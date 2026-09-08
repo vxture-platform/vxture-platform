@@ -2,7 +2,6 @@ import type { ObjectState } from "@vxture-platform/shared";
 import type {
   AccountOperationRecord,
   AnnouncementRecord,
-  AuditLogRecord,
   Capability,
   BillingBillAction,
   AiModelGrantRecord,
@@ -17,9 +16,7 @@ import type {
   CommerceOverviewSnapshot,
   ConsoleUser,
   DevServiceSnapshot,
-  FeatureFlagRecord,
   NotificationLogRecord,
-  PlatformSettingRecord,
   OrderOfflinePaymentType,
   OrderOperationDetailRecord,
   OrderOperationRecord,
@@ -27,8 +24,6 @@ import type {
   ModelPolicyRecord,
   ModelPriceRuleRecord,
   ModelProviderRecord,
-  PlatformAdminPermissionRecord,
-  PlatformAdminRecord,
   PromotionOperationRecord,
   PromotionRedemptionRecord,
   ProductAgentRecord,
@@ -44,9 +39,6 @@ import type {
   ProductSolutionStatus,
   ProductSolutionTierCode,
   ProductSolutionWriteInput,
-  ComplianceEventItem,
-  PlatformRoleRecord,
-  RiskRecordItem,
   SessionSnapshot,
   RunosCapabilityDetailRecord,
   RunosCapabilityRecord,
@@ -654,31 +646,6 @@ export async function deleteProductSolution(
   );
 }
 
-export async function fetchPlatformAdmins(): Promise<PlatformAdminRecord[]> {
-  return readJsonStrict<PlatformAdminRecord[]>("/api/platform-admins");
-}
-
-export interface PlatformOverview {
-  operatorCount: number;
-  tenantCount: number;
-  pendingVerifications: number;
-  openRiskCount: number;
-  activeSubscriptions: number;
-  openTickets: number;
-}
-
-// 平台总览真实聚合（B15）：替换 PlatformAutonomyPage 的硬编码指标。
-export async function fetchPlatformOverview(): Promise<PlatformOverview> {
-  return readJson<PlatformOverview>("/api/platform-admins/overview", {
-    operatorCount: 0,
-    tenantCount: 0,
-    pendingVerifications: 0,
-    openRiskCount: 0,
-    activeSubscriptions: 0,
-    openTickets: 0,
-  });
-}
-
 export type DashboardOverviewPeriod =
   | "recent30"
   | "total"
@@ -751,11 +718,14 @@ const EMPTY_DASHBOARD_OVERVIEW: Omit<DashboardOverviewRecord, "period"> = {
 };
 
 // admin 首页真实聚合（TD-036）：替换首页 overviewSnapshots 等硬编码 mock 常量。
+// 2026-09-08 路径自 /api/platform-admins/dashboard-overview 改为 /api/dashboard/overview
+// ——那个路由是运营账号管理，已随治理平面 cutover（#121）整体迁去 arche；首页聚合
+// 只是当年停在了它里面，与「平台管理员」无关。
 export async function fetchDashboardOverview(
   period: DashboardOverviewPeriod,
 ): Promise<DashboardOverviewRecord> {
   return readJson<DashboardOverviewRecord>(
-    `/api/platform-admins/dashboard-overview?period=${encodeURIComponent(period)}`,
+    `/api/dashboard/overview?period=${encodeURIComponent(period)}`,
     { period, ...EMPTY_DASHBOARD_OVERVIEW },
   );
 }
@@ -1394,52 +1364,6 @@ export async function forceLogoutAccount(
   );
 }
 
-export async function fetchPlatformRoles(): Promise<PlatformRoleRecord[]> {
-  return readJsonStrict<PlatformRoleRecord[]>("/api/admin-roles");
-}
-
-export async function replacePlatformRolePermissions(
-  roleId: string,
-  permissionIds: string[],
-): Promise<PlatformRoleRecord> {
-  const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/admin-roles/${encodeURIComponent(roleId)}/permissions`,
-    {
-      method: "PUT",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ permissionIds }),
-    },
-  );
-
-  if (!response.ok) {
-    let message = "Role authorization update failed";
-
-    try {
-      const body = (await response.json()) as { message?: string | string[] };
-      message = Array.isArray(body.message)
-        ? (body.message[0] ?? message)
-        : (body.message ?? message);
-    } catch {
-      // Preserve a typed error when the BFF returns a non-JSON response.
-    }
-
-    throw new AdminBffError(message, response.status);
-  }
-
-  return (await response.json()) as PlatformRoleRecord;
-}
-
-export async function fetchPlatformPermissions(): Promise<
-  PlatformAdminPermissionRecord[]
-> {
-  return readJsonStrict<PlatformAdminPermissionRecord[]>(
-    "/api/admin-permissions",
-  );
-}
-
 export async function fetchDevServices(
   signal?: AbortSignal,
 ): Promise<DevServiceSnapshot[]> {
@@ -1741,27 +1665,6 @@ export async function logout(): Promise<string | undefined> {
     // Keep local sign-out resilient even if the BFF is unavailable.
     return undefined;
   }
-}
-
-export interface AuditLogFilters {
-  from?: string;
-  to?: string;
-  actorId?: string;
-  action?: string;
-  module?: string;
-  result?: "success" | "failure" | "denied";
-}
-
-// Server-side filters (BFF audit-logs.router). Date range is the key one: audit
-// logs grow unboundedly, so without from/to only the most-recent 500 are visible.
-// Strict read: errors propagate so the page can distinguish a failure from an
-// empty result (avoids the silent readJson->[] swallow, §0.3 "错误不可观测").
-export async function fetchAuditLogs(
-  filters: AuditLogFilters = {},
-): Promise<AuditLogRecord[]> {
-  return readJsonStrict<AuditLogRecord[]>(
-    `/api/audit-logs${queryString(filters)}`,
-  );
 }
 
 export async function fetchAnnouncements(): Promise<AnnouncementRecord[]> {
@@ -2123,263 +2026,6 @@ export async function submitOperatorStepUpTotp(
   );
 }
 
-export interface OperatorRoleCreateInput {
-  roleCode: string;
-  nameEn: string;
-  nameI18nKey?: string;
-  description?: string;
-  mfaMinLevel?: "disabled" | "optional" | "required";
-  sort?: number;
-}
-
-export interface OperatorRoleUpdateInput {
-  nameEn?: string;
-  nameI18nKey?: string;
-  description?: string;
-  mfaMinLevel?: "disabled" | "optional" | "required";
-  sort?: number;
-}
-
-export interface OperatorRoleCopyInput {
-  roleCode: string;
-  nameEn?: string;
-  nameI18nKey?: string;
-  description?: string;
-}
-
-export async function createOperatorRole(
-  payload: OperatorRoleCreateInput,
-): Promise<PlatformRoleRecord> {
-  return mutateJson<PlatformRoleRecord>(
-    "/api/admin-roles",
-    "POST",
-    payload,
-    "Operator role creation failed",
-  );
-}
-
-export async function updateOperatorRole(
-  roleId: string,
-  payload: OperatorRoleUpdateInput,
-): Promise<PlatformRoleRecord> {
-  return mutateJson<PlatformRoleRecord>(
-    `/api/admin-roles/${encodeURIComponent(roleId)}`,
-    "PUT",
-    payload,
-    "Operator role update failed",
-  );
-}
-
-export async function copyOperatorRole(
-  roleId: string,
-  payload: OperatorRoleCopyInput,
-): Promise<PlatformRoleRecord> {
-  return mutateJson<PlatformRoleRecord>(
-    `/api/admin-roles/${encodeURIComponent(roleId)}/copy`,
-    "POST",
-    payload,
-    "Operator role copy failed",
-  );
-}
-
-export async function toggleOperatorRoleStatus(
-  roleId: string,
-): Promise<PlatformRoleRecord> {
-  return mutateJson<PlatformRoleRecord>(
-    `/api/admin-roles/${encodeURIComponent(roleId)}/toggle-status`,
-    "POST",
-    undefined,
-    "Operator role status toggle failed",
-  );
-}
-
-export async function deleteOperatorRole(
-  roleId: string,
-): Promise<{ id: string; status: "deleted" }> {
-  return mutateJson<{ id: string; status: "deleted" }>(
-    `/api/admin-roles/${encodeURIComponent(roleId)}`,
-    "DELETE",
-    undefined,
-    "Operator role deletion failed",
-  );
-}
-
-export interface OperatorPermissionCreateInput {
-  permCode: string;
-  permType: string;
-  permName: string;
-  parentId?: string | null;
-  routePath?: string | null;
-  component?: string | null;
-  icon?: string | null;
-  description?: string;
-  sort?: number;
-}
-
-export interface OperatorPermissionUpdateInput {
-  permCode?: string;
-  permType?: string;
-  permName?: string;
-  parentId?: string | null;
-  routePath?: string | null;
-  component?: string | null;
-  icon?: string | null;
-  description?: string;
-  sort?: number;
-}
-
-export async function createOperatorPermission(
-  payload: OperatorPermissionCreateInput,
-): Promise<PlatformAdminPermissionRecord> {
-  return mutateJson<PlatformAdminPermissionRecord>(
-    "/api/admin-permissions",
-    "POST",
-    payload,
-    "Operator permission creation failed",
-  );
-}
-
-export async function updateOperatorPermission(
-  permissionId: string,
-  payload: OperatorPermissionUpdateInput,
-): Promise<PlatformAdminPermissionRecord> {
-  return mutateJson<PlatformAdminPermissionRecord>(
-    `/api/admin-permissions/${encodeURIComponent(permissionId)}`,
-    "PUT",
-    payload,
-    "Operator permission update failed",
-  );
-}
-
-export async function toggleOperatorPermission(
-  permissionId: string,
-): Promise<PlatformAdminPermissionRecord> {
-  return mutateJson<PlatformAdminPermissionRecord>(
-    `/api/admin-permissions/${encodeURIComponent(permissionId)}/toggle`,
-    "POST",
-    undefined,
-    "Operator permission toggle failed",
-  );
-}
-
-export interface PlatformAdminMetadataInput {
-  displayName?: string;
-  email?: string;
-  phone?: string;
-  remark?: string;
-  sort?: number;
-}
-
-export interface CreatePlatformAdminInput {
-  username: string;
-  displayName: string;
-  email: string;
-  phone?: string;
-  roleId: string;
-}
-
-/**
- * Create a new operator (TD-017 §③⑤). No credential is handled client-side —
- * the IdP mails an out-of-band initial-setup link to the new operator's own
- * email; the response only carries a masked delivery confirmation.
- */
-export async function createPlatformAdmin(
-  input: CreatePlatformAdminInput,
-): Promise<{ record: PlatformAdminRecord; deliveredTo: string }> {
-  return mutateJson<{ record: PlatformAdminRecord; deliveredTo: string }>(
-    "/api/platform-admins",
-    "POST",
-    input,
-    "Platform admin creation failed",
-  );
-}
-
-export async function changePlatformAdminRole(
-  adminId: string,
-  roleId: string,
-): Promise<PlatformAdminRecord> {
-  return mutateJson<PlatformAdminRecord>(
-    `/api/platform-admins/${encodeURIComponent(adminId)}/role`,
-    "POST",
-    { roleId },
-    "Platform admin role change failed",
-  );
-}
-
-export async function updatePlatformAdmin(
-  adminId: string,
-  payload: PlatformAdminMetadataInput,
-): Promise<PlatformAdminRecord> {
-  return mutateJson<PlatformAdminRecord>(
-    `/api/platform-admins/${encodeURIComponent(adminId)}`,
-    "PUT",
-    payload,
-    "Platform admin update failed",
-  );
-}
-
-// B9-P1b-α：凭据/会话类动作经 IdP 委托（后端 admin-bff→auth-bff /internal/operator/*）。
-export async function disablePlatformAdmin(
-  adminId: string,
-  reason?: string,
-): Promise<PlatformAdminRecord> {
-  return mutateJson<PlatformAdminRecord>(
-    `/api/platform-admins/${encodeURIComponent(adminId)}/disable`,
-    "POST",
-    reason ? { reason } : {},
-    "Platform admin disable failed",
-  );
-}
-
-export async function enablePlatformAdmin(
-  adminId: string,
-  reason?: string,
-): Promise<PlatformAdminRecord> {
-  return mutateJson<PlatformAdminRecord>(
-    `/api/platform-admins/${encodeURIComponent(adminId)}/enable`,
-    "POST",
-    reason ? { reason } : {},
-    "Platform admin enable failed",
-  );
-}
-
-export async function forcePlatformAdminLogout(
-  adminId: string,
-  reason?: string,
-): Promise<{ ok: true; revoked: number }> {
-  return mutateJson<{ ok: true; revoked: number }>(
-    `/api/platform-admins/${encodeURIComponent(adminId)}/force-logout`,
-    "POST",
-    reason ? { reason } : {},
-    "Platform admin force-logout failed",
-  );
-}
-
-export async function resetPlatformAdminMfa(
-  adminId: string,
-  reason?: string,
-): Promise<{ ok: true; revoked: number }> {
-  return mutateJson<{ ok: true; revoked: number }>(
-    `/api/platform-admins/${encodeURIComponent(adminId)}/mfa/reset`,
-    "POST",
-    reason ? { reason } : {},
-    "Platform admin MFA reset failed",
-  );
-}
-
-// B9-P1b-β：生成一次性重置链接（不下发明文）；运营复制交付用户，用户在公开重置页设新密码。
-export async function resetPlatformAdminPassword(
-  adminId: string,
-  reason?: string,
-): Promise<{ ok: true; deliveredTo: string; expiresIn: number }> {
-  return mutateJson<{ ok: true; deliveredTo: string; expiresIn: number }>(
-    `/api/platform-admins/${encodeURIComponent(adminId)}/reset-password`,
-    "POST",
-    reason ? { reason } : {},
-    "Platform admin password reset failed",
-  );
-}
-
 // 运营者本人自助改邮箱（原 startOperatorEmailChange / verifyOperatorEmailChange，
 // 走 admin-bff /api/operator/contact/email/*）已随 Phase B.2 收敛到身份层 accounts
 // 账户中心（auth-bff cookie 版 oidc/operator/self/email/*），admin 侧客户端方法退役。
@@ -2396,267 +2042,9 @@ function queryString(params: object): string {
   return qs ? `?${qs}` : "";
 }
 
-export interface RiskRecordListFilters {
-  tenantId?: string;
-  riskLevel?: string;
-  reviewed?: "true" | "false";
-  tag?: string;
-}
-
-export async function fetchRiskRecords(
-  filters: RiskRecordListFilters = {},
-): Promise<RiskRecordItem[]> {
-  return readJsonStrict<RiskRecordItem[]>(
-    `/api/risk-records${queryString(filters)}`,
-  );
-}
-
-export interface RiskRecordWriteInput {
-  tenantId?: string;
-  riskLevel?: RiskRecordItem["riskLevel"];
-  riskScore?: number | null;
-  scope?: string | null;
-  reason: string;
-  tags?: string[];
-}
-
-export async function createRiskRecord(
-  payload: RiskRecordWriteInput,
-): Promise<RiskRecordItem> {
-  return mutateJson<RiskRecordItem>(
-    "/api/risk-records",
-    "POST",
-    payload,
-    "Risk record creation failed",
-  );
-}
-
-export async function updateRiskRecord(
-  recordId: string,
-  payload: RiskRecordWriteInput,
-): Promise<RiskRecordItem> {
-  return mutateJson<RiskRecordItem>(
-    `/api/risk-records/${recordId}`,
-    "PUT",
-    payload,
-    "Risk record update failed",
-  );
-}
-
-export async function reviewRiskRecord(
-  recordId: string,
-): Promise<RiskRecordItem> {
-  return mutateJson<RiskRecordItem>(
-    `/api/risk-records/${recordId}/review`,
-    "POST",
-    undefined,
-    "Risk record review failed",
-  );
-}
-
-export async function deleteRiskRecord(
-  recordId: string,
-): Promise<{ id: string; status: "deleted" }> {
-  return mutateJson<{ id: string; status: "deleted" }>(
-    `/api/risk-records/${recordId}`,
-    "DELETE",
-    undefined,
-    "Risk record deletion failed",
-  );
-}
-
-export interface ComplianceEventListFilters {
-  status?: string;
-  tenantId?: string;
-  eventType?: string;
-  tag?: string;
-}
-
-export async function fetchComplianceEvents(
-  filters: ComplianceEventListFilters = {},
-): Promise<ComplianceEventItem[]> {
-  return readJsonStrict<ComplianceEventItem[]>(
-    `/api/compliance-events${queryString(filters)}`,
-  );
-}
-
-export interface ComplianceEventWriteInput {
-  tenantId?: string | null;
-  eventType: string;
-  regulationCode?: string | null;
-  evidenceUrl?: string | null;
-  detail?: Record<string, unknown> | null;
-  tags?: string[];
-}
-
-export async function createComplianceEvent(
-  payload: ComplianceEventWriteInput,
-): Promise<ComplianceEventItem> {
-  return mutateJson<ComplianceEventItem>(
-    "/api/compliance-events",
-    "POST",
-    payload,
-    "Compliance event creation failed",
-  );
-}
-
-export async function updateComplianceEvent(
-  eventId: string,
-  payload: ComplianceEventWriteInput,
-): Promise<ComplianceEventItem> {
-  return mutateJson<ComplianceEventItem>(
-    `/api/compliance-events/${eventId}`,
-    "PUT",
-    payload,
-    "Compliance event update failed",
-  );
-}
-
-export async function assignComplianceEvent(
-  eventId: string,
-  handlerId: string,
-): Promise<ComplianceEventItem> {
-  return mutateJson<ComplianceEventItem>(
-    `/api/compliance-events/${eventId}/assign`,
-    "POST",
-    { handlerId },
-    "Compliance event assignment failed",
-  );
-}
-
-export async function resolveComplianceEvent(
-  eventId: string,
-): Promise<ComplianceEventItem> {
-  return mutateJson<ComplianceEventItem>(
-    `/api/compliance-events/${eventId}/resolve`,
-    "POST",
-    undefined,
-    "Compliance event resolution failed",
-  );
-}
-
-export async function dismissComplianceEvent(
-  eventId: string,
-): Promise<ComplianceEventItem> {
-  return mutateJson<ComplianceEventItem>(
-    `/api/compliance-events/${eventId}/dismiss`,
-    "POST",
-    undefined,
-    "Compliance event dismissal failed",
-  );
-}
-
-export async function deleteComplianceEvent(
-  eventId: string,
-): Promise<{ id: string; status: "deleted" }> {
-  return mutateJson<{ id: string; status: "deleted" }>(
-    `/api/compliance-events/${eventId}`,
-    "DELETE",
-    undefined,
-    "Compliance event deletion failed",
-  );
-}
-
 // ── Feature flags (admin.feature_flags, P2) ─────────────────────────────────
 
-export interface FeatureFlagListFilters {
-  category?: string;
-  environment?: string;
-  archived?: "true" | "false" | "all";
-}
-
-export async function fetchFeatureFlags(
-  filters: FeatureFlagListFilters = {},
-): Promise<FeatureFlagRecord[]> {
-  return readJson<FeatureFlagRecord[]>(
-    `/api/feature-toggles${queryString(filters)}`,
-    [],
-  );
-}
-
-export interface FeatureFlagWriteInput {
-  flagKey?: string;
-  category?: string;
-  environment?: string;
-  description?: string | null;
-  rolloutPercentage?: number;
-  tenantOverrides?: Record<string, boolean>;
-  expiresAt?: string | null;
-}
-
-export async function createFeatureFlag(
-  payload: FeatureFlagWriteInput,
-): Promise<FeatureFlagRecord> {
-  return mutateJson<FeatureFlagRecord>(
-    "/api/feature-toggles",
-    "POST",
-    payload,
-    "Feature flag creation failed",
-  );
-}
-
-export async function updateFeatureFlag(
-  flagId: string,
-  payload: FeatureFlagWriteInput,
-): Promise<FeatureFlagRecord> {
-  return mutateJson<FeatureFlagRecord>(
-    `/api/feature-toggles/${flagId}`,
-    "PUT",
-    payload,
-    "Feature flag update failed",
-  );
-}
-
-export async function toggleFeatureFlag(
-  flagId: string,
-): Promise<FeatureFlagRecord> {
-  return mutateJson<FeatureFlagRecord>(
-    `/api/feature-toggles/${flagId}/toggle`,
-    "POST",
-    undefined,
-    "Feature flag toggle failed",
-  );
-}
-
-export async function archiveFeatureFlag(
-  flagId: string,
-  archived: boolean,
-): Promise<FeatureFlagRecord> {
-  return mutateJson<FeatureFlagRecord>(
-    `/api/feature-toggles/${flagId}/archive`,
-    "POST",
-    { archived },
-    "Feature flag archive failed",
-  );
-}
-
 // ── Platform settings (admin.settings, P2) ──────────────────────────────────
-
-export interface PlatformSettingListFilters {
-  group?: string;
-  search?: string;
-}
-
-export async function fetchPlatformSettings(
-  filters: PlatformSettingListFilters = {},
-): Promise<PlatformSettingRecord[]> {
-  return readJson<PlatformSettingRecord[]>(
-    `/api/system-parameters${queryString(filters)}`,
-    [],
-  );
-}
-
-export async function updatePlatformSetting(
-  settingId: string,
-  configValue: string,
-): Promise<PlatformSettingRecord> {
-  return mutateJson<PlatformSettingRecord>(
-    `/api/system-parameters/${settingId}`,
-    "PUT",
-    { configValue },
-    "Platform setting update failed",
-  );
-}
 
 // ── Notification delivery logs (support.notification_logs, P2, read-only) ───
 

@@ -23,18 +23,15 @@ import { OperatorStepUpGuard } from "./auth/step-up.guard";
 import { SessionAggregator } from "./aggregators/session.aggregator";
 import { AuthMiddleware } from "./middleware/auth.middleware";
 import { PermissionMiddleware } from "./middleware/permission.middleware";
-import { AdminPermissionsRouter } from "./routers/admin-permissions.router";
-import { AdminRolesRouter } from "./routers/admin-roles.router";
 import { AtlasRouter } from "./routers/atlas.router";
 import { RunosRouter } from "./routers/runos.router";
 import { AnnouncementsRouter } from "./routers/announcements.router";
-import { AuditLogsRouter } from "./routers/audit-logs.router";
 import { AuthRouter } from "./routers/auth.router";
 import { CapabilitiesRouter } from "./routers/capabilities.router";
+import { DashboardRouter } from "./routers/dashboard.router";
 import { HealthRouter } from "./routers/health.router";
 import { MeRouter } from "./routers/me.router";
 import { OperatorStepUpRouter } from "./routers/operator-stepup.router";
-import { PlatformAdminsRouter } from "./routers/platform-admins.router";
 import { ApplicationsRouter } from "./routers/applications.router";
 import { ProductsRouter } from "./routers/products.router";
 import { TicketsRouter } from "./routers/tickets.router";
@@ -47,10 +44,6 @@ import { OrdersRouter } from "./routers/orders.router";
 import { PaymentsRouter } from "./routers/payments.router";
 import { SubscriptionsRouter } from "./routers/subscriptions.router";
 import { CommercialRouter } from "./routers/commercial.router";
-import { RiskRecordsRouter } from "./routers/risk-records.router";
-import { ComplianceEventsRouter } from "./routers/compliance-events.router";
-import { FeatureTogglesRouter } from "./routers/feature-toggles.router";
-import { SystemParametersRouter } from "./routers/system-parameters.router";
 import { NotificationLogsRouter } from "./routers/notification-logs.router";
 import { SearchRouter } from "./routers/search.router";
 @Module({
@@ -72,10 +65,7 @@ import { SearchRouter } from "./routers/search.router";
     CapabilitiesRouter,
     AtlasRouter,
     RunosRouter,
-    AdminPermissionsRouter,
-    AdminRolesRouter,
     AnnouncementsRouter,
-    AuditLogsRouter,
     ApplicationsRouter,
     ProductsRouter,
     TicketsRouter,
@@ -88,13 +78,11 @@ import { SearchRouter } from "./routers/search.router";
     PaymentsRouter,
     SubscriptionsRouter,
     CommercialRouter,
-    RiskRecordsRouter,
-    ComplianceEventsRouter,
-    FeatureTogglesRouter,
-    SystemParametersRouter,
     NotificationLogsRouter,
+    // TD-036 首页聚合。2026-09-08 自 PlatformAdminsRouter 搬出——那个路由随治理平面
+    // cutover(#121)整体迁去 arche 了,只剩这一个端点还有人调,不该拖着 1176 行不能删。
+    DashboardRouter,
     SearchRouter,
-    PlatformAdminsRouter,
     OperatorStepUpRouter,
   ],
   providers: [

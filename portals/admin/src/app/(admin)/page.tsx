@@ -143,7 +143,7 @@ const periodOptions = [
 /* 2026-08-30：这里原来有一张 `periodScale = { total: 8.4, year: 6.2, quarter: 2.7,
    month: 0.92 }`，把"近 30 天"的真实读数乘上一个凭空写的系数冒充其它周期的数
    ——产品供给的"版本更新 N 次"与模型平台的"Token 总量"都靠它。按周期的数字只认
-   `GET /api/platform-admins/dashboard-overview?period=` 这一条真聚合；没有表撑着
+   `GET /api/dashboard/overview?period=` 这一条真聚合；没有表撑着
    的读数（发布更新次数、Token 用量，见 TD-036）直接不展示，不再拿系数编。 */
 
 /**
