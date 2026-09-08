@@ -106,7 +106,9 @@ export function formatProfileDate(
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
-    timeStyle: "short",
+    // medium 起才有秒（short 只到分）——owner 2026-09-08:
+    // 凡是显示了时间的地方都要到秒。
+    timeStyle: "medium",
   }).format(date);
 }
 

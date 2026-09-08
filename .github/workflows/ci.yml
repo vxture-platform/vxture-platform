@@ -194,6 +194,13 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:ops-todo-alerts
 
+      # 显示了时分却没有秒:不报错、不影响构建、页面照常渲染,只是表里少两个字符。
+      # 而排查订单/审计/通知时,同一分钟内的先后顺序恰恰最要紧——两个「15:04」
+      # 摆在一起看不出谁先谁后。2026-09-08 清点全仓 8 处,是本地副本各自漂移。
+      - name: Datetime seconds guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:datetime-seconds
+
       # 两类不报错的样式缺陷：CSS 注释提前收口（`next build` 走的
       # Lightning CSS 会自行恢复、照常打包成功，Turbopack dev 却直接拒收），
       # 以及被主题踩掉的关键字工具类（`max-w-none` 实际是 `max-width: 0`）。

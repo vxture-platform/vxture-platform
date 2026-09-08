@@ -113,7 +113,8 @@ function severityTone(
 
 const DATE_TIME = new Intl.DateTimeFormat("zh-CN", {
   dateStyle: "short",
-  timeStyle: "short",
+  // medium 起才有秒（short 只到分）——owner 2026-09-08。
+  timeStyle: "medium",
 });
 
 function formatMoment(iso: string | null): string {
