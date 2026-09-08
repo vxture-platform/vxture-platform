@@ -27,6 +27,8 @@ export class MockUserRepository implements UserReadRepository {
   async ensureUserPoints(_userId: string): Promise<void> {}
 
   private readonly users = new Map<string, UserCredentialRecord>();
+  /** 注册补齐已完成的 user id（对应 account.users.profile_completed_at 非空）。 */
+  private readonly profileCompleted = new Set<string>();
   private readonly identities = new Map<string, string>(); // `${provider}:${subject}` -> userId
   private readonly avatars = new Map<string, AvatarRecord>();
   // 与库里的 user_no 同形(§11 v4「三号解耦」):10 位 = 类别位 1 + 随机 8 + Luhn,
@@ -228,6 +230,17 @@ export class MockUserRepository implements UserReadRepository {
     if (!u) return null;
     u.accountLoginDisabled = disabled;
     return toView(u);
+  }
+
+  /** 与 pg 实现同口径：查不到这个人按「已完成」处理（不把不存在的用户引去补齐页）。 */
+  async isProfileCompleted(userId: string): Promise<boolean> {
+    const u = this.users.get(userId);
+    if (!u) return true;
+    return this.profileCompleted.has(userId);
+  }
+
+  async markProfileCompleted(userId: string): Promise<void> {
+    if (this.users.has(userId)) this.profileCompleted.add(userId);
   }
 
   async changeAccount(

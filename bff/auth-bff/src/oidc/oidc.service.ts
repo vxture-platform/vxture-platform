@@ -712,8 +712,12 @@ export class OidcService {
     }
 
     let user;
+    let isNew = false;
     try {
-      ({ user } = await this.authn.loginWithPhoneCode(input.phone, input.code));
+      ({ user, isNew } = await this.authn.loginWithPhoneCode(
+        input.phone,
+        input.code,
+      ));
     } catch (err) {
       await this.recordTenantAttempt({
         identifier: input.phone,
@@ -732,6 +736,19 @@ export class OidcService {
       ipAddress: input.clientIp,
       userAgent: input.userAgent,
     });
+    /*
+     * 这里原先是 `({ user } = ...)`——把下面那层算好的 isNew 丢掉，然后无条件发码回跳，
+     * 新老用户走同一个出口。于是从子域应用注册的人手机验完就被弹回应用：没有补齐、
+     * 也没有任何「注册成功」的交代，过几天开 console 才被 console 自己的门拦下来补
+     * （owner 2026-09-08 报的正是这个）。
+     *
+     * 现在「要不要先去补齐」由 finishTenantLogin 统一判（判据是库里的事实，
+     * 见那里的注释），这里不再需要 isNew——留着解构只为让新建这件事进日志：
+     * 「谁是这一刻注册的」在排查时值钱，而它本来一直被丢掉。
+     */
+    if (isNew) {
+      this.logger.log(`registered new tenant user ${user.id} via phone code`);
+    }
     return this.finishTenantLogin(user.id, client, challenge, "phone", {
       ipAddress: input.clientIp,
       userAgent: input.userAgent,
@@ -948,6 +965,38 @@ export class OidcService {
       );
     }
 
+    /*
+     * 注册补齐未完成：会话照建（补齐页要靠它认身份），但**码留到补齐完成再发**。
+     * 授权码 TTL 只有 300 秒，人填三项资料很容易填过头，先发码等于让他填完却登不进去。
+     *
+     * 判断放在这条**共用尾巴**里，而不是放在各个调用方：建号的入口不止手机验证码
+     * 一处（社交登录的 social-auth.service 也会 createUser，走的是
+     * completeLoginWithUser 这条），把判断留给调用方 = 每加一个登录入口就要有人
+     * 记得补一次，漏了不会报错、只会又出现一个"注册完就回应用"的洞。
+     *
+     * 对存量账号无影响：迁移已把 profile_completed_at 回填成 created_at。
+     * 顺带覆盖"补齐填到一半退出、下次换个入口再登录"——判据是库里的事实，
+     * 不是本次是不是新建的。
+     */
+    if (!(await this.account.isProfileCompleted(userId))) {
+      await this.redis.storePendingProfileCompletion(sid, {
+        clientId: client.clientId,
+        redirectUri: challenge.redirectUri,
+        scope: challenge.scope,
+        state: challenge.state,
+        codeChallenge: challenge.codeChallenge,
+        nonce: challenge.nonce,
+        sub: `usr_${userId}`,
+        activeOrg,
+      });
+      return {
+        sid,
+        realm: "customer",
+        sessionMaxAge: absTtl,
+        redirectTo: this.onboardingUrl(),
+      };
+    }
+
     const code = await this.issueAuthCode({
       client,
       sub: `usr_${userId}`,
@@ -969,6 +1018,89 @@ export class OidcService {
         ...(challenge.state ? { state: challenge.state } : {}),
       }),
     };
+  }
+
+  /**
+   * 补齐页的地址。相对路径：accounts 与 OIDC API 在生产同源
+   * （accounts.vxture.com），登录页拿到它直接 `window.location` 即可；
+   * 开发态 accounts 跑在自己的端口上，同样是它自己的路由。
+   */
+  private onboardingUrl(): string {
+    return "/onboarding";
+  }
+
+  /**
+   * 补齐页要展示的当前状态：手机号（只读锚点）+ 预填的默认用户名。
+   * 顺带当鉴权探针——sid 无效直接 401，页面据此把人送回登录。
+   */
+  async getOnboardingState(sid: string): Promise<{
+    phone: string;
+    account: string;
+    displayName: string | null;
+    email: string | null;
+  }> {
+    const userId = await this.userIdFromSid(sid);
+    const user = await this.account.getUserById(userId);
+    if (!user) throw new UnauthorizedException("invalid_session");
+    return {
+      phone: user.phone,
+      account: user.account,
+      displayName: user.name ?? null,
+      email: user.email ?? null,
+    };
+  }
+
+  /**
+   * 提交注册补齐，然后接着走完 OIDC（owner 2026-09-08）。
+   * 三项都落库、标记完成之后才发授权码——所以「注册完成」这件事和「能回应用」
+   * 是同一个瞬间，不会出现资料没填全却已经进了应用的中间态。
+   */
+  async submitProfileCompletion(
+    sid: string,
+    input: { account: string; displayName: string; email: string },
+  ): Promise<string> {
+    const userId = await this.userIdFromSid(sid);
+    await this.account.completeProfile(userId, input);
+    return this.resumeAfterProfileCompletion(sid);
+  }
+
+  /** 会话 cookie → user id。补齐页除了 sid 没有别的身份可用。 */
+  private async userIdFromSid(sid: string): Promise<string> {
+    const session = await this.redis.getOidcSession(sid);
+    if (!session?.sub?.startsWith("usr_")) {
+      throw new UnauthorizedException("invalid_session");
+    }
+    return session.sub.slice("usr_".length);
+  }
+
+  /**
+   * 补齐完成后接着走完 OIDC：取出挂起的回跳意图、这时才发授权码。
+   * 挂起记录单次消费——重复提交拿不到第二张码。
+   */
+  async resumeAfterProfileCompletion(sid: string): Promise<string> {
+    const pending = await this.redis.consumePendingProfileCompletion(sid);
+    if (!pending) {
+      throw new BadRequestException("no_pending_login");
+    }
+    const client = await this.clients.findEnabledByClientId(pending.clientId);
+    if (!client) {
+      throw new BadRequestException("invalid_client");
+    }
+    const code = await this.issueAuthCode({
+      client,
+      sub: pending.sub,
+      sid,
+      realm: "customer",
+      redirectUri: pending.redirectUri,
+      scope: pending.scope,
+      codeChallenge: pending.codeChallenge,
+      nonce: pending.nonce,
+      activeOrg: pending.activeOrg ?? null,
+    });
+    return this.appendParams(pending.redirectUri, {
+      code,
+      ...(pending.state ? { state: pending.state } : {}),
+    });
   }
 
   /**

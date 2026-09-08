@@ -186,6 +186,16 @@ export interface UserReadRepository {
   setAvatar(userId: string, input: SetAvatarInput): Promise<void>;
   /** Remove a user's custom avatar (delete bytes + clear the user's hash). */
   deleteAvatar(userId: string): Promise<void>;
+  /**
+   * 注册补齐是否完成（account.users.profile_completed_at 非空）。
+   *
+   * 这是**记下来的事实**，不是从别处推断的。此前唯一在跑的补齐门（console 外壳）
+   * 判据是「用户名还长得像建号时发的默认值 `_{user_no}`」——那种推断分不清
+   * 「完成过 / 跳过了 / 从没问过」，也会在任何一处改了用户名之后悄悄失效。
+   */
+  isProfileCompleted(userId: string): Promise<boolean>;
+  /** 标记注册补齐完成；已完成的不覆盖原时刻（补齐只发生一次）。 */
+  markProfileCompleted(userId: string): Promise<void>;
   /** Atomically update a user's verified phone anchor. Throws ConflictException if taken. */
   changePhone(userId: string, newPhone: string): Promise<UserView | null>;
   /** Atomically replace the email + set email_verified_at=now(). Throws ConflictException if taken. */

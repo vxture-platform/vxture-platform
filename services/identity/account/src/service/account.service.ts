@@ -196,6 +196,37 @@ export class AccountService {
     return this.users.updateProfile(userId, input);
   }
 
+  /** 注册补齐是否已完成（记下来的事实，不是从用户名长相推断的）。 */
+  isProfileCompleted(userId: string): Promise<boolean> {
+    return this.users.isProfileCompleted(userId);
+  }
+
+  /**
+   * 注册补齐（owner 2026-09-08：三项必填）。用户名、显示名、邮箱一起落，
+   * 全部成功才标记完成。
+   *
+   * **顺序是有讲究的**：用户名先改。它是唯一会 409 的一项里最可能撞的
+   * （短、好记、先到先得），先做能在冲突时少写两张表；邮箱也唯一，撞了同样抛
+   * ConflictException，调用方按字段回报，不要整张表单只说一句"失败"。
+   *
+   * 这里刻意不开事务：三步分属 users / user_profiles 两张表且各自幂等，
+   * 中途失败重新提交即可（用户名已改成功的话第二次是 no-op）；为它引一层跨仓储事务
+   * 反而要把 changeUsername 的冷却校验也拖进去。补齐标记放最后——它是"三项都落了"
+   * 的凭据，早标一步就会让一个只改了用户名的人被当作已完成。
+   */
+  async completeProfile(
+    userId: string,
+    input: { account: string; displayName: string; email: string },
+  ): Promise<UserView | null> {
+    await this.changeUsername(userId, input.account);
+    const view = await this.users.updateProfile(userId, {
+      name: input.displayName,
+      email: input.email,
+    });
+    await this.users.markProfileCompleted(userId);
+    return view;
+  }
+
   /**
    * Change password after verifying the current one. Returns false if the user
    * has no credential or the current password is wrong (caller maps to 400/403).

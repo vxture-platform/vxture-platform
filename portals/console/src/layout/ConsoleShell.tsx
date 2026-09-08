@@ -20,6 +20,15 @@ import { ConsoleAppShell } from "@/layout/template/ConsoleAppShell";
 // completed first-time setup — that state alone (no extra DB flag) drives the
 // onboarding redirect below, since setup always changes the username away
 // from it.
+//
+// 2026-09-08 起这道门**不再是主路**:注册补齐已经搬到 IdP(accounts /onboarding),
+// 在 OIDC 回跳之前完成,判据是 account.users.profile_completed_at 这个记下来的事实。
+// 原因是补齐本来只在 console 有,于是从 karda 之类的应用注册的人可以永远不补齐——
+// 补齐属于身份面,不属于某一个消费方应用。
+//
+// 这里保留成兜底:走到这一步说明有人绕过了 IdP 那道门(理论上到不了,因为补齐要求
+// 的用户名格式本身就排除 `_\d+`)。**别在这里加新规则** —— 要改补齐口径去改 IdP 那侧,
+// 两处各长一套判据正是这次要修掉的毛病。
 const DEFAULT_USERNAME_RE = /^_\d+$/;
 const ONBOARDING_PATH = "/onboarding";
 

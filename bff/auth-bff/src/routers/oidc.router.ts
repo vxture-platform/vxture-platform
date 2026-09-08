@@ -505,6 +505,57 @@ export class OidcRouter {
   }
 
   /**
+   * 注册补齐（owner 2026-09-08）。上面那条手机登录若判定「补齐未完成」，
+   * 返回的 redirectTo 指向 accounts 的补齐页而不是应用；补齐页用这两个端点收尾。
+   *
+   * 身份只认中央会话 cookie —— 会话在手机验证那一步就建好了，
+   * 缺的只是资料；授权码则还没发（finishTenantLogin 判定补齐未完成时会把回跳意图挂起）。
+   */
+  @Get("oidc/onboarding")
+  async onboardingState(@Req() req: Request): Promise<{
+    phone: string;
+    account: string;
+    displayName: string | null;
+    email: string | null;
+  }> {
+    return this.oidc.getOnboardingState(this.requireTenantSid(req));
+  }
+
+  /**
+   * 提交补齐并走完 OIDC。三项落库、标记完成之后才发授权码，
+   * 所以「注册完成」与「能回应用」是同一个瞬间。
+   */
+  @Post("oidc/onboarding")
+  @HttpCode(HttpStatus.OK)
+  async submitOnboarding(
+    @Body()
+    body: { account?: string; display_name?: string; email?: string },
+    @Req() req: Request,
+  ): Promise<{ redirectTo: string }> {
+    const account = body.account?.trim() ?? "";
+    const displayName = body.display_name?.trim() ?? "";
+    const email = body.email?.trim() ?? "";
+    // 三项都必填（owner 2026-09-08）。格式与唯一性由下面各层负责：
+    // 用户名格式走 assertValidAccount、重名 409；邮箱唯一冲突同样 409。
+    if (!account || !displayName || !email) {
+      throw new BadRequestException("invalid_request");
+    }
+    const redirectTo = await this.oidc.submitProfileCompletion(
+      this.requireTenantSid(req),
+      { account, displayName, email },
+    );
+    return { redirectTo };
+  }
+
+  /** 租户会话 sid；没有就是没登录，让补齐页把人送回登录。 */
+  private requireTenantSid(req: Request): string {
+    const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
+    const sid = cookies[SID_COOKIE.tenant];
+    if (!sid) throw new UnauthorizedException("invalid_session");
+    return sid;
+  }
+
+  /**
    * Interactive login completion via email code (tenant realm only, login-only).
    * The login UI POSTs the login_challenge + email + code; on success the central
    * session cookie is set and the client redirect (with code) is returned.

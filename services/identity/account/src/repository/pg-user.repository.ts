@@ -408,6 +408,29 @@ export class PgUserRepository implements UserReadRepository {
     }
   }
 
+  async isProfileCompleted(userId: string): Promise<boolean> {
+    const res = await this.pool.query<{ done: boolean }>(
+      `select profile_completed_at is not null as done
+         from account.users
+        where id = $1 and deleted_at is null`,
+      [userId],
+    );
+    // 查不到这个人（已删 / 不存在）按「已完成」处理：这条判据只用来决定要不要把人
+    // 引去补齐页，对一个不存在的用户把他引去补齐没有意义，登录本身会在别处失败。
+    return res.rows[0]?.done ?? true;
+  }
+
+  async markProfileCompleted(userId: string): Promise<void> {
+    // coalesce 而不是直接赋值：补齐只发生一次，重复提交不该改写首次完成时刻。
+    await this.pool.query(
+      `update account.users
+          set profile_completed_at = coalesce(profile_completed_at, now()),
+              updated_at = now()
+        where id = $1 and deleted_at is null`,
+      [userId],
+    );
+  }
+
   async changeAccount(
     userId: string,
     newAccount: string,

@@ -48,8 +48,28 @@ export interface OidcAuthCodePayload {
  *  filling the login page doesn't lose it; the social round-trip re-anchors it
  *  separately (extendOidcLoginChallenge) since provider login+consent is slower. */
 const LOGIN_CHALLENGE_TTL_SECONDS = 1200;
+/**
+ * 挂起补齐的时效（30 分钟）。比授权码的 300 秒宽得多——这段时间是**人在填表**，
+ * 不是机器在换码；卡在这一步超过半小时，让他从应用重新发起登录更干净。
+ */
+const PENDING_PROFILE_TTL_SECONDS = 1800;
 
 /** Parked OIDC authorize request under a login_challenge (vx:oidc:login:{challenge}). */
+/**
+ * 挂起的回跳意图（vx:oidc:pending-profile:{sid}，单次 GETDEL）。
+ * 补齐完成后据此发授权码、拼回跳 URL——字段就是 issueAuthCode + appendParams 要的那些。
+ */
+export interface PendingProfileCompletion {
+  clientId: string;
+  redirectUri: string;
+  scope: string;
+  state?: string | undefined;
+  codeChallenge: string;
+  nonce?: string | undefined;
+  sub: string;
+  activeOrg?: string | null | undefined;
+}
+
 export interface OidcLoginChallenge {
   clientId: string;
   realm: string;
@@ -385,6 +405,53 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       throw new ServiceUnavailableException(
         "operator_contact_verification_failed",
       );
+    }
+  }
+
+  // ─── OIDC: pending profile completion (注册补齐挂起) ───────────────────────
+
+  /**
+   * 新账号注册后、补齐之前挂起的回跳意图（owner 2026-09-08）。
+   *
+   * 为什么不能先发授权码再让人填表：授权码 TTL 只有 300 秒
+   * （OIDC_AUTH_CODE_TTL_SECONDS），而补齐要填账号名、显示名、邮箱三项——填慢一点
+   * 码就过期，用户填完反而登不进去。所以会话照常建立（补齐页要靠它认身份），
+   * **码留到补齐完成那一刻再发**，这里只挂起发码所需的那点上下文。
+   *
+   * 键挂在 sid 上：补齐页带的是会话 cookie，除了 sid 没有别的东西可认。
+   */
+  async storePendingProfileCompletion(
+    sid: string,
+    payload: PendingProfileCompletion,
+  ): Promise<void> {
+    const client = this.requireReadyClient();
+    const key = `${this.prefix}oidc:pending-profile:${sid}`;
+    try {
+      await client.setex(
+        key,
+        PENDING_PROFILE_TTL_SECONDS,
+        JSON.stringify(payload),
+      );
+    } catch (err) {
+      this.logger.error(`storePendingProfileCompletion failed: ${String(err)}`);
+      throw new ServiceUnavailableException("pending_profile_store_failed");
+    }
+  }
+
+  /** 单次消费：补齐提交成功后取出并删除，重复提交拿不到第二张码。 */
+  async consumePendingProfileCompletion(
+    sid: string,
+  ): Promise<PendingProfileCompletion | null> {
+    const client = this.requireReadyClient();
+    const key = `${this.prefix}oidc:pending-profile:${sid}`;
+    try {
+      const raw = await client.getdel(key);
+      return raw ? (JSON.parse(raw) as PendingProfileCompletion) : null;
+    } catch (err) {
+      this.logger.error(
+        `consumePendingProfileCompletion failed: ${String(err)}`,
+      );
+      throw new ServiceUnavailableException("pending_profile_read_failed");
     }
   }
 
