@@ -1954,74 +1954,6 @@
     }
   },
   "quotasPage": {
-    "title": "配额管理",
-    "description": "工作空间的存储与 AI Credits:额度构成、当前用量与剩余一目了然",
-    "metrics": {
-      "groupLabel": "配额概览",
-      "storage": "存储空间",
-      "storageHint": "总额度 {limit} · 剩余 {remaining}",
-      "creditRemaining": "AI Credits 余额",
-      "creditRemainingHint": "总额度 {limit}",
-      "creditUsed": "本期已消耗",
-      "creditUsedHint": "AI Credits · 随订阅周期重置",
-      "credits": "AI Credits",
-      "addons": "生效中的加油包",
-      "addonsExpiry": "最早到期 {date}",
-      "addonsNone": "暂无生效加油包,可在下方购买"
-    },
-    "source": {
-      "ws_base": "基础授予",
-      "subscription": "订阅权益",
-      "addon_purchase": "加油包",
-      "manual_override": "运营授予"
-    },
-    "reset": {
-      "none": "不重置",
-      "day": "按日重置",
-      "month": "按月重置"
-    },
-    "storage": {
-      "title": "存储空间",
-      "description": "工作空间级共享资源:每行一个额度来源或用量主体,同产品的贡献与用量并读",
-      "colLimit": "额度",
-      "colExpires": "有效期至",
-      "noExpiry": "长期有效",
-      "colUsed": "已用",
-      "colShare": "占总额度",
-      "colObserved": "上报时间",
-      "totalLine": "合计额度 {limit} · {remaining}",
-      "emptySources": "暂无存储额度来源",
-      "colItem": "项目",
-      "usageOnly": "产品用量"
-    },
-    "credits": {
-      "title": "AI Credits",
-      "description": "各产品订阅权益累加,自留先用、共享兜底;全部用完可通过加油包补充",
-      "colSource": "来源",
-      "colLimit": "额度",
-      "colUsed": "本期已用",
-      "colRemaining": "剩余",
-      "colReset": "重置周期",
-      "colExpires": "有效期至",
-      "empty": "暂无 AI Credits 额度,订阅产品后自动获得",
-      "sharingTitle": "跨产品共享",
-      "sharingOn": "已默认开启:{products} 参与共享——单个产品用完后可使用其他产品的剩余额度,消耗均按产品归因记录",
-      "sharingOff": "当前无产品参与共享,各产品额度独立使用",
-      "boosterTitle": "AI Credits 加油包",
-      "boosterBody": "订阅额度全部用完后,可购买加油包补充;加油包在订阅额度之后消耗,有效期更长"
-    },
-    "products": {
-      "title": "各产品配额明细",
-      "description": "按产品独立统计:产品自身服务配额与平台资源贡献",
-      "colProduct": "产品",
-      "colMetric": "指标",
-      "colLimit": "额度",
-      "colUsed": "本期已用",
-      "colRemaining": "剩余",
-      "wsShared": "全工作空间共用",
-      "empty": "暂无产品配额,订阅产品后自动生成",
-      "colReset": "重置周期"
-    },
     "addons": {
       "title": "加油包与扩展包",
       "description": "存储扩展包与 AI 加油包:选卡下单,走完整订单流程——付款申报、运营核销后额度自动入池生效",
@@ -2072,9 +2004,31 @@
       "buyNoPermission": "你的角色没有付款权限,购买加油包请联系租户所有者",
       "loadFailed": "加油包目录与订单读取失败，请重试"
     },
-    "gotoAddons": "去加购",
-    "remainBy": "剩余 {amount}",
-    "overBy": "已超出 {amount}",
+    "addonsEntry": {
+      "description": "额度不够用时可单独加购,不影响当前订阅。购买与订单记录在费用中心。",
+      "subscriptionBody": "一次性购买,不改变当前订阅的档位与账期;购买与订单记录都在费用中心。",
+      "subscriptionTitle": "与订阅的关系",
+      "title": "加油包与扩展包",
+      "whenBody": "某项额度用尽、或临时有用量高峰时单独加购,当期即时生效。",
+      "whenTitle": "什么时候需要"
+    },
+    "credits": {
+      "title": "AI Credits",
+      "description": "各产品订阅权益累加,自留先用、共享兜底;全部用完可通过加油包补充",
+      "colSource": "来源",
+      "colLimit": "额度",
+      "colUsed": "本期已用",
+      "colRemaining": "剩余",
+      "colReset": "重置周期",
+      "colExpires": "有效期至",
+      "empty": "暂无 AI Credits 额度,订阅产品后自动获得",
+      "sharingTitle": "跨产品共享",
+      "sharingOn": "已默认开启:{products} 参与共享——单个产品用完后可使用其他产品的剩余额度,消耗均按产品归因记录",
+      "sharingOff": "当前无产品参与共享,各产品额度独立使用",
+      "boosterTitle": "AI Credits 加油包",
+      "boosterBody": "订阅额度全部用完后,可购买加油包补充;加油包在订阅额度之后消耗,有效期更长"
+    },
+    "description": "工作空间的存储与 AI Credits:额度构成、当前用量与剩余一目了然",
     "filters": {
       "groupLabel": "产品配额筛选",
       "listOnly": "产品配额只有列表视图",
@@ -2082,7 +2036,61 @@
       "searchPlaceholder": "搜索产品名、产品代码或指标",
       "searchAriaLabel": "搜索产品配额",
       "reset": "复位"
-    }
+    },
+    "gotoAddons": "去加购",
+    "metrics": {
+      "groupLabel": "配额概览",
+      "storage": "存储空间",
+      "storageHint": "总额度 {limit} · 剩余 {remaining}",
+      "creditRemaining": "AI Credits 余额",
+      "creditRemainingHint": "总额度 {limit}",
+      "creditUsed": "本期已消耗",
+      "creditUsedHint": "AI Credits · 随订阅周期重置",
+      "credits": "AI Credits",
+      "addons": "生效中的加油包",
+      "addonsExpiry": "最早到期 {date}",
+      "addonsNone": "暂无生效加油包,可在下方购买"
+    },
+    "overBy": "已超出 {amount}",
+    "products": {
+      "title": "各产品配额明细",
+      "description": "按产品独立统计:产品自身服务配额与平台资源贡献",
+      "colProduct": "产品",
+      "colMetric": "指标",
+      "colLimit": "额度",
+      "colUsed": "本期已用",
+      "colRemaining": "剩余",
+      "wsShared": "全工作空间共用",
+      "empty": "暂无产品配额,订阅产品后自动生成",
+      "colReset": "重置周期"
+    },
+    "remainBy": "剩余 {amount}",
+    "reset": {
+      "none": "不重置",
+      "day": "按日重置",
+      "month": "按月重置"
+    },
+    "source": {
+      "ws_base": "基础授予",
+      "subscription": "订阅权益",
+      "addon_purchase": "加油包",
+      "manual_override": "运营授予"
+    },
+    "storage": {
+      "title": "存储空间",
+      "description": "工作空间级共享资源:每行一个额度来源或用量主体,同产品的贡献与用量并读",
+      "colLimit": "额度",
+      "colExpires": "有效期至",
+      "noExpiry": "长期有效",
+      "colUsed": "已用",
+      "colShare": "占总额度",
+      "colObserved": "上报时间",
+      "totalLine": "合计额度 {limit} · {remaining}",
+      "emptySources": "暂无存储额度来源",
+      "colItem": "项目",
+      "usageOnly": "产品用量"
+    },
+    "title": "配额管理"
   },
   "role": {
     "owner": "所有者",

@@ -27,7 +27,10 @@ const routeLabels = new Map<string, string>([
   ["/billing/invoices", "billingInvoices"],
   ["/vouchers", "vouchers"],
   ["/quotas", "quotas"],
+  // 加油包支付页 2026-09-08 迁到费用中心;旧地址保留跳转,
+  // 面包屑在跳转那一帧仍要有名字(与 /roles、/invitations 同体例)
   ["/quotas/addon-pay", "addonPay"],
+  ["/billing/addon-pay", "addonPay"],
   ["/usage", "usage"],
   ["/atlas", "atlas"],
   ["/notifications", "notifications"],

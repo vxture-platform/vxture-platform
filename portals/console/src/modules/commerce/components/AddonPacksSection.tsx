@@ -1,16 +1,20 @@
 "use client";
 
 /**
- * AddonPacksSection.tsx — 加油包/扩展包购买区(配额管理页组合件)。
+ * AddonPacksSection.tsx — 加油包/扩展包购买区(费用中心组合件)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
  * 2026-08-21 owner 整改:加油包是我们的**服务**,必须卡片模式(不做表格目录),
- * 且走完整订单流程——卡片「购买」下单 → 跳 /quotas/addon-pay/[orderNo] 支付页
+ * 且走完整订单流程——卡片「购买」下单 → 跳 /billing/addon-pay/[orderNo] 支付页
  * (四步流程条:下单→付款→收款→开通)→ 运营核销 → 额度入池生效。
  * 本区 = 服务卡片栅格(3/行,与订阅 hub 卡同构)+ 订单记录表(序号列 +
  * 单操作列:去支付主按钮 + ⋯ 取消,遵守表格规范)。
+ *
+ * 2026-09-08 owner 板块梳理:本区从配额页迁到**费用中心**——加油包是一次性购买,
+ * 与订阅、订单、账单、发票同属「钱」这条线;配额页答的是「用了多少、还剩多少」,
+ * 是用量视角。配额页保留一个入口,因为真实发现路径是「发现额度不够 → 去加购」。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -54,6 +58,7 @@ import { fmtDate, fmtTime } from "./hubModel";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
 import { useConfirmLabels } from "@/lib/destructive";
 
+import { buildAddonPayHref } from "../addon-routes";
 /** 包内容展示:存储字节格式化,credits 计数。 */
 const packAmount = (metricKey: string, amount: number): string =>
   metricKey === "storage.bytes" ? formatBytes(amount) : fmtCount(amount);
@@ -225,8 +230,7 @@ export function AddonPacksSection({
       (o) => o.packCode === packCode && o.status === "pending_payment",
     )?.orderNo ?? null;
 
-  const goPay = (orderNo: string) =>
-    router.push(`/quotas/addon-pay/${orderNo}`);
+  const goPay = (orderNo: string) => router.push(buildAddonPayHref(orderNo));
 
   const handleBuy = async (pack: ConsoleAddonPack) => {
     setError(null);

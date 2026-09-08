@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AddonPayPage.tsx — 加油包订单支付页(/quotas/addon-pay/[orderNo])。
+ * AddonPayPage.tsx — 加油包订单支付页(/billing/addon-pay/[orderNo])。
  * @package @vxture/console
  * @layer Application
  * @category Module

@@ -33,6 +33,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { daysLeft, fmtDate } from "@/modules/commerce/components/hubModel";
 
+import { buildAddonPayHref } from "@/modules/commerce/addon-routes";
 export type TodoKind = "payment" | "renewal" | "quota" | "invitation" | "addon";
 
 export interface TodoRef {
@@ -220,7 +221,7 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
           detail: a.expireAt
             ? t("items.addonDetail", { date: fmtDate(a.expireAt) })
             : t("items.payDetailNoTtl"),
-          href: `/quotas/addon-pay/${a.orderNo}`,
+          href: buildAddonPayHref(a.orderNo),
           actionLabel: t("items.addonAction"),
           refs: [],
         });

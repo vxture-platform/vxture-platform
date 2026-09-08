@@ -1954,74 +1954,6 @@
     }
   },
   "quotasPage": {
-    "title": "Quota Management",
-    "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
-    "metrics": {
-      "groupLabel": "Quota overview",
-      "storage": "Storage",
-      "storageHint": "Total {limit} · {remaining} left",
-      "creditRemaining": "AI Credits balance",
-      "creditRemainingHint": "Total {limit}",
-      "creditUsed": "Used this cycle",
-      "creditUsedHint": "AI Credits · resets with the subscription cycle",
-      "credits": "AI Credits",
-      "addons": "Active booster packs",
-      "addonsExpiry": "Earliest expiry {date}",
-      "addonsNone": "No active packs — buy one below"
-    },
-    "source": {
-      "ws_base": "Base grant",
-      "subscription": "Subscription",
-      "addon_purchase": "Booster pack",
-      "manual_override": "Operator grant"
-    },
-    "reset": {
-      "none": "No reset",
-      "day": "Daily reset",
-      "month": "Monthly reset"
-    },
-    "storage": {
-      "title": "Storage",
-      "description": "A workspace-level shared resource: one row per grant source or usage subject; a product's contribution and usage read side by side",
-      "colLimit": "Grant",
-      "colExpires": "Valid until",
-      "noExpiry": "No expiry",
-      "colUsed": "Used",
-      "colShare": "Of total",
-      "colObserved": "Reported at",
-      "totalLine": "Total {limit} · {remaining}",
-      "emptySources": "No storage grants yet",
-      "colItem": "Item",
-      "usageOnly": "Product usage"
-    },
-    "credits": {
-      "title": "AI Credits",
-      "description": "Subscription grants stack across products — own pool first, shared pools as fallback; top up with booster packs when everything runs dry",
-      "colSource": "Source",
-      "colLimit": "Grant",
-      "colUsed": "Used this cycle",
-      "colRemaining": "Left",
-      "colReset": "Reset",
-      "colExpires": "Valid until",
-      "empty": "No AI Credits yet — subscribe to a product to receive them",
-      "sharingTitle": "Cross-product sharing",
-      "sharingOn": "On by default: {products} participate — a product that runs dry can draw on the others' remainder, with every spend attributed per product",
-      "sharingOff": "No products currently share — each product's credits stay reserved",
-      "boosterTitle": "AI Credits booster packs",
-      "boosterBody": "When subscription credits run out, booster packs top you up; they burn after subscription pools and stay valid longer"
-    },
-    "products": {
-      "title": "Per-product quotas",
-      "description": "Independent per-product view: the product's own service quotas plus its platform resource contributions",
-      "colProduct": "Product",
-      "colMetric": "Metric",
-      "colLimit": "Grant",
-      "colUsed": "Used this cycle",
-      "colRemaining": "Left",
-      "wsShared": "Shared workspace-wide",
-      "empty": "No product quotas yet — they appear once you subscribe",
-      "colReset": "Resets"
-    },
     "addons": {
       "title": "Booster & Extension Packs",
       "description": "Storage extensions and AI booster packs: pick a card to order, then follow the full order flow — declare the payment, operations confirms, and the grant lands in your pools",
@@ -2072,9 +2004,31 @@
       "buyNoPermission": "Your role cannot make payments; ask the tenant owner to buy add-on packs",
       "loadFailed": "Could not load add-on packs and orders, please retry"
     },
-    "gotoAddons": "Buy add-ons",
-    "remainBy": "{amount} left",
-    "overBy": "{amount} over",
+    "addonsEntry": {
+      "description": "Top up separately when quota runs low, without changing your subscription. Purchase and order records live in Billing.",
+      "subscriptionBody": "A one-off purchase. Your plan and billing cycle stay unchanged; purchase and order records live in Billing.",
+      "subscriptionTitle": "Relation to your subscription",
+      "title": "Add-on packs",
+      "whenBody": "Top up a specific quota that has run out, or cover a temporary spike. Takes effect in the current period.",
+      "whenTitle": "When you need one"
+    },
+    "credits": {
+      "title": "AI Credits",
+      "description": "Subscription grants stack across products — own pool first, shared pools as fallback; top up with booster packs when everything runs dry",
+      "colSource": "Source",
+      "colLimit": "Grant",
+      "colUsed": "Used this cycle",
+      "colRemaining": "Left",
+      "colReset": "Reset",
+      "colExpires": "Valid until",
+      "empty": "No AI Credits yet — subscribe to a product to receive them",
+      "sharingTitle": "Cross-product sharing",
+      "sharingOn": "On by default: {products} participate — a product that runs dry can draw on the others' remainder, with every spend attributed per product",
+      "sharingOff": "No products currently share — each product's credits stay reserved",
+      "boosterTitle": "AI Credits booster packs",
+      "boosterBody": "When subscription credits run out, booster packs top you up; they burn after subscription pools and stay valid longer"
+    },
+    "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
     "filters": {
       "groupLabel": "Product quota filters",
       "listOnly": "Product quotas are list-only",
@@ -2082,7 +2036,61 @@
       "searchPlaceholder": "Search product, code or metric",
       "searchAriaLabel": "Search product quotas",
       "reset": "Reset"
-    }
+    },
+    "gotoAddons": "Buy add-ons",
+    "metrics": {
+      "groupLabel": "Quota overview",
+      "storage": "Storage",
+      "storageHint": "Total {limit} · {remaining} left",
+      "creditRemaining": "AI Credits balance",
+      "creditRemainingHint": "Total {limit}",
+      "creditUsed": "Used this cycle",
+      "creditUsedHint": "AI Credits · resets with the subscription cycle",
+      "credits": "AI Credits",
+      "addons": "Active booster packs",
+      "addonsExpiry": "Earliest expiry {date}",
+      "addonsNone": "No active packs — buy one below"
+    },
+    "overBy": "{amount} over",
+    "products": {
+      "title": "Per-product quotas",
+      "description": "Independent per-product view: the product's own service quotas plus its platform resource contributions",
+      "colProduct": "Product",
+      "colMetric": "Metric",
+      "colLimit": "Grant",
+      "colUsed": "Used this cycle",
+      "colRemaining": "Left",
+      "wsShared": "Shared workspace-wide",
+      "empty": "No product quotas yet — they appear once you subscribe",
+      "colReset": "Resets"
+    },
+    "remainBy": "{amount} left",
+    "reset": {
+      "none": "No reset",
+      "day": "Daily reset",
+      "month": "Monthly reset"
+    },
+    "source": {
+      "ws_base": "Base grant",
+      "subscription": "Subscription",
+      "addon_purchase": "Booster pack",
+      "manual_override": "Operator grant"
+    },
+    "storage": {
+      "title": "Storage",
+      "description": "A workspace-level shared resource: one row per grant source or usage subject; a product's contribution and usage read side by side",
+      "colLimit": "Grant",
+      "colExpires": "Valid until",
+      "noExpiry": "No expiry",
+      "colUsed": "Used",
+      "colShare": "Of total",
+      "colObserved": "Reported at",
+      "totalLine": "Total {limit} · {remaining}",
+      "emptySources": "No storage grants yet",
+      "colItem": "Item",
+      "usageOnly": "Product usage"
+    },
+    "title": "Quota Management"
   },
   "role": {
     "owner": "Owner",
