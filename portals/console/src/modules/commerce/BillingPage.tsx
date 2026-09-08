@@ -64,6 +64,8 @@ import {
 import { PlannedBadge } from "@/components/planned";
 
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
+import { AddonPacksSection } from "./components/AddonPacksSection";
+import { ADDON_SECTION_ID } from "./addon-routes";
 import { fmtDate, fmtTime } from "./components/hubModel";
 import { OrdersSection } from "./components/OrdersSection";
 import { InvoiceSections } from "./components/InvoiceSections";
@@ -122,6 +124,13 @@ export function BillingPage() {
   const canManageInvoices = hasCapability(
     session.capabilities,
     "tenant.invoice.manage",
+  );
+  /* 加油包购买是**付款**权限,不是发票权限——板块从配额页迁来时要把它原样带过来。
+     初稿我在这里图省事复用了 canManageInvoices,那等于悄悄换掉一道权限门:
+     能开票的人未必该能下单花钱。 */
+  const canPurchaseAddons = hasCapability(
+    session.capabilities,
+    "tenant.payment.manage",
   );
 
   const [summary, setSummary] = useState<ConsoleBillingSummary | null>(null);
@@ -613,7 +622,18 @@ export function BillingPage() {
         invoiceBlockedBy={invoiceBlockedBy}
       />
 
-      {/* ③ 收款与计费口径 */}
+      {/* ③ 加油包与扩展包(自助购买闭环;2026-09-08 从配额页迁来)。
+          放在两张台账之后:来费用中心的人多半是来看账的,买的入口不该把账挤下去。
+          加油包真实的发现路径是**配额页发现额度告急 → 去加购**,那边留了直达锚点
+          的入口,所以这里靠后不影响找得到。 */}
+      <AddonPacksSection
+        id={ADDON_SECTION_ID}
+        onSettledRefresh={() => setReloadKey((k) => k + 1)}
+        formatMoney={money}
+        canPurchase={canPurchaseAddons}
+      />
+
+      {/* ④ 收款与计费口径 */}
       <PageSection
         icon="seal-check"
         level={2}

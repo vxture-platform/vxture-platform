@@ -32,7 +32,7 @@
 
 import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import { useTableSort } from "@/lib/table-sort";
 import {
@@ -61,16 +61,15 @@ import {
   type ConsoleQuotaOverview,
   type ConsoleQuotaPool,
 } from "@/api/console-bff";
-import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { Link } from "@/lib/i18n/navigation";
 import { ListPagination } from "@/components/pagination";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
-import { hasCapability } from "@/features/permissions/can";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { AddonPacksSection } from "./components/AddonPacksSection";
+import { ADDON_SECTION_HREF } from "./addon-routes";
 import { fmtDate, fmtTime } from "./components/hubModel";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
 import { useMetricLabel } from "@/lib/metric-label";
@@ -95,13 +94,10 @@ type ProductMetricRow = ConsoleProductQuota["metrics"][number] & {
 };
 
 const PAGE_SIZE = 10;
-/** 加油包板块的锚点:额度告急时「去加购」滚到这里。 */
-const ADDON_ANCHOR = "quota-addons";
 
 export function QuotasPage() {
   const t = useTranslations("quotasPage");
   const tableLabels = useTableLabels();
-  const locale = useLocale();
   const { session } = useConsoleSession();
 
   const [overview, setOverview] = useState<ConsoleQuotaOverview | null>(null);
@@ -142,16 +138,6 @@ export function QuotasPage() {
     };
   }, [session.tenant?.id, reloadKey]);
 
-  const money = useCallback(
-    (yuan: string, currency: string) =>
-      formatCurrency(
-        Number.parseFloat(yuan || "0"),
-        locale as Locale,
-        currency,
-      ),
-    [locale],
-  );
-
   // 指标名走共用字典(用量页读同一份;见 lib/metric-label)
   const metricLabel = useMetricLabel();
   const metricValue = (metric: string, v: number): string =>
@@ -183,16 +169,15 @@ export function QuotasPage() {
     );
   };
 
-  /** 「去加购」:滚到本页下方的加油包板块——额度告急时唯一能做的事。 */
-  const gotoAddons = () => {
-    document
-      .getElementById(ADDON_ANCHOR)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  /* 「去加购」:额度告急时唯一能做的事。加油包板块 2026-09-08 迁到费用中心,
+     所以这里从同页 scrollIntoView 改成**跨页直达锚点**——用 Link 而不是
+     onClick+router.push:它是导航,中键/新标签页/复制链接都该能用。 */
   const addonsAction = (
-    <Button variant="outline" size="sm" onClick={gotoAddons}>
-      <Icon name="lightning" size="xs" fallback="placeholder" />
-      <span>{t("gotoAddons")}</span>
+    <Button asChild variant="outline" size="sm">
+      <Link href={ADDON_SECTION_HREF}>
+        <Icon name="lightning" size="xs" fallback="placeholder" />
+        <span>{t("gotoAddons")}</span>
+      </Link>
     </Button>
   );
 
@@ -807,16 +792,32 @@ export function QuotasPage() {
         </SectionBody>
       </PageSection>
 
-      {/* ③ 加油包与扩展包(自助购买闭环) */}
-      <AddonPacksSection
-        id={ADDON_ANCHOR}
-        onSettledRefresh={() => setReloadKey((k) => k + 1)}
-        formatMoney={money}
-        canPurchase={hasCapability(
-          session.capabilities,
-          "tenant.payment.manage",
-        )}
-      />
+      {/* ③ 加油包入口(板块本体 2026-09-08 迁至费用中心)。
+          这里只留入口不留板块:加油包是**买**,与订单/账单/发票同属钱这条线;
+          本页答的是「用了多少、还剩多少」。但发现路径确实从这里开始——
+          人是在这一页看到额度告急才想加购的,所以入口必须在。 */}
+      <PageSection
+        icon="lightning"
+        level={2}
+        title={t("addonsEntry.title")}
+        description={t("addonsEntry.description")}
+        action={addonsAction}
+      >
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("addonsEntry.whenTitle"),
+                description: t("addonsEntry.whenBody"),
+              },
+              {
+                title: t("addonsEntry.subscriptionTitle"),
+                description: t("addonsEntry.subscriptionBody"),
+              },
+            ]}
+          />
+        </SectionBody>
+      </PageSection>
 
       {/* ④ 各产品配额明细 */}
       <PageSection

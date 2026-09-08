@@ -274,7 +274,7 @@ export class QuotaRouter {
     };
   }
 
-  /** 加油包订单详情(支付页 /quotas/addon-pay/[orderNo] 数据源)。 */
+  /** 加油包订单详情(支付页 /billing/addon-pay/[orderNo] 数据源)。 */
   @RequireCapability("tenant.billing.read")
   @Get("addon-orders/:orderNo")
   async getAddonOrder(
