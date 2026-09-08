@@ -248,7 +248,12 @@ const BASELINE = {
   website: 40,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
-  accounts: 290,
+  // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
+  // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
+  // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页
+  // 会造出半中半英的登录流——那正是 2026-08-27 视觉走查抓到过的坏法。accounts 整体
+  // i18n 化另开专项，届时这一页跟着一起抽。
+  accounts: 321,
 };
 
 const CJK = "[\u4e00-\u9fff]";

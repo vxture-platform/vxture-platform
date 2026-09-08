@@ -474,3 +474,73 @@ export async function completeOidcLoginWithEmail(
   if (!data.redirectTo) throw new Error("登录响应异常，请重试");
   return { redirectTo: data.redirectTo };
 }
+
+// ─── 注册补齐（owner 2026-09-08）────────────────────────────────────────────
+
+/**
+ * 补齐页的会话没了（cookie 过期 / 被清 / 直接手打这个地址进来）。
+ * 与"提交内容不合法"区分开：这一类要把人送回应用重新发起登录，重试没有意义。
+ */
+export class OnboardingSessionError extends Error {
+  constructor() {
+    super("登录会话已失效，请从应用重新发起登录");
+    this.name = "OnboardingSessionError";
+  }
+}
+
+export interface OnboardingState {
+  phone: string;
+  account: string;
+  displayName: string | null;
+  email: string | null;
+}
+
+/** GET /oidc/onboarding —— 手机号（只读锚点）与已有的预填值。 */
+export async function fetchOnboardingState(): Promise<OnboardingState> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/oidc/onboarding`, {
+      credentials: "include",
+    });
+  } catch {
+    throw new Error("网络异常，请稍后重试");
+  }
+  if (res.status === 401) throw new OnboardingSessionError();
+  if (!res.ok) throw new Error("读取账号信息失败");
+  return (await res.json()) as OnboardingState;
+}
+
+/**
+ * POST /oidc/onboarding —— 三项落库 + 标记完成 + 发授权码，一次返回回跳地址。
+ * 409 的文案要能被调用方按字段分派，所以把后端的原因串原样带出去。
+ */
+export async function submitOnboarding(input: {
+  account: string;
+  displayName: string;
+  email: string;
+}): Promise<{ redirectTo: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/oidc/onboarding`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        account: input.account,
+        display_name: input.displayName,
+        email: input.email,
+      }),
+    });
+  } catch {
+    throw new Error("网络异常，请稍后重试");
+  }
+  if (res.status === 401) throw new OnboardingSessionError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    // 409 的 message 形如 "username already in use" / "email already in use"。
+    throw new Error(body.message ?? "提交失败，请重试");
+  }
+  const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
+  if (!data.redirectTo) throw new Error("提交响应异常，请重试");
+  return { redirectTo: data.redirectTo };
+}
