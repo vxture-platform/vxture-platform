@@ -42,6 +42,7 @@ import {
   typeLabel,
   verifiedLabel,
 } from "@/modules/tenants/tenant-utils";
+import { formatDateTime } from "@vxture-platform/shared";
 
 type TodoSeverity = "rose" | "amber" | "blue" | "green";
 /**
@@ -121,19 +122,6 @@ const ORDER_TODO: Partial<
     priority: 15,
   },
 };
-
-/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
-   `2026/08/18`，英文 `08/18/2026`。同一串数字，读出来是两个日期。 */
-function formatDateTime(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
 
 function severityOrder(severity: TodoSeverity) {
   if (severity === "rose") return 0;

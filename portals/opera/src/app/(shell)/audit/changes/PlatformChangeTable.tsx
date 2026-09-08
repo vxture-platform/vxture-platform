@@ -33,6 +33,7 @@ import {
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 /** 字段名对齐 product_251 X-3 的统一审计记录（见 opera-bff 同名接口）。 */
 interface AuditLogEntry {
@@ -65,9 +66,7 @@ const OUTCOME_TONE: Record<string, StatusBadgeTone> = {
    没跟着改，见 scripts/guardrails 旁的说明。） */
 function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 export function PlatformChangeTable() {

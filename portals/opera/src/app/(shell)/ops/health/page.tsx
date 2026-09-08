@@ -80,6 +80,7 @@ import {
 } from "@/features/product/lifecycle";
 import { api, OperaApiError } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
+import { formatDateTime, formatDay } from "@vxture-platform/shared";
 
 /** 触发一次浏览器下载；用完立即回收 URL，不留 blob 常驻内存。 */
 function downloadCsv(filename: string, rows: readonly string[][]) {
@@ -246,29 +247,17 @@ function productNeedsAttention(item: ProductHealthItem): boolean {
   return item.onboarded && channelNeedsAttention(item.prod);
 }
 
-const TIME_FORMAT = new Intl.DateTimeFormat("zh-CN", {
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
-const DATE_FORMAT = new Intl.DateTimeFormat("zh-CN", {
-  dateStyle: "medium",
-});
-
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : TIME_FORMAT.format(d);
+  // locale 沿用本页原有的固定 zh-CN(只统一形态,不动 locale)。
+  return formatDateTime(d, "zh-CN", "—");
 }
 
 function formatBuildTime(iso: string | null): string {
   if (!iso || iso === "unknown") return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : DATE_FORMAT.format(d);
+  return Number.isNaN(d.getTime()) ? iso : formatDay(d, "zh-CN", iso);
 }
 
 function formatChecks(checks: Record<string, string> | null): string | null {

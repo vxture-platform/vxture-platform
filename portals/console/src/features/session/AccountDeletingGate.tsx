@@ -17,18 +17,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { Banner, Button, Icon } from "@vxture/design-system";
 import { ConsoleBffError, cancelAccountDeletion } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { formatDay as sharedDay } from "@vxture-platform/shared";
 
 const RETENTION_DAYS = 30;
 
 function formatDay(iso: string | null | undefined, locale: string): string {
   if (!iso) return "—";
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat(locale, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  return sharedDay(date, locale);
 }
 
 export function AccountDeletingGate() {

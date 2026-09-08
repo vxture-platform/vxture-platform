@@ -64,6 +64,7 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { LOG_LEVEL_META, type LogLevel } from "@/lib/status";
 import { RunosCallStreams } from "./RunosCallStreams";
+import { formatDateTime } from "@vxture-platform/shared";
 
 /* ── Atlas 请求日志 ──────────────────────────────────────────────────────── */
 
@@ -182,9 +183,7 @@ function toPlatformRows(snapshot: JobSchedulerSnapshot): PlatformLogRow[] {
 function formatTime(iso: string, locale: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 export default function LogsPage() {

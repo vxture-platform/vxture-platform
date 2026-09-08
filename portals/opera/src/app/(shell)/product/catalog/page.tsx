@@ -80,6 +80,7 @@ import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
+import { formatDateTime } from "@vxture-platform/shared";
 
 const MANAGE = "platform:product.manage";
 
@@ -1543,7 +1544,7 @@ function ProductsPageContent() {
                     ) : null}
                     {item.checkedAt ? (
                       <span className="text-body-sm text-muted-foreground">
-                        {new Date(item.checkedAt).toLocaleString(locale)} 确认
+                        {formatDateTime(item.checkedAt, locale)} 确认
                       </span>
                     ) : null}
                   </div>

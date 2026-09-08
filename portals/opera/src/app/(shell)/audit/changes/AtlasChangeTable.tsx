@@ -60,6 +60,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 /** 与 opera-bff atlas.router.ts 同名能力码。**已知缺口**：提交给平台能力码词表的
  * 那套只覆盖配置类写操作，所以「可以读变更流水」目前没法与「可以轮换密钥」分开
@@ -105,9 +106,7 @@ const OUTCOME_TONE: Record<string, StatusBadgeTone> = {
    没跟着改，见 scripts/guardrails 旁的说明。） */
 function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 type LoadState =

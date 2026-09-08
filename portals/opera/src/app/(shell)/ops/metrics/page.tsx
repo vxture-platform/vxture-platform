@@ -44,6 +44,7 @@ import {
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 /**
  * `/capability/logs/summary` —— 窗口聚合的请求量 / 错误率 / 延迟分位。
@@ -118,9 +119,7 @@ interface ProviderPerformanceSnapshot {
 function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "从未";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 function formatMs(ms: number | null): string {

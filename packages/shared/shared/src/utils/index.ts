@@ -8,7 +8,14 @@
 export { debugLog, debugWarn, debugError } from "./debug.utils";
 
 // Format utils
-export { formatCurrency, formatDate, formatNumber } from "./format.utils";
+export {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatDay,
+  formatNumber,
+} from "./format.utils";
+export type { DateInput } from "./format.utils";
 
 // Object utils
 export { deepMerge, deepClone, isPlainObject } from "./object.utils";

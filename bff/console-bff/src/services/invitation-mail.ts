@@ -8,6 +8,7 @@
  * owner 规则:只写机制,不写承诺(有效期、点链接后会发生什么)。
  */
 import { escapeHtml } from "@vxture/service-notification";
+import { formatDateTime } from "@vxture-platform/shared";
 
 export type InvitationMailLocale = "zh-CN" | "en-US";
 
@@ -88,16 +89,8 @@ export function invitationMailLocale(
 }
 
 function formatExpiry(date: Date, locale: InvitationMailLocale): string {
-  return date.toLocaleString(locale, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    timeZone: "Asia/Shanghai",
-    hour12: false,
-  });
+  // 邮件里时区必须写死:收件人的客户端不参与渲染,不能按对方本地时区算。
+  return formatDateTime(date, locale, "", { timeZone: "Asia/Shanghai" });
 }
 
 export function renderInvitationMail(

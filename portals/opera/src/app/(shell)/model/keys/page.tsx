@@ -93,6 +93,7 @@ import {
   type KeyEffectiveState,
   type KeyState,
 } from "@/lib/status";
+import { formatDateTime } from "@vxture-platform/shared";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——api-keys 复用 model:provider.manage
  * （和 provider-keys 一样是"vault"类操作，同样挂 StepUp）。 */
@@ -174,9 +175,7 @@ function describeError(error: unknown): { description?: string } {
 function formatTime(iso: string | null, locale: string, never: string): string {
   if (!iso) return never;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 type LoadState =

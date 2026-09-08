@@ -1,3 +1,4 @@
+import { formatDateTime, formatDay } from "@vxture-platform/shared";
 /**
  * format.ts — 账号信息页的展示格式化(手机号 / 时区 / 日期 / UA / 打码)。
  * @package @vxture/console
@@ -104,12 +105,7 @@ export function formatProfileDate(
   if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    // medium 起才有秒（short 只到分）——owner 2026-09-08:
-    // 凡是显示了时间的地方都要到秒。
-    timeStyle: "medium",
-  }).format(date);
+  return formatDateTime(date, locale);
 }
 
 /** 只要日期(注册时间、加入时间这类不需要时分的场合)。 */
@@ -121,7 +117,7 @@ export function formatProfileDay(
   if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
+  return formatDay(date, locale, fallback);
 }
 
 export function parseOS(userAgent: string | null): string {

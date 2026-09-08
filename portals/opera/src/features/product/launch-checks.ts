@@ -39,6 +39,7 @@
 
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 export type CheckStatus = "pass" | "fail" | "skipped";
 
@@ -108,9 +109,7 @@ function reason(error: unknown, fallback: string): string {
 /** 时间戳上屏：与页面上「最近一次」的格式一致，不给人看 ISO 串。 */
 function formatAt(iso: string, locale: string | undefined): string {
   const at = new Date(iso);
-  return Number.isNaN(at.getTime())
-    ? iso
-    : at.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(at.getTime()) ? iso : formatDateTime(at, locale);
 }
 
 /** 凭据的人话。`via` 来自 platform-api，词表就两个；其它值原样带出以免藏错。 */

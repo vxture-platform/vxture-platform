@@ -52,6 +52,7 @@ import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
+import { formatDateTime } from "@vxture-platform/shared";
 
 /** 写操作的能力码，与 BFF 的能力门同名（release:maintenance.manage）。 */
 const MANAGE = "release:maintenance.manage";
@@ -111,16 +112,12 @@ function severityTone(
   return "neutral";
 }
 
-const DATE_TIME = new Intl.DateTimeFormat("zh-CN", {
-  dateStyle: "short",
-  // medium 起才有秒（short 只到分）——owner 2026-09-08。
-  timeStyle: "medium",
-});
-
 function formatMoment(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : DATE_TIME.format(d);
+  // locale 沿用本页原有的固定 zh-CN——这次只统一**形态**（年月日 时分秒），
+  // 改 locale 会让这几个内部运维页的日期字段顺序变掉，是另一件事。
+  return formatDateTime(d, "zh-CN", "—");
 }
 
 type LoadState =

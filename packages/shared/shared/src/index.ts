@@ -116,6 +116,8 @@ export {
   // Format utils
   formatCurrency,
   formatDate,
+  formatDateTime,
+  formatDay,
   formatNumber,
   // Object utils
   deepMerge,
@@ -153,3 +155,6 @@ export {
   InternalServerError,
   isVxtureError,
 } from "./errors";
+
+// 日期形态的输入类型（formatDay / formatDateTime 的参数）
+export type { DateInput } from "./utils/format.utils";

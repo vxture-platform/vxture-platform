@@ -60,6 +60,7 @@ import { useTableLabels } from "@/lib/table";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
+import { formatDateTime } from "@vxture-platform/shared";
 
 const MANAGE = "capability:runos.manage";
 
@@ -113,9 +114,7 @@ function describeError(error: unknown): { description?: string } {
 function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "从未";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 function parseList(input: string): string[] {

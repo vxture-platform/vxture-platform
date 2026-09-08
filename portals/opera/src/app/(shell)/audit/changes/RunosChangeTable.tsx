@@ -41,6 +41,7 @@ import {
   useToast,
 } from "@vxture/design-system";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 /** 字段名跟随 runos v0.8.0（X-3 三方对齐）：`eventType` → `action`，新增 `outcome`。 */
 interface MgmtEventRecord {
@@ -82,9 +83,7 @@ type LoadState =
    没跟着改，见 scripts/guardrails 旁的说明。） */
 function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 export function RunosChangeTable() {

@@ -52,6 +52,7 @@ import {
 import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 type StreamKey = "calls" | "outcomes";
 
@@ -130,9 +131,7 @@ const STREAM_META: Record<StreamKey, { label: string; placeholder: string }> = {
    没跟着改，见 scripts/guardrails 旁的说明。） */
 function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 function callTone(outcome: string | null): StatusBadgeTone {
