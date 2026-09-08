@@ -50,9 +50,12 @@ const CONTENT_SCROLL_ATTR = "data-content-scroll";
  * "前往消息中心"落到同一张台账的完整页。没有的时候就是空态，不补假行。 */
 const DRAWER_NOTIF_LIMIT = 8;
 /* 「前往消息中心」的落地页原是 admin 的 /notification-logs。完整台账页随治理平面
-   cutover（#121）迁去 arche 了，admin 里这个路由已不存在——按钮和每一行都还指着它，
-   点了 404，2026-09-08 走查才发现。抽屉本身保留（看最近几条投递记录不需要落地页），
-   落地页不传：TemplateDrawer 拿不到 href 就不渲染按钮、整行降级成不可点。 */
+ * cutover（#121）迁去 arche 了，admin 里这个路由已不存在——按钮和每一行都还指着它，
+ * 点了 404，2026-09-08 走查才发现。抽屉本身保留（看最近几条投递记录不需要落地页），
+ * 落地页不传：TemplateDrawer 拿不到 href 就不渲染按钮、整行降级成不可点。
+ *
+ * 续行的 `*` 不是排版洁癖：ds/no-raw-color 的 isCommentLine 按「本行以 * 开头」
+ * 认注释，纯缩进的续行不算，于是 `（#121）` 会被当成三位十六进制色值报错。 */
 /** 投递状态 → 抽屉行语气：failed/bounced 要人管；queued 还在路上；其余是回执。 */
 const NOTIF_LEVEL: Record<string, DrawerNotif["level"]> = {
   failed: "danger",
