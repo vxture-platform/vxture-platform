@@ -2288,8 +2288,8 @@
     },
     "items": {
       "overview": {
-        "label": "Data Overview",
-        "description": "Tenant status, subscription expiry, usage, and quick entries"
+        "label": "Overview",
+        "description": "What needs you, and what you have"
       },
       "todos": {
         "label": "Todo Items",
