@@ -4,28 +4,30 @@ import type { Pool, PoolClient } from "pg";
 import { ORG_PG_POOL } from "../tokens";
 import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import type {
-  CloseTenantResult,
   AcceptInvitationResult,
+  CloseTenantResult,
   CreateInvitationInput,
+  DeclineInvitationResult,
+  IncomingInvitation,
+  InvitationListItem,
   InvitationLookup,
   InvitationView,
-  OrgMemberStatus,
-  RotatedInvitation,
-  OrganizationProfileView,
-  OrganizationReadRepository,
   OrgLogoRecord,
   OrgMemberDetail,
+  OrgMemberStatus,
   OrgMembershipView,
   OrgProfileUpdateInput,
   OrgRole,
-  TransferOwnerResult,
   OrgRoleCatalogEntry,
   OrgView,
+  OrganizationProfileView,
+  OrganizationReadRepository,
   PermissionCatalogEntry,
   ProvisionedOrg,
-  InvitationListItem,
+  RotatedInvitation,
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
+  TransferOwnerResult,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -139,6 +141,10 @@ const DEFAULT_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * invitations), with governance RBAC via access.roles/permissions and member
  * joins to account.users. Mirrors the @vxture/service-account pg-repository convention.
  */
+/** 邀请 ID 的形状门。见 acceptInvitation 里的说明。 */
+const ACCEPT_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class PgOrganizationRepository implements OrganizationReadRepository {
   constructor(@Inject(ORG_PG_POOL) private readonly pool: Pool) {}
@@ -1394,6 +1400,126 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     }
   }
 
+  /**
+   * 「谁在邀请我」——按**身份**查待接受的邀请,跨租户。
+   *
+   * 与 `listInvitations` 是相反的两侧:那个答「我这个租户发出去了哪些」(要
+   * `tenant.member.manage`),这个答「有谁邀请我」(SelfScope,不需要任何租户权限——
+   * 恰恰因为此刻我还不是那个租户的成员)。
+   *
+   * 只列 pending 且未过期的:已过期的邀请对被邀请人没有任何可做的事,列出来只会
+   * 在收件箱里堆出点不动的条目。
+   *
+   * 两个通道各按各的规则匹配:邮箱大小写不敏感(与 `rejectAcceptance` 同口径),
+   * 用户号是精确串。**身份为空的那一路不匹配任何行**——传 null 时写成
+   * `lower($1)` 会让 `lower(target) = null` 恒为 unknown,不会误放行。
+   */
+  async listInvitationsForIdentity(
+    identity: { email: string | null; userNo: string | null },
+    limit = 50,
+  ): Promise<IncomingInvitation[]> {
+    const res = await this.pool.query<{
+      id: string;
+      target_type: string;
+      role_code: string | null;
+      expires_at: Date;
+      created_at: Date;
+      tenant_id: string | null;
+      tenant_name: string | null;
+      inviter_name: string | null;
+    }>(
+      `select i.id, i.target_type, r.role_code, i.expires_at, i.created_at,
+              i.tenant_id, t.name as tenant_name,
+              coalesce(up.display_name, u.account) as inviter_name
+         from tenancy.invitations i
+         left join access.roles r on r.id = i.role_id
+         left join tenancy.tenants t on t.id = i.tenant_id
+         left join account.users u on u.id = i.created_by
+         left join account.user_profiles up on up.user_id = i.created_by
+        where i.status = 'pending'
+          and i.expires_at > now()
+          and (
+            (i.target_type = 'email'   and lower(i.target) = lower($1))
+            or
+            (i.target_type = 'user_no' and i.target = $2)
+          )
+        order by i.created_at desc
+        limit $3`,
+      [identity.email, identity.userNo, limit],
+    );
+    return res.rows.map((row) => ({
+      id: row.id,
+      targetType: row.target_type,
+      roleCode: row.role_code ?? "member",
+      tenantId: row.tenant_id,
+      tenantName: row.tenant_name,
+      inviterName: row.inviter_name,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+    }));
+  }
+
+  /**
+   * 拒绝邀请。判定用的是**与接受同一套**的 `rejectAcceptance`——一条我无权接受的
+   * 邀请,也不该由我来拒绝(否则任何人都能替别人回绝掉邀请)。
+   */
+  async declineInvitation(
+    invitationId: string,
+    identity: { email: string | null; userNo: string | null },
+  ): Promise<DeclineInvitationResult> {
+    if (!ACCEPT_UUID_RE.test(invitationId)) {
+      return { ok: false, reason: "not_found" };
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query<{
+        id: string;
+        status: string;
+        expires_at: Date;
+        target_type: string;
+        target: string;
+      }>(
+        `select id, status, expires_at, target_type, target
+           from tenancy.invitations
+          where id = $1
+            for update`,
+        [invitationId],
+      );
+      const row = found.rows[0];
+      const rejection = row
+        ? rejectAcceptance(
+            {
+              status: row.status,
+              expiresAt: row.expires_at,
+              targetType: row.target_type,
+              target: row.target,
+            },
+            identity,
+          )
+        : "not_found";
+      if (!row || rejection) {
+        await client.query("rollback");
+        return { ok: false, reason: rejection ?? "not_found" };
+      }
+      /* declined ≠ revoked:前者是被邀请人自己不来,后者是邀请人撤回。
+         合成一个状态会让邀请台账把「对方不来」写成「我撤回了」。 */
+      await client.query(
+        `update tenancy.invitations
+            set status = 'declined', updated_at = now()
+          where id = $1`,
+        [row.id],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // ── 邀请台账(P1;expired 读侧派生:pending ∧ expires_at 已过)────────────
   async listInvitations(
     tenantId: string,
@@ -1581,12 +1707,33 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return r.rows.map((row) => row.code);
   }
 
+  /**
+   * 接受邀请。**定位方式有两种,判定与写入只有一份**:
+   *
+   *   `{ token }`        邮件通道——链接里的一次性 token。
+   *   `{ invitationId }` 站内通道——按用户号邀请时不发链接,对方在自己的收件箱里
+   *                      点「同意」,凭的是**身份**不是 token(owner 2026-09-09)。
+   *
+   * 两条路都过同一个 `rejectAcceptance`:按用户号发出的邀请,其 `target_type` 是
+   * `user_no`,矩阵会核对当前账号的用户号。所以「知道了邀请 ID」本身不构成权限——
+   * ID 不是凭证,身份才是。这也是为什么这里没有第二个事务、第二套 upsert:
+   * 两份写入一定会有一份先漂。
+   */
   async acceptInvitation(
-    token: string,
+    locator: { token: string } | { invitationId: string },
     userId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
-    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const byToken = "token" in locator;
+    /* 形状不对的 ID 要当「查不到」,不能让它撞到 PG:`i.id` 是 uuid 列,
+       传一个非 uuid 文本会抛 22P02(invalid input syntax),那是 500 不是 404。
+       版本位/变体位刻意不卡——校验器不该比存储层更严(与各 BFF 的 UUID_RE 同口径)。 */
+    if (!byToken && !ACCEPT_UUID_RE.test(locator.invitationId)) {
+      return { ok: false, reason: "not_found" };
+    }
+    const key = byToken
+      ? createHash("sha256").update(locator.token).digest("hex")
+      : locator.invitationId;
     const client = await this.pool.connect();
     try {
       await client.query("begin");
@@ -1609,9 +1756,9 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
                 i.status, i.expires_at, i.target_type, i.target, t.name as tenant_name
            from tenancy.invitations i
            left join tenancy.tenants t on t.id = i.tenant_id
-          where i.token_hash = $1
+          where ${byToken ? "i.token_hash" : "i.id"} = $1
             for update of i`,
-        [tokenHash],
+        [key],
       );
       const row = found.rows[0];
       const rejection = row

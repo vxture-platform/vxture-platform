@@ -10,7 +10,12 @@ import type {
   InvitationListItem,
 } from "../types/organization.types";
 
-/** 行状态 + 到期时刻 → 对外状态(pending 且已过期 → expired)。 */
+/**
+ * 行状态 + 到期时刻 → 对外状态(pending 且已过期 → expired)。
+ *
+ * 每个终态都要在上面这张白名单里点名。漏掉一个的后果不是报错,而是它悄悄
+ * 落到兜底的 `expired`——`declined`(对方拒绝)会在邀请台账里显示成「已过期」,
+ * 把「对方不来」讲成「没人理」。 */
 export function deriveInvitationStatus(
   status: string,
   expiresAt: Date,
@@ -21,7 +26,8 @@ export function deriveInvitationStatus(
     status === "pending" ||
     status === "accepted" ||
     status === "expired" ||
-    status === "revoked"
+    status === "revoked" ||
+    status === "declined"
   ) {
     return status;
   }

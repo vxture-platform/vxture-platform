@@ -2,23 +2,26 @@ import { Inject, Injectable } from "@nestjs/common";
 import { ORGANIZATION_REPOSITORY } from "../tokens";
 import type {
   AcceptInvitationResult,
-  SubmitTenantVerificationInput,
   CreateInvitationInput,
+  DeclineInvitationResult,
+  IncomingInvitation,
+  InvitationLocator,
   InvitationLookup,
   InvitationView,
-  OrgMemberStatus,
-  RotatedInvitation,
-  OrganizationProfileView,
-  OrganizationReadRepository,
   OrgLogoRecord,
   OrgMemberDetail,
+  OrgMemberStatus,
   OrgMembershipView,
   OrgProfileUpdateInput,
   OrgRole,
   OrgRoleCatalogEntry,
   OrgView,
+  OrganizationProfileView,
+  OrganizationReadRepository,
   PermissionCatalogEntry,
   ProvisionedOrg,
+  RotatedInvitation,
+  SubmitTenantVerificationInput,
   TransferOwnerResult,
   WorkspaceMembershipView,
   WorkspaceView,
@@ -207,11 +210,23 @@ export class OrganizationService {
     return this.repo.createInvitation(input);
   }
   acceptInvitation(
-    token: string,
+    locator: InvitationLocator,
     userId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
-    return this.repo.acceptInvitation(token, userId, identity);
+    return this.repo.acceptInvitation(locator, userId, identity);
+  }
+  listInvitationsForIdentity(
+    identity: { email: string | null; userNo: string | null },
+    limit?: number,
+  ): Promise<IncomingInvitation[]> {
+    return this.repo.listInvitationsForIdentity(identity, limit);
+  }
+  declineInvitation(
+    invitationId: string,
+    identity: { email: string | null; userNo: string | null },
+  ): Promise<DeclineInvitationResult> {
+    return this.repo.declineInvitation(invitationId, identity);
   }
   getInvitationByToken(token: string): Promise<InvitationLookup | null> {
     return this.repo.getInvitationByToken(token);

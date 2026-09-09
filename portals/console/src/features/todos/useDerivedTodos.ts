@@ -28,13 +28,28 @@ import {
   type ConsoleQuotaOverview,
   type MyOrder,
   type SubscribedProduct,
+  fetchIncomingInvitations,
+  type IncomingInvitation,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { daysLeft, fmtDate } from "@/modules/commerce/components/hubModel";
 
 import { buildAddonPayHref } from "@/modules/commerce/addon-routes";
-export type TodoKind = "payment" | "renewal" | "quota" | "invitation" | "addon";
+/**
+ * `invitation`          我**发出**的邀请里还有人没接受(要 member.manage,去邀请台账)。
+ * `invitation_incoming` **有人邀请我**加入他们的租户(自视角,同意 / 拒绝就在收件箱里做)。
+ *
+ * 两个都叫「邀请」但方向相反,合成一个 kind 会让文案没法写:一边是「催对方」,
+ * 一边是「等我表态」。
+ */
+export type TodoKind =
+  | "payment"
+  | "renewal"
+  | "quota"
+  | "invitation"
+  | "invitation_incoming"
+  | "addon";
 
 export interface TodoRef {
   type: string;
@@ -49,6 +64,13 @@ export interface TodoItem {
   href: string;
   actionLabel: string;
   refs: TodoRef[];
+  /**
+   * 就地处理型待办的业务 ID(目前只有待我表态的邀请)。
+   *
+   * 有它的那几条不是「点进去某一页」而是「在原地按同意 / 拒绝」——概览页仍然按
+   * `href` 渲染成一个跳转(概览只看不做),收件箱那一页才把两个按钮画出来。
+   */
+  actionableId?: string;
 }
 
 const RENEW_THRESHOLD_DAYS = 7;
@@ -59,6 +81,8 @@ interface Sources {
   addonOrders: ConsoleAddonOrder[];
   quota: ConsoleQuotaOverview | null;
   pendingInvites: number;
+  /** 待我表态的邀请(别人邀请我加入他们的租户)。 */
+  incoming: IncomingInvitation[];
 }
 
 const EMPTY_SOURCES: Sources = {
@@ -67,6 +91,7 @@ const EMPTY_SOURCES: Sources = {
   addonOrders: [],
   quota: null,
   pendingInvites: 0,
+  incoming: [],
 };
 
 export function useDerivedTodos(options: { enabled?: boolean } = {}) {
@@ -102,8 +127,11 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
       canSeeQuota ? fetchQuotaOverview() : skip(null),
       canManageMembers ? fetchInvitations() : skip([]),
       canSeeCommerce ? fetchAddonOrders() : skip([] as ConsoleAddonOrder[]),
+      /* **不设权限门**:有人邀请我加入,与我在当前租户有什么权限无关——
+         恰恰因为我还不是那个租户的成员。 */
+      fetchIncomingInvitations(),
     ])
-      .then(([ords, products, quotaOverview, invites, addons]) => {
+      .then(([ords, products, quotaOverview, invites, addons, incoming]) => {
         if (!active) return;
         setSources({
           orders: ords.status === "fulfilled" ? ords.value : [],
@@ -115,9 +143,10 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
               ? invites.value.filter((i) => i.status === "pending").length
               : 0,
           addonOrders: addons.status === "fulfilled" ? addons.value : [],
+          incoming: incoming.status === "fulfilled" ? incoming.value : [],
         });
         setPartialFailed(
-          [ords, products, quotaOverview, invites, addons].some(
+          [ords, products, quotaOverview, invites, addons, incoming].some(
             (r) => r.status === "rejected",
           ),
         );
@@ -201,6 +230,29 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
       }
     }
     if (sources.pendingInvites > 0) {
+      /* 待我表态的邀请:**一条一行**。发出方那条是合成的计数(「还有 3 条没人接受」),
+         这边不行——每一条都要我单独同意或拒绝,合成一条就没法表态。 */
+      for (const inv of sources.incoming) {
+        rows.push({
+          key: `incoming-invite-${inv.id}`,
+          kind: "invitation_incoming",
+          title: t("items.incomingInviteTitle", {
+            tenant: inv.tenantName ?? t("items.incomingInviteUnnamedTenant"),
+          }),
+          detail: t("items.incomingInviteDetail", {
+            inviter: inv.inviterName ?? t("items.incomingInviteUnknownInviter"),
+            role: inv.roleCode,
+            expires: fmtDate(inv.expiresAt),
+          }),
+          /* 概览页按这个 href 渲染成一次跳转(概览只看不做);
+             收件箱那一页认 actionableId,把「同意 / 拒绝」画在原地。 */
+          href: "/inbox",
+          actionLabel: t("items.incomingInviteAction"),
+          refs: [{ type: "invitation", id: inv.id }],
+          actionableId: inv.id,
+        });
+      }
+
       rows.push({
         key: "invitations",
         kind: "invitation",

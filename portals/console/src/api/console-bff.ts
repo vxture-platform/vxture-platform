@@ -338,14 +338,81 @@ export function memberErrorCode(error: unknown): MemberErrorCode | null {
     : null;
 }
 
-/** 邀请 / 重发的产出:待接受记录 + 一次性链接 + 邮件是否发出。 */
+/**
+ * 「谁在邀请我」的一条。**自视角**——目标就是本人,所以不含目标串;也不含 token
+ * (那是邮件通道的凭证,不从这条读路径出来)。
+ */
+export interface IncomingInvitation {
+  id: string;
+  /** 这条邀请按哪条通道发来(email / user_no)。 */
+  targetType: string;
+  roleCode: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  inviterName: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/**
+ * 有谁在邀请我加入。跨租户、自视角——此刻我还不是那些租户的成员,所以这条**不带
+ * 租户头**(`withTenant`):带上当前租户会让它读成「当前租户里的邀请」,那是另一件事。
+ */
+export async function fetchIncomingInvitations(): Promise<
+  IncomingInvitation[]
+> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/incoming`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  return (await response.json()) as IncomingInvitation[];
+}
+
+/** 同意加入。站内通道没有 token,凭的是当前登录身份。 */
+export async function acceptIncomingInvitation(
+  invitationId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/accept`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invitationId }),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 拒绝加入。与同意同一张判定矩阵——无权接受者亦无权拒绝。 */
+export async function declineIncomingInvitation(
+  invitationId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/${encodeURIComponent(invitationId)}/decline`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/**
+ * 邀请 / 重发的产出。两条通道的形状不同,别按邮箱那条的假设读:
+ *
+ *   邮箱通道   `inviteLink` 是一次性链接,`emailSent=false` 时前端出「复制链接」兜底。
+ *   用户号通道 `inviteLink=null`、`email=""`、`deliveredInApp=true`——**没有链接可复制**,
+ *              邀请靠站内消息送到对方的「待办与消息」,由本人同意。
+ */
 export interface InviteMemberResult {
   member: MemberRecord;
   invitationId: string;
   email: string;
   roleCode: string;
-  inviteLink: string;
+  inviteLink: string | null;
   emailSent: boolean;
+  /** 走的是站内送达(用户号通道)。为真时 inviteLink 必为 null。 */
+  deliveredInApp: boolean;
   expiresAt: string;
 }
 
@@ -372,8 +439,18 @@ export async function createMember(payload: {
   return (await response.json()) as MemberRecord;
 }
 
+/**
+ * 邀请成员。两条通道**二选一**（owner 2026-09-09）：
+ *
+ *   `email`  —— 发链接，对方可以还没有账号。
+ *   `userNo` —— 目标必须是平台已有账号：不发邮件、不给链接，站内落一条消息，
+ *               对方在「待办与消息」里同意才加入。
+ *
+ * 只给该给的那一项：两个都给会让后端的分叉判据（给了哪一个）多出一种歧义。
+ */
 export async function inviteMember(payload: {
-  email: string;
+  email?: string;
+  userNo?: string;
   roleCode?: string | null;
 }): Promise<InviteMemberResult> {
   const response = await fetch(

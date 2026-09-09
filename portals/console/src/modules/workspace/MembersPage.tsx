@@ -31,6 +31,7 @@ import {
   DialogForm,
   EmptyState,
   Field,
+  SegmentedControl,
   FieldLabel,
   FilterBar,
   Icon,
@@ -146,7 +147,14 @@ export function MembersPage() {
     result: InviteMemberResult;
     resent: boolean;
   } | null>(null);
-  const [memberForm, setMemberForm] = useState({ email: "", roleId: "" });
+  /* 邀请通道(owner 2026-09-09)。「加成员」只走邮箱(那条路径要求对方已有账号,
+     按邮箱找得到人);「邀请」才有两条通道可选。 */
+  const [memberForm, setMemberForm] = useState({
+    email: "",
+    userNo: "",
+    channel: "email" as "email" | "user_no",
+    roleId: "",
+  });
   const [passwordForm, setPasswordForm] = useState({ nextPassword: "" });
 
   useEffect(() => {
@@ -193,6 +201,10 @@ export function MembersPage() {
   function resetMemberForm(member?: MemberRecord | null) {
     setMemberForm({
       email: member?.email ?? "",
+      userNo: "",
+      /* 每次开对话框都回到邮箱通道:上一次选了用户号不该粘住,
+         下一个人多半是要发邮件的。 */
+      channel: "email",
       roleId: member?.roleId ?? "",
     });
   }
@@ -231,26 +243,37 @@ export function MembersPage() {
     setSubmitting(true);
     resetFeedback();
 
-    const payload = {
-      email: memberForm.email,
-      // The backend reads `roleCode`; the role catalog sets id === roleCode.
-      roleCode: memberForm.roleId || null,
-    };
+    // The backend reads `roleCode`; the role catalog sets id === roleCode.
+    const roleCode = memberForm.roleId || null;
 
     try {
       if (createMode === "invite") {
-        const result = await inviteMember(payload);
+        /* 按通道只给该给的那一项:两个都给会让后端的分叉判据(给了哪一个)变成
+           「都给了怎么办」,那是个不必要的歧义。 */
+        const result = await inviteMember(
+          memberForm.channel === "user_no"
+            ? { userNo: memberForm.userNo.trim(), roleCode }
+            : { email: memberForm.email, roleCode },
+        );
         await reloadMembers(result.member.id);
         setCreateMode(null);
         resetMemberForm();
         setInviteResult({ result, resent: false });
+        /* 三种收尾各说各的:站内邀请没有邮件也没有链接,套用「邮件没发出去」
+           会让人以为出了错——它恰恰是这条通道的正常结果。 */
         setMessage(
-          result.emailSent
-            ? t("feedback.inviteSuccess")
-            : t("feedback.inviteNoEmail"),
+          result.deliveredInApp
+            ? t("feedback.inviteSentInApp")
+            : result.emailSent
+              ? t("feedback.inviteSuccess")
+              : t("feedback.inviteNoEmail"),
         );
       } else {
-        const created = await createMember(payload);
+        /* 「加成员」只有邮箱一条路:它要求对方已是平台用户且按邮箱找得到。 */
+        const created = await createMember({
+          email: memberForm.email,
+          roleCode,
+        });
         await reloadMembers(created.id);
         setCreateMode(null);
         resetMemberForm();
@@ -1103,20 +1126,70 @@ export function MembersPage() {
               </Button>
             </div>
           ) : null}
-          <Field>
-            <FieldLabel htmlFor="member-email">
-              {t("dialogs.fields.email")}
-            </FieldLabel>
-            <Input
-              id="member-email"
-              type="email"
-              value={memberForm.email}
-              onChange={(event) =>
-                setMemberForm((old) => ({ ...old, email: event.target.value }))
-              }
-              required
-            />
-          </Field>
+          {/* 邀请通道二选一(owner 2026-09-09)。只在「邀请」时出现——
+              「加成员」那条路径要求对方已是平台用户且按邮箱找得到,没有第二条通道。 */}
+          {createMode === "invite" ? (
+            <Field>
+              <FieldLabel htmlFor="member-channel">
+                {t("dialogs.fields.channel")}
+              </FieldLabel>
+              <SegmentedControl<"email" | "user_no">
+                ariaLabel={t("dialogs.fields.channel")}
+                value={memberForm.channel}
+                onChange={(next) =>
+                  setMemberForm((old) => ({ ...old, channel: next }))
+                }
+                items={[
+                  { value: "email", label: t("dialogs.channel.email") },
+                  { value: "user_no", label: t("dialogs.channel.userNo") },
+                ]}
+              />
+            </Field>
+          ) : null}
+
+          {createMode === "invite" && memberForm.channel === "user_no" ? (
+            <Field>
+              <FieldLabel htmlFor="member-user-no">
+                {t("dialogs.fields.userNo")}
+              </FieldLabel>
+              <Input
+                id="member-user-no"
+                inputMode="numeric"
+                autoComplete="off"
+                value={memberForm.userNo}
+                onChange={(event) =>
+                  setMemberForm((old) => ({
+                    ...old,
+                    userNo: event.target.value,
+                  }))
+                }
+                required
+              />
+              {/* 说明放框后:这条通道与邮箱那条的行为不同(不发邮件、要对方在站内同意),
+                  不说清楚的话邀请人会一直等一封不会来的邮件。 */}
+              <span className="text-body-sm text-muted-foreground">
+                {t("dialogs.fields.userNoHint")}
+              </span>
+            </Field>
+          ) : (
+            <Field>
+              <FieldLabel htmlFor="member-email">
+                {t("dialogs.fields.email")}
+              </FieldLabel>
+              <Input
+                id="member-email"
+                type="email"
+                value={memberForm.email}
+                onChange={(event) =>
+                  setMemberForm((old) => ({
+                    ...old,
+                    email: event.target.value,
+                  }))
+                }
+                required
+              />
+            </Field>
+          )}
           {roleSelect}
         </DialogForm>
       ) : null}

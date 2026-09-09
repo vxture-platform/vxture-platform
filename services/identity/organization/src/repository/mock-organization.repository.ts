@@ -3,25 +3,28 @@ import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import type {
   AcceptInvitationResult,
   CreateInvitationInput,
+  DeclineInvitationResult,
+  IncomingInvitation,
+  InvitationListItem,
+  InvitationLocator,
   InvitationLookup,
   InvitationView,
-  OrgMemberStatus,
-  RotatedInvitation,
-  OrganizationProfileView,
-  OrganizationReadRepository,
   OrgLogoRecord,
   OrgMemberDetail,
+  OrgMemberStatus,
   OrgMembershipView,
-  TransferOwnerResult,
   OrgProfileUpdateInput,
   OrgRole,
   OrgRoleCatalogEntry,
-  InvitationListItem,
   OrgView,
+  OrganizationProfileView,
+  OrganizationReadRepository,
   PermissionCatalogEntry,
   ProvisionedOrg,
+  RotatedInvitation,
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
+  TransferOwnerResult,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -630,12 +633,78 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     });
     return { invitation, token };
   }
+  async listInvitationsForIdentity(
+    identity: { email: string | null; userNo: string | null },
+    limit = 50,
+  ): Promise<IncomingInvitation[]> {
+    const now = Date.now();
+    return [...this.invitations.values()]
+      .filter((i) => {
+        const v = i.view;
+        if (v.status !== "pending" || v.expiresAt.getTime() <= now)
+          return false;
+        /* 与 pg 那份同口径:邮箱大小写不敏感,用户号精确串;
+           身份缺的那一路一律不匹配(不是「放行」)。 */
+        if (v.targetType === "email") {
+          return (
+            !!identity.email &&
+            identity.email.trim().toLowerCase() ===
+              v.target.trim().toLowerCase()
+          );
+        }
+        if (v.targetType === "user_no") {
+          return (
+            !!identity.userNo && identity.userNo.trim() === v.target.trim()
+          );
+        }
+        return false;
+      })
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit)
+      .map((i) => ({
+        id: i.view.id,
+        targetType: i.view.targetType,
+        roleCode: i.view.role,
+        tenantId: i.view.organizationId ?? null,
+        tenantName: null,
+        inviterName: null,
+        expiresAt: i.view.expiresAt,
+        createdAt: i.createdAt,
+      }));
+  }
+
+  async declineInvitation(
+    invitationId: string,
+    identity: { email: string | null; userNo: string | null },
+  ): Promise<DeclineInvitationResult> {
+    const inv = [...this.invitations.values()].find(
+      (i) => i.view.id === invitationId,
+    );
+    if (!inv) return { ok: false, reason: "not_found" };
+    const rejection = rejectAcceptance(
+      {
+        status: inv.view.status,
+        expiresAt: inv.view.expiresAt,
+        targetType: inv.view.targetType,
+        target: inv.view.target,
+      },
+      identity,
+    );
+    if (rejection) return { ok: false, reason: rejection };
+    inv.view.status = "declined";
+    return { ok: true };
+  }
+
   async acceptInvitation(
-    token: string,
+    locator: InvitationLocator,
     userId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
-    const inv = [...this.invitations.values()].find((i) => i.token === token);
+    const inv = [...this.invitations.values()].find((i) =>
+      "token" in locator
+        ? i.token === locator.token
+        : i.view.id === locator.invitationId,
+    );
     if (!inv) return { ok: false, reason: "not_found" };
     const rejection = rejectAcceptance(
       {

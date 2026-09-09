@@ -169,7 +169,7 @@ describe("MockOrganizationRepository invitations & member status", () => {
 
   it("接受成功:邀请转 accepted,租户级 + 默认工作空间两级 membership 都挂上", async () => {
     const { invitation, token } = await invite();
-    const result = await repo.acceptInvitation(token, "u-ann", {
+    const result = await repo.acceptInvitation({ token: token }, "u-ann", {
       email: "ann@example.com",
       userNo: null,
     });
@@ -186,7 +186,7 @@ describe("MockOrganizationRepository invitations & member status", () => {
     const list = await repo.listInvitations(orgId);
     expect(list.find((i) => i.id === invitation.id)?.status).toBe("accepted");
     // 同一链接不能再用一次。
-    const again = await repo.acceptInvitation(token, "u-ann", {
+    const again = await repo.acceptInvitation({ token: token }, "u-ann", {
       email: "ann@example.com",
       userNo: null,
     });
@@ -195,7 +195,7 @@ describe("MockOrganizationRepository invitations & member status", () => {
 
   it("邮箱不符 → email_mismatch,邀请仍是 pending", async () => {
     const { invitation, token } = await invite();
-    const result = await repo.acceptInvitation(token, "u-bob", {
+    const result = await repo.acceptInvitation({ token: token }, "u-bob", {
       email: "bob@x.com",
       userNo: null,
     });
@@ -218,7 +218,7 @@ describe("MockOrganizationRepository invitations & member status", () => {
     expect(await repo.revokeInvitation(invitation.id, orgId)).toBe(true);
     expect(await repo.rotateInvitationToken(invitation.id, orgId)).toBeNull();
     expect(
-      await repo.acceptInvitation(rotated!.token, "u-ann", {
+      await repo.acceptInvitation({ token: rotated!.token }, "u-ann", {
         email: "ann@example.com",
         userNo: null,
       }),
@@ -258,5 +258,39 @@ describe("MockOrganizationRepository invitations & member status", () => {
     expect(await repo.removeOrgMember(orgId, "u-ann")).toBe(true);
     expect(await repo.getWorkspaceMembership("u-ann", ws!.id)).toBeNull();
     expect(await repo.getOrgMemberDetail(orgId, "u-ann")).toBeNull();
+  });
+});
+/**
+ * declined 的取档（owner 2026-09-09）。
+ *
+ * 这一条钉的不是「能不能拒绝」，而是**拒绝之后邀请人看到的是什么**。
+ * `deriveInvitationStatus` 有个兜底 `expired`：任何没在白名单里点名的状态都会
+ * 悄悄变成「已过期」。漏点名不报错——它只是把「对方拒绝了」讲成「没人理」。
+ */
+describe("declined 取档", () => {
+  const future = new Date(Date.now() + 60_000);
+
+  it("declined 原样透出，不落到兜底的 expired", () => {
+    expect(deriveInvitationStatus("declined", future)).toBe("declined");
+  });
+
+  /* 反向对照：兜底确实还在（否则上一条不构成证明——一个「原样返回一切」的实现
+     同样能让它通过）。 */
+  it("未知状态仍走兜底 → expired", () => {
+    expect(deriveInvitationStatus("something_new", future)).toBe("expired");
+  });
+
+  /* 拒绝与接受共用同一张矩阵：一条我无权接受的邀请，也不该由我来拒绝——
+     否则任何人都能替别人把邀请回绝掉。 */
+  it("拒绝走的是同一张矩阵：号不对就不许动", () => {
+    const inv = {
+      targetType: "user_no",
+      target: "1000000017",
+      status: "pending",
+      expiresAt: future,
+    };
+    expect(rejectAcceptance(inv, { email: null, userNo: "1000000099" })).toBe(
+      "user_mismatch",
+    );
   });
 });

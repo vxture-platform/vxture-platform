@@ -32,6 +32,34 @@ export interface NotifyInput {
   params: TemplateParams;
   /** 额外收件人 account id；租户 owner 永远包含。 */
   recipients?: string[] | undefined;
+  /**
+   * **只发这些人**，不并入租户 owner。
+   *
+   * 给「这条消息只与某一个人有关」的场景用——典型是入组邀请：收件人此刻**还不是**
+   * 该租户的成员，而 owner 多半就是发出邀请的那个人。默认那条「owner 永远包含」
+   * 的规则对这类消息是错的:它会把「有人邀请你加入」发给邀请人自己。
+   *
+   * 与 `recipients` 互斥语义:给了这个就完全接管收件人集合。
+   */
+  exactRecipients?: string[] | undefined;
+  /**
+   * 事务性通知:**绕过收件人的偏好开关**。
+   *
+   * 只在「这条消息本身就是送达手段」时才为真。入组邀请就是这种:按用户号邀请不发
+   * 邮件、不给链接,站内这条消息**是**邀请本身。被偏好关掉的话,邀请人会收到
+   * 「已送达对方账号」而对方那边什么也没有——那是在对邀请人说谎。
+   *
+   * 「到期提醒」这类不属于此列:关掉它,事实仍然在订阅页看得到。
+   */
+  mandatory?: boolean | undefined;
+  /**
+   * 只落站内,不发邮件 / 短信。
+   *
+   * 按用户号邀请时前端明说了「不发邮件」,那句话必须是真的:界面承诺与实际行为
+   * 不一致比少一个渠道糟得多。(要不要另发一封**不含链接**的周知邮件是个产品取舍,
+   * 待 owner 定;真要发,改这里一个开关即可。)
+   */
+  inboxOnly?: boolean | undefined;
   /** console 内相对路径，或（公告 CTA）绝对 URL。 */
   link?: string | undefined;
 }
@@ -138,7 +166,10 @@ export class NotificationDispatcher {
 
     for (const accountId of recipients) {
       try {
-        if (!(await this.allows(accountId, topic, "inbox"))) {
+        if (
+          !input.mandatory &&
+          !(await this.allows(accountId, topic, "inbox"))
+        ) {
           result.skipped += 1;
           continue;
         }
@@ -184,22 +215,24 @@ export class NotificationDispatcher {
           delivered: true,
         });
 
-        await this.sendEmail(
-          input,
-          accountId,
-          topic,
-          recipient.email,
-          rendered,
-          result,
-        );
-        await this.sendSms(
-          input,
-          accountId,
-          topic,
-          recipient.phone,
-          rendered,
-          result,
-        );
+        if (!input.inboxOnly) {
+          await this.sendEmail(
+            input,
+            accountId,
+            topic,
+            recipient.email,
+            rendered,
+            result,
+          );
+          await this.sendSms(
+            input,
+            accountId,
+            topic,
+            recipient.phone,
+            rendered,
+            result,
+          );
+        }
       } catch (err) {
         result.skipped += 1;
         this.logger.warn(
@@ -312,6 +345,10 @@ export class NotificationDispatcher {
 
   /** 调用方给的收件人 ∪ 租户 owner，去重、去空。 */
   private async resolveRecipients(input: NotifyInput): Promise<string[]> {
+    /* 指名收件人时完全接管:不并 owner。见 NotifyInput.exactRecipients 的理由。 */
+    if (input.exactRecipients) {
+      return [...new Set(input.exactRecipients.filter(Boolean))];
+    }
     const res = await this.pool.query<{ owner_user_id: string | null }>(
       `select owner_user_id from tenancy.tenants where id = $1`,
       [input.tenantId],

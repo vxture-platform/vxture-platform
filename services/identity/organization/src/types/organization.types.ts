@@ -84,7 +84,7 @@ export interface InvitationListItem {
   target: string;
   email: string;
   roleCode: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined";
   expiresAt: Date;
   acceptedAt: Date | null;
   createdAt: Date;
@@ -305,7 +305,7 @@ export interface InvitationLookup {
   tenantName: string | null;
   email: string;
   roleCode: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined";
   expiresAt: Date;
   inviterName: string | null;
 }
@@ -340,6 +340,38 @@ export type AcceptInvitationRejection =
    * 通道都可能落到这里——一律拒绝，不放行。
    */
   | "unknown_target";
+
+/**
+ * 定位一条待接受的邀请。
+ *
+ * `token`        邮件通道:链接里的一次性 token,**token 即凭证**。
+ * `invitationId` 站内通道:按用户号邀请时不发链接,对方在收件箱里点「同意」——
+ *                此时 ID 只是**地址**,凭证是当前登录身份,由 `rejectAcceptance`
+ *                的 `user_no` 分支核对。知道 ID 不等于能接受。
+ */
+/**
+ * 「谁在邀请我」的一条。给被邀请人看的视角,所以**不含 token、不含目标串**:
+ * 目标就是本人,重复展示自己的邮箱/用户号没有信息量;token 属于邮件通道的凭证,
+ * 不该经这条自视角的读路径流出去。
+ */
+export interface IncomingInvitation {
+  id: string;
+  /** 这条邀请是按哪条通道发来的(email / user_no)。 */
+  targetType: string;
+  roleCode: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  inviterName: string | null;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+/** 拒绝邀请的产出。拒绝理由沿用接受那套矩阵——无权接受者亦无权拒绝。 */
+export type DeclineInvitationResult =
+  | { ok: true }
+  | { ok: false; reason: AcceptInvitationRejection };
+
+export type InvitationLocator = { token: string } | { invitationId: string };
 
 export type AcceptInvitationResult =
   | { ok: true; membership: OrgMembershipView; tenantName: string | null }
@@ -484,10 +516,23 @@ export interface OrganizationReadRepository {
    * `rejectAcceptance` 的 default 是拒绝。
    */
   acceptInvitation(
-    token: string,
+    locator: InvitationLocator,
     userId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult>;
+  /**
+   * 「谁在邀请我」——按身份查待接受邀请,跨租户。与 `listInvitations` 互为两侧:
+   * 那个要 `tenant.member.manage`,这个是自视角(此刻我还不是该租户成员)。
+   */
+  listInvitationsForIdentity(
+    identity: { email: string | null; userNo: string | null },
+    limit?: number,
+  ): Promise<IncomingInvitation[]>;
+  /** 被邀请人自己拒绝。判定沿用接受矩阵——无权接受者亦无权拒绝。 */
+  declineInvitation(
+    invitationId: string,
+    identity: { email: string | null; userNo: string | null },
+  ): Promise<DeclineInvitationResult>;
   /** 按原始 token 查邀请(接受页先看清楚再点);查不到返回 null。 */
   getInvitationByToken(token: string): Promise<InvitationLookup | null>;
   /**

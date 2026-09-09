@@ -20,6 +20,8 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
 import { MailService } from "@vxture/core-mail";
+import type { NotificationDispatcher } from "@vxture/service-notification";
+import { CUSTOMER_NOTIFIER } from "../services/customer-notifications.wiring";
 import {
   SessionAggregator,
   type InviteMemberOutcome,
@@ -107,6 +109,9 @@ export class IamRouter {
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
     @Inject(MailService) private readonly mail: MailService,
     @Inject(VxConfigService) private readonly config: VxConfigService,
+    /** 站内送达走统一分发器:按收件人语言渲染 + 记 notification_logs。 */
+    @Inject(CUSTOMER_NOTIFIER)
+    private readonly notifier: NotificationDispatcher,
   ) {}
 
   /** 邀请链接:CONSOLE_BASE_URL + 语言前缀(console 路由 localePrefix=always)+ 接受页。 */
@@ -194,13 +199,23 @@ export class IamRouter {
   }
 
   /**
-   * 站内送达:往被邀请人的收件箱落一条消息,链接指向接受页。
+   * 站内送达:往被邀请人的收件箱落一条 `tenant.invitation`。
    *
-   * 与邮件同一条纪律——**best-effort**:邀请行已经落库，送达失败只记日志、不回滚。
-   * 邀请人那边仍然看得到这条 pending，可以重发。
+   * **走统一分发器,不自己写 INSERT。** 最初这里是一条手写 SQL,三处都是错的:
+   * 标题正文写死中文(收件人可能是 en-US)、不记 `notification_logs`、
+   * 链接指向 `/invitations/:id`——那个地址会跳到**邀请人**的邀请台账,
+   * 被邀请人既看不懂也没权限。
    *
-   * 去重键与 dispatcher 同构（收件人 × 模板 × 业务引用）：同一条邀请重发时不会
-   * 在对方收件箱里堆出第二条。
+   * 三个非默认开关各自的理由见 `NotifyInput`:
+   *   `exactRecipients` 只发被邀请人——默认会把 owner 并进来,而 owner 多半就是
+   *                     发出邀请的那个人。
+   *   `mandatory`       这条消息**就是**邀请本身,被偏好开关吞掉的话邀请人会收到
+   *                     「已送达」而对方那边什么也没有。
+   *   `inboxOnly`       前端明说了「不发邮件」,那句话必须是真的。
+   *
+   * 与邮件同一条纪律——**best-effort**:邀请行已经落库,送达失败只记日志、不回滚。
+   * 邀请人那边仍然看得到这条 pending,可以重发。去重键(收件人 × 模板 × 业务引用)
+   * 保证重发不会在对方收件箱里堆出第二条。
    */
   private async notifyInviteeInApp(
     outcome: InviteMemberOutcome,
@@ -208,24 +223,25 @@ export class IamRouter {
   ) {
     if (!outcome.targetUserId) return;
     try {
-      await this.pool.query(
+      await this.notifier.notify({
         /* tenant_id 由调用方给,**不按租户名去查**:`tenancy.tenants.name` 没有
-           唯一索引(查过 pg_index),按名字 join 可能挑错租户、甚至插出多行。 */
-        `insert into support.inbox_messages
-           (tenant_id, account_id, template_code, title, body, link,
-            reference_type, reference_id, created_at)
-         values ($1, $2, 'tenant.invitation', $3, $4, $5, 'invitation', $6, now())
-         on conflict (account_id, template_code, reference_type, reference_id)
-         do nothing`,
-        [
-          tenantId,
-          outcome.targetUserId,
-          `${outcome.tenantName} 邀请你加入`,
-          `${outcome.inviterName} 邀请你以「${outcome.roleCode}」身份加入 ${outcome.tenantName}。`,
-          `/invitations/${outcome.invitationId}`,
-          outcome.invitationId,
-        ],
-      );
+           唯一索引(查过 pg_index),按名字 join 可能挑错租户。 */
+        tenantId,
+        templateCode: "tenant.invitation",
+        reference: { type: "invitation", id: outcome.invitationId },
+        params: {
+          tenantName: outcome.tenantName,
+          inviterName: outcome.inviterName,
+          roleName: outcome.roleCode,
+          expiresAt: outcome.expiresAt.toISOString().slice(0, 10),
+        },
+        exactRecipients: [outcome.targetUserId],
+        mandatory: true,
+        inboxOnly: true,
+        /* 「同意 / 拒绝」两个按钮长在收件箱那一条上,点开就在原地——
+           不另开一页,也就不需要把邀请 ID 放进地址栏。 */
+        link: "/inbox",
+      });
     } catch (err) {
       this.logger.warn(
         `in-app invitation notice for ${outcome.invitationId} failed: ${String(err)}`,
@@ -458,6 +474,52 @@ export class IamRouter {
     };
   }
 
+  /**
+   * 「谁在邀请我」。**自视角读**——此刻我还不是那些租户的成员,所以不能挂任何
+   * 租户能力门;`@SelfScope()` 表达的正是「作用域是我自己」。
+   *
+   * 返回里没有 token、没有目标串:目标就是本人,重复展示自己的邮箱/用户号没有
+   * 信息量;token 是邮件通道的凭证,不该从这条读路径漏出去。
+   */
+  @SelfScope()
+  @Get("invitations/incoming")
+  async listIncomingInvitations(@Req() req: Request & RequestContext) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const rows = await this.sessionAggregator.listIncomingInvitations(
+      req.user.id,
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      targetType: row.targetType,
+      roleCode: row.roleCode,
+      tenantId: row.tenantId,
+      tenantName: row.tenantName,
+      inviterName: row.inviterName,
+      expiresAt: row.expiresAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * 拒绝邀请。与接受同一张判定矩阵:一条我无权接受的邀请也不该由我拒绝,
+   * 否则任何人都能替别人把邀请回绝掉。
+   */
+  @SelfScope()
+  @Post("invitations/:invitationId/decline")
+  async declineInvitation(
+    @Req() req: Request & RequestContext,
+    @Param("invitationId") invitationId: string,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const result = await this.sessionAggregator.declineInvitation(
+      req.user.id,
+      invitationId,
+    );
+    if (!result.ok)
+      throw ACCEPT_INVITATION_ERRORS[result.reason](result.reason);
+    return { ok: true };
+  }
+
   @SelfScope()
   @Post("invitations/accept")
   async acceptInvitation(
@@ -465,10 +527,18 @@ export class IamRouter {
     @Body() body: AcceptInvitationDto,
   ) {
     if (!req.user) throw new UnauthorizedException("No active session");
-    if (!body.token) throw new BadRequestException("token is required");
+    /* token 优先:它是显式凭证。两者都没有才是真的无法定位。 */
+    const locator = body.token
+      ? { token: body.token }
+      : body.invitationId
+        ? { invitationId: body.invitationId }
+        : null;
+    if (!locator) {
+      throw new BadRequestException("token or invitationId is required");
+    }
     const result = await this.sessionAggregator.acceptInvitation(
       req.user.id,
-      body.token,
+      locator,
     );
     if (!result.ok)
       throw ACCEPT_INVITATION_ERRORS[result.reason](result.reason);

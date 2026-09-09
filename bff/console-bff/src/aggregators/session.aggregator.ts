@@ -31,6 +31,7 @@ import {
   GovernanceService,
   OrganizationService,
   type AcceptInvitationResult,
+  type InvitationLocator,
   type InvitationLookup,
   type OrgLogoRecord,
   type OrgMemberDetail,
@@ -970,12 +971,21 @@ export class SessionAggregator {
    * 接受邀请。租户由 token 决定,不看当前活跃租户;**收件人身份须与邀请对得上**
    * ——邮箱通道核邮箱、用户号通道核用户号(仓储层校验,认不出的通道一律拒绝)。成功后清掉能力缓存——对方下一次切进该租户就该按新角色拿能力。
    */
+  /**
+   * 接受邀请。两条通道走同一个方法,只是定位方式不同:
+   *
+   *   `{ token }`        邮件链接。
+   *   `{ invitationId }` 站内消息里的「同意」——按用户号邀请时没有链接可点。
+   *
+   * 身份(email + userNo)在这里一次取全:少传一项,对应通道的邀请就永远接受不了。
+   * 这是**故意的方向**——`rejectAcceptance` 的 default 是拒绝,不是放行。
+   */
   async acceptInvitation(
     userId: string,
-    token: string,
+    locator: InvitationLocator,
   ): Promise<AcceptInvitationResult> {
     const user = await this.account.getUserById(userId);
-    const result = await this.org.acceptInvitation(token, userId, {
+    const result = await this.org.acceptInvitation(locator, userId, {
       email: user?.email ?? null,
       userNo: user?.userNo ?? null,
     });
@@ -983,6 +993,27 @@ export class SessionAggregator {
       this.invalidateCapabilities(userId, result.membership.organizationId);
     }
     return result;
+  }
+
+  /** 「谁在邀请我」。自视角读——此刻我还不是那些租户的成员,不能要租户权限。 */
+  async listIncomingInvitations(userId: string) {
+    const user = await this.account.getUserById(userId);
+    /* 身份两项都没有 → 不可能有任何邀请指向我。空手查会让 SQL 拿两个 null
+       去比,虽然也返回空,但没必要为此打一趟库。 */
+    if (!user?.email && !user?.userNo) return [];
+    return this.org.listInvitationsForIdentity({
+      email: user?.email ?? null,
+      userNo: user?.userNo ?? null,
+    });
+  }
+
+  /** 拒绝邀请。判定沿用接受矩阵——无权接受者亦无权拒绝。 */
+  async declineInvitation(userId: string, invitationId: string) {
+    const user = await this.account.getUserById(userId);
+    return this.org.declineInvitation(invitationId, {
+      email: user?.email ?? null,
+      userNo: user?.userNo ?? null,
+    });
   }
 
   /**

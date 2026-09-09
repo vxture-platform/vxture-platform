@@ -474,7 +474,21 @@
     "readBadge": "已读",
     "todoBadge": "待办",
     "unread": "{count} 条未读",
-    "unreadBadge": "未读"
+    "unreadBadge": "未读",
+    "invite": {
+      "accept": "同意",
+      "decline": "拒绝",
+      "failed": "操作失败，请稍后重试。",
+      "error": {
+        "not_found": "这条邀请不存在或已被撤销。",
+        "expired": "这条邀请已过期，请让邀请人重新发送。",
+        "revoked": "这条邀请已被邀请人撤销。",
+        "already_accepted": "这条邀请已经处理过了。",
+        "email_mismatch": "这条邀请发给的是另一个邮箱，请用该邮箱对应的账号登录。",
+        "user_mismatch": "这条邀请发给的是另一个用户号，请用该账号登录。",
+        "unknown_target": "这条邀请的数据不可用，请让邀请人重新发送。"
+      }
+    }
   },
   "invitationsPage": {
     "title": "邀请记录",
@@ -724,6 +738,9 @@
       },
       "fields": {
         "email": "邮箱",
+        "channel": "邀请方式",
+        "userNo": "用户号",
+        "userNoHint": "对方必须是已注册的平台用户。不发邮件——邀请会出现在对方的「待办与消息」里，由本人同意后加入。",
         "role": "角色",
         "defaultRole": "默认成员",
         "nextPassword": "新临时密码"
@@ -740,6 +757,10 @@
         "verb": "撤销给",
         "consequence": "邀请链接立刻失效,对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方加入,需要再发一次邀请。",
         "keep": "保留邀请"
+      },
+      "channel": {
+        "email": "邮箱",
+        "userNo": "用户号"
       }
     },
     "feedback": {
@@ -765,6 +786,7 @@
       "memberDisableError": "成员禁用失败，请稍后重试。",
       "memberEnableError": "成员启用失败，请稍后重试。",
       "inviteNoEmail": "邀请已创建,但邮件未能发出,请把链接手动发给对方。",
+      "inviteSentInApp": "邀请已送达对方账号，等待本人同意。",
       "inviteResent": "邀请已重发。",
       "inviteRevoked": "邀请已撤销。",
       "resendError": "重发失败,请稍后重试。",
@@ -2937,7 +2959,8 @@
       "renewal": "续订",
       "quota": "配额",
       "invitation": "邀请",
-      "addon": "加油包"
+      "addon": "加油包",
+      "invitation_incoming": "邀请我"
     },
     "items": {
       "payTitle": "支付「{product}」的订阅订单",
@@ -2957,7 +2980,12 @@
       "invitesAction": "去邀请管理",
       "addonTitle": "支付加油包「{pack}」的订单",
       "addonDetail": "请在 {date} 前完成转账申报,逾期自动取消",
-      "addonAction": "去申报"
+      "addonAction": "去申报",
+      "incomingInviteTitle": "{tenant} 邀请你加入",
+      "incomingInviteDetail": "{inviter} 邀请你以「{role}」身份加入，{expires} 前有效。",
+      "incomingInviteAction": "去处理",
+      "incomingInviteUnnamedTenant": "一个组织",
+      "incomingInviteUnknownInviter": "对方"
     },
     "loadFailed": "部分待办来源读取失败，列表可能不完整"
   },

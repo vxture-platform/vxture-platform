@@ -474,7 +474,21 @@
     "readBadge": "Read",
     "todoBadge": "To-do",
     "unread": "{count} unread",
-    "unreadBadge": "Unread"
+    "unreadBadge": "Unread",
+    "invite": {
+      "accept": "Accept",
+      "decline": "Decline",
+      "failed": "Something went wrong. Please try again.",
+      "error": {
+        "not_found": "This invitation no longer exists.",
+        "expired": "This invitation has expired. Ask the sender to send a new one.",
+        "revoked": "The sender withdrew this invitation.",
+        "already_accepted": "This invitation has already been handled.",
+        "email_mismatch": "This invitation was sent to a different email address. Sign in with that account.",
+        "user_mismatch": "This invitation was sent to a different user ID. Sign in with that account.",
+        "unknown_target": "This invitation's data is unusable. Ask the sender to send a new one."
+      }
+    }
   },
   "invitationsPage": {
     "title": "Invitations",
@@ -724,6 +738,9 @@
       },
       "fields": {
         "email": "Email",
+        "channel": "Invite by",
+        "userNo": "User ID",
+        "userNoHint": "The recipient must already have a platform account. No email is sent — the invitation appears in their inbox and takes effect once they accept it.",
         "role": "Role",
         "defaultRole": "Default member",
         "nextPassword": "New temporary password"
@@ -740,6 +757,10 @@
         "verb": "Revoke the invitation to",
         "consequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — send a new invitation to let them join.",
         "keep": "Keep invitation"
+      },
+      "channel": {
+        "email": "Email",
+        "userNo": "User ID"
       }
     },
     "feedback": {
@@ -765,6 +786,7 @@
       "memberDisableError": "Could not disable the member. Try again later.",
       "memberEnableError": "Could not enable the member. Try again later.",
       "inviteNoEmail": "Invitation created, but the email could not be sent; share the link manually.",
+      "inviteSentInApp": "Invitation delivered to the account. Waiting for them to accept.",
       "inviteResent": "Invitation resent.",
       "inviteRevoked": "Invitation revoked.",
       "resendError": "Could not resend the invitation. Try again later.",
@@ -2937,7 +2959,8 @@
       "renewal": "Renewal",
       "quota": "Quota",
       "invitation": "Invitation",
-      "addon": "Booster"
+      "addon": "Booster",
+      "invitation_incoming": "Invitation to you"
     },
     "items": {
       "payTitle": "Pay the subscription order for {product}",
@@ -2957,7 +2980,12 @@
       "invitesAction": "Open Invitations",
       "addonTitle": "Pay the order for add-on pack \"{pack}\"",
       "addonDetail": "Complete the transfer and declare it before {date}; the order closes automatically afterwards",
-      "addonAction": "Declare payment"
+      "addonAction": "Declare payment",
+      "incomingInviteTitle": "{tenant} invited you to join",
+      "incomingInviteDetail": "{inviter} invited you to join as {role}. Valid until {expires}.",
+      "incomingInviteAction": "Review",
+      "incomingInviteUnnamedTenant": "An organization",
+      "incomingInviteUnknownInviter": "Someone"
     },
     "loadFailed": "Some to-do sources failed to load; the list may be incomplete"
   },

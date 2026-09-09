@@ -303,3 +303,88 @@ describe("NotificationDispatcher", () => {
     expect(f.inbox.size).toBe(0);
   });
 });
+/**
+ * 定向送达（owner 2026-09-09，按用户号邀请）。
+ *
+ * 这三个开关各自解决一个「默认规则对这类消息是错的」的地方。三条用例都写成
+ * **对照**形式：不带开关时会发生什么、带上之后变成什么。只断言带开关的那一半，
+ * 证明不了开关起了作用——默认行为恰好一样的实现同样能过。
+ */
+describe("定向送达的三个开关", () => {
+  const invite: NotifyInput = {
+    tenantId: "t-1",
+    templateCode: "tenant.invitation",
+    reference: { type: "invitation", id: "inv-1" },
+    params: {
+      tenantName: "Acme",
+      inviterName: "Ann",
+      roleName: "成员",
+      expiresAt: "2026-09-12",
+    },
+    link: "/inbox",
+  };
+
+  it("exactRecipients 接管收件人集合：owner 不再被并进来", async () => {
+    const withOwner = fakePool({ owner: "owner-1" });
+    await new NotificationDispatcher(withOwner.pool).notify({
+      ...invite,
+      recipients: ["invitee-1"],
+    });
+    // 对照：默认规则确实会把 owner 也发一份。
+    expect(withOwner.inbox.size).toBe(2);
+
+    const exact = fakePool({ owner: "owner-1" });
+    const res = await new NotificationDispatcher(exact.pool).notify({
+      ...invite,
+      exactRecipients: ["invitee-1"],
+    });
+    expect(res.inboxCreated).toBe(1);
+    expect([...exact.inbox].every((k) => k.startsWith("invitee-1|"))).toBe(
+      true,
+    );
+  });
+
+  it("mandatory 绕过偏好开关：关掉也照样送到", async () => {
+    const deny = { allows: async () => false };
+
+    const gated = fakePool();
+    const a = await new NotificationDispatcher(gated.pool, {
+      prefs: deny,
+    }).notify({ ...invite, exactRecipients: ["invitee-1"] });
+    // 对照：不加 mandatory 时，偏好关掉就真的不发。
+    expect(a.inboxCreated).toBe(0);
+
+    const forced = fakePool();
+    const b = await new NotificationDispatcher(forced.pool, {
+      prefs: deny,
+    }).notify({
+      ...invite,
+      exactRecipients: ["invitee-1"],
+      mandatory: true,
+    });
+    expect(b.inboxCreated).toBe(1);
+  });
+
+  it("inboxOnly 只落站内：不发邮件", async () => {
+    const mail = { send: vi.fn(async () => ({ messageId: "m-1" })) };
+    const emails = { "invitee-1": "invitee@example.com" };
+
+    const open = fakePool({ emails });
+    await new NotificationDispatcher(open.pool, { mail }).notify({
+      ...invite,
+      exactRecipients: ["invitee-1"],
+    });
+    // 对照：不加 inboxOnly 时邮件确实会发出去。
+    expect(mail.send).toHaveBeenCalledTimes(1);
+
+    mail.send.mockClear();
+    const closed = fakePool({ emails });
+    const res = await new NotificationDispatcher(closed.pool, { mail }).notify({
+      ...invite,
+      exactRecipients: ["invitee-1"],
+      inboxOnly: true,
+    });
+    expect(mail.send).not.toHaveBeenCalled();
+    expect(res.inboxCreated).toBe(1); // 站内那一路照走
+  });
+});

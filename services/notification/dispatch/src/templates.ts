@@ -18,13 +18,15 @@ export type NotificationTemplateCode =
   | "refund.approved"
   | "refund.rejected"
   | "refund.completed"
-  | "announcement.published";
+  | "announcement.published"
+  | "tenant.invitation";
 
 export type NotificationReferenceType =
   | "subscription"
   | "order"
   | "refund"
-  | "announcement";
+  | "announcement"
+  | "invitation";
 
 /**
  * 偏好主题（与 @vxture/service-account NOTIFICATION_TOPICS 同一集合）。
@@ -38,7 +40,8 @@ export type NotificationTopic =
   | "provision_result"
   | "payment_due"
   | "refund_progress"
-  | "announcement";
+  | "announcement"
+  | "member_invitation";
 
 export type NotificationLocale = "zh-CN" | "en-US";
 
@@ -59,6 +62,7 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "refund.rejected": "退款申请未通过：订单 {{orderNo}}",
   "refund.completed": "退款已完成：订单 {{orderNo}}",
   "announcement.published": "{{title}}",
+  "tenant.invitation": "{{tenantName}} 邀请你加入",
 };
 
 const BODIES_ZH: Record<NotificationTemplateCode, string> = {
@@ -77,6 +81,10 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
   "refund.completed":
     "退款 {{amount}} 已退回原付款渠道，订阅已回到未订阅状态。",
   "announcement.published": "{{content}}",
+  /* 只说机制:谁、什么身份、到什么时候截止。不写「欢迎加入」这类替对方做决定的话——
+     这条消息的意义就是那个决定还没做。 */
+  "tenant.invitation":
+    "{{inviterName}} 邀请你以「{{roleName}}」身份加入 {{tenantName}}，{{expiresAt}} 前有效。",
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -92,6 +100,7 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "refund.rejected": "Refund request declined: order {{orderNo}}",
   "refund.completed": "Refund completed: order {{orderNo}}",
   "announcement.published": "{{title}}",
+  "tenant.invitation": "{{tenantName}} invited you to join",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -112,6 +121,8 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
   "refund.completed":
     "The refund of {{amount}} has been returned via the original payment channel and the subscription is back to unsubscribed.",
   "announcement.published": "{{content}}",
+  "tenant.invitation":
+    "{{inviterName}} invited you to join {{tenantName}} as {{roleName}}. The invitation is valid until {{expiresAt}}.",
 };
 
 const FOOTER: Record<NotificationLocale, string> = {
@@ -152,6 +163,7 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "refund.rejected": "refund_progress",
   "refund.completed": "refund_progress",
   "announcement.published": "announcement",
+  "tenant.invitation": "member_invitation",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {
