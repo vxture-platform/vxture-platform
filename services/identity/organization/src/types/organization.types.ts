@@ -114,6 +114,50 @@ export interface WorkspaceView {
   isDefault: boolean;
 }
 
+/**
+ * 工作空间的完整视图(管理页用)。`WorkspaceView` 是会话解析那条路上的最小形状,
+ * 只带 id / name / isDefault;这里多的几项是管理页要显示与编辑的。
+ *
+ * `workspaceNo` 是**可视码**——地址栏与界面上只出现它,不出现 uuid(§11 v4 三号解耦)。
+ */
+export interface WorkspaceDetail extends WorkspaceView {
+  workspaceNo: string;
+  description: string | null;
+  icon: string | null;
+  status: "active" | "archived";
+  memberCount: number;
+  createdAt: Date;
+}
+
+export interface CreateWorkspaceInput {
+  tenantId: string;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  /** 建好后把创建者以这个角色挂进去(工作空间级角色码)。 */
+  creatorUserId: string;
+  creatorRoleCode: string;
+}
+
+export interface UpdateWorkspaceInput {
+  name?: string | undefined;
+  description?: string | null | undefined;
+  icon?: string | null | undefined;
+}
+
+/**
+ * 工作空间写动作的拒绝理由。与邀请那套同一条纪律:**理由是闭集**,
+ * 由仓储判定、路由映射成 HTTP,不在两处各写一遍判据。
+ */
+export type WorkspaceRejection =
+  | "not_found"
+  | "name_taken"
+  | "default_locked"
+  | "last_active"
+  /** 目标已停用:停用的不能设为默认(会把所有人登录后送进一个停用的空间)。 */
+  | "archived"
+  | "not_empty";
+
 /** Tenant (organization) profile — display/contact/localization (§3.2/3.3/3.6). */
 export interface OrganizationProfileView {
   description: string | null;
@@ -533,6 +577,31 @@ export interface OrganizationReadRepository {
     invitationId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<DeclineInvitationResult>;
+  /** 列出租户下的工作空间(不含已删),含成员数。 */
+  listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]>;
+  /** 建工作空间;创建者按给定的工作空间级角色码一并挂进去。 */
+  createWorkspace(
+    input: CreateWorkspaceInput,
+  ): Promise<
+    | { ok: true; workspace: WorkspaceDetail }
+    | { ok: false; reason: WorkspaceRejection }
+  >;
+  /** 改名 / 说明 / 图标。说明与图标可显式清空。 */
+  updateWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceInput,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
+  /** 改默认工作空间(登录后的落点)。停用的设不成默认。 */
+  setDefaultWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
+  /** 停用(archived)。默认的停不掉;**不删**——35 张表挂着 workspace_id。 */
+  archiveWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
   /** 按原始 token 查邀请(接受页先看清楚再点);查不到返回 null。 */
   getInvitationByToken(token: string): Promise<InvitationLookup | null>;
   /**

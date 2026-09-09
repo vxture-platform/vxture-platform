@@ -29,6 +29,7 @@ import {
 import { auditCustomerAction } from "../audit/audit-log";
 import {
   AcceptInvitationDto,
+  UpsertWorkspaceDto,
   ResetMemberPasswordDto,
   UpdateMemberDto,
   UpsertMemberDto,
@@ -41,6 +42,7 @@ import {
 import type { RequestContext } from "../types/console.types";
 import type {
   AcceptInvitationRejection,
+  WorkspaceRejection,
   TransferOwnerRejection,
 } from "@vxture/service-organization";
 import {
@@ -80,6 +82,21 @@ const TRANSFER_OWNER_ERRORS: Record<TransferOwnerRejection, () => Error> = {
  * 接受邀请的拒绝原因 → HTTP 语义。message 就是原因码,接受页按码给文案——
  * 「链接失效」「已被撤销」「你登录的不是受邀邮箱」是三件用户要做不同事的事。
  */
+/**
+ * 工作空间写动作的拒绝理由 → HTTP。穷尽 `Record`:仓储加一个理由而这里忘了映射,
+ * **编译不过**,不会静默落到某个兜底档。
+ */
+const WORKSPACE_ERRORS: Record<WorkspaceRejection, (reason: string) => Error> =
+  {
+    not_found: (reason) => new NotFoundException(reason),
+    /* 409 而不是 400:请求本身没错,是当前状态与它冲突(同名的已经存在)。 */
+    name_taken: (reason) => new ConflictException(reason),
+    default_locked: (reason) => new ConflictException(reason),
+    last_active: (reason) => new ConflictException(reason),
+    archived: (reason) => new ConflictException(reason),
+    not_empty: (reason) => new ConflictException(reason),
+  };
+
 const ACCEPT_INVITATION_ERRORS: Record<
   AcceptInvitationRejection,
   (reason: string) => Error
@@ -472,6 +489,152 @@ export class IamRouter {
       expiresAt: found.expiresAt.toISOString(),
       inviterName: found.inviterName,
     };
+  }
+
+  // ── 工作空间管理(owner 2026-09-09「把工作空间做成真轴」)────────────────
+  //
+  // 门用**已有的** `tenant.workspace.manage`(owner / manager 持有),不新增权限码:
+  // 「管这个租户的工作空间」正是这个码的字面意思,再造一个新码只会让权限树多一层
+  // 谁也说不清与它的差别。
+  //
+  // 读那条例外,用 `tenant.member.read`:普通成员要看得见自己在哪些工作空间里,
+  // 那不是管理动作。
+
+  @RequireCapability("tenant.member.read")
+  @Get("workspaces")
+  async listWorkspaces(@Req() req: Request & RequestContext) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const rows = await this.sessionAggregator.listWorkspaces(
+      accountId,
+      tenantId,
+    );
+    if (!rows) throw new NotFoundException("Tenant context is required");
+    return rows.map((w) => ({
+      id: w.id,
+      /* 对外给可视码,不给 uuid(§11 v4 三号解耦:界面与地址栏只出现可视码)。 */
+      workspaceNo: w.workspaceNo,
+      name: w.name,
+      description: w.description,
+      icon: w.icon,
+      isDefault: w.isDefault,
+      status: w.status,
+      memberCount: w.memberCount,
+      createdAt: w.createdAt.toISOString(),
+    }));
+  }
+
+  @RequireCapability("tenant.workspace.manage")
+  @Post("workspaces")
+  async createWorkspace(
+    @Req() req: Request & RequestContext,
+    @Body() body: UpsertWorkspaceDto,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const name = (body.name ?? "").trim();
+    if (!name) throw new BadRequestException("name is required");
+    const result = await this.sessionAggregator.createWorkspace(
+      accountId,
+      tenantId,
+      { name, description: body.description ?? null, icon: body.icon ?? null },
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.create",
+      resourceType: "workspace",
+      resourceId: result.workspace.id,
+      after: { name: result.workspace.name },
+    });
+    return {
+      id: result.workspace.id,
+      workspaceNo: result.workspace.workspaceNo,
+      name: result.workspace.name,
+    };
+  }
+
+  @RequireCapability("tenant.workspace.manage")
+  @Put("workspaces/:workspaceId")
+  async updateWorkspace(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Body() body: UpsertWorkspaceDto,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    /* 三项各自可选,但**全都没给**就是一次空写:与其静默成功,不如说清楚。 */
+    if (
+      body.name === undefined &&
+      body.description === undefined &&
+      body.icon === undefined
+    ) {
+      throw new BadRequestException("nothing to update");
+    }
+    if (body.name !== undefined && !body.name.trim()) {
+      throw new BadRequestException("name is required");
+    }
+    const result = await this.sessionAggregator.updateWorkspace(
+      accountId,
+      tenantId,
+      workspaceId,
+      body,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.update",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { name: body.name ?? null },
+    });
+    return { ok: true };
+  }
+
+  @RequireCapability("tenant.workspace.manage")
+  @Post("workspaces/:workspaceId/default")
+  async setDefaultWorkspace(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.setDefaultWorkspace(
+      accountId,
+      tenantId,
+      workspaceId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.set_default",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+    });
+    return { ok: true };
+  }
+
+  /** 停用。**不是删**——订阅 / 订单 / 配额池 / 用量都挂着 workspace_id。 */
+  @RequireCapability("tenant.workspace.manage")
+  @Post("workspaces/:workspaceId/archive")
+  async archiveWorkspace(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.archiveWorkspace(
+      accountId,
+      tenantId,
+      workspaceId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.archive",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+    });
+    return { ok: true };
   }
 
   /**

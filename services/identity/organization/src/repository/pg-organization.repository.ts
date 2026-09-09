@@ -7,6 +7,7 @@ import type {
   AcceptInvitationResult,
   CloseTenantResult,
   CreateInvitationInput,
+  CreateWorkspaceInput,
   DeclineInvitationResult,
   IncomingInvitation,
   InvitationListItem,
@@ -28,7 +29,10 @@ import type {
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
   TransferOwnerResult,
+  UpdateWorkspaceInput,
+  WorkspaceDetail,
   WorkspaceMembershipView,
+  WorkspaceRejection,
   WorkspaceView,
 } from "../types/organization.types";
 
@@ -557,6 +561,302 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return r.rows
       .map((row) => mapOrg(row))
       .filter((o): o is OrgView => o !== null);
+  }
+
+  // ── 工作空间管理(owner 2026-09-09 定「把工作空间做成真轴」)──────────────
+  //
+  // 在此之前工作空间是个 1:1 的隐含物:每个租户建号时插一条 `default workspace`,
+  // 之后再没有第二条,也没有任何建 / 改 / 停的入口。下面这几个方法是「真轴」的写侧。
+  //
+  // 三条不变式,全部在**库里**判,不靠调用方自觉:
+  //   1. 同一租户下工作空间名不重(大小写与首尾空白归一后比)——两个同名工作空间
+  //      在切换器里没法分辨。
+  //   2. 默认工作空间不能停用:它是会话解析的落点(`getDefaultWorkspaceWithMembership`),
+  //      停掉等于让所有人登录后无处可去。要停先把默认挪走。
+  //   3. 最后一个 active 的不能停:同上,一个都不剩时登录后没有工作空间上下文。
+
+  /** 列出租户下的工作空间(不含已删)。成员数一并算出来,管理页要显示。 */
+  async listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
+    const r = await this.pool.query<
+      WorkspaceRow & {
+        workspace_no: string;
+        description: string | null;
+        icon: string | null;
+        status: string;
+        member_count: string;
+        created_at: Date;
+      }
+    >(
+      `select w.id, w.tenant_id, w.name, w.is_default,
+              w.workspace_no::text as workspace_no,
+              w.description, w.icon, w.status, w.created_at,
+              (select count(*) from tenancy.workspace_memberships m
+                where m.workspace_id = w.id and m.status = 'active') as member_count
+         from tenancy.workspaces w
+        where w.tenant_id = $1 and w.deleted_at is null
+        order by w.is_default desc, w.created_at asc`,
+      [tenantId],
+    );
+    return r.rows.map((row) => ({
+      id: row.id,
+      organizationId: row.tenant_id,
+      name: row.name,
+      isDefault: row.is_default,
+      workspaceNo: row.workspace_no,
+      description: row.description,
+      icon: row.icon,
+      /* 库里 status 有三档(active/archived/deleted),但 deleted 那档与 deleted_at
+         是同一件事、上面已经滤掉。对外只剩两档,不把一个永远取不到的值放进类型。 */
+      status: row.status === "archived" ? "archived" : "active",
+      memberCount: Number(row.member_count),
+      createdAt: row.created_at,
+    }));
+  }
+
+  /**
+   * 建工作空间。`workspace_no` 由 `tenancy.assign_workspace_no` 触发器取号——
+   * 不在应用层拼号,取号规则(类别位 + Luhn)只该有一处实现。
+   *
+   * 创建者立刻以指定角色挂进去:一个建好却进不去的工作空间没有意义。
+   */
+  async createWorkspace(
+    input: CreateWorkspaceInput,
+  ): Promise<
+    | { ok: true; workspace: WorkspaceDetail }
+    | { ok: false; reason: WorkspaceRejection }
+  > {
+    const name = input.name.trim();
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      /* 锁住这个租户的工作空间集合再查重:两个人同时建同名的,后到的那个要撞上
+         而不是两条都进去。锁 tenants 行(工作空间的父)比锁一堆子行更稳。 */
+      await client.query(
+        `select 1 from tenancy.tenants where id = $1 for update`,
+        [input.tenantId],
+      );
+      const dup = await client.query(
+        `select 1 from tenancy.workspaces
+          where tenant_id = $1 and deleted_at is null
+            and lower(btrim(name)) = lower(btrim($2))
+          limit 1`,
+        [input.tenantId, name],
+      );
+      if (dup.rowCount) {
+        await client.query("rollback");
+        return { ok: false, reason: "name_taken" };
+      }
+      const created = await client.query<{ id: string }>(
+        `insert into tenancy.workspaces
+           (tenant_id, name, description, icon, is_default, status, created_at, updated_at)
+         values ($1, $2, $3, $4, false, 'active', now(), now())
+         returning id`,
+        [input.tenantId, name, input.description ?? null, input.icon ?? null],
+      );
+      const workspaceId = created.rows[0]!.id;
+      await client.query(
+        `insert into tenancy.workspace_memberships
+           (workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+         select $1, $2, $3, r.id, 'workspace', 'active', now(), now()
+           from access.roles r
+          where r.scope = 'workspace' and r.role_code = $4`,
+        [
+          workspaceId,
+          input.tenantId,
+          input.creatorUserId,
+          input.creatorRoleCode,
+        ],
+      );
+      await client.query("commit");
+      const rows = await this.listWorkspaces(input.tenantId);
+      const found = rows.find((w) => w.id === workspaceId);
+      /* 刚提交的行必然读得到;读不到说明有并发把它删了,当 not_found 报,
+         不返回一个拼出来的对象假装成功。 */
+      return found
+        ? { ok: true, workspace: found }
+        : { ok: false, reason: "not_found" };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** 改名 / 改说明 / 改图标。同租户下重名照样挡(与建同一条判据)。 */
+  async updateWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceInput,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query(
+        `select 1 from tenancy.workspaces
+          where id = $1 and tenant_id = $2 and deleted_at is null
+          for update`,
+        [workspaceId, tenantId],
+      );
+      if (!found.rowCount) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_found" };
+      }
+      if (input.name !== undefined) {
+        const dup = await client.query(
+          `select 1 from tenancy.workspaces
+            where tenant_id = $1 and id <> $2 and deleted_at is null
+              and lower(btrim(name)) = lower(btrim($3))
+            limit 1`,
+          [tenantId, workspaceId, input.name],
+        );
+        if (dup.rowCount) {
+          await client.query("rollback");
+          return { ok: false, reason: "name_taken" };
+        }
+      }
+      /* coalesce($n, 列) 只能表达「没给就不改」,表达不了「显式设为 null」。
+         说明与图标都允许清空,所以各带一个「这次给没给」的布尔位。
+         参数上的显式转型是给读的人看的,不是必需:PG 能从 else 分支的列推出类型
+         (拆掉转型跑 itest 仍然全绿,验过)。 */
+      await client.query(
+        `update tenancy.workspaces
+            set name        = coalesce($3::varchar, name),
+                description = case when $4::boolean then $5::text else description end,
+                icon        = case when $6::boolean then $7::varchar else icon end,
+                updated_at  = now()
+          where id = $1 and tenant_id = $2`,
+        [
+          workspaceId,
+          tenantId,
+          input.name === undefined ? null : input.name.trim(),
+          input.description !== undefined,
+          input.description ?? null,
+          input.icon !== undefined,
+          input.icon ?? null,
+        ],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 改默认工作空间。默认是**会话解析的落点**:登录后进哪个工作空间由它决定。
+   * 一租户只有一条 is_default,所以是「先清后置」的一次事务。
+   */
+  async setDefaultWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query<{ status: string }>(
+        `select status from tenancy.workspaces
+          where id = $1 and tenant_id = $2 and deleted_at is null
+          for update`,
+        [workspaceId, tenantId],
+      );
+      const row = found.rows[0];
+      /* 停用的不能设为默认:那等于把所有人登录后送进一个已停用的空间。
+         用 not_found 之外的码说清楚原因——「找不到」会让人以为是 ID 错了。 */
+      if (!row) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_found" };
+      }
+      if (row.status !== "active") {
+        await client.query("rollback");
+        return { ok: false, reason: "archived" };
+      }
+      await client.query(
+        `update tenancy.workspaces set is_default = false, updated_at = now()
+          where tenant_id = $1 and is_default = true and id <> $2`,
+        [tenantId, workspaceId],
+      );
+      await client.query(
+        `update tenancy.workspaces set is_default = true, updated_at = now()
+          where id = $1 and tenant_id = $2`,
+        [workspaceId, tenantId],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 停用工作空间(archived)。**不删**:订阅、订单、配额池、用量都挂在
+   * `workspace_id` 上(35 张表引用它),硬删会把这些行的归属打断。
+   *
+   * 两条不变式在这里挡,但**分量不同**:
+   *
+   *   `default_locked` 是真正起作用的那条。默认永远是 active(停用的设不成默认),
+   *      而默认停不掉 ⇒ 任何时候至少有一个 active。会话解析要落到一个 active 的
+   *      工作空间上,没有就登录后无处可去。
+   *   `last_active` 是**兜底**。经这几个方法走不到它(上面那条已经保证了下界);
+   *      它防的是绕过这一层造出来的状态——手工 SQL 修数据、迁移写歪、
+   *      或将来有人给默认加了「可停用」的口子。这类兜底要么真的挡得住、要么就别写,
+   *      所以 itest 里用直接 SQL 造出那个状态,把它跑到。
+   */
+  async archiveWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      /* 锁父行:并发停用两个时,两条各自看到「还有另一个 active」就会把最后一个
+         也停掉。计数与写入必须在同一把锁下。 */
+      await client.query(
+        `select 1 from tenancy.tenants where id = $1 for update`,
+        [tenantId],
+      );
+      const found = await client.query<{ is_default: boolean; status: string }>(
+        `select is_default, status from tenancy.workspaces
+          where id = $1 and tenant_id = $2 and deleted_at is null`,
+        [workspaceId, tenantId],
+      );
+      const row = found.rows[0];
+      if (!row) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_found" };
+      }
+      if (row.is_default) {
+        await client.query("rollback");
+        return { ok: false, reason: "default_locked" };
+      }
+      const actives = await client.query<{ n: string }>(
+        `select count(*) as n from tenancy.workspaces
+          where tenant_id = $1 and deleted_at is null and status = 'active'`,
+        [tenantId],
+      );
+      if (Number(actives.rows[0]?.n ?? 0) <= 1) {
+        await client.query("rollback");
+        return { ok: false, reason: "last_active" };
+      }
+      await client.query(
+        `update tenancy.workspaces set status = 'archived', updated_at = now()
+          where id = $1 and tenant_id = $2`,
+        [workspaceId, tenantId],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getDefaultWorkspace(orgId: string): Promise<WorkspaceView | null> {

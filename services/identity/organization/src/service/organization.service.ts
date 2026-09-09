@@ -3,6 +3,7 @@ import { ORGANIZATION_REPOSITORY } from "../tokens";
 import type {
   AcceptInvitationResult,
   CreateInvitationInput,
+  CreateWorkspaceInput,
   DeclineInvitationResult,
   IncomingInvitation,
   InvitationLocator,
@@ -23,6 +24,8 @@ import type {
   RotatedInvitation,
   SubmitTenantVerificationInput,
   TransferOwnerResult,
+  UpdateWorkspaceInput,
+  WorkspaceDetail,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -227,6 +230,25 @@ export class OrganizationService {
     identity: { email: string | null; userNo: string | null },
   ): Promise<DeclineInvitationResult> {
     return this.repo.declineInvitation(invitationId, identity);
+  }
+  listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
+    return this.repo.listWorkspaces(tenantId);
+  }
+  createWorkspace(input: CreateWorkspaceInput) {
+    return this.repo.createWorkspace(input);
+  }
+  updateWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceInput,
+  ) {
+    return this.repo.updateWorkspace(tenantId, workspaceId, input);
+  }
+  setDefaultWorkspace(tenantId: string, workspaceId: string) {
+    return this.repo.setDefaultWorkspace(tenantId, workspaceId);
+  }
+  archiveWorkspace(tenantId: string, workspaceId: string) {
+    return this.repo.archiveWorkspace(tenantId, workspaceId);
   }
   getInvitationByToken(token: string): Promise<InvitationLookup | null> {
     return this.repo.getInvitationByToken(token);

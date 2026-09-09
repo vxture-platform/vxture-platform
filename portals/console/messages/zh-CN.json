@@ -155,7 +155,11 @@
       "tenant_role_create": "新建角色",
       "tenant_role_delete": "删除角色",
       "tenant_role_update": "修改角色",
-      "tenant_verification_submit": "提交企业认证"
+      "tenant_verification_submit": "提交企业认证",
+      "tenant_workspace_archive": "停用工作空间",
+      "tenant_workspace_create": "新建工作空间",
+      "tenant_workspace_set_default": "设为默认工作空间",
+      "tenant_workspace_update": "修改工作空间"
     },
     "table": {
       "title": "操作记录",

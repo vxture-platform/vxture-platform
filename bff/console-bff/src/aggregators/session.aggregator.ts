@@ -995,6 +995,70 @@ export class SessionAggregator {
     return result;
   }
 
+  /* ── 工作空间管理(owner 2026-09-09「把工作空间做成真轴」)──────────────
+     门在路由上(`tenant.workspace.manage`),这里只负责把租户解析出来并透传。
+     判据(重名 / 默认不可停 / 至少一个 active)全在仓储的 SQL 里,不在这一层重写。 */
+
+  async listWorkspaces(userId: string, orgId?: string) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    return this.org.listWorkspaces(resolved.orgId);
+  }
+
+  async createWorkspace(
+    userId: string,
+    orgId: string | undefined,
+    input: { name: string; description?: string | null; icon?: string | null },
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    /* 建的人以 owner 身份进去:他是这个工作空间的第一个人,而且刚建完就要能管它
+       (改名、加人)。工作空间级 owner 只有那 3 个 workspace.* 码,不牵涉租户级权限。 */
+    return this.org.createWorkspace({
+      tenantId: resolved.orgId,
+      name: input.name,
+      description: input.description ?? null,
+      icon: input.icon ?? null,
+      creatorUserId: userId,
+      creatorRoleCode: "owner",
+    });
+  }
+
+  async updateWorkspace(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+    input: {
+      name?: string | undefined;
+      description?: string | null | undefined;
+      icon?: string | null | undefined;
+    },
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    return this.org.updateWorkspace(resolved.orgId, workspaceId, input);
+  }
+
+  async setDefaultWorkspace(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    return this.org.setDefaultWorkspace(resolved.orgId, workspaceId);
+  }
+
+  async archiveWorkspace(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    return this.org.archiveWorkspace(resolved.orgId, workspaceId);
+  }
+
   /** 「谁在邀请我」。自视角读——此刻我还不是那些租户的成员,不能要租户权限。 */
   async listIncomingInvitations(userId: string) {
     const user = await this.account.getUserById(userId);

@@ -155,7 +155,11 @@
       "tenant_role_create": "Create role",
       "tenant_role_delete": "Delete role",
       "tenant_role_update": "Update role",
-      "tenant_verification_submit": "Submit business verification"
+      "tenant_verification_submit": "Submit business verification",
+      "tenant_workspace_archive": "Archive workspace",
+      "tenant_workspace_create": "Create workspace",
+      "tenant_workspace_set_default": "Set default workspace",
+      "tenant_workspace_update": "Update workspace"
     },
     "table": {
       "title": "Activity",

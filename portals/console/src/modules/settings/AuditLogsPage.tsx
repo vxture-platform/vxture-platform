@@ -94,6 +94,10 @@ const KNOWN_ACTIONS = new Set([
   "tenant.role.delete",
   "tenant.role.update",
   "tenant.verification.submit",
+  "tenant.workspace.archive",
+  "tenant.workspace.create",
+  "tenant.workspace.set_default",
+  "tenant.workspace.update",
 ]);
 
 type ResultFilter = "all" | "success" | "failure";

@@ -27,3 +27,18 @@ export class AcceptInvitationDto {
   token?: string;
   invitationId?: string;
 }
+
+/**
+ * 建 / 改工作空间。三项都可选,但**语义不同**:
+ *
+ *   `name`        不给 = 不改名(建的时候必给,路由上挡)。
+ *   `description` 不给 = 不改;显式给 null = 清空。
+ *   `icon`        同上。
+ *
+ * 「不给」与「给 null」必须分得开,所以不能把它们合成一个 `string | null`。
+ */
+export class UpsertWorkspaceDto {
+  name?: string;
+  description?: string | null;
+  icon?: string | null;
+}

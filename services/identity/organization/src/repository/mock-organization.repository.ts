@@ -3,6 +3,7 @@ import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import type {
   AcceptInvitationResult,
   CreateInvitationInput,
+  CreateWorkspaceInput,
   DeclineInvitationResult,
   IncomingInvitation,
   InvitationListItem,
@@ -25,6 +26,8 @@ import type {
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
   TransferOwnerResult,
+  UpdateWorkspaceInput,
+  WorkspaceDetail,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -250,7 +253,11 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   }
 
   private readonly orgs = new Map<string, OrgView>();
-  private readonly workspaces = new Map<string, WorkspaceView>();
+  /* 存 WorkspaceDetail 而不是 WorkspaceView:前者是后者的超集,现有的读一行不用改,
+     而管理页要的号 / 说明 / 状态 / 成员数都在里面。 */
+  private readonly workspaces = new Map<string, WorkspaceDetail>();
+  /** mock 的号只要唯一且形状对;真库的号由 tenancy.assign_workspace_no 触发器取。 */
+  private nextWorkspaceNo = 3_000_000_001;
   private readonly orgMembers: OrgMembershipView[] = [];
   private readonly wsMembers: WorkspaceMembershipView[] = [];
   private readonly profiles = new Map<string, OrganizationProfileView>();
@@ -272,6 +279,12 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       organizationId: orgId,
       name: "default workspace",
       isDefault: true,
+      workspaceNo: String(this.nextWorkspaceNo++),
+      description: null,
+      icon: null,
+      status: "active" as const,
+      memberCount: 0,
+      createdAt: new Date(),
     });
     this.orgMembers.push({
       organizationId: orgId,
@@ -349,11 +362,17 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       ownerUserId,
       status: "active",
     };
-    const workspace: WorkspaceView = {
+    const workspace: WorkspaceDetail = {
       id: wsId,
       organizationId: orgId,
       name: "default workspace",
       isDefault: true,
+      workspaceNo: String(this.nextWorkspaceNo++),
+      description: null,
+      icon: null,
+      status: "active" as const,
+      memberCount: 0,
+      createdAt: new Date(),
     };
     this.orgs.set(orgId, org);
     this.workspaces.set(wsId, workspace);
@@ -693,6 +712,117 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     if (rejection) return { ok: false, reason: rejection };
     inv.view.status = "declined";
     return { ok: true };
+  }
+
+  /* ── 工作空间管理 ──────────────────────────────────────────────────────
+     不变式与 pg 那份同形,但**判据的权威在 SQL 里**:这里重写一遍只是为了让 mock
+     可用,不该有任何用例拿这一份来证明不变式成立(那证明的是重写的这份)。
+     真正的验收在 workspace-crud.itest.spec.ts,连真库跑。 */
+
+  private sameName(a: string, b: string): boolean {
+    return a.trim().toLowerCase() === b.trim().toLowerCase();
+  }
+
+  async listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
+    return [...this.workspaces.values()]
+      .filter((w) => w.organizationId === tenantId)
+      .map((w) => ({
+        ...w,
+        memberCount: this.wsMembers.filter(
+          (m) => m.workspaceId === w.id && m.status === "active",
+        ).length,
+      }))
+      .sort(
+        (a, b) =>
+          Number(b.isDefault) - Number(a.isDefault) ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
+      );
+  }
+
+  async createWorkspace(input: CreateWorkspaceInput) {
+    const taken = [...this.workspaces.values()].some(
+      (w) =>
+        w.organizationId === input.tenantId &&
+        this.sameName(w.name, input.name),
+    );
+    if (taken) return { ok: false as const, reason: "name_taken" as const };
+    const id = `ws-${this.workspaces.size + 1}`;
+    const workspace: WorkspaceDetail = {
+      id,
+      organizationId: input.tenantId,
+      name: input.name.trim(),
+      isDefault: false,
+      workspaceNo: String(this.nextWorkspaceNo++),
+      description: input.description ?? null,
+      icon: input.icon ?? null,
+      status: "active",
+      memberCount: 1,
+      createdAt: new Date(),
+    };
+    this.workspaces.set(id, workspace);
+    await this.addWorkspaceMember(
+      id,
+      input.creatorUserId,
+      input.creatorRoleCode as OrgRole,
+    );
+    return { ok: true as const, workspace };
+  }
+
+  async updateWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceInput,
+  ) {
+    const w = this.workspaces.get(workspaceId);
+    if (!w || w.organizationId !== tenantId) {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (
+      input.name !== undefined &&
+      [...this.workspaces.values()].some(
+        (o) =>
+          o.organizationId === tenantId &&
+          o.id !== workspaceId &&
+          this.sameName(o.name, input.name!),
+      )
+    ) {
+      return { ok: false as const, reason: "name_taken" as const };
+    }
+    if (input.name !== undefined) w.name = input.name.trim();
+    if (input.description !== undefined)
+      w.description = input.description ?? null;
+    if (input.icon !== undefined) w.icon = input.icon ?? null;
+    return { ok: true as const };
+  }
+
+  async setDefaultWorkspace(tenantId: string, workspaceId: string) {
+    const w = this.workspaces.get(workspaceId);
+    if (!w || w.organizationId !== tenantId) {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (w.status !== "active") {
+      return { ok: false as const, reason: "archived" as const };
+    }
+    for (const o of this.workspaces.values()) {
+      if (o.organizationId === tenantId) o.isDefault = o.id === workspaceId;
+    }
+    return { ok: true as const };
+  }
+
+  async archiveWorkspace(tenantId: string, workspaceId: string) {
+    const w = this.workspaces.get(workspaceId);
+    if (!w || w.organizationId !== tenantId) {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (w.isDefault)
+      return { ok: false as const, reason: "default_locked" as const };
+    const actives = [...this.workspaces.values()].filter(
+      (o) => o.organizationId === tenantId && o.status === "active",
+    ).length;
+    if (actives <= 1)
+      return { ok: false as const, reason: "last_active" as const };
+    w.status = "archived";
+    return { ok: true as const };
   }
 
   async acceptInvitation(
