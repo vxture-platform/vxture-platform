@@ -791,6 +791,7 @@ export class SessionAggregator {
   ): Promise<MemberRecord | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
+    this.assertOrganizationTenant(resolved.org);
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
@@ -849,6 +850,7 @@ export class SessionAggregator {
   ): Promise<InviteMemberOutcome | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
+    this.assertOrganizationTenant(resolved.org);
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
@@ -1114,6 +1116,23 @@ export class SessionAggregator {
    * 所以这里按**目标工作空间**再判一次:要么持租户级的 `tenant.workspace.manage`
    * (那是「管这个租户的工作空间」,天然覆盖全部),要么在目标空间里就是 owner/manager。
    */
+  /**
+   * 个人租户不做成员管理(owner 2026-09-10)。
+   *
+   * **个人租户只有自己**——邀请别人进来、新建成员、改角色、管权限,这几件事在那里
+   * 都没有意义。侧栏本来就按 `tenantTypes: ["organization"]` 藏了入口,但那只是**藏**:
+   * 从组织租户切到个人租户时页面还留在原地,动作照样打得出去。owner 走查抓到的
+   * 就是这个形状——**入口不见了不等于门关上了**。
+   *
+   * 挡在这一层而不是每个路由上:五个写方法都过 `resolveOrg`,在这里判一次,
+   * 加第六个方法的人照抄同一行即可。
+   */
+  private assertOrganizationTenant(org: { type: string }): void {
+    if (org.type !== "organization") {
+      throw new BadRequestException("personal_tenant_no_members");
+    }
+  }
+
   private async assertCanManageWorkspaceMembers(
     userId: string,
     orgId: string,
@@ -1184,6 +1203,47 @@ export class SessionAggregator {
     return result;
   }
 
+  /**
+   * 按用户号查人(邀请前的「确认是不是这个人」)。
+   *
+   * ── 这是个用户枚举面,所以三处收着 ──
+   *   1. 门是 `tenant.member.manage`——只有能邀请的人才查得动。
+   *   2. **联系方式一律遮蔽**(与成员目录同一套 `redactContacts` 口径):
+   *      裸给邮箱手机号,等于让任何一个租户管理员按号把通讯录刷出来。
+   *      遮蔽后仍够用——邀请人认得出「zh***@example.com / 138****5678」是不是他要找的人。
+   *   3. 查不到就是查不到,不区分「没这个号」与「这个号被停用了」——
+   *      区分开等于告诉对方哪些号是存在的。
+   *
+   * 顺带回一个 `alreadyMember`:已经在本租户里的人不需要邀请,让前端把按钮收掉,
+   * 而不是让人点完才收到一句「已经是成员」。
+   */
+  async lookupUserByNo(
+    userId: string,
+    orgId: string | undefined,
+    userNo: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.gov.assertCan(
+      userId,
+      { orgId: resolved.orgId },
+      "tenant.member.manage",
+    );
+    const found = await this.account.findUserByUserNo(userNo.trim());
+    if (!found) return { found: false as const };
+    const member = await this.org.getOrgMemberDetail(resolved.orgId, found.id);
+    return {
+      found: true as const,
+      userNo: found.userNo,
+      /* 显示名优先,回落到账号名。两个都没有时给 null,由前端写「未设置昵称」——
+         这里不编一个占位串,那会让前端分不清「没设」与「就叫这个」。 */
+      name: found.name ?? found.account ?? null,
+      maskedEmail: maskContact(found.email, "email"),
+      maskedPhone: maskContact(found.phone, "phone"),
+      alreadyMember: member !== null,
+    };
+  }
+
   /** 「谁在邀请我」。自视角读——此刻我还不是那些租户的成员,不能要租户权限。 */
   async listIncomingInvitations(userId: string) {
     const user = await this.account.getUserById(userId);
@@ -1218,6 +1278,7 @@ export class SessionAggregator {
   ): Promise<MemberRecord | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
+    this.assertOrganizationTenant(resolved.org);
     if (!input.roleCode) {
       return this.getMember(userId, orgId, memberUserId);
     }
@@ -1253,6 +1314,7 @@ export class SessionAggregator {
   ): Promise<MemberRecord | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
+    this.assertOrganizationTenant(resolved.org);
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
@@ -1329,6 +1391,7 @@ export class SessionAggregator {
   ): Promise<boolean> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return false;
+    this.assertOrganizationTenant(resolved.org);
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
@@ -1544,17 +1607,32 @@ function pendingMemberRecord(
 }
 
 /** 邮箱打码:保留首字符与域名;手机号保留前 3 后 4。 */
+/**
+ * 联系方式遮蔽。与 `redactContacts` 同一口径,抽出来给按用户号查人共用——
+ * 两处各写一遍就会有一处先松(而松掉的那一处就是泄漏点)。
+ */
+function maskContact(
+  value: string | null,
+  kind: "email" | "phone",
+): string | null {
+  if (!value) return null;
+  if (kind === "email") {
+    const at = value.indexOf("@");
+    return at > 0 ? `${value.slice(0, 1)}***${value.slice(at)}` : "***";
+  }
+  return value.length >= 7
+    ? `${value.slice(0, 3)}****${value.slice(-4)}`
+    : "****";
+}
+
 function redactContacts(m: MemberRecord): MemberRecord {
-  const at = m.email.indexOf("@");
-  const email =
-    at > 0 ? `${m.email.slice(0, 1)}***${m.email.slice(at)}` : "***";
-  const phone =
-    m.phone && m.phone.length >= 7
-      ? `${m.phone.slice(0, 3)}****${m.phone.slice(-4)}`
-      : m.phone
-        ? "****"
-        : null;
-  return { ...m, email, phone };
+  /* 走同一个 maskContact:两份同口径的实现迟早会有一份先松,而松掉的那一份
+     就是泄漏点。email 列不可空,遮蔽不出来时回落 "***"(而不是 null)。 */
+  return {
+    ...m,
+    email: maskContact(m.email, "email") ?? "***",
+    phone: maskContact(m.phone, "phone"),
+  };
 }
 
 function toConsoleRole(e: OrgRoleCatalogEntry): ConsoleTenantRole {

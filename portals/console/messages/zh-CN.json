@@ -3427,5 +3427,12 @@
       "member_not_found": "这个人不在本租户里，请先把他加进租户。",
       "workspace_scope_denied": "你没有管理这个工作空间成员的权限。"
     }
+  },
+  "access": {
+    "title": "没有访问权限",
+    "description": "这一页需要 {required} 权限。请联系租户管理员为你的角色开通。",
+    "back": "回到总览",
+    "tenantTypeTitle": "这个租户没有成员管理",
+    "tenantTypeDescription": "个人租户只有你自己。要邀请其他人协作，请先在「租户信息」页把它升为组织租户。"
   }
 }

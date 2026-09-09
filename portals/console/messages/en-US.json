@@ -3427,5 +3427,12 @@
       "member_not_found": "They are not in this tenant. Add them to the tenant first.",
       "workspace_scope_denied": "You cannot manage members of that workspace."
     }
+  },
+  "access": {
+    "title": "No access",
+    "description": "This page requires {required}. Ask a tenant administrator to grant it to your role.",
+    "back": "Back to overview",
+    "tenantTypeTitle": "Member management is not available here",
+    "tenantTypeDescription": "A personal tenant only has you. To collaborate with others, upgrade it to an organization tenant on the Tenant page."
   }
 }

@@ -208,17 +208,31 @@ export class PgUserRepository implements UserReadRepository {
    * 返回的字段刻意窄：只够确认「这个号对应哪个账号、是谁」，不带凭据、不带联系方式。
    * 邀请方输入一个号就能读到对方邮箱手机号，那是另一种泄露。
    */
-  async findUserByUserNo(
-    userNo: string,
-  ): Promise<{ id: string; userNo: string; name: string | null } | null> {
+  /**
+   * 按用户号查人。**联系方式一并取出,但调用方必须遮蔽后再对外**——
+   * 这是个用户枚举面(号是 10 位可视码,认识规则就能穷举),裸给邮箱手机号等于
+   * 让任何一个能邀请成员的人把通讯录刷出来。遮蔽在 BFF 做(与成员目录同一套)。
+   */
+  async findUserByUserNo(userNo: string): Promise<{
+    id: string;
+    userNo: string;
+    name: string | null;
+    account: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null> {
     const raw = userNo.trim();
     if (!/^\d{1,20}$/.test(raw)) return null;
     const result = await this.pool.query<{
       id: string;
       user_no: string;
       name: string | null;
+      account: string | null;
+      email: string | null;
+      phone: string | null;
     }>(
-      `select u.id, u.user_no::text as user_no, p.display_name as name
+      `select u.id, u.user_no::text as user_no, p.display_name as name,
+              u.account, u.email, u.phone
          from account.users u
          left join account.user_profiles p on p.user_id = u.id
         where u.deleted_at is null and ${READABLE_STATUS_SQL}
@@ -227,7 +241,16 @@ export class PgUserRepository implements UserReadRepository {
       [raw],
     );
     const row = result.rows[0];
-    return row ? { id: row.id, userNo: row.user_no, name: row.name } : null;
+    return row
+      ? {
+          id: row.id,
+          userNo: row.user_no,
+          name: row.name,
+          account: row.account,
+          email: row.email,
+          phone: row.phone,
+        }
+      : null;
   }
 
   async findCredentialById(

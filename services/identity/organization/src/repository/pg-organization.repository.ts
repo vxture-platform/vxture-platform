@@ -1353,7 +1353,15 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
            from upserted up join access.roles rr on rr.id = up.role_id`,
         [orgId, userId, role],
       );
-      await upsertDefaultWorkspaceMembership(client, orgId, userId, role);
+      /* 「加成员」没有工作空间选择(它是把已有账号直接拉进租户),传 null =
+         回落到默认空间。邀请那条路才带指定空间。 */
+      await upsertWorkspaceMembershipForInvite(
+        client,
+        orgId,
+        userId,
+        role,
+        null,
+      );
       await client.query("commit");
       return mapMembership(r.rows[0]!);
     } catch (error) {
@@ -2377,12 +2385,15 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
           [row.tenant_id, userId, row.role_id, row.role_scope],
         );
         membership = mapMembership(m.rows[0]!);
-        // 邀请说明页承诺「接受后成为租户与默认工作空间成员」——两级一起挂。
-        await upsertDefaultWorkspaceMembership(
+        /* 两级一起挂。进**哪个**工作空间:邀请上指定的那个;没指定就回落默认。
+           owner 2026-09-10 起邀请必选工作空间,所以正常路径走的是前者;
+           回落留着是为了旧的 pending 邀请(它们那一列是 null)。 */
+        await upsertWorkspaceMembershipForInvite(
           client,
           row.tenant_id,
           userId,
           membership.role,
+          row.workspace_id,
         );
       } else {
         // workspace_memberships requires tenant_id: derive it from the workspace.
@@ -2470,11 +2481,23 @@ function mapMembership(row: OrgMembershipRow): OrgMembershipView {
  * transferOrgOwner 已为 owner 走过这条路,这里推广到加成员 / 接受邀请。
  * 找不到默认工作空间(理论上不存在:开租户时一并建)时静默跳过,不让加成员失败。
  */
-async function upsertDefaultWorkspaceMembership(
+/**
+ * 接受邀请时把人挂进工作空间。
+ *
+ * `workspaceId` 给了就进那一个(owner 2026-09-10:邀请必选工作空间);
+ * 给 null 回落到租户的默认空间——留着是为了**旧的 pending 邀请**,
+ * 它们那一列是 null,不能让它们在接受时无处可去。
+ *
+ * 目标空间必须属于这个租户、未删、启用中:邀请可能躺了几天,期间空间被停用了。
+ * 条件不满足时这条 insert 选不出行 → 一行不写,人仍进了租户(租户级那半已经提交),
+ * 只是不在任何工作空间里——那是允许的状态(owner 2026-09-09 第 3 件裁定)。
+ */
+async function upsertWorkspaceMembershipForInvite(
   client: PoolClient,
   orgId: string,
   userId: string,
   roleCode: string,
+  workspaceId: string | null,
 ): Promise<void> {
   await client.query(
     `insert into tenancy.workspace_memberships
@@ -2482,13 +2505,16 @@ async function upsertDefaultWorkspaceMembership(
      select w.id, w.tenant_id, $2, r.id, 'workspace', 'active', now(), now()
        from tenancy.workspaces w
        join access.roles r on r.scope = 'workspace' and r.role_code = $3
-      where w.tenant_id = $1 and w.is_default and w.deleted_at is null
+      where w.tenant_id = $1
+        and w.deleted_at is null
+        and w.status = 'active'
+        and case when $4::uuid is null then w.is_default else w.id = $4::uuid end
      on conflict (workspace_id, user_id) do update
         set role_id = excluded.role_id,
             role_scope = 'workspace',
             status = 'active',
             updated_at = now()`,
-    [orgId, userId, roleCode],
+    [orgId, userId, roleCode, workspaceId],
   );
 }
 
