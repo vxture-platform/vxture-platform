@@ -708,7 +708,8 @@
       "resetPassword": "重置密码",
       "unlink": "解除关联",
       "resendInvite": "重发邀请",
-      "revokeInvite": "撤销邀请"
+      "revokeInvite": "撤销邀请",
+      "manageWorkspaces": "工作空间归属"
     },
     "bulk": {
       "selected": "已选择 {count} 人",
@@ -805,7 +806,8 @@
     "hints": {
       "ownerProtected": "所有者不可停用或解除关联,请先转让所有权",
       "ownerRoleLocked": "所有者的角色只能通过「转让所有权」变更",
-      "selfProtected": "不能对自己执行此操作"
+      "selfProtected": "不能对自己执行此操作",
+      "invitedNoWorkspace": "邀请尚未被接受，还谈不上归属"
     },
     "errors": {
       "owner_protected": "所有者不可停用或解除关联,请先转让所有权。",
@@ -3401,6 +3403,32 @@
       "last_active": "至少要保留一个启用中的工作空间。",
       "archived": "已停用的工作空间不能设为默认。",
       "not_empty": "这个工作空间里还有内容，无法完成该操作。"
+    }
+  },
+  "memberWorkspaces": {
+    "title": "{name} 的工作空间",
+    "description": "加入或移出各个工作空间。这里的移出不会把人移出租户。",
+    "done": "完成",
+    "close": "关闭",
+    "loading": "加载中",
+    "loadFailed": "工作空间列表读取失败，请稍后重试。",
+    "noWorkspaces": "这个租户还没有工作空间",
+    "defaultTag": "默认",
+    "inWorkspace": "已加入",
+    "notInWorkspace": "未加入",
+    "defaultLockedHint": "默认工作空间不能移出——移出后他登录时没有落点",
+    "add": "加入",
+    "remove": "移出",
+    "errors": {
+      "generic": "操作失败，请稍后重试。",
+      "not_found": "这个工作空间不存在，或他本来就不在里面。",
+      "name_taken": "同名的工作空间已经存在。",
+      "default_locked": "默认工作空间不能移出成员。",
+      "last_active": "至少要保留一个启用中的工作空间。",
+      "archived": "这个工作空间已停用。",
+      "not_empty": "这个工作空间里还有内容，无法完成该操作。",
+      "member_not_found": "这个人不在本租户里，请先把他加进租户。",
+      "workspace_scope_denied": "你没有管理这个工作空间成员的权限。"
     }
   }
 }

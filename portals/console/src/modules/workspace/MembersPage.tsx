@@ -84,6 +84,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
+import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
 
@@ -144,6 +145,8 @@ export function MembersPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [bulkUnlinkOpen, setBulkUnlinkOpen] = useState(false);
+  /** 正在管谁的工作空间归属;null = 对话框不开。 */
+  const [workspacesFor, setWorkspacesFor] = useState<MemberRecord | null>(null);
   const [inviteResult, setInviteResult] = useState<{
     result: InviteMemberResult;
     resent: boolean;
@@ -748,6 +751,18 @@ export function MembersPage() {
           onSelect: () => openResetDialog(member),
         },
         {
+          /* 工作空间归属(owner 2026-09-09 第 2 件的写侧)。
+             Invited 行不给:人还没进来,没有可归属的东西。 */
+          id: "workspaces",
+          label: t("actions.manageWorkspaces"),
+          icon: "stack",
+          disabled: submitting || member.status === "Invited",
+          ...(member.status === "Invited"
+            ? { hint: t("hints.invitedNoWorkspace") }
+            : {}),
+          onSelect: () => setWorkspacesFor(member),
+        },
+        {
           id: "unlink",
           label: t("actions.unlink"),
           icon: "user-switch",
@@ -1300,6 +1315,16 @@ export function MembersPage() {
             event.preventDefault();
             void handleBulkUnlink();
           }}
+        />
+      ) : null}
+
+      {workspacesFor ? (
+        <MemberWorkspacesDialog
+          member={workspacesFor}
+          onClose={() => setWorkspacesFor(null)}
+          /* 归属变了,「所属工作空间」那一列要跟着变——重取成员目录。
+             不就地改本地行:那一列的数据源在服务端,两处各算一遍会漂。 */
+          onChanged={() => void reloadMembers()}
         />
       ) : null}
 

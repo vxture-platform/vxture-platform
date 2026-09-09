@@ -708,7 +708,8 @@
       "resetPassword": "Reset password",
       "unlink": "Unlink",
       "resendInvite": "Resend invitation",
-      "revokeInvite": "Revoke invitation"
+      "revokeInvite": "Revoke invitation",
+      "manageWorkspaces": "Workspaces"
     },
     "bulk": {
       "selected": "{count} selected",
@@ -805,7 +806,8 @@
     "hints": {
       "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
       "ownerRoleLocked": "The owner's role only changes through ownership transfer",
-      "selfProtected": "You cannot do this to yourself"
+      "selfProtected": "You cannot do this to yourself",
+      "invitedNoWorkspace": "The invitation has not been accepted yet"
     },
     "errors": {
       "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
@@ -3401,6 +3403,32 @@
       "last_active": "At least one workspace must stay active.",
       "archived": "An archived workspace cannot be set as the default.",
       "not_empty": "This workspace still has content, so the action cannot complete."
+    }
+  },
+  "memberWorkspaces": {
+    "title": "{name}'s workspaces",
+    "description": "Add or remove them from each workspace. Removing here does not remove them from the tenant.",
+    "done": "Done",
+    "close": "Close",
+    "loading": "Loading",
+    "loadFailed": "Could not load the workspace list. Please try again.",
+    "noWorkspaces": "This tenant has no workspaces yet",
+    "defaultTag": "Default",
+    "inWorkspace": "Member",
+    "notInWorkspace": "Not a member",
+    "defaultLockedHint": "Members cannot be removed from the default workspace — they would have nowhere to land at sign-in",
+    "add": "Add",
+    "remove": "Remove",
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "not_found": "That workspace no longer exists, or they were not a member.",
+      "name_taken": "A workspace with that name already exists.",
+      "default_locked": "Members cannot be removed from the default workspace.",
+      "last_active": "At least one workspace must stay active.",
+      "archived": "That workspace is archived.",
+      "not_empty": "That workspace still has content, so the action cannot complete.",
+      "member_not_found": "They are not in this tenant. Add them to the tenant first.",
+      "workspace_scope_denied": "You cannot manage members of that workspace."
     }
   }
 }

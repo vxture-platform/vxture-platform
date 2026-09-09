@@ -463,6 +463,42 @@ export async function setDefaultWorkspace(workspaceId: string): Promise<void> {
   if (!response.ok) await throwMemberError(response, "");
 }
 
+/**
+ * 把已在租户里的人加进某个工作空间。
+ *
+ * 目标必须**已经是租户成员**——库里的 `fk_workspace_memberships_tenant_member`
+ * 也挡,但那会抛外键错;BFF 先判,给的是 404「这个人不在租户里」。
+ */
+export async function addWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+  roleCode = "member",
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/members`)}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, roleCode }),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 把人从某个工作空间移除(**不动**租户成员关系);默认工作空间移不掉。 */
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`)}`,
+    { method: "DELETE", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
 /** 停用。**不是删**——订阅 / 订单 / 配额池 / 用量都挂着 workspace_id。 */
 export async function archiveWorkspace(workspaceId: string): Promise<void> {
   const response = await fetch(
