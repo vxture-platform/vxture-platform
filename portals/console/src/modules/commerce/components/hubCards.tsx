@@ -197,27 +197,45 @@ export function SubscriptionProductCard({
   return (
     <Card surface="base" className="gap-md py-lg">
       <CardContent className="flex flex-1 flex-col gap-md">
-        {/* 产品名 + ★ */}
-        <div className="flex items-center gap-md">
+        {/* ── 标题区 + 状态区 ────────────────────────────────────────────
+            owner 2026-09-09:服务状态**放右上角**,不与特性徽章混在一起。
+            混在一起时「服务中」和「专业版」「按年」长得一样重,而它们回答的是
+            完全不同的问题——一个是「这东西现在还给不给我用」,另外几个是
+            「它是什么」。放右上角是因为那是卡片上视线第二个到的位置
+            （第一个是名字）。★ 紧随其后:它是操作,比状态轻一档。 */}
+        <div className="flex items-start gap-md">
           <ProductGlyph name={item.productName} code={item.productCode} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-label-md text-foreground">
-              {item.productName ?? item.planName}
+            {/* 右侧控件与**主标题同一行盒**。
+                此前它们是两行标题块的兄弟节点,靠 `items-center` 对齐——于是对到的是
+                「名字 + 副名」两行的中线,看起来比标题低半行(owner 2026-09-09 指出)。
+                加偏移量能盖住,但换个字号或副名换行就又歪了。放进同一个 flex 行里,
+                「同高」就成了结构决定的,不是调出来的。
+                星是 icon-sm 按钮、比一行文字高,所以这一行用 items-center:
+                标题对到按钮中线,两者视觉上齐平。 */}
+            <span className="flex items-center gap-sm">
+              <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
+                {item.productName ?? item.planName}
+              </span>
+              <StatusBadge tone={SUB_STATUS_TONES[item.status] ?? "neutral"}>
+                {t(`subStatus.${item.status}`)}
+              </StatusBadge>
+              <FavoriteStar
+                active={item.favorite}
+                busy={favoriteBusy || !productCode}
+                onToggle={() => onToggleFavorite(productCode, !item.favorite)}
+                labelOn={t("favorite.remove")}
+                labelOff={t("favorite.add")}
+              />
             </span>
             <span className="block truncate text-body-sm text-muted-foreground">
               {item.productNick ?? item.planName}
             </span>
           </span>
-          <FavoriteStar
-            active={item.favorite}
-            busy={favoriteBusy || !productCode}
-            onToggle={() => onToggleFavorite(productCode, !item.favorite)}
-            labelOn={t("favorite.remove")}
-            labelOff={t("favorite.add")}
-          />
         </div>
 
-        {/* 档位 / 受众·席位 / 周期 / 状态 */}
+        {/* ── 信息区:它是什么(档位 / 受众·席位 / 周期)──────────────────
+            这一行现在只剩「是什么」,状态已经移走。 */}
         <div className="flex flex-wrap items-center gap-xs">
           {item.tier ? (
             <Badge variant="secondary">{t(`tier.${item.tier}`)}</Badge>
@@ -235,12 +253,11 @@ export function SubscriptionProductCard({
           <Badge variant="outline">
             {item.cycleUnit === "year" ? t("cycle.year") : t("cycle.month")}
           </Badge>
-          <StatusBadge tone={SUB_STATUS_TONES[item.status] ?? "neutral"}>
-            {t(`subStatus.${item.status}`)}
-          </StatusBadge>
         </div>
 
-        {/* 有效期 + 进度 */}
+        {/* ── 权益区:这份订阅给到什么时候 ──────────────────────────────
+            进度条走 DS 的 Progress,填充是 `bg-primary`(品牌色,当前就是蓝)——
+            不需要为「蓝色进度线」再造一个档,也不在注释里记具体色值。 */}
         <div className="flex flex-col gap-2xs">
           <div className="flex items-baseline justify-between gap-sm text-body-sm">
             <span className="text-muted-foreground tabular-nums">

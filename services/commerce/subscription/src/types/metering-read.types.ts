@@ -27,6 +27,11 @@ export interface QuotaPoolRow {
    * 比看见「运营授予 · <原因>」更难受——他只会看到总额度对不上自己买的那些。
    */
   grantReason: string | null;
+  /**
+   * 本池生效时刻。有它才能画「用了周期的百分之多少」——只有 `expiresAt` 画不出
+   * 进度，一条没有起点的线只能显示剩余天数。
+   */
+  effectiveAt: Date | null;
 }
 
 /** 各产品最新水位切片(usage_gauges,LWW 快照)。 */

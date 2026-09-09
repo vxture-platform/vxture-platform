@@ -77,14 +77,29 @@ export class InboxRouter {
 
   private async unreadCount(userId: string): Promise<number> {
     const res = await this.pool.query<{ n: string }>(
+      // 已删的不算未读:铃铛角标上那个数必须与列表里看得见的条数对得上,
+      // 否则会出现「角标 3 条未读、点进去一条也没有」。
       `select count(*)::text as n from support.inbox_messages
-        where account_id = $1 and read_at is null`,
+        where account_id = $1 and read_at is null and deleted_at is null`,
       [userId],
     );
     return Number(res.rows[0]?.n ?? 0);
   }
 
-  /** 列表：created_at 倒序，`before` = 上一页最后一条的 createdAt（ISO）做游标。 */
+  /**
+   * 列表：**未读置顶**，其次 created_at 倒序（owner 2026-09-09）。
+   *
+   * 已删（`deleted_at is not null`）不返回。删除是软删——通知的送达记录要留着，
+   * dispatcher 的去重依赖它（唯一键 收件人 × 模板 × 业务引用），硬删会让同一条
+   * 通知重新发一遍。
+   *
+   * ── 游标为什么还是 created_at ──
+   * 排序键是 `(read_at is null) desc, created_at desc`，而游标只带 created_at。
+   * 这在「翻页期间有消息被标已读」时会漏行——但列表在前端是**一次性拉完**的
+   * （owner：没删除的全部显示），翻页只在超过上限时才发生，且那时用户还没开始
+   * 标已读。把游标做成复合键要多带一个状态位，收益不抵复杂度；**限度写在这里**，
+   * 真出现万级消息再改。
+   */
   @Get()
   async list(
     @Req() req: Request & RequestContext,
@@ -107,8 +122,9 @@ export class InboxRouter {
       `select id, template_code, title, body, link, reference_type, reference_id, read_at, created_at
          from support.inbox_messages
         where account_id = $1
+          and deleted_at is null
           and ($2::timestamptz is null or created_at < $2::timestamptz)
-        order by created_at desc, id desc
+        order by (read_at is null) desc, created_at desc, id desc
         limit $3`,
       [userId, beforeAt, limit + 1],
     );
@@ -134,7 +150,7 @@ export class InboxRouter {
   ): Promise<{ updated: number }> {
     const res = await this.pool.query(
       `update support.inbox_messages set read_at = now()
-        where account_id = $1 and read_at is null`,
+        where account_id = $1 and read_at is null and deleted_at is null`,
       [this.userId(req)],
     );
     return { updated: res.rowCount ?? 0 };
@@ -149,6 +165,31 @@ export class InboxRouter {
     if (!UUID_RE.test(id)) throw new NotFoundException("消息不存在");
     const res = await this.pool.query<{ id: string }>(
       `update support.inbox_messages set read_at = coalesce(read_at, now())
+        where id = $1 and account_id = $2 returning id`,
+      [id, userId],
+    );
+    if ((res.rowCount ?? 0) === 0) throw new NotFoundException("消息不存在");
+    return { ok: true };
+  }
+
+  /**
+   * 删除一条消息（软删，owner 2026-09-09）。
+   *
+   * 幂等：已删的再删一次仍返回 ok，不报 404——重复点击、或两个标签页各点一次，
+   * 都不该看到错误。真正的「不存在」（别人的消息、乱造的 id）仍是 404。
+   *
+   * 删除**不影响 dispatcher 的送达去重**：那条记录还在，只是不再出现在列表里。
+   */
+  @Post(":id/delete")
+  async remove(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<{ ok: true }> {
+    const userId = this.userId(req);
+    if (!UUID_RE.test(id)) throw new NotFoundException("消息不存在");
+    const res = await this.pool.query<{ id: string }>(
+      `update support.inbox_messages
+          set deleted_at = coalesce(deleted_at, now())
         where id = $1 and account_id = $2 returning id`,
       [id, userId],
     );

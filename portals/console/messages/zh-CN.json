@@ -475,24 +475,13 @@
     }
   },
   "inbox": {
-    "header": {
-      "title": "消息中心",
-      "description": "待办由订单、订阅、配额、邀请与加油包的真实状态派生,处理完自动消失;消息是订阅到期、续费订单、开通与退款进度的通知,邮件偏好在「通知提醒」调整。"
-    },
-    "unread": "{count} 条未读",
     "allRead": "没有未读消息",
-    "markAllRead": "全部标为已读",
-    "loadMore": "加载更多",
-    "loading": "加载中…",
+    "counts": "{todos} 项待办 · {unread} 条未读",
+    "delete": "删除「{title}」",
+    "deleteFailed": "删除失败，请重试",
     "empty": "还没有任何消息",
-    "loadError": "消息读取失败，请稍后再试",
-    "open": "查看",
-    "readBadge": "已读",
-    "unreadBadge": "未读",
-    "list": {
-      "title": "列表",
-      "description": "待办置顶;同一件事只出现一次"
-    },
+    "emptyAll": "没有待办,也没有消息",
+    "emptyTodo": "没有需要你处理的事",
     "filters": {
       "label": "筛选",
       "all": "全部",
@@ -500,16 +489,29 @@
       "message": "消息",
       "unread": "未读"
     },
-    "counts": "{todos} 项待办 · {unread} 条未读",
-    "todoBadge": "待办",
-    "messageBadge": "消息",
-    "emptyTodo": "没有需要你处理的事",
-    "emptyAll": "没有待办,也没有消息",
+    "header": {
+      "title": "消息中心",
+      "description": "待办由订单、订阅、配额、邀请与加油包的真实状态派生,处理完自动消失;消息是订阅到期、续费订单、开通与退款进度的通知,邮件偏好在「通知提醒」调整。"
+    },
+    "list": {
+      "title": "列表",
+      "description": "待办置顶;同一件事只出现一次"
+    },
+    "loadError": "消息读取失败，请稍后再试",
+    "loadMore": "加载更多",
+    "loading": "加载中…",
     "markAllFailed": "标记失败,请稍后重试",
+    "markAllRead": "全部标为已读",
+    "messageBadge": "消息",
     "notes": {
       "title": "口径说明",
       "body": "待办没有「已读」:它是真实状态的镜子,处理完才消失,未处理会一直显示。消息有已读 / 未读;「未读」筛选只针对消息。有待办的事项在「全部」里只显示待办那一条,对应的消息留在「消息」筛选下作为历史。"
-    }
+    },
+    "open": "查看",
+    "readBadge": "已读",
+    "todoBadge": "待办",
+    "unread": "{count} 条未读",
+    "unreadBadge": "未读"
   },
   "invitationsPage": {
     "title": "邀请记录",
@@ -1951,12 +1953,7 @@
       "colRemaining": "剩余",
       "colReset": "重置周期",
       "colExpires": "有效期至",
-      "empty": "暂无 AI Credits 额度,订阅产品后自动获得",
-      "sharingTitle": "跨产品共享",
-      "sharingOn": "已默认开启:{products} 参与共享——单个产品用完后可使用其他产品的剩余额度,消耗均按产品归因记录",
-      "sharingOff": "当前无产品参与共享,各产品额度独立使用",
-      "boosterTitle": "AI Credits 加油包",
-      "boosterBody": "订阅额度全部用完后,可购买加油包补充;加油包在订阅额度之后消耗,有效期更长"
+      "empty": "暂无 AI Credits 额度,订阅产品后自动获得"
     },
     "description": "工作空间的存储与 AI Credits:额度构成、当前用量与剩余一目了然",
     "filters": {
@@ -2587,17 +2584,17 @@
       "menuSubscriptionHint": "订单履约后才会挂上订阅"
     },
     "packs": {
-      "basePriceAndReset": "¥0 / {period} · 每{period}重置",
-      "description": "这个工作空间的额度从哪来。订阅带来的额度算在上面的智能体里，这里是其余三类。用了多少在配额管理。",
+      "daysLeft": "剩 {days} 天",
+      "description": "这个工作空间有哪些额度、从哪来、管到什么时候。订阅带来的额度算在上面的智能体里。用了多少在配额管理。",
       "emptyDescription": "工作空间的基础额度落库后会出现在这里。",
       "emptyTitle": "暂无资源包",
-      "expires": "有效期至 {date}",
+      "expired": "已到期",
       "loading": "读取中…",
-      "noReset": "不重置",
       "period": {
         "day": "日",
         "month": "月"
       },
+      "perpetual": "长期有效",
       "resets": "每{period}重置",
       "source": {
         "ws_base": "默认自带",

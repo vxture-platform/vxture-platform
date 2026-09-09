@@ -412,14 +412,15 @@ export function SubscriptionPage() {
 
       {/* ② 我的资源包(owner 2026-09-09)。
           分组规则直接落在库的 `pool_source` 上,不另立一张要人维护的清单:
-            ws_base         工作空间基础额度 —— ¥0,但**有周期**,随周期重置
-            addon_purchase  加油包与扩展包 —— 买来的,有有效期
-            manual_override 运营授予 —— 标明来由(库里的 grant_reason)
+            ws_base         默认自带 —— 生命周期随工作空间,显示「长期有效」
+            addon_purchase  用户加购 —— 有到期时间,画周期进度、临期提醒
+            manual_override 平台发放 —— 长期有效 / 周期有效两种都支持
           `subscription` 那一类不进这里:它的来由是上面 ① 的订阅,在这儿再列一遍
           等于同一件事说两处。
 
-          与 /quotas 的分工(owner 裁定):**这里答「你有什么」——来源、额度、周期、
-          到期、价格;配额页答「用了多少、还剩多少」。** */}
+          与 /quotas 的分工(owner 裁定):**这里答「你有什么」——额度、来源、有效期;
+          配额页答「用了多少、还剩多少」。**
+          订阅管理**不出现费用**(owner 2026-09-09):它答的是权益结果,不是花了多少。 */}
       <ResourcePacksSection
         pools={resourcePools}
         loading={loading}

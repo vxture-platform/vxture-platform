@@ -35,10 +35,7 @@ import {
   type ProductAppTile,
 } from "@/api/console-bff";
 import { formatInboxTime, inboxPresentation } from "@/lib/inbox-format";
-import {
-  isCoveredByTodo,
-  useDerivedTodos,
-} from "@/features/todos/useDerivedTodos";
+import { useDerivedTodos } from "@/features/todos/useDerivedTodos";
 import { selectVisibleDomains } from "@/features/permissions/navigation-access";
 import {
   ShellHeader,
@@ -402,21 +399,20 @@ export function ConsoleAppShell({
   const billingAmount = Number(billing.amount ?? 0);
   const billingLabel = `${currencySymbol}${(Number.isFinite(billingAmount) ? billingAmount : 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // 抽屉条目 = 站内收件箱最近 8 条（P2-g）；点开去消息带的链接，没有链接去「待办与消息」。
-  // 同一件事只出现一次:有待办覆盖的知情类消息不再列(去重口径与页面一致)。
-  const drawerNotifs: DrawerNotif[] = inboxItems
-    .filter((m) => !isCoveredByTodo(m, derivedTodos.todos))
-    .map((m) => {
-      const p = inboxPresentation(m.templateCode);
-      return {
-        level: p.level,
-        icon: p.icon,
-        title: m.title,
-        meta: `${formatInboxTime(m.createdAt, locale)} · ${m.body}`,
-        href: m.link ?? "/inbox",
-        unread: m.readAt === null,
-      };
-    });
+  /* 抽屉条目 = 站内收件箱最近 8 条（P2-g）；点开去消息带的链接，没有链接去「待办与消息」。
+     owner 2026-09-09:**不再按待办去重**——与页面同一口径。抽屉只放 8 条,藏掉一条的
+     后果比整页更重:人会以为那条通知没来过。待办是派生的、会消失,消息是落库的凭据。 */
+  const drawerNotifs: DrawerNotif[] = inboxItems.map((m) => {
+    const p = inboxPresentation(m.templateCode);
+    return {
+      level: p.level,
+      icon: p.icon,
+      title: m.title,
+      meta: `${formatInboxTime(m.createdAt, locale)} · ${m.body}`,
+      href: m.link ?? "/inbox",
+      unread: m.readAt === null,
+    };
+  });
   const drawerTodos = derivedTodos.todos.map((todo) => ({
     key: todo.key,
     title: todo.title,

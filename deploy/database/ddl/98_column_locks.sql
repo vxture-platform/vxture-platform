@@ -437,7 +437,7 @@ GRANT UPDATE (tenant_id, account_id, channel, template_code, status, reference_t
 
 -- support.inbox_messages  [anchor: id, created_at]
 REVOKE UPDATE ON support.inbox_messages FROM platform_svc;
-GRANT UPDATE (tenant_id, account_id, template_code, title, body, link, reference_type, reference_id, read_at) ON support.inbox_messages TO platform_svc;
+GRANT UPDATE (tenant_id, account_id, template_code, title, body, link, reference_type, reference_id, read_at, deleted_at) ON support.inbox_messages TO platform_svc;
 
 -- admin.operator_role  [anchor: id, rank, created_by, created_at]
 REVOKE UPDATE ON admin.operator_role FROM platform_svc;

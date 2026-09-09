@@ -32,13 +32,13 @@ import { isExternalLink, mergeById } from "@/lib/inbox-list";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   fetchInbox,
+  deleteInboxMessage,
   markInboxAllRead,
   markInboxRead,
   type InboxMessage,
 } from "@/api/console-bff";
 import { formatInboxTime } from "@/lib/inbox-format";
 import {
-  isCoveredByTodo,
   useDerivedTodos,
   type TodoItem,
 } from "@/features/todos/useDerivedTodos";
@@ -74,6 +74,9 @@ export function InboxPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  /* 正在删的那几条:按 id 记而不是一个全局 busy——同时删两条时，
+     一个全局标志会让两个按钮一起变灰，看不出是哪条在动。 */
+  const [deleting, setDeleting] = useState<ReadonlySet<string>>(new Set());
 
   const derived = useDerivedTodos();
 
@@ -155,17 +158,50 @@ export function InboxPage() {
     }
   }
 
+  /**
+   * 删除一条消息（软删）。
+   *
+   * 乐观移除：先从列表里拿掉，失败再放回去并报错。这一步的判断依据是——删除是
+   * 幂等的、后端不会因为重复请求出错，而「点了没反应」比「删错了要撤回」更常见
+   * 也更烦人。
+   *
+   * 未读的那条被删掉时，本地未读数要跟着减：角标与列表必须对得上，否则会出现
+   * 「角标 3 条未读、点进去一条也没有」。
+   */
+  async function remove(m: InboxMessage) {
+    if (deleting.has(m.id)) return;
+    setDeleting((cur) => new Set(cur).add(m.id));
+    const snapshot = items;
+    const wasUnread = m.readAt === null;
+    setItems((cur) => cur.filter((x) => x.id !== m.id));
+    if (wasUnread) setUnreadCount((n) => Math.max(0, n - 1));
+    try {
+      await deleteInboxMessage(m.id);
+    } catch {
+      setItems(snapshot);
+      if (wasUnread) setUnreadCount((n) => n + 1);
+      setError(t("deleteFailed"));
+    } finally {
+      setDeleting((cur) => {
+        const next = new Set(cur);
+        next.delete(m.id);
+        return next;
+      });
+    }
+  }
+
   const todos: TodoItem[] =
     filter === "message" || filter === "unread" ? [] : derived.todos;
   const messages = useMemo(() => {
     if (filter === "todo") return [];
     let list = items;
     if (filter === "unread") list = list.filter((m) => m.readAt === null);
-    // 「全部」里同一件事只出现一次:有待办就藏起对应的知情类消息。
-    if (filter === "all")
-      list = list.filter((m) => !isCoveredByTodo(m, derived.todos));
+    /* owner 2026-09-09:**没删除的全部显示**。
+       此前「全部」这一档会把「已有对应待办」的知情类消息藏起来（去重），
+       但那条规则让人无法确认「那条通知到底来没来」——待办是派生的、会消失，
+       消息是落库的凭据。要去重就在待办那一侧做，不要让消息凭空少一条。 */
     return list;
-  }, [filter, items, derived.todos]);
+  }, [filter, items]);
 
   const busy = loading || derived.loading;
   const nothing = !busy && todos.length === 0 && messages.length === 0;
@@ -259,11 +295,14 @@ export function InboxPage() {
           {messages.map((m) => {
             const unread = m.readAt === null;
             return (
-              <li key={m.id}>
+              /* 删除键**在主按钮之外**:整行本身是个 Button（点开消息），
+                 把删除嵌进去就是按钮套按钮——HTML 不允许，浏览器会拆开，
+                 点删除会落到外层的「打开」上。并排放，两个动作各自独立。 */
+              <li key={m.id} className="flex items-start gap-2xs">
                 <Button
                   variant="ghost"
                   size="lg"
-                  className="h-auto w-full items-start justify-start gap-md whitespace-normal py-md text-left"
+                  className="h-auto min-w-0 flex-1 items-start justify-start gap-md whitespace-normal py-md text-left"
                   onClick={() => void open(m)}
                 >
                   <span className="flex min-w-0 flex-1 flex-col gap-2xs">
@@ -295,6 +334,16 @@ export function InboxPage() {
                       />
                     </span>
                   ) : null}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="mt-md shrink-0 text-muted-foreground"
+                  aria-label={t("delete", { title: m.title })}
+                  disabled={deleting.has(m.id)}
+                  onClick={() => void remove(m)}
+                >
+                  <Icon name="trash" size="xs" fallback="placeholder" />
                 </Button>
               </li>
             );

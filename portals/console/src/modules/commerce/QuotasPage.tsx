@@ -9,10 +9,10 @@
  * 运营视角:「此刻还剩多少、要不要加购」。数据 = GET /api/quota/overview:
  *   - 存储空间 = WS 级总账(product_220 §4.4):额度 Σ 全来源池(基础授予/
  *     订阅贡献/加油包),用量 Σ 各产品水位切片;剩余可为负(超冲,如实展示);
- *   - AI Credits = 池明细(来源/本期已用/剩余/周期/效期)+ 共享参与产品;
+ *   - AI Credits = 池明细(来源/本期已用/剩余/周期/效期);
  *   - 各产品配额明细 = 产品级指标 + 平台指标贡献。
  * 严格 DS 组合件拼装(billing 页口径):MetricGrid columns=3(本页 3 指标铺满,
- * 列数随业务不写死)+ PageSection 原生 icon + DataTable + SignalList,无自造
+ * 列数随业务不写死)+ PageSection 原生 icon + DataTable,无自造
  * 样式层。中文基准,zh/en 双份 i18n(quotasPage 命名空间)。全页无 UUID。
  *
  * ## 2026-09-07 页面级走查改了什么
@@ -66,7 +66,7 @@ import {
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { Link } from "@/lib/i18n/navigation";
 import { ListPagination } from "@/components/pagination";
-import { PageSection, SectionBody, SignalList } from "@/layout/shell";
+import { PageSection } from "@/layout/shell";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
@@ -645,8 +645,6 @@ export function QuotasPage() {
     },
   ];
 
-  const sharingProducts = overview?.aiCredit.sharingProducts ?? [];
-
   return (
     <ViewLayout>
       <ViewHeader
@@ -771,28 +769,6 @@ export function QuotasPage() {
             />
           }
         />
-        {/* 说明缩进到与板块标题文字对齐(二级页说明口径,owner 2026-09-06)。 */}
-        <SectionBody>
-          <SignalList
-            items={[
-              {
-                title: t("credits.sharingTitle"),
-                description:
-                  sharingProducts.length > 0
-                    ? t("credits.sharingOn", {
-                        products: sharingProducts
-                          .map((p) => p.productName)
-                          .join(" / "),
-                      })
-                    : t("credits.sharingOff"),
-              },
-              {
-                title: t("credits.boosterTitle"),
-                description: t("credits.boosterBody"),
-              },
-            ]}
-          />
-        </SectionBody>
       </PageSection>
 
       {/* ③ 各产品配额明细 */}

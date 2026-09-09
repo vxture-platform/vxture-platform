@@ -170,9 +170,14 @@ CREATE TABLE support.inbox_messages (
     reference_type  varchar(64)   NOT NULL,                             -- subscription / order / refund
     reference_id    varchar(128)  NOT NULL,                             -- 去重键：同一业务对象 + 阶段只发一次
     read_at         timestamptz,
+    -- 租户删除时刻（软删，owner 2026-09-09）。读路径过滤；**去重唯一键不含它**——
+    -- 删除表达的是「不想再看见」，不是「这件事没发生过」，硬删会让同一条通知重发。
+    deleted_at      timestamptz,
     created_at      timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT uq_inbox_messages_dedupe UNIQUE (account_id, template_code, reference_type, reference_id)
 );
 CREATE INDEX idx_inbox_messages_account_created ON support.inbox_messages (account_id, created_at DESC);
+-- 列表查询的同形部分索引：account_id + 未删 + created_at 倒序。已删行不进索引。
+CREATE INDEX idx_inbox_messages_account_live    ON support.inbox_messages (account_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_inbox_messages_account_unread  ON support.inbox_messages (account_id) WHERE read_at IS NULL;
 CREATE INDEX idx_inbox_messages_tenant          ON support.inbox_messages (tenant_id);

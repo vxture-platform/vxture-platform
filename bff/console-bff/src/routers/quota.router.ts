@@ -70,6 +70,8 @@ export interface QuotaPoolView {
   expiresAt: string | null;
   /** 运营授予的原因（`source = 'manual_override'` 才有值） */
   grantReason: string | null;
+  /** 本池生效时刻；与 `expiresAt` 一起才画得出周期进度 */
+  effectiveAt: string | null;
 }
 
 export interface StorageSliceView {
@@ -385,6 +387,7 @@ export class QuotaRouter {
       resetPeriod: r.resetPeriod,
       expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
       grantReason: r.grantReason,
+      effectiveAt: r.effectiveAt ? r.effectiveAt.toISOString() : null,
     });
 
     // ── storage: WS 总账(gauge — used 来自水位切片,池的 used 无意义) ────────
