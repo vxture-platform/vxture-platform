@@ -1,111 +1,79 @@
 "use client";
 
 /**
- * DashboardPage.tsx — 工作台首页(批 4 收口)。
+ * DashboardPage.tsx — 概览（工作台首页）。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 三格摘要(套餐 / 配额健康度 / 待处理)+ 三张入口卡 + 最近账单 + 配额态势。
- * 此前「最近发票」读的是待退役的 /api/billing/invoices 透传(字段名与账单页对不上,
- * 状态列还是英文首字母大写),「配额态势」是一块永久占位——批 4:账单读同一份
- * /api/billing/bills 的最近 5 张,配额画真实读数(与租户面板同源 /quota-usage)。
- * 读全部 allSettled:一路失败只让它自己那块显影为「—」/ 读取失败,并给一次重试。
- * 各块按能力码显隐(billing.read / quota.read),没码的人不发那一路读。
+ * ## 2026-09-09 全面重排（owner）
+ *
+ * 三块，顺序是 **你是谁 → 要你做什么 → 你有什么**：
+ *
+ *     ① WelcomeCard     当前用户与所在租户/工作空间的概要，只显示不编辑
+ *     ② TodoSection     需要处理的事项：待办与紧要信息
+ *     ③ ResourceSection 我有的资源与产品，「更多」去智能体域主页
+ *
+ * ── 旧版错在哪 ──
+ * 旧版标题叫「账户与租户控制台」，第一块是「快捷操作」三个按钮（添加成员 / 查看
+ * 订阅 / 提交工单），然后是重点信号、配额态势、近期账单。两个问题：
+ *
+ *   1. **它把一个多产品平台讲成了单一后台的入口页。** owner 的话：「必须清楚我们是
+ *      多产品服务平台，不是一款产品」。旧版**完全没有**「我有哪些产品在服务」这一块。
+ *   2. **快捷操作那三个按钮指向的就是侧栏里的三项**——重复导航不是内容。而且
+ *      「提交工单」指向的页面根本不存在。
+ *
+ * 我自己在这里也想岔过一次：起初把「产品」放第一块，owner 指出思路狭隘——人落到
+ * 这一页先要知道「我是谁、在哪」（这是**多租户**平台，进错租户做的每件事都是错的），
+ * 然后才是「要我做什么」「我有什么」。
+ *
+ * ── 为什么不用 DashboardTemplate ──
+ * 那个模板焊死的顺序是「先看数(metrics) → 再选路(entries) → 再处理事项」，与这里
+ * 要的顺序相反；而且它的 `entries` 槽位天然招来一排快捷入口，正是要去掉的东西。
+ * 它只有这一个使用者。
+ *
+ * ── 读失败显影 ──
+ * 四路读全 allSettled：一路失败只让它自己那块显影，并给一次整页重试。
+ * 各块按能力码显隐（billing.read / quota.read）；**产品磁贴不设门**——「我有哪些
+ * 产品」是每个成员都该看得见的事实，不是账务信息。
  */
 
-import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder";
 import { useEffect, useMemo, useState } from "react";
-import { getPathname, useRouter } from "@/lib/i18n/navigation";
+import { useTranslations } from "next-intl";
+import { ViewHeader, ViewLayout } from "@vxture/design-system";
 import {
-  Button,
-  DashboardTemplate,
-  DataTable,
-  EmptyState,
-  EntryCard,
-  Icon,
-  Progress,
-  StatusBadge,
-  ViewHeader,
-  TableTitleCell,
-} from "@vxture/design-system";
-import type {
-  DataTableColumn,
-  IconName,
-  StatusBadgeTone,
-} from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture-platform/shared";
-import {
-  fetchBillingSummary,
-  fetchBills,
-  fetchMyOrders,
-  fetchMySubscriptions,
+  fetchMyApps,
   fetchQuotaUsage,
-  type ConsoleBill,
-  type ConsoleBillingSummary,
   type ConsoleQuotaUsage,
-  type ConsoleSubscription,
-  type MyOrder,
+  type ProductAppTile,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
-import { useLocale, useTranslations } from "next-intl";
-import { useTableLabels } from "@/lib/table";
-import {
-  LoadFailedBanner,
-  LoadFailedEmpty,
-} from "@/components/load/LoadFailed";
-import { PageSection, SummaryStrip } from "@/layout/shell";
-import { fmtDate } from "@/modules/commerce/components/hubModel";
+import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
+import { WelcomeCard } from "./WelcomeCard";
+import { TodoSection } from "./TodoSection";
+import { ResourceSection, type OverviewQuotaRow } from "./ResourceSection";
 
-const RECENT_BILLS = 5;
-
-/** bill_status 六值域 → 徽章语气(与账单页同一张表)。 */
-const BILL_STATUS_TONES: Record<string, StatusBadgeTone> = {
-  unpaid: "warning",
-  paying: "info",
-  partial: "info",
-  paid: "success",
-  overdue: "warning",
-  cancelled: "neutral",
-};
-const KNOWN_BILL_STATUSES = new Set(Object.keys(BILL_STATUS_TONES));
-
-type QuotaRow = {
-  key: "storage" | "aiCredit";
-  used: number;
-  limit: number;
-};
+/** 用过这个比例才值得在概览上提一句。与配额页的告急口径同一个数。 */
+const ATTENTION_PERCENT = 80;
 
 export function DashboardPage() {
   const { session } = useConsoleSession();
   const t = useTranslations("dashboard");
-  const tableLabels = useTableLabels();
-  const tBilling = useTranslations("billingPage");
-  // localePrefix="always":EntryCard 是个原生 <a>,不能套在 next-intl 的 Link
-  // 里(<a> 嵌 <a> 非法),所以自己把 locale 前缀拼进 href。
-  const locale = useLocale();
-  const router = useRouter();
 
-  const canSeeBilling = hasCapability(
-    session.capabilities,
-    "tenant.billing.read",
-  );
   const canSeeQuota = hasCapability(session.capabilities, "tenant.quota.read");
 
-  const [bills, setBills] = useState<ConsoleBill[]>([]);
-  const [summary, setSummary] = useState<ConsoleBillingSummary | null>(null);
-  const [subscriptions, setSubscriptions] = useState<ConsoleSubscription[]>([]);
   const [quota, setQuota] = useState<ConsoleQuotaUsage | null>(null);
-  const [orders, setOrders] = useState<MyOrder[]>([]);
+  /* 产品磁贴。null = 没读到——与「读到了但一个产品都没有」是两回事，
+     后者是新工作空间的正常状态，要给去处而不是报错。 */
+  const [tiles, setTiles] = useState<ProductAppTile[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState<{
-    bills: boolean;
-    summary: boolean;
     quota: boolean;
+    tiles: boolean;
     any: boolean;
-  }>({ bills: false, summary: false, quota: false, any: false });
+  }>({ quota: false, tiles: false, any: false });
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -113,33 +81,19 @@ export function DashboardPage() {
     setLoading(true);
     const skip = <T,>(value: T) => Promise.resolve(value);
     void Promise.allSettled([
-      canSeeBilling ? fetchBills(1, RECENT_BILLS) : skip(null),
-      canSeeBilling ? fetchBillingSummary() : skip(null),
-      canSeeBilling ? fetchMySubscriptions() : skip([]),
       canSeeQuota ? fetchQuotaUsage() : skip(null),
-      canSeeBilling ? fetchMyOrders() : skip([]),
+      fetchMyApps(),
     ])
-      .then(([billsRes, summaryRes, subsRes, quotaRes, ordersRes]) => {
+      .then(([quotaRes, tilesRes]) => {
         if (!active) return;
-        setBills(
-          billsRes.status === "fulfilled" ? (billsRes.value?.items ?? []) : [],
-        );
-        setSummary(summaryRes.status === "fulfilled" ? summaryRes.value : null);
-        setSubscriptions(subsRes.status === "fulfilled" ? subsRes.value : []);
         setQuota(quotaRes.status === "fulfilled" ? quotaRes.value : null);
-        setOrders(ordersRes.status === "fulfilled" ? ordersRes.value : []);
+        setTiles(tilesRes.status === "fulfilled" ? tilesRes.value : null);
         const f = {
-          bills: billsRes.status === "rejected",
-          summary: summaryRes.status === "rejected",
           quota: quotaRes.status === "rejected",
+          tiles: tilesRes.status === "rejected",
           any: false,
         };
-        f.any =
-          f.bills ||
-          f.summary ||
-          f.quota ||
-          subsRes.status === "rejected" ||
-          ordersRes.status === "rejected";
+        f.any = f.quota || f.tiles;
         setFailed(f);
       })
       .finally(() => {
@@ -148,296 +102,57 @@ export function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [session.tenant?.id, canSeeBilling, canSeeQuota, reloadKey]);
+  }, [session.tenant?.id, canSeeQuota, reloadKey]);
 
-  const money = (v: string, currency: string) =>
-    formatCurrency(Number.parseFloat(v || "0"), locale as Locale, currency);
-
-  const activeSubscription =
-    subscriptions.find((s) => s.status === "active") ?? subscriptions[0];
-  const aiCredit = quota?.aiCredit;
-  const quotaPct =
-    aiCredit && aiCredit.limit > 0
-      ? `${Math.round((aiCredit.used / aiCredit.limit) * 100)}%`
-      : null;
-  /* 待处理 = 待付订单 + 待收款账单(概览的 unpaid + overdue,库内计数,不再只数
-   * 最近 5 张)。读不到就是「—」,不是 0。 */
-  const openItems =
-    summary === null && failed.summary
-      ? null
-      : orders.filter((o) => o.orderStatus === "pending_payment").length +
-        (summary ? summary.unpaid + summary.overdue : 0);
-
-  const quickActions = [
-    { id: "addMember", href: "/members", icon: "users" },
-    { id: "reviewSubscription", href: "/subscription", icon: "chart-bar" },
-    { id: "adjustQuotas", href: "/quotas", icon: "database" },
-  ] as const;
-
-  /* Labels stay in i18n; values come from the reads above. No `hint` is
-   * passed: the old hints were specific fabricated sentences and there is no
-   * endpoint that could produce a true equivalent — a bare true value beats a
-   * plausible false sentence. `—` marks "not loaded / not applicable". */
-  const summaryItems = [
-    {
-      label: t("stats.plan.label"),
-      value: activeSubscription?.planName ?? "—",
-      aside: <Icon name="medal" size="sm" fallback="info" />,
-    },
-    {
-      label: t("stats.quota.label"),
-      value: quotaPct ?? (failed.quota ? t("stats.quota.unavailable") : "—"),
-      aside: <Icon name="chart-bar" size="sm" fallback="info" />,
-    },
-    {
-      label: t("stats.reminders.label"),
-      value: openItems === null ? "—" : String(openItems),
-      aside: <Icon name="warning" size="sm" fallback="info" />,
-    },
-  ];
-
-  const billColumns: DataTableColumn<ConsoleBill>[] = [
-    {
-      id: "billNo",
-      header: t("bills.headers.billNo"),
-      cell: (b) => (
-        <TableTitleCell
-          title={<span className="font-mono">{b.billNo}</span>}
-          description={
-            <span className="tabular-nums">{fmtDate(b.createdAt)}</span>
-          }
-        />
-      ),
-    },
-    {
-      id: "cycle",
-      header: t("bills.headers.cycle"),
-      cell: (b) =>
-        b.cycleStartDate && b.cycleEndDate ? (
-          <span className="tabular-nums">
-            {fmtDate(b.cycleStartDate)} ~ {fmtDate(b.cycleEndDate)}
-          </span>
-        ) : (
-          "—"
-        ),
-    },
-    {
-      id: "status",
-      header: t("bills.headers.status"),
-      align: "center",
-      cell: (b) => (
-        <StatusBadge tone={BILL_STATUS_TONES[b.billStatus] ?? "neutral"}>
-          {KNOWN_BILL_STATUSES.has(b.billStatus)
-            ? tBilling(`status.${b.billStatus}`)
-            : b.billStatus}
-        </StatusBadge>
-      ),
-    },
-    {
-      id: "amount",
-      header: t("bills.headers.amount"),
-      align: "money",
-      cell: (b) => (
-        <span className="tabular-nums font-semibold text-foreground">
-          {money(b.payableAmount, b.currency)}
-        </span>
-      ),
-    },
-  ];
-
-  const quotaRows = useMemo<QuotaRow[]>(
-    () =>
-      quota
-        ? [
-            {
-              key: "storage",
-              used: quota.storage.used,
-              limit: quota.storage.limit,
-            },
-            {
-              key: "aiCredit",
-              used: quota.aiCredit.used,
-              limit: quota.aiCredit.limit,
-            },
-          ]
-        : [],
-    [quota],
-  );
-  const quotaValue = (row: QuotaRow, v: number) =>
-    row.key === "storage" ? formatBytes(v) : fmtCount(v);
-  const quotaColumns: DataTableColumn<QuotaRow>[] = [
-    {
-      id: "pool",
-      header: t("quotas.headers.pool"),
-      cell: (r) => t(`quotas.rows.${r.key}`),
-    },
-    {
-      id: "usage",
-      header: t("quotas.headers.usage"),
-      cell: (r) => (
-        <span className="inline-flex items-baseline gap-xs tabular-nums">
-          <span className="text-info-text">{quotaValue(r, r.used)}</span>
-          <span className="text-muted-foreground">/</span>
-          <span className="text-foreground">{quotaValue(r, r.limit)}</span>
-        </span>
-      ),
-    },
-    {
-      id: "share",
-      header: t("quotas.headers.share"),
-      width: "md",
-      cell: (r) => (
-        <Progress
-          value={
-            r.limit > 0
-              ? Math.min(100, Math.round((r.used / r.limit) * 100))
-              : 0
-          }
-          aria-label={t("quotas.headers.share")}
-        />
-      ),
-    },
-    {
-      id: "status",
-      header: t("quotas.headers.status"),
-      align: "center",
-      cell: (r) => {
-        const tight = r.limit > 0 && r.limit - r.used < r.limit * 0.1;
-        return (
-          <StatusBadge tone={tight ? "warning" : "success"}>
-            {tight ? t("quotas.status.tight") : t("quotas.status.ok")}
-          </StatusBadge>
-        );
-      },
-    },
-  ];
+  /* 概览只画**需要注意**的额度行（用过 80%）。没有任何一项到线时整块不画——
+     一堆 5% 的进度条不需要人做任何事，画出来只是噪音。全量在配额管理。 */
+  const quotaRows = useMemo<OverviewQuotaRow[]>(() => {
+    if (!quota) return [];
+    const pools = [
+      { key: "storage" as const, ...quota.storage, fmt: formatBytes },
+      { key: "aiCredit" as const, ...quota.aiCredit, fmt: fmtCount },
+    ];
+    return pools
+      .map((p) => ({
+        label: t(`quotas.pool.${p.key}`),
+        percent:
+          p.limit > 0
+            ? Math.min(100, Math.round((p.used / p.limit) * 100))
+            : null,
+        text: `${p.fmt(p.used)} / ${p.fmt(p.limit)}`,
+      }))
+      .filter((r) => r.percent !== null && r.percent >= ATTENTION_PERCENT);
+  }, [quota, t]);
 
   return (
-    /* DashboardTemplate 焊死工作台的阅读顺序:先看数(metrics)、再选路
-     * (entries)、最后处理具体事项(children)。 */
-    <DashboardTemplate
-      header={
-        <ViewHeader
-          icon="home"
-          title={t("title")}
-          description={t("description")}
+    <ViewLayout>
+      <ViewHeader
+        icon="home"
+        title={t("title")}
+        description={t("description")}
+      />
+
+      {failed.any ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
         />
-      }
-      metrics={
-        <div className="flex flex-col gap-md">
-          {failed.any ? (
-            <LoadFailedBanner
-              onRetry={() => setReloadKey((k) => k + 1)}
-              retrying={loading}
-            />
-          ) : null}
-          <SummaryStrip items={summaryItems} />
-        </div>
-      }
-      entries={
-        <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
-          {quickActions.map((action) => (
-            <EntryCard
-              key={action.id}
-              href={getPathname({ href: action.href, locale })}
-              icon={action.icon as IconName}
-              title={t(`quickActions.${action.id}.label`)}
-              description={t(`quickActions.${action.id}.description`)}
-            />
-          ))}
-        </div>
-      }
-    >
-      {canSeeBilling ? (
-        <PageSection
-          icon="receipt"
-          level={2}
-          title={t("bills.title")}
-          description={t("bills.description")}
-          action={
-            <Button
-              size="md"
-              variant="outline"
-              onClick={() => router.push("/billing")}
-            >
-              <Icon name="arrow-right" size="xs" fallback="placeholder" />
-              <span>{t("bills.viewAll")}</span>
-            </Button>
-          }
-        >
-          <DataTable<ConsoleBill>
-            labels={tableLabels}
-            columns={billColumns}
-            rows={bills}
-            rowKey={(b) => b.id}
-            /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
-               与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
-            leadingSpacer
-            indexStart={1}
-            /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
-               先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
-               不是整张表的列结构（owner 2026-09-07）。 */
-            rowActions={() => <RowActionsPlaceholder />}
-            loading={loading}
-            empty={
-              failed.bills ? (
-                <LoadFailedEmpty />
-              ) : (
-                <EmptyState title={t("bills.empty")} />
-              )
-            }
-            footer={
-              <span className="text-body-sm text-muted-foreground tabular-nums">
-                {loading || failed.bills
-                  ? "—"
-                  : t("bills.count", { count: bills.length })}
-              </span>
-            }
-          />
-        </PageSection>
       ) : null}
 
-      {canSeeQuota ? (
-        <PageSection
-          icon="gauge"
-          level={2}
-          title={t("quotas.title")}
-          description={t("quotas.description")}
-          action={
-            <Button
-              size="md"
-              variant="outline"
-              onClick={() => router.push("/quotas")}
-            >
-              <Icon name="arrow-right" size="xs" fallback="placeholder" />
-              <span>{t("quotas.viewAll")}</span>
-            </Button>
-          }
-        >
-          <DataTable<QuotaRow>
-            labels={tableLabels}
-            columns={quotaColumns}
-            rows={quotaRows}
-            rowKey={(r) => r.key}
-            /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
-               与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
-            leadingSpacer
-            indexStart={1}
-            /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
-               先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
-               不是整张表的列结构（owner 2026-09-07）。 */
-            rowActions={() => <RowActionsPlaceholder />}
-            loading={loading}
-            empty={
-              failed.quota ? (
-                <LoadFailedEmpty />
-              ) : (
-                <EmptyState title={t("quotas.empty")} />
-              )
-            }
-          />
-        </PageSection>
-      ) : null}
-    </DashboardTemplate>
+      {/* ① 你是谁、在哪 —— 只显示不编辑 */}
+      <WelcomeCard />
+
+      {/* ② 要你做什么 —— 待办与紧要信息 */}
+      <TodoSection />
+
+      {/* ③ 你有什么 —— 产品与需要注意的额度 */}
+      <ResourceSection
+        tiles={tiles}
+        tilesFailed={failed.tiles}
+        quotaRows={quotaRows}
+        quotaFailed={failed.quota}
+        loading={loading}
+      />
+    </ViewLayout>
   );
 }
