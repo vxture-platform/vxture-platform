@@ -331,87 +331,50 @@
     }
   },
   "dashboard": {
-    "eyebrow": "概览",
-    "title": "账户与租户管理台",
-    "description": "面向用户与租户的自主管理入口，集中查看成员、订阅、账单、配额与安全状态。",
-    "createAction": "新增管理事项",
-    "stats": {
-      "plan": {
-        "label": "当前套餐"
-      },
-      "quota": {
-        "label": "配额健康度",
-        "unavailable": "读取失败"
-      },
-      "reminders": {
-        "label": "待处理提醒"
-      }
-    },
-    "quickActions": {
-      "title": "快捷操作",
-      "description": "引导高频管理动作，而不是堆叠一排主按钮。",
-      "addMember": {
-        "label": "添加成员",
-        "description": "邀请运营人员、工作区所有者和只读审查者。"
-      },
-      "reviewSubscription": {
-        "label": "查看订阅",
-        "description": "检查套餐详情、续费时间与配额池压力。"
-      },
-      "adjustQuotas": {
-        "label": "调整配额",
-        "description": "在超额成本上升前重新平衡共享限制。"
-      }
-    },
-    "signals": {
-      "title": "重点信号",
-      "description": "只保留当前真正需要关注的内容。",
-      "badge": "今天",
-      "billing": {
-        "title": "账单跟进",
-        "description": "一张模型超额发票将在 5 天内到期。"
-      },
-      "quota": {
-        "title": "配额热点",
-        "description": "微调 GPU 小时已接近配置的月度上限。"
-      },
-      "access": {
-        "title": "访问卫生",
-        "description": "有两位受邀成员尚未接受访问。"
-      }
-    },
+    "description": "你在这个工作空间的当前状况：需要处理什么、手里有哪些产品与资源。",
     "quotas": {
-      "title": "配额态势",
-      "description": "工作空间的存储与 AI Credits 当前用量;明细与加油包在配额管理页",
-      "headers": {
-        "pool": "资源池",
-        "usage": "用量 / 额度",
-        "share": "占比",
-        "status": "状态"
-      },
-      "rows": {
+      "pool": {
         "storage": "存储空间",
         "aiCredit": "AI Credits"
-      },
-      "status": {
-        "ok": "正常",
-        "tight": "余量不足 10%"
-      },
-      "empty": "暂无配额数据,订阅产品后自动生成",
-      "viewAll": "配额管理"
+      }
     },
-    "bills": {
-      "title": "最近账单",
-      "description": "最近 5 张账单;全部记录与发票申请在账单管理页",
-      "headers": {
-        "billNo": "账单号",
-        "cycle": "账期",
-        "status": "状态",
-        "amount": "应付"
+    "resources": {
+      "title": "我的产品与资源",
+      "description": "这个工作空间在服务中的产品；额度用得紧张时也会在这里提醒。",
+      "loading": "读取中…",
+      "viewAll": "更多",
+      "tilesFailed": "产品清单读取失败",
+      "noProducts": "还没有产品",
+      "noProductsHint": "去产品市场看看有哪些可以订阅的。",
+      "moreProducts": "还有 {count} 个产品，去智能体主页看全部",
+      "status": {
+        "active": "服务中",
+        "trialing": "试用中"
+      }
+    },
+    "title": "概览",
+    "todos": {
+      "title": "需要处理",
+      "description": "从订阅、订单、认证等状态推出来的事项。",
+      "badge": "待办",
+      "loading": "读取中…",
+      "empty": "暂无待处理",
+      "emptyHint": "有需要你处理的事会出现在这里。",
+      "viewAll": "全部",
+      "more": "还有 {count} 项，去「待办与消息」看全部"
+    },
+    "welcome": {
+      "greeting": {
+        "morning": "早上好，{name}",
+        "afternoon": "下午好，{name}",
+        "evening": "晚上好，{name}"
       },
-      "count": "最近 {count} 张账单",
-      "empty": "暂无账单",
-      "viewAll": "账单管理"
+      "greetingAnonymous": "欢迎回来",
+      "subtitle": "以下是这个工作空间的当前状况。",
+      "tenant": "租户",
+      "workspace": "工作空间",
+      "role": "角色",
+      "deleting": "账号删除保留期中"
     }
   },
   "destructive": {
@@ -2012,7 +1975,6 @@
       "colUsed": "已用",
       "colShare": "占总额度",
       "colObserved": "上报时间",
-      "totalLine": "合计额度 {limit} · {remaining}",
       "emptySources": "暂无存储额度来源",
       "colItem": "项目",
       "usageOnly": "产品用量"

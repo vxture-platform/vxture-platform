@@ -331,87 +331,50 @@
     }
   },
   "dashboard": {
-    "eyebrow": "Overview",
-    "title": "Account and tenant console",
-    "description": "A self-service entry for users and tenants to manage members, subscriptions, billing, quotas, and security posture.",
-    "createAction": "Create management item",
-    "stats": {
-      "plan": {
-        "label": "Current plan"
-      },
-      "quota": {
-        "label": "Quota health",
-        "unavailable": "Unavailable"
-      },
-      "reminders": {
-        "label": "Open reminders"
-      }
-    },
-    "quickActions": {
-      "title": "Quick actions",
-      "description": "Guide frequent management actions without flooding the page with primary buttons.",
-      "addMember": {
-        "label": "Add member",
-        "description": "Invite operators, workspace owners, and readonly reviewers."
-      },
-      "reviewSubscription": {
-        "label": "Review subscription",
-        "description": "Inspect plan details, renewal timing, and quota pool pressure."
-      },
-      "adjustQuotas": {
-        "label": "Adjust quotas",
-        "description": "Rebalance shared limits before overage costs increase."
-      }
-    },
-    "signals": {
-      "title": "Signals",
-      "description": "Keep the dashboard concise: only what needs attention now.",
-      "badge": "Today",
-      "billing": {
-        "title": "Billing follow-up",
-        "description": "An invoice for model overage is due within 5 days."
-      },
-      "quota": {
-        "title": "Quota hotspot",
-        "description": "Fine-tune GPU hours are nearing the configured monthly cap."
-      },
-      "access": {
-        "title": "Access hygiene",
-        "description": "Two invited members have not accepted access yet."
-      }
-    },
+    "description": "Where this workspace stands right now: what needs you, and what you have.",
     "quotas": {
-      "title": "Quota posture",
-      "description": "Current storage and AI Credits usage for the workspace; details and add-on packs live on the Quotas page",
-      "headers": {
-        "pool": "Pool",
-        "usage": "Used / limit",
-        "share": "Share",
-        "status": "Status"
-      },
-      "rows": {
+      "pool": {
         "storage": "Storage",
         "aiCredit": "AI Credits"
-      },
-      "status": {
-        "ok": "OK",
-        "tight": "Under 10% left"
-      },
-      "empty": "No quota data yet; it appears once a product is subscribed",
-      "viewAll": "Quotas"
+      }
     },
-    "bills": {
-      "title": "Recent bills",
-      "description": "The 5 most recent bills; the full list and invoice requests live on the Billing page",
-      "headers": {
-        "billNo": "Bill no.",
-        "cycle": "Cycle",
-        "status": "Status",
-        "amount": "Payable"
+    "resources": {
+      "title": "My products and resources",
+      "description": "Products serving this workspace; tight quota shows up here too.",
+      "loading": "Loading…",
+      "viewAll": "More",
+      "tilesFailed": "Could not load your products",
+      "noProducts": "No products yet",
+      "noProductsHint": "Browse the marketplace to see what you can subscribe to.",
+      "moreProducts": "{count} more — see all on the agents home",
+      "status": {
+        "active": "Active",
+        "trialing": "Trial"
+      }
+    },
+    "title": "Overview",
+    "todos": {
+      "title": "Needs your attention",
+      "description": "Derived from your subscriptions, orders and verification state.",
+      "badge": "To do",
+      "loading": "Loading…",
+      "empty": "Nothing to handle",
+      "emptyHint": "Anything that needs you will show up here.",
+      "viewAll": "See all",
+      "more": "{count} more — see all in Inbox"
+    },
+    "welcome": {
+      "greeting": {
+        "morning": "Good morning, {name}",
+        "afternoon": "Good afternoon, {name}",
+        "evening": "Good evening, {name}"
       },
-      "count": "{count} most recent bills",
-      "empty": "No bills yet",
-      "viewAll": "Billing"
+      "greetingAnonymous": "Welcome back",
+      "subtitle": "Here's where this workspace stands.",
+      "tenant": "Tenant",
+      "workspace": "Workspace",
+      "role": "Role",
+      "deleting": "Account pending deletion"
     }
   },
   "destructive": {
@@ -2012,7 +1975,6 @@
       "colUsed": "Used",
       "colShare": "Of total",
       "colObserved": "Reported at",
-      "totalLine": "Total {limit} · {remaining}",
       "emptySources": "No storage grants yet",
       "colItem": "Item",
       "usageOnly": "Product usage"
