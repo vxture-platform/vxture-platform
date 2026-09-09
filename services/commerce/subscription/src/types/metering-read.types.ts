@@ -20,6 +20,13 @@ export interface QuotaPoolRow {
   resetPeriod: string;
   expiresAt: Date | null;
   platformKind: string | null;
+  /**
+   * 运营授予的原因（`pool_source = 'manual_override'` 才有值）。
+   *
+   * 透到租户侧是 owner 2026-09-09 的裁定：额度多出来一块却看不见来由，
+   * 比看见「运营授予 · <原因>」更难受——他只会看到总额度对不上自己买的那些。
+   */
+  grantReason: string | null;
 }
 
 /** 各产品最新水位切片(usage_gauges,LWW 快照)。 */

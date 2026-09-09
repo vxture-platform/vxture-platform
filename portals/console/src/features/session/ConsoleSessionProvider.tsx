@@ -72,7 +72,7 @@ function getSessionIdentity(snapshot: SessionSnapshot) {
 /*
  * 活跃租户只有一个真相:服务端的 RP 会话(access token 里的 active_org)。
  * 此前这里还在 localStorage / cookie 里存一份「上次选的租户」,恢复会话时替用户切回去——
- * 它会抢在「登录后默认进入的租户」(账号信息页「设为默认」)前面,而且它依赖的那条切换
+ * 它会抢在「登录后默认进入的租户」(我的账号页「设为默认」)前面,而且它依赖的那条切换
  * 从未生效(POST 到一个退役路由)。2026-09-05 整体撤掉。
  */
 export function ConsoleSessionProvider({

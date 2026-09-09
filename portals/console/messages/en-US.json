@@ -106,76 +106,6 @@
     },
     "expiredNotice": "The payment window has closed; refreshing the order…"
   },
-  "atlasPage": {
-    "description": "Models available to this tenant, this workspace's product entitlements, and model quota and call volume. Read-only — provisioning and configuration live in the operations plane.",
-    "entitlements": {
-      "title": "Product entitlements",
-      "description": "Products and tiers this workspace subscribes to. Model availability is derived from these; there is no separate tenant-level model grant.",
-      "colProduct": "Product",
-      "colTier": "Tier",
-      "colStatus": "Status",
-      "colLimits": "Limits",
-      "bundled": "bundled",
-      "none": "Not subscribed",
-      "empty": "No product entitlements yet."
-    },
-    "loadError": "Could not load model platform status, please retry later.",
-    "metrics": {
-      "groupLabel": "Model service overview",
-      "models": "Available models",
-      "modelsHint": "{count} live entitlements",
-      "quota": "Model quota",
-      "quotaTier": "tier: {tier}",
-      "quotaNoTier": "no tier",
-      "tokens": "Model call tokens",
-      "tokensHint": "{count} rows"
-    },
-    "models": {
-      "title": "Available models",
-      "description": "Models granted to this tenant by the platform control plane.",
-      "empty": "No available models",
-      "colModel": "Model",
-      "colProvider": "Provider",
-      "colProtocol": "Protocol",
-      "colCapabilities": "Capabilities"
-    },
-    "quotaStatus": {
-      "covered": "Covered",
-      "uncovered": "No plan",
-      "unavailable": "Platform unreachable"
-    },
-    "quotas": {
-      "title": "Quota status",
-      "description": "Plan quota pools from the platform side (not Atlas data).",
-      "emptyCovered": "No active quota pools",
-      "emptyUncovered": "No plan published for this workspace yet",
-      "emptyUnavailable": "Could not reach the platform entitlement service",
-      "emptyNone": "No quota data",
-      "colMetric": "Metric",
-      "colRemaining": "Remaining / Limit",
-      "colPriority": "Priority",
-      "colTier": "Tier"
-    },
-    "signals": {
-      "title": "Notes",
-      "description": "The tenant side only shows what is visible in the current context.",
-      "scopeTitle": "Tenant scope",
-      "scopeBody": "Showing model platform state for {tenant}.",
-      "scopeMissing": "Tenant context is required before model platform state can be shown.",
-      "boundaryTitle": "Control-plane boundary",
-      "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
-    },
-    "title": "Model services",
-    "usage": {
-      "title": "Usage records",
-      "description": "Recent actual calls (Atlas logs, not the billing basis).",
-      "empty": "No model usage recorded",
-      "colModel": "Model",
-      "colProvider": "Provider",
-      "colRequests": "Requests",
-      "colTokens": "Tokens"
-    }
-  },
   "auditPage": {
     "title": "Audit Logs",
     "description": "Who did what, when: a trail of member management, subscription/order, and invoicing actions",
@@ -1475,7 +1405,7 @@
   "profilePage": {
     "header": {
       "eyebrow": "Account center",
-      "title": "Account",
+      "title": "My account",
       "description": "Avatar, profile, contact details, sign-in methods and preferences."
     },
     "common": {
@@ -2158,7 +2088,7 @@
   "routes": {
     "dashboard": "Dashboard",
     "todos": "Todo Items",
-    "profile": "Account",
+    "profile": "My account",
     "personalTenant": "Tenant info",
     "organization": "Organization Info",
     "members": "Members",
@@ -2171,7 +2101,6 @@
     "billing": "Billing center",
     "billingInvoices": "Invoices & titles",
     "quotas": "Quotas",
-    "atlas": "Model Services",
     "notifications": "Notifications",
     "security": "Security",
     "settings": "Tenant Settings",
@@ -2370,7 +2299,7 @@
         "description": "Key actions waiting for the current tenant"
       },
       "profile": {
-        "label": "Account",
+        "label": "My account",
         "description": "Avatar, profile, contact details, sign-in methods and preferences"
       },
       "members": {
@@ -2430,7 +2359,6 @@
         "description": "Skills and tools available to this workspace (in development)"
       }
     },
-    "openDocs": "View documentation",
     "sections": {
       "workspace": "Workspace",
       "accountTenant": "Account & Tenant",
@@ -2442,18 +2370,6 @@
     "workspaceMode": {
       "platform": "Platform workspace",
       "tenant": "Tenant workspace"
-    }
-  },
-  "skillsPage": {
-    "title": "Skills & Tools",
-    "description": "Skills and tools available to this workspace, with quotas and usage. Read-only — grants and configuration live on the operations side.",
-    "planned": {
-      "title": "In development",
-      "body": "The data path is not wired up yet. Once it is, this page will list the skills and tools this workspace has been granted, in the same shape as Model Services."
-    },
-    "empty": {
-      "title": "Nothing to show yet",
-      "description": "This does not mean you have no skills — the page is not wired to data yet."
     }
   },
   "subscribePage": {
@@ -2579,22 +2495,6 @@
     "contactSalesSubject": "{product} enterprise inquiry"
   },
   "subscriptionHub": {
-    "title": "Product Subscriptions",
-    "description": "Every product this workspace subscribes to, plus recommendations; orders and bills live in the billing center.",
-    "browseMarket": "Browse products",
-    "loading": "Loading…",
-    "favorite": {
-      "add": "Add to favorites",
-      "remove": "Remove from favorites",
-      "error": "Favorite action failed. Please try again."
-    },
-    "tier": {
-      "free": "Free",
-      "starter": "Starter",
-      "pro": "Pro",
-      "business": "Business",
-      "enterprise": "Enterprise"
-    },
     "audience": {
       "person": "Personal",
       "team": "Team",
@@ -2605,25 +2505,7 @@
       "team": "Team · {seats} {seats, plural, one {seat} other {seats}}",
       "private": "Private · {seats} {seats, plural, one {seat} other {seats}}"
     },
-    "cycle": {
-      "month": "Monthly",
-      "year": "Yearly"
-    },
-    "subStatus": {
-      "active": "Active",
-      "expiring": "Expiring soon",
-      "trialing": "Trialing",
-      "overdue": "Grace period",
-      "suspended": "Suspended",
-      "expired": "Expired",
-      "cancelled": "Cancelled"
-    },
-    "term": {
-      "perpetual": "No expiry",
-      "expired": "Expired",
-      "daysLeft": "{days} {days, plural, one {day} other {days}} left",
-      "until": "Valid until {date}"
-    },
+    "browseMarket": "Browse products",
     "card": {
       "productDetail": "Product details",
       "version": "Latest v{version}",
@@ -2640,30 +2522,41 @@
       "unsubscribeConsequence": "The subscription ends when the current billing cycle closes; it will not renew or bill again. Access continues until then. Resuming means subscribing again at the price listed at that time.",
       "unsubscribeKeep": "Keep subscription"
     },
-    "stats": {
-      "groupLabel": "Subscription metrics",
-      "products": "Active products",
-      "productsHint": "{free} on Free tier",
-      "productsHintNoFree": "in this workspace",
-      "expiring": "Next expiry",
-      "expiringHint": "{product} · {cycle} · {days} days left",
-      "expiringNone": "Nothing expiring soon"
+    "cycle": {
+      "month": "Monthly",
+      "year": "Yearly"
     },
-    "subs": {
-      "title": "My subscriptions",
-      "description": "Favorites first, then most recently provisioned; unpaid or unprovisioned orders are not listed here.",
-      "filterLabel": "Subscription filter",
-      "filterActive": "Active",
-      "filterAll": "All",
-      "emptyTitle": "No active subscriptions yet",
-      "emptyDescription": "Pick a product from the marketplace to start. The Free tier counts as a subscription and expires per cycle like any other.",
-      "autoRenewError": "Failed to update renewal setting — please try again",
-      "unsubscribeError": "Unsubscribe failed — please try again",
-      "unsubscribeTitle": "Unsubscribe from {product}?",
-      "unsubscribeBody": "Service stops immediately and no refund is issued; data follows the retention policy. If you only want to stop renewing, use \"Cancel at period end\" instead — service continues through the current cycle.",
-      "unsubscribeKeep": "Keep subscription",
-      "unsubscribeConfirm": "Unsubscribe now"
+    "description": "Every product this workspace subscribes to, plus recommendations; orders and bills live in the billing center.",
+    "detail": {
+      "ownership": "Ownership",
+      "subscriber": "Subscriber:",
+      "ownerTag": "owner",
+      "content": "Order contents",
+      "cycleMonth": "Monthly",
+      "cycleYear": "Yearly",
+      "periodOnActivation": "Cycle starts when the service is provisioned",
+      "listPrice": "List {amount}",
+      "discountTotal": "Total discount",
+      "payable": "Amount paid",
+      "progress": "Order progress",
+      "payRemain": "{time} left — closes automatically on timeout",
+      "step": {
+        "submitted": "Order placed",
+        "pay": "Payment",
+        "declared": "Payment declared",
+        "confirm": "Payment confirmed",
+        "settleZero": "Auto-settled (¥0)",
+        "provision": "Service provisioned",
+        "cancelled": "Order cancelled",
+        "expiredClosed": "Closed on timeout"
+      }
     },
+    "favorite": {
+      "add": "Add to favorites",
+      "remove": "Remove from favorites",
+      "error": "Favorite action failed. Please try again."
+    },
+    "loading": "Loading…",
     "orders": {
       "title": "My orders",
       "description": "Order → bill → payment → invoice: the first link in the chain. Expand for ownership, amount breakdown, and progress.",
@@ -2693,12 +2586,71 @@
       "menuSubscription": "View subscription",
       "menuSubscriptionHint": "A subscription is attached only after the order is fulfilled"
     },
+    "packs": {
+      "basePriceAndReset": "¥0 / {period} · resets every {period}",
+      "description": "Where this workspace's quota comes from. Quota that came with a subscription is counted under your agents above; these are the other three. Usage lives in Quotas.",
+      "emptyDescription": "The workspace baseline will appear here once it is provisioned.",
+      "emptyTitle": "No resource packs",
+      "expires": "Valid until {date}",
+      "loading": "Loading…",
+      "noReset": "Does not reset",
+      "period": {
+        "day": "day",
+        "month": "month"
+      },
+      "resets": "Resets every {period}",
+      "source": {
+        "ws_base": "Included by default",
+        "addon_purchase": "Purchased",
+        "manual_override": "Issued by platform"
+      },
+      "title": "My resource packs"
+    },
     "payAxis": {
       "pending": "Awaiting payment",
       "declared": "Declared · verifying",
       "received": "Payment received",
       "unpaid": "Unpaid",
       "settledZero": "Settled"
+    },
+    "pendingBanner": {
+      "title": "{count} order(s) awaiting payment",
+      "description": "Pay in the billing center; the subscription activates once the order is fulfilled.",
+      "deadline": "The earliest expires at {time}; it closes automatically after that.",
+      "action": "Pay in billing center"
+    },
+    "stats": {
+      "groupLabel": "Subscription metrics",
+      "products": "Active products",
+      "productsHint": "{free} on Free tier",
+      "productsHintNoFree": "in this workspace",
+      "expiring": "Next expiry",
+      "expiringHint": "{product} · {cycle} · {days} days left",
+      "expiringNone": "Nothing expiring soon"
+    },
+    "subStatus": {
+      "active": "Active",
+      "expiring": "Expiring soon",
+      "trialing": "Trialing",
+      "overdue": "Grace period",
+      "suspended": "Suspended",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "subs": {
+      "title": "My agents",
+      "description": "Favorites first, then most recently provisioned; unpaid or unprovisioned orders are not listed here.",
+      "filterLabel": "Subscription filter",
+      "filterActive": "Active",
+      "filterAll": "All",
+      "emptyTitle": "No active subscriptions yet",
+      "emptyDescription": "Pick a product from the marketplace to start. The Free tier counts as a subscription and expires per cycle like any other.",
+      "autoRenewError": "Failed to update renewal setting — please try again",
+      "unsubscribeError": "Unsubscribe failed — please try again",
+      "unsubscribeTitle": "Unsubscribe from {product}?",
+      "unsubscribeBody": "Service stops immediately and no refund is issued; data follows the retention policy. If you only want to stop renewing, use \"Cancel at period end\" instead — service continues through the current cycle.",
+      "unsubscribeKeep": "Keep subscription",
+      "unsubscribeConfirm": "Unsubscribe now"
     },
     "svcAxis": {
       "notProvisioned": "Not provisioned",
@@ -2707,37 +2659,21 @@
       "cancelled": "Cancelled",
       "closed": "Closed"
     },
-    "detail": {
-      "ownership": "Ownership",
-      "subscriber": "Subscriber:",
-      "ownerTag": "owner",
-      "content": "Order contents",
-      "cycleMonth": "Monthly",
-      "cycleYear": "Yearly",
-      "periodOnActivation": "Cycle starts when the service is provisioned",
-      "listPrice": "List {amount}",
-      "discountTotal": "Total discount",
-      "payable": "Amount paid",
-      "progress": "Order progress",
-      "payRemain": "{time} left — closes automatically on timeout",
-      "step": {
-        "submitted": "Order placed",
-        "pay": "Payment",
-        "declared": "Payment declared",
-        "confirm": "Payment confirmed",
-        "settleZero": "Auto-settled (¥0)",
-        "provision": "Service provisioned",
-        "cancelled": "Order cancelled",
-        "expiredClosed": "Closed on timeout"
-      }
+    "term": {
+      "perpetual": "No expiry",
+      "expired": "Expired",
+      "daysLeft": "{days} {days, plural, one {day} other {days}} left",
+      "until": "Valid until {date}"
     },
-    "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview.",
-    "pendingBanner": {
-      "title": "{count} order(s) awaiting payment",
-      "description": "Pay in the billing center; the subscription activates once the order is fulfilled.",
-      "deadline": "The earliest expires at {time}; it closes automatically after that.",
-      "action": "Pay in billing center"
-    }
+    "tier": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "title": "Product Subscriptions",
+    "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview."
   },
   "table": {
     "rowActions": "Actions",
@@ -3083,9 +3019,9 @@
       "windowDay": "30 days",
       "windowWeek": "12 weeks",
       "windowMonth": "12 months",
-      "windowYear": "Yearly",
+      "windowYear": "5 years",
       "empty": "No usage data in this period",
-      "windowHour": "Hourly (24h)",
+      "windowHour": "24 hours",
       "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in your local time. Dashboard figures only — never a billing basis",
       "statTotal": "Window total",
       "statPeak": "Peak",

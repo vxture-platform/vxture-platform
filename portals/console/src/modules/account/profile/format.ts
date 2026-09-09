@@ -1,6 +1,6 @@
 import { formatDateTime, formatDay } from "@vxture-platform/shared";
 /**
- * format.ts — 账号信息页的展示格式化(手机号 / 时区 / 日期 / UA / 打码)。
+ * format.ts — 我的账号页的展示格式化(手机号 / 时区 / 日期 / UA / 打码)。
  * @package @vxture/console
  * @layer Application
  * @category Module

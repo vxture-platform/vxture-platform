@@ -140,7 +140,7 @@ export interface ConsoleWorkspaceItem {
   workspaceId: string | null;
   workspaceName: string | null;
   isCurrent: boolean;
-  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  /** 登录后默认进入的租户(我的账号页「设为默认」)。 */
   isDefault?: boolean;
   /** 租户标识内容哈希;null = 无自定义标识。 */
   logoHash?: string | null;
@@ -228,7 +228,7 @@ export interface TenantContext {
   tenantCode?: string;
   /** 租户标识内容哈希;null = 无自定义标识(画类型图标)。 */
   logoHash?: string | null;
-  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  /** 登录后默认进入的租户(我的账号页「设为默认」)。 */
   isDefault?: boolean;
   /** Human-friendly tenant number ("可视码"), bigint as string; null when unavailable. */
   tenantNo?: string | null;

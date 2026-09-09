@@ -68,6 +68,8 @@ export interface QuotaPoolView {
   remaining: number;
   resetPeriod: string;
   expiresAt: string | null;
+  /** 运营授予的原因（`source = 'manual_override'` 才有值） */
+  grantReason: string | null;
 }
 
 export interface StorageSliceView {
@@ -382,6 +384,7 @@ export class QuotaRouter {
       remaining: Math.max(0, r.quotaLimit - r.effectiveUsed),
       resetPeriod: r.resetPeriod,
       expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
+      grantReason: r.grantReason,
     });
 
     // ── storage: WS 总账(gauge — used 来自水位切片,池的 used 无意义) ────────

@@ -106,76 +106,6 @@
     },
     "expiredNotice": "付款时限已到，正在刷新订单状态…"
   },
-  "atlasPage": {
-    "description": "当前租户可用的模型、本工作空间的产品权益,以及模型配额与调用量。只读——开通与配置在运维平面。",
-    "entitlements": {
-      "title": "产品权益",
-      "description": "本工作空间已订阅的产品与档位。模型可用范围由此派生,不再单列租户级模型授权。",
-      "colProduct": "产品",
-      "colTier": "档位",
-      "colStatus": "状态",
-      "colLimits": "额度",
-      "bundled": "随套餐",
-      "none": "未订阅",
-      "empty": "尚无产品权益。"
-    },
-    "loadError": "模型平台状态加载失败，请稍后重试。",
-    "metrics": {
-      "groupLabel": "模型服务概览",
-      "models": "可用模型",
-      "modelsHint": "{count} 项生效权益",
-      "quota": "模型配额",
-      "quotaTier": "档位：{tier}",
-      "quotaNoTier": "无档位",
-      "tokens": "模型调用 Token",
-      "tokensHint": "{count} 条记录"
-    },
-    "models": {
-      "title": "可用模型",
-      "description": "由平台控制面授权给当前租户的模型。",
-      "empty": "暂无可用模型",
-      "colModel": "模型",
-      "colProvider": "供应方",
-      "colProtocol": "协议",
-      "colCapabilities": "能力"
-    },
-    "quotaStatus": {
-      "covered": "已开通",
-      "uncovered": "未开通套餐",
-      "unavailable": "平台不可达"
-    },
-    "quotas": {
-      "title": "配额状态",
-      "description": "来自平台侧的套餐配额资源池（非 Atlas 自身数据）。",
-      "emptyCovered": "暂无生效的配额池",
-      "emptyUncovered": "当前工作空间尚未发布套餐",
-      "emptyUnavailable": "无法连接平台权益服务",
-      "emptyNone": "暂无配额数据",
-      "colMetric": "指标",
-      "colRemaining": "剩余 / 总量",
-      "colPriority": "优先级",
-      "colTier": "档位"
-    },
-    "signals": {
-      "title": "状态说明",
-      "description": "租户侧仅显示当前上下文可见状态。",
-      "scopeTitle": "租户范围",
-      "scopeBody": "正在显示 {tenant} 的模型平台状态。",
-      "scopeMissing": "需要租户上下文才能显示模型平台状态。",
-      "boundaryTitle": "控制面边界",
-      "boundaryBody": "供应方、模型、策略、价格与授权的变更由平台运营在管理面完成。"
-    },
-    "title": "模型服务",
-    "usage": {
-      "title": "用量记录",
-      "description": "近期实际调用记录（Atlas 自身日志，非计费口径）。",
-      "empty": "暂无模型用量记录",
-      "colModel": "模型",
-      "colProvider": "供应方",
-      "colRequests": "请求数",
-      "colTokens": "Token"
-    }
-  },
   "auditPage": {
     "title": "审计日志",
     "description": "谁在什么时候做了什么:成员管理、订阅与订单、发票与抬头等关键动作的操作轨迹",
@@ -1475,7 +1405,7 @@
   "profilePage": {
     "header": {
       "eyebrow": "账户中心",
-      "title": "账号信息",
+      "title": "我的账号",
       "description": "头像、资料、联系方式、登录方式与偏好。"
     },
     "common": {
@@ -2158,7 +2088,7 @@
   "routes": {
     "dashboard": "仪表盘",
     "todos": "待办事项",
-    "profile": "账号信息",
+    "profile": "我的账号",
     "personalTenant": "租户信息",
     "organization": "组织信息",
     "members": "成员管理",
@@ -2171,7 +2101,6 @@
     "billing": "费用中心",
     "billingInvoices": "发票与抬头",
     "quotas": "配额管理",
-    "atlas": "模型服务",
     "notifications": "通知提醒",
     "security": "安全设置",
     "settings": "租户设置",
@@ -2370,7 +2299,7 @@
         "description": "需要当前租户处理的关键事项"
       },
       "profile": {
-        "label": "账号信息",
+        "label": "我的账号",
         "description": "头像、资料、联系方式、登录方式与偏好"
       },
       "members": {
@@ -2430,7 +2359,6 @@
         "description": "本工作空间可用的技能与工具（开发中）"
       }
     },
-    "openDocs": "查看文档",
     "sections": {
       "workspace": "工作空间",
       "accountTenant": "账户与租户",
@@ -2442,18 +2370,6 @@
     "workspaceMode": {
       "platform": "平台工作区",
       "tenant": "租户工作区"
-    }
-  },
-  "skillsPage": {
-    "title": "技能工具",
-    "description": "本工作空间可用的技能与工具、额度与用量。只读——授权与配置在运维侧。",
-    "planned": {
-      "title": "开发中",
-      "body": "取数通路尚未接通。接通后这一页会列出本工作空间已获得的技能与工具，形状与「模型服务」一致。"
-    },
-    "empty": {
-      "title": "暂无可展示的内容",
-      "description": "这不表示你没有技能——是这一页还没接上数据。"
     }
   },
   "subscribePage": {
@@ -2579,22 +2495,6 @@
     "contactSalesSubject": "{product} 企业版咨询"
   },
   "subscriptionHub": {
-    "title": "产品订阅",
-    "description": "当前工作区订阅的全部产品与推荐；订单与账单在费用中心。",
-    "browseMarket": "浏览产品市场",
-    "loading": "正在加载…",
-    "favorite": {
-      "add": "收藏",
-      "remove": "取消收藏",
-      "error": "收藏操作失败，请稍后重试。"
-    },
-    "tier": {
-      "free": "Free",
-      "starter": "Starter",
-      "pro": "Pro",
-      "business": "Business",
-      "enterprise": "Enterprise"
-    },
     "audience": {
       "person": "个人",
       "team": "团队",
@@ -2605,25 +2505,7 @@
       "team": "团队 · {seats} 席位",
       "private": "私有化 · {seats} 席位"
     },
-    "cycle": {
-      "month": "月付",
-      "year": "年付"
-    },
-    "subStatus": {
-      "active": "服务中",
-      "expiring": "即将到期",
-      "trialing": "试用中",
-      "overdue": "宽限期",
-      "suspended": "已暂停",
-      "expired": "已过期",
-      "cancelled": "已取消"
-    },
-    "term": {
-      "perpetual": "长期有效",
-      "expired": "已过期",
-      "daysLeft": "剩余 {days} 天",
-      "until": "有效期至 {date}"
-    },
+    "browseMarket": "浏览产品市场",
     "card": {
       "productDetail": "产品详情",
       "version": "最新版 v{version}",
@@ -2640,30 +2522,41 @@
       "unsubscribeConsequence": "订阅将在当前计费周期结束时终止，之后不再续费也不再计费。周期内仍可正常使用。要恢复需要重新订阅，价格以届时的挂牌价为准。",
       "unsubscribeKeep": "保留订阅"
     },
-    "stats": {
-      "groupLabel": "产品订阅统计",
-      "products": "在订产品",
-      "productsHint": "含 {free} 个 Free 档",
-      "productsHintNoFree": "当前工作区",
-      "expiring": "即将到期",
-      "expiringHint": "{product} · {cycle} · 剩 {days} 天",
-      "expiringNone": "暂无到期压力"
+    "cycle": {
+      "month": "月付",
+      "year": "年付"
     },
-    "subs": {
-      "title": "我的订阅",
-      "description": "收藏优先，按最近开通排序；未支付、未开通的订单不在此列。",
-      "filterLabel": "订阅筛选",
-      "filterActive": "服务中",
-      "filterAll": "全部",
-      "emptyTitle": "还没有生效的订阅",
-      "emptyDescription": "从产品市场挑选一个产品开始，Free 档同样计入订阅、同样按周期到期。",
-      "autoRenewError": "续费设置更新失败,请稍后重试",
-      "unsubscribeError": "退订失败,请稍后重试",
-      "unsubscribeTitle": "确认退订 {product}?",
-      "unsubscribeBody": "退订后服务立即终止且不退款;已用配额与数据按数据保留策略处理。若只是不想续费,请改用「到期不续」——本周期内服务不受影响。",
-      "unsubscribeKeep": "保留订阅",
-      "unsubscribeConfirm": "确认立即退订"
+    "description": "当前工作区订阅的全部产品与推荐；订单与账单在费用中心。",
+    "detail": {
+      "ownership": "订阅归属",
+      "subscriber": "订阅人：",
+      "ownerTag": "owner",
+      "content": "订单内容",
+      "cycleMonth": "月付",
+      "cycleYear": "年付",
+      "periodOnActivation": "周期自服务开通时刻起算",
+      "listPrice": "原价 {amount}",
+      "discountTotal": "抵扣总额",
+      "payable": "订单支付金额",
+      "progress": "订单进度",
+      "payRemain": "剩余 {time}，超时自动关闭",
+      "step": {
+        "submitted": "提交订单",
+        "pay": "付款",
+        "declared": "付款申报",
+        "confirm": "确认收款",
+        "settleZero": "自动结清（¥0）",
+        "provision": "服务开通",
+        "cancelled": "取消订单",
+        "expiredClosed": "超时关闭"
+      }
     },
+    "favorite": {
+      "add": "收藏",
+      "remove": "取消收藏",
+      "error": "收藏操作失败，请稍后重试。"
+    },
+    "loading": "正在加载…",
     "orders": {
       "title": "我的订单",
       "description": "下单 → 出账 → 付款 → 开票,一笔钱的第一环;展开查看归属、金额构成与进度。",
@@ -2693,12 +2586,71 @@
       "menuSubscription": "查看订阅",
       "menuSubscriptionHint": "订单履约后才会挂上订阅"
     },
+    "packs": {
+      "basePriceAndReset": "¥0 / {period} · 每{period}重置",
+      "description": "这个工作空间的额度从哪来。订阅带来的额度算在上面的智能体里，这里是其余三类。用了多少在配额管理。",
+      "emptyDescription": "工作空间的基础额度落库后会出现在这里。",
+      "emptyTitle": "暂无资源包",
+      "expires": "有效期至 {date}",
+      "loading": "读取中…",
+      "noReset": "不重置",
+      "period": {
+        "day": "日",
+        "month": "月"
+      },
+      "resets": "每{period}重置",
+      "source": {
+        "ws_base": "默认自带",
+        "addon_purchase": "用户加购",
+        "manual_override": "平台发放"
+      },
+      "title": "我的资源包"
+    },
     "payAxis": {
       "pending": "待付款",
       "declared": "已申报 · 核验中",
       "received": "已收款",
       "unpaid": "未付款",
       "settledZero": "已结清"
+    },
+    "pendingBanner": {
+      "title": "有 {count} 笔订单待支付",
+      "description": "去费用中心完成支付,订单履约后订阅才会开通。",
+      "deadline": "最早一笔 {time} 到期,逾期自动关闭。",
+      "action": "去费用中心支付"
+    },
+    "stats": {
+      "groupLabel": "产品订阅统计",
+      "products": "在订产品",
+      "productsHint": "含 {free} 个 Free 档",
+      "productsHintNoFree": "当前工作区",
+      "expiring": "即将到期",
+      "expiringHint": "{product} · {cycle} · 剩 {days} 天",
+      "expiringNone": "暂无到期压力"
+    },
+    "subStatus": {
+      "active": "服务中",
+      "expiring": "即将到期",
+      "trialing": "试用中",
+      "overdue": "宽限期",
+      "suspended": "已暂停",
+      "expired": "已过期",
+      "cancelled": "已取消"
+    },
+    "subs": {
+      "title": "我的智能体",
+      "description": "收藏优先，按最近开通排序；未支付、未开通的订单不在此列。",
+      "filterLabel": "订阅筛选",
+      "filterActive": "服务中",
+      "filterAll": "全部",
+      "emptyTitle": "还没有生效的订阅",
+      "emptyDescription": "从产品市场挑选一个产品开始，Free 档同样计入订阅、同样按周期到期。",
+      "autoRenewError": "续费设置更新失败,请稍后重试",
+      "unsubscribeError": "退订失败,请稍后重试",
+      "unsubscribeTitle": "确认退订 {product}?",
+      "unsubscribeBody": "退订后服务立即终止且不退款;已用配额与数据按数据保留策略处理。若只是不想续费,请改用「到期不续」——本周期内服务不受影响。",
+      "unsubscribeKeep": "保留订阅",
+      "unsubscribeConfirm": "确认立即退订"
     },
     "svcAxis": {
       "notProvisioned": "未开通",
@@ -2707,37 +2659,21 @@
       "cancelled": "已取消",
       "closed": "已关闭"
     },
-    "detail": {
-      "ownership": "订阅归属",
-      "subscriber": "订阅人：",
-      "ownerTag": "owner",
-      "content": "订单内容",
-      "cycleMonth": "月付",
-      "cycleYear": "年付",
-      "periodOnActivation": "周期自服务开通时刻起算",
-      "listPrice": "原价 {amount}",
-      "discountTotal": "抵扣总额",
-      "payable": "订单支付金额",
-      "progress": "订单进度",
-      "payRemain": "剩余 {time}，超时自动关闭",
-      "step": {
-        "submitted": "提交订单",
-        "pay": "付款",
-        "declared": "付款申报",
-        "confirm": "确认收款",
-        "settleZero": "自动结清（¥0）",
-        "provision": "服务开通",
-        "cancelled": "取消订单",
-        "expiredClosed": "超时关闭"
-      }
+    "term": {
+      "perpetual": "长期有效",
+      "expired": "已过期",
+      "daysLeft": "剩余 {days} 天",
+      "until": "有效期至 {date}"
     },
-    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。",
-    "pendingBanner": {
-      "title": "有 {count} 笔订单待支付",
-      "description": "去费用中心完成支付,订单履约后订阅才会开通。",
-      "deadline": "最早一笔 {time} 到期,逾期自动关闭。",
-      "action": "去费用中心支付"
-    }
+    "tier": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "title": "产品订阅",
+    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。"
   },
   "table": {
     "rowActions": "操作",
@@ -3083,9 +3019,9 @@
       "windowDay": "近 30 天",
       "windowWeek": "近 12 周",
       "windowMonth": "近 12 月",
-      "windowYear": "按年",
+      "windowYear": "近 5 年",
       "empty": "所选周期内暂无用量数据",
-      "windowHour": "按小时(24h)",
+      "windowHour": "近 24 小时",
       "descriptionHour": "近 24 小时逐时消耗;横轴已换算为你的本地时刻。统计口径为纯看板数据,不作计费依据",
       "statTotal": "窗口合计",
       "statPeak": "峰值",

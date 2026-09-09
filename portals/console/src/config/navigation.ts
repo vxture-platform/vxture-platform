@@ -2,7 +2,11 @@ import type { Capability } from "@/entities/console";
 import type { IconName } from "@vxture/design-system";
 
 export interface NavigationItem {
-  href: string;
+  /**
+   * 应用内路由。**纯外链项没有它**（见 `docsSection`）——那种项在 console 里
+   * 没有页面，点它直接去文档站。
+   */
+  href?: string;
   labelKey: string;
   icon: IconName;
   descriptionKey: string;
@@ -20,8 +24,13 @@ export interface NavigationItem {
    */
   subLabel?: string;
   /**
-   * 文档站的区段名。给了就在行尾渲染一个外链图标（DS 12.2.0 的
-   * `ShellNavItem.external`），点它去 `/{locale}/docs/{docsSection}`。
+   * 文档站的区段名。**给了它就没有 href**：这一项整行就是去文档站的跳转
+   * （`/{locale}/docs/{docsSection}`，新标签页）。
+   *
+   * owner 2026-09-09 的裁定：模型服务 / 技能工具不需要 console 提供页面——
+   * 它们答的是「这些能力是什么、怎么用」，那是文档的事；console 是工作台，
+   * 装的是你能操作的东西。先前那版给了页面又在行尾挂个外链图标，是把一件事
+   * 拆成了两个去处。
    *
    * 这里存**区段名**而不是完整 URL：URL 要拼当前 locale，而导航配置是静态的、
    * 拿不到 locale。拼接在外壳里做。
@@ -182,7 +191,7 @@ const settingsSecuritySection: NavigationSection = {
       descriptionKey: "auditLogs.description",
       capability: "tenant.audit.read",
     },
-    // 批 5a:「安全设置」并入「账号信息」(/profile),/security 路由保留跳转。
+    // 批 5a:「安全设置」并入「我的账号」(/profile),/security 路由保留跳转。
   ],
 };
 
@@ -201,7 +210,6 @@ const capabilitySection: NavigationSection = {
   titleKey: "capability",
   items: [
     {
-      href: "/atlas",
       labelKey: "modelService.label",
       icon: "database",
       descriptionKey: "modelService.description",
@@ -210,9 +218,6 @@ const capabilitySection: NavigationSection = {
       capability: "tenant.model.read",
     },
     {
-      // 占位页（owner 2026-09-08）：console-bff 目前没有 runos 取数通路，
-      // 页面明确标「开发中」。菜单先就位是 owner 的裁定——占位≠无用。
-      href: "/skills",
       labelKey: "skillTools.label",
       icon: "stack",
       descriptionKey: "skillTools.description",

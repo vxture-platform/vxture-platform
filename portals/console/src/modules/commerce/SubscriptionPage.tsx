@@ -46,6 +46,8 @@ import {
   ConsoleBffError,
   type MyOrder,
   type SubscribedProduct,
+  fetchQuotaOverview,
+  type ConsoleQuotaOverview,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
@@ -58,6 +60,7 @@ import { buildWebsiteProductsUrl } from "@/lib/website-entry";
 import { SubscriptionProductCard } from "./components/hubCards";
 import { daysLeft, fmtDate, fmtTime } from "./components/hubModel";
 
+import { ResourcePacksSection } from "./components/ResourcePacksSection";
 type SubFilter = "active" | "all";
 
 export function SubscriptionPage() {
@@ -81,14 +84,25 @@ export function SubscriptionPage() {
   /* 只剩 setter：忙态现在由 DS 的确认件按 Promise 自己接管（「处理中…」与
      关闭时机都在件里），页面不再需要读它。 */
   const [, setSelfServiceBusy] = useState(false);
+  /* 配额总览:只为「我的资源包」取。null = 没读到——与「读到了但没有池」
+     是两件事,后者是合法空态。 */
+  const [quota, setQuota] = useState<ConsoleQuotaOverview | null>(null);
+  /* 资源包看的是**来源**,不分指标族,所以把存储与 Credits 两族的池并成一张表;
+     过滤 subscription 那一类在组件里做(那是它的分组规则)。 */
+  const resourcePools = useMemo(
+    () => [...(quota?.storage.sources ?? []), ...(quota?.aiCredit.pools ?? [])],
+    [quota],
+  );
 
   const reloadSubs = useCallback(async () => {
-    const [subs, ords] = await Promise.all([
+    const [subs, ords, quota] = await Promise.all([
       fetchSubscribedProducts(),
       fetchMyOrders(),
+      fetchQuotaOverview(),
     ]);
     setProducts(subs);
     setOrders(ords);
+    setQuota(quota);
   }, []);
 
   /* 读失败显影(批 0b):三路读全是 strict,任一失败置 loadFailed——指标画「—」、
@@ -100,16 +114,22 @@ export function SubscriptionPage() {
     let active = true;
     setLoading(true);
     setLoadFailed(false);
-    Promise.all([fetchSubscribedProducts(), fetchMyOrders()])
-      .then(([subs, ords]) => {
+    Promise.all([
+      fetchSubscribedProducts(),
+      fetchMyOrders(),
+      fetchQuotaOverview(),
+    ])
+      .then(([subs, ords, quota]) => {
         if (!active) return;
         setProducts(subs);
         setOrders(ords);
+        setQuota(quota);
       })
       .catch(() => {
         if (!active) return;
         setProducts([]);
         setOrders([]);
+        setQuota(null);
         setLoadFailed(true);
       })
       .finally(() => {
@@ -341,7 +361,7 @@ export function SubscriptionPage() {
         aria-label={t("stats.groupLabel")}
       />
 
-      {/* ① 我的订阅 */}
+      {/* ① 我的智能体 —— 订阅来的产品(pool_source='subscription' 那一类的来由) */}
       <PageSection
         icon="package"
         level={2}
@@ -389,6 +409,22 @@ export function SubscriptionPage() {
           </div>
         )}
       </PageSection>
+
+      {/* ② 我的资源包(owner 2026-09-09)。
+          分组规则直接落在库的 `pool_source` 上,不另立一张要人维护的清单:
+            ws_base         工作空间基础额度 —— ¥0,但**有周期**,随周期重置
+            addon_purchase  加油包与扩展包 —— 买来的,有有效期
+            manual_override 运营授予 —— 标明来由(库里的 grant_reason)
+          `subscription` 那一类不进这里:它的来由是上面 ① 的订阅,在这儿再列一遍
+          等于同一件事说两处。
+
+          与 /quotas 的分工(owner 裁定):**这里答「你有什么」——来源、额度、周期、
+          到期、价格;配额页答「用了多少、还剩多少」。** */}
+      <ResourcePacksSection
+        pools={resourcePools}
+        loading={loading}
+        loadFailed={loadFailed}
+      />
 
       {/* 退订确认(危操作:立即终止、不退款,AlertDialog 强确认) */}
     </ViewLayout>

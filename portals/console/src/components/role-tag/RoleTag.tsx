@@ -8,7 +8,7 @@
  *
  * owner 2026-09-06:「角色显示模式采用 tag 模式,需要 icon + rolename」。
  *
- * **这个设计本来就有**,在账号信息页身份卡的租户行里(`profile/IdentityHeader.tsx`):
+ * **这个设计本来就有**,在我的账号页身份卡的租户行里(`profile/IdentityHeader.tsx`):
  * `StatusBadge` + 按角色码取的图标 + 角色名。问题是它是那个文件的私有常量,别处各写
  * 各的——邀请记录与成员表是纯文本,接受邀请页有 tag 没图标、语气还不一样,角色管理页
  * 五个角色共用一个图标。角色名更是**四份一模一样的副本**(profilePage / rolesPage /

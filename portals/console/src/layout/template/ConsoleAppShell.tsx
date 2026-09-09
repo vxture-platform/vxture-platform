@@ -70,6 +70,41 @@ const LS = {
   view: "vx-console-view",
 };
 
+/**
+ * 注入给 `ShellSidebarNav` 的链接件。
+ *
+ * 导航里现在混着两类目的地：应用内路由走 next 的 `Link`（客户端跳转、预取），
+ * **绝对地址走原生 `<a target="_blank">`** ——模型服务 / 技能工具指的是文档站
+ * （owner 2026-09-09：这两项不需要 console 提供页面）。
+ *
+ * 用 DS 留的 `linkComponent` 注入点而不是去改 DS：那个口子的存在理由正是
+ * 「路由无关，由产品侧决定链接怎么渲染」，这里判断的也是产品侧的事实。
+ *
+ * `noopener` 不能少：`target="_blank"` 打开的页面能拿到 `window.opener`，
+ * 是一条已知的钓鱼路径。
+ */
+function NavLink({
+  href,
+  children,
+  ...rest
+}: {
+  href: string;
+  children?: ReactNode;
+} & Record<string, unknown>) {
+  if (/^https?:\/\//i.test(href)) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" {...rest}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} {...rest}>
+      {children}
+    </Link>
+  );
+}
+
 export function ConsoleAppShell({
   children,
   initialNavCollapsed = false,
@@ -306,23 +341,17 @@ export function ConsoleAppShell({
         d.sections.map((section) => ({
           title: tSidebar(`sections.${section.titleKey}`),
           items: section.items.map((it) => ({
-            href: it.href,
+            /* 纯外链项没有 href,它的目的地是文档站(owner 2026-09-09:模型服务 /
+               技能工具不需要 console 提供页面)。URL 在这里拼是因为它要带当前
+               locale,而导航配置是静态的、拿不到 locale。 */
+            href: it.docsSection
+              ? buildWebsiteDocsUrl(locale, it.docsSection)
+              : (it.href ?? "/"),
             label: tSidebar(`items.${it.labelKey}`),
             icon: it.icon,
             /* 副名标供给来源(Atlas / Runos)。**不走 i18n**:它是产品代号,
                翻译它等于把一个专名改掉。不传的项仍是单行,行为不变。 */
             ...(it.subLabel ? { subLabel: it.subLabel } : {}),
-            /* 行尾外链 → 文档站(DS 12.2.0 的 external 槽位)。URL 在这里拼是因为
-               它要带当前 locale,而导航配置是静态的、拿不到 locale。
-               点行仍进应用内页面,点图标才去文档——两个目的地都保留。 */
-            ...(it.docsSection
-              ? {
-                  external: {
-                    href: buildWebsiteDocsUrl(locale, it.docsSection),
-                    label: tSidebar("openDocs"),
-                  },
-                }
-              : {}),
           })),
         })),
       ),
@@ -540,7 +569,7 @@ export function ConsoleAppShell({
                 href === "/" ? pathname === "/" : pathname.startsWith(href)
               }
               storageKeyPrefix="vx-console-nav"
-              linkComponent={Link}
+              linkComponent={NavLink}
               labels={sidebarLabels}
             />
           </ShellSidebarFrame>
