@@ -1014,7 +1014,32 @@ export class SessionAggregator {
   async listWorkspaces(userId: string, orgId?: string) {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
-    return this.org.listWorkspaces(resolved.orgId);
+    /* 带上 viewer:列表要标出「哪个是我的默认落点」,那与租户级默认是两件事。 */
+    return this.org.listWorkspaces(resolved.orgId, userId);
+  }
+
+  /**
+   * 记住「我下次进这个租户时落在哪个工作空间」。
+   *
+   * **个人偏好,不是管理动作**:改的是 `tenant_memberships.default_workspace_id`
+   * 我自己那一行。与 `setDefaultWorkspace`(租户级 `workspaces.is_default`、
+   * 影响所有人、要 tenant.workspace.manage)是两件事。
+   *
+   * 会话里的落点不会立刻变——那要等下一次发令牌。这与切换工作空间是两回事:
+   * 切换是「现在就去」,这个是「以后默认去」。
+   */
+  async setMyDefaultWorkspace(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string | null,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    return this.org.setMemberDefaultWorkspace(
+      resolved.orgId,
+      userId,
+      workspaceId,
+    );
   }
 
   /** 我在当前租户能进哪些工作空间(切换器 + 切换预检共用同一份判据)。 */

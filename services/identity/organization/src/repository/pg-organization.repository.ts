@@ -575,8 +575,18 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   //      停掉等于让所有人登录后无处可去。要停先把默认挪走。
   //   3. 最后一个 active 的不能停:同上,一个都不剩时登录后没有工作空间上下文。
 
-  /** 列出租户下的工作空间(不含已删)。成员数一并算出来,管理页要显示。 */
-  async listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
+  /**
+   * 列出租户下的工作空间(不含已删)。成员数一并算出来,管理页要显示。
+   *
+   * `viewerUserId` 给了就顺带标出「哪个是**我的**默认落点」
+   * (`tenant_memberships.default_workspace_id`)——它与 `isDefault`
+   * (租户级 `workspaces.is_default`,影响所有人)是两件事,管理页要并排显示,
+   * 不标出来的话那两个动作看起来像同一个。
+   */
+  async listWorkspaces(
+    tenantId: string,
+    viewerUserId?: string,
+  ): Promise<WorkspaceDetail[]> {
     const r = await this.pool.query<
       WorkspaceRow & {
         workspace_no: string;
@@ -597,6 +607,21 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         order by w.is_default desc, w.created_at asc`,
       [tenantId],
     );
+    /* 我的默认落点单独问一句:把它 join 进上面那条会让每一行都带一份同样的值,
+       而它与行无关——是「我」这一个人的属性。 */
+    let myDefault: string | null = null;
+    if (viewerUserId) {
+      const mine = await this.pool.query<{
+        default_workspace_id: string | null;
+      }>(
+        `select default_workspace_id
+           from tenancy.tenant_memberships
+          where tenant_id = $1 and user_id = $2 and status = 'active'
+          limit 1`,
+        [tenantId, viewerUserId],
+      );
+      myDefault = mine.rows[0]?.default_workspace_id ?? null;
+    }
     return r.rows.map((row) => ({
       id: row.id,
       organizationId: row.tenant_id,
@@ -610,6 +635,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       status: row.status === "archived" ? "archived" : "active",
       memberCount: Number(row.member_count),
       createdAt: row.created_at,
+      isMyDefault: myDefault !== null && row.id === myDefault,
     }));
   }
 
@@ -914,7 +940,70 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         };
       }
     }
+    /* 没给提示(或提示站不住)时的落点顺序:**我自己的 > 租户默认**
+       (owner 2026-09-09)。
+
+       `tenant_memberships.default_workspace_id` 是每个成员各自的落点,列、复合 FK
+       (锁死「默认 ws 必属本 tenant」,NULL 自动放行)、索引、列锁 GRANT 都在,
+       但此前**零个代码引用、零行有值**——设计好了没接的位子。
+       `workspaces.is_default` 是**租户级**的那一个,兜底。
+
+       我自己那个也要过同一套「站得住」判定:它可能指向一个已停用的、
+       或我已被移出的空间。所以走一次递归而不是直接读——判据只写一遍。 */
+    const mine = await this.pool.query<{ default_workspace_id: string | null }>(
+      `select default_workspace_id
+         from tenancy.tenant_memberships
+        where tenant_id = $1 and user_id = $2 and status = 'active'
+        limit 1`,
+      [orgId, userId],
+    );
+    const personal = mine.rows[0]?.default_workspace_id ?? null;
+    if (personal && personal !== hint) {
+      return this.resolveWorkspaceForSession(orgId, userId, personal);
+    }
     return this.getDefaultWorkspaceWithMembership(orgId, userId);
+  }
+
+  /**
+   * 记住「我在这个租户下默认进哪个工作空间」。
+   *
+   * 与 `setDefaultWorkspace` 是两件事,别混:那个改 `workspaces.is_default`——
+   * **租户级**、影响所有人、要 tenant.workspace.manage;这个只改我自己那一行,
+   * 是个人偏好,不需要任何管理权限。
+   *
+   * 传 null = 清掉个人偏好,回到跟随租户默认。
+   */
+  async setMemberDefaultWorkspace(
+    tenantId: string,
+    userId: string,
+    workspaceId: string | null,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    if (workspaceId !== null) {
+      if (!ACCEPT_UUID_RE.test(workspaceId)) {
+        return { ok: false, reason: "not_found" };
+      }
+      /* 只能设成**我进得去**的空间:属于本租户、启用中、我是活跃成员。
+         复合 FK 只挡住「不属于本租户」那一条,另外两条得自己判——
+         设成一个我进不去的空间,症状是下次登录静默退回租户默认,看起来像没保存上。 */
+      const ok = await this.pool.query(
+        `select 1
+           from tenancy.workspaces w
+           join tenancy.workspace_memberships m
+             on m.workspace_id = w.id and m.user_id = $3 and m.status = 'active'
+          where w.id = $2 and w.tenant_id = $1
+            and w.deleted_at is null and w.status = 'active'
+          limit 1`,
+        [tenantId, workspaceId, userId],
+      );
+      if (!ok.rowCount) return { ok: false, reason: "not_found" };
+    }
+    const r = await this.pool.query(
+      `update tenancy.tenant_memberships
+          set default_workspace_id = $3, updated_at = now()
+        where tenant_id = $1 and user_id = $2 and status = 'active'`,
+      [tenantId, userId, workspaceId],
+    );
+    return r.rowCount === 0 ? { ok: false, reason: "not_found" } : { ok: true };
   }
 
   /**

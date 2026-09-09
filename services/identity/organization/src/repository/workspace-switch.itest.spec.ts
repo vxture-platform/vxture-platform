@@ -321,6 +321,90 @@ describe.runIf(RUN)("工作空间切换的解析（live DB）", () => {
     ).toBeNull();
   });
 
+  /**
+   * 个人默认工作空间（owner 2026-09-09：「每人自己的，租户默认兜底」）。
+   *
+   * `tenant_memberships.default_workspace_id` 此前**零个代码引用、零行有值**——
+   * 列、复合 FK、索引、列锁 GRANT 全都在，是设计好了没接的位子。我先前一直只用
+   * `workspaces.is_default`（租户级、影响所有人），把两件事当成了一件。
+   */
+  describe("个人默认工作空间", () => {
+    afterAll(async () => {
+      await pool.query(
+        `update tenancy.tenant_memberships set default_workspace_id = null
+          where tenant_id = $1`,
+        [tenantId],
+      );
+    });
+
+    it("设了个人默认 → 不给提示时落在它上面，而不是租户默认", async () => {
+      expect(
+        await repo.setMemberDefaultWorkspace(tenantId, userId, ws["mine"]!),
+      ).toEqual({ ok: true });
+      const r = await repo.resolveWorkspaceForSession(tenantId, userId);
+      expect(r.workspace?.id).toBe(ws["mine"]);
+    });
+
+    it("显式提示仍然赢过个人默认（切换是当下的意思）", async () => {
+      const r = await repo.resolveWorkspaceForSession(
+        tenantId,
+        userId,
+        ws["default"]!,
+      );
+      expect(r.workspace?.id).toBe(ws["default"]);
+    });
+
+    /**
+     * 个人默认指向一个我进不去的空间时要退回租户默认，**且不能无限递归**。
+     *
+     * 实现是拿个人默认当提示再走一遍自己，靠 `personal !== hint` 收口：
+     * 第二遍进来时 hint 就是 personal，那个分支不再成立。这条用例同时钉住
+     * 「退回」和「会终止」——递归不终止的话它不是失败，是挂住。
+     */
+    it("个人默认指向已停用的空间 → 退回租户默认，不死循环", async () => {
+      await pool.query(
+        `update tenancy.workspaces set status = 'archived' where id = $1`,
+        [ws["mine"]!],
+      );
+      await pool.query(
+        `update tenancy.tenant_memberships set default_workspace_id = $2
+          where tenant_id = $1 and user_id = $3`,
+        [tenantId, ws["mine"]!, userId],
+      );
+      const r = await repo.resolveWorkspaceForSession(tenantId, userId);
+      expect(r.workspace?.id).toBe(ws["default"]);
+      await pool.query(
+        `update tenancy.workspaces set status = 'active' where id = $1`,
+        [ws["mine"]!],
+      );
+    });
+
+    it("设成我进不去的空间 → 拒绝（不是静默存进去）", async () => {
+      expect(
+        await repo.setMemberDefaultWorkspace(tenantId, userId, ws["notMine"]!),
+      ).toEqual({ ok: false, reason: "not_found" });
+    });
+
+    it("设成别的租户的空间 → 拒绝", async () => {
+      expect(
+        await repo.setMemberDefaultWorkspace(
+          tenantId,
+          userId,
+          ws["otherTenant"]!,
+        ),
+      ).toEqual({ ok: false, reason: "not_found" });
+    });
+
+    it("传 null → 清掉个人偏好，回到跟随租户默认", async () => {
+      await repo.setMemberDefaultWorkspace(tenantId, userId, ws["mine"]!);
+      expect(
+        await repo.setMemberDefaultWorkspace(tenantId, userId, null),
+      ).toEqual({ ok: true });
+      const r = await repo.resolveWorkspaceForSession(tenantId, userId);
+      expect(r.workspace?.id).toBe(ws["default"]);
+    });
+  });
+
   it("切换器清单：换个人看，只剩他自己能进的（这里是一个都没有）", async () => {
     if (strangerId === userId) return; // 库里只有一个账号时跳过
     await joinTenant(tenantId, strangerId);

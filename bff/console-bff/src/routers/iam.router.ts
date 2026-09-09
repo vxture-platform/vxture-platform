@@ -517,6 +517,9 @@ export class IamRouter {
       description: w.description,
       icon: w.icon,
       isDefault: w.isDefault,
+      /* 我的默认落点。与 isDefault(租户级、影响所有人)分开给——
+         前端要把两个动作并排画出来,合成一个字段就看不出差别了。 */
+      isMyDefault: w.isMyDefault,
       status: w.status,
       memberCount: w.memberCount,
       createdAt: w.createdAt.toISOString(),
@@ -546,6 +549,32 @@ export class IamRouter {
       name: w.name,
       isDefault: w.isDefault,
     }));
+  }
+
+  /**
+   * 我的默认工作空间(个人偏好)。
+   *
+   * `@SelfScope()` 而不是任何能力门:改的是我自己那一行成员记录,
+   * 与「管这个租户的工作空间」无关——一个普通成员也该能选自己登录后落在哪。
+   *
+   * 与 `POST workspaces/:id/default` 分得清:那个是**租户级**默认,影响所有人。
+   * 路径也刻意不同形(mine vs :id/default),不然两个动作看起来像同一个的两种写法。
+   */
+  @SelfScope()
+  @Post("workspaces/mine/default")
+  async setMyDefaultWorkspace(
+    @Req() req: Request & RequestContext,
+    @Body() body: { workspaceId?: string | null },
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.setMyDefaultWorkspace(
+      accountId,
+      tenantId,
+      body?.workspaceId ?? null,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+    return { ok: true };
   }
 
   @RequireCapability("tenant.workspace.manage")

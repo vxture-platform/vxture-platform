@@ -250,8 +250,18 @@ export class OrganizationService {
   getWorkspaceRole(tenantId: string, workspaceId: string, userId: string) {
     return this.repo.getWorkspaceRole(tenantId, workspaceId, userId);
   }
-  listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
-    return this.repo.listWorkspaces(tenantId);
+  setMemberDefaultWorkspace(
+    tenantId: string,
+    userId: string,
+    workspaceId: string | null,
+  ) {
+    return this.repo.setMemberDefaultWorkspace(tenantId, userId, workspaceId);
+  }
+  listWorkspaces(
+    tenantId: string,
+    viewerUserId?: string,
+  ): Promise<WorkspaceDetail[]> {
+    return this.repo.listWorkspaces(tenantId, viewerUserId);
   }
   createWorkspace(input: CreateWorkspaceInput) {
     return this.repo.createWorkspace(input);

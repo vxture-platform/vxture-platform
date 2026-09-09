@@ -345,7 +345,10 @@ export interface ConsoleWorkspace {
   name: string;
   description: string | null;
   icon: string | null;
+  /** 租户级默认(影响所有人),要 tenant.workspace.manage 才改得动。 */
   isDefault: boolean;
+  /** **我**的默认落点(个人偏好),任何成员都能改自己的。 */
+  isMyDefault: boolean;
   status: "active" | "archived";
   memberCount: number;
   createdAt: string;
@@ -423,6 +426,29 @@ export async function updateWorkspace(
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/**
+ * 记住「我下次进这个租户时落在哪个工作空间」。**个人偏好,不是管理动作**——
+ * 与 `setDefaultWorkspace`(租户级、影响所有人)是两件事。
+ *
+ * 传 null = 清掉个人偏好,回到跟随租户默认。
+ * 设完不会立刻改变当前会话:那要等下一次发令牌。想马上过去用 `switchWorkspace`。
+ */
+export async function setMyDefaultWorkspace(
+  workspaceId: string | null,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces/mine/default")}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId }),
     },
   );
   if (!response.ok) await throwMemberError(response, "");

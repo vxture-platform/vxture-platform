@@ -3353,7 +3353,8 @@
       "colCreatedAt": "Created",
       "default": "Default",
       "empty": "No workspaces yet",
-      "emptyHint": "Create a workspace to keep subscriptions and quotas separate."
+      "emptyHint": "Create a workspace to keep subscriptions and quotas separate.",
+      "myDefault": "Yours"
     },
     "status": {
       "active": "Active",
@@ -3370,7 +3371,9 @@
       "defaultLockedHint": "The default workspace cannot be archived — set another one as default first",
       "archiveVerb": "Archive",
       "archiveConsequence": "Members can no longer enter this workspace. Its subscriptions, invoices and usage records are kept and it can be reactivated at any time.",
-      "archiveKeep": "Keep it active"
+      "archiveKeep": "Keep it active",
+      "setMyDefault": "Make this my default",
+      "alreadyMyDefault": "Already your default"
     },
     "dialog": {
       "createTitle": "New workspace",
@@ -3386,7 +3389,8 @@
       "created": "Workspace created.",
       "updated": "Saved.",
       "defaultSet": "Default workspace updated.",
-      "archived": "Workspace archived."
+      "archived": "Workspace archived.",
+      "myDefaultSet": "Saved. You will land here next time you sign in."
     },
     "errors": {
       "generic": "Something went wrong. Please try again.",
