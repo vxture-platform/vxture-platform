@@ -518,6 +518,20 @@ export async function markInboxRead(id: string): Promise<void> {
   if (!response.ok) throw new ConsoleBffError("", response.status);
 }
 
+/**
+ * 删除一条站内消息（软删）。
+ *
+ * 后端幂等：已删的再删仍返回 ok。所以前端不需要为「重复点击」或「两个标签页
+ * 各点一次」做防抖——那两种情况本来就该无声成功。
+ */
+export async function deleteInboxMessage(id: string): Promise<void> {
+  const response = await fetch(
+    `${INBOX_URL}/${encodeURIComponent(id)}/delete`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+}
+
 export async function markInboxAllRead(): Promise<number> {
   const response = await fetch(`${INBOX_URL}/read-all`, {
     method: "POST",

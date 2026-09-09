@@ -475,24 +475,13 @@
     }
   },
   "inbox": {
-    "header": {
-      "title": "Message Center",
-      "description": "To-dos derive from the live state of orders, subscriptions, quotas, invitations and add-on packs and disappear once handled; messages are notices about expiry, renewal orders, activation and refunds. Email preferences live under Notifications."
-    },
-    "unread": "{count} unread",
     "allRead": "No unread messages",
-    "markAllRead": "Mark all as read",
-    "loadMore": "Load more",
-    "loading": "Loading…",
+    "counts": "{todos} to-dos · {unread} unread",
+    "delete": "Delete \"{title}\"",
+    "deleteFailed": "Delete failed. Please try again.",
     "empty": "No messages yet",
-    "loadError": "Could not load messages, please try again later",
-    "open": "Open",
-    "readBadge": "Read",
-    "unreadBadge": "Unread",
-    "list": {
-      "title": "List",
-      "description": "To-dos stay on top; each matter appears only once"
-    },
+    "emptyAll": "No to-dos and no messages",
+    "emptyTodo": "Nothing waiting on you",
     "filters": {
       "label": "Filter",
       "all": "All",
@@ -500,16 +489,29 @@
       "message": "Messages",
       "unread": "Unread"
     },
-    "counts": "{todos} to-dos · {unread} unread",
-    "todoBadge": "To-do",
-    "messageBadge": "Message",
-    "emptyTodo": "Nothing waiting on you",
-    "emptyAll": "No to-dos and no messages",
+    "header": {
+      "title": "Message Center",
+      "description": "To-dos derive from the live state of orders, subscriptions, quotas, invitations and add-on packs and disappear once handled; messages are notices about expiry, renewal orders, activation and refunds. Email preferences live under Notifications."
+    },
+    "list": {
+      "title": "List",
+      "description": "To-dos stay on top; each matter appears only once"
+    },
+    "loadError": "Could not load messages, please try again later",
+    "loadMore": "Load more",
+    "loading": "Loading…",
     "markAllFailed": "Could not mark as read; try again later",
+    "markAllRead": "Mark all as read",
+    "messageBadge": "Message",
     "notes": {
       "title": "How this works",
       "body": "To-dos have no read state: they mirror the live state and only disappear once handled. Messages have read / unread; the Unread filter applies to messages only. When a to-do exists for a matter, All shows only the to-do; the matching message stays under Messages as history."
-    }
+    },
+    "open": "Open",
+    "readBadge": "Read",
+    "todoBadge": "To-do",
+    "unread": "{count} unread",
+    "unreadBadge": "Unread"
   },
   "invitationsPage": {
     "title": "Invitations",
@@ -1951,12 +1953,7 @@
       "colRemaining": "Left",
       "colReset": "Reset",
       "colExpires": "Valid until",
-      "empty": "No AI Credits yet — subscribe to a product to receive them",
-      "sharingTitle": "Cross-product sharing",
-      "sharingOn": "On by default: {products} participate — a product that runs dry can draw on the others' remainder, with every spend attributed per product",
-      "sharingOff": "No products currently share — each product's credits stay reserved",
-      "boosterTitle": "AI Credits booster packs",
-      "boosterBody": "When subscription credits run out, booster packs top you up; they burn after subscription pools and stay valid longer"
+      "empty": "No AI Credits yet — subscribe to a product to receive them"
     },
     "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
     "filters": {
