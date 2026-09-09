@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * flows.ts — 账号信息页里带验证码的两条流程(换手机 / 验证或更换联系方式)。
+ * flows.ts — 我的账号页里带验证码的两条流程(换手机 / 验证或更换联系方式)。
  * @package @vxture/console
  * @layer Application
  * @category Module

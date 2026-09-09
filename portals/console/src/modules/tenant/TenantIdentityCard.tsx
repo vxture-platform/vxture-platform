@@ -6,7 +6,7 @@
  * @layer Application
  * @category Module
  *
- * 与账号信息页的身份卡同一形状:整块**一张卡**(IdentityCard frame={false} 套在
+ * 与我的账号页的身份卡同一形状:整块**一张卡**(IdentityCard frame={false} 套在
  * 外层卡里),右下角一枚展开开关。只读事实全部收在这里——类型、状态、认证、
  * `ID: T-…`、创建时间、所有者、成员数——下面的信息卡不再重复(owner 2026-09-05)。
  *
@@ -277,7 +277,7 @@ export function TenantIdentityCard({
   );
 }
 
-/** 卡片外壳:与账号信息页同一套(Section tone=raised + CardRows 缩进)。 */
+/** 卡片外壳:与我的账号页同一套(Section tone=raised + CardRows 缩进)。 */
 export function TenantSection({
   icon,
   titleKey,

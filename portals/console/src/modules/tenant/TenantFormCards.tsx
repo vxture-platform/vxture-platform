@@ -7,7 +7,7 @@
  * @category Module
  *
  * 个人租户与组织租户**同结构、同字段**(owner 2026-09-05):字段允许为空,不按类型
- * 藏卡——这样个人转组织时页面不换。缩进与名列宽度复用账号信息页的 CardRows。
+ * 藏卡——这样个人转组织时页面不换。缩进与名列宽度复用我的账号页的 CardRows。
  *
  * 走查修正(owner 2026-09-05 / 06,多轮):
  * - 基本信息与主管理员卡同一模式(第九轮:五行各带「修改」太细):标题行右侧一个
@@ -53,7 +53,7 @@ import {
 import { GenderMark } from "@/components/gender/GenderRadio";
 import { TenantSection } from "./TenantIdentityCard";
 
-/** 与账号信息页个人偏好同一档宽度(≈300px,owner 2026-09-05);四张卡的内容框都用它。 */
+/** 与我的账号页个人偏好同一档宽度(≈300px,owner 2026-09-05);四张卡的内容框都用它。 */
 const CONTROL_CLASS = "w-full max-w-overlay-lg";
 
 export interface TenantDraft {

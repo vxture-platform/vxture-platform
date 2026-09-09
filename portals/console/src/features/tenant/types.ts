@@ -28,7 +28,7 @@ export interface TenantListItem {
   type: TenantType;
   role: TenantRole;
   isCurrent: boolean;
-  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  /** 登录后默认进入的租户(我的账号页「设为默认」)。 */
   isDefault: boolean;
   /** 租户标识内容哈希;null = 无自定义标识。 */
   logoHash: string | null;

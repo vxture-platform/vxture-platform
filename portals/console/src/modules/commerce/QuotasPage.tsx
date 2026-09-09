@@ -22,7 +22,9 @@
  *     ——`metrics[].resetPeriod` 一直返回却不显示,月度重置与一次性额度长得一样。
  *   · **超冲要能读**:剩余为负是有意义的状态(见 API 契约注释),但「剩余 -1.2 GB」
  *     是数学不是话。负值一律改说「已超出 1.2 GB」,概览卡与表尾同一个表达。
- *   · **额度告急有去处**:存储/Credits 板块加「去加购」,滚到本页的加油包板块。
+ *   · **额度告急有去处**:存储/Credits 板块头各有一个「去加购」(primary),跨页直达
+ *     费用中心的加油包板块。本页**不留任何加油包/扩展包板块**(owner 2026-09-09)
+ *     ——买在费用中心,这一页只答「用了多少、还剩多少」。
  *   · **一致性**:三张表补 ListPagination;产品明细补 FilterBar;日期列改居中
  *     (金额/数字才右对齐);上报时间改日期主/时间辅;说明裹 SectionBody。
  *
@@ -169,11 +171,12 @@ export function QuotasPage() {
     );
   };
 
-  /* 「去加购」:额度告急时唯一能做的事。加油包板块 2026-09-08 迁到费用中心,
-     所以这里从同页 scrollIntoView 改成**跨页直达锚点**——用 Link 而不是
+  /* 「去加购」:额度告急时唯一能做的事,所以走 **primary**——它是这两个板块里
+     唯一的动作,压成次要档会让「额度告急」这件事没有出口。
+     加油包板块 2026-09-08 迁到费用中心,这里跨页直达锚点;用 Link 而不是
      onClick+router.push:它是导航,中键/新标签页/复制链接都该能用。 */
   const addonsAction = (
-    <Button asChild variant="outline" size="sm">
+    <Button asChild size="sm">
       <Link href={ADDON_SECTION_HREF}>
         <Icon name="lightning" size="xs" fallback="placeholder" />
         <span>{t("gotoAddons")}</span>
@@ -792,34 +795,7 @@ export function QuotasPage() {
         </SectionBody>
       </PageSection>
 
-      {/* ③ 加油包入口(板块本体 2026-09-08 迁至费用中心)。
-          这里只留入口不留板块:加油包是**买**,与订单/账单/发票同属钱这条线;
-          本页答的是「用了多少、还剩多少」。但发现路径确实从这里开始——
-          人是在这一页看到额度告急才想加购的,所以入口必须在。 */}
-      <PageSection
-        icon="lightning"
-        level={2}
-        title={t("addonsEntry.title")}
-        description={t("addonsEntry.description")}
-        action={addonsAction}
-      >
-        <SectionBody>
-          <SignalList
-            items={[
-              {
-                title: t("addonsEntry.whenTitle"),
-                description: t("addonsEntry.whenBody"),
-              },
-              {
-                title: t("addonsEntry.subscriptionTitle"),
-                description: t("addonsEntry.subscriptionBody"),
-              },
-            ]}
-          />
-        </SectionBody>
-      </PageSection>
-
-      {/* ④ 各产品配额明细 */}
+      {/* ③ 各产品配额明细 */}
       <PageSection
         icon="package"
         level={2}

@@ -106,76 +106,6 @@
     },
     "expiredNotice": "The payment window has closed; refreshing the order…"
   },
-  "atlasPage": {
-    "description": "Models available to this tenant, this workspace's product entitlements, and model quota and call volume. Read-only — provisioning and configuration live in the operations plane.",
-    "entitlements": {
-      "title": "Product entitlements",
-      "description": "Products and tiers this workspace subscribes to. Model availability is derived from these; there is no separate tenant-level model grant.",
-      "colProduct": "Product",
-      "colTier": "Tier",
-      "colStatus": "Status",
-      "colLimits": "Limits",
-      "bundled": "bundled",
-      "none": "Not subscribed",
-      "empty": "No product entitlements yet."
-    },
-    "loadError": "Could not load model platform status, please retry later.",
-    "metrics": {
-      "groupLabel": "Model service overview",
-      "models": "Available models",
-      "modelsHint": "{count} live entitlements",
-      "quota": "Model quota",
-      "quotaTier": "tier: {tier}",
-      "quotaNoTier": "no tier",
-      "tokens": "Model call tokens",
-      "tokensHint": "{count} rows"
-    },
-    "models": {
-      "title": "Available models",
-      "description": "Models granted to this tenant by the platform control plane.",
-      "empty": "No available models",
-      "colModel": "Model",
-      "colProvider": "Provider",
-      "colProtocol": "Protocol",
-      "colCapabilities": "Capabilities"
-    },
-    "quotaStatus": {
-      "covered": "Covered",
-      "uncovered": "No plan",
-      "unavailable": "Platform unreachable"
-    },
-    "quotas": {
-      "title": "Quota status",
-      "description": "Plan quota pools from the platform side (not Atlas data).",
-      "emptyCovered": "No active quota pools",
-      "emptyUncovered": "No plan published for this workspace yet",
-      "emptyUnavailable": "Could not reach the platform entitlement service",
-      "emptyNone": "No quota data",
-      "colMetric": "Metric",
-      "colRemaining": "Remaining / Limit",
-      "colPriority": "Priority",
-      "colTier": "Tier"
-    },
-    "signals": {
-      "title": "Notes",
-      "description": "The tenant side only shows what is visible in the current context.",
-      "scopeTitle": "Tenant scope",
-      "scopeBody": "Showing model platform state for {tenant}.",
-      "scopeMissing": "Tenant context is required before model platform state can be shown.",
-      "boundaryTitle": "Control-plane boundary",
-      "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
-    },
-    "title": "Model services",
-    "usage": {
-      "title": "Usage records",
-      "description": "Recent actual calls (Atlas logs, not the billing basis).",
-      "empty": "No model usage recorded",
-      "colModel": "Model",
-      "colProvider": "Provider",
-      "colRequests": "Requests",
-      "colTokens": "Tokens"
-    }
-  },
   "auditPage": {
     "title": "Audit Logs",
     "description": "Who did what, when: a trail of member management, subscription/order, and invoicing actions",
@@ -1475,7 +1405,7 @@
   "profilePage": {
     "header": {
       "eyebrow": "Account center",
-      "title": "Account",
+      "title": "My account",
       "description": "Avatar, profile, contact details, sign-in methods and preferences."
     },
     "common": {
@@ -2158,7 +2088,7 @@
   "routes": {
     "dashboard": "Dashboard",
     "todos": "Todo Items",
-    "profile": "Account",
+    "profile": "My account",
     "personalTenant": "Tenant info",
     "organization": "Organization Info",
     "members": "Members",
@@ -2171,7 +2101,6 @@
     "billing": "Billing center",
     "billingInvoices": "Invoices & titles",
     "quotas": "Quotas",
-    "atlas": "Model Services",
     "notifications": "Notifications",
     "security": "Security",
     "settings": "Tenant Settings",
@@ -2370,7 +2299,7 @@
         "description": "Key actions waiting for the current tenant"
       },
       "profile": {
-        "label": "Account",
+        "label": "My account",
         "description": "Avatar, profile, contact details, sign-in methods and preferences"
       },
       "members": {
@@ -2430,7 +2359,6 @@
         "description": "Skills and tools available to this workspace (in development)"
       }
     },
-    "openDocs": "View documentation",
     "sections": {
       "workspace": "Workspace",
       "accountTenant": "Account & Tenant",
@@ -2442,18 +2370,6 @@
     "workspaceMode": {
       "platform": "Platform workspace",
       "tenant": "Tenant workspace"
-    }
-  },
-  "skillsPage": {
-    "title": "Skills & Tools",
-    "description": "Skills and tools available to this workspace, with quotas and usage. Read-only — grants and configuration live on the operations side.",
-    "planned": {
-      "title": "In development",
-      "body": "The data path is not wired up yet. Once it is, this page will list the skills and tools this workspace has been granted, in the same shape as Model Services."
-    },
-    "empty": {
-      "title": "Nothing to show yet",
-      "description": "This does not mean you have no skills — the page is not wired to data yet."
     }
   },
   "subscribePage": {
@@ -3083,9 +2999,9 @@
       "windowDay": "30 days",
       "windowWeek": "12 weeks",
       "windowMonth": "12 months",
-      "windowYear": "Yearly",
+      "windowYear": "5 years",
       "empty": "No usage data in this period",
-      "windowHour": "Hourly (24h)",
+      "windowHour": "24 hours",
       "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in your local time. Dashboard figures only — never a billing basis",
       "statTotal": "Window total",
       "statPeak": "Peak",

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ProfilePage — 「账号信息」(批 5a,owner 2026-09-04 定稿的重排;原 2030 行个人信息页)。
+ * ProfilePage — 「我的账号」(批 5a,owner 2026-09-04 定稿的重排;原 2030 行个人信息页)。
  * @package @vxture/console
  * @layer Application
  * @category Module

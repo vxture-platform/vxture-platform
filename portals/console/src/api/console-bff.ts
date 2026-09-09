@@ -1362,7 +1362,7 @@ export async function fetchMyWorkspaces(): Promise<ConsoleWorkspaceItem[]> {
   return readJson<ConsoleWorkspaceItem[]>("/api/me/workspaces", []);
 }
 
-/** 账号信息页「设为默认」:每次登录后默认进入的租户(目标须是本人所在租户)。 */
+/** 我的账号页「设为默认」:每次登录后默认进入的租户(目标须是本人所在租户)。 */
 export async function setDefaultTenant(tenantId: string): Promise<void> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/tenants/${encodeURIComponent(tenantId)}/default`,
@@ -1488,7 +1488,7 @@ export async function deleteOrgLogo(): Promise<void> {
 }
 
 /**
- * 本人所在任一租户的标识 URL(按内容哈希版本化)——账号信息页所在租户列表、
+ * 本人所在任一租户的标识 URL(按内容哈希版本化)——我的账号页所在租户列表、
  * 顶栏租户面板画头像用;非成员 404。当前租户的另有 `orgLogoUrl`(租户信息页)。
  */
 export function tenantLogoUrl(tenantId: string, logoHash: string): string {

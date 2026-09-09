@@ -34,7 +34,7 @@ export interface IdentityCardProps {
   readonly actions?: ReactNode;
   /**
    * 自带描边卡框(默认)。放进一张已经是卡片的容器里时置 false,只出内容行——
-   * 账号信息页的身份卡下面还挂着所在租户展开区,整块才是一张卡,不能卡套卡
+   * 我的账号页的身份卡下面还挂着所在租户展开区,整块才是一张卡,不能卡套卡
    * (owner 2026-09-04 走查)。
    */
   readonly frame?: boolean;

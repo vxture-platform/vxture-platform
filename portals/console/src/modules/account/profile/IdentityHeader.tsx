@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * IdentityHeader — 账号信息页头部身份卡 + 所在租户展开区(批 5a,owner 定稿)。
+ * IdentityHeader — 我的账号页头部身份卡 + 所在租户展开区(批 5a,owner 定稿)。
  * @package @vxture/console
  * @layer Application
  * @category Module
