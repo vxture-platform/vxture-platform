@@ -24,7 +24,7 @@
     "@vxture/platform-browser": "workspace:*",
     "@vxture-platform/shared": "workspace:*",
     "axios": "^1.18.1",
-    "next": "^15.5.21",
+    "next": "^15.5.25",
     "next-intl": "^4.13.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -47,7 +47,7 @@
     "postcss": "^8.5.19",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8",
+    "vitest": "^4.1.11",
     "webpack": "^5.105.4",
     "webpack-cli": "^7.0.0",
     "webpack-dev-server": "^5.2.6"

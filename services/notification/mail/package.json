@@ -13,12 +13,12 @@
     "@nestjs/common": "^11.0.0",
     "@vxture/core-utils": "workspace:*",
     "ioredis": "^5.0.0",
-    "nodemailer": "^9.0.3"
+    "nodemailer": "^9.1.1"
   },
   "devDependencies": {
     "@types/nodemailer": "^6.4.17",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.0.0"
