@@ -107,23 +107,28 @@
     "expiredNotice": "付款时限已到，正在刷新订单状态…"
   },
   "atlasPage": {
-    "title": "模型平台",
-    "description": "当前租户可用模型、应用授权、配额和用量状态。",
+    "description": "当前租户可用的模型、本工作空间的产品权益,以及模型配额与调用量。只读——开通与配置在运维平面。",
+    "entitlements": {
+      "title": "产品权益",
+      "description": "本工作空间已订阅的产品与档位。模型可用范围由此派生,不再单列租户级模型授权。",
+      "colProduct": "产品",
+      "colTier": "档位",
+      "colStatus": "状态",
+      "colLimits": "额度",
+      "bundled": "随套餐",
+      "none": "未订阅",
+      "empty": "尚无产品权益。"
+    },
     "loadError": "模型平台状态加载失败，请稍后重试。",
     "metrics": {
-      "groupLabel": "模型平台概览",
+      "groupLabel": "模型服务概览",
       "models": "可用模型",
       "modelsHint": "{count} 项生效权益",
-      "quota": "配额状态",
+      "quota": "模型配额",
       "quotaTier": "档位：{tier}",
       "quotaNoTier": "无档位",
-      "tokens": "Token 用量",
+      "tokens": "模型调用 Token",
       "tokensHint": "{count} 条记录"
-    },
-    "quotaStatus": {
-      "covered": "已开通",
-      "uncovered": "未开通套餐",
-      "unavailable": "平台不可达"
     },
     "models": {
       "title": "可用模型",
@@ -133,6 +138,11 @@
       "colProvider": "供应方",
       "colProtocol": "协议",
       "colCapabilities": "能力"
+    },
+    "quotaStatus": {
+      "covered": "已开通",
+      "uncovered": "未开通套餐",
+      "unavailable": "平台不可达"
     },
     "quotas": {
       "title": "配额状态",
@@ -146,15 +156,6 @@
       "colPriority": "优先级",
       "colTier": "档位"
     },
-    "usage": {
-      "title": "用量记录",
-      "description": "近期实际调用记录（Atlas 自身日志，非计费口径）。",
-      "empty": "暂无模型用量记录",
-      "colModel": "模型",
-      "colProvider": "供应方",
-      "colRequests": "请求数",
-      "colTokens": "Token"
-    },
     "signals": {
       "title": "状态说明",
       "description": "租户侧仅显示当前上下文可见状态。",
@@ -164,16 +165,15 @@
       "boundaryTitle": "控制面边界",
       "boundaryBody": "供应方、模型、策略、价格与授权的变更由平台运营在管理面完成。"
     },
-    "entitlements": {
-      "title": "产品权益",
-      "description": "本工作空间已订阅的产品与档位。模型可用范围由此派生,不再单列租户级模型授权。",
-      "colProduct": "产品",
-      "colTier": "档位",
-      "colStatus": "状态",
-      "colLimits": "额度",
-      "bundled": "随套餐",
-      "none": "未订阅",
-      "empty": "尚无产品权益。"
+    "title": "模型服务",
+    "usage": {
+      "title": "用量记录",
+      "description": "近期实际调用记录（Atlas 自身日志，非计费口径）。",
+      "empty": "暂无模型用量记录",
+      "colModel": "模型",
+      "colProvider": "供应方",
+      "colRequests": "请求数",
+      "colTokens": "Token"
     }
   },
   "auditPage": {

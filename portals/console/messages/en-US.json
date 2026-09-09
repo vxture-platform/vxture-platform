@@ -107,23 +107,28 @@
     "expiredNotice": "The payment window has closed; refreshing the order…"
   },
   "atlasPage": {
-    "title": "Model Platform",
-    "description": "Models available to this tenant, application grants, quota and usage.",
+    "description": "Models available to this tenant, this workspace's product entitlements, and model quota and call volume. Read-only — provisioning and configuration live in the operations plane.",
+    "entitlements": {
+      "title": "Product entitlements",
+      "description": "Products and tiers this workspace subscribes to. Model availability is derived from these; there is no separate tenant-level model grant.",
+      "colProduct": "Product",
+      "colTier": "Tier",
+      "colStatus": "Status",
+      "colLimits": "Limits",
+      "bundled": "bundled",
+      "none": "Not subscribed",
+      "empty": "No product entitlements yet."
+    },
     "loadError": "Could not load model platform status, please retry later.",
     "metrics": {
-      "groupLabel": "Model platform overview",
+      "groupLabel": "Model service overview",
       "models": "Available models",
       "modelsHint": "{count} live entitlements",
-      "quota": "Quota status",
+      "quota": "Model quota",
       "quotaTier": "tier: {tier}",
       "quotaNoTier": "no tier",
-      "tokens": "Token usage",
+      "tokens": "Model call tokens",
       "tokensHint": "{count} rows"
-    },
-    "quotaStatus": {
-      "covered": "Covered",
-      "uncovered": "No plan",
-      "unavailable": "Platform unreachable"
     },
     "models": {
       "title": "Available models",
@@ -133,6 +138,11 @@
       "colProvider": "Provider",
       "colProtocol": "Protocol",
       "colCapabilities": "Capabilities"
+    },
+    "quotaStatus": {
+      "covered": "Covered",
+      "uncovered": "No plan",
+      "unavailable": "Platform unreachable"
     },
     "quotas": {
       "title": "Quota status",
@@ -146,15 +156,6 @@
       "colPriority": "Priority",
       "colTier": "Tier"
     },
-    "usage": {
-      "title": "Usage records",
-      "description": "Recent actual calls (Atlas logs, not the billing basis).",
-      "empty": "No model usage recorded",
-      "colModel": "Model",
-      "colProvider": "Provider",
-      "colRequests": "Requests",
-      "colTokens": "Tokens"
-    },
     "signals": {
       "title": "Notes",
       "description": "The tenant side only shows what is visible in the current context.",
@@ -164,16 +165,15 @@
       "boundaryTitle": "Control-plane boundary",
       "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
     },
-    "entitlements": {
-      "title": "Product entitlements",
-      "description": "Products and tiers this workspace subscribes to. Model availability is derived from these; there is no separate tenant-level model grant.",
-      "colProduct": "Product",
-      "colTier": "Tier",
-      "colStatus": "Status",
-      "colLimits": "Limits",
-      "bundled": "bundled",
-      "none": "Not subscribed",
-      "empty": "No product entitlements yet."
+    "title": "Model services",
+    "usage": {
+      "title": "Usage records",
+      "description": "Recent actual calls (Atlas logs, not the billing basis).",
+      "empty": "No model usage recorded",
+      "colModel": "Model",
+      "colProvider": "Provider",
+      "colRequests": "Requests",
+      "colTokens": "Tokens"
     }
   },
   "auditPage": {
