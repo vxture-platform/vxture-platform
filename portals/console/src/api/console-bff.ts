@@ -351,6 +351,30 @@ export interface ConsoleWorkspace {
   createdAt: string;
 }
 
+/**
+ * 我在当前租户能进哪些工作空间(切换器用)。
+ *
+ * 与 `fetchWorkspaces` 不同:那个是**管理视角**(租户下的全部,含停用的);
+ * 这个是**我的视角**——只有我是活跃成员、且启用中的。切换器里列出一个我进不去的
+ * 工作空间,点了只会被预检打回来,看起来像「按钮没反应」。
+ *
+ * 名字避开 `fetchMyWorkspaces`:那个虽然叫 workspaces,给的其实是**我的租户列表**
+ * (每个租户配一个默认工作空间),是租户切换器的数据。两件事,别混。
+ */
+export async function fetchSwitchableWorkspaces(): Promise<
+  Pick<ConsoleWorkspace, "id" | "name" | "isDefault">[]
+> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces/mine")}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  return (await response.json()) as Pick<
+    ConsoleWorkspace,
+    "id" | "name" | "isDefault"
+  >[];
+}
+
 /** 当前租户的工作空间清单(不含已删)。看这张表只要 tenant.member.read。 */
 export async function fetchWorkspaces(): Promise<ConsoleWorkspace[]> {
   const response = await fetch(
@@ -2090,6 +2114,21 @@ export function buildTenantSwitchUrl(
 ): string {
   const params = new URLSearchParams({ tenantId, returnTo });
   return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/auth/switch-tenant?${params.toString()}`;
+}
+
+/**
+ * 切换活跃工作空间的入口 URL(owner 2026-09-09)。与切租户**同一条链路、同一个理由**:
+ * 顶层导航而不是 fetch——IdP 要收到中央会话 cookie 才能静默发码。
+ *
+ * console-bff 预检「我能进这个工作空间吗」→ 302 IdP(prompt=none + workspace_hint)
+ * → /auth/callback 建新 RP 会话(新 active_workspace)→ 回到 returnTo。
+ */
+export function buildWorkspaceSwitchUrl(
+  workspaceId: string,
+  returnTo: string,
+): string {
+  const params = new URLSearchParams({ workspaceId, returnTo });
+  return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/auth/switch-workspace?${params.toString()}`;
 }
 
 /**

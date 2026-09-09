@@ -1005,6 +1005,13 @@ export class SessionAggregator {
     return this.org.listWorkspaces(resolved.orgId);
   }
 
+  /** 我在当前租户能进哪些工作空间(切换器 + 切换预检共用同一份判据)。 */
+  async listWorkspacesForSwitch(userId: string, orgId?: string) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    return this.org.listWorkspacesForSwitch(resolved.orgId, userId);
+  }
+
   async createWorkspace(
     userId: string,
     orgId: string | undefined,

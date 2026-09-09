@@ -870,6 +870,78 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return mapWorkspace(r.rows[0]);
   }
 
+  /**
+   * 会话要落到哪个工作空间——**带提示的那一版**(工作空间切换,owner 2026-09-09)。
+   *
+   * `getDefaultWorkspaceWithMembership` 永远给默认那一个;这个方法在给了 `hint`
+   * 且它**站得住**时给 hint 指的那个,否则退回默认。
+   *
+   * 「站得住」是四条,全部在 SQL 的 where 里,一条都不能少:
+   *   · 属于这个租户    —— 否则拿到别的租户的工作空间 id 就能横着进去。
+   *   · 未删、状态 active —— 停用的空间不该成为任何人的落点。
+   *   · 我是它的活跃成员 —— 我不在里面,就不该进去。
+   *
+   * 退回默认而不是报错:提示来自浏览器地址栏与 Redis 里的旧值,**过期是常态**
+   * (工作空间被停用、我被移出)。那种时候人该落回默认,而不是登录失败。
+   */
+  async resolveWorkspaceForSession(
+    orgId: string,
+    userId: string,
+    hint?: string | null,
+  ): Promise<{
+    workspace: WorkspaceView | null;
+    membershipRole: string | null;
+  }> {
+    if (hint && ACCEPT_UUID_RE.test(hint)) {
+      const r = await this.pool.query<WorkspaceRow & { ws_role: string }>(
+        `select w.id, w.tenant_id, w.name, w.is_default, rr.role_code as ws_role
+           from tenancy.workspaces w
+           join tenancy.workspace_memberships m
+             on m.workspace_id = w.id and m.user_id = $3 and m.status = 'active'
+           join access.roles rr on rr.id = m.role_id
+          where w.id = $2
+            and w.tenant_id = $1
+            and w.deleted_at is null
+            and w.status = 'active'
+          limit 1`,
+        [orgId, hint, userId],
+      );
+      const row = r.rows[0];
+      if (row) {
+        return {
+          workspace: mapWorkspace(row),
+          membershipRole: row.ws_role,
+        };
+      }
+    }
+    return this.getDefaultWorkspaceWithMembership(orgId, userId);
+  }
+
+  /**
+   * 我在这个租户里能进哪些工作空间(切换器用)。
+   *
+   * 与 `listWorkspaces` 不同:那个是**管理视角**(租户下的全部,含停用的);
+   * 这个是**我的视角**——只有我是活跃成员、且启用中的。切换器里列出一个我进不去
+   * 的工作空间,点了只会失败。
+   */
+  async listWorkspacesForSwitch(
+    orgId: string,
+    userId: string,
+  ): Promise<WorkspaceView[]> {
+    const r = await this.pool.query<WorkspaceRow>(
+      `select w.id, w.tenant_id, w.name, w.is_default
+         from tenancy.workspaces w
+         join tenancy.workspace_memberships m
+           on m.workspace_id = w.id and m.user_id = $2 and m.status = 'active'
+        where w.tenant_id = $1
+          and w.deleted_at is null
+          and w.status = 'active'
+        order by w.is_default desc, w.created_at asc`,
+      [orgId, userId],
+    );
+    return r.rows.map((row) => mapWorkspace(row)!);
+  }
+
   async getDefaultWorkspaceWithMembership(
     orgId: string,
     userId: string,

@@ -120,10 +120,14 @@ export class GovernanceController {
     /* 身份凭据两项都要给:邮箱通道核 email、用户号通道核 userNo。
        少给一项,对应通道的邀请就永远接受不了——rejectAcceptance 的 default 是拒绝,
        所以这是「打不开」而不是「放行」,方向是安全的,但仍是个 bug。 */
-    const result = await this.org.acceptInvitation(body.token, me.userId, {
-      email: user?.email ?? null,
-      userNo: user?.userNo ?? null,
-    });
+    const result = await this.org.acceptInvitation(
+      { token: body.token },
+      me.userId,
+      {
+        email: user?.email ?? null,
+        userNo: user?.userNo ?? null,
+      },
+    );
     if (!result.ok) {
       throw new BadRequestException(result.reason);
     }

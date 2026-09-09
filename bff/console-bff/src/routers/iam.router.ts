@@ -523,6 +523,31 @@ export class IamRouter {
     }));
   }
 
+  /**
+   * 我能进哪些工作空间(切换器 + 切换预检共用)。
+   *
+   * 门只到 `tenant.member.read`?**不,连这个都不要**——「我自己能进哪儿」是
+   * 自视角的事实。但它挂在租户上下文里,所以仍走 requireTenantSession。
+   *
+   * 路径放在 `workspaces/mine` 而不是 `workspaces?scope=mine`:两条读的**判据不同**
+   * (管理视角含停用的、我的视角只含我是成员的),不是同一份数据的过滤。
+   */
+  @SelfScope()
+  @Get("workspaces/mine")
+  async listMyWorkspaces(@Req() req: Request & RequestContext) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const rows = await this.sessionAggregator.listWorkspacesForSwitch(
+      accountId,
+      tenantId,
+    );
+    if (!rows) throw new NotFoundException("Tenant context is required");
+    return rows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      isDefault: w.isDefault,
+    }));
+  }
+
   @RequireCapability("tenant.workspace.manage")
   @Post("workspaces")
   async createWorkspace(

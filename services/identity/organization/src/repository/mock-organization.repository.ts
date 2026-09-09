@@ -723,6 +723,42 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     return a.trim().toLowerCase() === b.trim().toLowerCase();
   }
 
+  async resolveWorkspaceForSession(
+    orgId: string,
+    userId: string,
+    hint?: string | null,
+  ) {
+    if (hint) {
+      const w = this.workspaces.get(hint);
+      const member = w
+        ? this.wsMembers.find(
+            (m) =>
+              m.workspaceId === w.id &&
+              m.userId === userId &&
+              m.status === "active",
+          )
+        : undefined;
+      if (w && w.organizationId === orgId && w.status === "active" && member) {
+        return { workspace: w, membershipRole: member.role };
+      }
+    }
+    return this.getDefaultWorkspaceWithMembership(orgId, userId);
+  }
+
+  async listWorkspacesForSwitch(orgId: string, userId: string) {
+    return [...this.workspaces.values()].filter(
+      (w) =>
+        w.organizationId === orgId &&
+        w.status === "active" &&
+        this.wsMembers.some(
+          (m) =>
+            m.workspaceId === w.id &&
+            m.userId === userId &&
+            m.status === "active",
+        ),
+    );
+  }
+
   async listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
     return [...this.workspaces.values()]
       .filter((w) => w.organizationId === tenantId)

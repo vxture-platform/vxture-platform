@@ -577,6 +577,23 @@ export interface OrganizationReadRepository {
     invitationId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<DeclineInvitationResult>;
+  /**
+   * 会话落到哪个工作空间——带提示的那一版。hint 站不住(不属于本租户 / 已停用 /
+   * 我不是成员)就**退回默认**,不报错:提示过期是常态。
+   */
+  resolveWorkspaceForSession(
+    orgId: string,
+    userId: string,
+    hint?: string | null,
+  ): Promise<{
+    workspace: WorkspaceView | null;
+    membershipRole: string | null;
+  }>;
+  /** 我在这个租户里能进哪些工作空间(切换器用:只列我是活跃成员、且启用中的)。 */
+  listWorkspacesForSwitch(
+    orgId: string,
+    userId: string,
+  ): Promise<WorkspaceView[]>;
   /** 列出租户下的工作空间(不含已删),含成员数。 */
   listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]>;
   /** 建工作空间;创建者按给定的工作空间级角色码一并挂进去。 */

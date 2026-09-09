@@ -51,6 +51,17 @@ export interface TenantPanelProps {
   tenant: TenantContext | null | undefined;
   /** 当前工作空间名；未知时面板显示"默认工作空间"。 */
   workspaceName: string | null;
+  /**
+   * 我能切过去的工作空间(只含我是活跃成员、且启用中的)。
+   * ≤1 项时列表里只剩当前一行,切换入口自然无处可点——功能在,只是无处可切。
+   */
+  workspaceOptions: {
+    id: string;
+    name: string;
+    isDefault: boolean;
+    isCurrent: boolean;
+  }[];
+  onSwitchWorkspace: (workspaceId: string) => void;
   quotaUsage: ConsoleQuotaUsage | null;
   /** 本月费用，已带币种符号与千分位——格式化是业务判断，不下推给 DS。 */
   billingLabel: string;
@@ -75,6 +86,8 @@ export interface TenantPanelProps {
 export function TenantPanel({
   tenant,
   workspaceName,
+  workspaceOptions,
+  onSwitchWorkspace,
   quotaUsage,
   billingLabel,
   planName,
@@ -225,9 +238,13 @@ export function TenantPanel({
             onClick={() => go("/settings")}
           />
 
-          {/* 切换范围:嵌套弹层,锚在这一行右侧。租户是真列表(批 4:此前只有一行
-              「切换组织」,点下去跳到第一个非当前租户,三个租户的用户根本选不到
-              第三个);工作区暂不可切(后端尚无多工作区),保留结构置灰,不假装能点。 */}
+          {/* 切换范围:嵌套弹层,锚在这一行右侧。两级都是真列表——
+              租户那一列是批 4 做的(此前只有一行「切换组织」,点下去跳到第一个
+              非当前租户,三个租户的用户根本选不到第三个);
+              工作空间那一列 owner 2026-09-09 通了(此前置灰写着「暂不可切」,
+              因为后端只有一个工作空间,连可选项都没有)。
+
+              两级各切各的:切工作空间不动 active_org,反之亦然。 */}
           <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
             <PopoverTrigger asChild>
               <div>
@@ -265,13 +282,37 @@ export function TenantPanel({
                 ))}
               </ShellPanelSection>
               <ShellPanelSection title={t("workspace")}>
-                <ShellPanelRow
-                  icon="cube"
-                  label={workspaceName || t("defaultWorkspace")}
-                  description={t("workspaceSwitchComingSoon")}
-                  value={t("defaultTag")}
-                  disabled
-                />
+                {workspaceOptions.length > 0 ? (
+                  workspaceOptions.map((option) => (
+                    <ShellPanelRow
+                      key={option.id}
+                      icon="cube"
+                      label={option.name}
+                      {...(option.isDefault
+                        ? { description: t("defaultWorkspaceTag") }
+                        : {})}
+                      active={option.isCurrent}
+                      {...(option.isCurrent
+                        ? { value: t("currentTag"), disabled: true }
+                        : {
+                            onClick: () => {
+                              setOpen(false);
+                              setScopeOpen(false);
+                              onSwitchWorkspace(option.id);
+                            },
+                          })}
+                    />
+                  ))
+                ) : (
+                  /* 一个都没取到时仍画当前这一行:清单是另一路读,读失败不该让人
+                     以为自己不在任何工作空间里。 */
+                  <ShellPanelRow
+                    icon="cube"
+                    label={workspaceName || t("defaultWorkspace")}
+                    value={t("currentTag")}
+                    disabled
+                  />
+                )}
               </ShellPanelSection>
             </ShellPanelContent>
           </Popover>

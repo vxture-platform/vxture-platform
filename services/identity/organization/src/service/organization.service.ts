@@ -231,6 +231,16 @@ export class OrganizationService {
   ): Promise<DeclineInvitationResult> {
     return this.repo.declineInvitation(invitationId, identity);
   }
+  resolveWorkspaceForSession(
+    orgId: string,
+    userId: string,
+    hint?: string | null,
+  ) {
+    return this.repo.resolveWorkspaceForSession(orgId, userId, hint);
+  }
+  listWorkspacesForSwitch(orgId: string, userId: string) {
+    return this.repo.listWorkspacesForSwitch(orgId, userId);
+  }
   listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
     return this.repo.listWorkspaces(tenantId);
   }

@@ -2227,7 +2227,7 @@
     "workspace": "Workspace",
     "defaultWorkspace": "Default workspace",
     "defaultTag": "Default",
-    "workspaceSwitchComingSoon": "Multi-workspace switching coming soon",
+    "defaultWorkspaceTag": "Default landing workspace",
     "plan": "Plan",
     "freePlan": "No subscription",
     "orgTenant": "Organization tenant",

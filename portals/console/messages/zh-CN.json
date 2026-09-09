@@ -2227,7 +2227,7 @@
     "workspace": "工作空间",
     "defaultWorkspace": "默认工作空间",
     "defaultTag": "默认",
-    "workspaceSwitchComingSoon": "多工作空间切换即将支持",
+    "defaultWorkspaceTag": "登录后默认进入",
     "plan": "计划",
     "freePlan": "未订阅",
     "orgTenant": "组织租户",

@@ -125,6 +125,14 @@ export interface OidcAuthorizeRequest {
   prompt?: string | undefined;
   /** active-org hint (legacy param name tenant_hint maps here). */
   tenantHint?: string | undefined;
+  /**
+   * active-workspace hint(`workspace_hint`)。与 `tenant_hint` 形状对称:
+   * 两级各自可切,在 console 切工作空间不该动 website 那边的任何东西。
+   *
+   * 提示**站不住时静默退回默认**(不属于本租户 / 已停用 / 我不是成员)——判定在
+   * organization 仓储的 SQL 里。提示来自地址栏与 Redis 里的旧值,过期是常态。
+   */
+  workspaceHint?: string | undefined;
 }
 
 export type OidcAuthorizeResult =
@@ -539,6 +547,7 @@ export class OidcService {
         codeChallenge: req.codeChallenge,
         nonce: req.nonce,
         orgHint: req.tenantHint,
+        workspaceHint: req.workspaceHint,
       });
       return { kind: "login", loginChallenge: challenge, realm: client.realm };
     }
@@ -549,6 +558,16 @@ export class OidcService {
       session!.sub,
       client.realm,
       req.tenantHint,
+    );
+    /* 工作空间的选择记在 (sid, clientId) 上,与 active_org 同处。发码时不把它
+       塞进授权码——铸令牌那一刻直接从 Redis 读,刷新令牌那条路才拿得到同一个值。 */
+    await this.rememberActiveWorkspace(
+      sid as string,
+      client.clientId,
+      stripSubPrefix(session!.sub),
+      client.realm,
+      activeOrg,
+      req.workspaceHint,
     );
     const code = await this.issueAuthCode({
       client,
@@ -568,6 +587,43 @@ export class OidcService {
         ...(req.state ? { state: req.state } : {}),
       }),
     };
+  }
+
+  /**
+   * 解析并记住这个 (sid, client) 的活跃工作空间。
+   *
+   * 与 `resolveActiveOrg` 同形,但有一处**故意不同**:这里不返回值,只负责「记住」。
+   * 铸令牌时会自己从 Redis 读——工作空间不进授权码,于是刷新令牌那条路(没有授权码)
+   * 与首次发码走的是同一个读法,两条路不会各拿到一个值。
+   *
+   * 提示站不站得住由 organization 那边的 SQL 判(属于本租户、启用中、我是成员);
+   * 这里只把**判完的结果**存下来——存一个进不去的 id 等于让下一次登录静默退回默认,
+   * 看起来像「切换没生效」。
+   */
+  private async rememberActiveWorkspace(
+    sid: string,
+    clientId: string,
+    /* **裸 userId**,不是带前缀的 sub。两个调用方一个有 sub、一个有 userId,
+       在这里收 sub 的话另一边就得靠「UUID 里没有下划线所以 stripSubPrefix 是空操作」
+       蒙混过去——那种巧合迟早会被换个 id 形状打破。 */
+    userId: string,
+    realm: string,
+    activeOrg: string | null,
+    workspaceHint?: string,
+  ): Promise<void> {
+    if (realm !== "customer" || !activeOrg) return;
+    const stored = await this.redis.getOidcActiveWorkspace(sid, clientId);
+    const hint = workspaceHint ?? stored ?? undefined;
+    if (!hint) return;
+    const ctx = await this.activeContext.resolveActiveContext(
+      userId,
+      activeOrg,
+      hint,
+    );
+    const chosen = ctx?.activeWorkspace ?? null;
+    if (chosen && chosen !== stored) {
+      await this.redis.setOidcActiveWorkspace(sid, clientId, chosen);
+    }
   }
 
   /**
@@ -946,6 +1002,16 @@ export class OidcService {
     );
     if (activeOrg) {
       await this.redis.setOidcActiveOrg(sid, client.clientId, activeOrg);
+      /* 交互式登录也走同一条:提示是跨过登录页从挑战里带过来的
+         (例如「切工作空间」时会话过期,登录完要回到那个工作空间,而不是默认)。 */
+      await this.rememberActiveWorkspace(
+        sid,
+        client.clientId,
+        userId,
+        client.realm,
+        activeOrg,
+        challenge.workspaceHint,
+      );
     }
     // 持久镜像(session.auth_sessions,同 sid):console「活跃会话」按它列设备、
     // 「下线」翻它的 status,刷新 / 静默 SSO 再回查。镜像失败不挡登录——Redis 才是主。
@@ -2166,9 +2232,17 @@ export class OidcService {
         },
       });
     } else {
+      /* 活跃工作空间**不进授权码**,铸令牌这一刻直接从 Redis 读 (sid, clientId)。
+         这样首次发码与刷新令牌(那条路没有授权码)读的是同一个值——两条路各存一份
+         就一定会有一处先漂,而漂出来的症状是「刷新之后又跳回默认工作空间」。 */
+      const workspaceHint = await this.redis.getOidcActiveWorkspace(
+        sid,
+        client.clientId,
+      );
       const ctx = await this.activeContext.resolveActiveContext(
         userId,
         input.activeOrg ?? undefined,
+        workspaceHint,
       );
       // Cross-domain RPs (e.g. umbra) read identity from the access_token — they
       // cannot reach the IdP DB the way same-origin BFFs do — so release the
