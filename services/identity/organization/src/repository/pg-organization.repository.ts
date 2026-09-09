@@ -145,6 +145,18 @@ const DEFAULT_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * invitations), with governance RBAC via access.roles/permissions and member
  * joins to account.users. Mirrors the @vxture/service-account pg-repository convention.
  */
+/**
+ * 组织租户能不能建第二个工作空间。
+ *
+ * owner 2026-09-10:设计上允许,但**功能还在规划中**,后续按付费开通。开关放在这里
+ * 而不是散在各处 if 里——将来接上付费时只有这一处要改,而且改的时候一眼看得见
+ * 它挡的是什么。
+ *
+ * 常量而不是环境变量:这不是部署差异,是产品阶段。用环境变量会让「哪个环境开着」
+ * 变成一个要去查的问题。
+ */
+const ALLOW_MULTI_WORKSPACE = false;
+
 /** 邀请 ID 的形状门。见 acceptInvitation 里的说明。 */
 const ACCEPT_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -652,6 +664,30 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     | { ok: false; reason: WorkspaceRejection }
   > {
     const name = input.name.trim();
+
+    /* 建工作空间的闸门(owner 2026-09-10)。两种租户拒绝的**理由不同**,
+       所以码也不同——文案跟着码走:
+
+         个人租户 → `personal_single_workspace`,**结构性**的。个人租户只有你自己,
+                    第二个空间没有意义;将来开放付费也不会变。
+         组织租户 → `planned`,**暂时**的。设计上允许多个,但功能还在规划中
+                    (后续按付费开通)。
+
+       「以后会有」和「这里不会有」不该说成同一句话:说错了,个人租户的人会一直等
+       一个永远不会来的功能。 */
+    const tenant = await this.pool.query<{ type: string }>(
+      `select type from tenancy.tenants where id = $1 and deleted_at is null`,
+      [input.tenantId],
+    );
+    const tenantType = tenant.rows[0]?.type ?? null;
+    if (!tenantType) return { ok: false, reason: "not_found" };
+    if (tenantType !== "organization") {
+      return { ok: false, reason: "personal_single_workspace" };
+    }
+    if (!ALLOW_MULTI_WORKSPACE) {
+      return { ok: false, reason: "planned" };
+    }
+
     const client = await this.pool.connect();
     try {
       await client.query("begin");

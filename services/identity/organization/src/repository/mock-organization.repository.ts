@@ -881,6 +881,18 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   }
 
   async createWorkspace(input: CreateWorkspaceInput) {
+    /* 与 pg 那份同一道闸门:个人租户结构性只有一个;组织租户功能规划中。
+       mock 不查库,拿它自己的 orgs 表判类型。 */
+    const org = this.orgs.get(input.tenantId);
+    if (!org) return { ok: false as const, reason: "not_found" as const };
+    if (org.type !== "organization") {
+      return {
+        ok: false as const,
+        reason: "personal_single_workspace" as const,
+      };
+    }
+    return { ok: false as const, reason: "planned" as const };
+
     const taken = [...this.workspaces.values()].some(
       (w) =>
         w.organizationId === input.tenantId &&

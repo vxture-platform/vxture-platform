@@ -95,6 +95,11 @@ const WORKSPACE_ERRORS: Record<WorkspaceRejection, (reason: string) => Error> =
     last_active: (reason) => new ConflictException(reason),
     archived: (reason) => new ConflictException(reason),
     not_empty: (reason) => new ConflictException(reason),
+    /* 两条建工作空间的闸门(owner 2026-09-10)。都用 409 而不是 403:
+       请求本身没错、权限也没问题,是**当前状态**不允许——个人租户结构上只有一个,
+       组织租户的多空间还在规划中。403 会让人去找管理员要权限,而没有人能给。 */
+    personal_single_workspace: (reason) => new ConflictException(reason),
+    planned: (reason) => new ConflictException(reason),
   };
 
 const ACCEPT_INVITATION_ERRORS: Record<

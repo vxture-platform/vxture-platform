@@ -3371,7 +3371,9 @@
       "default": "Default",
       "empty": "No workspaces yet",
       "emptyHint": "Create a workspace to keep subscriptions and quotas separate.",
-      "myDefault": "Yours"
+      "myDefault": "Yours",
+      "plannedNote": "{count} workspace(s) currently active. Multiple workspaces are planned and will be unlocked as a paid capability.",
+      "personalNote": "A personal tenant has exactly one workspace. To use several, upgrade it to an organization tenant on the Tenant page."
     },
     "status": {
       "active": "Active",
@@ -3390,7 +3392,9 @@
       "archiveConsequence": "Members can no longer enter this workspace. Its subscriptions, invoices and usage records are kept and it can be reactivated at any time.",
       "archiveKeep": "Keep it active",
       "setMyDefault": "Set as my default",
-      "alreadyMyDefault": "Already your default"
+      "alreadyMyDefault": "Already your default",
+      "createPlannedLabel": "New workspace (planned)",
+      "createPlanned": "Multiple workspaces are planned and will be unlocked as a paid capability."
     },
     "dialog": {
       "createTitle": "New workspace",
@@ -3417,7 +3421,9 @@
       "default_locked": "The default workspace cannot be archived. Set another one as default first.",
       "last_active": "At least one workspace must stay active.",
       "archived": "An archived workspace cannot be set as the default.",
-      "not_empty": "This workspace still has content, so the action cannot complete."
+      "not_empty": "This workspace still has content, so the action cannot complete.",
+      "personal_single_workspace": "A personal tenant has exactly one workspace.",
+      "planned": "Multiple workspaces are planned and will be unlocked as a paid capability."
     }
   },
   "memberWorkspaces": {

@@ -88,6 +88,8 @@ const WORKSPACE_ERROR_CODES = [
   "last_active",
   "archived",
   "not_empty",
+  "personal_single_workspace",
+  "planned",
 ] as const;
 type WorkspaceErrorCode = (typeof WORKSPACE_ERROR_CODES)[number];
 
@@ -110,6 +112,16 @@ export function WorkspacesPage() {
     session.capabilities,
     "tenant.workspace.manage",
   );
+
+  /* 建工作空间的闸门(owner 2026-09-10),两种租户**理由不同、说法也不同**:
+       个人租户 —— 结构性只有一个,第二个没有意义;将来开放付费也不会变。
+       组织租户 —— 设计上允许多个,但功能还在规划中(后续按付费开通)。
+     「以后会有」和「这里不会有」不该说成同一句话:说错了,个人租户的人会一直等
+     一个永远不会来的功能。
+
+     服务端也判(createWorkspace 直接拒),这里只是不让人白填一遍表单。 */
+  const isPersonalTenant = session.tenant?.tenantType !== "organization";
+  const createPlanned = !isPersonalTenant;
 
   const [rows, setRows] = useState<ConsoleWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -383,14 +395,22 @@ export function WorkspacesPage() {
         title={t("title")}
         description={t("description")}
         action={
-          canManage ? (
+          canManage && !isPersonalTenant ? (
+            /* 组织租户:按钮**留着但按不动**,并写明「功能规划中」——按钮直接消失
+               会让人以为这个能力不存在,而它只是还没开。个人租户那边则连按钮都不给:
+               那不是「还没开」,是不会有。 */
             <Button
               size="md"
-              disabled={busy}
+              disabled={busy || createPlanned}
+              {...(createPlanned ? { title: t("actions.createPlanned") } : {})}
               onClick={() => setForm({ ...EMPTY_FORM })}
             >
               <Icon name="plus" size="xs" fallback="placeholder" />
-              <span>{t("actions.create")}</span>
+              <span>
+                {createPlanned
+                  ? t("actions.createPlannedLabel")
+                  : t("actions.create")}
+              </span>
             </Button>
           ) : undefined
         }
@@ -400,7 +420,13 @@ export function WorkspacesPage() {
         icon="stack"
         level={2}
         title={t("table.title")}
-        description={t("table.description", { count: activeCount })}
+        description={
+          isPersonalTenant
+            ? t("table.personalNote")
+            : createPlanned
+              ? t("table.plannedNote", { count: activeCount })
+              : t("table.description", { count: activeCount })
+        }
       >
         <div className="flex flex-col gap-md">
           {loadFailed ? (

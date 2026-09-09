@@ -3371,7 +3371,9 @@
       "default": "默认",
       "empty": "还没有工作空间",
       "emptyHint": "新建一个工作空间，把订阅与配额分开归属。",
-      "myDefault": "我的"
+      "myDefault": "我的",
+      "plannedNote": "当前有 {count} 个启用中的工作空间。多工作空间功能规划中，后续将按付费开通。",
+      "personalNote": "个人租户只有一个工作空间。要使用多个工作空间，请先在「租户信息」页升为组织租户。"
     },
     "status": {
       "active": "启用中",
@@ -3390,7 +3392,9 @@
       "archiveConsequence": "停用后成员不能再进入这个工作空间。其中的订阅、账单与用量记录不会被删除，随时可以重新启用。",
       "archiveKeep": "不停用",
       "setMyDefault": "设为我的默认",
-      "alreadyMyDefault": "已经是我的默认落点"
+      "alreadyMyDefault": "已经是我的默认落点",
+      "createPlannedLabel": "新建工作空间（规划中）",
+      "createPlanned": "多工作空间功能规划中，后续将按付费开通。"
     },
     "dialog": {
       "createTitle": "新建工作空间",
@@ -3417,7 +3421,9 @@
       "default_locked": "默认工作空间不能停用，请先把默认设到别的工作空间。",
       "last_active": "至少要保留一个启用中的工作空间。",
       "archived": "已停用的工作空间不能设为默认。",
-      "not_empty": "这个工作空间里还有内容，无法完成该操作。"
+      "not_empty": "这个工作空间里还有内容，无法完成该操作。",
+      "personal_single_workspace": "个人租户只有一个工作空间，无法新增。",
+      "planned": "多工作空间功能规划中，后续将按付费开通。"
     }
   },
   "memberWorkspaces": {
