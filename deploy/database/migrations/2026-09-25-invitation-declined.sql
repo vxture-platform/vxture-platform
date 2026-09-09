@@ -34,17 +34,35 @@ begin
 end $$;
 
 -- 自检 2：约束仍然在挡未知状态——放宽一个枚举时最容易顺手把门也卸了。
+--
+-- 探针的外键列取**真实存在的行**，不是随机 uuid：`invitations` 上有
+-- `fk_invitations_created_by` 与复合的 `fk_invitations_role (role_id, role_scope)`。
+-- 用随机 uuid 时这一条也能过，但过的理由是「PG 先评 CHECK、后评 FK」——
+-- 那是评估顺序的巧合，不是判据。真要有人把 CHECK 拆了，探针会撞上 FK 抛
+-- foreign_key_violation，而下面只接 check_violation，于是迁移以一个
+-- 看不懂的错误失败，而不是那句「约束失效」。
 do $$
+declare
+  v_role  uuid;
+  v_scope text;
+  v_user  uuid;
 begin
+  select id, scope into v_role, v_scope from access.roles limit 1;
+  select id into v_user from account.users limit 1;
+  if v_role is null or v_user is null then
+    -- 空库（首次 DDL 之后、seed 之前）没有可用的外键目标：跳过探针而不是假装通过。
+    raise notice '跳过约束探针：access.roles 或 account.users 为空';
+    return;
+  end if;
   begin
     insert into tenancy.invitations
       (scope, target_type, target, role_id, role_scope, status, token_hash, expires_at, created_by)
     values
-      ('org', 'email', 'probe@invalid', gen_random_uuid(), 'tenant',
-       'not_a_real_status', 'probe-' || gen_random_uuid()::text, now(), gen_random_uuid());
+      ('org', 'email', 'probe@invalid', v_role, v_scope,
+       'not_a_real_status', 'probe-' || gen_random_uuid()::text, now(), v_user);
     raise exception '约束失效：未知状态被写进去了';
   exception
-    when check_violation then null;  -- 期望走到这里
+    when check_violation then null;  -- 期望走到这里：唯一能挡住它的只剩 CHECK
   end;
 end $$;
 
