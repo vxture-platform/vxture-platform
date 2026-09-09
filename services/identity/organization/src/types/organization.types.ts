@@ -432,6 +432,18 @@ export type DeclineInvitationResult =
   | { ok: true }
   | { ok: false; reason: AcceptInvitationRejection };
 
+/**
+ * 组织租户能不能建第二个工作空间(owner 2026-09-10)。
+ *
+ * 设计上允许多个,但**功能还在规划中**,后续按付费开通。开关放在这一处,
+ * 两份仓储(pg / mock)共用——各写一份迟早会有一份先翻开,那时 mock 与真库
+ * 的行为就分叉了,而分叉出来的症状是「测试全绿、线上不对」。
+ *
+ * 常量而不是环境变量:这不是部署差异,是产品阶段。用环境变量会让
+ * 「哪个环境开着」变成一个要去查的问题。将来接付费只改这一行。
+ */
+export const ALLOW_MULTI_WORKSPACE = false;
+
 export type InvitationLocator = { token: string } | { invitationId: string };
 
 export type AcceptInvitationResult =

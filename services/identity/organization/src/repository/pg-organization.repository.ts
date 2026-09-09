@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { ORG_PG_POOL } from "../tokens";
 import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
+import { ALLOW_MULTI_WORKSPACE } from "../types/organization.types";
 import type {
   AcceptInvitationResult,
   CloseTenantResult,
@@ -145,18 +146,6 @@ const DEFAULT_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * invitations), with governance RBAC via access.roles/permissions and member
  * joins to account.users. Mirrors the @vxture/service-account pg-repository convention.
  */
-/**
- * 组织租户能不能建第二个工作空间。
- *
- * owner 2026-09-10:设计上允许,但**功能还在规划中**,后续按付费开通。开关放在这里
- * 而不是散在各处 if 里——将来接上付费时只有这一处要改,而且改的时候一眼看得见
- * 它挡的是什么。
- *
- * 常量而不是环境变量:这不是部署差异,是产品阶段。用环境变量会让「哪个环境开着」
- * 变成一个要去查的问题。
- */
-const ALLOW_MULTI_WORKSPACE = false;
-
 /** 邀请 ID 的形状门。见 acceptInvitation 里的说明。 */
 const ACCEPT_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

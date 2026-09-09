@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
+import { ALLOW_MULTI_WORKSPACE } from "../types/organization.types";
 import type {
   AcceptInvitationResult,
   CreateInvitationInput,
@@ -891,7 +892,12 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
         reason: "personal_single_workspace" as const,
       };
     }
-    return { ok: false as const, reason: "planned" as const };
+    /* 与 pg 那份同一个常量,不是硬编码 `return`——直接 return 会让下面整段变成
+       **永远执行不到的代码**(SonarCloud 的可靠性评级如期抓到了它:C,真 bug 不是误报),
+       而且将来翻开闸门时这一份不会跟着活。 */
+    if (!ALLOW_MULTI_WORKSPACE) {
+      return { ok: false as const, reason: "planned" as const };
+    }
 
     const taken = [...this.workspaces.values()].some(
       (w) =>
