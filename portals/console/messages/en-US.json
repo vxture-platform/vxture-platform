@@ -1975,7 +1975,6 @@
       "colUsed": "Used",
       "colShare": "Of total",
       "colObserved": "Reported at",
-      "totalLine": "Total {limit} · {remaining}",
       "emptySources": "No storage grants yet",
       "colItem": "Item",
       "usageOnly": "Product usage"

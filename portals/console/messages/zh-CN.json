@@ -1975,7 +1975,6 @@
       "colUsed": "已用",
       "colShare": "占总额度",
       "colObserved": "上报时间",
-      "totalLine": "合计额度 {limit} · {remaining}",
       "emptySources": "暂无存储额度来源",
       "colItem": "项目",
       "usageOnly": "产品用量"

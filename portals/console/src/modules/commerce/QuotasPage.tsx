@@ -698,29 +698,20 @@ export function QuotasPage() {
               <EmptyState title={t("storage.emptySources")} />
             )
           }
+          /* 表尾只放翻页,与本页另外两张表一致。
+             此前这里还裹了一行「合计额度 X · 剩余 Y」——**它和上面的指标卡说的是
+             同一件事**(owner 2026-09-09),同一个数在一屏里出现两次,读的人要停下来
+             确认它们是不是一回事。而且那一层 `justify-between` 的包裹把翻页推到了
+             左边,与另两张表的右对齐不一致。 */
           footer={
-            <span className="flex flex-wrap items-center justify-between gap-sm">
-              {/* 合计行留在表尾左侧:它是这张表的读数,不是翻页控件的一部分。 */}
-              <span className="tabular-nums text-body-sm text-muted-foreground">
-                {overview
-                  ? t("storage.totalLine", {
-                      limit: formatBytes(overview.storage.limitBytes),
-                      remaining: remainText(
-                        overview.storage.remainingBytes,
-                        formatBytes,
-                      ),
-                    })
-                  : "—"}
-              </span>
-              <ListPagination
-                page={storagePage}
-                pageCount={storagePageCount}
-                total={loadFailed ? 0 : storageRows.length}
-                pageSize={storagePageSize}
-                onPageSizeChange={setStoragePageSize}
-                onPageChange={setStoragePage}
-              />
-            </span>
+            <ListPagination
+              page={storagePage}
+              pageCount={storagePageCount}
+              total={loadFailed ? 0 : storageRows.length}
+              pageSize={storagePageSize}
+              onPageSizeChange={setStoragePageSize}
+              onPageChange={setStoragePage}
+            />
           }
         />
       </PageSection>
