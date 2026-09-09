@@ -15,7 +15,7 @@
   "devDependencies": {
     "@types/pg": "^8.11.11",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.0.0"

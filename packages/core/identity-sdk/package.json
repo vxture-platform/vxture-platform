@@ -36,11 +36,11 @@
     }
   },
   "devDependencies": {
-    "next": "^15.5.21",
+    "next": "^15.5.25",
     "rimraf": "^6.0.1",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.0.0"
