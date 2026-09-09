@@ -133,9 +133,12 @@ BEGIN
   SELECT count(*) INTO n_api  FROM access.permissions WHERE perm_type = 'api' AND parent_id IS NOT NULL;
   SELECT count(*) INTO n_orphan FROM access.permissions WHERE perm_type = 'api' AND parent_id IS NULL;
   SELECT count(*) INTO n_grants FROM access.role_permissions rp JOIN access.roles r ON r.id = rp.role_id WHERE r.scope = 'tenant';
-  IF n_menu <> 25 THEN
-    RAISE EXCEPTION '[access-console-permission-catalog] expected 25 menu nodes, found %', n_menu;
-  END IF;
+  -- 这里**不做**「全库菜单节点应为 N 个」这类绝对计数断言。
+  -- 2026-09-09 实测:三份迁移各写了一条(25 / 21 / 18),而 `migrate` 是**全量重放**
+  -- ——每份跑在最终状态上,而不是它当年被写下时的那个状态。新增任何一个菜单节点,
+  -- 这三条会一起炸(那天 tenant.menu.skills 就把它们全顶偏了 1)。
+  -- 全局计数也证明不了本迁移做对了什么:它是一张无关状态的快照。
+  -- 本块下面那些**按本迁移职责**写的断言才是判据,它们与全库有多少节点无关。
   RAISE NOTICE '[access-console-permission-catalog] % menu nodes, % api codes parented, % api codes at root, % tenant-role grants',
     n_menu, n_api, n_orphan, n_grants;
 END $$;

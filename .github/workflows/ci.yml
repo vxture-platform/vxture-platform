@@ -290,6 +290,9 @@ jobs:
           pnpm lint:schema-residue
           pnpm lint:seed
           pnpm lint:catalog-domains
+          # 迁移里不得断言「全库某类共 N 个」:migrate 是全量重放,每份跑在最终状态上,
+          # 这种数会随后来的任何一次新增而失效(2026-09-09 三条一起炸,连挂三次生产迁移)
+          pnpm lint:migration-counts
 
       # 租户权限配置体系门控(批 0a):权限目录在 seed / core-utils / console 导航 / 迁移
       # 四处必须逐码一致;console-bff 每条路由必须声明 @Public / @SelfScope /
