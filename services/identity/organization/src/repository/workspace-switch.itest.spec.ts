@@ -201,6 +201,61 @@ describe.runIf(RUN)("工作空间切换的解析（live DB）", () => {
     expect(list[0]!.id).toBe(ws["default"]);
   });
 
+  /**
+   * 改租户角色**不该**动我在各个工作空间里的角色（2026-09-09 回归）。
+   *
+   * 工作空间还只有一个的时候，`updateOrgMemberRole` 把两级一起改是对的：
+   * 代码原注写着「只改租户级会留下谁也解释不了的中间态」。但工作空间变成复数之后，
+   * 那条 UPDATE 的 where 只有 `(tenant_id, user_id)`、**没有工作空间**，于是它会
+   * 把这个人在**每一个**工作空间里的角色一起改掉。
+   *
+   * 够得着的路径：我建了个工作空间（建者拿 workspace-owner）→ 别人把我的租户角色
+   * 改成 member → 我在自己建的那个空间里也变成 member，管不了它了。
+   * 不报错、没有提示，只是权限少了。
+   */
+  it("改租户角色不该覆盖我在其它工作空间里的角色", async () => {
+    // 我在 mine 这个空间里是 owner（模拟「自己建的空间」）。
+    await pool.query(
+      `update tenancy.workspace_memberships m
+          set role_id = r.id
+         from access.roles r
+        where m.workspace_id = $1 and m.user_id = $2
+          and r.scope = 'workspace' and r.role_code = 'owner'`,
+      [ws["mine"], userId],
+    );
+
+    await repo.updateOrgMemberRole(tenantId, userId, "member");
+
+    const after = await pool.query<{ role_code: string }>(
+      `select rr.role_code
+         from tenancy.workspace_memberships m
+         join access.roles rr on rr.id = m.role_id
+        where m.workspace_id = $1 and m.user_id = $2`,
+      [ws["mine"], userId],
+    );
+    // 默认空间跟着租户角色走是既有行为；**别的**空间不该被牵连。
+    expect(after.rows[0]?.role_code).toBe("owner");
+  });
+
+  /**
+   * 正向对照：默认空间**仍然**要跟着租户角色走。
+   *
+   * 上一条只证明「别的空间没被动」，一个「工作空间那半整个不写」的实现同样能过它——
+   * 那就切过头了，会留下代码原注说的「租户里是 manager、工作空间里还是 member」
+   * 那种谁也解释不了的中间态。两条合起来才把范围钉死：**恰好默认那一个**。
+   */
+  it("改租户角色仍然带动默认工作空间（切过头的反向对照）", async () => {
+    await repo.updateOrgMemberRole(tenantId, userId, "manager");
+    const def = await pool.query<{ role_code: string }>(
+      `select rr.role_code
+         from tenancy.workspace_memberships m
+         join access.roles rr on rr.id = m.role_id
+        where m.workspace_id = $1 and m.user_id = $2`,
+      [ws["default"], userId],
+    );
+    expect(def.rows[0]?.role_code).toBe("manager");
+  });
+
   it("切换器清单：换个人看，只剩他自己能进的（这里是一个都没有）", async () => {
     if (strangerId === userId) return; // 库里只有一个账号时跳过
     await joinTenant(tenantId, strangerId);

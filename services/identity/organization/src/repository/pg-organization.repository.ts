@@ -1301,13 +1301,24 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         await client.query("rollback");
         return null;
       }
-      // 工作空间级角色跟着租户级走(同角色码的 workspace 域角色);只改租户级会留下
-      // 「租户里是 manager、工作空间里还是 member」这种谁也解释不了的中间态。
+      /* 工作空间级角色跟着租户级走(同角色码的 workspace 域角色);只改租户级会留下
+         「租户里是 manager、工作空间里还是 member」这种谁也解释不了的中间态。
+
+         **只改默认工作空间**(2026-09-09 修回归)。这条 UPDATE 原来的 where 只有
+         `(tenant_id, user_id)`——工作空间还只有一个时无所谓,变成复数之后它会把这个人
+         在**每一个**工作空间里的角色一起覆盖掉:我建了个空间(建者拿 workspace-owner),
+         别人改了我的租户角色,我在自己建的那个空间里也跟着降级,管不了它了。
+         不报错、没提示,只是权限少了。
+
+         收窄到默认空间,与「加成员」那条(upsertDefaultWorkspaceMembership 也只写
+         默认)同口径:租户级动作只负责租户 + 默认空间,别的空间归它自己的成员管理。 */
       await client.query(
         `update tenancy.workspace_memberships wm
             set role_id = r.id, role_scope = 'workspace', updated_at = now()
-           from access.roles r
+           from access.roles r, tenancy.workspaces w
           where wm.tenant_id = $1 and wm.user_id = $2
+            and w.id = wm.workspace_id
+            and w.is_default and w.deleted_at is null
             and r.scope = 'workspace' and r.role_code = $3`,
         [orgId, userId, role],
       );
