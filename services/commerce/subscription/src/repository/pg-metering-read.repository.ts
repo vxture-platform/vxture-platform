@@ -90,6 +90,7 @@ export class PgMeteringReadRepository {
       expires_at: Date | null;
       platform_kind: string | null;
       grant_reason: string | null;
+      effective_at: Date | null;
     }>(
       `select qp.metric_key, qp.pool_source,
               prod.product_code, prod.product_name,
@@ -105,7 +106,7 @@ export class PgMeteringReadRepository {
                           <> date_trunc('month', now() at time zone 'UTC') then 0
                  else qp.quota_used
                end)::text as effective_used,
-              qp.reset_period, qp.expires_at, qp.grant_reason,
+              qp.reset_period, qp.expires_at, qp.grant_reason, qp.effective_at,
               plm.kind as platform_kind
          from metering.quota_pools qp
          left join product.products prod on prod.id = qp.product_id
@@ -132,6 +133,7 @@ export class PgMeteringReadRepository {
       expiresAt: r.expires_at,
       platformKind: r.platform_kind,
       grantReason: r.grant_reason,
+      effectiveAt: r.effective_at,
     }));
   }
 

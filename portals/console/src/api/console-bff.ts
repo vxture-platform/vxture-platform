@@ -2003,6 +2003,8 @@ export interface ConsoleQuotaPool {
   expiresAt: string | null;
   /** 运营授予的原因（`source = "manual_override"` 才有值） */
   grantReason: string | null;
+  /** 本池生效时刻；与 `expiresAt` 一起才画得出周期进度 */
+  effectiveAt: string | null;
 }
 
 export interface ConsoleStorageSlice {

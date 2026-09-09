@@ -2587,17 +2587,17 @@
       "menuSubscriptionHint": "A subscription is attached only after the order is fulfilled"
     },
     "packs": {
-      "basePriceAndReset": "¥0 / {period} · resets every {period}",
-      "description": "Where this workspace's quota comes from. Quota that came with a subscription is counted under your agents above; these are the other three. Usage lives in Quotas.",
+      "daysLeft": "{days} days left",
+      "description": "What quota this workspace has, where it came from, and how long it lasts. Quota from a subscription is counted under your agents above; usage lives in Quotas.",
       "emptyDescription": "The workspace baseline will appear here once it is provisioned.",
       "emptyTitle": "No resource packs",
-      "expires": "Valid until {date}",
+      "expired": "Expired",
       "loading": "Loading…",
-      "noReset": "Does not reset",
       "period": {
         "day": "day",
         "month": "month"
       },
+      "perpetual": "No expiry",
       "resets": "Resets every {period}",
       "source": {
         "ws_base": "Included by default",

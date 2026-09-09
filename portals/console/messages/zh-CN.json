@@ -2587,17 +2587,17 @@
       "menuSubscriptionHint": "订单履约后才会挂上订阅"
     },
     "packs": {
-      "basePriceAndReset": "¥0 / {period} · 每{period}重置",
-      "description": "这个工作空间的额度从哪来。订阅带来的额度算在上面的智能体里，这里是其余三类。用了多少在配额管理。",
+      "daysLeft": "剩 {days} 天",
+      "description": "这个工作空间有哪些额度、从哪来、管到什么时候。订阅带来的额度算在上面的智能体里。用了多少在配额管理。",
       "emptyDescription": "工作空间的基础额度落库后会出现在这里。",
       "emptyTitle": "暂无资源包",
-      "expires": "有效期至 {date}",
+      "expired": "已到期",
       "loading": "读取中…",
-      "noReset": "不重置",
       "period": {
         "day": "日",
         "month": "月"
       },
+      "perpetual": "长期有效",
       "resets": "每{period}重置",
       "source": {
         "ws_base": "默认自带",
