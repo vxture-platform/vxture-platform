@@ -143,11 +143,15 @@ export class OrderService {
    */
   private async emit(
     label: string,
-    build: () => Promise<CustomerNotifyInput>,
+    build: () => Promise<CustomerNotifyInput | null>,
   ): Promise<void> {
     if (!this.notifier) return;
     try {
-      await this.notifier.notify(await build());
+      /* build 返回 null = 展示数据取不到(订单被并发删了之类),不发也不报错。
+         与 subscription.service 的 emit 同形——两个服务的这条纪律不该有两种写法。 */
+      const input = await build();
+      if (!input) return;
+      await this.notifier.notify(input);
     } catch (err) {
       this.logger.warn(`notify ${label} failed — ${String(err)}`);
     }
@@ -425,7 +429,39 @@ export class OrderService {
       },
     );
 
-    if ("done" in settled && settled.done) return settled.done;
+    if ("done" in settled && settled.done) {
+      /* 只有「已申报、等人工核对」这一档发通知(owner 2026-09-09:「付费…都有操作」)。
+         另外两档不发:already_settled 是重复提交(什么也没发生),而 activated /
+         activating 那条路继续往下走,由 fulfill 发 order.fulfilled——
+         在这里再发一条等于同一件事说两遍。
+
+         发在事务**之后**:事务里发,回滚了消息还留着。 */
+      if (settled.done.outcome === "declared") {
+        const cashDue = settled.done.cashDue;
+        await this.emit(`payment_declared ${input.orderId}`, async () => {
+          const order = await this.orders.getById(input.orderId);
+          if (!order) return null;
+          const display = await this.orders.getPlanDisplay(order.planVersionId);
+          return {
+            tenantId: order.tenantId,
+            templateCode: "order.payment_declared",
+            reference: { type: "order", id: order.id },
+            params: {
+              orderNo: order.orderNo,
+              productName: display.productName,
+              planName: display.planName,
+              amount: formatNotifyMoney(cashDue, order.currency),
+            },
+            recipients: customerRecipients(
+              order.createdByType,
+              order.createdById,
+            ),
+            link: `/subscribe/pay/${order.id}`,
+          };
+        });
+      }
+      return settled.done;
+    }
 
     // cashDue=0：资金已提交，履约作为独立事务（崩溃窗口由 reconcile 兜底）。
     try {
@@ -904,12 +940,39 @@ export class OrderService {
     return this.orders.listRefunds(status);
   }
 
+  /**
+   * 取消 / 逾期关闭。两态**同一条路**,只是 kind 不同,所以通知也在这一处发。
+   *
+   * owner 2026-09-09:「订单取消…都有操作」——此前这两条终态一句话都不发,
+   * 客户只能自己去订单页发现它没了。
+   *
+   * 通知在业务写**之后**:cancelOrder 抛异常就不该发「已取消」。
+   */
   async cancel(
     orderId: string,
     actor: OrderActor,
     kind: "cancelled" | "expired" = "cancelled",
   ): Promise<OrderRecord> {
-    return this.orders.cancelOrder(orderId, actor, kind);
+    const cancelled = await this.orders.cancelOrder(orderId, actor, kind);
+    await this.emit(`${kind} ${cancelled.orderNo}`, async () => {
+      const display = await this.orders.getPlanDisplay(cancelled.planVersionId);
+      return {
+        tenantId: cancelled.tenantId,
+        templateCode: kind === "expired" ? "order.expired" : "order.cancelled",
+        reference: { type: "order", id: cancelled.id },
+        params: {
+          orderNo: cancelled.orderNo,
+          productName: display.productName,
+          planName: display.planName,
+        },
+        recipients: customerRecipients(
+          cancelled.createdByType,
+          cancelled.createdById,
+        ),
+        link: "/subscription",
+      };
+    });
+    return cancelled;
   }
 
   async restore(orderId: string, actor: OrderActor): Promise<OrderRecord> {

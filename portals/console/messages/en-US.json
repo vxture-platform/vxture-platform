@@ -1015,6 +1015,12 @@
         "announcement": {
           "title": "Announcements"
         },
+        "order_status": {
+          "title": "Order status"
+        },
+        "tenant_change": {
+          "title": "Tenant changes"
+        },
         "security": {
           "title": "Security alerts"
         },

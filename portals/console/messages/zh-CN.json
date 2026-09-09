@@ -1015,6 +1015,12 @@
         "announcement": {
           "title": "平台公告"
         },
+        "order_status": {
+          "title": "订单状态"
+        },
+        "tenant_change": {
+          "title": "租户变更"
+        },
         "security": {
           "title": "安全提醒"
         },

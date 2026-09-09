@@ -19,14 +19,23 @@ export type NotificationTemplateCode =
   | "refund.rejected"
   | "refund.completed"
   | "announcement.published"
-  | "tenant.invitation";
+  | "tenant.invitation"
+  /* owner 2026-09-09:「我订阅了产品，付费，放弃付费，订单取消，都有操作…
+     如果没有，那就是发消息方有纰漏」。下面四条补的就是那几处——每一条都对应一个
+     **已经在跑的方法**（declarePayment / cancel / cancel(kind=expired) /
+     convertPersonalToOrganization），只是此前一句话都不发。 */
+  | "order.payment_declared"
+  | "order.cancelled"
+  | "order.expired"
+  | "tenant.converted";
 
 export type NotificationReferenceType =
   | "subscription"
   | "order"
   | "refund"
   | "announcement"
-  | "invitation";
+  | "invitation"
+  | "tenant";
 
 /**
  * 偏好主题（与 @vxture/service-account NOTIFICATION_TOPICS 同一集合）。
@@ -41,7 +50,9 @@ export type NotificationTopic =
   | "payment_due"
   | "refund_progress"
   | "announcement"
-  | "member_invitation";
+  | "member_invitation"
+  | "order_status"
+  | "tenant_change";
 
 export type NotificationLocale = "zh-CN" | "en-US";
 
@@ -63,6 +74,10 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "refund.completed": "退款已完成：订单 {{orderNo}}",
   "announcement.published": "{{title}}",
   "tenant.invitation": "{{tenantName}} 邀请你加入",
+  "order.payment_declared": "已收到你的付款信息：订单 {{orderNo}}",
+  "order.cancelled": "订单已取消：{{orderNo}}",
+  "order.expired": "订单已关闭：{{orderNo}}",
+  "tenant.converted": "{{tenantName}} 已升为组织租户",
 };
 
 const BODIES_ZH: Record<NotificationTemplateCode, string> = {
@@ -85,6 +100,16 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
      这条消息的意义就是那个决定还没做。 */
   "tenant.invitation":
     "{{inviterName}} 邀请你以「{{roleName}}」身份加入 {{tenantName}}，{{expiresAt}} 前有效。",
+  /* 只说机制，不做承诺：核对要多久由人工决定，写「很快」就是替他们许诺。 */
+  "order.payment_declared":
+    "金额 {{amount}}。我们会核对到账情况，确认后订单自动开通；在此之前订单保持待确认。",
+  "order.cancelled": "订单 {{orderNo}}（{{productName}}）已取消，未产生费用。",
+  /* 「放弃付费」的机制面：付款窗口到点，订单自己关。不写「你放弃了」——
+     人可能只是没看到，说他放弃是在替他下结论。 */
+  "order.expired":
+    "付款窗口已过，订单 {{orderNo}}（{{productName}}）自动关闭，未产生费用。需要的话可以重新下单。",
+  "tenant.converted":
+    "{{tenantName}} 已从个人租户升为组织租户，现在可以邀请成员、按角色分配权限。原有订阅与用量记录不变。",
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -101,6 +126,10 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "refund.completed": "Refund completed: order {{orderNo}}",
   "announcement.published": "{{title}}",
   "tenant.invitation": "{{tenantName}} invited you to join",
+  "order.payment_declared": "Payment details received: order {{orderNo}}",
+  "order.cancelled": "Order cancelled: {{orderNo}}",
+  "order.expired": "Order closed: {{orderNo}}",
+  "tenant.converted": "{{tenantName}} is now an organization tenant",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -123,6 +152,14 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
   "announcement.published": "{{content}}",
   "tenant.invitation":
     "{{inviterName}} invited you to join {{tenantName}} as {{roleName}}. The invitation is valid until {{expiresAt}}.",
+  "order.payment_declared":
+    "Amount {{amount}}. We will check the payment against our records; the order activates once confirmed and stays pending until then.",
+  "order.cancelled":
+    "Order {{orderNo}} ({{productName}}) has been cancelled. Nothing was charged.",
+  "order.expired":
+    "The payment window has passed, so order {{orderNo}} ({{productName}}) closed automatically. Nothing was charged. You can place a new order whenever you need it.",
+  "tenant.converted":
+    "{{tenantName}} has been upgraded from a personal tenant to an organization tenant. You can now invite members and assign permissions by role. Existing subscriptions and usage records are unchanged.",
 };
 
 const FOOTER: Record<NotificationLocale, string> = {
@@ -164,6 +201,13 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "refund.completed": "refund_progress",
   "announcement.published": "announcement",
   "tenant.invitation": "member_invitation",
+  /* 三条订单生命周期事件同一个主题:它们回答的是同一个问题——「我那个订单最后
+     怎么样了」。不塞进 payment_due(那是「有单要付」)或 provision_result
+     (那是「开通了吗」):主题要贴着用户关心的那件事切,不贴模板键的前缀。 */
+  "order.payment_declared": "order_status",
+  "order.cancelled": "order_status",
+  "order.expired": "order_status",
+  "tenant.converted": "tenant_change",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {

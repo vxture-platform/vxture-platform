@@ -814,3 +814,67 @@ describe("OrderService sweeps", () => {
     expect(subscriptions.createSubscription).toHaveBeenCalledTimes(3);
   });
 });
+
+/**
+ * 订单终态的通知（owner 2026-09-09：「订单取消…都有操作，如果没有，那就是发消息方
+ * 有纰漏」）。取消与逾期关闭此前一句话都不发，客户只能自己去订单页发现它没了。
+ *
+ * 这一组钉的是**发没发、发的是哪个模板**，不是文案内容——文案在 templates.ts，
+ * 那边另有自己的验收。两态走同一个方法（cancel 的 kind 参数），所以最容易错的
+ * 恰恰是「两态发成同一个模板」，下面两条互为对照。
+ */
+describe("订单取消 / 逾期的通知", () => {
+  function withNotifier(orderRow = order({ status: "pending_payment" })) {
+    const built = build(orderRow, null);
+    built.orders.getPlanDisplay = vi.fn(async () => ({
+      productName: "Arda",
+      planName: "Pro",
+    }));
+    const notify = vi.fn(async () => undefined);
+    built.service.setCustomerNotifier({ notify });
+    return { ...built, notify };
+  }
+
+  it("取消 → 发 order.cancelled", async () => {
+    const { service, notify } = withNotifier();
+    await service.cancel("ord-1", { actorType: "customer", actorId: "u-1" });
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0]![0]).toMatchObject({
+      templateCode: "order.cancelled",
+      reference: { type: "order", id: "ord-1" },
+    });
+  });
+
+  it("逾期关闭 → 发 order.expired（与取消是两个模板）", async () => {
+    const { service, notify } = withNotifier();
+    await service.cancel(
+      "ord-1",
+      { actorType: "system", actorId: null },
+      "expired",
+    );
+    expect(notify.mock.calls[0]![0]).toMatchObject({
+      templateCode: "order.expired",
+    });
+  });
+
+  /* 业务写失败就不该发「已取消」——通知是对既成事实的陈述，不是对意图的。 */
+  it("cancelOrder 抛异常 → 一条都不发", async () => {
+    const { service, orders, notify } = withNotifier();
+    orders.cancelOrder.mockRejectedValueOnce(new Error("boom"));
+    await expect(
+      service.cancel("ord-1", { actorType: "customer", actorId: "u-1" }),
+    ).rejects.toThrow();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  /* 通知失败不该把业务动作也带倒（best-effort，与既有几处同一纪律）。 */
+  it("通知抛异常 → 取消照样成功", async () => {
+    const { service, notify } = withNotifier();
+    notify.mockRejectedValueOnce(new Error("smtp down"));
+    const result = await service.cancel("ord-1", {
+      actorType: "customer",
+      actorId: "u-1",
+    });
+    expect(result.status).toBe("cancelled");
+  });
+});

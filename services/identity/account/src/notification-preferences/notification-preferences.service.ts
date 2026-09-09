@@ -28,7 +28,7 @@ import { ACCOUNT_PG_POOL } from "../tokens";
  * `security` / `usage` 三个没有任何模板会落到它们头上（见 dispatch 的 `topicOf`），
  * 客户勾了等于没勾——页面在说假话。
  *
- * 现在 11 个主题，前 5 个有模板已经在发，后 6 个的**事件源都已存在**（各自的状态机
+ * 现在 13 个主题，前 7 个有模板已经在发，后 6 个的**事件源都已存在**（各自的状态机
  * 或 webhook 事件类型跑着），只是通知模板还没接：这些在界面上挂「开发中」标并**禁用
  * 三个渠道开关**，不给假开关。
  *
@@ -41,6 +41,11 @@ export const NOTIFICATION_TOPICS = [
   "payment_due", // order.renewal_created
   "refund_progress", // refund.requested / approved / rejected / completed
   "announcement", // announcement.published
+  // owner 2026-09-09:补上「订单最后怎么样了」与「租户升为组织」两类。
+  // 三条订单事件同一个主题——它们回答同一个问题;不塞进 payment_due(「有单要付」)
+  // 或 provision_result(「开通了吗」),那会让那两个开关名不副实。
+  "order_status", // order.payment_declared / cancelled / expired
+  "tenant_change", // tenant.converted
   // ── 事件源已存在、模板待接（界面标「开发中」）────────────────────────────
   "security", // 站内强制锁定；异地登录/凭据变更等
   "invoice_progress", // billing.invoice_receipts 六态
@@ -110,6 +115,10 @@ const TOPIC_DEFAULT_OVERRIDES: Partial<
   provision_result: { email: true },
   payment_due: { email: true },
   refund_progress: { email: true },
+  /* 与前端 DEFAULT_NOTIFICATION_STATE 同源:两者都是事务性——错过了会误判自己的
+     订单或权限状态——邮件默认开、可关。 */
+  order_status: { email: true },
+  tenant_change: { email: true },
 };
 
 function defaults(): NotificationPreferences {

@@ -37,13 +37,18 @@ describe("通知偏好规整", () => {
       expect(Object.keys(prefs[topic]).sort()).toEqual(
         [...NOTIFICATION_CHANNELS].sort(),
       );
-      // 默认开外发通道等于替用户同意打扰——事务性的四个除外（错过了会有实际损失）。
+      // 默认开外发通道等于替用户同意打扰——事务性的那几个除外（错过了会有实际损失）。
+      // 2026-09-09 从四个变六个：订单最后怎么样了、租户升组织，错过同样会误判自己
+      // 的订单或权限状态。这张名单**手写、不引服务端的表**：引过来就成了「拿被测的
+      // 那份去证明它自己」，改错了两边一起错，测不出来。
       const transactional = (
         [
           "subscription_expiry",
           "provision_result",
           "payment_due",
           "refund_progress",
+          "order_status",
+          "tenant_change",
         ] as readonly string[]
       ).includes(topic);
       expect(prefs[topic].email).toBe(transactional);
