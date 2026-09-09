@@ -618,10 +618,40 @@ export async function createMember(payload: {
  *
  * 只给该给的那一项：两个都给会让后端的分叉判据（给了哪一个）多出一种歧义。
  */
+/** 按用户号查到的人。**联系方式已在服务端遮蔽**,前端拿到的就是遮蔽后的串。 */
+export interface UserLookupResult {
+  found: boolean;
+  userNo?: string;
+  name?: string | null;
+  maskedEmail?: string | null;
+  maskedPhone?: string | null;
+  /** 已在本租户里 —— 不需要邀请,前端据此把按钮收掉。 */
+  alreadyMember?: boolean;
+}
+
+/**
+ * 按用户号查人(邀请前确认「是不是这个人」)。
+ *
+ * 查不到时返回 `{ found: false }` 而**不是抛错**:没查到是一次正常的查询结果,
+ * 不是故障。抛错会让「号打错了」和「服务挂了」在界面上长一个样。
+ */
+export async function lookupUserByNo(
+  userNo: string,
+): Promise<UserLookupResult> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/users/by-no/${encodeURIComponent(userNo)}`)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+  return (await response.json()) as UserLookupResult;
+}
+
 export async function inviteMember(payload: {
   email?: string;
   userNo?: string;
   roleCode?: string | null;
+  /** 邀请进哪个工作空间。**必填**(owner 2026-09-10);服务端也判。 */
+  workspaceId?: string | null;
 }): Promise<InviteMemberResult> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/members/invite")}`,

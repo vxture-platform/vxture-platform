@@ -169,9 +169,18 @@ export interface UserReadRepository {
    * 哪个账号、是谁」，不带凭据也不带联系方式——输入一个号就能读到对方邮箱手机号
    * 是另一种泄露。号不合形状或查不到，一律 null。
    */
-  findUserByUserNo(
-    userNo: string,
-  ): Promise<{ id: string; userNo: string; name: string | null } | null>;
+  /**
+   * 按用户号查人。联系方式一并返回,但**调用方必须遮蔽后再对外**:
+   * 这是个用户枚举面,裸给邮箱手机号等于把通讯录交出去。
+   */
+  findUserByUserNo(userNo: string): Promise<{
+    id: string;
+    userNo: string;
+    name: string | null;
+    account: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null>;
   findCredentialById(userId: string): Promise<UserCredentialRecord | null>;
   setPassword(userId: string, passwordHash: string): Promise<void>;
   /** Update mutable profile fields (name/email/bio/timezone/language); returns the updated view or null. */

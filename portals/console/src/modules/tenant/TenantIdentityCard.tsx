@@ -222,18 +222,7 @@ export function TenantIdentityCard({
         />
       </div>
 
-      <div className="flex items-center justify-end gap-xs px-md pb-xs pt-sm">
-        {/* 「管理 →」(owner 2026-09-10):工作空间不进侧栏,入口收在这里——
-            这块清单本来就画着,只是点不动,看得见与管得了到此接上。
-
-            **所有人都显示**:`/workspaces` 对普通成员是有用的只读视图(看自己在哪些
-            空间、设自己的默认落点),按权限藏入口反而让他找不到那个动作。
-            收敛发生在页面里:建 / 改 / 停用各自按 `tenant.workspace.manage` 收,
-            没权限的人整列动作菜单不出现。 */}
-        <Button variant="ghost" size="sm" onClick={onManageWorkspaces}>
-          <span>{t("workspaces.manage")}</span>
-          <Icon name="arrow-right" size="xs" fallback="placeholder" />
-        </Button>
+      <div className="flex justify-end px-md pb-xs pt-sm">
         <Button
           variant="ghost"
           size="sm"
@@ -277,6 +266,25 @@ export function TenantIdentityCard({
                   kind="workspace"
                   className="text-body-sm text-muted-foreground"
                 />
+                {/* 「管理 →」(owner 2026-09-10):**展开后、与工作空间同行、居右**。
+                    起初放在折叠按钮旁边——那是收起状态下的一行控件,与它要管的东西
+                    隔着一层,读起来像卡片的操作而不是这个工作空间的。
+
+                    `ml-auto` 把它推到行尾:行是 flex-wrap 的,窄屏折行时它跟着走,
+                    不会脱出这一行的语境。
+
+                    **所有人都显示**:`/workspaces` 对普通成员是有用的只读视图
+                    (看自己在哪些空间、设自己的默认落点),按权限藏入口反而让他
+                    找不到那个动作。收敛在页面里按项做。 */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={onManageWorkspaces}
+                >
+                  <span>{t("workspaces.manage")}</span>
+                  <Icon name="arrow-right" size="xs" fallback="placeholder" />
+                </Button>
               </li>
             ))}
             {workspaces.length === 0 ? (

@@ -161,6 +161,18 @@ export type WorkspaceRejection =
   | "last_active"
   /** 目标已停用:停用的不能设为默认(会把所有人登录后送进一个停用的空间)。 */
   | "archived"
+  /**
+   * 个人租户只能有一个工作空间(owner 2026-09-10)。
+   * 与 `planned` 分开:这是**结构性**的,不会因为将来开放付费就变——
+   * 个人租户只有你自己,第二个空间没有意义。
+   */
+  | "personal_single_workspace"
+  /**
+   * 组织租户可以有多个,但**这个功能还在规划中**(owner 2026-09-10:后续按付费开通)。
+   * 与 `personal_single_workspace` 分开:这一条是**暂时**的,文案也不一样——
+   * 「以后会有」和「这里不会有」不该说成同一句话。
+   */
+  | "planned"
   | "not_empty";
 
 /** Tenant (organization) profile — display/contact/localization (§3.2/3.3/3.6). */
@@ -419,6 +431,18 @@ export interface IncomingInvitation {
 export type DeclineInvitationResult =
   | { ok: true }
   | { ok: false; reason: AcceptInvitationRejection };
+
+/**
+ * 组织租户能不能建第二个工作空间(owner 2026-09-10)。
+ *
+ * 设计上允许多个,但**功能还在规划中**,后续按付费开通。开关放在这一处,
+ * 两份仓储(pg / mock)共用——各写一份迟早会有一份先翻开,那时 mock 与真库
+ * 的行为就分叉了,而分叉出来的症状是「测试全绿、线上不对」。
+ *
+ * 常量而不是环境变量:这不是部署差异,是产品阶段。用环境变量会让
+ * 「哪个环境开着」变成一个要去查的问题。将来接付费只改这一行。
+ */
+export const ALLOW_MULTI_WORKSPACE = false;
 
 export type InvitationLocator = { token: string } | { invitationId: string };
 

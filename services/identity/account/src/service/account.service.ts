@@ -126,9 +126,14 @@ export class AccountService {
    * 按**平台用户号**找人（按 ID 邀请用）。与 `findUserByIdentifier` 刻意分开：
    * 那一个是登录凭据查询，把用户号加进去等于让一个**公开的可视码**变成登录标识。
    */
-  findUserByUserNo(
-    userNo: string,
-  ): Promise<{ id: string; userNo: string; name: string | null } | null> {
+  findUserByUserNo(userNo: string): Promise<{
+    id: string;
+    userNo: string;
+    name: string | null;
+    account: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null> {
     return this.users.findUserByUserNo(userNo);
   }
 

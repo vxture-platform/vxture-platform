@@ -752,7 +752,10 @@
         "userNoHint": "The recipient must already have a platform account. No email is sent — the invitation appears in their inbox and takes effect once they accept it.",
         "role": "Role",
         "defaultRole": "Default member",
-        "nextPassword": "New temporary password"
+        "nextPassword": "New temporary password",
+        "workspace": "Workspace",
+        "workspacePlaceholder": "Select a workspace",
+        "rolePlaceholder": "Select a role"
       },
       "actions": {
         "cancel": "Cancel",
@@ -760,7 +763,9 @@
         "sendInvite": "Send invite",
         "save": "Save",
         "resetPassword": "Reset password",
-        "unlink": "Unlink"
+        "unlink": "Unlink",
+        "lookup": "Look up",
+        "looking": "Looking up"
       },
       "revokeInvite": {
         "verb": "Revoke the invitation to",
@@ -770,6 +775,13 @@
       "channel": {
         "email": "Email",
         "userNo": "User ID"
+      },
+      "targetTenant": "Joining tenant: {tenant}",
+      "lookup": {
+        "noName": "No display name",
+        "noContact": "No contact on file",
+        "notFound": "No account matches that user ID. Check it with them and try again.",
+        "alreadyMember": "Already in this tenant"
       }
     },
     "feedback": {
@@ -801,7 +813,8 @@
       "resendError": "Could not resend the invitation. Try again later.",
       "revokeError": "Could not revoke the invitation. Try again later.",
       "bulkPartial": "{done} done, {failed} failed.",
-      "bulkSkipped": "The owner and yourself were skipped."
+      "bulkSkipped": "The owner and yourself were skipped.",
+      "lookupFailed": "Lookup failed. Please try again."
     },
     "hints": {
       "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
@@ -816,7 +829,12 @@
       "account_not_found": "No Vxture account uses this email; send an invitation instead.",
       "already_member": "This account is already a member of the tenant.",
       "invitation_pending": "This email already has a pending invitation; resend or revoke it on the Invitations page.",
-      "invalid_email": "The email address is not valid."
+      "invalid_email": "The email address is not valid.",
+      "workspace_required": "Select the workspace they will join.",
+      "role_required": "Select a role.",
+      "lookup_required": "Look the person up and confirm before sending the invitation.",
+      "workspace_not_found": "That workspace is not available. Pick another one.",
+      "personal_tenant_no_members": "A personal tenant only has you; members cannot be invited or created."
     }
   },
   "metric": {
@@ -2288,8 +2306,8 @@
     },
     "items": {
       "overview": {
-        "label": "Data Overview",
-        "description": "Tenant status, subscription expiry, usage, and quick entries"
+        "label": "Overview",
+        "description": "What needs you, and what you have"
       },
       "todos": {
         "label": "Todo Items",
@@ -3353,7 +3371,9 @@
       "default": "Default",
       "empty": "No workspaces yet",
       "emptyHint": "Create a workspace to keep subscriptions and quotas separate.",
-      "myDefault": "Yours"
+      "myDefault": "Yours",
+      "plannedNote": "{count} workspace(s) currently active. Multiple workspaces are planned and will be unlocked as a paid capability.",
+      "personalNote": "A personal tenant has exactly one workspace. To use several, upgrade it to an organization tenant on the Tenant page."
     },
     "status": {
       "active": "Active",
@@ -3372,7 +3392,9 @@
       "archiveConsequence": "Members can no longer enter this workspace. Its subscriptions, invoices and usage records are kept and it can be reactivated at any time.",
       "archiveKeep": "Keep it active",
       "setMyDefault": "Set as my default",
-      "alreadyMyDefault": "Already your default"
+      "alreadyMyDefault": "Already your default",
+      "createPlannedLabel": "New workspace (planned)",
+      "createPlanned": "Multiple workspaces are planned and will be unlocked as a paid capability."
     },
     "dialog": {
       "createTitle": "New workspace",
@@ -3399,7 +3421,9 @@
       "default_locked": "The default workspace cannot be archived. Set another one as default first.",
       "last_active": "At least one workspace must stay active.",
       "archived": "An archived workspace cannot be set as the default.",
-      "not_empty": "This workspace still has content, so the action cannot complete."
+      "not_empty": "This workspace still has content, so the action cannot complete.",
+      "personal_single_workspace": "A personal tenant has exactly one workspace.",
+      "planned": "Multiple workspaces are planned and will be unlocked as a paid capability."
     }
   },
   "memberWorkspaces": {
@@ -3427,5 +3451,12 @@
       "member_not_found": "They are not in this tenant. Add them to the tenant first.",
       "workspace_scope_denied": "You cannot manage members of that workspace."
     }
+  },
+  "access": {
+    "title": "No access",
+    "description": "This page requires {required}. Ask a tenant administrator to grant it to your role.",
+    "back": "Back to overview",
+    "tenantTypeTitle": "Member management is not available here",
+    "tenantTypeDescription": "A personal tenant only has you. To collaborate with others, upgrade it to an organization tenant on the Tenant page."
   }
 }

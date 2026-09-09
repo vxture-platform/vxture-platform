@@ -81,7 +81,77 @@ describe.runIf(RUN)("工作空间写侧（live DB）", () => {
     await pool?.end();
   });
 
-  it("建：名字首尾空白被裁掉，workspace_no 由触发器取到", async () => {
+  /**
+   * 建工作空间的闸门（owner 2026-09-10）。
+   *
+   * 两种租户拒绝的**理由不同，码也不同**——文案跟着码走：
+   *   个人租户 `personal_single_workspace`：**结构性**的，将来开放付费也不会变。
+   *   组织租户 `planned`：**暂时**的，功能还在规划中（后续按付费开通）。
+   *
+   * 合成一个码就说不清了：「以后会有」和「这里不会有」不该是同一句话——
+   * 说错了，个人租户的人会一直等一个永远不会来的功能。
+   */
+  it("闸门：个人租户 → personal_single_workspace（结构性，不是暂时的）", async () => {
+    /* 需要一个**还没有个人租户**的账号:`uq_tenants_one_personal_per_owner`
+       一个人只能有一个个人租户(第一版夹具直接用 userId 插，撞了这条唯一约束——
+       又一条只有连真库才照得出来的规则)。
+
+       第二版改成「找一个现成的、找不到就 return」——那更糟:库里**一个都没有**
+       (每个账号建号时都配了个人租户),于是这条用例从来没真跑过,而静默 return
+       长得和通过一模一样。反向验证时「拆掉个人租户闸门」没红,就是被它骗的。
+
+       现在自己造一个账号,造不出就让它**明着失败**,不假装通过。 */
+    const owner = await pool.query<{ id: string }>(
+      `insert into account.users (user_no, account, phone, phone_verified_at)
+       values (public.new_principal_no(1), 'itest-ws-gate-' || substr(gen_random_uuid()::text, 1, 8),
+               '1' || lpad((floor(random() * 9999999999))::bigint::text, 10, '0'), now())
+       returning id`,
+    );
+    const ownerId = owner.rows[0]!.id;
+
+    const t = await pool.query<{ id: string }>(
+      `insert into tenancy.tenants (name, display_name, type, owner_user_id, status)
+       values ('ITEST 个人租户', 'ITEST', 'personal', $1, 'active') returning id`,
+      [ownerId],
+    );
+    const personalId = t.rows[0]!.id;
+    try {
+      expect(
+        await repo.createWorkspace({
+          tenantId: personalId,
+          name: "ITEST 不该建出来",
+          creatorUserId: ownerId,
+          creatorRoleCode: "owner",
+        }),
+      ).toEqual({ ok: false, reason: "personal_single_workspace" });
+      // 真的一行都没写进去——「返回了拒绝」与「没写」是两件事。
+      const left = await pool.query(
+        `select 1 from tenancy.workspaces where tenant_id = $1`,
+        [personalId],
+      );
+      expect(left.rowCount).toBe(0);
+    } finally {
+      await pool.query(`delete from tenancy.tenants where id = $1`, [
+        personalId,
+      ]);
+      await pool.query(`delete from account.users where id = $1`, [ownerId]);
+    }
+  });
+
+  it("闸门：组织租户 → planned（暂时的，与个人租户那条分开）", async () => {
+    /* 这条用例同时钉住「常量当前是 false」。将来接上付费把它翻成 true 时，
+       这里会红——那正是提醒改它的人：闸门开了，下面那些建工作空间的用例才会跑。 */
+    expect(
+      await repo.createWorkspace({
+        tenantId,
+        name: "ITEST 规划中",
+        creatorUserId: userId,
+        creatorRoleCode: "owner",
+      }),
+    ).toEqual({ ok: false, reason: "planned" });
+  });
+
+  it.skip("建：名字首尾空白被裁掉，workspace_no 由触发器取到", async () => {
     const made = await repo.createWorkspace({
       tenantId,
       name: "  ITEST 空间 A  ",
@@ -100,7 +170,7 @@ describe.runIf(RUN)("工作空间写侧（live DB）", () => {
     expect(made.workspace.isDefault).toBe(false);
   });
 
-  it("建：同租户重名要撞（大小写与首尾空白归一后比）", async () => {
+  it.skip("建：同租户重名要撞（大小写与首尾空白归一后比）", async () => {
     const dup = await repo.createWorkspace({
       tenantId,
       name: "itest 空间 a ",
@@ -110,7 +180,7 @@ describe.runIf(RUN)("工作空间写侧（live DB）", () => {
     expect(dup).toEqual({ ok: false, reason: "name_taken" });
   });
 
-  it("改：说明可以显式清空（不是「没给就不改」）", async () => {
+  it.skip("改：说明可以显式清空（不是「没给就不改」）", async () => {
     const list = await repo.listWorkspaces(tenantId);
     const target = list.find((w) => w.name === "ITEST 空间 A")!;
     expect(target.description).toBe("说明");
@@ -133,14 +203,14 @@ describe.runIf(RUN)("工作空间写侧（live DB）", () => {
     expect(renamed.find((w) => w.id === target.id)!.name).toBe("ITEST 空间 B");
   });
 
-  it("停用：默认的停不掉", async () => {
+  it.skip("停用：默认的停不掉", async () => {
     expect(await repo.archiveWorkspace(tenantId, baseWsId)).toEqual({
       ok: false,
       reason: "default_locked",
     });
   });
 
-  it("停用：非默认的可以停；停用的设不成默认", async () => {
+  it.skip("停用：非默认的可以停；停用的设不成默认", async () => {
     const list = await repo.listWorkspaces(tenantId);
     const other = list.find((w) => w.id !== baseWsId)!;
     expect(await repo.archiveWorkspace(tenantId, other.id)).toEqual({
@@ -164,7 +234,7 @@ describe.runIf(RUN)("工作空间写侧（live DB）", () => {
    * 所以这里用直接 SQL 造出「默认被停用、只剩一个非默认的 active」——
    * 手工修数据或迁移写歪就会是这个形状——再看兜底认不认。
    */
-  it("停用：兜底——只剩一个 active 时停不掉（用直接 SQL 造状态）", async () => {
+  it.skip("停用：兜底——只剩一个 active 时停不掉（用直接 SQL 造状态）", async () => {
     const list = await repo.listWorkspaces(tenantId);
     const other = list.find((w) => w.id !== baseWsId)!;
     await pool.query(
@@ -186,7 +256,7 @@ describe.runIf(RUN)("工作空间写侧（live DB）", () => {
     );
   });
 
-  it("改默认：默认唯一，切过去之后原来那条不再是默认", async () => {
+  it.skip("改默认：默认唯一，切过去之后原来那条不再是默认", async () => {
     const list = await repo.listWorkspaces(tenantId);
     const other = list.find((w) => w.id !== baseWsId)!;
     // 先恢复成 active 才能设为默认。
@@ -205,7 +275,7 @@ describe.runIf(RUN)("工作空间写侧（live DB）", () => {
     expect(defaults[0]!.id).toBe(other.id);
   });
 
-  it("列：不含别的租户的工作空间", async () => {
+  it.skip("列：不含别的租户的工作空间", async () => {
     const list = await repo.listWorkspaces(tenantId);
     expect(list.every((w) => w.organizationId === tenantId)).toBe(true);
     expect(list.map((w) => w.name).sort()).toEqual(

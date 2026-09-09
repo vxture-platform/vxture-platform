@@ -358,7 +358,7 @@
         "trialing": "试用中"
       }
     },
-    "title": "概览",
+    "title": "总览",
     "todos": {
       "title": "需要处理",
       "description": "从订阅、订单、认证等状态推出来的事项。",
@@ -752,7 +752,10 @@
         "userNoHint": "对方必须是已注册的平台用户。不发邮件——邀请会出现在对方的「待办与消息」里，由本人同意后加入。",
         "role": "角色",
         "defaultRole": "默认成员",
-        "nextPassword": "新临时密码"
+        "nextPassword": "新临时密码",
+        "workspace": "工作空间",
+        "workspacePlaceholder": "请选择工作空间",
+        "rolePlaceholder": "请选择角色"
       },
       "actions": {
         "cancel": "取消",
@@ -760,7 +763,9 @@
         "sendInvite": "发送邀请",
         "save": "保存",
         "resetPassword": "确认重置",
-        "unlink": "解除关联"
+        "unlink": "解除关联",
+        "lookup": "查询",
+        "looking": "查询中"
       },
       "revokeInvite": {
         "verb": "撤销给",
@@ -770,6 +775,13 @@
       "channel": {
         "email": "邮箱",
         "userNo": "用户号"
+      },
+      "targetTenant": "将加入租户：{tenant}",
+      "lookup": {
+        "noName": "未设置昵称",
+        "noContact": "未留联系方式",
+        "notFound": "没有找到这个用户号对应的账号。请与对方核对后重试。",
+        "alreadyMember": "已在本租户"
       }
     },
     "feedback": {
@@ -801,7 +813,8 @@
       "resendError": "重发失败,请稍后重试。",
       "revokeError": "撤销失败,请稍后重试。",
       "bulkPartial": "完成 {done} 项,失败 {failed} 项。",
-      "bulkSkipped": "已跳过所有者与本人。"
+      "bulkSkipped": "已跳过所有者与本人。",
+      "lookupFailed": "查询失败，请稍后重试。"
     },
     "hints": {
       "ownerProtected": "所有者不可停用或解除关联,请先转让所有权",
@@ -816,7 +829,12 @@
       "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
       "already_member": "该账号已是本租户成员。",
       "invitation_pending": "该邮箱已有待接受的邀请,请到邀请管理页重发或撤销。",
-      "invalid_email": "邮箱格式不正确。"
+      "invalid_email": "邮箱格式不正确。",
+      "workspace_required": "请选择要加入的工作空间。",
+      "role_required": "请选择角色。",
+      "lookup_required": "请先查询并确认是这个人，再发送邀请。",
+      "workspace_not_found": "这个工作空间不可用，请重新选择。",
+      "personal_tenant_no_members": "个人租户只有你自己，不能邀请或新建成员。"
     }
   },
   "metric": {
@@ -2288,8 +2306,8 @@
     },
     "items": {
       "overview": {
-        "label": "数据总览",
-        "description": "租户状态、订阅到期、用量概览与快捷入口"
+        "label": "总览",
+        "description": "需要处理什么、手里有哪些产品与资源"
       },
       "todos": {
         "label": "待办事项",
@@ -3353,7 +3371,9 @@
       "default": "默认",
       "empty": "还没有工作空间",
       "emptyHint": "新建一个工作空间，把订阅与配额分开归属。",
-      "myDefault": "我的"
+      "myDefault": "我的",
+      "plannedNote": "当前有 {count} 个启用中的工作空间。多工作空间功能规划中，后续将按付费开通。",
+      "personalNote": "个人租户只有一个工作空间。要使用多个工作空间，请先在「租户信息」页升为组织租户。"
     },
     "status": {
       "active": "启用中",
@@ -3372,7 +3392,9 @@
       "archiveConsequence": "停用后成员不能再进入这个工作空间。其中的订阅、账单与用量记录不会被删除，随时可以重新启用。",
       "archiveKeep": "不停用",
       "setMyDefault": "设为我的默认",
-      "alreadyMyDefault": "已经是我的默认落点"
+      "alreadyMyDefault": "已经是我的默认落点",
+      "createPlannedLabel": "新建工作空间（规划中）",
+      "createPlanned": "多工作空间功能规划中，后续将按付费开通。"
     },
     "dialog": {
       "createTitle": "新建工作空间",
@@ -3399,7 +3421,9 @@
       "default_locked": "默认工作空间不能停用，请先把默认设到别的工作空间。",
       "last_active": "至少要保留一个启用中的工作空间。",
       "archived": "已停用的工作空间不能设为默认。",
-      "not_empty": "这个工作空间里还有内容，无法完成该操作。"
+      "not_empty": "这个工作空间里还有内容，无法完成该操作。",
+      "personal_single_workspace": "个人租户只有一个工作空间，无法新增。",
+      "planned": "多工作空间功能规划中，后续将按付费开通。"
     }
   },
   "memberWorkspaces": {
@@ -3427,5 +3451,12 @@
       "member_not_found": "这个人不在本租户里，请先把他加进租户。",
       "workspace_scope_denied": "你没有管理这个工作空间成员的权限。"
     }
+  },
+  "access": {
+    "title": "没有访问权限",
+    "description": "这一页需要 {required} 权限。请联系租户管理员为你的角色开通。",
+    "back": "回到总览",
+    "tenantTypeTitle": "这个租户没有成员管理",
+    "tenantTypeDescription": "个人租户只有你自己。要邀请其他人协作，请先在「租户信息」页把它升为组织租户。"
   }
 }

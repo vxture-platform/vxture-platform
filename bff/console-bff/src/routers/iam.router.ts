@@ -95,6 +95,11 @@ const WORKSPACE_ERRORS: Record<WorkspaceRejection, (reason: string) => Error> =
     last_active: (reason) => new ConflictException(reason),
     archived: (reason) => new ConflictException(reason),
     not_empty: (reason) => new ConflictException(reason),
+    /* 两条建工作空间的闸门(owner 2026-09-10)。都用 409 而不是 403:
+       请求本身没错、权限也没问题,是**当前状态**不允许——个人租户结构上只有一个,
+       组织租户的多空间还在规划中。403 会让人去找管理员要权限,而没有人能给。 */
+    personal_single_workspace: (reason) => new ConflictException(reason),
+    planned: (reason) => new ConflictException(reason),
   };
 
 const ACCEPT_INVITATION_ERRORS: Record<
@@ -856,6 +861,29 @@ export class IamRouter {
     });
 
     return member;
+  }
+
+  /**
+   * 按用户号查人(邀请前确认「是不是这个人」)。
+   *
+   * 门与邀请同一个:只有能邀请的人才查得动——这是个**用户枚举面**(号是 10 位可视码,
+   * 认识规则就能穷举)。返回里联系方式一律遮蔽,查不到只说查不到,不区分
+   * 「没这个号」与「这个号被停用了」。
+   */
+  @RequireCapability("tenant.member.manage")
+  @Get("users/by-no/:userNo")
+  async lookupUserByNo(
+    @Req() req: Request & RequestContext,
+    @Param("userNo") userNo: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.lookupUserByNo(
+      accountId,
+      tenantId,
+      userNo,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    return result;
   }
 
   @RequireCapability("tenant.member.manage")
