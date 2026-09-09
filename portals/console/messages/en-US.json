@@ -2291,6 +2291,10 @@
         "label": "Member Management",
         "description": "Invites, access review, and team membership"
       },
+      "workspaces": {
+        "label": "Workspaces",
+        "description": "Create and manage the workspaces in this tenant"
+      },
       "subscription": {
         "label": "Subscriptions",
         "description": "Subscribed products, renewal alerts, and recommendations"
@@ -3324,5 +3328,65 @@
   "workspacePicker": {
     "defaultWorkspace": "Default workspace",
     "switchFailed": "Tenant switch failed — please retry; the order owner is unchanged"
+  },
+  "workspacesPage": {
+    "title": "Workspaces",
+    "description": "Subscriptions, quotas and usage all belong to a workspace. Archiving does not delete what is inside.",
+    "rowMenu": "Workspace actions",
+    "table": {
+      "title": "Workspaces",
+      "description": "{count} workspace(s) currently active.",
+      "colName": "Name",
+      "colStatus": "Status",
+      "colMembers": "Members",
+      "colDescription": "Description",
+      "colCreatedAt": "Created",
+      "default": "Default",
+      "empty": "No workspaces yet",
+      "emptyHint": "Create a workspace to keep subscriptions and quotas separate."
+    },
+    "status": {
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "actions": {
+      "create": "New workspace",
+      "edit": "Edit",
+      "setDefault": "Set as default",
+      "alreadyDefault": "Already the default workspace",
+      "archivedHint": "An archived workspace cannot be the default",
+      "archive": "Archive",
+      "alreadyArchived": "Already archived",
+      "defaultLockedHint": "The default workspace cannot be archived — set another one as default first",
+      "archiveVerb": "Archive",
+      "archiveConsequence": "Members can no longer enter this workspace. Its subscriptions, invoices and usage records are kept and it can be reactivated at any time.",
+      "archiveKeep": "Keep it active"
+    },
+    "dialog": {
+      "createTitle": "New workspace",
+      "createHint": "You will be its first member.",
+      "editTitle": "Edit workspace",
+      "editHint": "Renaming does not change what belongs to it.",
+      "name": "Name",
+      "descriptionLabel": "Description",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "feedback": {
+      "created": "Workspace created.",
+      "updated": "Saved.",
+      "defaultSet": "Default workspace updated.",
+      "archived": "Workspace archived."
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "nameRequired": "Enter a workspace name.",
+      "not_found": "This workspace no longer exists.",
+      "name_taken": "A workspace with that name already exists.",
+      "default_locked": "The default workspace cannot be archived. Set another one as default first.",
+      "last_active": "At least one workspace must stay active.",
+      "archived": "An archived workspace cannot be set as the default.",
+      "not_empty": "This workspace still has content, so the action cannot complete."
+    }
   }
 }

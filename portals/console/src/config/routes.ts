@@ -13,6 +13,7 @@ const routeLabels = new Map<string, string>([
   ["/personal-tenant", "personalTenant"],
   ["/organization", "organization"],
   ["/members", "members"],
+  ["/workspaces", "workspaces"],
   // 批 9:邀请记录 / 角色管理 / 权限管理都是成员管理的二级页;面包屑最后一节
   // 要有名字,别显示 "invitations" / "roles" / "permissions"
   ["/members/invitations", "membersInvitations"],

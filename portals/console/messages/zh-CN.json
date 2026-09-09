@@ -2291,6 +2291,10 @@
         "label": "成员管理",
         "description": "邀请、访问审查与团队成员管理"
       },
+      "workspaces": {
+        "label": "工作空间",
+        "description": "建立与管理这个租户下的工作空间"
+      },
       "subscription": {
         "label": "订阅管理",
         "description": "已订产品、到期提醒与新品推荐"
@@ -3324,5 +3328,65 @@
   "workspacePicker": {
     "defaultWorkspace": "默认工作区",
     "switchFailed": "切换租户失败，请重试；当前归属未变更"
+  },
+  "workspacesPage": {
+    "title": "工作空间",
+    "description": "订阅、配额与用量都按工作空间归属。停用不会删除其中的数据。",
+    "rowMenu": "工作空间操作",
+    "table": {
+      "title": "工作空间清单",
+      "description": "当前有 {count} 个启用中的工作空间。",
+      "colName": "名称",
+      "colStatus": "状态",
+      "colMembers": "成员数",
+      "colDescription": "说明",
+      "colCreatedAt": "创建时间",
+      "default": "默认",
+      "empty": "还没有工作空间",
+      "emptyHint": "新建一个工作空间，把订阅与配额分开归属。"
+    },
+    "status": {
+      "active": "启用中",
+      "archived": "已停用"
+    },
+    "actions": {
+      "create": "新建工作空间",
+      "edit": "编辑",
+      "setDefault": "设为默认",
+      "alreadyDefault": "已经是默认工作空间",
+      "archivedHint": "已停用的工作空间不能设为默认",
+      "archive": "停用",
+      "alreadyArchived": "已经停用了",
+      "defaultLockedHint": "默认工作空间不能停用，请先把默认设到别的工作空间",
+      "archiveVerb": "停用",
+      "archiveConsequence": "停用后成员不能再进入这个工作空间。其中的订阅、账单与用量记录不会被删除，随时可以重新启用。",
+      "archiveKeep": "不停用"
+    },
+    "dialog": {
+      "createTitle": "新建工作空间",
+      "createHint": "建好后你会成为它的第一个成员。",
+      "editTitle": "编辑工作空间",
+      "editHint": "改名不影响其中的订阅与用量归属。",
+      "name": "名称",
+      "descriptionLabel": "说明",
+      "save": "保存",
+      "cancel": "取消"
+    },
+    "feedback": {
+      "created": "工作空间已创建。",
+      "updated": "已保存。",
+      "defaultSet": "已设为默认工作空间。",
+      "archived": "工作空间已停用。"
+    },
+    "errors": {
+      "generic": "操作失败，请稍后重试。",
+      "nameRequired": "请填写工作空间名称。",
+      "not_found": "这个工作空间不存在或已被删除。",
+      "name_taken": "同名的工作空间已经存在。",
+      "default_locked": "默认工作空间不能停用，请先把默认设到别的工作空间。",
+      "last_active": "至少要保留一个启用中的工作空间。",
+      "archived": "已停用的工作空间不能设为默认。",
+      "not_empty": "这个工作空间里还有内容，无法完成该操作。"
+    }
   }
 }

@@ -338,6 +338,90 @@ export function memberErrorCode(error: unknown): MemberErrorCode | null {
     : null;
 }
 
+/** 一个工作空间。`workspaceNo` 是可视码——界面与地址栏只出现它,不出现 uuid。 */
+export interface ConsoleWorkspace {
+  id: string;
+  workspaceNo: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  isDefault: boolean;
+  status: "active" | "archived";
+  memberCount: number;
+  createdAt: string;
+}
+
+/** 当前租户的工作空间清单(不含已删)。看这张表只要 tenant.member.read。 */
+export async function fetchWorkspaces(): Promise<ConsoleWorkspace[]> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces")}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  return (await response.json()) as ConsoleWorkspace[];
+}
+
+export async function createWorkspace(payload: {
+  name: string;
+  description?: string | null;
+}): Promise<{ id: string; workspaceNo: string; name: string }> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces")}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+  return (await response.json()) as {
+    id: string;
+    workspaceNo: string;
+    name: string;
+  };
+}
+
+/**
+ * 改名 / 改说明。**不给的项不改,给 null 的项清空**——两者是不同的意思,
+ * 所以调用方要么别传这个键,要么显式传 null,不要传空串。
+ */
+export async function updateWorkspace(
+  workspaceId: string,
+  payload: { name?: string; description?: string | null },
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}`)}`,
+    {
+      method: "PUT",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 设为默认(登录后的落点)。停用的设不成默认。 */
+export async function setDefaultWorkspace(workspaceId: string): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/default`)}`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 停用。**不是删**——订阅 / 订单 / 配额池 / 用量都挂着 workspace_id。 */
+export async function archiveWorkspace(workspaceId: string): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/archive`)}`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
 /**
  * 「谁在邀请我」的一条。**自视角**——目标就是本人,所以不含目标串;也不含 token
  * (那是邮件通道的凭证,不从这条读路径出来)。
