@@ -2600,9 +2600,9 @@
       },
       "resets": "每{period}重置",
       "source": {
-        "ws_base": "工作空间自带",
-        "addon_purchase": "单独购买",
-        "manual_override": "平台发放"
+        "ws_base": "自带",
+        "addon_purchase": "已购",
+        "manual_override": "发放"
       },
       "title": "我的资源包"
     },

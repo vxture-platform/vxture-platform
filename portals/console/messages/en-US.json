@@ -2600,9 +2600,9 @@
       },
       "resets": "Resets every {period}",
       "source": {
-        "ws_base": "Included with workspace",
-        "addon_purchase": "Purchased separately",
-        "manual_override": "Issued by platform"
+        "ws_base": "Included",
+        "addon_purchase": "Purchased",
+        "manual_override": "Issued"
       },
       "title": "My resource packs"
     },
