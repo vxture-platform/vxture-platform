@@ -1,7 +1,20 @@
+/**
+ * 新增 / 邀请成员的入参。
+ *
+ * `email` 与 `userNo` **二选一**:邮箱通道发链接(对方可以还没有账号),
+ * 用户号通道站内直邀(目标必须是平台已有账号)。所以 `email` 不是必填——
+ * 此前它写成 `email!: string`,而用户号通道根本不传它,类型在说谎。
+ *
+ * `roleCode` 与 `workspaceId` 在**邀请**时都必填(owner 2026-09-10),
+ * 缺了由 aggregator 报 400;类型上仍可选,因为「加成员」那条路径不问工作空间。
+ */
 export class UpsertMemberDto {
-  email!: string;
+  email?: string;
+  userNo?: string;
   roleId?: string | null;
   roleCode?: string | null;
+  /** 邀请进哪个工作空间(邀请必填;加成员不用)。 */
+  workspaceId?: string | null;
 }
 
 export class UpdateMemberDto {

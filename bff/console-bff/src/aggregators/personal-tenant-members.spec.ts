@@ -115,3 +115,89 @@ describe("个人租户：成员管理的五个写动作一律拒绝", () => {
     expect(org.removeOrgMember).toHaveBeenCalled();
   });
 });
+
+/**
+ * 邀请必选工作空间与角色（owner 2026-09-10）。
+ *
+ * 此前 `roleCode` 缺省成 `"member"`、工作空间根本不问——**两个默认都在替邀请人
+ * 做决定**，而这两件事恰恰是邀请的实质内容：进哪个空间、以什么身份。
+ *
+ * 工作空间还要**回查属不属于这个租户**：前端给的 id 不可信；而且邀请可能躺几天，
+ * 这里不判的话，一条指向别的租户的邀请会一路落库，直到接受时才静默落空——
+ * 那时没有任何人会知道发生过什么。
+ */
+describe("邀请：工作空间与角色都必填", () => {
+  function orgBuild(workspaces: { id: string }[] = [{ id: "ws-1" }]) {
+    const { aggregator, org } = build("organization");
+    Object.assign(aggregator, {
+      /* 邮箱通道会查一次 findUserByIdentifier(看对方有没有账号)——
+         桩不全时它抛 TypeError,表现成「前置没过」,查起来会指错方向。 */
+      account: {
+        getUserById: vi.fn(async () => ({ id: "u-1", email: "a@b.co" })),
+        findUserByIdentifier: vi.fn(async () => null),
+        findUserByUserNo: vi.fn(async () => null),
+      },
+      org: {
+        ...org,
+        getOrgById: vi.fn(async () => ({ id: "org-1", type: "organization" })),
+        listWorkspacesForSwitch: vi.fn(async () => workspaces),
+        getOrgMemberDetail: vi.fn(async () => null),
+        listInvitations: vi.fn(async () => []),
+        createInvitation: vi.fn(async () => ({
+          invitation: {
+            id: "inv-1",
+            expiresAt: new Date(),
+            role: "member",
+          },
+          token: "tok",
+        })),
+      },
+    });
+    return aggregator;
+  }
+
+  it("不给角色 → 400 role_required", async () => {
+    await expect(
+      orgBuild().inviteMember("u-1", "org-1", {
+        email: "x@y.z",
+        workspaceId: "ws-1",
+      } as never),
+    ).rejects.toThrow(/role_required/);
+  });
+
+  it("不给工作空间 → 400 workspace_required", async () => {
+    await expect(
+      orgBuild().inviteMember("u-1", "org-1", {
+        email: "x@y.z",
+        roleCode: "member",
+      } as never),
+    ).rejects.toThrow(/workspace_required/);
+  });
+
+  it("工作空间不属于这个租户 → 400 workspace_not_found", async () => {
+    await expect(
+      orgBuild([{ id: "ws-1" }]).inviteMember("u-1", "org-1", {
+        email: "x@y.z",
+        roleCode: "member",
+        workspaceId: "ws-别的租户的",
+      } as never),
+    ).rejects.toThrow(/workspace_not_found/);
+  });
+
+  /* 正向对照：两项都给、且工作空间站得住时**要走下去**。
+     只有拒绝那三条的话，一个「inviteMember 永远抛」的实现同样能过。 */
+  it("两项都给且工作空间站得住 → 走到创建邀请那一步", async () => {
+    const a = orgBuild([{ id: "ws-1" }]);
+    await a
+      .inviteMember("u-1", "org-1", {
+        email: "x@y.z",
+        roleCode: "member",
+        workspaceId: "ws-1",
+      } as never)
+      .catch(() => undefined); // 后面几步的桩不全，这里只看有没有过掉前置
+    const org = (
+      a as unknown as { org: Record<string, { mock: { calls: unknown[] } }> }
+    ).org;
+    expect(org["createInvitation"]?.mock.calls.length).toBeGreaterThan(0);
+  });
+});

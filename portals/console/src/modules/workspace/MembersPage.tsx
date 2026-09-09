@@ -61,6 +61,9 @@ import {
   fetchTenantRoles,
   inviteMember,
   memberErrorCode,
+  fetchSwitchableWorkspaces,
+  lookupUserByNo,
+  type UserLookupResult,
   resendInvitation,
   resetMemberPassword,
   revokeInvitation,
@@ -73,6 +76,7 @@ import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import { useTableSort } from "@/lib/table-sort";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -153,9 +157,19 @@ export function MembersPage() {
   } | null>(null);
   /* 邀请通道(owner 2026-09-09)。「加成员」只走邮箱(那条路径要求对方已有账号,
      按邮箱找得到人);「邀请」才有两条通道可选。 */
+  /** 邀请进哪个工作空间(必选)。「加成员」不问这个。 */
+  const [inviteWorkspaces, setInviteWorkspaces] = useState<
+    { id: string; name: string; isDefault: boolean }[]
+  >([]);
+  /** 按用户号查到的人;null = 还没查。查过才允许提交,防止邀错人。 */
+  const [lookup, setLookup] = useState<UserLookupResult | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+
   const [memberForm, setMemberForm] = useState({
     email: "",
     userNo: "",
+    /** 邀请进哪个工作空间(必选,owner 2026-09-10)。 */
+    workspaceId: "",
     channel: "email" as "email" | "user_no",
     roleId: "",
   });
@@ -206,6 +220,7 @@ export function MembersPage() {
     setMemberForm({
       email: member?.email ?? "",
       userNo: "",
+      workspaceId: "",
       /* 每次开对话框都回到邮箱通道:上一次选了用户号不该粘住,
          下一个人多半是要发邮件的。 */
       channel: "email",
@@ -250,14 +265,49 @@ export function MembersPage() {
     // The backend reads `roleCode`; the role catalog sets id === roleCode.
     const roleCode = memberForm.roleId || null;
 
+    /* 邀请的三条前置(owner 2026-09-10)。服务端也判——这里挡是为了不让人
+       填完一屏才收到一句 400,不是把服务端那道省掉。 */
+    if (createMode === "invite") {
+      if (!memberForm.workspaceId) {
+        setDialogError(t("errors.workspace_required"));
+        setSubmitting(false);
+        return;
+      }
+      if (!roleCode) {
+        setDialogError(t("errors.role_required"));
+        setSubmitting(false);
+        return;
+      }
+      /* 用户号通道:**查过并确认是这个人**才让提交。这一条服务端不判(它只知道号
+         存不存在),但它正是 owner 要这个查询的理由——防止邀错人。 */
+      if (memberForm.channel === "user_no" && !lookup?.found) {
+        setDialogError(t("errors.lookup_required"));
+        setSubmitting(false);
+        return;
+      }
+      if (memberForm.channel === "user_no" && lookup?.alreadyMember) {
+        setDialogError(t("errors.already_member"));
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
       if (createMode === "invite") {
         /* 按通道只给该给的那一项:两个都给会让后端的分叉判据(给了哪一个)变成
            「都给了怎么办」,那是个不必要的歧义。 */
         const result = await inviteMember(
           memberForm.channel === "user_no"
-            ? { userNo: memberForm.userNo.trim(), roleCode }
-            : { email: memberForm.email, roleCode },
+            ? {
+                userNo: memberForm.userNo.trim(),
+                roleCode,
+                workspaceId: memberForm.workspaceId,
+              }
+            : {
+                email: memberForm.email,
+                roleCode,
+                workspaceId: memberForm.workspaceId,
+              },
         );
         await reloadMembers(result.member.id);
         setCreateMode(null);
@@ -830,6 +880,68 @@ export function MembersPage() {
   // 对话框字段一律「标签在上、控件在下」(DS Field)。标签与控件不能同塞进一个
   // Label:DS Label 是横排 flex,控件占满一行会把中文标题挤到只剩一字宽、逐字换行
   // (租户信息页走查第八轮抓到的,同一写法全站一起改)。
+  /* 打开「邀请」时取一次可选工作空间(只列我进得去、启用中的),并清掉上一次的
+     查询结果——留着的话,换个号没查就提交会把上一个人的确认当成这一次的。 */
+  useEffect(() => {
+    if (createMode !== "invite") return;
+    setLookup(null);
+    let active = true;
+    fetchSwitchableWorkspaces()
+      .then((list) => {
+        if (!active) return;
+        setInviteWorkspaces(list);
+        /* 只有一个时直接选上:那不是「替人做决定」,是没有第二个可选。 */
+        if (list.length === 1) {
+          setMemberForm((old) => ({ ...old, workspaceId: list[0]!.id }));
+        }
+      })
+      .catch(() => {
+        if (active) setInviteWorkspaces([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [createMode, session.tenant?.id]);
+
+  /** 按用户号查人。查到什么都记下来,由界面显示,不在这里替人判断。 */
+  async function runLookup() {
+    const no = memberForm.userNo.trim();
+    if (!no || lookingUp) return;
+    setLookingUp(true);
+    setDialogError(null);
+    try {
+      setLookup(await lookupUserByNo(no));
+    } catch (caught) {
+      setLookup(null);
+      setDialogError(errorText(caught, "feedback.lookupFailed"));
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
+  const workspaceSelect = (
+    <Field>
+      <FieldLabel htmlFor="member-workspace">
+        {t("dialogs.fields.workspace")}
+      </FieldLabel>
+      <NativeSelect
+        id="member-workspace"
+        value={memberForm.workspaceId}
+        onChange={(event) =>
+          setMemberForm((old) => ({ ...old, workspaceId: event.target.value }))
+        }
+        required
+      >
+        <option value="">{t("dialogs.fields.workspacePlaceholder")}</option>
+        {inviteWorkspaces.map((w) => (
+          <option key={w.id} value={w.id}>
+            {w.name}
+          </option>
+        ))}
+      </NativeSelect>
+    </Field>
+  );
+
   const roleSelect = (
     <Field>
       <FieldLabel htmlFor="member-role">{t("dialogs.fields.role")}</FieldLabel>
@@ -840,7 +952,13 @@ export function MembersPage() {
           setMemberForm((old) => ({ ...old, roleId: event.target.value }))
         }
       >
-        <option value="">{t("dialogs.fields.defaultRole")}</option>
+        {/* 邀请时**必选**(owner 2026-09-10):空选项等于替邀请人默认成 member,
+            而给什么角色恰恰是邀请的实质内容。「加成员」那条路径仍允许留空。 */}
+        <option value="">
+          {createMode === "invite"
+            ? t("dialogs.fields.rolePlaceholder")
+            : t("dialogs.fields.defaultRole")}
+        </option>
         {assignableRoles.map((role) => (
           <option key={role.id} value={role.id}>
             {role.roleName}
@@ -1154,6 +1272,17 @@ export function MembersPage() {
           }}
           onSubmit={(event) => void submitCreate(event)}
         >
+          {/* 租户名摆在最前(owner 2026-09-10:防误操作)。从组织租户切来切去时,
+              对话框长得一模一样——不写清楚往哪个租户加人,加错了没人会发现。 */}
+          <Banner
+            tone="info"
+            title={t("dialogs.targetTenant", {
+              tenant: formatTenantDisplay(
+                session.tenant?.name,
+                session.tenant?.tenantType,
+              ),
+            })}
+          />
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
           {createHint === "account_not_found" ? (
             <div>
@@ -1198,24 +1327,73 @@ export function MembersPage() {
               <FieldLabel htmlFor="member-user-no">
                 {t("dialogs.fields.userNo")}
               </FieldLabel>
-              <Input
-                id="member-user-no"
-                inputMode="numeric"
-                autoComplete="off"
-                value={memberForm.userNo}
-                onChange={(event) =>
-                  setMemberForm((old) => ({
-                    ...old,
-                    userNo: event.target.value,
-                  }))
-                }
-                required
-              />
+              {/* 输入框 + 查询按钮同一行(owner 2026-09-10 的布局)。
+                  改动号码就把上一次的结果清掉——否则改了号、卡还停在旧人身上,
+                  那正是「邀错人」最容易发生的一刻。 */}
+              <div className="flex items-center gap-sm">
+                <Input
+                  id="member-user-no"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={memberForm.userNo}
+                  onChange={(event) => {
+                    setLookup(null);
+                    setMemberForm((old) => ({
+                      ...old,
+                      userNo: event.target.value,
+                    }));
+                  }}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  disabled={!memberForm.userNo.trim() || lookingUp}
+                  onClick={() => void runLookup()}
+                >
+                  {lookingUp
+                    ? t("dialogs.actions.looking")
+                    : t("dialogs.actions.lookup")}
+                </Button>
+              </div>
               {/* 说明放框后:这条通道与邮箱那条的行为不同(不发邮件、要对方在站内同意),
                   不说清楚的话邀请人会一直等一封不会来的邮件。 */}
               <span className="text-body-sm text-muted-foreground">
                 {t("dialogs.fields.userNoHint")}
               </span>
+
+              {/* 查到的人:**全宽、淡色底**(owner 2026-09-10 的布局)。
+                  联系方式是服务端遮蔽过的——够邀请人认出是不是他要找的那个人,
+                  又不至于让任何一个管理员按号把通讯录刷出来。 */}
+              {lookup ? (
+                lookup.found ? (
+                  <div className="flex w-full flex-col gap-2xs rounded-lg bg-accent px-md py-sm">
+                    <span className="flex flex-wrap items-center gap-sm">
+                      <span className="text-label-md text-foreground">
+                        {lookup.name ?? t("dialogs.lookup.noName")}
+                      </span>
+                      <span className="tabular-nums text-body-sm text-muted-foreground">
+                        {lookup.userNo}
+                      </span>
+                      {lookup.alreadyMember ? (
+                        <StatusBadge tone="warning">
+                          {t("dialogs.lookup.alreadyMember")}
+                        </StatusBadge>
+                      ) : null}
+                    </span>
+                    <span className="text-body-sm text-muted-foreground">
+                      {[lookup.maskedEmail, lookup.maskedPhone]
+                        .filter(Boolean)
+                        .join(" · ") || t("dialogs.lookup.noContact")}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="w-full rounded-lg bg-accent px-md py-sm text-body-sm text-muted-foreground">
+                    {t("dialogs.lookup.notFound")}
+                  </div>
+                )
+              ) : null}
             </Field>
           ) : (
             <Field>
@@ -1236,6 +1414,9 @@ export function MembersPage() {
               />
             </Field>
           )}
+          {/* 邀请必选工作空间(owner 2026-09-10);「加成员」那条路径不问——
+              它把已有账号直接拉进租户,进哪个空间沿用默认。 */}
+          {createMode === "invite" ? workspaceSelect : null}
           {roleSelect}
         </DialogForm>
       ) : null}

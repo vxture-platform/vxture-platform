@@ -752,7 +752,10 @@
         "userNoHint": "The recipient must already have a platform account. No email is sent — the invitation appears in their inbox and takes effect once they accept it.",
         "role": "Role",
         "defaultRole": "Default member",
-        "nextPassword": "New temporary password"
+        "nextPassword": "New temporary password",
+        "workspace": "Workspace",
+        "workspacePlaceholder": "Select a workspace",
+        "rolePlaceholder": "Select a role"
       },
       "actions": {
         "cancel": "Cancel",
@@ -760,7 +763,9 @@
         "sendInvite": "Send invite",
         "save": "Save",
         "resetPassword": "Reset password",
-        "unlink": "Unlink"
+        "unlink": "Unlink",
+        "lookup": "Look up",
+        "looking": "Looking up"
       },
       "revokeInvite": {
         "verb": "Revoke the invitation to",
@@ -770,6 +775,13 @@
       "channel": {
         "email": "Email",
         "userNo": "User ID"
+      },
+      "targetTenant": "Joining tenant: {tenant}",
+      "lookup": {
+        "noName": "No display name",
+        "noContact": "No contact on file",
+        "notFound": "No account matches that user ID. Check it with them and try again.",
+        "alreadyMember": "Already in this tenant"
       }
     },
     "feedback": {
@@ -801,7 +813,8 @@
       "resendError": "Could not resend the invitation. Try again later.",
       "revokeError": "Could not revoke the invitation. Try again later.",
       "bulkPartial": "{done} done, {failed} failed.",
-      "bulkSkipped": "The owner and yourself were skipped."
+      "bulkSkipped": "The owner and yourself were skipped.",
+      "lookupFailed": "Lookup failed. Please try again."
     },
     "hints": {
       "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
@@ -816,7 +829,12 @@
       "account_not_found": "No Vxture account uses this email; send an invitation instead.",
       "already_member": "This account is already a member of the tenant.",
       "invitation_pending": "This email already has a pending invitation; resend or revoke it on the Invitations page.",
-      "invalid_email": "The email address is not valid."
+      "invalid_email": "The email address is not valid.",
+      "workspace_required": "Select the workspace they will join.",
+      "role_required": "Select a role.",
+      "lookup_required": "Look the person up and confirm before sending the invitation.",
+      "workspace_not_found": "That workspace is not available. Pick another one.",
+      "personal_tenant_no_members": "A personal tenant only has you; members cannot be invited or created."
     }
   },
   "metric": {

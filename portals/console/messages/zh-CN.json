@@ -752,7 +752,10 @@
         "userNoHint": "对方必须是已注册的平台用户。不发邮件——邀请会出现在对方的「待办与消息」里，由本人同意后加入。",
         "role": "角色",
         "defaultRole": "默认成员",
-        "nextPassword": "新临时密码"
+        "nextPassword": "新临时密码",
+        "workspace": "工作空间",
+        "workspacePlaceholder": "请选择工作空间",
+        "rolePlaceholder": "请选择角色"
       },
       "actions": {
         "cancel": "取消",
@@ -760,7 +763,9 @@
         "sendInvite": "发送邀请",
         "save": "保存",
         "resetPassword": "确认重置",
-        "unlink": "解除关联"
+        "unlink": "解除关联",
+        "lookup": "查询",
+        "looking": "查询中"
       },
       "revokeInvite": {
         "verb": "撤销给",
@@ -770,6 +775,13 @@
       "channel": {
         "email": "邮箱",
         "userNo": "用户号"
+      },
+      "targetTenant": "将加入租户：{tenant}",
+      "lookup": {
+        "noName": "未设置昵称",
+        "noContact": "未留联系方式",
+        "notFound": "没有找到这个用户号对应的账号。请与对方核对后重试。",
+        "alreadyMember": "已在本租户"
       }
     },
     "feedback": {
@@ -801,7 +813,8 @@
       "resendError": "重发失败,请稍后重试。",
       "revokeError": "撤销失败,请稍后重试。",
       "bulkPartial": "完成 {done} 项,失败 {failed} 项。",
-      "bulkSkipped": "已跳过所有者与本人。"
+      "bulkSkipped": "已跳过所有者与本人。",
+      "lookupFailed": "查询失败，请稍后重试。"
     },
     "hints": {
       "ownerProtected": "所有者不可停用或解除关联,请先转让所有权",
@@ -816,7 +829,12 @@
       "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
       "already_member": "该账号已是本租户成员。",
       "invitation_pending": "该邮箱已有待接受的邀请,请到邀请管理页重发或撤销。",
-      "invalid_email": "邮箱格式不正确。"
+      "invalid_email": "邮箱格式不正确。",
+      "workspace_required": "请选择要加入的工作空间。",
+      "role_required": "请选择角色。",
+      "lookup_required": "请先查询并确认是这个人，再发送邀请。",
+      "workspace_not_found": "这个工作空间不可用，请重新选择。",
+      "personal_tenant_no_members": "个人租户只有你自己，不能邀请或新建成员。"
     }
   },
   "metric": {

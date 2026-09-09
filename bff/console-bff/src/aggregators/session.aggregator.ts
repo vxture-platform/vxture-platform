@@ -845,8 +845,17 @@ export class SessionAggregator {
     userId: string,
     orgId: string | undefined,
     /* 两条通道二选一：给 email 走邮件链接，给 userNo 走站内直邀。
-       两个都不给是 400——不要发一条没有收件人的邀请。 */
-    input: { email?: string; userNo?: string; roleCode?: string | null },
+       两个都不给是 400——不要发一条没有收件人的邀请。
+
+       `roleCode` 与 `workspaceId` **都必填**(owner 2026-09-10):
+       类型上仍写成可选是因为它们来自 HTTP body(前端可能不传),
+       缺了在方法体里报 400,而不是悄悄取个默认——那两个默认都在替邀请人做决定。 */
+    input: {
+      email?: string;
+      userNo?: string;
+      roleCode?: string | null;
+      workspaceId?: string | null;
+    },
   ): Promise<InviteMemberOutcome | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
@@ -856,7 +865,22 @@ export class SessionAggregator {
       { orgId: resolved.orgId },
       "tenant.member.manage",
     );
-    const role = asAssignableRole(input.roleCode ?? "member");
+    /* 角色与工作空间**都不能为空**(owner 2026-09-10)。
+       此前 roleCode 缺省成 "member"、工作空间根本不问——两个默认都在替邀请人做决定,
+       而这两件事恰恰是邀请的实质内容。缺了就报,不猜。 */
+    if (!input.roleCode) throw new BadRequestException("role_required");
+    if (!input.workspaceId) throw new BadRequestException("workspace_required");
+    const role = asAssignableRole(input.roleCode);
+
+    /* 目标工作空间必须属于这个租户、启用中。前端给的 id 不可信;而且邀请可能躺几天,
+       这里不判的话,一条指向别的租户的邀请会一路落库,直到接受时才静默落空。 */
+    const workspaces = await this.org.listWorkspacesForSwitch(
+      resolved.orgId,
+      userId,
+    );
+    if (!workspaces.some((w) => w.id === input.workspaceId)) {
+      throw new BadRequestException("workspace_not_found");
+    }
 
     /* 两条通道（owner 2026-09-09）：
      *   email    —— 发链接，对方可能还没有账号，注册后凭邮箱接受
@@ -901,8 +925,11 @@ export class SessionAggregator {
     if (pending) throw new ConflictException("invitation_pending");
 
     const { invitation, token } = await this.org.createInvitation({
+      /* scope 仍是 org(接受后先成为**租户**成员),但带上工作空间——
+         接受时按它入,而不是一律进默认那个。 */
       scope: "org",
       organizationId: resolved.orgId,
+      workspaceId: input.workspaceId!,
       targetType: byUserNo ? "user_no" : "email",
       target,
       role,

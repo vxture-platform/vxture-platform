@@ -858,6 +858,29 @@ export class IamRouter {
     return member;
   }
 
+  /**
+   * 按用户号查人(邀请前确认「是不是这个人」)。
+   *
+   * 门与邀请同一个:只有能邀请的人才查得动——这是个**用户枚举面**(号是 10 位可视码,
+   * 认识规则就能穷举)。返回里联系方式一律遮蔽,查不到只说查不到,不区分
+   * 「没这个号」与「这个号被停用了」。
+   */
+  @RequireCapability("tenant.member.manage")
+  @Get("users/by-no/:userNo")
+  async lookupUserByNo(
+    @Req() req: Request & RequestContext,
+    @Param("userNo") userNo: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.lookupUserByNo(
+      accountId,
+      tenantId,
+      userNo,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    return result;
+  }
+
   @RequireCapability("tenant.member.manage")
   @Post("members/invite")
   async inviteMember(
