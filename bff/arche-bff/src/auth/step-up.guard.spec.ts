@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import type { ExecutionContext } from "@nestjs/common";
+import type { ExecutionContext, HttpException } from "@nestjs/common";
 import { OperatorStepUpGuard } from "./step-up.guard";
 import { stepUpCookieName } from "./step-up.decorator";
 import { RP_OIDC_CLIENT, RP_RUNTIME } from "../oidc/oidc-rp.tokens";
@@ -77,7 +77,7 @@ const ok = async (): Promise<Claims> => ({ sub: OWN_SUB, stepup: true });
  */
 async function expectDenied(p: Promise<unknown>) {
   await expect(p).rejects.toThrow();
-  const err = await p.catch((e) => e);
+  const err = (await p.catch((e: unknown) => e)) as HttpException;
   expect(err.getStatus()).toBe(403);
   expect(err.getResponse()).toMatchObject({
     code: "AUTH_STEP_UP_REQUIRED",

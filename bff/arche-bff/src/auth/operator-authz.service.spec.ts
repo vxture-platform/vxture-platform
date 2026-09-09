@@ -94,7 +94,9 @@ describe("解析结果的映射", () => {
     // 而不是「SQL 文本里没有这个 id」——后者对 UUID 形状的 id 恒真，不区分。
     const { service, query } = svc([ROW]);
     await service.resolve("op-1");
-    const [sql, params] = query.mock.calls[0];
+    const call = query.mock.calls[0];
+    expect(call).toBeDefined();
+    const [sql, params] = call as [string, unknown[]];
     expect(params).toEqual(["op-1"]);
     expect(sql).not.toContain("op-1");
   });
