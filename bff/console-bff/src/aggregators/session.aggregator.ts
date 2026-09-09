@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -688,12 +689,20 @@ export class SessionAggregator {
     // 目录 = 在册成员(active + suspended)+ 待接受的邀请(Invited 行,id = 邀请 id)。
     // 此前邀请只在发出的那一刻回一条 pending 记录,刷新即消失,页面上的「已邀请」
     // 筛选与计数从来没有真数据可数。
-    const [members, invitations] = await Promise.all([
+    /* 三路一起取。工作空间那一路是 owner 2026-09-09「两层用户只展示了一次」的答复:
+       每个人各在哪些工作空间里。一次查完再归组,不逐行往返。 */
+    const [members, invitations, byWorkspace] = await Promise.all([
       this.org.listOrgMembersWithUser(resolved.orgId),
       this.org.listInvitations(resolved.orgId),
+      this.org.listWorkspaceMembersByTenant(resolved.orgId),
     ]);
     const records = [
-      ...members.map(toMemberRecord),
+      ...members.map((m) => ({
+        ...toMemberRecord(m),
+        /* 空数组是**真实状态**,不是缺数据:租户成员可以不属于任何工作空间
+           (owner 2026-09-09 的第 3 件裁定)。前端据此显示「未加入」而不是「—」。 */
+        workspaces: byWorkspace.get(m.userId) ?? [],
+      })),
       ...invitations
         .filter((i) => i.status === "pending")
         .map((i) =>
@@ -704,7 +713,10 @@ export class SessionAggregator {
             i.expiresAt,
             i.createdAt,
           ),
-        ),
+        )
+        /* 待接受的邀请必然不属于任何工作空间——人还没进来。给空数组而不是省掉
+           这个键:两种行形状不一致会让前端到处写 `?.` 兜。 */
+        .map((r) => ({ ...r, workspaces: [] })),
     ];
     return opts.includeContacts === false
       ? records.map(redactContacts)
@@ -1002,7 +1014,32 @@ export class SessionAggregator {
   async listWorkspaces(userId: string, orgId?: string) {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
-    return this.org.listWorkspaces(resolved.orgId);
+    /* 带上 viewer:列表要标出「哪个是我的默认落点」,那与租户级默认是两件事。 */
+    return this.org.listWorkspaces(resolved.orgId, userId);
+  }
+
+  /**
+   * 记住「我下次进这个租户时落在哪个工作空间」。
+   *
+   * **个人偏好,不是管理动作**:改的是 `tenant_memberships.default_workspace_id`
+   * 我自己那一行。与 `setDefaultWorkspace`(租户级 `workspaces.is_default`、
+   * 影响所有人、要 tenant.workspace.manage)是两件事。
+   *
+   * 会话里的落点不会立刻变——那要等下一次发令牌。这与切换工作空间是两回事:
+   * 切换是「现在就去」,这个是「以后默认去」。
+   */
+  async setMyDefaultWorkspace(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string | null,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    return this.org.setMemberDefaultWorkspace(
+      resolved.orgId,
+      userId,
+      workspaceId,
+    );
   }
 
   /** 我在当前租户能进哪些工作空间(切换器 + 切换预检共用同一份判据)。 */
@@ -1064,6 +1101,87 @@ export class SessionAggregator {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
     return this.org.archiveWorkspace(resolved.orgId, workspaceId);
+  }
+
+  /**
+   * 「我能不能管**这一个**工作空间的人」。
+   *
+   * 光挂 `@RequireCapability("workspace.member.manage")` 不够,而且不够的方式很隐蔽:
+   * 那个码在 `tenant:owner` 是**全租户**的,在 `workspace:manager/owner` 却只来自
+   * **当前活跃**工作空间(有效权限 = 租户角色 ∪ 活跃工作空间角色)。于是 A 空间的
+   * 管理员切到 A、拿着 A 给的码去改 B 空间的人——能力有,作用域不对。
+   *
+   * 所以这里按**目标工作空间**再判一次:要么持租户级的 `tenant.workspace.manage`
+   * (那是「管这个租户的工作空间」,天然覆盖全部),要么在目标空间里就是 owner/manager。
+   */
+  private async assertCanManageWorkspaceMembers(
+    userId: string,
+    orgId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const tenantWide = await this.gov.can(
+      userId,
+      { orgId },
+      "tenant.workspace.manage",
+    );
+    if (tenantWide) return;
+    const role = await this.org.getWorkspaceRole(orgId, workspaceId, userId);
+    if (role === "owner" || role === "manager") return;
+    throw new ForbiddenException("workspace_scope_denied");
+  }
+
+  /** 把已在租户里的人加进某个工作空间。 */
+  async addWorkspaceMemberScoped(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+    memberUserId: string,
+    roleCode: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.assertCanManageWorkspaceMembers(
+      userId,
+      resolved.orgId,
+      workspaceId,
+    );
+    /* 目标必须已经是租户成员。库里的 fk_workspace_memberships_tenant_member 也挡,
+       但那会抛一个 500 的外键错;在这里先判,给的是 404「这个人不在租户里」。 */
+    const member = await this.org.getOrgMemberDetail(
+      resolved.orgId,
+      memberUserId,
+    );
+    if (!member) throw new NotFoundException("member_not_found");
+    await this.org.addWorkspaceMember(
+      workspaceId,
+      memberUserId,
+      asAssignableRole(roleCode),
+    );
+    this.invalidateCapabilities(memberUserId, resolved.orgId);
+    return { ok: true as const };
+  }
+
+  /** 把人从某个工作空间移除(不动租户成员关系)。 */
+  async removeWorkspaceMemberScoped(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+    memberUserId: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.assertCanManageWorkspaceMembers(
+      userId,
+      resolved.orgId,
+      workspaceId,
+    );
+    const result = await this.org.removeWorkspaceMember(
+      resolved.orgId,
+      workspaceId,
+      memberUserId,
+    );
+    if (result.ok) this.invalidateCapabilities(memberUserId, resolved.orgId);
+    return result;
   }
 
   /** 「谁在邀请我」。自视角读——此刻我还不是那些租户的成员,不能要租户权限。 */

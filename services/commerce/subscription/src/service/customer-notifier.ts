@@ -17,7 +17,12 @@ export type CustomerNotificationTemplate =
   | "refund.requested"
   | "refund.approved"
   | "refund.rejected"
-  | "refund.completed";
+  | "refund.completed"
+  /* owner 2026-09-09:补上此前一句话都不发的三处订单事件。
+     每一条都对应一个已经在跑的方法,不是新流程。 */
+  | "order.payment_declared"
+  | "order.cancelled"
+  | "order.expired";
 
 export interface CustomerNotifyInput {
   tenantId: string;

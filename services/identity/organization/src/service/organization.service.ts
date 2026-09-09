@@ -241,8 +241,27 @@ export class OrganizationService {
   listWorkspacesForSwitch(orgId: string, userId: string) {
     return this.repo.listWorkspacesForSwitch(orgId, userId);
   }
-  listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
-    return this.repo.listWorkspaces(tenantId);
+  listWorkspaceMembersByTenant(tenantId: string) {
+    return this.repo.listWorkspaceMembersByTenant(tenantId);
+  }
+  removeWorkspaceMember(tenantId: string, workspaceId: string, userId: string) {
+    return this.repo.removeWorkspaceMember(tenantId, workspaceId, userId);
+  }
+  getWorkspaceRole(tenantId: string, workspaceId: string, userId: string) {
+    return this.repo.getWorkspaceRole(tenantId, workspaceId, userId);
+  }
+  setMemberDefaultWorkspace(
+    tenantId: string,
+    userId: string,
+    workspaceId: string | null,
+  ) {
+    return this.repo.setMemberDefaultWorkspace(tenantId, userId, workspaceId);
+  }
+  listWorkspaces(
+    tenantId: string,
+    viewerUserId?: string,
+  ): Promise<WorkspaceDetail[]> {
+    return this.repo.listWorkspaces(tenantId, viewerUserId);
   }
   createWorkspace(input: CreateWorkspaceInput) {
     return this.repo.createWorkspace(input);

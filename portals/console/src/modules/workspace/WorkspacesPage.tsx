@@ -58,6 +58,7 @@ import {
   createWorkspace,
   fetchWorkspaces,
   setDefaultWorkspace,
+  setMyDefaultWorkspace,
   updateWorkspace,
   type ConsoleWorkspace,
 } from "@/api/console-bff";
@@ -241,6 +242,46 @@ export function WorkspacesPage() {
       },
     },
     {
+      /* 「我的默认」与上面的「设为默认」**紧挨着放**:两者一字之差、后果差很远——
+         上面那个是租户级、影响所有人、要管理权限;这个只改我自己。
+         并排摆才看得出差别,分开摆会让人以为是同一个动作的两种叫法。
+
+         这一项**不看 canManage**:选自己登录后落在哪是个人偏好,
+         普通成员也该能选。 */
+      id: "my-default",
+      label: t("actions.setMyDefault"),
+      icon: "user",
+      disabled: busy || w.isMyDefault || w.status !== "active",
+      ...(w.isMyDefault
+        ? { hint: t("actions.alreadyMyDefault") }
+        : w.status !== "active"
+          ? { hint: t("actions.archivedHint") }
+          : {}),
+      onSelect: () => {
+        void run(() => setMyDefaultWorkspace(w.id), "feedback.myDefaultSet");
+      },
+    },
+    {
+      /* 「我的默认」与上面的「设为默认」**紧挨着放**:两者一字之差、后果差很远——
+         上面那个是租户级、影响所有人、要管理权限;这个只改我自己。
+         并排摆才看得出差别,分开摆会让人以为是同一个动作的两种叫法。
+
+         这一项**不看 canManage**:选自己登录后落在哪是个人偏好,
+         普通成员也该能选。 */
+      id: "my-default",
+      label: t("actions.setMyDefault"),
+      icon: "user",
+      disabled: busy || w.isMyDefault || w.status !== "active",
+      ...(w.isMyDefault
+        ? { hint: t("actions.alreadyMyDefault") }
+        : w.status !== "active"
+          ? { hint: t("actions.archivedHint") }
+          : {}),
+      onSelect: () => {
+        void run(() => setMyDefaultWorkspace(w.id), "feedback.myDefaultSet");
+      },
+    },
+    {
       id: "archive",
       label: t("actions.archive"),
       icon: "x",
@@ -289,6 +330,10 @@ export function WorkspacesPage() {
           </StatusBadge>
           {w.isDefault ? (
             <StatusBadge tone="info">{t("table.default")}</StatusBadge>
+          ) : null}
+          {/* 我的落点单独标:它与租户默认可以是两个不同的空间。 */}
+          {w.isMyDefault ? (
+            <StatusBadge tone="neutral">{t("table.myDefault")}</StatusBadge>
           ) : null}
         </span>
       ),

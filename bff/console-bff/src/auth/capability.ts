@@ -30,7 +30,7 @@ import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
 import {
   hasAnyCapability,
-  type TenantPermissionCode,
+  type GovernancePermissionCode,
 } from "@vxture/core-utils";
 import type { RequestContext } from "../types/console.types";
 
@@ -41,7 +41,7 @@ export type AccessPolicy =
   | { readonly kind: "self" }
   | {
       readonly kind: "capability";
-      readonly anyOf: readonly TenantPermissionCode[];
+      readonly anyOf: readonly GovernancePermissionCode[];
     };
 
 /** 无需会话。只给认证流程本身与健康检查用。 */
@@ -52,8 +52,18 @@ export const Public = () =>
 export const SelfScope = () =>
   SetMetadata<string, AccessPolicy>(ACCESS_POLICY, { kind: "self" });
 
-/** 持有 `anyOf` 中任一权限码才放行。 */
-export const RequireCapability = (...anyOf: TenantPermissionCode[]) =>
+/**
+ * 持有 `anyOf` 中任一权限码才放行。
+ *
+ * 收的是 `GovernancePermissionCode`(租户级 ∪ 工作空间级),不只是租户级:
+ * 有效权限本来就是两级取并集(GovernanceService.getEffectivePermissions),
+ * 只是此前没有任何路由用工作空间级的码开过门。
+ *
+ * **注意作用域**:工作空间级的码只来自**当前活跃**工作空间,所以「能不能管
+ * 某一个指定的工作空间」不能只靠这个门——那要在处理器里按目标再判一次
+ * (见 SessionAggregator.assertCanManageWorkspaceMembers)。
+ */
+export const RequireCapability = (...anyOf: GovernancePermissionCode[]) =>
   SetMetadata<string, AccessPolicy>(ACCESS_POLICY, {
     kind: "capability",
     anyOf,
@@ -92,7 +102,7 @@ export function evaluateAccessPolicy(
  */
 export function assertAnyCapability(
   req: Request & RequestContext,
-  anyOf: readonly TenantPermissionCode[],
+  anyOf: readonly GovernancePermissionCode[],
 ): void {
   evaluateAccessPolicy({ kind: "capability", anyOf }, req);
 }
@@ -100,7 +110,7 @@ export function assertAnyCapability(
 /** 只查不抛:用于按持有的码裁剪响应内容。 */
 export function holdsAnyCapability(
   req: Request & RequestContext,
-  anyOf: readonly TenantPermissionCode[],
+  anyOf: readonly GovernancePermissionCode[],
 ): boolean {
   return hasAnyCapability(req.capabilities ?? [], anyOf);
 }

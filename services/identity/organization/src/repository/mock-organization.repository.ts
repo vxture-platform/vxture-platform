@@ -285,6 +285,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       status: "active" as const,
       memberCount: 0,
       createdAt: new Date(),
+      isMyDefault: false,
     });
     this.orgMembers.push({
       organizationId: orgId,
@@ -373,6 +374,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       status: "active" as const,
       memberCount: 0,
       createdAt: new Date(),
+      isMyDefault: false,
     };
     this.orgs.set(orgId, org);
     this.workspaces.set(wsId, workspace);
@@ -727,7 +729,10 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     orgId: string,
     userId: string,
     hint?: string | null,
-  ) {
+  ): Promise<{
+    workspace: WorkspaceView | null;
+    membershipRole: string | null;
+  }> {
     if (hint) {
       const w = this.workspaces.get(hint);
       const member = w
@@ -741,6 +746,12 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       if (w && w.organizationId === orgId && w.status === "active" && member) {
         return { workspace: w, membershipRole: member.role };
       }
+    }
+    /* 与 pg 那份同序:我自己的落点 > 租户默认。`personal !== hint` 收口递归——
+       个人默认指向一个进不去的空间时,第二遍进来 hint 就是它,分支不再成立。 */
+    const personal = this.memberDefaultWs.get(`${orgId}:${userId}`) ?? null;
+    if (personal && personal !== hint) {
+      return this.resolveWorkspaceForSession(orgId, userId, personal);
     }
     return this.getDefaultWorkspaceWithMembership(orgId, userId);
   }
@@ -759,11 +770,105 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     );
   }
 
-  async listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
+  async listWorkspaceMembersByTenant(tenantId: string) {
+    const out = new Map<
+      string,
+      { id: string; name: string; isDefault: boolean; role: string }[]
+    >();
+    for (const m of this.wsMembers) {
+      if (m.status !== "active") continue;
+      const w = this.workspaces.get(m.workspaceId);
+      if (!w || w.organizationId !== tenantId || w.status !== "active")
+        continue;
+      const list = out.get(m.userId) ?? [];
+      list.push({
+        id: w.id,
+        name: w.name,
+        isDefault: w.isDefault,
+        role: m.role,
+      });
+      out.set(m.userId, list);
+    }
+    return out;
+  }
+
+  async removeWorkspaceMember(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ) {
+    const w = this.workspaces.get(workspaceId);
+    if (!w || w.organizationId !== tenantId) {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (w.isDefault) {
+      return { ok: false as const, reason: "default_locked" as const };
+    }
+    const i = this.wsMembers.findIndex(
+      (m) => m.workspaceId === workspaceId && m.userId === userId,
+    );
+    if (i < 0) return { ok: false as const, reason: "not_found" as const };
+    this.wsMembers.splice(i, 1);
+    return { ok: true as const };
+  }
+
+  async getWorkspaceRole(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<string | null> {
+    const w = this.workspaces.get(workspaceId);
+    if (!w || w.organizationId !== tenantId) return null;
+    const m = this.wsMembers.find(
+      (x) =>
+        x.workspaceId === workspaceId &&
+        x.userId === userId &&
+        x.status === "active",
+    );
+    return m?.role ?? null;
+  }
+
+  /** mock 的个人默认落点:按 (tenantId,userId) 存,与 pg 那份同语义。 */
+  private readonly memberDefaultWs = new Map<string, string | null>();
+
+  async setMemberDefaultWorkspace(
+    tenantId: string,
+    userId: string,
+    workspaceId: string | null,
+  ) {
+    if (workspaceId !== null) {
+      const w = this.workspaces.get(workspaceId);
+      const member = this.wsMembers.find(
+        (m) =>
+          m.workspaceId === workspaceId &&
+          m.userId === userId &&
+          m.status === "active",
+      );
+      if (
+        !w ||
+        w.organizationId !== tenantId ||
+        w.status !== "active" ||
+        !member
+      ) {
+        return { ok: false as const, reason: "not_found" as const };
+      }
+    }
+    this.memberDefaultWs.set(`${tenantId}:${userId}`, workspaceId);
+    return { ok: true as const };
+  }
+
+  async listWorkspaces(
+    tenantId: string,
+    viewerUserId?: string,
+  ): Promise<WorkspaceDetail[]> {
+    const myDefault = viewerUserId
+      ? (this.memberDefaultWs.get(`${tenantId}:${viewerUserId}`) ?? null)
+      : null;
     return [...this.workspaces.values()]
       .filter((w) => w.organizationId === tenantId)
       .map((w) => ({
         ...w,
+        isMyDefault: myDefault !== null && w.id === myDefault,
         memberCount: this.wsMembers.filter(
           (m) => m.workspaceId === w.id && m.status === "active",
         ).length,
@@ -794,6 +899,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       status: "active",
       memberCount: 1,
       createdAt: new Date(),
+      isMyDefault: false,
     };
     this.workspaces.set(id, workspace);
     await this.addWorkspaceMember(

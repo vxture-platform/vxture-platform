@@ -517,6 +517,9 @@ export class IamRouter {
       description: w.description,
       icon: w.icon,
       isDefault: w.isDefault,
+      /* 我的默认落点。与 isDefault(租户级、影响所有人)分开给——
+         前端要把两个动作并排画出来,合成一个字段就看不出差别了。 */
+      isMyDefault: w.isMyDefault,
       status: w.status,
       memberCount: w.memberCount,
       createdAt: w.createdAt.toISOString(),
@@ -546,6 +549,32 @@ export class IamRouter {
       name: w.name,
       isDefault: w.isDefault,
     }));
+  }
+
+  /**
+   * 我的默认工作空间(个人偏好)。
+   *
+   * `@SelfScope()` 而不是任何能力门:改的是我自己那一行成员记录,
+   * 与「管这个租户的工作空间」无关——一个普通成员也该能选自己登录后落在哪。
+   *
+   * 与 `POST workspaces/:id/default` 分得清:那个是**租户级**默认,影响所有人。
+   * 路径也刻意不同形(mine vs :id/default),不然两个动作看起来像同一个的两种写法。
+   */
+  @SelfScope()
+  @Post("workspaces/mine/default")
+  async setMyDefaultWorkspace(
+    @Req() req: Request & RequestContext,
+    @Body() body: { workspaceId?: string | null },
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.setMyDefaultWorkspace(
+      accountId,
+      tenantId,
+      body?.workspaceId ?? null,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+    return { ok: true };
   }
 
   @RequireCapability("tenant.workspace.manage")
@@ -634,6 +663,70 @@ export class IamRouter {
       action: "tenant.workspace.set_default",
       resourceType: "workspace",
       resourceId: workspaceId,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * 把已在租户里的人加进某个工作空间 / 从某个工作空间移除。
+   *
+   * 门是**两级**的:能力门 `workspace.member.manage` 只回答「我有没有这个能力」,
+   * 作用域由 aggregator 的 assertCanManageWorkspaceMembers 再判一次——那个码在
+   * `tenant:owner` 是全租户的,在 `workspace:manager/owner` 却只来自**当前活跃**
+   * 工作空间,光靠能力门,A 空间的管理员就能管 B 空间的人。
+   *
+   * 这也是这三个 `workspace.*` 码第一次真的有门:此前它们在 BFF 与门户里
+   * 一个消费方都没有。
+   */
+  @RequireCapability("workspace.member.manage")
+  @Post("workspaces/:workspaceId/members")
+  async addWorkspaceMember(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Body() body: { userId?: string; roleCode?: string },
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    if (!body?.userId) throw new BadRequestException("userId is required");
+    const result = await this.sessionAggregator.addWorkspaceMemberScoped(
+      accountId,
+      tenantId,
+      workspaceId,
+      body.userId,
+      body.roleCode ?? "member",
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.member_add",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { userId: body.userId, role: body.roleCode ?? "member" },
+    });
+    return { ok: true };
+  }
+
+  @RequireCapability("workspace.member.manage")
+  @Delete("workspaces/:workspaceId/members/:memberUserId")
+  async removeWorkspaceMember(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Param("memberUserId") memberUserId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.removeWorkspaceMemberScoped(
+      accountId,
+      tenantId,
+      workspaceId,
+      memberUserId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.member_remove",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { userId: memberUserId },
     });
     return { ok: true };
   }

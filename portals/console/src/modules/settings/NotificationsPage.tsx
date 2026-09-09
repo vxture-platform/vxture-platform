@@ -31,6 +31,8 @@ type TopicKey =
   | "payment_due"
   | "refund_progress"
   | "announcement"
+  | "order_status"
+  | "tenant_change"
   | "security"
   | "invoice_progress"
   | "verification_result"
@@ -63,10 +65,10 @@ const CHANNELS: ChannelMeta[] = [
 ];
 
 /**
- * 主题清单（owner 2026-09-08 重排）。**平铺，不分组**：11 个主题各自四字自足，
+ * 主题清单（owner 2026-09-08 重排；2026-09-09 补两个）。**平铺，不分组**：各自四字自足，
  * 组名拼进项名等于把删掉的分组用文字再写一遍，还占列宽。
  *
- * 前 5 个有模板已经在发；后 6 个的**事件源都已存在**（各自的状态机或 webhook 事件
+ * 前 7 个有模板已经在发；后 6 个的**事件源都已存在**（各自的状态机或 webhook 事件
  * 类型跑着），只是通知模板还没接——`planned: true` 让它们在界面上挂「开发中」标并
  * **禁用三个渠道开关**。
  *
@@ -104,6 +106,20 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
       key: "announcement",
       icon: "megaphone",
       channels: { inbox: true, email: false, sms: false },
+    },
+    /* owner 2026-09-09 补的两个。都**已经在发**，所以不带 planned 标：
+       order_status 是「我那个订单最后怎么样了」(申报付款 / 取消 / 逾期关闭)；
+       tenant_change 是「租户结构变了」(个人升组织)。
+       两者都属于事务性——错过了会误判自己的订单或权限状态——邮件默认开、可关。 */
+    {
+      key: "order_status",
+      icon: "receipt",
+      channels: { inbox: true, email: true, sms: false },
+    },
+    {
+      key: "tenant_change",
+      icon: "buildings",
+      channels: { inbox: true, email: true, sms: false },
     },
     {
       key: "security",

@@ -127,6 +127,11 @@ export interface WorkspaceDetail extends WorkspaceView {
   status: "active" | "archived";
   memberCount: number;
   createdAt: Date;
+  /**
+   * 这是不是**我**的默认落点(`tenant_memberships.default_workspace_id`)。
+   * 与 `isDefault`(租户级、影响所有人)是两件事。没给 viewer 时恒为 false。
+   */
+  isMyDefault: boolean;
 }
 
 export interface CreateWorkspaceInput {
@@ -594,8 +599,42 @@ export interface OrganizationReadRepository {
     orgId: string,
     userId: string,
   ): Promise<WorkspaceView[]>;
+  /** 租户下每个人各在哪些工作空间里(成员管理的「所属工作空间」列)。 */
+  listWorkspaceMembersByTenant(
+    tenantId: string,
+  ): Promise<
+    Map<
+      string,
+      { id: string; name: string; isDefault: boolean; role: string }[]
+    >
+  >;
+  /** 把人从某一个工作空间移除(不动租户成员关系);默认工作空间不许移除。 */
+  removeWorkspaceMember(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
+  /** 我在**指定**工作空间里的角色(不是当前活跃的那个);门的作用域判定要用它。 */
+  getWorkspaceRole(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<string | null>;
+  /**
+   * 记住「我在这个租户下默认进哪个工作空间」。与 `setDefaultWorkspace` 是两件事:
+   * 那个改租户级的 `workspaces.is_default`(影响所有人,要 workspace.manage);
+   * 这个只改我自己那一行,是个人偏好,不需要任何管理权限。null = 清掉,跟随租户默认。
+   */
+  setMemberDefaultWorkspace(
+    tenantId: string,
+    userId: string,
+    workspaceId: string | null,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
   /** 列出租户下的工作空间(不含已删),含成员数。 */
-  listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]>;
+  listWorkspaces(
+    tenantId: string,
+    viewerUserId?: string,
+  ): Promise<WorkspaceDetail[]>;
   /** 建工作空间;创建者按给定的工作空间级角色码一并挂进去。 */
   createWorkspace(
     input: CreateWorkspaceInput,

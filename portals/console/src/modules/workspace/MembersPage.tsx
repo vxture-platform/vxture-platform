@@ -38,6 +38,7 @@ import {
   Input,
   InputGroup,
   InputGroupAddon,
+  Badge,
   InputGroupInput,
   ListCard,
   ListCardGrid,
@@ -83,6 +84,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
+import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
 
@@ -143,6 +145,8 @@ export function MembersPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [bulkUnlinkOpen, setBulkUnlinkOpen] = useState(false);
+  /** 正在管谁的工作空间归属;null = 对话框不开。 */
+  const [workspacesFor, setWorkspacesFor] = useState<MemberRecord | null>(null);
   const [inviteResult, setInviteResult] = useState<{
     result: InviteMemberResult;
     resent: boolean;
@@ -747,6 +751,18 @@ export function MembersPage() {
           onSelect: () => openResetDialog(member),
         },
         {
+          /* 工作空间归属(owner 2026-09-09 第 2 件的写侧)。
+             Invited 行不给:人还没进来,没有可归属的东西。 */
+          id: "workspaces",
+          label: t("actions.manageWorkspaces"),
+          icon: "stack",
+          disabled: submitting || member.status === "Invited",
+          ...(member.status === "Invited"
+            ? { hint: t("hints.invitedNoWorkspace") }
+            : {}),
+          onSelect: () => setWorkspacesFor(member),
+        },
+        {
           id: "unlink",
           label: t("actions.unlink"),
           icon: "user-switch",
@@ -1032,6 +1048,36 @@ export function MembersPage() {
                     ),
                   },
                   {
+                    /* owner 2026-09-09:「关于用户，有两层，tenant 级、workspace 级，
+                       目前只展示了一次」。这一列是第二层。
+
+                       在工作空间成为真轴之前，两级逐行一致（三条写路径成对写），
+                       画出来是同一批人的复印件——所以此前不画不是漏，是那时它没有
+                       信息量。现在能建多个空间，它才开始不同。 */
+                    id: "workspaces",
+                    header: t("table.columns.workspaces"),
+                    align: "center",
+                    cell: (member: MemberRecord) =>
+                      member.workspaces.length === 0 ? (
+                        /* 空是**真实状态**：租户成员可以不属于任何工作空间。
+                           写「未加入」而不是「—」——后者读起来像没查到。 */
+                        <span className="text-body-sm text-muted-foreground">
+                          {t("table.noWorkspace")}
+                        </span>
+                      ) : (
+                        <span className="inline-flex flex-wrap items-center justify-center gap-2xs">
+                          {member.workspaces.map((w) => (
+                            <Badge
+                              key={w.id}
+                              variant={w.isDefault ? "default" : "outline"}
+                            >
+                              {w.name}
+                            </Badge>
+                          ))}
+                        </span>
+                      ),
+                  },
+                  {
                     id: "status",
                     header: t("table.columns.status"),
                     align: "center",
@@ -1269,6 +1315,16 @@ export function MembersPage() {
             event.preventDefault();
             void handleBulkUnlink();
           }}
+        />
+      ) : null}
+
+      {workspacesFor ? (
+        <MemberWorkspacesDialog
+          member={workspacesFor}
+          onClose={() => setWorkspacesFor(null)}
+          /* 归属变了,「所属工作空间」那一列要跟着变——重取成员目录。
+             不就地改本地行:那一列的数据源在服务端,两处各算一遍会漂。 */
+          onChanged={() => void reloadMembers()}
         />
       ) : null}
 

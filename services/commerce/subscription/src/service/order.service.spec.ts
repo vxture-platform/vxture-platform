@@ -6,6 +6,7 @@ import type {
   ProrationBasis,
   RefundBasis,
 } from "../repository/pg-order.repository";
+import type { CustomerNotifyInput } from "./customer-notifier";
 
 // product_330 P1-b2 — order orchestration over the order entity. The repo and
 // SubscriptionService are mocked: what is asserted is the dispatch/guard logic
@@ -104,6 +105,12 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
         usageRemainingRatio: 0.8,
       }),
     ),
+    /* 展示数据:通知的 build 会问它要产品名 / 套餐名。放进这里而不是事后赋值——
+       事后赋值不进桩对象的类型,type-check 会红(CI 抓到过)。 */
+    getPlanDisplay: vi.fn(async () => ({
+      productName: "Arda",
+      planName: "Pro",
+    })),
     grantLeftoverToPrepaid: vi.fn(async () => true),
     getRefundPolicy: vi.fn(async () => ({
       windowHours: 24,
@@ -812,5 +819,68 @@ describe("OrderService sweeps", () => {
       expect(await service.reconcileHungPaid(2)).toBe(0);
     }
     expect(subscriptions.createSubscription).toHaveBeenCalledTimes(3);
+  });
+});
+
+/**
+ * 订单终态的通知（owner 2026-09-09：「订单取消…都有操作，如果没有，那就是发消息方
+ * 有纰漏」）。取消与逾期关闭此前一句话都不发，客户只能自己去订单页发现它没了。
+ *
+ * 这一组钉的是**发没发、发的是哪个模板**，不是文案内容——文案在 templates.ts，
+ * 那边另有自己的验收。两态走同一个方法（cancel 的 kind 参数），所以最容易错的
+ * 恰恰是「两态发成同一个模板」，下面两条互为对照。
+ */
+describe("订单取消 / 逾期的通知", () => {
+  function withNotifier(orderRow = order({ status: "pending_payment" })) {
+    const built = build(orderRow, null);
+    /* 入参类型显式给出:`vi.fn(async () => …)` 推出来的是零参签名,
+       于是 `notify.mock.calls[0][0]` 在类型上是「长度 0 的元组取第 0 项」——
+       测试跑得过、type-check 红。CI 抓到过。 */
+    const notify = vi.fn(async (_input: CustomerNotifyInput) => undefined);
+    built.service.setCustomerNotifier({ notify });
+    return { ...built, notify };
+  }
+
+  it("取消 → 发 order.cancelled", async () => {
+    const { service, notify } = withNotifier();
+    await service.cancel("ord-1", { actorType: "customer", actorId: "u-1" });
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0]![0]).toMatchObject({
+      templateCode: "order.cancelled",
+      reference: { type: "order", id: "ord-1" },
+    });
+  });
+
+  it("逾期关闭 → 发 order.expired（与取消是两个模板）", async () => {
+    const { service, notify } = withNotifier();
+    await service.cancel(
+      "ord-1",
+      { actorType: "system", actorId: null },
+      "expired",
+    );
+    expect(notify.mock.calls[0]![0]).toMatchObject({
+      templateCode: "order.expired",
+    });
+  });
+
+  /* 业务写失败就不该发「已取消」——通知是对既成事实的陈述，不是对意图的。 */
+  it("cancelOrder 抛异常 → 一条都不发", async () => {
+    const { service, orders, notify } = withNotifier();
+    orders.cancelOrder.mockRejectedValueOnce(new Error("boom"));
+    await expect(
+      service.cancel("ord-1", { actorType: "customer", actorId: "u-1" }),
+    ).rejects.toThrow();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  /* 通知失败不该把业务动作也带倒（best-effort，与既有几处同一纪律）。 */
+  it("通知抛异常 → 取消照样成功", async () => {
+    const { service, notify } = withNotifier();
+    notify.mockRejectedValueOnce(new Error("smtp down"));
+    const result = await service.cancel("ord-1", {
+      actorType: "customer",
+      actorId: "u-1",
+    });
+    expect(result.status).toBe("cancelled");
   });
 });

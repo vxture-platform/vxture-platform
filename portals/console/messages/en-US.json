@@ -158,6 +158,8 @@
       "tenant_verification_submit": "Submit business verification",
       "tenant_workspace_archive": "Archive workspace",
       "tenant_workspace_create": "Create workspace",
+      "tenant_workspace_member_add": "Add to workspace",
+      "tenant_workspace_member_remove": "Remove from workspace",
       "tenant_workspace_set_default": "Set default workspace",
       "tenant_workspace_update": "Update workspace"
     },
@@ -673,10 +675,12 @@
         "role": "Role",
         "status": "Status",
         "lastActive": "Last active",
-        "joinedAt": "Joined"
+        "joinedAt": "Joined",
+        "workspaces": "Workspaces"
       },
       "invitedExpires": "Invitation valid until {date}",
-      "selfTag": "You"
+      "selfTag": "You",
+      "noWorkspace": "None"
     },
     "status": {
       "Active": "Active",
@@ -704,7 +708,8 @@
       "resetPassword": "Reset password",
       "unlink": "Unlink",
       "resendInvite": "Resend invitation",
-      "revokeInvite": "Revoke invitation"
+      "revokeInvite": "Revoke invitation",
+      "manageWorkspaces": "Workspaces"
     },
     "bulk": {
       "selected": "{count} selected",
@@ -801,7 +806,8 @@
     "hints": {
       "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
       "ownerRoleLocked": "The owner's role only changes through ownership transfer",
-      "selfProtected": "You cannot do this to yourself"
+      "selfProtected": "You cannot do this to yourself",
+      "invitedNoWorkspace": "The invitation has not been accepted yet"
     },
     "errors": {
       "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
@@ -1014,6 +1020,12 @@
         },
         "announcement": {
           "title": "Announcements"
+        },
+        "order_status": {
+          "title": "Order status"
+        },
+        "tenant_change": {
+          "title": "Tenant changes"
         },
         "security": {
           "title": "Security alerts"
@@ -3343,7 +3355,8 @@
       "colCreatedAt": "Created",
       "default": "Default",
       "empty": "No workspaces yet",
-      "emptyHint": "Create a workspace to keep subscriptions and quotas separate."
+      "emptyHint": "Create a workspace to keep subscriptions and quotas separate.",
+      "myDefault": "Yours"
     },
     "status": {
       "active": "Active",
@@ -3360,7 +3373,9 @@
       "defaultLockedHint": "The default workspace cannot be archived — set another one as default first",
       "archiveVerb": "Archive",
       "archiveConsequence": "Members can no longer enter this workspace. Its subscriptions, invoices and usage records are kept and it can be reactivated at any time.",
-      "archiveKeep": "Keep it active"
+      "archiveKeep": "Keep it active",
+      "setMyDefault": "Make this my default",
+      "alreadyMyDefault": "Already your default"
     },
     "dialog": {
       "createTitle": "New workspace",
@@ -3376,7 +3391,8 @@
       "created": "Workspace created.",
       "updated": "Saved.",
       "defaultSet": "Default workspace updated.",
-      "archived": "Workspace archived."
+      "archived": "Workspace archived.",
+      "myDefaultSet": "Saved. You will land here next time you sign in."
     },
     "errors": {
       "generic": "Something went wrong. Please try again.",
@@ -3387,6 +3403,32 @@
       "last_active": "At least one workspace must stay active.",
       "archived": "An archived workspace cannot be set as the default.",
       "not_empty": "This workspace still has content, so the action cannot complete."
+    }
+  },
+  "memberWorkspaces": {
+    "title": "{name}'s workspaces",
+    "description": "Add or remove them from each workspace. Removing here does not remove them from the tenant.",
+    "done": "Done",
+    "close": "Close",
+    "loading": "Loading",
+    "loadFailed": "Could not load the workspace list. Please try again.",
+    "noWorkspaces": "This tenant has no workspaces yet",
+    "defaultTag": "Default",
+    "inWorkspace": "Member",
+    "notInWorkspace": "Not a member",
+    "defaultLockedHint": "Members cannot be removed from the default workspace — they would have nowhere to land at sign-in",
+    "add": "Add",
+    "remove": "Remove",
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "not_found": "That workspace no longer exists, or they were not a member.",
+      "name_taken": "A workspace with that name already exists.",
+      "default_locked": "Members cannot be removed from the default workspace.",
+      "last_active": "At least one workspace must stay active.",
+      "archived": "That workspace is archived.",
+      "not_empty": "That workspace still has content, so the action cannot complete.",
+      "member_not_found": "They are not in this tenant. Add them to the tenant first.",
+      "workspace_scope_denied": "You cannot manage members of that workspace."
     }
   }
 }

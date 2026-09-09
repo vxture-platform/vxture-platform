@@ -345,7 +345,10 @@ export interface ConsoleWorkspace {
   name: string;
   description: string | null;
   icon: string | null;
+  /** 租户级默认(影响所有人),要 tenant.workspace.manage 才改得动。 */
   isDefault: boolean;
+  /** **我**的默认落点(个人偏好),任何成员都能改自己的。 */
+  isMyDefault: boolean;
   status: "active" | "archived";
   memberCount: number;
   createdAt: string;
@@ -428,11 +431,70 @@ export async function updateWorkspace(
   if (!response.ok) await throwMemberError(response, "");
 }
 
+/**
+ * 记住「我下次进这个租户时落在哪个工作空间」。**个人偏好,不是管理动作**——
+ * 与 `setDefaultWorkspace`(租户级、影响所有人)是两件事。
+ *
+ * 传 null = 清掉个人偏好,回到跟随租户默认。
+ * 设完不会立刻改变当前会话:那要等下一次发令牌。想马上过去用 `switchWorkspace`。
+ */
+export async function setMyDefaultWorkspace(
+  workspaceId: string | null,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces/mine/default")}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId }),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
 /** 设为默认(登录后的落点)。停用的设不成默认。 */
 export async function setDefaultWorkspace(workspaceId: string): Promise<void> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/default`)}`,
     { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/**
+ * 把已在租户里的人加进某个工作空间。
+ *
+ * 目标必须**已经是租户成员**——库里的 `fk_workspace_memberships_tenant_member`
+ * 也挡,但那会抛外键错;BFF 先判,给的是 404「这个人不在租户里」。
+ */
+export async function addWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+  roleCode = "member",
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/members`)}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, roleCode }),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 把人从某个工作空间移除(**不动**租户成员关系);默认工作空间移不掉。 */
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`)}`,
+    { method: "DELETE", credentials: "include", cache: "no-store" },
   );
   if (!response.ok) await throwMemberError(response, "");
 }

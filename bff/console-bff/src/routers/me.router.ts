@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -22,6 +23,8 @@ import {
 } from "@vxture/service-account";
 import { PhoneCodeService } from "@vxture/service-sms";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
+import type { NotificationDispatcher } from "@vxture/service-notification";
+import { CUSTOMER_NOTIFIER } from "../services/customer-notifications.wiring";
 import { SessionAggregator } from "../aggregators/session.aggregator";
 import { AccountDeletionAggregator } from "../aggregators/account-deletion.aggregator";
 import { auditCustomerAction } from "../audit/audit-log";
@@ -55,6 +58,8 @@ import { RequireCapability, SelfScope } from "../auth/capability";
 @SelfScope()
 @Controller("api/me")
 export class MeRouter {
+  private readonly logger = new Logger(MeRouter.name);
+
   constructor(
     @Inject(SessionAggregator)
     private readonly sessionAggregator: SessionAggregator,
@@ -68,6 +73,9 @@ export class MeRouter {
     private readonly phoneChangeService: PhoneChangeService,
     @Inject(EmailChangeService)
     private readonly emailChangeService: EmailChangeService,
+    /** 站内 + 邮件送达走统一分发器(按收件人语言渲染 + 记 notification_logs)。 */
+    @Inject(CUSTOMER_NOTIFIER)
+    private readonly notifier: NotificationDispatcher,
     @Inject(PhoneCodeService)
     private readonly phoneCodeService: PhoneCodeService,
     @Inject(NotificationPreferencesService)
@@ -350,11 +358,35 @@ export class MeRouter {
     if (body?.acknowledged !== true) {
       throw new BadRequestException("acknowledgement_required");
     }
-    return this.sessionAggregator.convertCurrentTenantToOrganization(
-      req.user.id,
-      req.tenant?.id,
-      body?.name ?? "",
-    );
+    const converted =
+      await this.sessionAggregator.convertCurrentTenantToOrganization(
+        req.user.id,
+        req.tenant?.id,
+        body?.name ?? "",
+      );
+
+    /* owner 2026-09-09:「组织从个人到组织租户，应该有消息」。
+       此前这件不可回退的事一句话都不发——做完就只是页面变了个样。
+
+       发在转换**成功之后**:上面抛异常就不该发「已升级」。
+       best-effort:业务写已提交,通知失败只记日志、不回滚——与订单那条同一纪律。
+
+       收件人不指定:此刻租户里只有 owner 一个人(个人租户转来的),
+       分发器默认就发给 owner,正是该收到的那个人。 */
+    try {
+      await this.notifier.notify({
+        tenantId: converted.tenantId,
+        templateCode: "tenant.converted",
+        reference: { type: "tenant", id: converted.tenantId },
+        params: { tenantName: converted.name },
+        link: "/tenant",
+      });
+    } catch (err) {
+      this.logger.warn(
+        `tenant.converted notice for ${converted.tenantId} failed: ${String(err)}`,
+      );
+    }
+    return converted;
   }
 
   /** 注销资格:阻断 / 确认 / 连带动作(走查 2026-09-05;照账号删除的三档)。 */
