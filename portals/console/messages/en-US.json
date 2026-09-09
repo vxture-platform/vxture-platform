@@ -158,6 +158,8 @@
       "tenant_verification_submit": "Submit business verification",
       "tenant_workspace_archive": "Archive workspace",
       "tenant_workspace_create": "Create workspace",
+      "tenant_workspace_member_add": "Add to workspace",
+      "tenant_workspace_member_remove": "Remove from workspace",
       "tenant_workspace_set_default": "Set default workspace",
       "tenant_workspace_update": "Update workspace"
     },
@@ -673,10 +675,12 @@
         "role": "Role",
         "status": "Status",
         "lastActive": "Last active",
-        "joinedAt": "Joined"
+        "joinedAt": "Joined",
+        "workspaces": "Workspaces"
       },
       "invitedExpires": "Invitation valid until {date}",
-      "selfTag": "You"
+      "selfTag": "You",
+      "noWorkspace": "None"
     },
     "status": {
       "Active": "Active",

@@ -158,6 +158,8 @@
       "tenant_verification_submit": "提交企业认证",
       "tenant_workspace_archive": "停用工作空间",
       "tenant_workspace_create": "新建工作空间",
+      "tenant_workspace_member_add": "加入工作空间",
+      "tenant_workspace_member_remove": "移出工作空间",
       "tenant_workspace_set_default": "设为默认工作空间",
       "tenant_workspace_update": "修改工作空间"
     },
@@ -673,10 +675,12 @@
         "role": "角色",
         "status": "状态",
         "lastActive": "最近活跃",
-        "joinedAt": "加入时间"
+        "joinedAt": "加入时间",
+        "workspaces": "所属工作空间"
       },
       "invitedExpires": "邀请有效期至 {date}",
-      "selfTag": "本人"
+      "selfTag": "本人",
+      "noWorkspace": "未加入"
     },
     "status": {
       "Active": "活跃",

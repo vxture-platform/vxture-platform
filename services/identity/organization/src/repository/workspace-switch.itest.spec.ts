@@ -202,16 +202,18 @@ describe.runIf(RUN)("工作空间切换的解析（live DB）", () => {
   });
 
   /**
-   * 改租户角色**不该**动我在各个工作空间里的角色（2026-09-09 回归）。
+   * 改租户角色**一行工作空间成员都不该写**（owner 2026-09-09 指正）。
    *
-   * 工作空间还只有一个的时候，`updateOrgMemberRole` 把两级一起改是对的：
-   * 代码原注写着「只改租户级会留下谁也解释不了的中间态」。但工作空间变成复数之后，
-   * 那条 UPDATE 的 where 只有 `(tenant_id, user_id)`、**没有工作空间**，于是它会
-   * 把这个人在**每一个**工作空间里的角色一起改掉。
+   * `tenancy.workspace_memberships` 是真正的 N-N 关系表
+   * （UNIQUE (workspace_id, user_id)，每行自带 role_id）：「他在这个空间里是什么角色」
+   * 是那一行上的独立事实，不是租户角色的投影。
    *
-   * 够得着的路径：我建了个工作空间（建者拿 workspace-owner）→ 别人把我的租户角色
-   * 改成 member → 我在自己建的那个空间里也变成 member，管不了它了。
-   * 不报错、没有提示，只是权限少了。
+   * 旧实现把租户角色写进这张表，where 只有 `(tenant_id, user_id)`，于是改一次租户角色
+   * 会把这个人在**每一个**空间里的角色一起盖掉。够得着的路径：我建了个工作空间
+   * （建者拿 workspace-owner）→ 别人把我的租户角色改成 member → 我在自己建的那个
+   * 空间里也变成 member，管不了它了。不报错、没提示，只是权限少了。
+   *
+   * 我第一版把它收窄到「只改默认空间」——方向仍然错，只是错得少一点。现在整条摘掉。
    */
   it("改租户角色不该覆盖我在其它工作空间里的角色", async () => {
     // 我在 mine 这个空间里是 owner（模拟「自己建的空间」）。
@@ -221,7 +223,7 @@ describe.runIf(RUN)("工作空间切换的解析（live DB）", () => {
          from access.roles r
         where m.workspace_id = $1 and m.user_id = $2
           and r.scope = 'workspace' and r.role_code = 'owner'`,
-      [ws["mine"], userId],
+      [ws["mine"]!, userId],
     );
 
     await repo.updateOrgMemberRole(tenantId, userId, "member");
@@ -231,29 +233,92 @@ describe.runIf(RUN)("工作空间切换的解析（live DB）", () => {
          from tenancy.workspace_memberships m
          join access.roles rr on rr.id = m.role_id
         where m.workspace_id = $1 and m.user_id = $2`,
-      [ws["mine"], userId],
+      [ws["mine"]!, userId],
     );
     // 默认空间跟着租户角色走是既有行为；**别的**空间不该被牵连。
     expect(after.rows[0]?.role_code).toBe("owner");
   });
 
   /**
-   * 正向对照：默认空间**仍然**要跟着租户角色走。
+   * 连**默认**空间也不该被带动。
    *
-   * 上一条只证明「别的空间没被动」，一个「工作空间那半整个不写」的实现同样能过它——
-   * 那就切过头了，会留下代码原注说的「租户里是 manager、工作空间里还是 member」
-   * 那种谁也解释不了的中间态。两条合起来才把范围钉死：**恰好默认那一个**。
+   * 上一条只看了「别的空间」，一个「只改默认空间」的实现照样能过它——我第一版就是
+   * 那样写的。默认空间那一行同样是 N-N 表上的独立事实，没有理由例外。
+   *
+   * 三级互不相干的形状(这才是这张表存在的意义)：租户里是 manager、
+   * A 空间里是 member、B 空间里是 owner，三件事各自为真。
    */
-  it("改租户角色仍然带动默认工作空间（切过头的反向对照）", async () => {
+  it("改租户角色连默认空间也不带动", async () => {
+    await pool.query(
+      `update tenancy.workspace_memberships m
+          set role_id = r.id
+         from access.roles r
+        where m.workspace_id = $1 and m.user_id = $2
+          and r.scope = 'workspace' and r.role_code = 'member'`,
+      [ws["default"], userId],
+    );
     await repo.updateOrgMemberRole(tenantId, userId, "manager");
     const def = await pool.query<{ role_code: string }>(
       `select rr.role_code
          from tenancy.workspace_memberships m
          join access.roles rr on rr.id = m.role_id
         where m.workspace_id = $1 and m.user_id = $2`,
-      [ws["default"], userId],
+      [ws["default"]!, userId],
     );
-    expect(def.rows[0]?.role_code).toBe("manager");
+    expect(def.rows[0]?.role_code).toBe("member");
+  });
+
+  /* 正向对照：租户那一级**确实**改成功了。只断言「工作空间没被动」的话，
+     一个「updateOrgMemberRole 整个不干活」的实现同样能过上面两条。 */
+  it("改租户角色：租户那一级确实生效了", async () => {
+    await repo.updateOrgMemberRole(tenantId, userId, "readonly");
+    const m = await repo.getOrgMemberDetail(tenantId, userId);
+    expect(m?.role).toBe("readonly");
+  });
+
+  /**
+   * 「所属工作空间」列的数据源（owner 2026-09-09 第 2 件）。
+   *
+   * 判据有三条，各挡一种把列画错的方式：
+   *   · 只列**这个租户**的     —— 漏了就会把别的租户的空间画到这个人名下
+   *   · 只列**启用中**的       —— 漏了就会显示一个他其实进不去的空间
+   *   · 不在任何空间 = **空**  —— 那是真实状态，不是缺数据（第 3 件的裁定）
+   */
+  it("所属工作空间：只列本租户、启用中、我是活跃成员的", async () => {
+    const map = await repo.listWorkspaceMembersByTenant(tenantId);
+    const mine = map.get(userId) ?? [];
+    expect(mine.map((w) => w.id).sort()).toEqual(
+      [ws["default"], ws["mine"]].sort(),
+    );
+    // 默认排最前：与切换器同一个顺序，两处不该各排各的。
+    expect(mine[0]!.isDefault).toBe(true);
+    // 别的租户的那个不该混进来。
+    expect(mine.some((w) => w.id === ws["otherTenant"])).toBe(false);
+  });
+
+  it("所属工作空间：租户成员但不在任何空间 → 空数组（不是缺数据）", async () => {
+    if (strangerId === userId) return;
+    await joinTenant(tenantId, strangerId);
+    const map = await repo.listWorkspaceMembersByTenant(tenantId);
+    expect(map.get(strangerId) ?? []).toEqual([]);
+  });
+
+  it("移出工作空间：默认那个移不掉（移掉他登录后就没有落点了）", async () => {
+    expect(
+      await repo.removeWorkspaceMember(tenantId, ws["default"]!, userId),
+    ).toEqual({ ok: false, reason: "default_locked" });
+  });
+
+  it("指定工作空间里的角色：问的是那一个，不是当前活跃的那个", async () => {
+    /* 门的作用域判定靠它:`workspace.member.manage` 在 workspace:manager/owner
+       只来自**当前活跃**空间,不按目标再判一次,A 空间的管理员就能管 B 空间。 */
+    expect(
+      await repo.getWorkspaceRole(tenantId, ws["mine"]!, userId),
+    ).not.toBeNull();
+    // 我不是成员的那个空间 → null,不是某个兜底角色。
+    expect(
+      await repo.getWorkspaceRole(tenantId, ws["notMine"]!, userId),
+    ).toBeNull();
   });
 
   it("切换器清单：换个人看，只剩他自己能进的（这里是一个都没有）", async () => {

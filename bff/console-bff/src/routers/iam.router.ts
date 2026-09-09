@@ -638,6 +638,70 @@ export class IamRouter {
     return { ok: true };
   }
 
+  /**
+   * 把已在租户里的人加进某个工作空间 / 从某个工作空间移除。
+   *
+   * 门是**两级**的:能力门 `workspace.member.manage` 只回答「我有没有这个能力」,
+   * 作用域由 aggregator 的 assertCanManageWorkspaceMembers 再判一次——那个码在
+   * `tenant:owner` 是全租户的,在 `workspace:manager/owner` 却只来自**当前活跃**
+   * 工作空间,光靠能力门,A 空间的管理员就能管 B 空间的人。
+   *
+   * 这也是这三个 `workspace.*` 码第一次真的有门:此前它们在 BFF 与门户里
+   * 一个消费方都没有。
+   */
+  @RequireCapability("workspace.member.manage")
+  @Post("workspaces/:workspaceId/members")
+  async addWorkspaceMember(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Body() body: { userId?: string; roleCode?: string },
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    if (!body?.userId) throw new BadRequestException("userId is required");
+    const result = await this.sessionAggregator.addWorkspaceMemberScoped(
+      accountId,
+      tenantId,
+      workspaceId,
+      body.userId,
+      body.roleCode ?? "member",
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.member_add",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { userId: body.userId, role: body.roleCode ?? "member" },
+    });
+    return { ok: true };
+  }
+
+  @RequireCapability("workspace.member.manage")
+  @Delete("workspaces/:workspaceId/members/:memberUserId")
+  async removeWorkspaceMember(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Param("memberUserId") memberUserId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.removeWorkspaceMemberScoped(
+      accountId,
+      tenantId,
+      workspaceId,
+      memberUserId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.member_remove",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { userId: memberUserId },
+    });
+    return { ok: true };
+  }
+
   /** 停用。**不是删**——订阅 / 订单 / 配额池 / 用量都挂着 workspace_id。 */
   @RequireCapability("tenant.workspace.manage")
   @Post("workspaces/:workspaceId/archive")

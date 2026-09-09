@@ -594,6 +594,27 @@ export interface OrganizationReadRepository {
     orgId: string,
     userId: string,
   ): Promise<WorkspaceView[]>;
+  /** 租户下每个人各在哪些工作空间里(成员管理的「所属工作空间」列)。 */
+  listWorkspaceMembersByTenant(
+    tenantId: string,
+  ): Promise<
+    Map<
+      string,
+      { id: string; name: string; isDefault: boolean; role: string }[]
+    >
+  >;
+  /** 把人从某一个工作空间移除(不动租户成员关系);默认工作空间不许移除。 */
+  removeWorkspaceMember(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
+  /** 我在**指定**工作空间里的角色(不是当前活跃的那个);门的作用域判定要用它。 */
+  getWorkspaceRole(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<string | null>;
   /** 列出租户下的工作空间(不含已删),含成员数。 */
   listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]>;
   /** 建工作空间;创建者按给定的工作空间级角色码一并挂进去。 */

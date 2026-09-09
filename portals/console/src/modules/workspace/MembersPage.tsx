@@ -38,6 +38,7 @@ import {
   Input,
   InputGroup,
   InputGroupAddon,
+  Badge,
   InputGroupInput,
   ListCard,
   ListCardGrid,
@@ -1030,6 +1031,36 @@ export function MembersPage() {
                     cell: (member: MemberRecord) => (
                       <RoleTag code={member.roleCode} fallback={member.role} />
                     ),
+                  },
+                  {
+                    /* owner 2026-09-09:「关于用户，有两层，tenant 级、workspace 级，
+                       目前只展示了一次」。这一列是第二层。
+
+                       在工作空间成为真轴之前，两级逐行一致（三条写路径成对写），
+                       画出来是同一批人的复印件——所以此前不画不是漏，是那时它没有
+                       信息量。现在能建多个空间，它才开始不同。 */
+                    id: "workspaces",
+                    header: t("table.columns.workspaces"),
+                    align: "center",
+                    cell: (member: MemberRecord) =>
+                      member.workspaces.length === 0 ? (
+                        /* 空是**真实状态**：租户成员可以不属于任何工作空间。
+                           写「未加入」而不是「—」——后者读起来像没查到。 */
+                        <span className="text-body-sm text-muted-foreground">
+                          {t("table.noWorkspace")}
+                        </span>
+                      ) : (
+                        <span className="inline-flex flex-wrap items-center justify-center gap-2xs">
+                          {member.workspaces.map((w) => (
+                            <Badge
+                              key={w.id}
+                              variant={w.isDefault ? "default" : "outline"}
+                            >
+                              {w.name}
+                            </Badge>
+                          ))}
+                        </span>
+                      ),
                   },
                   {
                     id: "status",

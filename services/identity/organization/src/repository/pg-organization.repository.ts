@@ -1301,27 +1301,19 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         await client.query("rollback");
         return null;
       }
-      /* 工作空间级角色跟着租户级走(同角色码的 workspace 域角色);只改租户级会留下
-         「租户里是 manager、工作空间里还是 member」这种谁也解释不了的中间态。
+      /* 改租户角色**不动任何工作空间成员行**(owner 2026-09-09 指正)。
+         `tenancy.workspace_memberships` 是真正的 N-N 关系表
+         (uq_workspace_memberships_ws_user UNIQUE (workspace_id, user_id)),
+         每一行自带 role_id——「他在这个空间里是什么角色」是那一行上的**独立事实**,
+         不是租户角色的投影。
 
-         **只改默认工作空间**(2026-09-09 修回归)。这条 UPDATE 原来的 where 只有
-         `(tenant_id, user_id)`——工作空间还只有一个时无所谓,变成复数之后它会把这个人
-         在**每一个**工作空间里的角色一起覆盖掉:我建了个空间(建者拿 workspace-owner),
-         别人改了我的租户角色,我在自己建的那个空间里也跟着降级,管不了它了。
-         不报错、没提示,只是权限少了。
+         旧实现把租户角色写进这张表(原注写着「只改租户级会留下『租户里是 manager、
+         工作空间里还是 member』这种谁也解释不了的中间态」)。在 1:1 的年代那句话成立;
+         有了真正的 N-N,那恰恰是这张表存在的意义:租户里是 manager、A 空间里是
+         member、B 空间里是 owner,三件事各自为真。
 
-         收窄到默认空间,与「加成员」那条(upsertDefaultWorkspaceMembership 也只写
-         默认)同口径:租户级动作只负责租户 + 默认空间,别的空间归它自己的成员管理。 */
-      await client.query(
-        `update tenancy.workspace_memberships wm
-            set role_id = r.id, role_scope = 'workspace', updated_at = now()
-           from access.roles r, tenancy.workspaces w
-          where wm.tenant_id = $1 and wm.user_id = $2
-            and w.id = wm.workspace_id
-            and w.is_default and w.deleted_at is null
-            and r.scope = 'workspace' and r.role_code = $3`,
-        [orgId, userId, role],
-      );
+         我先前把它从「所有空间」收窄到「默认空间」——**方向仍然是错的**,
+         只是错得少一点:默认空间那一行同样是独立事实。整条摘掉。 */
       await client.query("commit");
       return mapMembership(r.rows[0]);
     } catch (error) {
@@ -1630,6 +1622,122 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       [orgId],
     );
     return r.rows.map(mapMemberDetail);
+  }
+
+  /**
+   * 租户下每个人各在哪些工作空间里(成员管理的「所属工作空间」列)。
+   *
+   * owner 2026-09-09:「关于用户，有两层，tenant 级、workspace 级，目前只展示了一次」。
+   * 展示层此前只有租户那一层——不是漏画,是那之前两级逐行一致(三条写路径成对写),
+   * 画第二遍就是同一批人的复印件。工作空间成了真轴之后它们才会不同。
+   *
+   * **一次查完整张表再在应用层归组**,不是每个成员查一次:成员管理页一屏几十行,
+   * 逐行查会打出几十趟往返。
+   *
+   * 只列启用中的工作空间与活跃成员关系:停用的空间与已停用的成员关系不该出现在
+   * 「他在哪儿」这个问题的答案里。
+   */
+  async listWorkspaceMembersByTenant(
+    tenantId: string,
+  ): Promise<
+    Map<
+      string,
+      { id: string; name: string; isDefault: boolean; role: string }[]
+    >
+  > {
+    const r = await this.pool.query<{
+      user_id: string;
+      workspace_id: string;
+      name: string;
+      is_default: boolean;
+      role_code: string;
+    }>(
+      `select m.user_id, w.id as workspace_id, w.name, w.is_default,
+              rr.role_code
+         from tenancy.workspace_memberships m
+         join tenancy.workspaces w
+           on w.id = m.workspace_id
+          and w.deleted_at is null
+          and w.status = 'active'
+         join access.roles rr on rr.id = m.role_id
+        where m.tenant_id = $1 and m.status = 'active'
+        order by w.is_default desc, w.created_at asc`,
+      [tenantId],
+    );
+    const out = new Map<
+      string,
+      { id: string; name: string; isDefault: boolean; role: string }[]
+    >();
+    for (const row of r.rows) {
+      const list = out.get(row.user_id) ?? [];
+      list.push({
+        id: row.workspace_id,
+        name: row.name,
+        isDefault: row.is_default,
+        role: row.role_code,
+      });
+      out.set(row.user_id, list);
+    }
+    return out;
+  }
+
+  /**
+   * 把人从**某一个**工作空间里移除(不动租户成员关系)。
+   *
+   * 与 `removeOrgMember` 的区别是方向:那个是「离开这个租户」,会连着所有工作空间
+   * 一起删(工作空间成员 ⊂ 租户成员,库里的 FK 硬挡);这个只是「不在这个空间里了」,
+   * 人还在租户里。
+   *
+   * 默认工作空间**不许移除**:会话解析要落到一个工作空间上,把人从默认空间踢出去
+   * 会让他登录后没有工作空间上下文——症状是页面到处空白,而不是一句「你没权限」。
+   */
+  async removeWorkspaceMember(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    const found = await this.pool.query<{ is_default: boolean }>(
+      `select is_default from tenancy.workspaces
+        where id = $1 and tenant_id = $2 and deleted_at is null`,
+      [workspaceId, tenantId],
+    );
+    const row = found.rows[0];
+    if (!row) return { ok: false, reason: "not_found" };
+    if (row.is_default) return { ok: false, reason: "default_locked" };
+    const del = await this.pool.query(
+      `delete from tenancy.workspace_memberships
+        where workspace_id = $1 and tenant_id = $2 and user_id = $3`,
+      [workspaceId, tenantId, userId],
+    );
+    /* 本来就不在里面 = 已经是想要的状态。报 not_found 会让「重复点删除」变成报错,
+       而那两次点击的意图完全一样。 */
+    return del.rowCount === 0
+      ? { ok: false, reason: "not_found" }
+      : { ok: true };
+  }
+
+  /**
+   * 我在**指定**工作空间里的角色(不是当前活跃的那个)。
+   *
+   * 门要用它:`workspace.member.manage` 在 `tenant:owner` 是全租户的,在
+   * `workspace:manager/owner` 却**只来自当前活跃工作空间**。光挂能力门,
+   * A 空间的管理员就能管 B 空间的人——能力有、作用域不对。
+   */
+  async getWorkspaceRole(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<string | null> {
+    const r = await this.pool.query<{ role_code: string }>(
+      `select rr.role_code
+         from tenancy.workspace_memberships m
+         join access.roles rr on rr.id = m.role_id
+        where m.workspace_id = $1 and m.tenant_id = $2
+          and m.user_id = $3 and m.status = 'active'
+        limit 1`,
+      [workspaceId, tenantId, userId],
+    );
+    return r.rows[0]?.role_code ?? null;
   }
 
   async getOrgMemberDetail(

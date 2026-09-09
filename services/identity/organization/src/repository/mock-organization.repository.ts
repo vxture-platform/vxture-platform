@@ -759,6 +759,64 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     );
   }
 
+  async listWorkspaceMembersByTenant(tenantId: string) {
+    const out = new Map<
+      string,
+      { id: string; name: string; isDefault: boolean; role: string }[]
+    >();
+    for (const m of this.wsMembers) {
+      if (m.status !== "active") continue;
+      const w = this.workspaces.get(m.workspaceId);
+      if (!w || w.organizationId !== tenantId || w.status !== "active")
+        continue;
+      const list = out.get(m.userId) ?? [];
+      list.push({
+        id: w.id,
+        name: w.name,
+        isDefault: w.isDefault,
+        role: m.role,
+      });
+      out.set(m.userId, list);
+    }
+    return out;
+  }
+
+  async removeWorkspaceMember(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ) {
+    const w = this.workspaces.get(workspaceId);
+    if (!w || w.organizationId !== tenantId) {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (w.isDefault) {
+      return { ok: false as const, reason: "default_locked" as const };
+    }
+    const i = this.wsMembers.findIndex(
+      (m) => m.workspaceId === workspaceId && m.userId === userId,
+    );
+    if (i < 0) return { ok: false as const, reason: "not_found" as const };
+    this.wsMembers.splice(i, 1);
+    return { ok: true as const };
+  }
+
+  async getWorkspaceRole(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<string | null> {
+    const w = this.workspaces.get(workspaceId);
+    if (!w || w.organizationId !== tenantId) return null;
+    const m = this.wsMembers.find(
+      (x) =>
+        x.workspaceId === workspaceId &&
+        x.userId === userId &&
+        x.status === "active",
+    );
+    return m?.role ?? null;
+  }
+
   async listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
     return [...this.workspaces.values()]
       .filter((w) => w.organizationId === tenantId)

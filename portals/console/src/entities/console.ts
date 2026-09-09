@@ -292,6 +292,19 @@ export interface MemberRecord {
   isPrimaryOwner: boolean;
   /** Invited 行:邀请到期时刻(ISO);在册成员为 null / 缺省。 */
   invitationExpiresAt?: string | null;
+  /**
+   * 这个人在本租户的哪些工作空间里(owner 2026-09-09「两层用户只展示了一次」)。
+   *
+   * **空数组是真实状态,不是缺数据**:租户成员可以不属于任何工作空间。
+   * Invited 行必然为空——人还没进来。
+   */
+  workspaces: {
+    id: string;
+    name: string;
+    isDefault: boolean;
+    /** 他在这个工作空间里的角色码(可能与租户级角色不同)。 */
+    role: string;
+  }[];
 }
 
 export interface TenantRoleRecord {
