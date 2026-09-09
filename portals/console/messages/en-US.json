@@ -2587,8 +2587,8 @@
       "menuSubscriptionHint": "A subscription is attached only after the order is fulfilled"
     },
     "packs": {
-      "basePrice": "¥0 / {period}",
-      "description": "Where this workspace's quota comes from: the baseline, packs you bought, and operator grants. Usage lives in Quotas.",
+      "basePriceAndReset": "¥0 / {period} · resets every {period}",
+      "description": "Where this workspace's quota comes from. Quota that came with a subscription is counted under your agents above; these are the other three. Usage lives in Quotas.",
       "emptyDescription": "The workspace baseline will appear here once it is provisioned.",
       "emptyTitle": "No resource packs",
       "expires": "Valid until {date}",
@@ -2600,9 +2600,9 @@
       },
       "resets": "Resets every {period}",
       "source": {
-        "ws_base": "Baseline",
-        "addon_purchase": "Add-on pack",
-        "manual_override": "Operator grant"
+        "ws_base": "Included with workspace",
+        "addon_purchase": "Purchased separately",
+        "manual_override": "Issued by platform"
       },
       "title": "My resource packs"
     },

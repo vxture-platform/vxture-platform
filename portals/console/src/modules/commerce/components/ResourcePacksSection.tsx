@@ -54,6 +54,21 @@ function isPackSource(s: string): s is PackSource {
   return (PACK_SOURCES as readonly string[]).includes(s);
 }
 
+/**
+ * 三类来源的色调。标签的作用是让人**一眼分出这笔额度是哪来的**，所以三类要能
+ * 互相区分，而不是「自带 = 灰、其余都是蓝」。
+ *
+ * `neutral` 给自带的：它是默认状态，不需要吸引注意。
+ * `brand` 给买来的：花过钱的那一笔，是这一页里租户最关心的。
+ * `info` 给平台发放的：它是外部给的、不由租户控制，用信息色而不是成功色——
+ * 那不是一件「达成了什么」的事。
+ */
+const SOURCE_TONE = {
+  ws_base: "neutral",
+  addon_purchase: "brand",
+  manual_override: "info",
+} as const satisfies Record<PackSource, string>;
+
 /** 额度按指标选格式：存储是字节，其余按个数。 */
 function formatAmount(metric: string, value: number): string {
   return metric === "storage.bytes" ? formatBytes(value) : fmtCount(value);
@@ -115,9 +130,7 @@ export function ResourcePacksSection({
               <CardContent className="flex flex-col gap-sm">
                 <div className="flex items-start justify-between gap-sm">
                   <span className="font-medium">{metricLabel(p.metric)}</span>
-                  <StatusBadge
-                    tone={p.source === "ws_base" ? "neutral" : "info"}
-                  >
+                  <StatusBadge tone={SOURCE_TONE[p.source as PackSource]}>
                     {t(`source.${p.source}`)}
                   </StatusBadge>
                 </div>
@@ -130,17 +143,21 @@ export function ResourcePacksSection({
                   {/* 价格：基础额度是 ¥0——**但它有周期**，所以写「¥0 / 周期」
                       而不是「免费」。买来的那些价格在订单里，这里不重复展示金额，
                       只说它是买来的（避免与订单页的实付金额出现两个数）。 */}
+                  {/* 自带的那一类要说清「¥0，但有周期」——这一行同时给了价格与周期，
+                      所以下面的重置行对它是重复的，不再画第二遍。 */}
                   {p.source === "ws_base" ? (
                     <span>
-                      {t("basePrice", { period: t(`period.${p.resetPeriod}`) })}
+                      {t("basePriceAndReset", {
+                        period: t(`period.${p.resetPeriod}`),
+                      })}
                     </span>
-                  ) : null}
-
-                  <span>
-                    {p.resetPeriod === "none"
-                      ? t("noReset")
-                      : t("resets", { period: t(`period.${p.resetPeriod}`) })}
-                  </span>
+                  ) : (
+                    <span>
+                      {p.resetPeriod === "none"
+                        ? t("noReset")
+                        : t("resets", { period: t(`period.${p.resetPeriod}`) })}
+                    </span>
+                  )}
 
                   {p.expiresAt ? (
                     <span>
