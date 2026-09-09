@@ -2303,10 +2303,6 @@
         "label": "Member Management",
         "description": "Invites, access review, and team membership"
       },
-      "workspaces": {
-        "label": "Workspaces",
-        "description": "Create and manage the workspaces in this tenant"
-      },
       "subscription": {
         "label": "Subscriptions",
         "description": "Subscribed products, renewal alerts, and recommendations"
@@ -2731,7 +2727,8 @@
       "toggle": "Workspaces · {count}",
       "unnamed": "Default workspace",
       "defaultTag": "Default",
-      "empty": "No workspaces yet."
+      "empty": "No workspaces yet.",
+      "manage": "Manage"
     },
     "cards": {
       "basic": {
@@ -3365,8 +3362,8 @@
     "actions": {
       "create": "New workspace",
       "edit": "Edit",
-      "setDefault": "Set as default",
-      "alreadyDefault": "Already the default workspace",
+      "setDefault": "Set as tenant default",
+      "alreadyDefault": "Already the tenant default",
       "archivedHint": "An archived workspace cannot be the default",
       "archive": "Archive",
       "alreadyArchived": "Already archived",
@@ -3374,7 +3371,7 @@
       "archiveVerb": "Archive",
       "archiveConsequence": "Members can no longer enter this workspace. Its subscriptions, invoices and usage records are kept and it can be reactivated at any time.",
       "archiveKeep": "Keep it active",
-      "setMyDefault": "Make this my default",
+      "setMyDefault": "Set as my default",
       "alreadyMyDefault": "Already your default"
     },
     "dialog": {

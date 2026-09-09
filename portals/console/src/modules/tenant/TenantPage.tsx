@@ -475,6 +475,7 @@ export function TenantPage() {
         workspaces={workspaceRows}
         workspacesOpen={workspacesOpen}
         onWorkspacesOpenChange={setWorkspacesOpen}
+        onManageWorkspaces={() => router.push("/workspaces")}
         loading={loading}
       />
 

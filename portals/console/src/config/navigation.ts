@@ -130,21 +130,9 @@ const accountTenantSection: NavigationSection = {
       capability: "tenant.member.read",
       tenantTypes: ["organization"],
     },
-    // owner 2026-09-09「把工作空间做成真轴」:建 / 改 / 设默认 / 停用有了真入口。
-    //
-    // 只给组织租户:个人租户永远只有一个工作空间,给它一个「管理工作空间」的入口,
-    // 点进去是一条不能停用、不能改默认的记录——那不是功能,是噪音。
-    //
-    // 门用 `tenant.member.read`(看得见自己在哪些工作空间里,不是管理动作);
-    // 页内的建 / 改 / 停各自再按 `tenant.workspace.manage` 收。
-    {
-      href: "/workspaces",
-      labelKey: "workspaces.label",
-      icon: "stack",
-      descriptionKey: "workspaces.description",
-      capability: "tenant.member.read",
-      tenantTypes: ["organization"],
-    },
+    // owner 2026-09-10:工作空间**不进侧栏**——它是租户的结构属性,入口在租户信息页
+    // 的身份卡上(那里本来就画着工作空间清单,现在接上「管理 →」)。
+    // 页面 `/workspaces` 保留,只是不从这里进。
   ],
 };
 
