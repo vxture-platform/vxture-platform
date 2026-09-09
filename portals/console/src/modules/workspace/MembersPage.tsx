@@ -77,6 +77,7 @@ import { useTableLabels } from "@/lib/table";
 import { useTableSort } from "@/lib/table-sort";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
+import { normalizePrincipalNoInput, principalPrefix } from "@/lib/principal-no";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -89,6 +90,9 @@ import {
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
+
+/** 输入框里固定前置的用户号前缀。与展示端同源——改前缀时这里跟着变。 */
+const USER_NO_PREFIX = principalPrefix("user");
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
 
@@ -1331,20 +1335,37 @@ export function MembersPage() {
                   改动号码就把上一次的结果清掉——否则改了号、卡还停在旧人身上,
                   那正是「邀错人」最容易发生的一刻。 */}
               <div className="flex items-center gap-sm">
-                <Input
-                  id="member-user-no"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={memberForm.userNo}
-                  onChange={(event) => {
-                    setLookup(null);
-                    setMemberForm((old) => ({
-                      ...old,
-                      userNo: event.target.value,
-                    }));
-                  }}
-                  required
-                />
+                {/* 前缀 `U-` 做成**固定前置**(owner 2026-09-10):界面上用户号一律
+                    带前缀展示,不在输入框里体现的话,人会连前缀一起粘进来。
+                    粘进来的也照收——`normalizePrincipalNoInput` 把前缀与空白剔掉,
+                    只留数字。它**不吞非数字字符**:`1799729O56` 这种 O/0 手误要留着
+                    让它查不到,静默改成另一个号比查不到糟得多。 */}
+                <div className="flex flex-1 items-center gap-2xs rounded-md border border-input bg-background px-sm focus-within:ring-1 focus-within:ring-ring">
+                  <span
+                    className="select-none text-body-sm text-muted-foreground"
+                    aria-hidden="true"
+                  >
+                    {USER_NO_PREFIX}
+                  </span>
+                  <Input
+                    id="member-user-no"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="border-0 bg-transparent px-0 focus-visible:ring-0"
+                    value={memberForm.userNo}
+                    onChange={(event) => {
+                      setLookup(null);
+                      setMemberForm((old) => ({
+                        ...old,
+                        userNo: normalizePrincipalNoInput(
+                          event.target.value,
+                          "user",
+                        ),
+                      }));
+                    }}
+                    required
+                  />
+                </div>
                 <Button
                   type="button"
                   variant="outline"

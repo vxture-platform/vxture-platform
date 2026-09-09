@@ -22,6 +22,7 @@
 
 import { useTranslations } from "next-intl";
 import { Card, CardContent, Icon, StatusBadge } from "@vxture/design-system";
+import { orgLogoUrl } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import { TenantAvatar } from "@/components/tenant-avatar/TenantAvatar";
@@ -71,11 +72,14 @@ export function WelcomeCard() {
   return (
     <Card surface="base" className="py-lg">
       <CardContent className="flex flex-col gap-md sm:flex-row sm:items-center sm:gap-lg">
-        {/* TenantAvatar 收的是 src + tenantType，不是整个 tenant——照它的签名传。 */}
+        {/* TenantAvatar 收的是 src + tenantType，不是整个 tenant——照它的签名传。
+
+            URL 走 `orgLogoUrl`,不自己拼(owner 2026-09-10 走查:概览页的租户标识
+            一直加载不出来)。原来这里手写的是 `/api/tenant/logo?v=…`——**那条路由
+            不存在**,而且漏了 BFF 前缀,请求一路 404,于是永远显示回落的首字母。
+            图片 404 不报错、不进控制台红字,页面看起来只是「这个租户没设标识」。 */}
         <TenantAvatar
-          src={
-            tenant?.logoHash ? `/api/tenant/logo?v=${tenant.logoHash}` : null
-          }
+          src={tenant?.logoHash ? orgLogoUrl(tenant.logoHash) : null}
           tenantType={tenant?.tenantType ?? null}
           size="lg"
           {...(tenantName ? { alt: tenantName } : {})}

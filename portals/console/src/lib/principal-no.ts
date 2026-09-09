@@ -21,6 +21,16 @@ const PREFIX: Record<PrincipalKind, string> = {
   workspace: "W",
 };
 
+/**
+ * 某一类主体码的展示前缀(含连字符),如 `U-`。
+ *
+ * 输入框要把它做成固定前置,所以需要单独取。别用 `formatPrincipalNo("", kind)` 代替:
+ * 那个函数对空串返回 null,拿到的永远是调用方写死的兜底,「与展示同源」就成了空话。
+ */
+export function principalPrefix(kind: PrincipalKind): string {
+  return `${PREFIX[kind]}-`;
+}
+
 /** `1799729056` → `U-1799729056`;空值返回 null(调用方决定占位符)。 */
 export function formatPrincipalNo(
   no: string | number | null | undefined,
@@ -37,4 +47,26 @@ export function formatPrincipalNoOr(
   fallback: string,
 ): string {
   return formatPrincipalNo(no, kind) ?? fallback;
+}
+
+/**
+ * 反向:把人**粘进来的东西**规整成裸号(owner 2026-09-10)。
+ *
+ * 界面上一律带前缀展示(`U-1799729056`),于是复制过来的十有八九带着它;
+ * 后端收的却是裸数字。不规整的话,粘贴 → 查不到 → 人以为号错了,而号是对的。
+ *
+ * 收得宽一点,因为人会怎么复制是不可控的:
+ *   `U-1799729056` / `u-1799729056` / `U1799729056` / `1799729056`
+ *   带空格、全角空格、前后换行的,也都收。
+ * 但**只剔前缀与空白,不改数字**:把非数字字符一并滤掉会让「1799 729O56」
+ * 这种 O/0 手误静默变成另一个号——那比查不到糟得多。
+ */
+export function normalizePrincipalNoInput(
+  raw: string,
+  kind: PrincipalKind,
+): string {
+  const trimmed = raw.replace(/[\s　]/g, "");
+  const prefix = PREFIX[kind];
+  const re = new RegExp(`^${prefix}[-_]?`, "i");
+  return trimmed.replace(re, "");
 }
