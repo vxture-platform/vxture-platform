@@ -6,6 +6,7 @@ import type {
   ProrationBasis,
   RefundBasis,
 } from "../repository/pg-order.repository";
+import type { CustomerNotifyInput } from "./customer-notifier";
 
 // product_330 P1-b2 — order orchestration over the order entity. The repo and
 // SubscriptionService are mocked: what is asserted is the dispatch/guard logic
@@ -104,6 +105,12 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
         usageRemainingRatio: 0.8,
       }),
     ),
+    /* 展示数据:通知的 build 会问它要产品名 / 套餐名。放进这里而不是事后赋值——
+       事后赋值不进桩对象的类型,type-check 会红(CI 抓到过)。 */
+    getPlanDisplay: vi.fn(async () => ({
+      productName: "Arda",
+      planName: "Pro",
+    })),
     grantLeftoverToPrepaid: vi.fn(async () => true),
     getRefundPolicy: vi.fn(async () => ({
       windowHours: 24,
@@ -826,11 +833,10 @@ describe("OrderService sweeps", () => {
 describe("订单取消 / 逾期的通知", () => {
   function withNotifier(orderRow = order({ status: "pending_payment" })) {
     const built = build(orderRow, null);
-    built.orders.getPlanDisplay = vi.fn(async () => ({
-      productName: "Arda",
-      planName: "Pro",
-    }));
-    const notify = vi.fn(async () => undefined);
+    /* 入参类型显式给出:`vi.fn(async () => …)` 推出来的是零参签名,
+       于是 `notify.mock.calls[0][0]` 在类型上是「长度 0 的元组取第 0 项」——
+       测试跑得过、type-check 红。CI 抓到过。 */
+    const notify = vi.fn(async (_input: CustomerNotifyInput) => undefined);
     built.service.setCustomerNotifier({ notify });
     return { ...built, notify };
   }
