@@ -2045,7 +2045,7 @@
     }
   },
   "routes": {
-    "dashboard": "Dashboard",
+    "dashboard": "Overview",
     "todos": "Todo Items",
     "profile": "My account",
     "personalTenant": "Tenant info",
@@ -2250,8 +2250,8 @@
     },
     "items": {
       "overview": {
-        "label": "Data Overview",
-        "description": "Tenant status, subscription expiry, usage, and quick entries"
+        "label": "Overview",
+        "description": "Where this workspace stands: what needs you, and what you have"
       },
       "todos": {
         "label": "Todo Items",

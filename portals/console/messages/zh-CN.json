@@ -2045,7 +2045,7 @@
     }
   },
   "routes": {
-    "dashboard": "仪表盘",
+    "dashboard": "概览",
     "todos": "待办事项",
     "profile": "我的账号",
     "personalTenant": "租户信息",
@@ -2250,8 +2250,8 @@
     },
     "items": {
       "overview": {
-        "label": "数据总览",
-        "description": "租户状态、订阅到期、用量概览与快捷入口"
+        "label": "概览",
+        "description": "你在这个工作空间的当前状况:需要处理什么、手里有哪些产品与资源"
       },
       "todos": {
         "label": "待办事项",
