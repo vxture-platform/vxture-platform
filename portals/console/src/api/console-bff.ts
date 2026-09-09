@@ -2001,6 +2001,8 @@ export interface ConsoleQuotaPool {
   remaining: number;
   resetPeriod: string;
   expiresAt: string | null;
+  /** 运营授予的原因（`source = "manual_override"` 才有值） */
+  grantReason: string | null;
 }
 
 export interface ConsoleStorageSlice {

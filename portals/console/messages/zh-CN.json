@@ -2495,22 +2495,6 @@
     "contactSalesSubject": "{product} 企业版咨询"
   },
   "subscriptionHub": {
-    "title": "产品订阅",
-    "description": "当前工作区订阅的全部产品与推荐；订单与账单在费用中心。",
-    "browseMarket": "浏览产品市场",
-    "loading": "正在加载…",
-    "favorite": {
-      "add": "收藏",
-      "remove": "取消收藏",
-      "error": "收藏操作失败，请稍后重试。"
-    },
-    "tier": {
-      "free": "Free",
-      "starter": "Starter",
-      "pro": "Pro",
-      "business": "Business",
-      "enterprise": "Enterprise"
-    },
     "audience": {
       "person": "个人",
       "team": "团队",
@@ -2521,25 +2505,7 @@
       "team": "团队 · {seats} 席位",
       "private": "私有化 · {seats} 席位"
     },
-    "cycle": {
-      "month": "月付",
-      "year": "年付"
-    },
-    "subStatus": {
-      "active": "服务中",
-      "expiring": "即将到期",
-      "trialing": "试用中",
-      "overdue": "宽限期",
-      "suspended": "已暂停",
-      "expired": "已过期",
-      "cancelled": "已取消"
-    },
-    "term": {
-      "perpetual": "长期有效",
-      "expired": "已过期",
-      "daysLeft": "剩余 {days} 天",
-      "until": "有效期至 {date}"
-    },
+    "browseMarket": "浏览产品市场",
     "card": {
       "productDetail": "产品详情",
       "version": "最新版 v{version}",
@@ -2556,30 +2522,41 @@
       "unsubscribeConsequence": "订阅将在当前计费周期结束时终止，之后不再续费也不再计费。周期内仍可正常使用。要恢复需要重新订阅，价格以届时的挂牌价为准。",
       "unsubscribeKeep": "保留订阅"
     },
-    "stats": {
-      "groupLabel": "产品订阅统计",
-      "products": "在订产品",
-      "productsHint": "含 {free} 个 Free 档",
-      "productsHintNoFree": "当前工作区",
-      "expiring": "即将到期",
-      "expiringHint": "{product} · {cycle} · 剩 {days} 天",
-      "expiringNone": "暂无到期压力"
+    "cycle": {
+      "month": "月付",
+      "year": "年付"
     },
-    "subs": {
-      "title": "我的订阅",
-      "description": "收藏优先，按最近开通排序；未支付、未开通的订单不在此列。",
-      "filterLabel": "订阅筛选",
-      "filterActive": "服务中",
-      "filterAll": "全部",
-      "emptyTitle": "还没有生效的订阅",
-      "emptyDescription": "从产品市场挑选一个产品开始，Free 档同样计入订阅、同样按周期到期。",
-      "autoRenewError": "续费设置更新失败,请稍后重试",
-      "unsubscribeError": "退订失败,请稍后重试",
-      "unsubscribeTitle": "确认退订 {product}?",
-      "unsubscribeBody": "退订后服务立即终止且不退款;已用配额与数据按数据保留策略处理。若只是不想续费,请改用「到期不续」——本周期内服务不受影响。",
-      "unsubscribeKeep": "保留订阅",
-      "unsubscribeConfirm": "确认立即退订"
+    "description": "当前工作区订阅的全部产品与推荐；订单与账单在费用中心。",
+    "detail": {
+      "ownership": "订阅归属",
+      "subscriber": "订阅人：",
+      "ownerTag": "owner",
+      "content": "订单内容",
+      "cycleMonth": "月付",
+      "cycleYear": "年付",
+      "periodOnActivation": "周期自服务开通时刻起算",
+      "listPrice": "原价 {amount}",
+      "discountTotal": "抵扣总额",
+      "payable": "订单支付金额",
+      "progress": "订单进度",
+      "payRemain": "剩余 {time}，超时自动关闭",
+      "step": {
+        "submitted": "提交订单",
+        "pay": "付款",
+        "declared": "付款申报",
+        "confirm": "确认收款",
+        "settleZero": "自动结清（¥0）",
+        "provision": "服务开通",
+        "cancelled": "取消订单",
+        "expiredClosed": "超时关闭"
+      }
     },
+    "favorite": {
+      "add": "收藏",
+      "remove": "取消收藏",
+      "error": "收藏操作失败，请稍后重试。"
+    },
+    "loading": "正在加载…",
     "orders": {
       "title": "我的订单",
       "description": "下单 → 出账 → 付款 → 开票,一笔钱的第一环;展开查看归属、金额构成与进度。",
@@ -2609,12 +2586,71 @@
       "menuSubscription": "查看订阅",
       "menuSubscriptionHint": "订单履约后才会挂上订阅"
     },
+    "packs": {
+      "basePrice": "¥0 / {period}",
+      "description": "这个工作空间的额度从哪来：基础额度、买来的加油包与扩展包、运营授予。用了多少在配额管理。",
+      "emptyDescription": "工作空间的基础额度落库后会出现在这里。",
+      "emptyTitle": "暂无资源包",
+      "expires": "有效期至 {date}",
+      "loading": "读取中…",
+      "noReset": "不重置",
+      "period": {
+        "day": "天",
+        "month": "月"
+      },
+      "resets": "随{period}重置",
+      "source": {
+        "ws_base": "基础额度",
+        "addon_purchase": "加油包",
+        "manual_override": "运营授予"
+      },
+      "title": "我的资源包"
+    },
     "payAxis": {
       "pending": "待付款",
       "declared": "已申报 · 核验中",
       "received": "已收款",
       "unpaid": "未付款",
       "settledZero": "已结清"
+    },
+    "pendingBanner": {
+      "title": "有 {count} 笔订单待支付",
+      "description": "去费用中心完成支付,订单履约后订阅才会开通。",
+      "deadline": "最早一笔 {time} 到期,逾期自动关闭。",
+      "action": "去费用中心支付"
+    },
+    "stats": {
+      "groupLabel": "产品订阅统计",
+      "products": "在订产品",
+      "productsHint": "含 {free} 个 Free 档",
+      "productsHintNoFree": "当前工作区",
+      "expiring": "即将到期",
+      "expiringHint": "{product} · {cycle} · 剩 {days} 天",
+      "expiringNone": "暂无到期压力"
+    },
+    "subStatus": {
+      "active": "服务中",
+      "expiring": "即将到期",
+      "trialing": "试用中",
+      "overdue": "宽限期",
+      "suspended": "已暂停",
+      "expired": "已过期",
+      "cancelled": "已取消"
+    },
+    "subs": {
+      "title": "我的智能体",
+      "description": "收藏优先，按最近开通排序；未支付、未开通的订单不在此列。",
+      "filterLabel": "订阅筛选",
+      "filterActive": "服务中",
+      "filterAll": "全部",
+      "emptyTitle": "还没有生效的订阅",
+      "emptyDescription": "从产品市场挑选一个产品开始，Free 档同样计入订阅、同样按周期到期。",
+      "autoRenewError": "续费设置更新失败,请稍后重试",
+      "unsubscribeError": "退订失败,请稍后重试",
+      "unsubscribeTitle": "确认退订 {product}?",
+      "unsubscribeBody": "退订后服务立即终止且不退款;已用配额与数据按数据保留策略处理。若只是不想续费,请改用「到期不续」——本周期内服务不受影响。",
+      "unsubscribeKeep": "保留订阅",
+      "unsubscribeConfirm": "确认立即退订"
     },
     "svcAxis": {
       "notProvisioned": "未开通",
@@ -2623,37 +2659,21 @@
       "cancelled": "已取消",
       "closed": "已关闭"
     },
-    "detail": {
-      "ownership": "订阅归属",
-      "subscriber": "订阅人：",
-      "ownerTag": "owner",
-      "content": "订单内容",
-      "cycleMonth": "月付",
-      "cycleYear": "年付",
-      "periodOnActivation": "周期自服务开通时刻起算",
-      "listPrice": "原价 {amount}",
-      "discountTotal": "抵扣总额",
-      "payable": "订单支付金额",
-      "progress": "订单进度",
-      "payRemain": "剩余 {time}，超时自动关闭",
-      "step": {
-        "submitted": "提交订单",
-        "pay": "付款",
-        "declared": "付款申报",
-        "confirm": "确认收款",
-        "settleZero": "自动结清（¥0）",
-        "provision": "服务开通",
-        "cancelled": "取消订单",
-        "expiredClosed": "超时关闭"
-      }
+    "term": {
+      "perpetual": "长期有效",
+      "expired": "已过期",
+      "daysLeft": "剩余 {days} 天",
+      "until": "有效期至 {date}"
     },
-    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。",
-    "pendingBanner": {
-      "title": "有 {count} 笔订单待支付",
-      "description": "去费用中心完成支付,订单履约后订阅才会开通。",
-      "deadline": "最早一笔 {time} 到期,逾期自动关闭。",
-      "action": "去费用中心支付"
-    }
+    "tier": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "title": "产品订阅",
+    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。"
   },
   "table": {
     "rowActions": "操作",

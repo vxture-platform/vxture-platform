@@ -2495,22 +2495,6 @@
     "contactSalesSubject": "{product} enterprise inquiry"
   },
   "subscriptionHub": {
-    "title": "Product Subscriptions",
-    "description": "Every product this workspace subscribes to, plus recommendations; orders and bills live in the billing center.",
-    "browseMarket": "Browse products",
-    "loading": "Loading…",
-    "favorite": {
-      "add": "Add to favorites",
-      "remove": "Remove from favorites",
-      "error": "Favorite action failed. Please try again."
-    },
-    "tier": {
-      "free": "Free",
-      "starter": "Starter",
-      "pro": "Pro",
-      "business": "Business",
-      "enterprise": "Enterprise"
-    },
     "audience": {
       "person": "Personal",
       "team": "Team",
@@ -2521,25 +2505,7 @@
       "team": "Team · {seats} {seats, plural, one {seat} other {seats}}",
       "private": "Private · {seats} {seats, plural, one {seat} other {seats}}"
     },
-    "cycle": {
-      "month": "Monthly",
-      "year": "Yearly"
-    },
-    "subStatus": {
-      "active": "Active",
-      "expiring": "Expiring soon",
-      "trialing": "Trialing",
-      "overdue": "Grace period",
-      "suspended": "Suspended",
-      "expired": "Expired",
-      "cancelled": "Cancelled"
-    },
-    "term": {
-      "perpetual": "No expiry",
-      "expired": "Expired",
-      "daysLeft": "{days} {days, plural, one {day} other {days}} left",
-      "until": "Valid until {date}"
-    },
+    "browseMarket": "Browse products",
     "card": {
       "productDetail": "Product details",
       "version": "Latest v{version}",
@@ -2556,30 +2522,41 @@
       "unsubscribeConsequence": "The subscription ends when the current billing cycle closes; it will not renew or bill again. Access continues until then. Resuming means subscribing again at the price listed at that time.",
       "unsubscribeKeep": "Keep subscription"
     },
-    "stats": {
-      "groupLabel": "Subscription metrics",
-      "products": "Active products",
-      "productsHint": "{free} on Free tier",
-      "productsHintNoFree": "in this workspace",
-      "expiring": "Next expiry",
-      "expiringHint": "{product} · {cycle} · {days} days left",
-      "expiringNone": "Nothing expiring soon"
+    "cycle": {
+      "month": "Monthly",
+      "year": "Yearly"
     },
-    "subs": {
-      "title": "My subscriptions",
-      "description": "Favorites first, then most recently provisioned; unpaid or unprovisioned orders are not listed here.",
-      "filterLabel": "Subscription filter",
-      "filterActive": "Active",
-      "filterAll": "All",
-      "emptyTitle": "No active subscriptions yet",
-      "emptyDescription": "Pick a product from the marketplace to start. The Free tier counts as a subscription and expires per cycle like any other.",
-      "autoRenewError": "Failed to update renewal setting — please try again",
-      "unsubscribeError": "Unsubscribe failed — please try again",
-      "unsubscribeTitle": "Unsubscribe from {product}?",
-      "unsubscribeBody": "Service stops immediately and no refund is issued; data follows the retention policy. If you only want to stop renewing, use \"Cancel at period end\" instead — service continues through the current cycle.",
-      "unsubscribeKeep": "Keep subscription",
-      "unsubscribeConfirm": "Unsubscribe now"
+    "description": "Every product this workspace subscribes to, plus recommendations; orders and bills live in the billing center.",
+    "detail": {
+      "ownership": "Ownership",
+      "subscriber": "Subscriber:",
+      "ownerTag": "owner",
+      "content": "Order contents",
+      "cycleMonth": "Monthly",
+      "cycleYear": "Yearly",
+      "periodOnActivation": "Cycle starts when the service is provisioned",
+      "listPrice": "List {amount}",
+      "discountTotal": "Total discount",
+      "payable": "Amount paid",
+      "progress": "Order progress",
+      "payRemain": "{time} left — closes automatically on timeout",
+      "step": {
+        "submitted": "Order placed",
+        "pay": "Payment",
+        "declared": "Payment declared",
+        "confirm": "Payment confirmed",
+        "settleZero": "Auto-settled (¥0)",
+        "provision": "Service provisioned",
+        "cancelled": "Order cancelled",
+        "expiredClosed": "Closed on timeout"
+      }
     },
+    "favorite": {
+      "add": "Add to favorites",
+      "remove": "Remove from favorites",
+      "error": "Favorite action failed. Please try again."
+    },
+    "loading": "Loading…",
     "orders": {
       "title": "My orders",
       "description": "Order → bill → payment → invoice: the first link in the chain. Expand for ownership, amount breakdown, and progress.",
@@ -2609,12 +2586,71 @@
       "menuSubscription": "View subscription",
       "menuSubscriptionHint": "A subscription is attached only after the order is fulfilled"
     },
+    "packs": {
+      "basePrice": "¥0 / {period}",
+      "description": "Where this workspace's quota comes from: the baseline, packs you bought, and operator grants. Usage lives in Quotas.",
+      "emptyDescription": "The workspace baseline will appear here once it is provisioned.",
+      "emptyTitle": "No resource packs",
+      "expires": "Valid until {date}",
+      "loading": "Loading…",
+      "noReset": "Does not reset",
+      "period": {
+        "day": "day",
+        "month": "month"
+      },
+      "resets": "Resets every {period}",
+      "source": {
+        "ws_base": "Baseline",
+        "addon_purchase": "Add-on pack",
+        "manual_override": "Operator grant"
+      },
+      "title": "My resource packs"
+    },
     "payAxis": {
       "pending": "Awaiting payment",
       "declared": "Declared · verifying",
       "received": "Payment received",
       "unpaid": "Unpaid",
       "settledZero": "Settled"
+    },
+    "pendingBanner": {
+      "title": "{count} order(s) awaiting payment",
+      "description": "Pay in the billing center; the subscription activates once the order is fulfilled.",
+      "deadline": "The earliest expires at {time}; it closes automatically after that.",
+      "action": "Pay in billing center"
+    },
+    "stats": {
+      "groupLabel": "Subscription metrics",
+      "products": "Active products",
+      "productsHint": "{free} on Free tier",
+      "productsHintNoFree": "in this workspace",
+      "expiring": "Next expiry",
+      "expiringHint": "{product} · {cycle} · {days} days left",
+      "expiringNone": "Nothing expiring soon"
+    },
+    "subStatus": {
+      "active": "Active",
+      "expiring": "Expiring soon",
+      "trialing": "Trialing",
+      "overdue": "Grace period",
+      "suspended": "Suspended",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "subs": {
+      "title": "My agents",
+      "description": "Favorites first, then most recently provisioned; unpaid or unprovisioned orders are not listed here.",
+      "filterLabel": "Subscription filter",
+      "filterActive": "Active",
+      "filterAll": "All",
+      "emptyTitle": "No active subscriptions yet",
+      "emptyDescription": "Pick a product from the marketplace to start. The Free tier counts as a subscription and expires per cycle like any other.",
+      "autoRenewError": "Failed to update renewal setting — please try again",
+      "unsubscribeError": "Unsubscribe failed — please try again",
+      "unsubscribeTitle": "Unsubscribe from {product}?",
+      "unsubscribeBody": "Service stops immediately and no refund is issued; data follows the retention policy. If you only want to stop renewing, use \"Cancel at period end\" instead — service continues through the current cycle.",
+      "unsubscribeKeep": "Keep subscription",
+      "unsubscribeConfirm": "Unsubscribe now"
     },
     "svcAxis": {
       "notProvisioned": "Not provisioned",
@@ -2623,37 +2659,21 @@
       "cancelled": "Cancelled",
       "closed": "Closed"
     },
-    "detail": {
-      "ownership": "Ownership",
-      "subscriber": "Subscriber:",
-      "ownerTag": "owner",
-      "content": "Order contents",
-      "cycleMonth": "Monthly",
-      "cycleYear": "Yearly",
-      "periodOnActivation": "Cycle starts when the service is provisioned",
-      "listPrice": "List {amount}",
-      "discountTotal": "Total discount",
-      "payable": "Amount paid",
-      "progress": "Order progress",
-      "payRemain": "{time} left — closes automatically on timeout",
-      "step": {
-        "submitted": "Order placed",
-        "pay": "Payment",
-        "declared": "Payment declared",
-        "confirm": "Payment confirmed",
-        "settleZero": "Auto-settled (¥0)",
-        "provision": "Service provisioned",
-        "cancelled": "Order cancelled",
-        "expiredClosed": "Closed on timeout"
-      }
+    "term": {
+      "perpetual": "No expiry",
+      "expired": "Expired",
+      "daysLeft": "{days} {days, plural, one {day} other {days}} left",
+      "until": "Valid until {date}"
     },
-    "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview.",
-    "pendingBanner": {
-      "title": "{count} order(s) awaiting payment",
-      "description": "Pay in the billing center; the subscription activates once the order is fulfilled.",
-      "deadline": "The earliest expires at {time}; it closes automatically after that.",
-      "action": "Pay in billing center"
-    }
+    "tier": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "title": "Product Subscriptions",
+    "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview."
   },
   "table": {
     "rowActions": "Actions",
