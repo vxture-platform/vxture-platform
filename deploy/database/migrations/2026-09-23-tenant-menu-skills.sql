@@ -30,14 +30,30 @@ UPDATE access.permissions SET perm_name = '模型服务', updated_at = now()
  WHERE perm_code = 'tenant.menu.atlas' AND perm_name IS DISTINCT FROM '模型服务';
 
 -- ── 新增「技能工具」菜单节点 ─────────────────────────────────────────────
-INSERT INTO access.permissions (perm_code, perm_name, route_path, perm_type, icon, parent_id, sort)
-SELECT v.code, v.name, v.route, 'menu', v.icon, p.id, v.sort
+-- perm_name_key / description_key 是 i18n 键,**不能省**:基线审计(30-verify 的
+-- [C2])要求 seeded 行两列都非空。命名照同族既有行:access.menu.<x> / .desc。
+--
+-- 2026-09-09 补:初版这两列没写,迁移本身成功、随后的基线审计红了
+--   [C2] access.permissions.perm_name_key: 1 seeded row(s) NULL/empty
+-- 本机只用 psql 单跑迁移验过,而审计在 `migrate` 这条链的后半段——**没跑到消费方
+-- 真实形态**。验迁移要跑整条 28d + 28c + 30,不是只跑那份 .sql。
+INSERT INTO access.permissions (
+  perm_code, perm_name, perm_name_key, description_key,
+  route_path, perm_type, icon, parent_id, sort
+)
+SELECT v.code, v.name, v.name_key, v.desc_key,
+       v.route, 'menu', v.icon, p.id, v.sort
   FROM (VALUES
-    ('tenant.menu.skills', '技能工具', '/skills', 'stack', 'tenant.menu.platform', 20)
-  ) AS v(code, name, route, icon, parent_code, sort)
+    ('tenant.menu.skills', '技能工具',
+     'access.menu.skills', 'access.menu.skills.desc',
+     '/skills', 'stack', 'tenant.menu.platform', 20)
+  ) AS v(code, name, name_key, desc_key, route, icon, parent_code, sort)
   JOIN access.permissions p ON p.perm_code = v.parent_code
 ON CONFLICT (perm_code) DO UPDATE SET
-  perm_name = excluded.perm_name, parent_id = excluded.parent_id,
+  perm_name = excluded.perm_name,
+  perm_name_key = excluded.perm_name_key,
+  description_key = excluded.description_key,
+  parent_id = excluded.parent_id,
   route_path = excluded.route_path, perm_type = excluded.perm_type,
   icon = excluded.icon, sort = excluded.sort, updated_at = now();
 
@@ -65,6 +81,16 @@ BEGIN
    WHERE perm_code = 'tenant.menu.platform' AND perm_name = '模型与能力';
   IF v <> 1 THEN
     RAISE EXCEPTION '改名未落地:tenant.menu.platform 的显示名不是「模型与能力」';
+  END IF;
+
+  -- i18n 键必须落上:基线审计([C2])要求 seeded 行两列都非空。
+  -- 这一条是补的——初版没写这两列,迁移过了、审计红了。
+  SELECT count(*) INTO v FROM access.permissions
+   WHERE perm_code = 'tenant.menu.skills'
+     AND coalesce(perm_name_key, '') <> ''
+     AND coalesce(description_key, '') <> '';
+  IF v <> 1 THEN
+    RAISE EXCEPTION 'i18n 键未落地:tenant.menu.skills 的 perm_name_key/description_key 为空';
   END IF;
 
   -- 码不能被改掉:这两行必须还在,否则已授出的权限就断了。
