@@ -113,7 +113,8 @@
     "// === 部署相关 ===": "",
     "prepare": "husky || true",
     "precommit": "pnpm lint:fix && pnpm type-check",
-    "prepush": "pnpm health && pnpm test"
+    "prepush": "pnpm health && pnpm test",
+    "lint:migration-counts": "node scripts/guardrails/check-migration-absolute-counts.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",

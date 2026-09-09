@@ -72,9 +72,12 @@ DO $$
 DECLARE n_menu int; n_bad_parent int; n_left int; n_inbox_ok int; n_admin int;
 BEGIN
   SELECT count(*) INTO n_menu FROM access.permissions WHERE perm_type = 'menu';
-  IF n_menu <> 21 THEN
-    RAISE EXCEPTION '[menu-tree-cleanup] expected 21 menu nodes, found %', n_menu;
-  END IF;
+  -- 这里**不做**「全库菜单节点应为 N 个」这类绝对计数断言。
+  -- 2026-09-09 实测:三份迁移各写了一条(25 / 21 / 18),而 `migrate` 是**全量重放**
+  -- ——每份跑在最终状态上,而不是它当年被写下时的那个状态。新增任何一个菜单节点,
+  -- 这三条会一起炸(那天 tenant.menu.skills 就把它们全顶偏了 1)。
+  -- 全局计数也证明不了本迁移做对了什么:它是一张无关状态的快照。
+  -- 本块下面那些**按本迁移职责**写的断言才是判据,它们与全库有多少节点无关。
 
   SELECT count(*) INTO n_bad_parent
     FROM access.permissions c
