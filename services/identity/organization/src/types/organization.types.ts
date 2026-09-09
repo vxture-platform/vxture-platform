@@ -74,9 +74,17 @@ export interface TenantVerificationRecord {
 /** 邀请台账行(tenancy.invitations;expired 为读侧派生,库内可能仍是 pending)。 */
 export interface InvitationListItem {
   id: string;
+  /**
+   * 收件方式。`email` 时 `email` 字段有值；`user_no` 时它是空串，真正的目标在
+   * `target` 里——两条通道判重时要**各比各的**，混着比会把「同一个人的两种邀请」
+   * 误判成重复。
+   */
+  targetType: string;
+  /** 原样的收件目标：邮箱地址，或平台用户号。 */
+  target: string;
   email: string;
   roleCode: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined";
   expiresAt: Date;
   acceptedAt: Date | null;
   createdAt: Date;
@@ -105,6 +113,50 @@ export interface WorkspaceView {
   name: string;
   isDefault: boolean;
 }
+
+/**
+ * 工作空间的完整视图(管理页用)。`WorkspaceView` 是会话解析那条路上的最小形状,
+ * 只带 id / name / isDefault;这里多的几项是管理页要显示与编辑的。
+ *
+ * `workspaceNo` 是**可视码**——地址栏与界面上只出现它,不出现 uuid(§11 v4 三号解耦)。
+ */
+export interface WorkspaceDetail extends WorkspaceView {
+  workspaceNo: string;
+  description: string | null;
+  icon: string | null;
+  status: "active" | "archived";
+  memberCount: number;
+  createdAt: Date;
+}
+
+export interface CreateWorkspaceInput {
+  tenantId: string;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  /** 建好后把创建者以这个角色挂进去(工作空间级角色码)。 */
+  creatorUserId: string;
+  creatorRoleCode: string;
+}
+
+export interface UpdateWorkspaceInput {
+  name?: string | undefined;
+  description?: string | null | undefined;
+  icon?: string | null | undefined;
+}
+
+/**
+ * 工作空间写动作的拒绝理由。与邀请那套同一条纪律:**理由是闭集**,
+ * 由仓储判定、路由映射成 HTTP,不在两处各写一遍判据。
+ */
+export type WorkspaceRejection =
+  | "not_found"
+  | "name_taken"
+  | "default_locked"
+  | "last_active"
+  /** 目标已停用:停用的不能设为默认(会把所有人登录后送进一个停用的空间)。 */
+  | "archived"
+  | "not_empty";
 
 /** Tenant (organization) profile — display/contact/localization (§3.2/3.3/3.6). */
 export interface OrganizationProfileView {
@@ -252,7 +304,18 @@ export interface CreateInvitationInput {
   scope: "org" | "workspace";
   organizationId: string | null;
   workspaceId?: string | null;
-  targetType: "email" | "phone";
+  /**
+   * 邀请的收件方式。
+   *
+   * `email`   —— 发链接到邮箱，收件人凭邮箱身份接受（既有）。
+   * `user_no` —— 目标是**平台已有账号**：填对方的用户号，站内直接送达，
+   *               对方同意即加入（owner 2026-09-09）。不发邮件、不出链接。
+   * `phone`   —— 预留，尚未接通。
+   *
+   * 每加一种，`rejectAcceptance` 的 switch 里必须同时加身份校验分支——
+   * 那个 switch 的 default 是拒绝，漏了会在测试里显影而不是静默放行。
+   */
+  targetType: "email" | "phone" | "user_no";
   target: string;
   role: string;
   createdBy: string;
@@ -286,7 +349,7 @@ export interface InvitationLookup {
   tenantName: string | null;
   email: string;
   roleCode: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
+  status: "pending" | "accepted" | "expired" | "revoked" | "declined";
   expiresAt: Date;
   inviterName: string | null;
 }
@@ -295,6 +358,11 @@ export interface InvitationLookup {
 export interface RotatedInvitation {
   token: string;
   expiresAt: Date;
+  /** 走的哪条通道——重发要照原样走：邮箱通道才发邮件。 */
+  targetType: string;
+  /** 原样的收件目标：邮箱地址，或平台用户号。 */
+  target: string;
+  /** 只在邮箱通道有值；用户号通道是空串。 */
   email: string;
   roleCode: string;
 }
@@ -308,7 +376,46 @@ export type AcceptInvitationRejection =
   | "expired"
   | "revoked"
   | "already_accepted"
-  | "email_mismatch";
+  | "email_mismatch"
+  /** 按平台用户号邀请，但接受的人不是那个号（owner 2026-09-09）。 */
+  | "user_mismatch"
+  /**
+   * `target_type` 认不出来。库里这一列**没有 CHECK 约束**，脏数据或某个没接完的
+   * 通道都可能落到这里——一律拒绝，不放行。
+   */
+  | "unknown_target";
+
+/**
+ * 定位一条待接受的邀请。
+ *
+ * `token`        邮件通道:链接里的一次性 token,**token 即凭证**。
+ * `invitationId` 站内通道:按用户号邀请时不发链接,对方在收件箱里点「同意」——
+ *                此时 ID 只是**地址**,凭证是当前登录身份,由 `rejectAcceptance`
+ *                的 `user_no` 分支核对。知道 ID 不等于能接受。
+ */
+/**
+ * 「谁在邀请我」的一条。给被邀请人看的视角,所以**不含 token、不含目标串**:
+ * 目标就是本人,重复展示自己的邮箱/用户号没有信息量;token 属于邮件通道的凭证,
+ * 不该经这条自视角的读路径流出去。
+ */
+export interface IncomingInvitation {
+  id: string;
+  /** 这条邀请是按哪条通道发来的(email / user_no)。 */
+  targetType: string;
+  roleCode: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  inviterName: string | null;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+/** 拒绝邀请的产出。拒绝理由沿用接受那套矩阵——无权接受者亦无权拒绝。 */
+export type DeclineInvitationResult =
+  | { ok: true }
+  | { ok: false; reason: AcceptInvitationRejection };
+
+export type InvitationLocator = { token: string } | { invitationId: string };
 
 export type AcceptInvitationResult =
   | { ok: true; membership: OrgMembershipView; tenantName: string | null }
@@ -444,11 +551,74 @@ export interface OrganizationReadRepository {
    * (邮箱邀请只能由该邮箱对应的账号接受——链接被转发给别人不该等于把租户交出去),
    * 然后建租户级 + 默认工作空间两级 membership。拒绝原因判别式返回,不抛。
    */
+  /**
+   * 接受邀请。
+   *
+   * `identity` 是**接受者的身份凭据**，不是展示数据：每一种 `target_type` 都要拿
+   * 其中一项来核对「这个邀请确实是发给你的」。邮箱通道核 email，用户号通道核
+   * userNo。少传一项，对应通道的邀请就永远接受不了（而不是放行）——
+   * `rejectAcceptance` 的 default 是拒绝。
+   */
   acceptInvitation(
-    token: string,
+    locator: InvitationLocator,
     userId: string,
-    userEmail: string | null,
+    identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult>;
+  /**
+   * 「谁在邀请我」——按身份查待接受邀请,跨租户。与 `listInvitations` 互为两侧:
+   * 那个要 `tenant.member.manage`,这个是自视角(此刻我还不是该租户成员)。
+   */
+  listInvitationsForIdentity(
+    identity: { email: string | null; userNo: string | null },
+    limit?: number,
+  ): Promise<IncomingInvitation[]>;
+  /** 被邀请人自己拒绝。判定沿用接受矩阵——无权接受者亦无权拒绝。 */
+  declineInvitation(
+    invitationId: string,
+    identity: { email: string | null; userNo: string | null },
+  ): Promise<DeclineInvitationResult>;
+  /**
+   * 会话落到哪个工作空间——带提示的那一版。hint 站不住(不属于本租户 / 已停用 /
+   * 我不是成员)就**退回默认**,不报错:提示过期是常态。
+   */
+  resolveWorkspaceForSession(
+    orgId: string,
+    userId: string,
+    hint?: string | null,
+  ): Promise<{
+    workspace: WorkspaceView | null;
+    membershipRole: string | null;
+  }>;
+  /** 我在这个租户里能进哪些工作空间(切换器用:只列我是活跃成员、且启用中的)。 */
+  listWorkspacesForSwitch(
+    orgId: string,
+    userId: string,
+  ): Promise<WorkspaceView[]>;
+  /** 列出租户下的工作空间(不含已删),含成员数。 */
+  listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]>;
+  /** 建工作空间;创建者按给定的工作空间级角色码一并挂进去。 */
+  createWorkspace(
+    input: CreateWorkspaceInput,
+  ): Promise<
+    | { ok: true; workspace: WorkspaceDetail }
+    | { ok: false; reason: WorkspaceRejection }
+  >;
+  /** 改名 / 说明 / 图标。说明与图标可显式清空。 */
+  updateWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceInput,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
+  /** 改默认工作空间(登录后的落点)。停用的设不成默认。 */
+  setDefaultWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
+  /** 停用(archived)。默认的停不掉;**不删**——35 张表挂着 workspace_id。 */
+  archiveWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }>;
   /** 按原始 token 查邀请(接受页先看清楚再点);查不到返回 null。 */
   getInvitationByToken(token: string): Promise<InvitationLookup | null>;
   /**

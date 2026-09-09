@@ -37,7 +37,14 @@ export const TENANT_PERMISSION_CODES = [
   "tenant.model.read",
 ] as const;
 
-/** 工作空间级操作码(workspace scope)。console 暂无对应页面,仅目录完整性。 */
+/**
+ * 工作空间级操作码(workspace scope)。
+ *
+ * 这三个码今天仍**没有消费方**:BFF 与门户里没有任何一处按它们开门。工作空间管理
+ * 那一页用的是租户级的 `tenant.workspace.manage`——「管这个租户有哪些工作空间」是
+ * 租户级的事。这三个码要等「在某个工作空间内管它自己的人和设置」这件事真出现
+ * (多工作空间铺开之后)才会有门。在那之前它们只在目录里,不在任何判据里。
+ */
 export const WORKSPACE_PERMISSION_CODES = [
   "workspace.member.manage",
   "workspace.role.assign",
@@ -94,6 +101,7 @@ export interface TenantMenuNode {
 
 export const TENANT_MENU_CODES = [
   "tenant.menu.workspace",
+  "tenant.menu.tenant_workspaces",
   "tenant.menu.overview",
   "tenant.menu.inbox",
   "tenant.menu.account_tenant",
@@ -150,6 +158,15 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
           "tenant.role.assign",
         ],
       },
+      // owner 2026-09-09 定「把工作空间做成真轴」:建 / 改 / 设默认 / 停用有了真入口,
+      // 从此它不再是租户信息页里的一行设置,而是自己一页。
+      //
+      // 节点码是 `tenant_workspaces` 不是 `workspace`:后者已被**根域**占着
+      // (`tenant.menu.workspace` = console 这个域本身),同名会把一页挂到域上去。
+      //
+      // `tenant.workspace.manage` 的**归属**仍在 `/tenant`(操作码一码一父),
+      // 这一页用它当**门**——两页共用一个码走门,不是再挂一行父子关系。
+      { code: "tenant.menu.tenant_workspaces", route: "/workspaces" },
     ],
   },
   {

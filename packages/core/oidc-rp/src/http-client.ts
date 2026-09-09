@@ -98,6 +98,7 @@ export class HttpOidcRpClient implements OidcRpClient {
     codeChallenge: string;
     prompt?: string;
     tenantHint?: string;
+    workspaceHint?: string;
   }): string {
     // Built synchronously from issuer + the standard path (avoids awaiting
     // discovery on the hot login path; our IdP path is stable).
@@ -113,6 +114,8 @@ export class HttpOidcRpClient implements OidcRpClient {
     u.searchParams.set("code_challenge_method", "S256");
     if (input.prompt) u.searchParams.set("prompt", input.prompt);
     if (input.tenantHint) u.searchParams.set("tenant_hint", input.tenantHint);
+    if (input.workspaceHint)
+      u.searchParams.set("workspace_hint", input.workspaceHint);
     return u.toString();
   }
 

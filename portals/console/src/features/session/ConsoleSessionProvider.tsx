@@ -15,6 +15,7 @@ import {
   buildLogoutUrl,
   buildRpLoginUrl,
   buildTenantSwitchUrl,
+  buildWorkspaceSwitchUrl,
   restoreSession,
 } from "@/api/console-bff";
 import type { SessionSnapshot } from "@/entities/console";
@@ -48,6 +49,11 @@ interface SessionContextValue {
    * 调用方不要在它之后排任何事;切完要落到别的页面就传 `returnTo`。
    */
   switchTenant: (tenantId: string, returnTo?: string) => Promise<void>;
+  /**
+   * 切换活跃工作空间。与切租户**同一条链路**(顶层导航 → IdP 静默重授权),
+   * 只换提示参数;两级各切各的,切工作空间不动 active_org。
+   */
+  switchWorkspace: (workspaceId: string, returnTo?: string) => Promise<void>;
   refreshSession: (options?: RefreshSessionOptions) => Promise<SessionSnapshot>;
 }
 
@@ -56,6 +62,7 @@ const SessionContext = createContext<SessionContextValue>({
   status: "idle",
   signOut: () => undefined,
   switchTenant: async () => undefined,
+  switchWorkspace: async () => undefined,
   refreshSession: async () => ANONYMOUS_SESSION,
 });
 
@@ -240,11 +247,33 @@ export function ConsoleSessionProvider({
     [],
   );
 
+  const switchWorkspace = useCallback(
+    async (workspaceId: string, returnTo?: string) => {
+      // 与 switchTenant 同一个理由:顶层导航,IdP 要收到中央会话 cookie。
+      setStatus("loading");
+      const dest = new URL(
+        returnTo ?? `${window.location.pathname}${window.location.search}`,
+        window.location.origin,
+      ).toString();
+      window.location.assign(buildWorkspaceSwitchUrl(workspaceId, dest));
+      // 页面即将卸载:不 resolve,免得调用方在导航中途继续改状态。
+      await new Promise<void>(() => undefined);
+    },
+    [],
+  );
+
   // Stable context value: consumers only re-render when session/status actually
   // change, not on every ancestor render.
   const contextValue = useMemo<SessionContextValue>(
-    () => ({ session, status, signOut, switchTenant, refreshSession }),
-    [session, status, signOut, switchTenant, refreshSession],
+    () => ({
+      session,
+      status,
+      signOut,
+      switchTenant,
+      switchWorkspace,
+      refreshSession,
+    }),
+    [session, status, signOut, switchTenant, switchWorkspace, refreshSession],
   );
 
   return (

@@ -50,7 +50,15 @@ export const NOTIFICATION_TOPICS = [
   "ticket_activity", // support.tickets 七态
 ] as const;
 
-/** 事件源已存在但通知模板未接：界面上标「开发中」并禁用三个渠道开关。 */
+/**
+ * 事件源已存在但通知模板未接：界面上标「开发中」并禁用三个渠道开关。
+ *
+ * `member_invitation` 留在这张表里是**故意的**（owner 2026-09-09）：它下面已经有一个
+ * 模板在发（`tenant.invitation`，按用户号邀请的站内送达），但那条是 `mandatory` 的——
+ * 站内这条消息**就是**邀请本身，关掉它，邀请人会收到「已送达对方账号」而对方那边
+ * 什么也没有。给一个按下去不起作用的开关比不给更糟。等 accepted / declined / revoked
+ * 三态的模板接上（那三条是可选的周知），再把它挪出去。
+ */
 export const NOTIFICATION_TOPICS_PLANNED = [
   "security",
   "invoice_progress",

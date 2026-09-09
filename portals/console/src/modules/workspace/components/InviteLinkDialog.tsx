@@ -8,6 +8,10 @@
  *
  * 邮件是主通道,链接是兜底:SMTP 没配或投递失败时邀请已经建好,把链接交给
  * 邀请人手动转发,比让整个动作失败强。token 只在这一刻可见——关掉就只能重发。
+ *
+ * **只服务邮箱通道。** 按用户号邀请时后端不发链接(`inviteLink=null`),这一整块
+ * 就没有内容可呈现——那条通道靠站内消息送达、由本人同意,一条可转发的链接恰恰是
+ * 它要避免的东西。所以下面看到 null 直接不画,而不是画个空输入框。
  */
 
 import { useEffect, useState } from "react";
@@ -40,11 +44,13 @@ export function InviteLinkDialog({
     setCopyState("idle");
   }, [result?.inviteLink]);
 
-  if (!result) return null;
+  /* 无链接 = 站内送达通道,这个对话框对它无话可说。 */
+  if (!result || !result.inviteLink) return null;
+  const inviteLink = result.inviteLink;
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(result.inviteLink);
+      await navigator.clipboard.writeText(inviteLink);
       setCopyState("copied");
     } catch {
       setCopyState("failed");
@@ -78,7 +84,7 @@ export function InviteLinkDialog({
         <FieldLabel htmlFor="invite-link">{t("linkLabel")}</FieldLabel>
         <Input
           id="invite-link"
-          value={result.inviteLink}
+          value={inviteLink}
           readOnly
           onFocus={(event) => event.currentTarget.select()}
         />

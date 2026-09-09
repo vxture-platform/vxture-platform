@@ -17,7 +17,7 @@
  * 只是不再引用它们。跟上一轮侧栏迁移同一处理方式。
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ShellBrand,
@@ -41,6 +41,7 @@ import {
 import type { Locale, Theme } from "@vxture-platform/shared";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { fetchSwitchableWorkspaces } from "@/api/console-bff";
 import { useTenant } from "@/features/tenant";
 import {
   buildLogoutUrl,
@@ -101,7 +102,7 @@ export function ConsoleHeader({
   planName,
 }: ConsoleHeaderProps) {
   const t = useTranslations("shell");
-  const { session } = useConsoleSession();
+  const { session, switchWorkspace } = useConsoleSession();
   const { tenantList, switchTenantContext } = useTenant();
   const locale = useLocale() as Locale;
   const router = useRouter();
@@ -110,6 +111,31 @@ export function ConsoleHeader({
     useTheme();
 
   const search = useGlobalSearch(navEntries);
+
+  /* 可切换的工作空间(owner 2026-09-09)。**只在会话真有工作空间时取**——
+     个人租户、或还没解析出上下文的那一帧,取了也只会得到空列表。
+     读失败不报错:面板会退回只画当前那一行,而不是让整个顶栏出错。 */
+  const [workspaceOptions, setWorkspaceOptions] = useState<
+    { id: string; name: string; isDefault: boolean }[]
+  >([]);
+  const activeWorkspaceId = session.tenant?.workspace ?? null;
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      setWorkspaceOptions([]);
+      return;
+    }
+    let active = true;
+    fetchSwitchableWorkspaces()
+      .then((list) => {
+        if (active) setWorkspaceOptions(list);
+      })
+      .catch(() => {
+        if (active) setWorkspaceOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, activeWorkspaceId]);
 
   const user = session.user;
   const displayName = (
@@ -214,6 +240,11 @@ export function ConsoleHeader({
             planName={planName}
             tenantOptions={tenantList}
             onSwitchTenant={(id) => void switchTenantContext(id)}
+            workspaceOptions={workspaceOptions.map((w) => ({
+              ...w,
+              isCurrent: w.id === activeWorkspaceId,
+            }))}
+            onSwitchWorkspace={(id) => void switchWorkspace(id)}
             onNavigate={onNavigate}
             onBeforeNavigate={() => setView("console")}
           />

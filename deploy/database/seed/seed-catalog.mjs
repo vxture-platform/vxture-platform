@@ -129,6 +129,20 @@ const TENANT_MENU_TREE = [
           "tenant.role.assign",
         ],
       },
+      // owner 2026-09-09 定「把工作空间做成真轴」:建 / 改 / 设默认 / 停用有了真入口,
+      // 从此它不再是租户信息页里的一行设置,而是自己一页。
+      //
+      // 节点码是 `tenant_workspaces` 不是 `workspace`:后者已被**根域**占着
+      // (`tenant.menu.workspace` = console 这个域本身),同名会把一页挂到域上去。
+      //
+      // `tenant.workspace.manage` 的**归属**仍在 `/tenant`(操作码一码一父),
+      // 这一页用它当**门**——两页共用一个码走门,不是再挂一行父子关系。
+      {
+        code: "tenant.menu.tenant_workspaces",
+        name: "工作空间",
+        route: "/workspaces",
+        icon: "stack",
+      },
     ],
   },
   {

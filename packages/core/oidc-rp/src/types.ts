@@ -128,6 +128,13 @@ export interface OidcRpClient {
     prompt?: string;
     /** optional tenant_hint for tenant switching */
     tenantHint?: string;
+    /**
+     * optional workspace_hint for workspace switching(owner 2026-09-09)。
+     *
+     * 与 tenantHint 形状对称、作用域独立:在 console 切工作空间不该动别的应用。
+     * IdP 侧站不住会静默退回默认——提示过期是常态,不该让登录失败。
+     */
+    workspaceHint?: string | undefined;
   }): string;
 
   /** Exchange an authorization code (+ PKCE verifier) for a token set. */

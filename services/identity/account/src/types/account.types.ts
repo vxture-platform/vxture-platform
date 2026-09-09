@@ -164,6 +164,14 @@ export interface UserReadRepository {
   findUserByIdentifier(
     identifier: string,
   ): Promise<UserCredentialRecord | null>;
+  /**
+   * 按**平台用户号**找人（按 ID 邀请用）。返回的字段刻意窄：只够确认「这个号对应
+   * 哪个账号、是谁」，不带凭据也不带联系方式——输入一个号就能读到对方邮箱手机号
+   * 是另一种泄露。号不合形状或查不到，一律 null。
+   */
+  findUserByUserNo(
+    userNo: string,
+  ): Promise<{ id: string; userNo: string; name: string | null } | null>;
   findCredentialById(userId: string): Promise<UserCredentialRecord | null>;
   setPassword(userId: string, passwordHash: string): Promise<void>;
   /** Update mutable profile fields (name/email/bio/timezone/language); returns the updated view or null. */

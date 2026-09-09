@@ -20,6 +20,8 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
 import { MailService } from "@vxture/core-mail";
+import type { NotificationDispatcher } from "@vxture/service-notification";
+import { CUSTOMER_NOTIFIER } from "../services/customer-notifications.wiring";
 import {
   SessionAggregator,
   type InviteMemberOutcome,
@@ -27,6 +29,7 @@ import {
 import { auditCustomerAction } from "../audit/audit-log";
 import {
   AcceptInvitationDto,
+  UpsertWorkspaceDto,
   ResetMemberPasswordDto,
   UpdateMemberDto,
   UpsertMemberDto,
@@ -39,6 +42,7 @@ import {
 import type { RequestContext } from "../types/console.types";
 import type {
   AcceptInvitationRejection,
+  WorkspaceRejection,
   TransferOwnerRejection,
 } from "@vxture/service-organization";
 import {
@@ -78,6 +82,21 @@ const TRANSFER_OWNER_ERRORS: Record<TransferOwnerRejection, () => Error> = {
  * 接受邀请的拒绝原因 → HTTP 语义。message 就是原因码,接受页按码给文案——
  * 「链接失效」「已被撤销」「你登录的不是受邀邮箱」是三件用户要做不同事的事。
  */
+/**
+ * 工作空间写动作的拒绝理由 → HTTP。穷尽 `Record`:仓储加一个理由而这里忘了映射,
+ * **编译不过**,不会静默落到某个兜底档。
+ */
+const WORKSPACE_ERRORS: Record<WorkspaceRejection, (reason: string) => Error> =
+  {
+    not_found: (reason) => new NotFoundException(reason),
+    /* 409 而不是 400:请求本身没错,是当前状态与它冲突(同名的已经存在)。 */
+    name_taken: (reason) => new ConflictException(reason),
+    default_locked: (reason) => new ConflictException(reason),
+    last_active: (reason) => new ConflictException(reason),
+    archived: (reason) => new ConflictException(reason),
+    not_empty: (reason) => new ConflictException(reason),
+  };
+
 const ACCEPT_INVITATION_ERRORS: Record<
   AcceptInvitationRejection,
   (reason: string) => Error
@@ -87,6 +106,13 @@ const ACCEPT_INVITATION_ERRORS: Record<
   revoked: (reason) => new BadRequestException(reason),
   already_accepted: (reason) => new ConflictException(reason),
   email_mismatch: (reason) => new ForbiddenException(reason),
+  /* 按用户号邀请、但接受的人不是那个号。与 email_mismatch 同档:
+     403 而不是 404——「这个邀请存在,但不是给你的」，说清楚才好换个账号登录。 */
+  user_mismatch: (reason) => new ForbiddenException(reason),
+  /* target_type 认不出来。库里那一列没有 CHECK 约束,脏数据或某个没接完的通道
+     都可能落到这里;对用户是「这个邀请用不了」,对我们是该看日志的信号。
+     用 400 不用 500:请求本身没错,是这条邀请的数据不可用。 */
+  unknown_target: (reason) => new BadRequestException(reason),
 };
 
 @Controller("api/iam")
@@ -100,6 +126,9 @@ export class IamRouter {
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
     @Inject(MailService) private readonly mail: MailService,
     @Inject(VxConfigService) private readonly config: VxConfigService,
+    /** 站内送达走统一分发器:按收件人语言渲染 + 记 notification_logs。 */
+    @Inject(CUSTOMER_NOTIFIER)
+    private readonly notifier: NotificationDispatcher,
   ) {}
 
   /** 邀请链接:CONSOLE_BASE_URL + 语言前缀(console 路由 localePrefix=always)+ 接受页。 */
@@ -143,7 +172,35 @@ export class IamRouter {
     }
   }
 
-  private async deliverInvitation(outcome: InviteMemberOutcome) {
+  /**
+   * 按通道送达邀请。
+   *
+   * `email`   —— 发邮件 + 一次性链接（`emailSent=false` 时前端出「复制链接」兜底）。
+   * `user_no` —— **不发邮件、不给链接**：目标是平台已有账号，站内落一条消息，
+   *              对方在「待办与消息」里点「同意」即加入（owner 2026-09-09）。
+   *
+   * 用户号通道为什么不给链接：给了就等于开一条「转发即可加入」的旁路，
+   * 而这条通道的全部意义就是「只有那个号本人能接受」。仓储层的
+   * `rejectAcceptance` 会拦住转发者，但前端不该先把它递出去。
+   */
+  private async deliverInvitation(
+    outcome: InviteMemberOutcome,
+    tenantId: string,
+  ) {
+    if (outcome.targetType === "user_no") {
+      await this.notifyInviteeInApp(outcome, tenantId);
+      return {
+        member: outcome.member,
+        invitationId: outcome.invitationId,
+        email: "",
+        roleCode: outcome.roleCode,
+        /* 不给链接:这条通道靠站内消息送达。前端据此不出「复制链接」弹窗。 */
+        inviteLink: null,
+        emailSent: false,
+        deliveredInApp: true,
+        expiresAt: outcome.expiresAt.toISOString(),
+      };
+    }
     const inviteLink = this.inviteLink(outcome.token, outcome.inviterLanguage);
     const emailSent = await this.sendInvitationMail(outcome, inviteLink);
     return {
@@ -153,8 +210,60 @@ export class IamRouter {
       roleCode: outcome.roleCode,
       inviteLink,
       emailSent,
+      deliveredInApp: false,
       expiresAt: outcome.expiresAt.toISOString(),
     };
+  }
+
+  /**
+   * 站内送达:往被邀请人的收件箱落一条 `tenant.invitation`。
+   *
+   * **走统一分发器,不自己写 INSERT。** 最初这里是一条手写 SQL,三处都是错的:
+   * 标题正文写死中文(收件人可能是 en-US)、不记 `notification_logs`、
+   * 链接指向 `/invitations/:id`——那个地址会跳到**邀请人**的邀请台账,
+   * 被邀请人既看不懂也没权限。
+   *
+   * 三个非默认开关各自的理由见 `NotifyInput`:
+   *   `exactRecipients` 只发被邀请人——默认会把 owner 并进来,而 owner 多半就是
+   *                     发出邀请的那个人。
+   *   `mandatory`       这条消息**就是**邀请本身,被偏好开关吞掉的话邀请人会收到
+   *                     「已送达」而对方那边什么也没有。
+   *   `inboxOnly`       前端明说了「不发邮件」,那句话必须是真的。
+   *
+   * 与邮件同一条纪律——**best-effort**:邀请行已经落库,送达失败只记日志、不回滚。
+   * 邀请人那边仍然看得到这条 pending,可以重发。去重键(收件人 × 模板 × 业务引用)
+   * 保证重发不会在对方收件箱里堆出第二条。
+   */
+  private async notifyInviteeInApp(
+    outcome: InviteMemberOutcome,
+    tenantId: string,
+  ) {
+    if (!outcome.targetUserId) return;
+    try {
+      await this.notifier.notify({
+        /* tenant_id 由调用方给,**不按租户名去查**:`tenancy.tenants.name` 没有
+           唯一索引(查过 pg_index),按名字 join 可能挑错租户。 */
+        tenantId,
+        templateCode: "tenant.invitation",
+        reference: { type: "invitation", id: outcome.invitationId },
+        params: {
+          tenantName: outcome.tenantName,
+          inviterName: outcome.inviterName,
+          roleName: outcome.roleCode,
+          expiresAt: outcome.expiresAt.toISOString().slice(0, 10),
+        },
+        exactRecipients: [outcome.targetUserId],
+        mandatory: true,
+        inboxOnly: true,
+        /* 「同意 / 拒绝」两个按钮长在收件箱那一条上,点开就在原地——
+           不另开一页,也就不需要把邀请 ID 放进地址栏。 */
+        link: "/inbox",
+      });
+    } catch (err) {
+      this.logger.warn(
+        `in-app invitation notice for ${outcome.invitationId} failed: ${String(err)}`,
+      );
+    }
   }
 
   @RequireCapability("tenant.member.read")
@@ -351,7 +460,7 @@ export class IamRouter {
     if (!outcome) {
       throw new NotFoundException("Invitation not found or not pending");
     }
-    const delivered = await this.deliverInvitation(outcome);
+    const delivered = await this.deliverInvitation(outcome, tenantId);
     auditCustomerAction(this.pool, req, {
       action: "tenant.invitation.resend",
       resourceType: "invitation",
@@ -382,6 +491,223 @@ export class IamRouter {
     };
   }
 
+  // ── 工作空间管理(owner 2026-09-09「把工作空间做成真轴」)────────────────
+  //
+  // 门用**已有的** `tenant.workspace.manage`(owner / manager 持有),不新增权限码:
+  // 「管这个租户的工作空间」正是这个码的字面意思,再造一个新码只会让权限树多一层
+  // 谁也说不清与它的差别。
+  //
+  // 读那条例外,用 `tenant.member.read`:普通成员要看得见自己在哪些工作空间里,
+  // 那不是管理动作。
+
+  @RequireCapability("tenant.member.read")
+  @Get("workspaces")
+  async listWorkspaces(@Req() req: Request & RequestContext) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const rows = await this.sessionAggregator.listWorkspaces(
+      accountId,
+      tenantId,
+    );
+    if (!rows) throw new NotFoundException("Tenant context is required");
+    return rows.map((w) => ({
+      id: w.id,
+      /* 对外给可视码,不给 uuid(§11 v4 三号解耦:界面与地址栏只出现可视码)。 */
+      workspaceNo: w.workspaceNo,
+      name: w.name,
+      description: w.description,
+      icon: w.icon,
+      isDefault: w.isDefault,
+      status: w.status,
+      memberCount: w.memberCount,
+      createdAt: w.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * 我能进哪些工作空间(切换器 + 切换预检共用)。
+   *
+   * 门只到 `tenant.member.read`?**不,连这个都不要**——「我自己能进哪儿」是
+   * 自视角的事实。但它挂在租户上下文里,所以仍走 requireTenantSession。
+   *
+   * 路径放在 `workspaces/mine` 而不是 `workspaces?scope=mine`:两条读的**判据不同**
+   * (管理视角含停用的、我的视角只含我是成员的),不是同一份数据的过滤。
+   */
+  @SelfScope()
+  @Get("workspaces/mine")
+  async listMyWorkspaces(@Req() req: Request & RequestContext) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const rows = await this.sessionAggregator.listWorkspacesForSwitch(
+      accountId,
+      tenantId,
+    );
+    if (!rows) throw new NotFoundException("Tenant context is required");
+    return rows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      isDefault: w.isDefault,
+    }));
+  }
+
+  @RequireCapability("tenant.workspace.manage")
+  @Post("workspaces")
+  async createWorkspace(
+    @Req() req: Request & RequestContext,
+    @Body() body: UpsertWorkspaceDto,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const name = (body.name ?? "").trim();
+    if (!name) throw new BadRequestException("name is required");
+    const result = await this.sessionAggregator.createWorkspace(
+      accountId,
+      tenantId,
+      { name, description: body.description ?? null, icon: body.icon ?? null },
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.create",
+      resourceType: "workspace",
+      resourceId: result.workspace.id,
+      after: { name: result.workspace.name },
+    });
+    return {
+      id: result.workspace.id,
+      workspaceNo: result.workspace.workspaceNo,
+      name: result.workspace.name,
+    };
+  }
+
+  @RequireCapability("tenant.workspace.manage")
+  @Put("workspaces/:workspaceId")
+  async updateWorkspace(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Body() body: UpsertWorkspaceDto,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    /* 三项各自可选,但**全都没给**就是一次空写:与其静默成功,不如说清楚。 */
+    if (
+      body.name === undefined &&
+      body.description === undefined &&
+      body.icon === undefined
+    ) {
+      throw new BadRequestException("nothing to update");
+    }
+    if (body.name !== undefined && !body.name.trim()) {
+      throw new BadRequestException("name is required");
+    }
+    const result = await this.sessionAggregator.updateWorkspace(
+      accountId,
+      tenantId,
+      workspaceId,
+      body,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.update",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { name: body.name ?? null },
+    });
+    return { ok: true };
+  }
+
+  @RequireCapability("tenant.workspace.manage")
+  @Post("workspaces/:workspaceId/default")
+  async setDefaultWorkspace(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.setDefaultWorkspace(
+      accountId,
+      tenantId,
+      workspaceId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.set_default",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+    });
+    return { ok: true };
+  }
+
+  /** 停用。**不是删**——订阅 / 订单 / 配额池 / 用量都挂着 workspace_id。 */
+  @RequireCapability("tenant.workspace.manage")
+  @Post("workspaces/:workspaceId/archive")
+  async archiveWorkspace(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.archiveWorkspace(
+      accountId,
+      tenantId,
+      workspaceId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw WORKSPACE_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.archive",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * 「谁在邀请我」。**自视角读**——此刻我还不是那些租户的成员,所以不能挂任何
+   * 租户能力门;`@SelfScope()` 表达的正是「作用域是我自己」。
+   *
+   * 返回里没有 token、没有目标串:目标就是本人,重复展示自己的邮箱/用户号没有
+   * 信息量;token 是邮件通道的凭证,不该从这条读路径漏出去。
+   */
+  @SelfScope()
+  @Get("invitations/incoming")
+  async listIncomingInvitations(@Req() req: Request & RequestContext) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const rows = await this.sessionAggregator.listIncomingInvitations(
+      req.user.id,
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      targetType: row.targetType,
+      roleCode: row.roleCode,
+      tenantId: row.tenantId,
+      tenantName: row.tenantName,
+      inviterName: row.inviterName,
+      expiresAt: row.expiresAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * 拒绝邀请。与接受同一张判定矩阵:一条我无权接受的邀请也不该由我拒绝,
+   * 否则任何人都能替别人把邀请回绝掉。
+   */
+  @SelfScope()
+  @Post("invitations/:invitationId/decline")
+  async declineInvitation(
+    @Req() req: Request & RequestContext,
+    @Param("invitationId") invitationId: string,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const result = await this.sessionAggregator.declineInvitation(
+      req.user.id,
+      invitationId,
+    );
+    if (!result.ok)
+      throw ACCEPT_INVITATION_ERRORS[result.reason](result.reason);
+    return { ok: true };
+  }
+
   @SelfScope()
   @Post("invitations/accept")
   async acceptInvitation(
@@ -389,10 +715,18 @@ export class IamRouter {
     @Body() body: AcceptInvitationDto,
   ) {
     if (!req.user) throw new UnauthorizedException("No active session");
-    if (!body.token) throw new BadRequestException("token is required");
+    /* token 优先:它是显式凭证。两者都没有才是真的无法定位。 */
+    const locator = body.token
+      ? { token: body.token }
+      : body.invitationId
+        ? { invitationId: body.invitationId }
+        : null;
+    if (!locator) {
+      throw new BadRequestException("token or invitationId is required");
+    }
     const result = await this.sessionAggregator.acceptInvitation(
       req.user.id,
-      body.token,
+      locator,
     );
     if (!result.ok)
       throw ACCEPT_INVITATION_ERRORS[result.reason](result.reason);
@@ -447,7 +781,7 @@ export class IamRouter {
     if (!outcome) {
       throw new NotFoundException("Tenant member could not be invited");
     }
-    const delivered = await this.deliverInvitation(outcome);
+    const delivered = await this.deliverInvitation(outcome, tenantId);
 
     auditCustomerAction(this.pool, req, {
       action: "tenant.member.invite",

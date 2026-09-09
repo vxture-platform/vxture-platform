@@ -123,6 +123,16 @@ export class AccountService {
   }
 
   /**
+   * 按**平台用户号**找人（按 ID 邀请用）。与 `findUserByIdentifier` 刻意分开：
+   * 那一个是登录凭据查询，把用户号加进去等于让一个**公开的可视码**变成登录标识。
+   */
+  findUserByUserNo(
+    userNo: string,
+  ): Promise<{ id: string; userNo: string; name: string | null } | null> {
+    return this.users.findUserByUserNo(userNo);
+  }
+
+  /**
    * Verify an identifier (account|email|phone) + password. Returns the user on
    * success, null otherwise. Constant-ish: a missing user still runs a verify to
    * blunt user-enumeration timing (only meaningful once a dummy hash is used;

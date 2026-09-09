@@ -197,6 +197,39 @@ export class PgUserRepository implements UserReadRepository {
     return mapCredential(result.rows[0]);
   }
 
+  /**
+   * 按**平台用户号**找人（owner 2026-09-09，按 ID 邀请用）。
+   *
+   * ── 为什么不塞进 findUserByIdentifier ──
+   * 那一个是**登录凭据查询**（account / email / phone 三选一命中即认人）。把
+   * `user_no` 加进去等于让用户号变成第四种登录标识——而它是**可视码、会被公开**
+   * （邀请时要报给别人），公开的东西不能当登录标识用。
+   *
+   * 返回的字段刻意窄：只够确认「这个号对应哪个账号、是谁」，不带凭据、不带联系方式。
+   * 邀请方输入一个号就能读到对方邮箱手机号，那是另一种泄露。
+   */
+  async findUserByUserNo(
+    userNo: string,
+  ): Promise<{ id: string; userNo: string; name: string | null } | null> {
+    const raw = userNo.trim();
+    if (!/^\d{1,20}$/.test(raw)) return null;
+    const result = await this.pool.query<{
+      id: string;
+      user_no: string;
+      name: string | null;
+    }>(
+      `select u.id, u.user_no::text as user_no, p.display_name as name
+         from account.users u
+         left join account.user_profiles p on p.user_id = u.id
+        where u.deleted_at is null and ${READABLE_STATUS_SQL}
+          and u.user_no::text = $1
+        limit 1`,
+      [raw],
+    );
+    const row = result.rows[0];
+    return row ? { id: row.id, userNo: row.user_no, name: row.name } : null;
+  }
+
   async findCredentialById(
     userId: string,
   ): Promise<UserCredentialRecord | null> {

@@ -13,34 +13,129 @@ describe("invitation-rules", () => {
   const future = new Date(Date.now() + 60_000);
   const past = new Date(Date.now() - 60_000);
   const base = { targetType: "email", target: "Ann@Example.com" };
+  /** 「谁也不是」——既没邮箱也没用户号。行状态类的拒绝与人无关，用它做入参。 */
+  const NOBODY = { email: null, userNo: null };
 
   it("pending 且未过期、邮箱一致(大小写不敏感)→ 可接受", () => {
     expect(
       rejectAcceptance(
         { ...base, status: "pending", expiresAt: future },
-        "ann@example.com",
+        { email: "ann@example.com", userNo: null },
       ),
     ).toBeNull();
   });
 
   it("邮箱不符 / 无邮箱 → email_mismatch", () => {
     const inv = { ...base, status: "pending", expiresAt: future };
-    expect(rejectAcceptance(inv, "bob@example.com")).toBe("email_mismatch");
-    expect(rejectAcceptance(inv, null)).toBe("email_mismatch");
+    expect(
+      rejectAcceptance(inv, { email: "bob@example.com", userNo: null }),
+    ).toBe("email_mismatch");
+    expect(rejectAcceptance(inv, NOBODY)).toBe("email_mismatch");
+  });
+
+  /**
+   * 按平台用户号邀请（owner 2026-09-09）。
+   *
+   * 与邮箱通道同一条要求：**邀请链接会被转发**，收件人校验是这条链上唯一挡住
+   * 「链接给谁谁就能进」的东西。这一组用例存在的理由就是它。
+   */
+  describe("user_no 通道", () => {
+    const byNo = { targetType: "user_no", target: "1000000017" };
+
+    it("用户号一致 → 可接受", () => {
+      expect(
+        rejectAcceptance(
+          { ...byNo, status: "pending", expiresAt: future },
+          { email: null, userNo: "1000000017" },
+        ),
+      ).toBeNull();
+    });
+
+    it("**用户号不符 → user_mismatch**（链接被转发给别人）", () => {
+      expect(
+        rejectAcceptance(
+          { ...byNo, status: "pending", expiresAt: future },
+          { email: null, userNo: "1000000099" },
+        ),
+      ).toBe("user_mismatch");
+    });
+
+    it("没有用户号 → user_mismatch，不是放行", () => {
+      expect(
+        rejectAcceptance(
+          { ...byNo, status: "pending", expiresAt: future },
+          NOBODY,
+        ),
+      ).toBe("user_mismatch");
+    });
+
+    it("邮箱对得上也不算数 —— 这一条邀请核的是用户号", () => {
+      /* 交叉校验：两个通道各管各的判据。少了这条，一个「邮箱恰好也对」的人
+         能接受一条本该只有某个用户号才能接受的邀请。 */
+      expect(
+        rejectAcceptance(
+          { ...byNo, status: "pending", expiresAt: future },
+          { email: "ann@example.com", userNo: null },
+        ),
+      ).toBe("user_mismatch");
+    });
+
+    it("首尾空白不算不符（库里存的是写入时的原样）", () => {
+      expect(
+        rejectAcceptance(
+          { ...byNo, status: "pending", expiresAt: future },
+          { email: null, userNo: " 1000000017 " },
+        ),
+      ).toBeNull();
+    });
+
+    it("行状态仍然优先：已撤销的邀请，号对得上也说「已撤销」", () => {
+      expect(
+        rejectAcceptance(
+          { ...byNo, status: "revoked", expiresAt: future },
+          { email: null, userNo: "1000000017" },
+        ),
+      ).toBe("revoked");
+    });
+  });
+
+  /**
+   * 认不出的 target_type 一律拒绝。
+   *
+   * 这一条钉的是 `switch` 的 **default 分支**：原来的写法是
+   * `if (targetType === "email") 校验`，意味着**任何新增的 targetType 默认放行**
+   * ——加一种通道就开一个洞，而且不报错。库里 `target_type` 没有 CHECK 约束，
+   * 脏数据也会落到这里。
+   */
+  it("认不出的 target_type → unknown_target，不放行", () => {
+    expect(
+      rejectAcceptance(
+        {
+          targetType: "phone",
+          target: "13800000000",
+          status: "pending",
+          expiresAt: future,
+        },
+        { email: "ann@example.com", userNo: "1000000017" },
+      ),
+    ).toBe("unknown_target");
   });
 
   it("行状态优先于邮箱:撤销 / 已接受 / 过期各有其名", () => {
     expect(
-      rejectAcceptance({ ...base, status: "revoked", expiresAt: future }, null),
+      rejectAcceptance(
+        { ...base, status: "revoked", expiresAt: future },
+        NOBODY,
+      ),
     ).toBe("revoked");
     expect(
       rejectAcceptance(
         { ...base, status: "accepted", expiresAt: future },
-        null,
+        NOBODY,
       ),
     ).toBe("already_accepted");
     expect(
-      rejectAcceptance({ ...base, status: "pending", expiresAt: past }, null),
+      rejectAcceptance({ ...base, status: "pending", expiresAt: past }, NOBODY),
     ).toBe("expired");
   });
 
@@ -74,11 +169,10 @@ describe("MockOrganizationRepository invitations & member status", () => {
 
   it("接受成功:邀请转 accepted,租户级 + 默认工作空间两级 membership 都挂上", async () => {
     const { invitation, token } = await invite();
-    const result = await repo.acceptInvitation(
-      token,
-      "u-ann",
-      "ann@example.com",
-    );
+    const result = await repo.acceptInvitation({ token: token }, "u-ann", {
+      email: "ann@example.com",
+      userNo: null,
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.tenantName).toBe("Acme");
@@ -92,17 +186,19 @@ describe("MockOrganizationRepository invitations & member status", () => {
     const list = await repo.listInvitations(orgId);
     expect(list.find((i) => i.id === invitation.id)?.status).toBe("accepted");
     // 同一链接不能再用一次。
-    const again = await repo.acceptInvitation(
-      token,
-      "u-ann",
-      "ann@example.com",
-    );
+    const again = await repo.acceptInvitation({ token: token }, "u-ann", {
+      email: "ann@example.com",
+      userNo: null,
+    });
     expect(again).toEqual({ ok: false, reason: "already_accepted" });
   });
 
   it("邮箱不符 → email_mismatch,邀请仍是 pending", async () => {
     const { invitation, token } = await invite();
-    const result = await repo.acceptInvitation(token, "u-bob", "bob@x.com");
+    const result = await repo.acceptInvitation({ token: token }, "u-bob", {
+      email: "bob@x.com",
+      userNo: null,
+    });
     expect(result).toEqual({ ok: false, reason: "email_mismatch" });
     const list = await repo.listInvitations(orgId);
     expect(list.find((i) => i.id === invitation.id)?.status).toBe("pending");
@@ -122,7 +218,10 @@ describe("MockOrganizationRepository invitations & member status", () => {
     expect(await repo.revokeInvitation(invitation.id, orgId)).toBe(true);
     expect(await repo.rotateInvitationToken(invitation.id, orgId)).toBeNull();
     expect(
-      await repo.acceptInvitation(rotated!.token, "u-ann", "ann@example.com"),
+      await repo.acceptInvitation({ token: rotated!.token }, "u-ann", {
+        email: "ann@example.com",
+        userNo: null,
+      }),
     ).toEqual({ ok: false, reason: "revoked" });
   });
 
@@ -159,5 +258,39 @@ describe("MockOrganizationRepository invitations & member status", () => {
     expect(await repo.removeOrgMember(orgId, "u-ann")).toBe(true);
     expect(await repo.getWorkspaceMembership("u-ann", ws!.id)).toBeNull();
     expect(await repo.getOrgMemberDetail(orgId, "u-ann")).toBeNull();
+  });
+});
+/**
+ * declined 的取档（owner 2026-09-09）。
+ *
+ * 这一条钉的不是「能不能拒绝」，而是**拒绝之后邀请人看到的是什么**。
+ * `deriveInvitationStatus` 有个兜底 `expired`：任何没在白名单里点名的状态都会
+ * 悄悄变成「已过期」。漏点名不报错——它只是把「对方拒绝了」讲成「没人理」。
+ */
+describe("declined 取档", () => {
+  const future = new Date(Date.now() + 60_000);
+
+  it("declined 原样透出，不落到兜底的 expired", () => {
+    expect(deriveInvitationStatus("declined", future)).toBe("declined");
+  });
+
+  /* 反向对照：兜底确实还在（否则上一条不构成证明——一个「原样返回一切」的实现
+     同样能让它通过）。 */
+  it("未知状态仍走兜底 → expired", () => {
+    expect(deriveInvitationStatus("something_new", future)).toBe("expired");
+  });
+
+  /* 拒绝与接受共用同一张矩阵：一条我无权接受的邀请，也不该由我来拒绝——
+     否则任何人都能替别人把邀请回绝掉。 */
+  it("拒绝走的是同一张矩阵：号不对就不许动", () => {
+    const inv = {
+      targetType: "user_no",
+      target: "1000000017",
+      status: "pending",
+      expiresAt: future,
+    };
+    expect(rejectAcceptance(inv, { email: null, userNo: "1000000099" })).toBe(
+      "user_mismatch",
+    );
   });
 });

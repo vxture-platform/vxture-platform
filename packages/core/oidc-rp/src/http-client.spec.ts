@@ -84,6 +84,39 @@ describe("HttpOidcRpClient.buildAuthorizeUrl", () => {
     expect(url.searchParams.get("prompt")).toBe("none");
     expect(url.searchParams.get("tenant_hint")).toBe("tn1");
   });
+
+  /**
+   * 工作空间切换（owner 2026-09-09）。
+   *
+   * 这一条钉的是**参数名那个字面量**。两端各写一次：RP 这边 set("workspace_hint")，
+   * IdP 那边读 `q.workspace_hint`——而 IdP 的 query 类型是
+   * `Record<string, string | undefined>`，写错名字**照样编译通过**，症状是切换
+   * 静默无效（永远落在默认工作空间），最难查。类型检查在这里帮不上忙，只能钉字面量。
+   */
+  it("带上 workspaceHint 时写出 workspace_hint 参数", () => {
+    const url = new URL(
+      makeClient().buildAuthorizeUrl({
+        state: "st",
+        nonce: "nc",
+        codeChallenge: "ch",
+        workspaceHint: "ws-7",
+      }),
+    );
+    expect(url.searchParams.get("workspace_hint")).toBe("ws-7");
+  });
+
+  /* 反向对照：不给就不该出现这个参数。带一个空的 workspace_hint 会让 IdP 把
+     「没指定」读成「指定了空字符串」。 */
+  it("不给 workspaceHint 时不写这个参数", () => {
+    const url = new URL(
+      makeClient().buildAuthorizeUrl({
+        state: "st",
+        nonce: "nc",
+        codeChallenge: "ch",
+      }),
+    );
+    expect(url.searchParams.has("workspace_hint")).toBe(false);
+  });
 });
 
 describe("HttpOidcRpClient.verifyIdToken / verifyAccessToken (JWKS round-trip)", () => {

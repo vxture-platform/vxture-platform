@@ -155,7 +155,11 @@
       "tenant_role_create": "新建角色",
       "tenant_role_delete": "删除角色",
       "tenant_role_update": "修改角色",
-      "tenant_verification_submit": "提交企业认证"
+      "tenant_verification_submit": "提交企业认证",
+      "tenant_workspace_archive": "停用工作空间",
+      "tenant_workspace_create": "新建工作空间",
+      "tenant_workspace_set_default": "设为默认工作空间",
+      "tenant_workspace_update": "修改工作空间"
     },
     "table": {
       "title": "操作记录",
@@ -474,7 +478,21 @@
     "readBadge": "已读",
     "todoBadge": "待办",
     "unread": "{count} 条未读",
-    "unreadBadge": "未读"
+    "unreadBadge": "未读",
+    "invite": {
+      "accept": "同意",
+      "decline": "拒绝",
+      "failed": "操作失败，请稍后重试。",
+      "error": {
+        "not_found": "这条邀请不存在或已被撤销。",
+        "expired": "这条邀请已过期，请让邀请人重新发送。",
+        "revoked": "这条邀请已被邀请人撤销。",
+        "already_accepted": "这条邀请已经处理过了。",
+        "email_mismatch": "这条邀请发给的是另一个邮箱，请用该邮箱对应的账号登录。",
+        "user_mismatch": "这条邀请发给的是另一个用户号，请用该账号登录。",
+        "unknown_target": "这条邀请的数据不可用，请让邀请人重新发送。"
+      }
+    }
   },
   "invitationsPage": {
     "title": "邀请记录",
@@ -724,6 +742,9 @@
       },
       "fields": {
         "email": "邮箱",
+        "channel": "邀请方式",
+        "userNo": "用户号",
+        "userNoHint": "对方必须是已注册的平台用户。不发邮件——邀请会出现在对方的「待办与消息」里，由本人同意后加入。",
         "role": "角色",
         "defaultRole": "默认成员",
         "nextPassword": "新临时密码"
@@ -740,6 +761,10 @@
         "verb": "撤销给",
         "consequence": "邀请链接立刻失效,对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方加入,需要再发一次邀请。",
         "keep": "保留邀请"
+      },
+      "channel": {
+        "email": "邮箱",
+        "userNo": "用户号"
       }
     },
     "feedback": {
@@ -765,6 +790,7 @@
       "memberDisableError": "成员禁用失败，请稍后重试。",
       "memberEnableError": "成员启用失败，请稍后重试。",
       "inviteNoEmail": "邀请已创建,但邮件未能发出,请把链接手动发给对方。",
+      "inviteSentInApp": "邀请已送达对方账号，等待本人同意。",
       "inviteResent": "邀请已重发。",
       "inviteRevoked": "邀请已撤销。",
       "resendError": "重发失败,请稍后重试。",
@@ -2201,7 +2227,7 @@
     "workspace": "工作空间",
     "defaultWorkspace": "默认工作空间",
     "defaultTag": "默认",
-    "workspaceSwitchComingSoon": "多工作空间切换即将支持",
+    "defaultWorkspaceTag": "登录后默认进入",
     "plan": "计划",
     "freePlan": "未订阅",
     "orgTenant": "组织租户",
@@ -2264,6 +2290,10 @@
       "members": {
         "label": "成员管理",
         "description": "邀请、访问审查与团队成员管理"
+      },
+      "workspaces": {
+        "label": "工作空间",
+        "description": "建立与管理这个租户下的工作空间"
       },
       "subscription": {
         "label": "订阅管理",
@@ -2937,7 +2967,8 @@
       "renewal": "续订",
       "quota": "配额",
       "invitation": "邀请",
-      "addon": "加油包"
+      "addon": "加油包",
+      "invitation_incoming": "邀请我"
     },
     "items": {
       "payTitle": "支付「{product}」的订阅订单",
@@ -2957,7 +2988,12 @@
       "invitesAction": "去邀请管理",
       "addonTitle": "支付加油包「{pack}」的订单",
       "addonDetail": "请在 {date} 前完成转账申报,逾期自动取消",
-      "addonAction": "去申报"
+      "addonAction": "去申报",
+      "incomingInviteTitle": "{tenant} 邀请你加入",
+      "incomingInviteDetail": "{inviter} 邀请你以「{role}」身份加入，{expires} 前有效。",
+      "incomingInviteAction": "去处理",
+      "incomingInviteUnnamedTenant": "一个组织",
+      "incomingInviteUnknownInviter": "对方"
     },
     "loadFailed": "部分待办来源读取失败，列表可能不完整"
   },
@@ -3292,5 +3328,65 @@
   "workspacePicker": {
     "defaultWorkspace": "默认工作区",
     "switchFailed": "切换租户失败，请重试；当前归属未变更"
+  },
+  "workspacesPage": {
+    "title": "工作空间",
+    "description": "订阅、配额与用量都按工作空间归属。停用不会删除其中的数据。",
+    "rowMenu": "工作空间操作",
+    "table": {
+      "title": "工作空间清单",
+      "description": "当前有 {count} 个启用中的工作空间。",
+      "colName": "名称",
+      "colStatus": "状态",
+      "colMembers": "成员数",
+      "colDescription": "说明",
+      "colCreatedAt": "创建时间",
+      "default": "默认",
+      "empty": "还没有工作空间",
+      "emptyHint": "新建一个工作空间，把订阅与配额分开归属。"
+    },
+    "status": {
+      "active": "启用中",
+      "archived": "已停用"
+    },
+    "actions": {
+      "create": "新建工作空间",
+      "edit": "编辑",
+      "setDefault": "设为默认",
+      "alreadyDefault": "已经是默认工作空间",
+      "archivedHint": "已停用的工作空间不能设为默认",
+      "archive": "停用",
+      "alreadyArchived": "已经停用了",
+      "defaultLockedHint": "默认工作空间不能停用，请先把默认设到别的工作空间",
+      "archiveVerb": "停用",
+      "archiveConsequence": "停用后成员不能再进入这个工作空间。其中的订阅、账单与用量记录不会被删除，随时可以重新启用。",
+      "archiveKeep": "不停用"
+    },
+    "dialog": {
+      "createTitle": "新建工作空间",
+      "createHint": "建好后你会成为它的第一个成员。",
+      "editTitle": "编辑工作空间",
+      "editHint": "改名不影响其中的订阅与用量归属。",
+      "name": "名称",
+      "descriptionLabel": "说明",
+      "save": "保存",
+      "cancel": "取消"
+    },
+    "feedback": {
+      "created": "工作空间已创建。",
+      "updated": "已保存。",
+      "defaultSet": "已设为默认工作空间。",
+      "archived": "工作空间已停用。"
+    },
+    "errors": {
+      "generic": "操作失败，请稍后重试。",
+      "nameRequired": "请填写工作空间名称。",
+      "not_found": "这个工作空间不存在或已被删除。",
+      "name_taken": "同名的工作空间已经存在。",
+      "default_locked": "默认工作空间不能停用，请先把默认设到别的工作空间。",
+      "last_active": "至少要保留一个启用中的工作空间。",
+      "archived": "已停用的工作空间不能设为默认。",
+      "not_empty": "这个工作空间里还有内容，无法完成该操作。"
+    }
   }
 }

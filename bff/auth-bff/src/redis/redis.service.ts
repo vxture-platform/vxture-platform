@@ -80,6 +80,8 @@ export interface OidcLoginChallenge {
   nonce?: string | undefined;
   /** active-org hint carried from the authorize request. */
   orgHint?: string | undefined;
+  /** 工作空间提示。交互式登录时要跨过登录页带到发码那一刻,所以存进挑战里。 */
+  workspaceHint?: string | undefined;
 }
 
 /**
@@ -742,6 +744,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * 活跃工作空间的 (sid → clientId → workspaceId) 映射键。
+   *
+   * 与 org 那把**分开两个键**,不是合成一个 hash:两级各自按应用切换
+   * (在 console 切工作空间,不该动 website 那边的任何东西),分开存让每一级的
+   * 生命周期与失效各归各的。
+   */
+  private sessionActiveWorkspaceKey(sid: string): string {
+    return `${this.prefix}sess:${sid}:ws`;
+  }
+
+  /**
    * 这个中央会话给哪些 client 发过令牌。
    *
    * **与 `:org` 分开是必须的**，不是洁癖：`:org` 只在 customer realm 写入，
@@ -822,6 +835,45 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       throw new ServiceUnavailableException(
         "OIDC active_org persistence failed",
       );
+    }
+  }
+
+  /**
+   * 记住这个 (sid, clientId) 选中的工作空间;TTL 跟着会话。
+   *
+   * 与 active_org 同形,但**失败不抛**:工作空间选择是个便利,记不住的后果是
+   * 下次回到默认;active_org 记不住的后果是进错租户,所以那边要抛。
+   */
+  async setOidcActiveWorkspace(
+    sid: string,
+    clientId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const client = this.requireReadyClient();
+    const key = this.sessionActiveWorkspaceKey(sid);
+    try {
+      await client.hset(key, clientId, workspaceId);
+      const ttl = await client.ttl(this.sessionKey(sid));
+      if (ttl > 0) await client.expire(key, ttl);
+    } catch (err) {
+      this.logger.error(`setOidcActiveWorkspace failed: ${String(err)}`);
+    }
+  }
+
+  /** 读这个 (sid, clientId) 选中的工作空间;没有 / 读不到都给 null(退回默认)。 */
+  async getOidcActiveWorkspace(
+    sid: string,
+    clientId: string,
+  ): Promise<string | null> {
+    const client = this.requireReadyClient();
+    try {
+      return (
+        (await client.hget(this.sessionActiveWorkspaceKey(sid), clientId)) ??
+        null
+      );
+    } catch (err) {
+      this.logger.error(`getOidcActiveWorkspace failed: ${String(err)}`);
+      return null;
     }
   }
 

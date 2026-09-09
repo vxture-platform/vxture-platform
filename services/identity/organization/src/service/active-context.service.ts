@@ -13,8 +13,11 @@ import type {
  *
  * Shaping only: returns plain context to whatever issues tokens (identity-server,
  * Batch 4/5). Does NOT issue tokens, set cookies, or touch Redis/session.
- * Multi-workspace switching is post-MVP (default workspace only); active-ORG switch
- * is supported via the optional hint + listOrgsForSwitch.
+ *
+ * 组织与工作空间**两级都可切**(工作空间那一级 owner 2026-09-09 定):各自一个可选
+ * 提示,形状对称。提示站不住时一律**退回默认**而不是报错——提示来自地址栏与
+ * Redis 里的旧值,过期是常态(工作空间被停用、我被移出租户),那种时候人该落回
+ * 默认,而不是登录失败。
  */
 @Injectable()
 export class ActiveContextService {
@@ -33,6 +36,7 @@ export class ActiveContextService {
   async resolveActiveContext(
     userId: string,
     activeOrgHint?: string,
+    activeWorkspaceHint?: string | null,
   ): Promise<ActiveOrgContext | null> {
     const memberships = await this.repo.listOrgMembershipsForUser(userId);
     if (memberships.length === 0) return null;
@@ -46,13 +50,15 @@ export class ActiveContextService {
       memberships[0]!;
 
     const roles = [`org:${active.role}`];
-    // Default workspace + this user's workspace role in a single round-trip
-    // (was two sequential reads). membershipRole is null when the user has no
-    // active workspace membership; the workspace is still returned.
+    /* 选中的工作空间 + 我在它里面的角色,一次往返。给了提示就用提示指的那个
+       (要求:属于这个租户、启用中、我是活跃成员),否则退回默认。
+       membershipRole 为 null = 我不是它的成员——那只可能发生在退回默认的那条路上
+       (默认工作空间存在但我没被挂进去),此时工作空间照给、角色不给。 */
     const { workspace, membershipRole } =
-      await this.repo.getDefaultWorkspaceWithMembership(
+      await this.repo.resolveWorkspaceForSession(
         active.organizationId,
         userId,
+        activeWorkspaceHint,
       );
     let activeWorkspace: string | null = null;
     let activeWorkspaceName: string | null = null;

@@ -2,24 +2,30 @@ import { Inject, Injectable } from "@nestjs/common";
 import { ORGANIZATION_REPOSITORY } from "../tokens";
 import type {
   AcceptInvitationResult,
-  SubmitTenantVerificationInput,
   CreateInvitationInput,
+  CreateWorkspaceInput,
+  DeclineInvitationResult,
+  IncomingInvitation,
+  InvitationLocator,
   InvitationLookup,
   InvitationView,
-  OrgMemberStatus,
-  RotatedInvitation,
-  OrganizationProfileView,
-  OrganizationReadRepository,
   OrgLogoRecord,
   OrgMemberDetail,
+  OrgMemberStatus,
   OrgMembershipView,
   OrgProfileUpdateInput,
   OrgRole,
   OrgRoleCatalogEntry,
   OrgView,
+  OrganizationProfileView,
+  OrganizationReadRepository,
   PermissionCatalogEntry,
   ProvisionedOrg,
+  RotatedInvitation,
+  SubmitTenantVerificationInput,
   TransferOwnerResult,
+  UpdateWorkspaceInput,
+  WorkspaceDetail,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -207,11 +213,52 @@ export class OrganizationService {
     return this.repo.createInvitation(input);
   }
   acceptInvitation(
-    token: string,
+    locator: InvitationLocator,
     userId: string,
-    userEmail: string | null,
+    identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
-    return this.repo.acceptInvitation(token, userId, userEmail);
+    return this.repo.acceptInvitation(locator, userId, identity);
+  }
+  listInvitationsForIdentity(
+    identity: { email: string | null; userNo: string | null },
+    limit?: number,
+  ): Promise<IncomingInvitation[]> {
+    return this.repo.listInvitationsForIdentity(identity, limit);
+  }
+  declineInvitation(
+    invitationId: string,
+    identity: { email: string | null; userNo: string | null },
+  ): Promise<DeclineInvitationResult> {
+    return this.repo.declineInvitation(invitationId, identity);
+  }
+  resolveWorkspaceForSession(
+    orgId: string,
+    userId: string,
+    hint?: string | null,
+  ) {
+    return this.repo.resolveWorkspaceForSession(orgId, userId, hint);
+  }
+  listWorkspacesForSwitch(orgId: string, userId: string) {
+    return this.repo.listWorkspacesForSwitch(orgId, userId);
+  }
+  listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
+    return this.repo.listWorkspaces(tenantId);
+  }
+  createWorkspace(input: CreateWorkspaceInput) {
+    return this.repo.createWorkspace(input);
+  }
+  updateWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceInput,
+  ) {
+    return this.repo.updateWorkspace(tenantId, workspaceId, input);
+  }
+  setDefaultWorkspace(tenantId: string, workspaceId: string) {
+    return this.repo.setDefaultWorkspace(tenantId, workspaceId);
+  }
+  archiveWorkspace(tenantId: string, workspaceId: string) {
+    return this.repo.archiveWorkspace(tenantId, workspaceId);
   }
   getInvitationByToken(token: string): Promise<InvitationLookup | null> {
     return this.repo.getInvitationByToken(token);

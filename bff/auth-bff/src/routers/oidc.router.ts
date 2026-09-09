@@ -126,6 +126,7 @@ export class OidcRouter {
         nonce: q.nonce,
         prompt: q.prompt,
         tenantHint: q.tenant_hint,
+        workspaceHint: q.workspace_hint,
       },
       sids,
     );

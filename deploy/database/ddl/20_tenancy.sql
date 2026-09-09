@@ -211,7 +211,9 @@ CREATE TABLE tenancy.invitations (
     created_at    timestamptz  NOT NULL DEFAULT now(),
     updated_at    timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT uq_invitations_token_hash UNIQUE (token_hash),
-    CONSTRAINT chk_invitations_status    CHECK (status IN ('pending','accepted','expired','revoked'))
+    -- declined = 被邀请人自己拒绝；revoked = 邀请人撤回。两者都终结这条邀请，但
+    -- 谁做的这件事不一样——合成一个状态会让邀请台账把「对方不来」写成「我撤回了」。
+    CONSTRAINT chk_invitations_status    CHECK (status IN ('pending','accepted','expired','revoked','declined'))
 );
 CREATE INDEX idx_invitations_tenant_id    ON tenancy.invitations (tenant_id);
 CREATE INDEX idx_invitations_workspace_id ON tenancy.invitations (workspace_id);

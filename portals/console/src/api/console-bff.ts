@@ -338,14 +338,189 @@ export function memberErrorCode(error: unknown): MemberErrorCode | null {
     : null;
 }
 
-/** 邀请 / 重发的产出:待接受记录 + 一次性链接 + 邮件是否发出。 */
+/** 一个工作空间。`workspaceNo` 是可视码——界面与地址栏只出现它,不出现 uuid。 */
+export interface ConsoleWorkspace {
+  id: string;
+  workspaceNo: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  isDefault: boolean;
+  status: "active" | "archived";
+  memberCount: number;
+  createdAt: string;
+}
+
+/**
+ * 我在当前租户能进哪些工作空间(切换器用)。
+ *
+ * 与 `fetchWorkspaces` 不同:那个是**管理视角**(租户下的全部,含停用的);
+ * 这个是**我的视角**——只有我是活跃成员、且启用中的。切换器里列出一个我进不去的
+ * 工作空间,点了只会被预检打回来,看起来像「按钮没反应」。
+ *
+ * 名字避开 `fetchMyWorkspaces`:那个虽然叫 workspaces,给的其实是**我的租户列表**
+ * (每个租户配一个默认工作空间),是租户切换器的数据。两件事,别混。
+ */
+export async function fetchSwitchableWorkspaces(): Promise<
+  Pick<ConsoleWorkspace, "id" | "name" | "isDefault">[]
+> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces/mine")}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  return (await response.json()) as Pick<
+    ConsoleWorkspace,
+    "id" | "name" | "isDefault"
+  >[];
+}
+
+/** 当前租户的工作空间清单(不含已删)。看这张表只要 tenant.member.read。 */
+export async function fetchWorkspaces(): Promise<ConsoleWorkspace[]> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces")}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  return (await response.json()) as ConsoleWorkspace[];
+}
+
+export async function createWorkspace(payload: {
+  name: string;
+  description?: string | null;
+}): Promise<{ id: string; workspaceNo: string; name: string }> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/workspaces")}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+  return (await response.json()) as {
+    id: string;
+    workspaceNo: string;
+    name: string;
+  };
+}
+
+/**
+ * 改名 / 改说明。**不给的项不改,给 null 的项清空**——两者是不同的意思,
+ * 所以调用方要么别传这个键,要么显式传 null,不要传空串。
+ */
+export async function updateWorkspace(
+  workspaceId: string,
+  payload: { name?: string; description?: string | null },
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}`)}`,
+    {
+      method: "PUT",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 设为默认(登录后的落点)。停用的设不成默认。 */
+export async function setDefaultWorkspace(workspaceId: string): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/default`)}`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 停用。**不是删**——订阅 / 订单 / 配额池 / 用量都挂着 workspace_id。 */
+export async function archiveWorkspace(workspaceId: string): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/archive`)}`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/**
+ * 「谁在邀请我」的一条。**自视角**——目标就是本人,所以不含目标串;也不含 token
+ * (那是邮件通道的凭证,不从这条读路径出来)。
+ */
+export interface IncomingInvitation {
+  id: string;
+  /** 这条邀请按哪条通道发来(email / user_no)。 */
+  targetType: string;
+  roleCode: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  inviterName: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/**
+ * 有谁在邀请我加入。跨租户、自视角——此刻我还不是那些租户的成员,所以这条**不带
+ * 租户头**(`withTenant`):带上当前租户会让它读成「当前租户里的邀请」,那是另一件事。
+ */
+export async function fetchIncomingInvitations(): Promise<
+  IncomingInvitation[]
+> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/incoming`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  return (await response.json()) as IncomingInvitation[];
+}
+
+/** 同意加入。站内通道没有 token,凭的是当前登录身份。 */
+export async function acceptIncomingInvitation(
+  invitationId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/accept`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invitationId }),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/** 拒绝加入。与同意同一张判定矩阵——无权接受者亦无权拒绝。 */
+export async function declineIncomingInvitation(
+  invitationId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/${encodeURIComponent(invitationId)}/decline`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+/**
+ * 邀请 / 重发的产出。两条通道的形状不同,别按邮箱那条的假设读:
+ *
+ *   邮箱通道   `inviteLink` 是一次性链接,`emailSent=false` 时前端出「复制链接」兜底。
+ *   用户号通道 `inviteLink=null`、`email=""`、`deliveredInApp=true`——**没有链接可复制**,
+ *              邀请靠站内消息送到对方的「待办与消息」,由本人同意。
+ */
 export interface InviteMemberResult {
   member: MemberRecord;
   invitationId: string;
   email: string;
   roleCode: string;
-  inviteLink: string;
+  inviteLink: string | null;
   emailSent: boolean;
+  /** 走的是站内送达(用户号通道)。为真时 inviteLink 必为 null。 */
+  deliveredInApp: boolean;
   expiresAt: string;
 }
 
@@ -372,8 +547,18 @@ export async function createMember(payload: {
   return (await response.json()) as MemberRecord;
 }
 
+/**
+ * 邀请成员。两条通道**二选一**（owner 2026-09-09）：
+ *
+ *   `email`  —— 发链接，对方可以还没有账号。
+ *   `userNo` —— 目标必须是平台已有账号：不发邮件、不给链接，站内落一条消息，
+ *               对方在「待办与消息」里同意才加入。
+ *
+ * 只给该给的那一项：两个都给会让后端的分叉判据（给了哪一个）多出一种歧义。
+ */
 export async function inviteMember(payload: {
-  email: string;
+  email?: string;
+  userNo?: string;
   roleCode?: string | null;
 }): Promise<InviteMemberResult> {
   const response = await fetch(
@@ -1929,6 +2114,21 @@ export function buildTenantSwitchUrl(
 ): string {
   const params = new URLSearchParams({ tenantId, returnTo });
   return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/auth/switch-tenant?${params.toString()}`;
+}
+
+/**
+ * 切换活跃工作空间的入口 URL(owner 2026-09-09)。与切租户**同一条链路、同一个理由**:
+ * 顶层导航而不是 fetch——IdP 要收到中央会话 cookie 才能静默发码。
+ *
+ * console-bff 预检「我能进这个工作空间吗」→ 302 IdP(prompt=none + workspace_hint)
+ * → /auth/callback 建新 RP 会话(新 active_workspace)→ 回到 returnTo。
+ */
+export function buildWorkspaceSwitchUrl(
+  workspaceId: string,
+  returnTo: string,
+): string {
+  const params = new URLSearchParams({ workspaceId, returnTo });
+  return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/auth/switch-workspace?${params.toString()}`;
 }
 
 /**

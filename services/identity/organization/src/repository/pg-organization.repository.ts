@@ -4,29 +4,35 @@ import type { Pool, PoolClient } from "pg";
 import { ORG_PG_POOL } from "../tokens";
 import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import type {
-  CloseTenantResult,
   AcceptInvitationResult,
+  CloseTenantResult,
   CreateInvitationInput,
+  CreateWorkspaceInput,
+  DeclineInvitationResult,
+  IncomingInvitation,
+  InvitationListItem,
   InvitationLookup,
   InvitationView,
-  OrgMemberStatus,
-  RotatedInvitation,
-  OrganizationProfileView,
-  OrganizationReadRepository,
   OrgLogoRecord,
   OrgMemberDetail,
+  OrgMemberStatus,
   OrgMembershipView,
   OrgProfileUpdateInput,
   OrgRole,
-  TransferOwnerResult,
   OrgRoleCatalogEntry,
   OrgView,
+  OrganizationProfileView,
+  OrganizationReadRepository,
   PermissionCatalogEntry,
   ProvisionedOrg,
-  InvitationListItem,
+  RotatedInvitation,
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
+  TransferOwnerResult,
+  UpdateWorkspaceInput,
+  WorkspaceDetail,
   WorkspaceMembershipView,
+  WorkspaceRejection,
   WorkspaceView,
 } from "../types/organization.types";
 
@@ -139,6 +145,10 @@ const DEFAULT_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * invitations), with governance RBAC via access.roles/permissions and member
  * joins to account.users. Mirrors the @vxture/service-account pg-repository convention.
  */
+/** 邀请 ID 的形状门。见 acceptInvitation 里的说明。 */
+const ACCEPT_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class PgOrganizationRepository implements OrganizationReadRepository {
   constructor(@Inject(ORG_PG_POOL) private readonly pool: Pool) {}
@@ -553,6 +563,302 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       .filter((o): o is OrgView => o !== null);
   }
 
+  // ── 工作空间管理(owner 2026-09-09 定「把工作空间做成真轴」)──────────────
+  //
+  // 在此之前工作空间是个 1:1 的隐含物:每个租户建号时插一条 `default workspace`,
+  // 之后再没有第二条,也没有任何建 / 改 / 停的入口。下面这几个方法是「真轴」的写侧。
+  //
+  // 三条不变式,全部在**库里**判,不靠调用方自觉:
+  //   1. 同一租户下工作空间名不重(大小写与首尾空白归一后比)——两个同名工作空间
+  //      在切换器里没法分辨。
+  //   2. 默认工作空间不能停用:它是会话解析的落点(`getDefaultWorkspaceWithMembership`),
+  //      停掉等于让所有人登录后无处可去。要停先把默认挪走。
+  //   3. 最后一个 active 的不能停:同上,一个都不剩时登录后没有工作空间上下文。
+
+  /** 列出租户下的工作空间(不含已删)。成员数一并算出来,管理页要显示。 */
+  async listWorkspaces(tenantId: string): Promise<WorkspaceDetail[]> {
+    const r = await this.pool.query<
+      WorkspaceRow & {
+        workspace_no: string;
+        description: string | null;
+        icon: string | null;
+        status: string;
+        member_count: string;
+        created_at: Date;
+      }
+    >(
+      `select w.id, w.tenant_id, w.name, w.is_default,
+              w.workspace_no::text as workspace_no,
+              w.description, w.icon, w.status, w.created_at,
+              (select count(*) from tenancy.workspace_memberships m
+                where m.workspace_id = w.id and m.status = 'active') as member_count
+         from tenancy.workspaces w
+        where w.tenant_id = $1 and w.deleted_at is null
+        order by w.is_default desc, w.created_at asc`,
+      [tenantId],
+    );
+    return r.rows.map((row) => ({
+      id: row.id,
+      organizationId: row.tenant_id,
+      name: row.name,
+      isDefault: row.is_default,
+      workspaceNo: row.workspace_no,
+      description: row.description,
+      icon: row.icon,
+      /* 库里 status 有三档(active/archived/deleted),但 deleted 那档与 deleted_at
+         是同一件事、上面已经滤掉。对外只剩两档,不把一个永远取不到的值放进类型。 */
+      status: row.status === "archived" ? "archived" : "active",
+      memberCount: Number(row.member_count),
+      createdAt: row.created_at,
+    }));
+  }
+
+  /**
+   * 建工作空间。`workspace_no` 由 `tenancy.assign_workspace_no` 触发器取号——
+   * 不在应用层拼号,取号规则(类别位 + Luhn)只该有一处实现。
+   *
+   * 创建者立刻以指定角色挂进去:一个建好却进不去的工作空间没有意义。
+   */
+  async createWorkspace(
+    input: CreateWorkspaceInput,
+  ): Promise<
+    | { ok: true; workspace: WorkspaceDetail }
+    | { ok: false; reason: WorkspaceRejection }
+  > {
+    const name = input.name.trim();
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      /* 锁住这个租户的工作空间集合再查重:两个人同时建同名的,后到的那个要撞上
+         而不是两条都进去。锁 tenants 行(工作空间的父)比锁一堆子行更稳。 */
+      await client.query(
+        `select 1 from tenancy.tenants where id = $1 for update`,
+        [input.tenantId],
+      );
+      const dup = await client.query(
+        `select 1 from tenancy.workspaces
+          where tenant_id = $1 and deleted_at is null
+            and lower(btrim(name)) = lower(btrim($2))
+          limit 1`,
+        [input.tenantId, name],
+      );
+      if (dup.rowCount) {
+        await client.query("rollback");
+        return { ok: false, reason: "name_taken" };
+      }
+      const created = await client.query<{ id: string }>(
+        `insert into tenancy.workspaces
+           (tenant_id, name, description, icon, is_default, status, created_at, updated_at)
+         values ($1, $2, $3, $4, false, 'active', now(), now())
+         returning id`,
+        [input.tenantId, name, input.description ?? null, input.icon ?? null],
+      );
+      const workspaceId = created.rows[0]!.id;
+      await client.query(
+        `insert into tenancy.workspace_memberships
+           (workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+         select $1, $2, $3, r.id, 'workspace', 'active', now(), now()
+           from access.roles r
+          where r.scope = 'workspace' and r.role_code = $4`,
+        [
+          workspaceId,
+          input.tenantId,
+          input.creatorUserId,
+          input.creatorRoleCode,
+        ],
+      );
+      await client.query("commit");
+      const rows = await this.listWorkspaces(input.tenantId);
+      const found = rows.find((w) => w.id === workspaceId);
+      /* 刚提交的行必然读得到;读不到说明有并发把它删了,当 not_found 报,
+         不返回一个拼出来的对象假装成功。 */
+      return found
+        ? { ok: true, workspace: found }
+        : { ok: false, reason: "not_found" };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** 改名 / 改说明 / 改图标。同租户下重名照样挡(与建同一条判据)。 */
+  async updateWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    input: UpdateWorkspaceInput,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query(
+        `select 1 from tenancy.workspaces
+          where id = $1 and tenant_id = $2 and deleted_at is null
+          for update`,
+        [workspaceId, tenantId],
+      );
+      if (!found.rowCount) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_found" };
+      }
+      if (input.name !== undefined) {
+        const dup = await client.query(
+          `select 1 from tenancy.workspaces
+            where tenant_id = $1 and id <> $2 and deleted_at is null
+              and lower(btrim(name)) = lower(btrim($3))
+            limit 1`,
+          [tenantId, workspaceId, input.name],
+        );
+        if (dup.rowCount) {
+          await client.query("rollback");
+          return { ok: false, reason: "name_taken" };
+        }
+      }
+      /* coalesce($n, 列) 只能表达「没给就不改」,表达不了「显式设为 null」。
+         说明与图标都允许清空,所以各带一个「这次给没给」的布尔位。
+         参数上的显式转型是给读的人看的,不是必需:PG 能从 else 分支的列推出类型
+         (拆掉转型跑 itest 仍然全绿,验过)。 */
+      await client.query(
+        `update tenancy.workspaces
+            set name        = coalesce($3::varchar, name),
+                description = case when $4::boolean then $5::text else description end,
+                icon        = case when $6::boolean then $7::varchar else icon end,
+                updated_at  = now()
+          where id = $1 and tenant_id = $2`,
+        [
+          workspaceId,
+          tenantId,
+          input.name === undefined ? null : input.name.trim(),
+          input.description !== undefined,
+          input.description ?? null,
+          input.icon !== undefined,
+          input.icon ?? null,
+        ],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 改默认工作空间。默认是**会话解析的落点**:登录后进哪个工作空间由它决定。
+   * 一租户只有一条 is_default,所以是「先清后置」的一次事务。
+   */
+  async setDefaultWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query<{ status: string }>(
+        `select status from tenancy.workspaces
+          where id = $1 and tenant_id = $2 and deleted_at is null
+          for update`,
+        [workspaceId, tenantId],
+      );
+      const row = found.rows[0];
+      /* 停用的不能设为默认:那等于把所有人登录后送进一个已停用的空间。
+         用 not_found 之外的码说清楚原因——「找不到」会让人以为是 ID 错了。 */
+      if (!row) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_found" };
+      }
+      if (row.status !== "active") {
+        await client.query("rollback");
+        return { ok: false, reason: "archived" };
+      }
+      await client.query(
+        `update tenancy.workspaces set is_default = false, updated_at = now()
+          where tenant_id = $1 and is_default = true and id <> $2`,
+        [tenantId, workspaceId],
+      );
+      await client.query(
+        `update tenancy.workspaces set is_default = true, updated_at = now()
+          where id = $1 and tenant_id = $2`,
+        [workspaceId, tenantId],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 停用工作空间(archived)。**不删**:订阅、订单、配额池、用量都挂在
+   * `workspace_id` 上(35 张表引用它),硬删会把这些行的归属打断。
+   *
+   * 两条不变式在这里挡,但**分量不同**:
+   *
+   *   `default_locked` 是真正起作用的那条。默认永远是 active(停用的设不成默认),
+   *      而默认停不掉 ⇒ 任何时候至少有一个 active。会话解析要落到一个 active 的
+   *      工作空间上,没有就登录后无处可去。
+   *   `last_active` 是**兜底**。经这几个方法走不到它(上面那条已经保证了下界);
+   *      它防的是绕过这一层造出来的状态——手工 SQL 修数据、迁移写歪、
+   *      或将来有人给默认加了「可停用」的口子。这类兜底要么真的挡得住、要么就别写,
+   *      所以 itest 里用直接 SQL 造出那个状态,把它跑到。
+   */
+  async archiveWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: WorkspaceRejection }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      /* 锁父行:并发停用两个时,两条各自看到「还有另一个 active」就会把最后一个
+         也停掉。计数与写入必须在同一把锁下。 */
+      await client.query(
+        `select 1 from tenancy.tenants where id = $1 for update`,
+        [tenantId],
+      );
+      const found = await client.query<{ is_default: boolean; status: string }>(
+        `select is_default, status from tenancy.workspaces
+          where id = $1 and tenant_id = $2 and deleted_at is null`,
+        [workspaceId, tenantId],
+      );
+      const row = found.rows[0];
+      if (!row) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_found" };
+      }
+      if (row.is_default) {
+        await client.query("rollback");
+        return { ok: false, reason: "default_locked" };
+      }
+      const actives = await client.query<{ n: string }>(
+        `select count(*) as n from tenancy.workspaces
+          where tenant_id = $1 and deleted_at is null and status = 'active'`,
+        [tenantId],
+      );
+      if (Number(actives.rows[0]?.n ?? 0) <= 1) {
+        await client.query("rollback");
+        return { ok: false, reason: "last_active" };
+      }
+      await client.query(
+        `update tenancy.workspaces set status = 'archived', updated_at = now()
+          where id = $1 and tenant_id = $2`,
+        [workspaceId, tenantId],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async getDefaultWorkspace(orgId: string): Promise<WorkspaceView | null> {
     const r = await this.pool.query<WorkspaceRow>(
       `select id, tenant_id, name, is_default
@@ -562,6 +868,78 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       [orgId],
     );
     return mapWorkspace(r.rows[0]);
+  }
+
+  /**
+   * 会话要落到哪个工作空间——**带提示的那一版**(工作空间切换,owner 2026-09-09)。
+   *
+   * `getDefaultWorkspaceWithMembership` 永远给默认那一个;这个方法在给了 `hint`
+   * 且它**站得住**时给 hint 指的那个,否则退回默认。
+   *
+   * 「站得住」是四条,全部在 SQL 的 where 里,一条都不能少:
+   *   · 属于这个租户    —— 否则拿到别的租户的工作空间 id 就能横着进去。
+   *   · 未删、状态 active —— 停用的空间不该成为任何人的落点。
+   *   · 我是它的活跃成员 —— 我不在里面,就不该进去。
+   *
+   * 退回默认而不是报错:提示来自浏览器地址栏与 Redis 里的旧值,**过期是常态**
+   * (工作空间被停用、我被移出)。那种时候人该落回默认,而不是登录失败。
+   */
+  async resolveWorkspaceForSession(
+    orgId: string,
+    userId: string,
+    hint?: string | null,
+  ): Promise<{
+    workspace: WorkspaceView | null;
+    membershipRole: string | null;
+  }> {
+    if (hint && ACCEPT_UUID_RE.test(hint)) {
+      const r = await this.pool.query<WorkspaceRow & { ws_role: string }>(
+        `select w.id, w.tenant_id, w.name, w.is_default, rr.role_code as ws_role
+           from tenancy.workspaces w
+           join tenancy.workspace_memberships m
+             on m.workspace_id = w.id and m.user_id = $3 and m.status = 'active'
+           join access.roles rr on rr.id = m.role_id
+          where w.id = $2
+            and w.tenant_id = $1
+            and w.deleted_at is null
+            and w.status = 'active'
+          limit 1`,
+        [orgId, hint, userId],
+      );
+      const row = r.rows[0];
+      if (row) {
+        return {
+          workspace: mapWorkspace(row),
+          membershipRole: row.ws_role,
+        };
+      }
+    }
+    return this.getDefaultWorkspaceWithMembership(orgId, userId);
+  }
+
+  /**
+   * 我在这个租户里能进哪些工作空间(切换器用)。
+   *
+   * 与 `listWorkspaces` 不同:那个是**管理视角**(租户下的全部,含停用的);
+   * 这个是**我的视角**——只有我是活跃成员、且启用中的。切换器里列出一个我进不去
+   * 的工作空间,点了只会失败。
+   */
+  async listWorkspacesForSwitch(
+    orgId: string,
+    userId: string,
+  ): Promise<WorkspaceView[]> {
+    const r = await this.pool.query<WorkspaceRow>(
+      `select w.id, w.tenant_id, w.name, w.is_default
+         from tenancy.workspaces w
+         join tenancy.workspace_memberships m
+           on m.workspace_id = w.id and m.user_id = $2 and m.status = 'active'
+        where w.tenant_id = $1
+          and w.deleted_at is null
+          and w.status = 'active'
+        order by w.is_default desc, w.created_at asc`,
+      [orgId, userId],
+    );
+    return r.rows.map((row) => mapWorkspace(row)!);
   }
 
   async getDefaultWorkspaceWithMembership(
@@ -1394,6 +1772,126 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     }
   }
 
+  /**
+   * 「谁在邀请我」——按**身份**查待接受的邀请,跨租户。
+   *
+   * 与 `listInvitations` 是相反的两侧:那个答「我这个租户发出去了哪些」(要
+   * `tenant.member.manage`),这个答「有谁邀请我」(SelfScope,不需要任何租户权限——
+   * 恰恰因为此刻我还不是那个租户的成员)。
+   *
+   * 只列 pending 且未过期的:已过期的邀请对被邀请人没有任何可做的事,列出来只会
+   * 在收件箱里堆出点不动的条目。
+   *
+   * 两个通道各按各的规则匹配:邮箱大小写不敏感(与 `rejectAcceptance` 同口径),
+   * 用户号是精确串。**身份为空的那一路不匹配任何行**——传 null 时写成
+   * `lower($1)` 会让 `lower(target) = null` 恒为 unknown,不会误放行。
+   */
+  async listInvitationsForIdentity(
+    identity: { email: string | null; userNo: string | null },
+    limit = 50,
+  ): Promise<IncomingInvitation[]> {
+    const res = await this.pool.query<{
+      id: string;
+      target_type: string;
+      role_code: string | null;
+      expires_at: Date;
+      created_at: Date;
+      tenant_id: string | null;
+      tenant_name: string | null;
+      inviter_name: string | null;
+    }>(
+      `select i.id, i.target_type, r.role_code, i.expires_at, i.created_at,
+              i.tenant_id, t.name as tenant_name,
+              coalesce(up.display_name, u.account) as inviter_name
+         from tenancy.invitations i
+         left join access.roles r on r.id = i.role_id
+         left join tenancy.tenants t on t.id = i.tenant_id
+         left join account.users u on u.id = i.created_by
+         left join account.user_profiles up on up.user_id = i.created_by
+        where i.status = 'pending'
+          and i.expires_at > now()
+          and (
+            (i.target_type = 'email'   and lower(i.target) = lower($1))
+            or
+            (i.target_type = 'user_no' and i.target = $2)
+          )
+        order by i.created_at desc
+        limit $3`,
+      [identity.email, identity.userNo, limit],
+    );
+    return res.rows.map((row) => ({
+      id: row.id,
+      targetType: row.target_type,
+      roleCode: row.role_code ?? "member",
+      tenantId: row.tenant_id,
+      tenantName: row.tenant_name,
+      inviterName: row.inviter_name,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+    }));
+  }
+
+  /**
+   * 拒绝邀请。判定用的是**与接受同一套**的 `rejectAcceptance`——一条我无权接受的
+   * 邀请,也不该由我来拒绝(否则任何人都能替别人回绝掉邀请)。
+   */
+  async declineInvitation(
+    invitationId: string,
+    identity: { email: string | null; userNo: string | null },
+  ): Promise<DeclineInvitationResult> {
+    if (!ACCEPT_UUID_RE.test(invitationId)) {
+      return { ok: false, reason: "not_found" };
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query<{
+        id: string;
+        status: string;
+        expires_at: Date;
+        target_type: string;
+        target: string;
+      }>(
+        `select id, status, expires_at, target_type, target
+           from tenancy.invitations
+          where id = $1
+            for update`,
+        [invitationId],
+      );
+      const row = found.rows[0];
+      const rejection = row
+        ? rejectAcceptance(
+            {
+              status: row.status,
+              expiresAt: row.expires_at,
+              targetType: row.target_type,
+              target: row.target,
+            },
+            identity,
+          )
+        : "not_found";
+      if (!row || rejection) {
+        await client.query("rollback");
+        return { ok: false, reason: rejection ?? "not_found" };
+      }
+      /* declined ≠ revoked:前者是被邀请人自己不来,后者是邀请人撤回。
+         合成一个状态会让邀请台账把「对方不来」写成「我撤回了」。 */
+      await client.query(
+        `update tenancy.invitations
+            set status = 'declined', updated_at = now()
+          where id = $1`,
+        [row.id],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // ── 邀请台账(P1;expired 读侧派生:pending ∧ expires_at 已过)────────────
   async listInvitations(
     tenantId: string,
@@ -1401,6 +1899,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   ): Promise<InvitationListItem[]> {
     const res = await this.pool.query<{
       id: string;
+      target_type: string;
       target: string;
       role_code: string | null;
       status: string;
@@ -1409,7 +1908,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       created_at: Date;
       inviter_name: string | null;
     }>(
-      `select i.id, i.target, r.role_code, i.status, i.expires_at,
+      `select i.id, i.target_type, i.target, r.role_code, i.status, i.expires_at,
               i.accepted_at, i.created_at,
               coalesce(up.display_name, u.account) as inviter_name
          from tenancy.invitations i
@@ -1424,7 +1923,11 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const now = Date.now();
     return res.rows.map((row) => ({
       id: row.id,
-      email: row.target,
+      targetType: row.target_type,
+      target: row.target,
+      /* `email` 只在邮箱通道有值。以前这里写的是 `email: row.target`——两条通道
+         并存之后那就是在说谎:一条按用户号发的邀请会把号显示成邮箱地址。 */
+      email: row.target_type === "email" ? row.target : "",
       roleCode: row.role_code ?? "member",
       status: deriveInvitationStatus(row.status, row.expires_at, now),
       expiresAt: row.expires_at,
@@ -1475,6 +1978,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const res = await this.pool.query<{
       expires_at: Date;
+      target_type: string;
       target: string;
       role_code: string | null;
     }>(
@@ -1484,9 +1988,9 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
                 expires_at = now() + ($4 || ' seconds')::interval,
                 updated_at = now()
           where i.id = $1 and i.tenant_id = $2 and i.status = 'pending'
-          returning i.expires_at, i.target, i.role_id
+          returning i.expires_at, i.target_type, i.target, i.role_id
        )
-       select r.expires_at, r.target, rr.role_code
+       select r.expires_at, r.target_type, r.target, rr.role_code
          from rotated r
          left join access.roles rr on rr.id = r.role_id`,
       [invitationId, tenantId, tokenHash, String(DEFAULT_INVITE_TTL_SECONDS)],
@@ -1496,7 +2000,10 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       ? {
           token,
           expiresAt: row.expires_at,
-          email: row.target,
+          targetType: row.target_type,
+          target: row.target,
+          /* 只在邮箱通道有值:上层拿它决定重发时发不发邮件。 */
+          email: row.target_type === "email" ? row.target : "",
           roleCode: row.role_code ?? "member",
         }
       : null;
@@ -1572,12 +2079,33 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return r.rows.map((row) => row.code);
   }
 
+  /**
+   * 接受邀请。**定位方式有两种,判定与写入只有一份**:
+   *
+   *   `{ token }`        邮件通道——链接里的一次性 token。
+   *   `{ invitationId }` 站内通道——按用户号邀请时不发链接,对方在自己的收件箱里
+   *                      点「同意」,凭的是**身份**不是 token(owner 2026-09-09)。
+   *
+   * 两条路都过同一个 `rejectAcceptance`:按用户号发出的邀请,其 `target_type` 是
+   * `user_no`,矩阵会核对当前账号的用户号。所以「知道了邀请 ID」本身不构成权限——
+   * ID 不是凭证,身份才是。这也是为什么这里没有第二个事务、第二套 upsert:
+   * 两份写入一定会有一份先漂。
+   */
   async acceptInvitation(
-    token: string,
+    locator: { token: string } | { invitationId: string },
     userId: string,
-    userEmail: string | null,
+    identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
-    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const byToken = "token" in locator;
+    /* 形状不对的 ID 要当「查不到」,不能让它撞到 PG:`i.id` 是 uuid 列,
+       传一个非 uuid 文本会抛 22P02(invalid input syntax),那是 500 不是 404。
+       版本位/变体位刻意不卡——校验器不该比存储层更严(与各 BFF 的 UUID_RE 同口径)。 */
+    if (!byToken && !ACCEPT_UUID_RE.test(locator.invitationId)) {
+      return { ok: false, reason: "not_found" };
+    }
+    const key = byToken
+      ? createHash("sha256").update(locator.token).digest("hex")
+      : locator.invitationId;
     const client = await this.pool.connect();
     try {
       await client.query("begin");
@@ -1600,9 +2128,9 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
                 i.status, i.expires_at, i.target_type, i.target, t.name as tenant_name
            from tenancy.invitations i
            left join tenancy.tenants t on t.id = i.tenant_id
-          where i.token_hash = $1
+          where ${byToken ? "i.token_hash" : "i.id"} = $1
             for update of i`,
-        [tokenHash],
+        [key],
       );
       const row = found.rows[0];
       const rejection = row
@@ -1613,7 +2141,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
               targetType: row.target_type,
               target: row.target,
             },
-            userEmail,
+            identity,
           )
         : "not_found";
       if (!row || rejection) {
