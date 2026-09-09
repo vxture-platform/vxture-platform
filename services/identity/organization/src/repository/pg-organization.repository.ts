@@ -1401,6 +1401,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   ): Promise<InvitationListItem[]> {
     const res = await this.pool.query<{
       id: string;
+      target_type: string;
       target: string;
       role_code: string | null;
       status: string;
@@ -1409,7 +1410,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       created_at: Date;
       inviter_name: string | null;
     }>(
-      `select i.id, i.target, r.role_code, i.status, i.expires_at,
+      `select i.id, i.target_type, i.target, r.role_code, i.status, i.expires_at,
               i.accepted_at, i.created_at,
               coalesce(up.display_name, u.account) as inviter_name
          from tenancy.invitations i
@@ -1424,7 +1425,11 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const now = Date.now();
     return res.rows.map((row) => ({
       id: row.id,
-      email: row.target,
+      targetType: row.target_type,
+      target: row.target,
+      /* `email` 只在邮箱通道有值。以前这里写的是 `email: row.target`——两条通道
+         并存之后那就是在说谎:一条按用户号发的邀请会把号显示成邮箱地址。 */
+      email: row.target_type === "email" ? row.target : "",
       roleCode: row.role_code ?? "member",
       status: deriveInvitationStatus(row.status, row.expires_at, now),
       expiresAt: row.expires_at,
@@ -1475,6 +1480,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const res = await this.pool.query<{
       expires_at: Date;
+      target_type: string;
       target: string;
       role_code: string | null;
     }>(
@@ -1484,9 +1490,9 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
                 expires_at = now() + ($4 || ' seconds')::interval,
                 updated_at = now()
           where i.id = $1 and i.tenant_id = $2 and i.status = 'pending'
-          returning i.expires_at, i.target, i.role_id
+          returning i.expires_at, i.target_type, i.target, i.role_id
        )
-       select r.expires_at, r.target, rr.role_code
+       select r.expires_at, r.target_type, r.target, rr.role_code
          from rotated r
          left join access.roles rr on rr.id = r.role_id`,
       [invitationId, tenantId, tokenHash, String(DEFAULT_INVITE_TTL_SECONDS)],
@@ -1496,7 +1502,10 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       ? {
           token,
           expiresAt: row.expires_at,
-          email: row.target,
+          targetType: row.target_type,
+          target: row.target,
+          /* 只在邮箱通道有值:上层拿它决定重发时发不发邮件。 */
+          email: row.target_type === "email" ? row.target : "",
           roleCode: row.role_code ?? "member",
         }
       : null;
@@ -1575,7 +1584,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   async acceptInvitation(
     token: string,
     userId: string,
-    userEmail: string | null,
+    identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const client = await this.pool.connect();
@@ -1613,7 +1622,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
               targetType: row.target_type,
               target: row.target,
             },
-            userEmail,
+            identity,
           )
         : "not_found";
       if (!row || rejection) {

@@ -87,6 +87,13 @@ const ACCEPT_INVITATION_ERRORS: Record<
   revoked: (reason) => new BadRequestException(reason),
   already_accepted: (reason) => new ConflictException(reason),
   email_mismatch: (reason) => new ForbiddenException(reason),
+  /* 按用户号邀请、但接受的人不是那个号。与 email_mismatch 同档:
+     403 而不是 404——「这个邀请存在,但不是给你的」，说清楚才好换个账号登录。 */
+  user_mismatch: (reason) => new ForbiddenException(reason),
+  /* target_type 认不出来。库里那一列没有 CHECK 约束,脏数据或某个没接完的通道
+     都可能落到这里;对用户是「这个邀请用不了」,对我们是该看日志的信号。
+     用 400 不用 500:请求本身没错,是这条邀请的数据不可用。 */
+  unknown_target: (reason) => new BadRequestException(reason),
 };
 
 @Controller("api/iam")
@@ -143,7 +150,35 @@ export class IamRouter {
     }
   }
 
-  private async deliverInvitation(outcome: InviteMemberOutcome) {
+  /**
+   * 按通道送达邀请。
+   *
+   * `email`   —— 发邮件 + 一次性链接（`emailSent=false` 时前端出「复制链接」兜底）。
+   * `user_no` —— **不发邮件、不给链接**：目标是平台已有账号，站内落一条消息，
+   *              对方在「待办与消息」里点「同意」即加入（owner 2026-09-09）。
+   *
+   * 用户号通道为什么不给链接：给了就等于开一条「转发即可加入」的旁路，
+   * 而这条通道的全部意义就是「只有那个号本人能接受」。仓储层的
+   * `rejectAcceptance` 会拦住转发者，但前端不该先把它递出去。
+   */
+  private async deliverInvitation(
+    outcome: InviteMemberOutcome,
+    tenantId: string,
+  ) {
+    if (outcome.targetType === "user_no") {
+      await this.notifyInviteeInApp(outcome, tenantId);
+      return {
+        member: outcome.member,
+        invitationId: outcome.invitationId,
+        email: "",
+        roleCode: outcome.roleCode,
+        /* 不给链接:这条通道靠站内消息送达。前端据此不出「复制链接」弹窗。 */
+        inviteLink: null,
+        emailSent: false,
+        deliveredInApp: true,
+        expiresAt: outcome.expiresAt.toISOString(),
+      };
+    }
     const inviteLink = this.inviteLink(outcome.token, outcome.inviterLanguage);
     const emailSent = await this.sendInvitationMail(outcome, inviteLink);
     return {
@@ -153,8 +188,49 @@ export class IamRouter {
       roleCode: outcome.roleCode,
       inviteLink,
       emailSent,
+      deliveredInApp: false,
       expiresAt: outcome.expiresAt.toISOString(),
     };
+  }
+
+  /**
+   * 站内送达:往被邀请人的收件箱落一条消息,链接指向接受页。
+   *
+   * 与邮件同一条纪律——**best-effort**:邀请行已经落库，送达失败只记日志、不回滚。
+   * 邀请人那边仍然看得到这条 pending，可以重发。
+   *
+   * 去重键与 dispatcher 同构（收件人 × 模板 × 业务引用）：同一条邀请重发时不会
+   * 在对方收件箱里堆出第二条。
+   */
+  private async notifyInviteeInApp(
+    outcome: InviteMemberOutcome,
+    tenantId: string,
+  ) {
+    if (!outcome.targetUserId) return;
+    try {
+      await this.pool.query(
+        /* tenant_id 由调用方给,**不按租户名去查**:`tenancy.tenants.name` 没有
+           唯一索引(查过 pg_index),按名字 join 可能挑错租户、甚至插出多行。 */
+        `insert into support.inbox_messages
+           (tenant_id, account_id, template_code, title, body, link,
+            reference_type, reference_id, created_at)
+         values ($1, $2, 'tenant.invitation', $3, $4, $5, 'invitation', $6, now())
+         on conflict (account_id, template_code, reference_type, reference_id)
+         do nothing`,
+        [
+          tenantId,
+          outcome.targetUserId,
+          `${outcome.tenantName} 邀请你加入`,
+          `${outcome.inviterName} 邀请你以「${outcome.roleCode}」身份加入 ${outcome.tenantName}。`,
+          `/invitations/${outcome.invitationId}`,
+          outcome.invitationId,
+        ],
+      );
+    } catch (err) {
+      this.logger.warn(
+        `in-app invitation notice for ${outcome.invitationId} failed: ${String(err)}`,
+      );
+    }
   }
 
   @RequireCapability("tenant.member.read")
@@ -351,7 +427,7 @@ export class IamRouter {
     if (!outcome) {
       throw new NotFoundException("Invitation not found or not pending");
     }
-    const delivered = await this.deliverInvitation(outcome);
+    const delivered = await this.deliverInvitation(outcome, tenantId);
     auditCustomerAction(this.pool, req, {
       action: "tenant.invitation.resend",
       resourceType: "invitation",
@@ -447,7 +523,7 @@ export class IamRouter {
     if (!outcome) {
       throw new NotFoundException("Tenant member could not be invited");
     }
-    const delivered = await this.deliverInvitation(outcome);
+    const delivered = await this.deliverInvitation(outcome, tenantId);
 
     auditCustomerAction(this.pool, req, {
       action: "tenant.member.invite",

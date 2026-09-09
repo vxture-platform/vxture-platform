@@ -774,7 +774,7 @@ export class SessionAggregator {
   async addExistingMember(
     userId: string,
     orgId: string | undefined,
-    input: { email: string; roleCode?: string | null },
+    input: { email?: string; userNo?: string; roleCode?: string | null },
   ): Promise<MemberRecord | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
@@ -784,7 +784,8 @@ export class SessionAggregator {
       "tenant.member.manage",
     );
     const role = asAssignableRole(input.roleCode ?? "member");
-    const email = normalizeEmail(input.email);
+    const email = normalizeEmail(input.email ?? "");
+    if (!email) throw new BadRequestException("email_required");
     const user = await this.account.findUserByIdentifier(email);
     if (!user) throw new NotFoundException("account_not_found");
     const existing = await this.org.getOrgMemberDetail(resolved.orgId, user.id);
@@ -829,7 +830,9 @@ export class SessionAggregator {
   async inviteMember(
     userId: string,
     orgId: string | undefined,
-    input: { email: string; roleCode?: string | null },
+    /* 两条通道二选一：给 email 走邮件链接，给 userNo 走站内直邀。
+       两个都不给是 400——不要发一条没有收件人的邀请。 */
+    input: { email?: string; userNo?: string; roleCode?: string | null },
   ): Promise<InviteMemberOutcome | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
@@ -839,25 +842,54 @@ export class SessionAggregator {
       "tenant.member.manage",
     );
     const role = asAssignableRole(input.roleCode ?? "member");
-    const email = normalizeEmail(input.email);
-    const existingUser = await this.account.findUserByIdentifier(email);
-    if (existingUser) {
+
+    /* 两条通道（owner 2026-09-09）：
+     *   email    —— 发链接，对方可能还没有账号，注册后凭邮箱接受
+     *   user_no  —— 目标**必须是平台已有账号**：查不到就直接告诉邀请方号不对，
+     *               不要发出一条永远没人能接受的邀请
+     * 判据是入参里给了哪一个，不是猜的。 */
+    const byUserNo = (input.userNo ?? "").trim().length > 0;
+    let target: string;
+    let targetUserId: string | null = null;
+    if (byUserNo) {
+      const found = await this.account.findUserByUserNo(input.userNo!.trim());
+      if (!found) throw new NotFoundException("user_not_found");
+      target = found.userNo;
+      targetUserId = found.id;
+    } else {
+      target = normalizeEmail(input.email ?? "");
+      if (!target) throw new BadRequestException("email_or_user_no_required");
+      const existingUser = await this.account.findUserByIdentifier(target);
+      targetUserId = existingUser?.id ?? null;
+    }
+
+    /* 已是成员就不必再邀。两条通道都要查——按号邀请时我们已经知道是谁，
+       按邮箱邀请时只有对方已有账号才查得到。 */
+    if (targetUserId) {
       const member = await this.org.getOrgMemberDetail(
         resolved.orgId,
-        existingUser.id,
+        targetUserId,
       );
       if (member) throw new ConflictException("already_member");
     }
+
+    /* 同一个目标不重复挂 pending。比对要**按通道各比各的**:
+       邮箱通道比邮箱、用户号通道比号——混着比会让「同一个人的两种邀请」
+       其中一条被误判成重复。 */
     const pending = (await this.org.listInvitations(resolved.orgId)).find(
-      (i) => i.status === "pending" && i.email.toLowerCase() === email,
+      (i) =>
+        i.status === "pending" &&
+        (byUserNo
+          ? i.targetType === "user_no" && i.target.trim() === target
+          : i.targetType === "email" && i.email.toLowerCase() === target),
     );
     if (pending) throw new ConflictException("invitation_pending");
 
     const { invitation, token } = await this.org.createInvitation({
       scope: "org",
       organizationId: resolved.orgId,
-      targetType: "email",
-      target: email,
+      targetType: byUserNo ? "user_no" : "email",
+      target,
       role,
       createdBy: userId,
     });
@@ -865,14 +897,18 @@ export class SessionAggregator {
     return {
       member: pendingMemberRecord(
         invitation.id,
-        email,
+        target,
         role,
         invitation.expiresAt,
         new Date(),
       ),
       invitationId: invitation.id,
       token,
-      email,
+      /* `email` 只在邮箱通道有值:上层拿它决定发不发邮件。按用户号邀请时是空串,
+         那条链路不发邮件——站内直接送达,对方在待办里同意。 */
+      email: byUserNo ? "" : target,
+      targetType: byUserNo ? ("user_no" as const) : ("email" as const),
+      targetUserId,
       roleCode: role,
       expiresAt: invitation.expiresAt,
       tenantName: resolved.org.name,
@@ -901,11 +937,19 @@ export class SessionAggregator {
     return {
       member: pendingMemberRecord(
         invitationId,
-        rotated.email,
+        /* 展示用的是 target 不是 email:按用户号发的邀请,email 是空串,
+           拿它做展示会让重发后的那一行变成一个没有名字的空位。 */
+        rotated.target,
         rotated.roleCode,
         rotated.expiresAt,
         new Date(),
       ),
+      /* 重发照原通道走:邮箱通道才发邮件(email 非空),用户号通道只是换了 token,
+         对方待办里那条仍然有效。 */
+      targetType: rotated.targetType === "user_no" ? "user_no" : "email",
+      /* 重发不重新解析被邀请人:这条邀请是谁的在创建时就定了,轮换 token 不改变它。
+         站内待办也已经挂好,不需要再挂一次。 */
+      targetUserId: null,
       invitationId,
       token: rotated.token,
       email: rotated.email,
@@ -923,19 +967,18 @@ export class SessionAggregator {
   }
 
   /**
-   * 接受邀请。租户由 token 决定,不看当前活跃租户;受邀邮箱须与账号邮箱一致
-   * (仓储层校验)。成功后清掉能力缓存——对方下一次切进该租户就该按新角色拿能力。
+   * 接受邀请。租户由 token 决定,不看当前活跃租户;**收件人身份须与邀请对得上**
+   * ——邮箱通道核邮箱、用户号通道核用户号(仓储层校验,认不出的通道一律拒绝)。成功后清掉能力缓存——对方下一次切进该租户就该按新角色拿能力。
    */
   async acceptInvitation(
     userId: string,
     token: string,
   ): Promise<AcceptInvitationResult> {
     const user = await this.account.getUserById(userId);
-    const result = await this.org.acceptInvitation(
-      token,
-      userId,
-      user?.email ?? null,
-    );
+    const result = await this.org.acceptInvitation(token, userId, {
+      email: user?.email ?? null,
+      userNo: user?.userNo ?? null,
+    });
     if (result.ok) {
       this.invalidateCapabilities(userId, result.membership.organizationId);
     }
@@ -1089,7 +1132,18 @@ export interface InviteMemberOutcome {
   member: MemberRecord;
   invitationId: string;
   token: string;
+  /**
+   * 收件邮箱。**只在邮箱通道有值**；按用户号邀请时是空串——上层拿它决定发不发邮件，
+   * 空串即不发（站内直接送达，对方在待办里同意）。
+   */
   email: string;
+  /** 走的哪条通道。决定送达方式，也决定审计里记的是什么。 */
+  targetType: "email" | "user_no";
+  /**
+   * 被邀请人的账号 id。按用户号邀请时**一定有**（查不到号就不会走到这里）；
+   * 按邮箱邀请时只有对方已注册才有值——站内待办要挂到这个人头上。
+   */
+  targetUserId: string | null;
   roleCode: string;
   expiresAt: Date;
   tenantName: string;

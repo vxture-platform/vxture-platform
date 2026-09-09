@@ -116,7 +116,9 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       .slice(0, limit)
       .map((i) => ({
         id: i.view.id,
-        email: i.view.target,
+        targetType: i.view.targetType,
+        target: i.view.target,
+        email: i.view.targetType === "email" ? i.view.target : "",
         roleCode: i.view.role,
         status: deriveInvitationStatus(i.view.status, i.view.expiresAt),
         expiresAt: i.view.expiresAt,
@@ -197,7 +199,9 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     return {
       token: inv.token,
       expiresAt: inv.view.expiresAt,
-      email: inv.view.target,
+      targetType: inv.view.targetType,
+      target: inv.view.target,
+      email: inv.view.targetType === "email" ? inv.view.target : "",
       roleCode: inv.view.role,
     };
   }
@@ -629,7 +633,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   async acceptInvitation(
     token: string,
     userId: string,
-    userEmail: string | null,
+    identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
     const inv = [...this.invitations.values()].find((i) => i.token === token);
     if (!inv) return { ok: false, reason: "not_found" };
@@ -640,7 +644,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
         targetType: inv.view.targetType,
         target: inv.view.target,
       },
-      userEmail,
+      identity,
     );
     if (rejection) return { ok: false, reason: rejection };
     inv.view.status = "accepted";

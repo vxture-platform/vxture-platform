@@ -209,9 +209,9 @@ export class OrganizationService {
   acceptInvitation(
     token: string,
     userId: string,
-    userEmail: string | null,
+    identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
-    return this.repo.acceptInvitation(token, userId, userEmail);
+    return this.repo.acceptInvitation(token, userId, identity);
   }
   getInvitationByToken(token: string): Promise<InvitationLookup | null> {
     return this.repo.getInvitationByToken(token);

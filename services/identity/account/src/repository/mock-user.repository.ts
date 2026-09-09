@@ -93,6 +93,19 @@ export class MockUserRepository implements UserReadRepository {
     return null;
   }
 
+  async findUserByUserNo(
+    userNo: string,
+  ): Promise<{ id: string; userNo: string; name: string | null } | null> {
+    const raw = userNo.trim();
+    if (!/^\d{1,20}$/.test(raw)) return null;
+    const hit = [...this.users.values()].find(
+      (u) => (u.userNo ?? "").trim() === raw,
+    );
+    return hit
+      ? { id: hit.id, userNo: hit.userNo ?? raw, name: hit.name ?? null }
+      : null;
+  }
+
   async findCredentialById(
     userId: string,
   ): Promise<UserCredentialRecord | null> {
