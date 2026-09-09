@@ -2303,10 +2303,6 @@
         "label": "成员管理",
         "description": "邀请、访问审查与团队成员管理"
       },
-      "workspaces": {
-        "label": "工作空间",
-        "description": "建立与管理这个租户下的工作空间"
-      },
       "subscription": {
         "label": "订阅管理",
         "description": "已订产品、到期提醒与新品推荐"
@@ -2731,7 +2727,8 @@
       "toggle": "工作空间 · {count} 个",
       "unnamed": "默认工作空间",
       "defaultTag": "默认",
-      "empty": "暂无工作空间。"
+      "empty": "暂无工作空间。",
+      "manage": "管理"
     },
     "cards": {
       "basic": {
@@ -3365,8 +3362,8 @@
     "actions": {
       "create": "新建工作空间",
       "edit": "编辑",
-      "setDefault": "设为默认",
-      "alreadyDefault": "已经是默认工作空间",
+      "setDefault": "设为租户默认",
+      "alreadyDefault": "已经是租户默认工作空间",
       "archivedHint": "已停用的工作空间不能设为默认",
       "archive": "停用",
       "alreadyArchived": "已经停用了",

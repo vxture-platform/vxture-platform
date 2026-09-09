@@ -129,20 +129,14 @@ const TENANT_MENU_TREE = [
           "tenant.role.assign",
         ],
       },
-      // owner 2026-09-09 定「把工作空间做成真轴」:建 / 改 / 设默认 / 停用有了真入口,
-      // 从此它不再是租户信息页里的一行设置,而是自己一页。
+      // owner 2026-09-10:工作空间**不进侧栏**。它是租户的结构属性(与「租户叫什么、
+      // 谁是所有者、有几个成员」同一类),入口在租户信息页的身份卡上——那里本来就
+      // 已经画着一块工作空间清单,这次给它接上「管理 →」。侧栏那一层是「我每天要去
+      // 的地方」,工作空间不是。
       //
-      // 节点码是 `tenant_workspaces` 不是 `workspace`:后者已被**根域**占着
-      // (`tenant.menu.workspace` = console 这个域本身),同名会把一页挂到域上去。
-      //
-      // `tenant.workspace.manage` 的**归属**仍在 `/tenant`(操作码一码一父),
-      // 这一页用它当**门**——两页共用一个码走门,不是再挂一行父子关系。
-      {
-        code: "tenant.menu.tenant_workspaces",
-        name: "工作空间",
-        route: "/workspaces",
-        icon: "stack",
-      },
+      // 页面 `/workspaces` 保留(集合页、动作立即生效,塞不进租户信息那张带
+      // 「保存 / 放弃」的表单页);二级页不进菜单树,与 `/tenant/verification` 同例。
+      // 节点 `tenant.menu.tenant_workspaces` 已退役(2026-09-27 迁移)。
     ],
   },
   {

@@ -213,41 +213,57 @@ export function WorkspacesPage() {
   } = useTableSort(rows, sortAccessors);
   const pager = useListPagination(sortedRows, 20);
 
-  const menuItems = (w: ConsoleWorkspace): ActionMenuItem[] => [
-    {
-      id: "edit",
-      label: t("actions.edit"),
-      icon: "edit",
-      disabled: busy,
-      onSelect: () =>
-        setForm({
-          target: w,
-          name: w.name,
-          description: w.description ?? "",
-        }),
-    },
-    {
-      id: "default",
-      label: t("actions.setDefault"),
-      icon: "star",
-      /* 已是默认、或已停用的，这一项按不动。给出原因而不是让人点了没反应。 */
-      disabled: busy || w.isDefault || w.status !== "active",
-      ...(w.isDefault
-        ? { hint: t("actions.alreadyDefault") }
-        : w.status !== "active"
-          ? { hint: t("actions.archivedHint") }
-          : {}),
-      onSelect: () => {
-        void run(() => setDefaultWorkspace(w.id), "feedback.defaultSet");
-      },
-    },
-    {
-      /* 「我的默认」与上面的「设为默认」**紧挨着放**:两者一字之差、后果差很远——
-         上面那个是租户级、影响所有人、要管理权限;这个只改我自己。
-         并排摆才看得出差别,分开摆会让人以为是同一个动作的两种叫法。
+  /**
+   * 行菜单**按项收,不按整列收**(owner 2026-09-10)。
+   *
+   * 原来是「没有管理权限的人整列动作菜单不出现」——那把「设为我的默认」也一起藏了。
+   * 那一项是**个人偏好**:普通成员进得来、看得到,却设不了自己的落点,而这恰恰是
+   * 「入口对所有人开放」的理由。收敛的粒度错了一级。
+   *
+   * 管理三项(编辑 / 设为租户默认 / 停用)要 `tenant.workspace.manage`;
+   * 「设为我的默认」谁都有。
+   */
+  const menuItems = (w: ConsoleWorkspace): ActionMenuItem[] => {
+    const manage: ActionMenuItem[] = canManage
+      ? [
+          {
+            id: "edit",
+            label: t("actions.edit"),
+            icon: "edit",
+            disabled: busy,
+            onSelect: () =>
+              setForm({
+                target: w,
+                name: w.name,
+                description: w.description ?? "",
+              }),
+          },
+          {
+            /* 两项的名字对称:「设为**租户**默认」/「设为**我的**默认」。
+               原来这一项叫「设为默认」——没说清作用域,与下面那条并排看时读起来像
+               「默认」和「我的默认」是同一件事的粗细两档,而实际上一个影响所有人、
+               一个只影响我自己。
 
-         这一项**不看 canManage**:选自己登录后落在哪是个人偏好,
-         普通成员也该能选。 */
+               已是默认、或已停用的,这一项按不动。给原因,不让人点了才知道。 */
+            id: "default",
+            label: t("actions.setDefault"),
+            icon: "star",
+            disabled: busy || w.isDefault || w.status !== "active",
+            ...(w.isDefault
+              ? { hint: t("actions.alreadyDefault") }
+              : w.status !== "active"
+                ? { hint: t("actions.archivedHint") }
+                : {}),
+            onSelect: () => {
+              void run(() => setDefaultWorkspace(w.id), "feedback.defaultSet");
+            },
+          },
+        ]
+      : [];
+
+    /* 「设为我的默认」紧跟在「设为租户默认」之后:两者一字之差、后果差很远,
+       并排摆才看得出差别。没有管理权限时上一项不在,这一项就是菜单的第一条。 */
+    const mine: ActionMenuItem = {
       id: "my-default",
       label: t("actions.setMyDefault"),
       icon: "user",
@@ -260,50 +276,37 @@ export function WorkspacesPage() {
       onSelect: () => {
         void run(() => setMyDefaultWorkspace(w.id), "feedback.myDefaultSet");
       },
-    },
-    {
-      /* 「我的默认」与上面的「设为默认」**紧挨着放**:两者一字之差、后果差很远——
-         上面那个是租户级、影响所有人、要管理权限;这个只改我自己。
-         并排摆才看得出差别,分开摆会让人以为是同一个动作的两种叫法。
+    };
 
-         这一项**不看 canManage**:选自己登录后落在哪是个人偏好,
-         普通成员也该能选。 */
-      id: "my-default",
-      label: t("actions.setMyDefault"),
-      icon: "user",
-      disabled: busy || w.isMyDefault || w.status !== "active",
-      ...(w.isMyDefault
-        ? { hint: t("actions.alreadyMyDefault") }
-        : w.status !== "active"
-          ? { hint: t("actions.archivedHint") }
-          : {}),
-      onSelect: () => {
-        void run(() => setMyDefaultWorkspace(w.id), "feedback.myDefaultSet");
-      },
-    },
-    {
-      id: "archive",
-      label: t("actions.archive"),
-      icon: "x",
-      danger: true,
-      disabled: busy || w.isDefault || w.status !== "active",
-      ...(w.isDefault
-        ? { hint: t("actions.defaultLockedHint") }
-        : w.status !== "active"
-          ? { hint: t("actions.alreadyArchived") }
-          : {}),
-      confirm: withLabels({
-        verb: t("actions.archiveVerb"),
-        target: w.name,
-        /* 说清楚它**不是删除**：里面的订阅与账单不会消失，只是这个空间不再能进。 */
-        consequence: t("actions.archiveConsequence"),
-        cancelLabel: t("actions.archiveKeep"),
-        onConfirm: async () => {
-          await run(() => archiveWorkspace(w.id), "feedback.archived");
-        },
-      }),
-    },
-  ];
+    const archive: ActionMenuItem[] = canManage
+      ? [
+          {
+            id: "archive",
+            label: t("actions.archive"),
+            icon: "x",
+            danger: true,
+            disabled: busy || w.isDefault || w.status !== "active",
+            ...(w.isDefault
+              ? { hint: t("actions.defaultLockedHint") }
+              : w.status !== "active"
+                ? { hint: t("actions.alreadyArchived") }
+                : {}),
+            confirm: withLabels({
+              verb: t("actions.archiveVerb"),
+              target: w.name,
+              /* 说清楚它**不是删除**:里面的订阅与账单不会消失,只是这个空间不再能进。 */
+              consequence: t("actions.archiveConsequence"),
+              cancelLabel: t("actions.archiveKeep"),
+              onConfirm: async () => {
+                await run(() => archiveWorkspace(w.id), "feedback.archived");
+              },
+            }),
+          },
+        ]
+      : [];
+
+    return [...manage, mine, ...archive];
+  };
 
   const columns: DataTableColumn<ConsoleWorkspace>[] = [
     {
@@ -418,14 +421,11 @@ export function WorkspacesPage() {
             leadingSpacer
             loading={loading}
             indexStart={pager.indexStart}
-            /* 没有管理权限的人这一列整个不出现——不给按不动的菜单。 */
-            {...(canManage
-              ? {
-                  rowActions: (w: ConsoleWorkspace) => (
-                    <ActionMenu label={t("rowMenu")} items={menuItems(w)} />
-                  ),
-                }
-              : {})}
+            /* 动作列**永远出现**:菜单里至少有「设为我的默认」,那是任何成员都该能做的。
+               管理三项在 menuItems 里按 canManage 收——粒度在项,不在整列。 */
+            rowActions={(w: ConsoleWorkspace) => (
+              <ActionMenu label={t("rowMenu")} items={menuItems(w)} />
+            )}
             empty={
               loadFailed ? (
                 <LoadFailedEmpty />

@@ -80,6 +80,7 @@ export function TenantIdentityCard({
   workspaces,
   workspacesOpen,
   onWorkspacesOpenChange,
+  onManageWorkspaces,
   loading,
 }: {
   readonly logoSrc: string | null;
@@ -106,6 +107,8 @@ export function TenantIdentityCard({
   readonly workspaces: readonly TenantWorkspaceRow[];
   readonly workspacesOpen: boolean;
   readonly onWorkspacesOpenChange: (open: boolean) => void;
+  /** 去工作空间管理页。入口对所有人可见,页面里再按权限收敛动作。 */
+  readonly onManageWorkspaces: () => void;
   readonly loading: boolean;
 }) {
   const t = useTranslations("tenantInfoPage");
@@ -219,7 +222,18 @@ export function TenantIdentityCard({
         />
       </div>
 
-      <div className="flex justify-end px-md pb-xs pt-sm">
+      <div className="flex items-center justify-end gap-xs px-md pb-xs pt-sm">
+        {/* 「管理 →」(owner 2026-09-10):工作空间不进侧栏,入口收在这里——
+            这块清单本来就画着,只是点不动,看得见与管得了到此接上。
+
+            **所有人都显示**:`/workspaces` 对普通成员是有用的只读视图(看自己在哪些
+            空间、设自己的默认落点),按权限藏入口反而让他找不到那个动作。
+            收敛发生在页面里:建 / 改 / 停用各自按 `tenant.workspace.manage` 收,
+            没权限的人整列动作菜单不出现。 */}
+        <Button variant="ghost" size="sm" onClick={onManageWorkspaces}>
+          <span>{t("workspaces.manage")}</span>
+          <Icon name="arrow-right" size="xs" fallback="placeholder" />
+        </Button>
         <Button
           variant="ghost"
           size="sm"
