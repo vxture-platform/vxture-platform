@@ -29,7 +29,7 @@
  * @category Components - Marketing
  */
 
-import { useLocale } from "next-intl";
+import { useWebsiteDateFormat } from "@/lib/date-format";
 import { Button, Icon } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
@@ -111,13 +111,9 @@ export function ProductCatalogCard({
   //   上线（ga/beta）→ 「v 1.2.3 at 2026/9/12」，版本与发布时间取目录真列，自动；
   //   开发中           → 「预期发布：2026/9/30」，日期由运营在营销内容里手填（marketing.expectedReleaseAt）。
   // 日期按 locale 数字格式（zh 不补零：2026/9/12）。
-  const locale = useLocale();
-  const formatDate = (iso: string) =>
-    new Intl.DateTimeFormat(locale, {
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-    }).format(new Date(iso));
+  /* 形态收在 lib/date-format:输出与此前逐字相同(按 locale 数字格式、不补零),
+     只是不再各组件各搓一个 Intl——豁免按组件增长会让 §1 那条判据一路失效。 */
+  const { numericDate: formatDate } = useWebsiteDateFormat();
   const versionLine = developing
     ? product.expectedReleaseAt
       ? labels.expectedRelease.replace(

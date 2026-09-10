@@ -16,7 +16,8 @@
 import Image from "next/image";
 import { Link } from "@/lib/i18n/navigation";
 import { memo, useMemo } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useWebsiteDateFormat } from "@/lib/date-format";
 import { debugLog } from "@vxture-platform/shared";
 import { HOME_CASES_DATA } from "@/data/home/home.cases.data";
 
@@ -54,24 +55,10 @@ const CaseCard = memo(function CaseCard({
   item,
   viewDetailsLabel,
 }: CaseCardProps) {
-  const format = useFormatter();
-  /**
-   * 案例发布的**年月**。
-   *
-   * 原先是 `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,"0")}`——
-   * 把「年在前、斜杠分隔」写死了，英文访客拿到的也是中文的字段顺序。字段顺序属于
-   * 语言（英文是 `09/2026`），所以交给 Intl。
-   *
-   * 形态就地传而不是进配置文件：全站只此一处要年月。website 若以后多起来，
-   * 照 console 的 `lib/i18n/formats.ts` 建一份命名形态，别在各处散着写。
-   */
+  const { yearMonth } = useWebsiteDateFormat();
   const formattedDate = useMemo(
-    () =>
-      format.dateTime(new Date(item.publishedAt), {
-        year: "numeric",
-        month: "2-digit",
-      }),
-    [format, item.publishedAt],
+    () => yearMonth(item.publishedAt),
+    [yearMonth, item.publishedAt],
   );
 
   const t = useTranslations(`home.cases.items.${item.id}`);
