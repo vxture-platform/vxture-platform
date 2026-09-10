@@ -44,7 +44,12 @@ const DDL_ROOTS = ["deploy/database/ddl", "deploy/database/migrations"];
 /** 共用件自己要用 Intl 实现形态；另两处见注释。 */
 const ALLOW_SRC = [
   "packages/shared",
-  "portals/website/src/components/marketing/ProductCatalogCard.tsx",
+  // 官网营销版式的日期形态，收在这一个文件里（2026-09-10）。
+  // 此前是 ProductCatalogCard.tsx 单独占一条豁免；案例卡改完本来要占第二条——
+  // **豁免按组件增长，这条判据就会一路失效**。所以把两处形态收进
+  // portals/website/src/lib/date-format.ts，只豁免它，新形态往那里加。
+  // 它自己不手拼日期：字段顺序一律由 Intl 决定，只做补零与分隔符。
+  "portals/website/src/lib/date-format.ts",
   // 通知模板的日期**参数**：用 formatToParts 拼严格 YYYY-MM-DD，是进模板的数据串，
   // 不是界面渲染。走共用件会变成 locale 形状的 2026/09/08，那不是同一个东西。
   "services/commerce/subscription/src/service/customer-notifier.ts",
@@ -105,9 +110,23 @@ function scanHandRolled(src) {
       hits.push({ line: i + 1, kind: "手搓 toLocale*（Date 接收者）" });
     }
   }
+  /*
+   * 一律报，**除非**能证明它不是在格式化日期。
+   *
+   * 此前的写法是反过来的：只有窗口里出现字面量选项键（year/month/…）才报。
+   * 那留了个口子——`new Intl.DateTimeFormat(locale, opts)` 把选项收进变量就看不见了，
+   * 而那恰恰是「共用件」和「绕开共用件」长得一模一样的写法。2026-09-10 官网收口时
+   * 发现：给共用件加的那条豁免其实是空的，判据根本没看那个文件。
+   *
+   * 唯一的例外是**只读时区名**（`timeZoneName` 且不含任何日期时间字段）：
+   * 那是拿 Intl 取「UTC+08:00 Asia/Shanghai」这类元数据，不是渲染日期。
+   */
+  const DATE_FIELD =
+    /(year|month|day|hour|minute|second|dateStyle|timeStyle|weekday|era)\s*:/;
   for (const m of src.matchAll(/new Intl\.DateTimeFormat/g)) {
     const win = src.slice(m.index, m.index + 260);
-    if (/(year|month|day|hour|minute|second|dateStyle|timeStyle)\s*:/.test(win)) {
+    const zoneOnly = /timeZoneName\s*:/.test(win) && !DATE_FIELD.test(win);
+    if (!zoneOnly) {
       hits.push({
         line: src.slice(0, m.index).split("\n").length,
         kind: "手搓 Intl.DateTimeFormat",
@@ -185,6 +204,14 @@ function scanPrecision(sql) {
 // ── 自检 ──────────────────────────────────────────────────────────────────
 const S = {
   badIntl: 'new Intl.DateTimeFormat(locale, { hour: "2-digit" })',
+  /** 选项收进变量——旧写法看不见它，正是绕开共用件最省事的方式。 */
+  badIntlVarOpts: "const f = new Intl.DateTimeFormat(locale, opts);",
+  /** 只读时区名：拿的是「UTC+08:00 Asia/Shanghai」这类元数据，不是渲染日期。 */
+  goodZoneOnly:
+    'new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "longOffset" })',
+  /** 带日期字段的就算也写了 timeZone，仍然是在渲染日期。 */
+  badZonePlusDate:
+    'new Intl.DateTimeFormat(l, { timeZone: tz, timeZoneName: "short", year: "numeric" })',
   badToLocale: "return d.toLocaleString(locale, { hour12: false });",
   goodShared: "return formatDateTime(value, locale);",
   goodNumber: 'total.toLocaleString("en-US")',
@@ -212,6 +239,11 @@ const fail = (why) => {
   process.exit(1);
 };
 if (!scanHandRolled(S.badIntl).length) fail("手搓 Intl 没被抓到");
+if (!scanHandRolled(S.badIntlVarOpts).length)
+  fail("选项收进变量的 Intl 没被抓到（旧写法的口子）");
+if (scanHandRolled(S.goodZoneOnly).length) fail("只读时区名被误报");
+if (!scanHandRolled(S.badZonePlusDate).length)
+  fail("带日期字段的 Intl 因为也写了 timeZone 就被放过了");
 if (!scanHandRolled(S.badToLocale).length) fail("手搓 toLocaleString 没被抓到");
 if (scanHandRolled(S.goodShared).length) fail("走共用件的写法被误报");
 if (scanHandRolled(S.goodNumber).length) fail("数字千分位被当成日期");
