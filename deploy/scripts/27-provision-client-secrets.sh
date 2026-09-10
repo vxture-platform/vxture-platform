@@ -177,6 +177,45 @@ else
   echo "  [skip] OPERATOR_TOTP_ENC_KEY — already set"
 fi
 
+# ── webhook 密钥的主密钥: PLATFORM_WEBHOOK_ENC_KEY ────────────────────────────
+# `product.product_webhooks.webhook_secret_enc` 的 AES-256-GCM 主密钥
+# (产品接入配置化,owner 2026-09-10)。在机器上铸一次,幂等;
+# FORCE_PROVISION_SECRETS=1 轮换。64 位十六进制 = 32 字节,无 shell 元字符。
+#
+# ── 两个文件必须同值 ──
+#   · opera-bff    运营者在产品目录里登记密钥时**加密**
+#   · platform-api 投递 provisioning webhook 时**解密**(dispatchPending 只在这儿跑)
+# 两边不同 = opera 存进去的密文 platform-api 解不开,而症状是投递静默停摆
+# (服务里那条路径已经改成报错不回落,但那也只是一行日志)。
+# 所以:任一文件里已有值就**以它为准复制到另一个**,只有两个都空才新铸。
+# admin-bff 不给——它只 enqueue,不投递,不需要这个密钥;密钥少一处落地少一分暴露面。
+PLATFORM_API_ENV_FILE="${PLATFORM_API_ENV_FILE:-$RUNTIME_DIR/.env.platform-api}"
+OPERA_ENV_FILE="${OPERA_ENV_FILE:-$RUNTIME_DIR/.env.opera-bff}"
+wh_key_api="$(read_kv "$PLATFORM_API_ENV_FILE" PLATFORM_WEBHOOK_ENC_KEY)"
+wh_key_opera="$(read_kv "$OPERA_ENV_FILE" PLATFORM_WEBHOOK_ENC_KEY)"
+if [ "$FORCE" = "1" ]; then
+  wh_key="$(openssl rand -hex 32)"
+  wh_why="rotated"
+elif ! is_unset "$wh_key_api"; then
+  wh_key="$wh_key_api"
+  wh_why="from platform-api"
+elif ! is_unset "$wh_key_opera"; then
+  wh_key="$wh_key_opera"
+  wh_why="from opera-bff"
+else
+  wh_key="$(openssl rand -hex 32)"
+  wh_why="generated"
+fi
+if [ "$FORCE" = "1" ] || is_unset "$wh_key_api" || is_unset "$wh_key_opera"    || [ "$wh_key_api" != "$wh_key_opera" ]; then
+  for f in "$PLATFORM_API_ENV_FILE" "$OPERA_ENV_FILE"; do
+    upsert_kv "$f" PLATFORM_WEBHOOK_ENC_KEY "$wh_key"
+    chmod 600 "$f" 2>/dev/null || true
+  done
+  echo "  [ok] PLATFORM_WEBHOOK_ENC_KEY → .env.platform-api + .env.opera-bff ($wh_why)"
+else
+  echo "  [skip] PLATFORM_WEBHOOK_ENC_KEY — already set and matching"
+fi
+
 # Decide which clients still need a secret + hash pair.
 check_file "$RUNTIME_DIR/secrets/platform.env"
 CLIENTS_DISCOVERED="$(discover_clients)"
