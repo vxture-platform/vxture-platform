@@ -622,6 +622,9 @@ function ProductClients() {
       />
 
       <DialogForm
+        /* 两组两列共 7 个字段 + 一个 Textarea(redirect_uris 一行一条)。同产品登记弹窗,
+           512 宽下两列各 ~230px 放不下。 */
+        size="xl"
         open={createOpen}
         onOpenChange={setCreateOpen}
         title="注册客户端"

@@ -1199,6 +1199,9 @@ function ProductsPageContent() {
       />
 
       <DialogForm
+        /* 三组两列共 8 个字段。默认 md=512 时每列才 ~230px,中文标签加说明必然挤成两三行
+           (owner 2026-09-10 走查:「内容拥挤,还有滚动条」)。xl=928 每列 ~440。 */
+        size="xl"
         open={dialog?.kind === "create" || editing}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
@@ -1406,6 +1409,9 @@ function ProductsPageContent() {
       {/* Webhook 登记。**两档而不是三档**：三项都是接入必需，凑一个高级档只是把
           自己定的规则抄一遍（同 E3 里注册模型那个的判断）。 */}
       <DialogForm
+        /* 单列 5 个字段 + 长说明:加宽是为了让说明少换行、整体变矮少出滚动条。
+           不用 xl——928 的单列阅读距离太长,那是给两列排布准备的。 */
+        size="lg"
         open={dialog?.kind === "webhook"}
         onOpenChange={(open) => {
           if (!open) setDialog(null);

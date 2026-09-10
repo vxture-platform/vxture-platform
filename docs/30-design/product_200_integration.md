@@ -170,6 +170,11 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 
 ## 7. 新产品接入 checklist
 
+> **操作面见 [`docs/60-operations/40-register-a-product.md`](../60-operations/40-register-a-product.md)。**
+> 本节是**要接哪几件事**（三通道的契约面）；那份 runbook 是**在哪儿点、填什么、填错报什么**。
+> 2026-09-10 起平台侧这六步**全部是页面操作**——不改 seed、不发版、不跑 db-init
+> （唯一例外见那份 §10：产品码被平台代码字面量引用时）。
+
 1. **目录**:product 目录登记(code/layer/类型/checklist 项)+ plan 结构(运营);
 2. **C1**:OIDC client 登记(redirect_uris、scopes、back-channel logout)+ RP 实现(按接入标准);
 3. **C3**:webhook 端点(验签/幂等)+ provisioning 消费;`local_usage` 缓冲 + consume 上报 Job;
