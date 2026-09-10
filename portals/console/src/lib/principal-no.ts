@@ -78,7 +78,14 @@ const CLASS_DIGIT: Record<PrincipalKind, string> = {
   workspace: "3",
 };
 
-/** 规整后的号形不对时,说清楚**哪儿**不对——而不是笼统一句「格式错误」。 */
+/**
+ * 规整后的号形不对时,分档给出问题。
+ *
+ * 分档是为了**给得出可操作的提示**:「位数不对」和「混进了字母」是人能自己改的。
+ * 但 `bad_class` 是个例外——它对外只说「格式不正确」(owner 2026-09-10):
+ * 类别位 1/2/3 分别是什么,是**内部编号规则**,告诉用户既帮不上忙、又把它泄了出去。
+ * 码保留是为了内部区分,文案不跟着走。
+ */
 export type PrincipalNoProblem =
   | "empty"
   | "not_digits"
@@ -105,6 +112,8 @@ export function validatePrincipalNo(
   if (normalized === "") return "empty";
   if (!/^\d+$/.test(normalized)) return "not_digits";
   if (normalized.length !== 10) return "bad_length";
+  /* 类别位对不上 = 这不是这一类的号(例如把租户号粘进了用户号框)。
+     对外只说「格式不正确」,不解释 1/2/3 各是什么——见上面的说明。 */
   if (normalized[0] !== CLASS_DIGIT[kind]) return "bad_class";
   return null;
 }

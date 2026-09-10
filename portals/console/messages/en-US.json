@@ -787,7 +787,7 @@
         "empty": "Enter a user ID.",
         "not_digits": "A user ID contains digits only. Check for stray letters (an O instead of a 0, for example).",
         "bad_length": "A user ID is 10 digits; this one is not.",
-        "bad_class": "That is not a user ID. User IDs start with 1 (2 is a tenant, 3 is a workspace)."
+        "bad_class": "That user ID is not valid. Check it and try again."
       }
     },
     "feedback": {
