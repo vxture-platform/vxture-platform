@@ -21,8 +21,9 @@
 # `$vx_agent_upstream` 由 conf.d/10-agent-upstream.conf 里的 map 定义，map 的数据行
 # 来自 conf.d/agents-upstream.map，由 render-agent-map.mjs 从产品登记渲染。
 #
-# proxy_pass 用变量时 nginx 不做启动期解析；上游一律是 IP:port，**不需要 resolver**
-# （用主机名才需要）。带变量的 proxy_pass 不会自动传 URI，所以显式接 $request_uri。
+# proxy_pass 用变量时 nginx 不做启动期解析。上游是 IP:port 时不需要 resolver，
+# 填主机名时需要——登记面两种都收，所以 server 块里给上（见下）。
+# 带变量的 proxy_pass 不会自动传 URI，所以显式接 $request_uri。
 
 server {
     listen 80;
@@ -50,6 +51,15 @@ server {
     add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
 
     client_max_body_size 25m;
+
+    # 带变量的 proxy_pass **只在上游是主机名时**需要 resolver;IP:port 不需要。
+    # 生产上游是 tailnet IP,所以本来用不上——但登记面允许填主机名,而缺 resolver
+    # 时的表现是**静默 502**,运营者只会看到「打不开」。给上 Docker 内嵌 DNS。
+    #
+    # 不能指望 nginx.conf 里那句:仓里那份根本没被挂载(见 conf.d/05-agent-upstream.conf
+    # 的说明),容器跑的是镜像自带的,里面没有 resolver。
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    resolver_timeout 5s;
 
     # 没登记边缘上游的子域：与 00-default.conf 同样的 444，不给任何回应。
     # 放在 server 层而不是 location 层：证书握手已经发生（通配证书对任何子域都成立），

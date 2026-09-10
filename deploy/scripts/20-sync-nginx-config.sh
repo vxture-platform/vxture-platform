@@ -135,7 +135,12 @@ fi
 #
 # 顺序要紧：路由表必须在下面 `nginx -t` **之前**产出——snippets/agent-upstream.conf
 # 里的 map include 了它，文件不存在则 nginx -t 直接失败。
-AGENT_MAP="$DST/snippets/agents-upstream.map"
+# 产物落 conf.d/:那是**唯一**既被挂载、又被镜像自带 nginx.conf include 的目录
+# (compose 只挂 conf.d / sites-enabled / html / ssl / logs;snippets 与仓里那份
+# nginx.conf 都不生效)。扩展名用 .map 而非 .conf——stock 的 include 是 `*.conf`,
+# 否则这份数据行会被当成一个独立配置文件在 http{} 里解析。
+# 注意:本脚本对 sites-enabled 是「先清后渲」,对 conf.d 不清,所以这份生成物能留存。
+AGENT_MAP="$DST/conf.d/agents-upstream.map"
 AGENT_RENDERER="$SRC/render-agent-map.mjs"
 DB_ENV="${DB_ENV:-/srv/vxture/runtime/.env.db}"
 if [ -f "$AGENT_RENDERER" ]; then
@@ -150,7 +155,7 @@ if [ -f "$AGENT_RENDERER" ]; then
       --network vxture-prod \
       --env-file "$DB_ENV" \
       -v "$SRC:/edge:ro" \
-      -v "$DST/snippets:/out" \
+      -v "$DST/conf.d:/out" \
       -v "$DB_TOOL_CACHE_DIR:/tmp/vxture-db" \
       node:24-alpine \
       sh -lc '
