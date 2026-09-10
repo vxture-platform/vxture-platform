@@ -32,12 +32,14 @@ import {
   themeBootstrapScript,
 } from "@vxture/design-system";
 import { THEME_CONSTANTS } from "@vxture/design-system/server";
-import { DEFAULT_LOCALE } from "@vxture-platform/shared";
+import { DEFAULT_LOCALE, BRAND_NAME } from "@vxture-platform/shared";
 import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "vxture AI",
+  /* 根 layout 的静态 metadata:各语言路由下会被 `buildMetadata` 覆盖,
+     但**根路径与静态资源仍用它**——漏改这一处的症状就是 tab 上还挂着旧名。 */
+  title: BRAND_NAME,
   description: "AI-based virtual nature exploration platform",
 };
 

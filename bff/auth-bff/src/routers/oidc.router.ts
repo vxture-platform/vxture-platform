@@ -247,6 +247,10 @@ export class OidcRouter {
       [cookies[SID_COOKIE.operator], cookies[SID_COOKIE.tenant]],
       q.post_logout_redirect_uri,
       q.state,
+      /* 发起登出的 RP(RP-Initiated Logout 1.0)。回跳白名单**兜底**用它:
+         中央会话已过期时,会话上的 client 名单没了,不带它就一个客户端都比不到,
+         回跳被当成开放重定向挡掉,人停在 IdP 侧。 */
+      q.client_id,
     );
 
     // Clear both realm session cookies (host + parent domain variants).
