@@ -142,7 +142,19 @@ fi
 # 注意:本脚本对 sites-enabled 是「先清后渲」,对 conf.d 不清,所以这份生成物能留存。
 AGENT_MAP="$DST/conf.d/agents-upstream.map"
 AGENT_RENDERER="$SRC/render-agent-map.mjs"
-DB_ENV="${DB_ENV:-/srv/vxture/runtime/.env.db}"
+# 库连接从哪来。**`/srv/vxture/runtime/.env.db` 是不存在的**——那是我 2026-09-10
+# 第一版凭空写的路径,结果 v0.26.132 的 deploy 日志里只留下一句「不存在,跳过」,
+# 渲染器一次都没跑,map 永远为空、没有任何智能体被路由,而部署照样绿。
+#
+# 真实位置见 29-seed-platform-ddl.sh:secrets/ 下面那两份。
+# 这里**优先 platform.env**(platform_svc,最小权限)——本脚本只做一次 SELECT,
+# 不需要 owner 连接;owner 那份只作兜底。
+DB_ENV="${DB_ENV:-}"
+if [ -z "$DB_ENV" ]; then
+  for cand in "$COMPOSE_ENV_RUNTIME_DIR/secrets/platform.env"               "/srv/vxture/runtime/secrets/platform.env"               "$COMPOSE_ENV_RUNTIME_DIR/secrets/rds-owner.env"               "/srv/vxture/runtime/secrets/rds-owner.env"; do
+    [ -n "$cand" ] && [ -f "$cand" ] && { DB_ENV="$cand"; break; }
+  done
+fi
 if [ -f "$AGENT_RENDERER" ]; then
   echo "==> 渲染智能体边缘路由表（从产品登记）"
   # 与 seed 同一手法：宿主上没有 node，借一次性 node 容器跑，pg 装在共享缓存里。
@@ -167,7 +179,9 @@ if [ -f "$AGENT_RENDERER" ]; then
         node /edge/render-agent-map.mjs /out/agents-upstream.map
       ' || true
   else
-    echo "  提示：$DB_ENV 不存在，跳过路由表渲染"
+    echo "  ⚠ 找不到库连接文件（secrets/platform.env 或 secrets/rds-owner.env），跳过路由表渲染。"
+    echo "    后果：已在 opera 登记「边缘上游」的智能体**不会被路由**（其子域返 444）。"
+    echo "    既有产品各自的精确 vhost 不受影响。"
   fi
   # 兜底：无论上面走哪条分支，include 的文件必须存在，否则 nginx -t 必失败。
   if [ ! -f "$AGENT_MAP" ]; then
