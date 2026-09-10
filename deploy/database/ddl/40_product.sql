@@ -314,9 +314,21 @@ CREATE TABLE product.product_webhooks (
     product_id         uuid         PRIMARY KEY REFERENCES product.products(id) ON DELETE CASCADE,
     home_url           varchar(512),                                  -- 产品主页（展示）
     webhook_url        varchar(512),                                  -- 平台→产品推送目标
-    webhook_secret_ref varchar(128),                                  -- 平台自签 HMAC 验签密钥引用
+    webhook_secret_ref varchar(128),                                  -- 平台自签 HMAC 验签密钥引用（旧路径：ref→env）
+    -- 边缘上游：智能体在 tailnet 上的 host:port。边缘那份 *.vxture.com 兜底 vhost
+    -- 用 map $host 查它；精确 server_name 的 vhost 按 nginx 匹配优先级照旧压过通配。
+    -- 空 = 不走通配兜底（自带精确 vhost，或尚未接入边缘）。
+    edge_upstream      varchar(128),
+    -- provisioning webhook 的 HMAC 密钥**密文**（AES-256-GCM，v1.<iv>.<tag>.<ct>，
+    -- 与 admin.operator_mfa.totp_secret 同格式同实现）。与 client_secret 不同：
+    -- HMAC 密钥必须能还原原文，存哈希不可用。主密钥 PLATFORM_WEBHOOK_ENC_KEY，
+    -- **只有一个、永不随产品增长**——这才是接一个智能体不用改 env 的原因。
+    webhook_secret_enc text,
     created_at         timestamptz  NOT NULL DEFAULT now(),
-    updated_at         timestamptz  NOT NULL DEFAULT now()
+    updated_at         timestamptz  NOT NULL DEFAULT now(),
+    -- 形状错要在登记那一刻报，不要等渲进 map 之后靠 nginx -t 失败才发现。
+    -- 单行写：跨行约束会被 check-column-locks 的列解析器当成列定义。
+    CONSTRAINT chk_product_webhooks_edge_upstream CHECK (edge_upstream IS NULL OR edge_upstream ~ '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]{1,5}$')
 );
 
 -- 上架检查项目录（可配置，item_code 自然键 PK）。新增检查项 = INSERT 一行，不改表结构。

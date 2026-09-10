@@ -8,6 +8,7 @@
  * responsibility (delivery_id + seq). See identity-platform-rp-integration.md §4–§6.
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { decryptSecret, deriveSecretKey } from "@vxture/core-utils";
 import { PgProvisioningRepository } from "../repository/pg-provisioning.repository";
 import { backoffSeconds } from "../backoff";
 import { signWebhook } from "../signer";
@@ -40,6 +41,20 @@ export class ProvisioningService {
     @Inject(PROVISIONING_ALERT_SINK)
     private readonly alerts: ProvisioningAlertSink,
   ) {}
+
+  /**
+   * webhook 密钥密文的主密钥,派生一次。
+   *
+   * **只有一个,永不随产品增长**——这正是与旧做法(每产品一个
+   * `{CODE}_PROVISION_WEBHOOK_SECRET`)的区别:接一个智能体不用改 .env、不用重新部署。
+   *
+   * 未配置时为 null,行为等同「没有新路径」:登记了密文的产品投不出去并报错,
+   * 只用旧 ref 的产品照常。不在构造时抛——那会让整个 admin-bff 起不来,
+   * 而这条新路径此刻可能一个产品都还没用上。
+   */
+  private readonly encKey: Buffer | null = process.env.PLATFORM_WEBHOOK_ENC_KEY
+    ? deriveSecretKey(process.env.PLATFORM_WEBHOOK_ENC_KEY)
+    : null;
 
   /** Enqueue a provisioning event (bumps state/version + queues a delivery). */
   async enqueue(
@@ -108,13 +123,44 @@ export class ProvisioningService {
     return { recovered, claimed: claimed.length, delivered, retried, failed };
   }
 
+  /**
+   * 取这次投递要用的 HMAC 密钥。两条路径,**新的优先**:
+   *
+   *   ① `webhookSecretEnc` —— 运营者在 opera 产品目录里登记的密文,随产品行一起
+   *      落库。接一个新产品不需要动容器环境,这是「零代码上线产品」的最后一环。
+   *   ② `webhookSecretRef` —— 旧路径,引用名 → `process.env[ref]`。存量产品
+   *      (karda / arda / vxtpl)还在用,保留到它们迁完为止。
+   *
+   * 解密失败**不静默回落到 ②**:密文存在却解不开,只有两种可能——主密钥换了、
+   * 或者这一行被改坏了。这两种都是要人去看的事故;悄悄改用另一个密钥去签名,
+   * 产品侧会收到一批验签失败的投递,而平台这边一句话都没有。
+   */
+  private resolveSecret(d: ClaimedDelivery): string | null {
+    if (d.webhookSecretEnc) {
+      const raw = this.encKey;
+      if (!raw) {
+        this.logger.error(
+          `delivery ${d.id}: 已登记密文但 PLATFORM_WEBHOOK_ENC_KEY 未配置——无法签名`,
+        );
+        return null;
+      }
+      try {
+        return decryptSecret(d.webhookSecretEnc, raw);
+      } catch {
+        this.logger.error(
+          `delivery ${d.id}: webhook 密钥密文解不开(主密钥不符或该行被改坏)——不回落到 env`,
+        );
+        return null;
+      }
+    }
+    return d.webhookSecretRef ? this.secrets.resolve(d.webhookSecretRef) : null;
+  }
+
   private async deliverOne(
     d: ClaimedDelivery,
   ): Promise<"delivered" | "retried" | "failed"> {
     const attempts = d.attempts + 1;
-    const secret = d.webhookSecretRef
-      ? this.secrets.resolve(d.webhookSecretRef)
-      : null;
+    const secret = this.resolveSecret(d);
 
     let responseCode: number | null = null;
     let ok = false;

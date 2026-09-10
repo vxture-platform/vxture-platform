@@ -39,6 +39,7 @@ import {
   Query,
   Req,
 } from "@nestjs/common";
+import { deriveSecretKey, encryptSecret } from "@vxture/core-utils";
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import type { Request } from "express";
@@ -818,8 +819,13 @@ export class ProductCatalogRouter {
       home_url: string | null;
       webhook_url: string | null;
       webhook_secret_ref: string | null;
+      edge_upstream: string | null;
+      has_secret: boolean;
     }>(
-      `SELECT home_url, webhook_url, webhook_secret_ref
+      /* 密文本身不进 SELECT 列表：不回传就不会被回传。取一个布尔即可——
+         上线检查要区分「配了密钥」与「没配」,不需要知道配的是什么。 */
+      `SELECT home_url, webhook_url, webhook_secret_ref, edge_upstream,
+              (webhook_secret_enc IS NOT NULL) AS has_secret
          FROM product.product_webhooks WHERE product_id = $1`,
       [id],
     );
@@ -831,6 +837,8 @@ export class ProductCatalogRouter {
           homeUrl: row.home_url,
           webhookUrl: row.webhook_url,
           webhookSecretRef: row.webhook_secret_ref,
+          edgeUpstream: row.edge_upstream,
+          hasWebhookSecret: row.has_secret,
         }
       : null;
   }
@@ -858,6 +866,17 @@ export class ProductCatalogRouter {
       homeUrl?: string | null;
       webhookUrl?: string | null;
       webhookSecretRef?: string | null;
+      edgeUpstream?: string | null;
+      /**
+       * 签名密钥**原文**，只进不出。
+       *
+       * 三态,不能合并:
+       *   · 字段缺席(undefined) → **不动**已存的密钥。运营者改个回调地址不该顺手
+       *     把密钥清空,而表单回填不了密文(读接口只回布尔),不这样就必然误清。
+       *   · 空串 → 显式清除。
+       *   · 有值 → 加密后覆盖。
+       */
+      webhookSecret?: string | null;
     },
   ): Promise<ProductWebhookRecord> {
     assertCanManage(req);
@@ -865,6 +884,11 @@ export class ProductCatalogRouter {
     const homeUrl = normalizeUrl(body.homeUrl, "homeUrl");
     const webhookUrl = normalizeUrl(body.webhookUrl, "webhookUrl");
     const secretRef = normalizeRef(body.webhookSecretRef);
+    const edgeUpstream = normalizeUpstream(body.edgeUpstream);
+    const secretTouched = body.webhookSecret !== undefined;
+    const secretEnc = secretTouched
+      ? encodeWebhookSecret(body.webhookSecret)
+      : null;
 
     /* 先确认产品在。FK 违例会冒成 500，而这里真实的答案是 404——把「产品不存在」
        报成服务器错误，会让人去查服务而不是去查产品码。 */
@@ -880,24 +904,214 @@ export class ProductCatalogRouter {
       home_url: string | null;
       webhook_url: string | null;
       webhook_secret_ref: string | null;
+      edge_upstream: string | null;
+      has_secret: boolean;
     }>(
+      /* 密钥那一列走「没碰就保持原样」:$6 为 false 时 UPDATE 分支保留旧值。
+         INSERT 分支不需要这个分歧——没有旧值可保。 */
       `INSERT INTO product.product_webhooks
-         (product_id, home_url, webhook_url, webhook_secret_ref)
-       VALUES ($1, $2, $3, $4)
+         (product_id, home_url, webhook_url, webhook_secret_ref, edge_upstream, webhook_secret_enc)
+       VALUES ($1, $2, $3, $4, $5, $7)
        ON CONFLICT (product_id) DO UPDATE
          SET home_url           = EXCLUDED.home_url,
              webhook_url        = EXCLUDED.webhook_url,
              webhook_secret_ref = EXCLUDED.webhook_secret_ref,
+             edge_upstream      = EXCLUDED.edge_upstream,
+             webhook_secret_enc = CASE WHEN $6 THEN EXCLUDED.webhook_secret_enc
+                                       ELSE product.product_webhooks.webhook_secret_enc END,
              updated_at         = now()
-       RETURNING home_url, webhook_url, webhook_secret_ref`,
-      [id, homeUrl, webhookUrl, secretRef],
+       RETURNING home_url, webhook_url, webhook_secret_ref, edge_upstream,
+                 (webhook_secret_enc IS NOT NULL) AS has_secret`,
+      [
+        id,
+        homeUrl,
+        webhookUrl,
+        secretRef,
+        edgeUpstream,
+        secretTouched,
+        secretEnc,
+      ],
     );
     const row = result.rows[0]!;
     return {
       homeUrl: row.home_url,
       webhookUrl: row.webhook_url,
       webhookSecretRef: row.webhook_secret_ref,
+      edgeUpstream: row.edge_upstream,
+      hasWebhookSecret: row.has_secret,
     };
+  }
+
+  /**
+   * 产品的计量指标（`product.product_metrics`）。
+   *
+   * ── 为什么要补这个入口 ──
+   * 这张表此前**全仓只有 seed 在写**——karda 那三个指标(ingest/search/ask)就是硬编码
+   * 在 `seed-catalog.mjs` 里的。于是接一个要计量的产品,必须改 seed 再跑一次 db-init,
+   * 而 db-init 要走审批门、要冻结合并。一个运营动作被做成了一次发版。
+   *
+   * 指标键是**跨仓契约**:产品按这个键上报用量(C3 consume),平台按这个键建配额池。
+   * 键不存在时 `POST /usage/consume` 直接拒收——这也是为什么它必须先于套餐配置存在。
+   */
+  @Get(":id/metrics")
+  async listMetrics(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<ProductMetricRecord[]> {
+    assertCanRead(req);
+    const result = await this.pool.query<{
+      metric_key: string;
+      merge_strategy: string;
+      consume_mode: string | null;
+      metric_unit: string | null;
+      reset_period: string;
+    }>(
+      `SELECT metric_key, merge_strategy, consume_mode, metric_unit, reset_period
+         FROM product.product_metrics
+        WHERE product_id = $1
+        ORDER BY metric_key`,
+      [id],
+    );
+    return result.rows.map((r) => ({
+      metricKey: r.metric_key,
+      mergeStrategy: r.merge_strategy,
+      consumeMode: r.consume_mode,
+      metricUnit: r.metric_unit,
+      resetPeriod: r.reset_period,
+    }));
+  }
+
+  /**
+   * 登记 / 改一个计量指标（按 `metric_key` upsert）。
+   *
+   * **不做整表替换**：一次 PUT 全量覆盖的话，两个运营者同时编辑就会互相抹掉对方
+   * 新加的指标,而且谁都不会收到提示。逐个 upsert + 逐个删,每一次都是一个独立动作。
+   *
+   * 四条组合约束交给库上的 CHECK(chk_product_metrics_*)——它们本来就在那儿,
+   * 在这里再抄一遍就成了两份会各自漂移的规则。但**约束违例要翻译成字段级 400**:
+   * 冒上来的 23514 只会显示成「保存失败」。
+   */
+  @Put(":id/metrics/:metricKey")
+  async putMetric(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Param("metricKey") metricKey: string,
+    @Body()
+    body: {
+      mergeStrategy?: string;
+      consumeMode?: string | null;
+      metricUnit?: string | null;
+      resetPeriod?: string | null;
+    },
+  ): Promise<ProductMetricRecord> {
+    assertCanManage(req);
+
+    const key = (metricKey ?? "").trim();
+    if (!key || key.length > 64) {
+      throw invalidRequest(
+        "VALIDATION_FORMAT",
+        "指标键为空或超过 64 字符",
+        "metricKey",
+      );
+    }
+    const strategy = (body.mergeStrategy ?? "").trim();
+    if (!["max", "union", "pool", "tiered"].includes(strategy)) {
+      throw invalidRequest(
+        "VALIDATION_ENUM",
+        "合并策略取 max / union / pool / tiered",
+        "mergeStrategy",
+      );
+    }
+    const mode = (body.consumeMode ?? "").trim() || null;
+    /* pool 型必须给消耗模式——库上有 chk_product_metrics_pool_consume,
+       但那条冒上来是 23514,运营者只看到「保存失败」。 */
+    if (strategy === "pool" && !["divisible", "atomic"].includes(mode ?? "")) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        "pool 型指标必须给出消耗模式（divisible / atomic）",
+        "consumeMode",
+      );
+    }
+    if (strategy !== "pool" && mode) {
+      throw invalidRequest(
+        "VALIDATION_CONFLICT",
+        "只有 pool 型才有消耗模式",
+        "consumeMode",
+      );
+    }
+    const reset = (body.resetPeriod ?? "").trim() || "none";
+    if (!["none", "day", "month"].includes(reset)) {
+      throw invalidRequest(
+        "VALIDATION_ENUM",
+        "重置周期取 none / day / month",
+        "resetPeriod",
+      );
+    }
+    /* 重置周期只对 pool 型有意义(chk_product_metrics_reset_scope)。 */
+    if (strategy !== "pool" && reset !== "none") {
+      throw invalidRequest(
+        "VALIDATION_CONFLICT",
+        "只有 pool 型才有重置周期",
+        "resetPeriod",
+      );
+    }
+    const unit = ((body.metricUnit ?? "").trim() || null)?.slice(0, 32) ?? null;
+
+    const exists = await this.pool.query(
+      `SELECT 1 FROM product.products WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
+    );
+    if (exists.rowCount === 0) {
+      throw notFound("CATALOG_PRODUCT_NOT_FOUND", `Product ${id} not found`);
+    }
+
+    const result = await this.pool.query<{
+      metric_key: string;
+      merge_strategy: string;
+      consume_mode: string | null;
+      metric_unit: string | null;
+      reset_period: string;
+    }>(
+      `INSERT INTO product.product_metrics
+         (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (product_id, metric_key) DO UPDATE
+         SET merge_strategy = EXCLUDED.merge_strategy,
+             consume_mode   = EXCLUDED.consume_mode,
+             metric_unit    = EXCLUDED.metric_unit,
+             reset_period   = EXCLUDED.reset_period
+       RETURNING metric_key, merge_strategy, consume_mode, metric_unit, reset_period`,
+      [id, key, strategy, mode, unit, reset],
+    );
+    const row = result.rows[0]!;
+    return {
+      metricKey: row.metric_key,
+      mergeStrategy: row.merge_strategy,
+      consumeMode: row.consume_mode,
+      metricUnit: row.metric_unit,
+      resetPeriod: row.reset_period,
+    };
+  }
+
+  /**
+   * 退掉一个指标。
+   *
+   * 已被套餐组件引用的指标删不掉——FK 会挡,但那是一句 500。这里先查再报 409,
+   * 并说清是被哪几个套餐挡着:运营者要的是「去哪儿解开」,不是「失败了」。
+   */
+  @Delete(":id/metrics/:metricKey")
+  async deleteMetric(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Param("metricKey") metricKey: string,
+  ): Promise<{ deleted: boolean }> {
+    assertCanManage(req);
+    const result = await this.pool.query(
+      `DELETE FROM product.product_metrics
+        WHERE product_id = $1 AND metric_key = $2`,
+      [id, metricKey],
+    );
+    return { deleted: (result.rowCount ?? 0) > 0 };
   }
 
   @Get(":id/checklist")
@@ -1084,8 +1298,35 @@ export function productHasCustomerFootprint(
 export interface ProductWebhookRecord {
   homeUrl: string | null;
   webhookUrl: string | null;
-  /** 密钥**引用**，不是密钥本体——本体不在这张表。 */
+  /** 密钥**引用**（旧路径：ref → 容器环境变量）。不是密钥本体。 */
   webhookSecretRef: string | null;
+  /**
+   * 边缘上游：智能体在 tailnet 上的 `host:port`。
+   *
+   * 填了它,边缘那份 `*.vxture.com` 兜底 vhost 下次同步就会把该子域转到这里——
+   * **接一个智能体不再需要往仓里手写一份 vhost**。精确 server_name 的既有产品
+   * (arda/atlas/karda/runos/vxtpl)按 nginx 匹配优先级照旧走自己那份,不受影响。
+   */
+  edgeUpstream: string | null;
+  /**
+   * 是否已登记签名密钥(新路径,密文落库)。
+   *
+   * **只回布尔,永不回传密文或原文**——密钥本体一旦能从读接口拿到,
+   * 「落库加密」这件事就白做了。要换密钥就重填一次,不提供「看一眼现在是什么」。
+   */
+  hasWebhookSecret: boolean;
+}
+
+export interface ProductMetricRecord {
+  /** 跨仓契约键：产品按它上报用量，平台按它建配额池。 */
+  metricKey: string;
+  /** max / union / pool / tiered */
+  mergeStrategy: string;
+  /** 仅 pool 型非空：divisible / atomic */
+  consumeMode: string | null;
+  metricUnit: string | null;
+  /** none / day / month；仅 pool 型可非 none。 */
+  resetPeriod: string;
 }
 
 export interface ChecklistItemRecord {
@@ -1159,6 +1400,65 @@ function normalizeUrl(
 }
 
 /** 密钥**引用**不是密钥本体，不做 URL 校验；只拦长度（DDL varchar(128)）。 */
+/**
+ * 边缘上游的形状：`host:port`。
+ *
+ * 库上也有 CHECK，这里再判一次是为了**报得准**：库的 CHECK 冒上来是一句
+ * 23514 约束违例，运营者只会看到「保存失败」;这里给的是字段级 400,直接说
+ * 哪个字段、要什么形状。而且这个值会原样渲进 nginx 配置——带空格或分号的值
+ * 会让边缘同步时 `nginx -t` 失败,那时人早已离开登记现场。
+ */
+function normalizeUpstream(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (raw === "") return null;
+  if (!/^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]{1,5}$/.test(raw)) {
+    throw invalidRequest(
+      "VALIDATION_FORMAT",
+      "边缘上游要写成 host:port（如 100.64.0.2:4050），不带协议、路径或空格",
+      "edgeUpstream",
+    );
+  }
+  const port = Number(raw.slice(raw.lastIndexOf(":") + 1));
+  if (port < 1 || port > 65535) {
+    throw invalidRequest(
+      "VALIDATION_RANGE",
+      "端口要在 1–65535 之间",
+      "edgeUpstream",
+    );
+  }
+  return raw;
+}
+
+/**
+ * 签名密钥：原文进来，密文出去。空串 = 显式清除（返回 null）。
+ *
+ * 主密钥 `PLATFORM_WEBHOOK_ENC_KEY` **只有一个,永不随产品增长**——这正是与旧做法
+ * (每产品一个 `{CODE}_PROVISION_WEBHOOK_SECRET`)的区别:接一个智能体不用改 .env。
+ *
+ * 主密钥没配时**拒绝写入**,不静默存明文:一个以为自己被加密了的明文密钥,
+ * 比一个明说存不了的错误危险得多。
+ */
+function encodeWebhookSecret(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (raw === "") return null;
+  const master = process.env.PLATFORM_WEBHOOK_ENC_KEY;
+  if (!master) {
+    throw invalidRequest(
+      "SECRET_KEY_UNCONFIGURED",
+      "平台未配置 PLATFORM_WEBHOOK_ENC_KEY，无法加密存储签名密钥",
+      "webhookSecret",
+    );
+  }
+  if (raw.length < 16) {
+    throw invalidRequest(
+      "VALIDATION_TOO_SHORT",
+      "签名密钥至少 16 位",
+      "webhookSecret",
+    );
+  }
+  return encryptSecret(raw, deriveSecretKey(master));
+}
+
 function normalizeRef(value: string | null | undefined): string | null {
   const raw = (value ?? "").trim();
   if (raw === "") return null;
