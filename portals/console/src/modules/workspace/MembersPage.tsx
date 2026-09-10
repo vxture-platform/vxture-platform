@@ -77,6 +77,11 @@ import { useTableLabels } from "@/lib/table";
 import { useTableSort } from "@/lib/table-sort";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
+import {
+  normalizePrincipalNoInput,
+  principalPrefix,
+  validatePrincipalNo,
+} from "@/lib/principal-no";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -89,6 +94,9 @@ import {
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
+
+/** 输入框里固定前置的用户号前缀。与展示端同源——改前缀时这里跟着变。 */
+const USER_NO_PREFIX = principalPrefix("user");
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
 
@@ -277,6 +285,15 @@ export function MembersPage() {
         setDialogError(t("errors.role_required"));
         setSubmitting(false);
         return;
+      }
+      /* 号形先判:形不对时根本查不了,报「还没查」会把人指向错的方向。 */
+      if (memberForm.channel === "user_no") {
+        const problem = validatePrincipalNo(memberForm.userNo, "user");
+        if (problem) {
+          setDialogError(t(`dialogs.userNoError.${problem}`));
+          setSubmitting(false);
+          return;
+        }
       }
       /* 用户号通道:**查过并确认是这个人**才让提交。这一条服务端不判(它只知道号
          存不存在),但它正是 owner 要这个查询的理由——防止邀错人。 */
@@ -942,6 +959,13 @@ export function MembersPage() {
     </Field>
   );
 
+  /* 号形问题(owner 2026-09-10:「不能静默查不到,用户也不知道问题」)。
+     空串不报——那是「还没填」,不是「填错了」;进对话框就红一片没有意义。 */
+  const userNoProblem =
+    memberForm.userNo === ""
+      ? null
+      : validatePrincipalNo(memberForm.userNo, "user");
+
   const roleSelect = (
     <Field>
       <FieldLabel htmlFor="member-role">{t("dialogs.fields.role")}</FieldLabel>
@@ -1331,25 +1355,44 @@ export function MembersPage() {
                   改动号码就把上一次的结果清掉——否则改了号、卡还停在旧人身上,
                   那正是「邀错人」最容易发生的一刻。 */}
               <div className="flex items-center gap-sm">
-                <Input
-                  id="member-user-no"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={memberForm.userNo}
-                  onChange={(event) => {
-                    setLookup(null);
-                    setMemberForm((old) => ({
-                      ...old,
-                      userNo: event.target.value,
-                    }));
-                  }}
-                  required
-                />
+                {/* 前缀 `U-` 做成**固定前置**(owner 2026-09-10):界面上用户号一律
+                    带前缀展示,不在输入框里体现的话,人会连前缀一起粘进来。
+                    粘进来的也照收——`normalizePrincipalNoInput` 把前缀与空白剔掉,
+                    只留数字。它**不吞非数字字符**:`1799729O56` 这种 O/0 手误要留着
+                    让它查不到,静默改成另一个号比查不到糟得多。 */}
+                <div className="flex flex-1 items-center gap-2xs rounded-md border border-input bg-background px-sm focus-within:ring-1 focus-within:ring-ring">
+                  <span
+                    className="select-none text-body-sm text-muted-foreground"
+                    aria-hidden="true"
+                  >
+                    {USER_NO_PREFIX}
+                  </span>
+                  <Input
+                    id="member-user-no"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="border-0 bg-transparent px-0 focus-visible:ring-0"
+                    value={memberForm.userNo}
+                    onChange={(event) => {
+                      setLookup(null);
+                      setMemberForm((old) => ({
+                        ...old,
+                        userNo: normalizePrincipalNoInput(
+                          event.target.value,
+                          "user",
+                        ),
+                      }));
+                    }}
+                    required
+                  />
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   size="md"
-                  disabled={!memberForm.userNo.trim() || lookingUp}
+                  disabled={
+                    !memberForm.userNo || userNoProblem !== null || lookingUp
+                  }
                   onClick={() => void runLookup()}
                 >
                   {lookingUp
@@ -1357,11 +1400,22 @@ export function MembersPage() {
                     : t("dialogs.actions.lookup")}
                 </Button>
               </div>
-              {/* 说明放框后:这条通道与邮箱那条的行为不同(不发邮件、要对方在站内同意),
-                  不说清楚的话邀请人会一直等一封不会来的邮件。 */}
-              <span className="text-body-sm text-muted-foreground">
-                {t("dialogs.fields.userNoHint")}
-              </span>
+              {/* 号形不对时**替掉**那句通道说明,而不是并排显示:此刻人要解决的是
+                  这一个问题,把两句话摆在一起会让重点散掉。
+
+                  分档给文案(不是纯数字 / 位数不对 / 类别位不对)——说「请填 10 位数字」
+                  对一个填了 11 位数字的人没有帮助,他要知道的是「位数不对」。 */}
+              {userNoProblem ? (
+                <span className="text-body-sm text-danger-text">
+                  {t(`dialogs.userNoError.${userNoProblem}`)}
+                </span>
+              ) : (
+                /* 说明放框后:这条通道与邮箱那条的行为不同(不发邮件、要对方在站内同意),
+                   不说清楚的话邀请人会一直等一封不会来的邮件。 */
+                <span className="text-body-sm text-muted-foreground">
+                  {t("dialogs.fields.userNoHint")}
+                </span>
+              )}
 
               {/* 查到的人:**全宽、淡色底**(owner 2026-09-10 的布局)。
                   联系方式是服务端遮蔽过的——够邀请人认出是不是他要找的那个人,

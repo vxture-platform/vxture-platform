@@ -782,6 +782,12 @@
         "noContact": "未留联系方式",
         "notFound": "没有找到这个用户号对应的账号。请与对方核对后重试。",
         "alreadyMember": "已在本租户"
+      },
+      "userNoError": {
+        "empty": "请填写用户号。",
+        "not_digits": "用户号只能是数字。请检查是否混入了字母（例如把 0 打成了 O）。",
+        "bad_length": "用户号是 10 位数字，当前位数不对。",
+        "bad_class": "用户号格式不正确，请检查后重试。"
       }
     },
     "feedback": {

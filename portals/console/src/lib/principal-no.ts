@@ -21,6 +21,16 @@ const PREFIX: Record<PrincipalKind, string> = {
   workspace: "W",
 };
 
+/**
+ * 某一类主体码的展示前缀(含连字符),如 `U-`。
+ *
+ * 输入框要把它做成固定前置,所以需要单独取。别用 `formatPrincipalNo("", kind)` 代替:
+ * 那个函数对空串返回 null,拿到的永远是调用方写死的兜底,「与展示同源」就成了空话。
+ */
+export function principalPrefix(kind: PrincipalKind): string {
+  return `${PREFIX[kind]}-`;
+}
+
 /** `1799729056` → `U-1799729056`;空值返回 null(调用方决定占位符)。 */
 export function formatPrincipalNo(
   no: string | number | null | undefined,
@@ -37,4 +47,73 @@ export function formatPrincipalNoOr(
   fallback: string,
 ): string {
   return formatPrincipalNo(no, kind) ?? fallback;
+}
+
+/**
+ * 反向:把人**粘进来的东西**规整成裸号(owner 2026-09-10)。
+ *
+ * 界面上一律带前缀展示(`U-1799729056`),于是复制过来的十有八九带着它;
+ * 后端收的却是裸数字。不规整的话,粘贴 → 查不到 → 人以为号错了,而号是对的。
+ *
+ * 收得宽一点,因为人会怎么复制是不可控的:
+ *   `U-1799729056` / `u-1799729056` / `U1799729056` / `1799729056`
+ *   带空格、全角空格、前后换行的,也都收。
+ * 但**只剔前缀与空白,不改数字**:把非数字字符一并滤掉会让「1799 729O56」
+ * 这种 O/0 手误静默变成另一个号——那比查不到糟得多。
+ */
+export function normalizePrincipalNoInput(
+  raw: string,
+  kind: PrincipalKind,
+): string {
+  const trimmed = raw.replace(/[\s　]/g, "");
+  const prefix = PREFIX[kind];
+  const re = new RegExp(`^${prefix}[-_]?`, "i");
+  return trimmed.replace(re, "");
+}
+
+/** 主体码的类别位:用户 1 / 租户 2 / 工作空间 3(§11 v4「三号解耦」)。 */
+const CLASS_DIGIT: Record<PrincipalKind, string> = {
+  user: "1",
+  tenant: "2",
+  workspace: "3",
+};
+
+/**
+ * 规整后的号形不对时,分档给出问题。
+ *
+ * 分档是为了**给得出可操作的提示**:「位数不对」和「混进了字母」是人能自己改的。
+ * 但 `bad_class` 是个例外——它对外只说「格式不正确」(owner 2026-09-10):
+ * 类别位 1/2/3 分别是什么,是**内部编号规则**,告诉用户既帮不上忙、又把它泄了出去。
+ * 码保留是为了内部区分,文案不跟着走。
+ */
+export type PrincipalNoProblem =
+  | "empty"
+  | "not_digits"
+  | "bad_length"
+  | "bad_class";
+
+/**
+ * 校验一个**已规整**的主体码(owner 2026-09-10)。
+ *
+ * 为什么要有它:不校验的话,`1799729O56`(字母 O 冒充 0)会一路送去查、查不到,
+ * 而「查不到」与「格式不对」在界面上长得一模一样——人会去找对方核对号码,
+ * 而问题在自己这一次粘贴里。两件事要分开说。
+ *
+ * 校到**号形**为止,不校 Luhn:
+ *   · 号形(纯数字 / 10 位 / 类别位)是**本地就能判**的,判了能立刻给出准确提示;
+ *   · Luhn 虽然也能本地算,但那等于把「这个号存不存在」的判断权搬到前端——
+ *     一个 Luhn 合法但不存在的号仍然要问服务端。多一道只会让两处的口径将来分叉。
+ * 所以:形状本地判,存不存在服务端判。
+ */
+export function validatePrincipalNo(
+  normalized: string,
+  kind: PrincipalKind,
+): PrincipalNoProblem | null {
+  if (normalized === "") return "empty";
+  if (!/^\d+$/.test(normalized)) return "not_digits";
+  if (normalized.length !== 10) return "bad_length";
+  /* 类别位对不上 = 这不是这一类的号(例如把租户号粘进了用户号框)。
+     对外只说「格式不正确」,不解释 1/2/3 各是什么——见上面的说明。 */
+  if (normalized[0] !== CLASS_DIGIT[kind]) return "bad_class";
+  return null;
 }
