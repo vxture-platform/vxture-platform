@@ -124,7 +124,9 @@ export async function seedBulkCore(c) {
         [
           ID("user", i),
           `测试用户 ${String(i).padStart(3, "0")}`,
-          pick(["male", "female", "unspecified"], i),
+          // 第三档是 **null 不是字符串**:列的取值只有 male / female / NULL
+          // (「未设定」就是 NULL)。此前写的 "unspecified" 与 CHECK 冲突。
+          pick(["male", "female", null], i),
           pick(["light", "dark", "system"], i),
           day(i),
         ],

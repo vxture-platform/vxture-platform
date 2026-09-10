@@ -250,7 +250,8 @@ export async function seedDemo(client) {
     await client.query(
       `insert into account.user_profiles
          (user_id, display_name, gender, bio, language, timezone, theme, created_at, updated_at)
-       values ($1, $2, 'unknown', 'Demo 数据，供本地联调使用。', 'zh-CN', 'Asia/Shanghai', 'system', now(), now())
+       -- gender 只有 male / female / NULL(见 10_account.sql 的 CHECK);NULL = 未设定。
+       values ($1, $2, NULL, 'Demo 数据，供本地联调使用。', 'zh-CN', 'Asia/Shanghai', 'system', now(), now())
        on conflict (user_id) do nothing`,
       [ID.user(t.i), t.ownerName],
     );

@@ -331,8 +331,14 @@ jobs:
                 # (base-URL backfill + U-line env migration run above, before the case.)
                 # 1) generate + write confidential RP client secrets (idempotent)
                 CONFIRM_PROVISION_SECRETS=yes bash scripts/27-provision-client-secrets.sh
-                # 2) re-seed so appoidc.oidc_clients picks up the new bcrypt hashes
-                CONFIRM_SEED=yes bash scripts/29-seed-platform-ddl.sh
+                # 2) re-seed so appoidc.oidc_clients picks up the new bcrypt hashes.
+                # SEED_SAMPLE=false：本动作要的只是 catalog（客户端哈希在那儿），
+                # 样例数据是它不需要的副作用。29-seed 的默认是 true，四个调用点里
+                # 只有这一个的语义不含样例——seed / migrate-seed / reset 三个是运营者
+                # 明确要求 seed 的场合，保持原样。
+                # 2026-09-10 实际后果：provision-secrets 因为跑到 seed-sample 而整体失败
+                #（那里另有一个 gender 取值的 bug），连带把「铸密钥」这件事也报成失败。
+                CONFIRM_SEED=yes SEED_SAMPLE=false bash scripts/29-seed-platform-ddl.sh
                 # 3) recreate auth-bff + the RP bffs so they load the new env.
                 # env_file changes only take effect on container *recreate*, not
                 # restart. auth-bff MUST be included: 27-provision mints

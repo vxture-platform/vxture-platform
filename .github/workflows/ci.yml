@@ -202,6 +202,9 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:datetime-discipline
 
+      - name: Seed vs column CHECK guardrail
+        run: pnpm lint:seed-constraints
+
       # 用户名格式写在三处(后端判据 + 两个补齐页的前端校验),漂了不报错:
       # 前端比后端松 → 用户填得进去、提交被 400 拒;紧 → 后端接受的名字被拦下,
       # 用户永远不知道那可以用。2026-09-08 实际漂过一次,是靠人翻源码撞见的。
