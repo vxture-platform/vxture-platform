@@ -37,7 +37,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
-import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
   success: "success",
@@ -110,6 +110,8 @@ const PAGE_SIZE = 20;
 const ACTION_OPTIONS = [...KNOWN_ACTIONS].sort();
 
 export function AuditLogsPage() {
+  const { fmtDate, fmtTime } = useDateFormat();
+
   const t = useTranslations("auditPage");
   const tableLabels = useTableLabels();
   const { session } = useConsoleSession();
@@ -252,7 +254,7 @@ export function AuditLogsPage() {
           ),
       },
     ],
-    [t, actionLabel],
+    [t, actionLabel, fmtDate, fmtTime],
   );
 
   return (

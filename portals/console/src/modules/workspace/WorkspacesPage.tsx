@@ -70,7 +70,7 @@ import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { fmtDate } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 const STATUS_TONES: Record<ConsoleWorkspace["status"], StatusBadgeTone> = {
   active: "success",
@@ -103,6 +103,8 @@ interface FormState {
 const EMPTY_FORM: FormState = { target: null, name: "", description: "" };
 
 export function WorkspacesPage() {
+  const { fmtDate } = useDateFormat();
+
   const t = useTranslations("workspacesPage");
   const { session } = useConsoleSession();
   const tableLabels = useTableLabels();

@@ -69,7 +69,7 @@ import type { StatusBadgeTone } from "@vxture/design-system";
 import { getPathname } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductUrl } from "@/lib/website-entry";
-import { fmtDate } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import type {
   ProductAppTile,
   RecommendedProduct,
@@ -177,6 +177,8 @@ export function AppCenter({
   onNavigate,
   labels,
 }: AppCenterProps) {
+  const { fmtDate } = useDateFormat();
+
   const locale = useLocale();
   /* 订阅这个域的词典(档位/周期/状态/期限),与 hubCards、OrdersSection、付款页共用。 */
   const tSub = useTranslations("subscriptionHub");

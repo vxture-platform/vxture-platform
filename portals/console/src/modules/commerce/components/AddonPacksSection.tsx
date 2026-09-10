@@ -54,7 +54,7 @@ import { useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection } from "@/layout/shell";
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
-import { fmtDate, fmtTime } from "./hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
 import { useConfirmLabels } from "@/lib/destructive";
 
@@ -172,6 +172,8 @@ export function AddonPacksSection({
   /** tenant.payment.manage:无码只能看目录与订单,不能下单/取消(与 BFF 守卫同码)。 */
   canPurchase?: boolean;
 }) {
+  const { fmtDate, fmtDateTime } = useDateFormat();
+
   const t = useTranslations("quotasPage.addons");
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
@@ -286,9 +288,7 @@ export function AddonPacksSection({
         <TableTitleCell
           title={<span className="font-mono">{o.orderNo}</span>}
           description={
-            <span className="tabular-nums">
-              {fmtDate(o.createdAt)} {fmtTime(o.createdAt)}
-            </span>
+            <span className="tabular-nums">{fmtDateTime(o.createdAt)}</span>
           }
         />
       ),
@@ -344,7 +344,7 @@ export function AddonPacksSection({
           return (
             <span className="tabular-nums text-body-sm text-muted-foreground">
               {t("payBefore", {
-                date: `${fmtDate(o.expireAt)} ${fmtTime(o.expireAt)}`,
+                date: fmtDateTime(o.expireAt),
               })}
             </span>
           );

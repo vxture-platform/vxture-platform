@@ -10,6 +10,7 @@
 
 import { getRequestConfig } from "next-intl/server";
 import { routing } from "./routing";
+import { DATETIME_FORMATS } from "./formats";
 
 export default getRequestConfig(async ({ requestLocale }) => {
   let locale = await requestLocale;
@@ -29,5 +30,5 @@ export default getRequestConfig(async ({ requestLocale }) => {
           unknown
         >);
 
-  return { locale, messages };
+  return { locale, messages, formats: DATETIME_FORMATS };
 });

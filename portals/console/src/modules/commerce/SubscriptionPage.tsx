@@ -58,12 +58,15 @@ import {
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductsUrl } from "@/lib/website-entry";
 import { SubscriptionProductCard } from "./components/hubCards";
-import { daysLeft, fmtDate, fmtTime } from "./components/hubModel";
+import { daysLeft } from "./components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 import { ResourcePacksSection } from "./components/ResourcePacksSection";
 type SubFilter = "active" | "all";
 
 export function SubscriptionPage() {
+  const { fmtDateTime, fmtDateShort } = useDateFormat();
+
   const t = useTranslations("subscriptionHub");
   const locale = useLocale();
   const router = useRouter();
@@ -284,7 +287,7 @@ export function SubscriptionPage() {
         id: "expiring",
         icon: "clock",
         label: t("stats.expiring"),
-        value: expiring?.endAt ? fmtDate(expiring.endAt).slice(5) : "—",
+        value: fmtDateShort(expiring?.endAt),
         trend: expiring
           ? t("stats.expiringHint", {
               product: expiring.productName ?? expiring.planName,
@@ -297,7 +300,7 @@ export function SubscriptionPage() {
           : t("stats.expiringNone"),
       },
     ];
-  }, [products, t, loadFailed]);
+  }, [products, t, loadFailed, fmtDateShort]);
 
   return (
     <ViewLayout>
@@ -340,7 +343,7 @@ export function SubscriptionPage() {
           description={
             nextDeadline
               ? t("pendingBanner.deadline", {
-                  time: `${fmtDate(nextDeadline)} ${fmtTime(nextDeadline)}`,
+                  time: fmtDateTime(nextDeadline),
                 })
               : t("pendingBanner.description")
           }

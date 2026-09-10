@@ -91,7 +91,7 @@ import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
 
@@ -128,6 +128,8 @@ function memberSearchText(member: MemberRecord) {
 }
 
 export function MembersPage() {
+  const { fmtDate, fmtTime } = useDateFormat();
+
   const t = useTranslations("membersPage");
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();

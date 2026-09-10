@@ -9,7 +9,9 @@
  * 排查订单、审计、通知时，同一分钟内的先后顺序恰恰最要紧，两个「15:04」摆在
  * 一起看不出谁先谁后。形态定义见 `@vxture-platform/shared` 的 format.utils.ts。
  *
- * 执法方式：门户与 BFF 不得手搓日期格式，一律走共用件（下面 §1）。
+ * 执法方式：门户与 BFF 不得手搓日期格式，一律走共用件（下面 §1）。手搓有三种写法，
+ * 三种都要认——只认前两种时，console 的 `hubModel.ts` 拿第三种（分量 getter + padStart）
+ * 写了三个格式化函数，67 处调用，从守卫底下整整走过去。
  *
  * ══ 二、存储到微秒 ══
  * **界面到秒是产品口径，不是精度上限。** 库里一律 `timestamptz`（默认精度 6，
@@ -48,19 +50,57 @@ const ALLOW_SRC = [
   "services/commerce/subscription/src/service/customer-notifier.ts",
 ];
 
+/**
+ * 只对这条 §1c 生效的豁免——**不是**整个 §1 的豁免。
+ * 这两处补零拼串是对的，理由各自写在文件里：
+ */
+const ALLOW_PADDED = [
+  // 本地时区 yyyy-MM-dd，是算周期起止用的**数据键**，形状必须固定、与语言无关。
+  "portals/console/src/modules/commerce/components/CyclePicker.tsx",
+  // 用量图表的**轴标**（小时档只要 `14:00` 这个刻度），规范里短形态点名的场合。
+  "portals/console/src/modules/commerce/UsagePage.tsx",
+];
+
 const FORMATTER = /\b(formatDay|formatDateTime|sharedDay|sharedDateTime)\s*\(/;
 /** Date 接收者的 toLocale*：认 `new Date(...)`、或名字像日期的变量。 */
 const DATE_RECEIVER =
   /(new Date\([^)]*\)|\b(?:d|dt|date|at|when|ts|moment)\b)\s*\.\s*toLocale(?:Date|Time)?String\s*\(/;
+/**
+ * 第三种手搓方式：拿 Date 的分量 getter 自己补零拼串。
+ *
+ * 前两条认的是 `toLocale*` 和 `new Intl.DateTimeFormat`——那是「用了 Intl 但绕开
+ * 共用件」。这一条认的是**连 Intl 都没用**：`String(d.getMonth() + 1).padStart(2, "0")`。
+ * console 的 `hubModel.ts` 里三个格式化函数（41 + 22 + 4 处调用）正是这么写的，
+ * 从前两条眼皮底下整整走过去——不看语言、英文界面照样输出中文形状，`fmtTime`
+ * 还漏了秒。**判据只认得两种手搓方式，第三种就等于没设防。**
+ */
+const PADDED_DATE_PART =
+  /\.get(?:Month|Date|Hours|Minutes|Seconds)\s*\(\s*\)[^;\n]*\.padStart\s*\(/;
 /** 写调用的开头。命中后按括号配平圈出实参区间。 */
 const WRITE_OPENER =
   /\b(?:api|http|client)\s*\.\s*(?:post|put|patch|delete)\s*\(|\bJSON\.stringify\s*\(|\bbody\s*:\s*\{|\.query\s*\(/;
+
+/**
+ * 整行都是注释吗（`//`、`/*`、JSDoc 续行的 `*`）。
+ *
+ * 按行匹配时**注释和代码长得一模一样**。这条判据要拦的写法，恰恰最常被引在注释里
+ * ——「原先是 xxx，已经改掉了」。把那种行报成缺陷，等于逼着人不许在注释里说明白
+ * 自己改了什么，而说明白正是注释存在的理由。
+ *
+ * 只看整行注释：行尾跟在代码后面的注释不处理。那种位置写下这类样例极罕见，
+ * 真遇上了，正确做法是把它挪到独立一行，而不是让判据去猜哪半边是代码。
+ */
+function isCommentLine(line) {
+  const s = line.trimStart();
+  return s.startsWith("//") || s.startsWith("*") || s.startsWith("/*");
+}
 
 // ── §1 手搓日期格式 ────────────────────────────────────────────────────────
 function scanHandRolled(src) {
   const lines = src.split("\n");
   const hits = [];
   for (let i = 0; i < lines.length; i += 1) {
+    if (isCommentLine(lines[i])) continue;
     if (DATE_RECEIVER.test(lines[i])) {
       hits.push({ line: i + 1, kind: "手搓 toLocale*（Date 接收者）" });
     }
@@ -71,6 +111,22 @@ function scanHandRolled(src) {
       hits.push({
         line: src.slice(0, m.index).split("\n").length,
         kind: "手搓 Intl.DateTimeFormat",
+      });
+    }
+  }
+  return hits;
+}
+
+/** §1c 单独一支，因为它有自己的豁免名单（见 ALLOW_PADDED）。 */
+function scanPaddedParts(src) {
+  const lines = src.split("\n");
+  const hits = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (isCommentLine(lines[i])) continue;
+    if (PADDED_DATE_PART.test(lines[i])) {
+      hits.push({
+        line: i + 1,
+        kind: "手搓补零拼串（Date 分量 getter + padStart）",
       });
     }
   }
@@ -132,6 +188,18 @@ const S = {
   badToLocale: "return d.toLocaleString(locale, { hour12: false });",
   goodShared: "return formatDateTime(value, locale);",
   goodNumber: 'total.toLocaleString("en-US")',
+  badPadded: 'const m = String(d.getMonth() + 1).padStart(2, "0");',
+  badPaddedHour: 'return `${String(d.getHours()).padStart(2, "0")}:00`;',
+  /** 补零的不是日期分量就不该报——序号、编号、金额都会 padStart。 */
+  goodPadded: 'const seq = String(index + 1).padStart(2, "0");',
+  /** 取了分量但没补零拼串（做的是比较 / 计算），也不该报。 */
+  goodDateMath: "if (a.getMonth() !== b.getMonth()) return false;",
+  /** 注释里引用旧写法说明「已经改掉了」——不是缺陷。 */
+  goodInComment:
+    ' * 原先是 `${String(d.getMonth() + 1).padStart(2, "0")}`，已改走 Intl。',
+  goodInLineComment:
+    '// 别再写 String(d.getHours()).padStart(2, "0") 这种，走共用件。',
+  goodToLocaleInComment: "// 旧代码是 d.toLocaleString(locale, {}) ，已退役。",
   badWrite:
     'await api.patch(url, {\n  checkedAt: formatDateTime(new Date(), locale),\n});',
   goodRender: "cell: (item) => formatDateTime(item.updatedAt, locale),",
@@ -147,6 +215,14 @@ if (!scanHandRolled(S.badIntl).length) fail("手搓 Intl 没被抓到");
 if (!scanHandRolled(S.badToLocale).length) fail("手搓 toLocaleString 没被抓到");
 if (scanHandRolled(S.goodShared).length) fail("走共用件的写法被误报");
 if (scanHandRolled(S.goodNumber).length) fail("数字千分位被当成日期");
+if (!scanPaddedParts(S.badPadded).length) fail("手搓补零拼串没被抓到");
+if (!scanPaddedParts(S.badPaddedHour).length) fail("手搓补零拼小时没被抓到");
+if (scanPaddedParts(S.goodPadded).length) fail("序号补零被当成日期");
+if (scanPaddedParts(S.goodDateMath).length) fail("日期比较被当成拼串");
+if (scanPaddedParts(S.goodInComment).length) fail("JSDoc 里引用旧写法被误报");
+if (scanPaddedParts(S.goodInLineComment).length) fail("行注释里的样例被误报");
+if (scanHandRolled(S.goodToLocaleInComment).length)
+  fail("行注释里的 toLocale* 被误报");
 if (!scanIntoWrites(S.badWrite).length) fail("格式化进写调用没被抓到");
 if (scanIntoWrites(S.goodRender).length) fail("表格渲染被误报成写调用");
 if (scanIntoWrites(S.goodWrite).length) fail("不含格式化的写调用被误报");
@@ -193,6 +269,12 @@ for (const f of srcFiles) {
   if (!ALLOW_SRC.some((a) => rel.startsWith(a))) {
     for (const h of scanHandRolled(src)) {
       problems.push(`§1 ${rel}:${h.line} —— ${h.kind}`);
+    }
+    /* §1c 的豁免是**这一条自己的**：上面两条对这两个文件仍然生效。 */
+    if (!ALLOW_PADDED.includes(rel)) {
+      for (const h of scanPaddedParts(src)) {
+        problems.push(`§1c ${rel}:${h.line} —— ${h.kind}`);
+      }
     }
   }
   // §3 对共用件自己也生效——它没有写路径，命中即真有问题。

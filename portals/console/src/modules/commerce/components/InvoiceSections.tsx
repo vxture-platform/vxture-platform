@@ -55,7 +55,7 @@ import {
 } from "@/api/console-bff";
 import { PageSection } from "@/layout/shell";
 import { useConfirmLabels } from "@/lib/destructive";
-import { fmtDate, fmtTime } from "./hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 /** invoice_status 六值域(52_billing.sql CHECK)→ 徽章语气。 */
 export const RECEIPT_STATUS_TONES: Record<string, StatusBadgeTone> = {
@@ -133,6 +133,8 @@ export function InvoiceSections({
    */
   invoiceBlockedBy?: "lite" | "none" | null;
 }) {
+  const { fmtDateTime } = useDateFormat();
+
   const t = useTranslations("billingPage.invoicing");
   const tableLabels = useTableLabels();
 
@@ -239,9 +241,7 @@ export function InvoiceSections({
         <TableTitleCell
           title={<span className="font-mono">{r.invoiceNo}</span>}
           description={
-            <span className="tabular-nums">
-              {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
-            </span>
+            <span className="tabular-nums">{fmtDateTime(r.createdAt)}</span>
           }
         />
       ),

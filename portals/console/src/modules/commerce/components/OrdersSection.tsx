@@ -55,11 +55,14 @@ import { PageSection } from "@/layout/shell";
 import { ListPagination } from "@/components/pagination";
 import { OrderDetailPanel } from "./OrderDetailPanel";
 import { useOrderPolling } from "./pay/useOrderPolling";
-import { PAY_AXIS, SVC_AXIS, fmtDate, fmtTime, formatRemain } from "./hubModel";
+import { PAY_AXIS, SVC_AXIS, formatRemain } from "./hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 const ORDERS_PAGE_SIZE = 10;
 
 export function OrdersSection() {
+  const { fmtDate, fmtTime } = useDateFormat();
+
   const t = useTranslations("subscriptionHub");
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();

@@ -61,7 +61,7 @@ import { ListPagination } from "@/components/pagination";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtCount } from "@/lib/format-metrics";
 import { METRIC_LABEL_KEYS, useMetricLabel } from "@/lib/metric-label";
-import { fmtDate, fmtTime } from "./components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 const PAGE_SIZE = 20;
 /** 未归集那一桶的筛选哨兵(与 BFF 的 USER_FILTER_RE 同一个字面量)。 */
@@ -94,6 +94,8 @@ const initialFilters = (): Filters => ({
 });
 
 export function UsageRecordsPage() {
+  const { fmtDate, fmtTime } = useDateFormat();
+
   const t = useTranslations("usageRecordsPage");
   const tableLabels = useTableLabels();
   const metricLabel = useMetricLabel();

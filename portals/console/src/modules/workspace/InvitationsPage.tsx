@@ -57,7 +57,7 @@ import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 
 const STATUS_TONES: Record<ConsoleInvitation["status"], StatusBadgeTone> = {
@@ -70,6 +70,8 @@ const STATUS_TONES: Record<ConsoleInvitation["status"], StatusBadgeTone> = {
 const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 
 export function InvitationsPage() {
+  const { fmtDate, fmtDateTime } = useDateFormat();
+
   const t = useTranslations("invitationsPage");
   const tableLabels = useTableLabels();
   const router = useRouter();
@@ -238,7 +240,7 @@ export function InvitationsPage() {
       header: t("table.colCreatedAt"),
       cell: (r) => (
         <span className="tabular-nums text-body-sm text-muted-foreground">
-          {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
+          {fmtDateTime(r.createdAt)}
         </span>
       ),
     },
@@ -252,9 +254,7 @@ export function InvitationsPage() {
             {t("table.acceptedAt", { date: fmtDate(r.acceptedAt) })}
           </span>
         ) : (
-          <span className="tabular-nums">
-            {fmtDate(r.expiresAt)} {fmtTime(r.expiresAt)}
-          </span>
+          <span className="tabular-nums">{fmtDateTime(r.expiresAt)}</span>
         ),
     },
   ];

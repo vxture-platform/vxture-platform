@@ -62,7 +62,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { ListPagination } from "@/components/pagination";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
-import { fmtDate, fmtTime } from "./components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 const STATUS_TONES: Record<ConsoleVoucher["status"], StatusBadgeTone> = {
   available: "success",
@@ -90,6 +90,8 @@ const SOON_MS = 7 * 86_400_000;
 const BILLING_HREF = "/billing";
 
 export function VouchersPage() {
+  const { fmtDate, fmtTime } = useDateFormat();
+
   const t = useTranslations("vouchersPage");
   const tableLabels = useTableLabels();
   const locale = useLocale();

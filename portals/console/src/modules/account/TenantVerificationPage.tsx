@@ -43,10 +43,12 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
 import { CardRows } from "@/modules/account/profile/CardRows";
-import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { VERIFICATION_STATUS_TONES } from "./verification-methods";
 
 export function TenantVerificationPage() {
+  const { fmtDateTime } = useDateFormat();
+
   const t = useTranslations("verificationPage.org");
   const tableLabels = useTableLabels();
   const { session } = useConsoleSession();
@@ -138,9 +140,7 @@ export function TenantVerificationPage() {
       sortable: true,
       header: t("history.colAt"),
       cell: (r) => (
-        <span className="tabular-nums">
-          {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
-        </span>
+        <span className="tabular-nums">{fmtDateTime(r.createdAt)}</span>
       ),
     },
     {
@@ -153,7 +153,7 @@ export function TenantVerificationPage() {
           </span>
         ) : r.reviewedAt ? (
           <span className="tabular-nums text-body-sm text-muted-foreground">
-            {fmtDate(r.reviewedAt)} {fmtTime(r.reviewedAt)}
+            {fmtDateTime(r.reviewedAt)}
           </span>
         ) : (
           t("history.awaiting")
@@ -291,7 +291,7 @@ export function TenantVerificationPage() {
               ) : null}
               <DetailRow label={t("current.verifiedAt")}>
                 {state.latest.reviewedAt
-                  ? `${fmtDate(state.latest.reviewedAt)} ${fmtTime(state.latest.reviewedAt)}`
+                  ? fmtDateTime(state.latest.reviewedAt)
                   : "—"}
               </DetailRow>
               <DetailRow label={t("current.invoicing")}>

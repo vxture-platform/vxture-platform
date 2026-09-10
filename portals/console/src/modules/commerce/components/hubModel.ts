@@ -60,34 +60,6 @@ export const SVC_AXIS: Record<OrderState, AxisView> = {
   expired: { key: "closed", tone: "neutral" },
 };
 
-/** 本地时区 yyyy-MM-dd（toISOString 会因 UTC 偏移串日）。 */
-export function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
-/** 本地时区 HH:mm。 */
-export function fmtTime(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-/** MM-dd HH:mm（进度时间线的紧凑刻度）。 */
-export function fmtStamp(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${m}-${day} ${fmtTime(iso)}`;
-}
-
 /** 距到期的整天数（向上取整）；无到期（长期有效）→ null。 */
 export function daysLeft(endIso: string | null): number | null {
   if (!endIso) return null;

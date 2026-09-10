@@ -30,7 +30,7 @@ import {
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import type { MyOrder } from "@/api/console-bff";
 import { infoRow, infoRowGlyph, infoRowText } from "./sectionKit";
-import { fmtStamp } from "./hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { PrincipalNo } from "@/components/principal-no";
 
 interface Step {
@@ -130,6 +130,8 @@ export function OrderDetailPanel({
   countdown: string | null;
   fmtLocale: Locale;
 }) {
+  const { fmtDate, fmtDateTime } = useDateFormat();
+
   const t = useTranslations("subscriptionHub.detail");
   const money = (v: string) =>
     formatCurrency(Number.parseFloat(v || "0"), fmtLocale, order.currency);
@@ -214,7 +216,7 @@ export function OrderDetailPanel({
             </b>
             <span className="text-body-sm text-muted-foreground tabular-nums">
               {order.startAt && order.endAt
-                ? `${fmtStamp(order.startAt)} ~ ${fmtStamp(order.endAt)}`
+                ? `${fmtDate(order.startAt)} ~ ${fmtDate(order.endAt)}`
                 : t("periodOnActivation")}
             </span>
           </span>
@@ -263,7 +265,7 @@ export function OrderDetailPanel({
                   ) : null}
                 </span>
                 <span className="shrink-0 text-body-sm text-muted-foreground tabular-nums">
-                  {step.at ? fmtStamp(step.at) : "—"}
+                  {fmtDateTime(step.at)}
                 </span>
               </li>
             );
