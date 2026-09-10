@@ -1499,6 +1499,9 @@ importers:
       '@vxture/core-config':
         specifier: workspace:*
         version: link:../../../packages/core/config
+      '@vxture/core-utils':
+        specifier: workspace:*
+        version: link:../../../packages/core/utils
       pg:
         specifier: ^8.13.3
         version: 8.20.0

@@ -135,3 +135,13 @@ export type {
   TenantMenuCode,
   TenantMenuNode,
 } from "./tenant-permissions";
+
+// ============================================
+// Secret cipher (AES-256-GCM, 需要取回原文的密钥)
+// ============================================
+
+export {
+  deriveSecretKey,
+  encryptSecret,
+  decryptSecret,
+} from "./utils/secret-cipher";

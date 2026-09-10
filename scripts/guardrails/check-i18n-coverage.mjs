@@ -238,6 +238,19 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-03 admin 2499 → 2502(+3):同一编辑框加「预期发布日期」(开发中的产品官网卡底部显示
  *   「预期发布:日期」,运营手填;上线后自动改用 released_at,owner 要求)。同上,整页硬编码,不单抽。
  */
+/*
+ * 2026-09-10 opera 1931 → 1938(+7)、website 40 → 39(-1):产品接入配置化
+ *   (owner「零代码改动上线产品」)。
+ *
+ *   opera +7:产品目录的 webhook 弹窗新增「签名密钥」与「边缘上游」两个字段及其说明。
+ *   **不单抽**——opera 整个门户没做 i18n,光这一页就有 138 条硬编码;只把新写的 7 条
+ *   走 t(),换来的是同一个弹窗里半中半英。局部抽取造混合语言这件事 2026-08-27
+ *   的走查已经抓到过一次(见 [[project-ds9-visuals-unverified]] 那条教训)。
+ *   opera 整页 i18n 化另开专项,与 admin 同一批。
+ *
+ *   website -1:CaseSection 的年月不再手拼 `${year}/${month}`,改由 Intl 按 locale
+ *   给——那个手拼串本身就是一处写死的中文字段顺序。棘轮跟着收紧。
+ */
 const BASELINE = {
   // 2026-09-04 console 30 → 8:批 0c 清掉 onboarding 法务链接 / signin 跳板 /
   //   atlas 整页 / 成员批量栏 / 「default」徽章 / 付款页全角冒号拼接 / 联系销售主题。
@@ -245,9 +258,9 @@ const BASELINE = {
   //   译器);要清得改成错误码 + 页面侧翻译,归批 1。
   // 2026-09-04 console 8 → 0:批 1 把客户端兜底改成空串 + 页面侧翻译,棘轮归零。
   console: 0,
-  website: 40,
+  website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
+  opera: 1938, // 2026-09-10 见上方说明;原 1931 是 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页

@@ -166,17 +166,28 @@ type DialogState =
   | { kind: "webhook"; row: ProductRecord }
   | null;
 
-/** `product.product_webhooks` 一行。三列都可空——见 BFF `putWebhook` 的注释。 */
+/** `product.product_webhooks` 一行。各列都可空——见 BFF `putWebhook` 的注释。 */
 interface WebhookDraft {
   homeUrl: string;
   webhookUrl: string;
   webhookSecretRef: string;
+  /** tailnet 上的 host:port。填了它,边缘下次同步就把该子域转到这里。 */
+  edgeUpstream: string;
+  /**
+   * 签名密钥**原文**,只进不出。
+   *
+   * 读接口只回「配没配」这个布尔——密文和原文都不回传,否则「落库加密」就白做了。
+   * 所以这个框**永远是空的**:留空 = 不动已存的那个,填了 = 覆盖。
+   */
+  webhookSecret: string;
 }
 
 const EMPTY_WEBHOOK: WebhookDraft = {
   homeUrl: "",
   webhookUrl: "",
   webhookSecretRef: "",
+  edgeUpstream: "",
+  webhookSecret: "",
 };
 
 interface ProductDraft {
@@ -331,6 +342,8 @@ function ProductsPageContent() {
   const [draft, setDraft] = useState<ProductDraft>(EMPTY_DRAFT);
   const [webhookDraft, setWebhookDraft] = useState<WebhookDraft>(EMPTY_WEBHOOK);
   const [webhookLoad, setWebhookLoad] = useState<LoadState>({ kind: "ready" });
+  /** 已登记签名密钥?只有布尔——密钥本体不回传。用来在框旁边说明留空的后果。 */
+  const [hasSecret, setHasSecret] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   /* 全部产品的检查单完成态，一次取回（`GET /api/products/checklist-summary`）。
@@ -664,12 +677,18 @@ function ProductsPageContent() {
         homeUrl: string | null;
         webhookUrl: string | null;
         webhookSecretRef: string | null;
+        edgeUpstream: string | null;
+        hasWebhookSecret: boolean;
       } | null>(`/api/product/catalog/${encodeURIComponent(row.id)}/webhook`);
       setWebhookDraft({
         homeUrl: current?.homeUrl ?? "",
         webhookUrl: current?.webhookUrl ?? "",
         webhookSecretRef: current?.webhookSecretRef ?? "",
+        edgeUpstream: current?.edgeUpstream ?? "",
+        /* 密钥框恒空:回传密钥本体等于取消加密存储的意义。 */
+        webhookSecret: "",
       });
+      setHasSecret(current?.hasWebhookSecret ?? false);
       setWebhookLoad({ kind: "ready" });
     } catch (error) {
       /* 读不到就不让写：读失败时保存会把「读不出来的那份」覆盖成空。 */
@@ -691,6 +710,13 @@ function ProductsPageContent() {
           homeUrl: webhookDraft.homeUrl.trim() || null,
           webhookUrl: webhookDraft.webhookUrl.trim() || null,
           webhookSecretRef: webhookDraft.webhookSecretRef.trim() || null,
+          edgeUpstream: webhookDraft.edgeUpstream.trim() || null,
+          /* 三态,不能塌成两态:框里没填就**不带这个字段**(undefined = 不动已存的),
+             带一个 null 过去会把密钥清空。运营者只是来改个回调地址,
+             不该顺手把密钥抹了——而框里恒空,不这样就必然误清。 */
+          ...(webhookDraft.webhookSecret.trim()
+            ? { webhookSecret: webhookDraft.webhookSecret.trim() }
+            : {}),
         },
       );
       toast({
@@ -1446,8 +1472,63 @@ function ProductsPageContent() {
                     className="font-mono text-code-sm"
                   />
                   <FieldDescription>
-                    **是引用不是密钥本体**——密钥不存这张表，这里填的是取密钥的路径，
-                    平台用它自签 HMAC，对方据此验签。
+                    **旧路径,新产品不用填**——它是引用不是密钥本体,取密钥要靠容器环境里
+                    的同名变量,也就是说每接一个产品都得改 .env
+                    再重新部署。存量产品 (karda / arda /
+                    vxtpl)还在用,保留到它们迁完为止。
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="wh-secret-value">签名密钥</FieldLabel>
+                  <Input
+                    id="wh-secret-value"
+                    type="password"
+                    autoComplete="new-password"
+                    value={webhookDraft.webhookSecret}
+                    onChange={(e) =>
+                      setWebhookDraft({
+                        ...webhookDraft,
+                        webhookSecret: e.target.value,
+                      })
+                    }
+                    placeholder={
+                      hasSecret ? "已登记,留空则不改动" : "至少 16 位"
+                    }
+                    className="font-mono text-code-sm"
+                  />
+                  <FieldDescription>
+                    {hasSecret
+                      ? "已登记。密钥加密存库、不回传,所以这里看不到当前值——要换就填新的,留空则保持不变。"
+                      : "填了它就不用再走上面那条引用+环境变量的老路。密钥加密存库,填完这一次就再也拿不回来,请同时交给产品侧。"}
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            </FieldTier>
+
+            <FieldTier
+              tier="identity"
+              hint="填了边缘上游,这个产品的子域下次边缘同步就通了——不需要往仓里手写一份 vhost。"
+            >
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="wh-edge">边缘上游</FieldLabel>
+                  <Input
+                    id="wh-edge"
+                    value={webhookDraft.edgeUpstream}
+                    onChange={(e) =>
+                      setWebhookDraft({
+                        ...webhookDraft,
+                        edgeUpstream: e.target.value,
+                      })
+                    }
+                    placeholder="<tailnet-ip>:4050"
+                    className="font-mono text-code-sm"
+                  />
+                  <FieldDescription>
+                    写成 `host:port`,不带协议、路径或空格——这个值会原样进 nginx
+                    配置。 留空 = 不走通配兜底(自带精确 vhost 的产品就该留空)。
+                    另外要确认该子域的 DNS 记录已建:证书是通配的不用签,DNS
+                    不是。
                   </FieldDescription>
                 </Field>
               </FieldGroup>

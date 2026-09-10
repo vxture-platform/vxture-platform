@@ -107,7 +107,22 @@ export interface ClaimedDelivery {
   payload: ProvisioningPayload | GenericEventPayload;
   attempts: number;
   webhookUrl: string | null;
+  /**
+   * 旧路径：密钥引用名 → `process.env[ref]`。
+   * 每接一个产品就要往容器环境塞一个 `{CODE}_PROVISION_WEBHOOK_SECRET`,
+   * 改 .env + 重新部署——这正是「接一个智能体必须改代码/改环境」的最后一环。
+   */
   webhookSecretRef: string | null;
+  /**
+   * 新路径：密钥**密文**（AES-256-GCM），由运营者在 opera 产品目录里登记。
+   * 与 `webhookUrl` 同一次查询取回，不多一次往返;解密在服务层做,所以
+   * `WebhookSecretResolver` 那个**同步**接口一个字都不用改。
+   *
+   * 两条路径并存:优先密文,为空回落到 ref→env。存量产品(karda/arda/vxtpl)
+   * 还在用 ref,等它们迁完再退役旧路——一次改动里既开新路又拆旧路,
+   * 出问题时分不清是哪一半。
+   */
+  webhookSecretEnc: string | null;
 }
 
 /** Dispatcher tuning (env-driven; see provisioning.module). */

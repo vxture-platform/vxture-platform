@@ -34,6 +34,7 @@ interface WebhookCfgRow {
   product_id: string;
   webhook_url: string | null;
   webhook_secret_ref: string | null;
+  webhook_secret_enc: string | null;
 }
 
 @Injectable()
@@ -206,7 +207,7 @@ export class PgProvisioningRepository {
     // product_id (one row per product).
     const productIds = [...new Set(claimed.rows.map((r) => r.application_id))];
     const cfgs = await this.pool.query<WebhookCfgRow>(
-      `select product_id, webhook_url, webhook_secret_ref
+      `select product_id, webhook_url, webhook_secret_ref, webhook_secret_enc
          from product.product_webhooks
         where product_id = any($1::uuid[])`,
       [productIds],
@@ -225,6 +226,7 @@ export class PgProvisioningRepository {
         attempts: r.attempts,
         webhookUrl: cfg?.webhook_url ?? null,
         webhookSecretRef: cfg?.webhook_secret_ref ?? null,
+        webhookSecretEnc: cfg?.webhook_secret_enc ?? null,
       };
     });
   }

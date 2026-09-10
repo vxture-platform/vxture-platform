@@ -125,6 +125,58 @@ if [ -f "$ARCHE_TEMPLATE" ]; then
   fi
 fi
 
+# ── 模板渲染：L3 智能体通配兜底 vhost + 路由表（owner 2026-09-10）────────────
+# 此前每接一个智能体都要手写一份 vhost 进仓再发版。智能体持续上线，这条路每次都走
+# 一遍。现在改成：一份 `*.vxture.com` 兜底 + 一张从**产品登记**生成的 map，运营者在
+# opera 填「边缘上游」即可，仓里一个字不用改。
+#
+# 精确 server_name 的 vhost（arda/atlas/karda/runos/vxtpl 与平台自己那几个面）按
+# nginx 的匹配优先级照旧压过通配，**一个都不用迁**。
+#
+# 顺序要紧：路由表必须在下面 `nginx -t` **之前**产出——snippets/agent-upstream.conf
+# 里的 map include 了它，文件不存在则 nginx -t 直接失败。
+AGENT_MAP="$DST/snippets/agents-upstream.map"
+AGENT_RENDERER="$SRC/render-agent-map.mjs"
+DB_ENV="${DB_ENV:-/srv/vxture/runtime/.env.db}"
+if [ -f "$AGENT_RENDERER" ]; then
+  echo "==> 渲染智能体边缘路由表（从产品登记）"
+  # 与 seed 同一手法：宿主上没有 node，借一次性 node 容器跑，pg 装在共享缓存里。
+  # 渲染器自己保证「无论如何都产出这个文件」并且失败不中断（读不到库时保留上一版），
+  # 所以这里 `|| true` 只兜住容器本身起不来的情况，不吞它的业务判断。
+  DB_TOOL_CACHE_DIR="${DB_TOOL_CACHE_DIR:-/srv/vxture/data/db-tool-cache}"
+  mkdir -p "$DB_TOOL_CACHE_DIR"
+  if [ -f "$DB_ENV" ]; then
+    docker run --rm \
+      --network vxture-prod \
+      --env-file "$DB_ENV" \
+      -v "$SRC:/edge:ro" \
+      -v "$DST/snippets:/out" \
+      -v "$DB_TOOL_CACHE_DIR:/tmp/vxture-db" \
+      node:24-alpine \
+      sh -lc '
+        set -e
+        if [ ! -d /tmp/vxture-db/node_modules/pg ]; then
+          npm install --prefix /tmp/vxture-db pg@8.20.0 >/dev/null 2>&1 || true
+        fi
+        export NODE_PATH="/tmp/vxture-db/node_modules"
+        node /edge/render-agent-map.mjs /out/agents-upstream.map
+      ' || true
+  else
+    echo "  提示：$DB_ENV 不存在，跳过路由表渲染"
+  fi
+  # 兜底：无论上面走哪条分支，include 的文件必须存在，否则 nginx -t 必失败。
+  if [ ! -f "$AGENT_MAP" ]; then
+    echo "# 未渲染（见上方提示），空表占位" > "$AGENT_MAP"
+    echo "  已写出空的智能体路由表占位 → $AGENT_MAP"
+  fi
+
+  AGENT_TEMPLATE="$SRC/templates/agents.vhost.template"
+  if [ -f "$AGENT_TEMPLATE" ]; then
+    render_nginx "$AGENT_TEMPLATE" "$DST/sites-enabled/agents.conf"
+    echo "==> 已渲染智能体通配兜底 vhost → $DST/sites-enabled/agents.conf"
+  fi
+fi
+
 echo ""
 echo "同步完成，目录内容："
 find "$DST" -type f | sort

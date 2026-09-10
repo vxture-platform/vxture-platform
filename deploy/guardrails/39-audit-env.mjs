@@ -460,6 +460,12 @@ const ENV_FILE_RULES = [
       // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
       "OIDC_CLIENT_SECRET",
     ]),
+    // 产品 webhook 密钥的主密钥（产品接入配置化，2026-09-10）。opera 是**加密侧**：
+    // 运营者在产品目录里登记密钥时用它加密落库。与 platform-api（解密侧）**必须同值**，
+    // 由 27-provision 同时写两份、任一存在即复制而非新铸。
+    // 可选而非必需：这条新路径可能一个产品都还没用上，缺了不该拦部署——真用上了
+    // 而它缺失，投递侧会明确报错（服务里那条路径不静默回落）。
+    placeholderOptionalKeys: new Set(["PLATFORM_WEBHOOK_ENC_KEY"]),
   },
   {
     label: "platform-api env",
@@ -469,9 +475,15 @@ const ENV_FILE_RULES = [
     requiredExample: true,
     // Webhook signing degrades to retry/dead-letter when unset — never blocks deploy.
     placeholderOptionalKeys: new Set([
+      // 旧路径：**每产品一个**密钥进环境。接一个智能体就要改 .env + 重新部署——
+      // 产品接入配置化（2026-09-10）正是来去掉这条的。这三个是存量，等它们迁到
+      // 密文落库后一并退役；**新产品不要再往这里加**。
       "ARDA_PROVISION_WEBHOOK_SECRET",
       "KARDA_PROVISION_WEBHOOK_SECRET",
       "VXTPL_PROVISION_WEBHOOK_SECRET",
+      // 新路径：**只有一个**主密钥，永不随产品增长。platform-api 是解密侧
+      // （dispatchPending 只在这个 host 上跑），与 opera-bff（加密侧）必须同值。
+      "PLATFORM_WEBHOOK_ENC_KEY",
     ]),
     forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([

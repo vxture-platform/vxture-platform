@@ -1,0 +1,81 @@
+# agents.vhost.template — L3 智能体的**通配兜底** vhost（owner 2026-09-10）
+#
+# ── 它解决什么 ──
+# 此前每接一个智能体都要手写一份 vhost 进仓再发版（arda 那份去掉注释还有 80 多行）。
+# 智能体会持续上线，这条路每次都要走一遍。
+#
+# 现在：一份 `*.vxture.com` 兜底 + 一张从**产品登记**生成的 map。运营者在 opera 的
+# 产品目录里填「边缘上游」（tailnet 的 host:port），下一次同步就通了，仓里一个字不用改。
+#
+# ── 为什么不会影响既有产品 ──
+# nginx 的 server_name 匹配优先级是**精确名 > 前导通配 > 尾随通配 > 正则**。
+# arda / atlas / karda / runos / vxtpl 与平台自己那几个面都是精确名，一律压过这份通配，
+# **一个都不用迁、一行都不用改**。它们各自的 vhost 里有真实的产品特有路由
+# （分流、websocket、body 尺寸），本来就不该被一份通用兜底替掉。
+#
+# 也不会把「未知子域」放进来：map 查不到就是空串，下面直接 444——与 00-default.conf
+# 现在的行为一致（未匹配 server_name → 444 无响应关闭）。实测过：接入前
+# tenderforge.vxture.com / yucer.vxture.com 走 HTTPS 就是被重置。
+#
+# ── 变量取值 ──
+# `$vx_agent_upstream` 由 conf.d/10-agent-upstream.conf 里的 map 定义，map 的数据行
+# 来自 conf.d/agents-upstream.map，由 render-agent-map.mjs 从产品登记渲染。
+#
+# proxy_pass 用变量时 nginx 不做启动期解析；上游一律是 IP:port，**不需要 resolver**
+# （用主机名才需要）。带变量的 proxy_pass 不会自动传 URI，所以显式接 $request_uri。
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name *.vxture.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name *.vxture.com;
+
+    # 通配证书：SAN = *.vxture.com + vxture.com，新子域不需要签证书。
+    ssl_certificate     /etc/nginx/ssl/live/vxture.com/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/live/vxture.com/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options           SAMEORIGIN always;
+    add_header X-Content-Type-Options    nosniff always;
+    add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 25m;
+
+    # 没登记边缘上游的子域：与 00-default.conf 同样的 444，不给任何回应。
+    # 放在 server 层而不是 location 层：证书握手已经发生（通配证书对任何子域都成立），
+    # 这一步是**路由**判定，不是 TLS 判定。
+    if ($vx_agent_upstream = "") {
+        return 444;
+    }
+
+    location / {
+        proxy_pass http://$vx_agent_upstream$request_uri;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # websocket / SSE：智能体基本都要流式回话，不给就只能整段等。
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_buffering off;
+
+        # 智能体的回话可以很长；60s 默认会把一次正常推理掐断。
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    300s;
+        proxy_read_timeout    300s;
+    }
+}
