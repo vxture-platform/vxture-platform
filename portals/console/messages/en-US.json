@@ -782,6 +782,12 @@
         "noContact": "No contact on file",
         "notFound": "No account matches that user ID. Check it with them and try again.",
         "alreadyMember": "Already in this tenant"
+      },
+      "userNoError": {
+        "empty": "Enter a user ID.",
+        "not_digits": "A user ID contains digits only. Check for stray letters (an O instead of a 0, for example).",
+        "bad_length": "A user ID is 10 digits; this one is not.",
+        "bad_class": "That is not a user ID. User IDs start with 1 (2 is a tenant, 3 is a workspace)."
       }
     },
     "feedback": {

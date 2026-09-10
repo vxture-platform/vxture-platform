@@ -70,3 +70,41 @@ export function normalizePrincipalNoInput(
   const re = new RegExp(`^${prefix}[-_]?`, "i");
   return trimmed.replace(re, "");
 }
+
+/** 主体码的类别位:用户 1 / 租户 2 / 工作空间 3(§11 v4「三号解耦」)。 */
+const CLASS_DIGIT: Record<PrincipalKind, string> = {
+  user: "1",
+  tenant: "2",
+  workspace: "3",
+};
+
+/** 规整后的号形不对时,说清楚**哪儿**不对——而不是笼统一句「格式错误」。 */
+export type PrincipalNoProblem =
+  | "empty"
+  | "not_digits"
+  | "bad_length"
+  | "bad_class";
+
+/**
+ * 校验一个**已规整**的主体码(owner 2026-09-10)。
+ *
+ * 为什么要有它:不校验的话,`1799729O56`(字母 O 冒充 0)会一路送去查、查不到,
+ * 而「查不到」与「格式不对」在界面上长得一模一样——人会去找对方核对号码,
+ * 而问题在自己这一次粘贴里。两件事要分开说。
+ *
+ * 校到**号形**为止,不校 Luhn:
+ *   · 号形(纯数字 / 10 位 / 类别位)是**本地就能判**的,判了能立刻给出准确提示;
+ *   · Luhn 虽然也能本地算,但那等于把「这个号存不存在」的判断权搬到前端——
+ *     一个 Luhn 合法但不存在的号仍然要问服务端。多一道只会让两处的口径将来分叉。
+ * 所以:形状本地判,存不存在服务端判。
+ */
+export function validatePrincipalNo(
+  normalized: string,
+  kind: PrincipalKind,
+): PrincipalNoProblem | null {
+  if (normalized === "") return "empty";
+  if (!/^\d+$/.test(normalized)) return "not_digits";
+  if (normalized.length !== 10) return "bad_length";
+  if (normalized[0] !== CLASS_DIGIT[kind]) return "bad_class";
+  return null;
+}

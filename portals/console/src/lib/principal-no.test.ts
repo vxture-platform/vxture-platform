@@ -3,6 +3,7 @@ import {
   formatPrincipalNo,
   normalizePrincipalNoInput,
   principalPrefix,
+  validatePrincipalNo,
 } from "./principal-no";
 
 /**
@@ -70,5 +71,45 @@ describe("normalizePrincipalNoInput", () => {
   it("与 formatPrincipalNo 互逆", () => {
     const shown = formatPrincipalNo(NO, "user")!;
     expect(normalizePrincipalNoInput(shown, "user")).toBe(NO);
+  });
+});
+
+/**
+ * 号形校验（owner 2026-09-10：「不能静默查不到，用户也不知道问题」）。
+ *
+ * 不校验的话，`1799729O56`（字母 O 冒充 0）会一路送去查、查不到，而「查不到」与
+ * 「格式不对」在界面上长得一模一样——人会去找对方核对号码，而问题在自己这一次粘贴里。
+ *
+ * 每一档给**不同的**问题码，因为文案要不一样：说「请填 10 位数字」对一个填了
+ * 11 位数字的人没有帮助，他需要知道的是「位数不对」。
+ */
+describe("validatePrincipalNo", () => {
+  it("合法的用户号 → null", () => {
+    expect(validatePrincipalNo("1799729056", "user")).toBeNull();
+  });
+
+  it.each([
+    ["", "empty", "空"],
+    ["1799729O56", "not_digits", "字母 O 冒充 0——这条正是本次要挡的"],
+    ["17997290", "bad_length", "位数不够"],
+    ["179972905612", "bad_length", "位数超了"],
+    ["2799729056", "bad_class", "类别位是租户的 2，不是用户的 1"],
+  ])("%s → %s（%s）", (input, expected) => {
+    expect(validatePrincipalNo(input, "user")).toBe(expected);
+  });
+
+  /* 类别位按 kind 走:同一个号对用户是错的、对租户是对的。
+     只测 user 的话,一个写死 "1" 的实现同样能过。 */
+  it("类别位随 kind 变", () => {
+    expect(validatePrincipalNo("2765432109", "tenant")).toBeNull();
+    expect(validatePrincipalNo("2765432109", "user")).toBe("bad_class");
+    expect(validatePrincipalNo("3123456789", "workspace")).toBeNull();
+  });
+
+  /* 与规整串起来:粘贴 `U-1799729O56` 时,规整剔掉前缀、校验抓住那个 O。
+     两个函数各自都对,但接不上的话这条链仍然是断的。 */
+  it("与规整串起来:粘贴带前缀的错号,能指出是「不是纯数字」", () => {
+    const normalized = normalizePrincipalNoInput("U-1799729O56", "user");
+    expect(validatePrincipalNo(normalized, "user")).toBe("not_digits");
   });
 });
