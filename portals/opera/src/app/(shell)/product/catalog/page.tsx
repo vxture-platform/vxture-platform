@@ -1521,7 +1521,7 @@ function ProductsPageContent() {
                         edgeUpstream: e.target.value,
                       })
                     }
-                    placeholder="100.64.0.2:4050"
+                    placeholder="<tailnet-ip>:4050"
                     className="font-mono text-code-sm"
                   />
                   <FieldDescription>

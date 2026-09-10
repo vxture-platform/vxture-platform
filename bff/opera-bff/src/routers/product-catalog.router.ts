@@ -1414,7 +1414,7 @@ function normalizeUpstream(value: string | null | undefined): string | null {
   if (!/^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]{1,5}$/.test(raw)) {
     throw invalidRequest(
       "VALIDATION_FORMAT",
-      "边缘上游要写成 host:port（如 100.64.0.2:4050），不带协议、路径或空格",
+      "边缘上游要写成 host:port（如 <tailnet-ip>:4050），不带协议、路径或空格",
       "edgeUpstream",
     );
   }
