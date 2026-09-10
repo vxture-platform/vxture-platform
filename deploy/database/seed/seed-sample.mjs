@@ -62,7 +62,10 @@ export async function seedSample(client) {
   await client.query(`
     insert into account.user_profiles
       (user_id, display_name, gender, bio, language, timezone, theme, created_at, updated_at)
-    values ($1, $2, 'unknown', 'Sample user for integration testing.', 'zh-CN', 'Asia/Shanghai', 'system', now(), now())
+    -- gender NULL = 「未设定」。列的取值只有 male / female / NULL(2026-09-17 迁移
+    -- 把 CHECK 收窄成 male/female,账号页显示先生 / 女士 / 未设定)——'unknown' 不是
+    -- 一个值,写它会 23514。本行此前正是这么写的,而那次迁移没同步改 seed。
+    values ($1, $2, NULL, 'Sample user for integration testing.', 'zh-CN', 'Asia/Shanghai', 'system', now(), now())
     on conflict (user_id) do nothing
   `, [userId, SAMPLE.name]);
   await client.query(`
