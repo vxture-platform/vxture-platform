@@ -1225,7 +1225,7 @@ function ProductsPageContent() {
         >
           <FieldGroup>
             <div className="grid grid-cols-2 gap-md">
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="product-code">Product Code</FieldLabel>
                 <Input
                   id="product-code"
@@ -1239,7 +1239,7 @@ function ProductsPageContent() {
                 />
                 <FieldDescription>全局唯一，登记后不可改。</FieldDescription>
               </Field>
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="product-type">
                   {tShared("columns.kind")}
                 </FieldLabel>
@@ -1263,7 +1263,7 @@ function ProductsPageContent() {
             </div>
 
             <div className="grid grid-cols-2 gap-md">
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="product-name">名称</FieldLabel>
                 <Input
                   id="product-name"
@@ -1274,7 +1274,7 @@ function ProductsPageContent() {
                   placeholder="Karda"
                 />
               </Field>
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="product-nick">副名 / 译名</FieldLabel>
                 <Input
                   id="product-nick"
@@ -1291,7 +1291,7 @@ function ProductsPageContent() {
 
         <FieldTier tier="details" hint="目录归属与来源，登记后都还能改。">
           <FieldGroup>
-            <Field>
+            <Field orientation="labeled">
               <FieldLabel htmlFor="product-category">品类</FieldLabel>
               <NativeSelect
                 id="product-category"
@@ -1309,7 +1309,7 @@ function ProductsPageContent() {
               </NativeSelect>
             </Field>
 
-            <Field>
+            <Field orientation="labeled">
               <FieldLabel htmlFor="product-description">简介</FieldLabel>
               <Textarea
                 id="product-description"
@@ -1322,7 +1322,7 @@ function ProductsPageContent() {
             </Field>
 
             <div className="grid grid-cols-2 gap-md">
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="product-origin">
                   {tShared("columns.source")}
                 </FieldLabel>
@@ -1342,7 +1342,7 @@ function ProductsPageContent() {
                 </NativeSelect>
               </Field>
               {draft.origin === "third_party" ? (
-                <Field>
+                <Field orientation="labeled">
                   <FieldLabel htmlFor="product-origin-provider">
                     来源方
                   </FieldLabel>
@@ -1445,7 +1445,7 @@ function ProductsPageContent() {
               hint="回调地址与密钥引用都配齐，上线检查第五项才算通过——只配一半意味着对方收得到但验不了签。"
             >
               <FieldGroup>
-                <Field>
+                <Field orientation="labeled">
                   <FieldLabel htmlFor="wh-url">回调地址</FieldLabel>
                   <Input
                     id="wh-url"
@@ -1463,7 +1463,7 @@ function ProductsPageContent() {
                     必须是 http / https 绝对地址。留空即撤销登记。
                   </FieldDescription>
                 </Field>
-                <Field>
+                <Field orientation="labeled">
                   <FieldLabel htmlFor="wh-secret">签名密钥引用</FieldLabel>
                   <Input
                     id="wh-secret"
@@ -1484,7 +1484,7 @@ function ProductsPageContent() {
                     vxtpl)还在用,保留到它们迁完为止。
                   </FieldDescription>
                 </Field>
-                <Field>
+                <Field orientation="labeled">
                   <FieldLabel htmlFor="wh-secret-value">签名密钥</FieldLabel>
                   <Input
                     id="wh-secret-value"
@@ -1516,7 +1516,7 @@ function ProductsPageContent() {
               hint="填了边缘上游,这个产品的子域下次边缘同步就通了——不需要往仓里手写一份 vhost。"
             >
               <FieldGroup>
-                <Field>
+                <Field orientation="labeled">
                   <FieldLabel htmlFor="wh-edge">边缘上游</FieldLabel>
                   <Input
                     id="wh-edge"
@@ -1542,7 +1542,7 @@ function ProductsPageContent() {
 
             <FieldTier tier="details" hint="展示用，不参与投递。">
               <FieldGroup>
-                <Field>
+                <Field orientation="labeled">
                   <FieldLabel htmlFor="wh-home">产品主页</FieldLabel>
                   <Input
                     id="wh-home"

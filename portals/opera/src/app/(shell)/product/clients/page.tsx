@@ -645,7 +645,7 @@ function ProductClients() {
           hint="产品码是它换票时的身份（`act.sub`）；Client ID 全局唯一，注册后不可改。"
         >
           <FieldGroup>
-            <Field>
+            <Field orientation="labeled">
               <FieldLabel htmlFor="client-product">
                 {tShared("columns.product")}
               </FieldLabel>
@@ -667,7 +667,7 @@ function ProductClients() {
             </Field>
 
             <div className="grid grid-cols-2 gap-md">
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="client-id">Client ID</FieldLabel>
                 <Input
                   id="client-id"
@@ -682,7 +682,7 @@ function ProductClients() {
                   全局唯一，小写 kebab；同产品多渠道常见 acme-agent-beta。
                 </FieldDescription>
               </Field>
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="client-channel">渠道</FieldLabel>
                 <NativeSelect
                   id="client-channel"
@@ -709,7 +709,7 @@ function ProductClients() {
         >
           <FieldGroup>
             <div className="grid grid-cols-2 gap-md">
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="client-name">Name</FieldLabel>
                 <Input
                   id="client-name"
@@ -717,7 +717,7 @@ function ProductClients() {
                   onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                 />
               </Field>
-              <Field>
+              <Field orientation="labeled">
                 <FieldLabel htmlFor="client-display-name">
                   展示名（授权页用）
                 </FieldLabel>
@@ -731,7 +731,7 @@ function ProductClients() {
               </Field>
             </div>
 
-            <Field>
+            <Field orientation="labeled">
               <FieldLabel htmlFor="client-redirects">Redirect URIs</FieldLabel>
               <Textarea
                 id="client-redirects"
@@ -756,7 +756,7 @@ function ProductClients() {
           hint="两项都有缺省值；PKCE 默认强制，除非对方是拿不到 code_verifier 的老客户端，否则不要关。"
         >
           <FieldGroup>
-            <Field>
+            <Field orientation="labeled">
               <FieldLabel htmlFor="client-scopes">Allowed Scopes</FieldLabel>
               <Input
                 id="client-scopes"
