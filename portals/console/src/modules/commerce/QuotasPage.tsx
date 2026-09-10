@@ -72,7 +72,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { ADDON_SECTION_HREF } from "./addon-routes";
-import { fmtDate, fmtTime } from "./components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
 import { useMetricLabel } from "@/lib/metric-label";
 
@@ -98,6 +98,8 @@ type ProductMetricRow = ConsoleProductQuota["metrics"][number] & {
 const PAGE_SIZE = 10;
 
 export function QuotasPage() {
+  const { fmtDate, fmtTime } = useDateFormat();
+
   const t = useTranslations("quotasPage");
   const tableLabels = useTableLabels();
   const { session } = useConsoleSession();
@@ -246,7 +248,7 @@ export function QuotasPage() {
             : t("metrics.addonsNone"),
       },
     ];
-  }, [overview, t, remainText]);
+  }, [overview, t, remainText, fmtDate]);
 
   /** 时间列的统一写法(与卡券页同口径):日期为主、时间为辅。 */
   const timeCell = (iso: string | null) =>

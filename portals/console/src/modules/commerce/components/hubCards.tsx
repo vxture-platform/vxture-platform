@@ -47,10 +47,10 @@ import {
   TIER_AUDIENCE,
   cyclePercent,
   daysLeft,
-  fmtDate,
   productInitials,
   type PlanAudience,
 } from "./hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 const AUDIENCE_ICON: Record<PlanAudience, IconName> = {
   person: "user",
@@ -144,6 +144,8 @@ export function SubscriptionProductCard({
   /** tenant.billing.manage:无码时不出续费开关与退订菜单(与 BFF 守卫同码)。 */
   canManage?: boolean;
 }) {
+  const { fmtDate } = useDateFormat();
+
   const t = useTranslations("subscriptionHub");
   const withLabels = useConfirmLabels();
   const locale = useLocale();

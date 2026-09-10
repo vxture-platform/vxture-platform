@@ -21,7 +21,13 @@ export type CycleValue = "month" | "year";
 
 const CYCLE_VALUES: CycleValue[] = ["month", "year"];
 
-/** 本地时区 yyyy-MM-dd（toISOString 会因 UTC 偏移串日）。 */
+/**
+ * 本地时区 yyyy-MM-dd（toISOString 会因 UTC 偏移串日）。
+ *
+ * **不走 useDateFormat**：这不是给人读的展示串，是算周期起止用的**数据键**，
+ * 形状必须固定、与语言无关。套上长格式反而会让它随语言变形（英文下变成
+ * `09/10/2026`），而它是拿来比较和传参的。
+ */
 function isoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");

@@ -33,7 +33,8 @@ import {
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
-import { daysLeft, fmtDate } from "@/modules/commerce/components/hubModel";
+import { daysLeft } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 import { buildAddonPayHref } from "@/modules/commerce/addon-routes";
 /**
@@ -95,6 +96,8 @@ const EMPTY_SOURCES: Sources = {
 };
 
 export function useDerivedTodos(options: { enabled?: boolean } = {}) {
+  const { fmtDate } = useDateFormat();
+
   const enabled = options.enabled ?? true;
   const t = useTranslations("todosPage");
   const { session } = useConsoleSession();
@@ -280,7 +283,7 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
       }
     }
     return rows;
-  }, [sources, t]);
+  }, [sources, t, fmtDate]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 

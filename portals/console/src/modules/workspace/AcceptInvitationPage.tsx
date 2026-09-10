@@ -37,7 +37,7 @@ import {
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { getPathname, useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
-import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { RoleTag } from "@/components/role-tag";
 
 type LookupState =
@@ -47,6 +47,8 @@ type LookupState =
   | { kind: "ready"; invitation: InvitationLookup };
 
 export function AcceptInvitationPage() {
+  const { fmtDateTime } = useDateFormat();
+
   const t = useTranslations("acceptInvitationPage");
   const tLoad = useTranslations("loadState");
   const locale = useLocale();
@@ -247,9 +249,7 @@ export function AcceptInvitationPage() {
           </DetailRow>
           <DetailRow label={t("fields.email")}>{inv.email}</DetailRow>
           <DetailRow label={t("fields.expires")}>
-            <span className="tabular-nums">
-              {fmtDate(inv.expiresAt)} {fmtTime(inv.expiresAt)}
-            </span>
+            <span className="tabular-nums">{fmtDateTime(inv.expiresAt)}</span>
           </DetailRow>
         </DetailList>
         {emailMismatch ? (

@@ -66,7 +66,7 @@ import { PlannedBadge } from "@/components/planned";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { ADDON_SECTION_ID } from "./addon-routes";
-import { fmtDate, fmtTime } from "./components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import { OrdersSection } from "./components/OrdersSection";
 import { InvoiceSections } from "./components/InvoiceSections";
 
@@ -115,6 +115,8 @@ const INVOICE_PHASE_TONES: Record<InvoicePhase, StatusBadgeTone> = {
 };
 
 export function BillingPage() {
+  const { fmtDate, fmtTime, fmtDateTime } = useDateFormat();
+
   const t = useTranslations("billingPage");
   const tableLabels = useTableLabels();
   const router = useRouter();
@@ -345,7 +347,7 @@ export function BillingPage() {
       cell: (b) => (
         <TableTitleCell
           title={<span className="font-mono">{b.billNo}</span>}
-          description={`${fmtDate(b.createdAt)} ${fmtTime(b.createdAt)}`}
+          description={fmtDateTime(b.createdAt)}
         />
       ),
     },

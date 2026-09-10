@@ -63,6 +63,9 @@ type TrendWindow = "hour" | "day" | "week" | "month" | "year";
  *   - day / week 保持 UTC 日期(不做换算——换了日期边界反而对不上后台的桶),
  *     month=YYYYMM → YYYY-MM,year 原样。
  */
+/* **不走 useDateFormat**:这是**图表轴标**,规范里短形态点名的场景
+   (「短形态保留在规范里——窄列、图表轴标这类地方用得上」)。
+   小时档只要 `14:00` 这个刻度,套长日期长时间会把一排轴标挤成一团。 */
 const periodLabel = (granularity: string, period: string): string => {
   if (granularity === "hour" && period.length >= 16) {
     const d = new Date(`${period.slice(0, 10)}T${period.slice(11, 16)}:00Z`);

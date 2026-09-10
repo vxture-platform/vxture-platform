@@ -53,7 +53,7 @@ import {
   OrderFlowStrip,
   type OrderFlowStage,
 } from "./components/OrderFlowStrip";
-import { fmtDate, fmtTime } from "./components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 import {
   PayChannelPanel,
   defaultPayChannel,
@@ -79,6 +79,8 @@ const STATUS_TONE: Record<string, StatusBadgeTone> = {
 };
 
 export function AddonPayPage({ orderNo }: { orderNo: string }) {
+  const { fmtDate, fmtDateTime } = useDateFormat();
+
   const t = useTranslations("addonPay");
   const tChannels = useTranslations("payChannels");
   const withLabels = useConfirmLabels();
@@ -303,7 +305,7 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
             )}
           </DetailRow>
           <DetailRow label={t("summary.createdAt")}>
-            {`${fmtDate(order.createdAt)} ${fmtTime(order.createdAt)}`}
+            {fmtDateTime(order.createdAt)}
           </DetailRow>
         </DetailList>
       </PageSection>

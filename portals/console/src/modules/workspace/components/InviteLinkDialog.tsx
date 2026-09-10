@@ -24,7 +24,7 @@ import {
   Input,
 } from "@vxture/design-system";
 import type { InviteMemberResult } from "@/api/console-bff";
-import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
+import { useDateFormat } from "@/lib/use-date-format";
 
 export function InviteLinkDialog({
   result,
@@ -35,6 +35,8 @@ export function InviteLinkDialog({
   readonly resent?: boolean;
   readonly onClose: () => void;
 }) {
+  const { fmtDateTime } = useDateFormat();
+
   const t = useTranslations("inviteLinkDialog");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
@@ -91,7 +93,7 @@ export function InviteLinkDialog({
       </Field>
       <p className="text-body-sm text-muted-foreground">
         {t("expires", {
-          date: `${fmtDate(result.expiresAt)} ${fmtTime(result.expiresAt)}`,
+          date: fmtDateTime(result.expiresAt),
         })}
       </p>
       {copyState === "failed" ? (
