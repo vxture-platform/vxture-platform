@@ -278,6 +278,11 @@ export class HttpOidcRpClient implements OidcRpClient {
   }): string {
     const base = `${this.config.issuer.replace(/\/$/, "")}/oidc/end_session`;
     const u = new URL(base);
+    /* 一律带上 client_id(RP-Initiated Logout 1.0 允许)。IdP 用它校验回跳白名单——
+       在**中央会话已经过期**的场合,这是唯一还能用的依据:那时会话上的 client 名单
+       已经没了,不带 client_id 就没有任何客户端可比,回跳会被当成开放重定向挡掉,
+       人被扔在 IdP 侧(owner 2026-09-10 走查:会话到期后停在 accounts/logout)。 */
+    u.searchParams.set("client_id", this.config.clientId);
     u.searchParams.set("post_logout_redirect_uri", input.postLogoutRedirectUri);
     if (input.idTokenHint)
       u.searchParams.set("id_token_hint", input.idTokenHint);

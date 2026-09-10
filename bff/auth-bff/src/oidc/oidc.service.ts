@@ -405,8 +405,22 @@ export class OidcService {
     sids: ReadonlyArray<string | undefined>,
     postLogoutRedirectUri?: string,
     state?: string,
+    /**
+     * 发起登出的 RP(`client_id`,RP-Initiated Logout 1.0)。
+     *
+     * 回跳白名单原本**只**对着「这个会话发过令牌的 client」校验。那份名单存在会话上,
+     * 于是**会话一过期它就没了**——`isRegisteredPostLogout(uri, [])` 的循环一次都不进、
+     * 直接返回 false,回跳被当成开放重定向挡掉,路由兜底把人送到 `${issuer}/logout`。
+     * 结果是「会话还在时登出」能回官网,「会话过期后登出」反而停在 IdP 侧,恰好反了
+     * (owner 2026-09-10 走查)。
+     *
+     * 并进来的**仍然是注册过的地址**,不是放开校验:客户端自称身份,但它能回跳到哪
+     * 依旧由那个 client 在库里登记的 post_logout_redirect_uris 决定——
+     * 自称 website 也只能回 website 登记过的地址。
+     */
+    initiatingClientId?: string,
   ): Promise<string | null> {
-    let clientIds: string[] = [];
+    let clientIds: string[] = initiatingClientId ? [initiatingClientId] : [];
     for (const sid of sids) {
       if (!sid) continue;
       const session = await this.redis.getOidcSession(sid);

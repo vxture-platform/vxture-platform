@@ -78,6 +78,7 @@
     "lint:docs-numbering": "node scripts/guardrails/check-docs-numbering.mjs --strict",
     "lint:public-hygiene": "node scripts/guardrails/check-public-repo-hygiene.mjs",
     "lint:boundaries": "depcruise portals business bff services packages/core packages/shared packages/platform --config .depcruiserc.cjs",
+    "lint:brand-name": "node scripts/guardrails/check-brand-name.mjs",
     "lint:action-pinning": "node scripts/guardrails/check-action-pinning.mjs",
     "test:deploy-scripts": "bash deploy/scripts/lib/prune-images.test.sh",
     "lint:fix": "pnpm --recursive --if-present lint:fix",

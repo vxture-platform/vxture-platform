@@ -158,3 +158,6 @@ export {
 
 // 日期形态的输入类型（formatDay / formatDateTime 的参数）
 export type { DateInput } from "./utils/format.utils";
+
+// 官网品牌名的单一权威(owner 2026-09-10:tab 标题漏改)。
+export { BRAND_NAME, BRAND_TITLE } from "./constants";

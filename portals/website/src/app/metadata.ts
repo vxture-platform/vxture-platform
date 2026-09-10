@@ -7,13 +7,17 @@
  */
 
 import type { Metadata } from "next";
-import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "@vxture-platform/shared";
+import {
+  SUPPORTED_LOCALES,
+  DEFAULT_LOCALE,
+  BRAND_TITLE,
+} from "@vxture-platform/shared";
 
 export function buildMetadata(locale: string): Metadata {
-  const titles = {
-    "zh-CN": "vxture AI | 释放数据潜力",
-    "en-US": "vxture AI | Unleash Data Potential",
-  };
+  /* 品牌名走 shared 的单一权威。owner 2026-09-10 走查:页面标题已改,
+   * 而 tab 标题还挂着旧名——品牌名此前散在四处各写一份,
+   * 改了看得见的那两处,看不见的两处没人会想起来。 */
+  const titles = BRAND_TITLE;
 
   const descriptions = {
     "zh-CN": "基于AI的虚拟自然探索平台",
