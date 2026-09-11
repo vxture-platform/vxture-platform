@@ -86,13 +86,22 @@ function productRow(status: string) {
  * 状态机那段事务。记下写进去的状态与事务有没有开过——后者正是「检查在事务之外」
  * 这条断言要看的。
  */
-function makePool(currentStatus: string | null) {
+function makePool(currentStatus: string | null, pendingItems: string[] = []) {
   const writes: string[] = [];
   const client = {
     query: vi.fn(async (sql: string, params?: unknown[]) => {
       if (/^\s*(BEGIN|COMMIT|ROLLBACK)/.test(sql)) return { rows: [] };
       if (/SELECT status/.test(sql)) {
         return { rows: currentStatus ? [{ status: currentStatus }] : [] };
+      }
+      /* 首次上线的检查单闸门。缺省空数组 = 必填项都满足，于是既有用例不受影响；
+         要测闸门的用例自己传未满足项进来。 */
+      if (/FROM product\.launch_checklist_items/.test(sql)) {
+        const rows = pendingItems.map((code) => ({
+          item_code: code,
+          item_name: code,
+        }));
+        return { rows, rowCount: rows.length };
       }
       if (/UPDATE product\.products/.test(sql)) {
         const next = String(params?.[0]);
@@ -120,8 +129,8 @@ function makePool(currentStatus: string | null) {
   return { pool: pool as unknown as Pool, connect: pool.connect, writes };
 }
 
-function makeRouter(currentStatus: string | null) {
-  const { pool, connect, writes } = makePool(currentStatus);
+function makeRouter(currentStatus: string | null, pendingItems: string[] = []) {
+  const { pool, connect, writes } = makePool(currentStatus, pendingItems);
   const config = {
     platform: {
       ATLAS_API_URL: "http://atlas.test/",
@@ -290,7 +299,7 @@ describe("其它迁移不受影响", () => {
     expect(fetchGrants).not.toHaveBeenCalled();
   });
 
-  it("非法迁移（draft → inactive）仍是 409 CATALOG_INVALID_STATE_TRANSITION，与闸门无关", async () => {
+  it("非法迁移（draft → inactive）仍是 409 CATALOG_INVALID_STATE_TRANSITION，与退役闸门无关", async () => {
     const { router, writes } = makeRouter("draft");
     const { status, body } = await failure(
       router.setState(makeReq(), PRODUCT_ID, { state: "inactive" }),
@@ -312,5 +321,61 @@ describe("其它迁移不受影响", () => {
     );
     expect(status).toBe(403);
     expect(fetchGrants).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 首次上线的检查单闸门。
+ *
+ * 这道门此前**只立在界面上**（opera 的 `runLifecycle()`），于是 `draft → active`
+ * 在零项满足的情况下一条 curl 就过——本文件顶上为状态跃迁守卫写的那句
+ * 「约定挡不住的东西不叫约束」，在低一层没被执行。
+ *
+ * 下面四条各钉一个方向，缺任何一条这道门都可能悄悄失效或悄悄扩大：
+ */
+describe("首次上线的检查单闸门", () => {
+  it("有未满足的必填项 → 409，且**一个字都没写库**", async () => {
+    const { router, writes } = makeRouter("draft", [
+      "acceptance",
+      "data_plane",
+    ]);
+    const { status, body } = await failure(
+      router.setState(makeReq(), PRODUCT_ID, { state: "active" }),
+    );
+    expect(status).toBe(409);
+    expect(body["code"]).toBe("CATALOG_LAUNCH_CHECKLIST_PENDING");
+    /* 事务回滚了才叫挡住。只断言状态码会漏掉「报了错但也写了」那种。 */
+    expect(writes).toEqual([]);
+  });
+
+  it("错误消息点名是哪几项——「还差几项」说不出运营者接下来该做什么", async () => {
+    const { router } = makeRouter("draft", ["acceptance"]);
+    const { body } = await failure(
+      router.setState(makeReq(), PRODUCT_ID, { state: "active" }),
+    );
+    expect(String(body["message"])).toContain("acceptance");
+  });
+
+  it("必填项全满足 → 照常上线", async () => {
+    const { router, writes } = makeRouter("draft", []);
+    const result = await router.setState(makeReq(), PRODUCT_ID, {
+      state: "active",
+    });
+    expect(result.state).toBe("active");
+    expect(writes).toEqual(["active"]);
+  });
+
+  /**
+   * **范围不许扩大。** 界面上「恢复」是 advisory（提醒不是门闩），服务端把它变成
+   * 门闩会把一次运维恢复堵死——一个上线后指标停了 90 天的产品，复验会红，而那时
+   * 正是最需要把它恢复起来排障的时候。
+   */
+  it("inactive → active（恢复）不受闸门管，即便有未满足项", async () => {
+    const { router, writes } = makeRouter("inactive", ["acceptance"]);
+    const result = await router.setState(makeReq(), PRODUCT_ID, {
+      state: "active",
+    });
+    expect(result.state).toBe("active");
+    expect(writes).toEqual(["active"]);
   });
 });

@@ -47,6 +47,7 @@ import {
 } from "@vxture/core-utils";
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
+import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
@@ -559,6 +560,51 @@ export class ProductCatalogRouter {
       if (!from) {
         await client.query("ROLLBACK");
         throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+      }
+
+      /*
+       * 首次上线的检查单闸门。**此前只立在界面上。**
+       *
+       * 本文件开头为状态跃迁守卫写过一句判据：「任何直连这个 BFF 的调用都能把已退役
+       * 的产品改回 active……约定挡不住的东西不叫约束」。检查单闸门当时没跟着搬过来
+       * ——它整个住在 opera 的 `runLifecycle()` 里，于是 `draft → active` 在**零项
+       * 满足**的情况下，一条 curl 就过。同一条原则，低一层没执行。
+       *
+       * 范围与界面那道完全一致，不多收一寸：
+       *   · 只管 `draft → active`（`lifecycle.ts` 里只有 `launch` 带
+       *     `requiresChecklist`）。`inactive → active`（恢复）在界面上是 advisory
+       *     ——提醒不是门闩，服务端也不该把它变成门闩，那会把一次运维恢复堵死。
+       *   · 只算 opera 自己那几项（`ADMIN_OWNED_ITEM_CODES` 排除在外），与
+       *     `checklist-summary` / `:id/checklist` 同一口径。
+       *
+       * **LEFT JOIN 的 NULL 算作未满足**：一项从来没被写过，和被写成 false 是同一
+       * 件事——都不是「已确认」。`coalesce` 而不是 `s.is_satisfied = false`，后者会
+       * 把没有行的项漏掉，也就是把「一次都没检查过的产品」判成通过。
+       */
+      if (from === "draft" && next === "active") {
+        const pending = await client.query<{
+          item_code: string;
+          item_name: string;
+        }>(
+          `SELECT i.item_code, i.item_name
+             FROM product.launch_checklist_items i
+             LEFT JOIN product.product_launch_statuses s
+               ON s.item_code = i.item_code AND s.product_id = $1
+            WHERE i.is_required
+              AND i.item_code <> ALL($2::text[])
+              AND NOT coalesce(s.is_satisfied, false)
+            ORDER BY i.sort ASC`,
+          [id, ADMIN_OWNED_ITEM_CODES],
+        );
+        if (pending.rowCount && pending.rowCount > 0) {
+          await client.query("ROLLBACK");
+          const names = pending.rows.map((r) => r.item_name || r.item_code);
+          throw conflict(
+            "CATALOG_LAUNCH_CHECKLIST_PENDING",
+            `还有 ${names.length} 项必填接入检查未满足，不能上线：${names.join("、")}。` +
+              `机器判定的几项要去产品的「上线复验」页跑一次，其余在接入检查单上确认。`,
+          );
+        }
       }
 
       /* 幂等重放（active → active）不报错也不写库：重复点一次「恢复」不该看到
@@ -1232,7 +1278,19 @@ export class ProductCatalogRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
     @Param("itemCode") itemCode: string,
-    @Body() body: { isSatisfied?: boolean; remark?: string | null },
+    @Body()
+    body: {
+      isSatisfied?: boolean;
+      remark?: string | null;
+      /**
+       * `"auto"` = 这一笔来自上线复验的实测结果，不是人手勾的。
+       *
+       * 只有它能写「机器判定」的那几项，而且写进去的 `checked_by` 是 NULL
+       * ——`product_launch_statuses.checked_by` 的 DDL 注释从一开始就写着
+       * 「自动校验为 NULL」，这张表早就预留了这个位置，只是没人用。
+       */
+      source?: "auto" | "manual";
+    },
   ): Promise<ChecklistItemRecord> {
     assertCanManage(req);
     /* 先查字典再写：字典里没有的码，此前被正向清单挡成 404；现在清单是反向的，
@@ -1255,7 +1313,40 @@ export class ProductCatalogRouter {
         "isSatisfied",
       );
     }
-    const operatorId = req.operator?.id ?? null;
+    /*
+     * 机器判定的项不收人工勾选。
+     *
+     * 此前这个端点对所有项一视同仁，于是「复验判失败 → 运营者手动勾上 → 闸门放行」
+     * 是一条走得通的路，而且**事后看不出来**：机器写和人工写都记成同一个
+     * `checked_by = operatorId`，DDL 预留的「自动校验为 NULL」从没被用过。
+     *
+     * 判据来源是 `@vxture/core-utils` 的 `AUTO_DETERMINED_CHECKLIST_ITEMS`——
+     * opera 的复验页据它决定写不写回，这里据它决定收不收，两边同一份。
+     *
+     * 给的是 409 不是 403：这不是权限不够（有 manage 权限的人也不该勾），
+     * 是这一项的值不由人决定。
+     */
+    const isAuto = isAutoDeterminedChecklistItem(itemCode);
+    const fromAuto = body.source === "auto";
+    if (isAuto && !fromAuto) {
+      throw conflict(
+        "CATALOG_CHECKLIST_ITEM_AUTO_DETERMINED",
+        `「${itemCode}」由平台实测判定，不能手工勾选或取消。去产品的「上线复验」页跑一次，结果会自动写回。`,
+      );
+    }
+    /* 反过来也挡：`source: "auto"` 不能拿去写人工项。否则复验页一个笔误就能把
+       `acceptance`（端到端验收，必须人来判）写成一条无人署名的通过。 */
+    if (!isAuto && fromAuto) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        `「${itemCode}」不是机器判定项，不接受 source=auto。`,
+        "source",
+      );
+    }
+
+    /* 机器判定的写入不署名（DDL：自动校验为 NULL），人工勾选署操作者。
+       这让「这一项是谁说通过的」在数据里答得出来——此前答不出来。 */
+    const checkedBy = fromAuto ? null : (req.operator?.id ?? null);
 
     /* PATCH = 未出现即不改（product_251 B-1）。
        原来无条件写 `remark = EXCLUDED.remark`：只勾一下「已满足」而不带 remark 的请求
@@ -1274,7 +1365,7 @@ export class ProductCatalogRouter {
          checked_by = EXCLUDED.checked_by,
          ${touchesRemark ? "remark = EXCLUDED.remark," : ""}
          updated_at = now()`,
-      [id, itemCode, body.isSatisfied, operatorId, remark],
+      [id, itemCode, body.isSatisfied, checkedBy, remark],
     );
     const result = await this.pool.query<ChecklistRow>(
       `SELECT i.item_code, i.item_name, i.description, i.is_required, i.sort,

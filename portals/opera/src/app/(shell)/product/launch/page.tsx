@@ -155,9 +155,10 @@ function ProductLaunch() {
         const results = await runLaunchChecks(p, { locale });
         setChecks(results);
         setCheckedAt(formatDateTime(new Date(), locale));
-        /* 把能映射到检查项的结果写回检查单（`checked_by` 由 BFF 填当前操作员；
-           DDL 预留的"自动校验为 NULL"要等 BFF 支持自动标记时再用）。写失败不影响
-           页面上的结论——结论来自刚跑完的这一次，不是来自库里那一行。 */
+        /* 把能映射到检查项的结果写回检查单。`source: "auto"` 让 BFF 把 `checked_by`
+           写成 NULL（DDL 注释里预留的「自动校验为 NULL」），这样「这一项是谁说通过的」
+           在数据里答得出来；同时 BFF 会拒绝人手去勾这几项。
+           写失败不影响页面上的结论——结论来自刚跑完的这一次，不是来自库里那一行。 */
         await Promise.all(
           results
             .filter((r) => r.itemCode)
@@ -166,6 +167,7 @@ function ProductLaunch() {
                 .patch(`/api/products/${p.id}/checklist/${r.itemCode}`, {
                   isSatisfied: r.status === "pass",
                   remark: `自动检查：${r.detail}`,
+                  source: "auto",
                 })
                 .catch(() => undefined),
             ),

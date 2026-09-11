@@ -118,6 +118,16 @@ export {
 export type { ProductSurface, ProductSurfaceDef } from "./product-surface";
 
 // ============================================
+// Launch checklist（哪几项检查由机器判定，人工不得勾选）
+// ============================================
+
+export {
+  AUTO_DETERMINED_CHECKLIST_ITEMS,
+  isAutoDeterminedChecklistItem,
+} from "./launch-checklist";
+export type { AutoDeterminedChecklistItem } from "./launch-checklist";
+
+// ============================================
 // Tenant console permission catalog (customer realm 治理 RBAC 的代码侧镜像)
 // ============================================
 

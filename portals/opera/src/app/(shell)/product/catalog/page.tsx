@@ -85,6 +85,7 @@ import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { LockedInput } from "@/components/form/LockedInput";
+import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import { RequiredMark } from "@/components/form/RequiredMark";
 import { formatDateTime } from "@vxture-platform/shared";
 
@@ -1739,43 +1740,59 @@ function ProductsPageContent() {
             <Banner
               tone="info"
               title="只覆盖技术接入六步"
-              description="对应 product_200_integration.md §7：目录/C1/C3/C2/数据面/验收。商业检查项（认证策略/定价）归 admin 消费，这里不读不写。C2/C3 是否真的接好，opera 从外面观测不到——勾选是操作员的判断，不是自动检测。"
+              description="对应 product_200_integration.md §7：目录/C1/C3/C2/数据面/验收。商业检查项（认证策略/定价）归 admin 消费，这里不读不写。带「复验判定」标记的几项由平台实测写入，勾不动——要改去跑一次上线复验。"
             />
             <div className="flex flex-col gap-sm">
-              {checklist.map((item) => (
-                <div
-                  key={item.itemCode}
-                  className="flex items-start gap-sm rounded-md border border-border p-sm"
-                >
-                  <Checkbox
-                    checked={item.isSatisfied}
-                    disabled={submitting || !canManage}
-                    onCheckedChange={(checked) =>
-                      void toggleChecklistItem(item.itemCode, checked === true)
-                    }
-                  />
-                  <div className="flex flex-1 flex-col gap-2xs">
-                    <div className="flex items-center gap-sm">
-                      <span className="text-body-md font-medium">
-                        {item.itemName}
-                      </span>
-                      {item.isRequired ? (
-                        <Badge variant="outline">必需</Badge>
+              {checklist.map((item) => {
+                /* 机器判定的项不给勾。BFF 也会拒（409），这里灰掉是为了让运营者在
+                   点之前就知道——一个点得下去然后报错的框，等于让人白跑一趟。 */
+                const auto = isAutoDeterminedChecklistItem(item.itemCode);
+                return (
+                  <div
+                    key={item.itemCode}
+                    className="flex items-start gap-sm rounded-md border border-border p-sm"
+                  >
+                    <Checkbox
+                      checked={item.isSatisfied}
+                      disabled={submitting || !canManage || auto}
+                      onCheckedChange={(checked) =>
+                        void toggleChecklistItem(
+                          item.itemCode,
+                          checked === true,
+                        )
+                      }
+                    />
+                    <div className="flex flex-1 flex-col gap-2xs">
+                      <div className="flex items-center gap-sm">
+                        <span className="text-body-md font-medium">
+                          {item.itemName}
+                        </span>
+                        {item.isRequired ? (
+                          <Badge variant="outline">必需</Badge>
+                        ) : null}
+                        {auto ? (
+                          <Badge variant="secondary">复验判定</Badge>
+                        ) : null}
+                      </div>
+                      {item.description ? (
+                        <span className="text-body-sm text-muted-foreground">
+                          {item.description}
+                        </span>
+                      ) : null}
+                      {auto ? (
+                        <span className="text-body-sm text-muted-foreground">
+                          由平台实测写入，不接受手工勾选。
+                        </span>
+                      ) : null}
+                      {item.checkedAt ? (
+                        <span className="text-body-sm text-muted-foreground">
+                          {formatDateTime(item.checkedAt, locale)} 确认
+                        </span>
                       ) : null}
                     </div>
-                    {item.description ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {item.description}
-                      </span>
-                    ) : null}
-                    {item.checkedAt ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {formatDateTime(item.checkedAt, locale)} 确认
-                      </span>
-                    ) : null}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
