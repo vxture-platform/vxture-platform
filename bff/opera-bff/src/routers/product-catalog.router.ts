@@ -106,6 +106,19 @@ const STATE_LABELS: Record<ProductState, string> = {
 const ORIGINS = ["self", "third_party", "other"] as const;
 type ProductOrigin = (typeof ORIGINS)[number];
 
+/**
+ * L0 平台级共享指标（只读）。`state` 为 `reserved` 的键同样不许产品重定义。
+ *
+ * 出参叫 `state` 不叫 `status`：管理面 API 口径里「算不算数」统一是 `state`
+ * （DB 列仍是 `status`，只在接口层改名）。lint:api-conventions B-3 强制。
+ */
+export interface PlatformMetricRecord {
+  metricKey: string;
+  kind: string | null;
+  metricUnit: string | null;
+  state: string | null;
+}
+
 export interface ProductCategoryRecord {
   id: number;
   parentId: number | null;
@@ -385,6 +398,39 @@ export class ProductCatalogRouter {
    * UUID 判据只看**格式良好**，不卡 RFC 4122 的版本/变体位——与 `router.shared.ts`
    * 的 `UUID_RE` 同一条，那里记着为什么（严格版会把种子里刻意固定段的 id 判成无效）。
    */
+  /**
+   * L0 平台级共享指标。**只读**。
+   *
+   * 产品登记自己的指标之前要先知道哪些键是平台的——它们不能被产品重新定义
+   * （95 的 `trg_product_metrics_no_platform_shadow`），额度由套餐组件贡献。
+   * 此前这份清单在界面上完全看不见，运营者只能靠撞上那条 409 才知道。
+   *
+   * 路由必须**排在 `@Get(":idOrCode")` 之前**——Nest 按声明顺序匹配，放在后面会被
+   * 参数段吃掉。同 `checklist-summary` 那条的理由。
+   */
+  @Get("platform-metrics")
+  async listPlatformMetrics(
+    @Req() req: Request & RequestContext,
+  ): Promise<PlatformMetricRecord[]> {
+    assertCanRead(req);
+    const result = await this.pool.query<{
+      metric_key: string;
+      kind: string | null;
+      metric_unit: string | null;
+      status: string | null;
+    }>(
+      `SELECT metric_key, kind, metric_unit, status
+         FROM product.platform_metrics
+        ORDER BY metric_key`,
+    );
+    return result.rows.map((r) => ({
+      metricKey: r.metric_key,
+      kind: r.kind,
+      metricUnit: r.metric_unit,
+      state: r.status,
+    }));
+  }
+
   @Get(":idOrCode")
   async get(
     @Req() req: Request & RequestContext,

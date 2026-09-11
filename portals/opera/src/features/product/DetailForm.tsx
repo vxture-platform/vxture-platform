@@ -29,12 +29,12 @@
 
 import type { ReactNode } from "react";
 import {
-  Button,
   Icon,
   Label,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+  Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@vxture/design-system";
 
 /**
@@ -56,13 +56,50 @@ export function SectionBody({ children }: { children: ReactNode }) {
 /**
  * 两列字段栅格。
  *
- * `gap-x-2xl` 比常规的 `gap-md` 宽出一档，专治 owner 指出的那条：
- * 「第一个内容与第二个条目标题挨在一起」。纵向仍用 `gap-lg`——上下是同一列里的
- * 相邻字段，不需要横向那么大的分隔。
+ * 横向用 `gap-x-7xl`（默认密度 **128px**，紧凑 96px）——DS 12.6.0 为此新加的
+ * 「栏间沟」档。此前用 `2xl`(40px) 时第一栏的输入框看起来贴着第二栏的标签，
+ * owner 两次走查都点了这一条。
+ *
+ * **不要改用写死像素的 arbitrary 值**：那会绕过密度轴，紧凑模式下不跟着收窄，
+ * 而那正是密度存在的意义；`ds/no-app-tailwind-arbitrary-scale` 也会拦。
+ *
+ * 纵向仍用 `gap-lg`——上下是同一列里的相邻字段，不需要横向那么大的分隔。
  */
 export function FieldGrid({ children }: { children: ReactNode }) {
   return (
-    <div className="grid gap-x-2xl gap-y-lg md:grid-cols-2">{children}</div>
+    <div className="grid gap-x-7xl gap-y-lg md:grid-cols-2">{children}</div>
+  );
+}
+
+/**
+ * 帮助提示：鼠标移上去就出、移开就收。
+ *
+ * owner 2026-09-11:「信息是鼠标 hover 弹出，移开关闭，不能让点击才显示」。要点一下
+ * 才出来的说明，读者得先知道「这里有东西可点」——而一个淡色小图标恰恰不提示可点。
+ *
+ * 触发器仍是 `<button>`：Tooltip 在键盘上靠 focus 触发，非可聚焦元素等于只给鼠标
+ * 用户。`TooltipProvider` 挂在 `OperaShell` 上，这里直接用。
+ *
+ * 图标**与标签同色**（owner：颜色太重了）——它是标签的附属物，不该比标签本身显眼。
+ */
+export function HelpHint({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        type="button"
+        aria-label={`${label}的说明`}
+        className="inline-flex shrink-0 items-center rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Icon name="help" size="sm" aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-panel-sm">{children}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -108,7 +145,11 @@ export function FormField({
     <div
       className={`flex min-w-0 flex-col gap-xs${full ? " md:col-span-2" : ""}`}
     >
-      <div className="flex items-center gap-2xs">
+      {/* **定高**。此前带帮助图标的行比不带的高一截,两栏并排时标签与控件逐行
+          错开(owner 2026-09-11:「label 行高没有统一,有帮助图标的高了一些,导致
+          排版错位」)。`h-control-xs` 是 DS 的控件高度档,比图标高、比标签行高——
+          把行高从「内容决定」改成「档位决定」,有没有图标都一样。 */}
+      <div className="flex h-control-xs items-center gap-2xs">
         <Label
           htmlFor={id}
           /* 小字且淡：标签是索引不是内容。 */
@@ -129,32 +170,56 @@ export function FormField({
             <span className="sr-only">（必填）</span>
           </>
         ) : null}
-        {help ? (
-          <Popover>
-            <PopoverTrigger asChild>
-              {/* 用 DS 的 Button 而不是裸 <button>:焦点环、悬停、禁用态都归件管,
-                  自己写一套等于在这一个页面里开一个不受 DS 约束的分支。 */}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`${label}的说明`}
-              >
-                <Icon name="help" size="sm" aria-hidden="true" />
-              </Button>
-            </PopoverTrigger>
-            {/* 说明常常是两三句带判据的话，`max-w-panel-sm` 给它一个可读的行宽，
-                而不是让它铺成一条横贯全屏的细线。 */}
-            <PopoverContent className="max-w-panel-sm text-body-sm">
-              {help}
-            </PopoverContent>
-          </Popover>
-        ) : null}
+        {help ? <HelpHint label={label}>{help}</HelpHint> : null}
       </div>
       {children}
       {error ? (
         <p className="text-body-sm text-destructive-text">{error}</p>
       ) : null}
+    </div>
+  );
+}
+
+export interface ToggleRowProps {
+  readonly id: string;
+  readonly label: string;
+  readonly help?: string;
+  readonly checked: boolean;
+  readonly disabled?: boolean;
+  readonly onChange: (next: boolean) => void;
+}
+
+/**
+ * 一行开关：标签在左、开关在右，同一行。
+ *
+ * owner 2026-09-11:「两个版面：label：内容选择，同行；现在都是选择，样式需要一致。」
+ * 此前「可见性」两项与「端」四项虽然都是开关，却长得不一样——前者是裸开关配一个
+ * 上方标签，后者是带边框的方块。**同一种交互出现两种外观，读者会以为它们是两回事。**
+ *
+ * 帮助图标与 `FormField` 用同一个：hover 出、移开收，颜色与标签同色。
+ */
+export function ToggleRow({
+  id,
+  label,
+  help,
+  checked,
+  disabled,
+  onChange,
+}: ToggleRowProps) {
+  return (
+    <div className="flex h-control-md items-center justify-between gap-sm rounded-md border border-border px-sm">
+      <span className="flex min-w-0 items-center gap-2xs">
+        <Label htmlFor={id} className="truncate text-body-sm font-normal">
+          {label}
+        </Label>
+        {help ? <HelpHint label={label}>{help}</HelpHint> : null}
+      </span>
+      <Switch
+        id={id}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onChange}
+      />
     </div>
   );
 }

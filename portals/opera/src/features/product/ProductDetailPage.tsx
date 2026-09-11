@@ -44,6 +44,7 @@ import {
   Badge,
   Banner,
   Button,
+  Card,
   DetailList,
   DetailRow,
   DialogForm,
@@ -55,7 +56,6 @@ import {
   Section,
   Separator,
   StatusBadge,
-  Switch,
   Textarea,
   ViewHeader,
   ViewLayout,
@@ -74,7 +74,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { LockedInput } from "@/components/form/LockedInput";
 import { actionsFor, type ProductAction } from "./lifecycle";
-import { FieldGrid, FormField, SectionBody } from "./DetailForm";
+import { FieldGrid, FormField, SectionBody, ToggleRow } from "./DetailForm";
 import { ProductMetricsSection } from "./ProductMetricsSection";
 
 const MANAGE = "platform:product.manage";
@@ -172,6 +172,108 @@ interface WebhookDraft {
 /** 字段级错误：键是 BFF 回的 `field`，值是它给的消息。 */
 type FieldErrors = Record<string, string>;
 
+/**
+ * BFF 的 `field` → 界面上的标签与输入框 id。
+ *
+ * owner 2026-09-11:「保存失败，提示字段标红了，但是没看到，直接提示哪个字段。」
+ * 「已在页面上标红」是让人自己去找——页面有十几个框，而出错的那个可能在折叠之下或
+ * 视口之外。所以两件一起做：**toast 直接点名**，并把那个框**滚到视野中央并聚焦**。
+ *
+ * 表里没有的字段仍会标红并弹 toast，只是标题退回通用文案——BFF 将来加字段不会因为
+ * 这里没登记就变成「保存失败」四个字。
+ */
+const FIELD_META: Record<string, { label: string; inputId: string }> = {
+  productName: { label: "产品名称", inputId: "pd-name" },
+  productType: { label: "产品类型", inputId: "pd-type" },
+  originProvider: { label: "供应方", inputId: "pd-provider" },
+  productNick: { label: "英文名称", inputId: "pd-nick" },
+  description: { label: "产品介绍", inputId: "pd-desc" },
+  iconUrl: { label: "产品图标", inputId: "pd-icon" },
+  edgeDomain: { label: "边缘域名", inputId: "pd-domain" },
+  edgeUpstream: { label: "边缘上游", inputId: "pd-upstream" },
+  webhookUrl: { label: "回调地址", inputId: "pd-callback" },
+  webhookSecret: { label: "签名密钥", inputId: "pd-secret" },
+  homeUrl: { label: "产品主页", inputId: "pd-home" },
+};
+
+/**
+ * 预留渠道。有对应客户端就不占位，没有就摆一张灰卡。
+ *
+ * 只留 `beta`：`canary` 是按需开的，给每个产品都摆一张会把「没建」变成「缺了」。
+ */
+const RESERVED_CHANNELS = ["beta"] as const;
+
+const CHANNEL_LABEL: Record<string, string> = {
+  stable: "正式",
+  beta: "灰度",
+  canary: "金丝雀",
+};
+
+/** 一张凭据卡：图标 + client_id + 渠道/类型/状态/回调数。 */
+function ClientCard({ client }: { readonly client: ClientLite }) {
+  const isPublic = client.tokenEndpointAuthMethod === "none";
+  return (
+    <Card className="flex min-w-0 flex-col gap-sm p-md">
+      <div className="flex min-w-0 items-center gap-sm">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+          <Icon name="fingerprint" size="sm" aria-hidden="true" />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate font-mono text-code-sm">
+            {client.clientId}
+          </span>
+          <span className="text-label-sm text-muted-foreground">
+            {CHANNEL_LABEL[client.releaseChannel] ?? client.releaseChannel}
+          </span>
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-xs">
+        <StatusBadge
+          tone={client.state === "active" ? "success" : "neutral"}
+          dot
+        >
+          {client.state === "active" ? "启用" : "停用"}
+        </StatusBadge>
+        <Badge variant={isPublic ? "secondary" : "outline"}>
+          {isPublic ? "公共客户端" : "机密客户端"}
+        </Badge>
+        <span className="text-body-sm text-muted-foreground">
+          {client.redirectUris.length} 个回调
+        </span>
+      </div>
+    </Card>
+  );
+}
+
+/** 占位卡：这个渠道还没有凭据。灰、虚线、不可点。 */
+function ReservedClientCard({ channel }: { readonly channel: string }) {
+  return (
+    <Card className="flex min-w-0 flex-col gap-sm border-dashed bg-muted/20 p-md">
+      <div className="flex min-w-0 items-center gap-sm">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/50">
+          <Icon
+            name="fingerprint"
+            size="sm"
+            aria-hidden="true"
+            className="text-muted-foreground/50"
+          />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-body-sm text-muted-foreground">
+            未注册
+          </span>
+          <span className="text-label-sm text-muted-foreground/70">
+            {CHANNEL_LABEL[channel] ?? channel}
+          </span>
+        </span>
+      </div>
+      <span className="text-body-sm text-muted-foreground/70">
+        保存本页后在「接入凭据」页注册，会自动关联。
+      </span>
+    </Card>
+  );
+}
+
 export function ProductDetailPage({ productCode }: { productCode: string }) {
   const tShared = useTranslations();
   const locale = useLocale();
@@ -197,6 +299,17 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
   const [applying, setApplying] = useState(false);
   /** 接入检查抽屉（owner：不在页面底部堆信息）。 */
   const [checkOpen, setCheckOpen] = useState(false);
+  /**
+   * 接入凭据抽屉。
+   *
+   * owner 2026-09-11:「接入凭据，需要跳转，导致本页内容未保存，全部丢失……
+   * **切记不能跳转**。」原来那一节里有个「去凭据页」按钮，点下去这一页填了一半的
+   * 东西就没了——而运营者刚配完域名、正准备配凭据，恰恰是改动最多的时刻。
+   *
+   * 客户端本来就是**按 productId 自动关联**的（注册时就挂在产品上），所以这一页
+   * 只需要能看见它们；真要新建，保存完这一页之后再去凭据页，回来会自动关联。
+   */
+  const [credOpen, setCredOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -314,11 +427,22 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       const message = reason(error, "保存失败");
       if (field) {
         setErrors({ [field]: message });
+        const meta = FIELD_META[field];
         toast({
           tone: "danger",
-          title: "保存失败",
-          description: `${message}（对应的字段已在页面上标红）`,
+          /* 点名。「保存失败」谁都知道，要答的是「哪一个」。 */
+          title: meta ? `${meta.label}：请修正` : "保存失败",
+          description: message,
         });
+        /* 滚到视野中央并聚焦。标红只有在看得见时才有用——出错的框常在视口之外。
+           下一帧再找：setErrors 刚触发一次渲染，这一拍 DOM 还没更新到红态。 */
+        if (meta) {
+          requestAnimationFrame(() => {
+            const el = document.getElementById(meta.inputId);
+            el?.scrollIntoView({ block: "center", behavior: "smooth" });
+            el?.focus({ preventScroll: true });
+          });
+        }
       } else {
         toast({ tone: "danger", title: "保存失败", description: message });
       }
@@ -486,7 +610,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
               <FieldGrid>
                 <FormField
                   id="pd-code"
-                  label="产品码"
+                  label="产品代码"
                   help="登记后不可改。要换须登记新产品。"
                 >
                   {/* `locked` 已经把它置为 disabled——件刻意 Omit 掉了 readOnly。 */}
@@ -495,6 +619,23 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                     locked
                     value={product?.productCode ?? ""}
                     className="font-mono text-code-sm"
+                  />
+                </FormField>
+
+                <FormField
+                  id="pd-icon"
+                  label="产品图标"
+                  help="留空则只显示文字。"
+                >
+                  <Input
+                    id="pd-icon"
+                    value={draft?.iconUrl ?? ""}
+                    disabled={!canManage}
+                    placeholder={`https://${product?.productCode ?? "acme"}.vxture.com/icon.svg`}
+                    className="font-mono text-code-sm"
+                    onChange={(e) =>
+                      draft && setDraft({ ...draft, iconUrl: e.target.value })
+                    }
                   />
                 </FormField>
 
@@ -516,11 +657,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   />
                 </FormField>
 
-                <FormField
-                  id="pd-nick"
-                  label="副名 / 译名"
-                  help="外文名或简称。"
-                >
+                <FormField id="pd-nick" label="英文名称" help="外文名或简称。">
                   <Input
                     id="pd-nick"
                     value={draft?.productNick ?? ""}
@@ -556,7 +693,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   </NativeSelect>
                 </FormField>
 
-                <FormField id="pd-origin" label="来源">
+                <FormField id="pd-origin" label="接入来源">
                   <NativeSelect
                     id="pd-origin"
                     value={draft?.origin ?? "self"}
@@ -590,27 +727,11 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   </FormField>
                 ) : null}
 
-                <FormField
-                  id="pd-icon"
-                  label="产品图标"
-                  help="留空则只显示文字。"
-                >
-                  <Input
-                    id="pd-icon"
-                    value={draft?.iconUrl ?? ""}
-                    disabled={!canManage}
-                    placeholder="https://cdn.acme.com/icon.svg"
-                    className="font-mono text-code-sm"
-                    onChange={(e) =>
-                      draft && setDraft({ ...draft, iconUrl: e.target.value })
-                    }
-                  />
-                </FormField>
-
-                <FormField id="pd-desc" label="简介" full>
+                <FormField id="pd-desc" label="产品介绍" full>
                   <Textarea
                     id="pd-desc"
                     rows={2}
+                    maxLength={100}
                     value={draft?.description ?? ""}
                     disabled={!canManage}
                     onChange={(e) =>
@@ -634,120 +755,55 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           {/* ── 可见性与终端 ─────────────────────────────────────────────── */}
           <Section icon="eye" title="可见性与终端" level={2}>
             <SectionBody>
+              {/* 左「可见性」右「终端支持」，各自纵向排列。两边都是开关行，所以
+               **用同一个件渲染**——owner:「现在都是选择，样式需要一致」。 */}
               <FieldGrid>
-                <FormField
-                  id="pd-customer"
-                  label="客户域可见"
-                  help="关掉后，这个产品在 console 与官网都不出现。"
-                >
-                  <div className="flex h-9 items-center">
-                    <Switch
-                      id="pd-customer"
-                      checked={draft?.isCustomerVisible ?? false}
-                      disabled={!canManage}
-                      onCheckedChange={(v) =>
-                        draft && setDraft({ ...draft, isCustomerVisible: v })
-                      }
-                    />
-                  </div>
-                </FormField>
+                <div className="flex min-w-0 flex-col gap-sm">
+                  <p className="text-label-sm font-normal text-muted-foreground">
+                    可见性
+                  </p>
+                  <ToggleRow
+                    id="pd-customer"
+                    label="客户域"
+                    help="关掉后，这个产品在 console 与官网都不出现。"
+                    checked={draft?.isCustomerVisible ?? false}
+                    disabled={!canManage}
+                    onChange={(v) =>
+                      draft && setDraft({ ...draft, isCustomerVisible: v })
+                    }
+                  />
+                  <ToggleRow
+                    id="pd-workforce"
+                    label="运营域"
+                    help="admin / opera 里是否列出它。"
+                    checked={draft?.isWorkforceVisible ?? false}
+                    disabled={!canManage}
+                    onChange={(v) =>
+                      draft && setDraft({ ...draft, isWorkforceVisible: v })
+                    }
+                  />
+                </div>
 
-                <FormField
-                  id="pd-workforce"
-                  label="运营域可见"
-                  help="admin / opera 里是否列出它。"
-                >
-                  <div className="flex h-9 items-center">
-                    <Switch
-                      id="pd-workforce"
-                      checked={draft?.isWorkforceVisible ?? false}
+                <div className="flex min-w-0 flex-col gap-sm">
+                  <p className="text-label-sm font-normal text-muted-foreground">
+                    终端支持
+                  </p>
+                  {PRODUCT_SURFACE_DEFS.map((d) => (
+                    <ToggleRow
+                      key={d.value}
+                      id={`pd-surface-${d.value}`}
+                      label={productSurfaceLabel(d.value, typeLocale)}
+                      checked={draft?.surfaces.includes(d.value) ?? false}
                       disabled={!canManage}
-                      onCheckedChange={(v) =>
-                        draft && setDraft({ ...draft, isWorkforceVisible: v })
-                      }
+                      onChange={(v) => toggleSurface(d.value, v)}
                     />
-                  </div>
-                </FormField>
-
-                <FormField id="pd-surfaces" label="可露出的端" full>
-                  <div className="grid gap-sm md:grid-cols-2">
-                    {PRODUCT_SURFACE_DEFS.map((d) => (
-                      <label
-                        key={d.value}
-                        className="flex items-center justify-between gap-sm rounded-md border border-border px-sm py-xs"
-                      >
-                        <span className="text-body-sm">
-                          {productSurfaceLabel(d.value, typeLocale)}
-                        </span>
-                        <Switch
-                          checked={draft?.surfaces.includes(d.value) ?? false}
-                          disabled={!canManage}
-                          onCheckedChange={(v) => toggleSurface(d.value, v)}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </FormField>
+                  ))}
+                </div>
               </FieldGrid>
             </SectionBody>
           </Section>
 
           {/* ── 接入凭据 ─────────────────────────────────────────────────── */}
-          <Section
-            icon="fingerprint"
-            title="接入凭据"
-            level={2}
-            action={
-              <Button asChild variant="outline" size="md">
-                <Link
-                  href={`/product/clients?productId=${encodeURIComponent(product?.id ?? "")}`}
-                >
-                  去凭据页
-                </Link>
-              </Button>
-            }
-          >
-            <SectionBody>
-              {clients.length === 0 ? (
-                <EmptyState
-                  title="还没有客户端"
-                  description="没有 OIDC 客户端，这个产品无法完成登录。"
-                />
-              ) : (
-                <DetailList>
-                  {clients.map((c) => (
-                    <DetailRow key={c.clientId} label={c.clientId}>
-                      <div className="flex flex-wrap items-center gap-xs">
-                        <Badge variant="outline">{c.releaseChannel}</Badge>
-                        <Badge
-                          variant={
-                            c.tokenEndpointAuthMethod === "none"
-                              ? "secondary"
-                              : "outline"
-                          }
-                        >
-                          {c.tokenEndpointAuthMethod === "none"
-                            ? "公共客户端"
-                            : "机密客户端"}
-                        </Badge>
-                        <StatusBadge
-                          tone={c.state === "active" ? "success" : "neutral"}
-                          dot
-                        >
-                          {c.state === "active"
-                            ? tShared("actions.enable")
-                            : tShared("actions.disable")}
-                        </StatusBadge>
-                        <span className="text-body-sm text-muted-foreground">
-                          {c.redirectUris.length} 个回调
-                        </span>
-                      </div>
-                    </DetailRow>
-                  ))}
-                </DetailList>
-              )}
-            </SectionBody>
-          </Section>
 
           {/* ── 边缘路由与回调 ───────────────────────────────────────────── */}
           <Section icon="plug" title="边缘路由与回调" level={2}>
@@ -803,7 +859,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                     value={whDraft?.webhookUrl ?? ""}
                     disabled={!canManage}
                     aria-invalid={!!errors["webhookUrl"]}
-                    placeholder="https://app.example.com/webhooks/vxture"
+                    placeholder={`https://${whDraft?.edgeDomain || `${product?.productCode ?? "acme"}.vxture.com`}/webhooks/vxture`}
                     className="font-mono text-code-sm"
                     onChange={(e) =>
                       whDraft &&
@@ -851,7 +907,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                     value={whDraft?.homeUrl ?? ""}
                     disabled={!canManage}
                     aria-invalid={!!errors["homeUrl"]}
-                    placeholder="https://app.example.com"
+                    placeholder={`https://${whDraft?.edgeDomain || `${product?.productCode ?? "acme"}.vxture.com`}`}
                     className="font-mono text-code-sm"
                     onChange={(e) =>
                       whDraft &&
@@ -896,12 +952,14 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                     <Badge variant="outline">{pendingRequired.length}</Badge>
                   ) : null}
                 </Button>
-                <Button asChild variant="ghost">
-                  <Link
-                    href={`/product/launch?productId=${encodeURIComponent(product?.id ?? "")}`}
-                  >
-                    上线复验
-                  </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCredOpen(true)}
+                >
+                  <Icon name="fingerprint" size="xs" aria-hidden="true" />
+                  接入凭据
+                  <Badge variant="outline">{clients.length}</Badge>
                 </Button>
               </div>
               {canManage ? (
@@ -970,16 +1028,33 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 </DetailRow>
               ))}
             </DetailList>
-            <Button asChild variant="secondary">
-              <Link
-                href={`/product/launch?productId=${encodeURIComponent(product?.id ?? "")}`}
-              >
-                <Icon name="rocket" size="xs" aria-hidden="true" />
-                去跑一次复验
-              </Link>
-            </Button>
+            {/* 这里原本有个「去跑一次复验」的跳转。跳走同样会丢掉本页未保存的
+                改动,而抽屉是在配置中途打开的——去掉。复验在保存之后从目录页进。 */}
           </div>
         )}
+      </Drawer>
+
+      {/* ── 接入凭据抽屉 ───────────────────────────────────────────────── */}
+      <Drawer
+        open={credOpen}
+        onClose={() => setCredOpen(false)}
+        width="md"
+        title="接入凭据"
+        description={product?.productCode}
+      >
+        <div className="grid gap-md md:grid-cols-2">
+          {clients.map((c) => (
+            <ClientCard key={c.clientId} client={c} />
+          ))}
+          {/* 预留位:渠道是 stable / beta / canary,而绝大多数产品先有 stable。
+              给缺席的渠道留一张灰卡,让「还没建」这件事在版面上占位——否则一个
+              只有 stable 的产品看起来像「就该只有一个」。 */}
+          {RESERVED_CHANNELS.filter(
+            (ch) => !clients.some((c) => c.releaseChannel === ch),
+          ).map((ch) => (
+            <ReservedClientCard key={ch} channel={ch} />
+          ))}
+        </div>
       </Drawer>
 
       {/* ── 一次性交接清单 ─────────────────────────────────────────────── */}
