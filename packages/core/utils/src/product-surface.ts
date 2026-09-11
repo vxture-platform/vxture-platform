@@ -74,3 +74,20 @@ export const PRODUCT_SURFACE_DEFS: readonly ProductSurfaceDef[] = [
 export function isValidProductSurface(value: string): value is ProductSurface {
   return (PRODUCT_SURFACES as readonly string[]).includes(value);
 }
+
+/**
+ * 取展示标签（缺省 zh）。未登记值退回原字符串，便于过渡期**显影而非静默**。
+ *
+ * 与 `productTypeLabel` 同形，也同一个理由：定义里带着 `labelZh` / `labelEn` 两份
+ * 文案，而调用点各自写 `locale.startsWith("en") ? d.labelEn : d.labelZh` 的话，
+ * 漏一处就是那一处永远显示中文——而它在英文界面里看起来只是「这一列没翻译」，
+ * 没人会去追是哪一行代码。收成一个函数，locale 的判据只有一处。
+ */
+export function productSurfaceLabel(
+  value: string,
+  locale: "zh" | "en" = "zh",
+): string {
+  const def = PRODUCT_SURFACE_DEFS.find((d) => d.value === value);
+  if (!def) return value;
+  return locale === "en" ? def.labelEn : def.labelZh;
+}
