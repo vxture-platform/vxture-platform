@@ -205,3 +205,69 @@ describe("退掉指标：还被套餐引用时不许退", () => {
     expect(writes).toEqual(["delete"]);
   });
 });
+
+/**
+ * `GET :idOrCode` 的双接受（2026-09-11，批 4）。
+ *
+ * 产品详情页的地址走可读码（`/product/catalog/karda`），所以这条读要同时收 uuid 与
+ * product_code。**判据是「先判形状，再决定查哪一列」**，不是「先按 uuid 查、失败再
+ * 按 code 查」——`id` 是 uuid 列，把 `"karda"` 喂进去是 `22P02 invalid input syntax`，
+ * 一句 500，而真实答案是「按码去查」。dev 库实测：那条 SQL 直接 ERROR，不是返回零行。
+ *
+ * 所以这里断言的是**走了哪一列**，不是「查得到查不到」——后者在两种实现下都能绿。
+ */
+describe("GET :idOrCode 双接受", () => {
+  /** 记下 WHERE 子句里用的是哪一列。 */
+  function makeProbe() {
+    const seen: string[] = [];
+    const pool = {
+      query: vi.fn(async (sql: string) => {
+        if (/FROM product\.products/.test(sql)) {
+          seen.push(/product_code = \$1/.test(sql) ? "code" : "id");
+          return { rows: [], rowCount: 0 };
+        }
+        throw new Error(`unexpected sql: ${sql}`);
+      }),
+    };
+    const router = new ProductCatalogRouter(
+      pool as unknown as Pool,
+      {
+        platform: {
+          ATLAS_API_URL: "http://atlas.test/",
+          RUNOS_API_URL: "http://runos.test/",
+        },
+      } as unknown as VxConfigService,
+      {
+        getToken: vi.fn(async () => "obo"),
+      } as unknown as OperatorExchangeService,
+    );
+    return { router, seen };
+  }
+
+  it("uuid 形状 → 查 id 列", async () => {
+    const { router, seen } = makeProbe();
+    await router.get(makeReq(), "3d9f0c1e-0000-4000-8000-00000000000a");
+    expect(seen).toEqual(["id"]);
+  });
+
+  it("产品码 → 查 product_code 列（喂给 uuid 列会是 22P02，一句 500）", async () => {
+    const { router, seen } = makeProbe();
+    await router.get(makeReq(), "karda");
+    expect(seen).toEqual(["code"]);
+  });
+
+  /**
+   * 带连字符、长得有点像 uuid 但不是的串——产品码允许连字符（`acme-agent`），
+   * 一个只看「有没有连字符」的判据会把它错判成 uuid。
+   */
+  it("acme-agent 这类带连字符的码仍走 code 列", async () => {
+    const { router, seen } = makeProbe();
+    await router.get(makeReq(), "acme-agent");
+    expect(seen).toEqual(["code"]);
+  });
+
+  it("查不到就回 null，不抛", async () => {
+    const { router } = makeProbe();
+    await expect(router.get(makeReq(), "nope")).resolves.toBeNull();
+  });
+});

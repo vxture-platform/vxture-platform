@@ -48,6 +48,7 @@ import {
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
+import { UUID_RE } from "./router.shared";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
@@ -370,16 +371,31 @@ export class ProductCatalogRouter {
     return byProduct;
   }
 
-  @Get(":id")
+  /**
+   * 单个产品。**id 与 product_code 双接受。**
+   *
+   * 产品详情页的地址走可读码（`/product/catalog/karda` 而不是一串 uuid）——地址要
+   * 能读、能分享、能在工单里粘贴。既有调用方传 uuid，一样收。
+   *
+   * **先判形状再决定查哪一列**，不是「先按 uuid 查、失败再按 code 查」：`id` 是
+   * uuid 列，把 `"karda"` 喂进去是 `22P02 invalid input syntax`，一句 500，而真实
+   * 答案是「按码去查」。这条教训来自 admin 那批可读码路由（`tenant_no` 是 bigint，
+   * 同样要先挡形状）。
+   *
+   * UUID 判据只看**格式良好**，不卡 RFC 4122 的版本/变体位——与 `router.shared.ts`
+   * 的 `UUID_RE` 同一条，那里记着为什么（严格版会把种子里刻意固定段的 id 判成无效）。
+   */
+  @Get(":idOrCode")
   async get(
     @Req() req: Request & RequestContext,
-    @Param("id") id: string,
+    @Param("idOrCode") idOrCode: string,
   ): Promise<ProductRecord | null> {
     assertCanRead(req);
+    const byId = UUID_RE.test(idOrCode);
     const result = await this.pool.query<ProductRow>(
       `SELECT ${SELECT_COLUMNS} FROM product.products
-        WHERE id = $1 AND deleted_at IS NULL`,
-      [id],
+        WHERE ${byId ? "id = $1" : "product_code = $1"} AND deleted_at IS NULL`,
+      [idOrCode],
     );
     return result.rows[0] ? toRecord(result.rows[0]) : null;
   }
