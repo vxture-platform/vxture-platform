@@ -50,6 +50,14 @@ import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { RequiredMark } from "@/components/form/RequiredMark";
 
+/** L0 平台级共享指标（只读）。 */
+interface PlatformMetric {
+  metricKey: string;
+  kind: string | null;
+  metricUnit: string | null;
+  state: string | null;
+}
+
 export interface ProductMetric {
   metricKey: string;
   mergeStrategy: string;
@@ -137,6 +145,7 @@ export function ProductMetricsSection({
   const { toast } = useToast();
   const tableLabels = useTableLabels();
   const [rows, setRows] = useState<ProductMetric[]>([]);
+  const [platform, setPlatform] = useState<PlatformMetric[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -146,9 +155,15 @@ export function ProductMetricsSection({
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
     try {
-      setRows(
-        await api.get<ProductMetric[]>(`/api/products/${productId}/metrics`),
-      );
+      const [mine, shared] = await Promise.all([
+        api.get<ProductMetric[]>(`/api/products/${productId}/metrics`),
+        /* 平台清单读不到不该挡住本产品的指标——它只是参考。 */
+        api
+          .get<PlatformMetric[]>("/api/products/platform-metrics")
+          .catch(() => [] as PlatformMetric[]),
+      ]);
+      setRows(mine);
+      setPlatform(shared);
       setLoad({ kind: "ready" });
     } catch (error) {
       setLoad({ kind: "error", message: describeError(error) });
@@ -270,6 +285,31 @@ export function ProductMetricsSection({
                 <Icon name="plus" size="sm" aria-hidden="true" />
                 登记指标
               </Button>
+            </div>
+          ) : null}
+
+          {/* 平台级共享指标：**这里登记的是产品自己的**，这几个已经有了，不要重来。
+              owner 2026-09-11:「应该把平台的核心指标预写在清单……登记的是产品特有
+              的指标，不能都从头来。」产品重定义这些键会被 409 拦下。 */}
+          {platform.length > 0 ? (
+            <div className="flex flex-col gap-xs rounded-md border border-border-soft bg-muted/30 p-sm">
+              <span className="text-label-sm text-muted-foreground">
+                平台级共享指标（已有，无需登记）
+              </span>
+              <div className="flex flex-wrap gap-xs">
+                {platform.map((m) => (
+                  <Badge
+                    key={m.metricKey}
+                    variant={m.state === "active" ? "outline" : "secondary"}
+                  >
+                    <span className="font-mono text-code-sm">
+                      {m.metricKey}
+                    </span>
+                    {m.metricUnit ? ` · ${m.metricUnit}` : null}
+                    {m.state === "reserved" ? " · 保留" : null}
+                  </Badge>
+                ))}
+              </div>
             </div>
           ) : null}
 
