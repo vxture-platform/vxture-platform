@@ -923,6 +923,14 @@ export interface ProductAppTile {
   name: string;
   nick: string | null;
   iconUrl: string | null;
+  /**
+   * 平台托管图标的版本号（内容哈希）。null = 没传过图，磁贴回落到产品字母牌。
+   *
+   * 只带版本不带地址：地址是固定拼法 `/api/applications/{code}/icon?v={版本}`，
+   * 而版本进 URL 让这张图可以被浏览器 `immutable` 缓存一年——换图会换哈希、换
+   * 地址，缓存自然失效。外链方案做不到这一半（换图不换 URL，缓存里还是旧的）。
+   */
+  iconVersion: string | null;
   /** 产品主页（product_webhooks.home_url）；未登记为 null，此时落到 /subscription。 */
   homeUrl: string | null;
   status: "active" | "trialing";

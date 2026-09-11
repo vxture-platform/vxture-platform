@@ -260,6 +260,11 @@ REVOKE UPDATE ON product.product_webhooks FROM platform_svc;
 GRANT UPDATE (home_url, webhook_url, webhook_secret_ref, edge_upstream, webhook_secret_enc, edge_domain, updated_at) ON product.product_webhooks TO platform_svc;
 
 -- product.product_surfaces  [只增删不改:两列都是主键的一半,created_at 是锚点]
+-- product.product_icons  [anchor: product_id]
+-- 换图是覆盖同一行的内容，不是把这一行改挂到另一个产品上——product_id 不进白名单。
+REVOKE UPDATE ON product.product_icons FROM platform_svc;
+GRANT UPDATE (mime_type, bytes, byte_size, checksum, updated_at) ON product.product_icons TO platform_svc;
+
 REVOKE UPDATE ON product.product_surfaces FROM platform_svc;
 
 -- product.launch_checklist_items  [anchor: item_code, created_at]

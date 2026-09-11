@@ -37,6 +37,8 @@ export interface ProductAppTile {
   name: string;
   nick: string | null;
   iconUrl: string | null;
+  /** 平台托管图标的版本号（内容哈希）。null = 没有托管图标，界面回落字母牌。 */
+  iconVersion: string | null;
   /** product.product_webhooks.home_url；未登记为 null，门户回落到 /subscription。 */
   homeUrl: string | null;
   /** 撑起这块磁贴的最高优先级订阅态：active 压过 trialing。 */
@@ -52,6 +54,7 @@ export interface HeldProductRow {
   product_name: string;
   product_nick: string | null;
   icon_url: string | null;
+  icon_version: string | null;
   home_url: string | null;
   status: string;
   plan_name: string;
@@ -74,6 +77,7 @@ export interface HeldProductRow {
  */
 export const HELD_PRODUCT_TILES_SQL = `
   select prod.product_code, prod.product_name, prod.product_nick, prod.icon_url,
+         pi.checksum as icon_version,
          pw.home_url, ts.status, pl.plan_name, pc.tier, pc.component_role, prod.sort
     from metering.subscriptions ts
     join tenancy.workspaces w on w.id = ts.workspace_id
@@ -82,6 +86,9 @@ export const HELD_PRODUCT_TILES_SQL = `
     join product.plan_components pc on pc.plan_version_id = pv.id
     join product.products prod on prod.id = pc.product_id
     left join product.product_webhooks pw on pw.product_id = prod.id
+    -- 平台托管的图标。只取版本号(内容哈希)不取字节:磁贴列表要的是「有没有、是哪一版」，
+    -- 字节由 /api/applications/:code/icon 单独发，那条路能被浏览器长期缓存。
+    left join product.product_icons pi on pi.product_id = prod.id
    where w.tenant_id = $1 and w.is_default and w.deleted_at is null
      and ts.deleted_at is null and ts.status = any($2::text[])
      and prod.deleted_at is null and prod.status = 'active'
@@ -132,6 +139,7 @@ export function collapseProductTiles(
         name: row.product_name,
         nick: row.product_nick,
         iconUrl: row.icon_url,
+        iconVersion: row.icon_version,
         homeUrl: row.home_url,
         status: row.status,
         planName: row.plan_name,

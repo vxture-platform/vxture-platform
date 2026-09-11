@@ -350,6 +350,20 @@ CREATE TABLE product.product_surfaces (
 );
 CREATE INDEX ix_product_surfaces_surface ON product.product_surfaces (surface);
 
+-- 产品图标（平台托管，2026-09-11）。一产品一张，位图；**不收 SVG**——SVG 可以带
+-- <script>，从 console 自己的域名发出去等于存储型 XSS。没有行时界面回落到产品字母牌。
+-- 存库不存对象存储：平台没有上传基础设施，而图标很小（≤256KB × 二十几个产品）。
+CREATE TABLE product.product_icons (
+    product_id  uuid         PRIMARY KEY REFERENCES product.products(id) ON DELETE CASCADE,
+    mime_type   varchar(64)  NOT NULL,
+    bytes       bytea        NOT NULL,
+    byte_size   int          NOT NULL,                                  -- 冗余，列清单时不拖 bytea
+    checksum    varchar(64)  NOT NULL,                                  -- HTTP ETag 用
+    updated_at  timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT chk_product_icons_mime CHECK (mime_type IN ('image/png','image/webp','image/jpeg')),
+    CONSTRAINT chk_product_icons_size CHECK (byte_size > 0 AND byte_size <= 262144)
+);
+
 -- 上架检查项目录（可配置，item_code 自然键 PK）。新增检查项 = INSERT 一行，不改表结构。
 CREATE TABLE product.launch_checklist_items (
     item_code   varchar(64)  PRIMARY KEY,                             -- verification_policy/pricing_set…

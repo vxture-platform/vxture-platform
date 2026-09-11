@@ -1,18 +1,25 @@
 import {
   Controller,
   Get,
+  Headers,
   Inject,
+  NotFoundException,
+  Param,
   Req,
+  Res,
+  StreamableFile,
   UnauthorizedException,
 } from "@nestjs/common";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import type { RequestContext } from "../types/console.types";
 import { SelfScope } from "../auth/capability";
 
 interface PgPool {
+  /* 本地窄接口，避免把 pg 的类型拖进来。`params` 是 2026-09-11 补的——
+     图标端点要按 product_code 查，而原来这个签名连参数位都没有。 */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  query<T = any>(sql: string): Promise<{ rows: T[] }>;
+  query<T = any>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
 }
 
 export interface ApplicationRecord {
@@ -67,5 +74,60 @@ export class ApplicationsRouter {
       appType: r.app_type,
       sort: r.sort,
     }));
+  }
+
+  /**
+   * 产品图标的字节。平台托管（`product.product_icons`），不是产品域名的外链。
+   *
+   * ── 缓存 ──
+   * URL 上带 `?v=<checksum>`，所以同一个 URL 的内容**永不改变**——可以
+   * `immutable` 一年。换图会换 checksum、换 URL，缓存自然失效。
+   * 这正是外链方案做不到的那一半：外链换图不换 URL，浏览器与 CDN 里还是旧的。
+   *
+   * 同时给 ETag：没带 `?v=` 的老链接（或手敲的）仍能靠 304 省掉字节。
+   *
+   * ── 安全头 ──
+   * `nosniff` + 精确 `Content-Type`：库上只允许三种位图，但纵深防御——
+   * 让浏览器不要去猜一个被伪造成 PNG 的文件到底是什么。
+   *
+   * ── 不要求登录 ──
+   * 图标是产品的公开标识（官网也要用），而且已经按 `status='active'` 过滤。
+   * 要求会话反而会让 `<img>` 在未登录页面上裂图。
+   */
+  @Get(":appCode/icon")
+  async getIcon(
+    @Param("appCode") appCode: string,
+    @Res({ passthrough: true }) res: Response,
+    @Headers("if-none-match") ifNoneMatch?: string,
+  ): Promise<StreamableFile | undefined> {
+    const found = await this.pool.query<{
+      mime_type: string;
+      bytes: Buffer;
+      checksum: string;
+    }>(
+      `SELECT i.mime_type, i.bytes, i.checksum
+         FROM product.product_icons i
+         JOIN product.products p ON p.id = i.product_id
+        WHERE p.product_code = $1 AND p.deleted_at IS NULL`,
+      [appCode],
+    );
+    const row = found.rows[0];
+    if (!row) {
+      /* 没有托管图标不是错误——界面本来就会回落到产品字母牌。回 404 让
+         `<img>` 走它的 onError 分支，而不是渲染一个坏掉的图。 */
+      throw new NotFoundException("No icon");
+    }
+    const etag = `"${row.checksum}"`;
+    if (ifNoneMatch === etag) {
+      res.status(304);
+      return undefined;
+    }
+    res.set({
+      "Content-Type": row.mime_type,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      ETag: etag,
+      "X-Content-Type-Options": "nosniff",
+    });
+    return new StreamableFile(row.bytes);
   }
 }

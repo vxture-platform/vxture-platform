@@ -50,6 +50,7 @@ import {
   DialogForm,
   Drawer,
   EmptyState,
+  FileTrigger,
   Icon,
   Input,
   NativeSelect,
@@ -85,6 +86,10 @@ import { ProductMetricsSection } from "./ProductMetricsSection";
 
 const MANAGE = "platform:product.manage";
 
+/** 与 BFF、库上的 CHECK 同一套。不收 SVG——它可以带脚本。 */
+const ICON_ACCEPT = ["image/png", "image/webp", "image/jpeg"];
+const ICON_MAX_BYTES = 262144;
+
 type ProductState = "draft" | "active" | "inactive" | "deprecated";
 
 const STATE_TONE: Record<ProductState, StatusBadgeTone> = {
@@ -114,6 +119,8 @@ interface ProductRecord {
   originProvider: string | null;
   surfaces: string[];
   iconUrl: string | null;
+  /** 平台托管图标的版本号(内容哈希)。null = 没传过。 */
+  iconVersion: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -353,6 +360,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
     logoUrl: "",
   });
   const [savingClient, setSavingClient] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -494,6 +502,76 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * 上传产品图标。走 base64 JSON，不走 multipart——平台没有文件中间件，而图标是
+   * 几十 KB 的小文件，`FileReader` 读成 base64 直接发即可。
+   *
+   * 本地先判尺寸与类型，不是替代服务端校验（那边也判、库上还有 CHECK），是为了
+   * **不让人等一次上传再被拒**——一张 3MB 的图 base64 之后是 4MB，发上去再退回来
+   * 是纯粹的浪费。
+   */
+  async function uploadIcon(file: File) {
+    if (!product) return;
+    if (!ICON_ACCEPT.includes(file.type)) {
+      toast({
+        tone: "danger",
+        title: "图片格式不支持",
+        description: "只收 PNG / WebP / JPEG。SVG 不收——矢量请先栅格化。",
+      });
+      return;
+    }
+    if (file.size > ICON_MAX_BYTES) {
+      toast({
+        tone: "danger",
+        title: "图片太大",
+        description: `不能超过 ${Math.floor(ICON_MAX_BYTES / 1024)}KB，当前 ${Math.ceil(file.size / 1024)}KB。`,
+      });
+      return;
+    }
+    setUploadingIcon(true);
+    try {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error("读取文件失败"));
+        /* readAsDataURL 给的是 `data:image/png;base64,xxx`，只要逗号之后那段。 */
+        fr.onload = () => resolve(String(fr.result ?? "").split(",")[1] ?? "");
+        fr.readAsDataURL(file);
+      });
+      await api.put(`/api/products/${product.id}/icon`, {
+        mimeType: file.type,
+        dataBase64,
+      });
+      toast({ tone: "success", title: "图标已更新" });
+      await reload();
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "上传失败",
+        description: reason(error, "上传失败"),
+      });
+    } finally {
+      setUploadingIcon(false);
+    }
+  }
+
+  async function removeIcon() {
+    if (!product) return;
+    setUploadingIcon(true);
+    try {
+      await api.delete(`/api/products/${product.id}/icon`);
+      toast({ tone: "success", title: "图标已移除，回落到产品字母牌" });
+      await reload();
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "移除失败",
+        description: reason(error, "移除失败"),
+      });
+    } finally {
+      setUploadingIcon(false);
     }
   }
 
@@ -697,18 +775,55 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-icon"
                   label="产品图标"
-                  help="留空则只显示文字。"
+                  group
+                  help="PNG / WebP / JPEG，不超过 256KB。不传则 console 显示产品名首字母。"
                 >
-                  <CopyableInput
-                    id="pd-icon"
-                    value={draft?.iconUrl ?? ""}
-                    disabled={!canManage}
-                    placeholder={`https://${product?.productCode ?? "acme"}.vxture.com/icon.svg`}
-                    className="font-mono text-code-sm"
-                    onChange={(e) =>
-                      draft && setDraft({ ...draft, iconUrl: e.target.value })
-                    }
-                  />
+                  <div className="flex items-center gap-sm">
+                    {/* 预览：地址带版本号，换图会换地址，所以不会显示到旧图。 */}
+                    {product?.iconVersion ? (
+                      <img
+                        src={`/api/products/${encodeURIComponent(product.id)}/icon?v=${encodeURIComponent(product.iconVersion)}`}
+                        alt=""
+                        aria-hidden="true"
+                        className="size-control-md shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-muted text-label-sm text-muted-foreground"
+                      >
+                        {(product?.productName ?? "").slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    {canManage ? (
+                      <>
+                        {/* 藏 input、用 label 触发按钮那一套已收进 DS 12.7.0 的
+                            FileTrigger——这里原本是手写的一份，`ds/no-native-primitive`
+                            拦下了它。 */}
+                        <FileTrigger
+                          accept={ICON_ACCEPT.join(",")}
+                          disabled={uploadingIcon}
+                          onSelect={(files) => {
+                            const f = files[0];
+                            if (f) void uploadIcon(f);
+                          }}
+                        >
+                          {uploadingIcon ? "上传中…" : "上传图标"}
+                        </FileTrigger>
+                        {product?.iconVersion ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="md"
+                            disabled={uploadingIcon}
+                            onClick={() => void removeIcon()}
+                          >
+                            移除
+                          </Button>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
                 </FormField>
 
                 <FormField

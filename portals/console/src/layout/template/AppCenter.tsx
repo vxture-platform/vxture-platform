@@ -50,6 +50,7 @@
  * 全 DS 件；入口网格与工作台（DashboardPage）同一套。
  */
 
+import { useState } from "react";
 import type { MouseEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -155,10 +156,40 @@ function ReleaseLine({
   );
 }
 
-/** 产品字母牌（icon_url 未接入前的缺省底板；同 hubCards 的 ProductGlyph 规格）。 */
-function ProductGlyph({ name, code }: { name: string; code: string }) {
+/**
+ * 产品图标：有平台托管的就用图，没有（或加载失败）回落到字母牌。
+ *
+ * 图标改为**平台托管**（owner 2026-09-11）：产品把图交给平台，字节存
+ * `product.product_icons`，由 `/api/applications/{code}/icon` 发出。此前这里的注释
+ * 写着「icon_url 未接入前的缺省底板」——那条外链一直没被渲染过。
+ *
+ * `onError` 的回落不是装饰：图标端点在产品刚上传完、缓存还没到位时可能 404，
+ * 而一张裂图比一个字母牌难看得多。
+ */
+function ProductGlyph({
+  name,
+  code,
+  iconVersion,
+}: {
+  name: string;
+  code: string;
+  iconVersion?: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
   const source = (name || code || "").trim();
   const initials = source.slice(0, 2).toUpperCase();
+
+  if (iconVersion && !failed) {
+    return (
+      <img
+        src={`/api/applications/${encodeURIComponent(code)}/icon?v=${encodeURIComponent(iconVersion)}`}
+        alt=""
+        aria-hidden="true"
+        className="size-control-md shrink-0 rounded-lg object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
   return (
     <span
       aria-hidden="true"
@@ -258,7 +289,11 @@ export function AppCenter({
                   <CardContent className="flex flex-col gap-sm">
                     {/* 身份在左，状态在右上角——一列卡扫下来状态在同一条竖线上。 */}
                     <div className="flex items-start gap-sm">
-                      <ProductGlyph name={product.name} code={product.code} />
+                      <ProductGlyph
+                        name={product.name}
+                        code={product.code}
+                        iconVersion={product.iconVersion}
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-label-md text-foreground">
                           {product.name}

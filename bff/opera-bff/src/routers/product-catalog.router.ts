@@ -37,6 +37,8 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  StreamableFile,
   Req,
 } from "@nestjs/common";
 import {
@@ -48,8 +50,9 @@ import {
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
+import { createHash } from "node:crypto";
 import { UUID_RE } from "./router.shared";
-import type { Request } from "express";
+import type { Request, Response as ExpressResponse } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
@@ -146,6 +149,8 @@ export interface ProductRecord {
   updatedAt: string;
   /** 产品图标。console 应用中心磁贴、订阅卡在读它。 */
   iconUrl: string | null;
+  /** 平台托管图标的版本号(内容哈希)。null = 没传过。 */
+  iconVersion: string | null;
   /** 可露出的端（受管枚举）。一个都没勾时是空数组，不是 null。 */
   surfaces: string[];
 }
@@ -169,6 +174,7 @@ interface ProductRow {
   created_at: string;
   updated_at: string;
   icon_url: string | null;
+  icon_version: string | null;
   surfaces: string[];
 }
 
@@ -192,6 +198,7 @@ function toRecord(row: ProductRow): ProductRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     iconUrl: row.icon_url,
+    iconVersion: row.icon_version,
     surfaces: row.surfaces ?? [],
   };
 }
@@ -259,6 +266,9 @@ const SELECT_COLUMNS = `
   description, capability_keys, tags, standalone_subscribable, status,
   is_customer_visible, is_workforce_visible, origin, origin_provider,
   icon_url, created_at, updated_at,
+  /* 平台托管图标的版本号(内容哈希)。同样用裸 id 相关——理由见下面那段。
+     只取版本不取字节:这个常量用在列表查询上,把 bytea 拖进每一行是灾难。 */
+  (select i.checksum from product.product_icons i where i.product_id = id) as icon_version,
   /* 端是关系表，用相关子查询一次带出——不让调用方再打一遍。
      子查询里用**裸 id** 相关而不是 p.id：本常量同时用在三处 SELECT 与四处
      RETURNING，两种上下文都没有表别名。裸 id 在两处都能正确解析到外层那一行
@@ -272,6 +282,11 @@ const SELECT_COLUMNS = `
     '{}'
   ) as surfaces
 `;
+
+/** 只收位图。SVG 可以带脚本——见 `putIcon` 的注释。 */
+const ICON_MIME_TYPES = ["image/png", "image/webp", "image/jpeg"];
+/** 256KB，与库上的 chk_product_icons_size 同一个数。 */
+const ICON_MAX_BYTES = 262144;
 
 @Controller("api/products")
 export class ProductCatalogRouter {
@@ -429,6 +444,126 @@ export class ProductCatalogRouter {
       metricUnit: r.metric_unit,
       state: r.status,
     }));
+  }
+
+  /**
+   * 产品图标（平台托管）。上传走 base64 JSON，不走 multipart。
+   *
+   * **为什么不是 multipart**：平台一个上传端点都还没有，引入 multipart 要装
+   * `@nestjs/platform-express` 的文件中间件、配临时目录与清理。而图标是几十 KB 的
+   * 小文件，浏览器端 `FileReader` 读成 base64 直接 POST，零新增中间件。
+   * 将来有了对象存储与大文件（附件、工单截图），那时再引 multipart，它本来也该
+   * 是另一条路——大文件不该先在内存里变成 base64。
+   *
+   * **不收 SVG**：SVG 可以带 `<script>`，从 console 自己的域名发出去等于存储型 XSS，
+   * 且带着客户的会话。库上有 CHECK 兜底，这里先判，给字段级 400。
+   */
+  @Put(":id/icon")
+  async putIcon(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: { mimeType?: string; dataBase64?: string },
+  ): Promise<{ byteSize: number; mimeType: string }> {
+    assertCanManage(req);
+    const mime = (body.mimeType ?? "").trim();
+    if (!ICON_MIME_TYPES.includes(mime)) {
+      throw invalidRequest(
+        "VALIDATION_ENUM",
+        `图标只收 ${ICON_MIME_TYPES.join(" / ")}。SVG 不收——它可以带脚本，从控制台的域名发出去是存储型 XSS；要矢量请先栅格化。`,
+        "mimeType",
+      );
+    }
+    const raw = (body.dataBase64 ?? "").trim();
+    if (!raw) {
+      throw invalidRequest("VALIDATION_REQUIRED", "没有图片内容", "dataBase64");
+    }
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(raw, "base64");
+    } catch {
+      bytes = Buffer.alloc(0);
+    }
+    /* `Buffer.from(x, "base64")` 对垃圾输入**不抛**，它跳过非法字符返回一个短
+       buffer。所以判空是唯一能发现"这不是 base64"的地方。 */
+    if (bytes.length === 0) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "图片内容不是合法的 base64",
+        "dataBase64",
+      );
+    }
+    if (bytes.length > ICON_MAX_BYTES) {
+      throw invalidRequest(
+        "VALIDATION_TOO_LARGE",
+        `图标不能超过 ${Math.floor(ICON_MAX_BYTES / 1024)}KB，当前 ${Math.ceil(bytes.length / 1024)}KB`,
+        "dataBase64",
+      );
+    }
+    /* 内容哈希给 HTTP 的 ETag 用：浏览器带 If-None-Match 回来就是 304，不重发字节。
+       换图会换哈希，所以缓存不会对不齐——这正是外链方案做不到的那一半。 */
+    const checksum = createHash("sha256")
+      .update(bytes)
+      .digest("hex")
+      .slice(0, 32);
+    const done = await this.pool.query(
+      `INSERT INTO product.product_icons
+         (product_id, mime_type, bytes, byte_size, checksum)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (product_id) DO UPDATE SET
+         mime_type = EXCLUDED.mime_type, bytes = EXCLUDED.bytes,
+         byte_size = EXCLUDED.byte_size, checksum = EXCLUDED.checksum,
+         updated_at = now()
+       RETURNING byte_size, mime_type`,
+      [id, mime, bytes, bytes.length, checksum],
+    );
+    const row = done.rows[0] as { byte_size: number; mime_type: string };
+    return { byteSize: row.byte_size, mimeType: row.mime_type };
+  }
+
+  /**
+   * 取图标字节（详情页预览用）。与 console-bff 那条读同一张表。
+   *
+   * 两个门户各有一条而不是共用一条：它们的鉴权不同（这边要运营者会话，那边是
+   * 产品的公开标识），跨门户直连别人的 BFF 才是更奇怪的耦合。
+   */
+  @Get(":id/icon")
+  async getIcon(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Res({ passthrough: true }) res: ExpressResponse,
+  ): Promise<StreamableFile> {
+    assertCanRead(req);
+    const found = await this.pool.query<{
+      mime_type: string;
+      bytes: Buffer;
+      checksum: string;
+    }>(
+      `SELECT mime_type, bytes, checksum FROM product.product_icons
+        WHERE product_id = $1`,
+      [id],
+    );
+    const row = found.rows[0];
+    if (!row) throw notFound("CATALOG_ICON_NOT_FOUND", "No icon");
+    res.set({
+      "Content-Type": row.mime_type,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      ETag: `"${row.checksum}"`,
+      "X-Content-Type-Options": "nosniff",
+    });
+    return new StreamableFile(row.bytes);
+  }
+
+  @Delete(":id/icon")
+  async deleteIcon(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<{ deleted: boolean }> {
+    assertCanManage(req);
+    const r = await this.pool.query(
+      `DELETE FROM product.product_icons WHERE product_id = $1`,
+      [id],
+    );
+    return { deleted: (r.rowCount ?? 0) > 0 };
   }
 
   @Get(":idOrCode")

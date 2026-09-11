@@ -20,6 +20,7 @@ function row(overrides: Partial<HeldProductRow> = {}): HeldProductRow {
     product_name: "数据平台",
     product_nick: "Arda",
     icon_url: null,
+    icon_version: null,
     home_url: "http://localhost:3230",
     status: "active",
     plan_name: "Arda Pro",
