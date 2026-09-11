@@ -174,7 +174,6 @@ const BLOCKER_LABELS: Record<string, string> = {
 
 type DialogState =
   | { kind: "create" }
-  | { kind: "edit"; row: ProductRecord }
   | { kind: "webhook"; row: ProductRecord }
   | null;
 
@@ -247,24 +246,6 @@ const EMPTY_DRAFT: ProductDraft = {
      默认全勾会让「支持小程序」变成一句没人确认过的话。 */
   surfaces: ["web"],
 };
-
-function draftFromRecord(row: ProductRecord): ProductDraft {
-  return {
-    productCode: row.productCode,
-    productType: row.productType,
-    categoryId: row.categoryId != null ? String(row.categoryId) : "",
-    productName: row.productName,
-    productNick: row.productNick ?? "",
-    description: row.description ?? "",
-    origin: row.origin,
-    originProvider: row.originProvider ?? "",
-    standaloneSubscribable: row.standaloneSubscribable,
-    isCustomerVisible: row.isCustomerVisible,
-    isWorkforceVisible: row.isWorkforceVisible,
-    iconUrl: row.iconUrl ?? "",
-    surfaces: row.surfaces ?? [],
-  };
-}
 
 function describeError(error: unknown): { description?: string } {
   return error instanceof OperaApiError && error.message
@@ -505,9 +486,17 @@ function ProductsPageContent() {
     setDialog({ kind: "create" });
   }
 
-  function openEdit(row: ProductRecord) {
-    setDraft(draftFromRecord(row));
-    setDialog({ kind: "edit", row });
+  /**
+   * 进产品详情页。
+   *
+   * 此前这里是 `openEdit`——开一个编辑对话框。owner 2026-09-11:「一个产品接入，
+   * 分散在多个弹出页面，感觉很乱……一个详情页争取配置完所有」。同一批字段留两个
+   * 写入面比分散更糟:两处都能改、两处的校验与文案会各自漂。
+   *
+   * 新建仍走对话框——一个还不存在的产品没有详情页可进。
+   */
+  function openDetail(row: ProductRecord) {
+    router.push(`/product/catalog/${encodeURIComponent(row.productCode)}`);
   }
 
   /** 生命周期动作入口：该确认的先确认，该查检查单的先查。 */
@@ -802,28 +791,24 @@ function ProductsPageContent() {
     setSubmitting(true);
     try {
       if (dialog.kind === "create") {
-        /* 入口一（设计 §6.5）：主按钮 = **建草稿并进入流程**，不是"建完就完了"。
-           §6.2 的顺序是草稿先行——验证的大部分项要求产品已经存在（OIDC 客户端挂在
-           产品上，两个域的授权都按产品码配），所以登记完直接把人送到流程页，那里
-           才有"接下来配什么、交什么给对方"。 */
-        const created = await api.post<{ id: string }>(
-          "/api/products",
-          payload,
-        );
+        /* 入口一（设计 §6.5）：主按钮 = **建草稿并进入配置**，不是"建完就完了"。
+           §6.2 的顺序是草稿先行——配置的大部分项要求产品已经存在（OIDC 客户端挂在
+           产品上，两个域的授权都按产品码配），所以登记完直接把人送到详情页，那里
+           才有"接下来配什么、交什么给对方"。
+           不接返回值:详情页按**产品码**寻址,而产品码是这次提交的输入,不必回读。 */
+        await api.post("/api/products", payload);
         toast({
           tone: "success",
           title: `${draft.productCode} 已登记（草稿）`,
-          description: "接下来配置接入凭据与授权，然后回到上线流程页验证。",
+          description: "接下来在详情页配齐边缘、回调与计量，再去复验。",
         });
         setDialog(null);
+        /* 原本送去 `/product/launch`,理由是「那里才有接下来配什么」。现在详情页
+           就是那个地方——六组配置都在一页,复验只是它右上角的一个按钮。 */
         router.push(
-          `/product/launch?productId=${encodeURIComponent(created.id)}`,
+          `/product/catalog/${encodeURIComponent(draft.productCode.trim())}`,
         );
         return;
-      }
-      {
-        await api.put(`/api/products/${dialog.row.id}`, payload);
-        toast({ tone: "success", title: `${draft.productCode} 已保存` });
       }
       setDialog(null);
       await reload();
@@ -839,7 +824,6 @@ function ProductsPageContent() {
     draft.productType.trim() !== "" &&
     draft.productName.trim() !== "" &&
     (draft.origin !== "third_party" || draft.originProvider.trim() !== "");
-  const editing = dialog?.kind === "edit";
 
   const pagination = (
     <ListPagination
@@ -1019,12 +1003,16 @@ function ProductsPageContent() {
               {
                 id: "name",
                 header: tShared("columns.product"),
+                /* 点标题进详情页，不再开编辑对话框。owner 的分工：首次新增用
+                   对话框（还没有详情页可进），已配置的产品一页改完。不再按
+                   canManage 分支——详情页自己按权限决定可不可改，只读的人也该
+                   看得到配置。 */
                 cell: (r: ProductRecord) => (
                   <TableTitleCell
                     icon="package"
                     title={r.productName}
                     description={r.productCode}
-                    {...(canManage ? { onTitleClick: () => openEdit(r) } : {})}
+                    onTitleClick={() => openDetail(r)}
                   />
                 ),
               },
@@ -1114,9 +1102,9 @@ function ProductsPageContent() {
                       items={[
                         {
                           id: "edit",
-                          label: tShared("common.edit"),
+                          label: "配置详情",
                           icon: "edit",
-                          onSelect: () => openEdit(r),
+                          onSelect: () => openDetail(r),
                         },
                         {
                           /* 上线检查第五项（Webhook 登记）此前失败时给的 remedy 是
@@ -1260,17 +1248,13 @@ function ProductsPageContent() {
         /* 三组两列共 8 个字段。默认 md=512 时每列才 ~230px,中文标签加说明必然挤成两三行
            (owner 2026-09-10 走查:「内容拥挤,还有滚动条」)。xl=928 每列 ~440。 */
         size="xl"
-        open={dialog?.kind === "create" || editing}
+        open={dialog?.kind === "create"}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
         }}
-        title={editing ? "编辑产品" : "登记产品"}
-        description={
-          editing
-            ? undefined
-            : "新产品默认落草稿状态；确认信息无误后从操作菜单切到「启用」。"
-        }
-        submitLabel={editing ? tShared("common.save") : "登记"}
+        title="登记产品"
+        description="新产品默认落草稿状态；确认信息无误后从操作菜单切到「启用」。"
+        submitLabel="登记"
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}
@@ -1288,11 +1272,11 @@ function ProductsPageContent() {
                   Product Code
                   <RequiredMark />
                 </FieldLabel>
-                {/* 编辑态锁上：框内常驻一枚浅色锁，把「不能改」这条**规则**说出来。
-                    只 disabled 的话，灰掉的框读不出是「不能改」还是「还没轮到改」。 */}
+                {/* 本对话框只剩「登记」一种用途，产品码此刻正要被填，所以不锁。
+                    「登记后不可改」这条规则由详情页那一栏的常驻锁负责说。 */}
                 <LockedInput
                   id="product-code"
-                  locked={editing}
+                  locked={false}
                   value={draft.productCode}
                   onChange={(e) =>
                     setDraft({ ...draft, productCode: e.target.value })
