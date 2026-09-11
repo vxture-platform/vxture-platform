@@ -260,7 +260,7 @@ export function ProductMetricsSection({
       ) : load.kind === "error" ? (
         <EmptyState
           title="读取失败"
-          description={`${load.message}。读不到不等于没有——先解决读取失败，否则在这里新增会把已有的看漏。`}
+          description={`${load.message}。读不到不等于没有，请先解决读取失败。`}
         />
       ) : (
         <>
@@ -276,7 +276,7 @@ export function ProductMetricsSection({
           {rows.length === 0 ? (
             <EmptyState
               title="还没有登记任何指标"
-              description={`${productName} 目前不计量。要按用量计费或设配额，先在这里登记指标键。`}
+              description={`${productName} 目前不计量。`}
             />
           ) : (
             <DataTable
@@ -339,7 +339,7 @@ export function ProductMetricsSection({
                         verb: "退掉",
                         target: `指标 ${r.metricKey}`,
                         consequence:
-                          "配额池的形状由这条定义决定。套餐里若还有引用这个键的配额项，平台会先拦下并告诉你是哪几档；没有引用时退掉是安全的。",
+                          "套餐里若还有引用这个键的配额项，会被拦下并告知是哪几档。",
                         onConfirm: () => void remove(r.metricKey),
                       },
                     },
@@ -379,13 +379,9 @@ export function ProductMetricsSection({
               className="font-mono text-code-sm"
             />
             <FieldDescription>
-              点号分段，如 <code>doc.words</code> / <code>ai.calls</code> /{" "}
-              <code>service.api.call</code>。<b>平台级共享键不能在这里登记</b>
-              （如 <code>ai.credit</code>、<code>storage.bytes</code>
-              ）——那些的额度由套餐组件贡献，键归平台目录。
-              {editing
-                ? "改键等于换一个指标，这里锁住；要换请退掉再登记。"
-                : null}
+              点号分段，如 <code>doc.words</code>。平台级共享键（
+              <code>ai.credit</code> 等）不能在这里登记。
+              {editing ? "登记后不可改。" : null}
             </FieldDescription>
           </Field>
 
@@ -425,8 +421,7 @@ export function ProductMetricsSection({
                   <option value="atomic">整取（atomic）</option>
                 </NativeSelect>
                 <FieldDescription>
-                  一次消耗跨多个池时，<b>可拆</b>允许从几个池里各扣一部分，
-                  <b>整取</b>要求单个池能吃下整笔，否则拒绝。
+                  可拆：从多个池各扣一部分。整取：单池吃不下整笔就拒绝。
                 </FieldDescription>
               </Field>
 
@@ -445,9 +440,7 @@ export function ProductMetricsSection({
                     </option>
                   ))}
                 </NativeSelect>
-                <FieldDescription>
-                  池到期自动归位。<b>不重置</b>= 一次性额度，用完为止。
-                </FieldDescription>
+                <FieldDescription>不重置 = 一次性额度。</FieldDescription>
               </Field>
             </>
           ) : null}
@@ -462,9 +455,7 @@ export function ProductMetricsSection({
               }
               placeholder="words / calls / GB / seats"
             />
-            <FieldDescription>
-              只用于展示，不参与计算。留空则界面上只显示数字。
-            </FieldDescription>
+            <FieldDescription>仅展示用。</FieldDescription>
           </Field>
         </FieldGroup>
       </DialogForm>

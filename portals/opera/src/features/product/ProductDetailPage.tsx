@@ -461,7 +461,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           title={load.kind === "missing" ? "产品不存在" : "读取失败"}
           description={
             load.kind === "missing"
-              ? `目录里没有产品码「${productCode}」。它可能已被删除，或地址里的码写错了。`
+              ? `目录里没有产品码「${productCode}」。`
               : load.message
           }
           action={
@@ -487,13 +487,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-code"
                   label="产品码"
-                  help={
-                    <>
-                      它同时是 <code>{product?.productCode}.vxture.com</code>、
-                      容器前缀与库名的那个值，<b>登记后不可改</b>
-                      。要换必须登记一个新产品。
-                    </>
-                  }
+                  help="登记后不可改。要换须登记新产品。"
                 >
                   {/* `locked` 已经把它置为 disabled——件刻意 Omit 掉了 readOnly。 */}
                   <LockedInput
@@ -525,7 +519,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-nick"
                   label="副名 / 译名"
-                  help="外文名或简称。console 与官网在空间不够时会优先用它。"
+                  help="外文名或简称。"
                 >
                   <Input
                     id="pd-nick"
@@ -543,7 +537,6 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   label="产品类型"
                   required
                   error={errors["productType"]}
-                  help="受管枚举，权威源在 @vxture/core-utils。两条轴的乘积：通用 / 行业 × 平台 / 智能体。"
                 >
                   <NativeSelect
                     id="pd-type"
@@ -584,7 +577,6 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                     label="供应方"
                     required
                     error={errors["originProvider"]}
-                    help="来源是第三方时必填——「谁提供的」在出问题时是第一个要答的问题。"
                   >
                     <Input
                       id="pd-provider"
@@ -601,7 +593,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-icon"
                   label="产品图标"
-                  help="console 应用中心的磁贴用它。留空则只显示文字。"
+                  help="留空则只显示文字。"
                 >
                   <Input
                     id="pd-icon"
@@ -646,7 +638,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-customer"
                   label="客户域可见"
-                  help="关掉之后，这个产品在 console 应用中心与官网都不出现。它与「端」正交：端说的是形态，realm 说的是给谁看。"
+                  help="关掉后，这个产品在 console 与官网都不出现。"
                 >
                   <div className="flex h-9 items-center">
                     <Switch
@@ -663,7 +655,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-workforce"
                   label="运营域可见"
-                  help="平台自己的门户（admin / opera）里是否列出它。"
+                  help="admin / opera 里是否列出它。"
                 >
                   <div className="flex h-9 items-center">
                     <Switch
@@ -677,18 +669,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   </div>
                 </FormField>
 
-                <FormField
-                  id="pd-surfaces"
-                  label="可露出的端"
-                  full
-                  help={
-                    <>
-                      <b>端是产品自身的形态属性，与租户无关</b>
-                      ——要按租户开关的是权益，那挂在订阅 /
-                      套餐上。桌面客户端据此 决定列不列这个产品。
-                    </>
-                  }
-                >
+                <FormField id="pd-surfaces" label="可露出的端" full>
                   <div className="grid gap-sm md:grid-cols-2">
                     {PRODUCT_SURFACE_DEFS.map((d) => (
                       <label
@@ -730,7 +711,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
               {clients.length === 0 ? (
                 <EmptyState
                   title="还没有客户端"
-                  description="没有 OIDC 客户端，这个产品无法完成登录——接入检查的「C1 身份接入」也会是红的。"
+                  description="没有 OIDC 客户端，这个产品无法完成登录。"
                 />
               ) : (
                 <DetailList>
@@ -776,16 +757,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   id="pd-domain"
                   label="边缘域名"
                   error={errors["edgeDomain"]}
-                  help={
-                    <>
-                      已按产品码预填，<b>可改</b>。用别的 apex（如{" "}
-                      <code>anlan.ai</code>）就在这里改掉。
-                      <br />
-                      <b>DNS 记录要自己建</b>
-                      ，本页不建也建不了。本域子域的证书是 通配的不用签；换了
-                      apex 则证书与 vhost 都要另配。
-                    </>
-                  }
+                  help="按产品码预填，可改。DNS 记录需自行创建。"
                 >
                   <Input
                     id="pd-domain"
@@ -804,16 +776,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   id="pd-upstream"
                   label="边缘上游"
                   error={errors["edgeUpstream"]}
-                  help={
-                    <>
-                      写成 <code>host:port</code>
-                      ，不带协议、路径或空格。端口在这
-                      一栏，域名在上一栏，两者不要混。
-                      <br />
-                      <b>留空 = 这个产品完全不进边缘路由表</b>
-                      （自带精确 vhost 的产品就该留空）。
-                    </>
-                  }
+                  help="host:port，不带协议或路径。留空则不进边缘路由表。"
                 >
                   <Input
                     id="pd-upstream"
@@ -833,7 +796,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   id="pd-callback"
                   label="回调地址"
                   error={errors["webhookUrl"]}
-                  help="平台向这个产品推送订阅变更与额度预警的地址。必须是 http / https 绝对地址；留空即撤销登记。"
+                  help="http / https 绝对地址。留空即撤销登记。"
                 >
                   <Input
                     id="pd-callback"
@@ -855,8 +818,8 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["webhookSecret"]}
                   help={
                     webhook?.hasWebhookSecret
-                      ? "已登记。密钥加密存库、不回传，所以这里看不到当前值——要换就填新的，留空则保持不变。"
-                      : "至少 16 位。密钥加密存库，填完这一次就再也拿不回来。保存后会给出一份交接清单，把它和域名、回调一起交给产品侧。"
+                      ? "已登记。留空则不改动。"
+                      : "至少 16 位。保存后只显示一次。"
                   }
                 >
                   <Input
@@ -881,7 +844,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   id="pd-home"
                   label="产品主页"
                   error={errors["homeUrl"]}
-                  help="展示用，不参与投递。"
+                  help="展示用。"
                 >
                   <Input
                     id="pd-home"
@@ -973,7 +936,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         {checklist.length === 0 ? (
           <EmptyState
             title="读不到检查单"
-            description="读不到不等于通过。先解决读取失败再判断能不能上线。"
+            description="读不到不等于通过。请先解决读取失败。"
           />
         ) : (
           <div className="flex flex-col gap-md">
@@ -981,13 +944,13 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
               <Banner
                 tone="warning"
                 title={`还有 ${pendingRequired.length} 项必填检查未满足`}
-                description="带「复验判定」的几项由平台实测写入——去上线复验跑一次，结果会自动写回；其余在接入检查单上确认。"
+                description="带「复验判定」的几项去跑一次上线复验即可。"
               />
             ) : (
               <Banner
                 tone="success"
                 title="必填项已齐"
-                description="可以从页头的生命周期动作里确认上线。"
+                description="可以确认上线。"
               />
             )}
             <DetailList>
@@ -1026,7 +989,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           if (!open) setHandover(null);
         }}
         title="交接清单"
-        description="下面这些要交给产品侧。密钥只在这一次可见，关掉之后平台不再显示。"
+        description="下面这些要交给产品侧。"
         submitLabel="我已保存"
         cancelLabel={tShared("common.close")}
         onSubmit={(e) => {
@@ -1037,7 +1000,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         <Banner
           tone="warning"
           title="这是唯一一次看到密钥明文"
-          description="关闭后无法再次查看，只能换一把新的。请立即复制。"
+          description="关闭后无法再次查看。请立即复制。"
         />
         <Textarea
           readOnly
