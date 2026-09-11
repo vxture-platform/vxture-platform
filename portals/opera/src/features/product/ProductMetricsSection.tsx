@@ -27,6 +27,7 @@
  * 锁死 PKCE 的做法。
  */
 
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
@@ -141,6 +142,7 @@ export function ProductMetricsSection({
   productName,
   canManage,
 }: ProductMetricsSectionProps) {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const tableLabels = useTableLabels();
   const [rows, setRows] = useState<ProductMetric[]>([]);
@@ -394,6 +396,7 @@ export function ProductMetricsSection({
         submitting={submitting}
         submitDisabled={draft.metricKey.trim() === ""}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       >
         <FieldGroup>
           <Field orientation="labeled">

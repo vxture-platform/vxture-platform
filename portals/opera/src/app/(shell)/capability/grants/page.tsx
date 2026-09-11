@@ -926,6 +926,7 @@ function RunosGrantsPageContent() {
         submitLabel="归零"
         submitting={submitting}
         onSubmit={(e) => void confirmDialog(e)}
+        cancelLabel={tShared("actions.cancel")}
       />
 
       {/* ── 授权能力：从目录多选，不给手打的口子 ──────────────────────────── */}
@@ -943,6 +944,7 @@ function RunosGrantsPageContent() {
         submitting={submitting}
         submitDisabled={!grantPicker || grantPicker.picked.length === 0}
         onSubmit={submitPicker}
+        cancelLabel={tShared("actions.cancel")}
       >
         {grantPicker ? (
           <>
@@ -1085,6 +1087,7 @@ function RunosGrantsPageContent() {
         submitLabel={tShared("common.save")}
         submitting={submitting}
         onSubmit={submitAmend}
+        cancelLabel={tShared("actions.cancel")}
       >
         {amend ? (
           <FieldGroup>

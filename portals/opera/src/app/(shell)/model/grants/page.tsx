@@ -725,6 +725,7 @@ function ProductGrantsPageContent() {
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       >
         <FieldGroup>
           <Field>

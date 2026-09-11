@@ -518,6 +518,7 @@ export function FeatureTogglesPage() {
             if (!open) closeDialog();
           }}
           onSubmit={(event) => void submitForm(event)}
+          cancelLabel={tShared("actions.cancel")}
         >
           <div>
             <Field>

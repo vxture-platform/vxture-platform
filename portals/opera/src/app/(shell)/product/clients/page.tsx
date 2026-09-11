@@ -672,6 +672,7 @@ function ProductClients() {
           draft.redirectUris.trim() === ""
         }
         onSubmit={submitCreate}
+        cancelLabel={tShared("actions.cancel")}
       >
         {/* 三档（DS `FieldTier`）：身份 = 这个客户端属于谁、走哪条渠道；常规 = 回调与
             展示；高级 = 三项有缺省值的安全参数。 */}

@@ -1357,6 +1357,7 @@ export default function CapabilitiesPage() {
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submitRegister}
+        cancelLabel={tShared("actions.cancel")}
       >
         {/* 三档（DS `FieldTier`）：身份 = 这个能力是什么、怎么被寻址；常规 = 归属与
             检索面；高级 = 契约 JSON。**契约档能收起是因为它有模板**——换类型时自动
@@ -2155,6 +2156,7 @@ export default function CapabilitiesPage() {
             metaDraft.displayEn.trim() === "")
         }
         onSubmit={submitMetadata}
+        cancelLabel={tShared("actions.cancel")}
       >
         {metaDraft ? (
           <FieldGroup>
@@ -2315,6 +2317,7 @@ export default function CapabilitiesPage() {
         submitLabel="标记退役"
         submitting={submitting}
         onSubmit={submitLifecycle}
+        cancelLabel={tShared("actions.cancel")}
       />
 
       {/* ── official 准入档（仅第一方）───────────────────────────────────── */}
@@ -2331,6 +2334,7 @@ export default function CapabilitiesPage() {
         submitLabel="置为 official"
         submitting={submitting}
         onSubmit={submitOfficial}
+        cancelLabel={tShared("actions.cancel")}
       />
     </>
   );

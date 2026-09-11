@@ -611,6 +611,7 @@ function PermissionFormDialog({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const tShared = useTranslations();
   const valid =
     form.permCode.trim().length > 0 && form.permName.trim().length > 0;
 
@@ -626,6 +627,7 @@ function PermissionFormDialog({
         if (!open) onClose();
       }}
       onSubmit={onSubmit}
+      cancelLabel={tShared("actions.cancel")}
     >
       <div>
         <Field>

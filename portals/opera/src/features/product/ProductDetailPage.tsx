@@ -76,6 +76,7 @@ import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { LockedInput } from "@/components/form/LockedInput";
 import { actionsFor, type ProductAction } from "./lifecycle";
+import { runLaunchChecks } from "./launch-checks";
 import {
   CopyableInput,
   FieldGrid,
@@ -380,6 +381,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
   const [applying, setApplying] = useState(false);
   /** 接入检查抽屉（owner：不在页面底部堆信息）。 */
   const [checkOpen, setCheckOpen] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   /**
    * 接入凭据抽屉。
    *
@@ -672,6 +674,65 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
    * 一行一个地址：白名单是**集合**，用逗号分隔会在地址自带逗号时静默切错，而这里
    * 切错的后果是往白名单里放进一个谁都不认识的地址。
    */
+  /**
+   * 就地跑一次上线复验。
+   *
+   * ── 为什么不做成一个跳去 `/product/launch` 的链接 ──
+   * owner 2026-09-11:「接入凭据，需要跳转，导致本页内容未保存，全部丢失……**切记
+   * 不能跳转**。」复验按钮出现的时刻，运营者往往刚改完域名与回调正要验证——那恰恰
+   * 是页面上未保存改动最多的一刻。
+   *
+   * 而在此之前，这一格只写着一句「带『复验判定』的几项去跑一次上线复验即可」，
+   * **没有给出任何去处**：复验页不在菜单里（只能从产品目录的行动作进），详情页
+   * 也不链接它。一句指路而没有路。
+   *
+   * `runLaunchChecks` 本来就是个纯函数，结果由调用方写回——复验页与这里调的是
+   * 同一份，判据不会分叉。
+   */
+  async function runVerification() {
+    if (!product) return;
+    setVerifying(true);
+    try {
+      const results = await runLaunchChecks(product, { locale });
+      /* `source: "auto"` 让 BFF 把 `checked_by` 写成 NULL（自动校验不署名），
+         同时它会拒绝人手去勾这几项——「这一项是谁说通过的」在数据里答得出来。 */
+      await Promise.all(
+        results
+          .filter((r) => r.itemCode)
+          .map((r) =>
+            api
+              .patch(`/api/products/${product.id}/checklist/${r.itemCode}`, {
+                isSatisfied: r.status === "pass",
+                remark: `自动检查：${r.detail}`,
+                source: "auto",
+              })
+              .catch(() => undefined),
+          ),
+      );
+      const fresh = await api
+        .get<ChecklistItem[]>(`/api/products/${product.id}/checklist`)
+        .catch(() => null);
+      if (fresh) setChecklist(fresh);
+      const failed = results.filter((r) => r.status === "fail").length;
+      toast({
+        tone: failed > 0 ? "warning" : "success",
+        title: failed > 0 ? `复验完成，${failed} 项未通过` : "复验通过",
+        description:
+          failed > 0
+            ? "未通过的项在下面列着。读不到上游也记未通过——读不到不等于没问题。"
+            : "机器判定的几项已写回检查单。",
+      });
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "复验没跑成",
+        description: reason(error, "复验没跑成"),
+      });
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function saveClientUris(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!uriClient) return;
@@ -1389,11 +1450,23 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           />
         ) : (
           <div className="flex flex-col gap-md">
+            {/* 复验就在这里跑，不跳转——见 `runVerification` 上面那段。 */}
+            {canManage ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={verifying}
+                onClick={() => void runVerification()}
+              >
+                <Icon name="refresh" size="sm" aria-hidden="true" />
+                {verifying ? "复验中…" : "跑一次复验"}
+              </Button>
+            ) : null}
             {pendingRequired.length > 0 ? (
               <Banner
                 tone="warning"
                 title={`还有 ${pendingRequired.length} 项必填检查未满足`}
-                description="带「复验判定」的几项去跑一次上线复验即可。"
+                description="带「复验判定」的几项由平台实测写入，勾不动——上面跑一次复验即可。其余几项人工确认后勾选。"
               />
             ) : (
               <Banner
@@ -1480,6 +1553,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         submitLabel={tShared("common.save")}
         submitting={savingUris}
         onSubmit={saveClientUris}
+        cancelLabel={tShared("actions.cancel")}
       >
         <div className="flex flex-col gap-lg">
           <FormField
@@ -1533,6 +1607,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         submitLabel={tShared("common.save")}
         submitting={savingClient}
         onSubmit={saveClientDisplay}
+        cancelLabel={tShared("actions.cancel")}
       >
         <FieldGrid>
           <FormField
@@ -1580,6 +1655,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           e.preventDefault();
           void doSave();
         }}
+        cancelLabel={tShared("actions.cancel")}
       >
         <div className="flex flex-col gap-md">
           <Banner
@@ -1692,6 +1768,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           setAdvisory(null);
           if (next) void applyLifecycle(next);
         }}
+        cancelLabel={tShared("actions.cancel")}
       >
         {null}
       </DialogForm>

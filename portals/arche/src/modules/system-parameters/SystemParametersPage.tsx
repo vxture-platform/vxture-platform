@@ -274,6 +274,7 @@ export function SystemParametersPage() {
             if (!open) closeEdit();
           }}
           onSubmit={(event) => void submitEdit(event)}
+          cancelLabel={tShared("actions.cancel")}
         >
           <Field>
             <FieldLabel htmlFor="systemparameterspage-value">配置值</FieldLabel>

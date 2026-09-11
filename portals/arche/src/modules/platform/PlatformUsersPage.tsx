@@ -437,6 +437,7 @@ function PlatformUserRoleDialog({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <DialogForm
       open
@@ -449,6 +450,7 @@ function PlatformUserRoleDialog({
         if (!open) onClose();
       }}
       onSubmit={onSubmit}
+      cancelLabel={tShared("actions.cancel")}
     >
       <Field>
         <FieldLabel htmlFor="platformuserspage-field">平台角色</FieldLabel>
@@ -512,6 +514,7 @@ function PlatformUserCreateDialog({
         if (!open && !submitting) onClose();
       }}
       onSubmit={onSubmit}
+      cancelLabel={tShared("actions.cancel")}
     >
       <Field>
         <FieldLabel htmlFor="platformuserspage-field-2">用户名</FieldLabel>
@@ -587,6 +590,7 @@ function PlatformUserMetadataDialog({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <DialogForm
       open
@@ -598,6 +602,7 @@ function PlatformUserMetadataDialog({
         if (!open) onClose();
       }}
       onSubmit={onSubmit}
+      cancelLabel={tShared("actions.cancel")}
     >
       <div>
         <Field>
@@ -1253,6 +1258,7 @@ export function PlatformUsersPage() {
             event.preventDefault();
             setResetInfo(null);
           }}
+          cancelLabel={tShared("actions.cancel")}
         />
       ) : null}
     </>

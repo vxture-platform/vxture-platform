@@ -859,6 +859,7 @@ function AdminRoleFormDialog({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const tShared = useTranslations();
   const valid =
     mode === "create"
       ? form.roleCode.trim().length > 0 && form.nameEn.trim().length > 0
@@ -880,6 +881,7 @@ function AdminRoleFormDialog({
         if (!open) onClose();
       }}
       onSubmit={onSubmit}
+      cancelLabel={tShared("actions.cancel")}
     >
       <div>
         <Field>
@@ -962,6 +964,7 @@ function AdminRoleCopyDialog({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <DialogForm
       open
@@ -974,6 +977,7 @@ function AdminRoleCopyDialog({
         if (!open) onClose();
       }}
       onSubmit={onSubmit}
+      cancelLabel={tShared("actions.cancel")}
     >
       <Field>
         <FieldLabel htmlFor="adminrolespage-field-6">新角色编码</FieldLabel>

@@ -508,6 +508,7 @@ export default function RunosCredentialsPage() {
         submitting={submitting}
         submitDisabled={!createValid}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       >
         <FieldGroup>
           {/* 两档（DS `FieldTier`）。**没有高级档**：四项都必填，凑一个空档只是把
@@ -602,6 +603,7 @@ export default function RunosCredentialsPage() {
         submitting={submitting}
         submitDisabled={secretInput.trim() === ""}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       >
         <Field>
           <FieldLabel htmlFor="rotate-secret">新的凭证明文</FieldLabel>
@@ -633,6 +635,7 @@ export default function RunosCredentialsPage() {
         submitting={submitting}
         submitDisabled={parseList(scopeInput).length === 0}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       >
         <Field>
           <FieldLabel htmlFor="scope-list">

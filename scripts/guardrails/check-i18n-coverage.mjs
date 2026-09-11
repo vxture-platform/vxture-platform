@@ -289,6 +289,22 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *
  *   理由与前几条相同,不单抽。
  *
+ * 2026-09-11 opera 2188 → 2197(+9):上线复验就地跑 + 47 处 Cancel 转中文。
+ *
+ *   **复验此前没有入口**:详情页的检查抽屉只写着一句「带『复验判定』的几项去跑一次
+ *   上线复验即可」——而复验页不在菜单里(只能从产品目录的行动作进),详情页也不链接
+ *   它。一句指路而没有路,于是运营者只能手工勾(而机器判定的那几项 BFF 会拒绝人手勾,
+ *   变成勾不动也跑不了)。改成就地跑:不跳转(owner:「切记不能跳转」,复验按钮出现的
+ *   时刻恰恰是未保存改动最多的一刻),与复验页调同一个 `runLaunchChecks`。
+ *   新增按钮两态、四条 toast 与改写后的 Banner 说明。
+ *
+ *   **同一批把 47 处 DialogForm/ConfirmDestructive 的取消按钮接上 i18n**(opera 32 /
+ *   arche 12 / admin 3):DS 的默认是英文 "Cancel",于是中文提交按钮旁边配一个英文取消
+ *   ——admin 与 console 早就逐个传了 `cancelLabel`,opera 与 arche 一直没跟。这一批是
+ *   **净减**硬编码(走 `tShared("actions.cancel")`),所以上面 +9 是复验那部分的净增。
+ *
+ *   理由与前几条相同,不单抽。
+ *
  * 2026-09-11 opera 2176 → 2188(+12):回调白名单终于有了界面。
  *
  *   `PUT /api/oidc-clients/:clientId/redirect-uris` 一直有端点、没有任何地方调它
@@ -407,7 +423,7 @@ const BASELINE = {
   console: 0,
   website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 2188, // 2026-09-11 见上方说明(十二条;末条 回调白名单接上界面 +12)
+  opera: 2197, // 2026-09-11 见上方说明(十三条;末条 复验就地跑 + Cancel 转中文 +9)
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页

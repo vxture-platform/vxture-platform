@@ -2377,6 +2377,7 @@ function ModelServiceContent() {
         submitting={submitting}
         submitDisabled={!providerDraftValid}
         onSubmit={submitProvider}
+        cancelLabel={tShared("actions.cancel")}
       >
         {/* 三档（DS `FieldTier`）：身份 = 决定这是哪一家、创建后改不了；常规 = 运营
             真正会用到的；高级 = 填不填都行。**不平铺**——八个字段一长串时，读的人
@@ -2771,6 +2772,7 @@ function ModelServiceContent() {
         submitting={submitting}
         submitDisabled={!modelDraftValid}
         onSubmit={submitModel}
+        cancelLabel={tShared("actions.cancel")}
       >
         {/* 三档（DS `FieldTier`）：身份（不可改）/ 接入参数 / 可留空的容量与呈现。
             xl 双栏 + `density-compact`（DS 密度轴），整表一屏可见、不出滚动条。 */}
@@ -3180,6 +3182,7 @@ function ModelServiceContent() {
           e.preventDefault();
           void runVerify();
         }}
+        cancelLabel={tShared("actions.cancel")}
       >
         <Banner
           tone="warning"
@@ -3230,6 +3233,7 @@ function ModelServiceContent() {
           e.preventDefault();
           void runProbe();
         }}
+        cancelLabel={tShared("actions.cancel")}
       >
         <Banner
           tone="warning"
@@ -3439,6 +3443,7 @@ function ModelServiceContent() {
             : plaintextKey.trim() === ""
         }
         onSubmit={submitKeyDialog}
+        cancelLabel={tShared("actions.cancel")}
       >
         <FieldGroup>
           {keyDialog?.kind === "create" ? (
