@@ -73,6 +73,7 @@ import {
 import { formatDateTime } from "@vxture-platform/shared";
 import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { LockedInput } from "@/components/form/LockedInput";
 import { actionsFor, type ProductAction } from "./lifecycle";
 import {
@@ -243,10 +244,13 @@ function ClientCard({
   client,
   canManage,
   onEdit,
+  onEditUris,
 }: {
   readonly client: ClientLite;
   readonly canManage: boolean;
   readonly onEdit: () => void;
+  /** 改回调白名单。与展示名分开——见页内那段注释：两者的安全分量不同。 */
+  readonly onEditUris: () => void;
 }) {
   const isPublic = client.tokenEndpointAuthMethod === "none";
   return (
@@ -267,15 +271,28 @@ function ClientCard({
           </span>
         </span>
         {canManage ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`编辑 ${client.clientId}`}
-            onClick={onEdit}
-          >
-            <Icon name="edit" size="sm" aria-hidden="true" />
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${client.clientId} 的回调地址`}
+              title="回调地址"
+              onClick={onEditUris}
+            >
+              <Icon name="link" size="sm" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`编辑 ${client.clientId}`}
+              title="授权页展示"
+              onClick={onEdit}
+            >
+              <Icon name="edit" size="sm" aria-hidden="true" />
+            </Button>
+          </>
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-xs">
@@ -333,6 +350,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
+  const { runWithStepUp } = useStepUp();
 
   const [product, setProduct] = useState<ProductRecord | null>(null);
   const [webhook, setWebhook] = useState<WebhookRecord | null>(null);
@@ -385,6 +403,17 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
     logoUrl: "",
   });
   const [savingClient, setSavingClient] = useState(false);
+  /**
+   * 回调白名单的编辑态。与 `editClient` 分开而不是共用一个弹窗：
+   * 展示名改错了是难看，白名单里多一个地址就能把授权码导走。服务端也是两条路由，
+   * 后者挂 step-up。合成一个表单会让这两件事共享一次确认。
+   */
+  const [uriClient, setUriClient] = useState<ClientLite | null>(null);
+  const [uriDraft, setUriDraft] = useState({
+    redirectUris: "",
+    postLogoutRedirectUris: "",
+  });
+  const [savingUris, setSavingUris] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const reload = useCallback(async () => {
@@ -629,6 +658,56 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       });
     } finally {
       setUploadingIcon(false);
+    }
+  }
+
+  /**
+   * 改回调白名单。**走 step-up 仪式**——服务端那条路由挂着 `@RequireStepUp()`。
+   *
+   * ── 这个界面此前不存在 ──
+   * 端点建好了，但没有任何地方调它：想改一个产品的回调地址，只能从控制台直接打
+   * 接口。而 403 `AUTH_STEP_UP_REQUIRED` 在没有仪式的调用方那里是一堵死墙——
+   * 拿不到 cookie 就永远过不去。
+   *
+   * 一行一个地址：白名单是**集合**，用逗号分隔会在地址自带逗号时静默切错，而这里
+   * 切错的后果是往白名单里放进一个谁都不认识的地址。
+   */
+  async function saveClientUris(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!uriClient) return;
+    const split = (text: string) =>
+      text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    setSavingUris(true);
+    try {
+      await runWithStepUp(() =>
+        api.put(
+          `/api/oidc-clients/${encodeURIComponent(uriClient.clientId)}/redirect-uris`,
+          {
+            redirectUris: split(uriDraft.redirectUris),
+            postLogoutRedirectUris: split(uriDraft.postLogoutRedirectUris),
+          },
+        ),
+      );
+      toast({
+        tone: "success",
+        title: `${uriClient.clientId} 的回调地址已更新`,
+      });
+      setUriClient(null);
+      await reload();
+    } catch (error) {
+      /* 取消仪式不是失败——弹一句「保存失败」会让人以为点错了什么。 */
+      if (!isStepUpCancelled(error)) {
+        toast({
+          tone: "danger",
+          title: "保存失败",
+          description: reason(error, "保存失败"),
+        });
+      }
+    } finally {
+      setSavingUris(false);
     }
   }
 
@@ -1367,6 +1446,13 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   logoUrl: c.logoUrl ?? "",
                 });
               }}
+              onEditUris={() => {
+                setUriClient(c);
+                setUriDraft({
+                  redirectUris: c.redirectUris.join("\n"),
+                  postLogoutRedirectUris: c.postLogoutRedirectUris.join("\n"),
+                });
+              }}
             />
           ))}
           {/* 预留位:渠道是 stable / beta / canary,而绝大多数产品先有 stable。
@@ -1379,6 +1465,59 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           ))}
         </div>
       </Drawer>
+
+      {/* ── 回调地址（安全边界，挂 step-up）────────────────────────────────
+          与「授权页展示」分开的第二个动作：展示名改错了是难看，白名单里多一个地址
+          就能把授权码导走。服务端也是两条路由，后者挂 `@RequireStepUp()`。 */}
+      <DialogForm
+        size="lg"
+        open={uriClient !== null}
+        onOpenChange={(open) => {
+          if (!open) setUriClient(null);
+        }}
+        title={uriClient ? `${uriClient.clientId} · 回调地址` : ""}
+        description="改动要过一次二次验证。一行一个地址。"
+        submitLabel={tShared("common.save")}
+        submitting={savingUris}
+        onSubmit={saveClientUris}
+      >
+        <div className="flex flex-col gap-lg">
+          <FormField
+            id="cl-redirects"
+            label="登录回调地址"
+            required
+            help="授权完成后浏览器被送回的地址。必须与产品侧配置逐字一致，含协议与端口。"
+          >
+            <Textarea
+              id="cl-redirects"
+              rows={3}
+              className="font-mono text-code-sm"
+              value={uriDraft.redirectUris}
+              onChange={(e) =>
+                setUriDraft({ ...uriDraft, redirectUris: e.target.value })
+              }
+            />
+          </FormField>
+          <FormField
+            id="cl-logouts"
+            label="登出回跳地址"
+            help="登出后允许跳回的地址。留空则登出后停在平台页面。"
+          >
+            <Textarea
+              id="cl-logouts"
+              rows={3}
+              className="font-mono text-code-sm"
+              value={uriDraft.postLogoutRedirectUris}
+              onChange={(e) =>
+                setUriDraft({
+                  ...uriDraft,
+                  postLogoutRedirectUris: e.target.value,
+                })
+              }
+            />
+          </FormField>
+        </div>
+      </DialogForm>
 
       {/* ── 凭据展示物编辑 ─────────────────────────────────────────────────
           只改授权页的名字与 logo。回调白名单不在这里——它是安全边界，服务端那条
