@@ -64,7 +64,11 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import { PRODUCT_TYPE_DEFS, isValidProductType } from "@vxture/core-utils";
+import {
+  PRODUCT_SURFACE_DEFS,
+  PRODUCT_TYPE_DEFS,
+  isValidProductType,
+} from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -80,6 +84,8 @@ import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
+import { LockedInput } from "@/components/form/LockedInput";
+import { RequiredMark } from "@/components/form/RequiredMark";
 import { formatDateTime } from "@vxture-platform/shared";
 
 const MANAGE = "platform:product.manage";
@@ -115,6 +121,10 @@ interface ProductRecord {
   originProvider: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 产品图标。console 应用中心磁贴在读它。 */
+  iconUrl: string | null;
+  /** 可露出的端（受管枚举）。一个都没勾时是空数组，不是 null。 */
+  surfaces: string[];
 }
 
 interface ProductCategoryRecord {
@@ -174,6 +184,15 @@ interface WebhookDraft {
   /** tailnet 上的 host:port。填了它,边缘下次同步就把该子域转到这里。 */
   edgeUpstream: string;
   /**
+   * 边缘域名。**推导是默认值不是唯一规则**——渲染器对空值回落
+   * `{product_code}.vxture.com`,而那条推导已经在失效(anlan → anlan.ai、
+   * xuanzhen → xuanzhen.ai,推导会给它们生成一个不存在的域名且不报错)。
+   *
+   * 打开弹窗时按推导**预填**(可改):库里存空与存推导值对渲染器等价,预填只是
+   * 把这条隐含规则摆到运营者眼前,让异 apex 的产品有地方改。
+   */
+  edgeDomain: string;
+  /**
    * 签名密钥**原文**,只进不出。
    *
    * 读接口只回「配没配」这个布尔——密文和原文都不回传,否则「落库加密」就白做了。
@@ -187,6 +206,7 @@ const EMPTY_WEBHOOK: WebhookDraft = {
   webhookUrl: "",
   webhookSecretRef: "",
   edgeUpstream: "",
+  edgeDomain: "",
   webhookSecret: "",
 };
 
@@ -202,6 +222,10 @@ interface ProductDraft {
   standaloneSubscribable: boolean;
   isCustomerVisible: boolean;
   isWorkforceVisible: boolean;
+  /** 产品图标。console 应用中心的磁贴在读它。 */
+  iconUrl: string;
+  /** 可露出的端。整组替换语义——提交时原样送出。 */
+  surfaces: string[];
 }
 
 const EMPTY_DRAFT: ProductDraft = {
@@ -216,6 +240,10 @@ const EMPTY_DRAFT: ProductDraft = {
   standaloneSubscribable: true,
   isCustomerVisible: true,
   isWorkforceVisible: true,
+  iconUrl: "",
+  /* 新产品默认只勾网页端:那是所有产品都成立的那一个，其余按需加。
+     默认全勾会让「支持小程序」变成一句没人确认过的话。 */
+  surfaces: ["web"],
 };
 
 function draftFromRecord(row: ProductRecord): ProductDraft {
@@ -231,6 +259,8 @@ function draftFromRecord(row: ProductRecord): ProductDraft {
     standaloneSubscribable: row.standaloneSubscribable,
     isCustomerVisible: row.isCustomerVisible,
     isWorkforceVisible: row.isWorkforceVisible,
+    iconUrl: row.iconUrl ?? "",
+    surfaces: row.surfaces ?? [],
   };
 }
 
@@ -678,6 +708,7 @@ function ProductsPageContent() {
         webhookUrl: string | null;
         webhookSecretRef: string | null;
         edgeUpstream: string | null;
+        edgeDomain: string | null;
         hasWebhookSecret: boolean;
       } | null>(`/api/product/catalog/${encodeURIComponent(row.id)}/webhook`);
       setWebhookDraft({
@@ -685,6 +716,11 @@ function ProductsPageContent() {
         webhookUrl: current?.webhookUrl ?? "",
         webhookSecretRef: current?.webhookSecretRef ?? "",
         edgeUpstream: current?.edgeUpstream ?? "",
+        /* 没登记过就按推导预填。这不是替运营者做决定——渲染器本来就会对空值做
+           同一个推导,预填只是把它**摆出来让人能改**。异 apex 的产品(anlan.ai)
+           在这里改掉一次就对了,否则推导会悄悄指向一个不存在的域名。 */
+        edgeDomain:
+          current?.edgeDomain?.trim() || `${row.productCode}.vxture.com`,
         /* 密钥框恒空:回传密钥本体等于取消加密存储的意义。 */
         webhookSecret: "",
       });
@@ -711,6 +747,7 @@ function ProductsPageContent() {
           webhookUrl: webhookDraft.webhookUrl.trim() || null,
           webhookSecretRef: webhookDraft.webhookSecretRef.trim() || null,
           edgeUpstream: webhookDraft.edgeUpstream.trim() || null,
+          edgeDomain: webhookDraft.edgeDomain.trim() || null,
           /* 三态,不能塌成两态:框里没填就**不带这个字段**(undefined = 不动已存的),
              带一个 null 过去会把密钥清空。运营者只是来改个回调地址,
              不该顺手把密钥抹了——而框里恒空,不这样就必然误清。 */
@@ -748,6 +785,10 @@ function ProductsPageContent() {
       standaloneSubscribable: draft.standaloneSubscribable,
       isCustomerVisible: draft.isCustomerVisible,
       isWorkforceVisible: draft.isWorkforceVisible,
+      iconUrl: draft.iconUrl.trim() || null,
+      /* 端**整组送出**:接口按整组替换，缺席才是"不动"。这里永远带上，
+         所以取消勾选能真的取消——不带的话界面上取消了、库里还留着。 */
+      surfaces: draft.surfaces,
     };
 
     setSubmitting(true);
@@ -1226,22 +1267,30 @@ function ProductsPageContent() {
           <FieldGroup>
             <div className="grid grid-cols-2 gap-md">
               <Field orientation="labeled">
-                <FieldLabel htmlFor="product-code">Product Code</FieldLabel>
-                <Input
+                <FieldLabel htmlFor="product-code">
+                  Product Code
+                  <RequiredMark />
+                </FieldLabel>
+                {/* 编辑态锁上：框内常驻一枚浅色锁，把「不能改」这条**规则**说出来。
+                    只 disabled 的话，灰掉的框读不出是「不能改」还是「还没轮到改」。 */}
+                <LockedInput
                   id="product-code"
+                  locked={editing}
                   value={draft.productCode}
                   onChange={(e) =>
                     setDraft({ ...draft, productCode: e.target.value })
                   }
                   placeholder="karda"
-                  disabled={editing}
                   className="font-mono"
                 />
-                <FieldDescription>全局唯一，登记后不可改。</FieldDescription>
+                <FieldDescription>
+                  全局唯一，登记后不可改——它同时是域名、容器前缀与库名。
+                </FieldDescription>
               </Field>
               <Field orientation="labeled">
                 <FieldLabel htmlFor="product-type">
                   {tShared("columns.kind")}
+                  <RequiredMark />
                 </FieldLabel>
                 <NativeSelect
                   id="product-type"
@@ -1264,7 +1313,10 @@ function ProductsPageContent() {
 
             <div className="grid grid-cols-2 gap-md">
               <Field orientation="labeled">
-                <FieldLabel htmlFor="product-name">名称</FieldLabel>
+                <FieldLabel htmlFor="product-name">
+                  名称
+                  <RequiredMark />
+                </FieldLabel>
                 <Input
                   id="product-name"
                   value={draft.productName}
@@ -1362,10 +1414,69 @@ function ProductsPageContent() {
 
         <FieldTier
           tier="advanced"
-          title="可见性与订阅"
-          hint="三项都有缺省值；新产品先落草稿态，可见性等启用前再定。"
+          title="可见性、端与订阅"
+          hint="都有缺省值；新产品先落草稿态，可见性等启用前再定。"
         >
           <FieldGroup>
+            {/* 可露出的端。owner 2026-09-11:「平台 N 个产品，但 ruyin 可同步使用的
+                M 个产品，不是每个都能到 ruyin 端」。这是**产品自身的形态属性**，
+                与租户无关——按租户的开关属权益，挂在订阅/套餐上不在这里。 */}
+            <Field>
+              <FieldLabel>可露出的端</FieldLabel>
+              <div className="flex flex-col gap-2xs rounded-md border border-border p-sm">
+                {PRODUCT_SURFACE_DEFS.map((def) => {
+                  const on = draft.surfaces.includes(def.value);
+                  return (
+                    <label
+                      key={def.value}
+                      htmlFor={`product-surface-${def.value}`}
+                      className="flex cursor-pointer items-start gap-sm"
+                    >
+                      <Checkbox
+                        id={`product-surface-${def.value}`}
+                        checked={on}
+                        onCheckedChange={(v) =>
+                          setDraft({
+                            ...draft,
+                            surfaces: v
+                              ? [...draft.surfaces, def.value]
+                              : draft.surfaces.filter((x) => x !== def.value),
+                          })
+                        }
+                        className="mt-3xs"
+                      />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-label-md text-foreground">
+                          {def.labelZh}
+                        </span>
+                        <span className="text-body-sm text-muted-foreground">
+                          {def.hintZh}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <FieldDescription>
+                一个都不勾 =
+                这个产品不在任何端露出。取消勾选会真的取消——提交时整组替换。
+              </FieldDescription>
+            </Field>
+            <Field orientation="labeled">
+              <FieldLabel htmlFor="product-icon">产品图标</FieldLabel>
+              <Input
+                id="product-icon"
+                value={draft.iconUrl}
+                onChange={(e) =>
+                  setDraft({ ...draft, iconUrl: e.target.value })
+                }
+                placeholder="https://cdn.example.com/logo.svg"
+                className="font-mono text-code-sm"
+              />
+              <FieldDescription>
+                console 应用中心的磁贴与订阅卡在渲染它；留空则显示产品名首字。
+              </FieldDescription>
+            </Field>
             <div className="flex flex-col gap-sm rounded-md border border-border p-sm">
               <div className="flex items-center justify-between">
                 <FieldLabel htmlFor="product-standalone">可独立订阅</FieldLabel>
@@ -1478,10 +1589,12 @@ function ProductsPageContent() {
                     className="font-mono text-code-sm"
                   />
                   <FieldDescription>
-                    **旧路径,新产品不用填**——它是引用不是密钥本体,取密钥要靠容器环境里
-                    的同名变量,也就是说每接一个产品都得改 .env
-                    再重新部署。存量产品 (karda / arda /
-                    vxtpl)还在用,保留到它们迁完为止。
+                    <b>旧路径,新产品不用填</b>
+                    ——它是引用不是密钥本体,取密钥要靠容器
+                    环境里的同名变量,也就是说每接一个产品都得改{" "}
+                    <code>.env</code>
+                    再重新部署。存量产品(karda / arda / vxtpl)还在用,保留到它们
+                    迁完为止。
                   </FieldDescription>
                 </Field>
                 <Field orientation="labeled">
@@ -1513,9 +1626,33 @@ function ProductsPageContent() {
 
             <FieldTier
               tier="identity"
-              hint="填了边缘上游,这个产品的子域下次边缘同步就通了——不需要往仓里手写一份 vhost。"
+              hint="域名 + 上游都填好,下次边缘同步这个产品的子域就通了——不需要往仓里手写一份 vhost。DNS 记录仍要你自己去建。"
             >
               <FieldGroup>
+                <Field orientation="labeled">
+                  <FieldLabel htmlFor="wh-domain">边缘域名</FieldLabel>
+                  <Input
+                    id="wh-domain"
+                    value={webhookDraft.edgeDomain}
+                    onChange={(e) =>
+                      setWebhookDraft({
+                        ...webhookDraft,
+                        edgeDomain: e.target.value,
+                      })
+                    }
+                    placeholder="acme.vxture.com"
+                    className="font-mono text-code-sm"
+                  />
+                  <FieldDescription>
+                    已按产品码预填,<b>可改</b>。用别的 apex(如{" "}
+                    <code>anlan.ai</code>
+                    )就在这里改掉——预填只是默认值。
+                    <br />
+                    <b>DNS 记录要你自己建</b>,本页不建也建不了。本域子域 (
+                    <code>*.vxture.com</code>)的证书是通配的不用签;换了 apex
+                    则证书与 vhost 都要另配,这张表只解决路由。
+                  </FieldDescription>
+                </Field>
                 <Field orientation="labeled">
                   <FieldLabel htmlFor="wh-edge">边缘上游</FieldLabel>
                   <Input
@@ -1531,10 +1668,12 @@ function ProductsPageContent() {
                     className="font-mono text-code-sm"
                   />
                   <FieldDescription>
-                    写成 `host:port`,不带协议、路径或空格——这个值会原样进 nginx
-                    配置。 留空 = 不走通配兜底(自带精确 vhost 的产品就该留空)。
-                    另外要确认该子域的 DNS 记录已建:证书是通配的不用签,DNS
-                    不是。
+                    写成 <code>host:port</code>
+                    ,不带协议、路径或空格——这个值会原样 进 nginx
+                    配置。端口在这里,域名在上一栏,两者不要混。
+                    <br />
+                    <b>留空 = 这个产品完全不进边缘路由表</b>(自带精确 vhost
+                    的产品就该留空)。
                   </FieldDescription>
                 </Field>
               </FieldGroup>

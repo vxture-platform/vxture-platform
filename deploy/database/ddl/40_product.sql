@@ -319,6 +319,10 @@ CREATE TABLE product.product_webhooks (
     -- 用 map $host 查它；精确 server_name 的 vhost 按 nginx 匹配优先级照旧压过通配。
     -- 空 = 不走通配兜底（自带精确 vhost，或尚未接入边缘）。
     edge_upstream      varchar(128),
+    -- 边缘域名。表单预填 {product_code}.vxture.com 但**可改**——推导不是唯一规则:
+    -- anlan.ai / xuanzhen.ai 这两个 L3 智能体是异 apex,推导给出的域名根本不存在。
+    -- 空 = 不走通配兜底(自带精确 vhost,如 vxtpl)。
+    edge_domain        varchar(255),
     -- provisioning webhook 的 HMAC 密钥**密文**（AES-256-GCM，v1.<iv>.<tag>.<ct>，
     -- 与 admin.operator_mfa.totp_secret 同格式同实现）。与 client_secret 不同：
     -- HMAC 密钥必须能还原原文，存哈希不可用。主密钥 PLATFORM_WEBHOOK_ENC_KEY，
@@ -328,8 +332,23 @@ CREATE TABLE product.product_webhooks (
     updated_at         timestamptz  NOT NULL DEFAULT now(),
     -- 形状错要在登记那一刻报，不要等渲进 map 之后靠 nginx -t 失败才发现。
     -- 单行写：跨行约束会被 check-column-locks 的列解析器当成列定义。
-    CONSTRAINT chk_product_webhooks_edge_upstream CHECK (edge_upstream IS NULL OR edge_upstream ~ '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]{1,5}$')
+    CONSTRAINT chk_product_webhooks_edge_upstream CHECK (edge_upstream IS NULL OR edge_upstream ~ '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]{1,5}$'),
+    -- 主机名:不带协议、路径、端口(端口在 edge_upstream)。这个值原样进 nginx 的 map。
+    CONSTRAINT chk_product_webhooks_edge_domain CHECK (edge_domain IS NULL OR edge_domain ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$')
 );
+
+-- 产品可露出的端（web/desktop/app/miniprogram）。owner 2026-09-11:「平台 N 个产品，
+-- 但 ruyin 可同步使用的 M 个产品」。**产品自身的形态属性，与租户无关**——按租户的
+-- 开关属权益，挂订阅/套餐。键是**端类型**不是客户端凭据:一个端可能有多套凭据
+-- （iOS/Android 两个 OIDC 客户端），产品支持的是「移动端」这一件事。
+CREATE TABLE product.product_surfaces (
+    product_id  uuid         NOT NULL REFERENCES product.products(id) ON DELETE CASCADE,
+    surface     varchar(24)  NOT NULL,                             -- 受管枚举，权威源 @vxture/core-utils 的 PRODUCT_SURFACES
+    created_at  timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT pk_product_surfaces PRIMARY KEY (product_id, surface),
+    CONSTRAINT chk_product_surfaces_value CHECK (surface IN ('web','desktop','app','miniprogram'))
+);
+CREATE INDEX ix_product_surfaces_surface ON product.product_surfaces (surface);
 
 -- 上架检查项目录（可配置，item_code 自然键 PK）。新增检查项 = INSERT 一行，不改表结构。
 CREATE TABLE product.launch_checklist_items (

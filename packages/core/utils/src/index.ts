@@ -107,6 +107,17 @@ export {
 export type { ReleaseStage, ReleaseStageDef } from "./release-stage";
 
 // ============================================
+// Product surfaces（可露出的端：web / 桌面 / 移动 / 小程序）
+// ============================================
+
+export {
+  PRODUCT_SURFACES,
+  PRODUCT_SURFACE_DEFS,
+  isValidProductSurface,
+} from "./product-surface";
+export type { ProductSurface, ProductSurfaceDef } from "./product-surface";
+
+// ============================================
 // Tenant console permission catalog (customer realm 治理 RBAC 的代码侧镜像)
 // ============================================
 
