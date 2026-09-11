@@ -1,5 +1,5 @@
 /**
- * product-integration-signals.router.ts — 接入信号：平台自己看得见的 C2 / C3 事实。
+ * product-integration-signals.router.ts — 接入信号：平台自己看得见的 C1 出站 / C2 / C3 事实。
  * @package @vxture/bff-opera
  * @layer Application
  * @category router
@@ -51,9 +51,19 @@ export interface ConsumeSignal {
   metricKey: string;
 }
 
+/** C1 出站：对方最近一次换票去调别的产品。`target` 是它调的谁。 */
+export interface S2sSignal {
+  lastSeenAt: string;
+  /** 被调方产品码（审计 `after.target_product`）。 */
+  target: string;
+  /** `obo`（有用户在场）/ `service`（后台通道）。 */
+  mode: string;
+}
+
 export interface IntegrationSignalsRecord {
   entitlement: EntitlementSignal | null;
   consume: ConsumeSignal | null;
+  s2s: S2sSignal | null;
 }
 
 /** 只用到 GET；ioredis 满足它，单测给假的。 */
@@ -63,6 +73,12 @@ export interface SignalRedisReader {
 
 interface UsageEventRow {
   metric_key: string;
+  created_at: Date | string;
+}
+
+interface S2sAuditRow {
+  target_product: string | null;
+  mode: string | null;
   created_at: Date | string;
 }
 
@@ -79,6 +95,15 @@ export const C2_SIGNAL_KEY_INFIX = "integration:c2:";
  * 足够：超过 90 天没有事件，即使曾经接通过，这一项也该重新变红让人看一眼。
  */
 export const CONSUME_LOOKBACK = "90 days";
+
+/**
+ * C1 出站的回看窗口。同 C3 取 90 天，理由也同：`support.audit_logs` 按 `created_at`
+ * 月分区，谓词带下界才裁剪；且超过 90 天没换过票，即使曾经接通过也该重新变红。
+ */
+export const S2S_LOOKBACK = "90 days";
+
+/** 换票审计的 action 字面量，由 auth-bff 的 `TokenExchangeService.recordAudit` 写入。 */
+export const S2S_AUDIT_ACTION = "oidc.token_exchange.issued";
 
 // ============================================================================
 // Helpers
@@ -166,7 +191,7 @@ export class ProductIntegrationSignalsRouter {
     }
 
     const key = `${this.rpRuntime.keyPrefix}${C2_SIGNAL_KEY_INFIX}${productCode}`;
-    const [raw, usage] = await Promise.all([
+    const [raw, usage, s2s] = await Promise.all([
       this.redis.get(key),
       /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
          单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
@@ -181,15 +206,56 @@ export class ProductIntegrationSignalsRouter {
           LIMIT 1`,
         [productId],
       ),
+      /*
+       * C1 出站：**不新开一条写路径**。auth-bff 每次成功换票已经往
+       * `support.audit_logs` 写一条（product_210 §6 的 append-only 审计），
+       * 带 `after.caller_product`——那条痕迹一直在写，只是从来没人读。
+       *
+       * 这里按 `caller_product` 反查：调用方是本产品，说明它真的换过票去调别人。
+       *
+       * 查询形状：`idx_audit_logs_action` 先把行收敛到换票这一种，再靠
+       * `created_at` 下界做分区裁剪，最后按 jsonb 过滤。`after->>'caller_product'`
+       * **没有索引**——最坏情况是「这个产品从没换过票」，要把窗口内全部换票行扫完
+       * 才能确定没有，而那恰好是本检查项最常被问的状态。
+       *
+       * 今天可以这么查：换票凭证 TTL 300 秒、在跑的智能体个位数，窗口内是几千行量级。
+       * **到了不够用那天，加这条索引**，不要改判据：
+       *   create index idx_audit_logs_s2s_caller
+       *       on support.audit_logs ((after->>'caller_product'), created_at desc)
+       *    where action = 'oidc.token_exchange.issued';
+       */
+      this.pool.query<S2sAuditRow>(
+        `SELECT after->>'target_product' AS target_product,
+                after->>'mode'           AS mode,
+                created_at
+           FROM support.audit_logs
+          WHERE action = $1
+            AND result = 'success'
+            AND after->>'caller_product' = $2
+            AND created_at >= now() - interval '${S2S_LOOKBACK}'
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [S2S_AUDIT_ACTION, productCode],
+      ),
     ]);
 
     const latest = usage.rows[0];
+    const exchange = s2s.rows[0];
     return {
       entitlement: parseEntitlementSignal(raw, key),
       consume: latest
         ? {
             lastEventAt: toIso(latest.created_at),
             metricKey: latest.metric_key,
+          }
+        : null,
+      s2s: exchange
+        ? {
+            lastSeenAt: toIso(exchange.created_at),
+            /* 审计里这两个是 jsonb 取出来的，理论上可能缺；缺了不算故障
+               （旧行可能没有这两个键），用占位词而不是让整条信号消失。 */
+            target: exchange.target_product ?? "（未记录）",
+            mode: exchange.mode ?? "（未记录）",
           }
         : null,
     };

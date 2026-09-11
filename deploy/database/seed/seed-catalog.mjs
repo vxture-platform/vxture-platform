@@ -2391,6 +2391,9 @@ export async function seedCatalog(client) {
        'Product code/layer/type registered in product.products; checklist + plan structure scaffolded.', 'product.checklist.catalog_registered.desc', true, 30),
       ('c1_identity', 'C1 身份接入', 'product.checklist.c1_identity',
        'OIDC client registered; RP implementation (login/callback/session) completed.', 'product.checklist.c1_identity.desc', true, 40),
+      -- sort 45：紧跟 c1_identity。两项是同一个身份面的入站与出站，中间不插别的。
+      ('c1_s2s', 'C1 出站换票', 'product.checklist.c1_s2s',
+       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'product.checklist.c1_s2s.desc', true, 45),
       ('c3_metering', 'C3 计量上报', 'product.checklist.c3_metering',
        'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'product.checklist.c3_metering.desc', true, 50),
       ('c2_entitlement', 'C2 权益接入', 'product.checklist.c2_entitlement',

@@ -19,6 +19,7 @@ import type { RequestContext } from "../types/request-context";
 import {
   CONSUME_LOOKBACK,
   ProductIntegrationSignalsRouter,
+  S2S_LOOKBACK,
   parseEntitlementSignal,
 } from "./product-integration-signals.router";
 
@@ -37,6 +38,11 @@ interface Fixture {
   productCode: string | null;
   usageRow?: { metric_key: string; created_at: Date };
   redisValue?: string | null;
+  s2sRow?: {
+    target_product: string | null;
+    mode: string | null;
+    created_at: Date;
+  };
 }
 
 function makeRouter(fx: Fixture) {
@@ -52,6 +58,11 @@ function makeRouter(fx: Fixture) {
     if (/FROM metering\.usage_events/.test(sql)) {
       expect(params).toEqual([PRODUCT_ID]);
       return { rows: fx.usageRow ? [fx.usageRow] : [] };
+    }
+    if (/FROM support\.audit_logs/.test(sql)) {
+      /* 按**产品码**反查，不是产品 id——审计里记的是 caller_product。 */
+      expect(params).toEqual(["oidc.token_exchange.issued", fx.productCode]);
+      return { rows: fx.s2sRow ? [fx.s2sRow] : [] };
     }
     throw new Error(`unexpected sql: ${sql}`);
   });
@@ -101,6 +112,7 @@ describe("GET /api/products/:id/integration-signals", () => {
         workspaceId: "ws-1",
       },
       consume: { lastEventAt: "2026-08-30T08:00:00.000Z", metricKey: "tokens" },
+      s2s: null,
     });
     expect(get).toHaveBeenCalledWith("vx:integration:c2:arda");
 
@@ -111,12 +123,56 @@ describe("GET /api/products/:id/integration-signals", () => {
     expect(usageSql).toMatch(/LIMIT 1/);
   });
 
-  it("都没有：两个字段都是 null（不是 404，产品在，只是没接通）", async () => {
+  it("都没有：三个字段都是 null（不是 404，产品在，只是没接通）", async () => {
     const { router } = makeRouter({ productCode: "karda" });
     await expect(router.get(makeReq(), PRODUCT_ID)).resolves.toEqual({
       entitlement: null,
       consume: null,
+      s2s: null,
     });
+  });
+
+  it("C1 出站：从换票审计读出来，且按产品码而不是产品 id 反查", async () => {
+    const { router, sqls } = makeRouter({
+      productCode: "arda",
+      s2sRow: {
+        target_product: "atlas",
+        mode: "obo",
+        created_at: new Date("2026-08-30T09:00:00.000Z"),
+      },
+    });
+
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.s2s).toEqual({
+      lastSeenAt: "2026-08-30T09:00:00.000Z",
+      target: "atlas",
+      mode: "obo",
+    });
+
+    const sql = sqls.find((x) => /support\.audit_logs/.test(x))!;
+    /* 三条判据缺一不可：只按 action 查会把别的产品的换票算到本产品头上；
+       不带 result 会把失败的尝试算成接通；不带时间下界，分区表不裁剪。 */
+    expect(sql).toMatch(/after->>'caller_product' = \$2/);
+    expect(sql).toMatch(/result = 'success'/);
+    expect(sql).toContain(`interval '${S2S_LOOKBACK}'`);
+    expect(sql).toMatch(/ORDER BY created_at DESC/);
+    expect(sql).toMatch(/LIMIT 1/);
+  });
+
+  it("C1 出站：审计行缺 target/mode 不让整条信号消失", async () => {
+    /* 旧审计行可能没有这两个 jsonb 键。那不是故障——「换过票」这个结论仍然成立，
+       不该因为缺一个展示字段就退回「没换过」。 */
+    const { router } = makeRouter({
+      productCode: "arda",
+      s2sRow: {
+        target_product: null,
+        mode: null,
+        created_at: new Date("2026-08-30T09:00:00.000Z"),
+      },
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.s2s?.lastSeenAt).toBe("2026-08-30T09:00:00.000Z");
+    expect(out.s2s?.target).toBeTruthy();
   });
 
   it("产品不存在 → 404 CATALOG_PRODUCT_NOT_FOUND，不碰 Redis", async () => {
