@@ -288,6 +288,18 @@ const ICON_MIME_TYPES = ["image/png", "image/webp", "image/jpeg"];
 /** 256KB，与库上的 chk_product_icons_size 同一个数。 */
 const ICON_MAX_BYTES = 262144;
 
+/**
+ * 一个路径参数既可能是 id 也可能是产品码——**先判形状，再挑列**。
+ *
+ * 反过来（先查一列不中再查另一列）在这里不成立：把产品码喂给 `uuid` 列是
+ * `22P02`，那是**错误不是零行**，整条查询当场炸成 500，接不到"再试另一列"。
+ *
+ * 返回的是 SQL 片段而不是参数，所以**只能拿常量拼**：`$1` 始终承载值本身。
+ */
+function productWhere(idOrCode: string): string {
+  return UUID_RE.test(idOrCode) ? "p.id = $1" : "p.product_code = $1";
+}
+
 @Controller("api/products")
 export class ProductCatalogRouter {
   private readonly atlasApiUrl: string;
@@ -457,6 +469,11 @@ export class ProductCatalogRouter {
    *
    * **不收 SVG**：SVG 可以带 `<script>`，从 console 自己的域名发出去等于存储型 XSS，
    * 且带着客户的会话。库上有 CHECK 兜底，这里先判，给字段级 400。
+   *
+   * **三条都双接受 id 或产品码**，与 `GET :idOrCode` 一致：不判形状直接把产品码喂给
+   * `uuid` 列是 `22P02`——那是**错误不是零行**，于是「查不到」变成 500。而
+   * console 那边的同一张图恰恰是按产品码寻址的（`/api/applications/:appCode/icon`），
+   * 两边不一致会诱人拿产品码来试这边。
    */
   @Put(":id/icon")
   async putIcon(
@@ -505,10 +522,14 @@ export class ProductCatalogRouter {
       .update(bytes)
       .digest("hex")
       .slice(0, 32);
+    /* 产品 id 从 `SELECT` 里取而不是直接用 `$1`：`$1` 可能是产品码。顺带把
+       「产品不存在」变成 0 行——此前那是一条外键违例，也就是 500。 */
     const done = await this.pool.query(
       `INSERT INTO product.product_icons
          (product_id, mime_type, bytes, byte_size, checksum)
-       VALUES ($1, $2, $3, $4, $5)
+       SELECT p.id, $2, $3, $4, $5
+         FROM product.products p
+        WHERE ${productWhere(id)} AND p.deleted_at IS NULL
        ON CONFLICT (product_id) DO UPDATE SET
          mime_type = EXCLUDED.mime_type, bytes = EXCLUDED.bytes,
          byte_size = EXCLUDED.byte_size, checksum = EXCLUDED.checksum,
@@ -516,7 +537,10 @@ export class ProductCatalogRouter {
        RETURNING byte_size, mime_type`,
       [id, mime, bytes, bytes.length, checksum],
     );
-    const row = done.rows[0] as { byte_size: number; mime_type: string };
+    const row = done.rows[0] as
+      | { byte_size: number; mime_type: string }
+      | undefined;
+    if (!row) throw notFound("CATALOG_PRODUCT_NOT_FOUND", "No such product");
     return { byteSize: row.byte_size, mimeType: row.mime_type };
   }
 
@@ -538,8 +562,10 @@ export class ProductCatalogRouter {
       bytes: Buffer;
       checksum: string;
     }>(
-      `SELECT mime_type, bytes, checksum FROM product.product_icons
-        WHERE product_id = $1`,
+      `SELECT i.mime_type, i.bytes, i.checksum
+         FROM product.product_icons i
+         JOIN product.products p ON p.id = i.product_id
+        WHERE ${productWhere(id)} AND p.deleted_at IS NULL`,
       [id],
     );
     const row = found.rows[0];
@@ -560,7 +586,10 @@ export class ProductCatalogRouter {
   ): Promise<{ deleted: boolean }> {
     assertCanManage(req);
     const r = await this.pool.query(
-      `DELETE FROM product.product_icons WHERE product_id = $1`,
+      `DELETE FROM product.product_icons i
+        USING product.products p
+        WHERE p.id = i.product_id
+          AND ${productWhere(id)} AND p.deleted_at IS NULL`,
       [id],
     );
     return { deleted: (r.rowCount ?? 0) > 0 };
@@ -673,28 +702,74 @@ export class ProductCatalogRouter {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      /*
+       * ── 缺席即不改。这一段是在修一处正在生产上丢数据的缺陷 ──
+       * 原先 SET 列表取值一律 `body.x ?? 默认值`，于是**任何送部分字段的客户端都会
+       * 把它没送的列抹掉**：详情页只送 11 个，剩下四列每保存一次就被写成
+       * `category_id = null`、`standalone_subscribable = true`、`capability_keys = []`、
+       * `tags = []`。接口回 200、界面提示保存成功，而那几个字段本来就不在页面上，
+       * 所以看不出任何区别——要等到某个产品在目录里归错类，或者一个本不该单独售卖的
+       * 组件突然可以单买，才会有人发现，那时已无从判断是谁在哪一次保存里弄没的。
+       *
+       * 讽刺的是正确的规则就写在上面三行：`surfaces` 那里写着「字段缺席 = 不动」，
+       * 理由一字不差地适用于这些标量列，只是当时没往下推。
+       *
+       * **三态**（与 webhook 密钥那条同一套）：键不在 = 不改；显式 null / 空串 =
+       * 清空；有值 = 覆盖。改客户端（让详情页把字段送齐）也能让今天这版不丢数据，
+       * 但下次往表里加一列而某个写入面忘了跟，同样的静默丢失就回来了。
+       *
+       * ── 为什么是 CASE 而不是把 SET 列表拼出来 ──
+       * 拼 SET 列表更短，但 `lint:anchor-writes` 是**静态**读 SQL 文本抽列名的，
+       * 一插值它就抽到零列然后判过——实测：往那份列表里塞一个 `created_at`，守卫照样
+       * 绿。而写进锚点列在生产上是 42501、整条事务回滚（TD-018 列锁）。
+       * 保持 SQL 静态，守卫才继续看得见这条语句。`updateDisplay` 也是这个写法。
+       *
+       * 每个可选列一对参数：`$奇数` 是「这次送了没」，`$偶数` 是值。
+       * `ELSE <列名>` 在 UPDATE 的 SET 表达式里读的是**这一行的旧值**。
+       */
+      const has = (k: keyof ProductWriteBody) => body[k] !== undefined;
       const result = await client.query<ProductRow>(
         `UPDATE product.products SET
-           product_type = $1, category_id = $2, product_name = $3,
-           product_nick = $4, description = $5, capability_keys = $6, tags = $7,
-           standalone_subscribable = $8, is_customer_visible = $9,
-           is_workforce_visible = $10, origin = $11, origin_provider = $12,
-           icon_url = $13, updated_by = $14, updated_at = now()
-         WHERE id = $15 AND deleted_at IS NULL
+           product_type = $1,
+           product_name = $2,
+           category_id             = CASE WHEN  $3::bool THEN  $4 ELSE category_id             END,
+           product_nick            = CASE WHEN  $5::bool THEN  $6 ELSE product_nick            END,
+           description             = CASE WHEN  $7::bool THEN  $8 ELSE description             END,
+           capability_keys         = CASE WHEN  $9::bool THEN $10 ELSE capability_keys         END,
+           tags                    = CASE WHEN $11::bool THEN $12 ELSE tags                    END,
+           standalone_subscribable = CASE WHEN $13::bool THEN $14 ELSE standalone_subscribable END,
+           is_customer_visible     = CASE WHEN $15::bool THEN $16 ELSE is_customer_visible     END,
+           is_workforce_visible    = CASE WHEN $17::bool THEN $18 ELSE is_workforce_visible    END,
+           origin                  = CASE WHEN $19::bool THEN $20 ELSE origin                  END,
+           origin_provider         = CASE WHEN $21::bool THEN $22 ELSE origin_provider         END,
+           icon_url                = CASE WHEN $23::bool THEN $24 ELSE icon_url                END,
+           updated_by = $25, updated_at = now()
+         WHERE id = $26 AND deleted_at IS NULL
          RETURNING ${SELECT_COLUMNS}`,
         [
           body.productType!.trim(),
-          body.categoryId ?? null,
           body.productName!.trim(),
+          has("categoryId"),
+          body.categoryId ?? null,
+          has("productNick"),
           body.productNick?.trim() || null,
+          has("description"),
           body.description?.trim() || null,
+          has("capabilityKeys"),
           body.capabilityKeys ?? [],
+          has("tags"),
           body.tags ?? [],
+          has("standaloneSubscribable"),
           body.standaloneSubscribable ?? true,
+          has("isCustomerVisible"),
           body.isCustomerVisible ?? true,
+          has("isWorkforceVisible"),
           body.isWorkforceVisible ?? true,
+          has("origin"),
           body.origin ?? "self",
+          has("originProvider"),
           body.originProvider?.trim() || null,
+          has("iconUrl"),
           body.iconUrl?.trim() || null,
           operatorId,
           id,
