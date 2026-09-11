@@ -32,7 +32,6 @@ import type { FormEvent } from "react";
 import {
   ActionMenu,
   Badge,
-  Banner,
   Button,
   DataTable,
   DialogForm,
@@ -77,22 +76,22 @@ const STRATEGIES: ReadonlyArray<{
   {
     value: "pool",
     label: "池（pool）",
-    hint: "会消耗的额度：调用次数、字数、存储量。多个组件的额度相加成一个池。",
+    hint: "会消耗的额度：调用次数、字数、存储量。",
   },
   {
     value: "max",
     label: "取最大（max）",
-    hint: "不消耗的上限：成员数、数据源数。多个组件取其中最大的那个。",
+    hint: "不消耗的上限：成员数、数据源数。",
   },
   {
     value: "union",
     label: "并集（union）",
-    hint: "开关或枚举集合：多个组件的取值取并集。",
+    hint: "开关或枚举集合。",
   },
   {
     value: "tiered",
     label: "取最高档（tiered）",
-    hint: "非数值能力：取档位最高的那个组件的值。",
+    hint: "非数值能力，取最高档。",
   },
 ];
 
@@ -264,12 +263,6 @@ export function ProductMetricsSection({
 
   return (
     <div className="flex flex-col gap-md">
-      <Banner
-        tone="info"
-        title="指标键是跨仓契约"
-        description="产品按这个键上报用量（C3 consume），平台按这个键建配额池。键不存在时对方的上报会被直接拒收——所以它要先于套餐配置存在，且登记之后不要改名。"
-      />
-
       {load.kind === "loading" ? (
         <EmptyState title="读取中" description="正在读取已登记的指标。" />
       ) : load.kind === "error" ? (

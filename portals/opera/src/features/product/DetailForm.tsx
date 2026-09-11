@@ -27,9 +27,14 @@
  * 那是个常量不是 token，改了 DS 这里要跟着改，所以写在注释里。
  */
 
-import type { ReactNode } from "react";
+import { useState } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import {
+  Button,
   Icon,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
   Label,
   Switch,
   Tooltip,
@@ -113,6 +118,14 @@ export interface FormFieldProps {
   readonly error?: string | undefined;
   /** 跨两列（长文本、开关组）。 */
   readonly full?: boolean;
+  /**
+   * 这一格里装的是**一组**控件（如「预览 + 上传 + 移除」），不是单个控件。
+   *
+   * `<label htmlFor>` 只能指向一个控件；一组控件该用 `role="group"` +
+   * `aria-labelledby`。给了这个之后 `id` 变成**标签自己的** id，调用点不必
+   * （也不该）再把同一个 id 挂到里面某个控件上。
+   */
+  readonly group?: boolean;
   readonly children: ReactNode;
 }
 
@@ -139,8 +152,14 @@ export function FormField({
   help,
   error,
   full,
+  group,
   children,
 }: FormFieldProps) {
+  /* 小字且淡：标签是索引不是内容。 */
+  const labelClass = `text-label-sm font-normal ${
+    error ? "text-destructive-text" : "text-muted-foreground"
+  }`;
+
   return (
     <div
       className={`flex min-w-0 flex-col gap-xs${full ? " md:col-span-2" : ""}`}
@@ -150,15 +169,18 @@ export function FormField({
           排版错位」)。`h-control-xs` 是 DS 的控件高度档,比图标高、比标签行高——
           把行高从「内容决定」改成「档位决定」,有没有图标都一样。 */}
       <div className="flex h-control-xs items-center gap-2xs">
-        <Label
-          htmlFor={id}
-          /* 小字且淡：标签是索引不是内容。 */
-          className={`text-label-sm font-normal ${
-            error ? "text-destructive-text" : "text-muted-foreground"
-          }`}
-        >
-          {label}
-        </Label>
+        {group ? (
+          /* 组的标签不是 `<label>`：它不指向单个控件，而是被下面那层
+             `aria-labelledby` 引用。用 `<label>` 且不给 htmlFor 会变成一个
+             指不到任何东西的标签——比没有更糟。 */
+          <span id={id} className={labelClass}>
+            {label}
+          </span>
+        ) : (
+          <Label htmlFor={id} className={labelClass}>
+            {label}
+          </Label>
+        )}
         {required ? (
           <>
             <span
@@ -172,7 +194,13 @@ export function FormField({
         ) : null}
         {help ? <HelpHint label={label}>{help}</HelpHint> : null}
       </div>
-      {children}
+      {group ? (
+        <div role="group" aria-labelledby={id}>
+          {children}
+        </div>
+      ) : (
+        children
+      )}
       {error ? (
         <p className="text-body-sm text-destructive-text">{error}</p>
       ) : null}
@@ -221,5 +249,61 @@ export function ToggleRow({
         onCheckedChange={onChange}
       />
     </div>
+  );
+}
+
+/**
+ * 带复制按钮的输入框。
+ *
+ * owner 2026-09-11:「给输入框末尾留复制按钮，方便拷贝」。域名、上游、回调、
+ * client_id 这类值的用途就是**被粘到别处**——粘进工单、粘进对方的配置、粘进
+ * 一封交接邮件。让人手动划选一个等宽长串是这一页最高频的摩擦。
+ *
+ * 用 `InputGroup` 而不是在框旁边摆个按钮：聚焦环要圈住两者，手写 `absolute`
+ * 会压住输入文字的末尾（同 `LockedInput` 的判断）。
+ *
+ * 反馈用按钮自身的短暂态而不是 toast：复制是个微动作，弹一条全局提示太重，
+ * 而且连点几个字段会刷出一串。
+ */
+export function CopyableInput({
+  value,
+  ...props
+}: ComponentProps<typeof InputGroupInput> & { readonly value: string }) {
+  const [copied, setCopied] = useState(false);
+  const canCopy = value.trim() !== "";
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* 剪贴板可能被浏览器策略挡掉（非安全上下文、权限被拒）。失败就什么都不做——
+         值本来就在框里看得见，用户仍然可以手动选。弹一条"复制失败"只是噪音。 */
+    }
+  }
+
+  return (
+    <InputGroup>
+      <InputGroupInput {...props} value={value} />
+      {canCopy ? (
+        <InputGroupAddon align="end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={copied ? "已复制" : "复制"}
+            onClick={() => void copy()}
+          >
+            <Icon
+              name={copied ? "check" : "copy"}
+              size="sm"
+              aria-hidden="true"
+              className={copied ? "text-success-text" : "text-muted-foreground"}
+            />
+          </Button>
+        </InputGroupAddon>
+      ) : null}
+    </InputGroup>
   );
 }

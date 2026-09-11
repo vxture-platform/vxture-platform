@@ -37,6 +37,8 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  StreamableFile,
   Req,
 } from "@nestjs/common";
 import {
@@ -48,8 +50,9 @@ import {
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
+import { createHash } from "node:crypto";
 import { UUID_RE } from "./router.shared";
-import type { Request } from "express";
+import type { Request, Response as ExpressResponse } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
@@ -146,6 +149,8 @@ export interface ProductRecord {
   updatedAt: string;
   /** 产品图标。console 应用中心磁贴、订阅卡在读它。 */
   iconUrl: string | null;
+  /** 平台托管图标的版本号(内容哈希)。null = 没传过。 */
+  iconVersion: string | null;
   /** 可露出的端（受管枚举）。一个都没勾时是空数组，不是 null。 */
   surfaces: string[];
 }
@@ -169,6 +174,7 @@ interface ProductRow {
   created_at: string;
   updated_at: string;
   icon_url: string | null;
+  icon_version: string | null;
   surfaces: string[];
 }
 
@@ -192,6 +198,7 @@ function toRecord(row: ProductRow): ProductRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     iconUrl: row.icon_url,
+    iconVersion: row.icon_version,
     surfaces: row.surfaces ?? [],
   };
 }
@@ -259,6 +266,9 @@ const SELECT_COLUMNS = `
   description, capability_keys, tags, standalone_subscribable, status,
   is_customer_visible, is_workforce_visible, origin, origin_provider,
   icon_url, created_at, updated_at,
+  /* 平台托管图标的版本号(内容哈希)。同样用裸 id 相关——理由见下面那段。
+     只取版本不取字节:这个常量用在列表查询上,把 bytea 拖进每一行是灾难。 */
+  (select i.checksum from product.product_icons i where i.product_id = id) as icon_version,
   /* 端是关系表，用相关子查询一次带出——不让调用方再打一遍。
      子查询里用**裸 id** 相关而不是 p.id：本常量同时用在三处 SELECT 与四处
      RETURNING，两种上下文都没有表别名。裸 id 在两处都能正确解析到外层那一行
@@ -272,6 +282,23 @@ const SELECT_COLUMNS = `
     '{}'
   ) as surfaces
 `;
+
+/** 只收位图。SVG 可以带脚本——见 `putIcon` 的注释。 */
+const ICON_MIME_TYPES = ["image/png", "image/webp", "image/jpeg"];
+/** 256KB，与库上的 chk_product_icons_size 同一个数。 */
+const ICON_MAX_BYTES = 262144;
+
+/**
+ * 一个路径参数既可能是 id 也可能是产品码——**先判形状，再挑列**。
+ *
+ * 反过来（先查一列不中再查另一列）在这里不成立：把产品码喂给 `uuid` 列是
+ * `22P02`，那是**错误不是零行**，整条查询当场炸成 500，接不到"再试另一列"。
+ *
+ * 返回的是 SQL 片段而不是参数，所以**只能拿常量拼**：`$1` 始终承载值本身。
+ */
+function productWhere(idOrCode: string): string {
+  return UUID_RE.test(idOrCode) ? "p.id = $1" : "p.product_code = $1";
+}
 
 @Controller("api/products")
 export class ProductCatalogRouter {
@@ -431,6 +458,143 @@ export class ProductCatalogRouter {
     }));
   }
 
+  /**
+   * 产品图标（平台托管）。上传走 base64 JSON，不走 multipart。
+   *
+   * **为什么不是 multipart**：平台一个上传端点都还没有，引入 multipart 要装
+   * `@nestjs/platform-express` 的文件中间件、配临时目录与清理。而图标是几十 KB 的
+   * 小文件，浏览器端 `FileReader` 读成 base64 直接 POST，零新增中间件。
+   * 将来有了对象存储与大文件（附件、工单截图），那时再引 multipart，它本来也该
+   * 是另一条路——大文件不该先在内存里变成 base64。
+   *
+   * **不收 SVG**：SVG 可以带 `<script>`，从 console 自己的域名发出去等于存储型 XSS，
+   * 且带着客户的会话。库上有 CHECK 兜底，这里先判，给字段级 400。
+   *
+   * **三条都双接受 id 或产品码**，与 `GET :idOrCode` 一致：不判形状直接把产品码喂给
+   * `uuid` 列是 `22P02`——那是**错误不是零行**，于是「查不到」变成 500。而
+   * console 那边的同一张图恰恰是按产品码寻址的（`/api/applications/:appCode/icon`），
+   * 两边不一致会诱人拿产品码来试这边。
+   */
+  @Put(":id/icon")
+  async putIcon(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: { mimeType?: string; dataBase64?: string },
+  ): Promise<{ byteSize: number; mimeType: string }> {
+    assertCanManage(req);
+    const mime = (body.mimeType ?? "").trim();
+    if (!ICON_MIME_TYPES.includes(mime)) {
+      throw invalidRequest(
+        "VALIDATION_ENUM",
+        `图标只收 ${ICON_MIME_TYPES.join(" / ")}。SVG 不收——它可以带脚本，从控制台的域名发出去是存储型 XSS；要矢量请先栅格化。`,
+        "mimeType",
+      );
+    }
+    const raw = (body.dataBase64 ?? "").trim();
+    if (!raw) {
+      throw invalidRequest("VALIDATION_REQUIRED", "没有图片内容", "dataBase64");
+    }
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(raw, "base64");
+    } catch {
+      bytes = Buffer.alloc(0);
+    }
+    /* `Buffer.from(x, "base64")` 对垃圾输入**不抛**，它跳过非法字符返回一个短
+       buffer。所以判空是唯一能发现"这不是 base64"的地方。 */
+    if (bytes.length === 0) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "图片内容不是合法的 base64",
+        "dataBase64",
+      );
+    }
+    if (bytes.length > ICON_MAX_BYTES) {
+      throw invalidRequest(
+        "VALIDATION_TOO_LARGE",
+        `图标不能超过 ${Math.floor(ICON_MAX_BYTES / 1024)}KB，当前 ${Math.ceil(bytes.length / 1024)}KB`,
+        "dataBase64",
+      );
+    }
+    /* 内容哈希给 HTTP 的 ETag 用：浏览器带 If-None-Match 回来就是 304，不重发字节。
+       换图会换哈希，所以缓存不会对不齐——这正是外链方案做不到的那一半。 */
+    const checksum = createHash("sha256")
+      .update(bytes)
+      .digest("hex")
+      .slice(0, 32);
+    /* 产品 id 从 `SELECT` 里取而不是直接用 `$1`：`$1` 可能是产品码。顺带把
+       「产品不存在」变成 0 行——此前那是一条外键违例，也就是 500。 */
+    const done = await this.pool.query(
+      `INSERT INTO product.product_icons
+         (product_id, mime_type, bytes, byte_size, checksum)
+       SELECT p.id, $2, $3, $4, $5
+         FROM product.products p
+        WHERE ${productWhere(id)} AND p.deleted_at IS NULL
+       ON CONFLICT (product_id) DO UPDATE SET
+         mime_type = EXCLUDED.mime_type, bytes = EXCLUDED.bytes,
+         byte_size = EXCLUDED.byte_size, checksum = EXCLUDED.checksum,
+         updated_at = now()
+       RETURNING byte_size, mime_type`,
+      [id, mime, bytes, bytes.length, checksum],
+    );
+    const row = done.rows[0] as
+      | { byte_size: number; mime_type: string }
+      | undefined;
+    if (!row) throw notFound("CATALOG_PRODUCT_NOT_FOUND", "No such product");
+    return { byteSize: row.byte_size, mimeType: row.mime_type };
+  }
+
+  /**
+   * 取图标字节（详情页预览用）。与 console-bff 那条读同一张表。
+   *
+   * 两个门户各有一条而不是共用一条：它们的鉴权不同（这边要运营者会话，那边是
+   * 产品的公开标识），跨门户直连别人的 BFF 才是更奇怪的耦合。
+   */
+  @Get(":id/icon")
+  async getIcon(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Res({ passthrough: true }) res: ExpressResponse,
+  ): Promise<StreamableFile> {
+    assertCanRead(req);
+    const found = await this.pool.query<{
+      mime_type: string;
+      bytes: Buffer;
+      checksum: string;
+    }>(
+      `SELECT i.mime_type, i.bytes, i.checksum
+         FROM product.product_icons i
+         JOIN product.products p ON p.id = i.product_id
+        WHERE ${productWhere(id)} AND p.deleted_at IS NULL`,
+      [id],
+    );
+    const row = found.rows[0];
+    if (!row) throw notFound("CATALOG_ICON_NOT_FOUND", "No icon");
+    res.set({
+      "Content-Type": row.mime_type,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      ETag: `"${row.checksum}"`,
+      "X-Content-Type-Options": "nosniff",
+    });
+    return new StreamableFile(row.bytes);
+  }
+
+  @Delete(":id/icon")
+  async deleteIcon(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<{ deleted: boolean }> {
+    assertCanManage(req);
+    const r = await this.pool.query(
+      `DELETE FROM product.product_icons i
+        USING product.products p
+        WHERE p.id = i.product_id
+          AND ${productWhere(id)} AND p.deleted_at IS NULL`,
+      [id],
+    );
+    return { deleted: (r.rowCount ?? 0) > 0 };
+  }
+
   @Get(":idOrCode")
   async get(
     @Req() req: Request & RequestContext,
@@ -516,7 +680,18 @@ export class ProductCatalogRouter {
     @Body() body: ProductWriteBody,
   ): Promise<ProductRecord> {
     assertCanManage(req);
-    validateWrite(body, { requireCore: true });
+    /*
+     * `requireCode: false` —— 改产品不必带产品码。
+     *
+     * 此前这里和 create 共用 `requireCore: true`，于是 PUT 也必填 productCode。
+     * 旧的编辑对话框恰好带着它（它的 draft 里有这一栏），所以一直没露；详情页把
+     * 产品码做成锁定的展示项、不进 draft，第一次真保存就撞上「缺少 productCode」
+     * ——而那个字段在界面上明明写着「登记后不可改」。
+     *
+     * 带了也不会白带：草稿态可以改（owner 2026-09-11 裁定「整个草稿态都可改」，
+     * 启用后锁定）。见下面 `codeChange` 那一段。
+     */
+    validateWrite(body, { requireCore: true, requireCode: false });
     /* 端**字段缺席 = 不动**（undefined），传了数组才整组替换。
        「改个产品名」不该顺手把端清空——而如果这里把 undefined 当成空数组，
        任何一次不带 surfaces 的 PUT 都会静默清掉它。 */
@@ -527,31 +702,145 @@ export class ProductCatalogRouter {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+
+      /*
+       * ── 产品码：草稿态可改，启用后锁定（owner 2026-09-11）──
+       *
+       * `FOR UPDATE` 锁住这一行再判：不锁的话，「读到 draft → 另一个会话把它启用
+       * → 这边照样改码」这条竞态是存在的，而产品一旦启用就有客户足迹。
+       */
+      const current = await client.query<{
+        product_code: string;
+        status: string;
+      }>(
+        `SELECT product_code, status FROM product.products
+          WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+        [id],
+      );
+      const before = current.rows[0];
+      if (!before) {
+        await client.query("rollback").catch(() => undefined);
+        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+      }
+      const wantedCode = body.productCode?.trim();
+      const codeChange =
+        wantedCode !== undefined &&
+        wantedCode !== "" &&
+        wantedCode !== before.product_code;
+      if (codeChange && before.status !== "draft") {
+        /* 明确报错，不静默忽略。收下一个新值、校验通过、然后被 SET 列表丢掉，
+           会给运营者「我已经改了」的错觉——那比拒绝更糟。 */
+        const label =
+          STATE_LABELS[before.status as ProductState] ?? before.status;
+        throw conflict(
+          "CATALOG_CODE_LOCKED",
+          `产品码只能在草稿状态修改。「${before.product_code}」已经是${label}状态——它的客户端配置、边缘路由与已售订阅都按这个码在走。`,
+        );
+      }
+
+      /*
+       * ── 善后：改码之前先把推导出来的边缘域名钉死 ──
+       *
+       * `edge_domain` 为空时，边缘路由表按 `{产品码}.vxture.com` 推导。于是改码
+       * **等于换域名**，而 DNS 还指着旧的那个——下一次 deploy 渲染路由表时，旧域名
+       * 从表里消失，访问它的人拿到 444（无响应关闭），没有任何一处会报错。
+       *
+       * 所以在改码的同一个事务里，把当时**实际生效的**那个域名写成显式值。路由不动，
+       * 改码就只是改码。要换域名是另一件事，在同一页上单独改。
+       *
+       * 只在真的走边缘路由时才钉（`edge_upstream` 有值）：没接边缘的产品钉一个域名
+       * 进去，等于凭空给它一条没人要的配置。
+       */
+      let pinnedDomain: string | null = null;
+      if (codeChange) {
+        const pin = await client.query<{ edge_domain: string }>(
+          `UPDATE product.product_webhooks
+              SET edge_domain = $2, updated_at = now()
+            WHERE product_id = $1
+              AND coalesce(edge_domain, '') = ''
+              AND coalesce(edge_upstream, '') <> ''
+            RETURNING edge_domain`,
+          [id, `${before.product_code}.vxture.com`],
+        );
+        pinnedDomain = pin.rows[0]?.edge_domain ?? null;
+      }
+
+      /*
+       * ── 缺席即不改。这一段是在修一处正在生产上丢数据的缺陷 ──
+       * 原先 SET 列表取值一律 `body.x ?? 默认值`，于是**任何送部分字段的客户端都会
+       * 把它没送的列抹掉**：详情页只送 11 个，剩下四列每保存一次就被写成
+       * `category_id = null`、`standalone_subscribable = true`、`capability_keys = []`、
+       * `tags = []`。接口回 200、界面提示保存成功，而那几个字段本来就不在页面上，
+       * 所以看不出任何区别——要等到某个产品在目录里归错类，或者一个本不该单独售卖的
+       * 组件突然可以单买，才会有人发现，那时已无从判断是谁在哪一次保存里弄没的。
+       *
+       * 讽刺的是正确的规则就写在上面三行：`surfaces` 那里写着「字段缺席 = 不动」，
+       * 理由一字不差地适用于这些标量列，只是当时没往下推。
+       *
+       * **三态**（与 webhook 密钥那条同一套）：键不在 = 不改；显式 null / 空串 =
+       * 清空；有值 = 覆盖。改客户端（让详情页把字段送齐）也能让今天这版不丢数据，
+       * 但下次往表里加一列而某个写入面忘了跟，同样的静默丢失就回来了。
+       *
+       * ── 为什么是 CASE 而不是把 SET 列表拼出来 ──
+       * 拼 SET 列表更短，但 `lint:anchor-writes` 是**静态**读 SQL 文本抽列名的，
+       * 一插值它就抽到零列然后判过——实测：往那份列表里塞一个 `created_at`，守卫照样
+       * 绿。而写进锚点列在生产上是 42501、整条事务回滚（TD-018 列锁）。
+       * 保持 SQL 静态，守卫才继续看得见这条语句。`updateDisplay` 也是这个写法。
+       *
+       * 每个可选列一对参数：`$奇数` 是「这次送了没」，`$偶数` 是值。
+       * `ELSE <列名>` 在 UPDATE 的 SET 表达式里读的是**这一行的旧值**。
+       */
+      const has = (k: keyof ProductWriteBody) => body[k] !== undefined;
       const result = await client.query<ProductRow>(
         `UPDATE product.products SET
-           product_type = $1, category_id = $2, product_name = $3,
-           product_nick = $4, description = $5, capability_keys = $6, tags = $7,
-           standalone_subscribable = $8, is_customer_visible = $9,
-           is_workforce_visible = $10, origin = $11, origin_provider = $12,
-           icon_url = $13, updated_by = $14, updated_at = now()
-         WHERE id = $15 AND deleted_at IS NULL
+           product_type = $1,
+           product_name = $2,
+           product_code            = CASE WHEN $27::bool THEN $28 ELSE product_code            END,
+           category_id             = CASE WHEN  $3::bool THEN  $4 ELSE category_id             END,
+           product_nick            = CASE WHEN  $5::bool THEN  $6 ELSE product_nick            END,
+           description             = CASE WHEN  $7::bool THEN  $8 ELSE description             END,
+           capability_keys         = CASE WHEN  $9::bool THEN $10 ELSE capability_keys         END,
+           tags                    = CASE WHEN $11::bool THEN $12 ELSE tags                    END,
+           standalone_subscribable = CASE WHEN $13::bool THEN $14 ELSE standalone_subscribable END,
+           is_customer_visible     = CASE WHEN $15::bool THEN $16 ELSE is_customer_visible     END,
+           is_workforce_visible    = CASE WHEN $17::bool THEN $18 ELSE is_workforce_visible    END,
+           origin                  = CASE WHEN $19::bool THEN $20 ELSE origin                  END,
+           origin_provider         = CASE WHEN $21::bool THEN $22 ELSE origin_provider         END,
+           icon_url                = CASE WHEN $23::bool THEN $24 ELSE icon_url                END,
+           updated_by = $25, updated_at = now()
+         WHERE id = $26 AND deleted_at IS NULL
          RETURNING ${SELECT_COLUMNS}`,
         [
           body.productType!.trim(),
-          body.categoryId ?? null,
           body.productName!.trim(),
+          has("categoryId"),
+          body.categoryId ?? null,
+          has("productNick"),
           body.productNick?.trim() || null,
+          has("description"),
           body.description?.trim() || null,
+          has("capabilityKeys"),
           body.capabilityKeys ?? [],
+          has("tags"),
           body.tags ?? [],
+          has("standaloneSubscribable"),
           body.standaloneSubscribable ?? true,
+          has("isCustomerVisible"),
           body.isCustomerVisible ?? true,
+          has("isWorkforceVisible"),
           body.isWorkforceVisible ?? true,
+          has("origin"),
           body.origin ?? "self",
+          has("originProvider"),
           body.originProvider?.trim() || null,
+          has("iconUrl"),
           body.iconUrl?.trim() || null,
           operatorId,
           id,
+          /* 排在最后而不是插在中间：前 24 个是成对的 CASE 参数，从中间插一个会把
+             后面每一个编号都推一位，而编号错位不报错、只会把值写到别的列上去。 */
+          codeChange,
+          codeChange ? wantedCode : null,
         ],
       );
       const row = result.rows[0];
@@ -567,9 +856,20 @@ export class ProductCatalogRouter {
         ...toRecord(row),
         /* 同 create：RETURNING 的子查询在替换之前求值，回传的是旧集合。 */
         surfaces: surfaces ?? toRecord(row).surfaces,
+        /* 改码时的善后结果。界面据此告诉运营者「边缘域名已钉在旧值上」——
+           做了什么要说出来，悄悄改一行配置比不改更难查。 */
+        ...(pinnedDomain !== null ? { pinnedEdgeDomain: pinnedDomain } : {}),
       };
     } catch (error) {
       await client.query("rollback").catch(() => undefined);
+      /* 产品码撞车：`uq_products_product_code` 是唯一约束，冒上来是 23505、
+         也就是 500 和一句英文约束名。运营者看到的该是「这个码被谁占了」。 */
+      if ((error as { code?: string }).code === "23505") {
+        throw conflict(
+          "CATALOG_CODE_TAKEN",
+          `产品码「${body.productCode?.trim()}」已经被别的产品占用了。`,
+        );
+      }
       throw error;
     } finally {
       client.release();
@@ -1882,10 +2182,11 @@ function normalizeRef(value: string | null | undefined): string | null {
 
 function validateWrite(
   body: ProductWriteBody,
-  opts: { requireCore: boolean },
+  /** `requireCode` 缺省随 `requireCore`——只有「改」显式传 false（产品码不可改）。 */
+  opts: { requireCore: boolean; requireCode?: boolean },
 ): void {
   if (opts.requireCore) {
-    if (!body.productCode?.trim()) {
+    if ((opts.requireCode ?? true) && !body.productCode?.trim()) {
       throw invalidRequest(
         "VALIDATION_REQUIRED",
         "productCode is required",

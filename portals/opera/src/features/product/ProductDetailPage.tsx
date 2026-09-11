@@ -50,6 +50,7 @@ import {
   DialogForm,
   Drawer,
   EmptyState,
+  FileTrigger,
   Icon,
   Input,
   NativeSelect,
@@ -74,10 +75,20 @@ import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { LockedInput } from "@/components/form/LockedInput";
 import { actionsFor, type ProductAction } from "./lifecycle";
-import { FieldGrid, FormField, SectionBody, ToggleRow } from "./DetailForm";
+import {
+  CopyableInput,
+  FieldGrid,
+  FormField,
+  SectionBody,
+  ToggleRow,
+} from "./DetailForm";
 import { ProductMetricsSection } from "./ProductMetricsSection";
 
 const MANAGE = "platform:product.manage";
+
+/** 与 BFF、库上的 CHECK 同一套。不收 SVG——它可以带脚本。 */
+const ICON_ACCEPT = ["image/png", "image/webp", "image/jpeg"];
+const ICON_MAX_BYTES = 262144;
 
 type ProductState = "draft" | "active" | "inactive" | "deprecated";
 
@@ -97,6 +108,8 @@ const STATE_LABEL: Record<ProductState, string> = {
 interface ProductRecord {
   id: string;
   productCode: string;
+  categoryId: number | null;
+  standaloneSubscribable: boolean;
   productType: string;
   productName: string;
   productNick: string | null;
@@ -108,6 +121,8 @@ interface ProductRecord {
   originProvider: string | null;
   surfaces: string[];
   iconUrl: string | null;
+  /** 平台托管图标的版本号(内容哈希)。null = 没传过。 */
+  iconVersion: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -125,8 +140,16 @@ interface ClientLite {
   clientId: string;
   releaseChannel: string;
   state: string;
+  displayName: string | null;
+  logoUrl: string | null;
   redirectUris: string[];
+  postLogoutRedirectUris: string[];
   tokenEndpointAuthMethod: string;
+}
+
+interface CategoryLite {
+  id: number;
+  name: string;
 }
 
 interface ChecklistItem {
@@ -149,6 +172,10 @@ function reason(error: unknown, fallback: string): string {
 }
 
 interface ProductDraft {
+  /** 草稿态可改（owner 2026-09-11），启用后由 BFF 锁死。 */
+  productCode: string;
+  categoryId: string;
+  standaloneSubscribable: boolean;
   productName: string;
   productNick: string;
   description: string;
@@ -183,6 +210,8 @@ type FieldErrors = Record<string, string>;
  * 这里没登记就变成「保存失败」四个字。
  */
 const FIELD_META: Record<string, { label: string; inputId: string }> = {
+  productCode: { label: "产品代码", inputId: "pd-code" },
+  categoryId: { label: "产品分类", inputId: "pd-category" },
   productName: { label: "产品名称", inputId: "pd-name" },
   productType: { label: "产品类型", inputId: "pd-type" },
   originProvider: { label: "供应方", inputId: "pd-provider" },
@@ -210,7 +239,15 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 /** 一张凭据卡：图标 + client_id + 渠道/类型/状态/回调数。 */
-function ClientCard({ client }: { readonly client: ClientLite }) {
+function ClientCard({
+  client,
+  canManage,
+  onEdit,
+}: {
+  readonly client: ClientLite;
+  readonly canManage: boolean;
+  readonly onEdit: () => void;
+}) {
   const isPublic = client.tokenEndpointAuthMethod === "none";
   return (
     <Card className="flex min-w-0 flex-col gap-sm p-md">
@@ -218,14 +255,28 @@ function ClientCard({ client }: { readonly client: ClientLite }) {
         <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
           <Icon name="fingerprint" size="sm" aria-hidden="true" />
         </span>
-        <span className="flex min-w-0 flex-col">
+        <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate font-mono text-code-sm">
             {client.clientId}
           </span>
-          <span className="text-label-sm text-muted-foreground">
-            {CHANNEL_LABEL[client.releaseChannel] ?? client.releaseChannel}
+          {/* 展示名要露出来：它是**客户在授权页看到的那个名字**，而此前界面上
+              一处都不显示，于是 vxtpl 的授权页一直写着 seed 里的英文缩写。 */}
+          <span className="truncate text-label-sm text-muted-foreground">
+            {CHANNEL_LABEL[client.releaseChannel] ?? client.releaseChannel} ·{" "}
+            {client.displayName || "未设展示名"}
           </span>
         </span>
+        {canManage ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`编辑 ${client.clientId}`}
+            onClick={onEdit}
+          >
+            <Icon name="edit" size="sm" aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-xs">
         <StatusBadge
@@ -290,6 +341,18 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
 
   const [draft, setDraft] = useState<ProductDraft | null>(null);
+  const [categories, setCategories] = useState<CategoryLite[]>([]);
+  /** 待确认的新产品码。非 null 时弹危险确认。 */
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+  /** 产品码那一栏解锁了没。放弃 / 重载会回到锁着的默认态。 */
+  const [codeUnlocked, setCodeUnlocked] = useState(false);
+  /**
+   * 产品码能不能改：草稿态可改，启用之后锁定（owner 2026-09-11）。
+   *
+   * 界面这道只是不给改的入口，**判据在 BFF**——它锁行再判状态，因为「读到草稿 →
+   * 另一个会话把它启用 → 这边照样改」这条竞态在前端是看不见的。
+   */
+  const codeEditable = canManage && product?.state === "draft";
   const [whDraft, setWhDraft] = useState<WebhookDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -310,10 +373,26 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
    * 只需要能看见它们；真要新建，保存完这一页之后再去凭据页，回来会自动关联。
    */
   const [credOpen, setCredOpen] = useState(false);
+  /**
+   * 正在编辑的客户端。
+   *
+   * 展示物（授权页的名字与 logo）与回调白名单**分开两个动作**：前者改错了顶多难看，
+   * 后者能往白名单里加一个地址就能把授权码导走。服务端也是两个路由，后者挂 step-up。
+   */
+  const [editClient, setEditClient] = useState<ClientLite | null>(null);
+  const [clientDraft, setClientDraft] = useState({
+    displayName: "",
+    logoUrl: "",
+  });
+  const [savingClient, setSavingClient] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
     setErrors({});
+    /* 重新锁上。`reload` 是「放弃」「保存成功后」「首次加载」共同的入口，
+       锁态在这里收敛，就不会出现「保存完了那一栏还开着」。 */
+    setCodeUnlocked(false);
     try {
       const p = await api.get<ProductRecord | null>(
         `/api/products/${encodeURIComponent(productCode)}`,
@@ -324,6 +403,9 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       }
       setProduct(p);
       setDraft({
+        productCode: p.productCode,
+        categoryId: p.categoryId == null ? "" : String(p.categoryId),
+        standaloneSubscribable: p.standaloneSubscribable,
         productName: p.productName,
         productNick: p.productNick ?? "",
         description: p.description ?? "",
@@ -338,7 +420,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
 
       /* 三个附属读并行，且各自失败各自兜：webhook 读不到不该让整页空白，
          那样连产品名都看不见。每一节自己说自己的问题。 */
-      const [wh, cl, ck] = await Promise.all([
+      const [wh, cl, ck, cats] = await Promise.all([
         api
           .get<WebhookRecord | null>(`/api/products/${p.id}/webhook`)
           .catch(() => null),
@@ -348,10 +430,14 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         api
           .get<ChecklistItem[]>(`/api/products/${p.id}/checklist`)
           .catch(() => [] as ChecklistItem[]),
+        api
+          .get<CategoryLite[]>("/api/products/categories")
+          .catch(() => [] as CategoryLite[]),
       ]);
       setWebhook(wh);
       setClients(cl);
       setChecklist(ck);
+      setCategories(cats);
       setWhDraft({
         /* 没登记过就按产品码预填——渲染器本来就会对空值做同一个推导，预填只是把
            这条隐含规则摆到运营者眼前，让异 apex 的产品有地方改。 */
@@ -379,14 +465,39 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
    * 对应的信息框应该高亮红色体现。不然找不到位置。」`OperaApiError.field` 正是
    * BFF `invalidRequest(code, message, field)` 的第三个参数。
    */
-  async function save(event: FormEvent<HTMLFormElement>) {
+  /**
+   * 提交闸门。改产品码要先过一道确认——那不是普通字段。
+   *
+   * owner 2026-09-11:「草稿态有下游对接了，修改明确提示危险操作，并执行一个关联
+   * 修改流程完成善后工作。」下游有什么、会怎么处理，都在 `CodeChangeDialog` 里
+   * 逐条列出来；善后本身（钉住推导出来的边缘域名）在 BFF 的同一个事务里做。
+   */
+  function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!product || !draft) return;
+    const next = draft.productCode.trim();
+    if (codeEditable && next && next !== product.productCode) {
+      setPendingCode(next);
+      return;
+    }
+    void doSave();
+  }
+
+  async function doSave() {
     if (!product || !draft || !whDraft) return;
+    setPendingCode(null);
     setSaving(true);
     setErrors({});
     const secret = whDraft.webhookSecret.trim();
     try {
       await api.put(`/api/products/${product.id}`, {
+        /* 草稿态送草稿里的值（可改），否则送原值。原值仍然要送：本页发布时线上
+           可能还是旧 BFF，那版的 PUT 必填它。 */
+        productCode: codeEditable
+          ? draft.productCode.trim()
+          : product.productCode,
+        categoryId: draft.categoryId ? Number(draft.categoryId) : null,
+        standaloneSubscribable: draft.standaloneSubscribable,
         productName: draft.productName.trim(),
         productNick: draft.productNick.trim() || null,
         description: draft.description.trim() || null,
@@ -448,6 +559,102 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * 上传产品图标。走 base64 JSON，不走 multipart——平台没有文件中间件，而图标是
+   * 几十 KB 的小文件，`FileReader` 读成 base64 直接发即可。
+   *
+   * 本地先判尺寸与类型，不是替代服务端校验（那边也判、库上还有 CHECK），是为了
+   * **不让人等一次上传再被拒**——一张 3MB 的图 base64 之后是 4MB，发上去再退回来
+   * 是纯粹的浪费。
+   */
+  async function uploadIcon(file: File) {
+    if (!product) return;
+    if (!ICON_ACCEPT.includes(file.type)) {
+      toast({
+        tone: "danger",
+        title: "图片格式不支持",
+        description: "只收 PNG / WebP / JPEG。SVG 不收——矢量请先栅格化。",
+      });
+      return;
+    }
+    if (file.size > ICON_MAX_BYTES) {
+      toast({
+        tone: "danger",
+        title: "图片太大",
+        description: `不能超过 ${Math.floor(ICON_MAX_BYTES / 1024)}KB，当前 ${Math.ceil(file.size / 1024)}KB。`,
+      });
+      return;
+    }
+    setUploadingIcon(true);
+    try {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error("读取文件失败"));
+        /* readAsDataURL 给的是 `data:image/png;base64,xxx`，只要逗号之后那段。 */
+        fr.onload = () => resolve(String(fr.result ?? "").split(",")[1] ?? "");
+        fr.readAsDataURL(file);
+      });
+      await api.put(`/api/products/${product.id}/icon`, {
+        mimeType: file.type,
+        dataBase64,
+      });
+      toast({ tone: "success", title: "图标已更新" });
+      await reload();
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "上传失败",
+        description: reason(error, "上传失败"),
+      });
+    } finally {
+      setUploadingIcon(false);
+    }
+  }
+
+  async function removeIcon() {
+    if (!product) return;
+    setUploadingIcon(true);
+    try {
+      await api.delete(`/api/products/${product.id}/icon`);
+      toast({ tone: "success", title: "图标已移除，回落到产品字母牌" });
+      await reload();
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "移除失败",
+        description: reason(error, "移除失败"),
+      });
+    } finally {
+      setUploadingIcon(false);
+    }
+  }
+
+  async function saveClientDisplay(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editClient) return;
+    setSavingClient(true);
+    try {
+      await api.patch(
+        `/api/oidc-clients/${encodeURIComponent(editClient.clientId)}`,
+        {
+          displayName: clientDraft.displayName.trim() || null,
+          logoUrl: clientDraft.logoUrl.trim() || null,
+        },
+      );
+      toast({ tone: "success", title: `${editClient.clientId} 已更新` });
+      setEditClient(null);
+      await reload();
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "保存失败",
+        description: reason(error, "保存失败"),
+      });
+    } finally {
+      setSavingClient(false);
     }
   }
 
@@ -611,32 +818,124 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-code"
                   label="产品代码"
-                  help="登记后不可改。要换须登记新产品。"
+                  required={codeEditable}
+                  error={errors["productCode"]}
+                  help={
+                    codeEditable
+                      ? "草稿状态可以改，点「修改」解锁；启用之后彻底锁定。改动会同时处理已经按这个码建立的配置。"
+                      : "已启用，不可再改。它的客户端配置、边缘路由与已售订阅都按这个码在走。"
+                  }
                 >
-                  {/* `locked` 已经把它置为 disabled——件刻意 Omit 掉了 readOnly。 */}
-                  <LockedInput
-                    id="pd-code"
-                    locked
-                    value={product?.productCode ?? ""}
-                    className="font-mono text-code-sm"
-                  />
+                  {/* 三态。中间那一档是 owner 2026-09-11 要的：
+                      「给所有锁定条目，增加修改按钮激活修改，防止误操作」，
+                      「在已发布产品，该按钮隐藏，直接锁定无法修改」。
+
+                      · 草稿 + 已解锁 → 普通输入框
+                      · 草稿 + 未解锁 → 锁着，旁边一枚「修改」
+                      · 已发布       → 锁着，**没有按钮**（`onUnlock` 不传） */}
+                  {codeEditable && codeUnlocked ? (
+                    <Input
+                      id="pd-code"
+                      value={draft?.productCode ?? ""}
+                      autoFocus
+                      aria-invalid={!!errors["productCode"]}
+                      className="font-mono text-code-sm"
+                      onChange={(e) =>
+                        draft &&
+                        setDraft({ ...draft, productCode: e.target.value })
+                      }
+                    />
+                  ) : (
+                    /* `locked` 已经把它置为 disabled——件刻意 Omit 掉了 readOnly。 */
+                    <LockedInput
+                      id="pd-code"
+                      locked
+                      value={draft?.productCode ?? product?.productCode ?? ""}
+                      className="font-mono text-code-sm"
+                      {...(codeEditable
+                        ? { onUnlock: () => setCodeUnlocked(true) }
+                        : {})}
+                    />
+                  )}
+                </FormField>
+
+                <FormField
+                  id="pd-category"
+                  label="产品分类"
+                  error={errors["categoryId"]}
+                  help="目录归属。不选则归入未分类。"
+                >
+                  <NativeSelect
+                    id="pd-category"
+                    value={draft?.categoryId ?? ""}
+                    disabled={!canManage}
+                    aria-invalid={!!errors["categoryId"]}
+                    onChange={(e) =>
+                      draft &&
+                      setDraft({ ...draft, categoryId: e.target.value })
+                    }
+                  >
+                    <option value="">未分类</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
                 </FormField>
 
                 <FormField
                   id="pd-icon"
                   label="产品图标"
-                  help="留空则只显示文字。"
+                  group
+                  help="PNG / WebP / JPEG，不超过 256KB。不传则 console 显示产品名首字母。"
                 >
-                  <Input
-                    id="pd-icon"
-                    value={draft?.iconUrl ?? ""}
-                    disabled={!canManage}
-                    placeholder={`https://${product?.productCode ?? "acme"}.vxture.com/icon.svg`}
-                    className="font-mono text-code-sm"
-                    onChange={(e) =>
-                      draft && setDraft({ ...draft, iconUrl: e.target.value })
-                    }
-                  />
+                  <div className="flex items-center gap-sm">
+                    {/* 预览：地址带版本号，换图会换地址，所以不会显示到旧图。 */}
+                    {product?.iconVersion ? (
+                      <img
+                        src={`/api/products/${encodeURIComponent(product.id)}/icon?v=${encodeURIComponent(product.iconVersion)}`}
+                        alt=""
+                        aria-hidden="true"
+                        className="size-control-md shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-muted text-label-sm text-muted-foreground"
+                      >
+                        {(product?.productName ?? "").slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    {canManage ? (
+                      <>
+                        {/* 藏 input、用 label 触发按钮那一套已收进 DS 12.7.0 的
+                            FileTrigger——这里原本是手写的一份，`ds/no-native-primitive`
+                            拦下了它。 */}
+                        <FileTrigger
+                          accept={ICON_ACCEPT.join(",")}
+                          disabled={uploadingIcon}
+                          onSelect={(files) => {
+                            const f = files[0];
+                            if (f) void uploadIcon(f);
+                          }}
+                        >
+                          {uploadingIcon ? "上传中…" : "上传图标"}
+                        </FileTrigger>
+                        {product?.iconVersion ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="md"
+                            disabled={uploadingIcon}
+                            onClick={() => void removeIcon()}
+                          >
+                            移除
+                          </Button>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
                 </FormField>
 
                 <FormField
@@ -782,6 +1081,19 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                       draft && setDraft({ ...draft, isWorkforceVisible: v })
                     }
                   />
+                  {/* 关掉 = 只能随套餐捆绑售卖，不单独出现在订阅页。
+                      此前这一项只在登记对话框里有，详情页改任何字段都会把它写回
+                      true——那正是「缺席即不改」要修的那批列之一。 */}
+                  <ToggleRow
+                    id="pd-standalone"
+                    label="可独立订阅"
+                    help="关掉后只能随套餐捆绑售卖，不单独出现在订阅页。"
+                    checked={draft?.standaloneSubscribable ?? false}
+                    disabled={!canManage}
+                    onChange={(v) =>
+                      draft && setDraft({ ...draft, standaloneSubscribable: v })
+                    }
+                  />
                 </div>
 
                 <div className="flex min-w-0 flex-col gap-sm">
@@ -815,7 +1127,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["edgeDomain"]}
                   help="按产品码预填，可改。DNS 记录需自行创建。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-domain"
                     value={whDraft?.edgeDomain ?? ""}
                     disabled={!canManage}
@@ -834,7 +1146,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["edgeUpstream"]}
                   help="host:port，不带协议或路径。留空则不进边缘路由表。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-upstream"
                     value={whDraft?.edgeUpstream ?? ""}
                     disabled={!canManage}
@@ -854,7 +1166,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["webhookUrl"]}
                   help="http / https 绝对地址。留空即撤销登记。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-callback"
                     value={whDraft?.webhookUrl ?? ""}
                     disabled={!canManage}
@@ -902,7 +1214,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["homeUrl"]}
                   help="展示用。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-home"
                     value={whDraft?.homeUrl ?? ""}
                     disabled={!canManage}
@@ -1044,7 +1356,18 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       >
         <div className="grid gap-md md:grid-cols-2">
           {clients.map((c) => (
-            <ClientCard key={c.clientId} client={c} />
+            <ClientCard
+              key={c.clientId}
+              client={c}
+              canManage={canManage}
+              onEdit={() => {
+                setEditClient(c);
+                setClientDraft({
+                  displayName: c.displayName ?? "",
+                  logoUrl: c.logoUrl ?? "",
+                });
+              }}
+            />
           ))}
           {/* 预留位:渠道是 stable / beta / canary,而绝大多数产品先有 stable。
               给缺席的渠道留一张灰卡,让「还没建」这件事在版面上占位——否则一个
@@ -1057,7 +1380,117 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         </div>
       </Drawer>
 
+      {/* ── 凭据展示物编辑 ─────────────────────────────────────────────────
+          只改授权页的名字与 logo。回调白名单不在这里——它是安全边界，服务端那条
+          路由挂着 step-up，要另做一个动作。 */}
+      <DialogForm
+        size="lg"
+        open={editClient !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditClient(null);
+        }}
+        title={editClient ? `${editClient.clientId} · 授权页展示` : ""}
+        description="客户在授权页与登出页看到的名字和图标。"
+        submitLabel={tShared("common.save")}
+        submitting={savingClient}
+        onSubmit={saveClientDisplay}
+      >
+        <FieldGrid>
+          <FormField
+            id="cl-display"
+            label="展示名"
+            help="留空则显示 client_id。"
+          >
+            <Input
+              id="cl-display"
+              value={clientDraft.displayName}
+              onChange={(e) =>
+                setClientDraft({ ...clientDraft, displayName: e.target.value })
+              }
+            />
+          </FormField>
+          <FormField id="cl-logo" label="Logo 地址">
+            <CopyableInput
+              id="cl-logo"
+              value={clientDraft.logoUrl}
+              placeholder={`https://${product?.productCode ?? "acme"}.vxture.com/logo.svg`}
+              className="font-mono text-code-sm"
+              onChange={(e) =>
+                setClientDraft({ ...clientDraft, logoUrl: e.target.value })
+              }
+            />
+          </FormField>
+        </FieldGrid>
+      </DialogForm>
+
       {/* ── 一次性交接清单 ─────────────────────────────────────────────── */}
+      {/* ── 改产品码：危险确认 + 善后清单 ──────────────────────────────
+          owner:「草稿态有下游对接了，修改明确提示危险操作，并执行一个关联修改
+          流程完成善后工作。」所以这里不是一句「确定吗」，而是**把下游有什么、
+          各自会怎么处理逐条摆出来**——运营者要判断的是那些条目，不是这个问句。 */}
+      <DialogForm
+        open={pendingCode !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingCode(null);
+        }}
+        title="修改产品代码"
+        description={`${product?.productCode ?? ""} → ${pendingCode ?? ""}`}
+        submitLabel="确认修改"
+        submitting={saving}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void doSave();
+        }}
+      >
+        <div className="flex flex-col gap-md">
+          <Banner
+            tone="warning"
+            title="产品代码是这个产品在平台内外的身份"
+            description="启用之后就锁死了。现在还能改，是因为它还是草稿——但下面这些东西已经按旧的码建起来了。"
+          />
+          <DetailList>
+            <DetailRow label="边缘域名">
+              {webhook?.edgeDomain?.trim() ? (
+                <span>
+                  已显式填写 <code>{webhook.edgeDomain}</code> ——不受影响。
+                </span>
+              ) : webhook?.edgeUpstream?.trim() ? (
+                /* 推导 + 真的走边缘路由 = 改码等于换域名。BFF 会在同一个事务里把
+                   当时生效的那个域名钉成显式值，路由不动。 */
+                <span>
+                  当前按产品码推导为{" "}
+                  <code>{product?.productCode}.vxture.com</code>，会
+                  <strong>钉成固定值</strong>
+                  ——路由不变，DNS 不用动。要换域名请在保存后单独改这一栏。
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  没接边缘路由，不受影响。
+                </span>
+              )}
+            </DetailRow>
+            <DetailRow label="接入凭据">
+              {clients.length > 0 ? (
+                <span>
+                  {clients.map((c) => c.clientId).join("、")} —— 客户端标识
+                  <strong>保持不变</strong>
+                  。它写在产品自己的配置里，跟着改会让产品当场登不进来。
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  还没建，不受影响。
+                </span>
+              )}
+            </DetailRow>
+            <DetailRow label="回调与密钥">
+              <span className="text-muted-foreground">
+                按 id 关联，不受影响。
+              </span>
+            </DetailRow>
+          </DetailList>
+        </div>
+      </DialogForm>
+
       <DialogForm
         open={handover !== null}
         onOpenChange={(open) => {
@@ -1084,6 +1517,23 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           className="font-mono text-code-sm"
           onFocus={(e) => e.currentTarget.select()}
         />
+        {/* 这一份关掉就再也拿不到，而它正是要被粘进一封邮件的东西。
+            凭据页那个明文框一直有复制按钮，这里漏了。 */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText((handover ?? []).join("\n"))
+              .then(
+                () => toast({ tone: "success", title: "已复制交接清单" }),
+                () => undefined,
+              );
+          }}
+        >
+          <Icon name="copy" size="sm" aria-hidden="true" />
+          复制全部
+        </Button>
       </DialogForm>
 
       {/* advisory 的二次确认。**提醒不是门闩**：没有任何条件可以不满足，它只是

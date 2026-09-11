@@ -53,9 +53,7 @@ import {
   ListPageTemplate,
   NativeSelect,
   StatusBadge,
-  Switch,
   TableTitleCell,
-  Textarea,
   ViewHeader,
   useListPagination,
   useToast,
@@ -65,9 +63,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
-  PRODUCT_SURFACE_DEFS,
   PRODUCT_TYPE_DEFS,
-  productSurfaceLabel,
   productTypeLabel,
   isValidProductType,
 } from "@vxture/core-utils";
@@ -129,13 +125,6 @@ interface ProductRecord {
   iconUrl: string | null;
   /** 可露出的端（受管枚举）。一个都没勾时是空数组，不是 null。 */
   surfaces: string[];
-}
-
-interface ProductCategoryRecord {
-  id: number;
-  parentId: number | null;
-  code: string;
-  name: string;
 }
 
 const ORIGIN_LABELS: Record<ProductOrigin, string> = {
@@ -213,40 +202,22 @@ const EMPTY_WEBHOOK: WebhookDraft = {
   webhookSecret: "",
 };
 
+/**
+ * 登记草稿只装三项——对话框收什么，这里就有什么。
+ *
+ * 其余字段（副名、简介、分类、来源、三个开关、图标）搬去详情页了，所以也从这里
+ * 拿掉：留着不填的字段会让「这个对话框到底收什么」有两个答案，而其中一个是死的。
+ */
 interface ProductDraft {
   productCode: string;
   productType: string;
-  categoryId: string;
   productName: string;
-  productNick: string;
-  description: string;
-  origin: ProductOrigin;
-  originProvider: string;
-  standaloneSubscribable: boolean;
-  isCustomerVisible: boolean;
-  isWorkforceVisible: boolean;
-  /** 产品图标。console 应用中心的磁贴在读它。 */
-  iconUrl: string;
-  /** 可露出的端。整组替换语义——提交时原样送出。 */
-  surfaces: string[];
 }
 
 const EMPTY_DRAFT: ProductDraft = {
   productCode: "",
   productType: "",
-  categoryId: "",
   productName: "",
-  productNick: "",
-  description: "",
-  origin: "self",
-  originProvider: "",
-  standaloneSubscribable: true,
-  isCustomerVisible: true,
-  isWorkforceVisible: true,
-  iconUrl: "",
-  /* 新产品默认只勾网页端:那是所有产品都成立的那一个，其余按需加。
-     默认全勾会让「支持小程序」变成一句没人确认过的话。 */
-  surfaces: ["web"],
 };
 
 function describeError(error: unknown): { description?: string } {
@@ -347,7 +318,6 @@ function ProductsPageContent() {
   const productIdFilter = useSearchParams().get("productId") ?? "";
 
   const [rows, setRows] = useState<ProductRecord[]>([]);
-  const [categories, setCategories] = useState<ProductCategoryRecord[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
   const [originFilter, setOriginFilter] = useState<"all" | ProductOrigin>(
@@ -400,9 +370,10 @@ function ProductsPageContent() {
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
     try {
-      const [products, cats, summary] = await Promise.all([
+      /* 分类清单不再在这一页取：登记对话框已经不收分类了（搬去详情页），
+         而列表本身不显示它。留着就是每次进目录页多一次没人用的请求。 */
+      const [products, summary] = await Promise.all([
         api.get<ProductRecord[]>("/api/products"),
-        api.get<ProductCategoryRecord[]>("/api/products/categories"),
         /* 汇总失败不该让整页读不出来——验证态是附加信息，产品目录本身不依赖它。
            所以这一条单独兜底成空对象，全部行显示「未验证」。 */
         api
@@ -412,7 +383,6 @@ function ProductsPageContent() {
           .catch(() => ({}) as Record<string, ChecklistItem[]>),
       ]);
       setRows(products);
-      setCategories(cats);
       setChecklistByProduct(summary);
       setLoad({ kind: "ready" });
     } catch (error) {
@@ -776,20 +746,11 @@ function ProductsPageContent() {
     const payload = {
       productCode: draft.productCode.trim(),
       productType: draft.productType.trim(),
-      categoryId: draft.categoryId ? Number(draft.categoryId) : null,
       productName: draft.productName.trim(),
-      productNick: draft.productNick.trim() || null,
-      description: draft.description.trim() || null,
-      origin: draft.origin,
-      originProvider:
-        draft.origin === "third_party" ? draft.originProvider.trim() : null,
-      standaloneSubscribable: draft.standaloneSubscribable,
-      isCustomerVisible: draft.isCustomerVisible,
-      isWorkforceVisible: draft.isWorkforceVisible,
-      iconUrl: draft.iconUrl.trim() || null,
-      /* 端**整组送出**:接口按整组替换，缺席才是"不动"。这里永远带上，
-         所以取消勾选能真的取消——不带的话界面上取消了、库里还留着。 */
-      surfaces: draft.surfaces,
+      /* 端**整组送出**：接口按整组替换，缺席才是「不动」。新产品默认只勾网页端
+         ——那是所有产品都成立的那一个，其余在详情页按需加。默认全勾会让
+         「支持小程序」变成一句没人确认过的话。 */
+      surfaces: ["web"],
     };
 
     setSubmitting(true);
@@ -826,8 +787,7 @@ function ProductsPageContent() {
   const draftValid =
     draft.productCode.trim() !== "" &&
     draft.productType.trim() !== "" &&
-    draft.productName.trim() !== "" &&
-    (draft.origin !== "third_party" || draft.originProvider.trim() !== "");
+    draft.productName.trim() !== "";
 
   const pagination = (
     <ListPagination
@@ -1276,263 +1236,76 @@ function ProductsPageContent() {
         submitDisabled={!draftValid}
         onSubmit={submit}
       >
-        {/* 三档（DS `FieldTier`）：身份 = 这是哪个产品，Code 登记后不可改；常规 = 目录
-            与归属；高级 = 三个开关，都有缺省值，不动也能登记。 */}
-        <FieldTier
-          tier="identity"
-          hint="Product Code 全局唯一且登记后不可改——这一栏是唯一需要在提交前想清楚的。"
-        >
-          <FieldGroup>
-            <div className="grid grid-cols-2 gap-md">
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="product-code">
-                  Product Code
-                  <RequiredMark />
-                </FieldLabel>
-                {/* 本对话框只剩「登记」一种用途，产品码此刻正要被填，所以不锁。
-                    「登记后不可改」这条规则由详情页那一栏的常驻锁负责说。 */}
-                <LockedInput
-                  id="product-code"
-                  locked={false}
-                  value={draft.productCode}
-                  onChange={(e) =>
-                    setDraft({ ...draft, productCode: e.target.value })
-                  }
-                  placeholder="karda"
-                  className="font-mono"
-                />
-                <FieldDescription>
-                  全局唯一，登记后不可改——它同时是域名、容器前缀与库名。
-                </FieldDescription>
-              </Field>
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="product-type">
-                  {tShared("columns.kind")}
-                  <RequiredMark />
-                </FieldLabel>
-                <NativeSelect
-                  id="product-type"
-                  value={draft.productType}
-                  onChange={(e) =>
-                    setDraft({ ...draft, productType: e.target.value })
-                  }
-                >
-                  <option value="" disabled>
-                    {tShared("common.pleaseSelect")}
-                  </option>
-                  {PRODUCT_TYPE_DEFS.map((d) => (
-                    <option key={d.value} value={d.value}>
-                      {locale.startsWith("en") ? d.labelEn : d.labelZh}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            </div>
+        {/* ── 只收三项 ──────────────────────────────────────────────────
+            owner 2026-09-11:「接入产品按钮的连接还是旧的页面，这个需要修正和清理。」
 
-            <div className="grid grid-cols-2 gap-md">
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="product-name">
-                  名称
-                  <RequiredMark />
-                </FieldLabel>
-                <Input
-                  id="product-name"
-                  value={draft.productName}
-                  onChange={(e) =>
-                    setDraft({ ...draft, productName: e.target.value })
-                  }
-                  placeholder="Karda"
-                />
-              </Field>
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="product-nick">副名 / 译名</FieldLabel>
-                <Input
-                  id="product-nick"
-                  value={draft.productNick}
-                  onChange={(e) =>
-                    setDraft({ ...draft, productNick: e.target.value })
-                  }
-                  placeholder="卡尔达"
-                />
-              </Field>
-            </div>
-          </FieldGroup>
-        </FieldTier>
+            这里收的是**建一条草稿所必需的最小集**——正好是 BFF 硬性要求的那三个
+            （`validateWrite(requireCore)`）。其余全在详情页配：owner 早先定的是
+            「一个详情页争取配置完所有」，而同一批字段留两个写入面比分散更糟——
+            两处都能改，校验与文案会各自漂。
 
-        <FieldTier tier="details" hint="目录归属与来源，登记后都还能改。">
-          <FieldGroup>
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="product-category">品类</FieldLabel>
-              <NativeSelect
-                id="product-category"
-                value={draft.categoryId}
-                onChange={(e) =>
-                  setDraft({ ...draft, categoryId: e.target.value })
-                }
-              >
-                <option value="">{tShared("common.uncategorized")}</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Field>
+            副名、简介、分类、来源、三个开关都不在这里：它们都有缺省值或可留空，
+            填不填不影响这条草稿能不能建出来，而每多一栏就多一次"现在必须想清楚"。 */}
+        <FieldGroup>
+          <Field orientation="labeled">
+            <FieldLabel htmlFor="product-code">
+              产品代码
+              <RequiredMark />
+            </FieldLabel>
+            {/* 此刻正要被填，所以不锁。「登记后不可改」这条规则由详情页那一栏说。 */}
+            <LockedInput
+              id="product-code"
+              locked={false}
+              value={draft.productCode}
+              onChange={(e) =>
+                setDraft({ ...draft, productCode: e.target.value })
+              }
+              placeholder="karda"
+              className="font-mono"
+            />
+            <FieldDescription>
+              全局唯一，同时是域名、容器前缀与库名。草稿状态还能改，启用之后锁定。
+            </FieldDescription>
+          </Field>
 
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="product-description">简介</FieldLabel>
-              <Textarea
-                id="product-description"
-                value={draft.description}
-                onChange={(e) =>
-                  setDraft({ ...draft, description: e.target.value })
-                }
-                rows={2}
-              />
-            </Field>
+          <Field orientation="labeled">
+            <FieldLabel htmlFor="product-name">
+              产品名称
+              <RequiredMark />
+            </FieldLabel>
+            <Input
+              id="product-name"
+              value={draft.productName}
+              onChange={(e) =>
+                setDraft({ ...draft, productName: e.target.value })
+              }
+              placeholder="Karda"
+            />
+          </Field>
 
-            <div className="grid grid-cols-2 gap-md">
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="product-origin">
-                  {tShared("columns.source")}
-                </FieldLabel>
-                <NativeSelect
-                  id="product-origin"
-                  value={draft.origin}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      origin: e.target.value as ProductOrigin,
-                    })
-                  }
-                >
-                  <option value="self">平台自建</option>
-                  <option value="third_party">第三方接入</option>
-                  <option value="other">其他</option>
-                </NativeSelect>
-              </Field>
-              {draft.origin === "third_party" ? (
-                <Field orientation="labeled">
-                  <FieldLabel htmlFor="product-origin-provider">
-                    来源方
-                  </FieldLabel>
-                  <Input
-                    id="product-origin-provider"
-                    value={draft.originProvider}
-                    onChange={(e) =>
-                      setDraft({ ...draft, originProvider: e.target.value })
-                    }
-                    placeholder="公司 / 团队名"
-                  />
-                </Field>
-              ) : null}
-            </div>
-          </FieldGroup>
-        </FieldTier>
-
-        <FieldTier
-          tier="advanced"
-          title="可见性、端与订阅"
-          hint="都有缺省值；新产品先落草稿态，可见性等启用前再定。"
-        >
-          <FieldGroup>
-            {/* 可露出的端。owner 2026-09-11:「平台 N 个产品，但 ruyin 可同步使用的
-                M 个产品，不是每个都能到 ruyin 端」。这是**产品自身的形态属性**，
-                与租户无关——按租户的开关属权益，挂在订阅/套餐上不在这里。 */}
-            <Field>
-              <FieldLabel>可露出的端</FieldLabel>
-              <div className="flex flex-col gap-2xs rounded-md border border-border p-sm">
-                {PRODUCT_SURFACE_DEFS.map((def) => {
-                  const on = draft.surfaces.includes(def.value);
-                  return (
-                    <label
-                      key={def.value}
-                      htmlFor={`product-surface-${def.value}`}
-                      className="flex cursor-pointer items-start gap-sm"
-                    >
-                      <Checkbox
-                        id={`product-surface-${def.value}`}
-                        checked={on}
-                        onCheckedChange={(v) =>
-                          setDraft({
-                            ...draft,
-                            surfaces: v
-                              ? [...draft.surfaces, def.value]
-                              : draft.surfaces.filter((x) => x !== def.value),
-                          })
-                        }
-                        className="mt-3xs"
-                      />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="text-label-md text-foreground">
-                          {productSurfaceLabel(def.value, typeLocale)}
-                        </span>
-                        <span className="text-body-sm text-muted-foreground">
-                          {def.hintZh}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              <FieldDescription>
-                一个都不勾 =
-                这个产品不在任何端露出。取消勾选会真的取消——提交时整组替换。
-              </FieldDescription>
-            </Field>
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="product-icon">产品图标</FieldLabel>
-              <Input
-                id="product-icon"
-                value={draft.iconUrl}
-                onChange={(e) =>
-                  setDraft({ ...draft, iconUrl: e.target.value })
-                }
-                placeholder="https://cdn.example.com/logo.svg"
-                className="font-mono text-code-sm"
-              />
-              <FieldDescription>
-                console 应用中心的磁贴与订阅卡在渲染它；留空则显示产品名首字。
-              </FieldDescription>
-            </Field>
-            <div className="flex flex-col gap-sm rounded-md border border-border p-sm">
-              <div className="flex items-center justify-between">
-                <FieldLabel htmlFor="product-standalone">可独立订阅</FieldLabel>
-                <Switch
-                  id="product-standalone"
-                  checked={draft.standaloneSubscribable}
-                  onCheckedChange={(v) =>
-                    setDraft({ ...draft, standaloneSubscribable: v })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <FieldLabel htmlFor="product-visible-customer">
-                  客户端可见
-                </FieldLabel>
-                <Switch
-                  id="product-visible-customer"
-                  checked={draft.isCustomerVisible}
-                  onCheckedChange={(v) =>
-                    setDraft({ ...draft, isCustomerVisible: v })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <FieldLabel htmlFor="product-visible-workforce">
-                  运营端可见
-                </FieldLabel>
-                <Switch
-                  id="product-visible-workforce"
-                  checked={draft.isWorkforceVisible}
-                  onCheckedChange={(v) =>
-                    setDraft({ ...draft, isWorkforceVisible: v })
-                  }
-                />
-              </div>
-            </div>
-          </FieldGroup>
-        </FieldTier>
+          <Field orientation="labeled">
+            <FieldLabel htmlFor="product-type">
+              产品类型
+              <RequiredMark />
+            </FieldLabel>
+            <NativeSelect
+              id="product-type"
+              value={draft.productType}
+              onChange={(e) =>
+                setDraft({ ...draft, productType: e.target.value })
+              }
+            >
+              <option value="" disabled>
+                {tShared("common.pleaseSelect")}
+              </option>
+              {PRODUCT_TYPE_DEFS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {locale.startsWith("en") ? d.labelEn : d.labelZh}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+        </FieldGroup>
       </DialogForm>
 
       {/* Webhook 登记。**两档而不是三档**：三项都是接入必需，凑一个高级档只是把
