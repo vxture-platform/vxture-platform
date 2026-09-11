@@ -1,0 +1,473 @@
+"use client";
+
+/**
+ * ProductMetricsSection.tsx — 产品计量指标的登记面。
+ * @package @vxture/opera
+ * @layer Presentation
+ * @category Features - Product
+ *
+ * ── 为什么这一节存在 ──
+ * 三个端点（`GET/POST/DELETE :id/metrics`）早就写好了，**界面一个字都没调**。
+ * 于是「接一个要计量的产品」仍然要改 `seed-catalog.mjs` 再跑一次 db-init——而
+ * db-init 要走审批门、要冻结合并。一个运营动作被做成了一次发版，这正是那三个端点
+ * 当初存在的理由（见 opera-bff `listMetrics` 上方的注释）。
+ *
+ * 指标键是**跨仓契约**：产品按这个键上报用量（C3 consume），平台按这个键建配额池。
+ * 键不存在时对方的 `POST /usage/consume` 直接拒收——所以它必须先于套餐配置存在。
+ *
+ * ── 为什么写成自足组件而不是直接铺在目录页里 ──
+ * 产品详情单页（批 4）会把六组配置收进一页，这一节是其中之一。写成只认
+ * `productId` + `canManage` 的组件，届时换个挂载点即可，不必重建；现在先挂在目录页
+ * 的抽屉上，与当下的 IA 一致。
+ *
+ * ── 两组联动是「跟着改」不是「拦下来」 ──
+ * `consumeMode` 仅 pool 型有、且 pool 型必填；`resetPeriod` 非 none 也仅 pool 型。
+ * 切成非 pool 时把这两项一并归位并锁死，而不是让它们停在一个不合法的值上等提交报错
+ * ——后者会让运营者看着一个自己没动过的字段被判错。同 `product/clients` 页公共客户端
+ * 锁死 PKCE 的做法。
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import {
+  ActionMenu,
+  Badge,
+  Banner,
+  Button,
+  DataTable,
+  DialogForm,
+  EmptyState,
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  Icon,
+  Input,
+  NativeSelect,
+  useToast,
+} from "@vxture/design-system";
+import { useTableLabels } from "@/lib/table";
+import { api, OperaApiError } from "@/lib/api";
+import { RequiredMark } from "@/components/form/RequiredMark";
+
+export interface ProductMetric {
+  metricKey: string;
+  mergeStrategy: string;
+  consumeMode: string | null;
+  metricUnit: string | null;
+  resetPeriod: string;
+}
+
+type MergeStrategy = "max" | "union" | "pool" | "tiered";
+
+/** 合并策略的取值与「它是什么意思」。文案按运营者能判断的粒度写，不抄 DDL 注释。 */
+const STRATEGIES: ReadonlyArray<{
+  value: MergeStrategy;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "pool",
+    label: "池（pool）",
+    hint: "会消耗的额度：调用次数、字数、存储量。多个组件的额度相加成一个池。",
+  },
+  {
+    value: "max",
+    label: "取最大（max）",
+    hint: "不消耗的上限：成员数、数据源数。多个组件取其中最大的那个。",
+  },
+  {
+    value: "union",
+    label: "并集（union）",
+    hint: "开关或枚举集合：多个组件的取值取并集。",
+  },
+  {
+    value: "tiered",
+    label: "取最高档（tiered）",
+    hint: "非数值能力：取档位最高的那个组件的值。",
+  },
+];
+
+const RESET_PERIODS = [
+  { value: "none", label: "不重置" },
+  { value: "day", label: "每天" },
+  { value: "month", label: "每月" },
+] as const;
+
+interface Draft {
+  metricKey: string;
+  mergeStrategy: MergeStrategy;
+  consumeMode: string;
+  metricUnit: string;
+  resetPeriod: string;
+}
+
+const EMPTY_DRAFT: Draft = {
+  metricKey: "",
+  /* pool 是最常见的一档（要计量才来登记指标），也是唯一带子字段的一档——
+     默认选它，子字段一上来就可见，运营者不会以为它们不存在。 */
+  mergeStrategy: "pool",
+  consumeMode: "divisible",
+  metricUnit: "",
+  resetPeriod: "month",
+};
+
+type LoadState =
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | { kind: "ready" };
+
+function describeError(error: unknown): string {
+  return error instanceof OperaApiError && error.message
+    ? error.message
+    : "操作失败";
+}
+
+export interface ProductMetricsSectionProps {
+  readonly productId: string;
+  readonly productName: string;
+  readonly canManage: boolean;
+}
+
+export function ProductMetricsSection({
+  productId,
+  productName,
+  canManage,
+}: ProductMetricsSectionProps) {
+  const { toast } = useToast();
+  const tableLabels = useTableLabels();
+  const [rows, setRows] = useState<ProductMetric[]>([]);
+  const [load, setLoad] = useState<LoadState>({ kind: "loading" });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const reload = useCallback(async () => {
+    setLoad({ kind: "loading" });
+    try {
+      setRows(
+        await api.get<ProductMetric[]>(`/api/products/${productId}/metrics`),
+      );
+      setLoad({ kind: "ready" });
+    } catch (error) {
+      setLoad({ kind: "error", message: describeError(error) });
+    }
+  }, [productId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const isPool = draft.mergeStrategy === "pool";
+
+  /** 切策略时把两个子字段一并归位——不合法的组合不该有机会被提交。 */
+  function pickStrategy(next: MergeStrategy) {
+    setDraft({
+      ...draft,
+      mergeStrategy: next,
+      consumeMode: next === "pool" ? draft.consumeMode || "divisible" : "",
+      resetPeriod: next === "pool" ? draft.resetPeriod || "month" : "none",
+    });
+  }
+
+  function openCreate() {
+    setEditing(null);
+    setDraft(EMPTY_DRAFT);
+    setDialogOpen(true);
+  }
+
+  function openEdit(row: ProductMetric) {
+    setEditing(row.metricKey);
+    setDraft({
+      metricKey: row.metricKey,
+      mergeStrategy: row.mergeStrategy as MergeStrategy,
+      consumeMode: row.consumeMode ?? "",
+      metricUnit: row.metricUnit ?? "",
+      resetPeriod: row.resetPeriod,
+    });
+    setDialogOpen(true);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      /* 指标键是**路径参数**不是 body 字段，方法是 PUT（按键 upsert）。
+         这里最初写成 `POST /metrics` 带 metricKey——type-check 抓不到，因为
+         api 的 body 是 unknown；只有真调一次才知道。 */
+      const key = draft.metricKey.trim();
+      await api.put(
+        `/api/products/${productId}/metrics/${encodeURIComponent(key)}`,
+        {
+          mergeStrategy: draft.mergeStrategy,
+          /* 非 pool 时**不带这两个字段**，而不是带一个空串：BFF 对
+           「非 pool 却给了 consumeMode」是报错的，空串在 trim 之后虽然也会变 null，
+           但显式不带更贴合「这一档没有这个概念」。 */
+          ...(isPool ? { consumeMode: draft.consumeMode } : {}),
+          metricUnit: draft.metricUnit.trim() || null,
+          resetPeriod: isPool ? draft.resetPeriod : "none",
+        },
+      );
+      toast({
+        tone: "success",
+        title: editing ? "指标已更新" : `${key} 已登记`,
+      });
+      setDialogOpen(false);
+      await reload();
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "保存失败",
+        description: describeError(error),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function remove(metricKey: string) {
+    setSubmitting(true);
+    try {
+      await api.delete(
+        `/api/products/${productId}/metrics/${encodeURIComponent(metricKey)}`,
+      );
+      toast({ tone: "success", title: `${metricKey} 已退掉` });
+      await reload();
+    } catch (error) {
+      /* 409 的消息里带着「被哪几个套餐档位引用着」，原样给出去——运营者要的是
+         「去哪儿解开」，不是「失败了」。 */
+      toast({
+        tone: "danger",
+        title: "退不掉",
+        description: describeError(error),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-md">
+      <Banner
+        tone="info"
+        title="指标键是跨仓契约"
+        description="产品按这个键上报用量（C3 consume），平台按这个键建配额池。键不存在时对方的上报会被直接拒收——所以它要先于套餐配置存在，且登记之后不要改名。"
+      />
+
+      {load.kind === "loading" ? (
+        <EmptyState title="读取中" description="正在读取已登记的指标。" />
+      ) : load.kind === "error" ? (
+        <EmptyState
+          title="读取失败"
+          description={`${load.message}。读不到不等于没有——先解决读取失败，否则在这里新增会把已有的看漏。`}
+        />
+      ) : (
+        <>
+          {canManage ? (
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" onClick={openCreate}>
+                <Icon name="plus" size="sm" aria-hidden="true" />
+                登记指标
+              </Button>
+            </div>
+          ) : null}
+
+          {rows.length === 0 ? (
+            <EmptyState
+              title="还没有登记任何指标"
+              description={`${productName} 目前不计量。要按用量计费或设配额，先在这里登记指标键。`}
+            />
+          ) : (
+            <DataTable
+              labels={tableLabels}
+              rows={rows}
+              rowKey={(r: ProductMetric) => r.metricKey}
+              columns={[
+                {
+                  id: "metricKey",
+                  header: "指标键",
+                  cell: (r) => (
+                    <span className="font-mono text-code-sm">
+                      {r.metricKey}
+                    </span>
+                  ),
+                },
+                {
+                  id: "strategy",
+                  header: "合并策略",
+                  cell: (r) => (
+                    <div className="flex items-center gap-xs">
+                      <Badge variant="outline">{r.mergeStrategy}</Badge>
+                      {r.consumeMode ? (
+                        <Badge variant="secondary">{r.consumeMode}</Badge>
+                      ) : null}
+                    </div>
+                  ),
+                },
+                {
+                  id: "unit",
+                  header: "单位",
+                  cell: (r) => r.metricUnit ?? "—",
+                },
+                {
+                  id: "reset",
+                  header: "重置",
+                  cell: (r) =>
+                    RESET_PERIODS.find((p) => p.value === r.resetPeriod)
+                      ?.label ?? r.resetPeriod,
+                },
+              ]}
+              rowActions={(r: ProductMetric) => (
+                <ActionMenu
+                  label={`${r.metricKey} 操作`}
+                  disabled={!canManage || submitting}
+                  items={[
+                    {
+                      id: "edit",
+                      label: "编辑",
+                      icon: "edit",
+                      onSelect: () => openEdit(r),
+                    },
+                    {
+                      id: "delete",
+                      label: "退掉指标",
+                      icon: "trash",
+                      danger: true,
+                      /* 分隔线不用手写:DS 12.5.0 起件自己认末尾那段连续的危险项。 */
+                      confirm: {
+                        verb: "退掉",
+                        target: `指标 ${r.metricKey}`,
+                        consequence:
+                          "配额池的形状由这条定义决定。套餐里若还有引用这个键的配额项，平台会先拦下并告诉你是哪几档；没有引用时退掉是安全的。",
+                        onConfirm: () => void remove(r.metricKey),
+                      },
+                    },
+                  ]}
+                />
+              )}
+            />
+          )}
+        </>
+      )}
+
+      <DialogForm
+        size="lg"
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={editing ? `编辑指标 · ${editing}` : "登记计量指标"}
+        description="登记后，产品就可以按这个键上报用量，套餐也可以按这个键配额度。"
+        submitLabel={editing ? "保存" : "登记"}
+        submitting={submitting}
+        submitDisabled={draft.metricKey.trim() === ""}
+        onSubmit={submit}
+      >
+        <FieldGroup>
+          <Field orientation="labeled">
+            <FieldLabel htmlFor="metric-key">
+              指标键
+              <RequiredMark />
+            </FieldLabel>
+            <Input
+              id="metric-key"
+              value={draft.metricKey}
+              disabled={editing !== null}
+              onChange={(e) =>
+                setDraft({ ...draft, metricKey: e.target.value })
+              }
+              placeholder="doc.words"
+              className="font-mono text-code-sm"
+            />
+            <FieldDescription>
+              点号分段，如 <code>doc.words</code> / <code>ai.calls</code> /{" "}
+              <code>service.api.call</code>。<b>平台级共享键不能在这里登记</b>
+              （如 <code>ai.credit</code>、<code>storage.bytes</code>
+              ）——那些的额度由套餐组件贡献，键归平台目录。
+              {editing
+                ? "改键等于换一个指标，这里锁住；要换请退掉再登记。"
+                : null}
+            </FieldDescription>
+          </Field>
+
+          <Field orientation="labeled">
+            <FieldLabel htmlFor="metric-strategy">
+              合并策略
+              <RequiredMark />
+            </FieldLabel>
+            <NativeSelect
+              id="metric-strategy"
+              value={draft.mergeStrategy}
+              onChange={(e) => pickStrategy(e.target.value as MergeStrategy)}
+            >
+              {STRATEGIES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </NativeSelect>
+            <FieldDescription>
+              {STRATEGIES.find((s) => s.value === draft.mergeStrategy)?.hint}
+            </FieldDescription>
+          </Field>
+
+          {isPool ? (
+            <>
+              <Field orientation="labeled">
+                <FieldLabel htmlFor="metric-consume">消耗模式</FieldLabel>
+                <NativeSelect
+                  id="metric-consume"
+                  value={draft.consumeMode}
+                  onChange={(e) =>
+                    setDraft({ ...draft, consumeMode: e.target.value })
+                  }
+                >
+                  <option value="divisible">可拆（divisible）</option>
+                  <option value="atomic">整取（atomic）</option>
+                </NativeSelect>
+                <FieldDescription>
+                  一次消耗跨多个池时，<b>可拆</b>允许从几个池里各扣一部分，
+                  <b>整取</b>要求单个池能吃下整笔，否则拒绝。
+                </FieldDescription>
+              </Field>
+
+              <Field orientation="labeled">
+                <FieldLabel htmlFor="metric-reset">重置周期</FieldLabel>
+                <NativeSelect
+                  id="metric-reset"
+                  value={draft.resetPeriod}
+                  onChange={(e) =>
+                    setDraft({ ...draft, resetPeriod: e.target.value })
+                  }
+                >
+                  {RESET_PERIODS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <FieldDescription>
+                  池到期自动归位。<b>不重置</b>= 一次性额度，用完为止。
+                </FieldDescription>
+              </Field>
+            </>
+          ) : null}
+
+          <Field orientation="labeled">
+            <FieldLabel htmlFor="metric-unit">单位</FieldLabel>
+            <Input
+              id="metric-unit"
+              value={draft.metricUnit}
+              onChange={(e) =>
+                setDraft({ ...draft, metricUnit: e.target.value })
+              }
+              placeholder="words / calls / GB / seats"
+            />
+            <FieldDescription>
+              只用于展示，不参与计算。留空则界面上只显示数字。
+            </FieldDescription>
+          </Field>
+        </FieldGroup>
+      </DialogForm>
+    </div>
+  );
+}

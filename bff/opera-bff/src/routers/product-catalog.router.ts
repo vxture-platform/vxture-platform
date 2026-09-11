@@ -1205,6 +1205,32 @@ export class ProductCatalogRouter {
       throw notFound("CATALOG_PRODUCT_NOT_FOUND", `Product ${id} not found`);
     }
 
+    /*
+     * L0 平台指标键不许被产品级重新定义（95 的 trg_product_metrics_no_platform_shadow）。
+     *
+     * 上面四条 CHECK 都在这里前置判过，理由写在 pool/consumeMode 那条旁边：
+     * 「库上有约束，但那条冒上来是 23514，运营者只看到『保存失败』」。**这条触发器
+     * 当时漏了**，而它比那四条更难懂——抛的是一句英文内部消息，点名的还是一份
+     * 运营者没见过的文档编号。
+     *
+     * 判据**逐字照抄触发器**：按 metric_key 存在即拦，**不带 status 过滤**。
+     * 库里六个键有四个是 `reserved`（compute.cpu / compute.gpu / egress.bytes /
+     * ingress.bytes），按直觉加上 `status = 'active'` 会让这四个仍然 500——而那是
+     * 最难查的形态：界面看起来做了校验，偏偏对一半的键失效。
+     */
+    const shadow = await this.pool.query<{ status: string | null }>(
+      `SELECT status FROM product.platform_metrics WHERE metric_key = $1`,
+      [key],
+    );
+    if (shadow.rowCount && shadow.rowCount > 0) {
+      const status = shadow.rows[0]?.status ?? null;
+      throw conflict(
+        "CATALOG_METRIC_KEY_IS_PLATFORM_OWNED",
+        `「${key}」是平台级共享指标${status === "reserved" ? "（已保留，尚未启用）" : ""}，产品不能重新定义它。` +
+          `共享指标的额度由套餐组件贡献，不在这里登记；本产品自己的指标请换一个键。`,
+      );
+    }
+
     const result = await this.pool.query<{
       metric_key: string;
       merge_strategy: string;
@@ -1236,8 +1262,13 @@ export class ProductCatalogRouter {
   /**
    * 退掉一个指标。
    *
-   * 已被套餐组件引用的指标删不掉——FK 会挡,但那是一句 500。这里先查再报 409,
-   * 并说清是被哪几个套餐挡着:运营者要的是「去哪儿解开」,不是「失败了」。
+   * 已被套餐组件引用的指标不许退——先查再报 409,说清是被哪几档挡着:运营者要的是
+   * 「去哪儿解开」,不是「失败了」。
+   *
+   * 这段注释原本写的是「FK 会挡,但那是一句 500」。**没有 FK**(实测 pg_constraint
+   * 里指向 product_metrics 的约束是零行),而那比有 FK 更糟:套餐组件按 `quota`
+   * jsonb 的键名引用指标,字符串引用没有引用完整性,删掉定义之后**什么都不会发生**
+   * ——直到某个客户的额度对不上。检查见方法体。
    */
   @Delete(":id/metrics/:metricKey")
   async deleteMetric(
@@ -1246,6 +1277,49 @@ export class ProductCatalogRouter {
     @Param("metricKey") metricKey: string,
   ): Promise<{ deleted: boolean }> {
     assertCanManage(req);
+
+    /*
+     * 先查还有谁在用这个键。
+     *
+     * 本方法的注释原本写着「已被套餐组件引用的指标删不掉——FK 会挡，但那是一句 500。
+     * 这里先查再报 409」。**两头都不成立**：`product_metrics` 上没有任何外键指向它
+     * （实测 pg_constraint 零行），而实现就是一条裸 DELETE。
+     *
+     * 没有 FK 不是「更安全」，是**更危险**：套餐组件按 `quota` jsonb 的**键名**引用
+     * 指标（`{"doc.words": 1000000}`），字符串引用没有引用完整性。删掉定义之后组件
+     * 上那个键还在，只是再也解析不出 merge_strategy / consume_mode / reset_period
+     * ——配额物化拿不到池的形状。**不报错，不回滚，什么都不会发生**，直到某个客户
+     * 的额度对不上。
+     *
+     * 所以这道检查不是把 500 换成 409，是把「静默损坏」换成「说得出会毁掉什么」。
+     * 用 `jsonb_exists(quota, $2)` 而不是 `quota ? $2`：功能形式没有把 `?` 当占位符
+     * 的歧义，各层驱动看着都一样。
+     */
+    const inUse = await this.pool.query<{ plan_name: string; tier: string }>(
+      `SELECT DISTINCT coalesce(pl.plan_name, pl.plan_code) AS plan_name,
+                       coalesce(pc.tier, '-') AS tier
+         FROM product.plan_components pc
+         JOIN product.plan_versions pv ON pv.id = pc.plan_version_id
+         JOIN product.plans pl ON pl.id = pv.plan_id
+        WHERE pc.product_id = $1
+          AND pc.quota IS NOT NULL
+          AND jsonb_exists(pc.quota, $2)
+        ORDER BY plan_name, tier`,
+      [id, metricKey],
+    );
+    if (inUse.rowCount && inUse.rowCount > 0) {
+      const where = inUse.rows
+        .map((r) => `${r.plan_name}（${r.tier}）`)
+        .join("、");
+      throw conflict(
+        "CATALOG_METRIC_IN_USE",
+        `「${metricKey}」还被这些套餐档位的配额引用着：${where}。` +
+          `删掉指标定义不会连带清掉这些配额键，它们会变成解析不出池形状的孤儿。` +
+          `已发布的套餐版本是不可变的——要去掉这个配额项，得开一个新的套餐版本，` +
+          `而不是改现有版本。`,
+      );
+    }
+
     const result = await this.pool.query(
       `DELETE FROM product.product_metrics
         WHERE product_id = $1 AND metric_key = $2`,
