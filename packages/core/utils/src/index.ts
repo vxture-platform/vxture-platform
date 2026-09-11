@@ -114,6 +114,7 @@ export {
   PRODUCT_SURFACES,
   PRODUCT_SURFACE_DEFS,
   isValidProductSurface,
+  productSurfaceLabel,
 } from "./product-surface";
 export type { ProductSurface, ProductSurfaceDef } from "./product-surface";
 

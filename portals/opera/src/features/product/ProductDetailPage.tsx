@@ -40,6 +40,7 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  ActionMenu,
   Badge,
   Banner,
   Button,
@@ -67,6 +68,8 @@ import {
 import {
   PRODUCT_SURFACE_DEFS,
   PRODUCT_TYPE_DEFS,
+  productSurfaceLabel,
+  productTypeLabel,
   type ProductSurface,
 } from "@vxture/core-utils";
 import { formatDateTime } from "@vxture-platform/shared";
@@ -74,6 +77,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { LockedInput } from "@/components/form/LockedInput";
 import { RequiredMark } from "@/components/form/RequiredMark";
+import { actionsFor, type ProductAction } from "./lifecycle";
 import { ProductMetricsSection } from "./ProductMetricsSection";
 
 const MANAGE = "platform:product.manage";
@@ -173,6 +177,8 @@ interface WebhookDraft {
 export function ProductDetailPage({ productCode }: { productCode: string }) {
   const tShared = useTranslations();
   const locale = useLocale();
+  /* 查表函数收 "zh" | "en"，next-intl 给的是 zh-CN / en-US。 */
+  const typeLocale = locale.startsWith("en") ? "en" : "zh";
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -190,6 +196,10 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
 
   /** 首次配齐后的一次性交接弹窗。见下方 `handover`。 */
   const [handover, setHandover] = useState<string[] | null>(null);
+
+  /** 正在等二次确认的 advisory 动作（「恢复」那一档）。 */
+  const [advisory, setAdvisory] = useState<ProductAction | null>(null);
+  const [applying, setApplying] = useState(false);
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -328,6 +338,56 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
     }
   }
 
+  /**
+   * 生命周期落锤。
+   *
+   * 动作表是 `lifecycle.ts` 的 `PRODUCT_ACTIONS`——与目录页**共用同一份**，包括
+   * 「做了会怎样」的文案。两处各写一套的话，同一个退役会在两个入口给出两种说法。
+   *
+   * 上线的闸门在服务端（`PATCH :id/state` 读检查单）。这里不禁用按钮，而是点了
+   * 之后把「差哪几项」说出来——理由同目录页：禁用状态的菜单项只说明「不行」，
+   * 说不出运营者接下来要做的事。何况这一页的检查单就在下面，点完能直接对照。
+   */
+  async function applyLifecycle(action: ProductAction) {
+    if (!product) return;
+    setApplying(true);
+    try {
+      await api.patch(`/api/products/${product.id}/state`, {
+        state: action.to,
+      });
+      toast({
+        tone: "success",
+        title: `${product.productName} · ${action.label}`,
+      });
+      await reload();
+    } catch (error) {
+      /* 判码不判文案。三种拒绝各有各的下一步：检查未齐 → 就在本页下面；
+         上游还有授权 → 去权益配置；其余照旧一条 toast。 */
+      const code = error instanceof OperaApiError ? error.code : undefined;
+      if (code === "CATALOG_LAUNCH_CHECKLIST_PENDING") {
+        toast({
+          tone: "danger",
+          title: "接入检查未齐，不能上线",
+          description: `${reason(error, "")} 本页最下面的「接入检查」一节列着每一项的状态。`,
+        });
+      } else if (code === "PRODUCT_HAS_ACTIVE_GRANTS") {
+        toast({
+          tone: "danger",
+          title: `${product.productName} 未退役：上游还有生效中的授权`,
+          description: "先去权益配置把它们撤掉，再回来退役。",
+        });
+      } else {
+        toast({
+          tone: "danger",
+          title: `${action.label}失败`,
+          description: reason(error, "操作失败"),
+        });
+      }
+    } finally {
+      setApplying(false);
+    }
+  }
+
   function toggleSurface(value: ProductSurface, on: boolean) {
     if (!draft) return;
     setDraft({
@@ -337,6 +397,8 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         : draft.surfaces.filter((s) => s !== value),
     });
   }
+
+  const lifecycleActions = product ? actionsFor(product.state) : [];
 
   const header = (
     <ViewHeader
@@ -367,6 +429,40 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 上线复验
               </Link>
             </Button>
+          ) : null}
+          {product && canManage && lifecycleActions.length > 0 ? (
+            <ActionMenu
+              label={`${product.productName} 生命周期动作`}
+              disabled={applying}
+              items={lifecycleActions.map((action) =>
+                action.danger
+                  ? {
+                      id: action.id,
+                      label: action.label,
+                      icon: action.icon,
+                      danger: true as const,
+                      confirm: {
+                        verb: action.destructive.verb,
+                        target: product.productName,
+                        consequence: action.destructive.consequence,
+                        onConfirm: () => void applyLifecycle(action),
+                      },
+                    }
+                  : action.advisory
+                    ? {
+                        id: action.id,
+                        label: action.label,
+                        icon: action.icon,
+                        onSelect: () => setAdvisory(action),
+                      }
+                    : {
+                        id: action.id,
+                        label: action.label,
+                        icon: action.icon,
+                        onSelect: () => void applyLifecycle(action),
+                      },
+              )}
+            />
           ) : null}
         </div>
       }
@@ -422,18 +518,13 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 </span>
               </DetailRow>
               <DetailRow label="类型">
-                {PRODUCT_TYPE_DEFS.find((d) => d.value === product.productType)
-                  ?.labelZh ?? product.productType}
+                {productTypeLabel(product.productType, typeLocale)}
               </DetailRow>
               <DetailRow label="可露出的端">
                 {product.surfaces.length === 0
                   ? "—"
                   : product.surfaces
-                      .map(
-                        (s) =>
-                          PRODUCT_SURFACE_DEFS.find((d) => d.value === s)
-                            ?.labelZh ?? s,
-                      )
+                      .map((s) => productSurfaceLabel(s, typeLocale))
                       .join(" / ")}
               </DetailRow>
               <DetailRow label="接入检查">
@@ -525,7 +616,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   >
                     {PRODUCT_TYPE_DEFS.map((d) => (
                       <option key={d.value} value={d.value}>
-                        {d.labelZh}
+                        {productTypeLabel(d.value, typeLocale)}
                       </option>
                     ))}
                   </NativeSelect>
@@ -630,7 +721,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                     >
                       <span className="flex flex-col gap-3xs">
                         <span className="text-body-md font-medium">
-                          {d.labelZh}
+                          {productSurfaceLabel(d.value, typeLocale)}
                         </span>
                         <span className="text-body-sm text-muted-foreground">
                           {d.hintZh}
@@ -928,6 +1019,28 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           className="font-mono text-code-sm"
           onFocus={(e) => e.currentTarget.select()}
         />
+      </DialogForm>
+
+      {/* advisory 的二次确认。**提醒不是门闩**：没有任何条件可以不满足，它只是
+          拦一下让人看一眼（「恢复」那一档）。所以不用 ConfirmDestructive——那是
+          给不可逆动作的。 */}
+      <DialogForm
+        open={advisory !== null}
+        onOpenChange={(open) => {
+          if (!open) setAdvisory(null);
+        }}
+        title={advisory?.advisory?.title ?? ""}
+        description={advisory?.advisory?.description}
+        submitLabel={advisory?.label ?? "确认"}
+        submitting={applying}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const next = advisory;
+          setAdvisory(null);
+          if (next) void applyLifecycle(next);
+        }}
+      >
+        {null}
       </DialogForm>
     </>
   );

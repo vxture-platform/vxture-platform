@@ -67,6 +67,8 @@ import { useTableLabels } from "@/lib/table";
 import {
   PRODUCT_SURFACE_DEFS,
   PRODUCT_TYPE_DEFS,
+  productSurfaceLabel,
+  productTypeLabel,
   isValidProductType,
 } from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -328,6 +330,8 @@ export default function ProductsPage() {
 
 function ProductsPageContent() {
   const locale = useLocale();
+  /* 查表函数收的是 "zh" | "en"，而 next-intl 给的是 zh-CN / en-US。 */
+  const typeLocale = locale.startsWith("en") ? "en" : "zh";
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
@@ -1048,9 +1052,22 @@ function ProductsPageContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ProductRecord) => (
-                  // 受管枚举外的历史/非法 product_type 标「非合规」,便于 owner 上线后订正。
+                  /* 受管枚举外的历史/非法 product_type 标「非合规」,便于 owner
+                     上线后订正。
+                     标签走 `productTypeLabel`:此前这里直接渲染枚举值本身
+                     (`industry_agent`),运营者读到的是代码不是「行业智能体」。
+                     未登记值查不到时该函数退回原字符串——正好与右边的「非合规」
+                     徽标配套:显影而非静默。 */
                   <span className="inline-flex items-center justify-center gap-1.5">
-                    <span className="text-code-sm">{r.productType}</span>
+                    <span
+                      className={
+                        isValidProductType(r.productType)
+                          ? undefined
+                          : "text-code-sm"
+                      }
+                    >
+                      {productTypeLabel(r.productType, typeLocale)}
+                    </span>
                     {isValidProductType(r.productType) ? null : (
                       <StatusBadge tone="warning" dot>
                         {tShared("common.nonCompliant")}
@@ -1448,7 +1465,7 @@ function ProductsPageContent() {
                       />
                       <span className="flex min-w-0 flex-col">
                         <span className="text-label-md text-foreground">
-                          {def.labelZh}
+                          {productSurfaceLabel(def.value, typeLocale)}
                         </span>
                         <span className="text-body-sm text-muted-foreground">
                           {def.hintZh}
