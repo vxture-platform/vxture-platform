@@ -12,16 +12,17 @@
  *    （`test-delivery` 零处实现）。发一次真实回调是对**对方生产端点**的外部动作，
  *    不是"复用"，所以这里退回到读登记：配没配得出来，通没通不知道。
  *
- * 前五项回答「**我方**配齐了没有」。后两项（C2 / C3）此前被写成「平台从外面观测不到」，
- * 那不对：对方只要真接通了，就会调 `GET /platform/entitlements` 与 `POST /usage/consume`，
- * 两件事都落在平台自己的存储里（`GET /api/products/:id/integration-signals`）。它们
- * 归「对方」那一侧——通不通由对方决定——但判定由平台做，不再靠操作员按回报勾。
+ * 前五项回答「**我方**配齐了没有」。后三项（C2 / C3 / C1 出站）此前被写成「平台从外面
+ * 观测不到」，那不对：对方只要真接通了，就会调 `GET /platform/entitlements`、
+ * `POST /usage/consume`、`POST /oidc/token`，三件事都落在平台自己的存储里
+ * （`GET /api/products/:id/integration-signals`）。它们归「对方」那一侧——通不通由对方
+ * 决定——但判定由平台做，不再靠操作员按回报勾。
  * 仍然观测不到的只剩 `data_plane` 与 `acceptance`（端到端），留在检查单上人工确认。
  *
  * ── 检查结果写不写回检查单 ───────────────────────────────────────────────────
  *
  * 写，但**只写自动检查能完整判定的那几项**（`catalog_registered`、`c2_entitlement`、
- * `c3_metering`）。`product_launch_statuses.checked_by` 的 DDL 注释本来就写着
+ * `c3_metering`、`c1_s2s`）。`product_launch_statuses.checked_by` 的 DDL 注释本来就写着
  * 「自动校验为 NULL」，这张表从一开始就预留了自动结果的位置。
  *
  * C2 / C3 的判据是「最近一次」，不是台账：C2 键 30 天过期、只存最后一笔；C3 只看最近
@@ -35,6 +36,10 @@
  * `c1_identity` 也不写，理由更硬：**它的定义里有一半是对方的事**（RP 实现），自动打勾
  * 等于替对方声明完成。判据统一成一句——**一项检查只有在它的全部内容都被本次实测覆盖时
  * 才写回检查单**，否则只呈现不落库。
+ *
+ * 同一条判据下，`c1_s2s`（出站换票）**写**：换票发生在平台上、平台是签发方，
+ * `support.audit_logs` 里那条 `oidc.token_exchange.issued` 覆盖了这一项的全部内容。
+ * 入站与出站因此一个不写、一个写——差别不在通道，在平台看不看得全。
  */
 
 import { isEnabled } from "@/features/atlas/state";
@@ -100,6 +105,8 @@ interface IntegrationSignalsLite {
     workspaceId: string | null;
   } | null;
   consume: { lastEventAt: string; metricKey: string } | null;
+  /** C1 出站。形状与 opera-bff 的 `S2sSignal` 一致——两边不互相引类型，靠单测钉住。 */
+  s2s: { lastSeenAt: string; target: string; mode: string } | null;
 }
 
 function reason(error: unknown, fallback: string): string {
@@ -373,9 +380,19 @@ export async function runLaunchChecks(
         remedy: "读不到不等于没接。先解决读取失败，再重跑。",
         itemCode: "c3_metering",
       },
+      {
+        id: "c1-s2s",
+        label: "C1 出站换票",
+        what: "对方换过 S2S 令牌去调 Atlas / Runos / Karda——平台是签发方，审计里记着。",
+        side: "theirs",
+        status: "fail",
+        detail,
+        remedy: "读不到不等于没接。先解决读取失败，再重跑。",
+        itemCode: "c1_s2s",
+      },
     );
   } else {
-    const { entitlement, consume } = signals;
+    const { entitlement, consume, s2s } = signals;
     results.push({
       id: "c2-entitlement",
       label: "C2 权益拉取",
@@ -405,6 +422,23 @@ export async function runLaunchChecks(
         : "对方接通消费上报（POST /usage/consume）并真实扣一次后重跑。",
       itemCode: "c3_metering",
       href: entitlementsHref,
+    });
+    /* 出站换票。写回检查单的判据同 C2/C3——这一项问的就是「换没换过票」，
+       而换票发生在平台上、平台是签发方，实测覆盖了它的全部内容。
+       与 `c1_identity` 的区别正在这里：那一项有一半是对方的 RP 实现，测不到。 */
+    results.push({
+      id: "c1-s2s",
+      label: "C1 出站换票",
+      what: "对方用 POST /oidc/token 换过面向 Atlas / Runos / Karda 的短时凭证。只看最近 90 天内最后一次。",
+      side: "theirs",
+      status: s2s ? "pass" : "fail",
+      detail: s2s
+        ? `最近一次 ${formatAt(s2s.lastSeenAt, opts.locale)}，调 ${s2s.target}（${s2s.mode}）`
+        : "最近 90 天内没有以这个产品码换过票。",
+      remedy: s2s
+        ? null
+        : "凡是要用模型/能力/知识的智能体都要接这一步。把交接信息发给对方，对方按《产品接入通则》C1 出站实现换票后重跑。",
+      itemCode: "c1_s2s",
     });
   }
 

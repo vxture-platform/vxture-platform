@@ -15,6 +15,8 @@
  *   `c1_identity`  它的定义里有一半是**对方的事**（RP 的登录/回调/会话实现）。
  *                  平台只测得到「我方注册了 OIDC 客户端且配了回调」，自动打勾
  *                  等于替对方声明完成。
+ *                  （它的**出站**那一半另立 `c1_s2s`，那一半平台看得全——
+ *                  换票就发生在平台上，平台是签发方。）
  *   `acceptance`   端到端验收。两个上游授权检查（atlas / runos）能测，但把它们
  *                  的结论塞进这一项，等于把「端到端跑通了」替换成「授权配了」
  *                  ——后者弱得多，而勾上之后没人分得清当时勾的是哪个意思。
@@ -38,6 +40,14 @@ export const AUTO_DETERMINED_CHECKLIST_ITEMS = [
   "c2_entitlement",
   /** 对方真的报过用量——`POST /usage/consume` 在平台侧留下的最近事件。 */
   "c3_metering",
+  /**
+   * 对方真的换过票去调基础设施——`POST /oidc/token` 的 token-exchange 在
+   * `support.audit_logs` 留下的最近一条（`after.caller_product` = 本产品）。
+   *
+   * 它满足上面那条判据而 `c1_identity` 不满足，差别在**换票发生在平台上**：
+   * 平台是签发方，看得见这件事的全部，不需要替对方声明任何东西。
+   */
+  "c1_s2s",
 ] as const;
 
 export type AutoDeterminedChecklistItem =
