@@ -257,7 +257,10 @@ GRANT UPDATE (plan_id) ON product.solution_plans TO platform_svc;
 
 -- product.product_webhooks  [anchor: product_id, created_at]
 REVOKE UPDATE ON product.product_webhooks FROM platform_svc;
-GRANT UPDATE (home_url, webhook_url, webhook_secret_ref, edge_upstream, webhook_secret_enc, updated_at) ON product.product_webhooks TO platform_svc;
+GRANT UPDATE (home_url, webhook_url, webhook_secret_ref, edge_upstream, webhook_secret_enc, edge_domain, updated_at) ON product.product_webhooks TO platform_svc;
+
+-- product.product_surfaces  [只增删不改:两列都是主键的一半,created_at 是锚点]
+REVOKE UPDATE ON product.product_surfaces FROM platform_svc;
 
 -- product.launch_checklist_items  [anchor: item_code, created_at]
 REVOKE UPDATE ON product.launch_checklist_items FROM platform_svc;

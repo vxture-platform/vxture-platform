@@ -43,6 +43,7 @@ import {
   Query,
   Req,
 } from "@nestjs/common";
+import { RequireStepUp } from "../auth/step-up.decorator";
 import { hash, genSalt } from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import type { Request } from "express";
@@ -83,9 +84,13 @@ export interface OidcClientRecord {
   releaseChannel: ReleaseChannel;
   name: string | null;
   displayName: string | null;
+  logoUrl: string | null;
   redirectUris: string[];
+  postLogoutRedirectUris: string[];
   allowedScopes: string[];
   pkceRequired: boolean;
+  /** `client_secret_basic`(机密) 或 `none`(RFC 8252 公共客户端)。 */
+  tokenEndpointAuthMethod: string;
   state: ClientState;
   createdAt: string;
   updatedAt: string;
@@ -99,9 +104,12 @@ interface ClientRow {
   release_channel: ReleaseChannel;
   name: string | null;
   display_name: string | null;
+  logo_url: string | null;
   redirect_uris: string[];
+  post_logout_redirect_uris: string[];
   allowed_scopes: string[];
   pkce_required: boolean;
+  token_endpoint_auth_method: string;
   status: ClientState;
   created_at: string;
   updated_at: string;
@@ -109,7 +117,8 @@ interface ClientRow {
 
 const SELECT_COLUMNS = `
   c.id, c.client_id, c.product_id, p.product_code, c.release_channel, c.name,
-  c.display_name, c.redirect_uris, c.allowed_scopes, c.pkce_required, c.status,
+  c.display_name, c.logo_url, c.redirect_uris, c.post_logout_redirect_uris,
+  c.allowed_scopes, c.pkce_required, c.token_endpoint_auth_method, c.status,
   c.created_at, c.updated_at
 `;
 const FROM_JOIN = `appoidc.oidc_clients c LEFT JOIN product.products p ON p.id = c.product_id`;
@@ -124,8 +133,11 @@ function toRecord(row: ClientRow): OidcClientRecord {
     releaseChannel: row.release_channel,
     name: row.name,
     displayName: row.display_name,
+    logoUrl: row.logo_url,
     redirectUris: row.redirect_uris,
+    postLogoutRedirectUris: row.post_logout_redirect_uris ?? [],
     allowedScopes: row.allowed_scopes,
+    tokenEndpointAuthMethod: row.token_endpoint_auth_method,
     pkceRequired: row.pkce_required,
     state: row.status,
     createdAt: row.created_at,
@@ -147,6 +159,19 @@ interface CreateClientBody {
   redirectUris?: string[];
   allowedScopes?: string[];
   pkceRequired?: boolean;
+  /** 授权 / 登出页展示的 logo。此前库里有列、accounts 在读、没有地方能填。 */
+  logoUrl?: string | null;
+  /** 登出回跳白名单。不配的话用户登出后停在 accounts 页，回不到产品。 */
+  postLogoutRedirectUris?: string[];
+  /**
+   * token 端点认证方式。`client_secret_basic`（默认，机密客户端）或
+   * `none`（RFC 8252 公共客户端：桌面 / 移动原生应用，零机密）。
+   *
+   * 此前接口**根本不传这一项**，吃列默认——也就是说从 opera 建不出公共客户端，
+   * 产品要发桌面端只能走 seed 或直接改库（ruyin 2026-08-30 转原生应用时就踩过，
+   * 旧 secret hash 留着撞 CHECK，生产 seed 整体回滚）。
+   */
+  tokenEndpointAuthMethod?: "client_secret_basic" | "none";
 }
 
 @Controller("api/oidc-clients")
@@ -184,31 +209,46 @@ export class OidcClientRouter {
     const productId = body.productId!.trim();
     const productCode = await this.requireRegisteredProduct(productId);
 
-    const secret = generateSecret();
-    const salt = await genSalt(BCRYPT_COST);
-    const secretHash = await hash(secret, salt);
+    const authMethod = body.tokenEndpointAuthMethod ?? "client_secret_basic";
+    const isPublic = authMethod === "none";
+
+    /* 公共客户端没有 secret 可发。仍然生成再丢掉会白烧一次 bcrypt，
+       而 bcrypt(cost=10) 不便宜——按需生成。 */
+    const secret = isPublic ? null : generateSecret();
+    const secretHash = secret
+      ? await hash(secret, await genSalt(BCRYPT_COST))
+      : null;
 
     let row: ClientRow;
     try {
       const result = await this.pool.query<ClientRow>(
         `INSERT INTO appoidc.oidc_clients (
            client_id, client_secret_hash, realm, product_id, client_kind,
-           release_channel, name, display_name, redirect_uris, allowed_scopes,
-           pkce_required
-         ) VALUES ($1, $2, 'customer', $3, 'product', $4, $5, $6, $7, $8, $9)
+           release_channel, name, display_name, logo_url, redirect_uris,
+           post_logout_redirect_uris, allowed_scopes, pkce_required,
+           token_endpoint_auth_method
+         ) VALUES ($1, $2, 'customer', $3, 'product', $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING id, client_id, product_id, release_channel, name,
-                   display_name, redirect_uris, allowed_scopes, pkce_required,
+                   display_name, logo_url, redirect_uris, post_logout_redirect_uris,
+                   allowed_scopes, pkce_required, token_endpoint_auth_method,
                    status, created_at, updated_at`,
         [
           body.clientId!.trim(),
-          secretHash,
+          /* 公共客户端**不持有 secret**——这是协议属性不是「没配」。
+             库上 chk_oidc_clients_public_pkce 也挡，但那会冒成 500。 */
+          isPublic ? null : secretHash,
           productId,
           body.releaseChannel ?? "stable",
           body.name?.trim() || body.clientId!.trim(),
           body.displayName?.trim() || null,
+          body.logoUrl?.trim() || null,
           body.redirectUris,
+          body.postLogoutRedirectUris ?? [],
           body.allowedScopes ?? DEFAULT_SCOPES,
-          body.pkceRequired ?? true,
+          /* 公共客户端**强制** PKCE（RFC 8252）。机密客户端默认也开（OAuth 2.1
+             对所有客户端的建议），调用方可以关。 */
+          isPublic ? true : (body.pkceRequired ?? true),
+          authMethod,
         ],
       );
       row = { ...result.rows[0]!, product_code: null };
@@ -226,11 +266,25 @@ export class OidcClientRouter {
 
     return {
       ...toRecord({ ...row, product_code: productCode }),
-      clientSecret: secret,
+      /* 公共客户端回空串而不是 null:调用方拿到的仍是 string,
+         界面据「是否公共」决定显不显示那一栏,不靠判空。 */
+      clientSecret: secret ?? "",
     };
   }
 
+  /**
+   * 轮换 client secret。
+   *
+   * **挂 @RequireStepUp()**：这是凭证材料的重新签发，旧密钥当场作废——产品侧
+   * 当前的配置立即失效，直到他们换上新的。
+   *
+   * 此前它是裸的：`security:oidc_client.manage` 这个 step-up 码 2026-08-31 退役，
+   * 理由是「admin 里没有任何路由检查它」——但 OIDC 客户端管理**搬到了 opera**，
+   * step-up 没跟过来。于是有管理权限就能换，不需要二次验证本人在键盘前。
+   * 形态照 atlas.router.ts 的密钥类写路由（同样是 opera-bff 执行）。
+   */
   @Post(":clientId/rotate-secret")
+  @RequireStepUp()
   async rotateSecret(
     @Req() req: Request & RequestContext,
     @Param("clientId") clientId: string,
@@ -371,6 +425,30 @@ function validateCreate(body: CreateClientBody): void {
       "VALIDATION_INVALID_VALUE",
       "clientId must be lowercase kebab (e.g. acme-agent, acme-agent-beta)",
       "clientId",
+    );
+  }
+  const authMethod = body.tokenEndpointAuthMethod;
+  if (
+    authMethod &&
+    authMethod !== "client_secret_basic" &&
+    authMethod !== "none"
+  ) {
+    throw invalidRequest(
+      "VALIDATION_ENUM",
+      "认证方式取 client_secret_basic(机密) 或 none(公共客户端)",
+      "tokenEndpointAuthMethod",
+    );
+  }
+  /* 公共客户端（RFC 8252）三条绑死：零机密、强制 PKCE、回调是 loopback 或自定义
+     scheme。前两条库上有 chk_oidc_clients_public_pkce 兜底，但那会冒成 500——
+     这里先判，给的是字段级 400。
+     第三条不在这里判：loopback 端口是任意的、自定义 scheme 由产品定，判严了会
+     把合法的挡在外面。 */
+  if (authMethod === "none" && body.pkceRequired === false) {
+    throw invalidRequest(
+      "VALIDATION_CONFLICT",
+      "公共客户端必须强制 PKCE（RFC 8252）——它没有 secret，PKCE 是唯一的防护",
+      "pkceRequired",
     );
   }
   if (!body.redirectUris || body.redirectUris.length === 0) {

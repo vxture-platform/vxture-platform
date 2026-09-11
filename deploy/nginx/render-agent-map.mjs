@@ -13,9 +13,17 @@
  * 仓里不保存任何一行具体映射。
  *
  * ── 域名从哪来 ──
- * `{product_code}.vxture.com` 缺省规则（13-infra-allocation-registry §4#1）。
- * 异 apex 的产品（anlan.ai / xuanzhen.ai）不走这条兜底——它们的证书与本域通配证书
- * 无关，需要各自的 vhost。所以本脚本只渲染 `.vxture.com` 下的。
+ * 取 `product_webhooks.edge_domain`；为空时回落 `{product_code}.vxture.com`
+ * （13-infra-allocation-registry §4#1 的缺省规则）。
+ *
+ * **推导曾经是唯一规则，而它已经在失效**：登记表里 anlan → anlan.ai、
+ * xuanzhen → xuanzhen.ai，这两个正是通配兜底要服务的 L3 智能体，推导却会给它们
+ * 生成 `anlan.vxture.com`——指向一个不存在的域名，**且不报错**。
+ * 所以 2026-09-11 加了 `edge_domain` 列，推导降级成默认值。
+ *
+ * 注意异 apex 的域名**证书不在本域通配证书里**（`*.vxture.com`），
+ * 所以它们即使进了这张表，边缘仍需要各自的证书与 vhost——这张表只解决路由，
+ * 不解决证书。
  *
  * ── 失败时怎么办：保留上一版，不写空表 ──
  * 读不到库就写出一个空表，后果是**所有已接入的智能体一起 444**——把一次读库失败
@@ -81,7 +89,11 @@ try {
      仍然可能需要边缘可达（运营者正在排障），停不停用是产品目录的语义，
      不是路由的语义——真要断路由，把 edge_upstream 清空就是了。 */
   const r = await client.query(
-    `select p.product_code, w.edge_upstream
+    /* `edge_domain` 为空时回落到 `{product_code}.vxture.com`——推导仍是**默认值**,
+       只是不再是唯一规则。存量行的 edge_domain 都是 NULL,靠这条回落保持行为不变。 */
+    `select p.product_code,
+            coalesce(nullif(w.edge_domain, ''), p.product_code || '.vxture.com') as domain,
+            w.edge_upstream
        from product.product_webhooks w
        join product.products p on p.id = w.product_id
       where w.edge_upstream is not null
@@ -101,14 +113,22 @@ try {
    一个带空格或分号的值会让 nginx -t 失败，而那时人已经离开登记现场了。
    这里拒绝掉并点名是哪一行，比让 nginx 报一句语法错有用得多。 */
 const SHAPE = /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]{1,5}$/;
+const DOMAIN_SHAPE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 const lines = [];
 const rejected = [];
-for (const { product_code: code, edge_upstream: up } of rows) {
+for (const { product_code: code, domain, edge_upstream: up } of rows) {
   if (!SHAPE.test(up)) {
-    rejected.push(`${code} → ${JSON.stringify(up)}`);
+    rejected.push(`${code} 的上游 → ${JSON.stringify(up)}`);
     continue;
   }
-  lines.push(`${code}.vxture.com ${up};`);
+  /* 域名同样要校形状:它和上游一样原样进 nginx 配置,一个带空格或分号的值会让
+     `nginx -t` 失败,而那时人早已离开登记现场。库上有 CHECK,但回落推导出来的
+     那一支不经过 CHECK——产品码理论上可以含大写或下划线。 */
+  if (!DOMAIN_SHAPE.test(domain)) {
+    rejected.push(`${code} 的域名 → ${JSON.stringify(domain)}`);
+    continue;
+  }
+  lines.push(`${domain} ${up};`);
 }
 
 if (rejected.length) {

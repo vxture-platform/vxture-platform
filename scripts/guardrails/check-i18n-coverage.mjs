@@ -250,6 +250,21 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *
  *   website -1:CaseSection 的年月不再手拼 `${year}/${month}`,改由 Intl 按 locale
  *   给——那个手拼串本身就是一处写死的中文字段顺序。棘轮跟着收紧。
+ *
+ * 2026-09-11 opera 1938 → 1971(+33):接入配置补齐(同一条「零代码上线产品」的线)。
+ *
+ *   产品目录 webhook 弹窗 +「边缘域名」(按产品码预填、可改——推导已经在失效:
+ *   anlan → anlan.ai 会被推成一个不存在的 anlan.vxture.com 且不报错);
+ *   接入凭据弹窗 +「登出回跳地址」「Logo 地址」「认证方式」三项,以及公共客户端
+ *   (RFC 8252)那一支的展示文案——此前从 opera 建不出公共客户端,产品要发桌面端
+ *   只能走 seed 或直接改库。
+ *
+ *   理由与上一条相同,**不单抽**:opera 整个门户没做 i18n,只把新写的 33 条走 t()
+ *   换来的是同一个弹窗里半中半英。opera 整页 i18n 化另开专项,与 admin 同一批。
+ *
+ *   顺带清掉两处**渲染成字面量的 markdown**(`**旧路径…**` 与反引号包的
+ *   `host:port`)——JSX 文本里的星号与反引号不是强调语法,运营者看到的就是星号
+ *   本身。这类残留全站还有 13 处(全在 opera 的字符串属性里),另开一条收。
  */
 const BASELINE = {
   // 2026-09-04 console 30 → 8:批 0c 清掉 onboarding 法务链接 / signin 跳板 /
@@ -260,7 +275,7 @@ const BASELINE = {
   console: 0,
   website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 1938, // 2026-09-10 见上方说明;原 1931 是 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
+  opera: 1971, // 2026-09-11 见上方说明;上一档 1938 是 2026-09-10 的产品接入配置化
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页

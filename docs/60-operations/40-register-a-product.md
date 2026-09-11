@@ -69,6 +69,11 @@ opera → **产品目录** → 「登记产品」。
 | `origin`         | —    | `self` / `third_party` / `other`，缺省 `self`                                                                                      | `VALIDATION_INVALID_VALUE`                     |
 | `originProvider` | 条件 | **`origin=third_party` 时必填**                                                                                                    | `VALIDATION_REQUIRED`                          |
 | `description`    | —    | 外部文案                                                                                                                           | —                                              |
+| `surfaces`       | —    | 可露出的端，多选：`web` / `desktop` / `app` / `miniprogram`，缺省 `web`（受管枚举，权威 `@vxture/core-utils`）                     | `VALIDATION_INVALID_VALUE`                     |
+| `iconUrl`        | —    | console 应用中心磁贴用的图标                                                                                                       | —                                              |
+
+**「端」是产品自身的形态属性，与租户无关。** 要按租户开关的是权益，那挂在订阅 / 套餐上。
+桌面客户端（如影）据此决定列不列这个产品——不是每个产品都适合每个端。
 
 **产品码是唯一需要在提交前想清楚的**：它是 `{code}.vxture.com`、容器前缀 `{code}-*`、
 库名 `vx_{code}_db` 的同一个值，登记后不可改。
@@ -85,14 +90,30 @@ opera → **产品目录** → 「登记产品」。
 
 opera → **接入凭据** → 「注册客户端」。产品行必须已登记（外键要求，两个页面天然串联）。
 
-| 字段             | 说明                                                                                         |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| `clientId`       | 惯例等于产品码                                                                               |
-| `productId`      | 指向第 2 步登记的行                                                                          |
-| `realm`          | **恒为 `customer`**。workforce realm 留给平台自己的门户，不对产品开放                        |
-| `redirectUris`   | 一行一条，产品的回调地址                                                                     |
-| `allowed_scopes` | D12 之后的四段式：`openid` / `profile` / `email` / `phone`。**不要加 `{code}:subscription`** |
-| `pkce_required`  | 按产品形态                                                                                   |
+| 字段                      | 说明                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| `clientId`                | 惯例等于产品码                                                                               |
+| `productId`               | 指向第 2 步登记的行                                                                          |
+| `realm`                   | **恒为 `customer`**。workforce realm 留给平台自己的门户，不对产品开放                        |
+| `redirectUris`            | 一行一条，产品的回调地址                                                                     |
+| `allowed_scopes`          | D12 之后的四段式：`openid` / `profile` / `email` / `phone`。**不要加 `{code}:subscription`** |
+| `pkce_required`           | 按产品形态。**公共客户端强制开，界面上关不掉**                                               |
+| `tokenEndpointAuthMethod` | `client_secret_basic`（机密，缺省）或 `none`（公共客户端）。**注册后改不了**                 |
+| `logoUrl`                 | 授权页与登出页展示，和展示名一起出现                                                         |
+| `postLogoutRedirectUris`  | 登出回跳白名单。**不配的话用户登出后停在 accounts 页**，回不到产品                           |
+
+### 机密客户端还是公共客户端
+
+网页端服务能保住密钥，选**机密客户端**。桌面 / 移动原生应用把密钥打进安装包等于公开，
+按 RFC 8252 选**公共客户端**：不发密钥、强制 PKCE、回调走 loopback 或自定义 scheme。
+
+三条是绑死的：`token_endpoint_auth_method = 'none'` 时 `client_secret_hash` 必须为 NULL
+且 `pkce_required` 必须为真——库上 `chk_oidc_clients_public_pkce` 兜底，但那会冒成 500，
+所以界面与 BFF 各先判一道，给的是字段级 400。
+
+> 这一项**此前根本传不了**，接口吃列默认，也就是说从 opera 建不出公共客户端；产品要发
+> 桌面端只能走 seed 或直接改库（ruyin 2026-08-30 转原生应用时就踩过：旧 secret hash
+> 留着撞 CHECK，生产 seed 整体回滚）。
 
 **client secret 只在创建与轮换两个动作里明文返回一次**，别处（含列表）永不下发。
 拿到后立即交给产品侧——控制台零持有明文。
@@ -111,6 +132,7 @@ opera → **产品目录** → 该产品 → webhook 登记。**五个字段都�
 | `homeUrl`           | 产品主页（展示用，不参与投递）。必须是 http/https 绝对地址       | `VALIDATION_INVALID_URL`                 |
 | `webhookUrl`        | 平台→产品的推送目标。同上                                        | `VALIDATION_INVALID_URL`                 |
 | **`webhookSecret`** | 签名密钥**原文**，只进不出。**至少 16 位**                       | `VALIDATION_TOO_SHORT`                   |
+| **`edgeDomain`**    | 边缘域名。**按产品码预填 `{code}.vxture.com`，可改**             | `VALIDATION_FORMAT`（主机名形状）        |
 | **`edgeUpstream`**  | tailnet 上的 `host:port`，**不带协议、路径或空格**；端口 1–65535 | `VALIDATION_FORMAT` / `VALIDATION_RANGE` |
 | `webhookSecretRef`  | **旧路径，新产品不填**。见下                                     | `VALIDATION_TOO_LONG`（>128）            |
 
@@ -128,10 +150,20 @@ opera → **产品目录** → 该产品 → webhook 登记。**五个字段都�
 若平台未配置主密钥，填写签名密钥会被明确拒绝（`SECRET_KEY_UNCONFIGURED`），
 **不会静默存明文**。
 
-### 边缘上游
+### 边缘域名与边缘上游
 
-填了它，边缘那份 `*.vxture.com` 兜底 vhost 下次同步就把该子域转到这里。留空 = 不走通配兜底
-（自带精确 vhost 的产品就该留空）。
+两栏分工：**域名**决定「谁来敲门」，**上游**决定「转去哪」。端口只在上游那一栏，别混。
+
+域名此前**全靠推导** `{product_code}.vxture.com`，写死在渲染器里。推导已经在失效：
+登记表里 `anlan → anlan.ai`、`xuanzhen → xuanzhen.ai`，而推导会给它们生成
+`anlan.vxture.com`——**指向一个不存在的域名，且不报错**。所以现在推导降级成**预填的
+默认值**，异 apex 的产品在框里改掉即可。
+
+填了上游，边缘那份 `*.vxture.com` 兜底 vhost 下次同步就把该域名转到这里。
+上游留空 = 这个产品完全不进边缘路由表（自带精确 vhost 的产品就该留空）。
+
+**DNS 记录仍要人去建**（见第 1 步）：本域子域的证书是通配的不用签，DNS 不是；
+换了 apex 则证书与 vhost 都要另配——这张表只解决路由。
 
 **既有产品不受影响**：nginx 的 server_name 匹配优先级是精确名 > 通配，
 arda / atlas / karda / runos / vxtpl 与平台自己那几个面照旧走各自的 vhost。

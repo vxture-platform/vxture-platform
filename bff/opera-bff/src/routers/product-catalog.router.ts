@@ -39,7 +39,12 @@ import {
   Query,
   Req,
 } from "@nestjs/common";
-import { deriveSecretKey, encryptSecret } from "@vxture/core-utils";
+import {
+  PRODUCT_SURFACES,
+  deriveSecretKey,
+  encryptSecret,
+  isValidProductSurface,
+} from "@vxture/core-utils";
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import type { Request } from "express";
@@ -124,6 +129,10 @@ export interface ProductRecord {
   originProvider: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 产品图标。console 应用中心磁贴、订阅卡在读它。 */
+  iconUrl: string | null;
+  /** 可露出的端（受管枚举）。一个都没勾时是空数组，不是 null。 */
+  surfaces: string[];
 }
 
 interface ProductRow {
@@ -144,6 +153,8 @@ interface ProductRow {
   origin_provider: string | null;
   created_at: string;
   updated_at: string;
+  icon_url: string | null;
+  surfaces: string[];
 }
 
 function toRecord(row: ProductRow): ProductRecord {
@@ -165,6 +176,8 @@ function toRecord(row: ProductRow): ProductRecord {
     originProvider: row.origin_provider,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    iconUrl: row.icon_url,
+    surfaces: row.surfaces ?? [],
   };
 }
 
@@ -182,6 +195,15 @@ interface ProductWriteBody {
   isWorkforceVisible?: boolean;
   origin?: ProductOrigin;
   originProvider?: string | null;
+  /** 产品图标。console 应用中心的磁贴、订阅卡在读它——此前库里有列、没有地方能填。 */
+  iconUrl?: string | null;
+  /**
+   * 可露出的端（受管枚举，权威源 `@vxture/core-utils` 的 `PRODUCT_SURFACES`）。
+   *
+   * **整组替换语义**：传 `["web"]` = 只留 web，其余删掉；传 `[]` = 一个都不留。
+   * 字段缺席（undefined）= 不动——「改个产品名」不该顺手把端清空。
+   */
+  surfaces?: string[];
 }
 
 interface ProductDeleteBody {
@@ -221,7 +243,19 @@ const SELECT_COLUMNS = `
   id, product_code, product_type, category_id, product_name, product_nick,
   description, capability_keys, tags, standalone_subscribable, status,
   is_customer_visible, is_workforce_visible, origin, origin_provider,
-  created_at, updated_at
+  icon_url, created_at, updated_at,
+  /* 端是关系表，用相关子查询一次带出——不让调用方再打一遍。
+     子查询里用**裸 id** 相关而不是 p.id：本常量同时用在三处 SELECT 与四处
+     RETURNING，两种上下文都没有表别名。裸 id 在两处都能正确解析到外层那一行
+     （在 dev 库上两种上下文各跑过一次，不是推的）。
+     注意这段注释里不能出现反引号——它在模板字符串内部，一个反引号就把串截断了
+     （第一版就是这么写的，tsc 报的是十几行外的语法错，看不出根因）。
+     coalesce 到空数组：让「一个端都没勾」返回 [] 而不是 null。 */
+  coalesce(
+    (select array_agg(s.surface order by s.surface)
+       from product.product_surfaces s where s.product_id = id),
+    '{}'
+  ) as surfaces
 `;
 
 @Controller("api/products")
@@ -356,34 +390,60 @@ export class ProductCatalogRouter {
   ): Promise<ProductRecord> {
     assertCanManage(req);
     validateWrite(body, { requireCore: true });
+    const surfaces = normalizeSurfaces(body.surfaces);
     const operatorId = req.operator?.id ?? null;
-    const result = await this.pool.query<ProductRow>(
-      `INSERT INTO product.products (
-         product_code, product_type, category_id, product_name, product_nick,
-         description, capability_keys, tags, standalone_subscribable, status,
-         is_customer_visible, is_workforce_visible, origin, origin_provider,
-         created_by, updated_by
-       ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $14
-       ) RETURNING ${SELECT_COLUMNS}`,
-      [
-        body.productCode!.trim(),
-        body.productType!.trim(),
-        body.categoryId ?? null,
-        body.productName!.trim(),
-        body.productNick?.trim() || null,
-        body.description?.trim() || null,
-        body.capabilityKeys ?? [],
-        body.tags ?? [],
-        body.standaloneSubscribable ?? true,
-        body.isCustomerVisible ?? true,
-        body.isWorkforceVisible ?? true,
-        body.origin ?? "self",
-        body.originProvider?.trim() || null,
-        operatorId,
-      ],
-    );
-    return toRecord(result.rows[0]!);
+
+    /* 事务：产品行与端要么一起成，要么一起不成。端是关系表，分两次写的话
+       「产品建好了但端没写进去」会是一个看不出来的半截状态——产品照常显示，
+       只是它在如影端永远不出现。 */
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<ProductRow>(
+        `INSERT INTO product.products (
+           product_code, product_type, category_id, product_name, product_nick,
+           description, capability_keys, tags, standalone_subscribable, status,
+           is_customer_visible, is_workforce_visible, origin, origin_provider,
+           icon_url, created_by, updated_by
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15
+         ) RETURNING ${SELECT_COLUMNS}`,
+        [
+          body.productCode!.trim(),
+          body.productType!.trim(),
+          body.categoryId ?? null,
+          body.productName!.trim(),
+          body.productNick?.trim() || null,
+          body.description?.trim() || null,
+          body.capabilityKeys ?? [],
+          body.tags ?? [],
+          body.standaloneSubscribable ?? true,
+          body.isCustomerVisible ?? true,
+          body.isWorkforceVisible ?? true,
+          body.origin ?? "self",
+          body.originProvider?.trim() || null,
+          body.iconUrl?.trim() || null,
+          operatorId,
+        ],
+      );
+      const row = result.rows[0]!;
+      if (surfaces.length > 0) {
+        await client.query(
+          `INSERT INTO product.product_surfaces (product_id, surface)
+           SELECT $1, unnest($2::text[])`,
+          [row.id, surfaces],
+        );
+      }
+      await client.query("commit");
+      /* RETURNING 里的端子查询在插入端之前就求过值了，回传的会是空数组——
+         用刚写进去的值补上，而不是再查一次库。 */
+      return { ...toRecord(row), surfaces };
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   @Put(":id")
@@ -394,37 +454,63 @@ export class ProductCatalogRouter {
   ): Promise<ProductRecord> {
     assertCanManage(req);
     validateWrite(body, { requireCore: true });
+    /* 端**字段缺席 = 不动**（undefined），传了数组才整组替换。
+       「改个产品名」不该顺手把端清空——而如果这里把 undefined 当成空数组，
+       任何一次不带 surfaces 的 PUT 都会静默清掉它。 */
+    const surfaces =
+      body.surfaces === undefined ? null : normalizeSurfaces(body.surfaces);
     const operatorId = req.operator?.id ?? null;
-    const result = await this.pool.query<ProductRow>(
-      `UPDATE product.products SET
-         product_type = $1, category_id = $2, product_name = $3,
-         product_nick = $4, description = $5, capability_keys = $6, tags = $7,
-         standalone_subscribable = $8, is_customer_visible = $9,
-         is_workforce_visible = $10, origin = $11, origin_provider = $12,
-         updated_by = $13, updated_at = now()
-       WHERE id = $14 AND deleted_at IS NULL
-       RETURNING ${SELECT_COLUMNS}`,
-      [
-        body.productType!.trim(),
-        body.categoryId ?? null,
-        body.productName!.trim(),
-        body.productNick?.trim() || null,
-        body.description?.trim() || null,
-        body.capabilityKeys ?? [],
-        body.tags ?? [],
-        body.standaloneSubscribable ?? true,
-        body.isCustomerVisible ?? true,
-        body.isWorkforceVisible ?? true,
-        body.origin ?? "self",
-        body.originProvider?.trim() || null,
-        operatorId,
-        id,
-      ],
-    );
-    if (!result.rows[0]) {
-      throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<ProductRow>(
+        `UPDATE product.products SET
+           product_type = $1, category_id = $2, product_name = $3,
+           product_nick = $4, description = $5, capability_keys = $6, tags = $7,
+           standalone_subscribable = $8, is_customer_visible = $9,
+           is_workforce_visible = $10, origin = $11, origin_provider = $12,
+           icon_url = $13, updated_by = $14, updated_at = now()
+         WHERE id = $15 AND deleted_at IS NULL
+         RETURNING ${SELECT_COLUMNS}`,
+        [
+          body.productType!.trim(),
+          body.categoryId ?? null,
+          body.productName!.trim(),
+          body.productNick?.trim() || null,
+          body.description?.trim() || null,
+          body.capabilityKeys ?? [],
+          body.tags ?? [],
+          body.standaloneSubscribable ?? true,
+          body.isCustomerVisible ?? true,
+          body.isWorkforceVisible ?? true,
+          body.origin ?? "self",
+          body.originProvider?.trim() || null,
+          body.iconUrl?.trim() || null,
+          operatorId,
+          id,
+        ],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        await client.query("rollback").catch(() => undefined);
+        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+      }
+      if (surfaces !== null) {
+        await replaceSurfaces(client, id, surfaces);
+      }
+      await client.query("commit");
+      return {
+        ...toRecord(row),
+        /* 同 create：RETURNING 的子查询在替换之前求值，回传的是旧集合。 */
+        surfaces: surfaces ?? toRecord(row).surfaces,
+      };
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
     }
-    return toRecord(result.rows[0]);
   }
 
   @Patch(":id/state")
@@ -820,11 +906,12 @@ export class ProductCatalogRouter {
       webhook_url: string | null;
       webhook_secret_ref: string | null;
       edge_upstream: string | null;
+      edge_domain: string | null;
       has_secret: boolean;
     }>(
       /* 密文本身不进 SELECT 列表：不回传就不会被回传。取一个布尔即可——
          上线检查要区分「配了密钥」与「没配」,不需要知道配的是什么。 */
-      `SELECT home_url, webhook_url, webhook_secret_ref, edge_upstream,
+      `SELECT home_url, webhook_url, webhook_secret_ref, edge_upstream, edge_domain,
               (webhook_secret_enc IS NOT NULL) AS has_secret
          FROM product.product_webhooks WHERE product_id = $1`,
       [id],
@@ -838,6 +925,7 @@ export class ProductCatalogRouter {
           webhookUrl: row.webhook_url,
           webhookSecretRef: row.webhook_secret_ref,
           edgeUpstream: row.edge_upstream,
+          edgeDomain: row.edge_domain,
           hasWebhookSecret: row.has_secret,
         }
       : null;
@@ -867,6 +955,7 @@ export class ProductCatalogRouter {
       webhookUrl?: string | null;
       webhookSecretRef?: string | null;
       edgeUpstream?: string | null;
+      edgeDomain?: string | null;
       /**
        * 签名密钥**原文**，只进不出。
        *
@@ -885,6 +974,7 @@ export class ProductCatalogRouter {
     const webhookUrl = normalizeUrl(body.webhookUrl, "webhookUrl");
     const secretRef = normalizeRef(body.webhookSecretRef);
     const edgeUpstream = normalizeUpstream(body.edgeUpstream);
+    const edgeDomain = normalizeDomain(body.edgeDomain);
     const secretTouched = body.webhookSecret !== undefined;
     const secretEnc = secretTouched
       ? encodeWebhookSecret(body.webhookSecret)
@@ -905,22 +995,24 @@ export class ProductCatalogRouter {
       webhook_url: string | null;
       webhook_secret_ref: string | null;
       edge_upstream: string | null;
+      edge_domain: string | null;
       has_secret: boolean;
     }>(
       /* 密钥那一列走「没碰就保持原样」:$6 为 false 时 UPDATE 分支保留旧值。
          INSERT 分支不需要这个分歧——没有旧值可保。 */
       `INSERT INTO product.product_webhooks
-         (product_id, home_url, webhook_url, webhook_secret_ref, edge_upstream, webhook_secret_enc)
-       VALUES ($1, $2, $3, $4, $5, $7)
+         (product_id, home_url, webhook_url, webhook_secret_ref, edge_upstream, webhook_secret_enc, edge_domain)
+       VALUES ($1, $2, $3, $4, $5, $7, $8)
        ON CONFLICT (product_id) DO UPDATE
          SET home_url           = EXCLUDED.home_url,
              webhook_url        = EXCLUDED.webhook_url,
              webhook_secret_ref = EXCLUDED.webhook_secret_ref,
              edge_upstream      = EXCLUDED.edge_upstream,
+             edge_domain        = EXCLUDED.edge_domain,
              webhook_secret_enc = CASE WHEN $6 THEN EXCLUDED.webhook_secret_enc
                                        ELSE product.product_webhooks.webhook_secret_enc END,
              updated_at         = now()
-       RETURNING home_url, webhook_url, webhook_secret_ref, edge_upstream,
+       RETURNING home_url, webhook_url, webhook_secret_ref, edge_upstream, edge_domain,
                  (webhook_secret_enc IS NOT NULL) AS has_secret`,
       [
         id,
@@ -930,6 +1022,7 @@ export class ProductCatalogRouter {
         edgeUpstream,
         secretTouched,
         secretEnc,
+        edgeDomain,
       ],
     );
     const row = result.rows[0]!;
@@ -938,6 +1031,7 @@ export class ProductCatalogRouter {
       webhookUrl: row.webhook_url,
       webhookSecretRef: row.webhook_secret_ref,
       edgeUpstream: row.edge_upstream,
+      edgeDomain: row.edge_domain,
       hasWebhookSecret: row.has_secret,
     };
   }
@@ -1309,6 +1403,14 @@ export interface ProductWebhookRecord {
    */
   edgeUpstream: string | null;
   /**
+   * 边缘域名。表单预填 `{product_code}.vxture.com` 但**可改**。
+   *
+   * 此前域名全靠渲染器拼字符串，而推导已经在失效：anlan → anlan.ai、
+   * xuanzhen → xuanzhen.ai 这两个 L3 智能体是异 apex，推导给出的域名根本不存在，
+   * 且不报错。加这一列后推导降级成默认值，不再是唯一规则。
+   */
+  edgeDomain: string | null;
+  /**
    * 是否已登记签名密钥(新路径,密文落库)。
    *
    * **只回布尔,永不回传密文或原文**——密钥本体一旦能从读接口拿到,
@@ -1408,6 +1510,55 @@ function normalizeUrl(
  * 哪个字段、要什么形状。而且这个值会原样渲进 nginx 配置——带空格或分号的值
  * 会让边缘同步时 `nginx -t` 失败,那时人早已离开登记现场。
  */
+/**
+ * 端：去重、排序、逐个查受管枚举。
+ *
+ * 域外值**当场拒绝**而不是靠库上的 CHECK——CHECK 冒上来是一句 23514，
+ * 运营者只看到「保存失败」；这里给的是字段级 400，说清是哪个值不在表里。
+ * （库上那条 CHECK 仍然留着：判据写在数据层才挡得住绕过接口的写入。）
+ */
+function normalizeSurfaces(input: string[] | undefined): string[] {
+  if (!input || input.length === 0) return [];
+  const out: string[] = [];
+  for (const raw of input) {
+    const v = (raw ?? "").trim();
+    if (v === "") continue;
+    if (!isValidProductSurface(v)) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        `surface must be one of ${PRODUCT_SURFACES.join(", ")}`,
+        "surfaces",
+      );
+    }
+    if (!out.includes(v)) out.push(v);
+  }
+  return out.sort();
+}
+
+/**
+ * 端的整组替换。先删后插，同一事务内。
+ *
+ * 不做「差集增删」：这张表只有主键两列，没有可保留的行内状态，diff 换不来任何
+ * 东西，却要多一次查询和一段容易写错的集合运算。
+ */
+async function replaceSurfaces(
+  client: PoolClient,
+  productId: string,
+  surfaces: string[],
+): Promise<void> {
+  await client.query(
+    `DELETE FROM product.product_surfaces WHERE product_id = $1`,
+    [productId],
+  );
+  if (surfaces.length > 0) {
+    await client.query(
+      `INSERT INTO product.product_surfaces (product_id, surface)
+       SELECT $1, unnest($2::text[])`,
+      [productId, surfaces],
+    );
+  }
+}
+
 function normalizeUpstream(value: string | null | undefined): string | null {
   const raw = (value ?? "").trim();
   if (raw === "") return null;
@@ -1424,6 +1575,36 @@ function normalizeUpstream(value: string | null | undefined): string | null {
       "VALIDATION_RANGE",
       "端口要在 1–65535 之间",
       "edgeUpstream",
+    );
+  }
+  return raw;
+}
+
+/**
+ * 边缘域名的形状：主机名。**不带协议、路径、端口**（端口在 edgeUpstream 那一列）。
+ *
+ * 这个值会原样进 nginx 的 map，一个带协议或斜杠的值会让边缘同步时 `nginx -t` 失败——
+ * 而那时人早已离开登记现场。库上也有同款 CHECK；这里先判是为了给字段级 400。
+ */
+function normalizeDomain(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim().toLowerCase();
+  if (raw === "") return null;
+  if (
+    !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(
+      raw,
+    )
+  ) {
+    throw invalidRequest(
+      "VALIDATION_FORMAT",
+      "边缘域名只写主机名（如 tenderforge.vxture.com），不带协议、路径或端口",
+      "edgeDomain",
+    );
+  }
+  if (raw.length > 255) {
+    throw invalidRequest(
+      "VALIDATION_TOO_LONG",
+      "域名超过 255 字符",
+      "edgeDomain",
     );
   }
   return raw;
