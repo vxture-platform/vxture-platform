@@ -1235,6 +1235,7 @@ function ProductsPageContent() {
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       >
         {/* ── 只收三项 ──────────────────────────────────────────────────
             owner 2026-09-11:「接入产品按钮的连接还是旧的页面，这个需要修正和清理。」
@@ -1328,6 +1329,7 @@ function ProductsPageContent() {
         submitting={submitting}
         submitDisabled={webhookLoad.kind !== "ready"}
         onSubmit={submitWebhook}
+        cancelLabel={tShared("actions.cancel")}
       >
         {webhookLoad.kind === "loading" ? (
           <EmptyState
@@ -1631,6 +1633,7 @@ function ProductsPageContent() {
           setPendingAction(null);
           if (p) void applyLifecycle(p.product, p.action);
         }}
+        cancelLabel={tShared("actions.cancel")}
       >
         <p className="text-body-sm text-muted-foreground">
           对象：{pendingAction?.product.productName}（
@@ -1660,6 +1663,7 @@ function ProductsPageContent() {
           e.preventDefault();
           void confirmDeletion();
         }}
+        cancelLabel={tShared("actions.cancel")}
       >
         {deletion?.loadError ? (
           /* 读不到影响面不能删——同 webhook 那条判据：读失败时放行等于蒙着眼动手。 */

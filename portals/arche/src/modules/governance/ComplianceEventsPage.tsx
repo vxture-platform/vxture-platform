@@ -575,6 +575,7 @@ export function ComplianceEventsPage() {
             if (!open) closeDialog();
           }}
           onSubmit={(event) => void submitForm(event)}
+          cancelLabel={tShared("actions.cancel")}
         >
           <div>
             <Field>
@@ -661,6 +662,7 @@ export function ComplianceEventsPage() {
             if (!open) setAssignTarget(null);
           }}
           onSubmit={(event) => void confirmAssign(event)}
+          cancelLabel={tShared("actions.cancel")}
         >
           <Field>
             <FieldLabel htmlFor="complianceeventspage-handler">

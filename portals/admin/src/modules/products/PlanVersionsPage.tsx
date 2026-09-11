@@ -895,6 +895,7 @@ function PlanCreateDialog({
   onClose: () => void;
   onCreated: (created: PlanVersionDetail) => Promise<void>;
 }) {
+  const tShared = useTranslations();
   const [planCode, setPlanCode] = useState(
     `${target.productCode}-${target.tier}`,
   );
@@ -936,6 +937,7 @@ function PlanCreateDialog({
         if (!open) onClose();
       }}
       onSubmit={submit}
+      cancelLabel={tShared("actions.cancel")}
     >
       {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
       <Field>

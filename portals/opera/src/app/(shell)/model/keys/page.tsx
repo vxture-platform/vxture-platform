@@ -184,6 +184,7 @@ type LoadState =
   | { kind: "ready" };
 
 export default function KeysPage() {
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const t = useTranslations("modelKeysPage");
   const tableLabels = useTableLabels();
@@ -794,6 +795,7 @@ export default function KeysPage() {
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       >
         {/* 这里没有类型下拉，是刻意的——而且要说清楚为什么没有。只是悄悄拿掉，
             下一个人只会当成漏做又给加回来。 */}
@@ -857,6 +859,7 @@ export default function KeysPage() {
         submitLabel={t("rotate.submit")}
         submitting={submitting}
         onSubmit={submit}
+        cancelLabel={tShared("actions.cancel")}
       />
 
       {/* 明文展示：没有取消/提交的语义，只有"我记下了"，所以提交按钮就是关闭。 */}

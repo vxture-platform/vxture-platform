@@ -532,6 +532,7 @@ export function RiskRecordsPage() {
             if (!open) closeDialog();
           }}
           onSubmit={(event) => void submitForm(event)}
+          cancelLabel={tShared("actions.cancel")}
         >
           {dialogMode === "create" ? (
             <Field>

@@ -471,6 +471,7 @@ function AnnouncementFormDialog({
         if (!open) onClose();
       }}
       onSubmit={onSubmit}
+      cancelLabel={tShared("actions.cancel")}
     >
       <div>
         <Field>

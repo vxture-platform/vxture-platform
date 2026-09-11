@@ -605,6 +605,7 @@ export default function MaintenanceWindowsPage() {
             if (!open) closeDialog();
           }}
           onSubmit={(event) => void submitForm(event)}
+          cancelLabel={tShared("actions.cancel")}
         >
           {/* 三档（DS `FieldTier`）：身份 = 一条维护公告最少要说清的「什么事、什么时候」；
               常规 = 分级与波及面；高级 = 两段可选长文。 */}

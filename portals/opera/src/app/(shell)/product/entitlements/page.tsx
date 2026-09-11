@@ -1053,6 +1053,7 @@ function ProductEntitlements() {
           submitting={submitting}
           submitDisabled={!routePicker || routePicker.picked.length === 0}
           onSubmit={submitRoutePicker}
+          cancelLabel={tShared("actions.cancel")}
         >
           {routePicker ? (
             <FieldTier
@@ -1149,6 +1150,7 @@ function ProductEntitlements() {
           submitting={submitting}
           submitDisabled={!capPicker || capPicker.picked.length === 0}
           onSubmit={submitCapPicker}
+          cancelLabel={tShared("actions.cancel")}
         >
           {capPicker ? (
             <>

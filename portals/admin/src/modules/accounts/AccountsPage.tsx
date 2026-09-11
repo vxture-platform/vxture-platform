@@ -783,6 +783,7 @@ export function AccountsPage({
             if (!open) closePending();
           }}
           onSubmit={(event) => void confirmPending(event)}
+          cancelLabel={tShared("actions.cancel")}
         >
           <Field>
             <FieldLabel htmlFor="accountspage-field">备注（可选）</FieldLabel>
