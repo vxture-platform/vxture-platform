@@ -74,7 +74,13 @@ import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { LockedInput } from "@/components/form/LockedInput";
 import { actionsFor, type ProductAction } from "./lifecycle";
-import { FieldGrid, FormField, SectionBody, ToggleRow } from "./DetailForm";
+import {
+  CopyableInput,
+  FieldGrid,
+  FormField,
+  SectionBody,
+  ToggleRow,
+} from "./DetailForm";
 import { ProductMetricsSection } from "./ProductMetricsSection";
 
 const MANAGE = "platform:product.manage";
@@ -125,7 +131,10 @@ interface ClientLite {
   clientId: string;
   releaseChannel: string;
   state: string;
+  displayName: string | null;
+  logoUrl: string | null;
   redirectUris: string[];
+  postLogoutRedirectUris: string[];
   tokenEndpointAuthMethod: string;
 }
 
@@ -210,7 +219,15 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 /** 一张凭据卡：图标 + client_id + 渠道/类型/状态/回调数。 */
-function ClientCard({ client }: { readonly client: ClientLite }) {
+function ClientCard({
+  client,
+  canManage,
+  onEdit,
+}: {
+  readonly client: ClientLite;
+  readonly canManage: boolean;
+  readonly onEdit: () => void;
+}) {
   const isPublic = client.tokenEndpointAuthMethod === "none";
   return (
     <Card className="flex min-w-0 flex-col gap-sm p-md">
@@ -218,14 +235,28 @@ function ClientCard({ client }: { readonly client: ClientLite }) {
         <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
           <Icon name="fingerprint" size="sm" aria-hidden="true" />
         </span>
-        <span className="flex min-w-0 flex-col">
+        <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate font-mono text-code-sm">
             {client.clientId}
           </span>
-          <span className="text-label-sm text-muted-foreground">
-            {CHANNEL_LABEL[client.releaseChannel] ?? client.releaseChannel}
+          {/* 展示名要露出来：它是**客户在授权页看到的那个名字**，而此前界面上
+              一处都不显示，于是 vxtpl 的授权页一直写着 seed 里的英文缩写。 */}
+          <span className="truncate text-label-sm text-muted-foreground">
+            {CHANNEL_LABEL[client.releaseChannel] ?? client.releaseChannel} ·{" "}
+            {client.displayName || "未设展示名"}
           </span>
         </span>
+        {canManage ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`编辑 ${client.clientId}`}
+            onClick={onEdit}
+          >
+            <Icon name="edit" size="sm" aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-xs">
         <StatusBadge
@@ -310,6 +341,18 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
    * 只需要能看见它们；真要新建，保存完这一页之后再去凭据页，回来会自动关联。
    */
   const [credOpen, setCredOpen] = useState(false);
+  /**
+   * 正在编辑的客户端。
+   *
+   * 展示物（授权页的名字与 logo）与回调白名单**分开两个动作**：前者改错了顶多难看，
+   * 后者能往白名单里加一个地址就能把授权码导走。服务端也是两个路由，后者挂 step-up。
+   */
+  const [editClient, setEditClient] = useState<ClientLite | null>(null);
+  const [clientDraft, setClientDraft] = useState({
+    displayName: "",
+    logoUrl: "",
+  });
+  const [savingClient, setSavingClient] = useState(false);
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -387,6 +430,9 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
     const secret = whDraft.webhookSecret.trim();
     try {
       await api.put(`/api/products/${product.id}`, {
+        /* 产品码不可改，但仍然送过去：本页发布时线上可能还是旧 BFF（那版的 PUT
+           必填它）。服务端的 UPDATE 不会把它写进 SET 列表，所以送了也改不动。 */
+        productCode: product.productCode,
         productName: draft.productName.trim(),
         productNick: draft.productNick.trim() || null,
         description: draft.description.trim() || null,
@@ -448,6 +494,32 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveClientDisplay(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editClient) return;
+    setSavingClient(true);
+    try {
+      await api.patch(
+        `/api/oidc-clients/${encodeURIComponent(editClient.clientId)}`,
+        {
+          displayName: clientDraft.displayName.trim() || null,
+          logoUrl: clientDraft.logoUrl.trim() || null,
+        },
+      );
+      toast({ tone: "success", title: `${editClient.clientId} 已更新` });
+      setEditClient(null);
+      await reload();
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "保存失败",
+        description: reason(error, "保存失败"),
+      });
+    } finally {
+      setSavingClient(false);
     }
   }
 
@@ -627,7 +699,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   label="产品图标"
                   help="留空则只显示文字。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-icon"
                     value={draft?.iconUrl ?? ""}
                     disabled={!canManage}
@@ -815,7 +887,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["edgeDomain"]}
                   help="按产品码预填，可改。DNS 记录需自行创建。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-domain"
                     value={whDraft?.edgeDomain ?? ""}
                     disabled={!canManage}
@@ -834,7 +906,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["edgeUpstream"]}
                   help="host:port，不带协议或路径。留空则不进边缘路由表。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-upstream"
                     value={whDraft?.edgeUpstream ?? ""}
                     disabled={!canManage}
@@ -854,7 +926,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["webhookUrl"]}
                   help="http / https 绝对地址。留空即撤销登记。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-callback"
                     value={whDraft?.webhookUrl ?? ""}
                     disabled={!canManage}
@@ -902,7 +974,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                   error={errors["homeUrl"]}
                   help="展示用。"
                 >
-                  <Input
+                  <CopyableInput
                     id="pd-home"
                     value={whDraft?.homeUrl ?? ""}
                     disabled={!canManage}
@@ -1044,7 +1116,18 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       >
         <div className="grid gap-md md:grid-cols-2">
           {clients.map((c) => (
-            <ClientCard key={c.clientId} client={c} />
+            <ClientCard
+              key={c.clientId}
+              client={c}
+              canManage={canManage}
+              onEdit={() => {
+                setEditClient(c);
+                setClientDraft({
+                  displayName: c.displayName ?? "",
+                  logoUrl: c.logoUrl ?? "",
+                });
+              }}
+            />
           ))}
           {/* 预留位:渠道是 stable / beta / canary,而绝大多数产品先有 stable。
               给缺席的渠道留一张灰卡,让「还没建」这件事在版面上占位——否则一个
@@ -1056,6 +1139,49 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           ))}
         </div>
       </Drawer>
+
+      {/* ── 凭据展示物编辑 ─────────────────────────────────────────────────
+          只改授权页的名字与 logo。回调白名单不在这里——它是安全边界，服务端那条
+          路由挂着 step-up，要另做一个动作。 */}
+      <DialogForm
+        size="lg"
+        open={editClient !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditClient(null);
+        }}
+        title={editClient ? `${editClient.clientId} · 授权页展示` : ""}
+        description="客户在授权页与登出页看到的名字和图标。"
+        submitLabel={tShared("common.save")}
+        submitting={savingClient}
+        onSubmit={saveClientDisplay}
+      >
+        <FieldGrid>
+          <FormField
+            id="cl-display"
+            label="展示名"
+            help="留空则显示 client_id。"
+          >
+            <Input
+              id="cl-display"
+              value={clientDraft.displayName}
+              onChange={(e) =>
+                setClientDraft({ ...clientDraft, displayName: e.target.value })
+              }
+            />
+          </FormField>
+          <FormField id="cl-logo" label="Logo 地址">
+            <CopyableInput
+              id="cl-logo"
+              value={clientDraft.logoUrl}
+              placeholder={`https://${product?.productCode ?? "acme"}.vxture.com/logo.svg`}
+              className="font-mono text-code-sm"
+              onChange={(e) =>
+                setClientDraft({ ...clientDraft, logoUrl: e.target.value })
+              }
+            />
+          </FormField>
+        </FieldGrid>
+      </DialogForm>
 
       {/* ── 一次性交接清单 ─────────────────────────────────────────────── */}
       <DialogForm
@@ -1084,6 +1210,23 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
           className="font-mono text-code-sm"
           onFocus={(e) => e.currentTarget.select()}
         />
+        {/* 这一份关掉就再也拿不到，而它正是要被粘进一封邮件的东西。
+            凭据页那个明文框一直有复制按钮，这里漏了。 */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText((handover ?? []).join("\n"))
+              .then(
+                () => toast({ tone: "success", title: "已复制交接清单" }),
+                () => undefined,
+              );
+          }}
+        >
+          <Icon name="copy" size="sm" aria-hidden="true" />
+          复制全部
+        </Button>
       </DialogForm>
 
       {/* advisory 的二次确认。**提醒不是门闩**：没有任何条件可以不满足，它只是

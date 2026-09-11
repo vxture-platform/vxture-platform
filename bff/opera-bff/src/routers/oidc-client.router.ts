@@ -39,7 +39,9 @@ import {
   Get,
   Inject,
   Param,
+  Patch,
   Post,
+  Put,
   Query,
   Req,
 } from "@nestjs/common";
@@ -172,6 +174,27 @@ interface CreateClientBody {
    * 旧 secret hash 留着撞 CHECK，生产 seed 整体回滚）。
    */
   tokenEndpointAuthMethod?: "client_secret_basic" | "none";
+}
+
+/**
+ * 写路由回传的列。**收成常量**：此前 `setState` 手写了一份，而它比 `SELECT_COLUMNS`
+ * 少了 logo_url / post_logout_redirect_uris / token_endpoint_auth_method——停用一个
+ * 客户端之后界面拿到的那一份就少三个字段。散着写迟早漏，列在一处才比得出来。
+ */
+const RETURNING_COLUMNS = `c.id, c.client_id, c.product_id, c.release_channel, c.name,
+                  c.display_name, c.logo_url, c.redirect_uris,
+                  c.post_logout_redirect_uris, c.allowed_scopes, c.pkce_required,
+                  c.token_endpoint_auth_method, c.status, c.created_at, c.updated_at`;
+
+/** 去空白、丢空串、去重，顺序保持调用方给的。 */
+function normalizeUriList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const raw of value) {
+    const v = typeof raw === "string" ? raw.trim() : "";
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out;
 }
 
 @Controller("api/oidc-clients")
@@ -313,6 +336,102 @@ export class OidcClientRouter {
    * 并且自己拼对；而这是个只有两个位置的开关，能拼错的只有拼写本身。动作端点
    * 让「停用一个客户端」在审计里也是一个动词，而不是一次通用更新。
    */
+  /**
+   * 改展示物：授权页上的名字与 logo。
+   *
+   * 此前**建完就改不了**——批一把 `displayName` / `logoUrl` 加进了「注册」对话框，
+   * 却没有对应的改。于是 vxtpl 的授权页一直显示 `Vxtpl`（seed 里的英文缩写），
+   * 而它的中文主名早就改成了「专注训练智能体」。客户在授权页看到的是前者。
+   *
+   * **不挂 step-up**：这两项不是安全边界，改错了顶多难看。回调白名单是另一回事，
+   * 见下面那个端点——把它们分成两个路由，是为了让「哪一个动作需要二次验证」在
+   * 路由表上看得见，而不是藏在一个会读 body 的条件判断里。
+   *
+   * PATCH 语义：字段缺席 = 不动；显式 null = 清空。
+   */
+  @Patch(":clientId")
+  async updateDisplay(
+    @Req() req: Request & RequestContext,
+    @Param("clientId") clientId: string,
+    @Body() body: { displayName?: string | null; logoUrl?: string | null },
+  ): Promise<OidcClientRecord> {
+    assertCanManage(req);
+    const touchesName = Object.prototype.hasOwnProperty.call(
+      body,
+      "displayName",
+    );
+    const touchesLogo = Object.prototype.hasOwnProperty.call(body, "logoUrl");
+    if (!touchesName && !touchesLogo) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        "displayName 与 logoUrl 至少给一个",
+        "displayName",
+      );
+    }
+    const result = await this.pool.query<ClientRow>(
+      `UPDATE appoidc.oidc_clients c
+          SET display_name = CASE WHEN $2::bool THEN $3 ELSE c.display_name END,
+              logo_url     = CASE WHEN $4::bool THEN $5 ELSE c.logo_url END,
+              updated_at = now()
+        WHERE c.client_id = $1 AND c.realm = 'customer' AND c.client_kind = 'product'
+        RETURNING ${RETURNING_COLUMNS}`,
+      [
+        clientId,
+        touchesName,
+        body.displayName?.trim() || null,
+        touchesLogo,
+        body.logoUrl?.trim() || null,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
+    }
+    return toRecord(row);
+  }
+
+  /**
+   * 改回调白名单（登录回调 + 登出回跳）。
+   *
+   * **挂 @RequireStepUp()**：这是安全边界，不是展示物。能往白名单里加一个地址的人，
+   * 就能把授权码导到自己控制的端点上——那是账号接管，比轮换密钥还直接。
+   * 同 `rotateSecret` 的判据。
+   *
+   * 两个数组**整组替换**，不做增量：增量语义要求调用方先读再合并，而「读到的那一份
+   * 是不是最新的」没人保证；整组替换让界面上看到的就是将要写进去的。
+   */
+  @Put(":clientId/redirect-uris")
+  @RequireStepUp()
+  async updateRedirectUris(
+    @Req() req: Request & RequestContext,
+    @Param("clientId") clientId: string,
+    @Body()
+    body: { redirectUris?: string[]; postLogoutRedirectUris?: string[] },
+  ): Promise<OidcClientRecord> {
+    assertCanManage(req);
+    const redirects = normalizeUriList(body.redirectUris);
+    if (redirects.length === 0) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        "至少要有一个登录回调地址——清空等于这个客户端再也登不进来",
+        "redirectUris",
+      );
+    }
+    const logouts = normalizeUriList(body.postLogoutRedirectUris);
+    const result = await this.pool.query<ClientRow>(
+      `UPDATE appoidc.oidc_clients c
+          SET redirect_uris = $2, post_logout_redirect_uris = $3, updated_at = now()
+        WHERE c.client_id = $1 AND c.realm = 'customer' AND c.client_kind = 'product'
+        RETURNING ${RETURNING_COLUMNS}`,
+      [clientId, redirects, logouts],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
+    }
+    return toRecord(row);
+  }
+
   @Post(":clientId/activate")
   async activate(
     @Req() req: Request & RequestContext,
@@ -339,9 +458,7 @@ export class OidcClientRouter {
       `UPDATE appoidc.oidc_clients c
           SET status = $1, updated_at = now()
         WHERE c.client_id = $2 AND c.realm = 'customer' AND c.client_kind = 'product'
-        RETURNING c.id, c.client_id, c.product_id, c.release_channel, c.name,
-                  c.display_name, c.redirect_uris, c.allowed_scopes,
-                  c.pkce_required, c.status, c.created_at, c.updated_at`,
+        RETURNING ${RETURNING_COLUMNS}`,
       [next, clientId],
     );
     if (!result.rows[0]) {

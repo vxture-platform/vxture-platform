@@ -68,6 +68,18 @@ server {
         return 444;
     }
 
+    # 平台契约里的内部触发器：任何智能体都不该把它暴露在公网。
+    #
+    # 这条原本写在每份精确 vhost 里（arda / vxtpl 各一份），注释写着「edge 404 =
+    # defense in depth on top of the app-side guard」。vxtpl 2026-09-11 退掉自己的
+    # vhost 改走兜底时，这一层会跟着消失——所以提到模板里。
+    #
+    # 提上来比留在各自 vhost 里更对：它是**平台契约**的一部分，不是某个产品的特例。
+    # 每份 vhost 各写一遍，意味着下一个接入的智能体默认是**暴露**的。
+    location = /api/usage/flush {
+        return 404;
+    }
+
     location / {
         proxy_pass http://$vx_agent_upstream$request_uri;
         proxy_http_version 1.1;

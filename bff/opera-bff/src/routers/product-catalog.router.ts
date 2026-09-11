@@ -516,7 +516,18 @@ export class ProductCatalogRouter {
     @Body() body: ProductWriteBody,
   ): Promise<ProductRecord> {
     assertCanManage(req);
-    validateWrite(body, { requireCore: true });
+    /*
+     * `requireCode: false` —— **产品码不可改，所以「改」不该要求它**。
+     *
+     * 此前这里和 create 共用 `requireCore: true`，于是 PUT 也必填 productCode。
+     * 旧的编辑对话框恰好带着它（它的 draft 里有这一栏），所以一直没露；详情页把
+     * 产品码做成锁定的展示项、不进 draft，第一次真保存就撞上「缺少 productCode」
+     * ——而那个字段在界面上明明写着「登记后不可改」。
+     *
+     * 收它更糟的地方在于**它给了「能改」的错觉**：请求里带一个新值，接口收下、
+     * 校验通过、然后被 UPDATE 的 SET 列表忽略。不如从校验里摘掉。
+     */
+    validateWrite(body, { requireCore: true, requireCode: false });
     /* 端**字段缺席 = 不动**（undefined），传了数组才整组替换。
        「改个产品名」不该顺手把端清空——而如果这里把 undefined 当成空数组，
        任何一次不带 surfaces 的 PUT 都会静默清掉它。 */
@@ -1882,10 +1893,11 @@ function normalizeRef(value: string | null | undefined): string | null {
 
 function validateWrite(
   body: ProductWriteBody,
-  opts: { requireCore: boolean },
+  /** `requireCode` 缺省随 `requireCore`——只有「改」显式传 false（产品码不可改）。 */
+  opts: { requireCore: boolean; requireCode?: boolean },
 ): void {
   if (opts.requireCore) {
-    if (!body.productCode?.trim()) {
+    if ((opts.requireCode ?? true) && !body.productCode?.trim()) {
       throw invalidRequest(
         "VALIDATION_REQUIRED",
         "productCode is required",
