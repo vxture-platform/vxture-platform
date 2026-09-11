@@ -86,6 +86,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { LockedInput } from "@/components/form/LockedInput";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
+import { ProductMetricsSection } from "@/features/product/ProductMetricsSection";
 import { RequiredMark } from "@/components/form/RequiredMark";
 import { formatDateTime } from "@vxture-platform/shared";
 
@@ -397,6 +398,12 @@ function ProductsPageContent() {
     impact: ProductDeletionImpact | null;
     loadError: string | null;
   } | null>(null);
+
+  /* 计量指标抽屉。批 4 的产品详情单页会把这一节挪进去，届时这个 state 连同
+     下面那个 <Drawer> 一起删——组件本身不用动。 */
+  const [metricsProduct, setMetricsProduct] = useState<ProductRecord | null>(
+    null,
+  );
 
   const [checklistProduct, setChecklistProduct] =
     useState<ProductRecord | null>(null);
@@ -1122,6 +1129,15 @@ function ProductsPageContent() {
                           onSelect: () => void openWebhook(r),
                         },
                         {
+                          /* 计量指标。端点早就有、界面一直没有，于是要计量的
+                             产品仍得改 seed 跑一次 db-init——把一个运营动作做成了
+                             一次发版。位置紧挨 webhook：两者同属产品级接入配置。 */
+                          id: "metrics",
+                          label: "计量指标",
+                          icon: "gauge" as const,
+                          onSelect: () => setMetricsProduct(r),
+                        },
+                        {
                           /* 2026-08-14 拆出独立页（B4a-1）。这里从"开抽屉"改成
                              "带 productId 跳过去"：地址可分享、可后退，且到了那边
                              还能把过滤放宽看全部产品的凭据。 */
@@ -1702,6 +1718,33 @@ function ProductsPageContent() {
           </>
         )}
       </DialogForm>
+
+      {/* ── 计量指标抽屉 ─────────────────────────────────────────────────────
+          内容整个由 `ProductMetricsSection` 负责（自己取数、自己刷新）。这里只管
+          「开在哪」——批 4 的产品详情单页会把同一个组件挂成页内一节，那时删掉这个
+          抽屉即可，组件不动。 */}
+      <Drawer
+        open={metricsProduct !== null}
+        onClose={() => setMetricsProduct(null)}
+        width="lg"
+        title={
+          metricsProduct
+            ? `计量指标 · ${metricsProduct.productName}`
+            : undefined
+        }
+        description={metricsProduct?.productCode}
+      >
+        {metricsProduct ? (
+          <ProductMetricsSection
+            /* key 挂 productId：换一个产品时整节重挂，否则上一个产品的行会留在
+               表里直到新的取数回来——那一瞬看到的是别人的指标。 */
+            key={metricsProduct.id}
+            productId={metricsProduct.id}
+            productName={metricsProduct.productName}
+            canManage={canManage}
+          />
+        ) : null}
+      </Drawer>
 
       {/* ── OIDC 客户端抽屉（挂在某个产品下）───────────────────────────────── */}
       <Drawer
