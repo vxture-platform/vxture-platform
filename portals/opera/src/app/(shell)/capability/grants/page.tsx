@@ -479,7 +479,7 @@ function RunosGrantsPageContent() {
         tone: "success",
         title: `${row.capabilityId} 的授权已撤销`,
         description:
-          "行迁到 revoked 终态，没有删除。**不是急停**：调用走快照，撤销后最多还会再放行一轮（一个刷新周期）。由它带出来的派生权益也不会跟着撤——runos 刻意不级联。",
+          "行迁到 revoked 终态，没有删除。这不是急停：调用走快照，撤销后最多还会再放行一轮（一个刷新周期）。由它带出来的派生权益也不会跟着撤——runos 刻意不级联。",
       });
       await runLookup();
     } catch (error) {
@@ -765,7 +765,7 @@ function RunosGrantsPageContent() {
                               verb: "撤销",
                               target: `${r.capabilityId} 的授权`,
                               consequence:
-                                "行迁到 revoked 终态，不删除——「谁曾经持有、什么时候被收回」要留得住。**不是急停**：调用走快照，撤销后最多还会再放行一轮。由它带出来的派生权益也不会跟着撤，runos 刻意不级联。",
+                                "行迁到 revoked 终态，不删除——「谁曾经持有、什么时候被收回」要留得住。这不是急停：调用走快照，撤销后最多还会再放行一轮。由它带出来的派生权益也不会跟着撤，runos 刻意不级联。",
                               /* 两条判据此前只体现在 `disabled` 上——点不开，但说不出
                                  为什么。接成 `met` 之后框里能看见是哪一条挡的。 */
                               preconditions: [
@@ -1120,7 +1120,7 @@ function RunosGrantsPageContent() {
                 placeholder="留空 = 不改动"
               />
               <FieldDescription>
-                留空表示**这次不动配额**（不是改成 0——0 在 runos
+                留空表示<b>这次不动配额</b>（不是改成 0——0 在 runos
                 是「不设限」）。
                 改了上限不会重置已消费计数：要清零用行操作里的「重置计数」。
               </FieldDescription>

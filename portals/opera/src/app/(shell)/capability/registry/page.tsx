@@ -961,7 +961,7 @@ export default function CapabilitiesPage() {
               description:
                 `指向它的别名已被一并删除：${dropped.join("、")}。` +
                 (lostStable
-                  ? "其中 stable 是解析入口——这个能力现在**没有 stable 可解析**，请尽快提升另一个版本。"
+                  ? "其中 stable 是解析入口——这个能力现在没有 stable 可解析了，请尽快提升另一个版本。"
                   : "调用方如果按这些别名解析，现在会落空。"),
             }
           : {}),
@@ -998,7 +998,7 @@ export default function CapabilitiesPage() {
               description:
                 `指向它的别名已被一并删除：${dropped.join("、")}。` +
                 (lostStable
-                  ? "其中 stable 是解析入口——这个能力现在**没有 stable 可解析**，请尽快提升另一个版本。"
+                  ? "其中 stable 是解析入口——这个能力现在没有 stable 可解析了，请尽快提升另一个版本。"
                   : "调用方如果按这些别名解析，现在会落空。"),
             }
           : {}),
@@ -1839,7 +1839,7 @@ export default function CapabilitiesPage() {
                                      快照约束，最多还有一个刷新周期按旧状态放行。
                                      把它当急停用是这套管理面最容易犯的错。 */
                                   consequence:
-                                    "withdrawn 会把这个版本从解析快照里去掉，此后指向它的调用会解析失败——**但不是立刻**：调用走快照，最多还有一个刷新周期的流量按旧状态放行。如果它是当前的 stable，stable 别名会被一并删除，该能力将暂时没有 stable 可解析。状态单向，撤下后没有恢复路由。",
+                                    "withdrawn 会把这个版本从解析快照里去掉，此后指向它的调用会解析失败，但不是立刻：调用走快照，最多还有一个刷新周期的流量按旧状态放行。如果它是当前的 stable，stable 别名会被一并删除，该能力将暂时没有 stable 可解析。状态单向，撤下后没有恢复路由。",
                                   onConfirm: () =>
                                     applyVersionState(v.version, "withdrawn"),
                                 }),

@@ -689,7 +689,7 @@ function ProductEntitlements() {
           <TabsContent value="routes" className="flex flex-col gap-md pt-md">
             <div className="flex items-start justify-between gap-md">
               <p className="text-body-sm text-muted-foreground">
-                产品可以走哪些模型路由。这是**工程关系**——不是 admin
+                产品可以走哪些模型路由。这是<b>工程关系</b>——不是 admin
                 那个按租户逐模型 发放的商业 grant，两者同名但不是一回事。
               </p>
               {canWriteRoutes ? (
@@ -981,8 +981,8 @@ function ProductEntitlements() {
                                    那是这一步真正的爆炸半径，不能只说「撤销授权」。 */
                                 consequence:
                                   r.derivedCount > 0
-                                    ? `行迁到 revoked 终态、不删除。由它带出来的 ${r.derivedCount} 条派生权益会在下一次闭包重编译时消失——runos 刻意不级联，所以那几条不会立刻不见。**不是急停**：调用走快照，撤销后最多还会再放行一轮。`
-                                    : "行迁到 revoked 终态、不删除——「谁曾经持有、什么时候被收回」要留得住。**不是急停**：调用走快照，撤销后最多还会再放行一轮。",
+                                    ? `行迁到 revoked 终态、不删除。由它带出来的 ${r.derivedCount} 条派生权益会在下一次闭包重编译时消失——runos 刻意不级联，所以那几条不会立刻不见。这不是急停：调用走快照，撤销后最多还会再放行一轮。`
+                                    : "行迁到 revoked 终态、不删除——「谁曾经持有、什么时候被收回」要留得住。这不是急停：调用走快照，撤销后最多还会再放行一轮。",
                                 onConfirm: () => revokeCapability(r.grant),
                               }),
                             },
@@ -1557,7 +1557,7 @@ function ProductEntitlements() {
                                 verb: "撤销",
                                 target: `${r.productCode} 对 ${g.capabilityId} 的授权`,
                                 consequence:
-                                  "行迁到 revoked 终态、不删除——「谁曾经持有、什么时候被收回」要留得住。由它带出来的派生权益会在下一次闭包重编译时消失。**不是急停**：调用走快照，撤销后最多还会再放行一轮。",
+                                  "行迁到 revoked 终态、不删除——「谁曾经持有、什么时候被收回」要留得住。由它带出来的派生权益会在下一次闭包重编译时消失。这不是急停：调用走快照，撤销后最多还会再放行一轮。",
                                 onConfirm: () => revokeCapability(g),
                               }),
                             },
