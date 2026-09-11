@@ -22,9 +22,20 @@
  * ── 图标放 end 不放 start ──
  * 与密码框的「显示/隐藏」同侧。start 侧在本系统里是「这一栏是什么」的语义位
  * （搜索框的放大镜），锁表达的是状态不是语义。
+ *
+ * ── 第三态：锁着，但能解开 ──
+ * owner 2026-09-11:「给所有锁定条目，增加修改按钮激活修改，防止误操作。」
+ *
+ * 有些字段**规则上可改、实际上不该随手改**——产品码在草稿态就是这样。做成普通
+ * 输入框，光标一落就能改掉一个决定了域名、容器前缀与库名的值，而页面上十几个框
+ * 长得都一样；做成纯锁定又等于不给改。
+ *
+ * 所以锁仍然是默认态，旁边给一个「修改」。**多这一下不是形式**：它把「我正要改
+ * 这一栏」变成一个明确动作，误触改不动它。
  */
 
 import {
+  Button,
   Icon,
   InputGroup,
   InputGroupAddon,
@@ -45,11 +56,26 @@ export interface LockedInputProps extends Omit<
   readonly locked: boolean;
   /** 锁图标的无障碍标签。默认「此项登记后不可修改」。 */
   readonly lockLabel?: string;
+  /**
+   * 给了就把常驻锁换成一枚「修改」——这一栏是**锁着但能解开**的。
+   *
+   * 解不解锁由调用方持有：本件不自己记状态，否则同一个字段的锁态会有两个来源
+   * （调用方的 `locked` 与件内部的）而它们迟早对不上。
+   *
+   * **不给就是彻底锁死**——按钮根本不渲染。owner 2026-09-11:「在已发布产品，该
+   * 按钮隐藏，直接锁定无法修改。」渲染一个按下去会被拒的按钮，等于把规则写成
+   * 一次失败的尝试。
+   */
+  readonly onUnlock?: () => void;
+  /** 解锁按钮上的字。默认「修改」。 */
+  readonly unlockLabel?: string;
 }
 
 export function LockedInput({
   locked,
   lockLabel = "此项登记后不可修改",
+  onUnlock,
+  unlockLabel = "修改",
   ...props
 }: LockedInputProps) {
   return (
@@ -57,14 +83,23 @@ export function LockedInput({
       <InputGroupInput {...props} disabled={locked} />
       {locked ? (
         <InputGroupAddon align="end">
-          {/* 浅色常驻：它是背景信息，不该和输入的内容抢注意力。
-              `title` 与 `aria-label` 都给——鼠标悬停要看得到，读屏也要读得到。 */}
-          <Icon
-            name="lock"
-            size="sm"
-            className="text-muted-foreground/60"
-            aria-label={lockLabel}
-          />
+          {onUnlock ? (
+            /* `type="button"`：这件常常长在 `<form>` 里，不写就是 submit，
+               点「修改」会把整张表单提交掉。 */
+            <Button type="button" variant="ghost" size="sm" onClick={onUnlock}>
+              <Icon name="edit" size="sm" aria-hidden="true" />
+              {unlockLabel}
+            </Button>
+          ) : (
+            /* 浅色常驻：它是背景信息，不该和输入的内容抢注意力。
+               `title` 与 `aria-label` 都给——鼠标悬停要看得到，读屏也要读得到。 */
+            <Icon
+              name="lock"
+              size="sm"
+              className="text-muted-foreground/60"
+              aria-label={lockLabel}
+            />
+          )}
         </InputGroupAddon>
       ) : null}
     </InputGroup>

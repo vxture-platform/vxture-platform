@@ -108,6 +108,8 @@ const STATE_LABEL: Record<ProductState, string> = {
 interface ProductRecord {
   id: string;
   productCode: string;
+  categoryId: number | null;
+  standaloneSubscribable: boolean;
   productType: string;
   productName: string;
   productNick: string | null;
@@ -145,6 +147,11 @@ interface ClientLite {
   tokenEndpointAuthMethod: string;
 }
 
+interface CategoryLite {
+  id: number;
+  name: string;
+}
+
 interface ChecklistItem {
   itemCode: string;
   itemName: string | null;
@@ -165,6 +172,10 @@ function reason(error: unknown, fallback: string): string {
 }
 
 interface ProductDraft {
+  /** 草稿态可改（owner 2026-09-11），启用后由 BFF 锁死。 */
+  productCode: string;
+  categoryId: string;
+  standaloneSubscribable: boolean;
   productName: string;
   productNick: string;
   description: string;
@@ -199,6 +210,8 @@ type FieldErrors = Record<string, string>;
  * 这里没登记就变成「保存失败」四个字。
  */
 const FIELD_META: Record<string, { label: string; inputId: string }> = {
+  productCode: { label: "产品代码", inputId: "pd-code" },
+  categoryId: { label: "产品分类", inputId: "pd-category" },
   productName: { label: "产品名称", inputId: "pd-name" },
   productType: { label: "产品类型", inputId: "pd-type" },
   originProvider: { label: "供应方", inputId: "pd-provider" },
@@ -328,6 +341,18 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
 
   const [draft, setDraft] = useState<ProductDraft | null>(null);
+  const [categories, setCategories] = useState<CategoryLite[]>([]);
+  /** 待确认的新产品码。非 null 时弹危险确认。 */
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+  /** 产品码那一栏解锁了没。放弃 / 重载会回到锁着的默认态。 */
+  const [codeUnlocked, setCodeUnlocked] = useState(false);
+  /**
+   * 产品码能不能改：草稿态可改，启用之后锁定（owner 2026-09-11）。
+   *
+   * 界面这道只是不给改的入口，**判据在 BFF**——它锁行再判状态，因为「读到草稿 →
+   * 另一个会话把它启用 → 这边照样改」这条竞态在前端是看不见的。
+   */
+  const codeEditable = canManage && product?.state === "draft";
   const [whDraft, setWhDraft] = useState<WebhookDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -365,6 +390,9 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
     setErrors({});
+    /* 重新锁上。`reload` 是「放弃」「保存成功后」「首次加载」共同的入口，
+       锁态在这里收敛，就不会出现「保存完了那一栏还开着」。 */
+    setCodeUnlocked(false);
     try {
       const p = await api.get<ProductRecord | null>(
         `/api/products/${encodeURIComponent(productCode)}`,
@@ -375,6 +403,9 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       }
       setProduct(p);
       setDraft({
+        productCode: p.productCode,
+        categoryId: p.categoryId == null ? "" : String(p.categoryId),
+        standaloneSubscribable: p.standaloneSubscribable,
         productName: p.productName,
         productNick: p.productNick ?? "",
         description: p.description ?? "",
@@ -389,7 +420,7 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
 
       /* 三个附属读并行，且各自失败各自兜：webhook 读不到不该让整页空白，
          那样连产品名都看不见。每一节自己说自己的问题。 */
-      const [wh, cl, ck] = await Promise.all([
+      const [wh, cl, ck, cats] = await Promise.all([
         api
           .get<WebhookRecord | null>(`/api/products/${p.id}/webhook`)
           .catch(() => null),
@@ -399,10 +430,14 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
         api
           .get<ChecklistItem[]>(`/api/products/${p.id}/checklist`)
           .catch(() => [] as ChecklistItem[]),
+        api
+          .get<CategoryLite[]>("/api/products/categories")
+          .catch(() => [] as CategoryLite[]),
       ]);
       setWebhook(wh);
       setClients(cl);
       setChecklist(ck);
+      setCategories(cats);
       setWhDraft({
         /* 没登记过就按产品码预填——渲染器本来就会对空值做同一个推导，预填只是把
            这条隐含规则摆到运营者眼前，让异 apex 的产品有地方改。 */
@@ -430,17 +465,39 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
    * 对应的信息框应该高亮红色体现。不然找不到位置。」`OperaApiError.field` 正是
    * BFF `invalidRequest(code, message, field)` 的第三个参数。
    */
-  async function save(event: FormEvent<HTMLFormElement>) {
+  /**
+   * 提交闸门。改产品码要先过一道确认——那不是普通字段。
+   *
+   * owner 2026-09-11:「草稿态有下游对接了，修改明确提示危险操作，并执行一个关联
+   * 修改流程完成善后工作。」下游有什么、会怎么处理，都在 `CodeChangeDialog` 里
+   * 逐条列出来；善后本身（钉住推导出来的边缘域名）在 BFF 的同一个事务里做。
+   */
+  function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!product || !draft) return;
+    const next = draft.productCode.trim();
+    if (codeEditable && next && next !== product.productCode) {
+      setPendingCode(next);
+      return;
+    }
+    void doSave();
+  }
+
+  async function doSave() {
     if (!product || !draft || !whDraft) return;
+    setPendingCode(null);
     setSaving(true);
     setErrors({});
     const secret = whDraft.webhookSecret.trim();
     try {
       await api.put(`/api/products/${product.id}`, {
-        /* 产品码不可改，但仍然送过去：本页发布时线上可能还是旧 BFF（那版的 PUT
-           必填它）。服务端的 UPDATE 不会把它写进 SET 列表，所以送了也改不动。 */
-        productCode: product.productCode,
+        /* 草稿态送草稿里的值（可改），否则送原值。原值仍然要送：本页发布时线上
+           可能还是旧 BFF，那版的 PUT 必填它。 */
+        productCode: codeEditable
+          ? draft.productCode.trim()
+          : product.productCode,
+        categoryId: draft.categoryId ? Number(draft.categoryId) : null,
+        standaloneSubscribable: draft.standaloneSubscribable,
         productName: draft.productName.trim(),
         productNick: draft.productNick.trim() || null,
         description: draft.description.trim() || null,
@@ -761,15 +818,70 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                 <FormField
                   id="pd-code"
                   label="产品代码"
-                  help="登记后不可改。要换须登记新产品。"
+                  required={codeEditable}
+                  error={errors["productCode"]}
+                  help={
+                    codeEditable
+                      ? "草稿状态可以改，点「修改」解锁；启用之后彻底锁定。改动会同时处理已经按这个码建立的配置。"
+                      : "已启用，不可再改。它的客户端配置、边缘路由与已售订阅都按这个码在走。"
+                  }
                 >
-                  {/* `locked` 已经把它置为 disabled——件刻意 Omit 掉了 readOnly。 */}
-                  <LockedInput
-                    id="pd-code"
-                    locked
-                    value={product?.productCode ?? ""}
-                    className="font-mono text-code-sm"
-                  />
+                  {/* 三态。中间那一档是 owner 2026-09-11 要的：
+                      「给所有锁定条目，增加修改按钮激活修改，防止误操作」，
+                      「在已发布产品，该按钮隐藏，直接锁定无法修改」。
+
+                      · 草稿 + 已解锁 → 普通输入框
+                      · 草稿 + 未解锁 → 锁着，旁边一枚「修改」
+                      · 已发布       → 锁着，**没有按钮**（`onUnlock` 不传） */}
+                  {codeEditable && codeUnlocked ? (
+                    <Input
+                      id="pd-code"
+                      value={draft?.productCode ?? ""}
+                      autoFocus
+                      aria-invalid={!!errors["productCode"]}
+                      className="font-mono text-code-sm"
+                      onChange={(e) =>
+                        draft &&
+                        setDraft({ ...draft, productCode: e.target.value })
+                      }
+                    />
+                  ) : (
+                    /* `locked` 已经把它置为 disabled——件刻意 Omit 掉了 readOnly。 */
+                    <LockedInput
+                      id="pd-code"
+                      locked
+                      value={draft?.productCode ?? product?.productCode ?? ""}
+                      className="font-mono text-code-sm"
+                      {...(codeEditable
+                        ? { onUnlock: () => setCodeUnlocked(true) }
+                        : {})}
+                    />
+                  )}
+                </FormField>
+
+                <FormField
+                  id="pd-category"
+                  label="产品分类"
+                  error={errors["categoryId"]}
+                  help="目录归属。不选则归入未分类。"
+                >
+                  <NativeSelect
+                    id="pd-category"
+                    value={draft?.categoryId ?? ""}
+                    disabled={!canManage}
+                    aria-invalid={!!errors["categoryId"]}
+                    onChange={(e) =>
+                      draft &&
+                      setDraft({ ...draft, categoryId: e.target.value })
+                    }
+                  >
+                    <option value="">未分类</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
                 </FormField>
 
                 <FormField
@@ -967,6 +1079,19 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
                     disabled={!canManage}
                     onChange={(v) =>
                       draft && setDraft({ ...draft, isWorkforceVisible: v })
+                    }
+                  />
+                  {/* 关掉 = 只能随套餐捆绑售卖，不单独出现在订阅页。
+                      此前这一项只在登记对话框里有，详情页改任何字段都会把它写回
+                      true——那正是「缺席即不改」要修的那批列之一。 */}
+                  <ToggleRow
+                    id="pd-standalone"
+                    label="可独立订阅"
+                    help="关掉后只能随套餐捆绑售卖，不单独出现在订阅页。"
+                    checked={draft?.standaloneSubscribable ?? false}
+                    disabled={!canManage}
+                    onChange={(v) =>
+                      draft && setDraft({ ...draft, standaloneSubscribable: v })
                     }
                   />
                 </div>
@@ -1299,6 +1424,73 @@ export function ProductDetailPage({ productCode }: { productCode: string }) {
       </DialogForm>
 
       {/* ── 一次性交接清单 ─────────────────────────────────────────────── */}
+      {/* ── 改产品码：危险确认 + 善后清单 ──────────────────────────────
+          owner:「草稿态有下游对接了，修改明确提示危险操作，并执行一个关联修改
+          流程完成善后工作。」所以这里不是一句「确定吗」，而是**把下游有什么、
+          各自会怎么处理逐条摆出来**——运营者要判断的是那些条目，不是这个问句。 */}
+      <DialogForm
+        open={pendingCode !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingCode(null);
+        }}
+        title="修改产品代码"
+        description={`${product?.productCode ?? ""} → ${pendingCode ?? ""}`}
+        submitLabel="确认修改"
+        submitting={saving}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void doSave();
+        }}
+      >
+        <div className="flex flex-col gap-md">
+          <Banner
+            tone="warning"
+            title="产品代码是这个产品在平台内外的身份"
+            description="启用之后就锁死了。现在还能改，是因为它还是草稿——但下面这些东西已经按旧的码建起来了。"
+          />
+          <DetailList>
+            <DetailRow label="边缘域名">
+              {webhook?.edgeDomain?.trim() ? (
+                <span>
+                  已显式填写 <code>{webhook.edgeDomain}</code> ——不受影响。
+                </span>
+              ) : webhook?.edgeUpstream?.trim() ? (
+                /* 推导 + 真的走边缘路由 = 改码等于换域名。BFF 会在同一个事务里把
+                   当时生效的那个域名钉成显式值，路由不动。 */
+                <span>
+                  当前按产品码推导为{" "}
+                  <code>{product?.productCode}.vxture.com</code>，会
+                  <strong>钉成固定值</strong>
+                  ——路由不变，DNS 不用动。要换域名请在保存后单独改这一栏。
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  没接边缘路由，不受影响。
+                </span>
+              )}
+            </DetailRow>
+            <DetailRow label="接入凭据">
+              {clients.length > 0 ? (
+                <span>
+                  {clients.map((c) => c.clientId).join("、")} —— 客户端标识
+                  <strong>保持不变</strong>
+                  。它写在产品自己的配置里，跟着改会让产品当场登不进来。
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  还没建，不受影响。
+                </span>
+              )}
+            </DetailRow>
+            <DetailRow label="回调与密钥">
+              <span className="text-muted-foreground">
+                按 id 关联，不受影响。
+              </span>
+            </DetailRow>
+          </DetailList>
+        </div>
+      </DialogForm>
+
       <DialogForm
         open={handover !== null}
         onOpenChange={(open) => {

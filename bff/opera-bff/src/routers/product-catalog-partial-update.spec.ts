@@ -41,11 +41,20 @@ function makeReq(): Request & RequestContext {
   } as unknown as Request & RequestContext;
 }
 
-function makeRouter() {
+function makeRouter(opts: { readonly state?: string } = {}) {
   let sql = "";
   let params: unknown[] = [];
+  const seen: string[] = [];
   const client = {
     query: vi.fn(async (text: string, args?: unknown[]) => {
+      seen.push(text);
+      /* 改码那条判据先 `SELECT … FOR UPDATE` 读当前码与状态。 */
+      if (/SELECT product_code, status/.test(text)) {
+        return {
+          rows: [{ product_code: "vxtpl", status: opts.state ?? "draft" }],
+          rowCount: 1,
+        };
+      }
       if (/UPDATE product\.products/.test(text)) {
         sql = text;
         params = args ?? [];
@@ -87,7 +96,13 @@ function makeRouter() {
     return params[Number(m[1]) - 1] as boolean;
   }
 
-  return { router, sql: () => sql, params: () => params, writes };
+  return {
+    router,
+    sql: () => sql,
+    params: () => params,
+    writes,
+    seen: () => seen,
+  };
 }
 
 /**
@@ -149,8 +164,10 @@ describe("PUT :id · 缺席即不改", () => {
     expect(t.params()).toContain(7);
   });
 
-  it("占位符编号连续，且 WHERE 用的是最后一个", async () => {
-    /* 24 个参数手写编号，错位不会报错——只会把值写到别的列上去。 */
+  it("占位符 1..n 每个恰好用一次，WHERE 拿到的确实是这一行的 id", async () => {
+    /* 二十几个参数手写编号，错位不会报错——只会把值写到别的列上去。
+       **不假设 id 在最后一位**：它原本是，加了改码那对参数之后就不是了，
+       而位置本来也不是要钉的性质。从 SQL 里把 WHERE 用的编号解析出来。 */
     const t = makeRouter();
     await t.router.update(makeReq(), PRODUCT_ID, DETAIL_PAGE_BODY);
     const used = [...t.sql().matchAll(/\$(\d+)/g)].map((m) => Number(m[1]));
@@ -158,21 +175,62 @@ describe("PUT :id · 缺席即不改", () => {
     expect([...new Set(used)].sort((a, b) => a - b)).toEqual(
       Array.from({ length: n }, (_, i) => i + 1),
     );
-    expect(t.sql()).toContain(`WHERE id = $${n}`);
-    expect(t.params()[n - 1]).toBe(PRODUCT_ID);
+    const where = /WHERE id = \$(\d+)/.exec(t.sql());
+    if (!where?.[1]) throw new Error(`WHERE 解析不到：${t.sql()}`);
+    expect(t.params()[Number(where[1]) - 1]).toBe(PRODUCT_ID);
   });
 
   it("每个 CASE 的布尔位与值位是相邻的一对", async () => {
     /* `$3::bool THEN $4` ——两两配对写错（比如 THEN $5）不会有任何报错，
-       只会让这一列拿到隔壁列的值。 */
+       只会让这一列拿到隔壁列的值。
+       **对数不写死**：数量随字段增减，要钉的是「每一对都相邻」。 */
     const t = makeRouter();
     await t.router.update(makeReq(), PRODUCT_ID, DETAIL_PAGE_BODY);
     const pairs = [
       ...t.sql().matchAll(/CASE WHEN\s+\$(\d+)::bool THEN\s+\$(\d+)/g),
     ];
-    expect(pairs.length).toBe(11);
+    expect(pairs.length).toBeGreaterThanOrEqual(11);
     for (const [, flag, value] of pairs) {
       expect(Number(value)).toBe(Number(flag) + 1);
     }
+  });
+
+  it("草稿态改产品码：写进 SET，并把推导出来的边缘域名钉死", async () => {
+    const t = makeRouter({ state: "draft" });
+    await t.router.update(makeReq(), PRODUCT_ID, {
+      ...DETAIL_PAGE_BODY,
+      productCode: "vxtpl2",
+    });
+    expect(t.writes("product_code")).toBe(true);
+    expect(t.params()).toContain("vxtpl2");
+    /* 善后那条：只在「域名是推导来的」且「真的走边缘路由」时才钉。
+       钉的是**旧**码的域名——DNS 指着的是那一个。 */
+    const pin = t
+      .seen()
+      .find((s) => /UPDATE product\.product_webhooks/.test(s));
+    expect(pin, "改码要顺带钉边缘域名").toBeDefined();
+    expect(pin).toContain("coalesce(edge_domain, '') = ''");
+    expect(pin).toContain("coalesce(edge_upstream, '') <> ''");
+  });
+
+  it("码没变就不碰边缘域名——保存一次不该顺手写死一条配置", async () => {
+    const t = makeRouter({ state: "draft" });
+    await t.router.update(makeReq(), PRODUCT_ID, DETAIL_PAGE_BODY);
+    expect(t.writes("product_code")).toBe(false);
+    expect(
+      t.seen().some((s) => /UPDATE product\.product_webhooks/.test(s)),
+    ).toBe(false);
+  });
+
+  it("非草稿态改码 → 409，且一行都没写", async () => {
+    const t = makeRouter({ state: "active" });
+    await expect(
+      t.router.update(makeReq(), PRODUCT_ID, {
+        ...DETAIL_PAGE_BODY,
+        productCode: "vxtpl2",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    /* 「拒绝了」等于写没发生——只看状态码会漏掉「报了也写了」。 */
+    expect(t.seen().some((s) => /UPDATE product\./.test(s))).toBe(false);
   });
 });

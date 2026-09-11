@@ -681,15 +681,15 @@ export class ProductCatalogRouter {
   ): Promise<ProductRecord> {
     assertCanManage(req);
     /*
-     * `requireCode: false` —— **产品码不可改，所以「改」不该要求它**。
+     * `requireCode: false` —— 改产品不必带产品码。
      *
      * 此前这里和 create 共用 `requireCore: true`，于是 PUT 也必填 productCode。
      * 旧的编辑对话框恰好带着它（它的 draft 里有这一栏），所以一直没露；详情页把
      * 产品码做成锁定的展示项、不进 draft，第一次真保存就撞上「缺少 productCode」
      * ——而那个字段在界面上明明写着「登记后不可改」。
      *
-     * 收它更糟的地方在于**它给了「能改」的错觉**：请求里带一个新值，接口收下、
-     * 校验通过、然后被 UPDATE 的 SET 列表忽略。不如从校验里摘掉。
+     * 带了也不会白带：草稿态可以改（owner 2026-09-11 裁定「整个草稿态都可改」，
+     * 启用后锁定）。见下面 `codeChange` 那一段。
      */
     validateWrite(body, { requireCore: true, requireCode: false });
     /* 端**字段缺席 = 不动**（undefined），传了数组才整组替换。
@@ -702,6 +702,69 @@ export class ProductCatalogRouter {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+
+      /*
+       * ── 产品码：草稿态可改，启用后锁定（owner 2026-09-11）──
+       *
+       * `FOR UPDATE` 锁住这一行再判：不锁的话，「读到 draft → 另一个会话把它启用
+       * → 这边照样改码」这条竞态是存在的，而产品一旦启用就有客户足迹。
+       */
+      const current = await client.query<{
+        product_code: string;
+        status: string;
+      }>(
+        `SELECT product_code, status FROM product.products
+          WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+        [id],
+      );
+      const before = current.rows[0];
+      if (!before) {
+        await client.query("rollback").catch(() => undefined);
+        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+      }
+      const wantedCode = body.productCode?.trim();
+      const codeChange =
+        wantedCode !== undefined &&
+        wantedCode !== "" &&
+        wantedCode !== before.product_code;
+      if (codeChange && before.status !== "draft") {
+        /* 明确报错，不静默忽略。收下一个新值、校验通过、然后被 SET 列表丢掉，
+           会给运营者「我已经改了」的错觉——那比拒绝更糟。 */
+        const label =
+          STATE_LABELS[before.status as ProductState] ?? before.status;
+        throw conflict(
+          "CATALOG_CODE_LOCKED",
+          `产品码只能在草稿状态修改。「${before.product_code}」已经是${label}状态——它的客户端配置、边缘路由与已售订阅都按这个码在走。`,
+        );
+      }
+
+      /*
+       * ── 善后：改码之前先把推导出来的边缘域名钉死 ──
+       *
+       * `edge_domain` 为空时，边缘路由表按 `{产品码}.vxture.com` 推导。于是改码
+       * **等于换域名**，而 DNS 还指着旧的那个——下一次 deploy 渲染路由表时，旧域名
+       * 从表里消失，访问它的人拿到 444（无响应关闭），没有任何一处会报错。
+       *
+       * 所以在改码的同一个事务里，把当时**实际生效的**那个域名写成显式值。路由不动，
+       * 改码就只是改码。要换域名是另一件事，在同一页上单独改。
+       *
+       * 只在真的走边缘路由时才钉（`edge_upstream` 有值）：没接边缘的产品钉一个域名
+       * 进去，等于凭空给它一条没人要的配置。
+       */
+      let pinnedDomain: string | null = null;
+      if (codeChange) {
+        const pin = await client.query<{ edge_domain: string }>(
+          `UPDATE product.product_webhooks
+              SET edge_domain = $2, updated_at = now()
+            WHERE product_id = $1
+              AND coalesce(edge_domain, '') = ''
+              AND coalesce(edge_upstream, '') <> ''
+            RETURNING edge_domain`,
+          [id, `${before.product_code}.vxture.com`],
+        );
+        pinnedDomain = pin.rows[0]?.edge_domain ?? null;
+      }
+
       /*
        * ── 缺席即不改。这一段是在修一处正在生产上丢数据的缺陷 ──
        * 原先 SET 列表取值一律 `body.x ?? 默认值`，于是**任何送部分字段的客户端都会
@@ -732,6 +795,7 @@ export class ProductCatalogRouter {
         `UPDATE product.products SET
            product_type = $1,
            product_name = $2,
+           product_code            = CASE WHEN $27::bool THEN $28 ELSE product_code            END,
            category_id             = CASE WHEN  $3::bool THEN  $4 ELSE category_id             END,
            product_nick            = CASE WHEN  $5::bool THEN  $6 ELSE product_nick            END,
            description             = CASE WHEN  $7::bool THEN  $8 ELSE description             END,
@@ -773,6 +837,10 @@ export class ProductCatalogRouter {
           body.iconUrl?.trim() || null,
           operatorId,
           id,
+          /* 排在最后而不是插在中间：前 24 个是成对的 CASE 参数，从中间插一个会把
+             后面每一个编号都推一位，而编号错位不报错、只会把值写到别的列上去。 */
+          codeChange,
+          codeChange ? wantedCode : null,
         ],
       );
       const row = result.rows[0];
@@ -788,9 +856,20 @@ export class ProductCatalogRouter {
         ...toRecord(row),
         /* 同 create：RETURNING 的子查询在替换之前求值，回传的是旧集合。 */
         surfaces: surfaces ?? toRecord(row).surfaces,
+        /* 改码时的善后结果。界面据此告诉运营者「边缘域名已钉在旧值上」——
+           做了什么要说出来，悄悄改一行配置比不改更难查。 */
+        ...(pinnedDomain !== null ? { pinnedEdgeDomain: pinnedDomain } : {}),
       };
     } catch (error) {
       await client.query("rollback").catch(() => undefined);
+      /* 产品码撞车：`uq_products_product_code` 是唯一约束，冒上来是 23505、
+         也就是 500 和一句英文约束名。运营者看到的该是「这个码被谁占了」。 */
+      if ((error as { code?: string }).code === "23505") {
+        throw conflict(
+          "CATALOG_CODE_TAKEN",
+          `产品码「${body.productCode?.trim()}」已经被别的产品占用了。`,
+        );
+      }
       throw error;
     } finally {
       client.release();
