@@ -181,7 +181,7 @@ function firstRow(
       code: `${codePrefix}_CONTRACT_SHAPE_CHANGED`,
       message:
         `${upstream} 的 ${resource} 响应形状变了：契约声明是 ${expected}，实际收到 ${got}。` +
-        `**不按新形状继续解析**——形状变了通常意味着有东西没了（分页信封消失就是 ` +
+        `这里不会按新形状继续解析——形状变了通常意味着有东西没了（分页信封消失就是 ` +
         `nextCursor 没了，页面会安静地只显示第一页，且永远不知道还有更多）。`,
     });
   };

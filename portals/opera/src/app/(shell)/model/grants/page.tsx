@@ -774,7 +774,8 @@ function ProductGrantsPageContent() {
                 className="font-mono"
               />
               <FieldDescription>
-                留空是**产品级授权**，不是「没填」——这两者在唯一索引下是不同的东西。
+                留空是<b>产品级授权</b>
+                ，不是「没填」——这两者在唯一索引下是不同的东西。
               </FieldDescription>
             </Field>
             <Field>

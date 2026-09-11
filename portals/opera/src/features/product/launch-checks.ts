@@ -200,7 +200,7 @@ export async function runLaunchChecks(
     results.push({
       id: "client",
       label: "接入凭据",
-      what: "产品有一个启用中的 OIDC 客户端，且配了回调地址。**只测我方注册**——对方有没有把登录/回调/会话实现出来，平台观测不到。",
+      what: "产品有一个启用中的 OIDC 客户端，且配了回调地址。只测我方注册——对方有没有把登录/回调/会话实现出来，平台观测不到。",
       side: "ours",
       status: ok ? "pass" : "fail",
       detail: ok
@@ -322,7 +322,7 @@ export async function runLaunchChecks(
     results.push({
       id: "webhook",
       label: "Webhook 登记",
-      what: "平台侧登记了回调地址与签名密钥引用。**不发测试投递**——那是对对方生产端点的真实请求，本页不做；投递能不能成功要看运行监控里的投递队列。",
+      what: "平台侧登记了回调地址与签名密钥引用。不发测试投递——那是对对方生产端点的真实请求，本页不做；投递能不能成功要看运行监控里的投递队列。",
       side: "ours",
       status: hasUrl && hasSecret ? "pass" : "fail",
       detail:

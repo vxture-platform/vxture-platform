@@ -736,7 +736,7 @@ function parseOffPeakPolicy(raw: string): ExtraBodyParse {
     return {
       ok: false,
       reason:
-        '`multiplier` 要一个十进制**字符串**、最多 8 位小数（如 "0.50000000"）——金额不走 float。',
+        'multiplier 要一个十进制字符串（不是数值）、最多 8 位小数，如 "0.50000000"——金额不走 float。',
     };
   }
 

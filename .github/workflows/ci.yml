@@ -256,6 +256,12 @@ jobs:
       - name: i18n coverage ratchet
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:i18n-coverage
+      # JSX 文本与字符串属性都不是 markdown：`**不是急停**` 写进去，用户看到的就是
+      # 带星号的字面量。编译/类型/lint/测试全绿，而写的人在编辑器里看到的是高亮后
+      # 的粗体——所以它能活很久（首次全量扫出 17 处，最早可追到能力登记册那一批）。
+      - name: Literal markdown in UI copy
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:literal-markdown
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |

@@ -342,7 +342,7 @@ function ProductLaunch() {
                 : "尚未注册"
             }
             mono={clients.length > 0}
-            note="client_secret 只在注册与轮换后明文出现一次，这里**不回显**——丢了只能轮换。"
+            note="client_secret 只在注册与轮换后明文出现一次，这里不回显——丢了只能轮换。"
             action={
               <Button asChild variant="ghost" size="md">
                 <Link
@@ -514,7 +514,7 @@ function ProductLaunch() {
           title={`当前是「${PRODUCT_STATE_META[product.state].label}」，本页只做复验`}
           description={
             product.state === "active"
-              ? "已上线的产品在这里重新验证——对方改过配置、或密钥轮换后应当跑一次。**验证失败不会自动停用**：自动停用一个正在跑的产品，是把监测信号变成破坏性动作。要停由人去目录页停。"
+              ? "已上线的产品在这里重新验证——对方改过配置、或密钥轮换后应当跑一次。验证失败不会自动停用：自动停用一个正在跑的产品，是把监测信号变成破坏性动作。要停由人去目录页停。"
               : PRODUCT_STATE_META[product.state].hint
           }
           action={
