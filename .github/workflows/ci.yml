@@ -312,6 +312,22 @@ jobs:
           pnpm lint:permission-catalog
           pnpm lint:route-policies
 
+      # 身份面对外承诺门控：平台的认证面承诺过去**只写在代码里**，消费方只能靠探针猜，
+      # 已经为此付过三次代价（ruyin TD-057 的 prompt、atlas 的 mgmt:atlas 发放条件、
+      # 公共客户端禁铸 S2S）。两条各守一半：
+      #   · oidc-discovery —— discovery 公布的与 authorize 实现的必须互相覆盖
+      #   · public-routes  —— `@Public()` 不能落在 AuthMiddleware 覆盖的前缀下。
+      #     middleware 读不到路由元数据，落进去的公开端点会**永远回 401 而代码看起来是对的**；
+      #     2026-09-12 桌面端会话链路正是栽在它的消费方镜像形态上。
+      #
+      # `lint:oidc-discovery` 上一批只接进了 package.json 没接进这里，等于从没跑过——
+      # 装了却没人调的守卫不算守卫。两条一起钉在这。
+      - name: Identity surface guardrails
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          pnpm lint:oidc-discovery
+          pnpm lint:public-routes
+
       # 管理面 API 口径门控（product_251 D-3）：规范自己写着「能自动校验的条款就不要
       # 靠人记」。裸 Nest 异常、错误码大小写、审计字段名、`status`/`state` 都是纯文本
       # 模式可判的；动词语义与写入结果可分辨判不了，那两条靠评审。
