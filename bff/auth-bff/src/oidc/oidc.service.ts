@@ -270,6 +270,14 @@ export class OidcService {
         TOKEN_EXCHANGE_GRANT_TYPE,
       ],
       code_challenge_methods_supported: ["S256"],
+      /*
+       * 可选字段，但这里**必须给**：缺席时消费方只能靠探针猜，而探针在这件事上
+       * 判定不了（未登录状态下任何 prompt 值的回应都一样，包括无效值）。
+       * ruyin 就为此记了一条 TD-057，猜了两周。
+       *
+       * 与 `authorize()` 的分支由 `lint:oidc-discovery` 钉住一致。
+       */
+      prompt_values_supported: ["none", "login", "select_account"],
       id_token_signing_alg_values_supported: [this.keys.algorithm],
       subject_types_supported: ["public"],
       token_endpoint_auth_methods_supported: [
@@ -545,7 +553,37 @@ export class OidcService {
       await this.token.revokeSession(sid);
       session = null;
     }
-    const hasUsableSession = Boolean(session && session.realm === client.realm);
+    /*
+     * ── prompt 的三态（RFC 6749 / OIDC Core §3.1.2.1）────────────────────────
+     *
+     * 此前这里**只认 `none`**，其余值一律被静默忽略——有可用会话时下面的代码
+     * 根本不读 `req.prompt`，直接发码。
+     *
+     * 那条沉默造成过一次真实误判：ruyin 为「退出后再登录至少要有一屏」带上了
+     * `prompt=select_account`，并在自己仓里记了 TD-057 说「平台认不认，没验证过」
+     * ——他们的探针方法是对的，而那个探针在这件事上**判定不了**（未登录状态下
+     * 四种 prompt 的回应逐字相同，连 `bogus_value` 都照单全收）。于是一个已经
+     * 写好的缓解措施从未生效，而两侧都不知道。
+     *
+     * 缺陷在沉默，不在取舍：OP 允许忽略不认识的值，但**不该不告诉任何人**。
+     * 所以这一批同时做三件——支持、在 discovery 里公布（`prompt_values_supported`）、
+     * 用守卫钉住两者一致。少任何一件，下一个消费方还得再猜一遍。
+     *
+     *   none            无会话 → login_required（静默探测用）
+     *   login           **强制重新认证**：有会话也当没有
+     *   select_account  **强制账号选择**：有会话也当没有，让用户看得见、能换人
+     *
+     * 后两者在本实现里落到同一个动作（走交互式登录流程）。它们语义有别——
+     * `login` 是「再证明一次你是你」，`select_account` 是「这次想用哪个身份」——
+     * 但当前登录页同时承担这两件事，所以**不为一个不存在的区别造两条分支**；
+     * 真要分开（比如 `login` 强制重输密码而 `select_account` 只列账号），改的是
+     * 登录页，不是这里。
+     */
+    const forcesInteraction =
+      req.prompt === "login" || req.prompt === "select_account";
+    const hasUsableSession = Boolean(
+      session && session.realm === client.realm && !forcesInteraction,
+    );
 
     if (!hasUsableSession) {
       if (req.prompt === "none") {

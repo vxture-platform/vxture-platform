@@ -29,6 +29,7 @@ import { AuthMiddleware } from "./middleware/auth.middleware";
 import { PermissionMiddleware } from "./middleware/permission.middleware";
 import { TenantMiddleware } from "./middleware/tenant.middleware";
 import { ApplicationsRouter } from "./routers/applications.router";
+import { NativeAuthRouter } from "./routers/native-auth.router";
 import { AuditRouter } from "./routers/audit.router";
 import { AtlasRouter } from "./routers/atlas.router";
 import { BillingRouter } from "./routers/billing.router";
@@ -63,6 +64,7 @@ import { VerificationRouter } from "./routers/verification.router";
   ],
   controllers: [
     ApplicationsRouter,
+    NativeAuthRouter,
     HealthRouter,
     MeRouter,
     InboxRouter,

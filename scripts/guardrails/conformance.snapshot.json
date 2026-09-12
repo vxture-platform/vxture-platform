@@ -18,8 +18,8 @@
       "QUOTA_EXCEEDED": 0
     },
     "console-bff": {
-      "files": 47,
-      "retryable": 0,
+      "files": 48,
+      "retryable": 2,
       "NOT_ENTITLED": 0,
       "POLICY_DENIED": 0,
       "APPROVAL_REQUIRED": 0,
