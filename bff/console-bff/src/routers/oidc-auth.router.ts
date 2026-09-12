@@ -51,6 +51,7 @@ import {
   type RpRuntime,
 } from "../oidc/oidc-rp.tokens";
 import { Public } from "../auth/capability";
+import { bindNativePending } from "./native-auth.router";
 
 /** A pending authorize request, stashed under `state` until /auth/callback. */
 export interface AuthReq {
@@ -58,6 +59,14 @@ export interface AuthReq {
   nonce: string;
   returnTo: string;
   prompt?: string;
+  /**
+   * 发起这次登录的界面形态。`native` = 桌面端（见 `native-auth.router.ts`）。
+   * 缺省即浏览器——**不给默认值写成 `"web"`**：缺省与显式声明是两件事，
+   * 将来要按形态分流时，「没声明」该走最保守的那一支。
+   */
+  surface?: "native";
+  /** 桌面端给的 sha256 十六进制，回调时据它绑定待领会话。 */
+  handle?: string;
 }
 
 /**
@@ -79,6 +88,18 @@ export class OidcAuthRouter {
     @Inject(RP_REDIS) private readonly redis: Redis,
     @Inject(RP_RUNTIME) private readonly rt: RpRuntime,
   ) {}
+
+  /**
+   * 桌面端登录完成后停的那个页面。
+   *
+   * 落回 console 自己的域名：用户是在 console 的登录流程里，跳到别处会让人以为出错。
+   * `ok=0` 时页面提示「应用没接住，请回到应用重试」，而不是假装成功。
+   */
+  private nativeDonePage(ok: boolean): string {
+    const u = new URL("/auth/native-done", this.rt.defaultReturnTo);
+    if (!ok) u.searchParams.set("ok", "0");
+    return u.toString();
+  }
 
   private authReqKey(state: string): string {
     return consoleAuthReqKey(this.rt.keyPrefix, state);
@@ -114,6 +135,8 @@ export class OidcAuthRouter {
   async login(
     @Query("returnTo") returnTo: string | undefined,
     @Query("prompt") prompt: string | undefined,
+    @Query("surface") surface: string | undefined,
+    @Query("handle") handle: string | undefined,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
@@ -133,11 +156,16 @@ export class OidcAuthRouter {
       this.rt.allowedReturnOrigins,
       this.rt.defaultReturnTo,
     );
+    /* 桌面端的两个参数**一起生效或一起不生效**：只给 surface 不给 handle，
+       回调时无从绑定，用户会登录成功而应用永远领不到——那种失败没有任何提示。
+       所以在入口就要求成对出现。 */
+    const isNative = surface === "native" && typeof handle === "string";
     const payload: AuthReq = {
       codeVerifier: verifier,
       nonce,
       returnTo: dest,
       ...(prompt && { prompt }),
+      ...(isNative ? { surface: "native" as const, handle } : {}),
     };
     await this.redis.setex(
       this.authReqKey(state),
@@ -222,6 +250,24 @@ export class OidcAuthRouter {
     const previous = req.cookies?.[this.cookieName] as string | undefined;
     if (previous && previous !== rpsid) {
       await this.store.destroy(previous).catch(() => undefined);
+    }
+
+    /* ── 桌面端：绑定待领，不种 cookie ──────────────────────────────────
+       浏览器这一侧完成的是「批准」，不是「持有」。给它种 cookie 意味着系统浏览器里
+       凭空多出一个没人会用的登录态——用户在浏览器里并没有要求登录 console。
+       会话归应用，应用用自己那个从未外露的 deviceSecret 去领。 */
+    if (authReq.surface === "native" && authReq.handle) {
+      const bound = await bindNativePending(
+        this.redis,
+        this.rt.keyPrefix,
+        authReq.handle,
+        rpsid,
+      );
+      this.clearPresence(res);
+      /* 停在一个纯提示页。**URL 里不带任何凭据**——回跳地址会进浏览器历史。
+         绑定失败（handle 形状不合法）也要让用户看见，否则他会一直等着应用变化。 */
+      res.redirect(this.nativeDonePage(bound));
+      return;
     }
 
     res.cookie(this.cookieName, rpsid, {

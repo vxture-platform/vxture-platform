@@ -57,12 +57,30 @@ export class AuthMiddleware implements NestMiddleware {
   async use(req: Request, res: Response, next: NextFunction) {
     // OIDC RP session is the only auth path (legacy HS256 retired). The cookie
     // holds an opaque rpsid; tokens stay server-side (RpAuthService).
-    const rpsid = req.cookies?.[
+    /*
+     * rpsid 有两个来源，**分叉只到这一行为止**。
+     *
+     *   浏览器   Cookie: __Host-…            浏览器自动带
+     *   桌面端   X-Vxture-Session: <rpsid>   应用自己带（没有 cookie jar）
+     *
+     * 装的是同一个东西：不透明会话号，不是令牌。取到之后**走同一条代码**——
+     * 一旦让桌面端有自己的解析或校验分支，两条路径的安全性质就会各自漂，
+     * 而漂的症状是「某个端点对浏览器安全、对桌面端不安全」，没有任何守卫看得见。
+     *
+     * cookie 优先：同时出现时以浏览器那份为准。这不是偏好——同时出现意味着
+     * 请求来自浏览器而有人额外塞了个头，那更可能是攻击而不是桌面端。
+     */
+    const cookieRpsid = req.cookies?.[
       rpSessionCookieName(
         this.rpRuntime.cookieSecure,
         this.rpRuntime.config.clientId,
       )
     ] as string | undefined;
+    const headerRpsid =
+      typeof req.headers["x-vxture-session"] === "string"
+        ? (req.headers["x-vxture-session"] as string)
+        : undefined;
+    const rpsid = cookieRpsid ?? headerRpsid;
     const unauthorized = () =>
       res
         .status(401)
