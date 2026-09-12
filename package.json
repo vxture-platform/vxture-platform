@@ -118,7 +118,8 @@
     "type-check:console": "pnpm --filter @vxture/console type-check",
     "type-check:console-bff": "pnpm --filter @vxture/bff-console type-check",
     "update": "pnpm --recursive update",
-    "lint:oidc-discovery": "node scripts/guardrails/check-oidc-discovery.mjs"
+    "lint:oidc-discovery": "node scripts/guardrails/check-oidc-discovery.mjs",
+    "lint:public-routes": "node scripts/guardrails/check-public-routes.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",
