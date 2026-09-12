@@ -54,7 +54,8 @@
  * callerProductCode 这个 Runos 自己文档标注的"临时简化"兜底值，opera 侧先不
  * 接，等 Runos 真正的订阅/tier 解析落地再加。
  *
- * 2026-08-13 补齐一批「写得进、看不见、改不动」的缺口（runos `incr/04`，起于
+ * 2026-08-13 补齐一批「写得进、看不见、改不动」的缺口（runos 侧那批增量已按 ADR-011
+ * 折进单一基线，见下文 §分类法那段的说明；起于
  * `vxture-runos#65`——opera 页面上那几条"没有清单/不能撤销/看不到用量"的横幅
  * 就是这个 issue 的证据）：
  *   - credentials：list（元数据）/ rotate / revoke / applies-to
@@ -133,7 +134,12 @@ export interface CapabilityVersionRecord {
 }
 
 /**
- * 能力分类法（runos `incr/07` / `120` §3.1，v0.5.0 起**强制**）。
+ * 能力分类法（`120` §3.1，v0.5.0 起**强制**）。
+ *
+ * 原来这里引的是 runos `incr/07`。**那个指针已经失效**：runos 按 ADR-011 把
+ * `incr/01`–`incr/07` 折进了单一 create-once 基线，`incr/` 现在只剩
+ * `01_capability_display_name.sql`（`vxture-platform#17` §3）。指向一个不存在的
+ * 增量文件比不指更糟——照它去找的人会以为自己搞错了目录。规范号 `120` 仍然有效。
  *
  * 15 选 1，注册必填——缺了 runos 直接 `missing_category`，非法值 `invalid_category`
  * 并附完整词表。**`other` 是真实选项，不是缺省回落**：填不出来时选它是一个明确的
@@ -593,7 +599,8 @@ export class RunosRouter {
     );
   }
 
-  // ── Capabilities 补充写（2026-08-13 runos `incr/04` 补齐；起于 #65）────────
+  // ── Capabilities 补充写（2026-08-13 补齐；起于 #65。原引 runos `incr/04`，
+  //    该增量已按 ADR-011 折进单一基线）───────────────────────────────────────
   //    共同点：这四样在 runos 里**都有列可写、都没有路由**，所以能力注册进去
   //    之后就再也改不动——改个标题、退役一个版本、换个负责团队、重算一次
   //    embedding，全都无路可走。不是新功能，是把已经存在的列接上。

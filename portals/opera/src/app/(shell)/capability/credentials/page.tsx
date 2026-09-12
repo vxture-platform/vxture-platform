@@ -19,12 +19,14 @@
  * mode 仍只接受 "account-scoped"：per-caller 依赖平台侧 RFC 8693 token
  * exchange（`vxture-platform#226`，未落地），runos 会直接拒。 */
 
+import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
   useMemo,
   useState,
   type FormEvent,
+  Suspense,
 } from "react";
 import {
   ActionMenu,
@@ -129,7 +131,24 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
+/**
+ * 深链(`vxture-platform#17` §4):`?bindingId=<uuid>` 把关键词框预填成那个绑定 id。
+ *
+ * 这一页**没有详情抽屉**,所以深链落在过滤上而不是打开什么——「参数是定位,不是详情
+ * 路由」。装一个假的详情跳转,只会让调用方以为有个它其实进不去的地方。
+ *
+ * 未命中时说出那个 id:一张空表读起来是「没有凭证绑定」,而那和「id 拼错了」
+ * 「绑定被删了」在界面上一模一样。
+ */
 export default function RunosCredentialsPage() {
+  return (
+    <Suspense fallback={null}>
+      <RunosCredentialsPageContent />
+    </Suspense>
+  );
+}
+
+function RunosCredentialsPageContent() {
   const locale = useLocale();
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
@@ -142,7 +161,8 @@ export default function RunosCredentialsPage() {
 
   const [rows, setRows] = useState<CredentialBindingRecord[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
-  const [keyword, setKeyword] = useState("");
+  const deepLinkTarget = useSearchParams().get("bindingId");
+  const [keyword, setKeyword] = useState(deepLinkTarget ?? "");
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [draft, setDraft] = useState<CredentialDraft>(EMPTY_DRAFT);
@@ -182,6 +202,18 @@ export default function RunosCredentialsPage() {
             r.appliesTo.some((c) => c.toLowerCase().includes(kw)),
         );
   }, [rows, keyword]);
+
+  /* 等 `load.kind === "ready"` 再判：rows 还空着时任何 id 都会被判成找不到，
+     那条 Banner 会每次进页面闪一下再消失——比没有提示更糟，它教人忽略提示。 */
+  const [deepLinkMiss, setDeepLinkMiss] = useState<string | null>(null);
+  const [deepLinkDone, setDeepLinkDone] = useState(false);
+  useEffect(() => {
+    if (deepLinkDone || !deepLinkTarget || load.kind !== "ready") return;
+    setDeepLinkDone(true);
+    if (!rows.some((r) => r.bindingId === deepLinkTarget)) {
+      setDeepLinkMiss(deepLinkTarget);
+    }
+  }, [deepLinkDone, deepLinkTarget, load.kind, rows]);
 
   const pager = useListPagination(filtered, 20);
 
@@ -338,11 +370,21 @@ export default function RunosCredentialsPage() {
           />
         }
         summary={
-          <Banner
-            tone="info"
-            title="控制台零持有明文"
-            description="密钥只在录入与轮换时经过一次，落库前 AES-256-GCM 加密；此后任何读接口——包括这个页面——都拿不到它。忘了只能轮换，不能查看。注入由网关在出站时完成，调用方全程看不到凭证。"
-          />
+          deepLinkMiss ? (
+            <Banner
+              tone="warning"
+              title={tShared("deepLink.bindingMissTitle")}
+              description={tShared("deepLink.bindingMissBody", {
+                id: deepLinkMiss,
+              })}
+            />
+          ) : (
+            <Banner
+              tone="info"
+              title="控制台零持有明文"
+              description="密钥只在录入与轮换时经过一次，落库前 AES-256-GCM 加密；此后任何读接口——包括这个页面——都拿不到它。忘了只能轮换，不能查看。注入由网关在出站时完成，调用方全程看不到凭证。"
+            />
+          )
         }
         filters={
           <FilterBar
