@@ -203,5 +203,11 @@
     "selectAll": "Select all rows on this page",
     "deselectAll": "Deselect all rows on this page",
     "selectRow": "Select row"
+  },
+  "deepLink": {
+    "capabilityMissTitle": "That link points at a capability not in the catalogue",
+    "capabilityMissBody": "{id} was not found. The id may be misspelled, or the capability is not registered in Runos yet — the full catalogue is below.",
+    "bindingMissTitle": "That link points at a credential binding not on file",
+    "bindingMissBody": "{id} was not found. The id may be misspelled, or the binding was deleted — clear the search box below to see all of them."
   }
 }

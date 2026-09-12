@@ -47,12 +47,14 @@
  * 因此页面顶部原来那条"注册后无法下架（TD-010）"横幅已撤——它当时是对的，现在
  * 不是了。 */
 
+import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
   useMemo,
   useState,
   type FormEvent,
+  Suspense,
 } from "react";
 import {
   ActionMenu,
@@ -508,7 +510,29 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
+/**
+ * 深链(`vxture-platform#17` §4)。
+ *
+ * `?capabilityId=arda.invoice-query` 直接打开该能力的详情抽屉。**用的是 runos 的
+ * 稳定点分 id**,不是平台的任何内部键——平台要求内部 id 的话,runos 就拼不出链接,
+ * 那条「跳转」也就永远落不了地。
+ *
+ * 未命中**必须说出来**:一条不存在的 id 如果只表现为「详情抽屉里空着」或者「列表
+ * 里没这一行」,读起来就是「这个能力不存在」,而那和「id 拼错了」「能力被删了」
+ * 在界面上一模一样。所以核对一次并挂 Banner。
+ *
+ * `useSearchParams` 要求 Suspense 边界;fallback 给 null——这一层只解析一个参数,
+ * 闪一下骨架比直接出内容更晃眼(同 `audit/changes`)。
+ */
 export default function CapabilitiesPage() {
+  return (
+    <Suspense fallback={null}>
+      <CapabilitiesPageContent />
+    </Suspense>
+  );
+}
+
+function CapabilitiesPageContent() {
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
@@ -526,6 +550,8 @@ export default function CapabilitiesPage() {
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
 
   const [detailId, setDetailId] = useState<string | null>(null);
+  /** 深链指向的 id 在目录里找不到时,记下来给 Banner 用(null = 没有这个问题)。 */
+  const [deepLinkMiss, setDeepLinkMiss] = useState<string | null>(null);
   const [detail, setDetail] = useState<CapabilityDetailRecord | null>(null);
   /** null = 这次没读到绑定清单（不是"没有绑定"）——读不到就不做前置判断，
    *  退回让 runos 自己在 promote 时拒，而不是凭一份空清单说人家缺凭证。 */
@@ -647,6 +673,27 @@ export default function CapabilitiesPage() {
     setDetailId(null);
     setDetail(null);
   }
+
+  /*
+   * 深链:加载完成后核对一次,命中就开详情,没命中就挂 Banner。
+   *
+   * **必须等 `load.kind === "ready"`** ——在 rows 还空着的时候核对,任何 id 都会被
+   * 判成「找不到」,那条 Banner 会在每次进页面时闪一下,然后自己消失。那种提示比
+   * 没有提示更糟:它教人忽略提示。
+   *
+   * 只跑一次(`deepLinkDone`),否则用户手动关掉抽屉后 effect 会把它再开一遍。
+   */
+  const deepLinkTarget = useSearchParams().get("capabilityId");
+  const [deepLinkDone, setDeepLinkDone] = useState(false);
+  useEffect(() => {
+    if (deepLinkDone || !deepLinkTarget || load.kind !== "ready") return;
+    setDeepLinkDone(true);
+    if (rows.some((r) => r.capabilityId === deepLinkTarget)) {
+      openDetail(deepLinkTarget);
+    } else {
+      setDeepLinkMiss(deepLinkTarget);
+    }
+  }, [deepLinkDone, deepLinkTarget, load.kind, rows]);
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -1113,11 +1160,23 @@ export default function CapabilitiesPage() {
     <>
       <ListPageTemplate
         summary={
-          <Banner
-            tone="info"
-            title="能改的只有 title 与 ownerRef"
-            description="capabilityId / providerId / primitiveType 是身份列，注册后永久锁定（runos 98_column_locks.sql），写错了只能改数据库。版本可以退役（deprecated / withdrawn）但不能删除——目录保留历史。"
-          />
+          deepLinkMiss ? (
+            /* 深链没命中。**说出那个 id**——不说的话,用户看到的是一张正常的列表,
+               而他是带着「看某个能力」的意图点进来的,两者的差别没有任何线索。 */
+            <Banner
+              tone="warning"
+              title={tShared("deepLink.capabilityMissTitle")}
+              description={tShared("deepLink.capabilityMissBody", {
+                id: deepLinkMiss,
+              })}
+            />
+          ) : (
+            <Banner
+              tone="info"
+              title="能改的只有 title 与 ownerRef"
+              description="capabilityId / providerId / primitiveType 是身份列，注册后永久锁定（runos 98_column_locks.sql），写错了只能改数据库。版本可以退役（deprecated / withdrawn）但不能删除——目录保留历史。"
+            />
+          )
         }
         header={
           <ViewHeader
