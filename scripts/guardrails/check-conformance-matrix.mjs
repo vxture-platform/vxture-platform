@@ -98,8 +98,49 @@ const UPSTREAMS = [
   { key: "runos", label: "Runos", env: "VX_RUNOS_DIR", dir: "service" },
 ];
 
-/** 拒绝词表（X-1）。三方共用，不带模块前缀。 */
+/**
+ * 拒绝词表（X-1）。三方共用，**不带模块前缀**——它们在每个面都是同一件事，加前缀
+ * 会让同一件事有 N 种拼法。产品局部码才带（`CAPABILITY_TIMEOUT` / `MODEL_RUNTIME_*`）。
+ *
+ * `RATE_LIMITED` 2026-09-13 补入（`#21`）。它比另四个多一重身份:**它是能力可以
+ * 在 MCP 边界后面为自己自称的唯一一个码**（runos ADR-017，平台照收为 X-1 条款）。
+ * L1 读到它就映射成 `retryable: true`、审计记 `rejected`、不计费。
+ *
+ * 白名单只有它一条，而那是判据不是保守:L1 无法核对能力的任何自称，所以白名单上的
+ * 每一个码都是一份交给第三方的信任。唯一安全可信的自称是「什么都没做」——谎报它的
+ * 代价是重试一次无副作用的调用;而任何关于**执行之后**的自称（「我跑了，但重复是
+ * 安全的」）等于能力给自己授权让副作用被重试，没有调用方能核对。
+ *
+ * 实测:atlas 5 处、runos 5 处。**平台侧 0 处,而那是对的**——平台管理面自己没有
+ * 限流闸,它只把上游的 429 归类成可重试。别按本行去找那个 1:`packages/core/api` 里
+ * 确实有一处,但**本守卫不扫那个目录**(`shared` 面指的是
+ * `packages/shared/shared/src/errors`)。报数先说清范围,否则下一个人会去核一个
+ * 本守卫从没数过的数。
+ */
 const REJECTION_CODES = [
+  "NOT_ENTITLED",
+  "POLICY_DENIED",
+  "APPROVAL_REQUIRED",
+  "QUOTA_EXCEEDED",
+  "RATE_LIMITED",
+];
+
+/**
+ * 上面那些里,**每个受治理面都必须能说出口**的那一部分。
+ *
+ * 「是词表成员」和「每个面必须有」是**两件事**,这个常量的存在就是为了不让它们再被
+ * 合成一件。前四个是必须的:任何服务受权工作的面,都必须能说「没授权」「策略拒绝」
+ * 「需要审批」「配额耗尽」——说不出来,消费方就只能从一个泛化错误里猜。
+ *
+ * `RATE_LIMITED` **不在必须之列**。它是技术性限流闸的拒绝,而闸只存在于有闸的地方:
+ * 平台管理面**自己没有限流闸**(无 `ThrottlerGuard`、无 `@Throttle`),它只把上游的
+ * 429 归类成可重试(`opera-bff/errors/api-error.ts` 的 `defaultRetryable`)。
+ *
+ * 把它列为必须,唯一的效果是逼人往代码里塞一个字面量去满足守卫——**为一个不存在的
+ * 闸造覆盖**。那时守卫仍然绿,而它测的东西已经变成了「有没有人写过这个字符串」。
+ * 哪天平台管理面真的装了闸,把它挪进这个列表,并且那时它是有内容的。
+ */
+const REQUIRED_ON_GOVERNED = [
   "NOT_ENTITLED",
   "POLICY_DENIED",
   "APPROVAL_REQUIRED",
@@ -297,7 +338,7 @@ for (const s of SURFACES.filter((x) => x.governed)) {
       `${s.label}：封套里一个 retryable 都没有——${s.note}，这条是必备`,
     );
   }
-  for (const c of REJECTION_CODES) {
+  for (const c of REQUIRED_ON_GOVERNED) {
     if (m[c] === 0) {
       problems.push(`${s.label}：拒绝词表缺 \`${c}\`（0 处）`);
     }

@@ -7,7 +7,8 @@
       "NOT_ENTITLED": 2,
       "POLICY_DENIED": 2,
       "APPROVAL_REQUIRED": 1,
-      "QUOTA_EXCEEDED": 1
+      "QUOTA_EXCEEDED": 1,
+      "RATE_LIMITED": 0
     },
     "admin-bff": {
       "files": 52,
@@ -15,7 +16,8 @@
       "NOT_ENTITLED": 0,
       "POLICY_DENIED": 0,
       "APPROVAL_REQUIRED": 0,
-      "QUOTA_EXCEEDED": 0
+      "QUOTA_EXCEEDED": 0,
+      "RATE_LIMITED": 0
     },
     "console-bff": {
       "files": 48,
@@ -23,7 +25,8 @@
       "NOT_ENTITLED": 0,
       "POLICY_DENIED": 0,
       "APPROVAL_REQUIRED": 0,
-      "QUOTA_EXCEEDED": 0
+      "QUOTA_EXCEEDED": 0,
+      "RATE_LIMITED": 0
     },
     "shared": {
       "files": 2,
@@ -31,7 +34,8 @@
       "NOT_ENTITLED": 0,
       "POLICY_DENIED": 0,
       "APPROVAL_REQUIRED": 0,
-      "QUOTA_EXCEEDED": 0
+      "QUOTA_EXCEEDED": 0,
+      "RATE_LIMITED": 0
     },
     "atlas": {
       "files": 110,
@@ -39,15 +43,17 @@
       "NOT_ENTITLED": 4,
       "POLICY_DENIED": 0,
       "APPROVAL_REQUIRED": 0,
-      "QUOTA_EXCEEDED": 3
+      "QUOTA_EXCEEDED": 3,
+      "RATE_LIMITED": 2
     },
     "runos": {
-      "files": 64,
+      "files": 77,
       "retryable": 26,
       "NOT_ENTITLED": 2,
       "POLICY_DENIED": 2,
       "APPROVAL_REQUIRED": 2,
-      "QUOTA_EXCEEDED": 2
+      "QUOTA_EXCEEDED": 1,
+      "RATE_LIMITED": 2
     }
   }
 }
