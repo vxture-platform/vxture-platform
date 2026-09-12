@@ -3464,5 +3464,11 @@
     "back": "Back to overview",
     "tenantTypeTitle": "Member management is not available here",
     "tenantTypeDescription": "A personal tenant only has you. To collaborate with others, upgrade it to an organization tenant on the Tenant page."
+  },
+  "nativeDone": {
+    "title": "Signed in",
+    "body": "You can close this page and return to the app.",
+    "failedTitle": "Sign-in did not complete",
+    "failedBody": "This request was missing a valid device identifier, so the app will not receive the result. Start sign-in again from the app."
   }
 }

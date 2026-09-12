@@ -96,7 +96,11 @@ export class OidcAuthRouter {
    * `ok=0` 时页面提示「应用没接住，请回到应用重试」，而不是假装成功。
    */
   private nativeDonePage(ok: boolean): string {
-    const u = new URL("/auth/native-done", this.rt.defaultReturnTo);
+    /* **不要放回 `/auth/` 下。** nginx 把 `/auth/` 整段代理给 console-bff，
+       而 console 的 i18n middleware 又在 matcher 里排除了 `auth`——两边合起来的结果是
+       这个路径到不了页面层，登录成功的用户看到一个 404。页面落在 `/native-done`，
+       走 `/` 那条 location 到 Next，语言前缀由 middleware 补。 */
+    const u = new URL("/native-done", this.rt.defaultReturnTo);
     if (!ok) u.searchParams.set("ok", "0");
     return u.toString();
   }
