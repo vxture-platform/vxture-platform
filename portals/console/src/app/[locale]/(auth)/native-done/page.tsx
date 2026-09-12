@@ -33,12 +33,12 @@ export default async function NativeDonePage({
   const t = await getTranslations("nativeDone");
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-md text-center">
-        <h1 className="text-xl font-semibold text-[var(--vx-text-primary)]">
+    <main className="flex min-h-screen items-center justify-center px-lg">
+      <div className="w-full max-w-panel-sm text-center">
+        <h1 className="text-xl font-semibold text-foreground">
           {failed ? t("failedTitle") : t("title")}
         </h1>
-        <p className="mt-3 text-sm leading-relaxed text-[var(--vx-text-secondary)]">
+        <p className="mt-md text-sm leading-relaxed text-muted-foreground">
           {failed ? t("failedBody") : t("body")}
         </p>
       </div>
