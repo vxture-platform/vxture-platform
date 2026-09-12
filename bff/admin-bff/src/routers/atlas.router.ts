@@ -12,6 +12,7 @@ import {
   Query,
   Req,
   UnauthorizedException,
+  Delete,
 } from "@nestjs/common";
 import type { Request } from "express";
 import { VxConfigService } from "@vxture/core-config";
@@ -228,7 +229,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Body() body: JsonObject,
   ): Promise<ModelPriceRuleRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:price_rule.create");
     return this.request<ModelPriceRuleRecord>(req, "/capability/price-rules", {
       method: "POST",
       body,
@@ -241,7 +242,7 @@ export class AtlasRouter {
     @Param("priceRuleId") priceRuleId: string,
     @Body() body: JsonObject,
   ): Promise<ModelPriceRuleRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:price_rule.update");
     return this.request<ModelPriceRuleRecord>(
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}`,
@@ -257,7 +258,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("priceRuleId") priceRuleId: string,
   ): Promise<ModelPriceRuleRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:price_rule.activate");
     return this.request<ModelPriceRuleRecord>(
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}/activate`,
@@ -272,13 +273,33 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("priceRuleId") priceRuleId: string,
   ): Promise<ModelPriceRuleRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:price_rule.deactivate");
     return this.request<ModelPriceRuleRecord>(
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}/deactivate`,
       {
         method: "POST",
       },
+    );
+  }
+
+  /**
+   * 软删除一条价格规则（`is_active=false` + `deleted_at=now()`）。
+   *
+   * **此前没有代理这一条**，于是 atlas 上存在的路由在管理面够不着。#49 请求注册
+   * `price_rule.delete` 操作码时，这正是必须同时补上的一半：一个码背后没有路由，
+   * 就是一个「可以被授予、永远用不上」的权限 —— 那是 Atlas 自己反对空码的原话。
+   */
+  @Delete("price-rules/:priceRuleId")
+  deletePriceRule(
+    @Req() req: Request & RequestContext,
+    @Param("priceRuleId") priceRuleId: string,
+  ): Promise<ModelPriceRuleRecord> {
+    assertOperation(req, "model:price_rule.delete");
+    return this.request<ModelPriceRuleRecord>(
+      req,
+      `/capability/price-rules/${encodeURIComponent(priceRuleId)}`,
+      { method: "DELETE" },
     );
   }
 
@@ -308,7 +329,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Body() body: JsonObject,
   ): Promise<ModelPolicyRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:policy.create");
     return this.request<ModelPolicyRecord>(req, "/capability/policies", {
       method: "POST",
       body,
@@ -321,7 +342,7 @@ export class AtlasRouter {
     @Param("policyId") policyId: string,
     @Body() body: JsonObject,
   ): Promise<ModelPolicyRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:policy.update");
     return this.request<ModelPolicyRecord>(
       req,
       `/capability/policies/${encodeURIComponent(policyId)}`,
@@ -337,7 +358,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("policyId") policyId: string,
   ): Promise<ModelPolicyRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:policy.activate");
     return this.request<ModelPolicyRecord>(
       req,
       `/capability/policies/${encodeURIComponent(policyId)}/activate`,
@@ -352,13 +373,27 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("policyId") policyId: string,
   ): Promise<ModelPolicyRecord> {
-    assertCanManageModels(req);
+    assertOperation(req, "model:policy.deactivate");
     return this.request<ModelPolicyRecord>(
       req,
       `/capability/policies/${encodeURIComponent(policyId)}/deactivate`,
       {
         method: "POST",
       },
+    );
+  }
+
+  /** 软删除一条策略。同 price-rules，此前未代理；见上。 */
+  @Delete("policies/:policyId")
+  deletePolicy(
+    @Req() req: Request & RequestContext,
+    @Param("policyId") policyId: string,
+  ): Promise<ModelPolicyRecord> {
+    assertOperation(req, "model:policy.delete");
+    return this.request<ModelPolicyRecord>(
+      req,
+      `/capability/policies/${encodeURIComponent(policyId)}`,
+      { method: "DELETE" },
     );
   }
 
@@ -415,6 +450,33 @@ function assertCanManageModels(req: Request & RequestContext): void {
 
   if (!req.capabilities?.includes("platform.model.manage")) {
     throw new ForbiddenException("Missing platform.model.manage capability");
+  }
+}
+
+/**
+ * 细粒度操作码把门（vxture-platform#49，product_250 M-2）。
+ *
+ * ## 为什么不能继续用 `assertCanManageModels`
+ *
+ * 那一个检的是 `platform.model.manage` —— 一个**粗码**，同时覆盖「改 provider 简介」
+ * （无害）和「原地改掉某租户的限速」（不可回滚）。粗码因此**刻意不标 step-up**：标了
+ * 会把无害编辑也卡上二次验证。
+ *
+ * 后果是 Atlas 提的那条请求**在粗码上无法实施**：把 `model:policy.update` 标成需要
+ * step-up，必须先有这个码。所以本轮按资源拆开 price_rule / policy 两组。
+ *
+ * ## 粗码在这两组上被替掉，不是并存
+ *
+ * 并存等于两条路授权同一个动作，而**粗码没有 step-up 标记** —— 授粗码就绕过了全部
+ * 二次验证，那比不拆更糟。其余四组资源（provider / model / provider_key /
+ * api_key）本轮未拆，仍走粗码。
+ */
+function assertOperation(req: Request & RequestContext, code: string): void {
+  if (!req.user) {
+    throw new UnauthorizedException("No active session");
+  }
+  if (!req.capabilities?.includes(code)) {
+    throw new ForbiddenException(`Missing ${code} capability`);
   }
 }
 

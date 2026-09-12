@@ -409,6 +409,22 @@ const STEP_UP_REQUIRED = new Set([
   "user:pii.read",
   "support:impersonate",
   "tenant:lifecycle.suspend",
+  /* 策略更新（vxture-platform#49，atlas 2026-08-26 改判）。
+   *
+   * atlas 原来建议「不需要」，依据两点:改动可回滚(写新行让旧行过期)、每个版本能
+   * `?asOf=` 查回。**对策略这两条都不成立** —— 策略更新是对限速 / 并发 / 上下文上限的
+   * **原地覆盖**，旧值除 `audit.change_records` 外不留存，而策略面根本没有 `asOf`。
+   *
+   * 决定性的那个例子:运维把某租户限速调高再调回，**行本身完全一样**，事故窗口从这个
+   * 资源上问不出来。一个改动如果在资源上留不下痕迹，它就该在动作上留痕——step-up
+   * 正是那道痕。
+   *
+   * 价格规则**不标**:2026-08-16 起 `PATCH price-rules/:id` 拒收全部价格字段、只接
+   * `expiresAt`，改价格走「POST 新版本 + 让旧的过期」，是追加写且有 `asOf`。
+   *
+   * 若 atlas 的 TD-038 落地（给策略上追加写 + `asOf`），本条应当撤回——那时它就和价格
+   * 规则同构了。撤回的判据写在这里，免得它变成一条没人敢动的遗留标记。 */
+  "model:policy.update",
 ]);
 
 const OPERATOR_PERMISSIONS = [
@@ -462,6 +478,33 @@ const OPERATOR_PERMISSIONS = [
   ["model:provider.manage", "Manage model providers"],
   ["model:model.read", "View models"],
   ["model:model.manage", "Manage models"],
+  /* 细粒度操作码（vxture-platform#49，atlas 的词表信 2026-08-26）。
+   *
+   * **只拆了 price_rule / policy 两组。** 它们是 #49 点名的那两个,而拆开正好解锁
+   * 那封信的第二条请求——`model:policy.update` 要标 step-up,而在粗码上无法实施:
+   * 粗码 `model:model.manage` 同时覆盖无害编辑,刻意不标。
+   *
+   * 其余四组（provider / model / provider_key / api_key,19 个码）本轮未拆,仍走粗码;
+   * 它们分布在 opera-bff 与 6 个门户页上,和本批无依赖。
+   *
+   * **不注册 `.read`**：按 atlas 的原则,目录管的是动作;读由粗读码 `model:*.read` 覆盖。
+   * **不注册 `grant` 组**：tenant↔model 授权轴在退役(#129 已删管理面),给退役中的轴
+   * 注册权限码正是 atlas 自己反对空码的那句话。
+   * **`endpoint` 组等 atlas 改名**：`endpoints` 是通则点名的两义撞名,runos 已改自己那半。 */
+  ["model:price_rule.create", "Create model price rule"],
+  ["model:price_rule.update", "Update model price rule (expiresAt only)"],
+  ["model:price_rule.activate", "Activate model price rule"],
+  ["model:price_rule.deactivate", "Deactivate model price rule"],
+  ["model:price_rule.delete", "Soft-delete model price rule"],
+  ["model:policy.create", "Create model policy"],
+  [
+    "model:policy.update",
+    "Update model policy (high-risk)",
+    "In-place overwrite of rate/concurrency/context limits; no history surface (high-risk)",
+  ],
+  ["model:policy.activate", "Activate model policy"],
+  ["model:policy.deactivate", "Deactivate model policy"],
+  ["model:policy.delete", "Soft-delete model policy"],
   ["capability:runos.read", "View runos capabilities and endpoints"],
   [
     "capability:runos.manage",
@@ -860,6 +903,16 @@ const MENU_TREE = [
               "model:provider.manage",
               "model:model.read",
               "model:model.manage",
+              "model:price_rule.create",
+              "model:price_rule.update",
+              "model:price_rule.activate",
+              "model:price_rule.deactivate",
+              "model:price_rule.delete",
+              "model:policy.create",
+              "model:policy.update",
+              "model:policy.activate",
+              "model:policy.deactivate",
+              "model:policy.delete",
             ],
           },
           // 密钥管理 / 审批中心 / 字典管理 / 通知渠道四个菜单节点 2026-08-31 退役
