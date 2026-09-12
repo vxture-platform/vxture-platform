@@ -34,11 +34,25 @@ function stripLocale(pathname: string): string {
   return pathname;
 }
 
+/*
+ * 不参与认证的页面。
+ *
+ * `/signin` 现在只是个直连入口——middleware 不再把未认证的人**送进**它（见下），
+ * 但它仍可能被外部链接直接命中，所以继续豁免，否则就是自己跳自己。
+ *
+ * `/native-done` 是桌面端登录的**终点页**，而它的前提正是**浏览器没有 console
+ * 会话**：native 面的回调刻意不种 cookie（会话归应用，浏览器只做批准）。所以
+ * 到达这一页的浏览器一定是未认证的——不豁免的话，刚登完的用户会被要求再登一次，
+ * 而他真去登了就会在浏览器里留下一个设计上刻意避免的游荡会话。
+ *
+ * 判据不是「这一页需不需要数据」，是**到达它的浏览器有没有会话**。凡是某条认证
+ * 流程的终点或跳板，答案都是「没有」。
+ */
+const EXEMPT_PAGES = new Set(["/signin", "/native-done"]);
+
 export const middleware = createAuthMiddleware({
   app: "console",
-  /* `/signin` 现在只是个直连入口——middleware 不再把未认证的人**送进**它
-   * （见下），但它仍可能被外部链接直接命中，所以继续豁免，否则就是自己跳自己。 */
-  isExempt: (pathname) => stripLocale(pathname) === "/signin",
+  isExempt: (pathname) => EXEMPT_PAGES.has(stripLocale(pathname)),
   onAllow: handleI18n,
 });
 
