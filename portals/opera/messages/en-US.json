@@ -5,6 +5,8 @@
   },
   "pagination": {
     "total": "{total} records",
+    "first": "First",
+    "position": "Page {page} of {pageCount}",
     "previous": "Previous page",
     "next": "Next page",
     "pageSizeLabel": "Rows per page",

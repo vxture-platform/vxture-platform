@@ -57,10 +57,14 @@ export interface CursorPaginationProps {
   readonly total: number;
   readonly pageSize: CursorPageSize;
   readonly onPageSizeChange: (value: CursorPageSize) => void;
+  /** 当前页，1 起。用来显示「第 X / Y 页」——keyset 跳不了任意页，但**说得出自己在哪**。 */
+  readonly page: number;
   /** 能不能往回:第一页时为 false。 */
   readonly hasPrevious: boolean;
   /** 能不能往前:上游给了 `nextCursor` 才为 true。 */
   readonly hasNext: boolean;
+  /** 回第一页。**keyset 唯一做得到的随机跳转**——第一页不需要游标。 */
+  readonly onFirst: () => void;
   readonly onPrevious: () => void;
   readonly onNext: () => void;
   /** 取数中:两侧都禁用，避免连点把游标栈推乱。 */
@@ -70,23 +74,29 @@ export interface CursorPaginationProps {
 
 export function CursorPagination({
   total,
+  page,
   pageSize,
   onPageSizeChange,
   hasPrevious,
   hasNext,
+  onFirst,
   onPrevious,
   onNext,
   busy = false,
   className,
 }: CursorPaginationProps) {
   const t = useTranslations("pagination");
+  /* 总页数是**算得出来**的:`total` 与 `pageSize` 都在手上。跳不了任意页是游标的限制，
+     但那不等于连自己在第几页都说不出——不说的话，翻到第七页时只知道「还有下一页」。 */
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div
       className={`flex flex-wrap items-center justify-between gap-sm ${className ?? ""}`}
     >
-      <span className="text-body-sm text-muted-foreground tabular-nums">
-        {t("total", { total })}
+      <span className="flex flex-wrap items-center gap-sm text-body-sm text-muted-foreground tabular-nums">
+        <span>{t("total", { total })}</span>
+        <span>{t("position", { page, pageCount })}</span>
       </span>
       <div className="flex items-center gap-sm">
         <label className="flex items-center gap-2xs text-body-sm text-muted-foreground">
@@ -105,6 +115,16 @@ export function CursorPagination({
             ))}
           </NativeSelect>
         </label>
+        {/* 「首页」与「上一页」的禁用条件相同（都要求不在第一页），但它们不是一件事:
+            翻到第 30 页想回头看，点 29 次上一页不是一个可用的答案。 */}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!hasPrevious || busy}
+          onClick={onFirst}
+        >
+          {t("first")}
+        </Button>
         <Button
           variant="outline"
           size="sm"
