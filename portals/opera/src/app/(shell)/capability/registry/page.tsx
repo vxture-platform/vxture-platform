@@ -790,6 +790,28 @@ function CapabilitiesPageContent() {
   /* 本地 `filtered` 与 `useListPagination` 已退役:筛选与分页都在服务端。
      留着本地过滤会让搜索只搜当前页——见 reload 里的注释。 */
   const page = pageIndex(cursorStack);
+
+  /* 翻页后回到**表格头部**，不是页面顶部。
+     翻页触发的是页尾那颗按钮，读的却是表格第一行——不滚的话，新的一页出来了而视口
+     还停在页脚，人要自己往上拖。滚到页面最顶又过了:顶上那几屏（面包屑、横幅、筛选条）
+     每翻一页重看一遍是噪音。owner 2026-09-13 定:**表格头作为定位点**。
+     用 `scrollIntoView` 而不是 `window.scrollTo`——外壳的滚动容器是 `main` 不是窗口
+     （见 admin/console 的 AppShell），只有前者自己找得对容器。 */
+  const tableTopRef = useRef<HTMLDivElement>(null);
+  const pagedOnce = useRef(false);
+  useEffect(() => {
+    /* 首屏不滚:进页面时视口本来就在顶上，滚一下只会让人以为自己误触了什么。 */
+    if (!pagedOnce.current) {
+      pagedOnce.current = true;
+      return;
+    }
+    tableTopRef.current?.scrollIntoView({
+      block: "start",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+  }, [cursorStack]);
   /* 空态要分两种:**筛出来是空**和**目录本来就是空**。服务端筛选之后前端拿不到
      「筛掉了多少」，所以判据换成「有没有生效中的筛选」——这也正是那句提示要回答的
      问题，比数字差值更贴近它。 */
@@ -1212,8 +1234,10 @@ function CapabilitiesPageContent() {
         setPageSize(size);
         resetToFirstPage();
       }}
+      page={page + 1}
       hasPrevious={hasPrevious(cursorStack)}
       hasNext={nextCursor !== null}
+      onFirst={resetToFirstPage}
       onPrevious={() => setCursorStack(goBack)}
       onNext={() => setCursorStack((stack) => advance(stack, nextCursor))}
       busy={load.kind === "loading"}
@@ -1359,143 +1383,154 @@ function CapabilitiesPageContent() {
           </FilterBar>
         }
         table={
-          <DataTable
-            labels={tableLabels}
-            columns={[
-              {
-                /* 主名换成 `displayName`（业务语言），`capabilityId` 落到副行——
+          <>
+            {/* 零高度锚点。包一层 div 会改变模板给表格槽的布局假设，所以只放一个
+                不占高度的定位点。`scroll-mt-*` 留出的是外壳吸顶部分的余量。 */}
+            <div
+              ref={tableTopRef}
+              aria-hidden="true"
+              className="h-0 scroll-mt-lg"
+            />
+            <DataTable
+              labels={tableLabels}
+              columns={[
+                {
+                  /* 主名换成 `displayName`（业务语言），`capabilityId` 落到副行——
                    但**必须还在行上**：审计事件、端点、授权用的都是它。见
                    `resolveNames` 的表。 */
-                id: "id",
-                header: "能力",
-                cell: (r: CapabilityRecord) => {
-                  const n = resolveNames(r);
-                  return (
-                    <TableTitleCell
-                      icon="stack"
-                      title={
-                        <span className="flex items-center gap-xs">
-                          <span>{n.primary}</span>
-                          {n.operational ? (
-                            /* 运营名与业务名不同时两个都要在：运营者在跨仓 issue、
+                  id: "id",
+                  header: "能力",
+                  cell: (r: CapabilityRecord) => {
+                    const n = resolveNames(r);
+                    return (
+                      <TableTitleCell
+                        icon="stack"
+                        title={
+                          <span className="flex items-center gap-xs">
+                            <span>{n.primary}</span>
+                            {n.operational ? (
+                              /* 运营名与业务名不同时两个都要在：运营者在跨仓 issue、
                                日志里读到的是运营名，只显示业务名会对不上。 */
-                            <span className="text-body-sm font-normal text-muted-foreground">
-                              {n.operational}
-                            </span>
-                          ) : null}
-                          {n.missingConsoleLocale ? (
-                            <Badge
-                              variant="outline"
-                              title={`已登记 ${n.otherLocales.join(" / ")}，缺 ${CONSOLE_LOCALE}——当前显示的是运营名`}
-                            >
-                              缺中文名
+                              <span className="text-body-sm font-normal text-muted-foreground">
+                                {n.operational}
+                              </span>
+                            ) : null}
+                            {n.missingConsoleLocale ? (
+                              <Badge
+                                variant="outline"
+                                title={`已登记 ${n.otherLocales.join(" / ")}，缺 ${CONSOLE_LOCALE}——当前显示的是运营名`}
+                              >
+                                缺中文名
+                              </Badge>
+                            ) : null}
+                          </span>
+                        }
+                        description={
+                          <span className="font-mono">{r.capabilityId}</span>
+                        }
+                        onTitleClick={() => openDetail(r.capabilityId)}
+                      />
+                    );
+                  },
+                },
+                {
+                  id: "provider",
+                  header: "Provider",
+                  width: "sm",
+                  cell: (r: CapabilityRecord) => (
+                    <span className="text-code-sm">{r.providerId}</span>
+                  ),
+                },
+                {
+                  id: "taxonomy",
+                  header: "分类 / 标签",
+                  width: "md",
+                  cell: (r: CapabilityRecord) => (
+                    <span className="flex flex-col gap-2xs">
+                      {/* 分类缺失 = 这条是分类法强制之前注册的老行，如实标出来：
+                        它现在改不了自己，但一次 PATCH 就能补上。 */}
+                      {r.category ? (
+                        <Badge variant="secondary">{r.category}</Badge>
+                      ) : (
+                        <Badge variant="outline">
+                          {tShared("common.uncategorized")}
+                        </Badge>
+                      )}
+                      {r.tags && r.tags.length > 0 ? (
+                        <span className="flex flex-wrap gap-2xs">
+                          {r.tags.slice(0, 3).map((t) => (
+                            <Badge key={t} variant="outline">
+                              {t}
+                            </Badge>
+                          ))}
+                          {r.tags.length > 3 ? (
+                            <Badge variant="outline">
+                              +{r.tags.length - 3}
                             </Badge>
                           ) : null}
                         </span>
-                      }
-                      description={
-                        <span className="font-mono">{r.capabilityId}</span>
-                      }
-                      onTitleClick={() => openDetail(r.capabilityId)}
-                    />
-                  );
+                      ) : null}
+                    </span>
+                  ),
                 },
-              },
-              {
-                id: "provider",
-                header: "Provider",
-                width: "sm",
-                cell: (r: CapabilityRecord) => (
-                  <span className="text-code-sm">{r.providerId}</span>
-                ),
-              },
-              {
-                id: "taxonomy",
-                header: "分类 / 标签",
-                width: "md",
-                cell: (r: CapabilityRecord) => (
-                  <span className="flex flex-col gap-2xs">
-                    {/* 分类缺失 = 这条是分类法强制之前注册的老行，如实标出来：
-                        它现在改不了自己，但一次 PATCH 就能补上。 */}
-                    {r.category ? (
-                      <Badge variant="secondary">{r.category}</Badge>
-                    ) : (
-                      <Badge variant="outline">
-                        {tShared("common.uncategorized")}
-                      </Badge>
-                    )}
-                    {r.tags && r.tags.length > 0 ? (
-                      <span className="flex flex-wrap gap-2xs">
-                        {r.tags.slice(0, 3).map((t) => (
-                          <Badge key={t} variant="outline">
-                            {t}
-                          </Badge>
-                        ))}
-                        {r.tags.length > 3 ? (
-                          <Badge variant="outline">+{r.tags.length - 3}</Badge>
-                        ) : null}
-                      </span>
-                    ) : null}
-                  </span>
-                ),
-              },
-              {
-                id: "owner",
-                header: "Owner",
-                width: "sm",
-                cell: (r: CapabilityRecord) => (
-                  <span className="text-body-sm text-muted-foreground">
-                    {r.ownerRef}
-                  </span>
-                ),
-              },
-              {
-                id: "type",
-                header: tShared("columns.kind"),
-                align: "center",
-                width: "xs",
-                cell: (r: CapabilityRecord) => (
-                  <Badge variant="secondary">
-                    {PRIMITIVE_LABELS[r.primitiveType] ?? r.primitiveType}
-                  </Badge>
-                ),
-              },
-              {
-                id: "tier",
-                header: "准入等级",
-                align: "center",
-                width: "xs",
-                cell: (r: CapabilityRecord) => (
-                  <StatusBadge
-                    tone={ADMISSION_TONE[r.admissionTier] ?? "neutral"}
-                    dot
-                  >
-                    {r.admissionTier}
-                  </StatusBadge>
-                ),
-              },
-            ]}
-            rows={rows}
-            rowKey={(r: CapabilityRecord) => r.capabilityId}
-            selectedKeys={selectedKeys}
-            onSelectionChange={setSelectedKeys}
-            indexStart={page * pageSize}
-            rowActions={(r: CapabilityRecord) => (
-              <ActionMenu
-                label={`${r.capabilityId} 操作`}
-                items={[
-                  {
-                    id: "detail",
-                    label: "查看详情",
-                    icon: "eye",
-                    onSelect: () => openDetail(r.capabilityId),
-                  },
-                ]}
-              />
-            )}
-            footer={pagination}
-            empty={emptyState}
-          />
+                {
+                  id: "owner",
+                  header: "Owner",
+                  width: "sm",
+                  cell: (r: CapabilityRecord) => (
+                    <span className="text-body-sm text-muted-foreground">
+                      {r.ownerRef}
+                    </span>
+                  ),
+                },
+                {
+                  id: "type",
+                  header: tShared("columns.kind"),
+                  align: "center",
+                  width: "xs",
+                  cell: (r: CapabilityRecord) => (
+                    <Badge variant="secondary">
+                      {PRIMITIVE_LABELS[r.primitiveType] ?? r.primitiveType}
+                    </Badge>
+                  ),
+                },
+                {
+                  id: "tier",
+                  header: "准入等级",
+                  align: "center",
+                  width: "xs",
+                  cell: (r: CapabilityRecord) => (
+                    <StatusBadge
+                      tone={ADMISSION_TONE[r.admissionTier] ?? "neutral"}
+                      dot
+                    >
+                      {r.admissionTier}
+                    </StatusBadge>
+                  ),
+                },
+              ]}
+              rows={rows}
+              rowKey={(r: CapabilityRecord) => r.capabilityId}
+              selectedKeys={selectedKeys}
+              onSelectionChange={setSelectedKeys}
+              indexStart={page * pageSize}
+              rowActions={(r: CapabilityRecord) => (
+                <ActionMenu
+                  label={`${r.capabilityId} 操作`}
+                  items={[
+                    {
+                      id: "detail",
+                      label: "查看详情",
+                      icon: "eye",
+                      onSelect: () => openDetail(r.capabilityId),
+                    },
+                  ]}
+                />
+              )}
+              footer={pagination}
+              empty={emptyState}
+            />
+          </>
         }
       />
 
