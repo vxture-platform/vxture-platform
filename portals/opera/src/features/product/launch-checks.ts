@@ -102,6 +102,28 @@ interface WebhookLite {
   webhookSecretRef: string | null;
 }
 
+/**
+ * 通则 §C3 下发 规定的回调路径。所有产品同一个，变的只有域名。
+ *
+ * **这里重写一遍字面量是有意的。** 登记侧（`product-catalog.router.ts` 的
+ * `assertStandardWebhookPath`）从今往后当场拒收非标准路径，所以新登记的行不可能违规；
+ * 这一项要判的恰恰是**闸门补上之前**已经进库的那些行，它们绕过了那个函数。
+ * 让这里去 import 登记侧的常量，只会让两边一起改、一起错——而这一项存在的理由
+ * 就是替那些没经过登记侧校验的值兜底。
+ */
+const STANDARD_WEBHOOK_PATH = "/api/webhooks/vxture";
+
+/** 取 URL 的 path；取不出来（空值、不是绝对 URL）返回 null，由调用处当作不合格。 */
+function pathOf(url: string | null | undefined): string | null {
+  const raw = (url ?? "").trim();
+  if (raw === "") return null;
+  try {
+    return new URL(raw).pathname;
+  } catch {
+    return null;
+  }
+}
+
 /** `GET /api/products/:id/integration-signals` 的形状（opera-bff 定义）。 */
 interface IntegrationSignalsLite {
   entitlement: {
@@ -331,26 +353,36 @@ export async function runLaunchChecks(
   } else {
     const hasUrl = !!webhook?.webhookUrl?.trim();
     const hasSecret = !!webhook?.webhookSecretRef?.trim();
+    /* 「填了」不等于「填对了」。这一项此前只看两个字段非空，于是通则规定的
+       `/api/webhooks/vxture` 在全组织零实现而这一格全绿——路径不匹配最常见的表现
+       不是 404，是落到对方前端的 SPA catch-all 拿回 index.html 和 HTTP 200，
+       投递被判为送达而产品什么都没收到。登记侧 2026-09-13 起当场拒收非标准路径，
+       这里对**闸门补上之前就已存在的登记行**再判一次。 */
+    const path = pathOf(webhook?.webhookUrl);
+    const pathOk = path === STANDARD_WEBHOOK_PATH;
+    const ok = hasUrl && hasSecret && pathOk;
     results.push({
       id: "webhook",
       label: "Webhook 登记",
-      what: "平台侧登记了回调地址与签名密钥引用。不发测试投递——那是对对方生产端点的真实请求，本页不做；投递能不能成功要看运行监控里的投递队列。",
+      what: `平台侧登记了回调地址与签名密钥引用，且回调路径是通则规定的 ${STANDARD_WEBHOOK_PATH}（所有产品同一个，变的只有域名）。不发测试投递——那是对对方生产端点的真实请求，本页不做；投递能不能成功要看运行监控里的投递队列。`,
       side: "ours",
-      status: hasUrl && hasSecret ? "pass" : "fail",
-      detail:
-        hasUrl && hasSecret
-          ? `回调 ${webhook!.webhookUrl}，密钥引用 ${webhook!.webhookSecretRef}`
-          : !webhook
-            ? "这个产品没有 webhook 登记行。"
-            : hasUrl
-              ? "登记了回调地址，但没有签名密钥引用——对方无法验签。"
-              : "登记行存在，但没有回调地址。",
-      remedy:
-        hasUrl && hasSecret
-          ? null
-          : hasUrl
-            ? "去产品目录的「Webhook 登记」补上签名密钥引用。"
-            : "去产品目录的「Webhook 登记」填回调地址与签名密钥引用。",
+      status: ok ? "pass" : "fail",
+      detail: ok
+        ? `回调 ${webhook!.webhookUrl}，密钥引用 ${webhook!.webhookSecretRef}`
+        : !webhook
+          ? "这个产品没有 webhook 登记行。"
+          : !hasUrl
+            ? "登记行存在，但没有回调地址。"
+            : !pathOk
+              ? `回调地址的路径是 ${path ?? "(解析不出)"}，通则规定的是 ${STANDARD_WEBHOOK_PATH}。这是闸门补上之前留下的登记值。`
+              : "登记了回调地址，但没有签名密钥引用——对方无法验签。",
+      remedy: ok
+        ? null
+        : !hasUrl
+          ? "去产品目录的「Webhook 登记」填回调地址与签名密钥引用。"
+          : !pathOk
+            ? `按 X-4 三步迁移：① 产品侧先同时能收新旧两个路径并上线；② 回这里把地址改成 ${STANDARD_WEBHOOK_PATH}；③ 产品侧再撤掉旧路由。顺序反过来会有一段投递落空的窗口。`
+            : "去产品目录的「Webhook 登记」补上签名密钥引用。",
       /* 原来指 `/ops/logs`（投递日志）——那是看结果的地方，不是配置的地方；配置入口
          2026-08-16 补在产品目录的行操作里，这里跟着指过去。 */
       href: `/product/catalog?productId=${encodeURIComponent(product.id)}`,

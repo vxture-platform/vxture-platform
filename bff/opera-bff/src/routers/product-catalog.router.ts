@@ -1352,6 +1352,11 @@ export class ProductCatalogRouter {
    *
    * 非空时才校验格式：地址必须是 http/https 绝对 URL——填一个相对路径或 `example` 这类
    * 占位，要到平台真的推一次订阅变更才暴露，而那时错的是对方收不到。
+   *
+   * **并且要校验路径**（2026-09-13 补）。通则把回调路径定死成所有产品同一个
+   * `/api/webhooks/vxture`，变的只有域名；而在补上这一条之前，这里只看协议与长度，
+   * 于是那条 MUST 在整个组织里没有任何强制点。实测后果是它**零实现**——每个产品
+   * 各自取了个名字，而登记、上线检查、投递全程绿色。见 {@link assertStandardWebhookPath}。
    */
   @Put(":id/webhook")
   async putWebhook(
@@ -1389,14 +1394,25 @@ export class ProductCatalogRouter {
       : null;
 
     /* 先确认产品在。FK 违例会冒成 500，而这里真实的答案是 404——把「产品不存在」
-       报成服务器错误，会让人去查服务而不是去查产品码。 */
-    const exists = await this.pool.query(
-      `SELECT 1 FROM product.products WHERE id = $1`,
+       报成服务器错误，会让人去查服务而不是去查产品码。
+
+       顺带取回 product_code：回调路径的存量登记按产品码记，而这个入口只拿到 uuid。
+       多取一列不多一次往返。 */
+    const exists = await this.pool.query<{ product_code: string }>(
+      `SELECT product_code FROM product.products WHERE id = $1`,
       [id],
     );
-    if (exists.rowCount === 0) {
+    /* 判 `rows[0]` 而不是 `rowCount === 0`：两者在运行时等价，但只有前者能让
+       类型收窄——`noUncheckedIndexedAccess` 下 `rows[0]` 是 `T | undefined`，
+       而 `rowCount` 的比较不构成对数组元素的证明。 */
+    const product = exists.rows[0];
+    if (!product) {
       throw notFound("CATALOG_PRODUCT_NOT_FOUND", `Product ${id} not found`);
     }
+
+    /* 路径校验排在存在性之后：产品码不存在时真实的答案是 404，先报 400
+       会让人去查地址而不是去查产品码。 */
+    assertStandardWebhookPath(webhookUrl, product.product_code);
 
     const result = await this.pool.query<{
       home_url: string | null;
@@ -2026,6 +2042,79 @@ function normalizeUrl(
     );
   }
   return raw;
+}
+
+/**
+ * 通则 §C3 下发 规定的回调路径。**所有产品同一个**，变的只有域名。
+ *
+ * 三段各答一问：`api` 说明这是机器接口、不与产品的前端路由抢地址；`webhooks` 说明
+ * 入站、外部来源、必须验签；`vxture` 说明谁发的，产品将来接第二家时
+ * `/api/webhooks/<对方>` 自然并列。**版本不进路径**——URL 在这里按产品登记一次，
+ * 把版本写进路径等于每次信封升级都要逐个产品改登记。
+ */
+const STANDARD_WEBHOOK_PATH = "/api/webhooks/vxture";
+
+/**
+ * 仍登记在旧路径上的存量产品。**带失效条件的登记，不是永久豁免。**
+ *
+ * 键是 `product_code`，值是它迁移前允许保留的那个路径。列在这里的产品仍可保存
+ * webhook 行（比如轮换密钥），不至于因为这道闸门被卡在一次运维操作上；
+ * **但它们只能保存自己那一个旧值，换成第三个路径同样会被拒**。
+ *
+ * 不在表里的产品一律按新规则判——这正是 D-2：新接入的产品没有「存量迁移」档。
+ * 一个没列在这里的产品撞上这道闸门，正确的反应是**让那个产品迁到标准路径**，
+ * 而不是往这张表里再加一行；加行要连同下面的失效条件一起写。
+ *
+ * **失效条件**：对应产品完成 X-4 三步迁移（① 产品侧同时能收新旧两个路径并上线；
+ * ② 这里把登记地址改成标准路径；③ 产品侧撤掉旧路由）之后，删掉它那一行。
+ * 三行全空时，连同这张表和 `legacyPathFor` 一起删掉。
+ *
+ * 为什么只有这两个：全仓检索的结果是 vxtpl 与 yucer 各自有一个
+ * `app/provisioning/webhook/route.ts`，注释都标着「product_200 section 4」
+ * ——而那一节通篇只规定义务、**从没规定过路径**。两个产品各自造了同一个名字，
+ * 又互相成了对方的先例。其余产品的登记值这里读不到，它们会在这道闸门上现形，
+ * 那是这道闸门该做的事。
+ */
+const LEGACY_WEBHOOK_PATHS = new Map<string, string>([
+  ["vxtpl", "/provisioning/webhook"],
+  ["yucer", "/provisioning/webhook"],
+]);
+
+/**
+ * 回调地址的**路径**必须是通则规定的那一个。
+ *
+ * **为什么这道闸门必须在登记处而不是在投递处。** 投递处发现路径不对已经太晚：
+ * 那时错的表现是对方返 404，或者——更常见也更糟——落到对方前端的 SPA catch-all
+ * 拿回 `index.html` 和 **HTTP 200**，于是投递被判为送达，开通与档位变更静默消失，
+ * 两侧都不报错。登记是这件事唯一的**单一咽喉**：每个产品的回调地址都从这里进库。
+ *
+ * 空值放行：三项都允许留空是这个入口的既有语义（运营者常常先拿到地址、密钥还没
+ * 签发），这道闸门不改它。
+ */
+function assertStandardWebhookPath(
+  url: string | null,
+  productCode: string,
+): void {
+  if (url === null) return;
+
+  /* 到这里 url 已经过 normalizeUrl，一定 parse 得动。 */
+  const path = new URL(url).pathname;
+  if (path === STANDARD_WEBHOOK_PATH) return;
+
+  const legacy = LEGACY_WEBHOOK_PATHS.get(productCode);
+  if (legacy !== undefined && path === legacy) return;
+
+  throw invalidRequest(
+    "VALIDATION_INVALID_VALUE",
+    legacy !== undefined
+      ? `webhookUrl 的路径必须是 ${STANDARD_WEBHOOK_PATH}（通则 §C3 下发：所有产品同一个路径，变的只有域名）。` +
+          `${productCode} 作为存量产品可以暂时保留 ${legacy}，但不能改成第三个值 ${path}。`
+      : `webhookUrl 的路径必须是 ${STANDARD_WEBHOOK_PATH}（通则 §C3 下发：所有产品同一个路径，变的只有域名），` +
+          `收到的是 ${path}。${productCode} 不在存量登记里——正确的做法是让产品迁到标准路径，` +
+          `而不是在平台侧迁就它：路径不一致时投递可能落到对方前端的 SPA 并拿回 200，` +
+          `表现为「一切正常但产品什么都没收到」。`,
+    "webhookUrl",
+  );
 }
 
 /** 密钥**引用**不是密钥本体，不做 URL 校验；只拦长度（DDL varchar(128)）。 */
