@@ -24,6 +24,11 @@
  * `pageSizeLabel` / `pageSizeOption`），**不新增键**——两个控件说的是同一件事，计数语
  * 尤其要一字不差，否则同一个平面上会出现两种「共 N 条」。
  *
+ * 间距用**命名档**（`gap-sm` / `gap-2xs`），不是 `gap-3` 这类数字档:opera 全站命名档
+ * 232 处、数字档 5 处，而那 5 处里有 2 处是本件初版写错的。数字档在这里不报错也不
+ * 生效——`next build` 照样绿，页面上只是没有间距。判断办法是数用量:一个只有自己在用
+ * 的 class，多半是编出来的。
+ *
  * 页大小档与 `ListPagination` 一致（10/20/50/100，无 auto，owner 2026-09-02 定）。
  * 改页大小会把游标作废并回到第一页——**这是必须的**:游标是「某一行之后」，换了页大小
  * 之后它指向的位置还在，但前面已经看过的行数变了，不回第一页就会漏掉或重复。
@@ -66,13 +71,13 @@ export function CursorPagination({
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-3 ${className ?? ""}`}
+      className={`flex flex-wrap items-center justify-between gap-sm ${className ?? ""}`}
     >
       <span className="text-body-sm text-muted-foreground tabular-nums">
         {t("total", { total })}
       </span>
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2 text-body-sm text-muted-foreground">
+      <div className="flex items-center gap-sm">
+        <label className="flex items-center gap-2xs text-body-sm text-muted-foreground">
           {t("pageSizeLabel")}
           <NativeSelect
             wrapperClassName="w-fit"
