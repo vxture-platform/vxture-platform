@@ -51,7 +51,6 @@ import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
   type FormEvent,
   Suspense,
@@ -89,11 +88,13 @@ import {
   TableTitleCell,
   Textarea,
   ViewHeader,
-  useListPagination,
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
-import { ListPagination } from "@/modules/shared/ListPagination";
+import {
+  CursorPagination,
+  type CursorPageSize,
+} from "@/modules/shared/CursorPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
@@ -256,6 +257,14 @@ interface EndpointInstanceRecord {
   /** runos v0.8.0：由 `status` 改名（B-3 仓内统一 state/status/lifecycle 三个词）。 */
   state: string;
   createdAt: string;
+}
+
+/** 目录列表的一页。`nextCursor` 是 `null` 不是缺席——「没有下一页」要说得出来。 */
+interface CapabilityPage {
+  items: CapabilityRecord[];
+  nextCursor: string | null;
+  /** 匹配总数，**不是本页条数**。翻页时它要钉住不动。 */
+  total: number;
 }
 
 interface CapabilityDetailRecord extends CapabilityRecord {
@@ -541,6 +550,14 @@ function CapabilitiesPageContent() {
   const canManage = can(MANAGE);
 
   const [rows, setRows] = useState<CapabilityRecord[]>([]);
+  /* 服务端分页（vxture-platform#306 第 1 步）。
+     `cursorStack` 存的是**已经用过的**游标:第 i 项取到第 i+1 页。keyset 游标只能
+     顺着走，所以「上一页」的做法是弹栈重取，而不是往回算一个游标——往回算要求知道
+     上一页的第一行是谁，而那正是翻过去之后就不再持有的东西。 */
+  const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState<CursorPageSize>(20);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
   /* 这两个下推给 runos（带索引、AND 语义），与本地的 keyword 过滤不是一回事。 */
@@ -607,10 +624,20 @@ function CapabilitiesPageContent() {
       const p = new URLSearchParams();
       if (categoryFilter !== "all") p.set("category", categoryFilter);
       for (const t of parseTags(tagFilter)) p.append("tag", t);
-      const data = await api.get<CapabilityRecord[]>(
+      /* primitiveType 与关键词此前在本地过滤，现在也下推。
+         **留在本地就等于只搜当前页**——匹配项在第 7 页，表格说「没有」，而
+         「搜不到」和「不存在」在界面上一模一样。 */
+      if (primitiveFilter !== "all") p.set("primitiveType", primitiveFilter);
+      if (keyword.trim()) p.set("q", keyword.trim());
+      p.set("limit", String(pageSize));
+      const cursor = cursorStack[cursorStack.length - 1];
+      if (cursor) p.set("cursor", cursor);
+      const data = await api.get<CapabilityPage>(
         `/api/runos/capabilities${p.size ? `?${p.toString()}` : ""}`,
       );
-      setRows(data);
+      setRows(data.items);
+      setNextCursor(data.nextCursor);
+      setTotal(data.total);
       setLoad({ kind: "ready" });
     } catch (error) {
       setLoad({
@@ -621,7 +648,14 @@ function CapabilitiesPageContent() {
             : "读取 Capability 失败",
       });
     }
-  }, [categoryFilter, tagFilter]);
+  }, [categoryFilter, tagFilter, primitiveFilter, keyword, pageSize, cursorStack]);
+
+  /* 换筛选或换页大小要回到第一页。
+     游标是「某一行之后」:筛选变了，那一行可能已经不在结果里;页大小变了，它前面
+     看过的行数也变了。两种情况下继续用旧游标都会漏行或重复。 */
+  const resetToFirstPage = useCallback(() => {
+    setCursorStack((stack) => (stack.length === 1 ? stack : [null]));
+  }, []);
 
   useEffect(() => {
     void reload();
@@ -675,38 +709,41 @@ function CapabilitiesPageContent() {
   }
 
   /*
-   * 深链:加载完成后核对一次,命中就开详情,没命中就挂 Banner。
+   * 深链:直接问这个 id 存不存在,命中就开详情,没命中就挂 Banner。
    *
-   * **必须等 `load.kind === "ready"`** ——在 rows 还空着的时候核对,任何 id 都会被
-   * 判成「找不到」,那条 Banner 会在每次进页面时闪一下,然后自己消失。那种提示比
-   * 没有提示更糟:它教人忽略提示。
+   * **判据从「在不在 rows 里」换成了「详情读得到读不到」**——列表改服务端分页之后，
+   * `rows` 只剩当前一页，第 7 页上的能力会被判成「不存在」。那正是这条深链存在的
+   * 理由:一条不存在的 id 如果只表现为「列表里没这一行」，读起来就是「这个能力不
+   * 存在」，而那和「id 拼错了」「能力被删了」在界面上一模一样。
+   *
+   * 直接取详情也比扫列表更准:它问的就是那个问题，不受任何筛选与分页影响。
    *
    * 只跑一次(`deepLinkDone`),否则用户手动关掉抽屉后 effect 会把它再开一遍。
    */
   const deepLinkTarget = useSearchParams().get("capabilityId");
   const [deepLinkDone, setDeepLinkDone] = useState(false);
   useEffect(() => {
-    if (deepLinkDone || !deepLinkTarget || load.kind !== "ready") return;
+    if (deepLinkDone || !deepLinkTarget) return;
     setDeepLinkDone(true);
-    if (rows.some((r) => r.capabilityId === deepLinkTarget)) {
-      openDetail(deepLinkTarget);
-    } else {
-      setDeepLinkMiss(deepLinkTarget);
-    }
-  }, [deepLinkDone, deepLinkTarget, load.kind, rows]);
+    void api
+      .get<CapabilityDetailRecord>(
+        `/api/runos/capabilities/${encodeURIComponent(deepLinkTarget)}`,
+      )
+      .then(() => openDetail(deepLinkTarget))
+      .catch(() => setDeepLinkMiss(deepLinkTarget));
+  }, [deepLinkDone, deepLinkTarget]);
 
-  const filtered = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
-    return rows.filter(
-      (r) =>
-        (primitiveFilter === "all" || r.primitiveType === primitiveFilter) &&
-        (kw === "" ||
-          r.capabilityId.toLowerCase().includes(kw) ||
-          r.title.toLowerCase().includes(kw)),
-    );
-  }, [rows, keyword, primitiveFilter]);
-
-  const pager = useListPagination(filtered, 20);
+  /* 本地 `filtered` 与 `useListPagination` 已退役:筛选与分页都在服务端。
+     留着本地过滤会让搜索只搜当前页——见 reload 里的注释。 */
+  const pageIndex = cursorStack.length - 1;
+  /* 空态要分两种:**筛出来是空**和**目录本来就是空**。服务端筛选之后前端拿不到
+     「筛掉了多少」，所以判据换成「有没有生效中的筛选」——这也正是那句提示要回答的
+     问题，比数字差值更贴近它。 */
+  const hasActiveFilter =
+    categoryFilter !== "all" ||
+    primitiveFilter !== "all" ||
+    tagFilter.trim() !== "" ||
+    keyword.trim() !== "";
 
   function openRegister() {
     setDraft(EMPTY_DRAFT);
@@ -1113,15 +1150,23 @@ function CapabilitiesPageContent() {
     draft.category !== "";
 
   const pagination = (
-    <ListPagination
+    <CursorPagination
       className="w-full"
-      currentPage={pager.page}
-      pageCount={pager.pageCount}
-      total={rows.length}
-      filteredTotal={filtered.length}
-      pageSize={pager.pageSize}
-      onPageSizeChange={pager.onPageSizeChange}
-      onPageChange={pager.onPageChange}
+      total={total}
+      pageSize={pageSize}
+      onPageSizeChange={(size) => {
+        setPageSize(size);
+        resetToFirstPage();
+      }}
+      hasPrevious={pageIndex > 0}
+      hasNext={nextCursor !== null}
+      onPrevious={() => setCursorStack((stack) => stack.slice(0, -1))}
+      onNext={() =>
+        setCursorStack((stack) =>
+          nextCursor ? [...stack, nextCursor] : stack,
+        )
+      }
+      busy={load.kind === "loading"}
     />
   );
 
@@ -1141,7 +1186,7 @@ function CapabilitiesPageContent() {
           </Button>
         }
       />
-    ) : filtered.length !== rows.length ? (
+    ) : hasActiveFilter ? (
       <EmptyState
         title="没有匹配的 Capability"
         description={tShared("common.noMatchHint")}
@@ -1198,11 +1243,9 @@ function CapabilitiesPageContent() {
             view="list"
             onViewChange={() => {}}
             cardsDisabledReason={tShared("common.cardsRetired")}
-            count={
-              filtered.length === rows.length
-                ? rows.length
-                : `${filtered.length} / ${rows.length}`
-            }
+            /* 服务端筛选之后，「筛掉了多少」这个数在前端已经不存在了:`total`
+               本身就是筛选后的匹配数。显示它，而不是拿本页长度去冒充。 */
+            count={total}
           >
             <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
               <InputGroupAddon>
@@ -1214,7 +1257,7 @@ function CapabilitiesPageContent() {
                 value={keyword}
                 onChange={(e) => {
                   setKeyword(e.target.value);
-                  pager.resetPage();
+                  resetToFirstPage();
                 }}
               />
             </InputGroup>
@@ -1223,7 +1266,7 @@ function CapabilitiesPageContent() {
               value={primitiveFilter}
               onChange={(e) => {
                 setPrimitiveFilter(e.target.value);
-                pager.resetPage();
+                resetToFirstPage();
               }}
               aria-label="原语类型筛选"
             >
@@ -1238,7 +1281,7 @@ function CapabilitiesPageContent() {
               value={categoryFilter}
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
-                pager.resetPage();
+                resetToFirstPage();
               }}
               aria-label="分类筛选"
             >
@@ -1259,7 +1302,7 @@ function CapabilitiesPageContent() {
                 value={tagFilter}
                 onChange={(e) => {
                   setTagFilter(e.target.value);
-                  pager.resetPage();
+                  resetToFirstPage();
                 }}
               />
             </InputGroup>
@@ -1382,11 +1425,11 @@ function CapabilitiesPageContent() {
                 ),
               },
             ]}
-            rows={pager.pageRows}
+            rows={rows}
             rowKey={(r: CapabilityRecord) => r.capabilityId}
             selectedKeys={selectedKeys}
             onSelectionChange={setSelectedKeys}
-            indexStart={pager.indexStart}
+            indexStart={pageIndex * pageSize}
             rowActions={(r: CapabilityRecord) => (
               <ActionMenu
                 label={`${r.capabilityId} 操作`}
