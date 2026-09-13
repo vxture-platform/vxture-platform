@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark">
+<title>石头的大模型知识站</title>
+
+<!--
+  临时占位页（2026-09-13）。
+
+  ## 为什么是 public/ 下的一个静态 .html，而不是一条 Next 路由
+
+  要求是「不能影响原来任何内容」。这一页放进 `src/app/` 就会落到 `[locale]` 之下，
+  于是继承布局、走 next-intl、还要和 `(content)/[...slug]` 那条兜底路由抢路径——每一条
+  都是对现有站点的改动。
+
+  放在 `public/` 里则一行都不用碰:`middleware.ts` 的 matcher 是
+  `/((?!api|auth|_next|.*\..*).*)`，**带点的路径被整体排除**，所以 `/llm.html` 连
+  middleware 都不进，更不经过布局、i18n 与认证闸。新增一个文件，其余零改动。
+
+  URL 带 `.html` 后缀不是将就，是这条豁免成立的前提:去掉后缀就会被 matcher 抓住。
+
+  ## 这个表单不认证任何人
+
+  站点还没有后面那一半，所以无论输入什么都拒绝。**输入不发送、不存储**——没有任何
+  网络请求，也不写 localStorage / sessionStorage。一个永远说密码错的登录框，如果还
+  把人输的真密码留下来，那性质就不一样了。
+
+  撤下就是删掉这个文件。
+-->
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500&family=Noto+Serif+SC:wght@500;700&display=swap">
+
+<style>
+  /* 刻意的单一视觉世界（深色控制台），不跟随浏览器主题:背景是一块持续绘制的画布，
+     浅色版本会让分词栅格与注意力连线整个失效。所以不做双主题，但每一处颜色与底色
+     都显式写出。 */
+  :root {
+    --ink:        #070b14;
+    --ink-2:      #0b1220;
+    --ink-3:      #101a2c;
+    --line:       #1b2740;
+    --line-soft:  #162034;
+    --text:       #e6edf7;
+    --text-dim:   #9fb0c9;
+    --muted:      #6b7c96;
+    --amber:      #e8a33d;
+    --amber-soft: #c98a2e;
+    --amber-ink:  #2a1d08;
+    --alert:      #ef6a4c;
+    --alert-bg:   rgba(239, 106, 76, 0.09);
+    --alert-line: rgba(239, 106, 76, 0.32);
+
+    --sans:  "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --serif: "Noto Serif SC", Georgia, "Songti SC", "SimSun", serif;
+    --mono:  "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: #070b14; }
+
+  body {
+    min-height: 100svh;
+    margin: 0;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  img { max-width: 100%; }
+
+  /* ── 背景：分词栅格 + 注意力连线 ─────────────────────────────────────── */
+  #field {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 0;
+  }
+  /* 渐晕:让画布在文字后面退下去，而不是跟文字抢。 */
+  .veil {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 90% at 18% 45%, rgba(7, 11, 20, 0.94) 0%, rgba(7, 11, 20, 0.72) 38%, rgba(7, 11, 20, 0.22) 72%, rgba(7, 11, 20, 0) 100%),
+      linear-gradient(180deg, rgba(7, 11, 20, 0.85) 0%, rgba(7, 11, 20, 0.1) 26%, rgba(7, 11, 20, 0.1) 74%, rgba(7, 11, 20, 0.9) 100%);
+  }
+
+  /* ── 版面 ─────────────────────────────────────────────────────────────── */
+  .shell {
+    position: relative;
+    z-index: 2;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px clamp(20px, 5vw, 56px);
+    border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .topbar .mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-dim);
+  }
+  .glyph { width: 16px; height: 16px; flex: none; color: var(--amber); }
+  .topbar .state { display: inline-flex; align-items: center; gap: 8px; }
+  .dot {
+    width: 6px;
+    height: 6px;
+    background: var(--amber);
+    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.14);
+  }
+
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: clamp(40px, 7vh, 96px) clamp(20px, 5vw, 56px);
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    align-items: center;
+    gap: clamp(40px, 6vw, 88px);
+  }
+
+  /* ── 左：站点自述 ─────────────────────────────────────────────────────── */
+  .brand { min-width: 0; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--amber-soft);
+    margin: 0 0 22px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: clamp(34px, 5.6vw, 62px);
+    line-height: 1.12;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+    margin: 0;
+    color: var(--text);
+  }
+  h1 .accent { color: var(--amber); }
+
+  .rule {
+    width: 72px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--amber), rgba(232, 163, 61, 0));
+    margin: 28px 0 24px;
+  }
+
+  .lede {
+    max-width: 46ch;
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.85;
+    color: var(--text-dim);
+  }
+
+  /* 画布在画什么，说出来——它是内容不是装饰。 */
+  .legend {
+    margin: 40px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+  .legend li { display: inline-flex; align-items: center; gap: 9px; }
+  .swatch { width: 14px; height: 7px; flex: none; background: rgba(232, 163, 61, 0.55); }
+  .swatch.edge { height: 0; border-top: 1px solid rgba(232, 163, 61, 0.75); }
+
+  /* ── 右：登录面板 ─────────────────────────────────────────────────────── */
+  .panel {
+    position: relative;
+    justify-self: end;
+    width: 100%;
+    max-width: 430px;
+    background: linear-gradient(180deg, rgba(16, 26, 44, 0.92), rgba(11, 18, 32, 0.95));
+    border: 1px solid var(--line);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 28px 70px rgba(2, 5, 12, 0.62);
+  }
+  /* 顶端一道琥珀实线——面板唯一的高饱和处，其余保持安静。 */
+  .panel::before {
+    content: "";
+    position: absolute;
+    inset: -1px -1px auto -1px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--amber) 0%, var(--amber-soft) 42%, rgba(232, 163, 61, 0) 100%);
+  }
+
+  .panel-head { padding: 26px 30px 20px; border-bottom: 1px solid var(--line-soft); }
+  .panel-head h2 {
+    margin: 0;
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 21px;
+    letter-spacing: 0.04em;
+  }
+  .panel-head p {
+    margin: 9px 0 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  form { padding: 26px 30px 30px; }
+  .field + .field { margin-top: 20px; }
+
+  label {
+    display: block;
+    margin-bottom: 9px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  input {
+    width: 100%;
+    padding: 13px 14px;
+    background: rgba(7, 11, 20, 0.72);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  }
+  input::placeholder { color: #4d5c73; }
+  input:hover { border-color: #24334f; }
+  input:focus {
+    outline: none;
+    border-color: var(--amber-soft);
+    background: rgba(7, 11, 20, 0.9);
+    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.14);
+  }
+
+  /* 状态行常驻占位，不做「出现/消失」——一条会把面板顶高的提示，每次报错都会让
+     下面的按钮跳一下，人会点空。所以位置先留好，报错时只换颜色与文案。 */
+  .status {
+    margin-top: 20px;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    line-height: 1.5;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+  }
+  .status .icon { width: 14px; height: 14px; flex: none; opacity: 0.8; }
+  .status[data-state="error"] {
+    background: var(--alert-bg);
+    border-color: var(--alert-line);
+    color: var(--alert);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+  .status[data-state="error"] .icon { opacity: 1; }
+
+  @keyframes nudge {
+    0%, 100% { transform: translateX(0); }
+    22%      { transform: translateX(-4px); }
+    58%      { transform: translateX(3px); }
+  }
+  .status.shake { animation: nudge 260ms ease; }
+
+  button {
+    width: 100%;
+    margin-top: 22px;
+    padding: 14px 18px;
+    background: var(--amber);
+    border: 1px solid var(--amber);
+    border-radius: 0;
+    color: var(--amber-ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: background 140ms ease, transform 90ms ease, box-shadow 140ms ease;
+  }
+  button:hover { background: #f0b055; box-shadow: 0 8px 26px rgba(232, 163, 61, 0.2); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.3); }
+
+  .panel-foot {
+    padding: 16px 30px 20px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+  .panel-foot strong { color: var(--text-dim); font-weight: 500; }
+
+  footer {
+    padding: 20px clamp(20px, 5vw, 56px) 26px;
+    border-top: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: #4e5d75;
+  }
+
+  @media (max-width: 880px) {
+    main {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 40px;
+      padding-top: 44px;
+    }
+    .panel { justify-self: stretch; max-width: none; }
+    .legend { margin-top: 28px; }
+    .veil {
+      background:
+        radial-gradient(140% 70% at 50% 30%, rgba(7, 11, 20, 0.92) 0%, rgba(7, 11, 20, 0.6) 46%, rgba(7, 11, 20, 0.2) 100%),
+        linear-gradient(180deg, rgba(7, 11, 20, 0.8) 0%, rgba(7, 11, 20, 0.25) 30%, rgba(7, 11, 20, 0.92) 100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status.shake { animation: none; }
+    * { transition-duration: 1ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="field" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+
+<div class="shell">
+  <div class="topbar">
+    <span class="mark">
+      <svg class="glyph" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="0.5" y="3.5" width="5" height="3" stroke="currentColor"/>
+        <rect x="7.5" y="3.5" width="8" height="3" stroke="currentColor" opacity="0.55"/>
+        <rect x="0.5" y="9.5" width="9" height="3" stroke="currentColor" opacity="0.55"/>
+        <rect x="11.5" y="9.5" width="4" height="3" stroke="currentColor"/>
+      </svg>
+      石头的大模型知识站
+    </span>
+    <span class="state">
+      <i class="dot" aria-hidden="true"></i>
+      站点筹备中
+    </span>
+  </div>
+
+  <main>
+    <section class="brand">
+      <p class="eyebrow">Large Language Models · Notes &amp; Reference</p>
+      <h1>石头的<span class="accent">大模型</span><br>知识站</h1>
+      <div class="rule" aria-hidden="true"></div>
+      <p class="lede">
+        把读过的论文、跑过的实验、踩过的坑收在一处：分词与上下文、注意力与位置编码、
+        推理成本与量化、检索增强与评测。写给自己复查，也写给同路的人。
+      </p>
+      <ul class="legend">
+        <li><i class="swatch" aria-hidden="true"></i>背景是一段分词后的文本，格子宽窄即 token 长短</li>
+        <li><i class="swatch edge" aria-hidden="true"></i>连线是随机重采样的注意力边</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>登录</h2>
+        <p>Access · Invitation Only</p>
+      </div>
+
+      <!-- 不向任何地方提交，也不写入浏览器存储。 -->
+      <form id="signin" autocomplete="off" novalidate>
+        <div class="field">
+          <label for="username">用户名</label>
+          <input id="username" name="username" type="text" placeholder="请输入用户名"
+                 autocomplete="off" autocapitalize="off" spellcheck="false">
+        </div>
+
+        <div class="field">
+          <label for="password">密码</label>
+          <input id="password" name="password" type="password" placeholder="请输入密码"
+                 autocomplete="new-password">
+        </div>
+
+        <div class="status" id="status" data-state="idle" role="status" aria-live="polite">
+          <svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.25" stroke="currentColor"/>
+            <path d="M8 4.75v4" stroke="currentColor" stroke-linecap="round"/>
+            <circle cx="8" cy="11" r="0.85" fill="currentColor"/>
+          </svg>
+          <span id="status-text">等待凭据</span>
+        </div>
+
+        <button type="submit">登 录</button>
+      </form>
+
+      <div class="panel-foot">
+        本站尚未开放注册。<strong>账号由站长逐个发放</strong>，暂不提供自助找回。
+      </div>
+    </section>
+  </main>
+
+  <footer>石头的大模型知识站 · 临时页面</footer>
+</div>
+
+<script>
+  /* ── 状态行 ───────────────────────────────────────────────────────────────
+     无论输入什么都拒绝。输入不发送、不存储。 */
+  (function () {
+    var form = document.getElementById('signin');
+    var status = document.getElementById('status');
+    var text = document.getElementById('status-text');
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      text.textContent = '用户名或密码不正确，请重新输入';
+      status.setAttribute('data-state', 'error');
+
+      /* 重复提交时文案不变，所以靠一次位移让人看见「又试了一次」。
+         动画每次重放:先摘类、强制回流、再挂上。 */
+      status.classList.remove('shake');
+      void status.offsetWidth;
+      status.classList.add('shake');
+
+      document.getElementById('password').select();
+    });
+  })();
+
+  /* ── 背景：分词栅格 + 注意力边 ─────────────────────────────────────────
+     不是通用粒子。画的是这个站点谈论的东西本身:
+       · 格子 = token。宽度按幂律抖动，短的多、长的少——真实分词就是这样不齐的。
+       · 连线 = 注意力边。每隔几秒重新采样一批，淡入淡出。
+     `prefers-reduced-motion` 下只画一帧静态图，不起动画循环。 */
+  (function () {
+    var cvs = document.getElementById('field');
+    if (!cvs || !cvs.getContext) return;
+    var ctx = cvs.getContext('2d', { alpha: false });
+    if (!ctx) return;
+
+    var W = 0, H = 0, DPR = 1;
+    var tokens = [];
+    var edges = [];
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    var ROW_H = 27, GAP = 8, CELL_H = 9;
+
+    function build() {
+      tokens = [];
+      var rows = Math.ceil(H / ROW_H) + 1;
+      for (var r = 0; r < rows; r++) {
+        var y = r * ROW_H + 14;
+        var x = -60 + Math.random() * 40;
+        while (x < W + 60) {
+          // 幂律:多数 token 短，少数很长。
+          var w = 11 + Math.pow(Math.random(), 2.3) * 84;
+          tokens.push({
+            x: x, y: y, w: w,
+            base: 0.045 + Math.random() * 0.085,
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.18 + Math.random() * 0.5
+          });
+          x += w + GAP;
+        }
+      }
+      rollEdges(true);
+    }
+
+    function rollEdges(instant) {
+      edges = [];
+      if (!tokens.length) return;
+      var want = Math.min(22, Math.max(8, Math.round(W / 92)));
+      var now = (window.performance && performance.now) ? performance.now() : Date.now();
+      for (var i = 0; i < want; i++) {
+        var a = tokens[(Math.random() * tokens.length) | 0];
+        var b = tokens[(Math.random() * tokens.length) | 0];
+        if (!a || !b || a === b) continue;
+        // 只连「看得出关系」的距离:太远的弧线会变成穿屏直线，读起来像装饰。
+        var dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y);
+        if (dy < ROW_H || dy > ROW_H * 7 || dx > W * 0.42) continue;
+        edges.push({ a: a, b: b, born: now - (instant ? 1800 : 0) });
+      }
+    }
+
+    function resize() {
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      W = cvs.clientWidth;
+      H = cvs.clientHeight;
+      cvs.width = Math.max(1, Math.round(W * DPR));
+      cvs.height = Math.max(1, Math.round(H * DPR));
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      build();
+      if (reduce) draw(0);
+    }
+
+    function draw(t) {
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+
+      for (var i = 0; i < tokens.length; i++) {
+        var tk = tokens[i];
+        var pulse = reduce ? 0.5 : (Math.sin(t * 0.001 * tk.speed + tk.phase) * 0.5 + 0.5);
+        var a = tk.base + pulse * 0.075;
+        ctx.fillStyle = 'rgba(232, 163, 61, ' + a.toFixed(3) + ')';
+        ctx.fillRect(tk.x, tk.y, tk.w, CELL_H);
+      }
+
+      var LIFE = 5200, FADE = 900;
+      ctx.lineWidth = 1;
+      for (var j = 0; j < edges.length; j++) {
+        var e = edges[j];
+        var age = reduce ? LIFE / 2 : t - e.born;
+        if (age < 0) continue;
+        var k = age < FADE ? age / FADE
+              : age > LIFE - FADE ? Math.max(0, (LIFE - age) / FADE)
+              : 1;
+        if (k <= 0) continue;
+        var ax = e.a.x + e.a.w / 2, ay = e.a.y + CELL_H / 2;
+        var bx = e.b.x + e.b.w / 2, by = e.b.y + CELL_H / 2;
+        var mx = (ax + bx) / 2;
+        var my = (ay + by) / 2 - Math.abs(by - ay) * 0.45;
+        ctx.strokeStyle = 'rgba(232, 163, 61, ' + (0.3 * k).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo(mx, my, bx, by);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(240, 176, 85, ' + (0.5 * k).toFixed(3) + ')';
+        ctx.fillRect(ax - 1.5, ay - 1.5, 3, 3);
+        ctx.fillRect(bx - 1.5, by - 1.5, 3, 3);
+      }
+    }
+
+    var lastRoll = 0;
+    function frame(t) {
+      if (t - lastRoll > 5200) { rollEdges(false); lastRoll = t; }
+      draw(t);
+      requestAnimationFrame(frame);
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
+    if (!reduce && window.requestAnimationFrame) requestAnimationFrame(frame);
+  })();
+</script>
+</body>
+</html>
