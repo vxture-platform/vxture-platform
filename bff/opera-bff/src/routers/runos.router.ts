@@ -509,21 +509,22 @@ export class RunosRouter {
    * 目录列表。`?category=` 精确匹配；`?tag=` **可重复，且是全部命中（AND）**——
    * 不是任一命中，透传时必须保留重复参数，用 append 而不是 set。
    *
-   * ## 为什么这里要归一，而不是原样透传
+   * ## 形状为什么是现在这样（X-4 三步迁移，已走完）
    *
-   * 这是 X-4 三步迁移的第 1 步（vxture-platform#306）落在 BFF 上的那一半:runos 正在
-   * 从**整表裸数组**换成 `{items, nextCursor, total}`，而两边不是同时上线的。
+   * 目录列表原本是**整表裸数组**——886 行 / 343 kB，且供给是批量开采的，没有人写得出
+   * 它的上限，A-3 因此要求游标（`vxture-platform#306`）。而两个独立部署的仓改形状，是
+   * 唯一一种「两边都正确、合起来是断的」变更，所以走了三步:
    *
-   * 契约层已经两种形状都认（`runos-contract.ts` 的 `kind: "migrating"`），但**认得出
-   * 不等于用得了**:这条路由此前是原样透传，于是 runos 一切，控制台收到的就是它读不懂
-   * 的信封。而「拆开信封只回 `items`」更糟——那是 886 里的 100，**正是 A-3 在同一条里
-   * 禁的静默截断**:「这些对象没有数据」和「查到了但被砍掉」在界面上一模一样。
+   *   1. 消费方先能读两种形状（v0.26.148，对线上是无操作）
+   *   2. runos 切到 `{items, nextCursor, total}`（runos v0.26.0）
+   *   3. 消费方撤掉读旧形状那一支 ← 现在这个版本
    *
-   * 所以由 BFF 归一成一种形状:无论上游给哪种，下游永远拿到 `{items, nextCursor,
-   * total}`。裸数组包成 `nextCursor: null` + `total = 长度`，**今天这就是真话**——
-   * 上游一次给全，确实没有下一页。
+   * 第 2 步之前这里做过一件事值得记下来:BFF **归一**，而不是原样透传。当时若照
+   * 「拆开信封只回 `items`」去改，拿到的会是 886 里的 100——**正是 A-3 在同一条里禁的
+   * 静默截断**:「这些对象没有数据」和「查到了但被砍掉」在界面上一模一样，接口还回 200。
    *
-   * 第 3 步删掉包装的那一支。留着它，下一个人无法从代码判断线上是哪一种。
+   * 第 3 步不是收尾的客套。runos 切过去之后，包裸数组那一支在生产上已经是死代码——它
+   * 保护不了任何东西，只会让下一个人从代码里看不出线上到底是哪一种。
    */
   @Get("capabilities")
   async listCapabilities(
@@ -552,14 +553,11 @@ export class RunosRouter {
     if (limit) params.set("limit", limit);
     if (cursor) params.set("cursor", cursor);
 
-    const payload = await this.request<CapabilityRecord[] | CapabilityPage>(
+    return this.request<CapabilityPage>(
       req,
       `/capability/capabilities${params.size ? `?${params.toString()}` : ""}`,
       { contract: "capabilities" },
     );
-    return Array.isArray(payload)
-      ? { items: payload, nextCursor: null, total: payload.length }
-      : payload;
   }
 
   @Get("capabilities/:capabilityId")

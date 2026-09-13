@@ -18,11 +18,18 @@ function payloadFor(resource: RunosResource, drop: string[] = []): unknown {
   const row: Record<string, unknown> = Object.fromEntries(
     contract.fields.filter((f) => !drop.includes(f)).map((f) => [f, "x"]),
   );
-  /* 迁移期（#306）造 `from` 那一种——线上现在发的就是它。造 `to` 会让这组测试在
-     runos 还没切的时候「证明」一个尚未存在的形状。 */
-  const shape =
-    contract.shape.kind === "migrating" ? contract.shape.from : contract.shape;
-  return shape.kind === "list" ? [row] : row;
+  /* 迁移已走完（#306 第 3 步），不再有 `migrating` 要拆。迁移期这里曾刻意造 `from`:
+     造 `to` 会让这组测试在 runos 还没切的时候「证明」一个尚未存在的形状。 */
+  /* admin 这张表里已经没有 `list` 形状的资源了——目录列表切成信封之后一个都不剩。
+     真的加回来时类型会立刻指出这里少一支。 */
+  const shape = contract.shape;
+  if (shape.kind === "single") return row;
+  const envelope: Record<string, unknown> = Object.fromEntries(
+    (shape.envelopeFields ?? [])
+      .filter((f) => !drop.includes(f))
+      .map((f) => [f, "x"]),
+  );
+  return { ...envelope, [shape.rowsKey]: [row], nextCursor: null };
 }
 
 function thrown(fn: () => unknown): Record<string, unknown> {
@@ -42,7 +49,14 @@ describe("完整响应放行（每个资源都按自己声明的形状走一遍�
   });
 
   it("空目录是合法结果，不是契约问题", () => {
-    expect(() => assertRunosContract([], "capabilities")).not.toThrow();
+    /* 空**信封**，不是空数组——目录列表自 #306 起是 `{items, nextCursor, total}`。
+       「一条都没有」仍然是合法结果，不是契约问题。 */
+    expect(() =>
+      assertRunosContract(
+        { items: [], nextCursor: null, total: 0 },
+        "capabilities",
+      ),
+    ).not.toThrow();
   });
 });
 
@@ -65,7 +79,10 @@ describe("反向验证：把字段退回去要响", () => {
 
   it("一次点名所有缺的字段，不是只报第一个", () => {
     const body = thrown(() =>
-      assertRunosContract([{ capabilityId: "c1" }], "capabilities"),
+      assertRunosContract(
+        { items: [{ capabilityId: "c1" }], nextCursor: null, total: 1 },
+        "capabilities",
+      ),
     );
     expect(String(body["message"])).toContain("primitiveType");
     expect(String(body["message"])).toContain("admissionTier");
@@ -83,9 +100,9 @@ describe("形状是声明的，不是嗅出来的", () => {
       assertRunosContract({ rows: [] }, "capabilities"),
     );
     expect(body["code"]).toBe("RUNOS_CONTRACT_SHAPE_CHANGED");
-    /* 迁移期的形状错误要说得出什么会结束它——否则下一个人无从判断这是个 bug
-       还是个在途的迁移。 */
-    expect(String(body["message"])).toContain("#306");
+    /* 迁移期这里还要求错误信息里带上 `until`（「什么会结束它」）。迁移走完之后那句话
+       不再成立——现在只有一种合法形状，收到别的就是上游改了东西，没有「在途」可言。 */
+    expect(String(body["message"])).toContain("capabilities");
   });
 
   it("详情退成数组 → 形状变更", () => {

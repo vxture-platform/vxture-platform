@@ -40,24 +40,23 @@ export const RUNOS_CONTRACT = {
   /** `GET /capability/capabilities`——裸数组，行是 `registry.capability` 一整行。 */
   capabilities: {
     /*
-     * **迁移期**（X-4 三步的第 1 步，`vxture-platform#306`）。目录列表正从裸数组
-     * 改成游标信封:886 行 / 343 kB 且批量开采，没有写下来的上限，A-3 因此要求游标。
+     * 游标信封。886 行 / 343 kB 且批量开采，没有写下来的上限，A-3 因此要求游标
+     * （`vxture-platform#306`，runos TD-039）。
      *
-     * 本步只做一件事——**先能读两种形状**，对线上是无操作:runos 还在发裸数组，
-     * 这一支走的仍是 `from`。runos 切到信封（第 2 步）时这里不需要再发一次版。
+     * **X-4 三步迁移已走完**:第 1 步消费方先能读两种形状（v0.26.148），第 2 步 runos
+     * 切到信封（runos v0.26.0），第 3 步就是现在这一下——删掉读裸数组的 `from` 分支。
      *
-     * **第 3 步要把这个 `migrating` 换回 `{ kind: "page", ... }`**，并删掉 `from`。
-     * 留着它，下一个人无法从代码判断线上到底是哪一种——这正是 `until` 存在的理由。
+     * 第 3 步不是收尾的客套。runos 切过去之后，`from` 在生产上**已经是死代码**——它
+     * 保护不了任何东西，只会让下一个人从代码里看不出线上到底是哪一种形状。一个说不出
+     * 何时结束的宽容就是永久的宽容;`kind: "migrating"` 的 `until` 就是为了让这一步有
+     * 人来收。
+     *
+     * 机制本身留在 `upstream-contract.ts` 里——它是通用件，下一次跨仓改形状还要用。
      */
     shape: {
-      kind: "migrating",
-      from: { kind: "list" },
-      to: {
-        kind: "page",
-        rowsKey: "items",
-        envelopeFields: ["items", "nextCursor", "total"],
-      },
-      until: "vxture-platform#306 step 3",
+      kind: "page",
+      rowsKey: "items",
+      envelopeFields: ["items", "nextCursor", "total"],
     },
     fields: [
       "capabilityId",

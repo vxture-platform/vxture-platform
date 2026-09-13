@@ -1,17 +1,17 @@
 /**
- * runos-catalog-page.spec.ts —— 目录列表在 BFF 这一层归一（vxture-platform#306）。
+ * runos-catalog-page.spec.ts —— 目录列表在 BFF 这一层的形状与参数转发（#306）。
  *
- * ── 这一条钉的是 X-4 三步迁移里最容易漏掉的那半步 ──
+ * X-4 三步迁移已走完，本文件跟着收了两条:「上游发裸数组」与「两种形状键一致」都删了
+ * ——**`from` 分支不在了，那两条测的是不存在的行为**。留着会让人以为线上还可能收到
+ * 裸数组。
  *
- * 第 1 步是「消费方先能读两种形状」。契约层（`runos-contract.ts` 的
- * `kind: "migrating"`）已经两种都认了——但**认得出不等于用得了**。这条路由此前是
- * 原样透传，于是 runos 一切，控制台收到的就是它读不懂的信封。
- *
- * 更危险的是另一种改法:拆开信封只回 `items`。那是 886 里的 100，**正是 A-3 在同一条
- * 里禁的静默截断**——「这些对象没有数据」和「查到了但被砍掉」在界面上一模一样，而
- * 接口回 200，控制台一切正常。
- *
- * 所以这里的断言全都围着一件事:**下游拿到的形状与上游发的是哪种无关**。
+ * 剩下的仍然是这一层真正要守的:
+ *   · `total` 是上游说的匹配数，不是本页长度——照 `items.length` 算，翻页时「共 N 条」
+ *     会跟着页走，而操作员正是靠那个数判断还有多少没看。
+ *   · `?limit=` / `?cursor=` 原样转交，不在本层兜底成默认值。
+ *   · `?primitiveType=` / `?q=` 必须下推——留在浏览器里就只搜当前页，而「搜不到」和
+ *     「不存在」在界面上一模一样。
+ *   · `?tag=` 是可重复的 AND，用 append 不用 set。
  */
 import type { Request } from "express";
 import type { Pool } from "pg";
@@ -73,6 +73,9 @@ async function listWith(
   return { page, url: new URL(path, "http://runos.test") };
 }
 
+/** 空的一页。`[]` 不再是合法载荷——目录列表自 #306 第 3 步起只有信封一种形状。 */
+const EMPTY_PAGE = { items: [], nextCursor: null, total: 0 };
+
 const row = (id: string) => ({
   capabilityId: id,
   primitiveType: "tool",
@@ -84,17 +87,27 @@ const row = (id: string) => ({
 });
 
 describe("目录列表在 BFF 归一", () => {
-  it("上游发裸数组 → 下游拿到信封，且 nextCursor 是 null 不是缺席", async () => {
-    /* `null` 与「这个键不存在」要能分开:缺键读起来是「上游没告诉我」，而 `null`
-       说的是「我告诉你了，没有下一页」。今天上游一次给全，所以这是真话。 */
-    const { page } = await listWith([row("a.one"), row("a.two")]);
+  it("上游退回裸数组 → 拒收，不再顺着解析", async () => {
+    /* **第 3 步的不变式。** 迁移期这里是合法输入，走 `from` 分支;现在不是了。
+       这条测的不是「某种错误输入」，是「那条退路真的撤掉了」——`from` 还在的话它会绿，
+       而线上到底是哪一种形状就又变成看不出来的了。 */
+    operatorRequest.mockReset();
+    operatorRequest.mockResolvedValue([row("a.one")]);
+    const router = makeRouter();
 
-    expect(page).toEqual({
-      items: [row("a.one"), row("a.two")],
-      nextCursor: null,
-      total: 2,
+    await expect(
+      router.listCapabilities(
+        makeReq(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ),
+    ).rejects.toMatchObject({
+      response: { code: "RUNOS_CONTRACT_SHAPE_CHANGED" },
     });
-    expect(Object.hasOwn(page, "nextCursor")).toBe(true);
   });
 
   it("上游发信封 → 原样保留，包括 total 与游标", async () => {
@@ -107,21 +120,6 @@ describe("目录列表在 BFF 归一", () => {
     const { page } = await listWith(upstream);
 
     expect(page).toEqual(upstream);
-  });
-
-  it("两种上游形状下，下游拿到的键完全一致", async () => {
-    /* 写成性质而不是两组字面断言:这一步要防的就是两条分支各自演化，而把两边的键
-       拿来比，是唯一看得见那件事的断言。 */
-    const { page: fromArray } = await listWith([row("a.one")]);
-    const { page: fromEnvelope } = await listWith({
-      items: [row("a.one")],
-      nextCursor: null,
-      total: 1,
-    });
-
-    expect(Object.keys(fromArray).sort()).toEqual(
-      Object.keys(fromEnvelope).sort(),
-    );
   });
 
   it("total 报的是上游说的匹配数，不是这一页的长度", async () => {
@@ -140,21 +138,27 @@ describe("目录列表在 BFF 归一", () => {
   it("把 limit 与 cursor 原样转交，不在本层兜底成默认值", async () => {
     /* `?limit=abc` 该由 runos 回 REGISTRY_INVALID_LIMIT。BFF 替它挑一个数，等于把
        调用方的错误变成一个它以为自己要到了的页。 */
-    const { url } = await listWith([], { limit: "abc", cursor: "ZDF8eA" });
+    const { url } = await listWith(EMPTY_PAGE, {
+      limit: "abc",
+      cursor: "ZDF8eA",
+    });
 
     expect(url.searchParams.get("limit")).toBe("abc");
     expect(url.searchParams.get("cursor")).toBe("ZDF8eA");
   });
 
   it("把 primitiveType 与 q 下推——留在浏览器里会让搜索只搜当前页", async () => {
-    const { url } = await listWith([], { primitiveType: "tool", q: "invoice" });
+    const { url } = await listWith(EMPTY_PAGE, {
+      primitiveType: "tool",
+      q: "invoice",
+    });
 
     expect(url.searchParams.get("primitiveType")).toBe("tool");
     expect(url.searchParams.get("q")).toBe("invoice");
   });
 
   it("?tag= 仍是可重复的 AND，不被 set 压成一个", async () => {
-    const { url } = await listWith([], { tag: ["preset", "official"] });
+    const { url } = await listWith(EMPTY_PAGE, { tag: ["preset", "official"] });
 
     expect(url.searchParams.getAll("tag")).toEqual(["preset", "official"]);
   });
