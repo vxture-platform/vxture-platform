@@ -102,6 +102,51 @@ import { RISK_LEVEL_META } from "@/lib/status";
 
 const MANAGE = "capability:runos.manage";
 
+/** 多选弹窗要的那几个字段。 */
+interface CatalogEntry {
+  capabilityId: string;
+  title: string;
+  displayName?: Record<string, string>;
+  category?: string;
+}
+
+/** runos 服务端钳制的上限。要满，是为了让今天仍是一次请求（目录 886 行）。 */
+const CATALOG_MAX_LIMIT = 1000;
+
+/**
+ * 把整个目录读完，供弹窗做本地多选与关键词搜索。
+ *
+ * ## 为什么这里是「读完」而不是「翻页」
+ *
+ * 这个弹窗要的是**一整套词表**:它按 id / 标题 / 分类 / 每个 locale 的 displayName
+ * 四路做本地匹配，还要把已勾选的置顶——「勾完再搜就找不到自己勾过什么」。这些都要求
+ * 候选集在本地是全的。
+ *
+ * 目录列表改成分页之后（vxture-platform#306），**不动它就等于只拿第一页**:弹窗会
+ * 少掉大部分能力，而界面上看不出区别——搜不到和不存在一模一样。所以这里明确地读到
+ * 底，而不是默默接受一页。
+ *
+ * 要满 `limit` 是为了让今天仍然只发一次请求（886 < 1000）;超过上限时它自己会继续
+ * 往下取，而不是悄悄截断。
+ *
+ * 循环带闸:游标必须前进，且总页数有上限。一个返回同样游标的服务会让它转下去，而那
+ * 表现为整个弹窗一直空着，不是一条错误。
+ */
+async function loadWholeCatalog(): Promise<CatalogEntry[]> {
+  const all: CatalogEntry[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 50; page += 1) {
+    const query = new URLSearchParams({ limit: String(CATALOG_MAX_LIMIT) });
+    if (cursor) query.set("cursor", cursor);
+    const data: { items: CatalogEntry[]; nextCursor: string | null } =
+      await api.get(`/api/runos/capabilities?${query.toString()}`);
+    all.push(...data.items);
+    if (!data.nextCursor || data.nextCursor === cursor) break;
+    cursor = data.nextCursor;
+  }
+  return all;
+}
+
 /**
  * **授权主体只有 product 一个**（ADR-010，runos `incr/06`）。
  *
@@ -193,14 +238,7 @@ function RunosGrantsPageContent() {
     { id: string; productCode: string; productName: string }[]
   >([]);
   /** runos 能力目录，供多选弹窗用。 */
-  const [catalog, setCatalog] = useState<
-    {
-      capabilityId: string;
-      title: string;
-      displayName?: Record<string, string>;
-      category?: string;
-    }[]
-  >([]);
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
 
   useEffect(() => {
     void api
@@ -209,15 +247,7 @@ function RunosGrantsPageContent() {
       )
       .then(setProducts)
       .catch(() => setProducts([]));
-    void api
-      .get<
-        {
-          capabilityId: string;
-          title: string;
-          displayName?: Record<string, string>;
-          category?: string;
-        }[]
-      >("/api/runos/capabilities")
+    void loadWholeCatalog()
       .then(setCatalog)
       .catch(() => setCatalog([]));
   }, []);

@@ -46,7 +46,7 @@ export const RUNOS_CONTRACT = {
       to: {
         kind: "page",
         rowsKey: "items",
-        envelopeFields: ["items", "nextCursor"],
+        envelopeFields: ["items", "nextCursor", "total"],
       },
       until: "vxture-platform#306 step 3",
     },

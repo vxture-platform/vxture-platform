@@ -165,6 +165,23 @@ export const CAPABILITY_CATEGORIES = [
 
 export type CapabilityCategory = (typeof CAPABILITY_CATEGORIES)[number];
 
+/**
+ * 目录列表的一页。**BFF 向下游承诺的形状**，与 runos 当下发的那种无关——见
+ * `listCapabilities` 的注释。
+ *
+ * `nextCursor` 是 `string | null` 而不是可选键:**没有下一页**和**这个字段不存在**
+ * 要能分开。缺键会被读成「上游没告诉我」，而 `null` 说的是「我告诉你了，没有了」。
+ * A-4 冻结的信封字段里它必须在场，理由也是这个。
+ *
+ * `total` 是**匹配数，不是返回数**。拿着正好 `limit` 行的调用方，没有它就分不清
+ * 「答完了」和「被截断了」；控制台的「共 N 条」也要在翻页时钉住不动。
+ */
+export interface CapabilityPage {
+  items: CapabilityRecord[];
+  nextCursor: string | null;
+  total: number;
+}
+
 export interface CapabilityRecord {
   capabilityId: string;
   primitiveType: string;
@@ -491,24 +508,58 @@ export class RunosRouter {
   /**
    * 目录列表。`?category=` 精确匹配；`?tag=` **可重复，且是全部命中（AND）**——
    * 不是任一命中，透传时必须保留重复参数，用 append 而不是 set。
+   *
+   * ## 为什么这里要归一，而不是原样透传
+   *
+   * 这是 X-4 三步迁移的第 1 步（vxture-platform#306）落在 BFF 上的那一半:runos 正在
+   * 从**整表裸数组**换成 `{items, nextCursor, total}`，而两边不是同时上线的。
+   *
+   * 契约层已经两种形状都认（`runos-contract.ts` 的 `kind: "migrating"`），但**认得出
+   * 不等于用得了**:这条路由此前是原样透传，于是 runos 一切，控制台收到的就是它读不懂
+   * 的信封。而「拆开信封只回 `items`」更糟——那是 886 里的 100，**正是 A-3 在同一条里
+   * 禁的静默截断**:「这些对象没有数据」和「查到了但被砍掉」在界面上一模一样。
+   *
+   * 所以由 BFF 归一成一种形状:无论上游给哪种，下游永远拿到 `{items, nextCursor,
+   * total}`。裸数组包成 `nextCursor: null` + `total = 长度`，**今天这就是真话**——
+   * 上游一次给全，确实没有下一页。
+   *
+   * 第 3 步删掉包装的那一支。留着它，下一个人无法从代码判断线上是哪一种。
    */
   @Get("capabilities")
-  listCapabilities(
+  async listCapabilities(
     @Req() req: Request & RequestContext,
     @Query("category") category?: string,
     @Query("tag") tag?: string | string[],
-  ): Promise<CapabilityRecord[]> {
+    @Query("primitiveType") primitiveType?: string,
+    @Query("q") q?: string,
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ): Promise<CapabilityPage> {
     assertCanRead(req);
     const params = new URLSearchParams();
     if (category) params.set("category", category);
     for (const t of Array.isArray(tag) ? tag : tag ? [tag] : []) {
       if (t) params.append("tag", t);
     }
-    return this.request<CapabilityRecord[]>(
+    /* `primitiveType` 与 `q` 也下推。控制台此前在浏览器里过滤它一次拉回的整个目录，
+       服务端一分页那两个筛选就只在当前页上生效——匹配项在第 7 页，表格说「没有」。
+       **搜不到和不存在在界面上一模一样**，所以它们必须跟着分页一起下去。 */
+    if (primitiveType) params.set("primitiveType", primitiveType);
+    if (q) params.set("q", q);
+    /* 原样转交，不在这里兜底成默认值:`?limit=abc` 该由 runos 回
+       `REGISTRY_INVALID_LIMIT`。BFF 替它挑一个数，等于把调用方的错误变成一个它以为
+       自己要到了的页。 */
+    if (limit) params.set("limit", limit);
+    if (cursor) params.set("cursor", cursor);
+
+    const payload = await this.request<CapabilityRecord[] | CapabilityPage>(
       req,
       `/capability/capabilities${params.size ? `?${params.toString()}` : ""}`,
       { contract: "capabilities" },
     );
+    return Array.isArray(payload)
+      ? { items: payload, nextCursor: null, total: payload.length }
+      : payload;
   }
 
   @Get("capabilities/:capabilityId")
