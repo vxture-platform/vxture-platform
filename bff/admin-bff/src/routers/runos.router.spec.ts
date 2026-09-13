@@ -84,6 +84,13 @@ const CAPABILITY_ROW = {
   updatedAt: "2026-08-20T00:00:00.000Z",
 };
 
+/** 目录列表的一页。自 #306 第 3 步起上游只发这一种形状，不再有裸数组。 */
+const capabilityPage = (rows: unknown[]) => ({
+  items: rows,
+  nextCursor: null,
+  total: rows.length,
+});
+
 const CAPABILITY_DETAIL = {
   ...CAPABILITY_ROW,
   versions: [],
@@ -125,7 +132,7 @@ async function rejection(run: () => unknown): Promise<unknown> {
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  fetchMock = vi.fn(async () => jsonResponse([CAPABILITY_ROW]));
+  fetchMock = vi.fn(async () => jsonResponse(capabilityPage([CAPABILITY_ROW])));
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -154,9 +161,9 @@ describe("能力门在打上游之前判", () => {
     "%s 任一即可放行（与 opera 的 assertCanRead 同判据）",
     async (code) => {
       const { router } = makeRouter();
-      await expect(router.listCapabilities(makeReq([code]))).resolves.toEqual([
-        CAPABILITY_ROW,
-      ]);
+      await expect(router.listCapabilities(makeReq([code]))).resolves.toEqual(
+        capabilityPage([CAPABILITY_ROW]),
+      );
       expect(fetchMock).toHaveBeenCalledTimes(1);
     },
   );
@@ -240,7 +247,7 @@ describe("上游契约与错误", () => {
 
   it("列表少了 admissionTier → 502 并点名字段，不把残行交给页面", async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse([without(CAPABILITY_ROW, "admissionTier")]),
+      jsonResponse(capabilityPage([without(CAPABILITY_ROW, "admissionTier")])),
     );
     const { router } = makeRouter();
     const error = await rejection(() => router.listCapabilities(req()));

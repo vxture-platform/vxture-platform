@@ -16,10 +16,10 @@ function payloadFor(resource: RunosResource, drop: string[] = []): unknown {
   const row: Record<string, unknown> = Object.fromEntries(
     contract.fields.filter((f) => !drop.includes(f)).map((f) => [f, "x"]),
   );
-  /* 迁移期造 `from` 那一种——线上现在发的就是它。造 `to` 会让这组测试在 runos
-     还没切的时候「证明」了一个尚未存在的形状。 */
-  const shape =
-    contract.shape.kind === "migrating" ? contract.shape.from : contract.shape;
+  /* 迁移已走完（#306 第 3 步），不再有 `migrating` 要拆——造的就是契约声明的那一种。
+     迁移期这里曾经刻意造 `from`:造 `to` 会让这组测试在 runos 还没切的时候「证明」一个
+     尚未存在的形状。 */
+  const shape = contract.shape;
   if (shape.kind === "list") return [row];
   if (shape.kind === "single") return row;
   const envelope: Record<string, unknown> = Object.fromEntries(
@@ -123,7 +123,10 @@ describe("反向验证：runos 侧实测到的两条漂移", () => {
 
   it("一次点名所有缺的字段，不是只报第一个", () => {
     const body = thrown(() =>
-      assertRunosContract([{ capabilityId: "a.b" }], "capabilities"),
+      assertRunosContract(
+        { items: [{ capabilityId: "a.b" }], nextCursor: null, total: 1 },
+        "capabilities",
+      ),
     );
     expect(String(body["message"])).toContain("primitiveType");
     expect(String(body["message"])).toContain("admissionTier");
