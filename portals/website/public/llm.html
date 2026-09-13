@@ -6,31 +6,6 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="dark">
 <title>石头的大模型知识站</title>
-
-<!--
-  临时占位页（2026-09-13）。
-
-  ## 为什么是 public/ 下的一个静态 .html，而不是一条 Next 路由
-
-  要求是「不能影响原来任何内容」。这一页放进 `src/app/` 就会落到 `[locale]` 之下，
-  于是继承布局、走 next-intl、还要和 `(content)/[...slug]` 那条兜底路由抢路径——每一条
-  都是对现有站点的改动。
-
-  放在 `public/` 里则一行都不用碰:`middleware.ts` 的 matcher 是
-  `/((?!api|auth|_next|.*\..*).*)`，**带点的路径被整体排除**，所以 `/llm.html` 连
-  middleware 都不进，更不经过布局、i18n 与认证闸。新增一个文件，其余零改动。
-
-  URL 带 `.html` 后缀不是将就，是这条豁免成立的前提:去掉后缀就会被 matcher 抓住。
-
-  ## 这个表单不认证任何人
-
-  站点还没有后面那一半，所以无论输入什么都拒绝。**输入不发送、不存储**——没有任何
-  网络请求，也不写 localStorage / sessionStorage。一个永远说密码错的登录框，如果还
-  把人输的真密码留下来，那性质就不一样了。
-
-  撤下就是删掉这个文件。
--->
-
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500&family=Noto+Serif+SC:wght@500;700&display=swap">
 
@@ -275,7 +250,7 @@
     box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.14);
   }
 
-  /* 状态行常驻占位，不做「出现/消失」——一条会把面板顶高的提示，每次报错都会让
+  /* 状态行的位置常驻，不做「出现/消失」——一条会把面板顶高的提示，每次报错都会让
      下面的按钮跳一下，人会点空。所以位置先留好，报错时只换颜色与文案。 */
   .status {
     margin-top: 20px;
@@ -341,14 +316,6 @@
   }
   .panel-foot strong { color: var(--text-dim); font-weight: 500; }
 
-  footer {
-    padding: 20px clamp(20px, 5vw, 56px) 26px;
-    border-top: 1px solid var(--line-soft);
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    color: #4e5d75;
-  }
 
   @media (max-width: 880px) {
     main {
@@ -389,7 +356,7 @@
     </span>
     <span class="state">
       <i class="dot" aria-hidden="true"></i>
-      站点筹备中
+      持续沉淀中
     </span>
   </div>
 
@@ -414,7 +381,6 @@
         <p>Access · Invitation Only</p>
       </div>
 
-      <!-- 不向任何地方提交，也不写入浏览器存储。 -->
       <form id="signin" autocomplete="off" novalidate>
         <div class="field">
           <label for="username">用户名</label>
@@ -441,17 +407,15 @@
       </form>
 
       <div class="panel-foot">
-        本站尚未开放注册。<strong>账号由站长逐个发放</strong>，暂不提供自助找回。
+        本站不开放注册。<strong>账号由站长逐个发放</strong>，不提供自助找回。
       </div>
     </section>
   </main>
 
-  <footer>石头的大模型知识站 · 临时页面</footer>
 </div>
 
 <script>
-  /* ── 状态行 ───────────────────────────────────────────────────────────────
-     无论输入什么都拒绝。输入不发送、不存储。 */
+  /* 登录表单。 */
   (function () {
     var form = document.getElementById('signin');
     var status = document.getElementById('status');
@@ -462,8 +426,7 @@
       text.textContent = '用户名或密码不正确，请重新输入';
       status.setAttribute('data-state', 'error');
 
-      /* 重复提交时文案不变，所以靠一次位移让人看见「又试了一次」。
-         动画每次重放:先摘类、强制回流、再挂上。 */
+      /* 动画每次重放:先摘类、强制回流、再挂上。 */
       status.classList.remove('shake');
       void status.offsetWidth;
       status.classList.add('shake');
