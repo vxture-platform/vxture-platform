@@ -32,7 +32,12 @@ const TABLE = {
         rowsKey: "items",
         envelopeFields: ["items", "nextCursor"],
       },
-      until: "#306 step 3",
+      /* 仓名不能省。这是**共享包**——一个裸 `#306` 不说明是哪个仓的 306，而
+         `until` 的全部作用就是让下一个人查到那件事。生产侧的两个 BFF 写的也是
+         这个全限定形式。
+         （附带:`ds/no-raw-color` 把 `"#306"` 认成色值是对的——三位十六进制紧跟引号，
+         那正是色值的写法;而 `platform#306` 前面是个单词字符，一次都不会误伤。） */
+      until: "vxture-platform#306 step 3",
     },
     fields: ["id", "state"],
   },
@@ -211,7 +216,7 @@ describe("迁移期：两种形状都合法，第三种不是", () => {
     expect(body.code).toBe("TESTUP_CONTRACT_SHAPE_CHANGED");
     /* 决定性的一条：错误信息要带上 `until`。一个说不出何时结束的宽容就是永久的
        宽容，而这条消息是唯一会被读到的地方。 */
-    expect(body.message).toContain("#306 step 3");
+    expect(body.message).toContain("vxture-platform#306 step 3");
   });
 
   it("空集合在两种形状下都放行——空不是形状问题", () => {
