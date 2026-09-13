@@ -317,6 +317,30 @@
   .panel-foot strong { color: var(--text-dim); font-weight: 500; }
 
 
+  footer {
+    padding: 18px clamp(20px, 5vw, 56px) 24px;
+    border-top: 1px solid var(--line-soft);
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: #4e5d75;
+  }
+  footer a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color 140ms ease, border-color 140ms ease;
+  }
+  footer a:hover {
+    color: var(--text-dim);
+    border-bottom-color: var(--line);
+  }
+  footer a:focus-visible {
+    outline: none;
+    color: var(--amber);
+    border-bottom-color: var(--amber-soft);
+  }
+
   @media (max-width: 880px) {
     main {
       grid-template-columns: minmax(0, 1fr);
@@ -412,6 +436,9 @@
     </section>
   </main>
 
+  <footer>
+    备案号：<a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陕ICP备2025076448号</a>
+  </footer>
 </div>
 
 <script>
