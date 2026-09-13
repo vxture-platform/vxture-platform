@@ -98,7 +98,11 @@ describe("目录列表在 BFF 归一", () => {
   });
 
   it("上游发信封 → 原样保留，包括 total 与游标", async () => {
-    const upstream = { items: [row("a.one")], nextCursor: "ZDF8YS5vbmU", total: 886 };
+    const upstream = {
+      items: [row("a.one")],
+      nextCursor: "ZDF8YS5vbmU",
+      total: 886,
+    };
 
     const { page } = await listWith(upstream);
 
@@ -115,13 +119,19 @@ describe("目录列表在 BFF 归一", () => {
       total: 1,
     });
 
-    expect(Object.keys(fromArray).sort()).toEqual(Object.keys(fromEnvelope).sort());
+    expect(Object.keys(fromArray).sort()).toEqual(
+      Object.keys(fromEnvelope).sort(),
+    );
   });
 
   it("total 报的是上游说的匹配数，不是这一页的长度", async () => {
     /* 决定性的一条。若照 items.length 算，翻页时「共 N 条」会跟着页走——而操作员
        正是靠那个数判断还有多少没看。 */
-    const { page } = await listWith({ items: [row("a.one")], nextCursor: "c", total: 886 });
+    const { page } = await listWith({
+      items: [row("a.one")],
+      nextCursor: "c",
+      total: 886,
+    });
 
     expect(page.total).toBe(886);
     expect(page.items).toHaveLength(1);

@@ -648,7 +648,14 @@ function CapabilitiesPageContent() {
             : "读取 Capability 失败",
       });
     }
-  }, [categoryFilter, tagFilter, primitiveFilter, keyword, pageSize, cursorStack]);
+  }, [
+    categoryFilter,
+    tagFilter,
+    primitiveFilter,
+    keyword,
+    pageSize,
+    cursorStack,
+  ]);
 
   /* 换筛选或换页大小要回到第一页。
      游标是「某一行之后」:筛选变了，那一行可能已经不在结果里;页大小变了，它前面
@@ -1162,9 +1169,7 @@ function CapabilitiesPageContent() {
       hasNext={nextCursor !== null}
       onPrevious={() => setCursorStack((stack) => stack.slice(0, -1))}
       onNext={() =>
-        setCursorStack((stack) =>
-          nextCursor ? [...stack, nextCursor] : stack,
-        )
+        setCursorStack((stack) => (nextCursor ? [...stack, nextCursor] : stack))
       }
       busy={load.kind === "loading"}
     />
