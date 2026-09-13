@@ -30,7 +30,26 @@ import { upstreamContractViolation } from "../errors/api-error";
 
 export const RUNOS_CONTRACT = {
   capabilities: {
-    shape: { kind: "list" },
+    /*
+     * **迁移期**（X-4 三步的第 1 步，`vxture-platform#306`）。目录列表正从裸数组
+     * 改成游标信封:886 行 / 343 kB 且批量开采，没有写下来的上限，A-3 因此要求游标。
+     *
+     * 本步只做一件事——**先能读两种形状**，对线上是无操作:runos 还在发裸数组，
+     * 这一支走的仍是 `from`。runos 切到信封（第 2 步）时这里不需要再发一次版。
+     *
+     * **第 3 步要把这个 `migrating` 换回 `{ kind: "page", ... }`**，并删掉 `from`。
+     * 留着它，下一个人无法从代码判断线上到底是哪一种——这正是 `until` 存在的理由。
+     */
+    shape: {
+      kind: "migrating",
+      from: { kind: "list" },
+      to: {
+        kind: "page",
+        rowsKey: "items",
+        envelopeFields: ["items", "nextCursor"],
+      },
+      until: "vxture-platform#306 step 3",
+    },
     fields: [
       "capabilityId",
       "primitiveType",

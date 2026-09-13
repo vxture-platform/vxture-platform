@@ -1463,12 +1463,30 @@ for (const file of files) {
     }
   }
 
-  const lines = content.split(/\r?\n/);
+  /* 按行的规则看到的是**抹掉注释之后**的行。
+
+     `maskComments` 早就为这件事写好了（见它自己的文档注释:「规则在惩罚写清楚原因的
+     人」），但它只接在 `checkCodeLines` 上，于是每条想要它的规则都得逃去
+     `checkContent`——本文件里就有一条是这么逃的。这里把它接到正路上，逃生口不必再有。
+
+     为什么非补不可:`isCommentLine` 只认**整行以 `//` / `/*` / `*` 开头**的那一种，而
+     本仓块注释的续行是裸缩进文字。于是同一句解释，写在第一行没事，写在第二行就报——
+     **判据落在了这句话排版的位置上，而不是它的内容上。**
+
+     `ds/no-raw-color` 已经为这一族打过两次补丁（整行注释、JSX 与模板串里的
+     `atlas#159`），这是第三次;前两次都在改正则，而病根一直是「按行扫的东西没有跨行
+     状态」。改正则只能一次消掉一种排版。
+
+     字符串字面量**原样保留**，所以真色值照样被抓——遮蔽拿掉的只有讲代码的话。行数与
+     列数由 `maskComments` 保持不变，`lineNumber` 不受影响。 */
+  const lines = maskComments(content).split(/\r?\n/);
+  const rawLines = content.split(/\r?\n/);
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
     for (const rule of rules) {
       if (!rule.checkLine) continue;
-      const item = rule.checkLine(file, line, lineNumber);
+      /* 第四个参数是未遮蔽的原行，留给确实要读注释的规则（目前一条都没有）。 */
+      const item = rule.checkLine(file, line, lineNumber, rawLines[index]);
       if (item) violations.push({ rule, ...item });
     }
   });
@@ -1791,6 +1809,30 @@ if (activeViolations.length > 0) {
   }
   console.error(
     "\nFix rule: design tokens and primitives belong in @vxture/design-system; apps only compose them.\n",
+  );
+  process.exit(1);
+}
+
+/* 死掉的 baseline 条目要报出来。
+   baseline 是**一张常驻许可证**:凡签名在册,那条违例就放行。一条不再复现的条目不是
+   无害的残留——它继续为那个 (规则, 文件, 写法) 发许可,于是那个文件明天真写回违例
+   时,守卫会沉默地放过。这正是本次同时修掉的另一件事的镜像:**一个看不见自己该看的
+   东西的检查会报成功**,而这里是「一张没人来收的通行证会一直生效」。
+
+   本仓实测 3 条里 2 条是死的（一个文件已迁完、一个只在注释里出现),两条都在替一段
+   不存在的债背书。文件自己的 description 也写着 shrink this file——那句话此前没有
+   任何机制兑现。
+
+   发现死条目就红,并给出 `--update-baseline`。宁可让人删一行,不要留一张空头许可。 */
+const reproduced = new Set(
+  violations.filter((item) => baseline.has(signatureFor(item))).map(signatureFor),
+);
+const staleBaseline = [...baseline].filter((sig) => !reproduced.has(sig));
+if (staleBaseline.length > 0) {
+  console.error(`\nDesign System baseline has entries that no longer reproduce:\n`);
+  for (const sig of staleBaseline) console.error(`- ${sig}`);
+  console.error(
+    '\n这些条目在为一段不存在的债发许可。删掉它们，或跑 pnpm lint:design --update-baseline。\n',
   );
   process.exit(1);
 }

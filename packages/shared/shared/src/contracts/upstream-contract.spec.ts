@@ -22,6 +22,25 @@ const TABLE = {
   paged: { shape: { kind: "page", rowsKey: "items" }, fields: ["id", "state"] },
   envelope: { shape: { kind: "page", rowsKey: "rows" }, fields: ["id"] },
   one: { shape: { kind: "single" }, fields: ["id", "total"] },
+  /* 迁移期（X-4 三步的第 1 步）：裸数组正在变成游标信封。 */
+  moving: {
+    shape: {
+      kind: "migrating",
+      from: { kind: "list" },
+      to: {
+        kind: "page",
+        rowsKey: "items",
+        envelopeFields: ["items", "nextCursor"],
+      },
+      /* 仓名不能省。这是**共享包**——一个裸 `#306` 不说明是哪个仓的 306，而
+         `until` 的全部作用就是让下一个人查到那件事。生产侧的两个 BFF 写的也是
+         这个全限定形式。
+         （附带:`ds/no-raw-color` 把 `"#306"` 认成色值是对的——三位十六进制紧跟引号，
+         那正是色值的写法;而 `platform#306` 前面是个单词字符，一次都不会误伤。） */
+      until: "vxture-platform#306 step 3",
+    },
+    fields: ["id", "state"],
+  },
 } as const satisfies ContractTable;
 
 /**
@@ -164,5 +183,45 @@ describe("表里没有这条资源", () => {
     );
     expect(body.code).toBe("TESTUP_CONTRACT_UNKNOWN_RESOURCE");
     expect(body.message).toContain("typo");
+  });
+});
+
+/**
+ * 迁移期形状（X-4 三步的第 1 步）。
+ *
+ * 这一组钉的是**迁移与嗅探的区别**：宽容只对声明过的那两种成立，第三种照样抛，
+ * 而报出来的话里要说得出这条正在迁移、以及什么会结束它。
+ */
+describe("迁移期：两种形状都合法，第三种不是", () => {
+  it("收到迁移前的裸数组 → 放行，且照旧查行上的字段", () => {
+    expect(assertX([{ id: "1", state: "ok" }], "moving")).toBeTruthy();
+    expect(thrown(() => assertX([{ id: "1" }], "moving")).code).toBe(
+      "TESTUP_CONTRACT_FIELD_MISSING",
+    );
+  });
+
+  it("收到迁移后的信封 → 放行，且信封字段照查", () => {
+    const page = { items: [{ id: "1", state: "ok" }], nextCursor: null };
+    expect(assertX(page, "moving")).toBe(page);
+    /* nextCursor 没了要报——这正是 `shapeChanged` 那段注释里说的那个漏:
+       信封塌成一页而没人知道还有更多。 */
+    expect(
+      thrown(() => assertX({ items: [{ id: "1", state: "ok" }] }, "moving"))
+        .code,
+    ).toBe("TESTUP_CONTRACT_FIELD_MISSING");
+  });
+
+  it("第三种形状 → 抛，并说出它正在迁移和什么会结束它", () => {
+    const body = thrown(() => assertX({ rows: [] }, "moving"));
+    expect(body.code).toBe("TESTUP_CONTRACT_SHAPE_CHANGED");
+    /* 决定性的一条：错误信息要带上 `until`。一个说不出何时结束的宽容就是永久的
+       宽容，而这条消息是唯一会被读到的地方。 */
+    expect(body.message).toContain("vxture-platform#306 step 3");
+  });
+
+  it("空集合在两种形状下都放行——空不是形状问题", () => {
+    expect(assertX([], "moving")).toEqual([]);
+    const empty = { items: [], nextCursor: null };
+    expect(assertX(empty, "moving")).toBe(empty);
   });
 });

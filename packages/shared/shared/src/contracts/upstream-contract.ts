@@ -66,7 +66,29 @@ export type PayloadShape =
        */
       readonly envelopeFields?: readonly string[];
     }
-  | { readonly kind: "single" };
+  | { readonly kind: "single" }
+  /**
+   * **迁移期**：两种形状都合法，因为有人正在从一种切到另一种。
+   *
+   * 这是 `product_251` X-4「破坏一个冻结的形状 —— 三步」第 1 步的机制。没有它，
+   * 「消费方先能读两种形状」在代码里只能写成散在调用点的嗅探——而本文件
+   * （`firstRow` 的 `shapeChanged`）正是反对那个的:形状悄悄变了通常意味着有东西
+   * 没了，按新形状继续解析会把它咽下去。
+   *
+   * **迁移和嗅探的区别不是宽容度，是有没有人负责拆掉它。** 所以 `until` 是必填:
+   * 它写下的是「第 3 步做完之前这里是临时的」，而一个说不出何时结束的宽容就是
+   * 永久的宽容。
+   *
+   * 两种形状仍然各自按自己的规则查——`from` 与 `to` 都是完整的形状声明，不是
+   * 「随便哪种都放过」。收到的既不是 `from` 也不是 `to`，照样抛。
+   */
+  | {
+      readonly kind: "migrating";
+      readonly from: PayloadShape;
+      readonly to: PayloadShape;
+      /** 什么会结束它。写 issue 号或 PR 号，不写「以后」。 */
+      readonly until: string;
+    };
 
 export interface ResourceContract {
   /** 必有字段。每一条进来都要能说出「消费方哪里读它」。 */
@@ -141,9 +163,21 @@ export function makeContractAssert<T extends ContractTable>(
 
     /* 信封先查。**这一步不受空集合影响**——这正是它的价值：`nextCursor` 或
        `dimension` 没了，在一条数据都没有的时候同样要报，而那恰恰是行检查失明的时刻。 */
-    if (shape.kind === "page" && shape.envelopeFields) {
+    /* 迁移期:只有当实际收到的就是 `to`（信封形状）时才查信封字段。还在发 `from`
+       的环境上查信封，等于要求它交付它还没切到的东西。 */
+    const envelopeShape =
+      shape.kind === "page"
+        ? shape
+        : shape.kind === "migrating" &&
+            shape.to.kind === "page" &&
+            !Array.isArray(payload) &&
+            payload !== null &&
+            typeof payload === "object"
+          ? shape.to
+          : null;
+    if (envelopeShape && envelopeShape.envelopeFields) {
       const envelope = payload as Record<string, unknown>;
-      const missing = shape.envelopeFields.filter(
+      const missing = envelopeShape.envelopeFields.filter(
         (field) => envelope[field] === undefined,
       );
       if (missing.length > 0) report(missing, "响应信封上");
@@ -158,7 +192,10 @@ export function makeContractAssert<T extends ContractTable>(
     if (missing.length === 0) return payload;
 
     /* `report` 返回 never；写成 return 是为了让控制流分析看见这条路径终止。 */
-    return report(missing, shape.kind === "page" ? "的行上" : "响应里");
+    return report(
+      missing,
+      shape.kind === "page" || shape.kind === "migrating" ? "的行上" : "响应里",
+    );
   };
 }
 
@@ -187,6 +224,34 @@ function firstRow(
   };
 
   switch (shape.kind) {
+    case "migrating": {
+      /* 先试 `to`（迁移的终点），再试 `from`。顺序有意义:切换完成后每一次调用都
+         走第一条，而残留的 `from` 分支只在还没切的环境上生效——第 3 步删掉它时，
+         生产上早已没有走过它。 */
+      for (const candidate of [shape.to, shape.from]) {
+        try {
+          return firstRow(
+            payload,
+            candidate,
+            upstream,
+            codePrefix,
+            resource,
+            violation,
+          );
+        } catch {
+          /* 换下一种。两种都不匹配时由下面统一报，带上 `until`——
+             一条迁移期的形状错误要说得出它本该是哪两种之一。 */
+        }
+      }
+      throw violation({
+        code: `${codePrefix}_CONTRACT_SHAPE_CHANGED`,
+        message:
+          `${upstream} 的 ${resource} 响应形状既不是迁移前的也不是迁移后的，收到 ${describe(payload)}。` +
+          `这条正处在 X-4 的三步迁移中（${shape.until}），期间只有两种形状是合法的；` +
+          `第三种意味着上游改了别的东西，而不是迁移在进行。`,
+      });
+    }
+
     case "list":
       if (!Array.isArray(payload)) {
         return shapeChanged("裸数组", describe(payload));

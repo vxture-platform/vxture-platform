@@ -2,8 +2,6 @@
   "version": 1,
   "description": "Existing DS inline-style/native-primitive/scale debt. The guardrail blocks new signatures; shrink this file as modules migrate to DS.",
   "allowed": [
-    "ds/no-native-primitive|portals/admin/src/layout/template/TemplateDrawer.tsx|<button",
-    "ds/no-native-primitive|portals/console/src/layout/template/AppCenter.tsx|<button",
     "ds/no-native-primitive|portals/console/src/layout/template/TemplateDrawer.tsx|<button"
   ]
 }
