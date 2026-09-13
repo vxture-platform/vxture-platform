@@ -96,6 +96,16 @@ import {
   CursorPagination,
   type CursorPageSize,
 } from "@/modules/shared/CursorPagination";
+import {
+  FIRST_PAGE,
+  advance,
+  currentCursor,
+  goBack,
+  hasPrevious,
+  pageIndex,
+  resetToFirst,
+  type CursorStack,
+} from "@/lib/cursor-stack";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
@@ -572,11 +582,10 @@ function CapabilitiesPageContent() {
   const canManage = can(MANAGE);
 
   const [rows, setRows] = useState<CapabilityRecord[]>([]);
-  /* 服务端分页（vxture-platform#306 第 1 步）。
-     `cursorStack` 存的是**已经用过的**游标:第 i 项取到第 i+1 页。keyset 游标只能
-     顺着走，所以「上一页」的做法是弹栈重取，而不是往回算一个游标——往回算要求知道
-     上一页的第一行是谁，而那正是翻过去之后就不再持有的东西。 */
-  const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
+  /* 服务端分页（vxture-platform#306 第 1 步）。栈的转移规则与不变式都在
+     `@/lib/cursor-stack`——抽出去是因为其中一条（reset 在第一页返回同一引用）
+     肉眼看不出后果，而它决定了逐字敲会不会多发请求。 */
+  const [cursorStack, setCursorStack] = useState<CursorStack>(FIRST_PAGE);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState<CursorPageSize>(20);
@@ -664,7 +673,7 @@ function CapabilitiesPageContent() {
       if (primitiveFilter !== "all") p.set("primitiveType", primitiveFilter);
       if (debouncedKeyword.trim()) p.set("q", debouncedKeyword.trim());
       p.set("limit", String(pageSize));
-      const cursor = cursorStack[cursorStack.length - 1];
+      const cursor = currentCursor(cursorStack);
       if (cursor) p.set("cursor", cursor);
       const data = await api.get<CapabilityPage>(
         `/api/runos/capabilities${p.size ? `?${p.toString()}` : ""}`,
@@ -699,7 +708,7 @@ function CapabilitiesPageContent() {
      游标是「某一行之后」:筛选变了，那一行可能已经不在结果里;页大小变了，它前面
      看过的行数也变了。两种情况下继续用旧游标都会漏行或重复。 */
   const resetToFirstPage = useCallback(() => {
-    setCursorStack((stack) => (stack.length === 1 ? stack : [null]));
+    setCursorStack(resetToFirst);
   }, []);
 
   useEffect(() => {
@@ -780,7 +789,7 @@ function CapabilitiesPageContent() {
 
   /* 本地 `filtered` 与 `useListPagination` 已退役:筛选与分页都在服务端。
      留着本地过滤会让搜索只搜当前页——见 reload 里的注释。 */
-  const pageIndex = cursorStack.length - 1;
+  const page = pageIndex(cursorStack);
   /* 空态要分两种:**筛出来是空**和**目录本来就是空**。服务端筛选之后前端拿不到
      「筛掉了多少」，所以判据换成「有没有生效中的筛选」——这也正是那句提示要回答的
      问题，比数字差值更贴近它。 */
@@ -1203,12 +1212,10 @@ function CapabilitiesPageContent() {
         setPageSize(size);
         resetToFirstPage();
       }}
-      hasPrevious={pageIndex > 0}
+      hasPrevious={hasPrevious(cursorStack)}
       hasNext={nextCursor !== null}
-      onPrevious={() => setCursorStack((stack) => stack.slice(0, -1))}
-      onNext={() =>
-        setCursorStack((stack) => (nextCursor ? [...stack, nextCursor] : stack))
-      }
+      onPrevious={() => setCursorStack(goBack)}
+      onNext={() => setCursorStack((stack) => advance(stack, nextCursor))}
       busy={load.kind === "loading"}
     />
   );
@@ -1472,7 +1479,7 @@ function CapabilitiesPageContent() {
             rowKey={(r: CapabilityRecord) => r.capabilityId}
             selectedKeys={selectedKeys}
             onSelectionChange={setSelectedKeys}
-            indexStart={pageIndex * pageSize}
+            indexStart={page * pageSize}
             rowActions={(r: CapabilityRecord) => (
               <ActionMenu
                 label={`${r.capabilityId} 操作`}
