@@ -259,6 +259,27 @@ interface EndpointInstanceRecord {
   createdAt: string;
 }
 
+/**
+ * 文本框的值与**真正发出去的值**分开。
+ *
+ * 两个文本筛选（关键词、标签）都直接进取数的依赖，不防抖就是**每敲一个字符一次请求**
+ * ——而每次请求在 runos 那边是一次 COUNT 加一页查询。搜 "invoice" 就是七次。
+ *
+ * 关键词此前是本地过滤、零请求，这条回归是服务端分页带来的;标签是既有行为，同一个
+ * 机制顺手一起收——同一个页面上两个文本框行为不一样，比两个都慢更难解释。
+ *
+ * 没做成共享件:opera 全站此前没有防抖先例，一个用例撑不起一个约定。第二个用例出现
+ * 时再提。
+ */
+function useDebounced<T>(value: T, delay = 300): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setSettled(value), delay);
+    return () => window.clearTimeout(id);
+  }, [value, delay]);
+  return settled;
+}
+
 /** 目录列表的一页。`nextCursor` 是 `null` 不是缺席——「没有下一页」要说得出来。 */
 interface CapabilityPage {
   items: CapabilityRecord[];
@@ -564,6 +585,9 @@ function CapabilitiesPageContent() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("");
   const [primitiveFilter, setPrimitiveFilter] = useState<string>("all");
+  /* 取数用这两个，不用输入框的即时值——见 `useDebounced`。 */
+  const debouncedKeyword = useDebounced(keyword);
+  const debouncedTag = useDebounced(tagFilter);
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
 
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -623,12 +647,12 @@ function CapabilitiesPageContent() {
          重复实现了那条 AND 语义，又会随目录长大越来越慢。 */
       const p = new URLSearchParams();
       if (categoryFilter !== "all") p.set("category", categoryFilter);
-      for (const t of parseTags(tagFilter)) p.append("tag", t);
+      for (const t of parseTags(debouncedTag)) p.append("tag", t);
       /* primitiveType 与关键词此前在本地过滤，现在也下推。
          **留在本地就等于只搜当前页**——匹配项在第 7 页，表格说「没有」，而
          「搜不到」和「不存在」在界面上一模一样。 */
       if (primitiveFilter !== "all") p.set("primitiveType", primitiveFilter);
-      if (keyword.trim()) p.set("q", keyword.trim());
+      if (debouncedKeyword.trim()) p.set("q", debouncedKeyword.trim());
       p.set("limit", String(pageSize));
       const cursor = cursorStack[cursorStack.length - 1];
       if (cursor) p.set("cursor", cursor);
@@ -650,9 +674,9 @@ function CapabilitiesPageContent() {
     }
   }, [
     categoryFilter,
-    tagFilter,
+    debouncedTag,
     primitiveFilter,
-    keyword,
+    debouncedKeyword,
     pageSize,
     cursorStack,
   ]);
