@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start -p 3040",
     "lint": "eslint .",
+    "test": "vitest run",
     "type-check": "tsc --noEmit",
     "clean": "rimraf .next"
   },
@@ -39,7 +40,8 @@
     "postcss": "^8.5.19",
     "rimraf": "^6.0.1",
     "tailwindcss": "^4.2.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.0.0"
