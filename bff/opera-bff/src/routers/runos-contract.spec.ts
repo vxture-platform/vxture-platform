@@ -16,7 +16,10 @@ function payloadFor(resource: RunosResource, drop: string[] = []): unknown {
   const row: Record<string, unknown> = Object.fromEntries(
     contract.fields.filter((f) => !drop.includes(f)).map((f) => [f, "x"]),
   );
-  const shape = contract.shape;
+  /* 迁移期造 `from` 那一种——线上现在发的就是它。造 `to` 会让这组测试在 runos
+     还没切的时候「证明」了一个尚未存在的形状。 */
+  const shape =
+    contract.shape.kind === "migrating" ? contract.shape.from : contract.shape;
   if (shape.kind === "list") return [row];
   if (shape.kind === "single") return row;
   const envelope: Record<string, unknown> = Object.fromEntries(

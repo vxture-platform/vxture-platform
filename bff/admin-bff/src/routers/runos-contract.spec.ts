@@ -18,8 +18,11 @@ function payloadFor(resource: RunosResource, drop: string[] = []): unknown {
   const row: Record<string, unknown> = Object.fromEntries(
     contract.fields.filter((f) => !drop.includes(f)).map((f) => [f, "x"]),
   );
-  /* 本仓的表只有 list 与 single 两种形状——admin 对 Runos 没有信封读。 */
-  return contract.shape.kind === "list" ? [row] : row;
+  /* 迁移期（#306）造 `from` 那一种——线上现在发的就是它。造 `to` 会让这组测试在
+     runos 还没切的时候「证明」一个尚未存在的形状。 */
+  const shape =
+    contract.shape.kind === "migrating" ? contract.shape.from : contract.shape;
+  return shape.kind === "list" ? [row] : row;
 }
 
 function thrown(fn: () => unknown): Record<string, unknown> {
@@ -71,11 +74,18 @@ describe("反向验证：把字段退回去要响", () => {
 });
 
 describe("形状是声明的，不是嗅出来的", () => {
-  it("列表退成对象 → 形状变更，不顺着解析", () => {
+  it("目录退成第三种形状 → 形状变更，不顺着解析", () => {
+    /* `capabilities` 在迁移期（#306 step 3 之前）有**两种**合法形状:裸数组
+       与 `{items, nextCursor}`。所以这条不能再用 `{items: []}` 当反例——那是
+       迁移的终点形状，缺 `nextCursor` 会正确地报字段缺失而不是形状变更。
+       用一个两种都不是的形状:既非数组，也没有 `items`。 */
     const body = thrown(() =>
-      assertRunosContract({ items: [] }, "capabilities"),
+      assertRunosContract({ rows: [] }, "capabilities"),
     );
     expect(body["code"]).toBe("RUNOS_CONTRACT_SHAPE_CHANGED");
+    /* 迁移期的形状错误要说得出什么会结束它——否则下一个人无从判断这是个 bug
+       还是个在途的迁移。 */
+    expect(String(body["message"])).toContain("#306");
   });
 
   it("详情退成数组 → 形状变更", () => {
