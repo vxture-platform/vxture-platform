@@ -124,7 +124,12 @@ describe("反向验证：runos 侧实测到的两条漂移", () => {
   it("一次点名所有缺的字段，不是只报第一个", () => {
     const body = thrown(() =>
       assertRunosContract(
-        { items: [{ capabilityId: "a.b" }], nextCursor: null, total: 1 },
+        {
+          items: [{ capabilityId: "a.b" }],
+          nextCursor: null,
+          prevCursor: null,
+          total: 1,
+        },
         "capabilities",
       ),
     );

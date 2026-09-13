@@ -178,7 +178,15 @@ export type CapabilityCategory = (typeof CAPABILITY_CATEGORIES)[number];
  */
 export interface CapabilityPage {
   items: CapabilityRecord[];
+  /** 下一页的位置。`null` = 已是最后一页。 */
   nextCursor: string | null;
+  /**
+   * 上一页的位置。`null` = 已是第一页。
+   *
+   * runos#100 起两端都给。有了它**末页才不是死胡同**——单向游标下跳到末页之后没有可用
+   * 的回头路，「上一页」只能禁用。
+   */
+  prevCursor: string | null;
   total: number;
 }
 
@@ -535,6 +543,7 @@ export class RunosRouter {
     @Query("q") q?: string,
     @Query("limit") limit?: string,
     @Query("cursor") cursor?: string,
+    @Query("dir") dir?: string,
   ): Promise<CapabilityPage> {
     assertCanRead(req);
     const params = new URLSearchParams();
@@ -552,6 +561,10 @@ export class RunosRouter {
        自己要到了的页。 */
     if (limit) params.set("limit", limit);
     if (cursor) params.set("cursor", cursor);
+    /* 方向原样转交，本层不校验也不兜底:第三个值该由 runos 回
+       `REGISTRY_INVALID_DIRECTION`。BFF 替它当成 `after`，等于把一次「给我上一页」
+       安静地答成下一页——那在界面上是按钮失灵，不是报错。 */
+    if (dir) params.set("dir", dir);
 
     return this.request<CapabilityPage>(
       req,
