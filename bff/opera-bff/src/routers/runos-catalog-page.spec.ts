@@ -67,6 +67,7 @@ async function listWith(
     query.q as string | undefined,
     query.limit as string | undefined,
     query.cursor as string | undefined,
+    query.dir as string | undefined,
   );
   /* `operatorRequest(cfg, "runos", req, path, opts, onStatus)`——路径是第 4 个参数。 */
   const path = String(operatorRequest.mock.calls[0]?.[3] ?? "");
@@ -74,7 +75,7 @@ async function listWith(
 }
 
 /** 空的一页。`[]` 不再是合法载荷——目录列表自 #306 第 3 步起只有信封一种形状。 */
-const EMPTY_PAGE = { items: [], nextCursor: null, total: 0 };
+const EMPTY_PAGE = { items: [], nextCursor: null, prevCursor: null, total: 0 };
 
 const row = (id: string) => ({
   capabilityId: id,
@@ -114,6 +115,7 @@ describe("目录列表在 BFF 归一", () => {
     const upstream = {
       items: [row("a.one")],
       nextCursor: "ZDF8YS5vbmU",
+      prevCursor: null,
       total: 886,
     };
 
@@ -128,6 +130,7 @@ describe("目录列表在 BFF 归一", () => {
     const { page } = await listWith({
       items: [row("a.one")],
       nextCursor: "c",
+      prevCursor: "p",
       total: 886,
     });
 
@@ -155,6 +158,35 @@ describe("目录列表在 BFF 归一", () => {
 
     expect(url.searchParams.get("primitiveType")).toBe("tool");
     expect(url.searchParams.get("q")).toBe("invoice");
+  });
+
+  it("把 dir 原样转交——不送的话「上一页」会安静地答成下一页", async () => {
+    /* runos 的 `dir` 默认 `after`。BFF 丢掉它，一次「给我上一页」就会拿着前一行的
+       游标往后取，取回来的正是当前这一页——**界面上表现为按钮点了没反应，不是报错**，
+       没人会去查一个查询参数。 */
+    const { url } = await listWith(EMPTY_PAGE, { dir: "before" });
+
+    expect(url.searchParams.get("dir")).toBe("before");
+  });
+
+  it("本层不替 runos 校验 dir，也不兜底", async () => {
+    /* 第三个值该由 runos 回 REGISTRY_INVALID_DIRECTION。BFF 替它当成 after，等于把
+       调用方的错误变成一个它以为自己要到了的页。 */
+    const { url } = await listWith(EMPTY_PAGE, { dir: "sideways" });
+
+    expect(url.searchParams.get("dir")).toBe("sideways");
+  });
+
+  it("prevCursor 原样带下去——末页靠它才不是死胡同", async () => {
+    const { page } = await listWith({
+      items: [row("a.one")],
+      nextCursor: null,
+      prevCursor: "p",
+      total: 878,
+    });
+
+    expect(page.prevCursor).toBe("p");
+    expect(page.nextCursor).toBeNull();
   });
 
   it("?tag= 仍是可重复的 AND，不被 set 压成一个", async () => {

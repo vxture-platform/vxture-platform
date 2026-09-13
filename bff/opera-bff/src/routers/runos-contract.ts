@@ -47,7 +47,7 @@ export const RUNOS_CONTRACT = {
     shape: {
       kind: "page",
       rowsKey: "items",
-      envelopeFields: ["items", "nextCursor", "total"],
+      envelopeFields: ["items", "nextCursor", "prevCursor", "total"],
     },
     fields: [
       "capabilityId",

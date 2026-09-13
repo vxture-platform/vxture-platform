@@ -88,6 +88,7 @@ const CAPABILITY_ROW = {
 const capabilityPage = (rows: unknown[]) => ({
   items: rows,
   nextCursor: null,
+  prevCursor: null,
   total: rows.length,
 });
 

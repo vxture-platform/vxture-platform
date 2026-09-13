@@ -9,6 +9,7 @@
     "position": "Page {page} of {pageCount}",
     "previous": "Previous page",
     "next": "Next page",
+    "last": "Last",
     "pageSizeLabel": "Rows per page",
     "pageSizeOption": "{size} per page",
     "pageSizeAuto": "Fit rows to height"

@@ -53,7 +53,7 @@ describe("完整响应放行（每个资源都按自己声明的形状走一遍�
        「一条都没有」仍然是合法结果，不是契约问题。 */
     expect(() =>
       assertRunosContract(
-        { items: [], nextCursor: null, total: 0 },
+        { items: [], nextCursor: null, prevCursor: null, total: 0 },
         "capabilities",
       ),
     ).not.toThrow();
@@ -80,7 +80,12 @@ describe("反向验证：把字段退回去要响", () => {
   it("一次点名所有缺的字段，不是只报第一个", () => {
     const body = thrown(() =>
       assertRunosContract(
-        { items: [{ capabilityId: "c1" }], nextCursor: null, total: 1 },
+        {
+          items: [{ capabilityId: "c1" }],
+          nextCursor: null,
+          prevCursor: null,
+          total: 1,
+        },
         "capabilities",
       ),
     );

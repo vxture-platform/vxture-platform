@@ -98,14 +98,15 @@ import {
 } from "@/modules/shared/CursorPagination";
 import {
   FIRST_PAGE,
-  advance,
-  currentCursor,
-  goBack,
+  hasNext,
   hasPrevious,
-  pageIndex,
-  resetToFirst,
-  type CursorStack,
-} from "@/lib/cursor-stack";
+  pageCountOf,
+  toFirst,
+  toLast,
+  toNext,
+  toPrevious,
+  type CursorPage,
+} from "@/lib/cursor-page";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
@@ -291,10 +292,12 @@ function useDebounced<T>(value: T, delay = 300): T {
   return settled;
 }
 
-/** 目录列表的一页。`nextCursor` 是 `null` 不是缺席——「没有下一页」要说得出来。 */
+/** 目录列表的一页。两个游标都是 `null` 不是缺席——「这一侧没有了」要说得出来。 */
 interface CapabilityPage {
   items: CapabilityRecord[];
   nextCursor: string | null;
+  /** runos#100 起两端都给。末页靠它才不是死胡同。 */
+  prevCursor: string | null;
   /** 匹配总数，**不是本页条数**。翻页时它要钉住不动。 */
   total: number;
 }
@@ -583,10 +586,13 @@ function CapabilitiesPageContent() {
 
   const [rows, setRows] = useState<CapabilityRecord[]>([]);
   /* 服务端分页（vxture-platform#306 第 1 步）。栈的转移规则与不变式都在
-     `@/lib/cursor-stack`——抽出去是因为其中一条（reset 在第一页返回同一引用）
+     `@/lib/cursor-page`——抽出去是因为其中一条（`toFirst` 在第一页返回同一引用）
      肉眼看不出后果，而它决定了逐字敲会不会多发请求。 */
-  const [cursorStack, setCursorStack] = useState<CursorStack>(FIRST_PAGE);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [position, setPosition] = useState<CursorPage>(FIRST_PAGE);
+  const [cursors, setCursors] = useState<{
+    prevCursor: string | null;
+    nextCursor: string | null;
+  }>({ prevCursor: null, nextCursor: null });
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState<CursorPageSize>(20);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -673,14 +679,16 @@ function CapabilitiesPageContent() {
       if (primitiveFilter !== "all") p.set("primitiveType", primitiveFilter);
       if (debouncedKeyword.trim()) p.set("q", debouncedKeyword.trim());
       p.set("limit", String(pageSize));
-      const cursor = currentCursor(cursorStack);
-      if (cursor) p.set("cursor", cursor);
+      if (position.cursor) p.set("cursor", position.cursor);
+      /* 方向必须送。不送的话 runos 默认 `after`，于是「上一页」会拿着前一行的游标
+         往后取——取回来的正是当前这一页，界面上表现为按钮点了没反应。 */
+      if (position.dir !== "after") p.set("dir", position.dir);
       const data = await api.get<CapabilityPage>(
         `/api/runos/capabilities${p.size ? `?${p.toString()}` : ""}`,
       );
       if (epoch !== requestEpoch.current) return;
       setRows(data.items);
-      setNextCursor(data.nextCursor);
+      setCursors({ prevCursor: data.prevCursor, nextCursor: data.nextCursor });
       setTotal(data.total);
       setLoad({ kind: "ready" });
     } catch (error) {
@@ -701,14 +709,14 @@ function CapabilitiesPageContent() {
     primitiveFilter,
     debouncedKeyword,
     pageSize,
-    cursorStack,
+    position,
   ]);
 
   /* 换筛选或换页大小要回到第一页。
      游标是「某一行之后」:筛选变了，那一行可能已经不在结果里;页大小变了，它前面
      看过的行数也变了。两种情况下继续用旧游标都会漏行或重复。 */
   const resetToFirstPage = useCallback(() => {
-    setCursorStack(resetToFirst);
+    setPosition(toFirst);
   }, []);
 
   useEffect(() => {
@@ -789,7 +797,7 @@ function CapabilitiesPageContent() {
 
   /* 本地 `filtered` 与 `useListPagination` 已退役:筛选与分页都在服务端。
      留着本地过滤会让搜索只搜当前页——见 reload 里的注释。 */
-  const page = pageIndex(cursorStack);
+  const pageCount = pageCountOf(total, pageSize);
 
   /* 翻页后回到**表格头部**，不是页面顶部。
      翻页触发的是页尾那颗按钮，读的却是表格第一行——不滚的话，新的一页出来了而视口
@@ -811,7 +819,7 @@ function CapabilitiesPageContent() {
         ? "auto"
         : "smooth",
     });
-  }, [cursorStack]);
+  }, [position]);
   /* 空态要分两种:**筛出来是空**和**目录本来就是空**。服务端筛选之后前端拿不到
      「筛掉了多少」，所以判据换成「有没有生效中的筛选」——这也正是那句提示要回答的
      问题，比数字差值更贴近它。 */
@@ -1234,12 +1242,14 @@ function CapabilitiesPageContent() {
         setPageSize(size);
         resetToFirstPage();
       }}
-      page={page + 1}
-      hasPrevious={hasPrevious(cursorStack)}
-      hasNext={nextCursor !== null}
+      page={position.pageNo}
+      pageCount={pageCount}
+      hasPrevious={hasPrevious(position, cursors)}
+      hasNext={hasNext(cursors)}
       onFirst={resetToFirstPage}
-      onPrevious={() => setCursorStack(goBack)}
-      onNext={() => setCursorStack((stack) => advance(stack, nextCursor))}
+      onPrevious={() => setPosition((at) => toPrevious(at, cursors))}
+      onNext={() => setPosition((at) => toNext(at, cursors))}
+      onLast={() => setPosition(toLast(pageCount))}
       busy={load.kind === "loading"}
     />
   );
@@ -1513,7 +1523,7 @@ function CapabilitiesPageContent() {
               rowKey={(r: CapabilityRecord) => r.capabilityId}
               selectedKeys={selectedKeys}
               onSelectionChange={setSelectedKeys}
-              indexStart={page * pageSize}
+              indexStart={(position.pageNo - 1) * pageSize}
               rowActions={(r: CapabilityRecord) => (
                 <ActionMenu
                   label={`${r.capabilityId} 操作`}
