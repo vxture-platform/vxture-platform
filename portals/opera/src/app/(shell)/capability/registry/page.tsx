@@ -51,6 +51,7 @@ import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   Suspense,
@@ -639,7 +640,16 @@ function CapabilitiesPageContent() {
     (c) => (certItems[c.key]?.note ?? "").trim() !== "",
   );
 
+  /* 只有最后发出去的那次请求可以写状态。
+     两个请求同时在飞是常态:敲第一个字符时 `resetToFirstPage()` 立刻发一次（旧关键词、
+     第一页），300ms 后防抖再发一次（新关键词）。两条谁先回来不保证——**先发的后到就会
+     用旧关键词的结果盖掉新的**，而表格上看不出那是旧的，只会显得「搜出来的东西不对」。
+     翻页同理:连点两次「下一页」，回来的顺序反了就会停在错的一页上。
+     用 ref 不用 state:它只在回调里判，不该引起重渲染。 */
+  const requestEpoch = useRef(0);
+
   const reload = useCallback(async () => {
+    const epoch = (requestEpoch.current += 1);
     setLoad({ kind: "loading" });
     try {
       /* 分类与标签下推给 runos，不在本地筛：`?tag=` 是**全部命中**（AND）语义，
@@ -659,11 +669,15 @@ function CapabilitiesPageContent() {
       const data = await api.get<CapabilityPage>(
         `/api/runos/capabilities${p.size ? `?${p.toString()}` : ""}`,
       );
+      if (epoch !== requestEpoch.current) return;
       setRows(data.items);
       setNextCursor(data.nextCursor);
       setTotal(data.total);
       setLoad({ kind: "ready" });
     } catch (error) {
+      /* 过期请求的失败也要丢掉:一次被取代的请求超时，不该把界面推进错误态，
+         而那时候真正在飞的那次可能正要成功返回。 */
+      if (epoch !== requestEpoch.current) return;
       setLoad({
         kind: "error",
         message:
