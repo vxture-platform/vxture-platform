@@ -53,7 +53,8 @@
  *   - **撤销**（上游 v0.8.0 起是 `POST /commerce/capability-grants/:grantId/revoke`；
  *     本层对外仍是 `DELETE`）——迁到 `revoked` 终态，
  *     不删行。此前页面上写着"写入后无法通过接口撤回（TD-010）"，现在能撤了。
- *   - **配额消费量**（`GET .../quota`）——此前设了限额看不到用掉多少。
+ *   - ~~配额消费量 / 重置计数~~——2026-09 随 runos ADR-022 下线：配额与计量归平台，
+ *     runos 删了 quota 列与两条路由（TD-025），本页的配额列、用量读取、重置计数一并撤掉。
  *   - **反向索引**（上游 v0.8.0 起是 `GET /commerce/capability-grants?capabilityId=`）——"谁持有这个
  *     能力"，撤销/审计一个能力时问的其实是这个方向。
  *
@@ -174,28 +175,8 @@ interface GrantRecord {
   riskScope: string;
   criticalRequiresApproval: boolean;
   state: string;
-  quotaLimit: number | null;
   createdAt: string;
   compiledAt: string | null;
-}
-
-/** `quota-counter.service.ts#consumption` 的返回形状。
- *  `remaining` 在未强制时是 **null 而不是数字**——runos 特意不给个数，因为
- *  报一个"剩余"就等于宣称有上限。这里跟着不编。 */
-interface QuotaConsumption {
-  grantId: string;
-  used: number;
-  quotaLimit: number;
-  enforced: boolean;
-  remaining: number | null;
-  updatedAt: string | null;
-}
-
-/** §5b.3：`quota_limit <= 0` = **不强制执行**，不是"零调用"
- *  （runos 2026-08-13 应 #65 补进契约，此前未定义）。 */
-function formatQuota(limit: number | null): string {
-  if (limit == null) return "未设置";
-  return limit <= 0 ? "不限（未强制）" : String(limit);
 }
 
 function describeError(error: unknown): { description?: string } {
@@ -209,10 +190,6 @@ type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready" };
-
-/* 没有 `revoke` 档：撤销的确认由 DS 的 `ConfirmDestructive` 接管（菜单项的
-   `confirm`），落锤直接走 `revokeGrant`。 */
-type DialogState = { kind: "quota-reset"; row: GrantRecord } | null;
 
 /** `useSearchParams` 需要 Suspense 边界。 */
 export default function RunosGrantsPage() {
@@ -256,15 +233,13 @@ function RunosGrantsPageContent() {
   const [grantPicker, setGrantPicker] = useState<{
     picked: string[];
     riskScope: RiskScope;
-    quotaLimit: string;
     criticalRequiresApproval: boolean;
     keyword: string;
   } | null>(null);
-  /** 改条款：一次 PATCH，grantId 与已消费计数都保持不变（见 `submitAmend`）。 */
+  /** 改条款：一次 PATCH，grantId 保持不变（见 `submitAmend`）。 */
   const [amend, setAmend] = useState<{
     row: GrantRecord;
     riskScope: RiskScope;
-    quotaLimit: string;
   } | null>(null);
 
   /* 主体只有 product 一档，所以是常量而不是 state——没有可切换的东西。 */
@@ -277,16 +252,9 @@ function RunosGrantsPageContent() {
   const [grants, setGrants] = useState<GrantRecord[] | null>(null);
   const [lookupLoad, setLookupLoad] = useState<LoadState>({ kind: "idle" });
 
-  /** 按 grantId 缓存的消费量。空 = 还没读过，不是"用了 0 次"——两者在 UI 上
-   *  必须区分开，所以用 undefined 而不是默认 0。 */
-  const [quota, setQuota] = useState<Record<string, QuotaConsumption>>({});
-  const [quotaLoading, setQuotaLoading] = useState(false);
-
   const [capabilityRef, setCapabilityRef] = useState("");
   const [capGrants, setCapGrants] = useState<GrantRecord[] | null>(null);
   const [capLoad, setCapLoad] = useState<LoadState>({ kind: "idle" });
-
-  const [dialog, setDialog] = useState<DialogState>(null);
 
   /* 选中产品即查，不需要再点一次「查询」——选择器一动，意图就已经明确了。
      `runLookup` 每次渲染都是新函数，进依赖会无限循环，故只依赖产品码。 */
@@ -338,8 +306,7 @@ function RunosGrantsPageContent() {
     event.preventDefault();
     if (!grantPicker || grantPicker.picked.length === 0 || !selectedProduct)
       return;
-    const { picked, riskScope, quotaLimit, criticalRequiresApproval } =
-      grantPicker;
+    const { picked, riskScope, criticalRequiresApproval } = grantPicker;
     setSubmitting(true);
     const failed: string[] = [];
     try {
@@ -351,7 +318,6 @@ function RunosGrantsPageContent() {
             capabilityId,
             riskScope,
             ...(riskScope === "critical" ? { criticalRequiresApproval } : {}),
-            ...(quotaLimit.trim() ? { quotaLimit: Number(quotaLimit) } : {}),
           });
         } catch {
           failed.push(capabilityId);
@@ -396,8 +362,8 @@ function RunosGrantsPageContent() {
    *      那条路由。旧路径现在连"能跑通"都不成立。
    *
    * 换掉它还顺手去掉了两个真实代价：撤销与重发之间那一刻**这个产品是没有授权的**
-   * （两次写、两个失败点）；以及新行是新的 grantId，**已消费计数从零开始**——每改一次
-   * 配额就等于送一次免费额度，月度配额形同虚设。现在 grantId 不变，计数跟着走。
+   * （两次写、两个失败点）；以及新行是新的 grantId，同一份授权在审计里被拆成
+   * 互不相关的几段。现在 grantId 不变。
    *
    * 非 active 的授权改不动（409 `GRANT_NOT_ACTIVE`）：撤销过的要重新发一条，而不是
    * "改回来"——后者会让一段被撤销的时间从历史里消失。原样透传上游的说法。
@@ -405,19 +371,16 @@ function RunosGrantsPageContent() {
   async function submitAmend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!amend) return;
-    const { row, riskScope, quotaLimit } = amend;
+    const { row, riskScope } = amend;
     setSubmitting(true);
     try {
       await api.patch(`/api/runos/grants/${encodeURIComponent(row.grantId)}`, {
         riskScope,
-        /* 空输入 = **不动配额**，不是改成 0——0 在 runos 是「不设限」，把"没填"
-           解释成"取消限额"会是一次没人下过的决定。 */
-        ...(quotaLimit.trim() ? { quotaLimit: Number(quotaLimit) } : {}),
       });
       toast({
         tone: "success",
         title: `${row.capabilityId} 的条款已更新`,
-        description: "同一条授权改的，已消费计数不受影响。",
+        description: "改的是同一条授权，grantId 不变。",
       });
       setAmend(null);
       await runLookup();
@@ -440,7 +403,6 @@ function RunosGrantsPageContent() {
         `/api/runos/grants/${lookupSubjectType}/${encodeURIComponent(lookupSubjectRef.trim())}`,
       );
       setGrants(data);
-      setQuota({});
       setLookupLoad({ kind: "ready" });
     } catch (error) {
       setGrants(null);
@@ -448,36 +410,6 @@ function RunosGrantsPageContent() {
         kind: "error",
         message:
           error instanceof OperaApiError ? error.message : "查询权益失败",
-      });
-    }
-  }
-
-  /** 逐条读消费量。runos 侧每次读会先 flush 本地分片，所以这是有代价的调用，
-   *  不做自动加载、也不做轮询——由运营者按需触发一次。 */
-  async function loadQuota(rows: GrantRecord[]) {
-    if (rows.length === 0) return;
-    setQuotaLoading(true);
-    const results = await Promise.all(
-      rows.map(async (r) => {
-        try {
-          return await api.get<QuotaConsumption>(
-            `/api/runos/grants/${encodeURIComponent(r.grantId)}/quota`,
-          );
-        } catch {
-          return null;
-        }
-      }),
-    );
-    const next: Record<string, QuotaConsumption> = {};
-    for (const item of results) if (item) next[item.grantId] = item;
-    setQuota((prev) => ({ ...prev, ...next }));
-    setQuotaLoading(false);
-    const failed = results.filter((r) => r === null).length;
-    if (failed > 0) {
-      toast({
-        tone: "warning",
-        title: `${failed} 条用量读取失败`,
-        description: "其余已更新；失败的那几条仍显示「未读取」。",
       });
     }
   }
@@ -518,68 +450,8 @@ function RunosGrantsPageContent() {
     }
   }
 
-  async function confirmDialog(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!dialog) return;
-    const { row } = dialog;
-    setSubmitting(true);
-    try {
-      /**
-       * **重置的响应不是消费量的形状**，别往同一格缓存里塞。
-       *
-       * runos `QuotaCounterService.reset()` 回 `{grantId, used, updatedAt}`——只有
-       * 三个字段，没有 `quotaLimit` / `enforced` / `remaining`（那三个是
-       * `consumption()` 拿着授权行现算的）。此前直接把它当 `QuotaConsumption` 存
-       * 进缓存，于是 `q.enforced` 变成 undefined，用量列把一条**有配额上限**的授权
-       * 渲染成「未强制」——重置一次配额，界面就开始说这条授权不限量。
-       *
-       * 所以重置完重新读一次消费量：多一次往返，换一个不会自相矛盾的显示。
-       */
-      await api.post(
-        `/api/runos/grants/${encodeURIComponent(row.grantId)}/quota/reset`,
-      );
-      await loadQuota([row]);
-      toast({
-        tone: "success",
-        title: `${row.capabilityId} 的计数已归零`,
-      });
-      setDialog(null);
-    } catch (error) {
-      toast({
-        tone: "danger",
-        title: "重置失败",
-        ...describeError(error),
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   const derivedCount =
     grants?.filter((g) => g.grantType === "derived").length ?? 0;
-
-  /** 用量列。三态：未读取 / 未强制（只报 used）/ 强制（used ÷ limit）。 */
-  function quotaCell(r: GrantRecord) {
-    const q = quota[r.grantId];
-    if (!q) {
-      return <span className="text-body-sm text-muted-foreground">未读取</span>;
-    }
-    if (!q.enforced) {
-      return (
-        <span className="text-body-sm">
-          {q.used}
-          <span className="text-muted-foreground"> 次 · 未强制</span>
-        </span>
-      );
-    }
-    const exhausted = q.remaining != null && q.remaining <= 0;
-    return (
-      <span className={exhausted ? "text-danger" : undefined}>
-        {q.used} / {q.quotaLimit}
-        {exhausted ? <strong> · 已用尽</strong> : null}
-      </span>
-    );
-  }
 
   const grantColumns = [
     {
@@ -605,20 +477,6 @@ function RunosGrantsPageContent() {
         ) : (
           <Badge variant="secondary">直接授权</Badge>
         ),
-    },
-    {
-      id: "quota",
-      header: "配额",
-      align: "numeric" as const,
-      width: "xs" as const,
-      cell: (r: GrantRecord) => formatQuota(r.quotaLimit),
-    },
-    {
-      id: "consumption",
-      header: "已消费",
-      align: "numeric" as const,
-      width: "xs" as const,
-      cell: quotaCell,
     },
     {
       id: "approval",
@@ -662,7 +520,7 @@ function RunosGrantsPageContent() {
       <Banner
         tone="info"
         title="不是两段式，是合并成一次写入"
-        description="原设计的独立技术供给目录端点不存在——POST /commerce/capability-grants 一次收 riskScope 和 quotaLimit。RUNOS_ENTITLEMENT_ENFORCED 生产默认关闭，写入这里暂不影响网关实际裁决。"
+        description="原设计的独立技术供给目录端点不存在——POST /commerce/capability-grants 一次收齐授权条款（riskScope、critical 是否需人工确认）；配额与计量归平台，不在 runos。RUNOS_ENTITLEMENT_ENFORCED 生产默认关闭，写入这里暂不影响网关实际裁决。"
       />
 
       {!canManage ? (
@@ -713,14 +571,6 @@ function RunosGrantsPageContent() {
               ))}
             </NativeSelect>
           </Field>
-          <Button
-            variant="ghost"
-            type="button"
-            disabled={quotaLoading || grants == null || grants.length === 0}
-            onClick={() => void loadQuota(grants ?? [])}
-          >
-            {quotaLoading ? "读取用量中…" : "读取用量"}
-          </Button>
         </div>
 
         {derivedCount > 0 ? (
@@ -748,13 +598,7 @@ function RunosGrantsPageContent() {
                         disabled={submitting}
                         items={[
                           {
-                            id: "quota",
-                            label: "读取用量",
-                            icon: "gauge",
-                            onSelect: () => void loadQuota([r]),
-                          },
-                          {
-                            /* 改条款走 PATCH（一次写、grantId 不变、计数不清零）。
+                            /* 改条款走 PATCH（一次写、grantId 不变）。
                                派生行没有这个动作：它的配置跟着锚点走。非 active 的
                                也不给——上游会 409，那是对的，但没必要让人先点进去。 */
                             id: "amend",
@@ -766,19 +610,7 @@ function RunosGrantsPageContent() {
                               setAmend({
                                 row: r,
                                 riskScope: (r.riskScope as RiskScope) ?? "read",
-                                quotaLimit:
-                                  r.quotaLimit != null && r.quotaLimit > 0
-                                    ? String(r.quotaLimit)
-                                    : "",
                               }),
-                          },
-                          {
-                            id: "quota-reset",
-                            label: "重置计数",
-                            icon: "refresh",
-                            disabled: r.quotaLimit == null || r.quotaLimit <= 0,
-                            onSelect: () =>
-                              setDialog({ kind: "quota-reset", row: r }),
                           },
                           {
                             id: "revoke",
@@ -900,13 +732,6 @@ function RunosGrantsPageContent() {
                     ),
                 },
                 {
-                  id: "quota",
-                  header: "配额",
-                  align: "numeric",
-                  width: "xs",
-                  cell: (r: GrantRecord) => formatQuota(r.quotaLimit),
-                },
-                {
                   id: "risk",
                   header: "风险范围",
                   align: "center",
@@ -939,25 +764,6 @@ function RunosGrantsPageContent() {
           </div>
         )}
       </Section>
-
-      {/* ── 重置配额计数 ─────────────────────────────────────────────────── */}
-      <DialogForm
-        open={dialog?.kind === "quota-reset"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        size="sm"
-        title={
-          dialog?.kind === "quota-reset"
-            ? `重置「${dialog.row.capabilityId}」的计数`
-            : "重置配额计数"
-        }
-        description="计数器是累计的、没有自己的账期，所以周期翻页或改错了配额只能靠手动归零。归零后原计数不可找回；本次操作会记进 opera 审计与 runos 的管理事件流。"
-        submitLabel="归零"
-        submitting={submitting}
-        onSubmit={(e) => void confirmDialog(e)}
-        cancelLabel={tShared("actions.cancel")}
-      />
 
       {/* ── 授权能力：从目录多选，不给手打的口子 ──────────────────────────── */}
       <DialogForm
@@ -1079,28 +885,6 @@ function RunosGrantsPageContent() {
                   read——但不替你默认成 write。
                 </FieldDescription>
               </Field>
-              <Field>
-                <FieldLabel htmlFor="picker-quota">
-                  Quota Limit（可选）
-                </FieldLabel>
-                <Input
-                  id="picker-quota"
-                  value={grantPicker.quotaLimit}
-                  onChange={(e) =>
-                    setGrantPicker({
-                      ...grantPicker,
-                      quotaLimit: e.target.value,
-                    })
-                  }
-                  placeholder="留空 = 不限"
-                />
-                <FieldDescription>
-                  累计计数，没有周期重置。小于等于 0
-                  表示不强制执行，不是「零调用」。发出去之后可以在行操作里「改条款」
-                  单独调整——但**同一批里已经持有该能力、条款又不一样的产品会被
-                  runos 拒掉**（409），不会被这里的值覆盖。
-                </FieldDescription>
-              </Field>
             </FieldTier>
           </>
         ) : null}
@@ -1113,7 +897,7 @@ function RunosGrantsPageContent() {
           if (!open) setAmend(null);
         }}
         title={amend ? `改条款 · ${amend.row.capabilityId}` : ""}
-        description="改的是同一条授权：grantId 不变，已消费计数继续累计，派生闭包由 runos 在同一个调用里重编。撤销是另一个动作，不在这里发生。"
+        description="改的是同一条授权：grantId 不变，派生闭包由 runos 在同一个调用里重编。撤销是另一个动作，不在这里发生。"
         submitLabel={tShared("common.save")}
         submitting={submitting}
         onSubmit={submitAmend}
@@ -1140,22 +924,6 @@ function RunosGrantsPageContent() {
               <FieldDescription>
                 收窄它会同时收窄由它派生出去的那些权益——runos
                 在同一次调用里重编闭包。
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="amend-quota">Quota Limit</FieldLabel>
-              <Input
-                id="amend-quota"
-                value={amend.quotaLimit}
-                onChange={(e) =>
-                  setAmend({ ...amend, quotaLimit: e.target.value })
-                }
-                placeholder="留空 = 不改动"
-              />
-              <FieldDescription>
-                留空表示<b>这次不动配额</b>（不是改成 0——0 在 runos
-                是「不设限」）。
-                改了上限不会重置已消费计数：要清零用行操作里的「重置计数」。
               </FieldDescription>
             </Field>
           </FieldGroup>

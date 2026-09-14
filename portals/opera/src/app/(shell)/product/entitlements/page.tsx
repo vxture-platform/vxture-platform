@@ -57,7 +57,6 @@ import {
   FieldLabel,
   FieldTier,
   Icon,
-  Input,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -106,7 +105,6 @@ interface CapabilityGrant {
   anchorCapabilityId: string | null;
   riskScope: string;
   state: string;
-  quotaLimit: number | null;
   /** 主体。按产品汇总的读法里它是已知的；全量读（`grants/all`）里靠它归主体。 */
   subjectType?: string;
   subjectRef?: string;
@@ -180,12 +178,6 @@ const GRANT_STATE_TONE: Record<string, StatusBadgeTone> = {
   suspended: "warning",
 };
 
-/** §5b.3：`quota_limit <= 0` = **不强制执行**，不是「零调用」。 */
-function formatQuota(limit: number | null): string {
-  if (limit == null) return "未设置";
-  return limit <= 0 ? "不限（未强制）" : String(limit);
-}
-
 /* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
    `2026/8/18`，英文 `8/18/2026`。写死的后果不是「没翻译」，是英文用户会把
    8/18 读成 18 月。 */
@@ -249,7 +241,6 @@ function ProductEntitlements() {
   const [capPicker, setCapPicker] = useState<{
     picked: string[];
     riskScope: string;
-    quotaLimit: string;
     keyword: string;
   } | null>(null);
 
@@ -377,9 +368,6 @@ function ProductEntitlements() {
             subjectRef: selectedCode,
             capabilityId,
             riskScope: capPicker.riskScope,
-            ...(capPicker.quotaLimit.trim()
-              ? { quotaLimit: Number(capPicker.quotaLimit) }
-              : {}),
           });
         } catch {
           failed.push(capabilityId);
@@ -831,7 +819,6 @@ function ProductEntitlements() {
                     setCapPicker({
                       picked: [],
                       riskScope: "read",
-                      quotaLimit: "",
                       keyword: "",
                     })
                   }
@@ -931,13 +918,6 @@ function ProductEntitlements() {
                   align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => r.grant.riskScope,
-                },
-                {
-                  id: "quota",
-                  header: "配额",
-                  align: "numeric",
-                  width: "sm",
-                  cell: (r: CapabilityRow) => formatQuota(r.grant.quotaLimit),
                 },
                 {
                   id: "state",
@@ -1243,23 +1223,6 @@ function ProductEntitlements() {
                     这条授权的风险上限：能力上某个操作的 riskLevel
                     高过它，那次调用就 policy_denied。默认 read——不替你默认成
                     write。
-                  </FieldDescription>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="ent-quota">
-                    Quota Limit（可选）
-                  </FieldLabel>
-                  <Input
-                    id="ent-quota"
-                    value={capPicker.quotaLimit}
-                    onChange={(e) =>
-                      setCapPicker({ ...capPicker, quotaLimit: e.target.value })
-                    }
-                    placeholder="留空 = 不限"
-                  />
-                  <FieldDescription>
-                    累计计数，没有周期重置。发出去之后改不了——runos 对已有
-                    direct 授权 的重写是空操作，改配额只能撤销后重发。
                   </FieldDescription>
                 </Field>
               </FieldTier>

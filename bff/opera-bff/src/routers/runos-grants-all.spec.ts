@@ -63,8 +63,8 @@ const grant = (grantId: string, capabilityId: string) => ({
   capabilityId,
   grantType: "direct",
   riskScope: "read",
+  criticalRequiresApproval: false,
   state: "active",
-  quotaLimit: null,
 });
 
 /** `operatorRequest(cfg, "runos", req, path, opts, onStatus)`——路径是第 4 个参数。 */

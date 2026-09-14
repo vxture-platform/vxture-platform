@@ -86,8 +86,6 @@ interface CapabilityCallRecord {
   costAmount: string | null;
   /** 开放词表（`call` / `token` / `candidate` / `page` …），必须与量同时显示。 */
   costUnit: string | null;
-  quotaCounterBefore: number | null;
-  quotaLimit: number | null;
   bytesIn: number | null;
   bytesOut: number | null;
   matchedPolicyIds: string[];
@@ -530,42 +528,6 @@ export function RunosCallStreams({
                   </span>
                 ) : (
                   "—"
-                ),
-            },
-            {
-              /**
-               * 准入那一刻的配额位置。两件事必须说清，否则这一列会撒谎：
-               *
-               * 1. **`quotaLimit === 0` 是「未强制」，不是「上限为零」。** runos 的
-               *    `resolveDecision` 原文：*"a no-op when the grant's quotaLimit is 0
-               *    (unenforced)"*，而列默认值也是 0。渲染成「0 / 0」会读成「配额耗尽」，
-               *    恰好是真相的反面。
-               * 2. 它是**准入时的快照**，不是此刻余量——同一个授权后续还会被别的调用
-               *    推进。所以标题写「配额位置」而不是「剩余配额」。
-               */
-              id: "quota",
-              header: "配额位置",
-              align: "numeric",
-              width: "xs",
-              cell: (r: CapabilityCallRecord) =>
-                r.quotaLimit ? (
-                  <span
-                    className="font-mono text-code-sm"
-                    title="准入那一刻的计数 / 上限，不是此刻的余量"
-                  >
-                    {(r.quotaCounterBefore ?? 0).toLocaleString("zh-CN")}
-                    <span className="text-muted-foreground">
-                      {" / "}
-                      {r.quotaLimit.toLocaleString("zh-CN")}
-                    </span>
-                  </span>
-                ) : (
-                  <span
-                    className="text-muted-foreground"
-                    title="这条授权的 quotaLimit 为 0 —— 配额未强制，不是上限为零"
-                  >
-                    未强制
-                  </span>
                 ),
             },
           ]}
