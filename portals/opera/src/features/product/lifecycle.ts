@@ -212,7 +212,19 @@ export interface ChecklistItem {
  * 仍靠操作员按对方回报勾的只剩 `c1_identity`。侧的归属不因此改变——判定是谁做的
  * 与该由谁去动是两回事。
  */
-const THEIR_SIDE = new Set(["c1_identity", "c2_entitlement", "c3_metering"]);
+const THEIR_SIDE = new Set([
+  "c1_identity",
+  /* 出站换票是对方的调用：通不通由对方决定（平台只是签发方）。此前漏在这张表外，
+     于是它未通过时目录页报「待我方」，而检查抽屉把它列在对方——同一项两处归属不同。 */
+  "c1_s2s",
+  "c2_entitlement",
+  "c3_metering",
+]);
+
+/** 一项检查归哪一侧。目录页的验证态与接入检查抽屉的分组都读这一处。 */
+export function sideOfChecklistItem(itemCode: string): "ours" | "theirs" {
+  return THEIR_SIDE.has(itemCode) ? "theirs" : "ours";
+}
 
 export function verificationOf(
   items: readonly ChecklistItem[],

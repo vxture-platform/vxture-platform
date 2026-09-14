@@ -1,43 +1,59 @@
 "use client";
 
 /**
- * LaunchDrawer.tsx — 产品页「接入检查」抽屉：复验、检查单、交给对方、确认上线。
+ * LaunchDrawer.tsx — 产品页「接入检查」抽屉：一份清单、交给对方、确认上线。
  * @package @vxture/opera
  * @layer Presentation
  * @category Features - Product
  *
- * 2026-09-14 接管了原「产品上线」页（`/product/launch`）与目录页的「接入检查单」抽屉。
- * 那是同一件事的三处：上线页跑复验、目录抽屉勾检查单、详情页抽屉只看状态——
- * 运营者要在三个地方之间来回，才能回答「这个产品能不能上线」。
+ * ── 2026-09-14 下午：两份列表合成一份 ──
+ * 上午的版本把「复验结果」（8 项实测）和「接入检查单」（7 项，库里的）上下摆着。owner 走查：
+ * 「接入检查单的逻辑和显示感觉还有问题」。问题是具体的——
+ *  1. **同一件事出现两次、名字还不一样**：产品登记 / 目录已登记，C2 权益拉取 / C2 权益接入……
+ *     两份里有四项是同一个判定，读的人得自己去对。
+ *  2. 检查单的说明来自 seed 的 `description` 列，是英文。
+ *  3. 未通过的项也写着「xx 确认」——`checked_at` 记的是「判过」，不是「通过」；
+ *     状态只靠一个复选框表达，失败原因（`remark`）存在库里却不显示。
+ *  4. 顺序按 `sort`，C3（50）排在 C2（60）前。
  *
- * **不跳转**（owner 2026-09-11：「切记不能跳转」）：检查项的「去处理」以 `#` 开头时是
- * 页内板块或密钥面板，交给页面就地处理；其它去处（授权页）新标签页打开。
- * 抽屉是在配置中途打开的，跳走会丢掉页面上没保存的改动。
+ * 现在只有一份清单：一行一项，按「我方 / 对方」分组，每行是状态 + 名字 + 原因与下一步 + 来源。
+ *  - **平台实测**的项：打开抽屉就跑一遍实测（只读，不写库），状态与原因当场可见；
+ *    「重新复验」才把能写回检查单的几项落库（`source: "auto"`）。
+ *  - **人工确认**的项：「标记完成 / 撤销确认」，平台观测不到的只有这几项。
+ *  - 授权、Webhook 这类实测项没有对应的检查单行，照样列在同一张表里——上线前要看的是合集。
  *
- * **确认上线先重跑**：不接受「三天前通过」——配置随时会变，拿过期的通过去上线就是让
- * 声明冒充事实。重跑全通过、且检查单必填项全满足，才把草稿转成已上线；失败不改状态。
+ * **不跳转**（owner 2026-09-11：「切记不能跳转」）：「去处理」以 `#` 开头时交给页面就地处理，
+ * 其它去处新标签页打开。
+ *
+ * **确认上线先重跑**：不接受「三天前通过」——重跑全通过、且检查单必填项全满足，才把草稿
+ * 转成已上线；失败不改状态。
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Badge,
   Banner,
   Button,
-  Checkbox,
   Drawer,
-  EmptyState,
   Icon,
   Separator,
   StatusBadge,
   useToast,
+  type StatusBadgeTone,
 } from "@vxture/design-system";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import { formatDateTime } from "@vxture-platform/shared";
 import { api, OperaApiError } from "@/lib/api";
-import { allPassed, runLaunchChecks, type CheckResult } from "./launch-checks";
+import {
+  allPassed,
+  runLaunchChecks,
+  type CheckResult,
+  type CheckSide,
+} from "./launch-checks";
 import {
   pendingBySide,
   PRODUCT_STATE_META,
+  sideOfChecklistItem,
   type ProductState,
 } from "./lifecycle";
 import type { ClientRecord, WebhookRecord } from "./onboarding-model";
@@ -50,6 +66,8 @@ export interface ChecklistEntry {
   isRequired: boolean;
   isSatisfied: boolean;
   checkedAt: string | null;
+  /** 自动复验写回时带「自动检查：原因」；人工勾选为空。 */
+  remark?: string | null;
 }
 
 export interface LaunchDrawerProduct {
@@ -77,10 +95,168 @@ export interface LaunchDrawerProps {
   readonly onLaunched: () => Promise<void>;
 }
 
+type RowStatus = "pass" | "fail" | "pending" | "unchecked";
+
+const STATUS_META: Record<RowStatus, { label: string; tone: StatusBadgeTone }> =
+  {
+    pass: { label: "通过", tone: "success" },
+    fail: { label: "未通过", tone: "danger" },
+    pending: { label: "待确认", tone: "warning" },
+    unchecked: { label: "未检查", tone: "neutral" },
+  };
+
+interface Row {
+  key: string;
+  label: string;
+  side: CheckSide;
+  source: "auto" | "manual";
+  required: boolean;
+  status: RowStatus;
+  /** 这一项在判什么——只对人工项显示（实测项有具体的 `detail`，不必再说一遍）。 */
+  what: string;
+  detail: string | null;
+  remedy: string | null;
+  href?: string;
+  /** 人工项：确认时刻。 */
+  confirmedAt: string | null;
+  item?: ChecklistEntry;
+  order: number;
+}
+
+/**
+ * 检查单各项的中文名、说明与排序。
+ *
+ * **名字只有一套**：实测结果与检查单是同一个判定时用这里的名字，不再各叫各的。
+ * 说明不读 seed 的 `description`（英文），在这里写——它是给运营者看的，不是给库看的。
+ * 侧（我方 / 对方）不在这里：它由 `lifecycle.ts` 的 `sideOfChecklistItem` 统一给，
+ * 目录页的验证态徽标用的是同一份。
+ */
+const ITEM_META: Record<
+  string,
+  { label: string; what: string; order: number }
+> = {
+  catalog_registered: {
+    label: "产品登记",
+    what: "产品码已登记、来源信息完整。",
+    order: 10,
+  },
+  data_plane: {
+    label: "数据面就绪",
+    what: "产品侧的库按模板建好（vx_provision / local_authz / local_usage 与领域 schema）。平台观测不到，按实际情况确认。",
+    order: 60,
+  },
+  acceptance: {
+    label: "端到端验收",
+    what: "登录 → 开通 → 权益门控 → 用量上报 → 失效，整条链实际跑通过一次。卡在这一项通常意味着前面某项其实没真通。",
+    order: 70,
+  },
+  c1_identity: {
+    label: "C1 身份接入",
+    what: "对方实现了登录、回调与会话，用平台账号能登进产品。平台只看得到客户端注册，看不到对方实现，按对方回报确认。",
+    order: 110,
+  },
+  c1_s2s: {
+    label: "C1 出站换票",
+    what: "对方用 S2S 令牌去调 Atlas / Runos / Karda。",
+    order: 120,
+  },
+  c2_entitlement: {
+    label: "C2 权益接入",
+    what: "对方拉过权益。",
+    order: 130,
+  },
+  c3_metering: {
+    label: "C3 用量上报",
+    what: "对方上报过用量。",
+    order: 140,
+  },
+};
+
+/** 没有检查单行的实测项：排序与没跑之前的占位。 */
+const MEASURE_ONLY: Record<string, { label: string; order: number }> = {
+  client: { label: "登录接入", order: 20 },
+  "atlas-grants": { label: "模型路由授权", order: 30 },
+  "runos-grants": { label: "能力授权", order: 40 },
+  webhook: { label: "Webhook 登记", order: 50 },
+};
+
 function reason(error: unknown, fallback: string): string {
   return error instanceof OperaApiError && error.message
     ? error.message
     : fallback;
+}
+
+/** 自动写回的备注带着「自动检查：」前缀，显示时去掉。 */
+function remarkDetail(remark: string | null | undefined): string | null {
+  const text = (remark ?? "").replace(/^自动检查：/, "").trim();
+  return text || null;
+}
+
+function buildRows(
+  checklist: readonly ChecklistEntry[],
+  checks: readonly CheckResult[] | null,
+  running: boolean,
+): Row[] {
+  const liveByItem = new Map(
+    (checks ?? [])
+      .filter((c) => c.itemCode)
+      .map((c) => [c.itemCode as string, c]),
+  );
+  const rows: Row[] = [];
+
+  for (const item of checklist) {
+    const meta = ITEM_META[item.itemCode];
+    const auto = isAutoDeterminedChecklistItem(item.itemCode);
+    const live = liveByItem.get(item.itemCode);
+    let status: RowStatus;
+    if (!auto) {
+      status = item.isSatisfied ? "pass" : "pending";
+    } else if (live) {
+      status = live.status === "pass" ? "pass" : "fail";
+    } else if (item.checkedAt === null) {
+      status = "unchecked";
+    } else {
+      status = item.isSatisfied ? "pass" : "fail";
+    }
+    rows.push({
+      key: item.itemCode,
+      label: meta?.label ?? item.itemName ?? item.itemCode,
+      side: sideOfChecklistItem(item.itemCode),
+      source: auto ? "auto" : "manual",
+      required: item.isRequired,
+      status,
+      what: meta?.what ?? "",
+      detail: auto ? (live?.detail ?? remarkDetail(item.remark)) : null,
+      remedy: live && live.status !== "pass" ? live.remedy : null,
+      ...(live?.href ? { href: live.href } : {}),
+      confirmedAt: !auto && item.isSatisfied ? item.checkedAt : null,
+      item,
+      order: meta?.order ?? 900,
+    });
+  }
+
+  for (const [id, meta] of Object.entries(MEASURE_ONLY)) {
+    const live = (checks ?? []).find((c) => c.id === id);
+    rows.push({
+      key: id,
+      label: meta.label,
+      side: live?.side ?? "ours",
+      source: "auto",
+      required: true,
+      status: live ? (live.status === "pass" ? "pass" : "fail") : "unchecked",
+      what: "",
+      detail: live ? live.detail : running ? "检查中…" : null,
+      remedy: live && live.status !== "pass" ? live.remedy : null,
+      ...(live?.href ? { href: live.href } : {}),
+      confirmedAt: null,
+      order: meta.order,
+    });
+  }
+
+  return rows.sort(
+    (a, b) =>
+      (a.side === b.side ? 0 : a.side === "ours" ? -1 : 1) || a.order - b.order,
+  );
 }
 
 export function LaunchDrawer({
@@ -112,31 +288,34 @@ export function LaunchDrawer({
   }
 
   /**
-   * 跑一次复验并把机器判定的几项写回检查单。
+   * 跑一遍实测。`persist` 为真时把能写回检查单的几项落库。
    *
+   * 打开抽屉时只读地跑：状态与原因当场可见，但不因为「看了一眼」就写库。
    * `source: "auto"` 让 BFF 把 `checked_by` 写成 NULL（自动校验不署名），同时它拒绝人手
    * 去勾这几项——「这一项是谁说通过的」在数据里答得出来。
    */
-  async function runChecks(): Promise<CheckResult[] | null> {
+  async function runChecks(persist: boolean): Promise<CheckResult[] | null> {
     setRunning(true);
     try {
       const results = await runLaunchChecks(product, { locale });
-      await Promise.all(
-        results
-          .filter((r) => r.itemCode)
-          .map((r) =>
-            api
-              .patch(`/api/products/${product.id}/checklist/${r.itemCode}`, {
-                isSatisfied: r.status === "pass",
-                remark: `自动检查：${r.detail}`,
-                source: "auto",
-              })
-              .catch(() => undefined),
-          ),
-      );
+      if (persist) {
+        await Promise.all(
+          results
+            .filter((r) => r.itemCode)
+            .map((r) =>
+              api
+                .patch(`/api/products/${product.id}/checklist/${r.itemCode}`, {
+                  isSatisfied: r.status === "pass",
+                  remark: `自动检查：${r.detail}`,
+                  source: "auto",
+                })
+                .catch(() => undefined),
+            ),
+        );
+        await reloadChecklist();
+      }
       setChecks(results);
       setCheckedAt(formatDateTime(new Date(), locale));
-      await reloadChecklist();
       return results;
     } catch (error) {
       toast({
@@ -149,6 +328,17 @@ export function LaunchDrawer({
       setRunning(false);
     }
   }
+
+  /* 每次打开都现测一遍（只读）。关着的时候不跑，也不留着上一次的结果冒充现在。 */
+  useEffect(() => {
+    if (!open) {
+      setChecks(null);
+      setCheckedAt(null);
+      return;
+    }
+    void runChecks(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只跟着开关走；runChecks 每次渲染都是新函数
+  }, [open, product.id]);
 
   async function tick(item: ChecklistEntry, isSatisfied: boolean) {
     setTicking(item.itemCode);
@@ -172,15 +362,15 @@ export function LaunchDrawer({
   async function confirmLaunch() {
     setLaunching(true);
     try {
-      const results = await runChecks();
+      const results = await runChecks(true);
       if (!results) return;
       if (!allPassed(results)) {
         const failed = results.filter((r) => r.status !== "pass").length;
         toast({
           tone: "danger",
-          title: `${failed} 项接入检查未通过，未上线`,
+          title: `${failed} 项实测未通过，未上线`,
           description:
-            "生命周期状态没有改变。未通过的项在上面列着，各自写着下一步。",
+            "生命周期状态没有改变。未通过的项在清单里标红，各自写着下一步。",
         });
         return;
       }
@@ -206,9 +396,9 @@ export function LaunchDrawer({
       if (pending > 0) {
         toast({
           tone: "danger",
-          title: `还有 ${pending} 项检查单未确认`,
+          title: `还有 ${pending} 项人工确认没有完成`,
           description:
-            "实测项已过，但检查单里还有必填项没勾——数据面就绪与端到端验收平台观测不到，按实际情况在下面确认。",
+            "实测项已过，但数据面就绪、端到端验收这类平台观测不到的项还没确认。",
         });
         return;
       }
@@ -226,6 +416,124 @@ export function LaunchDrawer({
     }
   }
 
+  /**
+   * 交接清单的纯文本。owner：「需要转交的信息，应该提供一键复制——全部格式化信息。」
+   * 转交通常是贴进邮件或聊天，所以一段排好版的文字，而不是让人逐格去复制。
+   * **密钥不在里面**：它们只在签发与轮换时明文出现一次，这里只写「另行交付」。
+   */
+  function handoverText(): string {
+    const lines = [
+      `【${product.productName}（${product.productCode}）平台接入交接】`,
+      "",
+      `产品码：${product.productCode}`,
+    ];
+    if (clients.length === 0) {
+      lines.push("登录客户端：尚未添加");
+    }
+    for (const c of clients) {
+      const isPublic = c.tokenEndpointAuthMethod === "none";
+      lines.push(
+        "",
+        `登录客户端（${c.releaseChannel}）`,
+        `  client_id：${c.clientId}`,
+        `  认证方式：${isPublic ? "公共客户端（无 client_secret，强制 PKCE）" : "机密客户端（client_secret 另行交付）"}`,
+        `  登录回调地址：${c.redirectUris.join("、") || "尚未配置"}`,
+        `  登出回跳地址：${c.postLogoutRedirectUris.join("、") || "未配置"}`,
+        `  Scopes：${c.allowedScopes.join(" ")}`,
+      );
+    }
+    lines.push(
+      "",
+      `Webhook 回调地址：${webhook?.webhookUrl ?? "尚未配置"}`,
+      `Webhook 签名密钥：${webhook?.hasWebhookSecret ? "已登记（另行交付）" : "尚未登记"}`,
+    );
+    return lines.join("\n");
+  }
+
+  function copyHandover() {
+    void navigator.clipboard.writeText(handoverText()).then(
+      () => toast({ tone: "success", title: "已复制交接信息" }),
+      () =>
+        toast({
+          tone: "danger",
+          title: "复制失败",
+          description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        }),
+    );
+  }
+
+  const rows = buildRows(checklist, checks, running);
+  const open_ = rows.filter((r) => r.required && r.status !== "pass");
+  const openOurs = open_.filter((r) => r.side === "ours").length;
+  const openTheirs = open_.length - openOurs;
+
+  function renderRow(row: Row) {
+    const status =
+      running && row.source === "auto" && !checks ? "unchecked" : row.status;
+    const meta = STATUS_META[status];
+    return (
+      <div
+        key={row.key}
+        className="flex flex-col gap-2xs rounded-md border border-border p-sm"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-sm">
+          <div className="flex min-w-0 flex-wrap items-center gap-sm">
+            <StatusBadge tone={meta.tone} dot>
+              {meta.label}
+            </StatusBadge>
+            <span className="text-label-md text-foreground">{row.label}</span>
+            <Badge variant={row.source === "auto" ? "secondary" : "outline"}>
+              {row.source === "auto" ? "平台实测" : "人工确认"}
+            </Badge>
+            {!row.required ? <Badge variant="outline">可选</Badge> : null}
+          </div>
+          <div className="flex items-center gap-xs">
+            {row.href && row.status === "fail" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                onClick={() => onGoto(row.href!)}
+              >
+                去处理
+              </Button>
+            ) : null}
+            {row.source === "manual" && row.item && canManage ? (
+              <Button
+                type="button"
+                variant={row.status === "pass" ? "ghost" : "outline"}
+                size="md"
+                disabled={ticking !== null}
+                onClick={() =>
+                  row.item && void tick(row.item, row.status !== "pass")
+                }
+              >
+                {row.status === "pass" ? "撤销确认" : "标记完成"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        {row.source === "manual" ? (
+          <p className="text-body-sm text-muted-foreground">{row.what}</p>
+        ) : null}
+        {row.detail ? (
+          <p className="text-body-sm text-foreground">{row.detail}</p>
+        ) : null}
+        {row.remedy ? (
+          <p className="text-body-sm text-warning-text">下一步：{row.remedy}</p>
+        ) : null}
+        {row.confirmedAt ? (
+          <p className="text-body-sm text-muted-foreground">
+            {formatDateTime(row.confirmedAt, locale)} 确认
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const ours = rows.filter((r) => r.side === "ours");
+  const theirs = rows.filter((r) => r.side === "theirs");
+
   return (
     <Drawer
       open={open}
@@ -235,130 +543,65 @@ export function LaunchDrawer({
       description={product.productCode}
     >
       <div className="flex flex-col gap-xl">
-        {/* ── 复验 ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-md">
-          <div className="flex flex-wrap items-center justify-between gap-sm">
+        {/* ── 汇总 ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center justify-between gap-sm">
+          <div className="flex min-w-0 flex-col gap-2xs">
+            <p className="text-label-md text-foreground">
+              {running && !checks
+                ? "检查中…"
+                : open_.length === 0
+                  ? "全部通过"
+                  : `还差 ${open_.length} 项：我方 ${openOurs} · 对方 ${openTheirs}`}
+            </p>
             <p className="text-body-sm text-muted-foreground">
               {checkedAt
-                ? `最近一次：${checkedAt}`
-                : "复验只读平台自己的存储——我方的配置，加上对方接通后留下的调用痕迹——不向对方端点发任何请求，可以随时重跑。"}
+                ? `实测于 ${checkedAt}。实测只读平台自己的存储，不向对方端点发任何请求。`
+                : "实测只读平台自己的存储，不向对方端点发任何请求。"}
             </p>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={running || launching}
-              onClick={() => void runChecks()}
-            >
-              <Icon name="refresh" size="sm" aria-hidden="true" />
-              {running ? "复验中…" : checks ? "重新复验" : "跑一次复验"}
-            </Button>
           </div>
-          {checks?.map((c) => (
-            <div
-              key={c.id}
-              className="flex flex-col gap-2xs rounded-md border border-border p-sm"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-sm">
-                <div className="flex flex-wrap items-center gap-sm">
-                  <StatusBadge
-                    tone={c.status === "pass" ? "success" : "danger"}
-                    dot
-                  >
-                    {c.status === "pass" ? "通过" : "未通过"}
-                  </StatusBadge>
-                  <span className="text-label-md text-foreground">
-                    {c.label}
-                  </span>
-                  <Badge variant="outline">
-                    {c.side === "ours" ? "我方" : "对方"}
-                  </Badge>
-                </div>
-                {c.href && c.status !== "pass" ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="md"
-                    onClick={() => onGoto(c.href!)}
-                  >
-                    去处理
-                  </Button>
-                ) : null}
-              </div>
-              <p className="text-body-sm text-foreground">{c.detail}</p>
-              {c.remedy ? (
-                <p className="text-body-sm text-warning-text">
-                  下一步：{c.remedy}
-                </p>
-              ) : null}
-            </div>
-          ))}
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={running || launching}
+            onClick={() => void runChecks(true)}
+          >
+            <Icon name="refresh" size="sm" aria-hidden="true" />
+            {running ? "复验中…" : "重新复验"}
+          </Button>
         </div>
 
-        <Separator />
-
-        {/* ── 检查单 ───────────────────────────────────────────────────── */}
+        {/* ── 我方 ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">接入检查单</p>
-          <p className="text-body-sm text-muted-foreground">
-            带「复验判定」的几项由平台实测写入，勾不动；其余几项平台观测不到，按实际情况确认。
+          <p className="text-label-md text-foreground">
+            我方 · 平台侧配置{openOurs > 0 ? `（还差 ${openOurs} 项）` : ""}
           </p>
-          {checklist.length === 0 ? (
-            <EmptyState
-              title="读不到检查单"
-              description="读不到不等于通过。请先解决读取失败。"
-            />
-          ) : (
-            checklist.map((item) => {
-              /* 机器判定的项不给勾。BFF 也会拒（409），这里灰掉是为了让人在点之前
-                 就知道——一个点得下去然后报错的框，等于让人白跑一趟。 */
-              const auto = isAutoDeterminedChecklistItem(item.itemCode);
-              return (
-                <div
-                  key={item.itemCode}
-                  className="flex items-start gap-sm rounded-md border border-border p-sm"
-                >
-                  <Checkbox
-                    checked={item.isSatisfied}
-                    disabled={!canManage || auto || ticking !== null}
-                    aria-label={item.itemName ?? item.itemCode}
-                    onCheckedChange={(checked) =>
-                      void tick(item, checked === true)
-                    }
-                  />
-                  <div className="flex min-w-0 flex-1 flex-col gap-2xs">
-                    <div className="flex flex-wrap items-center gap-sm">
-                      <span className="text-body-md text-foreground">
-                        {item.itemName ?? item.itemCode}
-                      </span>
-                      {item.isRequired ? (
-                        <Badge variant="outline">必需</Badge>
-                      ) : null}
-                      {auto ? (
-                        <Badge variant="secondary">复验判定</Badge>
-                      ) : null}
-                    </div>
-                    {item.description ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {item.description}
-                      </span>
-                    ) : null}
-                    {item.checkedAt ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {formatDateTime(item.checkedAt, locale)} 确认
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })
-          )}
+          {ours.map(renderRow)}
+        </div>
+
+        {/* ── 对方 ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-sm">
+          <p className="text-label-md text-foreground">
+            对方 · 产品侧接通{openTheirs > 0 ? `（还差 ${openTheirs} 项）` : ""}
+          </p>
+          {theirs.map(renderRow)}
         </div>
 
         <Separator />
 
         {/* ── 交给对方 ─────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">交给对方</p>
+          <div className="flex flex-wrap items-center justify-between gap-sm">
+            <p className="text-label-md text-foreground">交给对方</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              onClick={copyHandover}
+            >
+              <Icon name="copy" size="sm" aria-hidden="true" />
+              复制全部
+            </Button>
+          </div>
           <p className="text-body-sm text-muted-foreground">
             接入是双边的：平台侧配完之后，下面这些要发给产品侧。密钥不在这里——它们只在签发与轮换时明文出现一次。
           </p>
@@ -395,15 +638,19 @@ export function LaunchDrawer({
         {/* ── 终点动作 ─────────────────────────────────────────────────── */}
         {product.state === "draft" ? (
           <Banner
-            tone="info"
-            title="确认上线会先重跑一遍复验"
-            description="重跑全通过、且检查单必填项全部满足，才会把草稿转成已上线。失败不改状态。"
+            tone={open_.length === 0 ? "success" : "info"}
+            title={
+              open_.length === 0
+                ? "可以确认上线"
+                : `还差 ${open_.length} 项，全部通过才能上线`
+            }
+            description="确认上线会先重跑一遍实测：全通过、且人工确认项齐了，才把草稿转成已上线。失败不改状态。"
             {...(canManage
               ? {
                   action: (
                     <Button
                       type="button"
-                      disabled={running || launching}
+                      disabled={running || launching || open_.length > 0}
                       onClick={() => void confirmLaunch()}
                     >
                       <Icon name="rocket" size="sm" aria-hidden="true" />
