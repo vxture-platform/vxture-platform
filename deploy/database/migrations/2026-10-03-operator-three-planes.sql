@@ -169,9 +169,8 @@ DELETE FROM admin.operator_permission
  WHERE perm_code IN ('admin.menu.system_setting_general', 'admin.menu.platform_resource');
 
 -- ── 6. 操作码改名：域即平台（id 不变，授权随行；新码已存在则跳过）───────────────
-UPDATE admin.operator_permission p
-   SET perm_code = v.new_code, perm_name = v.name, description = v.name, updated_at = now()
-  FROM (VALUES
+CREATE TEMP TABLE _code_renames ON COMMIT DROP AS
+SELECT * FROM (VALUES
     ('tenant:risk.read',            'risk:record.read',            'View risk records'),
     ('tenant:risk.manage',          'risk:record.manage',          'Manage risk records'),
     ('platform:setting.read',       'config:parameter.read',       'View platform parameters (sensitive masked)'),
@@ -194,7 +193,26 @@ UPDATE admin.operator_permission p
     ('model:policy.activate',       'pricing:policy.activate',     'Activate model policy'),
     ('model:policy.deactivate',     'pricing:policy.deactivate',   'Deactivate model policy'),
     ('model:policy.delete',         'pricing:policy.delete',       'Soft-delete model policy')
-  ) AS v(old_code, new_code, name)
+  ) AS v(old_code, new_code, name);
+
+--    重放自愈：migrate 是全量重放，更早的迁移（2026-10-02 atlas 细码）重放时看不见改名，
+--    只看得见「码不在」，会把旧码连同 super_admin 授权插回来——v0.26.162 的 db-init 实测
+--    因此在下面「旧码一个不剩」处失败。新码已存在时，旧码只是重放的副产物：先删它的授权，
+--    再删它本身；新码与新码的授权原样保留。
+DELETE FROM admin.operator_role_permission rp
+ USING admin.operator_permission p, _code_renames v
+ WHERE rp.permission_id = p.id
+   AND p.perm_code = v.old_code
+   AND EXISTS (SELECT 1 FROM admin.operator_permission x WHERE x.perm_code = v.new_code);
+
+DELETE FROM admin.operator_permission p
+ USING _code_renames v
+ WHERE p.perm_code = v.old_code
+   AND EXISTS (SELECT 1 FROM admin.operator_permission x WHERE x.perm_code = v.new_code);
+
+UPDATE admin.operator_permission p
+   SET perm_code = v.new_code, perm_name = v.name, description = v.name, updated_at = now()
+  FROM _code_renames v
  WHERE p.perm_code = v.old_code
    AND NOT EXISTS (SELECT 1 FROM admin.operator_permission x WHERE x.perm_code = v.new_code);
 
