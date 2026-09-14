@@ -131,6 +131,26 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 
 ### 4.3 下发:开通生命周期(provisioning webhook)
 
+> **回调地址不在本节,在《产品接入通则》§C3 下发。** 路径是
+> `POST {你的域名}/api/webhooks/vxture`——**所有产品同一个,变的只有域名**。
+>
+> 这句话是 2026-09-13 补的,补的原因值得留着:本节此前只规定**义务**(HMAC、幂等、
+> 建/拆空间)而从不规定**地址**,但 vxtpl 与 yucer 的
+> `app/provisioning/webhook/route.ts` 两处路由注释都写着「product_200 section 4」。
+> 两个产品各自造了同一个路径,又互相成了对方的「先例」;第三个产品(tenderforge)
+> 照着它们抄,理由是「组织里都这么写」。**没有任何一方读到过一条规定,而三方都以为
+> 自己在遵守规定。**
+>
+> 平台侧那时也接不住:`PUT :id/webhook` 只校验协议与长度、不看路径,上线检查第五项
+> 只问「填了没有」。于是通则规定的那个路径在**全组织零实现**,而每一道闸门都是绿的。
+> 强制点现在补在登记处(`assertStandardWebhookPath`)——登记是每个回调地址进库的
+> 单一咽喉,而投递处再发现已经太晚:路径不匹配最常见的表现不是 404,是落到对方前端的
+> SPA catch-all 拿回 `index.html` 和 **HTTP 200**,投递被判为送达而产品什么都没收到。
+>
+> 存量产品(vxtpl / yucer)按 X-4 三步迁移:① 产品侧同时能收新旧两个路径并上线;
+> ② 平台侧把登记地址改成标准路径;③ 产品侧撤掉旧路由。登记与失效条件见
+> `bff/opera-bff/src/routers/product-catalog.router.ts` 的 `LEGACY_WEBHOOK_PATHS`。
+
 - 平台维护开通状态机 `(workspace, product): pending → provisioned → deprovisioned`(字段级见 `data_platform_100` §10);
 - outbound webhook:HMAC 签名(平台自签密钥,非 Provider Key;**平台侧 env 命名惯例 = `{PRODUCT}_PROVISION_WEBHOOK_SECRET`**,每产品独立、经 secret manager,产品侧对端键名自定)、幂等 key、重试/lease/死信;产品端义务:验签、幂等消费、按指令建/拆业务空间(agent-db 内该 WS 的 schema/数据域);
 - Beta→Prod 转换指令同经此通道(业务数据迁移可选,平台侧订阅状态切换)。
