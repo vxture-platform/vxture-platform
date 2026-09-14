@@ -141,6 +141,20 @@ export interface OperatorMfaPending {
   expiresAt: number;
 }
 
+/**
+ * 运营者中央会话的一行（在线会话页的数据源）。时间是秒级 epoch，与中央会话同单位。
+ * `clients` = 这个会话给哪些 client 发过令牌（登录过哪几个平台）。
+ */
+export interface OperatorCentralSession {
+  sid: string;
+  sub: string;
+  authMethod: string;
+  amr: string[];
+  createdAt: number;
+  absExpiresAt: number;
+  clients: string[];
+}
+
 /** OIDC central session record (vx:sess:{sid}); per-client active_org lives in vx:sess:{sid}:org. */
 export interface OidcCentralSession {
   sub: string;
@@ -766,6 +780,21 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * 运营者（workforce realm）中央会话的索引：有序集合，成员 sid，分值 absExpiresAt。
+   *
+   * 「谁在线」只能从中央会话回答：刷新令牌链会被并发刷新的重放判定整条吊销，而会话本身
+   * 仍在、静默 SSO 照样放行——拿令牌表判在线，登录着的人会显示成不在线。
+   */
+  private operatorSessionIndexKey(): string {
+    return `${this.prefix}opr:sessions`;
+  }
+
+  /** 索引上线前已存在的会话补录过一次的标记（补录成功后才写）。 */
+  private operatorSessionIndexedKey(): string {
+    return `${this.prefix}opr:sessions:indexed`;
+  }
+
+  /**
    * 建立中央会话。TTL 就是**总时效**——IdP 侧不再有"空闲"这个概念。
    *
    * 原先这里取 `min(idle, abs)`，而 idle 恒小于 abs，于是 abs 从未生效、会话变成
@@ -794,6 +823,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.error(`createOidcSession failed: ${String(err)}`);
       throw new ServiceUnavailableException("OIDC session persistence failed");
+    }
+    if (session.realm === "workforce") {
+      try {
+        await client.zadd(
+          this.operatorSessionIndexKey(),
+          session.absExpiresAt,
+          sid,
+        );
+      } catch (err) {
+        /* 进不了索引不该挡住登录；代价是在线会话页漏掉这一个，所以留 error 日志。 */
+        this.logger.error(`operator session index add failed: ${String(err)}`);
+      }
     }
   }
 
@@ -936,9 +977,108 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         this.sessionActiveOrgKey(sid),
         this.sessionClientsKey(sid),
       );
+      await client.zrem(this.operatorSessionIndexKey(), sid);
     } catch (err) {
       this.logger.error(`deleteOidcSession failed: ${String(err)}`);
       throw new ServiceUnavailableException("OIDC session deletion failed");
     }
+  }
+
+  // ─── 运营者中央会话：在线会话列表 ─────────────────────────────────────────
+
+  /**
+   * 列出仍然有效的运营者中央会话。过期成员先按分值剪掉；中央会话已不在（被删、
+   * TTL 到期）的成员顺手移出索引。
+   */
+  async listOperatorSessions(): Promise<OperatorCentralSession[]> {
+    const client = this.requireReadyClient();
+    const index = this.operatorSessionIndexKey();
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      await this.backfillOperatorSessionIndex(client);
+      await client.zremrangebyscore(index, "-inf", now);
+      const sids = await client.zrange(index, 0, -1);
+      if (sids.length === 0) return [];
+
+      const pipeline = client.pipeline();
+      for (const sid of sids) {
+        pipeline.hgetall(this.sessionKey(sid));
+        pipeline.smembers(this.sessionClientsKey(sid));
+      }
+      const replies = (await pipeline.exec()) ?? [];
+      const sessions: OperatorCentralSession[] = [];
+      const gone: string[] = [];
+      sids.forEach((sid, i) => {
+        const [hashErr, hash] = replies[i * 2] ?? [null, null];
+        const [clientsErr, clients] = replies[i * 2 + 1] ?? [null, null];
+        if (hashErr) throw hashErr;
+        if (clientsErr) throw clientsErr;
+        const h = (hash ?? {}) as Record<string, string>;
+        if (!h.sub || h.realm !== "workforce") {
+          gone.push(sid);
+          return;
+        }
+        sessions.push({
+          sid,
+          sub: h.sub,
+          authMethod: h.authMethod ?? "",
+          amr: h.amr ? (JSON.parse(h.amr) as string[]) : [],
+          createdAt: Number(h.createdAt),
+          absExpiresAt: Number(h.absExpiresAt),
+          clients: Array.isArray(clients) ? (clients as string[]) : [],
+        });
+      });
+      if (gone.length > 0) await client.zrem(index, ...gone);
+      return sessions;
+    } catch (err) {
+      this.logger.error(`listOperatorSessions failed: ${String(err)}`);
+      throw new ServiceUnavailableException(
+        "OIDC operator session lookup failed",
+      );
+    }
+  }
+
+  /**
+   * 索引上线之前建立的会话不在索引里。第一次列出时扫一遍中央会话键补进去，成功后
+   * 写标记，之后不再扫（新会话在 createOidcSession 里入索引）。并发补录无害：zadd 幂等。
+   */
+  private async backfillOperatorSessionIndex(client: Redis): Promise<void> {
+    if ((await client.exists(this.operatorSessionIndexedKey())) === 1) return;
+    const head = `${this.prefix}sess:`;
+    let cursor = "0";
+    do {
+      const [next, keys] = await client.scan(
+        cursor,
+        "MATCH",
+        `${head}*`,
+        "COUNT",
+        500,
+      );
+      cursor = next;
+      /* 只要 sess:{sid} 本身，不要 :org / :ws / :clients 这些附属键。 */
+      const sessionKeys = keys.filter(
+        (key) => !key.slice(head.length).includes(":"),
+      );
+      if (sessionKeys.length === 0) continue;
+      const read = client.pipeline();
+      for (const key of sessionKeys) read.hmget(key, "realm", "absExpiresAt");
+      const replies = (await read.exec()) ?? [];
+      const add = client.pipeline();
+      let pending = 0;
+      sessionKeys.forEach((key, i) => {
+        const [err, fields] = replies[i] ?? [null, null];
+        if (err) throw err;
+        const [realm, absExpiresAt] = (fields ?? []) as (string | null)[];
+        if (realm !== "workforce" || !absExpiresAt) return;
+        add.zadd(
+          this.operatorSessionIndexKey(),
+          Number(absExpiresAt),
+          key.slice(head.length),
+        );
+        pending += 1;
+      });
+      if (pending > 0) await add.exec();
+    } while (cursor !== "0");
+    await client.set(this.operatorSessionIndexedKey(), "1");
   }
 }

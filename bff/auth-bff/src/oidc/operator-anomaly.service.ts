@@ -49,7 +49,9 @@ export class OperatorAnomalyService {
       await this.audit.recordAuditEvent({
         operatorId,
         action: "AnomalousLogin",
-        result: "alert",
+        // audit_logs.result 只收 success/failure/denied（CHECK）；告警类别由 action 表达。
+        // 写 "alert" 会整条被拒——此前异常登录从未落库，提醒邮件也从未发出。
+        result: "success",
         resourceId: operatorId,
         ipAddress: ip ?? null,
         userAgent: userAgent ?? null,
@@ -86,7 +88,7 @@ export class OperatorAnomalyService {
       await this.audit.recordAuditEvent({
         operatorId,
         action: "LoginFailureSpike",
-        result: "alert",
+        result: "success",
         resourceId: operatorId,
         ipAddress: ip ?? null,
         userAgent: userAgent ?? null,

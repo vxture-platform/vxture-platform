@@ -559,8 +559,9 @@ const OPERATOR_PERMISSIONS = [
   ["support:impersonate", "Impersonate customer (high-risk)"],
   ["operator:account.manage", "Manage operator accounts (high-risk)"],
   ["operator:role.manage", "Manage operator roles (high-risk)"],
-  ["operator:session.read", "View operator sign-in attempts and sessions"],
+  ["operator:session.read", "View operator online sessions"],
   ["audit:log.read", "View audit logs"],
+  ["audit:sign_in_log.read", "View operator sign-in records"],
   ["audit:notification_log.read", "View notification delivery logs"],
   ["risk:record.read", "View risk records"],
   ["risk:record.manage", "Manage risk records"],
@@ -1081,8 +1082,8 @@ const MENU_TREE = [
             route: "/permissions",
           },
           {
-            code: "arche.menu.sign_in_session",
-            name: "登录与会话",
+            code: "arche.menu.online_session",
+            name: "在线会话",
             route: "/sessions",
             perms: ["operator:session.read"],
           },
@@ -1097,6 +1098,12 @@ const MENU_TREE = [
             name: "审计日志",
             route: "/audit-logs",
             perms: ["audit:log.read"],
+          },
+          {
+            code: "arche.menu.sign_in_log",
+            name: "登录记录",
+            route: "/sign-in-logs",
+            perms: ["audit:sign_in_log.read"],
           },
           {
             code: "arche.menu.risk_record",
@@ -1366,6 +1373,7 @@ const OPERATOR_ROLE_PERMS = {
     "audit:notification_log.read",
     "support:ticket.read",
     "audit:log.read",
+    "audit:sign_in_log.read",
     "operator:session.read",
   ],
 };

@@ -34,6 +34,7 @@ import { VxConfigService } from "@vxture/core-config";
 import { PgOperatorRepository } from "@vxture/service-iam";
 import { MailService } from "@vxture/service-mail";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
+import { OidcService } from "../oidc/oidc.service";
 import { OperatorRefreshTokenRepository } from "../token/operator-refresh-token.repository";
 import { RedisService } from "../redis/redis.service";
 
@@ -71,7 +72,15 @@ export class OperatorAdminInternalRouter {
     private readonly config: VxConfigService,
     @Inject(MailService)
     private readonly mail: MailService,
+    @Inject(OidcService)
+    private readonly oidc: OidcService,
   ) {}
+
+  /** 吊销刷新令牌，并结束中央会话（否则静默 SSO 会把人放回来）。返回结束的会话数。 */
+  private async endSessions(operatorId: string): Promise<number> {
+    await this.refreshTokens.revokeAllForOperator(operatorId);
+    return this.oidc.endOperatorSessions(operatorId);
+  }
 
   /**
    * Rank gate (TD-017 graded model, layer 2 of 3). Layer 1 (capability
@@ -213,7 +222,7 @@ export class OperatorAdminInternalRouter {
     }
     const { target } = await this.assertRankGate(actor, id);
     if (target.status !== OPERATOR_STATUS_ACTIVE) {
-      const revoked = await this.refreshTokens.revokeAllForOperator(id);
+      const revoked = await this.endSessions(id);
       return { ok: true, status: target.status, revoked };
     }
     if ((await this.operators.countActiveOperators()) <= 1) {
@@ -228,7 +237,7 @@ export class OperatorAdminInternalRouter {
       }
       throw new NotFoundException("operator_not_found");
     }
-    const revoked = await this.refreshTokens.revokeAllForOperator(id);
+    const revoked = await this.endSessions(id);
     return { ok: true, status: result.status, revoked };
   }
 
@@ -250,7 +259,7 @@ export class OperatorAdminInternalRouter {
     return { ok: true, status };
   }
 
-  /** Force-logout: revoke every still-live refresh token for the operator. Rank-gated. */
+  /** Force-logout: end every central session and revoke the refresh tokens. Rank-gated. */
   @Post(":id/sessions/revoke")
   @HttpCode(HttpStatus.OK)
   async revokeSessions(
@@ -259,7 +268,7 @@ export class OperatorAdminInternalRouter {
   ): Promise<{ ok: true; revoked: number }> {
     const actor = requireActor(body);
     await this.assertRankGate(actor, id);
-    const revoked = await this.refreshTokens.revokeAllForOperator(id);
+    const revoked = await this.endSessions(id);
     return { ok: true, revoked };
   }
 
@@ -278,7 +287,7 @@ export class OperatorAdminInternalRouter {
     await this.assertRankGate(actor, id);
     const done = await this.operators.resetOperatorMfa(id);
     if (!done) throw new NotFoundException("operator_not_found");
-    const revoked = await this.refreshTokens.revokeAllForOperator(id);
+    const revoked = await this.endSessions(id);
     return { ok: true, revoked };
   }
 
@@ -336,7 +345,7 @@ export class OperatorAdminInternalRouter {
       );
       throw new BadRequestException("reset_mail_delivery_failed");
     }
-    await this.refreshTokens.revokeAllForOperator(id);
+    await this.endSessions(id);
     return {
       ok: true,
       deliveredTo: maskEmail(target.email),

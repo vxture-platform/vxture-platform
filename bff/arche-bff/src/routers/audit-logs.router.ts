@@ -28,6 +28,7 @@ import { ARCHE_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 import type { AuditLogRecord } from "../types/governance.types";
 import { listOrderBy } from "./router.shared";
+import { LOGIN_ALERT_ACTIONS, LOGIN_ALERT_SQL } from "./sign-in-logs.router";
 
 const AUDIT_LOG_LIMIT = 500;
 
@@ -43,7 +44,8 @@ export class AuditLogsRouter {
   //     actorId  uuid          → actor_id = actorId
   //     action   string        → action prefix match (action LIKE action%)
   //     module   string        → action first-segment = module OR (no dot AND resource_type = module)
-  //     result   'success'|'failure'|'denied' → result match ('failure' also matches 'denied')
+  //     result   'success'|'failure'|'denied'|'alert' → result match ('failure' also matches 'denied');
+  //              'alert' = 登录服务写的登录告警（按 action 判，库里 result 是 success）
   //     sort     operator|action|result|ip|time, order asc|desc（默认 time desc；排序参与取数）
   //   response: AuditLogRecord[].
   @Get()
@@ -168,13 +170,18 @@ function normalizeAuditLogFilters(query: AuditLogQuery): {
   }
   if (query.result !== undefined && query.result !== "") {
     if (query.result === "failure") {
-      // Front-end two-state failure covers both failure and denied.
+      // Front-end failure covers both failure and denied.
       conditions.push(`a.result in ('failure','denied')`);
-    } else if (query.result === "success" || query.result === "denied") {
+    } else if (query.result === "alert") {
+      conditions.push(LOGIN_ALERT_SQL);
+    } else if (query.result === "success") {
+      // 登录告警在库里也是 success（CHECK 只收三态），「成功」筛选要把它们排开。
+      conditions.push(`a.result = 'success' and not (${LOGIN_ALERT_SQL})`);
+    } else if (query.result === "denied") {
       conditions.push(`a.result = $${pushParam(query.result)}`);
     } else {
       throw new BadRequestException(
-        "result must be one of success/failure/denied",
+        "result must be one of success/failure/denied/alert",
       );
     }
   }
@@ -213,8 +220,13 @@ function mapAuditLogRow(row: AuditLogRow): AuditLogRecord {
     targetLabel: null,
     module,
     ip: row.ip_address ?? null,
-    // audit_logs.result ∈ success/failure/denied;前端二态:denied 归 failure。
-    result: row.result === "success" ? "success" : "failure",
+    // audit_logs.result ∈ success/failure/denied;denied 归 failure。
+    // 登录告警在库里是 success(CHECK 只收三态),类别看 action。
+    result: LOGIN_ALERT_ACTIONS.includes(row.action)
+      ? "alert"
+      : row.result === "success"
+        ? "success"
+        : "failure",
     errorMessage: row.error_code ?? null,
     createdAt: toIso(row.created_at),
   };

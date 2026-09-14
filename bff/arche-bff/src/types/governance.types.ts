@@ -19,7 +19,7 @@ export interface AuditLogRecord {
   targetLabel: string | null;
   module: string;
   ip: string | null;
-  result: "success" | "failure";
+  result: "success" | "failure" | "alert";
   errorMessage: string | null;
   createdAt: string;
 }
@@ -145,6 +145,8 @@ export interface PlatformAdminRecord {
   isSystem: boolean;
   lastLoginAt: string | null;
   lastLoginIp: string | null;
+  /** 有 IdP 中央会话即在线；null = 登录服务暂不可读。只在列表接口给。 */
+  isOnline?: boolean | null;
   remark: string | null;
   createdAt: string;
   updatedAt: string;

@@ -38,6 +38,7 @@ import { OperatorWebauthnRouter } from "./routers/operator-webauthn.router";
 import { OperatorSelfRouter } from "./routers/operator-self.router";
 import { OperatorStepUpRouter } from "./routers/operator-stepup.router";
 import { OperatorAdminInternalRouter } from "./routers/operator-admin-internal.router";
+import { OperatorSessionsInternalRouter } from "./routers/operator-sessions-internal.router";
 import { AccountAdminInternalRouter } from "./routers/account-admin-internal.router";
 import { OperatorPublicRouter } from "./routers/operator-public.router";
 import { InternalAuthGuard } from "./authn/internal-auth.guard";
@@ -75,6 +76,7 @@ import { HealthRouter } from "./routers/health.router";
     OperatorSelfRouter,
     OperatorStepUpRouter,
     OperatorAdminInternalRouter,
+    OperatorSessionsInternalRouter,
     AccountAdminInternalRouter,
     OperatorPublicRouter,
     SocialController,

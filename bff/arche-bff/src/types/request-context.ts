@@ -26,4 +26,9 @@ export interface OperatorPrincipal {
 export interface RequestContext {
   operator?: OperatorPrincipal;
   capabilities?: Capability[];
+  /**
+   * IdP 中央会话 sid（访问令牌的 `sid` 声明）。只在服务端用来认出「当前会话」：
+   * 它就是 IdP 会话 cookie 的值，**不下发**。
+   */
+  sessionId?: string;
 }

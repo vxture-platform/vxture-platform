@@ -42,7 +42,7 @@ export const archeNavSections: ArcheNavSection[] = [
     ],
   },
   {
-    /* 平台自身的账号 / 角色 / 权限策略 / 登录会话。写口单点在治理平台。 */
+    /* 平台自身的账号 / 角色 / 权限策略 / 在线会话。写口单点在治理平台。 */
     title: "身份权限",
     dividerBefore: true,
     items: [
@@ -72,11 +72,11 @@ export const archeNavSections: ArcheNavSection[] = [
       },
       {
         href: "/sessions",
-        label: "登录与会话",
-        subLabel: "Sign-in & Session",
+        label: "在线会话",
+        subLabel: "Online Session",
         icon: "clock",
-        description: "在线会话与登录记录（含失败与锁定）",
-        code: "arche.menu.sign_in_session",
+        description: "三个平台运营账号当前登录着的会话",
+        code: "arche.menu.online_session",
       },
     ],
   },
@@ -92,6 +92,14 @@ export const archeNavSections: ArcheNavSection[] = [
         icon: "clipboard",
         description: "操作员动作的全量问责流水",
         code: "arche.menu.audit_log",
+      },
+      {
+        href: "/sign-in-logs",
+        label: "登录记录",
+        subLabel: "Sign-in Log",
+        icon: "list",
+        description: "每一次登录尝试，含失败、锁定与异常告警",
+        code: "arche.menu.sign_in_log",
       },
       {
         href: "/risk-records",

@@ -261,8 +261,9 @@
 | `ops:job.read` · `ops:change.read` | | 任务调度 / 变更审计（此前不设码） |
 | **arche** | | |
 | `operator:account.manage` · `operator:role.manage` | 危 | 运营账号 / 角色管理 |
-| `operator:session.read` | | 登录记录与在线会话 |
+| `operator:session.read` | | 在线会话（IdP 中央会话） |
 | `audit:log.read` | | 中央审计日志（support.audit_logs；旧：`audit:read`） |
+| `audit:sign_in_log.read` | | 登录记录（admin.operator_login_attempt）与 24 小时登录告警 |
 | `audit:notification_log.read` | | 通知投递台账（support.notification_logs；旧：`notification:log.read`） |
 | `risk:record.read` / `.manage` | | 风险记录（admin.risk_records，TD-021；旧：`tenant:risk.*`） |
 | `compliance:event.read` / `.manage` | | 合规事件（admin.compliance_events，TD-021） |
@@ -302,10 +303,10 @@
 | `support:ticket`                                                | ✔           | ✔     | R         | —       | —        | ✔       | R       |
 | `support:impersonate` 危                                        | ✔           | ✔     | —         | —       | —        | —       | —       |
 | `operator:account/role.manage` 危                               | ✔           | —     | —         | —       | —        | —       | —       |
-| `operator:session.read`                                         | ✔           | —     | —         | —       | —        | —       | R       |
+| `operator:session.read` · `audit:sign_in_log.read`              | ✔           | —     | —         | —       | —        | —       | R       |
 | `audit:log.read`                                                | ✔           | ✔     | —         | —       | —        | —       | ✔       |
 
-> 2026-09-14 新码按「原先能做这件事的码」授给同一批角色：`product:capability.read` 给持有 `capability:runos.*` 的角色，`pricing:model.read` 给持有 `model:*.manage` 的，`ops:job.read` / `ops:change.read` 给持有任一 opera 码的；`operator:session.read` 给 super_admin 与 auditor。
+> 2026-09-14 新码按「原先能做这件事的码」授给同一批角色：`product:capability.read` 给持有 `capability:runos.*` 的角色，`pricing:model.read` 给持有 `model:*.manage` 的，`ops:job.read` / `ops:change.read` 给持有任一 opera 码的；`operator:session.read` 给 super_admin 与 auditor。2026-09-15 登录记录从「登录与会话」拆到安全审计，`audit:sign_in_log.read` 给持有 `operator:session.read` 的角色。
 
 > 两个关键不变量（比 prompt 稿更严，以本矩阵为准）：
 >
