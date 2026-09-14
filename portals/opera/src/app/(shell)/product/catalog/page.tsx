@@ -50,7 +50,7 @@ import { productTypeLabel, isValidProductType } from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
-  PRODUCT_STATE_META,
+  productStateMeta,
   VERIFICATION_META,
   verificationOf,
   type ChecklistItem,
@@ -762,8 +762,8 @@ function ProductsPageContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ProductRecord) => (
-                  <StatusBadge tone={PRODUCT_STATE_META[r.state].tone} dot>
-                    {PRODUCT_STATE_META[r.state].label}
+                  <StatusBadge tone={productStateMeta(r.state).tone} dot>
+                    {productStateMeta(r.state).label}
                   </StatusBadge>
                 ),
               },

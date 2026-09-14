@@ -52,7 +52,7 @@ import {
 } from "./launch-checks";
 import {
   pendingBySide,
-  PRODUCT_STATE_META,
+  productStateMeta,
   sideOfChecklistItem,
   type ProductState,
 } from "./lifecycle";
@@ -663,11 +663,11 @@ export function LaunchDrawer({
         ) : (
           <Banner
             tone="info"
-            title={`当前是「${PRODUCT_STATE_META[product.state].label}」，这里只做复验`}
+            title={`当前是「${productStateMeta(product.state).label}」，这里只做复验`}
             description={
               product.state === "active"
                 ? "对方改过配置、或密钥轮换后应当跑一次。复验失败不会自动停用——自动停用一个正在跑的产品，是把监测信号变成破坏性动作。要停由人在页头的生命周期菜单里停。"
-                : PRODUCT_STATE_META[product.state].hint
+                : productStateMeta(product.state).hint
             }
           />
         )}

@@ -56,6 +56,26 @@ export const PRODUCT_STATE_META: Record<
   },
 };
 
+/**
+ * 按值取产品状态的展示元数据；**认不出的值原样显示成中性徽标**，不让一个格子带走整页。
+ *
+ * 2026-09-14 模型路由页白屏就是这一类：上游改了词表，`META[新值]` 取到 undefined，
+ * 读 `.tone` 抛错。产品状态今天有库上 CHECK 兜着，但读它的页面不该靠这一点活着。
+ */
+export function productStateMeta(state: string): {
+  label: string;
+  tone: StatusBadgeTone;
+  hint: string;
+} {
+  return (
+    PRODUCT_STATE_META[state as ProductState] ?? {
+      label: state,
+      tone: "neutral",
+      hint: state,
+    }
+  );
+}
+
 interface ProductActionBase {
   id: string;
   label: string;

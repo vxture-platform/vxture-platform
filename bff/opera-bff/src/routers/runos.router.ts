@@ -438,6 +438,14 @@ const RUNOS_MAX_SUBJECT_REFS = 100;
  */
 const RUNOS_FANOUT_CONCURRENCY = 8;
 
+/**
+ * 读完整个能力目录时的一页大小与页数上限。1000 是 runos `MAX_PAGE_LIMIT`；超过
+ * `CATALOG_MAX_PAGES` 页就报错，不截断——`grants/all` 少读一页，等于把那一页的能力
+ * 全报成「没有授权」。
+ */
+const CATALOG_PAGE_LIMIT = 1000;
+const CATALOG_MAX_PAGES = 20;
+
 @Controller("api/runos")
 export class RunosRouter {
   private readonly runosApiUrl: string;
@@ -513,6 +521,35 @@ export class RunosRouter {
     return options?.contract
       ? assertRunosContract(payload, options.contract)
       : payload;
+  }
+
+  /**
+   * 读完整个能力目录（报表用）。
+   *
+   * 目录列表是游标信封（runos v0.26.0）。此前 `grants/all` 按裸数组读
+   * （`CapabilityRecord[]`），runos 切信封之后 `.map` 落在对象上，整条 500，权益配置页
+   * 随之白屏（2026-09-14）。按游标读到底；页数超限就抛，不交出半份目录。
+   */
+  private async listWholeCatalog(
+    req: Request & RequestContext,
+  ): Promise<CapabilityRecord[]> {
+    const rows: CapabilityRecord[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < CATALOG_MAX_PAGES; page++) {
+      const params = new URLSearchParams({ limit: String(CATALOG_PAGE_LIMIT) });
+      if (cursor) params.set("cursor", cursor);
+      const data: CapabilityPage = await this.request<CapabilityPage>(
+        req,
+        `/capability/capabilities?${params.toString()}`,
+        { contract: "capabilities" },
+      );
+      rows.push(...data.items);
+      if (data.nextCursor === null) return rows;
+      cursor = data.nextCursor;
+    }
+    throw new Error(
+      `capability catalog exceeds ${CATALOG_PAGE_LIMIT * CATALOG_MAX_PAGES} rows; grants/all refuses to report on a partial catalog`,
+    );
   }
 
   // ── Capabilities ─────────────────────────────────────────────────────────
@@ -1210,11 +1247,7 @@ export class RunosRouter {
     capabilityCount: number;
   }> {
     assertCanRead(req);
-    const capabilities = await this.request<CapabilityRecord[]>(
-      req,
-      "/capability/capabilities",
-      { contract: "capabilities" },
-    );
+    const capabilities = await this.listWholeCatalog(req);
     const ids = [...new Set(capabilities.map((c) => c.capabilityId))];
     const byGrantId = new Map<string, Record<string, unknown>>();
     const failed: string[] = [];

@@ -75,7 +75,7 @@ import {
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
-  PRODUCT_STATE_META,
+  productStateMeta,
   type ProductState,
 } from "@/features/product/lifecycle";
 import { api, OperaApiError } from "@/lib/api";
@@ -827,9 +827,9 @@ export default function ServiceMonitorPage() {
                            已退役产品同样在清单里，读数旁边得说明它处在哪一步。 */}
                           {r.item.state !== "active" ? (
                             <StatusBadge
-                              tone={PRODUCT_STATE_META[r.item.state].tone}
+                              tone={productStateMeta(r.item.state).tone}
                             >
-                              {PRODUCT_STATE_META[r.item.state].label}
+                              {productStateMeta(r.item.state).label}
                             </StatusBadge>
                           ) : null}
                         </span>

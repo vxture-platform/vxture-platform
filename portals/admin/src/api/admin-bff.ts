@@ -1684,18 +1684,37 @@ export interface RunosCapabilityFilters {
   tags?: string[];
 }
 
+/**
+ * 读完整个能力目录。目录页在浏览器里筛选与分页，要的是全量。
+ *
+ * 接口是游标信封（runos v0.26.0：`{items, nextCursor, prevCursor, total}`）。此前这里按
+ * 裸数组读，拿到信封后 `.filter` / `.map` 落在对象上，技能目录页崩掉。按游标读到底；
+ * 页数超限就抛，不交出半份目录。
+ */
 export async function fetchRunosCapabilities(
   filters: RunosCapabilityFilters = {},
 ): Promise<RunosCapabilityRecord[]> {
-  const search = new URLSearchParams();
-  if (filters.category) search.set("category", filters.category);
-  for (const tag of filters.tags ?? []) {
-    if (tag) search.append("tag", tag);
+  const rows: RunosCapabilityRecord[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 20; page++) {
+    const search = new URLSearchParams();
+    if (filters.category) search.set("category", filters.category);
+    for (const tag of filters.tags ?? []) {
+      if (tag) search.append("tag", tag);
+    }
+    /* runos `MAX_PAGE_LIMIT`，今天的目录一页读完。 */
+    search.set("limit", "1000");
+    if (cursor) search.set("cursor", cursor);
+    const data: { items: RunosCapabilityRecord[]; nextCursor: string | null } =
+      await readJsonStrict<{
+        items: RunosCapabilityRecord[];
+        nextCursor: string | null;
+      }>(`/api/runos/capabilities?${search.toString()}`);
+    rows.push(...data.items);
+    if (data.nextCursor === null) return rows;
+    cursor = data.nextCursor;
   }
-  const qs = search.toString();
-  return readJsonStrict<RunosCapabilityRecord[]>(
-    `/api/runos/capabilities${qs ? `?${qs}` : ""}`,
-  );
+  throw new Error("CAPABILITY_CATALOG_TOO_LARGE (> 20000)");
 }
 
 export async function fetchRunosCapability(

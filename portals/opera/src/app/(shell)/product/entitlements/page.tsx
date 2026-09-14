@@ -76,6 +76,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { fetchWholeCapabilityCatalog } from "@/lib/runos-catalog";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDay } from "@vxture-platform/shared";
 
@@ -260,9 +261,11 @@ function ProductEntitlements() {
       const [prods, routes, caps, eps] = await Promise.all([
         api.get<ProductLite[]>("/api/products"),
         api.get<RouteGrant[]>("/api/atlas/product-grants?includeInactive=true"),
-        api
-          .get<CapabilityLite[]>("/api/runos/capabilities")
-          .catch(() => [] as CapabilityLite[]),
+        /* 目录是游标分页，按游标读到底（见 `lib/runos-catalog.ts`）。此前按裸数组读，
+           runos 切信封之后 `.map` 落在对象上，整页白屏。 */
+        fetchWholeCapabilityCatalog<CapabilityLite>().catch(
+          () => [] as CapabilityLite[],
+        ),
         api
           .get<EndpointLite[]>("/api/atlas/endpoints")
           .catch(() => [] as EndpointLite[]),
