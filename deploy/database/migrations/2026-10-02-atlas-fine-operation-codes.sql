@@ -42,6 +42,13 @@
 -- 补了两条代理(`bff/admin-bff/src/routers/atlas.router.ts`)。
 --
 -- 幂等:整份可重跑。与 `seed-catalog.mjs` 同源。
+--
+-- ## 2026-09-15 补:改名之后的重放
+--
+-- 2026-10-03(三平面)把这十个码改名为 `pricing:*`。migrate 是**全量重放**,本迁移看不见
+-- 改名,只看得见「码不在」,于是重放时把旧码连同 super_admin 授权重新插回来,10-03 的
+-- 「旧码一个不剩」断言随即失败(v0.26.162 的 db-init 实测)。现在每一步都以「对应的
+-- `pricing:*` 码不存在」为前提:改名发生后,本迁移整份是空操作。
 -- 用法:CONFIRM_MIGRATE=yes bash scripts/28d-apply-migrations.sh
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -83,6 +90,11 @@ CROSS JOIN (
   -- 锚点账号,同 seed 的 SYS:系统预置行的 created_by / updated_by。
   SELECT id FROM admin.operator_account ORDER BY created_at LIMIT 1
 ) AS a
+-- 已改名为 pricing:*(2026-10-03)就不再插旧码。
+WHERE NOT EXISTS (
+  SELECT 1 FROM admin.operator_permission x
+   WHERE x.perm_code = 'pricing:' || split_part(v.perm_code, ':', 2)
+)
 ON CONFLICT (perm_code) DO UPDATE SET
   requires_step_up = excluded.requires_step_up,
   updated_at = now();
@@ -133,6 +145,7 @@ ON CONFLICT (role_id, permission_id) DO NOTHING;
 --    判据要落在「本迁移声明的那些对象」上,和全库有多少行无关。
 DO $$
 DECLARE
+  renamed_codes int;
   target_codes text[] := ARRAY[
     'model:price_rule.create', 'model:price_rule.update',
     'model:price_rule.activate', 'model:price_rule.deactivate',
@@ -143,6 +156,18 @@ DECLARE
   ];
   missing text[];
 BEGIN
+  -- ⓪ 已被 2026-10-03 改名为 pricing:* 的，本迁移的对象已不存在：不再断言。
+  SELECT count(*) INTO renamed_codes
+    FROM unnest(target_codes) c
+   WHERE EXISTS (
+     SELECT 1 FROM admin.operator_permission p
+      WHERE p.perm_code = 'pricing:' || split_part(c, ':', 2)
+   );
+  IF renamed_codes > 0 THEN
+    RAISE NOTICE 'atlas 细码已改名为 pricing:*(2026-10-03),跳过自检';
+    RETURN;
+  END IF;
+
   -- ① 十个码都在
   SELECT array_agg(c) INTO missing
     FROM unnest(target_codes) c

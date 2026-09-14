@@ -13,6 +13,8 @@
 -- 合规事件 40。
 --
 -- 幂等：整份可重跑。与 seed-catalog.mjs 同源，守卫 lint:operator-planes 核对。
+-- 重放：migrate 是全量重放，2026-10-03 重放时看不见本迁移的改码，会把旧节点插回来——
+-- 见第 0 步。
 -- 顺序：先 migrate 再 deploy（新镜像按新码校验「登录记录」页，旧库上没有人进得去）。
 -- 用法：CONFIRM_MIGRATE=yes bash scripts/28d-apply-migrations.sh
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -28,6 +30,27 @@ BEGIN
     RAISE EXCEPTION '[sign-in-log] 找不到 arche.menu.security_audit（先跑 2026-10-03-operator-three-planes）';
   END IF;
 END $$;
+
+-- ── 0. 重放自愈 ──────────────────────────────────────────────────────────────
+--    2026-10-03 重放时只看得见「arche.menu.sign_in_session 不在」：第 4 步把它插回来、
+--    第 8 步把 operator:session.read 挂回它下面、第 10 步按闭包给它授权。新节点已在时，
+--    旧节点只是重放的副产物：子节点挪回新节点，删旧节点的授权，再删旧节点。
+UPDATE admin.operator_permission c
+   SET parent_id = n.id, updated_at = now()
+  FROM admin.operator_permission o, admin.operator_permission n
+ WHERE o.perm_code = 'arche.menu.sign_in_session'
+   AND n.perm_code = 'arche.menu.online_session'
+   AND c.parent_id = o.id;
+
+DELETE FROM admin.operator_role_permission rp
+ USING admin.operator_permission o
+ WHERE rp.permission_id = o.id
+   AND o.perm_code = 'arche.menu.sign_in_session'
+   AND EXISTS (SELECT 1 FROM admin.operator_permission n WHERE n.perm_code = 'arche.menu.online_session');
+
+DELETE FROM admin.operator_permission o
+ WHERE o.perm_code = 'arche.menu.sign_in_session'
+   AND EXISTS (SELECT 1 FROM admin.operator_permission n WHERE n.perm_code = 'arche.menu.online_session');
 
 -- ── 1. 页面节点原地改码：登录与会话 → 在线会话 ─────────────────────────────
 UPDATE admin.operator_permission
