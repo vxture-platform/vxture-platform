@@ -48,8 +48,9 @@
  * 2026-08-12 补 Grant 写入口（liaison #249，230/280，已合并）：owner 决定
  * opera 技术供给 + admin 商业打包在 M2 合并成一次写入——原设计文档描述的
  * "opera 独立技术供给目录"端点不存在，`POST /commerce/capability-grants` 一次把
- * riskScope（opera 该填的）和 quotaLimit（admin 该填的）都收了，没有阶段
- * 隔离。这里不假装有阶段隔离，UI 侧也做成单页合并表单（owner 2026-08-12 拍
+ * 授权条款都收了，没有阶段隔离（当时还含 quotaLimit；2026-09 起配额已整体移出
+ * runos，见 runos ADR-022——现在条款只有 riskScope / criticalRequiresApproval，
+ * 多送任何字段都会被 400 `GRANT_UNKNOWN_FIELD`）。这里不假装有阶段隔离，UI 侧也做成单页合并表单（owner 2026-08-12 拍
  * 板）。subjectType 目前只开放 tenant / workspace——tier 级授权依赖
  * callerProductCode 这个 Runos 自己文档标注的"临时简化"兜底值，opera 侧先不
  * 接，等 Runos 真正的订阅/tier 解析落地再加。
@@ -59,8 +60,8 @@
  * `vxture-runos#65`——opera 页面上那几条"没有清单/不能撤销/看不到用量"的横幅
  * 就是这个 issue 的证据）：
  *   - credentials：list（元数据）/ rotate / revoke / applies-to
- *   - grants：revoke（迁 `revoked` 终态，不删行）/ quota 消费量读 / quota 重置 /
- *     by-capability 反向索引
+ *   - grants：revoke（迁 `revoked` 终态，不删行）/ by-capability 反向索引
+ *     （当时还有 quota 消费量读 / 重置两条，已随 runos ADR-022 下线并从本层删除）
  *   - capabilities：updateMetadata（title/ownerRef）/ version lifecycle
  *     （deprecated·withdrawn）/ official 准入档 / reembed
  *   - audit：mgmt_event / capability_call / task_outcome 三条读流
@@ -312,7 +313,7 @@ export interface CapabilityCallRecord {
   latencyGatewayMs: number | null;
   latencyCapabilityMs: number | null;
 
-  /* ── 计量与配额维度（2026-08-24 接出，此前上游一直在发、门户没读）───────── */
+  /* ── 计量维度（2026-08-24 接出，此前上游一直在发、门户没读）─────────────── */
 
   /**
    * 本次调用的计量量。**字符串，不是数字**——上游是 `Decimal(18,6)`，而
@@ -334,17 +335,6 @@ export interface CapabilityCallRecord {
    * 那正是 X-3 举的那个 `SUM()` 例子。
    */
   costUnit: string | null;
-
-  /**
-   * 准入那一刻的配额计数与上限。**`quotaLimit === 0` 表示未强制，不是「上限为零」**——
-   * runos 的 `resolveDecision` 注释原文：*"a no-op when the grant's quotaLimit is 0
-   * (unenforced)"*，而列上的默认值也是 0。渲染成「0 / 0」会读成「配额耗尽」，
-   * 恰好是真相的反面。
-   *
-   * 另：它是**准入时**的快照，不是此刻的余量。同一个授权后续还会被别的调用推进。
-   */
-  quotaCounterBefore: number | null;
-  quotaLimit: number | null;
 
   /** 载荷大小。与延迟配着看才有意义：「慢是因为大」是排障的第二个分叉。 */
   bytesIn: number | null;
@@ -858,7 +848,7 @@ export class RunosRouter {
    * 改条款 —— **上游 2026-08 补的原子入口**（`CommerceController.updateGrant` →
    * `GrantProvisioningService.updateTerms`）。
    *
-   * 在它存在之前，改一条授权的 riskScope / quotaLimit 只能「撤销 + 重发」：两次写、
+   * 在它存在之前，改一条授权的条款只能「撤销 + 重发」：两次写、
    * 两个失败点，中间那一刻这个产品是**没有这条授权**的。门户当时那样做是对的
    * （`grantDirect` 对已存在的 direct 行确实什么都不套用），现在不再是——上游已经
    * 把「同一对主体+能力、不同条款」的重复 POST 改成 **409 `GRANT_EXISTS`** 并在
@@ -870,8 +860,8 @@ export class RunosRouter {
    *     而不是"改回来"——那会让一段被撤销的时间从历史里消失）。
    *   - 收窄 riskScope 会连带重编派生闭包，上游在同一个调用里做完。
    *
-   * grantId 保持不变，所以配额消耗计数**跟着这条授权继续**——这正是撤销重发做不到
-   * 的：那条路径下每改一次条款，用量就从零开始，月度配额形同虚设。
+   * grantId 保持不变——撤销重发做不到这一点：那条路径下每改一次条款就换一个 grantId，
+   * 审计里同一份授权被拆成了互不相关的几段。
    */
   @Patch("grants/:grantId")
   updateGrantTerms(
@@ -1146,7 +1136,7 @@ export class RunosRouter {
     );
   }
 
-  // ── Grants 补充读写（2026-08-13 runos 补齐撤销/配额/反向索引）──────────────
+  // ── Grants 补充读写（2026-08-13 runos 补齐撤销/反向索引）──────────────────
 
   /**
    * 跨产品的授权汇总 —— **形状固定的接缝**。
@@ -1304,43 +1294,10 @@ export class RunosRouter {
     );
   }
 
-  /** 配额消耗。runos 侧读取前会 flush 本地分片，数字最多滞后一个 flush 周期。 */
-  @Get("grants/:grantId/quota")
-  getGrantQuota(
-    @Req() req: Request & RequestContext,
-    @Param("grantId") grantId: string,
-  ): Promise<Record<string, unknown>> {
-    assertCanRead(req);
-    return this.request<Record<string, unknown>>(
-      req,
-      `/commerce/capability-grants/${encodeURIComponent(grantId)}/quota`,
-      { contract: "grant-quota" },
-    );
-  }
-
-  @Post("grants/:grantId/quota/reset")
-  resetGrantQuota(
-    @Req() req: Request & RequestContext,
-    @Param("grantId") grantId: string,
-  ): Promise<Record<string, unknown>> {
-    assertCanManage(req);
-    return this.writeThrough<Record<string, unknown>>(
-      req,
-      `/commerce/capability-grants/${encodeURIComponent(grantId)}/quota/reset`,
-      { method: "POST" },
-      () => ({
-        action: "runos.grant.quota_reset",
-        resourceType: "runos_grant",
-        resourceId: grantId,
-      }),
-    );
-  }
-
   /**
    * **刻意声明在 grants 段最后。** Nest 在同一个 controller 内按声明顺序匹配，
    * 这个两段式 pattern 会吞掉 `grants/` 下所有其它两段路由——
-   * `by-capability/:id` 与 `:grantId/quota` 都会先落到这里
-   * （subjectType="by-capability" / subjectRef="quota"）。runos 侧
+   * `by-capability/:id` 会先落到这里（subjectType="by-capability"）。runos 侧
    * `commerce.controller.ts` 踩过同一个坑并留了同样的注释，本文件此前把它放在
    * 段首、被上面两条撞上：只因为**转发出去的 URL 字符串恰好一模一样**、
    * 且两条都是 `assertCanRead`，才没有表现出故障——是巧合不是设计。

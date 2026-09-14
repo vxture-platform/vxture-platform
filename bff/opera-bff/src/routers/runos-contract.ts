@@ -94,14 +94,14 @@ export const RUNOS_CONTRACT = {
       "decision",
       /* 这一条就是本文件存在的理由之一：门户曾经读 `latencyMs`，上游从来没有过。 */
       "latencyTotalMs",
-      /* 计量与配额维度（2026-08-24 接出）。上游列全是 NOT NULL 带默认值，所以
+      /* 计量维度（2026-08-24 接出）。上游列全是 NOT NULL 带默认值，所以
          「缺了」只可能是上游改了形状，不可能是这一行恰好没有。
          `costUnit` 与 `costAmount` 一起进清单是有意的：只有量没有单位，等于让人
-         把 token 和页数加在一起（product_251 X-3 的 `SUM()` 例子）。 */
+         把 token 和页数加在一起（product_251 X-3 的 `SUM()` 例子）。
+         配额位置（`quotaCounterBefore` / `quotaLimit`）已随配额整体移出 Runos
+         （runos ADR-022 / TD-025 删列），不再出现在行上。 */
       "costAmount",
       "costUnit",
-      "quotaCounterBefore",
-      "quotaLimit",
       "bytesIn",
       "bytesOut",
       "matchedPolicyIds",
@@ -162,18 +162,15 @@ export const RUNOS_CONTRACT = {
       /* direct / derived。派生行不能单独撤、不能改条款，整页的行操作都按它开关。 */
       "grantType",
       "riskScope",
+      /* 页面据它显示「critical 需人工确认」。缺了会被读成 false——一条要人工确认的
+         授权被显示成不需要，所以它是必有字段，不是装饰。 */
+      "criticalRequiresApproval",
       "state",
-      "quotaLimit",
+      /* **没有 `quotaLimit`**：配额与计量归平台（runos ADR-022），runos 删了
+         `capability_grant.quota_limit` 列（TD-025）。此前清单仍要求它，于是每一次
+         授权读都 502 `RUNOS_CONTRACT_FIELD_MISSING`——`grants/all` 把 89 个有授权的
+         能力全报成失败，接入检查单的「能力授权」对持有 84 条授权的产品判成未通过。 */
     ],
-  },
-  /**
-   * 配额消费量。**与 `quota/reset` 的响应形状不同**——后者只回
-   * `{grantId, used, updatedAt}`，把它当消费量存进缓存会让 `enforced` 变 undefined，
-   * 于是一条有上限的授权被渲染成「未强制」。这份清单就是那条边界的守卫。
-   */
-  "grant-quota": {
-    shape: { kind: "single" },
-    fields: ["grantId", "used", "quotaLimit", "enforced", "remaining"],
   },
 } as const satisfies ContractTable;
 

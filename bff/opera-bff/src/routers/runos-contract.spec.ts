@@ -66,37 +66,19 @@ describe("反向验证：runos 侧实测到的两条漂移", () => {
   });
 
   /**
-   * `quota/reset` 只回 `{grantId, used, updatedAt}`。把它当消费量存进缓存，
-   * `enforced` 就成了 undefined，于是一条**有上限**的授权被渲染成「未强制」——
-   * 重置一次配额，界面就开始说这条授权不限量。
-   */
-  it("配额消费量缺 enforced/quotaLimit/remaining（reset 的形状混进来就是这样）", () => {
-    const body = thrown(() =>
-      assertRunosContract(
-        { grantId: "g1", used: 0, updatedAt: null },
-        "grant-quota",
-      ),
-    );
-    expect(String(body["message"])).toContain("quotaLimit");
-    expect(String(body["message"])).toContain("enforced");
-    expect(String(body["message"])).toContain("remaining");
-  });
-
-  /**
-   * 计量与配额维度（2026-08-24 接出）。这一组不是「以防万一」——它钉的是两条会
+   * 计量维度（2026-08-24 接出）。这一组不是「以防万一」——它钉的是会
    * **静默出错**的边界：
    *
    * - `costUnit` 缺了，计量列会只剩一个数字，而 `costUnit` 是开放词表：同一列里
    *   `rerank` 按 candidate、`parse` 按 page。没有单位的一列数字，等于邀请人把
    *   token 和页数加起来（product_251 X-3 举的正是这个 `SUM()` 例子）。
-   * - `quotaLimit` 缺了会被读成 0，而 0 在这里的含义是「未强制」；页面据此显示
-   *   「未强制」——于是一条**有上限**的授权被渲染成不限量。
+   *
+   * 配额位置两列（`quotaCounterBefore` / `quotaLimit`）已随配额移出 runos（ADR-022 /
+   * TD-025 删列），不在清单里——见下面「授权行」那组。
    */
   it.each([
     ["costAmount", "计量列整列消失"],
     ["costUnit", "只剩数字，不同能力的单位被混在一列里"],
-    ["quotaLimit", "读成 0 → 有上限的授权被渲染成「未强制」"],
-    ["quotaCounterBefore", "配额位置只剩分母"],
     ["degradedMode", "降级裁决与正常裁决长得一样"],
     ["matchedPolicyIds", "裁决旁的策略提示变成空串"],
   ] as const)("调用流水缺 `%s`（%s）", (field, _why) => {
@@ -119,6 +101,40 @@ describe("反向验证：runos 侧实测到的两条漂移", () => {
     const fields = RUNOS_CONTRACT["audit-calls"].fields;
     expect(fields).toContain("costAmount");
     expect(fields).toContain("costUnit");
+  });
+
+  /**
+   * 授权行（runos ADR-022 之后的真实形状，2026-09-14 生产实测的键集合）。
+   *
+   * 清单此前仍要求 `quotaLimit`，而 runos 已删掉那一列：每一次授权读都 502，
+   * `grants/all` 把全部有授权的能力报成失败，接入检查单的「能力授权」对持有 84 条
+   * 授权的产品判成未通过。第一条钉住「没有配额字段的行必须过」，第二条钉住
+   * 换上来的必有字段确实会被查。
+   */
+  const liveGrantRow = {
+    grantId: "g1",
+    subjectType: "product",
+    subjectRef: "tenderforge",
+    capabilityId: "deusyu.deusyu",
+    grantType: "direct",
+    anchorCapabilityId: null,
+    riskScope: "read",
+    criticalRequiresApproval: false,
+    state: "active",
+    createdAt: "2026-09-14T00:00:00.000Z",
+    compiledAt: null,
+  };
+
+  it("授权行没有 quotaLimit 照样通过（配额已移出 runos）", () => {
+    expect(() => assertRunosContract([liveGrantRow], "grants")).not.toThrow();
+    expect(RUNOS_CONTRACT.grants.fields).not.toContain("quotaLimit");
+  });
+
+  it("授权行缺 `criticalRequiresApproval`（读成 false → 要人工确认的授权显示成不需要）", () => {
+    const { criticalRequiresApproval: _dropped, ...row } = liveGrantRow;
+    const body = thrown(() => assertRunosContract([row], "grants"));
+    expect(body["code"]).toBe("RUNOS_CONTRACT_FIELD_MISSING");
+    expect(body["field"]).toBe("criticalRequiresApproval");
   });
 
   it("一次点名所有缺的字段，不是只报第一个", () => {
