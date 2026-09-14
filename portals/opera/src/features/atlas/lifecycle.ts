@@ -20,7 +20,7 @@ import { isEnabled } from "./state";
 
 /** Endpoint 当前实际在干什么，读时从它指向的模型推导。 */
 export type EndpointResolutionState =
-  | "disabled"
+  | "inactive"
   | "unresolvable"
   | "degraded"
   | "serving";
@@ -41,7 +41,12 @@ export interface EndpointModelRef {
  * fallback 顶着。把它染成红色会让它和「调用正在失败」抢注意力，而两者该做的事完全
  * 不同——一个是尽快查 primary，一个是立刻止血。
  *
- * `disabled` 是 neutral：那是运营自己关的，不是故障。
+ * `inactive` 是 neutral：那是运营自己关的，不是故障。
+ *
+ * **这一档此前叫 `disabled`**。Atlas 按 product_251 M-B3 把它改成与对象自身 `state` 同一个词
+ * （`service/src/types/runtime.types.ts`：「一个控制台里同一个状态两种叫法，正是这条要消灭的
+ * 缺陷」），opera 没跟上——于是任何一条被停用的 Endpoint 都让 `RESOLUTION_META["inactive"]`
+ * 取到 undefined，整个路由页白屏（2026-09-14 实测）。
  */
 export const RESOLUTION_META: Record<
   EndpointResolutionState,
@@ -62,7 +67,7 @@ export const RESOLUTION_META: Record<
     tone: "danger",
     hint: "primary 与 fallback 都服务不了，走这个入口的调用正在失败。",
   },
-  disabled: {
+  inactive: {
     label: "已停用",
     tone: "neutral",
     hint: "运营把它关了。模型或 Provider 的任何状态都不会覆盖这一档。",
@@ -80,6 +85,41 @@ export const AVAILABILITY_META: Record<
   provider_inactive: { label: "Provider 已停用", tone: "warning" },
   missing: { label: "模型不存在", tone: "danger" },
 };
+
+/**
+ * 按值取展示元数据，**认不出的值不崩页**。
+ *
+ * 类型上 `Record<EndpointResolutionState, …>` 保证了「写得出的键都有」，保证不了「上游
+ * 送来的一定是这几个键」——上面那次改名就是反例：类型对、编译过、线上白屏。通则要求
+ * 容忍未知枚举值，所以未知值原样显示成中性徽标，并说明是契约漂移，而不是让一个格子
+ * 带走整张页。
+ */
+export function resolutionMeta(value: string): {
+  label: string;
+  tone: StatusBadgeTone;
+  hint: string;
+} {
+  return (
+    RESOLUTION_META[value as EndpointResolutionState] ?? {
+      label: value,
+      tone: "neutral",
+      /* 原样带出上游的值——认不出就说认不出，不编一句解释。 */
+      hint: value,
+    }
+  );
+}
+
+export function availabilityMeta(value: string): {
+  label: string;
+  tone: StatusBadgeTone;
+} {
+  return (
+    AVAILABILITY_META[value as ModelAvailability] ?? {
+      label: value,
+      tone: "neutral",
+    }
+  );
+}
 
 /**
  * 意图（`state`）与后果（`resolution`）**只在上游坏掉时才不一致**，而那正是唯一

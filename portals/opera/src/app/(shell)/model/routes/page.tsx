@@ -73,8 +73,8 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import {
-  AVAILABILITY_META,
-  RESOLUTION_META,
+  availabilityMeta,
+  resolutionMeta,
   deleteFailureToast,
   resolutionDivergesFromIntent,
   type EndpointModelRef,
@@ -185,7 +185,7 @@ function ModelRefCell({
       <span className="text-code-sm">{modelCode}</span>
       {availability && availability !== "available" ? (
         <Badge variant="outline" className="w-fit">
-          {AVAILABILITY_META[availability].label}
+          {availabilityMeta(availability).label}
         </Badge>
       ) : null}
     </span>
@@ -571,7 +571,7 @@ function EndpointsPageContent() {
                 description={diverging
                   .map((r) =>
                     r.resolution
-                      ? `${r.code}（${RESOLUTION_META[r.resolution].label}）`
+                      ? `${r.code}（${resolutionMeta(r.resolution).label}）`
                       : r.code,
                   )
                   .join("、")}
@@ -630,7 +630,7 @@ function EndpointsPageContent() {
               <option value="serving">服务中</option>
               <option value="degraded">降级服务</option>
               <option value="unresolvable">无法解析</option>
-              <option value="disabled">
+              <option value="inactive">
                 {tShared("status.generic.disabled")}
               </option>
             </NativeSelect>
@@ -758,7 +758,7 @@ function EndpointsPageContent() {
               },
               {
                 /* 读 resolution 而不是 state：后者是意图，前者是它当前实际
-                   在干什么。`disabled` 一档等价于 state="inactive"，没有信息损失。
+                   在干什么。`inactive` 一档等价于 state="inactive"，没有信息损失。
                    没有"读不到"的分支了——resolution 是契约必有字段，缺了在 BFF 就报错，
                    走不到这里。 */
                 id: "resolution",
@@ -766,8 +766,8 @@ function EndpointsPageContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ModelEndpointRecord) => (
-                  <StatusBadge tone={RESOLUTION_META[r.resolution].tone} dot>
-                    {RESOLUTION_META[r.resolution].label}
+                  <StatusBadge tone={resolutionMeta(r.resolution).tone} dot>
+                    {resolutionMeta(r.resolution).label}
                   </StatusBadge>
                 ),
               },
