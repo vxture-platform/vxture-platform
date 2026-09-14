@@ -202,7 +202,11 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:datetime-discipline
 
+      # docs_only 条件与上下相邻各步一致。#277 加这一步时漏了它，于是纯文档 PR 上
+      # setup-node-pnpm 被跳过、这一步却照跑 —— `pnpm: command not found`，exit 127，
+      # quality-gate 整条红。纯文档变更碰不到 seed 与列 CHECK 的一致性，跳过不丢判据。
       - name: Seed vs column CHECK guardrail
+        if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:seed-constraints
 
       # 用户名格式写在三处(后端判据 + 两个补齐页的前端校验),漂了不报错:
