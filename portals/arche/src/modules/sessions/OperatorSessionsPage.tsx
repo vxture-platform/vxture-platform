@@ -58,16 +58,19 @@ import { useTableLabels } from "@/modules/shared/table";
 
 const ACCOUNT_MANAGE = "operator:account.manage";
 
+/* 词表照登录服务实际写入的值（auth-bff recordOperatorAttempt）。认不出的值原样显示。 */
 const RESULT_LABELS: Record<string, string> = {
   success: "成功",
-  bad_credentials: "凭证错误",
-  locked: "已锁定",
+  mfa_required: "待二次验证",
+  bad_credential: "凭证错误",
   mfa_failed: "二次验证失败",
-  disabled: "账号停用",
+  locked: "已锁定",
 };
 
 function resultTone(result: string): StatusBadgeTone {
   if (result === "success") return "success";
+  /* 密码已过、等二次验证：正常中间步骤，不是失败。 */
+  if (result === "mfa_required") return "neutral";
   if (result === "locked") return "danger";
   return "warning";
 }
@@ -312,7 +315,7 @@ export function OperatorSessionsPage() {
             id: "failed",
             icon: "x",
             label: "24 小时登录失败",
-            help: "最近 24 小时结果不是成功的登录尝试。",
+            help: "最近 24 小时凭证错误、二次验证失败或被锁定的登录尝试；待二次验证不算。",
             value: formatNumber(summary?.failedSignIns24h ?? 0),
             ...((summary?.failedSignIns24h ?? 0) > 0
               ? { tone: "warning" as const }

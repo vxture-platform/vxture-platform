@@ -1,6 +1,6 @@
 {
   "meta": {
-    "plane": "Infrastructure Plane",
+    "plane": "Infrastructure Platform",
     "description": "Platform infrastructure: technical resources, runtime, metering, releases, observability and security. No commercial operations."
   },
   "pagination": {

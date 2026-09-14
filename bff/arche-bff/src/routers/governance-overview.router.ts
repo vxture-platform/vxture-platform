@@ -94,7 +94,7 @@ export class GovernanceOverviewRouter {
                        where status = 'active' and expires_at > now()) as active,
                      (select count(*)::int
                         from admin.operator_login_attempt
-                       where result <> 'success'
+                       where result not in ('success', 'mfa_required')
                          and created_at > now() - interval '24 hours') as failed`)
         : null,
       anyOf(req, "audit:log.read")

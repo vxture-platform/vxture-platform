@@ -335,7 +335,7 @@ export function ArcheShell({
                       {
                         key: "arche",
                         icon: "squares-four",
-                        label: "平台治理平面",
+                        label: "治理平台",
                         active: true,
                       },
                     ]}
@@ -354,7 +354,7 @@ export function ArcheShell({
                       看起来像换了颜色。排版角色是字号/字重/行高/字距一整套，
                       单挑一项覆盖，同一个角色在各处就会长得不一样。 */}
                   <span className="hidden truncate text-label-md text-muted-foreground md:inline">
-                    平台治理平面
+                    治理平台
                   </span>
                 </>
               }

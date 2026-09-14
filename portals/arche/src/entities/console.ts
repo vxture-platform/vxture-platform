@@ -208,7 +208,7 @@ export interface OperatorSignInRecord {
   operatorName: string | null;
   identifier: string;
   authMethod: string;
-  /** success / bad_credentials / locked …（开放集）。 */
+  /** success / mfa_required / bad_credential / mfa_failed / locked（开放集，登录服务决定）。 */
   result: string;
   ipAddress: string;
   userAgent: string | null;
