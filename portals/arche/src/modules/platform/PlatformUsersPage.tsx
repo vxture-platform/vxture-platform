@@ -279,14 +279,12 @@ function usePlatformUserColumns(
       header: "角色",
       sortable: true,
       cell: (admin) => (
-        <TableTitleCell
-          title={platformRoleDisplayName(admin, t)}
-          titleSuffix={
-            <StatusBadge tone={platformRoleStatusTone(admin)}>
-              {platformRoleStatusLabel(admin)}
-            </StatusBadge>
-          }
-        />
+        <span className="inline-flex items-center gap-xs">
+          {platformRoleDisplayName(admin, t)}
+          <StatusBadge tone={platformRoleStatusTone(admin)}>
+            {platformRoleStatusLabel(admin)}
+          </StatusBadge>
+        </span>
       ),
     },
     {
@@ -294,14 +292,11 @@ function usePlatformUserColumns(
       header: "最后登录",
       sortable: true,
       cell: (admin) => (
-        <TableTitleCell
-          title={
-            admin.lastLoginAt
-              ? formatDate(admin.lastLoginAt, locale)
-              : EMPTY_MARK
-          }
-          description={admin.lastLoginIp || EMPTY_MARK}
-        />
+        <span title={admin.lastLoginIp ? `IP ${admin.lastLoginIp}` : undefined}>
+          {admin.lastLoginAt
+            ? formatDate(admin.lastLoginAt, locale)
+            : EMPTY_MARK}
+        </span>
       ),
     },
     {
@@ -309,10 +304,9 @@ function usePlatformUserColumns(
       header: "联系方式",
       sortable: true,
       cell: (admin) => (
-        <TableTitleCell
-          title={admin.email || EMPTY_MARK}
-          description={admin.phone || EMPTY_MARK}
-        />
+        <span title={admin.phone ?? undefined}>
+          {admin.email || admin.phone || EMPTY_MARK}
+        </span>
       ),
     },
   ];

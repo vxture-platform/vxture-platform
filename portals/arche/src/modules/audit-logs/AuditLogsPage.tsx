@@ -227,20 +227,16 @@ function auditColumns(
       sortable: true,
       // 只写一次。`actionLabel` 曾是 BFF 拿 `row.action` 原样起的别名，标题与描述
       // 因此逐字相同（`oidc.token_exchange.issued` 上下各一行）。没有译名就不装作有。
-      cell: (log) => <TableTitleCell title={log.action} />,
+      cell: (log) => log.action,
     },
     {
       id: "target",
       header: "对象",
-      cell: (log) =>
-        log.targetLabel ? (
-          <TableTitleCell
-            title={log.targetLabel}
-            description={log.targetType}
-          />
-        ) : (
-          <span className="text-muted-foreground">{EMPTY_MARK}</span>
-        ),
+      cell: (log) => (
+        <span title={log.targetId ?? undefined}>
+          {log.targetLabel ?? log.targetType ?? EMPTY_MARK}
+        </span>
+      ),
     },
     { id: "module", header: "模块", cell: (log) => log.module },
     {

@@ -164,7 +164,6 @@ function columnsOf(locale: string): readonly DataTableColumn<RiskRecordItem>[] {
       id: "score",
       header: "评分",
       sortable: true,
-      align: "numeric",
       cell: (item) => item.riskScore ?? "-",
     },
     {

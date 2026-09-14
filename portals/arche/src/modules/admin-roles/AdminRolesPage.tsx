@@ -777,10 +777,9 @@ function useAdminRoleColumns(
       },
     },
     {
-      /* 启用 / 全部。数值列：个位对齐，不贴右缘。 */
+      /* 启用 / 全部。 */
       id: "admins",
       header: "成员",
-      align: "numeric",
       sortable: true,
       cell: (role) =>
         `${formatNumber(role.activeAdminCount)} / ${formatNumber(role.adminCount)}`,
@@ -789,7 +788,6 @@ function useAdminRoleColumns(
       /* 此前是三枚「菜单 / 按钮 / 接口」徽标——长内容精简成一个总数，构成在「权限详情」里。 */
       id: "permissions",
       header: "权限",
-      align: "numeric",
       sortable: true,
       cell: (role) => formatNumber(role.permissionCount),
     },
@@ -812,10 +810,9 @@ function useAdminRoleColumns(
       header: "创建人",
       sortable: true,
       cell: (role) => (
-        <TableTitleCell
-          title={role.createdByName ?? EMPTY_MARK}
-          description={formatDate(role.createdAt, locale)}
-        />
+        <span title={`创建于 ${formatDate(role.createdAt, locale)}`}>
+          {role.createdByName ?? EMPTY_MARK}
+        </span>
       ),
     },
   ];

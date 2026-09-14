@@ -1100,7 +1100,6 @@ function usePermissionTreeColumns({
     {
       id: "roles",
       header: "授权角色",
-      align: "numeric",
       sortable: true,
       cell: ({ permission }) =>
         `${formatNumber(permission.activeRoleCount)} / ${formatNumber(permission.roleCount)}`,
@@ -1123,6 +1122,8 @@ function PermissionDomainSection({
   onCreatePermission,
   onEditPermission,
   onTogglePermission,
+  open,
+  onOpenChange,
 }: {
   group: PermissionDomainGroup;
   permissionById: Map<string, PlatformAdminPermissionRecord>;
@@ -1138,6 +1139,9 @@ function PermissionDomainSection({
   onCreatePermission: () => void;
   onEditPermission: (permission: PlatformAdminPermissionRecord) => void;
   onTogglePermission: (permission: PlatformAdminPermissionRecord) => void;
+  /** 这个平台分组是否展开。三棵树连着铺开太长，第二、三个平台翻不到。 */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
@@ -1181,137 +1185,169 @@ function PermissionDomainSection({
         level={2}
         icon={group.icon}
         title={group.title}
+        titleSuffix={
+          <>
+            <Badge>{formatNumber(group.totalCount)} 项</Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={open}
+              onClick={() => onOpenChange(!open)}
+            >
+              <Icon
+                name={open ? "chevron-down" : "chevron-right"}
+                size="xs"
+                fallback="chevron-right"
+              />
+              {open ? "收起" : "展开"}
+            </Button>
+          </>
+        }
         description={group.description}
       />
-      <PermissionDomainStats group={group} />
-      <section
-        className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
-        aria-label={`${group.title}筛选`}
-      >
-        <ViewModeSwitch
-          value={viewMode}
-          onChange={onViewModeChange}
-          ariaLabel={`${group.title}展示方式`}
-        />
-        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
-          {formatNumber(group.matchedCount)} / {formatNumber(group.totalCount)}
-        </span>
-        <span className="flex-1 max-lg:hidden" aria-hidden="true" />
-        <Input
-          value={filters.query}
-          onChange={(event) => onFilterChange({ query: event.target.value })}
-          placeholder="搜索权限 code、名称、路径、组件"
-          className="min-w-media-2xl grow basis-0 max-w-panel-sm"
-          aria-label={`搜索${group.title}`}
-        />
-        <Button variant="outline" onClick={onResetFilters}>
-          重置
-        </Button>
+      {open ? (
         <>
-          <NativeSelect
-            wrapperClassName="w-fit basis-media-xl"
-            value={filters.typeFilter}
-            onChange={(event) =>
-              onFilterChange({
-                typeFilter: event.target.value as PermissionFilter,
-              })
-            }
-            aria-label={`${group.title}权限类型`}
+          <PermissionDomainStats group={group} />
+          <section
+            className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+            aria-label={`${group.title}筛选`}
           >
-            <option value="all">{tShared("filters.allKinds")}</option>
-            <option value="menu">菜单权限</option>
-            <option value="button">按钮权限</option>
-            <option value="api">接口权限</option>
-          </NativeSelect>
-          <NativeSelect
-            wrapperClassName="w-fit basis-media-xl"
-            value={filters.statusFilter}
-            onChange={(event) =>
-              onFilterChange({
-                statusFilter: event.target.value as StatusFilter,
-              })
-            }
-            aria-label={`${group.title}权限状态`}
-          >
-            <option value="all">{tShared("filters.allStates")}</option>
-            <option value="active">{tShared("actions.enable")}</option>
-            <option value="disabled">{tShared("actions.disable")}</option>
-          </NativeSelect>
-          <NativeSelect
-            wrapperClassName="w-fit basis-media-xl"
-            value={filters.sourceFilter}
-            onChange={(event) =>
-              onFilterChange({
-                sourceFilter: event.target.value as SourceFilter,
-              })
-            }
-            aria-label={`${group.title}权限来源`}
-          >
-            <option value="all">全部来源</option>
-            <option value="system">系统预置</option>
-            <option value="custom">自定义</option>
-          </NativeSelect>
-        </>
-        <Button variant="outline" onClick={() => onExpand(domainPermissionIds)}>
-          展开
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => onCollapse(domainPermissionIds)}
-        >
-          收起
-        </Button>
-        <ActionButton
-          variant="outline"
-          icon="plus"
-          onClick={onCreatePermission}
-        >
-          新增权限
-        </ActionButton>
-      </section>
-      {group.nodes.length ? (
-        viewMode === "list" ? (
-          <DataTable
-            labels={tableLabels}
-            columns={treeColumns}
-            rows={visibleNodes}
-            rowKey={(node) => node.permission.id}
-            aria-label={group.title}
-            indexStart={1}
-            {...(sort ? { sort: sort } : {})}
-            onSortChange={setSort}
-            rowActions={(node) => (
-              <PermissionActionsMenu
-                permission={node.permission}
+            <ViewModeSwitch
+              value={viewMode}
+              onChange={onViewModeChange}
+              ariaLabel={`${group.title}展示方式`}
+            />
+            <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
+              {formatNumber(group.matchedCount)} /{" "}
+              {formatNumber(group.totalCount)}
+            </span>
+            <span className="flex-1 max-lg:hidden" aria-hidden="true" />
+            <Input
+              value={filters.query}
+              onChange={(event) =>
+                onFilterChange({ query: event.target.value })
+              }
+              placeholder="搜索权限 code、名称、路径、组件"
+              className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+              aria-label={`搜索${group.title}`}
+            />
+            <Button variant="outline" onClick={onResetFilters}>
+              重置
+            </Button>
+            <>
+              <NativeSelect
+                wrapperClassName="w-fit basis-media-xl"
+                value={filters.typeFilter}
+                onChange={(event) =>
+                  onFilterChange({
+                    typeFilter: event.target.value as PermissionFilter,
+                  })
+                }
+                aria-label={`${group.title}权限类型`}
+              >
+                <option value="all">{tShared("filters.allKinds")}</option>
+                <option value="menu">菜单权限</option>
+                <option value="button">按钮权限</option>
+                <option value="api">接口权限</option>
+              </NativeSelect>
+              <NativeSelect
+                wrapperClassName="w-fit basis-media-xl"
+                value={filters.statusFilter}
+                onChange={(event) =>
+                  onFilterChange({
+                    statusFilter: event.target.value as StatusFilter,
+                  })
+                }
+                aria-label={`${group.title}权限状态`}
+              >
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="active">{tShared("actions.enable")}</option>
+                <option value="disabled">{tShared("actions.disable")}</option>
+              </NativeSelect>
+              <NativeSelect
+                wrapperClassName="w-fit basis-media-xl"
+                value={filters.sourceFilter}
+                onChange={(event) =>
+                  onFilterChange({
+                    sourceFilter: event.target.value as SourceFilter,
+                  })
+                }
+                aria-label={`${group.title}权限来源`}
+              >
+                <option value="all">全部来源</option>
+                <option value="system">系统预置</option>
+                <option value="custom">自定义</option>
+              </NativeSelect>
+            </>
+            <Button
+              variant="outline"
+              onClick={() => onExpand(domainPermissionIds)}
+            >
+              展开
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => onCollapse(domainPermissionIds)}
+            >
+              收起
+            </Button>
+            <ActionButton
+              variant="outline"
+              icon="plus"
+              onClick={onCreatePermission}
+            >
+              新增权限
+            </ActionButton>
+          </section>
+          {group.nodes.length ? (
+            viewMode === "list" ? (
+              <DataTable
+                labels={tableLabels}
+                columns={treeColumns}
+                rows={visibleNodes}
+                rowKey={(node) => node.permission.id}
+                aria-label={group.title}
+                indexStart={1}
+                {...(sort ? { sort: sort } : {})}
+                onSortChange={setSort}
+                rowActions={(node) => (
+                  <PermissionActionsMenu
+                    permission={node.permission}
+                    onOpenDetail={(permission) => {
+                      setDetailPermissionId(permission.id);
+                    }}
+                    onEdit={onEditPermission}
+                    onToggle={onTogglePermission}
+                  />
+                )}
+              />
+            ) : (
+              <PermissionCardGrid
+                nodes={group.nodes}
                 onOpenDetail={(permission) => {
                   setDetailPermissionId(permission.id);
                 }}
                 onEdit={onEditPermission}
                 onToggle={onTogglePermission}
               />
-            )}
-          />
-        ) : (
-          <PermissionCardGrid
-            nodes={group.nodes}
-            onOpenDetail={(permission) => {
-              setDetailPermissionId(permission.id);
-            }}
-            onEdit={onEditPermission}
-            onToggle={onTogglePermission}
-          />
-        )
-      ) : (
-        <EmptyState
-          title={`没有匹配的${group.title}`}
-          description="清空当前板块筛选条件后可查看该域全部权限。"
-          action={
-            <ActionButton variant="outline" icon="x" onClick={onResetFilters}>
-              {tShared("common.clearFilters")}
-            </ActionButton>
-          }
-        />
-      )}
+            )
+          ) : (
+            <EmptyState
+              title={`没有匹配的${group.title}`}
+              description="清空当前板块筛选条件后可查看该域全部权限。"
+              action={
+                <ActionButton
+                  variant="outline"
+                  icon="x"
+                  onClick={onResetFilters}
+                >
+                  {tShared("common.clearFilters")}
+                </ActionButton>
+              }
+            />
+          )}
+        </>
+      ) : null}
       {detailPermission ? (
         <PermissionDetailDialog
           permission={detailPermission}
@@ -1500,9 +1536,33 @@ export function AdminPermissionsPage() {
     [permissionDomainGroups],
   );
 
+  /* 树默认只露第一层（板块），不再整棵铺开；有筛选时展开命中项所在的路径。 */
+  const anyFilterActive = Object.values(filtersByDomain).some(
+    (filters) =>
+      filters.query.trim() !== "" ||
+      filters.typeFilter !== "all" ||
+      filters.statusFilter !== "all" ||
+      filters.sourceFilter !== "all",
+  );
   useEffect(() => {
-    setExpandedPermissionIds(new Set(visiblePermissionIds));
-  }, [visiblePermissionIds]);
+    setExpandedPermissionIds(
+      anyFilterActive ? new Set(visiblePermissionIds) : new Set(),
+    );
+  }, [visiblePermissionIds, anyFilterActive]);
+
+  /* 平台分组默认全部收起：标题一行一个平台，点开再看。 */
+  const [openDomains, setOpenDomains] = useState<Set<string>>(() => new Set());
+  function setDomainOpen(domain: PermissionDomainKey, next: boolean) {
+    setOpenDomains((current) => {
+      const updated = new Set(current);
+      if (next) {
+        updated.add(domain);
+      } else {
+        updated.delete(domain);
+      }
+      return updated;
+    });
+  }
 
   function updateDomainFilters(
     domain: PermissionDomainKey,
@@ -1633,6 +1693,8 @@ export function AdminPermissionsPage() {
                   onCreatePermission={openCreatePermission}
                   onEditPermission={openEditPermission}
                   onTogglePermission={togglePermission}
+                  open={openDomains.has(group.key)}
+                  onOpenChange={(next) => setDomainOpen(group.key, next)}
                 />
               ))}
             </div>

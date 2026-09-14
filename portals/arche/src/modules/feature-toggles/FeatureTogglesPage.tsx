@@ -165,7 +165,6 @@ function columnsOf(
       id: "rollout",
       header: "灰度",
       sortable: true,
-      align: "numeric",
       cell: (item) => `${item.rolloutPercentage}%`,
     },
     {
