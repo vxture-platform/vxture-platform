@@ -170,7 +170,7 @@ export const operaNavSections: OperaNavSection[] = [
         label: "接入凭据",
         subLabel: "OIDC Client",
         icon: "fingerprint",
-        description: "OIDC 客户端注册与密钥轮换",
+        description: "全部产品的登录客户端总览；配置在各产品页",
       },
       {
         href: "/product/entitlements",

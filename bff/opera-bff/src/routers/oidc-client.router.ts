@@ -50,6 +50,7 @@ import { hash, genSalt } from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import type { Queryable } from "../db/tx";
 import {
   conflict,
   invalidRequest,
@@ -187,7 +188,7 @@ const RETURNING_COLUMNS = `c.id, c.client_id, c.product_id, c.release_channel, c
                   c.token_endpoint_auth_method, c.status, c.created_at, c.updated_at`;
 
 /** 去空白、丢空串、去重，顺序保持调用方给的。 */
-function normalizeUriList(value: unknown): string[] {
+export function normalizeUriList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
   for (const raw of value) {
@@ -231,68 +232,13 @@ export class OidcClientRouter {
     validateCreate(body);
     const productId = body.productId!.trim();
     const productCode = await this.requireRegisteredProduct(productId);
-
-    const authMethod = body.tokenEndpointAuthMethod ?? "client_secret_basic";
-    const isPublic = authMethod === "none";
-
-    /* 公共客户端没有 secret 可发。仍然生成再丢掉会白烧一次 bcrypt，
-       而 bcrypt(cost=10) 不便宜——按需生成。 */
-    const secret = isPublic ? null : generateSecret();
-    const secretHash = secret
-      ? await hash(secret, await genSalt(BCRYPT_COST))
-      : null;
-
-    let row: ClientRow;
-    try {
-      const result = await this.pool.query<ClientRow>(
-        `INSERT INTO appoidc.oidc_clients (
-           client_id, client_secret_hash, realm, product_id, client_kind,
-           release_channel, name, display_name, logo_url, redirect_uris,
-           post_logout_redirect_uris, allowed_scopes, pkce_required,
-           token_endpoint_auth_method
-         ) VALUES ($1, $2, 'customer', $3, 'product', $4, $5, $6, $7, $8, $9, $10, $11, $12)
-         RETURNING id, client_id, product_id, release_channel, name,
-                   display_name, logo_url, redirect_uris, post_logout_redirect_uris,
-                   allowed_scopes, pkce_required, token_endpoint_auth_method,
-                   status, created_at, updated_at`,
-        [
-          body.clientId!.trim(),
-          /* 公共客户端**不持有 secret**——这是协议属性不是「没配」。
-             库上 chk_oidc_clients_public_pkce 也挡，但那会冒成 500。 */
-          isPublic ? null : secretHash,
-          productId,
-          body.releaseChannel ?? "stable",
-          body.name?.trim() || body.clientId!.trim(),
-          body.displayName?.trim() || null,
-          body.logoUrl?.trim() || null,
-          body.redirectUris,
-          body.postLogoutRedirectUris ?? [],
-          body.allowedScopes ?? DEFAULT_SCOPES,
-          /* 公共客户端**强制** PKCE（RFC 8252）。机密客户端默认也开（OAuth 2.1
-             对所有客户端的建议），调用方可以关。 */
-          isPublic ? true : (body.pkceRequired ?? true),
-          authMethod,
-        ],
-      );
-      row = { ...result.rows[0]!, product_code: null };
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        /* 唯一约束撞了——是"这个值被别人占了"，不是"这个值写得不对"。409 让
-           控制台可以直接提示改名，而不是让人去逐字检查格式。 */
-        throw conflict(
-          "OIDC_CLIENT_ID_TAKEN",
-          `client_id "${body.clientId}" already exists`,
-        );
-      }
-      throw error;
-    }
-
-    return {
-      ...toRecord({ ...row, product_code: productCode }),
-      /* 公共客户端回空串而不是 null:调用方拿到的仍是 string,
-         界面据「是否公共」决定显不显示那一栏,不靠判空。 */
-      clientSecret: secret ?? "",
-    };
+    const { record, clientSecret } = await insertProductClientTx(
+      this.pool,
+      productId,
+      productCode,
+      body,
+    );
+    return { ...record, clientSecret };
   }
 
   /**
@@ -368,26 +314,14 @@ export class OidcClientRouter {
         "displayName",
       );
     }
-    const result = await this.pool.query<ClientRow>(
-      `UPDATE appoidc.oidc_clients c
-          SET display_name = CASE WHEN $2::bool THEN $3 ELSE c.display_name END,
-              logo_url     = CASE WHEN $4::bool THEN $5 ELSE c.logo_url END,
-              updated_at = now()
-        WHERE c.client_id = $1 AND c.realm = 'customer' AND c.client_kind = 'product'
-        RETURNING ${RETURNING_COLUMNS}`,
-      [
-        clientId,
-        touchesName,
-        body.displayName?.trim() || null,
-        touchesLogo,
-        body.logoUrl?.trim() || null,
-      ],
-    );
-    const row = result.rows[0];
-    if (!row) {
+    const record = await patchProductClientTx(this.pool, clientId, null, {
+      ...(touchesName ? { displayName: body.displayName?.trim() || null } : {}),
+      ...(touchesLogo ? { logoUrl: body.logoUrl?.trim() || null } : {}),
+    });
+    if (!record) {
       throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
     }
-    return toRecord(row);
+    return record;
   }
 
   /**
@@ -409,27 +343,22 @@ export class OidcClientRouter {
     body: { redirectUris?: string[]; postLogoutRedirectUris?: string[] },
   ): Promise<OidcClientRecord> {
     assertCanManage(req);
-    const redirects = normalizeUriList(body.redirectUris);
-    if (redirects.length === 0) {
-      throw invalidRequest(
-        "VALIDATION_REQUIRED",
-        "至少要有一个登录回调地址——清空等于这个客户端再也登不进来",
-        "redirectUris",
-      );
-    }
-    const logouts = normalizeUriList(body.postLogoutRedirectUris);
-    const result = await this.pool.query<ClientRow>(
-      `UPDATE appoidc.oidc_clients c
-          SET redirect_uris = $2, post_logout_redirect_uris = $3, updated_at = now()
-        WHERE c.client_id = $1 AND c.realm = 'customer' AND c.client_kind = 'product'
-        RETURNING ${RETURNING_COLUMNS}`,
-      [clientId, redirects, logouts],
+    const redirectUris = normalizeUriList(body.redirectUris);
+    const postLogoutRedirectUris = normalizeUriList(
+      body.postLogoutRedirectUris,
     );
-    const row = result.rows[0];
-    if (!row) {
+    validateClientInput(
+      { clientId, redirectUris, postLogoutRedirectUris },
+      { creating: false },
+    );
+    const record = await patchProductClientTx(this.pool, clientId, null, {
+      redirectUris,
+      postLogoutRedirectUris,
+    });
+    if (!record) {
       throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
     }
-    return toRecord(row);
+    return record;
   }
 
   @Post(":clientId/activate")
@@ -530,21 +459,77 @@ function validateCreate(body: CreateClientBody): void {
       "productId",
     );
   }
-  if (!body.clientId?.trim()) {
+  validateClientInput(body, { creating: true });
+}
+
+/**
+ * 一个产品客户端的可写字段。
+ *
+ * **注册、改回调、改展示名、产品页合并保存共用这一份形状与校验。** 此前注册在「接入凭据」
+ * 页、改回调与改展示名是详情页里的两个弹窗，校验各写各的——注册时判回调格式、改回调时
+ * 只判非空，这类漂移只是时间问题。
+ */
+export interface ProductClientInput {
+  clientId?: string;
+  releaseChannel?: ReleaseChannel;
+  name?: string;
+  displayName?: string | null;
+  logoUrl?: string | null;
+  redirectUris?: string[];
+  postLogoutRedirectUris?: string[];
+  allowedScopes?: string[];
+  pkceRequired?: boolean;
+  tokenEndpointAuthMethod?: "client_secret_basic" | "none";
+}
+
+/** 合并保存一次带多个客户端，字段级 400 的 `field` 要能指到是哪一个。 */
+function fieldOf(prefix: string | undefined, name: string): string {
+  return prefix ? `${prefix}.${name}` : name;
+}
+
+function assertParsableUris(uris: readonly string[], field: string): void {
+  for (const uri of uris) {
+    /* 只判「是个 URL」，不判协议：原生应用（RFC 8252）的回调是 loopback 或自定义
+       scheme，判严了会把合法的挡在外面。 */
+    try {
+      new URL(uri);
+    } catch {
+      throw invalidRequest(
+        "VALIDATION_INVALID_URL",
+        `不是合法的地址：${uri}`,
+        field,
+      );
+    }
+  }
+}
+
+/**
+ * 客户端字段校验。
+ *
+ * `creating`：注册时 client_id 的格式、至少一个回调地址是硬要求；改已有客户端时
+ * client_id 不再校验格式（存量客户端早于这条规则，而 client_id 本来就不可改）。
+ */
+export function validateClientInput(
+  input: ProductClientInput,
+  opts: { creating: boolean; fieldPrefix?: string },
+): void {
+  const f = (name: string) => fieldOf(opts.fieldPrefix, name);
+  const clientId = input.clientId?.trim() ?? "";
+  if (!clientId) {
     throw invalidRequest(
       "VALIDATION_REQUIRED",
       "clientId is required",
-      "clientId",
+      f("clientId"),
     );
   }
-  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(body.clientId.trim())) {
+  if (opts.creating && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(clientId)) {
     throw invalidRequest(
       "VALIDATION_INVALID_VALUE",
       "clientId must be lowercase kebab (e.g. acme-agent, acme-agent-beta)",
-      "clientId",
+      f("clientId"),
     );
   }
-  const authMethod = body.tokenEndpointAuthMethod;
+  const authMethod = input.tokenEndpointAuthMethod;
   if (
     authMethod &&
     authMethod !== "client_secret_basic" &&
@@ -553,49 +538,219 @@ function validateCreate(body: CreateClientBody): void {
     throw invalidRequest(
       "VALIDATION_ENUM",
       "认证方式取 client_secret_basic(机密) 或 none(公共客户端)",
-      "tokenEndpointAuthMethod",
+      f("tokenEndpointAuthMethod"),
     );
   }
   /* 公共客户端（RFC 8252）三条绑死：零机密、强制 PKCE、回调是 loopback 或自定义
      scheme。前两条库上有 chk_oidc_clients_public_pkce 兜底，但那会冒成 500——
-     这里先判，给的是字段级 400。
-     第三条不在这里判：loopback 端口是任意的、自定义 scheme 由产品定，判严了会
-     把合法的挡在外面。 */
-  if (authMethod === "none" && body.pkceRequired === false) {
+     这里先判，给的是字段级 400。 */
+  if (authMethod === "none" && input.pkceRequired === false) {
     throw invalidRequest(
       "VALIDATION_CONFLICT",
       "公共客户端必须强制 PKCE（RFC 8252）——它没有 secret，PKCE 是唯一的防护",
-      "pkceRequired",
+      f("pkceRequired"),
     );
   }
-  if (!body.redirectUris || body.redirectUris.length === 0) {
-    throw invalidRequest(
-      "VALIDATION_REQUIRED",
-      "at least one redirectUri is required",
-      "redirectUris",
-    );
-  }
-  for (const uri of body.redirectUris) {
-    try {
-      new URL(uri);
-    } catch {
+  if (opts.creating || input.redirectUris !== undefined) {
+    const redirects = normalizeUriList(input.redirectUris);
+    if (redirects.length === 0) {
       throw invalidRequest(
-        "VALIDATION_INVALID_URL",
-        `invalid redirectUri: ${uri}`,
-        "redirectUris",
+        "VALIDATION_REQUIRED",
+        "至少要有一个登录回调地址——没有它这个客户端登不进来",
+        f("redirectUris"),
+      );
+    }
+    assertParsableUris(redirects, f("redirectUris"));
+  }
+  if (input.postLogoutRedirectUris !== undefined) {
+    assertParsableUris(
+      normalizeUriList(input.postLogoutRedirectUris),
+      f("postLogoutRedirectUris"),
+    );
+  }
+  if (input.allowedScopes !== undefined) {
+    const scopes = normalizeUriList(input.allowedScopes);
+    if (!scopes.includes("openid")) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        "allowedScopes 必须包含 openid——没有它就不是一次 OIDC 登录",
+        f("allowedScopes"),
+      );
+    }
+    const bad = scopes.find((sc) => !/^[a-z][a-z0-9_.:-]*$/.test(sc));
+    if (bad !== undefined) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        `scope 只能是小写字母开头的标识：${bad}`,
+        f("allowedScopes"),
       );
     }
   }
   if (
-    body.releaseChannel &&
-    !(RELEASE_CHANNELS as readonly string[]).includes(body.releaseChannel)
+    input.releaseChannel &&
+    !(RELEASE_CHANNELS as readonly string[]).includes(input.releaseChannel)
   ) {
     throw invalidRequest(
       "VALIDATION_INVALID_VALUE",
       `releaseChannel must be one of ${RELEASE_CHANNELS.join(", ")}`,
-      "releaseChannel",
+      f("releaseChannel"),
     );
   }
+}
+
+/**
+ * 注册一个产品客户端。调用方先跑过 `validateClientInput(input, { creating: true })`，
+ * 并已确认 productId 指向现存目录行。在调用方的事务里跑传 PoolClient，单独跑传 pool。
+ *
+ * client_secret **只在这里明文返回一次**，库里只存 bcrypt 哈希。公共客户端不生成——
+ * 生成再丢掉会白烧一次 bcrypt，而 cost=10 不便宜。
+ */
+export async function insertProductClientTx(
+  q: Queryable,
+  productId: string,
+  productCode: string,
+  input: ProductClientInput,
+): Promise<{ record: OidcClientRecord; clientSecret: string }> {
+  const clientId = input.clientId!.trim();
+  const authMethod = input.tokenEndpointAuthMethod ?? "client_secret_basic";
+  const isPublic = authMethod === "none";
+  const secret = isPublic ? null : generateSecret();
+  const secretHash = secret
+    ? await hash(secret, await genSalt(BCRYPT_COST))
+    : null;
+  let row: ClientRow;
+  try {
+    const result = await q.query<ClientRow>(
+      `INSERT INTO appoidc.oidc_clients (
+         client_id, client_secret_hash, realm, product_id, client_kind,
+         release_channel, name, display_name, logo_url, redirect_uris,
+         post_logout_redirect_uris, allowed_scopes, pkce_required,
+         token_endpoint_auth_method
+       ) VALUES ($1, $2, 'customer', $3, 'product', $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING id, client_id, product_id, release_channel, name,
+                 display_name, logo_url, redirect_uris, post_logout_redirect_uris,
+                 allowed_scopes, pkce_required, token_endpoint_auth_method,
+                 status, created_at, updated_at`,
+      [
+        clientId,
+        /* 公共客户端**不持有 secret**——这是协议属性不是「没配」。 */
+        secretHash,
+        productId,
+        input.releaseChannel ?? "stable",
+        input.name?.trim() || clientId,
+        input.displayName?.trim() || null,
+        input.logoUrl?.trim() || null,
+        normalizeUriList(input.redirectUris),
+        normalizeUriList(input.postLogoutRedirectUris),
+        input.allowedScopes
+          ? normalizeUriList(input.allowedScopes)
+          : DEFAULT_SCOPES,
+        /* 公共客户端**强制** PKCE（RFC 8252）。机密客户端默认也开（OAuth 2.1
+           对所有客户端的建议），调用方可以关。 */
+        isPublic ? true : (input.pkceRequired ?? true),
+        authMethod,
+      ],
+    );
+    row = { ...result.rows[0]!, product_code: productCode };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      /* 唯一约束撞了——是"这个值被别人占了"，不是"这个值写得不对"。 */
+      throw conflict(
+        "OIDC_CLIENT_ID_TAKEN",
+        `client_id "${clientId}" already exists`,
+      );
+    }
+    throw error;
+  }
+  return {
+    record: toRecord(row),
+    /* 公共客户端回空串而不是 null：调用方拿到的仍是 string，界面据「是否公共」
+       决定显不显示那一栏，不靠判空。 */
+    clientSecret: secret ?? "",
+  };
+}
+
+/** 改已有客户端的可变字段。字段缺席 = 不动；显式 null（展示名 / logo）= 清空。 */
+export interface ProductClientPatch {
+  displayName?: string | null;
+  logoUrl?: string | null;
+  redirectUris?: string[];
+  postLogoutRedirectUris?: string[];
+  allowedScopes?: string[];
+  pkceRequired?: boolean;
+}
+
+/**
+ * 按字段改一个产品客户端。
+ *
+ * **SQL 保持静态**：每一列都恒在 SET 列表里，「这次写不写」体现在成对的布尔参数上
+ * （`CASE WHEN $n::bool THEN 新值 ELSE 旧值 END`）。拼 SET 列表更短，但
+ * `lint:anchor-writes` 是静态读 SQL 文本的，一插值它就抽到零列然后判过。
+ *
+ * `productId` 非空时只改挂在这个产品下的客户端——合并保存不能借一个产品页去改
+ * 别的产品的客户端。返回 null = 没找到（或不属于这个产品）。
+ *
+ * 公共客户端关 PKCE 这类跨字段约束由调用方判（它手上有现状）；漏判会撞上库里的
+ * CHECK，冒成 500。
+ */
+export async function patchProductClientTx(
+  q: Queryable,
+  clientId: string,
+  productId: string | null,
+  patch: ProductClientPatch,
+): Promise<OidcClientRecord | null> {
+  const has = (k: keyof ProductClientPatch) => patch[k] !== undefined;
+  const result = await q.query<ClientRow>(
+    `UPDATE appoidc.oidc_clients c
+        SET display_name              = CASE WHEN  $2::bool THEN  $3         ELSE c.display_name              END,
+            logo_url                  = CASE WHEN  $4::bool THEN  $5         ELSE c.logo_url                  END,
+            redirect_uris             = CASE WHEN  $6::bool THEN  $7::text[] ELSE c.redirect_uris             END,
+            post_logout_redirect_uris = CASE WHEN  $8::bool THEN  $9::text[] ELSE c.post_logout_redirect_uris END,
+            allowed_scopes            = CASE WHEN $10::bool THEN $11::text[] ELSE c.allowed_scopes            END,
+            pkce_required             = CASE WHEN $12::bool THEN $13::bool   ELSE c.pkce_required             END,
+            updated_at = now()
+      WHERE c.client_id = $1 AND c.realm = 'customer' AND c.client_kind = 'product'
+        AND ($14::uuid IS NULL OR c.product_id = $14::uuid)
+      RETURNING ${RETURNING_COLUMNS}`,
+    [
+      clientId,
+      has("displayName"),
+      patch.displayName ?? null,
+      has("logoUrl"),
+      patch.logoUrl ?? null,
+      has("redirectUris"),
+      patch.redirectUris ?? [],
+      has("postLogoutRedirectUris"),
+      patch.postLogoutRedirectUris ?? [],
+      has("allowedScopes"),
+      patch.allowedScopes ?? [],
+      has("pkceRequired"),
+      patch.pkceRequired ?? true,
+      productId,
+    ],
+  );
+  const row = result.rows[0];
+  return row ? toRecord(row) : null;
+}
+
+/**
+ * 读出一个产品下的全部客户端并**锁行**（`FOR UPDATE OF c`）。
+ *
+ * 合并保存要先看现状再判「这次改没改安全边界」——不锁的话，读完到写之间另一个会话
+ * 改了回调白名单，这边按旧现状判成「没改」，就会不经二次验证把旧值写回去。
+ */
+export async function lockProductClientsTx(
+  q: Queryable,
+  productId: string,
+): Promise<OidcClientRecord[]> {
+  const result = await q.query<ClientRow>(
+    `SELECT ${SELECT_COLUMNS} FROM ${FROM_JOIN}
+      WHERE c.product_id = $1 AND c.realm = 'customer' AND c.client_kind = 'product'
+      ORDER BY c.client_id ASC
+      FOR UPDATE OF c`,
+    [productId],
+  );
+  return result.rows.map(toRecord);
 }
 
 function isUniqueViolation(error: unknown): boolean {

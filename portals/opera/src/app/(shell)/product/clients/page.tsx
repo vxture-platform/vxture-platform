@@ -1,6 +1,13 @@
 "use client";
 
-/* 接入凭据 — 产品接入平台用的 OIDC 客户端：注册、密钥轮换、启用/禁用。
+/* 接入凭据 — 全部产品的 OIDC 客户端总览（只读）。
+ *
+ * 2026-09-14 起写入全部回到产品页（owner：「注册客户端需要填写的信息……都整合在产品接入的
+ * 新建/配置页面，除了需要单独的密钥管理可以弹出单独面板」）：添加渠道、改回调与 scopes、
+ * 启用停用在「登录接入」板块，轮换密钥在「密钥管理」面板。这一页保留的是横向视角——
+ * 「哪些客户端还开着」「回调都指向哪里」在任何一个产品页里都答不出来。
+ *
+ * 以下是拆出时（2026-08-14）的记录，其中写入部分已不适用：
  *
  * 2026-08-14 自「产品目录」拆出（B4a-1，设计文件 §3）。此前它是目录页里的一个抽屉，
  * 那个位置有两个问题：
@@ -22,44 +29,29 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import type { FormEvent } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ActionMenu,
   Badge,
   Banner,
   Button,
   DataTable,
-  DialogForm,
   EmptyState,
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldTier,
-  FieldLabel,
   FilterBar,
   Icon,
-  Input,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
   StatusBadge,
-  Switch,
-  Textarea,
   ViewHeader,
   useListPagination,
-  useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
-import { RequiredMark } from "@/components/form/RequiredMark";
 import { ListPagination } from "@/modules/shared/ListPagination";
-import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
-
-const MANAGE = "platform:product.manage";
 
 type ReleaseChannel = "stable" | "beta" | "canary";
 /** product_251 B-3：字段名 `state`，最小词表 active / inactive。 */
@@ -91,36 +83,6 @@ interface ProductLite {
   productName: string;
 }
 
-interface ClientDraft {
-  productId: string;
-  clientId: string;
-  releaseChannel: ReleaseChannel;
-  name: string;
-  displayName: string;
-  logoUrl: string;
-  redirectUris: string;
-  postLogoutRedirectUris: string;
-  allowedScopes: string;
-  pkceRequired: boolean;
-  tokenEndpointAuthMethod: "client_secret_basic" | "none";
-}
-
-const DEFAULT_CLIENT_DRAFT: ClientDraft = {
-  productId: "",
-  clientId: "",
-  releaseChannel: "stable",
-  name: "",
-  displayName: "",
-  logoUrl: "",
-  redirectUris: "",
-  postLogoutRedirectUris: "",
-  allowedScopes: "openid, profile, email, phone",
-  pkceRequired: true,
-  /* 绝大多数产品是网页端(机密客户端)。公共客户端是桌面 / 移动原生的特例,
-     选它会连带锁死 PKCE 并且不发密钥——默认值不该是特例。 */
-  tokenEndpointAuthMethod: "client_secret_basic",
-};
-
 const CLIENT_STATE_TONE: Record<ClientState, StatusBadgeTone> = {
   active: "success",
   inactive: "neutral",
@@ -130,12 +92,6 @@ type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready" };
-
-function describeError(error: unknown): { description?: string } {
-  return error instanceof OperaApiError && error.message
-    ? { description: error.message }
-    : {};
-}
 
 export default function ProductClientsPage() {
   return (
@@ -148,9 +104,7 @@ export default function ProductClientsPage() {
 function ProductClients() {
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
-  const { toast } = useToast();
-  const { can } = useOperatorSession();
-  const canManage = can(MANAGE);
+  const router = useRouter();
   const initialProductId = useSearchParams().get("productId") ?? "all";
 
   const [rows, setRows] = useState<OidcClientRecord[]>([]);
@@ -163,23 +117,6 @@ function ProductClients() {
   );
   const [stateFilter, setStateFilter] = useState<"all" | ClientState>("all");
   const [selected, setSelected] = useState<readonly string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [draft, setDraft] = useState<ClientDraft>(DEFAULT_CLIENT_DRAFT);
-  const [revealSecret, setRevealSecret] = useState<{
-    clientId: string;
-    secret: string;
-    rotated: boolean;
-    /**
-     * 公共客户端**没有密钥**,这一栏整个不显示。
-     *
-     * 判据用它而不是 `secret === ""`:接口对公共客户端回的是空串(为了让调用方
-     * 拿到的仍是 string),空串同时也是「接口出了别的问题」的样子。用意图判,
-     * 不用巧合判。
-     */
-    isPublic: boolean;
-  } | null>(null);
-
   /* 两份都要：客户端列表自己带 productCode，但**新建**时要选产品，而产品名只有
      目录接口有。一次取回，之后不再打。 */
   const reload = useCallback(async () => {
@@ -227,144 +164,6 @@ function ProductClients() {
 
   const pager = useListPagination(visible, 20);
 
-  function openCreate() {
-    const preset = productFilter !== "all" ? productFilter : "";
-    const p = products.find((x) => x.id === preset);
-    setDraft({
-      ...DEFAULT_CLIENT_DRAFT,
-      productId: preset,
-      /* 预填产品码：绝大多数客户端就叫产品码本身，多渠道时再手工加后缀。 */
-      clientId: p?.productCode ?? "",
-      name: p?.productName ?? "",
-    });
-    setCreateOpen(true);
-  }
-
-  /** 选产品时同步预填 clientId / name——只在两者还是上一个产品的预填值时覆盖，
-   *  已经手改过的不动。 */
-  function pickProduct(productId: string) {
-    const prev = products.find((x) => x.id === draft.productId);
-    const next = products.find((x) => x.id === productId);
-    setDraft({
-      ...draft,
-      productId,
-      clientId:
-        draft.clientId === "" || draft.clientId === prev?.productCode
-          ? (next?.productCode ?? "")
-          : draft.clientId,
-      name:
-        draft.name === "" || draft.name === prev?.productName
-          ? (next?.productName ?? "")
-          : draft.name,
-    });
-  }
-
-  async function submitCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const redirectUris = draft.redirectUris
-      .split(/[\n,]/)
-      .map((u) => u.trim())
-      .filter(Boolean);
-    const postLogoutRedirectUris = draft.postLogoutRedirectUris
-      .split(/[\n,]/)
-      .map((u) => u.trim())
-      .filter(Boolean);
-    const allowedScopes = draft.allowedScopes
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const isPublic = draft.tokenEndpointAuthMethod === "none";
-
-    setSubmitting(true);
-    try {
-      const created = await api.post<
-        OidcClientRecord & { clientSecret: string }
-      >("/api/oidc-clients", {
-        productId: draft.productId,
-        clientId: draft.clientId.trim(),
-        releaseChannel: draft.releaseChannel,
-        name: draft.name.trim(),
-        displayName: draft.displayName.trim() || null,
-        logoUrl: draft.logoUrl.trim() || null,
-        redirectUris,
-        postLogoutRedirectUris,
-        allowedScopes,
-        /* 公共客户端强制 PKCE:库上的 chk_oidc_clients_public_pkce 会拦，
-           但那是 500。开关在界面上已经锁住，这里再钉一次，防的是
-           「切成公共之前先关了 PKCE」留下的脏 draft。 */
-        pkceRequired: isPublic ? true : draft.pkceRequired,
-        tokenEndpointAuthMethod: draft.tokenEndpointAuthMethod,
-      });
-      setCreateOpen(false);
-      setRevealSecret({
-        clientId: created.clientId,
-        secret: created.clientSecret,
-        rotated: false,
-        isPublic: created.tokenEndpointAuthMethod === "none",
-      });
-      await reload();
-    } catch (error) {
-      toast({ tone: "danger", title: "注册失败", ...describeError(error) });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function rotateSecret(clientId: string) {
-    setSubmitting(true);
-    try {
-      const result = await api.post<{ clientId: string; clientSecret: string }>(
-        `/api/oidc-clients/${encodeURIComponent(clientId)}/rotate-secret`,
-      );
-      setRevealSecret({
-        clientId: result.clientId,
-        secret: result.clientSecret,
-        rotated: true,
-        /* 轮换只对机密客户端开放(公共客户端本来就没有密钥可换)。 */
-        isPublic: false,
-      });
-      await reload();
-    } catch (error) {
-      toast({ tone: "danger", title: "轮换失败", ...describeError(error) });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  /* 二元开关走动作端点（product_251 B-3）：`activate` / `deactivate`，
-     不再 PATCH 一个目标值进去。 */
-  async function setClientState(clientId: string, next: ClientState) {
-    setSubmitting(true);
-    try {
-      const verb = next === "active" ? "activate" : "deactivate";
-      await api.post(
-        `/api/oidc-clients/${encodeURIComponent(clientId)}/${verb}`,
-      );
-      toast({
-        tone: "success",
-        title: `${clientId} 已${next === "active" ? "启用" : "停用"}`,
-      });
-      await reload();
-    } catch (error) {
-      toast({ tone: "danger", title: "操作失败", ...describeError(error) });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function copySecret(secret: string) {
-    try {
-      await navigator.clipboard.writeText(secret);
-      toast({ tone: "success", title: "已复制到剪贴板" });
-    } catch {
-      toast({
-        tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
-      });
-    }
-  }
-
   const emptyState =
     load.kind === "loading" ? (
       <EmptyState
@@ -385,7 +184,7 @@ function ProductClients() {
       <EmptyState
         icon="fingerprint"
         title="还没有任何接入凭据"
-        description="产品要接入平台，第一步是注册一个 OIDC 客户端（接入检查单里的 C1 身份接入）。"
+        description="客户端在产品页的「登录接入」板块添加。"
       />
     ) : (
       <EmptyState
@@ -401,15 +200,7 @@ function ProductClients() {
           <ViewHeader
             icon="fingerprint"
             title="接入凭据"
-            description="产品接入平台用的 OIDC 客户端。一个产品可以按渠道各有一个（stable / beta / canary）。client_secret 只在注册与轮换后明文出现一次，之后库里只有哈希——所以没有「查看」，只有「轮换」。"
-            action={
-              canManage ? (
-                <Button onClick={openCreate}>
-                  <Icon name="plus" size="sm" aria-hidden="true" />
-                  注册客户端
-                </Button>
-              ) : undefined
-            }
+            description="全部产品的登录客户端总览：哪些渠道开着、回调指向哪里。添加客户端、改回调、轮换密钥都在产品页——「登录接入」板块与「密钥管理」面板。"
           />
         }
         summary={
@@ -516,7 +307,11 @@ function ProductClients() {
                 cell: (c: OidcClientRecord) =>
                   c.productId ? (
                     <Link
-                      href={`/product/catalog?productId=${encodeURIComponent(c.productId)}`}
+                      href={
+                        c.productCode
+                          ? `/product/catalog/${encodeURIComponent(c.productCode)}#section-login`
+                          : `/product/catalog?productId=${encodeURIComponent(c.productId)}`
+                      }
                       className="flex flex-col gap-2xs hover:text-primary-text"
                     >
                       <span className="text-label-md">
@@ -602,43 +397,24 @@ function ProductClients() {
             selectedKeys={selected}
             onSelectionChange={setSelected}
             indexStart={pager.indexStart}
-            rowActions={(c: OidcClientRecord) => (
-              <ActionMenu
-                label={`${c.clientId} 操作`}
-                disabled={!canManage || submitting}
-                items={[
-                  {
-                    id: "rotate",
-                    label: "轮换密钥",
-                    icon: "refresh",
-                    onSelect: () => void rotateSecret(c.clientId),
-                  },
-                  c.state === "active"
-                    ? {
-                        id: "deactivate",
-                        label: tShared("actions.disable"),
-                        icon: "pause" as const,
-                        danger: true,
-                        separatorBefore: true,
-                        /* 单条、可逆、且不改任何凭据：停用只是把这个 client 置为
-                           不可用，随时可以再启用，密钥与授权原样保留。按 owner
-                           2026-08-25 定的线——单条可逆动作写明理由豁免，批量一律拦。 */
-                        confirmExempt:
-                          "停用可随时再启用，client 的密钥与授权原样保留，不构成不可逆操作",
-                        onSelect: () =>
-                          void setClientState(c.clientId, "inactive"),
-                      }
-                    : {
-                        id: "activate",
-                        label: tShared("actions.enable"),
-                        icon: "play" as const,
-                        separatorBefore: true,
-                        onSelect: () =>
-                          void setClientState(c.clientId, "active"),
-                      },
-                ]}
-              />
-            )}
+            rowActions={(c: OidcClientRecord) =>
+              c.productCode ? (
+                <ActionMenu
+                  label={`${c.clientId} 操作`}
+                  items={[
+                    {
+                      id: "configure",
+                      label: "去产品页配置",
+                      icon: "edit",
+                      onSelect: () =>
+                        router.push(
+                          `/product/catalog/${encodeURIComponent(c.productCode ?? "")}#section-login`,
+                        ),
+                    },
+                  ]}
+                />
+              ) : null
+            }
             footer={
               <ListPagination
                 className="w-full"
@@ -655,333 +431,6 @@ function ProductClients() {
           />
         }
       />
-
-      <DialogForm
-        /* 两组两列共 7 个字段 + 一个 Textarea(redirect_uris 一行一条)。同产品登记弹窗,
-           512 宽下两列各 ~230px 放不下。 */
-        size="xl"
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        title="注册客户端"
-        description="机密客户端的 client secret 只在提交成功后展示一次，关闭前先复制；公共客户端不发密钥。"
-        submitLabel="注册"
-        submitting={submitting}
-        submitDisabled={
-          draft.productId === "" ||
-          draft.clientId.trim() === "" ||
-          draft.redirectUris.trim() === ""
-        }
-        onSubmit={submitCreate}
-        cancelLabel={tShared("actions.cancel")}
-      >
-        {/* 三档（DS `FieldTier`）：身份 = 这个客户端属于谁、走哪条渠道；常规 = 回调与
-            展示；高级 = 三项有缺省值的安全参数。 */}
-        <FieldTier
-          tier="identity"
-          hint="产品码是它换票时的身份（act.sub）；Client ID 全局唯一，注册后不可改。"
-        >
-          <FieldGroup>
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="client-product">
-                {tShared("columns.product")}
-                <RequiredMark />
-              </FieldLabel>
-              <NativeSelect
-                id="client-product"
-                value={draft.productId}
-                onChange={(e) => pickProduct(e.target.value)}
-              >
-                <option value="">选择产品…</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.productName}（{p.productCode}）
-                  </option>
-                ))}
-              </NativeSelect>
-              <FieldDescription>
-                客户端必须挂在某个产品下——产品码是它换票时的身份（
-                <code>act.sub</code>）。
-              </FieldDescription>
-            </Field>
-
-            <div className="grid grid-cols-2 gap-md">
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="client-id">
-                  Client ID
-                  <RequiredMark />
-                </FieldLabel>
-                <Input
-                  id="client-id"
-                  value={draft.clientId}
-                  onChange={(e) =>
-                    setDraft({ ...draft, clientId: e.target.value })
-                  }
-                  placeholder="acme-agent"
-                  className="font-mono"
-                />
-                <FieldDescription>
-                  全局唯一，小写 kebab；同产品多渠道常见 acme-agent-beta。
-                </FieldDescription>
-              </Field>
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="client-channel">渠道</FieldLabel>
-                <NativeSelect
-                  id="client-channel"
-                  value={draft.releaseChannel}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      releaseChannel: e.target.value as ReleaseChannel,
-                    })
-                  }
-                >
-                  <option value="stable">stable</option>
-                  <option value="beta">beta</option>
-                  <option value="canary">canary</option>
-                </NativeSelect>
-              </Field>
-            </div>
-          </FieldGroup>
-        </FieldTier>
-
-        <FieldTier
-          tier="details"
-          hint="Redirect URI 至少一个，否则授权码流走不通。"
-        >
-          <FieldGroup>
-            <div className="grid grid-cols-2 gap-md">
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="client-name">Name</FieldLabel>
-                <Input
-                  id="client-name"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                />
-              </Field>
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="client-display-name">
-                  展示名（授权页用）
-                </FieldLabel>
-                <Input
-                  id="client-display-name"
-                  value={draft.displayName}
-                  onChange={(e) =>
-                    setDraft({ ...draft, displayName: e.target.value })
-                  }
-                />
-              </Field>
-            </div>
-
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="client-redirects">
-                Redirect URIs
-                <RequiredMark />
-              </FieldLabel>
-              <Textarea
-                id="client-redirects"
-                value={draft.redirectUris}
-                onChange={(e) =>
-                  setDraft({ ...draft, redirectUris: e.target.value })
-                }
-                rows={3}
-                placeholder={"https://agent.acme.com/auth/callback"}
-                className="font-mono text-code-sm"
-              />
-              <FieldDescription>
-                一行一个，或逗号分隔；至少一个。
-              </FieldDescription>
-            </Field>
-
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="client-post-logout">登出回跳地址</FieldLabel>
-              <Textarea
-                id="client-post-logout"
-                value={draft.postLogoutRedirectUris}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    postLogoutRedirectUris: e.target.value,
-                  })
-                }
-                rows={2}
-                placeholder={"https://agent.acme.com/"}
-                className="font-mono text-code-sm"
-              />
-              <FieldDescription>
-                一行一个，或逗号分隔。<b>不配的话用户登出后停在 accounts 页</b>
-                ，回不到产品——登出请求里带的回跳地址必须在这张白名单里才会被采纳。
-              </FieldDescription>
-            </Field>
-
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="client-logo">Logo 地址</FieldLabel>
-              <Input
-                id="client-logo"
-                value={draft.logoUrl}
-                onChange={(e) =>
-                  setDraft({ ...draft, logoUrl: e.target.value })
-                }
-                placeholder="https://cdn.acme.com/logo.svg"
-                className="font-mono text-code-sm"
-              />
-              <FieldDescription>
-                授权页与登出页展示，和上面的展示名一起出现。留空则只显示文字。
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-        </FieldTier>
-
-        <FieldTier
-          tier="advanced"
-          title="安全参数"
-          hint="三项都有缺省值。认证方式决定发不发密钥，注册后改不了——桌面 / 移动原生应用要选公共客户端。"
-        >
-          <FieldGroup>
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="client-scopes">Allowed Scopes</FieldLabel>
-              <Input
-                id="client-scopes"
-                value={draft.allowedScopes}
-                onChange={(e) =>
-                  setDraft({ ...draft, allowedScopes: e.target.value })
-                }
-                className="font-mono"
-              />
-              <FieldDescription>逗号分隔。</FieldDescription>
-            </Field>
-
-            <Field orientation="labeled">
-              <FieldLabel htmlFor="client-auth-method">认证方式</FieldLabel>
-              <NativeSelect
-                id="client-auth-method"
-                value={draft.tokenEndpointAuthMethod}
-                onChange={(e) => {
-                  const method = e.target
-                    .value as ClientDraft["tokenEndpointAuthMethod"];
-                  setDraft({
-                    ...draft,
-                    tokenEndpointAuthMethod: method,
-                    /* 切到公共客户端时把 PKCE 一并打开。让开关停在「关」再灰掉，
-                       看起来就像「公共客户端不需要 PKCE」——恰好是反的。 */
-                    pkceRequired: method === "none" ? true : draft.pkceRequired,
-                  });
-                }}
-              >
-                <option value="client_secret_basic">
-                  机密客户端 · client_secret_basic
-                </option>
-                <option value="none">公共客户端 · none（RFC 8252）</option>
-              </NativeSelect>
-              <FieldDescription>
-                网页端服务能保住密钥，选<b>机密客户端</b>。桌面 / 移动原生应用
-                （如影这类）把密钥打进安装包等于公开，按 RFC 8252 选
-                <b>公共客户端</b>：<b>不发密钥、强制 PKCE</b>，回调走 loopback
-                或自定义 scheme。
-                <br />
-                建好之后改不了——换类型要重新注册一个客户端。
-              </FieldDescription>
-            </Field>
-
-            <div className="flex items-center justify-between rounded-md border border-border p-sm">
-              <div className="flex flex-col gap-3xs">
-                <FieldLabel htmlFor="client-pkce">强制 PKCE</FieldLabel>
-                {draft.tokenEndpointAuthMethod === "none" ? (
-                  <span className="text-label-sm text-muted-foreground">
-                    公共客户端必须开，不可关闭。
-                  </span>
-                ) : null}
-              </div>
-              <Switch
-                id="client-pkce"
-                checked={draft.pkceRequired}
-                /* 公共客户端关掉 PKCE 会撞库上的 chk_oidc_clients_public_pkce，
-                   而那是一句 500。在这里就关死，让它成为选不出来的状态。 */
-                disabled={draft.tokenEndpointAuthMethod === "none"}
-                onCheckedChange={(v) => setDraft({ ...draft, pkceRequired: v })}
-              />
-            </div>
-          </FieldGroup>
-        </FieldTier>
-      </DialogForm>
-
-      {/* ── 明文展示：只有这一次 ─────────────────────────────────────────── */}
-      <DialogForm
-        open={revealSecret !== null}
-        onOpenChange={(open) => {
-          if (!open) setRevealSecret(null);
-        }}
-        title={revealSecret?.rotated ? "新密钥已生成" : "客户端已注册"}
-        submitLabel={revealSecret?.isPublic ? "知道了" : "我已保存"}
-        cancelLabel={tShared("common.close")}
-        onSubmit={(e) => {
-          e.preventDefault();
-          setRevealSecret(null);
-        }}
-      >
-        {revealSecret?.isPublic ? (
-          /* 公共客户端这一支没有任何「只此一次」的东西要交接——套用机密客户端
-             那套警告会让运营者去找一个根本不存在的密钥。 */
-          <>
-            <Banner
-              tone="info"
-              title="公共客户端没有密钥"
-              description="按 RFC 8252 注册，零机密、强制 PKCE。产品侧只需要 client_id 与回调地址，没有要保存的东西。"
-            />
-            <Field>
-              <FieldLabel htmlFor="client-id-reveal">
-                {revealSecret.clientId} · client_id
-              </FieldLabel>
-              <div className="flex items-center gap-sm">
-                <Input
-                  id="client-id-reveal"
-                  readOnly
-                  value={revealSecret.clientId}
-                  className="font-mono"
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void copySecret(revealSecret.clientId)}
-                >
-                  <Icon name="copy" size="sm" aria-hidden="true" />
-                  复制
-                </Button>
-              </div>
-            </Field>
-          </>
-        ) : (
-          <>
-            <Banner
-              tone="warning"
-              title="这是唯一一次看到明文"
-              description="关闭后无法再次查看，只能轮换。请立即复制并交给对方妥善保存。"
-            />
-            <Field>
-              <FieldLabel htmlFor="client-secret-reveal">
-                {revealSecret?.clientId} · client_secret
-              </FieldLabel>
-              <div className="flex items-center gap-sm">
-                <Input
-                  id="client-secret-reveal"
-                  readOnly
-                  value={revealSecret?.secret ?? ""}
-                  className="font-mono"
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void copySecret(revealSecret?.secret ?? "")}
-                >
-                  <Icon name="copy" size="sm" aria-hidden="true" />
-                  复制
-                </Button>
-              </div>
-            </Field>
-          </>
-        )}
-      </DialogForm>
     </>
   );
 }

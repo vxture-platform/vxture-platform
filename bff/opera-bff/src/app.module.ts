@@ -18,6 +18,7 @@ import { JobSchedulerRouter } from "./routers/job-scheduler.router";
 import { MaintenanceWindowsRouter } from "./routers/maintenance-windows.router";
 import { OidcClientRouter } from "./routers/oidc-client.router";
 import { ProductCatalogRouter } from "./routers/product-catalog.router";
+import { ProductOnboardingRouter } from "./routers/product-onboarding.router";
 import { ProductHealthRouter } from "./routers/product-health.router";
 import { ProductIntegrationSignalsRouter } from "./routers/product-integration-signals.router";
 import { RunosRouter } from "./routers/runos.router";
@@ -35,6 +36,7 @@ import { TenancyDirectoryRouter } from "./routers/tenancy-directory.router";
     AtlasRouter,
     RunosRouter,
     ProductCatalogRouter,
+    ProductOnboardingRouter,
     ProductIntegrationSignalsRouter,
     OidcClientRouter,
     AuditLogViewRouter,

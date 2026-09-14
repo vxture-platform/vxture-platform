@@ -21,32 +21,16 @@
  * third_party=第三方接入、other。新产品默认落 draft 状态，上线前操作员手动
  * 切到 active。 */
 
-import {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-} from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
-  Badge,
   Banner,
   Button,
-  Checkbox,
   DataTable,
   DialogForm,
-  Drawer,
   EmptyState,
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldTier,
-  FieldLabel,
   FilterBar,
   Icon,
-  Input,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -62,11 +46,7 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import {
-  PRODUCT_TYPE_DEFS,
-  productTypeLabel,
-  isValidProductType,
-} from "@vxture/core-utils";
+import { productTypeLabel, isValidProductType } from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -82,24 +62,8 @@ import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
-import { LockedInput } from "@/components/form/LockedInput";
-import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
-import { ProductMetricsSection } from "@/features/product/ProductMetricsSection";
-import { RequiredMark } from "@/components/form/RequiredMark";
-import { formatDateTime } from "@vxture-platform/shared";
 
 const MANAGE = "platform:product.manage";
-
-interface ChecklistItemRecord {
-  itemCode: string;
-  itemName: string;
-  description: string | null;
-  isRequired: boolean;
-  sort: number;
-  isSatisfied: boolean;
-  checkedAt: string | null;
-  remark: string | null;
-}
 
 type ProductOrigin = "self" | "third_party" | "other";
 
@@ -161,63 +125,6 @@ const BLOCKER_LABELS: Record<string, string> = {
   HAS_ENTITLEMENTS: "生效权益",
   HAS_UPSTREAM_ATLAS: "Atlas 模型路由授权",
   HAS_UPSTREAM_RUNOS: "Runos 能力授权",
-};
-
-type DialogState =
-  | { kind: "create" }
-  | { kind: "webhook"; row: ProductRecord }
-  | null;
-
-/** `product.product_webhooks` 一行。各列都可空——见 BFF `putWebhook` 的注释。 */
-interface WebhookDraft {
-  homeUrl: string;
-  webhookUrl: string;
-  webhookSecretRef: string;
-  /** tailnet 上的 host:port。填了它,边缘下次同步就把该子域转到这里。 */
-  edgeUpstream: string;
-  /**
-   * 边缘域名。**推导是默认值不是唯一规则**——渲染器对空值回落
-   * `{product_code}.vxture.com`,而那条推导已经在失效(anlan → anlan.ai、
-   * xuanzhen → xuanzhen.ai,推导会给它们生成一个不存在的域名且不报错)。
-   *
-   * 打开弹窗时按推导**预填**(可改):库里存空与存推导值对渲染器等价,预填只是
-   * 把这条隐含规则摆到运营者眼前,让异 apex 的产品有地方改。
-   */
-  edgeDomain: string;
-  /**
-   * 签名密钥**原文**,只进不出。
-   *
-   * 读接口只回「配没配」这个布尔——密文和原文都不回传,否则「落库加密」就白做了。
-   * 所以这个框**永远是空的**:留空 = 不动已存的那个,填了 = 覆盖。
-   */
-  webhookSecret: string;
-}
-
-const EMPTY_WEBHOOK: WebhookDraft = {
-  homeUrl: "",
-  webhookUrl: "",
-  webhookSecretRef: "",
-  edgeUpstream: "",
-  edgeDomain: "",
-  webhookSecret: "",
-};
-
-/**
- * 登记草稿只装三项——对话框收什么，这里就有什么。
- *
- * 其余字段（副名、简介、分类、来源、三个开关、图标）搬去详情页了，所以也从这里
- * 拿掉：留着不填的字段会让「这个对话框到底收什么」有两个答案，而其中一个是死的。
- */
-interface ProductDraft {
-  productCode: string;
-  productType: string;
-  productName: string;
-}
-
-const EMPTY_DRAFT: ProductDraft = {
-  productCode: "",
-  productType: "",
-  productName: "",
 };
 
 function describeError(error: unknown): { description?: string } {
@@ -325,12 +232,6 @@ function ProductsPageContent() {
   );
   const [stateFilter, setStateFilter] = useState<"all" | ProductState>("all");
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
-  const [dialog, setDialog] = useState<DialogState>(null);
-  const [draft, setDraft] = useState<ProductDraft>(EMPTY_DRAFT);
-  const [webhookDraft, setWebhookDraft] = useState<WebhookDraft>(EMPTY_WEBHOOK);
-  const [webhookLoad, setWebhookLoad] = useState<LoadState>({ kind: "ready" });
-  /** 已登记签名密钥?只有布尔——密钥本体不回传。用来在框旁边说明留空的后果。 */
-  const [hasSecret, setHasSecret] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   /* 全部产品的检查单完成态，一次取回（`GET /api/products/checklist-summary`）。
@@ -353,19 +254,6 @@ function ProductsPageContent() {
     impact: ProductDeletionImpact | null;
     loadError: string | null;
   } | null>(null);
-
-  /* 计量指标抽屉。批 4 的产品详情单页会把这一节挪进去，届时这个 state 连同
-     下面那个 <Drawer> 一起删——组件本身不用动。 */
-  const [metricsProduct, setMetricsProduct] = useState<ProductRecord | null>(
-    null,
-  );
-
-  const [checklistProduct, setChecklistProduct] =
-    useState<ProductRecord | null>(null);
-  const [checklist, setChecklist] = useState<ChecklistItemRecord[]>([]);
-  const [checklistLoad, setChecklistLoad] = useState<LoadState>({
-    kind: "ready",
-  });
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -397,49 +285,6 @@ function ProductsPageContent() {
   useEffect(() => {
     void reload();
   }, [reload]);
-  const loadChecklist = useCallback(async (productId: string) => {
-    setChecklistLoad({ kind: "loading" });
-    try {
-      const data = await api.get<ChecklistItemRecord[]>(
-        `/api/products/${encodeURIComponent(productId)}/checklist`,
-      );
-      setChecklist(data);
-      setChecklistLoad({ kind: "ready" });
-    } catch (error) {
-      setChecklistLoad({
-        kind: "error",
-        message:
-          error instanceof OperaApiError ? error.message : "读取检查单失败",
-      });
-    }
-  }, []);
-
-  function openChecklist(product: ProductRecord) {
-    setChecklistProduct(product);
-    void loadChecklist(product.id);
-  }
-
-  function closeChecklist() {
-    setChecklistProduct(null);
-    setChecklist([]);
-  }
-
-  async function toggleChecklistItem(itemCode: string, isSatisfied: boolean) {
-    if (!checklistProduct) return;
-    setSubmitting(true);
-    try {
-      await api.patch(
-        `/api/products/${checklistProduct.id}/checklist/${itemCode}`,
-        { isSatisfied },
-      );
-      await loadChecklist(checklistProduct.id);
-    } catch (error) {
-      toast({ tone: "danger", title: "更新失败", ...describeError(error) });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
     return rows.filter(
@@ -455,11 +300,6 @@ function ProductsPageContent() {
 
   const pager = useListPagination(filtered, 20);
 
-  function openCreate() {
-    setDraft(EMPTY_DRAFT);
-    setDialog({ kind: "create" });
-  }
-
   /**
    * 进产品详情页。
    *
@@ -467,7 +307,8 @@ function ProductsPageContent() {
    * 分散在多个弹出页面，感觉很乱……一个详情页争取配置完所有」。同一批字段留两个
    * 写入面比分散更糟:两处都能改、两处的校验与文案会各自漂。
    *
-   * 新建仍走对话框——一个还不存在的产品没有详情页可进。
+   * 新建也进同一张页（`/product/catalog/new`）：2026-09-14 起目录页不再有登记、webhook、
+   * 计量、检查单这些弹窗——它们与产品页上的同一批字段是两个写入面。
    */
   function openDetail(row: ProductRecord) {
     router.push(`/product/catalog/${encodeURIComponent(row.productCode)}`);
@@ -665,130 +506,6 @@ function ProductsPageContent() {
     }
   }
 
-  /**
-   * webhook 登记。**先读回现状再开弹窗**——这是 upsert，不读就打开等于让运营者对着
-   * 三个空框猜之前配过什么，一保存就把原值抹了。
-   */
-  async function openWebhook(row: ProductRecord) {
-    setDialog({ kind: "webhook", row });
-    setWebhookDraft(EMPTY_WEBHOOK);
-    setWebhookLoad({ kind: "loading" });
-    try {
-      const current = await api.get<{
-        homeUrl: string | null;
-        webhookUrl: string | null;
-        webhookSecretRef: string | null;
-        edgeUpstream: string | null;
-        edgeDomain: string | null;
-        hasWebhookSecret: boolean;
-      } | null>(`/api/product/catalog/${encodeURIComponent(row.id)}/webhook`);
-      setWebhookDraft({
-        homeUrl: current?.homeUrl ?? "",
-        webhookUrl: current?.webhookUrl ?? "",
-        webhookSecretRef: current?.webhookSecretRef ?? "",
-        edgeUpstream: current?.edgeUpstream ?? "",
-        /* 没登记过就按推导预填。这不是替运营者做决定——渲染器本来就会对空值做
-           同一个推导,预填只是把它**摆出来让人能改**。异 apex 的产品(anlan.ai)
-           在这里改掉一次就对了,否则推导会悄悄指向一个不存在的域名。 */
-        edgeDomain:
-          current?.edgeDomain?.trim() || `${row.productCode}.vxture.com`,
-        /* 密钥框恒空:回传密钥本体等于取消加密存储的意义。 */
-        webhookSecret: "",
-      });
-      setHasSecret(current?.hasWebhookSecret ?? false);
-      setWebhookLoad({ kind: "ready" });
-    } catch (error) {
-      /* 读不到就不让写：读失败时保存会把「读不出来的那份」覆盖成空。 */
-      setWebhookLoad({
-        kind: "error",
-        message: describeError(error).description ?? "读取失败",
-      });
-    }
-  }
-
-  async function submitWebhook(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (dialog?.kind !== "webhook") return;
-    setSubmitting(true);
-    try {
-      await api.put(
-        `/api/product/catalog/${encodeURIComponent(dialog.row.id)}/webhook`,
-        {
-          homeUrl: webhookDraft.homeUrl.trim() || null,
-          webhookUrl: webhookDraft.webhookUrl.trim() || null,
-          webhookSecretRef: webhookDraft.webhookSecretRef.trim() || null,
-          edgeUpstream: webhookDraft.edgeUpstream.trim() || null,
-          edgeDomain: webhookDraft.edgeDomain.trim() || null,
-          /* 三态,不能塌成两态:框里没填就**不带这个字段**(undefined = 不动已存的),
-             带一个 null 过去会把密钥清空。运营者只是来改个回调地址,
-             不该顺手把密钥抹了——而框里恒空,不这样就必然误清。 */
-          ...(webhookDraft.webhookSecret.trim()
-            ? { webhookSecret: webhookDraft.webhookSecret.trim() }
-            : {}),
-        },
-      );
-      toast({
-        tone: "success",
-        title: `${dialog.row.productName} 的 webhook 已登记`,
-      });
-      setDialog(null);
-    } catch (error) {
-      toast({ tone: "danger", title: "登记失败", ...describeError(error) });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!dialog) return;
-
-    const payload = {
-      productCode: draft.productCode.trim(),
-      productType: draft.productType.trim(),
-      productName: draft.productName.trim(),
-      /* 端**整组送出**：接口按整组替换，缺席才是「不动」。新产品默认只勾网页端
-         ——那是所有产品都成立的那一个，其余在详情页按需加。默认全勾会让
-         「支持小程序」变成一句没人确认过的话。 */
-      surfaces: ["web"],
-    };
-
-    setSubmitting(true);
-    try {
-      if (dialog.kind === "create") {
-        /* 入口一（设计 §6.5）：主按钮 = **建草稿并进入配置**，不是"建完就完了"。
-           §6.2 的顺序是草稿先行——配置的大部分项要求产品已经存在（OIDC 客户端挂在
-           产品上，两个域的授权都按产品码配），所以登记完直接把人送到详情页，那里
-           才有"接下来配什么、交什么给对方"。
-           不接返回值:详情页按**产品码**寻址,而产品码是这次提交的输入,不必回读。 */
-        await api.post("/api/products", payload);
-        toast({
-          tone: "success",
-          title: `${draft.productCode} 已登记（草稿）`,
-          description: "接下来在详情页配齐边缘、回调与计量，再去复验。",
-        });
-        setDialog(null);
-        /* 原本送去 `/product/launch`,理由是「那里才有接下来配什么」。现在详情页
-           就是那个地方——六组配置都在一页,复验只是它右上角的一个按钮。 */
-        router.push(
-          `/product/catalog/${encodeURIComponent(draft.productCode.trim())}`,
-        );
-        return;
-      }
-      setDialog(null);
-      await reload();
-    } catch (error) {
-      toast({ tone: "danger", title: "保存失败", ...describeError(error) });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const draftValid =
-    draft.productCode.trim() !== "" &&
-    draft.productType.trim() !== "" &&
-    draft.productName.trim() !== "";
-
   const pagination = (
     <ListPagination
       className="w-full"
@@ -894,7 +611,7 @@ function ProductsPageContent() {
             description="平台产品的基础设施登记；数据来自 product.products。商业定价/套餐发布仍在 admin。"
             action={
               canManage ? (
-                <Button onClick={openCreate} disabled={submitting}>
+                <Button onClick={() => router.push("/product/catalog/new")}>
                   <Icon name="plus" size="sm" aria-hidden="true" />
                   接入产品
                 </Button>
@@ -1084,61 +801,6 @@ function ProductsPageContent() {
                           onSelect: () => openDetail(r),
                         },
                         {
-                          /* 上线检查第五项（Webhook 登记）此前失败时给的 remedy 是
-                             「去库里补一行」——一个检查项失败后让人手改数据库，闭环
-                             是断的。入口补在这里：webhook 是产品级接入配置，和目录
-                             属性不是一回事，所以独立一项而不是塞进「编辑」。 */
-                          id: "webhook",
-                          label: "Webhook 登记",
-                          icon: "plug" as const,
-                          onSelect: () => void openWebhook(r),
-                        },
-                        {
-                          /* 计量指标。端点早就有、界面一直没有，于是要计量的
-                             产品仍得改 seed 跑一次 db-init——把一个运营动作做成了
-                             一次发版。位置紧挨 webhook：两者同属产品级接入配置。 */
-                          id: "metrics",
-                          label: "计量指标",
-                          icon: "gauge" as const,
-                          onSelect: () => setMetricsProduct(r),
-                        },
-                        {
-                          /* 2026-08-14 拆出独立页（B4a-1）。这里从"开抽屉"改成
-                             "带 productId 跳过去"：地址可分享、可后退，且到了那边
-                             还能把过滤放宽看全部产品的凭据。 */
-                          id: "oidc-clients",
-                          label: "接入凭据",
-                          icon: "fingerprint" as const,
-                          onSelect: () =>
-                            router.push(
-                              `/product/clients?productId=${encodeURIComponent(r.id)}`,
-                            ),
-                        },
-                        {
-                          /* 入口二 / 入口三（设计 §6.5）：草稿行是「继续接入」，
-                             正式行是「重新验证」。同一个页面，措辞跟着状态走——
-                             第三个入口尤其重要，它让验证不会变成"接入时通过"这样
-                             一个永不更新的过期结论。已退役的不给（终态，没有可验的）。 */
-                          id: "launch-flow",
-                          label:
-                            r.state === "draft"
-                              ? "继续接入"
-                              : r.state === "deprecated"
-                                ? "查看接入记录"
-                                : "重新验证",
-                          icon: "rocket" as const,
-                          onSelect: () =>
-                            router.push(
-                              `/product/launch?productId=${encodeURIComponent(r.id)}`,
-                            ),
-                        },
-                        {
-                          id: "checklist",
-                          label: "接入检查单",
-                          icon: "list-checks" as const,
-                          onSelect: () => openChecklist(r),
-                        },
-                        {
                           id: "admin-atlas-grants",
                           label: "Atlas 模型授权（admin）",
                           icon: "external-link" as const,
@@ -1220,402 +882,6 @@ function ProductsPageContent() {
           />
         }
       />
-
-      <DialogForm
-        /* 三组两列共 8 个字段。默认 md=512 时每列才 ~230px,中文标签加说明必然挤成两三行
-           (owner 2026-09-10 走查:「内容拥挤,还有滚动条」)。xl=928 每列 ~440。 */
-        size="xl"
-        open={dialog?.kind === "create"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        title="登记产品"
-        description="新产品默认落草稿状态；确认信息无误后从操作菜单切到「启用」。"
-        submitLabel="登记"
-        submitting={submitting}
-        submitDisabled={!draftValid}
-        onSubmit={submit}
-        cancelLabel={tShared("actions.cancel")}
-      >
-        {/* ── 只收三项 ──────────────────────────────────────────────────
-            owner 2026-09-11:「接入产品按钮的连接还是旧的页面，这个需要修正和清理。」
-
-            这里收的是**建一条草稿所必需的最小集**——正好是 BFF 硬性要求的那三个
-            （`validateWrite(requireCore)`）。其余全在详情页配：owner 早先定的是
-            「一个详情页争取配置完所有」，而同一批字段留两个写入面比分散更糟——
-            两处都能改，校验与文案会各自漂。
-
-            副名、简介、分类、来源、三个开关都不在这里：它们都有缺省值或可留空，
-            填不填不影响这条草稿能不能建出来，而每多一栏就多一次"现在必须想清楚"。 */}
-        <FieldGroup>
-          <Field orientation="labeled">
-            <FieldLabel htmlFor="product-code">
-              产品代码
-              <RequiredMark />
-            </FieldLabel>
-            {/* 此刻正要被填，所以不锁。「登记后不可改」这条规则由详情页那一栏说。 */}
-            <LockedInput
-              id="product-code"
-              locked={false}
-              value={draft.productCode}
-              onChange={(e) =>
-                setDraft({ ...draft, productCode: e.target.value })
-              }
-              placeholder="karda"
-              className="font-mono"
-            />
-            <FieldDescription>
-              全局唯一，同时是域名、容器前缀与库名。草稿状态还能改，启用之后锁定。
-            </FieldDescription>
-          </Field>
-
-          <Field orientation="labeled">
-            <FieldLabel htmlFor="product-name">
-              产品名称
-              <RequiredMark />
-            </FieldLabel>
-            <Input
-              id="product-name"
-              value={draft.productName}
-              onChange={(e) =>
-                setDraft({ ...draft, productName: e.target.value })
-              }
-              placeholder="Karda"
-            />
-          </Field>
-
-          <Field orientation="labeled">
-            <FieldLabel htmlFor="product-type">
-              产品类型
-              <RequiredMark />
-            </FieldLabel>
-            <NativeSelect
-              id="product-type"
-              value={draft.productType}
-              onChange={(e) =>
-                setDraft({ ...draft, productType: e.target.value })
-              }
-            >
-              <option value="" disabled>
-                {tShared("common.pleaseSelect")}
-              </option>
-              {PRODUCT_TYPE_DEFS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {locale.startsWith("en") ? d.labelEn : d.labelZh}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-        </FieldGroup>
-      </DialogForm>
-
-      {/* Webhook 登记。**两档而不是三档**：三项都是接入必需，凑一个高级档只是把
-          自己定的规则抄一遍（同 E3 里注册模型那个的判断）。 */}
-      <DialogForm
-        /* 单列 5 个字段 + 长说明:加宽是为了让说明少换行、整体变矮少出滚动条。
-           不用 xl——928 的单列阅读距离太长,那是给两列排布准备的。 */
-        size="lg"
-        open={dialog?.kind === "webhook"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        title={
-          dialog?.kind === "webhook"
-            ? `${dialog.row.productName} · Webhook 登记`
-            : "Webhook 登记"
-        }
-        description="平台向这个产品推送订阅变更与额度预警的地址。本页只登记，不发测试投递——那是对对方生产端点的真实请求，投递结果去运行监控看。"
-        submitLabel={tShared("common.save")}
-        submitting={submitting}
-        submitDisabled={webhookLoad.kind !== "ready"}
-        onSubmit={submitWebhook}
-        cancelLabel={tShared("actions.cancel")}
-      >
-        {webhookLoad.kind === "loading" ? (
-          <EmptyState
-            title={tShared("common.loading")}
-            description="正在读取现有登记。"
-          />
-        ) : webhookLoad.kind === "error" ? (
-          /* 读失败就不给填：这是 upsert，对着空框保存会把读不出来的那份覆盖成空。 */
-          <EmptyState
-            title={tShared("common.loadFailed")}
-            description={`${webhookLoad.message}。读不到不等于没配，先解决读取失败再改，否则保存会覆盖掉现有登记。`}
-          />
-        ) : (
-          <>
-            <FieldTier
-              tier="identity"
-              hint="回调地址与密钥引用都配齐，上线检查第五项才算通过——只配一半意味着对方收得到但验不了签。"
-            >
-              <FieldGroup>
-                <Field orientation="labeled">
-                  <FieldLabel htmlFor="wh-url">回调地址</FieldLabel>
-                  <Input
-                    id="wh-url"
-                    value={webhookDraft.webhookUrl}
-                    onChange={(e) =>
-                      setWebhookDraft({
-                        ...webhookDraft,
-                        webhookUrl: e.target.value,
-                      })
-                    }
-                    placeholder="https://app.example.com/webhooks/vxture"
-                    className="font-mono text-code-sm"
-                  />
-                  <FieldDescription>
-                    必须是 http / https 绝对地址。留空即撤销登记。
-                  </FieldDescription>
-                </Field>
-                <Field orientation="labeled">
-                  <FieldLabel htmlFor="wh-secret">签名密钥引用</FieldLabel>
-                  <Input
-                    id="wh-secret"
-                    value={webhookDraft.webhookSecretRef}
-                    onChange={(e) =>
-                      setWebhookDraft({
-                        ...webhookDraft,
-                        webhookSecretRef: e.target.value,
-                      })
-                    }
-                    placeholder="secret://product/acme/webhook"
-                    className="font-mono text-code-sm"
-                  />
-                  <FieldDescription>
-                    <b>旧路径,新产品不用填</b>
-                    ——它是引用不是密钥本体,取密钥要靠容器
-                    环境里的同名变量,也就是说每接一个产品都得改{" "}
-                    <code>.env</code>
-                    再重新部署。存量产品(karda / arda / vxtpl)还在用,保留到它们
-                    迁完为止。
-                  </FieldDescription>
-                </Field>
-                <Field orientation="labeled">
-                  <FieldLabel htmlFor="wh-secret-value">签名密钥</FieldLabel>
-                  <Input
-                    id="wh-secret-value"
-                    type="password"
-                    autoComplete="new-password"
-                    value={webhookDraft.webhookSecret}
-                    onChange={(e) =>
-                      setWebhookDraft({
-                        ...webhookDraft,
-                        webhookSecret: e.target.value,
-                      })
-                    }
-                    placeholder={
-                      hasSecret ? "已登记,留空则不改动" : "至少 16 位"
-                    }
-                    className="font-mono text-code-sm"
-                  />
-                  <FieldDescription>
-                    {hasSecret
-                      ? "已登记。密钥加密存库、不回传,所以这里看不到当前值——要换就填新的,留空则保持不变。"
-                      : "填了它就不用再走上面那条引用+环境变量的老路。密钥加密存库,填完这一次就再也拿不回来,请同时交给产品侧。"}
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-            </FieldTier>
-
-            <FieldTier
-              tier="identity"
-              hint="域名 + 上游都填好,下次边缘同步这个产品的子域就通了——不需要往仓里手写一份 vhost。DNS 记录仍要你自己去建。"
-            >
-              <FieldGroup>
-                <Field orientation="labeled">
-                  <FieldLabel htmlFor="wh-domain">边缘域名</FieldLabel>
-                  <Input
-                    id="wh-domain"
-                    value={webhookDraft.edgeDomain}
-                    onChange={(e) =>
-                      setWebhookDraft({
-                        ...webhookDraft,
-                        edgeDomain: e.target.value,
-                      })
-                    }
-                    placeholder="acme.vxture.com"
-                    className="font-mono text-code-sm"
-                  />
-                  <FieldDescription>
-                    已按产品码预填,<b>可改</b>。用别的 apex(如{" "}
-                    <code>anlan.ai</code>
-                    )就在这里改掉——预填只是默认值。
-                    <br />
-                    <b>DNS 记录要你自己建</b>,本页不建也建不了。本域子域 (
-                    <code>*.vxture.com</code>)的证书是通配的不用签;换了 apex
-                    则证书与 vhost 都要另配,这张表只解决路由。
-                  </FieldDescription>
-                </Field>
-                <Field orientation="labeled">
-                  <FieldLabel htmlFor="wh-edge">边缘上游</FieldLabel>
-                  <Input
-                    id="wh-edge"
-                    value={webhookDraft.edgeUpstream}
-                    onChange={(e) =>
-                      setWebhookDraft({
-                        ...webhookDraft,
-                        edgeUpstream: e.target.value,
-                      })
-                    }
-                    placeholder="<tailnet-ip>:4050"
-                    className="font-mono text-code-sm"
-                  />
-                  <FieldDescription>
-                    写成 <code>host:port</code>
-                    ,不带协议、路径或空格——这个值会原样 进 nginx
-                    配置。端口在这里,域名在上一栏,两者不要混。
-                    <br />
-                    <b>留空 = 这个产品完全不进边缘路由表</b>(自带精确 vhost
-                    的产品就该留空)。
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-            </FieldTier>
-
-            <FieldTier tier="details" hint="展示用，不参与投递。">
-              <FieldGroup>
-                <Field orientation="labeled">
-                  <FieldLabel htmlFor="wh-home">产品主页</FieldLabel>
-                  <Input
-                    id="wh-home"
-                    value={webhookDraft.homeUrl}
-                    onChange={(e) =>
-                      setWebhookDraft({
-                        ...webhookDraft,
-                        homeUrl: e.target.value,
-                      })
-                    }
-                    placeholder="https://app.example.com"
-                    className="font-mono text-code-sm"
-                  />
-                </Field>
-              </FieldGroup>
-            </FieldTier>
-          </>
-        )}
-      </DialogForm>
-
-      {/* ── 计量指标抽屉 ─────────────────────────────────────────────────────
-          内容整个由 `ProductMetricsSection` 负责（自己取数、自己刷新）。这里只管
-          「开在哪」——批 4 的产品详情单页会把同一个组件挂成页内一节，那时删掉这个
-          抽屉即可，组件不动。 */}
-      <Drawer
-        open={metricsProduct !== null}
-        onClose={() => setMetricsProduct(null)}
-        width="lg"
-        title={
-          metricsProduct
-            ? `计量指标 · ${metricsProduct.productName}`
-            : undefined
-        }
-        description={metricsProduct?.productCode}
-      >
-        {metricsProduct ? (
-          <ProductMetricsSection
-            /* key 挂 productId：换一个产品时整节重挂，否则上一个产品的行会留在
-               表里直到新的取数回来——那一瞬看到的是别人的指标。 */
-            key={metricsProduct.id}
-            productId={metricsProduct.id}
-            productName={metricsProduct.productName}
-            canManage={canManage}
-          />
-        ) : null}
-      </Drawer>
-
-      {/* ── OIDC 客户端抽屉（挂在某个产品下）───────────────────────────────── */}
-      <Drawer
-        open={checklistProduct !== null}
-        onClose={closeChecklist}
-        width="md"
-        title={
-          checklistProduct
-            ? `接入检查单 · ${checklistProduct.productName}`
-            : undefined
-        }
-        description={checklistProduct?.productCode}
-      >
-        {checklistLoad.kind === "loading" ? (
-          <EmptyState
-            title={tShared("common.loading")}
-            description="正在读取检查单。"
-          />
-        ) : checklistLoad.kind === "error" ? (
-          <EmptyState
-            title={tShared("common.loadFailed")}
-            description={checklistLoad.message}
-            action={
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  checklistProduct && void loadChecklist(checklistProduct.id)
-                }
-              >
-                {tShared("common.retry")}
-              </Button>
-            }
-          />
-        ) : (
-          <div className="flex flex-col gap-lg">
-            <Banner
-              tone="info"
-              title="只覆盖技术接入六步"
-              description="对应 product_200_integration.md §7：目录/C1/C3/C2/数据面/验收。商业检查项（认证策略/定价）归 admin 消费，这里不读不写。带「复验判定」标记的几项由平台实测写入，勾不动——要改去跑一次上线复验。"
-            />
-            <div className="flex flex-col gap-sm">
-              {checklist.map((item) => {
-                /* 机器判定的项不给勾。BFF 也会拒（409），这里灰掉是为了让运营者在
-                   点之前就知道——一个点得下去然后报错的框，等于让人白跑一趟。 */
-                const auto = isAutoDeterminedChecklistItem(item.itemCode);
-                return (
-                  <div
-                    key={item.itemCode}
-                    className="flex items-start gap-sm rounded-md border border-border p-sm"
-                  >
-                    <Checkbox
-                      checked={item.isSatisfied}
-                      disabled={submitting || !canManage || auto}
-                      onCheckedChange={(checked) =>
-                        void toggleChecklistItem(
-                          item.itemCode,
-                          checked === true,
-                        )
-                      }
-                    />
-                    <div className="flex flex-1 flex-col gap-2xs">
-                      <div className="flex items-center gap-sm">
-                        <span className="text-body-md font-medium">
-                          {item.itemName}
-                        </span>
-                        {item.isRequired ? (
-                          <Badge variant="outline">必需</Badge>
-                        ) : null}
-                        {auto ? (
-                          <Badge variant="secondary">复验判定</Badge>
-                        ) : null}
-                      </div>
-                      {item.description ? (
-                        <span className="text-body-sm text-muted-foreground">
-                          {item.description}
-                        </span>
-                      ) : null}
-                      {auto ? (
-                        <span className="text-body-sm text-muted-foreground">
-                          由平台实测写入，不接受手工勾选。
-                        </span>
-                      ) : null}
-                      {item.checkedAt ? (
-                        <span className="text-body-sm text-muted-foreground">
-                          {formatDateTime(item.checkedAt, locale)} 确认
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </Drawer>
 
       {/* 二次确认。退役不可逆、恢复要提醒重新验证——两者都不该点一下就发生。 */}
       <DialogForm
