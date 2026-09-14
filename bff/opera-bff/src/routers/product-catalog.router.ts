@@ -55,6 +55,7 @@ import { UUID_RE } from "./router.shared";
 import type { Request, Response as ExpressResponse } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
+import { withTransaction, type Queryable } from "../db/tx";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import { conflict, invalidRequest, notFound } from "../errors/api-error";
@@ -203,7 +204,7 @@ function toRecord(row: ProductRow): ProductRecord {
   };
 }
 
-interface ProductWriteBody {
+export interface ProductWriteBody {
   productCode?: string;
   productType?: string;
   categoryId?: number | null;
@@ -617,60 +618,9 @@ export class ProductCatalogRouter {
   ): Promise<ProductRecord> {
     assertCanManage(req);
     validateWrite(body, { requireCore: true });
-    const surfaces = normalizeSurfaces(body.surfaces);
-    const operatorId = req.operator?.id ?? null;
-
-    /* 事务：产品行与端要么一起成，要么一起不成。端是关系表，分两次写的话
-       「产品建好了但端没写进去」会是一个看不出来的半截状态——产品照常显示，
-       只是它在如影端永远不出现。 */
-    const client = await this.pool.connect();
-    try {
-      await client.query("begin");
-      const result = await client.query<ProductRow>(
-        `INSERT INTO product.products (
-           product_code, product_type, category_id, product_name, product_nick,
-           description, capability_keys, tags, standalone_subscribable, status,
-           is_customer_visible, is_workforce_visible, origin, origin_provider,
-           icon_url, created_by, updated_by
-         ) VALUES (
-           $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15
-         ) RETURNING ${SELECT_COLUMNS}`,
-        [
-          body.productCode!.trim(),
-          body.productType!.trim(),
-          body.categoryId ?? null,
-          body.productName!.trim(),
-          body.productNick?.trim() || null,
-          body.description?.trim() || null,
-          body.capabilityKeys ?? [],
-          body.tags ?? [],
-          body.standaloneSubscribable ?? true,
-          body.isCustomerVisible ?? true,
-          body.isWorkforceVisible ?? true,
-          body.origin ?? "self",
-          body.originProvider?.trim() || null,
-          body.iconUrl?.trim() || null,
-          operatorId,
-        ],
-      );
-      const row = result.rows[0]!;
-      if (surfaces.length > 0) {
-        await client.query(
-          `INSERT INTO product.product_surfaces (product_id, surface)
-           SELECT $1, unnest($2::text[])`,
-          [row.id, surfaces],
-        );
-      }
-      await client.query("commit");
-      /* RETURNING 里的端子查询在插入端之前就求过值了，回传的会是空数组——
-         用刚写进去的值补上，而不是再查一次库。 */
-      return { ...toRecord(row), surfaces };
-    } catch (error) {
-      await client.query("rollback").catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
+    return withTransaction(this.pool, (client) =>
+      insertProductTx(client, body, req.operator?.id ?? null),
+    );
   }
 
   @Put(":id")
@@ -681,199 +631,13 @@ export class ProductCatalogRouter {
   ): Promise<ProductRecord> {
     assertCanManage(req);
     /*
-     * `requireCode: false` —— 改产品不必带产品码。
-     *
-     * 此前这里和 create 共用 `requireCore: true`，于是 PUT 也必填 productCode。
-     * 旧的编辑对话框恰好带着它（它的 draft 里有这一栏），所以一直没露；详情页把
-     * 产品码做成锁定的展示项、不进 draft，第一次真保存就撞上「缺少 productCode」
-     * ——而那个字段在界面上明明写着「登记后不可改」。
-     *
-     * 带了也不会白带：草稿态可以改（owner 2026-09-11 裁定「整个草稿态都可改」，
-     * 启用后锁定）。见下面 `codeChange` 那一段。
+     * `requireCode: false` —— 改产品不必带产品码。带了也不会白带：草稿态可以改
+     * （owner 2026-09-11），启用后锁定，见 `updateProductTx`。
      */
     validateWrite(body, { requireCore: true, requireCode: false });
-    /* 端**字段缺席 = 不动**（undefined），传了数组才整组替换。
-       「改个产品名」不该顺手把端清空——而如果这里把 undefined 当成空数组，
-       任何一次不带 surfaces 的 PUT 都会静默清掉它。 */
-    const surfaces =
-      body.surfaces === undefined ? null : normalizeSurfaces(body.surfaces);
-    const operatorId = req.operator?.id ?? null;
-
-    const client = await this.pool.connect();
-    try {
-      await client.query("begin");
-
-      /*
-       * ── 产品码：草稿态可改，启用后锁定（owner 2026-09-11）──
-       *
-       * `FOR UPDATE` 锁住这一行再判：不锁的话，「读到 draft → 另一个会话把它启用
-       * → 这边照样改码」这条竞态是存在的，而产品一旦启用就有客户足迹。
-       */
-      const current = await client.query<{
-        product_code: string;
-        status: string;
-      }>(
-        `SELECT product_code, status FROM product.products
-          WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
-        [id],
-      );
-      const before = current.rows[0];
-      if (!before) {
-        await client.query("rollback").catch(() => undefined);
-        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
-      }
-      const wantedCode = body.productCode?.trim();
-      const codeChange =
-        wantedCode !== undefined &&
-        wantedCode !== "" &&
-        wantedCode !== before.product_code;
-      if (codeChange && before.status !== "draft") {
-        /* 明确报错，不静默忽略。收下一个新值、校验通过、然后被 SET 列表丢掉，
-           会给运营者「我已经改了」的错觉——那比拒绝更糟。 */
-        const label =
-          STATE_LABELS[before.status as ProductState] ?? before.status;
-        throw conflict(
-          "CATALOG_CODE_LOCKED",
-          `产品码只能在草稿状态修改。「${before.product_code}」已经是${label}状态——它的客户端配置、边缘路由与已售订阅都按这个码在走。`,
-        );
-      }
-
-      /*
-       * ── 善后：改码之前先把推导出来的边缘域名钉死 ──
-       *
-       * `edge_domain` 为空时，边缘路由表按 `{产品码}.vxture.com` 推导。于是改码
-       * **等于换域名**，而 DNS 还指着旧的那个——下一次 deploy 渲染路由表时，旧域名
-       * 从表里消失，访问它的人拿到 444（无响应关闭），没有任何一处会报错。
-       *
-       * 所以在改码的同一个事务里，把当时**实际生效的**那个域名写成显式值。路由不动，
-       * 改码就只是改码。要换域名是另一件事，在同一页上单独改。
-       *
-       * 只在真的走边缘路由时才钉（`edge_upstream` 有值）：没接边缘的产品钉一个域名
-       * 进去，等于凭空给它一条没人要的配置。
-       */
-      let pinnedDomain: string | null = null;
-      if (codeChange) {
-        const pin = await client.query<{ edge_domain: string }>(
-          `UPDATE product.product_webhooks
-              SET edge_domain = $2, updated_at = now()
-            WHERE product_id = $1
-              AND coalesce(edge_domain, '') = ''
-              AND coalesce(edge_upstream, '') <> ''
-            RETURNING edge_domain`,
-          [id, `${before.product_code}.vxture.com`],
-        );
-        pinnedDomain = pin.rows[0]?.edge_domain ?? null;
-      }
-
-      /*
-       * ── 缺席即不改。这一段是在修一处正在生产上丢数据的缺陷 ──
-       * 原先 SET 列表取值一律 `body.x ?? 默认值`，于是**任何送部分字段的客户端都会
-       * 把它没送的列抹掉**：详情页只送 11 个，剩下四列每保存一次就被写成
-       * `category_id = null`、`standalone_subscribable = true`、`capability_keys = []`、
-       * `tags = []`。接口回 200、界面提示保存成功，而那几个字段本来就不在页面上，
-       * 所以看不出任何区别——要等到某个产品在目录里归错类，或者一个本不该单独售卖的
-       * 组件突然可以单买，才会有人发现，那时已无从判断是谁在哪一次保存里弄没的。
-       *
-       * 讽刺的是正确的规则就写在上面三行：`surfaces` 那里写着「字段缺席 = 不动」，
-       * 理由一字不差地适用于这些标量列，只是当时没往下推。
-       *
-       * **三态**（与 webhook 密钥那条同一套）：键不在 = 不改；显式 null / 空串 =
-       * 清空；有值 = 覆盖。改客户端（让详情页把字段送齐）也能让今天这版不丢数据，
-       * 但下次往表里加一列而某个写入面忘了跟，同样的静默丢失就回来了。
-       *
-       * ── 为什么是 CASE 而不是把 SET 列表拼出来 ──
-       * 拼 SET 列表更短，但 `lint:anchor-writes` 是**静态**读 SQL 文本抽列名的，
-       * 一插值它就抽到零列然后判过——实测：往那份列表里塞一个 `created_at`，守卫照样
-       * 绿。而写进锚点列在生产上是 42501、整条事务回滚（TD-018 列锁）。
-       * 保持 SQL 静态，守卫才继续看得见这条语句。`updateDisplay` 也是这个写法。
-       *
-       * 每个可选列一对参数：`$奇数` 是「这次送了没」，`$偶数` 是值。
-       * `ELSE <列名>` 在 UPDATE 的 SET 表达式里读的是**这一行的旧值**。
-       */
-      const has = (k: keyof ProductWriteBody) => body[k] !== undefined;
-      const result = await client.query<ProductRow>(
-        `UPDATE product.products SET
-           product_type = $1,
-           product_name = $2,
-           product_code            = CASE WHEN $27::bool THEN $28 ELSE product_code            END,
-           category_id             = CASE WHEN  $3::bool THEN  $4 ELSE category_id             END,
-           product_nick            = CASE WHEN  $5::bool THEN  $6 ELSE product_nick            END,
-           description             = CASE WHEN  $7::bool THEN  $8 ELSE description             END,
-           capability_keys         = CASE WHEN  $9::bool THEN $10 ELSE capability_keys         END,
-           tags                    = CASE WHEN $11::bool THEN $12 ELSE tags                    END,
-           standalone_subscribable = CASE WHEN $13::bool THEN $14 ELSE standalone_subscribable END,
-           is_customer_visible     = CASE WHEN $15::bool THEN $16 ELSE is_customer_visible     END,
-           is_workforce_visible    = CASE WHEN $17::bool THEN $18 ELSE is_workforce_visible    END,
-           origin                  = CASE WHEN $19::bool THEN $20 ELSE origin                  END,
-           origin_provider         = CASE WHEN $21::bool THEN $22 ELSE origin_provider         END,
-           icon_url                = CASE WHEN $23::bool THEN $24 ELSE icon_url                END,
-           updated_by = $25, updated_at = now()
-         WHERE id = $26 AND deleted_at IS NULL
-         RETURNING ${SELECT_COLUMNS}`,
-        [
-          body.productType!.trim(),
-          body.productName!.trim(),
-          has("categoryId"),
-          body.categoryId ?? null,
-          has("productNick"),
-          body.productNick?.trim() || null,
-          has("description"),
-          body.description?.trim() || null,
-          has("capabilityKeys"),
-          body.capabilityKeys ?? [],
-          has("tags"),
-          body.tags ?? [],
-          has("standaloneSubscribable"),
-          body.standaloneSubscribable ?? true,
-          has("isCustomerVisible"),
-          body.isCustomerVisible ?? true,
-          has("isWorkforceVisible"),
-          body.isWorkforceVisible ?? true,
-          has("origin"),
-          body.origin ?? "self",
-          has("originProvider"),
-          body.originProvider?.trim() || null,
-          has("iconUrl"),
-          body.iconUrl?.trim() || null,
-          operatorId,
-          id,
-          /* 排在最后而不是插在中间：前 24 个是成对的 CASE 参数，从中间插一个会把
-             后面每一个编号都推一位，而编号错位不报错、只会把值写到别的列上去。 */
-          codeChange,
-          codeChange ? wantedCode : null,
-        ],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        await client.query("rollback").catch(() => undefined);
-        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
-      }
-      if (surfaces !== null) {
-        await replaceSurfaces(client, id, surfaces);
-      }
-      await client.query("commit");
-      return {
-        ...toRecord(row),
-        /* 同 create：RETURNING 的子查询在替换之前求值，回传的是旧集合。 */
-        surfaces: surfaces ?? toRecord(row).surfaces,
-        /* 改码时的善后结果。界面据此告诉运营者「边缘域名已钉在旧值上」——
-           做了什么要说出来，悄悄改一行配置比不改更难查。 */
-        ...(pinnedDomain !== null ? { pinnedEdgeDomain: pinnedDomain } : {}),
-      };
-    } catch (error) {
-      await client.query("rollback").catch(() => undefined);
-      /* 产品码撞车：`uq_products_product_code` 是唯一约束，冒上来是 23505、
-         也就是 500 和一句英文约束名。运营者看到的该是「这个码被谁占了」。 */
-      if ((error as { code?: string }).code === "23505") {
-        throw conflict(
-          "CATALOG_CODE_TAKEN",
-          `产品码「${body.productCode?.trim()}」已经被别的产品占用了。`,
-        );
-      }
-      throw error;
-    } finally {
-      client.release();
-    }
+    return withTransaction(this.pool, (client) =>
+      updateProductTx(client, id, body, req.operator?.id ?? null),
+    );
   }
 
   @Patch(":id/state")
@@ -2158,7 +1922,7 @@ function normalizeSurfaces(input: string[] | undefined): string[] {
  * 东西，却要多一次查询和一段容易写错的集合运算。
  */
 async function replaceSurfaces(
-  client: PoolClient,
+  client: Queryable,
   productId: string,
   surfaces: string[],
 ): Promise<void> {
@@ -2269,11 +2033,20 @@ function normalizeRef(value: string | null | undefined): string | null {
   return raw;
 }
 
-function validateWrite(
+export function validateWrite(
   body: ProductWriteBody,
   /** `requireCode` 缺省随 `requireCore`——只有「改」显式传 false（产品码不可改）。 */
   opts: { requireCore: boolean; requireCode?: boolean },
 ): void {
+  /* `new` 被 opera 的「接入产品」页占用（`/product/catalog/new`，静态段优先于
+     `[productCode]`）。登记成产品码的话，这个产品的页面永远打不开。 */
+  if (body.productCode?.trim() === "new") {
+    throw invalidRequest(
+      "VALIDATION_RESERVED",
+      "产品码 new 是保留字：opera 的「接入产品」页占用了这个地址",
+      "productCode",
+    );
+  }
   if (opts.requireCore) {
     if ((opts.requireCode ?? true) && !body.productCode?.trim()) {
       throw invalidRequest(
@@ -2320,4 +2093,346 @@ function validateWrite(
       "originProvider",
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 写入本体。**在调用方的事务里跑**，由 `PUT :id` / `POST` 与产品接入的合并保存
+// （`product-onboarding.router.ts`）共用——同一批字段只有一份写法，两个入口的
+// 校验、缺席语义与善后不会各自漂。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 产品码撞车：`uq_products_product_code` 冒上来是 23505、也就是 500 和一句英文约束名。 */
+function mapProductCodeTaken(
+  error: unknown,
+  code: string | undefined,
+): unknown {
+  if ((error as { code?: string }).code === "23505") {
+    return conflict(
+      "CATALOG_CODE_TAKEN",
+      `产品码「${code?.trim() ?? ""}」已经被别的产品占用了。`,
+    );
+  }
+  return error;
+}
+
+/**
+ * 登记一个产品（草稿）。调用方先跑过 `validateWrite(body, { requireCore: true })`。
+ *
+ * 产品行与端在同一个事务里：端是关系表，分两次写的话「产品建好了但端没写进去」是一个
+ * 看不出来的半截状态——产品照常显示，只是它在如影端永远不出现。
+ */
+export async function insertProductTx(
+  client: Queryable,
+  body: ProductWriteBody,
+  operatorId: string | null,
+): Promise<ProductRecord> {
+  const surfaces = normalizeSurfaces(body.surfaces);
+  const row = await client
+    .query<ProductRow>(
+      `INSERT INTO product.products (
+         product_code, product_type, category_id, product_name, product_nick,
+         description, capability_keys, tags, standalone_subscribable, status,
+         is_customer_visible, is_workforce_visible, origin, origin_provider,
+         icon_url, created_by, updated_by
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15
+       ) RETURNING ${SELECT_COLUMNS}`,
+      [
+        body.productCode!.trim(),
+        body.productType!.trim(),
+        body.categoryId ?? null,
+        body.productName!.trim(),
+        body.productNick?.trim() || null,
+        body.description?.trim() || null,
+        body.capabilityKeys ?? [],
+        body.tags ?? [],
+        body.standaloneSubscribable ?? true,
+        body.isCustomerVisible ?? true,
+        body.isWorkforceVisible ?? true,
+        body.origin ?? "self",
+        body.originProvider?.trim() || null,
+        body.iconUrl?.trim() || null,
+        operatorId,
+      ],
+    )
+    .then((r) => r.rows[0]!)
+    .catch((error: unknown) => {
+      throw mapProductCodeTaken(error, body.productCode);
+    });
+  if (surfaces.length > 0) {
+    await client.query(
+      `INSERT INTO product.product_surfaces (product_id, surface)
+       SELECT $1, unnest($2::text[])`,
+      [row.id, surfaces],
+    );
+  }
+  /* RETURNING 里的端子查询在插入端之前就求过值了，回传的会是空数组——
+     用刚写进去的值补上，而不是再查一次库。 */
+  return { ...toRecord(row), surfaces };
+}
+
+/**
+ * 改一个产品。调用方先跑过 `validateWrite(body, { requireCore: true, requireCode: false })`。
+ */
+export async function updateProductTx(
+  client: Queryable,
+  id: string,
+  body: ProductWriteBody,
+  operatorId: string | null,
+): Promise<ProductRecord & { pinnedEdgeDomain?: string }> {
+  /* 端**字段缺席 = 不动**（undefined），传了数组才整组替换。
+     「改个产品名」不该顺手把端清空。 */
+  const surfaces =
+    body.surfaces === undefined ? null : normalizeSurfaces(body.surfaces);
+
+  /*
+   * ── 产品码：草稿态可改，启用后锁定（owner 2026-09-11）──
+   *
+   * `FOR UPDATE` 锁住这一行再判：不锁的话，「读到 draft → 另一个会话把它启用
+   * → 这边照样改码」这条竞态是存在的，而产品一旦启用就有客户足迹。
+   */
+  const current = await client.query<{
+    product_code: string;
+    status: string;
+  }>(
+    `SELECT product_code, status FROM product.products
+      WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+    [id],
+  );
+  const before = current.rows[0];
+  if (!before) {
+    throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+  }
+  const wantedCode = body.productCode?.trim();
+  const codeChange =
+    wantedCode !== undefined &&
+    wantedCode !== "" &&
+    wantedCode !== before.product_code;
+  if (codeChange && before.status !== "draft") {
+    /* 明确报错，不静默忽略。收下一个新值、校验通过、然后被 SET 列表丢掉，
+       会给运营者「我已经改了」的错觉——那比拒绝更糟。 */
+    const label = STATE_LABELS[before.status as ProductState] ?? before.status;
+    throw conflict(
+      "CATALOG_CODE_LOCKED",
+      `产品码只能在草稿状态修改。「${before.product_code}」已经是${label}状态——它的客户端配置、边缘路由与已售订阅都按这个码在走。`,
+    );
+  }
+
+  /*
+   * ── 善后：改码之前先把推导出来的边缘域名钉死 ──
+   *
+   * `edge_domain` 为空时，边缘路由表按 `{产品码}.vxture.com` 推导。于是改码
+   * **等于换域名**，而 DNS 还指着旧的那个——下一次 deploy 渲染路由表时，旧域名
+   * 从表里消失，访问它的人拿到 444（无响应关闭），没有任何一处会报错。
+   * 所以在改码的同一个事务里，把当时**实际生效的**那个域名写成显式值。
+   * 只在真的走边缘路由时才钉（`edge_upstream` 有值）。
+   */
+  let pinnedDomain: string | null = null;
+  if (codeChange) {
+    const pin = await client.query<{ edge_domain: string }>(
+      `UPDATE product.product_webhooks
+          SET edge_domain = $2, updated_at = now()
+        WHERE product_id = $1
+          AND coalesce(edge_domain, '') = ''
+          AND coalesce(edge_upstream, '') <> ''
+        RETURNING edge_domain`,
+      [id, `${before.product_code}.vxture.com`],
+    );
+    pinnedDomain = pin.rows[0]?.edge_domain ?? null;
+  }
+
+  /*
+   * ── 缺席即不改 ──
+   * 原先 SET 列表取值一律 `body.x ?? 默认值`，于是**任何送部分字段的客户端都会把它
+   * 没送的列抹掉**——接口回 200、界面提示保存成功，而那几个字段本来就不在页面上。
+   * **三态**：键不在 = 不改；显式 null / 空串 = 清空；有值 = 覆盖。
+   *
+   * 为什么是 CASE 而不是把 SET 列表拼出来：`lint:anchor-writes` 是**静态**读 SQL 文本
+   * 抽列名的，一插值它就抽到零列然后判过；而写进锚点列在生产上是 42501、整条事务回滚。
+   * 每个可选列一对参数：`$奇数` 是「这次送了没」，`$偶数` 是值。
+   */
+  const has = (k: keyof ProductWriteBody) => body[k] !== undefined;
+  const row = await client
+    .query<ProductRow>(
+      `UPDATE product.products SET
+         product_type = $1,
+         product_name = $2,
+         product_code            = CASE WHEN $27::bool THEN $28 ELSE product_code            END,
+         category_id             = CASE WHEN  $3::bool THEN  $4 ELSE category_id             END,
+         product_nick            = CASE WHEN  $5::bool THEN  $6 ELSE product_nick            END,
+         description             = CASE WHEN  $7::bool THEN  $8 ELSE description             END,
+         capability_keys         = CASE WHEN  $9::bool THEN $10 ELSE capability_keys         END,
+         tags                    = CASE WHEN $11::bool THEN $12 ELSE tags                    END,
+         standalone_subscribable = CASE WHEN $13::bool THEN $14 ELSE standalone_subscribable END,
+         is_customer_visible     = CASE WHEN $15::bool THEN $16 ELSE is_customer_visible     END,
+         is_workforce_visible    = CASE WHEN $17::bool THEN $18 ELSE is_workforce_visible    END,
+         origin                  = CASE WHEN $19::bool THEN $20 ELSE origin                  END,
+         origin_provider         = CASE WHEN $21::bool THEN $22 ELSE origin_provider         END,
+         icon_url                = CASE WHEN $23::bool THEN $24 ELSE icon_url                END,
+         updated_by = $25, updated_at = now()
+       WHERE id = $26 AND deleted_at IS NULL
+       RETURNING ${SELECT_COLUMNS}`,
+      [
+        body.productType!.trim(),
+        body.productName!.trim(),
+        has("categoryId"),
+        body.categoryId ?? null,
+        has("productNick"),
+        body.productNick?.trim() || null,
+        has("description"),
+        body.description?.trim() || null,
+        has("capabilityKeys"),
+        body.capabilityKeys ?? [],
+        has("tags"),
+        body.tags ?? [],
+        has("standaloneSubscribable"),
+        body.standaloneSubscribable ?? true,
+        has("isCustomerVisible"),
+        body.isCustomerVisible ?? true,
+        has("isWorkforceVisible"),
+        body.isWorkforceVisible ?? true,
+        has("origin"),
+        body.origin ?? "self",
+        has("originProvider"),
+        body.originProvider?.trim() || null,
+        has("iconUrl"),
+        body.iconUrl?.trim() || null,
+        operatorId,
+        id,
+        /* 排在最后而不是插在中间：前 24 个是成对的 CASE 参数，从中间插一个会把
+           后面每一个编号都推一位，而编号错位不报错、只会把值写到别的列上去。 */
+        codeChange,
+        codeChange ? wantedCode : null,
+      ],
+    )
+    .then((r) => r.rows[0])
+    .catch((error: unknown) => {
+      throw mapProductCodeTaken(error, body.productCode);
+    });
+  if (!row) {
+    throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+  }
+  if (surfaces !== null) {
+    await replaceSurfaces(client, id, surfaces);
+  }
+  const record = toRecord(row);
+  return {
+    ...record,
+    /* 同 insert：RETURNING 的子查询在替换之前求值，回传的是旧集合。 */
+    surfaces: surfaces ?? record.surfaces,
+    /* 改码时的善后结果。界面据此告诉运营者「边缘域名已钉在旧值上」——
+       做了什么要说出来，悄悄改一行配置比不改更难查。 */
+    ...(pinnedDomain !== null ? { pinnedEdgeDomain: pinnedDomain } : {}),
+  };
+}
+
+/** 边缘与回调里**不是密钥**的那四项。 */
+export interface EdgeWriteBody {
+  homeUrl?: string | null;
+  webhookUrl?: string | null;
+  edgeUpstream?: string | null;
+  edgeDomain?: string | null;
+}
+
+interface WebhookRow {
+  home_url: string | null;
+  webhook_url: string | null;
+  webhook_secret_ref: string | null;
+  edge_upstream: string | null;
+  edge_domain: string | null;
+  has_secret: boolean;
+}
+
+function toWebhookRecord(row: WebhookRow): ProductWebhookRecord {
+  return {
+    homeUrl: row.home_url,
+    webhookUrl: row.webhook_url,
+    webhookSecretRef: row.webhook_secret_ref,
+    edgeUpstream: row.edge_upstream,
+    edgeDomain: row.edge_domain,
+    hasWebhookSecret: row.has_secret,
+  };
+}
+
+/**
+ * 写边缘与回调，**不碰密钥两列**（`webhook_secret_ref` / `webhook_secret_enc`）。
+ *
+ * 密钥只从密钥面板写（`setWebhookSecretTx`）。合并保存的 SQL 里连这两列都不出现，
+ * 所以不存在「改个回调地址顺手把密钥清空」——那条三态规则此前要靠前端记得「框空就别带
+ * 这个字段」来守，而表单回填不了密文，框恒空。
+ *
+ * 回调路径照登记处的规矩判（`assertStandardWebhookPath`），与 `PUT :id/webhook` 同一道闸门。
+ */
+export async function upsertEdgeTx(
+  client: Queryable,
+  productId: string,
+  productCode: string,
+  body: EdgeWriteBody,
+): Promise<ProductWebhookRecord> {
+  const homeUrl = normalizeUrl(body.homeUrl, "homeUrl");
+  const webhookUrl = normalizeUrl(body.webhookUrl, "webhookUrl");
+  const edgeUpstream = normalizeUpstream(body.edgeUpstream);
+  const edgeDomain = normalizeDomain(body.edgeDomain);
+  assertStandardWebhookPath(webhookUrl, productCode);
+  const result = await client.query<WebhookRow>(
+    `INSERT INTO product.product_webhooks
+       (product_id, home_url, webhook_url, edge_upstream, edge_domain)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (product_id) DO UPDATE
+       SET home_url      = EXCLUDED.home_url,
+           webhook_url   = EXCLUDED.webhook_url,
+           edge_upstream = EXCLUDED.edge_upstream,
+           edge_domain   = EXCLUDED.edge_domain,
+           updated_at    = now()
+     RETURNING home_url, webhook_url, webhook_secret_ref, edge_upstream, edge_domain,
+               (webhook_secret_enc IS NOT NULL) AS has_secret`,
+    [productId, homeUrl, webhookUrl, edgeUpstream, edgeDomain],
+  );
+  return toWebhookRecord(result.rows[0]!);
+}
+
+/** 密钥面板的写入。两项各自三态：缺席 = 不动；空串 = 清除；有值 = 覆盖。 */
+export interface WebhookSecretBody {
+  webhookSecret?: string | null;
+  webhookSecretRef?: string | null;
+}
+
+/**
+ * 写签名密钥与引用。调用方负责 step-up 与产品存在性。
+ *
+ * 密钥**原文只进不出**：加密后落 `webhook_secret_enc`，回传只有一个布尔。
+ */
+export async function setWebhookSecretTx(
+  client: Queryable,
+  productId: string,
+  body: WebhookSecretBody,
+): Promise<ProductWebhookRecord> {
+  const secretTouched = body.webhookSecret !== undefined;
+  const refTouched = body.webhookSecretRef !== undefined;
+  if (!secretTouched && !refTouched) {
+    throw invalidRequest(
+      "VALIDATION_REQUIRED",
+      "webhookSecret 与 webhookSecretRef 至少给一个",
+      "webhookSecret",
+    );
+  }
+  const secretEnc = secretTouched
+    ? encodeWebhookSecret(body.webhookSecret)
+    : null;
+  const ref = refTouched ? normalizeRef(body.webhookSecretRef) : null;
+  const result = await client.query<WebhookRow>(
+    `INSERT INTO product.product_webhooks
+       (product_id, webhook_secret_ref, webhook_secret_enc)
+     VALUES ($1, $3, $5)
+     ON CONFLICT (product_id) DO UPDATE
+       SET webhook_secret_ref = CASE WHEN $2::bool THEN EXCLUDED.webhook_secret_ref
+                                     ELSE product.product_webhooks.webhook_secret_ref END,
+           webhook_secret_enc = CASE WHEN $4::bool THEN EXCLUDED.webhook_secret_enc
+                                     ELSE product.product_webhooks.webhook_secret_enc END,
+           updated_at         = now()
+     RETURNING home_url, webhook_url, webhook_secret_ref, edge_upstream, edge_domain,
+               (webhook_secret_enc IS NOT NULL) AS has_secret`,
+    [productId, refTouched, ref, secretTouched, secretEnc],
+  );
+  return toWebhookRecord(result.rows[0]!);
 }

@@ -29,8 +29,8 @@ import {
   type RpRuntime,
 } from "../oidc/oidc-rp.tokens";
 import type { RequestContext } from "../types/request-context";
-import { stepUpRequired } from "../errors/api-error";
-import { REQUIRE_STEP_UP, stepUpCookieName } from "./step-up.decorator";
+import { REQUIRE_STEP_UP } from "./step-up.decorator";
+import { assertFreshStepUp } from "./step-up.verify";
 
 @Injectable()
 export class OperatorStepUpGuard implements CanActivate {
@@ -67,30 +67,9 @@ export class OperatorStepUpGuard implements CanActivate {
 
     const { oidcClient, rpRuntime } = this.resolveDeps();
     const req = context.switchToHttp().getRequest<Request & RequestContext>();
-
-    const sessionOperatorId = req.operator?.id;
-    if (!sessionOperatorId) {
-      // OperatorAuthMiddleware 本该填好；缺失即无会话。
-      throw stepUpRequired();
-    }
-
-    const token = req.cookies?.[stepUpCookieName(rpRuntime.cookieSecure)];
-    if (!token || typeof token !== "string") {
-      throw stepUpRequired();
-    }
-
-    let claims: Record<string, unknown>;
-    try {
-      // RS256/JWKS + iss + exp + aud=opera（与 access token 同一签发方）。
-      claims = await oidcClient.verifyAccessToken(token);
-    } catch {
-      throw stepUpRequired();
-    }
-
-    const boundToSession = claims.sub === `opr_${sessionOperatorId}`;
-    if (claims.stepup !== true || !boundToSession) {
-      throw stepUpRequired();
-    }
+    /* 判定本体在 `step-up.verify.ts`：按需调用的路由（产品接入合并保存）与这里
+       调的是同一段，判据只有一份。 */
+    await assertFreshStepUp(req, oidcClient, rpRuntime);
     return true;
   }
 }

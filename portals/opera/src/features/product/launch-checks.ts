@@ -69,7 +69,14 @@ export interface CheckResult {
   remedy: string | null;
   /** 对应的接入检查项，有则把结果写回去。 */
   itemCode?: string;
-  /** 去哪儿修。 */
+  /**
+   * 去哪儿修。
+   *
+   * 以 `#` 开头的是**产品页内**的去处（`#section-basic` / `#section-login` /
+   * `#section-edge` 是板块，`#secrets` 是密钥面板）：检查结果在产品页的抽屉里显示，
+   * 点它是就地滚过去或打开面板，不跳转——跳转会丢掉页面上没保存的改动。
+   * 其它值是别的页面，抽屉里以新标签页打开。
+   */
   href?: string;
 }
 
@@ -100,6 +107,8 @@ interface RunosGrantLite {
 interface WebhookLite {
   webhookUrl: string | null;
   webhookSecretRef: string | null;
+  /** 加密落库的签名密钥在不在。密钥本体永不回传。 */
+  hasWebhookSecret?: boolean;
 }
 
 /**
@@ -209,9 +218,9 @@ export async function runLaunchChecks(
     detail: registrationOk
       ? `产品码 ${product.productCode}`
       : "来源标为第三方接入，但没填接入方名称。",
-    remedy: registrationOk ? null : "在产品目录里编辑这一行，补上「接入方」。",
+    remedy: registrationOk ? null : "在「基本信息」补上供应方。",
     itemCode: "catalog_registered",
-    href: `/product/catalog?productId=${encodeURIComponent(product.id)}`,
+    href: "#section-basic",
   });
 
   /* ② 接入凭据 —— 只测**我方**这一半：client 注册了、启用着、有回调地址。
@@ -219,13 +228,13 @@ export async function runLaunchChecks(
   if (clients instanceof Error) {
     results.push({
       id: "client",
-      label: "接入凭据",
+      label: "登录接入",
       what: "产品有一个启用中的 OIDC 客户端，且配了回调地址。",
       side: "ours",
       status: "fail",
       detail: reason(clients, "读取 OIDC 客户端失败"),
       remedy: "读不到不等于没配。先解决读取失败，再重跑。",
-      href: `/product/clients?productId=${encodeURIComponent(product.id)}`,
+      href: "#section-login",
     });
   } else {
     const active = clients.filter((c) => c.state === "active");
@@ -233,7 +242,7 @@ export async function runLaunchChecks(
     const ok = withRedirect.length > 0;
     results.push({
       id: "client",
-      label: "接入凭据",
+      label: "登录接入",
       what: "产品有一个启用中的 OIDC 客户端，且配了回调地址。只测我方注册——对方有没有把登录/回调/会话实现出来，平台观测不到。",
       side: "ours",
       status: ok ? "pass" : "fail",
@@ -246,13 +255,13 @@ export async function runLaunchChecks(
           : "客户端启用着，但没有配任何回调地址——换票流程走不完。",
       remedy: ok
         ? null
-        : "去「接入凭据」注册或启用一个客户端，并补上回调地址。",
+        : "在「登录接入」添加或启用一个客户端，并补上登录回调地址。",
       /* **刻意不写回 `c1_identity`。** 那个检查项的定义是「OIDC 客户端已注册 **且对方
          已实现登录/回调/会话**」，而本检查只看得到前半句——`lifecycle.ts` 的 `THEIR_SIDE`
          也把它归在对方那一侧。自动打勾等于替对方声明「我实现完了」，而验证态由检查单
          推导、确认上线又以验证态为门槛，一路下去就是**自己造出来的假绿灯**。
          平台侧结论照常在本页显示，勾不勾由操作员按对方回报决定。 */
-      href: `/product/clients?productId=${encodeURIComponent(product.id)}`,
+      href: "#section-login",
     });
   }
 
@@ -344,7 +353,7 @@ export async function runLaunchChecks(
     results.push({
       id: "webhook",
       label: "Webhook 登记",
-      what: "平台侧登记了回调地址与签名密钥引用。",
+      what: "平台侧登记了回调地址与签名密钥。",
       side: "ours",
       status: "fail",
       detail: reason(webhook, "读取 webhook 登记失败"),
@@ -352,7 +361,11 @@ export async function runLaunchChecks(
     });
   } else {
     const hasUrl = !!webhook?.webhookUrl?.trim();
-    const hasSecret = !!webhook?.webhookSecretRef?.trim();
+    /* 签名密钥有两条路径，任一条配了都算：新路径是加密落库的密钥（`hasWebhookSecret`），
+       旧路径是引用名 → 平台容器环境变量（`webhookSecretRef`，存量产品在用）。此前这里
+       只认引用——于是按 runbook 走新路径的产品，这一项永远是红的。 */
+    const hasSecret =
+      !!webhook?.hasWebhookSecret || !!webhook?.webhookSecretRef?.trim();
     /* 「填了」不等于「填对了」。这一项此前只看两个字段非空，于是通则规定的
        `/api/webhooks/vxture` 在全组织零实现而这一格全绿——路径不匹配最常见的表现
        不是 404，是落到对方前端的 SPA catch-all 拿回 index.html 和 HTTP 200，
@@ -364,28 +377,28 @@ export async function runLaunchChecks(
     results.push({
       id: "webhook",
       label: "Webhook 登记",
-      what: `平台侧登记了回调地址与签名密钥引用，且回调路径是通则规定的 ${STANDARD_WEBHOOK_PATH}（所有产品同一个，变的只有域名）。不发测试投递——那是对对方生产端点的真实请求，本页不做；投递能不能成功要看运行监控里的投递队列。`,
+      what: `平台侧登记了回调地址与签名密钥，且回调路径是通则规定的 ${STANDARD_WEBHOOK_PATH}（所有产品同一个，变的只有域名）。不发测试投递——那是对对方生产端点的真实请求，本页不做；投递能不能成功要看运行监控里的投递队列。`,
       side: "ours",
       status: ok ? "pass" : "fail",
       detail: ok
-        ? `回调 ${webhook!.webhookUrl}，密钥引用 ${webhook!.webhookSecretRef}`
+        ? `回调 ${webhook!.webhookUrl}，${webhook!.hasWebhookSecret ? "签名密钥已登记" : `密钥引用 ${webhook!.webhookSecretRef}`}`
         : !webhook
           ? "这个产品没有 webhook 登记行。"
           : !hasUrl
             ? "登记行存在，但没有回调地址。"
             : !pathOk
               ? `回调地址的路径是 ${path ?? "(解析不出)"}，通则规定的是 ${STANDARD_WEBHOOK_PATH}。这是闸门补上之前留下的登记值。`
-              : "登记了回调地址，但没有签名密钥引用——对方无法验签。",
+              : "登记了回调地址，但没有签名密钥——对方无法验签。",
       remedy: ok
         ? null
         : !hasUrl
-          ? "去产品目录的「Webhook 登记」填回调地址与签名密钥引用。"
+          ? "在「边缘路由与回调」填回调地址，在「密钥管理」登记签名密钥。"
           : !pathOk
             ? `按 X-4 三步迁移：① 产品侧先同时能收新旧两个路径并上线；② 回这里把地址改成 ${STANDARD_WEBHOOK_PATH}；③ 产品侧再撤掉旧路由。顺序反过来会有一段投递落空的窗口。`
-            : "去产品目录的「Webhook 登记」补上签名密钥引用。",
-      /* 原来指 `/ops/logs`（投递日志）——那是看结果的地方，不是配置的地方；配置入口
-         2026-08-16 补在产品目录的行操作里，这里跟着指过去。 */
-      href: `/product/catalog?productId=${encodeURIComponent(product.id)}`,
+            : "在「密钥管理」登记签名密钥。",
+      /* 原来指 `/ops/logs`（投递日志）——那是看结果的地方，不是配置的地方。
+         2026-09-14 起配置都在产品页：地址在「边缘路由与回调」，签名密钥在密钥面板。 */
+      href: hasUrl && pathOk && !hasSecret ? "#secrets" : "#section-edge",
     });
   }
 

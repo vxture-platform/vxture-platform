@@ -7,6 +7,7 @@
  * （路由文件薄、页面组件住在 modules/features 下），这样组件可被别处复用，也不必
  * 为了看一眼实现去翻 app/ 目录树。 */
 
+import { Suspense } from "react";
 import { ProductDetailPage } from "@/features/product/ProductDetailPage";
 
 export default async function Page({
@@ -15,5 +16,10 @@ export default async function Page({
   params: Promise<{ productCode: string }>;
 }) {
   const { productCode } = await params;
-  return <ProductDetailPage productCode={decodeURIComponent(productCode)} />;
+  /* 页面读 `useSearchParams`（深链打开面板），放进 Suspense 边界。 */
+  return (
+    <Suspense fallback={null}>
+      <ProductDetailPage productCode={decodeURIComponent(productCode)} />
+    </Suspense>
+  );
 }

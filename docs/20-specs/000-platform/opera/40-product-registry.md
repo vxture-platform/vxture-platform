@@ -1,7 +1,7 @@
 # 产品登记与接入：单一入口模型（opera · product）
 
 > 状态：v1.0（2026-08-30，owner 口径）。
-> 实现：`bff/opera-bff/src/routers/product-catalog.router.ts`（登记）· `oidc-client.router.ts`（接入凭据）· `product-health.router.ts`（服务状态）；DDL `deploy/database/ddl/22_appoidc.sql`；seed `deploy/database/seed/seed-catalog.mjs`；迁移 `deploy/database/migrations/2026-08-30-oidc-client-kind.sql`。
+> 实现：`bff/opera-bff/src/routers/product-catalog.router.ts`（登记）· `oidc-client.router.ts`（接入凭据）· `product-onboarding.router.ts`（单页接入的合并保存与密钥）· `product-health.router.ts`（服务状态）；DDL `deploy/database/ddl/22_appoidc.sql`；seed `deploy/database/seed/seed-catalog.mjs`；迁移 `deploy/database/migrations/2026-08-30-oidc-client-kind.sql`。
 > 起因：运行监控「服务状态」与「产品目录」是两份清单（目录 21 个、监控 12 个，其中 5 个目录里不存在）。前者读 `appoidc.oidc_clients` 外加一份硬编码豁免名单，后者读 `product.products`。修法不是补数据，是把"谁是产品"这个问题收回到一张表、一个入口。
 
 ---
@@ -17,16 +17,18 @@
 
 新部署、`db-init` 跑完 DDL + seed 之后，目录里只有 §5 列出的自有产品；其余都是空的。接入一个新产品是下面这条线，**没有任何一步需要改代码或改 seed**：
 
-| 步  | 在哪里                        | 做什么                                                                           | 之后各业务面看到什么                                                 |
-| --- | ----------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 1   | opera · 产品管理 · 产品目录   | 登记产品：产品码、类型、来源、名称。落 `status='draft'`                          | 目录出现草稿行；服务状态出现同一行，标「未接入」；admin 产品能力可见 |
-| 2   | opera · 产品目录 · 接入检查单 | 跑上线检查：八项里七项自动判定并写回，`data_plane` / `acceptance` 人工勾（见下） | —                                                                    |
-| 3   | opera · 产品管理 · 接入凭据   | 为该产品按渠道签发 OIDC 客户端（`release_channel` = stable / beta / canary）     | 服务状态该渠道开始探测；auth-bff token-exchange 能解析出 `act.sub`   |
-| 4   | opera · 产品目录 · 上线       | 草稿 → 已上线（`status='active'`）                                               | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标  |
-| 5   | admin · 套餐 / 版本 / 方案    | 为产品建套餐并发布                                                               | console 订阅、权益、计量按套餐工作                                   |
-| 6   | opera · 路由授权 / 能力授权   | 把模型路由、能力授给产品                                                         | 权益配置页汇总                                                       |
+| 步  | 在哪里                                                | 做什么                                                                                                                                                                                                                    | 之后各业务面看到什么                                                                                                           |
+| --- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | opera · 产品目录 · 接入产品（`/product/catalog/new`） | 一页填完：产品码、类型、来源、名称；边缘与回调；按渠道添加 OIDC 客户端（`release_channel` = stable / beta / canary）。**一个事务**写入，落 `status='draft'`。签发客户端要过 step-up，client_secret 明文只在保存后显示一次 | 目录出现草稿行；服务状态出现同一行，有启用客户端的渠道开始探测；auth-bff token-exchange 能解析出 `act.sub`；admin 产品能力可见 |
+| 2   | 同一页 · 「密钥管理」面板                             | 登记 webhook 签名密钥与引用；轮换 client_secret。两者都挂 step-up                                                                                                                                                         | 平台可对开通 / 停用事件签名投递                                                                                                |
+| 3   | 同一页 · 「接入检查」抽屉                             | 跑复验：七项里七项自动判定并写回，`data_plane` / `acceptance` 人工勾（见下）                                                                                                                                              | —                                                                                                                              |
+| 4   | 同一抽屉 · 确认上线                                   | 先重跑复验，全通过且检查单必填项齐，才把草稿转为已上线（`status='active'`）                                                                                                                                               | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标                                                            |
+| 5   | admin · 套餐 / 版本 / 方案                            | 为产品建套餐并发布                                                                                                                                                                                                        | console 订阅、权益、计量按套餐工作                                                                                             |
+| 6   | opera · 路由授权 / 能力授权                           | 把模型路由、能力授给产品                                                                                                                                                                                                  | 权益配置页汇总                                                                                                                 |
 
-**步 2 的自动验证（2026-08-31）**：上线检查（`portals/opera/src/features/product/launch-checks.ts`）读平台自己的存储判七项——目录登记、OIDC 客户端、Atlas / Runos 授权、webhook 登记，以及对方接通后留下的两条痕迹：**C2** 每次成功的 `GET /platform/entitlements` 由 platform-api 在 Redis 记一个按产品码的「最近一次」键（`<REDIS_KEY_PREFIX>integration:c2:<code>`，30 天过期，每产品每分钟至多写一次，Redis 故障不影响响应），**C3** 取 `metering.usage_events` 最近 90 天内该产品的最后一行；两者经 `GET /api/products/:id/integration-signals` 读出，C2 / C3 与 `catalog_registered` 一起写回检查单。C2 是最近一次而不是台账（不答「调了多少次」）；走共享内部令牌的调用没有身份，按请求里的产品码归因；S2S 调用按 `act.sub` 归因。`c1_identity`（对方的 RP 实现）仍由操作员按回报勾；`data_plane` 与 `acceptance` 平台观测不到，保持人工。
+**步 3 的自动验证（2026-08-31）**：上线检查（`portals/opera/src/features/product/launch-checks.ts`）读平台自己的存储判七项——目录登记、OIDC 客户端、Atlas / Runos 授权、webhook 登记，以及对方接通后留下的两条痕迹：**C2** 每次成功的 `GET /platform/entitlements` 由 platform-api 在 Redis 记一个按产品码的「最近一次」键（`<REDIS_KEY_PREFIX>integration:c2:<code>`，30 天过期，每产品每分钟至多写一次，Redis 故障不影响响应），**C3** 取 `metering.usage_events` 最近 90 天内该产品的最后一行；两者经 `GET /api/products/:id/integration-signals` 读出，C2 / C3 与 `catalog_registered` 一起写回检查单。C2 是最近一次而不是台账（不答「调了多少次」）；走共享内部令牌的调用没有身份，按请求里的产品码归因；S2S 调用按 `act.sub` 归因。`c1_identity`（对方的 RP 实现）仍由操作员按回报勾；`data_plane` 与 `acceptance` 平台观测不到，保持人工。
+
+**单页接入（2026-09-14，owner 口径）**：步 1–4 原本分散在五个入口——目录页「登记产品」弹窗、详情页「保存设置」（两次串行 PUT）、「接入凭据」页「注册客户端」、详情页凭据抽屉里的「回调地址」与「授权页展示」两个弹窗，外加独立的「产品上线」页。现在收成**一张页 + 一个密钥面板**：写入走 `bff/opera-bff/src/routers/product-onboarding.router.ts` 的合并保存（`POST /api/products/onboarding` · `PUT /api/products/:id/onboarding`，产品 / 边缘与回调 / 客户端同一事务），step-up **按改动判**——只改展示不打扰，触及回调 / 登出回跳白名单、scopes、PKCE 或签发新客户端才要求；密钥只从面板写（`PUT /api/products/:id/webhook-secret`、`POST /api/oidc-clients/:clientId/rotate-secret`）。「接入凭据」页保留为全部产品客户端的**只读**总览；`/product/launch` 保留为跳转。产品码 `new` 是保留字（被 `/product/catalog/new` 占用）。
 
 产品状态机（`portals/opera/src/features/product/lifecycle.ts`）：`draft → active ⇄ inactive`，任一 → `deprecated`（终态）。
 
