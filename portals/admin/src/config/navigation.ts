@@ -1,7 +1,7 @@
 import type { IconName } from "@vxture/design-system";
 
 // 三平面拆分 cutover（2026-09-02）：治理面（身份权限/安全审计/系统配置/通知基座）
-// 整体迁往 arche 治理平面，admin 只保留「运营业务域」这一个工作域。原
+// 整体迁往 arche 治理平面，admin 只保留「运营平台」这一个工作域。原
 // `platform-autonomy` 自治域已撤，其中 /atlas（模型平台）作为商业/平台资源留在
 // 运营域「模型技能」分组，/settings（操作员自助账户设置）保留为 Header 齿轮入口。
 export type AdminWorkspaceId = "tenant-ops";
@@ -381,8 +381,8 @@ const tenantOpsSections: AdminNavigationSection[] = [
 export const adminWorkspaces: AdminNavigationWorkspace[] = [
   {
     id: "tenant-ops",
-    label: "运营业务域",
-    shortLabel: "运营域",
+    label: "运营平台",
+    shortLabel: "运营",
     description: "面向租户、用户、产品、订阅、交易和服务支持的运营管理。",
     homeHref: "/",
     icon: "buildings",

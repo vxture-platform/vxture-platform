@@ -1,7 +1,7 @@
 /**
  * middleware.ts —— arche 的认证前置闸。
  *
- * arche（平台治理平面）与 opera 同一套运维面拓扑：生产上 nginx 的 `auth_request`
+ * arche（治理平台）与 opera 同一套运维面拓扑：生产上 nginx 的 `auth_request`
  * 网关先于 Next 拦截每个请求（打到 arche-bff 的 `/auth/check`，204 放行 / 401 转
  * 登录），未认证请求到不了这里 —— 本文件在生产是恒真闸。真正吃这一层的是**开发
  * 环境**：那里没有边缘网关，靠它挡住整屏渲染→水合→401→replace 的老路。

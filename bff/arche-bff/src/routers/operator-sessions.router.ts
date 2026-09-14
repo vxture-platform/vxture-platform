@@ -16,6 +16,10 @@
  *
  * 能力码 `operator:session.read`。排序参与取数（`listOrderBy`），两张表都截在
  * `LIST_LIMIT` 条。
+ *
+ * **什么算登录失败**：登录服务写入的结果是 success / bad_credential / mfa_required /
+ * mfa_failed / locked。`mfa_required` 是密码通过、等待二次验证的正常中间步骤，
+ * 不是失败——算进去会让每一次正常的 MFA 登录都在总览上多一次「失败」。
  */
 import {
   Controller,
@@ -41,7 +45,7 @@ export interface OperatorSignInRecord {
   operatorName: string | null;
   identifier: string;
   authMethod: string;
-  /** success / bad_credentials / locked …（开放集，登录服务决定）。 */
+  /** success / mfa_required / bad_credential / mfa_failed / locked（开放集，登录服务决定）。 */
   result: string;
   ipAddress: string;
   userAgent: string | null;
@@ -101,7 +105,7 @@ export class OperatorSessionsRouter {
           where t.status = 'active' and t.expires_at > now()`,
       ),
       this.pool.query<{ failed: number; locked: number }>(
-        `select count(*) filter (where la.result <> 'success')::int as failed,
+        `select count(*) filter (where la.result not in ('success', 'mfa_required'))::int as failed,
                 count(*) filter (where la.result = 'locked')::int as locked
            from admin.operator_login_attempt la
           where la.created_at > now() - interval '24 hours'`,
@@ -116,7 +120,7 @@ export class OperatorSessionsRouter {
   }
 
   // GET /api/operator-sessions/sign-ins?result=success|failure&from=ISO&to=ISO&sort=&order=
-  //   result=failure 覆盖一切非 success（密码错、被锁、MFA 失败…）。
+  //   result=failure = 凭证错误、二次验证失败、被锁定（mfa_required 是中间步骤，不算失败）。
   @Get("sign-ins")
   async signIns(
     @Req() req: Request & RequestContext,
@@ -136,7 +140,8 @@ export class OperatorSessionsRouter {
     const where: string[] = ["true"];
     const params: unknown[] = [];
     if (result === "success") where.push("la.result = 'success'");
-    else if (result === "failure") where.push("la.result <> 'success'");
+    else if (result === "failure")
+      where.push("la.result not in ('success', 'mfa_required')");
     if (from) {
       params.push(parseIso(from, "from"));
       where.push(`la.created_at >= $${params.length}`);

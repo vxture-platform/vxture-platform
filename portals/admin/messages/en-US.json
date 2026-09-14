@@ -1,6 +1,6 @@
 {
   "meta": {
-    "plane": "Operations Plane",
+    "plane": "Operations Platform",
     "description": "Platform business operations: tenants, orders, billing, product catalog and operational ledgers."
   },
   "pagination": {

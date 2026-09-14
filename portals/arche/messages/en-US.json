@@ -1,6 +1,6 @@
 {
   "meta": {
-    "plane": "Governance Plane",
+    "plane": "Governance Platform",
     "description": "Platform identity and access, security audit, risk and compliance, system configuration and notification audit. The highest-trust layer, separate from the commercial and infrastructure planes."
   },
   "pagination": {
