@@ -277,9 +277,13 @@ export interface AuditPage<T> {
  * `audit.capability_call` 行——「这个 agent 实际调用了什么」。
  *
  * **`eventId` 是主键，`callId` 不是。** 上游 schema 上 `call_id` 只有一个**非唯一**
- * 索引，与之配套的还有 `sequence_no` / `parent_call_id` / `retry_of`：一次调用可以
- * 落多条事件行。拿 `callId` 当行标识（React key、去重、"复制调用 ID"）在重试或多段
- * 调用出现的那一刻就会撞——而那恰好是最需要看清这张表的时候。
+ * 索引，与之配套的还有 `parent_call_id` / `retry_of`：一次调用可以落多条事件行。
+ * 拿 `callId` 当行标识（React key、去重、"复制调用 ID"）在重试或多段调用出现的那一刻
+ * 就会撞——而那恰好是最需要看清这张表的时候。
+ *
+ * 这里原先还列着 `sequence_no`。**那一列已经退役**（runos TD-015）：它的计数器在网关
+ * 进程内存里，淘汰或重启都会让同一个任务从 1 重来，而库上没有唯一约束挡它。行内排序
+ * 用 `occurredAt`（微秒）+ `eventId`（uuidv7 破平），那也是审计游标一直在键的东西。
  */
 export interface CapabilityCallRecord {
   /** 主键。行标识用它。 */
