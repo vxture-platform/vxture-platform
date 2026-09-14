@@ -1,6 +1,6 @@
 /**
  * audit-log.ts — 操作者写操作的审计留痕。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * 落 `support.audit_logs`，`actor_type='operator'`——admin realm 没有自己的审计表

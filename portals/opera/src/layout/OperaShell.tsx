@@ -35,6 +35,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ShellSearchGroup } from "@vxture/design-system";
 import {
+  Button,
+  EmptyState,
   Icon,
   ShellBrand,
   ShellAgentButton,
@@ -275,6 +277,23 @@ export function OperaShell({
           name="spinner"
           size="lg"
           className="animate-spin text-muted-foreground"
+        />
+      </div>
+    );
+  }
+  /* 登录成功但没有运维平台的任何权限：整屏说明，不放进去看一页页的读取失败。 */
+  if (status === "forbidden") {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background px-md">
+        <EmptyState
+          icon="server"
+          title="没有进入运维平台的权限"
+          description="你的账号已登录，但所属角色在运维平台上没有任何权限。需要时请联系平台超级管理员在治理平台的「平台角色」中授权。"
+          action={
+            <Button variant="outline" onClick={() => void signOut()}>
+              退出登录
+            </Button>
+          }
         />
       </div>
     );

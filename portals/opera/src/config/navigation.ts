@@ -224,7 +224,8 @@ export const operaNavSections: OperaNavSection[] = [
     ],
   },
   {
-    /* 回答「谁在什么时候改了什么」。权限本身归 admin，此处只出跳转。 */
+    /* 回答「谁在什么时候改了什么」。角色与权限归治理平台 arche，opera 不设入口
+       （2026-09-14 三平台严格隔离）。 */
     title: "安全审计",
     dividerBefore: true,
     items: [
@@ -234,13 +235,6 @@ export const operaNavSections: OperaNavSection[] = [
         subLabel: "Change Trail",
         icon: "clipboard",
         description: "管理面变更记录（Atlas / Runos / opera 三来源）",
-      },
-      {
-        href: "/audit/rbac",
-        label: "权限管理",
-        subLabel: "RBAC",
-        icon: "role",
-        description: "角色与能力码——跳转 admin",
       },
     ],
   },

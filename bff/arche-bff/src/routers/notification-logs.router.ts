@@ -4,7 +4,7 @@
  *
  * Description: 通知投递台账只读接口。接 support.notification_logs,left join
  *   tenancy.tenants 补租户名。回执字段(delivered_at/opened_at/provider_message_id)
- *   由投递 webhook 回写。纯读,无写路径。能力守卫:notification:log.read。
+ *   由投递 webhook 回写。纯读,无写路径。能力守卫:audit:notification_log.read。
  *   —— 从 admin-bff 平移至治理台 arche-bff(三平面拆分 PR②);共享帮手改用
  *   arche-bff 的 router.shared,会话主体改判 req.operator。
  *
@@ -27,7 +27,23 @@ import type { Pool } from "pg";
 import { ARCHE_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 import type { NotificationLogRecord } from "../types/governance.types";
-import { LIST_LIMIT, parseIso, toIso, toIsoOrNull } from "./router.shared";
+import {
+  LIST_LIMIT,
+  listOrderBy,
+  parseIso,
+  toIso,
+  toIsoOrNull,
+} from "./router.shared";
+
+/** 可排序列（列 id 与门户表格一致）。排序参与取数，见 `listOrderBy`。 */
+const NOTIFICATION_LOG_SORT: Readonly<Record<string, string>> = {
+  recipient: "n.recipient",
+  template: "n.template_code",
+  channel: "n.channel",
+  status: "n.status",
+  tenant: "t.name",
+  createdAt: "n.created_at",
+};
 
 const CHANNELS = new Set(["email", "sms", "inapp", "webhook", "push"]);
 const STATUSES = new Set([
@@ -43,7 +59,7 @@ const STATUSES = new Set([
 export class NotificationLogsRouter {
   constructor(@Inject(ARCHE_BFF_RO_POOL) private readonly pool: Pool) {}
 
-  // Contract: GET /api/notification-logs?channel=&status=&from=ISO&to=ISO&search=
+  // Contract: GET /api/notification-logs?channel=&status=&from=ISO&to=ISO&search=&sort=&order=
   //   from/to filter on created_at; search matches recipient/template/reference.
   //   Most-recent LIST_LIMIT rows.
   @Get()
@@ -54,8 +70,16 @@ export class NotificationLogsRouter {
     @Query("from") from?: string,
     @Query("to") to?: string,
     @Query("search") search?: string,
+    @Query("sort") sort?: string,
+    @Query("order") order?: string,
   ): Promise<NotificationLogRecord[]> {
     assertCanReadNotificationLogs(req);
+    const orderBy = listOrderBy(
+      sort,
+      order,
+      NOTIFICATION_LOG_SORT,
+      "n.created_at desc, n.id",
+    );
 
     const where: string[] = ["true"];
     const params: unknown[] = [];
@@ -92,7 +116,7 @@ export class NotificationLogsRouter {
 
     const { rows } = await this.pool.query<NotificationLogRow>(
       `${NOTIFICATION_LOG_SELECT} where ${where.join(" and ")}
-       order by n.created_at desc limit $${params.length}`,
+       ${orderBy} limit $${params.length}`,
       params,
     );
     return rows.map(mapNotificationLogRow);
@@ -103,8 +127,10 @@ function assertCanReadNotificationLogs(req: Request & RequestContext): void {
   if (!req.operator) {
     throw new UnauthorizedException("No active session");
   }
-  if (!req.capabilities?.includes("notification:log.read")) {
-    throw new ForbiddenException("Missing notification:log.read capability");
+  if (!req.capabilities?.includes("audit:notification_log.read")) {
+    throw new ForbiddenException(
+      "Missing audit:notification_log.read capability",
+    );
   }
 }
 

@@ -5,7 +5,7 @@
  * @category Router
  *
  * 自 admin-bff 迁入（2026-08-07，批 A）。**行为逐条保持不变**，只换了宿主与主体
- * 类型：能力码仍是 `release:maintenance.read|manage`，状态机仍是
+ * 类型：能力码仍是 `ops:maintenance.read|manage`，状态机仍是
  *   scheduled →(start) in_progress →(complete) completed
  *   scheduled|in_progress →(cancel) cancelled
  * 无删除（表无 deleted_at，终态即归档留存对账）。
@@ -712,7 +712,7 @@ function normalizeMaintenanceWindowInput(
   };
 }
 
-// ── 能力门（能力码沿用既有 release:maintenance.*，迁移不改）──────────────
+// ── 能力门（能力码沿用既有 ops:maintenance.*，迁移不改）──────────────
 
 function assertCanReadMaintenanceWindows(req: Request & RequestContext): void {
   if (!req.operator) {
@@ -720,10 +720,10 @@ function assertCanReadMaintenanceWindows(req: Request & RequestContext): void {
   }
   if (
     !req.capabilities ||
-    (!req.capabilities.includes("release:maintenance.read") &&
-      !req.capabilities.includes("release:maintenance.manage"))
+    (!req.capabilities.includes("ops:maintenance.read") &&
+      !req.capabilities.includes("ops:maintenance.manage"))
   ) {
-    throw notEntitled("release:maintenance.read");
+    throw notEntitled("ops:maintenance.read");
   }
 }
 
@@ -735,8 +735,8 @@ function assertCanManageMaintenanceWindows(
   }
   if (
     !req.capabilities ||
-    !req.capabilities.includes("release:maintenance.manage")
+    !req.capabilities.includes("ops:maintenance.manage")
   ) {
-    throw notEntitled("release:maintenance.manage");
+    throw notEntitled("ops:maintenance.manage");
   }
 }

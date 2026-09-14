@@ -191,6 +191,8 @@ import type { RequestContext } from "../types/request-context";
 /** 活库当前的三段式能力码（见文件头——不是 admin-bff 那个已退役的扁平码）。 */
 const PROVIDER_MANAGE_CAPABILITY = "model:provider.manage";
 const MODEL_MANAGE_CAPABILITY = "model:model.manage";
+const PROVIDER_READ_CAPABILITY = "model:provider.read";
+const MODEL_READ_CAPABILITY = "model:model.read";
 
 /**
  * 两值资源的最小词表（atlas `object-state.ts`）。Provider / Endpoint /
@@ -796,7 +798,7 @@ export class AtlasRouter {
   listProtocols(
     @Req() req: Request & RequestContext,
   ): Promise<ProtocolCatalogResponse> {
-    assertCanManageModels(req);
+    assertCanReadModels(req);
     return this.request<ProtocolCatalogResponse>(req, "/capability/protocols", {
       contract: "protocols",
     });
@@ -809,7 +811,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Query("includeInactive") includeInactive?: string,
   ): Promise<ModelProviderRecord[]> {
-    assertCanManageProviders(req);
+    assertCanReadProviders(req);
     return this.request<ModelProviderRecord[]>(
       req,
       `/capability/providers?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
@@ -948,7 +950,7 @@ export class AtlasRouter {
   getProvidersPerformance(
     @Req() req: Request & RequestContext,
   ): Promise<ProviderPerformanceSnapshot> {
-    assertCanManageProviders(req);
+    assertCanReadProviders(req);
     return this.request<ProviderPerformanceSnapshot>(
       req,
       "/capability/providers/performance",
@@ -1064,7 +1066,7 @@ export class AtlasRouter {
      *  一个点不进去的数字是没人能据以行动的数字。primary 与 fallback 都算。 */
     @Query("modelCode") modelCode?: string,
   ): Promise<ModelEndpointRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadModels(req);
     const params = new URLSearchParams({
       includeInactive: includeInactive === "false" ? "false" : "true",
     });
@@ -1326,7 +1328,7 @@ export class AtlasRouter {
     /** provider 行上的 `modelCount` 点进来就落在这个过滤上。 */
     @Query("providerId") providerId?: string,
   ): Promise<AiModelRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadModels(req);
     const params = new URLSearchParams({
       includeInactive: includeInactive === "false" ? "false" : "true",
     });
@@ -1526,7 +1528,7 @@ export class AtlasRouter {
     @Query("endpointCode") endpointCode?: string,
     @Query("includeInactive") includeInactive?: string,
   ): Promise<ProductGrantRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadModels(req);
     const params = new URLSearchParams({
       includeInactive: includeInactive === "false" ? "false" : "true",
     });
@@ -1684,7 +1686,7 @@ export class AtlasRouter {
     @Query("providerCode") providerCode?: string,
     @Query("endpointCode") endpointCode?: string,
   ): Promise<AtlasLogSummary> {
-    assertCanManageModels(req);
+    assertCanReadModels(req);
     const params = new URLSearchParams();
     /* window: 1h|24h(默认)|7d。 */
     if (window) params.set("window", window);
@@ -1789,6 +1791,37 @@ export class AtlasRouter {
       `/capability/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
       { contract: "usage-summaries" },
     );
+  }
+}
+
+/**
+ * 读门：`.read` 或 `.manage` 任一（`.manage` ⊇ `.read`，同 product-authz）。
+ *
+ * 2026-09-14 补：此前模型与供应商的读接口一律要 `.manage`，seed 授给只读角色
+ * （运营、审计员）的 `model:provider.read` / `model:model.read` 从没有任何路由检查，
+ * 授了等于没授。调用密钥与供应商密钥的列表仍只认 `.manage`——那是凭据台账。
+ */
+function assertCanReadProviders(req: Request & RequestContext): void {
+  if (!req.operator) {
+    throw unauthenticated("AUTH_NO_SESSION", "No active session");
+  }
+  if (
+    !req.capabilities?.includes(PROVIDER_READ_CAPABILITY) &&
+    !req.capabilities?.includes(PROVIDER_MANAGE_CAPABILITY)
+  ) {
+    throw notEntitled(PROVIDER_READ_CAPABILITY);
+  }
+}
+
+function assertCanReadModels(req: Request & RequestContext): void {
+  if (!req.operator) {
+    throw unauthenticated("AUTH_NO_SESSION", "No active session");
+  }
+  if (
+    !req.capabilities?.includes(MODEL_READ_CAPABILITY) &&
+    !req.capabilities?.includes(MODEL_MANAGE_CAPABILITY)
+  ) {
+    throw notEntitled(MODEL_READ_CAPABILITY);
   }
 }
 

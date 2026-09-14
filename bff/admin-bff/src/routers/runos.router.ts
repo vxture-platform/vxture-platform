@@ -25,20 +25,16 @@
  * 上游。opera-bff 那份 `runos.router.ts` 是独立实现，不 import 这里任何东西，两个
  * `*-bff` 之间零交叉引用是明确纪律。
  *
- * 能力码复用 opera 2026-08-11 随接入注册进 `admin.operator_permission` 的那两个：
- * `capability:runos.read` / `capability:runos.manage`（super_admin / tech_ops 持
- * manage，operation / auditor 持 read——`deploy/database/seed/seed-catalog.mjs`）。
- * 只读面**两个码任一即可**，与 opera 的 `assertCanRead` 判据一致。
+ * 能力码 `product:capability.read`（2026-09-14 三平台拆分）。此前复用 opera 的
+ * `capability:runos.read` / `.manage`——在 opera 授权会顺带打开 admin 的目录页，反之
+ * 亦然。三个平台严格隔离：可以重复，不能耦合，所以 admin 有自己的码。
  *
  * ## 配置
  *
  * - `RUNOS_API_URL`：平台 schema 已有（opera-bff 在读），默认 `localhost:3120`。
  *   **生产必须显式配**——容器里没有这个服务，落回默认值等于 `/api/runos/*` 全部 502
  *   （同 `.env.admin-bff.example` 里 ATLAS_API_URL 那条注释记下的病）。
- * - `OPERA_BASE_URL`：只用来拼「去 opera 能力注册管理」那条链接。admin 门户没有
- *   任何指向 opera 的入口，也不该为此新开一个 `NEXT_PUBLIC_*` 构建参数（那要动
- *   Dockerfile 与 workflow）；BFF 本来就持有平台 schema，由它回答"opera 在哪"最省。
- *   真实主机名只在宿主机运行时 env 里，仓内按硬化口径放 `x.vxture.com` 占位。
+
  *
  * ## 只读列表的查询参数
  *
@@ -68,15 +64,8 @@ import { assertRunosContract, type RunosResource } from "./runos-contract";
 
 /** 换票时的目标 audience（对齐 product_100 的产品码）。 */
 const RUNOS_AUDIENCE = "runos";
-/** 活库当前的三段式能力码（见文件头）。 */
-const CAPABILITY_READ = "capability:runos.read";
-const CAPABILITY_MANAGE = "capability:runos.manage";
-/**
- * opera 里能力注册页的路径。2026-08-14 opera 目录重构后的正式路径
- * （`portals/opera/src/app/(shell)/capability/registry/page.tsx`），旧的
- * `/runos/capabilities` 只剩一个跳转壳。
- */
-const OPERA_CAPABILITY_REGISTRY_PATH = "/capability/registry";
+/** admin 自己的目录读码（见文件头）。 */
+const CATALOG_READ = "product:capability.read";
 
 interface RunosErrorBody {
   code?: string;
@@ -155,15 +144,9 @@ export interface CapabilityDetailRecord extends CapabilityRecord {
   endpoints: EndpointInstanceRecord[];
 }
 
-/** 「去 opera 能力注册管理」那条链接。 */
-export interface RunosManagementEntry {
-  url: string;
-}
-
 @Controller("api/runos")
 export class RunosRouter {
   private readonly runosApiUrl: string;
-  private readonly operaBaseUrl: string;
 
   constructor(
     @Inject(VxConfigService) configService: VxConfigService,
@@ -171,7 +154,6 @@ export class RunosRouter {
     private readonly operatorExchange: OperatorExchangeService,
   ) {
     this.runosApiUrl = trimBase(configService.platform.RUNOS_API_URL);
-    this.operaBaseUrl = trimBase(configService.platform.OPERA_BASE_URL);
   }
 
   /**
@@ -241,32 +223,19 @@ export class RunosRouter {
       { contract: "capability-detail" },
     );
   }
-
-  /**
-   * 「去 opera 能力注册管理」的链接。不读上游，只回配置——放在同一个路由前缀下是
-   * 因为它的权限判据与目录读相同：看得见目录的人才需要知道管理入口在哪。
-   */
-  @Get("management-entry")
-  managementEntry(@Req() req: Request & RequestContext): RunosManagementEntry {
-    assertCanRead(req);
-    return { url: `${this.operaBaseUrl}${OPERA_CAPABILITY_REGISTRY_PATH}` };
-  }
 }
 
 function trimBase(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
-/** 只读面：两个码任一即可（与 opera-bff 的 `assertCanRead` 同判据）。 */
+/** 只读面：admin 自己的目录读码。 */
 function assertCanRead(req: Request & RequestContext): void {
   if (!req.user) {
     throw new UnauthorizedException("No active session");
   }
-  if (
-    !req.capabilities?.includes(CAPABILITY_READ) &&
-    !req.capabilities?.includes(CAPABILITY_MANAGE)
-  ) {
-    throw new ForbiddenException(`Missing ${CAPABILITY_READ} capability`);
+  if (!req.capabilities?.includes(CATALOG_READ)) {
+    throw new ForbiddenException(`Missing ${CATALOG_READ} capability`);
   }
 }
 

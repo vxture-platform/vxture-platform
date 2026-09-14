@@ -1,10 +1,10 @@
 /**
  * operator-stepup.router.ts — operator 二次验证（step-up）入口。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer Application
  * @category Router
  *
- * 已认证的 operator 提交 TOTP 码；opera-bff 转发给 IdP 校验，成功则种一枚短时
+ * 已认证的 operator 提交 TOTP 码；arche-bff 转发给 IdP 校验，成功则种一枚短时
  * host-only cookie，`OperatorStepUpGuard` 在高危写路由上校验它。
  *
  * `operatorId` 取自 RP 会话（`OperatorAuthMiddleware` 填的 `req.operator`），

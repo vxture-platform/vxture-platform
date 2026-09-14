@@ -1,79 +1,190 @@
 "use client";
 
-/* 治理总览 — Arche 平台治理平面首页。
+/* 治理总览 — Arche 治理平台首页。
  *
- * 各治理页(身份权限/安全审计/系统配置/通知审计)已从 admin 平台自治域迁入并上线
- * (三平面拆分 cutover,2026-09-02);本页为入口聚合。真实治理仪表(当前态与待办)
- * 待有真数据源再接——此处不接假数据,一个显示虚构数字的治理台是误导不是功能。 */
+ * 两块：当前态与待办（BFF 按每一块自己那一页的能力码给，缺席的块就是无权查看——不显示
+ * 成 0，0 读作「没有风险」），以及本人能打开的页面入口（与侧栏同一份导航注册表，不另写
+ * 一份会过期的卡片清单）。 */
 
-import { EntryCard, ViewHeader } from "@vxture/design-system";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import {
+  Banner,
+  EntryCard,
+  MetricGrid,
+  SectionHeader,
+  ViewHeader,
+  ViewLayout,
+} from "@vxture/design-system";
+import { fetchGovernanceOverview } from "@/api/arche-bff";
+import { visibleNavSections } from "@/config/navigation";
+import type { GovernanceOverview } from "@/entities/console";
+import { useOperatorSession } from "@/features/session/SessionProvider";
+import { formatNumber } from "@/lib/format";
+
+type MetricItem = ComponentProps<typeof MetricGrid>["items"][number];
+
+function overviewMetrics(overview: GovernanceOverview): MetricItem[] {
+  const items: MetricItem[] = [];
+  const { identity, sessions, audit, risk, compliance, config, notifications } =
+    overview;
+  if (identity) {
+    items.push({
+      id: "operators",
+      icon: "fingerprint",
+      label: "在用平台用户",
+      help: "状态为启用的运营账号；停用、锁定、待激活另计。",
+      value: formatNumber(identity.activeOperators),
+      tags: [`其他状态 ${formatNumber(identity.inactiveOperators)}`],
+    });
+    items.push({
+      id: "roles",
+      icon: "role",
+      label: "平台角色",
+      help: "界面可见的角色数，含系统预置。",
+      value: formatNumber(identity.roles),
+      tags: [`自定义 ${formatNumber(identity.customRoles)}`],
+    });
+  }
+  if (sessions) {
+    items.push({
+      id: "sessions",
+      icon: "clock",
+      label: "在线会话",
+      help: "仍有未过期刷新令牌的会话。",
+      value: formatNumber(sessions.activeSessions),
+      tags: [`24 小时登录失败 ${formatNumber(sessions.failedSignIns24h)}`],
+      ...(sessions.failedSignIns24h > 0 ? { tone: "warning" as const } : {}),
+    });
+  }
+  if (audit) {
+    items.push({
+      id: "audit",
+      icon: "clipboard",
+      label: "今日操作",
+      help: "今天（服务器时区）写入审计日志的操作。",
+      value: formatNumber(audit.today),
+      tags: [`失败或被拒 ${formatNumber(audit.failedToday)}`],
+      ...(audit.failedToday > 0 ? { tone: "warning" as const } : {}),
+    });
+  }
+  if (risk) {
+    items.push({
+      id: "risk",
+      icon: "shield-check",
+      label: "待审阅高风险",
+      help: "等级为高风险、尚未审阅的风险记录。",
+      value: formatNumber(risk.pendingHigh),
+      tags: [`需跟进 ${formatNumber(risk.pendingFollowUp)}`],
+      ...(risk.pendingHigh > 0 ? { tone: "danger" as const } : {}),
+    });
+  }
+  if (compliance) {
+    items.push({
+      id: "compliance",
+      icon: "certificate",
+      label: "待处理合规事件",
+      help: "状态为待处理的合规事件。",
+      value: formatNumber(compliance.open),
+      tags: [`处理中 ${formatNumber(compliance.inReview)}`],
+      ...(compliance.open > 0 ? { tone: "warning" as const } : {}),
+    });
+  }
+  if (config) {
+    items.push({
+      id: "flags",
+      icon: "tree-structure",
+      label: "已启用开关",
+      help: "未归档且全局启用的特性开关。",
+      value: formatNumber(config.enabledFlags),
+      tags: [`未归档 ${formatNumber(config.activeFlags)}`],
+    });
+  }
+  if (notifications) {
+    items.push({
+      id: "notifications",
+      icon: "terminal",
+      label: "24 小时投递失败",
+      help: "最近 24 小时失败或被退回的通知。",
+      value: formatNumber(notifications.failed24h),
+      ...(notifications.failed24h > 0 ? { tone: "danger" as const } : {}),
+    });
+  }
+  return items;
+}
 
 export default function GovernanceOverviewPage() {
+  const { capabilities } = useOperatorSession();
+  const [overview, setOverview] = useState<GovernanceOverview | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchGovernanceOverview()
+      .then((value) => {
+        if (active) setOverview(value);
+      })
+      .catch((error) => {
+        if (active)
+          setLoadError(error instanceof Error ? error.message : "读取失败");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const metrics = useMemo(
+    () => (overview ? overviewMetrics(overview) : []),
+    [overview],
+  );
+  const entries = useMemo(
+    () =>
+      visibleNavSections(capabilities).flatMap((section) =>
+        section.items
+          .filter((item) => item.href !== "/")
+          .map((item) => ({ ...item, meta: section.title })),
+      ),
+    [capabilities],
+  );
+
   return (
-    <>
+    <ViewLayout>
       <ViewHeader
         icon="squares-four"
         title="治理总览"
-        description="平台身份权限、安全审计、风控合规与系统配置的入口。最高信任层,与商业(admin)、运维(opera)两面分立。"
+        description="平台身份权限、登录会话、安全审计、风控合规与系统配置的当前态。"
       />
+      {loadError ? (
+        <Banner tone="danger" title="当前态读取失败" description={loadError} />
+      ) : overview === null || metrics.length > 0 ? (
+        <MetricGrid
+          aria-label="治理当前态"
+          columns={4}
+          loading={overview === null}
+          items={
+            overview === null
+              ? [
+                  { id: "a", label: "—", value: "—" },
+                  { id: "b", label: "—", value: "—" },
+                  { id: "c", label: "—", value: "—" },
+                  { id: "d", label: "—", value: "—" },
+                ]
+              : metrics
+          }
+        />
+      ) : null}
+      <SectionHeader level={2} icon="list-checks" title="入口" />
       <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
-        <EntryCard
-          href="/admins"
-          icon="fingerprint"
-          title="平台用户"
-          meta="身份权限"
-          description="内部运营账号的开通、停用与凭证"
-        />
-        <EntryCard
-          href="/roles"
-          icon="role"
-          title="平台角色"
-          meta="身份权限"
-          description="操作角色与其 rank"
-        />
-        <EntryCard
-          href="/permissions"
-          icon="list-checks"
-          title="权限策略"
-          meta="身份权限"
-          description="域 / 板块 / 页面 / 操作四级权限树"
-        />
-        <EntryCard
-          href="/audit-logs"
-          icon="clipboard"
-          title="审计日志"
-          meta="安全审计"
-          description="操作员动作的全量问责流水"
-        />
-        <EntryCard
-          href="/risk-records"
-          icon="shield-check"
-          title="风险记录"
-          meta="安全审计"
-          description="风控命中与处置"
-        />
-        <EntryCard
-          href="/compliance-events"
-          icon="certificate"
-          title="合规事件"
-          meta="安全审计"
-          description="合规义务事件与留痕"
-        />
-        <EntryCard
-          href="/settings"
-          icon="settings"
-          title="系统设置"
-          meta="系统配置"
-          description="平台级通用设置、参数与开关"
-        />
-        <EntryCard
-          href="/notification-logs"
-          icon="terminal"
-          title="发送记录"
-          meta="通知审计"
-          description="系统通知的投递流水与状态"
-        />
+        {entries.map((item) => (
+          <EntryCard
+            key={item.href}
+            href={item.href}
+            icon={item.icon}
+            title={item.label}
+            meta={item.meta}
+            description={item.description}
+          />
+        ))}
       </div>
-    </>
+    </ViewLayout>
   );
 }

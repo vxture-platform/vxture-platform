@@ -51,6 +51,7 @@ import type {
 } from "@/entities/console";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { useTableSort } from "@/lib/table-sort";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate, formatNumber } from "@/lib/format";
@@ -733,22 +734,6 @@ function AdminRoleAuthorizationDialog({
   );
 }
 
-function PermissionTags({ role }: { role: PlatformRoleRecord }) {
-  return (
-    <span className="flex min-w-0 flex-wrap items-center justify-start gap-xs ">
-      <StatusBadge tone="brand" icon={false}>
-        菜单 {formatNumber(role.menuPermissionCount)}
-      </StatusBadge>
-      <StatusBadge tone="info" icon={false}>
-        按钮 {formatNumber(role.buttonPermissionCount)}
-      </StatusBadge>
-      <StatusBadge tone="warning" icon={false}>
-        接口 {formatNumber(role.apiPermissionCount)}
-      </StatusBadge>
-    </span>
-  );
-}
-
 /**
  * 状态标走 `StatusBadge`，语气由 `roleStatusTone` 给。
  */
@@ -765,6 +750,7 @@ function useAdminRoleColumns(
     {
       id: "role",
       header: "角色",
+      sortable: true,
       cell: (role) => (
         <TableTitleCell
           {...(roleDescription(role, t)
@@ -780,7 +766,7 @@ function useAdminRoleColumns(
     {
       id: "status",
       header: tShared("columns.state"),
-      align: "center",
+      sortable: true,
       cell: (role) => {
         const indicator = roleStatusIndicator(role);
         return (
@@ -791,27 +777,43 @@ function useAdminRoleColumns(
       },
     },
     {
+      /* 启用 / 全部。数值列：个位对齐，不贴右缘。 */
       id: "admins",
       header: "成员",
-      align: "center",
-      cell: (role) => (
-        <TableTitleCell
-          title={`${formatNumber(role.activeAdminCount)} / ${formatNumber(role.adminCount)}`}
-          description="启用 / 全部"
-        />
-      ),
+      align: "numeric",
+      sortable: true,
+      cell: (role) =>
+        `${formatNumber(role.activeAdminCount)} / ${formatNumber(role.adminCount)}`,
     },
     {
+      /* 此前是三枚「菜单 / 按钮 / 接口」徽标——长内容精简成一个总数，构成在「权限详情」里。 */
       id: "permissions",
       header: "权限",
-      cell: (role) => <PermissionTags role={role} />,
+      align: "numeric",
+      sortable: true,
+      cell: (role) => formatNumber(role.permissionCount),
     },
     {
+      id: "mfa",
+      header: "MFA 下限",
+      sortable: true,
+      cell: (role) => {
+        const meta = roleMfaMeta(role.mfaMinLevel);
+        return (
+          <StatusBadge tone={meta.tone} icon={false}>
+            {meta.label}
+          </StatusBadge>
+        );
+      },
+    },
+    {
+      /* 创建人一律关联到真实账号：预置角色是 systemadmin。 */
       id: "createdBy",
       header: "创建人",
+      sortable: true,
       cell: (role) => (
         <TableTitleCell
-          title={role.createdByName || EMPTY_MARK}
+          title={role.createdByName ?? EMPTY_MARK}
           description={formatDate(role.createdAt, locale)}
         />
       ),
@@ -820,6 +822,30 @@ function useAdminRoleColumns(
 }
 
 type RoleMfaLevel = "disabled" | "optional" | "required";
+
+const ROLE_MFA_META: Record<
+  RoleMfaLevel,
+  { label: string; tone: StatusBadgeTone; rank: number }
+> = {
+  required: { label: "必须", tone: "success", rank: 3 },
+  optional: { label: "可选", tone: "neutral", rank: 2 },
+  disabled: { label: "关闭", tone: "warning", rank: 1 },
+};
+
+/** 认不出的值显示原样的中性标，不崩页。 */
+function roleMfaMeta(level: string): {
+  label: string;
+  tone: StatusBadgeTone;
+  rank: number;
+} {
+  return (
+    ROLE_MFA_META[level as RoleMfaLevel] ?? {
+      label: level,
+      tone: "neutral",
+      rank: 0,
+    }
+  );
+}
 
 interface RoleFormState {
   roleCode: string;
@@ -1113,8 +1139,26 @@ export function AdminRolesPage() {
     statusFilter,
   ]);
 
+  const roleSortAccessors = useMemo(
+    () => ({
+      role: (role: PlatformRoleRecord) =>
+        roleLabels.get(role.id) ?? role.roleCode,
+      status: (role: PlatformRoleRecord) => roleStatusCode(role),
+      admins: (role: PlatformRoleRecord) => role.adminCount,
+      permissions: (role: PlatformRoleRecord) => role.permissionCount,
+      mfa: (role: PlatformRoleRecord) => roleMfaMeta(role.mfaMinLevel).rank,
+      createdBy: (role: PlatformRoleRecord) => role.createdByName,
+    }),
+    [roleLabels],
+  );
+  const {
+    sort: roleSort,
+    onSortChange: onRoleSortChange,
+    rows: sortedRoles,
+  } = useTableSort(filteredRoles, roleSortAccessors);
+
   const pageCount = Math.max(1, Math.ceil(filteredRoles.length / pageSize));
-  const visibleRoles = filteredRoles.slice(
+  const visibleRoles = sortedRoles.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   );
@@ -1210,8 +1254,7 @@ export function AdminRolesPage() {
       roleCode: role.roleCode,
       nameEn: role.nameEn ?? "",
       description: role.description ?? "",
-      // PlatformRoleRecord 未暴露 mfaMinLevel，编辑默认「保持默认」不覆盖后端值。
-      mfaMinLevel: "",
+      mfaMinLevel: role.mfaMinLevel,
       sort: String(role.sort ?? ""),
     });
     setRoleDialog({ mode: "edit", roleId: role.id });
@@ -1493,6 +1536,11 @@ export function AdminRolesPage() {
               indexStart={(Math.min(currentPage, pageCount) - 1) * pageSize + 1}
               selectedKeys={[...selectedRoleIds]}
               onSelectionChange={(keys) => setSelectedRoleIds(new Set(keys))}
+              {...(roleSort ? { sort: roleSort } : {})}
+              onSortChange={(next) => {
+                onRoleSortChange(next);
+                setCurrentPage(1);
+              }}
               rowActions={(role) => (
                 <AdminRoleActionsMenu
                   role={role}

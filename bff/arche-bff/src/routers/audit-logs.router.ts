@@ -27,6 +27,7 @@ import type { Pool } from "pg";
 import { ARCHE_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 import type { AuditLogRecord } from "../types/governance.types";
+import { listOrderBy } from "./router.shared";
 
 const AUDIT_LOG_LIMIT = 500;
 
@@ -43,6 +44,7 @@ export class AuditLogsRouter {
   //     action   string        → action prefix match (action LIKE action%)
   //     module   string        → action first-segment = module OR (no dot AND resource_type = module)
   //     result   'success'|'failure'|'denied' → result match ('failure' also matches 'denied')
+  //     sort     operator|action|result|ip|time, order asc|desc（默认 time desc；排序参与取数）
   //   response: AuditLogRecord[].
   @Get()
   async listAuditLogs(
@@ -52,35 +54,44 @@ export class AuditLogsRouter {
     assertCanReadAuditLogs(req);
 
     const filters = normalizeAuditLogFilters(query);
-    // Preserve exact default behavior when no filters are supplied.
-    if (filters.params.length === 0) {
-      const { rows } = await this.pool.query<AuditLogRow>(AUDIT_LOG_SQL, [
-        AUDIT_LOG_LIMIT,
-      ]);
-      return rows.map(mapAuditLogRow);
-    }
-
+    const orderBy = listOrderBy(
+      query.sort,
+      query.order,
+      AUDIT_LOG_SORT,
+      "a.created_at desc, a.id",
+    );
     const params = [...filters.params, AUDIT_LOG_LIMIT];
-    const sql =
-      `${AUDIT_LOG_SELECT_BASE} where ${filters.conditions.join(" and ")}` +
-      ` order by a.created_at desc limit $${params.length}`;
+    const where = filters.conditions.length
+      ? ` where ${filters.conditions.join(" and ")}`
+      : "";
+    const sql = `${AUDIT_LOG_SELECT_BASE}${where} ${orderBy} limit $${params.length}`;
     const { rows } = await this.pool.query<AuditLogRow>(sql, params);
     return rows.map(mapAuditLogRow);
   }
 }
 
 // Central audit trail exposes actor identities + IPs; gate on the dedicated
-// audit:read code (granted to super_admin/admin/auditor per data_admin_200 §4.3).
+// audit:log.read code (granted to super_admin/admin/auditor per data_admin_200 §4.3).
 function assertCanReadAuditLogs(req: Request & RequestContext): void {
   if (!req.operator) {
     throw new UnauthorizedException("No active session");
   }
-  if (!req.capabilities?.includes("audit:read")) {
-    throw new ForbiddenException("Missing audit:read capability");
+  if (!req.capabilities?.includes("audit:log.read")) {
+    throw new ForbiddenException("Missing audit:log.read capability");
   }
 }
 
-// Base select shared by the filtered path (mirrors AUDIT_LOG_SQL sans where/order/limit).
+/** 可排序列（列 id 与门户表格一致）。 */
+const AUDIT_LOG_SORT: Readonly<Record<string, string>> = {
+  operator: "coalesce(op.display_name, a.actor_type)",
+  action: "a.action",
+  result: "a.result",
+  ip: "a.ip_address",
+  time: "a.created_at",
+};
+
+// operator actor 关联 admin.operator_account 补 display_name/email;其余 actor(customer/system/api)
+// 无平台账号,名以 actor_type 兜底。audit_logs 按月分区。
 const AUDIT_LOG_SELECT_BASE = `
 select
   a.id,
@@ -112,6 +123,8 @@ interface AuditLogQuery {
   action?: string;
   module?: string;
   result?: string;
+  sort?: string;
+  order?: string;
 }
 
 // Builds a parameterized WHERE. Same param value may be referenced by two
@@ -176,29 +189,6 @@ function parseIsoParam(value: string, field: string): string {
   }
   return ts.toISOString();
 }
-
-// operator actor 关联 admin.operator_account 补 display_name/email;其余 actor(customer/system/api)
-// 无平台账号,名以 actor_type 兜底。audit_logs 按月分区,默认取最近 N 条。
-const AUDIT_LOG_SQL = `
-select
-  a.id,
-  a.actor_type,
-  a.actor_id,
-  a.action,
-  a.result,
-  a.resource_type,
-  a.resource_id,
-  a.error_code,
-  a.ip_address,
-  a.created_at,
-  op.display_name as operator_name,
-  op.email        as operator_email
-from support.audit_logs a
-left join admin.operator_account op
-  on op.id = a.actor_id and a.actor_type = 'operator'
-order by a.created_at desc
-limit $1
-`;
 
 function toIso(value: Date | string | null): string {
   if (!value) return new Date(0).toISOString();

@@ -29,7 +29,7 @@ CREATE TABLE admin.operator_role (
     sort                 int          NOT NULL DEFAULT 999,             -- UI 排序（≠ rank，非安全语义）
     rank                 int          NOT NULL DEFAULT 0,               -- 安全等级：跨 operator 操作的层级比较依据（严格大于才可管）；管理能力由 operator:account.manage 权限决定，非 rank。锚点列：不可经 API 改写（见 data_platform_100 铁律八；服务角色模型就位后加列级锁）。预置值见 data_admin_200 §4.1（super_admin=100…auditor=10）
     mfa_min_level        varchar(16)  NOT NULL DEFAULT 'optional',  -- 角色级 MFA 下限（三态）
-    created_by           uuid,                                      -- 运营专属（边界#2，裸值，见注释）
+    created_by           uuid         NOT NULL,                     -- 运营专属（边界#2，裸值）；预置角色 = systemadmin（2026-10-03 迁移补 NOT NULL）
     updated_by           uuid,
     created_at           timestamptz  NOT NULL DEFAULT now(),
     updated_at           timestamptz  NOT NULL DEFAULT now(),

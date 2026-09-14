@@ -1,6 +1,6 @@
 /**
  * session.router.ts — 当前操作者的主体与能力码。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer Application
  * @category Router
  *
@@ -14,6 +14,7 @@
  * 前端藏了按钮不等于接口关了，接口自己会 403。
  */
 import { Controller, Get, Req } from "@nestjs/common";
+import { PLANE_ROOT } from "../auth/plane";
 import { unauthenticated } from "../errors/api-error";
 import type { Request } from "express";
 import type {
@@ -25,6 +26,11 @@ import type {
 interface SessionView {
   operator: OperatorPrincipal;
   capabilities: Capability[];
+  /**
+   * 能否进入本平台（持有根码）。中间件对其余 `/api/*` 已按它 403；这里单独给出，
+   * 门户据此显示「没有进入本平台的权限」，而不是一路空白与报错。
+   */
+  planeEntitled: boolean;
 }
 
 @Controller("api/session")
@@ -37,6 +43,7 @@ export class SessionRouter {
     return {
       operator: req.operator,
       capabilities: req.capabilities ?? [],
+      planeEntitled: (req.capabilities ?? []).includes(PLANE_ROOT),
     };
   }
 }

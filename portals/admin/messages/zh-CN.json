@@ -58,9 +58,13 @@
       "groups": {
         "pages": "页面",
         "tenant": "租户",
-        "order": "订单",
-        "operator": "平台账号"
+        "order": "订单"
       }
+    },
+    "forbidden": {
+      "title": "没有进入运营平台的权限",
+      "description": "你的账号已登录，但所属角色在运营平台上没有任何权限。需要时请联系平台超级管理员在治理平台的「平台角色」中授权。",
+      "signOut": "退出登录"
     }
   },
   "role": {
@@ -1888,8 +1892,7 @@
   "skillsPage": {
     "header": {
       "title": "能力目录",
-      "description": "Runos 已注册能力的只读目录：连接器、执行器与技能。注册、晋升、退役与认证在 opera「能力注册」完成。",
-      "manageInOpera": "去 opera 能力注册管理"
+      "description": "Runos 已注册能力的只读目录：连接器、执行器与技能。注册、晋升、退役与认证在 opera「能力注册」完成。"
     },
     "summary": {
       "ariaLabel": "技能市场统计",

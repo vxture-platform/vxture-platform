@@ -92,6 +92,7 @@
     "lint:migration-counts": "node scripts/guardrails/check-migration-absolute-counts.mjs",
     "lint:ops-todo-alerts": "node scripts/guardrails/check-ops-todo-alerts.mjs",
     "lint:permission-catalog": "node scripts/guardrails/check-tenant-permission-catalog.mjs",
+    "lint:operator-planes": "node scripts/guardrails/check-operator-planes.mjs",
     "lint:public-hygiene": "node scripts/guardrails/check-public-repo-hygiene.mjs",
     "lint:route-policies": "node scripts/guardrails/check-bff-route-policies.mjs",
     "lint:schema-residue": "node scripts/guardrails/check-schema-residue.mjs",

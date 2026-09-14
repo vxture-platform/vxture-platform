@@ -32,7 +32,12 @@ import {
   updateComplianceEvent,
   type ComplianceEventWriteInput,
 } from "@/api/arche-bff";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type {
+  DataTableColumn,
+  DataTableSort,
+  StatusBadgeTone,
+} from "@vxture/design-system";
+import { sortParams } from "@/lib/table-sort";
 import type { ComplianceEventItem } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { ListPagination } from "@/modules/shared/ListPagination";
@@ -128,6 +133,7 @@ function columnsOf(
     {
       id: "eventType",
       header: "事件类型",
+      sortable: true,
       cell: (item) => (
         <span className="flex min-w-0 items-center gap-xs">
           <span className="truncate">{item.eventType}</span>
@@ -148,13 +154,15 @@ function columnsOf(
     {
       id: "tenant",
       header: "租户",
+      sortable: true,
+      /* 租户名缺失时不回退到 UUID——UUID 不展示。 */
       cell: (item) =>
-        item.tenantName ?? (item.tenantId ? item.tenantId : "平台级"),
+        item.tenantName ?? (item.tenantId ? "未知租户" : "平台级"),
     },
     {
       id: "status",
       header: "状态",
-      align: "center",
+      sortable: true,
       cell: (item) => (
         <StatusBadge tone={statusTone(item.status)}>
           {STATUS_LABELS[item.status]}
@@ -164,16 +172,19 @@ function columnsOf(
     {
       id: "regulation",
       header: "法规条款",
+      sortable: true,
       cell: (item) => item.regulationCode ?? "-",
     },
     {
       id: "handler",
       header: "处理人",
+      sortable: true,
       cell: (item) => item.handlerName ?? "-",
     },
     {
       id: "updatedAt",
       header: "更新时间",
+      sortable: true,
       cell: (item) => formatDate(item.updatedAt, locale),
     },
   ];
@@ -195,6 +206,8 @@ export function ComplianceEventsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
+  /* 排序交给 BFF：列表截在 500 条。 */
+  const [sort, setSort] = useState<DataTableSort | undefined>();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -208,7 +221,7 @@ export function ComplianceEventsPage() {
   const [handlerId, setHandlerId] = useState("");
 
   useEffect(() => {
-    fetchComplianceEvents()
+    fetchComplianceEvents(sortParams(sort))
       .then(setItems)
       .catch((error) => {
         setItems([]);
@@ -217,7 +230,7 @@ export function ComplianceEventsPage() {
         );
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [sort]);
 
   const filtered = useMemo(() => {
     let result = items;
@@ -248,7 +261,7 @@ export function ComplianceEventsPage() {
   const pageCount = Math.ceil(filtered.length / pageSize);
 
   async function reload() {
-    setItems(await fetchComplianceEvents());
+    setItems(await fetchComplianceEvents(sortParams(sort)));
   }
 
   function openCreate() {
@@ -464,6 +477,11 @@ export function ComplianceEventsPage() {
             indexStart={(page - 1) * pageSize + 1}
             selectedKeys={[...selectedIds]}
             onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+            {...(sort ? { sort: sort } : {})}
+            onSortChange={(next) => {
+              setSort(next);
+              setPage(1);
+            }}
             rowActions={(item) => (
               <ActionMenu
                 label="合规事件操作"

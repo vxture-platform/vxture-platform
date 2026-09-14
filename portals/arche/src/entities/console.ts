@@ -176,7 +176,10 @@ export interface PlatformRoleRecord {
   menuPermissionCount: number;
   buttonPermissionCount: number;
   apiPermissionCount: number;
-  createdBy: string | null;
+  /** 角色级 MFA 下限。 */
+  mfaMinLevel: "disabled" | "optional" | "required";
+  /** 预置角色的创建人是 systemadmin，不再为空。 */
+  createdBy: string;
   createdByName: string | null;
   createdAt: string;
   updatedAt: string;
@@ -185,6 +188,8 @@ export interface PlatformRoleRecord {
 
 export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRecord {
   isSystem: boolean;
+  /** 执行前是否要求二次验证（平台持有的策略，界面只读）。 */
+  requiresStepUp: boolean;
   icon: string | null;
   sort: number;
   component: string | null;
@@ -192,4 +197,56 @@ export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRec
   activeRoleCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── 登录与会话（arche-bff operator-sessions.router，只读）──────────────────────
+
+export interface OperatorSignInRecord {
+  id: string;
+  operatorId: string | null;
+  /** 找不到账号（标识打错、账号已删）时为 null，界面显示登录时用的标识。 */
+  operatorName: string | null;
+  identifier: string;
+  authMethod: string;
+  /** success / bad_credentials / locked …（开放集）。 */
+  result: string;
+  ipAddress: string;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+export interface OperatorSessionRecord {
+  sessionId: string;
+  operatorId: string;
+  operatorName: string;
+  username: string;
+  roleName: string | null;
+  clientId: string;
+  startedAt: string;
+  lastRefreshedAt: string;
+  expiresAt: string;
+}
+
+export interface OperatorSessionSummary {
+  activeSessions: number;
+  onlineOperators: number;
+  failedSignIns24h: number;
+  lockedSignIns24h: number;
+}
+
+// ── 治理总览（arche-bff governance-overview.router）—— 缺席的块 = 无权查看 ──────
+
+export interface GovernanceOverview {
+  identity?: {
+    activeOperators: number;
+    inactiveOperators: number;
+    roles: number;
+    customRoles: number;
+  };
+  sessions?: { activeSessions: number; failedSignIns24h: number };
+  audit?: { today: number; failedToday: number };
+  risk?: { pendingHigh: number; pendingFollowUp: number };
+  compliance?: { open: number; inReview: number };
+  config?: { enabledFlags: number; activeFlags: number };
+  notifications?: { failed24h: number };
 }

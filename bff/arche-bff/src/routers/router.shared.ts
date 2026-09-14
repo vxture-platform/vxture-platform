@@ -1,6 +1,6 @@
 /**
  * router.shared.ts — 数据面 router 共用的输入校验。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * 只收了当前真正用到的几个。admin-bff 那份 governance.shared 还带着 risk-records /
@@ -145,4 +145,44 @@ export function toIso(value: Date | string | null): string {
 
 export function toIsoOrNull(value: Date | string | null): string | null {
   return value ? toIso(value) : null;
+}
+
+/**
+ * 列表排序：前端传列 id 与方向，后端按白名单换成 SQL 的 `order by`。
+ *
+ * **排序参与取数，不在前端排。** 这几张表都截在 `LIST_LIMIT` 条：前端只拿得到这一段，
+ * 在这一段里排出来的「最早的」「分数最高的」不是全表的——界面上说假话。
+ *
+ * 列 id 只认白名单里的键，值是写死的表达式，请求里的字符串从不进 SQL 文本。
+ * 空值一律沉底；同值再按 `tiebreak` 定序，翻页时行不抖动。不传 `sort` 等于默认序。
+ */
+export function listOrderBy(
+  sort: string | undefined,
+  order: string | undefined,
+  columns: Readonly<Record<string, string>>,
+  tiebreak: string,
+): string {
+  if (sort === undefined || sort === "") return `order by ${tiebreak}`;
+  const expr = columns[sort];
+  if (!expr) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      `sort must be one of ${Object.keys(columns).join(" / ")}`,
+      "sort",
+    );
+  }
+  if (
+    order !== undefined &&
+    order !== "" &&
+    order !== "asc" &&
+    order !== "desc"
+  ) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      "order must be asc or desc",
+      "order",
+    );
+  }
+  const direction = order === "asc" ? "asc" : "desc";
+  return `order by ${expr} ${direction} nulls last, ${tiebreak}`;
 }

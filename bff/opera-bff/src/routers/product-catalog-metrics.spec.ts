@@ -36,7 +36,7 @@ const PRODUCT_ID = "3d9f0c1e-0000-4000-8000-00000000000a";
 function makeReq(): Request & RequestContext {
   return {
     operator: { id: "op-1", displayName: null },
-    capabilities: ["platform:product.manage"],
+    capabilities: ["integration:product.manage"],
     operatorAccessToken: "operator-access-token",
     headers: {},
   } as unknown as Request & RequestContext;

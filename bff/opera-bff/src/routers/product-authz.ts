@@ -4,7 +4,7 @@
  * @layer Application
  * @category router
  * @description
- *   `platform:product.read` / `platform:product.manage` and the two assert
+ *   `integration:product.read` / `integration:product.manage` and the two assert
  *   helpers used to live inside product-catalog.router.ts. The integration
  *   signals router (2026-08-31) is a second `api/products/:id/*` reader and
  *   must gate exactly the same way — one definition, two consumers, no
@@ -17,8 +17,8 @@ import type { Request } from "express";
 import { notEntitled, unauthenticated } from "../errors/api-error";
 import type { RequestContext } from "../types/request-context";
 
-export const PRODUCT_READ = "platform:product.read";
-export const PRODUCT_MANAGE = "platform:product.manage";
+export const PRODUCT_READ = "integration:product.read";
+export const PRODUCT_MANAGE = "integration:product.manage";
 
 /**
  * Read gate: a session plus either capability (manage implies read).

@@ -180,7 +180,9 @@ export interface PlatformRoleRecord {
   menuPermissionCount: number;
   buttonPermissionCount: number;
   apiPermissionCount: number;
-  createdBy: string | null;
+  /** 角色级 MFA 下限（admin.operator_role.mfa_min_level）。 */
+  mfaMinLevel: "disabled" | "optional" | "required";
+  createdBy: string;
   createdByName: string | null;
   createdAt: string;
   updatedAt: string;
@@ -190,6 +192,8 @@ export interface PlatformRoleRecord {
 export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRecord {
   /** 平台预置(seed)还是运营自建。 */
   isSystem: boolean;
+  /** 执行前是否要求二次验证（平台持有的策略，seed 声明，界面只读）。 */
+  requiresStepUp: boolean;
   icon: string | null;
   sort: number;
   component: string | null;

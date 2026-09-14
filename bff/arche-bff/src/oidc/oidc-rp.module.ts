@@ -1,10 +1,10 @@
 /**
- * oidc-rp.module.ts - opera-bff OIDC Relying Party wiring (product_250 M-4)
- * @package @vxture/bff-opera
+ * oidc-rp.module.ts - arche-bff OIDC Relying Party wiring (product_250 M-4)
+ * @package @vxture/bff-arche
  * @description
- *   Wires @vxture/core-oidc-rp for the Capability Console shell as a
- *   confidential RP in the WORKFORCE realm (client_id=opera). Same shape
- *   as admin-bff's RP wiring; base URL comes from OPERA_BASE_URL, which in
+ *   Wires @vxture/core-oidc-rp for the governance console shell as a
+ *   confidential RP in the WORKFORCE realm (client_id=arche). Same shape
+ *   as admin-bff's RP wiring; base URL comes from ARCHE_BASE_URL, which in
  *   production carries the real (repo-external) hostname. RP routes live under
  *   /auth/*; /auth/check additionally serves the nginx auth_request gate that
  *   enforces the "no content unauthenticated" hardening at the vhost edge.
@@ -19,7 +19,6 @@ import {
 } from "@vxture/core-oidc-rp";
 import Redis from "ioredis";
 import { OidcAuthRouter } from "../routers/oidc-auth.router";
-import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import {
   RP_AUTH_SERVICE,
   RP_OIDC_CLIENT,
@@ -55,7 +54,7 @@ const CLIENT_ID = "arche";
           // 谁的都不对，四家谁也登不进（2026-08-12 排查：bcrypt.compare 对 admin/opera
           // 两个哈希都不过）。先按本 BFF 自己的口径修：OPERA 专属变量优先，通用变量兜底
           // 保留向后兼容；website/console/admin 三家同款问题不在这次范围内，留给各自的
-          // owner 处理，不代改。
+          // owner 处理，不代改。（arche 照同一口径读 OIDC_CLIENT_SECRET_ARCHE。）
           clientSecret:
             process.env.OIDC_CLIENT_SECRET_ARCHE ??
             process.env.OIDC_CLIENT_SECRET ??
@@ -116,20 +115,13 @@ const CLIENT_ID = "arche";
         rt: RpRuntime,
       ) => new RpAuthService(store, client, rt.config.sessionTtlSec),
     },
-    OperatorExchangeService,
   ],
-  // OperatorExchangeService 额外导出：AtlasRouter（opera 自己的 Atlas 技术管理面，
-  // 与 admin-bff 各自独立、零交叉引用）复用同一套 operator-OBO 换票逻辑，不是从
-  // admin-bff 抄一份或反过来依赖它。
-  // RP_REDIS 导出（2026-08-31）：接入信号 router 读 platform-api 写下的 C2 键，
-  // 同一个 Redis、同一条连接——不为一次 GET 再开第二条。
   exports: [
     RP_AUTH_SERVICE,
     RP_SESSION_STORE,
     RP_OIDC_CLIENT,
     RP_RUNTIME,
     RP_REDIS,
-    OperatorExchangeService,
   ],
 })
 export class OidcRpModule {}

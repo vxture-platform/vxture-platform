@@ -1,6 +1,7 @@
 # Admin 双域菜单规格
 
-> 版本：1.2.0 | 更新：2026-08-31
+> 版本：1.3.0 | 更新：2026-09-14
+> 1.3.0：「平台自治域」整体归治理平台 arche（2026-09-02 cutover），权限树改为三个平台同形的根 `admin.plane` / `opera.plane` / `arche.plane`（`deploy/database/migrations/2026-10-03-operator-three-planes.sql`）。下文第一节只作历史参考，现行规格见 `docs/20-specs/000-platform/arche/00-index.md`；运营域菜单码不变。
 > 权威来源：`src/config/navigation.ts`（代码优先，本文档为设计规格参考）
 > 1.2.0：摘掉四个上线前仍为空的菜单项——密钥管理 `/platform-secrets`、审批中心 `/approval-center`（读的 `admin.governance_record` 从未建表）、字典管理 `/data-dictionaries`、通知渠道 `/notification-channels`（占位页）。owner 2026-08-30 裁定；对应的 `admin.menu.*` 权限行与 `security:signing_key.manage` / `security:oidc_client.manage` 两个无处可达的操作码由 `deploy/database/migrations/2026-08-31-admin-retire-empty-menus.sql` 退役。有数据源之日再按本规格挂回。
 
@@ -15,7 +16,7 @@
 
 ---
 
-## 一、平台自治域（Platform Domain）
+## 一、平台自治域（Platform Domain）——已迁出，见 arche 治理平台
 
 > 平台能力供给侧 — 管理平台自身的身份、资源、运行、安全、系统配置与通知能力
 

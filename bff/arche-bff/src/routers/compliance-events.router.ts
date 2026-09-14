@@ -51,6 +51,18 @@ import {
   requireUuid,
   toIso,
 } from "./governance.shared";
+import { listOrderBy } from "./router.shared";
+
+/** 可排序列（列 id 与门户表格一致）。状态按处理进程排，不按字母。 */
+const COMPLIANCE_EVENT_SORT: Readonly<Record<string, string>> = {
+  eventType: "e.event_type",
+  tenant: "t.name",
+  status:
+    "case e.status when 'open' then 1 when 'in_review' then 2 when 'resolved' then 3 else 4 end",
+  regulation: "e.regulation_code",
+  handler: "coalesce(nullif(o.display_name, ''), o.username)",
+  updatedAt: "e.updated_at",
+};
 
 const EVENT_STATUSES: ReadonlySet<ComplianceEventItem["status"]> = new Set([
   "open",
@@ -78,8 +90,16 @@ export class ComplianceEventsRouter {
     @Query("tenantId") tenantId?: string,
     @Query("eventType") eventType?: string,
     @Query("tag") tag?: string,
+    @Query("sort") sort?: string,
+    @Query("order") order?: string,
   ): Promise<ComplianceEventItem[]> {
     assertCanReadComplianceEvents(req);
+    const orderBy = listOrderBy(
+      sort,
+      order,
+      COMPLIANCE_EVENT_SORT,
+      "e.created_at desc, e.id",
+    );
 
     const where: string[] = ["e.deleted_at is null"];
     const params: unknown[] = [];
@@ -111,7 +131,7 @@ export class ComplianceEventsRouter {
 
     const { rows } = await this.pool.query<ComplianceEventRow>(
       `${COMPLIANCE_EVENT_SELECT} where ${where.join(" and ")}
-       order by e.created_at desc limit $${params.length}`,
+       ${orderBy} limit $${params.length}`,
       params,
     );
     return rows.map(mapComplianceEventRow);

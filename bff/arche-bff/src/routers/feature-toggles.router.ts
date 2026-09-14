@@ -6,7 +6,7 @@
  *   全局开关(is_globally_enabled) + 灰度百分比(rollout_percentage 0-100) + 逐租户覆盖
  *   (tenant_overrides jsonb {tenant_id: bool}，命中优先于 rollout) + 归档(is_archived)。
  *   flag_key 是自然键(唯一)，创建后不可改(锚点)；写路径事务 + 事务内审计。
- *   能力守卫：读 release:feature_flag.read|.manage，写 release:feature_flag.manage（seed §4.3）。
+ *   能力守卫：读 config:feature_flag.read|.manage，写 config:feature_flag.manage（seed §4.3）。
  *
  * @author AI-Generated
  * @date 2026-07-11
@@ -50,6 +50,16 @@ import {
   toIso,
   toIsoOrNull,
 } from "./governance.shared";
+import { listOrderBy } from "./router.shared";
+
+/** 可排序列（列 id 与门户表格一致）。 */
+const FEATURE_FLAG_SORT: Readonly<Record<string, string>> = {
+  key: "f.flag_key",
+  environment: "f.environment",
+  status: "f.is_globally_enabled",
+  rollout: "f.rollout_percentage",
+  updatedAt: "f.updated_at",
+};
 
 const FLAG_KEY_RE = /^[a-z0-9][a-z0-9._-]*$/i;
 
@@ -68,8 +78,16 @@ export class FeatureTogglesRouter {
     @Query("category") category?: string,
     @Query("environment") environment?: string,
     @Query("archived") archived?: string,
+    @Query("sort") sort?: string,
+    @Query("order") order?: string,
   ): Promise<FeatureFlagRecord[]> {
     assertCanReadFeatureFlags(req);
+    const orderBy = listOrderBy(
+      sort,
+      order,
+      FEATURE_FLAG_SORT,
+      "f.created_at desc, f.id",
+    );
 
     const where: string[] = ["true"];
     const params: unknown[] = [];
@@ -92,7 +110,7 @@ export class FeatureTogglesRouter {
 
     const { rows } = await this.pool.query<FeatureFlagRow>(
       `${FEATURE_FLAG_SELECT} where ${where.join(" and ")}
-       order by f.created_at desc limit $${params.length}`,
+       ${orderBy} limit $${params.length}`,
       params,
     );
     return rows.map(mapFeatureFlagRow);
@@ -295,12 +313,10 @@ function assertCanReadFeatureFlags(req: Request & RequestContext): void {
   }
   if (
     !req.capabilities ||
-    (!req.capabilities.includes("release:feature_flag.read") &&
-      !req.capabilities.includes("release:feature_flag.manage"))
+    (!req.capabilities.includes("config:feature_flag.read") &&
+      !req.capabilities.includes("config:feature_flag.manage"))
   ) {
-    throw new ForbiddenException(
-      "Missing release:feature_flag.read capability",
-    );
+    throw new ForbiddenException("Missing config:feature_flag.read capability");
   }
 }
 
@@ -310,10 +326,10 @@ function assertCanManageFeatureFlags(req: Request & RequestContext): void {
   }
   if (
     !req.capabilities ||
-    !req.capabilities.includes("release:feature_flag.manage")
+    !req.capabilities.includes("config:feature_flag.manage")
   ) {
     throw new ForbiddenException(
-      "Missing release:feature_flag.manage capability",
+      "Missing config:feature_flag.manage capability",
     );
   }
 }

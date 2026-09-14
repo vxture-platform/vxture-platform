@@ -10,9 +10,8 @@
  * 的空态和一排禁用按钮。技能 / 能力的真实注册表一直在 Runos，opera 早已代理并管理。
  * owner 同日裁定：admin 得到 Runos 能力目录的只读视图，管理留在 opera「能力注册」。
  *
- * 所以这一页**没有任何写操作**：没有注册、没有上下线、没有编辑。唯一的"动作"是
- * 页头那条「去 opera 能力注册管理」的外链，链接由 admin-bff 按 `OPERA_BASE_URL` 拼
- * （`/api/runos/management-entry`），门户里不写任何主机名；拿不到链接就不渲染按钮。
+ * 所以这一页**没有任何写操作**：没有注册、没有上下线、没有编辑，也不链到运维平台
+ * （2026-09-14 三平台严格隔离：可以重复，不能耦合）。
  *
  * 数据形状照 Runos：列表是 `registry.capability` 整行，详情多 `versions` / `aliases` /
  * `endpoints` 三组关联。列表上**没有**版本与端点——那两样只在详情里有（上游列表就是
@@ -30,14 +29,12 @@ import {
   ActionMenu,
   Badge,
   Banner,
-  Button,
   DataTable,
   DetailList,
   DetailRow,
   Drawer,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -51,12 +48,10 @@ import {
   AdminBffError,
   fetchRunosCapabilities,
   fetchRunosCapability,
-  fetchRunosManagementEntry,
 } from "@/api/admin-bff";
 import type {
   RunosCapabilityDetailRecord,
   RunosCapabilityRecord,
-  RunosManagementEntry,
 } from "@/entities/console";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { PageHeader } from "@/modules/shared/PageHeader";
@@ -673,7 +668,7 @@ export function SkillsPage() {
   const [capabilities, setCapabilities] = useState<RunosCapabilityRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [entry, setEntry] = useState<RunosManagementEntry | null>(null);
+
   const [search, setSearch] = useState("");
   const [primitiveFilter, setPrimitiveFilter] =
     useState<PrimitiveFilter>("all");
@@ -694,10 +689,7 @@ export function SkillsPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    /* 链接拿不到就不渲染按钮：无权限、或 BFF 没配 OPERA_BASE_URL，都不该挡住目录本身。 */
-    void fetchRunosManagementEntry().then((value) => {
-      if (!cancelled) setEntry(value);
-    });
+
     return () => {
       cancelled = true;
     };
@@ -768,15 +760,6 @@ export function SkillsPage() {
     setPage(1);
   };
 
-  const manageInOpera = entry ? (
-    <Button asChild variant="outline">
-      <a href={entry.url} target="_blank" rel="noreferrer">
-        <Icon name="external-link" size="xs" fallback="placeholder" />
-        {t("header.manageInOpera")}
-      </a>
-    </Button>
-  ) : null;
-
   return (
     <>
       <ListPageTemplate
@@ -785,7 +768,6 @@ export function SkillsPage() {
             icon="cube"
             title={t("header.title")}
             description={t("header.description")}
-            action={manageInOpera}
           />
         }
         summary={
@@ -853,7 +835,6 @@ export function SkillsPage() {
                 <EmptyState
                   title={t("empty.title")}
                   description={t("empty.description")}
-                  action={manageInOpera ?? undefined}
                 />
               )
             }

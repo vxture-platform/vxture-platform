@@ -16,7 +16,8 @@ import {
   TableTitleCell,
 } from "@vxture/design-system";
 import { fetchAuditLogs, type AuditLogFilters } from "@/api/arche-bff";
-import type { DataTableColumn } from "@vxture/design-system";
+import type { DataTableColumn, DataTableSort } from "@vxture/design-system";
+import { sortParams } from "@/lib/table-sort";
 import type { AuditLogRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { ListPagination } from "@/modules/shared/ListPagination";
@@ -212,6 +213,7 @@ function auditColumns(
     {
       id: "operator",
       header: "操作员",
+      sortable: true,
       cell: (log) => (
         <TableTitleCell
           title={log.operatorName}
@@ -222,6 +224,7 @@ function auditColumns(
     {
       id: "action",
       header: "操作",
+      sortable: true,
       // 只写一次。`actionLabel` 曾是 BFF 拿 `row.action` 原样起的别名，标题与描述
       // 因此逐字相同（`oidc.token_exchange.issued` 上下各一行）。没有译名就不装作有。
       cell: (log) => <TableTitleCell title={log.action} />,
@@ -243,7 +246,7 @@ function auditColumns(
     {
       id: "result",
       header: "结果",
-      align: "center",
+      sortable: true,
       cell: (log) => (
         <StatusBadge
           tone={log.result === "success" ? "success" : "danger"}
@@ -253,10 +256,16 @@ function auditColumns(
         </StatusBadge>
       ),
     },
-    { id: "ip", header: "IP", cell: (log) => log.ip ?? EMPTY_MARK },
+    {
+      id: "ip",
+      header: "IP",
+      sortable: true,
+      cell: (log) => log.ip ?? EMPTY_MARK,
+    },
     {
       id: "time",
       header: "时间",
+      sortable: true,
       cell: (log) => formatDateTime(log.createdAt, locale),
     },
   ];
@@ -280,6 +289,8 @@ export function AuditLogsPage() {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(50);
+  /* 排序交给 BFF：列表截在 500 条，前端在截断段里排是说假话。 */
+  const [sort, setSort] = useState<DataTableSort | undefined>();
 
   // Server-side filters (date range + result) drive the fetch; free-text search
   // stays client-side over the returned set (the BFF has no text search).
@@ -290,6 +301,7 @@ export function AuditLogsPage() {
     if (fromIso) filters.from = fromIso;
     if (toIso) filters.to = toIso;
     if (resultFilter !== "all") filters.result = resultFilter;
+    Object.assign(filters, sortParams(sort));
 
     let cancelled = false;
     setLoading(true);
@@ -312,7 +324,7 @@ export function AuditLogsPage() {
     return () => {
       cancelled = true;
     };
-  }, [resultFilter, dateFrom, dateTo]);
+  }, [resultFilter, dateFrom, dateTo, sort]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return logs;
@@ -398,6 +410,11 @@ export function AuditLogsPage() {
           indexStart={(page - 1) * pageSize + 1}
           selectedKeys={[...selectedIds]}
           onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+          {...(sort ? { sort: sort } : {})}
+          onSortChange={(next) => {
+            setSort(next);
+            setPage(1);
+          }}
           empty={
             <EmptyState
               title={loadError ? "审计日志读取失败" : "暂无审计记录"}

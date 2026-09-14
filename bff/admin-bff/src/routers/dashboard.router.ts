@@ -6,10 +6,10 @@
  * 在治理平面 cutover（#121）里整体迁去 arche 了；这个端点跟「平台管理员」毫无关系，
  * 只是当年停在了那里，于是它一个人拖着 1176 行已经没人调的代码不能删。
  *
- * 搬迁**不改行为**：SQL、周期算法、字段映射逐字节照搬，权限门仍是
- * `operator:account.manage`。那道门对首页聚合而言语义偏紧（首页不该要求
- * 运营账号管理权），但改它等于改「谁能看见 admin 首页」——那是产品裁定，
- * 不该混在一次清理里顺手做掉。要改另开一件事。
+ * 搬迁时 SQL、周期算法、字段映射逐字节照搬。权限门原是 `operator:account.manage`
+ * ——那是 arche 的码（运营账号管理），首页聚合借它，等于只有治理平台的人看得见 admin
+ * 首页。2026-09-14 三平台拆分裁定：admin 不认别的平台的码，首页改为**进得了 admin
+ * 就看得见**（本平台根码 `admin.plane`）。
  *
  * 路径由 `/api/platform-admins/dashboard-overview` 改为 `/api/dashboard/overview`；
  * 调用方只有 admin 首页一处，随同一版本一起发。
@@ -25,6 +25,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import { PLANE_ROOT } from "../auth/plane";
 import { ADMIN_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/console.types";
 
@@ -295,15 +296,14 @@ const DASHBOARD_OVERVIEW_SQL = `
 `;
 
 /**
- * 与搬迁前的 `assertCanManagePlatformAdmins` 逐字相同（仅更名）。
- * 门没有放松也没有收紧——见文件头。
+ * 首页门 = 本平台根码，见文件头。
  */
 function assertCanReadDashboard(req: Request & RequestContext): void {
   if (!req.user) {
     throw new UnauthorizedException("No active session");
   }
 
-  if (!req.capabilities?.includes("operator:account.manage")) {
-    throw new ForbiddenException("Missing platform.admin.manage capability");
+  if (!req.capabilities?.includes(PLANE_ROOT)) {
+    throw new ForbiddenException(`Missing ${PLANE_ROOT} capability`);
   }
 }

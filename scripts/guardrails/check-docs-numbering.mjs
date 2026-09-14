@@ -52,6 +52,7 @@ const DIR_EXEMPTIONS = new Set([
   "20-specs/000-platform/console",
   "20-specs/000-platform/website",
   "20-specs/000-platform/opera", // 键=产品面名（能力控制台,product_250 批C）
+  "20-specs/000-platform/arche", // 键=产品面名（治理平台，三平台拆分 2026-09-14）
   // 历史遗留（070 §2）：本应是序列子目录、理应编号，但既有引用面过宽，维持现状不追溯改名。
   // 本表随时间收缩，新建同层级目录一律编号，不得再加入本组。
   "30-design/architecture",

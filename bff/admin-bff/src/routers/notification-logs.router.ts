@@ -5,7 +5,7 @@
  * Description: 通知投递台账只读接口（P2 占位板块建设）。接 support.notification_logs
  *   （72_support.sql），left join tenancy.tenants 补租户名。回执字段（delivered_at/
  *   opened_at/provider_message_id）由投递 webhook 回写。纯读，无写路径。
- *   能力守卫：notification:log.read（seed §4.3：super_admin/admin/support/tech_ops/auditor）。
+ *   能力守卫：content:notification_log.read（seed §4.3：super_admin/admin/support/tech_ops/auditor）。
  *
  * @author AI-Generated
  * @date 2026-07-11
@@ -115,8 +115,10 @@ function assertCanReadNotificationLogs(req: Request & RequestContext): void {
   if (!req.user) {
     throw new UnauthorizedException("No active session");
   }
-  if (!req.capabilities?.includes("notification:log.read")) {
-    throw new ForbiddenException("Missing notification:log.read capability");
+  if (!req.capabilities?.includes("content:notification_log.read")) {
+    throw new ForbiddenException(
+      "Missing content:notification_log.read capability",
+    );
   }
 }
 

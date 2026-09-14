@@ -6,7 +6,7 @@
  *   读：is_sensitive/is_encrypted 值脱敏（'••••••'）。编辑：仅非 is_sensitive、非 is_encrypted、
  *   非 is_readonly 的行可经本板块改值（is_encrypted 走 secret manager；is_readonly 业务禁改；
  *   is_sensitive 属安全邻接留待专用流）。config_key/group/type 为定义元数据，本板块不改。
- *   写路径事务 + 事务内审计。守卫：读 platform:setting.read，写 platform:setting.manage（seed §4.3）。
+ *   写路径事务 + 事务内审计。守卫：读 config:parameter.read，写 config:parameter.manage（seed §4.3）。
  *
  * @author AI-Generated
  * @date 2026-07-11
@@ -151,10 +151,10 @@ function assertCanReadSettings(req: Request & RequestContext): void {
   }
   if (
     !req.capabilities ||
-    (!req.capabilities.includes("platform:setting.read") &&
-      !req.capabilities.includes("platform:setting.manage"))
+    (!req.capabilities.includes("config:parameter.read") &&
+      !req.capabilities.includes("config:parameter.manage"))
   ) {
-    throw new ForbiddenException("Missing platform:setting.read capability");
+    throw new ForbiddenException("Missing config:parameter.read capability");
   }
 }
 
@@ -162,8 +162,8 @@ function assertCanManageSettings(req: Request & RequestContext): void {
   if (!req.operator) {
     throw new UnauthorizedException("No active session");
   }
-  if (!req.capabilities?.includes("platform:setting.manage")) {
-    throw new ForbiddenException("Missing platform:setting.manage capability");
+  if (!req.capabilities?.includes("config:parameter.manage")) {
+    throw new ForbiddenException("Missing config:parameter.manage capability");
   }
 }
 

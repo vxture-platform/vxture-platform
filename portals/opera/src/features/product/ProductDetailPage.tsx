@@ -99,7 +99,7 @@ import {
   type WebhookRecord,
 } from "./onboarding-model";
 
-const MANAGE = "platform:product.manage";
+const MANAGE = "integration:product.manage";
 
 /** 与 BFF、库上的 CHECK 同一套。不收 SVG——它可以带脚本。 */
 const ICON_ACCEPT = ["image/png", "image/webp", "image/jpeg"];

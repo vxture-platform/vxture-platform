@@ -16,10 +16,15 @@ import {
   TableTitleCell,
   useToast,
 } from "@vxture/design-system";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type {
+  DataTableColumn,
+  DataTableSort,
+  StatusBadgeTone,
+} from "@vxture/design-system";
 import { fetchNotificationLogs } from "@/api/arche-bff";
 import type { NotificationLogRecord } from "@/entities/console";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
+import { sortParams } from "@/lib/table-sort";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
@@ -33,8 +38,8 @@ function formatDateTime(value: string, locale: string) {
   return sharedDateTime(d, locale);
 }
 
-// P2 占位板块建设：通知投递台账（support.notification_logs，只读）。
-// 守卫 notification:log.read（seed §4.3）。回执字段由投递 webhook 回写。
+// 通知投递台账（support.notification_logs，只读）。守卫 audit:notification_log.read。
+// 回执字段由投递 webhook 回写。表截在 500 条，排序交给 BFF（sortParams）。
 
 const CHANNEL_LABELS: Record<string, string> = {
   email: "邮件",
@@ -81,37 +86,38 @@ const CSV_COLUMNS: readonly CsvColumn<NotificationLogRecord>[] = [
   { label: "错误", value: (item) => item.errorMessage ?? "" },
 ];
 
-/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
-   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+/* 列序：接收方是这一行「发给谁」，作标题列居左；其余居中。时间收在末列。 */
 function columnsOf(
   locale: string,
 ): readonly DataTableColumn<NotificationLogRecord>[] {
   return [
     {
-      id: "createdAt",
-      header: "时间",
-      cell: (item) => formatDateTime(item.createdAt, locale),
-    },
-    {
-      id: "channel",
-      header: "渠道",
-      cell: (item) => CHANNEL_LABELS[item.channel] ?? item.channel,
+      id: "recipient",
+      header: "接收方",
+      sortable: true,
+      cell: (item) => (
+        <TableTitleCell
+          title={item.recipient}
+          {...(item.subject ? { description: item.subject } : {})}
+        />
+      ),
     },
     {
       id: "template",
       header: "模板",
-      cell: (item) => (
-        <TableTitleCell
-          title={item.templateCode}
-          {...(item.referenceType ? { description: item.referenceType } : {})}
-        />
-      ),
+      sortable: true,
+      cell: (item) => item.templateCode,
     },
-    { id: "recipient", header: "接收方", cell: (item) => item.recipient },
+    {
+      id: "channel",
+      header: "渠道",
+      sortable: true,
+      cell: (item) => CHANNEL_LABELS[item.channel] ?? item.channel,
+    },
     {
       id: "status",
       header: "状态",
-      align: "center",
+      sortable: true,
       cell: (item) => (
         <StatusBadge tone={statusTone(item.status)}>
           {STATUS_LABELS[item.status] ?? item.status}
@@ -119,14 +125,23 @@ function columnsOf(
         </StatusBadge>
       ),
     },
-    { id: "tenant", header: "租户", cell: (item) => item.tenantName ?? "-" },
+    {
+      id: "tenant",
+      header: "租户",
+      sortable: true,
+      cell: (item) => item.tenantName ?? "-",
+    },
+    {
+      id: "createdAt",
+      header: "时间",
+      sortable: true,
+      cell: (item) => formatDateTime(item.createdAt, locale),
+    },
   ];
 }
 
 export function NotificationLogsPage() {
   const locale = useLocale();
-  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
-     身份稳定。不 memo 等于每次渲染换一套列。 */
   const tableColumns = useMemo(() => columnsOf(locale), [locale]);
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
@@ -136,19 +151,29 @@ export function NotificationLogsPage() {
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sort, setSort] = useState<DataTableSort | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchNotificationLogs()
-      .then(setItems)
+    let active = true;
+    setLoading(true);
+    fetchNotificationLogs(sortParams(sort))
+      .then((rows) => {
+        if (active) setItems(rows);
+      })
       .catch((error) =>
         toast({ tone: "danger", title: "加载失败", ...describeError(error) }),
       )
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sort]);
 
   const filtered = useMemo(() => {
     let result = items;
@@ -184,7 +209,7 @@ export function NotificationLogsPage() {
       header={
         <PageHeader
           icon="bell"
-          title="通知记录"
+          title="发送记录"
           description="平台通知投递台账（只读）。涵盖邮件、短信、站内、Webhook、推送渠道的发送与回执状态，用于投递排障。"
         />
       }
@@ -196,7 +221,7 @@ export function NotificationLogsPage() {
           items={[
             {
               id: "total",
-              help: "当前筛选条件下的投递记录条数。",
+              help: "当前加载到的投递记录条数。",
               icon: "bell",
               label: "投递总数",
               value: String(items.length),
@@ -218,7 +243,7 @@ export function NotificationLogsPage() {
           onViewChange={() => {}}
           cardsDisabledReason="卡片视图已下线，改用列表"
           count={`${filtered.length} 条`}
-          aria-label="通知记录筛选"
+          aria-label="发送记录筛选"
           search={
             <Input
               type="search"
@@ -298,13 +323,18 @@ export function NotificationLogsPage() {
           indexStart={(page - 1) * pageSize + 1}
           selectedKeys={[...selectedIds]}
           onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+          {...(sort ? { sort: sort } : {})}
+          onSortChange={(next) => {
+            setSort(next);
+            setPage(1);
+          }}
           empty={
             <EmptyState
               title="暂无通知记录"
               description={
                 search || channelFilter !== "all" || statusFilter !== "all"
                   ? tShared("common.adjustFiltersHint")
-                  : "数据库中没有通知投递记录"
+                  : "还没有通知投递记录"
               }
             />
           }

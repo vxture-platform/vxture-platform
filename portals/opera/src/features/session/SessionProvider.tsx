@@ -37,7 +37,8 @@ export interface OperatorIdentity {
   emailVerified: boolean;
 }
 
-type SessionStatus = "loading" | "ready" | "anonymous";
+/** `forbidden`：身份成立，但没有进入本平台的权限（没有本平台根码）。 */
+type SessionStatus = "loading" | "ready" | "anonymous" | "forbidden";
 
 interface SessionContextValue {
   operator: OperatorIdentity | null;
@@ -136,8 +137,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     fetch("/api/session", { credentials: "include", cache: "no-store" })
       .then(async (res) => {
         if (!active || !res.ok) return;
-        const body = (await res.json()) as { capabilities?: string[] };
+        const body = (await res.json()) as {
+          capabilities?: string[];
+          planeEntitled?: boolean;
+        };
         setCapabilities(body.capabilities ?? []);
+        /* 进得了 IdP 不等于进得了本平台：没有根码时 BFF 对其余接口一律 403，
+           这里据此整屏说明，而不是放进去看一页页的读取失败。 */
+        if (body.planeEntitled === false) setStatus("forbidden");
       })
       .catch(() => {
         /* 保持空数组 */

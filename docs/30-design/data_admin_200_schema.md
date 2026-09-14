@@ -214,73 +214,98 @@
 
 ### 4.2 perm_code 目录（三段式 `{domain}:{resource}.{action}`）
 
-粒度约定：每资源暴露 `.read` 与 `.manage`，**`.manage` 语义上⊇ `.read`**；高危动作（危）单列独立 perm_code，强制 step-up（应用层 `@RequireStepUp`）。`domain` 段对齐 schema 边界（`commerce` 域映射 `metering`/`billing`；`release` 域映射 `admin` 治理表；`security` 域映射 `appoidc`）。
+粒度约定：每资源暴露 `.read` 与 `.manage`，**`.manage` 语义上⊇ `.read`**；高危动作（危）单列独立 perm_code，强制 step-up（应用层 `@RequireStepUp`）。
 
-| perm_code                                                                        | 危  | 说明                                                                                         |
-| -------------------------------------------------------------------------------- | --- | -------------------------------------------------------------------------------------------- |
-| `tenant:profile.read` / `.manage`                                                |     | 租户档案（tenancy）                                                                          |
-| `tenant:verification.review`                                                     |     | 租户认证审核（回写 kyc 快照）                                                                |
-| `tenant:quota.manage`                                                            |     | 配额调整（metering）                                                                         |
-| `tenant:lifecycle.suspend`                                                       | 危  | 封停/关闭租户                                                                                |
-| `tenant:risk.read` / `.manage`                                                   |     | 租户风险评估（admin.risk_records，TD-021）                                                   |
-| `user:profile.read`                                                              |     | 用户查询（脱敏）                                                                             |
-| `user:pii.read`                                                                  | 危  | 明文 PII                                                                                     |
-| `user:account.manage`                                                            |     | C 端账号处置（停用/恢复/强制下线；全禁用 status='disabled'，可逆故无 step-up）               |
-| `commerce:subscription.read` / `.manage`                                         |     | 订阅只读 / 订阅动作（续订/暂停/恢复/取消，routine）                                          |
-| `commerce:order.read`                                                            |     | 订单只读合成视图（无独立 order 表，写归 payment.settle）                                     |
-| `commerce:billing.read` / `.manage`                                              |     | 账单只读 / 账单动作（作废[限未收未开票]/逾期/调整/补开，routine）                            |
-| `commerce:billing.discount`                                                      | 危  | 账单减免应收（TD-027，单独端点 + step-up）                                                   |
-| `commerce:invoice.read` / `.manage`                                              |     | 发票只读 / 发票动作（线下登记/寄送/完成，routine）                                           |
-| `commerce:invoice.void`                                                          | 危  | 发票红冲（作废已出账发票，法定不可逆，TD-027，单独端点 + step-up）                           |
-| `commerce:payment.read` / `.manage`                                              |     | 支付只读 / 支付驳回（routine，不动钱）                                                       |
-| `commerce:payment.settle`                                                        | 危  | 支付核销 / 线下收款确认（确认收款写流水，TD-027，单独端点 + step-up）                        |
-| `commerce:refund.execute`                                                        | 危  | 退款                                                                                         |
-| `product:plan.read` / `.manage` · `product:price.read` / `.manage`               |     | 套餐与定价                                                                                   |
-| `model:provider.read` / `.manage` · `model:model.read` / `.manage`               |     | 模型供给                                                                                     |
-| `release:feature_flag.read` / `.manage` · `release:maintenance.read` / `.manage` |     | 灰度/维护窗口                                                                                |
-| `platform:setting.read` / `.manage`                                              |     | 平台运行时配置（admin.settings；sensitive/encrypted 值脱敏读，敏感/加密/只读行不经本码编辑） |
-| `content:announcement.read` / `.manage`                                          |     | 公告                                                                                         |
-| `notification:log.read`                                                          |     | 通知投递台账（support.notification_logs，只读）                                              |
-| `support:ticket.read` / `.manage`                                                |     | 工单                                                                                         |
-| `support:impersonate`                                                            | 危  | 代客操作                                                                                     |
-| `compliance:event.read` / `.manage`                                              |     | 合规事件（admin.compliance_events，TD-021；tenant_id 可空=平台级故自成 domain）              |
-| `security:signing_key.manage` · `security:oidc_client.manage`                    | 危  | 签名密钥 / OIDC client                                                                       |
-| `operator:account.manage` · `operator:role.manage`                               | 危  | 运营账号 / 角色管理                                                                          |
-| `audit:read`                                                                     |     | 中央审计日志（support.audit_logs）                                                           |
+**`domain` 段决定所属平台**（2026-09-14 三平台拆分，owner：「三个平面，包括 bff，必须严格隔离」）。一个域只属于一个平台，一个 BFF 只检查本平台的码；两个平台都要的能力各注册一个码。权威 = `seed-catalog.mjs` 的 `OPERATOR_PLANE_DOMAINS`，守卫 `lint:operator-planes`，迁移 `2026-10-03-operator-three-planes.sql`：
+
+| 平台  | 根码          | 域                                                                             |
+| ----- | ------------- | ------------------------------------------------------------------------------ |
+| admin | `admin.plane` | `tenant` `user` `commerce` `promotion` `product` `content` `support` `pricing` |
+| opera | `opera.plane` | `model` `capability` `integration` `ops`                                       |
+| arche | `arche.plane` | `operator` `audit` `compliance` `risk` `config`                                |
+
+平台根码是进入该平台的门（三个 BFF 中间件检查），按「持有子节点必持有祖先」闭包自动授予。下表按平台列出；2026-09-14 前的旧码在括号里。
+
+| perm_code                         | 危  | 说明                          |
+| --------------------------------- | --- | ----------------------------- |
+| `tenant:profile.read` / `.manage` |     | 租户档案（tenancy）           |
+| `tenant:verification.review`      |     | 租户认证审核（回写 kyc 快照） |
+| `tenant:quota.manage`             |     | 配额调整（metering）          |
+| `tenant:lifecycle.suspend`        | 危  | 封停/关闭租户                 |
+
+| `user:profile.read` | | 用户查询（脱敏） |
+| `user:pii.read` | 危 | 明文 PII |
+| `user:account.manage` | | C 端账号处置（停用/恢复/强制下线；全禁用 status='disabled'，可逆故无 step-up） |
+| `commerce:subscription.read` / `.manage` | | 订阅只读 / 订阅动作（续订/暂停/恢复/取消，routine） |
+| `commerce:order.read` | | 订单只读合成视图（无独立 order 表，写归 payment.settle） |
+| `commerce:billing.read` / `.manage` | | 账单只读 / 账单动作（作废[限未收未开票]/逾期/调整/补开，routine） |
+| `commerce:billing.discount` | 危 | 账单减免应收（TD-027，单独端点 + step-up） |
+| `commerce:invoice.read` / `.manage` | | 发票只读 / 发票动作（线下登记/寄送/完成，routine） |
+| `commerce:invoice.void` | 危 | 发票红冲（作废已出账发票，法定不可逆，TD-027，单独端点 + step-up） |
+| `commerce:payment.read` / `.manage` | | 支付只读 / 支付驳回（routine，不动钱） |
+| `commerce:payment.settle` | 危 | 支付核销 / 线下收款确认（确认收款写流水，TD-027，单独端点 + step-up） |
+| `commerce:refund.execute` | 危 | 退款 |
+| `product:plan.read` / `.manage` · `product:price.read` / `.manage` | | 套餐与定价 |
+| `product:capability.read` | | admin 能力目录（Runos 只读镜像；旧：借 opera 的 `capability:runos.read`） |
+| `pricing:model.read` | | admin 模型计价与策略页的读（旧：经旧桥借 opera 的 `model:*.manage`） |
+| `pricing:price_rule.*` · `pricing:policy.*`（`policy.update` 危） | 危 | 价格规则 / 限流策略写（旧：`model:price_rule.*` / `model:policy.*`） |
+| `content:announcement.read` / `.manage` | | 公告 |
+| `content:notification_log.read` | | admin 顶栏的近期投递抽屉 |
+| `support:ticket.read` / `.manage` | | 工单 |
+| `support:impersonate` | 危 | 代客操作 |
+| **opera** | | |
+| `model:provider.read` / `.manage` · `model:model.read` / `.manage` | | 模型供给（读接口认 `.read` 或 `.manage`，凭据台账只认 `.manage`） |
+| `capability:runos.read` / `.manage` | | Runos 能力注册 |
+| `integration:product.read` / `.manage` | | 产品登记与接入（旧：`platform:product.*`） |
+| `ops:maintenance.read` / `.manage` | | 维护窗口（旧：`release:maintenance.*`） |
+| `ops:job.read` · `ops:change.read` | | 任务调度 / 变更审计（此前不设码） |
+| **arche** | | |
+| `operator:account.manage` · `operator:role.manage` | 危 | 运营账号 / 角色管理 |
+| `operator:session.read` | | 登录记录与在线会话 |
+| `audit:log.read` | | 中央审计日志（support.audit_logs；旧：`audit:read`） |
+| `audit:notification_log.read` | | 通知投递台账（support.notification_logs；旧：`notification:log.read`） |
+| `risk:record.read` / `.manage` | | 风险记录（admin.risk_records，TD-021；旧：`tenant:risk.*`） |
+| `compliance:event.read` / `.manage` | | 合规事件（admin.compliance_events，TD-021） |
+| `config:parameter.read` / `.manage` | | 平台运行时配置（admin.settings；旧：`platform:setting.*`） |
+| `config:feature_flag.read` / `.manage` | | 特性开关（旧：`release:feature_flag.*`） |
+
+`security:signing_key.manage` / `security:oidc_client.manage` 已于 2026-08-31 退役（无路由检查）。
 
 ### 4.3 role → permission 映射（✔=授 `.manage`，R=授 `.read`，危独列）
 
-| perm_code                                    | super_admin | admin | operation | finance | tech_ops | support | auditor |
-| -------------------------------------------- | ----------- | ----- | --------- | ------- | -------- | ------- | ------- |
-| `tenant:profile`                             | ✔           | ✔     | ✔         | R       | R        | R       | R       |
-| `tenant:verification.review`                 | ✔           | ✔     | ✔         | —       | —        | —       | R       |
-| `tenant:lifecycle.suspend` 危                | ✔           | ✔     | —         | —       | —        | —       | —       |
-| `tenant:quota.manage`                        | ✔           | ✔     | ✔         | R       | R        | —       | R       |
-| `tenant:risk`                                | ✔           | ✔     | ✔         | —       | —        | —       | R       |
-| `compliance:event`                           | ✔           | ✔     | —         | —       | —        | —       | R       |
-| `user:profile.read`                          | ✔           | ✔     | ✔         | R       | —        | ✔       | R       |
-| `user:pii.read` 危                           | ✔           | ✔     | —         | —       | —        | —       | —       |
-| `user:account.manage`                        | ✔           | ✔     | —         | —       | —        | —       | —       |
-| `commerce:subscription`                      | ✔           | ✔     | R         | ✔       | —        | R       | R       |
-| `commerce:order.read`                        | ✔           | ✔     | R         | ✔       | —        | R       | R       |
-| `commerce:billing`                           | ✔           | ✔     | —         | ✔       | —        | —       | R       |
-| `commerce:billing.discount` 危               | ✔           | ✔     | —         | ✔       | —        | —       | —       |
-| `commerce:invoice`                           | ✔           | ✔     | —         | ✔       | —        | —       | R       |
-| `commerce:invoice.void` 危                   | ✔           | ✔     | —         | ✔       | —        | —       | —       |
-| `commerce:payment`                           | ✔           | ✔     | —         | ✔       | —        | —       | R       |
-| `commerce:payment.settle` 危                 | ✔           | ✔     | —         | ✔       | —        | —       | —       |
-| `commerce:refund.execute` 危                 | ✔           | ✔     | —         | ✔       | —        | —       | —       |
-| `product:plan/price`                         | ✔           | ✔     | ✔         | R       | —        | —       | R       |
-| `model:provider/model`                       | ✔           | ✔     | R         | —       | ✔        | —       | R       |
-| `release:feature_flag/maintenance`           | ✔           | ✔     | R         | —       | ✔        | —       | R       |
-| `platform:setting`                           | ✔           | R     | —         | —       | ✔        | —       | R       |
-| `content:announcement`                       | ✔           | ✔     | ✔         | —       | R        | —       | R       |
-| `notification:log.read`                      | ✔           | R     | —         | —       | R        | R       | R       |
-| `support:ticket`                             | ✔           | ✔     | R         | —       | —        | ✔       | R       |
-| `support:impersonate` 危                     | ✔           | ✔     | —         | —       | —        | —       | —       |
-| `security:signing_key/oidc_client.manage` 危 | ✔           | —     | —         | —       | —        | —       | —       |
-| `operator:account/role.manage` 危            | ✔           | —     | —         | —       | —        | —       | —       |
-| `audit:read`                                 | ✔           | ✔     | —         | —       | —        | —       | ✔       |
+| perm_code                                                       | super_admin | admin | operation | finance | tech_ops | support | auditor |
+| --------------------------------------------------------------- | ----------- | ----- | --------- | ------- | -------- | ------- | ------- |
+| `tenant:profile`                                                | ✔           | ✔     | ✔         | R       | R        | R       | R       |
+| `tenant:verification.review`                                    | ✔           | ✔     | ✔         | —       | —        | —       | R       |
+| `tenant:lifecycle.suspend` 危                                   | ✔           | ✔     | —         | —       | —        | —       | —       |
+| `tenant:quota.manage`                                           | ✔           | ✔     | ✔         | R       | R        | —       | R       |
+| `risk:record`（arche）                                          | ✔           | ✔     | ✔         | —       | —        | —       | R       |
+| `compliance:event`                                              | ✔           | ✔     | —         | —       | —        | —       | R       |
+| `user:profile.read`                                             | ✔           | ✔     | ✔         | R       | —        | ✔       | R       |
+| `user:pii.read` 危                                              | ✔           | ✔     | —         | —       | —        | —       | —       |
+| `user:account.manage`                                           | ✔           | ✔     | —         | —       | —        | —       | —       |
+| `commerce:subscription`                                         | ✔           | ✔     | R         | ✔       | —        | R       | R       |
+| `commerce:order.read`                                           | ✔           | ✔     | R         | ✔       | —        | R       | R       |
+| `commerce:billing`                                              | ✔           | ✔     | —         | ✔       | —        | —       | R       |
+| `commerce:billing.discount` 危                                  | ✔           | ✔     | —         | ✔       | —        | —       | —       |
+| `commerce:invoice`                                              | ✔           | ✔     | —         | ✔       | —        | —       | R       |
+| `commerce:invoice.void` 危                                      | ✔           | ✔     | —         | ✔       | —        | —       | —       |
+| `commerce:payment`                                              | ✔           | ✔     | —         | ✔       | —        | —       | R       |
+| `commerce:payment.settle` 危                                    | ✔           | ✔     | —         | ✔       | —        | —       | —       |
+| `commerce:refund.execute` 危                                    | ✔           | ✔     | —         | ✔       | —        | —       | —       |
+| `product:plan/price`                                            | ✔           | ✔     | ✔         | R       | —        | —       | R       |
+| `model:provider/model`                                          | ✔           | ✔     | R         | —       | ✔        | —       | R       |
+| `config:feature_flag`（arche）·`ops:maintenance`（opera）       | ✔           | ✔     | R         | —       | ✔        | —       | R       |
+| `config:parameter`（arche）                                     | ✔           | R     | —         | —       | ✔        | —       | R       |
+| `content:announcement`                                          | ✔           | ✔     | ✔         | —       | R        | —       | R       |
+| `audit:notification_log.read` + `content:notification_log.read` | ✔           | R     | —         | —       | R        | R       | R       |
+| `support:ticket`                                                | ✔           | ✔     | R         | —       | —        | ✔       | R       |
+| `support:impersonate` 危                                        | ✔           | ✔     | —         | —       | —        | —       | —       |
+| `operator:account/role.manage` 危                               | ✔           | —     | —         | —       | —        | —       | —       |
+| `operator:session.read`                                         | ✔           | —     | —         | —       | —        | —       | R       |
+| `audit:log.read`                                                | ✔           | ✔     | —         | —       | —        | —       | ✔       |
+
+> 2026-09-14 新码按「原先能做这件事的码」授给同一批角色：`product:capability.read` 给持有 `capability:runos.*` 的角色，`pricing:model.read` 给持有 `model:*.manage` 的，`ops:job.read` / `ops:change.read` 给持有任一 opera 码的；`operator:session.read` 给 super_admin 与 auditor。
 
 > 两个关键不变量（比 prompt 稿更严，以本矩阵为准）：
 >

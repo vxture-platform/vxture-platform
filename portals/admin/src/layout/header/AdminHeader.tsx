@@ -149,9 +149,8 @@ export function AdminHeader({
     const KIND_ICON: Record<string, IconName> = {
       tenant: "buildings",
       order: "receipt",
-      operator: "user",
     };
-    for (const kind of ["tenant", "order", "operator"] as const) {
+    for (const kind of ["tenant", "order"] as const) {
       const items = search.remoteHits.filter((hit) => hit.kind === kind);
       if (items.length === 0) continue;
       groups.push({

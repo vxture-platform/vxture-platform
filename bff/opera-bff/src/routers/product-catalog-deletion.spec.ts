@@ -11,7 +11,7 @@
  *   3. 有客户足迹 → 409 PRODUCT_HAS_CUSTOMER_FOOTPRINT，事务开了但产品没软删、回滚。
  *   4. 无足迹无授权 → 软删产品 + 软删 primary 套餐 + 停用 product 型 OIDC 客户端 + 审计。
  *   5. 预览只读：回 deletable / blockers / 连带项(套餐数、被停用的客户端)。
- *   6. 无 platform:product.manage → 403，闸门之前就停。
+ *   6. 无 integration:product.manage → 403，闸门之前就停。
  *
  * 上游那一次读整个换成桩(同退役 spec)；pg 按 SQL 正则桩。
  */
@@ -41,7 +41,7 @@ const fetchGrants = vi.mocked(fetchActiveUpstreamGrants);
 
 const PRODUCT_ID = "3d9f0c1e-0000-4000-8000-000000000009";
 
-function makeReq(caps: string[] = ["platform:product.manage"]) {
+function makeReq(caps: string[] = ["integration:product.manage"]) {
   return {
     operator: { id: "op-1", displayName: null },
     capabilities: caps,
@@ -305,10 +305,10 @@ describe("DELETE /:id —— 两步软删除", () => {
     expect(fetchGrants).not.toHaveBeenCalled();
   });
 
-  it("无 platform:product.manage → 403，确认之前就停", async () => {
+  it("无 integration:product.manage → 403，确认之前就停", async () => {
     const { router, connect } = makeRouter({ status: "draft" });
     const { status } = await failure(
-      router.remove(makeReq(["platform:product.read"]), PRODUCT_ID, {
+      router.remove(makeReq(["integration:product.read"]), PRODUCT_ID, {
         confirm: true,
       }),
     );

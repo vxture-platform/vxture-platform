@@ -59,11 +59,11 @@ import {
 } from "@/features/product/lifecycle";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
-import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
+
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 
-const MANAGE = "platform:product.manage";
+const MANAGE = "integration:product.manage";
 
 type ProductOrigin = "self" | "third_party" | "other";
 
@@ -800,31 +800,7 @@ function ProductsPageContent() {
                           icon: "edit",
                           onSelect: () => openDetail(r),
                         },
-                        {
-                          id: "admin-atlas-grants",
-                          label: "Atlas 模型授权（admin）",
-                          icon: "external-link" as const,
-                          separatorBefore: true,
-                          onSelect: () =>
-                            window.open(
-                              buildAdminAtlasGrantsUrl(),
-                              "_blank",
-                              "noopener,noreferrer",
-                            ),
-                        },
-                        {
-                          id: "admin-runos-bundles",
-                          label: "Runos 能力授权（规划中）",
-                          icon: "external-link" as const,
-                          disabled: true,
-                          onSelect: () =>
-                            toast({
-                              tone: "info",
-                              title: "规划中",
-                              description:
-                                "Runos 的商业层（commerce/bundles）还没建，admin 侧没有对应页面可跳。",
-                            }),
-                        },
+
                         /* 生命周期动作由 `PRODUCT_ACTIONS` 那张表生成，破坏性
                            与否也由表决定——所以这里按判别联合分流，而不是按 id
                            硬分支。表里加一个 danger 动作却不写后果，编译不过。

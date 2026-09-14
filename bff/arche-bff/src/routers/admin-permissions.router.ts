@@ -56,6 +56,7 @@ export class AdminPermissionsRouter {
       status: row.status,
       description: row.description,
       icon: row.icon,
+      requiresStepUp: row.requires_step_up,
       sort: row.sort,
       routePath: row.route_path,
       component: row.component,
@@ -392,6 +393,7 @@ function mapAdminPermissionRow(
     status: row.status,
     description: row.description,
     icon: row.icon,
+    requiresStepUp: row.requires_step_up,
     sort: row.sort,
     routePath: row.route_path,
     component: row.component,
@@ -478,6 +480,7 @@ interface PlatformAdminPermissionRow {
   description: string;
   icon: string | null;
   sort: number;
+  requires_step_up: boolean;
   route_path: string | null;
   component: string | null;
   role_count: number;
@@ -498,6 +501,7 @@ const PLATFORM_PERMISSION_SQL = `
     p.description,
     p.icon,
     p.sort,
+    p.requires_step_up,
     nullif(p.route_path, '') as route_path,
     nullif(p.component, '') as component,
     p.created_at,
@@ -528,6 +532,7 @@ const PLATFORM_PERMISSION_BY_ID_SQL = `
     p.description,
     p.icon,
     p.sort,
+    p.requires_step_up,
     nullif(p.route_path, '') as route_path,
     nullif(p.component, '') as component,
     p.created_at,
