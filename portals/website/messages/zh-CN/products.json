@@ -149,6 +149,11 @@
     },
     "items": []
   },
+  "agentDetail": {
+    "detailLabel": "产品详情",
+    "industriesLabel": "适用行业",
+    "tagsLabel": "能力标签"
+  },
   "subscription": {
     "unavailableTitle": "暂未开放订阅",
     "unavailable": "该产品暂未开放线上订阅，可联系销售获取方案。",

@@ -165,6 +165,11 @@
     },
     "items": []
   },
+  "agentDetail": {
+    "detailLabel": "Details",
+    "industriesLabel": "Industries",
+    "tagsLabel": "Capabilities"
+  },
   "subscription": {
     "unavailableTitle": "Subscriptions not open yet",
     "unavailable": "Online subscription for this product is not open yet — contact sales for a quote.",
