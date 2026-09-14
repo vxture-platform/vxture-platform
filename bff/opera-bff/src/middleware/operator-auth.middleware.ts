@@ -5,7 +5,7 @@
  *
  * 与 admin-bff 的 AuthMiddleware 同构：解析不透明的 operator RP 会话 → 强制 realm
  * 隔离（userType 必须是 operator）→ 回库取细粒度能力码（RP 令牌不带 operator 权限）。
- * 任一环节不成立即 401。
+ * 任一环节不成立即 401；主体成立但没有本平台根码（`opera.plane`）即 403。
  *
  * **只挂在 /api/* 上**：`/auth/*` 是登录出入口，挂上去会把自己锁在门外。
  */
@@ -13,6 +13,7 @@ import { Inject, Injectable, type NestMiddleware } from "@nestjs/common";
 import { rpSessionCookieName, type RpAuthService } from "@vxture/core-oidc-rp";
 import type { NextFunction, Request, Response } from "express";
 import { OperatorAuthzService } from "../auth/operator-authz.service";
+import { PLANE_GATE_EXEMPT_PATHS, PLANE_ROOT } from "../auth/plane";
 import {
   RP_AUTH_SERVICE,
   RP_RUNTIME,
@@ -81,6 +82,23 @@ export class OperatorAuthMiddleware implements NestMiddleware {
     context.operator = resolved.operator;
     context.capabilities = resolved.capabilities;
     context.operatorAccessToken = outcome.accessToken;
+
+    /* 平台门（owner 2026-09-14，三平台严格隔离）：进得了 IdP 的运营账号不等于进得了
+       本平台。根码由授权闭包自动授予，能做本平台任一件事的角色都有它；没有的一律 403，
+       而不是放进来再逐页 403。会话端点例外——门户靠它说清「没有进入本平台的权限」。 */
+    const path = (req.originalUrl.split("?")[0] ?? "").replace(/\/+$/, "");
+    if (
+      !resolved.capabilities.includes(PLANE_ROOT) &&
+      !PLANE_GATE_EXEMPT_PATHS.has(path)
+    ) {
+      res.status(403).json({
+        code: "NOT_ENTITLED",
+        message: `Missing ${PLANE_ROOT} capability`,
+        retryable: false,
+        statusCode: 403,
+      });
+      return;
+    }
     next();
   }
 }

@@ -1,6 +1,6 @@
 /**
  * operator-stepup.service.ts — 向 IdP 换取 operator step-up 凭证。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * 把已认证 operator 提交的 TOTP 码转发到 IdP 的内部 step-up 端点（S2S，

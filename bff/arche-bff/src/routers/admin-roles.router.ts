@@ -75,6 +75,7 @@ export class AdminRolesRouter {
       menuPermissionCount: role.menu_permission_count,
       buttonPermissionCount: role.button_permission_count,
       apiPermissionCount: role.api_permission_count,
+      mfaMinLevel: role.mfa_min_level,
       createdBy: role.created_by,
       createdByName: role.created_by_name,
       createdAt: toIso(role.created_at),
@@ -746,6 +747,7 @@ function mapRoleRow(
     menuPermissionCount: role.menu_permission_count,
     buttonPermissionCount: role.button_permission_count,
     apiPermissionCount: role.api_permission_count,
+    mfaMinLevel: role.mfa_min_level,
     createdBy: role.created_by,
     createdByName: role.created_by_name,
     createdAt: toIso(role.created_at),
@@ -790,7 +792,8 @@ interface PlatformRoleRow {
   menu_permission_count: number;
   button_permission_count: number;
   api_permission_count: number;
-  created_by: string | null;
+  mfa_min_level: "disabled" | "optional" | "required";
+  created_by: string;
   created_by_name: string | null;
   created_at: Date;
   updated_at: Date;
@@ -821,8 +824,11 @@ const PLATFORM_ROLE_SQL_WITH_FILTER = `
     r.status as status_code,
     r.status,
     r.sort,
+    r.mfa_min_level,
     r.created_by,
-    coalesce(nullif(creator.display_name, ''), nullif(creator.username, ''), r.created_by::text) as created_by_name,
+    -- 创建人一律关联到真实账号（预置角色 = systemadmin，迁移 2026-10-03 补齐并加 NOT NULL）；
+    -- 不再回退到 created_by 的 UUID——UUID 不展示。
+    coalesce(nullif(creator.display_name, ''), creator.username) as created_by_name,
     r.created_at,
     r.updated_at,
     count(distinct a.id) filter (where a.deleted_at is null)::int as admin_count,
@@ -831,9 +837,10 @@ const PLATFORM_ROLE_SQL_WITH_FILTER = `
         and a.status = 'active'
     )::int as active_admin_count,
     count(distinct p.id) filter (where p.is_active = true)::int as permission_count,
-    count(distinct p.id) filter (where p.is_active = true and p.perm_type = 'MENU')::int as menu_permission_count,
-    count(distinct p.id) filter (where p.is_active = true and p.perm_type = 'BUTTON')::int as button_permission_count,
-    count(distinct p.id) filter (where p.is_active = true and p.perm_type = 'API')::int as api_permission_count
+    -- perm_type 在库里是小写（seed 写 'menu' / 'api'）。此前按大写数，三个计数恒为 0。
+    count(distinct p.id) filter (where p.is_active = true and p.perm_type = 'menu')::int as menu_permission_count,
+    count(distinct p.id) filter (where p.is_active = true and p.perm_type = 'button')::int as button_permission_count,
+    count(distinct p.id) filter (where p.is_active = true and p.perm_type = 'api')::int as api_permission_count
   from admin.operator_role r
   left join admin.operator_account creator
     on creator.id = r.created_by

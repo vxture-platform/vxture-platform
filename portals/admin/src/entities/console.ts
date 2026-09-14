@@ -461,11 +461,6 @@ export interface RunosCapabilityDetailRecord extends RunosCapabilityRecord {
   endpoints: RunosEndpointInstanceRecord[];
 }
 
-/** 「去 opera 能力注册管理」的链接，由 admin-bff 按 `OPERA_BASE_URL` 拼。 */
-export interface RunosManagementEntry {
-  url: string;
-}
-
 export interface ProductPlanRecord {
   id: string;
   planCode: string;

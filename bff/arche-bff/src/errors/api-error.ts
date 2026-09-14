@@ -1,10 +1,10 @@
 /**
  * api-error.ts — 结构化错误封套（product_251 X-1）。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * 封套四件套：`code`（SCREAMING_SNAKE，带模块前缀）· `message` · `retryable`
- * （**必有**）· 可选 `field`。承载位置随传输，字段名不随传输变——opera-bff 只有
+ * （**必有**）· 可选 `field`。承载位置随传输，字段名不随传输变——arche-bff 只有
  * HTTP 一种传输，所以就是响应体。
  *
  * 为什么值得单独立一层：审计（`30-l1-consistency-audit.md` X-1）实测 platform
@@ -21,7 +21,7 @@ import { HttpException, HttpStatus } from "@nestjs/common";
  * 拒绝词表（X-1）——三方共用，**不带模块前缀**：它们是词表本身，不属于任何模块。
  *
  * `APPROVAL_REQUIRED` 是一条出路，不是一个错误：消费方看到它应该去发起审批，
- * 而不是把它当失败上报。opera-bff 目前没有需要人工批准的写路径，故未使用；
+ * 而不是把它当失败上报。arche-bff 目前没有需要人工批准的写路径，故未使用；
  * 列在这里是为了别人加的时候不去另造一个 `NEED_APPROVAL`。
  */
 export const REJECTION_CODES = [

@@ -36,10 +36,11 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate } from "@/lib/format";
+import { useTableSort } from "@/lib/table-sort";
 
 // P2 占位板块建设：功能开关（admin.feature_flags）。全局开关 + 灰度百分比 +
 // 逐租户覆盖（tenant_overrides，本页只读携带、不在 UI 编辑）+ 归档。
-// 能力守卫：读 release:feature_flag.read|.manage，写 .manage（seed §4.3）。
+// 能力守卫：读 config:feature_flag.read|.manage，写 .manage（seed §4.3）。
 
 type ArchivedFilter = "active" | "archived" | "all";
 type DialogMode = "create" | "edit" | null;
@@ -136,6 +137,7 @@ function columnsOf(
     {
       id: "key",
       header: "开关键 / 分类",
+      sortable: true,
       cell: (item) => (
         <TableTitleCell
           title={item.flagKey}
@@ -143,11 +145,16 @@ function columnsOf(
         />
       ),
     },
-    { id: "environment", header: "环境", cell: (item) => item.environment },
+    {
+      id: "environment",
+      header: "环境",
+      sortable: true,
+      cell: (item) => item.environment,
+    },
     {
       id: "status",
       header: "状态",
-      align: "center",
+      sortable: true,
       cell: (item) => (
         <StatusBadge tone={item.isGloballyEnabled ? "success" : "neutral"}>
           {item.isGloballyEnabled ? "已启用" : "已停用"}
@@ -157,16 +164,27 @@ function columnsOf(
     {
       id: "rollout",
       header: "灰度",
+      sortable: true,
       align: "numeric",
       cell: (item) => `${item.rolloutPercentage}%`,
     },
     {
       id: "updatedAt",
       header: "更新时间",
+      sortable: true,
       cell: (item) => formatDate(item.updatedAt, locale),
     },
   ];
 }
+
+/* 开关是配置台账，全量在内存里（BFF 按 archived=all 一次取回），前端排。 */
+const SORT_ACCESSORS = {
+  key: (item: FeatureFlagRecord) => item.flagKey,
+  environment: (item: FeatureFlagRecord) => item.environment,
+  status: (item: FeatureFlagRecord) => (item.isGloballyEnabled ? 1 : 0),
+  rollout: (item: FeatureFlagRecord) => item.rolloutPercentage,
+  updatedAt: (item: FeatureFlagRecord) => Date.parse(item.updatedAt),
+};
 
 export function FeatureTogglesPage() {
   const locale = useLocale();
@@ -236,10 +254,16 @@ export function FeatureTogglesPage() {
     return result;
   }, [items, search, categoryFilter, environmentFilter, archivedFilter]);
 
+  const {
+    sort,
+    onSortChange,
+    rows: sorted,
+  } = useTableSort(filtered, SORT_ACCESSORS);
+
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, page, pageSize]);
   const pageCount = Math.ceil(filtered.length / pageSize);
 
   function openCreate() {
@@ -433,6 +457,11 @@ export function FeatureTogglesPage() {
             indexStart={(page - 1) * pageSize + 1}
             selectedKeys={[...selectedIds]}
             onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+            {...(sort ? { sort: sort } : {})}
+            onSortChange={(next) => {
+              onSortChange(next);
+              setPage(1);
+            }}
             rowActions={(item) => (
               <ActionMenu
                 label="功能开关操作"

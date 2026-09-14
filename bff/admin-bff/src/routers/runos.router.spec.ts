@@ -60,7 +60,6 @@ function makeRouter(options: { token?: string | null } = {}) {
     platform: {
       /* 故意带尾部斜杠：路由要把它去掉，否则拼出 `//capability`。 */
       RUNOS_API_URL: "http://runos.test/",
-      OPERA_BASE_URL: "https://x.vxture.com/",
     },
   } as unknown as VxConfigService;
   const router = new RunosRouter(config, {
@@ -158,30 +157,30 @@ describe("能力门在打上游之前判", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("product:capability.read 放行", async () => {
+    const { router } = makeRouter();
+    await expect(
+      router.listCapabilities(makeReq(["product:capability.read"])),
+    ).resolves.toEqual(capabilityPage([CAPABILITY_ROW]));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  /* 三平台隔离：opera 的码在 admin 不放行——在 opera 授了权，不该顺带打开这里。 */
   it.each([["capability:runos.read"], ["capability:runos.manage"]])(
-    "%s 任一即可放行（与 opera 的 assertCanRead 同判据）",
+    "opera 的 %s 不放行",
     async (code) => {
       const { router } = makeRouter();
-      await expect(router.listCapabilities(makeReq([code]))).resolves.toEqual(
-        capabilityPage([CAPABILITY_ROW]),
+      const error = await rejection(() =>
+        router.listCapabilities(makeReq([code])),
       );
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect(fetchMock).not.toHaveBeenCalled();
     },
   );
-
-  it("management-entry 走同一道门", async () => {
-    const { router } = makeRouter();
-    expect(() => router.managementEntry(makeReq(null))).toThrow(
-      UnauthorizedException,
-    );
-    expect(() =>
-      router.managementEntry(makeReq(["platform.tenant.manage"])),
-    ).toThrow(ForbiddenException);
-  });
 });
 
 describe("查询参数原样透传", () => {
-  const req = () => makeReq(["capability:runos.read"]);
+  const req = () => makeReq(["product:capability.read"]);
 
   it("不带参数就不带 `?`，基址的尾部斜杠被去掉", async () => {
     const { router } = makeRouter();
@@ -220,7 +219,7 @@ describe("查询参数原样透传", () => {
 describe("operator-OBO（product_250 M-1）", () => {
   it("换票 aud=runos，拿到的令牌原样作 bearer", async () => {
     const { router, getToken } = makeRouter();
-    await router.listCapabilities(makeReq(["capability:runos.read"]));
+    await router.listCapabilities(makeReq(["product:capability.read"]));
     expect(getToken).toHaveBeenCalledWith(OPERATOR_TOKEN, "runos");
     const headers = firstFetchCall(fetchMock).init?.headers as
       | Record<string, string>
@@ -230,21 +229,21 @@ describe("operator-OBO（product_250 M-1）", () => {
 
   it("换票失败降级为不带 bearer 的上游调用（上游校验时以它自己的 401 浮出）", async () => {
     const { router } = makeRouter({ token: null });
-    await router.listCapabilities(makeReq(["capability:runos.read"]));
+    await router.listCapabilities(makeReq(["product:capability.read"]));
     expect(firstFetchCall(fetchMock).init?.headers).toBeUndefined();
   });
 
   it("没有会话令牌就不换票", async () => {
     const { router, getToken } = makeRouter();
     await router.listCapabilities(
-      makeReq(["capability:runos.read"], { withToken: false }),
+      makeReq(["product:capability.read"], { withToken: false }),
     );
     expect(getToken).not.toHaveBeenCalled();
   });
 });
 
 describe("上游契约与错误", () => {
-  const req = () => makeReq(["capability:runos.read"]);
+  const req = () => makeReq(["product:capability.read"]);
 
   it("列表少了 admissionTier → 502 并点名字段，不把残行交给页面", async () => {
     fetchMock.mockResolvedValueOnce(
@@ -304,15 +303,5 @@ describe("上游契约与错误", () => {
     const error = await rejection(() => router.listCapabilities(req()));
     expect(error).toBeInstanceOf(BadGatewayException);
     expect((error as BadGatewayException).message).toBe("Runos is unavailable");
-  });
-});
-
-describe("management-entry", () => {
-  it("拼 OPERA_BASE_URL + /capability/registry，去掉尾部斜杠", () => {
-    const { router } = makeRouter();
-    expect(router.managementEntry(makeReq(["capability:runos.read"]))).toEqual({
-      url: "https://x.vxture.com/capability/registry",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

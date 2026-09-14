@@ -2,6 +2,7 @@ import { Inject, Injectable, type NestMiddleware } from "@nestjs/common";
 import { rpSessionCookieName, type RpAuthService } from "@vxture/core-oidc-rp";
 import type { NextFunction, Request, Response } from "express";
 import { PlatformAuthService } from "../auth/auth.service";
+import { PLANE_GATE_EXEMPT_PATHS, PLANE_ROOT } from "../auth/plane";
 import {
   RP_AUTH_SERVICE,
   RP_RUNTIME,
@@ -83,6 +84,23 @@ export class AuthMiddleware implements NestMiddleware {
     // Kept for operator-OBO exchange when proxying to provider management
     // APIs (product_250 M-1); never serialized into any response.
     context.operatorAccessToken = outcome.accessToken;
+
+    /* 平台门（owner 2026-09-14，三平台严格隔离）：进得了 IdP 的运营账号不等于进得了
+       运营平台。根码由授权闭包自动授予；没有的一律 403。本人与能力码两个端点例外——
+       门户靠它们说清「没有进入本平台的权限」。 */
+    const path = (req.originalUrl.split("?")[0] ?? "").replace(/\/+$/, "");
+    if (
+      !capabilities.includes(PLANE_ROOT) &&
+      !PLANE_GATE_EXEMPT_PATHS.has(path)
+    ) {
+      res.status(403).json({
+        code: "NOT_ENTITLED",
+        message: `Missing ${PLANE_ROOT} capability`,
+        retryable: false,
+        statusCode: 403,
+      });
+      return;
+    }
     next();
   }
 }

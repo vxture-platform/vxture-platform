@@ -1,6 +1,6 @@
 /**
  * denied-audit.ts — 被拒的写操作也要留痕（product_251 X-3）。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * ## 为什么单独一层
@@ -28,10 +28,10 @@
  *
  * ## 保真度：比成功路径低，这是诚实的说明不是免责
  *
- * 过滤器看得见的是 **HTTP**，不是领域动词。成功行能写 `governance.maintenance.start`，
- * 这里只能从路径推 `maintenance_window.start`。**能答的是「谁、对哪类对象、想做什么、
+ * 过滤器看得见的是 **HTTP**，不是领域动词。成功行能写 `operator.role.permissions.update`，
+ * 这里只能从路径推 `operator_role.permissions`。**能答的是「谁、对哪类对象、想做什么、
  * 被什么码拒了」**，答不了业务语义上的精确动作名。`error_code` 存封套里的码——那一格
- * 往往比 action 更有用（`NOT_ENTITLED` 与 `MAINTENANCE_WINDOW_READ_ONLY` 是两回事）。
+ * 往往比 action 更有用（`NOT_ENTITLED` 与 `STEP_UP_REQUIRED` 是两回事）。
  */
 import { extractClientIp } from "@vxture/core-utils";
 import type { Request } from "express";
@@ -47,17 +47,18 @@ const DENIED_STATUSES = new Set([403, 409]);
 /**
  * 路径首段 → 审计里的 `resource_type`。
  *
- * 显式映射而不是机械去复数：成功行写的是 `maintenance_window`（单数），两边对不上
+ * 显式映射而不是机械去复数：成功行写的是 `operator_role`（单数），两边对不上
  * 就等于查不到一起去——而「查得到一起」正是记这行的全部意义。未登记的段原样落，
  * 保证新路由不会因为忘了改这张表而**不留痕**（宁可类型名难看，不可无记录）。
  */
 const RESOURCE_TYPES: Record<string, string> = {
-  products: "product",
-  "oidc-clients": "oidc_client",
-  "maintenance-windows": "maintenance_window",
-  "tenancy-directory": "tenancy_directory",
-  atlas: "atlas_proxy",
-  runos: "runos_proxy",
+  "platform-admins": "operator_account",
+  "admin-roles": "operator_role",
+  "admin-permissions": "operator_permission",
+  "risk-records": "risk_record",
+  "compliance-events": "compliance_event",
+  "system-parameters": "platform_setting",
+  "feature-toggles": "feature_flag",
 };
 
 const HTTP_VERBS: Record<string, string> = {
@@ -74,7 +75,7 @@ const DENIED_AUDIT_INSERT_SQL = `
 insert into support.audit_logs
   (actor_type, actor_console, actor_id, action, result, resource_type, resource_id, error_code, ip_address, user_agent)
 values
-  ('operator', 'opera', $1, $2, 'denied', $3, $4, $5, $6, $7)
+  ('operator', 'arche', $1, $2, 'denied', $3, $4, $5, $6, $7)
 `;
 
 export function shouldAuditDenial(req: Request, status: number): boolean {

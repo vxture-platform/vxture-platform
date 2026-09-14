@@ -423,9 +423,36 @@ const STEP_UP_REQUIRED = new Set([
    * `expiresAt`，改价格走「POST 新版本 + 让旧的过期」，是追加写且有 `asOf`。
    *
    * 若 atlas 的 TD-038 落地（给策略上追加写 + `asOf`），本条应当撤回——那时它就和价格
-   * 规则同构了。撤回的判据写在这里，免得它变成一条没人敢动的遗留标记。 */
-  "model:policy.update",
+   * 规则同构了。撤回的判据写在这里，免得它变成一条没人敢动的遗留标记。
+   *
+   * 2026-09-14 随三平台拆分改名 `model:policy.update` → `pricing:policy.update`：
+   * 计价与策略页在 admin，`model:` 域归 opera。 */
+  "pricing:policy.update",
 ]);
+
+/**
+ * 三平台归属：**一个域只属于一个平台**（owner 2026-09-14：三个平台严格隔离，BFF
+ * 之间不能互相引用，可以重复但不能耦合）。
+ *
+ * 判据是「哪个 BFF 检查这个码」。两个平台都要的能力各自注册一个码，而不是共用一个
+ * ——共用码意味着在一处授权会顺带打开另一个平台的门。菜单树的三个根
+ * （`admin.plane` / `opera.plane` / `arche.plane`）与本表一一对应，
+ * `scripts/guardrails/check-operator-planes.mjs` 按本表核对 seed、三个 BFF 与三个门户。
+ */
+export const OPERATOR_PLANE_DOMAINS = {
+  admin: [
+    "tenant",
+    "user",
+    "commerce",
+    "promotion",
+    "product",
+    "content",
+    "support",
+    "pricing",
+  ],
+  opera: ["model", "capability", "integration", "ops"],
+  arche: ["operator", "audit", "compliance", "risk", "config"],
+};
 
 const OPERATOR_PERMISSIONS = [
   ["tenant:profile.read", "View tenant profiles"],
@@ -434,8 +461,7 @@ const OPERATOR_PERMISSIONS = [
   ["tenant:quota.read", "View tenant quota"],
   ["tenant:quota.manage", "Adjust tenant quota"],
   ["tenant:lifecycle.suspend", "Suspend/close tenant (high-risk)"],
-  ["tenant:risk.read", "View tenant risk records"],
-  ["tenant:risk.manage", "Manage tenant risk records"],
+
   ["user:profile.read", "View users (masked)"],
   ["user:pii.read", "View plaintext PII (high-risk)"],
   [
@@ -474,6 +500,12 @@ const OPERATOR_PERMISSIONS = [
   ["product:plan.manage", "Manage plans"],
   ["product:price.read", "View pricing"],
   ["product:price.manage", "Manage pricing"],
+  ["product:capability.read", "View the capability catalog"],
+  [
+    "pricing:model.read",
+    "View models for pricing",
+    "View providers, models, quotas and usage summaries behind price rules and policies",
+  ],
   ["model:provider.read", "View model providers"],
   ["model:provider.manage", "Manage model providers"],
   ["model:model.read", "View models"],
@@ -491,44 +523,53 @@ const OPERATOR_PERMISSIONS = [
    * **不注册 `grant` 组**：tenant↔model 授权轴在退役(#129 已删管理面),给退役中的轴
    * 注册权限码正是 atlas 自己反对空码的那句话。
    * **`endpoint` 组等 atlas 改名**：`endpoints` 是通则点名的两义撞名,runos 已改自己那半。 */
-  ["model:price_rule.create", "Create model price rule"],
-  ["model:price_rule.update", "Update model price rule (expiresAt only)"],
-  ["model:price_rule.activate", "Activate model price rule"],
-  ["model:price_rule.deactivate", "Deactivate model price rule"],
-  ["model:price_rule.delete", "Soft-delete model price rule"],
-  ["model:policy.create", "Create model policy"],
+  ["pricing:price_rule.create", "Create model price rule"],
+  ["pricing:price_rule.update", "Update model price rule (expiresAt only)"],
+  ["pricing:price_rule.activate", "Activate model price rule"],
+  ["pricing:price_rule.deactivate", "Deactivate model price rule"],
+  ["pricing:price_rule.delete", "Soft-delete model price rule"],
+  ["pricing:policy.create", "Create model policy"],
   [
-    "model:policy.update",
+    "pricing:policy.update",
     "Update model policy (high-risk)",
     "In-place overwrite of rate/concurrency/context limits; no history surface (high-risk)",
   ],
-  ["model:policy.activate", "Activate model policy"],
-  ["model:policy.deactivate", "Deactivate model policy"],
-  ["model:policy.delete", "Soft-delete model policy"],
+  ["pricing:policy.activate", "Activate model policy"],
+  ["pricing:policy.deactivate", "Deactivate model policy"],
+  ["pricing:policy.delete", "Soft-delete model policy"],
   ["capability:runos.read", "View runos capabilities and endpoints"],
   [
     "capability:runos.manage",
     "Register / promote runos capabilities and endpoints",
   ],
-  ["release:feature_flag.read", "View feature flags"],
-  ["release:feature_flag.manage", "Manage feature flags"],
-  ["release:maintenance.read", "View maintenance windows"],
-  ["release:maintenance.manage", "Manage maintenance windows"],
-  ["platform:setting.read", "View platform settings (sensitive masked)"],
-  ["platform:setting.manage", "Manage platform settings (system config)"],
-  ["platform:product.read", "View the product catalog"],
-  ["platform:product.manage", "Register / edit products, manage OIDC clients"],
+  ["integration:product.read", "View the product registry"],
+  [
+    "integration:product.manage",
+    "Register / edit products, manage OIDC clients",
+  ],
+  ["ops:maintenance.read", "View maintenance windows"],
+  ["ops:maintenance.manage", "Manage maintenance windows"],
+  ["ops:job.read", "View background job status"],
+  ["ops:change.read", "View the opera change trail"],
   ["content:announcement.read", "View announcements"],
   ["content:announcement.manage", "Manage announcements"],
-  ["notification:log.read", "View notification delivery logs"],
+  ["content:notification_log.read", "View recent notification deliveries"],
   ["support:ticket.read", "View tickets"],
   ["support:ticket.manage", "Manage tickets"],
   ["support:impersonate", "Impersonate customer (high-risk)"],
-  ["compliance:event.read", "View compliance events"],
-  ["compliance:event.manage", "Manage compliance events"],
   ["operator:account.manage", "Manage operator accounts (high-risk)"],
   ["operator:role.manage", "Manage operator roles (high-risk)"],
-  ["audit:read", "View audit logs"],
+  ["operator:session.read", "View operator sign-in attempts and sessions"],
+  ["audit:log.read", "View audit logs"],
+  ["audit:notification_log.read", "View notification delivery logs"],
+  ["risk:record.read", "View risk records"],
+  ["risk:record.manage", "Manage risk records"],
+  ["compliance:event.read", "View compliance events"],
+  ["compliance:event.manage", "Manage compliance events"],
+  ["config:parameter.read", "View platform parameters (sensitive masked)"],
+  ["config:parameter.manage", "Manage platform parameters"],
+  ["config:feature_flag.read", "View feature flags"],
+  ["config:feature_flag.manage", "Manage feature flags"],
 ];
 
 // Operator roles: [role_code, rank, name_en, i18n_key, description, sort, mfa_min_level].
@@ -615,31 +656,25 @@ const OPERATOR_ROLES = [
 
 // ══ Operator menu tree (admin.operator_permission 的 menu 层) ═════════════════
 //
-// 这张表此前只有 59 条 perm_type='api' 的操作码，全部 parent_id = NULL——于是
-// 「权限策略」页拿不到任何层级：它按 `admin.workspace.tenant_ops` /
-// `admin.workspace.platform` 两个根锚点分域（见 AdminPermissionsPage 的
-// `resolvePermissionDomain`），两个码都不存在，59 条便全落进兜底分组
-// 「基础系统权限」，L1/L2/L3 计数恒为 0，展开钮全灰。
+// 三个平台各一棵树，层级就是各自门户侧栏的信息架构：
 //
-// 层级判据不是新发明的，就是运营台侧栏自己的信息架构
-// （`portals/admin/src/config/navigation.ts`：workspace → section → item）：
+//   L0  平台    admin.plane 运营 / opera.plane 运维 / arche.plane 治理
+//   L1  板块    侧栏分组（{plane}.menu.*）
+//   L2  页面    侧栏条目，带 route_path（与门户实际路由一致）
+//   L3  操作    api 码，挂在它实际作用的那个页面下
 //
-//   L0  域      运营业务域 / 平台自治域          ← 页面分域的锚点
-//   L1  板块    租户账号、订阅交易、安全审计…    ← 侧栏分组
-//   L2  页面    租户信息、交易订单…              ← 侧栏条目，带 route_path
-//   L3  操作    tenant:profile.manage…           ← 既有的 api 码
+// 三个平台的操作员都是平台运营人员（不是租户、不是用户），所以三个根同形
+// （owner 2026-09-14）。此前的两个根 `admin.workspace.tenant_ops` /
+// `admin.workspace.platform` 名字不统一且有歧义，opera 没有根，其码挂在 admin 页面下
+// ——由 migrations/2026-10-03-operator-three-planes.sql 改正。
 //
-// 叶子挂在**它实际作用的那个页面**下，而不是按 perm_code 的域前缀分——
-// `tenant:risk.*` 前缀是 tenant，但风险记录页在平台自治域的「安全审计」板块下，
-// 就挂那儿。前缀是命名空间，不是归属。
-//
-// 菜单码沿用 navigation.ts 里每个 section/item 已有的 `code`，加
-// `admin.menu.` 前缀；域锚点用页面已经在找的那两个常量。没有对应操作码的页面
-// 就是叶子菜单节点，不补造操作码。
+// **码的域决定平台**（OPERATOR_PLANE_DOMAINS），操作码只能挂在本平台的页面下；
+// 平台根码是进入该平台的门（三个 BFF 中间件检查），由下面的祖先闭包自动授予。
+// 没有对应操作码的页面就是叶子菜单节点，不补造操作码。
 const MENU_TREE = [
   {
-    code: "admin.workspace.tenant_ops",
-    name: "运营业务域",
+    code: "admin.plane",
+    name: "运营平台",
     icon: "buildings",
     children: [
       {
@@ -700,7 +735,6 @@ const MENU_TREE = [
             code: "admin.menu.product_capability",
             name: "产品能力",
             route: "/products",
-            perms: ["platform:product.read", "platform:product.manage"],
           },
           {
             code: "admin.menu.solution_package",
@@ -786,12 +820,29 @@ const MENU_TREE = [
         code: "admin.menu.model_skill",
         name: "模型技能",
         children: [
-          // `admin.menu.model_access`(/model-grants「模型授权」)随 #129 退役,批 8 摘掉节点。
+          {
+            code: "admin.menu.model_gateway",
+            name: "模型计价与策略",
+            route: "/atlas",
+            perms: [
+              "pricing:model.read",
+              "pricing:price_rule.create",
+              "pricing:price_rule.update",
+              "pricing:price_rule.activate",
+              "pricing:price_rule.deactivate",
+              "pricing:price_rule.delete",
+              "pricing:policy.create",
+              "pricing:policy.update",
+              "pricing:policy.activate",
+              "pricing:policy.deactivate",
+              "pricing:policy.delete",
+            ],
+          },
           {
             code: "admin.menu.skill_market",
-            name: "技能市场",
+            name: "能力目录",
             route: "/skills",
-            perms: ["capability:runos.read", "capability:runos.manage"],
+            perms: ["product:capability.read"],
           },
         ],
       },
@@ -850,96 +901,211 @@ const MENU_TREE = [
             code: "admin.menu.notification_message",
             name: "消息公告",
             route: "/announcements",
-            perms: ["content:announcement.read", "content:announcement.manage"],
+            perms: [
+              "content:announcement.read",
+              "content:announcement.manage",
+              "content:notification_log.read",
+            ],
           },
         ],
       },
     ],
   },
   {
-    code: "admin.workspace.platform",
-    name: "平台自治域",
-    icon: "shield-check",
+    // 与 portals/opera/src/config/navigation.ts 的分组逐项对应。
+    code: "opera.plane",
+    name: "运维平台",
+    icon: "server",
     children: [
-      // 「平台总览」这个 section 只有一个同名条目，不造冗余的分组层。
+      { code: "opera.menu.overview", name: "总览", route: "/" },
       {
-        code: "admin.menu.platform_overview",
-        name: "平台总览",
-        route: "/platform",
-      },
-      {
-        code: "admin.menu.identity_access",
-        name: "身份权限",
+        code: "opera.menu.model_management",
+        name: "模型管理",
         children: [
           {
-            code: "admin.menu.platform_admin",
-            name: "平台用户",
-            route: "/platform-admins",
-            perms: ["operator:account.manage"],
-          },
-          {
-            code: "admin.menu.platform_role",
-            name: "平台角色",
-            route: "/admin-roles",
-            perms: ["operator:role.manage"],
-          },
-          {
-            code: "admin.menu.permission_policy",
-            name: "权限策略",
-            route: "/admin-permissions",
-          },
-        ],
-      },
-      {
-        code: "admin.menu.platform_resource",
-        name: "平台资源",
-        children: [
-          {
-            code: "admin.menu.model_gateway",
-            name: "模型平台",
-            route: "/atlas",
+            code: "opera.menu.model_service",
+            name: "模型服务",
+            route: "/model/services",
             perms: [
               "model:provider.read",
               "model:provider.manage",
               "model:model.read",
               "model:model.manage",
-              "model:price_rule.create",
-              "model:price_rule.update",
-              "model:price_rule.activate",
-              "model:price_rule.deactivate",
-              "model:price_rule.delete",
-              "model:policy.create",
-              "model:policy.update",
-              "model:policy.activate",
-              "model:policy.deactivate",
-              "model:policy.delete",
             ],
           },
-          // 密钥管理 / 审批中心 / 字典管理 / 通知渠道四个菜单节点 2026-08-31 退役
-          // （owner 2026-08-30：上线前摘掉永远为空的菜单项，40-menu.md 1.2.0）。
-          // 存量库的行由 migrations/2026-08-31-admin-retire-empty-menus.sql 删除，
-          // 本 seed 只是不再写入。
+          {
+            code: "opera.menu.model_route",
+            name: "模型路由",
+            route: "/model/routes",
+          },
+          {
+            code: "opera.menu.model_grant",
+            name: "路由授权",
+            route: "/model/grants",
+          },
+          {
+            code: "opera.menu.model_key",
+            name: "调用密钥",
+            route: "/model/keys",
+          },
+          {
+            code: "opera.menu.model_metering",
+            name: "用量计量",
+            route: "/model/metering",
+          },
         ],
       },
       {
-        code: "admin.menu.security_audit",
+        code: "opera.menu.capability_management",
+        name: "能力管理",
+        children: [
+          {
+            code: "opera.menu.capability_registry",
+            name: "能力注册",
+            route: "/capability/registry",
+            perms: ["capability:runos.read", "capability:runos.manage"],
+          },
+          {
+            code: "opera.menu.capability_credential",
+            name: "凭证托管",
+            route: "/capability/credentials",
+          },
+          {
+            code: "opera.menu.capability_grant",
+            name: "能力授权",
+            route: "/capability/grants",
+          },
+          {
+            code: "opera.menu.capability_metering",
+            name: "用量计量",
+            route: "/capability/metering",
+          },
+        ],
+      },
+      {
+        code: "opera.menu.product_management",
+        name: "产品管理",
+        children: [
+          {
+            code: "opera.menu.product_catalog",
+            name: "产品目录",
+            route: "/product/catalog",
+            perms: ["integration:product.read", "integration:product.manage"],
+          },
+          {
+            code: "opera.menu.product_client",
+            name: "接入凭据",
+            route: "/product/clients",
+          },
+          {
+            code: "opera.menu.product_entitlement",
+            name: "权益配置",
+            route: "/product/entitlements",
+          },
+        ],
+      },
+      {
+        code: "opera.menu.runtime_monitor",
+        name: "运行监控",
+        children: [
+          {
+            code: "opera.menu.ops_health",
+            name: "服务状态",
+            route: "/ops/health",
+          },
+          {
+            code: "opera.menu.ops_metric",
+            name: "运行指标",
+            route: "/ops/metrics",
+          },
+          { code: "opera.menu.ops_log", name: "调用日志", route: "/ops/logs" },
+          {
+            code: "opera.menu.ops_job",
+            name: "任务调度",
+            route: "/ops/jobs",
+            perms: ["ops:job.read"],
+          },
+          {
+            code: "opera.menu.ops_maintenance",
+            name: "维护窗口",
+            route: "/ops/maintenance",
+            perms: ["ops:maintenance.read", "ops:maintenance.manage"],
+          },
+        ],
+      },
+      {
+        code: "opera.menu.security_audit",
         name: "安全审计",
         children: [
           {
-            code: "admin.menu.audit_log",
+            code: "opera.menu.audit_change",
+            name: "变更审计",
+            route: "/audit/changes",
+            perms: ["ops:change.read"],
+          },
+        ],
+      },
+      {
+        code: "opera.menu.system_setting",
+        name: "系统配置",
+        route: "/settings",
+      },
+    ],
+  },
+  {
+    // 与 portals/arche/src/config/navigation.ts 的分组逐项对应。
+    code: "arche.plane",
+    name: "治理平台",
+    icon: "shield-check",
+    children: [
+      { code: "arche.menu.overview", name: "治理总览", route: "/" },
+      {
+        code: "arche.menu.identity_access",
+        name: "身份权限",
+        children: [
+          {
+            code: "arche.menu.platform_admin",
+            name: "平台用户",
+            route: "/admins",
+            perms: ["operator:account.manage"],
+          },
+          {
+            code: "arche.menu.platform_role",
+            name: "平台角色",
+            route: "/roles",
+            perms: ["operator:role.manage"],
+          },
+          {
+            code: "arche.menu.permission_policy",
+            name: "权限策略",
+            route: "/permissions",
+          },
+          {
+            code: "arche.menu.sign_in_session",
+            name: "登录与会话",
+            route: "/sessions",
+            perms: ["operator:session.read"],
+          },
+        ],
+      },
+      {
+        code: "arche.menu.security_audit",
+        name: "安全审计",
+        children: [
+          {
+            code: "arche.menu.audit_log",
             name: "审计日志",
             route: "/audit-logs",
-            perms: ["audit:read"],
+            perms: ["audit:log.read"],
           },
           {
-            code: "admin.menu.risk_record",
+            code: "arche.menu.risk_record",
             name: "风险记录",
             route: "/risk-records",
-            // 码前缀是 tenant:，但风险记录页在自治域的安全审计板块下。
-            perms: ["tenant:risk.read", "tenant:risk.manage"],
+            perms: ["risk:record.read", "risk:record.manage"],
           },
           {
-            code: "admin.menu.compliance_event",
+            code: "arche.menu.compliance_event",
             name: "合规事件",
             route: "/compliance-events",
             perms: ["compliance:event.read", "compliance:event.manage"],
@@ -947,42 +1113,32 @@ const MENU_TREE = [
         ],
       },
       {
-        code: "admin.menu.system_setting",
+        code: "arche.menu.system_config",
         name: "系统配置",
         children: [
           {
-            code: "admin.menu.system_setting_general",
-            name: "系统设置",
-            route: "/settings",
-            perms: [
-              "platform:setting.read",
-              "platform:setting.manage",
-              "release:maintenance.read",
-              "release:maintenance.manage",
-            ],
-          },
-          {
-            code: "admin.menu.system_parameter",
+            code: "arche.menu.system_parameter",
             name: "参数配置",
             route: "/system-parameters",
+            perms: ["config:parameter.read", "config:parameter.manage"],
           },
           {
-            code: "admin.menu.feature_toggle",
+            code: "arche.menu.feature_toggle",
             name: "开关控制",
             route: "/feature-toggles",
-            perms: ["release:feature_flag.read", "release:feature_flag.manage"],
+            perms: ["config:feature_flag.read", "config:feature_flag.manage"],
           },
         ],
       },
       {
-        code: "admin.menu.notification_center",
-        name: "通知中心",
+        code: "arche.menu.notification_audit",
+        name: "通知审计",
         children: [
           {
-            code: "admin.menu.notification_log",
+            code: "arche.menu.notification_log",
             name: "发送记录",
             route: "/notification-logs",
-            perms: ["notification:log.read"],
+            perms: ["audit:notification_log.read"],
           },
         ],
       },
@@ -1040,8 +1196,8 @@ const OPERATOR_ROLE_PERMS = {
     "tenant:quota.read",
     "tenant:quota.manage",
     "tenant:lifecycle.suspend",
-    "tenant:risk.read",
-    "tenant:risk.manage",
+    "risk:record.read",
+    "risk:record.manage",
     "compliance:event.read",
     "compliance:event.manage",
     "user:profile.read",
@@ -1072,22 +1228,27 @@ const OPERATOR_ROLE_PERMS = {
     "model:provider.manage",
     "model:model.read",
     "model:model.manage",
+    "pricing:model.read",
     "capability:runos.read",
+    "product:capability.read",
+    "ops:job.read",
+    "ops:change.read",
     "capability:runos.manage",
-    "release:feature_flag.read",
-    "release:feature_flag.manage",
-    "release:maintenance.read",
-    "release:maintenance.manage",
-    "platform:setting.read",
-    "platform:product.read",
-    "platform:product.manage",
+    "config:feature_flag.read",
+    "config:feature_flag.manage",
+    "ops:maintenance.read",
+    "ops:maintenance.manage",
+    "config:parameter.read",
+    "integration:product.read",
+    "integration:product.manage",
     "content:announcement.read",
     "content:announcement.manage",
-    "notification:log.read",
+    "content:notification_log.read",
+    "audit:notification_log.read",
     "support:ticket.read",
     "support:ticket.manage",
     "support:impersonate",
-    "audit:read",
+    "audit:log.read",
   ],
   operation: [
     "tenant:profile.read",
@@ -1095,8 +1256,8 @@ const OPERATOR_ROLE_PERMS = {
     "tenant:verification.review",
     "tenant:quota.read",
     "tenant:quota.manage",
-    "tenant:risk.read",
-    "tenant:risk.manage",
+    "risk:record.read",
+    "risk:record.manage",
     "user:profile.read",
     "commerce:subscription.read",
     "commerce:order.read",
@@ -1108,9 +1269,12 @@ const OPERATOR_ROLE_PERMS = {
     "model:provider.read",
     "model:model.read",
     "capability:runos.read",
-    "platform:product.read",
-    "release:feature_flag.read",
-    "release:maintenance.read",
+    "product:capability.read",
+    "ops:job.read",
+    "ops:change.read",
+    "integration:product.read",
+    "config:feature_flag.read",
+    "ops:maintenance.read",
     "content:announcement.read",
     "content:announcement.manage",
     "support:ticket.read",
@@ -1146,18 +1310,23 @@ const OPERATOR_ROLE_PERMS = {
     "model:provider.manage",
     "model:model.read",
     "model:model.manage",
+    "pricing:model.read",
     "capability:runos.read",
+    "product:capability.read",
+    "ops:job.read",
+    "ops:change.read",
     "capability:runos.manage",
-    "release:feature_flag.read",
-    "release:feature_flag.manage",
-    "release:maintenance.read",
-    "release:maintenance.manage",
-    "platform:setting.read",
-    "platform:setting.manage",
-    "platform:product.read",
-    "platform:product.manage",
+    "config:feature_flag.read",
+    "config:feature_flag.manage",
+    "ops:maintenance.read",
+    "ops:maintenance.manage",
+    "config:parameter.read",
+    "config:parameter.manage",
+    "integration:product.read",
+    "integration:product.manage",
     "content:announcement.read",
-    "notification:log.read",
+    "content:notification_log.read",
+    "audit:notification_log.read",
   ],
   support: [
     "tenant:profile.read",
@@ -1166,12 +1335,13 @@ const OPERATOR_ROLE_PERMS = {
     "commerce:order.read",
     "support:ticket.read",
     "support:ticket.manage",
-    "notification:log.read",
+    "content:notification_log.read",
+    "audit:notification_log.read",
   ],
   auditor: [
     "tenant:profile.read",
     "tenant:quota.read",
-    "tenant:risk.read",
+    "risk:record.read",
     "compliance:event.read",
     "user:profile.read",
     "commerce:subscription.read",
@@ -1184,14 +1354,19 @@ const OPERATOR_ROLE_PERMS = {
     "model:provider.read",
     "model:model.read",
     "capability:runos.read",
-    "platform:product.read",
-    "release:feature_flag.read",
-    "release:maintenance.read",
-    "platform:setting.read",
+    "product:capability.read",
+    "ops:job.read",
+    "ops:change.read",
+    "integration:product.read",
+    "config:feature_flag.read",
+    "ops:maintenance.read",
+    "config:parameter.read",
     "content:announcement.read",
-    "notification:log.read",
+    "content:notification_log.read",
+    "audit:notification_log.read",
     "support:ticket.read",
-    "audit:read",
+    "audit:log.read",
+    "operator:session.read",
   ],
 };
 
@@ -1289,9 +1464,11 @@ export async function seedCatalog(client) {
     await client.query(
       `
       insert into admin.operator_role
-        (id, role_code, status, role_name, role_name_key, description, description_key, is_system, sort, rank, mfa_min_level, is_workforce_visible)
-      values (coalesce($1::uuid, gen_random_uuid()), $2, 'active', $3, $4, $5, $6, true, $7, $8, $9, $10)
-      on conflict (role_code) do update set rank = excluded.rank, is_workforce_visible = excluded.is_workforce_visible
+        (id, role_code, status, role_name, role_name_key, description, description_key, is_system, sort, rank, mfa_min_level, is_workforce_visible, created_by, updated_by)
+      values (coalesce($1::uuid, gen_random_uuid()), $2, 'active', $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $11)
+      -- 预置角色的创建人是 systemadmin（SYS），列表上不许出现凭空的「-」。
+      on conflict (role_code) do update set rank = excluded.rank, is_workforce_visible = excluded.is_workforce_visible,
+        created_by = coalesce(admin.operator_role.created_by, excluded.created_by)
     `,
       [
         OP_ROLE_PINNED[code] ?? null,
@@ -1304,6 +1481,7 @@ export async function seedCatalog(client) {
         rank,
         mfa,
         code !== "sys_config",
+        SYS,
       ],
     );
   }
@@ -1418,11 +1596,11 @@ export async function seedCatalog(client) {
       [
         node.code,
         node.name,
-        `ops.menu.${node.code.replace(/^admin\./, "")}`,
+        `ops.${node.code}`,
         node.parent,
         node.route,
         node.icon,
-        `ops.menu.${node.code.replace(/^admin\./, "")}.desc`,
+        `ops.${node.code}.desc`,
         node.sort,
         SYS,
       ],

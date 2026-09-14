@@ -1,6 +1,6 @@
 /**
  * step-up.guard.ts — 在高危路由上强制一枚新鲜的 step-up 凭证。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * 全局守卫，由 `@RequireStepUp()` 元数据触发（`product_250` v0.4：step-up 的执行位

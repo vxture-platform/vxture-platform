@@ -14,7 +14,7 @@ import {
   shouldAuditDenial,
 } from "./denied-audit";
 
-const req = (method: string, originalUrl = "/api/products/x") =>
+const req = (method: string, originalUrl = "/api/risk-records/x") =>
   ({ method, originalUrl, headers: {} }) as unknown as Request;
 
 group("口径：哪些拒绝值得留痕", () => {
@@ -38,19 +38,18 @@ group("口径：哪些拒绝值得留痕", () => {
 });
 
 group("路径推导 —— 与成功行查得到一起去", () => {
-  /* 成功行写的是 `maintenance_window`（单数）。两边对不上就等于查不到一起，
+  /* 成功行写的是 `operator_role`（单数）。两边对不上就等于查不到一起，
      而「查得到一起」正是记这行的全部意义。 */
   it("resource_type 与成功路径同名（单数）", () => {
     expect(
-      describeRequest(req("PUT", "/api/maintenance-windows/abc")).resourceType,
-    ).toBe("maintenance_window");
-    expect(describeRequest(req("POST", "/api/products")).resourceType).toBe(
-      "product",
-    );
+      describeRequest(req("PUT", "/api/admin-roles/abc")).resourceType,
+    ).toBe("operator_role");
     expect(
-      describeRequest(req("POST", "/api/oidc-clients/vxtpl/activate"))
-        .resourceType,
-    ).toBe("oidc_client");
+      describeRequest(req("POST", "/api/platform-admins")).resourceType,
+    ).toBe("operator_account");
+    expect(
+      describeRequest(req("POST", "/api/system-parameters/abc")).resourceType,
+    ).toBe("platform_setting");
   });
 
   it("未登记的段原样落——宁可类型名难看，不可无记录", () => {
@@ -59,41 +58,45 @@ group("路径推导 —— 与成功行查得到一起去", () => {
     ).toBe("brand_new_thing");
   });
 
-  it("动作取末段（start / activate / state）", () => {
+  it("动作取末段（disable / toggle / resolve）", () => {
     expect(
-      describeRequest(req("POST", "/api/maintenance-windows/abc/start")).action,
-    ).toBe("maintenance_window.start");
+      describeRequest(req("POST", "/api/platform-admins/abc/disable")).action,
+    ).toBe("operator_account.disable");
     expect(
-      describeRequest(req("POST", "/api/oidc-clients/vxtpl/deactivate")).action,
-    ).toBe("oidc_client.deactivate");
+      describeRequest(req("POST", "/api/feature-toggles/billing.v2/toggle"))
+        .action,
+    ).toBe("feature_flag.toggle");
   });
 
   it("末段就是对象本身时，用 HTTP 方法的语义词", () => {
     const uuid = "0c4fa6cc-a86d-4e96-98cd-deacc0b38b46";
-    expect(
-      describeRequest(req("PUT", `/api/maintenance-windows/${uuid}`)).action,
-    ).toBe("maintenance_window.replace");
-    expect(describeRequest(req("POST", "/api/products")).action).toBe(
-      "product.create",
+    expect(describeRequest(req("PUT", `/api/admin-roles/${uuid}`)).action).toBe(
+      "operator_role.replace",
+    );
+    expect(describeRequest(req("POST", "/api/risk-records")).action).toBe(
+      "risk_record.create",
     );
   });
 
   it("resource_id 取 uuid；没有 uuid 时取可视码；都没有落 `-`（列 NOT NULL）", () => {
     const uuid = "0c4fa6cc-a86d-4e96-98cd-deacc0b38b46";
     expect(
-      describeRequest(req("PATCH", `/api/products/${uuid}/state`)).resourceId,
+      describeRequest(req("POST", `/api/compliance-events/${uuid}/resolve`))
+        .resourceId,
     ).toBe(uuid);
     expect(
-      describeRequest(req("POST", "/api/oidc-clients/vxtpl/activate"))
+      describeRequest(req("POST", "/api/feature-toggles/billing.v2/toggle"))
         .resourceId,
-    ).toBe("vxtpl");
-    expect(describeRequest(req("POST", "/api/products")).resourceId).toBe("-");
+    ).toBe("billing.v2");
+    expect(describeRequest(req("POST", "/api/risk-records")).resourceId).toBe(
+      "-",
+    );
   });
 
   it("查询串不进推导", () => {
     expect(
-      describeRequest(req("PUT", "/api/products/abc?force=1")).action,
-    ).toBe("product.replace");
+      describeRequest(req("PUT", "/api/admin-roles/abc?force=1")).action,
+    ).toBe("operator_role.replace");
   });
 });
 
@@ -110,23 +113,25 @@ group("没有主体就写不了", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("有 operator 时按 opera 常量落库", async () => {
+  /* 发起面写 `arche`，不是抄过来时的 `opera`：三个平台的留痕各归各的，
+     opera 的变更审计只读 `actor_console = 'opera'` 的行。 */
+  it("有 operator 时按 arche 常量落库", async () => {
     const query = vi.fn<
       (sql: string, params: unknown[]) => Promise<{ rows: [] }>
     >(() => Promise.resolve({ rows: [] }));
     const request = {
-      ...req("POST", "/api/products/abc/state"),
+      ...req("POST", "/api/risk-records/abc/review"),
       operator: { id: "00000000-0000-4000-a000-000000000011" },
     };
     await insertDeniedAuditLog(
       { query } as unknown as Pool,
       request as never,
-      "CATALOG_INVALID_STATE_TRANSITION",
+      "RISK_RECORD_INVALID_STATE",
     );
     const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain("'operator', 'opera'");
+    expect(sql).toContain("'operator', 'arche'");
     expect(sql).toContain("'denied'");
     expect(params[0]).toBe("00000000-0000-4000-a000-000000000011");
-    expect(params).toContain("CATALOG_INVALID_STATE_TRANSITION");
+    expect(params).toContain("RISK_RECORD_INVALID_STATE");
   });
 });

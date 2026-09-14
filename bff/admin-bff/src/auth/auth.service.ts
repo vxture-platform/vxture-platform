@@ -13,9 +13,9 @@ const LEGACY_CAPABILITY_BRIDGE: Record<string, string[]> = {
   // product:price.manage → platform.pricing.manage retired (TD-027): the finance
   // routers that borrowed it now check commerce:* domain codes; no admin router
   // consumes platform.pricing.manage anymore.
-  "model:model.manage": ["platform.model.manage"],
-  "model:provider.manage": ["platform.model.manage"],
-  "audit:read": ["platform.audit.read"],
+  // model:*.manage → platform.model.manage 与 audit:read → platform.audit.read 两条
+  // 2026-09-14 摘掉：前者是 opera 的码，后者是 arche 的码，三平台严格隔离，admin 不认
+  // 别的平台的码（/atlas 的读门改为 admin 自己的 pricing:model.read）。
 };
 
 /**

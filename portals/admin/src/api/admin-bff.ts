@@ -42,7 +42,6 @@ import type {
   SessionSnapshot,
   RunosCapabilityDetailRecord,
   RunosCapabilityRecord,
-  RunosManagementEntry,
   SupportTicketRecord,
   SubscriptionOperationAction,
   SubscriptionOperationDetailRecord,
@@ -1725,17 +1724,6 @@ export async function fetchRunosCapability(
   );
 }
 
-/**
- * 「去 opera 能力注册管理」的链接。拿不到（无权限 / BFF 没配 OPERA_BASE_URL）就不
- * 渲染那个按钮——所以这一条走 readJson 回 null，而不是抛。
- */
-export async function fetchRunosManagementEntry(): Promise<RunosManagementEntry | null> {
-  return readJson<RunosManagementEntry | null>(
-    "/api/runos/management-entry",
-    null,
-  );
-}
-
 // ── Announcements 写路径（B8）─────────────────────────────────────────────
 
 export interface AnnouncementWriteInput {
@@ -2086,7 +2074,7 @@ export async function fetchNotificationLogs(
 
 // ── Global search (header ⌘K) ───────────────────────────────────────────────
 
-export type AdminSearchKind = "tenant" | "order" | "operator";
+export type AdminSearchKind = "tenant" | "order";
 
 export interface AdminSearchItem {
   kind: AdminSearchKind;

@@ -11,11 +11,14 @@ import type { RequestContext } from "../types/console.types";
  * 与 console 的同名接口形状一致（`{ query, items, skipped }`，item 自带
  * `href`），但**实现走库侧 ILIKE 而不是内存过滤**。console 那边的数据以租户
  * 为界（成员几十、发票按周期出），扇出到已有读路径再过滤是合算的；admin 是
- * 跨租户视角，租户/订单/操作员都是全平台量级，把 500 行拉进内存再筛既不完整
- * 也不便宜。三条查询各自 limit，命中由数据库判。
+ * 跨租户视角，租户/订单都是全平台量级，把 500 行拉进内存再筛既不完整
+ * 也不便宜。两条查询各自 limit，命中由数据库判。
  *
- * **按能力逐源放行**：三个数据源分别对应 tenants / orders / platform-admins
- * 三个既有列表接口的能力码，缺哪个就跳过哪一段，而不是整体 403。搜索是辅助
+ * 运营账号不在这里搜（2026-09-14 三平台拆分）：运营账号归治理平台 arche 管理，
+ * admin 不认 arche 的码，也不给出指向 arche 的结果。
+ *
+ * **按能力逐源放行**：两个数据源分别对应 tenants / orders
+ * 两个既有列表接口的能力码，缺哪个就跳过哪一段，而不是整体 403。搜索是辅助
  * 入口，一个只管订单的运营人员搜出订单、搜不到租户，是正确结果；给他弹一个
  * 403 才是错的。能力判定只读 `req.capabilities`（中间件已填），不放宽任何
  * 一条既有授权——这里能搜到的，点进去那个页面本来也进得去。
@@ -29,7 +32,7 @@ const PER_KIND_LIMIT = 5;
 /** 低于此长度不检索：一两个字符的命中率约等于"全量返回"。 */
 const MIN_QUERY_LENGTH = 2;
 
-export type AdminSearchResultKind = "tenant" | "order" | "operator";
+export type AdminSearchResultKind = "tenant" | "order";
 
 export interface AdminSearchResultItem {
   kind: AdminSearchResultKind;
@@ -86,26 +89,6 @@ order by sub.created_at desc
 limit ${PER_KIND_LIMIT}
 `;
 
-const OPERATOR_SEARCH_SQL = `
-select
-  a.id,
-  a.username,
-  a.display_name,
-  a.email,
-  r.role_name
-from admin.operator_account a
-join admin.operator_role r on r.id = a.role_id
-where a.deleted_at is null
-  and a.is_workforce_visible = true
-  and (
-    a.username ilike $1
-    or a.display_name ilike $1
-    or a.email ilike $1
-  )
-order by a.sort asc, a.created_at asc
-limit ${PER_KIND_LIMIT}
-`;
-
 interface TenantHitRow {
   id: string;
   name: string | null;
@@ -119,14 +102,6 @@ interface OrderHitRow {
   pay_amount: string | number | null;
   currency: string | null;
   tenant_name: string | null;
-}
-
-interface OperatorHitRow {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  email: string | null;
-  role_name: string | null;
 }
 
 @Controller("api/search")
@@ -151,9 +126,9 @@ export class SearchRouter {
     const caps = req.capabilities ?? [];
     const can = (code: string) => caps.includes(code);
 
-    /* 三源并发。能力不足的源根本不发查询；发出去的源若失败（超时、连接
+    /* 两源并发。能力不足的源根本不发查询；发出去的源若失败（超时、连接
      * 耗尽）只丢自己那一类，不整体 500。 */
-    const [tenants, orders, operators] = await Promise.all([
+    const [tenants, orders] = await Promise.all([
       can("platform.tenant.manage")
         ? this.pool
             .query<TenantHitRow>(TENANT_SEARCH_SQL, [needle])
@@ -163,12 +138,6 @@ export class SearchRouter {
       can("commerce:order.read")
         ? this.pool
             .query<OrderHitRow>(ORDER_SEARCH_SQL, [needle])
-            .then((r) => r.rows)
-            .catch(() => [])
-        : Promise.resolve([]),
-      can("operator:account.manage")
-        ? this.pool
-            .query<OperatorHitRow>(OPERATOR_SEARCH_SQL, [needle])
             .then((r) => r.rows)
             .catch(() => [])
         : Promise.resolve([]),
@@ -195,18 +164,9 @@ export class SearchRouter {
       href: `/orders?order=${encodeURIComponent(row.id)}`,
     }));
 
-    const operatorHits: AdminSearchResultItem[] = operators.map((row) => ({
-      kind: "operator" as const,
-      id: row.id,
-      label: row.display_name ?? row.username ?? row.id,
-      ...(row.email ? { description: row.email } : {}),
-      ...(row.role_name ? { meta: row.role_name } : {}),
-      href: `/platform-admins?admin=${encodeURIComponent(row.id)}`,
-    }));
-
     return {
       query,
-      items: [...tenantHits, ...orderHits, ...operatorHits],
+      items: [...tenantHits, ...orderHits],
       skipped: false,
     };
   }

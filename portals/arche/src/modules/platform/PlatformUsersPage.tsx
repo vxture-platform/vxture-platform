@@ -52,6 +52,7 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { useTableSort } from "@/lib/table-sort";
 import { formatDate, formatNumber } from "@/lib/format";
 import { useStepUp, isStepUpCancelled } from "@/features/stepup/StepUpProvider";
 
@@ -250,6 +251,7 @@ function usePlatformUserColumns(
     {
       id: "user",
       header: "用户",
+      sortable: true,
       cell: (admin) => (
         <TableTitleCell
           icon="user"
@@ -262,7 +264,7 @@ function usePlatformUserColumns(
     {
       id: "status",
       header: tShared("columns.state"),
-      align: "center",
+      sortable: true,
       cell: (admin) => (
         <StatusBadge
           tone={platformAdminStatusTone(admin)}
@@ -275,7 +277,7 @@ function usePlatformUserColumns(
     {
       id: "role",
       header: "角色",
-      align: "center",
+      sortable: true,
       cell: (admin) => (
         <TableTitleCell
           title={platformRoleDisplayName(admin, t)}
@@ -290,6 +292,7 @@ function usePlatformUserColumns(
     {
       id: "login",
       header: "最后登录",
+      sortable: true,
       cell: (admin) => (
         <TableTitleCell
           title={
@@ -304,6 +307,7 @@ function usePlatformUserColumns(
     {
       id: "contact",
       header: "联系方式",
+      sortable: true,
       cell: (admin) => (
         <TableTitleCell
           title={admin.email || EMPTY_MARK}
@@ -792,6 +796,23 @@ export function PlatformUsersPage() {
     });
   }, [admins, query, statusFilter, typeFilter]);
 
+  const userSortAccessors = useMemo(
+    () => ({
+      user: (admin: PlatformAdminRecord) => admin.displayName || admin.username,
+      status: (admin: PlatformAdminRecord) => platformAdminStatusCode(admin),
+      role: (admin: PlatformAdminRecord) => admin.roleRank,
+      login: (admin: PlatformAdminRecord) =>
+        admin.lastLoginAt ? Date.parse(admin.lastLoginAt) : null,
+      contact: (admin: PlatformAdminRecord) => admin.email,
+    }),
+    [],
+  );
+  const {
+    sort: userSort,
+    onSortChange: onUserSortChange,
+    rows: sortedAdmins,
+  } = useTableSort(filteredAdmins, userSortAccessors);
+
   const enabledCount = admins.filter(
     (admin) => platformAdminStatusCode(admin) === "active",
   ).length;
@@ -812,7 +833,7 @@ export function PlatformUsersPage() {
     disabledCount + lockedCount + pendingCount + suspendedCount;
   const pageCount = Math.max(1, Math.ceil(filteredAdmins.length / pageSize));
   const clampedCurrentPage = Math.min(currentPage, pageCount);
-  const visibleAdmins = filteredAdmins.slice(
+  const visibleAdmins = sortedAdmins.slice(
     (clampedCurrentPage - 1) * pageSize,
     clampedCurrentPage * pageSize,
   );
@@ -1153,6 +1174,11 @@ export function PlatformUsersPage() {
               indexStart={(clampedCurrentPage - 1) * pageSize + 1}
               selectedKeys={[...selectedIds]}
               onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+              {...(userSort ? { sort: userSort } : {})}
+              onSortChange={(next) => {
+                onUserSortChange(next);
+                setCurrentPage(1);
+              }}
               rowActions={(admin) => (
                 <PlatformUserActionsMenu
                   admin={admin}

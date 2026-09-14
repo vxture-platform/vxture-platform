@@ -1,13 +1,13 @@
 /**
- * pools.module.ts — opera-bff 的 pg 连接池。
- * @package @vxture/bff-opera
+ * pools.module.ts — arche-bff 的 pg 连接池。
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * 与 admin-bff 的 pools.module 同形：同一套 VxConfigService.database 取值顺序
  * （显式 connectionString → DATABASE_URL → 离散字段），RO 可单独指向只读副本。
  *
  * ⚠ 这份与 admin-bff 那份目前是**两处同样的代码**，是有意的：现在只有一个真实
- *   消费方时抽公共包属于投机。等 opera-bff 的数据面长齐、两边都在用，再按两个
+ *   消费方时抽公共包属于投机。等 arche-bff 的数据面长齐、两边都在用，再按两个
  *   真实消费方的共性抽包——那时候抽出来的边界才有依据。
  */
 import { Module } from "@nestjs/common";

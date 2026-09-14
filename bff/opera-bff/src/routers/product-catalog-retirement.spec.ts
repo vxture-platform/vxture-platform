@@ -53,7 +53,7 @@ const PRODUCT_ID = "3d9f0c1e-0000-4000-8000-000000000001";
 function makeReq(): Request & RequestContext {
   return {
     operator: { id: "op-1", displayName: null },
-    capabilities: ["platform:product.manage"],
+    capabilities: ["integration:product.manage"],
     operatorAccessToken: "operator-access-token",
   } as unknown as Request & RequestContext;
 }
@@ -310,11 +310,11 @@ describe("其它迁移不受影响", () => {
     expect(fetchGrants).not.toHaveBeenCalled();
   });
 
-  it("没有 platform:product.manage → 403，闸门之前就停", async () => {
+  it("没有 integration:product.manage → 403，闸门之前就停", async () => {
     const { router } = makeRouter("active");
     const req = {
       operator: { id: "op-1", displayName: null },
-      capabilities: ["platform:product.read"],
+      capabilities: ["integration:product.read"],
     } as unknown as Request & RequestContext;
     const { status } = await failure(
       router.setState(req, PRODUCT_ID, { state: "deprecated" }),

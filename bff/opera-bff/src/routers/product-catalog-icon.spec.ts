@@ -40,7 +40,7 @@ const PNG_1PX_B64 =
 function makeReq(): Request & RequestContext {
   return {
     operator: { id: "op-1", displayName: null },
-    capabilities: ["platform:product.manage"],
+    capabilities: ["integration:product.manage"],
     operatorAccessToken: "operator-access-token",
     headers: {},
   } as unknown as Request & RequestContext;

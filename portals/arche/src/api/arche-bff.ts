@@ -13,7 +13,11 @@ import type {
   AuditLogRecord,
   ComplianceEventItem,
   FeatureFlagRecord,
+  GovernanceOverview,
   NotificationLogRecord,
+  OperatorSessionRecord,
+  OperatorSessionSummary,
+  OperatorSignInRecord,
   PlatformAdminPermissionRecord,
   PlatformAdminRecord,
   PlatformRoleRecord,
@@ -99,6 +103,9 @@ export interface AuditLogFilters {
   action?: string;
   module?: string;
   result?: "success" | "failure" | "denied";
+  /** 排序参与取数（表截在 500 条），见 lib/table-sort 的 `sortParams`。 */
+  sort?: string;
+  order?: "asc" | "desc";
 }
 
 // 服务端筛选(arche-bff audit-logs.router)。日期区间是关键项:审计日志无限增长,
@@ -120,6 +127,8 @@ export interface NotificationLogListFilters {
   from?: string;
   to?: string;
   search?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 }
 
 export async function fetchNotificationLogs(
@@ -128,6 +137,44 @@ export async function fetchNotificationLogs(
   return readJson<NotificationLogRecord[]>(
     `/api/notification-logs${queryString(filters)}`,
     [],
+  );
+}
+
+// ── 治理总览（按能力码分块，缺席的块 = 无权查看）────────────────────────────
+
+export async function fetchGovernanceOverview(): Promise<GovernanceOverview> {
+  return readJsonStrict<GovernanceOverview>("/api/overview");
+}
+
+// ── 登录与会话（admin.operator_login_attempt / operator_refresh_token，只读）──
+
+export interface OperatorSignInFilters {
+  result?: "success" | "failure";
+  from?: string;
+  to?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+}
+
+export async function fetchOperatorSessionSummary(): Promise<OperatorSessionSummary> {
+  return readJsonStrict<OperatorSessionSummary>(
+    "/api/operator-sessions/summary",
+  );
+}
+
+export async function fetchOperatorSignIns(
+  filters: OperatorSignInFilters = {},
+): Promise<OperatorSignInRecord[]> {
+  return readJsonStrict<OperatorSignInRecord[]>(
+    `/api/operator-sessions/sign-ins${queryString(filters)}`,
+  );
+}
+
+export async function fetchOperatorSessions(
+  filters: { sort?: string; order?: "asc" | "desc" } = {},
+): Promise<OperatorSessionRecord[]> {
+  return readJsonStrict<OperatorSessionRecord[]>(
+    `/api/operator-sessions/active${queryString(filters)}`,
   );
 }
 
@@ -166,6 +213,8 @@ export interface RiskRecordListFilters {
   riskLevel?: string;
   reviewed?: "true" | "false";
   tag?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 }
 
 export async function fetchRiskRecords(
@@ -237,6 +286,8 @@ export interface ComplianceEventListFilters {
   tenantId?: string;
   eventType?: string;
   tag?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 }
 
 export async function fetchComplianceEvents(
@@ -330,6 +381,8 @@ export interface FeatureFlagListFilters {
   category?: string;
   environment?: string;
   archived?: "true" | "false" | "all";
+  sort?: string;
+  order?: "asc" | "desc";
 }
 
 export async function fetchFeatureFlags(

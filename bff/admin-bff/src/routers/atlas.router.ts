@@ -156,7 +156,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Query("includeInactive") includeInactive?: string,
   ): Promise<ModelProviderRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadPricingModels(req);
     return this.request<ModelProviderRecord[]>(
       req,
       `/capability/providers?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
@@ -169,7 +169,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Query("includeInactive") includeInactive?: string,
   ): Promise<AiModelRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadPricingModels(req);
     return this.request<AiModelRecord[]>(
       req,
       `/capability/models?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
@@ -185,7 +185,7 @@ export class AtlasRouter {
     @Query("applicationId") applicationId?: string,
     @Query("applicationType") applicationType?: string,
   ): Promise<AiModelGrantRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadPricingModels(req);
 
     const params = new URLSearchParams();
     if (tenantId) params.set("tenantId", tenantId);
@@ -211,7 +211,7 @@ export class AtlasRouter {
     @Query("modelId") modelId?: string,
     @Query("includeInactive") includeInactive?: string,
   ): Promise<ModelPriceRuleRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadPricingModels(req);
     const params = new URLSearchParams();
     if (modelId) params.set("modelId", modelId);
     if (includeInactive !== undefined) {
@@ -229,7 +229,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Body() body: JsonObject,
   ): Promise<ModelPriceRuleRecord> {
-    assertOperation(req, "model:price_rule.create");
+    assertOperation(req, "pricing:price_rule.create");
     return this.request<ModelPriceRuleRecord>(req, "/capability/price-rules", {
       method: "POST",
       body,
@@ -242,7 +242,7 @@ export class AtlasRouter {
     @Param("priceRuleId") priceRuleId: string,
     @Body() body: JsonObject,
   ): Promise<ModelPriceRuleRecord> {
-    assertOperation(req, "model:price_rule.update");
+    assertOperation(req, "pricing:price_rule.update");
     return this.request<ModelPriceRuleRecord>(
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}`,
@@ -258,7 +258,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("priceRuleId") priceRuleId: string,
   ): Promise<ModelPriceRuleRecord> {
-    assertOperation(req, "model:price_rule.activate");
+    assertOperation(req, "pricing:price_rule.activate");
     return this.request<ModelPriceRuleRecord>(
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}/activate`,
@@ -273,7 +273,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("priceRuleId") priceRuleId: string,
   ): Promise<ModelPriceRuleRecord> {
-    assertOperation(req, "model:price_rule.deactivate");
+    assertOperation(req, "pricing:price_rule.deactivate");
     return this.request<ModelPriceRuleRecord>(
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}/deactivate`,
@@ -295,7 +295,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("priceRuleId") priceRuleId: string,
   ): Promise<ModelPriceRuleRecord> {
-    assertOperation(req, "model:price_rule.delete");
+    assertOperation(req, "pricing:price_rule.delete");
     return this.request<ModelPriceRuleRecord>(
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}`,
@@ -310,7 +310,7 @@ export class AtlasRouter {
     @Query("modelId") modelId?: string,
     @Query("includeInactive") includeInactive?: string,
   ): Promise<ModelPolicyRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadPricingModels(req);
     const params = new URLSearchParams();
     if (tenantId) params.set("tenantId", tenantId);
     if (modelId) params.set("modelId", modelId);
@@ -329,7 +329,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Body() body: JsonObject,
   ): Promise<ModelPolicyRecord> {
-    assertOperation(req, "model:policy.create");
+    assertOperation(req, "pricing:policy.create");
     return this.request<ModelPolicyRecord>(req, "/capability/policies", {
       method: "POST",
       body,
@@ -342,7 +342,7 @@ export class AtlasRouter {
     @Param("policyId") policyId: string,
     @Body() body: JsonObject,
   ): Promise<ModelPolicyRecord> {
-    assertOperation(req, "model:policy.update");
+    assertOperation(req, "pricing:policy.update");
     return this.request<ModelPolicyRecord>(
       req,
       `/capability/policies/${encodeURIComponent(policyId)}`,
@@ -358,7 +358,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("policyId") policyId: string,
   ): Promise<ModelPolicyRecord> {
-    assertOperation(req, "model:policy.activate");
+    assertOperation(req, "pricing:policy.activate");
     return this.request<ModelPolicyRecord>(
       req,
       `/capability/policies/${encodeURIComponent(policyId)}/activate`,
@@ -373,7 +373,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("policyId") policyId: string,
   ): Promise<ModelPolicyRecord> {
-    assertOperation(req, "model:policy.deactivate");
+    assertOperation(req, "pricing:policy.deactivate");
     return this.request<ModelPolicyRecord>(
       req,
       `/capability/policies/${encodeURIComponent(policyId)}/deactivate`,
@@ -389,7 +389,7 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
     @Param("policyId") policyId: string,
   ): Promise<ModelPolicyRecord> {
-    assertOperation(req, "model:policy.delete");
+    assertOperation(req, "pricing:policy.delete");
     return this.request<ModelPolicyRecord>(
       req,
       `/capability/policies/${encodeURIComponent(policyId)}`,
@@ -403,7 +403,7 @@ export class AtlasRouter {
     @Query("tenantId") tenantId?: string,
     @Query("includeExpired") includeExpired?: string,
   ): Promise<TenantQuotaRecord[]> {
-    assertCanManageModels(req);
+    assertCanReadPricingModels(req);
     const params = new URLSearchParams();
     if (tenantId) params.set("tenantId", tenantId);
     if (includeExpired !== undefined) {
@@ -425,7 +425,7 @@ export class AtlasRouter {
     @Query("cycleMonth") cycleMonth?: string,
     @Query("groupBy") groupBy?: string,
   ): Promise<UsageSummaryPage> {
-    assertCanManageModels(req);
+    assertCanReadPricingModels(req);
     const params = new URLSearchParams();
     if (tenantId) params.set("tenantId", tenantId);
     if (applicationId) params.set("applicationId", applicationId);
@@ -443,26 +443,26 @@ export class AtlasRouter {
   }
 }
 
-function assertCanManageModels(req: Request & RequestContext): void {
+function assertCanReadPricingModels(req: Request & RequestContext): void {
   if (!req.user) {
     throw new UnauthorizedException("No active session");
   }
 
-  if (!req.capabilities?.includes("platform.model.manage")) {
-    throw new ForbiddenException("Missing platform.model.manage capability");
+  if (!req.capabilities?.includes("pricing:model.read")) {
+    throw new ForbiddenException("Missing pricing:model.read capability");
   }
 }
 
 /**
  * 细粒度操作码把门（vxture-platform#49，product_250 M-2）。
  *
- * ## 为什么不能继续用 `assertCanManageModels`
+ * ## 为什么写操作不用 `assertCanReadPricingModels`
  *
- * 那一个检的是 `platform.model.manage` —— 一个**粗码**，同时覆盖「改 provider 简介」
- * （无害）和「原地改掉某租户的限速」（不可回滚）。粗码因此**刻意不标 step-up**：标了
- * 会把无害编辑也卡上二次验证。
+ * 那一个检的是读码 `pricing:model.read`（2026-09-14 前是经旧桥映射自 opera 码的
+ * `platform.model.manage`，一个同时覆盖「改 provider 简介」与「原地改掉某租户的限速」
+ * 的**粗码**）。粗码刻意不标 step-up：标了会把无害编辑也卡上二次验证。
  *
- * 后果是 Atlas 提的那条请求**在粗码上无法实施**：把 `model:policy.update` 标成需要
+ * 后果是 Atlas 提的那条请求**在粗码上无法实施**：把 `pricing:policy.update` 标成需要
  * step-up，必须先有这个码。所以本轮按资源拆开 price_rule / policy 两组。
  *
  * ## 粗码在这两组上被替掉，不是并存

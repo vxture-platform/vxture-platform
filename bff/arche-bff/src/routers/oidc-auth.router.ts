@@ -1,25 +1,20 @@
 /**
  * oidc-auth.router.ts - Capability Console (workforce) RP auth endpoints
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @description
  *   /auth/* RP endpoints: login → IdP authorize (workforce realm), callback →
  *   token exchange + RP session, session lookup, local logout. Tokens stay
  *   server-side; the browser holds only the opaque __Host-vx_rp_session cookie.
  *
  *   /auth/check is the nginx auth_request gate (product_250 M-4 hardening:
- *   "any path, no content unauthenticated"). It resolves the RP session and,
- *   when the original URI targets a mounted provider module (/atlas/*, /runos/*),
- *   mints an operator-OBO management token (M-1) and returns it in
- *   X-Operator-Token so nginx injects it as the Authorization header on the
- *   proxied module request. See docs/20-specs/000-platform/opera/
- *   10-shell-mount-contract.md.
+ *   "any path, no content unauthenticated"): it only resolves the RP session.
+ *   arche mounts no provider module, so it mints no operator-OBO token.
  */
 import {
   Body,
   Controller,
   Get,
   Header,
-  Headers,
   HttpCode,
   HttpStatus,
   Inject,
@@ -47,7 +42,6 @@ import {
   silentFailureReturnTo,
 } from "@vxture/core-identity-sdk";
 import type { Redis } from "ioredis";
-import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import { invalidRequest, unauthenticated } from "../errors/api-error";
 import {
   RP_AUTH_SERVICE,
@@ -65,25 +59,6 @@ interface AuthReq {
   prompt?: string;
 }
 
-/**
- * Mount-path prefix → provider audience (product_code). The mount points are
- * contract-fixed (10-shell-mount-contract.md §2); a new L1 module = one more
- * entry here + its nginx location block.
- */
-const MODULE_AUD_BY_PREFIX: Record<string, string> = {
-  "/atlas": "atlas",
-  "/runos": "runos",
-};
-
-export function moduleAudFor(originalUri: string | undefined): string | null {
-  if (!originalUri) return null;
-  const path = originalUri.split("?")[0] ?? "";
-  for (const [prefix, aud] of Object.entries(MODULE_AUD_BY_PREFIX)) {
-    if (path === prefix || path.startsWith(`${prefix}/`)) return aud;
-  }
-  return null;
-}
-
 @Controller("auth")
 export class OidcAuthRouter {
   constructor(
@@ -92,12 +67,10 @@ export class OidcAuthRouter {
     @Inject(RP_AUTH_SERVICE) private readonly auth: RpAuthService,
     @Inject(RP_REDIS) private readonly redis: Redis,
     @Inject(RP_RUNTIME) private readonly rt: RpRuntime,
-    @Inject(OperatorExchangeService)
-    private readonly exchange: OperatorExchangeService,
   ) {}
 
   private authReqKey(state: string): string {
-    return `${this.rt.keyPrefix}rp:opera:authreq:${state}`;
+    return `${this.rt.keyPrefix}rp:arche:authreq:${state}`;
   }
 
   /** __Host- in prod https; bare name over local http so the browser stores it. */
@@ -296,30 +269,15 @@ export class OidcAuthRouter {
   /**
    * nginx auth_request gate. 204 = authenticated (nginx serves the gated
    * location); 401 = no/expired session (nginx redirects the navigation to
-   * /auth/login). For module paths the response carries X-Operator-Token —
-   * the operator-OBO management token nginx injects upstream (M-1). The
-   * exchange is cached per (subject, aud), so per-request cost is a Redis
-   * session read on the hot path.
+   * /auth/login). Per-request cost is one Redis session read.
    */
   @Get("check")
-  async check(
-    @Req() req: Request,
-    @Headers("x-original-uri") originalUri: string | undefined,
-    @Res() res: Response,
-  ): Promise<void> {
+  async check(@Req() req: Request, @Res() res: Response): Promise<void> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const out = await this.auth.resolve(rpsid);
     if (out.status !== "ok") {
       res.status(401).end();
       return;
-    }
-
-    const aud = moduleAudFor(originalUri);
-    if (aud) {
-      const token = await this.exchange.getToken(out.accessToken, aud);
-      if (token) {
-        res.setHeader("X-Operator-Token", token);
-      }
     }
     res.status(204).end();
   }

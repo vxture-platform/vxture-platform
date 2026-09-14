@@ -49,6 +49,18 @@ import {
   requireUuid,
   toIso,
 } from "./governance.shared";
+import { listOrderBy } from "./router.shared";
+
+/** 可排序列（列 id 与门户表格一致）。等级按严重度排，不按字母。 */
+const RISK_RECORD_SORT: Readonly<Record<string, string>> = {
+  tenant: "t.name",
+  level:
+    "case r.risk_level when 'high' then 3 when 'follow_up' then 2 else 1 end",
+  score: "r.risk_score",
+  scope: "r.scope",
+  reviewer: "coalesce(nullif(o.display_name, ''), o.username)",
+  updatedAt: "r.updated_at",
+};
 
 const RISK_LEVELS: ReadonlySet<RiskRecordItem["riskLevel"]> = new Set([
   "normal",
@@ -72,8 +84,16 @@ export class RiskRecordsRouter {
     @Query("riskLevel") riskLevel?: string,
     @Query("reviewed") reviewed?: string,
     @Query("tag") tag?: string,
+    @Query("sort") sort?: string,
+    @Query("order") order?: string,
   ): Promise<RiskRecordItem[]> {
     assertCanReadRiskRecords(req);
+    const orderBy = listOrderBy(
+      sort,
+      order,
+      RISK_RECORD_SORT,
+      "r.created_at desc, r.id",
+    );
 
     const where: string[] = ["r.deleted_at is null"];
     const params: unknown[] = [];
@@ -108,7 +128,7 @@ export class RiskRecordsRouter {
 
     const { rows } = await this.pool.query<RiskRecordRow>(
       `${RISK_RECORD_SELECT} where ${where.join(" and ")}
-       order by r.created_at desc limit $${params.length}`,
+       ${orderBy} limit $${params.length}`,
       params,
     );
     return rows.map(mapRiskRecordRow);
@@ -465,10 +485,10 @@ function assertCanReadRiskRecords(req: Request & RequestContext): void {
   }
   if (
     !req.capabilities ||
-    (!req.capabilities.includes("tenant:risk.read") &&
-      !req.capabilities.includes("tenant:risk.manage"))
+    (!req.capabilities.includes("risk:record.read") &&
+      !req.capabilities.includes("risk:record.manage"))
   ) {
-    throw new ForbiddenException("Missing tenant:risk.read capability");
+    throw new ForbiddenException("Missing risk:record.read capability");
   }
 }
 
@@ -476,7 +496,7 @@ function assertCanManageRiskRecords(req: Request & RequestContext): void {
   if (!req.operator) {
     throw new UnauthorizedException("No active session");
   }
-  if (!req.capabilities || !req.capabilities.includes("tenant:risk.manage")) {
-    throw new ForbiddenException("Missing tenant:risk.manage capability");
+  if (!req.capabilities || !req.capabilities.includes("risk:record.manage")) {
+    throw new ForbiddenException("Missing risk:record.manage capability");
   }
 }

@@ -54,8 +54,8 @@ import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDateTime } from "@vxture-platform/shared";
 
-/** 写操作的能力码，与 BFF 的能力门同名（release:maintenance.manage）。 */
-const MANAGE = "release:maintenance.manage";
+/** 写操作的能力码，与 BFF 的能力门同名（ops:maintenance.manage）。 */
+const MANAGE = "ops:maintenance.manage";
 
 interface MaintenanceWindowItem {
   id: string;

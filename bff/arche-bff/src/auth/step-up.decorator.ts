@@ -1,6 +1,6 @@
 /**
  * step-up.decorator.ts — 标记需要二次验证的高危路由。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * `product_250` v0.4（owner 2026-08-13）把 step-up 的**执行位**定在 console 层：

@@ -28,7 +28,7 @@ const OPERATOR_TOKEN = "operator-access-token";
 function makeReq(): Request & RequestContext {
   return {
     operator: { id: "op-1", displayName: null },
-    capabilities: ["platform:product.manage"],
+    capabilities: ["integration:product.manage"],
     operatorAccessToken: OPERATOR_TOKEN,
   } as unknown as Request & RequestContext;
 }

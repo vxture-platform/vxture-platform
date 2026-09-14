@@ -1,6 +1,6 @@
 /**
  * oidc-rp.tokens.ts - DI tokens + runtime config for the opera (workforce) RP.
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  */
 import type { OidcRpConfig } from "@vxture/core-oidc-rp";
 

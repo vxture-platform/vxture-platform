@@ -58,9 +58,13 @@
       "groups": {
         "pages": "Pages",
         "tenant": "Tenants",
-        "order": "Orders",
-        "operator": "Platform accounts"
+        "order": "Orders"
       }
+    },
+    "forbidden": {
+      "title": "No access to the operations platform",
+      "description": "You are signed in, but your role has no permission on the operations platform. Ask a platform super admin to grant access under Platform Roles in the governance platform.",
+      "signOut": "Sign out"
     }
   },
   "role": {
@@ -1888,8 +1892,7 @@
   "skillsPage": {
     "header": {
       "title": "Capability Catalog",
-      "description": "Read-only catalog of capabilities registered in Runos: connectors, executors, and skills. Registration, promotion, retirement, and certification happen in opera's Capability Registry.",
-      "manageInOpera": "Manage in opera Capability Registry"
+      "description": "Read-only catalog of capabilities registered in Runos: connectors, executors, and skills. Registration, promotion, retirement, and certification happen in opera's Capability Registry."
     },
     "summary": {
       "ariaLabel": "Skill market summary",

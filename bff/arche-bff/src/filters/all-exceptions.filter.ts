@@ -1,6 +1,6 @@
 /**
  * all-exceptions.filter.ts — 保证**每一个**出口都是 X-1 封套。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * 只把 78 处 throw 改掉是不够的：Nest 自己也会造错误（路由不存在的 404、请求体

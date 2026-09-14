@@ -27,16 +27,13 @@
  *    （claim/retry/dead-letter 逻辑已经在 @vxture/service-provisioning 里跑，opera
  *    不重复实现，也不越权代它重试）。
  *
- * 只读、零新增写路径（本路由）：每次请求现读现算，不缓存。未设专属能力码：admin 原
- * 页面的权限码本就是"自认误配"的历史遗留（platform.model.manage 或 audit:read），
- * 不是一个值得延续的授权口径；迁移不新增门槛，只要求已登录 operator（同
- * product-health.router.ts / maintenance-windows.router.ts 之外，这是第三个走这条
- * 口径的路由，模式已经稳定：没有专属能力码就不额外设卡，等哪天真的需要授权分级，
- * 三个一起补，而不是各自埋一个不一致的临时判断）。
+ * 只读、零新增写路径（本路由）：每次请求现读现算，不缓存。能力码 `ops:job.read`
+ * （2026-09-14 三平台拆分时补上：此前只要求已登录，而没有平台门时任何运营账号都进得了
+ * opera）。
  */
 
 import { Controller, Get, Inject, Req } from "@nestjs/common";
-import { unauthenticated } from "../errors/api-error";
+import { notEntitled, unauthenticated } from "../errors/api-error";
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { OPERA_BFF_RO_POOL } from "../tokens";
@@ -137,6 +134,8 @@ const EMPTY_COUNTS: WebhookQueueCounts = {
   dead: 0,
 };
 
+const JOB_READ = "ops:job.read";
+
 @Controller("api/job-scheduler")
 export class JobSchedulerRouter {
   constructor(@Inject(OPERA_BFF_RO_POOL) private readonly pool: Pool) {}
@@ -147,6 +146,9 @@ export class JobSchedulerRouter {
   ): Promise<JobSchedulerSnapshot> {
     if (!req.operator) {
       throw unauthenticated("AUTH_NO_SESSION", "No active session");
+    }
+    if (!req.capabilities?.includes(JOB_READ)) {
+      throw notEntitled(JOB_READ);
     }
 
     const [jobRows, countRows, issueRows] = await Promise.all([

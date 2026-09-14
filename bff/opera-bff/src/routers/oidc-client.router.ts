@@ -29,7 +29,7 @@
  * 只会诱使人从产品页去轮换 console 的密钥。创建时先确认 productId 指向一个未删除
  * 的目录行再写库：让 FK 去报错得到的是一句 500，这里给的是字段级 400。
  *
- * 能力码：复用 `platform:product.manage`——OIDC 客户端是产品登记的下一步，不
+ * 能力码：复用 `integration:product.manage`——OIDC 客户端是产品登记的下一步，不
  * 单独开一套能力码。
  */
 
@@ -61,7 +61,7 @@ import {
 import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 
-const PRODUCT_MANAGE = "platform:product.manage";
+const PRODUCT_MANAGE = "integration:product.manage";
 const BCRYPT_COST = 10;
 
 const RELEASE_CHANNELS = ["stable", "beta", "canary"] as const;

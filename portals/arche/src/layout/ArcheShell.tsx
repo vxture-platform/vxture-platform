@@ -35,12 +35,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ShellSearchGroup } from "@vxture/design-system";
 import {
+  Button,
+  EmptyState,
   Icon,
   ShellBrand,
   ShellAgentButton,
   ShellHeader,
   ShellIconButton,
-  ShellIconGroup,
   ShellLauncher,
   ShellPageContainer,
   ShellPreferencePanel,
@@ -54,7 +55,7 @@ import {
   type ShellSidebarMode,
   useTheme,
 } from "@vxture/design-system";
-import { archeNavSections } from "@/config/navigation";
+import { visibleNavSections } from "@/config/navigation";
 import { writeNavCollapsed } from "@vxture-platform/shared";
 import {
   useOperatorSession,
@@ -172,7 +173,7 @@ export function ArcheShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { operator, status, signOut } = useOperatorSession();
+  const { operator, status, capabilities, signOut } = useOperatorSession();
   const [searchQuery, setSearchQuery] = useState("");
   const { theme, setTheme, density, setDensity, fontSize, setFontSize } =
     useTheme();
@@ -237,10 +238,16 @@ export function ArcheShell({
    * Endpoint）要打 atlas 侧接口，那是独立一批工作。搜索框现在就上，是因为
    * 「搜页面」本身已经有真实落点；等后端就绪时这里加一个分组即可，面板与
    * 快捷键不用再动。 */
+  /* 侧栏与搜索只列本人能打开的页面（页面码来自权限树）。 */
+  const navSections = useMemo(
+    () => visibleNavSections(capabilities),
+    [capabilities],
+  );
+
   const searchGroups: ShellSearchGroup[] = useMemo(() => {
     const needle = searchQuery.trim().toLowerCase();
     if (needle.length < 2) return [];
-    const items = archeNavSections.flatMap((section) =>
+    const items = navSections.flatMap((section) =>
       section.items
         .filter(
           (item) =>
@@ -262,7 +269,7 @@ export function ArcheShell({
     return items.length > 0
       ? [{ key: "pages", heading: "页面", items: items.slice(0, 8) }]
       : [];
-  }, [searchQuery, router]);
+  }, [searchQuery, router, navSections]);
 
   /* 生产构建里 DEV_OPERATOR 是 null，这一行退化成 `operator ?? null`：没有真会话
      就没有外壳。 */
@@ -275,6 +282,23 @@ export function ArcheShell({
           name="spinner"
           size="lg"
           className="animate-spin text-muted-foreground"
+        />
+      </div>
+    );
+  }
+  /* 登录成功但没有治理平台的任何权限：整屏说明，不放进去看一页页的读取失败。 */
+  if (status === "forbidden") {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background px-md">
+        <EmptyState
+          icon="shield-check"
+          title="没有进入治理平台的权限"
+          description="你的账号已登录，但所属角色在治理平台上没有任何权限。需要时请联系平台超级管理员在「平台角色」中授权。"
+          action={
+            <Button variant="outline" onClick={() => void signOut()}>
+              退出登录
+            </Button>
+          }
         />
       </div>
     );
@@ -362,19 +386,7 @@ export function ArcheShell({
                   {/* 没有「告警通知」：opera 没有任何通知源（无告警表、无订阅、无
                       推送），一个点了什么都不发生的铃铛只会让人以为告警会到这里来。
                       有通知源的那天再加，不先摆一个空按钮占位（2026-08-30）。 */}
-                  <ShellIconGroup label="系统">
-                    <ShellIconButton
-                      icon="help"
-                      label="帮助"
-                      onClick={() => {}}
-                    />
-                    <ShellIconButton
-                      icon="settings"
-                      label="系统设置"
-                      active={isActive("/settings")}
-                      onClick={() => router.push("/settings")}
-                    />
-                  </ShellIconGroup>
+
                   {/* 与 admin 的用户菜单同形（同一个 DS 件、同一组槽位）。此前这里
                       只有显示名与角色码两行，因为 opera 只读 access_token 的 claims，
                       而 `name` / `email` 当时只进 id_token——面板不是设计成简版的，
@@ -443,7 +455,7 @@ export function ArcheShell({
           sidebar={
             <ShellSidebarNav
               domainName="Arche"
-              sections={archeNavSections}
+              sections={navSections}
               collapsed={collapsed}
               onToggleCollapsed={toggleNav}
               isActive={isActive}

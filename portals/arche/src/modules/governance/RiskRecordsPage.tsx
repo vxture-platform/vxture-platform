@@ -30,7 +30,12 @@ import {
   updateRiskRecord,
   type RiskRecordWriteInput,
 } from "@/api/arche-bff";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type {
+  DataTableColumn,
+  DataTableSort,
+  StatusBadgeTone,
+} from "@vxture/design-system";
+import { sortParams } from "@/lib/table-sort";
 import type { RiskRecordItem } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { ListPagination } from "@/modules/shared/ListPagination";
@@ -136,9 +141,11 @@ function columnsOf(locale: string): readonly DataTableColumn<RiskRecordItem>[] {
     {
       id: "tenant",
       header: "租户",
+      sortable: true,
+      /* 租户名缺失时不回退到 UUID——UUID 不展示。 */
       cell: (item) => (
         <TableTitleCell
-          title={item.tenantName ?? item.tenantId}
+          title={item.tenantName ?? "未知租户"}
           {...(item.tenantNo ? { description: `#${item.tenantNo}` } : {})}
         />
       ),
@@ -146,7 +153,7 @@ function columnsOf(locale: string): readonly DataTableColumn<RiskRecordItem>[] {
     {
       id: "level",
       header: "等级",
-      align: "center",
+      sortable: true,
       cell: (item) => (
         <StatusBadge tone={levelTone(item.riskLevel)}>
           {LEVEL_LABELS[item.riskLevel]}
@@ -156,23 +163,37 @@ function columnsOf(locale: string): readonly DataTableColumn<RiskRecordItem>[] {
     {
       id: "score",
       header: "评分",
+      sortable: true,
       align: "numeric",
       cell: (item) => item.riskScore ?? "-",
     },
-    { id: "scope", header: "范围", cell: (item) => item.scope ?? "-" },
+    {
+      id: "scope",
+      header: "范围",
+      sortable: true,
+      cell: (item) => item.scope ?? "-",
+    },
     {
       id: "tags",
       header: "标签",
-      cell: (item) => (item.tags.length > 0 ? item.tags.join(", ") : "-"),
+      /* 标签可能很多：只摆第一个与总数，完整清单在编辑框里。 */
+      cell: (item) =>
+        item.tags.length === 0
+          ? "-"
+          : item.tags.length === 1
+            ? item.tags[0]
+            : `${item.tags[0]} 等 ${item.tags.length} 个`,
     },
     {
       id: "reviewer",
       header: "审阅人",
+      sortable: true,
       cell: (item) => item.reviewerName ?? "待审阅",
     },
     {
       id: "updatedAt",
       header: "更新时间",
+      sortable: true,
       cell: (item) => formatDate(item.updatedAt, locale),
     },
   ];
@@ -195,6 +216,8 @@ export function RiskRecordsPage() {
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
+  /* 排序交给 BFF：列表截在 500 条。 */
+  const [sort, setSort] = useState<DataTableSort | undefined>();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -209,7 +232,7 @@ export function RiskRecordsPage() {
     if (params.get("reviewed") === "false") setReviewFilter("pending");
     const level = params.get("riskLevel");
     if (level === "follow_up,high") setLevelFilter("all");
-    fetchRiskRecords()
+    fetchRiskRecords(sortParams(sort))
       .then(setItems)
       .catch((error) => {
         setItems([]);
@@ -218,7 +241,7 @@ export function RiskRecordsPage() {
         );
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [sort]);
 
   const filtered = useMemo(() => {
     let result = items;
@@ -247,7 +270,7 @@ export function RiskRecordsPage() {
   const pageCount = Math.ceil(filtered.length / pageSize);
 
   async function reload() {
-    setItems(await fetchRiskRecords());
+    setItems(await fetchRiskRecords(sortParams(sort)));
   }
 
   function openCreate() {
@@ -446,6 +469,11 @@ export function RiskRecordsPage() {
             indexStart={(page - 1) * pageSize + 1}
             selectedKeys={[...selectedIds]}
             onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+            {...(sort ? { sort: sort } : {})}
+            onSortChange={(next) => {
+              setSort(next);
+              setPage(1);
+            }}
             rowActions={(item) => (
               <ActionMenu
                 label="风险记录操作"
@@ -477,7 +505,7 @@ export function RiskRecordsPage() {
                     separatorBefore: true,
                     confirm: withLabels({
                       verb: "删除",
-                      target: `「${item.tenantName ?? item.tenantId}」的风险记录`,
+                      target: `「${item.tenantName ?? "未知租户"}」的风险记录`,
                       consequence:
                         "记录被软删并从列表隐藏，不可在界面上恢复。它在审计追加表里的痕迹不受影响。",
                       onConfirm: () => confirmDelete(item),

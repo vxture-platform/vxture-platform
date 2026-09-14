@@ -314,6 +314,7 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: |
           pnpm lint:permission-catalog
+          pnpm lint:operator-planes
           pnpm lint:route-policies
 
       # 身份面对外承诺门控：平台的认证面承诺过去**只写在代码里**，消费方只能靠探针猜，

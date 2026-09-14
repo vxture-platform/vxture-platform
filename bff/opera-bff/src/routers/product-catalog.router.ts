@@ -20,7 +20,7 @@
  * self=平台自建、third_party=第三方接入、other；third_party 时
  * origin_provider 必填（DB CHECK 兜底，这里的校验只是提前给用户更好的错误）。
  *
- * 能力码：`platform:product.read` / `platform:product.manage`（门在 `product-authz.ts`，
+ * 能力码：`integration:product.read` / `integration:product.manage`（门在 `product-authz.ts`，
  * 与接入信号 router 共用一份）。
  */
 

@@ -30,7 +30,7 @@ function makeReq(
 ): Request & RequestContext {
   return {
     operator: opts.anonymous ? undefined : { id: "op-1", displayName: null },
-    capabilities: opts.capabilities ?? ["platform:product.read"],
+    capabilities: opts.capabilities ?? ["integration:product.read"],
   } as unknown as Request & RequestContext;
 }
 
@@ -194,7 +194,10 @@ describe("GET /api/products/:id/integration-signals", () => {
   it("没有 product.read / manage 能力 → 403 NOT_ENTITLED；没会话 → 401", async () => {
     const { router } = makeRouter({ productCode: "arda" });
     const denied = await failure(
-      router.get(makeReq({ capabilities: ["platform:oidc.read"] }), PRODUCT_ID),
+      router.get(
+        makeReq({ capabilities: ["capability:runos.read"] }),
+        PRODUCT_ID,
+      ),
     );
     expect(denied.status).toBe(403);
     expect(denied.body["code"]).toBe("NOT_ENTITLED");

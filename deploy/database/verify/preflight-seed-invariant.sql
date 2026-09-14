@@ -23,7 +23,7 @@ SELECT '① 缺 super_admin 授权的行（>0 即 seed 必抛）: '
      JOIN admin.operator_role r ON r.id = rp.role_id
     WHERE rp.permission_id = p.id AND r.role_code = 'super_admin');
 
-SELECT '② permTotal = ' || count(*) || '（seed 前应为 59，seed 后应为 113）'
+SELECT '② permTotal = ' || count(*) || ''
   FROM admin.operator_permission;
 
 SELECT '③ super_admin 授权 = ' || count(*) || '（应恒等于 ②）'
@@ -31,5 +31,5 @@ SELECT '③ super_admin 授权 = ' || count(*) || '（应恒等于 ②）'
   JOIN admin.operator_role r ON r.id = rp.role_id
  WHERE r.role_code = 'super_admin';
 
-SELECT '④ menu 层行数 = ' || count(*) || '（seed 前应为 0，seed 后应为 54）'
+SELECT '④ menu 层行数 = ' || count(*) || ''
   FROM admin.operator_permission WHERE perm_type = 'menu';

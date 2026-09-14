@@ -82,9 +82,9 @@ describe("拒绝词表 —— 不许各造各的", () => {
   /* 能力门是全仓最高频的拒绝点。它一旦自造码（`CATALOG_NOT_ENTITLED` 之类），
      消费方就得按产品分支判——X-1 要防的正是这个。 */
   it("能力门缺失一律 NOT_ENTITLED，且把缺的能力名带出去", () => {
-    const body = envelopeOf(notEntitled("platform:product.manage"));
+    const body = envelopeOf(notEntitled("integration:product.manage"));
     expect(body.code).toBe("NOT_ENTITLED");
-    expect(body.message).toContain("platform:product.manage");
+    expect(body.message).toContain("integration:product.manage");
     expect(body.statusCode).toBe(403);
   });
 });

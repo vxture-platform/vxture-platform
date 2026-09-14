@@ -1,6 +1,6 @@
 /**
  * operator-authz.service.ts — 从活库解析操作者主体与能力码。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  * @layer BFF
  *
  * RP 令牌**不携带 operator 的细粒度权限**（同 admin-bff 的判断），所以每个请求都要

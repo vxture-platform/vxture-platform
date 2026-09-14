@@ -1,6 +1,6 @@
 /**
  * tx.ts — 写路径的事务小工具。
- * @package @vxture/bff-opera
+ * @package @vxture/bff-arche
  *
  * `withTransaction` 用独立 client 包一个 BEGIN/COMMIT 单元，让"主写 + 事务内审计"
  * 成为原子的：审计插失败则整笔回滚，不会出现改了库但没留痕。任何抛出都回滚，

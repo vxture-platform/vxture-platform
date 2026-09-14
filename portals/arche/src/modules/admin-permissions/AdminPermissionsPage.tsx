@@ -35,6 +35,7 @@ import {
 } from "@vxture/design-system";
 import type {
   DataTableColumn,
+  DataTableSort,
   IconName,
   StatusBadgeTone,
   ViewModeSwitchValue,
@@ -58,11 +59,11 @@ import { formatDateTime } from "@vxture-platform/shared";
 type PermissionFilter = "all" | PlatformPermissionType;
 type StatusFilter = "all" | "active" | "disabled";
 type SourceFilter = "all" | "system" | "custom";
-type PermissionDomainKey = "tenant-ops" | "platform-autonomy" | "foundation";
+/** 分组键 = 平台根节点的 id；没有挂到任何平台根下的行归 `UNASSIGNED`。 */
+type PermissionDomainKey = string;
 
 const EMPTY_MARK = "-";
-const TENANT_OPS_WORKSPACE_CODE = "admin.workspace.tenant_ops";
-const PLATFORM_AUTONOMY_WORKSPACE_CODE = "admin.workspace.platform";
+const UNASSIGNED: PermissionDomainKey = "unassigned";
 const DEFAULT_DOMAIN_FILTERS: DomainFilterState = {
   query: "",
   typeFilter: "all",
@@ -120,6 +121,44 @@ function flattenVisibleNodes(
   return out;
 }
 
+/**
+ * 树表的排序：只在**同级之间**排，父子关系不被打散——一个 L2 页面不能因为名字
+ * 靠前就排到别的板块下面去。没有排序时保持树的原序（seed 的 sort）。
+ */
+const PERMISSION_SORT_ACCESSORS: Record<
+  string,
+  (permission: PlatformAdminPermissionRecord) => string | number
+> = {
+  name: (permission) => permission.permName || permission.permCode,
+  status: (permission) => (permission.status ? 1 : 0),
+  kind: (permission) => permission.permType,
+  source: (permission) => (permission.isSystem ? 1 : 0),
+  stepUp: (permission) => (permission.requiresStepUp ? 1 : 0),
+  roles: (permission) => permission.roleCount,
+};
+
+function sortPermissionTree(
+  nodes: readonly PermissionTreeNode[],
+  sort: DataTableSort | undefined,
+): PermissionTreeNode[] {
+  const pick = sort ? PERMISSION_SORT_ACCESSORS[sort.columnId] : undefined;
+  if (!sort || !pick) return [...nodes];
+  const dir = sort.direction === "asc" ? 1 : -1;
+  return [...nodes]
+    .sort((a, b) => {
+      const x = pick(a.permission);
+      const y = pick(b.permission);
+      if (typeof x === "number" && typeof y === "number") return (x - y) * dir;
+      return (
+        String(x).localeCompare(String(y), undefined, { numeric: true }) * dir
+      );
+    })
+    .map((node) => ({
+      ...node,
+      children: sortPermissionTree(node.children, sort),
+    }));
+}
+
 function permissionTypeMetaOf(type: string) {
   return (
     permissionTypeMeta[type as keyof typeof permissionTypeMeta] ??
@@ -152,7 +191,6 @@ interface PermissionTreeNode {
   permission: PlatformAdminPermissionRecord;
   children: PermissionTreeNode[];
   depth: number;
-  sequence: string;
 }
 
 interface PermissionDomainGroup {
@@ -278,7 +316,6 @@ function buildPermissionTree(
       permission,
       children: [],
       depth: 0,
-      sequence: "",
     });
   }
 
@@ -309,46 +346,6 @@ function buildPermissionTree(
   return roots;
 }
 
-function assignPermissionSequence(
-  nodes: PermissionTreeNode[],
-  parentParts: string[] = [],
-) {
-  return nodes.map((node, index) => {
-    const sequenceParts = [...parentParts, String(index + 1).padStart(2, "0")];
-    node.sequence = sequenceParts.join(".");
-    assignPermissionSequence(node.children, sequenceParts);
-    return node;
-  });
-}
-
-function buildPermissionSequenceMap(
-  permissions: PlatformAdminPermissionRecord[],
-) {
-  const sequenceMap = new Map<string, string>();
-  const stableTree = assignPermissionSequence(
-    stripWorkspaceRoot(buildPermissionTree(permissions)),
-  );
-
-  const walk = (node: PermissionTreeNode) => {
-    sequenceMap.set(node.permission.id, node.sequence);
-    node.children.forEach(walk);
-  };
-  stableTree.forEach(walk);
-
-  return sequenceMap;
-}
-
-function applyPermissionSequence(
-  nodes: PermissionTreeNode[],
-  sequenceMap: Map<string, string>,
-) {
-  return nodes.map((node) => {
-    node.sequence = sequenceMap.get(node.permission.id) ?? "";
-    applyPermissionSequence(node.children, sequenceMap);
-    return node;
-  });
-}
-
 function collectPermissionIds(nodes: PermissionTreeNode[]) {
   const ids: string[] = [];
   const walk = (node: PermissionTreeNode) => {
@@ -369,10 +366,17 @@ function flattenTreeNodes(nodes: PermissionTreeNode[]) {
   return flattened;
 }
 
-function isSectionPermission(permission: PlatformAdminPermissionRecord) {
-  return permission.permCode.startsWith("admin.section.");
+/** 平台根节点：没有父节点、码形如 `<平台>.plane` 的菜单行。 */
+function isPlaneRoot(permission: PlatformAdminPermissionRecord) {
+  return !permission.parentId && permission.permCode.endsWith(".plane");
 }
 
+/**
+ * 一行属于哪个平台：沿父链走到顶。顶是平台根 → 那个平台；否则归「未挂平台」。
+ *
+ * 分组从数据里的根节点来，不在界面上写死三个平台的码——治理台管的是整棵树，
+ * 树上有几个根就分几组。
+ */
 function resolvePermissionDomain(
   permission: PlatformAdminPermissionRecord,
   permissionById: Map<string, PlatformAdminPermissionRecord>,
@@ -382,15 +386,13 @@ function resolvePermissionDomain(
 
   while (current && !visited.has(current.id)) {
     visited.add(current.id);
-    if (current.permCode === TENANT_OPS_WORKSPACE_CODE) return "tenant-ops";
-    if (current.permCode === PLATFORM_AUTONOMY_WORKSPACE_CODE)
-      return "platform-autonomy";
+    if (isPlaneRoot(current)) return current.id;
     current = current.parentId
       ? permissionById.get(current.parentId)
       : undefined;
   }
 
-  return "foundation";
+  return UNASSIGNED;
 }
 
 function includeAncestorContext(
@@ -418,20 +420,13 @@ function includeAncestorContext(
   return [...contextualPermissions.values()];
 }
 
-function stripWorkspaceRoot(nodes: PermissionTreeNode[]) {
+/** 分组标题已经是平台名，树里不再重复画一层根。 */
+function stripPlaneRoot(nodes: PermissionTreeNode[]) {
   if (nodes.length !== 1) return nodes;
-
   const root = nodes[0];
-  if (!root) return nodes;
-
-  if (
-    (root.permission.permCode === TENANT_OPS_WORKSPACE_CODE ||
-      root.permission.permCode === PLATFORM_AUTONOMY_WORKSPACE_CODE) &&
-    root.children.length
-  ) {
+  if (root && isPlaneRoot(root.permission) && root.children.length) {
     return root.children;
   }
-
   return nodes;
 }
 
@@ -440,20 +435,20 @@ function buildPermissionDomainGroups(
   permissionById: Map<string, PlatformAdminPermissionRecord>,
   filtersByDomain: Record<PermissionDomainKey, DomainFilterState>,
 ): PermissionDomainGroup[] {
-  const groupedPermissions: Record<
+  const groupedPermissions = new Map<
     PermissionDomainKey,
     PlatformAdminPermissionRecord[]
-  > = {
-    "tenant-ops": [],
-    "platform-autonomy": [],
-    foundation: [],
-  };
-
+  >();
   for (const permission of permissions) {
-    groupedPermissions[
-      resolvePermissionDomain(permission, permissionById)
-    ].push(permission);
+    const key = resolvePermissionDomain(permission, permissionById);
+    const bucket = groupedPermissions.get(key) ?? [];
+    bucket.push(permission);
+    groupedPermissions.set(key, bucket);
   }
+
+  const roots = permissions
+    .filter(isPlaneRoot)
+    .sort((a, b) => a.sort - b.sort || a.permCode.localeCompare(b.permCode));
 
   const groups: Array<{
     key: PermissionDomainKey;
@@ -462,35 +457,25 @@ function buildPermissionDomainGroups(
     icon: IconName;
     permissions: PlatformAdminPermissionRecord[];
   }> = [
+    ...roots.map((root) => ({
+      key: root.id,
+      title: `${root.permName}权限`,
+      description: `${root.permCode} 之下的板块、页面与操作。角色持有其中任一权限，即可进入该平台。`,
+      icon: (root.icon as IconName | null) ?? "key",
+      permissions: groupedPermissions.get(root.id) ?? [],
+    })),
     {
-      key: "tenant-ops",
-      title: "运营管理域权限",
+      key: UNASSIGNED,
+      title: "未挂到平台的权限",
       description:
-        "面向租户、账号、产品、订阅、交易、财务和客户服务的运营后台权限。",
-      icon: "buildings",
-      permissions: groupedPermissions["tenant-ops"],
-    },
-    {
-      key: "platform-autonomy",
-      title: "平台自治域权限",
-      description:
-        "面向平台内部身份、角色权限、平台资源、运行可靠性、安全审计和审批治理的权限。",
-      icon: "shield-check",
-      permissions: groupedPermissions["platform-autonomy"],
-    },
-    {
-      key: "foundation",
-      title: "基础系统权限",
-      description:
-        "历史系统、基础认证和兼容菜单权限，保留独立分组以免与运营域、自治域混淆。",
-      icon: "key",
-      permissions: groupedPermissions.foundation,
+        "没有挂在任何平台之下的权限点：授给角色也不会让人进入任何平台。请编辑它，把上级改为对应页面。",
+      icon: "warning",
+      permissions: groupedPermissions.get(UNASSIGNED) ?? [],
     },
   ];
 
   return groups
     .map((group) => {
-      const sequenceMap = buildPermissionSequenceMap(group.permissions);
       const levelCounts = group.permissions.reduce(
         (counts, permission) => {
           const depth = permissionDepth(permission, permissionById);
@@ -501,8 +486,9 @@ function buildPermissionDomainGroups(
         },
         { l1: 0, l2: 0, l3: 0 },
       );
+      const filters = filtersByDomain[group.key] ?? DEFAULT_DOMAIN_FILTERS;
       const matchedPermissions = group.permissions.filter((permission) =>
-        permissionMatchesFilters(permission, filtersByDomain[group.key]),
+        permissionMatchesFilters(permission, filters),
       );
       const permissionsWithContext = includeAncestorContext(
         matchedPermissions,
@@ -523,10 +509,7 @@ function buildPermissionDomainGroups(
         title: group.title,
         description: group.description,
         icon: group.icon,
-        nodes: applyPermissionSequence(
-          stripWorkspaceRoot(buildPermissionTree(permissionsWithContext)),
-          sequenceMap,
-        ),
+        nodes: stripPlaneRoot(buildPermissionTree(permissionsWithContext)),
         matchedCount: matchedPermissions.length,
         totalCount: group.permissions.length,
         activeCount,
@@ -860,6 +843,13 @@ function PermissionDetailDialog({
               ? formatDateTime(permission.updatedAt, locale, EMPTY_MARK)
               : EMPTY_MARK}
           </DetailRow>
+          <DetailRow label="二次验证">
+            {permission.permType !== "api"
+              ? EMPTY_MARK
+              : permission.requiresStepUp
+                ? "需要"
+                : "不需要"}
+          </DetailRow>
           <DetailRow label="描述" className="sm:col-span-2">
             {permission.description || EMPTY_MARK}
           </DetailRow>
@@ -1003,18 +993,9 @@ function usePermissionTreeColumns({
 
   return [
     {
-      id: "sequence",
-      header: "#",
-      align: "center",
-      cell: ({ permission, sequence }) => (
-        <span className="text-body-sm text-muted-foreground">
-          {sequence || formatNumber(permission.sort)}
-        </span>
-      ),
-    },
-    {
       id: "name",
       header: "权限名称",
+      sortable: true,
       cell: (node) => {
         const { permission, children, depth } = node;
         const meta = permissionTypeMetaOf(permission.permType);
@@ -1055,9 +1036,6 @@ function usePermissionTreeColumns({
                   {children.length ? (
                     <Badge>{formatNumber(children.length)} 子级</Badge>
                   ) : null}
-                  {isSectionPermission(permission) ? (
-                    <Badge>业务分组</Badge>
-                  ) : null}
                 </>
               }
               description={permission.permCode}
@@ -1069,7 +1047,7 @@ function usePermissionTreeColumns({
     {
       id: "status",
       header: tShared("columns.state"),
-      align: "center",
+      sortable: true,
       cell: ({ permission }) => {
         const indicator = permissionStatusIndicator(permission);
         return (
@@ -1085,7 +1063,7 @@ function usePermissionTreeColumns({
     {
       id: "kind",
       header: tShared("columns.kind"),
-      align: "center",
+      sortable: true,
       cell: ({ permission }) => {
         const meta = permissionTypeMetaOf(permission.permType);
         return (
@@ -1098,15 +1076,32 @@ function usePermissionTreeColumns({
     {
       id: "source",
       header: "来源",
-      align: "center",
+      sortable: true,
       cell: ({ permission }) => (
         <Badge>{permissionSourceLabel(permission)}</Badge>
       ),
     },
     {
+      /* 二次验证是平台持有的策略（seed 声明），只对操作码有意义；菜单节点不适用。 */
+      id: "stepUp",
+      header: "二次验证",
+      sortable: true,
+      cell: ({ permission }) =>
+        permission.permType !== "api" ? (
+          EMPTY_MARK
+        ) : permission.requiresStepUp ? (
+          <StatusBadge tone="warning" icon={false}>
+            需要
+          </StatusBadge>
+        ) : (
+          "不需要"
+        ),
+    },
+    {
       id: "roles",
       header: "授权角色",
       align: "numeric",
+      sortable: true,
       cell: ({ permission }) =>
         `${formatNumber(permission.activeRoleCount)} / ${formatNumber(permission.roleCount)}`,
     },
@@ -1155,9 +1150,14 @@ function PermissionDomainSection({
   );
   /* 展开状态下可见的节点，拍平成表格的行。钉在 nodes 与 expandedIds 上：
      不 memo 的话每次渲染都是一个新数组，DataTable 白白重算一遍。 */
+  const [sort, setSort] = useState<DataTableSort | undefined>();
+  const sortedNodes = useMemo(
+    () => sortPermissionTree(group.nodes, sort),
+    [group.nodes, sort],
+  );
   const visibleNodes = useMemo(
-    () => flattenVisibleNodes(group.nodes, expandedIds),
-    [group.nodes, expandedIds],
+    () => flattenVisibleNodes(sortedNodes, expandedIds),
+    [sortedNodes, expandedIds],
   );
   /* 行操作走 DataTable 的 `rowActions`（它管固定 64px 与列锁定），所以列工厂
      只要展开状态这一件事。 */
@@ -1277,6 +1277,9 @@ function PermissionDomainSection({
             rows={visibleNodes}
             rowKey={(node) => node.permission.id}
             aria-label={group.title}
+            indexStart={1}
+            {...(sort ? { sort: sort } : {})}
+            onSortChange={setSort}
             rowActions={(node) => (
               <PermissionActionsMenu
                 permission={node.permission}
@@ -1326,18 +1329,10 @@ export function AdminPermissionsPage() {
   >([]);
   const [filtersByDomain, setFiltersByDomain] = useState<
     Record<PermissionDomainKey, DomainFilterState>
-  >({
-    "tenant-ops": { ...DEFAULT_DOMAIN_FILTERS },
-    "platform-autonomy": { ...DEFAULT_DOMAIN_FILTERS },
-    foundation: { ...DEFAULT_DOMAIN_FILTERS },
-  });
+  >({});
   const [viewModeByDomain, setViewModeByDomain] = useState<
     Record<PermissionDomainKey, ViewModeSwitchValue>
-  >({
-    "tenant-ops": "list",
-    "platform-autonomy": "list",
-    foundation: "list",
-  });
+  >({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedPermissionIds, setExpandedPermissionIds] = useState<
@@ -1516,7 +1511,7 @@ export function AdminPermissionsPage() {
     setFiltersByDomain((current) => ({
       ...current,
       [domain]: {
-        ...current[domain],
+        ...(current[domain] ?? DEFAULT_DOMAIN_FILTERS),
         ...patch,
       },
     }));
@@ -1572,7 +1567,7 @@ export function AdminPermissionsPage() {
       <PageHeader
         icon="shield-check"
         title="权限策略"
-        description="统一维护平台菜单、按钮和接口权限，用于角色授权、访问控制和平台自治治理。"
+        description="运营、运维、治理三个平台各一棵权限树。角色持有某个平台的任一权限，即可进入该平台。"
       />
 
       <MetricGrid
@@ -1626,12 +1621,12 @@ export function AdminPermissionsPage() {
                   onToggle={togglePermissionNode}
                   onExpand={expandPermissions}
                   onCollapse={collapsePermissions}
-                  filters={filtersByDomain[group.key]}
+                  filters={filtersByDomain[group.key] ?? DEFAULT_DOMAIN_FILTERS}
                   onFilterChange={(patch) =>
                     updateDomainFilters(group.key, patch)
                   }
                   onResetFilters={() => resetDomainFilters(group.key)}
-                  viewMode={viewModeByDomain[group.key]}
+                  viewMode={viewModeByDomain[group.key] ?? "list"}
                   onViewModeChange={(viewMode) =>
                     updateDomainViewMode(group.key, viewMode)
                   }
@@ -1653,7 +1648,7 @@ export function AdminPermissionsPage() {
             }
             description={
               loading
-                ? "正在读取 platform.platform_permission。"
+                ? "正在读取权限树。"
                 : (loadError ?? "当前没有可展示的平台权限。")
             }
           />

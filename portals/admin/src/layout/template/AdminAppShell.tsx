@@ -13,6 +13,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Button,
+  EmptyState,
   ShellBootScreen,
   ShellPageContainer,
   ShellSidebarFrame,
@@ -119,7 +121,7 @@ function ShellFrame({
   const [navCollapsed, setNavCollapsed] = useState(initialNavCollapsed);
   const [drawer, setDrawer] = useState<ShellDrawerType | null>(null);
   /* 只在通知抽屉打开时拉，关掉就丢：这是抽屉不是收件箱，台账没有已读态可维护。
-   * `null` = 还没回来，与"回来了但是空"分开画。没有 notification:log.read 能力的
+   * `null` = 还没回来，与"回来了但是空"分开画。没有 content:notification_log.read 能力的
    * 操作员拿到 403，readJson 落回 []——对他们抽屉就是空的，不报错。 */
   const [notifLogs, setNotifLogs] = useState<NotificationLogRecord[] | null>(
     null,
@@ -308,6 +310,24 @@ function ShellFrame({
         description={tShell("loading.unreachable")}
         delayMs={0}
       />
+    );
+  }
+
+  /* 登录成功但没有运营平台的任何权限：说清原因，不放进去看一页页的 403。 */
+  if (!session.capabilities.includes("admin.plane")) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background px-md">
+        <EmptyState
+          icon="buildings"
+          title={tShell("forbidden.title")}
+          description={tShell("forbidden.description")}
+          action={
+            <Button variant="outline" onClick={() => void signOut()}>
+              {tShell("forbidden.signOut")}
+            </Button>
+          }
+        />
+      </div>
     );
   }
 

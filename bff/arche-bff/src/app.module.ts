@@ -23,6 +23,8 @@ import { FeatureTogglesRouter } from "./routers/feature-toggles.router";
 import { PlatformAdminsRouter } from "./routers/platform-admins.router";
 import { AdminRolesRouter } from "./routers/admin-roles.router";
 import { AdminPermissionsRouter } from "./routers/admin-permissions.router";
+import { OperatorSessionsRouter } from "./routers/operator-sessions.router";
+import { GovernanceOverviewRouter } from "./routers/governance-overview.router";
 
 /* 通用面:登录会话 / 健康 / step-up。治理业务 router 分批从 admin-bff 迁入:
  * PR②(Batch 1)审计日志 / 通知投递台账两条只读面;(Batch 2)风险记录 / 合规
@@ -43,6 +45,8 @@ import { AdminPermissionsRouter } from "./routers/admin-permissions.router";
     PlatformAdminsRouter,
     AdminRolesRouter,
     AdminPermissionsRouter,
+    OperatorSessionsRouter,
+    GovernanceOverviewRouter,
   ],
   providers: [
     OperatorAdminService,

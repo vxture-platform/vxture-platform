@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionMenu,
@@ -22,12 +22,21 @@ import {
 import { fetchPlatformSettings, updatePlatformSetting } from "@/api/arche-bff";
 import type { DataTableColumn } from "@vxture/design-system";
 import type { PlatformSettingRecord } from "@/entities/console";
+import { formatDateTime } from "@/lib/format";
+import { useTableSort } from "@/lib/table-sort";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 
-// P2 占位板块建设：平台配置（admin.settings）。读 is_sensitive/is_encrypted 脱敏；
-// 编辑仅非敏感/非加密/非只读行（守卫 platform:setting.read|.manage，seed §4.3）。
+// 平台配置（admin.settings）。读 is_sensitive/is_encrypted 脱敏；
+// 编辑仅非敏感/非加密/非只读行（守卫 config:parameter.read|.manage）。
+
+const VALUE_TYPE_LABELS: Record<PlatformSettingRecord["valueType"], string> = {
+  string: "文本",
+  int: "整数",
+  bool: "布尔",
+  json: "JSON",
+};
 
 function describeError(error: unknown): { description?: string } {
   return error instanceof Error && error.message
@@ -42,38 +51,80 @@ function protectionLabel(item: PlatformSettingRecord): string | null {
   return null;
 }
 
-const COLUMNS: readonly DataTableColumn<PlatformSettingRecord>[] = [
-  {
-    id: "key",
-    header: "配置键 / 分组",
-    cell: (item) => (
-      <TableTitleCell title={item.configKey} description={item.configGroup} />
-    ),
-  },
-  { id: "type", header: "类型", cell: (item) => item.valueType },
-  {
-    id: "value",
-    header: "值",
-    cell: (item) => {
-      const protection = protectionLabel(item);
-      return (
-        <span className="flex min-w-0 items-center gap-xs">
-          <span className="truncate">{item.configValue}</span>
-          {protection ? (
-            <StatusBadge tone="neutral">{protection}</StatusBadge>
-          ) : null}
-        </span>
-      );
+/* 列序：配置键作标题列（说明收进副行，不另占一列）；分组、类型、值、保护、更新时间居中。
+   值可能很长（JSON）：单元格定上限并截断，完整值在编辑框里看。 */
+function columnsOf(
+  locale: string,
+): readonly DataTableColumn<PlatformSettingRecord>[] {
+  return [
+    {
+      id: "key",
+      header: "配置键",
+      sortable: true,
+      cell: (item) => (
+        <TableTitleCell
+          title={item.configKey}
+          {...(item.description ? { description: item.description } : {})}
+        />
+      ),
     },
-  },
-  {
-    id: "description",
-    header: "说明",
-    cell: (item) => item.description ?? "-",
-  },
-];
+    {
+      id: "group",
+      header: "分组",
+      sortable: true,
+      cell: (item) => item.configGroup,
+    },
+    {
+      id: "type",
+      header: "类型",
+      sortable: true,
+      cell: (item) => VALUE_TYPE_LABELS[item.valueType] ?? item.valueType,
+    },
+    {
+      id: "value",
+      header: "值",
+      cell: (item) => (
+        <span
+          className="mx-auto block max-w-panel-sm truncate"
+          title={item.configValue}
+        >
+          {item.configValue}
+        </span>
+      ),
+    },
+    {
+      id: "protection",
+      header: "保护",
+      sortable: true,
+      cell: (item) => {
+        const protection = protectionLabel(item);
+        return protection ? (
+          <StatusBadge tone="neutral">{protection}</StatusBadge>
+        ) : (
+          "-"
+        );
+      },
+    },
+    {
+      id: "updatedAt",
+      header: "更新时间",
+      sortable: true,
+      cell: (item) => formatDateTime(item.updatedAt, locale),
+    },
+  ];
+}
+
+const SORT_ACCESSORS = {
+  key: (item: PlatformSettingRecord) => item.configKey,
+  group: (item: PlatformSettingRecord) => item.configGroup,
+  type: (item: PlatformSettingRecord) => item.valueType,
+  protection: (item: PlatformSettingRecord) => protectionLabel(item),
+  updatedAt: (item: PlatformSettingRecord) => Date.parse(item.updatedAt),
+};
 
 export function SystemParametersPage() {
+  const locale = useLocale();
+  const tableColumns = useMemo(() => columnsOf(locale), [locale]);
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const { toast } = useToast();
@@ -123,10 +174,16 @@ export function SystemParametersPage() {
     return result;
   }, [items, search, groupFilter]);
 
+  const {
+    sort,
+    onSortChange,
+    rows: sorted,
+  } = useTableSort(filtered, SORT_ACCESSORS);
+
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, page, pageSize]);
   const pageCount = Math.ceil(filtered.length / pageSize);
 
   function openEdit(item: PlatformSettingRecord) {
@@ -161,9 +218,9 @@ export function SystemParametersPage() {
         className="vx-setting-page"
         header={
           <PageHeader
-            icon="settings"
-            title="系统参数"
-            description="查看与维护平台运行时配置。敏感/加密配置值脱敏显示；加密、只读、敏感配置不在本页编辑（分别经密钥管理器 / 业务锁 / 专用安全流程）。"
+            icon="gauge"
+            title="参数配置"
+            description="查看与维护平台运行时配置。敏感、加密配置值脱敏显示；加密、只读、敏感配置不在本页编辑。"
           />
         }
         filters={
@@ -172,7 +229,7 @@ export function SystemParametersPage() {
             onViewChange={() => {}}
             cardsDisabledReason="卡片视图已下线，改用列表"
             count={`${filtered.length} 条`}
-            aria-label="系统参数筛选"
+            aria-label="参数配置筛选"
             search={
               <Input
                 type="search"
@@ -212,13 +269,18 @@ export function SystemParametersPage() {
         table={
           <DataTable
             labels={tableLabels}
-            columns={COLUMNS}
+            columns={tableColumns}
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}
             indexStart={(page - 1) * pageSize + 1}
             selectedKeys={[...selectedIds]}
             onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+            {...(sort ? { sort: sort } : {})}
+            onSortChange={(next) => {
+              onSortChange(next);
+              setPage(1);
+            }}
             rowActions={(item) => (
               <ActionMenu
                 label="配置操作"
@@ -240,7 +302,7 @@ export function SystemParametersPage() {
                 description={
                   search || groupFilter !== "all"
                     ? tShared("common.adjustFiltersHint")
-                    : "数据库中没有平台配置项"
+                    : "还没有平台配置项"
                 }
               />
             }

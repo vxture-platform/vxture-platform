@@ -11,12 +11,12 @@
  * 显示名，账号已删除/找不到时回退 actor_id 本身，不让一行留痕因为找不到人就
  * 从列表里消失。
  *
- * 只读、零新增写路径；只要求已登录 operator，不设专属能力码——与
- * product-health.router.ts / job-scheduler.router.ts 同一口径（见后者文件头
- * "没有专属能力码就不额外设卡"）。
+ * 只读。能力码 `ops:change.read`（2026-09-14 三平台拆分时补上：此前只要求已登录，
+ * 任何运营账号都能读全平台的操作留痕）。**只读 opera 自己发起的行**
+ * （`actor_console = 'opera'`）：admin 与 arche 的操作留痕归各自平台，三平台严格隔离。
  */
 import { Controller, Get, Inject, Query, Req } from "@nestjs/common";
-import { unauthenticated } from "../errors/api-error";
+import { notEntitled, unauthenticated } from "../errors/api-error";
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { OPERA_BFF_RO_POOL } from "../tokens";
@@ -65,6 +65,8 @@ interface AuditLogRow {
   error_code: string | null;
 }
 
+const CHANGE_READ = "ops:change.read";
+
 @Controller("api/audit-logs")
 export class AuditLogViewRouter {
   constructor(@Inject(OPERA_BFF_RO_POOL) private readonly pool: Pool) {}
@@ -77,6 +79,9 @@ export class AuditLogViewRouter {
     if (!req.operator) {
       throw unauthenticated("AUTH_NO_SESSION", "No active session");
     }
+    if (!req.capabilities?.includes(CHANGE_READ)) {
+      throw notEntitled(CHANGE_READ);
+    }
     const limit = clampLimit(limitParam);
 
     const { rows } = await this.pool.query<AuditLogRow>(
@@ -86,6 +91,7 @@ export class AuditLogViewRouter {
        from support.audit_logs a
        left join admin.operator_account o on o.id = a.actor_id
        where a.actor_type = 'operator'
+         and a.actor_console = 'opera'
        order by a.created_at desc
        limit $1`,
       [limit],

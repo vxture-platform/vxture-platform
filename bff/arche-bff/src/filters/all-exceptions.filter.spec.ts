@@ -38,7 +38,7 @@ function makeHost(
   };
   const request = {
     method: "GET",
-    originalUrl: "/api/products",
+    originalUrl: "/api/risk-records",
     headers: {},
     ...req,
   };
@@ -152,24 +152,24 @@ describe("被拒留痕的口径（X-3 §4.1）", () => {
     );
 
   it("403 写操作 —— 记", async () => {
-    fire("POST", "/api/atlas/provider-keys/abc/rotate", notEntitled("x:y"));
+    fire("PUT", "/api/admin-roles/abc/permissions", notEntitled("x:y"));
     await vi.waitFor(() => expect(fake.calls).toHaveLength(1));
   });
 
   it("409 写操作 —— 记", async () => {
     fire(
       "PATCH",
-      "/api/products/0c4fa6cc-a86d-4e96-98cd-deacc0b38b46/state",
-      new HttpException({ code: "CATALOG_INVALID_STATE_TRANSITION" }, 409),
+      "/api/risk-records/0c4fa6cc-a86d-4e96-98cd-deacc0b38b46/review",
+      new HttpException({ code: "RISK_RECORD_INVALID_STATE" }, 409),
     );
     await vi.waitFor(() => expect(fake.calls).toHaveLength(1));
     /* error_code 那一格往往比 action 更有用——`NOT_ENTITLED` 与
        `MAINTENANCE_WINDOW_READ_ONLY` 是两回事。 */
-    expect(fake.calls[0]).toContain("CATALOG_INVALID_STATE_TRANSITION");
+    expect(fake.calls[0]).toContain("RISK_RECORD_INVALID_STATE");
   });
 
   it("400 纯格式 —— 不记（每个手滑都留一行会把审计表淹掉）", async () => {
-    fire("PATCH", "/api/products/x/state", invalidRequest("V_X", "m", "state"));
+    fire("PATCH", "/api/risk-records/x", invalidRequest("V_X", "m", "level"));
     await new Promise((r) => setTimeout(r, 20));
     expect(fake.calls).toHaveLength(0);
   });
@@ -177,7 +177,7 @@ describe("被拒留痕的口径（X-3 §4.1）", () => {
   it("404 —— 不记（「对象不存在」不是拒绝）", async () => {
     fire(
       "PATCH",
-      "/api/products/x/state",
+      "/api/risk-records/x",
       new HttpException({ code: "NF" }, 404),
     );
     await new Promise((r) => setTimeout(r, 20));
@@ -185,7 +185,7 @@ describe("被拒留痕的口径（X-3 §4.1）", () => {
   });
 
   it("读操作被拒 —— 不记（只记写方法）", async () => {
-    fire("GET", "/api/maintenance-windows", notEntitled("x:y"));
+    fire("GET", "/api/risk-records", notEntitled("x:y"));
     await new Promise((r) => setTimeout(r, 20));
     expect(fake.calls).toHaveLength(0);
   });
