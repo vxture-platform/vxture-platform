@@ -61,8 +61,11 @@ type StreamKey = "calls" | "outcomes";
  * **`state` 是这个对象算不算数，`outcome` 是这一次尝试怎么结束的**，调用是后者。
  */
 interface CapabilityCallRecord {
-  /** 主键。`callId` **不唯一**（上游只有非唯一索引，配 `sequenceNo`/`retryOf`
-   *  ——一次调用可以落多条事件行），所以行标识用这个。 */
+  /** 主键。`callId` **不唯一**（上游只有非唯一索引，配 `retryOf`——一次调用可以落
+   *  多条事件行），所以行标识用这个。
+   *
+   *  原先这里还列着 `sequenceNo`，那一列已退役（runos TD-015）：计数器在网关进程内存
+   *  里，淘汰或重启都会让同一个任务从 1 重来。排序用 `occurredAt` + `eventId`。 */
   eventId: string;
   callId: string;
   occurredAt: string;
