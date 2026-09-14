@@ -279,6 +279,23 @@ const HEALTH_META: Record<
   unknown: { label: "无数据", tone: "neutral" },
 };
 
+/**
+ * 按值取健康度展示；认不出的值原样显示成中性徽标，缺失时才是「无数据」——
+ * 把一个没见过的值渲染成「无数据」等于替上游编了一句话。
+ */
+function healthMeta(status: string | undefined): {
+  label: string;
+  tone: StatusBadgeTone;
+} {
+  if (!status) return HEALTH_META.unknown;
+  return (
+    HEALTH_META[status as ProviderHealthStatus] ?? {
+      label: status,
+      tone: "neutral",
+    }
+  );
+}
+
 /** 与本仓其它页同一份写法（`RunosChangeTable` / 审计页）：解析失败就原样显示。 */
 /* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
    中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
@@ -301,6 +318,16 @@ const MODEL_STATE_META: Record<
   inactive: { label: "停用", tone: "neutral" },
   deprecated: { label: "已弃用", tone: "warning" },
 };
+
+/** 按值取模型状态展示；认不出的值原样显示成中性徽标（同 `healthMeta`）。 */
+function modelStateMeta(state: string): {
+  label: string;
+  tone: StatusBadgeTone;
+} {
+  return (
+    MODEL_STATE_META[state as ModelState] ?? { label: state, tone: "neutral" }
+  );
+}
 
 /** 孤儿模型的分组键——不是一个真实 provider id，只用于把它们聚在一起显示。 */
 const ORPHAN = "__orphan__";
@@ -1830,8 +1857,8 @@ function ModelServiceContent() {
                       : undefined
                   }
                 >
-                  <StatusBadge tone={MODEL_STATE_META[m.state].tone} dot>
-                    {MODEL_STATE_META[m.state].label}
+                  <StatusBadge tone={modelStateMeta(m.state).tone} dot>
+                    {modelStateMeta(m.state).label}
                   </StatusBadge>
                 </span>
               ),
@@ -2191,11 +2218,8 @@ function ModelServiceContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
-                  <StatusBadge
-                    tone={HEALTH_META[r.health?.status ?? "unknown"].tone}
-                    dot
-                  >
-                    {HEALTH_META[r.health?.status ?? "unknown"].label}
+                  <StatusBadge tone={healthMeta(r.health?.status).tone} dot>
+                    {healthMeta(r.health?.status).label}
                   </StatusBadge>
                 ),
               },

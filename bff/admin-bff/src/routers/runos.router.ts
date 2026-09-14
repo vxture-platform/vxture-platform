@@ -110,6 +110,18 @@ export interface CapabilityRecord {
   updatedAt: string;
 }
 
+/**
+ * 目录列表的一页（runos v0.26.0 起的游标信封，契约见 `runos-contract.ts`）。
+ * 此前这条路由声明回 `CapabilityRecord[]`，而契约早已按信封校验——类型说一套、
+ * 线上是另一套，admin 能力目录页按数组读，拿到信封就崩。
+ */
+export interface CapabilityPage {
+  items: CapabilityRecord[];
+  nextCursor: string | null;
+  prevCursor: string | null;
+  total: number;
+}
+
 export interface CapabilityVersionRecord {
   capabilityId: string;
   version: string;
@@ -198,14 +210,19 @@ export class RunosRouter {
     @Req() req: Request & RequestContext,
     @Query("category") category?: string,
     @Query("tag") tag?: string | string[],
-  ): Promise<CapabilityRecord[]> {
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ): Promise<CapabilityPage> {
     assertCanRead(req);
     const params = new URLSearchParams();
     if (category) params.set("category", category);
     for (const t of Array.isArray(tag) ? tag : tag ? [tag] : []) {
       if (t) params.append("tag", t);
     }
-    return this.request<CapabilityRecord[]>(
+    /* 原样转交，不兜底：非法值由 runos 回 `REGISTRY_INVALID_LIMIT`。 */
+    if (limit) params.set("limit", limit);
+    if (cursor) params.set("cursor", cursor);
+    return this.request<CapabilityPage>(
       req,
       `/capability/capabilities${params.size ? `?${params.toString()}` : ""}`,
       { contract: "capabilities" },

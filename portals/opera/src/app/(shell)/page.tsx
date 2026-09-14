@@ -121,6 +121,23 @@ const HEALTH_META: Record<
   unknown: { label: "无数据", tone: "neutral" },
 };
 
+/**
+ * 按值取健康度展示；认不出的值原样显示成中性徽标，缺失时才是「无数据」——
+ * 把一个没见过的值渲染成「无数据」等于替上游编了一句话。
+ */
+function healthMeta(status: string | undefined): {
+  label: string;
+  tone: StatusBadgeTone;
+} {
+  if (!status) return HEALTH_META.unknown;
+  return (
+    HEALTH_META[status as ProviderHealthStatus] ?? {
+      label: status,
+      tone: "neutral",
+    }
+  );
+}
+
 /* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
    中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
    是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
@@ -366,11 +383,8 @@ export default function DashboardPage() {
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => (
-                <StatusBadge
-                  tone={HEALTH_META[r.health?.status ?? "unknown"].tone}
-                  dot
-                >
-                  {HEALTH_META[r.health?.status ?? "unknown"].label}
+                <StatusBadge tone={healthMeta(r.health?.status).tone} dot>
+                  {healthMeta(r.health?.status).label}
                 </StatusBadge>
               ),
             },
