@@ -131,7 +131,8 @@ describe("反向验证：runos 侧实测到的两条漂移", () => {
   });
 
   it("授权行缺 `criticalRequiresApproval`（读成 false → 要人工确认的授权显示成不需要）", () => {
-    const { criticalRequiresApproval: _dropped, ...row } = liveGrantRow;
+    const row: Record<string, unknown> = { ...liveGrantRow };
+    delete row["criticalRequiresApproval"];
     const body = thrown(() => assertRunosContract([row], "grants"));
     expect(body["code"]).toBe("RUNOS_CONTRACT_FIELD_MISSING");
     expect(body["field"]).toBe("criticalRequiresApproval");
