@@ -275,6 +275,20 @@ function usePlatformUserColumns(
       ),
     },
     {
+      /* 与「在线会话」同一口径：有登录会话即在线。登录服务读不到时「—」，不说成离线。 */
+      id: "online",
+      header: "在线",
+      sortable: true,
+      cell: (admin) =>
+        admin.isOnline == null ? (
+          EMPTY_MARK
+        ) : (
+          <StatusBadge tone={admin.isOnline ? "success" : "neutral"}>
+            {admin.isOnline ? "在线" : "离线"}
+          </StatusBadge>
+        ),
+    },
+    {
       id: "role",
       header: "角色",
       sortable: true,
@@ -794,6 +808,8 @@ export function PlatformUsersPage() {
     () => ({
       user: (admin: PlatformAdminRecord) => admin.displayName || admin.username,
       status: (admin: PlatformAdminRecord) => platformAdminStatusCode(admin),
+      online: (admin: PlatformAdminRecord) =>
+        admin.isOnline == null ? null : admin.isOnline ? 1 : 0,
       role: (admin: PlatformAdminRecord) => admin.roleRank,
       login: (admin: PlatformAdminRecord) =>
         admin.lastLoginAt ? Date.parse(admin.lastLoginAt) : null,

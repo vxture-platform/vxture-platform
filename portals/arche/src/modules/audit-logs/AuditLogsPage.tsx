@@ -30,7 +30,16 @@ import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 const EMPTY_MARK = "-";
 
 function resultLabel(result: AuditLogRecord["result"]) {
-  return result === "success" ? "成功" : "失败";
+  if (result === "success") return "成功";
+  /* 登录服务写的登录告警：异常登录（新地点、新设备）、二次验证失败激增。 */
+  if (result === "alert") return "告警";
+  return "失败";
+}
+
+function resultTone(result: AuditLogRecord["result"]) {
+  if (result === "success") return "success" as const;
+  if (result === "alert") return "warning" as const;
+  return "danger" as const;
 }
 
 function auditLogSearchText(log: AuditLogRecord) {
@@ -96,7 +105,7 @@ function AuditSummary({ logs }: { logs: AuditLogRecord[] }) {
 
 // ─── 子组件：工具栏 ────────────────────────────────────────────────────────────
 
-type ResultFilter = "all" | "success" | "failure";
+type ResultFilter = "all" | "success" | "failure" | "alert";
 
 function AuditToolbar({
   search,
@@ -178,6 +187,7 @@ function AuditToolbar({
         <option value="all">全部结果</option>
         <option value="success">成功</option>
         <option value="failure">失败</option>
+        <option value="alert">登录告警</option>
       </NativeSelect>
     </FilterBar>
   );
@@ -191,7 +201,7 @@ const AUDIT_CSV_COLUMNS: readonly CsvColumn<AuditLogRecord>[] = [
   { label: "对象类型", value: (l) => l.targetType },
   { label: "对象ID", value: (l) => l.targetId ?? "" },
   { label: "模块", value: (l) => l.module },
-  { label: "结果", value: (l) => (l.result === "success" ? "成功" : "失败") },
+  { label: "结果", value: (l) => resultLabel(l.result) },
   { label: "IP", value: (l) => l.ip ?? "" },
   { label: "错误", value: (l) => l.errorMessage ?? "" },
 ];
@@ -245,7 +255,7 @@ function auditColumns(
       sortable: true,
       cell: (log) => (
         <StatusBadge
-          tone={log.result === "success" ? "success" : "danger"}
+          tone={resultTone(log.result)}
           {...(log.errorMessage ? { title: log.errorMessage } : {})}
         >
           {resultLabel(log.result)}
@@ -280,6 +290,13 @@ export function AuditLogsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
+  /* 登录记录页的「查看登录告警」带 ?result=alert 进来。挂载后再读，免得与服务端渲染不一致。 */
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get("result");
+    if (value === "success" || value === "failure" || value === "alert") {
+      setResultFilter(value);
+    }
+  }, []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");

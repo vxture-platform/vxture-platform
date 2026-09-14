@@ -1,26 +1,20 @@
 /**
- * operator-sessions.router.ts — 运营账号的登录记录与在线会话（只读）。
+ * operator-sessions.router.ts — 在线会话：现在谁登录着（只读，现状）。
  * @package @vxture/bff-arche
  * @layer Application
  * @category Router
  *
- * 数据源是登录服务（auth-bff）写下的两张表，此前治理面一眼都看不到：
+ * **在线 = IdP 中央会话仍在**（auth-bff `GET /internal/operator/sessions`）。此前按
+ * `admin.operator_refresh_token` 里还有 active 行判在线，结果登录着的人（包括看这一页的
+ * 本人）不在列表里：刷新令牌链会被并发刷新的重放判定整条吊销，中央会话却仍在、静默 SSO
+ * 照样放行。能回答「谁在线」的只有中央会话。
  *
- *   admin.operator_login_attempt   每一次登录尝试（成功、密码错、被锁…），开放集
- *   admin.operator_refresh_token   刷新令牌的轮换链；同一 session_id 的行是一次会话
+ * 历史（登录记录、失败、锁定、异常告警）归「安全审计 / 登录记录」，见 sign-in-logs.router。
+ * 强制下线走平台用户的写口（`operator:account.manage` + step-up），本 router 不开写路径。
  *
- * 「平台用户」页能对单个人强制下线、重置 MFA，但回答不了「现在谁在线」「昨晚有没有
- * 人在撞密码」——这两个问题正是本页的全部职责。强制下线仍走平台用户的写口
- * （`/api/platform-admins/:id/force-logout`，要 `operator:account.manage` 与 step-up），
- * 本 router 不开第二条写路径。
- *
- * 能力码 `operator:session.read`。排序参与取数（`listOrderBy`），两张表都截在
- * `LIST_LIMIT` 条。
- *
- * **什么算登录失败**：登录服务写入的结果是 success / bad_credential / mfa_required /
- * mfa_failed / locked。`mfa_required` 是密码通过、等待二次验证的正常中间步骤，
- * 不是失败——算进去会让每一次正常的 MFA 登录都在总览上多一次「失败」。
+ * 能力码 `operator:session.read`。会话在 Redis，不在库里：排序在内存里做，列表截在 `LIST_LIMIT`。
  */
+import { createHash } from "node:crypto";
 import {
   Controller,
   ForbiddenException,
@@ -32,64 +26,75 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import {
+  OperatorAdminService,
+  type IdpOperatorSession,
+} from "../auth/operator-admin.service";
+import { invalidRequest } from "../errors/api-error";
 import { ARCHE_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
-import { LIST_LIMIT, listOrderBy, parseIso, toIso } from "./router.shared";
+import { LIST_LIMIT } from "./router.shared";
 
 export const SESSION_READ = "operator:session.read";
 
-export interface OperatorSignInRecord {
-  id: string;
-  operatorId: string | null;
-  /** 找不到账号（标识打错、账号已删）时为 null，界面显示登录时用的标识。 */
-  operatorName: string | null;
-  identifier: string;
-  authMethod: string;
-  /** success / mfa_required / bad_credential / mfa_failed / locked（开放集，登录服务决定）。 */
-  result: string;
-  ipAddress: string;
-  userAgent: string | null;
-  createdAt: string;
-}
-
 export interface OperatorSessionRecord {
-  sessionId: string;
+  /** sha256(sid) 前 32 位。sid 本身是会话 cookie 的值，不下发。 */
+  sessionRef: string;
   operatorId: string;
-  operatorName: string;
-  username: string;
+  /** 账号已被删除时为 null。 */
+  operatorName: string | null;
+  username: string | null;
   roleName: string | null;
-  clientId: string;
+  /** 这个会话登录过的平台（client_id）。 */
+  clients: string[];
+  authMethod: string;
   startedAt: string;
-  lastRefreshedAt: string;
   expiresAt: string;
+  /** 就是发起本次请求的这个会话。 */
+  isCurrent: boolean;
+  /** 会话属于本人（强制下线不对本人开放）。 */
+  isSelf: boolean;
 }
 
 export interface OperatorSessionSummary {
   activeSessions: number;
   onlineOperators: number;
-  failedSignIns24h: number;
-  lockedSignIns24h: number;
 }
 
-const SIGN_IN_SORT: Readonly<Record<string, string>> = {
-  operator: "coalesce(nullif(o.display_name, ''), o.username, la.identifier)",
-  method: "la.auth_method",
-  result: "la.result",
-  ip: "la.ip_address",
-  time: "la.created_at",
+/** 与 auth-bff operator-sessions-internal.router 的同名函数同一算法（各写一份，不共享代码）。 */
+export function sessionRefOf(sid: string): string {
+  return createHash("sha256").update(sid).digest("hex").slice(0, 32);
+}
+
+type SortValue = string | number | null;
+
+const SESSION_SORT: Readonly<
+  Record<string, (row: OperatorSessionRecord) => SortValue>
+> = {
+  operator: (row) => row.operatorName ?? row.username,
+  role: (row) => row.roleName,
+  clients: (row) => row.clients.join(","),
+  authMethod: (row) => row.authMethod,
+  startedAt: (row) => row.startedAt,
+  expiresAt: (row) => row.expiresAt,
 };
 
-const SESSION_SORT: Readonly<Record<string, string>> = {
-  operator: "coalesce(nullif(o.display_name, ''), o.username)",
-  client: "max(t.client_id)",
-  startedAt: "min(t.created_at)",
-  lastRefreshedAt: "max(t.created_at)",
-  expiresAt: "max(t.expires_at)",
-};
+/** 在线会话的汇总：会话数与在线账号数。概览与本页共用这一处口径。 */
+export function summarizeSessions(
+  sessions: readonly IdpOperatorSession[],
+): OperatorSessionSummary {
+  return {
+    activeSessions: sessions.length,
+    onlineOperators: new Set(sessions.map((s) => s.operatorId)).size,
+  };
+}
 
 @Controller("api/operator-sessions")
 export class OperatorSessionsRouter {
-  constructor(@Inject(ARCHE_BFF_RO_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(ARCHE_BFF_RO_POOL) private readonly pool: Pool,
+    @Inject(OperatorAdminService) private readonly idp: OperatorAdminService,
+  ) {}
 
   // GET /api/operator-sessions/summary
   @Get("summary")
@@ -97,160 +102,121 @@ export class OperatorSessionsRouter {
     @Req() req: Request & RequestContext,
   ): Promise<OperatorSessionSummary> {
     assertCanReadSessions(req);
-    const [sessions, attempts] = await Promise.all([
-      this.pool.query<{ active_sessions: number; online_operators: number }>(
-        `select count(distinct t.session_id)::int as active_sessions,
-                count(distinct t.operator_id)::int as online_operators
-           from admin.operator_refresh_token t
-          where t.status = 'active' and t.expires_at > now()`,
-      ),
-      this.pool.query<{ failed: number; locked: number }>(
-        `select count(*) filter (where la.result not in ('success', 'mfa_required'))::int as failed,
-                count(*) filter (where la.result = 'locked')::int as locked
-           from admin.operator_login_attempt la
-          where la.created_at > now() - interval '24 hours'`,
-      ),
-    ]);
-    return {
-      activeSessions: sessions.rows[0]?.active_sessions ?? 0,
-      onlineOperators: sessions.rows[0]?.online_operators ?? 0,
-      failedSignIns24h: attempts.rows[0]?.failed ?? 0,
-      lockedSignIns24h: attempts.rows[0]?.locked ?? 0,
-    };
-  }
-
-  // GET /api/operator-sessions/sign-ins?result=success|failure&from=ISO&to=ISO&sort=&order=
-  //   result=failure = 凭证错误、二次验证失败、被锁定（mfa_required 是中间步骤，不算失败）。
-  @Get("sign-ins")
-  async signIns(
-    @Req() req: Request & RequestContext,
-    @Query("result") result?: string,
-    @Query("from") from?: string,
-    @Query("to") to?: string,
-    @Query("sort") sort?: string,
-    @Query("order") order?: string,
-  ): Promise<OperatorSignInRecord[]> {
-    assertCanReadSessions(req);
-    const orderBy = listOrderBy(
-      sort,
-      order,
-      SIGN_IN_SORT,
-      "la.created_at desc, la.id",
-    );
-    const where: string[] = ["true"];
-    const params: unknown[] = [];
-    if (result === "success") where.push("la.result = 'success'");
-    else if (result === "failure")
-      where.push("la.result not in ('success', 'mfa_required')");
-    if (from) {
-      params.push(parseIso(from, "from"));
-      where.push(`la.created_at >= $${params.length}`);
-    }
-    if (to) {
-      params.push(parseIso(to, "to"));
-      where.push(`la.created_at <= $${params.length}`);
-    }
-    params.push(LIST_LIMIT);
-
-    const { rows } = await this.pool.query<SignInRow>(
-      `select la.id, la.operator_id, la.identifier, la.auth_method, la.result,
-              la.ip_address, la.user_agent, la.created_at,
-              coalesce(nullif(o.display_name, ''), o.username) as operator_name
-         from admin.operator_login_attempt la
-         left join admin.operator_account o on o.id = la.operator_id
-        where ${where.join(" and ")}
-        ${orderBy} limit $${params.length}`,
-      params,
-    );
-    return rows.map((row) => ({
-      id: row.id,
-      operatorId: row.operator_id,
-      operatorName: row.operator_name,
-      identifier: row.identifier,
-      authMethod: row.auth_method,
-      result: row.result,
-      ipAddress: row.ip_address,
-      userAgent: row.user_agent,
-      createdAt: toIso(row.created_at),
-    }));
+    return summarizeSessions(await this.idp.listOperatorSessions());
   }
 
   // GET /api/operator-sessions/active?sort=&order=
-  //   一个 session_id 是一次会话：开始 = 链上最早一行，最近续期 = 最晚一行，
-  //   还有一行 active 且未过期才算在线。
   @Get("active")
   async active(
     @Req() req: Request & RequestContext,
     @Query("sort") sort?: string,
     @Query("order") order?: string,
   ): Promise<OperatorSessionRecord[]> {
-    assertCanReadSessions(req);
-    const orderBy = listOrderBy(
-      sort,
-      order,
-      SESSION_SORT,
-      "max(t.created_at) desc, t.session_id",
-    );
-    const { rows } = await this.pool.query<SessionRow>(
-      `select t.session_id, t.operator_id,
-              max(t.client_id) as client_id,
-              min(t.created_at) as started_at,
-              max(t.created_at) as last_refreshed_at,
-              max(t.expires_at) filter (where t.status = 'active') as expires_at,
+    const operator = assertCanReadSessions(req);
+    const compare = sessionComparator(sort, order);
+    const sessions = await this.idp.listOperatorSessions();
+    const names = await this.operatorNames(sessions);
+    const currentRef = req.sessionId ? sessionRefOf(req.sessionId) : null;
+
+    return sessions
+      .map((session): OperatorSessionRecord => {
+        const account = names.get(session.operatorId);
+        return {
+          sessionRef: session.sessionRef,
+          operatorId: session.operatorId,
+          operatorName: account?.operator_name ?? null,
+          username: account?.username ?? null,
+          roleName: account?.role_name ?? null,
+          clients: session.clients,
+          authMethod: session.authMethod,
+          startedAt: session.createdAt,
+          expiresAt: session.expiresAt,
+          isCurrent: session.sessionRef === currentRef,
+          isSelf: session.operatorId === operator.id,
+        };
+      })
+      .sort(compare)
+      .slice(0, LIST_LIMIT);
+  }
+
+  private async operatorNames(
+    sessions: readonly IdpOperatorSession[],
+  ): Promise<Map<string, AccountRow>> {
+    const ids = [...new Set(sessions.map((s) => s.operatorId))];
+    if (ids.length === 0) return new Map();
+    const { rows } = await this.pool.query<AccountRow>(
+      `select o.id::text as id,
               coalesce(nullif(o.display_name, ''), o.username) as operator_name,
               o.username,
               r.role_name
-         from admin.operator_refresh_token t
-         join admin.operator_account o on o.id = t.operator_id
+         from admin.operator_account o
          left join admin.operator_role r on r.id = o.role_id
-        group by t.session_id, t.operator_id, o.display_name, o.username, r.role_name
-       having bool_or(t.status = 'active' and t.expires_at > now())
-        ${orderBy} limit $1`,
-      [LIST_LIMIT],
+        where o.id::text = any($1::text[])`,
+      [ids],
     );
-    return rows.map((row) => ({
-      sessionId: row.session_id,
-      operatorId: row.operator_id,
-      operatorName: row.operator_name,
-      username: row.username,
-      roleName: row.role_name,
-      clientId: row.client_id,
-      startedAt: toIso(row.started_at),
-      lastRefreshedAt: toIso(row.last_refreshed_at),
-      expiresAt: toIso(row.expires_at),
-    }));
+    return new Map(rows.map((row) => [row.id, row]));
   }
 }
 
-function assertCanReadSessions(req: Request & RequestContext): void {
+/** 排序白名单与方向校验同 `listOrderBy`；默认登录时间倒序。 */
+function sessionComparator(
+  sort: string | undefined,
+  order: string | undefined,
+): (a: OperatorSessionRecord, b: OperatorSessionRecord) => number {
+  const byStartedDesc = (a: OperatorSessionRecord, b: OperatorSessionRecord) =>
+    b.startedAt.localeCompare(a.startedAt);
+  if (sort === undefined || sort === "") return byStartedDesc;
+  const accessor = SESSION_SORT[sort];
+  if (!accessor) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      `sort must be one of ${Object.keys(SESSION_SORT).join(" / ")}`,
+      "sort",
+    );
+  }
+  if (
+    order !== undefined &&
+    order !== "" &&
+    order !== "asc" &&
+    order !== "desc"
+  ) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      "order must be asc or desc",
+      "order",
+    );
+  }
+  const direction = order === "asc" ? 1 : -1;
+  return (a, b) => {
+    const left = accessor(a);
+    const right = accessor(b);
+    /* 空值恒在最后，与 SQL 侧的 nulls last 一致。 */
+    if (left === null && right === null) return byStartedDesc(a, b);
+    if (left === null) return 1;
+    if (right === null) return -1;
+    const diff =
+      typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left).localeCompare(String(right), "zh-Hans-CN");
+    return diff === 0 ? byStartedDesc(a, b) : diff * direction;
+  };
+}
+
+function assertCanReadSessions(
+  req: Request & RequestContext,
+): NonNullable<RequestContext["operator"]> {
   if (!req.operator) {
     throw new UnauthorizedException("No active session");
   }
   if (!req.capabilities?.includes(SESSION_READ)) {
     throw new ForbiddenException(`Missing ${SESSION_READ} capability`);
   }
+  return req.operator;
 }
 
-interface SignInRow {
+interface AccountRow {
   id: string;
-  operator_id: string | null;
-  operator_name: string | null;
-  identifier: string;
-  auth_method: string;
-  result: string;
-  ip_address: string;
-  user_agent: string | null;
-  created_at: Date | string;
-}
-
-interface SessionRow {
-  session_id: string;
-  operator_id: string;
   operator_name: string;
   username: string;
   role_name: string | null;
-  client_id: string;
-  started_at: Date | string;
-  last_refreshed_at: Date | string;
-  expires_at: Date | string;
 }

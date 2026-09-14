@@ -1,6 +1,6 @@
 # Arche 治理平台规格
 
-> 版本：1.0.0 | 更新：2026-09-14
+> 版本：1.1.0 | 更新：2026-09-15
 > 权威来源：`portals/arche/src/config/navigation.ts`（侧栏）、`deploy/database/seed/seed-catalog.mjs`（`OPERATOR_PLANE_DOMAINS` / `OPERATOR_PERMISSIONS` / `MENU_TREE`）。本文件记录判据与边界，代码与 seed 为准。
 
 ---
@@ -19,19 +19,20 @@ arche 的信任等级最高、操作频率最低，物理独立成面，落实�
 
 ## 二、功能板块
 
-| 板块     | 页面       | 路由                 | 页面码                         | 操作码                                      |
-| -------- | ---------- | -------------------- | ------------------------------ | ------------------------------------------- |
-| 概览     | 治理总览   | `/`                  | `arche.menu.overview`          | —（进得了平台即可见；各块按对应页的码给数） |
-| 身份权限 | 平台用户   | `/admins`            | `arche.menu.platform_admin`    | `operator:account.manage`                   |
-| 身份权限 | 平台角色   | `/roles`             | `arche.menu.platform_role`     | `operator:role.manage`                      |
-| 身份权限 | 权限策略   | `/permissions`       | `arche.menu.permission_policy` | （读写均由 `operator:role.manage` 把门）    |
-| 身份权限 | 登录与会话 | `/sessions`          | `arche.menu.sign_in_session`   | `operator:session.read`                     |
-| 安全审计 | 审计日志   | `/audit-logs`        | `arche.menu.audit_log`         | `audit:log.read`                            |
-| 安全审计 | 风险记录   | `/risk-records`      | `arche.menu.risk_record`       | `risk:record.read` / `.manage`              |
-| 安全审计 | 合规事件   | `/compliance-events` | `arche.menu.compliance_event`  | `compliance:event.read` / `.manage`         |
-| 系统配置 | 参数配置   | `/system-parameters` | `arche.menu.system_parameter`  | `config:parameter.read` / `.manage`         |
-| 系统配置 | 开关控制   | `/feature-toggles`   | `arche.menu.feature_toggle`    | `config:feature_flag.read` / `.manage`      |
-| 通知审计 | 发送记录   | `/notification-logs` | `arche.menu.notification_log`  | `audit:notification_log.read`               |
+| 板块     | 页面     | 路由                 | 页面码                         | 操作码                                      |
+| -------- | -------- | -------------------- | ------------------------------ | ------------------------------------------- |
+| 概览     | 治理总览 | `/`                  | `arche.menu.overview`          | —（进得了平台即可见；各块按对应页的码给数） |
+| 身份权限 | 平台用户 | `/admins`            | `arche.menu.platform_admin`    | `operator:account.manage`                   |
+| 身份权限 | 平台角色 | `/roles`             | `arche.menu.platform_role`     | `operator:role.manage`                      |
+| 身份权限 | 权限策略 | `/permissions`       | `arche.menu.permission_policy` | （读写均由 `operator:role.manage` 把门）    |
+| 身份权限 | 在线会话 | `/sessions`          | `arche.menu.online_session`    | `operator:session.read`                     |
+| 安全审计 | 审计日志 | `/audit-logs`        | `arche.menu.audit_log`         | `audit:log.read`                            |
+| 安全审计 | 登录记录 | `/sign-in-logs`      | `arche.menu.sign_in_log`       | `audit:sign_in_log.read`                    |
+| 安全审计 | 风险记录 | `/risk-records`      | `arche.menu.risk_record`       | `risk:record.read` / `.manage`              |
+| 安全审计 | 合规事件 | `/compliance-events` | `arche.menu.compliance_event`  | `compliance:event.read` / `.manage`         |
+| 系统配置 | 参数配置 | `/system-parameters` | `arche.menu.system_parameter`  | `config:parameter.read` / `.manage`         |
+| 系统配置 | 开关控制 | `/feature-toggles`   | `arche.menu.feature_toggle`    | `config:feature_flag.read` / `.manage`      |
+| 通知审计 | 发送记录 | `/notification-logs` | `arche.menu.notification_log`  | `audit:notification_log.read`               |
 
 「个人信息」（`/me`）是本人只读自视，入口在用户菜单，不进权限树。
 
@@ -47,6 +48,14 @@ arche 的信任等级最高、操作频率最低，物理独立成面，落实�
 - **未做，需要另行决定**：
   - 审计与日志的保留期：没有清理作业作支撑，只加一个参数会是一张看起来能改、实际什么都不连的表单。
   - 三个 BFF 仍共用一个数据库账号（`platform.env` 的 `DATABASE_URL`）。按平台拆服务角色要在生产上新建角色与密钥。
+
+### 2026-09-15 拆分「登录与会话」
+
+- **两个问题，两页**：「现在谁登录着」是身份权限的现状，留在「身份权限 / 在线会话」；「谁在什么时候、从哪儿、登没登成」是历史，归「安全审计 / 登录记录」，另设操作码 `audit:sign_in_log.read`，授给原先持有 `operator:session.read` 的角色。
+- **在线的口径改为 IdP 中央会话**（auth-bff `GET /internal/operator/sessions`）。此前按刷新令牌表判在线，owner 本人登录着却不在列表里：刷新令牌链会被并发刷新的重放判定整条吊销，中央会话仍在、静默 SSO 照样放行。平台用户列表的「在线 / 离线」与总览用同一口径；登录服务读不到时显示「—」，不说成离线。
+- **会话标识不下发**：sid 就是 IdP 会话 cookie 的值。接口只给 `sessionRef`（sha256 前 32 位），用来标出「当前会话」。
+- **强制下线真正下线**：此前只吊销刷新令牌，中央会话还在，门户下一次授权就被静默 SSO 放回来。强制下线、停用、重置 MFA、重置密码现在一并结束中央会话，并给登录过的平台发后端通道登出。
+- **异常登录告警此前从未落库**：登录服务写 `result = 'alert'`，而 `support.audit_logs.result` 只收 success / failure / denied，整条被 CHECK 拒掉，提醒邮件也跟着没发。现写 `success`，类别由 action（`AnomalousLogin` / `LoginFailureSpike`）表达；审计日志把这两类显示为「告警」并可单独筛选，登录记录页给 24 小时告警数。
 
 ## 三、三个平台的权限隔离
 

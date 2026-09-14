@@ -23,10 +23,23 @@ import { formatNumber } from "@/lib/format";
 
 type MetricItem = ComponentProps<typeof MetricGrid>["items"][number];
 
+/** 读不到（null）显示「—」，不显示成 0。 */
+function countOrMark(value: number | null): string {
+  return value === null ? "—" : formatNumber(value);
+}
+
 function overviewMetrics(overview: GovernanceOverview): MetricItem[] {
   const items: MetricItem[] = [];
-  const { identity, sessions, audit, risk, compliance, config, notifications } =
-    overview;
+  const {
+    identity,
+    sessions,
+    signIns,
+    audit,
+    risk,
+    compliance,
+    config,
+    notifications,
+  } = overview;
   if (identity) {
     items.push({
       id: "operators",
@@ -50,10 +63,24 @@ function overviewMetrics(overview: GovernanceOverview): MetricItem[] {
       id: "sessions",
       icon: "clock",
       label: "在线会话",
-      help: "仍有未过期刷新令牌的会话。",
-      value: formatNumber(sessions.activeSessions),
-      tags: [`24 小时登录失败 ${formatNumber(sessions.failedSignIns24h)}`],
-      ...(sessions.failedSignIns24h > 0 ? { tone: "warning" as const } : {}),
+      help: "登录服务里仍然有效的运营账号会话；登录服务读不到时显示「—」。",
+      value: countOrMark(sessions.activeSessions),
+      tags: [`在线账号 ${countOrMark(sessions.onlineOperators)}`],
+    });
+  }
+  if (signIns) {
+    items.push({
+      id: "sign-ins",
+      icon: "list",
+      label: "24 小时登录失败",
+      help: "凭证错误、二次验证失败或被锁定的登录尝试；待二次验证不算。",
+      value: formatNumber(signIns.failed24h),
+      tags: [`登录告警 ${formatNumber(signIns.alerts24h)}`],
+      ...(signIns.alerts24h > 0
+        ? { tone: "danger" as const }
+        : signIns.failed24h > 0
+          ? { tone: "warning" as const }
+          : {}),
     });
   }
   if (audit) {

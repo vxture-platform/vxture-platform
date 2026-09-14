@@ -14,8 +14,11 @@
 import { Controller, Get, Inject, Req } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import { OperatorAdminService } from "../auth/operator-admin.service";
 import { ARCHE_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
+import { summarizeSessions } from "./operator-sessions.router";
+import { LOGIN_ALERT_SQL, SIGN_IN_FAILED_SQL } from "./sign-in-logs.router";
 
 export interface GovernanceOverview {
   identity?: {
@@ -24,9 +27,14 @@ export interface GovernanceOverview {
     roles: number;
     customRoles: number;
   };
+  /** 在线会话（IdP 中央会话）。登录服务暂不可读时两项为 null——不是 0。 */
   sessions?: {
-    activeSessions: number;
-    failedSignIns24h: number;
+    activeSessions: number | null;
+    onlineOperators: number | null;
+  };
+  signIns?: {
+    failed24h: number;
+    alerts24h: number;
   };
   audit?: {
     today: number;
@@ -54,7 +62,10 @@ const anyOf = (req: RequestContext, ...codes: string[]) =>
 
 @Controller("api/overview")
 export class GovernanceOverviewRouter {
-  constructor(@Inject(ARCHE_BFF_RO_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(ARCHE_BFF_RO_POOL) private readonly pool: Pool,
+    @Inject(OperatorAdminService) private readonly idp: OperatorAdminService,
+  ) {}
 
   @Get()
   async overview(
@@ -69,6 +80,7 @@ export class GovernanceOverviewRouter {
       identity,
       roles,
       sessions,
+      signIns,
       audit,
       risk,
       compliance,
@@ -87,15 +99,23 @@ export class GovernanceOverviewRouter {
                      from admin.operator_role
                     where is_workforce_visible = true`)
         : null,
+      /* undefined = 无权查看（整块缺席）；null = 登录服务读不到（块在、数字显示「—」）。 */
       anyOf(req, "operator:session.read")
+        ? this.idp
+            .listOperatorSessions()
+            .then(summarizeSessions)
+            .catch(() => null)
+        : undefined,
+      anyOf(req, "audit:sign_in_log.read")
         ? count(`select
-                     (select count(distinct session_id)::int
-                        from admin.operator_refresh_token
-                       where status = 'active' and expires_at > now()) as active,
                      (select count(*)::int
-                        from admin.operator_login_attempt
-                       where result not in ('success', 'mfa_required')
-                         and created_at > now() - interval '24 hours') as failed`)
+                        from admin.operator_login_attempt la
+                       where ${SIGN_IN_FAILED_SQL}
+                         and la.created_at > now() - interval '24 hours') as failed,
+                     (select count(*)::int
+                        from support.audit_logs a
+                       where ${LOGIN_ALERT_SQL}
+                         and a.created_at > now() - interval '24 hours') as alerts`)
         : null,
       anyOf(req, "audit:log.read")
         ? count(`select count(*)::int as today,
@@ -140,11 +160,19 @@ export class GovernanceOverviewRouter {
             },
           }
         : {}),
-      ...(sessions
+      ...(sessions !== undefined
         ? {
             sessions: {
-              activeSessions: sessions["active"] ?? 0,
-              failedSignIns24h: sessions["failed"] ?? 0,
+              activeSessions: sessions?.activeSessions ?? null,
+              onlineOperators: sessions?.onlineOperators ?? null,
+            },
+          }
+        : {}),
+      ...(signIns
+        ? {
+            signIns: {
+              failed24h: signIns["failed"] ?? 0,
+              alerts24h: signIns["alerts"] ?? 0,
             },
           }
         : {}),

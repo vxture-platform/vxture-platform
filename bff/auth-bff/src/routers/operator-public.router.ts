@@ -21,6 +21,7 @@ import {
   Post,
 } from "@nestjs/common";
 import { PgOperatorRepository } from "@vxture/service-iam";
+import { OidcService } from "../oidc/oidc.service";
 import { OperatorRefreshTokenRepository } from "../token/operator-refresh-token.repository";
 import { RedisService } from "../redis/redis.service";
 
@@ -36,6 +37,8 @@ export class OperatorPublicRouter {
     private readonly operators: PgOperatorRepository,
     @Inject(OperatorRefreshTokenRepository)
     private readonly refreshTokens: OperatorRefreshTokenRepository,
+    @Inject(OidcService)
+    private readonly oidc: OidcService,
   ) {}
 
   /**
@@ -78,6 +81,7 @@ export class OperatorPublicRouter {
     }
     await this.operators.markOwnEmailVerified(operatorId);
     await this.refreshTokens.revokeAllForOperator(operatorId);
+    await this.oidc.endOperatorSessions(operatorId);
     return { ok: true };
   }
 }

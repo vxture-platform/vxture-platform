@@ -486,6 +486,30 @@ export class OidcService {
     return false;
   }
 
+  /**
+   * 结束一个运营者的全部中央会话（强制下线、停用、重置 MFA / 密码）。
+   *
+   * 只吊销刷新令牌不够：中央会话还在，门户下一次 authorize 就被静默 SSO 放回来——
+   * 「强制下线」自己就失效了。这里和登出同一套收尾：删中央会话、吊销令牌链、
+   * 给登录过的平台发后端通道登出。返回结束的会话数。
+   */
+  async endOperatorSessions(operatorId: string): Promise<number> {
+    const sub = `opr_${operatorId}`;
+    const sessions = (await this.redis.listOperatorSessions()).filter(
+      (session) => session.sub === sub,
+    );
+    for (const session of sessions) {
+      await this.redis.deleteOidcSession(session.sid);
+      await this.token.revokeSession(session.sid);
+      await this.sendBackChannelLogouts(
+        session.sid,
+        session.sub,
+        session.clients,
+      );
+    }
+    return sessions.length;
+  }
+
   private async sendBackChannelLogouts(
     sid: string,
     sub: string,

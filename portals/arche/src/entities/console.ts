@@ -19,7 +19,8 @@ export interface AuditLogRecord {
   targetLabel: string | null;
   module: string;
   ip: string | null;
-  result: "success" | "failure";
+  /** alert = 登录服务写的登录告警（异常登录、失败激增），库里是 success、类别看 action。 */
+  result: "success" | "failure" | "alert";
   errorMessage: string | null;
   createdAt: string;
 }
@@ -142,6 +143,8 @@ export interface PlatformAdminRecord {
   isSystem: boolean;
   lastLoginAt: string | null;
   lastLoginIp: string | null;
+  /** 有登录会话即在线；null = 登录服务暂不可读。 */
+  isOnline?: boolean | null;
   remark: string | null;
   createdAt: string;
   updatedAt: string;
@@ -199,7 +202,7 @@ export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRec
   updatedAt: string;
 }
 
-// ── 登录与会话（arche-bff operator-sessions.router，只读）──────────────────────
+// ── 登录记录（arche-bff sign-in-logs.router，只读）──────────────────────────────
 
 export interface OperatorSignInRecord {
   id: string;
@@ -215,23 +218,37 @@ export interface OperatorSignInRecord {
   createdAt: string;
 }
 
+export interface SignInLogSummary {
+  failed24h: number;
+  locked24h: number;
+  /** 24 小时登录告警（异常登录、失败激增），明细在审计日志。 */
+  alerts24h: number;
+}
+
+// ── 在线会话（arche-bff operator-sessions.router，只读）——IdP 中央会话 ────────
+
 export interface OperatorSessionRecord {
-  sessionId: string;
+  /** 会话的不透明引用（sid 的摘要），只作行键。 */
+  sessionRef: string;
   operatorId: string;
-  operatorName: string;
-  username: string;
+  /** 账号已被删除时为 null。 */
+  operatorName: string | null;
+  username: string | null;
   roleName: string | null;
-  clientId: string;
+  /** 登录过的平台（client_id：admin / opera / arche）。 */
+  clients: string[];
+  authMethod: string;
   startedAt: string;
-  lastRefreshedAt: string;
   expiresAt: string;
+  /** 就是正在看这一页的会话。 */
+  isCurrent: boolean;
+  /** 会话属于本人。 */
+  isSelf: boolean;
 }
 
 export interface OperatorSessionSummary {
   activeSessions: number;
   onlineOperators: number;
-  failedSignIns24h: number;
-  lockedSignIns24h: number;
 }
 
 // ── 治理总览（arche-bff governance-overview.router）—— 缺席的块 = 无权查看 ──────
@@ -243,7 +260,9 @@ export interface GovernanceOverview {
     roles: number;
     customRoles: number;
   };
-  sessions?: { activeSessions: number; failedSignIns24h: number };
+  /** 登录服务读不到时两项为 null（显示「—」，不是 0）。 */
+  sessions?: { activeSessions: number | null; onlineOperators: number | null };
+  signIns?: { failed24h: number; alerts24h: number };
   audit?: { today: number; failedToday: number };
   risk?: { pendingHigh: number; pendingFollowUp: number };
   compliance?: { open: number; inReview: number };

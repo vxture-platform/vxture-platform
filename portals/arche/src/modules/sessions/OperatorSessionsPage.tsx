@@ -1,15 +1,17 @@
 "use client";
 
 /**
- * OperatorSessionsPage.tsx — 登录与会话：在线会话 + 登录记录（只读）。
+ * OperatorSessionsPage.tsx — 在线会话：现在谁登录着（只读，现状）。
  * @package @vxture/arche
  * @layer Presentation
  *
- * 「平台用户」页能对单个人强制下线，却回答不了「现在谁在线」「昨晚有没有人在撞密码」。
- * 本页只回答这两个问题。强制下线复用平台用户的写口（要 `operator:account.manage` 与
- * 二次验证），没有这个码的人看得见会话、看不到那个动作。
+ * 在线 = 登录服务里的中央会话仍然有效，本人正在用的这个会话也在其中（标「当前会话」）。
+ * 历史——谁在什么时候登没登成、失败、锁定、异常告警——在「安全审计 / 登录记录」。
  *
- * 两张表都截在 500 条，排序交给 BFF（`sortParams`），页面只持有排序状态。
+ * 强制下线复用平台用户的写口（要 `operator:account.manage` 与二次验证），会结束该账号在
+ * 三个平台上的全部会话。本人的会话不给这个动作：等级门本就拒绝对自己操作。
+ *
+ * 列表截在 500 条，排序交给 BFF（`sortParams`），页面只持有排序状态。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -17,34 +19,24 @@ import { useLocale } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
+  Badge,
   DataTable,
   EmptyState,
-  FilterBar,
   MetricGrid,
-  NativeSelect,
-  SectionHeader,
-  StatusBadge,
   TableTitleCell,
   ViewLayout,
   useToast,
 } from "@vxture/design-system";
-import type {
-  DataTableColumn,
-  DataTableSort,
-  StatusBadgeTone,
-} from "@vxture/design-system";
+import type { DataTableColumn, DataTableSort } from "@vxture/design-system";
 import {
   fetchOperatorSessionSummary,
   fetchOperatorSessions,
-  fetchOperatorSignIns,
   forcePlatformAdminLogout,
   isStepUpRequiredError,
-  type OperatorSignInFilters,
 } from "@/api/arche-bff";
 import type {
   OperatorSessionRecord,
   OperatorSessionSummary,
-  OperatorSignInRecord,
 } from "@/entities/console";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
@@ -57,25 +49,38 @@ import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { useTableLabels } from "@/modules/shared/table";
 
 const ACCOUNT_MANAGE = "operator:account.manage";
+const EMPTY_MARK = "—";
 
-/* 词表照登录服务实际写入的值（auth-bff recordOperatorAttempt）。认不出的值原样显示。 */
-const RESULT_LABELS: Record<string, string> = {
-  success: "成功",
-  mfa_required: "待二次验证",
-  bad_credential: "凭证错误",
-  mfa_failed: "二次验证失败",
-  locked: "已锁定",
+/* 登录过的平台：client_id → 平台名。认不出的原样显示。 */
+const CLIENT_LABELS: Record<string, string> = {
+  admin: "运营平台",
+  opera: "运维平台",
+  arche: "治理平台",
 };
 
-function resultTone(result: string): StatusBadgeTone {
-  if (result === "success") return "success";
-  /* 密码已过、等二次验证：正常中间步骤，不是失败。 */
-  if (result === "mfa_required") return "neutral";
-  if (result === "locked") return "danger";
-  return "warning";
+/* 登录方式：登录服务写入中央会话的 authMethod，两步登录写成「一步+二步」
+   （如 password+totp）。逐段翻译，认不出的段原样显示。 */
+const AUTH_FACTOR_LABELS: Record<string, string> = {
+  password: "密码",
+  phone: "手机验证码",
+  email: "邮箱验证码",
+  totp: "验证器",
+  webauthn: "通行密钥",
+  recovery: "恢复码",
+};
+
+function authMethodLabel(method: string): string {
+  if (!method) return EMPTY_MARK;
+  return method
+    .split("+")
+    .map((factor) => AUTH_FACTOR_LABELS[factor] ?? factor)
+    .join(" + ");
 }
 
-type ResultFilter = "all" | "success" | "failure";
+function clientsLabel(clients: readonly string[]): string {
+  if (clients.length === 0) return EMPTY_MARK;
+  return clients.map((id) => CLIENT_LABELS[id] ?? id).join("、");
+}
 
 function sessionColumns(
   locale: string,
@@ -88,21 +93,29 @@ function sessionColumns(
       cell: (row) => (
         <TableTitleCell
           icon="user"
-          title={row.operatorName}
-          description={`@${row.username}`}
+          title={row.operatorName ?? "已删除的账号"}
+          titleSuffix={row.isCurrent ? <Badge>当前会话</Badge> : null}
+          description={row.username ? `@${row.username}` : EMPTY_MARK}
         />
       ),
     },
     {
       id: "role",
       header: "角色",
-      cell: (row) => row.roleName ?? "—",
+      sortable: true,
+      cell: (row) => row.roleName ?? EMPTY_MARK,
     },
     {
-      id: "client",
+      id: "clients",
       header: "登录平台",
       sortable: true,
-      cell: (row) => row.clientId,
+      cell: (row) => clientsLabel(row.clients),
+    },
+    {
+      id: "authMethod",
+      header: "登录方式",
+      sortable: true,
+      cell: (row) => authMethodLabel(row.authMethod),
     },
     {
       id: "startedAt",
@@ -111,63 +124,10 @@ function sessionColumns(
       cell: (row) => formatDateTime(row.startedAt, locale),
     },
     {
-      id: "lastRefreshedAt",
-      header: "最近续期",
-      sortable: true,
-      cell: (row) => formatDateTime(row.lastRefreshedAt, locale),
-    },
-    {
       id: "expiresAt",
       header: "到期时间",
       sortable: true,
       cell: (row) => formatDateTime(row.expiresAt, locale),
-    },
-  ];
-}
-
-function signInColumns(
-  locale: string,
-): DataTableColumn<OperatorSignInRecord>[] {
-  return [
-    {
-      id: "operator",
-      header: "运营账号",
-      sortable: true,
-      cell: (row) => (
-        <TableTitleCell
-          icon="user"
-          title={row.operatorName ?? row.identifier}
-          description={row.operatorName ? row.identifier : "未匹配到账号"}
-        />
-      ),
-    },
-    {
-      id: "method",
-      header: "方式",
-      sortable: true,
-      cell: (row) => row.authMethod,
-    },
-    {
-      id: "result",
-      header: "结果",
-      sortable: true,
-      cell: (row) => (
-        <StatusBadge tone={resultTone(row.result)}>
-          {RESULT_LABELS[row.result] ?? row.result}
-        </StatusBadge>
-      ),
-    },
-    {
-      id: "ip",
-      header: "IP",
-      sortable: true,
-      cell: (row) => row.ipAddress,
-    },
-    {
-      id: "time",
-      header: "时间",
-      sortable: true,
-      cell: (row) => formatDateTime(row.createdAt, locale),
     },
   ];
 }
@@ -183,96 +143,50 @@ export function OperatorSessionsPage() {
 
   const [summary, setSummary] = useState<OperatorSessionSummary | null>(null);
   const [sessions, setSessions] = useState<OperatorSessionRecord[]>([]);
-  const [sessionSort, setSessionSort] = useState<DataTableSort | undefined>();
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sessionsError, setSessionsError] = useState<string | null>(null);
-  const [sessionPage, setSessionPage] = useState(1);
-  const [sessionPageSize, setSessionPageSize] = useState<PageSize>(10);
+  const [sort, setSort] = useState<DataTableSort | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
 
-  const [signIns, setSignIns] = useState<OperatorSignInRecord[]>([]);
-  const [signInSort, setSignInSort] = useState<DataTableSort | undefined>();
-  const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
-  const [signInsLoading, setSignInsLoading] = useState(true);
-  const [signInsError, setSignInsError] = useState<string | null>(null);
-  const [signInPage, setSignInPage] = useState(1);
-  const [signInPageSize, setSignInPageSize] = useState<PageSize>(20);
-
-  const loadSessions = useCallback(async () => {
-    setSessionsLoading(true);
-    setSessionsError(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const [rows, totals] = await Promise.all([
-        fetchOperatorSessions(sortParams(sessionSort)),
+        fetchOperatorSessions(sortParams(sort)),
         fetchOperatorSessionSummary(),
       ]);
       setSessions(rows);
       setSummary(totals);
     } catch (error) {
       setSessions([]);
-      setSessionsError(error instanceof Error ? error.message : "读取失败");
+      setLoadError(error instanceof Error ? error.message : "读取失败");
     } finally {
-      setSessionsLoading(false);
+      setLoading(false);
     }
-  }, [sessionSort]);
+  }, [sort]);
 
   useEffect(() => {
-    void loadSessions();
-  }, [loadSessions]);
+    void load();
+  }, [load]);
 
-  useEffect(() => {
-    let active = true;
-    const filters: OperatorSignInFilters = { ...sortParams(signInSort) };
-    if (resultFilter !== "all") filters.result = resultFilter;
-    setSignInsLoading(true);
-    setSignInsError(null);
-    fetchOperatorSignIns(filters)
-      .then((rows) => {
-        if (active) setSignIns(rows);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setSignIns([]);
-        setSignInsError(error instanceof Error ? error.message : "读取失败");
-      })
-      .finally(() => {
-        if (active) setSignInsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [signInSort, resultFilter]);
-
-  const sessionCols = useMemo(() => sessionColumns(locale), [locale]);
-  const signInCols = useMemo(() => signInColumns(locale), [locale]);
-
-  const sessionPageCount = Math.max(
-    1,
-    Math.ceil(sessions.length / sessionPageSize),
-  );
-  const sessionRows = sessions.slice(
-    (sessionPage - 1) * sessionPageSize,
-    sessionPage * sessionPageSize,
-  );
-  const signInPageCount = Math.max(
-    1,
-    Math.ceil(signIns.length / signInPageSize),
-  );
-  const signInRows = signIns.slice(
-    (signInPage - 1) * signInPageSize,
-    signInPage * signInPageSize,
-  );
+  const columns = useMemo(() => sessionColumns(locale), [locale]);
+  const pageCount = Math.max(1, Math.ceil(sessions.length / pageSize));
+  const rows = sessions.slice((page - 1) * pageSize, page * pageSize);
 
   async function forceLogout(row: OperatorSessionRecord) {
+    const name = row.operatorName ?? row.username ?? "该账号";
     try {
       const result = await runWithStepUp(() =>
-        forcePlatformAdminLogout(row.operatorId, "登录与会话页强制下线"),
+        forcePlatformAdminLogout(row.operatorId, "在线会话页强制下线"),
       );
       toast({
         tone: "success",
         title: "已强制下线",
-        description: `${row.operatorName} 的 ${formatNumber(result.revoked)} 个会话已吊销。`,
+        description: `${name} 的 ${formatNumber(result.revoked)} 个会话已结束。`,
       });
-      await loadSessions();
+      await load();
     } catch (error) {
       if (isStepUpCancelled(error)) throw error;
       toast({
@@ -288,71 +202,59 @@ export function OperatorSessionsPage() {
     <ViewLayout className="w-full">
       <PageHeader
         icon="clock"
-        title="登录与会话"
-        description="三个平台运营账号的在线会话与登录记录，含失败与锁定。"
+        title="在线会话"
+        description="三个平台运营账号当前登录着的会话，含本人。登录历史见「安全审计 / 登录记录」。"
+        action={
+          <ActionButton
+            variant="outline"
+            icon="clock-counter-clockwise"
+            onClick={() => void load()}
+          >
+            刷新
+          </ActionButton>
+        }
       />
 
       <MetricGrid
-        aria-label="登录与会话统计"
-        columns={4}
-        loading={summary === null}
+        aria-label="在线会话统计"
+        columns={2}
+        loading={summary === null && loading}
         items={[
           {
             id: "sessions",
             icon: "clock",
             label: "在线会话",
-            help: "仍有未过期刷新令牌的会话。",
-            value: formatNumber(summary?.activeSessions ?? 0),
+            help: "登录服务里仍然有效的会话。同一账号在不同浏览器登录算多个。",
+            value: summary ? formatNumber(summary.activeSessions) : EMPTY_MARK,
           },
           {
             id: "operators",
             icon: "user",
             label: "在线账号",
             help: "至少有一个在线会话的运营账号。",
-            value: formatNumber(summary?.onlineOperators ?? 0),
-          },
-          {
-            id: "failed",
-            icon: "x",
-            label: "24 小时登录失败",
-            help: "最近 24 小时凭证错误、二次验证失败或被锁定的登录尝试；待二次验证不算。",
-            value: formatNumber(summary?.failedSignIns24h ?? 0),
-            ...((summary?.failedSignIns24h ?? 0) > 0
-              ? { tone: "warning" as const }
-              : {}),
-          },
-          {
-            id: "locked",
-            icon: "shield-check",
-            label: "24 小时锁定",
-            help: "最近 24 小时因连续失败被锁定的登录尝试。",
-            value: formatNumber(summary?.lockedSignIns24h ?? 0),
-            ...((summary?.lockedSignIns24h ?? 0) > 0
-              ? { tone: "danger" as const }
-              : {}),
+            value: summary ? formatNumber(summary.onlineOperators) : EMPTY_MARK,
           },
         ]}
       />
 
-      <section className="grid min-w-0 gap-sm" aria-label="在线会话">
-        <SectionHeader level={2} icon="clock" title="在线会话" />
-        <DataTable
-          labels={tableLabels}
-          columns={sessionCols}
-          rows={sessionRows}
-          rowKey={(row) => row.sessionId}
-          loading={sessionsLoading}
-          indexStart={(sessionPage - 1) * sessionPageSize + 1}
-          {...(sessionSort ? { sort: sessionSort } : {})}
-          onSortChange={(next) => {
-            setSessionSort(next);
-            setSessionPage(1);
-          }}
-          {...(canManage
-            ? {
-                rowActions: (row: OperatorSessionRecord) => (
+      <DataTable
+        labels={tableLabels}
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.sessionRef}
+        loading={loading}
+        indexStart={(page - 1) * pageSize + 1}
+        {...(sort ? { sort } : {})}
+        onSortChange={(next) => {
+          setSort(next);
+          setPage(1);
+        }}
+        {...(canManage
+          ? {
+              rowActions: (row: OperatorSessionRecord) =>
+                row.isSelf ? null : (
                   <ActionMenu
-                    label={`${row.operatorName} 操作`}
+                    label={`${row.operatorName ?? row.username ?? "会话"} 操作`}
                     items={[
                       {
                         id: "force-logout",
@@ -361,108 +263,37 @@ export function OperatorSessionsPage() {
                         danger: true,
                         confirm: withLabels({
                           verb: "强制下线",
-                          target: `「${row.operatorName}」`,
+                          target: `「${row.operatorName ?? row.username ?? "该账号"}」`,
                           consequence:
-                            "吊销该账号在三个平台上的全部会话，对方需要重新登录。",
+                            "结束该账号在三个平台上的全部会话，对方需要重新登录。",
                           onConfirm: () => forceLogout(row),
                         }),
                       },
                     ]}
                   />
                 ),
-              }
-            : {})}
-          empty={
-            <EmptyState
-              title={sessionsError ? "在线会话读取失败" : "当前没有在线会话"}
-              {...(sessionsError ? { description: sessionsError } : {})}
-            />
-          }
-          footer={
-            <ListPagination
-              currentPage={Math.min(sessionPage, sessionPageCount)}
-              pageCount={sessionPageCount}
-              total={sessions.length}
-              pageSize={sessionPageSize}
-              onPageSizeChange={(size) => {
-                setSessionPageSize(size);
-                setSessionPage(1);
-              }}
-              onPageChange={setSessionPage}
-            />
-          }
-        />
-      </section>
-
-      <section className="grid min-w-0 gap-sm" aria-label="登录记录">
-        <SectionHeader level={2} icon="list" title="登录记录" />
-        <FilterBar
-          view="list"
-          onViewChange={() => {}}
-          cardsDisabledReason="卡片视图已下线，改用列表"
-          count={formatNumber(signIns.length)}
-          aria-label="登录记录筛选"
-          onReset={() => {
-            setResultFilter("all");
-            setSignInPage(1);
-          }}
-          actions={
-            <ActionButton
-              variant="outline"
-              icon="clock-counter-clockwise"
-              onClick={() => void loadSessions()}
-            >
-              刷新会话
-            </ActionButton>
-          }
-        >
-          <NativeSelect
-            wrapperClassName="w-fit basis-media-xl"
-            value={resultFilter}
-            onChange={(event) => {
-              setResultFilter(event.target.value as ResultFilter);
-              setSignInPage(1);
+            }
+          : {})}
+        empty={
+          <EmptyState
+            title={loadError ? "在线会话读取失败" : "当前没有在线会话"}
+            {...(loadError ? { description: loadError } : {})}
+          />
+        }
+        footer={
+          <ListPagination
+            currentPage={Math.min(page, pageCount)}
+            pageCount={pageCount}
+            total={sessions.length}
+            pageSize={pageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
             }}
-            aria-label="登录结果"
-          >
-            <option value="all">全部结果</option>
-            <option value="success">成功</option>
-            <option value="failure">失败（含锁定）</option>
-          </NativeSelect>
-        </FilterBar>
-        <DataTable
-          labels={tableLabels}
-          columns={signInCols}
-          rows={signInRows}
-          rowKey={(row) => row.id}
-          loading={signInsLoading}
-          indexStart={(signInPage - 1) * signInPageSize + 1}
-          {...(signInSort ? { sort: signInSort } : {})}
-          onSortChange={(next) => {
-            setSignInSort(next);
-            setSignInPage(1);
-          }}
-          empty={
-            <EmptyState
-              title={signInsError ? "登录记录读取失败" : "没有匹配的登录记录"}
-              {...(signInsError ? { description: signInsError } : {})}
-            />
-          }
-          footer={
-            <ListPagination
-              currentPage={Math.min(signInPage, signInPageCount)}
-              pageCount={signInPageCount}
-              total={signIns.length}
-              pageSize={signInPageSize}
-              onPageSizeChange={(size) => {
-                setSignInPageSize(size);
-                setSignInPage(1);
-              }}
-              onPageChange={setSignInPage}
-            />
-          }
-        />
-      </section>
+            onPageChange={setPage}
+          />
+        }
+      />
     </ViewLayout>
   );
 }

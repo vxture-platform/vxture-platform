@@ -81,6 +81,8 @@ export class OperatorAuthMiddleware implements NestMiddleware {
     const context = req as Request & RequestContext;
     context.operator = resolved.operator;
     context.capabilities = resolved.capabilities;
+    const sid = outcome.claims.sid;
+    if (typeof sid === "string" && sid) context.sessionId = sid;
 
     /* 平台门（owner 2026-09-14，三平台严格隔离）：进得了 IdP 的运营账号不等于进得了
        本平台。根码由授权闭包自动授予，能做本平台任一件事的角色都有它；没有的一律 403，

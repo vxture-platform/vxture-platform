@@ -58,8 +58,26 @@ export class PlatformAdminsRouter {
       requireOperatorId(req),
     );
 
-    const result = await this.pool.query<PlatformAdminRow>(PLATFORM_ADMIN_SQL);
-    return result.rows.map((row) => mapPlatformAdminRow(row, actorRank));
+    const [result, online] = await Promise.all([
+      this.pool.query<PlatformAdminRow>(PLATFORM_ADMIN_SQL),
+      this.onlineOperatorIds(),
+    ]);
+    return result.rows.map((row) =>
+      mapPlatformAdminRow(row, actorRank, online),
+    );
+  }
+
+  /**
+   * 在线 = 有 IdP 中央会话（与「在线会话」页同一口径）。登录服务读不到时给 null：
+   * 列表照常出，在线列显示「—」，不把人说成离线。
+   */
+  private async onlineOperatorIds(): Promise<Set<string> | null> {
+    try {
+      const sessions = await this.operatorAdmin.listOperatorSessions();
+      return new Set(sessions.map((session) => session.operatorId));
+    } catch {
+      return null;
+    }
   }
 
   /** Resolve the acting operator's role rank (TD-017 canManage display truth). */
@@ -459,6 +477,8 @@ function toIso(value: Date | string | null): string | null {
 function mapPlatformAdminRow(
   row: PlatformAdminRow,
   actorRank?: number,
+  /** 只有列表接口给；undefined = 不带在线态，null = 登录服务读不到。 */
+  online?: Set<string> | null,
 ): PlatformAdminRecord {
   const roleRank = Number(row.role_rank ?? 0);
   return {
@@ -484,6 +504,9 @@ function mapPlatformAdminRow(
     isSystem: row.account_type !== "personal",
     lastLoginAt: toIso(row.last_login_at),
     lastLoginIp: row.last_login_ip,
+    ...(online !== undefined
+      ? { isOnline: online ? online.has(row.id) : null }
+      : {}),
     remark: row.remark,
     createdAt: toIso(row.created_at) ?? new Date(0).toISOString(),
     updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),

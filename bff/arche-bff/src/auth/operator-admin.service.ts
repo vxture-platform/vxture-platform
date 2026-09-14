@@ -48,6 +48,17 @@ export interface CreateOperatorResult {
   deliveredTo: string;
 }
 
+/** IdP 中央会话（auth-bff GET /internal/operator/sessions）。sid 不出 IdP，只有 sessionRef。 */
+export interface IdpOperatorSession {
+  sessionRef: string;
+  operatorId: string;
+  authMethod: string;
+  /** 这个会话登录过的平台（client_id）。 */
+  clients: string[];
+  createdAt: string;
+  expiresAt: string;
+}
+
 @Injectable()
 export class OperatorAdminService {
   constructor(
@@ -112,6 +123,28 @@ export class OperatorAdminService {
     if (res.status === 409) throw new ConflictException(message);
     if (res.status === 422) throw new UnprocessableEntityException(message);
     throw new ServiceUnavailableException("operator_admin_unavailable");
+  }
+
+  /**
+   * 在线会话：IdP 中央会话（realm=workforce）。只读、没有操作者；读不到一律 503——
+   * 调用方决定是整页报错（在线会话页）还是降级成「—」（平台用户列表、总览）。
+   */
+  async listOperatorSessions(): Promise<IdpOperatorSession[]> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.idpBaseUrl()}/internal/operator/sessions`, {
+        headers: { "x-vxture-internal-auth": this.internalToken() },
+      });
+    } catch {
+      throw new ServiceUnavailableException("operator_sessions_unavailable");
+    }
+    if (!res.ok) {
+      throw new ServiceUnavailableException("operator_sessions_unavailable");
+    }
+    const body = (await res.json()) as { sessions?: unknown };
+    return Array.isArray(body.sessions)
+      ? (body.sessions as IdpOperatorSession[])
+      : [];
   }
 
   /**

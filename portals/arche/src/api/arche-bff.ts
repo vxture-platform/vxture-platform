@@ -17,6 +17,7 @@ import type {
   NotificationLogRecord,
   OperatorSessionRecord,
   OperatorSessionSummary,
+  SignInLogSummary,
   OperatorSignInRecord,
   PlatformAdminPermissionRecord,
   PlatformAdminRecord,
@@ -102,7 +103,8 @@ export interface AuditLogFilters {
   actorId?: string;
   action?: string;
   module?: string;
-  result?: "success" | "failure" | "denied";
+  /** alert = 登录服务写的登录告警（异常登录、失败激增）。 */
+  result?: "success" | "failure" | "denied" | "alert";
   /** 排序参与取数（表截在 500 条），见 lib/table-sort 的 `sortParams`。 */
   sort?: string;
   order?: "asc" | "desc";
@@ -146,27 +148,11 @@ export async function fetchGovernanceOverview(): Promise<GovernanceOverview> {
   return readJsonStrict<GovernanceOverview>("/api/overview");
 }
 
-// ── 登录与会话（admin.operator_login_attempt / operator_refresh_token，只读）──
-
-export interface OperatorSignInFilters {
-  result?: "success" | "failure";
-  from?: string;
-  to?: string;
-  sort?: string;
-  order?: "asc" | "desc";
-}
+// ── 在线会话（身份权限，现状）───────────────────────────────────────────────
 
 export async function fetchOperatorSessionSummary(): Promise<OperatorSessionSummary> {
   return readJsonStrict<OperatorSessionSummary>(
     "/api/operator-sessions/summary",
-  );
-}
-
-export async function fetchOperatorSignIns(
-  filters: OperatorSignInFilters = {},
-): Promise<OperatorSignInRecord[]> {
-  return readJsonStrict<OperatorSignInRecord[]>(
-    `/api/operator-sessions/sign-ins${queryString(filters)}`,
   );
 }
 
@@ -175,6 +161,28 @@ export async function fetchOperatorSessions(
 ): Promise<OperatorSessionRecord[]> {
   return readJsonStrict<OperatorSessionRecord[]>(
     `/api/operator-sessions/active${queryString(filters)}`,
+  );
+}
+
+// ── 登录记录（安全审计，历史）───────────────────────────────────────────────
+
+export interface SignInLogFilters {
+  result?: "success" | "failure";
+  from?: string;
+  to?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+}
+
+export async function fetchSignInLogSummary(): Promise<SignInLogSummary> {
+  return readJsonStrict<SignInLogSummary>("/api/sign-in-logs/summary");
+}
+
+export async function fetchSignInLogs(
+  filters: SignInLogFilters = {},
+): Promise<OperatorSignInRecord[]> {
+  return readJsonStrict<OperatorSignInRecord[]>(
+    `/api/sign-in-logs${queryString(filters)}`,
   );
 }
 
