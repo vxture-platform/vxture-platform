@@ -23,6 +23,7 @@ import {
   StatusBadge,
   TableTitleCell,
   Textarea,
+  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
 import {
@@ -217,6 +218,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       header: "工单",
       cell: (ticket) => (
         <TableTitleCell
+          icon="ticket"
           title={ticket.title}
           description={`${ticket.id} / ${ticket.ownerName}`}
           onTitleClick={() =>
@@ -229,11 +231,18 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (ticket) => (
-        <TableTitleCell
-          icon={ticket.tenantType === "company" ? "buildings" : "user"}
-          title={ticket.tenantName}
-          description={`${ticket.tenantCode} / ${typeLabel(ticket.tenantType)}`}
-        />
+        <span className="inline-flex items-center gap-xs">
+          <Icon
+            name={ticket.tenantType === "company" ? "buildings" : "user"}
+            size="sm"
+            className="shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {ticket.tenantName}
+            <span className="text-body-sm text-muted-foreground">{`${ticket.tenantCode} / ${typeLabel(ticket.tenantType)}`}</span>
+          </span>
+        </span>
       ),
     },
     {
@@ -267,10 +276,12 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       id: "updated",
       header: tShared("columns.updatedAt"),
       cell: (ticket) => (
-        <TableTitleCell
-          title={formatDateTime(ticket.updatedAt, locale)}
-          description={ticket.region}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {formatDateTime(ticket.updatedAt, locale)}
+          <span className="text-body-sm text-muted-foreground">
+            {ticket.region}
+          </span>
+        </span>
       ),
     },
   ];

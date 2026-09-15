@@ -608,15 +608,22 @@ export function OpsTodosPage() {
                 id: "tenant",
                 header: "租户",
                 cell: (item) => (
-                  <TableTitleCell
-                    title={item.tenantName}
-                    description={item.tenantMeta}
-                    onTitleClick={() =>
-                      router.push(
-                        `/tenants/${encodeURIComponent(item.tenantCode)}`,
-                      )
-                    }
-                  />
+                  <span className="inline-flex flex-col items-center gap-2xs">
+                    <button
+                      type="button"
+                      className="text-foreground hover:text-primary-text"
+                      onClick={() =>
+                        router.push(
+                          `/tenants/${encodeURIComponent(item.tenantCode)}`,
+                        )
+                      }
+                    >
+                      {item.tenantName}
+                    </button>
+                    <span className="text-body-sm text-muted-foreground">
+                      {item.tenantMeta}
+                    </span>
+                  </span>
                 ),
               },
               {
@@ -637,7 +644,7 @@ export function OpsTodosPage() {
                 id: "tags",
                 header: "标签",
                 cell: (item) => (
-                  <span className="flex flex-wrap gap-xs">
+                  <span className="flex flex-wrap justify-center gap-xs">
                     {item.tags.slice(0, 3).map((tag) => (
                       <Badge key={tag}>{tag}</Badge>
                     ))}

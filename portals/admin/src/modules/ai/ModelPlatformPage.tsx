@@ -702,17 +702,19 @@ export function ModelPlatformPage() {
       id: "source",
       header: "来源",
       cell: (model) => (
-        <TableTitleCell
-          title={providerLabel(model.provider)}
-          description={model.protocol}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {providerLabel(model.provider)}
+          <span className="text-body-sm text-muted-foreground">
+            {model.protocol}
+          </span>
+        </span>
       ),
     },
     {
       id: "capabilities",
       header: "模型能力",
       cell: (model) => (
-        <span className="flex flex-wrap gap-2xs">
+        <span className="flex flex-wrap justify-center gap-2xs">
           {model.capabilities.slice(0, 3).map((capability) => (
             <Badge key={capability}>{capability}</Badge>
           ))}

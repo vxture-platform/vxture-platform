@@ -384,6 +384,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       header: "收款流水",
       cell: (payment) => (
         <TableTitleCell
+          icon="coins"
           title={payment.paymentNo}
           description={`${paySourceLabel(payment.paySource)} · ${
             payment.paySource === "offline"
@@ -398,19 +399,26 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (payment) => (
-        <TableTitleCell
-          icon={payment.tenantType === "company" ? "buildings" : "user"}
-          title={payment.tenantName}
-          description={`${payment.tenantCode} · ${typeLabel(payment.tenantType)}`}
-        />
+        <span className="inline-flex items-center gap-xs">
+          <Icon
+            name={payment.tenantType === "company" ? "buildings" : "user"}
+            size="sm"
+            className="shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {payment.tenantName}
+            <span className="text-body-sm text-muted-foreground">{`${payment.tenantCode} · ${typeLabel(payment.tenantType)}`}</span>
+          </span>
+        </span>
       ),
     },
     {
       id: "bill",
       header: "关联账单",
       cell: (payment) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <span className="inline-flex flex-wrap gap-2xs">
               <StatusBadge
                 tone={
@@ -426,8 +434,10 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               </StatusBadge>
             </span>
           }
-          description={payment.billNo ?? "未关联账单"}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {payment.billNo ?? "未关联账单"}
+          </span>
+        </span>
       ),
     },
     {
@@ -435,13 +445,13 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       header: "金额",
       align: "numeric",
       cell: (payment) => (
-        <TableTitleCell
-          title={formatCurrency(payment.paidAmount, payment.currency)}
-          description={`应收 ${formatCurrency(
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatCurrency(payment.paidAmount, payment.currency)}
+          <span className="text-body-sm text-muted-foreground">{`应收 ${formatCurrency(
             payment.billPayableAmount || payment.totalAmount,
             payment.currency,
-          )}`}
-        />
+          )}`}</span>
+        </span>
       ),
     },
     {
@@ -449,8 +459,8 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       header: "收款状态",
       align: "center",
       cell: (payment) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge
               tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}
               icon={paymentStatusIcon(payment.paymentStatus)}
@@ -458,8 +468,10 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               {t(`status.paymentLedger.${payment.paymentStatus}`)}
             </StatusBadge>
           }
-          description={formatDate(payment.paidAt ?? payment.createdAt, locale)}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {formatDate(payment.paidAt ?? payment.createdAt, locale)}
+          </span>
+        </span>
       ),
     },
     {
@@ -467,8 +479,8 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       header: "对账",
       align: "center",
       cell: (payment) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge
               tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
               icon={reconciliationIcon(payment.reconciliationStatus)}
@@ -476,8 +488,10 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               {reconciliationLabel(payment.reconciliationStatus)}
             </StatusBadge>
           }
-          description={payment.remark ?? payment.operatorName}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {payment.remark ?? payment.operatorName}
+          </span>
+        </span>
       ),
     },
   ];

@@ -174,26 +174,24 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       id: "product",
       header: "产品能力",
       cell: (record) => (
-        <TableTitleCell
-          title={record.productName}
-          description={`${record.productType} · ${record.productCode}`}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {record.productName}
+          <span className="text-body-sm text-muted-foreground">{`${record.productType} · ${record.productCode}`}</span>
+        </span>
       ),
     },
     {
       id: "metric",
       header: "计量项",
       cell: (record) => (
-        <TableTitleCell
-          // 单位可缺（BFF 对没有单位的计量项回空串）。空标会渲染成一个什么都
-          // 不写的小圆圈，比不画更难读，所以缺就不画。
-          title={
-            record.metricUnit ? (
-              <Badge variant="outline">{record.metricUnit}</Badge>
-            ) : null
-          }
-          description={record.metricName}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {record.metricUnit ? (
+            <Badge variant="outline">{record.metricUnit}</Badge>
+          ) : null}
+          <span className="text-body-sm text-muted-foreground">
+            {record.metricName}
+          </span>
+        </span>
       ),
     },
     {
@@ -201,10 +199,10 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       header: "用量",
       align: "numeric",
       cell: (record) => (
-        <TableTitleCell
-          title={formatUsageValue(record.usedValue, record.metricUnit)}
-          description={`配额 ${formatUsageValue(record.quotaValue, record.metricUnit)} · ${formatPercent(record.usageRate)}`}
-        />
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatUsageValue(record.usedValue, record.metricUnit)}
+          <span className="text-body-sm text-muted-foreground">{`配额 ${formatUsageValue(record.quotaValue, record.metricUnit)} · ${formatPercent(record.usageRate)}`}</span>
+        </span>
       ),
     },
     {
@@ -222,10 +220,12 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       header: "周期",
       align: "center",
       cell: (record) => (
-        <TableTitleCell
-          title={record.cycleMonth}
-          description={formatDate(record.lastSyncedAt, locale)}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {record.cycleMonth}
+          <span className="text-body-sm text-muted-foreground">
+            {formatDate(record.lastSyncedAt, locale)}
+          </span>
+        </span>
       ),
     },
   ];

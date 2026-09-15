@@ -519,8 +519,8 @@ export function ProductSolutionsPage() {
       header: t("columns.scenario"),
       align: "center",
       cell: (solution) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <span className="inline-flex flex-wrap justify-center gap-2xs">
               <StatusBadge tone={SOLUTION_STATUS_TONE[solution.status]}>
                 {labels.status(solution.status)}
@@ -530,17 +530,17 @@ export function ProductSolutionsPage() {
               </StatusBadge>
             </span>
           }
-          description={
-            [
+          <span className="text-body-sm text-muted-foreground">
+            {[
               solution.industry
                 ? industryLabel(solution.industry, labelLocale)
                 : "",
               solution.scenario,
             ]
               .filter(Boolean)
-              .join(" | ") || t("columns.noScenario")
-          }
-        />
+              .join(" | ") || t("columns.noScenario")}
+          </span>
+        </span>
       ),
     },
     {
@@ -548,15 +548,17 @@ export function ProductSolutionsPage() {
       header: t("columns.products"),
       cell: (solution) =>
         solution.products.length ? (
-          <TableTitleCell
-            title={<CapabilityTags products={solution.products} />}
-            description={t("columns.productsMeta", {
-              count: solution.products.length,
-              partner: solution.products.filter(
-                (product) => product.source === "partner",
-              ).length,
-            })}
-          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {<CapabilityTags products={solution.products} />}
+            <span className="text-body-sm text-muted-foreground">
+              {t("columns.productsMeta", {
+                count: solution.products.length,
+                partner: solution.products.filter(
+                  (product) => product.source === "partner",
+                ).length,
+              })}
+            </span>
+          </span>
         ) : (
           <span className="text-body-sm text-muted-foreground">
             {t("columns.noProducts")}
@@ -569,8 +571,8 @@ export function ProductSolutionsPage() {
       align: "center",
       cell: (solution) =>
         solution.tiers.length ? (
-          <TableTitleCell
-            title={
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {
               <span className="inline-flex flex-wrap justify-center gap-2xs">
                 {solution.tiers.map((tier) => (
                   <Badge
@@ -583,12 +585,14 @@ export function ProductSolutionsPage() {
                 ))}
               </span>
             }
-            description={t("columns.tiersMeta", {
-              count: solution.tiers.length,
-              total: TIERS.length,
-              updatedAt: formatDate(solution.updatedAt, locale),
-            })}
-          />
+            <span className="text-body-sm text-muted-foreground">
+              {t("columns.tiersMeta", {
+                count: solution.tiers.length,
+                total: TIERS.length,
+                updatedAt: formatDate(solution.updatedAt, locale),
+              })}
+            </span>
+          </span>
         ) : (
           <span className="text-body-sm text-muted-foreground">
             {t("columns.noTiers")}
@@ -600,13 +604,15 @@ export function ProductSolutionsPage() {
       header: t("columns.operation"),
       align: "numeric",
       cell: (solution) => (
-        <TableTitleCell
-          title={formatMoney(solution.monthlyRevenue)}
-          description={t("columns.operationMeta", {
-            subscriptions: solution.subscriptionCount,
-            tenants: solution.activeTenantCount,
-          })}
-        />
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatMoney(solution.monthlyRevenue)}
+          <span className="text-body-sm text-muted-foreground">
+            {t("columns.operationMeta", {
+              subscriptions: solution.subscriptionCount,
+              tenants: solution.activeTenantCount,
+            })}
+          </span>
+        </span>
       ),
     },
   ];

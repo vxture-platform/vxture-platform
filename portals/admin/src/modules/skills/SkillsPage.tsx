@@ -345,6 +345,7 @@ function capabilityColumns({
       header: t("columns.capability"),
       cell: (record) => (
         <TableTitleCell
+          icon="stack"
           title={displayNameFor(record, locale)}
           description={record.capabilityId}
           tooltip={`${record.title} · ${record.capabilityId}`}
@@ -464,7 +465,13 @@ function CapabilityDetailDrawer({
       {
         id: "version",
         header: t("detail.versions.version"),
-        cell: (v) => v.version,
+        cell: (v) => (
+          <TableTitleCell
+            icon="git-branch"
+            title={v.version}
+            description={formatDateTime(v.createdAt, locale)}
+          />
+        ),
       },
       {
         id: "state",
@@ -502,7 +509,13 @@ function CapabilityDetailDrawer({
         id: "environment",
         header: t("detail.endpoints.environment"),
         width: "sm",
-        cell: (e) => e.environment,
+        cell: (e) => (
+          <TableTitleCell
+            icon="server"
+            title={e.environment}
+            description={e.version}
+          />
+        ),
       },
       {
         id: "baseUrl",

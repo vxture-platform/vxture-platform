@@ -159,14 +159,10 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
       header: "订阅",
       align: "center",
       cell: (tenant) => (
-        <TableTitleCell
-          title={
-            // 列表投影不带 subscriptions[]（2026-08-30 起明细只在详情），这里直接用
-            // 产品数：套餐 primary 组件去重后的数，比订阅条数更贴「N 产品」这个标。
-            <Badge>{formatNumber(tenant.productCount)} 产品</Badge>
-          }
-          description={`本月：¥ ${formatNumber(tenant.monthlyRevenue)} 元`}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {<Badge>{formatNumber(tenant.productCount)} 产品</Badge>}
+          <span className="text-body-sm text-muted-foreground">{`本月：¥ ${formatNumber(tenant.monthlyRevenue)} 元`}</span>
+        </span>
       ),
     },
     {
@@ -178,14 +174,14 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
         // 「总工单」原来取 max(tickets.length, ticketOpenCount)，而列表里 tickets[] 一直
         // 是空占位，所以它其实就是待处理数——现在只说待处理，不再摆一个同值的「总数」。
         return (
-          <TableTitleCell
-            title={
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {
               <StatusBadge tone={TENANT_RISK_TONE[riskLevel]}>
                 {riskLabel(riskLevel)}
               </StatusBadge>
             }
-            description={`待处理工单 ${formatNumber(tenant.ticketOpenCount)}`}
-          />
+            <span className="text-body-sm text-muted-foreground">{`待处理工单 ${formatNumber(tenant.ticketOpenCount)}`}</span>
+          </span>
         );
       },
     },

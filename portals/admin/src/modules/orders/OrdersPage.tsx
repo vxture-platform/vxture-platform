@@ -19,6 +19,7 @@ import {
   NativeSelect,
   StatusBadge,
   TableTitleCell,
+  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import {} from "@vxture-platform/shared";
@@ -235,6 +236,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       header: "订单",
       cell: (order) => (
         <TableTitleCell
+          icon="package"
           title={order.orderNo}
           description={`${order.billNo ?? "未生成账单"} · ${formatDate(order.createdAt, locale)}`}
           onTitleClick={() =>
@@ -247,38 +249,42 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (order) => (
-        <TableTitleCell
-          icon={order.tenantType === "company" ? "buildings" : "user"}
-          title={order.tenantName}
-          description={`${order.tenantCode} · ${typeLabel(order.tenantType)}`}
-        />
+        <span className="inline-flex items-center gap-xs">
+          <Icon
+            name={order.tenantType === "company" ? "buildings" : "user"}
+            size="sm"
+            className="shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {order.tenantName}
+            <span className="text-body-sm text-muted-foreground">{`${order.tenantCode} · ${typeLabel(order.tenantType)}`}</span>
+          </span>
+        </span>
       ),
     },
     {
       id: "solution",
       header: "业务方案",
       cell: (order) => (
-        <TableTitleCell
-          /* 缺失值弱化：深色粗体会让"未设置"读起来跟真的方案名一样重。 */
-          title={
-            isUnset(order.solutionName) ? (
-              <span className="text-body-md text-muted-foreground">
-                {UNSET_LABEL}
-              </span>
-            ) : (
-              order.solutionName
-            )
-          }
-          description={`${order.industry} · ${order.region}`}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {isUnset(order.solutionName) ? (
+            <span className="text-body-md text-muted-foreground">
+              {UNSET_LABEL}
+            </span>
+          ) : (
+            order.solutionName
+          )}
+          <span className="text-body-sm text-muted-foreground">{`${order.industry} · ${order.region}`}</span>
+        </span>
       ),
     },
     {
       id: "plan",
       header: "套餐",
       cell: (order) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <span className="inline-flex flex-wrap gap-2xs">
               {isUnset(order.tierName) ? (
                 <span className="text-body-md text-muted-foreground">
@@ -294,8 +300,10 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
               </StatusBadge>
             </span>
           }
-          description={order.servicePlanName}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {order.servicePlanName}
+          </span>
+        </span>
       ),
     },
     {
@@ -303,10 +311,10 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       header: "金额",
       align: "numeric",
       cell: (order) => (
-        <TableTitleCell
-          title={formatCurrency(order.amount, order.currency)}
-          description={`已收 ${formatCurrency(order.paidAmount, order.currency)}`}
-        />
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatCurrency(order.amount, order.currency)}
+          <span className="text-body-sm text-muted-foreground">{`已收 ${formatCurrency(order.paidAmount, order.currency)}`}</span>
+        </span>
       ),
     },
     {
@@ -314,8 +322,8 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       header: tShared("columns.state"),
       align: "center",
       cell: (order) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge
               tone={ORDER_STATUS_TONE[order.orderStatus]}
               icon={orderStatusIcon(order.orderStatus)}
@@ -323,8 +331,8 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
               {orderStatusLabel(order.orderStatus)}
             </StatusBadge>
           }
-          description={`${t(`status.orderPayment.${order.paymentStatus}`)} · ${paySourceLabel(order.paySource)}`}
-        />
+          <span className="text-body-sm text-muted-foreground">{`${t(`status.orderPayment.${order.paymentStatus}`)} · ${paySourceLabel(order.paySource)}`}</span>
+        </span>
       ),
     },
   ];

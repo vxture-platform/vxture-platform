@@ -628,14 +628,16 @@ function useTenantMemberColumns(): DataTableColumn<TenantMemberView>[] {
       align: "center",
       // 副题是加入时间（membership.created_at）；卡片视图同一读数带「加入时间」标签。
       cell: (member) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
               {memberStatusLabel(member.status)}
             </StatusBadge>
           }
-          description={formatDate(member.joinedAt, locale)}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {formatDate(member.joinedAt, locale)}
+          </span>
+        </span>
       ),
     },
     {
@@ -643,15 +645,19 @@ function useTenantMemberColumns(): DataTableColumn<TenantMemberView>[] {
       header: "最近活跃",
       align: "center",
       cell: (member) => (
-        <TableTitleCell
-          title={formatDate(member.lastActiveAt, locale)}
-          description={resolveIpLocation(member.lastActiveIp)}
-          tooltip={
+        <span
+          className="inline-flex flex-col items-center gap-2xs"
+          title={
             member.lastActiveIp
               ? `登录 IP ${member.lastActiveIp}`
               : "暂无登录 IP"
           }
-        />
+        >
+          {formatDate(member.lastActiveAt, locale)}
+          <span className="text-body-sm text-muted-foreground">
+            {resolveIpLocation(member.lastActiveIp)}
+          </span>
+        </span>
       ),
     },
   ];

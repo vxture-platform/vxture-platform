@@ -285,8 +285,8 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
       cell: (tenant) => {
         const indicator = verificationStatusIndicator(tenant.verifiedStatus);
         return (
-          <TableTitleCell
-            title={
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {
               <StatusBadge
                 tone={VERIFIED_TONE[tenant.verifiedStatus]}
                 icon={indicator.icon}
@@ -295,8 +295,10 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
                 {verifiedLabel(tenant.verifiedStatus)}
               </StatusBadge>
             }
-            description={riskLabel(normalizeTenantRiskLevel(tenant.riskLevel))}
-          />
+            <span className="text-body-sm text-muted-foreground">
+              {riskLabel(normalizeTenantRiskLevel(tenant.riskLevel))}
+            </span>
+          </span>
         );
       },
     },
@@ -304,39 +306,43 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
       id: "subject",
       header: "主体信息",
       cell: (tenant) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <span className="inline-flex flex-wrap gap-2xs">
               <Badge>{tenant.industry}</Badge>
               <Badge>{tenant.scale}</Badge>
             </span>
           }
-          description={tenant.tenantName}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {tenant.tenantName}
+          </span>
+        </span>
       ),
     },
     {
       id: "contact",
       header: "运营联系",
       cell: (tenant) => (
-        <TableTitleCell
-          title={tenant.contactName}
-          description={tenant.contactPhone || tenant.ownerEmail}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {tenant.contactName}
+          <span className="text-body-sm text-muted-foreground">
+            {tenant.contactPhone || tenant.ownerEmail}
+          </span>
+        </span>
       ),
     },
     {
       id: "time",
       header: "时间",
       cell: (tenant) => (
-        <TableTitleCell
-          title={
-            tenant.verificationSubmittedAt
-              ? formatDate(tenant.verificationSubmittedAt, locale)
-              : "未提交"
-          }
-          description={verificationTimeText(tenant, locale)}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {tenant.verificationSubmittedAt
+            ? formatDate(tenant.verificationSubmittedAt, locale)
+            : "未提交"}
+          <span className="text-body-sm text-muted-foreground">
+            {verificationTimeText(tenant, locale)}
+          </span>
+        </span>
       ),
     },
   ];
