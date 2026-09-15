@@ -70,7 +70,7 @@ import {
 import { api, OperaApiError } from "@/lib/api";
 import { formatDay } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
-import { visibleIdOr } from "@/lib/visible-id";
+import { isPlatformSentinel, visibleIdOr } from "@/lib/visible-id";
 
 type UsageAxis =
   | "tenant"
@@ -210,6 +210,16 @@ function axisLabel(
 ): string {
   const id = axisIdentity(row);
   if (id === "none") return id;
+  /* 应用 / Agent / 产品 / 入口位上的平台哨兵是「调用方没声明」，不是自检——自检只在租户 / 工作区位。 */
+  if (isPlatformSentinel(id)) {
+    return row.dimension === "agent"
+      ? "未声明 Agent"
+      : row.dimension === "product"
+        ? "未声明产品"
+        : row.dimension === "endpoint"
+          ? "未声明入口"
+          : "SYSTEM";
+  }
   if (row.dimension === "product") {
     return (row.productId && productCodeById.get(row.productId)) ?? "未知产品";
   }
