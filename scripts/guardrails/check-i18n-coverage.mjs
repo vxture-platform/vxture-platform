@@ -474,6 +474,10 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *   从 `<FieldDescription>` 收进 FieldLabel 的帮助 icon(`hint="…"`)。**没有新增文案**:
  *   计数器只认同一行里的 `"…"` 与 `>…<`,原先跨行书写的 JSX 文本它看不见,挪进属性后
  *   才被数到;同批删掉的「可选」「(可选)」抵掉一部分,净 +4。整页硬编码,不单抽(判据同上)。
+ *
+ * 2026-09-16 opera 2226 → 2229(+3):FieldTier 三档中文标题收成常量 FIELD_TIER_TITLE(基本信息 / 详细配置 /
+ *   高级选项),补给没传 title 的 13 处调用点。此前这些分组在中文表单里显示 DS 的英文默认
+ *   「Identity / Details / Advanced」(v0.26.176 线上走查)。整门户硬编码,不单抽(判据同上)。
  */
 const BASELINE = {
   // 2026-09-04 console 30 → 8:批 0c 清掉 onboarding 法务链接 / signin 跳板 /
@@ -484,7 +488,7 @@ const BASELINE = {
   console: 0,
   website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 2226, // 2026-09-15 见上方说明(末条:弹窗说明收进帮助 icon +4)
+  opera: 2229, // 2026-09-16 见上方说明(末条:FieldTier 中文标题 +3)
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页

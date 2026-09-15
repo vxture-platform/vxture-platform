@@ -72,7 +72,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
-import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
 
 const MANAGE = "capability:runos.manage";
 
@@ -755,6 +755,7 @@ function RunosCredentialsPageContent() {
         {/* 两档（DS FieldTier），每档一行两条（lg 面板）。四项都必填，所以没有高级档。 */}
         <FieldTier
           tier="identity"
+          title={FIELD_TIER_TITLE.identity}
           hint="类别须与目标能力的 credentialRequirements[].credentialClass 对上，否则这条凭证永远不会被取用。"
         >
           <FieldGroup columns={2}>
