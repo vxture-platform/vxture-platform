@@ -86,6 +86,15 @@ interface AtlasRequestLogRecord {
   taskId: string | null;
   status: string;
   tenantId: string | null;
+  /** `normal` / `retry` / `test`；`test` 是 Atlas 自检。 */
+  usageType: string | null;
+  /** S2S 令牌上的 `act.sub`：发起这次调用的产品。自检没有。 */
+  productCode: string | null;
+  /** opera-bff 拼上的：**只在自检行上有**，谁点的这次自检。 */
+  trigger?: {
+    operatorName: string | null;
+    match: "request-id" | "time" | "none";
+  };
   modelCode: string | null;
   providerCode: string | null;
   inputTokens: number | null;
@@ -109,6 +118,42 @@ function atlasStatusTone(status: string): StatusBadgeTone {
   if (status === "timeout") return "warning";
   if (status === "error") return "danger";
   return "neutral";
+}
+
+/**
+ * 一行请求是谁发起的。
+ *
+ * 产品调用 → 令牌上的产品码。平台自检 → 点自检的运营者：自检不属于任何租户，运营者也不是
+ * 租户里的用户（员工域），所以这里给的是人，不补租户 / 工作区。对不上是谁时如实说 SYSTEM ·
+ * 平台自检，不猜。
+ */
+function initiatorOf(r: AtlasRequestLogRecord): {
+  primary: string;
+  secondary: string | null;
+  title: string | null;
+} {
+  if (r.usageType !== "test") {
+    return { primary: r.productCode ?? "—", secondary: null, title: null };
+  }
+  const t = r.trigger;
+  if (t?.operatorName) {
+    return t.match === "time"
+      ? {
+          primary: t.operatorName,
+          secondary: "平台自检 · 按时间对应",
+          title:
+            "这次自检早于 Atlas 记录请求号，是按变更流水的时间对上的（时间窗内恰好一条自检记录）。",
+        }
+      : { primary: t.operatorName, secondary: "平台自检", title: null };
+  }
+  return {
+    primary: "SYSTEM",
+    secondary: "平台自检",
+    title:
+      t?.match === "none"
+        ? "没能从变更流水里对上是谁点的：时间窗内没有或不止一条自检记录。"
+        : null,
+  };
 }
 
 /* ── 平台后台作业（本页原有内容）───────────────────────────────────────── */
@@ -324,6 +369,7 @@ export default function LogsPage() {
       /* 带上 taskId：复制一行最常见的下一步就是拿它去 Runos 那张表里对。 */
       r.taskId ?? "—",
       r.status,
+      initiatorOf(r).primary,
       r.modelCode ?? "—",
       r.providerCode ?? "—",
       `${r.totalTokens ?? 0} tokens`,
@@ -534,6 +580,27 @@ export default function LogsPage() {
                   description={r.providerCode ?? "—"}
                 />
               ),
+            },
+            {
+              id: "initiator",
+              header: "发起方",
+              width: "sm",
+              cell: (r: AtlasRequestLogRecord) => {
+                const d = initiatorOf(r);
+                return (
+                  <span
+                    className="inline-flex flex-col items-center gap-2xs"
+                    {...(d.title ? { title: d.title } : {})}
+                  >
+                    <span>{d.primary}</span>
+                    {d.secondary ? (
+                      <span className="text-body-sm text-muted-foreground">
+                        {d.secondary}
+                      </span>
+                    ) : null}
+                  </span>
+                );
+              },
             },
             {
               /**

@@ -118,7 +118,11 @@ import {
   type HttpMethod,
   type JsonObject,
 } from "../lib/upstream-grants";
-import { OPERA_BFF_RW_POOL } from "../tokens";
+import { OPERA_BFF_RO_POOL, OPERA_BFF_RW_POOL } from "../tokens";
+import {
+  lookupOperatorNames,
+  operatorDisplayName,
+} from "../lib/operator-names";
 import type { RequestContext } from "../types/request-context";
 
 /** 活库当前的三段式能力码（见文件头）。 */
@@ -249,6 +253,11 @@ export interface MgmtEventRecord {
   outcome: string;
   occurredAt: string;
   actorId: string;
+  /**
+   * opera-bff 拼上的，不是 runos 的字段：`actorId`（`opr_<uuid>`）换成的运营者名字，
+   * 见 `lib/operator-names.ts`。**页面只显示这个，不显示 actorId。**
+   */
+  actorName?: string | null;
   actorConsole: string;
   objectType: string;
   objectId: string;
@@ -445,6 +454,7 @@ export class RunosRouter {
     @Inject(OperatorExchangeService)
     private readonly operatorExchange: OperatorExchangeService,
     @Inject(OPERA_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Inject(OPERA_BFF_RO_POOL) private readonly roPool: Pool,
   ) {
     this.runosApiUrl = configService.platform.RUNOS_API_URL.trim().replace(
       /\/+$/,
@@ -918,7 +928,7 @@ export class RunosRouter {
   }
 
   @Get("audit/mgmt-events")
-  listAuditMgmtEvents(
+  async listAuditMgmtEvents(
     @Req() req: Request & RequestContext,
     @Query("actorId") actorId?: string,
     @Query("actorConsole") actorConsole?: string,
@@ -939,11 +949,23 @@ export class RunosRouter {
     if (outcome) p.set("outcome", outcome);
     if (limit) p.set("limit", limit);
     if (cursor) p.set("cursor", cursor);
-    return this.request<AuditPage<MgmtEventRecord>>(
+    const page = await this.request<AuditPage<MgmtEventRecord>>(
       req,
       `/audit/mgmt-events${p.size ? `?${p.toString()}` : ""}`,
       { contract: "audit-mgmt-events" },
     );
+    /* actorId 是 `opr_<uuid>`，原样显示就是在界面上露 UUID——换成名字再交给页面。 */
+    const names = await lookupOperatorNames(
+      this.roPool,
+      page.items.map((r) => r.actorId),
+    );
+    return {
+      ...page,
+      items: page.items.map((r) => ({
+        ...r,
+        actorName: operatorDisplayName(r.actorId, names),
+      })),
+    };
   }
 
   @Get("audit/outcomes")
