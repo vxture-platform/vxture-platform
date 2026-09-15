@@ -72,6 +72,7 @@ import {
   type StatusBadgeTone,
   ActionButton,
 } from "@vxture/design-system";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -2451,7 +2452,14 @@ function ModelServiceContent() {
           >
             <div className="grid grid-cols-3 gap-md">
               <Field>
-                <FieldLabel htmlFor="provider-code">Code</FieldLabel>
+                <FieldLabel
+                  required
+                  hint="全局唯一，模型与密钥都按它归属。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-code"
+                >
+                  Code
+                </FieldLabel>
                 <Input
                   id="provider-code"
                   value={providerDraft.providerCode}
@@ -2464,12 +2472,16 @@ function ModelServiceContent() {
                   placeholder="openai"
                   disabled={editingProvider}
                 />
-                <FieldDescription>
-                  全局唯一，模型与密钥都按它归属。
-                </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-name">名称</FieldLabel>
+                <FieldLabel
+                  required
+                  hint="列表与选择器里显示的名字，可改。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-name"
+                >
+                  名称
+                </FieldLabel>
                 <Input
                   id="provider-name"
                   value={providerDraft.providerName}
@@ -2481,12 +2493,13 @@ function ModelServiceContent() {
                   }
                   placeholder="OpenAI"
                 />
-                <FieldDescription>
-                  列表与选择器里显示的名字，可改。
-                </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-type">
+                <FieldLabel
+                  hint="创建后不可改。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-type"
+                >
                   {tShared("columns.kind")}
                 </FieldLabel>
                 <NativeSelect
@@ -2506,7 +2519,6 @@ function ModelServiceContent() {
                     </option>
                   ))}
                 </NativeSelect>
-                <FieldDescription>创建后不可改。</FieldDescription>
               </Field>
             </div>
           </FieldTier>
@@ -2531,7 +2543,13 @@ function ModelServiceContent() {
             </Field>
             <div className="grid grid-cols-2 gap-md">
               <Field>
-                <FieldLabel htmlFor="provider-console">控制台 URL</FieldLabel>
+                <FieldLabel
+                  hint="密钥轮换、配额调整在这里做。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-console"
+                >
+                  控制台 URL
+                </FieldLabel>
                 <Input
                   id="provider-console"
                   value={providerDraft.consoleUrl}
@@ -2542,12 +2560,15 @@ function ModelServiceContent() {
                     })
                   }
                 />
-                <FieldDescription>
-                  密钥轮换、配额调整在这里做。
-                </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-billing">账单 URL</FieldLabel>
+                <FieldLabel
+                  hint="实际花费以对方账单为准（Atlas 计量不计费）。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-billing"
+                >
+                  账单 URL
+                </FieldLabel>
                 <Input
                   id="provider-billing"
                   value={providerDraft.billingUrl}
@@ -2558,9 +2579,6 @@ function ModelServiceContent() {
                     })
                   }
                 />
-                <FieldDescription>
-                  实际花费以对方账单为准（Atlas 计量不计费）。
-                </FieldDescription>
               </Field>
             </div>
           </FieldTier>
@@ -2584,7 +2602,13 @@ function ModelServiceContent() {
           >
             <div className="grid grid-cols-3 gap-md">
               <Field>
-                <FieldLabel htmlFor="provider-chat-path">端点后缀</FieldLabel>
+                <FieldLabel
+                  hint="接在接入地址后面的那一段。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-chat-path"
+                >
+                  端点后缀
+                </FieldLabel>
                 <Input
                   id="provider-chat-path"
                   value={providerDraft.chatPath}
@@ -2597,10 +2621,15 @@ function ModelServiceContent() {
                   placeholder="/chat/completions"
                   className="font-mono"
                 />
-                <FieldDescription>接在接入地址后面的那一段。</FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-auth-style">鉴权样式</FieldLabel>
+                <FieldLabel
+                  hint="密钥放在哪个头里送。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-auth-style"
+                >
+                  鉴权样式
+                </FieldLabel>
                 <NativeSelect
                   id="provider-auth-style"
                   value={providerDraft.authStyle}
@@ -2616,10 +2645,13 @@ function ModelServiceContent() {
                   <option value="x-api-key">x-api-key</option>
                   <option value="none">none（不带凭据）</option>
                 </NativeSelect>
-                <FieldDescription>密钥放在哪个头里送。</FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-stream-usage">
+                <FieldLabel
+                  hint="选 none＝这家流式不回 usage，那些调用不会被计量。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-stream-usage"
+                >
                   流式 usage
                 </FieldLabel>
                 <NativeSelect
@@ -2641,9 +2673,6 @@ function ModelServiceContent() {
                 </NativeSelect>
                 {/* 这一项直接决定流式调用会不会被计量：选 none 等于承认这家的
                     流式请求没有 usage 可记，而不是"随便填一个"。 */}
-                <FieldDescription>
-                  选 none＝这家流式不回 usage，那些调用不会被计量。
-                </FieldDescription>
               </Field>
             </div>
             {/* 四个能力开关是**三态**而不是勾选框：没声明会让协议默认透上来，
@@ -2686,7 +2715,13 @@ function ModelServiceContent() {
             </div>
             <div className="grid grid-cols-3 gap-md">
               <Field>
-                <FieldLabel htmlFor="provider-headers">附加请求头</FieldLabel>
+                <FieldLabel
+                  hint="JSON 对象，值必须是字符串。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-headers"
+                >
+                  附加请求头
+                </FieldLabel>
                 <Textarea
                   id="provider-headers"
                   rows={2}
@@ -2700,10 +2735,15 @@ function ModelServiceContent() {
                   placeholder={'{"anthropic-version":"2023-06-01"}'}
                   className="font-mono"
                 />
-                <FieldDescription>JSON 对象，值必须是字符串。</FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-param-map">参数改名</FieldLabel>
+                <FieldLabel
+                  hint="只能给已有参数换名字，塞不进新字段。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-param-map"
+                >
+                  参数改名
+                </FieldLabel>
                 <Textarea
                   id="provider-param-map"
                   rows={2}
@@ -2717,12 +2757,15 @@ function ModelServiceContent() {
                   placeholder={'{"maxTokens":"max_completion_tokens"}'}
                   className="font-mono"
                 />
-                <FieldDescription>
-                  只能给已有参数换名字，塞不进新字段。
-                </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-extra-body">厂商开关</FieldLabel>
+                <FieldLabel
+                  hint="整家默认的新字段。单个模型的开关在模型表单里配。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-extra-body"
+                >
+                  厂商开关
+                </FieldLabel>
                 <Textarea
                   id="provider-extra-body"
                   rows={2}
@@ -2736,9 +2779,6 @@ function ModelServiceContent() {
                   placeholder={'{"user_id":"vxture"}'}
                   className="font-mono"
                 />
-                <FieldDescription>
-                  整家默认的新字段。单个模型的开关在模型表单里配。
-                </FieldDescription>
               </Field>
             </div>
           </FieldTier>
@@ -2761,7 +2801,15 @@ function ModelServiceContent() {
             hint="留空＝不打折，全周期按峰价估。声明的是高峰窗口，低谷是补集。"
           >
             <Field>
-              <FieldLabel htmlFor="provider-off-peak">低谷定价策略</FieldLabel>
+              <FieldLabel
+                hint={
+                  "JSON 对象。`timezone` 只能是 UTC（分桶在 UTC 做）；`multiplier` 是十进制字符串、最多 8 位小数（金额不走 float）；`appliesTo` 与 `peakWindows` 都不能为空——空不当成「全部」，也不当成「没有高峰」。`fromHour`/`toHour` 左闭右开。"
+                }
+                {...FIELD_LABEL_A11Y}
+                htmlFor="provider-off-peak"
+              >
+                低谷定价策略
+              </FieldLabel>
               <Textarea
                 id="provider-off-peak"
                 rows={8}
@@ -2775,11 +2823,6 @@ function ModelServiceContent() {
                 placeholder={DEEPSEEK_OFF_PEAK_PRESET}
                 className="font-mono"
               />
-              <FieldDescription>
-                {
-                  "JSON 对象。`timezone` 只能是 UTC（分桶在 UTC 做）；`multiplier` 是十进制字符串、最多 8 位小数（金额不走 float）；`appliesTo` 与 `peakWindows` 都不能为空——空不当成「全部」，也不当成「没有高峰」。`fromHour`/`toHour` 左闭右开。"
-                }
-              </FieldDescription>
               <div>
                 <Button
                   type="button"
@@ -2801,7 +2844,13 @@ function ModelServiceContent() {
           <FieldTier tier="advanced" hint="填不填都不影响接入。">
             <div className="grid grid-cols-2 gap-md">
               <Field>
-                <FieldLabel htmlFor="provider-homepage">主页 URL</FieldLabel>
+                <FieldLabel
+                  hint="纯登记。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="provider-homepage"
+                >
+                  主页 URL
+                </FieldLabel>
                 <Input
                   id="provider-homepage"
                   value={providerDraft.homepageUrl}
@@ -2812,7 +2861,6 @@ function ModelServiceContent() {
                     })
                   }
                 />
-                <FieldDescription>纯登记。</FieldDescription>
               </Field>
             </div>
           </FieldTier>
@@ -2841,7 +2889,14 @@ function ModelServiceContent() {
             <FieldGroup>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
-                  <FieldLabel htmlFor="model-code">编码</FieldLabel>
+                  <FieldLabel
+                    required
+                    hint="全局唯一。同一上游模型由多家供应时各注册一条，编码加「供应方/」前缀区分，上游真实名填「上游模型名」。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-code"
+                  >
+                    编码
+                  </FieldLabel>
                   <Input
                     id="model-code"
                     value={modelDraft.modelCode}
@@ -2854,13 +2909,15 @@ function ModelServiceContent() {
                     placeholder="deepseek/deepseek-v4-flash"
                     disabled={editingModel}
                   />
-                  <FieldDescription>
-                    全局唯一。同一上游模型由多家供应时各注册一条，编码加
-                    「供应方/」前缀区分，上游真实名填「上游模型名」。
-                  </FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="model-name">名称</FieldLabel>
+                  <FieldLabel
+                    {...FIELD_LABEL_A11Y}
+                    required
+                    htmlFor="model-name"
+                  >
+                    名称
+                  </FieldLabel>
                   <Input
                     id="model-name"
                     value={modelDraft.modelName}
@@ -2876,7 +2933,13 @@ function ModelServiceContent() {
               </div>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
-                  <FieldLabel htmlFor="model-provider">Provider</FieldLabel>
+                  <FieldLabel
+                    hint="只列启用中的（当前已挂的除外）。模型与 Provider 都启用才可服务；换它即换供应方与密钥来源。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-provider"
+                  >
+                    Provider
+                  </FieldLabel>
                   <NativeSelect
                     id="model-provider"
                     value={modelDraft.providerId}
@@ -2899,10 +2962,6 @@ function ModelServiceContent() {
                       </option>
                     ))}
                   </NativeSelect>
-                  <FieldDescription>
-                    只列启用中的（当前已挂的除外）。模型与 Provider
-                    都启用才可服务；换它即换供应方与密钥来源。
-                  </FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="model-type">
@@ -2944,7 +3003,14 @@ function ModelServiceContent() {
             <FieldGroup>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
-                  <FieldLabel htmlFor="model-endpoint">Endpoint URL</FieldLabel>
+                  <FieldLabel
+                    required
+                    hint="上游 API 的基地址。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-endpoint"
+                  >
+                    Endpoint URL
+                  </FieldLabel>
                   <Input
                     id="model-endpoint"
                     value={modelDraft.endpointUrl}
@@ -2956,7 +3022,6 @@ function ModelServiceContent() {
                     }
                     placeholder="https://api.openai.com/v1"
                   />
-                  <FieldDescription>上游 API 的基地址。</FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="model-protocol">协议</FieldLabel>
@@ -2984,7 +3049,13 @@ function ModelServiceContent() {
               </div>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
-                  <FieldLabel htmlFor="model-upstream">上游模型名</FieldLabel>
+                  <FieldLabel
+                    hint="调用上游时送的 model 参数，留空＝直接用编码。编码带了供应方前缀、或上游用接入点 ID（火山引擎 ep-…）时必填。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-upstream"
+                  >
+                    上游模型名
+                  </FieldLabel>
                   <Input
                     id="model-upstream"
                     value={modelDraft.upstreamModel}
@@ -2997,11 +3068,6 @@ function ModelServiceContent() {
                     placeholder="deepseek-v4-flash / ep-2026…"
                     className="font-mono"
                   />
-                  <FieldDescription>
-                    调用上游时送的 model
-                    参数，留空＝直接用编码。编码带了供应方前缀、 或上游用接入点
-                    ID（火山引擎 ep-…）时必填。
-                  </FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="model-key">
@@ -3074,7 +3140,9 @@ function ModelServiceContent() {
                 </Field>
               </div>
               <Field>
-                <FieldLabel>能力标签</FieldLabel>
+                <FieldLabel required hint="至少选一项。" {...FIELD_LABEL_A11Y}>
+                  能力标签
+                </FieldLabel>
                 <div className="flex flex-wrap gap-sm">
                   {CAPABILITY_OPTIONS.map((c) => {
                     const active = modelDraft.capabilities.includes(c);
@@ -3095,7 +3163,6 @@ function ModelServiceContent() {
                     );
                   })}
                 </div>
-                <FieldDescription>至少选一项。</FieldDescription>
               </Field>
             </FieldGroup>
           </FieldTier>
@@ -3134,7 +3201,13 @@ function ModelServiceContent() {
                     就是坏的——流式一个 token 都不交付——而唯一的修法是一条门户填不了
                     的配置。这个输入框就是把那条路补上。 */}
                 <Field>
-                  <FieldLabel htmlFor="model-extra-body">厂商开关</FieldLabel>
+                  <FieldLabel
+                    hint="原样并进请求体的 JSON 对象，留空＝不声明。改名已有参数用 paramMap，这里管的是新字段。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-extra-body"
+                  >
+                    厂商开关
+                  </FieldLabel>
                   <Textarea
                     id="model-extra-body"
                     rows={2}
@@ -3148,15 +3221,17 @@ function ModelServiceContent() {
                     placeholder={'{"thinking":{"type":"disabled"}}'}
                     className="font-mono"
                   />
-                  <FieldDescription>
-                    原样并进请求体的 JSON 对象，留空＝不声明。改名已有参数用
-                    paramMap，这里管的是新字段。
-                  </FieldDescription>
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
-                  <FieldLabel htmlFor="model-context">上下文窗口</FieldLabel>
+                  <FieldLabel
+                    hint="token 数，留空＝不声明。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-context"
+                  >
+                    上下文窗口
+                  </FieldLabel>
                   <Input
                     id="model-context"
                     inputMode="numeric"
@@ -3169,7 +3244,6 @@ function ModelServiceContent() {
                     }
                     placeholder="128000"
                   />
-                  <FieldDescription>token 数，留空＝不声明。</FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="model-max-output">最大输出</FieldLabel>
@@ -3189,7 +3263,13 @@ function ModelServiceContent() {
               </div>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
-                  <FieldLabel htmlFor="model-sort">排序权重</FieldLabel>
+                  <FieldLabel
+                    hint="越小越靠前，默认 999。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-sort"
+                  >
+                    排序权重
+                  </FieldLabel>
                   <Input
                     id="model-sort"
                     inputMode="numeric"
@@ -3199,10 +3279,15 @@ function ModelServiceContent() {
                     }
                     placeholder="999"
                   />
-                  <FieldDescription>越小越靠前，默认 999。</FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="model-streaming">流式</FieldLabel>
+                  <FieldLabel
+                    hint="声明不支持，调用方就不会走 stream 路径。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="model-streaming"
+                  >
+                    流式
+                  </FieldLabel>
                   <NativeSelect
                     id="model-streaming"
                     value={modelDraft.supportsStreaming ? "yes" : "no"}
@@ -3216,9 +3301,6 @@ function ModelServiceContent() {
                     <option value="yes">支持</option>
                     <option value="no">不支持</option>
                   </NativeSelect>
-                  <FieldDescription>
-                    声明不支持，调用方就不会走 stream 路径。
-                  </FieldDescription>
                 </Field>
               </div>
             </FieldGroup>
@@ -3252,6 +3334,7 @@ function ModelServiceContent() {
       </DialogForm>
 
       <DialogForm
+        size="lg"
         open={verifyResult !== null}
         onOpenChange={(open) => {
           if (!open) setVerifyResult(null);
@@ -3307,6 +3390,7 @@ function ModelServiceContent() {
       </DialogForm>
 
       <DialogForm
+        size="lg"
         open={probeResult !== null}
         onOpenChange={(open) => {
           if (!open) setProbeResult(null);
@@ -3336,7 +3420,7 @@ function ModelServiceContent() {
       <Drawer
         open={wireTarget !== null}
         onClose={() => setWireTarget(null)}
-        width="md"
+        width="lg"
         title="线协议"
         description={
           wireTarget
@@ -3362,7 +3446,7 @@ function ModelServiceContent() {
           setKeys([]);
           setKeysLoad({ kind: "ready" });
         }}
-        width="md"
+        width="lg"
         title="密钥管理"
         description={
           keysProvider
@@ -3484,7 +3568,7 @@ function ModelServiceContent() {
         onOpenChange={(open) => {
           if (!open) setKeyDialog(null);
         }}
-        size="sm"
+        size={keyDialog?.kind === "create" ? "lg" : "sm"}
         title={
           keyDialog?.kind === "rotate"
             ? `轮换「${keyDialog.key.keyAlias}」`
@@ -3505,11 +3589,18 @@ function ModelServiceContent() {
         onSubmit={submitKeyDialog}
         cancelLabel={tShared("actions.cancel")}
       >
-        <FieldGroup>
+        <FieldGroup columns={keyDialog?.kind === "create" ? 2 : 1}>
           {keyDialog?.kind === "create" ? (
             <>
               <Field>
-                <FieldLabel htmlFor="key-alias">Alias</FieldLabel>
+                <FieldLabel
+                  required
+                  hint="同一 Provider 下唯一；模型注册时按 Provider + Alias 引用。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="key-alias"
+                >
+                  Alias
+                </FieldLabel>
                 <Input
                   id="key-alias"
                   value={keyAlias}
@@ -3517,9 +3608,6 @@ function ModelServiceContent() {
                   placeholder="default"
                   className="font-mono"
                 />
-                <FieldDescription>
-                  同一 Provider 下唯一；模型注册时按 Provider + Alias 引用。
-                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="key-scope">范围</FieldLabel>
@@ -3537,8 +3625,15 @@ function ModelServiceContent() {
               </Field>
             </>
           ) : null}
-          <Field>
-            <FieldLabel htmlFor="key-plaintext">密钥明文</FieldLabel>
+          <Field span="full">
+            <FieldLabel
+              required
+              hint="提交后立即加密入库，这个页面不会再显示它——包括你自己刷新之后。"
+              {...FIELD_LABEL_A11Y}
+              htmlFor="key-plaintext"
+            >
+              密钥明文
+            </FieldLabel>
             <Input
               id="key-plaintext"
               type="password"
@@ -3548,9 +3643,6 @@ function ModelServiceContent() {
               autoComplete="off"
               className="font-mono"
             />
-            <FieldDescription>
-              提交后立即加密入库，这个页面不会再显示它——包括你自己刷新之后。
-            </FieldDescription>
           </Field>
         </FieldGroup>
       </DialogForm>

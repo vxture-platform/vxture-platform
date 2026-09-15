@@ -53,7 +53,6 @@ import {
   DialogForm,
   EmptyState,
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
   FilterBar,
@@ -71,6 +70,7 @@ import {
   useListPagination,
   ActionButton,
 } from "@vxture/design-system";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import {
@@ -818,6 +818,7 @@ function EndpointsPageContent() {
       />
 
       <DialogForm
+        size="lg"
         open={formOpen}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
@@ -838,11 +839,22 @@ function EndpointsPageContent() {
         onSubmit={submit}
         cancelLabel={tShared("actions.cancel")}
       >
-        <FieldGroup>
+        <FieldGroup columns={2}>
           {routeOnly ? null : (
             <>
               <Field>
-                <FieldLabel htmlFor="endpoint-code">Endpoint 编码</FieldLabel>
+                <FieldLabel
+                  required
+                  hint={
+                    editing
+                      ? "创建后不可变——Atlas 会静默忽略这里的改动，所以直接锁住。"
+                      : "全局唯一，业务侧写死在配置里，创建后改动等于让调用方 404。"
+                  }
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="endpoint-code"
+                >
+                  Endpoint 编码
+                </FieldLabel>
                 <Input
                   id="endpoint-code"
                   value={draft.code}
@@ -850,11 +862,6 @@ function EndpointsPageContent() {
                   placeholder="chat/default"
                   disabled={editing}
                 />
-                <FieldDescription>
-                  {editing
-                    ? "创建后不可变——Atlas 会静默忽略这里的改动，所以直接锁住。"
-                    : "全局唯一，业务侧写死在配置里，创建后改动等于让调用方 404。"}
-                </FieldDescription>
               </Field>
 
               <Field>
@@ -872,7 +879,13 @@ function EndpointsPageContent() {
           )}
 
           <Field>
-            <FieldLabel>Primary 模型</FieldLabel>
+            <FieldLabel
+              required
+              hint="已下线的模型不进候选，但当前已经挂着的那个会带「已下线」留在列表里——抹掉它会让这一格看起来是空的，然后被一次无关的保存改掉。"
+              {...FIELD_LABEL_A11Y}
+            >
+              Primary 模型
+            </FieldLabel>
             <Combobox
               items={modelItemsFor(draft.primaryModelCode)}
               value={draft.primaryModelCode}
@@ -880,14 +893,15 @@ function EndpointsPageContent() {
               placeholder="选择模型"
               searchPlaceholder="搜索模型编码…"
             />
-            <FieldDescription>
-              已下线的模型不进候选，但当前已经挂着的那个会带「已下线」留在列表里
-              ——抹掉它会让这一格看起来是空的，然后被一次无关的保存改掉。
-            </FieldDescription>
           </Field>
 
           <Field>
-            <FieldLabel>Fallback 模型</FieldLabel>
+            <FieldLabel
+              hint="不能与 primary 相同——同一个模型挂两档，failover 等于没有。"
+              {...FIELD_LABEL_A11Y}
+            >
+              Fallback 模型
+            </FieldLabel>
             <Combobox
               items={[
                 { value: NO_FALLBACK, label: "不设（Single 路由）" },
@@ -900,9 +914,6 @@ function EndpointsPageContent() {
               placeholder="不设（Single 路由）"
               searchPlaceholder="搜索模型编码…"
             />
-            <FieldDescription>
-              不能与 primary 相同——同一个模型挂两档，failover 等于没有。
-            </FieldDescription>
           </Field>
         </FieldGroup>
       </DialogForm>

@@ -49,7 +49,7 @@ import {
 } from "@vxture/design-system";
 import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
-import { RequiredMark } from "@/components/form/RequiredMark";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** L0 平台级共享指标（只读）。 */
@@ -416,11 +416,10 @@ export function ProductMetricsSection({
         onSubmit={submit}
         cancelLabel={tShared("actions.cancel")}
       >
-        <FieldGroup>
-          <Field orientation="labeled">
-            <FieldLabel htmlFor="metric-key">
+        <FieldGroup columns={2}>
+          <Field>
+            <FieldLabel required {...FIELD_LABEL_A11Y} htmlFor="metric-key">
               指标键
-              <RequiredMark />
             </FieldLabel>
             <Input
               id="metric-key"
@@ -439,10 +438,13 @@ export function ProductMetricsSection({
             </FieldDescription>
           </Field>
 
-          <Field orientation="labeled">
-            <FieldLabel htmlFor="metric-strategy">
+          <Field>
+            <FieldLabel
+              required
+              {...FIELD_LABEL_A11Y}
+              htmlFor="metric-strategy"
+            >
               合并策略
-              <RequiredMark />
             </FieldLabel>
             <NativeSelect
               id="metric-strategy"
@@ -462,8 +464,14 @@ export function ProductMetricsSection({
 
           {isPool ? (
             <>
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="metric-consume">消耗模式</FieldLabel>
+              <Field>
+                <FieldLabel
+                  hint="可拆：从多个池各扣一部分。整取：单池吃不下整笔就拒绝。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="metric-consume"
+                >
+                  消耗模式
+                </FieldLabel>
                 <NativeSelect
                   id="metric-consume"
                   value={draft.consumeMode}
@@ -474,13 +482,16 @@ export function ProductMetricsSection({
                   <option value="divisible">可拆（divisible）</option>
                   <option value="atomic">整取（atomic）</option>
                 </NativeSelect>
-                <FieldDescription>
-                  可拆：从多个池各扣一部分。整取：单池吃不下整笔就拒绝。
-                </FieldDescription>
               </Field>
 
-              <Field orientation="labeled">
-                <FieldLabel htmlFor="metric-reset">重置周期</FieldLabel>
+              <Field>
+                <FieldLabel
+                  hint="不重置 = 一次性额度。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="metric-reset"
+                >
+                  重置周期
+                </FieldLabel>
                 <NativeSelect
                   id="metric-reset"
                   value={draft.resetPeriod}
@@ -494,13 +505,18 @@ export function ProductMetricsSection({
                     </option>
                   ))}
                 </NativeSelect>
-                <FieldDescription>不重置 = 一次性额度。</FieldDescription>
               </Field>
             </>
           ) : null}
 
-          <Field orientation="labeled">
-            <FieldLabel htmlFor="metric-unit">单位</FieldLabel>
+          <Field>
+            <FieldLabel
+              hint="仅展示用。"
+              {...FIELD_LABEL_A11Y}
+              htmlFor="metric-unit"
+            >
+              单位
+            </FieldLabel>
             <Input
               id="metric-unit"
               value={draft.metricUnit}
@@ -509,7 +525,6 @@ export function ProductMetricsSection({
               }
               placeholder="words / calls / GB / seats"
             />
-            <FieldDescription>仅展示用。</FieldDescription>
           </Field>
         </FieldGroup>
       </DialogForm>
