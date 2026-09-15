@@ -543,6 +543,7 @@ function ProductGrantsPageContent() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setStatusFilter("all");

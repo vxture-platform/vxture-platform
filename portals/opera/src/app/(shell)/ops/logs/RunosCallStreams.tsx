@@ -531,7 +531,7 @@ export function RunosCallStreams({
           rowActions={(r: CapabilityCallRecord) => (
             <Button
               variant="ghost"
-              size="md"
+              size="icon-md"
               aria-label="复制调用 ID"
               title={
                 r.errorCode

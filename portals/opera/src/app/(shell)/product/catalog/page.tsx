@@ -652,6 +652,7 @@ function ProductsPageContent() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setOriginFilter("all");

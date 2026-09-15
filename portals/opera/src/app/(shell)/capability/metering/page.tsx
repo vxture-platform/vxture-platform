@@ -461,6 +461,7 @@ export default function CapabilityMeteringPage() {
               />
             </InputGroup>
           }
+          resetLabel={tShared("filters.reset")}
           onReset={() => {
             setKeyword("");
             setLimit("100");

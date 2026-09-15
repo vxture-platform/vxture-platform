@@ -413,6 +413,7 @@ export default function MaintenanceWindowsPage() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setState("all");

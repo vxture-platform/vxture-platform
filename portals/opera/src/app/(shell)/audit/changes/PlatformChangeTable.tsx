@@ -221,6 +221,7 @@ export function PlatformChangeTable() {
             {tShared("common.refresh")}
           </ActionButton>
         }
+        resetLabel={tShared("filters.reset")}
         onReset={() => {
           setKeyword("");
           setAction("all");

@@ -667,6 +667,7 @@ export default function MetricsPage() {
               />
             </InputGroup>
           }
+          resetLabel={tShared("filters.reset")}
           onReset={() => {
             setKeyword("");
             pager.resetPage();

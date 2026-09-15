@@ -382,6 +382,7 @@ export default function JobSchedulerPage() {
                   />
                 </InputGroup>
               }
+              resetLabel={tShared("filters.reset")}
               onReset={() => {
                 setJobKeyword("");
                 jobPager.resetPage();
@@ -609,6 +610,7 @@ export default function JobSchedulerPage() {
                   />
                 </InputGroup>
               }
+              resetLabel={tShared("filters.reset")}
               onReset={() => {
                 setIssueKeyword("");
                 issuePager.resetPage();

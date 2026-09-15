@@ -343,6 +343,7 @@ export function AtlasChangeTable() {
             {tShared("common.refresh")}
           </ActionButton>
         }
+        resetLabel={tShared("filters.reset")}
         onReset={() => {
           setKeyword("");
           setObjectType("all");
