@@ -217,7 +217,7 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
         window.location.assign(origin);
         return;
       }
-      setErrors({ form: "登录会话已失效，请回到原平台重新发起登录" });
+      setErrors({ form: new SessionExpiredError().message });
       setLoading(false);
       return;
     }
