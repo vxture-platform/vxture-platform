@@ -36,7 +36,25 @@
  * 另一条还在继续放行——一个看起来生效了、实际没有的操作。
  *
  * `productCode`/`endpointCode` 创建后不可变：改指向 = 一次撤销加一次新建，两个决定
- * 都留在变更流水里；原地改只会留下终点、丢掉起点。 */
+ * 都留在变更流水里；原地改只会留下终点、丢掉起点。
+ *
+ * ── 按产品归集（owner 2026-09-15）───────────────────────────────────────────
+ *
+ * 「一条路由一行，一个产品会有很多条，很不直观」。一行是一个产品（持有几条、有没有
+ * 停用 / 过期），展开是它持有的路由，每条路由在子表里单独管理。分页按产品计。
+ *
+ * 发授权仍在「产品管理 · 权益配置」（E1）——产品行的「追加路由」带着产品码跳过去，
+ * 这里不再长出第二个新建入口，两处都能新建会立刻产生「以哪边为准」。
+ *
+ * **不做批量写**：Atlas 没有批量接口，前端逐条串发的「全部停用」一旦半途失败就是
+ * 半截状态；而且 owner 2026-08-25 定的线是单条可逆可豁免、批量一律拦。
+ *
+ * ── PATCH 会重写应用范围 ────────────────────────────────────────────────────
+ *
+ * Atlas 的 `updateProductGrant` 对 `applicationId` / `applicationType` 是**无条件写**：
+ * 请求里不带就当 null。所以任何修改都必须把范围原样带回去——只改到期或理由的
+ * 「快捷动作」会把一条应用级授权悄悄变成产品级。编辑对话框整份回传，就是这个原因；
+ * 不另做单字段的菜单项。 */
 
 import {
   Suspense,
@@ -49,7 +67,7 @@ import {
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ActionMenu,
   Badge,
@@ -114,6 +132,17 @@ interface EndpointSummary {
   code: string;
   category: string;
   state: ObjectState;
+}
+
+/** 一个产品持有的全部路由授权，按入口码排序。计数在归集时算好，排序与状态摘要共用。 */
+interface GrantGroup {
+  productCode: string;
+  grants: ProductGrantRecord[];
+  /** 启用且未过期——真在放行的条数。 */
+  live: number;
+  inactive: number;
+  /** 启用但已过期：state 说有效，读时判定说无效。 */
+  expired: number;
 }
 
 /* 没有 `delete` 档：删除的确认由 DS 的 `ConfirmDestructive` 接管（菜单项的
@@ -202,6 +231,7 @@ function ProductGrantsPageContent() {
      - `?productCode=` 权益配置页带着产品码进来看「这个产品有哪些路由」
      下推而不是本地过滤，是因为本地过滤会在"取回的这一页里没有"时显示成"没有"。 */
   const search = useSearchParams();
+  const router = useRouter();
   const endpointCodeFilter = search.get("endpointCode") ?? "";
   const productCodeFilter = search.get("productCode") ?? "";
 
@@ -283,20 +313,69 @@ function ProductGrantsPageContent() {
     );
   }, [rows, keyword, statusFilter]);
 
-  const grantSortAccessors = useMemo<
-    Readonly<Record<string, SortAccessor<ProductGrantRecord>>>
+  const endpointMeta = useMemo(
+    () => new Map(endpoints.map((e) => [e.code, e])),
+    [endpoints],
+  );
+
+  const groups = useMemo<GrantGroup[]>(() => {
+    const byProduct = new Map<string, ProductGrantRecord[]>();
+    for (const r of filtered) {
+      const list = byProduct.get(r.productCode);
+      if (list) list.push(r);
+      else byProduct.set(r.productCode, [r]);
+    }
+    return [...byProduct.entries()].map(([productCode, grants]) => ({
+      productCode,
+      grants: [...grants].sort((a, b) =>
+        a.endpointCode.localeCompare(b.endpointCode),
+      ),
+      live: grants.filter((g) => isEnabled(g.state) && !isExpired(g)).length,
+      inactive: grants.filter((g) => !isEnabled(g.state)).length,
+      expired: grants.filter((g) => isEnabled(g.state) && isExpired(g)).length,
+    }));
+  }, [filtered]);
+
+  const groupSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<GrantGroup>>>
   >(
     () => ({
-      product: (r) => productName.get(r.productCode) ?? r.productCode,
-      endpoint: (r) => r.endpointCode,
-      scope: (r) => r.applicationId,
-      expires: (r) => r.expiresAt,
-      status: (r) => r.state,
+      product: (g) => productName.get(g.productCode) ?? g.productCode,
+      routes: (g) => g.grants.length,
+      status: (g) => g.inactive + g.expired,
     }),
     [productName],
   );
-  const grantSort = useTableSort(filtered, grantSortAccessors);
-  const pager = useListPagination(grantSort.rows, 20);
+  const groupSort = useTableSort(groups, groupSortAccessors);
+  const pager = useListPagination(groupSort.rows, 20);
+
+  const productTotal = useMemo(
+    () => new Set(rows.map((r) => r.productCode)).size,
+    [rows],
+  );
+
+  const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
+  /* 有筛选时（深链、关键词、状态）展开命中的产品：筛出来的就是要看的那几条，
+     再点一下才看得见是多余的一步。无筛选时默认收起，一屏先看全貌。 */
+  const filtering =
+    keyword.trim() !== "" ||
+    statusFilter !== "all" ||
+    productCodeFilter !== "" ||
+    endpointCodeFilter !== "";
+  useEffect(() => {
+    if (filtering) setExpandedKeys(groups.map((g) => g.productCode));
+  }, [filtering, groups]);
+  const allExpanded =
+    pager.pageRows.length > 0 &&
+    pager.pageRows.every((g) => expandedKeys.includes(g.productCode));
+
+  function toggleGroup(productCode: string) {
+    setExpandedKeys((prev) =>
+      prev.includes(productCode)
+        ? prev.filter((k) => k !== productCode)
+        : [...prev, productCode],
+    );
+  }
 
   /** 启用中却已过期的：`state` 说它有效，读时判定说它没有。 */
   const expiredButActive = useMemo(
@@ -391,6 +470,241 @@ function ProductGrantsPageContent() {
     }
   }
 
+  async function copyGrant(r: ProductGrantRecord) {
+    const text = [
+      `${r.productCode} → ${r.endpointCode}`,
+      r.applicationId
+        ? `应用 ${r.applicationId}${r.applicationType ? `（${r.applicationType}）` : ""}`
+        : "产品级",
+      r.expiresAt ? `到期 ${r.expiresAt.slice(0, 10)}` : "不限期",
+      isEnabled(r.state) ? (isExpired(r) ? "已过期" : "生效中") : "已停用",
+      r.reason ? `理由 ${r.reason}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ tone: "success", title: tShared("common.rowCopied") });
+    } catch {
+      toast({ tone: "danger", title: tShared("common.copyFailed") });
+    }
+  }
+
+  /** 一条路由授权的菜单。只读的人也有「查看路由」与「复制」——看与改分开给。 */
+  function routeMenu(r: ProductGrantRecord) {
+    const label = `${r.productCode} → ${r.endpointCode}`;
+    return (
+      <ActionMenu
+        label={`${label} 操作`}
+        disabled={submitting}
+        items={[
+          ...(canManage
+            ? [
+                {
+                  id: "edit",
+                  label: tShared("common.edit"),
+                  icon: "edit" as const,
+                  onSelect: () => openEdit(r),
+                },
+              ]
+            : []),
+          {
+            id: "route",
+            label: "查看路由",
+            icon: "arrow-right",
+            onSelect: () =>
+              router.push(
+                `/model/routes?endpointCode=${encodeURIComponent(r.endpointCode)}`,
+              ),
+          },
+          {
+            id: "copy",
+            label: tShared("common.copyRow"),
+            icon: "copy",
+            onSelect: () => void copyGrant(r),
+          },
+          ...(canManage
+            ? [
+                isEnabled(r.state)
+                  ? {
+                      id: "revoke",
+                      label: "撤销（停用）",
+                      icon: "prohibit" as const,
+                      separatorBefore: true,
+                      onSelect: () =>
+                        void runAction(`${label} 已撤销`, () =>
+                          api.post(
+                            `/api/atlas/product-grants/${r.id}/deactivate`,
+                          ),
+                        ),
+                    }
+                  : {
+                      id: "grant",
+                      label: "重新授予",
+                      icon: "play" as const,
+                      separatorBefore: true,
+                      onSelect: () =>
+                        void runAction(`${label} 已重新授予`, () =>
+                          api.post(
+                            `/api/atlas/product-grants/${r.id}/activate`,
+                          ),
+                        ),
+                    },
+                {
+                  id: "delete",
+                  label: tShared("actions.delete"),
+                  icon: "trash" as const,
+                  danger: true as const,
+                  separatorBefore: true,
+                  confirm: withLabels({
+                    verb: tShared("actions.delete"),
+                    target: `${label} 的授权`,
+                    consequence:
+                      "删除只是把已经停用的记录清掉，不可恢复。日常收回权限用「撤销」就够了，那一步留在变更流水里。",
+                    /* 「要先撤销才能删」接成 `met`：一条还在放行的授权连确认钮都按不下去。
+                       Atlas 侧同样拒（assertDeactivated），这里是提前说出来。 */
+                    preconditions: [
+                      {
+                        label: "这条授权已撤销（停用）",
+                        met: !isEnabled(r.state),
+                      },
+                    ],
+                    onConfirm: () => removeGrant(r),
+                  }),
+                },
+              ]
+            : []),
+        ]}
+      />
+    );
+  }
+
+  /** 展开行：这个产品持有的路由。`leadingSpacer` 占住父表折叠列那一格，归属靠列对齐读出来。 */
+  function routeSubTable(g: GrantGroup) {
+    return (
+      <DataTable
+        labels={tableLabels}
+        leadingSpacer
+        indexStart={1}
+        columns={[
+          {
+            id: "endpoint",
+            header: "路由",
+            cell: (r: ProductGrantRecord) => {
+              const meta = endpointMeta.get(r.endpointCode);
+              return (
+                <TableTitleCell
+                  icon="plug"
+                  title={<span className="font-mono">{r.endpointCode}</span>}
+                  description={meta?.category ?? "—"}
+                  {...(canManage ? { onTitleClick: () => openEdit(r) } : {})}
+                />
+              );
+            },
+          },
+          {
+            /* 授权指向一个停用的入口不是错误（入口可能稍后再开），但这条授权此刻
+               放行不了任何东西——和授权自己的状态是两件事，分两列说。 */
+            id: "entry",
+            header: "入口状态",
+            width: "xs",
+            cell: (r: ProductGrantRecord) => {
+              const meta = endpointMeta.get(r.endpointCode);
+              if (endpoints.length === 0) return "—";
+              if (!meta)
+                return (
+                  <StatusBadge tone="danger" dot>
+                    入口不存在
+                  </StatusBadge>
+                );
+              return isEnabled(meta.state) ? (
+                <StatusBadge tone="success" dot>
+                  {tShared("actions.enable")}
+                </StatusBadge>
+              ) : (
+                <StatusBadge tone="warning" dot>
+                  入口已停用
+                </StatusBadge>
+              );
+            },
+          },
+          {
+            /* 产品级 vs 应用级：`applicationId` 为空是**产品级**授权，不是"没填"。
+               唯一索引用 NULLS NOT DISTINCT，这两者在约束下是不同的东西。 */
+            id: "scope",
+            header: "范围",
+            width: "sm",
+            cell: (r: ProductGrantRecord) =>
+              r.applicationId ? (
+                <span className="flex flex-col items-center gap-2xs">
+                  <span className="text-code-sm">{r.applicationId}</span>
+                  {r.applicationType ? (
+                    <span className="text-body-sm text-muted-foreground">
+                      {r.applicationType}
+                    </span>
+                  ) : null}
+                </span>
+              ) : (
+                <Badge variant="secondary">产品级</Badge>
+              ),
+          },
+          {
+            id: "expires",
+            header: "到期",
+            width: "xs",
+            cell: (r: ProductGrantRecord) =>
+              r.expiresAt ? (
+                <span
+                  className={
+                    isExpired(r) ? "text-warning-foreground" : "text-body-sm"
+                  }
+                >
+                  {r.expiresAt.slice(0, 10)}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">不限</span>
+              ),
+          },
+          {
+            id: "reason",
+            header: "理由",
+            cell: (r: ProductGrantRecord) =>
+              r.reason ? (
+                <span className="block truncate text-body-sm" title={r.reason}>
+                  {r.reason}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              ),
+          },
+          {
+            id: "status",
+            header: tShared("columns.state"),
+            width: "xs",
+            cell: (r: ProductGrantRecord) =>
+              isEnabled(r.state) && isExpired(r) ? (
+                <StatusBadge tone="warning" dot>
+                  已过期
+                </StatusBadge>
+              ) : (
+                <StatusBadge
+                  tone={isEnabled(r.state) ? "success" : "neutral"}
+                  dot
+                >
+                  {isEnabled(r.state)
+                    ? "生效中"
+                    : tShared("status.generic.disabled")}
+                </StatusBadge>
+              ),
+          },
+        ]}
+        rows={g.grants}
+        rowKey={(r: ProductGrantRecord) => r.id}
+        rowActions={routeMenu}
+      />
+    );
+  }
+
   const editing = dialog?.kind === "edit";
   const draftValid =
     draft.productCode.trim() !== "" && draft.endpointCode.trim() !== "";
@@ -400,8 +714,9 @@ function ProductGrantsPageContent() {
       className="w-full"
       currentPage={pager.page}
       pageCount={pager.pageCount}
-      total={rows.length}
-      filteredTotal={filtered.length}
+      total={productTotal}
+      filteredTotal={groups.length}
+      countLabel={`共 ${groups.length} 个产品 · ${filtered.length} 条路由`}
       pageSize={pager.pageSize}
       onPageSizeChange={pager.onPageSizeChange}
       onPageChange={pager.onPageChange}
@@ -444,7 +759,7 @@ function ProductGrantsPageContent() {
     ) : (
       <EmptyState
         title="暂无产品授权"
-        description="点击「授予入口」把一个能力入口发给某个产品。"
+        description="去「产品管理 · 权益配置」给产品发路由授权。"
       />
     );
 
@@ -524,8 +839,27 @@ function ProductGrantsPageContent() {
             cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === rows.length
-                ? rows.length
-                : `${filtered.length} / ${rows.length}`
+                ? `${groups.length} 个产品 · ${rows.length} 条路由`
+                : `${groups.length} 个产品 · ${filtered.length} / ${rows.length} 条路由`
+            }
+            scope={
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pager.pageRows.length === 0}
+                onClick={() =>
+                  setExpandedKeys(
+                    allExpanded ? [] : pager.pageRows.map((g) => g.productCode),
+                  )
+                }
+              >
+                <Icon
+                  name={allExpanded ? "chevron-up" : "chevron-down"}
+                  size="sm"
+                  aria-hidden="true"
+                />
+                {allExpanded ? "全部收起" : "全部展开"}
+              </Button>
             }
             search={
               <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
@@ -573,168 +907,107 @@ function ProductGrantsPageContent() {
                 id: "product",
                 header: tShared("columns.product"),
                 sortable: true,
-                cell: (r: ProductGrantRecord) => (
+                cell: (g: GrantGroup) => (
                   <TableTitleCell
                     icon="package"
-                    title={productName.get(r.productCode) ?? r.productCode}
-                    description={r.productCode}
-                    {...(canManage ? { onTitleClick: () => openEdit(r) } : {})}
+                    title={productName.get(g.productCode) ?? g.productCode}
+                    description={g.productCode}
+                    tooltip={
+                      expandedKeys.includes(g.productCode)
+                        ? "收起路由"
+                        : "展开路由"
+                    }
+                    onTitleClick={() => toggleGroup(g.productCode)}
                   />
                 ),
               },
               {
-                id: "endpoint",
-                header: "能力入口",
+                id: "routes",
+                header: "路由",
                 sortable: true,
-                width: "sm",
-                /* 不做成链接：Endpoint 页目前没有按入口码过滤的入参，配一个跳过去
-                   也筛不动的链接，比不配更糟。 */
-                cell: (r: ProductGrantRecord) => (
-                  <span className="text-code-sm">{r.endpointCode}</span>
-                ),
-              },
-              {
-                /* 产品级 vs 应用级：`applicationId` 为空是**产品级**授权，不是
-                   "没填"。唯一索引用 NULLS NOT DISTINCT，所以这两者在约束下是
-                   不同的东西，显示上也不能混。 */
-                id: "scope",
-                header: "范围",
-                sortable: true,
-                width: "sm",
-                cell: (r: ProductGrantRecord) =>
-                  r.applicationId ? (
-                    <span className="flex flex-col items-center gap-2xs">
-                      <span className="text-code-sm">{r.applicationId}</span>
-                      {r.applicationType ? (
-                        <span className="text-body-sm text-muted-foreground">
-                          {r.applicationType}
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : (
-                    <Badge variant="secondary">产品级</Badge>
-                  ),
-              },
-              {
-                id: "expires",
-                header: "到期",
-                sortable: true,
+                align: "numeric",
                 width: "xs",
-                cell: (r: ProductGrantRecord) =>
-                  r.expiresAt ? (
-                    <span
-                      className={
-                        isExpired(r)
-                          ? "text-warning-foreground"
-                          : "text-body-sm"
-                      }
-                    >
-                      {r.expiresAt.slice(0, 10)}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">不限</span>
-                  ),
+                cell: (g: GrantGroup) => g.grants.length,
               },
               {
+                /* 摘要只说需要看的：全部在放行时一个绿标；有停用或过期就把条数说出来，
+                   展开之前就知道这个产品里有没有要处理的。 */
                 id: "status",
                 header: tShared("columns.state"),
                 sortable: true,
-                width: "xs",
-                cell: (r: ProductGrantRecord) =>
-                  isEnabled(r.state) && isExpired(r) ? (
-                    <StatusBadge tone="warning" dot>
-                      已过期
+                cell: (g: GrantGroup) =>
+                  g.inactive === 0 && g.expired === 0 ? (
+                    <StatusBadge tone="success" dot>
+                      全部生效
                     </StatusBadge>
                   ) : (
-                    <StatusBadge
-                      tone={isEnabled(r.state) ? "success" : "neutral"}
-                      dot
-                    >
-                      {isEnabled(r.state)
-                        ? "生效中"
-                        : tShared("status.generic.disabled")}
-                    </StatusBadge>
+                    <span className="inline-flex flex-wrap justify-center gap-2xs">
+                      {g.live > 0 ? (
+                        <StatusBadge tone="success" dot>
+                          {g.live} 条生效
+                        </StatusBadge>
+                      ) : null}
+                      {g.expired > 0 ? (
+                        <StatusBadge tone="warning" dot>
+                          {g.expired} 条已过期
+                        </StatusBadge>
+                      ) : null}
+                      {g.inactive > 0 ? (
+                        <StatusBadge tone="neutral" dot>
+                          {g.inactive} 条已停用
+                        </StatusBadge>
+                      ) : null}
+                    </span>
                   ),
               },
             ]}
             rows={pager.pageRows}
-            {...(grantSort.sort ? { sort: grantSort.sort } : {})}
+            {...(groupSort.sort ? { sort: groupSort.sort } : {})}
             onSortChange={(next) => {
-              grantSort.onSortChange(next);
+              groupSort.onSortChange(next);
               pager.resetPage();
             }}
-            rowKey={(r: ProductGrantRecord) => r.id}
+            rowKey={(g: GrantGroup) => g.productCode}
             indexStart={pager.indexStart}
-            {...(canManage
-              ? {
-                  rowActions: (r: ProductGrantRecord) => (
-                    <ActionMenu
-                      label={`${r.productCode} → ${r.endpointCode} 操作`}
-                      disabled={submitting}
-                      items={[
-                        {
-                          id: "edit",
-                          label: tShared("common.edit"),
-                          icon: "edit",
-                          onSelect: () => openEdit(r),
-                        },
-                        isEnabled(r.state)
-                          ? {
-                              id: "revoke",
-                              label: "撤销（停用）",
-                              icon: "prohibit" as const,
-                              separatorBefore: true,
-                              onSelect: () =>
-                                void runAction(
-                                  `${r.productCode} → ${r.endpointCode} 已撤销`,
-                                  () =>
-                                    api.post(
-                                      `/api/atlas/product-grants/${r.id}/deactivate`,
-                                    ),
-                                ),
-                            }
-                          : {
-                              id: "grant",
-                              label: "重新授予",
-                              icon: "play" as const,
-                              separatorBefore: true,
-                              onSelect: () =>
-                                void runAction(
-                                  `${r.productCode} → ${r.endpointCode} 已重新授予`,
-                                  () =>
-                                    api.post(
-                                      `/api/atlas/product-grants/${r.id}/activate`,
-                                    ),
-                                ),
-                            },
-                        {
-                          id: "delete",
-                          label: tShared("actions.delete"),
-                          icon: "trash",
-                          danger: true,
-                          separatorBefore: true,
-                          confirm: withLabels({
-                            verb: tShared("actions.delete"),
-                            target: `${r.productCode} → ${r.endpointCode} 的授权`,
-                            consequence:
-                              "删除只是把已经停用的记录清掉，不可恢复。日常收回权限用「撤销」就够了，那一步留在变更流水里。",
-                            /* 「要先撤销才能删」此前只写在对话框描述里——那是描述，
-                               不是门闩。接成 `met` 之后，一条还在放行的授权连确认钮
-                               都按不下去。 */
-                            preconditions: [
-                              {
-                                label: "这条授权已撤销（停用）",
-                                met: !isEnabled(r.state),
-                              },
-                            ],
-                            onConfirm: () => removeGrant(r),
-                          }),
-                        },
-                      ]}
-                    />
-                  ),
-                }
-              : {})}
+            expandedKeys={expandedKeys}
+            onExpandedChange={setExpandedKeys}
+            expandedContent={routeSubTable}
+            rowActions={(g: GrantGroup) => (
+              <ActionMenu
+                label={`${g.productCode} 操作`}
+                items={[
+                  {
+                    id: "toggle",
+                    label: expandedKeys.includes(g.productCode)
+                      ? "收起路由"
+                      : "展开路由",
+                    icon: expandedKeys.includes(g.productCode)
+                      ? "chevron-up"
+                      : "chevron-down",
+                    onSelect: () => toggleGroup(g.productCode),
+                  },
+                  {
+                    /* 发授权的唯一入口在权益配置（E1），带着产品码过去。 */
+                    id: "add",
+                    label: "追加路由",
+                    icon: "plus",
+                    onSelect: () =>
+                      router.push(
+                        `/product/entitlements?productCode=${encodeURIComponent(g.productCode)}`,
+                      ),
+                  },
+                  {
+                    id: "product",
+                    label: "产品详情",
+                    icon: "package",
+                    onSelect: () =>
+                      router.push(
+                        `/product/catalog/${encodeURIComponent(g.productCode)}`,
+                      ),
+                  },
+                ]}
+              />
+            )}
             footer={pagination}
             empty={emptyState}
           />
