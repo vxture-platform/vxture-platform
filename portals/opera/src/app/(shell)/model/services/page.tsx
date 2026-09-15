@@ -62,6 +62,7 @@ import {
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
+  SectionHeader,
   StatusBadge,
   TableTitleCell,
   Textarea,
@@ -69,6 +70,7 @@ import {
   useListPagination,
   useToast,
   type StatusBadgeTone,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
@@ -83,6 +85,7 @@ import {
 } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 const PROVIDER_MANAGE = "model:provider.manage";
 const MODEL_MANAGE = "model:model.manage";
@@ -1205,7 +1208,20 @@ function ModelServiceContent() {
     });
   }, [providers, keyword, statusFilter, modelsByProvider]);
 
-  const pager = useListPagination(filtered, 20);
+  const providerSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ModelProviderRecord>>>
+  >(
+    () => ({
+      name: (r) => r.providerName,
+      type: (r) => r.providerType,
+      models: (r) => modelsByProvider.get(r.id)?.length ?? 0,
+      health: (r) => r.health?.status,
+      status: (r) => r.state,
+    }),
+    [modelsByProvider],
+  );
+  const providerSort = useTableSort(filtered, providerSortAccessors);
+  const pager = useListPagination(providerSort.rows, 20);
 
   const allExpanded =
     pager.pageRows.length > 0 &&
@@ -1768,7 +1784,6 @@ function ModelServiceContent() {
             {
               id: "protocol",
               header: "类型 / 协议",
-              align: "center",
               width: "sm",
               cell: (m: AiModelRecord) => (
                 <span className="flex flex-col items-center gap-2xs">
@@ -1844,7 +1859,6 @@ function ModelServiceContent() {
             {
               id: "status",
               header: "状态",
-              align: "center",
               width: "xs",
               cell: (m: AiModelRecord) => (
                 /* 已弃用的把**时间**一并带出来：运营要判断的是「还剩多久、该不该
@@ -2032,28 +2046,6 @@ function ModelServiceContent() {
             icon="plugs-connected"
             title="模型服务"
             description="供应商与它名下的模型，展开行查看归属；两者都启用才可服务。「健康」由真实流量派生，要即时结论用行操作里的「验证接入」。"
-            action={
-              <div className="flex items-center gap-sm">
-                {canManageModels ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => openModelCreate()}
-                    disabled={
-                      submitting || !providers.some((p) => isEnabled(p.state))
-                    }
-                  >
-                    <Icon name="plus" size="sm" aria-hidden="true" />
-                    注册模型
-                  </Button>
-                ) : null}
-                {canManageProviders ? (
-                  <Button onClick={openProviderCreate} disabled={submitting}>
-                    <Icon name="plus" size="sm" aria-hidden="true" />
-                    接入 Provider
-                  </Button>
-                ) : null}
-              </div>
-            }
           />
         }
         summary={
@@ -2072,8 +2064,12 @@ function ModelServiceContent() {
              "改归属或删除"，却不给入口，等于把问题指出来又把门关上。 */
           orphanModels.length > 0 ? (
             <div className="flex flex-col gap-sm rounded-md border border-warning-border">
-              <div className="px-md pt-sm text-label-md text-foreground">
-                未归属模型（{orphanModels.length}）
+              <div className="px-md pt-sm">
+                <SectionHeader
+                  level={3}
+                  icon="warning"
+                  title={`未归属模型（${orphanModels.length}）`}
+                />
               </div>
               {modelSubTable(orphanModels, null)}
             </div>
@@ -2107,21 +2103,53 @@ function ModelServiceContent() {
                 {allExpanded ? "全部收起" : "全部展开"}
               </Button>
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索供应商或模型…"
+                  aria-label="搜索"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setStatusFilter("all");
+              pager.resetPage();
+            }}
+            actions={
+              <>
+                {canManageModels ? (
+                  <ActionButton
+                    icon="plus"
+                    variant="outline"
+                    onClick={() => openModelCreate()}
+                    disabled={
+                      submitting || !providers.some((p) => isEnabled(p.state))
+                    }
+                  >
+                    注册模型
+                  </ActionButton>
+                ) : null}
+                {canManageProviders ? (
+                  <ActionButton
+                    icon="plus"
+                    onClick={openProviderCreate}
+                    disabled={submitting}
+                  >
+                    接入 Provider
+                  </ActionButton>
+                ) : null}
+              </>
+            }
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索供应商或模型…"
-                aria-label="搜索"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={statusFilter}
@@ -2144,6 +2172,7 @@ function ModelServiceContent() {
               {
                 id: "name",
                 header: "Provider",
+                sortable: true,
                 /* **不引供应商 logo**（2026-08-16 owner 定）：一屏十几家供应商，
                    认标确实比认字快，但代价是 15 个外部图源进 CSP `img-src`、每次开页
                    把运营台的访问泄给对方 CDN，还要处理商标资产的授权——为一个图标付
@@ -2162,7 +2191,7 @@ function ModelServiceContent() {
               {
                 id: "type",
                 header: tShared("columns.kind"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ModelProviderRecord) =>
                   PROVIDER_TYPES.find((t) => t.value === r.providerType)
@@ -2173,6 +2202,7 @@ function ModelServiceContent() {
                    就在这一行展开，不用跳走。挡住删除的仍然是这个数。 */
                 id: "models",
                 header: "模型数",
+                sortable: true,
                 align: "numeric",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => {
@@ -2215,7 +2245,7 @@ function ModelServiceContent() {
               {
                 id: "health",
                 header: tShared("columns.health"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
                   <StatusBadge tone={healthMeta(r.health?.status).tone} dot>
@@ -2226,7 +2256,7 @@ function ModelServiceContent() {
               {
                 id: "status",
                 header: tShared("columns.state"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
                   <StatusBadge
@@ -2241,6 +2271,11 @@ function ModelServiceContent() {
               },
             ]}
             rows={pager.pageRows}
+            {...(providerSort.sort ? { sort: providerSort.sort } : {})}
+            onSortChange={(next) => {
+              providerSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r: ModelProviderRecord) => r.id}
             indexStart={pager.indexStart}
             expandedKeys={expandedKeys}

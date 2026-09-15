@@ -69,6 +69,7 @@ import {
   ViewHeader,
   useToast,
   useListPagination,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
@@ -88,6 +89,7 @@ import {
 } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——endpoints 复用 model:model.manage
  * （路由配置本质是模型间接层，同一批人管，admin.operator_permission 里没有
@@ -278,7 +280,19 @@ function EndpointsPageContent() {
     );
   }, [rows, keyword, resolutionFilter, endpointCodeFilter]);
 
-  const pager = useListPagination(filtered, 20);
+  const endpointSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ModelEndpointRecord>>>
+  >(
+    () => ({
+      code: (r) => r.code,
+      primary: (r) => r.primaryModelCode,
+      fallback: (r) => r.fallbackModelCode,
+      resolution: (r) => r.resolution,
+    }),
+    [],
+  );
+  const endpointSort = useTableSort(filtered, endpointSortAccessors);
+  const pager = useListPagination(endpointSort.rows, 20);
 
   /**
    * 已下线的模型不进候选：挂上去等于给 Endpoint 埋一个必然失败的 primary。
@@ -517,14 +531,6 @@ function EndpointsPageContent() {
             icon="plug"
             title="模型路由"
             description="统一能力入口（chat/default、embedding/default…）。业务系统永远访问 Endpoint，不直接访问模型；这里配的 primary/fallback 是运行时真实生效的路由。「解析状态」是读时从所指模型推导出来的实际后果，不是启停开关——停用一个模型永远不会去停用指着它的入口。"
-            action={
-              canManage ? (
-                <Button onClick={openCreate} disabled={submitting}>
-                  <Icon name="plus" size="sm" />
-                  新建 Endpoint
-                </Button>
-              ) : null
-            }
           />
         }
         summary={
@@ -601,21 +607,39 @@ function EndpointsPageContent() {
                 ? rows.length
                 : `${filtered.length} / ${rows.length}`
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索 Endpoint 或模型编码…"
+                  aria-label="搜索 Endpoint"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setResolutionFilter("all");
+              pager.resetPage();
+            }}
+            actions={
+              canManage ? (
+                <ActionButton
+                  icon="plus"
+                  onClick={openCreate}
+                  disabled={submitting}
+                >
+                  新建 Endpoint
+                </ActionButton>
+              ) : null
+            }
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索 Endpoint 或模型编码…"
-                aria-label="搜索 Endpoint"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={resolutionFilter}
@@ -720,6 +744,7 @@ function EndpointsPageContent() {
               {
                 id: "code",
                 header: "Endpoint",
+                sortable: true,
                 cell: (r: ModelEndpointRecord) => (
                   <TableTitleCell
                     icon="plug"
@@ -734,6 +759,7 @@ function EndpointsPageContent() {
               {
                 id: "primary",
                 header: "Primary",
+                sortable: true,
                 width: "sm",
                 cell: (r: ModelEndpointRecord) => (
                   <ModelRefCell
@@ -745,6 +771,7 @@ function EndpointsPageContent() {
               {
                 id: "fallback",
                 header: "Fallback",
+                sortable: true,
                 width: "sm",
                 cell: (r: ModelEndpointRecord) =>
                   r.fallbackModelCode ? (
@@ -763,7 +790,7 @@ function EndpointsPageContent() {
                    走不到这里。 */
                 id: "resolution",
                 header: "解析状态",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ModelEndpointRecord) => (
                   <StatusBadge tone={resolutionMeta(r.resolution).tone} dot>
@@ -773,6 +800,11 @@ function EndpointsPageContent() {
               },
             ]}
             rows={pager.pageRows}
+            {...(endpointSort.sort ? { sort: endpointSort.sort } : {})}
+            onSortChange={(next) => {
+              endpointSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r) => r.id}
             selectedKeys={selectedKeys}
             onSelectionChange={setSelectedKeys}

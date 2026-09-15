@@ -80,6 +80,7 @@ import {
   ViewHeader,
   useToast,
   useListPagination,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
@@ -94,6 +95,7 @@ import {
   type KeyState,
 } from "@/lib/status";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——api-keys 复用 model:provider.manage
  * （和 provider-keys 一样是"vault"类操作，同样挂 StepUp）。 */
@@ -241,7 +243,22 @@ export default function KeysPage() {
     );
   }, [rows, keyword, kindFilter]);
 
-  const pager = useListPagination(filtered, 20);
+  const keySortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<GatewayApiKeyRecord>>>
+  >(
+    () => ({
+      name: (r) => r.name,
+      prefix: (r) => r.keyPrefix,
+      lastUsed: (r) => r.lastUsedAt,
+      createdAt: (r) => r.createdAt,
+      kind: (r) => r.kind,
+      expiresAt: (r) => r.expiresAt,
+      state: (r) => r.effectiveState,
+    }),
+    [],
+  );
+  const keySort = useTableSort(filtered, keySortAccessors);
+  const pager = useListPagination(keySort.rows, 20);
 
   /** 历史遗留的 internal 行。为 0 时，类型这个维度在这页上已经不存在了——那就
    *  连筛选器带说明横幅一起不出现，而不是留一个只有一个取值的下拉。 */
@@ -554,20 +571,6 @@ export default function KeysPage() {
             icon="key"
             title={t("header.title")}
             description={t("header.description")}
-            action={
-              canManage ? (
-                <Button
-                  disabled={submitting}
-                  onClick={() => {
-                    setDraft(EMPTY_DRAFT);
-                    setDialog({ kind: "issue" });
-                  }}
-                >
-                  <Icon name="plus" size="sm" />
-                  {t("issue.cta")}
-                </Button>
-              ) : null
-            }
           />
         }
         summary={
@@ -599,21 +602,42 @@ export default function KeysPage() {
                 ? rows.length
                 : `${filtered.length} / ${rows.length}`
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder={t("filters.searchPlaceholder")}
+                  aria-label={t("filters.searchAriaLabel")}
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setKindFilter("all");
+              pager.resetPage();
+            }}
+            actions={
+              canManage ? (
+                <ActionButton
+                  icon="plus"
+                  disabled={submitting}
+                  onClick={() => {
+                    setDraft(EMPTY_DRAFT);
+                    setDialog({ kind: "issue" });
+                  }}
+                >
+                  {t("issue.cta")}
+                </ActionButton>
+              ) : null
+            }
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder={t("filters.searchPlaceholder")}
-                aria-label={t("filters.searchAriaLabel")}
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             {/* 只在还有历史 internal 行时才给类型筛选：全是 external 的话，这个
                 下拉筛不出任何区别，只会暗示这里有两类可选。 */}
             {retiredCount > 0 ? (
@@ -677,6 +701,7 @@ export default function KeysPage() {
               {
                 id: "name",
                 header: t("columns.name"),
+                sortable: true,
                 cell: (r: GatewayApiKeyRecord) => (
                   <TableTitleCell
                     icon="key"
@@ -688,12 +713,14 @@ export default function KeysPage() {
               {
                 id: "prefix",
                 header: t("columns.prefix"),
+                sortable: true,
                 width: "sm",
                 cell: (r: GatewayApiKeyRecord) => <Kbd>{r.keyPrefix}</Kbd>,
               },
               {
                 id: "lastUsed",
                 header: t("columns.lastUsed"),
+                sortable: true,
                 width: "sm",
                 cell: (r: GatewayApiKeyRecord) =>
                   formatTime(r.lastUsedAt, locale, tCommon("never")),
@@ -701,6 +728,7 @@ export default function KeysPage() {
               {
                 id: "createdAt",
                 header: t("columns.issuedAt"),
+                sortable: true,
                 width: "sm",
                 cell: (r: GatewayApiKeyRecord) =>
                   formatTime(r.createdAt, locale, tCommon("never")),
@@ -710,7 +738,7 @@ export default function KeysPage() {
                    看起来平起平坐的 Internal 标，读起来就像还能再签一把。 */
                 id: "kind",
                 header: t("columns.kind"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: GatewayApiKeyRecord) => (
                   <Badge
@@ -725,7 +753,7 @@ export default function KeysPage() {
               {
                 id: "expiresAt",
                 header: t("columns.expiresAt"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: GatewayApiKeyRecord) =>
                   /* null = 不限期。到期与否不在这里判——那是 `effectiveState` 的事，
@@ -749,7 +777,7 @@ export default function KeysPage() {
               {
                 id: "state",
                 header: t("columns.state"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: GatewayApiKeyRecord) => (
                   /* 读 `effectiveState` 而不是 `state`：后者是运营设成什么，前者是
@@ -773,6 +801,11 @@ export default function KeysPage() {
               },
             ]}
             rows={pager.pageRows}
+            {...(keySort.sort ? { sort: keySort.sort } : {})}
+            onSortChange={(next) => {
+              keySort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r) => r.id}
             selectedKeys={selectedKeys}
             onSelectionChange={setSelectedKeys}

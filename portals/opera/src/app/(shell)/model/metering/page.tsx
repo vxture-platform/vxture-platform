@@ -74,6 +74,7 @@ import {
 } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 触发一次浏览器下载；用完立即回收 URL，不留 blob 常驻内存。 */
 function downloadCsv(filename: string, rows: readonly string[][]) {
@@ -353,7 +354,20 @@ export default function MeteringPage() {
     );
   }, [rows, keyword, cycleMonth, tenancy, resolvedAxis]);
 
-  const pager = useListPagination(filtered, 20);
+  const usageSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<UsageSummaryRecord>>>
+  >(
+    () => ({
+      identity: (r) => rowIdentity(resolvedAxis, r),
+      requests: (r) => r.requests,
+      tokens: (r) => r.totalTokens,
+      cycle: (r) => r.cycleMonth,
+      application: (r) => r.applicationType ?? r.applicationId,
+    }),
+    [resolvedAxis],
+  );
+  const usageSort = useTableSort(filtered, usageSortAccessors);
+  const pager = useListPagination(usageSort.rows, 20);
 
   const copyRow = async (r: UsageSummaryRecord) => {
     const text = toCsvRow(resolvedAxis, r, tenancy).filter(Boolean).join(" · ");
@@ -404,6 +418,7 @@ export default function MeteringPage() {
     const identity: DataTableColumn<UsageSummaryRecord> = {
       id: "identity",
       header: currentAxis.label,
+      sortable: true,
       cell: (r: UsageSummaryRecord) =>
         resolvedAxis === "tenant" ? (
           /* 租户在上、工作区在下——工作区一律以租户为主导，规则集中在
@@ -418,6 +433,7 @@ export default function MeteringPage() {
       {
         id: "requests",
         header: "请求数",
+        sortable: true,
         align: "numeric",
         width: "sm",
         cell: (r: UsageSummaryRecord) =>
@@ -426,6 +442,7 @@ export default function MeteringPage() {
       {
         id: "tokens",
         header: "Token（入/出/总）",
+        sortable: true,
         align: "numeric",
         width: "sm",
         cell: (r: UsageSummaryRecord) =>
@@ -434,7 +451,7 @@ export default function MeteringPage() {
       {
         id: "cycle",
         header: "周期",
-        align: "center",
+        sortable: true,
         width: "xs",
         cell: (r: UsageSummaryRecord) => r.cycleMonth,
       },
@@ -456,6 +473,7 @@ export default function MeteringPage() {
              */
             id: "application",
             header: "Application",
+            sortable: true,
             width: "sm",
             cell: (r: UsageSummaryRecord) =>
               r.applicationId || r.applicationType ? (
@@ -614,21 +632,28 @@ export default function MeteringPage() {
               }}
             />
           }
+          search={
+            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+              <InputGroupAddon>
+                <Icon name="search" size="sm" aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder={`搜索${currentAxis.label}…`}
+                aria-label="搜索"
+                value={keyword}
+                onChange={(e) => {
+                  setKeyword(e.target.value);
+                  pager.resetPage();
+                }}
+              />
+            </InputGroup>
+          }
+          onReset={() => {
+            setKeyword("");
+            setCycleMonth("all");
+            pager.resetPage();
+          }}
         >
-          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-            <InputGroupAddon>
-              <Icon name="search" size="sm" aria-hidden="true" />
-            </InputGroupAddon>
-            <InputGroupInput
-              placeholder={`搜索${currentAxis.label}…`}
-              aria-label="搜索"
-              value={keyword}
-              onChange={(e) => {
-                setKeyword(e.target.value);
-                pager.resetPage();
-              }}
-            />
-          </InputGroup>
           <NativeSelect
             wrapperClassName="w-fit"
             value={cycleMonth}
@@ -665,6 +690,11 @@ export default function MeteringPage() {
           labels={tableLabels}
           columns={columns}
           rows={pager.pageRows}
+          {...(usageSort.sort ? { sort: usageSort.sort } : {})}
+          onSortChange={(next) => {
+            usageSort.onSortChange(next);
+            pager.resetPage();
+          }}
           rowKey={(r) => rowKey(resolvedAxis, r)}
           selectedKeys={selectedKeys}
           onSelectionChange={setSelectedKeys}

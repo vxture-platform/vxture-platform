@@ -49,9 +49,11 @@ import {
   ViewHeader,
   useListPagination,
   type StatusBadgeTone,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 type ReleaseChannel = "stable" | "beta" | "canary";
 /** product_251 B-3：字段名 `state`，最小词表 active / inactive。 */
@@ -162,7 +164,20 @@ function ProductClients() {
     );
   }, [rows, keyword, productFilter, channelFilter, stateFilter]);
 
-  const pager = useListPagination(visible, 20);
+  const clientSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<OidcClientRecord>>>
+  >(
+    () => ({
+      clientId: (r) => r.clientId,
+      product: (r) => r.productCode ?? r.productId,
+      channel: (r) => r.releaseChannel,
+      pkce: (r) => (r.pkceRequired ? 1 : 0),
+      state: (r) => r.state,
+    }),
+    [],
+  );
+  const clientSort = useTableSort(visible, clientSortAccessors);
+  const pager = useListPagination(clientSort.rows, 20);
 
   const emptyState =
     load.kind === "loading" ? (
@@ -220,21 +235,29 @@ function ProductClients() {
                 ? rows.length
                 : `${visible.length} / ${rows.length}`
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索 client_id / 产品 / 回调地址…"
+                  aria-label="搜索接入凭据"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setChannelFilter("all");
+              setStateFilter("all");
+              pager.resetPage();
+            }}
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索 client_id / 产品 / 回调地址…"
-                aria-label="搜索接入凭据"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={productFilter}
@@ -287,22 +310,19 @@ function ProductClients() {
               {
                 id: "clientId",
                 header: "Client ID",
+                sortable: true,
                 cell: (c: OidcClientRecord) => (
-                  <span className="flex flex-col gap-2xs">
-                    <span className="font-mono text-code-sm text-foreground">
-                      {c.clientId}
-                    </span>
-                    {c.name ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {c.name}
-                      </span>
-                    ) : null}
-                  </span>
+                  <TableTitleCell
+                    icon="fingerprint"
+                    title={<span className="font-mono">{c.clientId}</span>}
+                    {...(c.name ? { description: c.name } : {})}
+                  />
                 ),
               },
               {
                 id: "product",
                 header: tShared("columns.product"),
+                sortable: true,
                 width: "sm",
                 cell: (c: OidcClientRecord) =>
                   c.productId ? (
@@ -330,7 +350,7 @@ function ProductClients() {
               {
                 id: "channel",
                 header: "渠道",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (c: OidcClientRecord) => (
                   <Badge variant="outline">{c.releaseChannel}</Badge>
@@ -364,7 +384,7 @@ function ProductClients() {
               {
                 id: "pkce",
                 header: "PKCE",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (c: OidcClientRecord) =>
                   c.pkceRequired ? (
@@ -381,7 +401,7 @@ function ProductClients() {
               {
                 id: "state",
                 header: tShared("columns.state"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (c: OidcClientRecord) => (
                   <StatusBadge tone={CLIENT_STATE_TONE[c.state]} dot>
@@ -393,6 +413,11 @@ function ProductClients() {
               },
             ]}
             rows={pager.pageRows}
+            {...(clientSort.sort ? { sort: clientSort.sort } : {})}
+            onSortChange={(next) => {
+              clientSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(c: OidcClientRecord) => c.id}
             selectedKeys={selected}
             onSelectionChange={setSelected}

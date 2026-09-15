@@ -57,14 +57,16 @@ import {
   ViewLayout,
   useListPagination,
   useToast,
-  type DataTableSort,
   type StatusBadgeTone,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
+import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 import { api, OperaApiError } from "@/lib/api";
 import { LOG_LEVEL_META, type LogLevel } from "@/lib/status";
 import { RunosCallStreams } from "./RunosCallStreams";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /* ── Atlas 请求日志 ──────────────────────────────────────────────────────── */
 
@@ -214,10 +216,6 @@ export default function LogsPage() {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
   const [level, setLevel] = useState<LogLevel | "all">("all");
-  const [sort, setSort] = useState<DataTableSort>({
-    columnId: "time",
-    direction: "desc",
-  });
   const [selected, setSelected] = useState<readonly string[]>([]);
 
   const atlasQuery = useCallback(
@@ -297,19 +295,28 @@ export default function LogsPage() {
 
   const visible = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    const filteredRows = rows.filter(
+    return rows.filter(
       (r) =>
         (level === "all" || r.level === level) &&
         (kw === "" || r.message.toLowerCase().includes(kw)),
     );
-    return [...filteredRows].sort((a, b) =>
-      sort.direction === "asc"
-        ? a.time.localeCompare(b.time)
-        : b.time.localeCompare(a.time),
-    );
-  }, [rows, keyword, level, sort]);
+  }, [rows, keyword, level]);
 
-  const pager = useListPagination(visible, 20);
+  const logSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<PlatformLogRow>>>
+  >(
+    () => ({
+      time: (r) => r.time,
+      source: (r) => r.source,
+      level: (r) => (({ info: 0, warn: 1, error: 2 }) as const)[r.level],
+    }),
+    [],
+  );
+  const logSort = useTableSort(visible, logSortAccessors, {
+    columnId: "time",
+    direction: "desc",
+  });
+  const pager = useListPagination(logSort.rows, 20);
 
   const copyAtlasRow = async (r: AtlasRequestLogRecord) => {
     const text = [
@@ -435,38 +442,40 @@ export default function LogsPage() {
         icon="terminal"
         level={2}
         description="来自 Atlas 的 /capability/logs：请求级事实，含模型、Provider、Token、延迟与错误。游标分页，只能顺序前进。"
-        action={
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={() => void reloadAtlas()}
-            disabled={atlasLoad.kind === "loading"}
-          >
-            <Icon name="refresh" size="sm" aria-hidden="true" />
-            {tShared("common.refresh")}
-          </Button>
-        }
       >
         <FilterBar
           view="list"
           onViewChange={() => {}}
           cardsDisabledReason={tShared("common.cardsRetired")}
           count={atlasCursor ? `${atlasRows.length}+` : atlasRows.length}
+          search={
+            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+              <InputGroupAddon>
+                <Icon name="search" size="sm" aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="模型编码（modelCode）…"
+                aria-label="按模型编码筛选"
+                value={modelCode}
+                onChange={(e) => setModelCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void reloadAtlas();
+                }}
+              />
+            </InputGroup>
+          }
+          actions={
+            <ActionButton
+              icon="refresh"
+              variant="outline"
+              size="md"
+              onClick={() => void reloadAtlas()}
+              disabled={atlasLoad.kind === "loading"}
+            >
+              {tShared("common.refresh")}
+            </ActionButton>
+          }
         >
-          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-            <InputGroupAddon>
-              <Icon name="search" size="sm" aria-hidden="true" />
-            </InputGroupAddon>
-            <InputGroupInput
-              placeholder="模型编码（modelCode）…"
-              aria-label="按模型编码筛选"
-              value={modelCode}
-              onChange={(e) => setModelCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void reloadAtlas();
-              }}
-            />
-          </InputGroup>
           <InputGroup className="grow basis-media-2xl max-w-panel-sm">
             <InputGroupAddon>
               <Icon name="plugs-connected" size="sm" aria-hidden="true" />
@@ -594,7 +603,6 @@ export default function LogsPage() {
             {
               id: "status",
               header: tShared("columns.state"),
-              align: "center",
               width: "xs",
               cell: (r: AtlasRequestLogRecord) => (
                 <StatusBadge tone={atlasStatusTone(r.status)} dot>
@@ -623,24 +631,12 @@ export default function LogsPage() {
           )}
           empty={atlasEmpty}
           footer={
-            <div className="flex w-full items-center justify-between gap-sm">
-              <span className="text-body-sm text-muted-foreground">
-                已加载 {atlasRows.length} 条
-                {atlasCursor ? "，还有更多" : "（已到末尾）"}
-              </span>
-              {atlasCursor ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={loadingMore}
-                  onClick={() => void loadMoreAtlas()}
-                >
-                  {loadingMore
-                    ? tShared("common.loading")
-                    : tShared("common.loadMore")}
-                </Button>
-              ) : null}
-            </div>
+            <LoadMoreFooter
+              loaded={atlasRows.length}
+              hasMore={Boolean(atlasCursor)}
+              loading={loadingMore}
+              onLoadMore={() => void loadMoreAtlas()}
+            />
           }
         />
       </Section>
@@ -669,21 +665,28 @@ export default function LogsPage() {
               ? rows.length
               : `${visible.length} / ${rows.length}`
           }
+          search={
+            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+              <InputGroupAddon>
+                <Icon name="search" size="sm" aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="搜索日志内容…"
+                aria-label="搜索日志"
+                value={keyword}
+                onChange={(e) => {
+                  setKeyword(e.target.value);
+                  pager.resetPage();
+                }}
+              />
+            </InputGroup>
+          }
+          onReset={() => {
+            setKeyword("");
+            setLevel("all");
+            pager.resetPage();
+          }}
         >
-          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-            <InputGroupAddon>
-              <Icon name="search" size="sm" aria-hidden="true" />
-            </InputGroupAddon>
-            <InputGroupInput
-              placeholder="搜索日志内容…"
-              aria-label="搜索日志"
-              value={keyword}
-              onChange={(e) => {
-                setKeyword(e.target.value);
-                pager.resetPage();
-              }}
-            />
-          </InputGroup>
           <NativeSelect
             wrapperClassName="w-fit"
             value={level}
@@ -713,6 +716,7 @@ export default function LogsPage() {
             {
               id: "source",
               header: tShared("columns.source"),
+              sortable: true,
               width: "xs",
               cell: (r: PlatformLogRow) => (
                 <Badge variant="secondary">{r.source}</Badge>
@@ -726,7 +730,7 @@ export default function LogsPage() {
             {
               id: "level",
               header: "级别",
-              align: "center",
+              sortable: true,
               width: "xs",
               cell: (r: PlatformLogRow) => (
                 <StatusBadge tone={LOG_LEVEL_META[r.level].tone}>
@@ -736,12 +740,15 @@ export default function LogsPage() {
             },
           ]}
           rows={pager.pageRows}
+          {...(logSort.sort ? { sort: logSort.sort } : {})}
+          onSortChange={(next) => {
+            logSort.onSortChange(next);
+            pager.resetPage();
+          }}
           rowKey={(r) => r.id}
           selectedKeys={selected}
           onSelectionChange={setSelected}
           indexStart={pager.indexStart}
-          sort={sort}
-          onSortChange={setSort}
           rowActions={(r: PlatformLogRow) => (
             <ActionMenu
               label="日志操作"

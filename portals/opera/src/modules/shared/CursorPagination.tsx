@@ -51,13 +51,16 @@
  * 一个是页面坏了，一个是将来对不齐。混为一谈会让人要么放过真坏的，要么把没坏的当事故查。
  * 本件用命名档 `gap-sm` / `gap-2xs`。
  *
- * 页大小档与 `ListPagination` 一致（10/20/50/100，无 auto，owner 2026-09-02 定）。
+ * 页大小档与 `ListPagination` 一致（10/20/50/100，无 auto，owner 2026-09-02 定）。**每页条数的控件、
+ * 按钮尺寸与两组之间的间距也与 DS `Pagination` 一致**（`SegmentedControl` md、`control-md` 按钮、
+ * `gap-2xl`）：此前这里是「每页条数」文字 + 下拉框、sm 按钮，同一个运维平台里两种表尾长得不一样
+ * （owner 2026-09-15 要求表尾统一）。
  * 改页大小回第一页——游标是「某一行之后」，换了页大小之后它前面看过的行数变了，不回
  * 第一页就会漏行或重复。
  */
 
 import { useTranslations } from "next-intl";
-import { Button, Icon, NativeSelect } from "@vxture/design-system";
+import { Button, Icon, SegmentedControl } from "@vxture/design-system";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 export type CursorPageSize = (typeof PAGE_SIZE_OPTIONS)[number];
@@ -143,29 +146,24 @@ export function CursorPagination({
         <span>{t("total", { total })}</span>
         <span>{t("position", { page, pageCount })}</span>
       </span>
-      <div className="flex items-center gap-sm">
-        <label className="flex items-center gap-2xs text-body-sm text-muted-foreground">
-          {t("pageSizeLabel")}
-          <NativeSelect
-            wrapperClassName="w-fit"
-            value={String(pageSize)}
-            onChange={(event) =>
-              onPageSizeChange(Number(event.target.value) as CursorPageSize)
-            }
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {t("pageSizeOption", { size })}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
+      <div className="flex flex-wrap items-center gap-2xl">
+        <SegmentedControl<CursorPageSize>
+          size="md"
+          ariaLabel={t("pageSizeLabel")}
+          value={pageSize}
+          onChange={onPageSizeChange}
+          items={PAGE_SIZE_OPTIONS.map((size) => ({
+            value: size,
+            label: String(size),
+            ariaLabel: t("pageSizeOption", { size }),
+          }))}
+        />
         <div className="flex items-center gap-2xs">
           {steps.map((step) => (
             <Button
               key={step.key}
               variant="outline"
-              size="sm"
+              size="md"
               aria-label={step.label}
               title={step.label}
               disabled={step.blocked || busy}

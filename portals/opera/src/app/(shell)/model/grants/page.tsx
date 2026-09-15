@@ -86,6 +86,7 @@ import {
 import { isEnabled, type ObjectState } from "@/features/atlas/state";
 import { useConfirmLabels } from "@/lib/destructive";
 import { api, OperaApiError } from "@/lib/api";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——与 endpoints 同一批人管（授权的是
  * 入口），活库 admin.operator_permission 里也没有更细的码。 */
@@ -282,7 +283,20 @@ function ProductGrantsPageContent() {
     );
   }, [rows, keyword, statusFilter]);
 
-  const pager = useListPagination(filtered, 20);
+  const grantSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ProductGrantRecord>>>
+  >(
+    () => ({
+      product: (r) => productName.get(r.productCode) ?? r.productCode,
+      endpoint: (r) => r.endpointCode,
+      scope: (r) => r.applicationId,
+      expires: (r) => r.expiresAt,
+      status: (r) => r.state,
+    }),
+    [productName],
+  );
+  const grantSort = useTableSort(filtered, grantSortAccessors);
+  const pager = useListPagination(grantSort.rows, 20);
 
   /** 启用中却已过期的：`state` 说它有效，读时判定说它没有。 */
   const expiredButActive = useMemo(
@@ -513,21 +527,28 @@ function ProductGrantsPageContent() {
                 ? rows.length
                 : `${filtered.length} / ${rows.length}`
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索产品码或入口码…"
+                  aria-label="搜索产品授权"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setStatusFilter("all");
+              pager.resetPage();
+            }}
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索产品码或入口码…"
-                aria-label="搜索产品授权"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={statusFilter}
@@ -550,6 +571,7 @@ function ProductGrantsPageContent() {
               {
                 id: "product",
                 header: tShared("columns.product"),
+                sortable: true,
                 cell: (r: ProductGrantRecord) => (
                   <TableTitleCell
                     icon="package"
@@ -562,6 +584,7 @@ function ProductGrantsPageContent() {
               {
                 id: "endpoint",
                 header: "能力入口",
+                sortable: true,
                 width: "sm",
                 /* 不做成链接：Endpoint 页目前没有按入口码过滤的入参，配一个跳过去
                    也筛不动的链接，比不配更糟。 */
@@ -575,6 +598,7 @@ function ProductGrantsPageContent() {
                    不同的东西，显示上也不能混。 */
                 id: "scope",
                 header: "范围",
+                sortable: true,
                 width: "sm",
                 cell: (r: ProductGrantRecord) =>
                   r.applicationId ? (
@@ -593,7 +617,7 @@ function ProductGrantsPageContent() {
               {
                 id: "expires",
                 header: "到期",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ProductGrantRecord) =>
                   r.expiresAt ? (
@@ -613,7 +637,7 @@ function ProductGrantsPageContent() {
               {
                 id: "status",
                 header: tShared("columns.state"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ProductGrantRecord) =>
                   isEnabled(r.state) && isExpired(r) ? (
@@ -633,6 +657,11 @@ function ProductGrantsPageContent() {
               },
             ]}
             rows={pager.pageRows}
+            {...(grantSort.sort ? { sort: grantSort.sort } : {})}
+            onSortChange={(next) => {
+              grantSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r: ProductGrantRecord) => r.id}
             indexStart={pager.indexStart}
             {...(canManage

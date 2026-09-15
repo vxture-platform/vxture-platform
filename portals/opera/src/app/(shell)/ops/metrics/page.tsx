@@ -41,10 +41,18 @@ import {
   useListPagination,
   useToast,
   type StatusBadgeTone,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+
+/** 未加载时的稳定空数组：`?? []` 每次渲染都是新数组，会让排序的 useMemo 每次重算。 */
+const NO_ITEMS: LogSummary["items"] = [];
+
+/** 未加载时的稳定空数组：`?? []` 每次渲染都是新数组，会让排序的 useMemo 每次重算。 */
+const NO_PROVIDERS: ProviderPerformanceRow[] = [];
 
 /**
  * `/capability/logs/summary` —— 窗口聚合的请求量 / 错误率 / 延迟分位。
@@ -259,7 +267,55 @@ export default function MetricsPage() {
       ? jobs
       : jobs.filter((j) => j.jobName.toLowerCase().includes(kw));
   }, [jobs, keyword]);
-  const pager = useListPagination(filteredJobs, 20);
+  const jobSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<JobHeartbeatItem>>>
+  >(
+    () => ({
+      job: (r) => r.jobName,
+      duration: (r) => r.lastDurationMs,
+      runs: (r) => r.runCount,
+      failures: (r) => r.failureCount,
+      status: (r) => r.status,
+    }),
+    [],
+  );
+  const jobSort = useTableSort(filteredJobs, jobSortAccessors);
+  const pager = useListPagination(jobSort.rows, 20);
+  const summarySortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<LogSummary["items"][number]>>>
+  >(
+    () => ({
+      group: (r) => r.modelCode,
+      endpoint: (r) => r.endpointCode,
+      requests: (r) => r.requests,
+      tokens: (r) => r.totalTokens,
+      errors: (r) => r.errors,
+      errorRate: (r) => r.errorRate,
+      p95: (r) => r.p95LatencyMs,
+    }),
+    [],
+  );
+  const summarySort = useTableSort(
+    summary?.items ?? NO_ITEMS,
+    summarySortAccessors,
+  );
+  const perfSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ProviderPerformanceRow>>>
+  >(
+    () => ({
+      provider: (r) => r.provider,
+      attempts: (r) => r.attempts,
+      errorRate: (r) => r.errorRate,
+      avgLatency: (r) => r.avgLatencyMs,
+      p95Latency: (r) => r.p95LatencyMs,
+      lastObserved: (r) => r.lastObservedAt,
+    }),
+    [],
+  );
+  const perfSort = useTableSort(
+    perf?.providers ?? NO_PROVIDERS,
+    perfSortAccessors,
+  );
 
   const copyRow = async (r: JobHeartbeatItem) => {
     const text = [
@@ -351,14 +407,13 @@ export default function MetricsPage() {
             {
               id: "group",
               header: "模型 / Provider",
+              sortable: true,
               cell: (r: LogSummary["items"][number]) => (
-                <span className="text-body-sm">
-                  {r.modelCode ?? "—"}
-                  <span className="text-muted-foreground">
-                    {" / "}
-                    {r.providerCode ?? "—"}
-                  </span>
-                </span>
+                <TableTitleCell
+                  icon="brain"
+                  title={r.modelCode ?? "—"}
+                  description={r.providerCode ?? "—"}
+                />
               ),
             },
             {
@@ -367,6 +422,7 @@ export default function MetricsPage() {
                  必须能加总回 overall——把它显示成「—」会让人以为是脏数据。 */
               id: "endpoint",
               header: "Endpoint",
+              sortable: true,
               width: "sm",
               cell: (r: LogSummary["items"][number]) =>
                 r.endpointCode ? (
@@ -383,6 +439,7 @@ export default function MetricsPage() {
             {
               id: "requests",
               header: "请求数",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) => r.requests,
@@ -390,6 +447,7 @@ export default function MetricsPage() {
             {
               id: "tokens",
               header: "Token 数",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) =>
@@ -400,6 +458,7 @@ export default function MetricsPage() {
             {
               id: "errors",
               header: "错误数",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) => r.errors,
@@ -407,6 +466,7 @@ export default function MetricsPage() {
             {
               id: "errorRate",
               header: "错误率",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) => formatRate(r.errorRate),
@@ -414,13 +474,16 @@ export default function MetricsPage() {
             {
               id: "p95",
               header: "P95 延迟",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) =>
                 formatMs(r.p95LatencyMs),
             },
           ]}
-          rows={summary?.items ?? []}
+          rows={summarySort.rows}
+          {...(summarySort.sort ? { sort: summarySort.sort } : {})}
+          onSortChange={summarySort.onSortChange}
           /* endpointCode 必须进 key：加上这一维之后，同一个 model/provider 会按不同
              入口拆成多行，只用前两段做 key 会撞成重复键——React 会丢行，而丢掉的正是
              这次新增的那一维。 */
@@ -493,13 +556,18 @@ export default function MetricsPage() {
             {
               id: "provider",
               header: "Provider",
+              sortable: true,
               cell: (r: ProviderPerformanceRow) => (
-                <span className="font-mono">{r.provider}</span>
+                <TableTitleCell
+                  icon="plugs-connected"
+                  title={<span className="font-mono">{r.provider}</span>}
+                />
               ),
             },
             {
               id: "attempts",
               header: "累计请求",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => r.attempts,
@@ -507,6 +575,7 @@ export default function MetricsPage() {
             {
               id: "errorRate",
               header: "错误率",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => formatRate(r.errorRate),
@@ -514,6 +583,7 @@ export default function MetricsPage() {
             {
               id: "avgLatency",
               header: "平均延迟",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => formatMs(r.avgLatencyMs),
@@ -521,6 +591,7 @@ export default function MetricsPage() {
             {
               id: "p95Latency",
               header: "P95 延迟",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => formatMs(r.p95LatencyMs),
@@ -528,12 +599,15 @@ export default function MetricsPage() {
             {
               id: "lastObserved",
               header: "最近观测",
+              sortable: true,
               width: "sm",
               cell: (r: ProviderPerformanceRow) =>
                 formatTime(r.lastObservedAt, locale),
             },
           ]}
-          rows={perf?.providers ?? []}
+          rows={perfSort.rows}
+          {...(perfSort.sort ? { sort: perfSort.sort } : {})}
+          onSortChange={perfSort.onSortChange}
           rowKey={(r) => r.provider}
           indexStart={1}
           empty={
@@ -577,33 +651,42 @@ export default function MetricsPage() {
               ? jobs.length
               : `${filteredJobs.length} / ${jobs.length}`
           }
-        >
-          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-            <InputGroupAddon>
-              <Icon name="search" size="sm" aria-hidden="true" />
-            </InputGroupAddon>
-            <InputGroupInput
-              placeholder="搜索作业名…"
-              aria-label="搜索作业"
-              value={keyword}
-              onChange={(e) => {
-                setKeyword(e.target.value);
-                pager.resetPage();
-              }}
-            />
-          </InputGroup>
-        </FilterBar>
+          search={
+            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+              <InputGroupAddon>
+                <Icon name="search" size="sm" aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="搜索作业名…"
+                aria-label="搜索作业"
+                value={keyword}
+                onChange={(e) => {
+                  setKeyword(e.target.value);
+                  pager.resetPage();
+                }}
+              />
+            </InputGroup>
+          }
+          onReset={() => {
+            setKeyword("");
+            pager.resetPage();
+          }}
+        />
         <DataTable
           labels={tableLabels}
           columns={[
             {
               id: "job",
               header: "作业",
-              cell: (r: JobHeartbeatItem) => r.jobName,
+              sortable: true,
+              cell: (r: JobHeartbeatItem) => (
+                <TableTitleCell icon="workflow" title={r.jobName} />
+              ),
             },
             {
               id: "duration",
               header: "最近耗时",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: JobHeartbeatItem) =>
@@ -612,6 +695,7 @@ export default function MetricsPage() {
             {
               id: "runs",
               header: "累计运行",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: JobHeartbeatItem) => r.runCount,
@@ -619,6 +703,7 @@ export default function MetricsPage() {
             {
               id: "failures",
               header: "累计失败",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: JobHeartbeatItem) => r.failureCount,
@@ -626,7 +711,7 @@ export default function MetricsPage() {
             {
               id: "status",
               header: tShared("columns.state"),
-              align: "center",
+              sortable: true,
               width: "xs",
               cell: (r: JobHeartbeatItem) => (
                 <StatusBadge tone={jobStatusTone(r.status)}>
@@ -636,6 +721,11 @@ export default function MetricsPage() {
             },
           ]}
           rows={pager.pageRows}
+          {...(jobSort.sort ? { sort: jobSort.sort } : {})}
+          onSortChange={(next) => {
+            jobSort.onSortChange(next);
+            pager.resetPage();
+          }}
           rowKey={(r) => r.jobName}
           selectedKeys={selected}
           onSelectionChange={setSelected}

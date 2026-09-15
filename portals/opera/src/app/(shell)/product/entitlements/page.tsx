@@ -78,6 +78,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { fetchWholeCapabilityCatalog } from "@/lib/runos-catalog";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDay } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 interface ProductLite {
   id: string;
@@ -506,6 +507,19 @@ function ProductEntitlements() {
    * 主体的 direct 授权）：把一条运营者确实持有的授权因为归不了组就从界面上抹掉，
    * 比多出一行难解释得多。
    */
+  const orphanSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<OrphanRow>>>
+  >(
+    () => ({
+      product: (r) => r.productCode,
+      source: (r) => r.source,
+      object: (r) =>
+        r.source === "atlas" ? r.grant.endpointCode : r.grant.capabilityId,
+      state: (r) => r.grant.state,
+    }),
+    [],
+  );
+  const orphanSort = useTableSort(orphanRows, orphanSortAccessors);
   function capabilityGrantRows(list: CapabilityGrant[]): CapabilityRow[] {
     const direct = list.filter((g) => g.grantType === "direct");
     const derived = list.filter((g) => g.grantType === "derived");
@@ -731,7 +745,6 @@ function ProductEntitlements() {
                 {
                   id: "state",
                   header: tShared("columns.state"),
-                  align: "center",
                   width: "xs",
                   cell: (g: RouteGrant) => (
                     <StatusBadge
@@ -902,7 +915,6 @@ function ProductEntitlements() {
                 {
                   id: "type",
                   header: tShared("columns.source"),
-                  align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => (
                     <Badge
@@ -915,14 +927,12 @@ function ProductEntitlements() {
                 {
                   id: "risk",
                   header: "风险域",
-                  align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => r.grant.riskScope,
                 },
                 {
                   id: "state",
                   header: tShared("columns.state"),
-                  align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => (
                     <StatusBadge
@@ -935,6 +945,7 @@ function ProductEntitlements() {
                 },
               ]}
               rows={capabilityGrantRows(caps)}
+              indexStart={1}
               rowKey={(r: CapabilityRow) => r.key}
               {...(canWriteCapabilities
                 ? {
@@ -1405,6 +1416,7 @@ function ProductEntitlements() {
               {
                 id: "product",
                 header: "产品码",
+                sortable: true,
                 width: "sm",
                 cell: (r: OrphanRow) => (
                   /* 点进详情页：那里对目录外的码同样能列、能撤（见详情分支的兜底）。 */
@@ -1419,6 +1431,7 @@ function ProductEntitlements() {
               {
                 id: "source",
                 header: tShared("columns.source"),
+                sortable: true,
                 width: "sm",
                 cell: (r: OrphanRow) => (
                   <Badge variant="outline">
@@ -1429,6 +1442,7 @@ function ProductEntitlements() {
               {
                 id: "object",
                 header: "授权对象",
+                sortable: true,
                 cell: (r: OrphanRow) =>
                   r.source === "atlas" ? (
                     <span className="font-mono text-code-sm">
@@ -1454,7 +1468,7 @@ function ProductEntitlements() {
               {
                 id: "state",
                 header: tShared("columns.state"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: OrphanRow) =>
                   r.source === "atlas" ? (
@@ -1476,7 +1490,9 @@ function ProductEntitlements() {
                   ),
               },
             ]}
-            rows={orphanRows}
+            rows={orphanSort.rows}
+            {...(orphanSort.sort ? { sort: orphanSort.sort } : {})}
+            onSortChange={orphanSort.onSortChange}
             rowKey={(r: OrphanRow) => r.key}
             indexStart={1}
             {...(canWriteRoutes || canWriteCapabilities

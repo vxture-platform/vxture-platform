@@ -57,10 +57,12 @@ import {
   StatusBadge,
   useToast,
   type StatusBadgeTone,
+  ActionButton,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
+import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 
 /** 与 opera-bff atlas.router.ts 同名能力码。**已知缺口**：提交给平台能力码词表的
  * 那套只覆盖配置类写操作，所以「可以读变更流水」目前没法与「可以轮换密钥」分开
@@ -318,18 +320,35 @@ export function AtlasChangeTable() {
             ? `${rows.length}${cursor ? "+" : ""}`
             : `${visible.length} / ${rows.length}`
         }
+        search={
+          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+            <InputGroupAddon>
+              <Icon name="search" size="sm" aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="搜索对象 / 动作 / 操作者…"
+              aria-label="搜索变更记录"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
+          </InputGroup>
+        }
+        actions={
+          <ActionButton
+            variant="outline"
+            icon="refresh"
+            onClick={() => void reload()}
+            disabled={load.kind === "loading"}
+          >
+            {tShared("common.refresh")}
+          </ActionButton>
+        }
+        onReset={() => {
+          setKeyword("");
+          setObjectType("all");
+          setOutcome("all");
+        }}
       >
-        <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-          <InputGroupAddon>
-            <Icon name="search" size="sm" aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            placeholder="搜索对象 / 动作 / 操作者…"
-            aria-label="搜索变更记录"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
-        </InputGroup>
         <NativeSelect
           wrapperClassName="w-fit"
           value={objectType}
@@ -353,14 +372,6 @@ export function AtlasChangeTable() {
           <option value="success">成功</option>
           <option value="failure">失败</option>
         </NativeSelect>
-        <Button
-          variant="secondary"
-          onClick={() => void reload()}
-          disabled={load.kind === "loading"}
-        >
-          <Icon name="refresh" size="sm" aria-hidden="true" />
-          {tShared("common.refresh")}
-        </Button>
       </FilterBar>
 
       <DataTable
@@ -410,7 +421,6 @@ export function AtlasChangeTable() {
           {
             id: "action",
             header: tShared("columns.action"),
-            align: "center",
             width: "xs",
             cell: (r: AtlasChangeRecord) => r.action,
           },
@@ -440,7 +450,6 @@ export function AtlasChangeTable() {
           {
             id: "outcome",
             header: "结果",
-            align: "center",
             width: "xs",
             cell: (r: AtlasChangeRecord) => (
               <StatusBadge tone={OUTCOME_TONE[r.outcome] ?? "neutral"} dot>
@@ -451,6 +460,7 @@ export function AtlasChangeTable() {
         ]}
         rows={visible}
         rowKey={(r: AtlasChangeRecord) => r.eventId}
+        indexStart={1}
         selectedKeys={selected}
         onSelectionChange={setSelected}
         rowActions={(r: AtlasChangeRecord) => (
@@ -470,19 +480,13 @@ export function AtlasChangeTable() {
         footer={
           /* 游标不透明、只能顺序前进，所以没有页码也没有总数——"共 N 条"这个数
              上游根本没给，编一个出来就是编。 */
-          cursor ? (
-            <Button
-              variant="secondary"
-              className="w-full"
-              onClick={() => void loadMore()}
-              disabled={loadingMore}
-            >
-              {loadingMore
-                ? tShared("common.loading")
-                : tShared("common.loadMore")}
-            </Button>
-          ) : rows.length > 0 ? (
-            <p className="text-body-sm text-muted-foreground">已经到底了。</p>
+          rows.length > 0 ? (
+            <LoadMoreFooter
+              loaded={rows.length}
+              hasMore={Boolean(cursor)}
+              loading={loadingMore}
+              onLoadMore={() => void loadMore()}
+            />
           ) : null
         }
       />

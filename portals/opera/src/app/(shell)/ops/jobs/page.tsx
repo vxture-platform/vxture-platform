@@ -43,11 +43,13 @@ import {
   useListPagination,
   useToast,
   type StatusBadgeTone,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
@@ -238,7 +240,22 @@ export default function JobSchedulerPage() {
       ? jobs
       : jobs.filter((j) => j.jobName.toLowerCase().includes(kw));
   }, [jobs, jobKeyword]);
-  const jobPager = useListPagination(filteredJobs, 20);
+  const jobSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<JobHeartbeatItem>>>
+  >(
+    () => ({
+      jobName: (r) => r.jobName,
+      lastStarted: (r) => r.lastStartedAt,
+      interval: (r) => r.intervalMs,
+      duration: (r) => r.lastDurationMs,
+      items: (r) => r.lastItemsProcessed,
+      counts: (r) => r.failureCount,
+      status: (r) => r.status,
+    }),
+    [],
+  );
+  const jobSort = useTableSort(filteredJobs, jobSortAccessors);
+  const jobPager = useListPagination(jobSort.rows, 20);
 
   const filteredIssues = useMemo(() => {
     const kw = issueKeyword.trim().toLowerCase();
@@ -251,7 +268,20 @@ export default function JobSchedulerPage() {
             (i.tenantName ?? "").toLowerCase().includes(kw),
         );
   }, [queue.recentIssues, issueKeyword]);
-  const issuePager = useListPagination(filteredIssues, 20);
+  const issueSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<WebhookDeliveryIssue>>>
+  >(
+    () => ({
+      event: (r) => r.eventType,
+      nextRetry: (r) => r.nextRetryAt,
+      lastAttempt: (r) => r.lastAttemptAt,
+      attempts: (r) => r.attempts,
+      status: (r) => r.status,
+    }),
+    [],
+  );
+  const issueSort = useTableSort(filteredIssues, issueSortAccessors);
+  const issuePager = useListPagination(issueSort.rows, 20);
 
   return (
     <ViewLayout>
@@ -336,37 +366,42 @@ export default function JobSchedulerPage() {
                   ? jobs.length
                   : `${filteredJobs.length} / ${jobs.length}`
               }
-            >
-              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-                <InputGroupAddon>
-                  <Icon name="search" size="sm" aria-hidden="true" />
-                </InputGroupAddon>
-                <InputGroupInput
-                  placeholder="搜索作业名…"
-                  aria-label="搜索作业"
-                  value={jobKeyword}
-                  onChange={(e) => {
-                    setJobKeyword(e.target.value);
-                    jobPager.resetPage();
-                  }}
-                />
-              </InputGroup>
-            </FilterBar>
+              search={
+                <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                  <InputGroupAddon>
+                    <Icon name="search" size="sm" aria-hidden="true" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    placeholder="搜索作业名…"
+                    aria-label="搜索作业"
+                    value={jobKeyword}
+                    onChange={(e) => {
+                      setJobKeyword(e.target.value);
+                      jobPager.resetPage();
+                    }}
+                  />
+                </InputGroup>
+              }
+              onReset={() => {
+                setJobKeyword("");
+                jobPager.resetPage();
+              }}
+            />
             <DataTable
               labels={tableLabels}
               columns={[
                 {
                   id: "jobName",
                   header: "作业",
+                  sortable: true,
                   cell: (r: JobHeartbeatItem) => (
-                    <span className="text-label-md text-foreground">
-                      {r.jobName}
-                    </span>
+                    <TableTitleCell icon="workflow" title={r.jobName} />
                   ),
                 },
                 {
                   id: "lastStarted",
                   header: "上次开始",
+                  sortable: true,
                   width: "sm",
                   cell: (r: JobHeartbeatItem) => (
                     <span className="text-body-sm text-muted-foreground">
@@ -394,6 +429,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "interval",
                   header: "心跳间隔",
+                  sortable: true,
                   align: "numeric",
                   width: "xs",
                   cell: (r: JobHeartbeatItem) => formatIntervalMs(r.intervalMs),
@@ -401,6 +437,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "duration",
                   header: "耗时",
+                  sortable: true,
                   align: "numeric",
                   width: "xs",
                   cell: (r: JobHeartbeatItem) =>
@@ -409,6 +446,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "items",
                   header: "处理项数",
+                  sortable: true,
                   align: "numeric",
                   width: "xs",
                   cell: (r: JobHeartbeatItem) => r.lastItemsProcessed ?? "—",
@@ -416,6 +454,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "counts",
                   header: "运行 / 失败次数",
+                  sortable: true,
                   align: "numeric",
                   width: "sm",
                   cell: (r: JobHeartbeatItem) =>
@@ -424,7 +463,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "status",
                   header: tShared("columns.state"),
-                  align: "center",
+                  sortable: true,
                   width: "xs",
                   cell: (r: JobHeartbeatItem) => (
                     <StatusBadge tone={jobStatusTone(r.status)}>
@@ -434,6 +473,11 @@ export default function JobSchedulerPage() {
                 },
               ]}
               rows={jobPager.pageRows}
+              {...(jobSort.sort ? { sort: jobSort.sort } : {})}
+              onSortChange={(next) => {
+                jobSort.onSortChange(next);
+                jobPager.resetPage();
+              }}
               rowKey={(r: JobHeartbeatItem) => r.jobName}
               selectedKeys={jobSelected}
               onSelectionChange={setJobSelected}
@@ -549,37 +593,40 @@ export default function JobSchedulerPage() {
                   ? queue.recentIssues.length
                   : `${filteredIssues.length} / ${queue.recentIssues.length}`
               }
-            >
-              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-                <InputGroupAddon>
-                  <Icon name="search" size="sm" aria-hidden="true" />
-                </InputGroupAddon>
-                <InputGroupInput
-                  placeholder="搜索事件 / 租户 / 产品…"
-                  aria-label="搜索投递记录"
-                  value={issueKeyword}
-                  onChange={(e) => {
-                    setIssueKeyword(e.target.value);
-                    issuePager.resetPage();
-                  }}
-                />
-              </InputGroup>
-            </FilterBar>
+              search={
+                <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                  <InputGroupAddon>
+                    <Icon name="search" size="sm" aria-hidden="true" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    placeholder="搜索事件 / 租户 / 产品…"
+                    aria-label="搜索投递记录"
+                    value={issueKeyword}
+                    onChange={(e) => {
+                      setIssueKeyword(e.target.value);
+                      issuePager.resetPage();
+                    }}
+                  />
+                </InputGroup>
+              }
+              onReset={() => {
+                setIssueKeyword("");
+                issuePager.resetPage();
+              }}
+            />
             <DataTable
               labels={tableLabels}
               columns={[
                 {
                   id: "event",
                   header: "事件",
+                  sortable: true,
                   cell: (r: WebhookDeliveryIssue) => (
-                    <div className="flex flex-col gap-2xs">
-                      <span className="text-label-md text-foreground">
-                        {r.eventType}
-                      </span>
-                      <span className="text-body-sm text-muted-foreground">
-                        {r.tenantName ?? "—"} · {r.productName ?? "—"}
-                      </span>
-                    </div>
+                    <TableTitleCell
+                      icon="plug"
+                      title={r.eventType}
+                      description={`${r.tenantName ?? "—"} · ${r.productName ?? "—"}`}
+                    />
                   ),
                 },
                 {
@@ -602,6 +649,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "nextRetry",
                   header: "下次重试",
+                  sortable: true,
                   width: "sm",
                   cell: (r: WebhookDeliveryIssue) => (
                     <span className="text-body-sm text-muted-foreground">
@@ -612,6 +660,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "lastAttempt",
                   header: "最后尝试",
+                  sortable: true,
                   width: "sm",
                   cell: (r: WebhookDeliveryIssue) => (
                     <span className="text-body-sm text-muted-foreground">
@@ -622,6 +671,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "attempts",
                   header: "尝试次数",
+                  sortable: true,
                   align: "numeric",
                   width: "xs",
                   cell: (r: WebhookDeliveryIssue) =>
@@ -630,7 +680,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "status",
                   header: tShared("columns.state"),
-                  align: "center",
+                  sortable: true,
                   width: "xs",
                   cell: (r: WebhookDeliveryIssue) => (
                     <StatusBadge tone={queueStatusTone(r.status)}>
@@ -640,6 +690,11 @@ export default function JobSchedulerPage() {
                 },
               ]}
               rows={issuePager.pageRows}
+              {...(issueSort.sort ? { sort: issueSort.sort } : {})}
+              onSortChange={(next) => {
+                issueSort.onSortChange(next);
+                issuePager.resetPage();
+              }}
               rowKey={(r: WebhookDeliveryIssue) => r.id}
               selectedKeys={issueSelected}
               onSelectionChange={setIssueSelected}

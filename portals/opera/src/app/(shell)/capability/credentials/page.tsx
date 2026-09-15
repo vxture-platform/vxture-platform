@@ -54,6 +54,7 @@ import {
   useListPagination,
   useToast,
   type StatusBadgeTone,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
@@ -63,6 +64,7 @@ import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 const MANAGE = "capability:runos.manage";
 
@@ -215,7 +217,20 @@ function RunosCredentialsPageContent() {
     }
   }, [deepLinkDone, deepLinkTarget, load.kind, rows]);
 
-  const pager = useListPagination(filtered, 20);
+  const bindingSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<CredentialBindingRecord>>>
+  >(
+    () => ({
+      class: (r) => r.credentialClass,
+      appliesTo: (r) => r.appliesTo.length,
+      rotated: (r) => r.rotatedAt,
+      mode: (r) => r.mode,
+      state: (r) => r.state,
+    }),
+    [],
+  );
+  const bindingSort = useTableSort(filtered, bindingSortAccessors);
+  const pager = useListPagination(bindingSort.rows, 20);
 
   function openCreate() {
     setDraft(EMPTY_DRAFT);
@@ -359,14 +374,6 @@ function RunosCredentialsPageContent() {
             icon="key"
             title="凭证托管"
             description="第三方系统凭证托管与代理注入；列表只含元数据，密钥材料永不回显。"
-            action={
-              canManage ? (
-                <Button onClick={openCreate} disabled={submitting}>
-                  <Icon name="plus" size="sm" aria-hidden="true" />
-                  录入凭证
-                </Button>
-              ) : null
-            }
           />
         }
         summary={
@@ -396,22 +403,38 @@ function RunosCredentialsPageContent() {
                 ? rows.length
                 : `${filtered.length} / ${rows.length}`
             }
-          >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索类别 / Provider / 适用能力…"
-                aria-label="搜索凭证"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
-          </FilterBar>
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索类别 / Provider / 适用能力…"
+                  aria-label="搜索凭证"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              pager.resetPage();
+            }}
+            actions={
+              canManage ? (
+                <ActionButton
+                  icon="plus"
+                  onClick={openCreate}
+                  disabled={submitting}
+                >
+                  录入凭证
+                </ActionButton>
+              ) : null
+            }
+          />
         }
         table={
           <DataTable
@@ -420,6 +443,7 @@ function RunosCredentialsPageContent() {
               {
                 id: "class",
                 header: "凭证类别",
+                sortable: true,
                 cell: (r: CredentialBindingRecord) => (
                   <TableTitleCell
                     icon="key"
@@ -433,6 +457,7 @@ function RunosCredentialsPageContent() {
               {
                 id: "appliesTo",
                 header: "适用能力",
+                sortable: true,
                 cell: (r: CredentialBindingRecord) => (
                   <span className="text-body-sm text-muted-foreground">
                     {r.appliesTo.length === 0
@@ -446,6 +471,7 @@ function RunosCredentialsPageContent() {
               {
                 id: "rotated",
                 header: "上次轮换",
+                sortable: true,
                 width: "sm",
                 cell: (r: CredentialBindingRecord) =>
                   formatTime(r.rotatedAt, locale),
@@ -453,7 +479,7 @@ function RunosCredentialsPageContent() {
               {
                 id: "mode",
                 header: "模式",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: CredentialBindingRecord) => (
                   <Badge variant="secondary">{r.mode}</Badge>
@@ -462,7 +488,7 @@ function RunosCredentialsPageContent() {
               {
                 id: "state",
                 header: tShared("columns.state"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: CredentialBindingRecord) => (
                   <StatusBadge tone={STATE_TONE[r.state] ?? "neutral"} dot>
@@ -472,6 +498,11 @@ function RunosCredentialsPageContent() {
               },
             ]}
             rows={pager.pageRows}
+            {...(bindingSort.sort ? { sort: bindingSort.sort } : {})}
+            onSortChange={(next) => {
+              bindingSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r) => r.bindingId}
             selectedKeys={selected}
             onSelectionChange={setSelected}

@@ -36,6 +36,7 @@ import {
   Button,
   Drawer,
   Icon,
+  SectionHeader,
   Separator,
   StatusBadge,
   useToast,
@@ -572,17 +573,21 @@ export function LaunchDrawer({
 
         {/* ── 我方 ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">
-            我方 · 平台侧配置{openOurs > 0 ? `（还差 ${openOurs} 项）` : ""}
-          </p>
+          <SectionHeader
+            level={3}
+            icon="settings"
+            title={`我方 · 平台侧配置${openOurs > 0 ? `（还差 ${openOurs} 项）` : ""}`}
+          />
           {ours.map(renderRow)}
         </div>
 
         {/* ── 对方 ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">
-            对方 · 产品侧接通{openTheirs > 0 ? `（还差 ${openTheirs} 项）` : ""}
-          </p>
+          <SectionHeader
+            level={3}
+            icon="plug"
+            title={`对方 · 产品侧接通${openTheirs > 0 ? `（还差 ${openTheirs} 项）` : ""}`}
+          />
           {theirs.map(renderRow)}
         </div>
 
@@ -590,18 +595,22 @@ export function LaunchDrawer({
 
         {/* ── 交给对方 ─────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-sm">
-          <div className="flex flex-wrap items-center justify-between gap-sm">
-            <p className="text-label-md text-foreground">交给对方</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              onClick={copyHandover}
-            >
-              <Icon name="copy" size="sm" aria-hidden="true" />
-              复制全部
-            </Button>
-          </div>
+          <SectionHeader
+            level={3}
+            icon="share"
+            title="交给对方"
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={copyHandover}
+              >
+                <Icon name="copy" size="sm" aria-hidden="true" />
+                复制全部
+              </Button>
+            }
+          />
           <p className="text-body-sm text-muted-foreground">
             接入是双边的：平台侧配完之后，下面这些要发给产品侧。密钥不在这里——它们只在签发与轮换时明文出现一次。
           </p>

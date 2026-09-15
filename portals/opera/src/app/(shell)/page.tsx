@@ -43,6 +43,7 @@ import {
 import { isEnabled, isServing } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 type ProviderHealthStatus = "healthy" | "degraded" | "down" | "unknown";
 
@@ -207,6 +208,31 @@ export default function DashboardPage() {
     }
     return map;
   }, [models]);
+  const providerSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ModelProviderRecord>>>
+  >(
+    () => ({
+      name: (r) => r.providerName,
+      models: (r) => modelCountByProvider.get(r.id) ?? 0,
+      type: (r) => r.providerType,
+      health: (r) => r.health?.status,
+      status: (r) => r.state,
+    }),
+    [modelCountByProvider],
+  );
+  const providerSort = useTableSort(providers, providerSortAccessors);
+  const eventSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<AuditLogEntry>>>
+  >(
+    () => ({
+      occurredAt: (r) => r.occurredAt,
+      actor: (r) => r.actorName,
+      target: (r) => `${r.objectType} ${r.objectId}`,
+      action: (r) => r.action,
+    }),
+    [],
+  );
+  const eventSort = useTableSort(events, eventSortAccessors);
 
   const copyEvent = async (r: AuditLogEntry) => {
     const text = [
@@ -354,6 +380,7 @@ export default function DashboardPage() {
             {
               id: "name",
               header: "Provider",
+              sortable: true,
               cell: (r: ModelProviderRecord) => (
                 <TableTitleCell
                   icon="plugs-connected"
@@ -365,6 +392,7 @@ export default function DashboardPage() {
             {
               id: "models",
               header: "模型数",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: ModelProviderRecord) =>
@@ -373,14 +401,14 @@ export default function DashboardPage() {
             {
               id: "type",
               header: tShared("columns.kind"),
-              align: "center",
+              sortable: true,
               width: "xs",
               cell: (r: ModelProviderRecord) => r.providerType,
             },
             {
               id: "health",
               header: tShared("columns.health"),
-              align: "center",
+              sortable: true,
               width: "xs",
               cell: (r: ModelProviderRecord) => (
                 <StatusBadge tone={healthMeta(r.health?.status).tone} dot>
@@ -391,7 +419,7 @@ export default function DashboardPage() {
             {
               id: "status",
               header: tShared("columns.state"),
-              align: "center",
+              sortable: true,
               width: "xs",
               cell: (r: ModelProviderRecord) => (
                 <StatusBadge tone={providerTone(r.state)} dot>
@@ -402,7 +430,9 @@ export default function DashboardPage() {
               ),
             },
           ]}
-          rows={providers}
+          rows={providerSort.rows}
+          {...(providerSort.sort ? { sort: providerSort.sort } : {})}
+          onSortChange={providerSort.onSortChange}
           rowKey={(r) => r.id}
           selectedKeys={providerSel}
           onSelectionChange={setProviderSel}
@@ -444,29 +474,34 @@ export default function DashboardPage() {
             {
               id: "occurredAt",
               header: tShared("columns.time"),
+              sortable: true,
               width: "sm",
               cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
             },
             {
               id: "actor",
               header: tShared("columns.actor"),
+              sortable: true,
               width: "sm",
               cell: (r: AuditLogEntry) => r.actorName,
             },
             {
               id: "target",
               header: tShared("columns.target"),
+              sortable: true,
               cell: (r: AuditLogEntry) => `${r.objectType} · ${r.objectId}`,
             },
             {
               id: "action",
               header: tShared("columns.action"),
-              align: "center",
+              sortable: true,
               width: "xs",
               cell: (r: AuditLogEntry) => r.action,
             },
           ]}
-          rows={events}
+          rows={eventSort.rows}
+          {...(eventSort.sort ? { sort: eventSort.sort } : {})}
+          onSortChange={eventSort.onSortChange}
           rowKey={(r) => r.eventId}
           selectedKeys={eventSel}
           onSelectionChange={setEventSel}

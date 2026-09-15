@@ -43,8 +43,9 @@ import {
   ViewHeader,
   useListPagination,
   useToast,
-  type DataTableSort,
   type StatusBadgeTone,
+  TableTitleCell,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
@@ -53,6 +54,7 @@ import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 写操作的能力码，与 BFF 的能力门同名（ops:maintenance.manage）。 */
 const MANAGE = "ops:maintenance.manage";
@@ -215,10 +217,6 @@ export default function MaintenanceWindowsPage() {
   const [keyword, setKeyword] = useState("");
   const [state, setState] = useState("all");
   const [selected, setSelected] = useState<readonly string[]>([]);
-  const [sort, setSort] = useState<DataTableSort>({
-    columnId: "startAt",
-    direction: "desc",
-  });
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [editing, setEditing] = useState<MaintenanceWindowItem | null>(null);
   const [form, setForm] = useState<WindowForm>(createDefaultForm);
@@ -252,21 +250,35 @@ export default function MaintenanceWindowsPage() {
 
   const visible = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    const matched = rows.filter(
+    return rows.filter(
       (r) =>
         (state === "all" || r.state === state) &&
         (kw === "" ||
           r.title.toLowerCase().includes(kw) ||
           r.affectedServices.some((s) => s.toLowerCase().includes(kw))),
     );
-    return [...matched].sort((a, b) => {
-      const cmp = a.startAt.localeCompare(b.startAt);
-      return sort.direction === "asc" ? cmp : -cmp;
-    });
-  }, [rows, keyword, state, sort]);
+  }, [rows, keyword, state]);
 
   const filtered = keyword.trim() !== "" || state !== "all";
-  const pager = useListPagination(visible, 20);
+  const windowSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<MaintenanceWindowItem>>>
+  >(
+    () => ({
+      title: (r) => r.title,
+      startAt: (r) => r.startAt,
+      endAt: (r) => r.endAt,
+      actualEndAt: (r) => r.actualEndAt,
+      createdByName: (r) => r.createdByName,
+      severity: (r) => r.severity,
+      state: (r) => r.state,
+    }),
+    [],
+  );
+  const windowSort = useTableSort(visible, windowSortAccessors, {
+    columnId: "startAt",
+    direction: "desc",
+  });
+  const pager = useListPagination(windowSort.rows, 20);
 
   const editingState = editing?.state;
   /** 进行中的窗口只允许顺延结束时间与追记描述，其余字段锁死（同 BFF 的分支）。 */
@@ -373,16 +385,6 @@ export default function MaintenanceWindowsPage() {
             icon="clock"
             title="维护窗口"
             description="声明与管理平台维护窗口：计划、执行、完成与取消，实际结束时间对账。"
-            action={
-              // 没有 manage 能力就不渲染写入口。这是界面取舍不是安全边界——
-              // 接口那边照样 403（见 BFF 的 assertCanManageMaintenanceWindows）。
-              canManage ? (
-                <Button onClick={openCreate} disabled={submitting}>
-                  <Icon name="plus" size="sm" aria-hidden="true" />
-                  新建窗口
-                </Button>
-              ) : null
-            }
           />
         }
         filters={
@@ -395,21 +397,39 @@ export default function MaintenanceWindowsPage() {
                 ? rows.length
                 : `${visible.length} / ${rows.length}`
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索标题 / 影响服务…"
+                  aria-label="搜索维护窗口"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setState("all");
+              pager.resetPage();
+            }}
+            actions={
+              canManage ? (
+                <ActionButton
+                  icon="plus"
+                  onClick={openCreate}
+                  disabled={submitting}
+                >
+                  新建窗口
+                </ActionButton>
+              ) : null
+            }
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索标题 / 影响服务…"
-                aria-label="搜索维护窗口"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={state}
@@ -437,17 +457,15 @@ export default function MaintenanceWindowsPage() {
               {
                 id: "title",
                 header: "窗口",
+                sortable: true,
                 cell: (r) => (
-                  <div className="flex flex-col gap-2xs">
-                    <span className="text-label-md text-foreground">
-                      {r.title}
-                    </span>
-                    {r.affectedServices.length > 0 ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {r.affectedServices.join(" · ")}
-                      </span>
-                    ) : null}
-                  </div>
+                  <TableTitleCell
+                    icon="clock"
+                    title={r.title}
+                    {...(r.affectedServices.length > 0
+                      ? { description: r.affectedServices.join(" · ") }
+                      : {})}
+                  />
                 ),
               },
               {
@@ -460,12 +478,14 @@ export default function MaintenanceWindowsPage() {
               {
                 id: "endAt",
                 header: "结束（计划）",
+                sortable: true,
                 width: "sm",
                 cell: (r) => formatMoment(r.endAt),
               },
               {
                 id: "actualEndAt",
                 header: "实际结束",
+                sortable: true,
                 width: "sm",
                 cell: (r) => (
                   <span className="text-body-sm text-muted-foreground">
@@ -476,6 +496,7 @@ export default function MaintenanceWindowsPage() {
               {
                 id: "createdByName",
                 header: "创建人",
+                sortable: true,
                 width: "sm",
                 cell: (r) => (
                   <span className="text-body-sm text-muted-foreground">
@@ -486,7 +507,7 @@ export default function MaintenanceWindowsPage() {
               {
                 id: "severity",
                 header: "严重度",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r) => (
                   <StatusBadge tone={severityTone(r.severity)}>
@@ -497,7 +518,7 @@ export default function MaintenanceWindowsPage() {
               {
                 id: "state",
                 header: tShared("columns.state"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r) => (
                   <StatusBadge tone={stateTone(r.state)}>
@@ -507,12 +528,15 @@ export default function MaintenanceWindowsPage() {
               },
             ]}
             rows={pager.pageRows}
+            {...(windowSort.sort ? { sort: windowSort.sort } : {})}
+            onSortChange={(next) => {
+              windowSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r) => r.id}
             selectedKeys={selected}
             onSelectionChange={setSelected}
             indexStart={pager.indexStart}
-            sort={sort}
-            onSortChange={setSort}
             {...(canManage
               ? {
                   rowActions: (item: MaintenanceWindowItem) => (
