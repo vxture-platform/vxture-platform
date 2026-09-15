@@ -226,6 +226,7 @@ function auditColumns(
       sortable: true,
       cell: (log) => (
         <TableTitleCell
+          icon="user"
           title={log.operatorName}
           description={log.operatorEmail}
         />

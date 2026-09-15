@@ -40,6 +40,7 @@ import {
   InputGroupInput,
   useToast,
   ActionButton,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
@@ -233,29 +234,21 @@ export function RunosChangeTable() {
         labels={tableLabels}
         columns={[
           {
-            id: "time",
-            header: tShared("columns.time"),
-            width: "sm",
-            cell: (r: MgmtEventRecord) => formatTime(r.occurredAt, locale),
+            id: "object",
+            header: tShared("columns.target"),
+            cell: (r: MgmtEventRecord) => (
+              <TableTitleCell
+                icon="clock-counter-clockwise"
+                title={r.objectType}
+                description={<span className="font-mono">{r.objectId}</span>}
+              />
+            ),
           },
           {
             id: "event",
             header: "事件",
             cell: (r: MgmtEventRecord) => (
               <span className="font-mono text-code-sm">{r.action}</span>
-            ),
-          },
-          {
-            id: "object",
-            header: tShared("columns.target"),
-            cell: (r: MgmtEventRecord) => (
-              <span className="text-body-sm">
-                {r.objectType}
-                <span className="text-muted-foreground">
-                  {" · "}
-                  {r.objectId}
-                </span>
-              </span>
             ),
           },
           {
@@ -284,6 +277,12 @@ export function RunosChangeTable() {
             cell: (r: MgmtEventRecord) => (
               <Badge variant="secondary">{r.actorConsole}</Badge>
             ),
+          },
+          {
+            id: "time",
+            header: tShared("columns.time"),
+            width: "sm",
+            cell: (r: MgmtEventRecord) => formatTime(r.occurredAt, locale),
           },
         ]}
         rows={rows}

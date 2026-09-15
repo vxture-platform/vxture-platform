@@ -472,11 +472,23 @@ export default function DashboardPage() {
           labels={tableLabels}
           columns={[
             {
-              id: "occurredAt",
-              header: tShared("columns.time"),
+              id: "target",
+              header: tShared("columns.target"),
               sortable: true,
-              width: "sm",
-              cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
+              cell: (r: AuditLogEntry) => (
+                <TableTitleCell
+                  icon="clock-counter-clockwise"
+                  title={r.objectType}
+                  description={<span className="font-mono">{r.objectId}</span>}
+                />
+              ),
+            },
+            {
+              id: "action",
+              header: tShared("columns.action"),
+              sortable: true,
+              width: "xs",
+              cell: (r: AuditLogEntry) => r.action,
             },
             {
               id: "actor",
@@ -486,17 +498,11 @@ export default function DashboardPage() {
               cell: (r: AuditLogEntry) => r.actorName,
             },
             {
-              id: "target",
-              header: tShared("columns.target"),
+              id: "occurredAt",
+              header: tShared("columns.time"),
               sortable: true,
-              cell: (r: AuditLogEntry) => `${r.objectType} · ${r.objectId}`,
-            },
-            {
-              id: "action",
-              header: tShared("columns.action"),
-              sortable: true,
-              width: "xs",
-              cell: (r: AuditLogEntry) => r.action,
+              width: "sm",
+              cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
             },
           ]}
           rows={eventSort.rows}

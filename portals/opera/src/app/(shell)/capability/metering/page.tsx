@@ -39,7 +39,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
-  Badge,
   Banner,
   Button,
   DataTable,
@@ -59,10 +58,11 @@ import {
   useToast,
   ViewHeader,
   ActionButton,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useTenancyDirectory } from "@/features/tenancy/directory";
-import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
+import { workspaceDisplay } from "@/features/tenancy/directory";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDay } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
@@ -524,32 +524,36 @@ export default function CapabilityMeteringPage() {
               id: "identity",
               header: currentAxis.label,
               sortable: true,
-              cell: (r: UsageSummaryRow) =>
-                /* workspace 轴走平台的租户主导规则——上游契约保证这根轴的行带
-                   tenantId，所以这里拿得到租户名做主导部分。 */
-                r.dimension === "workspace" ? (
-                  <WorkspaceCell
-                    directory={tenancy}
-                    workspaceId={r.workspaceId}
+              cell: (r: UsageSummaryRow) => {
+                /* workspace 轴走平台的租户主导规则——上游契约保证这根轴的行带 tenantId，所以这里拿得到租户名做主导部分。 */
+                if (r.dimension === "workspace") {
+                  const d = workspaceDisplay(tenancy, r.workspaceId);
+                  return d ? (
+                    <TableTitleCell
+                      icon="users"
+                      title={d.primary}
+                      description={d.secondary ?? "—"}
+                      tooltip={d.title}
+                    />
+                  ) : (
+                    "—"
+                  );
+                }
+                const id = axisIdentity(r);
+                return (
+                  <TableTitleCell
+                    icon="database"
+                    title={<span className="font-mono">{id}</span>}
+                    description={
+                      id === "none"
+                        ? "未解析维度"
+                        : r.dimension === "endpoint" && r.capabilityId
+                          ? r.capabilityId
+                          : currentAxis.label
+                    }
                   />
-                ) : (
-                  <span className="flex flex-col gap-2xs">
-                    <span className="font-mono text-code-sm text-foreground">
-                      {axisIdentity(r)}
-                    </span>
-                    {/* 端点行带能力 id：单看端点实例 id 没有意义。 */}
-                    {r.dimension === "endpoint" && r.capabilityId ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        {r.capabilityId}
-                      </span>
-                    ) : null}
-                    {axisIdentity(r) === "none" ? (
-                      <Badge variant="outline" className="w-fit">
-                        未解析维度
-                      </Badge>
-                    ) : null}
-                  </span>
-                ),
+                );
+              },
             },
             {
               id: "calls",

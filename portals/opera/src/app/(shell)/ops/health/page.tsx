@@ -73,6 +73,7 @@ import {
   type IconName,
   type StatusBadgeTone,
   ActionButton,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
@@ -821,7 +822,7 @@ export default function ServiceMonitorPage() {
                     <div className="flex items-center gap-xs">
                       <Button
                         variant="ghost"
-                        size="md"
+                        size="icon-md"
                         aria-label={
                           expandedKeys.includes(r.key) ? "收起渠道" : "展开渠道"
                         }
@@ -837,29 +838,21 @@ export default function ServiceMonitorPage() {
                           aria-hidden="true"
                         />
                       </Button>
-                      <Icon
-                        name={LAYER_ICON[r.item.layer]}
-                        size="sm"
-                        className="shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <div className="flex flex-col gap-2xs">
-                        <span className="inline-flex items-center gap-xs text-label-md text-foreground">
-                          {r.item.productName}
-                          {/* 产品状态只在不是「已上线」时显示：目录里的草稿 / 已停用 /
-                           已退役产品同样在清单里，读数旁边得说明它处在哪一步。 */}
-                          {r.item.state !== "active" ? (
+                      <TableTitleCell
+                        icon={LAYER_ICON[r.item.layer]}
+                        title={r.item.productName}
+                        /* 产品状态只在不是「已上线」时显示：目录里的草稿 / 已停用 / 已退役产品同样在清单里，读数旁边得说明它处在哪一步。 */
+                        titleSuffix={
+                          r.item.state !== "active" ? (
                             <StatusBadge
                               tone={productStateMeta(r.item.state).tone}
                             >
                               {productStateMeta(r.item.state).label}
                             </StatusBadge>
-                          ) : null}
-                        </span>
-                        <span className="text-body-sm text-muted-foreground">
-                          {r.item.productCode} · {LAYER_LABEL[r.item.layer]}
-                        </span>
-                      </div>
+                          ) : null
+                        }
+                        description={`${r.item.productCode} · ${LAYER_LABEL[r.item.layer]}`}
+                      />
                     </div>
                   ) : null,
               },

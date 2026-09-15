@@ -140,6 +140,7 @@ function columnsOf(
       sortable: true,
       cell: (item) => (
         <TableTitleCell
+          icon="settings"
           title={item.flagKey}
           description={`${item.category}${item.isArchived ? " · 已归档" : ""}`}
         />

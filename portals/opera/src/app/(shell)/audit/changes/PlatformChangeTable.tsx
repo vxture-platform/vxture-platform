@@ -30,6 +30,7 @@ import {
   useListPagination,
   useToast,
   ActionButton,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
@@ -250,27 +251,15 @@ export function PlatformChangeTable() {
         labels={tableLabels}
         columns={[
           {
-            id: "occurredAt",
-            header: tShared("columns.time"),
-            width: "sm",
-            cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
-            sortable: true,
-          },
-          {
-            id: "actor",
-            header: tShared("columns.actor"),
-            sortable: true,
-            width: "sm",
-            cell: (r: AuditLogEntry) => r.actorName,
-          },
-          {
             id: "target",
             header: tShared("columns.target"),
             sortable: true,
             cell: (r: AuditLogEntry) => (
-              <span className="text-label-md text-foreground">
-                {r.objectType} · {r.objectId}
-              </span>
+              <TableTitleCell
+                icon="clock-counter-clockwise"
+                title={r.objectType}
+                description={<span className="font-mono">{r.objectId}</span>}
+              />
             ),
           },
           {
@@ -279,6 +268,13 @@ export function PlatformChangeTable() {
             sortable: true,
             width: "xs",
             cell: (r: AuditLogEntry) => r.action,
+          },
+          {
+            id: "actor",
+            header: tShared("columns.actor"),
+            sortable: true,
+            width: "sm",
+            cell: (r: AuditLogEntry) => r.actorName,
           },
           {
             id: "outcome",
@@ -290,6 +286,13 @@ export function PlatformChangeTable() {
                 {r.errorCode ? `${r.outcome} · ${r.errorCode}` : r.outcome}
               </StatusBadge>
             ),
+          },
+          {
+            id: "occurredAt",
+            header: tShared("columns.time"),
+            width: "sm",
+            cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
+            sortable: true,
           },
         ]}
         rows={pager.pageRows}

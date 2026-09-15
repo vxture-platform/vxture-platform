@@ -487,12 +487,18 @@ function RunosGrantsPageContent() {
       id: "capability",
       header: "Capability",
       sortable: true,
-      cell: (r: GrantRecord) => (
-        <TableTitleCell
-          icon="stack"
-          title={<span className="font-mono">{r.capabilityId}</span>}
-        />
-      ),
+      cell: (r: GrantRecord) => {
+        const meta = catalog.find((c) => c.capabilityId === r.capabilityId);
+        return (
+          <TableTitleCell
+            icon="stack"
+            title={
+              meta?.displayName?.["zh-CN"] || meta?.title || r.capabilityId
+            }
+            description={<span className="font-mono">{r.capabilityId}</span>}
+          />
+        );
+      },
     },
     {
       id: "grantType",
@@ -501,7 +507,7 @@ function RunosGrantsPageContent() {
       width: "sm" as const,
       cell: (r: GrantRecord) =>
         r.grantType === "derived" ? (
-          <div className="flex flex-col gap-2xs">
+          <div className="flex flex-col items-center gap-2xs">
             <Badge variant="outline">派生 · 只读</Badge>
             <span className="text-body-sm text-muted-foreground">
               锚点：
@@ -744,9 +750,7 @@ function RunosGrantsPageContent() {
                     <TableTitleCell
                       icon="users"
                       title={<span className="font-mono">{r.subjectRef}</span>}
-                      titleSuffix={
-                        <Badge variant="outline">{r.subjectType}</Badge>
-                      }
+                      description={r.subjectType}
                     />
                   ),
                 },
@@ -757,7 +761,7 @@ function RunosGrantsPageContent() {
                   width: "sm",
                   cell: (r: GrantRecord) =>
                     r.grantType === "derived" ? (
-                      <div className="flex flex-col gap-2xs">
+                      <div className="flex flex-col items-center gap-2xs">
                         <Badge variant="outline">派生</Badge>
                         <span className="text-body-sm text-muted-foreground">
                           锚点：

@@ -145,6 +145,7 @@ function columnsOf(locale: string): readonly DataTableColumn<RiskRecordItem>[] {
       /* 租户名缺失时不回退到 UUID——UUID 不展示。 */
       cell: (item) => (
         <TableTitleCell
+          icon="users"
           title={item.tenantName ?? "未知租户"}
           {...(item.tenantNo ? { description: `#${item.tenantNo}` } : {})}
         />

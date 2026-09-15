@@ -1767,7 +1767,7 @@ function ModelServiceContent() {
               header: "能力",
               width: "md",
               cell: (m: AiModelRecord) => (
-                <span className="flex flex-wrap gap-2xs">
+                <span className="flex flex-wrap justify-center gap-2xs">
                   {m.capabilities.slice(0, 3).map((c) => (
                     <Badge key={c} variant="secondary">
                       {c}
