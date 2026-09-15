@@ -19,6 +19,7 @@ import {
   SegmentedControl,
   StatusBadge,
   TableTitleCell,
+  Button,
 } from "@vxture/design-system";
 import type { IconName, StatusBadgeTone } from "@vxture/design-system";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
@@ -609,9 +610,9 @@ export function OpsTodosPage() {
                 header: "租户",
                 cell: (item) => (
                   <span className="inline-flex flex-col items-center gap-2xs">
-                    <button
-                      type="button"
-                      className="text-foreground hover:text-primary-text"
+                    <Button
+                      variant="link"
+                      size="sm"
                       onClick={() =>
                         router.push(
                           `/tenants/${encodeURIComponent(item.tenantCode)}`,
@@ -619,7 +620,7 @@ export function OpsTodosPage() {
                       }
                     >
                       {item.tenantName}
-                    </button>
+                    </Button>
                     <span className="text-body-sm text-muted-foreground">
                       {item.tenantMeta}
                     </span>
