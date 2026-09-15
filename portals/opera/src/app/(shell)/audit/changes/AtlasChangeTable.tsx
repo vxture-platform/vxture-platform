@@ -83,8 +83,10 @@ interface AtlasChangeRecord {
   objectType: string;
   objectId: string | null;
   action: string;
-  /** 守卫先挡掉的尝试记为 "unknown"。 */
+  /** 守卫先挡掉的尝试记为 "unknown"。**只用来判「未归属」，不显示**——它是 `opr_<uuid>`。 */
   actorId: string;
+  /** opera-bff 换好的运营者名字；未归属为 null。 */
+  actorName: string | null;
   /** 从哪个管理面发起（`act.sub`，即铸票的 workforce RP）。 */
   actorConsole: string | null;
   /** 一次写碰过哪些字段的**名字**——不带值。 */
@@ -233,14 +235,14 @@ export function AtlasChangeTable() {
             (r.objectId ?? "").toLowerCase().includes(kw) ||
             r.objectType.toLowerCase().includes(kw) ||
             r.action.toLowerCase().includes(kw) ||
-            r.actorId.toLowerCase().includes(kw),
+            (r.actorName ?? "").toLowerCase().includes(kw),
         );
   }, [rows, keyword]);
 
   const copyRow = async (r: AtlasChangeRecord) => {
     const text = [
       formatTime(r.occurredAt, locale),
-      r.actorId,
+      r.actorName ?? "未归属",
       `${r.objectType} · ${r.objectId ?? "—"}`,
       r.action,
       r.outcome,
@@ -435,7 +437,7 @@ export function AtlasChangeTable() {
                     未归属
                   </Badge>
                 ) : (
-                  <span className="text-code-sm">{r.actorId}</span>
+                  <span>{r.actorName ?? "平台无此运营者"}</span>
                 )}
                 {r.actorConsole ? (
                   <span className="text-body-sm text-muted-foreground">

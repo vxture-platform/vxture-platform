@@ -48,6 +48,7 @@ function makeRouter() {
     config,
     { exchange: vi.fn() } as unknown as OperatorExchangeService,
     { query: vi.fn() } as unknown as Pool,
+    { query: vi.fn() } as unknown as Pool,
   );
 }
 

@@ -162,7 +162,7 @@ export function workspaceDisplay(
 
 /** Atlas 自检探测记在平台哨兵名下的说明，工作区与租户两处共用。 */
 const SENTINEL_TITLE =
-  "Atlas 自检探测的消耗：记在平台哨兵名下，是 Atlas 的运维成本，不属于任何租户。";
+  "Atlas 自检探测的消耗：记在平台哨兵名下，是 Atlas 的运维成本，不属于任何租户。谁点的自检，见请求日志的「发起方」列。";
 
 /** 租户的显示形态：名字 + 可视码。平台哨兵是 SYSTEM · 平台自检，平台库里没有的是「平台无此租户」，**不退回 UUID**。 */
 export function tenantDisplay(

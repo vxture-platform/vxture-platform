@@ -185,7 +185,12 @@ import {
   type HttpMethod,
   type JsonObject,
 } from "../lib/upstream-grants";
-import { OPERA_BFF_RW_POOL } from "../tokens";
+import { OPERA_BFF_RO_POOL, OPERA_BFF_RW_POOL } from "../tokens";
+import {
+  lookupOperatorNames,
+  operatorDisplayName,
+  type OperatorNames,
+} from "../lib/operator-names";
 import type { RequestContext } from "../types/request-context";
 
 /** 活库当前的三段式能力码（见文件头——不是 admin-bff 那个已退役的扁平码）。 */
@@ -577,6 +582,11 @@ export interface GatewayApiKeyWithSecret extends GatewayApiKeyRecord {
  * 是整个换了一遍，旧类型不能兼容升级。 */
 /** `/capability/logs` 的行形状（Atlas 唯一带分页的 /capability/* 端点）。 */
 export interface AtlasRequestLogRecord {
+  /**
+   * opera-bff 拼上的，不是 Atlas 的字段：**只在自检行上有**——谁点的这次自检（见
+   * `attachProbeTriggers`）。
+   */
+  trigger?: ProbeTrigger;
   id: string;
   requestId: string;
   /**
@@ -700,6 +710,11 @@ export interface TenantUsageSummaryRecord {
  */
 export interface AtlasChangeRecord {
   eventId: string;
+  /**
+   * opera-bff 拼上的，不是 Atlas 的字段：`actorId` 换成的运营者名字（见
+   * `lib/operator-names.ts`）。守卫先挡掉的尝试为 null。**页面只显示这个，不显示 actorId。**
+   */
+  actorName?: string | null;
   objectType: string;
   objectId: string | null;
   action: string;
@@ -728,6 +743,7 @@ export class AtlasRouter {
     @Inject(OperatorExchangeService)
     private readonly operatorExchange: OperatorExchangeService,
     @Inject(OPERA_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Inject(OPERA_BFF_RO_POOL) private readonly roPool: Pool,
   ) {
     this.atlasApiUrl = configService.platform.ATLAS_API_URL.trim().replace(
       /\/+$/,
@@ -941,7 +957,13 @@ export class AtlasRouter {
         action: "atlas.provider.probe",
         resourceType: "atlas_provider",
         resourceId: providerId,
-        after: { ok: r.ok, probedModel: r.probedModel },
+        /* requestId 与 Atlas 请求日志里这次自检那一行是同一个键：「谁点的」与「花了多少」
+           靠它精确对上，不靠时间猜。 */
+        after: {
+          ok: r.ok,
+          probedModel: r.probedModel,
+          requestId: r.probe.requestId,
+        },
       }),
     );
   }
@@ -1502,7 +1524,7 @@ export class AtlasRouter {
         action: "atlas.model.probe",
         resourceType: "atlas_model",
         resourceId: modelId,
-        after: { ok: r.ok, checks: r.checks },
+        after: { ok: r.ok, checks: r.checks, requestId: r.requestId },
       }),
     );
   }
@@ -1641,7 +1663,7 @@ export class AtlasRouter {
   //    增量、从没拿设计稿逐条验收的漏，不是 Atlas 没给）────────────────────────
 
   @Get("logs")
-  listLogs(
+  async listLogs(
     @Req() req: Request & RequestContext,
     @Query("tenantId") tenantId?: string,
     @Query("modelCode") modelCode?: string,
@@ -1671,11 +1693,68 @@ export class AtlasRouter {
     if (to) params.set("to", to);
     if (cursor) params.set("cursor", cursor);
     if (limit) params.set("limit", limit);
-    return this.request<AtlasRequestLogPage>(
+    const page = await this.request<AtlasRequestLogPage>(
       req,
       `/capability/logs${params.size ? `?${params.toString()}` : ""}`,
       { contract: "logs" },
     );
+    return this.attachProbeTriggers(req, page);
+  }
+
+  /**
+   * 给自检行（`usageType = "test"`）标上**谁点的**。
+   *
+   * 自检的请求日志归平台哨兵——它不属于任何租户，那一行说不出是谁；Atlas 的变更流水
+   * 说得出（`actorId`，每次自检都是一条 `action=probe` 的写）。两边共用自检的
+   * `requestId`：Atlas 起把它写进变更流水之后精确对上；在那之前的记录只能按时间对——
+   * 两条都出自 Atlas 同一个时钟，流水比日志晚几十到一百多毫秒，所以窗口内**恰好一条**
+   * 才认，多于一条宁可说「未能对应」也不猜。
+   *
+   * 运营者**不是**租户里的用户（员工域 vs 客户域），所以不给自检行补租户或工作区，
+   * 也不把运营者塞进日志的 userId——那一列是终端用户。
+   *
+   * 归属是增益：流水读不到就原样返回，不让日志页跟着失败。
+   */
+  private async attachProbeTriggers(
+    req: Request & RequestContext,
+    page: AtlasRequestLogPage,
+  ): Promise<AtlasRequestLogPage> {
+    const times = page.items
+      .filter((r) => r.usageType === "test")
+      .map((r) => Date.parse(r.createdAt))
+      .filter((t) => Number.isFinite(t));
+    if (times.length === 0) return page;
+
+    let records: AtlasChangeRecord[];
+    try {
+      const params = new URLSearchParams({
+        action: "probe",
+        from: new Date(Math.min(...times) - 1_000).toISOString(),
+        to: new Date(Math.max(...times) + PROBE_AUDIT_WINDOW_MS).toISOString(),
+        limit: String(PROBE_AUDIT_LIMIT),
+      });
+      records = (
+        await this.request<AtlasChangeRecordPage>(
+          req,
+          `/capability/audit-logs?${params.toString()}`,
+        )
+      ).items;
+    } catch {
+      return page;
+    }
+
+    const names = await lookupOperatorNames(
+      this.roPool,
+      records.map((r) => r.actorId),
+    );
+    return {
+      ...page,
+      items: page.items.map((row) =>
+        row.usageType === "test"
+          ? { ...row, trigger: matchProbeTrigger(row, records, names) }
+          : row,
+      ),
+    };
   }
 
   @Get("logs/summary")
@@ -1713,7 +1792,7 @@ export class AtlasRouter {
   //    「可以轮换密钥」分开授予。不在这里自造一个平台侧不认的码来假装分开了。
 
   @Get("audit-logs")
-  listAtlasAuditLogs(
+  async listAtlasAuditLogs(
     @Req() req: Request & RequestContext,
     @Query("objectType") objectType?: string,
     @Query("objectId") objectId?: string,
@@ -1738,11 +1817,23 @@ export class AtlasRouter {
     if (to) params.set("to", to);
     if (cursor) params.set("cursor", cursor);
     if (limit) params.set("limit", limit);
-    return this.request<AtlasChangeRecordPage>(
+    const page = await this.request<AtlasChangeRecordPage>(
       req,
       `/capability/audit-logs${params.size ? `?${params.toString()}` : ""}`,
       { contract: "audit-logs" },
     );
+    /* actorId 是 `opr_<uuid>`，原样显示就是在界面上露 UUID——换成名字再交给页面。 */
+    const names = await lookupOperatorNames(
+      this.roPool,
+      page.items.map((r) => r.actorId),
+    );
+    return {
+      ...page,
+      items: page.items.map((r) => ({
+        ...r,
+        actorName: operatorDisplayName(r.actorId, names),
+      })),
+    };
   }
 
   // ── Usage summaries（只读，metering 页用；商业口径的账单归 admin 的
@@ -1841,4 +1932,39 @@ function assertCanManageModels(req: Request & RequestContext): void {
   if (!req.capabilities?.includes(MODEL_MANAGE_CAPABILITY)) {
     throw notEntitled(MODEL_MANAGE_CAPABILITY);
   }
+}
+
+/** 自检写流水比写日志晚几十到一百多毫秒（2026-09-15 线上实测）；5 秒足够宽，又远小于同一模型 10 秒的自检冷却。 */
+const PROBE_AUDIT_WINDOW_MS = 5_000;
+/** Atlas 变更流水单页上限。 */
+const PROBE_AUDIT_LIMIT = 200;
+
+/** 自检行的发起人。`match` 说明怎么对上的，页面据此注明「按时间对应」或「未能对应」。 */
+export interface ProbeTrigger {
+  operatorName: string | null;
+  match: "request-id" | "time" | "none";
+}
+
+export function matchProbeTrigger(
+  row: { requestId: string; createdAt: string },
+  records: readonly AtlasChangeRecord[],
+  names: OperatorNames,
+): ProbeTrigger {
+  const exact = records.find((r) => r.requestId === row.requestId);
+  if (exact) {
+    return {
+      operatorName: operatorDisplayName(exact.actorId, names),
+      match: "request-id",
+    };
+  }
+  const at = Date.parse(row.createdAt);
+  const near = records.filter((r) => {
+    if (r.requestId !== null) return false;
+    const t = Date.parse(r.occurredAt);
+    return t >= at && t - at <= PROBE_AUDIT_WINDOW_MS;
+  });
+  const only = near.length === 1 ? near[0] : undefined;
+  return only
+    ? { operatorName: operatorDisplayName(only.actorId, names), match: "time" }
+    : { operatorName: null, match: "none" };
 }

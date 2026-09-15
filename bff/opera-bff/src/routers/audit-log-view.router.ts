@@ -113,10 +113,11 @@ function mapRow(row: AuditLogRow): AuditLogEntry {
     occurredAt: toIso(row.created_at),
     actorId: row.actor_id,
     actorConsole: row.actor_console,
+    /* 查不到名字不退回 actor_id：那是 UUID（owner 铁律：任何界面不展示 UUID）。 */
     actorName:
       row.actor_name && row.actor_name.trim() !== ""
         ? row.actor_name
-        : row.actor_id,
+        : "平台无此运营者",
     action: row.action,
     outcome: row.result,
     objectType: row.resource_type,

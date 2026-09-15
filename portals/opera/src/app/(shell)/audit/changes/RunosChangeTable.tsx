@@ -53,7 +53,10 @@ interface MgmtEventRecord {
   action: string;
   outcome: string;
   occurredAt: string;
+  /** `opr_<uuid>`，**不显示**。 */
   actorId: string;
+  /** opera-bff 换好的运营者名字。 */
+  actorName: string | null;
   actorConsole: string;
   objectType: string;
   objectId: string;
@@ -271,7 +274,7 @@ export function RunosChangeTable() {
             width: "sm",
             cell: (r: MgmtEventRecord) => (
               <span className="text-body-sm text-muted-foreground">
-                {r.actorId}
+                {r.actorName ?? "未归属"}
               </span>
             ),
           },
