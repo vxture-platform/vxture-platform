@@ -28,7 +28,7 @@
  */
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import type { FormEvent } from "react";
 import {
   ActionMenu,
@@ -45,10 +45,12 @@ import {
   Input,
   NativeSelect,
   useToast,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { RequiredMark } from "@/components/form/RequiredMark";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** L0 平台级共享指标（只读）。 */
 interface PlatformMetric {
@@ -146,6 +148,18 @@ export function ProductMetricsSection({
   const { toast } = useToast();
   const tableLabels = useTableLabels();
   const [rows, setRows] = useState<ProductMetric[]>([]);
+  const metricSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ProductMetric>>>
+  >(
+    () => ({
+      metricKey: (r) => r.metricKey,
+      strategy: (r) => r.mergeStrategy,
+      unit: (r) => r.metricUnit,
+      reset: (r) => r.resetPeriod,
+    }),
+    [],
+  );
+  const metricSort = useTableSort(rows, metricSortAccessors);
   const [platform, setPlatform] = useState<PlatformMetric[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -316,21 +330,27 @@ export function ProductMetricsSection({
           ) : (
             <DataTable
               labels={tableLabels}
-              rows={rows}
+              rows={metricSort.rows}
+              indexStart={1}
+              {...(metricSort.sort ? { sort: metricSort.sort } : {})}
+              onSortChange={metricSort.onSortChange}
               rowKey={(r: ProductMetric) => r.metricKey}
               columns={[
                 {
                   id: "metricKey",
                   header: "指标键",
+                  sortable: true,
                   cell: (r) => (
-                    <span className="font-mono text-code-sm">
-                      {r.metricKey}
-                    </span>
+                    <TableTitleCell
+                      icon="gauge"
+                      title={<span className="font-mono">{r.metricKey}</span>}
+                    />
                   ),
                 },
                 {
                   id: "strategy",
                   header: "合并策略",
+                  sortable: true,
                   cell: (r) => (
                     <div className="flex items-center gap-xs">
                       <Badge variant="outline">{r.mergeStrategy}</Badge>
@@ -343,11 +363,13 @@ export function ProductMetricsSection({
                 {
                   id: "unit",
                   header: "单位",
+                  sortable: true,
                   cell: (r) => r.metricUnit ?? "—",
                 },
                 {
                   id: "reset",
                   header: "重置",
+                  sortable: true,
                   cell: (r) =>
                     RESET_PERIODS.find((p) => p.value === r.resetPeriod)
                       ?.label ?? r.resetPeriod,

@@ -48,11 +48,13 @@ import {
   StatusBadge,
   useToast,
   type StatusBadgeTone,
+  ActionButton,
 } from "@vxture/design-system";
 import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
+import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 
 type StreamKey = "calls" | "outcomes";
 
@@ -277,21 +279,12 @@ export function RunosCallStreams({
    * 沉默的截断。
    */
   const streamFooter = (loaded: number) => (
-    <div className="flex w-full items-center justify-between gap-sm">
-      <span className="text-body-sm text-muted-foreground">
-        已加载 {loaded} 条{cursor ? "，还有更多" : "（已到末尾）"}
-      </span>
-      {cursor ? (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={loadingMore}
-          onClick={() => void loadMore()}
-        >
-          {loadingMore ? tShared("common.loading") : tShared("common.loadMore")}
-        </Button>
-      ) : null}
-    </div>
+    <LoadMoreFooter
+      loaded={loaded}
+      hasMore={Boolean(cursor)}
+      loading={loadingMore}
+      onLoadMore={() => void loadMore()}
+    />
   );
 
   const emptyState =
@@ -350,30 +343,33 @@ export function RunosCallStreams({
             }))}
           />
         }
-      >
-        <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-          <InputGroupAddon>
-            <Icon name="search" size="sm" aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            placeholder={STREAM_META[stream].placeholder}
-            aria-label="过滤调用记录"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void reload();
-            }}
-          />
-        </InputGroup>
-        <Button
-          variant="secondary"
-          onClick={() => void reload()}
-          disabled={load.kind === "loading"}
-        >
-          <Icon name="refresh" size="sm" aria-hidden="true" />
-          {tShared("common.refresh")}
-        </Button>
-      </FilterBar>
+        search={
+          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+            <InputGroupAddon>
+              <Icon name="search" size="sm" aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder={STREAM_META[stream].placeholder}
+              aria-label="过滤调用记录"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void reload();
+              }}
+            />
+          </InputGroup>
+        }
+        actions={
+          <ActionButton
+            variant="outline"
+            icon="refresh"
+            onClick={() => void reload()}
+            disabled={load.kind === "loading"}
+          >
+            {tShared("common.refresh")}
+          </ActionButton>
+        }
+      />
 
       {stream === "calls" ? (
         <DataTable
@@ -469,7 +465,6 @@ export function RunosCallStreams({
                */
               id: "decision",
               header: "裁决",
-              align: "center",
               width: "xs",
               cell: (r: CapabilityCallRecord) => (
                 <span
@@ -492,7 +487,6 @@ export function RunosCallStreams({
             {
               id: "outcome",
               header: "结果",
-              align: "center",
               width: "xs",
               cell: (r: CapabilityCallRecord) => (
                 <StatusBadge tone={callTone(r.outcome)} dot>
@@ -607,7 +601,6 @@ export function RunosCallStreams({
             {
               id: "outcome",
               header: "自报结果",
-              align: "center",
               width: "xs",
               cell: (r: TaskOutcomeRecord) => (
                 <StatusBadge tone={outcomeTone(r.outcome)} dot>

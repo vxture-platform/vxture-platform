@@ -65,7 +65,7 @@
  *   2. **派生行不该单独撤**——闭包编译器下次会把它算回来，撤了等于没撤。这里
  *      直接禁用派生行的撤销菜单项，而不是让人点了才发现无效。 */
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import Link from "next/link";
@@ -95,11 +95,16 @@ import {
   ViewHeader,
   ViewLayout,
   useToast,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+
+/** 未加载时的稳定空数组：`?? []` 每次渲染都是新数组，会让排序的 useMemo 每次重算。 */
+const NO_GRANTS: GrantRecord[] = [];
 
 const MANAGE = "capability:runos.manage";
 
@@ -254,6 +259,30 @@ function RunosGrantsPageContent() {
 
   const [capabilityRef, setCapabilityRef] = useState("");
   const [capGrants, setCapGrants] = useState<GrantRecord[] | null>(null);
+  const grantSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<GrantRecord>>>
+  >(
+    () => ({
+      capability: (r) => r.capabilityId,
+      grantType: (r) => r.grantType,
+      approval: (r) => (r.criticalRequiresApproval ? 1 : 0),
+      risk: (r) => r.riskScope,
+      state: (r) => r.state,
+    }),
+    [],
+  );
+  const grantSort = useTableSort(grants ?? NO_GRANTS, grantSortAccessors);
+  const holderSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<GrantRecord>>>
+  >(
+    () => ({
+      subject: (r) => r.subjectRef,
+      grantType: (r) => r.grantType,
+      risk: (r) => r.riskScope,
+    }),
+    [],
+  );
+  const holderSort = useTableSort(capGrants ?? NO_GRANTS, holderSortAccessors);
   const [capLoad, setCapLoad] = useState<LoadState>({ kind: "idle" });
 
   /* 选中产品即查，不需要再点一次「查询」——选择器一动，意图就已经明确了。
@@ -457,13 +486,18 @@ function RunosGrantsPageContent() {
     {
       id: "capability",
       header: "Capability",
+      sortable: true,
       cell: (r: GrantRecord) => (
-        <span className="font-mono text-code-sm">{r.capabilityId}</span>
+        <TableTitleCell
+          icon="stack"
+          title={<span className="font-mono">{r.capabilityId}</span>}
+        />
       ),
     },
     {
       id: "grantType",
       header: tShared("columns.source"),
+      sortable: true,
       width: "sm" as const,
       cell: (r: GrantRecord) =>
         r.grantType === "derived" ? (
@@ -481,14 +515,14 @@ function RunosGrantsPageContent() {
     {
       id: "approval",
       header: "critical 需人工确认",
-      align: "center" as const,
+      sortable: true,
       width: "xs" as const,
       cell: (r: GrantRecord) => (r.criticalRequiresApproval ? "是" : "否"),
     },
     {
       id: "risk",
       header: "风险范围",
-      align: "center" as const,
+      sortable: true,
       width: "xs" as const,
       cell: (r: GrantRecord) => (
         <StatusBadge tone={RISK_LEVEL_META[r.riskScope]?.tone ?? "neutral"}>
@@ -499,7 +533,7 @@ function RunosGrantsPageContent() {
     {
       id: "state",
       header: tShared("columns.state"),
-      align: "center" as const,
+      sortable: true,
       width: "xs" as const,
       cell: (r: GrantRecord) => (
         <StatusBadge tone={r.state === "active" ? "success" : "neutral"} dot>
@@ -587,7 +621,9 @@ function RunosGrantsPageContent() {
             <DataTable
               labels={tableLabels}
               columns={grantColumns}
-              rows={grants ?? []}
+              rows={grantSort.rows}
+              {...(grantSort.sort ? { sort: grantSort.sort } : {})}
+              onSortChange={grantSort.onSortChange}
               rowKey={(r) => r.grantId}
               indexStart={1}
               {...(canManage
@@ -703,18 +739,21 @@ function RunosGrantsPageContent() {
                 {
                   id: "subject",
                   header: "Subject",
+                  sortable: true,
                   cell: (r: GrantRecord) => (
-                    <div className="flex flex-col gap-2xs">
-                      <span className="font-mono text-code-sm">
-                        {r.subjectRef}
-                      </span>
-                      <Badge variant="outline">{r.subjectType}</Badge>
-                    </div>
+                    <TableTitleCell
+                      icon="users"
+                      title={<span className="font-mono">{r.subjectRef}</span>}
+                      titleSuffix={
+                        <Badge variant="outline">{r.subjectType}</Badge>
+                      }
+                    />
                   ),
                 },
                 {
                   id: "grantType",
                   header: tShared("columns.source"),
+                  sortable: true,
                   width: "sm",
                   cell: (r: GrantRecord) =>
                     r.grantType === "derived" ? (
@@ -734,7 +773,7 @@ function RunosGrantsPageContent() {
                 {
                   id: "risk",
                   header: "风险范围",
-                  align: "center",
+                  sortable: true,
                   width: "xs",
                   cell: (r: GrantRecord) => (
                     <StatusBadge
@@ -745,7 +784,9 @@ function RunosGrantsPageContent() {
                   ),
                 },
               ]}
-              rows={capGrants ?? []}
+              rows={holderSort.rows}
+              {...(holderSort.sort ? { sort: holderSort.sort } : {})}
+              onSortChange={holderSort.onSortChange}
               rowKey={(r) => r.grantId}
               indexStart={1}
               empty={

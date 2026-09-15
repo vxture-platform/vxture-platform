@@ -39,9 +39,11 @@ import {
   InputGroupAddon,
   InputGroupInput,
   useToast,
+  ActionButton,
 } from "@vxture/design-system";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
+import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 
 /** 字段名跟随 runos v0.8.0（X-3 三方对齐）：`eventType` → `action`，新增 `outcome`。 */
 interface MgmtEventRecord {
@@ -199,30 +201,33 @@ export function RunosChangeTable() {
         onViewChange={() => {}}
         cardsDisabledReason={tShared("common.cardsRetired")}
         count={rows.length}
-      >
-        <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-          <InputGroupAddon>
-            <Icon name="search" size="sm" aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            placeholder="按对象 ID 精确过滤…"
-            aria-label="过滤管理事件"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void reload();
-            }}
-          />
-        </InputGroup>
-        <Button
-          variant="secondary"
-          onClick={() => void reload()}
-          disabled={load.kind === "loading"}
-        >
-          <Icon name="refresh" size="sm" aria-hidden="true" />
-          {tShared("common.refresh")}
-        </Button>
-      </FilterBar>
+        search={
+          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+            <InputGroupAddon>
+              <Icon name="search" size="sm" aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="按对象 ID 精确过滤…"
+              aria-label="过滤管理事件"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void reload();
+              }}
+            />
+          </InputGroup>
+        }
+        actions={
+          <ActionButton
+            variant="outline"
+            icon="refresh"
+            onClick={() => void reload()}
+            disabled={load.kind === "loading"}
+          >
+            {tShared("common.refresh")}
+          </ActionButton>
+        }
+      />
 
       <DataTable
         labels={tableLabels}
@@ -275,7 +280,6 @@ export function RunosChangeTable() {
           {
             id: "console",
             header: "控制台",
-            align: "center",
             width: "xs",
             cell: (r: MgmtEventRecord) => (
               <Badge variant="secondary">{r.actorConsole}</Badge>
@@ -298,25 +302,12 @@ export function RunosChangeTable() {
         )}
         empty={emptyState}
         footer={
-          /* 显式说到没到末尾：「加载完了」与「加载不动了」在界面上长得一样，
-             而前者是答案、后者是故障。 */
-          <div className="flex w-full items-center justify-between gap-sm">
-            <span className="text-body-sm text-muted-foreground">
-              已加载 {rows.length} 条{cursor ? "，还有更多" : "（已到末尾）"}
-            </span>
-            {cursor ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loadingMore}
-                onClick={() => void loadMore()}
-              >
-                {loadingMore
-                  ? tShared("common.loading")
-                  : tShared("common.loadMore")}
-              </Button>
-            ) : null}
-          </div>
+          <LoadMoreFooter
+            loaded={rows.length}
+            hasMore={Boolean(cursor)}
+            loading={loadingMore}
+            onLoadMore={() => void loadMore()}
+          />
         }
       />
     </div>

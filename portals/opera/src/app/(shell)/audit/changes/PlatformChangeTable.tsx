@@ -26,14 +26,15 @@ import {
   InputGroupInput,
   NativeSelect,
   StatusBadge,
-  type DataTableSort,
   type StatusBadgeTone,
   useListPagination,
   useToast,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 字段名对齐 product_251 X-3 的统一审计记录（见 opera-bff 同名接口）。 */
 interface AuditLogEntry {
@@ -78,10 +79,6 @@ export function PlatformChangeTable() {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
   const [action, setAction] = useState("all");
-  const [sort, setSort] = useState<DataTableSort>({
-    columnId: "occurredAt",
-    direction: "desc",
-  });
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -109,7 +106,7 @@ export function PlatformChangeTable() {
 
   const visible = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    const filtered = rows.filter(
+    return rows.filter(
       (r) =>
         (action === "all" || r.action === action) &&
         (kw === "" ||
@@ -117,15 +114,26 @@ export function PlatformChangeTable() {
           r.objectType.toLowerCase().includes(kw) ||
           r.actorName.toLowerCase().includes(kw)),
     );
-    return [...filtered].sort((a, b) =>
-      sort.direction === "asc"
-        ? a.occurredAt.localeCompare(b.occurredAt)
-        : b.occurredAt.localeCompare(a.occurredAt),
-    );
-  }, [rows, keyword, action, sort]);
+  }, [rows, keyword, action]);
 
   const filtered = keyword !== "" || action !== "all";
-  const pager = useListPagination(visible, 20);
+  const changeSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<AuditLogEntry>>>
+  >(
+    () => ({
+      occurredAt: (r) => r.occurredAt,
+      actor: (r) => r.actorName,
+      target: (r) => `${r.objectType} ${r.objectId}`,
+      action: (r) => r.action,
+      outcome: (r) => r.outcome,
+    }),
+    [],
+  );
+  const changeSort = useTableSort(visible, changeSortAccessors, {
+    columnId: "occurredAt",
+    direction: "desc",
+  });
+  const pager = useListPagination(changeSort.rows, 20);
   /* 选择列全站占位（owner 定）：留痕只读，列先在。 */
   const [selected, setSelected] = useState<readonly string[]>([]);
 
@@ -187,21 +195,38 @@ export function PlatformChangeTable() {
             ? rows.length
             : `${visible.length} / ${rows.length}`
         }
+        search={
+          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+            <InputGroupAddon>
+              <Icon name="search" size="sm" aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="搜索对象 / 操作者…"
+              aria-label="搜索留痕"
+              value={keyword}
+              onChange={(e) => {
+                setKeyword(e.target.value);
+                pager.resetPage();
+              }}
+            />
+          </InputGroup>
+        }
+        actions={
+          <ActionButton
+            variant="outline"
+            icon="refresh"
+            onClick={() => void reload()}
+            disabled={load.kind === "loading"}
+          >
+            {tShared("common.refresh")}
+          </ActionButton>
+        }
+        onReset={() => {
+          setKeyword("");
+          setAction("all");
+          pager.resetPage();
+        }}
       >
-        <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-          <InputGroupAddon>
-            <Icon name="search" size="sm" aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            placeholder="搜索对象 / 操作者…"
-            aria-label="搜索留痕"
-            value={keyword}
-            onChange={(e) => {
-              setKeyword(e.target.value);
-              pager.resetPage();
-            }}
-          />
-        </InputGroup>
         <NativeSelect
           wrapperClassName="w-fit"
           value={action}
@@ -218,14 +243,6 @@ export function PlatformChangeTable() {
             </option>
           ))}
         </NativeSelect>
-        <Button
-          variant="secondary"
-          onClick={() => void reload()}
-          disabled={load.kind === "loading"}
-        >
-          <Icon name="refresh" size="sm" aria-hidden="true" />
-          {tShared("common.refresh")}
-        </Button>
       </FilterBar>
 
       <DataTable
@@ -241,12 +258,14 @@ export function PlatformChangeTable() {
           {
             id: "actor",
             header: tShared("columns.actor"),
+            sortable: true,
             width: "sm",
             cell: (r: AuditLogEntry) => r.actorName,
           },
           {
             id: "target",
             header: tShared("columns.target"),
+            sortable: true,
             cell: (r: AuditLogEntry) => (
               <span className="text-label-md text-foreground">
                 {r.objectType} · {r.objectId}
@@ -256,14 +275,14 @@ export function PlatformChangeTable() {
           {
             id: "action",
             header: tShared("columns.action"),
-            align: "center",
+            sortable: true,
             width: "xs",
             cell: (r: AuditLogEntry) => r.action,
           },
           {
             id: "outcome",
             header: "结果",
-            align: "center",
+            sortable: true,
             width: "xs",
             cell: (r: AuditLogEntry) => (
               <StatusBadge tone={OUTCOME_TONE[r.outcome] ?? "neutral"} dot>
@@ -273,12 +292,15 @@ export function PlatformChangeTable() {
           },
         ]}
         rows={pager.pageRows}
+        {...(changeSort.sort ? { sort: changeSort.sort } : {})}
+        onSortChange={(next) => {
+          changeSort.onSortChange(next);
+          pager.resetPage();
+        }}
         rowKey={(r: AuditLogEntry) => r.eventId}
         selectedKeys={selected}
         onSelectionChange={setSelected}
         indexStart={pager.indexStart}
-        sort={sort}
-        onSortChange={setSort}
         rowActions={(r: AuditLogEntry) => (
           <ActionMenu
             label="留痕操作"

@@ -10,6 +10,8 @@
     "previous": "Previous page",
     "next": "Next page",
     "last": "Last",
+    "loadedMore": "Loaded {count}, more available",
+    "loadedEnd": "Loaded {count} (end of list)",
     "pageSizeLabel": "Rows per page",
     "pageSizeOption": "{size} per page",
     "pageSizeAuto": "Fit rows to height"

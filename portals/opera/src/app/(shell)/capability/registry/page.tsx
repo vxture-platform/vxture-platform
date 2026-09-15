@@ -91,6 +91,7 @@ import {
   ViewHeader,
   useToast,
   type StatusBadgeTone,
+  ActionButton,
 } from "@vxture/design-system";
 import {
   CursorPagination,
@@ -1312,14 +1313,6 @@ function CapabilitiesPageContent() {
             icon="stack"
             title="能力注册"
             description="四原语统一注册台账；数据来自 Runos 的 /capability/capabilities。连接器 / 执行器 / 技能可注册，资产仍未开放。"
-            action={
-              canManage ? (
-                <Button onClick={openRegister} disabled={submitting}>
-                  <Icon name="plus" size="sm" aria-hidden="true" />
-                  注册 Capability
-                </Button>
-              ) : null
-            }
           />
         }
         filters={
@@ -1330,21 +1323,41 @@ function CapabilitiesPageContent() {
             /* 服务端筛选之后，「筛掉了多少」这个数在前端已经不存在了:`total`
                本身就是筛选后的匹配数。显示它，而不是拿本页长度去冒充。 */
             count={total}
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索 Capability…"
+                  aria-label="搜索 Capability"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    resetToFirstPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setPrimitiveFilter("all");
+              setCategoryFilter("all");
+              setTagFilter("");
+              resetToFirstPage();
+            }}
+            actions={
+              canManage ? (
+                <ActionButton
+                  icon="plus"
+                  onClick={openRegister}
+                  disabled={submitting}
+                >
+                  注册 Capability
+                </ActionButton>
+              ) : null
+            }
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索 Capability…"
-                aria-label="搜索 Capability"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  resetToFirstPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={primitiveFilter}
@@ -1496,7 +1509,6 @@ function CapabilitiesPageContent() {
                 {
                   id: "type",
                   header: tShared("columns.kind"),
-                  align: "center",
                   width: "xs",
                   cell: (r: CapabilityRecord) => (
                     <Badge variant="secondary">
@@ -1507,7 +1519,6 @@ function CapabilitiesPageContent() {
                 {
                   id: "tier",
                   header: "准入等级",
-                  align: "center",
                   width: "xs",
                   cell: (r: CapabilityRecord) => (
                     <StatusBadge
@@ -1523,7 +1534,7 @@ function CapabilitiesPageContent() {
               rowKey={(r: CapabilityRecord) => r.capabilityId}
               selectedKeys={selectedKeys}
               onSelectionChange={setSelectedKeys}
-              indexStart={(position.pageNo - 1) * pageSize}
+              indexStart={(position.pageNo - 1) * pageSize + 1}
               rowActions={(r: CapabilityRecord) => (
                 <ActionMenu
                   label={`${r.capabilityId} 操作`}

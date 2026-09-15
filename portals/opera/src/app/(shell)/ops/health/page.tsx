@@ -72,6 +72,7 @@ import {
   useToast,
   type IconName,
   type StatusBadgeTone,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
@@ -81,6 +82,7 @@ import {
 import { api, OperaApiError } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
 import { formatDateTime, formatDay } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 触发一次浏览器下载；用完立即回收 URL，不留 blob 常驻内存。 */
 function downloadCsv(filename: string, rows: readonly string[][]) {
@@ -517,7 +519,19 @@ export default function ServiceMonitorPage() {
   }, [items, keyword, statusFilter]);
 
   const filtered = keyword.trim() !== "" || statusFilter !== "all";
-  const pager = useListPagination(visible, 20);
+  const productSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ProductHealthItem>>>
+  >(
+    () => ({
+      product: (r) => r.productName,
+      health: (r) => r.prod.health.status,
+      status: (r) => r.prod.status.status,
+      checkedAt: (r) => r.prod.health.checkedAt,
+    }),
+    [],
+  );
+  const productSort = useTableSort(visible, productSortAccessors);
+  const pager = useListPagination(productSort.rows, 20);
 
   function toggleExpanded(key: string) {
     setExpandedKeys((prev) =>
@@ -658,16 +672,6 @@ export default function ServiceMonitorPage() {
                 </Badge>
               ) : null
             }
-            action={
-              <Button
-                variant="outline"
-                onClick={() => void reload()}
-                disabled={load.kind === "loading" || refreshing}
-              >
-                <Icon name="refresh" size="sm" aria-hidden="true" />
-                {tShared("common.refresh")}
-              </Button>
-            }
           />
         }
         summary={
@@ -737,21 +741,38 @@ export default function ServiceMonitorPage() {
                 {allExpanded ? "全部收起" : "全部展开"}
               </Button>
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索产品名称 / 代码…"
+                  aria-label="搜索产品"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setStatusFilter("all");
+              pager.resetPage();
+            }}
+            actions={
+              <ActionButton
+                icon="refresh"
+                variant="outline"
+                onClick={() => void reload()}
+                disabled={load.kind === "loading" || refreshing}
+              >
+                {tShared("common.refresh")}
+              </ActionButton>
+            }
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索产品名称 / 代码…"
-                aria-label="搜索产品"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={statusFilter}
@@ -793,6 +814,7 @@ export default function ServiceMonitorPage() {
                  折叠是产品行自己的事。渠道行这一格留空，缩进即由此而来。 */
                 id: "product",
                 header: tShared("columns.product"),
+                sortable: true,
                 cell: (r: HealthRow) =>
                   r.kind === "product" ? (
                     <div className="flex items-center gap-xs">
@@ -843,7 +865,6 @@ export default function ServiceMonitorPage() {
               {
                 id: "channel",
                 header: "渠道",
-                align: "center",
                 width: "xs",
                 cell: (r: HealthRow) =>
                   r.kind === "product" ? (
@@ -859,6 +880,7 @@ export default function ServiceMonitorPage() {
                  status 可映射。 */
                 id: "health",
                 header: "存活",
+                sortable: true,
                 width: "sm",
                 cell: (r: HealthRow) => {
                   const channel = channelOf(r);
@@ -882,6 +904,7 @@ export default function ServiceMonitorPage() {
               {
                 id: "status",
                 header: "就绪",
+                sortable: true,
                 width: "sm",
                 cell: (r: HealthRow) => {
                   const channel = channelOf(r);
@@ -937,6 +960,7 @@ export default function ServiceMonitorPage() {
               {
                 id: "checkedAt",
                 header: "最近探测",
+                sortable: true,
                 width: "sm",
                 cell: (r: HealthRow) => {
                   const channel = channelOf(r);
@@ -956,6 +980,11 @@ export default function ServiceMonitorPage() {
              全展开后编到 36，而计数条上写的是 12，两个数对不上。行号在这页本来
              也不承担任何用途。 */
             rows={displayRows}
+            {...(productSort.sort ? { sort: productSort.sort } : {})}
+            onSortChange={(next) => {
+              productSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r: HealthRow) => r.key}
             selectedKeys={selected}
             onSelectionChange={setSelected}

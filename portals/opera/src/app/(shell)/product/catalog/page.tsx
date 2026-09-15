@@ -41,6 +41,7 @@ import {
   ViewHeader,
   useListPagination,
   useToast,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import Link from "next/link";
@@ -62,6 +63,7 @@ import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 const MANAGE = "integration:product.manage";
 
@@ -298,7 +300,20 @@ function ProductsPageContent() {
     );
   }, [rows, keyword, originFilter, stateFilter, productIdFilter]);
 
-  const pager = useListPagination(filtered, 20);
+  const productSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<ProductRecord>>>
+  >(
+    () => ({
+      name: (r) => r.productName,
+      origin: (r) => r.origin,
+      type: (r) => r.productType,
+      state: (r) => r.state,
+      verification: (r) => verificationOf(checklistByProduct[r.id] ?? []),
+    }),
+    [checklistByProduct],
+  );
+  const productSort = useTableSort(filtered, productSortAccessors);
+  const pager = useListPagination(productSort.rows, 20);
 
   /**
    * 进产品详情页。
@@ -609,14 +624,6 @@ function ProductsPageContent() {
             icon="package"
             title="产品目录"
             description="平台产品的基础设施登记；数据来自 product.products。商业定价/套餐发布仍在 admin。"
-            action={
-              canManage ? (
-                <Button onClick={() => router.push("/product/catalog/new")}>
-                  <Icon name="plus" size="sm" aria-hidden="true" />
-                  接入产品
-                </Button>
-              ) : null
-            }
           />
         }
         filters={
@@ -629,21 +636,39 @@ function ProductsPageContent() {
                 ? rows.length
                 : `${filtered.length} / ${rows.length}`
             }
+            search={
+              <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+                <InputGroupAddon>
+                  <Icon name="search" size="sm" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="搜索产品…"
+                  aria-label="搜索产品"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    pager.resetPage();
+                  }}
+                />
+              </InputGroup>
+            }
+            onReset={() => {
+              setKeyword("");
+              setOriginFilter("all");
+              setStateFilter("all");
+              pager.resetPage();
+            }}
+            actions={
+              canManage ? (
+                <ActionButton
+                  icon="plus"
+                  onClick={() => router.push("/product/catalog/new")}
+                >
+                  接入产品
+                </ActionButton>
+              ) : null
+            }
           >
-            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-              <InputGroupAddon>
-                <Icon name="search" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="搜索产品…"
-                aria-label="搜索产品"
-                value={keyword}
-                onChange={(e) => {
-                  setKeyword(e.target.value);
-                  pager.resetPage();
-                }}
-              />
-            </InputGroup>
             <NativeSelect
               wrapperClassName="w-fit"
               value={originFilter}
@@ -684,6 +709,7 @@ function ProductsPageContent() {
               {
                 id: "name",
                 header: tShared("columns.product"),
+                sortable: true,
                 /* 点标题进详情页，不再开编辑对话框。owner 的分工：首次新增用
                    对话框（还没有详情页可进），已配置的产品一页改完。不再按
                    canManage 分支——详情页自己按权限决定可不可改，只读的人也该
@@ -700,6 +726,7 @@ function ProductsPageContent() {
               {
                 id: "origin",
                 header: tShared("columns.source"),
+                sortable: true,
                 width: "md",
                 cell: (r: ProductRecord) => (
                   <span className="text-body-sm">
@@ -726,7 +753,7 @@ function ProductsPageContent() {
               {
                 id: "type",
                 header: tShared("columns.kind"),
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ProductRecord) => (
                   /* 受管枚举外的历史/非法 product_type 标「非合规」,便于 owner
@@ -759,7 +786,7 @@ function ProductsPageContent() {
                    把监测信号变成破坏性动作。 */
                 id: "state",
                 header: "生命周期",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ProductRecord) => (
                   <StatusBadge tone={productStateMeta(r.state).tone} dot>
@@ -770,7 +797,7 @@ function ProductsPageContent() {
               {
                 id: "verification",
                 header: "验证态",
-                align: "center",
+                sortable: true,
                 width: "xs",
                 cell: (r: ProductRecord) => {
                   const v = verificationOf(checklistByProduct[r.id] ?? []);
@@ -783,6 +810,11 @@ function ProductsPageContent() {
               },
             ]}
             rows={pager.pageRows}
+            {...(productSort.sort ? { sort: productSort.sort } : {})}
+            onSortChange={(next) => {
+              productSort.onSortChange(next);
+              pager.resetPage();
+            }}
             rowKey={(r: ProductRecord) => r.id}
             selectedKeys={selectedKeys}
             onSelectionChange={setSelectedKeys}

@@ -27,6 +27,7 @@ import {
   Drawer,
   Icon,
   Input,
+  SectionHeader,
   Separator,
   StatusBadge,
   Textarea,
@@ -227,11 +228,12 @@ export function SecretsDrawer({
           ) : null}
 
           <div className="flex flex-col gap-md">
-            <p className="text-label-md text-foreground">登录客户端</p>
-            <p className="text-body-sm text-muted-foreground">
-              client_secret
-              只在签发与轮换后明文出现一次，库里只有哈希——所以没有「查看」，只有「轮换」。轮换后旧密钥当场失效。
-            </p>
+            <SectionHeader
+              level={3}
+              icon="fingerprint"
+              title="登录客户端"
+              description="client_secret 只在签发与轮换后明文出现一次，库里只有哈希——所以没有「查看」，只有「轮换」。轮换后旧密钥当场失效。"
+            />
             {clients.length === 0 ? (
               <p className="text-body-sm text-muted-foreground">
                 还没有登录客户端。在「登录接入」添加并保存后，密钥会在保存时签发。
@@ -275,15 +277,19 @@ export function SecretsDrawer({
           <Separator />
 
           <form onSubmit={saveWebhookSecret} className="flex flex-col gap-md">
-            <div className="flex flex-wrap items-center justify-between gap-sm">
-              <p className="text-label-md text-foreground">Webhook 签名</p>
-              <StatusBadge
-                tone={webhook?.hasWebhookSecret ? "success" : "neutral"}
-                dot
-              >
-                {webhook?.hasWebhookSecret ? "密钥已登记" : "密钥未登记"}
-              </StatusBadge>
-            </div>
+            <SectionHeader
+              level={3}
+              icon="key"
+              title="Webhook 签名"
+              titleSuffix={
+                <StatusBadge
+                  tone={webhook?.hasWebhookSecret ? "success" : "neutral"}
+                  dot
+                >
+                  {webhook?.hasWebhookSecret ? "密钥已登记" : "密钥未登记"}
+                </StatusBadge>
+              }
+            />
             <p className="text-body-sm text-muted-foreground">
               平台用这把密钥给发往产品的开通、停用事件签名，产品侧用同一个值验签。
             </p>

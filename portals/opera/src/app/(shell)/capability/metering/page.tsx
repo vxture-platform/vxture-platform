@@ -58,12 +58,14 @@ import {
   useListPagination,
   useToast,
   ViewHeader,
+  ActionButton,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDay } from "@vxture-platform/shared";
+import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 type UsageAxis =
   | "tenant"
@@ -269,7 +271,20 @@ export default function CapabilityMeteringPage() {
     return rows.filter((r) => axisIdentity(r).toLowerCase().includes(kw));
   }, [rows, keyword]);
 
-  const pager = useListPagination(visible, 20);
+  const usageSortAccessors = useMemo<
+    Readonly<Record<string, SortAccessor<UsageSummaryRow>>>
+  >(
+    () => ({
+      identity: (r) => axisIdentity(r),
+      calls: (r) => r.calls,
+      allowed: (r) => r.allowedCalls,
+      success: (r) => r.successCalls,
+      cost: (r) => Number(r.costAmount),
+    }),
+    [],
+  );
+  const usageSort = useTableSort(visible, usageSortAccessors);
+  const pager = useListPagination(usageSort.rows, 20);
   const currentAxis = AXES.find((a) => a.value === axis) ?? AXES[0]!;
 
   /** 恰好取满 = top-N 截断，合计不可信（上游契约）。 */
@@ -345,26 +360,6 @@ export default function CapabilityMeteringPage() {
           icon="gauge"
           title="用量计量"
           description="Runos 能力调用的用量汇总，七根聚合轴。在运行调用流之上求和——每一次调用的明细在「运行监控 · 调用日志」。只读：这里记的是调用事实，定价是 admin 商业层的事。"
-          action={
-            <div className="flex items-center gap-sm">
-              <Button
-                variant="secondary"
-                onClick={() => void reload()}
-                disabled={load.kind === "loading"}
-              >
-                <Icon name="refresh" size="sm" aria-hidden="true" />
-                {tShared("common.refresh")}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={exportCsv}
-                disabled={rows.length === 0}
-              >
-                <Icon name="download" size="sm" aria-hidden="true" />
-                导出 CSV
-              </Button>
-            </div>
-          }
         />
       }
       summary={
@@ -450,21 +445,48 @@ export default function CapabilityMeteringPage() {
               }}
             />
           }
+          search={
+            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+              <InputGroupAddon>
+                <Icon name="search" size="sm" aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder={`搜索${currentAxis.label}…`}
+                aria-label="搜索分组"
+                value={keyword}
+                onChange={(e) => {
+                  setKeyword(e.target.value);
+                  pager.resetPage();
+                }}
+              />
+            </InputGroup>
+          }
+          onReset={() => {
+            setKeyword("");
+            setLimit("100");
+            pager.resetPage();
+          }}
+          actions={
+            <>
+              <ActionButton
+                icon="refresh"
+                variant="outline"
+                onClick={() => void reload()}
+                disabled={load.kind === "loading"}
+              >
+                {tShared("common.refresh")}
+              </ActionButton>
+              <ActionButton
+                icon="download"
+                variant="outline"
+                onClick={exportCsv}
+                disabled={rows.length === 0}
+              >
+                导出 CSV
+              </ActionButton>
+            </>
+          }
         >
-          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
-            <InputGroupAddon>
-              <Icon name="search" size="sm" aria-hidden="true" />
-            </InputGroupAddon>
-            <InputGroupInput
-              placeholder={`搜索${currentAxis.label}…`}
-              aria-label="搜索分组"
-              value={keyword}
-              onChange={(e) => {
-                setKeyword(e.target.value);
-                pager.resetPage();
-              }}
-            />
-          </InputGroup>
           <Input
             type="date"
             aria-label="起始日期（UTC）"
@@ -500,6 +522,7 @@ export default function CapabilityMeteringPage() {
             {
               id: "identity",
               header: currentAxis.label,
+              sortable: true,
               cell: (r: UsageSummaryRow) =>
                 /* workspace 轴走平台的租户主导规则——上游契约保证这根轴的行带
                    tenantId，所以这里拿得到租户名做主导部分。 */
@@ -530,6 +553,7 @@ export default function CapabilityMeteringPage() {
             {
               id: "calls",
               header: "调用数",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: UsageSummaryRow) => r.calls.toLocaleString("zh-CN"),
@@ -537,6 +561,7 @@ export default function CapabilityMeteringPage() {
             {
               id: "allowed",
               header: "放行数",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: UsageSummaryRow) =>
@@ -545,6 +570,7 @@ export default function CapabilityMeteringPage() {
             {
               id: "success",
               header: "成功数",
+              sortable: true,
               align: "numeric",
               width: "xs",
               cell: (r: UsageSummaryRow) => (
@@ -563,6 +589,7 @@ export default function CapabilityMeteringPage() {
             {
               id: "cost",
               header: "成本（运营口径）",
+              sortable: true,
               align: "numeric",
               width: "sm",
               cell: (r: UsageSummaryRow) => (
@@ -571,6 +598,11 @@ export default function CapabilityMeteringPage() {
             },
           ]}
           rows={pager.pageRows}
+          {...(usageSort.sort ? { sort: usageSort.sort } : {})}
+          onSortChange={(next) => {
+            usageSort.onSortChange(next);
+            pager.resetPage();
+          }}
           rowKey={(r: UsageSummaryRow) => `${r.dimension}:${axisIdentity(r)}`}
           selectedKeys={selected}
           onSelectionChange={setSelected}

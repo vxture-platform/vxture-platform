@@ -58,6 +58,7 @@ import {
   Input,
   NativeSelect,
   Section,
+  SectionHeader,
   Separator,
   StatusBadge,
   Textarea,
@@ -1105,9 +1106,7 @@ export function ProductDetailPage({
               <SectionBody>
                 <FieldGrid>
                   <div className="flex min-w-0 flex-col gap-sm">
-                    <p className="text-label-sm font-normal text-muted-foreground">
-                      可见性
-                    </p>
+                    <SectionHeader level={4} title="可见性" />
                     <ToggleRow
                       id="pd-customer"
                       label="客户域"
@@ -1142,9 +1141,7 @@ export function ProductDetailPage({
                   </div>
 
                   <div className="flex min-w-0 flex-col gap-sm">
-                    <p className="text-label-sm font-normal text-muted-foreground">
-                      终端支持
-                    </p>
+                    <SectionHeader level={4} title="终端支持" />
                     {PRODUCT_SURFACE_DEFS.map((d) => (
                       <ToggleRow
                         key={d.value}
