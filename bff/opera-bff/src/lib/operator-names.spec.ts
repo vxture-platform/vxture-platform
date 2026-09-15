@@ -15,7 +15,10 @@ import {
   operatorDisplayName,
   operatorUuidOf,
 } from "./operator-names";
-import { matchProbeTrigger, type AtlasChangeRecord } from "../routers/atlas.router";
+import {
+  matchProbeTrigger,
+  type AtlasChangeRecord,
+} from "../routers/atlas.router";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -47,7 +50,9 @@ describe("operatorDisplayName", () => {
 
 describe("lookupOperatorNames", () => {
   it("queries only operator uuids, once each", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [{ id: A, name: "张三" }] });
+    const query = vi
+      .fn()
+      .mockResolvedValue({ rows: [{ id: A, name: "张三" }] });
     const names = await lookupOperatorNames({ query } as never, [
       `opr_${A}`,
       `opr_${A}`,
