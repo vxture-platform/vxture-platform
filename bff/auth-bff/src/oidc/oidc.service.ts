@@ -764,6 +764,39 @@ export class OidcService {
   }
 
   /**
+   * 凭据验过之后才把登录挑战用掉（原子 GETDEL）。
+   *
+   * 此前三条交互登录（密码 / 手机码 / 邮箱码）一进门就 GETDEL：人机验证没过、密码
+   * 输错，挑战都已经没了，第二次提交必然 400 invalid_login_challenge。登录页把 400
+   * 当成「会话失效」送人回「上一个应用」——而那份记忆不分 realm，于是在 opera 登录页
+   * 输错一次密码的运营者被送进了 console（浏览器里恰好还有租户会话），根本见不到
+   * 二次验证那一步（owner 2026-09-15 报「串台」）。
+   *
+   * 现在进门只读（readOidcLoginChallenge），这里才消耗；两个标签页同时提交时只有一个
+   * 拿得到，另一个照旧 invalid_login_challenge。
+   */
+  private async claimLoginChallenge(loginChallenge: string): Promise<void> {
+    const claimed = await this.redis.consumeOidcLoginChallenge(loginChallenge);
+    if (!claimed) {
+      throw new BadRequestException("invalid_login_challenge");
+    }
+  }
+
+  /**
+   * 发起登出的 client 属于哪个 realm；认不出（没带 client_id、client 不存在或已停用）
+   * 给 null，由调用方退回「两个 realm 都结束」。
+   */
+  async logoutRealmOf(
+    clientId: string | undefined,
+  ): Promise<"customer" | "workforce" | null> {
+    if (!clientId) return null;
+    const client = await this.clients.findEnabledByClientId(clientId);
+    return client?.realm === "customer" || client?.realm === "workforce"
+      ? client.realm
+      : null;
+  }
+
+  /**
    * Interactive password login against a parked login_challenge. Tenant logins
    * complete directly; an operator login may return an `mfa_required`
    * continuation when a second factor is owed (§3.2).
@@ -771,7 +804,8 @@ export class OidcService {
   async completeLoginWithPassword(
     input: OidcPasswordLoginInput,
   ): Promise<OidcLoginResult> {
-    const challenge = await this.redis.consumeOidcLoginChallenge(
+    /* 先读不消耗：凭据验过才用掉它（claimLoginChallenge）。 */
+    const challenge = await this.redis.readOidcLoginChallenge(
       input.loginChallenge,
     );
     if (!challenge) {
@@ -811,6 +845,7 @@ export class OidcService {
       });
       throw new UnauthorizedException("invalid_credentials");
     }
+    await this.claimLoginChallenge(input.loginChallenge);
     await this.recordTenantAttempt({
       userId: user.id,
       identifier: input.identifier,
@@ -829,7 +864,8 @@ export class OidcService {
   async completeLoginWithPhone(
     input: OidcPhoneLoginInput,
   ): Promise<OidcLoginCompletion> {
-    const challenge = await this.redis.consumeOidcLoginChallenge(
+    /* 先读不消耗：凭据验过才用掉它（claimLoginChallenge）。 */
+    const challenge = await this.redis.readOidcLoginChallenge(
       input.loginChallenge,
     );
     if (!challenge) {
@@ -860,6 +896,7 @@ export class OidcService {
       });
       throw err;
     }
+    await this.claimLoginChallenge(input.loginChallenge);
     await this.recordTenantAttempt({
       userId: user.id,
       identifier: input.phone,
@@ -896,7 +933,8 @@ export class OidcService {
   async completeLoginWithEmail(
     input: OidcEmailLoginInput,
   ): Promise<OidcLoginCompletion> {
-    const challenge = await this.redis.consumeOidcLoginChallenge(
+    /* 先读不消耗：凭据验过才用掉它（claimLoginChallenge）。 */
+    const challenge = await this.redis.readOidcLoginChallenge(
       input.loginChallenge,
     );
     if (!challenge) {
@@ -921,6 +959,7 @@ export class OidcService {
       });
       throw new NotFoundException("email_not_registered");
     }
+    await this.claimLoginChallenge(input.loginChallenge);
     await this.recordTenantAttempt({
       userId: user.id,
       identifier: input.email,
@@ -1278,6 +1317,7 @@ export class OidcService {
       });
       throw new UnauthorizedException("Invalid credentials");
     }
+    await this.claimLoginChallenge(input.loginChallenge);
     this.operatorGuard.recordSuccess(ip, input.identifier);
 
     const { decision, methods } = await this.operatorMfa.resolveLoginMfa(

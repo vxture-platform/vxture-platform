@@ -530,6 +530,29 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * 读挑战但不消耗，Redis 故障照实抛 503。
+   *
+   * 与 peekOidcLoginChallenge 的区别只在故障：那一个给跨标签页探测用，吞错返回 null
+   * 无妨；交互登录进门用这一个——把 Redis 故障说成「挑战不存在」，登录页会把人当作
+   * 会话失效送走。
+   */
+  async readOidcLoginChallenge(
+    challenge: string,
+  ): Promise<OidcLoginChallenge | null> {
+    const client = this.requireReadyClient();
+    const key = `${this.prefix}oidc:login:${challenge}`;
+    try {
+      const raw = await client.get(key);
+      return raw ? (JSON.parse(raw) as OidcLoginChallenge) : null;
+    } catch (err) {
+      this.logger.error(`readOidcLoginChallenge failed: ${String(err)}`);
+      throw new ServiceUnavailableException(
+        "OIDC login challenge verification failed",
+      );
+    }
+  }
+
   async peekOidcLoginChallenge(
     challenge: string,
   ): Promise<OidcLoginChallenge | null> {
