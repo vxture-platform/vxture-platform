@@ -47,7 +47,18 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import { productTypeLabel, isValidProductType } from "@vxture/core-utils";
+import {
+  productSurfaceLabel,
+  productTypeLabel,
+  isValidProductType,
+} from "@vxture/core-utils";
+import {
+  ConfigPopover,
+  MonoList,
+  StackCell,
+  formatUpdatedAt,
+} from "@/components/table/ConfigCells";
+import { isEnabled } from "@/features/atlas/state";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -91,6 +102,16 @@ interface ProductRecord {
   iconUrl: string | null;
   /** 可露出的端（受管枚举）。一个都没勾时是空数组，不是 null。 */
   surfaces: string[];
+  /** 列表接口带出的接入摘要（边缘与回调、登录客户端、计量指标）。 */
+  integration?: {
+    edgeDomain: string | null;
+    edgeUpstream: string | null;
+    webhookUrl: string | null;
+    homeUrl: string | null;
+    hasWebhookSecret: boolean;
+    clients: { clientId: string; channel: string; state: string }[];
+    metricKeys: string[];
+  };
 }
 
 const ORIGIN_LABELS: Record<ProductOrigin, string> = {
@@ -217,6 +238,7 @@ function ProductsPageContent() {
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const router = useRouter();
+  const dateLocale = useLocale();
   const { can } = useOperatorSession();
   /* 删除是高危写路由（BFF 挂 `@RequireStepUp()`）——命中闸门弹 TOTP、换 300s 凭证、
      重试，与 model/keys 那批同一套。 */
@@ -241,6 +263,17 @@ function ProductsPageContent() {
   const [checklistByProduct, setChecklistByProduct] = useState<
     Record<string, ChecklistItem[]>
   >({});
+  /* 权益计数：路由授权（Atlas）与能力授权（Runos）各一份。null = 没读到（或还在读），
+     界面显示「—」而不是 0——「没有授权」与「没查到」不能长得一样。 */
+  const [routeCounts, setRouteCounts] = useState<Record<
+    string,
+    { live: number; total: number }
+  > | null>(null);
+  const [capCounts, setCapCounts] = useState<Record<
+    string,
+    { direct: number; derived: number }
+  > | null>(null);
+  const [capFailed, setCapFailed] = useState<string[]>([]);
   /* 需要二次确认的生命周期动作。退役不可逆、恢复要提醒重新验证——两者都不该
      点一下就发生。 */
   const [pendingAction, setPendingAction] = useState<{
@@ -275,6 +308,55 @@ function ProductsPageContent() {
       setRows(products);
       setChecklistByProduct(summary);
       setLoad({ kind: "ready" });
+      /* 权益计数是附加信息：不阻塞目录，失败只让那一格显示「—」并点名没读到。 */
+      const codes = products.map((p) => p.productCode);
+      void Promise.all([
+        api
+          .get<
+            { productCode: string; state: string }[]
+          >("/api/atlas/product-grants?includeInactive=true")
+          .catch(() => null),
+        codes.length === 0
+          ? Promise.resolve({ byProduct: {}, failed: [] as string[] })
+          : api
+              .get<{
+                byProduct: Record<string, { grantType: string }[]>;
+                failed: string[];
+              }>(
+                "/api/runos/grants/summary?productCodes=" +
+                  encodeURIComponent(codes.join(",")),
+              )
+              .catch(() => null),
+      ]).then(([routes, caps]) => {
+        if (routes) {
+          const next: Record<string, { live: number; total: number }> = {};
+          for (const g of routes) {
+            const c = next[g.productCode] ?? { live: 0, total: 0 };
+            c.total += 1;
+            if (isEnabled(g.state)) c.live += 1;
+            next[g.productCode] = c;
+          }
+          setRouteCounts(next);
+        } else {
+          setRouteCounts(null);
+        }
+        if (caps) {
+          const next: Record<string, { direct: number; derived: number }> = {};
+          for (const [code, grants] of Object.entries(
+            caps.byProduct as Record<string, { grantType: string }[]>,
+          )) {
+            const direct = grants.filter(
+              (g) => g.grantType === "direct",
+            ).length;
+            next[code] = { direct, derived: grants.length - direct };
+          }
+          setCapCounts(next);
+          setCapFailed(caps.failed);
+        } else {
+          setCapCounts(null);
+          setCapFailed(codes);
+        }
+      });
     } catch (error) {
       setLoad({
         kind: "error",
@@ -309,6 +391,7 @@ function ProductsPageContent() {
       type: (r) => r.productType,
       state: (r) => r.state,
       verification: (r) => verificationOf(checklistByProduct[r.id] ?? []),
+      updated: (r) => r.updatedAt,
     }),
     [checklistByProduct],
   );
@@ -711,10 +794,7 @@ function ProductsPageContent() {
                 id: "name",
                 header: tShared("columns.product"),
                 sortable: true,
-                /* 点标题进详情页，不再开编辑对话框。owner 的分工：首次新增用
-                   对话框（还没有详情页可进），已配置的产品一页改完。不再按
-                   canManage 分支——详情页自己按权限决定可不可改，只读的人也该
-                   看得到配置。 */
+                /* 点标题进详情页。只读的人也该看得到配置，详情页自己按权限决定可不可改。 */
                 cell: (r: ProductRecord) => (
                   <TableTitleCell
                     icon="package"
@@ -725,89 +805,120 @@ function ProductsPageContent() {
                 ),
               },
               {
-                id: "origin",
-                header: tShared("columns.source"),
+                /* 类型为主、来源为辅（owner 2026-09-16「相似的两列合并，上下主辅」）。
+                   受管枚举外的 product_type 仍标「非合规」——显影而非静默。 */
+                id: "type",
+                header: "类型 / 来源",
                 sortable: true,
                 width: "md",
                 cell: (r: ProductRecord) => (
-                  <span className="text-body-sm">
-                    {ORIGIN_LABELS[r.origin]}
-                    {r.origin === "third_party" && r.originProvider
-                      ? ` · ${r.originProvider}`
-                      : ""}
-                  </span>
+                  <StackCell
+                    main={
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        <span
+                          className={
+                            isValidProductType(r.productType)
+                              ? undefined
+                              : "text-code-sm"
+                          }
+                        >
+                          {productTypeLabel(r.productType, typeLocale)}
+                        </span>
+                        {isValidProductType(r.productType) ? null : (
+                          <StatusBadge tone="warning" dot>
+                            {tShared("common.nonCompliant")}
+                          </StatusBadge>
+                        )}
+                      </span>
+                    }
+                    sub={
+                      ORIGIN_LABELS[r.origin] +
+                      (r.origin === "third_party" && r.originProvider
+                        ? " · " + r.originProvider
+                        : "")
+                    }
+                  />
                 ),
               },
               {
-                id: "visibility",
-                header: "可见性",
-                width: "sm",
+                id: "integration",
+                header: "接入配置",
+                width: "lg",
                 cell: (r: ProductRecord) => (
-                  <span className="text-body-sm text-muted-foreground">
-                    {r.isCustomerVisible ? "客户端" : ""}
-                    {r.isCustomerVisible && r.isWorkforceVisible ? " / " : ""}
-                    {r.isWorkforceVisible ? "运营端" : ""}
-                    {!r.isCustomerVisible && !r.isWorkforceVisible ? "—" : ""}
-                  </span>
+                  <IntegrationCell product={r} locale={typeLocale} />
                 ),
               },
               {
-                id: "type",
-                header: tShared("columns.kind"),
-                sortable: true,
-                width: "xs",
-                cell: (r: ProductRecord) => (
-                  /* 受管枚举外的历史/非法 product_type 标「非合规」,便于 owner
-                     上线后订正。
-                     标签走 `productTypeLabel`:此前这里直接渲染枚举值本身
-                     (`industry_agent`),运营者读到的是代码不是「行业智能体」。
-                     未登记值查不到时该函数退回原字符串——正好与右边的「非合规」
-                     徽标配套:显影而非静默。 */
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    <span
-                      className={
-                        isValidProductType(r.productType)
-                          ? undefined
-                          : "text-code-sm"
+                id: "entitlements",
+                header: "权益",
+                width: "md",
+                cell: (r: ProductRecord) => {
+                  const routes = routeCounts?.[r.productCode];
+                  const caps = capCounts?.[r.productCode];
+                  const capMissing =
+                    capCounts === null || capFailed.includes(r.productCode);
+                  const notes = [
+                    routeCounts === null ? "路由授权没读到" : null,
+                    capMissing ? "能力授权没读到" : null,
+                    routes && routes.total > routes.live
+                      ? routes.total - routes.live + " 条路由已停用"
+                      : null,
+                    caps && caps.derived > 0
+                      ? "推导能力 " + caps.derived
+                      : null,
+                  ].filter((x): x is string => x !== null);
+                  return (
+                    <StackCell
+                      main={
+                        <Link
+                          href={
+                            "/product/entitlements?productCode=" +
+                            encodeURIComponent(r.productCode)
+                          }
+                          className="hover:text-primary-text"
+                        >
+                          {"路由 " +
+                            (routeCounts === null ? "—" : (routes?.live ?? 0)) +
+                            " · 能力 " +
+                            (capMissing ? "—" : (caps?.direct ?? 0))}
+                        </Link>
                       }
-                    >
-                      {productTypeLabel(r.productType, typeLocale)}
-                    </span>
-                    {isValidProductType(r.productType) ? null : (
-                      <StatusBadge tone="warning" dot>
-                        {tShared("common.nonCompliant")}
-                      </StatusBadge>
-                    )}
-                  </span>
-                ),
+                      sub={notes.length > 0 ? notes.join(" · ") : undefined}
+                    />
+                  );
+                },
               },
               {
-                /* 生命周期状态与验证态**分成两列**，不合并（设计文件 §6.4）：
-                   合成一个字段之后，上线半年的产品一次复验失败就得被改回草稿——
-                   把监测信号变成破坏性动作。 */
+                /* 生命周期为主、验证态为辅。两者仍是两个事实（设计文件 §6.4 不合并字段），
+                   只是同一格上下展示。 */
                 id: "state",
-                header: "生命周期",
+                header: "状态",
                 sortable: true,
-                width: "xs",
-                cell: (r: ProductRecord) => (
-                  <StatusBadge tone={productStateMeta(r.state).tone} dot>
-                    {productStateMeta(r.state).label}
-                  </StatusBadge>
-                ),
-              },
-              {
-                id: "verification",
-                header: "验证态",
-                sortable: true,
-                width: "xs",
+                width: "sm",
                 cell: (r: ProductRecord) => {
                   const v = verificationOf(checklistByProduct[r.id] ?? []);
                   return (
-                    <StatusBadge tone={VERIFICATION_META[v].tone} dot>
-                      {VERIFICATION_META[v].label}
-                    </StatusBadge>
+                    <StackCell
+                      main={
+                        <StatusBadge tone={productStateMeta(r.state).tone} dot>
+                          {productStateMeta(r.state).label}
+                        </StatusBadge>
+                      }
+                      sub={VERIFICATION_META[v].label}
+                    />
                   );
                 },
+              },
+              {
+                id: "updated",
+                header: "更新时间",
+                sortable: true,
+                width: "sm",
+                cell: (r: ProductRecord) => (
+                  <span className="text-body-sm text-muted-foreground">
+                    {formatUpdatedAt(r.updatedAt, dateLocale)}
+                  </span>
+                ),
               },
             ]}
             rows={pager.pageRows}
@@ -820,72 +931,122 @@ function ProductsPageContent() {
             selectedKeys={selectedKeys}
             onSelectionChange={setSelectedKeys}
             indexStart={pager.indexStart}
-            {...(canManage
-              ? {
-                  rowActions: (r: ProductRecord) => (
-                    <ActionMenu
-                      label={`${r.productName} 操作`}
-                      disabled={submitting}
-                      items={[
-                        {
-                          id: "edit",
-                          label: "配置详情",
-                          icon: "edit",
-                          onSelect: () => openDetail(r),
-                        },
-
-                        /* 生命周期动作由 `PRODUCT_ACTIONS` 那张表生成，破坏性
-                           与否也由表决定——所以这里按判别联合分流，而不是按 id
-                           硬分支。表里加一个 danger 动作却不写后果，编译不过。
-
-                           `target` 在这里拼而不在表里：表描述「这个动作是什么」，
-                           不描述「作用在谁身上」。 */
-                        ...actionsFor(r.state).map((a) =>
-                          a.danger
-                            ? {
-                                id: a.id,
-                                label: a.label,
-                                icon: a.icon,
-                                danger: true as const,
-                                separatorBefore:
-                                  a.id === "launch" || a.id === "suspend",
-                                confirm: withLabels({
-                                  verb: a.destructive.verb,
-                                  target: `产品 ${r.productName}`,
-                                  consequence: a.destructive.consequence,
-                                  onConfirm: () => applyLifecycle(r, a),
-                                }),
-                              }
-                            : {
-                                id: a.id,
-                                label: a.label,
-                                icon: a.icon,
-                                separatorBefore:
-                                  a.id === "launch" || a.id === "suspend",
-                                onSelect: () => runLifecycle(r, a),
-                              },
+            rowActions={(r: ProductRecord) => {
+              const code = encodeURIComponent(r.productCode);
+              const detail = "/product/catalog/" + code;
+              return (
+                <ActionMenu
+                  label={r.productName + " 操作"}
+                  disabled={submitting}
+                  items={[
+                    {
+                      id: "edit",
+                      label: "配置详情",
+                      icon: "edit",
+                      onSelect: () => openDetail(r),
+                    },
+                    /* 接入：跳产品页并直接打开对应面板（owner 2026-09-16 选定）——复用产品页的
+                       抽屉与深链，列表页不另存一份会漂的抽屉。 */
+                    {
+                      id: "checks",
+                      label: "接入检查",
+                      icon: "list-checks",
+                      separatorBefore: true,
+                      onSelect: () => router.push(detail + "?panel=checks"),
+                    },
+                    {
+                      id: "secrets",
+                      label: "密钥管理",
+                      icon: "key",
+                      onSelect: () => router.push(detail + "?panel=secrets"),
+                    },
+                    {
+                      id: "login",
+                      label: "登录接入",
+                      icon: "fingerprint",
+                      onSelect: () => router.push(detail + "#section-login"),
+                    },
+                    {
+                      id: "metrics",
+                      label: "计量指标",
+                      icon: "gauge",
+                      onSelect: () => router.push(detail + "#section-metrics"),
+                    },
+                    /* 授权：三处各管一段——权益配置看合集，路由 / 能力各去自己的域页。 */
+                    {
+                      id: "entitlements",
+                      label: "权益配置",
+                      icon: "ticket",
+                      separatorBefore: true,
+                      onSelect: () =>
+                        router.push(
+                          "/product/entitlements?productCode=" + code,
                         ),
-                        {
-                          /* 删除（两步）。红色、与退役之间加分隔线：退役是可见的终态
-                             「已退役」，删除是从目录彻底移除（软删）——两者不该挨在
-                             一起像同一档。走 `confirmExempt` 而不是 DS 的一次性
-                             `confirm`：删除的确认由专用对话框接管（先拉影响面预览再
-                             落锤，比一次性确认更重），confirmExempt 的必填理由把这层
-                             判断显式写下来（见 ActionMenuItemExempt）。 */
-                          id: "delete",
-                          label: "删除",
-                          icon: "trash" as const,
-                          danger: true as const,
-                          separatorBefore: true,
-                          confirmExempt:
-                            "两步删除自带确认：先拉影响面预览，再在专用对话框里落锤",
-                          onSelect: () => void openDeletion(r),
-                        },
-                      ]}
-                    />
-                  ),
-                }
-              : {})}
+                    },
+                    {
+                      id: "model-grants",
+                      label: "模型路由授权",
+                      icon: "plug",
+                      onSelect: () =>
+                        router.push("/model/grants?productCode=" + code),
+                    },
+                    {
+                      id: "capability-grants",
+                      label: "能力授权",
+                      icon: "shield",
+                      onSelect: () =>
+                        router.push("/capability/grants?productCode=" + code),
+                    },
+                    /* 生命周期与删除只给有管理权的人；上面的查看与跳转人人都有。
+                       生命周期动作由 PRODUCT_ACTIONS 那张表生成，破坏性与否也由表决定。 */
+                    ...(canManage
+                      ? [
+                          ...actionsFor(r.state).map((a, index) =>
+                            a.danger
+                              ? {
+                                  id: a.id,
+                                  label: a.label,
+                                  icon: a.icon,
+                                  danger: true as const,
+                                  separatorBefore:
+                                    index === 0 ||
+                                    a.id === "launch" ||
+                                    a.id === "suspend",
+                                  confirm: withLabels({
+                                    verb: a.destructive.verb,
+                                    target: "产品 " + r.productName,
+                                    consequence: a.destructive.consequence,
+                                    onConfirm: () => applyLifecycle(r, a),
+                                  }),
+                                }
+                              : {
+                                  id: a.id,
+                                  label: a.label,
+                                  icon: a.icon,
+                                  separatorBefore:
+                                    index === 0 ||
+                                    a.id === "launch" ||
+                                    a.id === "suspend",
+                                  onSelect: () => runLifecycle(r, a),
+                                },
+                          ),
+                          {
+                            /* 删除（两步）：先拉影响面预览，再在专用对话框里落锤。 */
+                            id: "delete",
+                            label: "删除",
+                            icon: "trash" as const,
+                            danger: true as const,
+                            separatorBefore: true,
+                            confirmExempt:
+                              "两步删除自带确认：先拉影响面预览，再在专用对话框里落锤",
+                            onSelect: () => void openDeletion(r),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              );
+            }}
             footer={pagination}
             empty={emptyState}
           />
@@ -992,5 +1153,107 @@ function ProductsPageContent() {
         )}
       </DialogForm>
     </>
+  );
+}
+
+/**
+ * 「接入配置」一格：边缘域名为主，登录渠道与计量指标数为辅；辅行点开是整份接入摘要。
+ * 字段都来自列表接口带出的 integration 摘要，不逐行再打请求。
+ */
+function IntegrationCell({
+  product,
+  locale,
+}: {
+  readonly product: ProductRecord;
+  readonly locale: Parameters<typeof productSurfaceLabel>[1];
+}) {
+  const s = product.integration;
+  const clients = s?.clients ?? [];
+  const metrics = s?.metricKeys ?? [];
+  const channels = [...new Set(clients.map((c) => c.channel))];
+  const visibility =
+    [
+      product.isCustomerVisible ? "客户域" : null,
+      product.isWorkforceVisible ? "运营域" : null,
+    ]
+      .filter((x): x is string => x !== null)
+      .join(" / ") || "—";
+  return (
+    <StackCell
+      main={
+        s?.edgeDomain ? (
+          <span className="font-mono text-code-sm">{s.edgeDomain}</span>
+        ) : (
+          <span className="text-muted-foreground">未配置边缘域名</span>
+        )
+      }
+      sub={
+        <ConfigPopover
+          trigger={
+            "登录 " +
+            (channels.length > 0 ? channels.join(" · ") : "未配置") +
+            " · 计量 " +
+            metrics.length
+          }
+          title={product.productName + " · 接入配置"}
+          rows={[
+            {
+              label: "边缘域名",
+              value: <MonoList items={s?.edgeDomain ? [s.edgeDomain] : []} />,
+            },
+            {
+              label: "边缘上游",
+              value: (
+                <MonoList items={s?.edgeUpstream ? [s.edgeUpstream] : []} />
+              ),
+            },
+            {
+              label: "回调地址",
+              value: <MonoList items={s?.webhookUrl ? [s.webhookUrl] : []} />,
+            },
+            {
+              label: "签名密钥",
+              value: s?.hasWebhookSecret ? "已登记" : "未登记",
+            },
+            {
+              label: "产品主页",
+              value: <MonoList items={s?.homeUrl ? [s.homeUrl] : []} />,
+            },
+            { label: "可见性", value: visibility },
+            {
+              label: "终端",
+              value:
+                product.surfaces.length > 0
+                  ? product.surfaces
+                      .map((x) =>
+                        productSurfaceLabel(
+                          x as Parameters<typeof productSurfaceLabel>[0],
+                          locale,
+                        ),
+                      )
+                      .join("、")
+                  : "—",
+            },
+            {
+              label: "登录客户端",
+              value: (
+                <MonoList
+                  items={clients.map(
+                    (c) =>
+                      c.clientId +
+                      " · " +
+                      c.channel +
+                      (c.state === "active" ? "" : " · 已停用"),
+                  )}
+                />
+              ),
+            },
+            { label: "计量指标", value: <MonoList items={metrics} /> },
+          ]}
+          href={"/product/catalog/" + encodeURIComponent(product.productCode)}
+          hrefLabel="去产品页配置"
+        />
+      }
+    />
   );
 }

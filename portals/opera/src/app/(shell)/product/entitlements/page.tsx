@@ -664,12 +664,54 @@ function ProductEntitlements() {
           title={`权益配置 · ${product?.productName ?? selectedCode}`}
           description="这个产品被授了什么。两个维度并排——产品能不能跑取决于两者的合集，分开配就意味着分开想。"
           action={
-            <Button variant="secondary" asChild>
-              <Link href="/product/entitlements">
-                <Icon name="arrow-left" size="sm" aria-hidden="true" />
-                返回清单
-              </Link>
-            </Button>
+            <div className="flex items-center gap-sm">
+              <Button variant="secondary" asChild>
+                <Link href="/product/entitlements">
+                  <Icon name="arrow-left" size="sm" aria-hidden="true" />
+                  返回清单
+                </Link>
+              </Button>
+              {/* 在目录里的产品，常用的接入操作直达产品页对应面板（owner 2026-09-16）。 */}
+              {product ? (
+                <>
+                  <Button variant="outline" asChild>
+                    <Link
+                      href={
+                        "/product/catalog/" +
+                        encodeURIComponent(product.productCode)
+                      }
+                    >
+                      <Icon name="edit" size="sm" aria-hidden="true" />
+                      产品配置
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link
+                      href={
+                        "/product/catalog/" +
+                        encodeURIComponent(product.productCode) +
+                        "?panel=checks"
+                      }
+                    >
+                      <Icon name="list-checks" size="sm" aria-hidden="true" />
+                      接入检查
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link
+                      href={
+                        "/product/catalog/" +
+                        encodeURIComponent(product.productCode) +
+                        "?panel=secrets"
+                      }
+                    >
+                      <Icon name="key" size="sm" aria-hidden="true" />
+                      密钥管理
+                    </Link>
+                  </Button>
+                </>
+              ) : null}
+            </div>
           }
         />
 

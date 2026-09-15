@@ -743,6 +743,42 @@ export function ProductDetailPage({
   const derivedDomain = `${draft?.productCode.trim() || product?.productCode || "acme"}.vxture.com`;
   const domainForHints = edgeDraft?.edgeDomain.trim() || derivedDomain;
 
+  /* 授权三处各管一段：权益配置看合集，路由 / 能力各去自己的域页（带上本产品筛选）。 */
+  const productJumps = product
+    ? [
+        {
+          id: "entitlements",
+          label: "权益配置",
+          icon: "ticket" as const,
+          onSelect: () =>
+            router.push(
+              "/product/entitlements?productCode=" +
+                encodeURIComponent(product.productCode),
+            ),
+        },
+        {
+          id: "model-grants",
+          label: "模型路由授权",
+          icon: "plug" as const,
+          onSelect: () =>
+            router.push(
+              "/model/grants?productCode=" +
+                encodeURIComponent(product.productCode),
+            ),
+        },
+        {
+          id: "capability-grants",
+          label: "能力授权",
+          icon: "shield" as const,
+          onSelect: () =>
+            router.push(
+              "/capability/grants?productCode=" +
+                encodeURIComponent(product.productCode),
+            ),
+        },
+      ]
+    : [];
+
   const header = (
     <ViewHeader
       icon="package"
@@ -769,47 +805,79 @@ export function ProductDetailPage({
               返回目录
             </Link>
           </Button>
-          {product && canManage && lifecycleActions.length > 0 ? (
+          {/* 常用操作提到头部（owner 2026-09-16「操作区减得太过分」）：页面很长，
+              底部那组按钮要滚到底才看得到。底部的保留，两处打开的是同一个抽屉。 */}
+          {product ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCheckOpen(true)}
+              >
+                <Icon name="list-checks" size="xs" aria-hidden="true" />
+                接入检查
+                {pendingRequired.length > 0 ? (
+                  <Badge variant="outline">{pendingRequired.length}</Badge>
+                ) : null}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSecretsOpen(true)}
+              >
+                <Icon name="key" size="xs" aria-hidden="true" />
+                密钥管理
+              </Button>
+            </>
+          ) : null}
+          {product ? (
             <ActionMenu
-              label={`${product.productName} 生命周期动作`}
+              label={`${product.productName} 操作`}
               disabled={applying}
-              items={lifecycleActions.map((action) =>
-                action.id === "launch"
-                  ? {
-                      /* 上线只有一条路：接入检查抽屉里的「确认上线」，它会先重跑复验。
-                         菜单里这一项把抽屉打开，而不是另走一遍没有复验的状态切换。 */
-                      id: action.id,
-                      label: action.label,
-                      icon: action.icon,
-                      onSelect: () => setCheckOpen(true),
-                    }
-                  : action.danger
+              items={[
+                ...productJumps,
+                ...(canManage ? lifecycleActions : []).map((action, index) =>
+                  action.id === "launch"
                     ? {
+                        /* 上线只有一条路：接入检查抽屉里的「确认上线」，它会先重跑复验。
+                         菜单里这一项把抽屉打开，而不是另走一遍没有复验的状态切换。 */
                         id: action.id,
+                        separatorBefore: index === 0,
                         label: action.label,
                         icon: action.icon,
-                        danger: true as const,
-                        confirm: {
-                          verb: action.destructive.verb,
-                          target: product.productName,
-                          consequence: action.destructive.consequence,
-                          onConfirm: () => void applyLifecycle(action),
-                        },
+                        onSelect: () => setCheckOpen(true),
                       }
-                    : action.advisory
+                    : action.danger
                       ? {
                           id: action.id,
+                          separatorBefore: index === 0,
                           label: action.label,
                           icon: action.icon,
-                          onSelect: () => setAdvisory(action),
+                          danger: true as const,
+                          confirm: {
+                            verb: action.destructive.verb,
+                            target: product.productName,
+                            consequence: action.destructive.consequence,
+                            onConfirm: () => void applyLifecycle(action),
+                          },
                         }
-                      : {
-                          id: action.id,
-                          label: action.label,
-                          icon: action.icon,
-                          onSelect: () => void applyLifecycle(action),
-                        },
-              )}
+                      : action.advisory
+                        ? {
+                            id: action.id,
+                            separatorBefore: index === 0,
+                            label: action.label,
+                            icon: action.icon,
+                            onSelect: () => setAdvisory(action),
+                          }
+                        : {
+                            id: action.id,
+                            separatorBefore: index === 0,
+                            label: action.label,
+                            icon: action.icon,
+                            onSelect: () => void applyLifecycle(action),
+                          },
+                ),
+              ]}
             />
           ) : null}
         </div>
