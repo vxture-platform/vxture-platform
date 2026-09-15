@@ -195,6 +195,26 @@ export interface CapabilityPage {
   total: number;
 }
 
+/** 能力目录某一列的一个值，以及目录里有多少条是它。 */
+export interface CatalogFacetCount {
+  value: string;
+  count: number;
+}
+
+/**
+ * runos `/capability/capability-facets`：各筛选列在**全目录**上的取值与计数。
+ * 键就是 `/capability/capabilities` 的查询参数名——面板上勾一个值，直接落成同名参数。
+ */
+export interface CatalogFacets {
+  primitiveType: CatalogFacetCount[];
+  category: CatalogFacetCount[];
+  providerId: CatalogFacetCount[];
+  admissionTier: CatalogFacetCount[];
+  ownerRef: CatalogFacetCount[];
+  /** 标签：同一条能力带几个标签就各算一次。对应的查询参数是可重复的 `tag`（全部命中）。 */
+  tag: CatalogFacetCount[];
+}
+
 export interface CapabilityRecord {
   capabilityId: string;
   primitiveType: string;
@@ -578,25 +598,41 @@ export class RunosRouter {
   @Get("capabilities")
   async listCapabilities(
     @Req() req: Request & RequestContext,
-    @Query("category") category?: string,
+    @Query("category") category?: string | string[],
     @Query("tag") tag?: string | string[],
-    @Query("primitiveType") primitiveType?: string,
+    @Query("primitiveType") primitiveType?: string | string[],
     @Query("q") q?: string,
     @Query("limit") limit?: string,
     @Query("cursor") cursor?: string,
     @Query("dir") dir?: string,
+    /* 追加在末尾：规格按位置调用这个方法，插在中间会把 limit / cursor / dir 挤错位。 */
+    @Query("providerId") providerId?: string | string[],
+    @Query("admissionTier") admissionTier?: string | string[],
+    @Query("ownerRef") ownerRef?: string | string[],
   ): Promise<CapabilityPage> {
     assertCanRead(req);
     const params = new URLSearchParams();
-    if (category) params.set("category", category);
+    /* 这五列在 runos 侧是**可重复参数、任一命中**（筛选面板是勾选框）。一个值与多个值同一种写法。 */
+    for (const [key, value] of [
+      ["category", category],
+      ["primitiveType", primitiveType],
+      ["providerId", providerId],
+      ["admissionTier", admissionTier],
+      ["ownerRef", ownerRef],
+    ] as const) {
+      for (const v of Array.isArray(value) ? value : value ? [value] : []) {
+        if (v) params.append(key, v);
+      }
+    }
     for (const t of Array.isArray(tag) ? tag : tag ? [tag] : []) {
       if (t) params.append("tag", t);
     }
     /* `primitiveType` 与 `q` 也下推。控制台此前在浏览器里过滤它一次拉回的整个目录，
        服务端一分页那两个筛选就只在当前页上生效——匹配项在第 7 页，表格说「没有」。
        **搜不到和不存在在界面上一模一样**，所以它们必须跟着分页一起下去。 */
-    if (primitiveType) params.set("primitiveType", primitiveType);
     if (q) params.set("q", q);
+    /* 来源 / 准入等级 / Owner 同理下推（runos 2026-09-15 起接这三个参数）：筛选面板勾的
+       是全目录的值，只在当前页上筛等于告诉用户第 2 页以后「没有」。 */
     /* 原样转交，不在这里兜底成默认值:`?limit=abc` 该由 runos 回
        `REGISTRY_INVALID_LIMIT`。BFF 替它挑一个数，等于把调用方的错误变成一个它以为
        自己要到了的页。 */
@@ -612,6 +648,21 @@ export class RunosRouter {
       `/capability/capabilities${params.size ? `?${params.toString()}` : ""}`,
       { contract: "capabilities" },
     );
+  }
+
+  /**
+   * 能力注册页筛选面板的选项：各筛选列在全目录上有哪些值、各多少条。
+   *
+   * Provider 与 Owner 是开放集合，前端写不死；从手上这一页读，又只会列出第一页里出现过
+   * 的 Provider。计数**不随已选筛选变化**——它回答「这个值占目录多少」，不会在用户勾选
+   * 时跟着跳。
+   */
+  @Get("capability-facets")
+  getCapabilityFacets(
+    @Req() req: Request & RequestContext,
+  ): Promise<CatalogFacets> {
+    assertCanRead(req);
+    return this.request<CatalogFacets>(req, "/capability/capability-facets");
   }
 
   @Get("capabilities/:capabilityId")

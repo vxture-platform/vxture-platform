@@ -19,6 +19,7 @@
  * mode 仍只接受 "account-scoped"：per-caller 依赖平台侧 RFC 8693 token
  * exchange（`vxture-platform#226`，未落地），runos 会直接拒。 */
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   useCallback,
@@ -30,24 +31,30 @@ import {
 } from "react";
 import {
   ActionMenu,
-  Badge,
   Banner,
   Button,
   DataTable,
+  DetailList,
+  DetailRow,
   DialogForm,
+  Drawer,
   EmptyState,
   Field,
-  FieldDescription,
   FieldGroup,
   FieldTier,
   FieldLabel,
   FilterBar,
+  FilterPanel,
+  FilterPanelTrigger,
+  countFilterPanelValue,
+  type FilterPanelValue,
   Icon,
   Input,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   ListPageTemplate,
+  Section,
   StatusBadge,
   TableTitleCell,
   ViewHeader,
@@ -65,6 +72,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 
 const MANAGE = "capability:runos.manage";
 
@@ -136,8 +144,8 @@ type LoadState =
 /**
  * 深链(`vxture-platform#17` §4):`?bindingId=<uuid>` 把关键词框预填成那个绑定 id。
  *
- * 这一页**没有详情抽屉**,所以深链落在过滤上而不是打开什么——「参数是定位,不是详情
- * 路由」。装一个假的详情跳转,只会让调用方以为有个它其实进不去的地方。
+ * 命中时同时打开那一条的详情抽屉（2026-09-15 起这一页有详情抽屉了）；关键词框仍预填
+ * 那个 id，关掉抽屉后表格停在定位到的那一行上。
  *
  * 未命中时说出那个 id:一张空表读起来是「没有凭证绑定」,而那和「id 拼错了」
  * 「绑定被删了」在界面上一模一样。
@@ -170,6 +178,13 @@ function RunosCredentialsPageContent() {
   const [draft, setDraft] = useState<CredentialDraft>(EMPTY_DRAFT);
   const [secretInput, setSecretInput] = useState("");
   const [scopeInput, setScopeInput] = useState("");
+  /* 勾选筛选（DS FilterPanel）。凭证清单一次全量取回，四个维度都在本地筛。 */
+  const [facetValue, setFacetValue] = useState<FilterPanelValue>({});
+  const [filterOpen, setFilterOpen] = useState(false);
+  /** 详情抽屉里看的那一条。null = 抽屉关着。 */
+  const [detailRow, setDetailRow] = useState<CredentialBindingRecord | null>(
+    null,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const reload = useCallback(async () => {
@@ -193,17 +208,52 @@ function RunosCredentialsPageContent() {
     void reload();
   }, [reload]);
 
+  /**
+   * 面板的维度与计数。清单是一次全量取回的，所以计数就是全量的——不存在「只看得到
+   * 第一页里有哪些 Provider」的问题。
+   */
+  const facets = useMemo(() => {
+    const options = (pick: (r: CredentialBindingRecord) => string) => {
+      const counts = new Map<string, number>();
+      for (const r of rows) counts.set(pick(r), (counts.get(pick(r)) ?? 0) + 1);
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([value, count]) => ({ value, label: value, count }));
+    };
+    return [
+      {
+        id: "providerId",
+        label: "来源（Provider）",
+        options: options((r) => r.providerId),
+      },
+      {
+        id: "credentialClass",
+        label: "凭证类别",
+        options: options((r) => r.credentialClass),
+      },
+      { id: "state", label: "状态", options: options((r) => r.state) },
+      { id: "mode", label: "模式", options: options((r) => r.mode) },
+    ];
+  }, [rows]);
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    return kw === ""
-      ? rows
-      : rows.filter(
-          (r) =>
-            r.credentialClass.toLowerCase().includes(kw) ||
-            r.providerId.toLowerCase().includes(kw) ||
-            r.appliesTo.some((c) => c.toLowerCase().includes(kw)),
-        );
-  }, [rows, keyword]);
+    /* 维度内任一、维度间都要——面板的读法。 */
+    const pass = (id: string, value: string) => {
+      const chosen = facetValue[id] ?? [];
+      return chosen.length === 0 || chosen.includes(value);
+    };
+    return rows.filter(
+      (r) =>
+        pass("providerId", r.providerId) &&
+        pass("credentialClass", r.credentialClass) &&
+        pass("state", r.state) &&
+        pass("mode", r.mode) &&
+        (kw === "" ||
+          r.credentialClass.toLowerCase().includes(kw) ||
+          r.providerId.toLowerCase().includes(kw) ||
+          r.appliesTo.some((c) => c.toLowerCase().includes(kw))),
+    );
+  }, [rows, keyword, facetValue]);
 
   /* 等 `load.kind === "ready"` 再判：rows 还空着时任何 id 都会被判成找不到，
      那条 Banner 会每次进页面闪一下再消失——比没有提示更糟，它教人忽略提示。 */
@@ -212,9 +262,9 @@ function RunosCredentialsPageContent() {
   useEffect(() => {
     if (deepLinkDone || !deepLinkTarget || load.kind !== "ready") return;
     setDeepLinkDone(true);
-    if (!rows.some((r) => r.bindingId === deepLinkTarget)) {
-      setDeepLinkMiss(deepLinkTarget);
-    }
+    const hit = rows.find((r) => r.bindingId === deepLinkTarget);
+    if (hit) setDetailRow(hit);
+    else setDeepLinkMiss(deepLinkTarget);
   }, [deepLinkDone, deepLinkTarget, load.kind, rows]);
 
   const bindingSortAccessors = useMemo<
@@ -224,7 +274,6 @@ function RunosCredentialsPageContent() {
       class: (r) => r.credentialClass,
       appliesTo: (r) => r.appliesTo.length,
       rotated: (r) => r.rotatedAt,
-      mode: (r) => r.mode,
       state: (r) => r.state,
     }),
     [],
@@ -357,7 +406,8 @@ function RunosCredentialsPageContent() {
           </Button>
         }
       />
-    ) : filtered.length !== rows.length ? (
+    ) : filtered.length !== rows.length ||
+      countFilterPanelValue(facetValue) > 0 ? (
       <EmptyState
         title="没有匹配的凭证"
         description={tShared("common.noMatchKeywordHint")}
@@ -422,6 +472,7 @@ function RunosCredentialsPageContent() {
             resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
+              setFacetValue({});
               pager.resetPage();
             }}
             actions={
@@ -435,7 +486,13 @@ function RunosCredentialsPageContent() {
                 </ActionButton>
               ) : null
             }
-          />
+          >
+            <FilterPanelTrigger
+              label="筛选"
+              activeCount={countFilterPanelValue(facetValue)}
+              onClick={() => setFilterOpen(true)}
+            />
+          </FilterBar>
         }
         table={
           <DataTable
@@ -443,7 +500,7 @@ function RunosCredentialsPageContent() {
             columns={[
               {
                 id: "class",
-                header: "凭证类别",
+                header: "凭证",
                 sortable: true,
                 cell: (r: CredentialBindingRecord) => (
                   <TableTitleCell
@@ -451,21 +508,40 @@ function RunosCredentialsPageContent() {
                     title={
                       <span className="font-mono">{r.credentialClass}</span>
                     }
-                    description={`Provider ${r.providerId}`}
+                    description={r.providerId}
+                    onTitleClick={() => setDetailRow(r)}
                   />
                 ),
               },
               {
                 id: "appliesTo",
-                header: "适用能力",
+                header: "适用范围",
                 sortable: true,
+                width: "sm",
                 cell: (r: CredentialBindingRecord) => (
-                  <span className="text-body-sm text-muted-foreground">
-                    {r.appliesTo.length === 0
-                      ? "—"
-                      : r.appliesTo.length <= 2
-                        ? r.appliesTo.join("、")
-                        : `${r.appliesTo.slice(0, 2).join("、")} 等 ${r.appliesTo.length} 个`}
+                  <span className="inline-flex flex-col items-center gap-2xs">
+                    <span>{r.appliesTo.length} 个能力</span>
+                    {r.subjectScope ? (
+                      <span className="text-body-sm text-muted-foreground">
+                        {r.subjectScope}
+                      </span>
+                    ) : null}
+                  </span>
+                ),
+              },
+              {
+                id: "state",
+                header: tShared("columns.state"),
+                sortable: true,
+                width: "sm",
+                cell: (r: CredentialBindingRecord) => (
+                  <span className="inline-flex flex-col items-center gap-2xs">
+                    <StatusBadge tone={STATE_TONE[r.state] ?? "neutral"} dot>
+                      {r.state}
+                    </StatusBadge>
+                    <span className="text-body-sm text-muted-foreground">
+                      {r.mode}
+                    </span>
                   </span>
                 ),
               },
@@ -476,26 +552,6 @@ function RunosCredentialsPageContent() {
                 width: "sm",
                 cell: (r: CredentialBindingRecord) =>
                   formatTime(r.rotatedAt, locale),
-              },
-              {
-                id: "mode",
-                header: "模式",
-                sortable: true,
-                width: "xs",
-                cell: (r: CredentialBindingRecord) => (
-                  <Badge variant="secondary">{r.mode}</Badge>
-                ),
-              },
-              {
-                id: "state",
-                header: tShared("columns.state"),
-                sortable: true,
-                width: "xs",
-                cell: (r: CredentialBindingRecord) => (
-                  <StatusBadge tone={STATE_TONE[r.state] ?? "neutral"} dot>
-                    {r.state}
-                  </StatusBadge>
-                ),
               },
             ]}
             rows={pager.pageRows}
@@ -508,13 +564,19 @@ function RunosCredentialsPageContent() {
             selectedKeys={selected}
             onSelectionChange={setSelected}
             indexStart={pager.indexStart}
-            {...(canManage
-              ? {
-                  rowActions: (r: CredentialBindingRecord) => (
-                    <ActionMenu
-                      label={`${r.credentialClass} 操作`}
-                      disabled={submitting}
-                      items={[
+            rowActions={(r: CredentialBindingRecord) => (
+              <ActionMenu
+                label={`${r.credentialClass} 操作`}
+                disabled={submitting}
+                items={
+                  canManage
+                    ? [
+                        {
+                          id: "detail",
+                          label: "查看详情",
+                          icon: "eye",
+                          onSelect: () => setDetailRow(r),
+                        },
                         {
                           id: "rotate",
                           label: "轮换",
@@ -548,11 +610,18 @@ function RunosCredentialsPageContent() {
                             onConfirm: () => revokeBinding(r),
                           }),
                         },
-                      ]}
-                    />
-                  ),
+                      ]
+                    : [
+                        {
+                          id: "detail",
+                          label: "查看详情",
+                          icon: "eye",
+                          onSelect: () => setDetailRow(r),
+                        },
+                      ]
                 }
-              : {})}
+              />
+            )}
             footer={
               <ListPagination
                 className="w-full"
@@ -570,12 +639,88 @@ function RunosCredentialsPageContent() {
         }
       />
 
+      <FilterPanel
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        title="筛选凭证"
+        applyLabel="应用"
+        clearLabel="清空"
+        closeLabel="关闭"
+        emptyLabel="暂无可选值"
+        facets={facets}
+        value={facetValue}
+        onApply={(next) => {
+          setFacetValue(next);
+          pager.resetPage();
+        }}
+      />
+
+      {/* ── 详情（只读）：密文从不回显，所以这里只有绑定本身的事实 ──────────── */}
+      <Drawer
+        open={detailRow !== null}
+        onClose={() => setDetailRow(null)}
+        width="lg"
+        title={detailRow ? `凭证 · ${detailRow.credentialClass}` : "凭证"}
+        description="密文从不回显。换值用「轮换」，改覆盖面用「调整适用范围」。"
+        closeLabel="关闭"
+      >
+        {detailRow ? (
+          <div className="flex flex-col gap-xl">
+            <DetailList>
+              <DetailRow label="凭证类别">
+                <span className="font-mono">{detailRow.credentialClass}</span>
+              </DetailRow>
+              <DetailRow label="来源（Provider）">
+                {detailRow.providerId}
+              </DetailRow>
+              <DetailRow label="状态">
+                <StatusBadge
+                  tone={STATE_TONE[detailRow.state] ?? "neutral"}
+                  dot
+                >
+                  {detailRow.state}
+                </StatusBadge>
+              </DetailRow>
+              <DetailRow label="模式">{detailRow.mode}</DetailRow>
+              {detailRow.subjectScope ? (
+                <DetailRow label="主体范围">{detailRow.subjectScope}</DetailRow>
+              ) : null}
+              <DetailRow label="录入时间">
+                {formatTime(detailRow.createdAt, locale)}
+              </DetailRow>
+              <DetailRow label="上次轮换">
+                {formatTime(detailRow.rotatedAt, locale)}
+              </DetailRow>
+            </DetailList>
+            <Section
+              title={`适用能力（${detailRow.appliesTo.length}）`}
+              icon="stack"
+              level={3}
+            >
+              <ul className="flex flex-col gap-2xs">
+                {detailRow.appliesTo.map((capabilityId) => (
+                  <li key={capabilityId}>
+                    <Link
+                      href={`/capability/registry?capabilityId=${encodeURIComponent(capabilityId)}`}
+                      className="font-mono text-code-sm text-primary hover:underline"
+                    >
+                      {capabilityId}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          </div>
+        ) : null}
+      </Drawer>
+
       {/* ── 录入 ─────────────────────────────────────────────────────────── */}
       <DialogForm
         open={dialog?.kind === "create"}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
         }}
+        size="lg"
         title="录入凭证"
         description="明文只在这一次经过；提交后立即加密落库，之后只能轮换、不能查看。"
         submitLabel="录入"
@@ -584,80 +729,93 @@ function RunosCredentialsPageContent() {
         onSubmit={submit}
         cancelLabel={tShared("actions.cancel")}
       >
-        <FieldGroup>
-          {/* 两档（DS `FieldTier`）。**没有高级档**：四项都必填，凑一个空档只是把
-              规则抄一遍。 */}
-          <FieldTier
-            tier="identity"
-            hint="类别须与目标能力 credentialRequirements[].credentialClass 对上，对不上则这条凭证永远不会被取用。"
-          >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="cred-class">凭证类别</FieldLabel>
-                <Input
-                  id="cred-class"
-                  value={draft.credentialClass}
-                  onChange={(e) =>
-                    setDraft({ ...draft, credentialClass: e.target.value })
-                  }
-                  placeholder="github-oauth"
-                  className="font-mono"
-                />
-                <FieldDescription>
-                  须与目标能力的 credentialRequirements[].credentialClass 对应。
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="cred-provider">Provider</FieldLabel>
-                <Input
-                  id="cred-provider"
-                  value={draft.providerId}
-                  onChange={(e) =>
-                    setDraft({ ...draft, providerId: e.target.value })
-                  }
-                  placeholder="github"
-                />
-              </Field>
-            </FieldGroup>
-          </FieldTier>
+        {/* 两档（DS FieldTier），每档一行两条（lg 面板）。四项都必填，所以没有高级档。 */}
+        <FieldTier
+          tier="identity"
+          hint="类别须与目标能力的 credentialRequirements[].credentialClass 对上，否则这条凭证永远不会被取用。"
+        >
+          <FieldGroup columns={2}>
+            <Field>
+              <FieldLabel
+                htmlFor="cred-class"
+                required
+                hint="须与目标能力 credentialRequirements[].credentialClass 对应。"
+                {...FIELD_LABEL_A11Y}
+              >
+                凭证类别
+              </FieldLabel>
+              <Input
+                id="cred-class"
+                value={draft.credentialClass}
+                onChange={(e) =>
+                  setDraft({ ...draft, credentialClass: e.target.value })
+                }
+                placeholder="github-oauth"
+                className="font-mono"
+              />
+            </Field>
+            <Field>
+              <FieldLabel
+                htmlFor="cred-provider"
+                required
+                {...FIELD_LABEL_A11Y}
+              >
+                Provider
+              </FieldLabel>
+              <Input
+                id="cred-provider"
+                value={draft.providerId}
+                onChange={(e) =>
+                  setDraft({ ...draft, providerId: e.target.value })
+                }
+                placeholder="github"
+              />
+            </Field>
+          </FieldGroup>
+        </FieldTier>
 
-          <FieldTier
-            tier="details"
-            title="适用范围与明文"
-            hint="明文只在这一次提交时经过控制台，之后任何页面都读不回来。"
-          >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="cred-applies">
-                  适用的 Capability（逗号分隔）
-                </FieldLabel>
-                <Input
-                  id="cred-applies"
-                  value={draft.appliesTo}
-                  onChange={(e) =>
-                    setDraft({ ...draft, appliesTo: e.target.value })
-                  }
-                  placeholder="arda.github-connector, arda.gitlab-connector"
-                />
-                <FieldDescription>至少一个。</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="cred-secret">凭证明文</FieldLabel>
-                <Input
-                  id="cred-secret"
-                  type="password"
-                  value={draft.secretMaterial}
-                  onChange={(e) =>
-                    setDraft({ ...draft, secretMaterial: e.target.value })
-                  }
-                  placeholder="ghp_…"
-                  autoComplete="off"
-                  className="font-mono"
-                />
-              </Field>
-            </FieldGroup>
-          </FieldTier>
-        </FieldGroup>
+        <FieldTier
+          tier="details"
+          title="适用范围与明文"
+          hint="明文只在这一次提交时经过控制台，之后任何页面都读不回来。"
+        >
+          <FieldGroup columns={2}>
+            <Field>
+              <FieldLabel
+                htmlFor="cred-applies"
+                required
+                hint="逗号分隔，至少一个。"
+                {...FIELD_LABEL_A11Y}
+              >
+                适用的 Capability
+              </FieldLabel>
+              <Input
+                id="cred-applies"
+                value={draft.appliesTo}
+                onChange={(e) =>
+                  setDraft({ ...draft, appliesTo: e.target.value })
+                }
+                placeholder="arda.github-connector, arda.gitlab-connector"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="cred-secret" required {...FIELD_LABEL_A11Y}>
+                凭证明文
+              </FieldLabel>
+              <Input
+                id="cred-secret"
+                type="password"
+                value={draft.secretMaterial}
+                onChange={(e) =>
+                  setDraft({ ...draft, secretMaterial: e.target.value })
+                }
+                placeholder="ghp_…"
+                autoComplete="off"
+                className="font-mono"
+              />
+            </Field>
+          </FieldGroup>
+        </FieldTier>
       </DialogForm>
 
       {/* ── 轮换 ─────────────────────────────────────────────────────────── */}
@@ -680,7 +838,9 @@ function RunosCredentialsPageContent() {
         cancelLabel={tShared("actions.cancel")}
       >
         <Field>
-          <FieldLabel htmlFor="rotate-secret">新的凭证明文</FieldLabel>
+          <FieldLabel htmlFor="rotate-secret" required {...FIELD_LABEL_A11Y}>
+            新的凭证明文
+          </FieldLabel>
           <Input
             id="rotate-secret"
             type="password"
@@ -712,8 +872,13 @@ function RunosCredentialsPageContent() {
         cancelLabel={tShared("actions.cancel")}
       >
         <Field>
-          <FieldLabel htmlFor="scope-list">
-            适用的 Capability（逗号分隔）
+          <FieldLabel
+            htmlFor="scope-list"
+            required
+            hint="这条凭证会被注入到列出的每一个能力的出站调用里，改动即刻生效。逗号分隔。"
+            {...FIELD_LABEL_A11Y}
+          >
+            适用的 Capability
           </FieldLabel>
           <Input
             id="scope-list"
@@ -721,9 +886,6 @@ function RunosCredentialsPageContent() {
             onChange={(e) => setScopeInput(e.target.value)}
             className="font-mono"
           />
-          <FieldDescription>
-            这条凭证会被注入到列出的每一个能力的出站调用里，改动即刻生效。
-          </FieldDescription>
         </Field>
       </DialogForm>
     </>
