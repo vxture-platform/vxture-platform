@@ -154,7 +154,6 @@ export function ProductMetricsSection({
     () => ({
       metricKey: (r) => r.metricKey,
       strategy: (r) => r.mergeStrategy,
-      unit: (r) => r.metricUnit,
       reset: (r) => r.resetPeriod,
     }),
     [],
@@ -344,6 +343,9 @@ export function ProductMetricsSection({
                     <TableTitleCell
                       icon="gauge"
                       title={<span className="font-mono">{r.metricKey}</span>}
+                      description={
+                        r.metricUnit ? `单位 ${r.metricUnit}` : "无单位"
+                      }
                     />
                   ),
                 },
@@ -352,19 +354,13 @@ export function ProductMetricsSection({
                   header: "合并策略",
                   sortable: true,
                   cell: (r) => (
-                    <div className="flex items-center gap-xs">
+                    <div className="flex items-center justify-center gap-xs">
                       <Badge variant="outline">{r.mergeStrategy}</Badge>
                       {r.consumeMode ? (
                         <Badge variant="secondary">{r.consumeMode}</Badge>
                       ) : null}
                     </div>
                   ),
-                },
-                {
-                  id: "unit",
-                  header: "单位",
-                  sortable: true,
-                  cell: (r) => r.metricUnit ?? "—",
                 },
                 {
                   id: "reset",

@@ -246,7 +246,6 @@ export default function JobSchedulerPage() {
     () => ({
       jobName: (r) => r.jobName,
       lastStarted: (r) => r.lastStartedAt,
-      interval: (r) => r.intervalMs,
       duration: (r) => r.lastDurationMs,
       items: (r) => r.lastItemsProcessed,
       counts: (r) => r.failureCount,
@@ -396,7 +395,11 @@ export default function JobSchedulerPage() {
                   header: "作业",
                   sortable: true,
                   cell: (r: JobHeartbeatItem) => (
-                    <TableTitleCell icon="workflow" title={r.jobName} />
+                    <TableTitleCell
+                      icon="workflow"
+                      title={r.jobName}
+                      description={`心跳间隔 ${formatIntervalMs(r.intervalMs)}`}
+                    />
                   ),
                 },
                 {
@@ -426,14 +429,6 @@ export default function JobSchedulerPage() {
                         —
                       </span>
                     ),
-                },
-                {
-                  id: "interval",
-                  header: "心跳间隔",
-                  sortable: true,
-                  align: "numeric",
-                  width: "xs",
-                  cell: (r: JobHeartbeatItem) => formatIntervalMs(r.intervalMs),
                 },
                 {
                   id: "duration",

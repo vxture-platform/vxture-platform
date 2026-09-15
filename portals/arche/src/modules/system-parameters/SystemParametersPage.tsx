@@ -63,6 +63,7 @@ function columnsOf(
       sortable: true,
       cell: (item) => (
         <TableTitleCell
+          icon="settings"
           title={item.configKey}
           {...(item.description ? { description: item.description } : {})}
         />

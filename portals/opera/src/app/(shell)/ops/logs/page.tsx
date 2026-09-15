@@ -40,7 +40,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
-  Badge,
   Banner,
   Button,
   DataTable,
@@ -59,6 +58,7 @@ import {
   useToast,
   type StatusBadgeTone,
   ActionButton,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
@@ -307,7 +307,6 @@ export default function LogsPage() {
   >(
     () => ({
       time: (r) => r.time,
-      source: (r) => r.source,
       level: (r) => (({ info: 0, warn: 1, error: 2 }) as const)[r.level],
     }),
     [],
@@ -526,11 +525,15 @@ export default function LogsPage() {
           labels={tableLabels}
           columns={[
             {
-              id: "time",
-              header: tShared("columns.time"),
-              width: "sm",
-              cell: (r: AtlasRequestLogRecord) =>
-                formatTime(r.createdAt, locale),
+              id: "model",
+              header: "模型 / Provider",
+              cell: (r: AtlasRequestLogRecord) => (
+                <TableTitleCell
+                  icon="brain"
+                  title={r.modelCode ?? "—"}
+                  description={r.providerCode ?? "—"}
+                />
+              ),
             },
             {
               id: "requestId",
@@ -572,19 +575,6 @@ export default function LogsPage() {
                 ),
             },
             {
-              id: "model",
-              header: "模型 / Provider",
-              cell: (r: AtlasRequestLogRecord) => (
-                <span className="text-body-sm">
-                  {r.modelCode ?? "—"}
-                  <span className="text-muted-foreground">
-                    {" / "}
-                    {r.providerCode ?? "—"}
-                  </span>
-                </span>
-              ),
-            },
-            {
               id: "tokens",
               header: "Token（入/出）",
               align: "numeric",
@@ -609,6 +599,13 @@ export default function LogsPage() {
                   {r.status}
                 </StatusBadge>
               ),
+            },
+            {
+              id: "time",
+              header: tShared("columns.time"),
+              width: "sm",
+              cell: (r: AtlasRequestLogRecord) =>
+                formatTime(r.createdAt, locale),
             },
           ]}
           rows={atlasRows}
@@ -708,25 +705,16 @@ export default function LogsPage() {
           labels={tableLabels}
           columns={[
             {
-              id: "time",
-              header: tShared("columns.time"),
-              width: "sm",
-              cell: (r: PlatformLogRow) => formatTime(r.time, locale),
-              sortable: true,
-            },
-            {
-              id: "source",
-              header: tShared("columns.source"),
-              sortable: true,
-              width: "xs",
-              cell: (r: PlatformLogRow) => (
-                <Badge variant="secondary">{r.source}</Badge>
-              ),
-            },
-            {
               id: "message",
               header: "内容",
-              cell: (r: PlatformLogRow) => r.message,
+              cell: (r: PlatformLogRow) => (
+                <TableTitleCell
+                  icon="terminal"
+                  title={r.message}
+                  description={r.source}
+                  tooltip={r.message}
+                />
+              ),
             },
             {
               id: "level",
@@ -738,6 +726,13 @@ export default function LogsPage() {
                   {LOG_LEVEL_META[r.level].label}
                 </StatusBadge>
               ),
+            },
+            {
+              id: "time",
+              header: tShared("columns.time"),
+              width: "sm",
+              cell: (r: PlatformLogRow) => formatTime(r.time, locale),
+              sortable: true,
             },
           ]}
           rows={pager.pageRows}

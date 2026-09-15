@@ -603,7 +603,7 @@ function ProductGrantsPageContent() {
                 width: "sm",
                 cell: (r: ProductGrantRecord) =>
                   r.applicationId ? (
-                    <span className="flex flex-col gap-2xs">
+                    <span className="flex flex-col items-center gap-2xs">
                       <span className="text-code-sm">{r.applicationId}</span>
                       {r.applicationType ? (
                         <span className="text-body-sm text-muted-foreground">

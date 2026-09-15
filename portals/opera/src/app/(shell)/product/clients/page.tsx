@@ -333,7 +333,7 @@ function ProductClients() {
                           ? `/product/catalog/${encodeURIComponent(c.productCode)}#section-login`
                           : `/product/catalog?productId=${encodeURIComponent(c.productId)}`
                       }
-                      className="flex flex-col gap-2xs hover:text-primary-text"
+                      className="flex flex-col items-center gap-2xs hover:text-primary-text"
                     >
                       <span className="text-label-md">
                         {productName(c.productId) ?? c.productCode ?? "—"}
@@ -361,7 +361,7 @@ function ProductClients() {
                 id: "redirect",
                 header: "回调地址",
                 cell: (c: OidcClientRecord) => (
-                  <span className="flex flex-col gap-2xs">
+                  <span className="flex flex-col items-center gap-2xs">
                     {c.redirectUris.length === 0 ? (
                       <span className="text-muted-foreground">—</span>
                     ) : (

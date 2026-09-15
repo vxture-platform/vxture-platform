@@ -49,6 +49,7 @@ import {
   useToast,
   type StatusBadgeTone,
   ActionButton,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
@@ -376,19 +377,16 @@ export function RunosCallStreams({
           labels={tableLabels}
           columns={[
             {
-              id: "time",
-              header: tShared("columns.time"),
-              width: "sm",
-              cell: (r: CapabilityCallRecord) =>
-                formatTime(r.occurredAt, locale),
-            },
-            {
               id: "capability",
               header: "能力",
               cell: (r: CapabilityCallRecord) => (
-                <span className="font-mono text-code-sm">
-                  {r.capabilityId ?? "—"}
-                </span>
+                <TableTitleCell
+                  icon="stack"
+                  title={
+                    <span className="font-mono">{r.capabilityId ?? "—"}</span>
+                  }
+                  description={<span className="font-mono">{r.callId}</span>}
+                />
               ),
             },
             {
@@ -524,6 +522,13 @@ export function RunosCallStreams({
                   "—"
                 ),
             },
+            {
+              id: "time",
+              header: tShared("columns.time"),
+              width: "sm",
+              cell: (r: CapabilityCallRecord) =>
+                formatTime(r.occurredAt, locale),
+            },
           ]}
           rows={callRows}
           rowKey={(r) => r.eventId}
@@ -551,24 +556,16 @@ export function RunosCallStreams({
           labels={tableLabels}
           columns={[
             {
-              id: "time",
-              header: tShared("columns.time"),
-              width: "sm",
-              cell: (r: TaskOutcomeRecord) => formatTime(r.occurredAt, locale),
-            },
-            {
               id: "task",
               header: "任务",
               cell: (r: TaskOutcomeRecord) => (
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="font-mono text-code-sm"
-                  title="按这个任务串联上下两张表"
-                  onClick={() => onTaskIdChange(r.taskId)}
-                >
-                  {r.taskId}
-                </Button>
+                <TableTitleCell
+                  icon="workflow"
+                  title={<span className="font-mono">{r.taskId}</span>}
+                  description={r.agentId ?? "—"}
+                  tooltip="按这个任务串联上下两张表"
+                  onTitleClick={() => onTaskIdChange(r.taskId)}
+                />
               ),
             },
             {
@@ -593,12 +590,6 @@ export function RunosCallStreams({
               ),
             },
             {
-              id: "agent",
-              header: "Agent",
-              width: "sm",
-              cell: (r: TaskOutcomeRecord) => r.agentId ?? "—",
-            },
-            {
               id: "outcome",
               header: "自报结果",
               width: "xs",
@@ -607,6 +598,12 @@ export function RunosCallStreams({
                   {r.outcome}
                 </StatusBadge>
               ),
+            },
+            {
+              id: "time",
+              header: tShared("columns.time"),
+              width: "sm",
+              cell: (r: TaskOutcomeRecord) => formatTime(r.occurredAt, locale),
             },
           ]}
           rows={outcomeRows}

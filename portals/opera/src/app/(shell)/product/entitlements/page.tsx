@@ -71,6 +71,7 @@ import {
   ViewLayout,
   useToast,
   type StatusBadgeTone,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
@@ -512,7 +513,6 @@ function ProductEntitlements() {
   >(
     () => ({
       product: (r) => r.productCode,
-      source: (r) => r.source,
       object: (r) =>
         r.source === "atlas" ? r.grant.endpointCode : r.grant.capabilityId,
       state: (r) => r.grant.state,
@@ -714,12 +714,19 @@ function ProductEntitlements() {
                   id: "endpoint",
                   header: "路由",
                   cell: (g: RouteGrant) => (
-                    <Link
-                      href={`/model/routes?endpointCode=${encodeURIComponent(g.endpointCode)}`}
-                      className="font-mono text-code-sm hover:text-primary-text"
-                    >
-                      {g.endpointCode}
-                    </Link>
+                    <TableTitleCell
+                      icon="plug"
+                      title={
+                        <span className="font-mono">{g.endpointCode}</span>
+                      }
+                      description={g.applicationType ?? "产品下全部应用"}
+                      tooltip="打开模型路由"
+                      onTitleClick={() =>
+                        router.push(
+                          `/model/routes?endpointCode=${encodeURIComponent(g.endpointCode)}`,
+                        )
+                      }
+                    />
                   ),
                 },
                 {
@@ -863,7 +870,7 @@ function ProductEntitlements() {
                           r.derivedCount > 0 ? (
                             <Button
                               variant="ghost"
-                              size="md"
+                              size="icon-md"
                               aria-label={
                                 expandedAnchors.includes(r.grant.capabilityId)
                                   ? "收起派生权益"
@@ -882,32 +889,23 @@ function ProductEntitlements() {
                               />
                             </Button>
                           ) : (
-                            /* 没有派生行就不出箭头——一个点了没反应的箭头比没有
-                               箭头更让人以为是坏的。留一格保持列对齐。 */
-                            <span className="w-control-lg shrink-0" />
+                            /* 没有派生行就不出箭头——一个点了没反应的箭头比没有箭头更让人以为是坏的。留一格保持列对齐。 */
+                            <span className="w-control-md shrink-0" />
                           )
                         ) : (
                           <span className="w-control-xl shrink-0" />
                         )}
-                        <span className="flex min-w-0 flex-col gap-2xs">
-                          <span
-                            className={
-                              r.kind === "direct"
-                                ? "text-label-md text-foreground"
-                                : "text-body-sm text-muted-foreground"
-                            }
-                          >
-                            {name}
-                            {r.kind === "direct" && r.derivedCount > 0 ? (
-                              <span className="ml-xs text-body-sm text-muted-foreground">
-                                带 {r.derivedCount} 条派生
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="font-mono text-code-sm text-muted-foreground">
-                            {r.grant.capabilityId}
-                          </span>
-                        </span>
+                        <TableTitleCell
+                          icon="stack"
+                          title={name}
+                          description={
+                            <span className="font-mono">
+                              {r.kind === "direct" && r.derivedCount > 0
+                                ? `${r.grant.capabilityId} · 带 ${r.derivedCount} 条派生`
+                                : r.grant.capabilityId}
+                            </span>
+                          }
+                        />
                       </span>
                     );
                   },
@@ -1420,23 +1418,19 @@ function ProductEntitlements() {
                 width: "sm",
                 cell: (r: OrphanRow) => (
                   /* 点进详情页：那里对目录外的码同样能列、能撤（见详情分支的兜底）。 */
-                  <Link
-                    href={`/product/entitlements?productCode=${encodeURIComponent(r.productCode)}`}
-                    className="font-mono text-code-sm hover:text-primary-text"
-                  >
-                    {r.productCode}
-                  </Link>
-                ),
-              },
-              {
-                id: "source",
-                header: tShared("columns.source"),
-                sortable: true,
-                width: "sm",
-                cell: (r: OrphanRow) => (
-                  <Badge variant="outline">
-                    {r.source === "atlas" ? "Atlas · 模型路由" : "Runos · 能力"}
-                  </Badge>
+                  <TableTitleCell
+                    icon="package"
+                    title={<span className="font-mono">{r.productCode}</span>}
+                    description={
+                      r.source === "atlas" ? "Atlas · 模型路由" : "Runos · 能力"
+                    }
+                    tooltip="打开这个产品码的权益"
+                    onTitleClick={() =>
+                      router.push(
+                        `/product/entitlements?productCode=${encodeURIComponent(r.productCode)}`,
+                      )
+                    }
+                  />
                 ),
               },
               {
@@ -1449,7 +1443,7 @@ function ProductEntitlements() {
                       {r.grant.endpointCode}
                     </span>
                   ) : (
-                    <span className="flex items-center gap-xs">
+                    <span className="flex items-center justify-center gap-xs">
                       <span className="font-mono text-code-sm">
                         {r.grant.capabilityId}
                       </span>

@@ -1020,13 +1020,8 @@ function usePermissionTreeColumns({
                 fallback="chevron-right"
               />
             </Button>
-            <Icon
-              name={meta.icon}
-              size="sm"
-              fallback="placeholder"
-              className="shrink-0"
-            />
             <TableTitleCell
+              icon={meta.icon}
               title={permissionDisplayName(permission)}
               titleSuffix={
                 <>

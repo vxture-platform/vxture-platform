@@ -97,6 +97,7 @@ function columnsOf(
       sortable: true,
       cell: (item) => (
         <TableTitleCell
+          icon="user"
           title={item.recipient}
           {...(item.subject ? { description: item.subject } : {})}
         />

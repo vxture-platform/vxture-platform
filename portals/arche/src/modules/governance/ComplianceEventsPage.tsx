@@ -13,6 +13,7 @@ import {
   FieldLabel,
   FilterBar,
   Icon,
+  TableTitleCell,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -135,20 +136,28 @@ function columnsOf(
       header: "事件类型",
       sortable: true,
       cell: (item) => (
-        <span className="flex min-w-0 items-center gap-xs">
-          <span className="truncate">{item.eventType}</span>
-          {item.evidenceUrl ? (
-            <a
-              href={item.evidenceUrl}
-              target="_blank"
-              rel="noreferrer"
-              title="查看证据材料"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <Icon name="arrow-long-right" size="xs" fallback="placeholder" />
-            </a>
-          ) : null}
-        </span>
+        <TableTitleCell
+          icon="shield-check"
+          title={item.eventType}
+          titleSuffix={
+            item.evidenceUrl ? (
+              <a
+                href={item.evidenceUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="查看证据材料"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <Icon
+                  name="arrow-long-right"
+                  size="xs"
+                  fallback="placeholder"
+                />
+              </a>
+            ) : null
+          }
+          description={item.tags.length > 0 ? item.tags.join(" · ") : "无标签"}
+        />
       ),
     },
     {

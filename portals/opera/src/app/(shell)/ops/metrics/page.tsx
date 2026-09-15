@@ -561,6 +561,7 @@ export default function MetricsPage() {
                 <TableTitleCell
                   icon="plugs-connected"
                   title={<span className="font-mono">{r.provider}</span>}
+                  description={`成功 ${r.successes} 次`}
                 />
               ),
             },
@@ -681,7 +682,15 @@ export default function MetricsPage() {
               header: "作业",
               sortable: true,
               cell: (r: JobHeartbeatItem) => (
-                <TableTitleCell icon="workflow" title={r.jobName} />
+                <TableTitleCell
+                  icon="workflow"
+                  title={r.jobName}
+                  description={
+                    r.runCount > 0
+                      ? `成功率 ${Math.round(((r.runCount - r.failureCount) / r.runCount) * 100)}%`
+                      : "尚未运行"
+                  }
+                />
               ),
             },
             {

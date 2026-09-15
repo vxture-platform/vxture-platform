@@ -64,6 +64,7 @@ import {
   useToast,
   type DataTableColumn,
   type IconName,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { STALE_ATLAS_HINT } from "@/features/atlas/lifecycle";
@@ -72,7 +73,7 @@ import {
   workspaceLabel,
   type TenancyDirectory,
 } from "@/features/tenancy/directory";
-import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
+import { workspaceDisplay } from "@/features/tenancy/directory";
 import { api, OperaApiError } from "@/lib/api";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
@@ -419,14 +420,32 @@ export default function MeteringPage() {
       id: "identity",
       header: currentAxis.label,
       sortable: true,
-      cell: (r: UsageSummaryRecord) =>
-        resolvedAxis === "tenant" ? (
+      cell: (r: UsageSummaryRecord) => {
+        if (resolvedAxis === "tenant") {
           /* 租户在上、工作区在下——工作区一律以租户为主导，规则集中在
              features/tenancy/directory.ts，这里不自己拼一份。 */
-          <WorkspaceCell directory={tenancy} workspaceId={r.workspaceId} />
-        ) : (
-          <span className="text-code-sm">{rowIdentity(resolvedAxis, r)}</span>
-        ),
+          const d = workspaceDisplay(tenancy, r.workspaceId);
+          return d ? (
+            <TableTitleCell
+              icon="users"
+              title={d.primary}
+              description={d.secondary ?? "—"}
+              tooltip={d.title}
+            />
+          ) : (
+            "—"
+          );
+        }
+        return (
+          <TableTitleCell
+            icon="database"
+            title={
+              <span className="font-mono">{rowIdentity(resolvedAxis, r)}</span>
+            }
+            description={currentAxis.label}
+          />
+        );
+      },
     };
 
     const numbers: DataTableColumn<UsageSummaryRecord>[] = [

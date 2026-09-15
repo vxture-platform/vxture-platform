@@ -58,6 +58,7 @@ import {
   useToast,
   type StatusBadgeTone,
   ActionButton,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
@@ -379,44 +380,16 @@ export function AtlasChangeTable() {
         labels={tableLabels}
         columns={[
           {
-            id: "time",
-            header: tShared("columns.time"),
-            width: "sm",
-            cell: (r: AtlasChangeRecord) => formatTime(r.occurredAt, locale),
-          },
-          {
-            id: "operator",
-            header: tShared("columns.actor"),
-            width: "sm",
-            cell: (r: AtlasChangeRecord) => (
-              <span className="flex flex-col gap-2xs">
-                {r.actorId === "unknown" ? (
-                  <Badge variant="outline" className="w-fit">
-                    未归属
-                  </Badge>
-                ) : (
-                  <span className="text-code-sm">{r.actorId}</span>
-                )}
-                {r.actorConsole ? (
-                  <span className="text-body-sm text-muted-foreground">
-                    来自 {r.actorConsole}
-                  </span>
-                ) : null}
-              </span>
-            ),
-          },
-          {
             id: "target",
             header: tShared("columns.target"),
             cell: (r: AtlasChangeRecord) => (
-              <span className="flex flex-col gap-2xs">
-                <span className="text-label-md text-foreground">
-                  {r.objectType}
-                </span>
-                <span className="text-code-sm text-muted-foreground">
-                  {r.objectId ?? "—"}
-                </span>
-              </span>
+              <TableTitleCell
+                icon="clock-counter-clockwise"
+                title={r.objectType}
+                description={
+                  <span className="font-mono">{r.objectId ?? "—"}</span>
+                }
+              />
             ),
           },
           {
@@ -434,7 +407,7 @@ export function AtlasChangeTable() {
               r.changedFields.length === 0 ? (
                 <span className="text-muted-foreground">—</span>
               ) : (
-                <span className="flex flex-wrap gap-2xs">
+                <span className="flex flex-wrap justify-center gap-2xs">
                   {r.changedFields.slice(0, 4).map((f) => (
                     <Badge key={f} variant="secondary">
                       {f}
@@ -449,6 +422,27 @@ export function AtlasChangeTable() {
               ),
           },
           {
+            id: "operator",
+            header: tShared("columns.actor"),
+            width: "sm",
+            cell: (r: AtlasChangeRecord) => (
+              <span className="flex flex-col items-center gap-2xs">
+                {r.actorId === "unknown" ? (
+                  <Badge variant="outline" className="w-fit">
+                    未归属
+                  </Badge>
+                ) : (
+                  <span className="text-code-sm">{r.actorId}</span>
+                )}
+                {r.actorConsole ? (
+                  <span className="text-body-sm text-muted-foreground">
+                    来自 {r.actorConsole}
+                  </span>
+                ) : null}
+              </span>
+            ),
+          },
+          {
             id: "outcome",
             header: "结果",
             width: "xs",
@@ -457,6 +451,12 @@ export function AtlasChangeTable() {
                 {r.outcome === "success" ? "成功" : r.outcome}
               </StatusBadge>
             ),
+          },
+          {
+            id: "time",
+            header: tShared("columns.time"),
+            width: "sm",
+            cell: (r: AtlasChangeRecord) => formatTime(r.occurredAt, locale),
           },
         ]}
         rows={visible}

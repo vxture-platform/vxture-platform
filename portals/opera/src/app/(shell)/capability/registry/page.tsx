@@ -1470,7 +1470,7 @@ function CapabilitiesPageContent() {
                   header: "分类 / 标签",
                   width: "md",
                   cell: (r: CapabilityRecord) => (
-                    <span className="flex flex-col gap-2xs">
+                    <span className="flex flex-col items-center gap-2xs">
                       {/* 分类缺失 = 这条是分类法强制之前注册的老行，如实标出来：
                         它现在改不了自己，但一次 PATCH 就能补上。 */}
                       {r.category ? (
@@ -1481,7 +1481,7 @@ function CapabilitiesPageContent() {
                         </Badge>
                       )}
                       {r.tags && r.tags.length > 0 ? (
-                        <span className="flex flex-wrap gap-2xs">
+                        <span className="flex flex-wrap justify-center gap-2xs">
                           {r.tags.slice(0, 3).map((t) => (
                             <Badge key={t} variant="outline">
                               {t}
