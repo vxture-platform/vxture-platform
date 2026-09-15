@@ -25,7 +25,11 @@ import {
   AccountsAuthFooter,
   AccountsAuthHeader,
 } from "./AuthChrome";
-import { rememberRpOrigin, resolveReturnUrl } from "@vxture/platform-browser";
+import {
+  rememberRpOrigin,
+  resolveRealmReturnOrigin,
+  resolveReturnUrl,
+} from "@vxture/platform-browser";
 import {
   SessionExpiredError,
   completeOidcLogin,
@@ -135,8 +139,8 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   // Cache the referring app's origin so a later expired/missing challenge on
   // this surface can send the user back to where they actually came from.
   useEffect(() => {
-    rememberRpOrigin();
-  }, []);
+    rememberRpOrigin(realm);
+  }, [realm]);
 
   // Once a send-code call has consumed the current token, wait for a fresh one
   // (issued via resetTurnstile()) before actually firing the resend request.
@@ -203,8 +207,20 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   };
 
   // The parked login_challenge is gone — there is nothing to retry inline,
-  // send the user back to wherever they actually came from.
+  // send the user back to wherever they actually came from. Operators only go
+  // back to an operator app; with none known they are told to restart there —
+  // never sent to the tenant side (website / console).
   const redirectToReturnUrl = () => {
+    if (isOperator) {
+      const origin = resolveRealmReturnOrigin("workforce");
+      if (origin) {
+        window.location.assign(origin);
+        return;
+      }
+      setErrors({ form: "登录会话已失效，请回到原平台重新发起登录" });
+      setLoading(false);
+      return;
+    }
     window.location.assign(resolveReturnUrl(WEBSITE_HOME_URL));
   };
 

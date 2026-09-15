@@ -115,6 +115,21 @@ export function persistRememberedLogin(
 }
 
 const LAST_RP_ORIGIN_KEY = "vxture-last-rp-origin";
+
+/**
+ * 「上一个应用」按 realm 分开记。
+ *
+ * 只记一份时它不分租户与运营：先在 console 登录过、再到 opera 登录页撞上失效挑战，
+ * 运营者就被送回 console（浏览器里恰好还有租户会话，于是直接进了租户态）——
+ * owner 2026-09-15 报的「串台」之一。租户沿用原键名，已有的记忆不作废。
+ */
+export type LoginRealm = "customer" | "workforce";
+
+function rpOriginKey(realm: LoginRealm): string {
+  return realm === "workforce"
+    ? `${LAST_RP_ORIGIN_KEY}:workforce`
+    : LAST_RP_ORIGIN_KEY;
+}
 /** Absolute last-resort landing page when no RP/referrer/configured home is known. */
 const DEFAULT_HOME_URL = "https://vxture.com";
 
@@ -131,12 +146,12 @@ function originOf(url: string): string | null {
  * dead-end visit (expired challenge, bookmarked accounts URL) can send the
  * user back to the app they actually came from.
  */
-export function rememberRpOrigin(): void {
+export function rememberRpOrigin(realm: LoginRealm = "customer"): void {
   if (!isBrowser()) return;
   const origin = originOf(globalThis.document.referrer);
   if (!origin || origin === globalThis.window.location.origin) return;
   try {
-    globalThis.window.localStorage.setItem(LAST_RP_ORIGIN_KEY, origin);
+    globalThis.window.localStorage.setItem(rpOriginKey(realm), origin);
   } catch {
     // storage unavailable (private mode, quota) — nothing to fall back to here
   }
@@ -150,20 +165,31 @@ export function rememberRpOrigin(): void {
  */
 export function resolveReturnUrl(configuredHomeUrl?: string): string {
   if (!isBrowser()) return configuredHomeUrl?.trim() || DEFAULT_HOME_URL;
+  return (
+    resolveRealmReturnOrigin("customer") ??
+    (configuredHomeUrl?.trim() || DEFAULT_HOME_URL)
+  );
+}
 
+/**
+ * 只从「这个 realm 自己记下的应用」和当前 referrer 里找回跳地址，找不到给 null。
+ *
+ * 运营登录页用它：运营者没有「官网首页」这种兜底——宁可原地提示重新发起登录，
+ * 也不把人送到租户侧。
+ */
+export function resolveRealmReturnOrigin(realm: LoginRealm): string | null {
+  if (!isBrowser()) return null;
   try {
-    const cached = globalThis.window.localStorage.getItem(LAST_RP_ORIGIN_KEY);
+    const cached = globalThis.window.localStorage.getItem(rpOriginKey(realm));
     if (cached) return cached;
   } catch {
-    // storage unavailable — fall through to referrer/config
+    // storage unavailable — fall through to referrer
   }
-
   const referrerOrigin = originOf(globalThis.document.referrer);
   if (referrerOrigin && referrerOrigin !== globalThis.window.location.origin) {
     return referrerOrigin;
   }
-
-  return configuredHomeUrl?.trim() || DEFAULT_HOME_URL;
+  return null;
 }
 
 export async function storeBrowserPasswordCredential(

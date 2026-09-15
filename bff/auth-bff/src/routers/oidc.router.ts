@@ -37,6 +37,7 @@ import type {
 } from "@simplewebauthn/server";
 import {
   OidcService,
+  pickSessionForRealm,
   type OidcClientCredentials,
   type OidcMfaChallenge,
   type OidcTokenResponse,
@@ -235,16 +236,26 @@ export class OidcRouter {
   ): Promise<void> {
     const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
     /**
-     * **两个 realm 的会话都结束**，不是二选一。
+     * **只结束发起登出那个 client 所在 realm 的会话**，cookie 也只清那一份。
      *
-     * 这个端点下面本来就把两个 realm 的 cookie 连同 hint 一起清掉——只销毁其中一个
-     * 服务端会话，等于清了浏览器的凭证却把服务端会话留成孤儿。此前的
-     * `tenant ?? operator` 更糟：浏览器同时持有两份时，它销毁租户会话、**把运营者
-     * 会话留着**，于是运营者点了登出、cookie 也清了，下一次 authorize 又被静默 SSO
-     * 送回登录态——表现就是"退不出去"。
+     * 此前一律两个 realm 都结束：从 console 退出会把同一浏览器里的 opera 一起踢下线，
+     * 反过来也一样——三平面隔离在登出这一步被打穿（owner 2026-09-15 报「串台」）。
+     *
+     * 更早的 `tenant ?? operator` 的教训仍然成立：销毁的会话和清掉的 cookie 必须是
+     * 同一份，否则服务端留下拿不到 cookie 的孤儿会话；也不能挑错——运营者点了登出却
+     * 销毁了租户会话，下一次 authorize 又被静默 SSO 送回登录态。按 client 的 realm 挑
+     * 两件事都满足。
+     *
+     * 认不出 realm（没带 client_id、client 不存在或已停用）时退回两个都结束：宁可多退，
+     * 不留一个退不出去的会话。所有 RP 都经 oidc-rp 的 buildEndSessionUrl 带 client_id。
      */
+    const realm = await this.oidc.logoutRealmOf(q.client_id);
+    const sids = {
+      tenant: cookies[SID_COOKIE.tenant],
+      operator: cookies[SID_COOKIE.operator],
+    };
     const redirect = await this.oidc.endSession(
-      [cookies[SID_COOKIE.operator], cookies[SID_COOKIE.tenant]],
+      realm ? [pickSessionForRealm(realm, sids)] : [sids.operator, sids.tenant],
       q.post_logout_redirect_uri,
       q.state,
       /* 发起登出的 RP(RP-Initiated Logout 1.0)。回跳白名单**兜底**用它:
@@ -253,18 +264,22 @@ export class OidcRouter {
       q.client_id,
     );
 
-    // Clear both realm session cookies (host + parent domain variants).
+    // Clear the ended realm's session cookie (both when the realm is unknown).
     const cookieDomain = this.config.platform.COOKIE_DOMAIN_PLATFORM;
-    res.clearCookie(SID_COOKIE.operator, { path: "/" });
-    res.clearCookie(SID_COOKIE.tenant, {
-      path: "/",
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    });
-    // Clear the JS-readable login-state hint alongside the tenant session.
-    res.clearCookie(HINT_COOKIE_NAME, {
-      path: "/",
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    });
+    if (realm !== "customer") {
+      res.clearCookie(SID_COOKIE.operator, { path: "/" });
+    }
+    if (realm !== "workforce") {
+      res.clearCookie(SID_COOKIE.tenant, {
+        path: "/",
+        ...(cookieDomain ? { domain: cookieDomain } : {}),
+      });
+      // The JS-readable login-state hint mirrors the tenant session only.
+      res.clearCookie(HINT_COOKIE_NAME, {
+        path: "/",
+        ...(cookieDomain ? { domain: cookieDomain } : {}),
+      });
+    }
 
     if (redirect) {
       res.redirect(redirect);
