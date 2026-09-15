@@ -27,6 +27,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatPrincipalNo } from "@/lib/principal-no";
+import { isPlatformSentinel } from "@/lib/visible-id";
 
 export interface WorkspaceEntry {
   id: string;
@@ -110,9 +111,12 @@ export function useTenancyDirectory(
  * `primary` 是租户名，`secondary` 是工作区名——调用方按自己的版面决定是上下两行
  * 还是一行斜杠分隔，但**顺序不由调用方决定**。
  *
- * 查不到时 `primary` 是「未知工作区」、`secondary` 为空、`title` 为空。此前退回 workspaceId
- * 本身，理由是「显示一个 id 是诚实的"我不知道它叫什么"」——但那个 id 是 UUID，违反 owner 铁律
- * （任何界面不展示 UUID）。「未知工作区」同样诚实，而且不假装知道它叫什么。
+ * 两种查不到，**分开叫**（owner 2026-09-15：「未知工作区」太模糊，要让人懂得这是什么）：
+ *  - **平台哨兵**（全零 UUID）→ `SYSTEM` · 平台自检。Atlas 自检探测的消耗记在它名下，是 Atlas
+ *    的运维成本，不属于任何租户。
+ *  - **真实 id 但平台库里没有** → 「平台无此工作区」。用量记录里的主体在平台库里不存在——是
+ *    主体不在，不是查询失败（查号台对软删的也照常回名字）。
+ * 两种都**不退回 UUID**（owner 铁律：任何界面不展示 UUID）。
  *
  * `title`（悬停提示）给的是**可视码**，对工单用的就是它，不是 UUID。
  */
@@ -121,9 +125,17 @@ export function workspaceDisplay(
   workspaceId: string | null | undefined,
 ): { primary: string; secondary: string | null; title: string | null } | null {
   if (!workspaceId) return null;
+  if (isPlatformSentinel(workspaceId)) {
+    return { primary: "SYSTEM", secondary: "平台自检", title: SENTINEL_TITLE };
+  }
   const entry = directory.workspaces[workspaceId];
   if (!entry) {
-    return { primary: "未知工作区", secondary: null, title: null };
+    return {
+      primary: "平台无此工作区",
+      secondary: null,
+      title:
+        "这条记录挂在一个平台库里不存在的工作区上——是主体不在，不是查询失败。",
+    };
   }
   return {
     primary: entry.tenantName,
@@ -138,14 +150,20 @@ export function workspaceDisplay(
   };
 }
 
-/** 租户的显示形态：名字 + 可视码。查不到是「未知租户」，**不退回 UUID**。 */
+/** Atlas 自检探测记在平台哨兵名下的说明，工作区与租户两处共用。 */
+const SENTINEL_TITLE =
+  "Atlas 自检探测的消耗：记在平台哨兵名下，是 Atlas 的运维成本，不属于任何租户。";
+
+/** 租户的显示形态：名字 + 可视码。平台哨兵是 SYSTEM · 平台自检，平台库里没有的是「平台无此租户」，**不退回 UUID**。 */
 export function tenantDisplay(
   directory: TenancyDirectory,
   tenantId: string | null | undefined,
 ): { name: string; tenantNo: string | null } | null {
   if (!tenantId) return null;
+  if (isPlatformSentinel(tenantId))
+    return { name: "SYSTEM", tenantNo: "平台自检" };
   const entry = directory.tenants[tenantId];
-  if (!entry) return { name: "未知租户", tenantNo: null };
+  if (!entry) return { name: "平台无此租户", tenantNo: null };
   return {
     name: entry.name,
     tenantNo: formatPrincipalNo(entry.tenantNo, "tenant"),

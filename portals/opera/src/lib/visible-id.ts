@@ -12,6 +12,24 @@
  * 各记一次「这个会不会是 UUID」，漏一处就上屏——2026-09-15 计量页就是这样漏的。
  */
 
+/**
+ * **平台哨兵**：全零 UUID。Atlas 的 `COMMERCE_SENTINEL_UUID`（quota.service.ts）。
+ *
+ * 它在不同的位置说的是不同的事，所以显示也分开：
+ *  - 在**租户 / 工作区**上：Atlas 自检探测（`model-probe.service.ts` 的 recordProbe，
+ *    usageType=test）。「自检消耗的 token 是 Atlas 的运维成本，不是任何人的账单」。
+ *    界面叫 **SYSTEM · 平台自检**。
+ *  - 在**应用 / Agent** 上：调用方没有声明（`resolveApplicationScope` 补的位）。界面叫
+ *    **未声明应用 / 未声明 Agent**——它不是自检，是没说。
+ *
+ * 不叫「平台哨兵」：那是 Atlas 代码里的术语，运营者看到只会问「哨兵是什么」。
+ */
+export const PLATFORM_SENTINEL_UUID = "00000000-0000-0000-0000-000000000000";
+
+export function isPlatformSentinel(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.trim() === PLATFORM_SENTINEL_UUID;
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
