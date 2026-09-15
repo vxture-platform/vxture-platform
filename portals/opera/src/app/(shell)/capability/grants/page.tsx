@@ -84,10 +84,6 @@ import {
   FieldLabel,
   FieldTier,
   FilterBar,
-  FilterPanel,
-  FilterPanelTrigger,
-  countFilterPanelValue,
-  type FilterPanelValue,
   Icon,
   Input,
   InputGroup,
@@ -266,11 +262,12 @@ function RunosGrantsPageContent() {
   /* 「按 Capability 反查」可以从能力注册页深链进来：`?capabilityId=` 直接查。 */
   const initialCapabilityRef = useSearchParams().get("capabilityId") ?? "";
   const [capabilityRef, setCapabilityRef] = useState(initialCapabilityRef);
-  /* 产品持有能力表的筛选：关键词 + 勾选面板（来源 / 风险范围 / 需人工确认 / 状态）。
+  /* 产品持有能力表的筛选：关键词 + 三个下拉框（来源 / 风险范围 / 状态）。取值都只有两三个，不需要「更多筛选」气泡。
      这张表是一个产品的全部 grant，一次取回，所以在本地筛。 */
   const [grantKeyword, setGrantKeyword] = useState("");
-  const [grantFacetValue, setGrantFacetValue] = useState<FilterPanelValue>({});
-  const [grantFilterOpen, setGrantFilterOpen] = useState(false);
+  const [grantFacetValue, setGrantFacetValue] = useState<
+    Readonly<Record<string, readonly string[]>>
+  >({});
   const [capGrants, setCapGrants] = useState<GrantRecord[] | null>(null);
   const grantSortAccessors = useMemo<
     Readonly<Record<string, SortAccessor<GrantRecord>>>
@@ -721,25 +718,32 @@ function RunosGrantsPageContent() {
             setGrantFacetValue({});
           }}
         >
-          <FilterPanelTrigger
-            label="筛选"
-            activeCount={countFilterPanelValue(grantFacetValue)}
-            onClick={() => setGrantFilterOpen(true)}
-            disabled={!grants}
-          />
+          {grantFacets
+            .filter((f) => f.id !== "approval")
+            .map((facet) => (
+              <NativeSelect
+                key={facet.id}
+                wrapperClassName="w-fit"
+                aria-label={`${facet.label}筛选`}
+                disabled={!grants}
+                value={grantFacetValue[facet.id]?.[0] ?? "all"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setGrantFacetValue({
+                    ...grantFacetValue,
+                    [facet.id]: v === "all" ? [] : [v],
+                  });
+                }}
+              >
+                <option value="all">全部{facet.label}</option>
+                {facet.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}（{o.count}）
+                  </option>
+                ))}
+              </NativeSelect>
+            ))}
         </FilterBar>
-        <FilterPanel
-          open={grantFilterOpen}
-          onClose={() => setGrantFilterOpen(false)}
-          title="筛选权益"
-          applyLabel="应用"
-          clearLabel="清空"
-          closeLabel="关闭"
-          emptyLabel="暂无可选值"
-          facets={grantFacets}
-          value={grantFacetValue}
-          onApply={setGrantFacetValue}
-        />
 
         {derivedCount > 0 ? (
           <Banner
