@@ -27,8 +27,11 @@ export function WorkspaceCell({
   if (!d) return <span className="text-muted-foreground">—</span>;
 
   return (
-    /* 两个 uuid 都挂在 title 上：屏幕上给人看名字，对工单 / 日志时还得拿得到 id。 */
-    <span className="flex flex-col gap-2xs" title={d.title}>
+    /* 悬停提示给**可视码**（T- / W-），对工单用的是它；不挂 UUID（owner 铁律：任何界面不展示 UUID）。 */
+    <span
+      className="flex flex-col gap-2xs"
+      {...(d.title ? { title: d.title } : {})}
+    >
       <span className="text-body-sm text-foreground">{d.primary}</span>
       {d.secondary ? (
         <span className="text-body-sm text-muted-foreground">

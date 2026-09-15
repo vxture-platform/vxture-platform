@@ -80,6 +80,7 @@ import { fetchWholeCapabilityCatalog } from "@/lib/runos-catalog";
 import { useConfirmLabels } from "@/lib/destructive";
 import { formatDay } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { visibleIdOr } from "@/lib/visible-id";
 
 interface ProductLite {
   id: string;
@@ -735,7 +736,7 @@ function ProductEntitlements() {
                   cell: (g: RouteGrant) =>
                     g.applicationId ? (
                       <span className="font-mono text-code-sm">
-                        {g.applicationId}
+                        {visibleIdOr(g.applicationId, "指定应用")}
                       </span>
                     ) : (
                       /* NULL = 产品下全部应用。唯一索引用的是 NULLS NOT DISTINCT，

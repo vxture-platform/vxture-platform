@@ -19,8 +19,12 @@
  * ——但这个接口的消费方永远只需要"当前这一屏出现过的那些 id"，写成全量意味着租户
  * 长到几千的那天要回来改，而那天没人会记得这里。
  *
- * 只读，且**只回名字**：不回状态、不回归属人、不回任何联系方式。这是一张查号台，
+ * 只读，且**只回名字与可视码**：不回状态、不回归属人、不回任何联系方式。这是一张查号台，
  * 不是租户管理面——那个在 admin。回多余的字段等于在 opera 侧悄悄开了半个租户视图。
+ *
+ * **可视码（tenant_no / workspace_no）2026-09-15 补上。** owner 定的铁律是任何界面不展示
+ * UUID、一律用可视码；此前这里只回名字，前端查不到名字、或要在提示里给「对工单用的号」时
+ * 手上只有 uuid，于是 uuid 就被显示出来了。号在这里回，前端就没有任何理由再拿 uuid 去显示。
  *
  * 能力码复用 `model:model.manage`：调用点是 Atlas 计量页，看得到用量就看得到这些
  * 名字，不额外造一个只有零个持有者的死码。
@@ -41,6 +45,8 @@ const MAX_IDS = 500;
 export interface TenancyNameRecord {
   id: string;
   name: string;
+  /** 租户可视码（10 位，类别位 2）。 */
+  tenantNo: string;
 }
 
 /**
@@ -53,10 +59,15 @@ export interface TenancyNameRecord {
  * 所以这里做成**服务端 join 而不是让调用方查两次再自己拼**：拼接是每个页面都会
  * 重犯一遍的错（少拼一次就退化成"全是默认工作空间"），而 join 在这里只有一次。
  */
-export interface WorkspaceNameRecord extends TenancyNameRecord {
+export interface WorkspaceNameRecord {
+  id: string;
+  name: string;
+  /** 工作区可视码（10 位，类别位 3）。 */
+  workspaceNo: string;
   tenantId: string;
   /** 租户名（org_name）。工作区的显示以它为主导。 */
   tenantName: string;
+  tenantNo: string;
 }
 
 export interface TenancyDirectoryResponse {
@@ -92,7 +103,7 @@ export class TenancyDirectoryRouter {
     const [tenantRows, workspaceRows] = await Promise.all([
       tenants.length > 0
         ? this.pool.query<TenancyNameRecord>(
-            `SELECT id::text AS id, name FROM tenancy.tenants WHERE id = ANY($1::uuid[])`,
+            `SELECT id::text AS id, name, tenant_no::text AS "tenantNo" FROM tenancy.tenants WHERE id = ANY($1::uuid[])`,
             [tenants],
           )
         : Promise.resolve({ rows: [] as TenancyNameRecord[] }),
@@ -103,8 +114,10 @@ export class TenancyDirectoryRouter {
           this.pool.query<WorkspaceNameRecord>(
             `SELECT w.id::text AS id,
                     w.name,
+                    w.workspace_no::text AS "workspaceNo",
                     w.tenant_id::text AS "tenantId",
-                    t.name AS "tenantName"
+                    t.name AS "tenantName",
+                    t.tenant_no::text AS "tenantNo"
                FROM tenancy.workspaces w
                JOIN tenancy.tenants t ON t.id = w.tenant_id
               WHERE w.id = ANY($1::uuid[])`,

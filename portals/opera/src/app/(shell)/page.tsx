@@ -44,6 +44,7 @@ import { isEnabled, isServing } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { visibleIdOr } from "@/lib/visible-id";
 
 type ProviderHealthStatus = "healthy" | "degraded" | "down" | "unknown";
 
@@ -479,7 +480,11 @@ export default function DashboardPage() {
                 <TableTitleCell
                   icon="clock-counter-clockwise"
                   title={r.objectType}
-                  description={<span className="font-mono">{r.objectId}</span>}
+                  description={
+                    <span className="font-mono">
+                      {visibleIdOr(r.objectId, "—")}
+                    </span>
+                  }
                 />
               ),
             },

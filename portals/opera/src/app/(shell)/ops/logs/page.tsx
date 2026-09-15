@@ -536,14 +536,6 @@ export default function LogsPage() {
               ),
             },
             {
-              id: "requestId",
-              header: "Request ID",
-              width: "sm",
-              cell: (r: AtlasRequestLogRecord) => (
-                <span className="font-mono text-code-sm">{r.requestId}</span>
-              ),
-            },
-            {
               /**
                * 与下方 Runos 调用流水共用的那一根键（product_251 X-2）。
                *

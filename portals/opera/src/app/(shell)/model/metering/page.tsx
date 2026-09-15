@@ -76,6 +76,8 @@ import {
 import { workspaceDisplay } from "@/features/tenancy/directory";
 import { api, OperaApiError } from "@/lib/api";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { visibleIdOr } from "@/lib/visible-id";
+import { formatPrincipalNo } from "@/lib/principal-no";
 
 /** 触发一次浏览器下载；用完立即回收 URL，不留 blob 常驻内存。 */
 function downloadCsv(filename: string, rows: readonly string[][]) {
@@ -212,6 +214,27 @@ function displayName(
   return workspaceLabel(dir, r.workspaceId);
 }
 
+/**
+ * 这一行在当前轴上**可以对外的标识**：租户轴是 T- / W- 主体码，其余轴本来就是编码。
+ * `rowIdentity` 在租户轴拼的是两个 UUID，只能做内部键与搜索匹配，**不能上屏、不能导出**。
+ */
+function visibleIdentity(
+  dimension: RollupDimension,
+  r: UsageSummaryRecord,
+  dir: TenancyDirectory,
+): string {
+  if (dimension !== "tenant")
+    return visibleIdOr(rowIdentity(dimension, r), "—");
+  const entry = dir.workspaces[r.workspaceId ?? ""];
+  if (!entry) return "—";
+  return [
+    formatPrincipalNo(entry.tenantNo, "tenant"),
+    formatPrincipalNo(entry.workspaceNo, "workspace"),
+  ]
+    .filter(Boolean)
+    .join(" / ");
+}
+
 function rowKey(dimension: RollupDimension, r: UsageSummaryRecord): string {
   return [
     dimension,
@@ -220,12 +243,6 @@ function rowKey(dimension: RollupDimension, r: UsageSummaryRecord): string {
     r.applicationId ?? "—",
     r.applicationType ?? "—",
   ].join("·");
-}
-
-/** uuid 取尾段。整串 36 个字符在表格里读不动，而尾段足够在一屏内区分不同的行。 */
-function shortId(id: string): string {
-  const tail = id.split("-").at(-1);
-  return tail && tail.length >= 8 ? `…${tail.slice(-8)}` : id;
 }
 
 function formatNumber(value: string): string {
@@ -240,8 +257,9 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
-/** 名称与 id **两列都导**：名称给人看，id 给对账用——名称会改，id 不会，只导名称
- *  的表半年后就对不回是哪个租户了。 */
+/** 名称与**可视码**两列都导：名称给人看，可视码给对账用——名称会改，号不会，只导名称
+ *  的表半年后就对不回是哪个租户了。**不导 UUID**（owner 铁律：任何场景不展示 UUID，导出的
+ *  文件也算）；租户轴导 T- / W- 主体码，其余轴本来就是编码。 */
 const CSV_HEADER = [
   "聚合轴",
   "对象名称",
@@ -249,7 +267,6 @@ const CSV_HEADER = [
   "工作区名称",
   "周期",
   "Application 类型",
-  "Application ID",
   "总请求",
   "错误数",
   "Input Token",
@@ -265,13 +282,12 @@ function toCsvRow(
   return [
     dimension,
     displayName(dimension, r, dir),
-    rowIdentity(dimension, r),
+    visibleIdentity(dimension, r, dir),
     dir.workspaces[r.workspaceId ?? ""]?.name ?? "",
     r.cycleMonth,
     r.applicationType
       ? (APPLICATION_TYPE_LABELS[r.applicationType] ?? r.applicationType)
       : "",
-    r.applicationId ?? "",
     r.requests,
     r.errors,
     r.inputTokens,
@@ -430,7 +446,7 @@ export default function MeteringPage() {
               icon="users"
               title={d.primary}
               description={d.secondary ?? "—"}
-              tooltip={d.title}
+              {...(d.title ? { tooltip: d.title } : {})}
             />
           ) : (
             "—"
@@ -496,21 +512,11 @@ export default function MeteringPage() {
             width: "sm",
             cell: (r: UsageSummaryRecord) =>
               r.applicationId || r.applicationType ? (
-                <span
-                  className="flex flex-col gap-2xs"
-                  title={r.applicationId ?? undefined}
-                >
-                  <span className="text-body-sm text-foreground">
-                    {r.applicationType
-                      ? (APPLICATION_TYPE_LABELS[r.applicationType] ??
-                        r.applicationType)
-                      : "未标注类型"}
-                  </span>
-                  {r.applicationId ? (
-                    <span className="text-code-sm text-muted-foreground">
-                      {shortId(r.applicationId)}
-                    </span>
-                  ) : null}
+                <span className="text-body-sm text-foreground">
+                  {r.applicationType
+                    ? (APPLICATION_TYPE_LABELS[r.applicationType] ??
+                      r.applicationType)
+                    : "未标注类型"}
                 </span>
               ) : (
                 <span className="text-muted-foreground">—</span>
@@ -721,7 +727,7 @@ export default function MeteringPage() {
           indexStart={pager.indexStart}
           rowActions={(r) => (
             <ActionMenu
-              label={`${rowIdentity(resolvedAxis, r)} 操作`}
+              label={`${displayName(resolvedAxis, r, tenancy)} 操作`}
               items={[
                 {
                   id: "copy",
