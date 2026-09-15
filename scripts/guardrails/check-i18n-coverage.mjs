@@ -460,6 +460,8 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-15 opera 2143 → 2150(+7):查不到的主体分开叫(owner:「未知工作区」太模糊,要让人懂得这是什么)。
  *   平台哨兵 → 「SYSTEM」「平台自检」+ 悬停说明;平台库里没有的真实 id →「平台无此工作区」「平台无此租户」
  *   + 悬停说明;能力计量应用 / Agent / 产品 / 入口位上的哨兵 →「未声明 Agent / 产品 / 入口」。随 opera 现行体例写死。
+ * 2026-09-15 opera 2150 → 2153(+3):登记已查明来历的主体(owner:「追一下，然后可以正确登记」)。
+ *   `features/tenancy/known-subjects.ts` 的「Atlas 实测」「上线前测试」+ 悬停说明,随 opera 现行体例写死。
  */
 const BASELINE = {
   // 2026-09-04 console 30 → 8:批 0c 清掉 onboarding 法务链接 / signin 跳板 /
@@ -470,7 +472,7 @@ const BASELINE = {
   console: 0,
   website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 2150, // 2026-09-15 见上方说明(末条:平台哨兵与平台库无此主体分开叫 +7)
+  opera: 2153, // 2026-09-15 见上方说明(末条:登记 Atlas 上线前实测主体 +3)
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页

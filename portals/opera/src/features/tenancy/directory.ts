@@ -28,6 +28,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatPrincipalNo } from "@/lib/principal-no";
 import { isPlatformSentinel } from "@/lib/visible-id";
+import { knownTenant, knownWorkspace } from "./known-subjects";
 
 export interface WorkspaceEntry {
   id: string;
@@ -114,6 +115,7 @@ export function useTenancyDirectory(
  * 两种查不到，**分开叫**（owner 2026-09-15：「未知工作区」太模糊，要让人懂得这是什么）：
  *  - **平台哨兵**（全零 UUID）→ `SYSTEM` · 平台自检。Atlas 自检探测的消耗记在它名下，是 Atlas
  *    的运维成本，不属于任何租户。
+ *  - **真实 id 但平台库里没有、已查明来历** → 按 `known-subjects.ts` 的登记显示（如「Atlas 实测」）。
  *  - **真实 id 但平台库里没有** → 「平台无此工作区」。用量记录里的主体在平台库里不存在——是
  *    主体不在，不是查询失败（查号台对软删的也照常回名字）。
  * 两种都**不退回 UUID**（owner 铁律：任何界面不展示 UUID）。
@@ -130,6 +132,14 @@ export function workspaceDisplay(
   }
   const entry = directory.workspaces[workspaceId];
   if (!entry) {
+    const known = knownWorkspace(workspaceId);
+    if (known) {
+      return {
+        primary: known.name,
+        secondary: known.detail,
+        title: known.title,
+      };
+    }
     return {
       primary: "平台无此工作区",
       secondary: null,
@@ -163,7 +173,12 @@ export function tenantDisplay(
   if (isPlatformSentinel(tenantId))
     return { name: "SYSTEM", tenantNo: "平台自检" };
   const entry = directory.tenants[tenantId];
-  if (!entry) return { name: "平台无此租户", tenantNo: null };
+  if (!entry) {
+    const known = knownTenant(tenantId);
+    return known
+      ? { name: known.name, tenantNo: known.detail }
+      : { name: "平台无此租户", tenantNo: null };
+  }
   return {
     name: entry.name,
     tenantNo: formatPrincipalNo(entry.tenantNo, "tenant"),
