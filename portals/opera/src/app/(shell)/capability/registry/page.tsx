@@ -73,10 +73,9 @@ import {
   FieldTier,
   FieldLabel,
   FilterBar,
-  FilterPanel,
-  FilterPanelTrigger,
-  countFilterPanelValue,
-  type FilterPanelValue,
+  FilterPopover,
+  countFilterValue,
+  type FilterValue,
   Icon,
   Input,
   InputGroup,
@@ -634,8 +633,7 @@ function CapabilitiesPageContent() {
   const [keyword, setKeyword] = useState("");
   /* 筛选全部下推给 runos：目录是服务端分页，在前端筛只会筛到当前页。
      勾选面板的读法是维度内任一、维度间都要；标签例外，是全部命中（runos 120 §3.1）。 */
-  const [facetValue, setFacetValue] = useState<FilterPanelValue>({});
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [facetValue, setFacetValue] = useState<FilterValue>({});
   /** 面板选项：各列在全目录上的取值与计数。null = 没读到（面板里显示暂无可选值）。 */
   const [catalogFacets, setCatalogFacets] = useState<CatalogFacets | null>(
     null,
@@ -893,57 +891,67 @@ function CapabilitiesPageContent() {
      「筛掉了多少」，所以判据换成「有没有生效中的筛选」——这也正是那句提示要回答的
      问题，比数字差值更贴近它。 */
   const hasActiveFilter =
-    countFilterPanelValue(facetValue) > 0 || keyword.trim() !== "";
-  const panelFacets = useMemo(() => {
-    const options = (
-      list: readonly CatalogFacetCount[] | undefined,
-      label?: (value: string) => string,
-    ) =>
-      (list ?? []).map(({ value, count }) => ({
-        value,
-        label: label ? label(value) : value,
-        count,
-      }));
-    return [
-      {
-        id: "primitiveType",
-        label: tShared("columns.kind"),
-        options: options(
-          catalogFacets?.primitiveType,
-          (v) => PRIMITIVE_LABELS[v] ?? v,
-        ),
-      },
-      {
-        id: "category",
-        label: "分类",
-        options: options(
-          catalogFacets?.category,
-          (v) => CATEGORIES.find((c) => c.value === v)?.label ?? v,
-        ),
-      },
+    countFilterValue(facetValue) > 0 || keyword.trim() !== "";
+  /* 下拉框里的四个维度（owner 2026-09-15：「常用的筛选还是放起来，下拉框」）：取值少、天天用。
+     单选，选「全部」即不筛。 */
+  const selectFacets = useMemo(
+    () =>
+      [
+        {
+          id: "primitiveType",
+          all: "全部类型",
+          label: tShared("columns.kind"),
+          options: catalogFacets?.primitiveType ?? [],
+          name: (v: string) => PRIMITIVE_LABELS[v] ?? v,
+        },
+        {
+          id: "category",
+          all: "全部分类",
+          label: "分类",
+          options: catalogFacets?.category ?? [],
+          name: (v: string) =>
+            CATEGORIES.find((c) => c.value === v)?.label ?? v,
+        },
+        {
+          id: "admissionTier",
+          all: "全部准入等级",
+          label: "准入等级",
+          options: catalogFacets?.admissionTier ?? [],
+          name: (v: string) => v,
+        },
+        {
+          id: "ownerRef",
+          all: "全部 Owner",
+          label: "Owner",
+          options: catalogFacets?.ownerRef ?? [],
+          name: (v: string) => v,
+        },
+      ] as const,
+    [catalogFacets, tShared],
+  );
+  /* 其余取值多、偶尔才筛的维度收进「更多筛选」气泡：来源、标签。 */
+  const popoverFacets = useMemo(
+    () => [
       {
         id: "providerId",
         label: "来源（Provider）",
-        options: options(catalogFacets?.providerId),
-      },
-      {
-        id: "admissionTier",
-        label: "准入等级",
-        options: options(catalogFacets?.admissionTier),
-      },
-      {
-        id: "ownerRef",
-        label: "Owner",
-        options: options(catalogFacets?.ownerRef),
+        options: (catalogFacets?.providerId ?? []).map(({ value, count }) => ({
+          value,
+          label: value,
+          count,
+        })),
       },
       {
         id: "tag",
         label: "标签",
-        description: `全部命中才算（不是任一）。共 ${catalogFacets?.tag.length ?? 0} 个标签，这里列最常用的 ${TOP_TAGS} 个。`,
-        options: options(catalogFacets?.tag.slice(0, TOP_TAGS)),
+        description: `全部命中；共 ${catalogFacets?.tag.length ?? 0} 个，列最常用的 ${TOP_TAGS} 个`,
+        options: (catalogFacets?.tag.slice(0, TOP_TAGS) ?? []).map(
+          ({ value, count }) => ({ value, label: value, count }),
+        ),
       },
-    ];
-  }, [catalogFacets, tShared]);
+    ],
+    [catalogFacets],
+  );
 
   function openRegister() {
     setDraft(EMPTY_DRAFT);
@@ -1548,10 +1556,47 @@ function CapabilitiesPageContent() {
               ) : null
             }
           >
-            <FilterPanelTrigger
-              label="筛选"
-              activeCount={countFilterPanelValue(facetValue)}
-              onClick={() => setFilterOpen(true)}
+            {selectFacets.map((facet) => (
+              <NativeSelect
+                key={facet.id}
+                wrapperClassName="w-fit"
+                aria-label={`${facet.label}筛选`}
+                value={facetValue[facet.id]?.[0] ?? "all"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFacetValue({
+                    ...facetValue,
+                    [facet.id]: v === "all" ? [] : [v],
+                  });
+                  resetToFirstPage();
+                }}
+              >
+                <option value="all">{facet.all}</option>
+                {facet.options.map(({ value, count }) => (
+                  <option key={value} value={value}>
+                    {facet.name(value)}（{count}）
+                  </option>
+                ))}
+              </NativeSelect>
+            ))}
+            <FilterPopover
+              label="更多筛选"
+              confirmLabel="确定"
+              clearLabel="清空"
+              emptyLabel="暂无可选值"
+              facets={popoverFacets}
+              value={{
+                providerId: facetValue.providerId ?? [],
+                tag: facetValue.tag ?? [],
+              }}
+              onChange={(next) => {
+                setFacetValue({
+                  ...facetValue,
+                  providerId: next.providerId ?? [],
+                  tag: next.tag ?? [],
+                });
+                resetToFirstPage();
+              }}
             />
           </FilterBar>
         }
@@ -1698,22 +1743,6 @@ function CapabilitiesPageContent() {
             />
           </>
         }
-      />
-
-      <FilterPanel
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        title="筛选能力"
-        applyLabel="应用"
-        clearLabel="清空"
-        closeLabel="关闭"
-        emptyLabel="暂无可选值"
-        facets={panelFacets}
-        value={facetValue}
-        onApply={(next) => {
-          setFacetValue(next);
-          resetToFirstPage();
-        }}
       />
 
       {/* ── 注册 Capability ─────────────────────────────────────────────── */}

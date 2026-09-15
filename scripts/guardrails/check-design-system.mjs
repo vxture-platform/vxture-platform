@@ -2047,7 +2047,7 @@ function maskComments(content) {
  *   常规表单（≤6 字段，两列）        DialogForm size="lg"   672
  *   注册 / 编辑长表单（两列 + 分档） DialogForm size="xl"   928
  *   详情 / 检视                      Drawer 右侧 width="lg" 672
- *   筛选面板                          DS FilterPanel（左侧 sm，件内定死）
+ *   筛选                              工具行下拉框 + DS FilterPopover（贴触发钮弹出，非模态）
  *
  * 所以这里判的是**显式写出预设**：不写尺寸（默认 md）、写 md、写数字宽度都拦。
  * 裸 `DialogContent` 一并拦——它绕过 DialogForm 统一的字段滚动区与页脚。
@@ -2085,6 +2085,18 @@ function findOverlayPresetViolations(file, content) {
   const dialogFormSizes = new Set(["sm", "lg", "xl"]);
   const masked = maskComments(content);
   const results = [];
+  /* FilterPanel（左侧抽屉筛选）owner 2026-09-15 否掉、DS 12.10.0 弃用：一处也不许再用。 */
+  for (const [index, lineText] of masked.split(/\r?\n/).entries()) {
+    if (/<FilterPanel(Trigger)?\b/.test(lineText))
+      results.push(
+        violation(
+          file,
+          index + 1,
+          "FilterPanel 已弃用（左侧抽屉形态被否）：常用维度做下拉框，其余用 DS FilterPopover。",
+          lineText.trim(),
+        ),
+      );
+  }
   const re = /<(DialogForm|Drawer|DialogContent)(?=[\s>\/])/g;
   let m;
   while ((m = re.exec(masked))) {
@@ -2100,7 +2112,7 @@ function findOverlayPresetViolations(file, content) {
       const side = literalProp(tag, "side") ?? "right";
       const width = literalProp(tag, "width");
       if (side === "left")
-        problem = "左侧面板是筛选面板：用 DS FilterPanel，不自己拼 Drawer";
+        problem = "没有左侧抽屉这个预设：筛选用工具行下拉框 + DS FilterPopover";
       else if (width !== "lg")
         problem = `详情抽屉必须写 width="lg"（现为 ${width ?? "默认"}）`;
     } else {

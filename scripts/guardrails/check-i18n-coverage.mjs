@@ -467,6 +467,8 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-15 opera 2162 → 2225(+63):能力管理·Runos 四页(owner:合并列、补行操作、勾选筛选面板、面板五预设)。
  *   合并后的列头与副行、行菜单新增项、筛选面板维度名、详情抽屉字段名、表单帮助图标里的说明文案(原 FieldDescription 常驻文字
  *   收进 hint 后按调用点重新计数)、用量计量的能力过滤条。随 opera 现行体例写死。
+ * 2026-09-15 opera 2225 → 2222(-3):能力管理三页筛选改成「工具行下拉框 + 更多筛选气泡」(owner 否掉左侧抽屉 FilterPanel),
+ *   面板标题 / 应用 / 关闭等抽屉文案随之删除。
  */
 const BASELINE = {
   // 2026-09-04 console 30 → 8:批 0c 清掉 onboarding 法务链接 / signin 跳板 /
@@ -477,7 +479,7 @@ const BASELINE = {
   console: 0,
   website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 2225, // 2026-09-15 见上方说明(末条:能力管理·Runos 四页 +63)
+  opera: 2222, // 2026-09-15 见上方说明(末条:筛选改下拉框 + 气泡 -3)
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页

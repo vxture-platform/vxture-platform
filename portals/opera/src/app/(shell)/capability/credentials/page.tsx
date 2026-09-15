@@ -44,16 +44,16 @@ import {
   FieldTier,
   FieldLabel,
   FilterBar,
-  FilterPanel,
-  FilterPanelTrigger,
-  countFilterPanelValue,
-  type FilterPanelValue,
+  FilterPopover,
+  countFilterValue,
+  type FilterValue,
   Icon,
   Input,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   ListPageTemplate,
+  NativeSelect,
   Section,
   StatusBadge,
   TableTitleCell,
@@ -178,9 +178,8 @@ function RunosCredentialsPageContent() {
   const [draft, setDraft] = useState<CredentialDraft>(EMPTY_DRAFT);
   const [secretInput, setSecretInput] = useState("");
   const [scopeInput, setScopeInput] = useState("");
-  /* 勾选筛选（DS FilterPanel）。凭证清单一次全量取回，四个维度都在本地筛。 */
-  const [facetValue, setFacetValue] = useState<FilterPanelValue>({});
-  const [filterOpen, setFilterOpen] = useState(false);
+  /* 筛选：状态 / 模式做下拉框，来源 / 凭证类别收进「更多筛选」气泡。清单一次全量取回，都在本地筛。 */
+  const [facetValue, setFacetValue] = useState<FilterValue>({});
   /** 详情抽屉里看的那一条。null = 抽屉关着。 */
   const [detailRow, setDetailRow] = useState<CredentialBindingRecord | null>(
     null,
@@ -406,8 +405,7 @@ function RunosCredentialsPageContent() {
           </Button>
         }
       />
-    ) : filtered.length !== rows.length ||
-      countFilterPanelValue(facetValue) > 0 ? (
+    ) : filtered.length !== rows.length || countFilterValue(facetValue) > 0 ? (
       <EmptyState
         title="没有匹配的凭证"
         description={tShared("common.noMatchKeywordHint")}
@@ -487,10 +485,51 @@ function RunosCredentialsPageContent() {
               ) : null
             }
           >
-            <FilterPanelTrigger
-              label="筛选"
-              activeCount={countFilterPanelValue(facetValue)}
-              onClick={() => setFilterOpen(true)}
+            {facets
+              .filter((f) => f.id === "state" || f.id === "mode")
+              .map((facet) => (
+                <NativeSelect
+                  key={facet.id}
+                  wrapperClassName="w-fit"
+                  aria-label={`${facet.label}筛选`}
+                  value={facetValue[facet.id]?.[0] ?? "all"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFacetValue({
+                      ...facetValue,
+                      [facet.id]: v === "all" ? [] : [v],
+                    });
+                    pager.resetPage();
+                  }}
+                >
+                  <option value="all">全部{facet.label}</option>
+                  {facet.options.map(({ value, count }) => (
+                    <option key={value} value={value}>
+                      {value}（{count}）
+                    </option>
+                  ))}
+                </NativeSelect>
+              ))}
+            <FilterPopover
+              label="更多筛选"
+              confirmLabel="确定"
+              clearLabel="清空"
+              emptyLabel="暂无可选值"
+              facets={facets.filter(
+                (f) => f.id === "providerId" || f.id === "credentialClass",
+              )}
+              value={{
+                providerId: facetValue.providerId ?? [],
+                credentialClass: facetValue.credentialClass ?? [],
+              }}
+              onChange={(next) => {
+                setFacetValue({
+                  ...facetValue,
+                  providerId: next.providerId ?? [],
+                  credentialClass: next.credentialClass ?? [],
+                });
+                pager.resetPage();
+              }}
             />
           </FilterBar>
         }
@@ -637,22 +676,6 @@ function RunosCredentialsPageContent() {
             empty={emptyState}
           />
         }
-      />
-
-      <FilterPanel
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        title="筛选凭证"
-        applyLabel="应用"
-        clearLabel="清空"
-        closeLabel="关闭"
-        emptyLabel="暂无可选值"
-        facets={facets}
-        value={facetValue}
-        onApply={(next) => {
-          setFacetValue(next);
-          pager.resetPage();
-        }}
       />
 
       {/* ── 详情（只读）：密文从不回显，所以这里只有绑定本身的事实 ──────────── */}
