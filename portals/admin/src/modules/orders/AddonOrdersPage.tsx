@@ -17,6 +17,7 @@ import {
   DataTable,
   EmptyState,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import {
@@ -88,21 +89,18 @@ export function AddonOrdersPage() {
       id: "order",
       header: "订单",
       cell: (o) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-label-md text-foreground">
-            {o.orderNo}
-          </span>
-          <span className="text-body-sm text-muted-foreground tabular-nums">
-            {formatDate(o.createdAt, locale)}
-          </span>
-        </span>
+        <TableTitleCell
+          icon="package"
+          title={<span className="font-mono">{o.orderNo}</span>}
+          description={formatDate(o.createdAt, locale)}
+        />
       ),
     },
     {
       id: "pack",
       header: "加油包",
       cell: (o) => (
-        <span className="flex flex-col">
+        <span className="inline-flex flex-col items-center gap-2xs">
           <span className="text-foreground">{o.packName}</span>
           <span className="font-mono text-body-sm text-muted-foreground">
             {o.packCode}

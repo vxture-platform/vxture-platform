@@ -311,18 +311,18 @@ function useAccountColumns(
             cell: (account: AccountOperationRecord) => {
               const summary = accountTenantSummary(account);
               return (
-                <TableTitleCell
-                  title={
-                    <span className="inline-flex flex-wrap gap-2xs">
-                      {summary.tags.map((tag) => (
-                        <StatusBadge key={tag} tone="brand" icon={false}>
-                          {tag}
-                        </StatusBadge>
-                      ))}
-                    </span>
-                  }
-                  description={summary.primaryName}
-                />
+                <span className="inline-flex flex-col items-center gap-2xs">
+                  <span className="inline-flex flex-wrap justify-center gap-2xs">
+                    {summary.tags.map((tag) => (
+                      <StatusBadge key={tag} tone="brand" icon={false}>
+                        {tag}
+                      </StatusBadge>
+                    ))}
+                  </span>
+                  <span className="text-body-sm text-muted-foreground">
+                    {summary.primaryName}
+                  </span>
+                </span>
               );
             },
           },
@@ -349,14 +349,14 @@ function useAccountColumns(
       header: "权限",
       align: "center",
       cell: (account) => (
-        <TableTitleCell
-          title={<Badge>{accountHighestRoleLabel(account)}</Badge>}
-          description={
-            showTenantContext
+        <span className="inline-flex flex-col items-center gap-2xs">
+          <Badge>{accountHighestRoleLabel(account)}</Badge>
+          <span className="text-body-sm text-muted-foreground">
+            {showTenantContext
               ? `${formatNumber(account.tenantCount)} 个租户`
-              : "平台角色"
-          }
-        />
+              : "平台角色"}
+          </span>
+        </span>
       ),
     },
     {
@@ -364,10 +364,12 @@ function useAccountColumns(
       header: "登录",
       align: "center",
       cell: (account) => (
-        <TableTitleCell
-          title={<Badge>{account.lastActiveLocation}</Badge>}
-          description={`${formatDate(account.lastActiveAt, locale)} · ${formatNumber(account.loginCount30d)} 次`}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          <Badge>{account.lastActiveLocation}</Badge>
+          <span className="text-body-sm text-muted-foreground">
+            {`${formatDate(account.lastActiveAt, locale)} · ${formatNumber(account.loginCount30d)} 次`}
+          </span>
+        </span>
       ),
     },
   ];

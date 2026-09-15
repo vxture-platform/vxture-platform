@@ -154,6 +154,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: "优惠活动",
       cell: (record) => (
         <TableTitleCell
+          icon="target"
           title={record.promotionName}
           description={`${record.promotionCode} · ${typeLabel(record.promotionType)}`}
           onTitleClick={() => router.push("/promotion-redemptions")}
@@ -164,10 +165,12 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       id: "scope",
       header: "适用范围",
       cell: (record) => (
-        <TableTitleCell
-          title={<Badge variant="outline">{record.scopeLabel}</Badge>}
-          description={record.description}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {<Badge variant="outline">{record.scopeLabel}</Badge>}
+          <span className="text-body-sm text-muted-foreground">
+            {record.description}
+          </span>
+        </span>
       ),
     },
     {
@@ -175,10 +178,12 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: "优惠",
       align: "center",
       cell: (record) => (
-        <TableTitleCell
-          title={record.discountLabel}
-          description={typeLabel(record.promotionType)}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {record.discountLabel}
+          <span className="text-body-sm text-muted-foreground">
+            {typeLabel(record.promotionType)}
+          </span>
+        </span>
       ),
     },
     {
@@ -186,10 +191,10 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: "核销",
       align: "numeric",
       cell: (record) => (
-        <TableTitleCell
-          title={formatNumber(record.redemptionCount)}
-          description={`${formatNumber(record.tenantCount)} 租户`}
-        />
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatNumber(record.redemptionCount)}
+          <span className="text-body-sm text-muted-foreground">{`${formatNumber(record.tenantCount)} 租户`}</span>
+        </span>
       ),
     },
     {
@@ -197,14 +202,16 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: tShared("columns.state"),
       align: "center",
       cell: (record) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <Tag tone={statusTone(record.status)}>
               {statusLabel(record.status)}
             </Tag>
           }
-          description={record.ownerName}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {record.ownerName}
+          </span>
+        </span>
       ),
     },
     {
@@ -212,12 +219,12 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: "时间",
       align: "center",
       cell: (record) => (
-        <TableTitleCell
-          title={formatDate(record.startsAt, locale)}
-          description={
-            record.endsAt ? formatDate(record.endsAt, locale) : "长期"
-          }
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {formatDate(record.startsAt, locale)}
+          <span className="text-body-sm text-muted-foreground">
+            {record.endsAt ? formatDate(record.endsAt, locale) : "长期"}
+          </span>
+        </span>
       ),
     },
   ];

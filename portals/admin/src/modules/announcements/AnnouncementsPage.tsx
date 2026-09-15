@@ -20,6 +20,7 @@ import {
   StatusBadge,
   Textarea,
   useToast,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import {
@@ -327,7 +328,17 @@ function announcementColumns(
   locale: string,
 ): readonly DataTableColumn<AnnouncementRecord>[] {
   return [
-    { id: "title", header: "标题", cell: (item) => item.title },
+    {
+      id: "title",
+      header: "标题",
+      cell: (item) => (
+        <TableTitleCell
+          icon="bell"
+          title={item.title}
+          description={SCOPE_LABELS[item.targetScope]}
+        />
+      ),
+    },
     {
       id: "type",
       header: "类型",

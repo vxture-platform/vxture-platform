@@ -305,6 +305,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       header: "发票",
       cell: (invoice) => (
         <TableTitleCell
+          icon="clipboard"
           title={invoice.invoiceNo}
           description={`${invoice.invoiceTitle} · ${taxTypeLabel(invoice.invoiceTaxType)}`}
           onTitleClick={() =>
@@ -317,19 +318,26 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (invoice) => (
-        <TableTitleCell
-          icon={invoice.tenantType === "company" ? "buildings" : "user"}
-          title={invoice.tenantName}
-          description={`${invoice.tenantCode} · ${typeLabel(invoice.tenantType)}`}
-        />
+        <span className="inline-flex items-center gap-xs">
+          <Icon
+            name={invoice.tenantType === "company" ? "buildings" : "user"}
+            size="sm"
+            className="shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {invoice.tenantName}
+            <span className="text-body-sm text-muted-foreground">{`${invoice.tenantCode} · ${typeLabel(invoice.tenantType)}`}</span>
+          </span>
+        </span>
       ),
     },
     {
       id: "bill",
       header: "账单",
       cell: (invoice) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <span className="inline-flex flex-wrap gap-2xs">
               <StatusBadge tone={BILL_STATUS_TONE[invoice.billStatus]}>
                 {billStatusLabel(invoice.billStatus)}
@@ -339,8 +347,10 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
               </StatusBadge>
             </span>
           }
-          description={invoice.billNo}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {invoice.billNo}
+          </span>
+        </span>
       ),
     },
     {
@@ -348,10 +358,10 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       header: "金额",
       align: "numeric",
       cell: (invoice) => (
-        <TableTitleCell
-          title={formatCurrency(invoice.invoiceAmount, invoice.currency)}
-          description={`税额 ${formatCurrency(invoice.taxAmount, invoice.currency)}`}
-        />
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatCurrency(invoice.invoiceAmount, invoice.currency)}
+          <span className="text-body-sm text-muted-foreground">{`税额 ${formatCurrency(invoice.taxAmount, invoice.currency)}`}</span>
+        </span>
       ),
     },
     {
@@ -359,8 +369,8 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       header: tShared("columns.state"),
       align: "center",
       cell: (invoice) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge
               tone={INVOICE_STATUS_TONE[invoice.invoiceStatus]}
               icon={invoiceStatusIcon(invoice.invoiceStatus)}
@@ -368,28 +378,28 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
               {invoiceStatusLabel(invoice.invoiceStatus)}
             </StatusBadge>
           }
-          description={invoiceTypeLabel(invoice.invoiceType)}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {invoiceTypeLabel(invoice.invoiceType)}
+          </span>
+        </span>
       ),
     },
     {
       id: "delivery",
       header: "寄送",
       cell: (invoice) => (
-        <TableTitleCell
-          title={
-            invoice.expressNo
-              ? (invoice.expressCompany ?? "线下寄送")
-              : invoice.invoiceFileUrl
-                ? "电子文件"
-                : "未寄送"
-          }
-          description={
-            invoice.expressNo ??
-            invoice.invoiceFileUrl ??
-            formatDate(invoice.sendAt, locale)
-          }
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {invoice.expressNo
+            ? (invoice.expressCompany ?? "线下寄送")
+            : invoice.invoiceFileUrl
+              ? "电子文件"
+              : "未寄送"}
+          <span className="text-body-sm text-muted-foreground">
+            {invoice.expressNo ??
+              invoice.invoiceFileUrl ??
+              formatDate(invoice.sendAt, locale)}
+          </span>
+        </span>
       ),
     },
   ];

@@ -19,6 +19,7 @@ import {
   NativeSelect,
   StatusBadge,
   TableTitleCell,
+  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import { type StatusTone } from "@vxture-platform/shared";
@@ -347,6 +348,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       header: "账单",
       cell: (bill) => (
         <TableTitleCell
+          icon="list"
           title={bill.billNo}
           description={`${cycleLabel(bill.billCycle)} · ${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`}
           onTitleClick={() =>
@@ -359,25 +361,34 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (bill) => (
-        <TableTitleCell
-          icon={bill.tenantType === "company" ? "buildings" : "user"}
-          title={bill.tenantName}
-          description={`${bill.tenantCode} · ${typeLabel(bill.tenantType)}`}
-        />
+        <span className="inline-flex items-center gap-xs">
+          <Icon
+            name={bill.tenantType === "company" ? "buildings" : "user"}
+            size="sm"
+            className="shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {bill.tenantName}
+            <span className="text-body-sm text-muted-foreground">{`${bill.tenantCode} · ${typeLabel(bill.tenantType)}`}</span>
+          </span>
+        </span>
       ),
     },
     {
       id: "plan",
       header: "订阅套餐",
       cell: (bill) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <Badge className={tierBadgeClass(bill.tierName)}>
               {bill.tierName ?? "未关联"}
             </Badge>
           }
-          description={bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
+          </span>
+        </span>
       ),
     },
     {
@@ -385,14 +396,14 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       header: "金额",
       align: "numeric",
       cell: (bill) => (
-        <TableTitleCell
-          title={formatCurrency(bill.payableAmount, bill.currency)}
-          description={
-            bill.discountAmount > 0
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatCurrency(bill.payableAmount, bill.currency)}
+          <span className="text-body-sm text-muted-foreground">
+            {bill.discountAmount > 0
               ? `原价 ${formatCurrency(bill.totalAmount, bill.currency)} · 减免 ${formatCurrency(bill.discountAmount, bill.currency)}`
-              : `原价 ${formatCurrency(bill.totalAmount, bill.currency)}`
-          }
-        />
+              : `原价 ${formatCurrency(bill.totalAmount, bill.currency)}`}
+          </span>
+        </span>
       ),
     },
     {
@@ -402,28 +413,28 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       cell: (bill) => {
         const tags = billingExceptionTags(bill);
         return (
-          <TableTitleCell
-            title={
-              tags.length ? (
-                <span className="inline-flex flex-wrap gap-2xs">
-                  {tags.map((tag) => (
-                    <StatusBadge
-                      key={tag.key}
-                      tone={tag.tone}
-                      {...(tag.title ? { title: tag.title } : {})}
-                    >
-                      {tag.label}
-                    </StatusBadge>
-                  ))}
-                </span>
-              ) : (
-                "-"
-              )
-            }
-            {...(bill.operationRemark
-              ? { description: bill.operationRemark }
-              : {})}
-          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {tags.length ? (
+              <span className="inline-flex flex-wrap justify-center gap-2xs">
+                {tags.map((tag) => (
+                  <StatusBadge
+                    key={tag.key}
+                    tone={tag.tone}
+                    {...(tag.title ? { title: tag.title } : {})}
+                  >
+                    {tag.label}
+                  </StatusBadge>
+                ))}
+              </span>
+            ) : (
+              "-"
+            )}
+            {bill.operationRemark ? (
+              <span className="text-body-sm text-muted-foreground">
+                {bill.operationRemark}
+              </span>
+            ) : null}
+          </span>
         );
       },
     },
@@ -432,8 +443,8 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       header: "收款",
       align: "center",
       cell: (bill) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge
               tone={BILL_STATUS_TONE[bill.billStatus]}
               icon={billStatusIcon(bill.billStatus)}
@@ -441,8 +452,8 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
               {billStatusLabel(bill.billStatus)}
             </StatusBadge>
           }
-          description={`已收 ${formatCurrency(bill.paidAmount, bill.currency)}`}
-        />
+          <span className="text-body-sm text-muted-foreground">{`已收 ${formatCurrency(bill.paidAmount, bill.currency)}`}</span>
+        </span>
       ),
     },
     {
@@ -450,17 +461,17 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       header: "发票",
       align: "center",
       cell: (bill) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
               {t(`status.invoice.${bill.invoiceStatus}`)}
             </StatusBadge>
           }
-          description={
-            bill.invoiceNo ??
-            `已登记 ${formatCurrency(bill.invoicedAmount, bill.currency)}`
-          }
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {bill.invoiceNo ??
+              `已登记 ${formatCurrency(bill.invoicedAmount, bill.currency)}`}
+          </span>
+        </span>
       ),
     },
   ];

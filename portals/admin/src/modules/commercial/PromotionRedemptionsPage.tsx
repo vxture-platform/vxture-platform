@@ -17,6 +17,7 @@ import {
   MetricGrid,
   NativeSelect,
   TableTitleCell,
+  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
@@ -168,6 +169,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       header: "核销记录",
       cell: (record) => (
         <TableTitleCell
+          icon="check"
           title={record.redemptionNo}
           description={`${record.promotionCode} · ${record.promotionName}`}
           onTitleClick={() =>
@@ -180,25 +182,32 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (record) => (
-        <TableTitleCell
-          icon={record.tenantType === "company" ? "buildings" : "user"}
-          title={record.tenantName}
-          description={`${record.tenantCode} · ${typeLabel(record.tenantType)}`}
-        />
+        <span className="inline-flex items-center gap-xs">
+          <Icon
+            name={record.tenantType === "company" ? "buildings" : "user"}
+            size="sm"
+            className="shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="inline-flex flex-col items-center gap-2xs">
+            {record.tenantName}
+            <span className="text-body-sm text-muted-foreground">{`${record.tenantCode} · ${typeLabel(record.tenantType)}`}</span>
+          </span>
+        </span>
       ),
     },
     {
       id: "bill",
       header: "账单",
       cell: (record) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <Tag tone={billStatusTone(record.billStatus)}>
               {billStatusLabel(record.billStatus)}
             </Tag>
           }
-          description={`${record.billNo} · ${record.orderNo ?? "未关联订单"}`}
-        />
+          <span className="text-body-sm text-muted-foreground">{`${record.billNo} · ${record.orderNo ?? "未关联订单"}`}</span>
+        </span>
       ),
     },
     {
@@ -206,10 +215,10 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       header: "优惠金额",
       align: "numeric",
       cell: (record) => (
-        <TableTitleCell
-          title={formatCurrency(record.discountAmount, record.currency)}
-          description={`应付 ${formatCurrency(record.payableAmount, record.currency)} / 原价 ${formatCurrency(record.orderAmount, record.currency)}`}
-        />
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatCurrency(record.discountAmount, record.currency)}
+          <span className="text-body-sm text-muted-foreground">{`应付 ${formatCurrency(record.payableAmount, record.currency)} / 原价 ${formatCurrency(record.orderAmount, record.currency)}`}</span>
+        </span>
       ),
     },
     {
@@ -217,7 +226,10 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       header: "核销方",
       align: "center",
       cell: (record) => (
-        <TableTitleCell title={record.operatorName} description="已核销" />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {record.operatorName}
+          <span className="text-body-sm text-muted-foreground">已核销</span>
+        </span>
       ),
     },
     {
@@ -225,10 +237,12 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       header: "时间",
       align: "center",
       cell: (record) => (
-        <TableTitleCell
-          title={formatDate(record.redeemedAt, locale)}
-          description={record.remark ?? "系统记录"}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {formatDate(record.redeemedAt, locale)}
+          <span className="text-body-sm text-muted-foreground">
+            {record.remark ?? "系统记录"}
+          </span>
+        </span>
       ),
     },
   ];

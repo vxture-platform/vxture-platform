@@ -191,16 +191,16 @@ function useProductColumns(
       header: tShared("columns.state"),
       align: "center",
       cell: (product) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
               {productStatusLabel(product.status)}
             </StatusBadge>
           }
-          description={`${product.visibility === "public" ? "公开" : "内部"} | ${
+          <span className="text-body-sm text-muted-foreground">{`${product.visibility === "public" ? "公开" : "内部"} | ${
             product.healthStatus === "normal" ? "健康" : "关注"
-          }`}
-        />
+          }`}</span>
+        </span>
       ),
     },
     {
@@ -208,10 +208,10 @@ function useProductColumns(
       header: "方案",
       align: "center",
       cell: (product) => (
-        <TableTitleCell
-          title={`${formatNumber(product.solutionCount)} 方案`}
-          description={`${formatNumber(product.planCount)} 套餐 | ${formatNumber(product.releaseCount)} 发布`}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {`${formatNumber(product.solutionCount)} 方案`}
+          <span className="text-body-sm text-muted-foreground">{`${formatNumber(product.planCount)} 套餐 | ${formatNumber(product.releaseCount)} 发布`}</span>
+        </span>
       ),
     },
     {
@@ -219,14 +219,14 @@ function useProductColumns(
       header: "接入",
       align: "center",
       cell: (product) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge tone={ACCESS_STATUS_TONE[product.integration.status]}>
               {productAccessLabel(product.integration.status)}
             </StatusBadge>
           }
-          description={`${formatNumber(product.modelPolicyCount)} 模型授权`}
-        />
+          <span className="text-body-sm text-muted-foreground">{`${formatNumber(product.modelPolicyCount)} 模型授权`}</span>
+        </span>
       ),
     },
     {
@@ -234,10 +234,12 @@ function useProductColumns(
       header: "计量",
       align: "center",
       cell: (product) => (
-        <TableTitleCell
-          title={product.meteringUnit}
-          description={product.billingMode}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {product.meteringUnit}
+          <span className="text-body-sm text-muted-foreground">
+            {product.billingMode}
+          </span>
+        </span>
       ),
     },
   ];

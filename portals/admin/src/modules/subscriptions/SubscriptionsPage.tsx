@@ -267,18 +267,20 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       id: "solution",
       header: "业务方案",
       cell: (subscription) => (
-        <TableTitleCell
-          title={subscription.solutionName}
-          description={subscription.industry}
-        />
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {subscription.solutionName}
+          <span className="text-body-sm text-muted-foreground">
+            {subscription.industry}
+          </span>
+        </span>
       ),
     },
     {
       id: "plan",
       header: "套餐权益",
       cell: (subscription) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <span className="inline-flex flex-wrap gap-2xs">
               <Badge className={tierBadgeClass(subscription.tierCode)}>
                 {subscription.tierName}
@@ -288,8 +290,10 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               </StatusBadge>
             </span>
           }
-          description={subscription.orderNo ?? subscription.subscriptionCode}
-        />
+          <span className="text-body-sm text-muted-foreground">
+            {subscription.orderNo ?? subscription.subscriptionCode}
+          </span>
+        </span>
       ),
     },
     {
@@ -297,8 +301,8 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       header: tShared("columns.state"),
       align: "center",
       cell: (subscription) => (
-        <TableTitleCell
-          title={
+        <span className="inline-flex flex-col items-center gap-2xs">
+          {
             <StatusBadge
               tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
               icon={subscriptionStatusIcon(subscription.status)}
@@ -306,8 +310,8 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               {subscriptionStatusLabel(subscription.status)}
             </StatusBadge>
           }
-          description={`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}
-        />
+          <span className="text-body-sm text-muted-foreground">{`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}</span>
+        </span>
       ),
     },
     {
@@ -315,10 +319,10 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       header: "配额",
       align: "numeric",
       cell: (subscription) => (
-        <TableTitleCell
-          title={`${formatNumber(subscription.quota.usageRate)}%`}
-          description={`${quotaRiskLabel(subscription.quota.risk)} · ${formatNumber(subscription.quota.maxUsers)} 席位`}
-        />
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {`${formatNumber(subscription.quota.usageRate)}%`}
+          <span className="text-body-sm text-muted-foreground">{`${quotaRiskLabel(subscription.quota.risk)} · ${formatNumber(subscription.quota.maxUsers)} 席位`}</span>
+        </span>
       ),
     },
     {
@@ -328,12 +332,12 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       // 订阅收入 = 本周期实付（owner 2026-09-03：收入是真实收入，年付 ¥0.10 就显示 ¥0.10，
       // 任何地方都不折成月均）。
       cell: (subscription) => (
-        <TableTitleCell
-          title={formatMoney(subscription.payAmount)}
-          description={`${cycleLabel(subscription.cycleType)} · ${
+        <span className="inline-flex flex-col items-end gap-2xs">
+          {formatMoney(subscription.payAmount)}
+          <span className="text-body-sm text-muted-foreground">{`${cycleLabel(subscription.cycleType)} · ${
             subscription.autoRenew ? "自动续期" : subscription.operationHint
-          }`}
-        />
+          }`}</span>
+        </span>
       ),
     },
   ];
