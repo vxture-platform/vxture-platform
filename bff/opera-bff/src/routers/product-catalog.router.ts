@@ -204,6 +204,54 @@ function toRecord(row: ProductRow): ProductRecord {
   };
 }
 
+/**
+ * 列表上「接入配置」一格的摘要（owner 2026-09-16：目录列信息要补齐，长的收进气泡）。
+ *
+ * 只在列表查询里带出，不进 SELECT_COLUMNS：那个常量还用在单行读与 RETURNING 上，
+ * 那些路径不需要这份摘要。三份都是本地表，相关子查询一次带出，不让页面逐行再打。
+ */
+export interface ProductIntegrationSummary {
+  edgeDomain: string | null;
+  edgeUpstream: string | null;
+  webhookUrl: string | null;
+  homeUrl: string | null;
+  hasWebhookSecret: boolean;
+  clients: { clientId: string; channel: string; state: string }[];
+  metricKeys: string[];
+}
+
+export type ProductListRecord = ProductRecord & {
+  integration: ProductIntegrationSummary;
+};
+
+interface ProductListRow extends ProductRow {
+  webhook_summary: {
+    edgeDomain: string | null;
+    edgeUpstream: string | null;
+    webhookUrl: string | null;
+    homeUrl: string | null;
+    hasWebhookSecret: boolean;
+  } | null;
+  client_summary: { clientId: string; channel: string; state: string }[] | null;
+  metric_keys: string[] | null;
+}
+
+function toListRecord(row: ProductListRow): ProductListRecord {
+  const w = row.webhook_summary;
+  return {
+    ...toRecord(row),
+    integration: {
+      edgeDomain: w?.edgeDomain ?? null,
+      edgeUpstream: w?.edgeUpstream ?? null,
+      webhookUrl: w?.webhookUrl ?? null,
+      homeUrl: w?.homeUrl ?? null,
+      hasWebhookSecret: w?.hasWebhookSecret ?? false,
+      clients: row.client_summary ?? [],
+      metricKeys: row.metric_keys ?? [],
+    },
+  };
+}
+
 export interface ProductWriteBody {
   productCode?: string;
   productType?: string;
@@ -332,7 +380,7 @@ export class ProductCatalogRouter {
     @Req() req: Request & RequestContext,
     @Query("origin") origin?: string,
     @Query("state") state?: string,
-  ): Promise<ProductRecord[]> {
+  ): Promise<ProductListRecord[]> {
     assertCanRead(req);
     const clauses: string[] = ["deleted_at IS NULL"];
     const params: unknown[] = [];
@@ -344,13 +392,35 @@ export class ProductCatalogRouter {
       params.push(state);
       clauses.push(`status = $${params.length}`);
     }
-    const result = await this.pool.query<ProductRow>(
-      `SELECT ${SELECT_COLUMNS} FROM product.products
+    /* 摘要子查询用 p.id 相关而不是裸 id：oidc_clients 自己有 id 列，裸 id 会被解析成
+       c.id（SELECT_COLUMNS 里的子查询没有这个问题——那两张表没有 id 列）。 */
+    const result = await this.pool.query<ProductListRow>(
+      `SELECT ${SELECT_COLUMNS},
+         (SELECT json_build_object(
+             'edgeDomain', w.edge_domain,
+             'edgeUpstream', w.edge_upstream,
+             'webhookUrl', w.webhook_url,
+             'homeUrl', w.home_url,
+             'hasWebhookSecret', w.webhook_secret_enc IS NOT NULL)
+            FROM product.product_webhooks w WHERE w.product_id = p.id) AS webhook_summary,
+         coalesce(
+           (SELECT json_agg(json_build_object(
+               'clientId', c.client_id,
+               'channel', c.release_channel,
+               'state', c.status)
+               ORDER BY c.release_channel, c.client_id)
+              FROM appoidc.oidc_clients c WHERE c.product_id = p.id),
+           '[]'::json) AS client_summary,
+         coalesce(
+           (SELECT array_agg(m.metric_key ORDER BY m.metric_key)
+              FROM product.product_metrics m WHERE m.product_id = p.id),
+           '{}') AS metric_keys
+        FROM product.products p
         WHERE ${clauses.join(" AND ")}
         ORDER BY product_code ASC`,
       params,
     );
-    return result.rows.map(toRecord);
+    return result.rows.map(toListRecord);
   }
 
   @Get("categories")

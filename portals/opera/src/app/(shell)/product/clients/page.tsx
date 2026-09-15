@@ -27,7 +27,7 @@
  * 「查看密钥」，只有「轮换」——丢了就只能换一把新的，这是设计不是缺陷。 */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -52,6 +52,12 @@ import {
   TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
+import {
+  ConfigPopover,
+  MonoList,
+  StackCell,
+  formatUpdatedAt,
+} from "@/components/table/ConfigCells";
 import { api, OperaApiError } from "@/lib/api";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
@@ -107,6 +113,7 @@ function ProductClients() {
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const router = useRouter();
+  const locale = useLocale();
   const initialProductId = useSearchParams().get("productId") ?? "all";
 
   const [rows, setRows] = useState<OidcClientRecord[]>([]);
@@ -349,67 +356,105 @@ function ProductClients() {
                   ),
               },
               {
+                /* 渠道为主、认证方式为辅；PKCE 并进辅行（owner 2026-09-16「列不要太多，相似的合并」）。 */
                 id: "channel",
-                header: "渠道",
+                header: "渠道 / 认证",
                 sortable: true,
-                width: "xs",
+                width: "sm",
                 cell: (c: OidcClientRecord) => (
-                  <Badge variant="outline">{c.releaseChannel}</Badge>
+                  <StackCell
+                    main={<Badge variant="outline">{c.releaseChannel}</Badge>}
+                    sub={
+                      (c.tokenEndpointAuthMethod === "none"
+                        ? "公共客户端"
+                        : "机密客户端") + (c.pkceRequired ? " · PKCE" : "")
+                    }
+                  />
                 ),
               },
               {
+                /* 回调、登出回跳、scope 都是清单：首条回调为主，其余收进气泡。 */
                 id: "redirect",
-                header: "回调地址",
+                header: "回调与范围",
                 cell: (c: OidcClientRecord) => (
-                  <span className="flex flex-col items-center gap-2xs">
-                    {c.redirectUris.length === 0 ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      c.redirectUris.slice(0, 2).map((u) => (
-                        <span
-                          key={u}
-                          className="font-mono text-code-sm text-muted-foreground"
-                        >
-                          {u}
+                  <StackCell
+                    main={
+                      c.redirectUris[0] ? (
+                        <span className="font-mono text-code-sm text-muted-foreground">
+                          {c.redirectUris[0]}
                         </span>
-                      ))
-                    )}
-                    {c.redirectUris.length > 2 ? (
-                      <span className="text-body-sm text-muted-foreground">
-                        +{c.redirectUris.length - 2} 个
-                      </span>
-                    ) : null}
-                  </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )
+                    }
+                    sub={
+                      <ConfigPopover
+                        trigger={
+                          "回调 " +
+                          c.redirectUris.length +
+                          " · 登出 " +
+                          c.postLogoutRedirectUris.length +
+                          " · Scope " +
+                          c.allowedScopes.length
+                        }
+                        title={c.clientId + " · 回调与范围"}
+                        rows={[
+                          {
+                            label: "回调地址",
+                            value: <MonoList items={c.redirectUris} />,
+                          },
+                          {
+                            label: "登出回跳",
+                            value: (
+                              <MonoList items={c.postLogoutRedirectUris} />
+                            ),
+                          },
+                          {
+                            label: "Scope",
+                            value: <MonoList items={c.allowedScopes} />,
+                          },
+                          {
+                            label: "认证方式",
+                            value:
+                              c.tokenEndpointAuthMethod === "none"
+                                ? "公共客户端（无密钥）"
+                                : "机密客户端（client_secret_basic）",
+                          },
+                          {
+                            label: "PKCE",
+                            value: c.pkceRequired ? "强制" : "不强制",
+                          },
+                        ]}
+                        {...(c.productCode
+                          ? {
+                              href:
+                                "/product/catalog/" +
+                                encodeURIComponent(c.productCode) +
+                                "#section-login",
+                              hrefLabel: "去产品页配置",
+                            }
+                          : {})}
+                      />
+                    }
+                  />
                 ),
-              },
-              {
-                id: "pkce",
-                header: "PKCE",
-                sortable: true,
-                width: "xs",
-                cell: (c: OidcClientRecord) =>
-                  c.pkceRequired ? (
-                    <Icon
-                      name="check"
-                      size="sm"
-                      aria-label="强制 PKCE"
-                      className="text-success-text"
-                    />
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  ),
               },
               {
                 id: "state",
                 header: tShared("columns.state"),
                 sortable: true,
-                width: "xs",
+                width: "sm",
                 cell: (c: OidcClientRecord) => (
-                  <StatusBadge tone={CLIENT_STATE_TONE[c.state]} dot>
-                    {c.state === "active"
-                      ? tShared("actions.enable")
-                      : tShared("actions.disable")}
-                  </StatusBadge>
+                  <StackCell
+                    main={
+                      <StatusBadge tone={CLIENT_STATE_TONE[c.state]} dot>
+                        {c.state === "active"
+                          ? tShared("actions.enable")
+                          : tShared("actions.disable")}
+                      </StatusBadge>
+                    }
+                    sub={formatUpdatedAt(c.updatedAt, locale)}
+                  />
                 ),
               },
             ]}
@@ -434,7 +479,43 @@ function ProductClients() {
                       icon: "edit",
                       onSelect: () =>
                         router.push(
-                          `/product/catalog/${encodeURIComponent(c.productCode ?? "")}#section-login`,
+                          "/product/catalog/" +
+                            encodeURIComponent(c.productCode ?? "") +
+                            "#section-login",
+                        ),
+                    },
+                    /* 常用操作跳产品页并直接打开对应面板（owner 2026-09-16）。 */
+                    {
+                      id: "secrets",
+                      label: "轮换密钥",
+                      icon: "key",
+                      onSelect: () =>
+                        router.push(
+                          "/product/catalog/" +
+                            encodeURIComponent(c.productCode ?? "") +
+                            "?panel=secrets",
+                        ),
+                    },
+                    {
+                      id: "checks",
+                      label: "接入检查",
+                      icon: "list-checks",
+                      onSelect: () =>
+                        router.push(
+                          "/product/catalog/" +
+                            encodeURIComponent(c.productCode ?? "") +
+                            "?panel=checks",
+                        ),
+                    },
+                    {
+                      id: "entitlements",
+                      label: "权益配置",
+                      icon: "ticket",
+                      separatorBefore: true,
+                      onSelect: () =>
+                        router.push(
+                          "/product/entitlements?productCode=" +
+                            encodeURIComponent(c.productCode ?? ""),
                         ),
                     },
                   ]}
