@@ -72,7 +72,7 @@ import {
   type StatusBadgeTone,
   ActionButton,
 } from "@vxture/design-system";
-import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -2448,6 +2448,7 @@ function ModelServiceContent() {
         <div className="density-compact flex flex-col gap-md">
           <FieldTier
             tier="identity"
+            title={FIELD_TIER_TITLE.identity}
             hint="决定这是哪一家。Code 与类型创建后不可改。"
           >
             <div className="grid grid-cols-3 gap-md">
@@ -2525,6 +2526,7 @@ function ModelServiceContent() {
 
           <FieldTier
             tier="details"
+            title={FIELD_TIER_TITLE.details}
             hint="填了地址，行操作里就有对方控制台与账单的直达入口。"
           >
             <Field>
@@ -2841,7 +2843,11 @@ function ModelServiceContent() {
             </Field>
           </FieldTier>
 
-          <FieldTier tier="advanced" hint="填不填都不影响接入。">
+          <FieldTier
+            tier="advanced"
+            title={FIELD_TIER_TITLE.advanced}
+            hint="填不填都不影响接入。"
+          >
             <div className="grid grid-cols-2 gap-md">
               <Field>
                 <FieldLabel
@@ -2885,7 +2891,11 @@ function ModelServiceContent() {
         {/* 三档（DS `FieldTier`）：身份（不可改）/ 接入参数 / 可留空的容量与呈现。
             xl 双栏 + `density-compact`（DS 密度轴），整表一屏可见、不出滚动条。 */}
         <div className="density-compact flex flex-col gap-md">
-          <FieldTier tier="identity" hint="决定这是哪个模型、由谁供应。">
+          <FieldTier
+            tier="identity"
+            title={FIELD_TIER_TITLE.identity}
+            hint="决定这是哪个模型、由谁供应。"
+          >
             <FieldGroup>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
@@ -2998,6 +3008,7 @@ function ModelServiceContent() {
 
           <FieldTier
             tier="details"
+            title={FIELD_TIER_TITLE.details}
             hint="接入参数：填错要到第一次真实调用才暴露。"
           >
             <FieldGroup>
@@ -3173,6 +3184,7 @@ function ModelServiceContent() {
               关掉思考的开关，然后照着默认去猜为什么行为不一样。 */}
           <FieldTier
             tier="advanced"
+            title={FIELD_TIER_TITLE.advanced}
             defaultOpen={modelDraft.extraBody.trim() !== ""}
             hint="都可留空，留空＝用 Atlas 默认。"
           >

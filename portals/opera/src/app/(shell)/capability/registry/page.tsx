@@ -113,7 +113,7 @@ import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
-import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
 import { formatDateTime } from "@vxture-platform/shared";
 
 const MANAGE = "capability:runos.manage";
@@ -1762,6 +1762,7 @@ function CapabilitiesPageContent() {
             是因为它有模板——换类型时自动换成对应模板，不动也能提交。 */}
         <FieldTier
           tier="identity"
+          title={FIELD_TIER_TITLE.identity}
           hint="ID 前缀必须等于 Provider；类型决定下面出现哪份契约，选错要重来。"
         >
           <FieldGroup columns={2}>
@@ -1838,6 +1839,7 @@ function CapabilitiesPageContent() {
 
         <FieldTier
           tier="details"
+          title={FIELD_TIER_TITLE.details}
           hint="分类进 runos_discover 的检索面——选错等于让业务 agent 搜不到这个能力。"
         >
           <FieldGroup columns={2}>
@@ -2593,6 +2595,7 @@ function CapabilitiesPageContent() {
 
             <FieldTier
               tier="details"
+              title={FIELD_TIER_TITLE.details}
               hint="归属与检索面，分类选错等于让业务 agent 搜不到。"
             >
               <FieldGroup columns={2}>
@@ -2639,7 +2642,11 @@ function CapabilitiesPageContent() {
               </FieldGroup>
             </FieldTier>
 
-            <FieldTier tier="advanced" hint="可选，最多 8 个。">
+            <FieldTier
+              tier="advanced"
+              title={FIELD_TIER_TITLE.advanced}
+              hint="可选，最多 8 个。"
+            >
               <FieldGroup columns={2}>
                 <Field span="full">
                   <FieldLabel

@@ -11,3 +11,16 @@ export const FIELD_LABEL_A11Y = {
   requiredLabel: "必填",
   hintLabel: "说明",
 } as const;
+
+/**
+ * FieldTier 三档的中文标题。
+ *
+ * DS 的 FieldTier 按惯例零文案、默认英文（Identity / Details / Advanced），由消费方传
+ * `title`。opera 此前大多数调用点没传，表单里夹着三个英文分组名（v0.26.176 线上走查）。
+ * 调用点自己有更贴切的标题时照旧写自己的。
+ */
+export const FIELD_TIER_TITLE = {
+  identity: "基本信息",
+  details: "详细配置",
+  advanced: "高级选项",
+} as const;

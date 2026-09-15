@@ -47,7 +47,7 @@ import {
   TableTitleCell,
   ActionButton,
 } from "@vxture/design-system";
-import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
@@ -638,6 +638,7 @@ export default function MaintenanceWindowsPage() {
               常规 = 分级与波及面；高级 = 两段可选长文。 */}
           <FieldTier
             tier="identity"
+            title={FIELD_TIER_TITLE.identity}
             hint="标题与时间窗会直接出现在对外公告上；进行中的窗口只能顺延，不能提前。"
           >
             <FieldGroup columns={2}>
@@ -696,6 +697,7 @@ export default function MaintenanceWindowsPage() {
 
           <FieldTier
             tier="details"
+            title={FIELD_TIER_TITLE.details}
             hint="严重度决定公告的展示强度，受影响服务可留空。"
           >
             <FieldGroup columns={2}>
