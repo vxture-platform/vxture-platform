@@ -35,7 +35,8 @@
  *
  * 不轮询（设计文件 §7.3：窗口聚合类按手动刷新）——窗口本身是按月的，秒级刷新没有意义。 */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
@@ -245,7 +246,7 @@ function axisIdentity(row: UsageSummaryRow): string {
   }
 }
 
-export default function CapabilityMeteringPage() {
+function CapabilityMeteringContent() {
   const locale = useLocale();
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
@@ -254,6 +255,13 @@ export default function CapabilityMeteringPage() {
   const [window_, setWindow] = useState(currentMonth);
   const [limit, setLimit] = useState<string>("100");
   const [keyword, setKeyword] = useState("");
+  /**
+   * 只看某一个能力的用量。从能力注册 / 能力授权的行操作「查看用量」深链进来
+   * （`?capabilityId=`）。上游按 `capabilityId` 过滤是单值，所以这里是一个可清除的
+   * 条件而不是勾选面板；按 Provider / 能力分组看，用左边的聚合轴。
+   */
+  const initialCapabilityId = useSearchParams().get("capabilityId") ?? "";
+  const [capabilityFilter, setCapabilityFilter] = useState(initialCapabilityId);
   const [page, setPage] = useState<UsageSummaryPage | null>(null);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -266,6 +274,7 @@ export default function CapabilityMeteringPage() {
       to: window_.to,
       limit,
     });
+    if (capabilityFilter) p.set("capabilityId", capabilityFilter);
     try {
       const data = await api.get<UsageSummaryPage>(
         `/api/runos/audit/usage-summaries?${p.toString()}`,
@@ -281,7 +290,7 @@ export default function CapabilityMeteringPage() {
           error instanceof OperaApiError ? error.message : "读取用量汇总失败",
       });
     }
-  }, [axis, window_, limit]);
+  }, [axis, window_, limit, capabilityFilter]);
 
   useEffect(() => {
     void reload();
@@ -514,6 +523,7 @@ export default function CapabilityMeteringPage() {
           onReset={() => {
             setKeyword("");
             setLimit("100");
+            setCapabilityFilter("");
             pager.resetPage();
           }}
           actions={
@@ -537,6 +547,22 @@ export default function CapabilityMeteringPage() {
             </>
           }
         >
+          {capabilityFilter ? (
+            <Button
+              variant="outline"
+              size="md"
+              title="只看这个能力的用量；点一下清除"
+              onClick={() => {
+                setCapabilityFilter("");
+                pager.resetPage();
+              }}
+            >
+              <span className="font-mono text-code-sm">
+                能力：{capabilityFilter}
+              </span>
+              <Icon name="x" size="sm" aria-hidden="true" />
+            </Button>
+          ) : null}
           <Input
             type="date"
             aria-label="起始日期（UTC）"
@@ -691,5 +717,14 @@ export default function CapabilityMeteringPage() {
         />
       }
     />
+  );
+}
+
+/* `useSearchParams` 要求外面有 Suspense 边界，否则静态生成时整页退回客户端渲染并告警。 */
+export default function CapabilityMeteringPage() {
+  return (
+    <Suspense fallback={null}>
+      <CapabilityMeteringContent />
+    </Suspense>
   );
 }

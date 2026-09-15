@@ -69,7 +69,7 @@ import { Suspense, useEffect, useState, type FormEvent, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ActionMenu,
   Badge,
@@ -80,10 +80,14 @@ import {
   DialogForm,
   EmptyState,
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldTier,
+  FilterBar,
+  FilterPanel,
+  FilterPanelTrigger,
+  countFilterPanelValue,
+  type FilterPanelValue,
   Icon,
   Input,
   InputGroup,
@@ -102,6 +106,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 
 /** 未加载时的稳定空数组：`?? []` 每次渲染都是新数组，会让排序的 useMemo 每次重算。 */
 const NO_GRANTS: GrantRecord[] = [];
@@ -257,7 +262,15 @@ function RunosGrantsPageContent() {
   const [grants, setGrants] = useState<GrantRecord[] | null>(null);
   const [lookupLoad, setLookupLoad] = useState<LoadState>({ kind: "idle" });
 
-  const [capabilityRef, setCapabilityRef] = useState("");
+  const router = useRouter();
+  /* 「按 Capability 反查」可以从能力注册页深链进来：`?capabilityId=` 直接查。 */
+  const initialCapabilityRef = useSearchParams().get("capabilityId") ?? "";
+  const [capabilityRef, setCapabilityRef] = useState(initialCapabilityRef);
+  /* 产品持有能力表的筛选：关键词 + 勾选面板（来源 / 风险范围 / 需人工确认 / 状态）。
+     这张表是一个产品的全部 grant，一次取回，所以在本地筛。 */
+  const [grantKeyword, setGrantKeyword] = useState("");
+  const [grantFacetValue, setGrantFacetValue] = useState<FilterPanelValue>({});
+  const [grantFilterOpen, setGrantFilterOpen] = useState(false);
   const [capGrants, setCapGrants] = useState<GrantRecord[] | null>(null);
   const grantSortAccessors = useMemo<
     Readonly<Record<string, SortAccessor<GrantRecord>>>
@@ -265,13 +278,78 @@ function RunosGrantsPageContent() {
     () => ({
       capability: (r) => r.capabilityId,
       grantType: (r) => r.grantType,
-      approval: (r) => (r.criticalRequiresApproval ? 1 : 0),
       risk: (r) => r.riskScope,
       state: (r) => r.state,
     }),
     [],
   );
-  const grantSort = useTableSort(grants ?? NO_GRANTS, grantSortAccessors);
+  const grantFacets = useMemo(() => {
+    const options = (
+      pick: (r: GrantRecord) => string,
+      label?: (v: string) => string,
+    ) => {
+      const counts = new Map<string, number>();
+      for (const r of grants ?? [])
+        counts.set(pick(r), (counts.get(pick(r)) ?? 0) + 1);
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([value, count]) => ({
+          value,
+          label: label ? label(value) : value,
+          count,
+        }));
+    };
+    return [
+      {
+        id: "grantType",
+        label: "来源",
+        options: options(
+          (r) => r.grantType,
+          (v) => (v === "derived" ? "派生" : "直接授权"),
+        ),
+      },
+      {
+        id: "riskScope",
+        label: "风险范围",
+        options: options((r) => r.riskScope),
+      },
+      {
+        id: "approval",
+        label: "critical 需人工确认",
+        options: options(
+          (r) => (r.criticalRequiresApproval ? "yes" : "no"),
+          (v) => (v === "yes" ? "是" : "否"),
+        ),
+      },
+      { id: "state", label: "状态", options: options((r) => r.state) },
+    ];
+  }, [grants]);
+  const filteredGrants = useMemo(() => {
+    const kw = grantKeyword.trim().toLowerCase();
+    const pass = (id: string, value: string) => {
+      const chosen = grantFacetValue[id] ?? [];
+      return chosen.length === 0 || chosen.includes(value);
+    };
+    return (grants ?? NO_GRANTS).filter((r) => {
+      if (
+        !pass("grantType", r.grantType) ||
+        !pass("riskScope", r.riskScope) ||
+        !pass("approval", r.criticalRequiresApproval ? "yes" : "no") ||
+        !pass("state", r.state)
+      )
+        return false;
+      if (kw === "") return true;
+      const meta = catalog.find((c) => c.capabilityId === r.capabilityId);
+      return (
+        r.capabilityId.toLowerCase().includes(kw) ||
+        (meta?.title ?? "").toLowerCase().includes(kw) ||
+        Object.values(meta?.displayName ?? {}).some((v) =>
+          v.toLowerCase().includes(kw),
+        )
+      );
+    });
+  }, [grants, grantKeyword, grantFacetValue, catalog]);
+  const grantSort = useTableSort(filteredGrants, grantSortAccessors);
   const holderSortAccessors = useMemo<
     Readonly<Record<string, SortAccessor<GrantRecord>>>
   >(
@@ -285,6 +363,11 @@ function RunosGrantsPageContent() {
   const holderSort = useTableSort(capGrants ?? NO_GRANTS, holderSortAccessors);
   const [capLoad, setCapLoad] = useState<LoadState>({ kind: "idle" });
 
+  useEffect(() => {
+    if (initialCapabilityRef !== "") void runCapabilityLookup();
+    // 只在进页面时按深链查一次；之后由用户点「反查」。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /* 选中产品即查，不需要再点一次「查询」——选择器一动，意图就已经明确了。
      `runLookup` 每次渲染都是新函数，进依赖会无限循环，故只依赖产品码。 */
   useEffect(() => {
@@ -485,7 +568,7 @@ function RunosGrantsPageContent() {
   const grantColumns = [
     {
       id: "capability",
-      header: "Capability",
+      header: "能力",
       sortable: true,
       cell: (r: GrantRecord) => {
         const meta = catalog.find((c) => c.capabilityId === r.capabilityId);
@@ -519,21 +602,23 @@ function RunosGrantsPageContent() {
         ),
     },
     {
-      id: "approval",
-      header: "critical 需人工确认",
-      sortable: true,
-      width: "xs" as const,
-      cell: (r: GrantRecord) => (r.criticalRequiresApproval ? "是" : "否"),
-    },
-    {
+      /* 「critical 需人工确认」原是单独一列，只装一个是 / 否，而它说的就是风险范围那一档
+         怎么放行——并进风险列当副行。 */
       id: "risk",
-      header: "风险范围",
+      header: "风险",
       sortable: true,
-      width: "xs" as const,
+      width: "sm" as const,
       cell: (r: GrantRecord) => (
-        <StatusBadge tone={RISK_LEVEL_META[r.riskScope]?.tone ?? "neutral"}>
-          {r.riskScope}
-        </StatusBadge>
+        <span className="inline-flex flex-col items-center gap-2xs">
+          <StatusBadge tone={RISK_LEVEL_META[r.riskScope]?.tone ?? "neutral"}>
+            {r.riskScope}
+          </StatusBadge>
+          {r.riskScope === "critical" ? (
+            <span className="text-body-sm text-muted-foreground">
+              {r.criticalRequiresApproval ? "需人工确认" : "无需人工确认"}
+            </span>
+          ) : null}
+        </span>
       ),
     },
     {
@@ -591,15 +676,13 @@ function RunosGrantsPageContent() {
           </Button>
         }
       >
-        <div className="flex flex-wrap items-end gap-sm">
-          <Field className="w-fit grow max-w-panel-sm">
-            <FieldLabel htmlFor="lookup-product">
-              {tShared("columns.product")}
-            </FieldLabel>
-            {/* 选择器不是输入框：产品码是**已知集合**（平台自己的目录），让人手打
-                已知集合里的值就是在制造错字。选中即查，不用再点一次「查询」。 */}
+        <FilterBar
+          /* 选产品是「换一份数据」，不是在同一份里少看几行——放左段切面槽。 */
+          scope={
             <NativeSelect
               id="lookup-product"
+              wrapperClassName="w-fit"
+              aria-label={tShared("columns.product")}
               value={selectedProduct}
               onChange={(e) => setSelectedProduct(e.target.value)}
             >
@@ -610,8 +693,53 @@ function RunosGrantsPageContent() {
                 </option>
               ))}
             </NativeSelect>
-          </Field>
-        </div>
+          }
+          {...(grants
+            ? {
+                count:
+                  filteredGrants.length === grants.length
+                    ? grants.length
+                    : `${filteredGrants.length} / ${grants.length}`,
+              }
+            : {})}
+          search={
+            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
+              <InputGroupAddon>
+                <Icon name="search" size="sm" aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                placeholder="搜索能力名 / ID…"
+                aria-label="搜索这个产品持有的能力"
+                value={grantKeyword}
+                onChange={(e) => setGrantKeyword(e.target.value)}
+              />
+            </InputGroup>
+          }
+          resetLabel={tShared("filters.reset")}
+          onReset={() => {
+            setGrantKeyword("");
+            setGrantFacetValue({});
+          }}
+        >
+          <FilterPanelTrigger
+            label="筛选"
+            activeCount={countFilterPanelValue(grantFacetValue)}
+            onClick={() => setGrantFilterOpen(true)}
+            disabled={!grants}
+          />
+        </FilterBar>
+        <FilterPanel
+          open={grantFilterOpen}
+          onClose={() => setGrantFilterOpen(false)}
+          title="筛选权益"
+          applyLabel="应用"
+          clearLabel="清空"
+          closeLabel="关闭"
+          emptyLabel="暂无可选值"
+          facets={grantFacets}
+          value={grantFacetValue}
+          onApply={setGrantFacetValue}
+        />
 
         {derivedCount > 0 ? (
           <Banner
@@ -632,13 +760,31 @@ function RunosGrantsPageContent() {
               onSortChange={grantSort.onSortChange}
               rowKey={(r) => r.grantId}
               indexStart={1}
-              {...(canManage
-                ? {
-                    rowActions: (r: GrantRecord) => (
-                      <ActionMenu
-                        label={`${r.capabilityId} 操作`}
-                        disabled={submitting}
-                        items={[
+              rowActions={(r: GrantRecord) => (
+                <ActionMenu
+                  label={`${r.capabilityId} 操作`}
+                  disabled={submitting}
+                  items={
+                    canManage
+                      ? [
+                          {
+                            id: "view-capability",
+                            label: "查看能力",
+                            icon: "stack" as const,
+                            onSelect: () =>
+                              router.push(
+                                `/capability/registry?capabilityId=${encodeURIComponent(r.capabilityId)}`,
+                              ),
+                          },
+                          {
+                            id: "view-usage",
+                            label: "查看用量",
+                            icon: "gauge" as const,
+                            onSelect: () =>
+                              router.push(
+                                `/capability/metering?capabilityId=${encodeURIComponent(r.capabilityId)}`,
+                              ),
+                          },
                           {
                             /* 改条款走 PATCH（一次写、grantId 不变）。
                                派生行没有这个动作：它的配置跟着锚点走。非 active 的
@@ -685,11 +831,30 @@ function RunosGrantsPageContent() {
                               onConfirm: () => revokeGrant(r),
                             }),
                           },
-                        ]}
-                      />
-                    ),
+                        ]
+                      : [
+                          {
+                            id: "view-capability",
+                            label: "查看能力",
+                            icon: "stack" as const,
+                            onSelect: () =>
+                              router.push(
+                                `/capability/registry?capabilityId=${encodeURIComponent(r.capabilityId)}`,
+                              ),
+                          },
+                          {
+                            id: "view-usage",
+                            label: "查看用量",
+                            icon: "gauge" as const,
+                            onSelect: () =>
+                              router.push(
+                                `/capability/metering?capabilityId=${encodeURIComponent(r.capabilityId)}`,
+                              ),
+                          },
+                        ]
                   }
-                : {})}
+                />
+              )}
               empty={
                 lookupLoad.kind === "loading" ? (
                   <EmptyState title="查询中…" description="正在读取权益。" />
@@ -776,7 +941,7 @@ function RunosGrantsPageContent() {
                 },
                 {
                   id: "risk",
-                  header: "风险范围",
+                  header: "风险",
                   sortable: true,
                   width: "xs",
                   cell: (r: GrantRecord) => (
@@ -909,7 +1074,14 @@ function RunosGrantsPageContent() {
               hint="选中的能力共用同一套。要给某一条不同的配置，单独再发一次。"
             >
               <Field>
-                <FieldLabel htmlFor="picker-risk">Risk Scope</FieldLabel>
+                <FieldLabel
+                  htmlFor="picker-risk"
+                  required
+                  hint="这条授权的风险上限：能力上某个操作的 riskLevel 高过它，那次调用就 policy_denied。绝大多数是 read，所以默认 read——但不替你默认成 write。"
+                  {...FIELD_LABEL_A11Y}
+                >
+                  Risk Scope
+                </FieldLabel>
                 <NativeSelect
                   id="picker-risk"
                   value={grantPicker.riskScope}
@@ -924,11 +1096,6 @@ function RunosGrantsPageContent() {
                   <option value="write">write</option>
                   <option value="critical">critical</option>
                 </NativeSelect>
-                <FieldDescription>
-                  这条授权的风险上限：能力上某个操作的 riskLevel
-                  高过它，那次调用就 policy_denied。绝大多数是 read，所以默认
-                  read——但不替你默认成 write。
-                </FieldDescription>
               </Field>
             </FieldTier>
           </>
@@ -941,6 +1108,7 @@ function RunosGrantsPageContent() {
         onOpenChange={(open) => {
           if (!open) setAmend(null);
         }}
+        size="sm"
         title={amend ? `改条款 · ${amend.row.capabilityId}` : ""}
         description="改的是同一条授权：grantId 不变，派生闭包由 runos 在同一个调用里重编。撤销是另一个动作，不在这里发生。"
         submitLabel={tShared("common.save")}
@@ -951,7 +1119,14 @@ function RunosGrantsPageContent() {
         {amend ? (
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="amend-risk">Risk Scope</FieldLabel>
+              <FieldLabel
+                htmlFor="amend-risk"
+                required
+                hint="收窄它会同时收窄由它派生出去的那些权益——runos 在同一次调用里重编闭包。"
+                {...FIELD_LABEL_A11Y}
+              >
+                Risk Scope
+              </FieldLabel>
               <NativeSelect
                 id="amend-risk"
                 value={amend.riskScope}
@@ -966,10 +1141,6 @@ function RunosGrantsPageContent() {
                 <option value="write">write</option>
                 <option value="critical">critical</option>
               </NativeSelect>
-              <FieldDescription>
-                收窄它会同时收窄由它派生出去的那些权益——runos
-                在同一次调用里重编闭包。
-              </FieldDescription>
             </Field>
           </FieldGroup>
         ) : null}

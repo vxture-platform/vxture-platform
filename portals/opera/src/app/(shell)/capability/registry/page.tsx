@@ -47,11 +47,13 @@
  * 因此页面顶部原来那条"注册后无法下架（TD-010）"横幅已撤——它当时是对的，现在
  * 不是了。 */
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
+  type ComponentProps,
   useState,
   type FormEvent,
   Suspense,
@@ -63,20 +65,18 @@ import {
   Button,
   Checkbox,
   DataTable,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DialogForm,
   Drawer,
   EmptyState,
   Field,
-  FieldDescription,
   FieldGroup,
   FieldTier,
   FieldLabel,
   FilterBar,
+  FilterPanel,
+  FilterPanelTrigger,
+  countFilterPanelValue,
+  type FilterPanelValue,
   Icon,
   Input,
   InputGroup,
@@ -109,11 +109,13 @@ import {
   type CursorPage,
 } from "@/lib/cursor-page";
 import { useOperatorSession } from "@/features/session/SessionProvider";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import { formatDateTime } from "@vxture-platform/shared";
 
 const MANAGE = "capability:runos.manage";
 
@@ -122,6 +124,36 @@ const MANAGE = "capability:runos.manage";
  * 一个能力的称呼要一致；跟着浏览器变，等于两个人看同一行说的是两个名字。
  */
 const CONSOLE_LOCALE = "zh-CN";
+
+function formatTime(iso: string, locale: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
+}
+
+/** runos `/capability/capability-facets`：各筛选列在全目录上的取值与计数。 */
+interface CatalogFacetCount {
+  value: string;
+  count: number;
+}
+interface CatalogFacets {
+  primitiveType: CatalogFacetCount[];
+  category: CatalogFacetCount[];
+  providerId: CatalogFacetCount[];
+  admissionTier: CatalogFacetCount[];
+  ownerRef: CatalogFacetCount[];
+  tag: CatalogFacetCount[];
+}
+/** 面板维度键 = runos 列表的查询参数名，勾一个值直接落成同名参数。 */
+const FACET_PARAMS = [
+  "primitiveType",
+  "category",
+  "providerId",
+  "admissionTier",
+  "ownerRef",
+  "tag",
+] as const;
+/** 标签有上千个；面板只列最常用的这么多。 */
+const TOP_TAGS = 30;
 
 /**
  * 一个能力的三个名字各有各的职责，**一个都不能省**：
@@ -579,6 +611,8 @@ export default function CapabilitiesPage() {
 
 function CapabilitiesPageContent() {
   const tShared = useTranslations();
+  const locale = useLocale();
+  const router = useRouter();
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
@@ -598,13 +632,21 @@ function CapabilitiesPageContent() {
   const [pageSize, setPageSize] = useState<CursorPageSize>(20);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
-  /* 这两个下推给 runos（带索引、AND 语义），与本地的 keyword 过滤不是一回事。 */
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [tagFilter, setTagFilter] = useState("");
-  const [primitiveFilter, setPrimitiveFilter] = useState<string>("all");
-  /* 取数用这两个，不用输入框的即时值——见 `useDebounced`。 */
+  /* 筛选全部下推给 runos：目录是服务端分页，在前端筛只会筛到当前页。
+     勾选面板的读法是维度内任一、维度间都要；标签例外，是全部命中（runos 120 §3.1）。 */
+  const [facetValue, setFacetValue] = useState<FilterPanelValue>({});
+  const [filterOpen, setFilterOpen] = useState(false);
+  /** 面板选项：各列在全目录上的取值与计数。null = 没读到（面板里显示暂无可选值）。 */
+  const [catalogFacets, setCatalogFacets] = useState<CatalogFacets | null>(
+    null,
+  );
+  /** 行菜单里要先读到详情才能做的动作。 */
+  const [pendingAction, setPendingAction] = useState<{
+    capabilityId: string;
+    action: "meta" | "certify" | "official";
+  } | null>(null);
+  /* 取数用防抖后的关键词，不用输入框的即时值——见 `useDebounced`。 */
   const debouncedKeyword = useDebounced(keyword);
-  const debouncedTag = useDebounced(tagFilter);
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
 
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -672,12 +714,9 @@ function CapabilitiesPageContent() {
          而且是带索引的（btree(category) + GIN(tags)）。在前端拿全量再过滤，既
          重复实现了那条 AND 语义，又会随目录长大越来越慢。 */
       const p = new URLSearchParams();
-      if (categoryFilter !== "all") p.set("category", categoryFilter);
-      for (const t of parseTags(debouncedTag)) p.append("tag", t);
-      /* primitiveType 与关键词此前在本地过滤，现在也下推。
-         **留在本地就等于只搜当前页**——匹配项在第 7 页，表格说「没有」，而
-         「搜不到」和「不存在」在界面上一模一样。 */
-      if (primitiveFilter !== "all") p.set("primitiveType", primitiveFilter);
+      for (const key of FACET_PARAMS) {
+        for (const v of facetValue[key] ?? []) p.append(key, v);
+      }
       if (debouncedKeyword.trim()) p.set("q", debouncedKeyword.trim());
       p.set("limit", String(pageSize));
       if (position.cursor) p.set("cursor", position.cursor);
@@ -704,14 +743,7 @@ function CapabilitiesPageContent() {
             : "读取 Capability 失败",
       });
     }
-  }, [
-    categoryFilter,
-    debouncedTag,
-    primitiveFilter,
-    debouncedKeyword,
-    pageSize,
-    position,
-  ]);
+  }, [facetValue, debouncedKeyword, pageSize, position]);
 
   /* 换筛选或换页大小要回到第一页。
      游标是「某一行之后」:筛选变了，那一行可能已经不在结果里;页大小变了，它前面
@@ -723,6 +755,12 @@ function CapabilitiesPageContent() {
   useEffect(() => {
     void reload();
   }, [reload]);
+  useEffect(() => {
+    void api
+      .get<CatalogFacets>("/api/runos/capability-facets")
+      .then(setCatalogFacets)
+      .catch(() => setCatalogFacets(null));
+  }, []);
 
   const loadDetail = useCallback(async (capabilityId: string) => {
     setDetailLoad({ kind: "loading" });
@@ -770,6 +808,36 @@ function CapabilitiesPageContent() {
     setDetailId(null);
     setDetail(null);
   }
+  /**
+   * 行菜单里的编辑 / 认证 / official：这几个弹窗都读详情（元数据草稿、认证清单挂在
+   * 详情上），所以先开详情，读到了再弹。弹窗叠在详情抽屉上面，关掉弹窗人还在详情里。
+   */
+  function requestRowAction(
+    capabilityId: string,
+    action: "meta" | "certify" | "official",
+  ) {
+    setPendingAction({ capabilityId, action });
+    openDetail(capabilityId);
+  }
+  useEffect(() => {
+    if (!pendingAction || detail?.capabilityId !== pendingAction.capabilityId)
+      return;
+    if (pendingAction.action === "meta") {
+      setMetaDraft({
+        title: detail.title,
+        displayZh: detail.displayName?.["zh-CN"] ?? "",
+        displayEn: detail.displayName?.["en"] ?? "",
+        ownerRef: detail.ownerRef,
+        category: detail.category ?? "",
+        tagsInput: (detail.tags ?? []).join(", "),
+      });
+    } else if (pendingAction.action === "certify") {
+      openCertification();
+    } else {
+      setOfficialOpen(true);
+    }
+    setPendingAction(null);
+  }, [pendingAction, detail]);
 
   /*
    * 深链:直接问这个 id 存不存在,命中就开详情,没命中就挂 Banner。
@@ -825,10 +893,57 @@ function CapabilitiesPageContent() {
      「筛掉了多少」，所以判据换成「有没有生效中的筛选」——这也正是那句提示要回答的
      问题，比数字差值更贴近它。 */
   const hasActiveFilter =
-    categoryFilter !== "all" ||
-    primitiveFilter !== "all" ||
-    tagFilter.trim() !== "" ||
-    keyword.trim() !== "";
+    countFilterPanelValue(facetValue) > 0 || keyword.trim() !== "";
+  const panelFacets = useMemo(() => {
+    const options = (
+      list: readonly CatalogFacetCount[] | undefined,
+      label?: (value: string) => string,
+    ) =>
+      (list ?? []).map(({ value, count }) => ({
+        value,
+        label: label ? label(value) : value,
+        count,
+      }));
+    return [
+      {
+        id: "primitiveType",
+        label: tShared("columns.kind"),
+        options: options(
+          catalogFacets?.primitiveType,
+          (v) => PRIMITIVE_LABELS[v] ?? v,
+        ),
+      },
+      {
+        id: "category",
+        label: "分类",
+        options: options(
+          catalogFacets?.category,
+          (v) => CATEGORIES.find((c) => c.value === v)?.label ?? v,
+        ),
+      },
+      {
+        id: "providerId",
+        label: "来源（Provider）",
+        options: options(catalogFacets?.providerId),
+      },
+      {
+        id: "admissionTier",
+        label: "准入等级",
+        options: options(catalogFacets?.admissionTier),
+      },
+      {
+        id: "ownerRef",
+        label: "Owner",
+        options: options(catalogFacets?.ownerRef),
+      },
+      {
+        id: "tag",
+        label: "标签",
+        description: `全部命中才算（不是任一）。共 ${catalogFacets?.tag.length ?? 0} 个标签，这里列最常用的 ${TOP_TAGS} 个。`,
+        options: options(catalogFacets?.tag.slice(0, TOP_TAGS)),
+      },
+    ];
+  }, [catalogFacets, tShared]);
 
   function openRegister() {
     setDraft(EMPTY_DRAFT);
@@ -1234,6 +1349,82 @@ function CapabilitiesPageContent() {
     draft.title.trim() !== "" &&
     draft.category !== "";
 
+  type RowMenuItem = ComponentProps<typeof ActionMenu>["items"][number];
+  /**
+   * 行菜单。查看与跳转人人都有；改动类（编辑 / 认证 / official）要 `capability:runos.manage`，
+   * 版本级的 deprecate / withdrawn 仍只在详情抽屉里——它们按版本，不按整条能力。
+   */
+  function rowMenu(r: CapabilityRecord): RowMenuItem[] {
+    const items: RowMenuItem[] = [
+      {
+        id: "detail",
+        label: "查看详情",
+        icon: "eye",
+        onSelect: () => openDetail(r.capabilityId),
+      },
+    ];
+    if (canManage) {
+      items.push(
+        {
+          id: "meta",
+          label: "编辑元数据",
+          icon: "edit",
+          onSelect: () => requestRowAction(r.capabilityId, "meta"),
+        },
+        {
+          /* official 也要禁：certify 会把 tier 无条件置成 certified，对 official 跑是降级。 */
+          id: "certify",
+          label: "提交 certified 审核",
+          icon: "clipboard",
+          disabled:
+            r.admissionTier === "certified" || r.admissionTier === "official",
+          onSelect: () => requestRowAction(r.capabilityId, "certify"),
+        },
+        {
+          id: "official",
+          label: "置为 official（仅第一方）",
+          icon: "shield",
+          disabled: r.admissionTier === "official",
+          onSelect: () => requestRowAction(r.capabilityId, "official"),
+        },
+      );
+    }
+    items.push(
+      {
+        id: "grants",
+        label: "查看授权",
+        icon: "list-checks",
+        separatorBefore: true,
+        onSelect: () =>
+          router.push(
+            `/capability/grants?capabilityId=${encodeURIComponent(r.capabilityId)}`,
+          ),
+      },
+      {
+        id: "usage",
+        label: "查看用量",
+        icon: "gauge",
+        onSelect: () =>
+          router.push(
+            `/capability/metering?capabilityId=${encodeURIComponent(r.capabilityId)}`,
+          ),
+      },
+      {
+        id: "copy",
+        label: "复制 ID",
+        icon: "copy",
+        onSelect: () =>
+          void navigator.clipboard.writeText(r.capabilityId).then(
+            () =>
+              toast({ tone: "success", title: tShared("common.rowCopied") }),
+            () =>
+              toast({ tone: "danger", title: tShared("common.copyFailed") }),
+          ),
+      },
+    );
+    return items;
+  }
+
   const pagination = (
     <CursorPagination
       className="w-full"
@@ -1342,9 +1533,7 @@ function CapabilitiesPageContent() {
             resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
-              setPrimitiveFilter("all");
-              setCategoryFilter("all");
-              setTagFilter("");
+              setFacetValue({});
               resetToFirstPage();
             }}
             actions={
@@ -1359,51 +1548,11 @@ function CapabilitiesPageContent() {
               ) : null
             }
           >
-            <NativeSelect
-              wrapperClassName="w-fit"
-              value={primitiveFilter}
-              onChange={(e) => {
-                setPrimitiveFilter(e.target.value);
-                resetToFirstPage();
-              }}
-              aria-label="原语类型筛选"
-            >
-              <option value="all">全部类型</option>
-              <option value="connector">连接器</option>
-              <option value="executor">执行器</option>
-              <option value="skill">技能</option>
-              <option value="asset">资产（尚不可注册）</option>
-            </NativeSelect>
-            <NativeSelect
-              wrapperClassName="w-fit"
-              value={categoryFilter}
-              onChange={(e) => {
-                setCategoryFilter(e.target.value);
-                resetToFirstPage();
-              }}
-              aria-label="分类筛选"
-            >
-              <option value="all">全部分类</option>
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <InputGroup className="w-fit basis-media-xl">
-              <InputGroupAddon>
-                <Icon name="filter" size="sm" aria-hidden="true" />
-              </InputGroupAddon>
-              <InputGroupInput
-                placeholder="标签，多个为「全部命中」"
-                aria-label="标签筛选"
-                value={tagFilter}
-                onChange={(e) => {
-                  setTagFilter(e.target.value);
-                  resetToFirstPage();
-                }}
-              />
-            </InputGroup>
+            <FilterPanelTrigger
+              label="筛选"
+              activeCount={countFilterPanelValue(facetValue)}
+              onClick={() => setFilterOpen(true)}
+            />
           </FilterBar>
         }
         table={
@@ -1458,11 +1607,18 @@ function CapabilitiesPageContent() {
                   },
                 },
                 {
-                  id: "provider",
-                  header: "Provider",
+                  /* Provider 与 Owner 原是两列裸码，说的都是「这条能力从哪来、谁负责」——
+                     并成一列：主行来源，副行负责方。 */
+                  id: "source",
+                  header: "来源",
                   width: "sm",
                   cell: (r: CapabilityRecord) => (
-                    <span className="text-code-sm">{r.providerId}</span>
+                    <span className="inline-flex flex-col items-center gap-2xs">
+                      <span>{r.providerId}</span>
+                      <span className="text-body-sm text-muted-foreground">
+                        {r.ownerRef}
+                      </span>
+                    </span>
                   ),
                 },
                 {
@@ -1498,37 +1654,31 @@ function CapabilitiesPageContent() {
                   ),
                 },
                 {
-                  id: "owner",
-                  header: "Owner",
+                  /* 类型决定能不能注册 / 怎么调用，准入等级决定能不能被授权——都是「这条能力
+                     是什么档次」，并成一列。 */
+                  id: "kind",
+                  header: "类型 / 准入",
                   width: "sm",
                   cell: (r: CapabilityRecord) => (
-                    <span className="text-body-sm text-muted-foreground">
-                      {r.ownerRef}
+                    <span className="inline-flex flex-col items-center gap-2xs">
+                      <Badge variant="secondary">
+                        {PRIMITIVE_LABELS[r.primitiveType] ?? r.primitiveType}
+                      </Badge>
+                      <StatusBadge
+                        tone={ADMISSION_TONE[r.admissionTier] ?? "neutral"}
+                        dot
+                      >
+                        {r.admissionTier}
+                      </StatusBadge>
                     </span>
                   ),
                 },
                 {
-                  id: "type",
-                  header: tShared("columns.kind"),
-                  width: "xs",
-                  cell: (r: CapabilityRecord) => (
-                    <Badge variant="secondary">
-                      {PRIMITIVE_LABELS[r.primitiveType] ?? r.primitiveType}
-                    </Badge>
-                  ),
-                },
-                {
-                  id: "tier",
-                  header: "准入等级",
-                  width: "xs",
-                  cell: (r: CapabilityRecord) => (
-                    <StatusBadge
-                      tone={ADMISSION_TONE[r.admissionTier] ?? "neutral"}
-                      dot
-                    >
-                      {r.admissionTier}
-                    </StatusBadge>
-                  ),
+                  id: "updated",
+                  header: "更新时间",
+                  width: "sm",
+                  cell: (r: CapabilityRecord) =>
+                    formatTime(r.updatedAt, locale),
                 },
               ]}
               rows={rows}
@@ -1539,14 +1689,8 @@ function CapabilitiesPageContent() {
               rowActions={(r: CapabilityRecord) => (
                 <ActionMenu
                   label={`${r.capabilityId} 操作`}
-                  items={[
-                    {
-                      id: "detail",
-                      label: "查看详情",
-                      icon: "eye",
-                      onSelect: () => openDetail(r.capabilityId),
-                    },
-                  ]}
+                  disabled={submitting}
+                  items={rowMenu(r)}
                 />
               )}
               footer={pagination}
@@ -1556,10 +1700,27 @@ function CapabilitiesPageContent() {
         }
       />
 
+      <FilterPanel
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        title="筛选能力"
+        applyLabel="应用"
+        clearLabel="清空"
+        closeLabel="关闭"
+        emptyLabel="暂无可选值"
+        facets={panelFacets}
+        value={facetValue}
+        onApply={(next) => {
+          setFacetValue(next);
+          resetToFirstPage();
+        }}
+      />
+
       {/* ── 注册 Capability ─────────────────────────────────────────────── */}
       <DialogForm
         open={registerOpen}
         onOpenChange={setRegisterOpen}
+        size="xl"
         title="注册 Capability"
         description="asset 的注册机制还没上线；skill 的 operations 系统固定为一条 fetch，不需要填。"
         submitLabel="注册"
@@ -1568,17 +1729,22 @@ function CapabilitiesPageContent() {
         onSubmit={submitRegister}
         cancelLabel={tShared("actions.cancel")}
       >
-        {/* 三档（DS `FieldTier`）：身份 = 这个能力是什么、怎么被寻址；常规 = 归属与
-            检索面；高级 = 契约 JSON。**契约档能收起是因为它有模板**——换类型时自动
-            换成对应模板，不动也能提交；十几行 textarea 平铺在必填项下面，只会把真正
-            需要停下来想的四个字段淹掉。 */}
+        {/* 三档（DS FieldTier），xl 面板一行两条，说明收进标签后的帮助图标。契约档能收起
+            是因为它有模板——换类型时自动换成对应模板，不动也能提交。 */}
         <FieldTier
           tier="identity"
           hint="ID 前缀必须等于 Provider；类型决定下面出现哪份契约，选错要重来。"
         >
-          <FieldGroup>
+          <FieldGroup columns={2}>
             <Field>
-              <FieldLabel htmlFor="cap-id">Capability ID</FieldLabel>
+              <FieldLabel
+                htmlFor="cap-id"
+                required
+                hint={`格式 {provider}.{name}，两段都是小写 kebab；前缀必须等于 Provider。`}
+                {...FIELD_LABEL_A11Y}
+              >
+                Capability ID
+              </FieldLabel>
               <Input
                 id="cap-id"
                 value={draft.capabilityId}
@@ -1588,51 +1754,49 @@ function CapabilitiesPageContent() {
                 placeholder="runos.code-sandbox"
                 className="font-mono"
               />
-              <FieldDescription>
-                格式 {"{provider}.{name}"}，两段都是小写
-                kebab；前缀必须等于下面的 Provider。
-              </FieldDescription>
             </Field>
-            <div className="grid grid-cols-2 gap-md">
-              <Field>
-                <FieldLabel htmlFor="cap-type">
-                  {tShared("columns.kind")}
-                </FieldLabel>
-                <NativeSelect
-                  id="cap-type"
-                  value={draft.primitiveType}
-                  onChange={(e) => {
-                    const primitiveType = e.target
-                      .value as RegisterDraft["primitiveType"];
-                    setDraft({
-                      ...draft,
-                      primitiveType,
-                      contractJson:
-                        primitiveType === "skill"
-                          ? SKILL_CONTRACT_TEMPLATE
-                          : CONTRACT_TEMPLATE,
-                    });
-                  }}
-                >
-                  <option value="executor">执行器（Executor）</option>
-                  <option value="connector">连接器（Connector）</option>
-                  <option value="skill">技能（Skill）</option>
-                </NativeSelect>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="cap-provider">Provider</FieldLabel>
-                <Input
-                  id="cap-provider"
-                  value={draft.providerId}
-                  onChange={(e) =>
-                    setDraft({ ...draft, providerId: e.target.value })
-                  }
-                  placeholder="runos"
-                />
-              </Field>
-            </div>
             <Field>
-              <FieldLabel htmlFor="cap-title">标题</FieldLabel>
+              <FieldLabel htmlFor="cap-type" required {...FIELD_LABEL_A11Y}>
+                {tShared("columns.kind")}
+              </FieldLabel>
+              <NativeSelect
+                id="cap-type"
+                value={draft.primitiveType}
+                onChange={(e) => {
+                  const primitiveType = e.target
+                    .value as RegisterDraft["primitiveType"];
+                  setDraft({
+                    ...draft,
+                    primitiveType,
+                    contractJson:
+                      primitiveType === "skill"
+                        ? SKILL_CONTRACT_TEMPLATE
+                        : CONTRACT_TEMPLATE,
+                  });
+                }}
+              >
+                <option value="executor">执行器（Executor）</option>
+                <option value="connector">连接器（Connector）</option>
+                <option value="skill">技能（Skill）</option>
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="cap-provider" required {...FIELD_LABEL_A11Y}>
+                Provider
+              </FieldLabel>
+              <Input
+                id="cap-provider"
+                value={draft.providerId}
+                onChange={(e) =>
+                  setDraft({ ...draft, providerId: e.target.value })
+                }
+                placeholder="runos"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="cap-title" required {...FIELD_LABEL_A11Y}>
+                标题
+              </FieldLabel>
               <Input
                 id="cap-title"
                 value={draft.title}
@@ -1647,51 +1811,37 @@ function CapabilitiesPageContent() {
           tier="details"
           hint="分类进 runos_discover 的检索面——选错等于让业务 agent 搜不到这个能力。"
         >
-          <FieldGroup>
-            <div className="grid grid-cols-2 gap-md">
-              <Field>
-                <FieldLabel htmlFor="cap-category">分类（必填）</FieldLabel>
-                <NativeSelect
-                  id="cap-category"
-                  value={draft.category}
-                  onChange={(e) =>
-                    setDraft({ ...draft, category: e.target.value })
-                  }
-                >
-                  {/* 空选项不给默认值：`other` 是真实选项，替人预选任何一项都等于
-                      替运营做了分类决定，而这个字段会进 runos_discover 的检索面。 */}
-                  <option value="">— 请选择 —</option>
-                  {CATEGORIES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <FieldDescription>
-                  15 选 1，注册必填。业务 agent
-                  用它收窄检索范围，所以选错等于让人
-                  搜不到这个能力。填不出来就选 other——那是一个明确的判断。
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="cap-tags">标签（可选）</FieldLabel>
-                <Input
-                  id="cap-tags"
-                  value={draft.tagsInput}
-                  onChange={(e) =>
-                    setDraft({ ...draft, tagsInput: e.target.value })
-                  }
-                  placeholder="invoice, ocr"
-                  className="font-mono"
-                />
-                <FieldDescription>
-                  最多 8 个，小写字母 / 数字 / 连字符，长度
-                  2–32。逗号或空格分隔。
-                </FieldDescription>
-              </Field>
-            </div>
+          <FieldGroup columns={2}>
             <Field>
-              <FieldLabel htmlFor="cap-owner">Owner Ref</FieldLabel>
+              <FieldLabel
+                htmlFor="cap-category"
+                required
+                hint="15 选 1。业务 agent 用它收窄检索范围，所以选错等于让人搜不到这个能力。填不出来就选 other——那是一个明确的判断。"
+                {...FIELD_LABEL_A11Y}
+              >
+                分类
+              </FieldLabel>
+              <NativeSelect
+                id="cap-category"
+                value={draft.category}
+                onChange={(e) =>
+                  setDraft({ ...draft, category: e.target.value })
+                }
+              >
+                {/* 空选项不给默认值：`other` 是真实选项，替人预选任何一项都等于替运营
+                    做了分类决定，而这个字段会进 runos_discover 的检索面。 */}
+                <option value="">— 请选择 —</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="cap-owner" required {...FIELD_LABEL_A11Y}>
+                Owner Ref
+              </FieldLabel>
               <Input
                 id="cap-owner"
                 value={draft.ownerRef}
@@ -1699,6 +1849,24 @@ function CapabilitiesPageContent() {
                   setDraft({ ...draft, ownerRef: e.target.value })
                 }
                 placeholder="runos/executor"
+              />
+            </Field>
+            <Field>
+              <FieldLabel
+                htmlFor="cap-tags"
+                hint="可选。最多 8 个，小写字母 / 数字 / 连字符，长度 2–32。逗号或空格分隔。"
+                {...FIELD_LABEL_A11Y}
+              >
+                标签
+              </FieldLabel>
+              <Input
+                id="cap-tags"
+                value={draft.tagsInput}
+                onChange={(e) =>
+                  setDraft({ ...draft, tagsInput: e.target.value })
+                }
+                placeholder="invoice, ocr"
+                className="font-mono"
               />
             </Field>
           </FieldGroup>
@@ -1709,9 +1877,17 @@ function CapabilitiesPageContent() {
           title="契约（JSON 直填）"
           hint="已按类型预填模板，不改也能注册；contract 字段仍在 M1 阶段会长，做成表单只会漏字段。"
         >
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="cap-contract">
+          <FieldGroup columns={2}>
+            <Field span="full">
+              <FieldLabel
+                htmlFor="cap-contract"
+                hint={
+                  draft.primitiveType === "skill"
+                    ? "operations 不在这里填——Skill 的 operations 系统强制恰好一条 fetch，提交时自动补上。"
+                    : "contract 结构还在 M1 阶段，没有做成表单——字段随时可能长（见 vxture-runos 120-capability-model.md）。"
+                }
+                {...FIELD_LABEL_A11Y}
+              >
                 Contract（JSON，version / summary / useWhen / avoidWhen
                 {draft.primitiveType === "skill" ? "" : " / operations"}）
               </FieldLabel>
@@ -1724,15 +1900,14 @@ function CapabilitiesPageContent() {
                 rows={draft.primitiveType === "skill" ? 6 : 12}
                 className="font-mono text-code-sm"
               />
-              <FieldDescription>
-                {draft.primitiveType === "skill"
-                  ? "operations 不在这里填——Skill 的 operations 系统强制恰好一条 fetch，提交时自动补上。"
-                  : "contract 结构还在 M1 阶段，没有做成表单——字段随时可能长（见 vxture-runos 120-capability-model.md），先按 JSON 直填，比做一个会漏字段的表单诚实。"}
-              </FieldDescription>
             </Field>
             {draft.primitiveType === "executor" ? (
-              <Field>
-                <FieldLabel htmlFor="cap-executor">
+              <Field span="full">
+                <FieldLabel
+                  htmlFor="cap-executor"
+                  hint={`M1 只接受 egressPolicy="none"、persistence="ephemeral"。`}
+                  {...FIELD_LABEL_A11Y}
+                >
                   Executor 契约（JSON，runtimeClass / resourceLimits /
                   egressPolicy / persistence）
                 </FieldLabel>
@@ -1745,16 +1920,16 @@ function CapabilitiesPageContent() {
                   rows={6}
                   className="font-mono text-code-sm"
                 />
-                <FieldDescription>
-                  M1 只接受
-                  egressPolicy=&quot;none&quot;、persistence=&quot;ephemeral&quot;。
-                </FieldDescription>
               </Field>
             ) : null}
             {draft.primitiveType === "skill" ? (
               <>
-                <Field>
-                  <FieldLabel htmlFor="cap-skill">
+                <Field span="full">
+                  <FieldLabel
+                    htmlFor="cap-skill"
+                    hint="content 目前是直接提交的字符串（SKILL.md 文本），不是真实的 plugin 文件包；capabilityReferences 是自己声明的，不是从内容解析出来的——两者都等 runos 侧的 ingest pipeline 落地后再升级。"
+                    {...FIELD_LABEL_A11Y}
+                  >
                     Skill 契约（JSON，format / content / scripts /
                     capabilityReferences）
                   </FieldLabel>
@@ -1767,15 +1942,13 @@ function CapabilitiesPageContent() {
                     rows={8}
                     className="font-mono text-code-sm"
                   />
-                  <FieldDescription>
-                    content 目前是直接提交的字符串（SKILL.md 文本），不是真实的
-                    plugin 文件包；capabilityReferences
-                    是自己声明的，不是从内容解析出来的——两者都等 runos 侧的
-                    ingest pipeline 落地后再升级。
-                  </FieldDescription>
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="cap-dependencies">
+                <Field span="full">
+                  <FieldLabel
+                    htmlFor="cap-dependencies"
+                    hint={`scripts 非空时必须声明一条 kind="required" 的 Executor 依赖；不声明依赖就留空数组。`}
+                    {...FIELD_LABEL_A11Y}
+                  >
                     Dependencies（JSON 数组，可选）
                   </FieldLabel>
                   <Textarea
@@ -1788,10 +1961,6 @@ function CapabilitiesPageContent() {
                     className="font-mono text-code-sm"
                     placeholder={`[{ "capabilityId": "runos.code-sandbox", "kind": "required", "note": "脚本执行依赖" }]`}
                   />
-                  <FieldDescription>
-                    scripts 非空时必须声明一条 kind=&quot;required&quot; 的
-                    Executor 依赖；不声明依赖就留空数组。
-                  </FieldDescription>
                 </Field>
               </>
             ) : null}
@@ -1803,7 +1972,7 @@ function CapabilitiesPageContent() {
       <Drawer
         open={detailId !== null}
         onClose={closeDetail}
-        width="md"
+        width="lg"
         /* 抽屉标题跟着表格走：主名在前、机器标识在下。两处一致，否则从表格点进来
            会觉得像是打开了另一个东西。 */
         title={
@@ -2167,181 +2336,145 @@ function CapabilitiesPageContent() {
       </Drawer>
 
       {/* ── 注册 Endpoint（挂在当前详情的 capability 下）────────────────────── */}
-      <Dialog
+      <DialogForm
         open={endpointDialog !== null}
         onOpenChange={(open) => {
           if (!open) setEndpointDialog(null);
         }}
+        size="sm"
+        title={`注册 Endpoint${detail ? ` · ${detail.capabilityId}` : ""}`}
+        description="没有独立列表接口：Endpoint 永远挂在某个版本下，这里注册后会出现在上面的版本列表旁。"
+        submitLabel="注册"
+        submitting={submitting}
+        submitDisabled={
+          !endpointDialog ||
+          endpointDialog.version.trim() === "" ||
+          endpointDialog.baseUrl.trim() === ""
+        }
+        onSubmit={submitEndpoint}
+        cancelLabel={tShared("actions.cancel")}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              注册 Endpoint{detail ? ` · ${detail.capabilityId}` : ""}
-            </DialogTitle>
-          </DialogHeader>
-          {endpointDialog ? (
-            <form
-              className="flex flex-col gap-md"
-              onSubmit={(e) => void submitEndpoint(e)}
-            >
-              <Banner
-                tone="info"
-                title="没有独立列表接口"
-                description="Endpoint 永远挂在某个版本下，这里注册后会出现在上面的版本列表旁。"
+        {endpointDialog ? (
+          <FieldGroup>
+            <Field>
+              <FieldLabel
+                htmlFor="ep-version"
+                required
+                hint="必须是已注册过的版本号。"
+                {...FIELD_LABEL_A11Y}
+              >
+                版本
+              </FieldLabel>
+              <Input
+                id="ep-version"
+                value={endpointDialog.version}
+                onChange={(e) =>
+                  setEndpointDialog({
+                    ...endpointDialog,
+                    version: e.target.value,
+                  })
+                }
+                placeholder="1.0.0"
+                className="font-mono"
               />
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="ep-version">版本</FieldLabel>
-                  <Input
-                    id="ep-version"
-                    value={endpointDialog.version}
-                    onChange={(e) =>
-                      setEndpointDialog({
-                        ...endpointDialog,
-                        version: e.target.value,
-                      })
-                    }
-                    placeholder="1.0.0"
-                    className="font-mono"
-                  />
-                  <FieldDescription>必须是已注册过的版本号。</FieldDescription>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="ep-env">环境</FieldLabel>
-                  <NativeSelect
-                    id="ep-env"
-                    value={endpointDialog.environment}
-                    onChange={(e) =>
-                      setEndpointDialog({
-                        ...endpointDialog,
-                        environment: e.target
-                          .value as EndpointDraft["environment"],
-                      })
-                    }
-                  >
-                    <option value="sandbox">sandbox</option>
-                    <option value="prod">prod</option>
-                  </NativeSelect>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="ep-url">Base URL</FieldLabel>
-                  <Input
-                    id="ep-url"
-                    value={endpointDialog.baseUrl}
-                    onChange={(e) =>
-                      setEndpointDialog({
-                        ...endpointDialog,
-                        baseUrl: e.target.value,
-                      })
-                    }
-                    placeholder="http://executor:3210/mcp"
-                    className="font-mono"
-                  />
-                </Field>
-              </FieldGroup>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setEndpointDialog(null)}
-                >
-                  {tShared("actions.cancel")}
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    submitting ||
-                    endpointDialog.version.trim() === "" ||
-                    endpointDialog.baseUrl.trim() === ""
-                  }
-                >
-                  注册
-                </Button>
-              </DialogFooter>
-            </form>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ep-env" required {...FIELD_LABEL_A11Y}>
+                环境
+              </FieldLabel>
+              <NativeSelect
+                id="ep-env"
+                value={endpointDialog.environment}
+                onChange={(e) =>
+                  setEndpointDialog({
+                    ...endpointDialog,
+                    environment: e.target.value as EndpointDraft["environment"],
+                  })
+                }
+              >
+                <option value="sandbox">sandbox</option>
+                <option value="prod">prod</option>
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ep-url" required {...FIELD_LABEL_A11Y}>
+                Base URL
+              </FieldLabel>
+              <Input
+                id="ep-url"
+                value={endpointDialog.baseUrl}
+                onChange={(e) =>
+                  setEndpointDialog({
+                    ...endpointDialog,
+                    baseUrl: e.target.value,
+                  })
+                }
+                placeholder="http://executor:3210/mcp"
+                className="font-mono"
+              />
+            </Field>
+          </FieldGroup>
+        ) : null}
+      </DialogForm>
       {/* ── 提交 certified 审核（四项固定，不是可配置清单）──────────────────── */}
-      <Dialog
+      <DialogForm
         open={certOpen}
         onOpenChange={(open) => {
           if (!open) setCertOpen(false);
         }}
+        size="lg"
+        title={`提交 certified 审核${detail ? ` · ${detail.capabilityId}` : ""}`}
+        description="四项固定，全过才算 certified；每项都要写复核依据。outcome 由 Runos 服务端计算——全部通过才把 admission_tier 置为 certified，任一不通过则 rejected。这里不接受直传 outcome。四项的复核依据都是必填的（Runos 侧硬校验）：只勾一个「通过」没有复核价值，写下为什么才有；不通过的那项更要写清卡在哪。"
+        submitLabel="提交"
+        submitting={submitting}
+        /* 四条复核依据缺一条就提交不了——上游是整批 400，让人填完再发比发出去挨一句
+           看不懂的报错好。 */
+        submitDisabled={!certificationComplete}
+        onSubmit={submitCertification}
+        cancelLabel={tShared("actions.cancel")}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              提交 certified 审核{detail ? ` · ${detail.capabilityId}` : ""}
-            </DialogTitle>
-          </DialogHeader>
-          <form
-            className="flex flex-col gap-md"
-            onSubmit={(e) => void submitCertification(e)}
-          >
-            <Banner
-              tone="info"
-              title="四项固定，全过才算 certified；每项都要写复核依据"
-              description="outcome 由 Runos 服务端计算——全部通过才把 admission_tier 置为 certified，任一不通过则 rejected。这里不接受直传 outcome。四项的复核依据都是必填的（Runos 侧硬校验）：只勾一个「通过」没有复核价值，写下为什么才有；不通过的那项更要写清卡在哪。"
-            />
-            <div className="flex flex-col gap-md">
-              {CERTIFICATION_ITEMS.map((c) => (
-                <div key={c.key} className="flex flex-col gap-2xs">
-                  <label className="flex items-center gap-sm text-body-sm">
-                    <Checkbox
-                      checked={certItems[c.key]?.pass ?? false}
-                      onCheckedChange={(checked) =>
-                        setCertItems((all) => ({
-                          ...all,
-                          [c.key]: {
-                            pass: checked === true,
-                            note: all[c.key]?.note ?? "",
-                          },
-                        }))
-                      }
-                    />
-                    {c.label}
-                    <span className="font-mono text-code-sm text-muted-foreground">
-                      {c.key}
-                    </span>
-                  </label>
-                  <Input
-                    value={certItems[c.key]?.note ?? ""}
-                    onChange={(e) =>
-                      setCertItems((all) => ({
-                        ...all,
-                        [c.key]: {
-                          pass: all[c.key]?.pass ?? true,
-                          note: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="复核依据（必填）——查了什么、结论是什么"
-                    aria-label={`${c.label} 的复核依据`}
-                  />
-                </div>
-              ))}
+        <FieldGroup>
+          {CERTIFICATION_ITEMS.map((c) => (
+            <div key={c.key} className="flex flex-col gap-xs">
+              <Field orientation="horizontal">
+                <Checkbox
+                  id={`cert-${c.key}`}
+                  checked={certItems[c.key]?.pass ?? false}
+                  onCheckedChange={(checked) =>
+                    setCertItems((all) => ({
+                      ...all,
+                      [c.key]: {
+                        pass: checked === true,
+                        note: all[c.key]?.note ?? "",
+                      },
+                    }))
+                  }
+                />
+                <FieldLabel htmlFor={`cert-${c.key}`}>
+                  {c.label}
+                  <span className="font-mono text-code-sm text-muted-foreground">
+                    {c.key}
+                  </span>
+                </FieldLabel>
+              </Field>
+              <Input
+                value={certItems[c.key]?.note ?? ""}
+                onChange={(e) =>
+                  setCertItems((all) => ({
+                    ...all,
+                    [c.key]: {
+                      pass: all[c.key]?.pass ?? true,
+                      note: e.target.value,
+                    },
+                  }))
+                }
+                placeholder="复核依据（必填）——查了什么、结论是什么"
+                aria-label={`${c.label} 的复核依据`}
+              />
             </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setCertOpen(false)}
-              >
-                {tShared("actions.cancel")}
-              </Button>
-              {/* 四条复核依据缺一条就提交不了——上游是整批 400，让人填完再发比
-                  发出去挨一句看不懂的报错好。 */}
-              <Button
-                type="submit"
-                disabled={submitting || !certificationComplete}
-              >
-                提交
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          ))}
+        </FieldGroup>
+      </DialogForm>
 
       {/* ── 编辑元数据（只有 title / ownerRef——身份列锁死，见文件头）─────────── */}
       <DialogForm
@@ -2349,7 +2482,7 @@ function CapabilitiesPageContent() {
         onOpenChange={(open) => {
           if (!open) setMetaDraft(null);
         }}
-        size="sm"
+        size="xl"
         title={
           detail ? `编辑「${detail.capabilityId}」` : "编辑 Capability 元数据"
         }
@@ -2368,18 +2501,23 @@ function CapabilitiesPageContent() {
         cancelLabel={tShared("actions.cancel")}
       >
         {metaDraft ? (
-          <FieldGroup>
-            {/* 三档（DS `FieldTier`）：呈现名 = 人读到的；归属与分类 = 检索面；
-                标签可选。**能改的只有这几项**——身份（capabilityId / 类型 / Provider）
-                注册后就锁死了，所以这个弹窗里没有身份档。 */}
+          <>
+            {/* 三档（DS FieldTier），xl 一行两条。能改的只有这几项——身份（capabilityId /
+                类型 / Provider）注册后锁死，所以没有身份档。 */}
             <FieldTier
               tier="identity"
               title="呈现名"
               hint="业务名是呈现不是身份：解析、授权、计量、审计一律不认它。清空是有效操作，会删掉那门语言。"
             >
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="meta-title">运营名（title）</FieldLabel>
+              <FieldGroup columns={2}>
+                <Field span="full">
+                  <FieldLabel
+                    htmlFor="meta-title"
+                    hint="运营者之间以及跨仓沟通用的名字。业务名缺某个语言时，界面回落到它。"
+                    {...FIELD_LABEL_A11Y}
+                  >
+                    运营名（title）
+                  </FieldLabel>
                   <Input
                     id="meta-title"
                     value={metaDraft.title}
@@ -2388,55 +2526,39 @@ function CapabilitiesPageContent() {
                     }
                     placeholder="Python code sandbox"
                   />
-                  <FieldDescription>
-                    运营者之间以及跨仓沟通用的名字。业务名缺某个语言时，界面回落到它。
-                  </FieldDescription>
                 </Field>
-
-                <div className="grid grid-cols-2 gap-md">
-                  <Field>
-                    <FieldLabel htmlFor="meta-display-zh">
-                      业务名 · 中文
-                    </FieldLabel>
-                    <Input
-                      id="meta-display-zh"
-                      value={metaDraft.displayZh}
-                      onChange={(e) =>
-                        setMetaDraft({
-                          ...metaDraft,
-                          displayZh: e.target.value,
-                        })
-                      }
-                      maxLength={60}
-                      placeholder="发票查询"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="meta-display-en">
-                      业务名 · English
-                    </FieldLabel>
-                    <Input
-                      id="meta-display-en"
-                      value={metaDraft.displayEn}
-                      onChange={(e) =>
-                        setMetaDraft({
-                          ...metaDraft,
-                          displayEn: e.target.value,
-                        })
-                      }
-                      maxLength={60}
-                      placeholder="Invoice Query"
-                    />
-                  </Field>
-                </div>
-                <FieldDescription>
-                  给最终用户看的名字——与 agent 对话的人读到的是这个，不是
-                  capabilityId。只认 zh-CN / en 两个键（多一个 runos 回
-                  invalid_locale），各限 60
-                  字。留空即不登记该语言，界面回落到运营名；
-                  清空是有效操作，会把已登记的那门语言删掉。它是呈现不是身份：解析、
-                  授权、计量、审计一律不认它。
-                </FieldDescription>
+                <Field>
+                  <FieldLabel
+                    htmlFor="meta-display-zh"
+                    hint="给最终用户看的名字——与 agent 对话的人读到的是这个，不是 capabilityId。只认 zh-CN / en 两个键，各限 60 字；留空即不登记该语言，界面回落到运营名。"
+                    {...FIELD_LABEL_A11Y}
+                  >
+                    业务名 · 中文
+                  </FieldLabel>
+                  <Input
+                    id="meta-display-zh"
+                    value={metaDraft.displayZh}
+                    onChange={(e) =>
+                      setMetaDraft({ ...metaDraft, displayZh: e.target.value })
+                    }
+                    maxLength={60}
+                    placeholder="发票查询"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="meta-display-en">
+                    业务名 · English
+                  </FieldLabel>
+                  <Input
+                    id="meta-display-en"
+                    value={metaDraft.displayEn}
+                    onChange={(e) =>
+                      setMetaDraft({ ...metaDraft, displayEn: e.target.value })
+                    }
+                    maxLength={60}
+                    placeholder="Invoice Query"
+                  />
+                </Field>
               </FieldGroup>
             </FieldTier>
 
@@ -2444,9 +2566,15 @@ function CapabilitiesPageContent() {
               tier="details"
               hint="归属与检索面，分类选错等于让业务 agent 搜不到。"
             >
-              <FieldGroup>
+              <FieldGroup columns={2}>
                 <Field>
-                  <FieldLabel htmlFor="meta-owner">Owner Ref</FieldLabel>
+                  <FieldLabel
+                    htmlFor="meta-owner"
+                    hint="负责团队标识。留空表示不改这一项。"
+                    {...FIELD_LABEL_A11Y}
+                  >
+                    Owner Ref
+                  </FieldLabel>
                   <Input
                     id="meta-owner"
                     value={metaDraft.ownerRef}
@@ -2455,12 +2583,15 @@ function CapabilitiesPageContent() {
                     }
                     placeholder="runos/executor"
                   />
-                  <FieldDescription>
-                    负责团队标识。留空表示不改这一项。
-                  </FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="meta-category">分类</FieldLabel>
+                  <FieldLabel
+                    htmlFor="meta-category"
+                    hint="与注册同一套校验。改分类会改变业务 agent 检索到它的范围。"
+                    {...FIELD_LABEL_A11Y}
+                  >
+                    分类
+                  </FieldLabel>
                   <NativeSelect
                     id="meta-category"
                     value={metaDraft.category}
@@ -2475,17 +2606,26 @@ function CapabilitiesPageContent() {
                       </option>
                     ))}
                   </NativeSelect>
-                  <FieldDescription>
-                    与注册同一套校验。改分类会改变业务 agent 检索到它的范围。
-                  </FieldDescription>
                 </Field>
               </FieldGroup>
             </FieldTier>
 
             <FieldTier tier="advanced" hint="可选，最多 8 个。">
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="meta-tags">标签</FieldLabel>
+              <FieldGroup columns={2}>
+                <Field span="full">
+                  <FieldLabel
+                    htmlFor="meta-tags"
+                    hint={
+                      <>
+                        最多 8 个，小写字母 / 数字 / 连字符，长度 2–32。
+                        <strong>清空即删除全部标签</strong>
+                        ——这一栏与上面几项不同，空是一个有效值，不是「不改」。
+                      </>
+                    }
+                    {...FIELD_LABEL_A11Y}
+                  >
+                    标签
+                  </FieldLabel>
                   <Input
                     id="meta-tags"
                     value={metaDraft.tagsInput}
@@ -2495,15 +2635,10 @@ function CapabilitiesPageContent() {
                     placeholder="invoice, ocr"
                     className="font-mono"
                   />
-                  <FieldDescription>
-                    最多 8 个，小写字母 / 数字 / 连字符，长度 2–32。
-                    <strong>清空即删除全部标签</strong>
-                    ——这一栏与上面几项不同，空是一个 有效值，不是「不改」。
-                  </FieldDescription>
                 </Field>
               </FieldGroup>
             </FieldTier>
-          </FieldGroup>
+          </>
         ) : null}
       </DialogForm>
 

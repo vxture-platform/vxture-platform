@@ -75,6 +75,7 @@ const BASELINED_RULE_IDS = new Set([
   "ds/no-hardcoded-z-index",
   "ds/no-hardcoded-breakpoint",
   "ds/no-app-dark-overrides",
+  "ds/overlay-panel-preset",
 ]);
 const IGNORED_PARTS = new Set([
   ".git",
@@ -1362,6 +1363,20 @@ const rules = [
     },
   },
   {
+    id: "ds/overlay-panel-preset",
+    description:
+      "弹窗与抽屉只用平台五个面板预设：DialogForm size=sm|lg|xl；Drawer 右侧 width=lg（详情）、左侧 width=sm（筛选）；不写裸 DialogContent。",
+    checkContent(file, content) {
+      if (
+        !isFrontendSource(file) ||
+        isGeneratedOrAsset(file) ||
+        path.extname(file) !== ".tsx"
+      )
+        return [];
+      return findOverlayPresetViolations(file, content);
+    },
+  },
+  {
     id: "ds/no-native-table",
     description:
       "业务源码默认不能直接写 table/thead/tbody/tr/th/td，应使用 DS DataTable 或补充 DS 表格能力。",
@@ -2019,6 +2034,89 @@ function maskComments(content) {
     }
   }
   return out.join("");
+}
+
+/**
+ * 平台面板预设（owner 2026-09-15）。
+ *
+ * 起因：三个门户 73 个 DialogForm、9 个 Drawer **没有一个传了尺寸**，全落在默认的 md
+ * 512px 上——注册表单塞两列、提示常驻，对话框常态就要滚。面板多宽是设计决定，一个平台
+ * 只收敛到五个：
+ *
+ *   确认 / 单字段 / 结果展示        DialogForm size="sm"   448
+ *   常规表单（≤6 字段，两列）        DialogForm size="lg"   672
+ *   注册 / 编辑长表单（两列 + 分档） DialogForm size="xl"   928
+ *   详情 / 检视                      Drawer 右侧 width="lg" 672
+ *   筛选面板                          DS FilterPanel（左侧 sm，件内定死）
+ *
+ * 所以这里判的是**显式写出预设**：不写尺寸（默认 md）、写 md、写数字宽度都拦。
+ * 裸 `DialogContent` 一并拦——它绕过 DialogForm 统一的字段滚动区与页脚。
+ *
+ * 开标签跨多行、属性里有 `=>`，所以不能逐行正则：从标签起点扫到**花括号与引号都闭合
+ * 时的第一个 `>`**。签名带上开标签的全文（去空白），同一文件里多个对话框各记一条
+ * 基线，不会互相放行；改动一个已在基线里的对话框的开标签，它就得按预设写。
+ */
+function openingTagAt(content, start) {
+  let depth = 0;
+  let quote = null;
+  for (let i = start; i < content.length; i += 1) {
+    const ch = content[i];
+    if (quote) {
+      if (ch === "\\") i += 1;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") depth -= 1;
+    else if (ch === ">" && depth === 0) return content.slice(start, i + 1);
+  }
+  return content.slice(start);
+}
+
+function literalProp(tag, name) {
+  const m = new RegExp(`\\s${name}=(?:"([^"]*)"|\\{\\s*"([^"]*)"\\s*\\})`).exec(tag);
+  if (m) return m[1] ?? m[2] ?? "";
+  return new RegExp(`\\s${name}=\\{`).test(tag) ? "{expr}" : null;
+}
+
+function findOverlayPresetViolations(file, content) {
+  /* 函数内定义：规则在模块顶层求值途中就会被调用，模块级 const 此时还在暂时性死区里。 */
+  const dialogFormSizes = new Set(["sm", "lg", "xl"]);
+  const masked = maskComments(content);
+  const results = [];
+  const re = /<(DialogForm|Drawer|DialogContent)(?=[\s>\/])/g;
+  let m;
+  while ((m = re.exec(masked))) {
+    const tag = openingTagAt(masked, m.index);
+    const line = masked.slice(0, m.index).split(/\r?\n/).length;
+    const source = normalizeSnippet(tag);
+    let problem = null;
+    if (m[1] === "DialogForm") {
+      const size = literalProp(tag, "size");
+      if (!size || !dialogFormSizes.has(size))
+        problem = `DialogForm 必须写 size="sm" | "lg" | "xl"（现为 ${size ?? "默认 md"}）`;
+    } else if (m[1] === "Drawer") {
+      const side = literalProp(tag, "side") ?? "right";
+      const width = literalProp(tag, "width");
+      if (side === "left")
+        problem = "左侧面板是筛选面板：用 DS FilterPanel，不自己拼 Drawer";
+      else if (width !== "lg")
+        problem = `详情抽屉必须写 width="lg"（现为 ${width ?? "默认"}）`;
+    } else {
+      problem = "不写裸 DialogContent：用 DialogForm（统一的字段滚动区与页脚）";
+    }
+    if (problem)
+      results.push(
+        violation(
+          file,
+          line,
+          `${problem}。面板预设见 check-design-system.mjs 的 findOverlayPresetViolations。`,
+          source,
+        ),
+      );
+  }
+  return results;
 }
 
 /**

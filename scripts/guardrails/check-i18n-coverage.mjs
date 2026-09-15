@@ -464,6 +464,9 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *   `features/tenancy/known-subjects.ts` 的「Atlas 实测」「上线前测试」+ 悬停说明,随 opera 现行体例写死。
  * 2026-09-15 opera 2153 → 2162(+9):自检发起方(owner:「完整快速对接」)。请求日志新增「发起方」列与
  *   「平台自检」「按时间对应」及两句悬停说明;Atlas / runos 变更表操作者查不到时「平台无此运营者」「未归属」。随 opera 现行体例写死。
+ * 2026-09-15 opera 2162 → 2225(+63):能力管理·Runos 四页(owner:合并列、补行操作、勾选筛选面板、面板五预设)。
+ *   合并后的列头与副行、行菜单新增项、筛选面板维度名、详情抽屉字段名、表单帮助图标里的说明文案(原 FieldDescription 常驻文字
+ *   收进 hint 后按调用点重新计数)、用量计量的能力过滤条。随 opera 现行体例写死。
  */
 const BASELINE = {
   // 2026-09-04 console 30 → 8:批 0c 清掉 onboarding 法务链接 / signin 跳板 /
@@ -474,7 +477,7 @@ const BASELINE = {
   console: 0,
   website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 2162, // 2026-09-15 见上方说明(末条:自检发起方与运营者名字 +9)
+  opera: 2225, // 2026-09-15 见上方说明(末条:能力管理·Runos 四页 +63)
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页
