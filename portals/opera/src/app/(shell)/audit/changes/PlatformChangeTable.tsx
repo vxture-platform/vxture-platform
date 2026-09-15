@@ -36,6 +36,7 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { visibleIdOr } from "@/lib/visible-id";
 
 /** 字段名对齐 product_251 X-3 的统一审计记录（见 opera-bff 同名接口）。 */
 interface AuditLogEntry {
@@ -258,7 +259,11 @@ export function PlatformChangeTable() {
               <TableTitleCell
                 icon="clock-counter-clockwise"
                 title={r.objectType}
-                description={<span className="font-mono">{r.objectId}</span>}
+                description={
+                  <span className="font-mono">
+                    {visibleIdOr(r.objectId, "—")}
+                  </span>
+                }
               />
             ),
           },

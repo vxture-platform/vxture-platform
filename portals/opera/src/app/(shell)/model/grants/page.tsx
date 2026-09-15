@@ -105,6 +105,7 @@ import { isEnabled, type ObjectState } from "@/features/atlas/state";
 import { useConfirmLabels } from "@/lib/destructive";
 import { api, OperaApiError } from "@/lib/api";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { visibleIdOr } from "@/lib/visible-id";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——与 endpoints 同一批人管（授权的是
  * 入口），活库 admin.operator_permission 里也没有更细的码。 */
@@ -474,7 +475,7 @@ function ProductGrantsPageContent() {
     const text = [
       `${r.productCode} → ${r.endpointCode}`,
       r.applicationId
-        ? `应用 ${r.applicationId}${r.applicationType ? `（${r.applicationType}）` : ""}`
+        ? `应用 ${visibleIdOr(r.applicationId, "")}${r.applicationType ? `（${r.applicationType}）` : ""}`
         : "产品级",
       r.expiresAt ? `到期 ${r.expiresAt.slice(0, 10)}` : "不限期",
       isEnabled(r.state) ? (isExpired(r) ? "已过期" : "生效中") : "已停用",
@@ -637,7 +638,9 @@ function ProductGrantsPageContent() {
             cell: (r: ProductGrantRecord) =>
               r.applicationId ? (
                 <span className="flex flex-col items-center gap-2xs">
-                  <span className="text-code-sm">{r.applicationId}</span>
+                  <span className="text-code-sm">
+                    {visibleIdOr(r.applicationId, "应用级")}
+                  </span>
                   {r.applicationType ? (
                     <span className="text-body-sm text-muted-foreground">
                       {r.applicationType}

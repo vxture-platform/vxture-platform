@@ -45,6 +45,7 @@ import {
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
+import { visibleIdOr } from "@/lib/visible-id";
 
 /** 字段名跟随 runos v0.8.0（X-3 三方对齐）：`eventType` → `action`，新增 `outcome`。 */
 interface MgmtEventRecord {
@@ -240,7 +241,11 @@ export function RunosChangeTable() {
               <TableTitleCell
                 icon="clock-counter-clockwise"
                 title={r.objectType}
-                description={<span className="font-mono">{r.objectId}</span>}
+                description={
+                  <span className="font-mono">
+                    {visibleIdOr(r.objectId, "—")}
+                  </span>
+                }
               />
             ),
           },

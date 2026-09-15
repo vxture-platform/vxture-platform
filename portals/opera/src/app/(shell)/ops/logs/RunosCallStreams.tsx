@@ -56,6 +56,7 @@ import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
+import { visibleIdOr } from "@/lib/visible-id";
 
 type StreamKey = "calls" | "outcomes";
 
@@ -385,7 +386,7 @@ export function RunosCallStreams({
                   title={
                     <span className="font-mono">{r.capabilityId ?? "—"}</span>
                   }
-                  description={<span className="font-mono">{r.callId}</span>}
+                  description={visibleIdOr(r.callId, r.agentId ?? "—")}
                 />
               ),
             },

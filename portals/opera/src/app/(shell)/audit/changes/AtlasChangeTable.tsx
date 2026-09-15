@@ -64,6 +64,7 @@ import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDateTime } from "@vxture-platform/shared";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
+import { visibleIdOr } from "@/lib/visible-id";
 
 /** 与 opera-bff atlas.router.ts 同名能力码。**已知缺口**：提交给平台能力码词表的
  * 那套只覆盖配置类写操作，所以「可以读变更流水」目前没法与「可以轮换密钥」分开
@@ -387,7 +388,9 @@ export function AtlasChangeTable() {
                 icon="clock-counter-clockwise"
                 title={r.objectType}
                 description={
-                  <span className="font-mono">{r.objectId ?? "—"}</span>
+                  <span className="font-mono">
+                    {visibleIdOr(r.objectId, "—")}
+                  </span>
                 }
               />
             ),

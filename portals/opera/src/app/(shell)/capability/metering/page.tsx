@@ -61,11 +61,16 @@ import {
   TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
-import { useTenancyDirectory } from "@/features/tenancy/directory";
-import { workspaceDisplay } from "@/features/tenancy/directory";
+import {
+  tenantDisplay,
+  useTenancyDirectory,
+  workspaceDisplay,
+  workspaceLabel,
+} from "@/features/tenancy/directory";
 import { api, OperaApiError } from "@/lib/api";
 import { formatDay } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
+import { visibleIdOr } from "@/lib/visible-id";
 
 type UsageAxis =
   | "tenant"
@@ -194,7 +199,23 @@ function downloadCsv(filename: string, rows: readonly string[][]) {
   URL.revokeObjectURL(url);
 }
 
-/** 该轴那一列显示什么。`none` 原样透出——它是可以去查的真实分组，不是"未知"。 */
+/**
+ * 这一行在当前轴上的**原始标识**，只做内部判断（`none`）与搜索匹配。租户 / 工作区 / 产品 /
+ * 端点实例在上游都是 UUID，**不能直接上屏**——上屏走 `axisLabel` 或租户、工作区目录。
+ */
+/** 上屏与导出用：产品换成产品码，其余是 UUID 的一律不显示。`none` 原样透出——它是可以去查的真实分组。 */
+function axisLabel(
+  row: UsageSummaryRow,
+  productCodeById: ReadonlyMap<string, string>,
+): string {
+  const id = axisIdentity(row);
+  if (id === "none") return id;
+  if (row.dimension === "product") {
+    return (row.productId && productCodeById.get(row.productId)) ?? "未知产品";
+  }
+  return visibleIdOr(id, "—");
+}
+
 function axisIdentity(row: UsageSummaryRow): string {
   switch (row.dimension) {
     case "tenant":
@@ -301,12 +322,30 @@ export default function CapabilityMeteringPage() {
     );
   }, [rows]);
 
+  /* 产品轴的行只带 productId（UUID）。UUID 不上屏，所以查一次产品目录换成产品码；
+     查不到就说「未知产品」，不拿 UUID 顶上。 */
+  const [productCodeById, setProductCodeById] = useState<
+    ReadonlyMap<string, string>
+  >(new Map());
+  useEffect(() => {
+    void api
+      .get<{ id: string; productCode: string }[]>("/api/products")
+      .then((list) =>
+        setProductCodeById(new Map(list.map((p) => [p.id, p.productCode]))),
+      )
+      .catch(() => setProductCodeById(new Map()));
+  }, []);
+
   function exportCsv() {
     if (rows.length === 0) return;
     downloadCsv(`runos-usage-${axis}-${window_.from}_${window_.to}.csv`, [
       [currentAxis.label, "调用数", "放行数", "成功数", "成本（运营口径）"],
       ...rows.map((r) => [
-        axisIdentity(r),
+        r.dimension === "tenant"
+          ? (tenantDisplay(tenancy, r.tenantId)?.tenantNo ?? "—")
+          : r.dimension === "workspace"
+            ? workspaceLabel(tenancy, r.workspaceId)
+            : axisLabel(r, productCodeById),
         String(r.calls),
         String(r.allowedCalls),
         String(r.successCalls),
@@ -533,17 +572,31 @@ export default function CapabilityMeteringPage() {
                       icon="users"
                       title={d.primary}
                       description={d.secondary ?? "—"}
-                      tooltip={d.title}
+                      {...(d.title ? { tooltip: d.title } : {})}
                     />
                   ) : (
                     "—"
                   );
                 }
                 const id = axisIdentity(r);
+                if (r.dimension === "tenant" && id !== "none") {
+                  const t = tenantDisplay(tenancy, r.tenantId);
+                  return (
+                    <TableTitleCell
+                      icon="users"
+                      title={t?.name ?? "—"}
+                      description={t?.tenantNo ?? "—"}
+                    />
+                  );
+                }
                 return (
                   <TableTitleCell
                     icon="database"
-                    title={<span className="font-mono">{id}</span>}
+                    title={
+                      <span className="font-mono">
+                        {axisLabel(r, productCodeById)}
+                      </span>
+                    }
                     description={
                       id === "none"
                         ? "未解析维度"
