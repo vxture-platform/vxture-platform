@@ -648,6 +648,7 @@ export default function MeteringPage() {
               />
             </InputGroup>
           }
+          resetLabel={tShared("filters.reset")}
           onReset={() => {
             setKeyword("");
             setCycleMonth("all");

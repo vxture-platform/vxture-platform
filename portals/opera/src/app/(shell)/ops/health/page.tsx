@@ -757,6 +757,7 @@ export default function ServiceMonitorPage() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setStatusFilter("all");

@@ -442,7 +442,7 @@ export default function DashboardPage() {
             <Button
               asChild
               variant="ghost"
-              size="md"
+              size="icon-md"
               aria-label="前往 Provider 详情"
               title="前往 Provider 详情"
             >

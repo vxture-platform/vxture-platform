@@ -623,6 +623,7 @@ function EndpointsPageContent() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setResolutionFilter("all");

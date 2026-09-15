@@ -419,6 +419,7 @@ function RunosCredentialsPageContent() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               pager.resetPage();

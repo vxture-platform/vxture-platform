@@ -681,6 +681,7 @@ export default function LogsPage() {
               />
             </InputGroup>
           }
+          resetLabel={tShared("filters.reset")}
           onReset={() => {
             setKeyword("");
             setLevel("all");

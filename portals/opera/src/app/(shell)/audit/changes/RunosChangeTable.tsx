@@ -292,7 +292,7 @@ export function RunosChangeTable() {
         rowActions={(r: MgmtEventRecord) => (
           <Button
             variant="ghost"
-            size="md"
+            size="icon-md"
             aria-label="复制事件 ID"
             title="复制事件 ID"
             onClick={() => void copyRow(r.eventId)}

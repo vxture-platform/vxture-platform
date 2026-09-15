@@ -194,7 +194,8 @@
   },
   "filters": {
     "allStates": "全部状态",
-    "stateLabel": "状态筛选"
+    "stateLabel": "状态筛选",
+    "reset": "重置筛选"
   },
   "actions": {
     "cancel": "取消",

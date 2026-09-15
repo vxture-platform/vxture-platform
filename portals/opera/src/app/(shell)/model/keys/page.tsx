@@ -618,6 +618,7 @@ export default function KeysPage() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setKindFilter("all");

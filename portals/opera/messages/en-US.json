@@ -194,7 +194,8 @@
   },
   "filters": {
     "allStates": "All states",
-    "stateLabel": "Filter by state"
+    "stateLabel": "Filter by state",
+    "reset": "Reset filters"
   },
   "actions": {
     "cancel": "Cancel",

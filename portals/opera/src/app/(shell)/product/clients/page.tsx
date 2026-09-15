@@ -251,6 +251,7 @@ function ProductClients() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setChannelFilter("all");

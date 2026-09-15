@@ -1339,6 +1339,7 @@ function CapabilitiesPageContent() {
                 />
               </InputGroup>
             }
+            resetLabel={tShared("filters.reset")}
             onReset={() => {
               setKeyword("");
               setPrimitiveFilter("all");
