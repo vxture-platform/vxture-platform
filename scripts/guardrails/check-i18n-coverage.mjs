@@ -469,6 +469,11 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *   收进 hint 后按调用点重新计数)、用量计量的能力过滤条。随 opera 现行体例写死。
  * 2026-09-15 opera 2225 → 2222(-3):能力管理三页筛选改成「工具行下拉框 + 更多筛选气泡」(owner 否掉左侧抽屉 FilterPanel),
  *   面板标题 / 应用 / 关闭等抽屉文案随之删除。
+ *
+ * 2026-09-15 opera 2222 → 2226(+4):opera 其余弹窗收进面板预设(sm/lg/xl、抽屉 lg),静态字段说明
+ *   从 `<FieldDescription>` 收进 FieldLabel 的帮助 icon(`hint="…"`)。**没有新增文案**:
+ *   计数器只认同一行里的 `"…"` 与 `>…<`,原先跨行书写的 JSX 文本它看不见,挪进属性后
+ *   才被数到;同批删掉的「可选」「(可选)」抵掉一部分,净 +4。整页硬编码,不单抽(判据同上)。
  */
 const BASELINE = {
   // 2026-09-04 console 30 → 8:批 0c 清掉 onboarding 法务链接 / signin 跳板 /
@@ -479,7 +484,7 @@ const BASELINE = {
   console: 0,
   website: 39,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
-  opera: 2222, // 2026-09-15 见上方说明(末条:筛选改下拉框 + 气泡 -3)
+  opera: 2226, // 2026-09-15 见上方说明(末条:弹窗说明收进帮助 icon +4)
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页

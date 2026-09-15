@@ -1388,6 +1388,7 @@ export function ProductDetailPage({
       {/* ── 改产品码：危险确认 + 善后清单 ──────────────────────────────
           不是一句「确定吗」，而是把下游有什么、各自会怎么处理逐条摆出来。 */}
       <DialogForm
+        size="sm"
         open={pendingCode !== null}
         onOpenChange={(open) => {
           if (!open) setPendingCode(null);
@@ -1451,6 +1452,7 @@ export function ProductDetailPage({
 
       {/* ── 一次性交接清单：保存时签发了新客户端 ───────────────────────── */}
       <DialogForm
+        size="lg"
         open={handover !== null}
         onOpenChange={(open) => {
           if (!open) closeHandover();
@@ -1495,6 +1497,7 @@ export function ProductDetailPage({
 
       {/* advisory 的二次确认。**提醒不是门闩**：它只是拦一下让人看一眼（「恢复」那一档）。 */}
       <DialogForm
+        size="sm"
         open={advisory !== null}
         onOpenChange={(open) => {
           if (!open) setAdvisory(null);

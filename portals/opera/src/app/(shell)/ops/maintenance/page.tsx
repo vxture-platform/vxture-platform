@@ -47,6 +47,7 @@ import {
   TableTitleCell,
   ActionButton,
 } from "@vxture/design-system";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
@@ -616,6 +617,7 @@ export default function MaintenanceWindowsPage() {
 
       {dialogMode ? (
         <DialogForm
+          size="lg"
           open
           title={dialogMode === "create" ? "新建维护窗口" : "编辑维护窗口"}
           description={
@@ -638,9 +640,11 @@ export default function MaintenanceWindowsPage() {
             tier="identity"
             hint="标题与时间窗会直接出现在对外公告上；进行中的窗口只能顺延，不能提前。"
           >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="mw-title">标题</FieldLabel>
+            <FieldGroup columns={2}>
+              <Field span="full">
+                <FieldLabel {...FIELD_LABEL_A11Y} required htmlFor="mw-title">
+                  标题
+                </FieldLabel>
                 <Input
                   id="mw-title"
                   value={form.title}
@@ -653,38 +657,40 @@ export default function MaintenanceWindowsPage() {
                   required
                 />
               </Field>
-              <div className="grid grid-cols-2 gap-md">
-                <Field>
-                  <FieldLabel htmlFor="mw-start">计划开始</FieldLabel>
-                  <Input
-                    id="mw-start"
-                    type="datetime-local"
-                    value={form.startAt}
-                    disabled={liveEditOnly}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, startAt: e.target.value }))
-                    }
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="mw-end">计划结束</FieldLabel>
-                  <Input
-                    id="mw-end"
-                    type="datetime-local"
-                    value={form.endAt}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, endAt: e.target.value }))
-                    }
-                    required
-                  />
-                  {liveEditOnly ? (
-                    <FieldDescription>
-                      进行中的窗口只能顺延，不能提前
-                    </FieldDescription>
-                  ) : null}
-                </Field>
-              </div>
+              <Field>
+                <FieldLabel {...FIELD_LABEL_A11Y} required htmlFor="mw-start">
+                  计划开始
+                </FieldLabel>
+                <Input
+                  id="mw-start"
+                  type="datetime-local"
+                  value={form.startAt}
+                  disabled={liveEditOnly}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, startAt: e.target.value }))
+                  }
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel {...FIELD_LABEL_A11Y} required htmlFor="mw-end">
+                  计划结束
+                </FieldLabel>
+                <Input
+                  id="mw-end"
+                  type="datetime-local"
+                  value={form.endAt}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, endAt: e.target.value }))
+                  }
+                  required
+                />
+                {liveEditOnly ? (
+                  <FieldDescription>
+                    进行中的窗口只能顺延，不能提前
+                  </FieldDescription>
+                ) : null}
+              </Field>
             </FieldGroup>
           </FieldTier>
 
@@ -692,44 +698,47 @@ export default function MaintenanceWindowsPage() {
             tier="details"
             hint="严重度决定公告的展示强度，受影响服务可留空。"
           >
-            <FieldGroup>
-              <div className="grid grid-cols-2 gap-md">
-                <Field>
-                  <FieldLabel htmlFor="mw-severity">严重度</FieldLabel>
-                  <NativeSelect
-                    id="mw-severity"
-                    value={form.severity}
-                    disabled={liveEditOnly}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        severity: e.target
-                          .value as MaintenanceWindowItem["severity"],
-                      }))
-                    }
-                  >
-                    <option value="minor">一般</option>
-                    <option value="major">重要</option>
-                    <option value="critical">严重</option>
-                  </NativeSelect>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="mw-services">受影响服务</FieldLabel>
-                  <Input
-                    id="mw-services"
-                    value={form.affectedServices}
-                    disabled={liveEditOnly}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        affectedServices: e.target.value,
-                      }))
-                    }
-                    placeholder="如 auth-bff, admin-bff"
-                  />
-                  <FieldDescription>逗号分隔，可选</FieldDescription>
-                </Field>
-              </div>
+            <FieldGroup columns={2}>
+              <Field>
+                <FieldLabel htmlFor="mw-severity">严重度</FieldLabel>
+                <NativeSelect
+                  id="mw-severity"
+                  value={form.severity}
+                  disabled={liveEditOnly}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      severity: e.target
+                        .value as MaintenanceWindowItem["severity"],
+                    }))
+                  }
+                >
+                  <option value="minor">一般</option>
+                  <option value="major">重要</option>
+                  <option value="critical">严重</option>
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel
+                  hint="逗号分隔"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="mw-services"
+                >
+                  受影响服务
+                </FieldLabel>
+                <Input
+                  id="mw-services"
+                  value={form.affectedServices}
+                  disabled={liveEditOnly}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      affectedServices: e.target.value,
+                    }))
+                  }
+                  placeholder="如 auth-bff, admin-bff"
+                />
+              </Field>
             </FieldGroup>
           </FieldTier>
 
@@ -738,8 +747,8 @@ export default function MaintenanceWindowsPage() {
             title="说明文案"
             hint="两段都可选，不填也能发布——留空时公告只展示标题与时间窗。"
           >
-            <FieldGroup>
-              <Field>
+            <FieldGroup columns={2}>
+              <Field span="full">
                 <FieldLabel htmlFor="mw-desc">描述</FieldLabel>
                 <Textarea
                   id="mw-desc"
@@ -750,9 +759,8 @@ export default function MaintenanceWindowsPage() {
                   rows={3}
                   placeholder="维护内容说明"
                 />
-                <FieldDescription>可选</FieldDescription>
               </Field>
-              <Field>
+              <Field span="full">
                 <FieldLabel htmlFor="mw-impact">影响说明</FieldLabel>
                 <Textarea
                   id="mw-impact"
@@ -766,7 +774,6 @@ export default function MaintenanceWindowsPage() {
                   rows={3}
                   placeholder="对用户/租户的影响范围与降级预期"
                 />
-                <FieldDescription>可选</FieldDescription>
               </Field>
             </FieldGroup>
           </FieldTier>

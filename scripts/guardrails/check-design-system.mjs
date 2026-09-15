@@ -2077,7 +2077,12 @@ function openingTagAt(content, start) {
 function literalProp(tag, name) {
   const m = new RegExp(`\\s${name}=(?:"([^"]*)"|\\{\\s*"([^"]*)"\\s*\\})`).exec(tag);
   if (m) return m[1] ?? m[2] ?? "";
-  return new RegExp(`\\s${name}=\\{`).test(tag) ? "{expr}" : null;
+  /* `size={cond ? "lg" : "sm"}`：三元各分支的字符串字面量全是合法挡位就认——
+     一个弹窗按形态在两个预设之间切换是合法的，没有字面量（变量、拼接）才算不可判定。 */
+  const expr = new RegExp(`\\s${name}=\\{([^}]*)\\}`).exec(tag);
+  if (!expr) return null;
+  const literals = [...expr[1].matchAll(/[?:]\s*"([^"]*)"/g)].map((x) => x[1]);
+  return literals.length > 0 ? `{${literals.join("|")}}` : "{expr}";
 }
 
 function findOverlayPresetViolations(file, content) {
@@ -2106,7 +2111,8 @@ function findOverlayPresetViolations(file, content) {
     let problem = null;
     if (m[1] === "DialogForm") {
       const size = literalProp(tag, "size");
-      if (!size || !dialogFormSizes.has(size))
+      const sizes = size?.startsWith("{") ? size.slice(1, -1).split("|") : [size];
+      if (!size || size === "{expr}" || !sizes.every((x) => dialogFormSizes.has(x)))
         problem = `DialogForm 必须写 size="sm" | "lg" | "xl"（现为 ${size ?? "默认 md"}）`;
     } else if (m[1] === "Drawer") {
       const side = literalProp(tag, "side") ?? "right";

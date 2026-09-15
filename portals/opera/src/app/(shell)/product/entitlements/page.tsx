@@ -53,7 +53,6 @@ import {
   DialogForm,
   EmptyState,
   Field,
-  FieldDescription,
   FieldLabel,
   FieldTier,
   Icon,
@@ -73,6 +72,7 @@ import {
   type StatusBadgeTone,
   TableTitleCell,
 } from "@vxture/design-system";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
@@ -1217,7 +1217,13 @@ function ProductEntitlements() {
                 hint="选中的能力共用同一套。要给某一条不同的配置，单独再发一次。"
               >
                 <Field>
-                  <FieldLabel htmlFor="ent-risk">Risk Scope</FieldLabel>
+                  <FieldLabel
+                    hint="这条授权的风险上限：能力上某个操作的 riskLevel 高过它，那次调用就 policy_denied。默认 read——不替你默认成 write。"
+                    {...FIELD_LABEL_A11Y}
+                    htmlFor="ent-risk"
+                  >
+                    Risk Scope
+                  </FieldLabel>
                   <NativeSelect
                     id="ent-risk"
                     value={capPicker.riskScope}
@@ -1229,11 +1235,6 @@ function ProductEntitlements() {
                     <option value="write">write</option>
                     <option value="critical">critical</option>
                   </NativeSelect>
-                  <FieldDescription>
-                    这条授权的风险上限：能力上某个操作的 riskLevel
-                    高过它，那次调用就 policy_denied。默认 read——不替你默认成
-                    write。
-                  </FieldDescription>
                 </Field>
               </FieldTier>
             </>

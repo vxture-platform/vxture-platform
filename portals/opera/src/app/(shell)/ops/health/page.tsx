@@ -1025,7 +1025,7 @@ export default function ServiceMonitorPage() {
       <Drawer
         open={probeTarget !== null}
         onClose={() => setProbeTarget(null)}
-        width="md"
+        width="lg"
         title={
           probeTarget ? `探测点 · ${probeTarget.item.productName}` : undefined
         }

@@ -192,7 +192,7 @@ export function SecretsDrawer({
       <Drawer
         open={open}
         onClose={onClose}
-        width="md"
+        width="lg"
         title="密钥管理"
         description={productCode}
       >
@@ -349,6 +349,7 @@ export function SecretsDrawer({
       </Drawer>
 
       <DialogForm
+        size="sm"
         open={rotateTarget !== null}
         onOpenChange={(next) => {
           if (!next) setRotateTarget(null);

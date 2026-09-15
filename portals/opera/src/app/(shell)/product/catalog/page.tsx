@@ -894,6 +894,7 @@ function ProductsPageContent() {
 
       {/* 二次确认。退役不可逆、恢复要提醒重新验证——两者都不该点一下就发生。 */}
       <DialogForm
+        size="sm"
         open={pendingAction !== null}
         onOpenChange={(open) => {
           if (!open) setPendingAction(null);
@@ -922,6 +923,7 @@ function ProductsPageContent() {
       {/* 删除确认（两步删除第二步）。先看影响面：能删就摊开连带处理，不能删就说清
           为什么、禁掉按钮、指向退役。删除按钮走 DialogForm 的 danger（红）。 */}
       <DialogForm
+        size="sm"
         open={deletion !== null}
         danger
         onOpenChange={(open) => {

@@ -63,7 +63,6 @@ import {
   DialogForm,
   EmptyState,
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
   FilterBar,
@@ -82,6 +81,7 @@ import {
   useListPagination,
   ActionButton,
 } from "@vxture/design-system";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
@@ -819,6 +819,7 @@ export default function KeysPage() {
       />
 
       <DialogForm
+        size="lg"
         open={dialog?.kind === "issue"}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
@@ -838,31 +839,46 @@ export default function KeysPage() {
           title={t("issue.externalOnlyTitle")}
           description={t("issue.externalOnlyDescription")}
         />
-        <FieldGroup>
+        <FieldGroup columns={2}>
           <Field>
-            <FieldLabel htmlFor="key-name">{t("issue.nameLabel")}</FieldLabel>
+            <FieldLabel
+              required
+              hint={t("issue.nameDescription")}
+              {...FIELD_LABEL_A11Y}
+              htmlFor="key-name"
+            >
+              {t("issue.nameLabel")}
+            </FieldLabel>
             <Input
               id="key-name"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="acme-partner"
             />
-            <FieldDescription>{t("issue.nameDescription")}</FieldDescription>
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="key-owner">{t("issue.ownerLabel")}</FieldLabel>
+            <FieldLabel
+              hint={t("issue.ownerDescription")}
+              {...FIELD_LABEL_A11Y}
+              htmlFor="key-owner"
+            >
+              {t("issue.ownerLabel")}
+            </FieldLabel>
             <Input
               id="key-owner"
               value={draft.owner}
               onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
               placeholder={t("issue.ownerPlaceholder")}
             />
-            <FieldDescription>{t("issue.ownerDescription")}</FieldDescription>
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="key-expires">
+            <FieldLabel
+              hint={t("issue.expiresDescription")}
+              {...FIELD_LABEL_A11Y}
+              htmlFor="key-expires"
+            >
               {t("issue.expiresLabel")}
             </FieldLabel>
             <Input
@@ -873,7 +889,6 @@ export default function KeysPage() {
                 setDraft({ ...draft, expiresAt: e.target.value })
               }
             />
-            <FieldDescription>{t("issue.expiresDescription")}</FieldDescription>
           </Field>
         </FieldGroup>
       </DialogForm>
@@ -898,6 +913,7 @@ export default function KeysPage() {
 
       {/* 明文展示：没有取消/提交的语义，只有"我记下了"，所以提交按钮就是关闭。 */}
       <DialogForm
+        size="sm"
         open={reveal !== null}
         onOpenChange={(open) => {
           if (!open) setReveal(null);

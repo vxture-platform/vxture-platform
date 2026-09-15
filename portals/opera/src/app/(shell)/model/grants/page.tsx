@@ -78,7 +78,6 @@ import {
   DialogForm,
   EmptyState,
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
   FilterBar,
@@ -95,6 +94,7 @@ import {
   useListPagination,
   useToast,
 } from "@vxture/design-system";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import {
@@ -1021,6 +1021,7 @@ function ProductGrantsPageContent() {
           范围、到期、原因这类细项——批量入口给的是「这个产品能走这些路由」的最常见
           形状，两处都能新建会立刻产生「以哪边为准」。 */}
       <DialogForm
+        size="lg"
         open={editing}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
@@ -1033,9 +1034,19 @@ function ProductGrantsPageContent() {
         onSubmit={submit}
         cancelLabel={tShared("actions.cancel")}
       >
-        <FieldGroup>
+        <FieldGroup columns={2}>
           <Field>
-            <FieldLabel>{tShared("columns.product")}</FieldLabel>
+            <FieldLabel
+              required
+              hint={
+                editing
+                  ? "创建后不可变——改指向 = 一次撤销加一次新建，两个决定都要留在变更流水里。"
+                  : "产品码就是 S2S 令牌上的 act.sub，调用方伪造不了。"
+              }
+              {...FIELD_LABEL_A11Y}
+            >
+              {tShared("columns.product")}
+            </FieldLabel>
             <Combobox
               items={productItems}
               value={draft.productCode}
@@ -1044,15 +1055,20 @@ function ProductGrantsPageContent() {
               searchPlaceholder="搜索产品码…"
               disabled={editing}
             />
-            <FieldDescription>
-              {editing
-                ? "创建后不可变——改指向 = 一次撤销加一次新建，两个决定都要留在变更流水里。"
-                : "产品码就是 S2S 令牌上的 act.sub，调用方伪造不了。"}
-            </FieldDescription>
           </Field>
 
           <Field>
-            <FieldLabel>能力入口</FieldLabel>
+            <FieldLabel
+              required
+              hint={
+                editing
+                  ? "同上，不可变。"
+                  : "产品能调的模型由这个入口能触达的 primary / fallback 推导出来，不需要再逐个发放模型。"
+              }
+              {...FIELD_LABEL_A11Y}
+            >
+              能力入口
+            </FieldLabel>
             <Combobox
               items={endpointItems}
               value={draft.endpointCode}
@@ -1061,69 +1077,69 @@ function ProductGrantsPageContent() {
               searchPlaceholder="搜索入口码…"
               disabled={editing}
             />
-            <FieldDescription>
-              {editing
-                ? "同上，不可变。"
-                : "产品能调的模型由这个入口能触达的 primary / fallback 推导出来，不需要再逐个发放模型。"}
-            </FieldDescription>
           </Field>
 
-          <div className="grid grid-cols-2 gap-md">
-            <Field>
-              <FieldLabel htmlFor="grant-app-id">应用 ID（可选）</FieldLabel>
-              <Input
-                id="grant-app-id"
-                value={draft.applicationId}
-                onChange={(e) =>
-                  setDraft({ ...draft, applicationId: e.target.value })
-                }
-                placeholder="留空 = 产品级"
-                className="font-mono"
-              />
-              <FieldDescription>
-                留空是<b>产品级授权</b>
-                ，不是「没填」——这两者在唯一索引下是不同的东西。
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="grant-app-type">应用类型（可选）</FieldLabel>
-              <Input
-                id="grant-app-type"
-                value={draft.applicationType}
-                onChange={(e) =>
-                  setDraft({ ...draft, applicationType: e.target.value })
-                }
-                className="font-mono"
-              />
-            </Field>
-          </div>
+          <Field>
+            <FieldLabel
+              hint={
+                <>
+                  留空是<b>产品级授权</b>
+                  ，不是「没填」——这两者在唯一索引下是不同的东西。
+                </>
+              }
+              {...FIELD_LABEL_A11Y}
+              htmlFor="grant-app-id"
+            >
+              应用 ID
+            </FieldLabel>
+            <Input
+              id="grant-app-id"
+              value={draft.applicationId}
+              onChange={(e) =>
+                setDraft({ ...draft, applicationId: e.target.value })
+              }
+              placeholder="留空 = 产品级"
+              className="font-mono"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="grant-app-type">应用类型</FieldLabel>
+            <Input
+              id="grant-app-type"
+              value={draft.applicationType}
+              onChange={(e) =>
+                setDraft({ ...draft, applicationType: e.target.value })
+              }
+              className="font-mono"
+            />
+          </Field>
 
-          <div className="grid grid-cols-2 gap-md">
-            <Field>
-              <FieldLabel htmlFor="grant-expires">到期（可选）</FieldLabel>
-              <Input
-                id="grant-expires"
-                type="date"
-                value={draft.expiresAt}
-                onChange={(e) =>
-                  setDraft({ ...draft, expiresAt: e.target.value })
-                }
-              />
-              <FieldDescription>
-                到期在读时判定，没有清扫任务去翻 state——过期后不再放行，但这一行
-                仍会显示成启用，页面会另外提示。
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="grant-reason">理由（可选）</FieldLabel>
-              <Input
-                id="grant-reason"
-                value={draft.reason}
-                onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
-                placeholder="为什么这个产品需要这个入口"
-              />
-            </Field>
-          </div>
+          <Field>
+            <FieldLabel
+              hint="到期在读时判定，没有清扫任务去翻 state——过期后不再放行，但这一行仍会显示成启用，页面会另外提示。"
+              {...FIELD_LABEL_A11Y}
+              htmlFor="grant-expires"
+            >
+              到期
+            </FieldLabel>
+            <Input
+              id="grant-expires"
+              type="date"
+              value={draft.expiresAt}
+              onChange={(e) =>
+                setDraft({ ...draft, expiresAt: e.target.value })
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="grant-reason">理由</FieldLabel>
+            <Input
+              id="grant-reason"
+              value={draft.reason}
+              onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
+              placeholder="为什么这个产品需要这个入口"
+            />
+          </Field>
         </FieldGroup>
       </DialogForm>
     </>
