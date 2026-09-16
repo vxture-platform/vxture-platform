@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import {
   Banner,
   Button,
@@ -100,12 +101,10 @@ export function AddonOrdersPage() {
       id: "pack",
       header: "加油包",
       cell: (o) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          <span className="text-foreground">{o.packName}</span>
-          <span className="font-mono text-body-sm text-muted-foreground">
-            {o.packCode}
-          </span>
-        </span>
+        <StackCell
+          main={<span className="text-foreground">{o.packName}</span>}
+          sub={<span className="font-mono">{o.packCode}</span>}
+        />
       ),
     },
     {

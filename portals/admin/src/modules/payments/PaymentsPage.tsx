@@ -399,18 +399,11 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (payment) => (
-        <span className="inline-flex items-center gap-xs">
-          <Icon
-            name={payment.tenantType === "company" ? "buildings" : "user"}
-            size="sm"
-            className="shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span className="inline-flex flex-col items-center gap-2xs">
-            {payment.tenantName}
-            <span className="text-body-sm text-muted-foreground">{`${payment.tenantCode} · ${typeLabel(payment.tenantType)}`}</span>
-          </span>
-        </span>
+        <TableTitleCell
+          icon={payment.tenantType === "company" ? "buildings" : "user"}
+          title={payment.tenantName}
+          description={`${payment.tenantCode} · ${typeLabel(payment.tenantType)}`}
+        />
       ),
     },
     {

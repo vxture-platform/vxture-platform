@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -19,7 +20,6 @@ import {
   NativeSelect,
   StatusBadge,
   TableTitleCell,
-  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import {} from "@vxture-platform/shared";
@@ -249,34 +249,29 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (order) => (
-        <span className="inline-flex items-center gap-xs">
-          <Icon
-            name={order.tenantType === "company" ? "buildings" : "user"}
-            size="sm"
-            className="shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span className="inline-flex flex-col items-center gap-2xs">
-            {order.tenantName}
-            <span className="text-body-sm text-muted-foreground">{`${order.tenantCode} · ${typeLabel(order.tenantType)}`}</span>
-          </span>
-        </span>
+        <TableTitleCell
+          icon={order.tenantType === "company" ? "buildings" : "user"}
+          title={order.tenantName}
+          description={`${order.tenantCode} · ${typeLabel(order.tenantType)}`}
+        />
       ),
     },
     {
       id: "solution",
       header: "业务方案",
       cell: (order) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {isUnset(order.solutionName) ? (
-            <span className="text-body-md text-muted-foreground">
-              {UNSET_LABEL}
-            </span>
-          ) : (
-            order.solutionName
-          )}
-          <span className="text-body-sm text-muted-foreground">{`${order.industry} · ${order.region}`}</span>
-        </span>
+        <StackCell
+          main={
+            isUnset(order.solutionName) ? (
+              <span className="text-body-md text-muted-foreground">
+                {UNSET_LABEL}
+              </span>
+            ) : (
+              order.solutionName
+            )
+          }
+          sub={`${order.industry} · ${order.region}`}
+        />
       ),
     },
     {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -23,7 +24,6 @@ import {
   StatusBadge,
   TableTitleCell,
   Textarea,
-  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
 import {
@@ -231,18 +231,11 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (ticket) => (
-        <span className="inline-flex items-center gap-xs">
-          <Icon
-            name={ticket.tenantType === "company" ? "buildings" : "user"}
-            size="sm"
-            className="shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span className="inline-flex flex-col items-center gap-2xs">
-            {ticket.tenantName}
-            <span className="text-body-sm text-muted-foreground">{`${ticket.tenantCode} / ${typeLabel(ticket.tenantType)}`}</span>
-          </span>
-        </span>
+        <TableTitleCell
+          icon={ticket.tenantType === "company" ? "buildings" : "user"}
+          title={ticket.tenantName}
+          description={`${ticket.tenantCode} / ${typeLabel(ticket.tenantType)}`}
+        />
       ),
     },
     {
@@ -276,12 +269,10 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       id: "updated",
       header: tShared("columns.updatedAt"),
       cell: (ticket) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {formatDateTime(ticket.updatedAt, locale)}
-          <span className="text-body-sm text-muted-foreground">
-            {ticket.region}
-          </span>
-        </span>
+        <StackCell
+          main={formatDateTime(ticket.updatedAt, locale)}
+          sub={ticket.region}
+        />
       ),
     },
   ];
