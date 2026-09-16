@@ -42,6 +42,7 @@ import {
 } from "@vxture/design-system";
 import { isEnabled, isServing } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 import { visibleIdOr } from "@/lib/visible-id";
@@ -507,7 +508,9 @@ export default function DashboardPage() {
               header: tShared("columns.time"),
               sortable: true,
               width: "sm",
-              cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
+              cell: (r: AuditLogEntry) => (
+                <DateCell value={r.occurredAt} locale={locale} />
+              ),
             },
           ]}
           rows={eventSort.rows}

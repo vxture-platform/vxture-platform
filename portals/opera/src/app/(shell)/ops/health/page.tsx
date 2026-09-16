@@ -81,6 +81,7 @@ import {
   type ProductState,
 } from "@/features/product/lifecycle";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
 import { formatDateTime, formatDay } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
@@ -961,7 +962,10 @@ export default function ServiceMonitorPage() {
                   const emphasis = r.kind === "product" ? "prod" : "beta";
                   return channel.clientId ? (
                     <span className={EMPHASIS_TEXT[emphasis]}>
-                      {formatTime(channel.health.checkedAt)}
+                      <DateCell
+                        value={channel.health.checkedAt}
+                        locale="zh-CN"
+                      />
                     </span>
                   ) : (
                     /* 不写"从未"也不写时间：没有地址就没有发生过探测这件事。 */

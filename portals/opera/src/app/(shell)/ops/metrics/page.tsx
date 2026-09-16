@@ -45,6 +45,7 @@ import {
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
@@ -602,8 +603,9 @@ export default function MetricsPage() {
               header: "最近观测",
               sortable: true,
               width: "sm",
-              cell: (r: ProviderPerformanceRow) =>
-                formatTime(r.lastObservedAt, locale),
+              cell: (r: ProviderPerformanceRow) => (
+                <DateCell value={r.lastObservedAt} locale={locale} />
+              ),
             },
           ]}
           rows={perfSort.rows}

@@ -34,6 +34,7 @@ import {
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 import { visibleIdOr } from "@/lib/visible-id";
@@ -296,7 +297,9 @@ export function PlatformChangeTable() {
             id: "occurredAt",
             header: tShared("columns.time"),
             width: "sm",
-            cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
+            cell: (r: AuditLogEntry) => (
+              <DateCell value={r.occurredAt} locale={locale} />
+            ),
             sortable: true,
           },
         ]}

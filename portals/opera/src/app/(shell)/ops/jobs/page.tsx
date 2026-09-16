@@ -47,6 +47,7 @@ import {
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
@@ -409,7 +410,7 @@ export default function JobSchedulerPage() {
                   width: "sm",
                   cell: (r: JobHeartbeatItem) => (
                     <span className="text-body-sm text-muted-foreground">
-                      {formatTime(r.lastStartedAt)}
+                      <DateCell value={r.lastStartedAt} locale="zh-CN" />
                     </span>
                   ),
                 },
@@ -650,7 +651,7 @@ export default function JobSchedulerPage() {
                   width: "sm",
                   cell: (r: WebhookDeliveryIssue) => (
                     <span className="text-body-sm text-muted-foreground">
-                      {formatTime(r.nextRetryAt)}
+                      <DateCell value={r.nextRetryAt} locale="zh-CN" />
                     </span>
                   ),
                 },
@@ -661,7 +662,7 @@ export default function JobSchedulerPage() {
                   width: "sm",
                   cell: (r: WebhookDeliveryIssue) => (
                     <span className="text-body-sm text-muted-foreground">
-                      {formatTime(r.lastAttemptAt)}
+                      <DateCell value={r.lastAttemptAt} locale="zh-CN" />
                     </span>
                   ),
                 },
