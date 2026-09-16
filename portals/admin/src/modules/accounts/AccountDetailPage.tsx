@@ -161,36 +161,50 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
           <DetailSectionHeading icon="user" title="身份信息" />
         </header>
 
-        <div className="flex min-w-0 flex-wrap items-start gap-lg">
-          {/* 按原图画，不缩略——运营要看清用户传的到底是什么。 */}
-          <div className="flex shrink-0 flex-col items-center gap-sm">
-            <Avatar
-              key={account.avatarHash ?? "__default__"}
-              className="size-media-lg rounded-md"
-            >
-              <AvatarImage
-                src={avatarSrc}
-                alt={account.displayName}
-                className="rounded-md object-cover"
-              />
-              <AvatarFallback
-                delayMs={0}
-                className="rounded-md bg-accent text-muted-foreground"
-                aria-label={account.displayName}
+        <div className="grid min-w-0 gap-lg">
+          {/* 头像整行横排：头像与说明左起、动作靠右——与租户详情页同形。
+              此前头像、按钮、说明叠成一竖条（owner 2026-09-17 走查报的），
+              那是只改了租户那半边留下的不一致。
+              按原图画、不缩略：运营要看清用户传的到底是什么。 */}
+          <div className="flex min-w-0 items-center gap-lg border-b border-dashed border-primary/10 pb-sm">
+            <span className="w-media-sm shrink-0 text-body-sm text-muted-foreground">
+              用户头像
+            </span>
+            <span className="flex min-w-0 flex-1 items-center gap-sm">
+              <Avatar
+                key={account.avatarHash ?? "__default__"}
+                className="size-media-md rounded-md"
               >
-                <Icon name="user" size="md" fallback="placeholder" />
-              </AvatarFallback>
-            </Avatar>
+                <AvatarImage
+                  src={avatarSrc}
+                  alt={account.displayName}
+                  className="rounded-md object-cover"
+                />
+                <AvatarFallback
+                  delayMs={0}
+                  className="rounded-md bg-accent text-muted-foreground"
+                  aria-label={account.displayName}
+                >
+                  <Icon name="user" size="md" fallback="placeholder" />
+                </AvatarFallback>
+              </Avatar>
+              {!account.avatarHash ? (
+                <span className="whitespace-nowrap text-body-sm text-muted-foreground">
+                  未上传，当前为平台默认
+                </span>
+              ) : null}
+            </span>
             {/* 重置是不可撤回的删除，必须每次都问——step-up 凭据在有效期内会被
                 复用，不能拿它兼任确认（owner 2026-09-16 实测：刚验过租户、接着
                 重置用户头像时一声不响就删了）。后果文案里把这一点写明。 */}
             <DestructiveButton
+              className="ml-auto shrink-0"
               size="md"
               icon="refresh"
               disabled={resetting || !account.avatarHash}
               confirm={withLabels({
                 verb: "重置",
-                target: `${account.displayName} 的头像`,
+                target: `用户「${account.displayName}」的头像`,
                 consequence:
                   "删除用户上传的头像、回落平台默认图，原图不留存、不可撤回。若二次验证仍在有效期内，确认后将直接执行、不再要求验证码。",
                 onConfirm: handleResetAvatar,
@@ -198,14 +212,9 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
             >
               重置为默认
             </DestructiveButton>
-            {!account.avatarHash ? (
-              <span className="text-body-sm text-muted-foreground">
-                未上传，当前为平台默认
-              </span>
-            ) : null}
           </div>
 
-          <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-2">
             <Field label="账号编码">{account.accountCode}</Field>
             <Field label="显示名称">{account.displayName}</Field>
             <Field label="邮箱">{account.email || "—"}</Field>

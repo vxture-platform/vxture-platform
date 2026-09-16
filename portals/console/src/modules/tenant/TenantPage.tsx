@@ -55,6 +55,7 @@ import type {
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
+import { downscaleImage } from "@/lib/image-downscale";
 import { useRouter } from "@/lib/i18n/navigation";
 import { formatProfileDay } from "@/modules/account/profile/format";
 import {
@@ -80,6 +81,9 @@ const LOGO_ACCEPT = "image/png,image/jpeg,image/webp";
  * 挣在选文件这一刻告诉用户，而不是传完一轮再报错——服务端仍然校验，
  * 前端这一道只省往返，不是安全边界。 */
 const LOGO_MAX_BYTES = 1 * 1024 * 1024;
+/* 解码前的粗筛。缩图要把整张图读进内存，离谱的大文件不该走到那一步；
+ * 真正的上限是缩完之后按 LOGO_MAX_BYTES 判的。 */
+const LOGO_MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 
 /** 默认区域的托底值(owner 2026-09-05:按中国设定,三项可改)。 */
 const REGION_DEFAULTS = {
@@ -291,14 +295,22 @@ export function TenantPage() {
       setFeedback({ tone: "error", key: "feedback.logoInvalidType" });
       return;
     }
-    if (file.size > LOGO_MAX_BYTES) {
+    if (file.size > LOGO_MAX_SOURCE_BYTES) {
       setFeedback({ tone: "error", key: "feedback.logoTooLarge" });
       return;
     }
     setSubmitting(true);
     setFeedback(null);
     try {
-      await uploadOrgLogo(file);
+      /* 先缩再判大小：一张 3MB 的原图缩到 256px 通常只剩几十 KB，没道理让用户
+         自己先去改图。缩不动（GIF、本来就小、浏览器没 canvas）时原样返回，
+         所以这一判仍然拦得住真正超限的文件。 */
+      const upload = await downscaleImage(file);
+      if (upload.size > LOGO_MAX_BYTES) {
+        setFeedback({ tone: "error", key: "feedback.logoTooLarge" });
+        return;
+      }
+      await uploadOrgLogo(upload);
       setProfile(await fetchOrganizationProfile());
       setFeedback({ tone: "success", key: "feedback.logoSaved" });
     } catch {

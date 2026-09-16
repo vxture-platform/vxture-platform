@@ -111,6 +111,8 @@ import {
   formatProfileDay,
 } from "./format";
 
+import { downscaleImage } from "@/lib/image-downscale";
+
 const AVATAR_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 /* 上传前置限制：与服务端 `AVATAR_MAX_BYTES`
  * （services/identity/account/src/avatar/image-sniff.ts）**必须同值**。
@@ -119,6 +121,9 @@ const AVATAR_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
  * 而前后端唯一都依赖的 `@vxture/core-utils` 带着 libphonenumber-js 等无关依赖，
  * 搬过去等于给纯模块背包。改值时两处一起改。 */
 const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
+/* 解码前的粗筛。缩图要把整张图读进内存，离谱的大文件不该走到那一步；
+ * 真正的上限是缩完之后按 AVATAR_MAX_BYTES 判的。 */
+const AVATAR_MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 /** 与后端口径一致(此前前端 ≥6、后端 ≥8,提示与拒绝对不上)。 */
 const PASSWORD_MIN_LENGTH = 8;
 
@@ -352,14 +357,21 @@ export function ProfilePage() {
       setFeedback({ tone: "error", key: "feedback.avatarInvalidType" });
       return;
     }
-    if (file.size > AVATAR_MAX_BYTES) {
+    if (file.size > AVATAR_MAX_SOURCE_BYTES) {
       setFeedback({ tone: "error", key: "feedback.avatarTooLarge" });
       return;
     }
     setSubmitting(true);
     setFeedback(null);
     try {
-      const { picture } = await uploadUserAvatar(file);
+      /* 先缩再判大小，理由同租户标识那一处。GIF 会被原样返回——动图过一遍
+         canvas 就只剩第一帧，那比不压更糟。 */
+      const upload = await downscaleImage(file);
+      if (upload.size > AVATAR_MAX_BYTES) {
+        setFeedback({ tone: "error", key: "feedback.avatarTooLarge" });
+        return;
+      }
+      const { picture } = await uploadUserAvatar(upload);
       setProfile({ ...profile, picture });
       setFeedback({ tone: "success", key: "feedback.avatarUploaded" });
       await refreshSession();
