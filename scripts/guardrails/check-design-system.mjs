@@ -386,13 +386,13 @@ const rules = [
       if (!isDesignSystemConsumerSource(file)) return null;
       const specifiers = findDesignSystemSpecifiers(line);
       const unauthorized = specifiers.find(
-        (specifier) => !ALLOWED_DS_IMPORTS.has(specifier),
+        (specifier) => !isAllowedDsImport(specifier),
       );
       if (!unauthorized) return null;
       return violation(
         file,
         lineNumber,
-        `${unauthorized} 不是允许的 DS 公共入口；只允许根入口、/tokens、/types、/server 和 package exports 暴露的 styles/*。`,
+        `${unauthorized} 不是允许的 DS 公共入口；只允许 package exports 暴露的入口（根入口、/tokens、/types、/server、styles/*，以及 「./assets/*」 这类通配入口下的路径）。`,
       );
     },
   },
@@ -3019,6 +3019,31 @@ function readAllowedDesignSystemImports(manifest) {
         : `@vxture/design-system/${key.replace(/^\.\//, "")}`,
     ),
   );
+}
+
+/**
+ * 白名单条目可能带通配符——`exports` 里写 `"./assets/*"` 时，
+ * `readAllowedDesignSystemImports` 拼出来的是字面量
+ * `@vxture/design-system/assets/*`，而源码里写的是真实路径
+ * `@vxture/design-system/assets/icons/tenant-default.png`。用 `Set.has()` 精确比对，
+ * 通配那一条永远对不上任何真实路径——**于是 exports 明明暴露了的入口被判成违规**。
+ * 2026-09-16 实测：DS 12.12.0 给 `exports` 加了 `./assets/*`，平台侧引默认标识图
+ * 被本规则拦下。
+ *
+ * 这是匹配能力的缺口，不是判据。故改为：精确项照旧比，通配项展开成
+ * **前缀匹配**。展开得窄不得宽：`assets/*` 只放行 `assets/` 开头的路径，
+ * 不是“见 `*` 就放行”——后者等于把这道闸拆了。
+ */
+function isAllowedDsImport(specifier) {
+  if (ALLOWED_DS_IMPORTS.has(specifier)) return true;
+  for (const allowed of ALLOWED_DS_IMPORTS) {
+    if (!allowed.endsWith("/*")) continue;
+    const prefix = allowed.slice(0, -1); // 去掉末尾的 `*`，保留斜杠
+    if (specifier.length > prefix.length && specifier.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function readDesignSystemExportedStylePaths(manifest) {
