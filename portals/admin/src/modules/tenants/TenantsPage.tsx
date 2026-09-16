@@ -119,7 +119,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
       header: "租户",
       cell: (tenant) => (
         <TableTitleCell
-          icon={tenant.tenantType === "company" ? "buildings" : "user"}
+          icon={tenant.tenantType === "company" ? "buildings" : "building"}
           title={tenant.displayName}
           description={`${tenant.tenantCode} · ${tenant.region}`}
           onTitleClick={() =>

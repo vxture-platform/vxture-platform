@@ -400,7 +400,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
       header: "租户",
       cell: (payment) => (
         <TableTitleCell
-          icon={payment.tenantType === "company" ? "buildings" : "user"}
+          icon={payment.tenantType === "company" ? "buildings" : "building"}
           title={payment.tenantName}
           description={`${payment.tenantCode} · ${typeLabel(payment.tenantType)}`}
         />
