@@ -65,7 +65,7 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -95,6 +95,7 @@ import {
   useToast,
 } from "@vxture/design-system";
 import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import { DateCell } from "@/components/table/ConfigCells";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import {
@@ -222,6 +223,7 @@ export default function ProductGrantsPage() {
 
 function ProductGrantsPageContent() {
   const tShared = useTranslations();
+  const locale = useLocale();
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
@@ -662,7 +664,7 @@ function ProductGrantsPageContent() {
                     isExpired(r) ? "text-warning-foreground" : "text-body-sm"
                   }
                 >
-                  {r.expiresAt.slice(0, 10)}
+                  <DateCell value={r.expiresAt} locale={locale} />
                 </span>
               ) : (
                 <span className="text-muted-foreground">不限</span>

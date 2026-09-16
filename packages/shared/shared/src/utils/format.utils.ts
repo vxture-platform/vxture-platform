@@ -179,6 +179,33 @@ export function formatDateTime(
 }
 
 /**
+ * 只有时刻，不带日期。列表把日期与时刻分成主辅两行时，辅行用它
+ * （owner 2026-09-16：日期时间列分主辅，日期=年月日、时间=时分秒）。
+ *
+ * **不要拿 formatDateTime 再切字符串**：日期与时刻的拼接顺序、分隔符都属于
+ * locale，切出来的东西换一种语言就碎。
+ */
+export function formatClock(
+  value: DateInput,
+  /** 省略即交给运行时默认 locale——Intl 收 undefined 就是这个语义。 */
+  locale: string | undefined,
+  fallback = "—",
+  opts: DateFormatOptions = {},
+): string {
+  const d = toDate(value);
+  if (!d) return fallback;
+  return render(
+    d,
+    locale,
+    {
+      ...TIME_STYLES[opts.time ?? "long"],
+      ...(opts.timeZone ? { timeZone: opts.timeZone } : {}),
+    },
+    () => d.toISOString().slice(11, 19),
+  );
+}
+
+/**
  * @deprecated 用 {@link formatDay}（只有日期）或 {@link formatDateTime}
  * （日期 + 时刻）。本函数走的是无选项的 locale 默认形态，年月日不补零，
  * 与规范里的任一形态都对不上。保留仅为不破坏外部调用；仓内已无调用点。

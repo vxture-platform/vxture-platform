@@ -47,16 +47,11 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import {
-  productSurfaceLabel,
-  productTypeLabel,
-  isValidProductType,
-} from "@vxture/core-utils";
+import { productTypeLabel, isValidProductType } from "@vxture/core-utils";
 import {
   ConfigPopover,
-  MonoList,
+  DateCell,
   StackCell,
-  formatUpdatedAt,
 } from "@/components/table/ConfigCells";
 import { isEnabled } from "@/features/atlas/state";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -844,9 +839,7 @@ function ProductsPageContent() {
                 id: "integration",
                 header: "接入配置",
                 width: "lg",
-                cell: (r: ProductRecord) => (
-                  <IntegrationCell product={r} locale={typeLocale} />
-                ),
+                cell: (r: ProductRecord) => <IntegrationCell product={r} />,
               },
               {
                 id: "entitlements",
@@ -915,9 +908,7 @@ function ProductsPageContent() {
                 sortable: true,
                 width: "sm",
                 cell: (r: ProductRecord) => (
-                  <span className="text-body-sm text-muted-foreground">
-                    {formatUpdatedAt(r.updatedAt, dateLocale)}
-                  </span>
+                  <DateCell value={r.updatedAt} locale={dateLocale} />
                 ),
               },
             ]}
@@ -1157,27 +1148,16 @@ function ProductsPageContent() {
 }
 
 /**
- * 「接入配置」一格：边缘域名为主，登录渠道与计量指标数为辅；辅行点开是整份接入摘要。
- * 字段都来自列表接口带出的 integration 摘要，不逐行再打请求。
+ * 「接入配置」一格：边缘域名为主，登录渠道与计量指标数为辅；辅行点开是接入摘要。
+ *
+ * 气泡只列重点、一行一条（owner 2026-09-16）：边缘上游、产品主页、可见性、终端这些
+ * 次要字段不进来，去产品页看；也不放「去产品页配置」按钮——行菜单里已经有了。
  */
-function IntegrationCell({
-  product,
-  locale,
-}: {
-  readonly product: ProductRecord;
-  readonly locale: Parameters<typeof productSurfaceLabel>[1];
-}) {
+function IntegrationCell({ product }: { readonly product: ProductRecord }) {
   const s = product.integration;
   const clients = s?.clients ?? [];
   const metrics = s?.metricKeys ?? [];
   const channels = [...new Set(clients.map((c) => c.channel))];
-  const visibility =
-    [
-      product.isCustomerVisible ? "客户域" : null,
-      product.isWorkforceVisible ? "运营域" : null,
-    ]
-      .filter((x): x is string => x !== null)
-      .join(" / ") || "—";
   return (
     <StackCell
       main={
@@ -1197,61 +1177,35 @@ function IntegrationCell({
           }
           title={product.productName + " · 接入配置"}
           rows={[
-            {
-              label: "边缘域名",
-              value: <MonoList items={s?.edgeDomain ? [s.edgeDomain] : []} />,
-            },
-            {
-              label: "边缘上游",
-              value: (
-                <MonoList items={s?.edgeUpstream ? [s.edgeUpstream] : []} />
-              ),
-            },
-            {
-              label: "回调地址",
-              value: <MonoList items={s?.webhookUrl ? [s.webhookUrl] : []} />,
-            },
+            { label: "边缘域名", value: s?.edgeDomain ?? "—", mono: true },
+            { label: "回调地址", value: s?.webhookUrl ?? "—", mono: true },
             {
               label: "签名密钥",
               value: s?.hasWebhookSecret ? "已登记" : "未登记",
             },
             {
-              label: "产品主页",
-              value: <MonoList items={s?.homeUrl ? [s.homeUrl] : []} />,
-            },
-            { label: "可见性", value: visibility },
-            {
-              label: "终端",
+              label: "登录客户端",
               value:
-                product.surfaces.length > 0
-                  ? product.surfaces
-                      .map((x) =>
-                        productSurfaceLabel(
-                          x as Parameters<typeof productSurfaceLabel>[0],
-                          locale,
-                        ),
+                clients.length > 0
+                  ? clients
+                      .map(
+                        (c) =>
+                          c.clientId +
+                          "（" +
+                          c.channel +
+                          (c.state === "active" ? "" : "，已停用") +
+                          "）",
                       )
                       .join("、")
                   : "—",
+              mono: clients.length > 0,
             },
             {
-              label: "登录客户端",
-              value: (
-                <MonoList
-                  items={clients.map(
-                    (c) =>
-                      c.clientId +
-                      " · " +
-                      c.channel +
-                      (c.state === "active" ? "" : " · 已停用"),
-                  )}
-                />
-              ),
+              label: "计量指标",
+              value: metrics.length > 0 ? metrics.join("、") : "—",
+              mono: metrics.length > 0,
             },
-            { label: "计量指标", value: <MonoList items={metrics} /> },
           ]}
-          href={"/product/catalog/" + encodeURIComponent(product.productCode)}
-          hrefLabel="去产品页配置"
         />
       }
     />

@@ -54,7 +54,6 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
   ConfigPopover,
-  MonoList,
   StackCell,
   formatUpdatedAt,
 } from "@/components/table/ConfigCells";
@@ -401,39 +400,29 @@ function ProductClients() {
                         rows={[
                           {
                             label: "回调地址",
-                            value: <MonoList items={c.redirectUris} />,
+                            value:
+                              c.redirectUris.length > 0
+                                ? c.redirectUris.join("、")
+                                : "—",
+                            mono: c.redirectUris.length > 0,
                           },
                           {
                             label: "登出回跳",
-                            value: (
-                              <MonoList items={c.postLogoutRedirectUris} />
-                            ),
+                            value:
+                              c.postLogoutRedirectUris.length > 0
+                                ? c.postLogoutRedirectUris.join("、")
+                                : "—",
+                            mono: c.postLogoutRedirectUris.length > 0,
                           },
                           {
                             label: "Scope",
-                            value: <MonoList items={c.allowedScopes} />,
-                          },
-                          {
-                            label: "认证方式",
                             value:
-                              c.tokenEndpointAuthMethod === "none"
-                                ? "公共客户端（无密钥）"
-                                : "机密客户端（client_secret_basic）",
-                          },
-                          {
-                            label: "PKCE",
-                            value: c.pkceRequired ? "强制" : "不强制",
+                              c.allowedScopes.length > 0
+                                ? c.allowedScopes.join("、")
+                                : "—",
+                            mono: c.allowedScopes.length > 0,
                           },
                         ]}
-                        {...(c.productCode
-                          ? {
-                              href:
-                                "/product/catalog/" +
-                                encodeURIComponent(c.productCode) +
-                                "#section-login",
-                              hrefLabel: "去产品页配置",
-                            }
-                          : {})}
                       />
                     }
                   />

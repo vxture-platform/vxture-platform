@@ -114,7 +114,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
-import { formatDateTime } from "@vxture-platform/shared";
+import { DateCell } from "@/components/table/ConfigCells";
 
 const MANAGE = "capability:runos.manage";
 
@@ -123,11 +123,6 @@ const MANAGE = "capability:runos.manage";
  * 一个能力的称呼要一致；跟着浏览器变，等于两个人看同一行说的是两个名字。
  */
 const CONSOLE_LOCALE = "zh-CN";
-
-function formatTime(iso: string, locale: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
-}
 
 /** runos `/capability/capability-facets`：各筛选列在全目录上的取值与计数。 */
 interface CatalogFacetCount {
@@ -1722,8 +1717,9 @@ function CapabilitiesPageContent() {
                   id: "updated",
                   header: "更新时间",
                   width: "sm",
-                  cell: (r: CapabilityRecord) =>
-                    formatTime(r.updatedAt, locale),
+                  cell: (r: CapabilityRecord) => (
+                    <DateCell value={r.updatedAt} locale={locale} />
+                  ),
                 },
               ]}
               rows={rows}
