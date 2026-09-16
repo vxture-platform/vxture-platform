@@ -1111,7 +1111,7 @@ left join lateral (
   limit 1
 ) ver on true
 -- 标识字节存 tenancy.tenant_logos(PK tenant_id+kind)；这里只取 hash，字节走独立端点
--- 按内容哈希版本化。**有行 = 租户传过，无行 = 用平台默认**——重置就是删这一行。
+-- 按内容哈希版本化。有行 = 租户传过，无行 = 用平台默认——重置就是删这一行。
 left join tenancy.tenant_logos tl on tl.tenant_id = t.id and tl.kind = 'logo'
 where t.deleted_at is null
 `;

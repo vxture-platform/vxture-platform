@@ -492,7 +492,7 @@ left join lateral (
   where m.user_id = u.id and m.status = 'active'
 ) tb on true
 -- 头像字节存 account.user_avatars(PK user_id)；这里只取 hash，字节走独立端点按内容
--- 哈希版本化。**有行 = 用户传过，无行 = 用平台默认**——重置就是删这一行。
+-- 哈希版本化。有行 = 用户传过，无行 = 用平台默认——重置就是删这一行。
 left join account.user_avatars ua on ua.user_id = u.id
 `;
 
