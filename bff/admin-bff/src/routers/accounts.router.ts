@@ -38,6 +38,9 @@ import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorAdminService } from "../auth/operator-admin.service";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { requireOperatorId, requireUuid } from "./governance.shared";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import type {
   AccountOperationRecord,
   AccountOperationStatus,
@@ -54,6 +57,30 @@ export class AccountsRouter {
     @Inject(OperatorAdminService)
     private readonly operatorAdmin: OperatorAdminService,
   ) {}
+
+  /**
+   * 详情路由的参数是**面向用户的账号编码**（`user_no`），不是内部 UUID——地址栏是
+   * 可见面，与租户详情同规矩。BFF 双接受：存量书签与审计日志里记的是 id。
+   *
+   * `user_no` 是 **bigint**：把非数字串直接丢给它比较，Postgres 转型时抛 22P02，
+   * 出去是 500 而不是 404，所以先用形状挡一道。19 位是 bigint 的量级上限。
+   *
+   * 2026-09-16 实测代价：详情页按编码导航、这里只认 UUID，`u.id = '1649201736'`
+   * 让整页变成「未找到账号」而接口回 500。**照抄一条约定要连它的两半一起抄**
+   * ——前端用可读码与 BFF 双接受本是一件事。
+   */
+  private async resolveAccountId(value: string): Promise<string> {
+    if (UUID_RE.test(value ?? "")) return value;
+    if (!/^\d{1,19}$/.test(value ?? "")) {
+      throw new NotFoundException("Account not found");
+    }
+    const { rows } = await this.pool.query<{ id: string }>(
+      `select id from account.users where user_no = $1::bigint and deleted_at is null limit 1`,
+      [value],
+    );
+    if (!rows[0]) throw new NotFoundException("Account not found");
+    return rows[0].id;
+  }
 
   @Get()
   async listAccounts(
@@ -74,8 +101,9 @@ export class AccountsRouter {
     assertCanManageAccounts(req);
     const canReadPii = hasPiiAccess(req);
 
+    const userId = await this.resolveAccountId(id);
     const { rows } = await this.pool.query<AccountRow>(ACCOUNT_DETAIL_SQL, [
-      id,
+      userId,
     ]);
     const row = rows[0];
     if (!row) {
@@ -98,7 +126,7 @@ export class AccountsRouter {
     @Res() res: Response,
   ): Promise<void> {
     assertCanManageAccounts(req);
-    const userId = requireUuid(id, "id");
+    const userId = await this.resolveAccountId(id);
     const { rows } = await this.pool.query<AvatarRow>(
       `select data, content_type, hash from account.user_avatars
         where user_id = $1 limit 1`,
@@ -132,7 +160,7 @@ export class AccountsRouter {
     @Param("id") id: string,
   ): Promise<{ status: "ok"; removed: boolean }> {
     assertCanResetUserAvatar(req);
-    const userId = requireUuid(id, "id");
+    const userId = await this.resolveAccountId(id);
     const client = await this.rwPool.connect();
     let removed = false;
     let previousHash: string | null = null;
