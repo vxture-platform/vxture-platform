@@ -83,7 +83,7 @@ import {
 import { api, OperaApiError } from "@/lib/api";
 import { DateCell } from "@/components/table/ConfigCells";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
-import { formatDateTime, formatDay } from "@vxture-platform/shared";
+import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 触发一次浏览器下载；用完立即回收 URL，不留 blob 常驻内存。 */
@@ -256,12 +256,6 @@ function formatTime(iso: string | null): string {
   const d = new Date(iso);
   // locale 沿用本页原有的固定 zh-CN(只统一形态,不动 locale)。
   return formatDateTime(d, "zh-CN", "—");
-}
-
-function formatBuildTime(iso: string | null): string {
-  if (!iso || iso === "unknown") return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : formatDay(d, "zh-CN", iso);
 }
 
 function formatChecks(checks: Record<string, string> | null): string | null {
@@ -945,7 +939,14 @@ export default function ServiceMonitorPage() {
                   const emphasis = r.kind === "product" ? "prod" : "beta";
                   return channel.clientId ? (
                     <span className={EMPHASIS_TEXT[emphasis]}>
-                      {formatBuildTime(channel.health.buildTime)}
+                      <DateCell
+                        value={
+                          channel.health.buildTime === "unknown"
+                            ? null
+                            : channel.health.buildTime
+                        }
+                        locale="zh-CN"
+                      />
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
