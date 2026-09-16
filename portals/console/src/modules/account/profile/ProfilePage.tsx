@@ -112,7 +112,13 @@ import {
 } from "./format";
 
 const AVATAR_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
-const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+/* 上传前置限制：与服务端 `AVATAR_MAX_BYTES`
+ * （services/identity/account/src/avatar/image-sniff.ts）**必须同值**。
+ *
+ * 为什么不共用一份：那个模块自称 pure（零 import，供单测与多处复用），
+ * 而前后端唯一都依赖的 `@vxture/core-utils` 带着 libphonenumber-js 等无关依赖，
+ * 搬过去等于给纯模块背包。改值时两处一起改。 */
+const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
 /** 与后端口径一致(此前前端 ≥6、后端 ≥8,提示与拒绝对不上)。 */
 const PASSWORD_MIN_LENGTH = 8;
 

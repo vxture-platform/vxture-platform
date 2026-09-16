@@ -24,10 +24,10 @@ async function bootstrap() {
   app.use(cookieParser());
   // Raw image body for avatar / org-logo uploads; content-type is sniffed from
   // the bytes in the router, so accept any type here. 5MB ceiling.
-  app.use("/api/me/avatar", express.raw({ type: () => true, limit: "5mb" }));
+  app.use("/api/me/avatar", express.raw({ type: () => true, limit: "1mb" }));
   app.use(
     "/api/me/organization/logo",
-    express.raw({ type: () => true, limit: "5mb" }),
+    express.raw({ type: () => true, limit: "1mb" }),
   );
   const allowedOrigins =
     process.env["ALLOWED_ORIGIN"]

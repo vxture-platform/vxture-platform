@@ -409,6 +409,11 @@ const STEP_UP_REQUIRED = new Set([
   "user:pii.read",
   "support:impersonate",
   "tenant:lifecycle.suspend",
+  /* 重置主体标识（owner 2026-09-16）：内容处置动作。删掉用户传的图回落平台默认，
+     原图不留存（直接删行）——不可撤回，故要二次验证。与迁移里的
+     requires_step_up=true 必须一致：本集合是重新 seed 时的权威值。 */
+  "tenant:brand.reset",
+  "user:avatar.reset",
   /* 策略更新（vxture-platform#49，atlas 2026-08-26 改判）。
    *
    * atlas 原来建议「不需要」，依据两点:改动可回滚(写新行让旧行过期)、每个版本能
@@ -461,12 +466,22 @@ const OPERATOR_PERMISSIONS = [
   ["tenant:quota.read", "View tenant quota"],
   ["tenant:quota.manage", "Adjust tenant quota"],
   ["tenant:lifecycle.suspend", "Suspend/close tenant (high-risk)"],
+  [
+    "tenant:brand.reset",
+    "Reset tenant logo",
+    "Reset tenant logo to the platform default (content moderation; high-risk)",
+  ],
 
   ["user:profile.read", "View users (masked)"],
   ["user:pii.read", "View plaintext PII (high-risk)"],
   [
     "user:account.manage",
     "Manage customer account (disable/enable/force-logout)",
+  ],
+  [
+    "user:avatar.reset",
+    "Reset user avatar",
+    "Reset user avatar to the platform default (content moderation; high-risk)",
   ],
   ["commerce:subscription.read", "View subscriptions"],
   ["commerce:subscription.manage", "Manage subscriptions"],
@@ -708,6 +723,7 @@ const MENU_TREE = [
               "tenant:quota.read",
               "tenant:quota.manage",
               "tenant:lifecycle.suspend",
+              "tenant:brand.reset",
             ],
           },
           {
@@ -718,6 +734,7 @@ const MENU_TREE = [
               "user:profile.read",
               "user:pii.read",
               "user:account.manage",
+              "user:avatar.reset",
             ],
           },
           {
@@ -1199,6 +1216,7 @@ const OPERATOR_ROLE_PERMS = {
   admin: [
     "tenant:profile.read",
     "tenant:profile.manage",
+    "tenant:brand.reset",
     "tenant:verification.review",
     "tenant:quota.read",
     "tenant:quota.manage",
@@ -1210,6 +1228,7 @@ const OPERATOR_ROLE_PERMS = {
     "user:profile.read",
     "user:pii.read",
     "user:account.manage",
+    "user:avatar.reset",
     "commerce:subscription.read",
     "commerce:subscription.manage",
     "commerce:order.read",
@@ -1260,12 +1279,14 @@ const OPERATOR_ROLE_PERMS = {
   operation: [
     "tenant:profile.read",
     "tenant:profile.manage",
+    "tenant:brand.reset",
     "tenant:verification.review",
     "tenant:quota.read",
     "tenant:quota.manage",
     "risk:record.read",
     "risk:record.manage",
     "user:profile.read",
+    "user:avatar.reset",
     "commerce:subscription.read",
     "commerce:order.read",
     "promotion:campaign.read",

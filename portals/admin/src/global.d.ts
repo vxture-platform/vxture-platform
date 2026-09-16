@@ -27,3 +27,27 @@ declare module "next-intl" {
     Locale: Locale;
   }
 }
+
+/* 静态图片资源的模块声明。
+ *
+ * `declare module "*.png"` 本由 Next 写在 `next-env.d.ts`（`/// <reference
+ * types="next/image-types/global" />`），而**那个文件是 gitignored 的**（.gitignore
+ * 第 127 行），由 `next dev` / `next build` 自动生成。
+ *
+ * CI 的 quality-gate 把 **Type check 排在 Build 之前**，全新 checkout 此时既没有
+ * 仓库副本、Next 也还没生成它，于是 `import png from "…"` 直接 TS2307；本地却
+ * 一路绿灯，因为开发机上那个文件早就躺着。console 2026-09-16 实打实踩过一次。
+ *
+ * 所以把它显式钉在入库文件里，不依赖生成物的存在与否。
+ */
+declare module "*.png" {
+  const content: {
+    src: string;
+    height: number;
+    width: number;
+    blurDataURL?: string;
+    blurWidth?: number;
+    blurHeight?: number;
+  };
+  export default content;
+}

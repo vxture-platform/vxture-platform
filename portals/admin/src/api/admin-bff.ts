@@ -1325,6 +1325,57 @@ export async function fetchAccountOperations(): Promise<
   return readJsonStrict<AccountOperationRecord[]>("/api/accounts");
 }
 
+export async function fetchAccountOperation(
+  accountId: string,
+): Promise<AccountOperationRecord> {
+  return readJsonStrict<AccountOperationRecord>(
+    `/api/accounts/${encodeURIComponent(accountId)}`,
+  );
+}
+
+/**
+ * 主体标识的版本化 URL（按内容哈希）。
+ *
+ * `hash` 为空 = 没传过，**不要请求**（端点会 404），直接画 DS 的平台默认图。
+ * 带 hash 的 URL 服务端发 immutable 长缓存，换图即换 URL。
+ */
+export function accountAvatarUrl(accountId: string, hash: string): string {
+  return `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/accounts/${encodeURIComponent(
+    accountId,
+  )}/avatar?v=${encodeURIComponent(hash)}`;
+}
+
+export function tenantLogoUrl(tenantId: string, hash: string): string {
+  return `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/tenants/${encodeURIComponent(
+    tenantId,
+  )}/logo?v=${encodeURIComponent(hash)}`;
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+// 重置 = 删行回落平台默认，原图不留存、不可撤回——UI 处传 `{ danger: true }`。
+export async function resetAccountAvatar(
+  accountId: string,
+): Promise<{ status: "ok"; removed: boolean }> {
+  return mutateJson<{ status: "ok"; removed: boolean }>(
+    `/api/accounts/${encodeURIComponent(accountId)}/avatar/reset`,
+    "POST",
+    undefined,
+    "Account avatar reset failed",
+  );
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+export async function resetTenantLogo(
+  tenantId: string,
+): Promise<{ status: "ok"; removed: boolean }> {
+  return mutateJson<{ status: "ok"; removed: boolean }>(
+    `/api/tenants/${encodeURIComponent(tenantId)}/logo/reset`,
+    "POST",
+    undefined,
+    "Tenant logo reset failed",
+  );
+}
+
 // ── C12: admin-delegated customer account lifecycle (user:account.manage) ──
 
 export async function disableAccount(

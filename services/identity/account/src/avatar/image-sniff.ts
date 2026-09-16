@@ -15,7 +15,7 @@ export type AvatarMime =
   | "image/gif";
 
 /** Max accepted avatar size (bytes). */
-export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+export const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
 
 /**
  * Detect a supported raster image from its leading bytes; null if unrecognized

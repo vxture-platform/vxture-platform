@@ -1685,7 +1685,7 @@
       "avatarUploaded": "Avatar updated.",
       "avatarUploadError": "Avatar upload failed. Please try again later.",
       "avatarInvalidType": "Only PNG / JPEG / WEBP / GIF images are supported.",
-      "avatarTooLarge": "Image too large; please upload a file under 5MB.",
+      "avatarTooLarge": "Image too large; please upload a file under 1MB.",
       "connectedAccountBound": "{provider} connected.",
       "connectedAccountUnbound": "{provider} disconnected.",
       "unbindSuccess": "Third-party account disconnected.",
@@ -2848,6 +2848,8 @@
       "logoSaved": "Logo updated.",
       "logoCleared": "Logo cleared.",
       "logoFailed": "Logo update failed. Please try again.",
+      "logoInvalidType": "Only PNG / JPEG / WEBP images are supported.",
+      "logoTooLarge": "Image too large; please upload a file under 1MB.",
       "transferred": "Ownership transferred. You are now an admin."
     },
     "convert": {

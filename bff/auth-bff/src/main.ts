@@ -41,9 +41,9 @@ async function bootstrap() {
 
   // Raw image body for the avatar upload (PUT /api/me/avatar). The content-type
   // is sniffed from the bytes in the controller, so accept any type here; the
-  // 5MB limit mirrors AVATAR_MAX_BYTES.
+  // 1MB limit mirrors AVATAR_MAX_BYTES.
   const express = (await import("express")).default;
-  app.use("/api/me/avatar", express.raw({ type: () => true, limit: "5mb" }));
+  app.use("/api/me/avatar", express.raw({ type: () => true, limit: "1mb" }));
 
   // CORS for credentialed browser calls (the accounts login UI POSTs
   // /oidc/authorize/login with credentials). Prod: accounts is same-origin with
