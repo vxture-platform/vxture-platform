@@ -62,6 +62,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { formatDateTime } from "@vxture-platform/shared";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 import { visibleIdOr } from "@/lib/visible-id";
@@ -461,7 +462,9 @@ export function AtlasChangeTable() {
             id: "time",
             header: tShared("columns.time"),
             width: "sm",
-            cell: (r: AtlasChangeRecord) => formatTime(r.occurredAt, locale),
+            cell: (r: AtlasChangeRecord) => (
+              <DateCell value={r.occurredAt} locale={locale} />
+            ),
           },
         ]}
         rows={visible}

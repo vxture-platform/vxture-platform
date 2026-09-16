@@ -63,6 +63,7 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { LOG_LEVEL_META, type LogLevel } from "@/lib/status";
 import { RunosCallStreams } from "./RunosCallStreams";
 import { formatDateTime } from "@vxture-platform/shared";
@@ -790,7 +791,9 @@ export default function LogsPage() {
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: PlatformLogRow) => formatTime(r.time, locale),
+              cell: (r: PlatformLogRow) => (
+                <DateCell value={r.time} locale={locale} />
+              ),
               sortable: true,
             },
           ]}

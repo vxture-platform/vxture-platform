@@ -76,9 +76,9 @@ import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { fetchWholeCapabilityCatalog } from "@/lib/runos-catalog";
 import { useConfirmLabels } from "@/lib/destructive";
-import { formatDay } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 import { visibleIdOr } from "@/lib/visible-id";
 
@@ -180,15 +180,6 @@ const GRANT_STATE_TONE: Record<string, StatusBadgeTone> = {
   revoked: "danger",
   suspended: "warning",
 };
-
-/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
-   `2026/8/18`，英文 `8/18/2026`。写死的后果不是「没翻译」，是英文用户会把
-   8/18 读成 18 月。 */
-function formatTime(iso: string | null, locale: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : formatDay(d, locale, iso);
-}
 
 function message(error: unknown, fallback: string): string {
   return error instanceof OperaApiError ? error.message : fallback;
@@ -790,7 +781,9 @@ function ProductEntitlements() {
                   id: "expires",
                   header: "到期",
                   width: "sm",
-                  cell: (g: RouteGrant) => formatTime(g.expiresAt, locale),
+                  cell: (g: RouteGrant) => (
+                    <DateCell value={g.expiresAt} locale={locale} />
+                  ),
                 },
                 {
                   id: "state",

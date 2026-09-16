@@ -54,6 +54,7 @@ import {
 import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
+import { DateCell } from "@/components/table/ConfigCells";
 import { formatDateTime } from "@vxture-platform/shared";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 import { visibleIdOr } from "@/lib/visible-id";
@@ -604,7 +605,9 @@ export function RunosCallStreams({
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: TaskOutcomeRecord) => formatTime(r.occurredAt, locale),
+              cell: (r: TaskOutcomeRecord) => (
+                <DateCell value={r.occurredAt} locale={locale} />
+              ),
             },
           ]}
           rows={outcomeRows}
