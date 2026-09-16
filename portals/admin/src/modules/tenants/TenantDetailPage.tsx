@@ -552,7 +552,7 @@ function TenantInfoTab({
               disabled={resettingLogo || !tenant.logoHash}
               confirm={withLabels({
                 verb: "重置",
-                target: `${tenant.tenantName} 的标识`,
+                target: `租户「${tenant.tenantName}」的标识`,
                 consequence:
                   "删除租户上传的标识、回落平台默认图，原图不留存、不可撤回。若二次验证仍在有效期内，确认后将直接执行、不再要求验证码。",
                 onConfirm: onResetLogo,
