@@ -753,6 +753,53 @@ function toDateStr(value: Date | string | null): string {
 
 // ── 行映射 ──────────────────────────────────────────────────────────────────
 
+/**
+ * 运营备注里的**机读串**一律当作没有备注。
+ *
+ * `billing.invoices.operate_remark` 的 DDL 注释是「运营手工出账/调整备注」——它是
+ * 人写给人看的。但旧模型曾把订单意图也塞进这一列（`{"intent":"upgrade",
+ * "upgrade_of":"<uuid>"}`），于是账单列表的「处理」列、详情页的「运营备注」行、
+ * 徽标 tooltip、乃至列表搜索串里，都会原样打印出这么一坨 JSON，里面还裸着一个 uuid
+ * （撞「任何场景只展示可视码」那条）。
+ *
+ * 2026-09-03 订单实体拆分后，意图已经有了正规住所：`billing.orders.intent` 与
+ * `from_subscription_id`，而且那次迁移把旧 JSON 解析回填进去了。所以这一列里的 JSON
+ * **已无信息价值**，现行写侧也不再产生（`upgrade_of` 在 bff 与 services 层零命中）。
+ *
+ * 过滤放在投影处而不是各调用点：`mapBillingRow` 是列表、详情、单条三条路径的唯一
+ * 入口，改这一处，所有消费方（含将来的导出与报表）一并免疫；改调用点则要动八处，
+ * 漏一处就等于没改。
+ *
+ * 判据只认「能解析成 JSON 对象」，不靠正则猜 uuid——人写的备注里提到单号、编号
+ * 都很正常，按形状猜会误伤真备注。
+ *
+ * ## 本判据比清数据的那条**宽**，是有意的
+ *
+ * 清存量的迁移（2026-10-06-billing-machine-remark-cleanup）只清含 `"intent"` 键、
+ * 且账单已关联订单、订单 intent 已回填的那些行——数据层要严，因为删错了没得退；
+ * 没有订单可对照的机读串它刻意留着，那可能是唯一线索。
+ *
+ * 这一层反过来：**任何**能解析成 JSON 对象的备注都当机读串藏掉。理由是没有人会
+ * 手写一坨 JSON 当运营备注，而展示层藏错了随时可以改回来，代价不对称。所以库里
+ * 剩下的那些"无订单可对照"的行，界面上照样不会露出来。
+ *
+ * 两条判据不一致不是 bug，别去"修平"它。
+ */
+export function humanRemark(value: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return value;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return null;
+    }
+  } catch {
+    // 解析不了就不是机读串，原样交出去（以 { 开头的人写备注也留得住）。
+  }
+  return value;
+}
+
 function mapBillingRow(row: BillingListRow): BillingRecord {
   return {
     id: row.id,
@@ -783,7 +830,7 @@ function mapBillingRow(row: BillingListRow): BillingRecord {
     currency: row.currency ?? "CNY",
     paymentMethod: row.payment_method,
     transactionNo: row.transaction_no,
-    operationRemark: row.operate_remark,
+    operationRemark: humanRemark(row.operate_remark),
     operatorName: "系统",
     paidAt: toIsoOrNull(row.paid_at),
     createdAt: toIso(row.created_at),
