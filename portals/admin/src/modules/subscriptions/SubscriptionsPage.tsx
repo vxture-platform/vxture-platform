@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -268,9 +267,10 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       id: "solution",
       header: "业务方案",
       cell: (subscription) => (
-        <StackCell
-          main={subscription.solutionName}
-          sub={subscription.industry}
+        <TableTitleCell
+          layout="stacked"
+          title={subscription.solutionName}
+          description={subscription.industry}
         />
       ),
     },

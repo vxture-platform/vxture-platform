@@ -10,7 +10,6 @@ import {
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import {
   ActionButton,
   ActionMenu,
@@ -324,9 +323,10 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
       id: "contact",
       header: "运营联系",
       cell: (tenant) => (
-        <StackCell
-          main={tenant.contactName}
-          sub={tenant.contactPhone || tenant.ownerEmail}
+        <TableTitleCell
+          layout="stacked"
+          title={tenant.contactName}
+          description={tenant.contactPhone || tenant.ownerEmail}
         />
       ),
     },
@@ -334,13 +334,14 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
       id: "time",
       header: "时间",
       cell: (tenant) => (
-        <StackCell
-          main={
+        <TableTitleCell
+          layout="stacked"
+          title={
             tenant.verificationSubmittedAt
               ? formatDate(tenant.verificationSubmittedAt, locale)
               : "未提交"
           }
-          sub={verificationTimeText(tenant, locale)}
+          description={verificationTimeText(tenant, locale)}
         />
       ),
     },

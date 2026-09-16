@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -179,9 +178,10 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: "优惠",
       align: "center",
       cell: (record) => (
-        <StackCell
-          main={record.discountLabel}
-          sub={typeLabel(record.promotionType)}
+        <TableTitleCell
+          layout="stacked"
+          title={record.discountLabel}
+          description={typeLabel(record.promotionType)}
         />
       ),
     },
@@ -218,9 +218,12 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       header: "时间",
       align: "center",
       cell: (record) => (
-        <StackCell
-          main={formatDate(record.startsAt, locale)}
-          sub={record.endsAt ? formatDate(record.endsAt, locale) : "长期"}
+        <TableTitleCell
+          layout="stacked"
+          title={formatDate(record.startsAt, locale)}
+          description={
+            record.endsAt ? formatDate(record.endsAt, locale) : "长期"
+          }
         />
       ),
     },

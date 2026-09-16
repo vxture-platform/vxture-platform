@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -218,16 +217,23 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       id: "operator",
       header: "核销方",
       align: "center",
-      cell: (record) => <StackCell main={record.operatorName} sub="已核销" />,
+      cell: (record) => (
+        <TableTitleCell
+          layout="stacked"
+          title={record.operatorName}
+          description="已核销"
+        />
+      ),
     },
     {
       id: "time",
       header: "时间",
       align: "center",
       cell: (record) => (
-        <StackCell
-          main={formatDate(record.redeemedAt, locale)}
-          sub={record.remark ?? "系统记录"}
+        <TableTitleCell
+          layout="stacked"
+          title={formatDate(record.redeemedAt, locale)}
+          description={record.remark ?? "系统记录"}
         />
       ),
     },
