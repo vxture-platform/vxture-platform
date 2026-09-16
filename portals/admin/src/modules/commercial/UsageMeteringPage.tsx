@@ -161,7 +161,9 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       header: "租户",
       cell: (record) => (
         <TableTitleCell
-          icon={record.tenantType === "company" ? "buildings" : "building"}
+          icon={
+            record.tenantType === "company" ? "buildings" : "building-office"
+          }
           title={record.tenantName}
           description={`${record.tenantCode} · ${typeLabel(record.tenantType)}`}
           onTitleClick={() =>

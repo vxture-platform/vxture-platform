@@ -42,7 +42,9 @@ const ICON_SIZE: Record<TenantAvatarSize, "xs" | "sm" | "md"> = {
 /**
  * 类型图标（owner 2026-09-16 定）：**个人租户也是组织级主体**，所以归建筑族，不与
  * 自然人共用 `user`——那会让列表里「一个人」和「一个只有一个人的组织」长成同一个符号。
- * 族内轻重表示规模：`building` 单一场所 = 个人租户，`buildings` 多主体 = 组织租户。
+ * 族内轻重表示规模：`building-office` 单一办公场所 = 个人租户，`buildings` 多主体 = 组织租户。
+ * （owner 2026-09-16：个人租户原用的 `building` 在 16px 下轮廓过于墓碑化，换成带门脸的
+ * `building-office`；组织与用户两档不动。）
  *
  * 组织此前用 `building-library`（映射到 BankIcon，银行）——组织不是银行，一并纠正。
  * 这只是**回落**：有 logo 一律画 logo（见 TenantAvatar）。三处共用,别各写各的。
@@ -50,7 +52,7 @@ const ICON_SIZE: Record<TenantAvatarSize, "xs" | "sm" | "md"> = {
 export function tenantTypeIcon(
   tenantType: "personal" | "organization" | null | undefined,
 ): IconName {
-  return tenantType === "organization" ? "buildings" : "building";
+  return tenantType === "organization" ? "buildings" : "building-office";
 }
 
 /** 方角 + 弱化底色:三处头像块共用的外观类(顶栏面板走 DS 头部件,也套这一组)。 */

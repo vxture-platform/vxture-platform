@@ -249,7 +249,9 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       header: "租户",
       cell: (order) => (
         <TableTitleCell
-          icon={order.tenantType === "company" ? "buildings" : "building"}
+          icon={
+            order.tenantType === "company" ? "buildings" : "building-office"
+          }
           title={order.tenantName}
           description={`${order.tenantCode} · ${typeLabel(order.tenantType)}`}
         />
