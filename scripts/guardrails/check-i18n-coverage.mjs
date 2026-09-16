@@ -503,7 +503,10 @@ const BASELINE = {
   //（TenantDetailPage 自己就 136 条、OrderDetailPage 145 条），只抽新增的两块
   // 会让同一个文件里两套写法并存——与 accounts 门户 321 那条同一理由。
   // admin 整页 i18n 化另开专项。
-  admin: 2543,
+  // 2026-09-16 2543 → 2550（+7）：租户列表补主管理员列，两个详情页的重置按钮
+  // 换成 DS 的 `DestructiveButton`（确认框的 verb / target / consequence 都是文案）。
+  // 同上理由，不为这几处单独抽 t()。
+  admin: 2550,
   opera: 2271, // 2026-09-16 见上方说明(末条:气泡收成只列重点 -13)
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
