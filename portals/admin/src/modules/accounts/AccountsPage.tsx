@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionButton,
@@ -225,11 +226,13 @@ function AccountActionsMenu({
   busy,
   onToggleStatus,
   onForceLogout,
+  onViewDetail,
 }: {
   account: AccountOperationRecord;
   busy: boolean;
   onToggleStatus: (account: AccountOperationRecord) => void;
   onForceLogout: (account: AccountOperationRecord) => void;
+  onViewDetail: (account: AccountOperationRecord) => void;
 }) {
   const tShared = useTranslations();
   const isDisabled = account.status === "disabled";
@@ -246,7 +249,8 @@ function AccountActionsMenu({
             id: "details",
             label: tShared("actions.viewDetail"),
             icon: "arrow-right",
-            disabled: true,
+            disabled: busy,
+            onSelect: () => onViewDetail(account),
           },
           {
             id: "reset-password",
@@ -279,6 +283,7 @@ interface AccountRowActions {
   actionBusy: boolean;
   onToggleStatus: (account: AccountOperationRecord) => void;
   onForceLogout: (account: AccountOperationRecord) => void;
+  onViewDetail: (account: AccountOperationRecord) => void;
 }
 
 /**
@@ -387,6 +392,7 @@ export function AccountsPage({
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const pageCopy = { ...defaultAccountsPageCopy, ...copy };
+  const router = useRouter();
   const [accounts, setAccounts] = useState<AccountOperationRecord[]>([]);
   const [accountsTruncated, setAccountsTruncated] = useState(false);
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(
@@ -498,6 +504,10 @@ export function AccountsPage({
     actionBusy,
     onToggleStatus: requestToggleStatus,
     onForceLogout: requestForceLogout,
+    /* 详情路由参数用**面向用户的账号编码**（user_no），不是 UUID——
+       地址栏是可见面，与租户详情同规矩。 */
+    onViewDetail: (account) =>
+      router.push(`/accounts/${encodeURIComponent(account.accountCode)}`),
   };
 
   const accountColumns = useAccountColumns(showTenantContext);
@@ -722,6 +732,7 @@ export function AccountsPage({
                   busy={accountActions.actionBusy}
                   onToggleStatus={accountActions.onToggleStatus}
                   onForceLogout={accountActions.onForceLogout}
+                  onViewDetail={accountActions.onViewDetail}
                 />
               )}
               empty={

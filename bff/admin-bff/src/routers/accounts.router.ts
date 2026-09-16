@@ -28,11 +28,13 @@ import {
   Param,
   Post,
   Req,
+  Res,
   UnauthorizedException,
 } from "@nestjs/common";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import type { Pool } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
+import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorAdminService } from "../auth/operator-admin.service";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { requireOperatorId, requireUuid } from "./governance.shared";
@@ -80,6 +82,89 @@ export class AccountsRouter {
       throw new NotFoundException("Account not found");
     }
     return mapAccountRow(row, canReadPii);
+  }
+
+  /**
+   * GET /api/accounts/:id/avatar — 用户头像字节（运营在详情页看原图，审违规用）。
+   *
+   * 只服务**自定义**头像：`account.user_avatars` 有行 → 返字节；无行 → 404，由前端
+   * 画 DS 的平台默认图。按内容哈希版本化，故 immutable 长缓存；private：运营台的图
+   * 不进共享缓存。
+   */
+  @Get(":id/avatar")
+  async getAccountAvatar(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    assertCanManageAccounts(req);
+    const userId = requireUuid(id, "id");
+    const { rows } = await this.pool.query<AvatarRow>(
+      `select data, content_type, hash from account.user_avatars
+        where user_id = $1 limit 1`,
+      [userId],
+    );
+    const avatar = rows[0];
+    if (!avatar) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader("Content-Type", avatar.content_type);
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("ETag", `"${avatar.hash}"`);
+    res.end(avatar.data);
+  }
+
+  /**
+   * POST /api/accounts/:id/avatar/reset — 重置为平台默认（违规图片处置）。
+   *
+   * 重置 = **删行**，不写默认字节：「有行 = 用户传的，无行 = 默认」这个判据因此
+   * 天然成立。原图不留存、**不可撤回**，故 @RequireStepUp。
+   *
+   * `users.avatar_hash` 是供 claim 轻读的冗余列，同一事务清掉——否则 token 里的
+   * `picture` 还指向一张已经不存在的图。
+   */
+  @Post(":id/avatar/reset")
+  @RequireStepUp()
+  async resetAccountAvatar(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<{ status: "ok"; removed: boolean }> {
+    assertCanResetUserAvatar(req);
+    const userId = requireUuid(id, "id");
+    const client = await this.rwPool.connect();
+    let removed = false;
+    let previousHash: string | null = null;
+    try {
+      await client.query("begin");
+      const { rows } = await client.query<{ hash: string }>(
+        `delete from account.user_avatars where user_id = $1 returning hash`,
+        [userId],
+      );
+      removed = rows.length > 0;
+      previousHash = rows[0]?.hash ?? null;
+      await client.query(
+        `update account.user_profiles set avatar_hash = null, updated_at = now()
+          where user_id = $1 and avatar_hash is not null`,
+        [userId],
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action: "account.avatar_reset",
+      resourceType: "account_user",
+      resourceId: userId,
+      // 删掉的图不留存，只留内容哈希——事后能对上「删的是哪一张」。
+      ...(removed ? { before: { avatarHash: previousHash } } : {}),
+      after: { avatarHash: null },
+    });
+    return { status: "ok", removed };
   }
 
   // ── C12 write path — admin处置 C 端账号（委派 IdP，守卫 user:account.manage）──
@@ -156,6 +241,24 @@ export class AccountsRouter {
     });
     return result;
   }
+}
+
+// 重置头像是内容处置（危码 user:avatar.reset + step-up）：删掉的原图不留存、不可
+// 撤回，故与读门 platform.tenant.manage、与账号生命周期码 user:account.manage 都分开
+// ——能停用账号的人不等于能抹掉用户传的头像，反之亦然（operation 角色有前者没后者）。
+function assertCanResetUserAvatar(req: Request & RequestContext): void {
+  if (!req.user) {
+    throw new UnauthorizedException("No active session");
+  }
+  if (!req.capabilities?.includes("user:avatar.reset")) {
+    throw new ForbiddenException("Missing user:avatar.reset capability");
+  }
+}
+
+interface AvatarRow {
+  data: Buffer;
+  content_type: string;
+  hash: string;
 }
 
 // C12 write guard: customer account lifecycle (disable/enable/force-logout).
@@ -252,6 +355,7 @@ function mapAccountRow(
   return {
     id: row.id,
     accountCode: row.account_code,
+    avatarHash: row.avatar_hash,
     displayName: row.display_name,
     email: canReadPii ? row.email : maskEmail(row.email),
     phone: canReadPii ? row.phone : maskPhone(row.phone),
@@ -303,6 +407,7 @@ interface AccountRow {
   last_active_ip: string | null;
   login_count_30d: number | null;
   tenant_bindings: RawTenantBinding[] | null;
+  avatar_hash: string | null;
 }
 
 // 列均逐列核对 deploy/database/ddl 10_account.sql / 20_tenancy.sql / 18_access.sql / 24_session.sql。
@@ -328,7 +433,8 @@ select
   ls.last_active_at,
   ls.last_active_ip,
   coalesce(lc.login_count_30d, 0)              as login_count_30d,
-  coalesce(tb.bindings, '[]'::json)            as tenant_bindings
+  coalesce(tb.bindings, '[]'::json)            as tenant_bindings,
+  ua.hash                                      as avatar_hash
 from account.users u
 left join account.user_profiles p
   on p.user_id = u.id
@@ -385,6 +491,9 @@ left join lateral (
     on r.id = m.role_id
   where m.user_id = u.id and m.status = 'active'
 ) tb on true
+-- 头像字节存 account.user_avatars(PK user_id)；这里只取 hash，字节走独立端点按内容
+-- 哈希版本化。有行 = 用户传过，无行 = 用平台默认——重置就是删这一行。
+left join account.user_avatars ua on ua.user_id = u.id
 `;
 
 const ACCOUNT_LIST_SQL = `

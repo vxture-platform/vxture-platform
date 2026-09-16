@@ -7,6 +7,9 @@ import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import {
   ActionMenu,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   Badge,
   Button,
   DataTable,
@@ -38,6 +41,8 @@ import {
   changeTenantMemberRole,
   fetchTenantMembers,
   fetchTenantOperation,
+  resetTenantLogo,
+  tenantLogoUrl,
   removeTenantMember,
   suspendTenantMember,
   updateTenant,
@@ -58,6 +63,8 @@ import {
 } from "@/modules/shared/tenant-tone";
 import { SUBSCRIPTION_OPERATION_TONE } from "@/modules/shared/status-tone";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
+import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
+import tenantDefaultLogo from "@vxture/design-system/assets/icons/tenant-default.png";
 import { resolveIpLocation } from "@/shared/ip-location";
 import {
   auditResultLabel,
@@ -305,6 +312,8 @@ function TenantInfoTab({
   onEdit,
   onReset,
   onSave,
+  resettingLogo,
+  onResetLogo,
 }: {
   tenant: TenantOperationRecord;
   draft: TenantInfoDraft;
@@ -320,6 +329,8 @@ function TenantInfoTab({
   onEdit: () => void;
   onReset: () => void;
   onSave: () => void;
+  resettingLogo: boolean;
+  onResetLogo: () => void;
 }) {
   const tShared = useTranslations();
   return (
@@ -482,6 +493,57 @@ function TenantInfoTab({
             <TenantConfigItem label="人员规模">
               <TenantConfigValue>{tenant.scale}</TenantConfigValue>
             </TenantConfigItem>
+          </div>
+
+          {/* 租户标识：按**原图**画，不缩略——运营要看清租户传的到底是什么
+              （违规图片审核）。没传过则画 DS 的平台默认图。 */}
+          <div className="flex min-w-0 flex-wrap items-center gap-lg">
+            <TenantConfigItem label="租户标识" className="basis-media-2xl">
+              <span className="inline-flex items-center gap-sm">
+                <Avatar
+                  key={tenant.logoHash ?? "__default__"}
+                  className="size-media-md rounded-md"
+                >
+                  <AvatarImage
+                    src={
+                      tenant.logoHash
+                        ? tenantLogoUrl(tenant.id, tenant.logoHash)
+                        : tenantDefaultLogo.src
+                    }
+                    alt={tenant.tenantName}
+                    className="rounded-md object-cover"
+                  />
+                  <AvatarFallback
+                    delayMs={0}
+                    className="rounded-md bg-accent text-muted-foreground"
+                    aria-label={tenant.tenantName}
+                  >
+                    <Icon
+                      name={
+                        tenant.tenantType === "company"
+                          ? "buildings"
+                          : "building-office"
+                      }
+                      size="md"
+                      fallback="placeholder"
+                    />
+                  </AvatarFallback>
+                </Avatar>
+                {!tenant.logoHash ? (
+                  <span className="text-body-sm text-muted-foreground">
+                    未上传，当前为平台默认
+                  </span>
+                ) : null}
+              </span>
+            </TenantConfigItem>
+            <Button
+              variant="outline"
+              disabled={resettingLogo || !tenant.logoHash}
+              onClick={() => void onResetLogo()}
+            >
+              <Icon name="refresh" size="xs" fallback="placeholder" />
+              <span>重置为默认</span>
+            </Button>
           </div>
         </div>
       </section>
@@ -1342,6 +1404,8 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   );
   const [savingInfo, setSavingInfo] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [resettingLogo, setResettingLogo] = useState(false);
+  const { runWithStepUp } = useStepUp();
 
   useEffect(() => {
     let active = true;
@@ -1407,6 +1471,25 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
       ...(current ?? visibleInfoDraft),
       [field]: value,
     }));
+  }
+
+  /* 重置租户标识：删 tenant_logos 行回落平台默认。原图不留存、不可撤回，
+     所以走 step-up 且对话框标 danger。成功后只清 hash，不必重拉整条记录。 */
+  async function handleResetLogo() {
+    if (!tenant || resettingLogo) return;
+    setResettingLogo(true);
+    try {
+      await runWithStepUp(() => resetTenantLogo(tenant.id), {
+        danger: true,
+        submitLabel: "确认重置",
+      });
+      setTenant({ ...tenant, logoHash: null });
+    } catch (error) {
+      if (isStepUpCancelled(error)) return;
+      throw error;
+    } finally {
+      setResettingLogo(false);
+    }
   }
 
   function handleInfoReset() {
@@ -1693,6 +1776,8 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               onEdit={handleInfoEdit}
               onReset={handleInfoReset}
               onSave={() => void handleInfoSave()}
+              resettingLogo={resettingLogo}
+              onResetLogo={() => void handleResetLogo()}
             />
           </TabsContent>
           <TabsContent value="members" className="min-w-0">

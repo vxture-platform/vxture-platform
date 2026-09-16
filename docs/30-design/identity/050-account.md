@@ -222,7 +222,7 @@ GET {ACCOUNTS_BASE}/avatar/usr_<id>?v=<hash>[&s=64]
 
 ### 5.5 上传 / 修改端点（D-5）
 
-- `PUT /api/me/avatar`（登录态）：仅 `image/png|jpeg|webp`，大小上限（≤5MB），重编码为 webp（≤256px，剥 EXIF）。
+- `PUT /api/me/avatar`（登录态）：仅 `image/png|jpeg|webp`，大小上限（≤1MB），重编码为 webp（≤256px，剥 EXIF）。
 - **拒绝 SVG 上传**（可内嵌脚本，存储型 XSS 风险）；默认头像 SVG 是平台生成、可信，二者区别对待。
 - 写入后更新 `user_avatar.data`/`hash`/`updatedAt` + `users.avatar_hash` → 版本段变 → 下次 token `picture` 自动指新图。
 

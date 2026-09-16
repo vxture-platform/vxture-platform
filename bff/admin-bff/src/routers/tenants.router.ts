@@ -34,11 +34,13 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UnauthorizedException,
 } from "@nestjs/common";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import type { Pool } from "pg";
 import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
+import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import type {
@@ -325,6 +327,69 @@ export class TenantsRouter {
     }
 
     return this.loadTenant(tenantId);
+  }
+
+  /**
+   * GET /api/tenants/:id/logo — 租户标识字节（运营在详情页看原图，审违规用）。
+   *
+   * 只服务**自定义**标识：`tenancy.tenant_logos` 有行 → 返字节；无行 → 404，由前端
+   * 画 DS 的平台默认图。按内容哈希版本化（`?v=<hash>`），故 immutable 长缓存。
+   * private：运营台的图不进共享缓存。
+   */
+  @Get(":id/logo")
+  async getTenantLogo(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    assertCanManageTenants(req);
+    const tenantId = await this.resolveTenantId(id);
+    const { rows } = await this.pool.query<TenantLogoRow>(
+      `select data, content_type, hash from tenancy.tenant_logos
+        where tenant_id = $1 and kind = 'logo' limit 1`,
+      [tenantId],
+    );
+    const logo = rows[0];
+    if (!logo) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader("Content-Type", logo.content_type);
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("ETag", `"${logo.hash}"`);
+    res.end(logo.data);
+  }
+
+  /**
+   * POST /api/tenants/:id/logo/reset — 重置为平台默认（违规图片处置）。
+   *
+   * 重置 = **删行**，不写默认字节：「有行 = 租户传的，无行 = 默认」这个判据因此
+   * 天然成立，追责时分得清。原图不留存，**不可撤回**，故 @RequireStepUp。
+   */
+  @Post(":id/logo/reset")
+  @RequireStepUp()
+  async resetTenantLogo(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<{ status: "ok"; removed: boolean }> {
+    assertCanResetTenantBrand(req);
+    const tenantId = await this.resolveTenantId(id);
+    const { rows } = await this.rwPool.query<{ hash: string }>(
+      `delete from tenancy.tenant_logos
+        where tenant_id = $1 and kind = 'logo' returning hash`,
+      [tenantId],
+    );
+    const removed = rows.length > 0;
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action: "tenant.brand_reset",
+      resourceType: "tenant",
+      resourceId: tenantId,
+      // 删掉的图不留存，只留它的内容哈希——事后能对上「删的是哪一张」。
+      ...(removed ? { before: { logoHash: rows[0]?.hash ?? null } } : {}),
+      after: { logoHash: null },
+    });
+    return { status: "ok", removed };
   }
 
   /**
@@ -691,6 +756,18 @@ function assertCanManageTenants(req: Request & RequestContext): void {
   }
 }
 
+// 重置主体标识是内容处置（危码 tenant:brand.reset + step-up）：删掉的原图不留存、
+// 不可撤回，故与宽口径的 platform.tenant.manage 分开设门——能改租户资料的人不等于
+// 能抹掉租户传的标识。
+function assertCanResetTenantBrand(req: Request & RequestContext): void {
+  if (!req.user) {
+    throw new UnauthorizedException("No active session");
+  }
+  if (!req.capabilities?.includes("tenant:brand.reset")) {
+    throw new ForbiddenException("Missing tenant:brand.reset capability");
+  }
+}
+
 // Suspend/resume are tenant lifecycle transitions — a high-risk (危) operation in
 // data_admin_200 §4.2, gated on the dedicated tenant:lifecycle.suspend code
 // (super_admin/admin only) rather than the broader profile.manage, and additionally
@@ -757,6 +834,7 @@ function mapTenantRow(row: TenantOperationRow): TenantOperationRecord {
     tenantName: row.name,
     displayName: row.name,
     tenantType: row.type === "personal" ? "individual" : "company",
+    logoHash: row.logo_hash,
     status: normalizeStatus(row.status),
     verifiedStatus,
     verificationSubmittedAt: toIsoOrNull(row.verification_submitted_at),
@@ -947,6 +1025,7 @@ select
   up.display_name as owner_display_name,
   ver.created_at  as verification_submitted_at,
   ver.reviewed_at as verification_reviewed_at,
+  tl.hash as logo_hash,
   (
     select count(*) from tenancy.tenant_memberships m
     where m.tenant_id = t.id and m.status <> 'removed'
@@ -1031,6 +1110,9 @@ left join lateral (
   order by tv.created_at desc
   limit 1
 ) ver on true
+-- 标识字节存 tenancy.tenant_logos(PK tenant_id+kind)；这里只取 hash，字节走独立端点
+-- 按内容哈希版本化。有行 = 租户传过，无行 = 用平台默认——重置就是删这一行。
+left join tenancy.tenant_logos tl on tl.tenant_id = t.id and tl.kind = 'logo'
 where t.deleted_at is null
 `;
 
@@ -1043,6 +1125,12 @@ const TENANT_DETAIL_SQL = `${TENANT_SELECT}
   and t.id = $1
 limit 1
 `;
+
+interface TenantLogoRow {
+  data: Buffer;
+  content_type: string;
+  hash: string;
+}
 
 interface TenantOperationRow {
   id: string;
@@ -1065,6 +1153,7 @@ interface TenantOperationRow {
   owner_display_name: string | null;
   verification_submitted_at: Date | string | null;
   verification_reviewed_at: Date | string | null;
+  logo_hash: string | null;
   member_count: string | number | null;
   active_member_count: string | number | null;
   admin_count: string | number | null;

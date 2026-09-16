@@ -1003,6 +1003,8 @@ export interface SupportTicketRecord extends TenantOperationTicket {
 }
 
 export interface TenantOperationRecord {
+  /** 租户标识的内容哈希；null = 没传过，界面画平台默认图。 */
+  logoHash: string | null;
   id: string;
   tenantCode: string;
   tenantName: string;
@@ -1611,6 +1613,8 @@ export interface AccountTenantBinding {
 }
 
 export interface AccountOperationRecord {
+  /** 用户头像的内容哈希；null = 没传过，界面画平台默认图。 */
+  avatarHash: string | null;
   id: string;
   accountCode: string;
   displayName: string;

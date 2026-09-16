@@ -1685,7 +1685,7 @@
       "avatarUploaded": "头像已更新。",
       "avatarUploadError": "头像上传失败，请稍后重试。",
       "avatarInvalidType": "仅支持 PNG / JPEG / WEBP / GIF 图片。",
-      "avatarTooLarge": "图片过大，请上传 5MB 以内的文件。",
+      "avatarTooLarge": "图片过大，请上传 1MB 以内的文件。",
       "connectedAccountBound": "{provider} 已绑定。",
       "connectedAccountUnbound": "{provider} 已解绑。",
       "unbindSuccess": "已解绑该第三方账号。",
@@ -2848,6 +2848,8 @@
       "logoSaved": "标识已更新。",
       "logoCleared": "标识已清除。",
       "logoFailed": "标识操作失败,请稍后重试。",
+      "logoInvalidType": "仅支持 PNG / JPEG / WEBP 图片。",
+      "logoTooLarge": "图片过大，请上传 1MB 以内的文件。",
       "transferred": "所有权已转让,你已降为管理员。"
     },
     "convert": {

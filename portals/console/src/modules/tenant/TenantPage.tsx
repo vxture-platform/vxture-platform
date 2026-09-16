@@ -76,6 +76,11 @@ import { CloseTenantDialog } from "./CloseTenantDialog";
 
 const LOGO_ACCEPT = "image/png,image/jpeg,image/webp";
 
+/* 上传前置限制（owner 2026-09-16）：服务端的 AVATAR_MAX_BYTES 同值。
+ * 挣在选文件这一刻告诉用户，而不是传完一轮再报错——服务端仍然校验，
+ * 前端这一道只省往返，不是安全边界。 */
+const LOGO_MAX_BYTES = 1 * 1024 * 1024;
+
 /** 默认区域的托底值(owner 2026-09-05:按中国设定,三项可改)。 */
 const REGION_DEFAULTS = {
   timezone: "Asia/Shanghai",
@@ -282,7 +287,16 @@ export function TenantPage() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!LOGO_ACCEPT.split(",").includes(file.type)) {
+      setFeedback({ tone: "error", key: "feedback.logoInvalidType" });
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      setFeedback({ tone: "error", key: "feedback.logoTooLarge" });
+      return;
+    }
     setSubmitting(true);
+    setFeedback(null);
     try {
       await uploadOrgLogo(file);
       setProfile(await fetchOrganizationProfile());
