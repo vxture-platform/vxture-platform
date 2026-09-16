@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -208,10 +209,10 @@ function useProductColumns(
       header: "方案",
       align: "center",
       cell: (product) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {`${formatNumber(product.solutionCount)} 方案`}
-          <span className="text-body-sm text-muted-foreground">{`${formatNumber(product.planCount)} 套餐 | ${formatNumber(product.releaseCount)} 发布`}</span>
-        </span>
+        <StackCell
+          main={`${formatNumber(product.solutionCount)} 方案`}
+          sub={`${formatNumber(product.planCount)} 套餐 | ${formatNumber(product.releaseCount)} 发布`}
+        />
       ),
     },
     {
@@ -234,12 +235,7 @@ function useProductColumns(
       header: "计量",
       align: "center",
       cell: (product) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {product.meteringUnit}
-          <span className="text-body-sm text-muted-foreground">
-            {product.billingMode}
-          </span>
-        </span>
+        <StackCell main={product.meteringUnit} sub={product.billingMode} />
       ),
     },
   ];

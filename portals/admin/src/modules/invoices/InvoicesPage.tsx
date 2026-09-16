@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -318,18 +319,11 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (invoice) => (
-        <span className="inline-flex items-center gap-xs">
-          <Icon
-            name={invoice.tenantType === "company" ? "buildings" : "user"}
-            size="sm"
-            className="shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span className="inline-flex flex-col items-center gap-2xs">
-            {invoice.tenantName}
-            <span className="text-body-sm text-muted-foreground">{`${invoice.tenantCode} · ${typeLabel(invoice.tenantType)}`}</span>
-          </span>
-        </span>
+        <TableTitleCell
+          icon={invoice.tenantType === "company" ? "buildings" : "user"}
+          title={invoice.tenantName}
+          description={`${invoice.tenantCode} · ${typeLabel(invoice.tenantType)}`}
+        />
       ),
     },
     {
@@ -388,18 +382,20 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       id: "delivery",
       header: "寄送",
       cell: (invoice) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {invoice.expressNo
-            ? (invoice.expressCompany ?? "线下寄送")
-            : invoice.invoiceFileUrl
-              ? "电子文件"
-              : "未寄送"}
-          <span className="text-body-sm text-muted-foreground">
-            {invoice.expressNo ??
-              invoice.invoiceFileUrl ??
-              formatDate(invoice.sendAt, locale)}
-          </span>
-        </span>
+        <StackCell
+          main={
+            invoice.expressNo
+              ? (invoice.expressCompany ?? "线下寄送")
+              : invoice.invoiceFileUrl
+                ? "电子文件"
+                : "未寄送"
+          }
+          sub={
+            invoice.expressNo ??
+            invoice.invoiceFileUrl ??
+            formatDate(invoice.sendAt, locale)
+          }
+        />
       ),
     },
   ];

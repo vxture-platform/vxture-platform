@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -174,24 +175,24 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       id: "product",
       header: "产品能力",
       cell: (record) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {record.productName}
-          <span className="text-body-sm text-muted-foreground">{`${record.productType} · ${record.productCode}`}</span>
-        </span>
+        <StackCell
+          main={record.productName}
+          sub={`${record.productType} · ${record.productCode}`}
+        />
       ),
     },
     {
       id: "metric",
       header: "计量项",
       cell: (record) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {record.metricUnit ? (
-            <Badge variant="outline">{record.metricUnit}</Badge>
-          ) : null}
-          <span className="text-body-sm text-muted-foreground">
-            {record.metricName}
-          </span>
-        </span>
+        <StackCell
+          main={
+            record.metricUnit ? (
+              <Badge variant="outline">{record.metricUnit}</Badge>
+            ) : null
+          }
+          sub={record.metricName}
+        />
       ),
     },
     {
@@ -220,12 +221,10 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       header: "周期",
       align: "center",
       cell: (record) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {record.cycleMonth}
-          <span className="text-body-sm text-muted-foreground">
-            {formatDate(record.lastSyncedAt, locale)}
-          </span>
-        </span>
+        <StackCell
+          main={record.cycleMonth}
+          sub={formatDate(record.lastSyncedAt, locale)}
+        />
       ),
     },
   ];

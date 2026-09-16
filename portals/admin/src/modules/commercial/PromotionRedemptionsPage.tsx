@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -17,7 +18,6 @@ import {
   MetricGrid,
   NativeSelect,
   TableTitleCell,
-  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
@@ -182,18 +182,11 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (record) => (
-        <span className="inline-flex items-center gap-xs">
-          <Icon
-            name={record.tenantType === "company" ? "buildings" : "user"}
-            size="sm"
-            className="shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span className="inline-flex flex-col items-center gap-2xs">
-            {record.tenantName}
-            <span className="text-body-sm text-muted-foreground">{`${record.tenantCode} · ${typeLabel(record.tenantType)}`}</span>
-          </span>
-        </span>
+        <TableTitleCell
+          icon={record.tenantType === "company" ? "buildings" : "user"}
+          title={record.tenantName}
+          description={`${record.tenantCode} · ${typeLabel(record.tenantType)}`}
+        />
       ),
     },
     {
@@ -225,24 +218,17 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       id: "operator",
       header: "核销方",
       align: "center",
-      cell: (record) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {record.operatorName}
-          <span className="text-body-sm text-muted-foreground">已核销</span>
-        </span>
-      ),
+      cell: (record) => <StackCell main={record.operatorName} sub="已核销" />,
     },
     {
       id: "time",
       header: "时间",
       align: "center",
       cell: (record) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {formatDate(record.redeemedAt, locale)}
-          <span className="text-body-sm text-muted-foreground">
-            {record.remark ?? "系统记录"}
-          </span>
-        </span>
+        <StackCell
+          main={formatDate(record.redeemedAt, locale)}
+          sub={record.remark ?? "系统记录"}
+        />
       ),
     },
   ];

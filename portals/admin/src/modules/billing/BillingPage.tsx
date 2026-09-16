@@ -19,7 +19,6 @@ import {
   NativeSelect,
   StatusBadge,
   TableTitleCell,
-  Icon,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import { type StatusTone } from "@vxture-platform/shared";
@@ -361,18 +360,11 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       id: "tenant",
       header: "租户",
       cell: (bill) => (
-        <span className="inline-flex items-center gap-xs">
-          <Icon
-            name={bill.tenantType === "company" ? "buildings" : "user"}
-            size="sm"
-            className="shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span className="inline-flex flex-col items-center gap-2xs">
-            {bill.tenantName}
-            <span className="text-body-sm text-muted-foreground">{`${bill.tenantCode} · ${typeLabel(bill.tenantType)}`}</span>
-          </span>
-        </span>
+        <TableTitleCell
+          icon={bill.tenantType === "company" ? "buildings" : "user"}
+          title={bill.tenantName}
+          description={`${bill.tenantCode} · ${typeLabel(bill.tenantType)}`}
+        />
       ),
     },
     {

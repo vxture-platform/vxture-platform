@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { StackCell } from "@/modules/shared/StackCell";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -645,19 +646,15 @@ function useTenantMemberColumns(): DataTableColumn<TenantMemberView>[] {
       header: "最近活跃",
       align: "center",
       cell: (member) => (
-        <span
-          className="inline-flex flex-col items-center gap-2xs"
+        <StackCell
           title={
             member.lastActiveIp
               ? `登录 IP ${member.lastActiveIp}`
               : "暂无登录 IP"
           }
-        >
-          {formatDate(member.lastActiveAt, locale)}
-          <span className="text-body-sm text-muted-foreground">
-            {resolveIpLocation(member.lastActiveIp)}
-          </span>
-        </span>
+          main={formatDate(member.lastActiveAt, locale)}
+          sub={resolveIpLocation(member.lastActiveIp)}
+        />
       ),
     },
   ];

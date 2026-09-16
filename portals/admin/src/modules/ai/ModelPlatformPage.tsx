@@ -30,6 +30,7 @@ import {
   type ModelState,
 } from "@vxture-platform/shared";
 import { activeTone } from "@/modules/shared/tenant-tone";
+import { StackCell } from "@/modules/shared/StackCell";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
   activateModelPolicy,
@@ -702,12 +703,7 @@ export function ModelPlatformPage() {
       id: "source",
       header: "来源",
       cell: (model) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          {providerLabel(model.provider)}
-          <span className="text-body-sm text-muted-foreground">
-            {model.protocol}
-          </span>
-        </span>
+        <StackCell main={providerLabel(model.provider)} sub={model.protocol} />
       ),
     },
     {
