@@ -361,7 +361,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       header: "租户",
       cell: (bill) => (
         <TableTitleCell
-          icon={bill.tenantType === "company" ? "buildings" : "user"}
+          icon={bill.tenantType === "company" ? "buildings" : "building"}
           title={bill.tenantName}
           description={`${bill.tenantCode} · ${typeLabel(bill.tenantType)}`}
         />

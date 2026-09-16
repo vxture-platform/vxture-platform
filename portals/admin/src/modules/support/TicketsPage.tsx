@@ -231,7 +231,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       header: "租户",
       cell: (ticket) => (
         <TableTitleCell
-          icon={ticket.tenantType === "company" ? "buildings" : "user"}
+          icon={ticket.tenantType === "company" ? "buildings" : "building"}
           title={ticket.tenantName}
           description={`${ticket.tenantCode} / ${typeLabel(ticket.tenantType)}`}
         />

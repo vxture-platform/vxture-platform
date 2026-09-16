@@ -1527,7 +1527,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 >
                   <Icon
                     name={
-                      tenant.tenantType === "company" ? "buildings" : "user"
+                      tenant.tenantType === "company" ? "buildings" : "building"
                     }
                     size={summaryExpanded ? "lg" : "sm"}
                     fallback="placeholder"
