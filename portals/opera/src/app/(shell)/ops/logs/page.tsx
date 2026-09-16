@@ -664,8 +664,9 @@ export default function LogsPage() {
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: AtlasRequestLogRecord) =>
-                formatTime(r.createdAt, locale),
+              cell: (r: AtlasRequestLogRecord) => (
+                <DateCell value={r.createdAt} locale={locale} />
+              ),
             },
           ]}
           rows={atlasRows}

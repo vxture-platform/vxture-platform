@@ -55,7 +55,6 @@ import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
 import { DateCell } from "@/components/table/ConfigCells";
-import { formatDateTime } from "@vxture-platform/shared";
 import { LoadMoreFooter } from "@/modules/shared/LoadMoreFooter";
 import { visibleIdOr } from "@/lib/visible-id";
 
@@ -135,10 +134,6 @@ const STREAM_META: Record<StreamKey, { label: string; placeholder: string }> = {
    中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
    是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
    没跟着改，见 scripts/guardrails 旁的说明。） */
-function formatTime(iso: string, locale: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
-}
 
 function callTone(outcome: string | null): StatusBadgeTone {
   if (outcome === "success") return "success";
@@ -528,8 +523,9 @@ export function RunosCallStreams({
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: CapabilityCallRecord) =>
-                formatTime(r.occurredAt, locale),
+              cell: (r: CapabilityCallRecord) => (
+                <DateCell value={r.occurredAt} locale={locale} />
+              ),
             },
           ]}
           rows={callRows}
