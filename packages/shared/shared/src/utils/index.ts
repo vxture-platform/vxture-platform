@@ -9,6 +9,7 @@ export { debugLog, debugWarn, debugError } from "./debug.utils";
 
 // Format utils
 export {
+  formatClock,
   formatCurrency,
   formatDate,
   formatDateTime,

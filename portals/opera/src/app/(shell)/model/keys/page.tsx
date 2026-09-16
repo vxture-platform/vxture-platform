@@ -82,6 +82,7 @@ import {
   ActionButton,
 } from "@vxture/design-system";
 import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
+import { DateCell } from "@/components/table/ConfigCells";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
@@ -94,7 +95,6 @@ import {
   type KeyEffectiveState,
   type KeyState,
 } from "@/lib/status";
-import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——api-keys 复用 model:provider.manage
@@ -170,14 +170,6 @@ function describeError(error: unknown): { description?: string } {
   return error instanceof OperaApiError && error.message
     ? { description: error.message }
     : {};
-}
-
-/* 收 `locale` 与 `never` 而不是自己写死：原来这里是 `toLocaleString("zh-CN")`，
-   也就是说界面即使切到英文，时间仍按中文格式排。日期格式属于语言。 */
-function formatTime(iso: string | null, locale: string, never: string): string {
-  if (!iso) return never;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 type LoadState =
@@ -723,16 +715,26 @@ export default function KeysPage() {
                 header: t("columns.lastUsed"),
                 sortable: true,
                 width: "sm",
-                cell: (r: GatewayApiKeyRecord) =>
-                  formatTime(r.lastUsedAt, locale, tCommon("never")),
+                cell: (r: GatewayApiKeyRecord) => (
+                  <DateCell
+                    value={r.lastUsedAt}
+                    locale={locale}
+                    fallback={tCommon("never")}
+                  />
+                ),
               },
               {
                 id: "createdAt",
                 header: t("columns.issuedAt"),
                 sortable: true,
                 width: "sm",
-                cell: (r: GatewayApiKeyRecord) =>
-                  formatTime(r.createdAt, locale, tCommon("never")),
+                cell: (r: GatewayApiKeyRecord) => (
+                  <DateCell
+                    value={r.createdAt}
+                    locale={locale}
+                    fallback={tCommon("never")}
+                  />
+                ),
               },
               {
                 /* internal 标成「已退役」而不是原样显示：一个和 External 并排、
@@ -767,7 +769,7 @@ export default function KeysPage() {
                           : ""
                       }
                     >
-                      {r.expiresAt.slice(0, 10)}
+                      <DateCell value={r.expiresAt} locale={locale} />
                     </span>
                   ) : (
                     <span className="text-muted-foreground">

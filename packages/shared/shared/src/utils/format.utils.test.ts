@@ -16,6 +16,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  formatClock,
   formatCurrency,
   formatDateTime,
   formatDay,
@@ -51,6 +52,35 @@ describe("formatDay / formatDateTime — 形态", () => {
 
   it("24 小时制——不出现 AM/PM", () => {
     expect(formatDateTime(T, "zh-CN", "—", TZ)).not.toMatch(/[AP]M|上午|下午/);
+  });
+});
+
+describe("formatClock — 只有时刻", () => {
+  /* 列表把日期与时刻拆成主辅两行后，辅行走这一条；它与 formatDateTime 的时间段
+     必须逐字相同，否则同一个时刻在两处长得不一样。 */
+  it("长时间含秒", () => {
+    expect(formatClock(T, "zh-CN", "—", TZ)).toBe("15:04:05");
+  });
+
+  it("短形态无秒", () => {
+    expect(formatClock(T, "zh-CN", "—", { ...TZ, time: "short" })).toBe(
+      "15:04",
+    );
+  });
+
+  it("与 formatDateTime 的时间段逐字相同", () => {
+    const day = formatDay(T, "zh-CN", "—", TZ);
+    const dt = formatDateTime(T, "zh-CN", "—", TZ);
+    expect(dt.slice(day.length).trim()).toBe(formatClock(T, "zh-CN", "—", TZ));
+  });
+
+  it("空值走 fallback，不吐 Invalid Date", () => {
+    expect(formatClock(null, "zh-CN", "—")).toBe("—");
+    expect(formatClock("不是时间", "zh-CN", "—")).toBe("—");
+  });
+
+  it("坏 locale 不抛——降级到 ISO 的时刻段", () => {
+    expect(formatClock(T, "这不是-locale", "—")).toBe("07:04:05");
   });
 });
 

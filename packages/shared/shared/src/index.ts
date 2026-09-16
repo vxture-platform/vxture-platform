@@ -116,6 +116,7 @@ export {
   // Format utils
   formatCurrency,
   formatDate,
+  formatClock,
   formatDateTime,
   formatDay,
   formatNumber,

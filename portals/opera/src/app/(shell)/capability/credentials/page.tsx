@@ -73,6 +73,7 @@ import { useConfirmLabels } from "@/lib/destructive";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
+import { DateCell } from "@/components/table/ConfigCells";
 
 const MANAGE = "capability:runos.manage";
 
@@ -589,8 +590,9 @@ function RunosCredentialsPageContent() {
                 header: "上次轮换",
                 sortable: true,
                 width: "sm",
-                cell: (r: CredentialBindingRecord) =>
-                  formatTime(r.rotatedAt, locale),
+                cell: (r: CredentialBindingRecord) => (
+                  <DateCell value={r.rotatedAt} locale={locale} />
+                ),
               },
             ]}
             rows={pager.pageRows}
