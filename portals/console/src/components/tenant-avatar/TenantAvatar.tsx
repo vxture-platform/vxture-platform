@@ -13,6 +13,7 @@
  * 顶栏租户条上的 icon 固定不绑定头像(owner:暂时固定)。
  */
 
+import tenantDefaultLogo from "@vxture/design-system/assets/icons/tenant-default.png";
 import {
   Avatar,
   AvatarFallback,
@@ -47,7 +48,9 @@ const ICON_SIZE: Record<TenantAvatarSize, "xs" | "sm" | "md"> = {
  * `building-office`；组织与用户两档不动。）
  *
  * 组织此前用 `building-library`（映射到 BankIcon，银行）——组织不是银行，一并纠正。
- * 这只是**回落**：有 logo 一律画 logo（见 TenantAvatar）。三处共用,别各写各的。
+ * **它不再是「没 logo 时的样子」**（owner 2026-09-16）：没传过 logo 的主体现在画 DS 的
+ * 默认标识图，类型图标只在**图加载失败**时兜底（Radix 的 AvatarFallback 语义）。
+ * 三处共用,别各写各的。
  */
 export function tenantTypeIcon(
   tenantType: "personal" | "organization" | null | undefined,
@@ -76,19 +79,17 @@ export function TenantAvatar({
   readonly className?: string;
 }) {
   return (
-    // key on src:标识换 / 清空时强制重挂,否则 Radix 留着上一次的「已加载」状态,
-    // 回落块再也不显示(与 DS UserAvatar 同一处理)。
+    /* key on src:标识换 / 清空时强制重挂。清空后 src 回到默认图，不重挂的话
+       Radix 会留着上一张自定义图的「已加载」状态，默认图换不上去。 */
     <Avatar
       key={src ?? "__default__"}
       className={cn(SIZE_CLASS[size], TENANT_AVATAR_SHAPE_CLASS, className)}
     >
-      {src ? (
-        <AvatarImage
-          src={src}
-          alt={alt ?? ""}
-          className={cn(TENANT_AVATAR_SHAPE_CLASS, "object-cover")}
-        />
-      ) : null}
+      <AvatarImage
+        src={src ?? tenantDefaultLogo.src}
+        alt={alt ?? ""}
+        className={cn(TENANT_AVATAR_SHAPE_CLASS, "object-cover")}
+      />
       <AvatarFallback
         delayMs={0}
         className={TENANT_AVATAR_FALLBACK_CLASS}
