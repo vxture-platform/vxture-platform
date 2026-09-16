@@ -6,13 +6,19 @@
  * owner 2026-09-16：列表的核心信息要补齐，但列不能多——相似的两项合成一格上下主辅；
  * 太长的（回调地址、客户端清单、指标键）只露一个摘要，点开贴着格子弹出详情，
  * 不离开列表。
+ *
+ * ── 气泡里为什么不用 DetailList ──
+ * 第一版用了，线上一看就废：气泡默认档 lg 是 18rem（288px），而 `DetailRow` 并排时
+ * 名列定宽 12rem（192px），留给值的只剩 24px——一条 URL 每行一个字符，气泡被撑到
+ * 2035px 高（owner 2026-09-16 报「布局严重失衡」，实测确认）。
+ *
+ * 名值对在窄浮层里就不该并排。这里改成**名上值下、值占整行**，并按 FilterPopover
+ * 的先例把气泡加宽到 panel-md（32rem）：地址类内容需要的是横向空间，不是更多行。
  */
-import { Fragment, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import Link from "next/link";
 import {
   Button,
-  DetailList,
-  DetailRow,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -42,7 +48,7 @@ export interface ConfigDetail {
   readonly value: ReactNode;
 }
 
-/** 摘要作触发器，点开贴着格子弹出「标签 · 值」清单，底部可带一个去配置的链接。 */
+/** 摘要作触发器，点开贴着格子弹出「名上值下」清单，底部可带一个去配置的链接。 */
 export function ConfigPopover({
   trigger,
   title,
@@ -63,15 +69,26 @@ export function ConfigPopover({
           {trigger}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="flex flex-col gap-sm">
+      {/* 宽度走 panel-md（32rem）而不是气泡默认的 overlay-lg：这里装的是地址与清单，
+          横向空间不够就只能靠换行凑，越换越高。高度用到视口剩下的为止，再多才滚。 */}
+      <PopoverContent
+        width="xl"
+        align="start"
+        className="flex max-h-[var(--radix-popover-content-available-height)] w-panel-md flex-col gap-md overflow-y-auto"
+      >
         <span className="text-label-md">{title}</span>
-        <DetailList>
+        <dl className="flex flex-col gap-sm">
           {rows.map((row) => (
-            <DetailRow key={row.label} label={row.label}>
-              {row.value}
-            </DetailRow>
+            <div key={row.label} className="flex flex-col gap-2xs">
+              <dt className="text-label-sm text-muted-foreground">
+                {row.label}
+              </dt>
+              <dd className="min-w-0 text-body-sm text-foreground">
+                {row.value}
+              </dd>
+            </div>
           ))}
-        </DetailList>
+        </dl>
         {href ? (
           <Button asChild variant="outline" size="sm" className="self-start">
             <Link href={href}>{hrefLabel ?? href}</Link>
@@ -88,9 +105,12 @@ export function MonoList({ items }: { readonly items: readonly string[] }) {
   return (
     <span className="flex flex-col gap-2xs">
       {items.map((item, index) => (
-        <Fragment key={`${index}-${item}`}>
-          <span className="font-mono text-code-sm break-all">{item}</span>
-        </Fragment>
+        <span
+          key={`${index}-${item}`}
+          className="break-all font-mono text-code-sm"
+        >
+          {item}
+        </span>
       ))}
     </span>
   );
