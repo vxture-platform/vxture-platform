@@ -253,7 +253,9 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       cell: (subscription) => (
         <TableTitleCell
           icon={
-            subscription.tenantType === "company" ? "buildings" : "building"
+            subscription.tenantType === "company"
+              ? "buildings"
+              : "building-office"
           }
           title={subscription.tenantName}
           description={`${subscription.tenantCode} · ${subscription.region}`}

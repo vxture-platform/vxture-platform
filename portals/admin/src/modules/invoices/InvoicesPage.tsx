@@ -319,7 +319,9 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       header: "租户",
       cell: (invoice) => (
         <TableTitleCell
-          icon={invoice.tenantType === "company" ? "buildings" : "building"}
+          icon={
+            invoice.tenantType === "company" ? "buildings" : "building-office"
+          }
           title={invoice.tenantName}
           description={`${invoice.tenantCode} · ${typeLabel(invoice.tenantType)}`}
         />
