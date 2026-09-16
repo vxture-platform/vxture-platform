@@ -290,9 +290,13 @@ interface AccountRowActions {
  * 状态标走 `StatusBadge`，语气由 `ACCOUNT_STATUS_TONE` 给。
  *
  * 租户列随 `showTenantContext` 出没——平台账号视图没有租户归属这回事。
+ *
+ * 账号名可点、跳详情页，与租户列表同规矩——所以跳转回调要从调用点传进来，
+ * 行动作菜单里的那一个在这儿够不着。
  */
 function useAccountColumns(
   showTenantContext: boolean,
+  onViewDetail: (account: AccountOperationRecord) => void,
 ): DataTableColumn<AccountOperationRecord>[] {
   const locale = useLocale();
   const tShared = useTranslations();
@@ -305,6 +309,7 @@ function useAccountColumns(
           icon="user"
           title={account.displayName}
           description={`${account.accountCode} · ${account.email}`}
+          onTitleClick={() => onViewDetail(account)}
         />
       ),
     },
@@ -510,7 +515,10 @@ export function AccountsPage({
       router.push(`/accounts/${encodeURIComponent(account.accountCode)}`),
   };
 
-  const accountColumns = useAccountColumns(showTenantContext);
+  const accountColumns = useAccountColumns(
+    showTenantContext,
+    accountActions.onViewDetail,
+  );
 
   const filteredAccounts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

@@ -21,7 +21,7 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-  Button,
+  DestructiveButton,
   EmptyState,
   Icon,
   StatusBadge,
@@ -36,6 +36,7 @@ import {
 } from "@/api/admin-bff";
 import type { AccountOperationRecord } from "@/entities/console";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
+import { useConfirmLabels } from "@/modules/shared/destructive";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 import { formatDateTime, joinClasses } from "@/modules/tenants/tenant-utils";
 
@@ -75,6 +76,7 @@ function Field({
 export function AccountDetailPage({ accountId }: { accountId: string }) {
   const locale = useLocale();
   const { runWithStepUp } = useStepUp();
+  const withLabels = useConfirmLabels();
   const [account, setAccount] = useState<AccountOperationRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
@@ -179,14 +181,23 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
                 <Icon name="user" size="md" fallback="placeholder" />
               </AvatarFallback>
             </Avatar>
-            <Button
-              variant="outline"
+            {/* 重置是不可撤回的删除，必须每次都问——step-up 凭据在有效期内会被
+                复用，不能拿它兼任确认（owner 2026-09-16 实测：刚验过租户、接着
+                重置用户头像时一声不响就删了）。后果文案里把这一点写明。 */}
+            <DestructiveButton
+              size="md"
+              icon="refresh"
               disabled={resetting || !account.avatarHash}
-              onClick={() => void handleResetAvatar()}
+              confirm={withLabels({
+                verb: "重置",
+                target: `${account.displayName} 的头像`,
+                consequence:
+                  "删除用户上传的头像、回落平台默认图，原图不留存、不可撤回。若二次验证仍在有效期内，确认后将直接执行、不再要求验证码。",
+                onConfirm: handleResetAvatar,
+              })}
             >
-              <Icon name="refresh" size="xs" fallback="placeholder" />
-              <span>重置为默认</span>
-            </Button>
+              重置为默认
+            </DestructiveButton>
             {!account.avatarHash ? (
               <span className="text-body-sm text-muted-foreground">
                 未上传，当前为平台默认

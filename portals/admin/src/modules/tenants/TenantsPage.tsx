@@ -131,9 +131,20 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
       ),
     },
     {
+      id: "owner",
+      header: "主管理员",
+      cell: (tenant) => (
+        <TableTitleCell
+          layout="stacked"
+          title={tenant.ownerName || "—"}
+          {...(tenant.ownerEmail ? { description: tenant.ownerEmail } : {})}
+        />
+      ),
+    },
+    {
       id: "member",
       header: "成员",
-      align: "numeric",
+      align: "center",
       cell: (tenant) => formatNumber(tenant.memberCount),
     },
     {

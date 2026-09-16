@@ -13,6 +13,7 @@ import {
   Badge,
   Button,
   DataTable,
+  DestructiveButton,
   DetailPageTemplate,
   DialogForm,
   EmptyState,
@@ -330,9 +331,11 @@ function TenantInfoTab({
   onReset: () => void;
   onSave: () => void;
   resettingLogo: boolean;
-  onResetLogo: () => void;
+  /** 直接就是落锤动作——确认由 `DestructiveButton` 自带的框收，不再由外面开。 */
+  onResetLogo: () => Promise<void>;
 }) {
   const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   return (
     <div className="grid min-w-0 grid-cols-1 gap-lg">
       <section className="grid min-w-0 gap-lg">
@@ -497,53 +500,66 @@ function TenantInfoTab({
 
           {/* 租户标识：按**原图**画，不缩略——运营要看清租户传的到底是什么
               （违规图片审核）。没传过则画 DS 的平台默认图。 */}
-          <div className="flex min-w-0 flex-wrap items-center gap-lg">
-            <TenantConfigItem label="租户标识" className="basis-media-2xl">
-              <span className="inline-flex items-center gap-sm">
-                <Avatar
-                  key={tenant.logoHash ?? "__default__"}
-                  className="size-media-md rounded-md"
+          {/* 横向拉满一整行：标识与说明左起、动作靠右。此前把整块塞进一个
+              `TenantConfigItem` 里，那一格实测只有 128px 宽，说明文字被挤成竖排单字。 */}
+          <div className="flex min-w-0 items-center gap-lg border-b border-dashed border-primary/10 pb-sm">
+            <span className="w-media-sm shrink-0 text-body-sm text-muted-foreground">
+              租户标识
+            </span>
+            <span className="flex min-w-0 flex-1 items-center gap-sm">
+              <Avatar
+                key={tenant.logoHash ?? "__default__"}
+                className="size-media-md rounded-md"
+              >
+                <AvatarImage
+                  src={
+                    tenant.logoHash
+                      ? tenantLogoUrl(tenant.id, tenant.logoHash)
+                      : tenantDefaultLogo.src
+                  }
+                  alt={tenant.tenantName}
+                  className="rounded-md object-cover"
+                />
+                <AvatarFallback
+                  delayMs={0}
+                  className="rounded-md bg-accent text-muted-foreground"
+                  aria-label={tenant.tenantName}
                 >
-                  <AvatarImage
-                    src={
-                      tenant.logoHash
-                        ? tenantLogoUrl(tenant.id, tenant.logoHash)
-                        : tenantDefaultLogo.src
+                  <Icon
+                    name={
+                      tenant.tenantType === "company"
+                        ? "buildings"
+                        : "building-office"
                     }
-                    alt={tenant.tenantName}
-                    className="rounded-md object-cover"
+                    size="md"
+                    fallback="placeholder"
                   />
-                  <AvatarFallback
-                    delayMs={0}
-                    className="rounded-md bg-accent text-muted-foreground"
-                    aria-label={tenant.tenantName}
-                  >
-                    <Icon
-                      name={
-                        tenant.tenantType === "company"
-                          ? "buildings"
-                          : "building-office"
-                      }
-                      size="md"
-                      fallback="placeholder"
-                    />
-                  </AvatarFallback>
-                </Avatar>
-                {!tenant.logoHash ? (
-                  <span className="text-body-sm text-muted-foreground">
-                    未上传，当前为平台默认
-                  </span>
-                ) : null}
-              </span>
-            </TenantConfigItem>
-            <Button
-              variant="outline"
+                </AvatarFallback>
+              </Avatar>
+              {!tenant.logoHash ? (
+                <span className="whitespace-nowrap text-body-sm text-muted-foreground">
+                  未上传，当前为平台默认
+                </span>
+              ) : null}
+            </span>
+            {/* 重置是不可撤回的删除，必须每次都问——step-up 凭据在有效期内会被
+                复用，不能拿它兼任确认（owner 2026-09-16 实测：刚验过租户、接着
+                重置用户头像时一声不响就删了）。后果文案里把这一点写明。 */}
+            <DestructiveButton
+              className="ml-auto shrink-0"
+              size="md"
+              icon="refresh"
               disabled={resettingLogo || !tenant.logoHash}
-              onClick={() => void onResetLogo()}
+              confirm={withLabels({
+                verb: "重置",
+                target: `${tenant.tenantName} 的标识`,
+                consequence:
+                  "删除租户上传的标识、回落平台默认图，原图不留存、不可撤回。若二次验证仍在有效期内，确认后将直接执行、不再要求验证码。",
+                onConfirm: onResetLogo,
+              })}
             >
-              <Icon name="refresh" size="xs" fallback="placeholder" />
-              <span>重置为默认</span>
-            </Button>
+              重置为默认
+            </DestructiveButton>
           </div>
         </div>
       </section>
@@ -1777,7 +1793,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               onReset={handleInfoReset}
               onSave={() => void handleInfoSave()}
               resettingLogo={resettingLogo}
-              onResetLogo={() => void handleResetLogo()}
+              onResetLogo={handleResetLogo}
             />
           </TabsContent>
           <TabsContent value="members" className="min-w-0">
