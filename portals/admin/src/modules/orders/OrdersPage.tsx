@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -260,8 +259,9 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       id: "solution",
       header: "业务方案",
       cell: (order) => (
-        <StackCell
-          main={
+        <TableTitleCell
+          layout="stacked"
+          title={
             isUnset(order.solutionName) ? (
               <span className="text-body-md text-muted-foreground">
                 {UNSET_LABEL}
@@ -270,7 +270,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
               order.solutionName
             )
           }
-          sub={`${order.industry} · ${order.region}`}
+          description={`${order.industry} · ${order.region}`}
         />
       ),
     },

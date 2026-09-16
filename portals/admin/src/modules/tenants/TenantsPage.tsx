@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -160,9 +159,10 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
       header: "订阅",
       align: "center",
       cell: (tenant) => (
-        <StackCell
-          main={<Badge>{formatNumber(tenant.productCount)} 产品</Badge>}
-          sub={`本月：¥ ${formatNumber(tenant.monthlyRevenue)} 元`}
+        <TableTitleCell
+          layout="stacked"
+          title={<Badge>{formatNumber(tenant.productCount)} 产品</Badge>}
+          description={`本月：¥ ${formatNumber(tenant.monthlyRevenue)} 元`}
         />
       ),
     },

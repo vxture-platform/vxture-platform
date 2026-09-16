@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -175,9 +174,10 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       id: "product",
       header: "产品能力",
       cell: (record) => (
-        <StackCell
-          main={record.productName}
-          sub={`${record.productType} · ${record.productCode}`}
+        <TableTitleCell
+          layout="stacked"
+          title={record.productName}
+          description={`${record.productType} · ${record.productCode}`}
         />
       ),
     },
@@ -185,13 +185,14 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       id: "metric",
       header: "计量项",
       cell: (record) => (
-        <StackCell
-          main={
+        <TableTitleCell
+          layout="stacked"
+          title={
             record.metricUnit ? (
               <Badge variant="outline">{record.metricUnit}</Badge>
             ) : null
           }
-          sub={record.metricName}
+          description={record.metricName}
         />
       ),
     },
@@ -221,9 +222,10 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       header: "周期",
       align: "center",
       cell: (record) => (
-        <StackCell
-          main={record.cycleMonth}
-          sub={formatDate(record.lastSyncedAt, locale)}
+        <TableTitleCell
+          layout="stacked"
+          title={record.cycleMonth}
+          description={formatDate(record.lastSyncedAt, locale)}
         />
       ),
     },

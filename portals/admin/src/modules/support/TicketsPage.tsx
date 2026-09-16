@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -269,9 +268,10 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       id: "updated",
       header: tShared("columns.updatedAt"),
       cell: (ticket) => (
-        <StackCell
-          main={formatDateTime(ticket.updatedAt, locale)}
-          sub={ticket.region}
+        <TableTitleCell
+          layout="stacked"
+          title={formatDateTime(ticket.updatedAt, locale)}
+          description={ticket.region}
         />
       ),
     },

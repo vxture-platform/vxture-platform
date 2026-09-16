@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { StackCell } from "@/modules/shared/StackCell";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -382,15 +381,16 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
       id: "delivery",
       header: "寄送",
       cell: (invoice) => (
-        <StackCell
-          main={
+        <TableTitleCell
+          layout="stacked"
+          title={
             invoice.expressNo
               ? (invoice.expressCompany ?? "线下寄送")
               : invoice.invoiceFileUrl
                 ? "电子文件"
                 : "未寄送"
           }
-          sub={
+          description={
             invoice.expressNo ??
             invoice.invoiceFileUrl ??
             formatDate(invoice.sendAt, locale)
