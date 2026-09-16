@@ -259,7 +259,9 @@ export const consoleDomains: ConsoleDomain[] = [
   {
     id: "org",
     labelKey: "org",
-    icon: "building-library",
+    /* 组织＝多主体，与 tenantTypeIcon 的组织档对齐（owner 2026-09-16）。
+       building-library 映射到 BankIcon（银行），不是组织。 */
+    icon: "buildings",
     sections: [accountTenantSection],
   },
   {
