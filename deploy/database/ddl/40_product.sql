@@ -365,6 +365,10 @@ CREATE TABLE product.product_icons (
 );
 
 -- 上架检查项目录（可配置，item_code 自然键 PK）。新增检查项 = INSERT 一行，不改表结构。
+-- owner / gate 是两根**正交**轴（2026-09-17）：前者说这一项归谁，后者说它卡哪道门。
+-- 此前两者被揉在 opera-bff 的 ADMIN_OWNED_ITEM_CODES 字面量里，而「卡哪道门」根本
+-- 没有表达处——`acceptance` 因此卡在上线门上，形成循环自锁（它要的端到端链路需要
+-- 产品先能被订阅，而订阅需要产品已上线）。
 CREATE TABLE product.launch_checklist_items (
     item_code   varchar(64)  PRIMARY KEY,                             -- verification_policy/pricing_set…
     item_name   varchar(128) NOT NULL,
@@ -372,8 +376,12 @@ CREATE TABLE product.launch_checklist_items (
     description  varchar(256),
     description_key varchar(128),                                   -- i18n 键（product.checklist.{item_code}.desc）
     is_required boolean      NOT NULL DEFAULT true,
+    owner       varchar(16)  NOT NULL DEFAULT 'opera',               -- 归属轴：opera=技术接入 / admin=商业前置
+    gate        varchar(16)  NOT NULL DEFAULT 'launch',              -- 门轴：launch=draft→active / publish=developing→beta
     sort        int          NOT NULL DEFAULT 0,
-    created_at  timestamptz  NOT NULL DEFAULT now()
+    created_at  timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT chk_launch_checklist_items_owner CHECK (owner IN ('opera','admin')),
+    CONSTRAINT chk_launch_checklist_items_gate  CHECK (gate  IN ('launch','publish'))
 );
 
 -- 每 product × 每检查项完成态（复合 PK）。可上架由本表推导（所有 required 项 satisfied），主表不加汇总字段。

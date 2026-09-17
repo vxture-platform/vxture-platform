@@ -269,7 +269,7 @@ REVOKE UPDATE ON product.product_surfaces FROM platform_svc;
 
 -- product.launch_checklist_items  [anchor: item_code, created_at]
 REVOKE UPDATE ON product.launch_checklist_items FROM platform_svc;
-GRANT UPDATE (item_name, description, is_required, sort, item_name_key, description_key) ON product.launch_checklist_items TO platform_svc;
+GRANT UPDATE (item_name, description, is_required, owner, gate, sort, item_name_key, description_key) ON product.launch_checklist_items TO platform_svc;
 
 -- product.product_launch_statuses  [anchor: product_id, item_code, created_at]
 REVOKE UPDATE ON product.product_launch_statuses FROM platform_svc;

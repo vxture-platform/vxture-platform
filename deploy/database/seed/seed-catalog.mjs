@@ -2632,11 +2632,11 @@ export async function seedCatalog(client) {
   // launch checklist catalog
   await client.query(`
     insert into product.launch_checklist_items
-      (item_code, item_name, item_name_key, description, description_key, is_required, sort) values
+      (item_code, item_name, item_name_key, description, description_key, is_required, owner, gate, sort) values
       ('verification_policy', '认证策略已配置', 'product.checklist.verification_policy',
-       'A verification policy is configured for the product.', 'product.checklist.verification_policy.desc', true, 10),
+       'A verification policy is configured for the product.', 'product.checklist.verification_policy.desc', true, 'admin', 'publish', 10),
       ('pricing_set', '定价已配置', 'product.checklist.pricing_set',
-       'Pricing is configured for the product.', 'product.checklist.pricing_set.desc', true, 20)
+       'Pricing is configured for the product.', 'product.checklist.pricing_set.desc', true, 'admin', 'publish', 20)
     on conflict (item_code) do nothing
   `);
 
@@ -2646,22 +2646,22 @@ export async function seedCatalog(client) {
   // 项，商业那两项（verification_policy/pricing_set）继续留给 admin。
   await client.query(`
     insert into product.launch_checklist_items
-      (item_code, item_name, item_name_key, description, description_key, is_required, sort) values
+      (item_code, item_name, item_name_key, description, description_key, is_required, owner, gate, sort) values
       ('catalog_registered', '目录已登记', 'product.checklist.catalog_registered',
-       'Product code/layer/type registered in product.products; checklist + plan structure scaffolded.', 'product.checklist.catalog_registered.desc', true, 30),
+       'Product code/layer/type registered in product.products; checklist + plan structure scaffolded.', 'product.checklist.catalog_registered.desc', true, 'opera', 'launch', 30),
       ('c1_identity', 'C1 身份接入', 'product.checklist.c1_identity',
-       'OIDC client registered; RP implementation (login/callback/session) completed.', 'product.checklist.c1_identity.desc', true, 40),
+       'OIDC client registered; RP implementation (login/callback/session) completed.', 'product.checklist.c1_identity.desc', true, 'opera', 'launch', 40),
       -- sort 45：紧跟 c1_identity。两项是同一个身份面的入站与出站，中间不插别的。
       ('c1_s2s', 'C1 出站换票', 'product.checklist.c1_s2s',
-       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'product.checklist.c1_s2s.desc', true, 45),
+       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'product.checklist.c1_s2s.desc', true, 'opera', 'launch', 45),
       ('c3_metering', 'C3 计量上报', 'product.checklist.c3_metering',
-       'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'product.checklist.c3_metering.desc', true, 50),
+       'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'product.checklist.c3_metering.desc', true, 'opera', 'launch', 50),
       ('c2_entitlement', 'C2 权益接入', 'product.checklist.c2_entitlement',
-       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'product.checklist.c2_entitlement.desc', true, 60),
+       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60),
       ('data_plane', '数据面就绪', 'product.checklist.data_plane',
-       'Agent-db provisioned per product_240 §2.4 template (vx_provision/local_authz/local_usage schemas).', 'product.checklist.data_plane.desc', true, 70),
+       'Agent-db provisioned per product_240 §2.4 template (vx_provision/local_authz/local_usage schemas).', 'product.checklist.data_plane.desc', true, 'opera', 'launch', 70),
       ('acceptance', '端到端验收', 'product.checklist.acceptance',
-       'Full e2e verified: login → provision → gate → consume → invalidate; launch checklist reviewed.', 'product.checklist.acceptance.desc', true, 80)
+       'Full e2e verified: login → provision → gate → consume → invalidate; launch checklist reviewed.', 'product.checklist.acceptance.desc', true, 'opera', 'publish', 80)
     on conflict (item_code) do nothing
   `);
 
