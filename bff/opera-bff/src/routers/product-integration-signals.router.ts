@@ -1,5 +1,5 @@
 /**
- * product-integration-signals.router.ts — 接入信号：平台自己看得见的 C1 出站 / C2 / C3 事实。
+ * product-integration-signals.router.ts — 接入信号：平台自己看得见的接入事实。
  * @package @vxture/bff-opera
  * @layer Application
  * @category router
@@ -18,6 +18,30 @@
  *   C2 键由 platform-api 写、这里读，两边各自拼同一个字符串
  *   （`<REDIS_KEY_PREFIX>integration:c2:<productCode>`）——两个 BFF 之间不许互相
  *   引用，所以形状靠注释与两边的单测互相钉住。
+ *
+ *   ── 2026-09-17 增：开通与投递（`acceptance` 那条链的另外两段）──
+ *
+ *   `acceptance`（端到端验收）的判据是 `login → provision → gate → consume →
+ *   invalidate` 全链路。其中 gate / consume 就是上面的 C2 / C3，另外两段也各有台账：
+ *
+ *   - **provision**：`provisioning.provisionings` 里 `status='provisioned'` 的最近一行。
+ *     取 status 而不是「有行」——行在 `pending` 时就已存在，那只说明有人点了开通。
+ *   - **invalidate**：`provisioning.webhook_deliveries` 里 `status='delivered'` 的最近一行。
+ *     判据是 **status**，不是 `delivered_at`——那一列建了但全仓没人写
+ *     （`markDelivered` 只写 status 与 response_code），拿它判会得到一条永远不满足的检查。
+ *
+ *   两者都带 `workspace_id`，加上 C2 信号里的 `workspaceId`，门户可以判「四段是否落在
+ *   **同一个**工作区」——那才是「一条链走通了」，而不是四件不相干的事各发生过。
+ *
+ *   **这两张表都不是分区表**（`54_provisioning.sql` 无 PARTITION BY），所以两条查询
+ *   有意**不带 `created_at` 下界**；C3 那条带，是因为 `metering.usage_events` 按月分区。
+ *   照着 C3 抄一个时间窗到这里，只会把「半年前开通、至今在用」的产品判成没开通过。
+ *
+ *   **`login` 段仍然没有台账**：`appoidc` 只有 clients / signing_keys / consents 三张表，
+ *   没有会话表也没有刷新令牌表，而 `oidc_consents` 全仓零写入（是张空表）；auth-bff 只在
+ *   token-exchange 那条路写审计，登录本身不写。所以 `acceptance` **仍是人工项**——
+ *   按 `@vxture/core-utils` 的 `launch-checklist.ts` 立的判据「全部内容被实测覆盖才算
+ *   机器判定」，五缺一就不能转自动，否则是拿弱结论冒充强结论。
  *
  * @author AI-Generated
  * @date 2026-08-31
@@ -51,6 +75,32 @@ export interface ConsumeSignal {
   metricKey: string;
 }
 
+/**
+ * 开通：这个产品最近一次真的被开通到某个工作区。
+ *
+ * `acceptance`（端到端验收）那条链的第二段。判据取 `status='provisioned'` 而不是
+ * 「有行」——行在 `pending` 状态下就已经存在了，那只说明有人点了开通。
+ */
+export interface ProvisionSignal {
+  lastProvisionedAt: string;
+  /** 开到哪个工作区。四段链路要落在**同一个** workspace 上才算走通了一条链。 */
+  workspaceId: string;
+}
+
+/**
+ * 回调投递：平台最近一次把事件成功送到对方端点。
+ *
+ * `acceptance` 那条链的末段（invalidate）。判据是 `status='delivered'`——
+ * **不是 `delivered_at`**：那一列建了但全仓没人写（`markDelivered` 只写 status
+ * 与 response_code），拿它当判据会得到一条永远不满足的检查。
+ */
+export interface DeliverySignal {
+  eventType: string;
+  workspaceId: string;
+  responseCode: number | null;
+  lastAttemptAt: string | null;
+}
+
 /** C1 出站：对方最近一次换票去调别的产品。`target` 是它调的谁。 */
 export interface S2sSignal {
   lastSeenAt: string;
@@ -64,6 +114,8 @@ export interface IntegrationSignalsRecord {
   entitlement: EntitlementSignal | null;
   consume: ConsumeSignal | null;
   s2s: S2sSignal | null;
+  provision: ProvisionSignal | null;
+  delivery: DeliverySignal | null;
 }
 
 /** 只用到 GET；ioredis 满足它，单测给假的。 */
@@ -74,6 +126,18 @@ export interface SignalRedisReader {
 interface UsageEventRow {
   metric_key: string;
   created_at: Date | string;
+}
+
+interface ProvisionRow {
+  workspace_id: string;
+  provisioned_at: Date | string;
+}
+
+interface DeliveryRow {
+  event_type: string;
+  workspace_id: string;
+  response_code: number | null;
+  last_attempt_at: Date | string | null;
 }
 
 interface S2sAuditRow {
@@ -191,7 +255,7 @@ export class ProductIntegrationSignalsRouter {
     }
 
     const key = `${this.rpRuntime.keyPrefix}${C2_SIGNAL_KEY_INFIX}${productCode}`;
-    const [raw, usage, s2s] = await Promise.all([
+    const [raw, usage, s2s, provision, delivery] = await Promise.all([
       this.redis.get(key),
       /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
          单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
@@ -237,10 +301,42 @@ export class ProductIntegrationSignalsRouter {
           LIMIT 1`,
         [S2S_AUDIT_ACTION, productCode],
       ),
+      /*
+       * 开通与投递：`acceptance` 那条链的第二段与末段。
+       *
+       * **这两张表都不是分区表**（`54_provisioning.sql` 里没有 PARTITION BY），
+       * 所以这里**有意不带 `created_at` 下界**——C3 那条带，是因为
+       * `metering.usage_events` 按月分区、谓词里不给下界就要全分区扫。照着 C3 抄一个
+       * 时间窗在这里只会白白把「半年前开通过、至今在用」的产品判成没开通过。
+       *
+       * 两条都靠 `idx_provisionings_product_id` / `idx_webhook_deliveries_product`
+       * 收敛，再取最近一行。
+       */
+      this.pool.query<ProvisionRow>(
+        `SELECT workspace_id, provisioned_at
+           FROM provisioning.provisionings
+          WHERE product_id = $1
+            AND status = 'provisioned'
+            AND provisioned_at IS NOT NULL
+          ORDER BY provisioned_at DESC
+          LIMIT 1`,
+        [productId],
+      ),
+      this.pool.query<DeliveryRow>(
+        `SELECT event_type, workspace_id, response_code, last_attempt_at
+           FROM provisioning.webhook_deliveries
+          WHERE product_id = $1
+            AND status = 'delivered'
+          ORDER BY last_attempt_at DESC NULLS LAST
+          LIMIT 1`,
+        [productId],
+      ),
     ]);
 
     const latest = usage.rows[0];
     const exchange = s2s.rows[0];
+    const provisioned = provision.rows[0];
+    const delivered = delivery.rows[0];
     return {
       entitlement: parseEntitlementSignal(raw, key),
       consume: latest
@@ -256,6 +352,22 @@ export class ProductIntegrationSignalsRouter {
                （旧行可能没有这两个键），用占位词而不是让整条信号消失。 */
             target: exchange.target_product ?? "（未记录）",
             mode: exchange.mode ?? "（未记录）",
+          }
+        : null,
+      provision: provisioned
+        ? {
+            lastProvisionedAt: toIso(provisioned.provisioned_at),
+            workspaceId: provisioned.workspace_id,
+          }
+        : null,
+      delivery: delivered
+        ? {
+            eventType: delivered.event_type,
+            workspaceId: delivered.workspace_id,
+            responseCode: delivered.response_code,
+            lastAttemptAt: delivered.last_attempt_at
+              ? toIso(delivered.last_attempt_at)
+              : null,
           }
         : null,
     };

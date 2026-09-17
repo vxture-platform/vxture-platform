@@ -43,6 +43,15 @@ interface Fixture {
     mode: string | null;
     created_at: Date;
   };
+  /** 开通：`status='provisioned'` 的最近一行。 */
+  provisionRow?: { workspace_id: string; provisioned_at: Date };
+  /** 回调投递：`status='delivered'` 的最近一行。 */
+  deliveryRow?: {
+    event_type: string;
+    workspace_id: string;
+    response_code: number | null;
+    last_attempt_at: Date | null;
+  };
 }
 
 function makeRouter(fx: Fixture) {
@@ -58,6 +67,14 @@ function makeRouter(fx: Fixture) {
     if (/FROM metering\.usage_events/.test(sql)) {
       expect(params).toEqual([PRODUCT_ID]);
       return { rows: fx.usageRow ? [fx.usageRow] : [] };
+    }
+    if (/FROM provisioning\.provisionings/.test(sql)) {
+      expect(params).toEqual([PRODUCT_ID]);
+      return { rows: fx.provisionRow ? [fx.provisionRow] : [] };
+    }
+    if (/FROM provisioning\.webhook_deliveries/.test(sql)) {
+      expect(params).toEqual([PRODUCT_ID]);
+      return { rows: fx.deliveryRow ? [fx.deliveryRow] : [] };
     }
     if (/FROM support\.audit_logs/.test(sql)) {
       /* 按**产品码**反查，不是产品 id——审计里记的是 caller_product。 */
@@ -113,6 +130,8 @@ describe("GET /api/products/:id/integration-signals", () => {
       },
       consume: { lastEventAt: "2026-08-30T08:00:00.000Z", metricKey: "tokens" },
       s2s: null,
+      provision: null,
+      delivery: null,
     });
     expect(get).toHaveBeenCalledWith("vx:integration:c2:arda");
 
@@ -123,13 +142,61 @@ describe("GET /api/products/:id/integration-signals", () => {
     expect(usageSql).toMatch(/LIMIT 1/);
   });
 
-  it("都没有：三个字段都是 null（不是 404，产品在，只是没接通）", async () => {
+  it("都没有：五个字段都是 null（不是 404，产品在，只是没接通）", async () => {
     const { router } = makeRouter({ productCode: "karda" });
     await expect(router.get(makeReq(), PRODUCT_ID)).resolves.toEqual({
       entitlement: null,
       consume: null,
       s2s: null,
+      provision: null,
+      delivery: null,
     });
+  });
+
+  it("开通与投递：判 status，且**不带**时间下界（这两张表不是分区表）", async () => {
+    const { router, sqls } = makeRouter({
+      productCode: "arda",
+      provisionRow: {
+        workspace_id: "ws-1",
+        provisioned_at: new Date("2026-08-29T10:00:00.000Z"),
+      },
+      deliveryRow: {
+        event_type: "grant.invalidated",
+        workspace_id: "ws-1",
+        response_code: 200,
+        last_attempt_at: new Date("2026-08-30T11:00:00.000Z"),
+      },
+    });
+
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.provision).toEqual({
+      lastProvisionedAt: "2026-08-29T10:00:00.000Z",
+      workspaceId: "ws-1",
+    });
+    expect(out.delivery).toEqual({
+      eventType: "grant.invalidated",
+      workspaceId: "ws-1",
+      responseCode: 200,
+      lastAttemptAt: "2026-08-30T11:00:00.000Z",
+    });
+
+    const provSql = sqls.find((x) => /provisioning\.provisionings/.test(x))!;
+    /* 判 `status='provisioned'` 而不是「有行」：行在 pending 时就已经存在，
+       那只说明有人点了开通，不说明开通成功。 */
+    expect(provSql).toMatch(/status = 'provisioned'/);
+    expect(provSql).toMatch(/product_id = \$1/);
+
+    const delSql = sqls.find((x) => /webhook_deliveries/.test(x))!;
+    /* 判 `status='delivered'` 而**不是** `delivered_at`：那一列建了但全仓没人写
+       （markDelivered 只写 status 与 response_code），用它会得到一条永远不满足的检查。 */
+    expect(delSql).toMatch(/status = 'delivered'/);
+    expect(delSql).not.toMatch(/delivered_at\s*IS NOT NULL/);
+
+    /* **两条都不带 `created_at` 下界**：这两张表没有 PARTITION BY，不需要裁剪。
+       C3 那条带下界是因为 usage_events 按月分区——照着它抄一个时间窗到这里，
+       会把「半年前开通、至今在用」的产品判成没开通过。这一条就是拦那个的。 */
+    expect(provSql).not.toContain("interval");
+    expect(delSql).not.toContain("interval");
   });
 
   it("C1 出站：从换票审计读出来，且按产品码而不是产品 id 反查", async () => {

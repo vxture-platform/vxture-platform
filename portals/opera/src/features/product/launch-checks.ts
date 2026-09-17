@@ -143,6 +143,15 @@ interface IntegrationSignalsLite {
   consume: { lastEventAt: string; metricKey: string } | null;
   /** C1 出站。形状与 opera-bff 的 `S2sSignal` 一致——两边不互相引类型，靠单测钉住。 */
   s2s: { lastSeenAt: string; target: string; mode: string } | null;
+  /** 开通：`status='provisioned'` 的最近一行（不是「有行」——pending 也有行）。 */
+  provision: { lastProvisionedAt: string; workspaceId: string } | null;
+  /** 回调投递：`status='delivered'` 的最近一行（判据是 status，不是空着没人写的 delivered_at）。 */
+  delivery: {
+    eventType: string;
+    workspaceId: string;
+    responseCode: number | null;
+    lastAttemptAt: string | null;
+  } | null;
 }
 
 function reason(error: unknown, fallback: string): string {
@@ -442,7 +451,56 @@ export async function runLaunchChecks(
       },
     );
   } else {
-    const { entitlement, consume, s2s } = signals;
+    const { entitlement, consume, s2s, provision, delivery } = signals;
+    /* 端到端链路 —— **呈现型，不写回检查单**（没有 itemCode）。
+     *
+     * `acceptance` 的判据是 `login → provision → gate → consume → invalidate` 五段。
+     * 其中四段平台有台账：开通、C2（gate）、C3（consume）、回调投递（invalidate）。
+     * 剩下的 `login` 段没有——`oidc_consents` 是张空表，auth-bff 登录不写审计。
+     *
+     * 所以这一项**只呈现、不落库**，与两个上游授权检查同一处理：给操作员一个判断
+     * `acceptance` 该不该勾的依据，而不是替他勾。判据来自 `@vxture/core-utils` 的
+     * `launch-checklist.ts`——一项检查只有在它的**全部内容**都被实测覆盖时才算机器判定。
+     *
+     * 「同一个工作区」是这一项的要害：四件事各自发生过，不等于一条链走通了。
+     * C2 的 workspaceId 只在共享内部令牌路径上有值，所以它缺席时只降级说明，不算失败。 */
+    const chainWorkspaces = [
+      provision?.workspaceId,
+      delivery?.workspaceId,
+      entitlement?.workspaceId ?? undefined,
+    ].filter((w): w is string => typeof w === "string" && w !== "");
+    const sameWorkspace =
+      chainWorkspaces.length >= 2 &&
+      chainWorkspaces.every((w) => w === chainWorkspaces[0]);
+    const chainDone = Boolean(provision && delivery && entitlement && consume);
+    results.push({
+      id: "acceptance-chain",
+      label: "端到端链路痕迹",
+      what: "开通 → 权益 → 用量 → 回调投递，四段在平台侧各自留下的痕迹。登录那一段平台没有台账，所以这一项不替人勾「端到端验收」，只给判断依据。",
+      side: "theirs",
+      status: chainDone && sameWorkspace ? "pass" : "fail",
+      detail: !chainDone
+        ? `四段缺 ${[
+            provision ? null : "开通",
+            entitlement ? null : "权益拉取",
+            consume ? null : "用量上报",
+            delivery ? null : "回调投递",
+          ]
+            .filter(Boolean)
+            .join("、")}。`
+        : sameWorkspace
+          ? `四段齐全，且落在同一个工作区；最近一次开通 ${formatAt(provision!.lastProvisionedAt, opts.locale)}，末次投递 ${delivery!.eventType}${
+              delivery!.responseCode === null
+                ? ""
+                : `（HTTP ${delivery!.responseCode}）`
+            }`
+          : "四段齐全，但分散在不同工作区——这是四件各自发生过的事，不是一条走通的链。",
+      remedy:
+        chainDone && sameWorkspace
+          ? null
+          : "用同一个工作区把整条链走一遍：开通产品 → 拉一次权益 → 报一次用量 → 收到平台回调。",
+      href: entitlementsHref,
+    });
     results.push({
       id: "c2-entitlement",
       label: "C2 权益拉取",
