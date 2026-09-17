@@ -141,6 +141,11 @@ export const PRODUCT_ACTIONS: readonly ProductAction[] = [
     icon: "pause",
     from: ["active"],
     to: "inactive",
+    advisory: {
+      title: "停用后客户端立即看不到它",
+      description:
+        "产品会从 console 与官网目录里消失，已订阅的客户也不再能经平台登入。停用是可逆的（随时可恢复），但生效是立即的。",
+    },
   },
   {
     id: "resume",

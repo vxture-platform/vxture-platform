@@ -694,7 +694,22 @@ export class ProductCatalogRouter {
    * 里，不在路由外壳）。
    */
 
+  /**
+   * 产品生命周期迁移：上线 / 停用 / 恢复 / 退役。
+   *
+   * **整条路由挂 step-up（2026-09-17，owner）**——这四件事都是对外面的重大变化：
+   * 上线让产品进 console / 官网目录并成为 token-exchange 目标，停用与退役当场
+   * 收走客户的可用性。用**静态装饰器**而不是命令式 `assertFreshStepUp`：后者适合
+   * 「同一条路由有时高危有时不」（合并保存那种），而这条路由**每一条边都是高危写**，
+   * 正是 `step-up.guard.ts` 文件头说的那种场景。附带的好处：不必给本 router
+   * 注入 `oidcClient` / `rpRuntime`（那会改构造签名、波及六份 spec）。
+   *
+   * **step-up 不是确认框**：凭据有效期内会复用，第二次起一按就过。身份≠意图，
+   * 所以门户那侧另有确认框（`PRODUCT_ACTIONS` 的 `confirmIntent` / `destructive`）——
+   * 两道门各管一件事，不能互相顶替。
+   */
   @Patch(":id/state")
+  @RequireStepUp()
   async setState(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,

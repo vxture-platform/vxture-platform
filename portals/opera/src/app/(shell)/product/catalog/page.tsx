@@ -461,13 +461,19 @@ function ProductsPageContent() {
     const label = `${product.productName} · ${action.label}`;
     setSubmitting(true);
     try {
-      await api.patch(`/api/products/${product.id}/state`, {
-        state: action.to,
-      });
+      /* 状态迁移服务端挂了 step-up（上线 / 停用 / 恢复 / 退役都是对外面的重大变化），
+         回 403 后跑完仪式重发同一个请求。意图确认另在菜单侧。 */
+      await runWithStepUp(() =>
+        api.patch(`/api/products/${product.id}/state`, {
+          state: action.to,
+        }),
+      );
       toast({ tone: "success", title: label });
       if (action.to === "deprecated") setRetireBlock(null);
       await reload();
     } catch (error) {
+      /* 取消仪式不是失败：什么都没发生，不该弹红。 */
+      if (isStepUpCancelled(error)) return;
       /* 退役闸门的两种拒绝（BFF `assertNoActiveUpstreamGrants`）各有各的下一步，
          **判码不判文案**：409 = 上游还有生效授权，出口是权益配置页；502 = 上游没
          查到，退役没有执行，出口是稍后重试。其它错误（403、非法迁移）照旧一条

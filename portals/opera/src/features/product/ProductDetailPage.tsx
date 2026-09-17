@@ -690,15 +690,22 @@ export function ProductDetailPage({
     if (!product) return;
     setApplying(true);
     try {
-      await api.patch(`/api/products/${product.id}/state`, {
-        state: action.to,
-      });
+      /* 状态迁移（上线 / 停用 / 恢复 / 退役）服务端挂了 step-up，回 403
+         后跑完仪式重发同一个请求。确认框另在菜单侧（advisory / destructive）
+         ——身份与意图是两道门。 */
+      await runWithStepUp(() =>
+        api.patch(`/api/products/${product.id}/state`, {
+          state: action.to,
+        }),
+      );
       toast({
         tone: "success",
         title: `${product.productName} · ${action.label}`,
       });
       await reload();
     } catch (error) {
+      /* 取消仪式不是失败：什么都没发生，不该弹红。 */
+      if (isStepUpCancelled(error)) return;
       /* 判码不判文案。几种拒绝各有各的下一步。 */
       const code = error instanceof OperaApiError ? error.code : undefined;
       if (code === "CATALOG_LAUNCH_CHECKLIST_PENDING") {

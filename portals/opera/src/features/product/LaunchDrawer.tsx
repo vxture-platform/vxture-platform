@@ -45,6 +45,7 @@ import {
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import { formatDateTime } from "@vxture-platform/shared";
 import { api, OperaApiError } from "@/lib/api";
+import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import {
   allPassed,
   runLaunchChecks,
@@ -285,6 +286,7 @@ export function LaunchDrawer({
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const { runWithStepUp } = useStepUp();
   const [ticking, setTicking] = useState<string | null>(null);
 
   async function reloadChecklist(): Promise<ChecklistEntry[] | null> {
@@ -410,10 +412,17 @@ export function LaunchDrawer({
         });
         return;
       }
-      await api.patch(`/api/products/${product.id}/state`, { state: "active" });
+      /* 上线是对外面的重大变化，服务端挂了 step-up（`@Patch(":id/state")`）。
+         这条路径本身已经是「看完整份检查单再落锤」，意图已经表达过一次，
+         所以不再叠一个确认框；身份那一道由 step-up 负责。 */
+      await runWithStepUp(() =>
+        api.patch(`/api/products/${product.id}/state`, { state: "active" }),
+      );
       toast({ tone: "success", title: `${product.productName} 已上线` });
       await onLaunched();
     } catch (error) {
+      /* 取消仪式不是失败：生命周期没有改变，不该弹红。 */
+      if (isStepUpCancelled(error)) return;
       toast({
         tone: "danger",
         title: "确认上线失败",
