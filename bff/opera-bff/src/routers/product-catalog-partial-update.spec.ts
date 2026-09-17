@@ -1,8 +1,13 @@
 /**
- * product-catalog-partial-update.spec.ts —— `PUT :id` 缺席即不改（2026-09-11）。
+ * product-catalog-partial-update.spec.ts —— `updateProductTx` 缺席即不改（2026-09-11）。
+ *
+ * 2026-09-17：原先通过 `PUT /api/products/:id` 路由驱动。那条路由已退役（无调用方且
+ * 绕过合并保存的 step-up），测试改指 **`updateProductTx` 本体**——缺陷一直在这个
+ * helper 里，不在路由外壳；下面每一条断言看的都是它发出的 SQL 与参数，一字未改。
+ * 合并保存（`PUT :id/onboarding`）调的就是它，所以覆盖面没有缩小。
  *
  * ── 这一条钉的是一处真的在生产上丢数据的缺陷 ──
- * `PUT :id` 的 SET 取值原先一律 `body.x ?? 默认值`。而产品详情页只送其中 11 个字段
+ * SET 取值原先一律 `body.x ?? 默认值`。而产品详情页只送其中 11 个字段
  * ——于是每保存一次，没送的四列就被写成 `category_id = null`、
  * `standalone_subscribable = true`、`capability_keys = []`、`tags = []`。
  *
@@ -17,29 +22,19 @@
  *
  * 返回值也不能用来判：它来自 `RETURNING`，读的是写完之后的行，看它永远是自洽的。
  */
-import type { Request } from "express";
-import type { Pool, PoolClient } from "pg";
+import type { PoolClient } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import type { VxConfigService } from "@vxture/core-config";
-import type { OperatorExchangeService } from "../auth/operator-exchange.service";
-import type { RequestContext } from "../types/request-context";
 
 vi.mock("@vxture/core-config", () => ({
   VxConfigService: class VxConfigService {},
 }));
 
-import { ProductCatalogRouter } from "./product-catalog.router";
+import {
+  updateProductTx,
+  type ProductWriteBody,
+} from "./product-catalog.router";
 
 const PRODUCT_ID = "3d9f0c1e-0000-4000-8000-00000000000a";
-
-function makeReq(): Request & RequestContext {
-  return {
-    operator: { id: "op-1", displayName: null },
-    capabilities: ["integration:product.manage"],
-    operatorAccessToken: "operator-access-token",
-    headers: {},
-  } as unknown as Request & RequestContext;
-}
 
 function makeRouter(opts: { readonly state?: string } = {}) {
   let sql = "";
@@ -64,22 +59,10 @@ function makeRouter(opts: { readonly state?: string } = {}) {
     }),
     release: vi.fn(),
   };
-  const pool = {
-    connect: vi.fn(async () => client as unknown as PoolClient),
-    query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
-  } as unknown as Pool;
-  const router = new ProductCatalogRouter(
-    pool,
-    {
-      platform: {
-        ATLAS_API_URL: "http://atlas.test/",
-        RUNOS_API_URL: "http://runos.test/",
-      },
-    } as unknown as VxConfigService,
-    {
-      getToken: vi.fn(async () => "obo"),
-    } as unknown as OperatorExchangeService,
-  );
+  /* 直接调 helper：它只要一个 `Queryable`。路由外壳那三个构造参数
+     （pool / config / exchange service）与被测行为无关。 */
+  const update = (body: ProductWriteBody) =>
+    updateProductTx(client as unknown as PoolClient, PRODUCT_ID, body, "op-1");
 
   /**
    * 某一列这次会不会被写——从 SQL 里解析出它的 `$n::bool` 编号，再去参数里取。
@@ -97,7 +80,7 @@ function makeRouter(opts: { readonly state?: string } = {}) {
   }
 
   return {
-    router,
+    update,
     sql: () => sql,
     params: () => params,
     writes,
@@ -124,10 +107,10 @@ const DETAIL_PAGE_BODY = {
   iconUrl: null,
 };
 
-describe("PUT :id · 缺席即不改", () => {
+describe("updateProductTx · 缺席即不改", () => {
   it("详情页那份请求不碰它没送的四列", async () => {
     const t = makeRouter();
-    await t.router.update(makeReq(), PRODUCT_ID, DETAIL_PAGE_BODY);
+    await t.update(DETAIL_PAGE_BODY);
     /* 这四列是详情页界面上根本没有的字段。原实现会把它们写成默认值。 */
     for (const col of [
       "category_id",
@@ -145,7 +128,7 @@ describe("PUT :id · 缺席即不改", () => {
 
   it("显式 null 是清空，不是不改——两者不能合并", async () => {
     const t = makeRouter();
-    await t.router.update(makeReq(), PRODUCT_ID, {
+    await t.update({
       ...DETAIL_PAGE_BODY,
       categoryId: null,
     });
@@ -154,7 +137,7 @@ describe("PUT :id · 缺席即不改", () => {
 
   it("有值就覆盖", async () => {
     const t = makeRouter();
-    await t.router.update(makeReq(), PRODUCT_ID, {
+    await t.update({
       ...DETAIL_PAGE_BODY,
       categoryId: 7,
       tags: ["a", "b"],
@@ -169,7 +152,7 @@ describe("PUT :id · 缺席即不改", () => {
        **不假设 id 在最后一位**：它原本是，加了改码那对参数之后就不是了，
        而位置本来也不是要钉的性质。从 SQL 里把 WHERE 用的编号解析出来。 */
     const t = makeRouter();
-    await t.router.update(makeReq(), PRODUCT_ID, DETAIL_PAGE_BODY);
+    await t.update(DETAIL_PAGE_BODY);
     const used = [...t.sql().matchAll(/\$(\d+)/g)].map((m) => Number(m[1]));
     const n = t.params().length;
     expect([...new Set(used)].sort((a, b) => a - b)).toEqual(
@@ -185,7 +168,7 @@ describe("PUT :id · 缺席即不改", () => {
        只会让这一列拿到隔壁列的值。
        **对数不写死**：数量随字段增减，要钉的是「每一对都相邻」。 */
     const t = makeRouter();
-    await t.router.update(makeReq(), PRODUCT_ID, DETAIL_PAGE_BODY);
+    await t.update(DETAIL_PAGE_BODY);
     const pairs = [
       ...t.sql().matchAll(/CASE WHEN\s+\$(\d+)::bool THEN\s+\$(\d+)/g),
     ];
@@ -197,7 +180,7 @@ describe("PUT :id · 缺席即不改", () => {
 
   it("草稿态改产品码：写进 SET，并把推导出来的边缘域名钉死", async () => {
     const t = makeRouter({ state: "draft" });
-    await t.router.update(makeReq(), PRODUCT_ID, {
+    await t.update({
       ...DETAIL_PAGE_BODY,
       productCode: "vxtpl2",
     });
@@ -215,7 +198,7 @@ describe("PUT :id · 缺席即不改", () => {
 
   it("码没变就不碰边缘域名——保存一次不该顺手写死一条配置", async () => {
     const t = makeRouter({ state: "draft" });
-    await t.router.update(makeReq(), PRODUCT_ID, DETAIL_PAGE_BODY);
+    await t.update(DETAIL_PAGE_BODY);
     expect(t.writes("product_code")).toBe(false);
     expect(
       t.seen().some((s) => /UPDATE product\.product_webhooks/.test(s)),
@@ -225,7 +208,7 @@ describe("PUT :id · 缺席即不改", () => {
   it("非草稿态改码 → 409，且一行都没写", async () => {
     const t = makeRouter({ state: "active" });
     await expect(
-      t.router.update(makeReq(), PRODUCT_ID, {
+      t.update({
         ...DETAIL_PAGE_BODY,
         productCode: "vxtpl2",
       }),

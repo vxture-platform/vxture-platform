@@ -256,13 +256,24 @@ function hasEdgeValues(edge: EdgeWriteBody | undefined): edge is EdgeWriteBody {
   ].some((v) => typeof v === "string" && v.trim() !== "");
 }
 
-/** 锁住产品行并取回产品码。非 uuid 直接 404——拿去比 uuid 列会冒成 22P02 的 500。 */
-async function lockProduct(q: Queryable, id: string): Promise<string> {
+/**
+ * 锁住产品行，取回产品码与**当前对客可见性**。非 uuid 直接 404——拿去比 uuid 列会冒成 22P02 的 500。
+ *
+ * 可见性跟着这一次 `FOR UPDATE` 一起读：它是 `flipsCustomerVisibility` 的判据，而那个
+ * 判断必须在任何写之前做完。单开一条 SELECT 也行，但那就是同一行读两次。
+ */
+async function lockProduct(
+  q: Queryable,
+  id: string,
+): Promise<{ productCode: string; isCustomerVisible: boolean }> {
   if (!UUID_RE.test(id)) {
     throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
   }
-  const result = await q.query<{ product_code: string }>(
-    `SELECT product_code FROM product.products
+  const result = await q.query<{
+    product_code: string;
+    is_customer_visible: boolean;
+  }>(
+    `SELECT product_code, is_customer_visible FROM product.products
       WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
     [id],
   );
@@ -270,7 +281,32 @@ async function lockProduct(q: Queryable, id: string): Promise<string> {
   if (!row) {
     throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
   }
-  return row.product_code;
+  return {
+    productCode: row.product_code,
+    isCustomerVisible: row.is_customer_visible,
+  };
+}
+
+/**
+ * 这一次保存是否**翻转了对客可见性**。
+ *
+ * 纯函数、不碰库，理由与 `planClients` 同一条：step-up 要不要做是不能判错的事，
+ * 判错的表现是「不经二次验证把一个产品推上官网」而接口回 200。所以它单独可测。
+ *
+ * **两个方向都算**：把在售产品从官网与 console 上撤下来，和把它推上去一样是对外面
+ * 的改动。admin 侧的同一件事（`PATCH capabilities/:productCode/content`）本就双向都卡。
+ *
+ * 字段缺席（`undefined`）= 不动，送了但值没变也不算改动——反复保存同一张表单
+ * 不该每次都要 TOTP。
+ */
+export function flipsCustomerVisibility(
+  body: ProductWriteBody,
+  before: { isCustomerVisible: boolean },
+): boolean {
+  return (
+    body.isCustomerVisible !== undefined &&
+    body.isCustomerVisible !== before.isCustomerVisible
+  );
 }
 
 /**
@@ -380,11 +416,17 @@ export class ProductOnboardingRouter {
     validateWrite(productBody, { requireCore: true, requireCode: false });
     const inputs = clientList(body.clients);
     return withTransaction(this.pool, async (client) => {
-      await lockProduct(client, id);
+      const before = await lockProduct(client, id);
       const existing = await lockProductClientsTx(client, id);
       const plan = planClients(inputs, existing);
       await assertClientIdsFree(client, plan);
-      if (plan.touchesSecurity) {
+      /* 两条安全边界并列：客户端凭证（回调 / scopes / PKCE / 新发）与对客可见性。
+         后者决定一个产品在不在官网与 console 的目录里，是对外面的改动，而 admin 侧
+         的同一件事一直要 step-up——两边不一致等于这道门有一侧是虚的。 */
+      if (
+        plan.touchesSecurity ||
+        flipsCustomerVisibility(productBody, before)
+      ) {
         await assertFreshStepUp(req, this.oidcClient, this.rpRuntime);
       }
       const product = await updateProductTx(

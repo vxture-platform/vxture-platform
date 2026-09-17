@@ -235,6 +235,8 @@ function makeRouter(
     readonly existing?: ReturnType<typeof row>[];
     readonly takenIds?: readonly string[];
     readonly failOn?: RegExp;
+    /** 库里当前的对客可见性；不传即已上站。 */
+    readonly customerVisible?: boolean;
   } = {},
 ) {
   const statements: { text: string; args: unknown[] }[] = [];
@@ -244,8 +246,22 @@ function makeRouter(
       if (opts.failOn?.test(text)) {
         throw Object.assign(new Error("boom"), { code: "XX000" });
       }
-      if (/SELECT product_code FROM product\.products/.test(text)) {
-        return { rows: [{ product_code: "acme" }], rowCount: 1 };
+      /* `lockProduct` 一次读回产品码与当前对客可见性（后者是
+         `flipsCustomerVisibility` 的判据）。默认已上站，可用 opts 翻过来。 */
+      if (
+        /SELECT product_code, is_customer_visible FROM product\.products/.test(
+          text,
+        )
+      ) {
+        return {
+          rows: [
+            {
+              product_code: "acme",
+              is_customer_visible: opts.customerVisible ?? true,
+            },
+          ],
+          rowCount: 1,
+        };
       }
       if (/SELECT product_code, status FROM product\.products/.test(text)) {
         return {
@@ -357,6 +373,53 @@ describe("PUT :id/onboarding —— 合并保存", () => {
     expect(t.wrote(), "判定必须发生在任何写之前").toBe(false);
     expect(t.said("rollback")).toBe(true);
     expect(t.said("commit")).toBe(false);
+  });
+
+  it("把产品推上官网却没有 step-up 凭证：在写任何东西之前被拒", async () => {
+    /* 对客可见性决定一个产品在不在官网与 console 的目录里。admin 侧的同一件事
+       一直要 step-up，opera 侧之前一道门都没有——两边不一致等于这道门有一侧是虚的。 */
+    const t = makeRouter({ customerVisible: false });
+    const error = await rejection(
+      t.router.update(makeReq(false), PRODUCT_ID, {
+        ...body([UNCHANGED]),
+        product: { ...body([UNCHANGED]).product, isCustomerVisible: true },
+      }),
+    );
+    expect(envelope(error).code).toBe("AUTH_STEP_UP_REQUIRED");
+    expect(t.wrote(), "判定必须发生在任何写之前").toBe(false);
+    expect(t.said("rollback")).toBe(true);
+  });
+
+  it("把在售产品从官网撤下来：同样要二次验证（两个方向都算）", async () => {
+    const t = makeRouter({ customerVisible: true });
+    const error = await rejection(
+      t.router.update(makeReq(false), PRODUCT_ID, {
+        ...body([UNCHANGED]),
+        product: { ...body([UNCHANGED]).product, isCustomerVisible: false },
+      }),
+    );
+    expect(envelope(error).code).toBe("AUTH_STEP_UP_REQUIRED");
+    expect(t.wrote()).toBe(false);
+  });
+
+  it("可见性送了但值没变：不打扰——反复保存同一张表单不该每次都要 TOTP", async () => {
+    const t = makeRouter({ customerVisible: true });
+    await t.router.update(makeReq(false), PRODUCT_ID, {
+      ...body([UNCHANGED]),
+      product: { ...body([UNCHANGED]).product, isCustomerVisible: true },
+    });
+    expect(t.oidcClient.verifyAccessToken).not.toHaveBeenCalled();
+    expect(t.said("commit")).toBe(true);
+  });
+
+  it("翻转可见性且凭证有效：写入", async () => {
+    const t = makeRouter({ customerVisible: false });
+    await t.router.update(makeReq(true), PRODUCT_ID, {
+      ...body([UNCHANGED]),
+      product: { ...body([UNCHANGED]).product, isCustomerVisible: true },
+    });
+    expect(t.oidcClient.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(t.said("commit")).toBe(true);
   });
 
   it("改登录回调且凭证有效：写入", async () => {

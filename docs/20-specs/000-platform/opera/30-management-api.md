@@ -18,6 +18,9 @@
 ## 1. 动词语义（B-1）
 
 **`PUT` = 全量替换**：请求体未出现的可写字段被清空/复位。
+**例外：产品合并保存**（`PUT :id/onboarding`）是缺席即不改——详情页只送界面上有的字段，
+按全量替换语义会把没送的列写回默认值（这是 2026-09-11 修掉的一处真实丢数据缺陷，
+回归守卫在 `product-catalog-partial-update.spec.ts`）。
 **`PATCH` = 部分更新**：未出现即不改。
 **`POST :id/{verb}` = 动作**：状态迁移与二元开关走这里，不把目标值 PATCH 进去。
 
@@ -25,8 +28,8 @@
 
 | 端点                                                   | 动词    | 语义                                                                          |
 | ------------------------------------------------------ | ------- | ----------------------------------------------------------------------------- |
-| `/api/products`                                        | `POST`  | 创建                                                                          |
-| `/api/products/:id`                                    | `PUT`   | **全量替换**——每个可写列都在 `SET` 里，省略键落回默认值                       |
+| `/api/products/onboarding`                             | `POST`  | 创建（产品 / 边缘 / 登录客户端同一事务）                                      |
+| `/api/products/:id/onboarding`                         | `PUT`   | **部分更新**——缺席即不改（`CASE WHEN`）；step-up 按改动判，见 §1.1            |
 | `/api/products/:id/state`                              | `PATCH` | 单字段；四态状态机，非二元，故不用动作端点                                    |
 | `/api/products/:id/webhook`                            | `PUT`   | **全量替换**三个字段（`homeUrl`/`webhookUrl`/`webhookSecretRef`），省略即清空 |
 | `/api/products/:id/checklist/:itemCode`                | `PATCH` | **部分更新**：`remark` 键不在则不动                                           |

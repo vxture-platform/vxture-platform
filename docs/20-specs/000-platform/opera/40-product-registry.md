@@ -44,7 +44,9 @@
 
 **步 3 的自动验证（2026-08-31）**：上线检查（`portals/opera/src/features/product/launch-checks.ts`）读平台自己的存储判七项——目录登记、OIDC 客户端、Atlas / Runos 授权、webhook 登记，以及对方接通后留下的两条痕迹：**C2** 每次成功的 `GET /platform/entitlements` 由 platform-api 在 Redis 记一个按产品码的「最近一次」键（`<REDIS_KEY_PREFIX>integration:c2:<code>`，30 天过期，每产品每分钟至多写一次，Redis 故障不影响响应），**C3** 取 `metering.usage_events` 最近 90 天内该产品的最后一行；两者经 `GET /api/products/:id/integration-signals` 读出，C2 / C3 与 `catalog_registered` 一起写回检查单。C2 是最近一次而不是台账（不答「调了多少次」）；走共享内部令牌的调用没有身份，按请求里的产品码归因；S2S 调用按 `act.sub` 归因。`c1_identity`（对方的 RP 实现）仍由操作员按回报勾；`data_plane` 与 `acceptance` 平台观测不到，保持人工。
 
-**单页接入（2026-09-14，owner 口径）**：步 1–4 原本分散在五个入口——目录页「登记产品」弹窗、详情页「保存设置」（两次串行 PUT）、「接入凭据」页「注册客户端」、详情页凭据抽屉里的「回调地址」与「授权页展示」两个弹窗，外加独立的「产品上线」页。现在收成**一张页 + 一个密钥面板**：写入走 `bff/opera-bff/src/routers/product-onboarding.router.ts` 的合并保存（`POST /api/products/onboarding` · `PUT /api/products/:id/onboarding`，产品 / 边缘与回调 / 客户端同一事务），step-up **按改动判**——只改展示不打扰，触及回调 / 登出回跳白名单、scopes、PKCE 或签发新客户端才要求；密钥只从面板写（`PUT /api/products/:id/webhook-secret`、`POST /api/oidc-clients/:clientId/rotate-secret`）。「接入凭据」页保留为全部产品客户端的**只读**总览；`/product/launch` 保留为跳转。产品码 `new` 是保留字（被 `/product/catalog/new` 占用）。
+**单页接入（2026-09-14，owner 口径）**：步 1–4 原本分散在五个入口——目录页「登记产品」弹窗、详情页「保存设置」（两次串行 PUT）、「接入凭据」页「注册客户端」、详情页凭据抽屉里的「回调地址」与「授权页展示」两个弹窗，外加独立的「产品上线」页。现在收成**一张页 + 一个密钥面板**：写入走 `bff/opera-bff/src/routers/product-onboarding.router.ts` 的合并保存（`POST /api/products/onboarding` · `PUT /api/products/:id/onboarding`，产品 / 边缘与回调 / 客户端同一事务），step-up **按改动判**——只改展示不打扰，触及回调 / 登出回跳白名单、scopes、PKCE、签发新客户端，**或翻转对客可见性**（2026-09-17：把产品推上官网 / 从官网撤下都算，与 admin 侧 `PATCH capabilities/:productCode/content` 拉齐）才要求；密钥只从面板写（`PUT /api/products/:id/webhook-secret`、`POST /api/oidc-clients/:clientId/rotate-secret`）。「接入凭据」页保留为全部产品客户端的**只读**总览；`/product/launch` 保留为跳转。产品码 `new` 是保留字（被 `/product/catalog/new` 占用）。
+
+**写入口已收口（2026-09-17）**：产品字段的写入只剩合并保存一条路。旧的 `POST /api/products` 与 `PUT /api/products/:id` 已退役——它们自 2026-09-14 起就没有调用方，却绕过了合并保存那道按改动判的 step-up。退役而不是给旁路也挂一把锁：门只有一道，才不存在“有一侧是虚的”。
 
 产品状态机（`portals/opera/src/features/product/lifecycle.ts`）：`draft → active ⇄ inactive`，任一 → `deprecated`（终态）。
 

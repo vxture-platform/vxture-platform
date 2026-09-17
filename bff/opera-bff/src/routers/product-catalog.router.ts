@@ -34,7 +34,6 @@ import {
   Inject,
   Param,
   Patch,
-  Post,
   Put,
   Query,
   Res,
@@ -55,7 +54,7 @@ import { UUID_RE } from "./router.shared";
 import type { Request, Response as ExpressResponse } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
-import { withTransaction, type Queryable } from "../db/tx";
+import type { Queryable } from "../db/tx";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import { conflict, invalidRequest, notFound } from "../errors/api-error";
@@ -681,34 +680,19 @@ export class ProductCatalogRouter {
     return result.rows[0] ? toRecord(result.rows[0]) : null;
   }
 
-  @Post()
-  async create(
-    @Req() req: Request & RequestContext,
-    @Body() body: ProductWriteBody,
-  ): Promise<ProductRecord> {
-    assertCanManage(req);
-    validateWrite(body, { requireCore: true });
-    return withTransaction(this.pool, (client) =>
-      insertProductTx(client, body, req.operator?.id ?? null),
-    );
-  }
-
-  @Put(":id")
-  async update(
-    @Req() req: Request & RequestContext,
-    @Param("id") id: string,
-    @Body() body: ProductWriteBody,
-  ): Promise<ProductRecord> {
-    assertCanManage(req);
-    /*
-     * `requireCode: false` —— 改产品不必带产品码。带了也不会白带：草稿态可以改
-     * （owner 2026-09-11），启用后锁定，见 `updateProductTx`。
-     */
-    validateWrite(body, { requireCore: true, requireCode: false });
-    return withTransaction(this.pool, (client) =>
-      updateProductTx(client, id, body, req.operator?.id ?? null),
-    );
-  }
+  /*
+   * —— `POST /api/products` 与 `PUT /api/products/:id` 已退役（2026-09-17）——
+   *
+   * 两条路由自 2026-09-14 接入收成一张页（#323）起就**没有调用方**：建档与保存都走
+   * `product-onboarding.router.ts` 的合并保存（产品 / 边缘 / 客户端同一事务）。留着的代价
+   * 不是“多两行死码”：它们写的是同一张表，却**绕过了合并保存那道按改动判的 step-up**
+   * ——拿得到 `integration:product.manage` 的人可以绕开二次验证把一个产品推上官网。
+   *
+   * 所以是退役而不是“给旁路也挂一把锁”：写入口收成一个，门才只有一道。
+   * `insertProductTx` / `updateProductTx` / `validateWrite` 三个 helper 原样导出，onboarding
+   * 在用；「缺席即不改」那条回归守卫改指 `updateProductTx` 本体（缺陷在 helper
+   * 里，不在路由外壳）。
+   */
 
   @Patch(":id/state")
   async setState(
