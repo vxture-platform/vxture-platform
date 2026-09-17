@@ -44,6 +44,8 @@ import {
   fetchActiveUpstreamGrants,
   upstreamCheckUnavailable,
 } from "../lib/upstream-grants";
+import { Reflector } from "@nestjs/core";
+import { REQUIRE_STEP_UP } from "../auth/step-up.decorator";
 import { ProductCatalogRouter } from "./product-catalog.router";
 
 const fetchGrants = vi.mocked(fetchActiveUpstreamGrants);
@@ -382,5 +384,30 @@ describe("首次上线的检查单闸门", () => {
     });
     expect(result.state).toBe("active");
     expect(writes).toEqual(["active"]);
+  });
+});
+
+describe("路由上的 step-up 标注", () => {
+  const reflector = new Reflector();
+
+  /* owner 2026-09-17：上线 / 停用 / 恢复 / 退役都是对外面的重大变化。
+     四条边走同一条路由，所以挂**静态**装饰器而不是命令式判定——后者适合
+     「同一条路由有时高危有时不」的合并保存，这里每一条边都是高危写。 */
+  it("状态迁移挂 step-up", () => {
+    expect(
+      reflector.get(REQUIRE_STEP_UP, ProductCatalogRouter.prototype.setState),
+    ).toBe(true);
+  });
+
+  it("删除产品仍然挂着", () => {
+    expect(
+      reflector.get(REQUIRE_STEP_UP, ProductCatalogRouter.prototype.remove),
+    ).toBe(true);
+  });
+
+  it("读路由不挂——误挂上去会把一次查看变成一次 TOTP", () => {
+    expect(
+      reflector.get(REQUIRE_STEP_UP, ProductCatalogRouter.prototype.list),
+    ).toBeUndefined();
   });
 });
