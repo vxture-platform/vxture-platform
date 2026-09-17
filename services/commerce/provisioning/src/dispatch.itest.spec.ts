@@ -178,10 +178,18 @@ describe.skipIf(!RUN)("provisioning deliverer (integration)", () => {
     expect(got!.payload.plan).toBe("pro");
 
     const row = await pool.query(
-      `select status, attempts from provisioning.webhook_deliveries where id=$1`,
+      `select status, attempts, delivered_at, updated_at, created_at
+         from provisioning.webhook_deliveries where id=$1`,
       [deliveryId],
     );
     expect(row.rows[0].status).toBe("delivered");
+    /* 两个时间戳真落库（2026-09-17）。provisioning 域两表没有触发器，
+       `updated_at` 那个 DEFAULT now() 只在 INSERT 时生效——不手写就永远停在创建时间。
+       这是唯一能验「真的写进去了」的地方（单测只看得到 SQL 文本）。 */
+    expect(row.rows[0].delivered_at).not.toBeNull();
+    expect(new Date(row.rows[0].updated_at).getTime()).toBeGreaterThanOrEqual(
+      new Date(row.rows[0].created_at).getTime(),
+    );
   });
 
   it("bumps seq monotonically on the next event (ordering source)", async () => {
