@@ -1328,6 +1328,9 @@ export interface PaymentOperationRecord {
   paymentStatus: OrderPaymentStatus;
   reconciliationStatus: PaymentReconciliationStatus;
   transactionId: string | null;
+  /** 交易流水的可视码（TXN-…）。上屏、导出一律用它；transactionId 是内部 uuid。
+   *  与 portals/admin/src/entities/console.ts 的同名契约成对维护，改一处要改两处。 */
+  transactionNo: string | null;
   channelOrderNo: string | null;
   channelTransactionNo: string | null;
   offlineEvidenceUrl: string | null;

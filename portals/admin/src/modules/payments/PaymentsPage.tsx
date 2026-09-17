@@ -131,7 +131,7 @@ function paymentCsvColumns(
 ): readonly CsvColumn<PaymentOperationRecord>[] {
   return [
     { label: "收款流水", value: (p) => p.paymentNo },
-    { label: "交易号", value: (p) => p.transactionId ?? "" },
+    { label: "交易号", value: (p) => p.transactionNo ?? "" },
     { label: "关联订单", value: (p) => p.orderNo ?? "" },
     { label: "关联账单", value: (p) => p.billNo ?? "" },
     { label: "租户编码", value: (p) => p.tenantCode },
