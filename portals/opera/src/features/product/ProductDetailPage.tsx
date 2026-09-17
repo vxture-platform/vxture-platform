@@ -79,7 +79,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { LockedInput } from "@/components/form/LockedInput";
-import { actionsFor, type ProductAction } from "./lifecycle";
+import { actionsFor, gatesLaunch, type ProductAction } from "./lifecycle";
 import {
   CopyableInput,
   FieldGrid,
@@ -737,8 +737,10 @@ export function ProductDetailPage({
   }
 
   const lifecycleActions = product ? actionsFor(product.state) : [];
+  /* 徽标上的「还差几项」只数卡上线的那些（`gate = 'launch'`）——发布门的项
+     （`acceptance`）没勾不代表这个产品上不了线，数进去会把人引向错误的下一步。 */
   const pendingRequired = checklist.filter(
-    (i) => i.isRequired && !i.isSatisfied,
+    (i) => i.isRequired && gatesLaunch(i) && !i.isSatisfied,
   );
   const derivedDomain = `${draft?.productCode.trim() || product?.productCode || "acme"}.vxture.com`;
   const domainForHints = edgeDraft?.edgeDomain.trim() || derivedDomain;
@@ -758,7 +760,7 @@ export function ProductDetailPage({
         },
         {
           id: "model-grants",
-          label: "模型路由授权",
+          label: "模型授权",
           icon: "plug" as const,
           onSelect: () =>
             router.push(

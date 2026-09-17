@@ -6,7 +6,7 @@
  *
  * ── 为什么写入归这里，而不是各自的域页 ───────────────────────────────────────
  *
- * 第一直觉是「写入归域」——发模型路由授权要看这条 endpoint 可不可服务、primary /
+ * 第一直觉是「写入归域」——发模型授权要看这条 endpoint 可不可服务、primary /
  * fallback 是什么；发能力授权要看 riskLevel 上限、依赖闭包会派生什么。这些上下文只在
  * 域里有。
  *
@@ -17,7 +17,7 @@
  * 收敛 `subjectType` 时要消灭的思路。一个产品的授权散在两个域页里配，运营者永远拼不出
  * 「这个产品到底能干什么」，而那是唯一重要的问题。
  *
- * 还有一条硬证据：**权益必须一起看**。产品上线检查里模型路由授权与能力授权是并列两项，
+ * 还有一条硬证据：**权益必须一起看**。产品上线检查里模型授权与能力授权是并列两项，
  * 产品能不能跑取决于两者的**合集**。分开配就意味着分开想。
  *
  * 因此：`/model/grants` 与 `/capability/grants` 保留**反向视图**（这条 endpoint 被谁
@@ -238,7 +238,7 @@ function ProductEntitlements() {
     keyword: string;
   } | null>(null);
 
-  /* 一次把清单要的三份都取回：产品目录、Atlas 全量路由授权、能力目录（分类要用）。
+  /* 一次把清单要的三份都取回：产品目录、Atlas 全量模型授权、能力目录（分类要用）。
      能力授权走 BFF 的汇总接缝——那一份依赖产品码，所以要等产品目录先回来。 */
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -382,7 +382,7 @@ function ProductEntitlements() {
     }
   }
 
-  /** 停用一条路由授权。Atlas 是软停用（`state="inactive"`），不是删行。 */
+  /** 停用一条模型授权。Atlas 是软停用（`state="inactive"`），不是删行。 */
   async function deactivateRoute(g: RouteGrant) {
     setSubmitting(true);
     try {
@@ -843,7 +843,7 @@ function ProductEntitlements() {
                 : {})}
               empty={
                 <EmptyState
-                  title="没有模型路由授权"
+                  title="没有模型授权"
                   description="这个产品调不到任何模型路由。"
                   action={
                     <Button asChild variant="secondary">
@@ -1074,7 +1074,7 @@ function ProductEntitlements() {
           }}
           size="lg"
           title={`授权模型路由 · ${selectedCode}`}
-          description="选中的路由将对这个产品下的全部应用生效。要限定到某个应用或加到期时间，去「模型管理 · 路由授权」逐条改。"
+          description="选中的路由将对这个产品下的全部应用生效。要限定到某个应用或加到期时间，去「模型管理 · 模型授权」逐条改。"
           submitLabel={
             routePicker ? `授权 ${routePicker.picked.length} 条` : "授权"
           }

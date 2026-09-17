@@ -11,7 +11,7 @@ export default function RunosSupplyCatalogsRedirect() {
     <LegacyRedirect
       to="/capability/grants"
       title="能力授权"
-      description="与「路由授权」成对命名；旧路径 supply-catalogs 是上游内部叫法，不是运营者的词。"
+      description="与「模型授权」成对命名；旧路径 supply-catalogs 是上游内部叫法，不是运营者的词。"
     />
   );
 }

@@ -10,7 +10,7 @@ export default function AtlasProductGrantsRedirect() {
   return (
     <LegacyRedirect
       to="/model/grants"
-      title="路由授权"
+      title="模型授权"
       description="与「能力授权」成对命名：区别在授的是什么，不在授给谁。"
     />
   );

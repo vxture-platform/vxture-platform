@@ -90,6 +90,9 @@ interface ProductActionBase {
    * 跃迁**——不接受"三天前通过了"，配置随时会变，拿过期的通过去上线就是让声明冒充
    * 事实。自动探针见 `runLaunchChecks()`（B4b-3）；在它到位之前，这里以检查单的
    * 必填项作为门槛，并在界面上如实说明这是**人工勾选**而非实测。
+   *
+   * 「必填项」自 2026-09-17 起限于 `gate = 'launch'` 的那些（见 `gatesLaunch`）——
+   * 发布门的项（`acceptance`）不卡上线，与 BFF 同口径。
    */
   requiresChecklist?: boolean;
 }
@@ -161,10 +164,10 @@ export const PRODUCT_ACTIONS: readonly ProductAction[] = [
     destructive: {
       verb: "退役",
       /* 后半句是 2026-08-31 加的闸门（BFF `assertNoActiveUpstreamGrants`）：Atlas 的
-         模型路由授权与 Runos 的能力授权都按产品码挂在各自的库里，退役不会替人撤。
+         模型授权与 Runos 的能力授权都按产品码挂在各自的库里，退役不会替人撤。
          先说清楚，比落锤后被 409 弹回来再去猜要少一次往返。 */
       consequence:
-        "退役是终态：产品行会保留（「谁曾经接入过、什么时候退的」要答得出），但不能再回到任何其它状态。要重新接入必须登记一个新的产品码。退役前必须先撤销这个产品在 Atlas 的模型路由授权与在 Runos 的能力授权——还有生效中的授权时会被拒绝。",
+        "退役是终态：产品行会保留（「谁曾经接入过、什么时候退的」要答得出），但不能再回到任何其它状态。要重新接入必须登记一个新的产品码。退役前必须先撤销这个产品在 Atlas 的模型授权与在 Runos 的能力授权——还有生效中的授权时会被拒绝。",
     },
   },
 ];
@@ -209,8 +212,31 @@ export interface ChecklistItem {
   /** 人看的名字。错误报告里列 item_code 等于把内部标识符甩给读报告的人。 */
   itemName?: string;
   isRequired: boolean;
+  /**
+   * 卡哪一道门：`launch` = 上线前必满足；`publish` = 发布前才要。
+   *
+   * 2026-09-17 前没有这一根轴，上线门槛只看 `isRequired`——`acceptance` 因此卡住
+   * `draft→active`，而它要的端到端链路需要产品先能被订阅、订阅需要产品已上线，
+   * 成了环。BFF 侧（`product-catalog.router.ts` 的 `gate = 'launch'`）已按这根轴
+   * 放行，本文件这几个判定必须同口径，否则界面说「还差 1 项」而后端放行。
+   *
+   * 可选：旧数据或未升级的调用方没有这个字段，按 `launch` 兜底（与加轴前一致）。
+   */
+  gate?: string;
   isSatisfied: boolean;
   checkedAt: string | null;
+}
+
+/**
+ * 这一项卡不卡上线那道门。缺字段按卡上线处理——与加轴之前的行为一致。
+ *
+ * 入参**只收 `gate` 这一个字段**，不收整个 `ChecklistItem`：调用方有两种形状
+ * （本文件的 `ChecklistItem` 与 LaunchDrawer 的 `ChecklistEntry`，`itemName` 一个是
+ * `string | undefined`、一个是 `string | null`），而这个判定压根用不到别的字段。
+ * 收窄到用得着的那一个，两种形状都能传，不必为了对齐类型去放宽谁或在调用点断言。
+ */
+export function gatesLaunch(item: { gate?: string }): boolean {
+  return (item.gate ?? "launch") === "launch";
 }
 
 /**
@@ -249,7 +275,9 @@ export function sideOfChecklistItem(itemCode: string): "ours" | "theirs" {
 export function verificationOf(
   items: readonly ChecklistItem[],
 ): VerificationState {
-  const required = items.filter((i) => i.isRequired);
+  /* 只算卡上线那道门的项：`acceptance` 归发布门，它没勾不该让整个产品显示为
+     「待验证」——那会把一个技术上已经就绪的产品报成没准备好。 */
+  const required = items.filter((i) => i.isRequired && gatesLaunch(i));
   if (required.length === 0) return "unverified";
   /* 一次都没勾过 = 未验证。用「有没有 checkedAt」而不是「有没有 satisfied」判断：
      全部勾过但都判否，与从来没人看过，是两件不同的事。 */
@@ -267,7 +295,9 @@ export function pendingBySide(items: readonly ChecklistItem[]): {
   ours: ChecklistItem[];
   theirs: ChecklistItem[];
 } {
-  const pending = items.filter((i) => i.isRequired && !i.isSatisfied);
+  const pending = items.filter(
+    (i) => i.isRequired && gatesLaunch(i) && !i.isSatisfied,
+  );
   return {
     ours: pending.filter((i) => !THEIR_SIDE.has(i.itemCode)),
     theirs: pending.filter((i) => THEIR_SIDE.has(i.itemCode)),

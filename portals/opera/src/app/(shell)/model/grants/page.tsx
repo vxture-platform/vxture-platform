@@ -136,7 +136,7 @@ interface EndpointSummary {
   state: ObjectState;
 }
 
-/** 一个产品持有的全部路由授权，按入口码排序。计数在归集时算好，排序与状态摘要共用。 */
+/** 一个产品持有的全部模型授权，按入口码排序。计数在归集时算好，排序与状态摘要共用。 */
 interface GrantGroup {
   productCode: string;
   grants: ProductGrantRecord[];
@@ -493,7 +493,7 @@ function ProductGrantsPageContent() {
     }
   }
 
-  /** 一条路由授权的菜单。只读的人也有「查看路由」与「复制」——看与改分开给。 */
+  /** 一条模型授权的菜单。只读的人也有「查看路由」与「复制」——看与改分开给。 */
   function routeMenu(r: ProductGrantRecord) {
     const label = `${r.productCode} → ${r.endpointCode}`;
     return (
@@ -764,7 +764,7 @@ function ProductGrantsPageContent() {
     ) : (
       <EmptyState
         title="暂无产品授权"
-        description="去「产品管理 · 权益配置」给产品发路由授权。"
+        description="去「产品管理 · 权益配置」给产品发模型授权。"
       />
     );
 
@@ -774,7 +774,7 @@ function ProductGrantsPageContent() {
         header={
           <ViewHeader
             icon="list-checks"
-            title="路由授权"
+            title="模型授权"
             description="产品持有哪些能力入口。授权命名的是入口而不是模型——改入口指向对调用方无感，正是入口存在的意义；产品能选的模型由它持有的入口推导出来，不在这里逐个发放。"
             action={
               /* **写入已移到「产品管理 · 权益配置」**（2026-08-16，E1）。授权主体是
@@ -813,7 +813,7 @@ function ProductGrantsPageContent() {
                  产品只有这么几条"在界面上长得一模一样。 */
               <Banner
                 tone="info"
-                title={`只显示 ${productCodeFilter} 的路由授权`}
+                title={`只显示 ${productCodeFilter} 的模型授权`}
                 action={
                   <Button asChild variant="secondary" size="sm">
                     <Link href="/model/grants">

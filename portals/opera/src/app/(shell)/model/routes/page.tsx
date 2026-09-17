@@ -214,7 +214,7 @@ function EndpointsPageContent() {
      挡住模型删除的那个计数也是这么数的。 */
   const search = useSearchParams();
   const modelCodeFilter = search.get("modelCode") ?? "";
-  /* 权益配置页从某个产品的路由授权点进来，只想看那一条。上游没有按 code 查单条的
+  /* 权益配置页从某个产品的模型授权点进来，只想看那一条。上游没有按 code 查单条的
      参数，本地过滤即可——列表本来就整份取回，不存在"翻到那一页才有"的问题。 */
   const endpointCodeFilter = search.get("endpointCode") ?? "";
   const [rows, setRows] = useState<ModelEndpointRecord[]>([]);
