@@ -43,6 +43,8 @@ interface Fixture {
     mode: string | null;
     created_at: Date;
   };
+  /** 登录：`session.refresh_tokens` 的最近一行（按 product_id 聚合的客户端集合）。 */
+  loginRow?: { client_id: string; created_at: Date };
   /** 开通：`status='provisioned'` 的最近一行。 */
   provisionRow?: { workspace_id: string; provisioned_at: Date };
   /** 回调投递：`status='delivered'` 的最近一行。 */
@@ -67,6 +69,12 @@ function makeRouter(fx: Fixture) {
     if (/FROM metering\.usage_events/.test(sql)) {
       expect(params).toEqual([PRODUCT_ID]);
       return { rows: fx.usageRow ? [fx.usageRow] : [] };
+    }
+    if (/FROM session\.refresh_tokens/.test(sql)) {
+      /* 按**产品 id** 聚合：子查询先拿 product_id 取客户端集合，
+         而不是拿单个 client_id——一个产品可能有三个渠道客户端。 */
+      expect(params).toEqual([PRODUCT_ID]);
+      return { rows: fx.loginRow ? [fx.loginRow] : [] };
     }
     if (/FROM provisioning\.provisionings/.test(sql)) {
       expect(params).toEqual([PRODUCT_ID]);
@@ -123,6 +131,8 @@ describe("GET /api/products/:id/integration-signals", () => {
     const out = await router.get(makeReq(), PRODUCT_ID);
 
     expect(out).toEqual({
+      /* 这份 fixture 没给 loginRow——首段缺席是 null，不是报错。 */
+      login: null,
       entitlement: {
         lastSeenAt: "2026-08-31T01:02:03.000Z",
         via: "s2s",
@@ -142,15 +152,45 @@ describe("GET /api/products/:id/integration-signals", () => {
     expect(usageSql).toMatch(/LIMIT 1/);
   });
 
-  it("都没有：五个字段都是 null（不是 404，产品在，只是没接通）", async () => {
+  it("都没有：六个字段都是 null（不是 404，产品在，只是没接通）", async () => {
     const { router } = makeRouter({ productCode: "karda" });
     await expect(router.get(makeReq(), PRODUCT_ID)).resolves.toEqual({
+      login: null,
       entitlement: null,
       consume: null,
       s2s: null,
       provision: null,
       delivery: null,
     });
+  });
+
+  it("登录：按 product_id 聚合客户端，不按单个 client_id", async () => {
+    const { router, sqls } = makeRouter({
+      productCode: "arda",
+      loginRow: {
+        client_id: "arda-beta",
+        created_at: new Date("2026-09-17T02:00:00Z"),
+      },
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.login).toEqual({
+      lastLoginAt: "2026-09-17T02:00:00.000Z",
+      clientId: "arda-beta",
+    });
+    const sql = sqls.find((x) => /session\.refresh_tokens/.test(x))!;
+    /* 子查询走 oidc_clients，条件是 product_id + client_kind——这才能覆盖
+       stable / beta / canary 三个渠道。 */
+    expect(sql).toMatch(/FROM appoidc\.oidc_clients/);
+    expect(sql).toMatch(/c\.product_id = \$1/);
+    expect(sql).toMatch(/c\.client_kind = 'product'/);
+  });
+
+  it("登录：**不带** created_at 下界（refresh_tokens 不是分区表）", async () => {
+    /* 照搬 C3 的时间窗会把「半年前登过、至今在用」的产品判成没人登过。 */
+    const { router, sqls } = makeRouter({ productCode: "arda" });
+    await router.get(makeReq(), PRODUCT_ID);
+    const sql = sqls.find((x) => /session\.refresh_tokens/.test(x))!;
+    expect(sql).not.toMatch(/created_at >= now\(\)/);
   });
 
   it("开通与投递：判 status，且**不带**时间下界（这两张表不是分区表）", async () => {

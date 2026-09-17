@@ -135,6 +135,12 @@ function pathOf(url: string | null | undefined): string | null {
 
 /** `GET /api/products/:id/integration-signals` 的形状（opera-bff 定义）。 */
 interface IntegrationSignalsLite {
+  /**
+   * 登录：`acceptance` 链的首段。台账在 `session.refresh_tokens`（每次成功的 OIDC
+   * 登录无条件落一行、带 client_id），按 product_id 聚合客户端反查。
+   * 形状与 opera-bff 的 `LoginSignal` 一致——两边不互相引类型，靠单测钉住。
+   */
+  login: { lastLoginAt: string; clientId: string } | null;
   entitlement: {
     lastSeenAt: string;
     via: string;
@@ -451,19 +457,25 @@ export async function runLaunchChecks(
       },
     );
   } else {
-    const { entitlement, consume, s2s, provision, delivery } = signals;
+    const { login, entitlement, consume, s2s, provision, delivery } = signals;
     /* 端到端链路 —— **呈现型，不写回检查单**（没有 itemCode）。
      *
      * `acceptance` 的判据是 `login → provision → gate → consume → invalidate` 五段。
-     * 其中四段平台有台账：开通、C2（gate）、C3（consume）、回调投递（invalidate）。
-     * 剩下的 `login` 段没有——`oidc_consents` 是张空表，auth-bff 登录不写审计。
+     * 五段平台都有台账（2026-09-17）：登录、开通、C2（gate）、C3（consume）、回调投递
+     * （invalidate）。`login` 段此前被当成「没台账」，那句话错了两半：auth-bff 登录
+     * 确实不写审计，但每一次成功的 OIDC 登录都往 `session.refresh_tokens` 落一行、
+     * 带 `client_id`——台账一直在写，只是没人读。（`oidc_consents` 确实是空的，
+     * 但它从来不是这一段的台账。）
      *
      * 所以这一项**只呈现、不落库**，与两个上游授权检查同一处理：给操作员一个判断
      * `acceptance` 该不该勾的依据，而不是替他勾。判据来自 `@vxture/core-utils` 的
      * `launch-checklist.ts`——一项检查只有在它的**全部内容**都被实测覆盖时才算机器判定。
      *
-     * 「同一个工作区」是这一项的要害：四件事各自发生过，不等于一条链走通了。
-     * C2 的 workspaceId 只在共享内部令牌路径上有值，所以它缺席时只降级说明，不算失败。 */
+     * 「同一个工作区」是这一项的要害：几件事各自发生过，不等于一条链走通了。
+     * C2 的 workspaceId 只在共享内部令牌路径上有值，所以它缺席时只降级说明，不算失败。
+     *
+     * **登录段不进同工作区判定**：`session.refresh_tokens` 没有 `workspace_id` 列（登录
+     * 发生在选定工作区之前）。硬凑一个进去只会把一条本来成立的链判成失败。 */
     const chainWorkspaces = [
       provision?.workspaceId,
       delivery?.workspaceId,
@@ -472,15 +484,18 @@ export async function runLaunchChecks(
     const sameWorkspace =
       chainWorkspaces.length >= 2 &&
       chainWorkspaces.every((w) => w === chainWorkspaces[0]);
-    const chainDone = Boolean(provision && delivery && entitlement && consume);
+    const chainDone = Boolean(
+      login && provision && delivery && entitlement && consume,
+    );
     results.push({
       id: "acceptance-chain",
       label: "端到端链路痕迹",
-      what: "开通 → 权益 → 用量 → 回调投递，四段在平台侧各自留下的痕迹。登录那一段平台没有台账，所以这一项不替人勾「端到端验收」，只给判断依据。",
+      what: "登录 → 开通 → 权益 → 用量 → 回调投递，五段在平台侧各自留下的痕迹。仍然只给判断依据、不替人勾「端到端验收」：五段各自发生过，不等于同一个客户把一条链走完了。",
       side: "theirs",
       status: chainDone && sameWorkspace ? "pass" : "fail",
       detail: !chainDone
-        ? `四段缺 ${[
+        ? `五段缺 ${[
+            login ? null : "登录",
             provision ? null : "开通",
             entitlement ? null : "权益拉取",
             consume ? null : "用量上报",
@@ -489,12 +504,12 @@ export async function runLaunchChecks(
             .filter(Boolean)
             .join("、")}。`
         : sameWorkspace
-          ? `四段齐全，且落在同一个工作区；最近一次开通 ${formatAt(provision!.lastProvisionedAt, opts.locale)}，末次投递 ${delivery!.eventType}${
+          ? `五段齐全，且落在同一个工作区；最近一次登录 ${formatAt(login!.lastLoginAt, opts.locale)}，最近一次开通 ${formatAt(provision!.lastProvisionedAt, opts.locale)}，末次投递 ${delivery!.eventType}${
               delivery!.responseCode === null
                 ? ""
                 : `（HTTP ${delivery!.responseCode}）`
             }`
-          : "四段齐全，但分散在不同工作区——这是四件各自发生过的事，不是一条走通的链。",
+          : "五段齐全，但开通 / 投递 / 权益 分散在不同工作区——这是几件各自发生过的事，不是一条走通的链。（登录不进这个判定：它发生在选定工作区之前。）",
       remedy:
         chainDone && sameWorkspace
           ? null
@@ -512,7 +527,7 @@ export async function runLaunchChecks(
         : "最近 30 天内没有以这个产品码拉过权益。",
       remedy: entitlement
         ? null
-        : "把交接信息（产品码、client_id）发给对方；对方以 S2S 令牌调一次权益接口后重跑。",
+        : "把交接信息（产品码、client_id）发给对方；对方以 S2S 令牌调一次权益接口后重跑。这一项不要求先有客户、订阅或套餐——没有活跃订阅时接口落 free 兜底，照样算一次成功读取。",
       itemCode: "c2_entitlement",
       href: entitlementsHref,
     });
@@ -527,7 +542,7 @@ export async function runLaunchChecks(
         : "最近 90 天内没有这个产品的用量事件。",
       remedy: consume
         ? null
-        : "对方接通消费上报（POST /usage/consume）并真实扣一次后重跑。",
+        : "对方接通消费上报（POST /usage/consume）调一次后重跑。不要求真扣到额度——没有配额池时走零扣减分支，用量事件照样落库（引擎只记录、不裁决），所以也不必先有客户、订阅或套餐。",
       itemCode: "c3_metering",
       href: entitlementsHref,
     });
@@ -545,7 +560,7 @@ export async function runLaunchChecks(
         : "最近 90 天内没有以这个产品码换过票。",
       remedy: s2s
         ? null
-        : "凡是要用模型/能力/知识的智能体都要接这一步。把交接信息发给对方，对方按《产品接入通则》C1 出站实现换票后重跑。",
+        : "凡是要用模型/能力/知识的智能体都要接这一步。把交接信息发给对方，对方按《产品接入通则》C1 出站实现换票后重跑。产品还是草稿也能换——目标是平台受众时恒可解析，审计按调用方归因。",
       itemCode: "c1_s2s",
     });
   }

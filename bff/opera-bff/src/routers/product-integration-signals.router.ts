@@ -31,7 +31,7 @@
  *     `delivered_at`，此前那一列建了却没人写。但判据仍然不换：status 是状态机的
  *     权威，时间戳是派生记录；存量行的 `delivered_at` 也仍是 NULL。）
  *
- *   两者都带 `workspace_id`，加上 C2 信号里的 `workspaceId`，门户可以判「四段是否落在
+ *   两者都带 `workspace_id`，加上 C2 信号里的 `workspaceId`，门户可以判「这几段是否落在
  *   **同一个**工作区」——那才是「一条链走通了」，而不是四件不相干的事各发生过。
  *
  *   **这两张表都不是分区表**（`54_provisioning.sql` 无 PARTITION BY），所以两条查询
@@ -84,7 +84,10 @@ export interface ConsumeSignal {
  */
 export interface ProvisionSignal {
   lastProvisionedAt: string;
-  /** 开到哪个工作区。四段链路要落在**同一个** workspace 上才算走通了一条链。 */
+  /**
+   * 开到哪个工作区。带 workspace 的那几段要落在**同一个** workspace 上才算走通了一条链
+   * （登录段不在其内：`refresh_tokens` 没有 workspace_id，登录发生在选定工作区之前）。
+   */
   workspaceId: string;
 }
 
@@ -112,7 +115,27 @@ export interface S2sSignal {
   mode: string;
 }
 
+/**
+ * 登录：这个产品的客户端最近一次有人经平台登进去。
+ *
+ * `acceptance` 那条链的**首段**。台账一直在写，只是从来没人读：每一次成功的
+ * OIDC 登录都会往 `session.refresh_tokens` 落一行（`oidc.service.ts` 的授权码兑换里
+ * **无条件**签发，不按 scope 门控），行上带 `client_id`。
+ *
+ * **不是 `session.auth_sessions`**：那张表的 DDL 明写「会话 Redis-primary，OIDC 登录不写
+ * durable auth_sessions」，拿它当判据会得到一条永远为空的检查。
+ *
+ * 运营者登录不会混进来：`TokenService.storeFor(realm)` 把 workforce 分流到
+ * `admin.operator_refresh_token`，只有 customer realm 进这张表。
+ */
+export interface LoginSignal {
+  lastLoginAt: string;
+  /** 经哪个客户端登的（一个产品可能有 stable / beta / canary 三个）。 */
+  clientId: string;
+}
+
 export interface IntegrationSignalsRecord {
+  login: LoginSignal | null;
   entitlement: EntitlementSignal | null;
   consume: ConsumeSignal | null;
   s2s: S2sSignal | null;
@@ -140,6 +163,11 @@ interface DeliveryRow {
   workspace_id: string;
   response_code: number | null;
   last_attempt_at: Date | string | null;
+}
+
+interface LoginRow {
+  client_id: string;
+  created_at: Date | string;
 }
 
 interface S2sAuditRow {
@@ -257,8 +285,38 @@ export class ProductIntegrationSignalsRouter {
     }
 
     const key = `${this.rpRuntime.keyPrefix}${C2_SIGNAL_KEY_INFIX}${productCode}`;
-    const [raw, usage, s2s, provision, delivery] = await Promise.all([
+    const [raw, login, usage, s2s, provision, delivery] = await Promise.all([
       this.redis.get(key),
+      /*
+       * 登录：`acceptance` 链的首段。两步合成一条 SQL——先用
+       * `idx_oidc_clients_product_id` 把客户端收敛到这个产品（该表十几行），
+       * 再回 `session.refresh_tokens` 取最近一行。按 **product_id 聚合**而不是单个
+       * client_id：一个产品可能有 stable / beta / canary 三个客户端，哪个登都算。
+       *
+       * 查询形状：`refresh_tokens.client_id` **没有索引**（只有 user_id /
+       * session_id / status / expires_at 四条）。最坏情况是「这个产品从没人登过」，
+       * 要扫完整张表才能确定没有——而那恰好是本检查项最常被问的状态（与 C1
+       * 出站那条同型）。今天可以这么查：该表只增不删但量级跟登录次数走，
+       * 现阶段是万行以下。**到了不够用那天，加这条索引**，不要改判据：
+       *   create index idx_refresh_tokens_client_created
+       *       on session.refresh_tokens (client_id, created_at desc);
+       *
+       * **不带 `created_at` 下界**：这张表不是分区表，照搬 C3 的时间窗只会把
+       * 「半年前登过、至今在用」的产品判成没人登过。
+       */
+      this.pool.query<LoginRow>(
+        `SELECT rt.client_id, rt.created_at
+           FROM session.refresh_tokens rt
+          WHERE rt.client_id IN (
+                  SELECT c.client_id
+                    FROM appoidc.oidc_clients c
+                   WHERE c.product_id = $1
+                     AND c.client_kind = 'product'
+                )
+          ORDER BY rt.created_at DESC
+          LIMIT 1`,
+        [productId],
+      ),
       /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
          单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
          三四个月分区——对一个上线检查的点击来说够用；真到不够用那天加索引，
@@ -335,11 +393,18 @@ export class ProductIntegrationSignalsRouter {
       ),
     ]);
 
+    const loggedIn = login.rows[0];
     const latest = usage.rows[0];
     const exchange = s2s.rows[0];
     const provisioned = provision.rows[0];
     const delivered = delivery.rows[0];
     return {
+      login: loggedIn
+        ? {
+            lastLoginAt: toIso(loggedIn.created_at),
+            clientId: loggedIn.client_id,
+          }
+        : null,
       entitlement: parseEntitlementSignal(raw, key),
       consume: latest
         ? {
