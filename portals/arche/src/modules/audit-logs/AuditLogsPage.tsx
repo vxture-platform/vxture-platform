@@ -199,7 +199,9 @@ const AUDIT_CSV_COLUMNS: readonly CsvColumn<AuditLogRecord>[] = [
   { label: "邮箱", value: (l) => l.operatorEmail },
   { label: "操作", value: (l) => l.action },
   { label: "对象类型", value: (l) => l.targetType },
-  { label: "对象ID", value: (l) => l.targetId ?? "" },
+  /* 导出的 CSV 也算展示（owner 铁律）：这里给可读标签，不给 targetId。
+     审计对象跨表，没有统一可视码，targetLabel 就是上游算好的那一份。 */
+  { label: "对象", value: (l) => l.targetLabel ?? l.targetType ?? "" },
   { label: "模块", value: (l) => l.module },
   { label: "结果", value: (l) => resultLabel(l.result) },
   { label: "IP", value: (l) => l.ip ?? "" },
@@ -243,11 +245,10 @@ function auditColumns(
     {
       id: "target",
       header: "对象",
-      cell: (log) => (
-        <span title={log.targetId ?? undefined}>
-          {log.targetLabel ?? log.targetType ?? EMPTY_MARK}
-        </span>
-      ),
+      /* 不挂 title={targetId}：悬停提示同样算展示（owner 铁律），而可读标签就在
+         这个元素里显示着，tooltip 再补一个裸 uuid 既无用又违律。
+         2026-09-15 opera 变更表「对象」副标题露 objectId 是同一形态。 */
+      cell: (log) => log.targetLabel ?? log.targetType ?? EMPTY_MARK,
     },
     { id: "module", header: "模块", cell: (log) => log.module },
     {

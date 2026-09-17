@@ -62,6 +62,7 @@
     "dev:website-bff": "pnpm --filter @vxture/bff-website dev",
     "fixtures:inject": "node scripts/dev/fixtures.mjs inject",
     "fixtures:purge": "node scripts/dev/fixtures.mjs purge",
+    "probe:uuid": "node scripts/dev/uuid-probe.mjs",
     "fixtures:status": "node scripts/dev/fixtures.mjs status",
     "format": "prettier --write \"**/*.{js,ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,ts,tsx,json,md}\"",
@@ -120,6 +121,7 @@
     "type-check:console-bff": "pnpm --filter @vxture/bff-console type-check",
     "update": "pnpm --recursive update",
     "lint:oidc-discovery": "node scripts/guardrails/check-oidc-discovery.mjs",
+    "lint:visible-code": "node scripts/guardrails/check-visible-code-display.mjs",
     "lint:public-routes": "node scripts/guardrails/check-public-routes.mjs"
   },
   "devDependencies": {

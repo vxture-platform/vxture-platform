@@ -266,6 +266,13 @@ jobs:
       - name: Literal markdown in UI copy
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:literal-markdown
+
+      # 导出的 CSV 也算「展示」（owner 铁律：任何界面不展示 UUID）。页面那一半靠
+      # 运行时探针（scripts/dev/uuid-probe.mjs）——CSV 在点击那刻才由 Blob 生成，
+      # DOM 里从不存在，探针照不到，只能静态守这一列取的是可视码还是裸 id。
+      - name: Visible code in CSV exports
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:visible-code
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |

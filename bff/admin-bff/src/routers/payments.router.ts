@@ -455,6 +455,7 @@ function mapPaymentRow(row: PaymentRow): PaymentOperationRecord {
       billPayableAmount,
     ),
     transactionId: row.transaction_id,
+    transactionNo: row.transaction_no,
     channelOrderNo: row.channel_order_no,
     channelTransactionNo: row.channel_transaction_no,
     offlineEvidenceUrl: row.offline_evidence_url,
@@ -498,6 +499,9 @@ select
   p.pay_status,
   p.status_msg,
   p.transaction_id,
+  -- 交易号对外一律给可视码（owner 铁律：任何界面不展示 UUID，导出的 CSV 也算）。
+  -- transaction_id 是域内真 FK，留着给写路径用；上屏的是 tx.transaction_no。
+  tx.transaction_no,
   p.channel_order_no,
   p.channel_transaction_no,
   p.offline_evidence_url,
@@ -509,6 +513,7 @@ from billing.payments p
 join billing.invoices inv on inv.id = p.bill_id
 join tenancy.tenants t on t.id = p.tenant_id
 left join tenancy.tenant_profiles profile on profile.tenant_id = t.id
+left join billing.transactions tx on tx.id = p.transaction_id
 order by p.created_at desc
 limit 500
 `;
@@ -622,6 +627,9 @@ select
   p.pay_status,
   p.status_msg,
   p.transaction_id,
+  -- 交易号对外一律给可视码（owner 铁律：任何界面不展示 UUID，导出的 CSV 也算）。
+  -- transaction_id 是域内真 FK，留着给写路径用；上屏的是 tx.transaction_no。
+  tx.transaction_no,
   p.channel_order_no,
   p.channel_transaction_no,
   p.offline_evidence_url,
@@ -633,6 +641,7 @@ from billing.payments p
 join billing.invoices inv on inv.id = p.bill_id
 join tenancy.tenants t on t.id = p.tenant_id
 left join tenancy.tenant_profiles profile on profile.tenant_id = t.id
+left join billing.transactions tx on tx.id = p.transaction_id
 where p.id = $1
 limit 1
 `;
@@ -663,6 +672,7 @@ interface PaymentRow {
   pay_status: string | null;
   status_msg: string | null;
   transaction_id: string | null;
+  transaction_no: string | null;
   channel_order_no: string | null;
   channel_transaction_no: string | null;
   offline_evidence_url: string | null;

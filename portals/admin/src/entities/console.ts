@@ -1272,6 +1272,8 @@ export interface PaymentOperationRecord {
   paymentStatus: OrderPaymentStatus;
   reconciliationStatus: PaymentReconciliationStatus;
   transactionId: string | null;
+  /** 交易流水的**可视码**（TXN-…）。上屏、导出一律用它；transactionId 是内部 uuid。 */
+  transactionNo: string | null;
   channelOrderNo: string | null;
   channelTransactionNo: string | null;
   offlineEvidenceUrl: string | null;
