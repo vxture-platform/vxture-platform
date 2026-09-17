@@ -1530,6 +1530,7 @@ interface ProductCatalogRow {
   id: string;
   product_code: string;
   product_type: string; // 受管枚举 @vxture/core-utils: general_platform|industry_platform|general_agent|industry_agent|undefined
+  layer: string | null; // 定位轴 L1|L2|L3（product_100_matrix §2）；NULL=未分层。绑定候选按它过滤，所以原样透出不加工
   origin: string; // 来源轴 self|third_party|other —— source 从这里判，不再从 product_type='external' 反推
   release_stage: string; // 成熟度轴 ga|beta|developing
   marketing: unknown | null; // 营销内容 jsonb(双语富结构)
@@ -1634,6 +1635,7 @@ const PRODUCT_CATALOG_SQL = `
     p.id,
     p.product_code,
     p.product_type,
+    p.layer,
     p.origin,
     p.release_stage,
     p.marketing,
@@ -1751,6 +1753,7 @@ export async function loadProductCapabilities(
       productName: row.product_name,
       description: row.description ?? "",
       productType,
+      layer: row.layer,
       source,
       status,
       // 成熟度轴与营销内容(产品目录录入的业务字段,原样透传给前端表单回填)。

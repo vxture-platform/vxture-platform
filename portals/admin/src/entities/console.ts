@@ -538,6 +538,13 @@ export interface ProductCapabilityRecord {
   productName: string;
   description: string;
   productType: ProductCapabilityType;
+  /**
+   * 产品分层 L1/L2/L3（product_100_matrix §2）——定位轴，与 productType（类型轴）、
+   * source（来源轴）正交。null = 未分层。原样透出**不加工**：productType 经
+   * `mapProductCapabilityType` 收敛成本页展示枚举，而 layer 是绑定候选的判据，
+   * 加工一次就没法拿来过滤了。
+   */
+  layer: string | null;
   source: ProductCapabilitySource;
   status: ProductCapabilityStatus;
   /** 成熟度轴 ga|beta|developing（产品目录录入,官网据此判三态）。 */

@@ -90,6 +90,13 @@ const pairs = [
     tsArray(dom, "METRIC_KINDS"),
     ddlCheckIn(p40, "chk_platform_metrics_kind"),
   ],
+  // products.layer: closed domain (product_100_matrix §2). The DDL CHECK also
+  // admits NULL — ddlCheckIn only reads the IN(...) list, so the two still match.
+  [
+    "product layer",
+    tsArray(dom, "PRODUCT_LAYERS"),
+    ddlCheckIn(p40, "chk_products_layer"),
+  ],
 ];
 
 const errors = [];

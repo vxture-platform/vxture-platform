@@ -33,6 +33,10 @@ export {
   MERGE_STRATEGIES,
   CONSUME_MODES,
   METRIC_KINDS,
+  PRODUCT_LAYERS,
+  PRODUCT_LAYER_DEFS,
+  isValidProductLayer,
+  productLayerLabel,
 } from "./catalog-domains.constants";
 export type {
   Tier,
@@ -42,6 +46,7 @@ export type {
   MergeStrategy,
   ConsumeMode,
   MetricKind,
+  ProductLayerValue,
 } from "./catalog-domains.constants";
 // Atlas 对象状态 —— 上游契约在消费侧的镜像（product_251 M-B3）。
 // 两个门户读同一批记录，词表与「deprecated 算不算在服务」的判断只能有一份；
