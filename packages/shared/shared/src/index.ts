@@ -52,6 +52,7 @@ export type {
   MergeStrategy,
   ConsumeMode,
   MetricKind,
+  ProductLayerValue,
 } from "./constants";
 
 // Atlas 对象状态 —— 上游契约在消费侧的镜像（product_251 M-B3）。opera 与 admin 读同一批
@@ -105,6 +106,11 @@ export {
   MERGE_STRATEGIES,
   CONSUME_MODES,
   METRIC_KINDS,
+  // 定位轴 L1/L2/L3（product_100_matrix §2）——与类型轴、来源轴正交
+  PRODUCT_LAYERS,
+  PRODUCT_LAYER_DEFS,
+  isValidProductLayer,
+  productLayerLabel,
 } from "./constants";
 
 // Utils

@@ -33,6 +33,7 @@ CREATE TABLE product.products (
     id                       uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     product_code             varchar(64)  NOT NULL,                   -- 可视码
     product_type             varchar(32)  NOT NULL,                   -- 扩展型 kind，不加 CHECK
+    layer                    varchar(8),                              -- 定位轴 L1/L2/L3（product_100_matrix §2）：L1=基础支撑 / L2=域平台 / L3=智能体。与 product_type（类型）、origin（来源）正交；NULL=未分类。封闭值域，值域权威 @vxture-platform/shared PRODUCT_LAYERS（lint:catalog-domains 锁 DDL 一致）
     category_id              smallint     REFERENCES product.product_categories(id),
     product_name             varchar(128) NOT NULL,                   -- 主名/品牌名
     product_nick             varchar(128),                            -- 译名/副名
@@ -66,6 +67,7 @@ CREATE TABLE product.products (
     CONSTRAINT uq_products_product_code UNIQUE (product_code),
     CONSTRAINT chk_products_status CHECK (status IN ('active','inactive','draft','deprecated')),
     CONSTRAINT chk_products_release_stage CHECK (release_stage IN ('ga','beta','developing')),
+    CONSTRAINT chk_products_layer CHECK (layer IS NULL OR layer IN ('L1','L2','L3')),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
     CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL)
 );
@@ -73,6 +75,7 @@ CREATE INDEX idx_products_category_id ON product.products (category_id);
 CREATE INDEX idx_products_status      ON product.products (status);
 CREATE INDEX idx_products_release_stage ON product.products (release_stage);
 CREATE INDEX idx_products_origin      ON product.products (origin);
+CREATE INDEX idx_products_layer       ON product.products (layer);
 CREATE INDEX idx_products_deleted_at  ON product.products (deleted_at);
 CREATE INDEX idx_products_tags_gin    ON product.products USING gin (tags);
 CREATE INDEX idx_products_cap_gin     ON product.products USING gin (capability_keys);

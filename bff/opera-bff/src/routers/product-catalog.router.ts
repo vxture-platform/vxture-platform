@@ -48,6 +48,7 @@ import {
 } from "@vxture/core-utils";
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
+import { isValidProductLayer, PRODUCT_LAYERS } from "@vxture-platform/shared";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import { createHash } from "node:crypto";
 import { UUID_RE } from "./router.shared";
@@ -146,6 +147,12 @@ export interface ProductRecord {
   origin: ProductOrigin;
   originProvider: string | null;
   /**
+   * 产品分层 L1/L2/L3（product_100_matrix §2）。定位轴，与 productType（类型）、
+   * origin（来源）正交——external 是来源不是层级，客户端与内部服务不是目录产品。
+   * null = 未分类（存量行在 layer 列落地前都是这个）。
+   */
+  layer: string | null;
+  /**
    * 带理由跳过上线闸门的痕迹（owner 2026-09-17：“先上线再联调”）。
    *
    * 两者都为空 = 正常上线。理由不在这里——它是问责台账，归 `support.audit_logs`；
@@ -180,6 +187,7 @@ interface ProductRow {
   is_workforce_visible: boolean;
   origin: ProductOrigin;
   origin_provider: string | null;
+  layer: string | null;
   launch_override_at: string | null;
   launch_override_pending: string[] | null;
   created_at: string;
@@ -206,6 +214,7 @@ function toRecord(row: ProductRow): ProductRecord {
     isWorkforceVisible: row.is_workforce_visible,
     origin: row.origin,
     originProvider: row.origin_provider,
+    layer: row.layer,
     /* 带理由跳过上线闸门的痕迹（owner 2026-09-17）。产品页据此常驻提示
        「上线时跳过 N 项，待复验」；两列都为空 = 正常上线。理由不在这里，
        它是问责台账，归 support.audit_logs。 */
@@ -281,6 +290,8 @@ export interface ProductWriteBody {
   isWorkforceVisible?: boolean;
   origin?: ProductOrigin;
   originProvider?: string | null;
+  /** 分层 L1/L2/L3（受管值域 @vxture-platform/shared PRODUCT_LAYERS）；null = 清空。 */
+  layer?: string | null;
   /** 产品图标。console 应用中心的磁贴、订阅卡在读它——此前库里有列、没有地方能填。 */
   iconUrl?: string | null;
   /**
@@ -326,7 +337,7 @@ export interface ProductDeletionImpact {
 }
 
 const SELECT_COLUMNS = `
-  id, product_code, product_type, category_id, product_name, product_nick,
+  id, product_code, product_type, layer, category_id, product_name, product_nick,
   description, capability_keys, tags, standalone_subscribable, status,
   is_customer_visible, is_workforce_visible, origin, origin_provider,
   launch_override_at, launch_override_pending,
@@ -2214,6 +2225,15 @@ export function validateWrite(
       "productType",
     );
   }
+  // layer 同样走受管值域（@vxture-platform/shared 单一权威源，DDL 有 chk_products_layer）。
+  // 空串按「不分层」处理：下拉的「未分类」选项送的就是空串。
+  if (body.layer && !isValidProductLayer(body.layer.trim())) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      `layer must be one of ${PRODUCT_LAYERS.join()}`,
+      "layer",
+    );
+  }
   if (body.origin && !(ORIGINS as readonly string[]).includes(body.origin)) {
     throw invalidRequest(
       "VALIDATION_INVALID_VALUE",
@@ -2268,9 +2288,9 @@ export async function insertProductTx(
          product_code, product_type, category_id, product_name, product_nick,
          description, capability_keys, tags, standalone_subscribable, status,
          is_customer_visible, is_workforce_visible, origin, origin_provider,
-         icon_url, created_by, updated_by
+         icon_url, created_by, updated_by, layer
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15, $16
        ) RETURNING ${SELECT_COLUMNS}`,
       [
         body.productCode!.trim(),
@@ -2288,6 +2308,7 @@ export async function insertProductTx(
         body.originProvider?.trim() || null,
         body.iconUrl?.trim() || null,
         operatorId,
+        body.layer?.trim() || null,
       ],
     )
     .then((r) => r.rows[0]!)
@@ -2404,6 +2425,7 @@ export async function updateProductTx(
          origin                  = CASE WHEN $19::bool THEN $20 ELSE origin                  END,
          origin_provider         = CASE WHEN $21::bool THEN $22 ELSE origin_provider         END,
          icon_url                = CASE WHEN $23::bool THEN $24 ELSE icon_url                END,
+         layer                   = CASE WHEN $29::bool THEN $30 ELSE layer                   END,
          updated_by = $25, updated_at = now()
        WHERE id = $26 AND deleted_at IS NULL
        RETURNING ${SELECT_COLUMNS}`,
@@ -2438,6 +2460,9 @@ export async function updateProductTx(
            后面每一个编号都推一位，而编号错位不报错、只会把值写到别的列上去。 */
         codeChange,
         codeChange ? wantedCode : null,
+        /* 同理排在最后：$29/$30 是 layer 那一对，插在中间会推移前面每一个编号。 */
+        has("layer"),
+        body.layer?.trim() || null,
       ],
     )
     .then((r) => r.rows[0])

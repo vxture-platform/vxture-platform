@@ -158,6 +158,7 @@ export interface ProductChannelRow {
   product_code: string;
   product_name: string;
   product_type: string | null;
+  layer: string | null;
   product_status: string;
   client_id: string | null;
   release_channel: string | null;
@@ -174,6 +175,8 @@ export interface ProductChannelGroup {
   productCode: string;
   productName: string;
   productType: string | null;
+  /** product.products.layer —— 层级的唯一来源；null = 运营还没填。 */
+  layer: string | null;
   state: ProductState;
   channels: Record<ReleaseChannel, ChannelClient | null>;
 }
@@ -184,7 +187,7 @@ export interface ProductChannelGroup {
  * 排序把同一产品的客户端按登记时间排好，分组时同渠道取第一个即"最早登记的"。
  */
 const PRODUCT_CHANNELS_SELECT = `
-select p.id as product_id, p.product_code, p.product_name, p.product_type,
+select p.id as product_id, p.product_code, p.product_name, p.product_type, p.layer,
        p.status as product_status,
        c.client_id, c.release_channel, c.redirect_uris
   from product.products p
@@ -196,31 +199,25 @@ select p.id as product_id, p.product_code, p.product_name, p.product_type,
  order by p.product_code asc, c.created_at asc nulls last, c.client_id asc
 `;
 
-/** product_100_matrix.md §2 的层级判定，唯一来源 = product.products.product_type。 */
-export function layerFromProductType(productType: string | null): ProductLayer {
-  switch (productType) {
-    case "model_platform":
-    case "capability_platform":
-      return "L1";
-    // 受管枚举(@vxture/core-utils):平台族(general/industry)+历史应用平台 = L2。
-    case "general_platform":
-    case "industry_platform":
-    case "data_platform":
-    case "knowledge_platform":
-      return "L2";
-    // L3 = 智能体应用；受管枚举拆通用/行业,历史裸 agent 一并归此。
-    case "agent":
-    case "general_agent":
-    case "industry_agent":
-      return "L3";
-    case "client":
-      return "client";
-    case "external":
-      return "external";
-    // undefined(未定义)与其它未登记值。
-    default:
-      return "unclassified";
-  }
+/**
+ * 层级的唯一来源 = `product.products.layer`（owner 2026-09-17 裁定）。
+ *
+ * 此前这里从 `product_type` 推层级，而 L1 的两个 case（`model_platform` /
+ * `capability_platform`）不在受管枚举 `PRODUCT_TYPES` 里、写入面 `isValidProductType`
+ * 挡死——**那两个分支永远走不到**，结果 atlas / runos / arda / karda 四个同为
+ * `general_platform` 的产品一律被判成 L2。层级本来就不是类型：
+ * `product-taxonomy.ts` 头注释早写着「层级是产品的定位，不是类型，单独维护」。
+ *
+ * 值域只收 L1/L2/L3（@vxture-platform/shared `PRODUCT_LAYERS`，DDL 有
+ * `chk_products_layer`）。`client` 与 `external` 不在其中：external 是**来源**
+ * （`products.origin`），客户端与内部服务不是目录产品。二者仍留在 `ProductLayer`
+ * 里是因为渲染层与 `channelProbeMode` 还按它们分支——**它们的判据来源待「另一个轴」
+ * 落地后再接**，在那之前没有任何产品会取到这两个值。
+ */
+export function layerFromColumn(layer: string | null): ProductLayer {
+  return layer === "L1" || layer === "L2" || layer === "L3"
+    ? layer
+    : "unclassified";
 }
 
 function isReleaseChannel(value: string | null): value is ReleaseChannel {
@@ -249,6 +246,7 @@ export function groupProductChannels(
         productCode: row.product_code,
         productName: row.product_name,
         productType: row.product_type,
+        layer: row.layer,
         state: toProductState(row.product_status),
         channels: { stable: null, beta: null, canary: null },
       };
@@ -286,7 +284,7 @@ export class ProductHealthRouter {
 
     return Promise.all(
       groups.map(async (group) => {
-        const layer = layerFromProductType(group.productType);
+        const layer = layerFromColumn(group.layer);
         const [prod, beta, canary] = await Promise.all([
           resolveChannel(layer, group.channels.stable),
           resolveChannel(layer, group.channels.beta),

@@ -74,7 +74,11 @@ import {
   productTypeLabel,
   type ProductSurface,
 } from "@vxture/core-utils";
-import { formatDateTime } from "@vxture-platform/shared";
+import {
+  formatDateTime,
+  PRODUCT_LAYER_DEFS,
+  productLayerLabel,
+} from "@vxture-platform/shared";
 import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
@@ -138,6 +142,8 @@ interface ProductRecord {
   isWorkforceVisible: boolean;
   origin: string;
   originProvider: string | null;
+  /** 分层 L1/L2/L3；null = 未分类。形状与 opera-bff 的 `ProductRecord` 一致。 */
+  layer: string | null;
   /**
    * 带理由跳过上线闸门的痕迹（owner 2026-09-17：“先上线再联调”）。
    * 两者都为空 = 正常上线。形状与 opera-bff 的 `ProductRecord` 一致——
@@ -187,6 +193,8 @@ interface ProductDraft {
   productNick: string;
   description: string;
   productType: string;
+  /** 分层；空串 = 未分类（下拉的第一项）。 */
+  layer: string;
   origin: string;
   originProvider: string;
   isCustomerVisible: boolean;
@@ -204,6 +212,7 @@ const EMPTY_DRAFT: ProductDraft = {
   productNick: "",
   description: "",
   productType: "",
+  layer: "",
   origin: "self",
   originProvider: "",
   isCustomerVisible: true,
@@ -221,6 +230,7 @@ function draftFromProduct(p: ProductRecord): ProductDraft {
     productNick: p.productNick ?? "",
     description: p.description ?? "",
     productType: p.productType,
+    layer: p.layer ?? "",
     origin: p.origin,
     originProvider: p.originProvider ?? "",
     isCustomerVisible: p.isCustomerVisible,
@@ -468,6 +478,7 @@ export function ProductDetailPage({
         productNick: draft.productNick.trim() || null,
         description: draft.description.trim() || null,
         productType: draft.productType,
+        layer: draft.layer || null,
         origin: draft.origin,
         originProvider: draft.originProvider.trim() || null,
         isCustomerVisible: draft.isCustomerVisible,
@@ -1147,6 +1158,30 @@ export function ProductDetailPage({
                       {PRODUCT_TYPE_DEFS.map((d) => (
                         <option key={d.value} value={d.value}>
                           {productTypeLabel(d.value, typeLocale)}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </FormField>
+
+                  {/* 分层与类型并列：类型说「是什么」，分层说「在栈里站哪一层」。
+                      两个轴正交，所以是两个下拉，不是一个。 */}
+                  <FormField
+                    id="pd-layer"
+                    label="产品分层"
+                    help="L1 基础支撑 / L2 域平台 / L3 智能体；决定它能否被别的套餐绑定"
+                  >
+                    <NativeSelect
+                      id="pd-layer"
+                      value={draft?.layer ?? ""}
+                      disabled={!canManage}
+                      onChange={(e) =>
+                        draft && setDraft({ ...draft, layer: e.target.value })
+                      }
+                    >
+                      <option value="">未分类</option>
+                      {PRODUCT_LAYER_DEFS.map((d) => (
+                        <option key={d.value} value={d.value}>
+                          {productLayerLabel(d.value, typeLocale)}
                         </option>
                       ))}
                     </NativeSelect>

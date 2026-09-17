@@ -2013,6 +2013,7 @@ export async function seedCatalog(client) {
     {
       code: "runos",
       type: "general_platform",
+      layer: "L1",
       cat: 2,
       name: "鲁诺斯",
       nick: "Runos",
@@ -2021,6 +2022,7 @@ export async function seedCatalog(client) {
     {
       code: "arda",
       type: "general_platform",
+      layer: "L2",
       cat: 2,
       name: "数据平台",
       nick: "Arda",
@@ -2029,6 +2031,7 @@ export async function seedCatalog(client) {
     {
       code: "karda",
       type: "general_platform",
+      layer: "L2",
       cat: 2,
       name: "知识平台",
       nick: "Karda",
@@ -2043,6 +2046,7 @@ export async function seedCatalog(client) {
       // （runos 的 鲁诺斯 是先例），此处先按定位直译，不代表已拍板。
       code: "vxtpl",
       type: "general_agent",
+      layer: "L3",
       cat: 1,
       name: "模板智能体",
       nick: "Vxtpl",
@@ -2055,6 +2059,7 @@ export async function seedCatalog(client) {
       // and product definition are ready. C2 resolves atlas as "unsubscribed" until published.
       code: "atlas",
       type: "general_platform",
+      layer: "L1",
       // category 2 = 平台（与 runos/arda/karda 同列）；此前误填 1（智能体）。
       // `on conflict do nothing` 意味着存量库不受影响，只有新库拿到正确分类。
       cat: 2,
@@ -2067,8 +2072,8 @@ export async function seedCatalog(client) {
     await client.query(
       `
       insert into product.products
-        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, release_stage, origin, origin_provider, created_by, created_at, updated_at)
-      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', 'ga', $8, $9, $10, now(), now())
+        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, release_stage, origin, origin_provider, created_by, layer, created_at, updated_at)
+      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', 'ga', $8, $9, $10, $11, now(), now())
       on conflict (product_code) do nothing
     `,
       [
@@ -2082,6 +2087,8 @@ export async function seedCatalog(client) {
         p.origin ?? "self",
         p.originProvider ?? null,
         SYS,
+        // 层级照 product_100_matrix §2；umbra 刻意不给——它是外部边界，归 origin 轴。
+        p.layer ?? null,
       ],
     );
   }

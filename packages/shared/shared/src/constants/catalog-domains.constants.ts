@@ -90,3 +90,46 @@ export type ConsumeMode = (typeof CONSUME_MODES)[number];
 /** platform_metrics.kind (product_220 §4 / D7). */
 export const METRIC_KINDS = ["counter", "gauge"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
+
+/**
+ * products.layer — where a product sits in the product stack
+ * (product_100_matrix.md §2). L1 = foundational capability (atlas, runos),
+ * L2 = domain platform (arda, karda, terra), L3 = agent application.
+ *
+ * This is the *position* axis and it is deliberately separate from two others:
+ * `product_type` says what a product IS (the symmetric 2x2 in @vxture/core-utils)
+ * and `origin` says where it CAME FROM (self / third_party / other). External
+ * products are an origin, not a layer; a desktop client and an internal service
+ * are not catalogue products at all — none of the three occupies a layer value.
+ * A product with no layer set carries NULL and renders as unclassified, so the
+ * DB CHECK admits NULL. Closed domain (unlike product_type, an open kind with
+ * no CHECK): lint:catalog-domains pins this array to chk_products_layer.
+ */
+export const PRODUCT_LAYERS = ["L1", "L2", "L3"] as const;
+export type ProductLayerValue = (typeof PRODUCT_LAYERS)[number];
+
+/** Display definitions for the layer picker — order is the dropdown order. */
+export const PRODUCT_LAYER_DEFS: readonly {
+  readonly value: ProductLayerValue;
+  readonly labelZh: string;
+  readonly labelEn: string;
+}[] = [
+  { value: `L1`, labelZh: `L1 · 基础支撑`, labelEn: `L1 · Foundation` },
+  { value: `L2`, labelZh: `L2 · 域平台`, labelEn: `L2 · Domain platform` },
+  { value: `L3`, labelZh: `L3 · 智能体`, labelEn: `L3 · Agent` },
+] as const;
+
+/** Write-side validation, mirroring isValidProductType. */
+export function isValidProductLayer(value: string): value is ProductLayerValue {
+  return (PRODUCT_LAYERS as readonly string[]).includes(value);
+}
+
+/** Display label; an unregistered value falls back to itself, never silently blank. */
+export function productLayerLabel(
+  value: string,
+  locale: "zh" | "en" = "zh",
+): string {
+  const def = PRODUCT_LAYER_DEFS.find((d) => d.value === value);
+  if (!def) return value;
+  return locale === "en" ? def.labelEn : def.labelZh;
+}

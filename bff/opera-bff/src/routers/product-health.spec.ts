@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   groupProductChannels,
-  layerFromProductType,
+  layerFromColumn,
   readChecks,
   readinessFromBody,
   type ProductChannelRow,
@@ -31,6 +31,7 @@ function row(
     product_id: `id-${overrides.product_code}`,
     product_name: overrides.product_code,
     product_type: null,
+    layer: null,
     product_status: "active",
     client_id: null,
     release_channel: null,
@@ -139,20 +140,23 @@ describe("groupProductChannels —— 清单以产品目录为主表", () => {
   });
 });
 
-describe("layerFromProductType —— 层级只由 product_type 判定", () => {
-  it("矩阵 §2 的六类各归其位，agent 是 L3", () => {
-    expect(layerFromProductType("model_platform")).toBe("L1");
-    expect(layerFromProductType("capability_platform")).toBe("L1");
-    expect(layerFromProductType("data_platform")).toBe("L2");
-    expect(layerFromProductType("knowledge_platform")).toBe("L2");
-    expect(layerFromProductType("agent")).toBe("L3");
-    expect(layerFromProductType("client")).toBe("client");
-    expect(layerFromProductType("external")).toBe("external");
+describe("layerFromColumn —— 层级只认 products.layer 这一列", () => {
+  it("三个受管值原样透出", () => {
+    expect(layerFromColumn("L1")).toBe("L1");
+    expect(layerFromColumn("L2")).toBe("L2");
+    expect(layerFromColumn("L3")).toBe("L3");
   });
 
-  it("没填或填了矩阵外的类型 → 未分类，没有按产品码的回退表", () => {
-    expect(layerFromProductType(null)).toBe("unclassified");
-    expect(layerFromProductType("something")).toBe("unclassified");
+  it("没填 → 未分类，没有按 product_type 或产品码的回退表", () => {
+    expect(layerFromColumn(null)).toBe("unclassified");
+    expect(layerFromColumn("")).toBe("unclassified");
+  });
+
+  /* 这两个值曾经由 product_type 推出来，现在层级只读列、而列的值域不收它们。
+     写成断言而不是注释：将来谁把 client/external 塞回 layer 列，这里会当场红。 */
+  it("client / external 不是层级——它们归来源轴与「不是目录产品」", () => {
+    expect(layerFromColumn("client")).toBe("unclassified");
+    expect(layerFromColumn("external")).toBe("unclassified");
   });
 });
 
