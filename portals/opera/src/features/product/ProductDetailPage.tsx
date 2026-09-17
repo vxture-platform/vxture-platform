@@ -138,6 +138,13 @@ interface ProductRecord {
   isWorkforceVisible: boolean;
   origin: string;
   originProvider: string | null;
+  /**
+   * 带理由跳过上线闸门的痕迹（owner 2026-09-17：“先上线再联调”）。
+   * 两者都为空 = 正常上线。形状与 opera-bff 的 `ProductRecord` 一致——
+   * 两边不互相引类型，靠单测钉住。
+   */
+  launchOverrideAt: string | null;
+  launchOverridePending: string[] | null;
   surfaces: string[];
   iconUrl: string | null;
   /** 平台托管图标的版本号(内容哈希)。null = 没传过。 */
@@ -926,10 +933,37 @@ export function ProductDetailPage({
     );
   }
 
+  /* 带缺项上线的常驻提示（owner 2026-09-17）。
+     判据是两个条件的交集：跳过过（`launchOverrideAt` 非空）**且**当时跳的那几项
+     里还有未满足的。只看前者会让提示永不消失（复验通过了还在叫），
+     只看后者会把「从来没跳过、只是暂时没勾完」的产品也标成带缺项上线。
+     未满足的口径直接用 `pendingRequired`（已按 `gatesLaunch` 过滤），不另算一套。 */
+  const overrideStillPending = product?.launchOverrideAt
+    ? pendingRequired.filter((i) =>
+        (product.launchOverridePending ?? []).includes(i.itemCode),
+      )
+    : [];
+
   return (
     <>
       <ViewLayout>
         {header}
+        {overrideStillPending.length > 0 ? (
+          <Banner
+            tone="warning"
+            title={`上线时跳过了 ${overrideStillPending.length} 项接入检查，待复验`}
+            description={`还没补上的：${overrideStillPending
+              .map((i) => i.itemName || i.itemCode)
+              .join(
+                "、",
+              )}。联调完成后回「接入检查」重跑一次，这条提示会自己消失。`}
+            action={
+              <Button variant="secondary" onClick={() => setCheckOpen(true)}>
+                打开接入检查
+              </Button>
+            }
+          />
+        ) : null}
         <form onSubmit={save} className="flex min-w-0 flex-col gap-2xl">
           {/* ── 基本信息 ─────────────────────────────────────────────────── */}
           <div id="section-basic">
