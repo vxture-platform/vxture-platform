@@ -527,7 +527,7 @@ export async function runLaunchChecks(
         : "最近 30 天内没有以这个产品码拉过权益。",
       remedy: entitlement
         ? null
-        : "把交接信息（产品码、client_id）发给对方；对方以 S2S 令牌调一次权益接口后重跑。",
+        : "把交接信息（产品码、client_id）发给对方；对方以 S2S 令牌调一次权益接口后重跑。这一项不要求先有客户、订阅或套餐——没有活跃订阅时接口落 free 兜底，照样算一次成功读取。",
       itemCode: "c2_entitlement",
       href: entitlementsHref,
     });
@@ -542,7 +542,7 @@ export async function runLaunchChecks(
         : "最近 90 天内没有这个产品的用量事件。",
       remedy: consume
         ? null
-        : "对方接通消费上报（POST /usage/consume）并真实扣一次后重跑。",
+        : "对方接通消费上报（POST /usage/consume）调一次后重跑。不要求真扣到额度——没有配额池时走零扣减分支，用量事件照样落库（引擎只记录、不裁决），所以也不必先有客户、订阅或套餐。",
       itemCode: "c3_metering",
       href: entitlementsHref,
     });
@@ -560,7 +560,7 @@ export async function runLaunchChecks(
         : "最近 90 天内没有以这个产品码换过票。",
       remedy: s2s
         ? null
-        : "凡是要用模型/能力/知识的智能体都要接这一步。把交接信息发给对方，对方按《产品接入通则》C1 出站实现换票后重跑。",
+        : "凡是要用模型/能力/知识的智能体都要接这一步。把交接信息发给对方，对方按《产品接入通则》C1 出站实现换票后重跑。产品还是草稿也能换——目标是平台受众时恒可解析，审计按调用方归因。",
       itemCode: "c1_s2s",
     });
   }
