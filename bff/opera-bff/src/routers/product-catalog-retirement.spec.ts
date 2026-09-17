@@ -335,17 +335,17 @@ describe("其它迁移不受影响", () => {
  *
  * 下面四条各钉一个方向，缺任何一条这道门都可能悄悄失效或悄悄扩大：
  *
- * **用例里的未满足项一律取 `gate = 'launch'` 的**（`data_plane` / `c1_identity`）。
+ * **用例里的未满足项一律取 `gate = 'launch'` 的**（`c1_identity` / `c1_s2s`）。
+ * 原先用的 `data_plane` 已于 2026-10-09 退役——它的定义在 seed / workplan / opera 三处
+ * 互相矛盾，见退役迁移。拿一个**不存在的检查项**当夹具，测的就是幻觉:这个假 pool 按
+ * `pendingItems` 直接返回行、不查库，所以换不换测试都绿;正因为绿，才更该换。
  * `acceptance` 自 2026-09-17 起归发布门（`gate = 'publish'`），拿它演示「上线被拦」
  * 语义上已经不成立——这个假 pool 按 `pendingItems` 直接返回行、不解析 SQL，所以
  * 换不换测试都绿；正因为绿，才更该换：留着会让后人以为它仍卡上线。
  */
 describe("首次上线的检查单闸门", () => {
   it("有未满足的必填项 → 409，且**一个字都没写库**", async () => {
-    const { router, writes } = makeRouter("draft", [
-      "data_plane",
-      "c1_identity",
-    ]);
+    const { router, writes } = makeRouter("draft", ["c1_identity", "c1_s2s"]);
     const { status, body } = await failure(
       router.setState(makeReq(), PRODUCT_ID, { state: "active" }),
     );
@@ -356,11 +356,11 @@ describe("首次上线的检查单闸门", () => {
   });
 
   it("错误消息点名是哪几项——「还差几项」说不出运营者接下来该做什么", async () => {
-    const { router } = makeRouter("draft", ["data_plane"]);
+    const { router } = makeRouter("draft", ["c1_identity"]);
     const { body } = await failure(
       router.setState(makeReq(), PRODUCT_ID, { state: "active" }),
     );
-    expect(String(body["message"])).toContain("data_plane");
+    expect(String(body["message"])).toContain("c1_identity");
   });
 
   it("必填项全满足 → 照常上线", async () => {
@@ -378,7 +378,7 @@ describe("首次上线的检查单闸门", () => {
    * 正是最需要把它恢复起来排障的时候。
    */
   it("inactive → active（恢复）不受闸门管，即便有未满足项", async () => {
-    const { router, writes } = makeRouter("inactive", ["data_plane"]);
+    const { router, writes } = makeRouter("inactive", ["c1_identity"]);
     const result = await router.setState(makeReq(), PRODUCT_ID, {
       state: "active",
     });

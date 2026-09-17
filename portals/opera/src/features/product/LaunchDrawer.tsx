@@ -106,7 +106,7 @@ export interface LaunchDrawerProps {
   readonly onLaunched: () => Promise<void>;
 }
 
-type RowStatus = "pass" | "fail" | "pending" | "unchecked";
+type RowStatus = "pass" | "fail" | "pending" | "unchecked" | "probing";
 
 const STATUS_META: Record<RowStatus, { label: string; tone: StatusBadgeTone }> =
   {
@@ -114,6 +114,9 @@ const STATUS_META: Record<RowStatus, { label: string; tone: StatusBadgeTone }> =
     fail: { label: "未通过", tone: "danger" },
     pending: { label: "待确认", tone: "warning" },
     unchecked: { label: "未检查", tone: "neutral" },
+    /* 「自动」不写进标签:旁边的「平台实测」徽标已经说了，而现有四个标签都是三字，
+       六字会把徽标撑成两倍宽。 */
+    probing: { label: "探测中…", tone: "info" },
   };
 
 interface Row {
@@ -150,11 +153,6 @@ const ITEM_META: Record<
     label: "产品登记",
     what: "产品码已登记、来源信息完整。",
     order: 10,
-  },
-  data_plane: {
-    label: "数据面就绪",
-    what: "产品侧的库按模板建好（vx_provision / local_authz / local_usage 与领域 schema）。平台观测不到，按实际情况确认。",
-    order: 60,
   },
   acceptance: {
     label: "端到端验收",
@@ -282,7 +280,7 @@ function buildRows(
             : "fail"
         : "unchecked",
       what: "",
-      detail: live ? live.detail : running ? "检查中…" : null,
+      detail: live ? live.detail : running ? "探测中…" : null,
       remedy: live && live.status !== "pass" ? live.remedy : null,
       ...(live?.href ? { href: live.href } : {}),
       confirmedAt: null,
@@ -525,8 +523,11 @@ export function LaunchDrawer({
   const openTheirs = open_.length - openOurs;
 
   function renderRow(row: Row) {
-    const status =
-      running && row.source === "auto" && !checks ? "unchecked" : row.status;
+    /* 自动项在复验期间一律显示「探测中…」——包括已经有上一轮结果的时候。
+       旧结果让位一瞬，换来的是这个标签名副其实:它说的是此刻在做什么，
+       不是此刻恰好没有数据。 */
+    const status: RowStatus =
+      running && row.source === "auto" ? "probing" : row.status;
     const meta = STATUS_META[status];
     return (
       <div
@@ -558,7 +559,7 @@ export function LaunchDrawer({
             {row.source === "manual" && row.item && canManage ? (
               <Button
                 type="button"
-                variant={row.status === "pass" ? "ghost" : "outline"}
+                variant="ghost"
                 size="md"
                 disabled={ticking !== null}
                 onClick={() =>

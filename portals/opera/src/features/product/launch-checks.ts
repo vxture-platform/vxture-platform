@@ -22,12 +22,16 @@
  * `POST /usage/consume`、`POST /oidc/token`，三件事都落在平台自己的存储里
  * （`GET /api/products/:id/integration-signals`）。它们归「对方」那一侧——通不通由对方
  * 决定——但判定由平台做，不再靠操作员按回报勾。
- * 仍然观测不到的只剩 `data_plane` 与 `acceptance`（端到端），留在检查单上人工确认。
+ * **2026-09-17 起七项全部机器判定，检查单上一项人工勾都不剩。** 最后转过来的两项:
+ * `c1_identity` 判据换成**有人真的用平台账号登进了这个产品**（登录台账），
+ * `acceptance` 判据是五段台账**落在同一个工作区**。`data_plane` 不是转自动而是**退役**
+ * ——它要求产品自己库里的 schema 布局，那份模板平台明确登记为「非平台标准、不是平台
+ * 义务」，见 `migrations/2026-10-09-checklist-data-plane-retire.sql`。
  *
  * ── 检查结果写不写回检查单 ───────────────────────────────────────────────────
  *
- * 写，但**只写自动检查能完整判定的那几项**（`catalog_registered`、`c2_entitlement`、
- * `c3_metering`、`c1_s2s`）。`product_launch_statuses.checked_by` 的 DDL 注释本来就写着
+ * 写，**七项全写**（`catalog_registered`、`c1_identity`、`c1_s2s`、`c2_entitlement`、
+ * `c3_metering`、`acceptance`）。`product_launch_statuses.checked_by` 的 DDL 注释本来就写着
  * 「自动校验为 NULL」，这张表从一开始就预留了自动结果的位置。
  *
  * C2 / C3 的判据是「最近一次」，不是台账：C2 键 30 天过期、只存最后一笔；C3 只看最近
@@ -36,11 +40,14 @@
  *
  * 两个授权检查**不写**：检查单里没有对应的 item_code，硬塞进 `acceptance` 会把
  * 「端到端跑通了」这个结论替换成「授权配了」——后者远弱于前者，而勾上之后没人分得清
- * 当时勾的是哪个意思。它们作为就绪度信息呈现，供操作员判断 `acceptance` 该不该勾。
+ * 当时勾的是哪个意思。它们作为就绪度信息呈现——`acceptance` 自 2026-09-17 起由
+ * 端到端链路痕迹机器判定，不再需要有人替它拿主意。
  *
- * `c1_identity` 也不写，理由更硬：**它的定义里有一半是对方的事**（RP 实现），自动打勾
- * 等于替对方声明完成。判据统一成一句——**一项检查只有在它的全部内容都被本次实测覆盖时
- * 才写回检查单**，否则只呈现不落库。
+ * `c1_identity` **2026-09-17 起也写**。旧理由是「定义里有一半是对方的 RP 实现，平台只
+ * 测得到我方注册了客户端」——那个论证没错，错在**找错了判据**:平台确实看不到对方写没写
+ * 回调处理，但看得到**有人真的用平台账号登进了这个产品**（`session.refresh_tokens` 里
+ * 带该产品客户端的最近一行）。登录流程没接通，那一行不会出现——它与被测的事互为充要，
+ * 不是「观测到一个数就当它通过」。判据仍是那一句:**全部内容被本次实测覆盖才写回**。
  *
  * 同一条判据下，`c1_s2s`（出站换票）**写**：换票发生在平台上、平台是签发方，
  * `support.audit_logs` 里那条 `oidc.token_exchange.issued` 覆盖了这一项的全部内容。
@@ -258,8 +265,12 @@ export async function runLaunchChecks(
     href: "#section-basic",
   });
 
-  /* ② 接入凭据 —— 只测**我方**这一半：client 注册了、启用着、有回调地址。
-        对方有没有把登录/回调/会话真正实现出来，平台从外面看不见。 */
+  /* 登录台账要在 ② 用到，先安全取出来:`signals` 读取失败时它是 Error，
+     那时 loggedIn 为 null，② 会落 fail——读不到不等于通过。 */
+  const loggedIn = signals instanceof Error ? null : signals.login;
+
+  /* ② 身份接入 —— 两半都测:我方 client 注册了、启用着、有回调地址;
+   **并且真的有人用平台账号登进去过**（后半句蕴含对方的 RP 实现完成）。 */
   if (clients instanceof Error) {
     results.push({
       id: "client",
@@ -278,24 +289,29 @@ export async function runLaunchChecks(
     results.push({
       id: "client",
       label: "登录接入",
-      what: "产品有一个启用中的 OIDC 客户端，且配了回调地址。只测我方注册——对方有没有把登录/回调/会话实现出来，平台观测不到。",
-      side: "ours",
-      status: ok ? "pass" : "fail",
-      detail: ok
-        ? `${withRedirect.length} 个启用中的客户端：${withRedirect.map((c) => c.clientId).join("、")}`
-        : active.length === 0
+      what: "产品有一个启用中的 OIDC 客户端、配了回调地址，并且真的有人用平台账号登进去过。要害是后半句：登录台账里有行，才说明对方的登录、回调与会话确实实现了——客户端配好而没人登得进来，这一项不算通过。",
+      side: "theirs",
+      status: ok && loggedIn ? "pass" : "fail",
+      detail: !ok
+        ? active.length === 0
           ? clients.length === 0
             ? "这个产品下没有任何 OIDC 客户端。"
             : `有 ${clients.length} 个客户端但全部处于禁用状态。`
-          : "客户端启用着，但没有配任何回调地址——换票流程走不完。",
-      remedy: ok
-        ? null
-        : "在「登录接入」添加或启用一个客户端，并补上登录回调地址。",
-      /* **刻意不写回 `c1_identity`。** 那个检查项的定义是「OIDC 客户端已注册 **且对方
-         已实现登录/回调/会话**」，而本检查只看得到前半句——`lifecycle.ts` 的 `THEIR_SIDE`
-         也把它归在对方那一侧。自动打勾等于替对方声明「我实现完了」，而验证态由检查单
-         推导、确认上线又以验证态为门槛，一路下去就是**自己造出来的假绿灯**。
-         平台侧结论照常在本页显示，勾不勾由操作员按对方回报决定。 */
+          : "客户端启用着，但没有配任何回调地址——换票流程走不完。"
+        : loggedIn
+          ? `${withRedirect.length} 个启用中的客户端；最近一次登录 ${formatAt(loggedIn.lastLoginAt, opts.locale)}，经 ${loggedIn.clientId}`
+          : `${withRedirect.length} 个启用中的客户端已就绪，但从来没有人登进去过：对方的登录、回调与会话还没接通，或者还没人试过。`,
+      remedy:
+        ok && loggedIn
+          ? null
+          : !ok
+            ? "在「登录接入」添加或启用一个客户端，并补上登录回调地址。"
+            : "把 client_id 与回调地址交给对方；对方实现登录后，用平台账号真登一次，再重跑。",
+      /* 写回 `c1_identity`（2026-09-17 起）。那一项的定义是「OIDC 客户端已注册 **且对方
+         已实现登录/回调/会话**」——两半现在都测得到:前半句读客户端登记，后半句读登录
+         台账。**一行登录记录蕴含了后半句**，登录没接通它不会存在，所以这不是替对方声明
+         完成，是实测到了完成的结果。侧仍归「对方」:红着的时候该去找对方，不是改平台配置。 */
+      itemCode: "c1_identity",
       href: "#section-login",
     });
   }
@@ -495,9 +511,10 @@ export async function runLaunchChecks(
      * 带 `client_id`——台账一直在写，只是没人读。（`oidc_consents` 确实是空的，
      * 但它从来不是这一段的台账。）
      *
-     * 所以这一项**只呈现、不落库**，与两个上游授权检查同一处理：给操作员一个判断
-     * `acceptance` 该不该勾的依据，而不是替他勾。判据来自 `@vxture/core-utils` 的
-     * `launch-checklist.ts`——一项检查只有在它的**全部内容**都被实测覆盖时才算机器判定。
+     * **2026-09-17 起这一项写回检查单**（`itemCode: "acceptance"`）。此前只呈现不落库，
+     * 理由是五段台账不全;登录段（v0.26.200）与开通回执（v0.26.203）补齐之后，
+     * 判据「五段落在同一个工作区」已经覆盖了 `acceptance` 定义里的全部内容——
+     * 「整条链实际跑通过一次」。判据仍来自 `@vxture/core-utils` 的 `launch-checklist.ts`。
      *
      * 「同一个工作区」是这一项的要害：几件事各自发生过，不等于一条链走通了。
      * C2 的 workspaceId 只在共享内部令牌路径上有值，所以它缺席时只降级说明，不算失败。
@@ -542,6 +559,7 @@ export async function runLaunchChecks(
         chainDone && sameWorkspace
           ? null
           : "用同一个工作区把整条链走一遍：开通产品 → 拉一次权益 → 报一次用量 → 收到平台回调。",
+      itemCode: "acceptance",
       href: entitlementsHref,
     });
     /* 开通回执 —— **advisory**:只报事实，不参与「全部通过」。

@@ -2658,8 +2658,8 @@ export async function seedCatalog(client) {
        'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'product.checklist.c3_metering.desc', true, 'opera', 'launch', 50),
       ('c2_entitlement', 'C2 权益接入', 'product.checklist.c2_entitlement',
        'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60),
-      ('data_plane', '数据面就绪', 'product.checklist.data_plane',
-       'Agent-db provisioned per product_240 §2.4 template (vx_provision/local_authz/local_usage schemas).', 'product.checklist.data_plane.desc', true, 'opera', 'launch', 70),
+      -- sort 70 空缺：data_plane 已于 2026-10-09 退役（定义三处矛盾，别补回来）。
+      -- 理由见 migrations/2026-10-09-checklist-data-plane-retire.sql 的文件头。
       ('acceptance', '端到端验收', 'product.checklist.acceptance',
        'Full e2e verified: login → provision → gate → consume → invalidate; launch checklist reviewed.', 'product.checklist.acceptance.desc', true, 'opera', 'publish', 80)
     on conflict (item_code) do nothing
