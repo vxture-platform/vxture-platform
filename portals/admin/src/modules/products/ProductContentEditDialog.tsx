@@ -22,6 +22,7 @@ import {
   Textarea,
   useToast,
 } from "@vxture/design-system";
+import { RELEASE_STAGE_DEFS } from "@vxture/core-utils";
 import { SolutionField } from "./SolutionField";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 import { updateProductContent } from "@/api/admin-bff";
@@ -32,12 +33,14 @@ import type {
   ProductMarketingLocale,
 } from "@/entities/console";
 
-// 与 @vxture/core-utils RELEASE_STAGES 保持一致(admin 未依赖 core-utils,3 值本地镜像)。
-const RELEASE_STAGE_OPTIONS = [
-  { value: "ga", label: "正式版" },
-  { value: "beta", label: "公测版" },
-  { value: "developing", label: "开发中" },
-] as const;
+/* 三态与标签的权威源在 `@vxture/core-utils`（RELEASE_STAGE_DEFS）。此处曾自写一份
+   平行表，理由写的是「admin 未依赖 core-utils」——那句话已经不成立（package.json
+   里有这个依赖，同目录的 ProductSolutionsPage 就在用 INDUSTRY_DEFS），是上一个
+   模型留下的化石。2026-09-17 改指权威源。 */
+const RELEASE_STAGE_OPTIONS = RELEASE_STAGE_DEFS.map((d) => ({
+  value: d.value,
+  label: d.labelZh,
+}));
 
 type LocaleForm = {
   tagline: string;
