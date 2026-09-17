@@ -5,6 +5,8 @@
  * Product-facing S2S host (product_310 D13, split 2026-07-13):
  *  - C2 read face: PlatformEntitlementsRouter + PlatformSharingRouter
  *  - C3 write face: PlatformUsageRouter (consume/gauge)
+ *  - 开通回执: PlatformProvisioningRouter (provisioning/ack) —— 产品 → 平台的
+ *    反向信号，本期只记事实、不动 provisionings 的状态机
  *  - commerce jobs: provisioning dispatch + sharing/trial expiry sweeps
  *    (moved from admin-bff; the engine modules are self-contained, each
  *    with its own pool from the database config domain)
@@ -40,9 +42,11 @@ import { CustomerNotificationsWiring } from "./notifications/customer-notificati
 import { OperatorAlertsWiring } from "./notifications/operator-alerts.wiring";
 import { IntegrationSignalService } from "./platform/integration-signal.service";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
+import { PlatformProvisioningService } from "./platform/platform-provisioning.service";
 import { PlatformUsageService } from "./platform/platform-usage.service";
 import { HealthRouter } from "./routers/health.router";
 import { PlatformEntitlementsRouter } from "./routers/platform-entitlements.router";
+import { PlatformProvisioningRouter } from "./routers/platform-provisioning.router";
 import { PlatformSharingRouter } from "./routers/platform-sharing.router";
 import { PlatformUsageRouter } from "./routers/platform-usage.router";
 
@@ -64,10 +68,12 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     PlatformEntitlementsRouter,
     PlatformUsageRouter,
     PlatformSharingRouter,
+    PlatformProvisioningRouter,
   ],
   providers: [
     PlatformEntitlementsService,
     PlatformUsageService,
+    PlatformProvisioningService,
     IntegrationSignalService,
     PlatformAuthGuard,
     S2sTokenVerifier,

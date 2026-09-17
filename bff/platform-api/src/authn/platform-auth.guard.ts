@@ -2,9 +2,10 @@
  * platform-auth.guard.ts — the platform-face C2/C3 self-service guard.
  * @package @vxture/bff-platform-api
  *
- * Protects ONLY the three platform-face self-service endpoints (T2,
+ * Protects ONLY the platform-face self-service endpoints (T2,
  * product_210 §3.5/§8): `platform-entitlements.router.ts`,
- * `platform-usage.router.ts`, `platform-sharing.router.ts`. Deliberately
+ * `platform-usage.router.ts`, `platform-sharing.router.ts`, and
+ * `platform-provisioning.router.ts`. Deliberately
  * a SEPARATE class from auth-bff's `InternalAuthGuard` (post-review split,
  * 2026-07-12) — that guard also gates operator/account admin actions that
  * trust a caller-declared actor id with no identity binding, and must never
@@ -26,7 +27,13 @@
  *    product identity, attached to the request as `s2sCaller` for handlers
  *    to read via the `@S2sCaller()` decorator.
  *
- * `AUTH_INTERNAL_TOKEN` retirement (the "退役" end state) is NOT this
+ * 第四个（开通回执，2026-09-17）是按同一条判据加进来的，不是把半径放宽:它与
+ * `POST /usage/consume` 一字不差——产品**用自己的 S2S 票上报自己的事实**，`act.sub`
+ * 归因、`scopeToS2sCaller` 拒产品不符、工作区以 token 为准，请求体声明的一律丢弃。
+ * 这条判据（「产品自助上报自己的事」）才是这个 guard 的边界，「三个」只是当时的计数。
+ * 不属于它的东西照旧不能进来:任何信任调用方自报 actor 的运营/账号管理动作，仍然只走
+ * auth-bff 的 `InternalAuthGuard`。
+ * * `AUTH_INTERNAL_TOKEN` retirement (the "退役" end state) is NOT this
  * change — see TD-035/product_210 §8 T2 for the residual gap this dual-
  * accept mode does not close: neither path binds the caller's identity to
  * the specific workspace/product it asks about in the request body/query

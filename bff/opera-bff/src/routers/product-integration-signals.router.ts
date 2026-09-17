@@ -38,11 +38,21 @@
  *   有意**不带 `created_at` 下界**；C3 那条带，是因为 `metering.usage_events` 按月分区。
  *   照着 C3 抄一个时间窗到这里，只会把「半年前开通、至今在用」的产品判成没开通过。
  *
- *   **`login` 段仍然没有台账**：`appoidc` 只有 clients / signing_keys / consents 三张表，
- *   没有会话表也没有刷新令牌表，而 `oidc_consents` 全仓零写入（是张空表）；auth-bff 只在
- *   token-exchange 那条路写审计，登录本身不写。所以 `acceptance` **仍是人工项**——
- *   按 `@vxture/core-utils` 的 `launch-checklist.ts` 立的判据「全部内容被实测覆盖才算
- *   机器判定」，五缺一就不能转自动，否则是拿弱结论冒充强结论。
+ *   ── 2026-09-17 再增：登录段与开通回执 ──
+ *
+ *   **`login` 段此前被写成「没有台账」，那句话错了一半**：auth-bff 的登录确实不写审计，
+ *   但每一次成功的 OIDC 登录都会往 `session.refresh_tokens` 落一行、带 `client_id`——
+ *   台账一直在写，只是没人读。（空的是 `oidc_consents`，它从来不是这一段的台账。）
+ *   五段因此都有了台账。
+ *
+ *   **但 `acceptance` 仍是人工项**，理由换了一条、没有变弱：开通那一段的
+ *   `status='provisioned'` 回答的是**平台已下令**，不是产品已就绪（`enqueue` 的 upsert
+ *   当场就写它）。所以新增 `provisionAck`——产品经 `POST /provisioning/ack` 报回来的
+ *   回执，落在 `provisionings.metadata` 的 `ack` 子对象里。
+ *
+ *   回执**不进**任何自动判定:现在一个产品都还没实现它，进了判定就是用一次平台升级把
+ *   在产的产品全判成不合规。它只是把「平台已下令」与「产品已回执」两件事在界面上分开，
+ *   让那一格不再拿前者冒充后者。
  *
  * @author AI-Generated
  * @date 2026-08-31
@@ -82,6 +92,22 @@ export interface ConsumeSignal {
  * `acceptance`（端到端验收）那条链的第二段。判据取 `status='provisioned'` 而不是
  * 「有行」——行在 `pending` 状态下就已经存在了，那只说明有人点了开通。
  */
+/**
+ * 开通回执：产品自己报回来的「这个工作区的空间我建好了」。
+ *
+ * 与 `provision` 的区别是这一节的要害:`provision` 是**平台下令**的时间，这一个才是
+ * **产品确认**的时间。两者都在同一行上（回执写进 `provisionings.metadata.ack`，
+ * 不改 `status` / `version` / `provisioned_at`），所以取的是「最近一次开通」那一行的回执。
+ *
+ * `null` = 没回执过。**这不算失败**:回执是本期新加的次要约定，在产产品都还没实现。
+ */
+export interface ProvisionAckSignal {
+  ackedAt: string;
+  /** `ready` = 空间就绪;`failed` = 产品侧建不起来（回执也能说坏消息）。 */
+  status: string;
+  /** 与 `provision.workspaceId` 同一个——回执落在同一行上。 */
+  workspaceId: string;
+}
 export interface ProvisionSignal {
   lastProvisionedAt: string;
   /**
@@ -140,6 +166,7 @@ export interface IntegrationSignalsRecord {
   consume: ConsumeSignal | null;
   s2s: S2sSignal | null;
   provision: ProvisionSignal | null;
+  provisionAck: ProvisionAckSignal | null;
   delivery: DeliverySignal | null;
 }
 
@@ -156,6 +183,9 @@ interface UsageEventRow {
 interface ProvisionRow {
   workspace_id: string;
   provisioned_at: Date | string;
+  /* 回执:同一行 metadata 里取，不另开一条查询。两列都可能为 NULL（没回执过）。 */
+  ack_at: string | null;
+  ack_status: string | null;
 }
 
 interface DeliveryRow {
@@ -373,7 +403,9 @@ export class ProductIntegrationSignalsRouter {
        * 收敛，再取最近一行。
        */
       this.pool.query<ProvisionRow>(
-        `SELECT workspace_id, provisioned_at
+        `SELECT workspace_id, provisioned_at,
+                metadata->'ack'->>'at'     AS ack_at,
+                metadata->'ack'->>'status' AS ack_status
            FROM provisioning.provisionings
           WHERE product_id = $1
             AND status = 'provisioned'
@@ -427,6 +459,17 @@ export class ProductIntegrationSignalsRouter {
             workspaceId: provisioned.workspace_id,
           }
         : null,
+      /* 回执的时间戳是平台自己写进 metadata 的 ISO 串（`recordAck`），不是列上的
+         timestamptz——所以这里原样带出，不过 `toIso`。`status` 缺失时用占位词而不是
+         让整条信号消失，与 s2s 那两个 jsonb 字段同一处理。 */
+      provisionAck:
+        provisioned && provisioned.ack_at
+          ? {
+              ackedAt: provisioned.ack_at,
+              status: provisioned.ack_status ?? "（未记录）",
+              workspaceId: provisioned.workspace_id,
+            }
+          : null,
       delivery: delivered
         ? {
             eventType: delivered.event_type,

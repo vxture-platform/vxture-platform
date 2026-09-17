@@ -46,7 +46,13 @@ interface Fixture {
   /** 登录：`session.refresh_tokens` 的最近一行（按 product_id 聚合的客户端集合）。 */
   loginRow?: { client_id: string; created_at: Date };
   /** 开通：`status='provisioned'` 的最近一行。 */
-  provisionRow?: { workspace_id: string; provisioned_at: Date };
+  provisionRow?: {
+    workspace_id: string;
+    provisioned_at: Date;
+    /* 回执:同一行 metadata 里取出的两个 jsonb 值;没回执过时两列都是 NULL。 */
+    ack_at?: string | null;
+    ack_status?: string | null;
+  };
   /** 回调投递：`status='delivered'` 的最近一行。 */
   deliveryRow?: {
     event_type: string;
@@ -141,6 +147,7 @@ describe("GET /api/products/:id/integration-signals", () => {
       consume: { lastEventAt: "2026-08-30T08:00:00.000Z", metricKey: "tokens" },
       s2s: null,
       provision: null,
+      provisionAck: null,
       delivery: null,
     });
     expect(get).toHaveBeenCalledWith("vx:integration:c2:arda");
@@ -152,7 +159,7 @@ describe("GET /api/products/:id/integration-signals", () => {
     expect(usageSql).toMatch(/LIMIT 1/);
   });
 
-  it("都没有：六个字段都是 null（不是 404，产品在，只是没接通）", async () => {
+  it("都没有：七个字段都是 null（不是 404，产品在，只是没接通）", async () => {
     const { router } = makeRouter({ productCode: "karda" });
     await expect(router.get(makeReq(), PRODUCT_ID)).resolves.toEqual({
       login: null,
@@ -160,10 +167,62 @@ describe("GET /api/products/:id/integration-signals", () => {
       consume: null,
       s2s: null,
       provision: null,
+      provisionAck: null,
       delivery: null,
     });
   });
 
+  it("开通回执：与开通取同一行，回执缺席时是 null 而不是报错", async () => {
+    /* 回执写在 `provisionings.metadata.ack` 里，不改 status/version/provisioned_at——
+       所以它和「开通」取的是同一行，两个时间戳答的是两件事:`provision` 是**平台下令**，
+       `provisionAck` 是**产品确认**。此前只有前者，而接入检查把它当「开通成功」在读。 */
+    const { router } = makeRouter({
+      productCode: "arda",
+      provisionRow: {
+        workspace_id: "ws-1",
+        provisioned_at: new Date("2026-08-29T10:00:00.000Z"),
+        ack_at: "2026-08-29T10:00:31.000Z",
+        ack_status: "ready",
+      },
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.provisionAck).toEqual({
+      /* 原样带出，不过 toIso——这一列存的是平台自己写进 metadata 的 ISO 串，
+         不是列上的 timestamptz。 */
+      ackedAt: "2026-08-29T10:00:31.000Z",
+      status: "ready",
+      workspaceId: "ws-1",
+    });
+  });
+
+  it("开通回执：产品报 failed 也照实带出，不当成没回执", async () => {
+    /* 回执要能说坏消息。把 failed 读成 null，等于把「对方明说建不起来」
+       和「对方没理我」画成同一格。 */
+    const { router } = makeRouter({
+      productCode: "arda",
+      provisionRow: {
+        workspace_id: "ws-1",
+        provisioned_at: new Date("2026-08-29T10:00:00.000Z"),
+        ack_at: "2026-08-29T10:00:31.000Z",
+        ack_status: "failed",
+      },
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.provisionAck?.status).toBe("failed");
+  });
+
+  it("开通行在、但从没回执过：provisionAck 是 null，provision 照常有值", async () => {
+    const { router } = makeRouter({
+      productCode: "arda",
+      provisionRow: {
+        workspace_id: "ws-1",
+        provisioned_at: new Date("2026-08-29T10:00:00.000Z"),
+      },
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.provision).not.toBeNull();
+    expect(out.provisionAck).toBeNull();
+  });
   it("登录：按 product_id 聚合客户端，不按单个 client_id", async () => {
     const { router, sqls } = makeRouter({
       productCode: "arda",

@@ -16,6 +16,8 @@ import type {
   DeliveryEventType,
   EnqueueEventInput,
   EnqueueProvisioningInput,
+  ProvisioningAckInput,
+  ProvisioningAckResult,
   GenericEventPayload,
   ProvisioningPayload,
 } from "../types/provisioning.types";
@@ -290,5 +292,90 @@ export class PgProvisioningRepository {
        where status='delivering' and leased_until < now()`,
     );
     return res.rowCount ?? 0;
+  }
+  /**
+   * 记下产品侧的开通回执——「这个工作区的空间，我建好了」。
+   *
+   * ── 为什么它只写 metadata，不碰状态机 ──
+   * `provisionings.status` 的实际含义是**平台已下令**，不是产品已就绪:`enqueue` 的
+   * upsert 当场就写 `provisioned`，DDL 上那个 `pending` 默认值在代码里从来不经过。
+   * 本期不改这件事——一旦把 `provisioned` 的写入时机推迟到回执，所有还没实现回执的
+   * 产品会全部卡在 `pending`，而 opera 的开通信号读的正是 `status='provisioned'`，
+   * 等于用一次平台升级把在产的产品全判成没开通过。回执先只记事实，等产品侧铺开再切。
+   *
+   * 落点是 `metadata` 的 `ack` 子对象——`54_provisioning.sql` 给这一列写的注释
+   * （「开通上下文（区域/初始化参数/产品侧 space_id 回执）」）预留的就是它，而在此之前
+   * **全仓没有任何一处读写过这一列**。它已在 `98_column_locks.sql` 的 GRANT 白名单里，
+   * 所以这条写入不需要迁移，也不会撞列级锁。
+   *
+   * 幂等取投递 id。同一条投递重复回执不覆盖首次时间，返回 `replayed`——与 C3 consume
+   * 同义。投递 id 为空时不做幂等:那是产品按通则做定期对账补发的回执，每次记最新的。
+   *
+   * 锚点列（`id` / `created_at`）一个都不碰;`status` / `version` / `provisioned_at`
+   * 同样不碰——`version` 是投递的排序键（产品那边的 `seq`），动它会让对方的乱序丢弃判错。
+   *
+   * @returns 没有这个 (workspace, product) 的开通行时回 null（平台从没对它下过令）。
+   */
+  async recordAck(
+    input: ProvisioningAckInput,
+  ): Promise<ProvisioningAckResult | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      /* `for update` 锁住这一行:读出「上一次回执」与随后的写必须是同一个决定，
+         否则两条并发回执会各自读到「没记过」然后互相覆盖。 */
+      const found = await client.query<{
+        id: string;
+        prev_at: string | null;
+        prev_delivery: string | null;
+      }>(
+        `select id,
+                metadata->'ack'->>'at'         as prev_at,
+                metadata->'ack'->>'deliveryId' as prev_delivery
+           from provisioning.provisionings
+          where workspace_id = $1 and product_id = $2
+          for update`,
+        [input.workspaceId, input.applicationId],
+      );
+      const row = found.rows[0];
+      if (!row) {
+        await client.query("rollback");
+        return null;
+      }
+      const deliveryId = input.deliveryId ?? null;
+      if (deliveryId !== null && row.prev_delivery === deliveryId) {
+        if (row.prev_at === null) {
+          /* 同一条投递记过、却没有时间戳:这一列只有本方法写，形状对不上说明它被
+             外部改过。抛出来，不要兜一个「现在」冒充首次回执时间。 */
+          throw new Error(
+            `provisionings.metadata.ack malformed (id=${row.id}): deliveryId present, at missing`,
+          );
+        }
+        await client.query("rollback");
+        return { ackedAt: row.prev_at, replayed: true };
+      }
+      const ackedAt = new Date().toISOString();
+      const ack = {
+        at: ackedAt,
+        status: input.status,
+        deliveryId,
+        ...(input.detail ? { detail: input.detail } : {}),
+      };
+      await client.query(
+        `update provisioning.provisionings
+            set metadata = jsonb_set(coalesce(metadata, '{}'::jsonb),
+                                     '{ack}', $2::jsonb, true),
+                updated_at = now()
+          where id = $1`,
+        [row.id, JSON.stringify(ack)],
+      );
+      await client.query("commit");
+      return { ackedAt, replayed: false };
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 }

@@ -183,12 +183,30 @@ const ITEM_META: Record<
   },
 };
 
-/** 没有检查单行的实测项：排序与没跑之前的占位。 */
-const MEASURE_ONLY: Record<string, { label: string; order: number }> = {
+/**
+ * 没有检查单行的实测项：排序与没跑之前的占位。
+ *
+ * **这张表是「实测结果能不能被看见」的唯一开关。** 不在这里、又没有 `itemCode` 的
+ * 条目，`buildRows` 一行都不建——但 `allPassed()` 数的是 `runLaunchChecks()` 的**全部**
+ * 返回值。`acceptance-chain` 此前正好落在这个缝里:它几乎必然不通过（要求五段落在同一
+ * 工作区），于是每个产品点上线都得到「N 项实测未通过」，而清单里找得到的红项比 N 少
+ * 一个——提示还写着「未通过的项在清单里标红」，对它是句空话。
+ *
+ * 2026-09-17 补进来:让它现形。**不是让它不算数**——五段同工作区是真条件，
+ * 该算;它只是不该隐身。
+ */
+const MEASURE_ONLY: Record<
+  string,
+  { label: string; order: number; advisory?: boolean }
+> = {
   client: { label: "登录接入", order: 20 },
   "atlas-grants": { label: "模型授权", order: 30 },
   "runos-grants": { label: "能力授权", order: 40 },
   webhook: { label: "Webhook 登记", order: 50 },
+  "acceptance-chain": { label: "端到端链路痕迹", order: 71 },
+  /* 回执是次要约定，只报事实。画成「待确认」而不是红——它挡不住上线，
+     `allPassed()` 也跳过它（见 `launch-checks.ts` 的 `advisory`）。 */
+  "provision-ack": { label: "开通回执", order: 72, advisory: true },
 };
 
 function reason(error: unknown, fallback: string): string {
@@ -253,8 +271,16 @@ function buildRows(
       label: meta.label,
       side: live?.side ?? "ours",
       source: "auto",
-      required: true,
-      status: live ? (live.status === "pass" ? "pass" : "fail") : "unchecked",
+      required: !meta.advisory,
+      /* advisory 项没通过时画「待确认」不画红:它报的是事实，不是准入条件，
+         而红色在这张清单上的意思一直是「这条挡着上线」。 */
+      status: live
+        ? live.status === "pass"
+          ? "pass"
+          : meta.advisory
+            ? "pending"
+            : "fail"
+        : "unchecked",
       what: "",
       detail: live ? live.detail : running ? "检查中…" : null,
       remedy: live && live.status !== "pass" ? live.remedy : null,

@@ -25,6 +25,8 @@ export type {
   GenericEventPayload,
   EnqueueProvisioningInput,
   EnqueueEventInput,
+  ProvisioningAckInput,
+  ProvisioningAckResult,
   ClaimedDelivery,
   DispatchConfig,
   DispatchResult,
