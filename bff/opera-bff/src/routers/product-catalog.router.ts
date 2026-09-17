@@ -145,6 +145,15 @@ export interface ProductRecord {
   isWorkforceVisible: boolean;
   origin: ProductOrigin;
   originProvider: string | null;
+  /**
+   * 带理由跳过上线闸门的痕迹（owner 2026-09-17：“先上线再联调”）。
+   *
+   * 两者都为空 = 正常上线。理由不在这里——它是问责台账，归 `support.audit_logs`；
+   * 产品行只答「是不是带缺项上线的、缺的是哪几项」。
+   */
+  launchOverrideAt: string | null;
+  /** 跳过当时尚未满足的 `gate='launch'` 必填项 item_code；复验后转满足即不再提示。 */
+  launchOverridePending: string[] | null;
   createdAt: string;
   updatedAt: string;
   /** 产品图标。console 应用中心磁贴、订阅卡在读它。 */
@@ -171,6 +180,8 @@ interface ProductRow {
   is_workforce_visible: boolean;
   origin: ProductOrigin;
   origin_provider: string | null;
+  launch_override_at: string | null;
+  launch_override_pending: string[] | null;
   created_at: string;
   updated_at: string;
   icon_url: string | null;
@@ -195,6 +206,11 @@ function toRecord(row: ProductRow): ProductRecord {
     isWorkforceVisible: row.is_workforce_visible,
     origin: row.origin,
     originProvider: row.origin_provider,
+    /* 带理由跳过上线闸门的痕迹（owner 2026-09-17）。产品页据此常驻提示
+       「上线时跳过 N 项，待复验」；两列都为空 = 正常上线。理由不在这里，
+       它是问责台账，归 support.audit_logs。 */
+    launchOverrideAt: row.launch_override_at,
+    launchOverridePending: row.launch_override_pending ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     iconUrl: row.icon_url,
@@ -313,6 +329,7 @@ const SELECT_COLUMNS = `
   id, product_code, product_type, category_id, product_name, product_nick,
   description, capability_keys, tags, standalone_subscribable, status,
   is_customer_visible, is_workforce_visible, origin, origin_provider,
+  launch_override_at, launch_override_pending,
   icon_url, created_at, updated_at,
   /* 平台托管图标的版本号(内容哈希)。同样用裸 id 相关——理由见下面那段。
      只取版本不取字节:这个常量用在列表查询上,把 bytea 拖进每一行是灾难。 */
@@ -713,7 +730,17 @@ export class ProductCatalogRouter {
   async setState(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-    @Body() body: { state?: string },
+    @Body()
+    body: {
+      state?: string;
+      /**
+       * 带理由跳过上线闸门（owner 2026-09-17：“先上线再联调”）。
+       *
+       * **只对 `draft → active` 有意义**，其余边本来就不过检查单门。理由必填且不允许只打空白：
+       * 跳过本身不是问题，没人说得清为什么跳才是。
+       */
+      override?: { reason?: string };
+    },
   ): Promise<ProductRecord> {
     assertCanManage(req);
     if (!body.state || !(STATES as readonly string[]).includes(body.state)) {
@@ -796,13 +823,53 @@ export class ProductCatalogRouter {
           [id],
         );
         if (pending.rowCount && pending.rowCount > 0) {
-          await client.query("ROLLBACK");
-          const names = pending.rows.map((r) => r.item_name || r.item_code);
-          throw conflict(
-            "CATALOG_LAUNCH_CHECKLIST_PENDING",
-            `还有 ${names.length} 项必填接入检查未满足，不能上线：${names.join("、")}。` +
-              `机器判定的几项要去产品的「上线复验」页跑一次，其余在接入检查单上确认。`,
+          const reason = body.override?.reason?.trim() ?? "";
+          if (!reason) {
+            await client.query("ROLLBACK");
+            const names = pending.rows.map((r) => r.item_name || r.item_code);
+            throw conflict(
+              "CATALOG_LAUNCH_CHECKLIST_PENDING",
+              `还有 ${names.length} 项必填接入检查未满足，不能上线：${names.join("、")}。` +
+                `机器判定的几项要去产品的「上线复验」页跑一次，其余在接入检查单上确认。`,
+            );
+          }
+
+          /*
+           * 带理由跳过（owner 2026-09-17：“先上线再联调”）。
+           *
+           * **条件不删也不降级**：调研结论是六项里没有一项结构性锁死
+           * （三项自动检查产品后端各调一次就点亮，不需要客户 / 订阅 / 套餐）。
+           * 削弱条件只会让这道门以后什么也证明不了；所以保留门，另开一条
+           * 写明理由的路，并把跳过的事实留在产品行上。
+           *
+           * 三列各答一件事：什么时候跳的 / 谁跳的 / 当时缺哪几项。
+           * **理由不入产品行**——它是问责台账，归 `support.audit_logs`；
+           * 产品行只需答「是不是带缺项上线的、缺的是哪几项」，那正是产品页常驻
+           * 提示与后续复验要读的东西。
+           *
+           * step-up 已由路由级 `@RequireStepUp()` 覆盖（四条边都是高危写），
+           * 这里不再单独判一次。
+           */
+          const skipped = pending.rows.map((r) => r.item_code);
+          await client.query(
+            `UPDATE product.products
+                SET launch_override_at = now(),
+                    launch_override_by = $2,
+                    launch_override_pending = $3::jsonb,
+                    updated_at = now()
+              WHERE id = $1`,
+            [id, req.operator?.id ?? null, JSON.stringify(skipped)],
           );
+          await insertOperatorAuditLog(client, req, {
+            action: "catalog.product.launch_override",
+            resourceType: "product",
+            resourceId: id,
+            after: {
+              reason: reason.slice(0, 512),
+              skipped,
+              skippedNames: pending.rows.map((r) => r.item_name || r.item_code),
+            },
+          });
         }
       }
 

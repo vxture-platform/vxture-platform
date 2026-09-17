@@ -55,6 +55,9 @@ CREATE TABLE product.products (
     is_workforce_visible boolean      NOT NULL DEFAULT true,   -- 展示可见性（运营端/workforce realm）
     origin                   varchar(16)  NOT NULL DEFAULT 'self',    -- 来源轴：self=自建/third_party=三方接入/other；产品发布管理 2026-08-12 引入
     origin_provider          varchar(128),                            -- 来源方名称（origin='self' 时留空；third_party 时必填，公司/团队名，不是 product_code）
+    launch_override_at       timestamptz,                             -- 带理由跳过上线闸门的时刻；NULL = 从未跳过（正常上线）。理由本身在 support.audit_logs
+    launch_override_by       uuid,                                    -- 执行跳过的运营者；裸值→admin.operator_accounts（不建 FK，边界#2）
+    launch_override_pending  jsonb,                                   -- 跳过当时尚未满足的 gate=launch 必填项 item_code 数组；产品页据此常驻提示，复验后转满足即不再提示
     created_by               uuid,                                    -- 裸值→admin.operator_accounts（不建 FK，边界#2）
     updated_by               uuid,                                    -- 裸值→admin.operator_accounts（不建 FK，边界#2）
     created_at               timestamptz  NOT NULL DEFAULT now(),

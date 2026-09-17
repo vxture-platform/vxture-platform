@@ -34,11 +34,13 @@ import {
   Badge,
   Banner,
   Button,
+  DialogForm,
   Drawer,
   Icon,
   SectionHeader,
   Separator,
   StatusBadge,
+  Textarea,
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
@@ -286,6 +288,9 @@ export function LaunchDrawer({
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [launching, setLaunching] = useState(false);
+  /* 带理由跳过上线闸门（owner 2026-09-17：“先上线再联调”）。
+     null = 对话框没开；开着时存的是已输入的理由。 */
+  const [overrideReason, setOverrideReason] = useState<string | null>(null);
   const { runWithStepUp } = useStepUp();
   const [ticking, setTicking] = useState<string | null>(null);
 
@@ -369,12 +374,12 @@ export function LaunchDrawer({
     }
   }
 
-  async function confirmLaunch() {
+  async function confirmLaunch(overrideWith?: string) {
     setLaunching(true);
     try {
       const results = await runChecks(true);
       if (!results) return;
-      if (!allPassed(results)) {
+      if (!allPassed(results) && !overrideWith) {
         const failed = results.filter((r) => r.status !== "pass").length;
         toast({
           tone: "danger",
@@ -403,7 +408,7 @@ export function LaunchDrawer({
         })),
       );
       const pending = ours.length + theirs.length;
-      if (pending > 0) {
+      if (pending > 0 && !overrideWith) {
         toast({
           tone: "danger",
           title: `还有 ${pending} 项人工确认没有完成`,
@@ -416,9 +421,18 @@ export function LaunchDrawer({
          这条路径本身已经是「看完整份检查单再落锤」，意图已经表达过一次，
          所以不再叠一个确认框；身份那一道由 step-up 负责。 */
       await runWithStepUp(() =>
-        api.patch(`/api/products/${product.id}/state`, { state: "active" }),
+        api.patch(`/api/products/${product.id}/state`, {
+          state: "active",
+          ...(overrideWith ? { override: { reason: overrideWith } } : {}),
+        }),
       );
-      toast({ tone: "success", title: `${product.productName} 已上线` });
+      setOverrideReason(null);
+      toast({
+        tone: "success",
+        title: overrideWith
+          ? `${product.productName} 已上线（带缺项）`
+          : `${product.productName} 已上线`,
+      });
       await onLaunched();
     } catch (error) {
       /* 取消仪式不是失败：生命周期没有改变，不该弹红。 */
@@ -669,17 +683,29 @@ export function LaunchDrawer({
                 ? "可以确认上线"
                 : `还差 ${open_.length} 项，全部通过才能上线`
             }
-            description="确认上线会先重跑一遍实测：全通过、且人工确认项齐了，才把草稿转成已上线。失败不改状态。"
+            description={
+              open_.length === 0
+                ? "确认上线会先重跑一遍实测：全通过、且人工确认项齐了，才把草稿转成已上线。失败不改状态。"
+                : "三项自动检查只要对方后端各调一次平台就能点亮，不需要先有客户、订阅或套餐。确实要先上线再联调的话，可以写明理由带缺项上线——跳过的事实会留在产品页上。"
+            }
             {...(canManage
               ? {
                   action: (
                     <Button
                       type="button"
-                      disabled={running || launching || open_.length > 0}
-                      onClick={() => void confirmLaunch()}
+                      disabled={running || launching}
+                      onClick={() =>
+                        open_.length > 0
+                          ? setOverrideReason("")
+                          : void confirmLaunch()
+                      }
                     >
                       <Icon name="rocket" size="sm" aria-hidden="true" />
-                      {launching ? "检查中…" : "确认上线"}
+                      {launching
+                        ? "检查中…"
+                        : open_.length > 0
+                          ? "带缺项上线…"
+                          : "确认上线"}
                     </Button>
                   ),
                 }
@@ -697,6 +723,34 @@ export function LaunchDrawer({
           />
         )}
       </div>
+      {/* 带理由跳过上线闸门。**条件不删也不降级**，只多一条写明理由的路；
+          理由进审计，缺哪几项写在产品行上，产品页据此常驻提示直到复验补齐。 */}
+      <DialogForm
+        size="sm"
+        open={overrideReason !== null}
+        onOpenChange={(next) => {
+          if (!next) setOverrideReason(null);
+        }}
+        title="带缺项上线"
+        description={`还差 ${open_.length} 项：${open_
+          .map((r) => r.label)
+          .join("、")}。上线后这几项会一直显在产品页上，直到复验通过。`}
+        submitLabel="写明理由并上线"
+        submitting={launching}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const reason = (overrideReason ?? "").trim();
+          if (!reason) return;
+          void confirmLaunch(reason);
+        }}
+      >
+        <Textarea
+          rows={4}
+          value={overrideReason ?? ""}
+          placeholder="例如：对方后端下周才能接入联调，先上线以便对方能拿到 token-exchange 目标。"
+          onChange={(e) => setOverrideReason(e.target.value)}
+        />
+      </DialogForm>
     </Drawer>
   );
 }
