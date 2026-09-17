@@ -273,6 +273,27 @@ check_nginx_and_tls() {
     else
       high "vxture.com 证书将在 30 天内过期或不可读"
     fi
+
+    # ── SAN 逐项断言（2026-09-18，ruyin.work 落域）──────────────────────────
+    # 这是**全部 vhost 共用的一张**证书，覆盖范围由仓库变量 CERT_DOMAINS 决定
+    # （deploy-cert.yml）。少写一个 -d 的后果是静默的：证书照样签成、上面那条
+    # 有效期检查照样过、vxture.com 照样好，只有被漏掉那个域的访客撞「证书名不
+    # 匹配」。所以这里查的是「它覆盖了谁」，而不只是「它还没过期」。
+    #
+    # 读不到 SAN 时报 high 而不是放过——一条看不见自己判据的检查给出「通过」，
+    # 比没有这条检查更糟。
+    local san d
+    san="$(openssl x509 -noout -ext subjectAltName -in "$cert" 2>/dev/null || true)"
+    if [ -z "$san" ]; then
+      high "读不到证书 SAN（openssl -ext 不可用或证书损坏）—— 覆盖范围未经核验"
+    else
+      for d in vxture.com '*.vxture.com' ruyin.work '*.ruyin.work'; do
+        case "$san" in
+          *"DNS:$d"*) ok "证书 SAN 覆盖 $d" ;;
+          *) high "证书 SAN 缺少 $d —— 该域访客会撞证书名不匹配（查仓库变量 CERT_DOMAINS）" ;;
+        esac
+      done
+    fi
   fi
 }
 

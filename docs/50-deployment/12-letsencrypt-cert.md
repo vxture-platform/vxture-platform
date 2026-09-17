@@ -1,7 +1,8 @@
 # Let's Encrypt 通配符证书（worker-01 nginx）
 
 `.github/workflows/deploy-cert.yml` 通过 **DNS-01 challenge（Cloudflare API）** 为
-`vxture.com` + `*.vxture.com` 签发一张浏览器可信的 Let's Encrypt 通配符证书,并部署到
+`vxture.com` + `*.vxture.com`（2026-09-18 起另含 `ruyin.work` + `*.ruyin.work`，
+见下方「第二个注册域」）签发一张浏览器可信的 Let's Encrypt 通配符证书,并部署到
 worker-01 的 nginx。**签发全在 GitHub runner 里完成**,主机只接收两个 PEM 文件并 reload
 nginx（最小服务器改动）。
 
@@ -15,7 +16,7 @@ nginx（最小服务器改动）。
 
 1. **创建 Cloudflare API Token**：Cloudflare → My Profile → API Tokens → Create Token
    → 用 **"Edit zone DNS"** 模板 → 权限 `Zone:DNS:Edit` + `Zone:Zone:Read` →
-   Zone Resources 限 **vxture.com** → Create → 复制 token（只显示一次）。
+   Zone Resources 含 **vxture.com** 与 **ruyin.work** 两个 zone（见下方「第二个注册域」） → Create → 复制 token（只显示一次）。
 
 2. **加为 GitHub secret**：仓库 Settings → Secrets and variables → Actions → New
    repository secret → 名字 **`CLOUDFLARE_DNS_API_TOKEN`** → 值粘贴上面的 token。
@@ -59,6 +60,39 @@ nginx（最小服务器改动）。
 - 若你更想要**完全无人值守续期**,可另建一个无 Required reviewers 的专用环境(如 `cert`)、
   把 `DEPLOY_*` secret 放进去、工作流改 `environment: cert`——但这偏离"生产写操作都过审批门"的
   治理约定,取舍自定。
+
+## 第二个注册域（ruyin.work，2026-09-18）
+
+`ruyin.work` 与 `vxture.com` 共用**同一张**证书，SAN 从两项扩成四项：
+
+```
+CERT_DOMAINS = -d vxture.com -d *.vxture.com -d ruyin.work -d *.ruyin.work
+CERT_NAME    = vxture.com    ← 不变。它是 certbot 的 --cert-name，是这张证书的
+                               「名字」而不是覆盖范围；PEM 仍落 ssl/live/vxture.com/，
+                               全部 vhost（含 ruyin.work 那份）继续指这一个路径。
+```
+
+`CERT_DOMAINS` 本来就是仓库变量，所以这次扩容**没有改一行代码**。要动的两处都在仓外：
+
+1. 仓库变量 `CERT_DOMAINS` 改成上面那一行。
+2. Cloudflare API token（secret `CLOUDFLARE_DNS_API_TOKEN`）的 Zone Resources 必须
+   **同时包含 ruyin.work**——DNS-01 要在每个域各自的 zone 里建 TXT。只限 vxture.com 的
+   token 会让**整次**签发失败，不是只失败新域那一半。
+
+**取舍（owner 2026-09-18 选「一张证书」）**：一条续期线、巡检不用加第二份、workflow
+零改动；代价是两个注册域**耦合**——任一 zone 的 DNS-01 失败会让整张证书（含
+`vxture.com`）续不上。缓冲仍是 90 天证书 + 每月触发，漏一次还剩约 60 天。若日后
+`ruyin.work` 成为独立产品面，再拆成第二张证书（`ssl/live/ruyin.work/`）不迟。
+
+**顺序要紧**：先改变量与 token → 跑一次 `dry_run=true` 验 DNS-01 能在新 zone 建 TXT →
+正式签发 → **最后**才让带 `ruyin.work` 的 vhost 上生产。反过来的话，新证书落地之前
+访客拿到的是「证书名不匹配」的整页警告；而在 vhost 上线之前，该域的现状是 TLS 握手
+直接被拒（`00-default.conf` 的 `ssl_reject_handshake`）——后者对访客更像「站点不存在」，
+前者更像「站点被劫持」。
+
+**防静默失败**：少写一个 `-d` 的后果是隐蔽的——证书照样签成、到期检查照样过、
+`vxture.com` 照样好，只有被漏掉的那个域撞名不匹配。`51-check-platform-alerts.sh` 因此
+不只查有效期，还**逐项断言 SAN 覆盖**这四个域；读不到 SAN 时报 high 而不是放过。
 
 ## 回滚
 
