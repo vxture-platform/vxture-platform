@@ -81,11 +81,14 @@ export const operaNavSections: OperaNavSection[] = [
         description: "具名路由策略：主用与回退",
       },
       {
-        /* 与「能力授权」成对。**不是** admin 那个按租户逐模型发放的 grant：那是商业
-           关系，这是工程关系，两者同名但不是一回事。 */
+        /* 与「能力授权」成对：两边都以**授的是什么**命名（模型 / 能力），主体同为
+           产品（ADR-010）。**不是** admin 那个按租户逐模型发放的 grant：那是商业
+           关系，这是工程关系，两者相似但不是一回事。
+           2026-09-17 由「路由授权」改名为「模型授权」（owner）；路由 /model/grants
+           不动——它是菜单挂载键，seed 的 admin 菜单表按它对齐。 */
         href: "/model/grants",
-        label: "路由授权",
-        subLabel: "Product Grant",
+        label: "模型授权",
+        subLabel: "Model Grant",
         icon: "list-checks",
         description: "产品持有哪些模型路由",
       },
@@ -136,7 +139,7 @@ export const operaNavSections: OperaNavSection[] = [
         description: "第三方系统凭证托管",
       },
       {
-        /* 与「路由授权」成对：两边主体都是产品（ADR-010），真正的区别在**授的是
+        /* 与「模型授权」成对：两边主体都是产品（ADR-010），真正的区别在**授的是
            什么**，所以名字取对象名而不是主体名。 */
         href: "/capability/grants",
         label: "能力授权",
@@ -177,7 +180,7 @@ export const operaNavSections: OperaNavSection[] = [
         label: "权益配置",
         subLabel: "Entitlement",
         icon: "ticket",
-        description: "按产品聚合的模型路由授权与能力授权（只读汇总）",
+        description: "按产品聚合的模型授权与能力授权（只读汇总）",
       },
     ],
   },

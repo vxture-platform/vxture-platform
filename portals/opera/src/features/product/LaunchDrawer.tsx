@@ -65,6 +65,13 @@ export interface ChecklistEntry {
   itemName: string | null;
   description?: string | null;
   isRequired: boolean;
+  /**
+   * 卡哪一道门：`launch` 卡上线、`publish` 卡发布（2026-09-17 起由 BFF 返回）。
+   *
+   * 这个字段必须一路带到 `lifecycle.ts` 的判定里——它缺席时那边按 `launch` 兜底，
+   * 于是 `acceptance` 又会被算进「上线还差几项」，与 BFF 的闸门重新分叉。
+   */
+  gate?: string;
   isSatisfied: boolean;
   checkedAt: string | null;
   /** 自动复验写回时带「自动检查：原因」；人工勾选为空。 */
@@ -176,7 +183,7 @@ const ITEM_META: Record<
 /** 没有检查单行的实测项：排序与没跑之前的占位。 */
 const MEASURE_ONLY: Record<string, { label: string; order: number }> = {
   client: { label: "登录接入", order: 20 },
-  "atlas-grants": { label: "模型路由授权", order: 30 },
+  "atlas-grants": { label: "模型授权", order: 30 },
   "runos-grants": { label: "能力授权", order: 40 },
   webhook: { label: "Webhook 登记", order: 50 },
 };

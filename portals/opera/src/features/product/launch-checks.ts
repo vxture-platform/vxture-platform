@@ -274,16 +274,16 @@ export async function runLaunchChecks(
     });
   }
 
-  /* ③ 模型路由授权 —— 到期在**读时**判定，所以"启用中但已过期"要算失败：
+  /* ③ 模型授权 —— 到期在**读时**判定，所以"启用中但已过期"要算失败：
         state 说它有效，网关那边不会放行。 */
   if (atlasGrants instanceof Error) {
     results.push({
       id: "atlas-grants",
-      label: "模型路由授权",
+      label: "模型授权",
       what: "产品至少持有一条生效中的模型路由。",
       side: "ours",
       status: "fail",
-      detail: reason(atlasGrants, "读取模型路由授权失败"),
+      detail: reason(atlasGrants, "读取模型授权失败"),
       remedy: "读不到不等于没配。先解决读取失败，再重跑。",
       href: `/model/grants?productCode=${encodeURIComponent(product.productCode)}`,
     });
@@ -302,7 +302,7 @@ export async function runLaunchChecks(
     );
     results.push({
       id: "atlas-grants",
-      label: "模型路由授权",
+      label: "模型授权",
       what: "产品至少持有一条生效中的模型路由。过期的不算——到期在读时判定，网关不会因为 state 还写着 active 就放行。",
       side: "ours",
       status: live.length > 0 ? "pass" : "fail",
@@ -319,8 +319,8 @@ export async function runLaunchChecks(
         live.length > 0
           ? null
           : expired.length > 0
-            ? "去「路由授权」续期或重新发一条。"
-            : "去「路由授权」为这个产品发一条。",
+            ? "去「模型授权」续期或重新发一条。"
+            : "去「模型授权」为这个产品发一条。",
       href: `/model/grants?productCode=${encodeURIComponent(product.productCode)}`,
     });
   }

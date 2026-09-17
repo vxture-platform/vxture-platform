@@ -60,6 +60,7 @@ import {
   productStateMeta,
   VERIFICATION_META,
   verificationOf,
+  gatesLaunch,
   type ChecklistItem,
   type ProductAction,
   type ProductState,
@@ -141,7 +142,7 @@ const BLOCKER_LABELS: Record<string, string> = {
   HAS_BILLING: "账单",
   HAS_PROVISIONING: "开通记录",
   HAS_ENTITLEMENTS: "生效权益",
-  HAS_UPSTREAM_ATLAS: "Atlas 模型路由授权",
+  HAS_UPSTREAM_ATLAS: "Atlas 模型授权",
   HAS_UPSTREAM_RUNOS: "Runos 能力授权",
 };
 
@@ -258,7 +259,7 @@ function ProductsPageContent() {
   const [checklistByProduct, setChecklistByProduct] = useState<
     Record<string, ChecklistItem[]>
   >({});
-  /* 权益计数：路由授权（Atlas）与能力授权（Runos）各一份。null = 没读到（或还在读），
+  /* 权益计数：模型授权（Atlas）与能力授权（Runos）各一份。null = 没读到（或还在读），
      界面显示「—」而不是 0——「没有授权」与「没查到」不能长得一样。 */
   const [routeCounts, setRouteCounts] = useState<Record<
     string,
@@ -432,7 +433,11 @@ function ProductsPageContent() {
         });
         return;
       }
-      const pending = items.filter((i) => i.isRequired && !i.isSatisfied);
+      /* 只算卡上线那道门的项（`gate = 'launch'`），与 BFF 的闸门同口径。
+         `acceptance` 归发布门：它要的端到端链路需要产品先能被订阅，卡在这里是环。 */
+      const pending = items.filter(
+        (i) => i.isRequired && gatesLaunch(i) && !i.isSatisfied,
+      );
       if (pending.length > 0) {
         /* 不是"禁用按钮"而是"点了告诉他还差什么"：禁用状态的菜单项只说明"不行"，
            说不出"差哪几项"，而后者才是运营者接下来要做的事。 */
@@ -663,7 +668,7 @@ function ProductsPageContent() {
               {retireBlock?.kind === "grants" ? (
                 <Banner
                   tone="danger"
-                  title={`${retireBlock.product.productName} 未退役：Atlas ${retireBlock.atlas.count} 条模型路由授权、Runos ${retireBlock.runos.count} 条能力授权仍在生效`}
+                  title={`${retireBlock.product.productName} 未退役：Atlas ${retireBlock.atlas.count} 条模型授权、Runos ${retireBlock.runos.count} 条能力授权仍在生效`}
                   description={[
                     "退役前要先把它们全部撤销——目录是唯一权威，上游按产品码挂着的授权不会随退役自动消失。",
                     retireBlock.atlas.endpointCodes.length > 0
@@ -851,7 +856,7 @@ function ProductsPageContent() {
                   const capMissing =
                     capCounts === null || capFailed.includes(r.productCode);
                   const notes = [
-                    routeCounts === null ? "路由授权没读到" : null,
+                    routeCounts === null ? "模型授权没读到" : null,
                     capMissing ? "能力授权没读到" : null,
                     routes && routes.total > routes.live
                       ? routes.total - routes.live + " 条路由已停用"
@@ -976,7 +981,7 @@ function ProductsPageContent() {
                     },
                     {
                       id: "model-grants",
-                      label: "模型路由授权",
+                      label: "模型授权",
                       icon: "plug",
                       onSelect: () =>
                         router.push("/model/grants?productCode=" + code),

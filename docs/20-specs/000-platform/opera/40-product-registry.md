@@ -22,9 +22,25 @@
 | 1   | opera · 产品目录 · 接入产品（`/product/catalog/new`） | 一页填完：产品码、类型、来源、名称；边缘与回调；按渠道添加 OIDC 客户端（`release_channel` = stable / beta / canary）。**一个事务**写入，落 `status='draft'`。签发客户端要过 step-up，client_secret 明文只在保存后显示一次 | 目录出现草稿行；服务状态出现同一行，有启用客户端的渠道开始探测；auth-bff token-exchange 能解析出 `act.sub`；admin 产品能力可见 |
 | 2   | 同一页 · 「密钥管理」面板                             | 登记 webhook 签名密钥与引用；轮换 client_secret。两者都挂 step-up                                                                                                                                                         | 平台可对开通 / 停用事件签名投递                                                                                                |
 | 3   | 同一页 · 「接入检查」抽屉                             | 跑复验：七项里七项自动判定并写回，`data_plane` / `acceptance` 人工勾（见下）                                                                                                                                              | —                                                                                                                              |
-| 4   | 同一抽屉 · 确认上线                                   | 先重跑复验，全通过且检查单必填项齐，才把草稿转为已上线（`status='active'`）                                                                                                                                               | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标                                                            |
+| 4   | 同一抽屉 · 确认上线                                   | 先重跑复验，全通过且**卡上线那道门**的必填项齐（`gate='launch'`，六项），才把草稿转为已上线（`status='active'`）。`acceptance` 归发布门，不卡这一步——见下「两根轴」                                                       | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标                                                            |
 | 5   | admin · 套餐 / 版本 / 方案                            | 为产品建套餐并发布                                                                                                                                                                                                        | console 订阅、权益、计量按套餐工作                                                                                             |
-| 6   | opera · 路由授权 / 能力授权                           | 把模型路由、能力授给产品                                                                                                                                                                                                  | 权益配置页汇总                                                                                                                 |
+| 6   | opera · 模型授权 / 能力授权                           | 把模型路由、能力授给产品                                                                                                                                                                                                  | 权益配置页汇总                                                                                                                 |
+
+**检查项的两根轴（2026-09-17，owner 提出的循环自锁）**：`product.launch_checklist_items`
+上有 `owner`（opera | admin）与 `gate`（launch | publish）两列，**正交**。
+
+- `owner` 回答「这一项归谁勾」——opera 的抽屉只读写 `owner='opera'` 的项（七项），
+  商业前置两项归 admin。
+- `gate` 回答「这一项卡哪一道门」——上线门槛（`draft→active`）只看 `gate='launch'`
+  的必填项（六项）。
+
+`acceptance` 是唯一 `owner='opera'` 而 `gate='publish'` 的项：它的判据是
+`login → provision → gate → consume → invalidate` 全链路，而 provision 需要客户订阅、
+订阅需要 console 可见（`status='active'`）——卡在上线门上就是**环**。移到发布门之后，
+那条链在 `active + developing` 下本来就走得通。
+
+归属此前是 opera-bff 里的代码常量（`ADMIN_OWNED_ITEM_CODES`），而「卡哪道门」根本
+没有表达处；两列随 `2026-10-07-checklist-gate-owner.sql` 落库后常量已删。
 
 **步 3 的自动验证（2026-08-31）**：上线检查（`portals/opera/src/features/product/launch-checks.ts`）读平台自己的存储判七项——目录登记、OIDC 客户端、Atlas / Runos 授权、webhook 登记，以及对方接通后留下的两条痕迹：**C2** 每次成功的 `GET /platform/entitlements` 由 platform-api 在 Redis 记一个按产品码的「最近一次」键（`<REDIS_KEY_PREFIX>integration:c2:<code>`，30 天过期，每产品每分钟至多写一次，Redis 故障不影响响应），**C3** 取 `metering.usage_events` 最近 90 天内该产品的最后一行；两者经 `GET /api/products/:id/integration-signals` 读出，C2 / C3 与 `catalog_registered` 一起写回检查单。C2 是最近一次而不是台账（不答「调了多少次」）；走共享内部令牌的调用没有身份，按请求里的产品码归因；S2S 调用按 `act.sub` 归因。`c1_identity`（对方的 RP 实现）仍由操作员按回报勾；`data_plane` 与 `acceptance` 平台观测不到，保持人工。
 
@@ -34,7 +50,7 @@
 
 **退役 vs 删除（2026-08-31）**：两条不同的出口，别混。**退役**（`deprecated`）是可见的终态——产品曾合法、现下线，老订阅照付、历史留档。**删除**（软删 `deleted_at`，所有列表都过滤它）是「本不该在册」的出口，产品从目录彻底消失，给误发布的产品用。删除是两步（`GET /api/products/:id/deletion-preview` 预览影响面 → `DELETE /api/products/:id` 带 `confirm:true`，`@RequireStepUp` + 审计 `support.audit_logs`），判据是**无客户足迹即可删**：有用量（`metering.usage_events`）/ 账单（`billing.invoice_items`）/ 开通（`provisioning.provisionings`）/ 权益（`entitlement_caches` · `quota_pools` · `subscription_entitlement_overrides`）/ 上游生效授权任一者 → 409 `PRODUCT_HAS_CUSTOMER_FOOTPRINT`（或 `PRODUCT_HAS_ACTIVE_GRANTS`），只能退役。删除**不阻塞**于登录客户端：同事务把该产品 `product` 型 OIDC 客户端停用（登录中断，是结果不是阻塞项），并连带软删其 primary 套餐。列锁（`98_column_locks.sql`）已放行 `platform_svc` 写 `products.deleted_at` / `plans.deleted_at` / `oidc_clients.status`。
 
-**退役有前置（2026-08-31）**：写 `deprecated` 要求这个产品在 Atlas 的模型路由授权（`product_endpoint_grants`）与在 Runos 的能力授权（`capability_grant`）都为零。两个上游按 `product_code` 字符串挂授权、没有 FK，目录退役不会替人撤——此前退役一个产品，上游的授权原封不动地活着，一个目录里已不存在的主体仍然能换票、能调路由。闭合立在目录这一侧、立在写终态的那条边上（§6）。其它跃迁（上线 / 停用 / 恢复）不受影响：它们不减少任何东西。
+**退役有前置（2026-08-31）**：写 `deprecated` 要求这个产品在 Atlas 的模型授权（`product_endpoint_grants`）与在 Runos 的能力授权（`capability_grant`）都为零。两个上游按 `product_code` 字符串挂授权、没有 FK，目录退役不会替人撤——此前退役一个产品，上游的授权原封不动地活着，一个目录里已不存在的主体仍然能换票、能调路由。闭合立在目录这一侧、立在写终态的那条边上（§6）。其它跃迁（上线 / 停用 / 恢复）不受影响：它们不减少任何东西。
 
 ## 3. 对象模型
 
@@ -62,7 +78,7 @@ appoidc.oidc_clients (client_id UNIQUE, product_id FK, client_kind, release_chan
 | opera 产品目录                       | `GET /api/products`              | 无（草稿、正式全出，可按 `?state=` 筛）                                  | 登记台账本身                                                         |
 | opera 接入凭据                       | `GET /api/oidc-clients`          | `client_kind='product'`（客户端表），产品下拉来自 `/api/products`        | 平台门户不在列表里                                                   |
 | opera 服务状态                       | `GET /api/product-health`        | 无；LEFT JOIN `client_kind='product' AND status='active'` 的客户端       | 无客户端 = 「未接入」，**不是不显示**；带产品状态徽标                |
-| opera 路由授权 / 能力授权 / 权益配置 | `GET /api/products`              | 无                                                                       | 授权主体是产品                                                       |
+| opera 模型授权 / 能力授权 / 权益配置 | `GET /api/products`              | 无                                                                       | 授权主体是产品                                                       |
 | admin 产品能力                       | `GET /api/products/capabilities` | 无，`active` 排前                                                        | 商业封装的起点                                                       |
 | admin 套餐 / 版本                    | `GET /api/products/plans…`       | 经 `product.plans.product_id` FK                                         | 不单独枚举产品                                                       |
 | console 目录 / 推荐                  | `/api/subscription/*`            | `status='active' AND is_customer_visible`                                | 面向客户                                                             |

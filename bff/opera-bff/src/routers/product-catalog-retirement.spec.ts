@@ -332,12 +332,17 @@ describe("其它迁移不受影响", () => {
  * 「约定挡不住的东西不叫约束」，在低一层没被执行。
  *
  * 下面四条各钉一个方向，缺任何一条这道门都可能悄悄失效或悄悄扩大：
+ *
+ * **用例里的未满足项一律取 `gate = 'launch'` 的**（`data_plane` / `c1_identity`）。
+ * `acceptance` 自 2026-09-17 起归发布门（`gate = 'publish'`），拿它演示「上线被拦」
+ * 语义上已经不成立——这个假 pool 按 `pendingItems` 直接返回行、不解析 SQL，所以
+ * 换不换测试都绿；正因为绿，才更该换：留着会让后人以为它仍卡上线。
  */
 describe("首次上线的检查单闸门", () => {
   it("有未满足的必填项 → 409，且**一个字都没写库**", async () => {
     const { router, writes } = makeRouter("draft", [
-      "acceptance",
       "data_plane",
+      "c1_identity",
     ]);
     const { status, body } = await failure(
       router.setState(makeReq(), PRODUCT_ID, { state: "active" }),
@@ -349,11 +354,11 @@ describe("首次上线的检查单闸门", () => {
   });
 
   it("错误消息点名是哪几项——「还差几项」说不出运营者接下来该做什么", async () => {
-    const { router } = makeRouter("draft", ["acceptance"]);
+    const { router } = makeRouter("draft", ["data_plane"]);
     const { body } = await failure(
       router.setState(makeReq(), PRODUCT_ID, { state: "active" }),
     );
-    expect(String(body["message"])).toContain("acceptance");
+    expect(String(body["message"])).toContain("data_plane");
   });
 
   it("必填项全满足 → 照常上线", async () => {
@@ -371,7 +376,7 @@ describe("首次上线的检查单闸门", () => {
    * 正是最需要把它恢复起来排障的时候。
    */
   it("inactive → active（恢复）不受闸门管，即便有未满足项", async () => {
-    const { router, writes } = makeRouter("inactive", ["acceptance"]);
+    const { router, writes } = makeRouter("inactive", ["data_plane"]);
     const result = await router.setState(makeReq(), PRODUCT_ID, {
       state: "active",
     });

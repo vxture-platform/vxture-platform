@@ -464,16 +464,16 @@ export class ProductCatalogRouter {
     assertCanRead(req);
     const result = await this.pool.query<ChecklistRow & { product_id: string }>(
       `SELECT p.id AS product_id,
-              i.item_code, i.item_name, i.description, i.is_required, i.sort,
+              i.item_code, i.item_name, i.description, i.is_required, i.gate, i.sort,
               s.is_satisfied, s.checked_at, s.remark
          FROM product.products p
          CROSS JOIN product.launch_checklist_items i
          LEFT JOIN product.product_launch_statuses s
            ON s.item_code = i.item_code AND s.product_id = p.id
         WHERE p.deleted_at IS NULL
-          AND i.item_code <> ALL($1::text[])
+          AND i.owner = 'opera'
         ORDER BY p.id, i.sort ASC`,
-      [ADMIN_OWNED_ITEM_CODES],
+      [],
     );
     const byProduct: Record<string, ChecklistItemRecord[]> = {};
     for (const row of result.rows) {
@@ -770,8 +770,12 @@ export class ProductCatalogRouter {
        *   · 只管 `draft → active`（`lifecycle.ts` 里只有 `launch` 带
        *     `requiresChecklist`）。`inactive → active`（恢复）在界面上是 advisory
        *     ——提醒不是门闩，服务端也不该把它变成门闩，那会把一次运维恢复堵死。
-       *   · 只算 opera 自己那几项（`ADMIN_OWNED_ITEM_CODES` 排除在外），与
-       *     `checklist-summary` / `:id/checklist` 同一口径。
+       *   · 只算**卡这道门**的项（`gate = 'launch'`）。这与展示口径
+       *     （`checklist-summary` / `:id/checklist` 按 `owner = 'opera'`）**有意不同**：
+       *     归属回答「这一项归谁勾」，门回答「这一项卡哪一道」，是两根正交的轴。
+       *     `acceptance` 归 opera（仍在抽屉里、仍要人勾），但 `gate = 'publish'`
+       *     ——它要的端到端链路需要产品先能被订阅，而订阅需要产品已上线；卡在这道
+       *     门上就成了自锁（owner 2026-09-17）。发布门另立，见 40-product-registry.md。
        *
        * **LEFT JOIN 的 NULL 算作未满足**：一项从来没被写过，和被写成 false 是同一
        * 件事——都不是「已确认」。`coalesce` 而不是 `s.is_satisfied = false`，后者会
@@ -787,10 +791,10 @@ export class ProductCatalogRouter {
              LEFT JOIN product.product_launch_statuses s
                ON s.item_code = i.item_code AND s.product_id = $1
             WHERE i.is_required
-              AND i.item_code <> ALL($2::text[])
+              AND i.gate = 'launch'
               AND NOT coalesce(s.is_satisfied, false)
             ORDER BY i.sort ASC`,
-          [id, ADMIN_OWNED_ITEM_CODES],
+          [id],
         );
         if (pending.rowCount && pending.rowCount > 0) {
           await client.query("ROLLBACK");
@@ -1071,7 +1075,7 @@ export class ProductCatalogRouter {
   }
 
   /**
-   * 退役前置：Atlas 的模型路由授权与 Runos 的能力授权都必须为零。
+   * 退役前置：Atlas 的模型授权与 Runos 的能力授权都必须为零。
    *
    * 为什么要这道闸门：`product.products` 是「有哪些产品」的唯一权威，但两个上游
    * 各自的库里只存 `product_code` 字符串——没有 FK，也没有任何东西在产品退役时
@@ -1120,10 +1124,15 @@ export class ProductCatalogRouter {
   }
 
   // ── 接入检查单（product_200 §7，六步技术接入）─────────────────────────────
-  // 复用 product.launch_checklist_items 字典表——commerce 那两项
-  // （verification_policy/pricing_set）留给 admin 消费，这里按
-  // ADMIN_OWNED_ITEM_CODES **排除**它们，其余全是 opera 的；不读不写不属于
-  // opera 的两项。为什么是排除而不是正向清单，见该常量的注释。
+  // 复用 product.launch_checklist_items 字典表。归属与门是**表上的两列**
+  // （2026-09-17）：
+  //   · `owner`（opera | admin）——这一项归谁勾。本路由只读写 `owner = 'opera'`
+  //     的项；商业前置两项归 admin，对本接口等同「没有这一项」。
+  //   · `gate`（launch | publish）——这一项卡哪一道门。**只有上线门槛用它**，
+  //     展示仍按 owner：`acceptance` 归 opera（要人勾）但卡发布门，若展示也按
+  //     gate 过滤，它会从抽屉里消失、没人勾得到。
+  // 此前两者被揉在一个代码常量（ADMIN_OWNED_ITEM_CODES）里，而「卡哪道门」根本
+  // 没有表达处——那正是 acceptance 卡成循环自锁的原因。
 
   /**
    * 产品的 webhook 登记（`product.product_webhooks`，每产品至多一行）。
@@ -1547,14 +1556,14 @@ export class ProductCatalogRouter {
   ): Promise<ChecklistItemRecord[]> {
     assertCanRead(req);
     const result = await this.pool.query<ChecklistRow>(
-      `SELECT i.item_code, i.item_name, i.description, i.is_required, i.sort,
+      `SELECT i.item_code, i.item_name, i.description, i.is_required, i.gate, i.sort,
               s.is_satisfied, s.checked_at, s.remark
          FROM product.launch_checklist_items i
          LEFT JOIN product.product_launch_statuses s
            ON s.item_code = i.item_code AND s.product_id = $1
-        WHERE i.item_code <> ALL($2::text[])
+        WHERE i.owner = 'opera'
         ORDER BY i.sort ASC`,
-      [id, ADMIN_OWNED_ITEM_CODES],
+      [id],
     );
     return result.rows.map(toChecklistRecord);
   }
@@ -1579,14 +1588,15 @@ export class ProductCatalogRouter {
     },
   ): Promise<ChecklistItemRecord> {
     assertCanManage(req);
-    /* 先查字典再写：字典里没有的码，此前被正向清单挡成 404；现在清单是反向的，
-       不查一下就会一路走到 INSERT 撞 FK 冒成 500——而真实的答案仍是 404。admin 那
-       两项字典里有、但不归 opera，对本接口同样是「没有这一项」。 */
-    const known = await this.pool.query(
-      `SELECT 1 FROM product.launch_checklist_items WHERE item_code = $1`,
+    /* 存在性与归属**一次查清**：字典里没有的码若不查就会一路走到 INSERT 撞 FK
+       冒成 500——而真实的答案是 404；admin 拥有的项字典里有、但不归 opera，对本
+       接口同样是「没有这一项」。两者以前分两步（查存在 + 查代码常量），归属搬进
+       库以后就是同一行数据，合成一次读。 */
+    const known = await this.pool.query<{ owner: string }>(
+      `SELECT owner FROM product.launch_checklist_items WHERE item_code = $1`,
       [itemCode],
     );
-    if (known.rowCount === 0 || !isOperaChecklistItem(itemCode)) {
+    if (known.rowCount === 0 || known.rows[0]!.owner !== "opera") {
       throw notFound(
         "CATALOG_CHECKLIST_ITEM_UNKNOWN",
         `Unknown checklist item: ${itemCode}`,
@@ -1654,7 +1664,7 @@ export class ProductCatalogRouter {
       [id, itemCode, body.isSatisfied, checkedBy, remark],
     );
     const result = await this.pool.query<ChecklistRow>(
-      `SELECT i.item_code, i.item_name, i.description, i.is_required, i.sort,
+      `SELECT i.item_code, i.item_name, i.description, i.is_required, i.gate, i.sort,
               s.is_satisfied, s.checked_at, s.remark
          FROM product.launch_checklist_items i
          LEFT JOIN product.product_launch_statuses s
@@ -1666,35 +1676,20 @@ export class ProductCatalogRouter {
   }
 }
 
-/**
- * 检查单里**不归 opera** 的检查项：商业前置两项，admin 消费（2026-08-30 改反向）。
+/*
+ * ADMIN_OWNED_ITEM_CODES 与 isOperaChecklistItem 已于 2026-09-17 删除。
  *
- * 字典表 `product.launch_checklist_items` 没有归属列——它建表时
- * （`data_platform_200_schema.md` §7.8）只装商业前置项，product_200 §7 的六步技术
- * 接入后来复用了同一张表（seed 里的注释）。此前这里写的是六个技术项的**正向清单**，
- * 与 seed 里那六行一一重复：seed 加第七个技术项、这里不加，界面上就少一项，而且
- * 没有任何东西会报错——DDL 的原话是「新增检查项 = INSERT 一行，不改表结构」，
- * 正向清单把这句话变成了假的。
+ * 那个常量的注释自己写着：「真正的归属轴该是表上的一列……到那天把这个集合连同
+ * isOperaChecklistItem 一起删掉，SQL 改按列过滤」。归属列（`owner`）与门列（`gate`）
+ * 已随 2026-10-07-checklist-gate-owner.sql 落库，本文件的四处 SQL 改按列过滤：
  *
- * 改成反向：字典表里的行**默认都是 opera 的**，只排除 admin 那两项。这两项是这张
- * 表建表时就定下的商业前置（`verification_policy` 来自设计稿 §7.8，`pricing_set`
- * 由 seed 加入），比技术项稳定得多；技术项新增照 DDL 的话 INSERT 即可见。当前
- * seed 的八行经这条规则得到的正是原来那六项，顺序由 `sort` 给，行为不变（钉在
- * `product-catalog.spec.ts`）。
+ *   展示 / 写入归属  → `i.owner = 'opera'`
+ *   上线门槛         → `i.gate  = 'launch'`
  *
- * 这仍是一个字面量，只是从「opera 有什么」缩成「opera 没有什么」。真正的归属轴
- * 该是表上的一列（seed 与 DDL 的改动，不在本文件的范围）；到那天把这个集合连同
- * `isOperaChecklistItem` 一起删掉，SQL 改按列过滤。
+ * 两者**有意不同口径**：归属回答「归谁勾」，门回答「卡哪道」。acceptance 归 opera
+ * 但卡 publish——它要的端到端链路需要产品先能被订阅，而订阅需要产品已上线，卡在
+ * 上线门上就是自锁。
  */
-export const ADMIN_OWNED_ITEM_CODES = [
-  "verification_policy",
-  "pricing_set",
-] as const;
-
-/** 字典里的一项归不归 opera（不回答「字典里有没有」——那要查库）。 */
-export function isOperaChecklistItem(itemCode: string): boolean {
-  return !(ADMIN_OWNED_ITEM_CODES as readonly string[]).includes(itemCode);
-}
 
 /**
  * 409 `PRODUCT_HAS_ACTIVE_GRANTS`：上游还有生效中的授权，退役被拒。
@@ -1713,7 +1708,7 @@ export function productHasActiveGrants(
 ): HttpException {
   const parts: string[] = [];
   if (grants.atlas.count > 0) {
-    parts.push(`Atlas ${grants.atlas.count} 条模型路由授权`);
+    parts.push(`Atlas ${grants.atlas.count} 条模型授权`);
   }
   if (grants.runos.count > 0) {
     parts.push(`Runos ${grants.runos.count} 条能力授权`);
@@ -1813,6 +1808,8 @@ export interface ChecklistItemRecord {
   itemName: string;
   description: string | null;
   isRequired: boolean;
+  /** 卡哪一道门：`launch` = 上线前必满足；`publish` = 发布前才要（不卡上线）。 */
+  gate: string;
   sort: number;
   isSatisfied: boolean;
   checkedAt: string | null;
@@ -1824,6 +1821,7 @@ interface ChecklistRow {
   item_name: string;
   description: string | null;
   is_required: boolean;
+  gate: string;
   sort: number;
   is_satisfied: boolean | null;
   checked_at: string | null;
@@ -1836,6 +1834,7 @@ function toChecklistRecord(row: ChecklistRow): ChecklistItemRecord {
     itemName: row.item_name,
     description: row.description,
     isRequired: row.is_required,
+    gate: row.gate,
     sort: row.sort,
     isSatisfied: row.is_satisfied ?? false,
     checkedAt: row.checked_at,
