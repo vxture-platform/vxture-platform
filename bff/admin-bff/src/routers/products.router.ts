@@ -24,6 +24,8 @@ import { insertOperatorAuditLog } from "../audit/audit-log";
 import {
   isValidIndustry,
   isValidReleaseStage,
+  isForwardReleaseStageMove,
+  releaseStageLabel,
   RELEASE_STAGES,
 } from "@vxture/core-utils";
 import { pgErrorCode, withTransaction } from "../db/tx";
@@ -130,6 +132,25 @@ export class ProductsRouter {
       const row = before.rows[0];
       if (!row) {
         throw new NotFoundException(`Product ${code} not found`);
+      }
+
+      /*
+       * 成熟度状态机（2026-09-17）。此前只校枚举合法，于是 `ga → developing`
+       * 这种倒退也照写——而官网会当场把一个已发布产品的订阅入口换成「敬请期待」。
+       *
+       * 成熟度只向前走：`developing → beta → ga`，可跨级（developing → ga），
+       * 同态重放不报错（反复保存同一张表单是常事）。**不开倒退口**：真要把一个
+       * 产品从客户面前收回去，该动的是可见性（`is_customer_visible`）或生命周期
+       * （`status`），那两根轴各自有出口；拿成熟度当开关使是在说「它变不成熟了」。
+       */
+      if (
+        body.releaseStage !== undefined &&
+        body.releaseStage !== row.release_stage &&
+        !isForwardReleaseStageMove(row.release_stage, body.releaseStage)
+      ) {
+        throw new ConflictException(
+          `成熟度只能向前：当前为「${releaseStageLabel(row.release_stage)}」，不能改回「${releaseStageLabel(body.releaseStage)}」。要下架请改可见性或产品状态。`,
+        );
       }
 
       const sets: string[] = [];

@@ -103,6 +103,7 @@ export {
   isValidReleaseStage,
   releaseStageLabel,
   isReleaseStageSubscribable,
+  isForwardReleaseStageMove,
 } from "./release-stage";
 export type { ReleaseStage, ReleaseStageDef } from "./release-stage";
 

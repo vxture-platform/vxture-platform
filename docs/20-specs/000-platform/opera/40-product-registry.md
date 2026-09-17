@@ -39,6 +39,13 @@
 订阅需要 console 可见（`status='active'`）——卡在上线门上就是**环**。移到发布门之后，
 那条链在 `active + developing` 下本来就走得通。
 
+**成熟度轴（`release_stage`，2026-09-17 装上状态机）**：`ga`（正式版）/ `beta`（公测版）/ `developing`（开发中），三态与标签的权威源在 `@vxture/core-utils` 的 `release-stage.ts`。它与 `status`（生命周期）、`is_customer_visible`（上不上站）**仍然正交**——DDL 里「独立轴，不派生」那句话没有改。
+
+- **只向前走**：`developing → beta → ga`，可跨级，同态重放不报错；倒退一律 409。判据在 `isForwardReleaseStageMove`，执行在 admin-bff 的 `PATCH capabilities/:code/content`（事务内、写之前）。**不开倒退口**：要把产品从客户面前收回去，该动的是可见性或生命周期，那两根轴各自有出口；拿成熟度当开关使是在说「它变不成熟了」。
+- **「开发中不可订」已下沉到服务端**：此前它只长在官网卡片上（`ProductCatalogCard` 判 developing 就隐掉订阅按钮），而服务端从头到尾没有一处读 `release_stage`，权威源里的 `isReleaseStageSubscribable` 没有调用者。现在 console-bff 的 `POST /api/subscription/orders` 拒 `PRODUCT_NOT_RELEASED`（409），推荐位也不再出开发中产品。
+- **套餐阶梯故意不卡**：开发中产品的阶梯照常返回，由下单那一步明确拒。静默回空阶梯会让页面显示「无可用套餐」，用户不知道为什么。
+- **顺带修掉的归属缺口**：`productCode` 与 `planVersionId` 是下单请求里各自独立的两个字段，此前全程无一处校验它们属于同一产品（查价只看 plan，查在途单只看产品）。不合一不仅能绕过成熟度门，订单落库时产品与套餐也对不上；现在合并成一次查库，不匹配回 `PLAN_PRODUCT_MISMATCH`（400）。
+
 归属此前是 opera-bff 里的代码常量（`ADMIN_OWNED_ITEM_CODES`），而「卡哪道门」根本
 没有表达处；两列随 `2026-10-07-checklist-gate-owner.sql` 落库后常量已删。
 

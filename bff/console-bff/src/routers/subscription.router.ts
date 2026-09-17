@@ -52,6 +52,7 @@ import {
   type ProductEntitlementView,
   type Tier,
 } from "@vxture-platform/shared";
+import { isReleaseStageSubscribable } from "@vxture/core-utils";
 import type { RequestContext } from "../types/console.types";
 import { auditCustomerAction } from "../audit/audit-log";
 import {
@@ -823,6 +824,11 @@ export class SubscriptionRouter {
    * Public active plans whose CURRENT version is locked, with their prices.
    * TODO(shared-ladder): 本查询与 website-bff product-plans.router 是同一口径
    * 的两份 SQL；若第三处出现，应抽到共享查询层（如 @vxture/service-catalog）。
+   *
+   * **成熟度刷不在这里卡（2026-09-17，有意为之）**：开发中产品的阶梯照常返回，
+   * 由 `createOrder` 在下单时明确拒（`PRODUCT_NOT_RELEASED`）。静默回空阶梯会让页面
+   * 显示「无可用套餐」——用户不知道为什么；看得到价格、按下去被告知原因，更诚实。
+   * 另：在这里加判据还会连带要求改 website-bff 那份同口径 SQL，恰好凑成上面说的第三处。
    */
   private async queryPlanLadder(
     productCode: string,
@@ -1054,6 +1060,9 @@ export class SubscriptionRouter {
         where prod.deleted_at is null and prod.status = 'active'
           and prod.is_customer_visible = true
           and prod.standalone_subscribable = true
+          /* 开发中的不进推荐位：它还不能订（下单路径同步卡着），
+             推了只会把人送到一个按不下去的按钮前。 */
+          and prod.release_stage <> 'developing'
           and not exists (
             select 1 from metering.subscriptions ts
               join product.plan_components sub_pc
@@ -1174,6 +1183,55 @@ export class SubscriptionRouter {
         code: "NOT_PURCHASABLE",
         message: "该套餐/周期不可自助购买（如企业版请联系销售）",
       });
+
+    /*
+     * 成熟度兜底（2026-09-17）。「开发中不可订」此前**只长在官网卡片上**：
+     * `ProductCatalogCard` 判 developing 就隐掉订阅按钮，而服务端从头到尾没有一处读
+     * `release_stage`——权威源里那个 `isReleaseStageSubscribable` 写了，却没有调用者。
+     *
+     * 必须卡在这里而不是只卡列表查询：`lookupPlanPrice` 只按 plan_version_id 查价，
+     * 根本不碰产品行，所以「列表里滤掉了」不等于「下单拦得住」。
+     */
+    /*
+     * 一次查库答两件事：这个套餐到底卖的是哪个产品，那个产品能不能订。
+     *
+     * **归属校验**：`productCode` 与 `planVersionId` 是请求体里**各自独立**送来的两个
+     * 字段，此前全程没有一处校验它们属于同一个产品：`lookupPlanPrice` 只按
+     * plan 查价、不碰产品行，`assertNoPendingOrderForProduct` 只按产品查在途单。
+     * 不合一的后果不只是绕过下面的成熟度门——订单落库时产品与套餐就是对不上的。
+     *
+     * **成熟度兜底**：「开发中不可订」此前只长在官网卡片上（`ProductCatalogCard`
+     * 判 developing 就隐掉按钮），而服务端从头到尾没有一处读 `release_stage`——权威源里
+     * 那个 `isReleaseStageSubscribable` 写了，却没有调用者。
+     *
+     * 卡在这里而不是只卡列表查询：列表能滤掉不等于下单拦得住。
+     */
+    const soldRow = await this.pool.query<{
+      product_code: string;
+      release_stage: string;
+    }>(
+      `select prod.product_code, prod.release_stage
+         from product.plan_components pc
+         join product.products prod on prod.id = pc.product_id
+        where pc.plan_version_id = $1
+          and pc.component_role = 'primary'
+          and prod.deleted_at is null
+        limit 1`,
+      [planVersionId],
+    );
+    const sold = soldRow.rows[0];
+    if (!sold || sold.product_code !== productCode) {
+      throw new BadRequestException({
+        code: "PLAN_PRODUCT_MISMATCH",
+        message: "套餐与产品不匹配，请重新选择。",
+      });
+    }
+    if (!isReleaseStageSubscribable(sold.release_stage)) {
+      throw new ConflictException({
+        code: "PRODUCT_NOT_RELEASED",
+        message: "该产品尚在开发中，还不能订阅。",
+      });
+    }
 
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
     const createdBy = req.user.id;
