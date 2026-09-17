@@ -160,3 +160,36 @@ export interface DispatchResult {
   retried: number;
   failed: number;
 }
+
+/**
+ * 产品侧的开通回执 —— 「这个工作区的空间，我建好了」。
+ *
+ * 平台一直只有单向信号:`provisionings.status` 回答的是**平台已下令**，不是产品已就绪
+ * （`enqueue` 的 upsert 当场就写 `provisioned`）。通则把对账义务整个压在产品侧
+ * （「webhook 是提示，不是权威……启动时与定期各对账一次」），平台这边没有任何反向证据。
+ * 回执补的就是这一侧。
+ */
+export interface ProvisioningAckInput {
+  /** provisionings.workspace_id —— 以调用方 token 里的为准，不认请求体声明的。 */
+  workspaceId: string;
+  /** provisionings.product_id（product.products.id）。 */
+  applicationId: string;
+  /**
+   * 平台那条投递的 id（产品收到的 `payload.id`，通则里它就是产品的幂等键）。
+   *
+   * **可以为空**:产品按通则做「启动时与定期对账」补发的回执没有对应投递，
+   * 那种每次都记最新的，不做幂等。
+   */
+  deliveryId?: string | null;
+  /** `ready` = 空间已就绪;`failed` = 产品侧建不起来（回执也要能说坏消息）。 */
+  status: "ready" | "failed";
+  /** 产品侧的上下文（space_id 等）。`54_provisioning.sql` 给 metadata 写的注释预留的就是它。 */
+  detail?: Record<string, unknown>;
+}
+
+/** 回执的结果。`replayed` 与 C3 consume 同义:这一条之前已经记过。 */
+export interface ProvisioningAckResult {
+  /** 首次回执的时间;重放时返回的是**原来那一次**的时间——这正是它对账有用的原因。 */
+  ackedAt: string;
+  replayed: boolean;
+}

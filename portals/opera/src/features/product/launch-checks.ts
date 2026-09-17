@@ -70,6 +70,14 @@ export interface CheckResult {
   /** 对应的接入检查项，有则把结果写回去。 */
   itemCode?: string;
   /**
+   * 只报事实，**不参与「全部通过」的判定**。
+   *
+   * 给本期新加的次要约定用（开通回执）:在产产品一个都还没实现它，让它参与判定
+   * 等于用一次平台升级把所有产品的上线按钮推回「带理由跳过」那条路——而那正是
+   * 2026-09-17 刚放宽掉的东西。加一项检查却让它一票否决，是这类新增最容易造的坑。
+   */
+  advisory?: boolean;
+  /**
    * 去哪儿修。
    *
    * 以 `#` 开头的是**产品页内**的去处（`#section-basic` / `#section-login` /
@@ -149,8 +157,20 @@ interface IntegrationSignalsLite {
   consume: { lastEventAt: string; metricKey: string } | null;
   /** C1 出站。形状与 opera-bff 的 `S2sSignal` 一致——两边不互相引类型，靠单测钉住。 */
   s2s: { lastSeenAt: string; target: string; mode: string } | null;
-  /** 开通：`status='provisioned'` 的最近一行（不是「有行」——pending 也有行）。 */
+  /**
+   * 开通：`status='provisioned'` 的最近一行。
+   *
+   * **它回答的是「平台已下令」，不是「产品已就绪」**——`enqueue` 的 upsert 入队当场
+   * 就把 status 写成 provisioned，DDL 上那个 `pending` 默认值在代码里从来不经过。
+   * 产品那边到底建没建起空间，看下面的 `provisionAck`。
+   */
   provision: { lastProvisionedAt: string; workspaceId: string } | null;
+  /** 开通回执：产品经 `POST /provisioning/ack` 自己报回来的「我建好了」。 */
+  provisionAck: {
+    ackedAt: string;
+    status: string;
+    workspaceId: string;
+  } | null;
   /** 回调投递：`status='delivered'` 的最近一行（判据是 status，不是空着没人写的 delivered_at）。 */
   delivery: {
     eventType: string;
@@ -457,7 +477,15 @@ export async function runLaunchChecks(
       },
     );
   } else {
-    const { login, entitlement, consume, s2s, provision, delivery } = signals;
+    const {
+      login,
+      entitlement,
+      consume,
+      s2s,
+      provision,
+      provisionAck,
+      delivery,
+    } = signals;
     /* 端到端链路 —— **呈现型，不写回检查单**（没有 itemCode）。
      *
      * `acceptance` 的判据是 `login → provision → gate → consume → invalidate` 五段。
@@ -516,6 +544,34 @@ export async function runLaunchChecks(
           : "用同一个工作区把整条链走一遍：开通产品 → 拉一次权益 → 报一次用量 → 收到平台回调。",
       href: entitlementsHref,
     });
+    /* 开通回执 —— **advisory**:只报事实，不参与「全部通过」。
+     *
+     * 它与上面「开通」那一段是**两件事**:`provision` 是平台下令的时间，这一个才是
+     * 产品确认的时间。此前只有前者，而接入检查把它当「开通成功」在读，于是那一格在
+     * 平台按下开通的瞬间就绿了，与对方建没建起空间无关。
+     *
+     * 为什么不算进判定:回执是 2026-09-17 新加的**次要约定**（通则自己的规矩——一条
+     * 没有指明「谁在哪一步会拒绝它」的 MUST 还没写完），在产的五个产品一个都还没实现。
+     * 让它算数就是拿一次平台升级把它们全判成不合规。等产品侧铺开再谈升格。
+     */
+    results.push({
+      id: "provision-ack",
+      label: "开通回执",
+      what: "对方收到开通事件后，经 POST /provisioning/ack 报回「这个工作区的空间我建好了」。这一项只报事实，不挡上线——回执目前是次要约定，在产产品还没实现它。",
+      side: "theirs",
+      status: provisionAck && provisionAck.status === "ready" ? "pass" : "fail",
+      advisory: true,
+      detail: !provisionAck
+        ? "最近一次开通没有收到回执。这不是失败——平台此前从没要求过回执，对方也无从实现。"
+        : provisionAck.status === "ready"
+          ? `对方于 ${formatAt(provisionAck.ackedAt, opts.locale)} 回执:空间已就绪`
+          : `对方于 ${formatAt(provisionAck.ackedAt, opts.locale)} 回执:${provisionAck.status}——它说自己没建起来，去问对方为什么`,
+      remedy:
+        provisionAck && provisionAck.status === "ready"
+          ? null
+          : "把《产品接入通则》的开通回执一节发给对方;它收到 tenant.provisioned 并建好空间后，用同一张 S2S 票调一次 POST /provisioning/ack。不接也能上线。",
+      href: entitlementsHref,
+    });
     results.push({
       id: "c2-entitlement",
       label: "C2 权益拉取",
@@ -568,6 +624,13 @@ export async function runLaunchChecks(
   return results;
 }
 
+/**
+ * 「全部通过」——**只数参与判定的那些**。
+ *
+ * `advisory` 项被排除在外:它们报的是事实，不是准入条件。把一条谁都还没实现的新约定
+ * 算进来，会让每一个产品的上线都掉进「带理由跳过」，而按钮上看不出是被哪一条挡的。
+ */
 export function allPassed(results: readonly CheckResult[]): boolean {
-  return results.length > 0 && results.every((r) => r.status === "pass");
+  const counted = results.filter((r) => !r.advisory);
+  return counted.length > 0 && counted.every((r) => r.status === "pass");
 }

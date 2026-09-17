@@ -19,6 +19,8 @@ import type {
   DispatchResult,
   EnqueueEventInput,
   EnqueueProvisioningInput,
+  ProvisioningAckInput,
+  ProvisioningAckResult,
   ProvisioningAlertSink,
   WebhookSecretResolver,
 } from "../types/provisioning.types";
@@ -73,6 +75,20 @@ export class ProvisioningService {
     return this.repo.enqueueEvent(input);
   }
 
+  /**
+   * 记下产品侧的开通回执——平台第一条**反向**信号。
+   *
+   * 本层不加判断:「这条回执该不该被接受」由路由层的 S2S 归因回答（产品只能为自己
+   * 回执，工作区取 token 里的），落库与幂等规则在仓库层。这里只做转发，与 `enqueue`
+   * 同形——本服务一直是这个分工。
+   *
+   * @returns 平台从没对这个 (workspace, product) 下过开通令时回 null。
+   */
+  async recordAck(
+    input: ProvisioningAckInput,
+  ): Promise<ProvisioningAckResult | null> {
+    return this.repo.recordAck(input);
+  }
   /** Convenience: a (workspace, product) subscription became active/trial. */
   async onSubscriptionActivated(args: {
     workspaceId: string;
