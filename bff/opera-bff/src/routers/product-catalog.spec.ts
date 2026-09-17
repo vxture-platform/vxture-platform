@@ -38,7 +38,7 @@ const SEEDED_ITEMS = [
   { code: "c1_s2s", owner: "opera", gate: "launch" }, //               45
   { code: "c3_metering", owner: "opera", gate: "launch" }, //          50
   { code: "c2_entitlement", owner: "opera", gate: "launch" }, //       60
-  { code: "data_plane", owner: "opera", gate: "launch" }, //           70
+  /* sort 70 空缺：`data_plane` 已于 2026-10-09 退役（定义三处矛盾，见退役迁移）。 */
   { code: "acceptance", owner: "opera", gate: "publish" }, //          80  ← 唯一的自锁项
 ] as const;
 
@@ -81,7 +81,7 @@ describe("检查单的两根轴：展示按 owner，上线门槛按 gate", () =>
     expect(acceptance.gate).toBe("publish"); // 但不卡 draft→active
   });
 
-  it("上线门槛覆盖的是六项技术检查，acceptance 不在其中", () => {
+  it("上线门槛覆盖的是五项技术检查，acceptance 不在其中", () => {
     const launchGated = SEEDED_ITEMS.filter((i) => i.gate === "launch").map(
       (i) => i.code,
     );
@@ -91,16 +91,15 @@ describe("检查单的两根轴：展示按 owner，上线门槛按 gate", () =>
       "c1_s2s",
       "c3_metering",
       "c2_entitlement",
-      "data_plane",
     ]);
     expect(launchGated).not.toContain("acceptance");
   });
 
-  it("opera 抽屉里仍有七项（含 acceptance），商业两项不在", () => {
+  it("opera 抽屉里仍有六项（含 acceptance），商业两项不在", () => {
     const operaOwned = SEEDED_ITEMS.filter((i) => i.owner === "opera").map(
       (i) => i.code,
     );
-    expect(operaOwned).toHaveLength(7);
+    expect(operaOwned).toHaveLength(6);
     expect(operaOwned).toContain("acceptance");
     expect(operaOwned).not.toContain("verification_policy");
     expect(operaOwned).not.toContain("pricing_set");

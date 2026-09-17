@@ -102,7 +102,7 @@ async function rejection(promise: Promise<unknown>): Promise<unknown> {
 
 describe("draft → active · 带理由跳过闸门", () => {
   it("没理由：照旧 409，且不写任何跳过痕迹", async () => {
-    const t = makeRouter(["c1_s2s", "data_plane"]);
+    const t = makeRouter(["c1_s2s", "c1_identity"]);
     const error = await rejection(
       t.router.setState(makeReq(), PRODUCT_ID, { state: "active" }),
     );
@@ -124,7 +124,7 @@ describe("draft → active · 带理由跳过闸门", () => {
   });
 
   it("有理由：放行，三列写入，审计记下缺哪几项", async () => {
-    const t = makeRouter(["c1_s2s", "data_plane"]);
+    const t = makeRouter(["c1_s2s", "c1_identity"]);
     await t.router.setState(makeReq(), PRODUCT_ID, {
       state: "active",
       override: { reason: "对方下周才接入联调" },
@@ -136,7 +136,7 @@ describe("draft → active · 带理由跳过闸门", () => {
     expect(ov.text).toContain("launch_override_pending");
     /* 第二个参数是操作者，第三个是缺项数组（jsonb 串）。 */
     expect(ov.args[1]).toBe(OPERATOR);
-    expect(JSON.parse(String(ov.args[2]))).toEqual(["c1_s2s", "data_plane"]);
+    expect(JSON.parse(String(ov.args[2]))).toEqual(["c1_s2s", "c1_identity"]);
 
     const audit = t.find(/audit_logs/i)!;
     expect(audit, "跳过必须留审计").toBeDefined();

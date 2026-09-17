@@ -252,16 +252,19 @@ export function gatesLaunch(item: { gate?: string }): boolean {
  *   - `c1_identity` 身份接入 —— 平台发 client，**对方要实现登录/回调/会话**
  *   - `c2_entitlement` 权益接入 —— **对方**要接权益拉取与失效
  *   - `c3_metering` 计量上报 —— **对方**要实现 webhook 接收与消费上报
- *   - `data_plane` 数据面 —— 平台按模板 provision
  *   - `acceptance` 端到端验收 —— 两侧一起，卡在这一项通常意味着前面某项其实没真通
  *
  * 归到「对方」不是推卸：这三项都要对方动手才会变绿。把它们标成待对方，是让运营者
  * 知道下一步该发邮件而不是该去改配置。
  *
- * 其中 C2 / C3 自 2026-08-31 起**由平台判定**（对方接通后会在平台存储里留下痕迹，
- * `launch-checks.ts` ⑥⑦ 读 `GET /api/products/:id/integration-signals` 并写回检查单）；
- * 仍靠操作员按对方回报勾的只剩 `c1_identity`。侧的归属不因此改变——判定是谁做的
- * 与该由谁去动是两回事。
+ * **判定全部归平台**（2026-09-17 起）：对方接通后会在平台存储里留下痕迹，
+ * `launch-checks.ts` 读 `GET /api/products/:id/integration-signals` 并写回检查单。
+ * C2 / C3 自 2026-08-31 起如此;`c1_identity` 与 `acceptance` 是最后转过来的两项——
+ * 前者的判据是**有人真的用平台账号登进了这个产品**（`session.refresh_tokens` 里带该
+ * 产品客户端的最近一行，登录没接通就不会有它），后者是五段台账落在同一个工作区。
+ *
+ * **侧的归属不因此改变**——判定是谁做的，与该由谁去动，是两回事：`c1_identity` 红着
+ * 时运营者该做的仍然是去找对方，不是去改平台配置。这张表答的是后者。
  */
 const THEIR_SIDE = new Set([
   "c1_identity",
