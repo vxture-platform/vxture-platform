@@ -187,8 +187,10 @@ describe("GET /api/products/:id/integration-signals", () => {
     expect(provSql).toMatch(/product_id = \$1/);
 
     const delSql = sqls.find((x) => /webhook_deliveries/.test(x))!;
-    /* 判 `status='delivered'` 而**不是** `delivered_at`：那一列建了但全仓没人写
-       （markDelivered 只写 status 与 response_code），用它会得到一条永远不满足的检查。 */
+    /* 判 `status='delivered'` 而**不是** `delivered_at`。2026-09-17 起 markDelivered
+       已经写 `delivered_at` 了，但这条断言不跟着改：status 是状态机的权威，
+       时间戳是派生记录；而且补写之前落库的存量行 `delivered_at` 永远是 NULL，
+       换判据会把那些已经投成的行全判成未投递。 */
     expect(delSql).toMatch(/status = 'delivered'/);
     expect(delSql).not.toMatch(/delivered_at\s*IS NOT NULL/);
 

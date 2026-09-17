@@ -231,11 +231,21 @@ export class PgProvisioningRepository {
     });
   }
 
-  /** Mark a delivery delivered (2xx). */
+  /**
+   * Mark a delivery delivered (2xx).
+   *
+   * `delivered_at` 与 `updated_at` 都要手写（2026-09-17）：provisioning 域两表**没有
+   * 任何触发器**（`95_triggers.sql` 的 provisioning 段明写「无」），而表上那个
+   * `NOT NULL DEFAULT now()` 只在 INSERT 时生效。不写的后果都不报错：
+   *   · `delivered_at` 永远为 NULL——建了一列却没人写，拿它当判据的检查永远不满足；
+   *   · `updated_at` 停在创建时间——一行重试好几次、最后投成，运维查「它最后一次
+   *     动是什么时候」会得到错答案。
+   */
   async markDelivered(id: string, responseCode: number | null): Promise<void> {
     await this.pool.query(
       `update provisioning.webhook_deliveries
-         set status='delivered', response_code=$2, leased_until=null
+         set status='delivered', response_code=$2, leased_until=null,
+             delivered_at=now(), updated_at=now()
        where id=$1`,
       [id, responseCode],
     );
@@ -251,7 +261,7 @@ export class PgProvisioningRepository {
     await this.pool.query(
       `update provisioning.webhook_deliveries
          set status='pending', attempts=$2, next_retry_at=$3,
-             response_code=$4, leased_until=null
+             response_code=$4, leased_until=null, updated_at=now()
        where id=$1`,
       [id, attempts, nextRetryAt, responseCode],
     );
@@ -265,7 +275,8 @@ export class PgProvisioningRepository {
   ): Promise<void> {
     await this.pool.query(
       `update provisioning.webhook_deliveries
-         set status='failed', attempts=$2, response_code=$3, leased_until=null
+         set status='failed', attempts=$2, response_code=$3, leased_until=null,
+             updated_at=now()
        where id=$1`,
       [id, attempts, responseCode],
     );
@@ -275,7 +286,7 @@ export class PgProvisioningRepository {
   async recoverExpiredLeases(): Promise<number> {
     const res = await this.pool.query(
       `update provisioning.webhook_deliveries
-         set status='pending', leased_until=null
+         set status='pending', leased_until=null, updated_at=now()
        where status='delivering' and leased_until < now()`,
     );
     return res.rowCount ?? 0;

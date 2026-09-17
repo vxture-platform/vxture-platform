@@ -27,8 +27,9 @@
  *   - **provision**：`provisioning.provisionings` 里 `status='provisioned'` 的最近一行。
  *     取 status 而不是「有行」——行在 `pending` 时就已存在，那只说明有人点了开通。
  *   - **invalidate**：`provisioning.webhook_deliveries` 里 `status='delivered'` 的最近一行。
- *     判据是 **status**，不是 `delivered_at`——那一列建了但全仓没人写
- *     （`markDelivered` 只写 status 与 response_code），拿它判会得到一条永远不满足的检查。
+ *     判据是 **status**，不是 `delivered_at`。（2026-09-17 起 `markDelivered` 已同时写
+ *     `delivered_at`，此前那一列建了却没人写。但判据仍然不换：status 是状态机的
+ *     权威，时间戳是派生记录；存量行的 `delivered_at` 也仍是 NULL。）
  *
  *   两者都带 `workspace_id`，加上 C2 信号里的 `workspaceId`，门户可以判「四段是否落在
  *   **同一个**工作区」——那才是「一条链走通了」，而不是四件不相干的事各发生过。
@@ -90,9 +91,10 @@ export interface ProvisionSignal {
 /**
  * 回调投递：平台最近一次把事件成功送到对方端点。
  *
- * `acceptance` 那条链的末段（invalidate）。判据是 `status='delivered'`——
- * **不是 `delivered_at`**：那一列建了但全仓没人写（`markDelivered` 只写 status
- * 与 response_code），拿它当判据会得到一条永远不满足的检查。
+ * `acceptance` 那条链的末段（invalidate）。判据是 `status='delivered'`，**不是
+ * `delivered_at`**。理由在 2026-09-17 变过一次：原先是「那一列没人写」，现在
+ * `markDelivered` 已经写它了；但判据仍不换——status 是状态机的权威，时间戳只是
+ * 派生记录，而且补写之前落库的存量行永远是 NULL，换判据会把它们全判成未投递。
  */
 export interface DeliverySignal {
   eventType: string;
