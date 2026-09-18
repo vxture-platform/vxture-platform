@@ -33,14 +33,14 @@
 
 L0 各面的**段归属与段内取号规则**(x0=UI / x1=BFF / x2–x9 归本面)见端口登记表,本表只登记域名/容器/宿主绑定:
 
-| 面(L0)           | 域名                                    | 容器                              | 宿主绑定                           |
-| ---------------- | --------------------------------------- | --------------------------------- | ---------------------------------- |
-| website          | vxture.com(www 301→apex)                | vx-platform-website / website-bff | —                                  |
-| console          | console.vxture.com                      | vx-platform-console / console-bff | —                                  |
-| admin            | y.vxture.com                            | vx-platform-admin / admin-bff     | —                                  |
-| opera            | x.vxture.com                            | vx-platform-opera / opera-bff     | —                                  |
-| accounts(IdP)    | accounts.vxture.com(`/oidc/*`→auth-bff) | vx-platform-accounts / auth-bff   | auth-bff 经 tailnet 暴露(见下)     |
-| varda(非面,内嵌) | 无域名(console/admin `/varda/*` 反代)   | varda-bff / varda-agent           | worker-02 发布(UFW 仅放行 tailnet) |
+| 面(L0)           | 域名                                                                       | 容器                              | 宿主绑定                           |
+| ---------------- | -------------------------------------------------------------------------- | --------------------------------- | ---------------------------------- |
+| website          | vxture.com(www 301→apex) + ruyin.work(占位页,另一注册域,见 06 §ruyin.work) | vx-platform-website / website-bff | —                                  |
+| console          | console.vxture.com                                                         | vx-platform-console / console-bff | —                                  |
+| admin            | y.vxture.com                                                               | vx-platform-admin / admin-bff     | —                                  |
+| opera            | x.vxture.com                                                               | vx-platform-opera / opera-bff     | —                                  |
+| accounts(IdP)    | accounts.vxture.com(`/oidc/*`→auth-bff)                                    | vx-platform-accounts / auth-bff   | auth-bff 经 tailnet 暴露(见下)     |
+| varda(非面,内嵌) | 无域名(console/admin `/varda/*` 反代)                                      | varda-bff / varda-agent           | worker-02 发布(UFW 仅放行 tailnet) |
 
 **边缘带(不占应用段,两个 API 边缘 + 一个 S2S 暴露口;具体端口见端口登记表)**:
 

@@ -153,6 +153,10 @@ run_check "Nginx config test" \
 
 echo "==> Public HTTPS endpoints"
 check_public_https "https://vxture.com/"
+# ruyin.work 与 vxture.com 指同一张占位页，但它是**另一个注册域**，靠共用证书 SAN
+# 的后两项才成立。上面那个 check 用的 curl 没有 -k，证书名不匹配会直接 FAIL——所以
+# 这一条是「SAN 扩了没扩」在公网侧唯一会变红的判据，vxture.com 那条对此永远是绿的。
+check_public_https "https://ruyin.work/"
 check_public_https "https://console.vxture.com/"
 # admin's real hostname is not hardcoded here (hardening, same nature as
 # opera): read from the runtime env this host already has.

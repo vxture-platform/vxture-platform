@@ -133,6 +133,7 @@ secret，再整体重跑 `24`（各阶段幂等，第二次 `25` 通过 gate 后
 ### 3.1 健康检查
 
 - [ ] `GET https://vxture.com/` → HTTP 200
+- [ ] `GET https://ruyin.work/` → HTTP 200（同一张占位页；这一条同时验证证书 SAN 已含该域）
 - [ ] `GET https://console.vxture.com/` → 重定向到登录页
 - [ ] `GET https://y.vxture.com/` → 重定向到登录页
 - [ ] `GET https://vxture.com/api/health` → `{ status: 'ok' }`（gateway-bff）

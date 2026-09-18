@@ -159,15 +159,16 @@ vx-worker-02 的业务数据目录由外部业务仓库维护，本仓不定义 
 
 ## 五、域名规划
 
-| 域名                 | 接入方式                       | 目标服务（节点）        | 本仓职责 | 状态   |
-| -------------------- | ------------------------------ | ----------------------- | -------- | ------ |
-| `vxture.com`         | CF Proxy → Nginx → website     | VXTURE_DEPLOY_HOST:3010 | 是       | 待部署 |
-| `www.vxture.com`     | CF Proxy                       | 重定向到 vxture.com     | 是       | 待部署 |
-| `y.vxture.com`       | CF Proxy → Nginx → admin       | VXTURE_DEPLOY_HOST:3030 | 是       | 待部署 |
-| `console.vxture.com` | CF Proxy → Nginx → console     | VXTURE_DEPLOY_HOST:3020 | 是       | 待部署 |
-| `api.vxture.com`     | CF Proxy → Nginx → gateway-bff | VXTURE_DEPLOY_HOST:8000 | 是       | 待部署 |
-| `beta.vxture.com`    | 待规划                         | vxture-beta 临时服务器  | 待规划   | 预留   |
-| 业务域名             | 外部业务仓库定义               | vx-worker-02            | 否       | 外部   |
+| 域名                 | 接入方式                                     | 目标服务（节点）        | 本仓职责 | 状态   |
+| -------------------- | -------------------------------------------- | ----------------------- | -------- | ------ |
+| `vxture.com`         | CF Proxy → Nginx → website                   | VXTURE_DEPLOY_HOST:3010 | 是       | 待部署 |
+| `www.vxture.com`     | CF Proxy                                     | 重定向到 vxture.com     | 是       | 待部署 |
+| `y.vxture.com`       | CF Proxy → Nginx → admin                     | VXTURE_DEPLOY_HOST:3030 | 是       | 待部署 |
+| `console.vxture.com` | CF Proxy → Nginx → console                   | VXTURE_DEPLOY_HOST:3020 | 是       | 待部署 |
+| `api.vxture.com`     | CF Proxy → Nginx → gateway-bff               | VXTURE_DEPLOY_HOST:8000 | 是       | 待部署 |
+| `ruyin.work`         | DNS-only → Nginx → website（仅根路径占位页） | VXTURE_DEPLOY_HOST:3010 | 是       | 占位中 |
+| `beta.vxture.com`    | 待规划                                       | vxture-beta 临时服务器  | 待规划   | 预留   |
+| 业务域名             | 外部业务仓库定义                             | vx-worker-02            | 否       | 外部   |
 
 **CF Proxy 模式**：Full Strict（Cloudflare ↔ Nginx 之间必须有效 HTTPS）
 
