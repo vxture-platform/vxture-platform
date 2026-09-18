@@ -1963,6 +1963,21 @@
       "softDeleteDone": "套餐「{name}」已软删。",
       "softDeleteTarget": "套餐「{name}」",
       "softDeleteVerb": "软删"
+    },
+    "detail": {
+      "backToList": "全部产品",
+      "blockedHint": "不可清理：还有订阅、订阅历史或订单引用着它。",
+      "created": "创建时间",
+      "crowded": "同档多套餐",
+      "crowdedHint": "这一档挂了不止一条套餐。库里允许，但客户在订阅页只会看到当前在售的那条。",
+      "editDraft": "编辑草稿 v{n}",
+      "filterLabel": "套餐筛选",
+      "menuLabel": "{name} 操作",
+      "price": "价格",
+      "searchPlaceholder": "搜索套餐名或套餐码",
+      "tierDescription": "这个产品挂了哪几档、每档在哪个版本、谁在订。一档可以挂多条套餐——库里不禁止，同档多于一条时会在卡片上标出来。",
+      "versionsOf": "{tier} · {name} 的版本史",
+      "view": "查看版本"
     }
   },
   "skillsPage": {
