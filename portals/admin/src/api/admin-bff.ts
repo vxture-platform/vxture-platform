@@ -335,6 +335,15 @@ export interface PlanVersionSummary {
   /** ISO timestamp — the date axis of the version timeline. */
   createdAt: string;
   prices: PlanVersionPrice[];
+  /**
+   * 还钉在**这一个版本**上的活订阅数（`deleted_at IS NULL`）。
+   *
+   * 版本史的四态呈现靠它与 `isCurrent` 两个一起判：
+   * draft → 草稿；isCurrent → 当前在售；
+   * published 且非 current 且 > 0 → 仍在服务；published 且非 current 且 0 → 已停用。
+   * **库里只存 draft/published 两态**，后两格是现算出来的，不是新字段。
+   */
+  subscriptionCount: number;
 }
 
 /** One plan_components row: the primary product or a bundled backing component. */
@@ -433,6 +442,8 @@ export interface PlanMatrixPlan {
     | null;
   draftVersion: PlanMatrixVersionRef | null;
   versionCount: number;
+  /** 还钉在这个套餐**任一版本**上的活订阅数；一级列表的「在订阅」列用它。 */
+  subscriptionCount: number;
 }
 
 /** One row of the publishing desk: a sellable product and its tier ladder. */
@@ -443,8 +454,81 @@ export interface PlanMatrixProduct {
   plans: PlanMatrixPlan[];
 }
 
-export async function fetchPlanMatrix(): Promise<PlanMatrixProduct[]> {
-  return readJson<PlanMatrixProduct[]>("/api/products/plan-matrix", []);
+/**
+ * 发布台读模型。
+ *
+ * `includeDeprecated` 默认 false：一级列表**默认收起已退役的套餐**。退役不是删除
+ * ——老订阅仍钉在它的版本上照常解析，所以行还在、查得到，只是退出主视线。
+ */
+export async function fetchPlanMatrix(
+  includeDeprecated = false,
+): Promise<PlanMatrixProduct[]> {
+  const query = includeDeprecated ? "?include=deprecated" : "";
+  return readJson<PlanMatrixProduct[]>(`/api/products/plan-matrix${query}`, []);
+}
+
+/** 套餐可删性预检的结果（与 opera 的 `deletion-preview` 同形）。 */
+export interface PlanDeletionImpact {
+  deletable: boolean;
+  /** 挡住删除的原因码；`deletable=false` 时非空。 */
+  blockers: string[];
+  /** 该套餐**全部版本**上钉过的订阅数（含已软删——卖过就是卖过）。 */
+  subscriptions: number;
+  /** 引用该套餐任一版本的订单数。 */
+  orders: number;
+  /** 绑定该套餐的服务方案档位数。 */
+  solutionBindings: number;
+}
+
+/**
+ * 可删性预检。**只读、不 gate step-up**，门户据此决定「删除」按钮出不出现，
+ * 而不是让人点下去才吃一个 409。
+ *
+ * 用 strict 读：原因码是这个调用唯一有价值的产出，被 fallback 吞掉等于白查。
+ */
+export async function fetchPlanDeletable(
+  planId: string,
+): Promise<PlanDeletionImpact> {
+  return readJsonStrict<PlanDeletionImpact>(
+    `/api/products/plans/${encodeURIComponent(planId)}/deletable`,
+  );
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+/** 删除草稿版本。`plan_versions` 无 `deleted_at`，这是**物理删**。 */
+export async function deletePlanVersion(
+  versionId: string,
+): Promise<{ deleted: true }> {
+  return mutateJson<{ deleted: true }>(
+    `/api/products/plan-versions/${encodeURIComponent(versionId)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete draft version",
+  );
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+/** 软删套餐。`confirm` 是两步删除的第二步，漏了服务端会 400。 */
+export async function deletePlan(planId: string): Promise<{ deleted: true }> {
+  return mutateJson<{ deleted: true }>(
+    `/api/products/plans/${encodeURIComponent(planId)}`,
+    "DELETE",
+    { confirm: true },
+    "Failed to delete plan",
+  );
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+/** 退役套餐：可见的终态，老订阅照付，同时让开档位。 */
+export async function deprecatePlan(
+  planId: string,
+): Promise<{ deprecated: true }> {
+  return mutateJson<{ deprecated: true }>(
+    `/api/products/plans/${encodeURIComponent(planId)}/deprecate`,
+    "POST",
+    undefined,
+    "Failed to deprecate plan",
+  );
 }
 
 /** Create a plan skeleton (plan + v1 draft + primary component) on a tier slot. */

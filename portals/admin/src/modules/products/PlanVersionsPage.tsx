@@ -20,8 +20,9 @@
  * @date 2026-09-01
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import {
   Badge,
   Button,
@@ -236,6 +237,34 @@ export function PlanVersionsPage() {
     },
     [],
   );
+
+  /* ── 过渡路由的预选参数（/plan-versions/editor?plan=&version=）────────────
+     一级列表拆成独立页之后，这一页不再是入口：二级页的「编辑草稿 / 查看」直接
+     跳到这里，所以它必须能被 URL 定位到某一版，否则人得在矩阵里重新找一遍。
+
+     只认第一次：之后的选择以页面内操作为准，不让地址栏里的旧参数把人拽回去。
+     effect 放在 `selectPlan` 定义**之后**——它是函数体后段的 const，提前引用会在
+     渲染期撞 TDZ（编译照过，运行时才炸）。 */
+  const searchParams = useSearchParams();
+  const planParam = searchParams.get("plan");
+  const versionParam = searchParams.get("version");
+  const preselected = useRef(false);
+
+  useEffect(() => {
+    if (preselected.current || !planParam || matrix.length === 0) return;
+    for (const product of matrix) {
+      const plan = product.plans.find((p) => p.planId === planParam);
+      if (!plan) continue;
+      preselected.current = true;
+      void (async () => {
+        await selectPlan(plan, product);
+        // selectPlan 自己会落到「最该动的那一版」（草稿优先）；但 URL 明确指了
+        // 哪一版时以 URL 为准——查看已发布版本走的正是这条路。
+        if (versionParam) await openVersion(versionParam);
+      })();
+      return;
+    }
+  }, [matrix, planParam, versionParam, selectPlan]);
 
   /** Refresh matrix + version list after a write, keeping the selection. */
   async function refreshAfterWrite(planId: string) {
@@ -865,6 +894,9 @@ export function PlanVersionsPage() {
               currentVersion: null,
               draftVersion: { id: created.id, versionNo: created.versionNo },
               versionCount: 1,
+              // 刚建出来的骨架只有 v1 草稿：草稿不可被订阅，所以这里的 0 是事实，
+              // 不是占位。下一次 loadMatrix() 会用服务端的真值覆盖它。
+              subscriptionCount: 0,
               productCode: createTarget.productCode,
               productName: createTarget.productName,
             });
