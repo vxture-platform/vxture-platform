@@ -371,7 +371,6 @@ function ShellFrame({
          * 门户间距对不齐的来源。 */}
         <ShellSidebarFrame mode={navCollapsed ? "collapsed" : "expanded"}>
           <ShellSidebarNav
-            domainName={activeWorkspace.label}
             sections={navSections}
             collapsed={navCollapsed}
             onToggleCollapsed={toggleNav}

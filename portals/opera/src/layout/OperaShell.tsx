@@ -462,7 +462,6 @@ export function OperaShell({
           }
           sidebar={
             <ShellSidebarNav
-              domainName="Opera"
               sections={operaNavSections}
               collapsed={collapsed}
               onToggleCollapsed={toggleNav}
