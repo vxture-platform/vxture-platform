@@ -456,7 +456,6 @@ export function ArcheShell({
           }
           sidebar={
             <ShellSidebarNav
-              domainName="Arche"
               sections={navSections}
               collapsed={collapsed}
               onToggleCollapsed={toggleNav}
