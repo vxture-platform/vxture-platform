@@ -554,10 +554,17 @@ export function ConsoleAppShell({
            * 两个门户间距对不齐的来源（批 D：.sidebar 已随 shell-template 退役）。 */}
           <ShellSidebarFrame mode={navCollapsed ? "collapsed" : "expanded"}>
             <ShellSidebarNav
-              /* owner 2026-09-08:侧栏头部不再显示分组名(与设计不符)。传空串而不是
-                 改 DS——那一格是 flex-1 的占位,空着正好让右侧「展开/收起全部分组」
-                 按钮保持靠右;有了名字反而是多余的一层标题。 */
-              domainName=""
+              /* owner 2026-09-08:侧栏头部不显示分组名(与设计不符) —— 这条仍然有效,
+                 变的只是怎么实现。
+
+                 原先的做法是传 `domainName=""`,理由写着「不改 DS——那一格是 flex-1
+                 的占位,空着正好让右侧按钮保持靠右」。**两个前提现在都不成立了**:
+                 DS 12.13.0 起 `domainName` 本身就是可选的,不传时组件内部渲染等效
+                 占位(`min-w-0 flex-1`),靠右不再依赖调用方喂一个空串;而「不改 DS」
+                 这个取舍也已被推翻——运营三平面同样要去掉这行标题,于是改在了 DS 侧
+                 (owner 2026-09-18)。
+
+                 所以这里现在**什么都不传**。留着空串只会让人以为它有特殊作用。 */
               sections={navSections}
               collapsed={navCollapsed}
               onToggleCollapsed={toggleNav}
