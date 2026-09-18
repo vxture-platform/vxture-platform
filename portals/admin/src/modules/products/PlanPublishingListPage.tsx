@@ -19,10 +19,15 @@
  * 不是目录里的全部产品；捆绑型组件产品没有自己的售卖档位，不在此列。这一点写进了
  * 每张卡的 `help`，否则运营会拿它跟产品目录的总数对，然后对不上。
  *
+ * ── 表格按平台通例成套接 ──────────────────────────────────────────────────
+ * 选择列 + 序号列 + 居右的行操作菜单 + `FilterBar` 工具栏 + `ListPagination` 页脚，
+ * 与 `/products`、`/accounts` 同一套，不另立结构。行动作一律进 `ActionMenu`，
+ * 不外放按钮。
+ *
  * ── 已退役默认收起 ────────────────────────────────────────────────────────
  * 退役不是删除：老订阅仍钉在它的版本上照常解析，所以行还在、查得到，只是退出主视线。
  * 收起由服务端的 `?include=deprecated` 开关承担，不在前端过滤——前端过滤会让统计卡
- * 的分母与表格内容各说各话。
+ * 的分母与表格内容各说各话。它是个筛选条件，所以入口放在 `FilterBar` 里而不是页头。
  *
  * @author AI-Generated
  * @date 2026-09-18
@@ -32,18 +37,28 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
+  ActionButton,
+  ActionMenu,
   Badge,
-  Button,
   DataTable,
   EmptyState,
+  FilterBar,
+  Input,
   ListPageTemplate,
   MetricGrid,
+  NativeSelect,
   StatusBadge,
   TableTitleCell,
 } from "@vxture/design-system";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type {
+  ActionMenuItem,
+  DataTableColumn,
+  StatusBadgeTone,
+} from "@vxture/design-system";
 import { fetchPlanMatrix, type PlanMatrixProduct } from "@/api/admin-bff";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { useTableLabels } from "@/modules/shared/table";
 import { tierBadgeClass, tierLabel } from "@/modules/shared/tier-level";
 import { formatNumber } from "@/modules/tenants/tenant-utils";
@@ -108,25 +123,29 @@ const ROW_STATUS_TONE: Record<RowStatus, StatusBadgeTone> = {
   retired: "neutral",
 };
 
+type StatusFilter = "all" | RowStatus;
+
 export function PlanPublishingListPage() {
   const t = useTranslations("planVersionsPage");
+  const tShared = useTranslations();
   const router = useRouter();
   const tableLabels = useTableLabels();
 
   const [products, setProducts] = useState<PlanMatrixProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
   const [showRetired, setShowRetired] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const load = useCallback(async (includeDeprecated: boolean) => {
     setLoading(true);
     try {
-      const data = await fetchPlanMatrix(includeDeprecated);
-      setProducts(data);
-      // `fetchPlanMatrix` 读失败时回落空数组而不是抛，所以「空」有两种可能：
-      // 真的没有可独立订阅的产品，或者请求挂了。这里不把两者混成同一句话——
-      // 空数组时标记一次，让空态文案能分开说。
-      setLoadFailed(false);
+      setProducts(await fetchPlanMatrix(includeDeprecated));
     } finally {
       setLoading(false);
     }
@@ -136,9 +155,14 @@ export function PlanPublishingListPage() {
     void load(showRetired);
   }, [load, showRetired]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize, query, statusFilter, showRetired]);
+
   const rows = useMemo(() => products.map(toRow), [products]);
 
-  // 四张统计卡：全部从同一份 rows 派生，与表格内容同源，不会各说各话。
+  // 四张统计卡：从**未经筛选**的全量派生——它们是这一屏的总体态势，
+  // 跟着搜索框变会让人以为平台上只剩这几个产品。
   const stats = useMemo(() => {
     let sellingProducts = 0;
     let sellingVersions = 0;
@@ -153,12 +177,39 @@ export function PlanPublishingListPage() {
     return { sellingProducts, sellingVersions, drafts, unconfigured };
   }, [rows]);
 
+  const filteredRows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (statusFilter !== "all" && rowStatus(row) !== statusFilter)
+        return false;
+      if (
+        needle &&
+        !`${row.productName} ${row.productCode}`.toLowerCase().includes(needle)
+      )
+        return false;
+      return true;
+    });
+  }, [rows, query, statusFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const activePage = Math.min(currentPage, pageCount);
+  const visibleRows = filteredRows.slice(
+    (activePage - 1) * pageSize,
+    activePage * pageSize,
+  );
+
   const openDetail = useCallback(
     (productCode: string) => {
       router.push(`/plan-versions/${encodeURIComponent(productCode)}`);
     },
     [router],
   );
+
+  const handleReset = useCallback(() => {
+    setQuery("");
+    setStatusFilter("all");
+    setShowRetired(false);
+  }, []);
 
   const columns: DataTableColumn<ProductRow>[] = [
     {
@@ -243,6 +294,15 @@ export function PlanPublishingListPage() {
     },
   ];
 
+  const rowMenuItems = (row: ProductRow): ActionMenuItem[] => [
+    {
+      id: "open",
+      label: row.planCount === 0 ? t("list.configure") : t("list.enter"),
+      icon: "arrow-right",
+      onSelect: () => openDetail(row.productCode),
+    },
+  ];
+
   return (
     <ListPageTemplate
       className="w-full"
@@ -251,15 +311,6 @@ export function PlanPublishingListPage() {
           icon="table"
           title={t("title")}
           description={t("pageDescription")}
-          action={
-            <Button
-              variant={showRetired ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowRetired((on) => !on)}
-            >
-              {t("list.showRetired")}
-            </Button>
-          }
         />
       }
       summary={
@@ -302,28 +353,92 @@ export function PlanPublishingListPage() {
           ]}
         />
       }
+      filters={
+        <FilterBar
+          view="list"
+          onViewChange={() => {}}
+          cardsDisabledReason={tShared("common.cardsRetired")}
+          count={formatNumber(filteredRows.length)}
+          aria-label={t("detail.filterLabel")}
+          search={
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("list.product")}
+              className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+              aria-label={t("list.product")}
+            />
+          }
+          onReset={handleReset}
+        >
+          <>
+            <NativeSelect
+              wrapperClassName="w-fit basis-media-xl"
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as StatusFilter)
+              }
+              aria-label={t("list.status")}
+            >
+              <option value="all">{t("list.status")}</option>
+              <option value="published">{t("list.statusPublished")}</option>
+              <option value="draft">{t("list.statusDraft")}</option>
+              <option value="none">{t("list.statusNone")}</option>
+              <option value="retired">{t("list.statusRetired")}</option>
+            </NativeSelect>
+            {/* 已退役是筛选条件，不是页面动作，所以入口在这里。 */}
+            <ActionButton
+              variant="outline"
+              icon={showRetired ? "check" : "stop"}
+              onClick={() => setShowRetired((on) => !on)}
+            >
+              {t("list.showRetired")}
+            </ActionButton>
+          </>
+        </FilterBar>
+      }
       table={
         <DataTable
           labels={tableLabels}
           columns={columns}
-          rows={rows}
+          rows={visibleRows}
           rowKey={(row) => row.productCode}
           loading={loading}
+          indexStart={(activePage - 1) * pageSize + 1}
+          selectedKeys={[...selectedCodes]}
+          onSelectionChange={(keys) => setSelectedCodes(new Set(keys))}
           rowActions={(row) => (
-            <Button
-              variant={row.planCount === 0 ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => openDetail(row.productCode)}
+            <div
+              className="relative z-[1] inline-flex justify-self-end"
+              onClick={(event) => event.stopPropagation()}
             >
-              {row.planCount === 0 ? t("list.configure") : t("list.enter")}
-            </Button>
+              <ActionMenu
+                label={t("detail.menuLabel", { name: row.productName })}
+                items={rowMenuItems(row)}
+              />
+            </div>
           )}
           empty={
             <EmptyState
-              title={loadFailed ? t("list.loadFailed") : t("list.empty")}
-              description={loadFailed ? undefined : t("lifecycle.note")}
+              title={t("list.empty")}
+              description={t("lifecycle.note")}
+              action={
+                <ActionButton variant="outline" icon="x" onClick={handleReset}>
+                  {tShared("common.clearFilters")}
+                </ActionButton>
+              }
             />
           }
+        />
+      }
+      footer={
+        <ListPagination
+          currentPage={activePage}
+          pageCount={pageCount}
+          total={filteredRows.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
         />
       }
     />

@@ -1963,6 +1963,21 @@
       "softDeleteDone": "Plan {name} soft-deleted.",
       "softDeleteTarget": "plan {name}",
       "softDeleteVerb": "Soft-delete"
+    },
+    "detail": {
+      "backToList": "All products",
+      "blockedHint": "Not cleanable: subscriptions, subscription history or orders still reference it.",
+      "created": "Created",
+      "crowded": "Multiple plans on tier",
+      "crowdedHint": "More than one plan sits on this tier. The database allows it, but customers only ever see the one currently on sale.",
+      "editDraft": "Edit draft v{n}",
+      "filterLabel": "Plan filters",
+      "menuLabel": "{name} actions",
+      "price": "Price",
+      "searchPlaceholder": "Search plan name or code",
+      "tierDescription": "Which tiers this product sells, which version each is on, and who subscribes. A tier may carry more than one plan — the database allows it, and cards flag the ones that do.",
+      "versionsOf": "Version history of {tier} · {name}",
+      "view": "View version"
     }
   },
   "skillsPage": {
