@@ -592,7 +592,7 @@ export function PlanDraftEditorPage({
                           {m.mergeStrategy ? (
                             <Badge>{m.mergeStrategy}</Badge>
                           ) : null}
-                          {m.resetPeriod ? (
+                          {m.resetPeriod && m.resetPeriod !== "none" ? (
                             <Badge>{m.resetPeriod}</Badge>
                           ) : null}
                           {m.reserved ? (
@@ -632,7 +632,7 @@ export function PlanDraftEditorPage({
               {t("editorV2.chosen")}
             </h4>
             {entries.length === 0 ? (
-              <EmptyState title={t("editorV2.chosen")} />
+              <EmptyState title={t("editorV2.chosenEmpty")} />
             ) : (
               <PanelList>
                 {entries.map((entry, index) => {
@@ -776,7 +776,7 @@ export function PlanDraftEditorPage({
               {t("editorV2.bundleChosen")}
             </h4>
             {bundle.length === 0 ? (
-              <EmptyState title={t("editorV2.bundleChosen")} />
+              <EmptyState title={t("editorV2.bundleChosenEmpty")} />
             ) : (
               <PanelList>
                 {bundle.map((item, index) => (
