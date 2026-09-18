@@ -57,6 +57,7 @@ import {
   DetailPageTemplate,
   EmptyState,
   Input,
+  NativeSelect,
   PanelItem,
   PanelList,
   Section,
@@ -111,6 +112,37 @@ interface BundleEntry {
   features: string[];
 }
 
+/**
+ * 字节型配额的换算刻度（owner 2026-09-18：「页面输入单位和现实，按照 MB/GB
+ * 适应现实，json 中转化存储」）。
+ *
+ * **换算只发生在显示层**：`QuotaEntry.amount` 始终是**原始字节数**，与落库值
+ * 逐字符相同。改单位只改怎么读这一个数，不改这个数——否则「预览即落库」这条
+ * 就断了，而那正是运营核对的唯一依据。
+ *
+ * 1024 进制而非 1000：库里 `storage.bytes` 的既有值就是 `n * 1024³`
+ * （seed 的 `GIB`），用 1000 会让 1 GiB 显示成 1.073741824 GB。
+ *
+ * 只挂在 `metric_unit = 'bytes'` 的键上。单位取值集合是 bytes / credits /
+ * docs / calls，只有第一个有量级问题——credits 和 calls 本来就是人读得出的数。
+ */
+const BYTE_SCALES = [
+  { label: "B", factor: 1 },
+  { label: "MB", factor: 1024 ** 2 },
+  { label: "GB", factor: 1024 ** 3 },
+  { label: "TB", factor: 1024 ** 4 },
+] as const;
+
+/** 进页面时替这个值挑一个读得出来的挡：能整除的最大刻度。 */
+function autoScale(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  for (let i = BYTE_SCALES.length - 1; i >= 0; i -= 1) {
+    const factor = BYTE_SCALES[i]!.factor;
+    if (raw >= factor && raw % factor === 0) return factor;
+  }
+  return 1;
+}
+
 const LAYER_ORDER = ["L2", "L1", "L3", "none"] as const;
 type LayerKey = (typeof LAYER_ORDER)[number];
 
@@ -148,6 +180,8 @@ export function PlanDraftEditorPage({
   const [priceYear, setPriceYear] = useState("");
   const [alpha, setAlpha] = useState("");
   const [entries, setEntries] = useState<QuotaEntry[]>([]);
+  /* 每个字节型键当前用哪一挡读数。纯显示状态——不进 payload，不影响 composedQuota。 */
+  const [scales, setScales] = useState<Record<string, number>>({});
   const [bundle, setBundle] = useState<BundleEntry[]>([]);
 
   const versionPath = `/plan-versions/${encodeURIComponent(productCode)}/${encodeURIComponent(planCode)}/${versionNo}`;
@@ -638,6 +672,15 @@ export function PlanDraftEditorPage({
                 {entries.map((entry, index) => {
                   const meta = metricOf(entry.key);
                   const n = Number(entry.amount);
+                  const isBytes = meta?.metricUnit === "bytes";
+                  const scale = isBytes
+                    ? (scales[entry.key] ?? autoScale(n))
+                    : 1;
+                  /* 负数原样显示：`-1` 是 max 型的无限哨兵，换算它没有意义。 */
+                  const shown =
+                    isBytes && Number.isFinite(n) && n >= 0
+                      ? String(n / scale)
+                      : entry.amount;
                   return (
                     <PanelItem
                       key={entry.key}
@@ -659,20 +702,50 @@ export function PlanDraftEditorPage({
                         <span className="inline-flex items-center justify-end gap-2xs">
                           <Input
                             type="number"
-                            value={entry.amount}
+                            value={shown}
                             disabled={busy}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const typed = e.target.value;
+                              const v = Number(typed);
+                              /* 写回的是原始字节数。非字节键、空串、非数、
+                                 负哨兵一律原样透传。 */
+                              const raw =
+                                isBytes &&
+                                typed.trim() !== "" &&
+                                Number.isFinite(v) &&
+                                v >= 0
+                                  ? String(Math.round(v * scale))
+                                  : typed;
                               setEntries((old) =>
                                 old.map((it, i) =>
-                                  i === index
-                                    ? { ...it, amount: e.target.value }
-                                    : it,
+                                  i === index ? { ...it, amount: raw } : it,
                                 ),
-                              )
-                            }
+                              );
+                            }}
                             aria-label={`${entry.key} ${t("editorV2.amount")}`}
                             className="w-panel-2xs text-right font-mono"
                           />
+                          {isBytes ? (
+                            <NativeSelect
+                              wrapperClassName="w-fit"
+                              value={String(scale)}
+                              disabled={busy}
+                              onChange={(e) =>
+                                setScales((old) => ({
+                                  ...old,
+                                  [entry.key]: Number(e.target.value),
+                                }))
+                              }
+                              aria-label={`${entry.key} ${t("editorV2.unitScale")}`}
+                              title={t("editorV2.byteHint")}
+                            >
+                              {BYTE_SCALES.map((s) => (
+                                <option key={s.label} value={s.factor}>
+                                  {s.label}
+                                </option>
+                              ))}
+                            </NativeSelect>
+                          ) : null}
                           <ActionButton
                             variant="outline"
                             icon="minus"

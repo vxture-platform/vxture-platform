@@ -1996,6 +1996,7 @@
       "bundleChosenEmpty": "This tier wires in no other product's backend capability.",
       "bundleHeading": "Bundled products",
       "bundleHint": "Which products' backend capability is wired in. What comes in has no front end and is invisible to the user; the product's own UI and full features need their own subscription.",
+      "byteHint": "Converted at 1024 per step; the stored value is always raw bytes — that is what the preview shows.",
       "candidates": "Available quota items",
       "chosen": "Quota for this tier",
       "chosenEmpty": "No quota item chosen yet. Add one from the left.",
@@ -2040,7 +2041,8 @@
       "subtitle": "{tier} · {plan}",
       "title": "Edit draft v{n}",
       "trial": "Trial (days)",
-      "unit": "Unit"
+      "unit": "Unit",
+      "unitScale": "Unit"
     },
     "readonly": {
       "back": "Back to {name}",
