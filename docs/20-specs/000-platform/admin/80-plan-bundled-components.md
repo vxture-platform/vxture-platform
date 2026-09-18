@@ -102,8 +102,8 @@
 - 列出该版本的 bundled 行：产品名 + 产品码，配额用与 primary 同款的 JSON 文本域编辑；
 - 添加：下拉取 `GET /api/products/capabilities`，**按层过滤只留 `layer = 'L2'`**（active 在前）；排除版本自身的 primary 产品和已在列表里的。
   - v1.0 这里写的是「取**全目录**，不按类型过滤——atlas / runos 必须能选到」，**随 2026-08-30 那条裁定一并作废**。
-  - 该端点的 `PRODUCT_CATALOG_SQL` 已回 `product_type`，本批补 `p.layer` 后前端才过滤得了——所以这一步**等分层落库那一批**。
-  - 写侧目前**不拦**：`resolveBundledComponents` 只有两条限制（产品存在且未软删、不能把本产品绑进自己），`standalone_subscribable` 那条检查只管 primary。按层收口写侧是后续项，在那之前界面是唯一的护栏。
+  - 该端点的 `PRODUCT_CATALOG_SQL` 已回 `product_type`；`p.layer` 随**分层落库**那一批上线（PR #383 / v0.26.205，2026-09-17），前端过滤所需的字段现已齐备。
+  - 写侧**已按层收口**（2026-09-18）：`resolveBundledComponents` 现在只放行 `layer = 'L2'`，L1 基础支撑（额度走平台级度量键，不当组件绑）、L3 智能体（卖的就是那套界面）、未分层一律 400 带 `field: "components[N].productCode"`。此前「界面是唯一护栏」的状态就此结束——界面过滤是体验，写侧拦截才是保证。
 - 移除：行尾按钮，只改本地态；
 - 「保存捆绑组件」：整表 PUT，`runWithStepUp` 包裹，取消即静默返回；成功后用返回的详情替换本地态；
 - 版本已发布 / 已锁定：列表只读，添加 / 移除 / 保存全部隐藏。

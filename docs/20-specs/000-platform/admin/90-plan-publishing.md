@@ -44,8 +44,18 @@
 - `POST /api/products/plans` — 空档建骨架：plan + v1 草稿 + primary 组件一个事务；不 step-up（发布前不可售，发布才是危操作）
 - `POST /api/products/plans/:planId/versions` — 开下一个草稿（克隆；每套餐同时至多一个在途草稿，否则「那个草稿」对每个编辑端点都歧义）
 - 既有 `PATCH /plan-versions/:id`（草稿价格/配额）、`PUT …/bundled-components`、`POST …/publish`（step-up）不变，publish 加档位守卫
+- `DELETE /api/products/plan-versions/:versionId` — 删草稿（step-up；只放行 `draft AND NOT is_locked`；`plan_versions` 无 `deleted_at` 故为物理删；事务内复核「恰好是 current」）
+- `GET /api/products/plans/:planId/deletable` — 可删性预检（只读，**不** step-up；`deletable` + `blockers[]` + 三个计数）
+- `DELETE /api/products/plans/:planId` — 软删套餐（step-up；要求 `confirm=true`；事务内 `FOR UPDATE` 后复核判据挡 TOCTOU）
+- `POST /api/products/plans/:planId/deprecate` — 退役一档（step-up；让开档位占用）
+- `GET /api/products/products/:productCode/metric-options` — 配额候选（平台键 + 该产品自有键，带归属标注）
+- `plan-matrix` 加 `?include=deprecated`——默认收起已退役的套餐；开关写成 `($1::bool OR p.status <> 'deprecated')` 的**静态**形态（SQL 一插值 `lint:anchor-writes` 就抽不到列名、当场变瞎且恒绿）
 
-审计线：`product.plan.create` / `product.plan_version.create` 汇入既有 `support.audit_logs`（与 `product.plan_version.bundled.replace`、`product.solution.*` 同线）。
+> **所有删除都挂 step-up**（owner 2026-09-18），包括删草稿——它看着「发布前不可售、删了无害」，但闸门是给**动作**挂的，不按后果轻重分级。上面 `POST /plans` 那条「不 step-up（发布前不可售）」的理由**不可外推到删除**。预检是只读路由，不 gate。
+
+> **两个 `subscriptionCount` 口径不同，别互相套用**：版本列表里那个只数**还钉着的**（`deleted_at IS NULL`），用来把「当前在售 / 仍在服务 / 已停用」分开呈现；删除判据那个问的是**卖过没有**（不滤 `deleted_at`）。
+
+审计线：`product.plan.create` / `product.plan_version.create` / `product.plan_version.delete` / `product.plan.delete` / `product.plan.deprecate` 汇入既有 `support.audit_logs`（与 `product.plan_version.bundled.replace`、`product.solution.*` 同线）。
 
 ## 5. 刻意不做
 

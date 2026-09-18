@@ -4,9 +4,15 @@
  * @layer    Application
  * @category test
  * @description
- *   Write-path guard for the bundled component replace endpoint (owner decision
- *   2026-08-30: infrastructure quota reaches a workspace only via bundled
- *   components inside a subscription product's plan version). Locks the same
+ *   Write-path guard for the bundled component replace endpoint.
+ *
+ *   Owner 2026-09-17 supersedes the 2026-08-30 ruling: L1 foundation products
+ *   (atlas / runos) are NOT bundled any more — their quota travels as
+ *   platform-level metric keys (`ai.credit` lives in `platform_metrics`, and
+ *   `trg_product_metrics_no_platform_shadow` forbids a product from declaring
+ *   it), so a plan just lists the quota key and no atlas component is needed.
+ *   What CAN be bundled is **L2** domain platforms; L3 agents cannot be bundled
+ *   (they sell the UI) though an L3 plan may still bundle an L2. Locks the same
  *   contract as the solution write specs: authorize before DB, validate before
  *   DB, 409 on a frozen version, 404 (with `field`) on an unknown product, 400
  *   on primary-as-bundled / duplicates, full replace = delete + insert + audit
@@ -49,13 +55,23 @@ const DRAFT_VERSION = {
 
 const PRIMARY = { product_code: "karda", priority: 100 };
 
+/**
+ * 目录行现在带 `layer` —— 绑定候选按它过滤（只收 L2）。
+ * arda/terra 是 L2（可绑），atlas 是 L1（额度走平台键，不当组件绑），
+ * vxtpl 是 L3（卖的就是那套界面，不能被绑），nolayer 未分层（一并挡下）。
+ */
 const CATALOG = [
-  { id: "p-atlas", product_code: "atlas" },
-  { id: "p-runos", product_code: "runos" },
+  { id: "p-arda", product_code: "arda", layer: "L2" },
+  { id: "p-terra", product_code: "terra", layer: "L2" },
+  { id: "p-atlas", product_code: "atlas", layer: "L1" },
+  { id: "p-vxtpl", product_code: "vxtpl", layer: "L3" },
+  { id: "p-nolayer", product_code: "nolayer", layer: null },
 ];
 
-const ATLAS_QUOTA = { "ai.credit": 100000 };
-const RUNOS_QUOTA = { "compute.minutes": 3000 };
+/* arda 在 product_metrics 里的真键：dataset.max 是 max 型、
+   service.api.call 是 pool 型按月。terra 同为 L2，做第二个绑定件。 */
+const ARDA_QUOTA = { "dataset.max": 500, "service.api.call": 200000 };
+const TERRA_QUOTA = { "dataset.max": 100 };
 
 /** Default responder: an editable draft with a karda primary and a live catalog. */
 function draftResponder(overrides?: Responder): Responder {
@@ -93,12 +109,12 @@ const DETAIL_ROW = {
       priority: 100,
     },
     {
-      productCode: "atlas",
-      productName: "Atlas",
+      productCode: "arda",
+      productName: "Arda",
       componentRole: "bundled",
       tier: null,
-      quota: ATLAS_QUOTA,
-      features: ["embedding"],
+      quota: ARDA_QUOTA,
+      features: ["dataset.read"],
       priority: 50,
     },
   ],
@@ -135,14 +151,14 @@ describe("bundled components — pre-DB guards", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       router.replaceBundledComponents(req, VERSION_ID, {
-        components: [{ productCode: "atlas", quota: [1] }],
+        components: [{ productCode: "arda", quota: [1] }],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       router.replaceBundledComponents(req, VERSION_ID, {
         components: [
-          { productCode: "atlas", quota: ATLAS_QUOTA },
-          { productCode: "atlas", quota: { "ai.credit": 1 } },
+          { productCode: "arda", quota: ARDA_QUOTA },
+          { productCode: "arda", quota: { "dataset.max": 1 } },
         ],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -155,7 +171,7 @@ describe("bundled components — pre-DB guards", () => {
 // ============================================================================
 
 describe("bundled components — transactional rules", () => {
-  const body = { components: [{ productCode: "atlas", quota: ATLAS_QUOTA }] };
+  const body = { components: [{ productCode: "arda", quota: ARDA_QUOTA }] };
 
   it("404 + rollback when the version does not exist", async () => {
     const tx = makeTxClient(() => []);
@@ -201,7 +217,7 @@ describe("bundled components — transactional rules", () => {
     const error = await router
       .replaceBundledComponents(makeReq(MANAGE), VERSION_ID, {
         components: [
-          { productCode: "atlas", quota: ATLAS_QUOTA },
+          { productCode: "arda", quota: ARDA_QUOTA },
           { productCode: "ghost", quota: {} },
         ],
       })
@@ -230,12 +246,31 @@ describe("bundled components — transactional rules", () => {
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
     await expect(
       router.replaceBundledComponents(makeReq(MANAGE), VERSION_ID, {
-        components: [
-          { productCode: "atlas", quota: ATLAS_QUOTA, priority: 100 },
-        ],
+        components: [{ productCode: "arda", quota: ARDA_QUOTA, priority: 100 }],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.outcome().rolledBack).toBe(true);
+  });
+
+  /* owner 2026-09-17：可被绑的只有 L2。三种都要挡，且带 field 指到具体那一项。 */
+  it.each([
+    ["an L1 foundation product", "atlas"],
+    ["an L3 agent", "vxtpl"],
+    ["an unclassified product", "nolayer"],
+  ] as const)("400 when bundling %s", async (_n, code) => {
+    const tx = makeTxClient(draftResponder());
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    const error = await router
+      .replaceBundledComponents(makeReq(MANAGE), VERSION_ID, {
+        components: [{ productCode: code, quota: {} }],
+      })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).getResponse()).toMatchObject({
+      field: "components[0].productCode",
+    });
+    expect(tx.outcome().rolledBack).toBe(true);
+    expect(insertsOf(tx.calls)).toHaveLength(0);
   });
 
   it("maps a trigger RAISE (P0001) to 409 instead of a 500", async () => {
@@ -269,8 +304,8 @@ describe("bundled components — full replace", () => {
         sql.includes("order by pc.sort_order")
           ? [
               {
-                productCode: "runos",
-                quota: { "compute.minutes": 1 },
+                productCode: "terra",
+                quota: { "dataset.max": 1 },
                 features: [],
                 priority: 50,
               },
@@ -285,11 +320,11 @@ describe("bundled components — full replace", () => {
       {
         components: [
           {
-            productCode: "atlas",
-            quota: ATLAS_QUOTA,
-            features: ["embedding"],
+            productCode: "arda",
+            quota: ARDA_QUOTA,
+            features: ["dataset.read"],
           },
-          { productCode: "runos", quota: RUNOS_QUOTA, priority: 20 },
+          { productCode: "terra", quota: TERRA_QUOTA, priority: 20 },
         ],
       },
     );
@@ -318,18 +353,18 @@ describe("bundled components — full replace", () => {
     );
     expect(insertParams[0]).toEqual([
       VERSION_ID,
-      "p-atlas",
+      "p-arda",
       50,
-      ["embedding"],
-      JSON.stringify(ATLAS_QUOTA),
+      ["dataset.read"],
+      JSON.stringify(ARDA_QUOTA),
       0,
     ]);
     expect(insertParams[1]).toEqual([
       VERSION_ID,
-      "p-runos",
+      "p-terra",
       20,
       [],
-      JSON.stringify(RUNOS_QUOTA),
+      JSON.stringify(TERRA_QUOTA),
       1,
     ]);
 
@@ -344,20 +379,20 @@ describe("bundled components — full replace", () => {
     expect(audit[4]).toBe("karda-pro@v2");
     expect(JSON.parse(audit[5] as string)).toEqual([
       {
-        productCode: "runos",
-        quota: { "compute.minutes": 1 },
+        productCode: "terra",
+        quota: { "dataset.max": 1 },
         features: [],
         priority: 50,
       },
     ]);
     expect(JSON.parse(audit[6] as string)).toEqual([
       {
-        productCode: "atlas",
-        quota: ATLAS_QUOTA,
-        features: ["embedding"],
+        productCode: "arda",
+        quota: ARDA_QUOTA,
+        features: ["dataset.read"],
         priority: 50,
       },
-      { productCode: "runos", quota: RUNOS_QUOTA, features: [], priority: 20 },
+      { productCode: "terra", quota: TERRA_QUOTA, features: [], priority: 20 },
     ]);
 
     // response = the GET detail shape, bundled rows included
@@ -367,13 +402,13 @@ describe("bundled components — full replace", () => {
       detail.components.map((c) => [c.productCode, c.componentRole]),
     ).toEqual([
       ["karda", "primary"],
-      ["atlas", "bundled"],
+      ["arda", "bundled"],
     ]);
     expect(detail.components[1]).toMatchObject({
-      productName: "Atlas",
+      productName: "Arda",
       tier: null,
-      quota: ATLAS_QUOTA,
-      features: ["embedding"],
+      quota: ARDA_QUOTA,
+      features: ["dataset.read"],
       priority: 50,
     });
   });

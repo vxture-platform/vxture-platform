@@ -12,6 +12,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -838,6 +839,262 @@ export class ProductsRouter {
   }
 
   /**
+   * 删除草稿版本（物理删）。
+   *
+   * `plan_versions` **没有 `deleted_at`** —— 版本要么在、要么不在，没有软删这一档。
+   * 所以这里是真删，而且只对 `draft` 且 `NOT is_locked` 的行：已发布版本被三条
+   * §7 触发器钉死（锁守卫拦 components/prices 的增删改、is_locked 不可清除），
+   * 要删就得先拆「已发布不可变」这条地基——不做。
+   *
+   * 当前版本指针也要挡：草稿理论上不会是 `current_version_id`（发布才设指针），
+   * 但并发下指针可能刚被挪过来，所以事务内一并复核，不假定。
+   *
+   * owner 2026-09-18：**所有删除一律 step-up**，不按「草稿不可售所以无害」分级。
+   */
+  @Delete("plan-versions/:versionId")
+  @RequireStepUp()
+  async deletePlanVersion(
+    @Req() req: Request & RequestContext,
+    @Param("versionId") versionId: string,
+  ): Promise<{ deleted: true; versionId: string }> {
+    assertCanManageProducts(req);
+    await withTransaction(this.rwPool, async (client) => {
+      const cur = await client.query<{
+        plan_id: string;
+        plan_code: string;
+        version_no: number;
+        status: string;
+        is_locked: boolean;
+        is_current: boolean;
+      }>(
+        `SELECT pv.plan_id, p.plan_code, pv.version_no, pv.status, pv.is_locked,
+                (pv.id = p.current_version_id) AS is_current
+           FROM product.plan_versions pv
+           JOIN product.plans p ON p.id = pv.plan_id
+          WHERE pv.id = $1
+          FOR UPDATE OF pv`,
+        [versionId],
+      );
+      const row = cur.rows[0];
+      if (!row) {
+        throw new NotFoundException(`Plan version ${versionId} not found`);
+      }
+      if (row.status !== "draft" || row.is_locked) {
+        throw new ConflictException(
+          `${row.plan_code}@v${row.version_no} is ${row.status}${row.is_locked ? " and locked" : ""} — only an unlocked draft can be deleted`,
+        );
+      }
+      if (row.is_current) {
+        throw new ConflictException(
+          `${row.plan_code}@v${row.version_no} is the plan's current version`,
+        );
+      }
+      /* prices / components 是 ON DELETE CASCADE 的子行，随版本行一并消失。 */
+      await client.query(`DELETE FROM product.plan_versions WHERE id = $1`, [
+        versionId,
+      ]);
+      await insertOperatorAuditLog(client, req, {
+        action: "product.plan_version.delete",
+        resourceType: "product_plan_version",
+        resourceId: `${row.plan_code}@v${row.version_no}`,
+        before: { status: row.status, isLocked: row.is_locked },
+        after: null,
+      });
+    });
+    return { deleted: true, versionId };
+  }
+
+  /**
+   * 套餐可删性预检（两步删除第一步）——只读，回一份影响面。
+   *
+   * 门户据此决定「删除」按钮出不出现：**判据成立才给按钮**，而不是让人点下去
+   * 才吃一个 409。形状照 opera 的 `deletion-preview`（`deletable` + `blockers`
+   * 原因码 + 计数），两处口径保持一致。
+   *
+   * 读路由**不 gate step-up**（与 opera 同）——预检本身不改任何东西。
+   */
+  @Get("plans/:planId/deletable")
+  async planDeletable(
+    @Req() req: Request & RequestContext,
+    @Param("planId") planId: string,
+  ): Promise<PlanDeletionImpact> {
+    assertCanManageProducts(req);
+    const exists = await this.pool.query<{ plan_code: string }>(
+      `SELECT plan_code FROM product.plans WHERE id = $1 AND deleted_at IS NULL`,
+      [planId],
+    );
+    if (!exists.rows[0]) {
+      throw new NotFoundException(`Plan ${planId} not found`);
+    }
+    return readPlanDeletionImpact(this.pool, planId);
+  }
+
+  /**
+   * 软删套餐（两步删除第二步）。
+   *
+   * 与退役的分工照产品那套：退役 = 可见的终态「已退役」（曾合法售卖、现下线，
+   * 老订阅照付）；软删 = 「本不该在册」，从运营视野里隐去。所以**卖过就不能删**，
+   * 只能退役——三条判据任一成立即 409 并点名是哪一条挡着。
+   *
+   * 判据落在真实引用上：`metering.subscriptions.plan_version_id`（在订阅）、
+   * `billing.orders.plan_version_id`（订单历史）、`product.solution_plans.plan_id`
+   * （方案绑定）。`plan_prices` / `plan_components` 是 CASCADE 子行，不构成阻挡。
+   *
+   * 事务内 `FOR UPDATE` 之后**再复核一次**判据：预检与执行之间新产生的订阅要挡住
+   * （TOCTOU）。这一条照抄 opera 产品删除的做法，不是我另想的。
+   */
+  @Delete("plans/:planId")
+  @RequireStepUp()
+  async deletePlan(
+    @Req() req: Request & RequestContext,
+    @Param("planId") planId: string,
+    @Body() body: PlanDeleteBody,
+  ): Promise<{ deleted: true; planCode: string }> {
+    assertCanManageProducts(req);
+    /* 服务端也要显式确认——两步删除的第二步不该被一个漏参的 DELETE 顶穿。 */
+    if (body?.confirm !== true) {
+      throw new BadRequestException(
+        "delete requires confirm=true (two-step deletion)",
+      );
+    }
+    let planCode = "";
+    await withTransaction(this.rwPool, async (client) => {
+      const cur = await client.query<{
+        id: string;
+        plan_code: string;
+        status: string;
+      }>(
+        `SELECT id, plan_code, status FROM product.plans
+          WHERE id = $1 AND deleted_at IS NULL
+          FOR UPDATE`,
+        [planId],
+      );
+      const row = cur.rows[0];
+      if (!row) {
+        throw new NotFoundException(`Plan ${planId} not found`);
+      }
+      planCode = row.plan_code;
+      /* 事务内复核（防 TOCTOU）——预检那次的结论在这里不算数。 */
+      const impact = await readPlanDeletionImpact(client, planId);
+      if (!impact.deletable) {
+        throw new ConflictException(
+          `${row.plan_code} has customer footprint (${impact.blockers.join(", ")}) — deprecate it instead`,
+        );
+      }
+      await client.query(
+        `UPDATE product.plans
+            SET deleted_at = now(), updated_by = $2, updated_at = now()
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [planId, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.plan.delete",
+        resourceType: "product_plan",
+        resourceId: row.plan_code,
+        before: { status: row.status, deletedAt: null },
+        after: { status: row.status, deletedAt: "now()" },
+      });
+    });
+    return { deleted: true, planCode };
+  }
+
+  /**
+   * 退役一档：`status = deprecated`，套餐连同它的全部版本退出主视线。
+   *
+   * 与软删的分工见 `deletePlan` 的头注。退役**不要求无足迹**——正相反，卖过的
+   * 套餐只有这一条路：老订阅仍钉在它的版本上照常解析，新客户买不到。
+   *
+   * 它同时让开档位：`PLAN_TIER_AXIS_OCCUPANCY_SQL` 写着
+   * `p.status <> 'deprecated'`，所以退役之后同产品同档可以重新建套餐。
+   *
+   * 不是删除，但与 publish 同风险级（都改「客户买得到什么」），照它挂 step-up。
+   */
+  @Post("plans/:planId/deprecate")
+  @RequireStepUp()
+  async deprecatePlan(
+    @Req() req: Request & RequestContext,
+    @Param("planId") planId: string,
+  ): Promise<{ deprecated: true; planCode: string }> {
+    assertCanManageProducts(req);
+    let planCode = "";
+    await withTransaction(this.rwPool, async (client) => {
+      const cur = await client.query<{ plan_code: string; status: string }>(
+        `SELECT plan_code, status FROM product.plans
+          WHERE id = $1 AND deleted_at IS NULL
+          FOR UPDATE`,
+        [planId],
+      );
+      const row = cur.rows[0];
+      if (!row) {
+        throw new NotFoundException(`Plan ${planId} not found`);
+      }
+      planCode = row.plan_code;
+      if (row.status === "deprecated") {
+        throw new BadRequestException(`${row.plan_code} is already deprecated`);
+      }
+      await client.query(
+        `UPDATE product.plans
+            SET status = 'deprecated', updated_by = $2, updated_at = now()
+          WHERE id = $1`,
+        [planId, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.plan.deprecate",
+        resourceType: "product_plan",
+        resourceId: row.plan_code,
+        before: { status: row.status },
+        after: { status: "deprecated" },
+      });
+    });
+    return { deprecated: true, planCode };
+  }
+
+  /**
+   * 配额候选清单：平台级键 + 该产品自己登记的键，合并成一份带归属的选项表。
+   *
+   * 这是草稿编辑器那两列穿梭选择器的数据源——**为的是不再让运营手写 JSON**。
+   * 两组必须分开标：写进 WS 共享键是往跨产品共用的池贡献额度，本产品键只进
+   * 自己的池。而这条边界不是界面上的分类习惯，是库强制的：
+   * `trg_product_metrics_no_platform_shadow` 不许产品在自己的 `product_metrics`
+   * 里声明平台已有的键。
+   *
+   * `platform_metrics.status='reserved'` 的行照回，但标出来——它们已登记、尚不可用，
+   * 藏起来会让人以为键不存在而去产品侧另造一个同名的（那会被上面那条触发器拒）。
+   */
+  @Get("products/:productCode/metric-options")
+  async listMetricOptions(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<MetricOption[]> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(productCode);
+    const product = await this.pool.query<{ id: string }>(
+      `SELECT id FROM product.products WHERE product_code = $1 AND deleted_at IS NULL`,
+      [code],
+    );
+    if (!product.rows[0]) {
+      throw new NotFoundException({
+        message: `Product ${code} not found`,
+        field: "productCode",
+      });
+    }
+    const { rows } = await this.pool.query<MetricOptionRow>(
+      METRIC_OPTIONS_SQL,
+      [product.rows[0].id],
+    );
+    return rows.map((row) => ({
+      metricKey: row.metric_key,
+      scope: row.scope === "platform" ? "platform" : "product",
+      kind: row.kind,
+      mergeStrategy: row.merge_strategy,
+      consumeMode: row.consume_mode,
+      metricUnit: row.metric_unit,
+      resetPeriod: row.reset_period,
+      reserved: row.reserved,
+    }));
+  }
+
+  /**
    * Full replace of a draft version's bundled component set (PUT semantics,
    * 30-management-api.md §1: what is sent is what remains; an empty list clears).
    *
@@ -928,9 +1185,18 @@ export class ProductsRouter {
   @Get("plan-matrix")
   async listPlanMatrix(
     @Req() req: Request & RequestContext,
+    @Query("include") include?: string,
   ): Promise<PlanMatrixProduct[]> {
     assertCanManageProducts(req);
-    const { rows } = await this.pool.query<PlanMatrixRow>(PLAN_MATRIX_SQL);
+    /* 默认收起已退役的套餐：退役=「这一档不卖了」,它连同全部版本退出主视线,
+       但**不是删除**——老订阅仍钉在它的版本上照常解析,所以行还在、查得到。
+       `?include=deprecated` 让二级页的「已退役」分区把它们取回来。
+       开关写成 ($1::bool OR ...) 而不是拼 SQL:一插值 lint:anchor-writes
+       就抽不到列名、当场变瞎且恒绿。 */
+    const includeDeprecated = include === "deprecated";
+    const { rows } = await this.pool.query<PlanMatrixRow>(PLAN_MATRIX_SQL, [
+      includeDeprecated,
+    ]);
     return groupPlanMatrix(rows);
   }
 
@@ -1134,6 +1400,141 @@ export class ProductsRouter {
 
 // ── plan version lifecycle: types · SQL · loaders (product_320) ─────────────
 
+/**
+ * 套餐可删性影响面。形状对齐 opera 的 `ProductDeletionImpact`（deletable +
+ * blockers 原因码）——两处是同一件事的两个入口，口径不该各说各话。
+ */
+export interface PlanDeletionImpact {
+  deletable: boolean;
+  /** 挡住删除的原因码（deletable=false 时非空），供门户直接给出去处。 */
+  blockers: string[];
+  /** 该套餐**全部版本**上钉过的订阅数（含已软删——卖过就是卖过）。 */
+  subscriptions: number;
+  /** 引用该套餐任一版本的订单数（订单是钱的台账，只增不减）。 */
+  orders: number;
+  /** 绑定该套餐的服务方案档位数（solution_plans.plan_id 唯一，至多 1）。 */
+  solutionBindings: number;
+}
+
+/** DELETE /plans/:planId body —— 两步删除的第二步显式确认。 */
+export interface PlanDeleteBody {
+  confirm?: boolean;
+}
+
+/**
+ * 配额候选项：平台级键与产品自有键归一成同一形状，靠 `scope` 分组。
+ *
+ * 两组的差别不是分类习惯，是库强制的边界：
+ * `trg_product_metrics_no_platform_shadow` 不许产品在自己的 `product_metrics`
+ * 里声明 `platform_metrics` 已有的键。所以同一个 metricKey 不可能两边都出现。
+ */
+export interface MetricOption {
+  metricKey: string;
+  /** platform = 跨产品共用一个池；product = 只进这个产品自己的池。 */
+  scope: "platform" | "product";
+  /** platform_metrics.kind（counter/gauge）；产品自有键为 null。 */
+  kind: string | null;
+  /** product_metrics.merge_strategy（max/union/pool/tiered）；平台键为 null。 */
+  mergeStrategy: string | null;
+  consumeMode: string | null;
+  metricUnit: string | null;
+  resetPeriod: string;
+  /** 平台键已登记但尚不可用（status='reserved'）。照回但要标出来—— */
+  /** 藏起来会让人以为键不存在，转去产品侧另造一个同名的，那会被触发器拒。 */
+  reserved: boolean;
+}
+
+interface MetricOptionRow {
+  metric_key: string;
+  scope: string;
+  kind: string | null;
+  merge_strategy: string | null;
+  consume_mode: string | null;
+  metric_unit: string | null;
+  reset_period: string;
+  reserved: boolean;
+}
+
+/**
+ * 配额候选：两张登记表 UNION 成一份清单。
+ *
+ * `platform_metrics` 是平台级、不属于任何产品，所以不带 product_id 条件；
+ * `product_metrics` 只取这一个产品的。ORDER BY 把 platform 排在前面
+ * （字典序 platform < product），与编辑器左栏「WS 共享 / 本产品」的分组同序。
+ */
+const METRIC_OPTIONS_SQL = `
+  SELECT metric_key,
+         'platform' AS scope,
+         kind,
+         NULL::varchar AS merge_strategy,
+         consume_mode,
+         metric_unit,
+         reset_period,
+         (status = 'reserved') AS reserved
+    FROM product.platform_metrics
+   UNION ALL
+  SELECT metric_key,
+         'product' AS scope,
+         NULL::varchar AS kind,
+         merge_strategy,
+         consume_mode,
+         metric_unit,
+         reset_period,
+         false AS reserved
+    FROM product.product_metrics
+   WHERE product_id = $1
+   ORDER BY scope ASC, metric_key ASC
+`;
+
+/**
+ * 三条判据：卖过的套餐不能删，只能退役。
+ *
+ * **订阅与订单都经该套餐的全部版本反查**，不是只看 `current_version_id`——
+ * 一个卖过 v1、又开了 v2 的套餐，current 指向 v2，只看 current 会把它误判成
+ * 可删，而 v1 上还钉着老客户。
+ *
+ * **不滤 `deleted_at`**：软删一条订阅不等于它没卖过；订单更是只增不减的钱账。
+ * 判据问的是「这个套餐有没有客户足迹」，答案一旦为真就永远为真。
+ *
+ * 子行（plan_prices / plan_components）是 ON DELETE CASCADE，不构成阻挡；
+ * `plans.current_version_id` 是自指针，也不算外部引用。
+ */
+async function readPlanDeletionImpact(
+  db: Pick<Pool, "query"> | Pick<PoolClient, "query">,
+  planId: string,
+): Promise<PlanDeletionImpact> {
+  const { rows } = await db.query<{
+    subscriptions: string;
+    orders: string;
+    solution_bindings: string;
+  }>(
+    `SELECT
+       (SELECT count(*) FROM metering.subscriptions s
+          JOIN product.plan_versions pv ON pv.id = s.plan_version_id
+         WHERE pv.plan_id = $1) AS subscriptions,
+       (SELECT count(*) FROM billing.orders o
+          JOIN product.plan_versions pv ON pv.id = o.plan_version_id
+         WHERE pv.plan_id = $1) AS orders,
+       (SELECT count(*) FROM product.solution_plans sp
+         WHERE sp.plan_id = $1) AS solution_bindings`,
+    [planId],
+  );
+  const row = rows[0];
+  const subscriptions = Number(row?.subscriptions ?? 0);
+  const orders = Number(row?.orders ?? 0);
+  const solutionBindings = Number(row?.solution_bindings ?? 0);
+  const blockers: string[] = [];
+  if (subscriptions > 0) blockers.push("HAS_SUBSCRIPTIONS");
+  if (orders > 0) blockers.push("HAS_ORDERS");
+  if (solutionBindings > 0) blockers.push("HAS_SOLUTION_BINDING");
+  return {
+    deletable: blockers.length === 0,
+    blockers,
+    subscriptions,
+    orders,
+    solutionBindings,
+  };
+}
 interface PlanVersionPrice {
   cycleUnit: string;
   price: string;
@@ -1148,6 +1549,17 @@ interface PlanVersionSummary {
   /** ISO timestamp — the version timeline is unreadable without a date axis. */
   createdAt: string;
   prices: PlanVersionPrice[];
+  /**
+   * 还钉在这一版上的订阅数（不含已软删）。
+   *
+   * 版本史要把「当前在售 / 仍在服务 / 已停用」分开呈现,而 plan_versions.status
+   * 只有 draft|published 两个值——第三、四态靠这个计数与 isCurrent 一起判出来,
+   * 不新增存储态（那会和 current_version_id 长出第二份真相）。
+   *
+   * 注意它与删除判据口径不同:那边问「卖过没有」(含软删、含订单),这边问
+   * 「现在还有没有人钉着」。
+   */
+  subscriptionCount: number;
 }
 
 /** One plan_components row as the editor sees it (primary and bundled alike). */
@@ -1246,11 +1658,14 @@ interface PlanVersionSummaryRow {
   is_current: boolean;
   created_at: Date | string;
   prices: PlanVersionPrice[];
+  subscription_count: number;
 }
 
 const PLAN_VERSIONS_SQL = `
   SELECT pv.id, pv.version_no, pv.status, pv.is_locked, pv.created_at,
          (pv.id = p.current_version_id) AS is_current,
+         (SELECT count(*)::int FROM metering.subscriptions s
+           WHERE s.plan_version_id = pv.id AND s.deleted_at IS NULL) AS subscription_count,
          COALESCE((
            SELECT jsonb_agg(jsonb_build_object('cycleUnit', pp.cycle_unit, 'price', to_char(pp.price, 'FM999999999990.00'))
                             ORDER BY pp.cycle_unit)
@@ -1271,6 +1686,7 @@ function mapPlanVersionSummary(row: PlanVersionSummaryRow): PlanVersionSummary {
     isCurrent: row.is_current,
     createdAt: new Date(row.created_at).toISOString(),
     prices: row.prices ?? [],
+    subscriptionCount: Number(row.subscription_count ?? 0),
   };
 }
 
@@ -1481,12 +1897,16 @@ async function resolveBundledComponents(
   primary: PrimaryComponentRow | null,
 ): Promise<ResolvedBundledComponent[]> {
   if (items.length === 0) return [];
-  const { rows } = await client.query<{ id: string; product_code: string }>(
-    `SELECT id, product_code FROM product.products
+  const { rows } = await client.query<{
+    id: string;
+    product_code: string;
+    layer: string | null;
+  }>(
+    `SELECT id, product_code, layer FROM product.products
       WHERE deleted_at IS NULL AND product_code = ANY($1::text[])`,
     [items.map((item) => item.productCode)],
   );
-  const byCode = new Map(rows.map((row) => [row.product_code, row.id]));
+  const byCode = new Map(rows.map((row) => [row.product_code, row]));
   return items.map((item, index) => {
     const field = `components[${index}].productCode`;
     if (primary && item.productCode === primary.product_code) {
@@ -1494,14 +1914,30 @@ async function resolveBundledComponents(
         `${field}: ${item.productCode} is this version's primary product and cannot be bundled into itself`,
       );
     }
-    const productId = byCode.get(item.productCode);
-    if (!productId) {
+    const found = byCode.get(item.productCode);
+    if (!found) {
       throw new NotFoundException({
         statusCode: 404,
         message: `Product ${item.productCode} not found`,
         field,
       });
     }
+    /* 可被绑的只有 L2 域平台（owner 2026-09-17）。
+       L1 基础支撑不绑——它的额度走平台级度量键（ai.credit 在 platform_metrics，
+       且 trg_product_metrics_no_platform_shadow 禁止产品声明它），套餐里写一行
+       配额就进平台池，不需要把 atlas 当组件绑进来。
+       L3 智能体不能**被**绑——它卖的就是那套界面，抽掉前端什么都不剩；
+       但 L3 自己的套餐仍可绑 L2（product_220 §2 的 raven-pro 捆 arda 不受影响）。
+       未分层（layer IS NULL）一并挡下：宁可让运营先去产品目录补上分层，
+       也不放一个来路不明的组件进客户买到的配额里。 */
+    if (found.layer !== "L2") {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: `${item.productCode} is ${found.layer ?? "unclassified"}; only L2 domain platforms can be bundled`,
+        field,
+      });
+    }
+    const productId = found.id;
     const priority = item.priority ?? DEFAULT_BUNDLED_PRIORITY;
     if (primary && priority >= primary.priority) {
       throw new BadRequestException(
@@ -2997,6 +3433,7 @@ const PLAN_MATRIX_SQL = `
            LIMIT 1
         ) d ON true
        WHERE p.deleted_at IS NULL
+         AND ($1::bool OR p.status <> 'deprecated')
     ) plan ON true
    WHERE pr.deleted_at IS NULL AND pr.standalone_subscribable
    ORDER BY pr.sort ASC, pr.product_name ASC, pr.product_code ASC, plan.plan_code ASC

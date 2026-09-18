@@ -348,6 +348,20 @@ middleware 顺序：`auth → capabilities → router`
 
 **POST `/api/products/plans/:planId/versions`** — 开下一个草稿版本（自当前发布版克隆 components + prices + trial，version_no = max+1；已有在途草稿 409——每套餐同时至多一个草稿；审计 `product.plan_version.create`，resource_id = `plan_code@vN`；返回 `PlanVersionDetail`）
 
+**DELETE `/api/products/plan-versions/:versionId`** — 删除草稿版本（`@RequireStepUp`；只放行 `status='draft' AND NOT is_locked`，已发布 / 已锁 → 409。`plan_versions` **没有 `deleted_at`**，所以这是**物理删**；已发布版本被 §7 三条触发器钉死，要删得先拆「已发布不可变」这条地基，不做。并发下指针可能刚被挪过来，所以「恰好是 current」在事务内 `FOR UPDATE` 之后**复核**一次 → 409；审计 `product.plan_version.delete`，resource_id = `plan_code@vN`）
+
+**GET `/api/products/plans/:planId/deletable`** — 可删性预检（只读，**不 gate step-up**）：`{deletable, blockers[], subscriptions, orders, solutionBindings}`。形状对齐 opera 的 `deletion-preview`，门户据此决定「删除」按钮出不出现，而不是让人点下去才吃一个 409
+
+**DELETE `/api/products/plans/:planId`** — 软删套餐（`@RequireStepUp`；`body.confirm !== true` → 400——两步删除的第二步不该被一个漏参的 DELETE 顶穿。事务内 `FOR UPDATE` 之后**再复核一次判据**，挡预检与执行之间新产生的订阅（TOCTOU）。三条判据落在真实引用上：`metering.subscriptions.plan_version_id` / `billing.orders.plan_version_id` / `product.solution_plans.plan_id`，前两条经该套餐**全部版本**反查（只看 `current_version_id` 会把「卖过 v1、又开了 v2」误判成可删）且**不滤 `deleted_at`**（软删一条订阅不等于它没卖过）；任一非零 → 409 带 `blockers`；子行 `plan_prices` / `plan_components` 是 CASCADE，不构成阻挡；审计 `product.plan.delete`）
+
+**POST `/api/products/plans/:planId/deprecate`** — 退役套餐（`@RequireStepUp`；已 deprecated → 400；`status = 'deprecated'`，同时让开档位——`PLAN_TIER_AXIS_OCCUPANCY_SQL` 写着 `p.status <> 'deprecated'`；审计 `product.plan.deprecate`）
+
+> **退役与软删的分工**：退役 = 可见的终态（曾合法售卖、现下线，老订阅照付）；软删 = 「本不该在册」。所以**卖过就不能删，只能退役**——这也是上面那三条判据存在的理由。
+
+**GET `/api/products/products/:productCode/metric-options`** — 配额候选（`platform_metrics` 与该产品的 `product_metrics` 归一成一份带归属的清单：`{metricKey, scope, kind, mergeStrategy, consumeMode, metricUnit, resetPeriod, reserved}`，`scope` ASC 排序）。草稿编辑器那两列穿梭选择器的数据源，为的是不再让运营手写 JSON。两组必须分开标，而这条边界是库强制的：`trg_product_metrics_no_platform_shadow` 不许产品声明平台已有的键；`reserved` 的平台键照回但标出来——藏起来会让人以为键不存在，转去产品侧另造一个同名的，那会被触发器拒
+
+> 路径里 `products` 出现两次不是笔误：控制器前缀是 `@Controller("api/products")`，路由段是 `products/:productCode/metric-options`。别「顺手修掉」。
+
 > `POST /plan-versions/:versionId/publish` 自 2026-09-01 起带**档位占用守卫**：同产品同档已有其他套餐的当前发布版 → 409（先退役 / 弃用旧套餐）。同套餐 v2 覆盖 v1 不受影响。
 
 **GET `/api/products/agents`** — Agent 目录
