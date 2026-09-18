@@ -205,8 +205,19 @@ function ShellFrame({
           label: tNav.has(`items.${it.id}.label`)
             ? tNav(`items.${it.id}.label`)
             : it.label,
+          /* 副名走配置里的英文原词，不走词条：它的用途是让人把中文菜单名对上审计
+             事件与 API 里的那个词（opera 规则一），那个词在两种界面语言下是同一个，
+             翻译它等于把这条路断掉。
+
+             条件展开而不是 `subLabel: it.subLabel`——本仓开着
+             `exactOptionalPropertyTypes`，「不传这个键」与「传了但值是 undefined」
+             是两件事，后者对 `subLabel?: string` 不合法。 */
+          ...(it.subLabel === undefined ? {} : { subLabel: it.subLabel }),
           icon: it.icon,
         })),
+        ...(section.dividerBefore === undefined
+          ? {}
+          : { dividerBefore: section.dividerBefore }),
       })),
     [activeWorkspace, tNav],
   );

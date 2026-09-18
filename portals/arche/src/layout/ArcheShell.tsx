@@ -335,7 +335,9 @@ export function ArcheShell({
                       {
                         key: "arche",
                         icon: "squares-four",
-                        label: "治理平台",
+                        label: "治理平面",
+                        description:
+                          "身份、权限、安全审计与系统配置的治理平面。",
                         active: true,
                       },
                     ]}
@@ -354,7 +356,7 @@ export function ArcheShell({
                       看起来像换了颜色。排版角色是字号/字重/行高/字距一整套，
                       单挑一项覆盖，同一个角色在各处就会长得不一样。 */}
                   <span className="hidden truncate text-label-md text-muted-foreground md:inline">
-                    治理平台
+                    治理平面
                   </span>
                 </>
               }
