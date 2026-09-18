@@ -72,6 +72,8 @@ interface ProductRow {
   liveTiers: string[];
   /** 只有在途草稿、尚未发布的档位。 */
   draftTiers: string[];
+  /** 同一档挂了多于一条套餐的档位——库里允许，界面必须标出来。 */
+  crowdedTiers: Set<string>;
   planCount: number;
   versionCount: number;
   subscriptionCount: number;
@@ -80,21 +82,33 @@ interface ProductRow {
 }
 
 function toRow(product: PlanMatrixProduct): ProductRow {
-  const liveTiers: string[] = [];
-  const draftTiers: string[] = [];
+  // 按档位聚合，不按套餐逐个渲：库里**不禁止同档多套餐**（arda 的 pro 档挂着两条），
+  // 逐个渲会让同一档出现两枚同名 chip，看起来像多出一个档位——那正是初版让人数出
+  // 「6 个档位」的原因。同档多于一条时只出一枚 chip，并在 crowdedTiers 里标出来。
+  const live = new Set<string>();
+  const draft = new Set<string>();
+  const perTier = new Map<string, number>();
   for (const plan of product.plans) {
+    perTier.set(plan.tier, (perTier.get(plan.tier) ?? 0) + 1);
     if (plan.currentVersion) {
-      liveTiers.push(plan.tier);
+      live.add(plan.tier);
     } else if (plan.draftVersion) {
-      draftTiers.push(plan.tier);
+      draft.add(plan.tier);
     }
   }
+  const liveTiers = [...live];
+  // 只有草稿、且该档没有在售版本的，才算「草稿档」——否则同一档会既是在售又是草稿。
+  const draftTiers = [...draft].filter((tier) => !live.has(tier));
+  const crowdedTiers = new Set(
+    [...perTier.entries()].filter(([, n]) => n > 1).map(([tier]) => tier),
+  );
   return {
     productCode: product.productCode,
     productName: product.productName,
     productStatus: product.productStatus,
     liveTiers,
     draftTiers,
+    crowdedTiers,
     planCount: product.plans.length,
     versionCount: product.plans.reduce((sum, p) => sum + p.versionCount, 0),
     subscriptionCount: product.plans.reduce(
@@ -240,7 +254,9 @@ export function PlanPublishingListPage() {
                 variant="outline"
                 className={tierBadgeClass(tier)}
               >
-                {tierLabel(tier)}
+                {row.crowdedTiers.has(tier)
+                  ? `${tierLabel(tier)} · ${t("detail.crowded")}`
+                  : tierLabel(tier)}
               </Badge>
             ))}
             {row.draftTiers.map((tier) => (
@@ -297,8 +313,9 @@ export function PlanPublishingListPage() {
   const rowMenuItems = (row: ProductRow): ActionMenuItem[] => [
     {
       id: "open",
-      label: row.planCount === 0 ? t("list.configure") : t("list.enter"),
-      icon: "arrow-right",
+      // 箭头只表达「往那边走」，与「查阅这个产品卖哪几档」无关；清单图标才贴语义。
+      label: row.planCount === 0 ? t("list.configure") : t("list.viewPlans"),
+      icon: "list-checks",
       onSelect: () => openDetail(row.productCode),
     },
   ];
@@ -423,7 +440,11 @@ export function PlanPublishingListPage() {
               title={t("list.empty")}
               description={t("lifecycle.note")}
               action={
-                <ActionButton variant="outline" icon="x" onClick={handleReset}>
+                <ActionButton
+                  variant="outline"
+                  icon="refresh"
+                  onClick={handleReset}
+                >
                   {tShared("common.clearFilters")}
                 </ActionButton>
               }

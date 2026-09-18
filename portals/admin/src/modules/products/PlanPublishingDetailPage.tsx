@@ -132,13 +132,6 @@ function priceLine(
     .join(" · ");
 }
 
-function editorHref(planId: string, versionId?: string): string {
-  const query = versionId
-    ? `?plan=${encodeURIComponent(planId)}&version=${encodeURIComponent(versionId)}`
-    : `?plan=${encodeURIComponent(planId)}`;
-  return `/plan-versions/editor${query}`;
-}
-
 /** 行操作菜单的外壳：`justify-self-end` 负责居右，与账号/产品列表同一写法。 */
 function RowMenu({
   label,
@@ -336,10 +329,14 @@ export function PlanPublishingDetailPage({
       const items: ActionMenuItem[] = [
         {
           id: "view",
+          // 版本是一份**契约文本**（客户按之掏钱的那份），不是一个去向，所以不用箭头。
           label: t("detail.view"),
-          icon: "arrow-right",
+          icon: "file-text",
           disabled: busy,
-          onSelect: () => router.push(editorHref(plan.planId, version.id)),
+          onSelect: () =>
+            router.push(
+              `/plan-versions/${encodeURIComponent(productCode)}/${encodeURIComponent(plan.planCode)}/${version.versionNo}`,
+            ),
         },
       ];
       // 「删除草稿」只对草稿成立——已发布版本压根没有这回事，所以不进数组，
@@ -365,7 +362,7 @@ export function PlanPublishingDetailPage({
       }
       return items;
     },
-    [busy, router, runWrite, t, withLabels],
+    [busy, productCode, router, runWrite, t, withLabels],
   );
 
   const header = (
@@ -430,13 +427,17 @@ export function PlanPublishingDetailPage({
                   icon: "edit",
                   disabled: busy,
                   onSelect: () =>
-                    router.push(editorHref(plan.planId, draft.id)),
+                    router.push(
+                      `/plan-versions/${encodeURIComponent(productCode)}/${encodeURIComponent(plan.planCode)}/${draft.versionNo}/edit`,
+                    ),
                 });
               }
               items.push({
                 id: "deprecate",
                 label: t("actions.deprecate"),
-                icon: "stop",
+                // stop 是「停止运行中的东西」；退役是**下架封存**——老订阅照付、行还在、
+                // 查得到。archive 才是这个意思。
+                icon: "archive",
                 disabled: busy,
                 danger: true,
                 confirm: withLabels({
@@ -639,9 +640,6 @@ export function PlanPublishingDetailPage({
                             reasons: impact.blockers.join(" / "),
                           })
                         : t("detail.blockedHint"),
-                      danger: true,
-                      confirmExempt:
-                        "项处于禁用态，点不动，不存在需要拦截的落锤动作。",
                     },
               ];
               return (

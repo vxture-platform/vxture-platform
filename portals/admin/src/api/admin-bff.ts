@@ -518,6 +518,41 @@ export async function deletePlan(planId: string): Promise<{ deleted: true }> {
   );
 }
 
+/** 配额候选：平台登记的键与该产品自有的键，归一成一份带归属的清单。 */
+export interface MetricOption {
+  metricKey: string;
+  /** platform = 跨产品共用一个池；product = 只进这个产品自己的池。 */
+  scope: "platform" | "product";
+  /** platform_metrics.kind（counter/gauge）；产品自有键为 null。 */
+  kind: string | null;
+  /** product_metrics.merge_strategy（max/union/pool/tiered）；平台键为 null。 */
+  mergeStrategy: string | null;
+  consumeMode: string | null;
+  metricUnit: string | null;
+  resetPeriod: string;
+  /** 平台键已登记但尚不可用（status='reserved'）。照回但要标出来—— */
+  /** 藏起来会让人以为键不存在，转去产品侧另造一个同名的，那会被触发器拒。 */
+  reserved: boolean;
+}
+
+/**
+ * 草稿编辑器那两列穿梭选择器的数据源。
+ *
+ * 服务端按 `scope ASC, metric_key ASC` 排序，所以「WS 共享」组天然排在
+ * 「本产品」组之前，前端不必再排一次。
+ *
+ * 两组分开标不是界面习惯，是库强制的边界：
+ * `trg_product_metrics_no_platform_shadow` 不许产品声明平台已有的键。
+ */
+export async function fetchMetricOptions(
+  productCode: string,
+): Promise<MetricOption[]> {
+  return readJson<MetricOption[]>(
+    `/api/products/products/${encodeURIComponent(productCode)}/metric-options`,
+    [],
+  );
+}
+
 // step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 /** 退役套餐：可见的终态，老订阅照付，同时让开档位。 */
 export async function deprecatePlan(
