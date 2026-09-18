@@ -3362,6 +3362,15 @@ export interface PlanMatrixPlan {
   /** The editable draft in flight; null = none open. */
   draftVersion: PlanMatrixVersionRef | null;
   versionCount: number;
+  /**
+   * 还钉在这个套餐**任一版本**上的活订阅数（`deleted_at IS NULL`）。
+   *
+   * 一级列表的「在订阅」列用它，并据此把「现在为 0」与「从未售出」分开呈现。
+   * **与删除判据的计数口径不同**：那边问的是「卖过没有」，所以**不滤**
+   * `deleted_at`；这里问的是「现在还有没有人在用」，所以滤。同一个词两处含义
+   * 不同，别互相套用。
+   */
+  subscriptionCount: number;
 }
 
 /** One row of the publishing desk: a sellable product and its tier ladder. */
@@ -3387,6 +3396,7 @@ interface PlanMatrixRow {
   draft_version_id: string | null;
   draft_version_no: number | null;
   version_count: number | null;
+  subscription_count: number | null;
 }
 
 /**
@@ -3400,7 +3410,8 @@ const PLAN_MATRIX_SQL = `
   SELECT pr.product_code, pr.product_name, pr.status AS product_status,
          plan.plan_id, plan.plan_code, plan.plan_name, plan.plan_status, plan.tier,
          plan.current_version_id, plan.current_version_no, plan.current_prices,
-         plan.draft_version_id, plan.draft_version_no, plan.version_count
+         plan.draft_version_id, plan.draft_version_no, plan.version_count,
+         plan.subscription_count
     FROM product.products pr
     LEFT JOIN LATERAL (
       SELECT p.id AS plan_id, p.plan_code, p.plan_name, p.status AS plan_status,
@@ -3412,7 +3423,14 @@ const PLAN_MATRIX_SQL = `
                  FROM product.plan_prices pp WHERE pp.plan_version_id = cv.id
              ), '[]'::jsonb) AS current_prices,
              d.id AS draft_version_id, d.version_no AS draft_version_no,
-             (SELECT count(*)::int FROM product.plan_versions v WHERE v.plan_id = p.id) AS version_count
+             (SELECT count(*)::int FROM product.plan_versions v WHERE v.plan_id = p.id) AS version_count,
+             -- 跨该套餐的全部版本反查活订阅，不只当前版本：一个客户订的是套餐，
+             -- 落到哪个版本由 current_version_id 解析。所以「这个套餐有多少人在用」
+             -- 必须跨版本数——只看当前版本会把仍钉在旧版上的老客户漏掉。
+             (SELECT count(*)::int
+                FROM metering.subscriptions s
+                JOIN product.plan_versions pv2 ON pv2.id = s.plan_version_id
+               WHERE pv2.plan_id = p.id AND s.deleted_at IS NULL) AS subscription_count
         FROM product.plans p
         JOIN LATERAL (
           SELECT pc.tier
@@ -3476,6 +3494,7 @@ function groupPlanMatrix(rows: PlanMatrixRow[]): PlanMatrixProduct[] {
           ? { id: row.draft_version_id, versionNo: row.draft_version_no }
           : null,
       versionCount: row.version_count ?? 0,
+      subscriptionCount: Number(row.subscription_count ?? 0),
     });
   }
   return [...byProduct.values()];
