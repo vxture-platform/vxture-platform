@@ -20,7 +20,7 @@
       "RATE_LIMITED": 0
     },
     "console-bff": {
-      "files": 48,
+      "files": 49,
       "retryable": 2,
       "NOT_ENTITLED": 0,
       "POLICY_DENIED": 0,
