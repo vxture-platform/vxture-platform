@@ -1251,9 +1251,11 @@ export default function AdminOverviewPage() {
         </StatusBadge>
       ) : null}
 
-      {/* 四张一行，窄屏折两列。间距与其余卡组同为 16px。 */}
+      {/* 三张一行，窄屏折两列。间距与其余卡组同为 16px。
+          卡数与列数必须一起改：2026-09-20 把四卡收成三卡时只动了数据、没动这里，
+          宽屏于是右边空出一格（owner 实看报出）。 */}
       <section
-        className="grid gap-md sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-md sm:grid-cols-2 lg:grid-cols-3"
         aria-label="平台核心态势"
       >
         {pulseMetrics.map((metric) => (
@@ -1289,6 +1291,7 @@ export default function AdminOverviewPage() {
         />
         <MetricGrid
           aria-label="产品供给指标"
+          columns={3}
           items={metricItems(productMetrics)}
         />
         <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-3">
@@ -1344,7 +1347,7 @@ export default function AdminOverviewPage() {
           >
             <MetricGrid
               aria-label="服务评价指标"
-              columns={3}
+              columns={2}
               items={metricItems(ratingMetrics)}
             />
           </Section>
