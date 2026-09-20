@@ -111,19 +111,6 @@ export function memberStatusLabel(status: TenantOperationMember["status"]) {
   return status === "active" ? "正常" : "停用";
 }
 
-/** 七值与订阅列表页同一份措辞（SubscriptionsPage.subscriptionStatusLabel）。 */
-export function subscriptionStatusLabel(
-  status: TenantOperationSubscription["status"],
-) {
-  if (status === "trialing") return "试用";
-  if (status === "active") return "已生效";
-  if (status === "expiring") return "即将到期";
-  if (status === "overdue") return "逾期";
-  if (status === "suspended") return "暂停";
-  if (status === "expired") return "已过期";
-  return "已取消";
-}
-
 export function subscriptionKindLabel(
   kind: TenantOperationSubscription["kind"],
 ) {

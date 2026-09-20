@@ -29,7 +29,6 @@ import type {
   SubscriptionOperationAction,
   SubscriptionOperationDetailRecord,
   SubscriptionOperationQuotaRisk,
-  SubscriptionOperationStatus,
 } from "@/entities/console";
 import {
   QUOTA_RISK_TONE,
@@ -38,6 +37,7 @@ import {
 import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
+import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
 import {
   canRunSubscriptionAction,
   SubscriptionOperationDialog,
@@ -60,16 +60,6 @@ const TIMELINE_TONE: Record<string, StatusBadgeTone> = {
   warning: "warning",
   danger: "danger",
 };
-
-function subscriptionStatusLabel(status: SubscriptionOperationStatus) {
-  if (status === "trialing") return "试用";
-  if (status === "active") return "已生效";
-  if (status === "expiring") return "即将到期";
-  if (status === "overdue") return "逾期";
-  if (status === "suspended") return "暂停";
-  if (status === "expired") return "已到期";
-  return "已取消";
-}
 
 function quotaRiskLabel(risk: SubscriptionOperationQuotaRisk) {
   if (risk === "danger") return "高风险";
@@ -111,6 +101,7 @@ function SubscriptionSummary({
 }: {
   subscription: SubscriptionOperationDetailRecord;
 }) {
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
   return (
     <DetailSummaryHeader
       icon="star"
@@ -123,7 +114,7 @@ function SubscriptionSummary({
       badges={
         <>
           <StatusBadge tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}>
-            {subscriptionStatusLabel(subscription.status)}
+            {subscriptionStatusLabels[subscription.status]}
           </StatusBadge>
           <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
             {quotaRiskLabel(subscription.quota.risk)}
@@ -177,6 +168,7 @@ function SubscriptionDetails({
 }) {
   const locale = useLocale();
   const tShared = useTranslations();
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
     : null;
@@ -200,7 +192,7 @@ function SubscriptionDetails({
             {orUnset(typeLabel(subscription.tenantType))}
           </DetailRow>
           <DetailRow label="订阅状态">
-            {orUnset(subscriptionStatusLabel(subscription.status))}
+            {orUnset(subscriptionStatusLabels[subscription.status])}
           </DetailRow>
           <DetailRow label="计费周期">
             {orUnset(cycleLabel(subscription.cycleType))}

@@ -44,6 +44,7 @@ import {
 import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
+import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
 import {
   canConfirmOrderOfflinePayment,
   confirmOfflinePaymentDisabledReason,
@@ -124,17 +125,6 @@ function restoreDisabledReason(order: OrderOperationDetailRecord) {
   return "该订单不是可恢复的已取消状态（已激活过的订阅取消后无法在此恢复）。";
 }
 
-function subscriptionStatusLabel(
-  status: OrderOperationDetailRecord["subscriptionStatus"],
-) {
-  if (status === "trialing") return "试用";
-  if (status === "active") return "已生效";
-  if (status === "expiring") return "即将到期";
-  if (status === "overdue") return "逾期";
-  if (status === "suspended") return "暂停";
-  return "已取消";
-}
-
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
   const tShared = useTranslations();
@@ -199,6 +189,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
   return (
     <section
       className="grid min-w-0 gap-xl"
@@ -255,7 +246,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         <DetailList columns={3}>
           <DetailRow label="订阅 ID">{orUnset(order.subscriptionId)}</DetailRow>
           <DetailRow label="订阅状态">
-            {orUnset(subscriptionStatusLabel(order.subscriptionStatus))}
+            {orUnset(subscriptionStatusLabels[order.subscriptionStatus])}
           </DetailRow>
           <DetailRow label="计费周期">
             {orUnset(cycleLabel(order.cycleType))}

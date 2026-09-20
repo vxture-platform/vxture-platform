@@ -2388,5 +2388,16 @@
     "selectAll": "Select all rows on this page",
     "deselectAll": "Deselect all rows on this page",
     "selectRow": "Select row"
+  },
+  "enums": {
+    "subscriptionStatus": {
+      "active": "Active",
+      "expiring": "Expiring soon",
+      "trialing": "Trial",
+      "overdue": "Overdue",
+      "suspended": "Suspended",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    }
   }
 }
