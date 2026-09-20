@@ -57,7 +57,9 @@ import {
 } from "@/components/load/LoadFailed";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductsUrl } from "@/lib/website-entry";
+import { fetchReviewedSubscriptionIds } from "@/api/console-bff";
 import { SubscriptionProductCard } from "./components/hubCards";
+import { ReviewDialog } from "./components/ReviewDialog";
 import { daysLeft } from "./components/hubModel";
 import { useDateFormat } from "@/lib/use-date-format";
 
@@ -90,6 +92,16 @@ export function SubscriptionPage() {
   /* 配额总览:只为「我的资源包」取。null = 没读到——与「读到了但没有池」
      是两件事,后者是合法空态。 */
   const [quota, setQuota] = useState<ConsoleQuotaOverview | null>(null);
+  /* 哪些订阅已评过。整页一次问完(见 fetchReviewedSubscriptionIds)——逐卡各问
+     一次会打出 N+1。读失败不置 loadFailed:评价是附加信息,取不到就当都没评过,
+     客户顶多多点一次、由服务端 409 兜住;为它把整页画成「读取失败」不值当。 */
+  const [reviewedSubs, setReviewedSubs] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  /* 评价面板的目标订阅。面板跨卡片复用一份,状态因此在页上而不在卡上。 */
+  const [reviewTarget, setReviewTarget] = useState<SubscribedProduct | null>(
+    null,
+  );
   /* 资源包看的是**来源**,不分指标族,所以把存储与 Credits 两族的池并成一张表;
      过滤 subscription 那一类在组件里做(那是它的分组规则)。 */
   const resourcePools = useMemo(
@@ -127,6 +139,14 @@ export function SubscriptionPage() {
         setProducts(subs);
         setOrders(ords);
         setQuota(quota);
+        // 单独一路、单独 catch:评价读不到不该把整页拖成「读取失败」。
+        void fetchReviewedSubscriptionIds(subs.map((s) => s.subscriptionId))
+          .then((ids) => {
+            if (active) setReviewedSubs(new Set(ids));
+          })
+          .catch(() => {
+            if (active) setReviewedSubs(new Set());
+          });
       })
       .catch(() => {
         if (!active) return;
@@ -407,6 +427,8 @@ export function SubscriptionPage() {
                 }
                 onUnsubscribe={handleUnsubscribe}
                 canManage={canManageBilling}
+                reviewed={reviewedSubs.has(item.subscriptionId)}
+                onReview={setReviewTarget}
               />
             ))}
           </div>
@@ -431,6 +453,22 @@ export function SubscriptionPage() {
       />
 
       {/* 退订确认(危操作:立即终止、不退款,AlertDialog 强确认) */}
+
+      {/* 评价面板。一份跨卡片复用,目标由 reviewTarget 指着。
+          提交成功后只把这一条加进 reviewedSubs——不整页重拉:评价不改订阅本身,
+          重拉一遍只是让客户白等一次。 */}
+      {reviewTarget ? (
+        <ReviewDialog
+          open
+          subscriptionId={reviewTarget.subscriptionId}
+          productName={reviewTarget.productName ?? ""}
+          onClose={() => setReviewTarget(null)}
+          onSubmitted={() => {
+            const id = reviewTarget.subscriptionId;
+            setReviewedSubs((prev) => new Set(prev).add(id));
+          }}
+        />
+      ) : null}
     </ViewLayout>
   );
 }

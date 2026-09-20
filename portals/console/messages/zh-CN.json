@@ -2541,7 +2541,9 @@
       "autoRenewOnBadge": "自动续费",
       "unsubscribeVerb": "退订",
       "unsubscribeConsequence": "订阅将在当前计费周期结束时终止，之后不再续费也不再计费。周期内仍可正常使用。要恢复需要重新订阅，价格以届时的挂牌价为准。",
-      "unsubscribeKeep": "保留订阅"
+      "unsubscribeKeep": "保留订阅",
+      "review": "评价这个产品",
+      "reviewed": "已评价"
     },
     "cycle": {
       "month": "月付",
@@ -2694,7 +2696,28 @@
       "enterprise": "Enterprise"
     },
     "title": "产品订阅",
-    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。"
+    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。",
+    "review": {
+      "title": "聊聊 {product}",
+      "intro": "欢迎说说这一程用得怎么样。三项都可以留空，只评你想评的那一项。",
+      "outro": "感谢你陪 {product} 走到这里——你的这份评价我们会认真看。",
+      "productLabel": "产品体验",
+      "productHint": "功能是否称手、稳定与否",
+      "priceLabel": "价格",
+      "priceHint": "花的钱与得到的是否相称",
+      "serviceLabel": "服务",
+      "serviceHint": "咨询、工单与响应",
+      "commentLabel": "还想说点什么",
+      "commentPlaceholder": "写下来（选填，最多 512 字）",
+      "submit": "提交评价",
+      "cancel": "先不评",
+      "emptyError": "三项里至少评一项吧",
+      "duplicateError": "这一程已经评价过了，续订之后可以再聊。",
+      "submitted": "收到了，谢谢你",
+      "scoreLabels": ["很不满意", "不太满意", "一般", "满意", "很满意"],
+      "notRated": "未评分",
+      "roleDescription": "评分"
+    }
   },
   "table": {
     "rowActions": "操作",
