@@ -112,6 +112,8 @@ const TODO_TYPE_ICON: Record<TodoType, IconName> = {
  *
  * 所以此处单独列清单而不是从 TODO_TYPE_LABEL 删键：标签与图标仍要给表格用。
  */
+export type TodoScope = "queue" | "all";
+
 const TODO_FILTER_TYPES: readonly TodoType[] = [
   "payment",
   "verification",
@@ -381,7 +383,17 @@ const CSV_COLUMNS: readonly CsvColumn<OpsTodoItem>[] = [
   { label: "更新时间", value: (item) => item.updatedAt },
 ];
 
-export function OpsTodosPage() {
+/**
+ * 两个视图共用本件（owner 2026-09-20：「全部任务做二级页面展示」）。
+ *
+ *   queue（/ops-todos）     主页。只列与统计卡、筛选栏对齐的**三类**。
+ *   all  （/ops-todos/all） 全部任务。四类齐全，风险复核在这里有落点。
+ *
+ * 拆成两个视图而不是两份代码：表格列、操作菜单、CSV 列、翻页全都一样，复制一份
+ * 迟早两边长歪。差别只有「列哪几类」与「有没有那个去处按钮」，用一个 prop 收住。
+ */
+export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
+  const isAll = scope === "all";
   const locale = useLocale();
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
@@ -393,15 +405,32 @@ export function OpsTodosPage() {
   const [tenantLoadError, setTenantLoadError] = useState<string | null>(null);
   const [ticketLoadError, setTicketLoadError] = useState<string | null>(null);
   const [orderLoadError, setOrderLoadError] = useState<string | null>(null);
-  const todos = useMemo(
+  /** 四类全量。H0 的「任务 N」报的是这个数——owner：「tag 显示 全部代办数量」。 */
+  const allTodos = useMemo(
     () => buildOpsTodos(tenants, tickets, orders),
     [tenants, tickets, orders],
   );
+  /**
+   * 本视图实际要列的那些。
+   *
+   * 主页只列三类:统计卡是那三张、筛选栏是那三档,表格再混进第四类就对不上了。
+   * 风险复核不是被删掉,是搬到「全部任务」——那一页四类齐全。
+   */
+  const todos = useMemo(
+    () =>
+      isAll
+        ? allTodos
+        : allTodos.filter((todo) => TODO_FILTER_TYPES.includes(todo.type)),
+    [allTodos, isAll],
+  );
+  /** 主页上被折进「全部任务」的那些,区块说明要把这个数说出来。 */
+  const hiddenCount = allTodos.length - todos.length;
   const paymentTodos = todos.filter((todo) => todo.type === "payment");
   const verificationTodos = todos.filter(
     (todo) => todo.type === "verification",
   );
   const ticketTodos = todos.filter((todo) => todo.type === "ticket");
+  const riskTodos = todos.filter((todo) => todo.type === "risk");
   const [typeFilter, setTypeFilter] = useState<TodoType | "all">("all");
   const [severityFilter, setSeverityFilter] = useState<TodoSeverity | "all">(
     "all",
@@ -540,14 +569,19 @@ export function OpsTodosPage() {
       header={
         <PageHeader
           icon="table"
-          title="待办任务"
-          description="聚合待确认收款的订单、认证审核、风险租户与工单，帮助运营按优先级推进人工处理。"
+          title={isAll ? "全部任务" : "待办任务"}
+          description={
+            isAll
+              ? "四类待办的全量清单，含只在本页出现的风险复核。"
+              : "聚合待确认收款的订单、认证审核与工单，帮助运营按优先级推进人工处理。"
+          }
           secondary={
             <span className="inline-flex items-center gap-xs">
               {/* 标题行直接报总量,免得运营为了知道"还剩多少"去数统计卡。
-                  这里取 todos.length(全量)而非 filteredTodos——它是标题的属性,
-                  不随筛选变动。 */}
-              <Badge>任务 {formatNumber(todos.length)}</Badge>
+                  **两个视图都报四类全量**(owner:「tag 显示 全部代办数量」)——
+                  它是这件事的总数,不是本页列了几条,所以既不随筛选变、也不随
+                  视图变。主页与它的差额由区块说明点明。 */}
+              <Badge>任务 {formatNumber(allTodos.length)}</Badge>
               <Badge>只读聚合</Badge>
             </span>
           }
@@ -557,10 +591,13 @@ export function OpsTodosPage() {
         <MetricGrid
           loading={isLoading}
           aria-label="待办任务统计"
-          // 三卡与下方筛选栏三档**同名同图标同口径**(owner 2026-09-20:「保留与统计
-          // 区对应的三个,注意名称一致」)——标签一律取 TODO_TYPE_LABEL,杜绝两处各写
+          // 卡与下方筛选栏**同名同图标同口径**(owner 2026-09-20:「保留与统计区
+          // 对应的三个,注意名称一致」)——标签一律取 TODO_TYPE_LABEL,杜绝两处各写
           // 一套中文("待确认收款" vs "收款确认")导致运营以为是两个不同的数。
-          columns={3}
+          //
+          // 列数跟着**卡数**走:全部任务页多一张风险复核,写死 3 会在右侧空出一块
+          // (2026-09-20 owner 实看报过一次同样的病)。
+          columns={isAll ? 4 : 3}
           items={[
             {
               id: "payment",
@@ -591,17 +628,41 @@ export function OpsTodosPage() {
               ],
               tone: ticketTodos.length ? "warning" : "success",
             },
+            // 第四张只在全部任务页出现——主页不列这一类,列了卡就成了点不到的数。
+            ...(isAll
+              ? [
+                  {
+                    id: "risk",
+                    help: "风险等级异常或已暂停的租户。",
+                    icon: TODO_TYPE_ICON.risk,
+                    label: TODO_TYPE_LABEL.risk,
+                    value: formatNumber(riskTodos.length),
+                    tags: ["仅本页可见"],
+                    tone: (riskTodos.length
+                      ? "danger"
+                      : "success") as StatusBadgeTone,
+                  },
+                ]
+              : []),
           ]}
         />
       }
       table={
         <>
           <Section
-            title="优先处理队列"
+            // 全部任务页的页头已经叫「全部任务」了,区块再叫一遍等于把同一个词
+            // 摞两层;这里说的是它列的是什么。
+            title={isAll ? "任务明细" : "优先处理队列"}
             // 图标跟随当前分类，"全部"档退回队列自身图标。
             icon={typeFilter === "all" ? "table" : TODO_TYPE_ICON[typeFilter]}
             level={2}
-            description={`按紧急度与优先级排序，共 ${formatNumber(todos.length)} 条${ticketLoadError ? "（工单未接入）" : ""}${orderLoadError ? "（订单未接入）" : ""}。`}
+            // 主页把「本页列了几条」与「总共几条」的差额**说出来**:标题 badge 报
+            // 四类全量,这里只列三类,不点破就会被当成数字对不上。
+            description={`按紧急度与优先级排序，共 ${formatNumber(todos.length)} 条${
+              !isAll && hiddenCount > 0
+                ? `；另有 ${formatNumber(hiddenCount)} 条${TODO_TYPE_LABEL.risk}在「全部任务」里`
+                : ""
+            }${ticketLoadError ? "（工单未接入）" : ""}${orderLoadError ? "（订单未接入）" : ""}。`}
             action={
               <SegmentedControl
                 ariaLabel="待办分类"
@@ -614,7 +675,10 @@ export function OpsTodosPage() {
                 }}
                 items={[
                   { value: "all" as const, label: "全部", count: todos.length },
-                  ...TODO_FILTER_TYPES.map((type) => ({
+                  ...(isAll
+                    ? (Object.keys(TODO_TYPE_LABEL) as TodoType[])
+                    : TODO_FILTER_TYPES
+                  ).map((type) => ({
                     value: type,
                     label: TODO_TYPE_LABEL[type],
                     icon: TODO_TYPE_ICON[type],
@@ -652,16 +716,33 @@ export function OpsTodosPage() {
               }}
               actions={
                 /* 无"新建"：待办由聚合产生。 */
-                <ActionButton
-                  icon="arrow-down"
-                  variant={selectedTodos.length > 0 ? "default" : "outline"}
-                  disabled={selectedTodos.length === 0}
-                  onClick={() =>
-                    exportRowsToCsv("ops-todos", CSV_COLUMNS, selectedTodos)
-                  }
-                >
-                  {tShared("common.export")}
-                </ActionButton>
+                <>
+                  {/* 两个视图**互相通着**:主页去全量,全量回主页。只给单向出口的话,
+                      运营从全量页回来只能按浏览器后退。 */}
+                  <ActionButton
+                    icon={isAll ? "arrow-left" : "table"}
+                    variant="outline"
+                    onClick={() =>
+                      router.push(isAll ? "/ops-todos" : "/ops-todos/all")
+                    }
+                  >
+                    {isAll ? "回到待办队列" : "查看全部任务"}
+                  </ActionButton>
+                  <ActionButton
+                    icon="arrow-down"
+                    variant={selectedTodos.length > 0 ? "default" : "outline"}
+                    disabled={selectedTodos.length === 0}
+                    onClick={() =>
+                      exportRowsToCsv(
+                        isAll ? "ops-todos-all" : "ops-todos",
+                        CSV_COLUMNS,
+                        selectedTodos,
+                      )
+                    }
+                  >
+                    {tShared("common.export")}
+                  </ActionButton>
+                </>
               }
             >
               <NativeSelect
@@ -797,30 +878,33 @@ export function OpsTodosPage() {
             {pagination}
           </Section>
 
-          {/* S2 系统消息——本轮只立壳,不接数据(owner 2026-09-20:「暂空占位…可以
+          {/* S2 系统消息——只在主页出现;全部任务页是待办的二级页,不该把消息区
+            再画一遍。本轮只立壳,不接数据(owner 2026-09-20:「暂空占位…可以
             后续实现」)。
             用途:opera 侧的产品上线、能力新增、变更通告要同步给运营——三个平台
             由不同人员使用,消息不能只落在发的人那一边。
             库里 `support.inbox_messages` 已存在,缺的是读侧接口与二级页面。
             「查看全部」先停用而不是先隐藏:隐藏会让这一区看起来只是一段说明,
             停用才说得清"有这个去处,只是还没通"。 */}
-          <Section
-            title="系统消息"
-            icon="bell"
-            level={2}
-            description="来自 opera 与产品侧的平台通知：产品上线、能力新增、变更通告。"
-            action={
-              <ActionButton variant="outline" icon="arrow-right" disabled>
-                查看全部
-              </ActionButton>
-            }
-          >
-            <EmptyState
+          {isAll ? null : (
+            <Section
+              title="系统消息"
               icon="bell"
-              title="消息通道还未开通"
-              description="开通后，这里显示当天已读与全部未读的消息；更早的消息到「全部消息」里查。"
-            />
-          </Section>
+              level={2}
+              description="来自 opera 与产品侧的平台通知：产品上线、能力新增、变更通告。"
+              action={
+                <ActionButton variant="outline" icon="arrow-right" disabled>
+                  查看全部
+                </ActionButton>
+              }
+            >
+              <EmptyState
+                icon="bell"
+                title="消息通道还未开通"
+                description="开通后，这里显示当天已读与全部未读的消息；更早的消息到「全部消息」里查。"
+              />
+            </Section>
+          )}
         </>
       }
     />
