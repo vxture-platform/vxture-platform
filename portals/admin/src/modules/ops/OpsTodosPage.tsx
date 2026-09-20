@@ -762,7 +762,7 @@ export function OpsTodosPage() {
                   id: "updated",
                   header: tShared("columns.updatedAt"),
                   cell: (item) => (
-                    <span className="inline-flex flex-col gap-3xs">
+                    <span className="inline-flex flex-col gap-2xs">
                       <span>{formatDay(item.updatedAt, locale)}</span>
                       <span className="text-body-sm text-muted-foreground">
                         {formatClock(item.updatedAt, locale)}
