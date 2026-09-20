@@ -56,7 +56,7 @@ export function PreferencesCard({
 
   return (
     <Section
-      tone="raised"
+      tone="glass"
       level={2}
       icon="faders"
       title={t("cards.prefs.title")}

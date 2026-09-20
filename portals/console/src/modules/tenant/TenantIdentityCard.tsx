@@ -115,7 +115,7 @@ export function TenantIdentityCard({
   const typeIcon: IconName = tenantTypeIcon(tenantType);
 
   return (
-    <div className="flex flex-col rounded-xl bg-card shadow-raised ring-1 ring-foreground/10">
+    <div className="flex flex-col rounded-xl bg-gradient-to-b from-card to-accent shadow-raised ring-1 ring-foreground/10">
       <div className="px-lg pt-lg">
         <IdentityCard
           frame={false}
@@ -320,7 +320,7 @@ export function TenantSection({
   const t = useTranslations("tenantInfoPage");
   return (
     <Section
-      tone="raised"
+      tone="glass"
       level={2}
       icon={icon}
       title={

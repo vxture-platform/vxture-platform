@@ -65,7 +65,7 @@ export function SecurityCard({
 
   return (
     <Section
-      tone="raised"
+      tone="glass"
       level={2}
       icon="shield-check"
       title={t("cards.security.title")}
