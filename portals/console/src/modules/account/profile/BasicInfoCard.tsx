@@ -154,7 +154,7 @@ export function BasicInfoCard({
 
   return (
     <Section
-      tone="raised"
+      tone="glass"
       level={2}
       icon="user-circle"
       title={t("cards.basic.title")}

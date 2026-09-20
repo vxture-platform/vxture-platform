@@ -73,7 +73,7 @@ export function ThirdPartyLoginCard({
 
   return (
     <Section
-      tone="raised"
+      tone="glass"
       level={2}
       icon="plugs-connected"
       title={t("cards.thirdParty.title")}

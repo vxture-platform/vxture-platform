@@ -320,7 +320,7 @@ export function TenantSection({
   const t = useTranslations("tenantInfoPage");
   return (
     <Section
-      tone="raised"
+      tone="glass"
       level={2}
       icon={icon}
       title={
