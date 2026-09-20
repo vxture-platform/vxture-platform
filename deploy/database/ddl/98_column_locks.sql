@@ -512,6 +512,15 @@ GRANT UPDATE (flag_key, category, environment, description, is_globally_enabled,
 REVOKE UPDATE ON admin.announcements FROM platform_svc;
 GRANT UPDATE (announcement_type, severity, status, lang, title, content, cta_label, cta_url, target_plans, target_tenant_types, is_dismissible, publish_at, expires_at, meta, updated_at, deleted_at) ON admin.announcements TO platform_svc;
 
+-- admin.operator_notices  [anchor: id, created_by, created_at]
+REVOKE UPDATE ON admin.operator_notices FROM platform_svc;
+GRANT UPDATE (target_planes, severity, title, body, link, source, reference_type, reference_id, published_at, expires_at, updated_at, deleted_at) ON admin.operator_notices TO platform_svc;
+
+-- admin.operator_notice_reads  [anchor: notice_id, operator_id]
+-- 只剩 read_at 可改：这张表就是「谁在什么时候读的」，两个主键列是它的身份。
+REVOKE UPDATE ON admin.operator_notice_reads FROM platform_svc;
+GRANT UPDATE (read_at) ON admin.operator_notice_reads TO platform_svc;
+
 -- admin.maintenance_windows  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON admin.maintenance_windows FROM platform_svc;
 GRANT UPDATE (severity, status, title, description, impact_description, affected_services, start_at, end_at, actual_end_at, updated_by, updated_at) ON admin.maintenance_windows TO platform_svc;

@@ -565,6 +565,8 @@ const OPERATOR_PERMISSIONS = [
   ["ops:maintenance.read", "View maintenance windows"],
   ["ops:maintenance.manage", "Manage maintenance windows"],
   ["ops:job.read", "View background job status"],
+  ["ops:notice.read", "View operator notices"],
+  ["ops:notice.manage", "Publish / withdraw operator notices"],
   ["ops:change.read", "View the opera change trail"],
   ["content:announcement.read", "View announcements"],
   ["content:announcement.manage", "Manage announcements"],
@@ -1049,6 +1051,14 @@ const MENU_TREE = [
             route: "/ops/maintenance",
             perms: ["ops:maintenance.read", "ops:maintenance.manage"],
           },
+          {
+            // 运营通告的**发布面**。owner 2026-09-20:「面向客户的由 admin 发布,
+            // 面向内部运营的由 opera 发布」——所以写侧只在这里,admin / arche 只读。
+            code: "opera.menu.ops_notice",
+            name: "运营通告",
+            route: "/ops/notices",
+            perms: ["ops:notice.read", "ops:notice.manage"],
+          },
         ],
       },
       {
@@ -1214,6 +1224,8 @@ const OPERATOR_ROLE_PERMS = {
   sys_config: [],
   super_admin: [...OP_ALL], // §4.4 explicit full grant (no code bypass)
   admin: [
+    "ops:notice.read",
+    "ops:notice.manage",
     "tenant:profile.read",
     "tenant:profile.manage",
     "tenant:brand.reset",
@@ -1277,6 +1289,7 @@ const OPERATOR_ROLE_PERMS = {
     "audit:log.read",
   ],
   operation: [
+    "ops:notice.read",
     "tenant:profile.read",
     "tenant:profile.manage",
     "tenant:brand.reset",
@@ -1308,6 +1321,7 @@ const OPERATOR_ROLE_PERMS = {
     "support:ticket.read",
   ],
   finance: [
+    "ops:notice.read",
     "tenant:profile.read",
     "tenant:quota.read",
     "user:profile.read",
@@ -1332,6 +1346,8 @@ const OPERATOR_ROLE_PERMS = {
     "product:price.read",
   ],
   tech_ops: [
+    "ops:notice.read",
+    "ops:notice.manage",
     "tenant:profile.read",
     "tenant:quota.read",
     "model:provider.read",
@@ -1357,6 +1373,7 @@ const OPERATOR_ROLE_PERMS = {
     "audit:notification_log.read",
   ],
   support: [
+    "ops:notice.read",
     "tenant:profile.read",
     "user:profile.read",
     "commerce:subscription.read",
@@ -1367,6 +1384,7 @@ const OPERATOR_ROLE_PERMS = {
     "audit:notification_log.read",
   ],
   auditor: [
+    "ops:notice.read",
     "tenant:profile.read",
     "tenant:quota.read",
     "risk:record.read",

@@ -306,6 +306,71 @@ CREATE TABLE admin.announcements (
 CREATE INDEX idx_announcements_publish_at ON admin.announcements (publish_at);
 CREATE INDEX idx_announcements_status     ON admin.announcements (status);
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 运营通告（三平面之间同步信息）。owner 2026-09-20：「预留为 opera，产品上线、
+-- 新增等，给发信息，由于这些平台是不同人员使用，信息需要同步」。
+--
+-- ── 与另外两张的分界 ──
+-- admin.announcements    面向**客户**（target_plans / target_tenant_types /
+--                        is_dismissible / cta_url，客户在 console 看见），admin 发。
+-- support.inbox_messages 面向**客户个人**，每人一行（收件人 = account.users）。
+-- 本表                   面向**运营者**，opera 发，admin / arche 读。
+--
+-- ── 为什么不照抄 inbox_messages 的「每人一行」 ──
+-- 通告是「平台发生了一件事」，不是「给某个人的信」。扇出会有三个毛病：发一条要
+-- 写 N 行；之后新入职的运维永远看不到上周的上线通告；撤回一条要改 N 行。
+-- 所以一条通告一行，已读单独成表（下方）。
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE admin.operator_notices (
+    id             uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- 面向哪几个平面。空数组 = 三个平面都看得见——与 announcements 的 target_*
+    -- 同一约定：空=全部，不写成三个元素，免得将来加平面时要回填历史行。
+    target_planes  varchar(16)[] NOT NULL DEFAULT '{}',
+    severity       varchar(16)   NOT NULL DEFAULT 'info',
+    title          varchar(256)  NOT NULL,
+    body           text          NOT NULL,
+    link           varchar(512),                     -- 平面内相对路径（点开去哪）
+    -- manual = 人在 opera 里发的；system = 事件产出的（产品上线等）。
+    -- 本批只做 manual；system 这条路留着表结构，以后接事件不必改表。
+    source         varchar(16)   NOT NULL DEFAULT 'manual',
+    -- 系统来源的去重锚：同一业务对象 + 同一阶段只播一次。
+    -- manual 两列留空——人可以就同一件事发两条，那是他的判断，不是重复。
+    reference_type varchar(64),
+    reference_id   varchar(128),
+    published_at   timestamptz   NOT NULL DEFAULT now(),
+    expires_at     timestamptz,                      -- 到期即退出列表，不删行
+    created_by     uuid,                             -- 运营专属裸值：发布人注销，通告要留着
+    created_at     timestamptz   NOT NULL DEFAULT now(),
+    updated_at     timestamptz   NOT NULL DEFAULT now(),
+    deleted_at     timestamptz,
+    CONSTRAINT chk_operator_notices_severity CHECK (severity IN ('info','warning','critical')),
+    CONSTRAINT chk_operator_notices_source   CHECK (source IN ('manual','system')),
+    -- 平面码只认这三个。写错一个字母不会报错，只会让那条通告谁也看不见。
+    CONSTRAINT chk_operator_notices_planes
+        CHECK (target_planes <@ ARRAY['admin','opera','arche']::varchar(16)[]),
+    -- system 必须带去重锚，manual 必须不带：两种来源判重规则不同，混着来会出现
+    -- 「人发的那条把系统的去重位占了」。
+    CONSTRAINT chk_operator_notices_reference
+        CHECK ((source = 'system') = (reference_type IS NOT NULL AND reference_id IS NOT NULL))
+);
+-- 系统通告一事一条。软删的不占位——撤回之后同一件事可以重播。
+CREATE UNIQUE INDEX uq_operator_notices_system ON admin.operator_notices (reference_type, reference_id)
+    WHERE source = 'system' AND deleted_at IS NULL;
+-- 列表主查询：未删 + 按发布时间倒序。
+CREATE INDEX idx_operator_notices_live ON admin.operator_notices (published_at DESC, id DESC)
+    WHERE deleted_at IS NULL;
+
+-- 谁读过哪条。一条通告多个读者，所以已读是**关系**，不是通告的属性。
+-- 这一行没有独立价值，运营者注销就该跟着走 → 域内真 FK + CASCADE。
+CREATE TABLE admin.operator_notice_reads (
+    notice_id   uuid        NOT NULL REFERENCES admin.operator_notices(id) ON DELETE CASCADE,
+    operator_id uuid        NOT NULL REFERENCES admin.operator_account(id) ON DELETE CASCADE,
+    read_at     timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (notice_id, operator_id)
+);
+-- 「我的未读数」与「当天已读」都按人查。
+CREATE INDEX idx_operator_notice_reads_operator ON admin.operator_notice_reads (operator_id, read_at DESC);
+
 -- 维护窗口声明（原 maintenance 单数改 maintenance_windows）。actual_end_at 与计划对账。
 CREATE TABLE admin.maintenance_windows (
     id                 uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
