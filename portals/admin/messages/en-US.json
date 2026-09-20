@@ -171,16 +171,8 @@
       "productsPlans": "Product System",
       "subscriptionsTransactions": "Subscription Transactions",
       "commercialAnalysis": "Commercial Analysis",
-      "capabilitiesServices": "Model Skills",
       "financeSettlement": "Finance Settlement",
-      "supportCompliance": "Customer Service",
-      "autonomyOverview": "Platform Overview",
-      "identityAccess": "Identity Access",
-      "platformResources": "Platform Resource",
-      "runtimeOps": "Runtime Ops",
-      "securityAudit": "Security Audit",
-      "systemSetting": "System Settings",
-      "notificationCenter": "Notification Center"
+      "supportCompliance": "Customer Service"
     },
     "items": {
       "platformOverview": {
@@ -202,10 +194,6 @@
       "verifications": {
         "label": "Identity Verification",
         "description": "Review organization credentials, approvals, rejections, and rechecks."
-      },
-      "adminRoles": {
-        "label": "Platform Roles",
-        "description": "Maintain platform autonomy roles, role status, and role authorization."
       },
       "servicePlans": {
         "label": "Service Plans",
@@ -243,18 +231,6 @@
         "label": "Promotion Usage",
         "description": "Review coupon usage, discount redemption statistics, and related orders."
       },
-      "serviceMonitor": {
-        "label": "Service Monitoring",
-        "description": "Review response time, error rate, availability, and alert rules."
-      },
-      "modelPlatform": {
-        "label": "Model Pricing & Policy",
-        "description": "Configure model pricing rules and rate-limit policies; providers/models are read-only, with lifecycle management in Operations."
-      },
-      "skills": {
-        "label": "Capability Catalog",
-        "description": "Read-only catalog of capabilities registered in Runos; registration and management live in opera."
-      },
       "billing": {
         "label": "Billing Center",
         "description": "Manage bill generation, receivables confirmation, exceptions, and offline invoice entries."
@@ -275,65 +251,23 @@
         "label": "Messages",
         "description": "Publish platform announcements and targeted notices, and review delivery history."
       },
-      "auditLogs": {
-        "label": "Audit Logs",
-        "description": "Trace key admin operations by operator, time, and target."
+      "planVersions": {
+        "label": "Product Plans",
+        "description": "Publish plans per product: how many tiers a product carries is up to it. Drafts hold price and quota edits; publishing freezes the version and makes it current, with the full plan_version history kept."
       },
-      "platformAutonomy": {
-        "label": "Platform Overview",
-        "description": "Show platform autonomy health, key metrics, risks, and governance entries."
+      "atlas": {
+        "label": "Model Pricing",
+        "description": "Configure model pricing rules and rate limits. Providers and models are read-only here; their lifecycle is managed in Ops."
       },
-      "platformAdmins": {
-        "label": "Platform Users",
-        "description": "Manage internal platform autonomy users, not tenant end users."
-      },
-      "adminPermissions": {
-        "label": "Permission Policy",
-        "description": "Manage platform autonomy permissions, groups, policy bindings, and authorization scope."
-      },
-      "platformSecrets": {
-        "label": "Secret Store",
-        "description": "Manage platform-level secrets, credentials, service tokens, and sensitive config references."
-      },
-      "platformJobs": {
-        "label": "Job Scheduler",
-        "description": "Manage platform background jobs, async queues, executions, failed retries, and schedule status."
-      },
-      "maintenanceWindows": {
-        "label": "Maintenance Windows",
-        "description": "Declare and manage platform maintenance windows: schedule, run, complete or cancel, and reconcile actual end time."
-      },
-      "approvalCenter": {
-        "label": "Approval Center",
-        "description": "Handle sensitive operation approvals, permission requests, secret requests, and high-risk change confirmations."
-      },
-      "riskRecords": {
-        "label": "Risk Records",
-        "description": "Manage tenant risk assessments: create, follow up, review, and tag."
-      },
-      "complianceEvents": {
-        "label": "Compliance Events",
-        "description": "Track platform and tenant compliance events: assign handlers, resolve or dismiss, and keep evidence."
-      },
-      "systemParameters": {
-        "label": "System Parameters",
-        "description": "Planned module for platform parameters, defaults, runtime parameters, and global policy parameters."
-      },
-      "dataDictionaries": {
-        "label": "Data Dictionaries",
-        "description": "Planned module for system dictionaries, enum items, business options, and configurable static data."
-      },
-      "featureToggles": {
-        "label": "Feature Toggles",
-        "description": "Planned module for feature flags, rollout switches, experiment switches, and risk isolation switches."
-      },
-      "notificationChannels": {
-        "label": "Notification Channels",
-        "description": "Planned module for platform notification channels, template bindings, and sending configuration."
-      },
-      "notificationLogs": {
-        "label": "Sending Records",
-        "description": "Planned module for platform notification sending records, receipts, and failed retries."
+      "capabilityPricing": {
+        "label": "Capability Pricing",
+        "description": "Configure pricing rules and rate limits for capability calls (planned; the page does not exist yet)."
+      }
+    },
+    "workspaces": {
+      "tenant-ops": {
+        "label": "Operations",
+        "description": "Tenants, users, products, subscriptions, transactions and service support."
       }
     }
   },

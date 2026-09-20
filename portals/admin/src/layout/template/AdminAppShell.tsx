@@ -178,10 +178,13 @@ function ShellFrame({
   const activeWorkspace = getAdminWorkspaceByPath(pathname);
   /* icon 直接取注册表里的 DS IconName。原先经 WORKSPACE_PH_ICON + phNavIcon
    * 转成 Phosphor class 串——那是为字体图标准备的降级层，随字体图标一起退役。 */
+  /* 工作域的名字与说明走词条。此前这两处是配置里的中文字面量直出——于是英文
+     界面下侧栏与菜单项都是英文，而表头这个切换器仍是「运营平面」。owner 实看
+     报的「半中半英」，这是其中一处。 */
   const views: AdminHeaderViewOption[] = adminWorkspaces.map((w) => ({
     id: w.id,
-    name: w.label,
-    desc: w.description,
+    name: tNav(`workspaces.${w.id}.label`),
+    desc: tNav(`workspaces.${w.id}.description`),
     icon: w.icon,
   }));
   const selectView = (id: ShellView) => {
@@ -193,18 +196,21 @@ function ShellFrame({
   const navSections: ShellNavSection[] = useMemo(
     () =>
       activeWorkspace.sections.map((section) => ({
-        /* 这两处的键**由数据驱动**（工作域配置里的 section / item id），词条目录
-           不可能穷举，所以托底是真需要的——`t.has()` 先问一句，没有就用配置里
-           自带的中文名。其余 24 处静态键的托底是死代码：键全都存在，那句中文
-           永远不会渲染，留着只会让人以为「翻译还没做」。已一并摘掉。 */
-        title: tNav.has(`sections.${section.id}`)
-          ? tNav(`sections.${section.id}`)
-          : section.title,
+        /* 不再 `t.has()` 托底。原来的理由是「键由数据驱动，词条目录不可能穷举」
+           ——那句话不成立：数据驱动的是运行时选哪一个，不是可能有哪些。取值
+           集合就是 navigation.ts，它在仓里，是可枚举的。
+
+           而托底的代价是**静默的半中半英**：有词条的菜单项在英文界面变英文，
+           没词条的原样留中文，两者并排出现在同一条侧栏里，谁也不会报错。
+           2026-09-20 实测缺 3 条（planVersions / atlas / capabilityPricing）。
+
+           现在由 `lint:admin-nav-messages` 在 CI 期保证每个 id 都有词条，缺了
+           当场红。运行时缺键则由 `adminMessageFallback` 渲染成键路径本身——
+           难看，但看得见，比悄悄换回中文强。 */
+        title: tNav(`sections.${section.id}`),
         items: section.items.map((it) => ({
           href: it.href,
-          label: tNav.has(`items.${it.id}.label`)
-            ? tNav(`items.${it.id}.label`)
-            : it.label,
+          label: tNav(`items.${it.id}.label`),
           /* 副名走配置里的英文原词，不走词条：它的用途是让人把中文菜单名对上审计
              事件与 API 里的那个词（opera 规则一），那个词在两种界面语言下是同一个，
              翻译它等于把这条路断掉。

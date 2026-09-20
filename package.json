@@ -89,6 +89,7 @@
     "lint:literal-markdown": "node scripts/guardrails/check-literal-markdown.mjs",
     "lint:i18n-keys": "node scripts/guardrails/check-i18n-keys.mjs",
     "lint:message-usage": "node scripts/guardrails/check-message-usage.mjs",
+    "lint:admin-nav-messages": "node scripts/guardrails/check-admin-nav-messages.mjs",
     "lint:messages": "node scripts/guardrails/check-message-catalogs.mjs",
     "lint:migration-counts": "node scripts/guardrails/check-migration-absolute-counts.mjs",
     "lint:ops-todo-alerts": "node scripts/guardrails/check-ops-todo-alerts.mjs",
