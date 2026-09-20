@@ -2398,6 +2398,11 @@
       "suspended": "暂停",
       "expired": "已到期",
       "cancelled": "已取消"
+    },
+    "subscriptionCycle": {
+      "monthly": "月付",
+      "yearly": "年付",
+      "once": "一次性"
     }
   }
 }

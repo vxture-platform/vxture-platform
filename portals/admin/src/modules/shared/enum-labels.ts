@@ -38,6 +38,7 @@
 
 import { useTranslations } from "next-intl";
 import type { SubscriptionStatus } from "@vxture-platform/shared";
+import type { SubscriptionOperationCycle } from "@/entities/console";
 
 /**
  * 订阅状态的界面文案。
@@ -60,4 +61,43 @@ export function useSubscriptionStatusLabels(): Record<
     expired: t("expired"),
     cancelled: t("cancelled"),
   } satisfies Record<SubscriptionStatus, string>;
+}
+
+/**
+ * 订单 / 订阅的计费周期。
+ *
+ * 收的是四份一模一样的 `cycleLabel`（OrderDetailPage / OrdersPage /
+ * SubscriptionDetailPage / SubscriptionsPage），合并不改变任何输出。
+ *
+ * 原来每份都是 `if (yearly) … if (once) … return "月付"`——`monthly` 走的是
+ * **默认分支**。改成穷尽的 Record 之后没有默认分支了:三个值各自显式,多一个
+ * 值就编译不过。
+ *
+ * ── billing 那两份没收进来 ──
+ * `BillingDetailPage` / `BillingPage` 也各有一个 `cycleLabel`,但它们的入参是
+ * `bill.billCycle`,**那不是这个枚举**:`billing.invoices.bill_cycle` 的 DDL 注释
+ * 写着「如 '202607'」,而 admin-bff 写入时算的正是 `startDate.slice(0,7)`——账期
+ * 年月串。那两份函数的 yearly/monthly/once 三个分支在生产数据上从不命中,只有
+ * 最后的 `return cycle || "未设置"` 有效。
+ * （seed 却往同一列写 'monthly'/'yearly' 字面量,所以开发库看到的是「月度」、
+ *  生产看到的是「202607」。这是那一列的语义问题,不是文案问题,已单独报 owner。）
+ *
+ * ── 这三个值本身是 BFF 压缩过的 ──
+ * DB 侧 `metering.subscriptions.cycle_unit` 的值域是
+ * `day/week/month/year/perpetual`（有 CHECK）,外加一个 `cycle_count` 倍数列。
+ * admin-bff 的 `mapCycle()` 把它压成三值:month→monthly、year→yearly、
+ * **其余一律 once**,并且完全不看 cycle_count。
+ * 后果:按天 / 按周订阅会显示成「一次性」,季度（month×3）会显示成「月付」。
+ * 那是 BFF 的模型问题,本模块只负责把三值翻成文案,修不了它——同样已报 owner。
+ */
+export function useSubscriptionCycleLabels(): Record<
+  SubscriptionOperationCycle,
+  string
+> {
+  const t = useTranslations("enums.subscriptionCycle");
+  return {
+    monthly: t("monthly"),
+    yearly: t("yearly"),
+    once: t("once"),
+  } satisfies Record<SubscriptionOperationCycle, string>;
 }

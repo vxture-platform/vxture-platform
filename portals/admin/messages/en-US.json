@@ -2398,6 +2398,11 @@
       "suspended": "Suspended",
       "expired": "Expired",
       "cancelled": "Cancelled"
+    },
+    "subscriptionCycle": {
+      "monthly": "Monthly",
+      "yearly": "Annual",
+      "once": "One-time"
     }
   }
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { useSubscriptionCycleLabels } from "@/modules/shared/enum-labels";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -74,12 +75,6 @@ function formatCurrency(value: number, currency: string) {
   }).format(value);
 }
 
-function cycleLabel(cycle: OrderOperationRecord["cycleType"]) {
-  if (cycle === "yearly") return "年付";
-  if (cycle === "once") return "一次性";
-  return "月付";
-}
-
 function orderStatusLabel(status: OrderOperationStatus) {
   if (status === "pending") return "待付款";
   if (status === "pending_verify") return "待复核";
@@ -118,7 +113,10 @@ function paySourceLabel(source: OrderPaySource) {
 
 /* 从模块级常量改成收 `t` 的工厂：常量在模块加载时就求值了，那一刻
    没有任何运行时上下文，而列里的状态文案要按界面语言取。 */
-function orderCsvColumns(t: TFn): readonly CsvColumn<OrderOperationRecord>[] {
+function orderCsvColumns(
+  t: TFn,
+  cycleLabels: Record<OrderOperationRecord["cycleType"], string>,
+): readonly CsvColumn<OrderOperationRecord>[] {
   return [
     { label: "订单号", value: (o) => o.orderNo },
     { label: "账单号", value: (o) => o.billNo ?? "" },
@@ -127,7 +125,7 @@ function orderCsvColumns(t: TFn): readonly CsvColumn<OrderOperationRecord>[] {
     { label: "业务方案", value: (o) => o.solutionName },
     { label: "套餐", value: (o) => o.servicePlanName },
     { label: "版本", value: (o) => o.tierName },
-    { label: "计费周期", value: (o) => cycleLabel(o.cycleType) },
+    { label: "计费周期", value: (o) => cycleLabels[o.cycleType] },
     { label: "订单金额", value: (o) => o.amount },
     { label: "已收金额", value: (o) => o.paidAmount },
     { label: "币种", value: (o) => o.currency },
@@ -224,6 +222,7 @@ function OrderActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
+  const cycleLabels = useSubscriptionCycleLabels();
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
@@ -293,7 +292,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
                 </Badge>
               )}
               <StatusBadge tone="neutral" icon={false}>
-                {cycleLabel(order.cycleType)}
+                {cycleLabels[order.cycleType]}
               </StatusBadge>
             </span>
           }
@@ -337,6 +336,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
 
 export function OrdersPage() {
   const t = useTranslations();
+  const cycleLabels = useSubscriptionCycleLabels();
   const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
@@ -620,7 +620,7 @@ export function OrdersPage() {
                   onClick={() =>
                     exportRowsToCsv(
                       "orders-export",
-                      orderCsvColumns(t),
+                      orderCsvColumns(t, cycleLabels),
                       selectedOrders,
                     )
                   }
@@ -720,7 +720,7 @@ export function OrdersPage() {
                   onSelect: () =>
                     exportRowsToCsv(
                       "orders-export",
-                      orderCsvColumns(t),
+                      orderCsvColumns(t, cycleLabels),
                       selectedOrders,
                     ),
                 },

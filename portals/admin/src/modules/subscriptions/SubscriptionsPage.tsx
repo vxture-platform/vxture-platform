@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
+import {
+  useSubscriptionCycleLabels,
+  useSubscriptionStatusLabels,
+} from "@/modules/shared/enum-labels";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -72,12 +75,6 @@ function subscriptionStatusIcon(status: SubscriptionOperationStatus): IconName {
   return "warning";
 }
 
-function cycleLabel(cycle: SubscriptionOperationRecord["cycleType"]) {
-  if (cycle === "yearly") return "年付";
-  if (cycle === "once") return "一次性";
-  return "月付";
-}
-
 function quotaRiskLabel(risk: SubscriptionOperationQuotaRisk) {
   if (risk === "danger") return "高风险";
   if (risk === "warning") return "需关注";
@@ -110,6 +107,7 @@ function subscriptionSearchText(record: SubscriptionOperationRecord) {
    组件里拿。其余列不受影响。 */
 function useSubscriptionCsvColumns(): CsvColumn<SubscriptionOperationRecord>[] {
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const cycleLabels = useSubscriptionCycleLabels();
   return [
     { label: "订阅编号", value: (record) => record.subscriptionCode },
     { label: "订单号", value: (record) => record.orderNo ?? "" },
@@ -118,7 +116,7 @@ function useSubscriptionCsvColumns(): CsvColumn<SubscriptionOperationRecord>[] {
     { label: "业务方案", value: (record) => record.solutionName },
     { label: "套餐", value: (record) => record.tierName },
     { label: "套餐编码", value: (record) => record.servicePlanCode },
-    { label: "周期", value: (record) => cycleLabel(record.cycleType) },
+    { label: "周期", value: (record) => cycleLabels[record.cycleType] },
     {
       label: "状态",
       value: (record) => subscriptionStatusLabels[record.status],
@@ -243,6 +241,7 @@ function SubscriptionActionsMenu({
 function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[] {
   const locale = useLocale();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const cycleLabels = useSubscriptionCycleLabels();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -289,7 +288,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
                 {subscription.tierName}
               </Badge>
               <StatusBadge tone="neutral" icon={false}>
-                {cycleLabel(subscription.cycleType)}
+                {cycleLabels[subscription.cycleType]}
               </StatusBadge>
             </span>
           }
@@ -337,7 +336,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       cell: (subscription) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatMoney(subscription.payAmount)}
-          <span className="text-body-sm text-muted-foreground">{`${cycleLabel(subscription.cycleType)} · ${
+          <span className="text-body-sm text-muted-foreground">{`${cycleLabels[subscription.cycleType]} · ${
             subscription.autoRenew ? "自动续期" : subscription.operationHint
           }`}</span>
         </span>

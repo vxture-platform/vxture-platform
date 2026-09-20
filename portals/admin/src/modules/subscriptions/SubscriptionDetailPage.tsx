@@ -37,7 +37,10 @@ import {
 import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
-import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
+import {
+  useSubscriptionCycleLabels,
+  useSubscriptionStatusLabels,
+} from "@/modules/shared/enum-labels";
 import {
   canRunSubscriptionAction,
   SubscriptionOperationDialog,
@@ -65,12 +68,6 @@ function quotaRiskLabel(risk: SubscriptionOperationQuotaRisk) {
   if (risk === "danger") return "高风险";
   if (risk === "warning") return "需关注";
   return "正常";
-}
-
-function cycleLabel(cycle: SubscriptionOperationDetailRecord["cycleType"]) {
-  if (cycle === "yearly") return "年付";
-  if (cycle === "once") return "一次性";
-  return "月付";
 }
 
 function associationSourceLabel(
@@ -102,6 +99,7 @@ function SubscriptionSummary({
   subscription: SubscriptionOperationDetailRecord;
 }) {
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const cycleLabels = useSubscriptionCycleLabels();
   return (
     <DetailSummaryHeader
       icon="star"
@@ -138,7 +136,7 @@ function SubscriptionSummary({
               help: "本周期实付金额（年付即整年金额，不折成月）。",
               label: "订阅收入",
               value: formatMoney(subscription.payAmount),
-              tags: [cycleLabel(subscription.cycleType)],
+              tags: [cycleLabels[subscription.cycleType]],
             },
             {
               id: "quota",
@@ -169,6 +167,7 @@ function SubscriptionDetails({
   const locale = useLocale();
   const tShared = useTranslations();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const cycleLabels = useSubscriptionCycleLabels();
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
     : null;
@@ -195,7 +194,7 @@ function SubscriptionDetails({
             {orUnset(subscriptionStatusLabels[subscription.status])}
           </DetailRow>
           <DetailRow label="计费周期">
-            {orUnset(cycleLabel(subscription.cycleType))}
+            {orUnset(cycleLabels[subscription.cycleType])}
           </DetailRow>
           <DetailRow label="自动续期">
             {subscription.autoRenew ? "是" : "否"}
@@ -325,7 +324,7 @@ function SubscriptionDetails({
             {orUnset(`${formatNumber(subscription.quota.usageRate)}%`)}
           </DetailRow>
           <DetailRow label="配额周期">
-            {orUnset(cycleLabel(subscription.quota.quotaCycle))}
+            {orUnset(cycleLabels[subscription.quota.quotaCycle])}
           </DetailRow>
           <DetailRow label="允许模型">
             {orUnset(
