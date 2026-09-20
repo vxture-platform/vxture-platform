@@ -29,7 +29,6 @@ import {
 } from "@/api/admin-bff";
 import type {
   BillingBillAction,
-  BillingBillStatus,
   BillingBillType,
   BillingDetailRecord,
   BillingInvoiceReceiptAction,
@@ -44,6 +43,10 @@ import {
 import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
+import {
+  useBillStatusLabels,
+  usePaySourceLabel,
+} from "@/modules/shared/enum-labels";
 import {
   canSyncOfflineInvoice,
   offlineInvoiceDisabledReason,
@@ -84,15 +87,6 @@ function formatCurrency(value: number, currency: string) {
   }).format(value);
 }
 
-function billStatusLabel(status: BillingBillStatus) {
-  if (status === "paying") return "支付中";
-  if (status === "paid") return "已结清";
-  if (status === "partial") return "部分收款";
-  if (status === "cancelled") return "已作废";
-  if (status === "overdue") return "逾期";
-  return "待收款";
-}
-
 function billTypeLabel(type: BillingBillType) {
   if (type === "adjust") return "调整单";
   if (type === "supplement") return "补录单";
@@ -122,12 +116,6 @@ function cycleLabel(cycle: string) {
   return cycle || "未设置";
 }
 
-function paySourceLabel(source: string) {
-  if (source === "offline") return "线下";
-  if (source === "online") return "线上";
-  return "未设置";
-}
-
 function paymentStatusLabel(status: string) {
   if (status === "paid") return "已支付";
   if (status === "pending_verify") return "线下待核";
@@ -138,6 +126,7 @@ function paymentStatusLabel(status: string) {
 }
 
 function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
+  const billStatusLabels = useBillStatusLabels();
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
@@ -153,7 +142,7 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
       badges={
         <>
           <StatusBadge tone={BILL_STATUS_TONE[bill.billStatus]}>
-            {billStatusLabel(bill.billStatus)}
+            {billStatusLabels[bill.billStatus]}
           </StatusBadge>
           <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
             {t(`status.invoice.${bill.invoiceStatus}`)}
@@ -213,6 +202,8 @@ function BillingDetails({
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
+  const billStatusLabels = useBillStatusLabels();
+  const paySourceLabel = usePaySourceLabel();
   return (
     <section
       className="grid min-w-0 gap-xl"
@@ -223,7 +214,7 @@ function BillingDetails({
         <DetailList columns={3}>
           <DetailRow label="账单编号">{orUnset(bill.billNo)}</DetailRow>
           <DetailRow label="账单状态">
-            {orUnset(billStatusLabel(bill.billStatus))}
+            {orUnset(billStatusLabels[bill.billStatus])}
           </DetailRow>
           <DetailRow label="账单类型">
             {orUnset(billTypeLabel(bill.billType))}

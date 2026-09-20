@@ -79,6 +79,45 @@ export const SUBSCRIPTION_STATUSES = [
 ] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
+/**
+ * billing.invoices.bill_status — where a bill sits on the way to being settled.
+ *
+ * unpaid → paying (a payment attempt is in flight) → paid. partial = money
+ * arrived but not all of it, and the bill stays open (the remainder is carried,
+ * not written off). overdue = past due and still open — it is a *timing* fact
+ * layered on unpaid/partial, which is why nothing transitions out of it except
+ * by being paid or cancelled. cancelled = voided, no money owed.
+ *
+ * Mirrors chk_invoices_bill_status (52_billing.sql).
+ */
+export const BILL_STATUSES = [
+  "unpaid",
+  "paying",
+  "paid",
+  "partial",
+  "cancelled",
+  "overdue",
+] as const;
+export type BillStatus = (typeof BILL_STATUSES)[number];
+
+/**
+ * billing.payments.pay_source — how the money reached us.
+ *
+ * online = the customer paid through a channel (Alipay/WeChat/bank gateway).
+ * offline = wire/transfer the operator confirms by hand. voucher = a settlement
+ * leg backed by a voucher or credit rather than new money (product_321 P7) —
+ * it is a REAL source, not the absence of one. Three admin pages used to lack
+ * this branch and rendered voucher payments as "无" (2026-09-21).
+ *
+ * "no source at all" is NOT in this domain: the column is NOT NULL with a
+ * default, and a row that has no payment simply has no payments row. Callers
+ * that hold a nullable reference render the absence themselves.
+ *
+ * Mirrors chk_payments_pay_source (52_billing.sql).
+ */
+export const PAY_SOURCES = ["online", "offline", "voucher"] as const;
+export type PaySource = (typeof PAY_SOURCES)[number];
+
 /** product_metrics.merge_strategy (product_220 §2 / data_product_200). */
 export const MERGE_STRATEGIES = ["max", "union", "pool", "tiered"] as const;
 export type MergeStrategy = (typeof MERGE_STRATEGIES)[number];

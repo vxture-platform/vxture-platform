@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { useSubscriptionCycleLabels } from "@/modules/shared/enum-labels";
+import {
+  usePaySourceLabel,
+  useSubscriptionCycleLabels,
+} from "@/modules/shared/enum-labels";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -105,17 +108,12 @@ function attentionRank(status: OrderOperationStatus): number {
   return ATTENTION_RANK[status] ?? 9;
 }
 
-function paySourceLabel(source: OrderPaySource) {
-  if (source === "online") return "线上";
-  if (source === "offline") return "线下";
-  return "无";
-}
-
 /* 从模块级常量改成收 `t` 的工厂：常量在模块加载时就求值了，那一刻
    没有任何运行时上下文，而列里的状态文案要按界面语言取。 */
 function orderCsvColumns(
   t: TFn,
   cycleLabels: Record<OrderOperationRecord["cycleType"], string>,
+  paySourceLabel: (source: OrderPaySource) => string,
 ): readonly CsvColumn<OrderOperationRecord>[] {
   return [
     { label: "订单号", value: (o) => o.orderNo },
@@ -223,6 +221,7 @@ function OrderActionsMenu({
  */
 function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
   const cycleLabels = useSubscriptionCycleLabels();
+  const paySourceLabel = usePaySourceLabel();
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
@@ -337,6 +336,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
 export function OrdersPage() {
   const t = useTranslations();
   const cycleLabels = useSubscriptionCycleLabels();
+  const paySourceLabel = usePaySourceLabel();
   const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
@@ -620,7 +620,7 @@ export function OrdersPage() {
                   onClick={() =>
                     exportRowsToCsv(
                       "orders-export",
-                      orderCsvColumns(t, cycleLabels),
+                      orderCsvColumns(t, cycleLabels, paySourceLabel),
                       selectedOrders,
                     )
                   }
@@ -720,7 +720,7 @@ export function OrdersPage() {
                   onSelect: () =>
                     exportRowsToCsv(
                       "orders-export",
-                      orderCsvColumns(t, cycleLabels),
+                      orderCsvColumns(t, cycleLabels, paySourceLabel),
                       selectedOrders,
                     ),
                 },

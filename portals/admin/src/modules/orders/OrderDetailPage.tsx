@@ -35,7 +35,6 @@ import {
 import type {
   OrderOperationDetailRecord,
   OrderOperationStatus,
-  OrderPaySource,
 } from "@/entities/console";
 import {
   ORDER_STATUS_TONE,
@@ -45,6 +44,7 @@ import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
+  usePaySourceLabel,
   useSubscriptionCycleLabels,
   useSubscriptionStatusLabels,
 } from "@/modules/shared/enum-labels";
@@ -87,13 +87,6 @@ function orderStatusLabel(status: OrderOperationStatus) {
   return "异常";
 }
 
-function paySourceLabel(source: OrderPaySource) {
-  if (source === "online") return "线上";
-  if (source === "offline") return "线下";
-  if (source === "voucher") return "券";
-  return "无";
-}
-
 const DECLARED_CHANNEL_LABELS: Record<string, string> = {
   alipay: "支付宝",
   bank: "银行转账",
@@ -125,6 +118,7 @@ function restoreDisabledReason(order: OrderOperationDetailRecord) {
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
   const cycleLabels = useSubscriptionCycleLabels();
+  const paySourceLabel = usePaySourceLabel();
   const tShared = useTranslations();
   return (
     <DetailSummaryHeader
@@ -189,6 +183,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
   const tShared = useTranslations();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
+  const paySourceLabel = usePaySourceLabel();
   return (
     <section
       className="grid min-w-0 gap-xl"

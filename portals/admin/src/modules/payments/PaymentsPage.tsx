@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import {
+  useBillStatusLabels,
+  usePaySourceLabel,
+} from "@/modules/shared/enum-labels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -77,27 +81,11 @@ function formatCurrency(
   }).format(value);
 }
 
-function paySourceLabel(source: OrderPaySource) {
-  if (source === "online") return "线上";
-  if (source === "offline") return "线下";
-  return "无";
-}
-
 function offlineTypeLabel(type: OrderOfflinePaymentType | null) {
   if (type === "bank_transfer") return "银行转账";
   if (type === "cash") return "现金";
   if (type === "other") return "其他线下";
   return "未设置";
-}
-
-function billStatusLabel(status: PaymentOperationRecord["billStatus"]) {
-  if (status === "paid") return "已结清";
-  if (status === "partial") return "部分收款";
-  if (status === "paying") return "支付中";
-  if (status === "cancelled") return "已作废";
-  if (status === "overdue") return "逾期";
-  if (status === "unpaid") return "待收款";
-  return "未关联";
 }
 
 function reconciliationLabel(status: PaymentReconciliationStatus) {
@@ -128,6 +116,7 @@ function paymentStatusIcon(status: OrderPaymentStatus): IconName {
    没有任何运行时上下文，而列里的状态文案要按界面语言取。 */
 function paymentCsvColumns(
   t: TFn,
+  paySourceLabel: (source: OrderPaySource) => string,
 ): readonly CsvColumn<PaymentOperationRecord>[] {
   return [
     { label: "收款流水", value: (p) => p.paymentNo },
@@ -167,6 +156,7 @@ function paymentCsvColumns(
 function paymentSearchText(
   payment: PaymentOperationRecord,
   t: ReturnType<typeof useTranslations>,
+  paySourceLabel: (source: OrderPaySource) => string,
 ) {
   return [
     payment.id,
@@ -374,6 +364,8 @@ function PaymentActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
+  const paySourceLabel = usePaySourceLabel();
+  const billStatusLabels = useBillStatusLabels();
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -422,7 +414,9 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
                     : "neutral"
                 }
               >
-                {billStatusLabel(payment.billStatus)}
+                {payment.billStatus
+                  ? billStatusLabels[payment.billStatus]
+                  : t("table.unlinkedBill")}
               </StatusBadge>
               <StatusBadge tone="neutral" icon={false}>
                 {payment.orderNo ?? "未关联订单"}
@@ -494,6 +488,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
 
 export function PaymentsPage() {
   const t = useTranslations();
+  const paySourceLabel = usePaySourceLabel();
   const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
@@ -571,7 +566,7 @@ export function PaymentsPage() {
       if (!matchesOfflineTypeFilter(payment, offlineTypeFilter)) return false;
       if (
         normalizedQuery &&
-        !paymentSearchText(payment, t).includes(normalizedQuery)
+        !paymentSearchText(payment, t, paySourceLabel).includes(normalizedQuery)
       )
         return false;
       return true;
@@ -788,7 +783,7 @@ export function PaymentsPage() {
                   onClick={() =>
                     exportRowsToCsv(
                       "payments-export",
-                      paymentCsvColumns(t),
+                      paymentCsvColumns(t, paySourceLabel),
                       filteredPayments.filter((item) =>
                         selectedPaymentIds.has(item.id),
                       ),
@@ -891,7 +886,7 @@ export function PaymentsPage() {
                   onSelect: () =>
                     exportRowsToCsv(
                       "payments-export",
-                      paymentCsvColumns(t),
+                      paymentCsvColumns(t, paySourceLabel),
                       selectedPayments,
                     ),
                 },

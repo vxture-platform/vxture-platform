@@ -28,6 +28,8 @@ import type {
   PromotionRedemptionRecord,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { useBillStatusLabels } from "@/modules/shared/enum-labels";
+import type { BillStatus } from "@vxture-platform/shared";
 import {
   formatDate,
   formatNumber,
@@ -41,15 +43,6 @@ type BillStatusFilter = "all" | BillingBillStatus;
 // column on voucher_redemptions (a redemption row IS a completed redemption; the
 // applied/reversed states never existed in schema). Every row is 已核销.
 
-function billStatusLabel(status: BillingBillStatus) {
-  if (status === "paying") return "支付中";
-  if (status === "paid") return "已结清";
-  if (status === "partial") return "部分收款";
-  if (status === "cancelled") return "已作废";
-  if (status === "overdue") return "逾期";
-  return "待收款";
-}
-
 function billStatusTone(status: BillingBillStatus) {
   if (status === "paid") return "normal";
   if (status === "cancelled") return "muted";
@@ -57,7 +50,10 @@ function billStatusTone(status: BillingBillStatus) {
   return "warning";
 }
 
-function redemptionSearchText(record: PromotionRedemptionRecord) {
+function redemptionSearchText(
+  record: PromotionRedemptionRecord,
+  billStatusLabels: Record<BillStatus, string>,
+) {
   return [
     record.redemptionNo,
     record.promotionCode,
@@ -69,7 +65,7 @@ function redemptionSearchText(record: PromotionRedemptionRecord) {
     record.servicePlanName,
     record.operatorName,
     record.remark,
-    billStatusLabel(record.billStatus),
+    billStatusLabels[record.billStatus],
   ]
     .filter(Boolean)
     .join(" ")
@@ -80,6 +76,7 @@ function redemptionSearchText(record: PromotionRedemptionRecord) {
    没有任何运行时上下文，而列里的日期要按界面语言排。 */
 function redemptionCsvColumns(
   locale: string,
+  billStatusLabels: Record<BillStatus, string>,
 ): CsvColumn<PromotionRedemptionRecord>[] {
   return [
     { label: "核销编号", value: (record) => record.redemptionNo },
@@ -93,7 +90,7 @@ function redemptionCsvColumns(
     { label: "账单号", value: (record) => record.billNo },
     {
       label: "账单状态",
-      value: (record) => billStatusLabel(record.billStatus),
+      value: (record) => billStatusLabels[record.billStatus],
     },
     { label: "套餐", value: (record) => record.servicePlanName ?? "" },
     { label: "货币", value: (record) => record.currency },
@@ -159,6 +156,7 @@ function RedemptionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
+  const billStatusLabels = useBillStatusLabels();
   const locale = useLocale();
   const router = useRouter();
 
@@ -197,7 +195,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
         <span className="inline-flex flex-col items-center gap-2xs">
           {
             <Tag tone={billStatusTone(record.billStatus)}>
-              {billStatusLabel(record.billStatus)}
+              {billStatusLabels[record.billStatus]}
             </Tag>
           }
           <span className="text-body-sm text-muted-foreground">{`${record.billNo} · ${record.orderNo ?? "未关联订单"}`}</span>
@@ -244,6 +242,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
 
 export function PromotionRedemptionsPage() {
   const locale = useLocale();
+  const billStatusLabels = useBillStatusLabels();
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const [records, setRecords] = useState<PromotionRedemptionRecord[]>([]);
@@ -296,7 +295,9 @@ export function PromotionRedemptionsPage() {
         return false;
       if (
         normalizedQuery &&
-        !redemptionSearchText(record).includes(normalizedQuery)
+        !redemptionSearchText(record, billStatusLabels).includes(
+          normalizedQuery,
+        )
       )
         return false;
       return true;
@@ -334,7 +335,7 @@ export function PromotionRedemptionsPage() {
   function handleExportSelected() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      redemptionCsvColumns(locale),
+      redemptionCsvColumns(locale, billStatusLabels),
       selectedRecords,
     );
   }
@@ -342,7 +343,7 @@ export function PromotionRedemptionsPage() {
   function handleExportAll() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      redemptionCsvColumns(locale),
+      redemptionCsvColumns(locale, billStatusLabels),
       filteredRecords,
     );
   }

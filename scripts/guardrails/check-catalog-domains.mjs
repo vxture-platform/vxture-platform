@@ -38,6 +38,7 @@ const dom = read(
 );
 const p40 = read("deploy/database/ddl/40_product.sql");
 const p50 = read("deploy/database/ddl/50_metering.sql");
+const p52 = read("deploy/database/ddl/52_billing.sql");
 
 // [ label, @shared value domain, DB CHECK values ]
 const pairs = [
@@ -96,6 +97,19 @@ const pairs = [
     "product layer",
     tsArray(dom, "PRODUCT_LAYERS"),
     ddlCheckIn(p40, "chk_products_layer"),
+  ],
+  // 2026-09-21：这两族原本没有值域契约，admin 里各有 4~5 份就地写的中文映射函数，
+  // 而且互不相同——paySourceLabel 有三份漏了 voucher 分支，把券结算显示成「无」。
+  // 先立契约再谈文案（规矩见 status-tone.constants.ts 头注）。
+  [
+    "bill status",
+    tsArray(dom, "BILL_STATUSES"),
+    ddlCheckIn(p52, "chk_invoices_bill_status"),
+  ],
+  [
+    "pay source",
+    tsArray(dom, "PAY_SOURCES"),
+    ddlCheckIn(p52, "chk_payments_pay_source"),
   ],
 ];
 

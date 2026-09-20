@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { useBillStatusLabels } from "@/modules/shared/enum-labels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -110,15 +111,6 @@ function billTypeLabel(type: string) {
   if (type === "supplement") return "补录单";
   if (type === "prepaid") return "预付费";
   return "正常账单";
-}
-
-function billStatusLabel(status: string) {
-  if (status === "paid") return "已结清";
-  if (status === "partial") return "部分收款";
-  if (status === "paying") return "支付中";
-  if (status === "cancelled") return "已作废";
-  if (status === "overdue") return "逾期";
-  return "待收款";
 }
 
 function invoiceStatusIcon(status: BillingInvoiceStatus): IconName {
@@ -295,6 +287,7 @@ function InvoiceActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
+  const billStatusLabels = useBillStatusLabels();
   const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
@@ -335,7 +328,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
           {
             <span className="inline-flex flex-wrap gap-2xs">
               <StatusBadge tone={BILL_STATUS_TONE[invoice.billStatus]}>
-                {billStatusLabel(invoice.billStatus)}
+                {billStatusLabels[invoice.billStatus]}
               </StatusBadge>
               <StatusBadge tone="neutral" icon={false}>
                 {billTypeLabel(invoice.billType)}

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { useBillStatusLabels } from "@/modules/shared/enum-labels";
+import type { BillStatus } from "@vxture-platform/shared";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -81,15 +83,6 @@ function formatCurrency(
     minimumFractionDigits: Math.min(2, maximumFractionDigits),
     maximumFractionDigits,
   }).format(value);
-}
-
-function billStatusLabel(status: BillingBillStatus) {
-  if (status === "paying") return "支付中";
-  if (status === "paid") return "已结清";
-  if (status === "partial") return "部分收款";
-  if (status === "cancelled") return "已作废";
-  if (status === "overdue") return "逾期";
-  return "待收款";
 }
 
 function billStatusIcon(status: BillingBillStatus): IconName {
@@ -204,6 +197,7 @@ function cycleLabel(cycle: string) {
 function billingSearchText(
   record: BillingRecord,
   t: ReturnType<typeof useTranslations>,
+  billStatusLabels: Record<BillStatus, string>,
 ) {
   return [
     record.id,
@@ -219,7 +213,7 @@ function billingSearchText(
     record.operatorName,
     record.operationRemark,
     billTypeLabel(record.billType),
-    billStatusLabel(record.billStatus),
+    billStatusLabels[record.billStatus],
     t(`status.invoice.${record.invoiceStatus}`),
     record.billStatus,
     record.invoiceStatus,
@@ -234,6 +228,7 @@ function billingSearchText(
 function billingCsvColumns(
   locale: string,
   t: ReturnType<typeof useTranslations>,
+  billStatusLabels: Record<BillStatus, string>,
 ): CsvColumn<BillingRecord>[] {
   return [
     { label: "账单编号", value: (b) => b.billNo },
@@ -251,7 +246,7 @@ function billingCsvColumns(
     { label: "减免金额", value: (b) => b.discountAmount },
     { label: "已收金额", value: (b) => b.paidAmount },
     { label: "已开票金额", value: (b) => b.invoicedAmount },
-    { label: "收款状态", value: (b) => billStatusLabel(b.billStatus) },
+    { label: "收款状态", value: (b) => billStatusLabels[b.billStatus] },
     { label: "发票状态", value: (b) => t(`status.invoice.${b.invoiceStatus}`) },
     { label: "发票号", value: (b) => b.invoiceNo ?? "" },
     { label: "经办人", value: (b) => b.operatorName },
@@ -337,6 +332,7 @@ function BillingActionsMenu({
  * 与缺色（starter / business）一起另算。
  */
 function useBillingColumns(): DataTableColumn<BillingRecord>[] {
+  const billStatusLabels = useBillStatusLabels();
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -441,7 +437,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
               tone={BILL_STATUS_TONE[bill.billStatus]}
               icon={billStatusIcon(bill.billStatus)}
             >
-              {billStatusLabel(bill.billStatus)}
+              {billStatusLabels[bill.billStatus]}
             </StatusBadge>
           }
           <span className="text-body-sm text-muted-foreground">{`已收 ${formatCurrency(bill.paidAmount, bill.currency)}`}</span>
@@ -471,6 +467,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
 
 export function BillingPage() {
   const t = useTranslations();
+  const billStatusLabels = useBillStatusLabels();
   const tableLabels = useTableLabels();
   const locale = useLocale();
   const tShared = useTranslations();
@@ -551,7 +548,7 @@ export function BillingPage() {
       if (!matchesBillingExceptionFilter(bill, exceptionFilter)) return false;
       if (
         normalizedQuery &&
-        !billingSearchText(bill, t).includes(normalizedQuery)
+        !billingSearchText(bill, t, billStatusLabels).includes(normalizedQuery)
       )
         return false;
       return true;
@@ -633,7 +630,7 @@ export function BillingPage() {
     const rows = filteredBills.filter((bill) => selectedBillIds.has(bill.id));
     exportRowsToCsv(
       "billing-selected-export",
-      billingCsvColumns(locale, t),
+      billingCsvColumns(locale, t, billStatusLabels),
       rows,
     );
   }
