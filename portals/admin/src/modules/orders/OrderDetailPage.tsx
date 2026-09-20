@@ -45,6 +45,10 @@ import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
+  useSubscriptionCycleLabels,
+  useSubscriptionStatusLabels,
+} from "@/modules/shared/enum-labels";
+import {
   canConfirmOrderOfflinePayment,
   confirmOfflinePaymentDisabledReason,
   OrderOfflinePaymentDialog,
@@ -70,12 +74,6 @@ function formatCurrency(value: number, currency: string) {
     currency: currency || "CNY",
     maximumFractionDigits: 2,
   }).format(value);
-}
-
-function cycleLabel(cycle: OrderOperationDetailRecord["cycleType"]) {
-  if (cycle === "yearly") return "年付";
-  if (cycle === "once") return "一次性";
-  return "月付";
 }
 
 function orderStatusLabel(status: OrderOperationStatus) {
@@ -124,19 +122,9 @@ function restoreDisabledReason(order: OrderOperationDetailRecord) {
   return "该订单不是可恢复的已取消状态（已激活过的订阅取消后无法在此恢复）。";
 }
 
-function subscriptionStatusLabel(
-  status: OrderOperationDetailRecord["subscriptionStatus"],
-) {
-  if (status === "trialing") return "试用";
-  if (status === "active") return "已生效";
-  if (status === "expiring") return "即将到期";
-  if (status === "overdue") return "逾期";
-  if (status === "suspended") return "暂停";
-  return "已取消";
-}
-
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
+  const cycleLabels = useSubscriptionCycleLabels();
   const tShared = useTranslations();
   return (
     <DetailSummaryHeader
@@ -165,7 +153,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
               help: "订单成交金额，按订单币种展示。",
               label: "订单金额",
               value: formatCurrency(order.amount, order.currency),
-              tags: [cycleLabel(order.cycleType)],
+              tags: [cycleLabels[order.cycleType]],
             },
             {
               id: "paid",
@@ -199,6 +187,8 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const cycleLabels = useSubscriptionCycleLabels();
   return (
     <section
       className="grid min-w-0 gap-xl"
@@ -255,10 +245,10 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         <DetailList columns={3}>
           <DetailRow label="订阅 ID">{orUnset(order.subscriptionId)}</DetailRow>
           <DetailRow label="订阅状态">
-            {orUnset(subscriptionStatusLabel(order.subscriptionStatus))}
+            {orUnset(subscriptionStatusLabels[order.subscriptionStatus])}
           </DetailRow>
           <DetailRow label="计费周期">
-            {orUnset(cycleLabel(order.cycleType))}
+            {orUnset(cycleLabels[order.cycleType])}
           </DetailRow>
         </DetailList>
         <div className="inline-flex flex-wrap items-center justify-end gap-sm justify-start ">

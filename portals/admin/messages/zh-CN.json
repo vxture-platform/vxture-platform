@@ -2388,5 +2388,21 @@
     "selectAll": "全选本页",
     "deselectAll": "取消本页全选",
     "selectRow": "选择本行"
+  },
+  "enums": {
+    "subscriptionStatus": {
+      "active": "已生效",
+      "expiring": "即将到期",
+      "trialing": "试用",
+      "overdue": "逾期",
+      "suspended": "暂停",
+      "expired": "已到期",
+      "cancelled": "已取消"
+    },
+    "subscriptionCycle": {
+      "monthly": "月付",
+      "yearly": "年付",
+      "once": "一次性"
+    }
   }
 }

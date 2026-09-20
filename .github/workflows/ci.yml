@@ -267,6 +267,18 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:admin-nav-messages
 
+      # 硬编码的「枚举 → 中文」映射只准少不准多。2026-09-20 盘点：admin 里 380 条、
+      # 29 个文件，同名函数重复得厉害（cycleLabel 5 份、subscriptionStatusLabel 4 份、
+      # billStatusLabel / paySourceLabel 各 4 份）。而四份 subscriptionStatusLabel
+      # 实测互不相同：OrderDetailPage 那份漏了 expired 分支，把「权益自然到期」显示成
+      # 「已取消」；另外三份译名还分「已到期」/「已过期」。tenant-utils 那份的注释写着
+      # 「与订阅列表页同一份措辞」——注释声称一致、实际不一致，没有任何东西保证它。
+      # 存量走计数棘轮而不是逐条名单：收口的前提是先有值域契约（规矩见
+      # status-tone.constants.ts 头注），那不能在立守卫这一步顺带做完。
+      - name: Enum label sprawl guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:enum-label-sprawl
+
       # 列级锁只对非-owner 角色生效,开发/CI 以 owner 连库时锁是摆设:代码里一条碰锚点列
       # 的 UPDATE 到生产(platform_svc)才 42501 整条回滚(2026-09-02 确认收款实测)。
       # 静态扫 bff/ services/ 的 UPDATE 语句对照 98_column_locks 白名单。

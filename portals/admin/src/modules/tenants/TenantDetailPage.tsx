@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -80,7 +81,6 @@ import {
   statusLabel,
   subscriptionCycleLabel,
   subscriptionKindLabel,
-  subscriptionStatusLabel,
   TENANT_RISK_TONE,
   TENANT_STATUS_TONE,
   ticketStatusLabel,
@@ -1152,6 +1152,7 @@ function TenantSubscriptionsTab({
 }) {
   const locale = useLocale();
   const tShared = useTranslations();
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
   if (!subscriptions.length) {
     return (
       <EmptyState title="暂无订阅" description="该租户名下没有订阅记录。" />
@@ -1182,7 +1183,7 @@ function TenantSubscriptionsTab({
                 <StatusBadge
                   tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
                 >
-                  {subscriptionStatusLabel(subscription.status)}
+                  {subscriptionStatusLabels[subscription.status]}
                 </StatusBadge>
                 <Badge>{subscriptionKindLabel(subscription.kind)}</Badge>
               </>

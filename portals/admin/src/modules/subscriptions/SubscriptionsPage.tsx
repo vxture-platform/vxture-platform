@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import {
+  useSubscriptionCycleLabels,
+  useSubscriptionStatusLabels,
+} from "@/modules/shared/enum-labels";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -64,27 +68,11 @@ type TierFilter = "all" | TierFilterValue;
 type RiskFilter = "all" | SubscriptionOperationQuotaRisk;
 type RenewFilter = "all" | "auto" | "manual";
 
-function subscriptionStatusLabel(status: SubscriptionOperationStatus) {
-  if (status === "trialing") return "试用";
-  if (status === "active") return "已生效";
-  if (status === "expiring") return "即将到期";
-  if (status === "overdue") return "逾期";
-  if (status === "suspended") return "暂停";
-  if (status === "expired") return "已到期";
-  return "已取消";
-}
-
 function subscriptionStatusIcon(status: SubscriptionOperationStatus): IconName {
   if (status === "active") return "check";
   if (status === "trialing" || status === "expiring") return "clock";
   if (status === "cancelled" || status === "expired") return "x";
   return "warning";
-}
-
-function cycleLabel(cycle: SubscriptionOperationRecord["cycleType"]) {
-  if (cycle === "yearly") return "年付";
-  if (cycle === "once") return "一次性";
-  return "月付";
 }
 
 function quotaRiskLabel(risk: SubscriptionOperationQuotaRisk) {
@@ -115,28 +103,37 @@ function subscriptionSearchText(record: SubscriptionOperationRecord) {
     .toLowerCase();
 }
 
-const SUBSCRIPTION_CSV_COLUMNS: CsvColumn<SubscriptionOperationRecord>[] = [
-  { label: "订阅编号", value: (record) => record.subscriptionCode },
-  { label: "订单号", value: (record) => record.orderNo ?? "" },
-  { label: "租户编号", value: (record) => record.tenantCode },
-  { label: "租户名称", value: (record) => record.tenantName },
-  { label: "业务方案", value: (record) => record.solutionName },
-  { label: "套餐", value: (record) => record.tierName },
-  { label: "套餐编码", value: (record) => record.servicePlanCode },
-  { label: "周期", value: (record) => cycleLabel(record.cycleType) },
-  { label: "状态", value: (record) => subscriptionStatusLabel(record.status) },
-  { label: "自动续期", value: (record) => (record.autoRenew ? "是" : "否") },
-  { label: "配额使用率", value: (record) => record.quota.usageRate },
-  {
-    label: "配额风险",
-    value: (record) => quotaRiskLabel(record.quota.risk),
-  },
-  { label: "席位", value: (record) => record.quota.maxUsers },
-  { label: "货币", value: (record) => record.currency },
-  { label: "订阅收入", value: (record) => record.payAmount },
-  { label: "开始时间", value: (record) => record.startAt },
-  { label: "结束时间", value: (record) => record.endAt ?? "" },
-];
+/* CSV 列由 hook 给,不再是模块级常量——「状态」列的文案走词条,而 `t` 只能在
+   组件里拿。其余列不受影响。 */
+function useSubscriptionCsvColumns(): CsvColumn<SubscriptionOperationRecord>[] {
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const cycleLabels = useSubscriptionCycleLabels();
+  return [
+    { label: "订阅编号", value: (record) => record.subscriptionCode },
+    { label: "订单号", value: (record) => record.orderNo ?? "" },
+    { label: "租户编号", value: (record) => record.tenantCode },
+    { label: "租户名称", value: (record) => record.tenantName },
+    { label: "业务方案", value: (record) => record.solutionName },
+    { label: "套餐", value: (record) => record.tierName },
+    { label: "套餐编码", value: (record) => record.servicePlanCode },
+    { label: "周期", value: (record) => cycleLabels[record.cycleType] },
+    {
+      label: "状态",
+      value: (record) => subscriptionStatusLabels[record.status],
+    },
+    { label: "自动续期", value: (record) => (record.autoRenew ? "是" : "否") },
+    { label: "配额使用率", value: (record) => record.quota.usageRate },
+    {
+      label: "配额风险",
+      value: (record) => quotaRiskLabel(record.quota.risk),
+    },
+    { label: "席位", value: (record) => record.quota.maxUsers },
+    { label: "货币", value: (record) => record.currency },
+    { label: "订阅收入", value: (record) => record.payAmount },
+    { label: "开始时间", value: (record) => record.startAt },
+    { label: "结束时间", value: (record) => record.endAt ?? "" },
+  ];
+}
 
 function SubscriptionActionsMenu({
   subscription,
@@ -243,6 +240,8 @@ function SubscriptionActionsMenu({
  */
 function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[] {
   const locale = useLocale();
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const cycleLabels = useSubscriptionCycleLabels();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -289,7 +288,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
                 {subscription.tierName}
               </Badge>
               <StatusBadge tone="neutral" icon={false}>
-                {cycleLabel(subscription.cycleType)}
+                {cycleLabels[subscription.cycleType]}
               </StatusBadge>
             </span>
           }
@@ -310,7 +309,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
               icon={subscriptionStatusIcon(subscription.status)}
             >
-              {subscriptionStatusLabel(subscription.status)}
+              {subscriptionStatusLabels[subscription.status]}
             </StatusBadge>
           }
           <span className="text-body-sm text-muted-foreground">{`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}</span>
@@ -337,7 +336,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       cell: (subscription) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {formatMoney(subscription.payAmount)}
-          <span className="text-body-sm text-muted-foreground">{`${cycleLabel(subscription.cycleType)} · ${
+          <span className="text-body-sm text-muted-foreground">{`${cycleLabels[subscription.cycleType]} · ${
             subscription.autoRenew ? "自动续期" : subscription.operationHint
           }`}</span>
         </span>
@@ -347,6 +346,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
 }
 
 export function SubscriptionsPage() {
+  const subscriptionCsvColumns = useSubscriptionCsvColumns();
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
   const [subscriptions, setSubscriptions] = useState<
@@ -494,7 +494,7 @@ export function SubscriptionsPage() {
   function handleExportSelectedSubscriptions() {
     exportRowsToCsv(
       "subscriptions-export",
-      SUBSCRIPTION_CSV_COLUMNS,
+      subscriptionCsvColumns,
       selectedSubscriptions,
     );
   }
