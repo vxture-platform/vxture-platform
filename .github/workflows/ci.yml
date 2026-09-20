@@ -255,6 +255,18 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:message-usage
 
+      # admin 侧栏原来对缺词条**回落成配置里的中文**，理由写的是「键由数据驱动，
+      # 词条目录不可能穷举」——不成立：数据驱动的是运行时选哪一个，不是可能有
+      # 哪些；取值集合就是 navigation.ts，在仓里、可枚举。那个托底的代价是**静默
+      # 的半中半英**：有词条的菜单项在英文界面变英文，没词条的原样留中文，并排
+      # 在同一条侧栏里，谁也不报错，中文环境下永远发现不了。2026-09-20 owner 实看
+      # 报出来，查实缺 3 条。托底已摘掉，缺词条由这道守卫在 lint 期挡住。
+      # 顺带报孤儿：cutover 留下的死词条会掩盖「id 拼错了」——拼错的那个正好撞上
+      # 一条孤儿时，缺词条检查什么也发现不了。
+      - name: Admin navigation message guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:admin-nav-messages
+
       # 列级锁只对非-owner 角色生效,开发/CI 以 owner 连库时锁是摆设:代码里一条碰锚点列
       # 的 UPDATE 到生产(platform_svc)才 42501 整条回滚(2026-09-02 确认收款实测)。
       # 静态扫 bff/ services/ 的 UPDATE 语句对照 98_column_locks 白名单。

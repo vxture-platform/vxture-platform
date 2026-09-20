@@ -171,16 +171,8 @@
       "productsPlans": "产品体系",
       "subscriptionsTransactions": "订阅交易",
       "commercialAnalysis": "商业分析",
-      "capabilitiesServices": "模型技能",
       "financeSettlement": "财务结算",
-      "supportCompliance": "客户服务",
-      "autonomyOverview": "平台总览",
-      "identityAccess": "身份权限",
-      "platformResources": "平台资源",
-      "runtimeOps": "运行保障",
-      "securityAudit": "安全审计",
-      "systemSetting": "系统配置",
-      "notificationCenter": "通知中心"
+      "supportCompliance": "客户服务"
     },
     "items": {
       "platformOverview": {
@@ -202,10 +194,6 @@
       "verifications": {
         "label": "实名认证",
         "description": "审核租户企业资质材料，处理通过、驳回和复核状态。"
-      },
-      "adminRoles": {
-        "label": "平台角色",
-        "description": "维护平台自治域内部角色、角色状态和角色授权。"
       },
       "servicePlans": {
         "label": "服务套餐",
@@ -243,18 +231,6 @@
         "label": "优惠核销",
         "description": "查看优惠码使用记录、折扣核销统计和订单关联数据。"
       },
-      "serviceMonitor": {
-        "label": "服务监控",
-        "description": "查看服务运行详情、响应时间、错误率、可用性指标和告警规则。"
-      },
-      "modelPlatform": {
-        "label": "模型计价与策略",
-        "description": "配置模型计价规则与限流策略；供应商/模型只读，生命周期管理在运维台。"
-      },
-      "skills": {
-        "label": "能力目录",
-        "description": "Runos 已注册能力的只读目录；注册与管理在 opera「能力注册」。"
-      },
       "billing": {
         "label": "账单中心",
         "description": "管理账单生成、应收确认、异常处理和线下发票登记入口。"
@@ -275,65 +251,23 @@
         "label": "消息公告",
         "description": "发布平台公告和定向通知，查询通知触达与历史记录。"
       },
-      "auditLogs": {
-        "label": "审计日志",
-        "description": "追溯运营后台关键操作，按操作人、时间和对象筛选审计记录。"
+      "planVersions": {
+        "label": "产品套餐",
+        "description": "按产品发布套餐：每个产品挂几档由需要决定，草稿编辑价格与配额，发布冻结并设为当前版本，完整保留 plan_version 版本史。"
       },
-      "platformAutonomy": {
-        "label": "平台总览",
-        "description": "展示平台自治域运行状态、关键指标、风险提醒与治理入口。"
+      "atlas": {
+        "label": "模型计价策略",
+        "description": "配置模型计价规则与限流策略；供应商/模型为只读，其生命周期管理在运维台。"
       },
-      "platformAdmins": {
-        "label": "平台用户",
-        "description": "管理平台自治域内部用户，不面向租户最终用户。"
-      },
-      "adminPermissions": {
-        "label": "权限策略",
-        "description": "管理平台自治域权限点、权限分组、策略绑定与授权范围。"
-      },
-      "platformSecrets": {
-        "label": "密钥管理",
-        "description": "管理平台级密钥、访问凭证、服务令牌和敏感配置引用。"
-      },
-      "platformJobs": {
-        "label": "任务调度",
-        "description": "管理平台后台任务、异步队列、执行记录、失败重试与调度状态。"
-      },
-      "maintenanceWindows": {
-        "label": "维护窗口",
-        "description": "声明与管理平台维护窗口：计划、执行、完成与取消，实际结束时间对账。"
-      },
-      "approvalCenter": {
-        "label": "审批中心",
-        "description": "处理敏感操作审批、权限申请、密钥申请和高风险变更确认。"
-      },
-      "riskRecords": {
-        "label": "风险记录",
-        "description": "管理租户风险评估记录：录入、跟进、审阅处置与标签归类。"
-      },
-      "complianceEvents": {
-        "label": "合规事件",
-        "description": "跟踪平台与租户合规事件：指派处理人、办结与驳回、证据留存。"
-      },
-      "systemParameters": {
-        "label": "参数配置",
-        "description": "待建设模块，用于维护平台级参数、默认值、运行参数和全局策略参数。"
-      },
-      "dataDictionaries": {
-        "label": "字典管理",
-        "description": "待建设模块，用于维护系统字典、枚举项、业务选项和可配置静态数据。"
-      },
-      "featureToggles": {
-        "label": "开关控制",
-        "description": "待建设模块，用于控制平台功能开关、灰度开关、实验开关和风险隔离开关。"
-      },
-      "notificationChannels": {
-        "label": "通知渠道",
-        "description": "待建设模块，用于维护平台通知能力的渠道、模板绑定和发送配置。"
-      },
-      "notificationLogs": {
-        "label": "发送记录",
-        "description": "待建设模块，用于追踪平台通知能力的发送记录、回执和失败重试。"
+      "capabilityPricing": {
+        "label": "能力计价策略",
+        "description": "配置能力调用的计价规则与限流策略（规划中，页面尚未建）。"
+      }
+    },
+    "workspaces": {
+      "tenant-ops": {
+        "label": "运营平面",
+        "description": "面向租户、用户、产品、订阅、交易和服务支持的运营管理。"
       }
     }
   },
