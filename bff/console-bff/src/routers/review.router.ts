@@ -64,7 +64,11 @@ function toView(review: ReviewRecord): ReviewView {
 @Controller("api/me/reviews")
 export class ReviewRouter {
   constructor(
-    private readonly reviews: ReviewService,
+    // 必须显式 @Inject：打包走 esbuild，它**不产 emitDecoratorMetadata**，
+    // 靠参数类型推断的注入在运行时拿到 undefined（boot-smoke 报
+    // 「can't resolve dependencies of the ReviewRouter (?, COMMERCE_PG_POOL)」）。
+    // 类型检查与打包都不会报错——只有真启动一次才看得见。
+    @Inject(ReviewService) private readonly reviews: ReviewService,
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
   ) {}
 
