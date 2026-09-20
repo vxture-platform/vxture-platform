@@ -74,9 +74,13 @@ function formatCurrency(value: number, currency: string) {
   }).format(value);
 }
 
-const DECLARED_CHANNEL_LABELS: Record<string, string> = {
-  alipay: "支付宝",
-  bank: "银行转账",
+/** 渠道码 → 词条键。文案走 `orderDetailPage.channels.*`，这里只留映射。 */
+/** 本页命名空间的取词函数类型。模块级函数收它当参数（组件外拿不到 hook）。 */
+type TPage = ReturnType<typeof useTranslations<"orderDetailPage">>;
+
+const DECLARED_CHANNEL_KEYS: Record<string, string> = {
+  alipay: "channels.alipay",
+  bank: "channels.bank",
 };
 
 // 仅真正的待支付订单可驳回——已有任何收款请走结算而非驳回（product_320 §4.3）。
@@ -89,21 +93,25 @@ function canVoidOrder(order: OrderOperationDetailRecord) {
   );
 }
 
-function voidDisabledReason(order: OrderOperationDetailRecord) {
+function voidDisabledReason(order: OrderOperationDetailRecord, tPage: TPage) {
   if (canVoidOrder(order)) return null;
-  if (order.paidAmount > 0) return "已收到支付的订单不能驳回，请走结算流程。";
-  return "该订单不是待支付状态，无需驳回。";
+  if (order.paidAmount > 0) return tPage("disabled.hasPayment");
+  return tPage("disabled.notPending");
 }
 
 // restorable 由后端判定：从未激活过（订阅 end_at 为空）且没有支付记录的
 // 已取消/已过期订单才可恢复；已激活后再取消的订阅不在此列（见 admin-bff）。
-function restoreDisabledReason(order: OrderOperationDetailRecord) {
+function restoreDisabledReason(
+  order: OrderOperationDetailRecord,
+  tPage: TPage,
+) {
   if (order.restorable) return null;
-  return "该订单不是可恢复的已取消状态（已激活过的订阅取消后无法在此恢复）。";
+  return tPage("disabled.notRestorable");
 }
 
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
+  const tPage = useTranslations("orderDetailPage");
   const cycleLabels = useSubscriptionCycleLabels();
   const paySourceLabel = usePaySourceLabel();
   const orderStatusLabels = useOrderStatusLabels();
@@ -132,29 +140,29 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
           items={[
             {
               id: "amount",
-              help: "订单成交金额，按订单币种展示。",
-              label: "订单金额",
+              help: tPage("summary.amountHelp"),
+              label: tPage("summary.amount"),
               value: formatCurrency(order.amount, order.currency),
               tags: [cycleLabels[order.cycleType]],
             },
             {
               id: "paid",
-              help: "已核销到本订单的回款金额。",
+              help: tPage("summary.receivedHelp"),
               label: tShared("columns.receivedAmount"),
               value: formatCurrency(order.paidAmount, order.currency),
               tags: [paySourceLabel(order.paySource)],
             },
             {
               id: "solution",
-              help: "本订单开通的业务方案。",
-              label: "业务方案",
+              help: tPage("summary.planHelp"),
+              label: tPage("summary.plan"),
               value: order.solutionName,
               tags: [order.servicePlanName],
             },
             {
               id: "operation",
-              help: "按当前订单状态给出的建议处理动作。",
-              label: "运营动作",
+              help: tPage("summary.actionHelp"),
+              label: tPage("summary.action"),
               value: order.operationHint,
               tags: [order.operatorName],
             },
@@ -167,6 +175,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
 
 function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
+  const tPage = useTranslations("orderDetailPage");
   const locale = useLocale();
   const tShared = useTranslations();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
@@ -176,26 +185,30 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
   return (
     <section
       className="grid min-w-0 gap-xl"
-      aria-label={`${order.orderNo} 订单详情`}
+      aria-label={tPage("summary.ariaLabel", { orderNo: order.orderNo })}
     >
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="table" title="基础资料" />
+        <DetailSectionHeading icon="table" title={tPage("sections.basic")} />
         <DetailList columns={3}>
-          <DetailRow label="订单编号">{orUnset(order.orderNo)}</DetailRow>
-          <DetailRow label="订单状态">
+          <DetailRow label={tPage("fields.orderNo")}>
+            {orUnset(order.orderNo)}
+          </DetailRow>
+          <DetailRow label={tPage("fields.orderStatus")}>
             {orUnset(orderStatusLabels[order.orderStatus])}
           </DetailRow>
-          <DetailRow label="支付状态">
+          <DetailRow label={tPage("fields.payStatus")}>
             {orUnset(t(`status.orderPayment.${order.paymentStatus}`))}
           </DetailRow>
-          <DetailRow label="支付来源">
+          <DetailRow label={tPage("fields.paySource")}>
             {orUnset(paySourceLabel(order.paySource))}
           </DetailRow>
-          <DetailRow label="支付方式">{orUnset(order.payMethod)}</DetailRow>
-          <DetailRow label="创建时间">
+          <DetailRow label={tPage("fields.payMethod")}>
+            {orUnset(order.payMethod)}
+          </DetailRow>
+          <DetailRow label={tPage("fields.createdAt")}>
             {orUnset(formatDate(order.createdAt, locale))}
           </DetailRow>
-          <DetailRow label="确认时间">
+          <DetailRow label={tPage("fields.confirmedAt")}>
             {orUnset(formatDate(order.confirmedAt, locale))}
           </DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
@@ -205,33 +218,51 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
       </section>
 
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="buildings" title="租户与套餐" />
+        <DetailSectionHeading
+          icon="buildings"
+          title={tPage("sections.tenantPlan")}
+        />
         <DetailList columns={3}>
-          <DetailRow label="租户">{orUnset(order.tenantName)}</DetailRow>
+          <DetailRow label={tPage("fields.tenant")}>
+            {orUnset(order.tenantName)}
+          </DetailRow>
           <DetailRow label={tShared("columns.tenantCode")}>
             {orUnset(order.tenantCode)}
           </DetailRow>
           <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(order.tenantType))}
           </DetailRow>
-          <DetailRow label="所属区域">{orUnset(order.region)}</DetailRow>
-          <DetailRow label="所属行业">{orUnset(order.industry)}</DetailRow>
-          <DetailRow label="业务方案">{orUnset(order.solutionName)}</DetailRow>
-          <DetailRow label="服务套餐">
+          <DetailRow label={tPage("fields.region")}>
+            {orUnset(order.region)}
+          </DetailRow>
+          <DetailRow label={tPage("fields.industry")}>
+            {orUnset(order.industry)}
+          </DetailRow>
+          <DetailRow label={tPage("fields.plan")}>
+            {orUnset(order.solutionName)}
+          </DetailRow>
+          <DetailRow label={tPage("fields.servicePlan")}>
             {orUnset(order.servicePlanName)}
           </DetailRow>
-          <DetailRow label="套餐层级">{orUnset(order.tierName)}</DetailRow>
+          <DetailRow label={tPage("fields.planTier")}>
+            {orUnset(order.tierName)}
+          </DetailRow>
         </DetailList>
       </section>
 
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="star" title="关联订阅" />
+        <DetailSectionHeading
+          icon="star"
+          title={tPage("sections.subscription")}
+        />
         <DetailList columns={3}>
-          <DetailRow label="订阅 ID">{orUnset(order.subscriptionId)}</DetailRow>
-          <DetailRow label="订阅状态">
+          <DetailRow label={tPage("fields.subscriptionId")}>
+            {orUnset(order.subscriptionId)}
+          </DetailRow>
+          <DetailRow label={tPage("fields.subscriptionStatus")}>
             {orUnset(subscriptionStatusLabels[order.subscriptionStatus])}
           </DetailRow>
-          <DetailRow label="计费周期">
+          <DetailRow label={tPage("fields.billingCycle")}>
             {orUnset(cycleLabels[order.cycleType])}
           </DetailRow>
         </DetailList>
@@ -239,31 +270,37 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
           <Button asChild variant="outline">
             <Link href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}>
               <Icon name="star" size="xs" fallback="placeholder" />
-              订阅详情
+              {tPage("links.subscription")}
             </Link>
           </Button>
           <Button asChild variant="outline">
             <Link href={`/tenants/${encodeURIComponent(order.tenantCode)}`}>
               <Icon name="buildings" size="xs" fallback="placeholder" />
-              租户详情
+              {tPage("links.tenant")}
             </Link>
           </Button>
         </div>
       </section>
 
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="key" title="账单与收款" />
+        <DetailSectionHeading icon="key" title={tPage("sections.billing")} />
         <DetailList columns={3}>
-          <DetailRow label="账单编号">{order.billNo || "未生成"}</DetailRow>
-          <DetailRow label="账单状态">{order.billStatus || "未生成"}</DetailRow>
-          <DetailRow label="支付单号">{order.paymentNo || "未生成"}</DetailRow>
-          <DetailRow label="订单金额">
+          <DetailRow label={tPage("fields.billNo")}>
+            {order.billNo || tPage("notGenerated")}
+          </DetailRow>
+          <DetailRow label={tPage("fields.billStatus")}>
+            {order.billStatus || tPage("notGenerated")}
+          </DetailRow>
+          <DetailRow label={tPage("fields.payNo")}>
+            {order.paymentNo || tPage("notGenerated")}
+          </DetailRow>
+          <DetailRow label={tPage("fields.orderAmount")}>
             {orUnset(formatCurrency(order.amount, order.currency))}
           </DetailRow>
           <DetailRow label={tShared("columns.receivedAmount")}>
             {orUnset(formatCurrency(order.paidAmount, order.currency))}
           </DetailRow>
-          <DetailRow label="剩余应收">
+          <DetailRow label={tPage("fields.remaining")}>
             {orUnset(
               formatCurrency(
                 Math.max(0, order.amount - order.paidAmount),
@@ -275,7 +312,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
       </section>
 
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="list" title="账单明细" />
+        <DetailSectionHeading icon="list" title={tPage("sections.billItems")} />
         <PanelList>
           {order.invoiceItems.map((item) => (
             <PanelItem
@@ -299,7 +336,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
                   </span>
                   <span className="truncate text-body-sm text-muted-foreground">
                     {item.remark ??
-                      `单价 ${formatCurrency(item.unitPrice, order.currency)}`}
+                      `${tPage("unitPrice", { price: formatCurrency(item.unitPrice, order.currency) })}`}
                   </span>
                 </span>
               }
@@ -309,7 +346,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
       </section>
 
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="check" title="支付记录" />
+        <DetailSectionHeading icon="check" title={tPage("sections.payments")} />
         <PanelList>
           {order.paymentRecords.length ? (
             order.paymentRecords.map((payment) => (
@@ -345,17 +382,17 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
               lead={<Icon name="clock" size="sm" fallback="placeholder" />}
               main={
                 <TableTitleCell
-                  title={<>暂无支付记录</>}
-                  description={<>等待线上支付或运营确认线下收款</>}
+                  title={<>{tPage("payments.empty")}</>}
+                  description={<>{tPage("payments.emptyHint")}</>}
                 />
               }
               trail={
                 <span className="grid justify-items-end gap-2xs">
                   <span className="text-body-md font-semibold text-foreground">
-                    未收款
+                    {tPage("payments.unpaid")}
                   </span>
                   <span className="truncate text-body-sm text-muted-foreground">
-                    确认线下收款后会自动写入支付记录。
+                    {tPage("payments.unpaidHint")}
                   </span>
                 </span>
               }
@@ -365,7 +402,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
       </section>
 
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="clock" title="运营记录" />
+        <DetailSectionHeading icon="clock" title={tPage("sections.opsLog")} />
         <PanelList>
           {order.operationTimeline.map((event) => (
             <PanelItem
@@ -411,6 +448,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
 
 export function OrderDetailPage({ orderId }: { orderId: string }) {
   const locale = useLocale();
+  const tPage = useTranslations("orderDetailPage");
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [order, setOrder] = useState<OrderOperationDetailRecord | null>(null);
@@ -468,14 +506,14 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         confirmOrderOfflinePayment(order.id, payload),
       );
       setOrder(updatedOrder);
-      setOperationFeedback("线下收款已确认。");
+      setOperationFeedback(tPage("feedback.paymentConfirmed"));
       setPaymentDialogOpen(false);
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
         error instanceof Error
           ? error.message
-          : "确认线下收款失败，请稍后重试。",
+          : tPage("feedback.confirmPaymentFailed"),
       );
     } finally {
       setSubmittingPayment(false);
@@ -494,9 +532,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         rejectOrderPaymentDeclaration(order.id, rejectReason),
       );
       setOrder(updatedOrder);
-      setOperationFeedback(
-        "付款申报已驳回，券与折扣已释放，客户端将看到驳回原因。",
-      );
+      setOperationFeedback(tPage("feedback.declarationRejected"));
       setRejectDialogOpen(false);
       setRejectReason("");
     } catch (error) {
@@ -504,7 +540,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       setOperationError(
         error instanceof Error
           ? error.message
-          : "驳回付款申报失败，请稍后重试。",
+          : tPage("feedback.rejectDeclarationFailed"),
       );
     } finally {
       setSubmittingReject(false);
@@ -530,11 +566,13 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         }),
       );
       setOrder(updatedOrder);
-      setOperationFeedback("已重试开通（段 2 重驱动）。");
+      setOperationFeedback(tPage("feedback.provisionRetried"));
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
-        error instanceof Error ? error.message : "重试开通失败，请稍后重试。",
+        error instanceof Error
+          ? error.message
+          : tPage("feedback.retryProvisionFailed"),
       );
     } finally {
       setSubmittingPayment(false);
@@ -553,13 +591,15 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         voidOrder(order.id, voidReason),
       );
       setOrder(updatedOrder);
-      setOperationFeedback("订单已驳回。");
+      setOperationFeedback(tPage("feedback.orderRejected"));
       setVoidDialogOpen(false);
       setVoidReason("");
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
-        error instanceof Error ? error.message : "驳回订单失败，请稍后重试。",
+        error instanceof Error
+          ? error.message
+          : tPage("feedback.rejectOrderFailed"),
       );
     } finally {
       setSubmittingVoid(false);
@@ -582,16 +622,16 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       setOrder(updated);
       setOperationFeedback(
         refundDialog === "execute"
-          ? "退款已执行：订单已退款，订阅已回到未订阅状态。"
+          ? tPage("feedback.refundExecuted")
           : refundDialog === "approve"
-            ? "退款申请已通过，请按原渠道打款后点「退款完成」。"
-            : "退款申请已驳回。",
+            ? tPage("feedback.refundApproved")
+            : tPage("feedback.refundRejected"),
       );
       setRefundDialog(null);
       setRefundRemark("");
     } catch (error) {
       setOperationError(
-        error instanceof Error ? error.message : "退款操作失败，请稍后重试。",
+        error instanceof Error ? error.message : tPage("feedback.refundFailed"),
       );
     } finally {
       setSubmittingRefund(false);
@@ -610,13 +650,15 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         restoreOrder(order.id, restoreReason),
       );
       setOrder(updatedOrder);
-      setOperationFeedback("订单已恢复为待支付状态。");
+      setOperationFeedback(tPage("feedback.orderRestored"));
       setRestoreDialogOpen(false);
       setRestoreReason("");
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
-        error instanceof Error ? error.message : "恢复订单失败，请稍后重试。",
+        error instanceof Error
+          ? error.message
+          : tPage("feedback.restoreFailed"),
       );
     } finally {
       setSubmittingRestore(false);
@@ -630,8 +672,8 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         header={
           <PageHeader
             icon="table"
-            title="订单详情"
-            description="未找到对应的订单记录。"
+            title={tPage("title")}
+            description={tPage("notFound.description")}
             action={
               <Button asChild variant="outline">
                 <Link href="/orders">
@@ -644,8 +686,8 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         }
       >
         <EmptyState
-          title="订单不存在"
-          description="该订单可能已归档，或当前账号无权访问。"
+          title={tPage("noAccess.title")}
+          description={tPage("noAccess.description")}
         />
       </DetailPageTemplate>
     );
@@ -657,11 +699,11 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       header={
         <PageHeader
           icon="table"
-          title={order ? order.orderNo : "订单详情"}
+          title={order ? order.orderNo : tPage("title")}
           description={
             order
               ? `${order.tenantName} · ${order.solutionName} · ${order.servicePlanName}`
-              : "正在读取订单、账单和支付记录。"
+              : tPage("loading")
           }
           action={
             <div className="inline-flex flex-wrap items-center justify-end gap-sm">
@@ -678,7 +720,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                       href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}
                     >
                       <Icon name="star" size="xs" fallback="placeholder" />
-                      订阅详情
+                      {tPage("links.subscription")}
                     </Link>
                   </Button>
                   <Button
@@ -694,7 +736,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                     }
                   >
                     <Icon name="check" size="xs" fallback="placeholder" />
-                    确认收款
+                    {tPage("actions.confirmPayment")}
                   </Button>
                   {order.declaredPayment ? (
                     <Button
@@ -707,7 +749,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                       }}
                     >
                       <Icon name="warning" size="xs" fallback="placeholder" />
-                      驳回申报
+                      {tPage("actions.rejectDeclaration")}
                     </Button>
                   ) : null}
                   {order.orderStatus === "paid_unprovisioned" ? (
@@ -717,7 +759,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                       disabled={submittingPayment}
                     >
                       <Icon name="play" size="xs" fallback="placeholder" />
-                      重试开通
+                      {tPage("actions.retryProvision")}
                     </Button>
                   ) : null}
                   <Button
@@ -729,10 +771,10 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                       setVoidDialogOpen(true);
                     }}
                     disabled={!canVoidOrder(order)}
-                    title={voidDisabledReason(order) ?? undefined}
+                    title={voidDisabledReason(order, tPage) ?? undefined}
                   >
                     <Icon name="x" size="xs" fallback="placeholder" />
-                    驳回订单
+                    {tPage("actions.rejectOrder")}
                   </Button>
                   <Button
                     variant="outline"
@@ -743,10 +785,10 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                       setRestoreDialogOpen(true);
                     }}
                     disabled={!order.restorable}
-                    title={restoreDisabledReason(order) ?? undefined}
+                    title={restoreDisabledReason(order, tPage) ?? undefined}
                   >
                     <Icon name="play" size="xs" fallback="placeholder" />
-                    恢复订单
+                    {tPage("actions.restoreOrder")}
                   </Button>
                   {order.refund && order.refund.auditStatus === "pending" ? (
                     <>
@@ -760,7 +802,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                         }}
                       >
                         <Icon name="check" size="xs" fallback="placeholder" />
-                        同意退款
+                        {tPage("actions.approveRefund")}
                       </Button>
                       <Button
                         variant="outline"
@@ -772,7 +814,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                         }}
                       >
                         <Icon name="x" size="xs" fallback="placeholder" />
-                        驳回退款
+                        {tPage("actions.rejectRefund")}
                       </Button>
                     </>
                   ) : null}
@@ -789,7 +831,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                       }}
                     >
                       <Icon name="check" size="xs" fallback="placeholder" />
-                      退款完成（已打款）
+                      {tPage("actions.completeRefund")}
                     </Button>
                   ) : null}
                 </>
@@ -828,13 +870,16 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         <>
           {order.declaredPayment ? (
             <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-              <DetailSectionHeading icon="clock" title="客户付款申报" />
+              <DetailSectionHeading
+                icon="clock"
+                title={tPage("declaration.title")}
+              />
               <p className="m-0 text-body-sm text-muted-foreground">
-                客户在付款页提交的申报信息，确认前请核对到账；实收不符请「驳回申报」。
+                {tPage("declaration.hint")}
               </p>
               <div className="vx-detail-grid">
                 <div>
-                  <Label>申报金额</Label>
+                  <Label>{tPage("declaration.amount")}</Label>
                   <p>
                     {formatCurrency(
                       order.declaredPayment.amount,
@@ -843,29 +888,38 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                   </p>
                 </div>
                 <div>
-                  <Label>支付渠道</Label>
+                  <Label>{tPage("declaration.channel")}</Label>
                   <p>
-                    {DECLARED_CHANNEL_LABELS[
-                      order.declaredPayment.channel ?? ""
-                    ] ??
-                      order.declaredPayment.channel ??
-                      "未填写"}
+                    {(() => {
+                      const code = order.declaredPayment.channel;
+                      if (!code) return tPage("declaration.notFilled");
+                      const key = DECLARED_CHANNEL_KEYS[code];
+                      // 未登记的渠道码原样显示——它是 DB 里的值，不是文案，
+                      // 编一个「其他」会把运营能拿去查的那个码藏掉。
+                      return key ? tPage(key) : code;
+                    })()}
                   </p>
                 </div>
                 <div>
-                  <Label>付款方</Label>
-                  <p>{order.declaredPayment.payerName ?? "未填写"}</p>
+                  <Label>{tPage("declaration.payer")}</Label>
+                  <p>
+                    {order.declaredPayment.payerName ??
+                      tPage("declaration.notFilled")}
+                  </p>
                 </div>
                 <div>
-                  <Label>流水号</Label>
-                  <p>{order.declaredPayment.transactionNo ?? "未填写"}</p>
+                  <Label>{tPage("declaration.txnNo")}</Label>
+                  <p>
+                    {order.declaredPayment.transactionNo ??
+                      tPage("declaration.notFilled")}
+                  </p>
                 </div>
                 <div>
-                  <Label>申报时间</Label>
+                  <Label>{tPage("declaration.declaredAt")}</Label>
                   <p>{formatDate(order.declaredPayment.declaredAt, locale)}</p>
                 </div>
                 <div>
-                  <Label>备注</Label>
+                  <Label>{tPage("declaration.remark")}</Label>
                   <p>
                     {order.declaredPayment.remark ?? tShared("common.none")}
                   </p>
@@ -897,17 +951,23 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       {order && rejectDialogOpen ? (
         <DialogForm
           open
-          title="驳回付款申报"
+          title={tPage("dialogs.rejectDeclaration.title")}
           description={
-            <>
-              订单号：<strong>{order.orderNo}</strong>
-              {order.declaredPayment
-                ? ` · 申报 ${formatCurrency(order.declaredPayment.amount, order.currency)}`
-                : ""}
-              。驳回后券与折扣自动释放，订单回到待付款，驳回原因将展示在客户付款页。
-            </>
+            order.declaredPayment
+              ? tPage.rich("dialogs.rejectDeclaration.descriptionWithAmount", {
+                  orderNo: order.orderNo,
+                  amount: formatCurrency(
+                    order.declaredPayment.amount,
+                    order.currency,
+                  ),
+                  b: (chunks) => <strong>{chunks}</strong>,
+                })
+              : tPage.rich("dialogs.rejectDeclaration.description", {
+                  orderNo: order.orderNo,
+                  b: (chunks) => <strong>{chunks}</strong>,
+                })
           }
-          submitLabel="确认驳回申报"
+          submitLabel={tPage("dialogs.rejectDeclaration.submitLabel")}
           cancelLabel={tShared("actions.cancel")}
           submitting={submittingReject}
           submitDisabled={rejectReason.trim().length < 4}
@@ -920,13 +980,14 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           }}
         >
           <Label htmlFor="order-reject-reason">
-            驳回原因 <small>（必填，最少 4 字；将展示给客户）</small>
+            {tPage("dialogs.rejectDeclaration.reasonLabel")}{" "}
+            <small>{tPage("dialogs.rejectDeclaration.reasonHint")}</small>
           </Label>
           <Textarea
             id="order-reject-reason"
             value={rejectReason}
             onChange={(event) => setRejectReason(event.target.value)}
-            placeholder="例如：未查到对应转账记录，请核对金额后重新付款；实收 500 与申报 860 不符。"
+            placeholder={tPage("dialogs.rejectDeclaration.placeholder")}
             maxLength={512}
             rows={3}
             autoFocus
@@ -942,29 +1003,32 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           open
           title={
             refundDialog === "approve"
-              ? "同意退款申请"
+              ? tPage("dialogs.refund.titleApprove")
               : refundDialog === "reject"
-                ? "驳回退款申请"
-                : "退款完成（已按原渠道打款）"
+                ? tPage("dialogs.refund.titleReject")
+                : tPage("dialogs.refund.titleComplete")
           }
-          description={
-            <>
-              退款单 <strong>{order.refund.refundNo}</strong> ·{" "}
-              {formatCurrency(order.refund.amount, order.currency)}
-              {order.refund.reason ? ` · 客户原因：${order.refund.reason}` : ""}
-              {refundDialog === "execute"
-                ? "。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。"
+          description={tPage.rich(
+            `dialogs.refund.desc${
+              refundDialog === "execute"
+                ? "Complete"
                 : refundDialog === "approve"
-                  ? "。通过后请按原支付渠道打款，再回到本页点「退款完成」。"
-                  : "。驳回原因将展示给客户。"}
-            </>
-          }
+                  ? "Approve"
+                  : "Reject"
+            }${order.refund.reason ? "WithReason" : ""}`,
+            {
+              refundNo: order.refund.refundNo,
+              amount: formatCurrency(order.refund.amount, order.currency),
+              ...(order.refund.reason ? { reason: order.refund.reason } : {}),
+              b: (chunks) => <strong>{chunks}</strong>,
+            },
+          )}
           submitLabel={
             refundDialog === "approve"
-              ? "确认通过"
+              ? tPage("dialogs.refund.submitApprove")
               : refundDialog === "reject"
-                ? "确认驳回"
-                : "确认退款完成"
+                ? tPage("dialogs.refund.submitReject")
+                : tPage("dialogs.refund.submitComplete")
           }
           cancelLabel={tShared("actions.cancel")}
           submitting={submittingRefund}
@@ -978,10 +1042,11 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           }}
         >
           <Label htmlFor="vx-order-refund-remark">
-            备注{" "}
+            {tPage("dialogs.refund.remarkLabel")}{" "}
             <small>
-              （必填，最少 4 字
-              {refundDialog === "reject" ? "；将展示给客户" : ""}）
+              {refundDialog === "reject"
+                ? tPage("dialogs.refund.remarkHintCustomer")
+                : tPage("dialogs.refund.remarkHint")}
             </small>
           </Label>
           <Textarea
@@ -990,8 +1055,8 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             onChange={(event) => setRefundRemark(event.target.value)}
             placeholder={
               refundDialog === "execute"
-                ? "例如：已于 9/4 通过支付宝原路退回 ¥0.10，流水号 …"
-                : "例如：符合 24 小时首购退款条件；或：已超出退款窗口 / 用量已超阈值。"
+                ? tPage("dialogs.refund.placeholderComplete")
+                : tPage("dialogs.refund.placeholderReview")
             }
             maxLength={512}
             rows={3}
@@ -1006,14 +1071,20 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       {order && voidDialogOpen ? (
         <DialogForm
           open
-          title="驳回订单"
+          title={tPage("dialogs.rejectOrder.title")}
           description={
-            <>
-              订单号：<strong>{order.orderNo}</strong>
-              {order.tenantName ? `  ·  ${order.tenantName}` : ""}
-            </>
+            order.tenantName
+              ? tPage.rich("dialogs.rejectOrder.descriptionWithTenant", {
+                  orderNo: order.orderNo,
+                  tenantName: order.tenantName,
+                  b: (chunks) => <strong>{chunks}</strong>,
+                })
+              : tPage.rich("dialogs.rejectOrder.description", {
+                  orderNo: order.orderNo,
+                  b: (chunks) => <strong>{chunks}</strong>,
+                })
           }
-          submitLabel="确认驳回"
+          submitLabel={tPage("dialogs.rejectOrder.submitLabel")}
           cancelLabel={tShared("actions.cancel")}
           submitting={submittingVoid}
           submitDisabled={voidReason.trim().length < 4}
@@ -1026,14 +1097,15 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           }}
         >
           <Label htmlFor="vx-order-void-reason">
-            驳回原因 <small>（必填，最少 4 字）</small>
+            {tPage("dialogs.rejectOrder.reasonLabel")}{" "}
+            <small>{tPage("dialogs.rejectOrder.reasonHint")}</small>
           </Label>
           <Textarea
             id="vx-order-void-reason"
             value={voidReason}
             onChange={(e) => setVoidReason(e.target.value)}
             rows={3}
-            placeholder="例如：客户电话取消，重复下单。"
+            placeholder={tPage("dialogs.rejectOrder.placeholder")}
             autoFocus
           />
           {operationError ? (
@@ -1045,15 +1117,20 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       {order && restoreDialogOpen ? (
         <DialogForm
           open
-          title="恢复订单"
+          title={tPage("dialogs.restoreOrder.title")}
           description={
-            <>
-              订单号：<strong>{order.orderNo}</strong>
-              {order.tenantName ? `  ·  ${order.tenantName}` : ""}
-              。恢复后订单回到待付款状态，账单与折扣一并复原。
-            </>
+            order.tenantName
+              ? tPage.rich("dialogs.restoreOrder.descriptionWithTenant", {
+                  orderNo: order.orderNo,
+                  tenantName: order.tenantName,
+                  b: (chunks) => <strong>{chunks}</strong>,
+                })
+              : tPage.rich("dialogs.restoreOrder.description", {
+                  orderNo: order.orderNo,
+                  b: (chunks) => <strong>{chunks}</strong>,
+                })
           }
-          submitLabel="确认恢复"
+          submitLabel={tPage("dialogs.restoreOrder.submitLabel")}
           cancelLabel={tShared("actions.cancel")}
           submitting={submittingRestore}
           submitDisabled={restoreReason.trim().length < 4}
@@ -1066,14 +1143,15 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           }}
         >
           <Label htmlFor="vx-order-restore-reason">
-            恢复原因 <small>（必填，最少 4 字）</small>
+            {tPage("dialogs.restoreOrder.reasonLabel")}{" "}
+            <small>{tPage("dialogs.restoreOrder.reasonHint")}</small>
           </Label>
           <Textarea
             id="vx-order-restore-reason"
             value={restoreReason}
             onChange={(e) => setRestoreReason(e.target.value)}
             rows={3}
-            placeholder="例如：客户已确认继续购买，误操作驳回，现恢复订单。"
+            placeholder={tPage("dialogs.restoreOrder.placeholder")}
             autoFocus
           />
           {operationError ? (

@@ -2445,5 +2445,164 @@
       "data": "Data",
       "service": "Service"
     }
+  },
+  "orderDetailPage": {
+    "title": "Order detail",
+    "loading": "Loading the order, its bills and payment records.",
+    "notFound": {
+      "description": "No matching order record was found."
+    },
+    "noAccess": {
+      "title": "Order not found",
+      "description": "The order may have been archived, or this account cannot access it."
+    },
+    "summary": {
+      "amount": "Order amount",
+      "amountHelp": "Transaction amount, shown in the order currency.",
+      "receivedHelp": "Money already reconciled against this order.",
+      "plan": "Solution",
+      "planHelp": "The solution this order provisions.",
+      "action": "Suggested action",
+      "actionHelp": "Suggested handling based on the current order status.",
+      "ariaLabel": "Order detail for {orderNo}"
+    },
+    "sections": {
+      "basic": "Basics",
+      "tenantPlan": "Tenant and plan",
+      "subscription": "Linked subscription",
+      "billing": "Bill and collection",
+      "billItems": "Bill items",
+      "payments": "Payment records",
+      "opsLog": "Operation log"
+    },
+    "fields": {
+      "orderNo": "Order no.",
+      "orderStatus": "Order status",
+      "payStatus": "Payment status",
+      "paySource": "Payment source",
+      "payMethod": "Payment method",
+      "createdAt": "Created at",
+      "confirmedAt": "Confirmed at",
+      "tenant": "Tenant",
+      "region": "Region",
+      "industry": "Industry",
+      "plan": "Solution",
+      "servicePlan": "Service plan",
+      "planTier": "Plan tier",
+      "subscriptionId": "Subscription ID",
+      "subscriptionStatus": "Subscription status",
+      "billingCycle": "Billing cycle",
+      "billNo": "Bill no.",
+      "billStatus": "Bill status",
+      "payNo": "Payment no.",
+      "orderAmount": "Order amount",
+      "remaining": "Outstanding"
+    },
+    "notGenerated": "Not generated",
+    "unitPrice": "Unit price {price}",
+    "payments": {
+      "empty": "No payment records yet",
+      "emptyHint": "Waiting for an online payment, or for an operator to confirm an offline one",
+      "unpaid": "Unpaid",
+      "unpaidHint": "Confirming an offline payment writes a payment record automatically."
+    },
+    "links": {
+      "subscription": "Subscription detail",
+      "tenant": "Tenant detail"
+    },
+    "actions": {
+      "confirmPayment": "Confirm payment",
+      "rejectDeclaration": "Reject declaration",
+      "retryProvision": "Retry provisioning",
+      "rejectOrder": "Reject order",
+      "restoreOrder": "Restore order",
+      "approveRefund": "Approve refund",
+      "rejectRefund": "Reject refund",
+      "completeRefund": "Refund completed (paid out)"
+    },
+    "declaration": {
+      "title": "Customer payment declaration",
+      "hint": "What the customer submitted on the payment page. Verify the money arrived before confirming; if the amount does not match, use Reject declaration.",
+      "amount": "Declared amount",
+      "channel": "Payment channel",
+      "payer": "Payer",
+      "txnNo": "Transaction no.",
+      "declaredAt": "Declared at",
+      "remark": "Remark",
+      "notFilled": "Not provided"
+    },
+    "channels": {
+      "alipay": "Alipay",
+      "bank": "Bank transfer"
+    },
+    "disabled": {
+      "hasPayment": "An order that has received money cannot be rejected; settle it instead.",
+      "notPending": "This order is not awaiting payment, so there is nothing to reject.",
+      "notRestorable": "This order is not in a restorable cancelled state (a subscription cancelled after activation cannot be restored here)."
+    },
+    "feedback": {
+      "paymentConfirmed": "Offline payment confirmed.",
+      "declarationRejected": "Payment declaration rejected. Vouchers and discounts are released, and the customer will see the reason.",
+      "provisionRetried": "Provisioning retried (stage 2 redrive).",
+      "orderRejected": "Order rejected.",
+      "orderRestored": "Order restored to awaiting payment.",
+      "refundExecuted": "Refund executed: the order is refunded and the subscription is back to unsubscribed.",
+      "refundApproved": "Refund approved. Pay out through the original channel, then come back and mark it completed.",
+      "refundRejected": "Refund request rejected.",
+      "confirmPaymentFailed": "Could not confirm the offline payment. Try again shortly.",
+      "rejectDeclarationFailed": "Could not reject the payment declaration. Try again shortly.",
+      "retryProvisionFailed": "Could not retry provisioning. Try again shortly.",
+      "rejectOrderFailed": "Could not reject the order. Try again shortly.",
+      "refundFailed": "The refund action failed. Try again shortly.",
+      "restoreFailed": "Could not restore the order. Try again shortly."
+    },
+    "dialogs": {
+      "rejectDeclaration": {
+        "title": "Reject payment declaration",
+        "description": "Order <b>{orderNo}</b>. Rejecting releases the voucher and discount, returns the order to awaiting payment, and shows the reason on the customer payment page.",
+        "submitLabel": "Reject declaration",
+        "reasonLabel": "Reason",
+        "reasonHint": "(required, at least 4 characters; shown to the customer)",
+        "placeholder": "e.g. No matching transfer found. Check the amount and pay again; received 500 does not match the declared 860.",
+        "descriptionWithAmount": "Order <b>{orderNo}</b> · declared {amount}. Rejecting releases the voucher and discount, returns the order to awaiting payment, and shows the reason on the customer payment page."
+      },
+      "refund": {
+        "titleApprove": "Approve refund request",
+        "titleReject": "Reject refund request",
+        "titleComplete": "Refund completed (paid out through the original channel)",
+        "descApprove": "Refund <b>{refundNo}</b> · {amount}. Once approved, pay out through the original channel, then come back and mark it completed.",
+        "descReject": "Refund <b>{refundNo}</b> · {amount}. The rejection reason is shown to the customer.",
+        "descComplete": "Refund <b>{refundNo}</b> · {amount}. On execution the order becomes refunded and the whole product subscription returns to unsubscribed (including any free tier it was upgraded from). Entitlements stop immediately, and prepaid credit from offset overflow is reversed.",
+        "submitApprove": "Approve",
+        "submitReject": "Reject",
+        "submitComplete": "Mark refund completed",
+        "remarkLabel": "Remark",
+        "remarkHintCustomer": "(required, at least 4 characters; shown to the customer)",
+        "remarkHint": "(required, at least 4 characters)",
+        "placeholderComplete": "e.g. Refunded 0.10 CNY via Alipay on 9/4, transaction no. …",
+        "placeholderReview": "e.g. Meets the 24-hour first-purchase refund window; or: past the refund window / usage above threshold.",
+        "descApproveWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. Once approved, pay out through the original channel, then come back and mark it completed.",
+        "descRejectWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. The rejection reason is shown to the customer.",
+        "descCompleteWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. On execution the order becomes refunded and the whole product subscription returns to unsubscribed (including any free tier it was upgraded from). Entitlements stop immediately, and prepaid credit from offset overflow is reversed."
+      },
+      "rejectOrder": {
+        "title": "Reject order",
+        "description": "Order <b>{orderNo}</b>",
+        "submitLabel": "Reject",
+        "reasonLabel": "Reason",
+        "reasonHint": "(required, at least 4 characters)",
+        "placeholder": "e.g. Customer cancelled by phone; duplicate order.",
+        "descriptionWithTenant": "Order <b>{orderNo}</b> · {tenantName}"
+      },
+      "restoreOrder": {
+        "title": "Restore order",
+        "description": "Order <b>{orderNo}</b>. Restoring returns it to awaiting payment and brings back the bill and discount.",
+        "submitLabel": "Restore",
+        "reasonLabel": "Reason",
+        "reasonHint": "(required, at least 4 characters)",
+        "placeholder": "e.g. Customer confirmed they want to continue; rejected by mistake, restoring now.",
+        "descriptionWithTenant": "Order <b>{orderNo}</b> · {tenantName}. Restoring returns it to awaiting payment and brings back the bill and discount."
+      }
+    }
   }
 }
