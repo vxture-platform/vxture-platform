@@ -181,3 +181,64 @@ CREATE INDEX idx_inbox_messages_account_created ON support.inbox_messages (accou
 CREATE INDEX idx_inbox_messages_account_live    ON support.inbox_messages (account_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_inbox_messages_account_unread  ON support.inbox_messages (account_id) WHERE read_at IS NULL;
 CREATE INDEX idx_inbox_messages_tenant          ON support.inbox_messages (tenant_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5. product_reviews（客户评价：产品 / 价格 / 服务三项，可变 + 软删）
+-- owner 2026-09-20 定：admin 运营总览要展示服务/产品/价格三类评价，而平台此前
+-- **没有任何评价采集**——全库 rating|review|score|feedback|csat 一张表都没有，
+-- 唯一的评分是 tickets.satisfaction_score（工单级、单维度）。所以补的不是展示，
+-- 是整条链路：这张表 + 两个入口（console 订阅页操作菜单 / 工单完成）。
+--
+-- **5 分制**（与 tickets.satisfaction_score 同一量表）。10 分制被否：平台已有
+-- 1-5 的 CHECK 与 RatingStars 星级呈现，另起一套会让同一次服务出现两个口径、
+-- 聚合时无法合并；而一次三项在面板里 15 个点击目标也比 30 个好点（owner 2026-09-20）。
+--
+-- 三项分数**均可空**：客户可以只评其中一两项（owner 定）。
+--
+-- 来源二选一：subscription_id（订阅页入口）或 ticket_id（工单完成入口），恰有其一。
+-- 「一次订阅评一次、一个工单评一次」用两个**部分唯一索引**落地；续订会产生新的
+-- subscription_id，因而自然可以重新评价——不需要额外的"轮次"字段。
+--
+-- account_id 裸值不建 FK（边界#3）：评价人注销后，他留下的评价不该跟着消失。
+-- tenant_id / product_id 跨 schema 真 FK 见 90（两者都是软删，FK 安全）。
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE support.product_reviews (
+    id              uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       uuid          NOT NULL,                             -- 跨 schema→tenancy.tenants（真 FK，90）
+    account_id      uuid,                                               -- 评价人，裸值→account.users（边界#3）
+    product_id      uuid          NOT NULL,                             -- 跨 schema→product.products（真 FK，90）
+    subscription_id uuid,                                               -- 入口1：console 订阅页；跨 schema→metering.subscriptions（真 FK，90）
+    ticket_id       uuid,                                               -- 入口2：工单完成；域内 FK（下方内联）
+    product_score   smallint,                                           -- 1..5 或 NULL（三项均可空）
+    price_score     smallint,
+    service_score   smallint,
+    comment         varchar(512),
+    created_at      timestamptz   NOT NULL DEFAULT now(),
+    updated_at      timestamptz   NOT NULL DEFAULT now(),
+    deleted_at      timestamptz,
+    CONSTRAINT fk_product_reviews_ticket
+        FOREIGN KEY (ticket_id) REFERENCES support.tickets(id),
+    CONSTRAINT chk_product_reviews_product_score
+        CHECK (product_score IS NULL OR product_score BETWEEN 1 AND 5),
+    CONSTRAINT chk_product_reviews_price_score
+        CHECK (price_score   IS NULL OR price_score   BETWEEN 1 AND 5),
+    CONSTRAINT chk_product_reviews_service_score
+        CHECK (service_score IS NULL OR service_score BETWEEN 1 AND 5),
+    -- 来源恰有其一：不允许两个都给（说不清这条评价属于哪次），也不允许都不给
+    -- （无从判重，同一人可以无限刷分）。
+    CONSTRAINT chk_product_reviews_origin
+        CHECK ((subscription_id IS NOT NULL) <> (ticket_id IS NOT NULL)),
+    -- 至少评一项：三项全空的行没有任何信息量，只会拉低聚合分母。
+    CONSTRAINT chk_product_reviews_any_score
+        CHECK (product_score IS NOT NULL OR price_score IS NOT NULL OR service_score IS NOT NULL)
+);
+-- 一次订阅评一次 / 一个工单评一次。软删的行不占唯一位——删掉之后可以重评。
+CREATE UNIQUE INDEX uq_product_reviews_subscription ON support.product_reviews (subscription_id)
+    WHERE subscription_id IS NOT NULL AND deleted_at IS NULL;
+CREATE UNIQUE INDEX uq_product_reviews_ticket       ON support.product_reviews (ticket_id)
+    WHERE ticket_id IS NOT NULL AND deleted_at IS NULL;
+-- 聚合查询：按产品算三项均分（admin 运营总览的服务/产品/价格评价）。
+CREATE INDEX idx_product_reviews_product_live ON support.product_reviews (product_id, created_at DESC)
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_product_reviews_tenant       ON support.product_reviews (tenant_id);
+CREATE INDEX idx_product_reviews_account      ON support.product_reviews (account_id) WHERE account_id IS NOT NULL;

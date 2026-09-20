@@ -431,6 +431,15 @@ GRANT UPDATE (request_id, direction, result, detail) ON safety.moderation_logs T
 REVOKE UPDATE ON support.tickets FROM platform_svc;
 GRANT UPDATE (tenant_id, account_id, category, priority, source, status, title, description, reporter_name, assignee_id, assignee_name, tags, satisfaction_score, satisfaction_comment, sla_breach_at, first_response_at, due_at, resolved_at, closed_at, updated_at, deleted_at) ON support.tickets TO platform_svc;
 
+-- support.product_reviews  [anchor: id, created_at]
+-- 锚点只有 id 与 created_at（规则①③），其余列**全部**授权——本文件表达的是
+-- 「锚点列不可变」这一条结构性规则，不是业务上的「不该改」。
+-- 归属列（tenant_id / product_id / subscription_id / ticket_id）业务上确实是一次
+-- 写入的事实，但那要由写侧与唯一索引保证；在这里少授权换不来保护，只会让任何一次
+-- 带上它们的 UPDATE 整条 42501 回滚（同 invoices.transaction_no 那次实测）。
+REVOKE UPDATE ON support.product_reviews FROM platform_svc;
+GRANT UPDATE (tenant_id, account_id, product_id, subscription_id, ticket_id, product_score, price_score, service_score, comment, updated_at, deleted_at) ON support.product_reviews TO platform_svc;
+
 -- support.ticket_comments  [anchor: id, created_at]
 REVOKE UPDATE ON support.ticket_comments FROM platform_svc;
 GRANT UPDATE (ticket_id, event_type, actor_type, actor_id, actor_name, payload) ON support.ticket_comments TO platform_svc;
