@@ -120,6 +120,9 @@ importers:
       '@vxture/service-account':
         specifier: workspace:*
         version: link:../../services/identity/account
+      '@vxture/service-notice':
+        specifier: workspace:*
+        version: link:../../services/notification/notice
       '@vxture/service-notification':
         specifier: workspace:*
         version: link:../../services/notification/dispatch
@@ -199,6 +202,9 @@ importers:
       '@vxture/core-utils':
         specifier: workspace:*
         version: link:../../packages/core/utils
+      '@vxture/service-notice':
+        specifier: workspace:*
+        version: link:../../services/notification/notice
       bcryptjs:
         specifier: ^3.0.2
         version: 3.0.3
@@ -468,6 +474,9 @@ importers:
       '@vxture/core-utils':
         specifier: workspace:*
         version: link:../../packages/core/utils
+      '@vxture/service-notice':
+        specifier: workspace:*
+        version: link:../../services/notification/notice
       bcryptjs:
         specifier: ^3.0.2
         version: 3.0.3
@@ -1680,6 +1689,28 @@ importers:
       '@types/nodemailer':
         specifier: ^6.4.17
         version: 6.4.23
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.11)(vite@7.3.6(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
+
+  services/notification/notice:
+    dependencies:
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@vxture/core-config':
+        specifier: workspace:*
+        version: link:../../../packages/core/config
+      pg:
+        specifier: ^8.13.3
+        version: 8.20.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.11
+        version: 8.20.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

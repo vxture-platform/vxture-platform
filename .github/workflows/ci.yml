@@ -231,6 +231,16 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:destructive
 
+      # Nest 注入必须显式 @Inject：七个 BFF 的打包走 esbuild，它不产
+      # emitDecoratorMetadata。漏在 router 上启动期就抛（boot-smoke 红）；
+      # **漏在 service 上不抛**，Nest 直接 new 出一个依赖全是 undefined 的壳，
+      # boot-smoke / type-check / 打包全绿，第一次调用才 500。2026-09-20 两半
+      # 都踩过：#402 补了 router 那半，service 那半漏到生产（评价提交一律 500）。
+      # 这道守卫在 lint 期把它挡住——它是目前唯一看得见第二种症状的检查。
+      - name: Explicit Nest @Inject guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:explicit-inject
+
       # 词条中英对齐：键缺了会在英文界面渲染出键名本身（或静默回落成中文），
       # 而把中文原样复制进 en-US.json 能骗过键检查——那是「假双语」最常见的
       # 形态，且它在中文环境下永远不会被发现。两条一起查。

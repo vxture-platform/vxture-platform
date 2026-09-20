@@ -17,6 +17,7 @@ import {
 } from "@vxture/design-system";
 import { fetchGovernanceOverview } from "@/api/arche-bff";
 import { visibleNavSections } from "@/config/navigation";
+import { OperatorNoticesSection } from "@/modules/notices/OperatorNoticesSection";
 import type { GovernanceOverview } from "@/entities/console";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { formatNumber } from "@/lib/format";
@@ -199,6 +200,9 @@ export default function GovernanceOverviewPage() {
           }
         />
       ) : null}
+      {/* 通告排在入口之前:它是**会变的**,入口是常驻的。先看有没有新事,
+          再决定去哪一页。 */}
+      <OperatorNoticesSection />
       <SectionHeader level={2} icon="list-checks" title="入口" />
       <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
         {entries.map((item) => (
