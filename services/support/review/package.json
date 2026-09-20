@@ -1,0 +1,30 @@
+{
+  "name": "@vxture/service-review",
+  "version": "0.1.0",
+  "private": true,
+  "description": "客户评价服务 - 产品/价格/服务三项评分与留言",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/swagger": "^11.0.0",
+    "@vxture-platform/shared": "workspace:*",
+    "@vxture/core-api": "workspace:*",
+    "@vxture/core-auth": "workspace:*",
+    "@vxture/core-config": "workspace:*",
+    "class-validator": "^0.14.0",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
