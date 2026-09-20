@@ -37,6 +37,7 @@ import {
   fetchProductReleases,
   fetchProductSolutions,
 } from "@/api/admin-bff";
+import { EMPTY_DASHBOARD_OVERVIEW } from "@/api/admin-bff";
 import type { DashboardOverviewRecord } from "@/api/admin-bff";
 import type {
   ProductReleaseRecord,
@@ -111,7 +112,6 @@ interface OverviewPulseMetric {
   detail: string;
   tone: Tone;
   tags: Array<{ label?: string; value: string; tone?: Tone }>;
-  rating?: number;
 }
 
 const periodOptions = [
@@ -259,30 +259,70 @@ function serviceMetricsFor(overview: DashboardOverviewRecord) {
   ] satisfies OverviewMetric[];
 }
 
-// TD-036: no rating/CSAT/SLA-aggregate table exists in the schema (only a
-// per-ticket satisfaction_score, not a service/product-level aggregate) —
-// show an honest unavailable state rather than a fabricated star rating.
-function ratingMetricsFor(_overview: DashboardOverviewRecord) {
-  const unavailable = {
-    value: "—",
-    detail:
-      "数据源待建设：平台暂无服务/产品评价聚合表，仅工单级评分字段，无法汇总展示。",
-    description: "达成率",
-  };
+/**
+ * 客户评价三卡（support.product_reviews，2026-09-20 接入）。
+ *
+ * 此前这里写的是「数据源待建设：平台暂无服务/产品评价聚合表」——那句话现在是
+ * 化石，表与两个入口都已落地（#399 建表 / #402 写侧 / #403 console 入口）。
+ *
+ * 三项**各带各的分母**：均分下面那行报的是「评了这一项的人数」，不是评价总条数。
+ * 三项分数各自可空，只评了产品的客户不进价格分的分母；把四个数当同一个分母用，
+ * 在「只评一项」的客户多起来之后会越错越远。
+ *
+ * `average` 为 `null` = 这一项还没人评，画「—」而不是 0.0——0 分是最差评，
+ * 「还没人评」不是。
+ */
+function ratingMetricsFor(overview: DashboardOverviewRecord) {
+  const { productScore, priceScore, serviceScore, reviewCount } =
+    overview.reviews;
+
+  const card = (
+    label: string,
+    icon: IconName,
+    score: { average: number | null; count: number },
+    detail: string,
+  ) =>
+    ({
+      label,
+      icon,
+      value: score.average === null ? "—" : score.average.toFixed(1),
+      detail:
+        score.average === null
+          ? `${detail}目前还没有人评这一项。`
+          : `${detail}均分取自评了这一项的 ${score.count} 条评价（满分 5）。`,
+      tags: [
+        score.average === null
+          ? "暂无评价"
+          : `${score.count.toLocaleString("en-US")} 人评过`,
+      ],
+      // 低于 3 分转告警语气:这不是"数值小"，是客户在说不满意。
+      tone:
+        score.average === null
+          ? "neutral"
+          : score.average < 3
+            ? "warning"
+            : "success",
+    }) satisfies OverviewMetric;
 
   return [
-    {
-      label: "服务评价",
-      ...unavailable,
-      tone: "brand",
-      icon: "star",
-    },
-    {
-      label: "产品评价",
-      ...unavailable,
-      tone: "brand",
-      icon: "medal",
-    },
+    card(
+      "产品评价",
+      "medal",
+      productScore,
+      "客户对产品本身的评分（功能是否称手、稳定与否）。",
+    ),
+    card(
+      "价格评价",
+      "credit-card",
+      priceScore,
+      "客户对价格的评分（花的钱与得到的是否相称）。",
+    ),
+    card(
+      "服务评价",
+      "star",
+      serviceScore,
+      `客户对服务的评分（咨询、工单与响应）。共收到 ${reviewCount.toLocaleString("en-US")} 条评价。`,
+    ),
   ] satisfies OverviewMetric[];
 }
 
@@ -466,17 +506,7 @@ function OverviewPulseCard({ metric }: { metric: OverviewPulseMetric }) {
       label={metric.title}
       help={metric.detail}
       tone={toStatusTone(metric.tone)}
-      value={
-        metric.rating ? (
-          /* 评分档：星标在读数左侧，两者当作一个读数整体传进去。 */
-          <span className="inline-flex items-end gap-xs">
-            <RatingStars value={metric.rating} />
-            {metric.value}
-          </span>
-        ) : (
-          metric.value
-        )
-      }
+      value={metric.value}
       {...(delta
         ? {
             trend: delta.value,
@@ -1002,58 +1032,10 @@ function ProductRankingCard({
   );
 }
 
-function RatingStars({ value }: { value: number }) {
-  const rounded = Math.round(value);
-
-  return (
-    <span
-      className="inline-flex gap-xs text-body-md leading-[1] text-muted-foreground"
-      aria-label={`${value} 星`}
-    >
-      {Array.from({ length: 5 }, (_, index) => (
-        <span
-          key={index}
-          className={index < rounded ? "text-warning" : undefined}
-        >
-          {index < rounded ? "★" : "☆"}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-// TD-036: placeholder shown before a period's real overview has loaded, or
-// if the fetch fails — all zeros, never a fabricated number.
+// 还没读到 / 读失败时的占位——全零，绝不编造数字。
+// 取 admin-bff 那一份：此前这里另写了一遍，加字段时两处要同时改。
 function emptyDashboardOverview(period: PeriodKey): DashboardOverviewRecord {
-  return {
-    period,
-    tenants: { total: 0, active: 0, newInPeriod: 0, newInPrevPeriod: 0 },
-    users: { total: 0, newInPeriod: 0, newInPrevPeriod: 0 },
-    subscriptions: {
-      active: 0,
-      trialing: 0,
-      newInPeriod: 0,
-      newInPrevPeriod: 0,
-      trialConvertedInPeriod: 0,
-      renewalsDue: 0,
-      renewalsAtRisk: 0,
-    },
-    revenue: {
-      paidInPeriod: 0,
-      paidInPrevPeriod: 0,
-      paidTotal: 0,
-      outstandingAmount: 0,
-      outstandingCount: 0,
-      overdueCount: 0,
-    },
-    tickets: {
-      totalInPeriod: 0,
-      resolved: 0,
-      inProgress: 0,
-      pending: 0,
-      totalInPrevPeriod: 0,
-    },
-  };
+  return { period, ...EMPTY_DASHBOARD_OVERVIEW };
 }
 
 export default function AdminOverviewPage() {
@@ -1341,13 +1323,13 @@ export default function AdminOverviewPage() {
           </Section>
           <Section
             level={3}
-            title="服务评价"
-            description="服务满意度、产品评价和 SLA 达成。"
-            action={<DetailLink href="/tickets" />}
+            title="客户评价"
+            description="客户给产品、价格与服务打的分，全周期口径。"
+            action={<DetailLink href="/reviews" />}
           >
             <MetricGrid
-              aria-label="服务评价指标"
-              columns={2}
+              aria-label="客户评价指标"
+              columns={3}
               items={metricItems(ratingMetrics)}
             />
           </Section>

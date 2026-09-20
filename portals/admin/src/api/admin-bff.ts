@@ -804,36 +804,61 @@ export interface DashboardOverviewRecord {
     pending: number;
     totalInPrevPeriod: number;
   };
+  /**
+   * 客户评价（support.product_reviews）。全周期口径，不随 period 变——评价来得
+   * 稀疏，按周期切会让卡片在没有新评价的那一周直接空掉，看起来像坏了。
+   *
+   * 三项**各带各的分母**；`average` 为 `null` = 这一项还没人评，**不是 0 分**。
+   */
+  reviews: {
+    productScore: { average: number | null; count: number };
+    priceScore: { average: number | null; count: number };
+    serviceScore: { average: number | null; count: number };
+    reviewCount: number;
+  };
 }
 
-const EMPTY_DASHBOARD_OVERVIEW: Omit<DashboardOverviewRecord, "period"> = {
-  tenants: { total: 0, active: 0, newInPeriod: 0, newInPrevPeriod: 0 },
-  users: { total: 0, newInPeriod: 0, newInPrevPeriod: 0 },
-  subscriptions: {
-    active: 0,
-    trialing: 0,
-    newInPeriod: 0,
-    newInPrevPeriod: 0,
-    trialConvertedInPeriod: 0,
-    renewalsDue: 0,
-    renewalsAtRisk: 0,
-  },
-  revenue: {
-    paidInPeriod: 0,
-    paidInPrevPeriod: 0,
-    paidTotal: 0,
-    outstandingAmount: 0,
-    outstandingCount: 0,
-    overdueCount: 0,
-  },
-  tickets: {
-    totalInPeriod: 0,
-    resolved: 0,
-    inProgress: 0,
-    pending: 0,
-    totalInPrevPeriod: 0,
-  },
-};
+/**
+ * 读不到 / 还没读到时的空态。**导出**是因为首页也要它——此前首页另写了一份
+ * `emptyDashboardOverview()`，同一份事实两处推导，加字段时必然漏掉一处
+ * （加 reviews 时就漏了，type-check 才逮住）。
+ */
+export const EMPTY_DASHBOARD_OVERVIEW: Omit<DashboardOverviewRecord, "period"> =
+  {
+    tenants: { total: 0, active: 0, newInPeriod: 0, newInPrevPeriod: 0 },
+    users: { total: 0, newInPeriod: 0, newInPrevPeriod: 0 },
+    subscriptions: {
+      active: 0,
+      trialing: 0,
+      newInPeriod: 0,
+      newInPrevPeriod: 0,
+      trialConvertedInPeriod: 0,
+      renewalsDue: 0,
+      renewalsAtRisk: 0,
+    },
+    revenue: {
+      paidInPeriod: 0,
+      paidInPrevPeriod: 0,
+      paidTotal: 0,
+      outstandingAmount: 0,
+      outstandingCount: 0,
+      overdueCount: 0,
+    },
+    tickets: {
+      totalInPeriod: 0,
+      resolved: 0,
+      inProgress: 0,
+      pending: 0,
+      totalInPrevPeriod: 0,
+    },
+    // 读不到时三项都是 null 而不是 0：卡片据此画「—」，不会把"没读到"画成 0 分。
+    reviews: {
+      productScore: { average: null, count: 0 },
+      priceScore: { average: null, count: 0 },
+      serviceScore: { average: null, count: 0 },
+      reviewCount: 0,
+    },
+  };
 
 // admin 首页真实聚合（TD-036）：替换首页 overviewSnapshots 等硬编码 mock 常量。
 // 2026-09-08 路径自 /api/platform-admins/dashboard-overview 改为 /api/dashboard/overview
@@ -2349,4 +2374,39 @@ export async function confirmAddonOrderPayment(
     settled: boolean;
     order: AddonOrderOperationRecord | null;
   };
+}
+
+// ── 客户评价（support.product_reviews；运营总览「客户评价」区的下钻）─────────
+
+export interface ReviewListItem {
+  /** 可视码：租户号。**不返回也不展示 UUID**。 */
+  tenantNo: string;
+  tenantName: string;
+  productName: string;
+  /** null = 这一项没评，**不是 0 分**。 */
+  productScore: number | null;
+  priceScore: number | null;
+  serviceScore: number | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+/**
+ * 评价列表。
+ *
+ * `withComment` 缺省为 true——运营点进来是为了看客户说了什么；纯分数在三张卡上
+ * 已经汇总过了，逐条再列一遍只是噪声。
+ */
+export async function fetchReviewList(params: {
+  limit?: number;
+  offset?: number;
+  withComment?: boolean;
+}): Promise<{ items: ReviewListItem[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
+  if (params.offset !== undefined) query.set("offset", String(params.offset));
+  if (params.withComment === false) query.set("withComment", "false");
+  return readJsonStrict<{ items: ReviewListItem[]; total: number }>(
+    `/api/dashboard/reviews${query.size ? `?${query.toString()}` : ""}`,
+  );
 }

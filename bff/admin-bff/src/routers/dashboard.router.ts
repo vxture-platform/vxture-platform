@@ -37,7 +37,7 @@ export class DashboardRouter {
   // TD-036: replaces the admin home page's hardcoded snapshot literals with
   // live aggregates. Every field here has a real backing table; metrics with
   // no backing table anywhere in the schema (model token/call volume,
-  // platform uptime, service/product ratings, real infra health monitoring,
+  // platform uptime, real infra health monitoring,
   // product-catalog rankings — all blocked on TD-029's missing schema) are
   // NOT synthesized here — the frontend renders those as an explicit
   // "data source not yet built" state instead of inventing a number.
@@ -57,6 +57,119 @@ export class DashboardRouter {
     const row = result.rows[0];
     return mapDashboardOverviewRow(period, row);
   }
+
+  /**
+   * GET /api/dashboard/reviews —— 客户评价列表（运营总览「客户评价」区的下钻）。
+   *
+   * 与总览同一道门（本平面根码）：它就是那三张卡背后的明细，不另立权限码。
+   *
+   * **默认只列带留言的**：运营点进来是为了看客户说了什么；纯分数在三张卡上
+   * 已经汇总过了，逐条再列一遍只是噪声。`withComment=false` 可以看全部。
+   *
+   * 不返回 account_id / tenant_id 这类 UUID —— 任何场景不展示 UUID。评价人用
+   * 租户名 + 可视码呈现；读不到就是「—」，不退回 id。
+   */
+  @Get("reviews")
+  async listReviews(
+    @Req() req: Request & RequestContext,
+    @Query("limit") limitParam?: string,
+    @Query("offset") offsetParam?: string,
+    @Query("withComment") withCommentParam?: string,
+  ): Promise<{ items: ReviewListItem[]; total: number }> {
+    assertCanReadDashboard(req);
+    const limit = clampInt(limitParam, 50, 1, 200);
+    const offset = clampInt(offsetParam, 0, 0, 100_000);
+    // 缺省为 true；只有显式传 "false" 才看全部。
+    const withComment = withCommentParam !== "false";
+
+    const result = await this.pool.query<ReviewListRow>(REVIEW_LIST_SQL, [
+      withComment,
+      limit,
+      offset,
+    ]);
+    return {
+      items: result.rows.map(mapReviewRow),
+      total: Number(result.rows[0]?.total_count ?? 0),
+    };
+  }
+}
+
+export interface ReviewListItem {
+  /** 可视码：租户号。列表的行标识用它，不用主键。 */
+  tenantNo: string;
+  tenantName: string;
+  productName: string;
+  productScore: number | null;
+  priceScore: number | null;
+  serviceScore: number | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+interface ReviewListRow {
+  tenant_no: string | null;
+  tenant_name: string | null;
+  product_name: string | null;
+  product_score: number | null;
+  price_score: number | null;
+  service_score: number | null;
+  comment: string | null;
+  created_at: Date;
+  total_count: string;
+}
+
+function mapReviewRow(row: ReviewListRow): ReviewListItem {
+  return {
+    // 读不到显示「—」，不退回 id（全站规则：任何场景不展示 UUID）。
+    tenantNo: row.tenant_no ?? "—",
+    tenantName: row.tenant_name ?? "—",
+    productName: row.product_name ?? "—",
+    productScore: row.product_score,
+    priceScore: row.price_score,
+    serviceScore: row.service_score,
+    comment: row.comment,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+/**
+ * $1 = 只看带留言的（bool），$2 = limit，$3 = offset。
+ *
+ * `$1::bool` 写成 CASE 的条件而不是靠 JS 拼 where：SQL 一旦插值，静态守卫
+ * （lint:anchor-writes 那一族）就读不懂它了，当场变瞎且恒绿。
+ *
+ * 总数与页一起取（window count），省一次往返；空白留言不算留言。
+ */
+const REVIEW_LIST_SQL = `
+  select
+    t.tenant_no::text        as tenant_no,
+    coalesce(t.display_name, t.name) as tenant_name,
+    p.product_name           as product_name,
+    r.product_score,
+    r.price_score,
+    r.service_score,
+    r.comment,
+    r.created_at,
+    count(*) over ()::text   as total_count
+  from support.product_reviews r
+  left join tenancy.tenants  t on t.id = r.tenant_id
+  left join product.products p on p.id = r.product_id
+  where r.deleted_at is null
+    and (not $1::bool or (r.comment is not null and btrim(r.comment) <> ''))
+  order by r.created_at desc
+  limit $2 offset $3
+`;
+
+/** 取整并夹到 [min, max]；读不出数就用 fallback。 */
+function clampInt(
+  raw: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.floor(parsed), min), max);
 }
 
 type PeriodKey = "recent30" | "total" | "year" | "quarter" | "month";
@@ -150,6 +263,24 @@ interface DashboardOverviewRecord {
     pending: number;
     totalInPrevPeriod: number;
   };
+  /**
+   * 客户评价（support.product_reviews，2026-09-20 起）。
+   *
+   * 三项**各带各的分母**：`average` 是那一项的均分，`count` 是评了那一项的条数。
+   * 三项分数各自可空，`AVG` 跳过 `NULL`，所以只评了产品的客户不会把价格分的
+   * 分母也撑大。`reviewCount` 是评价条数，与任一项的 `count` 都不是一个数。
+   *
+   * `average` 为 `null` = 这一项还没人评，不是 0 分。
+   *
+   * 口径是**全周期**，不跟随 period：评价来得稀疏，按周期切会让卡片在没有新
+   * 评价的那一周直接空掉，看起来像坏了。
+   */
+  reviews: {
+    productScore: { average: number | null; count: number };
+    priceScore: { average: number | null; count: number };
+    serviceScore: { average: number | null; count: number };
+    reviewCount: number;
+  };
 }
 
 interface DashboardOverviewRow {
@@ -178,6 +309,13 @@ interface DashboardOverviewRow {
   ticket_in_progress: number;
   ticket_pending: number;
   ticket_total_in_prev_period: number;
+  review_product_avg: string | null;
+  review_product_cnt: number;
+  review_price_avg: string | null;
+  review_price_cnt: number;
+  review_service_avg: string | null;
+  review_service_cnt: number;
+  review_count: number;
 }
 
 function mapDashboardOverviewRow(
@@ -186,6 +324,9 @@ function mapDashboardOverviewRow(
 ): DashboardOverviewRecord {
   const n = (v: number | undefined) => v ?? 0;
   const money = (v: string | undefined) => Number(v ?? 0);
+  /** null/undefined 一律保持 null：没人评不是 0 分。 */
+  const avg = (v: string | null | undefined) =>
+    v === null || v === undefined ? null : Number(v);
   return {
     period,
     tenants: {
@@ -222,6 +363,23 @@ function mapDashboardOverviewRow(
       inProgress: n(row?.ticket_in_progress),
       pending: n(row?.ticket_pending),
       totalInPrevPeriod: n(row?.ticket_total_in_prev_period),
+    },
+    reviews: {
+      // null 原样传下去——「还没人评」与「0 分」必须分得开，
+      // 用 ?? 0 兜底会让空数据长成满分表的反面。
+      productScore: {
+        average: avg(row?.review_product_avg),
+        count: n(row?.review_product_cnt),
+      },
+      priceScore: {
+        average: avg(row?.review_price_avg),
+        count: n(row?.review_price_cnt),
+      },
+      serviceScore: {
+        average: avg(row?.review_service_avg),
+        count: n(row?.review_service_cnt),
+      },
+      reviewCount: n(row?.review_count),
     },
   };
 }
@@ -292,7 +450,23 @@ const DASHBOARD_OVERVIEW_SQL = `
       where deleted_at is null and (bounds.since is null or created_at >= bounds.since))::int as ticket_total_in_period,
     (select count(*) from support.tickets, bounds
       where deleted_at is null and bounds.prev_since is not null
-        and created_at >= bounds.prev_since and created_at < bounds.prev_until)::int as ticket_total_in_prev_period
+        and created_at >= bounds.prev_since and created_at < bounds.prev_until)::int as ticket_total_in_prev_period,
+    -- 客户评价：三项各自 AVG/COUNT（各带各的分母），外加评价条数。
+    -- 不带 bounds：评价来得稀疏，按周期切会让卡片在没有新评价的那一周空掉。
+    (select avg(product_score)::numeric(3,2) from support.product_reviews
+      where deleted_at is null) as review_product_avg,
+    (select count(product_score) from support.product_reviews
+      where deleted_at is null)::int as review_product_cnt,
+    (select avg(price_score)::numeric(3,2) from support.product_reviews
+      where deleted_at is null) as review_price_avg,
+    (select count(price_score) from support.product_reviews
+      where deleted_at is null)::int as review_price_cnt,
+    (select avg(service_score)::numeric(3,2) from support.product_reviews
+      where deleted_at is null) as review_service_avg,
+    (select count(service_score) from support.product_reviews
+      where deleted_at is null)::int as review_service_cnt,
+    (select count(*) from support.product_reviews
+      where deleted_at is null)::int as review_count
 `;
 
 /**
