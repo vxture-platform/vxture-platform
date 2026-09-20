@@ -519,7 +519,21 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── 以下为刻意「裸值不建 FK」清单（注释留痕，非真 FK） ────────────────────────
+DO $$ BEGIN
+  ALTER TABLE support.product_reviews
+    ADD CONSTRAINT fk_product_reviews_tenant FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE support.product_reviews
+    ADD CONSTRAINT fk_product_reviews_product FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE support.product_reviews
+    ADD CONSTRAINT fk_product_reviews_subscription FOREIGN KEY (subscription_id) REFERENCES metering.subscriptions(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- support.tickets.account_id              → account.users.id         裸值（边界#3：报单者可注销，工单留存）
+-- support.product_reviews.account_id      → account.users.id         裸值（边界#3：评价人可注销，评价留存）
 -- support.tickets.assignee_id             → admin.operator_accounts  裸值（边界#2：跨 realm workforce 隔离，铁律七）
 -- support.ticket_comments.actor_id        → account.users / operator 裸值（边界#2/#3：按 actor_type 跨 realm）
 -- support.audit_logs.tenant_id            → tenancy.tenants          裸值（边界#3：合规不可变，须活过租户注销）
