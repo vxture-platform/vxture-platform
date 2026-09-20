@@ -66,4 +66,11 @@ export type {
 } from "./atlas-state.constants";
 export * from "./status-tone.constants";
 export * from "./nav-preference.constants";
-export { BRAND_NAME, BRAND_TITLE } from "./brand.constants";
+export {
+  BRAND_NAME,
+  BRAND_TITLE,
+  ICP_FILING,
+  PUBLIC_SECURITY_FILING,
+  SITE_FILINGS,
+} from "./brand.constants";
+export type { SiteFiling } from "./brand.constants";

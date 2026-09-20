@@ -168,3 +168,9 @@ export type { DateInput } from "./utils/format.utils";
 
 // 官网品牌名的单一权威(owner 2026-09-10:tab 标题漏改)。
 export { BRAND_NAME, BRAND_TITLE } from "./constants";
+
+// 备案信息的单一权威(owner 2026-09-20)。**不进 i18n 词条**:备案号是法定标识、
+// 不随语言变化——此前挂在 messages 下被当成"待翻译文案",en-US 两处留空,
+// 英文页面一个备案号都不显示。官网页脚与 accounts 登录页页脚现在读同一份。
+export { ICP_FILING, PUBLIC_SECURITY_FILING, SITE_FILINGS } from "./constants";
+export type { SiteFiling } from "./constants";
