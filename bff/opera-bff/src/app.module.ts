@@ -16,6 +16,7 @@ import { AuditLogViewRouter } from "./routers/audit-log-view.router";
 import { HealthRouter } from "./routers/health.router";
 import { JobSchedulerRouter } from "./routers/job-scheduler.router";
 import { MaintenanceWindowsRouter } from "./routers/maintenance-windows.router";
+import { OperatorNoticesRouter } from "./routers/operator-notices.router";
 import { OidcClientRouter } from "./routers/oidc-client.router";
 import { ProductCatalogRouter } from "./routers/product-catalog.router";
 import { ProductOnboardingRouter } from "./routers/product-onboarding.router";
@@ -31,6 +32,7 @@ import { TenancyDirectoryRouter } from "./routers/tenancy-directory.router";
     HealthRouter,
     SessionRouter,
     MaintenanceWindowsRouter,
+    OperatorNoticesRouter,
     ProductHealthRouter,
     JobSchedulerRouter,
     AtlasRouter,
