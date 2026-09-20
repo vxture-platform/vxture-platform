@@ -314,9 +314,22 @@ export function PlanPublishingListPage() {
     {
       id: "open",
       // 箭头只表达「往那边走」，与「查阅这个产品卖哪几档」无关；清单图标才贴语义。
-      label: row.planCount === 0 ? t("list.configure") : t("list.viewPlans"),
+      // 一个产品下的套餐是要「管」的（开草稿、发布、退役），不只是「看」——
+      // 原先这里只有一个「查看套餐」，整个菜单没有一项真动作（owner 2026-09-19）。
+      label: row.planCount === 0 ? t("list.configure") : t("list.managePlans"),
       icon: "list-checks",
       onSelect: () => openDetail(row.productCode),
+    },
+    {
+      // 新建套餐的表单只在二级页持有一份：一级页带 `?new=1` 过去，由那边打开。
+      // 两处各写一套表单，档位占用判定迟早会分叉。
+      id: "new-plan",
+      label: t("list.newPlan"),
+      icon: "plus",
+      onSelect: () =>
+        router.push(
+          `/plan-versions/${encodeURIComponent(row.productCode)}?new=1`,
+        ),
     },
   ];
 
