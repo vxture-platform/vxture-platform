@@ -40,6 +40,7 @@ import {
   sendPhoneCode,
   type OidcMfaRequired,
 } from "@/api/oidc";
+import { turnstileSiteKey } from "@/lib/turnstile";
 import { OperatorMfaFlow } from "./OperatorMfaFlow";
 import { SocialLoginButtons } from "./SocialLoginButtons";
 
@@ -52,11 +53,11 @@ interface OidcLoginFormProps {
   readonly realm: Realm;
 }
 
-const TENANT_TURNSTILE_KEY =
-  process.env.NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY ?? "";
-// Operator surface reuses the existing ops/admin Turnstile (运营面), not a new key.
-const OPERATOR_TURNSTILE_KEY =
-  process.env.NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY ?? "";
+// site key 与「前端这一半的开关」都收在 lib/turnstile 里:服务端的
+// CF_TURNSTILE_ENABLED 关掉后,前端也要跟着不渲染,否则开关只拄了一半。
+const TENANT_TURNSTILE_KEY = turnstileSiteKey("tenant");
+// 运营面复用既有的 ops/admin Turnstile(运营面),不另起一个 key。
+const OPERATOR_TURNSTILE_KEY = turnstileSiteKey("operator");
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
