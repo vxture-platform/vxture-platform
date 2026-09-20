@@ -26,13 +26,15 @@ import { AdminPermissionsRouter } from "./routers/admin-permissions.router";
 import { OperatorSessionsRouter } from "./routers/operator-sessions.router";
 import { SignInLogsRouter } from "./routers/sign-in-logs.router";
 import { GovernanceOverviewRouter } from "./routers/governance-overview.router";
+import { OperatorNoticesRouter } from "./routers/operator-notices.router";
+import { NoticeModule } from "@vxture/service-notice";
 
 /* 通用面:登录会话 / 健康 / step-up。治理业务 router 分批从 admin-bff 迁入:
  * PR②(Batch 1)审计日志 / 通知投递台账两条只读面;(Batch 2)风险记录 / 合规
  * 事件 / 系统参数 / 功能开关四条写面(无 step-up);(Batch 3)平台用户 / 角色 /
  * 权限三条 RBAC 写面(带 step-up,最高危写口)。 */
 @Module({
-  imports: [OidcRpModule, ArcheBffPoolsModule],
+  imports: [OidcRpModule, ArcheBffPoolsModule, NoticeModule],
   controllers: [
     HealthRouter,
     SessionRouter,
@@ -49,6 +51,7 @@ import { GovernanceOverviewRouter } from "./routers/governance-overview.router";
     OperatorSessionsRouter,
     SignInLogsRouter,
     GovernanceOverviewRouter,
+    OperatorNoticesRouter,
   ],
   providers: [
     OperatorAdminService,

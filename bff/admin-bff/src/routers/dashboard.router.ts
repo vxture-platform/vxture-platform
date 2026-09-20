@@ -29,13 +29,23 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import {
+  NoticeService,
+  isNoticeId,
+  type NoticePlane,
+  type OperatorNoticeView,
+} from "@vxture/service-notice";
 import { PLANE_ROOT } from "../auth/plane";
 import { ADMIN_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/console.types";
 
 @Controller("api/dashboard")
 export class DashboardRouter {
-  constructor(@Inject(ADMIN_BFF_RO_POOL) private readonly pool: Pool) {}
+  // 必须显式 @Inject：打包走 esbuild，它不产 emitDecoratorMetadata。
+  constructor(
+    @Inject(ADMIN_BFF_RO_POOL) private readonly pool: Pool,
+    @Inject(NoticeService) private readonly notices: NoticeService,
+  ) {}
 
   // GET /api/dashboard/overview?period=recent30|total|year|quarter|month
   // TD-036: replaces the admin home page's hardcoded snapshot literals with
@@ -105,6 +115,9 @@ export class DashboardRouter {
    *
    * `scope=digest`（默认）落 owner 那条摘要规则：**当天已读 + 所有未读**。
    * `scope=all` 给二级页，去掉已读那一条谓词。
+   *
+   * 谓词本身在 `@vxture/service-notice`——admin 与 arche 读的是同一张表、同一条
+   * 可见性规则，各写一份的话没有守卫盯得住「两边一样地错」。
    */
   @Get("notices")
   async listNotices(
@@ -112,7 +125,7 @@ export class DashboardRouter {
     @Query("scope") scopeParam?: string,
     @Query("limit") limitParam?: string,
     @Query("offset") offsetParam?: string,
-  ): Promise<{ items: OperatorNoticeItem[]; total: number; unread: number }> {
+  ): Promise<{ items: OperatorNoticeView[]; total: number; unread: number }> {
     assertCanReadDashboard(req);
     const operatorId = req.user?.id;
     if (!operatorId) throw new UnauthorizedException("No active session");
@@ -120,19 +133,14 @@ export class DashboardRouter {
     const limit = clampInt(limitParam, digest ? 20 : 50, 1, 200);
     const offset = clampInt(offsetParam, 0, 0, 100_000);
 
-    const result = await this.pool.query<NoticeListRow>(NOTICE_LIST_SQL, [
-      PLANE_NAME,
+    // 平面与运营者都不从请求取：平面是本 BFF 自己的身份，人是会话里的那个。
+    return this.notices.list({
+      plane: PLANE_NAME,
       operatorId,
       digest,
       limit,
       offset,
-    ]);
-    return {
-      items: result.rows.map(mapNoticeRow),
-      total: Number(result.rows[0]?.total_count ?? 0),
-      // 未读数单独回：铃铛角标要的是「还有几条没看」，不是本页列了几条。
-      unread: Number(result.rows[0]?.unread_count ?? 0),
-    };
+    });
   }
 
   /** POST /api/dashboard/notices/:id/read —— 标记本人已读。幂等。 */
@@ -144,110 +152,18 @@ export class DashboardRouter {
     assertCanReadDashboard(req);
     const operatorId = req.user?.id;
     if (!operatorId) throw new UnauthorizedException("No active session");
-    if (!UUID_RE.test(id)) throw new BadRequestException("Invalid notice id");
+    if (!isNoticeId(id)) throw new BadRequestException("Invalid notice id");
 
-    // 重复标记不报错,只是把时间刷新——「我又看了一次」不是错误。
-    // 但 on conflict 必须写 do update 而不是 do nothing:do nothing 时
-    // returning 不回行,调用方拿不到 read_at。
-    const result = await this.pool.query<{ read_at: Date }>(
-      `insert into admin.operator_notice_reads (notice_id, operator_id)
-       select $1::uuid, $2::uuid
-        where exists (select 1 from admin.operator_notices
-                       where id = $1::uuid and deleted_at is null)
-       on conflict (notice_id, operator_id) do update set read_at = now()
-       returning read_at`,
-      [id, operatorId],
-    );
-    const row = result.rows[0];
-    // 通告不存在或已撤回时 where exists 不成立,插不进去 → 0 行。
-    if (!row) throw new NotFoundException("Notice not found");
-    return { id, readAt: row.read_at.toISOString() };
+    const marked = await this.notices.markRead(id, operatorId);
+    // 通告不存在或已撤回时服务层回 null——那是调用方要据以说话的结果，
+    // 不是服务的故障，所以 404 在这里翻，不在包里抛。
+    if (!marked) throw new NotFoundException("Notice not found");
+    return marked;
   }
 }
 
 /** 本平面的代号，与 target_planes 里的值同一套（PLANE_ROOT 是 "admin.plane"）。 */
-const PLANE_NAME = PLANE_ROOT.split(".")[0] as string;
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export interface OperatorNoticeItem {
-  id: string;
-  severity: "info" | "warning" | "critical";
-  title: string;
-  body: string;
-  link: string | null;
-  source: "manual" | "system";
-  publishedAt: string;
-  /** 本人读过的时刻；null = 未读。 */
-  readAt: string | null;
-  /** 发布人显示名；system 来源与已注销账号都回 null。 */
-  createdByName: string | null;
-}
-
-interface NoticeListRow {
-  id: string;
-  severity: string;
-  title: string;
-  body: string;
-  link: string | null;
-  source: string;
-  published_at: Date;
-  read_at: Date | null;
-  created_by_name: string | null;
-  total_count: string;
-  unread_count: string;
-}
-
-function mapNoticeRow(row: NoticeListRow): OperatorNoticeItem {
-  return {
-    id: row.id,
-    severity: row.severity as OperatorNoticeItem["severity"],
-    title: row.title,
-    body: row.body,
-    link: row.link,
-    source: row.source as OperatorNoticeItem["source"],
-    publishedAt: row.published_at.toISOString(),
-    readAt: row.read_at ? row.read_at.toISOString() : null,
-    createdByName: row.created_by_name,
-  };
-}
-
-/**
- * $1 = 本平面代号，$2 = 当前运营者，$3 = 是否摘要档，$4 = limit，$5 = offset。
- *
- * `$3::bool` 写成 CASE 的条件而不是靠 JS 拼 where：SQL 一旦插值，那一族静态守卫
- * 当场读不懂它，变瞎且恒绿。
- *
- * `visible` 先收敛出「本平面能看见的未撤回未过期通告」，两个计数与分页都基于它，
- * 免得三处各写一遍过滤条件、日后改漏一处。
- * **不回 created_by 那个 uuid**——全站规则：任何场景不展示 UUID。
- */
-const NOTICE_LIST_SQL = `
-  with visible as (
-    select n.id, n.severity, n.title, n.body, n.link, n.source, n.published_at,
-           r.read_at,
-           nullif(a.display_name, '') as created_by_name
-      from admin.operator_notices n
-      left join admin.operator_notice_reads r
-             on r.notice_id = n.id and r.operator_id = $2::uuid
-      left join admin.operator_account a on a.id = n.created_by
-     where n.deleted_at is null
-       and (n.expires_at is null or n.expires_at > now())
-       and (n.target_planes = '{}' or $1 = any(n.target_planes))
-  ), scoped as (
-    select * from visible
-     where not $3::bool
-        or read_at is null
-        or read_at >= date_trunc('day', now())
-  )
-  select s.*,
-         (select count(*) from scoped)::text                        as total_count,
-         (select count(*) from visible where read_at is null)::text  as unread_count
-    from scoped s
-   order by s.read_at is not null, s.published_at desc, s.id desc
-   limit $4 offset $5
-`;
+const PLANE_NAME = PLANE_ROOT.split(".")[0] as NoticePlane;
 
 export interface ReviewListItem {
   /** 可视码：租户号。列表的行标识用它，不用主键。 */

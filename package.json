@@ -83,6 +83,7 @@
     "lint:datetime-discipline": "node scripts/guardrails/check-datetime-discipline.mjs",
     "lint:design": "node scripts/guardrails/check-design-system.mjs",
     "lint:destructive": "node scripts/guardrails/check-destructive-confirmations.mjs",
+    "lint:explicit-inject": "node scripts/guardrails/check-explicit-inject.mjs",
     "lint:docs-numbering": "node scripts/guardrails/check-docs-numbering.mjs --strict",
     "lint:fix": "pnpm --recursive --if-present lint:fix",
     "lint:i18n-coverage": "node scripts/guardrails/check-i18n-coverage.mjs",

@@ -794,3 +794,59 @@ export async function resetPlatformAdminPassword(
     "Platform admin password reset failed",
   );
 }
+
+// ── 运营通告(admin.operator_notices,只读 + 标记已读)────────────────────────
+// 发布面在 opera(owner 2026-09-20:「面向内部运营的由 opera 发布」)。治理台只读。
+// 可见性谓词在 @vxture/service-notice,三个平面共用一份。
+
+export interface OperatorNoticeItem {
+  id: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  body: string;
+  link: string | null;
+  source: "manual" | "system";
+  publishedAt: string;
+  /** 本人读过的时刻;null = 未读。 */
+  readAt: string | null;
+  /** 发布人显示名;system 来源与已注销账号都回 null,前端画「—」。 */
+  createdByName: string | null;
+}
+
+export interface OperatorNoticePage {
+  items: OperatorNoticeItem[];
+  total: number;
+  /** 未读数恒按「全部」算,不随 scope 变——角标要的是「还有几条没看」。 */
+  unread: number;
+}
+
+/**
+ * 走 strict:读失败要与「没有消息」区分开。后者是一个真实的、令人安心的回答,
+ * 把前者画成后者等于报了一个假的平安。
+ */
+export async function fetchOperatorNotices(params: {
+  scope?: "digest" | "all";
+  limit?: number;
+  offset?: number;
+}): Promise<OperatorNoticePage> {
+  const search = new URLSearchParams();
+  if (params.scope) search.set("scope", params.scope);
+  if (params.limit !== undefined) search.set("limit", String(params.limit));
+  if (params.offset !== undefined) search.set("offset", String(params.offset));
+  const qs = search.toString();
+  return readJsonStrict<OperatorNoticePage>(
+    `/api/operator-notices${qs ? `?${qs}` : ""}`,
+  );
+}
+
+/** 幂等:重复标记只把时间刷新。 */
+export async function markOperatorNoticeRead(
+  id: string,
+): Promise<{ id: string; readAt: string }> {
+  return mutateJson<{ id: string; readAt: string }>(
+    `/api/operator-notices/${encodeURIComponent(id)}/read`,
+    "POST",
+    undefined,
+    "标记已读失败",
+  );
+}

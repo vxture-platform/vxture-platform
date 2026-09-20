@@ -36,6 +36,12 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import {
+  NOTICE_PLANES,
+  NOTICE_SEVERITIES,
+  type NoticePlane,
+  type NoticeSeverity,
+} from "@vxture/service-notice";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { withTransaction } from "../db/tx";
 import {
@@ -58,12 +64,14 @@ import {
   toIsoOrNull,
 } from "./router.shared";
 
-/** 平面码。与三个 BFF 的 `PLANE_ROOT` 前缀同一套，表上有 CHECK 兜底。 */
-const PLANES = ["admin", "opera", "arche"] as const;
-type Plane = (typeof PLANES)[number];
+/* 平面码与严重度取自 @vxture/service-notice：它们是表上那两条 CHECK 约束在代码
+ * 里的投影，只该有一处。此前 opera 与 admin 各写了一份——加第四个平面时，改了
+ * 一处没改另一处，症状分别是插入吃 23514、与新平面在读侧永远匹配不上。 */
+const PLANES = NOTICE_PLANES;
+type Plane = NoticePlane;
 
-const SEVERITIES = ["info", "warning", "critical"] as const;
-type Severity = (typeof SEVERITIES)[number];
+const SEVERITIES = NOTICE_SEVERITIES;
+type Severity = NoticeSeverity;
 
 export interface OperatorNoticeItem {
   id: string;

@@ -7,6 +7,7 @@ import {
 import { APP_GUARD } from "@nestjs/core";
 import { VxConfigModule } from "@vxture/core-config";
 import { MailModule } from "@vxture/core-mail";
+import { NoticeModule } from "@vxture/service-notice";
 import { AdminBffPoolsModule } from "./providers/pools.module";
 import {
   addonServiceProvider,
@@ -52,6 +53,7 @@ import { SearchRouter } from "./routers/search.router";
       domains: ["app", "auth", "database", "redis", "platform"],
     }),
     MailModule,
+    NoticeModule,
     AdminBffPoolsModule,
     OidcRpModule,
     // The commerce background jobs (provisioning dispatch, sharing/trial
