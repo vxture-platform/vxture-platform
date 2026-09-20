@@ -143,16 +143,6 @@ function autoScale(raw: number): number {
   return 1;
 }
 
-const LAYER_ORDER = ["L2", "L1", "L3", "none"] as const;
-type LayerKey = (typeof LAYER_ORDER)[number];
-
-function layerKeyOf(record: ProductCapabilityRecord): LayerKey {
-  if (record.layer === "L2") return "L2";
-  if (record.layer === "L1") return "L1";
-  if (record.layer === "L3") return "L3";
-  return "none";
-}
-
 export function PlanDraftEditorPage({
   productCode,
   planCode,
@@ -263,7 +253,10 @@ export function PlanDraftEditorPage({
       catalog.filter(
         (item) =>
           item.productCode !== productCode &&
-          !bundleChosen.has(item.productCode),
+          !bundleChosen.has(item.productCode) &&
+          // 只有 L2 域平台产品能把后台能力接进来：L1 是底座（额度走平台级度量键，
+          // 不经套餐分配）、L3 卖的就是那套界面、未分层的连判据都还没有。
+          item.layer === "L2",
       ),
     [catalog, productCode, bundleChosen],
   );
@@ -397,14 +390,13 @@ export function PlanDraftEditorPage({
   const header = (
     <PageHeader
       icon="edit"
-      title={t("editorV2.title", { n: versionNo })}
-      description={
+      title={
         plan
-          ? t("editorV2.subtitle", {
-              tier: tierLabel(plan.tier),
-              plan: plan.planName,
-            })
-          : planCode
+          ? t("editorV2.title", { plan: plan.planName, n: versionNo })
+          : t("editorV2.title", { plan: planCode, n: versionNo })
+      }
+      description={
+        plan ? t("editorV2.subtitle", { tier: tierLabel(plan.tier) }) : planCode
       }
       action={
         <Button
@@ -414,7 +406,9 @@ export function PlanDraftEditorPage({
             router.push(`/plan-versions/${encodeURIComponent(productCode)}`)
           }
         >
-          {t("detail.backToList")}
+          {/* 它跳的是这个产品的套餐页,不是全部产品的列表——原先写「全部产品」,
+              文字与去向对不上。 */}
+          {t("editorV2.backTo", { name: productCode })}
         </Button>
       }
     />
@@ -782,66 +776,45 @@ export function PlanDraftEditorPage({
             <h4 className="text-body-sm text-muted-foreground">
               {t("editorV2.bundleCandidates")}
             </h4>
-            {LAYER_ORDER.map((layer) => {
-              const group = bundleCandidates.filter(
-                (item) => layerKeyOf(item) === layer,
-              );
-              if (group.length === 0) return null;
-              const allowed = layer === "L2";
-              return (
-                <PanelList key={layer}>
+            {bundleCandidates.length === 0 ? (
+              <EmptyState title={t("editorV2.bundleNoCandidates")} />
+            ) : (
+              <PanelList>
+                {bundleCandidates.map((item) => (
                   <PanelItem
+                    key={item.productCode}
                     main={
                       <span className="inline-flex flex-wrap items-center gap-2xs">
-                        <StatusBadge tone={allowed ? "brand" : "neutral"}>
-                          {t(
-                            `editorV2.layer${layer === "none" ? "None" : layer}`,
-                          )}
-                        </StatusBadge>
-                        <span className="text-body-sm text-muted-foreground">
-                          {t(
-                            `editorV2.layer${layer === "none" ? "None" : layer}Hint`,
-                          )}
+                        <span>{item.productName}</span>
+                        <span className="font-mono text-body-sm text-muted-foreground">
+                          {item.productCode}
                         </span>
                       </span>
                     }
+                    trail={
+                      <ActionButton
+                        variant="outline"
+                        icon="plus"
+                        disabled={busy}
+                        onClick={() =>
+                          setBundle((old) => [
+                            ...old,
+                            {
+                              productCode: item.productCode,
+                              productName: item.productName,
+                              quota: {},
+                              features: [],
+                            },
+                          ])
+                        }
+                      >
+                        {t("editorV2.add")}
+                      </ActionButton>
+                    }
                   />
-                  {group.map((item) => (
-                    <PanelItem
-                      key={item.productCode}
-                      main={
-                        <span className="inline-flex flex-wrap items-center gap-2xs">
-                          <span>{item.productName}</span>
-                          <span className="font-mono text-body-sm text-muted-foreground">
-                            {item.productCode}
-                          </span>
-                        </span>
-                      }
-                      trail={
-                        <ActionButton
-                          variant="outline"
-                          icon="plus"
-                          disabled={busy || !allowed}
-                          onClick={() =>
-                            setBundle((old) => [
-                              ...old,
-                              {
-                                productCode: item.productCode,
-                                productName: item.productName,
-                                quota: {},
-                                features: [],
-                              },
-                            ])
-                          }
-                        >
-                          {t("editorV2.add")}
-                        </ActionButton>
-                      }
-                    />
-                  ))}
-                </PanelList>
-              );
-            })}
+                ))}
+              </PanelList>
+            )}
           </div>
 
           <div className="grid min-w-0 gap-2xs">
@@ -951,7 +924,12 @@ export function PlanDraftEditorPage({
       </Section>
 
       {/* ── 动作：左可逆、右不可逆 ─────────────────────────────────────── */}
-      <Section aria-label={t("editorV2.save")} level={3} icon="check">
+      <Section
+        aria-label={t("editorV2.save")}
+        level={2}
+        icon="check"
+        title={t("editorV2.save")}
+      >
         <div className="flex flex-wrap items-center justify-between gap-sm">
           <span className="inline-flex flex-wrap items-center gap-2xs">
             <Button

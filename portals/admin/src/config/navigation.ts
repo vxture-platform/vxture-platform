@@ -276,7 +276,9 @@ const tenantOpsSections: AdminNavigationSection[] = [
     i18nKey: "menu.operation.customer_service",
     status: "active",
     title: "客户服务",
-    dividerBefore: true,
+    // 这里**不画线**（owner 2026-09-20）：租户管理 / 产品体系 / 订阅交易 /
+    // 客户服务四组都是围绕客户展开的，属同一层，中间切一刀会把它们读成两段。
+    // 全侧栏只留两条线，切出「概览 / 客户侧 / 经营侧」三层。
     items: [
       {
         id: "tickets",

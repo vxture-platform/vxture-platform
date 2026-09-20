@@ -52,15 +52,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ActionMenu,
   Badge,
   Button,
   DataTable,
   DetailPageTemplate,
+  DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
+  Input,
   ListCardGrid,
+  NativeSelect,
   PanelCard,
   PanelItem,
   PanelList,
@@ -73,6 +78,8 @@ import type {
   StatusBadgeTone,
 } from "@vxture/design-system";
 import {
+  createPlanDraftVersion,
+  createProductPlan,
   deletePlan,
   deletePlanVersion,
   deprecatePlan,
@@ -87,7 +94,11 @@ import {
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 import { useTableLabels } from "@/modules/shared/table";
-import { tierBadgeClass, tierLabel } from "@/modules/shared/tier-level";
+import {
+  TIER_FILTER_OPTIONS,
+  tierBadgeClass,
+  tierLabel,
+} from "@/modules/shared/tier-level";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 
@@ -158,6 +169,7 @@ export function PlanPublishingDetailPage({
   productCode: string;
 }) {
   const t = useTranslations("planVersionsPage");
+  const tShared = useTranslations();
   const locale = useLocale();
   const router = useRouter();
   const tableLabels = useTableLabels();
@@ -176,6 +188,10 @@ export function PlanPublishingDetailPage({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [newPlanOpen, setNewPlanOpen] = useState(false);
+  const [newPlanCode, setNewPlanCode] = useState("");
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanTier, setNewPlanTier] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -252,6 +268,63 @@ export function PlanPublishingDetailPage({
     };
   }, [retiredOpen, retiredPlans]);
 
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("new") === "1") setNewPlanOpen(true);
+  }, [searchParams]);
+
+  const runPlain = useCallback(
+    async (action: () => Promise<unknown>, done: string) => {
+      setBusy(true);
+      setMessage(null);
+      try {
+        await action();
+        setMessage(done);
+        await load();
+      } catch (err) {
+        setMessage(err instanceof Error ? err.message : t("actions.failed"));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [load, t],
+  );
+
+  /**
+   * 已被在售套餐占住的档位 → 套餐名。退役的不算:退役的语义就是**让开档位**。
+   * 服务端仍有 `PLAN_TIER_AXIS_OCCUPANCY_SQL` 兜底(409),这里只是别让人填完才知道。
+   */
+  const occupiedTiers = useMemo(() => {
+    const taken = new Map<string, string>();
+    for (const plan of activePlans) {
+      if (!taken.has(plan.tier)) taken.set(plan.tier, plan.planName);
+    }
+    return taken;
+  }, [activePlans]);
+
+  const submitNewPlan = useCallback(async () => {
+    const code = newPlanCode.trim();
+    const name = newPlanName.trim();
+    if (!code || !name || !newPlanTier) {
+      setMessage(t("actions.newPlanInvalid"));
+      return;
+    }
+    await runPlain(
+      () =>
+        createProductPlan({
+          planCode: code,
+          planName: name,
+          productCode,
+          tier: newPlanTier,
+        }),
+      t("actions.newPlanDone", { name }),
+    );
+    setNewPlanOpen(false);
+    setNewPlanCode("");
+    setNewPlanName("");
+    setNewPlanTier("");
+  }, [newPlanCode, newPlanName, newPlanTier, productCode, runPlain, t]);
+
   const runWrite = useCallback(
     async (action: () => Promise<unknown>, done: string) => {
       setBusy(true);
@@ -270,6 +343,11 @@ export function PlanPublishingDetailPage({
     [load, runWithStepUp, t],
   );
 
+  /**
+   * 不过 step-up 的写入。`runWrite` 内置 `runWithStepUp`,适用于删除/退役那类
+   * 落锤动作;而「新建套餐」与「开新草稿」在 BFF 上都**显式不要** step-up——
+   * 两者产出的都是尚不可售的草稿,门由「发布」那一步承担。
+   */
   const versionColumns = useCallback(
     (): DataTableColumn<PlanVersionSummary>[] => [
       {
@@ -339,6 +417,50 @@ export function PlanPublishingDetailPage({
             ),
         },
       ];
+      if (version.status === "draft" && !version.isLocked) {
+        items.push({
+          id: "edit-draft",
+          label: t("actions.editDraftRow"),
+          icon: "edit",
+          disabled: busy,
+          onSelect: () =>
+            router.push(
+              `/plan-versions/${encodeURIComponent(productCode)}/${encodeURIComponent(plan.planCode)}/${version.versionNo}/edit`,
+            ),
+        });
+      }
+      /*
+       * 「基于此版本开新草稿」只挂在**当前在售**那一行。
+       *
+       * 后端 `POST plans/:planId/versions` 接的是 planId,克隆的永远是**当前发布
+       * 版**——挂到任意历史版本上,文案就会骗人:写着「基于此版本」,实际克隆的是
+       * 另一版。
+       *
+       * 一个套餐同时只允许一个在途草稿(再开会 409),所以已有草稿时置灰并写明
+       * 原因,而不是让人点下去吃报错。
+       */
+      if (version.isCurrent) {
+        const hasDraft = Boolean(plan.draftVersion);
+        items.push({
+          id: "new-draft",
+          label: t("actions.newVersion"),
+          icon: "plus",
+          disabled: busy || hasDraft,
+          ...(hasDraft
+            ? {
+                hint: t("detail.editDraft", {
+                  n: plan.draftVersion?.versionNo ?? "",
+                }),
+              }
+            : {
+                onSelect: () =>
+                  void runPlain(
+                    () => createPlanDraftVersion(plan.planId),
+                    t("actions.newVersionDone", { n: version.versionNo }),
+                  ),
+              }),
+        });
+      }
       // 「删除草稿」只对草稿成立——已发布版本压根没有这回事，所以不进数组，
       // 而不是放一个永远灰着的项。
       if (version.status === "draft" && !version.isLocked) {
@@ -362,7 +484,7 @@ export function PlanPublishingDetailPage({
       }
       return items;
     },
-    [busy, productCode, router, runWrite, t, withLabels],
+    [busy, productCode, router, runPlain, runWrite, t, withLabels],
   );
 
   const header = (
@@ -371,13 +493,22 @@ export function PlanPublishingDetailPage({
       title={product ? product.productName : productCode}
       description={t("lifecycle.note")}
       action={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push("/plan-versions")}
-        >
-          {t("detail.backToList")}
-        </Button>
+        <span className="inline-flex flex-wrap items-center gap-2xs">
+          <Button
+            size="sm"
+            disabled={busy || !product}
+            onClick={() => setNewPlanOpen(true)}
+          >
+            {t("actions.newPlan")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/plan-versions")}
+          >
+            {t("detail.backToList")}
+          </Button>
+        </span>
       }
     />
   );
@@ -686,6 +817,91 @@ export function PlanPublishingDetailPage({
           </PanelList>
         )}
       </Section>
+
+      {newPlanOpen ? (
+        <DialogForm
+          open
+          size="sm"
+          title={t("actions.newPlan")}
+          description={t("actions.newPlanDescription", {
+            product: product?.productName ?? productCode,
+          })}
+          submitLabel={t("actions.newPlanSubmit")}
+          submitting={busy}
+          onOpenChange={(open) => {
+            if (!open) setNewPlanOpen(false);
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitNewPlan();
+          }}
+          cancelLabel={tShared("actions.cancel")}
+        >
+          <Field>
+            <FieldLabel htmlFor="new-plan-tier">
+              {t("actions.newPlanTierLabel")}
+            </FieldLabel>
+            <NativeSelect
+              id="new-plan-tier"
+              value={newPlanTier}
+              disabled={busy}
+              onChange={(event) => setNewPlanTier(event.target.value)}
+            >
+              <option value="">—</option>
+              {TIER_FILTER_OPTIONS.filter((o) => o.value !== "other").map(
+                (option) => {
+                  const taken = occupiedTiers.get(option.value);
+                  return (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      disabled={Boolean(taken)}
+                    >
+                      {taken
+                        ? t("actions.newPlanTierOccupied", {
+                            tier: option.label,
+                            name: taken,
+                          })
+                        : option.label}
+                    </option>
+                  );
+                },
+              )}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="new-plan-code">
+              {t("actions.newPlanCodeLabel")}
+            </FieldLabel>
+            <Input
+              id="new-plan-code"
+              value={newPlanCode}
+              disabled={busy}
+              onChange={(event) => setNewPlanCode(event.target.value)}
+              placeholder={`${productCode}-pro`}
+              maxLength={64}
+            />
+            <span className="text-body-sm text-muted-foreground">
+              {t("actions.newPlanCodeHint")}
+            </span>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="new-plan-name">
+              {t("actions.newPlanNameLabel")}
+            </FieldLabel>
+            <Input
+              id="new-plan-name"
+              value={newPlanName}
+              disabled={busy}
+              onChange={(event) => setNewPlanName(event.target.value)}
+              maxLength={120}
+            />
+            <span className="text-body-sm text-muted-foreground">
+              {t("actions.newPlanNameHint")}
+            </span>
+          </Field>
+        </DialogForm>
+      ) : null}
     </DetailPageTemplate>
   );
 }
