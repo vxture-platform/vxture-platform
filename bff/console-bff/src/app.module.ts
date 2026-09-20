@@ -13,6 +13,7 @@ import { OrganizationModule } from "@vxture/service-organization";
 import { BillingModule } from "@vxture/service-billing";
 import { PromotionModule } from "@vxture/service-promotion";
 import { SubscriptionModule } from "@vxture/service-subscription";
+import { ReviewModule } from "@vxture/service-review";
 import { SmsModule } from "@vxture/service-sms";
 import { OidcRpModule } from "./oidc/oidc-rp.module";
 import { ConsoleAuthService } from "./auth/auth.service";
@@ -37,6 +38,7 @@ import { CapabilitiesRouter } from "./routers/capabilities.router";
 import { HealthRouter } from "./routers/health.router";
 import { IamRouter } from "./routers/iam.router";
 import { InboxRouter } from "./routers/inbox.router";
+import { ReviewRouter } from "./routers/review.router";
 import { MeRouter } from "./routers/me.router";
 import { PromotionRouter } from "./routers/promotion.router";
 import { QuotaRouter } from "./routers/quota.router";
@@ -59,6 +61,7 @@ import { VerificationRouter } from "./routers/verification.router";
     BillingModule,
     PromotionModule,
     SubscriptionModule,
+    ReviewModule,
     SmsModule,
     OidcRpModule,
   ],
@@ -68,6 +71,7 @@ import { VerificationRouter } from "./routers/verification.router";
     HealthRouter,
     MeRouter,
     InboxRouter,
+    ReviewRouter,
     CapabilitiesRouter,
     TenantContextRouter,
     TenantSwitchRouter,
