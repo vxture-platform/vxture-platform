@@ -2541,7 +2541,9 @@
       "autoRenewOnBadge": "Auto-renews",
       "unsubscribeVerb": "Unsubscribe from",
       "unsubscribeConsequence": "The subscription ends when the current billing cycle closes; it will not renew or bill again. Access continues until then. Resuming means subscribing again at the price listed at that time.",
-      "unsubscribeKeep": "Keep subscription"
+      "unsubscribeKeep": "Keep subscription",
+      "review": "Rate this product",
+      "reviewed": "Rated"
     },
     "cycle": {
       "month": "Monthly",
@@ -2694,7 +2696,28 @@
       "enterprise": "Enterprise"
     },
     "title": "Product Subscriptions",
-    "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview."
+    "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview.",
+    "review": {
+      "title": "Tell us about {product}",
+      "intro": "We'd love to hear how this run went. Leave any of the three blank — rate only what you want to.",
+      "outro": "Thanks for taking {product} this far. We read every one of these.",
+      "productLabel": "Product",
+      "productHint": "How well it fits, how steady it runs",
+      "priceLabel": "Price",
+      "priceHint": "Whether what you paid matches what you got",
+      "serviceLabel": "Service",
+      "serviceHint": "Questions, tickets and response",
+      "commentLabel": "Anything else",
+      "commentPlaceholder": "Optional, up to 512 characters",
+      "submit": "Submit",
+      "cancel": "Not now",
+      "emptyError": "Please rate at least one of the three",
+      "duplicateError": "This run has already been rated. You can rate again after you renew.",
+      "submitted": "Got it — thank you",
+      "scoreLabels": ["Very poor", "Poor", "Fair", "Good", "Excellent"],
+      "notRated": "Not rated",
+      "roleDescription": "rating"
+    }
   },
   "table": {
     "rowActions": "Actions",

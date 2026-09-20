@@ -3018,3 +3018,83 @@ export async function acceptInvitation(
   }
   return (await response.json()) as AcceptedInvitation;
 }
+
+// ── 客户评价（product_reviews；批三）────────────────────────────────────────
+
+/** 一次评价的三项分数与留言。三项各自可空——空表示没评这一项,不是 0 分。 */
+export interface MyReview {
+  id: string;
+  productId: string;
+  productScore: number | null;
+  priceScore: number | null;
+  serviceScore: number | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+/**
+ * 这条订阅还能不能评。
+ *
+ * 入口按钮靠它决定显示「评价」还是「已评价」——不能让客户写完一段留言、
+ * 点了提交才收到 409。
+ */
+export async function fetchReviewEligibility(
+  subscriptionId: string,
+): Promise<{ reviewed: boolean; review: MyReview | null }> {
+  return readJsonStrict<{ reviewed: boolean; review: MyReview | null }>(
+    `/api/me/reviews/eligibility?subscriptionId=${encodeURIComponent(subscriptionId)}`,
+  );
+}
+
+/**
+ * 一次问完哪些订阅已评过。
+ *
+ * 列表页逐卡调 eligibility 会打出 N+1；这条把整页的 id 一次送过去。
+ * 空数组直接短路,不发请求。
+ */
+export async function fetchReviewedSubscriptionIds(
+  subscriptionIds: readonly string[],
+): Promise<string[]> {
+  if (subscriptionIds.length === 0) return [];
+  const result = await readJsonStrict<{ subscriptionIds: string[] }>(
+    `/api/me/reviews/reviewed-subscriptions?ids=${encodeURIComponent(subscriptionIds.join(","))}`,
+  );
+  return result.subscriptionIds;
+}
+
+export interface SubmitReviewPayload {
+  subscriptionId: string;
+  productScore?: number;
+  priceScore?: number;
+  serviceScore?: number;
+  comment?: string;
+}
+
+/**
+ * 提交评价。
+ *
+ * 不送 productId——服务端从订阅本身查。客户端送的话,评价会挂到客户没订的
+ * 产品上。409 = 这条订阅已经评过(不是请求写错,是这次机会已经用过)。
+ */
+export async function submitReview(
+  payload: SubmitReviewPayload,
+): Promise<MyReview> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/reviews`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      await extractErrorMessage(response, ""),
+      response.status,
+    );
+  }
+  const body = (await response.json()) as { review: MyReview };
+  return body.review;
+}

@@ -125,6 +125,8 @@ export function SubscriptionProductCard({
   onSetAutoRenew,
   onUnsubscribe,
   canManage = true,
+  reviewed = false,
+  onReview,
 }: {
   item: SubscribedProduct;
   favoriteBusy: boolean;
@@ -143,6 +145,15 @@ export function SubscriptionProductCard({
   onUnsubscribe: (item: SubscribedProduct) => Promise<void>;
   /** tenant.billing.manage:无码时不出续费开关与退订菜单(与 BFF 守卫同码)。 */
   canManage?: boolean;
+  /**
+   * 这条订阅评价过没有(父页一次问完整页,见 fetchReviewedSubscriptionIds)。
+   *
+   * 已评过就把菜单项置灰而不是抽走:抽走会让客户以为入口在别处找;置灰并改成
+   * 「已评价」,一眼就知道这一程已经说过了。
+   */
+  reviewed?: boolean;
+  /** 打开评价面板。父页持有面板状态——面板要跨卡片复用一份。 */
+  onReview?: (item: SubscribedProduct) => void;
 }) {
   const { fmtDate } = useDateFormat();
 
@@ -181,6 +192,18 @@ export function SubscriptionProductCard({
           ...(renewToggleable ? {} : { hint: t("card.autoRenewNa") }),
           onSelect: () => onSetAutoRenew(item, false),
         },
+    // 评价放在退订之前:退订是危操作,永远压轴。
+    ...(onReview
+      ? [
+          {
+            id: "review",
+            label: reviewed ? t("card.reviewed") : t("card.review"),
+            // 已评过、或订阅还没开始(无 startAt)时不给评——没用过的东西评什么。
+            disabled: reviewed || item.startAt === null,
+            onSelect: () => onReview(item),
+          } satisfies ActionMenuItem,
+        ]
+      : []),
     {
       id: "unsubscribe",
       label: t("card.unsubscribe"),
