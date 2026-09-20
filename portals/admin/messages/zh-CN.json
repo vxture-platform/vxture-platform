@@ -2445,5 +2445,164 @@
       "data": "数据",
       "service": "服务"
     }
+  },
+  "orderDetailPage": {
+    "title": "订单详情",
+    "loading": "正在读取订单、账单和支付记录。",
+    "notFound": {
+      "description": "未找到对应的订单记录。"
+    },
+    "noAccess": {
+      "title": "订单不存在",
+      "description": "该订单可能已归档，或当前账号无权访问。"
+    },
+    "summary": {
+      "amount": "订单金额",
+      "amountHelp": "订单成交金额，按订单币种展示。",
+      "receivedHelp": "已核销到本订单的回款金额。",
+      "plan": "业务方案",
+      "planHelp": "本订单开通的业务方案。",
+      "action": "运营动作",
+      "actionHelp": "按当前订单状态给出的建议处理动作。",
+      "ariaLabel": "{orderNo} 订单详情"
+    },
+    "sections": {
+      "basic": "基础资料",
+      "tenantPlan": "租户与套餐",
+      "subscription": "关联订阅",
+      "billing": "账单与收款",
+      "billItems": "账单明细",
+      "payments": "支付记录",
+      "opsLog": "运营记录"
+    },
+    "fields": {
+      "orderNo": "订单编号",
+      "orderStatus": "订单状态",
+      "payStatus": "支付状态",
+      "paySource": "支付来源",
+      "payMethod": "支付方式",
+      "createdAt": "创建时间",
+      "confirmedAt": "确认时间",
+      "tenant": "租户",
+      "region": "所属区域",
+      "industry": "所属行业",
+      "plan": "业务方案",
+      "servicePlan": "服务套餐",
+      "planTier": "套餐层级",
+      "subscriptionId": "订阅 ID",
+      "subscriptionStatus": "订阅状态",
+      "billingCycle": "计费周期",
+      "billNo": "账单编号",
+      "billStatus": "账单状态",
+      "payNo": "支付单号",
+      "orderAmount": "订单金额",
+      "remaining": "剩余应收"
+    },
+    "notGenerated": "未生成",
+    "unitPrice": "单价 {price}",
+    "payments": {
+      "empty": "暂无支付记录",
+      "emptyHint": "等待线上支付或运营确认线下收款",
+      "unpaid": "未收款",
+      "unpaidHint": "确认线下收款后会自动写入支付记录。"
+    },
+    "links": {
+      "subscription": "订阅详情",
+      "tenant": "租户详情"
+    },
+    "actions": {
+      "confirmPayment": "确认收款",
+      "rejectDeclaration": "驳回申报",
+      "retryProvision": "重试开通",
+      "rejectOrder": "驳回订单",
+      "restoreOrder": "恢复订单",
+      "approveRefund": "同意退款",
+      "rejectRefund": "驳回退款",
+      "completeRefund": "退款完成（已打款）"
+    },
+    "declaration": {
+      "title": "客户付款申报",
+      "hint": "客户在付款页提交的申报信息，确认前请核对到账；实收不符请「驳回申报」。",
+      "amount": "申报金额",
+      "channel": "支付渠道",
+      "payer": "付款方",
+      "txnNo": "流水号",
+      "declaredAt": "申报时间",
+      "remark": "备注",
+      "notFilled": "未填写"
+    },
+    "channels": {
+      "alipay": "支付宝",
+      "bank": "银行转账"
+    },
+    "disabled": {
+      "hasPayment": "已收到支付的订单不能驳回，请走结算流程。",
+      "notPending": "该订单不是待支付状态，无需驳回。",
+      "notRestorable": "该订单不是可恢复的已取消状态（已激活过的订阅取消后无法在此恢复）。"
+    },
+    "feedback": {
+      "paymentConfirmed": "线下收款已确认。",
+      "declarationRejected": "付款申报已驳回，券与折扣已释放，客户端将看到驳回原因。",
+      "provisionRetried": "已重试开通（段 2 重驱动）。",
+      "orderRejected": "订单已驳回。",
+      "orderRestored": "订单已恢复为待支付状态。",
+      "refundExecuted": "退款已执行：订单已退款，订阅已回到未订阅状态。",
+      "refundApproved": "退款申请已通过，请按原渠道打款后点「退款完成」。",
+      "refundRejected": "退款申请已驳回。",
+      "confirmPaymentFailed": "确认线下收款失败，请稍后重试。",
+      "rejectDeclarationFailed": "驳回付款申报失败，请稍后重试。",
+      "retryProvisionFailed": "重试开通失败，请稍后重试。",
+      "rejectOrderFailed": "驳回订单失败，请稍后重试。",
+      "refundFailed": "退款操作失败，请稍后重试。",
+      "restoreFailed": "恢复订单失败，请稍后重试。"
+    },
+    "dialogs": {
+      "rejectDeclaration": {
+        "title": "驳回付款申报",
+        "description": "订单号：<b>{orderNo}</b>。驳回后券与折扣自动释放，订单回到待付款，驳回原因将展示在客户付款页。",
+        "submitLabel": "确认驳回申报",
+        "reasonLabel": "驳回原因",
+        "reasonHint": "（必填，最少 4 字；将展示给客户）",
+        "placeholder": "例如：未查到对应转账记录，请核对金额后重新付款；实收 500 与申报 860 不符。",
+        "descriptionWithAmount": "订单号：<b>{orderNo}</b> · 申报 {amount}。驳回后券与折扣自动释放，订单回到待付款，驳回原因将展示在客户付款页。"
+      },
+      "refund": {
+        "titleApprove": "同意退款申请",
+        "titleReject": "驳回退款申请",
+        "titleComplete": "退款完成（已按原渠道打款）",
+        "descApprove": "退款单 <b>{refundNo}</b> · {amount}。通过后请按原支付渠道打款，再回到本页点「退款完成」。",
+        "descReject": "退款单 <b>{refundNo}</b> · {amount}。驳回原因将展示给客户。",
+        "descComplete": "退款单 <b>{refundNo}</b> · {amount}。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。",
+        "submitApprove": "确认通过",
+        "submitReject": "确认驳回",
+        "submitComplete": "确认退款完成",
+        "remarkLabel": "备注",
+        "remarkHintCustomer": "（必填，最少 4 字；将展示给客户）",
+        "remarkHint": "（必填，最少 4 字）",
+        "placeholderComplete": "例如：已于 9/4 通过支付宝原路退回 ¥0.10，流水号 …",
+        "placeholderReview": "例如：符合 24 小时首购退款条件；或：已超出退款窗口 / 用量已超阈值。",
+        "descApproveWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。通过后请按原支付渠道打款，再回到本页点「退款完成」。",
+        "descRejectWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。驳回原因将展示给客户。",
+        "descCompleteWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。"
+      },
+      "rejectOrder": {
+        "title": "驳回订单",
+        "description": "订单号：<b>{orderNo}</b>",
+        "submitLabel": "确认驳回",
+        "reasonLabel": "驳回原因",
+        "reasonHint": "（必填，最少 4 字）",
+        "placeholder": "例如：客户电话取消，重复下单。",
+        "descriptionWithTenant": "订单号：<b>{orderNo}</b> · {tenantName}"
+      },
+      "restoreOrder": {
+        "title": "恢复订单",
+        "description": "订单号：<b>{orderNo}</b>。恢复后订单回到待付款状态，账单与折扣一并复原。",
+        "submitLabel": "确认恢复",
+        "reasonLabel": "恢复原因",
+        "reasonHint": "（必填，最少 4 字）",
+        "placeholder": "例如：客户已确认继续购买，误操作驳回，现恢复订单。",
+        "descriptionWithTenant": "订单号：<b>{orderNo}</b> · {tenantName}。恢复后订单回到待付款状态，账单与折扣一并复原。"
+      }
+    }
   }
 }
