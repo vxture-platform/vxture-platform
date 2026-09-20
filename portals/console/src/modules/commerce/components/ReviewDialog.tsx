@@ -56,15 +56,25 @@ function ScoreRow({
 }: ScoreRowProps) {
   return (
     <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <FieldDescription>{hint}</FieldDescription>
-      <Rating
-        aria-label={label}
-        value={value}
-        onValueChange={onChange}
-        optionLabels={optionLabels}
-        labels={labels}
-      />
+      {/* 左右布局：左边「项目 + 一句说明」，右边星星。
+          此前三者竖着堆三层——文字全挤在左边，星星另起一行，右边整片空白，
+          三项排下来页面又高又空（owner 2026-09-20 实看）。
+          横排还带来一个好处：三行星星在同一条竖直线上，一眼能比出哪项给低了。
+          窄屏下 flex-wrap 让它自己退回上下两段，不写断点。 */}
+      <div className="flex flex-wrap items-center justify-between gap-md">
+        <span className="flex min-w-0 flex-col gap-2xs">
+          <FieldLabel htmlFor={id}>{label}</FieldLabel>
+          <FieldDescription>{hint}</FieldDescription>
+        </span>
+        <Rating
+          className="shrink-0"
+          aria-label={label}
+          value={value}
+          onValueChange={onChange}
+          optionLabels={optionLabels}
+          labels={labels}
+        />
+      </div>
     </Field>
   );
 }
