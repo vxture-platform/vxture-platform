@@ -2410,3 +2410,55 @@ export async function fetchReviewList(params: {
     `/api/dashboard/reviews${query.size ? `?${query.toString()}` : ""}`,
   );
 }
+
+// ── 运营通告（admin.operator_notices；发布面在 opera，这边只读）───────────────
+
+export interface OperatorNoticeItem {
+  id: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  body: string;
+  link: string | null;
+  source: "manual" | "system";
+  publishedAt: string;
+  /** 本人读过的时刻；null = 未读。 */
+  readAt: string | null;
+  /** 发布人显示名；system 来源与已注销账号都回 null。 */
+  createdByName: string | null;
+}
+
+/**
+ * 运营通告列表。
+ *
+ * `scope` 缺省 `digest` —— owner 2026-09-20 定的摘要规则：**当天已读 + 所有未读**。
+ * 二级页传 `all` 看全部。`unread` 是本平面可见的未读总数,不随 scope 变。
+ */
+export async function fetchOperatorNotices(params: {
+  scope?: "digest" | "all";
+  limit?: number;
+  offset?: number;
+}): Promise<{ items: OperatorNoticeItem[]; total: number; unread: number }> {
+  const query = new URLSearchParams();
+  if (params.scope) query.set("scope", params.scope);
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
+  if (params.offset !== undefined) query.set("offset", String(params.offset));
+  return readJsonStrict<{
+    items: OperatorNoticeItem[];
+    total: number;
+    unread: number;
+  }>(`/api/dashboard/notices${query.size ? `?${query.toString()}` : ""}`);
+}
+
+/** 标记本人已读。幂等——重复标记只刷新时间，不报错。 */
+export async function markOperatorNoticeRead(
+  noticeId: string,
+): Promise<{ id: string; readAt: string }> {
+  // 走本文件既有的 mutateJson,不另手搓一份 fetch:它统一了 credentials、
+  // 断网时的 503 与错误文案提取。
+  return mutateJson<{ id: string; readAt: string }>(
+    `/api/dashboard/notices/${encodeURIComponent(noticeId)}/read`,
+    "POST",
+    undefined,
+    "标记已读失败",
+  );
+}

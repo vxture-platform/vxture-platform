@@ -36,6 +36,7 @@ import type {
   TenantOperationRecord,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { SystemNoticesSection } from "./SystemNoticesSection";
 import {
   formatNumber,
   riskLabel,
@@ -879,32 +880,9 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
           </Section>
 
           {/* S2 系统消息——只在主页出现;全部任务页是待办的二级页,不该把消息区
-            再画一遍。本轮只立壳,不接数据(owner 2026-09-20:「暂空占位…可以
-            后续实现」)。
-            用途:opera 侧的产品上线、能力新增、变更通告要同步给运营——三个平台
-            由不同人员使用,消息不能只落在发的人那一边。
-            库里 `support.inbox_messages` 已存在,缺的是读侧接口与二级页面。
-            「查看全部」先停用而不是先隐藏:隐藏会让这一区看起来只是一段说明,
-            停用才说得清"有这个去处,只是还没通"。 */}
-          {isAll ? null : (
-            <Section
-              title="系统消息"
-              icon="bell"
-              level={2}
-              description="来自 opera 与产品侧的平台通知：产品上线、能力新增、变更通告。"
-              action={
-                <ActionButton variant="outline" icon="arrow-right" disabled>
-                  查看全部
-                </ActionButton>
-              }
-            >
-              <EmptyState
-                icon="bell"
-                title="消息通道还未开通"
-                description="开通后，这里显示当天已读与全部未读的消息；更早的消息到「全部消息」里查。"
-              />
-            </Section>
-          )}
+            再画一遍。数据来自 admin.operator_notices(发布面在 opera)。
+            摘要规则「当天已读 + 所有未读」与二级页 /messages 共用一个件。 */}
+          {isAll ? null : <SystemNoticesSection />}
         </>
       }
     />
