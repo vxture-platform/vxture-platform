@@ -182,7 +182,9 @@ export const FOOTER_DATA: FooterData = {
   },
   publicSecurity: {
     textKey: "publicSecurity.text",
-    link: "https://beian.mps.gov.cn",
+    // 带 code 查询参数直达本站这条备案记录；只给域名根的话点过去是公安部
+    // 备案系统首页，查不到我们这一条（owner 2026-09-20 提供真实备案号）。
+    link: "https://beian.mps.gov.cn/#/query/webSearch?code=61011602000908",
   },
   copyright: {
     startYear: 2024,
