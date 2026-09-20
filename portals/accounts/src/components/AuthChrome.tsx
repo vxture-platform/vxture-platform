@@ -78,12 +78,14 @@ export function AccountsAuthFooter() {
         { href: websiteHref("/legal/cookies"), label: "Cookie 使用政策" },
         // 备案号读共享常量,与官网页脚同源——两处各写一份,改了看得见的那处、
         // 看不见的那处没人会想起来(owner 2026-09-20)。
-        // 这里走 links 槽而不给 ShellLegalFooter 加外链支持:它的
-        // ShellLegalFooterLink 只有 {href,label},没有 target。备案链接因此与
-        // 上面三条法律链接一样在当前窗口打开——行为一致,不是遗漏。
+        //
+        // `external` 让它在新标签页打开(DS 12.14.0 新增):备案号指向工信部/
+        // 公安部的查询系统,**登录页上点它不该把正在登录的人带走**。上面三条
+        // 法律链接是站内页,仍然当前窗口跳转——区别是"离不离开本站",不是排版。
         ...SITE_FILINGS.map((filing) => ({
           href: filing.link,
           label: filing.text,
+          external: true,
         })),
       ]}
     />
