@@ -28,7 +28,6 @@ import type {
   ProductSolutionCapabilityType,
   SubscriptionOperationAction,
   SubscriptionOperationDetailRecord,
-  SubscriptionOperationQuotaRisk,
 } from "@/entities/console";
 import {
   QUOTA_RISK_TONE,
@@ -38,6 +37,8 @@ import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
+  useCapabilityTypeLabels,
+  useQuotaRiskLabels,
   useSubscriptionCycleLabels,
   useSubscriptionStatusLabels,
 } from "@/modules/shared/enum-labels";
@@ -64,25 +65,11 @@ const TIMELINE_TONE: Record<string, StatusBadgeTone> = {
   danger: "danger",
 };
 
-function quotaRiskLabel(risk: SubscriptionOperationQuotaRisk) {
-  if (risk === "danger") return "高风险";
-  if (risk === "warning") return "需关注";
-  return "正常";
-}
-
 function associationSourceLabel(
   source: SubscriptionOperationDetailRecord["solutionAssociation"]["source"],
 ) {
   if (source === "solution") return "方案关联";
   return source === "industry_rule" ? "运营规则关联" : "历史套餐兼容";
-}
-
-function capabilityTypeLabel(type: ProductSolutionCapabilityType) {
-  if (type === "platform") return "平台";
-  if (type === "agent") return "智能体";
-  if (type === "model") return "模型";
-  if (type === "data") return "数据";
-  return "服务";
 }
 
 function capabilityTypeIcon(type: ProductSolutionCapabilityType): IconName {
@@ -100,6 +87,7 @@ function SubscriptionSummary({
 }) {
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
+  const quotaRiskLabels = useQuotaRiskLabels();
   return (
     <DetailSummaryHeader
       icon="star"
@@ -115,7 +103,7 @@ function SubscriptionSummary({
             {subscriptionStatusLabels[subscription.status]}
           </StatusBadge>
           <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
-            {quotaRiskLabel(subscription.quota.risk)}
+            {quotaRiskLabels[subscription.quota.risk]}
           </StatusBadge>
         </>
       }
@@ -168,6 +156,8 @@ function SubscriptionDetails({
   const tShared = useTranslations();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
+  const quotaRiskLabels = useQuotaRiskLabels();
+  const capabilityTypeLabels = useCapabilityTypeLabels();
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
     : null;
@@ -280,7 +270,7 @@ function SubscriptionDetails({
                   title={<>{item.productName}</>}
                   description={
                     <>
-                      {capabilityTypeLabel(item.productType)} |{" "}
+                      {capabilityTypeLabels[item.productType]} |{" "}
                       {item.source === "self" ? "自建" : "三方"}
                     </>
                   }
@@ -335,7 +325,7 @@ function SubscriptionDetails({
             {subscription.quota.allowCustomModel ? "允许" : "不允许"}
           </DetailRow>
           <DetailRow label="配额风险">
-            {orUnset(quotaRiskLabel(subscription.quota.risk))}
+            {orUnset(quotaRiskLabels[subscription.quota.risk])}
           </DetailRow>
         </DetailList>
       </section>

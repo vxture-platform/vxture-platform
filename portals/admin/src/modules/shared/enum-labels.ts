@@ -37,8 +37,18 @@
  */
 
 import { useTranslations } from "next-intl";
-import type { SubscriptionStatus } from "@vxture-platform/shared";
-import type { SubscriptionOperationCycle } from "@/entities/console";
+import type {
+  BillStatus,
+  PaySource,
+  SubscriptionStatus,
+} from "@vxture-platform/shared";
+import type {
+  BillingBillType,
+  OrderOperationStatus,
+  ProductCapabilityType,
+  SubscriptionOperationCycle,
+  SubscriptionOperationQuotaRisk,
+} from "@/entities/console";
 
 /**
  * 订阅状态的界面文案。
@@ -100,4 +110,155 @@ export function useSubscriptionCycleLabels(): Record<
     yearly: t("yearly"),
     once: t("once"),
   } satisfies Record<SubscriptionOperationCycle, string>;
+}
+
+/**
+ * 账单状态。
+ *
+ * 收的是五份 `billStatusLabel`（BillingDetailPage / BillingPage /
+ * PromotionRedemptionsPage / InvoicesPage / PaymentsPage）。前四份完全一致,
+ * `unpaid` 走默认分支;PaymentsPage 那份额外显式处理 `unpaid`,默认回「未关联」
+ * ——**那不是同一件事**:支付记录可以没有关联账单,那时它拿到的是 null。
+ * 所以「未关联」留在调用点,不进这张表:它描述的是「没有账单」,不是某个账单状态。
+ *
+ * 值域 2026-09-21 立进 shared 的 catalog-domains,与 `chk_invoices_bill_status`
+ * 由 `lint:catalog-domains` 逐值对账。
+ */
+export function useBillStatusLabels(): Record<BillStatus, string> {
+  const t = useTranslations("enums.billStatus");
+  return {
+    unpaid: t("unpaid"),
+    paying: t("paying"),
+    paid: t("paid"),
+    partial: t("partial"),
+    cancelled: t("cancelled"),
+    overdue: t("overdue"),
+  } satisfies Record<BillStatus, string>;
+}
+
+/**
+ * 支付来源。
+ *
+ * 收的是四份 `paySourceLabel`,而它们**互不相同**——三份漏了 `voucher` 分支:
+ *
+ *   OrderDetailPage    online/offline/voucher → 线上/线下/券        默认「无」
+ *   OrdersPage         online/offline         → 线上/线下           默认「无」  ← 券显示成「无」
+ *   PaymentsPage       online/offline         → 线上/线下           默认「无」  ← 同上
+ *   BillingDetailPage  offline/online         → 线下/线上           默认「未设置」← 券显示成「未设置」
+ *
+ * `voucher` 是券结算腿（product_321 P7,DDL 注释里写着),是一种**真实的**支付
+ * 来源,不是「没有来源」。运营在支付记录页看到「无」会以为这笔没有来源。
+ * 这与 subscriptionStatus 漏 `expired` 是同一类缺陷,只是影响面大三倍。
+ *
+ * 「没有来源」不在这个值域里:列是 NOT NULL 带默认值,没有支付就根本没有那一行。
+ * 调用方持有可空引用时,自己渲染那个「无」。
+ */
+function usePaySourceLabels(): Record<PaySource, string> {
+  const t = useTranslations("enums.paySource");
+  return {
+    online: t("online"),
+    offline: t("offline"),
+    voucher: t("voucher"),
+  } satisfies Record<PaySource, string>;
+}
+
+/**
+ * 取一条支付来源的文案,含「没有来源」那一档。
+ *
+ * 导出的是这个而不是上面那张表:admin 侧的 `OrderPaySource` 比值域多一个
+ * `"none"`（BFF 把 `pay_source` 为 null 的行映射成它）。表只认值域内的三个值,
+ * 于是九个调用点每处都要写一遍 `x === "none" ? … : labels[x]`——那个「无」就又
+ * 散成九份了,而它原本就已经散成两种说法（「无」和「未设置」）。
+ *
+ * 「无」取共享词条 `common.none`,与全站同一个词。
+ */
+export function usePaySourceLabel(): (source: PaySource | "none") => string {
+  const labels = usePaySourceLabels();
+  const tCommon = useTranslations("common");
+  return (source) => (source === "none" ? tCommon("none") : labels[source]);
+}
+
+/**
+ * 账单类型。
+ *
+ * 收三份（BillingDetailPage / BillingPage / InvoicesPage），内容完全一致。
+ *
+ * 值域是 admin 侧的四值,不是 DB 的。`normalizeBillType()` 把 DDL 的
+ * `normal/one_off/adjustment/prepaid_statement` 改名成 `normal/adjust/supplement/
+ * prepaid`——**1:1 无损**,只是换了写法,所以照原样收口。那层改名本身是笔债
+ * （凭空多一套值域要维护）,但不在文案收口的范围里。
+ */
+export function useBillTypeLabels(): Record<BillingBillType, string> {
+  const t = useTranslations("enums.billType");
+  return {
+    normal: t("normal"),
+    adjust: t("adjust"),
+    supplement: t("supplement"),
+    prepaid: t("prepaid"),
+  } satisfies Record<BillingBillType, string>;
+}
+
+/**
+ * 订单状态（**运营视图**,不是订单实体状态）。
+ *
+ * 收两份（OrderDetailPage / OrdersPage）,内容完全一致。
+ *
+ * 这个值域不对应任何 DB CHECK,所以**没有提升进 shared 的 catalog-domains**
+ * （那份文件的定位是「DB CHECK / seed / 服务对齐的值域契约」）。它是
+ * `mapEntityOrderStatus()` 用订单实体状态 + 账单状态**算出来**的运营视图:
+ *   · DDL 的 cancelled/expired/refunded 三态合并成 `closed`（运营视角不分）
+ *   · `pending_payment` + 账单 partial → `partial_pending`（两个字段派生）
+ *   · `paid` 单独浮出成 `paid_unprovisioned`,刻意不并进 `confirmed`
+ *     ——否则已收款未履约的悬挂单在运营视角「已完结」,永不被发现
+ *
+ * ⚠ `overdue` 与 `abnormal` 目前是**死值**:`mapEntityOrderStatus()` 只产出其余
+ * 六个,全 BFF 搜不到写这两个值的地方。留着不删——类型里少一个分支,将来真有
+ * 地方产出时会静默落到别处;留着则 `satisfies` 保证它有文案。
+ */
+export function useOrderStatusLabels(): Record<OrderOperationStatus, string> {
+  const t = useTranslations("enums.orderStatus");
+  return {
+    pending: t("pending"),
+    pending_verify: t("pending_verify"),
+    confirmed: t("confirmed"),
+    overdue: t("overdue"),
+    closed: t("closed"),
+    paid_unprovisioned: t("paid_unprovisioned"),
+    partial_pending: t("partial_pending"),
+    abnormal: t("abnormal"),
+  } satisfies Record<OrderOperationStatus, string>;
+}
+
+/** 配额风险三档。收两份（SubscriptionDetailPage / SubscriptionsPage），内容一致。 */
+export function useQuotaRiskLabels(): Record<
+  SubscriptionOperationQuotaRisk,
+  string
+> {
+  const t = useTranslations("enums.quotaRisk");
+  return {
+    normal: t("normal"),
+    warning: t("warning"),
+    danger: t("danger"),
+  } satisfies Record<SubscriptionOperationQuotaRisk, string>;
+}
+
+/**
+ * 能力类型。收两份（ProductCapabilityDetailPage / SubscriptionDetailPage），一致。
+ *
+ * 与 `@vxture/core-utils` 的 `PRODUCT_TYPES`（general_platform / industry_platform /
+ * general_agent / industry_agent / undefined,自带 labelZh/labelEn）**不是同一个轴**:
+ * 那个说「产品是什么」,这个说「能力属于哪一类」。别把两者合并。
+ */
+export function useCapabilityTypeLabels(): Record<
+  ProductCapabilityType,
+  string
+> {
+  const t = useTranslations("enums.capabilityType");
+  return {
+    platform: t("platform"),
+    agent: t("agent"),
+    model: t("model"),
+    data: t("data"),
+    service: t("service"),
+  } satisfies Record<ProductCapabilityType, string>;
 }

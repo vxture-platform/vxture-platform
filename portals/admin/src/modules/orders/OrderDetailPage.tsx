@@ -32,11 +32,7 @@ import {
   auditOrderRefund,
   executeOrderRefund,
 } from "@/api/admin-bff";
-import type {
-  OrderOperationDetailRecord,
-  OrderOperationStatus,
-  OrderPaySource,
-} from "@/entities/console";
+import type { OrderOperationDetailRecord } from "@/entities/console";
 import {
   ORDER_STATUS_TONE,
   PAYMENT_STATUS_TONE,
@@ -45,6 +41,8 @@ import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
+  useOrderStatusLabels,
+  usePaySourceLabel,
   useSubscriptionCycleLabels,
   useSubscriptionStatusLabels,
 } from "@/modules/shared/enum-labels";
@@ -74,24 +72,6 @@ function formatCurrency(value: number, currency: string) {
     currency: currency || "CNY",
     maximumFractionDigits: 2,
   }).format(value);
-}
-
-function orderStatusLabel(status: OrderOperationStatus) {
-  if (status === "pending") return "待付款";
-  if (status === "pending_verify") return "待复核";
-  if (status === "confirmed") return "已确认";
-  if (status === "overdue") return "逾期";
-  if (status === "closed") return "已关闭";
-  if (status === "paid_unprovisioned") return "已付未开通";
-  if (status === "partial_pending") return "部分收款·挂账";
-  return "异常";
-}
-
-function paySourceLabel(source: OrderPaySource) {
-  if (source === "online") return "线上";
-  if (source === "offline") return "线下";
-  if (source === "voucher") return "券";
-  return "无";
 }
 
 const DECLARED_CHANNEL_LABELS: Record<string, string> = {
@@ -125,6 +105,8 @@ function restoreDisabledReason(order: OrderOperationDetailRecord) {
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
   const cycleLabels = useSubscriptionCycleLabels();
+  const paySourceLabel = usePaySourceLabel();
+  const orderStatusLabels = useOrderStatusLabels();
   const tShared = useTranslations();
   return (
     <DetailSummaryHeader
@@ -138,7 +120,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
       badges={
         <>
           <StatusBadge tone={ORDER_STATUS_TONE[order.orderStatus]}>
-            {orderStatusLabel(order.orderStatus)}
+            {orderStatusLabels[order.orderStatus]}
           </StatusBadge>
           <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
             {t(`status.orderPayment.${order.paymentStatus}`)}
@@ -189,6 +171,8 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
   const tShared = useTranslations();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
+  const paySourceLabel = usePaySourceLabel();
+  const orderStatusLabels = useOrderStatusLabels();
   return (
     <section
       className="grid min-w-0 gap-xl"
@@ -199,7 +183,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         <DetailList columns={3}>
           <DetailRow label="订单编号">{orUnset(order.orderNo)}</DetailRow>
           <DetailRow label="订单状态">
-            {orUnset(orderStatusLabel(order.orderStatus))}
+            {orUnset(orderStatusLabels[order.orderStatus])}
           </DetailRow>
           <DetailRow label="支付状态">
             {orUnset(t(`status.orderPayment.${order.paymentStatus}`))}

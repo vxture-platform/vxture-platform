@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { useSubscriptionCycleLabels } from "@/modules/shared/enum-labels";
+import {
+  useOrderStatusLabels,
+  usePaySourceLabel,
+  useSubscriptionCycleLabels,
+} from "@/modules/shared/enum-labels";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -75,17 +79,6 @@ function formatCurrency(value: number, currency: string) {
   }).format(value);
 }
 
-function orderStatusLabel(status: OrderOperationStatus) {
-  if (status === "pending") return "待付款";
-  if (status === "pending_verify") return "待复核";
-  if (status === "confirmed") return "已确认";
-  if (status === "overdue") return "逾期";
-  if (status === "closed") return "已关闭";
-  if (status === "paid_unprovisioned") return "已付未开通";
-  if (status === "partial_pending") return "部分收款·挂账";
-  return "异常";
-}
-
 function orderStatusIcon(status: OrderOperationStatus): IconName {
   if (status === "confirmed") return "check";
   if (status === "pending" || status === "pending_verify") return "clock";
@@ -105,17 +98,13 @@ function attentionRank(status: OrderOperationStatus): number {
   return ATTENTION_RANK[status] ?? 9;
 }
 
-function paySourceLabel(source: OrderPaySource) {
-  if (source === "online") return "线上";
-  if (source === "offline") return "线下";
-  return "无";
-}
-
 /* 从模块级常量改成收 `t` 的工厂：常量在模块加载时就求值了，那一刻
    没有任何运行时上下文，而列里的状态文案要按界面语言取。 */
 function orderCsvColumns(
   t: TFn,
   cycleLabels: Record<OrderOperationRecord["cycleType"], string>,
+  paySourceLabel: (source: OrderPaySource) => string,
+  orderStatusLabels: Record<OrderOperationStatus, string>,
 ): readonly CsvColumn<OrderOperationRecord>[] {
   return [
     { label: "订单号", value: (o) => o.orderNo },
@@ -129,7 +118,7 @@ function orderCsvColumns(
     { label: "订单金额", value: (o) => o.amount },
     { label: "已收金额", value: (o) => o.paidAmount },
     { label: "币种", value: (o) => o.currency },
-    { label: "订单状态", value: (o) => orderStatusLabel(o.orderStatus) },
+    { label: "订单状态", value: (o) => orderStatusLabels[o.orderStatus] },
     {
       label: "支付状态",
       value: (o) => t(`status.orderPayment.${o.paymentStatus}`),
@@ -223,6 +212,8 @@ function OrderActionsMenu({
  */
 function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
   const cycleLabels = useSubscriptionCycleLabels();
+  const orderStatusLabels = useOrderStatusLabels();
+  const paySourceLabel = usePaySourceLabel();
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
@@ -324,7 +315,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
               tone={ORDER_STATUS_TONE[order.orderStatus]}
               icon={orderStatusIcon(order.orderStatus)}
             >
-              {orderStatusLabel(order.orderStatus)}
+              {orderStatusLabels[order.orderStatus]}
             </StatusBadge>
           }
           <span className="text-body-sm text-muted-foreground">{`${t(`status.orderPayment.${order.paymentStatus}`)} · ${paySourceLabel(order.paySource)}`}</span>
@@ -337,6 +328,8 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
 export function OrdersPage() {
   const t = useTranslations();
   const cycleLabels = useSubscriptionCycleLabels();
+  const orderStatusLabels = useOrderStatusLabels();
+  const paySourceLabel = usePaySourceLabel();
   const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
@@ -620,7 +613,12 @@ export function OrdersPage() {
                   onClick={() =>
                     exportRowsToCsv(
                       "orders-export",
-                      orderCsvColumns(t, cycleLabels),
+                      orderCsvColumns(
+                        t,
+                        cycleLabels,
+                        paySourceLabel,
+                        orderStatusLabels,
+                      ),
                       selectedOrders,
                     )
                   }
@@ -720,7 +718,12 @@ export function OrdersPage() {
                   onSelect: () =>
                     exportRowsToCsv(
                       "orders-export",
-                      orderCsvColumns(t, cycleLabels),
+                      orderCsvColumns(
+                        t,
+                        cycleLabels,
+                        paySourceLabel,
+                        orderStatusLabels,
+                      ),
                       selectedOrders,
                     ),
                 },
