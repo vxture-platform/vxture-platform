@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { isEnabled, isServing } from "@vxture-platform/shared";
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
@@ -34,22 +33,12 @@ import type {
 } from "@vxture/design-system";
 import type { Locale } from "@vxture-platform/shared";
 import {
-  fetchAiModelGrants,
-  fetchAiModels,
   fetchDashboardOverview,
-  fetchDevServices,
-  fetchModelPolicies,
-  fetchProductAgents,
   fetchProductReleases,
   fetchProductSolutions,
 } from "@/api/admin-bff";
 import type { DashboardOverviewRecord } from "@/api/admin-bff";
 import type {
-  AiModelGrantRecord,
-  AiModelRecord,
-  DevServiceSnapshot,
-  ModelPolicyRecord,
-  ProductAgentRecord,
   ProductReleaseRecord,
   ProductSolutionRecord,
 } from "@/entities/console";
@@ -79,7 +68,7 @@ interface ProductRankingRow {
 }
 
 /**
- * 产品供给 / 模型技能 / 服务与工单 三处指标排共用的一份形状。
+ * 产品供给 / 服务与工单 两处指标排共用的一份形状。
  *
  * 原本是 ProductMetric / ModelMetric / ServiceMetric 三个接口配三个本地卡组件，
  * 三份 CSS 逐条比对下来是同一张卡（2.5rem 图标轨 + 标签 + 读数 + 标）。迁到
@@ -123,13 +112,6 @@ interface OverviewPulseMetric {
   tone: Tone;
   tags: Array<{ label?: string; value: string; tone?: Tone }>;
   rating?: number;
-}
-
-interface CapabilityServiceRow {
-  id: string;
-  name: string;
-  meta: string;
-  value: string;
 }
 
 const periodOptions = [
@@ -228,112 +210,10 @@ function productTierCounts(records: ProductSolutionRecord[]) {
   };
 }
 
-function productSupplyAbnormalCounts(
-  releases: ProductReleaseRecord[],
-  solutions: ProductSolutionRecord[],
-) {
-  const stoppedProducts = uniqueProductReleases(releases).filter(
-    (release) => release.productStatus === "archived" || !release.isActive,
-  ).length;
-  const abnormalSolutions = solutions.filter(
-    (solution) => solution.status !== "active",
-  ).length;
-  const inactiveTiers = solutions
-    .flatMap((solution) => solution.tiers)
-    .filter((tier) => tier.status !== "active").length;
-
-  return {
-    total: stoppedProducts + abnormalSolutions + inactiveTiers,
-    stoppedProducts,
-    abnormalSolutions,
-    inactiveTiers,
-  };
-}
-
-function modelCapabilities(model: AiModelRecord) {
-  return model.capabilities.map((capability) => capability.toLowerCase());
-}
-
-function isPrivateModel(model: AiModelRecord) {
-  return (
-    model.provider === "private" || modelCapabilities(model).includes("private")
-  );
-}
-
-function modelOwnershipCounts(records: AiModelRecord[]) {
-  const selfBuilt = records.filter(isPrivateModel).length;
-  const thirdParty = records.length - selfBuilt;
-
-  return {
-    total: records.length,
-    selfBuilt,
-    thirdParty,
-  };
-}
-
-function isModelAbnormal(model: AiModelRecord) {
-  return (
-    !model.endpointUrl.trim() ||
-    !model.protocol.trim() ||
-    (model.keyReference !== null && !model.keyReference.configured)
-  );
-}
-
 /* TD-036：模型用量/Token 没有任何落库（写路径从未建过，服务已迁 vxture-atlas）。
    这里原来先读 `model.config` 里的 periodTokens/tokenCalls 之类的键、再乘周期
    系数——config 里几乎从不带这些键，带了也不是用量。"Token 总量"读数与"Token
    调用量前三"排行一并摘掉（2026-08-30），等有真表再接。 */
-
-// TD-036: fetchDevServices() proxies a local dev-tools panel
-// (localhost:8090), unreachable from a deployed admin instance — in any real
-// production environment `services` is always empty here, and the old code
-// filled that gap with a fabricated {total:12, healthy:11, ...}. There is no
-// real infra health/uptime table anywhere in the schema (see TD-036), so an
-// empty `services` array now surfaces as an honest unavailable state instead
-// of synthesizing production monitoring data that was never collected.
-function capabilityServiceHealth(services: DevServiceSnapshot[]) {
-  if (!services.length) {
-    return { available: false as const };
-  }
-
-  const healthy = services.filter(
-    (service) => service.listening && service.healthy,
-  ).length;
-  const total = services.length;
-  const abnormal = total - healthy;
-
-  return {
-    available: true as const,
-    total,
-    healthy,
-    abnormal,
-    availability: Math.round((healthy / Math.max(1, total)) * 100),
-  };
-}
-
-/**
- * 策略 = Atlas 的模型策略（`GET /api/atlas/policies`），不再是 products.router
- * 编出来的「未定义 → 默认不授权」占位行（2026-08-31 该端点退役）。启用与否只看
- * `state`，没有"已定义"这一维——Atlas 里不存在未定义的策略。
- */
-function capabilityPolicyCoverage(
-  policies: ModelPolicyRecord[],
-  grants: AiModelGrantRecord[],
-) {
-  const definedPolicies = policies.filter((policy) =>
-    isEnabled(policy.state),
-  ).length;
-  const activeGrants = grants.filter((grant) => isEnabled(grant.state)).length;
-  const total = policies.length + grants.length;
-  const active = definedPolicies + activeGrants;
-
-  return {
-    total,
-    active,
-    pending: Math.max(0, total - active),
-    rate: Math.round((active / Math.max(1, total)) * 100),
-  };
-}
 
 function periodLabelOf(period: PeriodKey) {
   return periodOptions.find((option) => option.key === period)?.label ?? "";
@@ -402,12 +282,6 @@ function ratingMetricsFor(_overview: DashboardOverviewRecord) {
       ...unavailable,
       tone: "brand",
       icon: "medal",
-    },
-    {
-      label: "SLA",
-      ...unavailable,
-      tone: "brand",
-      icon: "shield-check",
     },
   ] satisfies OverviewMetric[];
 }
@@ -544,8 +418,8 @@ function OverviewHeading({
   icon: IconName;
   title: string;
   description: string;
-  /* 周期开关只给真有按周期读数的板块。产品供给 / 模型技能两段下面全是当前快照
-     （目录计数、模型池、授权、智能体），原先那两个开关拨了只会换掉一个乘出来的
+  /* 周期开关只给真有按周期读数的板块。产品供给那一段下面全是当前快照
+     （目录计数），原先那个开关拨了只会换掉一个乘出来的
      假数（见 periodOptions 下方说明），开关本身就在暗示"这些数字分周期"——
      数字摘掉，开关也不留（2026-08-30）。 */
   period?: PeriodKey;
@@ -638,7 +512,9 @@ function businessPanelsFor(period: PeriodKey) {
       id: "finance",
       title: "收入验证",
       period,
-      detailHref: "/revenue",
+      // `/revenue` 是死链:侧栏注册表里没有这个条目,app 下也没有这个路由目录,
+      // 点过去会落到 [...slug] 的「板块待建设」占位页。收入验证的去处是商业分析。
+      detailHref: "/commerce-overview",
       tone: "blue" as const,
     },
   ] satisfies Array<{
@@ -692,7 +568,6 @@ function overviewPulseMetrics(
   locale: Locale,
 ) {
   const { tenants, revenue } = overview;
-  const unavailableTag = { label: "状态", value: "待建设" };
 
   return [
     {
@@ -706,6 +581,22 @@ function overviewPulseMetrics(
           `+${tenants.newInPeriod.toLocaleString("en-US")}`,
           "新增",
           "blue",
+        ),
+      ],
+    },
+    {
+      // 原先这一格是「模型调用」「平台稳定性」两个 `—` 占位(用量写路径未打通、
+      // 无健康检查表)。owner 2026-09-20 收成三卡,换上真有数据源的产品订阅。
+      id: "subscriptions",
+      title: "产品订阅",
+      value: overview.subscriptions.active.toLocaleString("en-US"),
+      detail: `有效订阅 ${overview.subscriptions.active.toLocaleString("en-US")}（metering.subscriptions, status=active），试用中 ${overview.subscriptions.trialing.toLocaleString("en-US")}，${periodLabelOf(overview.period)}新增 ${overview.subscriptions.newInPeriod.toLocaleString("en-US")}。`,
+      tone: "cyan",
+      tags: [
+        createOverviewPulseTag(
+          `+${overview.subscriptions.newInPeriod.toLocaleString("en-US")}`,
+          "新增",
+          "cyan",
         ),
       ],
     },
@@ -732,23 +623,6 @@ function overviewPulseMetrics(
           ),
         ),
       ],
-    },
-    {
-      id: "modelCalls",
-      title: "模型调用",
-      value: "—",
-      detail:
-        "数据源待建设：平台暂无模型调用/Token 用量落库（用量写路径未打通），不展示编造数值。",
-      tone: "amber",
-      tags: [unavailableTag],
-    },
-    {
-      id: "platformStability",
-      title: "平台稳定性",
-      value: "—",
-      detail: "数据源待建设：平台暂无健康检查/事件记录表，不展示编造数值。",
-      tone: "cyan",
-      tags: [unavailableTag],
     },
   ] satisfies OverviewPulseMetric[];
 }
@@ -1128,57 +1002,6 @@ function ProductRankingCard({
   );
 }
 
-function ModelCategoryCard({
-  title,
-  detail,
-  summary,
-  tone,
-  href,
-  rankStyle = "number",
-  rows,
-}: {
-  title: string;
-  detail: string;
-  summary: string;
-  tone: Tone;
-  href?: string;
-  rankStyle?: "number" | "medal";
-  rows: CapabilityServiceRow[];
-}) {
-  return (
-    <PanelCard
-      title={title}
-      titleSuffix={<DetailTip detail={detail} />}
-      description={summary}
-      {...(href ? { action: <DetailLink href={href} /> } : {})}
-      tone={toStatusTone(tone)}
-      className="grid min-w-0 gap-sm"
-    >
-      <PanelList empty="暂无数据">
-        {rows.map((row, index) => (
-          <PanelItem
-            key={row.id}
-            lead={
-              rankStyle === "medal" ? (
-                <RankMedal rank={index + 1} />
-              ) : (
-                <LevelMarker
-                  level={rankLevel(index + 1)}
-                  aria-label={`第 ${index + 1} 位`}
-                >
-                  {index + 1}
-                </LevelMarker>
-              )
-            }
-            main={<TableTitleCell title={row.name} description={row.meta} />}
-            trail={<span className="text-body-sm">{row.value}</span>}
-          />
-        ))}
-      </PanelList>
-    </PanelCard>
-  );
-}
-
 function RatingStars({ value }: { value: number }) {
   const rounded = Math.round(value);
 
@@ -1235,11 +1058,6 @@ function emptyDashboardOverview(period: PeriodKey): DashboardOverviewRecord {
 
 export default function AdminOverviewPage() {
   const locale = useLocale();
-  const [models, setModels] = useState<AiModelRecord[]>([]);
-  const [modelGrants, setModelGrants] = useState<AiModelGrantRecord[]>([]);
-  const [modelPolicies, setModelPolicies] = useState<ModelPolicyRecord[]>([]);
-  const [agents, setAgents] = useState<ProductAgentRecord[]>([]);
-  const [services, setServices] = useState<DevServiceSnapshot[]>([]);
   /**
    * 有上游读取失败。用于把"读不到"与"本来就没有"分开——两者在界面上都是空表，
    * 但只有前者需要运营去看服务是否还活着。
@@ -1304,15 +1122,17 @@ export default function AdminOverviewPage() {
     let active = true;
 
     /**
-     * 七路各自兜底，而不是 `Promise.all` 一荣俱荣。
+     * 两路各自兜底，而不是 `Promise.all` 一荣俱荣。
      *
      * 原先是裸 `Promise.all().then()`，**没有 `.catch()`**：Atlas 一挂
-     * （`AdminBffError: Atlas is unavailable`），整条链 reject，七个 setter
-     * 一个都不执行，六份数据全停在初始空值，界面于是显示成"这些数据本来就是
-     * 空的"，同时抛出未处理拒绝（2026-08-07 走查在控制台看到两条）。
+     * （`AdminBffError: Atlas is unavailable`），整条链 reject，setter 一个都不
+     * 执行，数据全停在初始空值，界面于是显示成"这些数据本来就是空的"，同时抛出
+     * 未处理拒绝（2026-08-07 走查在控制台看到两条）。一个上游挂掉不该让另一份
+     * 跟着消失。
      *
-     * 只有 `fetchDevServices` 当初单独挂了 `.catch`——有人知道它会失败，却没
-     * 管别的。一个上游挂掉不该让另外六份跟着消失。
+     * 原先是七路（模型/授权/策略/智能体/开发面板 + 产品/方案）。模型技能整块
+     * 2026-09-20 移交 opera 平面后，前五路没有消费方了，一并摘掉——少发四个
+     * 后端请求，也少一个在生产必然 404 的开发面板代理。
      */
     const settle = <T,>(promise: Promise<T>, fallback: T): Promise<T> =>
       promise.catch(() => {
@@ -1320,43 +1140,14 @@ export default function AdminOverviewPage() {
         return fallback;
       });
 
-    /* 开发面板代理（app/api/dev-services/route.ts）只在本地有意义，生产直接 404。
-       那不是"读取失败"，是"这个环境没有这份数据"——不能走 settle 去点亮上面的
-       降级横幅，生产也不该为一个必然 404 的请求在控制台留一条红字。空数组进
-       capabilityServiceHealth 就是"待建设"空态。 */
-    const devServices: Promise<DevServiceSnapshot[]> =
-      process.env.NODE_ENV === "production"
-        ? Promise.resolve([])
-        : fetchDevServices().catch(() => []);
-
     Promise.all([
-      settle(fetchAiModels(true), []),
-      settle(fetchAiModelGrants(), []),
-      settle(fetchModelPolicies({ includeInactive: true }), []),
-      settle(fetchProductAgents(), []),
-      devServices,
       settle(fetchProductReleases(), []),
       settle(fetchProductSolutions(), []),
-    ]).then(
-      ([
-        modelRecords,
-        grantRecords,
-        policyRecords,
-        agentRecords,
-        serviceRecords,
-        releaseRecords,
-        solutionRecords,
-      ]) => {
-        if (!active) return;
-        setModels(modelRecords);
-        setModelGrants(grantRecords);
-        setModelPolicies(policyRecords);
-        setAgents(agentRecords);
-        setServices(serviceRecords);
-        setReleases(releaseRecords);
-        setSolutions(solutionRecords);
-      },
-    );
+    ]).then(([releaseRecords, solutionRecords]) => {
+      if (!active) return;
+      setReleases(releaseRecords);
+      setSolutions(solutionRecords);
+    });
 
     return () => {
       active = false;
@@ -1372,13 +1163,11 @@ export default function AdminOverviewPage() {
     const activeProductCount = productActiveCount(releases, {
       uniqueProducts: true,
     });
-    const abnormalCounts = productSupplyAbnormalCounts(releases, solutions);
-
     return [
       {
-        label: "产品能力",
+        label: "产品发布",
         value: String(productTotalCounts.total),
-        detail: `产品能力是平台可被方案编排的底层产品供给，累计 ${productTotalCounts.total} 个，生效 ${activeProductCount} 个，自有 ${productTotalCounts.owned} 个，三方 ${productTotalCounts.thirdParty} 个。`,
+        detail: `产品发布是平台可被方案编排的底层产品供给，累计 ${productTotalCounts.total} 个，生效 ${activeProductCount} 个，自有 ${productTotalCounts.owned} 个，三方 ${productTotalCounts.thirdParty} 个。`,
         tone: "brand",
         icon: "database",
         tags: [
@@ -1387,9 +1176,9 @@ export default function AdminOverviewPage() {
         ],
       },
       {
-        label: "方案组合",
+        label: "解决方案",
         value: String(solutionCounts.total),
-        detail: `方案组合承接行业、场景和客户分层，当前方案 ${solutionCounts.total} 个，生效 ${solutionCounts.active} 个，覆盖 ${solutionCounts.industryCount} 个行业。`,
+        detail: `解决方案承接行业、场景和客户分层，当前方案 ${solutionCounts.total} 个，生效 ${solutionCounts.active} 个，覆盖 ${solutionCounts.industryCount} 个行业。`,
         tone: "brand",
         icon: "workflow",
         tags: [
@@ -1398,23 +1187,12 @@ export default function AdminOverviewPage() {
         ],
       },
       {
-        label: "套餐层级",
+        label: "服务套餐",
         value: String(tierCounts.total),
-        detail: `套餐层级是方案下可售卖、可授权的权益包，当前套餐 ${tierCounts.total} 个，生效 ${tierCounts.active} 个，公开 ${tierCounts.public} 个。`,
+        detail: `服务套餐是产品与方案之上可售卖、可授权的权益包，当前套餐 ${tierCounts.total} 个，生效 ${tierCounts.active} 个，公开 ${tierCounts.public} 个。`,
         tone: "brand",
         icon: "cube",
         tags: [`生效 ${tierCounts.active}`, `公开 ${tierCounts.public}`],
-      },
-      {
-        label: "供给异常",
-        value: String(abnormalCounts.total),
-        detail: `供给异常用于观察会影响售卖或交付的非正常状态：停用产品 ${abnormalCounts.stoppedProducts} 个，异常方案 ${abnormalCounts.abnormalSolutions} 个，未生效套餐 ${abnormalCounts.inactiveTiers} 个。`,
-        tone: abnormalCounts.total > 0 ? "warning" : "brand",
-        icon: "warning",
-        tags: [
-          `产品 ${abnormalCounts.stoppedProducts}`,
-          `套餐 ${abnormalCounts.inactiveTiers}`,
-        ],
       },
     ] satisfies OverviewMetric[];
   }, [releases, solutions]);
@@ -1439,142 +1217,6 @@ export default function AdminOverviewPage() {
     [],
   );
 
-  const capabilityMetrics = useMemo(() => {
-    const serviceHealth = capabilityServiceHealth(services);
-    const totalModelCounts = modelOwnershipCounts(models);
-    const activeModelCounts = modelOwnershipCounts(
-      /* 数还能服务的：`deprecated` 仍可解析，排除它会低报模型面。 */
-      models.filter((model) => isServing(model.state)),
-    );
-    const abnormalModelCounts = modelOwnershipCounts(
-      models.filter(isModelAbnormal),
-    );
-    const policyCoverage = capabilityPolicyCoverage(modelPolicies, modelGrants);
-    const activeAgents = agents.filter(
-      (agent) => agent.status === "active",
-    ).length;
-    const publicAgents = agents.filter(
-      (agent) => agent.visibility === "public",
-    ).length;
-    const inactiveAgents = agents.length - activeAgents;
-
-    return [
-      serviceHealth.available
-        ? {
-            label: "服务监控",
-            value: String(serviceHealth.total),
-            detail: `服务监控显示当前纳入观测的服务 ${serviceHealth.total} 个，其中健康 ${serviceHealth.healthy} 个，异常 ${serviceHealth.abnormal} 个。`,
-            tone:
-              serviceHealth.abnormal > 0
-                ? ("warning" as const)
-                : ("brand" as const),
-            icon: "server" as const,
-            tags: [`异常 ${serviceHealth.abnormal}`],
-          }
-        : {
-            label: "服务监控",
-            value: "—",
-            detail:
-              "数据源待建设：平台暂无真实基础设施健康/延迟监控落库，不展示编造数值。",
-            tone: "brand" as const,
-            icon: "server" as const,
-            tags: ["状态 待建设"],
-          },
-      {
-        label: "模型平台",
-        value: String(totalModelCounts.total),
-        detail: `模型平台观察平台可调度模型资源池，模型总数 ${totalModelCounts.total} 个，生效模型 ${activeModelCounts.total} 个，接入异常 ${abnormalModelCounts.total} 个。Token 用量数据源待建设（无模型用量写路径），不展示。`,
-        // 异常台数抬进整卡语气——同段的服务监控/策略覆盖/技能市场三张都是这么做的，
-        // 只有这张原先写死 blue，靠标自己变色，一排四张里独一份（2026-08-05）。
-        tone: abnormalModelCounts.total > 0 ? "warning" : "brand",
-        icon: "cloud",
-        tags: [
-          `异常 ${abnormalModelCounts.total}`,
-          `生效 ${activeModelCounts.total}`,
-        ],
-      },
-      {
-        label: "策略覆盖",
-        value: String(policyCoverage.active),
-        detail: `策略覆盖统计模型授权和租户授权的启用情况，当前有效策略 ${policyCoverage.active} 条，待配置或停用 ${policyCoverage.pending} 条。`,
-        tone: policyCoverage.pending > 0 ? "warning" : "brand",
-        icon: "shield-check",
-        tags: [`待配 ${policyCoverage.pending}`],
-      },
-      {
-        label: "技能市场",
-        value: String(activeAgents),
-        detail: `技能市场当前以智能体可调用能力作为过渡口径，启用 ${activeAgents} 个，公开 ${publicAgents} 个，异常或停用 ${inactiveAgents} 个。`,
-        tone: inactiveAgents > 0 ? "warning" : "brand",
-        icon: "cube",
-        tags: [`异常 ${inactiveAgents}`],
-      },
-    ] satisfies OverviewMetric[];
-  }, [agents, modelGrants, modelPolicies, models, services]);
-
-  const capabilityPanels = useMemo(() => {
-    /* 这一排原先有三张：模型平台（Token 调用量前三）、模型授权、技能市场，
-       不足三条的都拿"待接入 / 暂无数据"补到三行。模型那张的排序键是乘出来的
-       Token 数（见文件头部说明），整张摘掉；补位行也摘掉——列表有几条画几条，
-       一条没有就是 PanelList 的空态，不再用假行把表撑满（2026-08-30）。 */
-    // Atlas 策略：名字缺省用模型名（modelId 是 UUID，不上屏）；范围看 tenantId 有无。
-    const policyRows = modelPolicies
-      .map((policy) => ({
-        id: policy.id,
-        name:
-          policy.name ??
-          models.find((model) => model.id === policy.modelId)?.modelName ??
-          "未命名策略",
-        meta: policy.tenantId === null ? "平台策略" : "租户策略",
-        value: isEnabled(policy.state) ? "生效" : "停用",
-      }))
-      .slice(0, 3);
-    const agentRows = agents
-      .map((agent) => ({
-        id: agent.id,
-        name: agent.agentName,
-        meta: agent.agentType === "chat" ? "内容" : "业务",
-        value:
-          agent.visibility === "public"
-            ? "公开"
-            : agent.visibility === "internal"
-              ? "内部"
-              : "私有",
-      }))
-      .slice(0, 3);
-
-    return [
-      {
-        // 原「模型授权」卡:/model-grants 退役后改指 /atlas「模型计价与策略」,展示的
-        // 本就是策略行(policyRows),正名为「模型策略」。
-        title: "模型策略",
-        summary: "计价与限流策略。",
-        detail: "观察模型计价规则与限流策略的启用情况。",
-        tone: "blue",
-        href: "/atlas",
-        rankStyle: "medal",
-        rows: policyRows,
-      },
-      {
-        title: "技能市场",
-        summary: "可调用能力接入状态。",
-        detail: "当前以智能体可调用能力作为技能市场过渡口径。",
-        tone: "blue",
-        href: "/skills",
-        rankStyle: "medal",
-        rows: agentRows,
-      },
-    ] satisfies Array<{
-      title: string;
-      summary: string;
-      detail: string;
-      tone: Tone;
-      href: string;
-      rankStyle: "number" | "medal";
-      rows: CapabilityServiceRow[];
-    }>;
-  }, [agents, modelPolicies, models]);
-
   const serviceMetrics = useMemo(
     () => serviceMetricsFor(serviceOverview),
     [serviceOverview],
@@ -1590,7 +1232,7 @@ export default function AdminOverviewPage() {
         <OverviewHeading
           icon="squares-four"
           title="平台总览"
-          description={`${globalPeriodLabel}聚合客户活跃、订阅收入、模型调用和平台稳定性，首页只保留运营判断需要的核心数字。`}
+          description={`${globalPeriodLabel}聚合客户活跃、产品订阅和订阅收入，首页只保留运营判断需要的核心数字。`}
           period={globalPeriod}
           onPeriodChange={handleGlobalPeriodChange}
           level="page"
@@ -1643,7 +1285,7 @@ export default function AdminOverviewPage() {
         <OverviewHeading
           icon="database"
           title="产品供给"
-          description="按产品能力、方案组合、套餐层级和供给异常观察平台可售卖、可交付能力（当前快照）。"
+          description="按产品发布、解决方案和服务套餐观察平台可售卖、可交付能力（当前快照）。"
         />
         <MetricGrid
           aria-label="产品供给指标"
@@ -1651,49 +1293,23 @@ export default function AdminOverviewPage() {
         />
         <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-3">
           <ProductRankingCard
-            title="产品能力排行"
+            title="产品发布排行"
             summary="默认前三，观察底层产品被订阅采用的强度。"
             href="/products"
             rows={productRankings.productTop}
           />
           <ProductRankingCard
-            title="方案组合排行"
+            title="解决方案排行"
             summary="默认前三，观察场景方案的市场采用度。"
             href="/product-solutions"
             rows={productRankings.solutionTop}
           />
           <ProductRankingCard
-            title="套餐层级排行"
+            title="服务套餐排行"
             summary="默认前三，观察可售权益包的订阅使用。"
             href="/service-plans"
             rows={productRankings.tierTop}
           />
-        </div>
-      </section>
-
-      <section className="grid gap-md" aria-label="能力与服务">
-        <OverviewHeading
-          icon="cloud"
-          title="模型技能"
-          description="观察服务运行、模型池、策略覆盖和技能市场，判断平台 AI 能力是否稳定、可控、可被业务调用（当前快照）。"
-        />
-        <MetricGrid
-          aria-label="模型技能指标"
-          items={metricItems(capabilityMetrics)}
-        />
-        <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-2">
-          {capabilityPanels.map((panel) => (
-            <ModelCategoryCard
-              key={panel.title}
-              title={panel.title}
-              summary={panel.summary}
-              detail={panel.detail}
-              tone={panel.tone}
-              href={panel.href}
-              rankStyle={panel.rankStyle}
-              rows={panel.rows}
-            />
-          ))}
         </div>
       </section>
 
@@ -1706,8 +1322,8 @@ export default function AdminOverviewPage() {
           onPeriodChange={setServicePeriod}
         />
         {/* 这两块不是面板卡：它们装的就是一排指标卡，套上卡壳会变成卡中卡
-            （2026-08-05）。同段的产品供给/模型技能也是"标题 + 一排卡"，这里只是
-            多一层，用 level 3 的板块标题表达层级即可。 */}
+            （2026-08-05）。同段的产品供给也是"标题 + 一排卡"，这里只是多一层，
+            用 level 3 的板块标题表达层级即可。 */}
         <div className="grid gap-md">
           <Section
             level={3}
