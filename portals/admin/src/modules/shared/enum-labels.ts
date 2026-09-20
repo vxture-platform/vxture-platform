@@ -42,7 +42,13 @@ import type {
   PaySource,
   SubscriptionStatus,
 } from "@vxture-platform/shared";
-import type { SubscriptionOperationCycle } from "@/entities/console";
+import type {
+  BillingBillType,
+  OrderOperationStatus,
+  ProductCapabilityType,
+  SubscriptionOperationCycle,
+  SubscriptionOperationQuotaRisk,
+} from "@/entities/console";
 
 /**
  * 订阅状态的界面文案。
@@ -170,4 +176,89 @@ export function usePaySourceLabel(): (source: PaySource | "none") => string {
   const labels = usePaySourceLabels();
   const tCommon = useTranslations("common");
   return (source) => (source === "none" ? tCommon("none") : labels[source]);
+}
+
+/**
+ * 账单类型。
+ *
+ * 收三份（BillingDetailPage / BillingPage / InvoicesPage），内容完全一致。
+ *
+ * 值域是 admin 侧的四值,不是 DB 的。`normalizeBillType()` 把 DDL 的
+ * `normal/one_off/adjustment/prepaid_statement` 改名成 `normal/adjust/supplement/
+ * prepaid`——**1:1 无损**,只是换了写法,所以照原样收口。那层改名本身是笔债
+ * （凭空多一套值域要维护）,但不在文案收口的范围里。
+ */
+export function useBillTypeLabels(): Record<BillingBillType, string> {
+  const t = useTranslations("enums.billType");
+  return {
+    normal: t("normal"),
+    adjust: t("adjust"),
+    supplement: t("supplement"),
+    prepaid: t("prepaid"),
+  } satisfies Record<BillingBillType, string>;
+}
+
+/**
+ * 订单状态（**运营视图**,不是订单实体状态）。
+ *
+ * 收两份（OrderDetailPage / OrdersPage）,内容完全一致。
+ *
+ * 这个值域不对应任何 DB CHECK,所以**没有提升进 shared 的 catalog-domains**
+ * （那份文件的定位是「DB CHECK / seed / 服务对齐的值域契约」）。它是
+ * `mapEntityOrderStatus()` 用订单实体状态 + 账单状态**算出来**的运营视图:
+ *   · DDL 的 cancelled/expired/refunded 三态合并成 `closed`（运营视角不分）
+ *   · `pending_payment` + 账单 partial → `partial_pending`（两个字段派生）
+ *   · `paid` 单独浮出成 `paid_unprovisioned`,刻意不并进 `confirmed`
+ *     ——否则已收款未履约的悬挂单在运营视角「已完结」,永不被发现
+ *
+ * ⚠ `overdue` 与 `abnormal` 目前是**死值**:`mapEntityOrderStatus()` 只产出其余
+ * 六个,全 BFF 搜不到写这两个值的地方。留着不删——类型里少一个分支,将来真有
+ * 地方产出时会静默落到别处;留着则 `satisfies` 保证它有文案。
+ */
+export function useOrderStatusLabels(): Record<OrderOperationStatus, string> {
+  const t = useTranslations("enums.orderStatus");
+  return {
+    pending: t("pending"),
+    pending_verify: t("pending_verify"),
+    confirmed: t("confirmed"),
+    overdue: t("overdue"),
+    closed: t("closed"),
+    paid_unprovisioned: t("paid_unprovisioned"),
+    partial_pending: t("partial_pending"),
+    abnormal: t("abnormal"),
+  } satisfies Record<OrderOperationStatus, string>;
+}
+
+/** 配额风险三档。收两份（SubscriptionDetailPage / SubscriptionsPage），内容一致。 */
+export function useQuotaRiskLabels(): Record<
+  SubscriptionOperationQuotaRisk,
+  string
+> {
+  const t = useTranslations("enums.quotaRisk");
+  return {
+    normal: t("normal"),
+    warning: t("warning"),
+    danger: t("danger"),
+  } satisfies Record<SubscriptionOperationQuotaRisk, string>;
+}
+
+/**
+ * 能力类型。收两份（ProductCapabilityDetailPage / SubscriptionDetailPage），一致。
+ *
+ * 与 `@vxture/core-utils` 的 `PRODUCT_TYPES`（general_platform / industry_platform /
+ * general_agent / industry_agent / undefined,自带 labelZh/labelEn）**不是同一个轴**:
+ * 那个说「产品是什么」,这个说「能力属于哪一类」。别把两者合并。
+ */
+export function useCapabilityTypeLabels(): Record<
+  ProductCapabilityType,
+  string
+> {
+  const t = useTranslations("enums.capabilityType");
+  return {
+    platform: t("platform"),
+    agent: t("agent"),
+    model: t("model"),
+    data: t("data"),
+    service: t("service"),
+  } satisfies Record<ProductCapabilityType, string>;
 }

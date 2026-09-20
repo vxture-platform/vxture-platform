@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { useBillStatusLabels } from "@/modules/shared/enum-labels";
+import {
+  useBillStatusLabels,
+  useBillTypeLabels,
+} from "@/modules/shared/enum-labels";
 import type { BillStatus } from "@vxture-platform/shared";
 import { useRouter } from "next/navigation";
 import {
@@ -90,13 +93,6 @@ function billStatusIcon(status: BillingBillStatus): IconName {
   if (status === "cancelled") return "x";
   if (status === "overdue") return "warning";
   return "clock";
-}
-
-function billTypeLabel(type: BillingBillType) {
-  if (type === "adjust") return "调整单";
-  if (type === "supplement") return "补录单";
-  if (type === "prepaid") return "预付费";
-  return "正常账单";
 }
 
 /**
@@ -198,6 +194,7 @@ function billingSearchText(
   record: BillingRecord,
   t: ReturnType<typeof useTranslations>,
   billStatusLabels: Record<BillStatus, string>,
+  billTypeLabels: Record<BillingBillType, string>,
 ) {
   return [
     record.id,
@@ -212,7 +209,7 @@ function billingSearchText(
     record.tierName,
     record.operatorName,
     record.operationRemark,
-    billTypeLabel(record.billType),
+    billTypeLabels[record.billType],
     billStatusLabels[record.billStatus],
     t(`status.invoice.${record.invoiceStatus}`),
     record.billStatus,
@@ -229,6 +226,7 @@ function billingCsvColumns(
   locale: string,
   t: ReturnType<typeof useTranslations>,
   billStatusLabels: Record<BillStatus, string>,
+  billTypeLabels: Record<BillingBillType, string>,
 ): CsvColumn<BillingRecord>[] {
   return [
     { label: "账单编号", value: (b) => b.billNo },
@@ -236,7 +234,7 @@ function billingCsvColumns(
     { label: "租户编码", value: (b) => b.tenantCode },
     { label: "租户名称", value: (b) => b.tenantName },
     { label: "套餐", value: (b) => b.tierName ?? "" },
-    { label: "账单类型", value: (b) => billTypeLabel(b.billType) },
+    { label: "账单类型", value: (b) => billTypeLabels[b.billType] },
     { label: "计费周期", value: (b) => cycleLabel(b.billCycle) },
     { label: "周期起", value: (b) => formatDate(b.cycleStartDate, locale) },
     { label: "周期止", value: (b) => formatDate(b.cycleEndDate, locale) },
@@ -468,6 +466,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
 export function BillingPage() {
   const t = useTranslations();
   const billStatusLabels = useBillStatusLabels();
+  const billTypeLabels = useBillTypeLabels();
   const tableLabels = useTableLabels();
   const locale = useLocale();
   const tShared = useTranslations();
@@ -548,7 +547,9 @@ export function BillingPage() {
       if (!matchesBillingExceptionFilter(bill, exceptionFilter)) return false;
       if (
         normalizedQuery &&
-        !billingSearchText(bill, t, billStatusLabels).includes(normalizedQuery)
+        !billingSearchText(bill, t, billStatusLabels, billTypeLabels).includes(
+          normalizedQuery,
+        )
       )
         return false;
       return true;
@@ -630,7 +631,7 @@ export function BillingPage() {
     const rows = filteredBills.filter((bill) => selectedBillIds.has(bill.id));
     exportRowsToCsv(
       "billing-selected-export",
-      billingCsvColumns(locale, t, billStatusLabels),
+      billingCsvColumns(locale, t, billStatusLabels, billTypeLabels),
       rows,
     );
   }

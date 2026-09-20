@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import {
+  useQuotaRiskLabels,
   useSubscriptionCycleLabels,
   useSubscriptionStatusLabels,
 } from "@/modules/shared/enum-labels";
@@ -75,12 +76,6 @@ function subscriptionStatusIcon(status: SubscriptionOperationStatus): IconName {
   return "warning";
 }
 
-function quotaRiskLabel(risk: SubscriptionOperationQuotaRisk) {
-  if (risk === "danger") return "高风险";
-  if (risk === "warning") return "需关注";
-  return "正常";
-}
-
 function subscriptionSearchText(record: SubscriptionOperationRecord) {
   return [
     record.id,
@@ -108,6 +103,7 @@ function subscriptionSearchText(record: SubscriptionOperationRecord) {
 function useSubscriptionCsvColumns(): CsvColumn<SubscriptionOperationRecord>[] {
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
+  const quotaRiskLabels = useQuotaRiskLabels();
   return [
     { label: "订阅编号", value: (record) => record.subscriptionCode },
     { label: "订单号", value: (record) => record.orderNo ?? "" },
@@ -125,7 +121,7 @@ function useSubscriptionCsvColumns(): CsvColumn<SubscriptionOperationRecord>[] {
     { label: "配额使用率", value: (record) => record.quota.usageRate },
     {
       label: "配额风险",
-      value: (record) => quotaRiskLabel(record.quota.risk),
+      value: (record) => quotaRiskLabels[record.quota.risk],
     },
     { label: "席位", value: (record) => record.quota.maxUsers },
     { label: "货币", value: (record) => record.currency },
@@ -242,6 +238,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
   const locale = useLocale();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
+  const quotaRiskLabels = useQuotaRiskLabels();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -323,7 +320,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       cell: (subscription) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {`${formatNumber(subscription.quota.usageRate)}%`}
-          <span className="text-body-sm text-muted-foreground">{`${quotaRiskLabel(subscription.quota.risk)} · ${formatNumber(subscription.quota.maxUsers)} 席位`}</span>
+          <span className="text-body-sm text-muted-foreground">{`${quotaRiskLabels[subscription.quota.risk]} · ${formatNumber(subscription.quota.maxUsers)} 席位`}</span>
         </span>
       ),
     },

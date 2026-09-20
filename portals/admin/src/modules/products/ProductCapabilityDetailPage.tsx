@@ -31,18 +31,11 @@ import type {
   ProductCapabilityType,
 } from "@/entities/console";
 import { PUBLISH_STATUS_TONE } from "@/modules/shared/publish-tone";
+import { useCapabilityTypeLabels } from "@/modules/shared/enum-labels";
 import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
-
-function capabilityTypeLabel(type: ProductCapabilityType) {
-  if (type === "platform") return "平台";
-  if (type === "agent") return "智能体";
-  if (type === "model") return "模型";
-  if (type === "data") return "数据";
-  return "服务";
-}
 
 function capabilityTypeIcon(type: ProductCapabilityType): IconName {
   if (type === "platform") return "database";
@@ -86,6 +79,7 @@ function ProductCapabilitySummary({
 }: {
   product: ProductCapabilityRecord;
 }) {
+  const capabilityTypeLabels = useCapabilityTypeLabels();
   return (
     <DetailSummaryHeader
       icon={capabilityTypeIcon(product.productType)}
@@ -93,7 +87,7 @@ function ProductCapabilitySummary({
       subtitle={product.productCode}
       badges={
         <>
-          <Badge>{capabilityTypeLabel(product.productType)}</Badge>
+          <Badge>{capabilityTypeLabels[product.productType]}</Badge>
           <Badge>{sourceLabel(product.source)}</Badge>
           <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
             {statusLabel(product.status)}
@@ -144,6 +138,7 @@ function ProductCapabilityDetails({
 }) {
   const locale = useLocale();
   const tShared = useTranslations();
+  const capabilityTypeLabels = useCapabilityTypeLabels();
   return (
     <section
       className="grid min-w-0 gap-xl"
@@ -155,7 +150,7 @@ function ProductCapabilityDetails({
           <DetailRow label="产品编码">{orUnset(product.productCode)}</DetailRow>
           <DetailRow label="产品名称">{orUnset(product.productName)}</DetailRow>
           <DetailRow label="产品类型">
-            {orUnset(capabilityTypeLabel(product.productType))}
+            {orUnset(capabilityTypeLabels[product.productType])}
           </DetailRow>
           <DetailRow label="产品来源">
             {orUnset(sourceLabel(product.source))}

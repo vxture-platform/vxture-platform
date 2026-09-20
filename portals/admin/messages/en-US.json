@@ -2416,6 +2416,34 @@
       "online": "Online",
       "offline": "Offline",
       "voucher": "Voucher"
+    },
+    "billType": {
+      "normal": "Regular",
+      "adjust": "Adjustment",
+      "supplement": "Supplementary",
+      "prepaid": "Prepaid"
+    },
+    "orderStatus": {
+      "pending": "Awaiting payment",
+      "pending_verify": "Awaiting review",
+      "confirmed": "Confirmed",
+      "overdue": "Overdue",
+      "closed": "Closed",
+      "paid_unprovisioned": "Paid, not provisioned",
+      "partial_pending": "Partially paid, carried",
+      "abnormal": "Abnormal"
+    },
+    "quotaRisk": {
+      "normal": "Normal",
+      "warning": "Watch",
+      "danger": "At risk"
+    },
+    "capabilityType": {
+      "platform": "Platform",
+      "agent": "Agent",
+      "model": "Model",
+      "data": "Data",
+      "service": "Service"
     }
   }
 }

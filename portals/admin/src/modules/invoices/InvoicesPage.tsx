@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import { useBillStatusLabels } from "@/modules/shared/enum-labels";
+import {
+  useBillStatusLabels,
+  useBillTypeLabels,
+} from "@/modules/shared/enum-labels";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -104,13 +107,6 @@ function taxTypeLabel(type: BillingInvoiceTaxType) {
   if (type === "individual") return "个人";
   if (type === "government") return "政府/事业单位";
   return "其他";
-}
-
-function billTypeLabel(type: string) {
-  if (type === "adjust") return "调整单";
-  if (type === "supplement") return "补录单";
-  if (type === "prepaid") return "预付费";
-  return "正常账单";
 }
 
 function invoiceStatusIcon(status: BillingInvoiceStatus): IconName {
@@ -288,6 +284,7 @@ function InvoiceActionsMenu({
  */
 function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
   const billStatusLabels = useBillStatusLabels();
+  const billTypeLabels = useBillTypeLabels();
   const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
@@ -331,7 +328,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
                 {billStatusLabels[invoice.billStatus]}
               </StatusBadge>
               <StatusBadge tone="neutral" icon={false}>
-                {billTypeLabel(invoice.billType)}
+                {billTypeLabels[invoice.billType]}
               </StatusBadge>
             </span>
           }
