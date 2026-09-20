@@ -239,24 +239,24 @@ export default function Footer() {
                     {t(link.labelKey)}
                   </Link>
                 ))}
-              {t(FOOTER_DATA.icp.textKey) && (
+              {FOOTER_DATA.icp.text && (
                 <a
                   href={FOOTER_DATA.icp.link}
                   className="hover:text-vx-primary transition-colors whitespace-nowrap"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {t(FOOTER_DATA.icp.textKey)}
+                  {FOOTER_DATA.icp.text}
                 </a>
               )}
-              {t(FOOTER_DATA.publicSecurity.textKey) && (
+              {FOOTER_DATA.publicSecurity.text && (
                 <a
                   href={FOOTER_DATA.publicSecurity.link}
                   className="hover:text-vx-primary transition-colors whitespace-nowrap"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {t(FOOTER_DATA.publicSecurity.textKey)}
+                  {FOOTER_DATA.publicSecurity.text}
                 </a>
               )}
             </div>

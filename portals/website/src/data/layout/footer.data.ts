@@ -5,6 +5,11 @@
  * @category Data - Layout
  */
 
+import {
+  ICP_FILING,
+  PUBLIC_SECURITY_FILING,
+  type SiteFiling,
+} from "@vxture-platform/shared";
 import { COMPANY_CONTACT } from "@/data/company/contact.data";
 
 /**
@@ -61,12 +66,14 @@ export interface FooterLegal {
 }
 
 /**
- * 备案信息配置
+ * 备案信息配置。
+ *
+ * 值取自 `@vxture-platform/shared` 的备案常量,**不走 i18n 词条**:备案号是法定
+ * 标识、不随语言变化。此前它挂在 messages 的 `icp.text` / `publicSecurity.text`
+ * 下,于是被当成"待翻译的文案"——en-US 两处都留了空串,英文页面一个备案号都不显示
+ * (owner 2026-09-20 要求补上)。改读常量之后,英文页面显示同一个号不再需要"翻译"它。
  */
-export interface FooterIcp {
-  textKey: string;
-  link: string;
-}
+export type FooterIcp = SiteFiling;
 
 /**
  * 版权信息配置
@@ -176,16 +183,8 @@ export const FOOTER_DATA: FooterData = {
     { href: "/legal/brand", labelKey: "legal.brand" },
     { href: "/legal/cookies", labelKey: "legal.cookies" },
   ],
-  icp: {
-    textKey: "icp.text",
-    link: "https://beian.miit.gov.cn",
-  },
-  publicSecurity: {
-    textKey: "publicSecurity.text",
-    // 带 code 查询参数直达本站这条备案记录；只给域名根的话点过去是公安部
-    // 备案系统首页，查不到我们这一条（owner 2026-09-20 提供真实备案号）。
-    link: "https://beian.mps.gov.cn/#/query/webSearch?code=61011602000908",
-  },
+  icp: ICP_FILING,
+  publicSecurity: PUBLIC_SECURITY_FILING,
   copyright: {
     startYear: 2024,
     endYear: 2026,
