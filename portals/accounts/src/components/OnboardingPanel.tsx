@@ -148,9 +148,34 @@ export function OnboardingPanel() {
         title="注册完成"
         description="账号已创建，个人工作空间已就绪。正在返回应用…"
       >
-        <div className="flex flex-col gap-md">
+        <div className="flex flex-col gap-lg">
+          {/* 把**刚创建了什么**摆出来。此前这一步只有一句「正在返回应用」加一个
+              按钮:内容量比前两步少一大截,一路走下来是逐级塌陷(owner 2026-09-20
+              实看「最后只剩一条,太难看」);更要紧的是它什么都没交代——账号名与
+              显示名是当场定下、之后到处要用的东西,注册完成却不复述一遍。
+              这不是为了撑高度,是这一步本来就该回答「我刚得到了什么」。 */}
+          <dl className="flex flex-col gap-sm">
+            {[
+              ["账号名", account.trim()],
+              ["显示名称", displayName.trim()],
+              ["邮箱", email.trim()],
+              ["手机号", maskPhone(phone)],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="flex items-baseline justify-between gap-md"
+              >
+                <dt className="text-body-sm text-muted-foreground">{label}</dt>
+                {/* 读不到就写「—」,不留白:留白分不清「没有」与「没读到」。 */}
+                <dd className="min-w-0 truncate text-body-sm">
+                  {value || "—"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
           <p className="text-body-sm text-muted-foreground">
-            如果没有自动跳转，请点下面的按钮。
+            个人工作空间已就绪。如果没有自动跳转，请点下面的按钮。
           </p>
           <Button
             type="button"

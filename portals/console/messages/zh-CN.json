@@ -2542,7 +2542,7 @@
       "unsubscribeVerb": "退订",
       "unsubscribeConsequence": "订阅将在当前计费周期结束时终止，之后不再续费也不再计费。周期内仍可正常使用。要恢复需要重新订阅，价格以届时的挂牌价为准。",
       "unsubscribeKeep": "保留订阅",
-      "review": "评价这个产品",
+      "review": "写评价",
       "reviewed": "已评价"
     },
     "cycle": {

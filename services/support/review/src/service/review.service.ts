@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { PgReviewRepository } from "../repository/pg-review.repository";
 import type {
   ListReviewsParams,
@@ -22,7 +22,14 @@ export type SubmitReviewResult =
 
 @Injectable()
 export class ReviewService {
-  constructor(private readonly repository: PgReviewRepository) {}
+  // 必须显式 @Inject:BFF 打包走 esbuild,它**不产 emitDecoratorMetadata**,
+  // 靠参数类型推断的注入拿不到元数据。症状不是启动失败(boot-smoke 照样绿),
+  // 而是**实例化出一个依赖为 undefined 的壳**——调用方拿到它,第一次用就
+  // 「Cannot read properties of undefined」,表现为运行时 500。
+  // 2026-09-20 实测:router 那一处补过了,服务包自己这一处漏了,是同一个坑的两半。
+  constructor(
+    @Inject(PgReviewRepository) private readonly repository: PgReviewRepository,
+  ) {}
 
   /**
    * 落一条评价。

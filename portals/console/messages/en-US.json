@@ -2542,8 +2542,8 @@
       "unsubscribeVerb": "Unsubscribe from",
       "unsubscribeConsequence": "The subscription ends when the current billing cycle closes; it will not renew or bill again. Access continues until then. Resuming means subscribing again at the price listed at that time.",
       "unsubscribeKeep": "Keep subscription",
-      "review": "Rate this product",
-      "reviewed": "Rated"
+      "review": "Write a review",
+      "reviewed": "Reviewed"
     },
     "cycle": {
       "month": "Monthly",

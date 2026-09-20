@@ -17,9 +17,10 @@ import {
 } from "./auth/AuthLogin";
 import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
 import { bindOAuthPhone, sendPhoneCode } from "@/api/oidc";
+import { turnstileSiteKey } from "@/lib/turnstile";
 
-const TENANT_TURNSTILE_KEY =
-  process.env.NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY ?? "";
+/** 本面要不要人机验证:空串 = 不要(见 lib/turnstile,前端这一半的开关)。 */
+const TENANT_TURNSTILE_KEY = turnstileSiteKey("tenant");
 const PHONE_RE = /^1[3-9]\d{9}$/;
 
 export function BindPhonePanel({ token }: { readonly token: string }) {

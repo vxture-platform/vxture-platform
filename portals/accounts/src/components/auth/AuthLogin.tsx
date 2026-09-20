@@ -566,13 +566,23 @@ export function UnifiedAuthPage({
   );
 }
 
+/**
+ * 注册流三步共用本件（登录 → 完善账号信息 → 注册完成）。
+ *
+ * **内容区给一个高度下限**：三步的内容量天差地别——登录步有页签 + 两栏 + 协议 +
+ * 按钮 + 三方登录，完成步只有一句话加一个按钮。不设下限时卡片高度完全由内容决定，
+ * 一路走下来是逐级塌陷，最后一屏只剩窄窄一条（owner 2026-09-20 实看）。
+ *
+ * 取 `media-3xl` 而不是对齐最高的那一步：对齐最高会让完成步空出一大片，那是另一种
+ * 难看。下限只保证不塌成一条，比它高的步骤照常撑开。
+ */
 export function AuthLoginLayout({
   title = "欢迎回来",
   description,
   children,
 }: Readonly<AuthLoginLayoutProps>) {
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex min-h-media-3xl flex-col gap-lg">
       <section aria-label="登录标题">
         <div className="flex flex-col gap-2xs">
           {/* `text-balance`：标题折行时两行不要一长一短。 */}
