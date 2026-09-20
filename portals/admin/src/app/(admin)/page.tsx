@@ -556,40 +556,6 @@ function businessPanelsFor(period: PeriodKey) {
   }>;
 }
 
-function compactMetricValue(
-  value: string | undefined,
-  prefixes: readonly string[],
-) {
-  if (!value) return "—";
-  const trimmed = value.trim();
-  const matchedPrefix = prefixes.find(
-    (prefix) => trimmed === prefix || trimmed.startsWith(`${prefix} `),
-  );
-
-  return matchedPrefix
-    ? trimmed.slice(matchedPrefix.length).trim() || trimmed
-    : trimmed;
-}
-
-function displayMinorValue(label: string, value: string) {
-  const aliases: Record<string, readonly string[]> = {
-    新增: ["新增租户", "新增用户", "新增订阅", "新增"],
-    活跃: ["活跃租户", "活跃用户", "活跃"],
-    有效: ["有效订阅", "有效"],
-    风险: ["风险续费", "风险", "预警"],
-    取消订阅: ["取消订阅", "风险续费", "风险", "预警"],
-    总数: ["订阅总数", "总数"],
-    提升: ["覆盖提升", "提升"],
-    待补齐: ["待补齐"],
-    累计: ["累计确认收入", "累计成本", "累计毛利润", "累计"],
-    本年: ["本年收入", "本年成本", "本年毛利润", "本年"],
-    增长: ["增长"],
-    变化: ["变化"],
-  };
-
-  return compactMetricValue(value, [label, ...(aliases[label] ?? [])]);
-}
-
 // TD-036: 模型调用/平台稳定性 have no backing table anywhere in the schema
 // (no model usage-write path, no uptime/incident table) — rendered as an
 // honest unavailable state instead of the old fabricated snapshot values.
@@ -939,7 +905,14 @@ function BusinessMetricRow({ metric }: { metric: BusinessCardMetric }) {
         <FactList
           facts={metric.minor.map((item) => ({
             label: item.label,
-            value: displayMinorValue(item.label, item.value),
+            /* 原来这里走 `displayMinorValue()`——用一张 12 个中文键的别名表
+               去剥 value 的中文前缀。查实那是死代码:全部 14 个 minor[].value
+               的构造点要么是 `+${n.toLocaleString()}`、要么是 periodDelta()
+               的 `—`/`+N`/`-N`、要么是 toLocaleString()/
+               formatAdminCompactCurrency()（「万」是后缀不是前缀），**没有一个
+               以中文开头**,匹配从不发生,函数恒等返回。
+               有用的只有它开头那句空值兜底,留在这里。 */
+            value: item.value || "—",
             ...(item.tone === "rose" ? { tone: "danger" as const } : {}),
           }))}
         />
