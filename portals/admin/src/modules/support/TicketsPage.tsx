@@ -11,6 +11,7 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  FilterBar,
   Input,
   Label,
   ListPageTemplate,
@@ -385,54 +386,62 @@ export function TicketsPage() {
           />
         }
         filters={
-          <section
-            className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+          /* 走 DS FilterBar（owner 2026-09-21：搜索/筛选字号偏大）。手搓的 flex 行
+             拿不到 FilterBar 给子控件降一档的那份契约（它第 49~51 行），于是
+             落回 DS 表单字段的默认 `text-body-lg md:text-body-md`。 */
+          <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             aria-label="工单筛选"
+            count={formatNumber(visibleTickets.length)}
+            search={
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索工单、租户、行业、负责人"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+                aria-label="搜索工单"
+              />
+            }
+            onReset={resetFilters}
           >
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索工单、租户、行业、负责人"
-              className="min-w-media-2xl grow basis-0 max-w-panel-sm"
-              aria-label="搜索工单"
-            />
-            <div className="flex-1 max-lg:hidden" aria-hidden="true" />
-            <label aria-label="状态筛选">
-              <NativeSelect
-                value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value as TicketStatusFilter)
-                }
-              >
-                <option value="all">{tShared("filters.allStates")}</option>
-                <option value="open">
-                  {tShared("status.generic.pending")}
-                </option>
-                <option value="processing">
-                  {tShared("status.generic.processing")}
-                </option>
-                <option value="blocked">搁置</option>
-                <option value="closed">完成</option>
-              </NativeSelect>
-            </label>
-            <label aria-label="优先级筛选">
-              <NativeSelect
-                value={priority}
-                onChange={(event) =>
-                  setPriority(event.target.value as TicketPriorityFilter)
-                }
-              >
-                <option value="all">全部优先级</option>
-                <option value="p0">P0</option>
-                <option value="p1">P1</option>
-                <option value="p2">P2</option>
-                <option value="p3">P3</option>
-              </NativeSelect>
-            </label>
-            <Button variant="outline" size="md" onClick={resetFilters}>
-              重置
-            </Button>
-          </section>
+            {/* 裸 <label aria-label> 去掉：aria-label 挂在 label 上不会标注里面的
+                select，无障碍上是空的。NativeSelect 自己收 aria-label 才有效。 */}
+            <NativeSelect
+              wrapperClassName="w-fit basis-media-xl"
+              value={status}
+              onChange={(event) =>
+                setStatus(event.target.value as TicketStatusFilter)
+              }
+              aria-label="工单状态"
+            >
+              <option value="all">{tShared("filters.allStates")}</option>
+              <option value="open">{tShared("status.generic.pending")}</option>
+              <option value="processing">
+                {tShared("status.generic.processing")}
+              </option>
+              <option value="blocked">搁置</option>
+              <option value="closed">完成</option>
+            </NativeSelect>
+            <NativeSelect
+              wrapperClassName="w-fit basis-media-xl"
+              value={priority}
+              onChange={(event) =>
+                setPriority(event.target.value as TicketPriorityFilter)
+              }
+              aria-label="工单优先级"
+            >
+              {/* 「全部」而不是「全部优先级」：长词会顶到下拉箭头底下，
+                  owner 2026-09-20 在待办页实看过同一件事。 */}
+              <option value="all">全部</option>
+              <option value="p0">P0</option>
+              <option value="p1">P1</option>
+              <option value="p2">P2</option>
+              <option value="p3">P3</option>
+            </NativeSelect>
+          </FilterBar>
         }
         table={
           <section

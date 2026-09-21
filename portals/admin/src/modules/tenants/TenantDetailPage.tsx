@@ -27,6 +27,7 @@ import {
   DetailRow,
   DialogForm,
   EmptyState,
+  FilterBar,
   Icon,
   Input,
   MetricGrid,
@@ -37,6 +38,7 @@ import {
   PanelItem,
   PanelList,
   Progress,
+  Section,
   StatusBadge,
   TableTitleCell,
   Tabs,
@@ -46,7 +48,6 @@ import {
   TabsTrigger,
   useToast,
   ViewLayout,
-  ViewModeSwitch,
 } from "@vxture/design-system";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
 import {
@@ -368,13 +369,19 @@ function TenantInfoTab({
   const tShared = useTranslations();
   return (
     <div className="grid min-w-0 grid-cols-1 gap-lg">
-      <section className="grid min-w-0 gap-lg">
-        {/* 标题与操作同一行（owner 2026-09-21：「当前在标题行下面，不美观，
-            逻辑不清」）。此前 <header> 没有 flex，两个块级子元素自然上下堆叠。 */}
-        <header className="flex min-w-0 flex-wrap items-center justify-between gap-md">
-          <DetailSectionHeading icon="buildings" title="基础资料" />
+      {/* 卡片模式 + 贯通的标题分隔线（owner 2026-09-21，参照 console /tenant）。
+          操作走 Section 自己的 `action` 槽——此前我把 SectionHeader 塞进一个
+          flex 行当子元素，它的宽度收缩到文字宽，那条 `border-b` 跟着只剩
+          一小截，按钮也被挤到线**旁边**而不是线上方。 */}
+      <Section
+        tone="glass"
+        level={2}
+        icon="buildings"
+        title="基础资料"
+        className="min-w-0"
+        action={
           <div
-            className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-xs"
+            className="flex min-w-0 flex-wrap items-center justify-end gap-xs"
             aria-label="基础资料操作"
           >
             {editing ? (
@@ -431,8 +438,9 @@ function TenantInfoTab({
               </>
             )}
           </div>
-        </header>
-        <div className="grid min-w-0 gap-md lg:ml-media-lg">
+        }
+      >
+        <div className="grid min-w-0 gap-md">
           <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-3">
             {/* 租户代码删于 2026-09-21（owner：「身份卡显示一次即可」）。
                 它本来就不可编辑，却画成了输入框——一次性一并清掉。 */}
@@ -556,14 +564,17 @@ function TenantInfoTab({
             ) : null}
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section className="grid min-w-0 gap-lg">
-        {/* 同基础资料：标题与操作同一行，操作居右（owner 2026-09-21）。 */}
-        <header className="flex min-w-0 flex-wrap items-center justify-between gap-md">
-          <DetailSectionHeading icon="user-switch" title="主管理员" />
+      <Section
+        tone="glass"
+        level={2}
+        icon="user-switch"
+        title="主管理员"
+        className="min-w-0"
+        action={
           <div
-            className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-xs"
+            className="flex min-w-0 flex-wrap items-center justify-end gap-xs"
             aria-label="主管理员操作"
           >
             {/* 两颗都暂缓激活（owner 2026-09-21）。禁用不是懒，是后端真没有路径：
@@ -588,10 +599,11 @@ function TenantInfoTab({
               <span>重置密码</span>
             </Button>
           </div>
-        </header>
-        {/* 缩进与列数都跟基础资料对齐（owner：「与上方基础资料一行三列对齐
-            显示，完全整齐」）。此前这一块既没缩进又是四列，两排字段对不上。 */}
-        <div className="grid min-w-0 gap-md lg:ml-media-lg">
+        }
+      >
+        {/* 列数跟基础资料对齐（owner：「一行三列对齐显示，完全整齐」）。
+            缩进不再手加：换成 Section 后卡自带内边距，再叠 ml 会双计。 */}
+        <div className="grid min-w-0 gap-md">
           <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-3">
             <TenantConfigItem label="姓名">
               <TenantConfigValue>
@@ -609,13 +621,16 @@ function TenantInfoTab({
             </TenantConfigItem>
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section className="col-span-full grid min-w-0 gap-lg pt-xs">
-        {/* 操作按钮上标题行（owner 2026-09-21）。 */}
-        <header className="flex min-w-0 items-center justify-between gap-md">
-          <DetailSectionHeading icon="info" title="运营备注" />
-          <div className="inline-flex shrink-0 items-center gap-sm">
+      <Section
+        tone="glass"
+        level={2}
+        icon="info"
+        title="运营备注"
+        className="col-span-full min-w-0"
+        action={
+          <div className="inline-flex items-center gap-sm">
             {notesEditing ? (
               <>
                 <Button
@@ -639,9 +654,9 @@ function TenantInfoTab({
               </Button>
             )}
           </div>
-        </header>
-        {/* 缩进与上两块对齐（owner S3-3a）。 */}
-        <div className="grid min-w-0 gap-sm lg:ml-media-lg">
+        }
+      >
+        <div className="grid min-w-0 gap-sm">
           {notesEditing ? (
             <Textarea
               aria-label="运营备注"
@@ -670,7 +685,7 @@ function TenantInfoTab({
             同一段文字贴着两个含义相反的标签，运营以为那是自己人写的。
             原来下面还挂一排 `tenant.tags`：契约里那个数组从来是空的（已于
             2026-08-30 随字段一起删）。 */}
-      </section>
+      </Section>
     </div>
   );
 }
@@ -1065,40 +1080,43 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="grid min-w-0 gap-0">
-      <section
-        className="flex min-w-0 items-center gap-md pt-0 pb-md max-xl:flex-wrap max-lg:items-stretch"
+      {/* 走 DS FilterBar 而不是手搓一排（owner 2026-09-21：搜索/筛选字号偏大）。
+          根因不是没引用 token：DS 的 Input / NativeSelect 默认
+          `text-body-lg md:text-body-md`——`body-lg` 在小屏是防 iOS 聚焦缩放的惯用法，
+          对**表单字段**是对的。而 FilterBar 把子控件再降一档（见它第 49~51 行的
+          `[&_[data-slot=input]]:…text-body-sm`）：筛选栏是工具条，不是表单。
+          手搓的 flex 行拿不到那份契约，所以字大一号。用件而不是手工补字号——
+          手工补的下一次还会漏。槽位顺序是件的契约，调用方改不了。 */}
+      <FilterBar
+        view={viewMode}
+        onViewChange={setViewMode}
         aria-label="账号筛选"
+        count={formatNumber(filteredMembers.length)}
+        search={
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索账号、账号代码、邮箱"
+            className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+            aria-label="搜索账号"
+          />
+        }
+        onReset={handleReset}
+        actions={
+          <div
+            className="flex flex-wrap items-center gap-xs"
+            aria-label="账号统计"
+          >
+            <StatusBadge tone="success">
+              活跃 {formatNumber(activeCount)}
+            </StatusBadge>
+            <StatusBadge tone="danger">
+              停用 {formatNumber(suspendedCount)}
+            </StatusBadge>
+          </div>
+        }
       >
-        <ViewModeSwitch
-          value={viewMode}
-          onChange={setViewMode}
-          ariaLabel="账号展示方式"
-        />
-        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
-          {formatNumber(filteredMembers.length)}
-        </span>
-        <div
-          className="flex flex-wrap items-center gap-xs"
-          aria-label="账号统计"
-        >
-          <StatusBadge tone={"success"}>
-            活跃 {formatNumber(activeCount)}
-          </StatusBadge>
-          <StatusBadge tone={"danger"}>
-            停用 {formatNumber(suspendedCount)}
-          </StatusBadge>
-        </div>
-        <span className="flex-1 max-lg:hidden" aria-hidden="true" />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索账号、账号代码、邮箱"
-          className="min-w-media-2xl grow basis-0 max-w-panel-sm"
-          aria-label="搜索账号"
-        />
-        <Button variant="outline" onClick={handleReset}>
-          重置
-        </Button>
         <NativeSelect
           wrapperClassName="w-fit basis-media-xl"
           value={statusFilter}
@@ -1124,7 +1142,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             </option>
           ))}
         </NativeSelect>
-      </section>
+      </FilterBar>
 
       <section className="grid min-w-0 max-w-full gap-xs" aria-label="账号清单">
         {filteredMembers.length ? (
@@ -2297,7 +2315,12 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 与可见性做对，按空间筛数据是下一步。 */}
             {tenant.workspaces.length > 0 ? (
               <NativeSelect
-                wrapperClassName="w-fit shrink-0 basis-media-xl"
+                /* 宽度：owner 2026-09-21 实看「字完全遮挡」。
+                   原来是 `w-fit basis-media-xl`：两个尺寸打架（width 与 flex-basis
+                   同时给了主轴），而 media-xl 只有 24×spacing，装不下
+                   「默认工作空间（默认）」这种名字。
+                   改成只给下限：内容短就 128px，长了自己擑开，shrink-0 保底。 */
+                wrapperClassName="shrink-0 min-w-media-2xl"
                 value={activeWorkspace}
                 onChange={(event) => setActiveWorkspace(event.target.value)}
                 aria-label="工作空间"
