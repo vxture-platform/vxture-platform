@@ -37,6 +37,7 @@ import {
   noDbPool,
   readerOf,
   type Responder,
+  insertParam,
 } from "../testing/pool-mocks";
 
 // ============================================================================
@@ -373,11 +374,19 @@ describe("bundled components — full replace", () => {
       c.includes("insert into support.audit_logs"),
     );
     expect(auditAt).toBeGreaterThan(insertAt);
+    /* 按列名取，理由同 products-plan-lifecycle.spec.ts。 */
+    const auditSql = tx.calls[auditAt]!;
     const audit = tx.params[auditAt]!;
-    expect(audit[1]).toBe("product.plan_version.bundled.replace");
-    expect(audit[3]).toBe("product_plan_version");
-    expect(audit[4]).toBe("karda-pro@v2");
-    expect(JSON.parse(audit[5] as string)).toEqual([
+    expect(insertParam(auditSql, audit, "action")).toBe(
+      "product.plan_version.bundled.replace",
+    );
+    expect(insertParam(auditSql, audit, "resource_type")).toBe(
+      "product_plan_version",
+    );
+    expect(insertParam(auditSql, audit, "resource_id")).toBe("karda-pro@v2");
+    expect(
+      JSON.parse(insertParam(auditSql, audit, "before") as string),
+    ).toEqual([
       {
         productCode: "terra",
         quota: { "dataset.max": 1 },
@@ -385,15 +394,22 @@ describe("bundled components — full replace", () => {
         priority: 50,
       },
     ]);
-    expect(JSON.parse(audit[6] as string)).toEqual([
-      {
-        productCode: "arda",
-        quota: ARDA_QUOTA,
-        features: ["dataset.read"],
-        priority: 50,
-      },
-      { productCode: "terra", quota: TERRA_QUOTA, features: [], priority: 20 },
-    ]);
+    expect(JSON.parse(insertParam(auditSql, audit, "after") as string)).toEqual(
+      [
+        {
+          productCode: "arda",
+          quota: ARDA_QUOTA,
+          features: ["dataset.read"],
+          priority: 50,
+        },
+        {
+          productCode: "terra",
+          quota: TERRA_QUOTA,
+          features: [],
+          priority: 20,
+        },
+      ],
+    );
 
     // response = the GET detail shape, bundled rows included
     expect(detail.productCode).toBe("karda");

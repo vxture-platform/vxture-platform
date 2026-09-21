@@ -22,6 +22,18 @@ export interface OperatorAuditEntry {
   resourceType: string;
   /** Affected row id (visible/heterogeneous key — never an FK target). */
   resourceId: string;
+  /**
+   * 受影响的租户（裸值，不建 FK）。**绝大多数运营动作都该填它。**
+   *
+   * 租户详情的「风控审计」页查的是 `where a.tenant_id = $1`，而本函数一直
+   * 不写这一列——于是 admin 写进去的审计在那一页上**一条都看不到**，
+   * 那页只剩下 console-bff 写的客户侧动作（console 那份从一开始就带 tenant_id）。
+   * 从运营席位上看，那个 tab 只回答「租户干了什么」，从来不回答「我们对这个
+   * 租户干了什么」（2026-09-21 查实）。
+   *
+   * 平台级动作（角色、权限、公告…）不属于任何租户，留空。
+   */
+  tenantId?: string | null;
   result?: "success" | "failure" | "denied";
   /** Optional before/after snapshots (stored as jsonb). */
   before?: unknown;
@@ -34,9 +46,9 @@ export interface OperatorAuditEntry {
 // console, so the value is a constant here rather than a caller-supplied field.
 const OPERATOR_AUDIT_INSERT_SQL = `
 insert into support.audit_logs
-  (actor_type, actor_console, actor_id, action, result, resource_type, resource_id, before, after, ip_address, user_agent)
+  (actor_type, actor_console, actor_id, tenant_id, action, result, resource_type, resource_id, before, after, ip_address, user_agent)
 values
-  ('operator', 'admin', $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
+  ('operator', 'admin', $1, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)
 `;
 
 export async function insertOperatorAuditLog(
@@ -51,6 +63,7 @@ export async function insertOperatorAuditLog(
 
   await db.query(OPERATOR_AUDIT_INSERT_SQL, [
     actorId,
+    entry.tenantId ?? null,
     entry.action,
     entry.result ?? "success",
     entry.resourceType,

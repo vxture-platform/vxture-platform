@@ -1518,9 +1518,15 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   async function handleInfoSave() {
     if (savingInfo) return;
 
-    // 仅提交 UpdateTenantInput 支持的可编辑字段：name（→ tenants.name，后端同步 displayName）
-    // 与 status。租户代码/类型/简称无对应写字段，本轮不持久化（见 openIssues）。
-    const payload: UpdateTenantInput = { name: visibleInfoDraft.tenantName };
+    /* 名称与简称是**两列**，各自下发（2026-09-21）。
+       此前这里只送 name，注释写着「简称无对应写字段，本轮不持久化」——
+       于是运营在简称框里改完、点保存、拿到 200，值原样弹回，没有任何提示。
+       现在 BFF 收下 displayName 并落 tenancy.tenants.display_name。
+       租户代码/类型仍无写路径，但它们本来就不该在这里改。 */
+    const payload: UpdateTenantInput = {
+      name: visibleInfoDraft.tenantName,
+      displayName: visibleInfoDraft.displayName,
+    };
     if (
       visibleInfoDraft.status === "active" ||
       visibleInfoDraft.status === "suspended" ||

@@ -96,3 +96,61 @@ export function makeTxClient(responder?: Responder): {
 export function readerOf(rows: unknown[]): Pool {
   return { query: vi.fn(async () => ({ rows })) } as unknown as Pool;
 }
+
+/**
+ * 从一条 INSERT 里按**列名**取参数值。
+ *
+ * ── 为什么要有它 ──
+ * 2026-09-21：给审计表加了一列 `tenant_id`（第 2 位），于是后面每个占位符整体右移
+ * 一位，五处写成 `audit[1]` / `audit[4]` 的断言当场全碎（两个文件、四条用例）。
+ *
+ * 碎了还算好的。真正的风险是**不碎**：`audit[4]` 原来指 resource_id，移位后指
+ * resource_type，只要两边的值凑巧相近，断言会**带着错的含义继续通过**——那就成了
+ * 「一致性守卫抓不到两边一样地错」的同一类毛病。
+ *
+ * 按名取值让这类断言对「加列」免疫：SQL 自己写着列序，测试从 SQL 里读，加一列
+ * 两边同时变，不用人去对位置。
+ *
+ * 只认 `insert into <表> (a, b, c) values (...)` 这一种形状——审计与大多数写路径
+ * 都是它。取不到就**抛**，不返回 undefined：断言拿到 undefined 会报成「值不对」，
+ * 把「这个助手没看懂这条 SQL」伪装成「被测代码写错了」。
+ */
+export function insertParam(
+  sql: string,
+  values: unknown[],
+  column: string,
+): unknown {
+  const shape =
+    /insert\s+into\s+[\w."]+\s*\(([^)]*)\)\s*values\s*\(([^)]*)\)/i.exec(sql);
+  if (!shape) {
+    throw new Error(
+      `insertParam: 这条 SQL 不是可识别的 INSERT ... VALUES，取不到列名：${sql.slice(0, 120)}`,
+    );
+  }
+  const columns = shape[1]!.split(",").map((c) => c.trim().toLowerCase());
+  const exprs = shape[2]!.split(",").map((e) => e.trim());
+  if (columns.length !== exprs.length) {
+    throw new Error(
+      `insertParam: ${columns.length} 列对 ${exprs.length} 个值，对不上`,
+    );
+  }
+  const index = columns.indexOf(column.toLowerCase());
+  if (index < 0) {
+    throw new Error(
+      `insertParam: 列 ${column} 不在列表里（有 ${columns.join(", ")}）`,
+    );
+  }
+  const placeholder = /^\$(\d+)/.exec(exprs[index]!);
+  if (!placeholder) {
+    throw new Error(
+      `insertParam: 列 ${column} 写的是字面量 ${exprs[index]}，没有对应参数`,
+    );
+  }
+  const at = Number(placeholder[1]) - 1;
+  if (at >= values.length) {
+    throw new Error(
+      `insertParam: 列 ${column} 用 $${at + 1}，但只送了 ${values.length} 个参数`,
+    );
+  }
+  return values[at];
+}

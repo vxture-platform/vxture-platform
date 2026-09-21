@@ -35,6 +35,7 @@ import {
   noDbPool,
   readerOf,
   type Responder,
+  insertParam,
 } from "../testing/pool-mocks";
 
 // ============================================================================
@@ -183,11 +184,19 @@ describe("删草稿 —— plan_versions 没有 deleted_at，删就是真删", (
       c.includes("insert into support.audit_logs"),
     );
     expect(auditAt).toBeGreaterThan(delAt);
+    /* 按**列名**取，不按位置：审计表加一列就会把后面的占位符整体右移，
+       而移位后 `audit[4]` 会从 resource_id 变成 resource_type，只要值凑巧相近就会
+       带着错的含义继续通过（2026-09-21 实摘）。 */
+    const auditSql = tx.calls[auditAt]!;
     const audit = tx.params[auditAt]!;
-    expect(audit[1]).toBe("product.plan_version.delete");
-    expect(audit[3]).toBe("product_plan_version");
+    expect(insertParam(auditSql, audit, "action")).toBe(
+      "product.plan_version.delete",
+    );
+    expect(insertParam(auditSql, audit, "resource_type")).toBe(
+      "product_plan_version",
+    );
     /* 可视码而不是 UUID —— 审计给人看。 */
-    expect(audit[4]).toBe("karda-pro@v3");
+    expect(insertParam(auditSql, audit, "resource_id")).toBe("karda-pro@v3");
   });
 
   it.each([
@@ -259,8 +268,12 @@ describe("软删套餐 —— 卖过只能退役", () => {
     const auditAt = tx.calls.findIndex((c) =>
       c.includes("insert into support.audit_logs"),
     );
-    expect(tx.params[auditAt]![1]).toBe("product.plan.delete");
-    expect(tx.params[auditAt]![4]).toBe("karda-pro");
+    expect(insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "action")).toBe(
+      "product.plan.delete",
+    );
+    expect(
+      insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "resource_id"),
+    ).toBe("karda-pro");
   });
 
   it.each([
@@ -323,7 +336,9 @@ describe("退役 —— 与软删的分工", () => {
     const auditAt = tx.calls.findIndex((c) =>
       c.includes("insert into support.audit_logs"),
     );
-    expect(tx.params[auditAt]![1]).toBe("product.plan.deprecate");
+    expect(insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "action")).toBe(
+      "product.plan.deprecate",
+    );
   });
 
   it("已经退役了 → 400（同态重放不算成功）", async () => {
