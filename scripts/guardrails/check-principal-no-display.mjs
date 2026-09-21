@@ -40,14 +40,20 @@ const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const PORTALS = join(REPO_ROOT, "portals");
 const CANON = "packages/shared/shared/src/principal-no.ts";
 
-const FIELDS = new Set([
-  "tenantCode",
-  "accountCode",
-  "workspaceCode",
-  "tenantNo",
-  "userNo",
-  "workspaceNo",
-]);
+/**
+ * 认字段名，但**按后缀认**，不是钉死一张表。
+ *
+ * 2026-09-21 走查在账号详情页上看见 `示例科技（2515306732）`——裸租户号。守卫
+ * 当时钉死了六个名字，而那处叫 `primaryTenantCode`，于是完全看不见。同族还有
+ * `newPersonalTenantNo`。名字前面加个定语不改变它装的是什么。
+ *
+ * `accountCode` 单列：它不带主体前缀（历史上同名字段两种含义，见
+ * `principal-no.ts` 头注），但仍是要带 U- 上屏的可视码。
+ */
+const FIELD_RE = /(?:^|[a-z])(?:[Tt]enant|[Uu]ser|[Ww]orkspace)(?:Code|No)$/;
+const EXTRA_FIELDS = new Set(["accountCode"]);
+const isPrincipalField = (name) =>
+  EXTRA_FIELDS.has(name) || FIELD_RE.test(name);
 
 /** 这些上下文里的用法是路由 / 比较 / 键，不是上屏。 */
 const ROUTE_CALLS =
@@ -86,14 +92,17 @@ walk(PORTALS, (file) => {
     copies.push(rel);
   }
 
-  if (!/tenantCode|accountCode|workspaceCode|tenantNo|userNo|workspaceNo/.test(src)) {
+  if (!/[Tt]enant(Code|No)|accountCode|[Uu]ser(Code|No)|[Ww]orkspace(Code|No)/.test(src)) {
     return;
   }
   scanned += 1;
 
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const visit = (node) => {
-    if (ts.isPropertyAccessExpression(node) && FIELDS.has(node.name.text)) {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      isPrincipalField(node.name.text)
+    ) {
       let display = false;
       let prev = node;
       let p = node.parent;
