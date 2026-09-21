@@ -81,7 +81,7 @@ type AccountStatusIndicatorTone =
   | "attention"
   | "closed";
 
-const defaultAccountsPageCopy: AccountsPageCopy = {
+const accountsPageCopy: AccountsPageCopy = {
   eyebrow: "租户账号",
   title: "账号管理",
   description:
@@ -312,13 +312,13 @@ interface AccountRowActions {
 /**
  * 状态标走 `StatusBadge`，语气由 `ACCOUNT_STATUS_TONE` 给。
  *
- * 租户列随 `showTenantContext` 出没——平台账号视图没有租户归属这回事。
- *
  * 账号名可点、跳详情页，与租户列表同规矩——所以跳转回调要从调用点传进来，
  * 行动作菜单里的那一个在这儿够不着。
+ *
+ * 租户列曾经随 `showTenantContext` 出没，为一个「平台账号视图」留的口子；
+ * 那个视图从未存在，prop 也没有任何调用点传过（owner 2026-09-21：无用信息收掉）。
  */
 function useAccountColumns(
-  showTenantContext: boolean,
   onViewDetail: (account: AccountOperationRecord) => void,
 ): DataTableColumn<AccountOperationRecord>[] {
   const locale = useLocale();
@@ -350,31 +350,27 @@ function useAccountColumns(
         />
       ),
     },
-    ...(showTenantContext
-      ? [
-          {
-            id: "tenant",
-            header: "租户",
-            cell: (account: AccountOperationRecord) => {
-              const summary = accountTenantSummary(account);
-              return (
-                <span className="inline-flex flex-col items-center gap-2xs">
-                  <span className="inline-flex flex-wrap justify-center gap-2xs">
-                    {summary.tags.map((tag) => (
-                      <StatusBadge key={tag} tone="brand" icon={false}>
-                        {tag}
-                      </StatusBadge>
-                    ))}
-                  </span>
-                  <span className="text-body-sm text-muted-foreground">
-                    {summary.primaryName}
-                  </span>
-                </span>
-              );
-            },
-          },
-        ]
-      : []),
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (account: AccountOperationRecord) => {
+        const summary = accountTenantSummary(account);
+        return (
+          <span className="inline-flex flex-col items-center gap-2xs">
+            <span className="inline-flex flex-wrap justify-center gap-2xs">
+              {summary.tags.map((tag) => (
+                <StatusBadge key={tag} tone="brand" icon={false}>
+                  {tag}
+                </StatusBadge>
+              ))}
+            </span>
+            <span className="text-body-sm text-muted-foreground">
+              {summary.primaryName}
+            </span>
+          </span>
+        );
+      },
+    },
     {
       id: "status",
       header: tShared("columns.state"),
@@ -414,9 +410,7 @@ function useAccountColumns(
         <span className="inline-flex flex-col items-center gap-2xs">
           <Badge>{accountHighestRoleLabel(account)}</Badge>
           <span className="text-body-sm text-muted-foreground">
-            {showTenantContext
-              ? `${formatNumber(account.tenantCount)} 个租户`
-              : "平台角色"}
+            {`${formatNumber(account.tenantCount)} 个租户`}
           </span>
         </span>
       ),
@@ -441,18 +435,10 @@ function useAccountColumns(
   ];
 }
 
-export function AccountsPage({
-  copy = defaultAccountsPageCopy,
-  loadAccounts = fetchAccountOperations,
-  showTenantContext = true,
-}: {
-  copy?: Partial<AccountsPageCopy>;
-  loadAccounts?: () => Promise<AccountOperationRecord[]>;
-  showTenantContext?: boolean;
-} = {}) {
+export function AccountsPage() {
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
-  const pageCopy = { ...defaultAccountsPageCopy, ...copy };
+  const pageCopy = accountsPageCopy;
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountOperationRecord[]>([]);
   const [accountsTruncated, setAccountsTruncated] = useState(false);
@@ -482,7 +468,7 @@ export function AccountsPage({
     setLoading(true);
     setLoadError(null);
 
-    loadAccounts()
+    fetchAccountOperations()
       .then((records) => {
         if (active) {
           setAccounts(records);
@@ -505,7 +491,7 @@ export function AccountsPage({
     return () => {
       active = false;
     };
-  }, [loadAccounts]);
+  }, []);
 
   function requestToggleStatus(account: AccountOperationRecord) {
     setActionReason("");
@@ -545,7 +531,7 @@ export function AccountsPage({
           description: `已吊销 ${result.revoked} 个会话。`,
         });
       }
-      const refreshed = await loadAccounts();
+      const refreshed = await fetchAccountOperations();
       setAccounts(refreshed);
       setAccountsTruncated(isListTruncated(refreshed));
       setPendingAction(null);
@@ -572,10 +558,7 @@ export function AccountsPage({
       router.push(`/accounts/${encodeURIComponent(account.accountCode)}`),
   };
 
-  const accountColumns = useAccountColumns(
-    showTenantContext,
-    accountActions.onViewDetail,
-  );
+  const accountColumns = useAccountColumns(accountActions.onViewDetail);
 
   const filteredAccounts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -588,11 +571,7 @@ export function AccountsPage({
         account.online !== (onlineFilter === "online")
       )
         return false;
-      if (
-        showTenantContext &&
-        !accountMatchesTenantType(account, tenantTypeFilter)
-      )
-        return false;
+      if (!accountMatchesTenantType(account, tenantTypeFilter)) return false;
       if (roleFilter !== "all" && accountRoleGroup(account) !== roleFilter)
         return false;
       if (
@@ -607,7 +586,6 @@ export function AccountsPage({
     onlineFilter,
     query,
     roleFilter,
-    showTenantContext,
     statusFilter,
     tenantTypeFilter,
   ]);
@@ -745,21 +723,19 @@ export function AccountsPage({
             {/* 顺序是 owner 定的（2026-09-21）：全部租户 | 登录状态 | 全部状态 |
                 全部权限。从「他属于哪儿」收到「他此刻怎样」，再到「他能干什么」。 */}
             <>
-              {showTenantContext ? (
-                <NativeSelect
-                  wrapperClassName="w-fit basis-media-xl"
-                  value={tenantTypeFilter}
-                  onChange={(event) =>
-                    setTenantTypeFilter(event.target.value as TenantTypeFilter)
-                  }
-                  aria-label={pageCopy.tenantTypeAriaLabel}
-                >
-                  <option value="all">全部租户</option>
-                  <option value="individual">个人</option>
-                  <option value="company">组织</option>
-                  <option value="mixed">个人+组织</option>
-                </NativeSelect>
-              ) : null}
+              <NativeSelect
+                wrapperClassName="w-fit basis-media-xl"
+                value={tenantTypeFilter}
+                onChange={(event) =>
+                  setTenantTypeFilter(event.target.value as TenantTypeFilter)
+                }
+                aria-label={pageCopy.tenantTypeAriaLabel}
+              >
+                <option value="all">全部租户</option>
+                <option value="individual">个人</option>
+                <option value="company">组织</option>
+                <option value="mixed">个人+组织</option>
+              </NativeSelect>
               <NativeSelect
                 wrapperClassName="w-fit basis-media-xl"
                 value={onlineFilter}
