@@ -97,6 +97,10 @@ const MEMBER_ROW = {
   created_at: "2026-08-10T14:17:29.000Z",
   updated_at: "2026-08-10T14:17:29.000Z",
   account: "demo_acme",
+  /* 登录句柄与可视码是**两个值**：此前投影只给了前者、却叫 accountCode，
+     加 U- 前缀后界面上变成了 `U-stonesmoker`（owner 2026-09-21 走查）。
+     这里特意给两个不同的值，两者一旦再被揭到一起，这条就红。 */
+  user_no: "1799729056",
   email: "ops@acme.demo",
   user_status: "active",
   display_name: "陈立",
@@ -231,7 +235,8 @@ describe("GET /api/tenants/:id detail projection", () => {
     expect(record.members).toEqual([
       {
         id: MEMBER_ROW.membership_id,
-        accountCode: "demo_acme",
+        userNo: "1799729056",
+        account: "demo_acme",
         name: "陈立",
         email: "ops@acme.demo",
         role: "Tenant Owner",

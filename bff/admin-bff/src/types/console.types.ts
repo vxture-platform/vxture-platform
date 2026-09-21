@@ -919,8 +919,15 @@ export type TenantRiskLevel = "normal" | "follow_up" | "high";
 export interface TenantOperationMember {
   /** membership id，React key 用，不展示。 */
   id: string;
-  /** 登录句柄 `account.users.account`，可视码。 */
-  accountCode: string;
+
+  /** 用户可视码（10 位 user_no）。上屏带 `U-`；没取到为 null。 */
+  userNo: string | null;
+  /**
+   * 登录句柄 `account.users.account`（如 `stonesmoker`）。
+   * **不是主体码，不加 U- 前缀。** 原来叫 accountCode，而 accounts.router
+   * 里同名字段装的是 user_no——同名不同义，已按值改名。
+   */
+  account: string;
   name: string;
   email: string;
   role: string;

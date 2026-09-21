@@ -809,8 +809,15 @@ export type TenantRiskLevel = "normal" | "follow_up" | "high";
 export interface TenantOperationMember {
   /** membership id，React key 用，不展示。 */
   id: string;
-  /** 登录句柄 `account.users.account`，可视码。 */
-  accountCode: string;
+
+  /** 用户可视码（10 位 user_no）。上屏带 `U-`；没取到为 null。 */
+  userNo: string | null;
+  /**
+   * 登录句柄 `account.users.account`（如 `stonesmoker`）。
+   * **不是主体码，不加 U- 前缀。** 原来叫 accountCode，而 accounts.router
+   * 里同名字段装的是 user_no——同名不同义，已按值改名。
+   */
+  account: string;
   name: string;
   email: string;
   role: string;
@@ -997,6 +1004,9 @@ export interface TenantMemberRecord {
   membershipId: string;
   userId: string;
   name: string;
+  /** 用户可视码（10 位 user_no）。上屏带 `U-`。 */
+  userNo: string | null;
+  /** 登录句柄。**不是主体码，不加前缀。** */
   account: string;
   email: string;
   userStatus: string;
@@ -1596,6 +1606,14 @@ export interface AccountOperationRecord {
   /** 用户头像的内容哈希；null = 没传过，界面画平台默认图。 */
   avatarHash: string | null;
   id: string;
+  /**
+   * 用户可视码：**这一条真的是 `user_no::text`**（accounts.router 的 SQL 别名），
+   * 上屏带 `U-`。
+   *
+   * 与租户成员那边区分开：那里同名的字段曾经装的是**登录句柄**
+   * （`stonesmoker`），加了 U- 前缀后显示成 `U-stonesmoker`（owner 2026-09-21
+   * 走查抳到）；那一边已按值拆成 `userNo` 与 `account`。
+   */
   accountCode: string;
   displayName: string;
   email: string;

@@ -1134,7 +1134,12 @@ const TICKET_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
 function mapOperationMemberRow(row: TenantMemberRow): TenantOperationMember {
   return {
     id: row.membership_id,
-    accountCode: row.account ?? "",
+    /* 两个值拆开给（owner 2026-09-21 走查：成员行显示成了 `U-stonesmoker`）。
+       此前只给一个 `accountCode`，装的却是登录句柄——而 accounts.router 里
+       同名的字段装的是 `user_no::text`。同名不同义，加前缀时按名字当成了
+       主体码。visible-id.ts 的头注早警告过：同一个字段名在不同接口里两种都有。 */
+    userNo: row.user_no,
+    account: row.account ?? "",
     name: row.display_name ?? row.account ?? "",
     email: row.email ?? "",
     role: row.role_name ?? row.role_code ?? "",
@@ -1697,6 +1702,9 @@ function mapMemberRow(row: TenantMemberRow): TenantMemberRecord {
     membershipId: row.membership_id,
     userId: row.user_id,
     name: row.display_name ?? row.account ?? "未设置",
+    /* 两条投影共用 TenantMemberRow，所以 user_no 这边也有。
+       account = 登录句柄（不加前缀），userNo = 可视码（带 U-）。 */
+    userNo: row.user_no,
     account: row.account ?? "",
     email: row.email ?? "",
     userStatus: row.user_status ?? "",
@@ -1756,6 +1764,7 @@ select
   m.created_at,
   m.updated_at,
   u.account,
+  u.user_no::text as user_no,
   u.email,
   u.status       as user_status,
   up.display_name,
@@ -1837,6 +1846,8 @@ interface RejectVerificationBody {
 interface TenantMemberRow {
   membership_id: string;
   user_id: string;
+  /** 可视码（10 位，带 U- 上屏）。与 `account`（登录句柄）不是一回事。 */
+  user_no: string | null;
   role_id: string;
   role_scope: string;
   status: string;
@@ -1859,6 +1870,9 @@ interface TenantMemberRecord {
   membershipId: string;
   userId: string;
   name: string;
+  /** 用户可视码（10 位 user_no）。上屏带 `U-`。 */
+  userNo: string | null;
+  /** 登录句柄。**不是主体码，不加前缀。** */
   account: string;
   email: string;
   userStatus: string;
