@@ -114,14 +114,17 @@ const tenantOpsSections: AdminNavigationSection[] = [
       },
       {
         id: "accounts",
-        // 正名「账号体系」→「平台用户」（owner 2026-09-18）：这一页管的是跨租户的
-        // 自然人账号，"体系"听起来像在管一套制度。code 不动。
+        /* 「账号管理」（owner 2026-09-21），与「租户管理」成对。code 不动。
+           **改名要改两处**：侧栏渲染的中文来自 `messages/*.json` 的
+           `navigation.items.accounts.label`，这里的 `label` 只是兜底。
+           2026-09-18 那次「账号体系→平台用户」只改了这里，词条没跟上，
+           于是侧栏三天来一直显示「账号体系」——改名等于没发生。 */
         code: "account_system",
         i18nKey: "menu.operation.account_system",
         status: "active",
         href: "/accounts",
-        label: "平台用户",
-        subLabel: "Users",
+        label: "账号管理",
+        subLabel: "Accounts",
         description: "跨租户查询平台账号，管理账号状态、登录安全和联系方式。",
         icon: "user",
       },

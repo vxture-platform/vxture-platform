@@ -188,7 +188,7 @@
         "description": "Manage tenant profiles, status, lifecycle, and operating notes."
       },
       "accounts": {
-        "label": "Account System",
+        "label": "Account Management",
         "description": "Search accounts across tenants and manage status, security, and contacts."
       },
       "verifications": {
@@ -2190,7 +2190,8 @@
   },
   "filters": {
     "allKinds": "All types",
-    "allStates": "All states"
+    "allStates": "All states",
+    "allLoginStates": "All login states"
   },
   "actions": {
     "archive": "Archive",
@@ -2220,7 +2221,9 @@
       "voided": "Voided",
       "settled": "Settled",
       "partiallyPaid": "Partially paid",
-      "awaitingPayment": "Awaiting payment"
+      "awaitingPayment": "Awaiting payment",
+      "online": "Online",
+      "offline": "Offline"
     },
     "orderPayment": {
       "not_required": "Not required",

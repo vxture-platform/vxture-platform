@@ -188,7 +188,7 @@
         "description": "管理平台租户资料、状态、生命周期和运营备注。"
       },
       "accounts": {
-        "label": "账号体系",
+        "label": "账号管理",
         "description": "跨租户查询平台账号，管理账号状态、登录安全和联系方式。"
       },
       "verifications": {
@@ -2190,7 +2190,8 @@
   },
   "filters": {
     "allKinds": "全部类型",
-    "allStates": "全部状态"
+    "allStates": "全部状态",
+    "allLoginStates": "全部登录状态"
   },
   "actions": {
     "archive": "归档",
@@ -2220,7 +2221,9 @@
       "voided": "已作废",
       "settled": "已结清",
       "partiallyPaid": "部分收款",
-      "awaitingPayment": "待收款"
+      "awaitingPayment": "待收款",
+      "online": "在线",
+      "offline": "离线"
     },
     "orderPayment": {
       "not_required": "无需支付",

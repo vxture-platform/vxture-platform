@@ -694,8 +694,8 @@ order by k.updated_at desc
 limit 50
 `;
 
-// 未接 / 总计。两个数一次查出来：分开查会在两次查询之间漂移，而界面把它们写成
-// 「x / n」一个分数，分子分母不同时刻就是错的。
+// 未接 / 总计。两个数一次查出来：分开查会在两次查询之间漂移，而这两个数是一起读的
+// ——未接不可能多于总计，一旦漂移就会出现「未接 3 / 总计 2」这种自相矛盾的一对。
 const ACCOUNT_DETAIL_TICKET_COUNTS_SQL = `
 select
   count(*) filter (where k.status in ${ACCOUNT_OPEN_TICKET_STATUSES})::int as open_count,
