@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
+import { exportRowsToCsv } from "@/lib/exportCsv";
+import type { CsvColumn } from "@/lib/exportCsv";
 import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  ActionButton,
   ActionMenu,
   Avatar,
   AvatarFallback,
@@ -26,6 +29,7 @@ import {
   EmptyState,
   Icon,
   Input,
+  MetricGrid,
   Label,
   ListCardGrid,
   MetricListCard,
@@ -33,7 +37,6 @@ import {
   PanelItem,
   PanelList,
   Progress,
-  Section,
   StatusBadge,
   TableTitleCell,
   Tabs,
@@ -63,6 +66,7 @@ import type {
   TenantOperationDetailRecord,
   TenantOperationMember,
   TenantOperationRecord,
+  TenantOperationAuditEvent,
   TenantOperationSubscription,
   TenantOperationUsageMetric,
 } from "@/entities/console";
@@ -1478,49 +1482,106 @@ function TenantUsageTab({ usage }: { usage: TenantOperationUsageMetric[] }) {
     );
   }
 
+  /* 汇总（owner S5-1）。三个数各自回答一件事：
+       计量项   —— 这个租户一共在用几种资源
+       已配池   —— 其中几种真的设了上限（其余是「用多少算多少」）
+       临界     —— 有几种已经到 80% 以上
+     「临界」取 80% 与水位条的 warning 同一道线（usageTrackTone），不另立一个
+     阈值——两处用不同的线会让「卡片说临界、条子还是绿的」这种事发生。 */
+  const pooled = usage.filter((metric) => metric.quotaLimit !== null);
+  const tight = pooled.filter((metric) => {
+    const percent = usagePercent(metric);
+    return percent !== null && percent >= 80;
+  });
+
   return (
-    <div className="grid min-w-0 gap-lg">
-      {usage.map((metric) => {
-        const percent = usagePercent(metric);
-        const unit = metric.unit ?? "";
-        return (
-          <article
-            key={metric.metricKey}
-            className="grid min-w-0 gap-md border-b border-dashed border-primary/10 pb-lg"
-          >
-            <header className="flex min-w-0 items-center justify-between gap-md">
-              <strong className="text-title-md font-extrabold text-foreground">
-                {metric.metricKey}
-              </strong>
-              <span className="text-body-sm font-semibold text-muted-foreground">
-                本月用量 {formatNumber(metric.monthUsage)} {unit}
-              </span>
-            </header>
-            <div className="flex min-w-0 items-baseline justify-between gap-md">
-              <b className="text-title-xl text-foreground">
-                {metric.quotaUsed === null
-                  ? "-"
-                  : formatNumber(metric.quotaUsed)}
-              </b>
-              <small className="text-body-sm font-semibold text-muted-foreground">
-                {metric.quotaLimit === null
-                  ? "未配置配额池"
-                  : ` / ${formatNumber(metric.quotaLimit)} ${unit}`}
-              </small>
-            </div>
-            {/* 原来是手搓的轨道 + 一个按百分比改宽度的 span，语气色靠
-                `--usage-tone` 三个修饰类给。DS `Progress` 的填充用位移不改宽度
-                （不触发布局），语气改由调用方给填充色。 */}
-            {percent === null ? null : (
-              <Progress
-                value={percent}
-                aria-label={`${metric.metricKey} 配额水位`}
-                className={USAGE_TRACK_TONE[usageTrackTone(percent)]}
-              />
-            )}
-          </article>
-        );
-      })}
+    <div className="grid min-w-0 gap-xl">
+      <MetricGrid
+        aria-label="配额与用量汇总"
+        columns={3}
+        items={[
+          {
+            id: "metrics",
+            icon: "graph",
+            label: "计量项",
+            value: formatNumber(usage.length),
+            help: "该租户本月有用量汇总、或有配额池的资源种类数。",
+          },
+          {
+            id: "pooled",
+            icon: "shield-check",
+            label: "已配额",
+            value: `${formatNumber(pooled.length)} / ${formatNumber(usage.length)}`,
+            tags: ["其余不限量"],
+            help: "设了配额池上限的资源种类；没有池的按用量计，不受限。",
+          },
+          {
+            id: "tight",
+            icon: "warning",
+            label: "临界",
+            value: formatNumber(tight.length),
+            tags: ["水位 ≥ 80%"],
+            tone: tight.length ? "warning" : "success",
+            help: "配额水位达到 80% 以上的资源种类，与下方水位条同一条线。",
+          },
+        ]}
+      />
+
+      {/* 一项一张卡（owner S5-2）。此前是一排 <article> 靠虚线分隔——信息一样，
+          但卡有边界，扫起来快得多。一行两张：卡里有水位条与两组读数。 */}
+      <div className="grid min-w-0 gap-lg xl:grid-cols-2">
+        {usage.map((metric) => {
+          const percent = usagePercent(metric);
+          const unit = metric.unit ?? "";
+          return (
+            <Card key={metric.metricKey} surface="base" className="gap-md">
+              <CardHeader className="gap-2xs">
+                <span className="flex min-w-0 items-center gap-sm">
+                  <Icon
+                    name="graph"
+                    size="sm"
+                    fallback="placeholder"
+                    className="shrink-0 text-primary-text"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
+                    {metric.metricKey}
+                  </span>
+                  {percent !== null && percent >= 80 ? (
+                    <StatusBadge tone={percent >= 100 ? "danger" : "warning"}>
+                      {percent >= 100 ? "已用尽" : "临界"}
+                    </StatusBadge>
+                  ) : null}
+                </span>
+                <span className="block text-body-sm text-muted-foreground">
+                  本月用量 {formatNumber(metric.monthUsage)} {unit}
+                </span>
+              </CardHeader>
+              <CardContent className="grid min-w-0 gap-sm">
+                <div className="flex min-w-0 items-baseline justify-between gap-md">
+                  <b className="text-title-xl text-foreground tabular-nums">
+                    {metric.quotaUsed === null
+                      ? "—"
+                      : formatNumber(metric.quotaUsed)}
+                  </b>
+                  <small className="text-body-sm font-semibold text-muted-foreground tabular-nums">
+                    {metric.quotaLimit === null
+                      ? "未配置配额池"
+                      : `/ ${formatNumber(metric.quotaLimit)} ${unit}`}
+                  </small>
+                </div>
+                {/* 没有池就没有水位条——「不知道」不画成满格。 */}
+                {percent === null ? null : (
+                  <Progress
+                    value={percent}
+                    aria-label={`${metric.metricKey} 配额水位`}
+                    className={USAGE_TRACK_TONE[usageTrackTone(percent)]}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1532,65 +1593,130 @@ const RISK_TEXT_TONE: Record<string, string> = {
   high: "text-destructive-text",
 };
 
+/* 审计导出的列。时间给到秒：同一天几十条，只给日期对不了账。 */
+const AUDIT_CSV_COLUMNS: readonly CsvColumn<TenantOperationAuditEvent>[] = [
+  { label: "动作", value: (event) => event.action },
+  { label: "操作人", value: (event) => event.actor },
+  { label: "结果", value: (event) => auditResultLabel(event.result) },
+  { label: "时间", value: (event) => event.at },
+];
+
 function TenantRiskTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
   const locale = useLocale();
+  const tShared = useTranslations();
+  const tableLabels = useTableLabels();
+  const [selectedAudit, setSelectedAudit] = useState<readonly string[]>([]);
+
+  const riskLevel = normalizeTenantRiskLevel(tenant.riskLevel);
+
+  /* 单栏（owner S6）。此前是 xl:grid-cols-3：左边「风险状态」只有三个短读数，
+     右边审计记录挤在两列里——左侧空一半、右侧横向不够用。风险状态收成一行
+     摆在标题下，把整幅宽度让给表格。 */
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-lg xl:grid-cols-3">
-      <Section
-        level={3}
-        icon="shield-check"
-        title="风险状态"
-        className="min-w-0 content-start border-primary/15 xl:border-r xl:border-dashed xl:pr-lg"
-      >
-        <div className="flex min-w-0 flex-wrap items-baseline gap-md">
-          <strong
-            className={`text-title-xl font-extrabold ${RISK_TEXT_TONE[normalizeTenantRiskLevel(tenant.riskLevel)]}`}
-          >
-            {riskLabel(tenant.riskLevel)}
-          </strong>
-          <span className="text-body-sm text-muted-foreground">
-            {verifiedLabel(tenant.verifiedStatus)}
+    <div className="grid min-w-0 gap-xl">
+      <section className="grid min-w-0 gap-md">
+        <DetailSectionHeading icon="shield-check" title="风控审计" />
+        <div className="flex min-w-0 flex-wrap items-baseline gap-lg">
+          <span className="flex items-baseline gap-sm">
+            <span className="text-body-sm text-muted-foreground">风险等级</span>
+            <b
+              className={`text-title-xl font-extrabold ${RISK_TEXT_TONE[riskLevel]}`}
+            >
+              {riskLabel(tenant.riskLevel)}
+            </b>
           </span>
-          <span className="text-body-sm text-muted-foreground">
-            {tenant.ticketOpenCount} 个未结工单
+          <span className="flex items-baseline gap-sm">
+            <span className="text-body-sm text-muted-foreground">认证状态</span>
+            <StatusBadge tone={VERIFICATION_TONE[tenant.verifiedStatus]}>
+              {verifiedLabel(tenant.verifiedStatus)}
+            </StatusBadge>
+          </span>
+          <span className="flex items-baseline gap-sm">
+            <span className="text-body-sm text-muted-foreground">最近活跃</span>
+            <b className="text-body-md text-foreground">
+              {tenant.lastActiveAt
+                ? formatDate(tenant.lastActiveAt, locale)
+                : "无活动记录"}
+            </b>
           </span>
         </div>
-        <p className="m-0 text-body-sm leading-relaxed text-foreground">
-          {tenant.notes}
-        </p>
-      </Section>
+      </section>
 
-      <Section
-        level={3}
-        icon="table"
-        title="审计记录"
-        className="min-w-0 xl:col-span-2"
-      >
-        <PanelList empty="暂无审计记录">
-          {tenant.auditEvents.map((event) => (
-            <PanelItem
-              key={event.id}
-              main={
-                <TableTitleCell
-                  title={event.action}
-                  description={event.actor}
-                />
-              }
-              trail={
-                <span className="flex items-center gap-md">
-                  {/* 台账类到秒：同一天可能几十条，只显示日期分不出先后。 */}
-                  <span className="whitespace-nowrap text-body-sm text-muted-foreground">
-                    {formatDateTime(event.at, locale)}
-                  </span>
-                  <StatusBadge tone={AUDIT_RESULT_TONE[event.result]}>
-                    {auditResultLabel(event.result)}
-                  </StatusBadge>
-                </span>
-              }
-            />
-          ))}
-        </PanelList>
-      </Section>
+      {/* 导出条：选择列得有用处。
+          审计行**没有真的逐行动作**——它只有动作名 / 操作人显示名 / 时间 /
+          结果四个字段，没有可跳的目标。按 owner 定的「不能是死的按钮」，宁可
+          不给操作列，也不编一个跳回本页的假动作。真正有用的是把选中的
+          几条导出去对账。 */}
+      <div className="flex min-w-0 items-center justify-end gap-sm">
+        <ActionButton
+          icon="arrow-down"
+          variant={selectedAudit.length > 0 ? "default" : "outline"}
+          disabled={selectedAudit.length === 0}
+          onClick={() =>
+            exportRowsToCsv(
+              `tenant-${tenant.tenantCode}-audit`,
+              AUDIT_CSV_COLUMNS,
+              tenant.auditEvents.filter((event) =>
+                selectedAudit.includes(event.id),
+              ),
+            )
+          }
+        >
+          {tShared("common.export")}
+        </ActionButton>
+      </div>
+
+      {/* 表格走平台规范（owner S6）：选择列 + 序号列 + … + 操作列。
+          此前是 PanelList，没有序号也没有操作列，与全站其他台账不同形。 */}
+      <DataTable
+        labels={tableLabels}
+        columns={[
+          {
+            id: "action",
+            header: "动作",
+            cell: (event) => (
+              <TableTitleCell
+                icon="table"
+                title={event.action}
+                description={event.actor}
+              />
+            ),
+          },
+          {
+            id: "result",
+            header: tShared("columns.state"),
+            align: "center",
+            cell: (event) => (
+              <StatusBadge tone={AUDIT_RESULT_TONE[event.result]}>
+                {auditResultLabel(event.result)}
+              </StatusBadge>
+            ),
+          },
+          {
+            id: "at",
+            header: tShared("columns.occurredAt"),
+            cell: (event) => (
+              <TableTitleCell
+                layout="stacked"
+                /* 台账类到秒：同一天可能几十条，只显示日期分不出先后。 */
+                title={formatDate(event.at, locale)}
+                description={formatDateTime(event.at, locale)}
+              />
+            ),
+          },
+        ]}
+        rows={tenant.auditEvents}
+        rowKey={(event) => event.id}
+        indexStart={1}
+        selectedKeys={selectedAudit}
+        onSelectionChange={setSelectedAudit}
+        empty={
+          <EmptyState
+            title="暂无审计记录"
+            description="这个租户名下还没有审计事件。"
+          />
+        }
+      />
     </div>
   );
 }

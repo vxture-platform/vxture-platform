@@ -2180,6 +2180,7 @@
   "columns": {
     "currency": "币种",
     "kind": "类型",
+    "occurredAt": "发生时间",
     "receivedAmount": "已收金额",
     "state": "状态",
     "tenantCode": "租户编码",

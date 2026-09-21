@@ -2180,6 +2180,7 @@
   "columns": {
     "currency": "Currency",
     "kind": "Type",
+    "occurredAt": "Occurred at",
     "receivedAmount": "Received",
     "state": "State",
     "tenantCode": "Tenant code",
