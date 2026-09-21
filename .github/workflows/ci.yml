@@ -373,6 +373,13 @@ jobs:
           # 这种数会随后来的任何一次新增而失效(2026-09-09 三条一起炸,连挂三次生产迁移)
           pnpm lint:migration-counts
 
+      # 部署脚本的 bash 单测（prune-images / env-values / registry-retry）。
+      # 2026-09-22 接进 CI：这套测试在 package.json 里挂了很久，**CI 从来没跑过**
+      # ——不在 CI 里的测试等于没有，改坏了也不会有人知道。
+      - name: Deploy script unit tests
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm test:deploy-scripts
+
       # 租户权限配置体系门控(批 0a):权限目录在 seed / core-utils / console 导航 / 迁移
       # 四处必须逐码一致;console-bff 每条路由必须声明 @Public / @SelfScope /
       # @RequireCapability——漏标运行时是 403,这里在 lint 期就报出来。

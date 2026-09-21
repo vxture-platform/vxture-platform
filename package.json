@@ -118,7 +118,7 @@
     "start:panel": "pnpm --filter @vxture/dev-panel start",
     "test": "pnpm --recursive test",
     "test:coverage": "pnpm --recursive test:coverage",
-    "test:deploy-scripts": "bash deploy/scripts/lib/prune-images.test.sh",
+    "test:deploy-scripts": "bash deploy/scripts/lib/prune-images.test.sh && bash deploy/scripts/lib/env-values.test.sh && bash deploy/scripts/lib/registry-retry.test.sh",
     "test:watch": "pnpm --recursive test:watch",
     "type-check": "pnpm --filter @vxture/website type-check",
     "type-check:admin": "pnpm --filter @vxture/admin type-check",
