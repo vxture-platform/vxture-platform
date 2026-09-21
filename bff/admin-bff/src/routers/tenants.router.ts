@@ -386,6 +386,60 @@ export class TenantsRouter {
   }
 
   /**
+   * PUT /api/tenants/:id/operator-notes
+   * 请求体：{ body: string }。响应：TenantOperationDetailRecord（刷新后）。
+   *
+   * 备注只留**一份当前文本**（owner 2026-09-21：「信息一份即可」），而每次
+   * 编辑写一条审计（带 before/after）——历史在 support.audit_logs 里，不另建表。
+   * 另建一张历史表会造出第二份说法，而运营动作的台账本来就只该有一份。
+   */
+  @Put(":id/operator-notes")
+  async updateOperatorNotes(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: { body?: unknown },
+  ): Promise<TenantOperationDetailRecord> {
+    assertCanManageTenants(req);
+    const tenantId = await this.resolveTenantId(id);
+    // 空字符串是合法值（= 把备注清空），所以不走 requireTenantText。
+    if (typeof body?.body !== "string") {
+      throw new BadRequestException("body must be a string");
+    }
+    const next = body.body.trim();
+    if (next.length > 4000) {
+      throw new BadRequestException("body must be at most 4000 characters");
+    }
+    const actorId = req.user?.id ?? null;
+
+    const { rows } = await this.rwPool.query<{ before_body: string | null }>(
+      `
+        with prev as (
+          select body from admin.tenant_operator_notes where tenant_id = $1
+        )
+        insert into admin.tenant_operator_notes (tenant_id, body, updated_by, updated_at)
+        values ($1, $2, $3::uuid, now())
+        on conflict (tenant_id) do update set
+          body       = excluded.body,
+          updated_by = excluded.updated_by,
+          updated_at = now()
+        returning (select body from prev) as before_body
+      `,
+      [tenantId, next, actorId],
+    );
+
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action: "tenant.operator_notes.update",
+      resourceType: "tenant",
+      resourceId: tenantId,
+      tenantId,
+      before: { body: rows[0]?.before_body ?? "" },
+      after: { body: next },
+    });
+
+    return this.loadTenant(tenantId);
+  }
+
+  /**
    * GET /api/tenants/:id/logo — 租户标识字节（运营在详情页看原图，审违规用）。
    *
    * 只服务**自定义**标识：`tenancy.tenant_logos` 有行 → 返字节；无行 → 404，由前端
@@ -827,7 +881,7 @@ export class TenantsRouter {
       throw new NotFoundException("Tenant not found");
     }
 
-    const [members, subscriptions, usage, auditEvents, tickets] =
+    const [members, subscriptions, usage, auditEvents, tickets, notes] =
       await Promise.all([
         this.pool.query<TenantMemberRow>(TENANT_DETAIL_MEMBERS_SQL, [tenantId]),
         this.pool.query<TenantSubscriptionRow>(
@@ -837,7 +891,11 @@ export class TenantsRouter {
         this.pool.query<TenantUsageRow>(TENANT_DETAIL_USAGE_SQL, [tenantId]),
         this.pool.query<TenantAuditRow>(TENANT_DETAIL_AUDIT_SQL, [tenantId]),
         this.pool.query<TenantTicketRow>(TENANT_DETAIL_TICKETS_SQL, [tenantId]),
+        this.pool.query<TenantOperatorNotesRow>(TENANT_DETAIL_NOTES_SQL, [
+          tenantId,
+        ]),
       ]);
+    const notesRow = notes.rows[0];
 
     return {
       ...mapTenantRow(row),
@@ -846,6 +904,13 @@ export class TenantsRouter {
       usage: usage.rows.map(mapUsageRow),
       auditEvents: auditEvents.rows.map(mapAuditRow),
       tickets: tickets.rows.map(mapTicketRow),
+      /* 没写过备注的租户根本没有那一行，不是空字串——两者对界面来说
+         一样（都是空），但 updatedBy/updatedAt 要是 null 而不是假值。 */
+      operatorNotes: {
+        body: notesRow?.body ?? "",
+        updatedAt: toIsoOrNull(notesRow?.updated_at ?? null),
+        updatedBy: notesRow?.updated_by_name ?? null,
+      },
     };
   }
 
@@ -1001,6 +1066,8 @@ function mapTenantRow(row: TenantOperationRow): TenantOperationRecord {
     monthlyRevenue: toMoney(row.month_revenue),
     totalRevenue: toMoney(row.total_revenue),
     ticketOpenCount: toCount(row.ticket_open_count),
+    /* `notes` 是**租户自己写的简介**（tenant_profiles.description）。
+       运营内部备注是另一件事，在 admin.tenant_operator_notes，只随详情返回。 */
     notes: row.description ?? "",
   };
 }
@@ -1428,6 +1495,21 @@ where a.tenant_id = $1
 order by a.created_at desc
 limit 20
 `;
+
+// 运营备注：1:1，只随详情读。不进 TENANT_SELECT——那是列表与详情共用的基底，
+// join 进去等于让 500 行的列表也拖着这张表，而列表不需要它。
+const TENANT_DETAIL_NOTES_SQL = `
+select n.body, n.updated_at, op.display_name as updated_by_name
+  from admin.tenant_operator_notes n
+  left join admin.operator_account op on op.id = n.updated_by
+ where n.tenant_id = $1
+`;
+
+interface TenantOperatorNotesRow {
+  body: string;
+  updated_at: Date | string | null;
+  updated_by_name: string | null;
+}
 
 // 未结工单（与 ticket_open_count 同一过滤），先按优先级、再按最近更新。id 用可视码 ticket_no。
 const TENANT_DETAIL_TICKETS_SQL = `

@@ -1055,6 +1055,17 @@ export interface TenantOperationRecord {
  * 那批占位。与 SubscriptionOperationDetailRecord / OrderOperationDetailRecord 同一做法。
  */
 export interface TenantOperationDetailRecord extends TenantOperationRecord {
+  /**
+   * 运营内部备注（admin.tenant_operator_notes）。与 `notes` 不是一回事：
+   * `notes` 是租户自己写的简介，本字段租户看不到。
+   *
+   * 只在**详情**上：列表查询不 join 这张表，放在基类上会让列表投影缺字段。
+   */
+  operatorNotes: {
+    body: string;
+    updatedAt: string | null;
+    updatedBy: string | null;
+  };
   members: TenantOperationMember[];
   subscriptions: TenantOperationSubscription[];
   usage: TenantOperationUsageMetric[];

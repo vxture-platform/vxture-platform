@@ -936,6 +936,7 @@ export interface TenantOperationRecord {
   totalRevenue: number;
   /** support.tickets 未结（open/pending/in_progress/reopened）数。 */
   ticketOpenCount: number;
+  /** 租户**自己写的简介**（tenant_profiles.description）。不是运营备注。 */
   notes: string;
 }
 
@@ -951,6 +952,18 @@ export interface TenantOperationDetailRecord extends TenantOperationRecord {
   auditEvents: TenantOperationAuditEvent[];
   /** 未结工单（与 ticketOpenCount 同一过滤），按优先级再按更新时间。 */
   tickets: TenantOperationTicket[];
+  /**
+   * 运营内部备注（admin.tenant_operator_notes）。**租户看不到。**
+   *
+   * 与 `notes` 不是一回事：那一个是租户自己写的简介。2026-09-21 之前
+   * 这一页把 `notes` 挂在「运营备注」标题下，同一段文字贴着两个含义相反的标签。
+   * 只在详情上：列表查询不带它。
+   */
+  operatorNotes: {
+    body: string;
+    updatedAt: string | null;
+    updatedBy: string | null;
+  };
 }
 
 // 工单时间线事件（评论 / 指派 / 状态变更），append-only 事件流。
