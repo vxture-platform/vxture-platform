@@ -87,6 +87,7 @@ import {
   TENANT_RISK_TONE,
   TENANT_STATUS_TONE,
   ticketStatusLabel,
+  typeLabel,
   usagePercent,
   VERIFICATION_TONE,
   verifiedLabel,
@@ -321,8 +322,6 @@ function TenantInfoTab({
   onEdit,
   onReset,
   onSave,
-  resettingLogo,
-  onResetLogo,
   operatorNotes,
   notesDraft,
   notesEditing,
@@ -354,13 +353,9 @@ function TenantInfoTab({
   onEdit: () => void;
   onReset: () => void;
   onSave: () => void;
-  resettingLogo: boolean;
-  /** 直接就是落锤动作——确认由 `DestructiveButton` 自带的框收，不再由外面开。 */
-  onResetLogo: () => Promise<void>;
 }) {
   const locale = useLocale();
   const tShared = useTranslations();
-  const withLabels = useConfirmLabels();
   return (
     <div className="grid min-w-0 grid-cols-1 gap-lg">
       <section className="grid min-w-0 gap-lg">
@@ -521,70 +516,6 @@ function TenantInfoTab({
             <TenantConfigItem label="人员规模">
               <TenantConfigValue>{tenant.scale}</TenantConfigValue>
             </TenantConfigItem>
-          </div>
-
-          {/* 租户标识：按**原图**画，不缩略——运营要看清租户传的到底是什么
-              （违规图片审核）。没传过则画 DS 的平台默认图。 */}
-          {/* 横向拉满一整行：标识与说明左起、动作靠右。此前把整块塞进一个
-              `TenantConfigItem` 里，那一格实测只有 128px 宽，说明文字被挤成竖排单字。 */}
-          <div className="flex min-w-0 items-center gap-lg border-b border-dashed border-primary/10 pb-sm">
-            <span className="w-media-sm shrink-0 text-body-sm text-muted-foreground">
-              租户标识
-            </span>
-            <span className="flex min-w-0 flex-1 items-center gap-sm">
-              <Avatar
-                key={tenant.logoHash ?? "__default__"}
-                className="size-media-md rounded-md"
-              >
-                <AvatarImage
-                  src={
-                    tenant.logoHash
-                      ? tenantLogoUrl(tenant.id, tenant.logoHash)
-                      : tenantDefaultLogo.src
-                  }
-                  alt={tenant.tenantName}
-                  className="rounded-md object-cover"
-                />
-                <AvatarFallback
-                  delayMs={0}
-                  className="rounded-md bg-accent text-muted-foreground"
-                  aria-label={tenant.tenantName}
-                >
-                  <Icon
-                    name={
-                      tenant.tenantType === "company"
-                        ? "buildings"
-                        : "building-office"
-                    }
-                    size="md"
-                    fallback="placeholder"
-                  />
-                </AvatarFallback>
-              </Avatar>
-              {!tenant.logoHash ? (
-                <span className="whitespace-nowrap text-body-sm text-muted-foreground">
-                  未上传，当前为平台默认
-                </span>
-              ) : null}
-            </span>
-            {/* 重置是不可撤回的删除，必须每次都问——step-up 凭据在有效期内会被
-                复用，不能拿它兼任确认（owner 2026-09-16 实测：刚验过租户、接着
-                重置用户头像时一声不响就删了）。后果文案里把这一点写明。 */}
-            <DestructiveButton
-              className="ml-auto shrink-0"
-              size="md"
-              icon="refresh"
-              disabled={resettingLogo || !tenant.logoHash}
-              confirm={withLabels({
-                verb: "重置",
-                target: `租户「${tenant.tenantName}」的标识`,
-                consequence:
-                  "删除租户上传的标识、回落平台默认图，原图不留存、不可撤回。若二次验证仍在有效期内，确认后将直接执行、不再要求验证码。",
-                onConfirm: onResetLogo,
-              })}
-            >
-              重置为默认
-            </DestructiveButton>
           </div>
         </div>
       </section>
@@ -1478,6 +1409,7 @@ function TenantTicketsTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
 
 export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   const { toast } = useToast();
+  const withLabels = useConfirmLabels();
   const locale = useLocale();
   // 详情走 GET /api/tenants/:id：明细数组（订阅 / 用量 / 审计 / 工单）只有这条路由
   // 才带。此前这一页拉整张列表再 find 一条，列表投影里那些数组永远是空占位。
@@ -1755,22 +1687,70 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 }
                 aria-label="租户概要"
               >
-                <span
-                  className={`inline-grid shrink-0 place-items-center text-primary-text ${
-                    summaryExpanded ? "size-icon-xl" : "size-icon-lg"
-                  }`}
-                  aria-hidden="true"
+                {/* 区域 1：租户自己的标识，不是默认 icon（owner 2026-09-21）。
+                    展开大图 + 底下一条浅淡的「重置为默认」，收起只留小图。
+                    icon 降为 Avatar 的 fallback——它本来就只是 logo 的回落。 */}
+                <div
+                  className={
+                    summaryExpanded
+                      ? "grid shrink-0 justify-items-center gap-2xs"
+                      : "grid shrink-0"
+                  }
                 >
-                  <Icon
-                    name={
-                      tenant.tenantType === "company"
-                        ? "buildings"
-                        : "building-office"
+                  <Avatar
+                    key={tenant.logoHash ?? "__default__"}
+                    className={
+                      summaryExpanded
+                        ? "size-media-md rounded-md"
+                        : "size-icon-lg rounded-md"
                     }
-                    size={summaryExpanded ? "lg" : "sm"}
-                    fallback="placeholder"
-                  />
-                </span>
+                  >
+                    <AvatarImage
+                      src={
+                        tenant.logoHash
+                          ? tenantLogoUrl(tenant.id, tenant.logoHash)
+                          : tenantDefaultLogo.src
+                      }
+                      alt={tenant.tenantName}
+                      className="rounded-md object-cover"
+                    />
+                    <AvatarFallback
+                      delayMs={0}
+                      className="rounded-md bg-accent text-muted-foreground"
+                      aria-label={tenant.tenantName}
+                    >
+                      <Icon
+                        name={
+                          tenant.tenantType === "company"
+                            ? "buildings"
+                            : "building-office"
+                        }
+                        size={summaryExpanded ? "md" : "sm"}
+                        fallback="placeholder"
+                      />
+                    </AvatarFallback>
+                  </Avatar>
+                  {summaryExpanded ? (
+                    /* 浅淡模式（owner）：ghost + 弱化色。仍然是 DestructiveButton——
+                       重置是不可撤回的删除，确认框不能因为样式变淡就省掉。 */
+                    <DestructiveButton
+                      /* 浅淡靠 className：本件没有 variant（查过 design-ui 的 props）——
+                         破坏性动作不该有「换个温和变体」这种选项，那是件的态度。 */
+                      className="text-body-sm font-normal"
+                      size="sm"
+                      disabled={resettingLogo || !tenant.logoHash}
+                      confirm={withLabels({
+                        verb: "重置",
+                        target: `租户「${tenant.tenantName}」的标识`,
+                        consequence:
+                          "删除租户上传的标识、回落平台默认图，原图不留存、不可撤回。若二次验证仍在有效期内，确认后将直接执行、不再要求验证码。",
+                        onConfirm: handleResetLogo,
+                      })}
+                    >
+                      重置为默认
+                    </DestructiveButton>
+                  ) : null}
+                </div>
                 <div
                   className={
                     summaryExpanded
@@ -1798,6 +1778,11 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                     >
                       <Icon name="copy" size="xs" fallback="placeholder" />
                     </Button>
+                    {/* 类型跟在名字后面（owner）：它是这个主体是什么，不是它处于
+                        什么状态——所以不进下面那一排 StatusBadge。素 Badge 同行业那一条。 */}
+                    <Badge variant="outline" className="shrink-0">
+                      {typeLabel(tenant.tenantType)}
+                    </Badge>
                   </div>
                   <div className="group flex min-w-0 shrink-0 items-center gap-xs">
                     <p className="m-0 min-w-0 truncate text-body-sm font-extrabold text-muted-foreground">
@@ -1827,15 +1812,20 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                     >
                       {verifiedLabel(tenant.verifiedStatus)}
                     </StatusBadge>
-                    <StatusBadge
-                      tone={
-                        TENANT_RISK_TONE[
-                          normalizeTenantRiskLevel(tenant.riskLevel)
-                        ]
-                      }
-                    >
-                      {riskLabel(tenant.riskLevel)}
-                    </StatusBadge>
+                    {/* owner 的行 3 只列了租户状态与认证状态。风险标不删，改成
+                        **非正常才出现**：一枚写着「正常」的标是噪音，而非正常那一枚
+                        正是这张卡最该一眼看到的东西。 */}
+                    {normalizeTenantRiskLevel(tenant.riskLevel) !== "normal" ? (
+                      <StatusBadge
+                        tone={
+                          TENANT_RISK_TONE[
+                            normalizeTenantRiskLevel(tenant.riskLevel)
+                          ]
+                        }
+                      >
+                        {riskLabel(tenant.riskLevel)}
+                      </StatusBadge>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -1874,14 +1864,19 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                       tag={`累计 ${formatMoney(tenant.totalRevenue)}`}
                     />
                     {/* 最近活跃只在真有会话记录时挂标；null 就不挂，不用占位词冒充。 */}
+                    {/* 「未结 / 总计」而不是只给未结（owner 2026-09-21）：只看未结
+                        不知道分母，3 张未结在总共 5 张和总共 500 张里是两回事。 */}
                     <TenantKeyMetric
-                      label="未结工单"
-                      value={formatNumber(tenant.ticketOpenCount)}
-                      {...(tenant.lastActiveAt
-                        ? {
-                            tag: `最近活跃 ${formatDate(tenant.lastActiveAt, locale)}`,
-                          }
-                        : {})}
+                      label="工单数量"
+                      value={`${formatNumber(tenant.ticketOpenCount)} / ${formatNumber(tenant.ticketTotalCount)}`}
+                      tags={[
+                        "未结 / 总计",
+                        ...(tenant.lastActiveAt
+                          ? [
+                              `最近活跃 ${formatDate(tenant.lastActiveAt, locale)}`,
+                            ]
+                          : []),
+                      ]}
                     />
                   </section>
                 </>
@@ -1929,8 +1924,6 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               onEdit={handleInfoEdit}
               onReset={handleInfoReset}
               onSave={() => void handleInfoSave()}
-              resettingLogo={resettingLogo}
-              onResetLogo={handleResetLogo}
               operatorNotes={tenant.operatorNotes}
               notesDraft={notesDraft}
               notesEditing={notesEditing}

@@ -1046,6 +1046,8 @@ export interface TenantOperationRecord {
   totalRevenue: number;
   /** support.tickets 未结（open/pending/in_progress/reopened）数。 */
   ticketOpenCount: number;
+  /** support.tickets 总数（含已关闭，不含软删）——未结数的分母。 */
+  ticketTotalCount: number;
   notes: string;
 }
 
