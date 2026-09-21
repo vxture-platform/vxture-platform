@@ -60,6 +60,7 @@ import {
   formatNumber,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type InvoiceStatusFilter =
   | "all"
@@ -128,7 +129,7 @@ function invoiceSearchText(invoice: BillingInvoiceLedgerRecord) {
     invoice.expressNo,
     invoice.billNo,
     invoice.orderNo,
-    invoice.tenantCode,
+    formatPrincipalNoOr(invoice.tenantCode, "tenant", "—"),
     invoice.tenantName,
     invoice.region,
     invoice.industry,
@@ -184,7 +185,10 @@ function invoiceCsvColumns(
     { label: "税号", value: (v) => v.taxNo ?? "" },
     { label: "抬头类型", value: (v) => taxTypeLabel(v.invoiceTaxType) },
     { label: "发票类型", value: (v) => invoiceTypeLabel(v.invoiceType) },
-    { label: "租户编码", value: (v) => v.tenantCode },
+    {
+      label: "租户编码",
+      value: (v) => formatPrincipalNoOr(v.tenantCode, "tenant", "—"),
+    },
     { label: "租户名称", value: (v) => v.tenantName },
     { label: "关联账单", value: (v) => v.billNo },
     { label: "订单编号", value: (v) => v.orderNo ?? "" },
@@ -313,7 +317,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
             invoice.tenantType === "company" ? "buildings" : "building-office"
           }
           title={invoice.tenantName}
-          description={`${invoice.tenantCode} · ${typeLabel(invoice.tenantType)}`}
+          description={`${formatPrincipalNoOr(invoice.tenantCode, "tenant", "—")} · ${typeLabel(invoice.tenantType)}`}
         />
       ),
     },

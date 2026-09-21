@@ -32,6 +32,7 @@ import { fetchReviewList } from "@/api/admin-bff";
 import type { ReviewListItem } from "@/api/admin-bff";
 import { formatNumber } from "@/modules/tenants/tenant-utils";
 import { formatDay, formatClock } from "@vxture-platform/shared";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 /** DS 件内文案默认英文托底，调用点必须传中文（05 §3.1）。 */
 const RATING_LABELS = {
@@ -204,7 +205,7 @@ export function ReviewsPage() {
                   <span className="inline-flex flex-col gap-2xs">
                     <span>{item.tenantName}</span>
                     <span className="font-mono text-body-sm text-muted-foreground">
-                      {item.tenantNo}
+                      {formatPrincipalNoOr(item.tenantNo, "tenant", "—")}
                     </span>
                   </span>
                 ),

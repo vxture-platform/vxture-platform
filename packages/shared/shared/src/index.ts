@@ -43,6 +43,16 @@ export type {
   ConsumeResponseBody,
 } from "./types";
 
+// 三个主体可视码的展示形状（U- / T- / W-）。界面一律带前缀，前缀在此收口。
+export {
+  principalPrefix,
+  formatPrincipalNo,
+  formatPrincipalNoOr,
+  normalizePrincipalNoInput,
+  validatePrincipalNo,
+} from "./principal-no";
+export type { PrincipalKind, PrincipalNoProblem } from "./principal-no";
+
 // Catalog value-domain types — platform contract (product_220 §1/§2/§3)
 export type {
   Tier,

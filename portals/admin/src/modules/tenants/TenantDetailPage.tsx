@@ -103,6 +103,7 @@ import {
   verifiedLabel,
 } from "./tenant-utils";
 import { useConfirmLabels } from "@/modules/shared/destructive";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 // 「模型授权」页签 2026-08-30 删除：模型用量归 Atlas，平台库没有这份数据，
 // 那一页从来只渲染过空表——一个永远为空的页签比没有页签更误导。
@@ -239,7 +240,7 @@ function TenantKeyMetric({
 
 function createTenantInfoDraft(tenant: TenantOperationRecord): TenantInfoDraft {
   return {
-    tenantCode: tenant.tenantCode,
+    tenantCode: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
     tenantName: tenant.tenantName,
     displayName: tenant.displayName,
     tenantType: tenant.tenantType,
@@ -265,8 +266,9 @@ function isTenantInfoDirty(
  * 后者是编出来的钱；累计收入现在由 BFF 从 billing.payments 实付合计给（totalRevenue）。
  */
 
+/* 成员账号码的**唯一**展示入口——前缀在这里加，调用点都不用改。 */
 function getMemberAccountCode(member: TenantOperationMember) {
-  return member.accountCode || "-";
+  return formatPrincipalNoOr(member.accountCode, "user", "—");
 }
 
 /** 订阅金额是每期实付；币种不是人民币时不套人民币格式。 */
@@ -1672,7 +1674,7 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
           disabled={selectedAudit.length === 0}
           onClick={() =>
             exportRowsToCsv(
-              `tenant-${tenant.tenantCode}-audit`,
+              `tenant-${formatPrincipalNoOr(tenant.tenantCode, "tenant", "—")}-audit`,
               AUDIT_CSV_COLUMNS,
               tenant.auditEvents.filter((event) =>
                 selectedAudit.includes(event.id),
@@ -2180,7 +2182,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                   </div>
                   <div className="group flex min-w-0 shrink-0 items-center gap-xs">
                     <p className="m-0 min-w-0 truncate text-body-sm font-extrabold text-muted-foreground">
-                      {tenant.tenantCode}
+                      {formatPrincipalNoOr(tenant.tenantCode, "tenant", "—")}
                     </p>
                     <Button
                       variant="ghost"
@@ -2188,7 +2190,11 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                       className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label="复制租户代码"
                       title="复制租户代码"
-                      onClick={() => void handleCopyText(tenant.tenantCode)}
+                      onClick={() =>
+                        void handleCopyText(
+                          formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
+                        )
+                      }
                     >
                       <Icon name="copy" size="xs" fallback="placeholder" />
                     </Button>
@@ -2315,12 +2321,14 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 与可见性做对，按空间筛数据是下一步。 */}
             {tenant.workspaces.length > 0 ? (
               <NativeSelect
-                /* 宽度：owner 2026-09-21 实看「字完全遮挡」。
-                   原来是 `w-fit basis-media-xl`：两个尺寸打架（width 与 flex-basis
-                   同时给了主轴），而 media-xl 只有 24×spacing，装不下
-                   「默认工作空间（默认）」这种名字。
-                   改成只给下限：内容短就 128px，长了自己擑开，shrink-0 保底。 */
-                wrapperClassName="shrink-0 min-w-media-2xl"
+                /* `w-fit` 不能掉（owner 2026-09-21 两次实看）。
+                   NativeSelect 的包裹层自带 `w-full`，而 `cn` 是 tailwind-merge：
+                   从 wrapperClassName 传 `w-fit` 会把 `w-full` **剔掉**。上一版为了修
+                   「太窄」把 w-fit 去了，于是 w-full 留下来——它撑满整行，连带把下拉
+                   挤到了单独一行（实测：去掉 w-full 后 223px、与 tabs 同行）。
+                   另 63 处写 `w-fit basis-media-xl` 能工作，靠的是 basis 控主轴；这里不用
+                   basis，改用 min-w 给下限：内容短就 128px，长了按 fit 擑开。 */
+                wrapperClassName="w-fit shrink-0 min-w-media-2xl"
                 value={activeWorkspace}
                 onChange={(event) => setActiveWorkspace(event.target.value)}
                 aria-label="工作空间"

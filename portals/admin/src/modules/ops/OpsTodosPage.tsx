@@ -45,6 +45,7 @@ import {
   verifiedLabel,
 } from "@/modules/tenants/tenant-utils";
 import { formatClock, formatDay } from "@vxture-platform/shared";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type TodoSeverity = "rose" | "amber" | "blue" | "green";
 /**
@@ -244,7 +245,7 @@ function buildOpsTodos(
         title: spec.title,
         description: `${order.tenantName} · ${order.solutionName} · ${order.servicePlanName}，金额 ${order.currency} ${order.amount.toFixed(2)}。${spec.description}`,
         tenantId: order.tenantId,
-        tenantCode: order.tenantCode,
+        tenantCode: formatPrincipalNoOr(order.tenantCode, "tenant", "—"),
         tenantName: order.tenantName,
         tenantUser: tenantOwnerById.get(order.tenantId) ?? UNKNOWN_USER,
         tenantMeta: `${typeLabel(order.tenantType)} / ${order.region}`,
@@ -270,11 +271,11 @@ function buildOpsTodos(
       items.push({
         id: `${tenant.id}-verification`,
         type: "verification",
-        code: tenant.tenantCode,
+        code: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
         title: "认证待审核",
         description: `当前认证状态为${verifiedLabel(tenant.verifiedStatus)}，需要核验资质材料与联系人信息。`,
         tenantId: tenant.id,
-        tenantCode: tenant.tenantCode,
+        tenantCode: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
         tenantName: tenant.displayName,
         tenantUser: tenant.ownerName || UNKNOWN_USER,
         tenantMeta,
@@ -294,11 +295,11 @@ function buildOpsTodos(
       items.push({
         id: `${tenant.id}-risk`,
         type: "risk",
-        code: tenant.tenantCode,
+        code: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
         title: "风险状态需复核",
         description: tenant.notes,
         tenantId: tenant.id,
-        tenantCode: tenant.tenantCode,
+        tenantCode: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
         tenantName: tenant.displayName,
         tenantUser: tenant.ownerName || UNKNOWN_USER,
         tenantMeta,
@@ -332,7 +333,7 @@ function buildOpsTodos(
       title: ticket.title,
       description: `${ticket.tenantName} 的 ${ticket.priority.toUpperCase()} 工单处于${ticket.status === "blocked" ? "阻塞" : ticket.status === "processing" ? "处理中" : "待处理"}状态。`,
       tenantId: ticket.tenantId,
-      tenantCode: ticket.tenantCode,
+      tenantCode: formatPrincipalNoOr(ticket.tenantCode, "tenant", "—"),
       tenantName: ticket.tenantName,
       tenantUser: ticket.ownerName || UNKNOWN_USER,
       tenantMeta: `${typeLabel(ticket.tenantType)} / ${ticket.region} / ${statusLabel(ticket.tenantStatus)}`,

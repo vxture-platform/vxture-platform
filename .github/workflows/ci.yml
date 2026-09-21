@@ -258,6 +258,14 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:migration-placement
 
+      # 主体码上屏：租户号 / 账号码 / 工作空间号必须带 T- / U- / W- 前缀。
+      # 2026-09-21 owner 实看：admin 48 处裸显示，而三种码都是 10 位纯数字，
+      # 屏幕上分不出是哪一类，复制去搜也搜不到（别处显示的是带前缀的）。
+      # 同时盯「实现只有一份」——此前 console / opera 各一份且不一样。
+      - name: Principal number display guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:principal-no
+
       # 词条中英对齐：键缺了会在英文界面渲染出键名本身（或静默回落成中文），
       # 而把中文原样复制进 en-US.json 能骗过键检查——那是「假双语」最常见的
       # 形态，且它在中文环境下永远不会被发现。两条一起查。

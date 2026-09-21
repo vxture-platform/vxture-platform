@@ -71,6 +71,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { useDateFormat } from "@/lib/use-date-format";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 const STATUS_TONES: Record<ConsoleWorkspace["status"], StatusBadgeTone> = {
   active: "success",
@@ -332,7 +333,7 @@ export function WorkspacesPage() {
           title={w.name}
           /* 副行给可视码而不是说明：说明可能为空，而号永远在，且它是这一行在
              工单、日志、跨页跳转里的身份（§11 v4：界面只出现可视码）。 */
-          description={w.workspaceNo}
+          description={formatPrincipalNoOr(w.workspaceNo, "workspace", "—")}
         />
       ),
     },

@@ -94,6 +94,7 @@ import {
 import { useDateFormat } from "@/lib/use-date-format";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 /** 输入框里固定前置的用户号前缀。与展示端同源——改前缀时这里跟着变。 */
 const USER_NO_PREFIX = principalPrefix("user");
@@ -1430,7 +1431,7 @@ export function MembersPage() {
                         {lookup.name ?? t("dialogs.lookup.noName")}
                       </span>
                       <span className="tabular-nums text-body-sm text-muted-foreground">
-                        {lookup.userNo}
+                        {formatPrincipalNoOr(lookup.userNo, "user", "—")}
                       </span>
                       {lookup.alreadyMember ? (
                         <StatusBadge tone="warning">

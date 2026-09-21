@@ -64,6 +64,7 @@ import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type ModelStatusFilter = "all" | "active" | "inactive";
 type ModelSourceFilter = "all" | "online" | "private";
@@ -573,7 +574,13 @@ export function ModelPlatformPage() {
 
   /** UUID → 可视码。屏幕上只出 value，UUID 只当 key 用。 */
   const tenantCodeById = useMemo(
-    () => new Map(tenants.map((tenant) => [tenant.id, tenant.tenantCode])),
+    () =>
+      new Map(
+        tenants.map((tenant) => [
+          tenant.id,
+          formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
+        ]),
+      ),
     [tenants],
   );
 
@@ -1799,7 +1806,8 @@ export function ModelPlatformPage() {
                 ) : null}
                 {tenants.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>
-                    {tenant.tenantCode} · {tenant.tenantName}
+                    {formatPrincipalNoOr(tenant.tenantCode, "tenant", "—")} ·{" "}
+                    {tenant.tenantName}
                   </option>
                 ))}
               </NativeSelect>
