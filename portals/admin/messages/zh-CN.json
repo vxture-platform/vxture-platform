@@ -2444,6 +2444,21 @@
       "model": "模型",
       "data": "数据",
       "service": "服务"
+    },
+    "ticketStatus": {
+      "open": "待处理",
+      "pending": "挂起",
+      "inProgress": "处理中",
+      "resolved": "已解决",
+      "closed": "已关闭",
+      "reopened": "重新打开",
+      "cancelled": "已取消"
+    },
+    "ticketPriority": {
+      "p0": "P0 紧急",
+      "p1": "P1 高",
+      "p2": "P2 中",
+      "p3": "P3 低"
     }
   },
   "orderDetailPage": {
@@ -2603,6 +2618,17 @@
         "placeholder": "例如：客户已确认继续购买，误操作驳回，现恢复订单。",
         "descriptionWithTenant": "订单号：<b>{orderNo}</b> · {tenantName}。恢复后订单回到待付款状态，账单与折扣一并复原。"
       }
+    }
+  },
+  "ticketDetail": {
+    "eventType": {
+      "comment": "回复",
+      "assign": "指派",
+      "statusChange": "状态变更",
+      "created": "创建",
+      "resolved": "已解决",
+      "closed": "已关闭",
+      "reopened": "重新打开"
     }
   }
 }

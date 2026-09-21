@@ -39,6 +39,7 @@ const dom = read(
 const p40 = read("deploy/database/ddl/40_product.sql");
 const p50 = read("deploy/database/ddl/50_metering.sql");
 const p52 = read("deploy/database/ddl/52_billing.sql");
+const p72 = read("deploy/database/ddl/72_support.sql");
 
 // [ label, @shared value domain, DB CHECK values ]
 const pairs = [
@@ -110,6 +111,19 @@ const pairs = [
     "pay source",
     tsArray(dom, "PAY_SOURCES"),
     ddlCheckIn(p52, "chk_payments_pay_source"),
+  ],
+  // 工单两轴（2026-09-21）。存储值域进契约是把工单枚举文案收进
+  // enum-labels 的前提——该模块头注写明只收值域已成文的枚举。
+  // 注意这里对的是存储的七值，不是列表投影的四值（见 @shared 头注）。
+  [
+    "ticket status",
+    tsArray(dom, "TICKET_STATUSES"),
+    ddlCheckIn(p72, "chk_tickets_status"),
+  ],
+  [
+    "ticket priority",
+    tsArray(dom, "TICKET_PRIORITIES"),
+    ddlCheckIn(p72, "chk_tickets_priority"),
   ],
 ];
 

@@ -118,6 +118,48 @@ export type BillStatus = (typeof BILL_STATUSES)[number];
 export const PAY_SOURCES = ["online", "offline", "voucher"] as const;
 export type PaySource = (typeof PAY_SOURCES)[number];
 
+/**
+ * support.tickets.status — where a ticket sits on the way to being closed.
+ *
+ * open (nobody has picked it up) → in_progress → resolved (we believe it is
+ * answered) → closed (the customer agreed, or it aged out). pending is the
+ * parked state: we are waiting on somebody outside the queue, so it is neither
+ * open nor being worked. reopened is resolved-that-did-not-hold — a distinct
+ * value rather than a return to `open`, because "came back" is the fact an
+ * operator needs to see. cancelled = withdrawn, nothing was owed.
+ *
+ * **These seven are not the vocabulary the ticket LIST speaks.** admin-bff
+ * projects them onto a coarser four (`open` / `processing` / `blocked` /
+ * `closed`) for the queue view. The seven are the stored values — the ones a
+ * write may set; the four are a display grouping laid over them. Anything that
+ * writes status uses this domain.
+ *
+ * Mirrors chk_tickets_status (72_support.sql).
+ */
+export const TICKET_STATUSES = [
+  "open",
+  "pending",
+  "in_progress",
+  "resolved",
+  "closed",
+  "reopened",
+  "cancelled",
+] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
+
+/**
+ * support.tickets.priority — how far up the queue a ticket jumps.
+ *
+ * p0 is the only one that means "now"; p1..p3 are ordinary backlog ordering.
+ * The ladder is numeric rather than named (urgent/high/normal) on purpose: the
+ * names invite argument about where a ticket belongs, while the numbers keep
+ * sort order and label pointing the same way.
+ *
+ * Mirrors chk_tickets_priority (72_support.sql).
+ */
+export const TICKET_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
+export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
+
 /** product_metrics.merge_strategy (product_220 §2 / data_product_200). */
 export const MERGE_STRATEGIES = ["max", "union", "pool", "tiered"] as const;
 export type MergeStrategy = (typeof MERGE_STRATEGIES)[number];

@@ -46,7 +46,6 @@ const ALLOWLIST = new Map([
   ["services/commerce/invoice/src/service/invoice.service.ts", "存量,待查是否进 bundle"],
   ["services/commerce/payment/src/service/payment.service.ts", "存量,待查是否进 bundle"],
   // 评价包最初照抄的就是这一份——那次照抄把漏注入一起抄走了,直接造成生产 500。
-  ["services/support/ticket/src/service/ticket.service.ts", "存量,console-bff 未加载过"],
   ["packages/core/api/src/client/http.client.ts", "存量,待查是否进 bundle"],
   ["packages/core/auth/src/guards/jwt-auth.guard.ts", "存量,待查是否进 bundle"],
   ["packages/core/auth/src/guards/roles.guard.ts", "存量,待查是否进 bundle"],

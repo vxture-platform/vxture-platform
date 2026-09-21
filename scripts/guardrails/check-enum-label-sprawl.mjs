@@ -66,7 +66,6 @@ const BASELINE = new Map([
   ["modules/products/ProductsPage.tsx", 15],
   ["modules/subscriptions/SubscriptionOperationDialog.tsx", 16],
   ["modules/support/ReviewsPage.tsx", 4],
-  ["modules/support/TicketsPage.tsx", 15],
   ["modules/tenants/tenant-utils.ts", 21],
   ["modules/tenants/VerificationsPage.tsx", 2],
   ["shared/ip-location.ts", 2],

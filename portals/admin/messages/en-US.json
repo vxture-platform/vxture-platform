@@ -2444,6 +2444,21 @@
       "model": "Model",
       "data": "Data",
       "service": "Service"
+    },
+    "ticketStatus": {
+      "open": "Open",
+      "pending": "On hold",
+      "inProgress": "In progress",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "reopened": "Reopened",
+      "cancelled": "Cancelled"
+    },
+    "ticketPriority": {
+      "p0": "P0 Urgent",
+      "p1": "P1 High",
+      "p2": "P2 Medium",
+      "p3": "P3 Low"
     }
   },
   "orderDetailPage": {
@@ -2603,6 +2618,17 @@
         "placeholder": "e.g. Customer confirmed they want to continue; rejected by mistake, restoring now.",
         "descriptionWithTenant": "Order <b>{orderNo}</b> · {tenantName}. Restoring returns it to awaiting payment and brings back the bill and discount."
       }
+    }
+  },
+  "ticketDetail": {
+    "eventType": {
+      "comment": "Reply",
+      "assign": "Assigned",
+      "statusChange": "Status change",
+      "created": "Created",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "reopened": "Reopened"
     }
   }
 }

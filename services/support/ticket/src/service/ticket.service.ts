@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   ConflictException,
@@ -18,7 +19,13 @@ import type {
 
 @Injectable()
 export class TicketService {
-  constructor(private readonly repo: PgTicketRepository) {}
+  // 必须显式 @Inject。esbuild 不产 emitDecoratorMetadata，靠类型推断的注入在
+  // 打包后拿到 undefined，而这一处在 service 上：**boot-smoke 照样绿**，造出一个
+  // 依赖为 undefined 的壳，第一次调用才 500（2026-09-20 的评价提交 500
+  // 就是这个）。本包一直没被加载过，所以这颗雷一直没响。
+  constructor(
+    @Inject(PgTicketRepository) private readonly repo: PgTicketRepository,
+  ) {}
 
   async listTickets(params: ListTicketsParams): Promise<ListTicketsResult> {
     return this.repo.listTickets(params);

@@ -336,7 +336,10 @@ function buildOpsTodos(
       tenantName: ticket.tenantName,
       tenantUser: ticket.ownerName || UNKNOWN_USER,
       tenantMeta: `${typeLabel(ticket.tenantType)} / ${ticket.region} / ${statusLabel(ticket.tenantStatus)}`,
-      href: "/tickets",
+      // 跳这张工单本身（2026-09-21）。原先这里是 `/tickets`，于是行操作里的
+      // 「去处理工单」与「查看全部工单」是同一个地址——点进去还得自己
+      // 在列表里找回那一条。`ticket.id` 是可读码 `ticket_no`（BFF 投影就是它）。
+      href: `/tickets/${encodeURIComponent(ticket.id)}`,
       severity: ticketSeverity(ticket),
       priority: ticketPriority(ticket),
       updatedAt: ticket.updatedAt,
@@ -653,7 +656,7 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
           <Section
             // 全部任务页的页头已经叫「全部任务」了,区块再叫一遍等于把同一个词
             // 摞两层;这里说的是它列的是什么。
-            title={isAll ? "任务明细" : "优先处理队列"}
+            title={isAll ? "任务明细" : "任务队列"}
             // 图标跟随当前分类，"全部"档退回队列自身图标。
             icon={typeFilter === "all" ? "table" : TODO_TYPE_ICON[typeFilter]}
             level={2}
