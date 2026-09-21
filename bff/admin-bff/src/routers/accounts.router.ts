@@ -630,7 +630,7 @@ left join lateral (
     on r.id = m.role_id
   where m.user_id = u.id and m.status = 'active'
 ) tb on true
--- 在线 = realm='customer' 还没过期的活跃会话。**不能只看 status**：revoked 之外
+-- 在线 = realm='customer' 还没过期的活跃会话。只看 status 不够：revoked 之外
 -- 还有一类「status 仍写着 active 但 expires_at 已过」的行（清扫是异步的），只判
 -- status 会把早就离线的人画成在线，而「强制下线」正是拿这个读数当门。
 left join lateral (
