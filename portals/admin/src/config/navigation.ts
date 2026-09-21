@@ -105,7 +105,9 @@ const tenantOpsSections: AdminNavigationSection[] = [
         i18nKey: "menu.operation.tenant_profile",
         status: "active",
         href: "/tenants",
-        label: "租户信息",
+        // 「租户管理」而不是「租户信息」（owner 2026-09-21）——页面改名后
+        // 导航没跟上；侧栏与页内标题对不上的后果是运营以为是两个地方。
+        label: "租户管理",
         subLabel: "Tenants",
         description: "管理平台租户资料、状态、生命周期和运营备注。",
         icon: "buildings",

@@ -184,7 +184,7 @@
         "description": "聚合待审核、异常告警和需要人工介入的运营任务。"
       },
       "tenants": {
-        "label": "租户信息",
+        "label": "租户管理",
         "description": "管理平台租户资料、状态、生命周期和运营备注。"
       },
       "accounts": {

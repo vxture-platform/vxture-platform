@@ -184,7 +184,7 @@
         "description": "Reviews, alerts, and operating tasks that need manual handling."
       },
       "tenants": {
-        "label": "Tenant Profile",
+        "label": "Tenant Management",
         "description": "Manage tenant profiles, status, lifecycle, and operating notes."
       },
       "accounts": {
