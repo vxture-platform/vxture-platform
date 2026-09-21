@@ -1430,6 +1430,9 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   );
   const [summaryExpanded, setSummaryExpanded] = useState(true);
   const [infoEditing, setInfoEditing] = useState(false);
+  /* 工作空间选择器。现在只记录选了哪个，还没有消费方——下方各 tab
+     按空间筛数据是下一步。先把选择器与「有没有工作空间」这件事做对。 */
+  const [activeWorkspace, setActiveWorkspace] = useState("all");
   const [notesEditing, setNotesEditing] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -1899,17 +1902,45 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           onValueChange={(value) => setActiveTab(value as TenantTabId)}
           className="grid min-w-0 gap-lg"
         >
-          <TabsList
-            className="h-auto max-w-full flex-wrap justify-start"
-            aria-label={`${tenant.displayName} 信息分区`}
-          >
-            {tenantTabs.map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id} className="flex-none">
-                <Icon name={tab.icon} size="xs" fallback="placeholder" />
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          {/* 一行两栏（owner 2026-09-21）：左侧主选择区，右侧辅助操作区。
+              此前 TabsList 占满整行，右边那片空白没有用处。
+              窄屏堆成两行（flex-wrap），不把下拉挤成竖排。 */}
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-md">
+            <TabsList
+              className="h-auto max-w-full flex-wrap justify-start"
+              aria-label={`${tenant.displayName} 信息分区`}
+            >
+              {tenantTabs.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="flex-none">
+                  <Icon name={tab.icon} size="xs" fallback="placeholder" />
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {/* 直属租户（没有工作空间）整个隐藏，不画一个只有「全部」的空下拉
+                ——owner：「没有工作区直属租户的，这个选择隐藏」。
+                工作空间目前只是个**选择器**：下方各 tab 还没按空间分段，先把选择
+                与可见性做对，按空间筛数据是下一步。 */}
+            {tenant.workspaces.length > 0 ? (
+              <NativeSelect
+                wrapperClassName="w-fit shrink-0 basis-media-xl"
+                value={activeWorkspace}
+                onChange={(event) => setActiveWorkspace(event.target.value)}
+                aria-label="工作空间"
+              >
+                {/* 「全部」而不是「全部工作空间」：长词会顶到下拉箭头底下
+                    （owner 2026-09-20 在待办页实看过同一件事）。 */}
+                <option value="all">全部</option>
+                {tenant.workspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                    {workspace.isDefault ? "（默认）" : ""}
+                  </option>
+                ))}
+              </NativeSelect>
+            ) : null}
+          </div>
 
           <TabsContent value="info" className="min-w-0">
             <TenantInfoTab
