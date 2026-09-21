@@ -316,7 +316,7 @@ function TenantInfoTab({
   editing,
   infoDirty,
   saving,
-  showVerificationReview,
+  verificationReviewState,
   reviewHref,
   onDraftChange,
   onEdit,
@@ -344,7 +344,8 @@ function TenantInfoTab({
   editing: boolean;
   infoDirty: boolean;
   saving: boolean;
-  showVerificationReview: boolean;
+  /** hidden = 已认证；enabled = 待审核；disabled = 其余（按钮在但点不动）。 */
+  verificationReviewState: "hidden" | "enabled" | "disabled";
   reviewHref: string;
   onDraftChange: <K extends keyof TenantInfoDraft>(
     field: K,
@@ -359,7 +360,9 @@ function TenantInfoTab({
   return (
     <div className="grid min-w-0 grid-cols-1 gap-lg">
       <section className="grid min-w-0 gap-lg">
-        <header>
+        {/* 标题与操作同一行（owner 2026-09-21：「当前在标题行下面，不美观，
+            逻辑不清」）。此前 <header> 没有 flex，两个块级子元素自然上下堆叠。 */}
+        <header className="flex min-w-0 flex-wrap items-center justify-between gap-md">
           <DetailSectionHeading icon="buildings" title="基础资料" />
           <div
             className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-xs"
@@ -389,15 +392,29 @@ function TenantInfoTab({
               </>
             ) : (
               <>
-                {showVerificationReview ? (
-                  <Link
-                    className="inline-flex min-h-icon-xl items-center justify-center gap-xs rounded-lg border border-warning-border bg-warning-muted px-sm text-body-sm font-semibold whitespace-nowrap text-warning-text no-underline"
-                    href={reviewHref}
+                {/* 认证审核三态（owner 2026-09-21）：
+                      已认证 → 不显示（无事可做）
+                      待审核 → 出现且可点
+                      其余   → 出现但禁用（告诉运营「这里有这件事，只是现在无待审」）
+                    禁用态用 Button 不用 Link：禁用的链接不是一回事，点下去照跳。 */}
+                {verificationReviewState ===
+                "hidden" ? null : verificationReviewState === "enabled" ? (
+                  <Button asChild variant="outline">
+                    <Link href={reviewHref}>
+                      <Icon name="medal" size="xs" fallback="placeholder" />
+                      <span>认证审核</span>
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    disabled
+                    title="当前没有待审核的认证申请"
                   >
                     <Icon name="medal" size="xs" fallback="placeholder" />
                     <span>认证审核</span>
-                  </Link>
-                ) : null}
+                  </Button>
+                )}
                 <Button variant="outline" onClick={onEdit}>
                   <Icon name="edit" size="xs" fallback="placeholder" />
                   <span>修改</span>
@@ -408,18 +425,8 @@ function TenantInfoTab({
         </header>
         <div className="grid min-w-0 gap-md lg:ml-media-lg">
           <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-3">
-            <TenantConfigItem label="租户代码">
-              {editing ? (
-                <Input
-                  value={draft.tenantCode}
-                  onChange={(event) =>
-                    onDraftChange("tenantCode", event.target.value)
-                  }
-                />
-              ) : (
-                <TenantConfigValue>{draft.tenantCode}</TenantConfigValue>
-              )}
-            </TenantConfigItem>
+            {/* 租户代码删于 2026-09-21（owner：「身份卡显示一次即可」）。
+                它本来就不可编辑，却画成了输入框——一次性一并清掉。 */}
             <TenantConfigItem label={tShared("columns.tenantName")}>
               {editing ? (
                 <Input
@@ -429,7 +436,14 @@ function TenantInfoTab({
                   }
                 />
               ) : (
-                <TenantConfigValue>{draft.tenantName}</TenantConfigValue>
+                <span className="flex min-w-0 flex-wrap items-center gap-xs">
+                  <TenantConfigValue>{draft.tenantName}</TenantConfigValue>
+                  {/* 标明这一栏是**认证名**（tenancy.tenants.name，跟着 KYC 走），
+                      与旁边的简称不是同一列——两者长得像，不标就会被当成重复。 */}
+                  <Badge variant="outline" className="shrink-0">
+                    认证名
+                  </Badge>
+                </span>
               )}
             </TenantConfigItem>
             <TenantConfigItem label="租户简称">
@@ -499,6 +513,17 @@ function TenantInfoTab({
                 </StatusBadge>
               )}
             </TenantConfigItem>
+            {/* 活跃状态（owner 2026-09-21 line2）。给的是**事实**不是判定：
+                直接报最近一次会话的日期，没有就说「无活动记录」。
+                没做成「活跃 / 沉默」两档：那要一个阀值（多少天算沉默），而那是
+                业务规则，我编一个出来就会被当成平台口径。要分档请给阀值。 */}
+            <TenantConfigItem label="活跃状态">
+              <TenantConfigValue>
+                {tenant.lastActiveAt
+                  ? formatDate(tenant.lastActiveAt, locale)
+                  : "无活动记录"}
+              </TenantConfigValue>
+            </TenantConfigItem>
             <TenantConfigItem label="认证状态">
               <StatusBadge tone={VERIFICATION_TONE[tenant.verifiedStatus]}>
                 {verifiedLabel(tenant.verifiedStatus)}
@@ -513,41 +538,66 @@ function TenantInfoTab({
             <TenantConfigItem label="所属行业">
               <TenantConfigValue>{tenant.industry}</TenantConfigValue>
             </TenantConfigItem>
-            <TenantConfigItem label="人员规模">
-              <TenantConfigValue>{tenant.scale}</TenantConfigValue>
-            </TenantConfigItem>
+            {/* 「组织规模」只在组织租户出现（owner 2026-09-21）。
+                个人租户填不出也用不上，留着只会多一格「—」。 */}
+            {tenant.tenantType === "company" ? (
+              <TenantConfigItem label="组织规模">
+                <TenantConfigValue>{tenant.scale}</TenantConfigValue>
+              </TenantConfigItem>
+            ) : null}
           </div>
         </div>
       </section>
 
       <section className="grid min-w-0 gap-lg">
-        <header>
+        {/* 同基础资料：标题与操作同一行，操作居右（owner 2026-09-21）。 */}
+        <header className="flex min-w-0 flex-wrap items-center justify-between gap-md">
           <DetailSectionHeading icon="user-switch" title="主管理员" />
-        </header>
-        <div className="grid min-w-0 grid-cols-1 items-stretch gap-x-lg gap-y-md lg:grid-cols-4">
-          <TenantConfigItem label="姓名">
-            <TenantConfigValue>
-              {tenant.ownerName}
-              {tenant.tenantType === "individual" ? <Badge>owner</Badge> : null}
-            </TenantConfigValue>
-          </TenantConfigItem>
-          <TenantConfigItem label="Mail">
-            <TenantConfigValue>{tenant.ownerEmail}</TenantConfigValue>
-          </TenantConfigItem>
-          <TenantConfigItem label="Phone">
-            <TenantConfigValue>{tenant.contactPhone}</TenantConfigValue>
-          </TenantConfigItem>
-          <div className="flex min-h-icon-2xl min-w-0 items-center justify-start gap-xs border-b border-dashed border-primary/10 pb-sm">
-            {/* 换 owner / 改主管理员无对应后端端点，保持 disabled（见 completion-plan）。 */}
-            <Button variant="outline" size="md" disabled>
+          <div
+            className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-xs"
+            aria-label="主管理员操作"
+          >
+            {/* 两颗都暂缓激活（owner 2026-09-21）。禁用不是懒，是后端真没有路径：
+                `owner_user_id` 既不在 PUT /api/tenants/:id 的字段里，也不在 98 列锁的
+                UPDATE 授权里；转移 owner 还要踩个人租户的唯一性约束
+                uq_tenants_one_personal_per_owner。
+                title 把原因写在悬停上——一颗不说话的灰按钮比没有按钮更让人猜。 */}
+            <Button
+              variant="outline"
+              disabled
+              title="转移主管理员尚无后端路径（owner_user_id 不可写）"
+            >
               <Icon name="user-switch" size="xs" fallback="placeholder" />
               <span>修改主管理员</span>
             </Button>
-            {/* 凭据操作（重置密码）须经 IdP 内部端点，不在本轮直写库（见 completion-plan）。 */}
-            <Button variant="outline" size="md" disabled>
+            <Button
+              variant="outline"
+              disabled
+              title="重置密码须经 IdP 内部端点，不在本平台直写库"
+            >
               <Icon name="key" size="xs" fallback="placeholder" />
               <span>重置密码</span>
             </Button>
+          </div>
+        </header>
+        {/* 缩进与列数都跟基础资料对齐（owner：「与上方基础资料一行三列对齐
+            显示，完全整齐」）。此前这一块既没缩进又是四列，两排字段对不上。 */}
+        <div className="grid min-w-0 gap-md lg:ml-media-lg">
+          <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-3">
+            <TenantConfigItem label="姓名">
+              <TenantConfigValue>
+                {tenant.ownerName}
+                {tenant.tenantType === "individual" ? (
+                  <Badge>owner</Badge>
+                ) : null}
+              </TenantConfigValue>
+            </TenantConfigItem>
+            <TenantConfigItem label="Mail">
+              <TenantConfigValue>{tenant.ownerEmail}</TenantConfigValue>
+            </TenantConfigItem>
+            <TenantConfigItem label="Phone">
+              <TenantConfigValue>{tenant.contactPhone}</TenantConfigValue>
+            </TenantConfigItem>
           </div>
         </div>
       </section>
@@ -581,28 +631,31 @@ function TenantInfoTab({
             )}
           </div>
         </header>
-        {notesEditing ? (
-          <Textarea
-            aria-label="运营备注"
-            value={notesDraft}
-            onChange={(event) => onNotesChange(event.target.value)}
-            rows={4}
-            maxLength={4000}
-            placeholder="只有运营看得到。记下这个租户的特殊情况、沟通结论、需要交接的事…"
-          />
-        ) : (
-          <p className="m-0 text-body-sm leading-relaxed whitespace-pre-wrap text-foreground">
-            {operatorNotes.body || "—"}
-          </p>
-        )}
-        {/* 「有操作人员和信息记录」（owner）。逐次的编辑历史在风控审计里
+        {/* 缩进与上两块对齐（owner S3-3a）。 */}
+        <div className="grid min-w-0 gap-sm lg:ml-media-lg">
+          {notesEditing ? (
+            <Textarea
+              aria-label="运营备注"
+              value={notesDraft}
+              onChange={(event) => onNotesChange(event.target.value)}
+              rows={4}
+              maxLength={4000}
+              placeholder="只有运营看得到。记下这个租户的特殊情况、沟通结论、需要交接的事…"
+            />
+          ) : (
+            <p className="m-0 text-body-sm leading-relaxed whitespace-pre-wrap text-foreground">
+              {operatorNotes.body || "—"}
+            </p>
+          )}
+          {/* 「有操作人员和信息记录」（owner）。逐次的编辑历史在风控审计里
             （tenant.operator_notes.update，带 before/after），不在这里再列一遍。 */}
-        {operatorNotes.updatedAt ? (
-          <p className="m-0 text-body-sm text-muted-foreground">
-            {operatorNotes.updatedBy ?? "未知"} 于{" "}
-            {formatDateTime(operatorNotes.updatedAt, locale)} 更新
-          </p>
-        ) : null}
+          {operatorNotes.updatedAt ? (
+            <p className="m-0 text-body-sm text-muted-foreground">
+              {operatorNotes.updatedBy ?? "未知"} 于{" "}
+              {formatDateTime(operatorNotes.updatedAt, locale)} 更新
+            </p>
+          ) : null}
+        </div>
         {/* 原来这里显示的是 `tenant.notes`——那是**租户自己写的简介**
             （tenant_profiles.description），库里根本没有运营备注这一列。
             同一段文字贴着两个含义相反的标签，运营以为那是自己人写的。
@@ -1513,7 +1566,15 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
 
   const visibleInfoDraft = infoDraft ?? createTenantInfoDraft(tenant);
   const currentTenantId = tenant.id;
-  const showVerificationReview = tenant.verifiedStatus !== "verified";
+  /* 三态而不是两态（owner 2026-09-21）。此前是
+     `verifiedStatus !== "verified"`——unverified / rejected 与 pending 一起出现且可点，
+     点过去却没有待审的申请。 */
+  const verificationReviewState =
+    tenant.verifiedStatus === "verified"
+      ? ("hidden" as const)
+      : tenant.verifiedStatus === "pending"
+        ? ("enabled" as const)
+        : ("disabled" as const);
 
   function handleInfoDraftChange<K extends keyof TenantInfoDraft>(
     field: K,
@@ -1949,7 +2010,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               editing={infoEditing}
               infoDirty={infoDirty}
               saving={savingInfo}
-              showVerificationReview={showVerificationReview}
+              verificationReviewState={verificationReviewState}
               reviewHref={`/verifications?tenantId=${encodeURIComponent(tenant.id)}`}
               onDraftChange={handleInfoDraftChange}
               onEdit={handleInfoEdit}
