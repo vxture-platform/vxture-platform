@@ -32,8 +32,14 @@ function makeReq(): Request & RequestContext {
 
 /** 只读池回答套餐查询；写池回答 insert。 */
 function poolsOf(planRow: Record<string, unknown> | undefined) {
-  const roQuery = vi.fn(async () => ({ rows: planRow ? [planRow] : [] }));
-  const rwQuery = vi.fn(async () => ({ rows: [{ id: "batch-1" }] }));
+  /* 显式写出参数签名：`vi.fn(async () => …)` 推出来的调用元组是空的，
+     后面取 `calls[0][1]`（落库参数）会报 TS2493。 */
+  const roQuery = vi.fn(async (_sql: string, _params?: unknown[]) => ({
+    rows: planRow ? [planRow] : [],
+  }));
+  const rwQuery = vi.fn(async (_sql: string, _params?: unknown[]) => ({
+    rows: [{ id: "batch-1" }],
+  }));
   return {
     ro: { query: roQuery } as unknown as Pool,
     rw: { query: rwQuery } as unknown as Pool,
