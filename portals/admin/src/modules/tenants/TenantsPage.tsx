@@ -64,6 +64,18 @@ function TenantActionsMenu({
   const router = useRouter();
   const isSuspended = tenant.status === "suspended";
 
+  /* 地址栏走可读码（tenant_no），不是 UUID。板块与编辑态用 query 带过去，
+     详情页挂载时读一次（见 TenantDetailPage 的 `?tab=` / `?edit=1`）。 */
+  const go = (tab?: string, edit?: boolean) => {
+    const query = [
+      ...(tab ? [`tab=${tab}`] : []),
+      ...(edit ? ["edit=1"] : []),
+    ].join("&");
+    router.push(
+      `/tenants/${encodeURIComponent(tenant.tenantCode)}${query ? `?${query}` : ""}`,
+    );
+  };
+
   return (
     <div
       className="relative z-[1] inline-flex justify-self-end"
@@ -76,27 +88,56 @@ function TenantActionsMenu({
             id: "details",
             label: tShared("actions.viewDetail"),
             icon: "arrow-right",
-            onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`),
+            onSelect: () => go(),
           },
           {
+            /* 不在列表页弹编辑框——那就是把详情页的表单又搭一遍。跳过去并把
+               编辑态打开，一份表单只留一处实现。 */
             id: "edit",
             label: "编辑资料",
             icon: "edit",
-            disabled: true,
+            onSelect: () => go("info", true),
+          },
+          /* 下面四条是详情页板块的快捷入口。六个板块只放四个：
+             「租户信息」已经是「查看详情」的落地点，再列一条是同一个地址；
+             「风控审计」不是运营主动要去干的事，是出了问题才查的，摆进常用
+             菜单会稀释前四条。 */
+          {
+            id: "members",
+            label: "成员账号",
+            icon: "user",
+            separatorBefore: true,
+            onSelect: () => go("members"),
           },
           {
-            id: "subscription",
-            label: "订阅处理",
+            id: "subscriptions",
+            label: "订阅产品",
             icon: "star",
-            disabled: true,
+            onSelect: () => go("subscriptions"),
+          },
+          {
+            id: "usage",
+            label: "配额用量",
+            icon: "graph",
+            onSelect: () => go("usage"),
+          },
+          {
+            id: "tickets",
+            label: "工单服务",
+            icon: "chat-circle",
+            onSelect: () => go("tickets"),
           },
           {
             // 暂停 → suspendTenant / 已暂停恢复 → resumeTenant；已注销租户无切换语义，置灰。
+            // 这一条不跳：它的宾语就是这一行租户，在原地做完最短。
             id: "toggle-status",
             label: isSuspended ? "恢复租户" : "暂停租户",
             icon: isSuspended ? "success" : "warning",
+            separatorBefore: true,
             disabled: busy || tenant.status === "cancelled",
+            ...(tenant.status === "cancelled"
+              ? { hint: "已注销的租户没有暂停 / 恢复语义" }
+              : {}),
             onSelect: () => onToggleStatus(tenant),
           },
         ]}
@@ -316,16 +357,15 @@ export function TenantsPage() {
   const companyTenants = tenants.filter(
     (tenant) => tenant.tenantType === "company",
   ).length;
-  const pendingVerifications = tenants.filter(
-    (tenant) => tenant.verifiedStatus === "pending",
+  /* 「使用租户」= 手上有订阅的那些，下排再拆付费 / 试用两个数。
+     换口径而不是改名（owner 2026-09-21 裁定）：原卡叫「试用租户」，口径是
+     「有订阅但月收入为零」——把它直接改叫「使用租户」会把付费客户排在外面，
+     标题与数对不上。一张卡要回答的是「多少人在用、其中多少付钱」。 */
+  const activeProductTenants = tenants.filter(
+    (tenant) => tenant.subscriptionCount > 0,
   ).length;
-  const pendingIndividualVerifications = tenants.filter(
-    (tenant) =>
-      tenant.verifiedStatus === "pending" && tenant.tenantType === "individual",
-  ).length;
-  const pendingCompanyVerifications = tenants.filter(
-    (tenant) =>
-      tenant.verifiedStatus === "pending" && tenant.tenantType === "company",
+  const payingTenants = tenants.filter(
+    (tenant) => tenant.subscriptionCount > 0 && tenant.monthlyRevenue > 0,
   ).length;
   const trialProductTenants = tenants.filter(
     (tenant) => tenant.subscriptionCount > 0 && tenant.monthlyRevenue <= 0,
@@ -361,7 +401,7 @@ export function TenantsPage() {
           <PageHeader
             icon="buildings"
             eyebrow="租户账号"
-            title="租户信息"
+            title="租户管理"
             description="平台运营侧统一检索租户、识别风险、处理订阅和进入单租户管理。"
           />
         }
@@ -371,6 +411,8 @@ export function TenantsPage() {
             <MetricGrid
               loading={loading}
               aria-label="租户运营统计"
+              // 三张卡要显式写列数：MetricGrid 默认 columns = 4。
+              columns={3}
               items={[
                 {
                   id: "total",
@@ -383,32 +425,25 @@ export function TenantsPage() {
                     `组织 ${formatNumber(companyTenants)}`,
                   ],
                 },
+                /* 「认证待审」删于 2026-09-21。owner：与待办重复。
+                   重复不是它唯一的毛病——待办那份是按自己的谓词派生的，这张卡是列表
+                   自己 filter 出来的，两个数早晚对不上，而运营会信先看到的那个。 */
                 {
-                  id: "pending-verification",
-                  help: "提交了组织认证、尚未审核的租户。",
-                  icon: "medal",
-                  label: "认证待审",
-                  value: formatNumber(pendingVerifications),
-                  tags: [
-                    `个人 ${formatNumber(pendingIndividualVerifications)}`,
-                    `组织 ${formatNumber(pendingCompanyVerifications)}`,
-                  ],
-                  tone: "warning",
-                },
-                {
-                  id: "trial",
-                  help: "有订阅但月收入为零的租户。",
+                  id: "active",
+                  help: "手上至少有一条订阅的租户。",
                   icon: "star",
-                  label: "试用租户",
-                  value: formatNumber(trialProductTenants),
-                  tags: ["未付费"],
-                  tone: "warning",
+                  label: "使用租户",
+                  value: formatNumber(activeProductTenants),
+                  tags: [
+                    `付费 ${formatNumber(payingTenants)}`,
+                    `试用 ${formatNumber(trialProductTenants)}`,
+                  ],
                 },
                 {
                   id: "risk",
                   help: "风险等级非正常的租户。",
                   icon: "warning",
-                  label: "风险租户",
+                  label: "风险关注",
                   value: formatNumber(riskTenants),
                   tags: ["需跟进"],
                   tone: riskTenants ? "danger" : "success",

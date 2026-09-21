@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
   Avatar,
@@ -156,8 +157,13 @@ const tenantTabs: Array<{ id: TenantTabId; label: string; icon: IconName }> = [
   { id: "subscriptions", label: "订阅产品", icon: "star" },
   { id: "usage", label: "配额用量", icon: "graph" },
   { id: "risk", label: "风控审计", icon: "table" },
-  { id: "tickets", label: "工单备注", icon: "chat-circle" },
+  // 「工单服务」而不是「工单备注」（owner 2026-09-21）：这一页列的是工单，
+  // 备注是旁边一小块，拿它当板块名会把主角说成配角。
+  { id: "tickets", label: "工单服务", icon: "chat-circle" },
 ];
+
+/** 地址栏里的 `?tab=` 只认这六个；别的一律当没写，回到默认页。 */
+const TENANT_TAB_IDS = new Set<string>(tenantTabs.map((tab) => tab.id));
 
 const tenantTypeOptions: Array<{
   value: TenantOperationRecord["tenantType"];
@@ -1412,9 +1418,24 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   const [tenant, setTenant] = useState<TenantOperationDetailRecord | null>(
     null,
   );
-  const [activeTab, setActiveTab] = useState<TenantTabId>("info");
+  /* 板块与编辑态都能由地址栏带进来（2026-09-21）。
+     列表页的行操作要的是「直接进成员 / 订阅 / 配额」，而不是在列表里另搭一套
+     面板——重复的按钮与功能应该是跳转性的，不能重复构建页面（owner 定下的原则）。
+     只读初值：进来之后用户自己切 tab 不再回写地址栏，否则后退键会变成「逐个
+     tab 倒放」。 */
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<TenantTabId>(
+    tabParam && TENANT_TAB_IDS.has(tabParam)
+      ? (tabParam as TenantTabId)
+      : "info",
+  );
   const [summaryExpanded, setSummaryExpanded] = useState(true);
   const [infoEditing, setInfoEditing] = useState(false);
+  /* `?edit=1` 只能在资料拉回来之后才能生效（编辑态靠 infoDraft），
+     所以不能当初值写，得等一个 effect。只生效一次。 */
+  const wantsEdit = searchParams.get("edit") === "1";
+  const editApplied = useRef(false);
   const [infoDraft, setInfoDraft] = useState<TenantInfoDraft | null>(null);
   const [infoBaseline, setInfoBaseline] = useState<TenantInfoDraft | null>(
     null,
@@ -1453,6 +1474,16 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
     () => isTenantInfoDirty(infoDraft, infoBaseline),
     [infoDraft, infoBaseline],
   );
+
+  /* `?edit=1`（列表页的「编辑资料」跳过来）。放在 effect 而不是初值：
+     编辑态靠 infoDraft，而那东西要等详情拉回来才有。editApplied 只让它生效一次：
+     否则用户点了「放弃」之后，下一次重渲染会把他又推回编辑态。 */
+  useEffect(() => {
+    if (!wantsEdit || editApplied.current || !infoDraft) return;
+    editApplied.current = true;
+    setActiveTab("info");
+    setInfoEditing(true);
+  }, [wantsEdit, infoDraft]);
 
   if (!tenant) {
     return (
