@@ -1209,10 +1209,15 @@ export class SubscriptionRouter {
     const soldRow = await this.pool.query<{
       product_code: string;
       release_stage: string;
+      plan_is_public: boolean;
+      plan_code: string;
     }>(
-      `select prod.product_code, prod.release_stage
+      `select prod.product_code, prod.release_stage,
+              pl.is_public as plan_is_public, pl.plan_code
          from product.plan_components pc
          join product.products prod on prod.id = pc.product_id
+         join product.plan_versions pv on pv.id = pc.plan_version_id
+         join product.plans pl on pl.id = pv.plan_id
         where pc.plan_version_id = $1
           and pc.component_role = 'primary'
           and prod.deleted_at is null
@@ -1230,6 +1235,28 @@ export class SubscriptionRouter {
       throw new ConflictException({
         code: "PRODUCT_NOT_RELEASED",
         message: "该产品尚在开发中，还不能订阅。",
+      });
+    }
+
+    /*
+     * 非公开套餐不可自助购买（2026-09-22）。
+     *
+     * `plans.is_public` 此前**只是个列表过滤**：console-bff 在 `subscribe-context`
+     * 与 `recommended-products` 两处滤掉它，而本端点从头到尾没读过这一列。后果是
+     * 「非公开」只做到了看不见——**知道 planVersionId 的人照样下得了单**。
+     *
+     * 这正是上面那段成熟度注释写过的同一条教训（「列表能滤掉不等于下单拦得住」），
+     * 当时补了 `release_stage` 却没有回头看同在一条路径上的 `is_public`。
+     *
+     * 放在成熟度之后：两者都是「这东西现在不该卖」，但成熟度是产品级、可见性是
+     * 套餐级，先答产品再答套餐，报错也按这个次第给。
+     *
+     * 邀请制（凭有效邀请解锁非公开套餐）是下一条线；在它落地之前，这里就是硬拒。
+     */
+    if (!sold.plan_is_public) {
+      throw new ConflictException({
+        code: "PLAN_NOT_PUBLIC",
+        message: "该套餐未对外开放自助购买，请联系销售。",
       });
     }
 

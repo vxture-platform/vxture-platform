@@ -61,6 +61,20 @@ function req(): Request & RequestContext {
   } as unknown as Request & RequestContext;
 }
 
+/**
+ * 「三道门都放行」的**肯定式**断言。
+ *
+ * 放行后会往下走到 `resolveDefaultWorkspace`，假 pool 在第三次调用上抛一个**不带
+ * 语义码**的普通 Error——所以 `codeOf` 为 undefined 恰好证明它穿过了所有带码的门。
+ *
+ * 原来这两条写的是「报错不再是这两个码」。否定式断言会**静默接受新的失败**：
+ * 2026-09-22 加 `is_public` 门时，用例的桩没有那一列 → 当场撞新门 → 抛的是第三个
+ * 码 → 「不是那两个码」照样成立，80 条全绿，而它们要证的「继续往下走」已经不成立。
+ */
+function expectPassedAllGates(error: unknown): void {
+  expect(codeOf(error)).toBeUndefined();
+}
+
 /** 从封套里取语义码；不是 HttpException 或没带码都回 undefined。 */
 function codeOf(error: unknown): string | undefined {
   const res = (error as { getResponse?: () => unknown })?.getResponse?.();
@@ -121,29 +135,56 @@ describe("POST orders · 归属与成熟度两道门", () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
 
-  it("beta 可订：两道门都放行（报错不再是这两个码）", async () => {
-    const { pool } = poolOf({ product_code: "vxtpl", release_stage: "beta" });
+  it("beta + 公开套餐：三道门都放行", async () => {
+    const { pool } = poolOf({
+      product_code: "vxtpl",
+      release_stage: "beta",
+      plan_is_public: true,
+    });
     const error = await routerWith(pool)
       .createOrder(req(), BODY)
       .catch((e: unknown) => e);
 
-    /* 放行后会往下走到 resolveDefaultWorkspace，假 pool 在那里抛——这正是
-       「两道门没拦」的证据。
-
-       **断言落在语义码上，不落在异常类上**：`resolveDefaultWorkspace` 自己就抛
-       `BadRequestException`（「租户缺少默认工作空间」），拿异常类当判据会跟它撞车。
-       要钉的是「报错不再是这两道门的码」，与前三条同一口径。 */
-    expect(codeOf(error)).not.toBe("PRODUCT_NOT_RELEASED");
-    expect(codeOf(error)).not.toBe("PLAN_PRODUCT_MISMATCH");
+    expectPassedAllGates(error);
   });
 
-  it("ga 可订：同上", async () => {
-    const { pool } = poolOf({ product_code: "vxtpl", release_stage: "ga" });
+  it("ga + 公开套餐：同上", async () => {
+    const { pool } = poolOf({
+      product_code: "vxtpl",
+      release_stage: "ga",
+      plan_is_public: true,
+    });
     const error = await routerWith(pool)
       .createOrder(req(), BODY)
       .catch((e: unknown) => e);
 
-    expect(codeOf(error)).not.toBe("PRODUCT_NOT_RELEASED");
-    expect(codeOf(error)).not.toBe("PLAN_PRODUCT_MISMATCH");
+    expectPassedAllGates(error);
+  });
+
+  /*
+   * 非公开套餐（2026-09-22）。
+   *
+   * `plans.is_public` 此前**只是列表过滤**：console-bff 在 subscribe-context 与
+   * recommended-products 两处滤掉它，而下单端点从头到尾没读过这一列——「非公开」
+   * 只做到了看不见，知道 planVersionId 的人照样下得了单。生产库里正有这么一个：
+   * arda-beta-trial（22 个套餐里唯一的非公开，active、已发布、有价格行）。
+   *
+   * 两面各一条：非公开必须被拦（下），公开必须放行（上两条）。只写前者的话，
+   * 一个恒拒的门也会绿。
+   */
+  it("非公开套餐：409 PLAN_NOT_PUBLIC", async () => {
+    const { pool, query } = poolOf({
+      product_code: "vxtpl",
+      release_stage: "ga",
+      plan_is_public: false,
+    });
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(codeOf(error)).toBe("PLAN_NOT_PUBLIC");
+    // 拦住了就不该再查第三次库。
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });
