@@ -6,7 +6,7 @@ import { useTableLabels } from "@/modules/shared/table";
 import { useSubscriptionStatusLabels } from "@/modules/shared/enum-labels";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ActionMenu,
   Avatar,
@@ -14,9 +14,14 @@ import {
   AvatarImage,
   Badge,
   Button,
+  Card,
+  CardContent,
+  CardHeader,
   DataTable,
   DestructiveButton,
+  DetailList,
   DetailPageTemplate,
+  DetailRow,
   DialogForm,
   EmptyState,
   Icon,
@@ -1201,72 +1206,240 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
  * 读数全是库里的字段——每期实付、周期、到期——不再折算「月收入」，也没有「席位」
  * 「发布版本」（库里没有这两样，旧契约那两栏是占位）。
  */
+/**
+ * 订阅周期已走完多少（0~100）。
+ *
+ * console 那张卡的「图形化」就是这条：一眼看出这份订阅走到哪了，比两个日期直观。
+ * 不限期（endsAt 为 null）没有分母，返回 null——**不画成满格**，「不知道」和
+ * 「用完了」是两回事（同配额水位条那条注释）。
+ */
+function subscriptionTermPercent(
+  startedAt: string,
+  endsAt: string | null,
+): number | null {
+  if (!endsAt) return null;
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endsAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return null;
+  }
+  const elapsed = Date.now() - start;
+  return Math.min(
+    100,
+    Math.max(0, Math.round((elapsed / (end - start)) * 100)),
+  );
+}
+
+/** 距到期还有几天；已过期为负数，不限期为 null。 */
+function subscriptionDaysLeft(endsAt: string | null): number | null {
+  if (!endsAt) return null;
+  const end = new Date(endsAt).getTime();
+  if (!Number.isFinite(end)) return null;
+  return Math.ceil((end - Date.now()) / 86_400_000);
+}
+
+/**
+ * 订阅卡（运营侧）。版面照 console 的 `/subscription`（owner 2026-09-21 S4-1），
+ * 但装的是运营要看的东西。
+ *
+ * ── 与 console 那张卡的分工 ──
+ * console 给客户看「我买了什么、还剩多久」；这里给运营看「这份订阅是怎么来的、
+ * 钱怎么收、下一次什么时候动」。所以多了订单号、每期实付、续费方式与下次续费。
+ *
+ * ── 操作为什么只有三条跳转 ──
+ * 续费 / 暂停 / 恢复 / 取消四个生命周期动作在**订阅详情页**上已经有了，连同它们
+ * 各自的可用条件与禁用原因。按 owner 定的原则「重复的按钮和功能应该是跳转性的，
+ * 不能重复构建页面」，这里跳过去，不在租户页把那四颗按钮连同判定逻辑再抄一遍。
+ */
+function TenantSubscriptionCard({
+  subscription,
+}: {
+  subscription: TenantOperationSubscription;
+}) {
+  const locale = useLocale();
+  const tShared = useTranslations();
+  const router = useRouter();
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
+
+  const planLabel = subscription.planName
+    ? `${subscription.planName}${
+        subscription.planVersion ? ` v${subscription.planVersion}` : ""
+      }`
+    : tShared("common.noPlanLinked");
+  const title = subscription.productNames.length
+    ? subscription.productNames.join(" / ")
+    : planLabel;
+
+  const percent = subscriptionTermPercent(
+    subscription.startedAt,
+    subscription.endsAt,
+  );
+  const daysLeft = subscriptionDaysLeft(subscription.endsAt);
+  const expired = daysLeft != null && daysLeft < 0;
+  const nearExpiry = daysLeft != null && daysLeft >= 0 && daysLeft <= 30;
+
+  return (
+    <Card surface="base" className="gap-md">
+      <CardHeader className="gap-sm">
+        {/* 标题与状态标同一行盒——console 那张卡踩过：两者当兄弟节点靠
+            items-center 对齐，对到的是两行标题块的中线，看着低半行。 */}
+        <span className="flex min-w-0 items-center gap-sm">
+          <Icon
+            name="star"
+            size="sm"
+            fallback="placeholder"
+            className="shrink-0 text-primary-text"
+          />
+          <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
+            {title}
+          </span>
+          <StatusBadge tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}>
+            {subscriptionStatusLabels[subscription.status]}
+          </StatusBadge>
+          <ActionMenu
+            label={`${title} 订阅操作`}
+            items={[
+              {
+                /* ActionMenu 没有 href（查过 design-ui 的 props），跳转走 onSelect。 */
+                id: "detail",
+                label: "订阅详情",
+                icon: "arrow-right",
+                /* 续费 / 暂停 / 恢复 / 取消都在那一页，连同各自的禁用原因。 */
+                ...(subscription.orderNo
+                  ? {
+                      onSelect: () =>
+                        router.push(
+                          `/subscriptions/${encodeURIComponent(subscription.orderNo!)}`,
+                        ),
+                    }
+                  : {
+                      disabled: true,
+                      hint: "运营开通 / 试用的订阅没有订单号，详情页路由走的是它",
+                    }),
+              },
+              {
+                id: "order",
+                label: "查看订单",
+                icon: "table",
+                ...(subscription.orderNo
+                  ? {
+                      onSelect: () =>
+                        router.push(
+                          `/orders/${encodeURIComponent(subscription.orderNo!)}`,
+                        ),
+                    }
+                  : {
+                      disabled: true,
+                      hint: "这份订阅不是买来的，没有订单",
+                    }),
+              },
+            ]}
+          />
+        </span>
+        <span className="block truncate text-body-sm text-muted-foreground">
+          {planLabel}
+        </span>
+      </CardHeader>
+
+      <CardContent className="grid min-w-0 gap-md">
+        {/* ── 它是什么：来源 / 周期 / 续费方式 ─────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-xs">
+          <Badge variant="secondary">
+            {subscriptionKindLabel(subscription.kind)}
+          </Badge>
+          {/* 周期就是周期：¥0 档同样是按月/按年的订阅，不把这一格换成「免费」。 */}
+          <Badge variant="outline">
+            {subscriptionCycleLabel(subscription)}
+          </Badge>
+          <Badge variant="outline">
+            {subscription.autoRenew ? "自动续费" : "手动续费"}
+          </Badge>
+        </div>
+
+        {/* ── 走到哪了：图形化那一条 ──────────────────────────────────── */}
+        {percent == null ? (
+          <p className="m-0 text-body-sm text-muted-foreground">
+            开通 {formatDate(subscription.startedAt, locale)}
+            {" · "}不限期
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2xs">
+            <div className="flex items-baseline justify-between gap-sm text-body-sm">
+              <span className="text-muted-foreground tabular-nums">
+                {formatDate(subscription.startedAt, locale)} ~{" "}
+                {formatDate(subscription.endsAt!, locale)}
+              </span>
+              <span
+                className={
+                  expired || nearExpiry
+                    ? "font-medium text-warning-text tabular-nums"
+                    : "text-muted-foreground tabular-nums"
+                }
+              >
+                {expired
+                  ? `已过期 ${Math.abs(daysLeft!)} 天`
+                  : `剩余 ${daysLeft} 天`}
+              </span>
+            </div>
+            <Progress
+              value={percent}
+              aria-label={`${title} 周期进度`}
+              className={expired ? "[&>*]:bg-destructive" : undefined}
+            />
+          </div>
+        )}
+
+        {/* ── 运营要看的参数（owner S4-2）───────────────────────────────
+            订单号放第一个：它是「这份订阅怎么来的」的唯一线索，也是对账起点。 */}
+        <DetailList>
+          <DetailRow label="订单号">
+            {subscription.orderNo ? (
+              <Button asChild variant="ghost" size="sm">
+                <Link
+                  href={`/orders/${encodeURIComponent(subscription.orderNo)}`}
+                >
+                  {subscription.orderNo}
+                </Link>
+              </Button>
+            ) : (
+              /* 读不到显示「—」不显示 0，也不编一个假单号。 */
+              "—"
+            )}
+          </DetailRow>
+          <DetailRow label="每期实付">
+            {formatSubscriptionAmount(subscription)}
+          </DetailRow>
+          <DetailRow label="下次续费">
+            {subscription.nextRenewalAt
+              ? formatDate(subscription.nextRenewalAt, locale)
+              : "—"}
+          </DetailRow>
+        </DetailList>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TenantSubscriptionsTab({
   subscriptions,
 }: {
   subscriptions: TenantOperationSubscription[];
 }) {
-  const locale = useLocale();
-  const tShared = useTranslations();
-  const subscriptionStatusLabels = useSubscriptionStatusLabels();
   if (!subscriptions.length) {
     return (
       <EmptyState title="暂无订阅" description="该租户名下没有订阅记录。" />
     );
   }
 
+  /* 一行两张：卡里有进度条与三行参数，挤到三列会把日期区间压到换行。 */
   return (
-    <div className="grid min-w-0 gap-lg">
-      {subscriptions.map((subscription) => {
-        const planLabel = subscription.planName
-          ? `${subscription.planName}${
-              subscription.planVersion ? ` v${subscription.planVersion}` : ""
-            }`
-          : tShared("common.noPlanLinked");
-        return (
-          <MetricListCard
-            key={subscription.id}
-            icon="star"
-            title={
-              subscription.productNames.length
-                ? subscription.productNames.join(" / ")
-                : planLabel
-            }
-            description={`${subscription.orderNo ?? subscriptionKindLabel(subscription.kind)} · 开通 ${formatDate(subscription.startedAt, locale)}`}
-            tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
-            badges={
-              <>
-                <StatusBadge
-                  tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
-                >
-                  {subscriptionStatusLabels[subscription.status]}
-                </StatusBadge>
-                <Badge>{subscriptionKindLabel(subscription.kind)}</Badge>
-              </>
-            }
-            metrics={[
-              { key: "plan", value: planLabel, label: "套餐" },
-              {
-                key: "cycle",
-                value: subscriptionCycleLabel(subscription),
-                label: subscription.autoRenew ? "自动续费" : "手动续费",
-              },
-              {
-                key: "amount",
-                value: formatSubscriptionAmount(subscription),
-                label: "每期实付",
-              },
-              {
-                key: "period",
-                value: subscription.endsAt
-                  ? formatDate(subscription.endsAt, locale)
-                  : "不限期",
-                label: "到期",
-              },
-            ]}
-          />
-        );
-      })}
+    <div className="grid min-w-0 gap-lg xl:grid-cols-2">
+      {subscriptions.map((subscription) => (
+        <TenantSubscriptionCard
+          key={subscription.id}
+          subscription={subscription}
+        />
+      ))}
     </div>
   );
 }
@@ -1484,8 +1657,11 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   const [summaryExpanded, setSummaryExpanded] = useState(true);
   const [infoEditing, setInfoEditing] = useState(false);
   /* 工作空间选择器。现在只记录选了哪个，还没有消费方——下方各 tab
-     按空间筛数据是下一步。先把选择器与「有没有工作空间」这件事做对。 */
-  const [activeWorkspace, setActiveWorkspace] = useState("all");
+     按空间筛数据是下一步。先把选择器与「有没有工作空间」这件事做对。
+
+     初值空串，等详情回来再落到**默认空间**（owner 2026-09-21：「默认就是
+     一个，不要显示全部」）。不能在这里直接取 tenant——渲染第一轮它还是 null。 */
+  const [activeWorkspace, setActiveWorkspace] = useState("");
   const [notesEditing, setNotesEditing] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -1531,6 +1707,14 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
     () => isTenantInfoDirty(infoDraft, infoBaseline),
     [infoDraft, infoBaseline],
   );
+
+  /* 落到默认空间。BFF 已按 is_default desc 排序，所以第一项就是它；
+     若一个都没标默认，取最早建的那个。只在还没选过时生效，否则会把
+     用户刚切的空间推回去。 */
+  useEffect(() => {
+    if (activeWorkspace || !tenant?.workspaces.length) return;
+    setActiveWorkspace(tenant.workspaces[0]!.id);
+  }, [activeWorkspace, tenant]);
 
   /* `?edit=1`（列表页的「编辑资料」跳过来）。放在 effect 而不是初值：
      编辑态靠 infoDraft，而那东西要等详情拉回来才有。editApplied 只让它生效一次：
@@ -1718,7 +1902,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
             className={`relative grid min-w-0 rounded-xl border-t-2 border-primary/30 bg-card/60 px-xl ${
               summaryExpanded ? "gap-lg py-xl" : "gap-0 py-sm"
             }`}
-            aria-label={`${tenant.displayName} 标题概要`}
+            aria-label={`${tenant.tenantName} 标题概要`}
           >
             <Button
               className="absolute top-sm right-sm z-[1]"
@@ -1830,7 +2014,9 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                         summaryExpanded ? "text-title-xl" : "text-title-md"
                       }`}
                     >
-                      {tenant.displayName}
+                      {/* 全称（owner 2026-09-21）。简称在「基础资料」里单列一格；
+                          这里是管理平台的身份行，要能拿去对合同与发票。 */}
+                      {tenant.tenantName}
                     </h2>
                     <Button
                       variant="ghost"
@@ -1838,7 +2024,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                       className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label="复制租户名称"
                       title="复制租户名称"
-                      onClick={() => void handleCopyText(tenant.displayName)}
+                      onClick={() => void handleCopyText(tenant.tenantName)}
                     >
                       <Icon name="copy" size="xs" fallback="placeholder" />
                     </Button>
@@ -1952,7 +2138,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
     >
       <section
         className="grid min-w-0"
-        aria-label={`${tenant.displayName} 管理详情`}
+        aria-label={`${tenant.tenantName} 管理详情`}
       >
         {/* 原来是手搓的分区条：`role="tablist"` 的 div 里排一串 Button，选中态靠
          * 一个 `.is-active::after` 画下划线，键盘左右键、`aria-controls`、
@@ -1969,7 +2155,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-md">
             <TabsList
               className="h-auto max-w-full flex-wrap justify-start"
-              aria-label={`${tenant.displayName} 信息分区`}
+              aria-label={`${tenant.tenantName} 信息分区`}
             >
               {tenantTabs.map((tab) => (
                 <TabsTrigger key={tab.id} value={tab.id} className="flex-none">
@@ -1990,9 +2176,8 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 onChange={(event) => setActiveWorkspace(event.target.value)}
                 aria-label="工作空间"
               >
-                {/* 「全部」而不是「全部工作空间」：长词会顶到下拉箭头底下
-                    （owner 2026-09-20 在待办页实看过同一件事）。 */}
-                <option value="all">全部</option>
+                {/* 没有「全部」这一项（owner 2026-09-21）：绝大多数租户只有一个
+                    空间，多出一个「全部」只是让人多选一次。默认落在默认空间上。 */}
                 {tenant.workspaces.map((workspace) => (
                   <option key={workspace.id} value={workspace.id}>
                     {workspace.name}
