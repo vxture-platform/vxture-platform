@@ -1066,6 +1066,7 @@ function mapTenantRow(row: TenantOperationRow): TenantOperationRecord {
     monthlyRevenue: toMoney(row.month_revenue),
     totalRevenue: toMoney(row.total_revenue),
     ticketOpenCount: toCount(row.ticket_open_count),
+    ticketTotalCount: toCount(row.ticket_total_count),
     /* `notes` 是**租户自己写的简介**（tenant_profiles.description）。
        运营内部备注是另一件事，在 admin.tenant_operator_notes，只随详情返回。 */
     notes: row.description ?? "",
@@ -1285,6 +1286,13 @@ select
     where k.tenant_id = t.id and k.deleted_at is null
       and k.status in ${TENANT_OPEN_TICKET_STATUSES}
   ) as ticket_open_count,
+  /* 总计：同一租户的全部工单（含已关闭，不含软删）。
+     身份卡上要显示「未结 / 总计」（owner 2026-09-21）——只看未结不知道分母，
+     3 张未结在总共 5 张和总共 500 张里是两回事。 */
+  (
+    select count(*) from support.tickets k
+    where k.tenant_id = t.id and k.deleted_at is null
+  ) as ticket_total_count,
   -- 风险档 = 未复核（reviewer_id is null，与风控页「待处置」同一判据）记录里最高的一档；
   -- 没有未复核记录 → null → normal。复核过的记录视为已处置，不再抬高租户档位。
   (
@@ -1373,6 +1381,7 @@ interface TenantOperationRow {
   month_revenue: string | number | null;
   total_revenue: string | number | null;
   ticket_open_count: string | number | null;
+  ticket_total_count: string | number | null;
   risk_level: string | null;
   last_active_at: Date | string | null;
 }
