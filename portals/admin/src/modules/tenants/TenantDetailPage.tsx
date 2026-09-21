@@ -142,7 +142,8 @@ function toMemberView(record: TenantMemberRecord): TenantMemberView {
   return {
     id: record.membershipId,
     userId: record.userId,
-    accountCode: record.account,
+    userNo: record.userNo,
+    account: record.account,
     name: record.name,
     email: record.email,
     role: record.roleName || record.roleCode || "成员",
@@ -266,9 +267,11 @@ function isTenantInfoDirty(
  * 后者是编出来的钱；累计收入现在由 BFF 从 billing.payments 实付合计给（totalRevenue）。
  */
 
-/* 成员账号码的**唯一**展示入口——前缀在这里加，调用点都不用改。 */
+/* 成员可视码的**唯一**展示入口。给的是 `userNo`（带 U- 前缀），
+   不是登录句柄——此前两者混在一个 `accountCode` 里，走查时显示成了
+   `U-stonesmoker`（owner 2026-09-21）。 */
 function getMemberAccountCode(member: TenantOperationMember) {
-  return formatPrincipalNoOr(member.accountCode, "user", "—");
+  return formatPrincipalNoOr(member.userNo, "user", "—");
 }
 
 /** 订阅金额是每期实付；币种不是人民币时不套人民币格式。 */
