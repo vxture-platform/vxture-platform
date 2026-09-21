@@ -21,6 +21,7 @@ import type {
   TenantOperationTicket,
 } from "../types/console.types";
 import { industryLabel } from "@vxture/core-utils";
+import { TICKET_STATUSES } from "@vxture-platform/shared";
 
 @Controller("api/tickets")
 export class TicketsRouter {
@@ -191,7 +192,8 @@ export class TicketsRouter {
     const actor = requireActor(req);
     const ref = requireTicketRef(id);
     const status =
-      typeof body?.status === "string" && TICKET_STATUSES.has(body.status)
+      typeof body?.status === "string" &&
+      WRITABLE_TICKET_STATUSES.has(body.status)
         ? body.status
         : (() => {
             throw new BadRequestException(
@@ -505,15 +507,12 @@ insert into support.ticket_comments
 values ($1, $2, 'operator', $3::uuid, $4, $5::jsonb)
 `;
 
-const TICKET_STATUSES: ReadonlySet<string> = new Set([
-  "open",
-  "pending",
-  "in_progress",
-  "resolved",
-  "closed",
-  "reopened",
-  "cancelled",
-]);
+/**
+ * 可写入的状态集。取 @shared 的值域本身（2026-09-21）——这里原先是第三份
+ * 手抄的七值（另两份在 admin 的 `TicketStatusInput` 与 DB CHECK）。三份一致是
+ * 巧合；现在 `lint:catalog-domains` 逐值对 `chk_tickets_status`，漂不开了。
+ */
+const WRITABLE_TICKET_STATUSES: ReadonlySet<string> = new Set(TICKET_STATUSES);
 
 // 版本位/变体位刻意不卡：判据与理由见 governance.shared.ts 的 `UUID_RE` 注释
 //（校验器不该比存储层更严；种子 id 的变体位是段值本身，如 …-4000-d000-…）。

@@ -82,6 +82,20 @@ import { formatDateTime } from "@vxture-platform/shared";
  * 默认分支原样回显那个码，不编一个「其他」——开放集里没登记的值迟早
  * 会出现，而运营要拿那个码去查日志，藏掉就查不到了。
  *
+ * ── 这里原先认错了码（2026-09-21 修）──
+ * 抽屉版本认的是 `assign` / `assignment` / `status_change` / `status`，而全仓
+ * **没有任何地方写过这四个值**。真正写进 `support.ticket_comments` 的只有：
+ *
+ *   admin-bff `tickets.router.ts`   comment · assigned · status_changed
+ *   `@vxture/service-ticket`（未加载）created · assigned · replied · resolved · closed
+ *
+ * 于是「指派」和「状态变更」这两类事件从来没被认出来过，一直落到默认分支，在
+ * 时间线上显示成英文原始码 `assigned` / `status_changed`。四条死分支看着像在
+ * 处理它们，实际一条都没走到过——判死码不能只看有没有 case。
+ *
+ * 那四个旧码仍然留着当别名：`event_type` 是开放集，存量库里有没有早期行无从
+ * 断定（本机库是空的），留着不花钱，去掉才有风险。
+ *
  * 写成 hook 而不是纯函数：文案要走 `t()`，而 `t` 只能在组件里拿。
  * 键写成字面量而不是 `t(\`eventType.${x}\`)`：动态键 `lint:message-usage`
  * 扫不到，要等界面上渲染出键路径才发现（同 enum-labels 头注）。
@@ -90,14 +104,25 @@ function useTicketEventTypeLabel(): (eventType: string) => string {
   const t = useTranslations("ticketDetail.eventType");
   return (eventType) => {
     switch (eventType) {
+      // 回复：router 写 comment，service 写 replied。
       case "comment":
+      case "replied":
         return t("comment");
+      case "assigned":
+      // 以下三行是旧码别名，见头注。
       case "assign":
       case "assignment":
         return t("assign");
+      case "status_changed":
       case "status_change":
       case "status":
         return t("statusChange");
+      case "resolved":
+        return t("resolved");
+      case "closed":
+        return t("closed");
+      case "reopened":
+        return t("reopened");
       case "created":
         return t("created");
       default:

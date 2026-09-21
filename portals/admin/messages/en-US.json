@@ -2625,7 +2625,10 @@
       "comment": "Reply",
       "assign": "Assigned",
       "statusChange": "Status change",
-      "created": "Created"
+      "created": "Created",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "reopened": "Reopened"
     }
   }
 }
