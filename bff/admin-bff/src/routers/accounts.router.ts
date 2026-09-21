@@ -37,6 +37,7 @@ import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorAdminService } from "../auth/operator-admin.service";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
+import { hasPiiAccess, maskEmail, maskPhone } from "../privacy/pii-mask";
 import { requireOperatorId, requireUuid } from "./governance.shared";
 
 const UUID_RE =
@@ -299,29 +300,6 @@ function assertCanManageAccountLifecycle(req: Request & RequestContext): void {
   if (!req.capabilities?.includes("user:account.manage")) {
     throw new ForbiddenException("Missing user:account.manage capability");
   }
-}
-
-// user:pii.read (high-risk, super_admin/admin per data_admin_200 §4.3) gates plaintext
-// email/phone. Roles with only user:profile.read see masked values.
-function hasPiiAccess(req: Request & RequestContext): boolean {
-  return req.capabilities?.includes("user:pii.read") ?? false;
-}
-
-// j***@example.com — keep first local char + full domain; empty stays empty.
-function maskEmail(email: string): string {
-  if (!email) return "";
-  const at = email.indexOf("@");
-  if (at <= 0) return "***";
-  const first = email[0] ?? "";
-  return `${first}***${email.slice(at)}`;
-}
-
-// Keep the last 4 digits, mask the rest (137****5678); null stays null.
-function maskPhone(phone: string | null): string | null {
-  if (!phone) return phone;
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length <= 4) return "****";
-  return `${digits.slice(0, digits.length - 8 > 0 ? 3 : 0)}****${digits.slice(-4)}`;
 }
 
 // 账号运营归属租户治理域；沿用现有最贴近的 platform.tenant.manage 能力（tickets.router 同款软守卫）。

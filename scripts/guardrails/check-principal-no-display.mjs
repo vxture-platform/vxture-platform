@@ -101,6 +101,15 @@ walk(PORTALS, (file) => {
       while (p && guard++ < 8) {
         if (ts.isCallExpression(p) && ROUTE_CALLS.test(p.expression.getText(sf))) break;
         if (ts.isBinaryExpression(p)) break;
+        /* `disabled={!member.userNo}` / `!x && …`：前缀 `!` 是**存在性判断**，
+           结果是布尔，不可能上屏。不断在这里，链会一路走到外层的
+           `items={[…]}` 属性上，把整条菜单判成显示（2026-09-21 实际误报过）。 */
+        if (
+          ts.isPrefixUnaryExpression(p) &&
+          p.operator === ts.SyntaxKind.ExclamationToken
+        ) {
+          break;
+        }
         /* `x.tenantNo ? <PrincipalNo …/> : null` 的**条件位**是存在性判断，不是上屏
            ——真正上屏的是分支里那一个，它自己会被单独走到。 */
         if (ts.isConditionalExpression(p) && p.condition === prev) break;

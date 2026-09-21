@@ -437,7 +437,7 @@ export function TenantsPage() {
                   id: "active",
                   help: "手上至少有一条订阅的租户。",
                   icon: "star",
-                  label: "使用租户",
+                  label: "活跃租户",
                   value: formatNumber(activeProductTenants),
                   tags: [
                     `付费 ${formatNumber(payingTenants)}`,
