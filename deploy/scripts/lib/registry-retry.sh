@@ -10,7 +10,7 @@
 #
 # ── 为什么需要 ──
 # 2026-09-21 一天内七次：docker-build 的腿挂在对 ACR 的认证握手上，报文固定
-# `read: connection reset by peer`，对端 dockerauth.cn-hangzhou.aliyuncs.com，
+# `read: connection reset by peer`，对端是 ACR 的鉴权端点，
 # 重跑必过。不是凭据、不是权限，是上游网络抖动（TD-050）。
 #
 # ── 失败点不止 docker login ──

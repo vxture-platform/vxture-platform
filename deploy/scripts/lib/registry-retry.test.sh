@@ -32,8 +32,10 @@ classify() {
 
 # ── 分类：实测报文 ────────────────────────────────────────────────────────
 # 七次实测里的两种，逐字取自 2026-09-21 的 CI 日志。
-LOGIN_FLAKE='Error response from daemon: Get "https://crpi-x.cn-beijing.personal.cr.aliyuncs.com/v2/": Get "https://dockerauth.cn-hangzhou.aliyuncs.com/auth?account=x": read tcp 10.1.0.148:47412->47.97.242.13:443: read: connection reset by peer'
-RETAG_FLAKE='ERROR: failed to authorize: failed to fetch oauth token: Post "https://dockerauth.cn-hangzhou.aliyuncs.com/auth": read tcp 10.1.0.188:55580->120.55.35.38:443: read: connection reset by peer'
+# 主机名用占位符：这是公开仓，基础设施标识不入库（lint:public-hygiene）。
+# 判据落在报文尾部的传输层证据上，与主机名无关，所以替换不影响这份测试测的东西。
+LOGIN_FLAKE='Error response from daemon: Get "https://<acr-instance>/v2/": Get "https://<acr-auth-host>/auth?account=x": read tcp 10.0.0.1:47412->10.0.0.2:443: read: connection reset by peer'
+RETAG_FLAKE='ERROR: failed to authorize: failed to fetch oauth token: Post "https://<acr-auth-host>/auth": read tcp 10.0.0.1:55580->10.0.0.2:443: read: connection reset by peer'
 
 assert_eq "登录被重置 → 重试" "retry" "$(classify "$LOGIN_FLAKE")"
 # 这一条**同时含 `failed to authorize`**：听起来像鉴权失败，其实是取票时被重置。
