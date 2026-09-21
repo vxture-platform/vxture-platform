@@ -1,3 +1,4 @@
+import type { TicketStatus, UserKycStatus } from "@vxture-platform/shared";
 import type {
   ModelState,
   ObjectState,
@@ -1683,12 +1684,11 @@ export interface AccountOperationRecord {
   verifiedStatus: AccountVerifiedStatus;
 }
 
-/** 实名认证四态，值域即 kyc.user_kycs.status 的 CHECK。 */
-export type AccountVerifiedStatus =
-  | "unverified"
-  | "pending"
-  | "verified"
-  | "rejected";
+/**
+ * 实名认证四态。值域的**权威在 @shared 的 `USER_KYC_STATUSES`**（对着
+ * `chk_user_kycs_status`）——这里只是个别名，不再另抄一份字面量。
+ */
+export type AccountVerifiedStatus = UserKycStatus;
 
 /** 一次登录尝试。**含失败**——查登录史正是为了看失败与换 IP。 */
 export interface AccountLoginAttempt {
@@ -1705,7 +1705,12 @@ export interface AccountLoginAttempt {
 export interface AccountTicket {
   ticketNo: string;
   title: string;
-  status: string;
+  /**
+   * `support.tickets.status` 存的那**七**值（TICKET_STATUSES），不是队列视图
+   * 的粗四值。账号页列的是记录、含终态票，而粗四值里 `blocked` 库里没来源、
+   * `cancelled` 无处安放。
+   */
+  status: TicketStatus;
   priority: "p0" | "p1" | "p2" | "p3";
   createdAt: string;
   updatedAt: string;

@@ -37,6 +37,8 @@ import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorAdminService } from "../auth/operator-admin.service";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
+import { TICKET_STATUSES } from "@vxture-platform/shared";
+import type { TicketStatus } from "@vxture-platform/shared";
 import { requireOperatorId, requireUuid } from "./governance.shared";
 
 const UUID_RE =
@@ -418,11 +420,22 @@ function toTicketPriority(raw: string): AccountTicket["priority"] {
   return raw === "p0" || raw === "p1" || raw === "p2" ? raw : "p3";
 }
 
+/* status 给**库里存的那七值**，不投影成队列视图的粗四值。
+   粗四值是队列上的分组：终态票根本不进队列，所以它里面的 `blocked` 在库里没有
+   来源，而 `cancelled` 无处安放——归进「完成」会把"客户撤单"说成"问题已解决"。
+   账号页列的是**记录**（含终态），所以说七值那套。越界回落 `open`：未知状态
+   当成"还没完"最保守，不会让一张没处理的票看起来已经结了。 */
+function toTicketStatus(raw: string): TicketStatus {
+  return (TICKET_STATUSES as readonly string[]).includes(raw)
+    ? (raw as TicketStatus)
+    : "open";
+}
+
 function mapAccountTicketRow(row: AccountTicketRow): AccountTicket {
   return {
     ticketNo: row.ticket_no,
     title: row.title,
-    status: row.status,
+    status: toTicketStatus(row.status),
     priority: toTicketPriority(row.priority),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),

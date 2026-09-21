@@ -2463,6 +2463,20 @@
       "p1": "P1 High",
       "p2": "P2 Medium",
       "p3": "P3 Low"
+    },
+    "userKycStatus": {
+      "unverified": "Unverified",
+      "pending": "Under review",
+      "verified": "Verified",
+      "rejected": "Rejected"
+    },
+    "loginResult": {
+      "success": "Success",
+      "badCredentials": "Bad credentials",
+      "locked": "Account locked",
+      "expired": "Credential expired",
+      "mfaRequired": "MFA required",
+      "mfaFailed": "MFA failed"
     }
   },
   "orderDetailPage": {

@@ -42,6 +42,21 @@ function makeRoPool(responder: Responder) {
   return { pool: { query, connect } as unknown as Pool, calls, query };
 }
 
+/* AccountsRouter 还注入了 OperatorAdminService（凭据/生命周期写路径用）。
+   只读投影碰不到它，给个一碰就抛的桩：真被用到要当场响，不能静静地过。 */
+function noOperatorAdmin() {
+  return new Proxy(
+    {},
+    {
+      get(_t, prop) {
+        throw new Error(
+          `read path must not touch OperatorAdminService.${String(prop)}`,
+        );
+      },
+    },
+  ) as never;
+}
+
 function noDbPool(): Pool {
   return {
     query: vi.fn(() => {
@@ -125,7 +140,7 @@ function route(sqlLower: string, overrides: Record<string, unknown[]> = {}) {
 describe("GET /api/accounts/:id detail projection", () => {
   it("maps the three detail arrays from their own rows", async () => {
     const ro = makeRoPool((sql) => route(sql));
-    const router = new AccountsRouter(ro.pool, noDbPool());
+    const router = new AccountsRouter(ro.pool, noDbPool(), noOperatorAdmin());
     const record = await router.getAccount(makeReq(MANAGE), USER_ID);
 
     expect(record.productNames).toEqual(["umbra"]);
@@ -158,19 +173,21 @@ describe("GET /api/accounts/:id detail projection", () => {
      两种都不会有人报错。 */
   it("derives online from the session count, both ways", async () => {
     const on = makeRoPool((sql) => route(sql));
-    const online = await new AccountsRouter(on.pool, noDbPool()).getAccount(
-      makeReq(MANAGE),
-      USER_ID,
-    );
+    const online = await new AccountsRouter(
+      on.pool,
+      noDbPool(),
+      noOperatorAdmin(),
+    ).getAccount(makeReq(MANAGE), USER_ID);
     expect(online.online).toBe(true);
 
     const off = makeRoPool((sql) =>
       route(sql, { base: [{ ...BASE_ROW, online_session_count: 0 }] }),
     );
-    const offline = await new AccountsRouter(off.pool, noDbPool()).getAccount(
-      makeReq(MANAGE),
-      USER_ID,
-    );
+    const offline = await new AccountsRouter(
+      off.pool,
+      noDbPool(),
+      noOperatorAdmin(),
+    ).getAccount(makeReq(MANAGE), USER_ID);
     expect(offline.online).toBe(false);
   });
 
@@ -178,17 +195,18 @@ describe("GET /api/accounts/:id detail projection", () => {
     const ro = makeRoPool((sql) =>
       route(sql, { base: [{ ...BASE_ROW, verified_status: "bogus" }] }),
     );
-    const record = await new AccountsRouter(ro.pool, noDbPool()).getAccount(
-      makeReq(MANAGE),
-      USER_ID,
-    );
+    const record = await new AccountsRouter(
+      ro.pool,
+      noDbPool(),
+      noOperatorAdmin(),
+    ).getAccount(makeReq(MANAGE), USER_ID);
     /* 认不得的值按**最保守**那一档算：不能让脏数据冒充已认证。 */
     expect(record.verifiedStatus).toBe("unverified");
   });
 
   it("404s on a missing account without firing the detail queries", async () => {
     const ro = makeRoPool((sql) => route(sql, { base: [] }));
-    const router = new AccountsRouter(ro.pool, noDbPool());
+    const router = new AccountsRouter(ro.pool, noDbPool(), noOperatorAdmin());
     await expect(
       router.getAccount(makeReq(MANAGE), USER_ID),
     ).rejects.toBeInstanceOf(NotFoundException);

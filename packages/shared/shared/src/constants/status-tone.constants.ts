@@ -21,9 +21,11 @@
  */
 
 import type {
-  SubscriptionStatus,
-  Tier,
   PlanVersionStatus,
+  SubscriptionStatus,
+  TicketStatus,
+  Tier,
+  UserKycStatus,
 } from "./catalog-domains.constants";
 
 /**
@@ -70,6 +72,40 @@ export const TIER_TONE: Record<Tier, StatusTone> = {
   pro: "brand",
   business: "brand",
   enterprise: "info",
+};
+
+/**
+ * 自然人实名认证。
+ *
+ * `unverified` 取 neutral 不取 warning：**没认证是常态**，不是异常——绝大多数
+ * 个人用户永远不会走这一步。`rejected` 才是要人跟进的那一档。
+ */
+export const USER_KYC_STATUS_TONE: Record<UserKycStatus, StatusTone> = {
+  unverified: "neutral",
+  pending: "info",
+  verified: "success",
+  rejected: "danger",
+};
+
+/**
+ * 工单状态（`support.tickets.status` 存的那**七**值）。
+ *
+ * 与 admin 队列视图的粗四值（open/processing/blocked/closed）不是一回事：那四值
+ * 是**队列**上的分组，终态票根本不进队列，所以它里面的 `blocked` 在库里没有来源，
+ * 而 `cancelled` 无处安放——把它归进「完成」会把"客户撤单"说成"问题已解决"。
+ * 需要列**记录**（含终态）的地方用这七值，值域与 `TICKET_STATUSES` 同源。
+ *
+ * `reopened` 取 warning 而非 open 的同档：重开意味着上一次判定错了，值得留意。
+ * `cancelled` 取 neutral 不取 success：它终结了，但什么也没解决。
+ */
+export const TICKET_STATUS_TONE: Record<TicketStatus, StatusTone> = {
+  open: "warning",
+  pending: "info",
+  in_progress: "info",
+  resolved: "success",
+  closed: "neutral",
+  reopened: "warning",
+  cancelled: "neutral",
 };
 
 /** 套餐版本发布生命周期。draft 是工作副本，不该有"正常"的绿色。 */

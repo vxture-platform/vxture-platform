@@ -2463,6 +2463,20 @@
       "p1": "P1 高",
       "p2": "P2 中",
       "p3": "P3 低"
+    },
+    "userKycStatus": {
+      "unverified": "未认证",
+      "pending": "认证中",
+      "verified": "已认证",
+      "rejected": "认证驳回"
+    },
+    "loginResult": {
+      "success": "成功",
+      "badCredentials": "凭据错误",
+      "locked": "账号锁定",
+      "expired": "凭据过期",
+      "mfaRequired": "需二次验证",
+      "mfaFailed": "二次验证失败"
     }
   },
   "orderDetailPage": {
