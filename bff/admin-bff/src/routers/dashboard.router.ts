@@ -332,6 +332,18 @@ interface DashboardOverviewRecord {
     resolved: number;
     inProgress: number;
     pending: number;
+    /**
+     * 告警中：**建单已超 15 天且仍未关闭**（owner 2026-09-21 定，判据取
+     * `created_at` 不取 `updated_at`）。
+     *
+     * 取 created_at 的代价要说清楚：一张一直在推进、天天有人动的长单也会进这个
+     * 数——它问的是"这张单挂了多久"，不是"多久没人管"。owner 要的正是前者：
+     * 超过半个月没给客户一个了结，无论内部多忙都该被看见。
+     *
+     * 与 pending 不是一回事：pending 是状态（搁置），这个是时长。一张 open 状态
+     * 推进了 20 天的单不在 pending 里，但在这里。
+     */
+    alerting: number;
     totalInPrevPeriod: number;
   };
   /**
@@ -379,6 +391,7 @@ interface DashboardOverviewRow {
   ticket_resolved: number;
   ticket_in_progress: number;
   ticket_pending: number;
+  ticket_alerting: number;
   ticket_total_in_prev_period: number;
   review_product_avg: string | null;
   review_product_cnt: number;
@@ -433,6 +446,7 @@ function mapDashboardOverviewRow(
       resolved: n(row?.ticket_resolved),
       inProgress: n(row?.ticket_in_progress),
       pending: n(row?.ticket_pending),
+      alerting: n(row?.ticket_alerting),
       totalInPrevPeriod: n(row?.ticket_total_in_prev_period),
     },
     reviews: {
@@ -517,6 +531,13 @@ const DASHBOARD_OVERVIEW_SQL = `
     (select count(*) from support.tickets, bounds
       where deleted_at is null and (bounds.since is null or created_at >= bounds.since)
         and status = 'pending')::int as ticket_pending,
+    -- 告警中：建单超 15 天且未了结。这里刻意不套 bounds——"挂了 15 天"与"本周期建了
+    -- 多少单"是两件事；按周期过滤会在切到「近 30 天」时把更早建的老单漏掉，而那
+    -- 些正是最该看见的。cancelled 算了结（客户自己撤了，不欠一个交代）。
+    (select count(*) from support.tickets
+      where deleted_at is null
+        and status not in ('resolved', 'closed', 'cancelled')
+        and created_at < now() - interval '15 days')::int as ticket_alerting,
     (select count(*) from support.tickets, bounds
       where deleted_at is null and (bounds.since is null or created_at >= bounds.since))::int as ticket_total_in_period,
     (select count(*) from support.tickets, bounds

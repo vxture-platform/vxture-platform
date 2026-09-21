@@ -802,6 +802,8 @@ export interface DashboardOverviewRecord {
     resolved: number;
     inProgress: number;
     pending: number;
+    /** 告警中：建单已超 15 天且仍未了结。判据取 created_at，见 admin-bff。 */
+    alerting: number;
     totalInPrevPeriod: number;
   };
   /**
@@ -849,6 +851,7 @@ export const EMPTY_DASHBOARD_OVERVIEW: Omit<DashboardOverviewRecord, "period"> =
       resolved: 0,
       inProgress: 0,
       pending: 0,
+      alerting: 0,
       totalInPrevPeriod: 0,
     },
     // 读不到时三项都是 null 而不是 0：卡片据此画「—」，不会把"没读到"画成 0 分。

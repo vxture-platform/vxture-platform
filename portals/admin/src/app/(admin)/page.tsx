@@ -69,7 +69,7 @@ interface ProductRankingRow {
 }
 
 /**
- * 产品供给 / 服务与工单 两处指标排共用的一份形状。
+ * 产品供给 / 客户服务 两处指标排共用的一份形状。
  *
  * 原本是 ProductMetric / ModelMetric / ServiceMetric 三个接口配三个本地卡组件，
  * 三份 CSS 逐条比对下来是同一张卡（2.5rem 图标轨 + 标签 + 读数 + 标）。迁到
@@ -223,18 +223,20 @@ function periodLabelOf(period: PeriodKey) {
 // there is no rating/CSAT/SLA table anywhere in the schema, so that half of
 // the old combined "服务与工单" section is not synthesized — see
 // ratingMetricsFor below, which returns an explicit unavailable state.
+/**
+ * 工单统计三档（owner 2026-09-21 定）。
+ *
+ * 「工单总数」不在这里——它是这一块的量级，上了板块标题。占一张卡会让其余三项
+ * 看起来是它的兄弟，实则是它的部分。
+ *
+ * 「已搁置」并入告警的口径里不单列：pending 是**状态**，而 owner 要看的是**挂了
+ * 多久**。一张 open 状态推进了 20 天的单不在 pending 里，却正是最该被看见的。
+ */
 function serviceMetricsFor(overview: DashboardOverviewRecord) {
   const label = periodLabelOf(overview.period);
-  const { totalInPeriod, resolved, inProgress, pending } = overview.tickets;
+  const { resolved, inProgress, alerting } = overview.tickets;
 
   return [
-    {
-      label: "工单总数",
-      value: totalInPeriod.toLocaleString("en-US"),
-      detail: `${label}工单 ${totalInPeriod.toLocaleString("en-US")}（按创建时间统计）。`,
-      tone: "brand",
-      icon: "chat-circle",
-    },
     {
       label: "已完成",
       value: resolved.toLocaleString("en-US"),
@@ -250,10 +252,13 @@ function serviceMetricsFor(overview: DashboardOverviewRecord) {
       icon: "clock",
     },
     {
-      label: "已搁置",
-      value: pending.toLocaleString("en-US"),
-      detail: `${label}已搁置（pending）${pending.toLocaleString("en-US")}。`,
-      tone: "warning",
+      label: "告警中",
+      value: alerting.toLocaleString("en-US"),
+      // 说明里写明两件容易误读的事：判据是建单时间（不是最后活动时间），
+      // 以及这个数不随上方周期切换器变——挂了 15 天与本周期建了多少单无关。
+      detail: `建单超过 15 天仍未了结的工单 ${alerting.toLocaleString("en-US")} 张，按创建时间判定，不随周期切换。`,
+      // 告警取 danger 不取 warning：搁置是"暂时不动"，这是"已经欠客户一个交代"。
+      tone: alerting > 0 ? "danger" : "success",
       icon: "warning",
     },
   ] satisfies OverviewMetric[];
@@ -1271,10 +1276,10 @@ export default function AdminOverviewPage() {
         </div>
       </section>
 
-      <section className="grid gap-md" aria-label="服务与工单">
+      <section className="grid gap-md" aria-label="客户服务">
         <OverviewHeading
           icon="chat-circle"
-          title="服务与工单"
+          title="客户服务"
           description={`${servicePeriodLabel}工单处理和服务评价分层展示。`}
           period={servicePeriod}
           onPeriodChange={setServicePeriod}
@@ -1285,12 +1290,16 @@ export default function AdminOverviewPage() {
         <div className="grid gap-md">
           <Section
             level={3}
-            title="工单统计"
-            description="工单总量、处理状态和搁置情况。"
+            /* 总数上标题（owner 2026-09-21）：它是这一块的量级，不是与其余三项
+               并列的一个维度——占一张卡会让「已完成/进行中/告警中」看起来是总数
+               的三个兄弟，其实它们是它的三个部分。 */
+            title={`工单统计 · ${serviceOverview.tickets.totalInPeriod.toLocaleString("en-US")}`}
+            description="按处理状态分三档；告警中单独计，见该卡说明。"
             action={<DetailLink href="/tickets" />}
           >
             <MetricGrid
               aria-label="工单统计指标"
+              columns={3}
               items={metricItems(serviceMetrics)}
             />
           </Section>
