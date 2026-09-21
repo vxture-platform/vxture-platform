@@ -36,14 +36,23 @@ const PRICE_ROW = {
  * 按序回答：第一次 = lookupPlanPrice，第二次 = 归属+成熟度。
  * 后续调用一律抛——两道门拦住时不该还有第三次查库。
  */
-function poolOf(soldRow: Record<string, unknown> | undefined) {
+function poolOf(
+  soldRow: Record<string, unknown> | undefined,
+  /* 非公开套餐会多打两次库：邀请消耗（UPDATE）与台账（INSERT）。`invite` 给的是
+     那条 UPDATE 的 returning——空数组 = 没有可用邀请。不传 = 不该走到那一步。 */
+  opts?: { invite?: unknown[] },
+) {
   const query = vi
     .fn()
     .mockResolvedValueOnce({ rows: [PRICE_ROW] })
-    .mockResolvedValueOnce({ rows: soldRow ? [soldRow] : [] })
-    .mockImplementation(async () => {
-      throw new Error("不该走到这里：门未拦住");
-    });
+    .mockResolvedValueOnce({ rows: soldRow ? [soldRow] : [] });
+  if (opts?.invite !== undefined) {
+    query.mockResolvedValueOnce({ rows: opts.invite });
+    query.mockResolvedValueOnce({ rows: [] });
+  }
+  query.mockImplementation(async () => {
+    throw new Error("不该走到这里：门未拦住");
+  });
   return { pool: { query } as unknown as Pool, query };
 }
 
@@ -73,6 +82,14 @@ function req(): Request & RequestContext {
  */
 function expectPassedAllGates(error: unknown): void {
   expect(codeOf(error)).toBeUndefined();
+}
+
+/** 桩收到的 SQL 里有没有碰过某张表。比数调用次数表意——次数会把放行后
+    `resolveDefaultWorkspace` 那一次也算进来，改动别处就会误红。 */
+function touched(query: { mock: { calls: unknown[][] } }, table: string) {
+  return query.mock.calls.some(
+    (call) => typeof call[0] === "string" && call[0].includes(table),
+  );
 }
 
 /** 从封套里取语义码；不是 HttpException 或没带码都回 undefined。 */
@@ -172,19 +189,68 @@ describe("POST orders · 归属与成熟度两道门", () => {
    * 两面各一条：非公开必须被拦（下），公开必须放行（上两条）。只写前者的话，
    * 一个恒拒的门也会绿。
    */
-  it("非公开套餐：409 PLAN_NOT_PUBLIC", async () => {
-    const { pool, query } = poolOf({
-      product_code: "vxtpl",
-      release_stage: "ga",
-      plan_is_public: false,
-    });
+  /*
+   * 邀请订阅（2026-09-22）。三面：
+   *   有有效邀请 → 放行（穿过所有带码的门）
+   *   无邀请     → 仍是 PLAN_NOT_PUBLIC，且**不写台账**
+   *   公开套餐   → 根本不查邀请（只有 2 次查库）
+   * 第三条是这组的重点：没有它，一个「对所有套餐都去查邀请」的实现也会绿，
+   * 而那会给每一次正常下单平白加两次查库。
+   */
+  it("非公开 + 有有效邀请：放行", async () => {
+    const { pool, query } = poolOf(
+      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { invite: [{ id: "v-1", batch_id: "b-1" }] },
+    );
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expectPassedAllGates(error);
+    expect(touched(query, "promotion.vouchers")).toBe(true);
+    expect(touched(query, "voucher_redemptions")).toBe(true);
+  });
+
+  it("非公开 + 无可用邀请：仍然 409，且不写台账", async () => {
+    const { pool, query } = poolOf(
+      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { invite: [] },
+    );
     const error = await routerWith(pool)
       .createOrder(req(), BODY)
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ConflictException);
     expect(codeOf(error)).toBe("PLAN_NOT_PUBLIC");
-    // 拦住了就不该再查第三次库。
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(touched(query, "promotion.vouchers")).toBe(true);
+    // 消耗那条影响 0 行 → 不该再写台账。
+    expect(touched(query, "voucher_redemptions")).toBe(false);
+  });
+
+  it("公开套餐：根本不查邀请", async () => {
+    const { pool, query } = poolOf({
+      product_code: "vxtpl",
+      release_stage: "ga",
+      plan_is_public: true,
+    });
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expectPassedAllGates(error);
+    expect(touched(query, "promotion.vouchers")).toBe(false);
+  });
+
+  it("非公开套餐：409 PLAN_NOT_PUBLIC", async () => {
+    const { pool } = poolOf(
+      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { invite: [] },
+    );
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(codeOf(error)).toBe("PLAN_NOT_PUBLIC");
   });
 });

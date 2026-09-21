@@ -11,7 +11,11 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- 批次模板：一次营销活动 / 一批卡的配置（kind、effect、总量、有效期）。
--- 五型：credit_voucher 代金券 / recharge_card 充值卡 / redemption 兑换码 / discount 折扣券 / extension 展期券。
+-- 六型：credit_voucher 代金券 / recharge_card 充值卡 / redemption 兑换码 / discount 折扣券 /
+--       extension 展期券 / invite 订阅邀请（2026-09-22）。
+-- invite 与另外两条发放路径的分界：它**只解锁「能买」，不改变「要付钱」**——客户
+-- 自己下单自己付钱；operator_grant 是运营直接建订阅（无订单无钱），redemption 是
+-- 输码抵扣。effect 装 {planCode, planVersionId}：这张邀请解锁哪个套餐。
 -- kind 专属参数走 effect JSONB（§4 约定，服务层按 kind 校验），避免拆列大量 NULL。
 -- tenant_id NULL=平台级；非空=定向租户批次（跨 schema→tenancy.tenants，见 90）。
 -- 状态机：active↔paused；*→archived（软下线，非软删，故无 deleted_at）。
@@ -33,7 +37,7 @@ CREATE TABLE promotion.voucher_batches (
     created_at      timestamptz   NOT NULL DEFAULT now(),
     updated_at      timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT chk_voucher_batches_kind
-        CHECK (kind IN ('credit_voucher','recharge_card','redemption','discount','extension')),
+        CHECK (kind IN ('credit_voucher','recharge_card','redemption','discount','extension','invite')),
     CONSTRAINT chk_voucher_batches_status
         CHECK (status IN ('active','paused','archived')),
     CONSTRAINT chk_voucher_batches_total_count    CHECK (total_count >= 0),
@@ -101,7 +105,7 @@ CREATE TABLE promotion.voucher_redemptions (
     redeemed_at      timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT uq_voucher_redemptions_redemption_no UNIQUE (redemption_no),
     CONSTRAINT chk_voucher_redemptions_kind
-        CHECK (kind IN ('credit_voucher','recharge_card','redemption','discount','extension'))
+        CHECK (kind IN ('credit_voucher','recharge_card','redemption','discount','extension','invite'))
 );
 CREATE INDEX idx_voucher_redemptions_tenant_ws ON promotion.voucher_redemptions (tenant_id, workspace_id);
 CREATE INDEX idx_voucher_redemptions_voucher   ON promotion.voucher_redemptions (voucher_id);
