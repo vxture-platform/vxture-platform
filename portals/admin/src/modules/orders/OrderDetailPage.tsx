@@ -57,6 +57,7 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 /** 时间线圆点的语气。原来是 `--subscription-timeline-bg/-color` 两个变量，
  * 由三个 `--success/--warning/--danger` 修饰类喂进去。 */
@@ -227,7 +228,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
             {orUnset(order.tenantName)}
           </DetailRow>
           <DetailRow label={tShared("columns.tenantCode")}>
-            {orUnset(order.tenantCode)}
+            {orUnset(formatPrincipalNoOr(order.tenantCode, "tenant", "—"))}
           </DetailRow>
           <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(order.tenantType))}

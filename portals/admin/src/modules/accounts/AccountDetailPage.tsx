@@ -39,6 +39,7 @@ import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 import { formatDateTime, joinClasses } from "@/modules/tenants/tenant-utils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 /* 状态口径与列表页 AccountsPage 同源（那边是模块内私有函数）。改文案要两处一起改。 */
 const STATUS_LABEL: Record<AccountOperationRecord["status"], string> = {
@@ -215,7 +216,9 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
           </div>
 
           <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-2">
-            <Field label="账号编码">{account.accountCode}</Field>
+            <Field label="账号编码">
+              {formatPrincipalNoOr(account.accountCode, "user", "—")}
+            </Field>
             <Field label="显示名称">{account.displayName}</Field>
             <Field label="邮箱">{account.email || "—"}</Field>
             <Field label="手机号">{account.phone || "—"}</Field>

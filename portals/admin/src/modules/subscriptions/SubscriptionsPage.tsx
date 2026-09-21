@@ -63,6 +63,7 @@ import {
   formatNumber,
 } from "@/modules/tenants/tenant-utils";
 import { useConfirmLabels } from "@/modules/shared/destructive";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type StatusFilter = "all" | SubscriptionOperationStatus;
 type TierFilter = "all" | TierFilterValue;
@@ -81,7 +82,7 @@ function subscriptionSearchText(record: SubscriptionOperationRecord) {
     record.id,
     record.subscriptionCode,
     record.orderNo,
-    record.tenantCode,
+    formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
     record.tenantName,
     record.region,
     record.industry,
@@ -107,7 +108,10 @@ function useSubscriptionCsvColumns(): CsvColumn<SubscriptionOperationRecord>[] {
   return [
     { label: "订阅编号", value: (record) => record.subscriptionCode },
     { label: "订单号", value: (record) => record.orderNo ?? "" },
-    { label: "租户编号", value: (record) => record.tenantCode },
+    {
+      label: "租户编号",
+      value: (record) => formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
+    },
     { label: "租户名称", value: (record) => record.tenantName },
     { label: "业务方案", value: (record) => record.solutionName },
     { label: "套餐", value: (record) => record.tierName },
@@ -254,7 +258,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               : "building-office"
           }
           title={subscription.tenantName}
-          description={`${subscription.tenantCode} · ${subscription.region}`}
+          description={`${formatPrincipalNoOr(subscription.tenantCode, "tenant", "—")} · ${subscription.region}`}
           onTitleClick={() =>
             router.push(
               `/subscriptions/${encodeURIComponent(subscription.subscriptionCode)}`,

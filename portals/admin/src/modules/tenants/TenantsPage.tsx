@@ -45,6 +45,7 @@ import {
   verifiedLabel,
 } from "./tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type StatusFilter = "all" | TenantOperationRecord["status"];
 type TypeFilter = "all" | TenantOperationRecord["tenantType"];
@@ -168,7 +169,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
             tenant.tenantType === "company" ? "buildings" : "building-office"
           }
           title={tenant.tenantName}
-          description={`${tenant.tenantCode} · ${tenant.region}`}
+          description={`${formatPrincipalNoOr(tenant.tenantCode, "tenant", "—")} · ${tenant.region}`}
           onTitleClick={() =>
             router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`)
           }

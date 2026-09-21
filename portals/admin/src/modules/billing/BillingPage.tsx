@@ -60,6 +60,7 @@ import {
   formatNumber,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type BillStatusFilter = "all" | BillingBillStatus;
 type InvoiceStatusFilter = "all" | BillingInvoiceStatus;
@@ -201,7 +202,7 @@ function billingSearchText(
     record.billNo,
     record.orderNo,
     record.invoiceNo,
-    record.tenantCode,
+    formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
     record.tenantName,
     record.region,
     record.industry,
@@ -231,7 +232,10 @@ function billingCsvColumns(
   return [
     { label: "账单编号", value: (b) => b.billNo },
     { label: "订单编号", value: (b) => b.orderNo },
-    { label: "租户编码", value: (b) => b.tenantCode },
+    {
+      label: "租户编码",
+      value: (b) => formatPrincipalNoOr(b.tenantCode, "tenant", "—"),
+    },
     { label: "租户名称", value: (b) => b.tenantName },
     { label: "套餐", value: (b) => b.tierName ?? "" },
     { label: "账单类型", value: (b) => billTypeLabels[b.billType] },
@@ -357,7 +361,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
         <TableTitleCell
           icon={bill.tenantType === "company" ? "buildings" : "building-office"}
           title={bill.tenantName}
-          description={`${bill.tenantCode} · ${typeLabel(bill.tenantType)}`}
+          description={`${formatPrincipalNoOr(bill.tenantCode, "tenant", "—")} · ${typeLabel(bill.tenantType)}`}
         />
       ),
     },

@@ -36,6 +36,7 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { Tag, type PageSize, formatCurrency } from "./CommercialUtils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type BillStatusFilter = "all" | BillingBillStatus;
 
@@ -58,7 +59,7 @@ function redemptionSearchText(
     record.redemptionNo,
     record.promotionCode,
     record.promotionName,
-    record.tenantCode,
+    formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
     record.tenantName,
     record.orderNo,
     record.billNo,
@@ -83,7 +84,10 @@ function redemptionCsvColumns(
     { label: "券码", value: (record) => record.promotionCode },
     { label: "优惠编号", value: (record) => record.promotionCode },
     { label: "优惠名称", value: (record) => record.promotionName },
-    { label: "租户编号", value: (record) => record.tenantCode },
+    {
+      label: "租户编号",
+      value: (record) => formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
+    },
     { label: "租户名称", value: (record) => record.tenantName },
     { label: "租户类型", value: (record) => typeLabel(record.tenantType) },
     { label: "订单号", value: (record) => record.orderNo ?? "" },
@@ -184,7 +188,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
             record.tenantType === "company" ? "buildings" : "building-office"
           }
           title={record.tenantName}
-          description={`${record.tenantCode} · ${typeLabel(record.tenantType)}`}
+          description={`${formatPrincipalNoOr(record.tenantCode, "tenant", "—")} · ${typeLabel(record.tenantType)}`}
         />
       ),
     },

@@ -43,6 +43,7 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { formatDateTime } from "@vxture-platform/shared";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type TicketStatusFilter = "all" | TenantOperationTicket["status"];
 type TicketPriorityFilter = "all" | TenantOperationTicket["priority"];
@@ -162,7 +163,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
             ticket.tenantType === "company" ? "buildings" : "building-office"
           }
           title={ticket.tenantName}
-          description={`${ticket.tenantCode} / ${typeLabel(ticket.tenantType)}`}
+          description={`${formatPrincipalNoOr(ticket.tenantCode, "tenant", "—")} / ${typeLabel(ticket.tenantType)}`}
         />
       ),
     },

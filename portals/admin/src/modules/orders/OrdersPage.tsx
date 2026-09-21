@@ -62,6 +62,7 @@ import {
   formatNumber,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type TFn = ReturnType<typeof useTranslations>;
 
@@ -109,7 +110,10 @@ function orderCsvColumns(
   return [
     { label: "订单号", value: (o) => o.orderNo },
     { label: "账单号", value: (o) => o.billNo ?? "" },
-    { label: "租户编码", value: (o) => o.tenantCode },
+    {
+      label: "租户编码",
+      value: (o) => formatPrincipalNoOr(o.tenantCode, "tenant", "—"),
+    },
     { label: "租户名称", value: (o) => o.tenantName },
     { label: "业务方案", value: (o) => o.solutionName },
     { label: "套餐", value: (o) => o.servicePlanName },
@@ -134,7 +138,7 @@ function orderSearchText(record: OrderOperationRecord) {
     record.orderNo,
     record.billNo,
     record.paymentNo,
-    record.tenantCode,
+    formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
     record.tenantName,
     record.region,
     record.industry,
@@ -243,7 +247,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
             order.tenantType === "company" ? "buildings" : "building-office"
           }
           title={order.tenantName}
-          description={`${order.tenantCode} · ${typeLabel(order.tenantType)}`}
+          description={`${formatPrincipalNoOr(order.tenantCode, "tenant", "—")} · ${typeLabel(order.tenantType)}`}
         />
       ),
     },

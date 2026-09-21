@@ -60,6 +60,7 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type TFn = ReturnType<typeof useTranslations>;
 
@@ -123,7 +124,10 @@ function paymentCsvColumns(
     { label: "交易号", value: (p) => p.transactionNo ?? "" },
     { label: "关联订单", value: (p) => p.orderNo ?? "" },
     { label: "关联账单", value: (p) => p.billNo ?? "" },
-    { label: "租户编码", value: (p) => p.tenantCode },
+    {
+      label: "租户编码",
+      value: (p) => formatPrincipalNoOr(p.tenantCode, "tenant", "—"),
+    },
     { label: "租户名称", value: (p) => p.tenantName },
     { label: "收款金额", value: (p) => p.paidAmount },
     {
@@ -167,7 +171,7 @@ function paymentSearchText(
     payment.offlinePayerName,
     payment.billNo,
     payment.orderNo,
-    payment.tenantCode,
+    formatPrincipalNoOr(payment.tenantCode, "tenant", "—"),
     payment.tenantName,
     payment.region,
     payment.industry,
@@ -396,7 +400,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
             payment.tenantType === "company" ? "buildings" : "building-office"
           }
           title={payment.tenantName}
-          description={`${payment.tenantCode} · ${typeLabel(payment.tenantType)}`}
+          description={`${formatPrincipalNoOr(payment.tenantCode, "tenant", "—")} · ${typeLabel(payment.tenantType)}`}
         />
       ),
     },

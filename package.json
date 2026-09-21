@@ -96,6 +96,7 @@
     "lint:migration-counts": "node scripts/guardrails/check-migration-absolute-counts.mjs",
     "lint:migration-placement": "node scripts/guardrails/check-migration-placement.mjs",
     "lint:ops-todo-alerts": "node scripts/guardrails/check-ops-todo-alerts.mjs",
+    "lint:principal-no": "node scripts/guardrails/check-principal-no-display.mjs",
     "lint:permission-catalog": "node scripts/guardrails/check-tenant-permission-catalog.mjs",
     "lint:operator-planes": "node scripts/guardrails/check-operator-planes.mjs",
     "lint:orphan-services": "node scripts/guardrails/check-orphan-service-packages.mjs",

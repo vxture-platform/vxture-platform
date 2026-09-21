@@ -38,6 +38,7 @@ import { isListTruncated } from "@/lib/list-truncation";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type StatusFilter = "all" | AccountOperationRecord["status"];
 type TenantTypeFilter = "all" | "company" | "individual" | "mixed";
@@ -214,7 +215,8 @@ function accountSearchText(account: AccountOperationRecord) {
     account.primaryTenantName,
     account.lastActiveLocation,
     ...account.tenantBindings.map(
-      (tenant) => `${tenant.tenantCode} ${tenant.tenantName} ${tenant.role}`,
+      (tenant) =>
+        `${formatPrincipalNoOr(tenant.tenantCode, "tenant", "—")} ${tenant.tenantName} ${tenant.role}`,
     ),
   ]
     .join(" ")
@@ -308,7 +310,7 @@ function useAccountColumns(
         <TableTitleCell
           icon="user"
           title={account.displayName}
-          description={`${account.accountCode} · ${account.email}`}
+          description={`${formatPrincipalNoOr(account.accountCode, "user", "—")} · ${account.email}`}
           onTitleClick={() => onViewDetail(account)}
         />
       ),

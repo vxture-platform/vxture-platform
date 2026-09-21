@@ -70,6 +70,7 @@ import {
 } from "@/modules/shared/tenant-tone";
 import { ticketStatusLabel, typeLabel } from "@/modules/tenants/tenant-utils";
 import { formatDateTime } from "@vxture-platform/shared";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 /**
  * 时间线事件类型 → 界面文案。
@@ -473,7 +474,7 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
           <DetailSummaryHeader
             icon="ticket"
             title={ticket.title}
-            subtitle={`${ticket.tenantName} / ${ticket.tenantCode} · ${typeLabel(ticket.tenantType)}`}
+            subtitle={`${ticket.tenantName} / ${formatPrincipalNoOr(ticket.tenantCode, "tenant", "—")} · ${typeLabel(ticket.tenantType)}`}
             badges={
               <>
                 <StatusBadge tone={TICKET_STATUS_TONE[ticket.status]}>
@@ -501,7 +502,7 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
                 {priorityLabels[ticket.priority]}
               </DetailRow>
               <DetailRow label="租户">
-                {`${ticket.tenantName} / ${ticket.tenantCode}`}
+                {`${ticket.tenantName} / ${formatPrincipalNoOr(ticket.tenantCode, "tenant", "—")}`}
               </DetailRow>
               <DetailRow label="负责人">{ticket.ownerName}</DetailRow>
               <DetailRow label="行业">{ticket.industry}</DetailRow>

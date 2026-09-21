@@ -53,6 +53,7 @@ import {
   tenantRiskOptions,
   verifiedLabel,
 } from "./tenant-utils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type VerificationFilter = "all" | TenantVerificationStatus;
 type RiskFilter = "all" | TenantOperationRecord["riskLevel"];
@@ -271,7 +272,7 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
         <TableTitleCell
           icon="buildings"
           title={tenant.displayName}
-          description={`${tenant.tenantCode} · ${tenant.region}`}
+          description={`${formatPrincipalNoOr(tenant.tenantCode, "tenant", "—")} · ${tenant.region}`}
           onTitleClick={() =>
             router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`)
           }
@@ -784,7 +785,7 @@ export function VerificationsPage() {
         <DialogForm
           open
           title="驳回实名认证"
-          description={`将驳回 ${rejectTarget.displayName}（${rejectTarget.tenantCode}）提交的实名材料，请填写驳回原因，租户可据此补充后重新提交。`}
+          description={`将驳回 ${rejectTarget.displayName}（${formatPrincipalNoOr(rejectTarget.tenantCode, "tenant", "—")}）提交的实名材料，请填写驳回原因，租户可据此补充后重新提交。`}
           submitLabel="确认驳回"
           danger
           cancelLabel={tShared("actions.discard")}

@@ -35,6 +35,7 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { Tag, type PageSize, formatPercent } from "./CommercialUtils";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 type RiskFilter = "all" | UsageMeteringRisk;
 type ProductTypeFilter =
@@ -61,7 +62,7 @@ function riskTone(risk: UsageMeteringRisk) {
 
 function usageSearchText(record: UsageMeteringRecord) {
   return [
-    record.tenantCode,
+    formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
     record.tenantName,
     record.region,
     record.industry,
@@ -85,7 +86,10 @@ function formatUsageValue(value: number, unit: string) {
 }
 
 const USAGE_CSV_COLUMNS: CsvColumn<UsageMeteringRecord>[] = [
-  { label: "租户编号", value: (record) => record.tenantCode },
+  {
+    label: "租户编号",
+    value: (record) => formatPrincipalNoOr(record.tenantCode, "tenant", "—"),
+  },
   { label: "租户名称", value: (record) => record.tenantName },
   { label: "产品编码", value: (record) => record.productCode },
   { label: "产品名称", value: (record) => record.productName },
@@ -165,7 +169,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
             record.tenantType === "company" ? "buildings" : "building-office"
           }
           title={record.tenantName}
-          description={`${record.tenantCode} · ${typeLabel(record.tenantType)}`}
+          description={`${formatPrincipalNoOr(record.tenantCode, "tenant", "—")} · ${typeLabel(record.tenantType)}`}
           onTitleClick={() =>
             router.push(`/tenants/${encodeURIComponent(record.tenantCode)}`)
           }

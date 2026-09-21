@@ -42,6 +42,7 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { TENANT_RISK_TONE, formatDate } from "@/lib/format";
 import { useConfirmLabels } from "@/modules/shared/destructive";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 // TD-021 风险记录页。设计权威 = governance-write-paths.md §3.1/§5。
 // 「审阅」= 后端写 reviewer_id；risk_level 变更后端自动清空 reviewer_id。
@@ -147,7 +148,13 @@ function columnsOf(locale: string): readonly DataTableColumn<RiskRecordItem>[] {
         <TableTitleCell
           icon="users"
           title={item.tenantName ?? "未知租户"}
-          {...(item.tenantNo ? { description: `#${item.tenantNo}` } : {})}
+          {...(item.tenantNo
+            ? {
+                /* 带 T- 前缀，不用 `#`：三种主体码都是 10 位纯数字，`#` 分不出
+                   是租户还是工作空间；前缀还能让复制去搜的人搜得到。 */
+                description: formatPrincipalNoOr(item.tenantNo, "tenant", "—"),
+              }
+            : {})}
         />
       ),
     },
