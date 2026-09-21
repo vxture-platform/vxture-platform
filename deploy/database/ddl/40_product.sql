@@ -86,6 +86,8 @@ CREATE TABLE product.product_metrics (
     id             uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id     uuid         NOT NULL REFERENCES product.products(id) ON DELETE CASCADE,
     metric_key     varchar(64)  NOT NULL,                             -- doc.words/ai.calls/storage.max/member.max
+    display_name         varchar(128),                            -- 中文名（owner 2026-09-21）；没填则界面回落显示 metric_key，不自动生成
+    description          varchar(256),                            -- 一句话说明这个计量在数什么
     merge_strategy varchar(16)  NOT NULL,                              -- max/union/pool + tiered(非数值能力:取最高档组件的值,2026-07-07)
     consume_mode   varchar(16),                                       -- 仅 pool 时非空 divisible/atomic
     metric_unit    varchar(32),                                       -- words/calls/GB/seats
@@ -108,6 +110,8 @@ CREATE INDEX idx_product_metrics_product_id ON product.product_metrics (product_
 -- 仅占位键名（compute/egress 类），kind 可空、不开池。
 CREATE TABLE product.platform_metrics (
     metric_key    varchar(64)  PRIMARY KEY,
+    display_name  varchar(128),                                     -- 中文名；L0 共享指标跨产品复用，更该有个说得清的名字
+    description   varchar(256),
     kind          varchar(16),                                        -- counter | gauge（reserved 行可空）
     consume_mode  varchar(16),                                        -- divisible/atomic（仅 counter）
     metric_unit   varchar(32),

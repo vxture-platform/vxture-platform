@@ -526,7 +526,14 @@ export interface ProductCapabilityIntegration {
 
 export interface ProductCapabilityMetricRule {
   metricCode: string;
+  /**
+   * 中文名（`product_metrics.display_name`）。**可能是空串**——库里这两列
+   * 2026-09-22 才加，存量 19 条待人工补录。空时界面回落显示 `metricCode`，
+   * 平台不替产品编一个名字。
+   */
   metricName: string;
+  /** 一句话说明这个计量在数什么；同样可能是空串。 */
+  metricDescription: string;
   unit: string;
   cycle: string;
   quotaBase: string;

@@ -2028,6 +2028,8 @@ interface ProductCatalogRow {
 }
 
 interface ProductMetricRow {
+  display_name: string | null;
+  description: string | null;
   product_id: string;
   metric_key: string;
   metric_unit: string | null;
@@ -2187,7 +2189,8 @@ export async function loadProductCapabilities(
   const [products, metrics, webhooks, solutions, versions] = await Promise.all([
     pool.query<ProductCatalogRow>(PRODUCT_CATALOG_SQL),
     pool.query<ProductMetricRow>(
-      `SELECT product_id, metric_key, metric_unit, reset_period, merge_strategy
+      `SELECT product_id, metric_key, display_name, description,
+              metric_unit, reset_period, merge_strategy
          FROM product.product_metrics`,
     ),
     pool.query<ProductWebhookRow>(
@@ -2236,7 +2239,12 @@ export async function loadProductCapabilities(
     const list = metricsByProduct.get(metric.product_id) ?? [];
     list.push({
       metricCode: metric.metric_key,
-      metricName: metric.metric_key,
+      /* 中文名与说明可空：没填就给空串，**界面回落显示 metric_key**。
+         不在这里替它编一个——平台替产品命名必然错（`varda.enabled` 该叫
+         「Varda 开关」还是「智能体启用」，只有产品自己知道）。录入面在运维台的
+         产品接入页；存量 19 条人工补录。 */
+      metricName: metric.display_name ?? "",
+      metricDescription: metric.description ?? "",
       unit: metric.metric_unit ?? "",
       cycle: metric.reset_period,
       quotaBase: metric.merge_strategy,
