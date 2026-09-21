@@ -2089,6 +2089,22 @@ export async function fetchTenantOperation(
   );
 }
 
+/**
+ * 运营内部备注。空字符串是合法值（= 清空），所以不在这里拦空。
+ * 每次保存后端写一条 tenant.operator_notes.update 审计（带 before/after）。
+ */
+export async function updateTenantOperatorNotes(
+  tenantId: string,
+  body: string,
+): Promise<TenantOperationDetailRecord> {
+  return mutateJson<TenantOperationDetailRecord>(
+    `/api/tenants/${encodeURIComponent(tenantId)}/operator-notes`,
+    "PUT",
+    { body },
+    "Tenant operator notes update failed",
+  );
+}
+
 export async function updateTenant(
   tenantId: string,
   payload: UpdateTenantInput,

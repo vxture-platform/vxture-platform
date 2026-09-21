@@ -32,6 +32,7 @@ import {
   StatusBadge,
   TableTitleCell,
   Tabs,
+  Textarea,
   TabsContent,
   TabsList,
   TabsTrigger,
@@ -49,6 +50,7 @@ import {
   removeTenantMember,
   suspendTenantMember,
   updateTenant,
+  updateTenantOperatorNotes,
   type UpdateTenantInput,
 } from "@/api/admin-bff";
 import type {
@@ -321,8 +323,24 @@ function TenantInfoTab({
   onSave,
   resettingLogo,
   onResetLogo,
+  operatorNotes,
+  notesDraft,
+  notesEditing,
+  notesSaving,
+  onNotesEdit,
+  onNotesChange,
+  onNotesCancel,
+  onNotesSave,
 }: {
   tenant: TenantOperationRecord;
+  operatorNotes: TenantOperationDetailRecord["operatorNotes"];
+  notesDraft: string;
+  notesEditing: boolean;
+  notesSaving: boolean;
+  onNotesEdit: () => void;
+  onNotesChange: (value: string) => void;
+  onNotesCancel: () => void;
+  onNotesSave: () => void;
   draft: TenantInfoDraft;
   editing: boolean;
   infoDirty: boolean;
@@ -340,6 +358,7 @@ function TenantInfoTab({
   /** 直接就是落锤动作——确认由 `DestructiveButton` 自带的框收，不再由外面开。 */
   onResetLogo: () => Promise<void>;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   return (
@@ -603,14 +622,61 @@ function TenantInfoTab({
       </section>
 
       <section className="col-span-full grid min-w-0 gap-lg pt-xs">
-        <header>
+        {/* 操作按钮上标题行（owner 2026-09-21）。 */}
+        <header className="flex min-w-0 items-center justify-between gap-md">
           <DetailSectionHeading icon="info" title="运营备注" />
+          <div className="inline-flex shrink-0 items-center gap-sm">
+            {notesEditing ? (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={onNotesCancel}
+                  disabled={notesSaving}
+                >
+                  放弃
+                </Button>
+                <Button
+                  onClick={onNotesSave}
+                  disabled={notesSaving || notesDraft === operatorNotes.body}
+                >
+                  {notesSaving ? "保存中..." : "保存"}
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={onNotesEdit}>
+                <Icon name="edit" size="xs" fallback="placeholder" />
+                <span>{operatorNotes.body ? "修改" : "添加"}</span>
+              </Button>
+            )}
+          </div>
         </header>
-        <p className="m-0 text-body-sm leading-relaxed font-semibold text-foreground">
-          {tenant.notes}
-        </p>
-        {/* 原来下面挂一排 `tenant.tags`：契约里那个数组从来是空的，库里也没有
-            租户标签列（2026-08-30 随字段一起删）。 */}
+        {notesEditing ? (
+          <Textarea
+            aria-label="运营备注"
+            value={notesDraft}
+            onChange={(event) => onNotesChange(event.target.value)}
+            rows={4}
+            maxLength={4000}
+            placeholder="只有运营看得到。记下这个租户的特殊情况、沟通结论、需要交接的事…"
+          />
+        ) : (
+          <p className="m-0 text-body-sm leading-relaxed whitespace-pre-wrap text-foreground">
+            {operatorNotes.body || "—"}
+          </p>
+        )}
+        {/* 「有操作人员和信息记录」（owner）。逐次的编辑历史在风控审计里
+            （tenant.operator_notes.update，带 before/after），不在这里再列一遍。 */}
+        {operatorNotes.updatedAt ? (
+          <p className="m-0 text-body-sm text-muted-foreground">
+            {operatorNotes.updatedBy ?? "未知"} 于{" "}
+            {formatDateTime(operatorNotes.updatedAt, locale)} 更新
+          </p>
+        ) : null}
+        {/* 原来这里显示的是 `tenant.notes`——那是**租户自己写的简介**
+            （tenant_profiles.description），库里根本没有运营备注这一列。
+            同一段文字贴着两个含义相反的标签，运营以为那是自己人写的。
+            原来下面还挂一排 `tenant.tags`：契约里那个数组从来是空的（已于
+            2026-08-30 随字段一起删）。 */}
       </section>
     </div>
   );
@@ -1432,6 +1498,9 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   );
   const [summaryExpanded, setSummaryExpanded] = useState(true);
   const [infoEditing, setInfoEditing] = useState(false);
+  const [notesEditing, setNotesEditing] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
   /* `?edit=1` 只能在资料拉回来之后才能生效（编辑态靠 infoDraft），
      所以不能当初值写，得等一个 effect。只生效一次。 */
   const wantsEdit = searchParams.get("edit") === "1";
@@ -1597,6 +1666,36 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   function handleInfoEdit() {
     setActiveTab("info");
     setInfoEditing(true);
+  }
+
+  function handleNotesEdit() {
+    // 进编辑态时才拿当前值初始化草稿：平时不跟着 tenant 重算，
+    // 否则别处刷新会把正在敲的字抹掉。
+    setNotesDraft(tenant?.operatorNotes.body ?? "");
+    setNotesEditing(true);
+  }
+
+  async function handleNotesSave() {
+    if (!tenant || savingNotes) return;
+    setSavingNotes(true);
+    try {
+      const updated = await updateTenantOperatorNotes(tenant.id, notesDraft);
+      setTenant(updated);
+      setNotesEditing(false);
+      toast({
+        tone: "success",
+        title: "已保存运营备注",
+        description: `${updated.displayName} 的备注已更新。`,
+      });
+    } catch (error) {
+      toast({
+        tone: "danger",
+        title: "保存备注失败",
+        description: error instanceof Error ? error.message : "请稍后重试。",
+      });
+    } finally {
+      setSavingNotes(false);
+    }
   }
 
   async function handleCopyText(value: string) {
@@ -1832,6 +1931,14 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               onSave={() => void handleInfoSave()}
               resettingLogo={resettingLogo}
               onResetLogo={handleResetLogo}
+              operatorNotes={tenant.operatorNotes}
+              notesDraft={notesDraft}
+              notesEditing={notesEditing}
+              notesSaving={savingNotes}
+              onNotesEdit={handleNotesEdit}
+              onNotesChange={setNotesDraft}
+              onNotesCancel={() => setNotesEditing(false)}
+              onNotesSave={() => void handleNotesSave()}
             />
           </TabsContent>
           <TabsContent value="members" className="min-w-0">

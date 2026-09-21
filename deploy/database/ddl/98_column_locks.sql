@@ -512,6 +512,10 @@ GRANT UPDATE (flag_key, category, environment, description, is_globally_enabled,
 REVOKE UPDATE ON admin.announcements FROM platform_svc;
 GRANT UPDATE (announcement_type, severity, status, lang, title, content, cta_label, cta_url, target_plans, target_tenant_types, is_dismissible, publish_at, expires_at, meta, updated_at, deleted_at) ON admin.announcements TO platform_svc;
 
+-- admin.tenant_operator_notes  [anchor: tenant_id, created_at]
+REVOKE UPDATE ON admin.tenant_operator_notes FROM platform_svc;
+GRANT UPDATE (body, updated_by, updated_at) ON admin.tenant_operator_notes TO platform_svc;
+
 -- admin.operator_notices  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON admin.operator_notices FROM platform_svc;
 GRANT UPDATE (target_planes, severity, title, body, link, source, reference_type, reference_id, published_at, expires_at, updated_at, deleted_at) ON admin.operator_notices TO platform_svc;

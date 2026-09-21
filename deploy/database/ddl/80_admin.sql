@@ -434,6 +434,29 @@ CREATE TABLE admin.compliance_events (
 CREATE INDEX idx_compliance_events_tenant   ON admin.compliance_events (tenant_id, status);
 CREATE INDEX idx_compliance_events_tags_gin ON admin.compliance_events USING gin (tags);
 
+-- 运营备注：运营对某租户的内部记录，租户自己看不到。
+--
+-- 与 `tenancy.tenant_profiles.description` 是两件事：那一列是**租户自己的简介**。
+-- 2026-09-21 之前 admin 详情页把 description 挂在「运营备注」这个标题下——同一段
+-- 文字贴着两个含义相反的标签，运营以为那是自己人写的。
+--
+-- 1:1 而不是 1:N：owner 定的口径是「信息一份即可，但要有操作记录」。
+-- 历史不在本表：每次编辑写一条 support.audit_logs（tenant.operator_notes.update，
+-- 带 before/after 快照），那里本来就是运营动作的唯一台账，另建一张历史表会造出
+-- 第二份说法。
+--
+-- tenant_id 裸值→tenancy.tenants（边界#3：须活过租户注销，不建 FK）。
+-- updated_by 域内 FK→operator_account（同 schema 真 FK，ON DELETE SET NULL：
+-- 运营账号销了，备注要留着）。
+CREATE TABLE admin.tenant_operator_notes (
+    tenant_id    uuid          PRIMARY KEY,                       -- 裸值→tenancy.tenants（边界#3，不建 FK）
+    body         text          NOT NULL DEFAULT '',
+    updated_by   uuid          REFERENCES admin.operator_account(id) ON DELETE SET NULL,  -- 域内真 FK
+    created_at   timestamptz   NOT NULL DEFAULT now(),
+    updated_at   timestamptz   NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_tenant_operator_notes_updated_by ON admin.tenant_operator_notes (updated_by);
+
 -- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
 CREATE INDEX idx_compliance_events_handler ON admin.compliance_events (handler_id);
 CREATE INDEX idx_risk_records_reviewer     ON admin.risk_records (reviewer_id);
