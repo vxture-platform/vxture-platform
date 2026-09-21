@@ -228,22 +228,6 @@ describe("GET /api/tenants/:id detail projection", () => {
     expect(record.lastActiveAt).toBe("2026-08-29T10:00:00.000Z");
   });
 
-  /* 与上一条成员断言成对：那条是**没有** user:pii.read 的掩码档，这条是明文档。
-     只留一条的话，判据不会随权限变——掩码函数整个坏掉（比如恒等返回）也照样绿。 */
-  it("hands plaintext email/phone only to user:pii.read", async () => {
-    const ro = makeRoPool((sql) => route(sql));
-    const router = new TenantsRouter(ro.pool, noDbPool());
-    const record = await router.getTenant(
-      makeReq([...MANAGE, "user:pii.read"]),
-      TENANT_ID,
-    );
-
-    expect(record.members[0]).toMatchObject({
-      email: "ops@acme.demo",
-      phone: "13712345678",
-    });
-  });
-
   it("maps the five detail arrays from their own rows", async () => {
     const ro = makeRoPool((sql) => route(sql));
     const router = new TenantsRouter(ro.pool, noDbPool());
@@ -256,11 +240,11 @@ describe("GET /api/tenants/:id detail projection", () => {
         account: "demo_acme",
         name: "陈立",
         /* MANAGE 只有 `platform.tenant.manage`，**没有** `user:pii.read`，
-           所以这里是掩码——成员表与账号页走同一个闸门
-           （admin-bff `privacy/pii-mask.ts`）。明文那一档另有一条用例，
-           两条一起才证明这个判据会随权限变，而不是恒定输出。 */
-        email: "o***@acme.demo",
-        phone: "137****5678",
+           而联系方式照样是明文——成员表刻意不走账号页那道闸门（owner
+           2026-09-21：运营者本来就是管理员）。这条钉住的就是「不遮」，
+           下次有人以"对齐账号页"为由加回掩码时它会红。 */
+        email: "ops@acme.demo",
+        phone: "13712345678",
         role: "Tenant Owner",
         roleCode: "owner",
         status: "active",

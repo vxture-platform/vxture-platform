@@ -42,7 +42,6 @@ import type { Pool } from "pg";
 import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
-import { hasPiiAccess, maskEmail, maskPhone } from "../privacy/pii-mask";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import type {
   RequestContext,
@@ -176,7 +175,7 @@ export class TenantsRouter {
   ): Promise<TenantOperationDetailRecord> {
     assertCanManageTenants(req);
     const tenantId = await this.resolveTenantId(id);
-    return this.loadTenant(tenantId, hasPiiAccess(req));
+    return this.loadTenant(tenantId);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -383,7 +382,7 @@ export class TenantsRouter {
       ),
     });
 
-    return this.loadTenant(tenantId, hasPiiAccess(req));
+    return this.loadTenant(tenantId);
   }
 
   /**
@@ -437,7 +436,7 @@ export class TenantsRouter {
       after: { body: next },
     });
 
-    return this.loadTenant(tenantId, hasPiiAccess(req));
+    return this.loadTenant(tenantId);
   }
 
   /**
@@ -539,7 +538,7 @@ export class TenantsRouter {
       before: { status: rows[0]?.before_status ?? null },
       after: { status: "suspended" },
     });
-    return this.loadTenant(tenantId, hasPiiAccess(req));
+    return this.loadTenant(tenantId);
   }
 
   /**
@@ -577,7 +576,7 @@ export class TenantsRouter {
       before: { status: rows[0]?.before_status ?? null },
       after: { status: "active" },
     });
-    return this.loadTenant(tenantId, hasPiiAccess(req));
+    return this.loadTenant(tenantId);
   }
 
   /**
@@ -597,7 +596,7 @@ export class TenantsRouter {
       `${TENANT_MEMBER_SELECT} order by m.created_at asc`,
       [tenantId],
     );
-    return rows.map((row) => mapMemberRow(row, hasPiiAccess(req)));
+    return rows.map(mapMemberRow);
   }
 
   /**
@@ -686,7 +685,7 @@ export class TenantsRouter {
       after: { roleId, roleScope: nextRoleScope },
     });
 
-    return this.loadTenantMember(tenantId, memberUserId, hasPiiAccess(req));
+    return this.loadTenantMember(tenantId, memberUserId);
   }
 
   /**
@@ -755,7 +754,7 @@ export class TenantsRouter {
       before: { status: rows[0]?.before_status ?? null },
       after: { status },
     });
-    return this.loadTenantMember(tenantId, memberUserId, hasPiiAccess(req));
+    return this.loadTenantMember(tenantId, memberUserId);
   }
 
   private async reviewVerification(
@@ -872,7 +871,6 @@ export class TenantsRouter {
    */
   private async loadTenant(
     tenantId: string,
-    canReadPii: boolean,
   ): Promise<TenantOperationDetailRecord> {
     const { rows } = await this.pool.query<TenantOperationRow>(
       TENANT_DETAIL_SQL,
@@ -910,7 +908,7 @@ export class TenantsRouter {
 
     return {
       ...mapTenantRow(row),
-      members: members.rows.map((m) => mapOperationMemberRow(m, canReadPii)),
+      members: members.rows.map(mapOperationMemberRow),
       subscriptions: subscriptions.rows.map(mapOperationSubscriptionRow),
       usage: usage.rows.map(mapUsageRow),
       auditEvents: auditEvents.rows.map(mapAuditRow),
@@ -937,7 +935,6 @@ export class TenantsRouter {
   private async loadTenantMember(
     tenantId: string,
     userId: string,
-    canReadPii: boolean,
   ): Promise<TenantMemberRecord> {
     const { rows } = await this.pool.query<TenantMemberRow>(
       `${TENANT_MEMBER_SELECT} and m.user_id = $2 limit 1`,
@@ -947,7 +944,7 @@ export class TenantsRouter {
     if (!row) {
       throw new NotFoundException("Tenant member not found");
     }
-    return mapMemberRow(row, canReadPii);
+    return mapMemberRow(row);
   }
 
   private async loadVerification(
@@ -1134,12 +1131,10 @@ const CYCLE_UNITS = ["day", "week", "month", "year", "perpetual"] as const;
 const AUDIT_RESULTS = ["success", "failure", "denied"] as const;
 const TICKET_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
 
-/* `canReadPii` 由调用方从请求上下文算（`user:pii.read`）。成员表与账号页渲染的是
-   同一批人的同一批字段，闸门实现收在 privacy/pii-mask 一份里。 */
-function mapOperationMemberRow(
-  row: TenantMemberRow,
-  canReadPii: boolean,
-): TenantOperationMember {
+/* 联系方式给明文，不走 `user:pii.read`（owner 2026-09-21：运营者本来就是管理员）。
+   账号页 `accounts.router` 那边仍然走闸门，是尚未复核的原设计——两页不一致是已知的，
+   别以"对齐"为由把这一页改回去。 */
+function mapOperationMemberRow(row: TenantMemberRow): TenantOperationMember {
   return {
     id: row.membership_id,
     /* 两个值拆开给（owner 2026-09-21 走查：成员行显示成了 `U-stonesmoker`）。
@@ -1149,8 +1144,8 @@ function mapOperationMemberRow(
     userNo: row.user_no,
     account: row.account ?? "",
     name: row.display_name ?? row.account ?? "",
-    email: canReadPii ? (row.email ?? "") : maskEmail(row.email ?? ""),
-    phone: canReadPii ? (row.phone ?? null) : maskPhone(row.phone ?? null),
+    email: row.email ?? "",
+    phone: row.phone ?? null,
     role: row.role_name ?? row.role_code ?? "",
     roleCode: row.role_code ?? "",
     // 查询已过滤 removed；CHECK 只剩 active/suspended。
@@ -1706,10 +1701,7 @@ function assertVerificationStatus(value: string): string {
   throw new BadRequestException(`Unsupported verification status: ${value}`);
 }
 
-function mapMemberRow(
-  row: TenantMemberRow,
-  canReadPii: boolean,
-): TenantMemberRecord {
+function mapMemberRow(row: TenantMemberRow): TenantMemberRecord {
   return {
     membershipId: row.membership_id,
     userId: row.user_id,
@@ -1718,8 +1710,8 @@ function mapMemberRow(
        account = 登录句柄（不加前缀），userNo = 可视码（带 U-）。 */
     userNo: row.user_no,
     account: row.account ?? "",
-    email: canReadPii ? (row.email ?? "") : maskEmail(row.email ?? ""),
-    phone: canReadPii ? (row.phone ?? null) : maskPhone(row.phone ?? null),
+    email: row.email ?? "",
+    phone: row.phone ?? null,
     userStatus: row.user_status ?? "",
     roleId: row.role_id,
     roleScope: row.role_scope,
@@ -1889,9 +1881,8 @@ interface TenantMemberRecord {
   userNo: string | null;
   /** 登录句柄。**不是主体码，不加前缀。** */
   account: string;
-  /** 明文需 `user:pii.read`，否则是掩码。 */
   email: string;
-  /** 明文需 `user:pii.read`，否则是掩码；没取到为 null。 */
+  /** 明文（运营者即管理员，不遮）；没取到为 null。 */
   phone: string | null;
   userStatus: string;
   roleId: string;

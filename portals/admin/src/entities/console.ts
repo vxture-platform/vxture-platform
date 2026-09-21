@@ -819,9 +819,8 @@ export interface TenantOperationMember {
    */
   account: string;
   name: string;
-  /** 明文需 `user:pii.read`，否则是掩码（j***@x.com）。 */
   email: string;
-  /** 明文需 `user:pii.read`，否则是掩码（137****5678）；没取到为 null。 */
+  /** 明文（运营者即管理员，不遮）；没取到为 null。 */
   phone: string | null;
   role: string;
   roleCode: string;
@@ -1011,9 +1010,8 @@ export interface TenantMemberRecord {
   userNo: string | null;
   /** 登录句柄。**不是主体码，不加前缀。** */
   account: string;
-  /** 明文需 `user:pii.read`，否则是掩码。 */
   email: string;
-  /** 明文需 `user:pii.read`，否则是掩码；没取到为 null。 */
+  /** 明文（运营者即管理员，不遮）；没取到为 null。 */
   phone: string | null;
   userStatus: string;
   roleId: string;
