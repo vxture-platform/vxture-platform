@@ -205,6 +205,9 @@ export class TenantsRouter {
     const tenantId = await this.resolveTenantId(id);
 
     const name = optionalString(body?.name, 128, "name");
+    // 96 而不是 128：跟 `tenancy.tenants.display_name` 的 varchar(96) 对齐，
+    // 否则超长的名字会走到 PG 才报错，而那时事务已经开了。
+    const displayName = optionalString(body?.displayName, 96, "displayName");
     const dbStatus = mapIncomingTenantStatus(body?.status);
     const industry = optionalString(body?.industry, 64, "industry");
     const scale = optionalString(body?.scale, 32, "scale");
@@ -222,28 +225,53 @@ export class TenantsRouter {
     const address = optionalString(body?.address, 255, "address");
     const postalCode = optionalString(body?.postalCode, 16, "postalCode");
 
+    // 提到 try 外层：审计写在 finally 之后。
+    let auditBefore: {
+      name: string;
+      displayName: string | null;
+      status: string;
+    } | null = null;
+
     const client = await this.rwPool.connect();
     try {
       await client.query("begin");
 
-      const existing = await client.query<{ id: string }>(
-        `select id from tenancy.tenants where id = $1 and deleted_at is null for update`,
+      /* 多取三列做审计的 before。只取 tenants 这三个身份字段，不把 profiles /
+         contacts 也拉进来：审计要回答的是「谁把这个租户改成了什么」，
+         满屏快照反而没人读。 */
+      const existing = await client.query<{
+        id: string;
+        name: string;
+        display_name: string | null;
+        status: string;
+      }>(
+        `select id, name, display_name, status
+           from tenancy.tenants
+          where id = $1 and deleted_at is null
+          for update`,
         [tenantId],
       );
-      if (!existing.rows[0]) {
+      const beforeRow = existing.rows[0];
+      if (!beforeRow) {
         throw new NotFoundException("Tenant not found");
       }
+      auditBefore = {
+        name: beforeRow.name,
+        displayName: beforeRow.display_name,
+        status: beforeRow.status,
+      };
 
       await client.query(
         `
           update tenancy.tenants
-          set name       = coalesce($2, name),
-              status     = coalesce($3, status),
-              updated_at = now()
+          set name         = coalesce($2, name),
+              display_name = coalesce($3, display_name),
+              status       = coalesce($4, status),
+              updated_at   = now()
           where id = $1
             and deleted_at is null
         `,
-        [tenantId, name, dbStatus],
+        [tenantId, name, displayName, dbStatus],
       );
 
       await client.query(
@@ -326,6 +354,34 @@ export class TenantsRouter {
       client.release();
     }
 
+    /* after 只记**本次真送了的**字段（非 null 那几个）。全部列一律记下来会把
+       「没动的」和「改成同值的」混在一起，事后没法从审计里读出运营到底改了什么。 */
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action: "tenant.update",
+      resourceType: "tenant",
+      resourceId: tenantId,
+      tenantId,
+      ...(auditBefore ? { before: auditBefore } : {}),
+      after: Object.fromEntries(
+        Object.entries({
+          name,
+          displayName,
+          status: dbStatus,
+          industry,
+          scale,
+          description,
+          website,
+          contactName,
+          contactRole,
+          contactEmail,
+          contactPhone,
+          countryCode,
+          address,
+          postalCode,
+        }).filter(([, value]) => value !== null && value !== undefined),
+      ),
+    });
+
     return this.loadTenant(tenantId);
   }
 
@@ -385,6 +441,7 @@ export class TenantsRouter {
       action: "tenant.brand_reset",
       resourceType: "tenant",
       resourceId: tenantId,
+      tenantId,
       // 删掉的图不留存，只留它的内容哈希——事后能对上「删的是哪一张」。
       ...(removed ? { before: { logoHash: rows[0]?.hash ?? null } } : {}),
       after: { logoHash: null },
@@ -406,17 +463,27 @@ export class TenantsRouter {
     assertCanManageTenantLifecycle(req);
     const tenantId = await this.resolveTenantId(id);
 
-    const { rowCount } = await this.rwPool.query(
+    const { rows } = await this.rwPool.query<{ before_status: string }>(
       `
-        update tenancy.tenants
+        update tenancy.tenants t
         set status = 'suspended', updated_at = now()
-        where id = $1 and deleted_at is null
+        from (select id, status from tenancy.tenants where id = $1) old
+        where t.id = old.id and t.deleted_at is null
+        returning old.status as before_status
       `,
       [tenantId],
     );
-    if (!rowCount) {
+    if (!rows.length) {
       throw new NotFoundException("Tenant not found");
     }
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action: "tenant.suspend",
+      resourceType: "tenant",
+      resourceId: tenantId,
+      tenantId,
+      before: { status: rows[0]?.before_status ?? null },
+      after: { status: "suspended" },
+    });
     return this.loadTenant(tenantId);
   }
 
@@ -434,17 +501,27 @@ export class TenantsRouter {
     assertCanManageTenantLifecycle(req);
     const tenantId = await this.resolveTenantId(id);
 
-    const { rowCount } = await this.rwPool.query(
+    const { rows } = await this.rwPool.query<{ before_status: string }>(
       `
-        update tenancy.tenants
+        update tenancy.tenants t
         set status = 'active', updated_at = now()
-        where id = $1 and deleted_at is null
+        from (select id, status from tenancy.tenants where id = $1) old
+        where t.id = old.id and t.deleted_at is null
+        returning old.status as before_status
       `,
       [tenantId],
     );
-    if (!rowCount) {
+    if (!rows.length) {
       throw new NotFoundException("Tenant not found");
     }
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action: "tenant.resume",
+      resourceType: "tenant",
+      resourceId: tenantId,
+      tenantId,
+      before: { status: rows[0]?.before_status ?? null },
+      after: { status: "active" },
+    });
     return this.loadTenant(tenantId);
   }
 
@@ -487,6 +564,11 @@ export class TenantsRouter {
     const memberUserId = requireUuid(userId, "Invalid member user id");
     const roleId = requireUuid(body?.roleId, "Invalid role id");
 
+    // 提到 try 外层：审计写在 finally 之后（审计失败不该回滚业务），
+    // 而 try 内的 const 在那里已经出了作用域。
+    let beforeRoleId: string | null = null;
+    let nextRoleScope = "";
+
     const client = await this.rwPool.connect();
     try {
       await client.query("begin");
@@ -505,17 +587,23 @@ export class TenantsRouter {
         );
       }
 
-      const membership = await client.query<{ id: string }>(
+      const membership = await client.query<{
+        id: string;
+        role_id: string | null;
+      }>(
         `
-          select id from tenancy.tenant_memberships
+          select id, role_id from tenancy.tenant_memberships
           where tenant_id = $1 and user_id = $2
           for update
         `,
         [tenantId, memberUserId],
       );
-      if (!membership.rows[0]) {
+      const beforeMember = membership.rows[0];
+      if (!beforeMember) {
         throw new NotFoundException("Tenant member not found");
       }
+      beforeRoleId = beforeMember.role_id;
+      nextRoleScope = role.scope;
 
       await client.query(
         `
@@ -533,6 +621,15 @@ export class TenantsRouter {
     } finally {
       client.release();
     }
+
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action: "tenant.member.role_change",
+      resourceType: "tenant_member",
+      resourceId: memberUserId,
+      tenantId,
+      before: { roleId: beforeRoleId },
+      after: { roleId, roleScope: nextRoleScope },
+    });
 
     return this.loadTenantMember(tenantId, memberUserId);
   }
@@ -575,17 +672,34 @@ export class TenantsRouter {
     const tenantId = await this.resolveTenantId(id);
     const memberUserId = requireUuid(userId, "Invalid member user id");
 
-    const { rowCount } = await this.rwPool.query(
+    const { rows } = await this.rwPool.query<{ before_status: string }>(
       `
-        update tenancy.tenant_memberships
+        update tenancy.tenant_memberships m
         set status = $3, updated_at = now()
-        where tenant_id = $1 and user_id = $2
+        from (
+          select tenant_id, user_id, status
+            from tenancy.tenant_memberships
+           where tenant_id = $1 and user_id = $2
+        ) old
+        where m.tenant_id = old.tenant_id and m.user_id = old.user_id
+        returning old.status as before_status
       `,
       [tenantId, memberUserId, status],
     );
-    if (!rowCount) {
+    if (!rows.length) {
       throw new NotFoundException("Tenant member not found");
     }
+    /* resourceId 取成员的 user_id（这条审计记的是那个人），tenantId 另写一列——
+       租户详情的风控审计页按 tenant_id 查，不写就在那一页上看不见。 */
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action:
+        status === "removed" ? "tenant.member.remove" : "tenant.member.suspend",
+      resourceType: "tenant_member",
+      resourceId: memberUserId,
+      tenantId,
+      before: { status: rows[0]?.before_status ?? null },
+      after: { status },
+    });
     return this.loadTenantMember(tenantId, memberUserId);
   }
 
@@ -602,6 +716,10 @@ export class TenantsRouter {
       "Invalid platform operator principal",
     );
 
+    // 同上：审计在 finally 之后写，这两个值得活到那里。
+    let auditTenantId = "";
+    let auditBeforeStatus: string | null = null;
+
     const client = await this.rwPool.connect();
     try {
       await client.query("begin");
@@ -609,11 +727,12 @@ export class TenantsRouter {
       const current = await client.query<{
         id: string;
         tenant_id: string;
+        status: string;
         company_name: string | null;
         verification_type: string;
       }>(
         `
-          select id, tenant_id, company_name, verification_type
+          select id, tenant_id, status, company_name, verification_type
           from kyc.tenant_verifications
           where id = $1
           for update
@@ -624,6 +743,8 @@ export class TenantsRouter {
       if (!record) {
         throw new NotFoundException("Tenant verification not found");
       }
+      auditTenantId = record.tenant_id;
+      auditBeforeStatus = record.status ?? null;
 
       await client.query(
         `
@@ -670,6 +791,21 @@ export class TenantsRouter {
     } finally {
       client.release();
     }
+
+    /* 写在 commit 之后，不在事务内：审计写失败不该把已经做成的审核回滚掉。
+       resourceId 取 verificationId（这条审计记的是那次审核），而 tenantId 另写一
+       列——租户详情的风控审计页按 tenant_id 查，两者不是一回事。 */
+    await insertOperatorAuditLog(this.rwPool, req, {
+      action:
+        nextStatus === "verified"
+          ? "tenant.verification.approve"
+          : "tenant.verification.reject",
+      resourceType: "tenant_verification",
+      resourceId: verificationId,
+      tenantId: auditTenantId,
+      before: { status: auditBeforeStatus },
+      after: { status: nextStatus, ...(reason ? { reason } : {}) },
+    });
 
     return this.loadVerification(verificationId);
   }
@@ -832,7 +968,11 @@ function mapTenantRow(row: TenantOperationRow): TenantOperationRecord {
     id: row.id,
     tenantCode: String(row.tenant_no),
     tenantName: row.name,
-    displayName: row.name,
+    // 两个字段指两列：`name` 是认证名（跟着 KYC 走），`display_name` 是日常
+    // 简称（自由改）—— 20_tenancy.sql 第 13 行就这么写着。此前两者都取 `row.name`，
+    // 于是界面上这两行永远相等，运营看不出租户到底有没有简称。
+    // 空值回落到认证名而不是「—」：列表与面包屑都拿它当称呼，空着比重复更坏。
+    displayName: row.display_name ?? row.name,
     tenantType: row.type === "personal" ? "individual" : "company",
     logoHash: row.logo_hash,
     status: normalizeStatus(row.status),
@@ -1008,6 +1148,9 @@ select
   t.id,
   t.tenant_no,
   t.name,
+  -- 简称。没选它的后果不是「少一列」：投影里 displayName 一直拿 name 充数，
+  -- 界面上「租户简称」与「租户名称」永远一模一样（owner 2026-09-21 实看）。
+  t.display_name,
   t.type,
   t.status,
   t.verification_status,
@@ -1136,6 +1279,7 @@ interface TenantOperationRow {
   id: string;
   tenant_no: string | number;
   name: string;
+  display_name: string | null;
   type: string;
   status: string;
   verification_status: string;
@@ -1540,6 +1684,7 @@ join tenancy.tenants t on t.id = v.tenant_id
 
 interface UpdateTenantBody {
   name?: unknown;
+  displayName?: unknown;
   status?: unknown;
   industry?: unknown;
   scale?: unknown;

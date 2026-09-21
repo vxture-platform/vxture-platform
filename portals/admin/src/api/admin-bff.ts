@@ -2057,7 +2057,10 @@ export async function changeTicketStatus(
 // ── Tenants 治理 写/读聚合（B10）──────────────────────────────────────────
 
 export interface UpdateTenantInput {
+  /** 认证名（tenancy.tenants.name）。认证通过时后端会把它归位到申报的企业名。 */
   name?: string;
+  /** 简称（tenancy.tenants.display_name，自由改）。与 name 是两列，别当成一个。 */
+  displayName?: string;
   status?: TenantOperationRecord["status"];
   industry?: string;
   scale?: string;
