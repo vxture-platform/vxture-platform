@@ -881,20 +881,29 @@ export class TenantsRouter {
       throw new NotFoundException("Tenant not found");
     }
 
-    const [members, subscriptions, usage, auditEvents, tickets, notes] =
-      await Promise.all([
-        this.pool.query<TenantMemberRow>(TENANT_DETAIL_MEMBERS_SQL, [tenantId]),
-        this.pool.query<TenantSubscriptionRow>(
-          TENANT_DETAIL_SUBSCRIPTIONS_SQL,
-          [tenantId],
-        ),
-        this.pool.query<TenantUsageRow>(TENANT_DETAIL_USAGE_SQL, [tenantId]),
-        this.pool.query<TenantAuditRow>(TENANT_DETAIL_AUDIT_SQL, [tenantId]),
-        this.pool.query<TenantTicketRow>(TENANT_DETAIL_TICKETS_SQL, [tenantId]),
-        this.pool.query<TenantOperatorNotesRow>(TENANT_DETAIL_NOTES_SQL, [
-          tenantId,
-        ]),
-      ]);
+    const [
+      members,
+      subscriptions,
+      usage,
+      auditEvents,
+      tickets,
+      notes,
+      workspaces,
+    ] = await Promise.all([
+      this.pool.query<TenantMemberRow>(TENANT_DETAIL_MEMBERS_SQL, [tenantId]),
+      this.pool.query<TenantSubscriptionRow>(TENANT_DETAIL_SUBSCRIPTIONS_SQL, [
+        tenantId,
+      ]),
+      this.pool.query<TenantUsageRow>(TENANT_DETAIL_USAGE_SQL, [tenantId]),
+      this.pool.query<TenantAuditRow>(TENANT_DETAIL_AUDIT_SQL, [tenantId]),
+      this.pool.query<TenantTicketRow>(TENANT_DETAIL_TICKETS_SQL, [tenantId]),
+      this.pool.query<TenantOperatorNotesRow>(TENANT_DETAIL_NOTES_SQL, [
+        tenantId,
+      ]),
+      this.pool.query<TenantWorkspaceRow>(TENANT_DETAIL_WORKSPACES_SQL, [
+        tenantId,
+      ]),
+    ]);
     const notesRow = notes.rows[0];
 
     return {
@@ -911,6 +920,15 @@ export class TenantsRouter {
         updatedAt: toIsoOrNull(notesRow?.updated_at ?? null),
         updatedBy: notesRow?.updated_by_name ?? null,
       },
+      /* 空数组是**真结论**：直属租户没有工作空间，界面据此隐藏下拉。
+         别拿一个假的「默认空间」充数（同 2026-08-30 拆掉的那批占位）。 */
+      workspaces: workspaces.rows.map((row) => ({
+        id: row.id,
+        workspaceCode: String(row.workspace_no),
+        name: row.name,
+        isDefault: row.is_default,
+        status: row.status,
+      })),
     };
   }
 
@@ -1504,6 +1522,24 @@ where a.tenant_id = $1
 order by a.created_at desc
 limit 20
 `;
+
+/* 工作空间：只随详情读。默认空间排在最前，其余按创建时间——
+   下拉的第一项就是运营默认想看的那个。软删的不返回，archived 的返回
+   （它们仍然有用量与账单，运营要能查），status 一并给出。 */
+const TENANT_DETAIL_WORKSPACES_SQL = `
+select w.id, w.workspace_no, w.name, w.is_default, w.status
+  from tenancy.workspaces w
+ where w.tenant_id = $1 and w.deleted_at is null
+ order by w.is_default desc, w.created_at asc
+`;
+
+interface TenantWorkspaceRow {
+  id: string;
+  workspace_no: string | number;
+  name: string;
+  is_default: boolean;
+  status: string;
+}
 
 // 运营备注：1:1，只随详情读。不进 TENANT_SELECT——那是列表与详情共用的基底，
 // join 进去等于让 500 行的列表也拖着这张表，而列表不需要它。

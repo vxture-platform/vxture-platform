@@ -1056,6 +1056,16 @@ export interface TenantOperationRecord {
  * 要么每行再打五条查询、要么放空数组冒充「没有」——后者正是 2026-08-30 拆掉的
  * 那批占位。与 SubscriptionOperationDetailRecord / OrderOperationDetailRecord 同一做法。
  */
+/** 租户下的工作空间（tenancy.workspaces）。只随详情返回。 */
+export interface TenantOperationWorkspace {
+  id: string;
+  /** 可视码 workspace_no（十位）——界面上不展示 UUID。 */
+  workspaceCode: string;
+  name: string;
+  isDefault: boolean;
+  status: string;
+}
+
 export interface TenantOperationDetailRecord extends TenantOperationRecord {
   /**
    * 运营内部备注（admin.tenant_operator_notes）。与 `notes` 不是一回事：
@@ -1068,6 +1078,8 @@ export interface TenantOperationDetailRecord extends TenantOperationRecord {
     updatedAt: string | null;
     updatedBy: string | null;
   };
+  /** 空数组 = 直属租户（没有工作空间），界面据此隐藏工作空间下拉。 */
+  workspaces: TenantOperationWorkspace[];
   members: TenantOperationMember[];
   subscriptions: TenantOperationSubscription[];
   usage: TenantOperationUsageMetric[];

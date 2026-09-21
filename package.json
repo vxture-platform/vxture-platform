@@ -94,6 +94,7 @@
     "lint:admin-nav-messages": "node scripts/guardrails/check-admin-nav-messages.mjs",
     "lint:messages": "node scripts/guardrails/check-message-catalogs.mjs",
     "lint:migration-counts": "node scripts/guardrails/check-migration-absolute-counts.mjs",
+    "lint:migration-placement": "node scripts/guardrails/check-migration-placement.mjs",
     "lint:ops-todo-alerts": "node scripts/guardrails/check-ops-todo-alerts.mjs",
     "lint:permission-catalog": "node scripts/guardrails/check-tenant-permission-catalog.mjs",
     "lint:operator-planes": "node scripts/guardrails/check-operator-planes.mjs",

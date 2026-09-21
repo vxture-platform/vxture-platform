@@ -201,15 +201,15 @@ describe("GET /api/tenants/:id detail projection", () => {
     expect(ro.calls).toHaveLength(1);
   });
 
-  it("maps the scalar counts from the base row and fires exactly six detail queries", async () => {
+  it("maps the scalar counts from the base row and fires exactly seven detail queries", async () => {
     const ro = makeRoPool((sql) => route(sql));
     const router = new TenantsRouter(ro.pool, noDbPool());
     const record = await router.getTenant(makeReq(MANAGE), TENANT_ID);
 
-    /* 1 条基底 + 6 条明细（成员 / 订阅 / 用量 / 审计 / 工单 / 运营备注）。
+    /* 1 条基底 + 7 条明细（成员 / 订阅 / 用量 / 审计 / 工单 / 运营备注 / 工作空间）。
        这个数字是防 N+1 的门：多出来的查询要么是新明细（改这里），要么是
        有人把查询写进了循环（那就是缺陷）。别无条件地把它改大。 */
-    expect(ro.calls).toHaveLength(7);
+    expect(ro.calls).toHaveLength(8);
     expect(record.tenantCode).toBe("100001");
     expect(record.memberCount).toBe(3);
     expect(record.activeMemberCount).toBe(2);
