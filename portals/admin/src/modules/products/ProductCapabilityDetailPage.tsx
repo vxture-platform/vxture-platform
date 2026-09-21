@@ -206,15 +206,23 @@ export function ProductCapabilityDetailPage({
   >[] = useMemo(
     () => [
       {
-        id: "code",
-        /* 「计量代码」而不是「计量名称 + 计量代码」两列：`product_metrics` 只有
-           `metric_key`，没有名称列，BFF 里 `metricName` 就是 key 本身——两列会
-           显示同一个字符串两遍。中文名需要加库列 + 扩 opera 录入面，
-           owner 2026-09-21 裁定另开一条线。 */
-        header: "计量代码",
+        id: "name",
+        /* 中文名与说明（`display_name` / `description`）2026-09-22 才加列，存量
+           19 条待运维台补录。**没填就回落显示代码**，不在界面上编一个——平台替
+           产品命名必然错。回落时副题留空，免得同一个串画两遍。 */
+        header: "计量名称",
         cell: (metric) => (
-          <TableTitleCell icon="chart-bar" title={metric.metricCode} />
+          <TableTitleCell
+            icon="chart-bar"
+            title={metric.metricName || metric.metricCode}
+            {...(metric.metricName ? { description: metric.metricCode } : {})}
+          />
         ),
+      },
+      {
+        id: "description",
+        header: "说明",
+        cell: (metric) => metric.metricDescription || "—",
       },
       {
         id: "unit",
