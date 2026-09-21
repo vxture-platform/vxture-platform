@@ -2477,6 +2477,33 @@
       "expired": "Credential expired",
       "mfaRequired": "MFA required",
       "mfaFailed": "MFA failed"
+    },
+    "mergeStrategy": {
+      "max": "Max",
+      "union": "Union",
+      "pool": "Pool",
+      "tiered": "Tiered"
+    },
+    "productLayer": {
+      "L1": "L1 Foundation",
+      "L2": "L2 Domain platform",
+      "L3": "L3 Agent"
+    },
+    "releaseStage": {
+      "ga": "GA",
+      "beta": "Beta",
+      "developing": "In development"
+    },
+    "resetPeriod": {
+      "none": "No reset",
+      "day": "Daily",
+      "month": "Monthly"
+    },
+    "productSurface": {
+      "web": "Web",
+      "desktop": "Desktop",
+      "app": "Mobile",
+      "miniprogram": "Mini program"
     }
   },
   "orderDetailPage": {

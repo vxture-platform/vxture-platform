@@ -533,6 +533,23 @@ export interface ProductCapabilityMetricRule {
   billingMode: string;
 }
 
+/** 套餐版本历史的一行（DS04）。 */
+export interface ProductPlanVersionRecord {
+  planCode: string;
+  planName: string;
+  versionNo: number;
+  /** draft 可编辑待发布；published 已发布并随 is_locked 冻结。 */
+  status: "draft" | "published";
+  isLocked: boolean;
+  /** 本产品在这个套餐版本里的角色：primary=套餐卖的就是它，bundled=搭售件。 */
+  componentRole: "primary" | "bundled";
+  /**
+   * **创建时刻，不是发布时刻**：plan_versions 没有 published_at——发布这个动作
+   * 冻结了版本（is_locked=true）却没记时刻。不拿 created_at 冒充发布时间。
+   */
+  createdAt: string;
+}
+
 export interface ProductCapabilityRecord {
   id: string;
   productCode: string;
@@ -552,14 +569,43 @@ export interface ProductCapabilityRecord {
   releaseStage: string;
   /** 营销内容（双语富结构 jsonb）；未录入为 null。 */
   marketing: ProductMarketingContent | null;
+  /** 客户端可见性（is_customer_visible）。 */
   visibility: ProductCapabilityVisibility;
-  region: ProductCapabilityRegion;
-  ownerTeam: string;
-  capabilitySummary: string;
-  accessModes: string[];
+  /** 运营端可见性（is_workforce_visible）。与客户端是两根轴。 */
+  isWorkforceVisible: boolean;
+  /**
+   * 英文名。库列叫 `product_nick`（注释写「译名/副名」）**名不副实**：装的就是
+   * 英文名（数据平台→Arda、模型平台→Atlas……）。与中文名同时给，不走 i18n
+   * （owner 2026-09-21：「和中文同时提供，超越 i18n 范围」）。
+   */
+  productNameEn: string;
+  /** 分类中文名（product_categories.name）；未分类为空串。 */
+  categoryName: string;
+  /** 合作方（origin_provider）。`origin='third_party'` 时必填，自建为空串。 */
+  originProvider: string;
+  /** 能否单独订阅（standalone_subscribable）。false = 只能随方案搭售。 */
+  standaloneSubscribable: boolean;
+  releaseVersion: string;
+  releasedAt: string | null;
+  /** 终端支持，opera 接入页写的 product_surfaces；没录为空数组。 */
+  surfaces: string[];
+  /** 该产品的套餐里对外开放自助购买的个数（plans.is_public）。 */
+  publicPlanCount: number;
+  /** 至少有一个 published 版本的套餐数（正式，不含只有草稿的）。 */
+  publishedPlanCount: number;
+  /** 套餐版本历史；产品级「发布历史」库里没有这个概念（见 ProductPlanVersionRecord）。 */
+  planVersions: ProductPlanVersionRecord[];
+  /**
+   * 带理由跳过上线闸门的时刻；null = 正常过门。
+   *
+   * admin 这一页是运营**唯一**能看见「这个产品的接入门被绕过了」的地方——
+   * 不显示，就会在不知情的情况下卖一个没验完的东西。理由本身在 audit_logs。
+   */
+  launchOverrideAt: string | null;
+  /** 跳过当时尚未满足的 gate=launch 必填项；复验转满足后即不再出现。 */
+  launchOverridePending: string[];
   tags: string[];
   meteringUnit: string;
-  billingMode: string;
   healthStatus: ProductCapabilityHealthStatus;
   integration: ProductCapabilityIntegration;
   metrics: ProductCapabilityMetricRule[];

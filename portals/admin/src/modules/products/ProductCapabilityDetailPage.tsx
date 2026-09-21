@@ -1,40 +1,71 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * ProductCapabilityDetailPage.tsx - 产品详情。
+ * @package @vxture/admin
+ * @layer Presentation
+ * @category Modules - Products
+ *
+ * 版面按 owner 2026-09-21 重排：面包屑 + **一个**标题行（标题后跟一排状态标）
+ * + 四段（基础资料 / 关联方案 / 计量配置 / 套餐版本）。
+ *
+ * ── 为什么只剩一个标题行 ──
+ * 原来这一页有两个：`PageHeader`（标题 + 描述 + 返回/编辑按钮）叠着
+ * `DetailSummaryHeader`（同一个标题 + 副标 + 徽章 + 四张 MetricGrid 卡）。
+ * 同一个产品名连画两遍，四张卡还各占一格高。owner：「两个标题行重复，删一个；
+ * 四个 card 收缩为 tag-status 跟在标题后面，不要太浪费空间。」
+ *
+ * ── 标题后那排标是哪来的 ──
+ * 产品类型 / 产品来源 / 上线状态 / 接入状态 / 正式套餐数 / 计量项数。
+ * owner 原列的是「可用状态」，但 `healthStatus` 在 BFF 里**就是由 status 派生**
+ * （active→normal，其余→warning），两枚标永远一致、等于把同一件事说两遍。
+ * 换成**接入状态**：那是真独立的信号（opera 的 C1/C2/C3 接入进度）。
+ *
+ * ── 「发布历史」为什么变成「套餐版本」 ──
+ * 产品级发布历史**库里没有这个概念**：products 只有一个当前 release_version，
+ * 没有历史表，而 BFF 里那个 `releases` 是恒空的壳（已删）。真有历史的是
+ * `product.plan_versions`。owner 2026-09-21 认了这个改法。
+ */
+
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Badge,
+  Banner,
   Button,
+  Card,
+  CardContent,
+  DataTable,
   DetailList,
   DetailPageTemplate,
   DetailRow,
   EmptyState,
   Icon,
-  MetricGrid,
-  PanelItem,
-  PanelList,
-  SHELL_PANEL_HAIRLINE,
+  Section,
   StatusBadge,
   TableTitleCell,
+  type DataTableColumn,
+  type IconName,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
-import type { IconName } from "@vxture/design-system";
 import { fetchProductCapability } from "@/api/admin-bff";
-import { ProductContentEditDialog } from "./ProductContentEditDialog";
 import type {
-  ProductCapabilityHealthStatus,
   ProductCapabilityIntegrationStatus,
   ProductCapabilityRecord,
+  ProductPlanVersionRecord,
   ProductCapabilitySource,
   ProductCapabilityStatus,
   ProductCapabilityType,
 } from "@/entities/console";
 import { PUBLISH_STATUS_TONE } from "@/modules/shared/publish-tone";
-import { useCapabilityTypeLabels } from "@/modules/shared/enum-labels";
-import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
-import { PageHeader } from "@/modules/shared/PageHeader";
-import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
+import {
+  useCapabilityTypeLabels,
+  useMergeStrategyLabels,
+  useProductLayerLabels,
+} from "@/modules/shared/enum-labels";
+import { useTableLabels } from "@/modules/shared/table";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 
 function capabilityTypeIcon(type: ProductCapabilityType): IconName {
@@ -62,275 +93,76 @@ function integrationStatusLabel(status: ProductCapabilityIntegrationStatus) {
   return "无需接入";
 }
 
-function healthLabel(status: ProductCapabilityHealthStatus) {
-  if (status === "normal") return "正常";
-  if (status === "warning") return "需关注";
-  return "不可用";
+/*
+ * 三组文案留在本页而不是进 `enum-labels`：那个模块**只收值域已在 @shared 成文的
+ * 枚举**（规矩见它的头注）。成熟度 / 重置周期 / 终端支持三者的值域目前只在 DDL 的
+ * CHECK 里，shared 没有契约——先立契约再谈展示映射，不能让展示层先于契约定义业务
+ * 词汇。配额策略与产品分层有契约（MERGE_STRATEGIES / PRODUCT_LAYERS），已收进去。
+ *
+ * 认不得的值原样回显那个码，不编一个「其他」——没登记正是要看见的事。
+ */
+function useReleaseStageLabel() {
+  const t = useTranslations("enums.releaseStage");
+  return (stage: string) =>
+    stage === "ga"
+      ? t("ga")
+      : stage === "beta"
+        ? t("beta")
+        : stage === "developing"
+          ? t("developing")
+          : stage;
 }
 
-function regionLabel(region: ProductCapabilityRecord["region"]) {
-  if (region === "domestic") return "国内";
-  if (region === "international") return "国际";
-  return "全局";
+function useResetPeriodLabel() {
+  const t = useTranslations("enums.resetPeriod");
+  return (period: string) =>
+    period === "none"
+      ? t("none")
+      : period === "day"
+        ? t("day")
+        : period === "month"
+          ? t("month")
+          : period;
 }
 
-function ProductCapabilitySummary({
-  product,
+function useSurfaceLabel() {
+  const t = useTranslations("enums.productSurface");
+  return (surface: string) =>
+    surface === "web"
+      ? t("web")
+      : surface === "desktop"
+        ? t("desktop")
+        : surface === "app"
+          ? t("app")
+          : surface === "miniprogram"
+            ? t("miniprogram")
+            : surface;
+}
+
+/** 标题行后面那一枚一枚的状态标。 */
+function HeadTag({
+  icon,
+  children,
+  tone,
 }: {
-  product: ProductCapabilityRecord;
+  icon?: IconName;
+  children: React.ReactNode;
+  tone?: "neutral" | "success" | "warning" | "danger" | "info" | "brand";
 }) {
-  const capabilityTypeLabels = useCapabilityTypeLabels();
+  if (tone) {
+    return (
+      <StatusBadge tone={tone} icon={false}>
+        {children}
+      </StatusBadge>
+    );
+  }
   return (
-    <DetailSummaryHeader
-      icon={capabilityTypeIcon(product.productType)}
-      title={product.productName}
-      subtitle={product.productCode}
-      badges={
-        <>
-          <Badge>{capabilityTypeLabels[product.productType]}</Badge>
-          <Badge>{sourceLabel(product.source)}</Badge>
-          <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
-            {statusLabel(product.status)}
-          </StatusBadge>
-        </>
-      }
-      aside={
-        <MetricGrid
-          items={[
-            {
-              id: "solutions",
-              help: "引用了本产品的业务方案数。",
-              label: "业务方案",
-              value: formatNumber(product.solutionCount),
-              tags: [`${formatNumber(product.planCount)} 套餐`],
-            },
-            {
-              id: "integration",
-              help: "本能力对接平台的进度：无需接入 / 待配置 / 联调中 / 已接入。",
-              label: "接入状态",
-              value: integrationStatusLabel(product.integration.status),
-              tags: [product.integration.providerName],
-            },
-            {
-              id: "metering",
-              label: "计量单位",
-              value: product.meteringUnit,
-              tags: [product.billingMode],
-            },
-            {
-              id: "health",
-              help: "本能力当前可用状态：正常 / 需关注 / 不可用。",
-              label: "可用状态",
-              value: healthLabel(product.healthStatus),
-              tags: [`${formatNumber(product.modelPolicyCount)} 模型授权`],
-            },
-          ]}
-        />
-      }
-    />
-  );
-}
-
-function ProductCapabilityDetails({
-  product,
-}: {
-  product: ProductCapabilityRecord;
-}) {
-  const locale = useLocale();
-  const tShared = useTranslations();
-  const capabilityTypeLabels = useCapabilityTypeLabels();
-  return (
-    <section
-      className="grid min-w-0 gap-xl"
-      aria-label={`${product.productName} 产品详情`}
-    >
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="database" title="基础资料" />
-        <DetailList columns={3}>
-          <DetailRow label="产品编码">{orUnset(product.productCode)}</DetailRow>
-          <DetailRow label="产品名称">{orUnset(product.productName)}</DetailRow>
-          <DetailRow label="产品类型">
-            {orUnset(capabilityTypeLabels[product.productType])}
-          </DetailRow>
-          <DetailRow label="产品来源">
-            {orUnset(sourceLabel(product.source))}
-          </DetailRow>
-          <DetailRow label="可见范围">
-            {product.visibility === "public" ? "公开" : "内部"}
-          </DetailRow>
-          <DetailRow label="服务区域">
-            {orUnset(regionLabel(product.region))}
-          </DetailRow>
-          <DetailRow label="负责团队">{orUnset(product.ownerTeam)}</DetailRow>
-          <DetailRow label="创建时间">
-            {orUnset(formatDate(product.createdAt, locale))}
-          </DetailRow>
-          <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(product.updatedAt, locale))}
-          </DetailRow>
-        </DetailList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="sparkles" title="能力属性" />
-        <div className="grid min-w-0 gap-xs">
-          <strong className="text-body-md leading-relaxed font-semibold text-foreground">
-            {product.capabilitySummary}
-          </strong>
-          <p className="m-0 text-body-sm leading-loose text-muted-foreground">
-            {product.description}
-          </p>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-xs">
-          {product.accessModes.map((mode) => (
-            <StatusBadge key={mode} tone="brand" icon={false}>
-              {mode}
-            </StatusBadge>
-          ))}
-          {product.tags.map((tag) => (
-            <StatusBadge key={tag} tone="neutral" icon={false}>
-              {tag}
-            </StatusBadge>
-          ))}
-        </div>
-        <PanelList
-          empty={
-            <TableTitleCell
-              title="暂未被业务方案引用"
-              description="后续可在解决方案中配置。"
-            />
-          }
-        >
-          {product.relatedSolutions.map((solution) => (
-            <PanelItem
-              key={`${solution.solutionCode}:${solution.role}`}
-              main={
-                <TableTitleCell
-                  title={solution.solutionName}
-                  description={solution.role}
-                />
-              }
-              trail={
-                <span className="truncate text-body-sm text-muted-foreground">
-                  {solution.tierNames.join(" | ")}
-                </span>
-              }
-            />
-          ))}
-        </PanelList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="api" title="接入配置" />
-        <DetailList columns={3}>
-          <DetailRow label="供应商">
-            {orUnset(product.integration.providerName)}
-          </DetailRow>
-          <DetailRow label="供应商类型">
-            {orUnset(sourceLabel(product.integration.providerType))}
-          </DetailRow>
-          <DetailRow label="接入状态">
-            {orUnset(integrationStatusLabel(product.integration.status))}
-          </DetailRow>
-          <DetailRow label="协议">
-            {orUnset(product.integration.protocol)}
-          </DetailRow>
-          <DetailRow label="认证方式">
-            {orUnset(product.integration.authMode)}
-          </DetailRow>
-          <DetailRow label="结算方式">
-            {product.integration.settlementMode || tShared("common.none")}
-          </DetailRow>
-          <DetailRow label="接口地址">
-            {product.integration.endpoint || "内部能力，无需外部接口"}
-          </DetailRow>
-          <DetailRow label="最近检测">
-            {orUnset(
-              product.integration.lastCheckedAt
-                ? formatDate(product.integration.lastCheckedAt, locale)
-                : "未检测",
-            )}
-          </DetailRow>
-        </DetailList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="chart-bar" title="计量配置" />
-        <DetailList columns={3}>
-          <DetailRow label="默认计量单位">
-            {orUnset(product.meteringUnit)}
-          </DetailRow>
-          <DetailRow label="计费模式">{orUnset(product.billingMode)}</DetailRow>
-          <DetailRow label="策略数量">
-            {orUnset(`${formatNumber(product.modelPolicyCount)} 个`)}
-          </DetailRow>
-        </DetailList>
-        <PanelList>
-          {product.metrics.map((metric) => (
-            <PanelItem
-              key={metric.metricCode}
-              main={
-                <TableTitleCell
-                  title={metric.metricName}
-                  description={metric.metricCode}
-                />
-              }
-              trail={
-                /* 同 SubscriptionDetailPage：trail 槽 `shrink-0` 按内容定宽，
-                   `truncate` 要先有宽度上限才截得断。 */
-                <span className="block max-w-panel-sm truncate text-body-sm text-muted-foreground">
-                  {metric.unit} | {metric.cycle} | {metric.quotaBase} |{" "}
-                  {metric.billingMode}
-                </span>
-              }
-            />
-          ))}
-        </PanelList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="shield-check" title="可用状态" />
-        <DetailList columns={3}>
-          <DetailRow label="能力状态">
-            {orUnset(statusLabel(product.status))}
-          </DetailRow>
-          <DetailRow label="健康状态">
-            {orUnset(healthLabel(product.healthStatus))}
-          </DetailRow>
-          <DetailRow label="发布数量">
-            {orUnset(`${formatNumber(product.releaseCount)} 个`)}
-          </DetailRow>
-          <DetailRow label="方案复用">
-            {orUnset(`${formatNumber(product.solutionCount)} 个`)}
-          </DetailRow>
-        </DetailList>
-        <PanelList
-          empty={
-            <TableTitleCell
-              title="暂无发布版本"
-              description="该能力当前主要通过业务方案组合使用。"
-            />
-          }
-        >
-          {product.releases.map((release) => (
-            <PanelItem
-              key={release.releaseCode}
-              main={
-                <TableTitleCell
-                  title={release.releaseName}
-                  description={release.releaseCode}
-                />
-              }
-              trail={
-                <span className="truncate text-body-sm text-muted-foreground">
-                  {release.versionLabels.join(" | ")}
-                </span>
-              }
-            />
-          ))}
-        </PanelList>
-      </section>
-    </section>
+    <Badge variant="outline" className="inline-flex items-center gap-2xs">
+      {icon ? (
+        <Icon name={icon} size="xs" fallback="placeholder" aria-hidden="true" />
+      ) : null}
+      {children}
+    </Badge>
   );
 }
 
@@ -339,56 +171,159 @@ export function ProductCapabilityDetailPage({
 }: {
   productCode: string;
 }) {
-  const tShared = useTranslations();
+  const locale = useLocale();
+  const router = useRouter();
+  const tableLabels = useTableLabels();
+  const capabilityTypeLabels = useCapabilityTypeLabels();
+  const mergeStrategyLabels = useMergeStrategyLabels();
+  const productLayerLabels = useProductLayerLabels();
+  const releaseStageLabel = useReleaseStageLabel();
+  const resetPeriodLabel = useResetPeriodLabel();
+  const surfaceLabel = useSurfaceLabel();
   const [product, setProduct] = useState<ProductCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-
     fetchProductCapability(productCode)
       .then((record) => {
-        if (!active) return;
-        setProduct(record);
+        if (active) setProduct(record);
+      })
+      .catch(() => {
+        if (active) setProduct(null);
       })
       .finally(() => {
         if (active) setLoading(false);
       });
-
     return () => {
       active = false;
     };
   }, [productCode]);
 
-  if (!loading && !product) {
-    return (
-      <DetailPageTemplate
-        className="min-w-0"
-        header={
-          <PageHeader
-            icon="database"
-            title="产品详情"
-            description="未找到对应的产品。"
-            action={
-              <Button asChild variant="outline">
-                <Link href="/products">
-                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  {tShared("actions.backToList")}
-                </Link>
-              </Button>
+  const metricColumns: DataTableColumn<
+    ProductCapabilityRecord["metrics"][number]
+  >[] = useMemo(
+    () => [
+      {
+        id: "code",
+        /* 「计量代码」而不是「计量名称 + 计量代码」两列：`product_metrics` 只有
+           `metric_key`，没有名称列，BFF 里 `metricName` 就是 key 本身——两列会
+           显示同一个字符串两遍。中文名需要加库列 + 扩 opera 录入面，
+           owner 2026-09-21 裁定另开一条线。 */
+        header: "计量代码",
+        cell: (metric) => (
+          <TableTitleCell icon="chart-bar" title={metric.metricCode} />
+        ),
+      },
+      {
+        id: "unit",
+        header: "单位",
+        align: "center",
+        width: "xs",
+        cell: (metric) => <Badge>{metric.unit || "—"}</Badge>,
+      },
+      {
+        id: "quota",
+        header: "配额策略",
+        align: "center",
+        width: "xs",
+        cell: (metric) => (
+          <Badge variant="outline">
+            {mergeStrategyLabels[
+              metric.quotaBase as keyof typeof mergeStrategyLabels
+            ] ?? metric.quotaBase}
+          </Badge>
+        ),
+      },
+      {
+        id: "cycle",
+        header: "重置周期",
+        align: "center",
+        width: "xs",
+        cell: (metric) => resetPeriodLabel(metric.cycle),
+      },
+    ],
+    [mergeStrategyLabels, resetPeriodLabel],
+  );
+
+  const versionColumns: DataTableColumn<ProductPlanVersionRecord>[] = useMemo(
+    () => [
+      {
+        id: "version",
+        header: "版本代码",
+        cell: (version) => (
+          <TableTitleCell
+            icon="package"
+            title={`${version.planCode} v${version.versionNo}`}
+            description={version.planName}
+            onTitleClick={() =>
+              router.push(
+                `/plan-versions/${encodeURIComponent(productCode)}/${encodeURIComponent(version.planCode)}/${version.versionNo}`,
+              )
             }
           />
-        }
+        ),
+      },
+      {
+        id: "note",
+        header: "版本说明",
+        align: "center",
+        width: "sm",
+        cell: (version) => (
+          <span className="inline-flex flex-wrap justify-center gap-2xs">
+            <StatusBadge
+              tone={version.status === "published" ? "success" : "neutral"}
+            >
+              {version.status === "published" ? "已发布" : "草稿"}
+            </StatusBadge>
+            {/* 本产品在这个套餐里是主售品还是搭售件——同一个套餐版本可以两者都挂。 */}
+            <Badge variant="outline">
+              {version.componentRole === "primary" ? "主售" : "搭售"}
+            </Badge>
+          </span>
+        ),
+      },
+      {
+        id: "created",
+        /* **创建时间，不是发布时间**：plan_versions 没有 published_at——发布
+             这个动作冻结了版本（is_locked）却没记时刻。不拿 created_at 冒充
+             发布时间（owner 2026-09-21 同意）。 */
+        header: "创建时间",
+        align: "center",
+        width: "sm",
+        cell: (version) => formatDate(version.createdAt, locale),
+      },
+    ],
+    [locale, productCode, router],
+  );
+
+  const backLink = (
+    /* 面包屑（owner 2026-09-21：二级页面增加面包屑）。 */
+    <nav
+      className="flex min-w-0 items-center gap-2xs text-body-sm text-muted-foreground"
+      aria-label="面包屑"
+    >
+      <Link
+        className="font-extrabold text-primary-text no-underline"
+        href="/products"
       >
+        产品目录
+      </Link>
+      <Icon name="chevron-right" size="xs" fallback="placeholder" />
+      <span className="min-w-0 truncate text-foreground">
+        {product?.productName ?? productCode}
+      </span>
+    </nav>
+  );
+
+  if (!product) {
+    return (
+      <DetailPageTemplate className="min-w-0" header={backLink}>
         <EmptyState
-          title="产品不存在"
-          description="该产品可能已下线，或当前账号无权访问。"
-          action={
-            <Button asChild variant="outline">
-              <Link href="/products">返回产品管理</Link>
-            </Button>
+          title={loading ? "正在加载产品" : "产品不存在"}
+          description={
+            loading ? "正在读取产品详情。" : "该产品不存在或已被删除。"
           }
         />
       </DetailPageTemplate>
@@ -399,47 +334,254 @@ export function ProductCapabilityDetailPage({
     <DetailPageTemplate
       className="min-w-0"
       header={
-        <PageHeader
-          icon={product ? capabilityTypeIcon(product.productType) : "database"}
-          title={product?.productName ?? "产品详情"}
-          description={product?.capabilitySummary ?? "正在读取产品详情。"}
-          action={
-            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
-              <Button asChild variant="outline">
-                <Link href="/products">
-                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  {tShared("actions.backToList")}
-                </Link>
-              </Button>
+        <>
+          {backLink}
+
+          {/* 唯一的标题行：图标 + 名字 + 代码 + 一排状态标 + 右侧跳转。 */}
+          <header className="flex min-w-0 flex-wrap items-center gap-sm">
+            <Icon
+              name={capabilityTypeIcon(product.productType)}
+              size="md"
+              fallback="placeholder"
+              aria-hidden="true"
+              className="shrink-0 text-muted-foreground"
+            />
+            <h1 className="m-0 min-w-0 truncate text-title-xl font-semibold text-foreground">
+              {product.productName}
+            </h1>
+            <span className="shrink-0 text-body-sm font-extrabold text-muted-foreground">
+              {product.productCode}
+            </span>
+
+            <div className="flex min-w-0 flex-wrap items-center gap-xs">
+              <HeadTag>{capabilityTypeLabels[product.productType]}</HeadTag>
+              <HeadTag>{sourceLabel(product.source)}</HeadTag>
+              <HeadTag tone={PUBLISH_STATUS_TONE[product.status]}>
+                {statusLabel(product.status)}
+              </HeadTag>
+              <HeadTag icon="shield-check">
+                {integrationStatusLabel(product.integration.status)}
+              </HeadTag>
+              {/* 正式套餐数：不含只有草稿版本的（owner：正式不含草稿）。
+                  与总数不等时把差额说出来——「挂着 5 个套餐但一个都没发布」
+                  正是运营该一眼看见的事。 */}
+              <HeadTag icon="package">
+                {product.publishedPlanCount === product.planCount
+                  ? `套餐 ${formatNumber(product.publishedPlanCount)} 个`
+                  : `套餐 ${formatNumber(product.publishedPlanCount)} / ${formatNumber(product.planCount)} 个`}
+              </HeadTag>
+              <HeadTag icon="chart-bar">
+                {`计量 ${formatNumber(product.metrics.length)} 项`}
+              </HeadTag>
+            </div>
+
+            <div className="ml-auto inline-flex shrink-0 flex-wrap items-center gap-sm">
+              {/* 营销配置是**同级**的独立页，不是这一页的子页——两者互为跳转
+                  （owner 2026-09-21）。 */}
               <Button
                 variant="outline"
-                disabled={!product}
-                onClick={() => setEditing(true)}
+                onClick={() =>
+                  router.push(
+                    `/products/${encodeURIComponent(product.productCode)}/marketing`,
+                  )
+                }
               >
                 <Icon name="edit" size="xs" fallback="placeholder" />
-                编辑营销
+                营销配置
               </Button>
             </div>
-          }
-        />
+          </header>
+
+          {/* 带理由跳过上线闸门的产品，常驻提示。这一页是运营唯一能看见
+              「这个产品的接入门被绕过了」的地方。 */}
+          {product.launchOverrideAt ? (
+            <Banner
+              tone="warning"
+              title="本产品跳过了上线闸门"
+              description={`于 ${formatDate(product.launchOverrideAt, locale)} 带理由跳过；当时尚未满足 ${formatNumber(product.launchOverridePending.length)} 项必填检查${
+                product.launchOverridePending.length
+                  ? `（${product.launchOverridePending.join("、")}）`
+                  : ""
+              }。理由记在审计日志。`}
+            />
+          ) : null}
+        </>
       }
     >
-      {product ? (
-        <>
-          <ProductCapabilitySummary product={product} />
-          <ProductCapabilityDetails product={product} />
-          <ProductContentEditDialog
-            product={product}
-            open={editing}
-            onOpenChange={setEditing}
-            onSaved={setProduct}
+      <Section
+        tone="glass"
+        level={2}
+        icon="database"
+        title="基础资料"
+        className="min-w-0"
+      >
+        <DetailList columns={3}>
+          <DetailRow label="产品代码">{orUnset(product.productCode)}</DetailRow>
+          <DetailRow label="产品名称">{orUnset(product.productName)}</DetailRow>
+          <DetailRow label="英文名称">
+            {orUnset(product.productNameEn)}
+          </DetailRow>
+
+          <DetailRow label="产品分类">
+            {orUnset(product.categoryName)}
+          </DetailRow>
+          <DetailRow label="产品分层">
+            {orUnset(
+              product.layer
+                ? (productLayerLabels[
+                    product.layer as keyof typeof productLayerLabels
+                  ] ?? product.layer)
+                : "",
+            )}
+          </DetailRow>
+          <DetailRow label="产品类型">
+            {capabilityTypeLabels[product.productType]}
+          </DetailRow>
+
+          <DetailRow label="产品来源">{sourceLabel(product.source)}</DetailRow>
+          <DetailRow label="合作方">
+            {orUnset(product.originProvider)}
+          </DetailRow>
+          <DetailRow label="成熟度">
+            {releaseStageLabel(product.releaseStage)}
+          </DetailRow>
+
+          <DetailRow label="订阅模式">
+            {product.standaloneSubscribable ? "可单独订阅" : "仅随方案搭售"}
+          </DetailRow>
+          <DetailRow label="订阅开放">
+            {product.planCount
+              ? `${formatNumber(product.publicPlanCount)} / ${formatNumber(product.planCount)} 个套餐开放自助购买`
+              : "—"}
+          </DetailRow>
+          <DetailRow label="终端支持">
+            {product.surfaces.length
+              ? product.surfaces.map(surfaceLabel).join(" · ")
+              : "—"}
+          </DetailRow>
+
+          <DetailRow label="可见范围">
+            {`客户端${product.visibility === "public" ? "可见" : "不可见"} · 运营端${
+              product.isWorkforceVisible ? "可见" : "不可见"
+            }`}
+          </DetailRow>
+          <DetailRow label="产品版本">
+            {orUnset(product.releaseVersion)}
+          </DetailRow>
+          <DetailRow label="发布时间">
+            {product.releasedAt ? formatDate(product.releasedAt, locale) : "—"}
+          </DetailRow>
+
+          <DetailRow label="创建时间">
+            {formatDate(product.createdAt, locale)}
+          </DetailRow>
+          <DetailRow label="更新时间">
+            {formatDate(product.updatedAt, locale)}
+          </DetailRow>
+          <DetailRow label="上线方式">
+            {product.launchOverrideAt ? "跳过闸门" : "正常上线"}
+          </DetailRow>
+        </DetailList>
+      </Section>
+
+      <Section
+        tone="glass"
+        level={2}
+        icon="workflow"
+        title={`关联方案 ${formatNumber(product.relatedSolutions.length)} 个`}
+        className="min-w-0"
+      >
+        {product.relatedSolutions.length ? (
+          /* 每个方案一个**全宽**卡片，点进解决方案（owner 2026-09-21）。 */
+          /* 每个方案一个**全宽卡片**（owner 2026-09-21）。跳转交给
+             `TableTitleCell` 的可点标题——与全站「标题可点跳详情」同一个交互；
+             整张卡做成按钮会和卡内的徽章抢焦点，而 DS 的 PanelItem 刻意不出
+             onClick（见它的文件头）。 */
+          <div className="grid min-w-0 gap-sm">
+            {product.relatedSolutions.map((solution) => (
+              <Card key={solution.solutionCode} className="min-w-0">
+                <CardContent className="flex min-w-0 flex-wrap items-center gap-sm">
+                  <TableTitleCell
+                    icon="workflow"
+                    title={solution.solutionName}
+                    description={solution.solutionCode}
+                    onTitleClick={() =>
+                      router.push(
+                        `/product-solutions/${encodeURIComponent(solution.solutionCode)}`,
+                      )
+                    }
+                  />
+                  <span className="ml-auto inline-flex shrink-0 flex-wrap items-center gap-xs">
+                    <Badge variant="outline">{solution.role}</Badge>
+                    <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
+                      {statusLabel(solution.status)}
+                    </StatusBadge>
+                    {solution.tierNames.map((tier) => (
+                      <Badge key={tier}>{tier}</Badge>
+                    ))}
+                  </span>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="暂未被业务方案引用"
+            description="该产品还没有被任何解决方案引用。"
           />
-        </>
-      ) : (
-        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-          <span>{tShared("common.loading")}</span>
-        </section>
-      )}
+        )}
+      </Section>
+
+      <Section
+        tone="glass"
+        level={2}
+        icon="chart-bar"
+        title={`计量配置 ${formatNumber(product.metrics.length)} 项`}
+        className="min-w-0"
+      >
+        {product.metrics.length ? (
+          /* 不翻页、全展开（owner 2026-09-21）：计量项是个位数到几十条，
+             翻页会让人以为还有别的。 */
+          <DataTable
+            labels={tableLabels}
+            columns={metricColumns}
+            rows={product.metrics}
+            rowKey={(metric) => metric.metricCode}
+            indexStart={1}
+            aria-label="计量配置"
+          />
+        ) : (
+          <EmptyState
+            title="暂无计量项"
+            description="该产品还没有登记计量配置。计量在运维台的产品接入页录入。"
+          />
+        )}
+      </Section>
+
+      <Section
+        tone="glass"
+        level={2}
+        icon="package"
+        title={`套餐版本 ${formatNumber(product.planVersions.length)} 个`}
+        className="min-w-0"
+        description="产品级没有发布历史（库里只有一个当前版本号）；这里列的是该产品参与的套餐版本。"
+      >
+        {product.planVersions.length ? (
+          <DataTable
+            labels={tableLabels}
+            columns={versionColumns}
+            rows={product.planVersions}
+            rowKey={(version) => `${version.planCode}-${version.versionNo}`}
+            indexStart={1}
+            aria-label="套餐版本"
+          />
+        ) : (
+          <EmptyState
+            title="暂无套餐版本"
+            description="该产品还没有被任何套餐引用。"
+          />
+        )}
+      </Section>
     </DetailPageTemplate>
   );
 }
