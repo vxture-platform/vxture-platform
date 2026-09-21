@@ -132,6 +132,8 @@ type MemberRoleOption = { roleId: string; label: string };
 // 成员行动作句柄集合，透传到 MemberActionsMenu，避免逐个 prop 层层穿透。
 type MemberActionHandlers = {
   busy: boolean;
+  /** 跳到账号体系里那个人的详情页（/accounts/<user_no>）。 */
+  onOpenAccount: (member: TenantMemberView) => void;
   onChangeRole: (member: TenantMemberView) => void;
   onSuspend: (member: TenantMemberView) => void;
   /** 落锤，不是开框。确认由菜单项承担；这里返回的 Promise 成败决定框关不关。 */
@@ -146,6 +148,7 @@ function toMemberView(record: TenantMemberRecord): TenantMemberView {
     account: record.account,
     name: record.name,
     email: record.email,
+    phone: record.phone,
     role: record.roleName || record.roleCode || "成员",
     roleCode: record.roleCode,
     roleId: record.roleId,
@@ -288,6 +291,7 @@ function getMemberSearchText(member: TenantOperationMember) {
   return [
     member.name,
     member.email,
+    member.phone ?? "",
     getMemberAccountCode(member),
     member.role,
     member.status,
@@ -703,6 +707,7 @@ function MemberActionsMenu({
   actions: MemberActionHandlers;
 }) {
   const withLabels = useConfirmLabels();
+  const tShared = useTranslations();
   const isSuspended = member.status === "suspended";
 
   return (
@@ -713,10 +718,20 @@ function MemberActionsMenu({
       <ActionMenu
         label={`${member.name} 操作`}
         items={[
+          /* 查看类人人可见、排首位（owner 2026-09-21）。没有 userNo 就跳不过去，
+             置灰而不是藏——藏起来会让人以为这个人没有账号页。 */
+          {
+            id: "detail",
+            label: tShared("actions.viewDetail"),
+            icon: "arrow-right",
+            disabled: !member.userNo,
+            onSelect: () => actions.onOpenAccount(member),
+          },
           {
             id: "role",
             label: "调整权限",
             icon: "user-switch",
+            separatorBefore: true,
             disabled: actions.busy,
             onSelect: () => actions.onChangeRole(member),
           },
@@ -763,7 +778,9 @@ function MemberActionsMenu({
  * 换 `DataTable`：序号列（`indexStart`）与固定 64px 的行操作列（`rowActions`）
  * 都是它的既有契约，admin 的列表页惯例本来就长这样。
  */
-function useTenantMemberColumns(): DataTableColumn<TenantMemberView>[] {
+function useTenantMemberColumns(
+  onOpenAccount: (member: TenantMemberView) => void,
+): DataTableColumn<TenantMemberView>[] {
   const locale = useLocale();
   const tShared = useTranslations();
 
@@ -771,11 +788,34 @@ function useTenantMemberColumns(): DataTableColumn<TenantMemberView>[] {
     {
       id: "account",
       header: "账号",
+      /* 标题列只留「姓名 + 账号码」，邮箱挪去「联系方式」（owner 2026-09-21：
+         标题列信息太多）。标题点开账号详情——同一个人在账号体系里已有一整页，
+         这里不重建（owner 定的原则：重复的功能做成跳转，不重复建页面）。
+         `TableTitleCell` 的可点标题不画下划线（recipes 的 `interactive` 里没有，
+         已在生产页实测 `textDecorationLine: none`），正合 owner 要的「hover 不要
+         下划线」——所以用件本身，不另加类。 */
       cell: (member) => (
         <TableTitleCell
           icon={member.role.toLowerCase() === "owner" ? "shield-check" : "user"}
           title={member.name}
-          description={`${getMemberAccountCode(member)} · ${member.email}`}
+          description={getMemberAccountCode(member)}
+          {...(member.userNo
+            ? { onTitleClick: () => onOpenAccount(member) }
+            : {})}
+        />
+      ),
+    },
+    {
+      id: "contact",
+      header: "联系方式",
+      /* 主副两行：电话是账号的强锚点（account.users.phone NOT NULL），邮箱是次
+         标识，所以电话在上。两者都可能是掩码——只有 `user:pii.read` 的角色看得
+         到明文，闸门在 admin-bff `privacy/pii-mask.ts`。读不到显示「—」。 */
+      cell: (member) => (
+        <TableTitleCell
+          layout="stacked"
+          title={member.phone || "—"}
+          description={member.email || "—"}
         />
       ),
     },
@@ -831,7 +871,7 @@ function TenantMemberList({
   actions: MemberActionHandlers;
 }) {
   const tableLabels = useTableLabels();
-  const columns = useTenantMemberColumns();
+  const columns = useTenantMemberColumns(actions.onOpenAccount);
   return (
     <DataTable
       labels={tableLabels}
@@ -868,7 +908,7 @@ function TenantMemberCards({
               member.role.toLowerCase() === "owner" ? "shield-check" : "user"
             }
             title={member.name}
-            description={`${getMemberAccountCode(member)} · ${member.email}`}
+            description={getMemberAccountCode(member)}
             tone={MEMBER_STATUS_TONE[member.status]}
             actions={<MemberActionsMenu member={member} actions={actions} />}
             badges={
@@ -880,6 +920,12 @@ function TenantMemberCards({
               </>
             }
             metrics={[
+              /* 与表格的「联系方式」列同源：电话为主、邮箱为次。 */
+              {
+                key: "contact",
+                value: member.phone || "—",
+                label: member.email || "—",
+              },
               { key: "joined", value: joinedAt, label: "加入时间" },
               {
                 key: "lastActive",
@@ -896,6 +942,7 @@ function TenantMemberCards({
 
 function TenantMembersTab({ tenantId }: { tenantId: string }) {
   const tShared = useTranslations();
+  const router = useRouter();
   const { toast } = useToast();
   const [members, setMembers] = useState<TenantMemberView[]>([]);
   const [roleChoices, setRoleChoices] = useState<MemberRoleOption[]>([]);
@@ -951,6 +998,16 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
         (left, right) => left.localeCompare(right),
       ),
     [members],
+  );
+
+  /* 账号详情路由的参数是 `user_no` 本体，**不带 U- 前缀**——前缀只上屏。
+     带上去 BFF 那条 `where user_no = $1::bigint` 会在转型时抛 22P02 而不是 404。 */
+  const handleOpenAccount = useCallback(
+    (member: TenantMemberView) => {
+      if (!member.userNo) return;
+      router.push(`/accounts/${encodeURIComponent(member.userNo)}`);
+    },
+    [router],
   );
   const filteredMembers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -1078,13 +1135,18 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
 
   const memberActions: MemberActionHandlers = {
     busy: actionBusy,
+    onOpenAccount: handleOpenAccount,
     onChangeRole: openRoleDialog,
     onSuspend: handleSuspendMember,
     onRemove: handleRemoveMember,
   };
 
   return (
-    <div className="grid min-w-0 gap-0">
+    /* `gap-sm`，不是 `gap-0`（owner 2026-09-21：筛选框与表格线挨上了）。
+       节奏取自 DS `ListPageTemplate`：筛选行 / 批量条 / 表格是**同一个板块的
+       三段**，之间收紧到 `gap-sm`；板块与板块之间才是 `gap-xl`。这一段在 tab
+       里手搓，没走模板，于是把这档间距漏了。 */
+    <div className="grid min-w-0 gap-sm">
       {/* 走 DS FilterBar 而不是手搓一排（owner 2026-09-21：搜索/筛选字号偏大）。
           根因不是没引用 token：DS 的 Input / NativeSelect 默认
           `text-body-lg md:text-body-md`——`body-lg` 在小屏是防 iOS 聚焦缩放的惯用法，
@@ -1097,18 +1159,12 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
         onViewChange={setViewMode}
         aria-label="账号筛选"
         count={formatNumber(filteredMembers.length)}
-        search={
-          <Input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索账号、账号代码、邮箱"
-            className="min-w-media-2xl grow basis-0 max-w-panel-sm"
-            aria-label="搜索账号"
-          />
-        }
-        onReset={handleReset}
-        actions={
+        /* 两颗统计 tag 归左段（owner 2026-09-21：应该调整到成员数量后面，右侧
+           统一为搜索/筛选/操作）。件的左段只有 view / count / scope 三个槽，
+           「跟在计数后面」只有 scope 一个落点。它的文档说的是切面控件，而这里
+           放的是两个只读读数——位置对、语义不冲突（tag 不改变在看哪份数据，
+           真正的筛选仍在右段的 children 里）。 */
+        scope={
           <div
             className="flex flex-wrap items-center gap-xs"
             aria-label="账号统计"
@@ -1121,6 +1177,17 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             </StatusBadge>
           </div>
         }
+        search={
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索账号、账号代码、联系方式"
+            className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+            aria-label="搜索账号"
+          />
+        }
+        onReset={handleReset}
       >
         <NativeSelect
           wrapperClassName="w-fit basis-media-xl"
