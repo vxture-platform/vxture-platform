@@ -241,6 +241,15 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:explicit-inject
 
+      # 孤儿服务包：`services/*/*` 下零消费方的包必须带理由登记在案。
+      # 2026-09-21 的教训——`@vxture/service-ticket` 导出一个看起来完整的
+      # TicketService，却从初始导入起就没人依赖，三个月里与在跑的那份实现
+      # 分叉了五处，还藏着上面那颗 @Inject 雷。代价不是死代码，是它让人
+      # 按错误的前提做规划（我就按它把一整批活规划成了「搬家」）。
+      - name: Orphan service package guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:orphan-services
+
       # 词条中英对齐：键缺了会在英文界面渲染出键名本身（或静默回落成中文），
       # 而把中文原样复制进 en-US.json 能骗过键检查——那是「假双语」最常见的
       # 形态，且它在中文环境下永远不会被发现。两条一起查。

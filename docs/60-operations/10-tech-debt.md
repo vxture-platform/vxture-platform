@@ -55,56 +55,57 @@
 
 ## 汇总表
 
-| ID                                                                                       | 标题                                                                      | 分类               | 状态          | 优先级                                       |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------ | ------------- | -------------------------------------------- |
-| [TD-001](#td-001--bff-层结构待大版本重构)                                                | BFF 层结构待大版本重构                                                    | Architecture       | Open          |                                              |
-| [TD-002](#td-002--prisma-schema-集中管理待重构)                                          | Prisma schema 集中管理待重构                                              | Architecture       | Resolved      |                                              |
-| [TD-003](#td-003--business-bff-认证流程未实现)                                           | Business BFF 认证流程未实现                                               | Implementation Gap | Resolved      |                                              |
-| [TD-004](#td-004--会话空闲超时未实现)                                                    | 会话空闲超时未实现                                                        | Implementation Gap | Open          |                                              |
-| [TD-005](#td-005--model-platform-流式响应未实现)                                         | Model Platform 流式响应未实现                                             | Implementation Gap | 作废          |                                              |
-| [TD-006](#td-006--model-platform-provider-api-key-无轮换机制)                            | Model Platform Provider API Key 无轮换机制                                | Security           | 作废          |                                              |
-| [TD-007](#td-007--model-platform-provider-重试--降级未实现)                              | Model Platform Provider 重试 / 降级未实现                                 | Implementation Gap | 作废          |                                              |
-| [TD-008](#td-008--model-platform-provider-合同价格为占位数据)                            | Model Platform Provider 合同价格为占位数据（范围收窄=commerce 侧）        | Implementation Gap | Open          |                                              |
-| [TD-009](#td-009--surface-命名方案待定)                                                  | surface 命名方案待定                                                      | Design Pending     | Open          |                                              |
-| [TD-010](#td-010--platform-sdk-部分模块计划中未实现)                                     | Platform SDK 部分模块计划中未实现                                         | Implementation Gap | 作废          |                                              |
-| [TD-011](#td-011--agent-server-直接读取-process.env-绕过-vxconfigservice)                | agent-server 直接读取 process.env                                         | Security           | Resolved      | 🔴 HIGH                                      |
-| [TD-012](#td-012--bff-oauth-provider-凭据未入-core-config-schema)                        | BFF OAuth provider 凭据未入 schema                                        | Security           | Resolved      | 🔴 HIGH                                      |
-| [TD-013](#td-013--bff-跨服务-url--cookie-domain-未入-core-config-schema)                 | BFF 跨服务 URL / cookie domain 未入 schema                                | Implementation Gap | Resolved      | 🟡 MED                                       |
-| [TD-014](#td-014--varda-server-操作配置直读-processenv-无-zod-验证)                      | varda-server 操作配置直读 process.env                                     | Implementation Gap | Resolved      | 🟡 MED                                       |
-| [TD-015](#td-015--admin-bff-reporting_ro_database_url-未入-schema)                       | admin-bff REPORTING_RO_DATABASE_URL 未入 schema                           | Implementation Gap | Resolved      | 🟡 MED                                       |
-| [TD-016](#td-016--model-runtime-client-model_platform_url-库级-fallback-无-fail-fast)    | model-runtime-client MODEL_PLATFORM_URL 库级 fallback                     | Implementation Gap | Resolved      | 🟢 LOW                                       |
-| [TD-017](#td-017--平台管理员权限平顶凭据重置无分级)                                      | 平台管理员权限"平顶"，凭据/账号管理无分级                                 | Security           | Resolved      | 🔴 P0                                        |
-| [TD-018](#td-018--无非-owner-服务角色列级不可变锁无法生效)                               | 无非-owner 服务角色，列级不可变锁无法生效                                 | Security           | Resolved      | 🟡 MED                                       |
-| [TD-019](#td-019--最后一个-super_admin-存活保护存在并发竞态)                             | 最后一个 super_admin 存活保护存在并发竞态                                 | Implementation Gap | Resolved      | 🟢 LOW                                       |
-| [TD-020](#td-020--platform_svc-为共享单一角色未按服务域最小权限拆分)                     | platform_svc 为共享单一角色，未按服务/域最小权限拆分                      | Security           | In Progress   | 🟢 LOW                                       |
-| [TD-021](#td-021--风险合规维护窗口治理写路径未定义)                                      | 风险/合规/维护窗口治理写路径未定义                                        | Design Pending     | Resolved      |                                              |
-| [TD-022](#td-022--tenant-可见运营动态内容无多语言方案)                                   | tenant 可见运营动态内容无多语言方案                                       | Design Pending     | Open          | 🟢 LOW                                       |
-| [TD-023](#td-023--hotfix-车道无-ci必检结构性缺席)                                        | hotfix 车道无 CI，必检结构性缺席                                          | CI/CD              | Resolved      | 🟡 MED                                       |
-| [TD-024](#td-024--nest-di-装配无启动冒烟tscunit-对其失明)                                | Nest DI 装配无启动冒烟，tsc/unit 对其失明                                 | CI/CD              | Resolved      | 🟡 MED                                       |
-| [TD-025](#td-025--login_attempts-ip_address-多源登录获取不全)                            | login_attempts.ip_address 多源登录获取不全                                | Implementation Gap | Resolved      | 🟡 P2                                        |
-| [TD-026](#td-026--admin-bff-verifications-路由被-id-遮蔽实名审核页恒-500)                | admin-bff verifications 路由被 :id 遮蔽，实名审核页恒 500                 | Implementation Gap | Resolved      | 🔴 HIGH                                      |
-| [TD-027](#td-027--admin-bff-authz-未按域收口legacy-桥--finance-写码缺口)                 | admin-bff authz 未按域收口，legacy 桥 + finance 写码缺口                  | Security           | Resolved      | 🔴 HIGH（组内最高，见批注）                  |
-| [TD-028](#td-028--promotionusage-域无-perm-码commercial-仪表盘借-billingread)            | promotion/usage 域无 perm 码，commercial 仪表盘借 billing.read            | Security           | Open          | 🟢 LOW                                       |
-| [TD-029](#td-029--产品目录-solutionsreleasesmodel-policies-无-schema无法去-mock)         | 产品目录 solutions/releases/model-policies 无 schema，无法去 mock         | Design Pending     | Resolved      | 🟢 LOW                                       |
-| [TD-030](#td-030--券批次金额面无展示effect-jsonb-按-kind-异构未解析)                     | 券批次金额面无展示，effect JSONB 按 kind 异构未解析                       | Design Pending     | Open          | 🟢 LOW                                       |
-| [TD-031](#td-031--c-端账号凭据重置无带外通道)                                            | C 端账号凭据重置无带外通道（社交-only/无验证邮箱语义未定）                | Design Pending     | Open          | 🟢 LOW                                       |
-| [TD-032](#td-032--高流量只读板块无服务端分页)                                            | 高流量只读板块无服务端分页，仍全量拉取                                    | Implementation Gap | Open          | 🟢 LOW                                       |
-| [TD-033](#td-033--租户共享资源策略无配置界面仅运营通道可写)                              | 租户共享资源策略（D8 reserved/shared）无配置界面，仅运营通道可写          | Implementation Gap | Open          | 🟢 LOW                                       |
-| [TD-034](#td-034--t1-token-exchange-签发无审计落库)                                      | T1 token exchange 签发无审计落库（product_210 §6 要求，未实现）           | Implementation Gap | Resolved      | 🟡 MED（组内第三，见批注）                   |
-| [TD-035](#td-035--s2s-token-身份未绑定到-platform-router-的-workspaceproduct-参数)       | S2S token 身份未绑定到 platform router 的 workspace/product 参数          | Security           | Resolved      | 🟡 MED（组内第二，见批注）                   |
-| [TD-036](#td-036--admin-首页总览大面积硬编码-mock-数据)                                  | admin 首页总览大面积硬编码 mock 数据                                      | Implementation Gap | Resolved      | 🟡 MED                                       |
-| [TD-037](#td-037--无安全重建单个平台服务重载-env-的运维通道)                             | 无安全重建单个平台服务/重载 env 的运维通道（registry+tag 解析陷阱）       | Implementation Gap | Resolved      | 🟡 MED                                       |
-| [TD-038](#td-038--platform-env-变更后依赖整栈重建无单键热更或影响面收窄)                 | platform.env 变更后依赖整栈重建，无单键热更或影响面收窄                   | Architecture       | Open          | 🟢 LOW                                       |
-| [TD-039](#td-039--疑似死-ci-凭证待审计清理需全域确认)                                    | 疑似死 CI 凭证待审计清理（需全域确认）                                    | Security Hygiene   | Open          | 🟢 LOW                                       |
-| [TD-040](#td-040--变更门控方法论未沉淀进-cicd-optimization-playbook)                     | 变更门控方法论未沉淀进 cicd-optimization-playbook                         | Documentation      | Resolved      | 🟢 LOW                                       |
-| [TD-041](#td-041--admin-订阅动作写路径绕过-provisioning-派发与-c3-invalidate)            | admin 订阅动作写路径绕过 provisioning 派发与 C3 invalidate                | Architecture       | Open          | 🟡 MED                                       |
-| [TD-042](#td-042--console-bff-quota-usage-绕开-c2-契约直查-db-并重复实现-reset-逻辑)     | console-bff quota-usage 绕开 C2 契约，直查 DB 并重复实现 reset 逻辑       | Architecture       | Resolved      | 🟢 LOW                                       |
-| [TD-043](#td-043--平台调用-atlas-无-s2s-鉴权能力数据面均裸调用)                          | 平台调用 atlas 无 S2S 鉴权，能力/数据面均裸调用                           | Security           | 部分 Resolved | 🟢 LOW（console-bff 侧已解决，varda 侧暂缓） |
-| [TD-044](#td-044--atlas-未接入平台-c2c3全平台-ai-用量对计量账单系统不可见)               | atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见               | Architecture       | Resolved      | 🟢 LOW                                       |
-| [TD-045](#td-045--atlas--runos-两侧同一个-bigint-序列化缺陷打掉-opera-两块运行数据面)    | atlas / runos 两侧同一个 BigInt 序列化缺陷，打掉 opera 两块运行数据面     | Implementation Gap | Open          | 🟡 MED                                       |
-| [TD-046](#td-046--billinginvoicesbill_cycle-一列两种语义生产写账期串seed-写周期枚举)     | `billing.invoices.bill_cycle` 一列两种语义：生产写账期串，seed 写周期枚举 | Data Model         | Open          | 🟡 MED                                       |
-| [TD-047](#td-047--线下发票抬头类型存进了税种列发票类型三个选项塌成同一个值)              | 线下发票「抬头类型」存进了税种列；「发票类型」三个选项塌成同一个值        | Data Model         | Open          | 🔴 HIGH                                      |
-| [TD-048](#td-048--ds-守卫的-overlay-panel-preset-会借用嵌套元素的同名属性基线签名含文案) | DS 守卫的 overlay-panel-preset 会借用嵌套元素的同名属性；基线签名含文案   | Tooling            | Open          | 🟡 MED                                       |
+| ID                                                                                         | 标题                                                                      | 分类               | 状态          | 优先级                                       |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ------------------ | ------------- | -------------------------------------------- |
+| [TD-001](#td-001--bff-层结构待大版本重构)                                                  | BFF 层结构待大版本重构                                                    | Architecture       | Open          |                                              |
+| [TD-002](#td-002--prisma-schema-集中管理待重构)                                            | Prisma schema 集中管理待重构                                              | Architecture       | Resolved      |                                              |
+| [TD-003](#td-003--business-bff-认证流程未实现)                                             | Business BFF 认证流程未实现                                               | Implementation Gap | Resolved      |                                              |
+| [TD-004](#td-004--会话空闲超时未实现)                                                      | 会话空闲超时未实现                                                        | Implementation Gap | Open          |                                              |
+| [TD-005](#td-005--model-platform-流式响应未实现)                                           | Model Platform 流式响应未实现                                             | Implementation Gap | 作废          |                                              |
+| [TD-006](#td-006--model-platform-provider-api-key-无轮换机制)                              | Model Platform Provider API Key 无轮换机制                                | Security           | 作废          |                                              |
+| [TD-007](#td-007--model-platform-provider-重试--降级未实现)                                | Model Platform Provider 重试 / 降级未实现                                 | Implementation Gap | 作废          |                                              |
+| [TD-008](#td-008--model-platform-provider-合同价格为占位数据)                              | Model Platform Provider 合同价格为占位数据（范围收窄=commerce 侧）        | Implementation Gap | Open          |                                              |
+| [TD-009](#td-009--surface-命名方案待定)                                                    | surface 命名方案待定                                                      | Design Pending     | Open          |                                              |
+| [TD-010](#td-010--platform-sdk-部分模块计划中未实现)                                       | Platform SDK 部分模块计划中未实现                                         | Implementation Gap | 作废          |                                              |
+| [TD-011](#td-011--agent-server-直接读取-processenv-绕过-vxconfigservice)                   | agent-server 直接读取 process.env                                         | Security           | Resolved      | 🔴 HIGH                                      |
+| [TD-012](#td-012--bff-oauth-provider-凭据未入-core-config-schema)                          | BFF OAuth provider 凭据未入 schema                                        | Security           | Resolved      | 🔴 HIGH                                      |
+| [TD-013](#td-013--bff-跨服务-url--cookie-domain-未入-core-config-schema)                   | BFF 跨服务 URL / cookie domain 未入 schema                                | Implementation Gap | Resolved      | 🟡 MED                                       |
+| [TD-014](#td-014--varda-server-操作配置直读-processenv-无-zod-验证)                        | varda-server 操作配置直读 process.env                                     | Implementation Gap | Resolved      | 🟡 MED                                       |
+| [TD-015](#td-015--admin-bff-reporting_ro_database_url-未入-schema)                         | admin-bff REPORTING_RO_DATABASE_URL 未入 schema                           | Implementation Gap | Resolved      | 🟡 MED                                       |
+| [TD-016](#td-016--model-runtime-client-model_platform_url-库级-fallback-无-fail-fast-保护) | model-runtime-client MODEL_PLATFORM_URL 库级 fallback                     | Implementation Gap | Resolved      | 🟢 LOW                                       |
+| [TD-017](#td-017--平台管理员权限平顶凭据账号管理无分级)                                    | 平台管理员权限"平顶"，凭据/账号管理无分级                                 | Security           | Resolved      | 🔴 P0                                        |
+| [TD-018](#td-018--无非-owner-服务角色列级不可变锁无法生效)                                 | 无非-owner 服务角色，列级不可变锁无法生效                                 | Security           | Resolved      | 🟡 MED                                       |
+| [TD-019](#td-019--最后一个-super_admin-存活保护存在并发竞态)                               | 最后一个 super_admin 存活保护存在并发竞态                                 | Implementation Gap | Resolved      | 🟢 LOW                                       |
+| [TD-020](#td-020--platform_svc-为共享单一角色未按服务域最小权限拆分)                       | platform_svc 为共享单一角色，未按服务/域最小权限拆分                      | Security           | In Progress   | 🟢 LOW                                       |
+| [TD-021](#td-021--风险合规维护窗口治理写路径未定义)                                        | 风险/合规/维护窗口治理写路径未定义                                        | Design Pending     | Resolved      |                                              |
+| [TD-022](#td-022--tenant-可见运营动态内容无多语言方案)                                     | tenant 可见运营动态内容无多语言方案                                       | Design Pending     | Open          | 🟢 LOW                                       |
+| [TD-023](#td-023--hotfix-车道无-ci必检结构性缺席)                                          | hotfix 车道无 CI，必检结构性缺席                                          | CI/CD              | Resolved      | 🟡 MED                                       |
+| [TD-024](#td-024--nest-di-装配无启动冒烟tscunit-对其失明)                                  | Nest DI 装配无启动冒烟，tsc/unit 对其失明                                 | CI/CD              | Resolved      | 🟡 MED                                       |
+| [TD-025](#td-025--login_attemptsip_address-多源登录获取不全)                               | login_attempts.ip_address 多源登录获取不全                                | Implementation Gap | Resolved      | 🟡 P2                                        |
+| [TD-026](#td-026--admin-bff-verifications-路由被-id-遮蔽实名审核页恒-500)                  | admin-bff verifications 路由被 :id 遮蔽，实名审核页恒 500                 | Implementation Gap | Resolved      | 🔴 HIGH                                      |
+| [TD-027](#td-027--admin-bff-authz-未按域收口legacy-桥--finance-写码缺口)                   | admin-bff authz 未按域收口，legacy 桥 + finance 写码缺口                  | Security           | Resolved      | 🔴 HIGH（组内最高，见批注）                  |
+| [TD-028](#td-028--promotionusage-域无-perm-码commercial-仪表盘借-billingread)              | promotion/usage 域无 perm 码，commercial 仪表盘借 billing.read            | Security           | Open          | 🟢 LOW                                       |
+| [TD-029](#td-029--产品目录-solutionsreleasesmodel-policies-无-schema无法去-mock)           | 产品目录 solutions/releases/model-policies 无 schema，无法去 mock         | Design Pending     | Resolved      | 🟢 LOW                                       |
+| [TD-030](#td-030--券批次金额面无展示effect-jsonb-按-kind-异构未解析)                       | 券批次金额面无展示，effect JSONB 按 kind 异构未解析                       | Design Pending     | Open          | 🟢 LOW                                       |
+| [TD-031](#td-031--c-端账号凭据重置无带外通道)                                              | C 端账号凭据重置无带外通道（社交-only/无验证邮箱语义未定）                | Design Pending     | Open          | 🟢 LOW                                       |
+| [TD-032](#td-032--高流量只读板块无服务端分页)                                              | 高流量只读板块无服务端分页，仍全量拉取                                    | Implementation Gap | Open          | 🟢 LOW                                       |
+| [TD-033](#td-033--租户共享资源策略无配置界面仅运营通道可写)                                | 租户共享资源策略（D8 reserved/shared）无配置界面，仅运营通道可写          | Implementation Gap | Open          | 🟢 LOW                                       |
+| [TD-034](#td-034--t1-token-exchange-签发无审计落库)                                        | T1 token exchange 签发无审计落库（product_210 §6 要求，未实现）           | Implementation Gap | Resolved      | 🟡 MED（组内第三，见批注）                   |
+| [TD-035](#td-035--s2s-token-身份未绑定到-platform-router-的-workspaceproduct-参数)         | S2S token 身份未绑定到 platform router 的 workspace/product 参数          | Security           | Resolved      | 🟡 MED（组内第二，见批注）                   |
+| [TD-036](#td-036--admin-首页总览大面积硬编码-mock-数据)                                    | admin 首页总览大面积硬编码 mock 数据                                      | Implementation Gap | Resolved      | 🟡 MED                                       |
+| [TD-037](#td-037--无安全重建单个平台服务重载-env-的运维通道)                               | 无安全重建单个平台服务/重载 env 的运维通道（registry+tag 解析陷阱）       | Implementation Gap | Resolved      | 🟡 MED                                       |
+| [TD-038](#td-038--platformenv-变更后依赖整栈重建无单键热更或影响面收窄)                    | platform.env 变更后依赖整栈重建，无单键热更或影响面收窄                   | Architecture       | Open          | 🟢 LOW                                       |
+| [TD-039](#td-039--疑似死-ci-凭证待审计清理需全域确认)                                      | 疑似死 CI 凭证待审计清理（需全域确认）                                    | Security Hygiene   | Open          | 🟢 LOW                                       |
+| [TD-040](#td-040--变更门控方法论未沉淀进-cicd-optimization-playbook)                       | 变更门控方法论未沉淀进 cicd-optimization-playbook                         | Documentation      | Resolved      | 🟢 LOW                                       |
+| [TD-041](#td-041--admin-订阅动作写路径绕过-provisioning-派发与-c3-invalidate)              | admin 订阅动作写路径绕过 provisioning 派发与 C3 invalidate                | Architecture       | Open          | 🟡 MED                                       |
+| [TD-042](#td-042--console-bff-quota-usage-绕开-c2-契约直查-db-并重复实现-reset-逻辑)       | console-bff quota-usage 绕开 C2 契约，直查 DB 并重复实现 reset 逻辑       | Architecture       | Resolved      | 🟢 LOW                                       |
+| [TD-043](#td-043--平台调用-atlas-无-s2s-鉴权能力数据面均裸调用)                            | 平台调用 atlas 无 S2S 鉴权，能力/数据面均裸调用                           | Security           | 部分 Resolved | 🟢 LOW（console-bff 侧已解决，varda 侧暂缓） |
+| [TD-044](#td-044--atlas-未接入平台-c2c3全平台-ai-用量对计量账单系统不可见)                 | atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见               | Architecture       | Resolved      | 🟢 LOW                                       |
+| [TD-045](#td-045--atlas--runos-两侧同一个-bigint-序列化缺陷打掉-opera-两块运行数据面)      | atlas / runos 两侧同一个 BigInt 序列化缺陷，打掉 opera 两块运行数据面     | Implementation Gap | Open          | 🟡 MED                                       |
+| [TD-046](#td-046--billinginvoicesbill_cycle-一列两种语义生产写账期串seed-写周期枚举)       | `billing.invoices.bill_cycle` 一列两种语义：生产写账期串，seed 写周期枚举 | Data Model         | Open          | 🟡 MED                                       |
+| [TD-047](#td-047--线下发票抬头类型存进了税种列发票类型三个选项塌成同一个值)                | 线下发票「抬头类型」存进了税种列；「发票类型」三个选项塌成同一个值        | Data Model         | Open          | 🔴 HIGH                                      |
+| [TD-048](#td-048--ds-守卫的-overlay-panel-preset-会借用嵌套元素的同名属性基线签名含文案)   | DS 守卫的 overlay-panel-preset 会借用嵌套元素的同名属性；基线签名含文案   | Tooling            | Open          | 🟡 MED                                       |
+| [TD-049](#td-049--vxtureservice-ticket-零消费方与在跑的实现分叉五处却长得像实现)           | `@vxture/service-ticket` 零消费方，与在跑的实现分叉五处，却长得像实现     | Architecture       | Open          | 🟡 MED                                       |
 
 ---
 
@@ -1309,3 +1310,69 @@ admin 还有 38 个文件要做 i18n，基线里 `AccountsPage` / `ModelPlatform
 2. 签名改成不含文案：用 `规则id|文件|标签内的属性名集合` 或对**去掉字符串字面量后**的
    标签骨架取哈希。这样改文案不影响签名，改结构才影响。
 3. 两条都修完之后，OrderDetailPage 那 4 条基线该删掉，真给 DialogForm 补 size。
+
+---
+
+### TD-049 — `@vxture/service-ticket` 零消费方，与在跑的实现分叉五处，却长得像实现
+
+**登记**：2026-09-21（工单详情页 PR #418 期间发现）
+**类型**：Architecture ｜ **状态**：Open ｜ **严重度**：🟡 MED
+
+**怎么发现的**
+
+给待办的「去处理工单」补详情页跳转时，要决定后端怎么办。仓库里有
+`services/support/ticket`，导出一个看起来完整的 `TicketService`（list / get / create /
+assign / reply / resolve / close / update / events / auditLogs 共 12 个方法），于是整批活被
+规划成「把 admin-bff 的 612 行 router 接到这个已有的服务上」。
+
+**规划错了。** 那个包的 `package.json` 没有任何人依赖——它是 15 个服务包里唯一零消费方的
+（`@vxture/workers` 也是 0，但它头注自称「占位入口」，一看就知道不是实现）。从初始导入
+`dbf51a0` 起就没被加载过，此后只被全局改名和文档编号扫过，**从没被功能提交碰过**。
+
+**分叉在哪**
+
+| 面           | admin-bff router（在跑）                                                       | service 包（未加载）                        |
+| ------------ | ------------------------------------------------------------------------------ | ------------------------------------------- |
+| `:id`        | 双接受 `ticket_no` / uuid                                                      | 只认一种                                    |
+| 回复事件     | `comment`，payload `{body}`                                                    | `replied`，payload `{content,attachments}`  |
+| 指派 payload | `{assignee_id, assignee_name, note}`                                           | `{assigneeId, assigneeName}`，**丢了 note** |
+| 状态变更     | 任意七值 + `{from,to,note}` + 派生时间戳（first_response / resolved / closed） | 只有 `resolveTicket` / `closeTicket`        |
+| 写入         | `begin`/`commit` + `for update` 行锁                                           | 无事务，两次独立写                          |
+
+每一处都是 router 那份更对。service 那份不是「另一种写法」，是**一版没被现实校正过的早期设计**。
+
+它还藏着一颗 `@Inject` 雷（esbuild 不产 `emitDecoratorMetadata`，漏在 service 上 boot-smoke
+照样绿、第一次调用才 500）。这颗雷靠「没人加载」躲了三个月，已在 PR #418 拆掉，
+`check-explicit-inject` 的豁免从 6 条降到 5 条。
+
+**影响**
+
+代价不是那几百行死代码，是**它会让人按错误的前提做规划**——本次就实打实发生了一回。
+一个没人加载的包不会被任何东西校正，但它长得跟做完的实现一模一样。
+
+**当下处置**（PR #418）
+
+1. 包的 `index.ts` 加头注，当场自证「这不是在跑的那份实现」，并列出五处分叉。
+2. 新守卫 `lint:orphan-services`：`services/*/*` 下零消费方的包必须带理由登记在案，陈旧条目
+   也红。已做四向反向验证（未登记的孤儿 / 名单条目其实有消费方 / 名单条目指向不存在的包 /
+   判据读不到），四种都红，恢复后回绿。
+3. **代码不动**：不接也不删。
+
+**为什么不接**
+
+把 router 的写路径搬进服务包，是重写一条在跑的、带事务和行锁的、**零测试**的写路径，而今天
+只有一个调用方。一个消费方的共享服务买不到任何东西。抽象的钱该在第二个消费方到场时付。
+
+**为什么不删**
+
+删掉不会删掉「客户要能提工单」这个需求（见「减法不能按实现没有」）。但也要说清楚：真做那条流
+时不会复用这 400 行，会照 router 那份经过现实检验的语义重写——所以它不是替需求占位，是一份
+过期的答案。留着的唯一理由是删除不可逆，且该由 owner 裁定。
+
+**解决方向**
+
+客户侧工单流（console）解锁时，由**本包采纳 router 的契约**后上岗，那时才真有第二个消费方。
+客户侧现在卡的不是服务层：`bff/console-bff/src/routers/review.router.ts` 写着「工单入口暂不
+开通」，缺的是工单到产品的关联（`support.tickets` 上没有 `product_id` 也没有 `subscription_id`）。
+
+届时记得同步摘掉 `lint:orphan-services` 名单里的那条登记（守卫盯着，陈旧条目也红）。
