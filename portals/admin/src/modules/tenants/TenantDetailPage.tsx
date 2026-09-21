@@ -809,8 +809,8 @@ function useTenantMemberColumns(
       id: "contact",
       header: "联系方式",
       /* 主副两行：电话是账号的强锚点（account.users.phone NOT NULL），邮箱是次
-         标识，所以电话在上。两者都可能是掩码——只有 `user:pii.read` 的角色看得
-         到明文，闸门在 admin-bff `privacy/pii-mask.ts`。读不到显示「—」。 */
+         标识，所以电话在上。都是明文——运营者本来就是管理员（owner 2026-09-21），
+         这里不走账号页那道 `user:pii.read` 闸门。读不到显示「—」。 */
       cell: (member) => (
         <TableTitleCell
           layout="stacked"
