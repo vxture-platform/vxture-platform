@@ -17,6 +17,7 @@
 import { useTranslations } from "next-intl";
 import {
   Button,
+  Card,
   Collapsible,
   CollapsibleContent,
   Icon,
@@ -115,7 +116,7 @@ export function TenantIdentityCard({
   const typeIcon: IconName = tenantTypeIcon(tenantType);
 
   return (
-    <div className="flex flex-col rounded-xl bg-gradient-to-b from-card to-accent shadow-raised ring-1 ring-foreground/10">
+    <Card className="gap-0 py-0">
       <div className="px-lg pt-lg">
         <IdentityCard
           frame={false}
@@ -295,7 +296,7 @@ export function TenantIdentityCard({
           </ul>
         </CollapsibleContent>
       </Collapsible>
-    </div>
+    </Card>
   );
 }
 
