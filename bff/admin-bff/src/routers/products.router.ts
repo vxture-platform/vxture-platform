@@ -1963,6 +1963,16 @@ async function resolveBundledComponents(
 
 /** Raw product.products row (+ derived plan_count / category_code) for the catalog list. */
 interface ProductCatalogRow {
+  product_nick: string | null;
+  standalone_subscribable: boolean;
+  origin_provider: string | null;
+  release_version: string | null;
+  released_at: Date | string | null;
+  launch_override_at: Date | string | null;
+  launch_override_pending: string[] | null;
+  category_name: string | null;
+  surfaces: string[] | null;
+  public_plan_count: number | null;
   id: string;
   product_code: string;
   product_type: string; // 受管枚举 @vxture/core-utils: general_platform|industry_platform|general_agent|industry_agent|undefined
@@ -2076,16 +2086,43 @@ const PRODUCT_CATALOG_SQL = `
     p.release_stage,
     p.marketing,
     p.product_name,
+    /* 「译名/副名」列名不副实：库里装的就是英文名（数据平台→Arda、模型平台→Atlas
+       ……）。对外按英文名用，与中文名同时给，不走 i18n（owner 2026-09-21：
+       「和中文同时提供，超越 i18n 范围」）。 */
+    p.product_nick,
     p.description,
     p.status,
     p.is_customer_visible,
     p.is_workforce_visible,
+    p.standalone_subscribable,
+    p.origin_provider,
+    p.release_version,
+    p.released_at,
+    /* 带理由跳过上线闸门的痕迹。admin 这一页是运营唯一能看见「这个产品的接入门
+       被绕过了、还欠哪几项」的地方——不显示，就会在不知情的情况下卖一个没验完
+       的东西。理由本身在 support.audit_logs。 */
+    p.launch_override_at,
+    p.launch_override_pending,
     p.tags,
     c.code AS category_code,
+    c.name AS category_name,
+    -- 终端支持：opera 接入页写的 product_surfaces（web/desktop/app/miniprogram）。
+    (SELECT array_agg(s.surface ORDER BY s.surface)
+       FROM product.product_surfaces s WHERE s.product_id = p.id) AS surfaces,
     (SELECT COUNT(DISTINCT pv.plan_id)::int
        FROM product.plan_components comp
        JOIN product.plan_versions pv ON pv.id = comp.plan_version_id
       WHERE comp.product_id = p.id) AS plan_count,
+    -- 订阅开放：这个产品的套餐里有几个对外开放自助购买（plans.is_public）。
+    -- 那根轴已经在跑——console-bff 的订阅列表与购买路径三处都过滤 is_public = true。
+    -- 这里只是把它汇到产品这一层给运营看，不新增语义。
+    -- （owner 2026-09-21 裁定：轴维持在套餐层，「邀请订阅」另起一条线。）
+    -- 注意：本注释在**模板串**里，不能写反引号——它会当场截断字符串。
+    (SELECT COUNT(DISTINCT pv.plan_id)::int
+       FROM product.plan_components comp
+       JOIN product.plan_versions pv ON pv.id = comp.plan_version_id
+       JOIN product.plans pl ON pl.id = pv.plan_id AND pl.is_public
+      WHERE comp.product_id = p.id) AS public_plan_count,
     p.created_at,
     p.updated_at
   FROM product.products p
@@ -2196,13 +2233,24 @@ export async function loadProductCapabilities(
       releaseStage: row.release_stage,
       marketing: row.marketing ?? null,
       visibility: row.is_customer_visible ? "public" : "internal",
-      region: "global",
-      ownerTeam: "",
-      capabilitySummary: row.description ?? "",
-      accessModes: [],
+      isWorkforceVisible: row.is_workforce_visible,
+      /* 英文名（库列名叫 product_nick「译名/副名」，装的其实是英文名）。 */
+      productNameEn: row.product_nick ?? "",
+      categoryName: row.category_name ?? "",
+      originProvider: row.origin_provider ?? "",
+      standaloneSubscribable: row.standalone_subscribable,
+      releaseVersion: row.release_version ?? "",
+      releasedAt: row.released_at ? toIso(row.released_at) : null,
+      surfaces: row.surfaces ?? [],
+      publicPlanCount: row.public_plan_count ?? 0,
+      /* 上线方式：带理由跳过上线闸门的产品，这里给时刻与当时欠的项。
+         null = 正常过门。 */
+      launchOverrideAt: row.launch_override_at
+        ? toIso(row.launch_override_at)
+        : null,
+      launchOverridePending: row.launch_override_pending ?? [],
       tags: row.tags ?? [],
       meteringUnit: productMetrics[0]?.unit ?? "",
-      billingMode: "",
       healthStatus:
         status === "active"
           ? "normal"
