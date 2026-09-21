@@ -42,9 +42,13 @@ import { requireOperatorId, requireUuid } from "./governance.shared";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import type {
+  AccountLoginAttempt,
+  AccountOperationDetailRecord,
   AccountOperationRecord,
   AccountOperationStatus,
   AccountTenantBinding,
+  AccountTicket,
+  AccountVerifiedStatus,
   RequestContext,
   TenantOperationType,
 } from "../types/console.types";
@@ -93,11 +97,15 @@ export class AccountsRouter {
     return rows.map((row) => mapAccountRow(row, canReadPii));
   }
 
+  /**
+   * 详情 = 标量投影（与列表同一条 SQL）+ 三段明细。先拿主行判 404，再并发打三条
+   * ——它们互不依赖，串行只是白等；只读池，不必同一连接。与租户详情同形。
+   */
   @Get(":id")
   async getAccount(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-  ): Promise<AccountOperationRecord> {
+  ): Promise<AccountOperationDetailRecord> {
     assertCanManageAccounts(req);
     const canReadPii = hasPiiAccess(req);
 
@@ -109,7 +117,26 @@ export class AccountsRouter {
     if (!row) {
       throw new NotFoundException("Account not found");
     }
-    return mapAccountRow(row, canReadPii);
+
+    const [products, tickets, ticketCounts, logins] = await Promise.all([
+      this.pool.query<AccountProductRow>(ACCOUNT_DETAIL_PRODUCTS_SQL, [userId]),
+      this.pool.query<AccountTicketRow>(ACCOUNT_DETAIL_TICKETS_SQL, [userId]),
+      this.pool.query<AccountTicketCountsRow>(
+        ACCOUNT_DETAIL_TICKET_COUNTS_SQL,
+        [userId],
+      ),
+      this.pool.query<AccountLoginRow>(ACCOUNT_DETAIL_LOGINS_SQL, [userId]),
+    ]);
+    const counts = ticketCounts.rows[0];
+
+    return {
+      ...mapAccountRow(row, canReadPii),
+      productNames: products.rows.map((p) => p.product_name),
+      tickets: tickets.rows.map(mapAccountTicketRow),
+      ticketOpenCount: counts?.open_count ?? 0,
+      ticketTotalCount: counts?.total_count ?? 0,
+      loginHistory: logins.rows.map(mapAccountLoginRow),
+    };
   }
 
   /**
@@ -378,6 +405,40 @@ function mapTenantBindings(
   }));
 }
 
+/* kyc.user_kycs.status 的 CHECK 是四值闭集。库里出了别的值说明有人绕过 CHECK 写入，
+   按未认证算是**最保守**的那一档——不能把不认识的值当成已认证。 */
+function toVerifiedStatus(raw: string | null): AccountVerifiedStatus {
+  return raw === "pending" || raw === "verified" || raw === "rejected"
+    ? raw
+    : "unverified";
+}
+
+/* priority 的 CHECK 是四值闭集；越界按最低档算，不让未知值冒充 p0 排到最前。 */
+function toTicketPriority(raw: string): AccountTicket["priority"] {
+  return raw === "p0" || raw === "p1" || raw === "p2" ? raw : "p3";
+}
+
+function mapAccountTicketRow(row: AccountTicketRow): AccountTicket {
+  return {
+    ticketNo: row.ticket_no,
+    title: row.title,
+    status: row.status,
+    priority: toTicketPriority(row.priority),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  };
+}
+
+function mapAccountLoginRow(row: AccountLoginRow): AccountLoginAttempt {
+  return {
+    id: row.id,
+    result: row.result,
+    authMethod: row.auth_method,
+    ip: row.ip_address,
+    createdAt: toIso(row.created_at),
+  };
+}
+
 function mapAccountRow(
   row: AccountRow,
   canReadPii: boolean,
@@ -403,6 +464,10 @@ function mapAccountRow(
       : toIso(row.registered_at),
     lastActiveIp: row.last_active_ip,
     lastActiveLocation: "未知",
+    /* 在线 = 有未过期的活跃会话。给布尔不给计数：界面问的是「此刻在不在」，
+       几个会话是另一个问题，现在没人问。 */
+    online: (row.online_session_count ?? 0) > 0,
+    verifiedStatus: toVerifiedStatus(row.verified_status),
     loginCount30d: row.login_count_30d ?? 0,
     tenantBindings: mapTenantBindings(row.tenant_bindings),
   };
@@ -437,7 +502,36 @@ interface AccountRow {
   last_active_ip: string | null;
   login_count_30d: number | null;
   tenant_bindings: RawTenantBinding[] | null;
+  /** realm=customer 未过期的活跃会话数；> 0 即在线。 */
+  online_session_count: number | null;
+  verified_status: string | null;
   avatar_hash: string | null;
+}
+
+interface AccountProductRow {
+  product_name: string;
+}
+
+interface AccountTicketRow {
+  ticket_no: string;
+  title: string;
+  status: string;
+  priority: string;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+}
+
+interface AccountTicketCountsRow {
+  open_count: number | null;
+  total_count: number | null;
+}
+
+interface AccountLoginRow {
+  id: string;
+  result: string;
+  auth_method: string;
+  ip_address: string;
+  created_at: Date | string | null;
 }
 
 // 列均逐列核对 deploy/database/ddl 10_account.sql / 20_tenancy.sql / 18_access.sql / 24_session.sql。
@@ -464,6 +558,8 @@ select
   ls.last_active_ip,
   coalesce(lc.login_count_30d, 0)              as login_count_30d,
   coalesce(tb.bindings, '[]'::json)            as tenant_bindings,
+  coalesce(os.online_count, 0)                 as online_session_count,
+  coalesce(kv.status, 'unverified')            as verified_status,
   ua.hash                                      as avatar_hash
 from account.users u
 left join account.user_profiles p
@@ -521,6 +617,18 @@ left join lateral (
     on r.id = m.role_id
   where m.user_id = u.id and m.status = 'active'
 ) tb on true
+-- 在线 = realm='customer' 还没过期的活跃会话。**不能只看 status**：revoked 之外
+-- 还有一类「status 仍写着 active 但 expires_at 已过」的行（清扫是异步的），只判
+-- status 会把早就离线的人画成在线，而「强制下线」正是拿这个读数当门。
+left join lateral (
+  select count(*)::int as online_count
+  from session.auth_sessions s
+  where s.user_id = u.id and s.realm = 'customer'
+    and s.status = 'active' and s.expires_at > now()
+) os on true
+-- 实名认证。没有行 = 从没提交过，按 'unverified' 算（与 kyc.user_kycs 的列默认值
+-- 一致）——不是「读不到」，是确实没认证。
+left join kyc.user_kycs kv on kv.user_id = u.id
 -- 头像字节存 account.user_avatars(PK user_id)；这里只取 hash，字节走独立端点按内容
 -- 哈希版本化。有行 = 用户传过，无行 = 用平台默认——重置就是删这一行。
 left join account.user_avatars ua on ua.user_id = u.id
@@ -537,4 +645,80 @@ const ACCOUNT_DETAIL_SQL = `
 ${ACCOUNT_SELECT}
 where u.deleted_at is null and u.id = $1
 limit 1
+`;
+
+// 未结工单：support.tickets CHECK 七值里 resolved / closed / cancelled 是终态，
+// 其余四个都还有人要跟。与租户详情的 TENANT_OPEN_TICKET_STATUSES 同一口径。
+const ACCOUNT_OPEN_TICKET_STATUSES = `('open','pending','in_progress','reopened')`;
+
+// 在册订阅：与租户详情的 IN_FORCE_SUBSCRIPTION_STATUSES 同一口径。
+const IN_FORCE_SUBSCRIPTION_STATUSES = `('active','expiring','trialing','overdue')`;
+
+/**
+ * 这个人能用到的产品（去重）。
+ *
+ * 口径：他**在册成员身份**的每个租户 → 该租户在册的订阅 → 套餐版本的 primary
+ * 组件所指的产品。bundled 是随主产品搭售的配件，不单算一个产品（与租户详情的
+ * product_count 同一条判据）。
+ *
+ * 去重发生在人这一层：同一个产品在他的三个租户里各订一份，对「这个人能用什么」
+ * 来说仍是一个。数量取本结果的行数，不另算——一份事实只留一份推导。
+ */
+const ACCOUNT_DETAIL_PRODUCTS_SQL = `
+select distinct p.product_name
+from tenancy.tenant_memberships m
+join tenancy.tenants t
+  on t.id = m.tenant_id and t.deleted_at is null
+join metering.subscriptions s
+  on s.tenant_id = t.id and s.deleted_at is null
+ and s.status in ${IN_FORCE_SUBSCRIPTION_STATUSES}
+join product.plan_components pcm
+  on pcm.plan_version_id = s.plan_version_id and pcm.component_role = 'primary'
+join product.products p on p.id = pcm.product_id
+where m.user_id = $1 and m.status = 'active'
+order by p.product_name asc
+`;
+
+// 工单记录：这个人报的全部工单（不只未结——本段是「记录」不是「待办」）。
+const ACCOUNT_DETAIL_TICKETS_SQL = `
+select
+  k.ticket_no,
+  k.title,
+  k.status,
+  k.priority,
+  k.created_at,
+  k.updated_at
+from support.tickets k
+where k.account_id = $1 and k.deleted_at is null
+order by k.updated_at desc
+limit 50
+`;
+
+// 未接 / 总计。两个数一次查出来：分开查会在两次查询之间漂移，而界面把它们写成
+// 「x / n」一个分数，分子分母不同时刻就是错的。
+const ACCOUNT_DETAIL_TICKET_COUNTS_SQL = `
+select
+  count(*) filter (where k.status in ${ACCOUNT_OPEN_TICKET_STATUSES})::int as open_count,
+  count(*)::int as total_count
+from support.tickets k
+where k.account_id = $1 and k.deleted_at is null
+`;
+
+/**
+ * 登录历史。**含失败尝试**——运营查一个账号的登录史，正是为了看有没有连续失败、
+ * 换了几个 IP；只给成功的那几条等于把要查的东西滤掉了。
+ *
+ * 给 50 条，界面默认只展开近 10 条（owner 2026-09-21）：分页归界面，服务端给一页。
+ */
+const ACCOUNT_DETAIL_LOGINS_SQL = `
+select
+  la.id,
+  la.result,
+  la.auth_method,
+  la.ip_address,
+  la.created_at
+from session.login_attempts la
+where la.user_id = $1
+order by la.created_at desc
+limit 50
 `;

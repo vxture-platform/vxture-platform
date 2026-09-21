@@ -1,5 +1,6 @@
 import type { ObjectState, TicketStatus } from "@vxture-platform/shared";
 import type {
+  AccountOperationDetailRecord,
   AccountOperationRecord,
   AnnouncementRecord,
   Capability,
@@ -1474,8 +1475,8 @@ export async function fetchAccountOperations(): Promise<
 
 export async function fetchAccountOperation(
   accountId: string,
-): Promise<AccountOperationRecord> {
-  return readJsonStrict<AccountOperationRecord>(
+): Promise<AccountOperationDetailRecord> {
+  return readJsonStrict<AccountOperationDetailRecord>(
     `/api/accounts/${encodeURIComponent(accountId)}`,
   );
 }
