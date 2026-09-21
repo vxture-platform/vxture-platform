@@ -106,6 +106,7 @@
 | [TD-047](#td-047--线下发票抬头类型存进了税种列发票类型三个选项塌成同一个值)                | 线下发票「抬头类型」存进了税种列；「发票类型」三个选项塌成同一个值        | Data Model         | Open          | 🔴 HIGH                                      |
 | [TD-048](#td-048--ds-守卫的-overlay-panel-preset-会借用嵌套元素的同名属性基线签名含文案)   | DS 守卫的 overlay-panel-preset 会借用嵌套元素的同名属性；基线签名含文案   | Tooling            | Open          | 🟡 MED                                       |
 | [TD-049](#td-049--vxtureservice-ticket-零消费方与在跑的实现分叉五处却长得像实现)           | `@vxture/service-ticket` 零消费方，与在跑的实现分叉五处，却长得像实现     | Architecture       | Open          | 🟡 MED                                       |
+| [TD-050](#td-050--acr-认证握手偶发被重置每次都要人工-rerun)                                | ACR 认证握手偶发被重置，发版链每次都要人工 rerun                          | Operations         | Open          | 🟡 MED                                       |
 
 ---
 
@@ -1376,3 +1377,45 @@ assign / reply / resolve / close / update / events / auditLogs 共 12 个方法�
 开通」，缺的是工单到产品的关联（`support.tickets` 上没有 `product_id` 也没有 `subscription_id`）。
 
 届时记得同步摘掉 `lint:orphan-services` 名单里的那条登记（守卫盯着，陈旧条目也红）。
+
+---
+
+### TD-050 — ACR 认证握手偶发被重置，发版链每次都要人工 rerun
+
+| 字段         | 内容                                                           |
+| ------------ | -------------------------------------------------------------- |
+| **分类**     | Operations                                                     |
+| **状态**     | Open                                                           |
+| **登记日期** | 2026-09-22                                                     |
+| **来源**     | 2026-09-21 一天内七次实测（v0.26.234 / 235 / 236 / 237 / 238） |
+
+**描述**：`docker-build` 的腿偶发挂在对阿里云 ACR 的认证握手上，报文固定是
+`read: connection reset by peer`，对端是 `dockerauth.cn-hangzhou.aliyuncs.com`。
+**重跑必过**——七次无一例外，说明不是凭据、不是权限，是上游网络抖动。
+
+**关键：失败点不止一处。** 早先以为只挂在 `docker login`，实测两类都中过：
+
+| 失败点                                                          | 报文                                                                                                          | 实例                                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `docker login`（workflow 里三处）                               | `Error response from daemon: Get ".../v2/": ... connection reset by peer`                                     | platform_admin / platform_bff-arche / platform_bff-website / platform_bff-platform-api |
+| `docker buildx imagetools create`（retag 步骤**自己**取 token） | `failed to authorize: failed to fetch oauth token: Post "https://dockerauth..." ... connection reset by peer` | platform_bff-website / platform_accounts                                               |
+
+所以**只给 `docker login` 加重试治不了**——retag 那一步不经过登录态，它自己去换票。
+
+**影响**：每次发版都要人工盯着、`gh run rerun --failed`、再重跑 deploy。而
+`deploy` 读到 `docker-build` 的 `completed/failure` 会直接拒绝（设计正确，没有半套
+镜像上线的风险），代价只是**人工介入与发版延时**——但审批门是绑在具体 run 上的，
+deploy 重跑要**重新审批一次**，owner 因此被反复打断。
+
+**解决方向**：
+
+1. **两处都包退避重试**，不只是 login：
+   - `docker login` 三处抽成一个复合 step 或 `retry` 包装（3 次，指数退避 2/4/8s）；
+   - retag 的 `docker buildx imagetools create` 同样包一层——它的失败率实测与 login 相当。
+2. **只对可重试的错重试**：`connection reset by peer` / `failed to fetch oauth token`
+   这类网络错重试；`unauthorized` / `denied` 一类凭据错**立即失败**，不要用重试把
+   真问题拖成超时（判据先证它区分得开，见 feedback「判据先验它会不会动」）。
+3. 重试次数与退避写进日志，便于日后判断上游是否真的变稳（不然"没再挂过"分不清是
+   治好了还是运气）。
+
+**不做的**：不改 `deploy` 的拒绝逻辑——它挡住半套镜像上线是对的，不是这条债的一部分。
