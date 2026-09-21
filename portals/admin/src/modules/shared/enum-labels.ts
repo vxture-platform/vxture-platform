@@ -23,7 +23,8 @@
  * **值域已经成文**的枚举:
  *
  *   已收  SubscriptionStatus   值域在 @vxture-platform/shared 的 catalog-domains
- *   未收  订单状态/账单状态/发票类型/税种/支付来源/对账态/工单状态…
+ *   已收  TicketStatus/TicketPriority  同上（2026-09-21 随工单详情页立的契约）
+ *   未收  订单状态/账单状态/发票类型/税种/支付来源/对账态…
  *         ——它们在 admin 里连类型都是就地写的,没有值域契约。补齐要先把值域
  *           立起来(那是比文案大得多的一件事),不该让展示层先于契约定义业务词汇。
  *
@@ -41,6 +42,8 @@ import type {
   BillStatus,
   PaySource,
   SubscriptionStatus,
+  TicketPriority,
+  TicketStatus,
 } from "@vxture-platform/shared";
 import type {
   BillingBillType,
@@ -261,4 +264,39 @@ export function useCapabilityTypeLabels(): Record<
     data: t("data"),
     service: t("service"),
   } satisfies Record<ProductCapabilityType, string>;
+}
+
+/**
+ * 工单状态的界面文案——这是**存储的七值**（`chk_tickets_status`）。
+ *
+ * 工单列表说的是另一种话：admin-bff 把这七值投影成四档
+ * （open / processing / blocked / closed）给队列视图用，那四个走
+ * `ticketStatusLabel()`。两份不得合并：一份是写入面能选的值，一份是
+ * 读取面的分组。写操作一律用这一份。
+ */
+export function useTicketStatusLabels(): Record<TicketStatus, string> {
+  const t = useTranslations("enums.ticketStatus");
+  return {
+    open: t("open"),
+    pending: t("pending"),
+    in_progress: t("inProgress"),
+    resolved: t("resolved"),
+    closed: t("closed"),
+    reopened: t("reopened"),
+    cancelled: t("cancelled"),
+  } satisfies Record<TicketStatus, string>;
+}
+
+/**
+ * 工单优先级。码与中文并列（「P0 紧急」而不是「紧急」）：运营口头与
+ * 工单里都直接说 P0/P1，只留中文反而要在心里换一道。
+ */
+export function useTicketPriorityLabels(): Record<TicketPriority, string> {
+  const t = useTranslations("enums.ticketPriority");
+  return {
+    p0: t("p0"),
+    p1: t("p1"),
+    p2: t("p2"),
+    p3: t("p3"),
+  } satisfies Record<TicketPriority, string>;
 }

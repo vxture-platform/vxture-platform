@@ -1,4 +1,4 @@
-import type { ObjectState } from "@vxture-platform/shared";
+import type { ObjectState, TicketStatus } from "@vxture-platform/shared";
 import type {
   AccountOperationRecord,
   AnnouncementRecord,
@@ -1993,14 +1993,14 @@ export async function deleteAnnouncement(
 
 // ── Tickets 详情 / 时间线 / 写路径（B8）───────────────────────────────────
 
-export type TicketStatusInput =
-  | "open"
-  | "pending"
-  | "in_progress"
-  | "resolved"
-  | "closed"
-  | "reopened"
-  | "cancelled";
+/**
+ * 写入面能设的状态 = **存储值域本身**（`chk_tickets_status`）。
+ *
+ * 原先这里手写了一份七值联合，与 DB CHECK 并行维护——两边一致是巧合，
+ * 没有任何东西保证它。现在值域成文在 @shared 的 catalog-domains，并由
+ * `lint:catalog-domains` 逐值对账，这里只做别名。
+ */
+export type TicketStatusInput = TicketStatus;
 
 export async function fetchTicket(
   ticketId: string,

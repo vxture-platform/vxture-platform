@@ -1,19 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
-import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ActionMenu,
   Badge,
   Button,
   DataTable,
-  DetailList,
-  DetailRow,
   DialogForm,
-  Drawer,
   EmptyState,
   Input,
   Label,
@@ -22,29 +18,24 @@ import {
   NativeSelect,
   StatusBadge,
   TableTitleCell,
-  Textarea,
 } from "@vxture/design-system";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
-import {
-  AdminBffError,
-  addTicketComment,
-  assignTicket,
-  changeTicketStatus,
-  fetchSupportTicketsStrict,
-  fetchTicket,
-  fetchTicketComments,
-} from "@/api/admin-bff";
+import { changeTicketStatus, fetchSupportTicketsStrict } from "@/api/admin-bff";
 import type { TicketStatusInput } from "@/api/admin-bff";
 import type {
   SupportTicketRecord,
   TenantOperationTicket,
-  TicketCommentRecord,
 } from "@/entities/console";
+import { TICKET_STATUSES } from "@vxture-platform/shared";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import {
   TICKET_PRIORITY_TONE,
   TICKET_STATUS_TONE,
 } from "@/modules/shared/tenant-tone";
+import {
+  useTicketPriorityLabels,
+  useTicketStatusLabels,
+} from "@/modules/shared/enum-labels";
 import {
   formatNumber,
   ticketStatusLabel,
@@ -54,69 +45,6 @@ import { formatDateTime } from "@vxture-platform/shared";
 
 type TicketStatusFilter = "all" | TenantOperationTicket["status"];
 type TicketPriorityFilter = "all" | TenantOperationTicket["priority"];
-
-const priorityLabels: Record<TenantOperationTicket["priority"], string> = {
-  p0: "P0 紧急",
-  p1: "P1 高",
-  p2: "P2 中",
-  p3: "P3 低",
-};
-
-const ticketStatusInputLabels: Record<TicketStatusInput, string> = {
-  open: "待处理",
-  pending: "挂起",
-  in_progress: "处理中",
-  resolved: "已解决",
-  closed: "已关闭",
-  reopened: "重新打开",
-  cancelled: "已取消",
-};
-
-const TICKET_STATUS_INPUT_ORDER: TicketStatusInput[] = [
-  "open",
-  "pending",
-  "in_progress",
-  "resolved",
-  "closed",
-  "reopened",
-  "cancelled",
-];
-
-function ticketEventTypeLabel(eventType: string): string {
-  switch (eventType) {
-    case "comment":
-      return "回复";
-    case "assign":
-    case "assignment":
-      return "指派";
-    case "status_change":
-    case "status":
-      return "状态变更";
-    case "created":
-      return "创建";
-    default:
-      return eventType;
-  }
-}
-
-function ticketEventBodyText(event: TicketCommentRecord): string | null {
-  const payload = event.payload ?? {};
-  const candidate =
-    payload.body ?? payload.note ?? payload.comment ?? payload.message;
-  if (typeof candidate === "string" && candidate.trim()) {
-    return candidate;
-  }
-  if (typeof payload.status === "string") {
-    const label =
-      ticketStatusInputLabels[payload.status as TicketStatusInput] ??
-      payload.status;
-    return `→ ${label}`;
-  }
-  if (typeof payload.assigneeName === "string") {
-    return `指派给 ${payload.assigneeName}`;
-  }
-  return null;
-}
 
 function ticketStatusIcon(status: TenantOperationTicket["status"]): IconName {
   if (status === "open") return "clock";
@@ -141,13 +69,7 @@ function ticketSearchText(ticket: SupportTicketRecord) {
     .toLowerCase();
 }
 
-function TicketActionsMenu({
-  ticket,
-  onOpenDetail,
-}: {
-  ticket: SupportTicketRecord;
-  onOpenDetail: (ticket: SupportTicketRecord) => void;
-}) {
+function TicketActionsMenu({ ticket }: { ticket: SupportTicketRecord }) {
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -163,7 +85,8 @@ function TicketActionsMenu({
             id: "detail",
             label: "工单详情",
             icon: "chat-circle",
-            onSelect: () => onOpenDetail(ticket),
+            onSelect: () =>
+              router.push(`/tickets/${encodeURIComponent(ticket.id)}`),
           },
           {
             id: "tenant",
@@ -210,6 +133,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
   const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
+  const priorityLabels = useTicketPriorityLabels();
 
   return [
     {
@@ -220,8 +144,10 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
           icon="ticket"
           title={ticket.title}
           description={`${ticket.id} / ${ticket.ownerName}`}
+          /* 2026-09-21：原先点标题跳的是**租户**页。首列的标题是这一行代表的
+             对象，点它该打开这张工单——租户另有一列，也另有一条行操作。 */
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(ticket.tenantCode)}`)
+            router.push(`/tickets/${encodeURIComponent(ticket.id)}`)
           }
         />
       ),
@@ -280,389 +206,10 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
   ];
 }
 
-function TicketAssignDialog({
-  ticket,
-  onClose,
-  onAssigned,
-}: {
-  ticket: SupportTicketRecord;
-  onClose: () => void;
-  onAssigned: (updated: SupportTicketRecord) => void;
-}) {
-  const tShared = useTranslations();
-  const [assigneeId, setAssigneeId] = useState("");
-  const [assigneeName, setAssigneeName] = useState("");
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const canSubmit =
-    assigneeId.trim().length > 0 && assigneeName.trim().length > 0;
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canSubmit) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const trimmedNote = note.trim();
-      const updated = await assignTicket(ticket.id, {
-        assigneeId: assigneeId.trim(),
-        assigneeName: assigneeName.trim(),
-        ...(trimmedNote ? { note: trimmedNote } : {}),
-      });
-      onAssigned(updated);
-    } catch (err) {
-      setError(err instanceof AdminBffError ? err.message : "指派失败，请重试");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <DialogForm
-      open
-      title="指派工单"
-      description={
-        <>
-          工单：<strong>{ticket.title}</strong>
-        </>
-      }
-      submitLabel="确认指派"
-      cancelLabel={tShared("actions.cancel")}
-      submitting={submitting}
-      submitDisabled={!canSubmit}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      onSubmit={handleSubmit}
-    >
-      <Label htmlFor="vx-ticket-assignee-id">受理人 ID</Label>
-      <Input
-        id="vx-ticket-assignee-id"
-        value={assigneeId}
-        onChange={(event) => setAssigneeId(event.target.value)}
-        placeholder="受理人账号 ID"
-        autoFocus
-      />
-      <Label htmlFor="vx-ticket-assignee-name">受理人名称</Label>
-      <Input
-        id="vx-ticket-assignee-name"
-        value={assigneeName}
-        onChange={(event) => setAssigneeName(event.target.value)}
-        placeholder="受理人显示名"
-      />
-      <Label htmlFor="vx-ticket-assign-note">
-        备注 <small>（可选）</small>
-      </Label>
-      <Textarea
-        id="vx-ticket-assign-note"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        rows={2}
-        placeholder="指派说明…"
-      />
-      {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
-    </DialogForm>
-  );
-}
-
-function TicketStatusDialog({
-  ticket,
-  onClose,
-  onChanged,
-}: {
-  ticket: SupportTicketRecord;
-  onClose: () => void;
-  onChanged: (updated: SupportTicketRecord) => void;
-}) {
-  const tShared = useTranslations();
-  const [status, setStatus] = useState<TicketStatusInput>("in_progress");
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      const trimmedNote = note.trim();
-      const updated = await changeTicketStatus(ticket.id, {
-        status,
-        ...(trimmedNote ? { note: trimmedNote } : {}),
-      });
-      onChanged(updated);
-    } catch (err) {
-      setError(
-        err instanceof AdminBffError ? err.message : "状态变更失败，请重试",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <DialogForm
-      open
-      title="变更工单状态"
-      description={
-        <>
-          工单：<strong>{ticket.title}</strong>
-        </>
-      }
-      submitLabel="确认变更"
-      cancelLabel={tShared("actions.cancel")}
-      submitting={submitting}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      onSubmit={handleSubmit}
-    >
-      <Label htmlFor="vx-ticket-status">目标状态</Label>
-      <NativeSelect
-        id="vx-ticket-status"
-        value={status}
-        onChange={(event) => setStatus(event.target.value as TicketStatusInput)}
-      >
-        {TICKET_STATUS_INPUT_ORDER.map((value) => (
-          <option key={value} value={value}>
-            {ticketStatusInputLabels[value]}
-          </option>
-        ))}
-      </NativeSelect>
-      <Label htmlFor="vx-ticket-status-note">
-        备注 <small>（可选）</small>
-      </Label>
-      <Textarea
-        id="vx-ticket-status-note"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        rows={2}
-        placeholder="状态变更说明…"
-      />
-      {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
-    </DialogForm>
-  );
-}
-
-function TicketDetailDrawer({
-  ticketId,
-  onClose,
-  onTicketUpdated,
-}: {
-  ticketId: string;
-  onClose: () => void;
-  onTicketUpdated: (updated: SupportTicketRecord) => void;
-}) {
-  const locale = useLocale();
-  const tShared = useTranslations();
-  const [detail, setDetail] = useState<SupportTicketRecord | null>(null);
-  const [comments, setComments] = useState<TicketCommentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [replyBody, setReplyBody] = useState("");
-  const [replySubmitting, setReplySubmitting] = useState(false);
-  const [replyError, setReplyError] = useState<string | null>(null);
-
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-
-  const reloadComments = useCallback(async () => {
-    const list = await fetchTicketComments(ticketId);
-    setComments(list);
-  }, [ticketId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    Promise.all([fetchTicket(ticketId), fetchTicketComments(ticketId)])
-      .then(([ticket, list]) => {
-        if (!cancelled) {
-          setDetail(ticket);
-          setComments(list);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "工单详情读取失败");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ticketId]);
-
-  function applyUpdated(updated: SupportTicketRecord) {
-    setDetail(updated);
-    onTicketUpdated(updated);
-    void reloadComments();
-  }
-
-  async function handleReply(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const body = replyBody.trim();
-    if (!body) return;
-    setReplySubmitting(true);
-    setReplyError(null);
-    try {
-      await addTicketComment(ticketId, body);
-      setReplyBody("");
-      await reloadComments();
-    } catch (err) {
-      setReplyError(
-        err instanceof AdminBffError ? err.message : "回复失败，请重试",
-      );
-    } finally {
-      setReplySubmitting(false);
-    }
-  }
-
-  const title = detail ? detail.title : "工单详情";
-  const fields = detail
-    ? [
-        { label: "工单编号", value: detail.id },
-        {
-          label: tShared("columns.state"),
-          value: ticketStatusLabel(detail.status),
-        },
-        { label: "优先级", value: priorityLabels[detail.priority] },
-        { label: "租户", value: `${detail.tenantName} / ${detail.tenantCode}` },
-        { label: "负责人", value: detail.ownerName },
-        { label: "行业", value: detail.industry },
-        { label: "地区", value: detail.region },
-        {
-          label: tShared("columns.updatedAt"),
-          value: formatDateTime(detail.updatedAt, locale),
-        },
-      ]
-    : undefined;
-
-  return (
-    /* DS 的 `DetailDrawer` 在分类重构里被拆成两件：容器归 `Drawer`（自带遮罩、
-     * 关闭按钮、焦点管理），字段表归 `DetailList`/`DetailRow`。原先那件把两者
-     * 焊死，字段只能走 `fields` 数组、值只能是纯文本；拆开后字段值可以是
-     * 「文本 + StatusBadge」这类就地拼的表达式。 */
-    <Drawer open onClose={onClose} title={title}>
-      {fields ? (
-        <DetailList>
-          {fields.map((field) => (
-            <DetailRow key={field.label} label={field.label}>
-              {field.value}
-            </DetailRow>
-          ))}
-        </DetailList>
-      ) : null}
-      {loading ? (
-        <EmptyState
-          title="正在加载工单详情"
-          description="正在读取工单与时间线。"
-        />
-      ) : error ? (
-        <EmptyState title="工单详情读取失败" description={error} />
-      ) : detail ? (
-        <div className="grid gap-5">
-          <div className="grid gap-2">
-            <Button
-              variant="outline"
-              size="md"
-              onClick={() => setAssignOpen(true)}
-            >
-              指派
-            </Button>
-            <Button
-              variant="outline"
-              size="md"
-              onClick={() => setStatusOpen(true)}
-            >
-              改状态
-            </Button>
-          </div>
-
-          <div className="grid gap-3">
-            <strong>处理时间线</strong>
-            {comments.length ? (
-              <ol className="grid gap-3">
-                {comments.map((event) => {
-                  const bodyText = ticketEventBodyText(event);
-                  return (
-                    <li key={event.id} className="grid gap-1">
-                      <span>
-                        <Badge>{ticketEventTypeLabel(event.eventType)}</Badge>{" "}
-                        <strong>{event.actorName}</strong>{" "}
-                        <small>{formatDateTime(event.createdAt, locale)}</small>
-                      </span>
-                      {bodyText ? <p>{bodyText}</p> : null}
-                    </li>
-                  );
-                })}
-              </ol>
-            ) : (
-              <p>
-                <small>暂无时间线记录。</small>
-              </p>
-            )}
-          </div>
-
-          <form className="grid gap-2" onSubmit={handleReply}>
-            <Label htmlFor="vx-ticket-reply">回复工单</Label>
-            <Textarea
-              id="vx-ticket-reply"
-              value={replyBody}
-              onChange={(event) => setReplyBody(event.target.value)}
-              rows={3}
-              placeholder="输入回复内容…"
-            />
-            {replyError ? (
-              <p className="text-sm text-vx-danger">{replyError}</p>
-            ) : null}
-            <div>
-              <Button
-                type="submit"
-                size="md"
-                disabled={replySubmitting || replyBody.trim().length === 0}
-              >
-                {replySubmitting ? "处理中..." : "回复"}
-              </Button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
-      {assignOpen && detail ? (
-        <TicketAssignDialog
-          ticket={detail}
-          onClose={() => setAssignOpen(false)}
-          onAssigned={(updated) => {
-            applyUpdated(updated);
-            setAssignOpen(false);
-          }}
-        />
-      ) : null}
-      {statusOpen && detail ? (
-        <TicketStatusDialog
-          ticket={detail}
-          onClose={() => setStatusOpen(false)}
-          onChanged={(updated) => {
-            applyUpdated(updated);
-            setStatusOpen(false);
-          }}
-        />
-      ) : null}
-    </Drawer>
-  );
-}
-
 export function TicketsPage() {
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
+  const ticketStatusInputLabels = useTicketStatusLabels();
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -672,7 +219,6 @@ export function TicketsPage() {
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [detailTicketId, setDetailTicketId] = useState<string | null>(null);
   const [batchStatusOpen, setBatchStatusOpen] = useState(false);
   const [batchStatusValue, setBatchStatusValue] =
     useState<TicketStatusInput>("in_progress");
@@ -740,12 +286,6 @@ export function TicketsPage() {
     setQuery("");
     setStatus("all");
     setPriority("all");
-  }
-
-  function applyTicketUpdate(updated: SupportTicketRecord) {
-    setTickets((current) =>
-      current.map((ticket) => (ticket.id === updated.id ? updated : ticket)),
-    );
   }
 
   const selectedTickets = tickets.filter((ticket) =>
@@ -944,14 +484,7 @@ export function TicketsPage() {
                 onSelectionChange={(keys) =>
                   setSelectedTicketIds(new Set(keys))
                 }
-                rowActions={(ticket) => (
-                  <TicketActionsMenu
-                    ticket={ticket}
-                    onOpenDetail={(selectedTicket) =>
-                      setDetailTicketId(selectedTicket.id)
-                    }
-                  />
-                )}
+                rowActions={(ticket) => <TicketActionsMenu ticket={ticket} />}
                 empty={
                   <EmptyState
                     title="没有匹配的工单"
@@ -969,17 +502,10 @@ export function TicketsPage() {
         }
       />
 
-      {detailTicketId ? (
-        <TicketDetailDrawer
-          ticketId={detailTicketId}
-          onClose={() => setDetailTicketId(null)}
-          onTicketUpdated={applyTicketUpdate}
-        />
-      ) : null}
-
       {batchStatusOpen ? (
         <DialogForm
           open
+          size="sm"
           title="批量变更工单状态"
           description={`将对已选 ${formatNumber(selectedTickets.length)} 条工单应用新状态。`}
           submitLabel="确认变更"
@@ -1002,7 +528,7 @@ export function TicketsPage() {
               setBatchStatusValue(event.target.value as TicketStatusInput)
             }
           >
-            {TICKET_STATUS_INPUT_ORDER.map((value) => (
+            {TICKET_STATUSES.map((value) => (
               <option key={value} value={value}>
                 {ticketStatusInputLabels[value]}
               </option>
