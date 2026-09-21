@@ -44,6 +44,7 @@ import type {
   SubscriptionStatus,
   TicketPriority,
   TicketStatus,
+  UserKycStatus,
 } from "@vxture-platform/shared";
 import type {
   BillingBillType,
@@ -285,6 +286,20 @@ export function useTicketStatusLabels(): Record<TicketStatus, string> {
     reopened: t("reopened"),
     cancelled: t("cancelled"),
   } satisfies Record<TicketStatus, string>;
+}
+
+/**
+ * 自然人实名认证。值域 `USER_KYC_STATUSES` 在 @shared 的 catalog-domains，
+ * 对着 `chk_user_kycs_status`——先有值域契约，才有这份文案（规矩见本文件头注）。
+ */
+export function useUserKycStatusLabels(): Record<UserKycStatus, string> {
+  const t = useTranslations("enums.userKycStatus");
+  return {
+    unverified: t("unverified"),
+    pending: t("pending"),
+    verified: t("verified"),
+    rejected: t("rejected"),
+  } satisfies Record<UserKycStatus, string>;
 }
 
 /**

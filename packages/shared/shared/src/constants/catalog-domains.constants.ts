@@ -136,6 +136,22 @@ export type PaySource = (typeof PAY_SOURCES)[number];
  *
  * Mirrors chk_tickets_status (72_support.sql).
  */
+/**
+ * kyc.user_kycs.status — 自然人实名认证。
+ *
+ * `unverified` 是**没提交过**，不是"提交了没过"——后者是 `rejected`。两者在界面上
+ * 语气不同：没认证是常态，驳回才是要跟进的事。
+ *
+ * Mirrors chk_user_kycs_status (16_kyc.sql).
+ */
+export const USER_KYC_STATUSES = [
+  "unverified",
+  "pending",
+  "verified",
+  "rejected",
+] as const;
+export type UserKycStatus = (typeof USER_KYC_STATUSES)[number];
+
 export const TICKET_STATUSES = [
   "open",
   "pending",

@@ -1,3 +1,4 @@
+import type { TicketStatus, UserKycStatus } from "@vxture-platform/shared";
 import type {
   ModelState,
   ObjectState,
@@ -1636,4 +1637,55 @@ export interface AccountOperationRecord {
   lastActiveLocation: string;
   loginCount30d: number;
   tenantBindings: AccountTenantBinding[];
+  /** 此刻有没有未过期的活跃会话（realm=customer）。「强制下线」拿它当门。 */
+  online: boolean;
+  verifiedStatus: AccountVerifiedStatus;
+}
+
+/**
+ * 实名认证四态。值域的**权威在 @shared 的 `USER_KYC_STATUSES`**（对着
+ * `chk_user_kycs_status`）——这里只是个别名，不再另抄一份字面量。
+ */
+export type AccountVerifiedStatus = UserKycStatus;
+
+/** 一次登录尝试。**含失败**——查登录史正是为了看失败与换 IP。 */
+export interface AccountLoginAttempt {
+  id: string;
+  /** session.login_attempts.result：开放集（success / bad_credentials / locked / …）。 */
+  result: string;
+  /** password / sms / oauth …… */
+  authMethod: string;
+  ip: string;
+  createdAt: string;
+}
+
+/** 这个人报的工单。 */
+export interface AccountTicket {
+  ticketNo: string;
+  title: string;
+  /**
+   * `support.tickets.status` 存的那**七**值（TICKET_STATUSES），不是队列视图
+   * 的粗四值。账号页列的是记录、含终态票，而粗四值里 `blocked` 库里没来源、
+   * `cancelled` 无处安放。
+   */
+  status: TicketStatus;
+  priority: "p0" | "p1" | "p2" | "p3";
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 账号详情 = 列表标量 + 三段明细。与租户详情同形：主行判 404 在前，明细并发。
+ */
+export interface AccountOperationDetailRecord extends AccountOperationRecord {
+  /**
+   * 这个人能用到的产品名，**已按人去重**：同一个产品在他三个租户里各订一份，
+   * 对「他能用什么」来说仍是一个。数量取 `.length`，不另给字段。
+   */
+  productNames: string[];
+  tickets: AccountTicket[];
+  ticketOpenCount: number;
+  ticketTotalCount: number;
+  /** 近 50 次登录尝试（倒序）；界面默认只展开近 10 条。 */
+  loginHistory: AccountLoginAttempt[];
 }

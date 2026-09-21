@@ -717,7 +717,7 @@ const MENU_TREE = [
         children: [
           {
             code: "admin.menu.tenant_profile",
-            name: "租户信息",
+            name: "租户管理",
             route: "/tenants",
             perms: [
               "tenant:profile.read",
@@ -730,7 +730,7 @@ const MENU_TREE = [
           },
           {
             code: "admin.menu.account_system",
-            name: "账号体系",
+            name: "账号管理",
             route: "/accounts",
             perms: [
               "user:profile.read",
@@ -753,7 +753,7 @@ const MENU_TREE = [
         children: [
           {
             code: "admin.menu.product_capability",
-            name: "产品能力",
+            name: "产品目录",
             route: "/products",
           },
           {
@@ -774,7 +774,7 @@ const MENU_TREE = [
           },
           {
             code: "admin.menu.plan_version",
-            name: "套餐版本",
+            name: "产品套餐",
             route: "/plan-versions",
           },
           {
@@ -842,7 +842,7 @@ const MENU_TREE = [
         children: [
           {
             code: "admin.menu.model_gateway",
-            name: "模型计价与策略",
+            name: "模型计价策略",
             route: "/atlas",
             perms: [
               "pricing:model.read",
@@ -960,7 +960,7 @@ const MENU_TREE = [
           },
           {
             code: "opera.menu.model_grant",
-            name: "路由授权",
+            name: "模型授权",
             route: "/model/grants",
           },
           {

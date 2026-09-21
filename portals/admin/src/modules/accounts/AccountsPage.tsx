@@ -39,10 +39,23 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
+import { resolveIpLocation } from "@/shared/ip-location";
 
 type StatusFilter = "all" | AccountOperationRecord["status"];
 type TenantTypeFilter = "all" | "company" | "individual" | "mixed";
 type RoleFilter = "all" | "owner" | "admin" | "member";
+/** 此刻在不在线。与账号状态是**两件事**：状态说能不能进，在线说此刻在不在。 */
+type OnlineFilter = "all" | "online" | "offline";
+
+/* 分组的展示名与次第。次第固定（owner > admin > member），出现与否看数据。 */
+const ROLE_FILTER_ORDER: ReadonlyArray<{
+  value: Exclude<RoleFilter, "all">;
+  label: string;
+}> = [
+  { value: "owner", label: "Owner" },
+  { value: "admin", label: "Admin" },
+  { value: "member", label: "Member" },
+];
 type AccountsPageCopy = {
   eyebrow: string;
   title: string;
@@ -68,15 +81,15 @@ type AccountStatusIndicatorTone =
   | "attention"
   | "closed";
 
-const defaultAccountsPageCopy: AccountsPageCopy = {
+const accountsPageCopy: AccountsPageCopy = {
   eyebrow: "租户账号",
-  title: "账号体系",
+  title: "账号管理",
   description:
     "平台运营侧跨租户检索账号、识别安全状态、处理账号启停与登录问题。",
   summaryAriaLabel: "账号运营统计",
   toolbarAriaLabel: "账号筛选",
   directoryAriaLabel: "账号清单",
-  searchPlaceholder: "搜索账号、邮箱、租户、权限",
+  searchPlaceholder: "搜索账号、联系方式、租户、权限",
   searchAriaLabel: "搜索账号",
   statusAriaLabel: "账号状态",
   tenantTypeAriaLabel: "租户类型",
@@ -205,7 +218,10 @@ function accountStatusIndicator(account: AccountOperationRecord): {
 function accountSearchText(account: AccountOperationRecord) {
   return [
     account.id,
+    /* 两种形态都收：屏幕上是 `U-1649201736`，但运营多半直接粘 10 位数字。
+       只收一种，另一种就搜不到。 */
     account.accountCode,
+    formatPrincipalNoOr(account.accountCode, "user", ""),
     account.displayName,
     account.email,
     account.phone,
@@ -262,10 +278,15 @@ function AccountActionsMenu({
             disabled: true,
           },
           {
+            /* 不在线就没有会话可吊销——按在线状态置灰（owner 2026-09-21）。
+               灰的原因写进 hint：光灰着不说为什么，运营会当成按钮坏了。 */
             id: "force-logout",
             label: "强制下线",
             icon: "sign-out",
-            disabled: busy || isDisabled,
+            disabled: busy || isDisabled || !account.online,
+            ...(!isDisabled && !account.online
+              ? { hint: "该账号当前没有活跃会话" }
+              : {}),
             onSelect: () => onForceLogout(account),
           },
           {
@@ -291,13 +312,13 @@ interface AccountRowActions {
 /**
  * 状态标走 `StatusBadge`，语气由 `ACCOUNT_STATUS_TONE` 给。
  *
- * 租户列随 `showTenantContext` 出没——平台账号视图没有租户归属这回事。
- *
  * 账号名可点、跳详情页，与租户列表同规矩——所以跳转回调要从调用点传进来，
  * 行动作菜单里的那一个在这儿够不着。
+ *
+ * 租户列曾经随 `showTenantContext` 出没，为一个「平台账号视图」留的口子；
+ * 那个视图从未存在，prop 也没有任何调用点传过（owner 2026-09-21：无用信息收掉）。
  */
 function useAccountColumns(
-  showTenantContext: boolean,
   onViewDetail: (account: AccountOperationRecord) => void,
 ): DataTableColumn<AccountOperationRecord>[] {
   const locale = useLocale();
@@ -306,53 +327,78 @@ function useAccountColumns(
     {
       id: "account",
       header: "账号",
+      /* 邮箱挪去「联系方式」（owner 2026-09-21：与租户管理-成员账号同形）。 */
       cell: (account) => (
         <TableTitleCell
           icon="user"
           title={account.displayName}
-          description={`${formatPrincipalNoOr(account.accountCode, "user", "—")} · ${account.email}`}
+          description={formatPrincipalNoOr(account.accountCode, "user", "—")}
           onTitleClick={() => onViewDetail(account)}
         />
       ),
     },
-    ...(showTenantContext
-      ? [
-          {
-            id: "tenant",
-            header: "租户",
-            cell: (account: AccountOperationRecord) => {
-              const summary = accountTenantSummary(account);
-              return (
-                <span className="inline-flex flex-col items-center gap-2xs">
-                  <span className="inline-flex flex-wrap justify-center gap-2xs">
-                    {summary.tags.map((tag) => (
-                      <StatusBadge key={tag} tone="brand" icon={false}>
-                        {tag}
-                      </StatusBadge>
-                    ))}
-                  </span>
-                  <span className="text-body-sm text-muted-foreground">
-                    {summary.primaryName}
-                  </span>
-                </span>
-              );
-            },
-          },
-        ]
-      : []),
+    {
+      id: "contact",
+      header: "联系方式",
+      /* 电话在上：account.users.phone 是 NOT NULL 的强锚点，邮箱是次标识。
+         与租户详情的成员表同一口径。读不到显示「—」不显示空。 */
+      cell: (account) => (
+        <TableTitleCell
+          layout="stacked"
+          title={account.phone || "—"}
+          description={account.email || "—"}
+        />
+      ),
+    },
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (account: AccountOperationRecord) => {
+        const summary = accountTenantSummary(account);
+        return (
+          <span className="inline-flex flex-col items-center gap-2xs">
+            <span className="inline-flex flex-wrap justify-center gap-2xs">
+              {summary.tags.map((tag) => (
+                <StatusBadge key={tag} tone="brand" icon={false}>
+                  {tag}
+                </StatusBadge>
+              ))}
+            </span>
+            <span className="text-body-sm text-muted-foreground">
+              {summary.primaryName}
+            </span>
+          </span>
+        );
+      },
+    },
     {
       id: "status",
       header: tShared("columns.state"),
       align: "center",
+      /**
+       * 账号状态与在线状态**两个平级**（owner 2026-09-21）——都是整枚 badge，
+       * 不做主副。它们问的不是一回事：状态说这个人能不能进来（运营改才变），
+       * 在线说他此刻在不在（自己会变）。
+       *
+       * 在线放在这里而不是「登录活动」列，是因为**「强制下线」按它置灰**：
+       * 按钮灰了，原因必须在同一行看得见，否则运营只会觉得按钮坏了。
+       */
       cell: (account) => {
         const indicator = accountStatusIndicator(account);
         return (
-          <StatusBadge
-            tone={ACCOUNT_STATUS_TONE[account.status]}
-            icon={indicator.icon}
-          >
-            {accountStatusLabel(account.status)}
-          </StatusBadge>
+          <span className="inline-flex flex-col items-center gap-2xs">
+            <StatusBadge
+              tone={ACCOUNT_STATUS_TONE[account.status]}
+              icon={indicator.icon}
+            >
+              {accountStatusLabel(account.status)}
+            </StatusBadge>
+            <StatusBadge tone={account.online ? "success" : "neutral"}>
+              {account.online
+                ? tShared("status.generic.online")
+                : tShared("status.generic.offline")}
+            </StatusBadge>
+          </span>
         );
       },
     },
@@ -364,41 +410,35 @@ function useAccountColumns(
         <span className="inline-flex flex-col items-center gap-2xs">
           <Badge>{accountHighestRoleLabel(account)}</Badge>
           <span className="text-body-sm text-muted-foreground">
-            {showTenantContext
-              ? `${formatNumber(account.tenantCount)} 个租户`
-              : "平台角色"}
+            {`${formatNumber(account.tenantCount)} 个租户`}
           </span>
         </span>
       ),
     },
     {
       id: "login",
-      header: "登录",
+      /* 「登录活动」而不是「登录」：这一列装的是**过去**——什么时候、从哪、
+         30 天几次。「此刻在不在」是状态，已并进「状态」列。 */
+      header: "登录活动",
       align: "center",
+      /* 地点走前端共用的 `resolveIpLocation`，与租户详情的成员表同一份。
+         此前画的是 BFF 的 `lastActiveLocation`，而那个字段在 mapper 里写死
+         「未知」——一枚永远写着「未知」的徽标是噪音，不是信息。 */
       cell: (account) => (
-        <span className="inline-flex flex-col items-center gap-2xs">
-          <Badge>{account.lastActiveLocation}</Badge>
-          <span className="text-body-sm text-muted-foreground">
-            {`${formatDate(account.lastActiveAt, locale)} · ${formatNumber(account.loginCount30d)} 次`}
-          </span>
-        </span>
+        <TableTitleCell
+          layout="stacked"
+          title={formatDate(account.lastActiveAt, locale)}
+          description={`${resolveIpLocation(account.lastActiveIp)} · ${formatNumber(account.loginCount30d)} 次`}
+        />
       ),
     },
   ];
 }
 
-export function AccountsPage({
-  copy = defaultAccountsPageCopy,
-  loadAccounts = fetchAccountOperations,
-  showTenantContext = true,
-}: {
-  copy?: Partial<AccountsPageCopy>;
-  loadAccounts?: () => Promise<AccountOperationRecord[]>;
-  showTenantContext?: boolean;
-} = {}) {
+export function AccountsPage() {
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
-  const pageCopy = { ...defaultAccountsPageCopy, ...copy };
+  const pageCopy = accountsPageCopy;
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountOperationRecord[]>([]);
   const [accountsTruncated, setAccountsTruncated] = useState(false);
@@ -410,6 +450,7 @@ export function AccountsPage({
   const [tenantTypeFilter, setTenantTypeFilter] =
     useState<TenantTypeFilter>("all");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [onlineFilter, setOnlineFilter] = useState<OnlineFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   const [loading, setLoading] = useState(true);
@@ -427,7 +468,7 @@ export function AccountsPage({
     setLoading(true);
     setLoadError(null);
 
-    loadAccounts()
+    fetchAccountOperations()
       .then((records) => {
         if (active) {
           setAccounts(records);
@@ -450,7 +491,7 @@ export function AccountsPage({
     return () => {
       active = false;
     };
-  }, [loadAccounts]);
+  }, []);
 
   function requestToggleStatus(account: AccountOperationRecord) {
     setActionReason("");
@@ -490,7 +531,7 @@ export function AccountsPage({
           description: `已吊销 ${result.revoked} 个会话。`,
         });
       }
-      const refreshed = await loadAccounts();
+      const refreshed = await fetchAccountOperations();
       setAccounts(refreshed);
       setAccountsTruncated(isListTruncated(refreshed));
       setPendingAction(null);
@@ -517,10 +558,7 @@ export function AccountsPage({
       router.push(`/accounts/${encodeURIComponent(account.accountCode)}`),
   };
 
-  const accountColumns = useAccountColumns(
-    showTenantContext,
-    accountActions.onViewDetail,
-  );
+  const accountColumns = useAccountColumns(accountActions.onViewDetail);
 
   const filteredAccounts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -529,10 +567,11 @@ export function AccountsPage({
       if (statusFilter !== "all" && account.status !== statusFilter)
         return false;
       if (
-        showTenantContext &&
-        !accountMatchesTenantType(account, tenantTypeFilter)
+        onlineFilter !== "all" &&
+        account.online !== (onlineFilter === "online")
       )
         return false;
+      if (!accountMatchesTenantType(account, tenantTypeFilter)) return false;
       if (roleFilter !== "all" && accountRoleGroup(account) !== roleFilter)
         return false;
       if (
@@ -544,12 +583,20 @@ export function AccountsPage({
     });
   }, [
     accounts,
+    onlineFilter,
     query,
     roleFilter,
-    showTenantContext,
     statusFilter,
     tenantTypeFilter,
   ]);
+
+  /* 角色筛选的选项：这批账号里**真实出现过**的分组，按固定次第排。
+     `accountRoleGroup` 把开放集的角色名收成三组，所以这里只会出现那三个值——
+     但出现哪几个由数据说了算，空的那组不占一行。 */
+  const roleFilterOptions = useMemo(() => {
+    const present = new Set(accounts.map(accountRoleGroup));
+    return ROLE_FILTER_ORDER.filter((option) => present.has(option.value));
+  }, [accounts]);
 
   const pageCount = Math.max(1, Math.ceil(filteredAccounts.length / pageSize));
   const visibleAccounts = filteredAccounts.slice(
@@ -576,6 +623,7 @@ export function AccountsPage({
   function handleReset() {
     setQuery("");
     setStatusFilter("all");
+    setOnlineFilter("all");
     setTenantTypeFilter("all");
     setRoleFilter("all");
   }
@@ -672,7 +720,38 @@ export function AccountsPage({
               </>
             }
           >
+            {/* 顺序是 owner 定的（2026-09-21）：全部租户 | 登录状态 | 全部状态 |
+                全部权限。从「他属于哪儿」收到「他此刻怎样」，再到「他能干什么」。 */}
             <>
+              <NativeSelect
+                wrapperClassName="w-fit basis-media-xl"
+                value={tenantTypeFilter}
+                onChange={(event) =>
+                  setTenantTypeFilter(event.target.value as TenantTypeFilter)
+                }
+                aria-label={pageCopy.tenantTypeAriaLabel}
+              >
+                <option value="all">全部租户</option>
+                <option value="individual">个人</option>
+                <option value="company">组织</option>
+                <option value="mixed">个人+组织</option>
+              </NativeSelect>
+              <NativeSelect
+                wrapperClassName="w-fit basis-media-xl"
+                value={onlineFilter}
+                onChange={(event) =>
+                  setOnlineFilter(event.target.value as OnlineFilter)
+                }
+                aria-label={tShared("filters.allLoginStates")}
+              >
+                <option value="all">{tShared("filters.allLoginStates")}</option>
+                <option value="online">
+                  {tShared("status.generic.online")}
+                </option>
+                <option value="offline">
+                  {tShared("status.generic.offline")}
+                </option>
+              </NativeSelect>
               <NativeSelect
                 wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
@@ -689,21 +768,10 @@ export function AccountsPage({
                 <option value="locked">已锁定</option>
                 <option value="disabled">已停用</option>
               </NativeSelect>
-              {showTenantContext ? (
-                <NativeSelect
-                  wrapperClassName="w-fit basis-media-xl"
-                  value={tenantTypeFilter}
-                  onChange={(event) =>
-                    setTenantTypeFilter(event.target.value as TenantTypeFilter)
-                  }
-                  aria-label={pageCopy.tenantTypeAriaLabel}
-                >
-                  <option value="all">全部租户</option>
-                  <option value="individual">个人</option>
-                  <option value="company">组织</option>
-                  <option value="mixed">个人+组织</option>
-                </NativeSelect>
-              ) : null}
+              {/* 选项从**当前这批账号**里派生，不写死（owner 2026-09-21：
+                  「需要补齐角色，现在不全」）。原来钉死 Owner/Admin/Member 三档，
+                  而租户侧的角色名是开放集——任何第四种角色都选不中。
+                  派生的口径与 `accountRoleGroup` 同源，所以选了必有结果。 */}
               <NativeSelect
                 wrapperClassName="w-fit basis-media-xl"
                 value={roleFilter}
@@ -713,9 +781,11 @@ export function AccountsPage({
                 aria-label={pageCopy.roleAriaLabel}
               >
                 <option value="all">全部权限</option>
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-                <option value="member">Member</option>
+                {roleFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </NativeSelect>
             </>
           </FilterBar>
