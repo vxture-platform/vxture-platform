@@ -82,7 +82,7 @@ function TenantActionsMenu({
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
-        label={`${tenant.displayName} 操作`}
+        label={`${tenant.tenantName} 操作`}
         items={[
           {
             id: "details",
@@ -158,12 +158,16 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
     {
       id: "tenant",
       header: "租户",
+      /* 标题用**全称**而不是简称（owner 2026-09-21：「这是管理平台，要全称」）。
+         tenantName = tenancy.tenants.name，跟着 KYC 走的认证名；简称是租户自己日常
+         用的。运营要能拿屏幕上这个名字去对合同与发票。
+         （#419 之前两者投影到同一列，看不出区别；现在才是真的两个值。） */
       cell: (tenant) => (
         <TableTitleCell
           icon={
             tenant.tenantType === "company" ? "buildings" : "building-office"
           }
-          title={tenant.displayName}
+          title={tenant.tenantName}
           description={`${tenant.tenantCode} · ${tenant.region}`}
           onTitleClick={() =>
             router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`)
@@ -297,7 +301,7 @@ export function TenantsPage() {
       toast({
         tone: "success",
         title: resuming ? "已恢复租户" : "已暂停租户",
-        description: `${tenant.displayName} ${resuming ? "已恢复为正常状态。" : "已暂停。"}`,
+        description: `${tenant.tenantName} ${resuming ? "已恢复为正常状态。" : "已暂停。"}`,
       });
     } catch (error) {
       if (isStepUpCancelled(error)) return;
