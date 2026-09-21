@@ -43,6 +43,8 @@ import type {
   PaySource,
   SubscriptionStatus,
   TicketPriority,
+  MergeStrategy,
+  ProductLayerValue,
   TicketStatus,
   UserKycStatus,
 } from "@vxture-platform/shared";
@@ -286,6 +288,34 @@ export function useTicketStatusLabels(): Record<TicketStatus, string> {
     reopened: t("reopened"),
     cancelled: t("cancelled"),
   } satisfies Record<TicketStatus, string>;
+}
+
+/**
+ * 配额合并策略。值域 `MERGE_STRATEGIES` 在 @shared 的 catalog-domains，
+ * 对着 `chk_product_metrics_merge_strategy`。
+ */
+export function useMergeStrategyLabels(): Record<MergeStrategy, string> {
+  const t = useTranslations("enums.mergeStrategy");
+  return {
+    max: t("max"),
+    union: t("union"),
+    pool: t("pool"),
+    tiered: t("tiered"),
+  } satisfies Record<MergeStrategy, string>;
+}
+
+/**
+ * 产品分层。值域 `PRODUCT_LAYERS` 在 @shared（product_100_matrix §2）。
+ * 文案带码（「L1 基础支撑」而不是「基础支撑」）：内部口头就说 L1/L2/L3，
+ * 只留中文反而要在心里换一道——同工单优先级那条。
+ */
+export function useProductLayerLabels(): Record<ProductLayerValue, string> {
+  const t = useTranslations("enums.productLayer");
+  return {
+    L1: t("L1"),
+    L2: t("L2"),
+    L3: t("L3"),
+  } satisfies Record<ProductLayerValue, string>;
 }
 
 /**

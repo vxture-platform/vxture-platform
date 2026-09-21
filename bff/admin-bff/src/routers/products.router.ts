@@ -44,6 +44,7 @@ import type {
   ProductReleasePeriodType,
   ProductReleasePrice,
   ProductReleaseRecord,
+  ProductPlanVersionRecord,
   ProductServicePlanDetailRecord,
   ProductServicePlanEntitlement,
   ProductServicePlanPrice,
@@ -1962,6 +1963,39 @@ async function resolveBundledComponents(
 //   in favour of the Atlas proxy. See the solutions section at the bottom.
 
 /** Raw product.products row (+ derived plan_count / category_code) for the catalog list. */
+/**
+ * 套餐版本历史（DS04）。
+ *
+ * 排序：先按套餐码，再按版本号**倒序**——同一个套餐的最新版在上，人找的是
+ * 「现在是第几版」而不是「当初第一版」。
+ */
+const PRODUCT_PLAN_VERSIONS_SQL = `
+  SELECT DISTINCT
+    comp.product_id,
+    pl.plan_code,
+    pl.plan_name,
+    pv.version_no,
+    pv.status,
+    pv.is_locked,
+    comp.component_role,
+    pv.created_at
+  FROM product.plan_components comp
+  JOIN product.plan_versions pv ON pv.id = comp.plan_version_id
+  JOIN product.plans pl ON pl.id = pv.plan_id
+  ORDER BY pl.plan_code ASC, pv.version_no DESC
+`;
+
+interface ProductPlanVersionRow {
+  product_id: string;
+  plan_code: string;
+  plan_name: string;
+  version_no: number;
+  status: string;
+  is_locked: boolean;
+  component_role: string;
+  created_at: Date | string | null;
+}
+
 interface ProductCatalogRow {
   product_nick: string | null;
   standalone_subscribable: boolean;
@@ -1973,6 +2007,7 @@ interface ProductCatalogRow {
   category_name: string | null;
   surfaces: string[] | null;
   public_plan_count: number | null;
+  published_plan_count: number | null;
   id: string;
   product_code: string;
   product_type: string; // 受管枚举 @vxture/core-utils: general_platform|industry_platform|general_agent|industry_agent|undefined
@@ -2117,12 +2152,18 @@ const PRODUCT_CATALOG_SQL = `
     -- 那根轴已经在跑——console-bff 的订阅列表与购买路径三处都过滤 is_public = true。
     -- 这里只是把它汇到产品这一层给运营看，不新增语义。
     -- （owner 2026-09-21 裁定：轴维持在套餐层，「邀请订阅」另起一条线。）
-    -- 注意：本注释在**模板串**里，不能写反引号——它会当场截断字符串。
+    -- 注意：本注释在模板串里，不能写反引号——它会当场截断字符串。
     (SELECT COUNT(DISTINCT pv.plan_id)::int
        FROM product.plan_components comp
        JOIN product.plan_versions pv ON pv.id = comp.plan_version_id
        JOIN product.plans pl ON pl.id = pv.plan_id AND pl.is_public
       WHERE comp.product_id = p.id) AS public_plan_count,
+    -- 正式套餐数：至少有一个 published 版本的套餐（owner：正式不含草稿）。
+    -- 与 plan_count 的差就是「只存在草稿版本」的那些——它们还卖不出去。
+    (SELECT COUNT(DISTINCT pv.plan_id)::int
+       FROM product.plan_components comp
+       JOIN product.plan_versions pv ON pv.id = comp.plan_version_id
+      WHERE comp.product_id = p.id AND pv.status = 'published') AS published_plan_count,
     p.created_at,
     p.updated_at
   FROM product.products p
@@ -2143,7 +2184,7 @@ const PRODUCT_CATALOG_SQL = `
 export async function loadProductCapabilities(
   pool: Pool,
 ): Promise<ProductCapabilityRecord[]> {
-  const [products, metrics, webhooks, solutions] = await Promise.all([
+  const [products, metrics, webhooks, solutions, versions] = await Promise.all([
     pool.query<ProductCatalogRow>(PRODUCT_CATALOG_SQL),
     pool.query<ProductMetricRow>(
       `SELECT product_id, metric_key, metric_unit, reset_period, merge_strategy
@@ -2153,7 +2194,26 @@ export async function loadProductCapabilities(
       `SELECT product_id, webhook_url FROM product.product_webhooks`,
     ),
     pool.query<ProductSolutionLinkRow>(PRODUCT_SOLUTION_LINKS_SQL),
+    pool.query<ProductPlanVersionRow>(PRODUCT_PLAN_VERSIONS_SQL),
   ]);
+
+  /* 套餐版本按产品归堆。一个版本可能挂多个产品（plan_components 里 primary 之外
+     还有 bundled 搭售件），所以这里按 (product_id, plan_id, version_no) 去重的活
+     交给 SQL 的 DISTINCT，本函数只归堆。 */
+  const versionsByProduct = new Map<string, ProductPlanVersionRecord[]>();
+  for (const row of versions.rows) {
+    const list = versionsByProduct.get(row.product_id) ?? [];
+    list.push({
+      planCode: row.plan_code,
+      planName: row.plan_name,
+      versionNo: row.version_no,
+      status: row.status === "published" ? "published" : "draft",
+      isLocked: row.is_locked,
+      componentRole: row.component_role === "primary" ? "primary" : "bundled",
+      createdAt: toIso(row.created_at),
+    });
+    versionsByProduct.set(row.product_id, list);
+  }
 
   const solutionsByProduct = new Map<
     string,
@@ -2243,6 +2303,8 @@ export async function loadProductCapabilities(
       releasedAt: row.released_at ? toIso(row.released_at) : null,
       surfaces: row.surfaces ?? [],
       publicPlanCount: row.public_plan_count ?? 0,
+      publishedPlanCount: row.published_plan_count ?? 0,
+      planVersions: versionsByProduct.get(row.id) ?? [],
       /* 上线方式：带理由跳过上线闸门的产品，这里给时刻与当时欠的项。
          null = 正常过门。 */
       launchOverrideAt: row.launch_override_at

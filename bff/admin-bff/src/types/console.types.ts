@@ -648,6 +648,23 @@ export interface ProductCapabilityMetricRule {
   billingMode: string;
 }
 
+/** 套餐版本历史的一行（DS04）。 */
+export interface ProductPlanVersionRecord {
+  planCode: string;
+  planName: string;
+  versionNo: number;
+  /** draft 可编辑待发布；published 已发布并随 is_locked 冻结。 */
+  status: "draft" | "published";
+  isLocked: boolean;
+  /** 本产品在这个套餐版本里的角色：primary=套餐卖的就是它，bundled=搭售件。 */
+  componentRole: "primary" | "bundled";
+  /**
+   * **创建时刻，不是发布时刻**：plan_versions 没有 published_at——发布这个动作
+   * 冻结了版本（is_locked=true）却没记时刻。不拿 created_at 冒充发布时间。
+   */
+  createdAt: string;
+}
+
 export interface ProductCapabilityRecord {
   id: string;
   productCode: string;
@@ -689,6 +706,10 @@ export interface ProductCapabilityRecord {
   surfaces: string[];
   /** 该产品的套餐里对外开放自助购买的个数（plans.is_public）。 */
   publicPlanCount: number;
+  /** 至少有一个 published 版本的套餐数（正式，不含只有草稿的）。 */
+  publishedPlanCount: number;
+  /** 套餐版本历史；产品级「发布历史」库里没有这个概念（见 ProductPlanVersionRecord）。 */
+  planVersions: ProductPlanVersionRecord[];
   /**
    * 带理由跳过上线闸门的时刻；null = 正常过门。
    *

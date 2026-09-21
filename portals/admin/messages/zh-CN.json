@@ -2477,6 +2477,33 @@
       "expired": "凭据过期",
       "mfaRequired": "需二次验证",
       "mfaFailed": "二次验证失败"
+    },
+    "mergeStrategy": {
+      "max": "取上限",
+      "union": "并集",
+      "pool": "配额池",
+      "tiered": "分档"
+    },
+    "productLayer": {
+      "L1": "L1 基础支撑",
+      "L2": "L2 域平台",
+      "L3": "L3 智能体"
+    },
+    "releaseStage": {
+      "ga": "正式版",
+      "beta": "公测版",
+      "developing": "开发中"
+    },
+    "resetPeriod": {
+      "none": "不重置",
+      "day": "按日",
+      "month": "按月"
+    },
+    "productSurface": {
+      "web": "网页",
+      "desktop": "桌面端",
+      "app": "移动端",
+      "miniprogram": "小程序"
     }
   },
   "orderDetailPage": {
