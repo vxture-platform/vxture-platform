@@ -67,11 +67,18 @@ import { industryLabel } from "@vxture/core-utils";
 // ── 发券写端点契约（product_321 §4.2，TD-028 部分销号）─────────────────────────
 
 interface CreateVoucherBatchBody {
-  /** V1 只放行结算引擎已启用的两型（product_321 P7）。 */
-  kind: "discount" | "credit_voucher";
+  /**
+   * 结算引擎已启用的两型（product_321 P7）+ 订阅邀请（2026-09-22）。
+   * invite 不进结算，它只解锁非公开套餐的自助购买资格。
+   */
+  kind: "discount" | "credit_voucher" | "invite";
   name: string;
   codePrefix?: string;
-  /** discount: {discountType, value, maxOffCents?}; credit_voucher: {amountCents} */
+  /**
+   * discount: {discountType, value, maxOffCents?}
+   * credit_voucher: {amountCents}
+   * invite: {planCode? | planVersionId?, note?} —— 这张邀请解锁哪个套餐
+   */
   effect: Record<string, unknown>;
   totalCount: number;
   perUserLimit?: number;
@@ -108,6 +115,9 @@ export class CommercialRouter {
     assertCanManagePromotion(req);
     const operatorId = requireOperator(req);
     const input = normalizeCreateBatchBody(body);
+    if (input.kind === "invite") {
+      await this.assertInvitablePlan(input.effect);
+    }
 
     const { rows } = await this.rwPool.query<{ id: string }>(
       `insert into promotion.voucher_batches (
@@ -133,6 +143,48 @@ export class CommercialRouter {
     const row = rows[0];
     if (!row) throw new BadRequestException("批次创建失败");
     return { batchId: row.id };
+  }
+
+  /**
+   * 邀请只对**真存在、且真非公开**的套餐有意义。
+   *
+   * 不校的话会发出两种废券：指向不存在套餐的（永远解锁不了任何东西），和指向公开
+   * 套餐的（本来就能买，发了等于骗人）。两种都要等客户点下去才发现。
+   *
+   * 非公开的判据与 console 侧下单闸门同一列（`plans.is_public`）——两边看同一个
+   * 事实，不各自定义。
+   */
+  private async assertInvitablePlan(
+    effect: Record<string, unknown>,
+  ): Promise<void> {
+    const planCode =
+      typeof effect.planCode === "string" ? effect.planCode : null;
+    const planVersionId =
+      typeof effect.planVersionId === "string" ? effect.planVersionId : null;
+
+    const { rows } = await this.pool.query<{
+      plan_code: string;
+      is_public: boolean;
+    }>(
+      `select pl.plan_code, pl.is_public
+         from product.plans pl
+    left join product.plan_versions pv on pv.plan_id = pl.id
+        where ($1::text is null or pl.plan_code = $1)
+          and ($2::uuid is null or pv.id = $2)
+        limit 1`,
+      [planCode, planVersionId],
+    );
+    const plan = rows[0];
+    if (!plan) {
+      throw new BadRequestException(
+        `找不到套餐（${planVersionId ?? planCode}）——邀请必须指向一个真实存在的套餐`,
+      );
+    }
+    if (plan.is_public) {
+      throw new BadRequestException(
+        `套餐「${plan.plan_code}」本来就对外开放自助购买，不需要邀请`,
+      );
+    }
   }
 
   // 定向发放（product_321 §4.2）：码按需生成（assign 时生成 voucher 行，
@@ -323,7 +375,7 @@ function voucherCode(prefix: string | null): string {
 const GATE_FIELDS = ["applicable_plan_ids", "min_user_level"] as const;
 
 function normalizeCreateBatchBody(body: CreateVoucherBatchBody): {
-  kind: "discount" | "credit_voucher";
+  kind: "discount" | "credit_voucher" | "invite";
   name: string;
   codePrefix: string | null;
   effect: Record<string, unknown>;
@@ -335,9 +387,13 @@ function normalizeCreateBatchBody(body: CreateVoucherBatchBody): {
 } {
   if (!body || typeof body !== "object")
     throw new BadRequestException("Request body is required");
-  if (body.kind !== "discount" && body.kind !== "credit_voucher")
+  if (
+    body.kind !== "discount" &&
+    body.kind !== "credit_voucher" &&
+    body.kind !== "invite"
+  )
     throw new BadRequestException(
-      "kind 仅支持 discount / credit_voucher（其余券型 V1 未启用）",
+      "kind 仅支持 discount / credit_voucher / invite（其余券型未启用）",
     );
   const name = (body.name ?? "").trim();
   if (name.length < 2 || name.length > 128)
@@ -357,7 +413,32 @@ function normalizeCreateBatchBody(body: CreateVoucherBatchBody): {
     }
   }
   let effect: Record<string, unknown>;
-  if (body.kind === "discount") {
+  if (body.kind === "invite") {
+    /* 订阅邀请（2026-09-22）：effect 只装「这张邀请解锁哪个套餐」。
+       **只解锁「能买」，不改变「要付钱」**——客户照常下单付款，与运营直接发订阅
+       （operator_grant）和兑换码（redemption）是三件事。
+
+       planCode 与 planVersionId 至少给一个：console 侧两条都认（按 planVersionId
+       精确到版本，或按 planCode 覆盖该套餐的所有版本）。套餐是否存在、是否真的
+       非公开，由调用方在落库前查库校验——在这里只做形状检查，不打库。 */
+    const planCode = String(
+      rawEffect["planCode"] ?? rawEffect["plan_code"] ?? "",
+    ).trim();
+    const planVersionId = String(
+      rawEffect["planVersionId"] ?? rawEffect["plan_version_id"] ?? "",
+    ).trim();
+    if (!planCode && !planVersionId)
+      throw new BadRequestException(
+        "invite 的 effect 必须给 planCode 或 planVersionId 之一（这张邀请解锁哪个套餐）",
+      );
+    const note = String(rawEffect["note"] ?? "").trim();
+    if (note.length > 200) throw new BadRequestException("note 最长 200 字");
+    effect = {
+      ...(planCode ? { planCode } : {}),
+      ...(planVersionId ? { planVersionId } : {}),
+      ...(note ? { note } : {}),
+    };
+  } else if (body.kind === "discount") {
     const discountType =
       rawEffect["discount_type"] ?? rawEffect["discountType"];
     const value = Number(rawEffect["value"]);

@@ -1251,13 +1251,24 @@ export class SubscriptionRouter {
      * 放在成熟度之后：两者都是「这东西现在不该卖」，但成熟度是产品级、可见性是
      * 套餐级，先答产品再答套餐，报错也按这个次第给。
      *
-     * 邀请制（凭有效邀请解锁非公开套餐）是下一条线；在它落地之前，这里就是硬拒。
+     * **凭邀请解锁**（2026-09-22）：非公开套餐本身不开放自助购买，但持有一张有效
+     * 邀请（`promotion.vouchers` 的 `kind='invite'`）的人可以买。邀请**只解锁
+     * 「能买」，不改变「要付钱」**——客户照常下单、照常付款，与运营直接发订阅
+     * （`operator_grant`，无订单无钱）和兑换码（`redemption`，输码抵扣）是三件事。
      */
     if (!sold.plan_is_public) {
-      throw new ConflictException({
-        code: "PLAN_NOT_PUBLIC",
-        message: "该套餐未对外开放自助购买，请联系销售。",
+      const invite = await this.consumeInviteForPlan({
+        userId: req.user.id,
+        tenantId: req.tenant.id,
+        planVersionId,
+        planCode: sold.plan_code,
       });
+      if (!invite) {
+        throw new ConflictException({
+          code: "PLAN_NOT_PUBLIC",
+          message: "该套餐未对外开放自助购买，请联系销售。",
+        });
+      }
     }
 
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
@@ -1720,6 +1731,108 @@ export class SubscriptionRouter {
    * （product_330 P1-b2：billing.orders 未终态即在途）。0 元订单与付费订单同路
    * （owner 2026-08-20），本守卫对两者一视同仁。
    */
+  /**
+   * 查验并消耗一张邀请（`promotion.vouchers`，`kind='invite'`）。
+   *
+   * 返回被用掉那张的 id；没有可用的邀请返回 null（调用方据此拒单）。
+   *
+   * ── 为什么查验与消耗必须是**同一条 UPDATE** ──
+   * 先 SELECT 再 UPDATE 会让两个并发下单读到同一张有效邀请、各自认为自己拿到了。
+   * 所以用一条带 `WHERE` 全部条件的 UPDATE：**谁的 UPDATE 影响到行，谁就拿到**，
+   * 判据是 rowCount 而不是先前读到的那一行。并发下另一条自然影响 0 行。
+   *
+   * ── 有效的定义 ──
+   * 状态是 `assigned`（已定向发放、未核销未撤回未过期）、未到期（券上的
+   * `expires_at` 与批次的 `valid_until` 都要看，券上的可覆盖批次但不能延长过批次）、
+   * 定向到本人或本人所在租户的工作区、且 effect 指的就是这个套餐。
+   *
+   * ── 消耗时刻：下单时 ──
+   * 走非 discount 类的既定直达路径 `assigned → redeemed`。**代价：订单取消后邀请
+   * 已烧掉，需运营重发**——已知且接受（owner 2026-09-22）。不等到订阅创建，是因为
+   * 那要把 invite 一路从订单穿到 services/commerce/subscription，跨包；而「解锁
+   * 能买」这件事在下单那一刻就兑现了。
+   */
+  private async consumeInviteForPlan(params: {
+    userId: string;
+    tenantId: string;
+    planVersionId: string;
+    planCode: string;
+  }): Promise<string | null> {
+    const { userId, tenantId, planVersionId, planCode } = params;
+
+    const consumed = await this.pool.query<{ id: string; batch_id: string }>(
+      `update promotion.vouchers v
+          set status      = 'redeemed',
+              used_count  = v.used_count + 1,
+              redeemed_at = now()
+         from promotion.voucher_batches b
+        where b.id = v.batch_id
+          and b.kind = 'invite'
+          and b.status = 'active'
+          and v.status = 'assigned'
+          and v.used_count < v.max_uses
+          and (v.expires_at is null or v.expires_at > now())
+          and b.valid_from <= now() and b.valid_until > now()
+          and (
+                v.assigned_user_id = $1
+             or v.assigned_workspace_id in (
+                  select w.id from tenancy.workspaces w
+                   where w.tenant_id = $2 and w.deleted_at is null
+                )
+              )
+          and (
+                b.effect ->> 'planVersionId' = $3
+             or b.effect ->> 'planCode' = $4
+              )
+          and v.id = (
+            -- 多张都有效时取最早过期的那张，先用快到期的。
+            select v2.id from promotion.vouchers v2
+              join promotion.voucher_batches b2 on b2.id = v2.batch_id
+             where b2.kind = 'invite' and b2.status = 'active'
+               and v2.status = 'assigned'
+               and v2.used_count < v2.max_uses
+               and (v2.expires_at is null or v2.expires_at > now())
+               and b2.valid_from <= now() and b2.valid_until > now()
+               and (
+                     v2.assigned_user_id = $1
+                  or v2.assigned_workspace_id in (
+                       select w.id from tenancy.workspaces w
+                        where w.tenant_id = $2 and w.deleted_at is null
+                     )
+                   )
+               and (
+                     b2.effect ->> 'planVersionId' = $3
+                  or b2.effect ->> 'planCode' = $4
+                   )
+             order by v2.expires_at asc nulls last, v2.created_at asc
+             limit 1
+          )
+       returning v.id, v.batch_id`,
+      [userId, tenantId, planVersionId, planCode],
+    );
+
+    const row = consumed.rows[0];
+    if (!row) return null;
+
+    /* 台账：每次核销一行。`subscription_id` 此刻还没有（订阅要等付款后才建），
+       四个效果 FK 列按 kind 填——invite 一个都不填，去向记在 effect_snapshot 里。 */
+    await this.pool.query(
+      `insert into promotion.voucher_redemptions
+         (redemption_no, voucher_id, tenant_id, workspace_id, user_id, kind, effect_snapshot)
+       select
+         'RV-' || to_char(now(), 'YYYYMMDD') || '-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8),
+         $1, $2,
+         (select w.id from tenancy.workspaces w
+           where w.tenant_id = $2 and w.deleted_at is null
+           order by w.is_default desc, w.created_at asc limit 1),
+         $3, 'invite',
+         jsonb_build_object('planCode', $4::text, 'planVersionId', $5::text, 'unlockedAt', now())`,
+      [row.id, tenantId, userId, planCode, planVersionId],
+    );
+
+    return row.id;
+  }
+
   private async assertNoPendingOrderForProduct(
     workspaceId: string,
     productCode: string,
