@@ -250,6 +250,14 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:orphan-services
 
+      # 迁移放置：新迁移只能进 28d 真正重放的那个目录。
+      # 2026-09-21 的教训——`deploy/database/prisma/migrations/` 是零消费方的死
+      # 目录，却长得完全像迁移目录；一份放错地方的迁移过了本机真库验证、过了 36
+      # 条守卫、过了九条 CI，直到生产 migrate 才炸（列锁引用了一张没建出来的表）。
+      - name: Migration placement guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:migration-placement
+
       # 词条中英对齐：键缺了会在英文界面渲染出键名本身（或静默回落成中文），
       # 而把中文原样复制进 en-US.json 能骗过键检查——那是「假双语」最常见的
       # 形态，且它在中文环境下永远不会被发现。两条一起查。
