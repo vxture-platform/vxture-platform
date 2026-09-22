@@ -2640,6 +2640,50 @@ export async function seedCatalog(client) {
     );
   }
 
+  /*
+   * 通用计量键的中文名（owner 2026-09-22 逐条过目定稿）。
+   *
+   * 名字是**键的属性**，不是 (产品, 键) 的属性——member.max 换个产品叫法不变，
+   * 所以住在 metric_catalog 而不是两张计量表上（2026-09-22 已搬）。
+   *
+   * ON CONFLICT DO NOTHING：本段只负责**初值**。运营后来在 opera 改过的名字不能被
+   * 下一次 seed/migrate 冲回这里的字面量——那是「改了又变回去」这类最难查的问题。
+   *
+   * 故意不写产品专属的那几个（karda.* / varda.*）：`varda.enabled` 该叫「Varda 开关」
+   * 还是「智能体启用」，只有产品自己知道，平台替它命名必然错。留空 ⇒ 界面回落显示
+   * metric_key 本身，不阻塞。member.max 同样留空——它可能整个改名成 seat.max
+   * （见 data_commerce_250 §5-④），现在命名等于给一个将要改名的东西起名。
+   *
+   * 与 2026-10-26 那条迁移同一份字面量：迁移管存量库，这里管新库，两边必须一致。
+   */
+  const METRIC_NAMES = [
+    // 平台级共享资源（有成本）
+    ["ai.credit", "AI 额度", "调用模型消耗的额度，每月重置"],
+    ["compute.cpu", "CPU 算力", "可使用的 CPU 计算资源"],
+    ["compute.gpu", "GPU 算力", "可使用的 GPU 计算资源"],
+    ["storage.bytes", "存储空间", "可占用的存储容量"],
+    ["ingress.bytes", "入站流量", "上传到平台的数据量"],
+    ["egress.bytes", "出站流量", "从平台流出的数据量"],
+    // 通用配额项
+    ["dataset.max", "数据集上限", "最多可创建的数据集数"],
+    ["datasource.max", "数据源上限", "最多可接入的数据源数"],
+    ["service_endpoint.max", "服务端点上限", "最多可开放的服务端点数"],
+    ["retention.days", "数据保留天数", "数据在平台留存的天数"],
+    ["sync.frequency", "数据同步频率", "按档位开放的同步频率"],
+    ["service.api.call", "接口调用次数", "每月可发起的接口调用次数，按月重置"],
+    ["quality.check.run", "质量检查次数", "每月可执行的质量检查次数，按月重置"],
+  ];
+  for (const [key, name, desc] of METRIC_NAMES) {
+    await client.query(
+      `insert into product.metric_catalog (metric_key, display_name, description)
+       values ($1, $2, $3) on conflict (metric_key) do nothing`,
+      [key, name, desc],
+    );
+  }
+  console.log(
+    `✓  product — metric_catalog (${METRIC_NAMES.length} 个通用键命名;产品专属与 member.max 按设计留空)`,
+  );
+
   // vxtpl — C3 provisioning endpoint (owner 2026-08-13 完全产品化)。与 karda 同形状:
   // VXTPL_WEBHOOK_BASE_URL 是 tailnet 投递目标，与 VXTPL_BASE_URL 解耦——后者还要喂
   // OIDC redirect_uris，必须保持公网可达。未设时回退公网 base。

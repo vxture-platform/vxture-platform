@@ -236,6 +236,79 @@ function checkCatalogI18nKeys() {
 }
 checkCatalogI18nKeys();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⑥ 计量键中文名：迁移与 seed 两份字面量必须逐字一致（2026-09-22）。
+//
+// 同一份事实写在两处：`2026-10-26-metric-catalog-names.sql` 管存量库，
+// seed 的 `METRIC_NAMES` 管新库。两边都用 ON CONFLICT DO NOTHING，所以谁也不会
+// 覆盖谁——分叉之后**老库和新库显示的名字就不一样了，而且谁也不报错**。
+//
+// 为什么不抽成一份：SQL 迁移不能 import JS，seed 也不该去解析 SQL。两份字面量是
+// 这个边界的必然结果，能做的是让它们对不上时当场红。
+// ─────────────────────────────────────────────────────────────────────────────
+function checkMetricNamesInSync() {
+  const migPath = join(
+    SEED_DIR,
+    '..',
+    'migrations',
+    '2026-10-26-metric-catalog-names.sql',
+  );
+  const seedPath = join(SEED_DIR, 'seed-catalog.mjs');
+  if (!existsSync(migPath) || !existsSync(seedPath)) return;
+
+  const mig = readFileSync(migPath, 'utf8');
+  const seed = readFileSync(seedPath, 'utf8');
+
+  const fromMig = [
+    ...mig.matchAll(/\('([a-z_.]+)',\s*'([^']+)',\s*'([^']+)'\)/g),
+  ].map((m) => `${m[1]} | ${m[2]} | ${m[3]}`);
+
+  const at = seed.indexOf('const METRIC_NAMES = [');
+  if (at < 0) {
+    findings.push({
+      file: seedPath,
+      line: 1,
+      msg: '找不到 METRIC_NAMES —— 判据读不到就是错，不是通过',
+    });
+    return;
+  }
+  const block = seed.slice(at, seed.indexOf('\n  ];', at));
+  const fromSeed = [
+    ...block.matchAll(/\["([a-z_.]+)",\s*"([^"]+)",\s*"([^"]+)"\]/g),
+  ].map((m) => `${m[1]} | ${m[2]} | ${m[3]}`);
+
+  if (fromMig.length === 0 || fromSeed.length === 0) {
+    findings.push({
+      file: seedPath,
+      line: 1,
+      msg: `计量名解析到 迁移 ${fromMig.length} 条 / seed ${fromSeed.length} 条 —— 空集不算通过`,
+    });
+    return;
+  }
+
+  const inSeed = new Set(fromSeed);
+  const inMig = new Set(fromMig);
+  for (const row of fromMig) {
+    if (!inSeed.has(row)) {
+      findings.push({
+        file: seedPath,
+        line: 1,
+        msg: `计量名只在迁移里、seed 缺：${row} —— 新库会显示 metric_key`,
+      });
+    }
+  }
+  for (const row of fromSeed) {
+    if (!inMig.has(row)) {
+      findings.push({
+        file: migPath,
+        line: 1,
+        msg: `计量名只在 seed 里、迁移缺：${row} —— 存量库拿不到这个名字`,
+      });
+    }
+  }
+}
+checkMetricNamesInSync();
+
 console.log('══ seed 幂等 + perm_code 检查（check-seed-idempotency）══');
 console.log(`扫描 ${files.length} 个 seed .mjs（${rel(SEED_DIR)}）。\n`);
 
