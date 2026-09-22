@@ -2106,36 +2106,6 @@
       "empty": "This role holds no permission points"
     }
   },
-  "routes": {
-    "dashboard": "Dashboard",
-    "todos": "Todo Items",
-    "profile": "My account",
-    "personalTenant": "Tenant info",
-    "organization": "Organization Info",
-    "members": "Members",
-    "membersInvitations": "Invitations",
-    "membersRoles": "Roles",
-    "membersPermissions": "Permissions",
-    "roles": "Roles",
-    "invitations": "Invitation Records",
-    "subscription": "Subscriptions",
-    "billing": "Billing center",
-    "billingInvoices": "Invoices & titles",
-    "quotas": "Quotas",
-    "notifications": "Notifications",
-    "security": "Security",
-    "settings": "Tenant Settings",
-    "tenantSettings": "Tenant Settings",
-    "usage": "Usage",
-    "addonPay": "Booster Pack Payment",
-    "vouchers": "Vouchers",
-    "auditLogs": "Audit Logs",
-    "inbox": "Message Center",
-    "tenant": "Tenant",
-    "tenantVerification": "Business verification",
-    "tenantVerificationApply": "Submit verification",
-    "skills": "Skills & Tools"
-  },
   "securityPage": {
     "header": {
       "eyebrow": "Account security",
