@@ -1,5 +1,19 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+
+/** 递归列出目录下的 .ts 文件（测试与声明文件不算）。 */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...walk(full));
+    } else if (entry.endsWith(".ts") && !/\.(spec|test|d)\.ts$/.test(entry)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
 
 import { describe, expect, it } from "vitest";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
@@ -192,14 +206,19 @@ describe("PATCH capabilities/:code/move —— 目录次序", () => {
   });
 
   /*
-   * 三处次序必须逐字一致，否则「排了不生效」：
+   * 目录次序的读者必须逐字一致，否则「排了不生效」：
    *   1. 移动时锁全集的那句（算的就是这个次序）
    *   2. admin 产品清单（运营眼前那张表——按别的键排，就是在看不见的次序上按上移）
    *   3. 官网 /appcenter（这条线存在的目的）
-   * 三句都是拼死的 SQL 文本，对不上时**没有任何一处会报错**，只会安静地各排各的。
+   *   4. opera 产品接入页（owner 2026-09-22 报：admin 顺序变了、opera 没变）
+   *
+   * 第 4 处是上一版漏掉的读者。当时我把判据写死成「三处」，而真实读者有四个——
+   * 一个自己数出来的数字不是范围，得去数**谁在读这张表**。
+   *
+   * 四句都是拼死的 SQL 文本，对不上时**没有任何一处会报错**，只会安静地各排各的。
    * 所以这里直接比源码里的那句，不比运行结果。
    */
-  it("三处 ORDER BY 逐字一致（移动 / admin 清单 / 官网目录）", () => {
+  it("四处 ORDER BY 逐字一致（移动 / admin / 官网 / opera）", () => {
     const norm = (sql: string) => sql.toLowerCase().replace(/\s+/g, " ").trim();
     const EXPECTED = norm("ORDER BY p.sort ASC, p.product_code ASC");
     // 移动那句不带表别名（单表 FOR UPDATE），去掉 `p.` 后应当同形。
@@ -212,10 +231,61 @@ describe("PATCH capabilities/:code/move —— 目录次序", () => {
     const website = read(
       "../../../website-bff/src/routers/product-catalog.router.ts",
     );
+    const opera = read(
+      "../../../opera-bff/src/routers/product-catalog.router.ts",
+    );
 
     // admin 里两句都要在：清单（带别名）与移动（不带别名）。
     expect(admin).toContain(EXPECTED);
     expect(admin).toContain(MOVE);
     expect(website).toContain(EXPECTED);
+    expect(opera).toContain(EXPECTED);
+  });
+
+  /*
+   * 唯一写入方（owner 2026-09-22：「排序的控制权只留一个，在 admin，其他都为跟随，
+   * 这个排序是营销运营人员管理，影响页面显示」）。
+   *
+   * `products.sort` 原本**一个写入方都没有**——DDL 里写着「排序」，三个门户按它排，
+   * 全仓没有一条 UPDATE 碰它。这类列一旦开了口子，第二个写入方进来时不会报错，
+   * 只会让「我在 admin 排的顺序自己变了」，而那时已经查不出是谁改的。
+   *
+   * 所以这里直接扫源码：admin-bff 之外，任何 BFF 都不许出现改 sort 的 UPDATE。
+   * 新建产品时把 sort 置成 max+1（opera）**不算**——那是落位默认值，没有次序的
+   * 选择权，新产品一律去末尾；排到哪由营销运营在 admin 决定。
+   */
+  it("products.sort 的写入方只有 admin-bff（owner：控制权只留一处）", () => {
+    const bffDir = join(__dirname, "../../..");
+    const offenders: string[] = [];
+
+    for (const bff of readdirSync(bffDir, { withFileTypes: true })) {
+      if (!bff.isDirectory() || bff.name === "admin-bff") continue;
+      const src = join(bffDir, bff.name, "src");
+      if (!existsSync(src)) continue;
+
+      for (const file of walk(src)) {
+        const text = readFileSync(file, "utf8").toLowerCase();
+        /*
+         * 按 `;` 切成语句，再逐段查四个词——不用跨行正则。
+         *
+         * 上一版写的是 `/update[^;]{0,200}?product\.products.../s`，而 heredoc 把
+         * `\\b` 吃成了**字面退格符**（0x08）落进正则里：终端不显示、`re.source`
+         * 打出来也看不出，于是它恒假——**一个瞎掉的守卫和通过长得一模一样**。
+         * 换成一眼看得出对的写法：守卫的价值全在「它真的看得见」。
+         */
+        const hit = text
+          .split(";")
+          .some(
+            (stmt) =>
+              stmt.includes("update") &&
+              stmt.includes("product.products") &&
+              stmt.includes("set") &&
+              /sort\s*=/.test(stmt),
+          );
+        if (hit) offenders.push(file.slice(bffDir.length + 1));
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 });

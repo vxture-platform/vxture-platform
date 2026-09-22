@@ -454,7 +454,12 @@ export class ProductCatalogRouter {
            '{}') AS metric_keys
         FROM product.products p
         WHERE ${clauses.join(" AND ")}
-        ORDER BY product_code ASC`,
+        -- 默认次序 = 目录次序，与 admin 产品目录和官网 /appcenter 同一句（owner
+        -- 2026-09-22 裁定）。原先只排 product_code，于是运营在 admin 把某个产品移到
+        -- 顶部之后，这一页纹丝不动——同一份清单两个后台两个顺序。
+        -- 本页的表头排序（名称/来源/类型/状态/验收/更新时间）不受影响，要字母序点
+        -- 一下【名称】就回来了；这里只定「没点任何表头时看到的是什么」。
+        ORDER BY p.sort ASC, p.product_code ASC`,
       params,
     );
     return result.rows.map(toListRecord);
@@ -2472,13 +2477,29 @@ export async function insertProductTx(
   const surfaces = normalizeSurfaces(body.surfaces);
   const row = await client
     .query<ProductRow>(
+      /*
+       * `sort` 显式取 max+1，让新产品落在目录**末尾**。
+       *
+       * 不写它的话拿列默认值 0，而存量产品在第一次用「上移/置顶」之后已被重排成
+       * 1..n——0 比谁都小，于是每接一个新产品，它就自动抢到目录第一位，官网
+       * /appcenter 首屏也跟着换人。没有任何报错，只是位置错了。
+       *
+       * ── 这不是「opera 也能排序」──
+       * owner 2026-09-22 定：**排序控制权只在 admin 一处**（营销运营管，决定页面
+       * 陈列），其余一律跟随。这里没有任何次序的选择权——新产品一律落末尾，
+       * 排到哪由营销运营去 admin 决定。opera 全仓不得出现改 `sort` 的 UPDATE，
+       * 这条由 products-reorder.spec.ts 的「唯一写入方」用例钉着。
+       *
+       * 空表时 max 为 NULL，coalesce 兜到 0 ⇒ 第一个产品拿 1。
+       */
       `INSERT INTO product.products (
          product_code, product_type, category_id, product_name, product_nick,
          description, capability_keys, tags, standalone_subscribable, status,
          is_customer_visible, is_workforce_visible, origin, origin_provider,
-         icon_url, created_by, updated_by, layer
+         icon_url, created_by, updated_by, layer, sort
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15, $16
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15, $16,
+         (SELECT coalesce(max(sort), 0) + 1 FROM product.products)
        ) RETURNING ${SELECT_COLUMNS}`,
       [
         body.productCode!.trim(),
