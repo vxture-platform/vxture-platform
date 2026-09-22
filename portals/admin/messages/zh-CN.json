@@ -1915,7 +1915,16 @@
       "softDeleteConsequence": "该套餐从所有列表中消失。仅在无在订阅、无订阅历史、无订单引用时才允许——卖过的套餐只能退役，不能删。",
       "softDeleteDone": "套餐「{name}」已软删。",
       "softDeleteTarget": "套餐「{name}」",
-      "softDeleteVerb": "软删"
+      "softDeleteVerb": "软删",
+      "makeInviteOnly": "改为邀请订阅",
+      "makeInviteOnlyVerb": "改为邀请订阅",
+      "makeInviteOnlyConsequence": "改为邀请订阅后，这一档不再出现在客户的套餐列表里，只有持邀请的人能下单。现有 {n} 份订阅不受影响，续订也照常。",
+      "makeInviteOnlyDone": "已将「{name}」改为邀请订阅",
+      "makePublic": "改为公开订阅",
+      "makePublicVerb": "改为公开订阅",
+      "makePublicConsequence": "改为公开订阅后，所有客户都能在套餐列表里看到它并自助下单。",
+      "makePublicDone": "已将「{name}」改为公开订阅",
+      "visibilityTarget": "套餐「{name}」"
     },
     "detail": {
       "backToList": "全部产品",
@@ -1930,7 +1939,10 @@
       "searchPlaceholder": "搜索套餐名或套餐码",
       "tierDescription": "这个产品挂了哪几档、每档在哪个版本、谁在订。一档可以挂多条套餐——库里不禁止，同档多于一条时会在卡片上标出来。",
       "versionsOf": "{tier} · {name} 的版本史",
-      "view": "查看版本"
+      "view": "查看版本",
+      "visibility": "订阅方式",
+      "visibilityPublic": "公开订阅",
+      "visibilityInvite": "邀请订阅"
     },
     "editorV2": {
       "actionsLeftHint": "左边可逆：保存与放弃都能再来一次。",

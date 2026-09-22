@@ -2436,7 +2436,9 @@
     "noPlans": "No public plans available for this product yet.",
     "badges": {
       "current": "Current",
-      "recommended": "Recommended"
+      "recommended": "Recommended",
+      "inviteOnly": "By invitation",
+      "inviteOnlyHint": "This tier is open to you by invitation; placing the order uses it up."
     },
     "cycle": {
       "day": "day",

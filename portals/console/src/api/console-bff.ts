@@ -969,6 +969,11 @@ export interface SubscribePlanOption {
   prices: SubscribePlanPrice[];
   /** Primary component feature list (plan_components.features) — 权益 chips. */
   features: string[];
+  /**
+   * 这一档不对外公开，是凭邀请才出现在你这份阶梯里的（其他人看不到它）。
+   * 不标出来，客户会当成人人可买的公开档。
+   */
+  inviteOnly: boolean;
 }
 
 export interface SubscribeCurrent {
@@ -1414,9 +1419,10 @@ export async function fetchSubscribeContext(params: {
   const ctx = await readJsonStrict<SubscribeContext>(
     `/api/subscription/subscribe-context?${qs.toString()}`,
   );
-  // 部署偏斜防护：门户先于 BFF 发布时旧响应没有 features 字段。
+  // 部署偏斜防护：门户先于 BFF 发布时旧响应没有 features / inviteOnly 字段。
   for (const plan of ctx.plans) {
     plan.features = (plan as { features?: string[] }).features ?? [];
+    plan.inviteOnly = (plan as { inviteOnly?: boolean }).inviteOnly ?? false;
   }
   return ctx;
 }

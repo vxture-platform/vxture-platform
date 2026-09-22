@@ -1010,6 +1010,93 @@ export class ProductsRouter {
    *
    * 不是删除，但与 publish 同风险级（都改「客户买得到什么」），照它挂 step-up。
    */
+  /**
+   * 订阅方式开关：公开订阅 ⇄ 邀请订阅（`product.plans.is_public`）。
+   *
+   * ── 为什么要有这条路由 ──
+   * 这一列此前**没有任何写路径**：INSERT 时硬编码 `true`，全仓没有一条 UPDATE
+   * 碰它。于是「把某个套餐设成邀请制」只能写迁移——而发券那一侧（卡券 `invite`
+   * 型 + console 的邀请解锁）已经做完了，整条链缺的就是这个开关。运营既看不见
+   * 也改不了，一个已经能用的机制等于不存在。
+   *
+   * ── 翻过去会发生什么（运营要知道的） ──
+   * 改成邀请订阅后，这一档从客户的套餐阶梯里消失，只有持有效邀请的人看得见、
+   * 买得到。**已有订阅不受影响，续订也不受影响**（console 侧的邀请闸门对
+   * 「续自己手上这一档」有例外）。所以返回值带上活订阅数，让确认框能把影响面
+   * 说清楚，而不是让运营自己去别处对。
+   *
+   * 列锁无需变更：`is_public` 本来就在 98 给 platform_svc 的 GRANT 名单里。
+   */
+  @Patch("plans/:planId/visibility")
+  @RequireStepUp()
+  async setPlanVisibility(
+    @Req() req: Request & RequestContext,
+    @Param("planId") planId: string,
+    @Body() body: { isPublic?: unknown },
+  ): Promise<{
+    planCode: string;
+    isPublic: boolean;
+    subscriptionCount: number;
+  }> {
+    assertCanManageProducts(req);
+    if (typeof body?.isPublic !== "boolean") {
+      throw new BadRequestException("isPublic must be a boolean");
+    }
+    const isPublic = body.isPublic;
+
+    let planCode = "";
+    let subscriptionCount = 0;
+    await withTransaction(this.rwPool, async (client) => {
+      const cur = await client.query<{
+        plan_code: string;
+        is_public: boolean;
+        status: string;
+        subscription_count: number;
+      }>(
+        `SELECT p.plan_code, p.is_public, p.status,
+                (SELECT count(*)::int
+                   FROM metering.subscriptions s
+                   JOIN product.plan_versions pv ON pv.id = s.plan_version_id
+                  WHERE pv.plan_id = p.id AND s.deleted_at IS NULL)
+                  AS subscription_count
+           FROM product.plans p
+          WHERE p.id = $1 AND p.deleted_at IS NULL
+          FOR UPDATE OF p`,
+        [planId],
+      );
+      const row = cur.rows[0];
+      if (!row) throw new NotFoundException(`Plan ${planId} not found`);
+      planCode = row.plan_code;
+      subscriptionCount = Number(row.subscription_count ?? 0);
+
+      /* 已退役的套餐不该再改售卖方式：它已经下架，改它只会让人以为还在卖。 */
+      if (row.status === "deprecated") {
+        throw new BadRequestException(
+          `${row.plan_code} 已退役，不能再改订阅方式`,
+        );
+      }
+      if (row.is_public === isPublic) {
+        /* 幂等：已经是这个状态就原样回，不写审计（没有发生变更）。 */
+        return;
+      }
+
+      await client.query(
+        `UPDATE product.plans
+            SET is_public = $2, updated_by = $3, updated_at = now()
+          WHERE id = $1`,
+        [planId, isPublic, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.plan.visibility",
+        resourceType: "product_plan",
+        resourceId: row.plan_code,
+        before: { isPublic: row.is_public },
+        after: { isPublic },
+      });
+    });
+    return { planCode, isPublic, subscriptionCount };
+  }
+
   @Post("plans/:planId/deprecate")
   @RequireStepUp()
   async deprecatePlan(
@@ -3473,6 +3560,15 @@ export interface PlanMatrixPlan {
   planName: string;
   planStatus: string;
   tier: Tier;
+  /**
+   * 订阅方式：`true` = 公开订阅（客户在 console 自助下单），
+   * `false` = 邀请订阅（不进客户的套餐阶梯，只有持邀请券的人看得见、买得到）。
+   *
+   * 这一列此前**只有 INSERT 时硬编码的 `true`，没有任何写路径**——要把一个套餐
+   * 设成邀请制，只能写迁移。运营侧看不见也改不了，而发券那一侧（卡券 `invite`）
+   * 已经做完了，整条链缺的就是这个开关。
+   */
+  isPublic: boolean;
   /** The live version (plans.current_version_id, published); null = never published. */
   currentVersion:
     | (PlanMatrixVersionRef & { prices: PlanVersionPrice[] })
@@ -3507,6 +3603,7 @@ interface PlanMatrixRow {
   plan_code: string | null;
   plan_name: string | null;
   plan_status: string | null;
+  is_public: boolean | null;
   tier: string | null;
   current_version_id: string | null;
   current_version_no: number | null;
@@ -3526,13 +3623,15 @@ interface PlanMatrixRow {
  */
 const PLAN_MATRIX_SQL = `
   SELECT pr.product_code, pr.product_name, pr.status AS product_status,
-         plan.plan_id, plan.plan_code, plan.plan_name, plan.plan_status, plan.tier,
+         plan.plan_id, plan.plan_code, plan.plan_name, plan.plan_status,
+         plan.is_public, plan.tier,
          plan.current_version_id, plan.current_version_no, plan.current_prices,
          plan.draft_version_id, plan.draft_version_no, plan.version_count,
          plan.subscription_count
     FROM product.products pr
     LEFT JOIN LATERAL (
       SELECT p.id AS plan_id, p.plan_code, p.plan_name, p.status AS plan_status,
+             p.is_public,
              axis.tier,
              cv.id AS current_version_id, cv.version_no AS current_version_no,
              COALESCE((
@@ -3598,6 +3697,8 @@ function groupPlanMatrix(rows: PlanMatrixRow[]): PlanMatrixProduct[] {
       planCode: row.plan_code ?? "",
       planName: row.plan_name ?? "",
       planStatus: row.plan_status ?? "active",
+      /* 读不到按公开算：漏判成「邀请制」会把一个在售档从客户阶梯里摘掉。 */
+      isPublic: row.is_public !== false,
       tier: row.tier as Tier,
       currentVersion:
         row.current_version_id && row.current_version_no !== null

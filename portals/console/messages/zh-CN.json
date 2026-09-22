@@ -2436,7 +2436,9 @@
     "noPlans": "该产品暂无公开套餐。",
     "badges": {
       "current": "当前",
-      "recommended": "推荐"
+      "recommended": "推荐",
+      "inviteOnly": "邀请专享",
+      "inviteOnlyHint": "这一档凭邀请开放，下单时会用掉你的邀请。"
     },
     "cycle": {
       "day": "天",

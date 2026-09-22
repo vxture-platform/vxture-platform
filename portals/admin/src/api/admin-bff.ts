@@ -445,6 +445,11 @@ export interface PlanMatrixPlan {
   versionCount: number;
   /** 还钉在这个套餐**任一版本**上的活订阅数；一级列表的「在订阅」列用它。 */
   subscriptionCount: number;
+  /**
+   * 订阅方式：`true` = 公开订阅（客户自助下单），`false` = 邀请订阅
+   * （不进客户的套餐阶梯，只有持邀请券的人看得见、买得到）。
+   */
+  isPublic: boolean;
 }
 
 /** One row of the publishing desk: a sellable product and its tier ladder. */
@@ -564,6 +569,28 @@ export async function deprecatePlan(
     "POST",
     undefined,
     "Failed to deprecate plan",
+  );
+}
+
+/**
+ * 订阅方式：公开订阅 ⇄ 邀请订阅（`plans.is_public`）。
+ *
+ * 回值带活订阅数，供确认后的提示把影响面说清楚——已有订阅与续订都不受影响，
+ * 变的只是「新客户能不能自助买到」。
+ */
+export async function setPlanVisibility(
+  planId: string,
+  isPublic: boolean,
+): Promise<{ planCode: string; isPublic: boolean; subscriptionCount: number }> {
+  return mutateJson<{
+    planCode: string;
+    isPublic: boolean;
+    subscriptionCount: number;
+  }>(
+    `/api/products/plans/${encodeURIComponent(planId)}/visibility`,
+    "PATCH",
+    { isPublic },
+    "Failed to change plan visibility",
   );
 }
 

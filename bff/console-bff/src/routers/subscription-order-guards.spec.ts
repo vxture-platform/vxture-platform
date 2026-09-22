@@ -35,17 +35,37 @@ const PRICE_ROW = {
 /**
  * 按序回答：第一次 = lookupPlanPrice，第二次 = 归属+成熟度。
  * 后续调用一律抛——两道门拦住时不该还有第三次查库。
+ *
+ * **价格那一次按真库语义作答，不是无条件回一行。** 原来它写死
+ * `mockResolvedValueOnce({ rows: [PRICE_ROW] })`，于是照不出这个缺陷：
+ * `lookupPlanPrice` 的 SQL 里也带着 `plan.is_public = true`，而它排在邀请解锁
+ * **之前**——真库里非公开套餐在这一步就返回 0 行，NOT_PURCHASABLE 400 抛出，
+ * 下面那三条「非公开 + 有邀请」的用例要证的路径整条走不到，却照样全绿。
+ *
+ * 桩少模拟一个上游过滤，下游的门就等于没被测过。所以这里读真正发出的 SQL：
+ * 带 is_public 过滤 + 这张套餐非公开 → 回 0 行，跟 Postgres 一样。
  */
 function poolOf(
   soldRow: Record<string, unknown> | undefined,
   /* 非公开套餐会多打两次库：邀请消耗（UPDATE）与台账（INSERT）。`invite` 给的是
-     那条 UPDATE 的 returning——空数组 = 没有可用邀请。不传 = 不该走到那一步。 */
-  opts?: { invite?: unknown[] },
+     那条 UPDATE 的 returning——空数组 = 没有可用邀请。不传 = 不该走到那一步。
+     `owns` 是续订例外那一问（本租户手上有没有同一套餐的订阅）的答案；给了它，
+     那一问就排在邀请消耗之前。 */
+  opts?: { invite?: unknown[]; owns?: boolean },
 ) {
+  const planIsPublic = soldRow?.plan_is_public !== false;
   const query = vi
     .fn()
-    .mockResolvedValueOnce({ rows: [PRICE_ROW] })
+    .mockImplementationOnce(async (sql: string) => ({
+      rows:
+        /plan\.is_public\s*=\s*true/.test(sql) && !planIsPublic
+          ? []
+          : [PRICE_ROW],
+    }))
     .mockResolvedValueOnce({ rows: soldRow ? [soldRow] : [] });
+  if (opts?.owns !== undefined) {
+    query.mockResolvedValueOnce({ rows: opts.owns ? [{ one: 1 }] : [] });
+  }
   if (opts?.invite !== undefined) {
     query.mockResolvedValueOnce({ rows: opts.invite });
     query.mockResolvedValueOnce({ rows: [] });
@@ -54,6 +74,16 @@ function poolOf(
     throw new Error("不该走到这里：门未拦住");
   });
   return { pool: { query } as unknown as Pool, query };
+}
+
+/** 下单路径上所有发出的 SQL 里，提到 is_public 的有几条。 */
+function sqlsMentioning(
+  query: { mock: { calls: unknown[][] } },
+  needle: string,
+) {
+  return query.mock.calls.filter(
+    (call) => typeof call[0] === "string" && call[0].includes(needle),
+  ).length;
 }
 
 /** 八个注入里只有 pool 需要真货：两道门都排在任何 service 调用之前。 */
@@ -252,5 +282,66 @@ describe("POST orders · 归属与成熟度两道门", () => {
 
     expect(error).toBeInstanceOf(ConflictException);
     expect(codeOf(error)).toBe("PLAN_NOT_PUBLIC");
+  });
+
+  /*
+   * 续订例外（2026-09-22）。
+   *
+   * 邀请挡的是进门。少了这条例外，把一个在售档改成邀请制会连带掐断**老客户的
+   * 续订**（409，客户什么都没做错），而且每续一次要烧一张券。
+   *
+   * 两面都写，反面是重点：光看 `intent === "renew"` 就放行的实现，会让任何人
+   * 把 intent 写成 renew 就绕过邀请——它在正面那条用例下照样绿。
+   */
+  it("非公开 + 续订自己手上这一档：放行，且不动邀请券", async () => {
+    const { pool, query } = poolOf(
+      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { owns: true },
+    );
+    const error = await routerWith(pool)
+      .createOrder(req(), { ...BODY, intent: "renew" })
+      .catch((e: unknown) => e);
+
+    expectPassedAllGates(error);
+    expect(touched(query, "promotion.vouchers")).toBe(false);
+    expect(touched(query, "voucher_redemptions")).toBe(false);
+  });
+
+  it("非公开 + 声称续订但手上没有这一档：仍要邀请", async () => {
+    const { pool, query } = poolOf(
+      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { owns: false, invite: [] },
+    );
+    const error = await routerWith(pool)
+      .createOrder(req(), { ...BODY, intent: "renew" })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(codeOf(error)).toBe("PLAN_NOT_PUBLIC");
+    expect(touched(query, "promotion.vouchers")).toBe(true);
+  });
+
+  /*
+   * 判据只许长在一处（2026-09-22）。
+   *
+   * 上面那几条用例证的是「门的行为对不对」，这一条证的是**门只有一道**。两者不能
+   * 互相替代：可见性判据一旦同时长在查价 SQL 和闸门 SQL 上，前者排在前面，邀请解锁
+   * 就成了永远走不到的死分支——而每一条只看返回码的用例都照样绿。
+   *
+   * 所以直接查性质：下单路径上发出的 SQL 里，提到 is_public 的必须恰好一条。
+   */
+  it("下单路径上 is_public 只出现在闸门那一条 SQL 里", async () => {
+    const { pool, query } = poolOf(
+      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { invite: [{ id: "v-1", batch_id: "b-1" }] },
+    );
+    await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch(() => undefined);
+
+    /* 先钉住**第一条**（查价）：判据一旦爬回它身上，调用在那里就中止了，
+       「全路径恰好一条」反而照样成立——只数总数的写法对这个缺陷是瞎的。 */
+    expect(String(query.mock.calls[0]?.[0])).not.toContain("is_public");
+    expect(sqlsMentioning(query, "is_public")).toBe(1);
   });
 });
