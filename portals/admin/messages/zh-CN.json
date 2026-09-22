@@ -2034,6 +2034,12 @@
     "empty": {
       "noPlansTitle": "还没有套餐",
       "noPlansDescription": "这个产品目前一档都没挂，客户订不了。每个商业档位只能挂一条在售套餐；建完会自动开一份草稿，填好价格与配额再发布。"
+    },
+    "publishOverride": {
+      "title": "上架检查有未满足项",
+      "reasonLabel": "跳过理由",
+      "reasonHint": "写清楚为什么现在就要发",
+      "auditHint": "填完再点一次发布即可。理由会进运营审计，连同跳过了哪几项一起记下。"
     }
   },
   "skillsPage": {

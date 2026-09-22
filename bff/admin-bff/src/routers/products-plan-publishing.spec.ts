@@ -530,6 +530,104 @@ describe("publish — tier occupancy guard", () => {
     );
   });
 
+  /*
+   * 带理由跳过（owner 2026-09-22）。
+   *
+   * 装上门的当天就坐实了它是**墙不是门**：`acceptance` 是自动检查（五段端到端），
+   * 生产上四个产品全部未满足且人工勾不掉——没有任何产品能发布任何套餐。
+   * 上线门（gate='launch'）一开始就带 override，我加 publish 门时没照抄这一半。
+   *
+   * 条件不删也不降级：删了以后它什么也证明不了。保留门，另开一条写明理由的路。
+   */
+  function pendingResponder() {
+    return (sql: string) => {
+      if (
+        sql.includes("product.plan_versions pv") &&
+        sql.includes("for update of pv")
+      )
+        return [
+          {
+            plan_id: "plan-a",
+            status: "draft",
+            plan_code: "karda-pro",
+            version_no: 2,
+          },
+        ];
+      if (sql.includes("cv2.status = 'published'")) return [];
+      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
+        return [{ product_id: "p-karda", tier: "pro" }];
+      if (sql.includes("launch_checklist_items"))
+        return [{ item_code: "acceptance", item_name: "端到端验收" }];
+      return [];
+    };
+  }
+
+  it("有未满足项 + 带理由 → 放行，并把跳过的项与理由写进审计", async () => {
+    const tx = makeTxClient(pendingResponder());
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID, {
+      override: { reason: "联调环境用量上报未接，先发内测档" },
+    });
+
+    expect(tx.outcome().committed).toBe(true);
+    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+      true,
+    );
+    const at = tx.calls.findIndex((c) =>
+      c.includes("insert into support.audit_logs"),
+    );
+    const after = insertParam(tx.calls[at]!, tx.params[at]!, "after");
+    expect(String(after)).toContain("acceptance");
+    expect(String(after)).toContain("联调环境用量上报未接");
+  });
+
+  it("理由是空白 → 仍然拒（别让一个空格当成理由）", async () => {
+    const tx = makeTxClient(pendingResponder());
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    const err = await router
+      .publishPlanVersion(makeReq(MANAGE), VERSION_ID, {
+        override: { reason: "   " },
+      })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+      false,
+    );
+  });
+
+  it("没有未满足项时：审计里不该出现跳过字段（别给正常发布留个假痕迹）", async () => {
+    const tx = makeTxClient((sql) => {
+      if (
+        sql.includes("product.plan_versions pv") &&
+        sql.includes("for update of pv")
+      )
+        return [
+          {
+            plan_id: "plan-a",
+            status: "draft",
+            plan_code: "karda-pro",
+            version_no: 2,
+          },
+        ];
+      if (sql.includes("cv2.status = 'published'")) return [];
+      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
+        return [{ product_id: "p-karda", tier: "pro" }];
+      return [];
+    });
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID, {
+      override: { reason: "不该被用上的理由" },
+    });
+
+    const at = tx.calls.findIndex((c) =>
+      c.includes("insert into support.audit_logs"),
+    );
+    expect(
+      String(insertParam(tx.calls[at]!, tx.params[at]!, "after")),
+    ).not.toContain("overrideReason");
+  });
+
   it("publish 门只看 gate='publish' 的项（别把上线门那一组也算进来）", async () => {
     const tx = makeTxClient((sql) => {
       if (

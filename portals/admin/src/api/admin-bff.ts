@@ -101,6 +101,14 @@ export class AdminBffError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    /**
+     * 服务端的语义码（错误体里的 `code`）。
+     *
+     * 此前只留 message 与 status，**码被丢掉了**——于是调用点想按「是哪一类错」
+     * 分支时只能去匹配中文串。2026-09-22 发布门要按 `PUBLISH_CHECKLIST_PENDING`
+     * 决定「要不要提示带理由跳过」，才发现这一层拿不到它。
+     */
+    readonly code?: string,
   ) {
     super(message);
     this.name = "AdminBffError";
@@ -150,15 +158,25 @@ async function readJsonStrict<T>(path: string): Promise<T> {
 }
 
 async function responseErrorMessage(response: Response, fallback: string) {
+  return (await responseError(response, fallback)).message;
+}
+
+/** 错误体里的 message 与语义码；解析不出来就只回 fallback。 */
+async function responseError(
+  response: Response,
+  fallback: string,
+): Promise<{ message: string; code?: string }> {
   try {
     const body = (await response.clone().json()) as {
       message?: string | string[];
+      code?: string;
     };
-    return Array.isArray(body.message)
+    const message = Array.isArray(body.message)
       ? (body.message[0] ?? fallback)
       : (body.message ?? fallback);
+    return body.code ? { message, code: body.code } : { message };
   } catch {
-    return fallback;
+    return { message: fallback };
   }
 }
 
@@ -183,10 +201,8 @@ async function mutateJson<T>(
   }
 
   if (!response.ok) {
-    throw new AdminBffError(
-      await responseErrorMessage(response, fallbackMessage),
-      response.status,
-    );
+    const err = await responseError(response, fallbackMessage);
+    throw new AdminBffError(err.message, response.status, err.code);
   }
 
   return (await response.json()) as T;
@@ -424,15 +440,29 @@ export async function updateDraftPlanVersion(
   );
 }
 
-// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+/**
+ * 发布一个草稿版本。step-up gated（`@RequireStepUp`）——调用点包 runWithStepUp。
+ *
+ * `overrideReason`：上架检查（`gate='publish'`）有未满足项时，带理由跳过。
+ * 不带就会被 409 `PUBLISH_CHECKLIST_PENDING` 拦下并点名缺哪几项。
+ * 理由进运营审计，与上线门那条同口径——问责台账归 audit_logs。
+ */
 export async function publishPlanVersion(
   versionId: string,
+  overrideReason?: string,
 ): Promise<{ published: true; versionId: string }> {
   return mutateJson<{ published: true; versionId: string }>(
     `/api/products/plan-versions/${encodeURIComponent(versionId)}/publish`,
     "POST",
-    undefined,
+    overrideReason ? { override: { reason: overrideReason } } : undefined,
     "Failed to publish version",
+  );
+}
+
+/** 上架检查未满足——调用点据此提示「带理由跳过」，而不是去匹配中文串。 */
+export function publishChecklistPending(error: unknown): boolean {
+  return (
+    error instanceof AdminBffError && error.code === "PUBLISH_CHECKLIST_PENDING"
   );
 }
 
