@@ -55,6 +55,14 @@ import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 /** L0 平台级共享指标（只读）。 */
 interface PlatformMetric {
   metricKey: string;
+  /**
+   * 中文名与说明——住在 `product.metric_catalog`（key → 名/说明），是**键的属性**。
+   * 同一个 `member.max` 在所有产品下是同一个名字，所以改它会影响所有用到这个键的
+   * 产品（owner 2026-09-22：更高维度的统一，产品要复用）。
+   * 空 = 没命名过，界面回落显示 metricKey 本身。
+   */
+  displayName: string;
+  metricDescription: string;
   kind: string | null;
   metricUnit: string | null;
   state: string | null;
@@ -62,6 +70,14 @@ interface PlatformMetric {
 
 export interface ProductMetric {
   metricKey: string;
+  /**
+   * 中文名与说明——住在 `product.metric_catalog`（key → 名/说明），是**键的属性**。
+   * 同一个 `member.max` 在所有产品下是同一个名字，所以改它会影响所有用到这个键的
+   * 产品（owner 2026-09-22：更高维度的统一，产品要复用）。
+   * 空 = 没命名过，界面回落显示 metricKey 本身。
+   */
+  displayName: string;
+  metricDescription: string;
   mergeStrategy: string;
   consumeMode: string | null;
   metricUnit: string | null;
@@ -145,6 +161,13 @@ export function ProductMetricsSection({
   canManage,
 }: ProductMetricsSectionProps) {
   const tShared = useTranslations();
+  /*
+   * 命名这一组走词条（i18n 棘轮：硬编码中文不许变多）。本文件其余部分仍是历史
+   * 硬编码，逐页抽取时一并处理。
+   *
+   * 续行要以 `*` 起头——不然 i18n 守卫把它当代码，一行注释就把棘轮顶破。
+   */
+  const tName = useTranslations("metricCatalog");
   const { toast } = useToast();
   const tableLabels = useTableLabels();
   const [rows, setRows] = useState<ProductMetric[]>([]);
@@ -255,6 +278,56 @@ export function ProductMetricsSection({
     }
   }
 
+  /**
+   * 命名一个计量键。路径上**没有产品 id**——命名是键的属性，所以改它会影响所有用到
+   * 这个键的产品。对话框上要写清楚，别让人以为只改了本产品。
+   */
+  const [naming, setNaming] = useState<{
+    metricKey: string;
+    displayName: string;
+    description: string;
+  } | null>(null);
+
+  function openNaming(r: {
+    metricKey: string;
+    displayName: string;
+    metricDescription: string;
+  }) {
+    setNaming({
+      metricKey: r.metricKey,
+      displayName: r.displayName,
+      description: r.metricDescription,
+    });
+  }
+
+  async function submitNaming() {
+    if (!naming) return;
+    setSubmitting(true);
+    try {
+      await api.put(
+        `/api/products/metric-catalog/${encodeURIComponent(naming.metricKey)}`,
+        {
+          displayName: naming.displayName,
+          description: naming.description,
+        },
+      );
+      toast({
+        tone: "success",
+        title: tName("done", { key: naming.metricKey }),
+      });
+      setNaming(null);
+      await reload();
+    } catch (err) {
+      toast({
+        tone: "danger",
+        title: tName("failed"),
+        description: describeError(err),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function remove(metricKey: string) {
     setSubmitting(true);
     try {
@@ -339,15 +412,31 @@ export function ProductMetricsSection({
                   id: "metricKey",
                   header: "指标键",
                   sortable: true,
-                  cell: (r) => (
-                    <TableTitleCell
-                      icon="gauge"
-                      title={<span className="font-mono">{r.metricKey}</span>}
-                      description={
-                        r.metricUnit ? `单位 ${r.metricUnit}` : "无单位"
-                      }
-                    />
-                  ),
+                  /* 中文名在标题位、代码退到副标题。此前两处都显示 metricKey，
+                     于是「计量名称 | 计量代码」两列是同一个字符串——正是 owner
+                     2026-09-21 报的那个病根。没命名过时仍显示代码，不编一个。 */
+                  cell: (r) => {
+                    /* 单位那句只写一次：i18n 棘轮数的是硬编码中文串的**条数**，
+                       同一句话写两遍就多一条。 */
+                    const unit = r.metricUnit
+                      ? `单位 ${r.metricUnit}`
+                      : "无单位";
+                    return (
+                      <TableTitleCell
+                        icon="gauge"
+                        title={
+                          r.displayName ? (
+                            r.displayName
+                          ) : (
+                            <span className="font-mono">{r.metricKey}</span>
+                          )
+                        }
+                        description={
+                          r.displayName ? `${r.metricKey} · ${unit}` : unit
+                        }
+                      />
+                    );
+                  },
                 },
                 {
                   id: "strategy",
@@ -377,6 +466,12 @@ export function ProductMetricsSection({
                   disabled={!canManage || submitting}
                   items={[
                     {
+                      id: "name",
+                      label: tName("action"),
+                      icon: "translate",
+                      onSelect: () => openNaming(r),
+                    },
+                    {
                       id: "edit",
                       label: "编辑",
                       icon: "edit",
@@ -403,6 +498,60 @@ export function ProductMetricsSection({
           )}
         </>
       )}
+
+      {/*
+       * 命名对话框。**路径上没有产品 id** —— 命名是键的属性，改它影响所有用到这个
+       * 键的产品，所以说明里必须写明白，别让人以为只改了本产品。
+       */}
+      <DialogForm
+        size="sm"
+        open={naming !== null}
+        onOpenChange={(open) => {
+          if (!open) setNaming(null);
+        }}
+        title={tName("dialogTitle", { key: naming?.metricKey ?? "" })}
+        description={tName("dialogDescription")}
+        submitLabel={tName("submit")}
+        submitting={submitting}
+        cancelLabel={tShared("actions.cancel")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submitNaming();
+        }}
+      >
+        <Field>
+          <FieldLabel htmlFor="metric-display-name">
+            {tName("nameLabel")}
+          </FieldLabel>
+          <Input
+            id="metric-display-name"
+            value={naming?.displayName ?? ""}
+            disabled={submitting}
+            maxLength={128}
+            onChange={(event) =>
+              setNaming((cur) =>
+                cur ? { ...cur, displayName: event.target.value } : cur,
+              )
+            }
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="metric-display-desc">
+            {tName("descLabel")}
+          </FieldLabel>
+          <Input
+            id="metric-display-desc"
+            value={naming?.description ?? ""}
+            disabled={submitting}
+            maxLength={256}
+            onChange={(event) =>
+              setNaming((cur) =>
+                cur ? { ...cur, description: event.target.value } : cur,
+              )
+            }
+          />
+        </Field>
+      </DialogForm>
 
       <DialogForm
         size="lg"

@@ -52,8 +52,13 @@ interface PoolOpts {
 function makePool({ platformRows = [], inUseRows = [] }: PoolOpts = {}) {
   /** 记下真的执行过哪些写——「拦住了」等于写没发生，只看状态码会漏掉「报了也写了」。 */
   const writes: string[] = [];
+  /** 发出的全部 SQL——命名那组要断言「写的是 metric_catalog、没碰 product_metrics」。 */
+  const sqls: string[] = [];
   const pool = {
+    /* 返回形状是联合类型，不直接结构兼容 Pool——显式断言。
+       vitest 不做类型检查，这个错只有 type-check:all 抓得到。 */
     query: vi.fn(async (sql: string) => {
+      sqls.push(sql);
       if (/FROM product\.products WHERE id/.test(sql)) {
         return { rows: [{ "?column?": 1 }], rowCount: 1 };
       }
@@ -62,6 +67,27 @@ function makePool({ platformRows = [], inUseRows = [] }: PoolOpts = {}) {
       }
       if (/FROM product\.plan_components/.test(sql)) {
         return { rows: inUseRows, rowCount: inUseRows.length };
+      }
+      /* 中文名不在 product_metrics 上，住在 metric_catalog（键的属性，两张计量表
+         共用一处命名）。upsert 之后补读一次，读与写两处形状才一致。 */
+      if (/FROM product\.metric_catalog/.test(sql)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (/INSERT INTO product\.metric_catalog/.test(sql)) {
+        writes.push("name-insert");
+        return {
+          rows: [
+            {
+              display_name: "成员数上限",
+              description: "一个工作空间最多几个人",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (/DELETE FROM product\.metric_catalog/.test(sql)) {
+        writes.push("name-delete");
+        return { rows: [], rowCount: 1 };
       }
       if (/INSERT INTO product\.product_metrics/.test(sql)) {
         writes.push("insert");
@@ -85,11 +111,11 @@ function makePool({ platformRows = [], inUseRows = [] }: PoolOpts = {}) {
       throw new Error(`unexpected sql: ${sql}`);
     }),
   };
-  return { pool: pool as unknown as Pool, writes };
+  return { pool: pool as unknown as Pool, writes, sqls };
 }
 
 function makeRouter(opts: PoolOpts = {}) {
-  const { pool, writes } = makePool(opts);
+  const { pool, writes, sqls } = makePool(opts);
   const router = new ProductCatalogRouter(
     pool,
     {
@@ -102,7 +128,7 @@ function makeRouter(opts: PoolOpts = {}) {
       getToken: vi.fn(async () => "obo"),
     } as unknown as OperatorExchangeService,
   );
-  return { router, writes };
+  return { router, writes, sqls };
 }
 
 async function failure(
@@ -269,5 +295,60 @@ describe("GET :idOrCode 双接受", () => {
   it("查不到就回 null，不抛", async () => {
     const { router } = makeProbe();
     await expect(router.get(makeReq(), "nope")).resolves.toBeNull();
+  });
+});
+
+/**
+ * 计量项命名字典（owner 2026-09-22：「更高维度的统一，产品要复用」）。
+ *
+ * 命名是**键的属性**，不是「(产品, 键)」的属性——此前 display_name 挂在
+ * product_metrics 上，`member.max` 每接一个产品就会被再命名一遍。所以这条路由的
+ * 路径上**没有产品 id**，写的也不是那张表。
+ */
+describe("PUT metric-catalog/:metricKey —— 命名住在键上", () => {
+  it("落到 metric_catalog，不碰 product_metrics", async () => {
+    const { router, sqls } = makeRouter({});
+    const res = await router.putMetricName(makeReq(), "member.max", {
+      displayName: "成员数上限",
+      description: "一个工作空间最多几个人",
+    });
+
+    expect(res).toEqual({
+      metricKey: "member.max",
+      displayName: "成员数上限",
+      description: "一个工作空间最多几个人",
+    });
+    expect(
+      sqls.some((s) => /INSERT INTO product\.metric_catalog/.test(s)),
+    ).toBe(true);
+    /* 反面：不许再写回 product_metrics——那正是要搬走的落点。 */
+    expect(sqls.some((s) => /product_metrics/.test(s))).toBe(false);
+  });
+
+  it("空名字 = 撤销命名：整行删掉，不留空串", async () => {
+    const { router, sqls } = makeRouter({});
+    const res = await router.putMetricName(makeReq(), "member.max", {
+      displayName: "   ",
+    });
+
+    expect(res.displayName).toBe("");
+    expect(
+      sqls.some((s) => /DELETE FROM product\.metric_catalog/.test(s)),
+    ).toBe(true);
+    /* 「没命名过」与「命名成空」不该是两个态。 */
+    expect(
+      sqls.some((s) => /INSERT INTO product\.metric_catalog/.test(s)),
+    ).toBe(false);
+  });
+
+  it("名称超长 → 400，且一次都不写库", async () => {
+    const { router, sqls } = makeRouter({});
+    const { status } = await failure(
+      router.putMetricName(makeReq(), "member.max", {
+        displayName: "名".repeat(129),
+      }),
+    );
+    expect(status).toBe(400);
+    expect(sqls.some((s) => /metric_catalog/.test(s))).toBe(false);
   });
 });

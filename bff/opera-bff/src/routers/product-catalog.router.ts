@@ -118,6 +118,14 @@ type ProductOrigin = (typeof ORIGINS)[number];
  */
 export interface PlatformMetricRecord {
   metricKey: string;
+  /**
+   * 中文名与一句话说明——住在 `product.metric_catalog`（key → 名/说明），是**键的
+   * 属性**而不是「(产品, 键)」的属性：同一个 `member.max` 不该每接一个产品就被再
+   * 命名一遍（owner 2026-09-22：更高维度的统一，产品要复用）。
+   * 没命名过时为空串，界面回落显示 metricKey 本身——平台不替产品命名。
+   */
+  displayName: string;
+  metricDescription: string;
   kind: string | null;
   metricUnit: string | null;
   state: string | null;
@@ -545,13 +553,22 @@ export class ProductCatalogRouter {
       kind: string | null;
       metric_unit: string | null;
       status: string | null;
+      display_name: string | null;
+      description: string | null;
     }>(
-      `SELECT metric_key, kind, metric_unit, status
-         FROM product.platform_metrics
-        ORDER BY metric_key`,
+      /* 中文名住在 `metric_catalog`（key → 名/说明）——它是**键的属性**，两张计量表
+         共用一处命名（owner 2026-09-22：更高维度的统一，产品要复用）。
+         LEFT JOIN：没命名过的回落显示 metric_key 本身，不阻塞。 */
+      `SELECT m.metric_key, m.kind, m.metric_unit, m.status,
+              mc.display_name, mc.description
+         FROM product.platform_metrics m
+         LEFT JOIN product.metric_catalog mc ON mc.metric_key = m.metric_key
+        ORDER BY m.metric_key`,
     );
     return result.rows.map((r) => ({
       metricKey: r.metric_key,
+      displayName: r.display_name ?? "",
+      metricDescription: r.description ?? "",
       kind: r.kind,
       metricUnit: r.metric_unit,
       state: r.status,
@@ -1470,15 +1487,24 @@ export class ProductCatalogRouter {
       consume_mode: string | null;
       metric_unit: string | null;
       reset_period: string;
+      display_name: string | null;
+      description: string | null;
     }>(
-      `SELECT metric_key, merge_strategy, consume_mode, metric_unit, reset_period
-         FROM product.product_metrics
-        WHERE product_id = $1
-        ORDER BY metric_key`,
+      /* 中文名住在 `metric_catalog`（key → 名/说明）——它是**键的属性**，两张计量表
+         共用一处命名（owner 2026-09-22：更高维度的统一，产品要复用）。
+         LEFT JOIN：没命名过的回落显示 metric_key 本身，不阻塞。 */
+      `SELECT m.metric_key, m.merge_strategy, m.consume_mode, m.metric_unit,
+              m.reset_period, mc.display_name, mc.description
+         FROM product.product_metrics m
+         LEFT JOIN product.metric_catalog mc ON mc.metric_key = m.metric_key
+        WHERE m.product_id = $1
+        ORDER BY m.metric_key`,
       [id],
     );
     return result.rows.map((r) => ({
       metricKey: r.metric_key,
+      displayName: r.display_name ?? "",
+      metricDescription: r.description ?? "",
       mergeStrategy: r.merge_strategy,
       consumeMode: r.consume_mode,
       metricUnit: r.metric_unit,
@@ -1496,6 +1522,81 @@ export class ProductCatalogRouter {
    * 在这里再抄一遍就成了两份会各自漂移的规则。但**约束违例要翻译成字段级 400**:
    * 冒上来的 23514 只会显示成「保存失败」。
    */
+  /**
+   * 给一个计量键定中文名与说明（owner 2026-09-22）。
+   *
+   * ── 写的是「键」，不是「产品的键」 ──
+   * 路径上没有产品 id：命名是键的属性，`member.max` 在所有产品下是同一个名字。
+   * 这正是要统一的那件事——此前 display_name 挂在 product_metrics 上，每接一个产品
+   * 就会被再命名一遍。
+   *
+   * 所以**改它会影响所有用到这个键的产品**，界面要说清楚，别让人以为只改了本产品。
+   *
+   * 空名字 = 删掉命名（回落显示 metric_key 本身）。不给默认值、不自动生成——平台替
+   * 产品命名必然错（`varda.enabled` 该叫「Varda 开关」还是「智能体启用」，只有产品
+   * 自己知道）。
+   */
+  @Put("metric-catalog/:metricKey")
+  async putMetricName(
+    @Req() req: Request & RequestContext,
+    @Param("metricKey") metricKey: string,
+    @Body() body: { displayName?: unknown; description?: unknown },
+  ): Promise<{ metricKey: string; displayName: string; description: string }> {
+    assertCanManage(req);
+    const key = (metricKey ?? "").trim();
+    if (!key || key.length > 64) {
+      throw invalidRequest(
+        "CATALOG_METRIC_KEY_INVALID",
+        "metricKey 非法",
+        "metricKey",
+      );
+    }
+    const name =
+      typeof body?.displayName === "string" ? body.displayName.trim() : "";
+    const desc =
+      typeof body?.description === "string" ? body.description.trim() : "";
+    if (name.length > 128 || desc.length > 256) {
+      throw invalidRequest(
+        "CATALOG_METRIC_NAME_TOO_LONG",
+        "名称最长 128 字、说明最长 256 字",
+        name.length > 128 ? "displayName" : "description",
+      );
+    }
+    const operatorId = req.operator?.id ?? null;
+
+    if (!name) {
+      /* 空名字 = 撤销命名。整行删掉而不是留个空串——「没命名过」与「命名成空」
+         不该是两个态。 */
+      await this.pool.query(
+        `DELETE FROM product.metric_catalog WHERE metric_key = $1`,
+        [key],
+      );
+      return { metricKey: key, displayName: "", description: "" };
+    }
+
+    const res = await this.pool.query<{
+      display_name: string;
+      description: string | null;
+    }>(
+      `INSERT INTO product.metric_catalog
+         (metric_key, display_name, description, created_by, updated_by)
+       VALUES ($1, $2, $3, $4, $4)
+       ON CONFLICT (metric_key) DO UPDATE
+         SET display_name = EXCLUDED.display_name,
+             description  = EXCLUDED.description,
+             updated_by   = EXCLUDED.updated_by,
+             updated_at   = now()
+       RETURNING display_name, description`,
+      [key, name, desc || null, operatorId],
+    );
+    const row = res.rows[0]!;
+    return {
+      metricKey: key,
+      displayName: row.display_name,
+      description: row.description ?? "",
+    };
+  }
+
   @Put(":id/metrics/:metricKey")
   async putMetric(
     @Req() req: Request & RequestContext,
@@ -1615,8 +1716,20 @@ export class ProductCatalogRouter {
       [id, key, strategy, mode, unit, reset],
     );
     const row = result.rows[0]!;
+    /* 命名不在本表里，upsert 之后补读一次——读与写两处形状必须一致，否则调用方
+       会拿到一个「有时有名字、有时没有」的记录。 */
+    const named = await this.pool.query<{
+      display_name: string | null;
+      description: string | null;
+    }>(
+      `SELECT display_name, description FROM product.metric_catalog
+        WHERE metric_key = $1`,
+      [row.metric_key],
+    );
     return {
       metricKey: row.metric_key,
+      displayName: named.rows[0]?.display_name ?? "",
+      metricDescription: named.rows[0]?.description ?? "",
       mergeStrategy: row.merge_strategy,
       consumeMode: row.consume_mode,
       metricUnit: row.metric_unit,
@@ -1938,6 +2051,14 @@ export interface ProductWebhookRecord {
 export interface ProductMetricRecord {
   /** 跨仓契约键：产品按它上报用量，平台按它建配额池。 */
   metricKey: string;
+  /**
+   * 中文名与一句话说明——住在 `product.metric_catalog`（key → 名/说明），是**键的
+   * 属性**而不是「(产品, 键)」的属性：同一个 `member.max` 不该每接一个产品就被再
+   * 命名一遍（owner 2026-09-22：更高维度的统一，产品要复用）。
+   * 没命名过时为空串，界面回落显示 metricKey 本身——平台不替产品命名。
+   */
+  displayName: string;
+  metricDescription: string;
   /** max / union / pool / tiered */
   mergeStrategy: string;
   /** 仅 pool 型非空：divisible / atomic */
