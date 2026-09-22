@@ -1915,7 +1915,16 @@
       "softDeleteConsequence": "The plan disappears from every list. Allowed only with no live subscriptions, no subscription history and no order references: a plan that has sold can only be retired.",
       "softDeleteDone": "Plan {name} soft-deleted.",
       "softDeleteTarget": "plan {name}",
-      "softDeleteVerb": "Soft-delete"
+      "softDeleteVerb": "Soft-delete",
+      "makeInviteOnly": "Switch to invitation only",
+      "makeInviteOnlyVerb": "Switch to invitation only",
+      "makeInviteOnlyConsequence": "This tier will no longer appear in customers' plan lists; only holders of an invitation can order it. The {n} existing subscriptions are unaffected and can still renew.",
+      "makeInviteOnlyDone": "“{name}” is now invitation only",
+      "makePublic": "Switch to public",
+      "makePublicVerb": "Switch to public",
+      "makePublicConsequence": "Every customer will see this tier in their plan list and can order it themselves.",
+      "makePublicDone": "“{name}” is now public",
+      "visibilityTarget": "plan “{name}”"
     },
     "detail": {
       "backToList": "All products",
@@ -1930,7 +1939,10 @@
       "searchPlaceholder": "Search plan name or code",
       "tierDescription": "Which tiers this product sells, which version each is on, and who subscribes. A tier may carry more than one plan — the database allows it, and cards flag the ones that do.",
       "versionsOf": "Version history of {tier} · {name}",
-      "view": "View version"
+      "view": "View version",
+      "visibility": "Subscription access",
+      "visibilityPublic": "Public",
+      "visibilityInvite": "By invitation"
     },
     "editorV2": {
       "actionsLeftHint": "Left side is reversible: save and discard can both be redone.",

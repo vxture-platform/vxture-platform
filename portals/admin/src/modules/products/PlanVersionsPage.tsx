@@ -897,6 +897,9 @@ export function PlanVersionsPage() {
               // 刚建出来的骨架只有 v1 草稿：草稿不可被订阅，所以这里的 0 是事实，
               // 不是占位。下一次 loadMatrix() 会用服务端的真值覆盖它。
               subscriptionCount: 0,
+              // 新建的套餐骨架一律公开（BFF 的 INSERT 也是 is_public=true）；
+              // 要改成邀请制，在套餐卡的动作菜单里翻。
+              isPublic: true,
               productCode: createTarget.productCode,
               productName: createTarget.productName,
             });

@@ -83,6 +83,7 @@ import {
   deletePlan,
   deletePlanVersion,
   deprecatePlan,
+  setPlanVisibility,
   fetchPlanDeletable,
   fetchPlanMatrix,
   fetchPlanVersions,
@@ -563,6 +564,46 @@ export function PlanPublishingDetailPage({
                     ),
                 });
               }
+              /*
+               * 订阅方式：公开订阅 ⇄ 邀请订阅。翻成邀请制后这一档从客户的套餐
+               * 阶梯里消失，只有持邀请券的人看得见、买得到；已有订阅与续订都
+               * 不受影响。所以它不是 danger——变的是「新客户能不能自助买到」。
+               */
+              items.push({
+                id: "visibility",
+                label: plan.isPublic
+                  ? t("actions.makeInviteOnly")
+                  : t("actions.makePublic"),
+                icon: plan.isPublic ? "lock" : "globe",
+                disabled: busy,
+                /* 两向都过确认框：改成邀请制会把这一档从所有客户眼前摘掉，
+                   改回公开则等于对所有人开卖——都是商务变更，不该一点就生效。
+                   DS 的受保护菜单项把 confirm 与 danger 绑在一起（`danger` 只收
+                   字面 true），所以这里不按方向分轻重。 */
+                danger: true,
+                confirm: withLabels({
+                  verb: plan.isPublic
+                    ? t("actions.makeInviteOnlyVerb")
+                    : t("actions.makePublicVerb"),
+                  target: t("actions.visibilityTarget", {
+                    name: plan.planName,
+                  }),
+                  consequence: plan.isPublic
+                    ? t("actions.makeInviteOnlyConsequence", {
+                        n: plan.subscriptionCount,
+                      })
+                    : t("actions.makePublicConsequence"),
+                  onConfirm: () =>
+                    runWrite(
+                      () => setPlanVisibility(plan.planId, !plan.isPublic),
+                      plan.isPublic
+                        ? t("actions.makeInviteOnlyDone", {
+                            name: plan.planName,
+                          })
+                        : t("actions.makePublicDone", { name: plan.planName }),
+                    ),
+                }),
+              });
               items.push({
                 id: "deprecate",
                 label: t("actions.deprecate"),
@@ -627,6 +668,19 @@ export function PlanPublishingDetailPage({
                             </StatusBadge>
                           ) : null}
                         </span>
+                      }
+                    />
+                    {/* 订阅方式：公开档人人可自助买；邀请档只有持券的人看得见。
+                        这一行此前根本不存在（库里的 is_public 没有任何读写面），
+                        运营看不到一个套餐到底对外开不开放。 */}
+                    <PanelItem
+                      main={t("detail.visibility")}
+                      trail={
+                        <StatusBadge tone={plan.isPublic ? "success" : "info"}>
+                          {plan.isPublic
+                            ? t("detail.visibilityPublic")
+                            : t("detail.visibilityInvite")}
+                        </StatusBadge>
                       }
                     />
                     <PanelItem

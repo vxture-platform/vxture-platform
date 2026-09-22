@@ -63,7 +63,17 @@ export function PlanSummaryCard({
               {productName} · {plan.planName}
             </strong>
             <StatusBadge tone="brand">{plan.tier}</StatusBadge>
+            {/* 非公开档是凭邀请才出现在这份阶梯里的——别人打开同一个产品看不到
+                它。不标出来，客户会当成人人可买的公开档。 */}
+            {plan.inviteOnly ? (
+              <StatusBadge tone="info">{t("badges.inviteOnly")}</StatusBadge>
+            ) : null}
           </span>
+          {plan.inviteOnly ? (
+            <span className="text-body-sm text-muted-foreground">
+              {t("badges.inviteOnlyHint")}
+            </span>
+          ) : null}
           {note ? (
             <span className="text-body-sm text-muted-foreground">{note}</span>
           ) : null}

@@ -142,6 +142,51 @@ interface SubscribePlanOption {
   prices: SubscribePlanPrice[];
   /** Primary component feature list (plan_components.features) — 确认订单页的权益 chips。 */
   features: string[];
+  /**
+   * 这一档是凭邀请才出现的（`plans.is_public = false` + 本人持有有效邀请）。
+   * 给页面一个据以标注的依据——同一个阶梯里别人看不到这一档，不说明白，
+   * 客户会以为是人人可买的公开档。
+   */
+  inviteOnly: boolean;
+}
+
+/**
+ * 「此人此刻持有一张指向该套餐的有效邀请」——邀请订阅的**唯一**判据。
+ *
+ * 看得见（subscribe-context 的套餐阶梯）与买得到（createOrder 的闸门）必须共用它。
+ * 两边各写一份，迟早分叉成「看得见却买不到」或「买得到却没人看得见」——后者正是
+ * 2026-09-22 上线时的样子：闸门认邀请，阶梯只认 is_public，券发下去客户点不到。
+ *
+ * 判据本身：批次是 invite 且在效期内、券已定向发放未核销、未超次数、未过期、
+ * 定向到本人或本人租户的工作区、effect 指的就是这个套餐。
+ *
+ * 表别名与「这个套餐」两半由调用点给：消耗那条按参数比（$3/$4），阶梯那条按
+ * 当前行比（pv.id / pl.plan_code）。其余每一个条件都只有这一份。
+ */
+function inviteMatchSql(o: {
+  v: string;
+  b: string;
+  user: string;
+  tenant: string;
+  planVersion: string;
+  planCode: string;
+}): string {
+  return `${o.b}.kind = 'invite' and ${o.b}.status = 'active'
+      and ${o.v}.status = 'assigned'
+      and ${o.v}.used_count < ${o.v}.max_uses
+      and (${o.v}.expires_at is null or ${o.v}.expires_at > now())
+      and ${o.b}.valid_from <= now() and ${o.b}.valid_until > now()
+      and (
+            ${o.v}.assigned_user_id = ${o.user}
+         or ${o.v}.assigned_workspace_id in (
+              select w.id from tenancy.workspaces w
+               where w.tenant_id = ${o.tenant} and w.deleted_at is null
+            )
+          )
+      and (
+            ${o.b}.effect ->> 'planVersionId' = ${o.planVersion}
+         or ${o.b}.effect ->> 'planCode' = ${o.planCode}
+          )`;
 }
 
 interface SubscribeCurrent {
@@ -697,7 +742,9 @@ export class SubscriptionRouter {
       metric?: string;
     },
   ): Promise<SubscribeContext> {
-    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    /* 套餐阶梯要按人算邀请（非公开档凭邀请才出现），所以这里连 user 一起挡。 */
+    if (!req.user || !req.tenant)
+      throw new UnauthorizedException("租户上下文缺失");
 
     const rawIntent = query.intent?.trim() ?? "";
     const intent = (KNOWN_INTENTS as readonly string[]).includes(rawIntent)
@@ -755,7 +802,7 @@ export class SubscriptionRouter {
     const [current, pendingOrder, plans] = await Promise.all([
       this.queryCurrentForProduct(req.tenant.id, product.code),
       this.queryPendingOrder(req.tenant.id, product.code),
-      this.queryPlanLadder(product.code),
+      this.queryPlanLadder(product.code, req.user.id, req.tenant.id),
     ]);
     return {
       intent,
@@ -821,9 +868,21 @@ export class SubscriptionRouter {
   }
 
   /**
-   * Public active plans whose CURRENT version is locked, with their prices.
+   * Public active plans whose CURRENT version is locked, with their prices，
+   * **外加本人凭邀请解锁的非公开档**。
+   *
+   * 邀请订阅那一半（2026-09-22 补）：`is_public = false` 的档默认不进阶梯，但持有
+   * 有效邀请的人要看得见——否则券发下去，客户打开订阅页什么都没有，点不到下单。
+   * 上线时只做了闸门认邀请、阶梯没认，整条链在客户那一侧是断的。判据与闸门共用
+   * `inviteMatchSql`，不另写一份。
+   *
+   * 这里**不消耗**邀请，只是看：消耗在下单那一刻（`consumeInviteForPlan`）。
+   * 刷一次订阅页就烧掉一张券，是这条链上最容易犯的错。
+   *
    * TODO(shared-ladder): 本查询与 website-bff product-plans.router 是同一口径
    * 的两份 SQL；若第三处出现，应抽到共享查询层（如 @vxture/service-catalog）。
+   * 注意那一份是**匿名公开目录**，没有会话就没有邀请可言，它的 is_public 过滤
+   * 留着是对的——「同一口径」指的是公开那一半。
    *
    * **成熟度刷不在这里卡（2026-09-17，有意为之）**：开发中产品的阶梯照常返回，
    * 由 `createOrder` 在下单时明确拒（`PRODUCT_NOT_RELEASED`）。静默回空阶梯会让页面
@@ -832,6 +891,8 @@ export class SubscriptionRouter {
    */
   private async queryPlanLadder(
     productCode: string,
+    userId: string,
+    tenantId: string,
   ): Promise<SubscribePlanOption[]> {
     const res = await this.pool.query<{
       plan_id: string;
@@ -841,9 +902,11 @@ export class SubscriptionRouter {
       tier: string;
       features: string[] | null;
       prices: SubscribePlanPrice[];
+      invite_only: boolean;
     }>(
       `select pl.id as plan_id, pl.plan_code, pl.plan_name,
               pv.id as plan_version_id, pc.tier, pc.features,
+              (pl.is_public = false) as invite_only,
               coalesce(
                 jsonb_agg(jsonb_build_object(
                   'cycleUnit', pp.cycle_unit, 'cycleCount', pp.cycle_count,
@@ -859,11 +922,28 @@ export class SubscriptionRouter {
          join product.plans pl
            on pl.id = pv.plan_id and pl.current_version_id = pv.id
           and pl.deleted_at is null and pl.status = 'active'
-          and pl.is_public = true and pl.is_customer_visible = true
+          and pl.is_customer_visible = true
+          and (
+                pl.is_public = true
+             or exists (
+                  select 1
+                    from promotion.vouchers iv
+                    join promotion.voucher_batches ib on ib.id = iv.batch_id
+                   where ${inviteMatchSql({
+                     v: "iv",
+                     b: "ib",
+                     user: "$2",
+                     tenant: "$3",
+                     planVersion: "pv.id::text",
+                     planCode: "pl.plan_code",
+                   })}
+                )
+              )
          left join product.plan_prices pp on pp.plan_version_id = pv.id
         where prod.product_code = $1 and pc.tier is not null
-        group by pl.id, pl.plan_code, pl.plan_name, pv.id, pc.tier, pc.features`,
-      [productCode],
+        group by pl.id, pl.plan_code, pl.plan_name, pl.is_public,
+                 pv.id, pc.tier, pc.features`,
+      [productCode, userId, tenantId],
     );
     const rank = (t: string) => {
       const i = (TIERS as readonly string[]).indexOf(t);
@@ -878,6 +958,7 @@ export class SubscriptionRouter {
         tier: r.tier,
         prices: r.prices,
         features: r.features ?? [],
+        inviteOnly: r.invite_only,
       }))
       .sort(
         (a: SubscribePlanOption, b: SubscribePlanOption) =>
@@ -1257,17 +1338,32 @@ export class SubscriptionRouter {
      * （`operator_grant`，无订单无钱）和兑换码（`redemption`，输码抵扣）是三件事。
      */
     if (!sold.plan_is_public) {
-      const invite = await this.consumeInviteForPlan({
-        userId: req.user.id,
-        tenantId: req.tenant.id,
-        planVersionId,
-        planCode: sold.plan_code,
-      });
-      if (!invite) {
-        throw new ConflictException({
-          code: "PLAN_NOT_PUBLIC",
-          message: "该套餐未对外开放自助购买，请联系销售。",
+      /*
+       * 续订例外：邀请挡的是**进门**，不是挡已经在里面的人续费。
+       *
+       * 少了这一条，把一个在售档改成邀请制就会连带掐断老客户的续订——界面上
+       * 只是 409，而客户什么都没做错；更糟的是 `consumeInviteForPlan` 每次都要
+       * 烧掉一张券，等于「每个周期续一次要重发一张邀请」。都不是这条机制的本意。
+       *
+       * 范围按**套餐**（跨版本）而不是按版本：续订延长的就是手上这一档。换档是
+       * `upgrade`，那是新进一档，照样要邀请。
+       */
+      const renewingOwnPlan =
+        intent === "renew" &&
+        (await this.holdsSubscriptionOnPlan(req.tenant.id, planVersionId));
+      if (!renewingOwnPlan) {
+        const invite = await this.consumeInviteForPlan({
+          userId: req.user.id,
+          tenantId: req.tenant.id,
+          planVersionId,
+          planCode: sold.plan_code,
         });
+        if (!invite) {
+          throw new ConflictException({
+            code: "PLAN_NOT_PUBLIC",
+            message: "该套餐未对外开放自助购买，请联系销售。",
+          });
+        }
       }
     }
 
@@ -1752,6 +1848,29 @@ export class SubscriptionRouter {
    * 那要把 invite 一路从订单穿到 services/commerce/subscription，跨包；而「解锁
    * 能买」这件事在下单那一刻就兑现了。
    */
+  /**
+   * 这个租户手上是否已经有一份**同一套餐**（跨版本）的订阅。
+   *
+   * 只给邀请闸门的续订例外用：判「已经在门里」，所以不看版本、不看状态是否
+   * 刚好 active（过期待续的也算在门里，那正是要续的那一份）。
+   */
+  private async holdsSubscriptionOnPlan(
+    tenantId: string,
+    planVersionId: string,
+  ): Promise<boolean> {
+    const res = await this.pool.query<{ one: number }>(
+      `select 1 as one
+         from metering.subscriptions ts
+         join product.plan_versions mine on mine.id = ts.plan_version_id
+         join product.plan_versions want on want.plan_id = mine.plan_id
+        where ts.tenant_id = $1 and ts.deleted_at is null
+          and want.id = $2
+        limit 1`,
+      [tenantId, planVersionId],
+    );
+    return res.rows.length > 0;
+  }
+
   private async consumeInviteForPlan(params: {
     userId: string;
     tenantId: string;
@@ -1767,43 +1886,26 @@ export class SubscriptionRouter {
               redeemed_at = now()
          from promotion.voucher_batches b
         where b.id = v.batch_id
-          and b.kind = 'invite'
-          and b.status = 'active'
-          and v.status = 'assigned'
-          and v.used_count < v.max_uses
-          and (v.expires_at is null or v.expires_at > now())
-          and b.valid_from <= now() and b.valid_until > now()
-          and (
-                v.assigned_user_id = $1
-             or v.assigned_workspace_id in (
-                  select w.id from tenancy.workspaces w
-                   where w.tenant_id = $2 and w.deleted_at is null
-                )
-              )
-          and (
-                b.effect ->> 'planVersionId' = $3
-             or b.effect ->> 'planCode' = $4
-              )
+          and ${inviteMatchSql({
+            v: "v",
+            b: "b",
+            user: "$1",
+            tenant: "$2",
+            planVersion: "$3",
+            planCode: "$4",
+          })}
           and v.id = (
             -- 多张都有效时取最早过期的那张，先用快到期的。
             select v2.id from promotion.vouchers v2
               join promotion.voucher_batches b2 on b2.id = v2.batch_id
-             where b2.kind = 'invite' and b2.status = 'active'
-               and v2.status = 'assigned'
-               and v2.used_count < v2.max_uses
-               and (v2.expires_at is null or v2.expires_at > now())
-               and b2.valid_from <= now() and b2.valid_until > now()
-               and (
-                     v2.assigned_user_id = $1
-                  or v2.assigned_workspace_id in (
-                       select w.id from tenancy.workspaces w
-                        where w.tenant_id = $2 and w.deleted_at is null
-                     )
-                   )
-               and (
-                     b2.effect ->> 'planVersionId' = $3
-                  or b2.effect ->> 'planCode' = $4
-                   )
+             where ${inviteMatchSql({
+               v: "v2",
+               b: "b2",
+               user: "$1",
+               tenant: "$2",
+               planVersion: "$3",
+               planCode: "$4",
+             })}
              order by v2.expires_at asc nulls last, v2.created_at asc
              limit 1
           )
@@ -1900,7 +2002,17 @@ export class SubscriptionRouter {
     return id;
   }
 
-  /** 查 (plan_version, cycle) 的价格 + 套餐名；无价格行返回 null（不可自助购买）。 */
+  /**
+   * 查 (plan_version, cycle) 的价格 + 套餐名；无价格行返回 null（不可自助购买）。
+   *
+   * **这里只查价，不判能不能买。** 原来这条 SQL 里还带着 `plan.is_public = true`，
+   * 于是「可见性」这一道门同时长在两个地方——而它排在下单路径的**最前面**，
+   * 在邀请解锁（createOrder 的 `consumeInviteForPlan`）之前。后果是邀请订阅整条
+   * 分支在真库里永远走不到：非公开套餐在这一步就返回 0 行 → NOT_PURCHASABLE 400。
+   *
+   * 单测照不出来，因为桩对第一次查询无条件回一行价格，不模拟这个上游过滤。
+   * 判据与执行点分家，是同一件事拆成两道门的必然代价——所以把判据收回闸门那一处。
+   */
   private async lookupPlanPrice(
     planVersionId: string,
     cycleUnit: string,
@@ -1922,7 +2034,7 @@ export class SubscriptionRouter {
          join product.plans plan on plan.id = pv.plan_id
         where pp.plan_version_id = $1 and pp.cycle_unit = $2 and pp.cycle_count = 1
           and plan.current_version_id = pv.id
-          and plan.status = 'active' and plan.is_public = true
+          and plan.status = 'active'
         limit 1`,
       [planVersionId, cycleUnit],
     );
