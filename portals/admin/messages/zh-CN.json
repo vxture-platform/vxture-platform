@@ -1911,11 +1911,11 @@
       "newVersion": "基于此版本开新草稿",
       "newVersionDone": "已基于 v{n} 开出新草稿。",
       "newVersionFailed": "开新草稿失败。",
-      "softDelete": "软删",
-      "softDeleteConsequence": "该套餐从所有列表中消失。仅在无在订阅、无订阅历史、无订单引用时才允许——卖过的套餐只能退役，不能删。",
-      "softDeleteDone": "套餐「{name}」已软删。",
+      "softDelete": "删除",
+      "softDeleteConsequence": "整条删掉，不可恢复，套餐码随之释放（可再用回同一个码）。仅在无在订阅、无订单历史、无方案绑定时才允许——卖过的套餐只能退役。",
+      "softDeleteDone": "套餐「{name}」已删除，套餐码已释放。",
       "softDeleteTarget": "套餐「{name}」",
-      "softDeleteVerb": "软删",
+      "softDeleteVerb": "删除",
       "makeInviteOnly": "改为邀请订阅",
       "makeInviteOnlyVerb": "改为邀请订阅",
       "makeInviteOnlyConsequence": "改为邀请订阅后，这一档不再出现在客户的套餐列表里，只有持邀请的人能下单。现有 {n} 份订阅不受影响，续订也照常。",
@@ -2018,6 +2018,10 @@
       "openNextDraftHint": "它不改这一版，而是复制一份内容开新版本——已发布的改不了，要改就开新版本。",
       "quotaHeading": "配额 · {n} 项",
       "title": "{plan} · v{n}"
+    },
+    "empty": {
+      "noPlansTitle": "还没有套餐",
+      "noPlansDescription": "这个产品目前一档都没挂，客户订不了。每个商业档位只能挂一条在售套餐；建完会自动开一份草稿，填好价格与配额再发布。"
     }
   },
   "skillsPage": {

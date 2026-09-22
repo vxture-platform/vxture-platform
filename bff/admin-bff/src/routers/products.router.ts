@@ -772,8 +772,19 @@ export class ProductsRouter {
     const client = await this.rwPool.connect();
     try {
       await client.query("BEGIN");
-      const cur = await client.query<{ plan_id: string; status: string }>(
-        `SELECT plan_id, status FROM product.plan_versions WHERE id = $1 FOR UPDATE`,
+      /* 连 plan_code / version_no 一起取：审计那一行要写「哪个套餐的第几版」，
+         而 resourceId 只认可读码（不许落 uuid）。 */
+      const cur = await client.query<{
+        plan_id: string;
+        status: string;
+        plan_code: string;
+        version_no: number;
+      }>(
+        `SELECT pv.plan_id, pv.status, pv.version_no, p.plan_code
+           FROM product.plan_versions pv
+           JOIN product.plans p ON p.id = pv.plan_id
+          WHERE pv.id = $1
+          FOR UPDATE OF pv`,
         [versionId],
       );
       const row = cur.rows[0];
@@ -829,6 +840,21 @@ export class ProductsRouter {
         `UPDATE product.plans SET current_version_id = $2, updated_at = now() WHERE id = $1`,
         [row.plan_id, versionId],
       );
+      /*
+       * 审计（2026-09-22 补）。**发布此前压根不留痕**——它是这一屏最要紧的动作
+       * （决定客户买不到/买得到、且把版本连同 components/prices 一起冻结），也是
+       * 少数挂 step-up 的动作之一，而七个已登记的审计动作里偏偏没有它：
+       * plan.create / plan.delete / plan.deprecate / plan.visibility /
+       * plan_version.create / plan_version.delete / plan_version.bundled.replace
+       * 全都写了。「谁在什么时候把哪一版放上货架」查不到，这是个治理洞不是小事。
+       */
+      await insertOperatorAuditLog(client, req, {
+        action: "product.plan_version.publish",
+        resourceType: "product_plan_version",
+        resourceId: `${row.plan_code} v${row.version_no}`,
+        before: { status: row.status, isLocked: false, isCurrent: false },
+        after: { status: "published", isLocked: true, isCurrent: true },
+      });
       await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK");
@@ -931,18 +957,37 @@ export class ProductsRouter {
   }
 
   /**
-   * 软删套餐（两步删除第二步）。
+   * 删除套餐（两步删除第二步）——**真删，不是软删**（owner 2026-09-22 裁定）。
    *
-   * 与退役的分工照产品那套：退役 = 可见的终态「已退役」（曾合法售卖、现下线，
-   * 老订阅照付）；软删 = 「本不该在册」，从运营视野里隐去。所以**卖过就不能删**，
-   * 只能退役——三条判据任一成立即 409 并点名是哪一条挡着。
+   * ── 两条路各管什么 ──
+   *   退役 deprecate  卖过的套餐**唯一**的路：老订阅仍钉在它的版本上照常解析，
+   *                   新客户买不到，行还在、查得到
+   *   删除 delete     从来没人订过、没下过单、没被方案绑过 → 它本不该在册，整行删掉
    *
-   * 判据落在真实引用上：`metering.subscriptions.plan_version_id`（在订阅）、
-   * `billing.orders.plan_version_id`（订单历史）、`product.solution_plans.plan_id`
-   * （方案绑定）。`plan_prices` / `plan_components` 是 CASCADE 子行，不构成阻挡。
+   * 中间那个「软删」态被撤了。它带来的唯一后果是**码位被永久占住**：
+   * `uq_plans_plan_code` 是普通唯一约束（不排除软删行），而档位占用检查写的是
+   * `deleted_at IS NULL`——两个判据对「软删行算不算」判得不一样。于是删掉一档再想
+   * 用回同一个 plan_code：占用检查放你过，INSERT 撞唯一约束抛 23505，运营侧看到的
+   * 是一句「Internal server error」。owner 2026-09-22 在 umbra 上撞到这一条。
+   *
+   * ── 为什么敢直接 DELETE ──
+   * `readPlanDeletionImpact` 检的那三条，**正好就是硬删会撞的三个无 CASCADE 外键**：
+   *   metering.subscriptions.plan_version_id   在订阅
+   *   billing.orders.plan_version_id           订单历史
+   *   product.solution_plans.plan_id           方案绑定
+   * 而 plan_versions（plan_id CASCADE）、plan_prices / plan_components
+   * （plan_version_id CASCADE）是子行，随删。也就是说这道门本来就是按硬删写的，
+   * 只有最后那一句是软删——本次是让语句跟它自己的判据对齐。
+   *
+   * `fk_plans_current_version`（plans.current_version_id → plan_versions.id）无需
+   * 先清空：它是 NO ACTION，在**语句末**校验，那时 plans 那一行已经不在了。
    *
    * 事务内 `FOR UPDATE` 之后**再复核一次**判据：预检与执行之间新产生的订阅要挡住
-   * （TOCTOU）。这一条照抄 opera 产品删除的做法，不是我另想的。
+   * （TOCTOU）。
+   *
+   * 注意 `plans.deleted_at` 这一列**没有退役**：opera 删产品时会连带软删它名下的
+   * 套餐（`product-catalog.router.ts`，那条路径上产品行本身也是软删）。所以读路径
+   * 的 `deleted_at IS NULL` 过滤一律保留。两条路径的口径差异已报 owner。
    */
   @Delete("plans/:planId")
   @RequireStepUp()
@@ -982,19 +1027,25 @@ export class ProductsRouter {
           `${row.plan_code} has customer footprint (${impact.blockers.join(", ")}) — deprecate it instead`,
         );
       }
-      await client.query(
-        `UPDATE product.plans
-            SET deleted_at = now(), updated_by = $2, updated_at = now()
-          WHERE id = $1 AND deleted_at IS NULL`,
-        [planId, req.user!.id],
-      );
+      /* 审计先写：行删掉之后 plan_code 就查不回来了，而它是这条日志的 resourceId。 */
       await insertOperatorAuditLog(client, req, {
         action: "product.plan.delete",
         resourceType: "product_plan",
         resourceId: row.plan_code,
-        before: { status: row.status, deletedAt: null },
-        after: { status: row.status, deletedAt: "now()" },
+        before: { status: row.status, exists: true },
+        after: { exists: false },
       });
+      const gone = await client.query(
+        `DELETE FROM product.plans WHERE id = $1`,
+        [planId],
+      );
+      /* 上面 FOR UPDATE 已经把行锁住了，删不掉只能是判据与外键不一致——那是缺陷，
+         不是并发。抛出去让事务回滚，别静默返回 deleted: true。 */
+      if (gone.rowCount !== 1) {
+        throw new ConflictException(
+          `${row.plan_code} 未被删除（影响 ${gone.rowCount ?? 0} 行）——判据与外键约束不一致`,
+        );
+      }
     });
     return { deleted: true, planCode };
   }

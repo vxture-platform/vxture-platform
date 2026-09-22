@@ -26,6 +26,7 @@ import {
 import { ProductsRouter } from "./products.router";
 import {
   MANAGE,
+  insertParam,
   makeReq,
   makeTxClient,
   noDbPool,
@@ -380,8 +381,20 @@ describe("draft version creation", () => {
 describe("publish — tier occupancy guard", () => {
   it("409 + rollback when another plan's current published version holds the slot", async () => {
     const tx = makeTxClient((sql) => {
-      if (sql.includes("from product.plan_versions where id = $1 for update"))
-        return [{ plan_id: "plan-a", status: "draft" }];
+      /* 这一句现在连 plan_code / version_no 一起取（审计那行要写「哪个套餐第几版」），
+         所以别按整段 SQL 文本匹配——照 `for update of pv` 这个稳定特征认。 */
+      if (
+        sql.includes("product.plan_versions pv") &&
+        sql.includes("for update of pv")
+      )
+        return [
+          {
+            plan_id: "plan-a",
+            status: "draft",
+            plan_code: "karda-pro",
+            version_no: 2,
+          },
+        ];
       // Order matters: the clash query also mentions component_role='primary'.
       if (sql.includes("cv2.status = 'published'"))
         return [{ plan_code: "karda-pro-old" }];
@@ -401,8 +414,20 @@ describe("publish — tier occupancy guard", () => {
 
   it("publishes when the slot is free: freeze + current pointer + commit", async () => {
     const tx = makeTxClient((sql) => {
-      if (sql.includes("from product.plan_versions where id = $1 for update"))
-        return [{ plan_id: "plan-a", status: "draft" }];
+      /* 这一句现在连 plan_code / version_no 一起取（审计那行要写「哪个套餐第几版」），
+         所以别按整段 SQL 文本匹配——照 `for update of pv` 这个稳定特征认。 */
+      if (
+        sql.includes("product.plan_versions pv") &&
+        sql.includes("for update of pv")
+      )
+        return [
+          {
+            plan_id: "plan-a",
+            status: "draft",
+            plan_code: "karda-pro",
+            version_no: 2,
+          },
+        ];
       // Order matters: the clash query also mentions component_role='primary'.
       if (sql.includes("cv2.status = 'published'")) return [];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
@@ -420,5 +445,23 @@ describe("publish — tier occupancy guard", () => {
     expect(tx.calls.some((c) => c.includes("SET current_version_id"))).toBe(
       true,
     );
+
+    /*
+     * 审计（2026-09-22 补）：发布**此前压根不留痕**。它是这一屏最要紧的动作
+     * （决定客户买不到/买得到，还把版本连同 components/prices 一起冻结），也挂着
+     * step-up，而七个已登记的审计动作里偏偏没有它。「谁在什么时候把哪一版放上
+     * 货架」查不到。
+     */
+    const auditAt = tx.calls.findIndex((c) =>
+      c.includes("insert into support.audit_logs"),
+    );
+    expect(auditAt).toBeGreaterThanOrEqual(0);
+    expect(insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "action")).toBe(
+      "product.plan_version.publish",
+    );
+    /* resourceId 只许是可读码，不许落 uuid（owner 铁律）。 */
+    expect(
+      insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "resource_id"),
+    ).toBe("karda-pro v2");
   });
 });
