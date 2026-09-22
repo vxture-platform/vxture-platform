@@ -1430,6 +1430,14 @@ export interface PromotionOperationRecord {
   promotionCode: string;
   promotionName: string;
   promotionType: PromotionOperationType;
+  /**
+   * 原始券型（voucher_batches.kind）：discount / credit_voucher / invite /
+   * redemption / extension / recharge_card。
+   *
+   * `promotionType` 是归并过的三型（把 invite / redemption / extension 一起算
+   * campaign），分辨不出具体是哪种；发放弹窗要按券型改规则，所以留原值。
+   */
+  kind: string;
   status: PromotionOperationStatus;
   scopeLabel: string;
   discountLabel: string;

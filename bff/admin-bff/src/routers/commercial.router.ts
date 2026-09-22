@@ -102,7 +102,7 @@ export class CommercialRouter {
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
   ) {}
 
-  // 创建券批次（product_321 §4.2）：kind 限 discount/credit_voucher，effect 结构化
+  // 创建券批次（product_321 §4.2）：kind 限 discount/credit_voucher/invite，effect 结构化
   // 校验（金额整数分、percent 0-100），未实现的门槛字段（applicable_plan_ids /
   // min_user_level）显式拒绝——结算引擎会把带门槛的券过滤为不可用（P7），放行
   // 配置只会造出永远用不了的券。
@@ -233,6 +233,22 @@ export class CommercialRouter {
       if (!batch.tenant_id && !targetUserId && !targetWorkspaceId) {
         throw new BadRequestException(
           "平台级批次必须定向到 user 或 workspace（禁无主券，P7）",
+        );
+      }
+      /*
+       * 邀请券必须定向到人或工作空间（2026-09-22）。
+       *
+       * 上面那条只管平台级批次；**租户级批次走「租户全员」时两个 assigned_* 列都是
+       * NULL**。而 console 侧的邀请判据认的正是这两列（本人 / 本人租户的工作空间），
+       * 于是这么发出去的邀请**永远匹配不上**——界面回「发放成功」还带着券码，客户
+       * 那边却始终看不见套餐。发得出去、用不了，比发不出去更糟。
+       *
+       * 选择拒绝而不是把判据放宽到「批次的 tenant_id 对上就算」：邀请这件事本身是
+       * 定向的，「整个租户都能买」说的是另一回事（那是把套餐改回公开订阅）。
+       */
+      if (batch.kind === "invite" && !targetUserId && !targetWorkspaceId) {
+        throw new BadRequestException(
+          "邀请券必须定向到具体用户或工作空间；「整个租户都能买」请把套餐改回公开订阅",
         );
       }
 
@@ -665,6 +681,9 @@ const PROMOTION_TYPE_BY_KIND: Record<string, PromotionOperationType> = {
   recharge_card: "coupon",
   redemption: "campaign",
   extension: "campaign",
+  /* 邀请券不减价也不抵扣——它归活动类。显式写出来而不是吃兜底：兜底值
+     看不出是想好的还是漏了。 */
+  invite: "campaign",
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -673,6 +692,7 @@ const KIND_LABEL: Record<string, string> = {
   redemption: "兑换码",
   discount: "折扣券",
   extension: "展期券",
+  invite: "邀请券",
 };
 
 function derivePromotionType(kind: string): PromotionOperationType {
@@ -716,6 +736,12 @@ function faceLabel(kind: string, effect: unknown): string {
       ? `¥${(amount / 100).toFixed(2)}`
       : "未配置";
   }
+  if (kind === "invite") {
+    /* 邀请券没有面额，它的「面额」就是解锁哪个套餐——那是这一行唯一要紧的事实，
+       退回「—」等于把它藏了。套餐码是可读码（arda-starter 这种），不是 uuid。 */
+    const plan = e["planCode"] ?? e["planVersionId"];
+    return typeof plan === "string" && plan ? `解锁 ${plan}` : "未配置";
+  }
   return "—";
 }
 
@@ -731,6 +757,10 @@ function mapPromotionBatchRow(
     promotionCode: row.code_prefix ?? row.id,
     promotionName: row.name,
     promotionType: derivePromotionType(row.kind),
+    /* 原始券型。`promotionType` 把 invite / redemption / extension 一起归成
+       campaign，分辨不出——而发放弹窗必须知道这是不是邀请券（邀请不许发给
+       「租户全员」，那样两个 assigned_* 列都为 NULL，发出来就是死券）。 */
+    kind: row.kind,
     status: derivePromotionStatus(row.status, row.valid_from, row.valid_until),
     scopeLabel: row.tenant_id ? "定向租户" : "平台级",
     // TD-030: 面额随台账展示（此前只有 kind 标签）。
