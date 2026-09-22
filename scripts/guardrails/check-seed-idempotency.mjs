@@ -178,6 +178,64 @@ function checkOperatorRoleCodes() {
 }
 checkOperatorRoleCodes();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⑤ 库驱动的 i18n 键必须是 `catalog.<…>.name` / `catalog.<…>.desc`（2026-09-22）。
+//
+// 两个病症各自都不报错：
+//   · 名键与说明键写成 `<X>` + `<X>.desc` 两个平级键 —— next-intl 按点号下钻，
+//     前者要求该节点是字符串、后者要求是对象，**一棵树里不可能同时成立**。
+//     于是这些词条一条也写不出来，t.has() 恒假、静默回落到库里的英文名列。
+//     全库当时 6 张表 / 230 行全是这个形状。
+//   · 库驱动的键与页面自己的词条共用顶层（`access.*` 撞 console 的页面命名空间）
+//     —— 今天不冲突，但两类词条寿命不同，共用顶层迟早互相踩。
+//
+// 归一后的不变式一句话：**catalog. 开头，.name 或 .desc 结尾**。
+//
+// 这里只查 seed 源码里的键字面量。真正的判据是「seed 往库里写了什么」——那条
+// 靠把 seed 跑进一个全新库再读回来（本次实测 238 行、不合规 0）。两者互补：
+// 静态这条便宜、每次 CI 都跑；跑库那条贵、改动时手动跑。
+//
+// ⚠ 静态扫的局限，本次亲自踩到：有些键是**拼出来**的
+// （`"catalog.product.plan." + code + ".name"`），字面量只是前缀片段，正则看它
+// 「不以 .name 结尾」会误报。所以片段（以 `.` 结尾的）显式豁免——代价是拼接处
+// 的正确性静态查不了，只能靠跑库那条兜。
+// ─────────────────────────────────────────────────────────────────────────────
+function checkCatalogI18nKeys() {
+  const file = join(SEED_DIR, 'seed-catalog.mjs');
+  if (!existsSync(file)) return;
+  const src = readFileSync(file, 'utf8');
+
+  // 库驱动的族前缀。ops.setting.* 不在其中：admin.settings 只有 description_key、
+  // 没有名键，不存在「两个平级键」那个撞法。
+  const FAMILY = /^(?:catalog\.)?(?:ops\.(?!setting\.)|access\.(?:perm|menu|role)\.|product\.(?:plan|checklist)\.|loyalty\.level\.)/;
+
+  src.split(/\r?\n/).forEach((line, i) => {
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+    // 反引号一支要放宽：模板串里嵌着引号（`${code.replace(/:/g, ".")}`）。
+    const re = /`((?:catalog\.)?(?:ops|access|product|loyalty)\.[^`]*)`|(['"])((?:catalog\.)?(?:ops|access|product|loyalty)\.[^'"]*)\2/g;
+    for (const m of line.matchAll(re)) {
+      const body = m[1] ?? m[3];
+      if (!FAMILY.test(body)) continue;
+      if (body.endsWith('.')) continue; // 拼接用的前缀片段，见上方 ⚠
+      if (body.includes('${')) continue; // 含插值，静态判不了结尾
+      if (!body.startsWith('catalog.')) {
+        findings.push({
+          file,
+          line: i + 1,
+          msg: `库驱动 i18n 键 ${body} 缺 catalog. 顶层 —— 会与页面自己的词条共用命名空间`,
+        });
+      } else if (!/\.(name|desc)$/.test(body)) {
+        findings.push({
+          file,
+          line: i + 1,
+          msg: `库驱动 i18n 键 ${body} 结尾不是 .name/.desc —— 名与说明写不进同一棵 messages 树`,
+        });
+      }
+    }
+  });
+}
+checkCatalogI18nKeys();
+
 console.log('══ seed 幂等 + perm_code 检查（check-seed-idempotency）══');
 console.log(`扫描 ${files.length} 个 seed .mjs（${rel(SEED_DIR)}）。\n`);
 

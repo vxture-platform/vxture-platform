@@ -602,7 +602,7 @@ const OPERATOR_ROLES = [
     "sys_config",
     999,
     "System Config",
-    "ops.role.sys_config.name",
+    "catalog.ops.role.sys_config.name",
     "Platform self-governance config meta-role, used as createdBy for system-init data.",
     0,
     "optional",
@@ -611,7 +611,7 @@ const OPERATOR_ROLES = [
     "super_admin",
     100,
     "Super Admin",
-    "ops.role.super_admin.name",
+    "catalog.ops.role.super_admin.name",
     "Platform built-in super admin with all permissions.",
     1,
     "required",
@@ -620,7 +620,7 @@ const OPERATOR_ROLES = [
     "administrator",
     80,
     "Administrator",
-    "ops.role.administrator.name",
+    "catalog.ops.role.administrator.name",
     "Platform admin: all business domains, excludes operator management and security keys.",
     2,
     "required",
@@ -629,7 +629,7 @@ const OPERATOR_ROLES = [
     "operator",
     60,
     "Operator",
-    "ops.role.operator.name",
+    "catalog.ops.role.operator.name",
     "Tenant / plan / content / growth operations.",
     3,
     "required",
@@ -638,7 +638,7 @@ const OPERATOR_ROLES = [
     "finance",
     60,
     "Finance",
-    "ops.role.finance.name",
+    "catalog.ops.role.finance.name",
     "Subscriptions / orders / refunds / invoices / revenue reports.",
     4,
     "required",
@@ -647,7 +647,7 @@ const OPERATOR_ROLES = [
     "engineer",
     50,
     "Engineer",
-    "ops.role.engineer.name",
+    "catalog.ops.role.engineer.name",
     "Model supply / release / maintenance windows / system settings.",
     5,
     "required",
@@ -656,7 +656,7 @@ const OPERATOR_ROLES = [
     "support",
     30,
     "Support",
-    "ops.role.support.name",
+    "catalog.ops.role.support.name",
     "Tickets / masked tenant lookup / notifications.",
     6,
     "optional",
@@ -665,7 +665,7 @@ const OPERATOR_ROLES = [
     "auditor",
     10,
     "Auditor",
-    "ops.role.auditor.name",
+    "catalog.ops.role.auditor.name",
     "Read-only across all domains + audit logs, zero write.",
     7,
     "required",
@@ -1610,8 +1610,8 @@ export async function seedCatalog(client) {
       [
         code,
         name,
-        `ops.perm.${code.replace(/:/g, ".")}`,
-        `ops.perm.${code.replace(/:/g, ".")}.desc`,
+        `catalog.ops.perm.${code.replace(/:/g, ".")}.name`,
+        `catalog.ops.perm.${code.replace(/:/g, ".")}.desc`,
         SYS,
         description ?? name,
         STEP_UP_REQUIRED.has(code),
@@ -1646,11 +1646,11 @@ export async function seedCatalog(client) {
       [
         node.code,
         node.name,
-        `ops.${node.code}`,
+        `catalog.ops.${node.code}.name`,
         node.parent,
         node.route,
         node.icon,
-        `ops.${node.code}.desc`,
+        `catalog.ops.${node.code}.desc`,
         node.sort,
         SYS,
       ],
@@ -1769,9 +1769,9 @@ export async function seedCatalog(client) {
       [
         code,
         description,
-        `access.perm.${code}`,
+        `catalog.access.perm.${code}.name`,
         category,
-        `access.perm.${code}.desc`,
+        `catalog.access.perm.${code}.desc`,
         SYS,
       ],
     );
@@ -1801,11 +1801,11 @@ export async function seedCatalog(client) {
       [
         node.code,
         node.name,
-        `access.menu.${node.code.replace(/^tenant\.menu\./, "")}`,
+        `catalog.access.menu.${node.code.replace(/^tenant\.menu\./, "")}.name`,
         node.parent,
         node.route,
         node.icon,
-        `access.menu.${node.code.replace(/^tenant\.menu\./, "")}.desc`,
+        `catalog.access.menu.${node.code.replace(/^tenant\.menu\./, "")}.desc`,
         node.sort,
         SYS,
       ],
@@ -1838,14 +1838,24 @@ export async function seedCatalog(client) {
 
   // ── 3. access.roles (two-level; scope tenant/workspace; is_system) ──────────
   for (const [scope, code, name, description] of ROLES) {
-    const nameKey = `access.role.${scope}.${code}`;
+    const nameKey = `catalog.access.role.${scope}.${code}.name`;
     await client.query(
       `
       insert into access.roles
         (scope, role_code, role_name, role_name_key, description, description_key, is_system, created_by, created_at, updated_at)
       values ($1, $2, $3, $4, $5, $6, true, $7, now(), now()) on conflict (scope, role_code) do nothing
     `,
-      [scope, code, name, nameKey, description, `${nameKey}.desc`, SYS],
+      // 说明键是**同一节点下的兄弟叶子**，不是名键再加后缀：名键已以 `.name` 结尾，
+      // 直接接 `.desc` 会拼成 `….name.desc`。与 operator_role 那处同一个写法。
+      [
+        scope,
+        code,
+        name,
+        nameKey,
+        description,
+        `${nameKey.replace(/\.name$/, "")}.desc`,
+        SYS,
+      ],
     );
   }
 
@@ -1885,11 +1895,11 @@ export async function seedCatalog(client) {
   await client.query(`
     insert into loyalty.level_policies
       (level_no, max_owned_org_tenant, level_name, level_name_key, description, description_key) values
-      (1, 1, 'Starter',  'loyalty.level.1', 'L1', 'loyalty.level.1.desc'),
-      (2, 1, 'Bronze',   'loyalty.level.2', 'L2', 'loyalty.level.2.desc'),
-      (3, 1, 'Silver',   'loyalty.level.3', 'L3', 'loyalty.level.3.desc'),
-      (4, 1, 'Gold',     'loyalty.level.4', 'L4', 'loyalty.level.4.desc'),
-      (5, 1, 'Platinum', 'loyalty.level.5', 'L5', 'loyalty.level.5.desc')
+      (1, 1, 'Starter',  'catalog.loyalty.level.1.name', 'L1', 'catalog.loyalty.level.1.desc'),
+      (2, 1, 'Bronze',   'catalog.loyalty.level.2.name', 'L2', 'catalog.loyalty.level.2.desc'),
+      (3, 1, 'Silver',   'catalog.loyalty.level.3.name', 'L3', 'catalog.loyalty.level.3.desc'),
+      (4, 1, 'Gold',     'catalog.loyalty.level.4.name', 'L4', 'catalog.loyalty.level.4.desc'),
+      (5, 1, 'Platinum', 'catalog.loyalty.level.5.name', 'L5', 'catalog.loyalty.level.5.desc')
     on conflict (level_no) do nothing
   `);
   await client.query(`
@@ -2661,10 +2671,10 @@ export async function seedCatalog(client) {
   await client.query(`
     insert into product.launch_checklist_items
       (item_code, item_name, item_name_key, description, description_key, is_required, owner, gate, sort) values
-      ('verification_policy', '认证策略已配置', 'product.checklist.verification_policy',
-       'A verification policy is configured for the product.', 'product.checklist.verification_policy.desc', true, 'admin', 'publish', 10),
-      ('pricing_set', '定价已配置', 'product.checklist.pricing_set',
-       'Pricing is configured for the product.', 'product.checklist.pricing_set.desc', true, 'admin', 'publish', 20)
+      ('verification_policy', '认证策略已配置', 'catalog.product.checklist.verification_policy.name',
+       'A verification policy is configured for the product.', 'catalog.product.checklist.verification_policy.desc', true, 'admin', 'publish', 10),
+      ('pricing_set', '定价已配置', 'catalog.product.checklist.pricing_set.name',
+       'Pricing is configured for the product.', 'catalog.product.checklist.pricing_set.desc', true, 'admin', 'publish', 20)
     on conflict (item_code) do nothing
   `);
 
@@ -2675,21 +2685,21 @@ export async function seedCatalog(client) {
   await client.query(`
     insert into product.launch_checklist_items
       (item_code, item_name, item_name_key, description, description_key, is_required, owner, gate, sort) values
-      ('catalog_registered', '目录已登记', 'product.checklist.catalog_registered',
-       'Product code/layer/type registered in product.products; checklist + plan structure scaffolded.', 'product.checklist.catalog_registered.desc', true, 'opera', 'launch', 30),
-      ('c1_identity', 'C1 身份接入', 'product.checklist.c1_identity',
-       'OIDC client registered; RP implementation (login/callback/session) completed.', 'product.checklist.c1_identity.desc', true, 'opera', 'launch', 40),
+      ('catalog_registered', '目录已登记', 'catalog.product.checklist.catalog_registered.name',
+       'Product code/layer/type registered in product.products; checklist + plan structure scaffolded.', 'catalog.product.checklist.catalog_registered.desc', true, 'opera', 'launch', 30),
+      ('c1_identity', 'C1 身份接入', 'catalog.product.checklist.c1_identity.name',
+       'OIDC client registered; RP implementation (login/callback/session) completed.', 'catalog.product.checklist.c1_identity.desc', true, 'opera', 'launch', 40),
       -- sort 45：紧跟 c1_identity。两项是同一个身份面的入站与出站，中间不插别的。
-      ('c1_s2s', 'C1 出站换票', 'product.checklist.c1_s2s',
-       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'product.checklist.c1_s2s.desc', true, 'opera', 'launch', 45),
-      ('c3_metering', 'C3 计量上报', 'product.checklist.c3_metering',
-       'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'product.checklist.c3_metering.desc', true, 'opera', 'launch', 50),
-      ('c2_entitlement', 'C2 权益接入', 'product.checklist.c2_entitlement',
-       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60),
+      ('c1_s2s', 'C1 出站换票', 'catalog.product.checklist.c1_s2s.name',
+       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'catalog.product.checklist.c1_s2s.desc', true, 'opera', 'launch', 45),
+      ('c3_metering', 'C3 计量上报', 'catalog.product.checklist.c3_metering.name',
+       'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'catalog.product.checklist.c3_metering.desc', true, 'opera', 'launch', 50),
+      ('c2_entitlement', 'C2 权益接入', 'catalog.product.checklist.c2_entitlement.name',
+       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'catalog.product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60),
       -- sort 70 空缺：data_plane 已于 2026-10-09 退役（定义三处矛盾，别补回来）。
       -- 理由见 migrations/2026-10-09-checklist-data-plane-retire.sql 的文件头。
-      ('acceptance', '端到端验收', 'product.checklist.acceptance',
-       'Full e2e verified: login → provision → gate → consume → invalidate; launch checklist reviewed.', 'product.checklist.acceptance.desc', true, 'opera', 'publish', 80)
+      ('acceptance', '端到端验收', 'catalog.product.checklist.acceptance.name',
+       'Full e2e verified: login → provision → gate → consume → invalidate; launch checklist reviewed.', 'catalog.product.checklist.acceptance.desc', true, 'opera', 'publish', 80)
     on conflict (item_code) do nothing
   `);
 
@@ -2829,9 +2839,9 @@ export async function seedCatalog(client) {
   await client.query(`
     update product.plans
        set plan_code = 'umbra-free', plan_name = 'Umbra Free',
-           plan_name_key = 'product.plan.umbra-free',
+           plan_name_key = 'catalog.product.plan.umbra-free.name',
            description = 'Free tier for umbra.',
-           description_key = 'product.plan.umbra-free.desc', updated_at = now()
+           description_key = 'catalog.product.plan.umbra-free.desc', updated_at = now()
      where plan_code = 'ruyin-free'
        and not exists (select 1 from product.plans where plan_code = 'umbra-free')
   `);
@@ -2839,8 +2849,8 @@ export async function seedCatalog(client) {
     `
     insert into product.plans
       (id, plan_code, plan_name, plan_name_key, description, description_key, is_public, status, created_by, created_at, updated_at)
-    values (gen_random_uuid(), 'umbra-free', 'Umbra Free', 'product.plan.umbra-free',
-            'Free tier for umbra.', 'product.plan.umbra-free.desc', true, 'active', $1, now(), now())
+    values (gen_random_uuid(), 'umbra-free', 'Umbra Free', 'catalog.product.plan.umbra-free.name',
+            'Free tier for umbra.', 'catalog.product.plan.umbra-free.desc', true, 'active', $1, now(), now())
     on conflict (plan_code) do nothing
   `,
     [SYS],
@@ -3217,9 +3227,9 @@ export async function seedCatalog(client) {
         [
           code,
           name,
-          "product.plan." + code,
+          "catalog.product.plan." + code + ".name",
           name + " tier for Arda.",
-          "product.plan." + code + ".desc",
+          "catalog.product.plan." + code + ".desc",
           isPublic,
           SYS,
         ],
@@ -3389,9 +3399,9 @@ export async function seedCatalog(client) {
         [
           code,
           name,
-          "product.plan." + code,
+          "catalog.product.plan." + code + ".name",
           name + " tier for Karda.",
-          "product.plan." + code + ".desc",
+          "catalog.product.plan." + code + ".desc",
           isPublic,
           SYS,
         ],
@@ -3460,9 +3470,9 @@ export async function seedCatalog(client) {
         [
           code,
           name,
-          "product.plan." + code,
+          "catalog.product.plan." + code + ".name",
           name + " tier for Atlas.",
-          "product.plan." + code + ".desc",
+          "catalog.product.plan." + code + ".desc",
           isPublic,
           SYS,
         ],
@@ -3522,9 +3532,9 @@ export async function seedCatalog(client) {
       [
         "vxtpl-free",
         "Vxtpl Free",
-        "product.plan.vxtpl-free",
+        "catalog.product.plan.vxtpl-free.name",
         "Free tier for the template agent.",
-        "product.plan.vxtpl-free.desc",
+        "catalog.product.plan.vxtpl-free.desc",
         SYS,
       ],
     );
