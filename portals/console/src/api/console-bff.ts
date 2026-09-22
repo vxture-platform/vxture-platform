@@ -1006,6 +1006,22 @@ export interface PendingOrderSummary {
   paymentState: OrderState;
 }
 
+/**
+ * 续订会跨版本这件事本身，外加新旧差异（owner 2026-09-22）。
+ *
+ * **非空 = 续订会换版本**。差异三项可能全空（只翻了版本号、内容没变），那时不画
+ * 对比表，但**仍要把 `fromPlanVersionId` 回送**——服务端那道闸门只看版本是否相同，
+ * 它同时是自动续订的护栏。
+ */
+export interface RenewVersionChange {
+  fromPlanVersionId: string;
+  toPlanVersionId: string;
+  prices: { cycleUnit: string; from: string | null; to: string | null }[];
+  quota: { key: string; from: string | null; to: string | null }[];
+  featuresAdded: string[];
+  featuresRemoved: string[];
+}
+
 export interface SubscribeContext {
   intent: "subscribe" | "upgrade" | "renew" | "addon" | null;
   product: { code: string; name: string } | null;
@@ -1014,6 +1030,13 @@ export interface SubscribeContext {
   current: SubscribeCurrent | null;
   pendingOrder: PendingOrderSummary | null;
   plans: SubscribePlanOption[];
+  /** 见 RenewVersionChange；null = 不跨版本 / 无在用订阅 / 该套餐已退役。 */
+  versionChange: RenewVersionChange | null;
+  /**
+   * 他在用的那个套餐已不在售（退役）。这时既不能续订，也不该把他推进一个写着
+   * 「升级」的同档位假动作——界面明说下架（owner 2026-09-22）。
+   */
+  currentPlanRetired: boolean;
 }
 
 export interface OfflinePaymentInstructions {
@@ -1424,6 +1447,13 @@ export async function fetchSubscribeContext(params: {
     plan.features = (plan as { features?: string[] }).features ?? [];
     plan.inviteOnly = (plan as { inviteOnly?: boolean }).inviteOnly ?? false;
   }
+  /* 同上：回落成「不跨版本、未退役」——即这两个字段之前的行为。不会凭空拦住正常
+     续订，也不会凭空把在售套餐标成下架。 */
+  ctx.versionChange =
+    (ctx as { versionChange?: RenewVersionChange | null }).versionChange ??
+    null;
+  ctx.currentPlanRetired =
+    (ctx as { currentPlanRetired?: boolean }).currentPlanRetired === true;
   return ctx;
 }
 
@@ -1483,6 +1513,12 @@ export async function createSubscriptionOrder(body: {
   upgradeOfSubscriptionId?: string;
   /** 自动续费 opt-in（owner 2026-09-03）：确认页开关，默认关。 */
   autoRenew: boolean;
+  /**
+   * 跨版本续订的确认（owner 2026-09-22）：把 `versionChange.fromPlanVersionId`
+   * 原样回送，表示差异已呈现给客户。服务端比对它与原订阅当前钉着的版本，不等就拒
+   * ——期间若又发布了新版，旧确认失效。
+   */
+  acceptVersionChangeFrom?: string;
 }): Promise<CreateOrderResult> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/subscription/orders`,

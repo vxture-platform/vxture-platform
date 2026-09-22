@@ -226,6 +226,32 @@ export interface PendingOrderSummary {
   paymentState: OrderState;
 }
 
+/**
+ * 续订会跨版本这件事本身，外加新旧差异（owner 2026-09-22）。
+ *
+ * **非空 = 续订会换版本**。差异三项可能全空（只翻了版本号、内容没变），那时界面不画
+ * 对比表，但**仍要回送确认**——服务端那道闸门只看版本是否相同，它同时是自动续订的
+ * 护栏。
+ *
+ * 续订 = 重新签一次，签的是套餐现在在售的那一版；内容可能与他当初买的不同。
+ * **客户要有知情权与决策权**，所以差异由服务端算好给出去——判据不放前端，两边各算
+ * 一份迟早会分叉成「界面说没变、下单却变了」。
+ *
+ * 只列**变了的**项：没变的条目摆出来会把真正变了的那一两条淹掉。
+ */
+export interface RenewVersionChange {
+  /** 他当前钉着的版本；下单时要原样回送，作为「我看的是这一版」的凭据。 */
+  fromPlanVersionId: string;
+  /** 续订后会落到的版本（套餐当前在售版）。 */
+  toPlanVersionId: string;
+  /** 价格变化，按周期列；两边都有价才比得了，缺一侧给 null。 */
+  prices: { cycleUnit: string; from: string | null; to: string | null }[];
+  /** 配额变化；值统一转字符串，前端只负责展示不做解读。 */
+  quota: { key: string; from: string | null; to: string | null }[];
+  featuresAdded: string[];
+  featuresRemoved: string[];
+}
+
 export interface SubscribeContext {
   /** Normalized known intent, or null = unknown/absent → client degrades. */
   intent: SubscribeIntent | null;
@@ -240,6 +266,19 @@ export interface SubscribeContext {
   pendingOrder: PendingOrderSummary | null;
   /** Purchasable ladder: public active plans' current locked version, tier-sorted. */
   plans: SubscribePlanOption[];
+  /**
+   * 续订会跨版本时的差异；null = 不跨版本、没有在用订阅、或该套餐已不在阶梯上
+   * （退役——那种情况下压根不能续，见 `currentPlanRetired`）。
+   */
+  versionChange: RenewVersionChange | null;
+  /**
+   * 他在用的那个套餐**已不在售**（退役/下架），阶梯里找不到它。
+   *
+   * 这时既不能续订，也不该把他推进一个写着「升级」的按钮——那是同档位的假动作。
+   * 界面据此明说「该套餐已下架，到期后需改选其他档」（owner 2026-09-22 裁定：
+   * 退役 = 服务到本周期为止，不再续）。
+   */
+  currentPlanRetired: boolean;
 }
 
 // ── order endpoints (product_320 §4.4) ──────────────────────────────────────
@@ -252,6 +291,12 @@ interface CreateOrderBody {
   upgradeOfSubscriptionId?: string;
   /** 确认页的自动续费开关（owner 2026-09-03：默认关，需客户开启）；缺省 = false。 */
   autoRenew?: boolean;
+  /**
+   * 跨版本续订的客户确认（owner 2026-09-22）：值是他在确认页上看到差异时、
+   * 原订阅钉着的那个版本 id。服务端比对它与原订阅当前的版本，不等就拒——期间若又
+   * 发布了新版，旧确认失效，必须重新看一遍。
+   */
+  acceptVersionChangeFrom?: string;
 }
 
 interface OfflinePaymentInstructions {
@@ -796,6 +841,8 @@ export class SubscriptionRouter {
         current: null,
         pendingOrder: null,
         plans: [],
+        versionChange: null,
+        currentPlanRetired: false,
       };
     }
 
@@ -804,6 +851,30 @@ export class SubscriptionRouter {
       this.queryPendingOrder(req.tenant.id, product.code),
       this.queryPlanLadder(product.code, req.user.id, req.tenant.id),
     ]);
+    /*
+     * 他在用的那一档，在阶梯里还找得到吗（按 plan_code 比，不按版本）。
+     *   找得到且版本不同 → 续订会跨版本，算差异给客户看
+     *   找不到           → 套餐已退役：不能续，界面明说下架
+     * 没有在用订阅时两者都不成立。
+     */
+    const ladderSame = current
+      ? (plans.find((p) => p.planCode === current.planCode) ?? null)
+      : null;
+    const isLive = current
+      ? current.status === "active" || current.status === "trialing"
+      : false;
+    const currentPlanRetired =
+      Boolean(current) && isLive && ladderSame === null;
+    const versionChange =
+      current &&
+      ladderSame &&
+      ladderSame.planVersionId !== current.planVersionId
+        ? await this.queryVersionChange(
+            current.planVersionId,
+            ladderSame.planVersionId,
+          )
+        : null;
+
     return {
       intent,
       product,
@@ -812,6 +883,97 @@ export class SubscriptionRouter {
       current,
       pendingOrder,
       plans,
+      versionChange,
+      currentPlanRetired,
+    };
+  }
+
+  /**
+   * 两个版本之间的差异（价格 / 配额 / 权益），只列**变了的**。
+   *
+   * 算在服务端，不给前端：同一个判据两边各算一份，迟早分叉成「界面说没变、下单却
+   * 变了」——而这一条正是客户的知情权所依赖的东西（owner 2026-09-22）。
+   *
+   * 配额与权益取 primary 组件那一行：主售品决定客户拿到什么，bundled 是支撑件。
+   */
+  private async queryVersionChange(
+    fromPlanVersionId: string,
+    toPlanVersionId: string,
+  ): Promise<RenewVersionChange | null> {
+    const res = await this.pool.query<{
+      plan_version_id: string;
+      features: string[] | null;
+      quota: Record<string, unknown> | null;
+      prices: { cycleUnit: string; price: string }[];
+    }>(
+      `select pv.id as plan_version_id, pc.features, pc.quota,
+              coalesce((
+                select jsonb_agg(jsonb_build_object(
+                         'cycleUnit', pp.cycle_unit,
+                         'price', to_char(pp.price, 'FM999999999990.00'))
+                       order by pp.cycle_unit)
+                  from product.plan_prices pp
+                 where pp.plan_version_id = pv.id and pp.cycle_count = 1
+              ), '[]'::jsonb) as prices
+         from product.plan_versions pv
+         left join product.plan_components pc
+           on pc.plan_version_id = pv.id and pc.component_role = 'primary'
+        where pv.id = any($1::uuid[])`,
+      [[fromPlanVersionId, toPlanVersionId]],
+    );
+    const byId = new Map(res.rows.map((r) => [r.plan_version_id, r]));
+    const before = byId.get(fromPlanVersionId);
+    const after = byId.get(toPlanVersionId);
+    /* 读不到就不给差异——宁可不显示，也不显示一份半边的对比。 */
+    if (!before || !after) return null;
+
+    const priceOf = (
+      row: { prices: { cycleUnit: string; price: string }[] },
+      cycle: string,
+    ) => row.prices?.find((x) => x.cycleUnit === cycle)?.price ?? null;
+    const cycles = [
+      ...new Set(
+        [...(before.prices ?? []), ...(after.prices ?? [])].map(
+          (x) => x.cycleUnit,
+        ),
+      ),
+    ].sort();
+    const prices = cycles
+      .map((cycleUnit) => ({
+        cycleUnit,
+        from: priceOf(before, cycleUnit),
+        to: priceOf(after, cycleUnit),
+      }))
+      .filter((x) => x.from !== x.to);
+
+    const asText = (v: unknown) =>
+      v === null || v === undefined ? null : String(v);
+    const qa = before.quota ?? {};
+    const qb = after.quota ?? {};
+    const quota = [...new Set([...Object.keys(qa), ...Object.keys(qb)])]
+      .sort()
+      .map((key) => ({ key, from: asText(qa[key]), to: asText(qb[key]) }))
+      .filter((x) => x.from !== x.to);
+
+    const fa = new Set(before.features ?? []);
+    const fb = new Set(after.features ?? []);
+    const featuresAdded = [...fb].filter((x) => !fa.has(x)).sort();
+    const featuresRemoved = [...fa].filter((x) => !fb.has(x)).sort();
+
+    /*
+     * 三项都没变（只是版本号翻了）**也要回这个块**，不能回 null。
+     *
+     * 「会不会跨版本」与「有没有差异」是两件事：服务端只要版本不同就要客户确认
+     * （那道闸门同时是自动续订的护栏），回 null 会让界面无面板可确认、下单却被
+     * 409 拦住，而且不给任何理由。差异为空时界面不画对比表，但仍要回送确认。
+     */
+    return {
+      fromPlanVersionId,
+      toPlanVersionId,
+      prices,
+      quota,
+      featuresAdded,
+      featuresRemoved,
     };
   }
 
@@ -1433,6 +1595,11 @@ export class SubscriptionRouter {
         itemName: plan.planName,
         paymentTtlMinutes: ttlMinutes,
         autoRenew: body.autoRenew === true,
+        /* 原样透传，判据在服务层（它才拿得到原订阅当前钉着的版本）。 */
+        ...(typeof body.acceptVersionChangeFrom === "string" &&
+        body.acceptVersionChangeFrom.trim()
+          ? { acceptVersionChangeFrom: body.acceptVersionChangeFrom.trim() }
+          : {}),
       });
       return {
         status: "pending_payment",

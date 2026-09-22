@@ -2515,7 +2515,18 @@
     "orderFailed": "下单失败，请稍后重试或联系支持。",
     "cancelOrderFailed": "取消订单失败，请稍后重试。",
     "myOrdersEmpty": "暂无订单。",
-    "contactSalesSubject": "{product} 企业版咨询"
+    "contactSalesSubject": "{product} 企业版咨询",
+    "retired": {
+      "title": "该套餐已下架",
+      "description": "你当前的套餐已停售，服务至本周期结束为止，到期后需改选其他档。权益在本周期内照常，不受影响。"
+    },
+    "versionChange": {
+      "title": "续订后将启用新版套餐",
+      "hint": "与你当初订阅的那一版相比，以下内容有变化。确认无误再下单。",
+      "price": "{cycle}付价格",
+      "featuresAdded": "新增权益",
+      "featuresRemoved": "减少权益"
+    }
   },
   "subscriptionHub": {
     "audience": {

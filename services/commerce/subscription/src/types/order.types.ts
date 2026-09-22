@@ -77,6 +77,19 @@ export interface CreateOrderInput {
   intent: OrderIntent;
   /** required when intent = upgrade | renew：原订阅 */
   fromSubscriptionId?: string;
+  /**
+   * 跨版本续订的客户确认（owner 2026-09-22）：值必须**等于原订阅当前钉着的版本 id**。
+   *
+   * 续订会把订阅落到套餐当前在售的那一版，内容可能与他当初买的不同（价格增减、配额
+   * 增减、权益增删）。客户要有知情权与决策权，所以差异得看过、并由客户端把「看到的是
+   * 哪一版」回送过来。期间若又发布了新版，`from` 已经变了，旧确认自然失效——他必须
+   * 重新看一遍。
+   *
+   * 它同时是**自动续订的护栏**：自动续费引擎（`createdByType: "system"`）送不出这个
+   * 值，于是天然跨不了版本。fail closed，而不是靠注释提醒后人。
+   * 现状：`auto_renew` 只是个开关，`next_renewal_at` 全仓无写入方、无作业。
+   */
+  acceptVersionChangeFrom?: string;
   /** billing.invoice_items.item_name, e.g. "Arda Pro" */
   itemName: string;
   /** 付款时效（分钟，个人 30 / 组织 2880）；omitted → 读取端回退 env */

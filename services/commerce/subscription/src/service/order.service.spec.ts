@@ -15,6 +15,8 @@ import type { CustomerNotifyInput } from "./customer-notifier";
 const WS = "ws-1";
 const PV_FREE = "pv-free";
 const PV_PRO = "pv-pro";
+/** 同一个套餐的下一版——续订跨版本那一组用它。 */
+const PV_PRO_V2 = "pv-pro-v2";
 
 function order(over: Partial<OrderRecord> = {}): OrderRecord {
   return {
@@ -111,6 +113,14 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       productName: "Arda",
       planName: "Pro",
     })),
+    /* 续订/升级的判据来源（2026-09-22 起按**套餐**判，不按版本）。默认答「同一个
+       套餐、目标就是当前在售版」——各用例按需覆写。 */
+    resolveRenewTarget: vi.fn(async (fromId: string, toId: string) => ({
+      samePlan: fromId === toId || (fromId === PV_PRO && toId === PV_PRO_V2),
+      toIsCurrent: true,
+      toPlanStatus: "active",
+      toPlanCode: "arda-pro",
+    })),
     grantLeftoverToPrepaid: vi.fn(async () => true),
     getRefundPolicy: vi.fn(async () => ({
       windowHours: 24,
@@ -202,7 +212,7 @@ describe("OrderService.createOrder guards", () => {
     expect(orders.createOrder).toHaveBeenCalledTimes(1);
   });
 
-  it("upgrade: 409 when the target version equals the current one", async () => {
+  it("upgrade: 409 当目标是同一个套餐（换档才叫升级，延期用续订）", async () => {
     const { service } = build(order(), sub({ planVersionId: PV_PRO }));
     await expect(
       service.createOrder({
@@ -251,6 +261,114 @@ describe("OrderService.createOrder guards", () => {
         itemName: "Pro",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  /*
+   * 续订跨版本（owner 2026-09-22）。
+   *
+   * 套餐一旦发布新版本，阶梯送的就是新版本 id。此前判据按 `planVersionId` 比，于是
+   * 同一档的老客户想续期被判成升级——周期从现在重置、走折抵报价、订阅被重钉到新版，
+   * 界面还写「升级」，全程不报错。现在判据按**套餐**比。
+   *
+   * 而跨版本要客户确认过差异才放行：客户要有知情权与决策权（尤其价格增减、配额增减）。
+   * 这道闸门同时是**自动续订的护栏**——自动续费引擎送不出这个确认，于是天然跨不了版本。
+   */
+  function renewInput(over: Record<string, unknown> = {}) {
+    return {
+      tenantId: "t-1",
+      workspaceId: WS,
+      planVersionId: PV_PRO_V2,
+      cycleUnit: "month",
+      price: 100,
+      createdBy: "u-1",
+      intent: "renew" as const,
+      fromSubscriptionId: "sub-1",
+      itemName: "Pro",
+      ...over,
+    };
+  }
+
+  it("续订跨版本：带上确认 → 放行", async () => {
+    const { service, orders } = build(
+      order({ intent: "renew" }),
+      sub({ planVersionId: PV_PRO }),
+    );
+    await service.createOrder(renewInput({ acceptVersionChangeFrom: PV_PRO }));
+    expect(orders.createOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("续订跨版本：没带确认 → 409 VERSION_CHANGE_NOT_ACKNOWLEDGED，且不落单", async () => {
+    const { service, orders } = build(
+      order({ intent: "renew" }),
+      sub({ planVersionId: PV_PRO }),
+    );
+    const err = await service
+      .createOrder(renewInput())
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      code: "VERSION_CHANGE_NOT_ACKNOWLEDGED",
+    });
+    expect(orders.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("续订跨版本：确认的是**别的**版本 → 仍然拒（期间又发版，旧确认失效）", async () => {
+    const { service, orders } = build(
+      order({ intent: "renew" }),
+      sub({ planVersionId: PV_PRO }),
+    );
+    const err = await service
+      .createOrder(renewInput({ acceptVersionChangeFrom: "pv-stale" }))
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(orders.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("续订不跨版本：不需要确认（别给正常续订平白加一道门）", async () => {
+    const { service, orders } = build(
+      order({ intent: "renew" }),
+      sub({ planVersionId: PV_PRO }),
+    );
+    await service.createOrder(renewInput({ planVersionId: PV_PRO }));
+    expect(orders.createOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("续订到已退役的套餐 → 409 PLAN_RETIRED（服务到本周期为止，不再续）", async () => {
+    const { service, orders } = build(
+      order({ intent: "renew" }),
+      sub({ planVersionId: PV_PRO }),
+    );
+    orders.resolveRenewTarget.mockResolvedValueOnce({
+      samePlan: true,
+      toIsCurrent: true,
+      toPlanStatus: "deprecated",
+      toPlanCode: "arda-pro",
+    });
+    const err = await service
+      .createOrder(renewInput({ planVersionId: PV_PRO }))
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      code: "PLAN_RETIRED",
+    });
+    expect(orders.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("续订到陈旧版本（不是当前在售版）→ 409", async () => {
+    const { service, orders } = build(
+      order({ intent: "renew" }),
+      sub({ planVersionId: PV_PRO }),
+    );
+    orders.resolveRenewTarget.mockResolvedValueOnce({
+      samePlan: true,
+      toIsCurrent: false,
+      toPlanStatus: "active",
+      toPlanCode: "arda-pro",
+    });
+    await expect(
+      service.createOrder(renewInput({ planVersionId: PV_PRO })),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.createOrder).not.toHaveBeenCalled();
   });
 
   it("renew: an expired same-plan subscription is renewable (revival path)", async () => {
@@ -336,6 +454,45 @@ describe("OrderService upgrade proration (P2-a)", () => {
       expect.objectContaining({ id: "ord-1" }),
       expect.objectContaining({ actorType: "operator" }),
     );
+  });
+
+  /*
+   * 续订落账要把订阅**重钉到订单那一版**（owner 2026-09-22：续订 = 重新签一次，
+   * 签的是现在在售的那一版）。不重钉的话「小改开新版本」永远触达不到存量客户——
+   * 那正是 owner 最初想改已发布套餐的原因。
+   *
+   * 两面都写：跨版本要重钉，不跨版本不许白写一次（`toPlanVersionId` 不该出现）。
+   */
+  it("fulfill(renew) 跨版本：把订阅重钉到订单那一版", async () => {
+    const { service, subscriptions } = build(
+      order({
+        intent: "renew",
+        fromSubscriptionId: "sub-1",
+        planVersionId: PV_PRO_V2,
+      }),
+      sub({ planVersionId: PV_PRO, status: "active" }),
+    );
+    await service.fulfill("ord-1", { actorType: "customer", actorId: "u-1" });
+    expect(subscriptions.updateSubscription).toHaveBeenCalledWith(
+      "sub-1",
+      expect.objectContaining({ toPlanVersionId: PV_PRO_V2 }),
+    );
+  });
+
+  it("fulfill(renew) 不跨版本：不带 toPlanVersionId（别白写一次）", async () => {
+    const { service, subscriptions } = build(
+      order({
+        intent: "renew",
+        fromSubscriptionId: "sub-1",
+        planVersionId: PV_PRO,
+      }),
+      sub({ planVersionId: PV_PRO, status: "active" }),
+    );
+    await service.fulfill("ord-1", { actorType: "customer", actorId: "u-1" });
+    const call = subscriptions.updateSubscription.mock.calls.find(
+      (c: unknown[]) => c[0] === "sub-1",
+    );
+    expect(call?.[1]).not.toHaveProperty("toPlanVersionId");
   });
 
   it("fulfill(upgrade) with no leftover never touches the prepaid balance", async () => {
