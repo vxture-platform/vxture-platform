@@ -280,6 +280,24 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:message-usage
 
+      # 库里的目录表带着伴生的 `*_key` 列（角色名 / 权限名 / 菜单名），前端按它取词条。
+      # 这道守卫查的是**列存不存在**——新表漏加伴生键列时，那张表从此与 i18n 无缘，
+      # 而界面照常显示（回落到英文名列），不报错。
+      #
+      # 2026-09-22 接进 CI：它在 package.json 里躺了很久，**ci.yml 里一步都没有**。
+      # 「仓里有一份完整的实现」不等于「它在跑」——跑过才知道，当时一跑就是绿的，
+      # 所以它不是坏了，是从来没被接线。同批接进来的还有下面的 brand-name。
+      - name: i18n companion key columns
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:i18n-keys
+
+      # 品牌名只有一个权威值（BRAND_NAME 常量），词条里不许各写各的，退役名不许残留。
+      # 品牌改名是那种「改了九成、剩一成在犄角旮旯」的事：漏掉的那处不报错，只是
+      # 某个页面还挂着旧名，而中文环境下大概率没人点到。同上，本条此前也从未在 CI 跑过。
+      - name: Brand name single source
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:brand-name
+
       # admin 侧栏原来对缺词条**回落成配置里的中文**，理由写的是「键由数据驱动，
       # 词条目录不可能穷举」——不成立：数据驱动的是运行时选哪一个，不是可能有
       # 哪些；取值集合就是 navigation.ts，在仓里、可枚举。那个托底的代价是**静默
