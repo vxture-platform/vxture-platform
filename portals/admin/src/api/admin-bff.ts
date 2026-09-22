@@ -627,12 +627,15 @@ export async function deprecatePlan(
 /**
  * 调整产品在目录里的先后次序（owner 2026-09-22）。
  *
- * 只说「哪个、往哪动」——次序由服务端按**全集**算。让前端提交有序数组的话，它得在
- * 筛选后的子集上算全局次序，「上移」的语义当场含糊。
+ * `anchorCode` 是**运营屏幕上的那个邻居**，up/down 必填：服务端按全集重排，但参照
+ * 物得由看得见列表的这一方给。不给的话服务端只能取全集相邻行，而那一行可能被筛掉
+ * 或在另一页——库里换了位、屏幕上没动，toast 却说「已调整」。
+ * top/bottom 不需要：全集端点与视图端点重合。
  */
 export async function moveProduct(
   productCode: string,
   direction: "up" | "down" | "top" | "bottom",
+  anchorCode?: string,
 ): Promise<{ productCode: string; moved: boolean; position: number }> {
   return mutateJson<{
     productCode: string;
@@ -641,7 +644,7 @@ export async function moveProduct(
   }>(
     `/api/products/capabilities/${encodeURIComponent(productCode)}/move`,
     "PATCH",
-    { direction },
+    anchorCode ? { direction, anchorCode } : { direction },
     "Failed to reorder product",
   );
 }

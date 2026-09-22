@@ -16,9 +16,12 @@ import { MANAGE, makeReq, makeTxClient, noDbPool } from "../testing/pool-mocks";
  * 默认值 0，实际顺序落到并列键 `product_code ASC`——**字母序**。
  * 字母序看起来像「有某种顺序」，所以一直没被当成缺陷。
  *
- * ── 为什么方向交给服务端 ──
- * 产品目录是带筛选与分页的列表页。让前端提交有序数组，等于让它在筛选后的子集上算
- * 全局次序——「上移」到底是在视图里上移还是在全集里上移，语义当场含糊。
+ * ── up/down 为什么要带 anchorCode ──
+ * 第一版让服务端按**全集**取相邻行。上线当天 owner 报：置顶/置底正常，上移/下移
+ * 偶尔生效、「提示说已经移到了但实际未移动」。两件事不是一回事：
+ *   · 置顶/置底 → 全集端点，在任何筛选/分页的视图里**也**是端点 ⇒ 看着总是对的
+ *   · 上移/下移 → 全集相邻行可能被筛掉或在另一页 ⇒ 库里换了位，屏幕上没动
+ * 服务端确实移了，所以 moved:true、toast 照弹——报告成功却什么也没发生。
  */
 
 const ORDER = ["alpha", "beta", "gamma", "delta"];
@@ -41,14 +44,17 @@ function writtenOrder(tx: { calls: string[]; params: unknown[][] }) {
 
 describe("PATCH capabilities/:code/move —— 目录次序", () => {
   it.each([
-    ["up", "gamma", ["alpha", "gamma", "beta", "delta"]],
-    ["down", "beta", ["alpha", "gamma", "beta", "delta"]],
-    ["top", "delta", ["delta", "alpha", "beta", "gamma"]],
-    ["bottom", "alpha", ["beta", "gamma", "delta", "alpha"]],
-  ] as const)("%s：%s → %j", async (direction, code, expected) => {
+    ["up", "gamma", "beta", ["alpha", "gamma", "beta", "delta"]],
+    ["down", "beta", "gamma", ["alpha", "gamma", "beta", "delta"]],
+    ["top", "delta", "", ["delta", "alpha", "beta", "gamma"]],
+    ["bottom", "alpha", "", ["beta", "gamma", "delta", "alpha"]],
+  ] as const)("%s：%s → %j", async (direction, code, anchor, expected) => {
     const tx = catalogTx();
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    const res = await router.moveProduct(makeReq(MANAGE), code, { direction });
+    const res = await router.moveProduct(makeReq(MANAGE), code, {
+      direction,
+      ...(anchor ? { anchorCode: anchor } : {}),
+    });
 
     expect(res.moved).toBe(true);
     expect(writtenOrder(tx)).toEqual(expected);
@@ -56,30 +62,108 @@ describe("PATCH capabilities/:code/move —— 目录次序", () => {
   });
 
   /*
+   * 本次缺陷的回归用例。运营筛掉了 beta，屏幕上是 alpha / gamma / delta；
+   * 对 gamma 点「上移」，看得见的邻居是 alpha。
+   *
+   * 旧行为：服务端取全集相邻行 beta，把 gamma 挪到 beta 之前 ⇒ 全集变成
+   *   alpha, gamma, beta, delta，而**筛选后的视图仍是 alpha, gamma, delta**——
+   *   一模一样。moved:true、toast 弹出、屏幕纹丝不动。
+   * 现在：anchor=alpha ⇒ gamma 落到 alpha 之前，视图当场变成 gamma, alpha, delta。
+   */
+  it("邻居被筛掉时，上移跟的是**看得见**的那一个（回归）", async () => {
+    const tx = catalogTx();
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    const res = await router.moveProduct(makeReq(MANAGE), "gamma", {
+      direction: "up",
+      anchorCode: "alpha",
+    });
+
+    expect(res.moved).toBe(true);
+    expect(writtenOrder(tx)).toEqual(["gamma", "alpha", "beta", "delta"]);
+  });
+
+  it("下移同理：跨过被筛掉的行，落到看得见的那个之后", async () => {
+    const tx = catalogTx();
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await router.moveProduct(makeReq(MANAGE), "alpha", {
+      direction: "down",
+      anchorCode: "gamma",
+    });
+
+    expect(writtenOrder(tx)).toEqual(["beta", "gamma", "alpha", "delta"]);
+  });
+
+  /* 不给 anchor 就 400。兜底回「按全集取相邻」正是本次的缺陷本身，所以不留兜底。 */
+  it.each(["up", "down"] as const)(
+    "%s 不带 anchorCode → 400，且一次都不查库",
+    async (direction) => {
+      const tx = catalogTx();
+      const router = new ProductsRouter(noDbPool().pool, tx.pool);
+      await expect(
+        router.moveProduct(makeReq(MANAGE), "gamma", { direction }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tx.calls).toHaveLength(0);
+    },
+  );
+
+  it("anchorCode 就是自己 → 400", async () => {
+    const tx = catalogTx();
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await expect(
+      router.moveProduct(makeReq(MANAGE), "gamma", {
+        direction: "up",
+        anchorCode: "gamma",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.calls).toHaveLength(0);
+  });
+
+  it("anchorCode 指向不存在的产品 → 404 且回滚", async () => {
+    const tx = catalogTx();
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await expect(
+      router.moveProduct(makeReq(MANAGE), "gamma", {
+        direction: "up",
+        anchorCode: "nope",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(tx.outcome().rolledBack).toBe(true);
+  });
+
+  /*
    * 已在端点时**不写库**。写了的话每次点「上移」都会重排一遍全表、并在审计里留一条
    * 什么也没改的记录——而运营点到顶部之后还会再点一下确认自己到顶了。
    */
   it.each([
-    ["up", "alpha"],
-    ["top", "alpha"],
-    ["down", "delta"],
-    ["bottom", "delta"],
-  ] as const)("已在端点：%s %s → 不写库、不写审计", async (direction, code) => {
-    const tx = catalogTx();
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    const res = await router.moveProduct(makeReq(MANAGE), code, { direction });
+    ["up", "beta", "gamma"],
+    ["top", "alpha", ""],
+    ["down", "gamma", "beta"],
+    ["bottom", "delta", ""],
+  ] as const)(
+    "位置没变：%s %s → 不写库、不写审计",
+    async (direction, code, anchor) => {
+      const tx = catalogTx();
+      const router = new ProductsRouter(noDbPool().pool, tx.pool);
+      const res = await router.moveProduct(makeReq(MANAGE), code, {
+        direction,
+        ...(anchor ? { anchorCode: anchor } : {}),
+      });
 
-    expect(res.moved).toBe(false);
-    expect(writtenOrder(tx)).toBeNull();
-    expect(
-      tx.calls.some((c) => c.includes("insert into support.audit_logs")),
-    ).toBe(false);
-  });
+      expect(res.moved).toBe(false);
+      expect(writtenOrder(tx)).toBeNull();
+      expect(
+        tx.calls.some((c) => c.includes("insert into support.audit_logs")),
+      ).toBe(false);
+    },
+  );
 
   it("整份次序一起写，不是只改动的那两行", async () => {
     const tx = catalogTx();
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    await router.moveProduct(makeReq(MANAGE), "gamma", { direction: "up" });
+    await router.moveProduct(makeReq(MANAGE), "gamma", {
+      direction: "up",
+      anchorCode: "beta",
+    });
 
     /* sort 全 0 的存量数据没有可交换的号；归一化重排才让结果与「当前看到的顺序」
        一致，不留空洞或重号。 */
@@ -99,7 +183,10 @@ describe("PATCH capabilities/:code/move —— 目录次序", () => {
     const tx = catalogTx();
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
     await expect(
-      router.moveProduct(makeReq(MANAGE), "nope", { direction: "up" }),
+      router.moveProduct(makeReq(MANAGE), "nope", {
+        direction: "up",
+        anchorCode: "alpha",
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(tx.outcome().rolledBack).toBe(true);
   });

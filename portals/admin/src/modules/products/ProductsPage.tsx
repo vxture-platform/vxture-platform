@@ -128,17 +128,25 @@ function ProductActionsMenu({
   moveBusy,
   isFirst,
   isLast,
+  prevCode,
+  nextCode,
 }: {
   product: ProductCapabilityRecord;
   onViewDetails: () => void;
   onOpenMarketing: () => void;
   onOpenPlans: () => void;
-  /** 目录次序：方向交给服务端按**全集**算，这里只说「往哪动」。 */
-  onMove: (direction: "up" | "down" | "top" | "bottom") => void;
+  /** 目录次序。up/down 由调用方带上看得见的那个邻居（anchorCode）。 */
+  onMove: (
+    direction: "up" | "down" | "top" | "bottom",
+    anchorCode?: string,
+  ) => void;
   moveBusy: boolean;
-  /** 已在首/末位时置灰——服务端也会原样返回不写库，这里只是不让人白点。 */
+  /** 已在这张表的首/末位时置灰——没有邻居可参照，服务端也会拒。 */
   isFirst: boolean;
   isLast: boolean;
+  /** 本行在当前这张表里的上一个/下一个产品码；没有则为空。 */
+  prevCode: string;
+  nextCode: string;
 }) {
   const tShared = useTranslations();
   return (
@@ -189,15 +197,15 @@ function ProductActionsMenu({
             id: "move-up",
             label: "上移",
             icon: "arrow-up",
-            disabled: moveBusy || isFirst,
-            onSelect: () => onMove("up"),
+            disabled: moveBusy || isFirst || !prevCode,
+            onSelect: () => onMove("up", prevCode),
           },
           {
             id: "move-down",
             label: "下移",
             icon: "arrow-down",
-            disabled: moveBusy || isLast,
-            onSelect: () => onMove("down"),
+            disabled: moveBusy || isLast || !nextCode,
+            onSelect: () => onMove("down", nextCode),
           },
           {
             id: "move-bottom",
@@ -345,17 +353,22 @@ export function ProductsPage() {
   }, []);
 
   /**
-   * 移动一格。服务端按**全集**算并把整份次序重排号，所以这里重新拉一次列表，
-   * 而不是本地猜一个新顺序——猜的那份与服务端算的不一定一致。
+   * 移动一格。服务端把整份次序重排号，所以这里重新拉一次列表，而不是本地猜一个新
+   * 顺序——猜的那份与服务端算的不一定一致。
+   *
+   * `anchorCode` 是运营**在这张表上看得见**的那个邻居（取自 filteredProducts，
+   * 跨页也算看得见，翻一页就跟过去了）。不送它的话服务端只能取全集相邻行，而那一行
+   * 可能正被筛掉——库里换了位、屏幕上没动，toast 却说「已调整」。
    */
   const handleMove = useCallback(
     async (
       productCode: string,
       direction: "up" | "down" | "top" | "bottom",
+      anchorCode?: string,
     ) => {
       setMoveBusy(true);
       try {
-        const res = await moveProduct(productCode, direction);
+        const res = await moveProduct(productCode, direction, anchorCode);
         if (res.moved) {
           await load();
           toast({ tone: "success", title: "目录次序已调整" });
@@ -416,6 +429,19 @@ export function ProductsPage() {
       return true;
     });
   }, [accessFilter, products, query, sourceFilter, statusFilter, typeFilter]);
+
+  /* 每行在**当前这张表**里的上下邻居。up/down 拿它当参照物送给服务端；
+     全集邻居不作数——被筛掉的那一行运营看不见，跟它换位等于什么也没发生。 */
+  const neighbors = useMemo(() => {
+    const map = new Map<string, { prev: string; next: string }>();
+    filteredProducts.forEach((product, index) => {
+      map.set(product.productCode, {
+        prev: filteredProducts[index - 1]?.productCode ?? "",
+        next: filteredProducts[index + 1]?.productCode ?? "",
+      });
+    });
+    return map;
+  }, [filteredProducts]);
 
   const pageCount = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const activePage = Math.min(currentPage, pageCount);
@@ -639,16 +665,22 @@ export function ProductsPage() {
               rowActions={(product) => (
                 <ProductActionsMenu
                   product={product}
-                  /* 首末位按**全集**判，不按当前筛选/分页后的视图——移动本身也是
-                     按全集算的，两边口径要一致。 */
-                  isFirst={products[0]?.productCode === product.productCode}
-                  isLast={
-                    products[products.length - 1]?.productCode ===
-                    product.productCode
+                  /* 首末位与上下邻居都按 filteredProducts 判——那才是运营正在看的
+                     这张表。按全集判会让「上移」去跟一个被筛掉的行换位：库里动了，
+                     屏幕上没动。分页不在此列：跨页的邻居仍是看得见的，翻一页就跟
+                     过去了，所以用 filteredProducts 而不是 visibleProducts。 */
+                  isFirst={
+                    filteredProducts[0]?.productCode === product.productCode
                   }
+                  isLast={
+                    filteredProducts[filteredProducts.length - 1]
+                      ?.productCode === product.productCode
+                  }
+                  prevCode={neighbors.get(product.productCode)?.prev ?? ""}
+                  nextCode={neighbors.get(product.productCode)?.next ?? ""}
                   moveBusy={moveBusy}
-                  onMove={(direction) =>
-                    void handleMove(product.productCode, direction)
+                  onMove={(direction, anchorCode) =>
+                    void handleMove(product.productCode, direction, anchorCode)
                   }
                   onViewDetails={() => handleOpenDetails(product.productCode)}
                   /* 营销配置是**与产品详情同级**的独立二级页，不是它的子页——

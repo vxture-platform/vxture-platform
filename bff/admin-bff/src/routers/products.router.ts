@@ -104,9 +104,21 @@ export class ProductsRouter {
    * 字母序看起来像「有某种顺序」，所以一直没被当成缺陷。
    *
    * ── 为什么是「移动一格」而不是「提交整个数组」 ──
-   * 产品目录是带筛选与分页的列表页。让前端提交有序数组，等于让它在**筛选后的子集**
-   * 上算全局次序——「上移」到底是在当前视图里上移还是在全集里上移，语义当场含糊。
-   * 所以方向交给服务端：它按全集算，前端只说「哪个、往哪动」。
+   * 产品目录是带筛选与分页的列表页。让前端提交有序数组，等于让它在筛选后的子集上
+   * 算全局次序，会把没在看的那些行一起重排。所以前端只说「哪个、往哪动」。
+   *
+   * ── up/down 必须带 anchorCode（2026-09-22 当天修）──
+   * 第一版让服务端**按全集**取相邻行。上线当天 owner 报：置顶/置底正常，上移/下移
+   * 偶尔生效、「提示说已经移到了但实际没动」。原因是这两件事不是一回事：
+   *   · 置顶/置底 → 全集的端点，在任何筛选/分页的视图里**也**是端点 ⇒ 看着总是对的
+   *   · 上移/下移 → 全集的相邻行可能被筛掉、或在另一页 ⇒ 库里换了位，**屏幕上没动**
+   * 服务端确实移了，所以 `moved: true`、toast 照弹——一个报告成功却什么也没发生的
+   * 控件，比置灰更糟。
+   *
+   * 改法：up/down 由前端把**它看得见的那个邻居**（anchorCode）一起送来，服务端把
+   * 目标放到 anchor 的前/后。没有筛选时 anchor 就是全集邻居，行为与原来逐字相同。
+   * anchorCode 不给就 400——不给兜底回「按全集取相邻」，那正是本次的缺陷本身。
+   * top/bottom 不需要 anchor：全集端点与视图端点重合。
    *
    * ── 每次都重排号 ──
    * 算完把所有行的 sort 写成 1..n（`WITH ORDINALITY` 从 1 起），而不是只改动的那
@@ -120,7 +132,7 @@ export class ProductsRouter {
   async moveProduct(
     @Req() req: Request & RequestContext,
     @Param("productCode") productCode: string,
-    @Body() body: { direction?: unknown },
+    @Body() body: { direction?: unknown; anchorCode?: unknown },
   ): Promise<{ productCode: string; moved: boolean; position: number }> {
     assertCanManageProducts(req);
     const code = decodeURIComponent(productCode);
@@ -134,6 +146,19 @@ export class ProductsRouter {
       throw new BadRequestException(
         "direction must be one of up / down / top / bottom",
       );
+    }
+
+    /* up/down 的参照物由调用方给：它是运营屏幕上的那个邻居，不一定是全集的邻居。 */
+    const anchorRaw = body?.anchorCode;
+    const anchorCode =
+      typeof anchorRaw === "string" && anchorRaw.trim() ? anchorRaw.trim() : "";
+    if ((direction === "up" || direction === "down") && !anchorCode) {
+      throw new BadRequestException(
+        "anchorCode is required for direction up / down",
+      );
+    }
+    if (anchorCode && anchorCode === code) {
+      throw new BadRequestException("anchorCode must differ from the product");
     }
 
     let moved = false;
@@ -152,19 +177,29 @@ export class ProductsRouter {
       if (from < 0) {
         throw new NotFoundException(`Product ${code} not found`);
       }
-      const to =
-        direction === "up"
-          ? Math.max(0, from - 1)
-          : direction === "down"
-            ? Math.min(rows.length - 1, from + 1)
-            : direction === "top"
-              ? 0
-              : rows.length - 1;
-      position = to;
-      if (to === from) return; // 已在端点，不写库
 
+      /* 先把目标摘出来，再在**剩下的**序列里定位插入点——anchor 在目标前面还是
+         后面都不用分情况，索引不会因为摘除而错位。 */
       const next = rows.slice();
       const [picked] = next.splice(from, 1);
+
+      let to: number;
+      if (direction === "top") {
+        to = 0;
+      } else if (direction === "bottom") {
+        to = next.length;
+      } else {
+        const anchorAt = next.findIndex((r) => r.product_code === anchorCode);
+        if (anchorAt < 0) {
+          throw new NotFoundException(`Product ${anchorCode} not found`);
+        }
+        // 上移 = 落到 anchor 之前；下移 = 落到 anchor 之后。
+        to = direction === "up" ? anchorAt : anchorAt + 1;
+      }
+
+      position = to;
+      if (to === from) return; // 位置没变，不写库、不留空审计
+
       next.splice(to, 0, picked!);
       moved = true;
 
