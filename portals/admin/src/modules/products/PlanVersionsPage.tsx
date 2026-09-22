@@ -907,6 +907,11 @@ export function PlanVersionsPage() {
               // 新建的套餐骨架一律公开（BFF 的 INSERT 也是 is_public=true）；
               // 要改成邀请制，在套餐卡的动作菜单里翻。
               isPublic: true,
+              /* 新建的骨架还没填说明；两个展示轴默认可见（库里也是 DEFAULT true）。
+                 下一次 loadMatrix() 会用服务端的真值覆盖。 */
+              description: "",
+              isCustomerVisible: true,
+              isWorkforceVisible: true,
               productCode: createTarget.productCode,
               productName: createTarget.productName,
             });

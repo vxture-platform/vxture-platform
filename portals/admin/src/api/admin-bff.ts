@@ -466,6 +466,12 @@ export interface PlanMatrixPlan {
    * （不进客户的套餐阶梯，只有持邀请券的人看得见、买得到）。
    */
   isPublic: boolean;
+  /** 套餐说明（客户可见）；可改。 */
+  description: string;
+  /** 展示轴：客户端显不显示。与 isPublic（能不能自助买）正交。 */
+  isCustomerVisible: boolean;
+  /** 展示轴：运营端显不显示。 */
+  isWorkforceVisible: boolean;
 }
 
 /** One row of the publishing desk: a sellable product and its tier ladder. */
@@ -585,6 +591,30 @@ export async function deprecatePlan(
     "POST",
     undefined,
     "Failed to deprecate plan",
+  );
+}
+
+/**
+ * 改套餐的可改字段（owner 2026-09-22：A 类字段开放编辑）。
+ *
+ * 只送要改的键——`undefined` 的字段服务端不碰。名称/说明只换显示名（历史单据是
+ * 下单时快照，不受影响）；两个可见性是展示轴。能不能自助买是另一根轴，走
+ * `setPlanVisibility`。
+ */
+export async function updateProductPlan(
+  planId: string,
+  body: {
+    planName?: string;
+    description?: string;
+    isCustomerVisible?: boolean;
+    isWorkforceVisible?: boolean;
+  },
+): Promise<{ planCode: string; updated: string[] }> {
+  return mutateJson<{ planCode: string; updated: string[] }>(
+    `/api/products/plans/${encodeURIComponent(planId)}`,
+    "PATCH",
+    body,
+    "Failed to update plan",
   );
 }
 
