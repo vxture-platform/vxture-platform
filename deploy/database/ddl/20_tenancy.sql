@@ -18,6 +18,15 @@ CREATE TABLE tenancy.tenants (
     verification_type    varchar(32),
     -- workspace_counter 已随 §11 v4 解耦退役:空间号不再由租户号 ×1000 + 序号推导,
     -- 每租户空间数因此不再被三位序号卡在 999(2026-09-05)。
+    -- ↑ 那次解耦把唯一的数量闸也一并去掉了,此后建工作区无任何上限。下面两列是
+    --   补回来的**防滥用闸**(owner 2026-09-22「设定一个比较高的上限,防止恶意爆仓
+    --   就行」),不是售卖配额——不进 quota_pools、不进套餐 limits、不上订阅页。
+    --   NULL = 随 admin.settings 的 tenancy/tenant.{member,workspace}_limit(500/200),
+    --   所以存量零迁移;某个大客户要更高时,运营只改这一行。
+    --   只在租户一层设成员闸:fk_workspace_memberships_tenant_member 强制工作区成员
+    --   必须先是租户成员,故任一工作区成员数恒 ≤ 租户成员数,再设一层拦不到新东西。
+    member_limit         int,
+    workspace_limit      int,
     created_at           timestamptz  NOT NULL DEFAULT now(),
     updated_at           timestamptz  NOT NULL DEFAULT now(),
     deleted_at           timestamptz,

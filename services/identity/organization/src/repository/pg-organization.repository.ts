@@ -150,6 +150,138 @@ const DEFAULT_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
 const ACCEPT_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * 租户成员数的**防滥用闸**（owner 2026-09-22：「设定一个比较高的上限，防止恶意
+ * 爆仓就行」）。
+ *
+ * ── 它不是售卖配额 ──
+ * 不走产品订阅、不进 quota_pools、不进套餐 limits、不上订阅页。那些回答「卖多少」，
+ * 这条回答「最多能撑多少」。两者混在一起就会出现「退订某产品后已加入的人怎么办」
+ * 这种无解局面。
+ *
+ * ── 为什么只在租户一层 ──
+ * `fk_workspace_memberships_tenant_member` 强制工作区成员必须先是租户成员，于是恒有
+ * 「任一工作区成员数 ≤ 租户成员数」。再设一个工作区成员闸拦不到新东西。
+ *
+ * ── 三个必须做对的细节 ──
+ * ① **在同一事务里、insert 之前**判，且先 `for update` 锁住租户行——否则两个并发
+ *    邀请各自读到 499 都放行，闸形同虚设。
+ * ② **已是成员的不算新增**：addOrgMember 走 `on conflict do update`，重复添加不长数，
+ *    此时不该被拦。
+ * ③ 上限取值 = 租户行的覆盖值 ?? 平台默认（admin.settings）。覆盖列可空正是为了
+ *    存量零迁移；默认读不到时**抛**，不兜一个硬编码数——兜底会让「设置丢了」这件事
+ *    悄无声息。
+ */
+/**
+ * 取某个闸的生效值：租户行的覆盖值 ?? 平台默认（admin.settings）。
+ *
+ * 覆盖列可空正是为了存量零迁移；默认读不到时**抛**，不兜一个硬编码数——兜底会让
+ * 「设置丢了」这件事悄无声息，而那正是闸失效的形态。
+ *
+ * 返回 null = 租户不存在，调用方放行，交给后续的外键去报。
+ */
+export async function resolveTenantCap(
+  client: PoolClient,
+  tenantId: string,
+  column: "member_limit" | "workspace_limit",
+  settingKey: "tenant.member_limit" | "tenant.workspace_limit",
+  lock: boolean,
+): Promise<number | null> {
+  /* 列名不可参数化，但它来自上面那个字面量联合类型，不是外部输入。 */
+  const row = await client.query<{ cap: number | null }>(
+    `select ${column} as cap from tenancy.tenants where id = $1${
+      lock ? " for update" : ""
+    }`,
+    [tenantId],
+  );
+  if (row.rowCount === 0) return null;
+
+  const override = row.rows[0]?.cap ?? null;
+  if (override !== null) return override;
+
+  const def = await client.query<{ config_value: string }>(
+    `select config_value from admin.settings
+      where config_group = 'tenancy' and config_key = $1`,
+    [settingKey],
+  );
+  const raw = def.rows[0]?.config_value;
+  const parsed = raw === undefined ? Number.NaN : Number(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(
+      `${settingKey} not configured — refusing to proceed without a cap`,
+    );
+  }
+  return parsed;
+}
+
+export async function assertTenantMemberHeadroom(
+  client: PoolClient,
+  tenantId: string,
+  incomingUserId: string,
+): Promise<void> {
+  // ① 锁租户行，把同一租户的并发加人串起来
+  const limit = await resolveTenantCap(
+    client,
+    tenantId,
+    "member_limit",
+    "tenant.member_limit",
+    true,
+  );
+  if (limit === null) return;
+
+  // ② 已是成员则不是新增，直接放行
+  const existing = await client.query(
+    `select 1 from tenancy.tenant_memberships
+      where tenant_id = $1 and user_id = $2`,
+    [tenantId, incomingUserId],
+  );
+  if (existing.rowCount && existing.rowCount > 0) return;
+
+  const used = await client.query<{ n: string }>(
+    `select count(*)::text as n from tenancy.tenant_memberships
+      where tenant_id = $1 and status = 'active'`,
+    [tenantId],
+  );
+  const current = Number(used.rows[0]?.n ?? "0");
+  if (current >= limit) {
+    throw new ConflictException(
+      `tenant member limit reached (${current}/${limit})`,
+    );
+  }
+}
+
+/**
+ * 工作区数量的防滥用闸。判据与成员那条同源，只有两处不同：
+ * ① 没有「已存在则放行」——每次建区都是真新增；
+ * ② 不自己加锁：调用点（createWorkspace）为了防重名已经 `for update` 锁住租户行，
+ *    重复加锁无益。
+ */
+export async function assertTenantWorkspaceHeadroom(
+  client: PoolClient,
+  tenantId: string,
+): Promise<void> {
+  const limit = await resolveTenantCap(
+    client,
+    tenantId,
+    "workspace_limit",
+    "tenant.workspace_limit",
+    false,
+  );
+  if (limit === null) return;
+
+  const used = await client.query<{ n: string }>(
+    `select count(*)::text as n from tenancy.workspaces
+      where tenant_id = $1 and deleted_at is null`,
+    [tenantId],
+  );
+  const current = Number(used.rows[0]?.n ?? "0");
+  if (current >= limit) {
+    throw new ConflictException(
+      `tenant workspace limit reached (${current}/${limit})`,
+    );
+  }
+}
+
 @Injectable()
 export class PgOrganizationRepository implements OrganizationReadRepository {
   constructor(@Inject(ORG_PG_POOL) private readonly pool: Pool) {}
@@ -697,6 +829,12 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         await client.query("rollback");
         return { ok: false, reason: "name_taken" };
       }
+      /* 工作区数量的防滥用闸。租户行在上面已 `for update` 锁住（防重名并发时锁的），
+         这里直接复用那把锁——并发建区因此被串起来，不会各自读到 199 都放行。
+         建工作区**不需要对方有账号**，比加成员容易被脚本利用（加成员要对方接受
+         邀请），而 2026-09-05 三号解耦退役 workspace_counter 时把唯一的数量闸也
+         一并去掉了，此后一直无上限。 */
+      await assertTenantWorkspaceHeadroom(client, input.tenantId);
       const created = await client.query<{ id: string }>(
         `insert into tenancy.workspaces
            (tenant_id, name, description, icon, is_default, status, created_at, updated_at)
@@ -1363,6 +1501,9 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      /* 防滥用闸：同事务内、insert 之前判，且已锁住租户行。已是成员的不算新增
+         （下面那句是 on conflict do update，重复添加本就不长数）。 */
+      await assertTenantMemberHeadroom(client, orgId, userId);
       // role code → role_id (scope 'tenant'); CTE resolves the code back for the view.
       const r = await client.query<OrgMembershipRow>(
         `with upserted as (
@@ -2397,6 +2538,10 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       );
       let membership: OrgMembershipView;
       if (row.scope === "org" && row.tenant_id) {
+        /* 防滥用闸：受邀者接受是另一条让租户长人的路，与 addOrgMember 同源判据。
+           放在 update invitations 之后无妨——整段在一个事务里，抛了一起回滚，
+           邀请不会被标成已接受。 */
+        await assertTenantMemberHeadroom(client, row.tenant_id, userId);
         // Carry the invitation's resolved role_id + role_scope onto the membership.
         const m = await client.query<OrgMembershipRow>(
           `with upserted as (
