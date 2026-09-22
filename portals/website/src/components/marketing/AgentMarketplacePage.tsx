@@ -93,35 +93,38 @@ export default function AgentMarketplacePage({
     [t],
   );
 
-  // 完整阵容全部来自 DB 目录；营销内容取 marketing jsonb。vxtpl 置顶，其余保持目录顺序。
+  /*
+   * 完整阵容全部来自 DB 目录；营销内容取 marketing jsonb。**次序也来自目录**。
+   *
+   * 这里原本写死 `vxtpl` 置顶（`.sort((a,b) => (a.productCode === "vxtpl" ? -1 : 0) …)`）。
+   * 2026-09-22 给产品目录加了次序调整（`products.sort`，admin 行操作里的上移/下移/
+   * 置顶/置底）之后，这一行就成了插队的：运营把某个产品排到第一，页面上仍然是
+   * vxtpl——「排了不生效」。所以拆掉，一律按目录给的顺序渲染。
+   *
+   * 要让 vxtpl 排第一，去 admin 把它移到顶部；那是个可改的决定，不该是段代码。
+   */
   const cards = useMemo<AgentCard[] | null>(() => {
     if (agents === null) return null;
-    return [...agents]
-      .sort(
-        (a, b) =>
-          (a.productCode === "vxtpl" ? -1 : 0) -
-          (b.productCode === "vxtpl" ? -1 : 0),
-      )
-      .map((agent) => {
-        const m = marketingForLocale(agent.marketing, locale);
-        return {
-          code: agent.productCode,
-          name: catalogDisplayName(agent, locale),
-          // per-agent 类型标签（marketing.tagline），缺省退回 kinds 映射，再退回通用「智能体」。
-          typeLabel:
-            m?.tagline ?? agentKinds[agent.productType] ?? t("agents.type"),
-          icon: productTypeIcon(agent.productType),
-          description: agent.description ?? "",
-          value: m?.value ?? null,
-          highlights: m?.highlights ?? [],
-          releaseStage: agent.releaseStage,
-          version: agent.releaseVersion,
-          releasedAt: agent.releasedAt,
-          recommend: marketingRecommend(agent.marketing),
-          subscribeAccess: agent.subscribeAccess,
-          expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
-        };
-      });
+    return agents.map((agent) => {
+      const m = marketingForLocale(agent.marketing, locale);
+      return {
+        code: agent.productCode,
+        name: catalogDisplayName(agent, locale),
+        // per-agent 类型标签（marketing.tagline），缺省退回 kinds 映射，再退回通用「智能体」。
+        typeLabel:
+          m?.tagline ?? agentKinds[agent.productType] ?? t("agents.type"),
+        icon: productTypeIcon(agent.productType),
+        description: agent.description ?? "",
+        value: m?.value ?? null,
+        highlights: m?.highlights ?? [],
+        releaseStage: agent.releaseStage,
+        version: agent.releaseVersion,
+        releasedAt: agent.releasedAt,
+        recommend: marketingRecommend(agent.marketing),
+        subscribeAccess: agent.subscribeAccess,
+        expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
+      };
+    });
   }, [agents, agentKinds, locale, t]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。

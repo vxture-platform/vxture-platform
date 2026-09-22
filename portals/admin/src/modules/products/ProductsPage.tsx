@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
@@ -17,11 +17,12 @@ import {
   NativeSelect,
   StatusBadge,
   TableTitleCell,
+  useToast,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import type { IconName } from "@vxture/design-system";
-import { fetchProductCapabilities } from "@/api/admin-bff";
+import { fetchProductCapabilities, moveProduct } from "@/api/admin-bff";
 import type {
   ProductCapabilityIntegrationStatus,
   ProductCapabilityRecord,
@@ -123,11 +124,21 @@ function ProductActionsMenu({
   onViewDetails,
   onOpenMarketing,
   onOpenPlans,
+  onMove,
+  moveBusy,
+  isFirst,
+  isLast,
 }: {
   product: ProductCapabilityRecord;
   onViewDetails: () => void;
   onOpenMarketing: () => void;
   onOpenPlans: () => void;
+  /** 目录次序：方向交给服务端按**全集**算，这里只说「往哪动」。 */
+  onMove: (direction: "up" | "down" | "top" | "bottom") => void;
+  moveBusy: boolean;
+  /** 已在首/末位时置灰——服务端也会原样返回不写库，这里只是不让人白点。 */
+  isFirst: boolean;
+  isLast: boolean;
 }) {
   const tShared = useTranslations();
   return (
@@ -158,6 +169,42 @@ function ProductActionsMenu({
             disabled: !product.planCount,
             ...(product.planCount ? {} : { hint: "该产品还没有套餐" }),
             onSelect: onOpenPlans,
+          },
+          /*
+           * 目录次序（owner 2026-09-22）。与上面几项用分割线隔开——它们改的是
+           * 「这个产品是什么」，这一组改的是「它排在哪」，是两回事。
+           *
+           * 不做拖拽：产品目录是带筛选与分页的列表，拖拽在筛选后的子集上语义含糊
+           * （拖的是视图里的位置还是全集里的位置？）。四个按钮把意图说死。
+           */
+          {
+            id: "move-top",
+            label: "移到顶部",
+            icon: "arrow-up",
+            separatorBefore: true,
+            disabled: moveBusy || isFirst,
+            onSelect: () => onMove("top"),
+          },
+          {
+            id: "move-up",
+            label: "上移",
+            icon: "arrow-up",
+            disabled: moveBusy || isFirst,
+            onSelect: () => onMove("up"),
+          },
+          {
+            id: "move-down",
+            label: "下移",
+            icon: "arrow-down",
+            disabled: moveBusy || isLast,
+            onSelect: () => onMove("down"),
+          },
+          {
+            id: "move-bottom",
+            label: "移到底部",
+            icon: "arrow-down",
+            disabled: moveBusy || isLast,
+            onSelect: () => onMove("bottom"),
           },
         ]}
       />
@@ -288,6 +335,46 @@ export function ProductsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   const [loading, setLoading] = useState(true);
+  /** 目录次序调整中——四个移动项一起置灰，别让人连点出一串竞争的写。 */
+  const [moveBusy, setMoveBusy] = useState(false);
+  const { toast } = useToast();
+
+  const load = useCallback(async () => {
+    const records = await fetchProductCapabilities();
+    setProducts(records);
+  }, []);
+
+  /**
+   * 移动一格。服务端按**全集**算并把整份次序重排号，所以这里重新拉一次列表，
+   * 而不是本地猜一个新顺序——猜的那份与服务端算的不一定一致。
+   */
+  const handleMove = useCallback(
+    async (
+      productCode: string,
+      direction: "up" | "down" | "top" | "bottom",
+    ) => {
+      setMoveBusy(true);
+      try {
+        const res = await moveProduct(productCode, direction);
+        if (res.moved) {
+          await load();
+          toast({ tone: "success", title: "目录次序已调整" });
+        }
+        /* moved=false 说明已经在端点，服务端没写库——不弹提示，也不刷新。 */
+      } catch (err) {
+        toast({
+          tone: "danger",
+          title: "调整次序失败",
+          ...(err instanceof Error && err.message
+            ? { description: err.message }
+            : {}),
+        });
+      } finally {
+        setMoveBusy(false);
+      }
+    },
+    [load, toast],
+  );
 
   useEffect(() => {
     let active = true;
@@ -552,6 +639,17 @@ export function ProductsPage() {
               rowActions={(product) => (
                 <ProductActionsMenu
                   product={product}
+                  /* 首末位按**全集**判，不按当前筛选/分页后的视图——移动本身也是
+                     按全集算的，两边口径要一致。 */
+                  isFirst={products[0]?.productCode === product.productCode}
+                  isLast={
+                    products[products.length - 1]?.productCode ===
+                    product.productCode
+                  }
+                  moveBusy={moveBusy}
+                  onMove={(direction) =>
+                    void handleMove(product.productCode, direction)
+                  }
                   onViewDetails={() => handleOpenDetails(product.productCode)}
                   /* 营销配置是**与产品详情同级**的独立二级页，不是它的子页——
                      两者互为跳转，不是隶属（owner 2026-09-21）。 */

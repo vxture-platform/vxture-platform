@@ -625,6 +625,28 @@ export async function deprecatePlan(
 }
 
 /**
+ * 调整产品在目录里的先后次序（owner 2026-09-22）。
+ *
+ * 只说「哪个、往哪动」——次序由服务端按**全集**算。让前端提交有序数组的话，它得在
+ * 筛选后的子集上算全局次序，「上移」的语义当场含糊。
+ */
+export async function moveProduct(
+  productCode: string,
+  direction: "up" | "down" | "top" | "bottom",
+): Promise<{ productCode: string; moved: boolean; position: number }> {
+  return mutateJson<{
+    productCode: string;
+    moved: boolean;
+    position: number;
+  }>(
+    `/api/products/capabilities/${encodeURIComponent(productCode)}/move`,
+    "PATCH",
+    { direction },
+    "Failed to reorder product",
+  );
+}
+
+/**
  * 改套餐的可改字段（owner 2026-09-22：A 类字段开放编辑）。
  *
  * 只送要改的键——`undefined` 的字段服务端不碰。名称/说明只换显示名（历史单据是
