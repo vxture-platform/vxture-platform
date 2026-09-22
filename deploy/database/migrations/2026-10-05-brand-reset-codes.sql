@@ -42,14 +42,18 @@ UPDATE admin.operator_permission p
  WHERE p.perm_code = v.code
    AND (p.parent_id IS DISTINCT FROM m.id);
 
--- ── 3. 授给 admin / operation ────────────────────────────────────────────────
+-- ── 3. 授给 administrator / operator ────────────────────────────────────────
+-- 2026-09-22：这两个角色的码改了（admin → administrator、operation → operator）。
+-- 本行按码字面量筛，而 migrate 是**全量重放**——只写新码的话，重放到这一步时旧库
+-- 里还没改名，两条都匹配不上；只写旧码的话，新库（seed 直接用新码）同样匹配不上。
+-- 两套都接受是唯一对两种重放次序都成立的写法。ON CONFLICT 已保证不会重复授。
 INSERT INTO admin.operator_role_permission (role_id, permission_id, is_system, created_by, created_at)
 SELECT r.id, p.id, true, s.id, now()
   FROM admin.operator_role r
   JOIN admin.operator_permission p
     ON p.perm_code IN ('tenant:brand.reset', 'user:avatar.reset')
  CROSS JOIN (SELECT id FROM admin.operator_account WHERE username = 'systemadmin') s
- WHERE r.role_code IN ('admin', 'operation')
+ WHERE r.role_code IN ('admin', 'administrator', 'operation', 'operator')
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- ── 4. super_admin 全量授权（data_admin_200 §4.4，无代码旁路）────────────────

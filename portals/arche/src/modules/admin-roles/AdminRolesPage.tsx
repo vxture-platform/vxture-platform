@@ -758,10 +758,30 @@ function useAdminRoleColumns(
             : {})}
           icon="role"
           title={labelOf(role)}
-          titleSuffix={role.isSystem ? <Badge>系统</Badge> : null}
           description={role.roleCode}
         />
       ),
+    },
+    {
+      /*
+       * 角色类型单独成列（owner 2026-09-22，与 console 同一条裁定：原来贴在标题后
+       * 太轻，看不出是一类事实）。贴标而不是纯文本：它是**类目**，与状态一样用一枚
+       * 标读得最快。样式与 console 的 rolesPage 保持一致——同一件事在两个门户不该
+       * 长成两个样子。
+       */
+      id: "kind",
+      header: "角色类型",
+      align: "center",
+      cell: (role) =>
+        role.isSystem ? (
+          <StatusBadge tone="info" icon="lock">
+            系统预置
+          </StatusBadge>
+        ) : (
+          <StatusBadge tone="neutral" icon="edit">
+            自定义
+          </StatusBadge>
+        ),
     },
     {
       id: "status",

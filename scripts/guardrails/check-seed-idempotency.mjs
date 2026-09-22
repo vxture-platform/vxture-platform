@@ -107,6 +107,77 @@ const files = existsSync(SEED_DIR)
   : [];
 for (const f of files) checkFile(f);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ④ 运营角色码 ↔ 权限表键必须一一对应（2026-09-22）。
+//
+// `OPERATOR_ROLES` 给码，`OPERATOR_ROLE_PERMS` 按码查权限，而 seed 里写的是
+// `OPERATOR_ROLE_PERMS[roleCode] ?? []`——**查不到就是空数组，不报错**。
+// 于是码打错一个字母、或改名时只改了一半，那个角色会静默拿到零权限：
+// seed 成功、库里有行、界面上角色在，只是谁也点不动任何菜单。
+//
+// 反方向同样要查：权限表里留着一个已不存在的码，说明改名漏了另一半，
+// 那份权限清单从此谁也读不到。
+//
+// 本次改名（admin→administrator / operation→operator / tech_ops→engineer）
+// 正是这条要防的形状。
+// ─────────────────────────────────────────────────────────────────────────────
+function checkOperatorRoleCodes() {
+  const file = join(SEED_DIR, 'seed-catalog.mjs');
+  if (!existsSync(file)) return;
+  const src = readFileSync(file, 'utf8');
+  const lineOf = (needle) => src.slice(0, src.indexOf(needle)).split(/\r?\n/).length;
+
+  const ROLES_AT = 'const OPERATOR_ROLES = ';
+  const PERMS_AT = 'const OPERATOR_ROLE_PERMS = ';
+  const rolesAt = src.indexOf(ROLES_AT);
+  const permsAt = src.indexOf(PERMS_AT);
+  if (rolesAt < 0 || permsAt < 0) {
+    // 判据读不到就是错，不是通过（见 check-component-classes 的「空集永远全绿」）。
+    findings.push({
+      file,
+      line: 1,
+      msg: '找不到 OPERATOR_ROLES / OPERATOR_ROLE_PERMS，本检查无法进行',
+    });
+    return;
+  }
+
+  // 码 = 每个子数组的第一个元素，其后紧跟 rank（数字）。
+  // 不能只匹配「缩进四格的字符串」——mfa 档（"optional"/"required"）长得一模一样，
+  // 会被一并当成角色码（我自己第一版就栽在这里）。
+  const rolesBlock = src.slice(rolesAt, src.indexOf('\n];', rolesAt));
+  const codes = [...rolesBlock.matchAll(/"([a-z_]+)",\s*\r?\n\s+\d+,/g)].map((m) => m[1]);
+  const permsBlock = src.slice(permsAt, src.indexOf('\n};', permsAt));
+  const permKeys = [...permsBlock.matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1]);
+
+  if (codes.length === 0 || permKeys.length === 0) {
+    findings.push({
+      file,
+      line: lineOf(ROLES_AT),
+      msg: `角色码解析到 ${codes.length} 个、权限表键 ${permKeys.length} 个 —— 空集不算通过`,
+    });
+    return;
+  }
+  for (const code of codes) {
+    if (!permKeys.includes(code)) {
+      findings.push({
+        file,
+        line: lineOf(PERMS_AT),
+        msg: `角色码 ${code} 在 OPERATOR_ROLE_PERMS 里没有对应键 —— 该角色会静默拿到零权限`,
+      });
+    }
+  }
+  for (const key of permKeys) {
+    if (!codes.includes(key)) {
+      findings.push({
+        file,
+        line: lineOf(PERMS_AT),
+        msg: `权限表键 ${key} 不对应任何角色码 —— 这份权限清单谁也读不到（改名漏了一半？）`,
+      });
+    }
+  }
+}
+checkOperatorRoleCodes();
+
 console.log('══ seed 幂等 + perm_code 检查（check-seed-idempotency）══');
 console.log(`扫描 ${files.length} 个 seed .mjs（${rel(SEED_DIR)}）。\n`);
 
