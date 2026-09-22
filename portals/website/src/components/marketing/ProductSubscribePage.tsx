@@ -39,6 +39,7 @@ import {
   Skeleton,
 } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
+import { buildConsoleSubscribeUrl } from "@/lib/console-entry";
 import {
   fetchProductPlans,
   type ProductPlansResponse,
@@ -218,6 +219,20 @@ export default function ProductSubscribePage() {
     .filter(Boolean)
     .join(" ");
 
+  /**
+   * 只有邀请档（`plans` 为空但库里有非公开档）。判据来自服务端，不由前端猜：
+   * 「空阶梯」本身分不出「还没开卖」与「全是邀请档」。
+   */
+  const inviteOnly =
+    load.status === "ready" && load.data.subscribeAccess === "invite";
+
+  /* 邀请是定向发到账号上的，落点是控制台的订阅页（登录后即可看到解锁的那一档）。 */
+  const consoleSubscribeHref = buildConsoleSubscribeUrl(
+    locale,
+    productCode,
+    "subscribe",
+  );
+
   const contactHref = (subject: string) =>
     `mailto:sales@vxture.com?subject=${encodeURIComponent(subject)}`;
 
@@ -269,26 +284,47 @@ export default function ProductSubscribePage() {
               }
             />
           ) : !model ? (
-            /* 产品不可见 / 没有已发布套餐：如实说「暂未开放」，不拿静态价兜底 */
+            /*
+             * 空阶梯分两种，此前都说「暂未开放订阅」——而那对邀请制产品是**错的**：
+             * umbra 配好了两档、只是都改成了邀请订阅，页面却说没开放（owner
+             * 2026-09-22 报）。
+             *
+             *   invite  只有邀请档 → 讲清怎么拿到邀请，并给「我已有邀请」的去处
+             *   none    一档都没有 → 如实说还没开放，不拿静态价兜底
+             */
             <EmptyState
-              icon="package"
-              title={t("unavailableTitle")}
-              description={t("unavailable")}
+              icon={inviteOnly ? "ticket" : "package"}
+              title={inviteOnly ? t("inviteOnlyTitle") : t("unavailableTitle")}
+              description={
+                inviteOnly ? t("inviteOnlyDescription") : t("unavailable")
+              }
               className="mx-auto max-w-website-xl"
               action={
                 <div className="flex flex-wrap justify-center gap-3">
                   <Button asChild variant="outline">
                     <a
                       href={contactHref(
-                        t("contactSubject", {
-                          product: catalogItem?.name ?? productCode,
-                        }),
+                        t(
+                          inviteOnly
+                            ? "inviteRequestSubject"
+                            : "contactSubject",
+                          {
+                            product: catalogItem?.name ?? productCode,
+                          },
+                        ),
                       )}
                     >
-                      {t("contact")}
+                      {inviteOnly ? t("inviteRequest") : t("contact")}
                     </a>
                   </Button>
-                  <Button asChild>
+                  {inviteOnly ? (
+                    /* 「我已有邀请」——邀请是定向发到账号上的，登录后在控制台的订阅页
+                       就看得到那一档，不用输码。这颗按钮不是装饰：它是那条路径的入口。 */
+                    <Button asChild>
+                      <a href={consoleSubscribeHref}>{t("inviteHolder")}</a>
+                    </Button>
+                  ) : null}
+                  <Button asChild variant={inviteOnly ? "ghost" : "default"}>
                     <Link href="/products">{t("back")}</Link>
                   </Button>
                 </div>

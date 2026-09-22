@@ -81,6 +81,8 @@ export default function ProductsOverviewPage({
       },
       actions: {
         subscribe: t("catalog.actions.subscribe"),
+        inviteSubscribe: t("catalog.actions.inviteSubscribe"),
+        notForSale: t("catalog.actions.notForSale"),
         upgrade: t("catalog.actions.upgrade"),
         enter: t("catalog.actions.enter"),
         noEntry: t("catalog.actions.noEntry"),
@@ -107,6 +109,7 @@ export default function ProductsOverviewPage({
         version: product.releaseVersion,
         releasedAt: product.releasedAt,
         recommend: marketingRecommend(product.marketing),
+        subscribeAccess: product.subscribeAccess,
         expectedReleaseAt: marketingExpectedReleaseAt(product.marketing),
       };
     });

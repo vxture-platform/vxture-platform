@@ -54,6 +54,19 @@ export interface ProductCatalogItem {
   releaseStage: string;
   /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
   marketing: MarketingContent | null;
+  /**
+   * 订阅入口三态——卡片上那颗按钮该写什么，由它决定（owner 2026-09-22）。
+   *
+   *   public  有公开可买的档            → 「订阅」
+   *   invite  只有邀请档（非 is_public）→ 「邀请订阅」
+   *   none    一档都没有                → 不给购买入口
+   *
+   * 为什么要有这一列：按钮此前只按成熟度 × 订阅态决定，不知道有没有公开档。把所有
+   * 档改成邀请订阅之后，卡上照样写「订阅」，点进去落到「暂未开放订阅」——入口在
+   * 承诺一件做不到的事。而「有邀请档」与「一档都没有」也必须分开：前者该指路
+   * （登录看你的邀请 / 申请邀请），后者只能如实说还没开卖。
+   */
+  subscribeAccess: "public" | "invite" | "none";
 }
 
 interface ProductCatalogRow {
@@ -66,6 +79,8 @@ interface ProductCatalogRow {
   released_at: Date | string | null;
   release_stage: string;
   marketing: MarketingContent | null;
+  public_plan_count: number | string | null;
+  invite_plan_count: number | string | null;
 }
 
 @Controller("api/products")
@@ -75,13 +90,40 @@ export class ProductCatalogRouter {
   @Get("catalog")
   async getCatalog(): Promise<ProductCatalogItem[]> {
     const res = await this.pool.query<ProductCatalogRow>(
-      `select product_code, product_name, product_nick, product_type,
-              description, release_version, released_at, release_stage, marketing
-         from product.products
-        where is_customer_visible = true
-          and status = 'active'
-          and deleted_at is null
-        order by sort asc, product_code asc`,
+      `select p.product_code, p.product_name, p.product_nick, p.product_type,
+              p.description, p.release_version, p.released_at, p.release_stage,
+              p.marketing,
+              /*
+               * 订阅入口三态（owner 2026-09-22）。卡片上那颗按钮此前只按成熟度 ×
+               * 订阅态决定，**完全不知道这个产品还有没有公开可买的档**——于是把所有
+               * 档改成邀请订阅之后，卡上照样写「订阅」，点进去落到「暂未开放订阅」。
+               * 入口与落地页各说各话，而错的是入口在承诺一件做不到的事。
+               *
+               * 这里数两类：能自助买到的（is_public）与凭邀请才能买的（非 is_public）。
+               * 除可见性之外的条件两边完全一样——都得是 active、当前版本已发布冻结、
+               * 客户可见、挂在某个档位上。判据与本文件下方 product-plans 那条同源。
+               */
+              coalesce(sell.public_count, 0) as public_plan_count,
+              coalesce(sell.invite_count, 0) as invite_plan_count
+         from product.products p
+         left join lateral (
+           select count(*) filter (where pl.is_public)     as public_count,
+                  count(*) filter (where not pl.is_public) as invite_count
+             from product.plan_components pc
+             join product.plan_versions pv
+               on pv.id = pc.plan_version_id and pv.is_locked = true
+             join product.plans pl
+               on pl.id = pv.plan_id and pl.current_version_id = pv.id
+              and pl.deleted_at is null and pl.status = 'active'
+              and pl.is_customer_visible = true
+            where pc.product_id = p.id
+              and pc.component_role = 'primary'
+              and pc.tier is not null
+         ) sell on true
+        where p.is_customer_visible = true
+          and p.status = 'active'
+          and p.deleted_at is null
+        order by p.sort asc, p.product_code asc`,
     );
     return res.rows.map((r) => ({
       productCode: r.product_code,
@@ -96,6 +138,17 @@ export class ProductCatalogRouter {
           : (r.released_at ?? null),
       releaseStage: r.release_stage,
       marketing: r.marketing,
+      /*
+       * 有公开档就是公开订阅；一个公开档都没有但有邀请档 = 邀请订阅；两者都没有
+       * = 还没开卖。先判公开再判邀请：混卖时（公开档 + 邀请档并存）对匿名访客来说
+       * 它就是个能买的产品，邀请档不进公开阶梯，不该把整个产品标成邀请制。
+       */
+      subscribeAccess:
+        Number(r.public_plan_count ?? 0) > 0
+          ? "public"
+          : Number(r.invite_plan_count ?? 0) > 0
+            ? "invite"
+            : "none",
     }));
   }
 }

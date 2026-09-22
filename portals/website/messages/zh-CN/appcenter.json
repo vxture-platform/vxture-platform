@@ -31,7 +31,9 @@
       "enter": "进入",
       "noEntry": "入口即将开放",
       "detail": "产品介绍",
-      "coming": "敬请期待"
+      "coming": "敬请期待",
+      "inviteSubscribe": "邀请订阅",
+      "notForSale": "暂未开卖"
     },
     "empty": {
       "title": "更多智能体陆续上线",
