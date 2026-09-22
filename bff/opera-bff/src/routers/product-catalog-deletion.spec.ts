@@ -98,8 +98,11 @@ function makePool(opts: {
   const spy = {
     beganTx: false,
     productDeleted: false,
-    plansSoftDeleted: [] as string[],
-    clientsDisabled: [] as string[],
+    plansRemoved: [] as string[],
+    clientsRemoved: [] as string[],
+    configCleared: [] as string[],
+    /* 反面侦测位：再出现「UPDATE … deleted_at = now()」就说明退回软删了。 */
+    softDeleted: false,
     audited: false,
     rolledBack: false,
     committed: false,
@@ -128,21 +131,37 @@ function makePool(opts: {
         return { rows: status ? [productRow(status)] : [] };
       }
       if (/has_usage/.test(sql)) return { rows: [footprintRow] };
-      if (/UPDATE product\.products/.test(sql)) {
-        spy.productDeleted = true;
-        return { rows: [productRow(status ?? "draft")] };
+      if (/UPDATE .*deleted_at = now\(\)/is.test(sql)) {
+        spy.softDeleted = true;
+        return { rows: [productRow(status ?? "draft")], rowCount: 1 };
       }
-      if (/UPDATE product\.plans/.test(sql)) {
+      /* 2026-09-22：删除改真删。三条都从 UPDATE 变 DELETE——顺序也变了：
+         套餐/客户端/其余配置先清，审计再写，最后删主行（删完 product_code 就查不
+         回来了，而它是审计的 resourceId）。 */
+      if (/DELETE FROM product\.products/.test(sql)) {
+        spy.productDeleted = true;
+        return { rows: [productRow(status ?? "draft")], rowCount: 1 };
+      }
+      if (/DELETE FROM product\.plans/.test(sql)) {
         const rows = Array.from({ length: plansCount }, (_, i) => ({
           plan_code: `ruyin-plan-${i}`,
         }));
-        spy.plansSoftDeleted = rows.map((r) => r.plan_code);
-        return { rows };
+        spy.plansRemoved = rows.map((r) => r.plan_code);
+        return { rows, rowCount: rows.length };
       }
-      if (/UPDATE appoidc\.oidc_clients/.test(sql)) {
+      if (/DELETE FROM appoidc\.oidc_clients/.test(sql)) {
         const rows = activeClients.map((c) => ({ client_id: c }));
-        spy.clientsDisabled = activeClients;
-        return { rows };
+        spy.clientsRemoved = activeClients;
+        return { rows, rowCount: rows.length };
+      }
+      /* 其余运营侧配置与弱引用：逐张直删，不回行。 */
+      if (
+        /DELETE FROM (kyc|product|metering|provisioning|account|support|sharing)\./.test(
+          sql,
+        )
+      ) {
+        spy.configCleared.push(sql.replace(/\s+/g, " ").trim());
+        return { rows: [], rowCount: 0 };
       }
       if (/insert into support\.audit_logs/i.test(sql)) {
         spy.audited = true;
@@ -273,7 +292,14 @@ describe("DELETE /:id —— 两步软删除", () => {
     expect(spy.committed).toBe(false);
   });
 
-  it("无足迹无授权 → 软删产品 + 软删 primary 套餐 + 停用 product 型客户端 + 审计 + 提交", async () => {
+  /*
+   * 2026-09-22 owner 裁定：删除 = 真删；不删除的叫归档/退役（status='deprecated'）。
+   *
+   * 软删的唯一后果是 `uq_products_product_code` 被墓碑永久占住，而全仓**没有任何
+   * 恢复路径**——找不到把 deleted_at 清回 null 的代码。所以那不是「可恢复」，是个
+   * 消耗掉码位的墓碑。
+   */
+  it("无足迹无授权 → 真删产品 + 删掉 primary 套餐与 OIDC 客户端 + 清运营配置 + 审计 + 提交", async () => {
     const { router, spy } = makeRouter({
       status: "draft",
       footprint: {},
@@ -288,8 +314,13 @@ describe("DELETE /:id —— 两步软删除", () => {
 
     expect(result.productCode).toBe("ruyin");
     expect(spy.productDeleted).toBe(true);
-    expect(spy.plansSoftDeleted).toHaveLength(2);
-    expect(spy.clientsDisabled).toEqual(["ruyin", "ruyin-beta"]);
+    expect(spy.plansRemoved).toHaveLength(2);
+    expect(spy.clientsRemoved).toEqual(["ruyin", "ruyin-beta"]);
+    /* 反面：不许再退回软删——那会重新占住码位。 */
+    expect(spy.softDeleted).toBe(false);
+    /* 那 25 张无级联外键里属于「运营侧配置」的那些必须被显式清掉，否则硬删会撞
+       裸 23503 → 500。逐张直删，这里只确认确实清了若干张。 */
+    expect(spy.configCleared.length).toBeGreaterThanOrEqual(6);
     expect(spy.audited).toBe(true);
     expect(spy.committed).toBe(true);
     expect(spy.rolledBack).toBe(false);

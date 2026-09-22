@@ -314,6 +314,8 @@ interface CustomerFootprint {
   hasBilling: boolean;
   hasProvisioning: boolean;
   hasEntitlements: boolean;
+  /** 被别的产品的套餐当搭售件引用——删掉会把人家的套餐掏空。 */
+  hasBundledUse: boolean;
   blocked: boolean;
 }
 
@@ -1000,48 +1002,83 @@ export class ProductCatalogRouter {
         throw productHasCustomerFootprint(row.product_code, footprint);
       }
 
-      const operatorId = req.operator?.id ?? null;
-      const deleted = await client.query<ProductRow>(
-        `UPDATE product.products
-            SET deleted_at = now(), updated_by = $2, updated_at = now()
-          WHERE id = $1 AND deleted_at IS NULL
-          RETURNING ${SELECT_COLUMNS}`,
-        [id, operatorId],
-      );
-      /* 连带软删本产品作 primary 组件的套餐(plans 无 product_id 列，归属经
-         plan_components.component_role='primary' 反查)。 */
+      /*
+       * ── 删除 = 真删（owner 2026-09-22 裁定）──
+       *
+       * 「不删除的应该是归档/退役」——那条路是 `status='deprecated'`，行留着、码占着，
+       * 对。而删除删的是**本不该在册**的行（无客户足迹），它占着的码位要能拿回来：
+       * 软删留下的墓碑会让 `uq_products_product_code` 永久占住那个码，而再也没有任何
+       * 恢复路径（全仓找不到把 deleted_at 清回 null 的代码）。
+       *
+       * ── 为什么先清配置再删主行 ──
+       * 25 张表无级联引用 products。上面的足迹检查挡住了「有客户」的那些；剩下的是
+       * **运营侧配置**，它们随产品消失才合理，所以在这里显式清掉，而不是改 DDL 的
+       * 外键（那是数据模型改动，连带面要另评）。不清的话硬删会撞裸 23503 → 500。
+       *
+       * 顺序：套餐（连带 versions/components/prices 级联）→ 其余配置 → 主行。
+       */
+      /* 本产品作 primary 的套餐随它一起走。plans 无 product_id 列，归属经
+         plan_components.component_role='primary' 反查。删 plans 会级联掉它的
+         versions / components / prices。作 bundled 被别人引用的情况上面已挡。 */
       const plans = await client.query<{ plan_code: string }>(
-        `UPDATE product.plans
-            SET deleted_at = now(), updated_by = $2, updated_at = now()
-          WHERE deleted_at IS NULL
-            AND id IN (
-              SELECT pv.plan_id FROM product.plan_versions pv
-                JOIN product.plan_components pc ON pc.plan_version_id = pv.id
-               WHERE pc.component_role = 'primary' AND pc.product_id = $1
-            )
+        `DELETE FROM product.plans
+          WHERE id IN (
+            SELECT pv.plan_id FROM product.plan_versions pv
+              JOIN product.plan_components pc ON pc.plan_version_id = pv.id
+             WHERE pc.component_role = 'primary' AND pc.product_id = $1
+          )
           RETURNING plan_code`,
-        [id, operatorId],
+        [id],
       );
-      /* 停用该产品的 product 型 OIDC 客户端——登录中断(已接受、不阻塞)。行不删：
-         product_id 仍指向(已软删的)产品行，chk_oidc_clients_kind_product 不破。 */
+      /* OIDC 客户端：此前只置 inactive、行留着（靠 product_id 指向软删行成立）。
+         主行要真删了，这些行必须一起走，否则外键拦住。登录中断是已接受的后果。 */
       const clients = await client.query<{ client_id: string }>(
-        `UPDATE appoidc.oidc_clients
-            SET status = 'inactive', updated_at = now()
-          WHERE product_id = $1 AND status = 'active'
+        `DELETE FROM appoidc.oidc_clients WHERE product_id = $1
           RETURNING client_id`,
         [id],
       );
+      /* 其余运营侧配置与弱引用。都按 product_id 直删，不逐张报数——它们不是客户
+         足迹，只是这个产品存在期间留下的配置。 */
+      for (const sql of [
+        `DELETE FROM kyc.verification_policies WHERE product_id = $1`,
+        `DELETE FROM product.solution_products WHERE product_id = $1`,
+        `DELETE FROM metering.resource_sharing_policies WHERE product_id = $1`,
+        `DELETE FROM provisioning.webhook_deliveries WHERE product_id = $1`,
+        `DELETE FROM account.user_product_favorites WHERE product_id = $1`,
+        `DELETE FROM support.product_reviews WHERE product_id = $1`,
+        `DELETE FROM sharing.visible_set_current WHERE product_id = $1`,
+        `DELETE FROM sharing.visible_set_refresh WHERE product_id = $1`,
+      ]) {
+        await client.query(sql, [id]);
+      }
+
+      /* 审计先写：行删掉之后 product_code 就查不回来了。 */
       await insertOperatorAuditLog(client, req, {
         action: "catalog.product.delete",
         resourceType: "product",
-        resourceId: id,
+        resourceId: row.product_code,
         before: { productCode: row.product_code, status: row.status },
         after: {
           deleted: true,
-          disabledClients: clients.rows.map((r) => r.client_id),
-          softDeletedPlans: plans.rows.map((r) => r.plan_code),
+          removedClients: clients.rows.map((r) => r.client_id),
+          removedPlans: plans.rows.map((r) => r.plan_code),
         },
       });
+
+      const deleted = await client.query<ProductRow>(
+        `DELETE FROM product.products WHERE id = $1
+          RETURNING ${SELECT_COLUMNS}`,
+        [id],
+      );
+      if (deleted.rowCount !== 1) {
+        /* 上面 FOR UPDATE 已锁住行，删不掉只能是判据与外键不一致——那是缺陷，
+           不是并发。抛出去回滚，别静默返回「已删除」。 */
+        throw invalidRequest(
+          "PRODUCT_DELETE_BLOCKED",
+          `${row.product_code} 未被删除（影响 ${deleted.rowCount ?? 0} 行）——判据与外键约束不一致`,
+          "id",
+        );
+      }
       await client.query("COMMIT");
       return toRecord(deleted.rows[0]!);
     } catch (error) {
@@ -1127,14 +1164,42 @@ export class ProductCatalogRouter {
       has_billing: boolean;
       has_provisioning: boolean;
       has_entitlements: boolean;
+      has_bundled_use: boolean;
     }>(
+      /*
+       * 2026-09-22：删除改真删（owner 裁定），判据必须**覆盖到硬删会撞的每一张
+       * 无级联外键表**——否则删不掉的那些会以裸 23503 → 500 冒出来，而那正是同一天
+       * 刚给套餐修掉的毛病。
+       *
+       * 此前只查 6 张（usage_events / invoice_items / provisionings /
+       * entitlement_caches / quota_pools / subscription_entitlement_overrides），
+       * 而 `metering.subscriptions`、`billing.orders`、五张 usage_summary_*、
+       * usage_gauges、sharing.grants 一张都没查——订阅与订单没被查到尤其要命：
+       * 它们正是「卖过」的直接证据。
+       *
+       * `has_bundled_use` 是另一类：本产品被**别的产品的套餐**当搭售件引用
+       * （`component_role = 'bundled'`）。删掉它会把人家的套餐掏空，所以也得挡住。
+       * 自己作 primary 的那些不算——那是它自己的套餐，随它一起走。
+       */
       `SELECT
-         EXISTS(SELECT 1 FROM metering.usage_events        WHERE product_id = $1) AS has_usage,
-         EXISTS(SELECT 1 FROM billing.invoice_items        WHERE product_id = $1) AS has_billing,
-         EXISTS(SELECT 1 FROM provisioning.provisionings   WHERE product_id = $1) AS has_provisioning,
-         (EXISTS(SELECT 1 FROM metering.entitlement_caches WHERE product_id = $1)
-          OR EXISTS(SELECT 1 FROM metering.quota_pools     WHERE product_id = $1)
-          OR EXISTS(SELECT 1 FROM metering.subscription_entitlement_overrides WHERE product_id = $1)) AS has_entitlements`,
+         (EXISTS(SELECT 1 FROM metering.usage_events           WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.usage_gauges        WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.usage_summary_hours WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.usage_summary_days  WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.usage_summary_weeks WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.usage_summary_months WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.usage_summary_years WHERE product_id = $1)) AS has_usage,
+         (EXISTS(SELECT 1 FROM billing.invoice_items          WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM billing.orders              WHERE product_id = $1)) AS has_billing,
+         EXISTS(SELECT 1 FROM provisioning.provisionings      WHERE product_id = $1) AS has_provisioning,
+         (EXISTS(SELECT 1 FROM metering.entitlement_caches    WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.quota_pools        WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.subscriptions      WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM sharing.grants
+                     WHERE resource_product_id = $1 OR grantee_product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.subscription_entitlement_overrides WHERE product_id = $1)) AS has_entitlements,
+         EXISTS(SELECT 1 FROM product.plan_components
+                 WHERE product_id = $1 AND component_role = 'bundled') AS has_bundled_use`,
       [id],
     );
     const r = res.rows[0]!;
@@ -1143,11 +1208,13 @@ export class ProductCatalogRouter {
       hasBilling: r.has_billing,
       hasProvisioning: r.has_provisioning,
       hasEntitlements: r.has_entitlements,
+      hasBundledUse: r.has_bundled_use,
       blocked:
         r.has_usage ||
         r.has_billing ||
         r.has_provisioning ||
-        r.has_entitlements,
+        r.has_entitlements ||
+        r.has_bundled_use,
     };
   }
 
