@@ -373,24 +373,6 @@
       }
     }
   },
-  "routes": {
-    "dashboard": "Dashboard",
-    "todos": "Todo Items",
-    "profile": "Profile",
-    "personalTenant": "My Tenant",
-    "organization": "Organization Info",
-    "members": "Members",
-    "roles": "Roles & Permissions",
-    "invitations": "Invitation Records",
-    "subscription": "Subscription",
-    "billing": "Billing",
-    "quotas": "Quotas",
-    "modelPlatform": "Model Pricing & Policy",
-    "notifications": "Notifications",
-    "security": "Security Settings",
-    "settings": "Tenant Settings",
-    "tenantSettings": "Tenant Settings"
-  },
   "login": {
     "hero": {
       "eyebrow": "Unified access",

@@ -2106,36 +2106,6 @@
       "empty": "该角色未授予任何权限点"
     }
   },
-  "routes": {
-    "dashboard": "仪表盘",
-    "todos": "待办事项",
-    "profile": "我的账号",
-    "personalTenant": "租户信息",
-    "organization": "组织信息",
-    "members": "成员管理",
-    "membersInvitations": "邀请记录",
-    "membersRoles": "角色管理",
-    "membersPermissions": "权限管理",
-    "roles": "角色管理",
-    "invitations": "邀请记录",
-    "subscription": "订阅管理",
-    "billing": "费用中心",
-    "billingInvoices": "发票与抬头",
-    "quotas": "配额管理",
-    "notifications": "通知提醒",
-    "security": "安全设置",
-    "settings": "租户设置",
-    "tenantSettings": "租户设置",
-    "usage": "用量分析",
-    "addonPay": "加油包支付",
-    "vouchers": "我的卡券",
-    "auditLogs": "审计日志",
-    "inbox": "消息中心",
-    "tenant": "租户信息",
-    "tenantVerification": "企业认证",
-    "tenantVerificationApply": "提交认证",
-    "skills": "技能工具"
-  },
   "securityPage": {
     "header": {
       "eyebrow": "账户安全",
