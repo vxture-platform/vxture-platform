@@ -31,7 +31,9 @@
       "enter": "Enter",
       "noEntry": "Entry coming soon",
       "detail": "Product details",
-      "coming": "Coming soon"
+      "coming": "Coming soon",
+      "inviteSubscribe": "By invitation",
+      "notForSale": "Not on sale yet"
     },
     "empty": {
       "title": "More agents are on the way",

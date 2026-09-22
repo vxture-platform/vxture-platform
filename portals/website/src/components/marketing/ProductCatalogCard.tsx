@@ -56,6 +56,15 @@ export interface ProductCatalogCardModel {
   expectedReleaseAt: string | null;
   /** 推荐度 0–3（marketing.recommend）：未订阅时右上角按数量画奖章。 */
   recommend: number;
+  /**
+   * 订阅入口三态（owner 2026-09-22）：public 有公开可买的档 / invite 只有邀请档 /
+   * none 一档都没有。
+   *
+   * 这颗按钮原先只按成熟度 × 订阅态决定，**不知道有没有公开可买的档**——把一个产品
+   * 的档全改成邀请订阅之后，卡上照样写「订阅」，点进去落到「暂未开放订阅」。入口与
+   * 落地页各说各话，而错的是入口在承诺一件做不到的事。
+   */
+  subscribeAccess: "public" | "invite" | "none";
 }
 
 /** 卡片文案——两页各自的命名空间里键名相同，形状在这里定死。 */
@@ -75,6 +84,10 @@ export interface ProductCatalogCardLabels {
   expectedRelease: string;
   actions: {
     subscribe: string;
+    /** 只有邀请档时按钮的字样（落地页会讲清怎么拿到邀请）。 */
+    inviteSubscribe: string;
+    /** 一档都没有时的禁用按钮字样 + 悬停原因。 */
+    notForSale: string;
     upgrade: string;
     /** 「进入」——目标是产品自己的站点（home_url）。 */
     enter: string;
@@ -266,12 +279,29 @@ export function ProductCatalogCard({
           ) : (
             <>
               {/* 未订阅：先去官网定价页看价格 + 功能，登录后置。
-                  「联系我们」不再放卡上——hero 已统一给「预约演示 / 业务咨询」（owner 2026-09-03）。 */}
-              <Button asChild>
-                <Link href={pricingHref} target="_blank">
-                  {labels.actions.subscribe}
-                </Link>
-              </Button>
+                  「联系我们」不再放卡上——hero 已统一给「预约演示 / 业务咨询」（owner 2026-09-03）。
+
+                  三态各给各的落点：能自助买的去定价页；只有邀请档的仍去同一页——
+                  那页会讲清「此产品为邀请订阅」与怎么拿到邀请，所以不是假动作；
+                  一档都没有的给禁用按钮 + 悬停写明原因，而不是把人送进一个空页面。 */}
+              {product.subscribeAccess === "none" ? (
+                <Button disabled title={labels.actions.notForSale}>
+                  {labels.actions.notForSale}
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  variant={
+                    product.subscribeAccess === "invite" ? "outline" : "default"
+                  }
+                >
+                  <Link href={pricingHref} target="_blank">
+                    {product.subscribeAccess === "invite"
+                      ? labels.actions.inviteSubscribe
+                      : labels.actions.subscribe}
+                  </Link>
+                </Button>
+              )}
             </>
           )}
         </div>

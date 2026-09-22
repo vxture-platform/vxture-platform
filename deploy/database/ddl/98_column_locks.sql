@@ -233,7 +233,7 @@ GRANT UPDATE (plan_code, plan_name, description, current_version_id, is_public, 
 -- status = publish lifecycle (draft|published, product_320); the admin publish
 -- flow flips it alongside is_locked, so it is writable (not an anchor).
 REVOKE UPDATE ON product.plan_versions FROM platform_svc;
-GRANT UPDATE (plan_id, status, is_locked, trial_cycle_unit, trial_cycle_count) ON product.plan_versions TO platform_svc;
+GRANT UPDATE (plan_id, status, is_locked, trial_cycle_unit, trial_cycle_count, published_at) ON product.plan_versions TO platform_svc;
 
 -- product.plan_prices  [anchor: id, created_at]
 REVOKE UPDATE ON product.plan_prices FROM platform_svc;

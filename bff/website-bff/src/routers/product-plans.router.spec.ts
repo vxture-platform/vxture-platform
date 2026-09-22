@@ -16,12 +16,20 @@ const ARDA = {
   release_version: "1.4.0",
 };
 
-/** 依查询顺序编程的 pool:第 1 次 = 产品行,第 2 次 = 阶梯行。 */
-function makePool(productRows: unknown[], ladderRows: unknown[] = []) {
+/**
+ * 依查询顺序编程的 pool：第 1 次 = 产品行，第 2 次 = 阶梯行，
+ * 第 3 次 = 邀请档计数（判 subscribeAccess 的那一问）。
+ */
+function makePool(
+  productRows: unknown[],
+  ladderRows: unknown[] = [],
+  inviteCount = 0,
+) {
   const query = vi
     .fn()
     .mockResolvedValueOnce({ rows: productRows })
-    .mockResolvedValueOnce({ rows: ladderRows });
+    .mockResolvedValueOnce({ rows: ladderRows })
+    .mockResolvedValueOnce({ rows: [{ invite_count: inviteCount }] });
   return { pool: { query } as unknown as Pool, query };
 }
 
@@ -88,7 +96,12 @@ describe("ProductPlansRouter", () => {
   it("degrades to an empty ladder for an unknown product without querying plans", async () => {
     const { pool, query } = makePool([]);
     const res = await new ProductPlansRouter(pool).getProductPlans("nope");
-    expect(res).toEqual({ product: null, plans: [] });
+    expect(res).toEqual({
+      product: null,
+      plans: [],
+      subscribeAccess: "none",
+    });
+    /* 产品都不存在就不该再问阶梯，也不该问邀请档。 */
     expect(query).toHaveBeenCalledTimes(1);
   });
 
@@ -99,13 +112,68 @@ describe("ProductPlansRouter", () => {
     expect(res.plans).toEqual([]);
   });
 
+  /*
+   * 订阅入口三态（owner 2026-09-22）。
+   *
+   * `plans` 里永远不含邀请档——这是匿名端点，没有会话就没有邀请可言。于是「空阶梯」
+   * 此前无法区分「还没开卖」与「全是邀请档」，落地页两种都说「暂未开放订阅」。
+   * 而 umbra 明明配好了两档、只是都改成了邀请订阅：页面说得跟事实不符。
+   *
+   * 三面都写。**「有公开档时不去数邀请」那一面是重点**：只写前两面的话，一个对每个
+   * 产品都平白多打一次库的实现也会绿。
+   */
+  it("阶梯里有档 → public，且不再多问一次邀请计数", async () => {
+    const { pool, query } = makePool(
+      [ARDA],
+      [
+        {
+          plan_code: "arda-pro",
+          plan_name: "Arda Pro",
+          description: null,
+          tier: "pro",
+          features: [],
+          quota: null,
+          prices: [],
+        },
+      ],
+      7,
+    );
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.subscribeAccess).toBe("public");
+    /* 产品行 + 阶梯 = 2 次；有公开档就没必要再问邀请。 */
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("阶梯为空但有邀请档 → invite（不是「暂未开放」）", async () => {
+    const { pool } = makePool([ARDA], [], 2);
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.plans).toEqual([]);
+    expect(res.subscribeAccess).toBe("invite");
+  });
+
+  it("阶梯为空且无邀请档 → none", async () => {
+    const { pool } = makePool([ARDA], [], 0);
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.subscribeAccess).toBe("none");
+  });
+
+  it("计数是字符串也认（pg 的 count() 交出来是 string）", async () => {
+    const { pool } = makePool([ARDA], [], "3" as unknown as number);
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.subscribeAccess).toBe("invite");
+  });
+
   it("rejects a malformed product code without touching the pool", async () => {
     const query = vi.fn(() => {
       throw new Error("DB must not be touched");
     });
     const router = new ProductPlansRouter({ query } as unknown as Pool);
     const res = await router.getProductPlans("Arda; drop table--");
-    expect(res).toEqual({ product: null, plans: [] });
+    expect(res).toEqual({
+      product: null,
+      plans: [],
+      subscribeAccess: "none",
+    });
     expect(query).not.toHaveBeenCalled();
   });
 });

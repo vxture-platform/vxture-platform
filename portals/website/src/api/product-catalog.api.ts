@@ -77,6 +77,17 @@ export interface ProductCatalogItem {
   releaseStage: string;
   /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
   marketing: MarketingContent | null;
+  /**
+   * 订阅入口三态（owner 2026-09-22）——卡片上那颗按钮写什么由它决定。
+   *
+   *   public  有公开可买的档            → 「订阅」
+   *   invite  只有邀请档（非 is_public）→ 「邀请订阅」
+   *   none    一档都没有                → 不给购买入口
+   *
+   * 部署偏斜防护：门户先于 BFF 发布时旧响应没有这个字段，回落 `public`——那是本
+   * 字段之前的行为（卡上一律「订阅」），不会凭空把在售产品标成邀请制。
+   */
+  subscribeAccess: "public" | "invite" | "none";
 }
 
 /** 取当前 locale 的营销单语块（zh-* → zh,其余 → en,缺则回退另一语）。 */
@@ -166,7 +177,24 @@ export async function fetchPublicProductCatalog(): Promise<
     );
   }
   const data: unknown = await res.json();
-  return Array.isArray(data) ? (data as ProductCatalogItem[]) : [];
+  return Array.isArray(data) ? data.map(normalizeCatalogItem) : [];
+}
+
+/**
+ * 部署偏斜防护：门户先于 BFF 发布时旧响应没有 `subscribeAccess`，回落 `public`
+ * ——那是这个字段之前的行为（卡上一律「订阅」）。回落成 `invite` 会把在售产品
+ * 凭空标成邀请制，那比不标更糟。
+ */
+function normalizeCatalogItem(raw: unknown): ProductCatalogItem {
+  const item = raw as ProductCatalogItem;
+  const access = (raw as { subscribeAccess?: unknown }).subscribeAccess;
+  return {
+    ...item,
+    subscribeAccess:
+      access === "invite" || access === "none" || access === "public"
+        ? access
+        : "public",
+  };
 }
 
 /** 清单页用：目录读不到时回 null，由页面渲染不可用态而不是整页 500。 */

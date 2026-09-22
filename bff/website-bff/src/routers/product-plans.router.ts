@@ -63,6 +63,14 @@ export interface ProductPlansResponse {
     releaseVersion: string | null;
   } | null;
   plans: ProductPlanOption[];
+  /**
+   * 订阅入口三态（owner 2026-09-22）：public 阶梯里有档 / invite 只有邀请档 /
+   * none 一档都没有。
+   *
+   * `plans` 里永远不含邀请档（匿名端点无会话，无邀请可言），所以「空阶梯」此前无法
+   * 区分「还没开卖」与「全是邀请档」——落地页两种都说「暂未开放订阅」。
+   */
+  subscribeAccess: "public" | "invite" | "none";
 }
 
 @Controller("api/products")
@@ -80,7 +88,7 @@ export class ProductPlansRouter {
       this.logger.warn(
         `product plans: malformed product code "${productCode}" — returning empty ladder`,
       );
-      return { product: null, plans: [] };
+      return { product: null, plans: [], subscribeAccess: "none" };
     }
 
     const productRes = await this.pool.query<{
@@ -102,7 +110,7 @@ export class ProductPlansRouter {
       this.logger.warn(
         `product plans: unknown or non-public product "${productCode}" — returning empty ladder`,
       );
-      return { product: null, plans: [] };
+      return { product: null, plans: [], subscribeAccess: "none" };
     }
 
     const ladderRes = await this.pool.query<{
@@ -154,6 +162,37 @@ export class ProductPlansRouter {
       }))
       .sort((a, b) => rank(a.tier) - rank(b.tier));
 
+    /*
+     * 订阅入口三态（owner 2026-09-22）。
+     *
+     * 阶梯里**一个非公开档都不该出现**——这是匿名端点，没有会话就没有邀请可言，
+     * 上面那条 `is_public = true` 保留不动。但「一档都没有」与「只有邀请档」对访客
+     * 是两件不同的事：前者只能如实说还没开卖，后者该指路（怎么拿到邀请）。此前两者
+     * 都退化成 `plans: []`，页面一律显示「暂未开放订阅」——而 umbra 明明配好了两档、
+     * 只是都改成了邀请订阅。
+     *
+     * 所以另问一次计数，判据除可见性外与阶梯完全一致。
+     */
+    /* 只在阶梯为空时才问——有公开档就已经是 public 了，再问一次是给每个产品页
+       平白加一次查库。 */
+    const inviteRes = plans.length
+      ? null
+      : await this.pool.query<{ invite_count: number | string }>(
+          `select count(*) as invite_count
+         from product.products prod
+         join product.plan_components pc
+           on pc.product_id = prod.id and pc.component_role = 'primary'
+         join product.plan_versions pv
+           on pv.id = pc.plan_version_id and pv.is_locked = true
+         join product.plans pl
+           on pl.id = pv.plan_id and pl.current_version_id = pv.id
+          and pl.deleted_at is null and pl.status = 'active'
+          and pl.is_public = false and pl.is_customer_visible = true
+        where prod.product_code = $1 and pc.tier is not null`,
+          [productCode],
+        );
+    const inviteCount = Number(inviteRes?.rows[0]?.invite_count ?? 0);
+
     return {
       product: {
         code: productRow.product_code,
@@ -162,6 +201,8 @@ export class ProductPlansRouter {
         releaseVersion: productRow.release_version,
       },
       plans,
+      subscribeAccess:
+        plans.length > 0 ? "public" : inviteCount > 0 ? "invite" : "none",
     };
   }
 }

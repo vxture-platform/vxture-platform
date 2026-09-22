@@ -1852,7 +1852,8 @@
       "subscriptions": "Subscribed",
       "tierDrafting": "{tier} · draft",
       "versions": "Versions",
-      "viewPlans": "View plans"
+      "viewPlans": "View plans",
+      "effectiveAt": "Effective"
     },
     "lifecycle": {
       "current": "On sale",
@@ -1911,11 +1912,11 @@
       "newVersion": "Open a new draft from this version",
       "newVersionDone": "A new draft was opened from v{n}.",
       "newVersionFailed": "Failed to open a new draft.",
-      "softDelete": "Soft-delete",
-      "softDeleteConsequence": "The plan disappears from every list. Allowed only with no live subscriptions, no subscription history and no order references: a plan that has sold can only be retired.",
-      "softDeleteDone": "Plan {name} soft-deleted.",
+      "softDelete": "Delete",
+      "softDeleteConsequence": "The row is deleted for good and the plan code is released for reuse. Allowed only with no live subscriptions, no order history and no solution binding: a plan that has sold can only be retired.",
+      "softDeleteDone": "Plan “{name}” deleted; its plan code is free again.",
       "softDeleteTarget": "plan {name}",
-      "softDeleteVerb": "Soft-delete",
+      "softDeleteVerb": "Delete",
       "makeInviteOnly": "Switch to invitation only",
       "makeInviteOnlyVerb": "Switch to invitation only",
       "makeInviteOnlyConsequence": "This tier will no longer appear in customers' plan lists; only holders of an invitation can order it. The {n} existing subscriptions are unaffected and can still renew.",
@@ -1924,7 +1925,9 @@
       "makePublicVerb": "Switch to public",
       "makePublicConsequence": "Every customer will see this tier in their plan list and can order it themselves.",
       "makePublicDone": "“{name}” is now public",
-      "visibilityTarget": "plan “{name}”"
+      "visibilityTarget": "plan “{name}”",
+      "newVersionSameMajor": "New draft from current (stay on V{v})",
+      "newVersionBumpMajor": "New draft as V{v}"
     },
     "detail": {
       "backToList": "All products",
@@ -2018,6 +2021,10 @@
       "openNextDraftHint": "It does not change this version; it clones the content into a new one — published versions are immutable, so changing means a new version.",
       "quotaHeading": "Quota · {n} items",
       "title": "{plan} · v{n}"
+    },
+    "empty": {
+      "noPlansTitle": "No plans yet",
+      "noPlansDescription": "This product has no tier on the shelf, so customers cannot subscribe. Each commercial tier holds one live plan; creating one opens a draft for you to fill in prices and quotas before publishing."
     }
   },
   "skillsPage": {

@@ -118,7 +118,9 @@
       "enter": "进入",
       "noEntry": "入口即将开放",
       "detail": "产品介绍",
-      "coming": "敬请期待"
+      "coming": "敬请期待",
+      "inviteSubscribe": "邀请订阅",
+      "notForSale": "暂未开卖"
     },
     "types": {
       "general_platform": "通用平台",
@@ -267,7 +269,12 @@
           "a": "企业版支持私有化部署、定制配额与专属支持，请联系 sales@vxture.com，我们会在 1 个工作日内响应。"
         }
       ]
-    }
+    },
+    "inviteOnlyTitle": "邀请订阅",
+    "inviteOnlyDescription": "该产品的套餐目前凭邀请开放。邀请会发到你的账号上，收到后登录控制台即可看到对应套餐并自助下单，价格与公开套餐一致。",
+    "inviteRequest": "申请邀请",
+    "inviteRequestSubject": "{product} 邀请订阅申请",
+    "inviteHolder": "我已有邀请"
   },
   "comingSoon": {
     "eyebrow": "Coming Soon",

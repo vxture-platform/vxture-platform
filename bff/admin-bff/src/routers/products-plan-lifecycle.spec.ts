@@ -87,6 +87,10 @@ function planResponder(overrides?: Responder): Responder {
     if (sql.includes("from product.plans") && sql.includes("for update"))
       return [PLAN_ROW];
     if (sql.includes("metering.subscriptions")) return [CLEAN_IMPACT];
+    /* 真删那一句没有 RETURNING，而 makeTxClient 用 rows.length 当 rowCount——
+       回一行空对象就是「删掉了 1 行」。端点拿 rowCount 判成败，桩不给就等于
+       「一行都没删」。 */
+    if (sql.includes("delete from product.plans")) return [{}];
     return [];
   };
 }
@@ -98,7 +102,7 @@ function planResponder(overrides?: Responder): Responder {
 describe("套餐生命周期 —— 删除一律 step-up", () => {
   it.each([
     ["deletePlanVersion", "删草稿也要过门：闸门给动作挂，不按后果轻重分级"],
-    ["deletePlan", "软删套餐"],
+    ["deletePlan", "删除套餐：真删，卖过的走退役"],
     ["deprecatePlan", "退役：不是删除，但与 publish 同改「客户买得到什么」"],
   ] as const)("%s carries REQUIRE_STEP_UP metadata", (handler, _why) => {
     const fn = (ProductsRouter.prototype as unknown as Record<string, unknown>)[
@@ -246,11 +250,20 @@ describe("删草稿 —— plan_versions 没有 deleted_at，删就是真删", (
 });
 
 // ============================================================================
-// ② 软删套餐：卖过就不能删，且判据要在事务内复核
+// ② 删除套餐：卖过就不能删，且判据要在事务内复核
+//
+// owner 2026-09-22 裁定：**删除就是真删**，中间那个「软删」态撤掉。
+//   没人订过 / 没下过单 / 没被方案绑过  →  整行删掉，plan_code 随之释放
+//   卖过的                            →  只有退役一条路
+//
+// 原来这里断言的是「写 deleted_at，不是物理删」，理由写着「物理删会让历史订单指向
+// 不存在的行」——那个理由不成立：有订单时 `readPlanDeletionImpact` 本来就挡着，
+// 走不到删除那一步。而软删的真实后果是 `uq_plans_plan_code`（普通唯一约束，不排除
+// 软删行）把码位永久占住，运营删掉一档就再也用不回同一个码。
 // ============================================================================
 
-describe("软删套餐 —— 卖过只能退役", () => {
-  it("零足迹：软删（写 deleted_at，不是物理删）+ 审计 + 提交", async () => {
+describe("删除套餐 —— 卖过只能退役", () => {
+  it("零足迹：整行真删（不写 deleted_at）+ 审计 + 提交", async () => {
     const tx = makeTxClient(planResponder());
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
     const res = await router.deletePlan(makeReq(MANAGE), PLAN_ID, {
@@ -259,14 +272,17 @@ describe("软删套餐 —— 卖过只能退役", () => {
 
     expect(res).toEqual({ deleted: true, planCode: "karda-pro" });
     expect(tx.outcome().committed).toBe(true);
-    const upd = tx.calls.find((c) => c.includes("UPDATE product.plans"));
-    expect(upd).toContain("deleted_at = now()");
-    /* 物理删会让历史订单指向不存在的行，所以这里只能是软删。 */
     expect(tx.calls.some((c) => c.includes("DELETE FROM product.plans"))).toBe(
-      false,
+      true,
     );
+    /* 反面：不许再退回软删——那会重新占住码位。 */
+    expect(tx.calls.some((c) => c.includes("deleted_at = now()"))).toBe(false);
+
     const auditAt = tx.calls.findIndex((c) =>
       c.includes("insert into support.audit_logs"),
+    );
+    const deleteAt = tx.calls.findIndex((c) =>
+      c.includes("DELETE FROM product.plans"),
     );
     expect(insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "action")).toBe(
       "product.plan.delete",
@@ -274,6 +290,27 @@ describe("软删套餐 —— 卖过只能退役", () => {
     expect(
       insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "resource_id"),
     ).toBe("karda-pro");
+    /* 审计必须排在删除**之前**：行删掉之后 plan_code 就查不回来了，而它正是
+       这条日志的 resourceId。顺序错了日志里只会剩一个 uuid。 */
+    expect(auditAt).toBeLessThan(deleteAt);
+  });
+
+  it("删了却影响 0 行：409 + 回滚，不谎报 deleted: true", async () => {
+    /*
+     * 上面 FOR UPDATE 已经把行锁住了，所以「删不掉」只能是判据与外键不一致——
+     * 那是缺陷，不是并发。静默返回 deleted: true 会让运营以为删掉了，而行还在、
+     * 码位还占着，正是本次要治的那个症状的另一种形态。
+     */
+    const tx = makeTxClient(
+      planResponder((sql) =>
+        sql.includes("delete from product.plans") ? [] : undefined,
+      ),
+    );
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await expect(
+      router.deletePlan(makeReq(MANAGE), PLAN_ID, { confirm: true }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.outcome().rolledBack).toBe(true);
   });
 
   it.each([

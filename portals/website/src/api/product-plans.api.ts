@@ -49,6 +49,15 @@ export interface ProductPlansProduct {
 export interface ProductPlansResponse {
   product: ProductPlansProduct | null;
   plans: ProductPlanOption[];
+  /**
+   * 订阅入口三态：public 阶梯里有档 / invite 只有邀请档 / none 一档都没有。
+   *
+   * `plans` 里永远不含邀请档（匿名端点无会话，无邀请可言），所以空阶梯此前无法区分
+   * 「还没开卖」与「全是邀请档」——页面两种都说「暂未开放订阅」。
+   *
+   * 部署偏斜防护：旧响应没有这个字段时回落 `none`，即本字段之前的行为。
+   */
+  subscribeAccess: "public" | "invite" | "none";
 }
 
 export async function fetchProductPlans(
@@ -58,8 +67,14 @@ export async function fetchProductPlans(
     `/api/products/${encodeURIComponent(code)}/plans`,
   );
   const data = res.data;
+  const access = (data as { subscribeAccess?: unknown } | undefined)
+    ?.subscribeAccess;
   return {
     product: data?.product ?? null,
     plans: Array.isArray(data?.plans) ? data.plans : [],
+    subscribeAccess:
+      access === "public" || access === "invite" || access === "none"
+        ? access
+        : "none",
   };
 }

@@ -134,7 +134,9 @@
       "enter": "Enter",
       "noEntry": "Entry coming soon",
       "detail": "Learn more",
-      "coming": "Coming soon"
+      "coming": "Coming soon",
+      "inviteSubscribe": "By invitation",
+      "notForSale": "Not on sale yet"
     },
     "types": {
       "general_platform": "General Platform",
@@ -283,7 +285,12 @@
           "a": "Enterprise offers on-prem deployment, custom quotas and dedicated support. Contact sales@vxture.com and we respond within 1 business day."
         }
       ]
-    }
+    },
+    "inviteOnlyTitle": "By invitation",
+    "inviteOnlyDescription": "This product's plans are currently open by invitation. An invitation is issued to your account; once you have one, sign in to the console to see the plan and order it yourself, at the same price as a public plan.",
+    "inviteRequest": "Request an invitation",
+    "inviteRequestSubject": "{product} invitation request",
+    "inviteHolder": "I have an invitation"
   },
   "comingSoon": {
     "eyebrow": "Coming Soon",

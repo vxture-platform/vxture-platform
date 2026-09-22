@@ -54,6 +54,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  ActionButton,
   ActionMenu,
   Badge,
   Button,
@@ -71,6 +72,7 @@ import {
   PanelList,
   Section,
   StatusBadge,
+  useToast,
 } from "@vxture/design-system";
 import type {
   ActionMenuItem,
@@ -93,6 +95,10 @@ import {
   type PlanVersionSummary,
 } from "@/api/admin-bff";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import {
+  planVersionEffectiveDate,
+  planVersionLabel,
+} from "@/modules/shared/plan-version-label";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 import { useTableLabels } from "@/modules/shared/table";
 import {
@@ -164,6 +170,32 @@ function RowMenu({
   );
 }
 
+/** 摊进 `toast()`——`exactOptionalPropertyTypes` 不许显式传 undefined description。 */
+function describeError(error: unknown): { description?: string } {
+  return error instanceof Error && error.message
+    ? { description: error.message }
+    : {};
+}
+
+/**
+ * 按产品 × 档位推出套餐码与名称，用作创建弹窗的预填值。
+ *
+ * 口径照 seed 里既有的全部套餐：`arda-pro` / "Arda Pro"、`karda-free` / "Karda Free"、
+ * `umbra-free` / "Umbra Free"——码是 `<产品码>-<档位>`，名是两段首字母大写。不是我
+ * 新定的规则，是把已经在用的规则填进框里，省掉人照着提示再敲一遍。
+ */
+function derivePlanIdentity(
+  productCode: string,
+  tier: string,
+): { code: string; name: string } {
+  const cap = (x: string) => (x ? x[0]!.toUpperCase() + x.slice(1) : x);
+  if (!productCode || !tier) return { code: "", name: "" };
+  return {
+    code: `${productCode}-${tier}`,
+    name: `${cap(productCode)} ${cap(tier)}`,
+  };
+}
+
 export function PlanPublishingDetailPage({
   productCode,
 }: {
@@ -176,6 +208,7 @@ export function PlanPublishingDetailPage({
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { runWithStepUp } = useStepUp();
+  const { toast } = useToast();
 
   const [product, setProduct] = useState<PlanMatrixProduct | null>(null);
   const [versionsByPlan, setVersionsByPlan] = useState<
@@ -188,11 +221,19 @@ export function PlanPublishingDetailPage({
   >({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [newPlanCode, setNewPlanCode] = useState("");
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanTier, setNewPlanTier] = useState("");
+  /**
+   * 套餐码与名称是否被人手改过。
+   *
+   * 提示里写着「如 arda-pro」，而人得照着再敲一遍——同一个信息说两遍，第二遍还容易
+   * 敲错（owner 2026-09-22）。改成按产品 × 档位**预填**：没动过就跟着档位变，动过就
+   * 不再覆盖（否则人刚改完一换档位就被抹掉）。
+   */
+  const [codeTouched, setCodeTouched] = useState(false);
+  const [nameTouched, setNameTouched] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -271,24 +312,40 @@ export function PlanPublishingDetailPage({
 
   const searchParams = useSearchParams();
   useEffect(() => {
-    if (searchParams.get("new") === "1") setNewPlanOpen(true);
+    if (searchParams.get("new") === "1") openNewPlan();
   }, [searchParams]);
 
+  /**
+   * 返回值是「成不成」——调用点要靠它决定关不关对话框（2026-09-22）。
+   *
+   * 原来它把异常吞掉且不回报，于是 `submitNewPlan` **无条件**关框、清字段；加上
+   * 成功与失败都走同一个无语气的 `setMessage`，两种结果长得一模一样。owner 报的
+   * 「无法新建——没有提示、没有创建结果」就是这么来的：框关了、字段清了、顶上一行
+   * 小灰字（内容是 Nest 对 23505 的兜底「Internal server error」）、没有新卡片。
+   *
+   * 反馈改走 DS toast + tone（与同域的 ProductSolutionsPage 同一套），成功绿、
+   * 失败红并带上服务端的原因。
+   */
   const runPlain = useCallback(
-    async (action: () => Promise<unknown>, done: string) => {
+    async (action: () => Promise<unknown>, done: string): Promise<boolean> => {
       setBusy(true);
-      setMessage(null);
       try {
         await action();
-        setMessage(done);
+        toast({ tone: "success", title: done });
         await load();
+        return true;
       } catch (err) {
-        setMessage(err instanceof Error ? err.message : t("actions.failed"));
+        toast({
+          tone: "danger",
+          title: t("actions.failed"),
+          ...describeError(err),
+        });
+        return false;
       } finally {
         setBusy(false);
       }
     },
-    [load, t],
+    [load, t, toast],
   );
 
   /**
@@ -303,14 +360,36 @@ export function PlanPublishingDetailPage({
     return taken;
   }, [activePlans]);
 
+  /**
+   * 开框。两个入口共用它：页头那颗按钮与空态里那颗（owner 2026-09-22 要的）。
+   * 同一个动作两个入口是对的——空态是眼睛落点，页头是常驻入口；不重复建页面。
+   */
+  const openNewPlan = useCallback(() => {
+    setNewPlanCode("");
+    setNewPlanName("");
+    setNewPlanTier("");
+    setCodeTouched(false);
+    setNameTouched(false);
+    setNewPlanOpen(true);
+  }, []);
+
+  const closeNewPlan = useCallback(() => {
+    setNewPlanOpen(false);
+    setNewPlanCode("");
+    setNewPlanName("");
+    setNewPlanTier("");
+    setCodeTouched(false);
+    setNameTouched(false);
+  }, []);
+
   const submitNewPlan = useCallback(async () => {
     const code = newPlanCode.trim();
     const name = newPlanName.trim();
     if (!code || !name || !newPlanTier) {
-      setMessage(t("actions.newPlanInvalid"));
+      toast({ tone: "danger", title: t("actions.newPlanInvalid") });
       return;
     }
-    await runPlain(
+    const ok = await runPlain(
       () =>
         createProductPlan({
           planCode: code,
@@ -320,28 +399,42 @@ export function PlanPublishingDetailPage({
         }),
       t("actions.newPlanDone", { name }),
     );
-    setNewPlanOpen(false);
-    setNewPlanCode("");
-    setNewPlanName("");
-    setNewPlanTier("");
-  }, [newPlanCode, newPlanName, newPlanTier, productCode, runPlain, t]);
+    /* 只在成功时收摊。失败就把框留着、字段留着——人才能改完重提，而不是回到一张
+       空白表单前猜刚才发生了什么。 */
+    if (ok) closeNewPlan();
+  }, [
+    closeNewPlan,
+    newPlanCode,
+    newPlanName,
+    newPlanTier,
+    productCode,
+    runPlain,
+    t,
+    toast,
+  ]);
 
   const runWrite = useCallback(
-    async (action: () => Promise<unknown>, done: string) => {
+    async (action: () => Promise<unknown>, done: string): Promise<boolean> => {
       setBusy(true);
-      setMessage(null);
       try {
         await runWithStepUp(action);
-        setMessage(done);
+        toast({ tone: "success", title: done });
         await load();
+        return true;
       } catch (err) {
-        if (isStepUpCancelled(err)) return;
-        setMessage(err instanceof Error ? err.message : t("actions.failed"));
+        /* 用户自己取消 step-up 不是失败，不弹任何东西。 */
+        if (isStepUpCancelled(err)) return false;
+        toast({
+          tone: "danger",
+          title: t("actions.failed"),
+          ...describeError(err),
+        });
+        return false;
       } finally {
         setBusy(false);
       }
     },
-    [load, runWithStepUp, t],
+    [load, runWithStepUp, t, toast],
   );
 
   /**
@@ -355,7 +448,27 @@ export function PlanPublishingDetailPage({
         // 平台列表通例的首列是序号；版本史里版本号本身就是序号，用它更有意义。
         id: "version",
         header: t("list.versions"),
-        cell: (version) => <strong>v{version.versionNo}</strong>,
+        /* 主标签给人看代际与启用日期；内部号仍要露出来——唯一键、排序与详情路由
+           都拄它，排查时得对得上（相似两项上下主辅，全站通例）。 */
+        cell: (version) => (
+          <span className="flex flex-col">
+            <strong>{planVersionLabel(version)}</strong>
+            <span className="text-body-sm text-muted-foreground tabular-nums">
+              v{version.versionNo}
+            </span>
+          </span>
+        ),
+      },
+      {
+        id: "effective",
+        header: t("list.effectiveAt"),
+        /* 「什么时间启用」——取 published_at。读不到显示「—」，不拿 createdAt 冒充：
+           那是草稿何时开的，是另一个时刻。 */
+        cell: (version) => (
+          <span className="tabular-nums">
+            {planVersionEffectiveDate(version)}
+          </span>
+        ),
       },
       {
         id: "state",
@@ -476,7 +589,7 @@ export function PlanPublishingDetailPage({
             target: t("actions.deleteDraftTarget", { n: version.versionNo }),
             consequence: t("actions.deleteDraftConsequence"),
             onConfirm: () =>
-              runWrite(
+              void runWrite(
                 () => deletePlanVersion(version.id),
                 t("actions.deleteDraftDone", { n: version.versionNo }),
               ),
@@ -498,7 +611,7 @@ export function PlanPublishingDetailPage({
           <Button
             size="sm"
             disabled={busy || !product}
-            onClick={() => setNewPlanOpen(true)}
+            onClick={() => openNewPlan()}
           >
             {t("actions.newPlan")}
           </Button>
@@ -527,12 +640,6 @@ export function PlanPublishingDetailPage({
 
   return (
     <DetailPageTemplate className="min-w-0" header={header}>
-      {message ? (
-        <p className="text-body-sm" role="status">
-          {message}
-        </p>
-      ) : null}
-
       {/* ── 档位区：一条套餐一张卡，标题是套餐名 ───────────────────────── */}
       <Section
         aria-label={t("list.sellingTiers")}
@@ -542,7 +649,24 @@ export function PlanPublishingDetailPage({
         description={t("detail.tierDescription")}
       >
         {activePlans.length === 0 ? (
-          <EmptyState title={t("list.statusNone")} />
+          /* 原来这里是 `<EmptyState title={t("list.statusNone")} />`——「未配套餐」
+             那个词串同时还是状态徽标的文案（见下方版本表），一个词串两个岗；作为
+             空态它是个标签不是句子，而且没有任何出路。照 /product-solutions 的写法
+             补图标、说明与创建入口（owner 2026-09-22）。 */
+          <EmptyState
+            icon="cube"
+            title={t("empty.noPlansTitle")}
+            description={t("empty.noPlansDescription")}
+            action={
+              <ActionButton
+                icon="plus"
+                disabled={busy}
+                onClick={() => openNewPlan()}
+              >
+                {t("actions.newPlan")}
+              </ActionButton>
+            }
+          />
         ) : (
           <ListCardGrid>
             {activePlans.map((plan) => {
@@ -561,6 +685,54 @@ export function PlanPublishingDetailPage({
                   onSelect: () =>
                     router.push(
                       `/plan-versions/${encodeURIComponent(productCode)}/${encodeURIComponent(plan.planCode)}/${draft.versionNo}/edit`,
+                    ),
+                });
+              } else if (plan.currentVersion !== null) {
+                const current = plan.currentVersion;
+                /*
+                 * 「基于当前版本开新草稿」——**卡片上原先没有这个入口**，它只长在
+                 * 下方版本史的清单行里（owner 2026-09-22 报）。改一档的价格/配额是
+                 * 这一屏最常做的事，而人的落点是卡片，不是翻到版本表去找那一行。
+                 *
+                 * 与上面的「编辑草稿」互斥成一对：有草稿就去编辑它，没有就开一份。
+                 * 一个套餐同时只允许一个在途草稿（再开会 409），所以这里不需要再
+                 * 置灰——走到这一支就说明没有草稿。
+                 */
+                /*
+                 * 两个入口都给出来，而不是把主版本号藏在默认值里（owner 2026-09-22：
+                 * 「版本号……都是需要设定的，不能自己无限增」）。沿用是常态——改一两个
+                 * 配额、价格没变，还在同一个商业代际里；升位是价格或档位结构真的变了，
+                 * 那是一次决定，得有人按。
+                 */
+                items.push({
+                  id: "new-draft-same",
+                  label: t("actions.newVersionSameMajor", {
+                    v: current.majorNo,
+                  }),
+                  icon: "plus",
+                  disabled: busy,
+                  onSelect: () =>
+                    void runPlain(
+                      () =>
+                        createPlanDraftVersion(plan.planId, current.majorNo),
+                      t("actions.newVersionDone", { n: current.versionNo }),
+                    ),
+                });
+                items.push({
+                  id: "new-draft-bump",
+                  label: t("actions.newVersionBumpMajor", {
+                    v: current.majorNo + 1,
+                  }),
+                  icon: "arrow-up",
+                  disabled: busy,
+                  onSelect: () =>
+                    void runPlain(
+                      () =>
+                        createPlanDraftVersion(
+                          plan.planId,
+                          current.majorNo + 1,
+                        ),
+                      t("actions.newVersionDone", { n: current.versionNo }),
                     ),
                 });
               }
@@ -594,7 +766,7 @@ export function PlanPublishingDetailPage({
                       })
                     : t("actions.makePublicConsequence"),
                   onConfirm: () =>
-                    runWrite(
+                    void runWrite(
                       () => setPlanVisibility(plan.planId, !plan.isPublic),
                       plan.isPublic
                         ? t("actions.makeInviteOnlyDone", {
@@ -617,7 +789,7 @@ export function PlanPublishingDetailPage({
                   target: t("actions.deprecateTarget", { name: plan.planName }),
                   consequence: t("actions.deprecateConsequence"),
                   onConfirm: () =>
-                    runWrite(
+                    void runWrite(
                       () => deprecatePlan(plan.planId),
                       t("actions.deprecateDone", { name: plan.planName }),
                     ),
@@ -650,7 +822,7 @@ export function PlanPublishingDetailPage({
                         <span className="inline-flex flex-wrap items-center justify-end gap-2xs">
                           {plan.currentVersion ? (
                             <StatusBadge tone="success">
-                              {`v${plan.currentVersion.versionNo} · ${t("lifecycle.current")}`}
+                              {`${planVersionLabel(plan.currentVersion)} · ${t("lifecycle.current")}`}
                             </StatusBadge>
                           ) : (
                             <StatusBadge tone="neutral">
@@ -807,7 +979,7 @@ export function PlanPublishingDetailPage({
                         }),
                         consequence: t("actions.softDeleteConsequence"),
                         onConfirm: () =>
-                          runWrite(
+                          void runWrite(
                             () => deletePlan(plan.planId),
                             t("actions.softDeleteDone", {
                               name: plan.planName,
@@ -883,7 +1055,7 @@ export function PlanPublishingDetailPage({
           submitLabel={t("actions.newPlanSubmit")}
           submitting={busy}
           onOpenChange={(open) => {
-            if (!open) setNewPlanOpen(false);
+            if (!open) closeNewPlan();
           }}
           onSubmit={(event) => {
             event.preventDefault();
@@ -899,7 +1071,14 @@ export function PlanPublishingDetailPage({
               id="new-plan-tier"
               value={newPlanTier}
               disabled={busy}
-              onChange={(event) => setNewPlanTier(event.target.value)}
+              onChange={(event) => {
+                const tier = event.target.value;
+                setNewPlanTier(tier);
+                /* 换档位时跟着重算，但**不覆盖人手改过的**那一个。 */
+                const guess = derivePlanIdentity(productCode, tier);
+                if (!codeTouched) setNewPlanCode(guess.code);
+                if (!nameTouched) setNewPlanName(guess.name);
+              }}
             >
               <option value="">—</option>
               {TIER_FILTER_OPTIONS.filter((o) => o.value !== "other").map(
@@ -931,7 +1110,10 @@ export function PlanPublishingDetailPage({
               id="new-plan-code"
               value={newPlanCode}
               disabled={busy}
-              onChange={(event) => setNewPlanCode(event.target.value)}
+              onChange={(event) => {
+                setCodeTouched(true);
+                setNewPlanCode(event.target.value);
+              }}
               placeholder={`${productCode}-pro`}
               maxLength={64}
             />
@@ -947,7 +1129,10 @@ export function PlanPublishingDetailPage({
               id="new-plan-name"
               value={newPlanName}
               disabled={busy}
-              onChange={(event) => setNewPlanName(event.target.value)}
+              onChange={(event) => {
+                setNameTouched(true);
+                setNewPlanName(event.target.value);
+              }}
               maxLength={120}
             />
             <span className="text-body-sm text-muted-foreground">

@@ -81,6 +81,8 @@ export default function AgentMarketplacePage({
       },
       actions: {
         subscribe: t("agents.actions.subscribe"),
+        inviteSubscribe: t("agents.actions.inviteSubscribe"),
+        notForSale: t("agents.actions.notForSale"),
         upgrade: t("agents.actions.upgrade"),
         enter: t("agents.actions.enter"),
         noEntry: t("agents.actions.noEntry"),
@@ -116,6 +118,7 @@ export default function AgentMarketplacePage({
           version: agent.releaseVersion,
           releasedAt: agent.releasedAt,
           recommend: marketingRecommend(agent.marketing),
+          subscribeAccess: agent.subscribeAccess,
           expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
         };
       });
