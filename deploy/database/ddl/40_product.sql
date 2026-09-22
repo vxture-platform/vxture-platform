@@ -185,7 +185,9 @@ CREATE INDEX idx_plans_deleted_at ON product.plans (deleted_at);
 CREATE TABLE product.plan_versions (
     id                uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_id           uuid         NOT NULL REFERENCES product.plans(id) ON DELETE CASCADE,
-    version_no        int          NOT NULL,                          -- 同 plan 下从 1 递增
+    version_no        int          NOT NULL,                          -- 同 plan 下从 1 递增（内部身份：唯一键、排序、详情路由都拄它；98 锚点列，不可改写）
+    major_no          int          NOT NULL DEFAULT 1,                -- 主版本号（V1/V2…）：**人设定的商业代际**，不自增。价格/档位结构变了才升；只改配额这类小改沿用当前主版本，于是同一 V1 下可以有多个日期修订。98 锚点列（`_no` 后缀）——开草稿时一次写入，之后不改
+    published_at      timestamptz,                                    -- 发布（启用）那一刻；NULL = 还没发布过。运营要看的「什么时间启用」只能取它——created_at 是草稿何时开的，是另一个时刻
     status            varchar(32)  NOT NULL DEFAULT 'draft',          -- 发布生命周期（值域=@shared PLAN_VERSION_STATUSES）：draft 可编辑/待发布；published 已发布（发布时随 is_locked=true 冻结、plans.current_version_id 指向）
     is_locked         boolean      NOT NULL DEFAULT false,            -- 锁定 → 版本 + components + prices + trial 全冻结
     trial_cycle_unit  varchar(16),                                    -- 试用时长单位（NULL=不提供试用）
@@ -194,7 +196,12 @@ CREATE TABLE product.plan_versions (
     created_at        timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT uq_plan_versions_plan_version UNIQUE (plan_id, version_no),
     CONSTRAINT chk_plan_versions_status CHECK (status IN ('draft','published')),
-    CONSTRAINT chk_plan_versions_trial_cycle_unit CHECK (trial_cycle_unit IS NULL OR trial_cycle_unit IN ('day','week','month'))
+    CONSTRAINT chk_plan_versions_trial_cycle_unit CHECK (trial_cycle_unit IS NULL OR trial_cycle_unit IN ('day','week','month')),
+    CONSTRAINT chk_plan_versions_major_no CHECK (major_no >= 1)
+    -- 刻意**不加**「published ⇔ published_at 非空」这条 CHECK：本列上线前就已发布的
+    -- 版本没有这个时刻可考（既不在表里也不在审计里，发布动作此前压根不留痕），加了
+    -- 会让存量行当场违反、也会顶穿 seed 里那些已发布版本。已发布而 published_at 为
+    -- 空，读作「发布于本列上线之前」，界面显示「—」，不拿 created_at 冒充。
 );
 CREATE INDEX idx_plan_versions_plan_id ON product.plan_versions (plan_id);
 

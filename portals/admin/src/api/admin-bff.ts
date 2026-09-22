@@ -330,11 +330,23 @@ export interface PlanVersionPrice {
 export interface PlanVersionSummary {
   id: string;
   versionNo: number;
+  /**
+   * 主版本号 V1/V2…——**人设定的商业代际**，不自增（owner 2026-09-22）。
+   * 价格或档位结构变了才升；只改配额这类小改沿用当前主版本，于是同一 V1 下可以
+   * 有多个日期修订。`versionNo` 仍是内部身份（唯一键、排序、详情路由都拄它）。
+   */
+  majorNo: number;
   status: string;
   isLocked: boolean;
   isCurrent: boolean;
   /** ISO timestamp — the date axis of the version timeline. */
   createdAt: string;
+  /**
+   * 发布（启用）那一刻；`null` = 还没发布，或发布于该列上线之前。
+   * 「什么时间启用」只有这一刻能答——`createdAt` 是草稿何时开的。存量已发布版本
+   * 没有这个时刻可考，显示「—」，**不拿 createdAt 冒充**。
+   */
+  publishedAt: string | null;
   prices: PlanVersionPrice[];
   /**
    * 还钉在**这一个版本**上的活订阅数（`deleted_at IS NULL`）。
@@ -429,6 +441,10 @@ export async function publishPlanVersion(
 export interface PlanMatrixVersionRef {
   id: string;
   versionNo: number;
+  /** 主版本号 V1/V2…（人设定的商业代际，不自增）。 */
+  majorNo: number;
+  /** 发布（启用）那一刻；null = 未发布，或发布于该列上线之前。 */
+  publishedAt: string | null;
 }
 
 /** One plan laid on a product's tier ladder. */
@@ -611,13 +627,20 @@ export async function createProductPlan(body: {
 }
 
 /** Open the next draft version, cloned from the current published version. */
+/**
+ * 开一份新草稿（从当前版本克隆）。
+ *
+ * `majorNo` 不传 = 沿用源版本的主版本号（小改仍在同一商业代际里）；要升位就显式
+ * 给 —— 升位是人的决定，服务端不自增，也不许比当前的低。
+ */
 export async function createPlanDraftVersion(
   planId: string,
+  majorNo?: number,
 ): Promise<PlanVersionDetail> {
   return mutateJson<PlanVersionDetail>(
     `/api/products/plans/${encodeURIComponent(planId)}/versions`,
     "POST",
-    undefined,
+    majorNo === undefined ? undefined : { majorNo },
     "Failed to open a draft version",
   );
 }

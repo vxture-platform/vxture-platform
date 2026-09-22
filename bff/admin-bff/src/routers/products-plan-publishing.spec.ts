@@ -109,6 +109,8 @@ function draftVersionResponder(overrides?: Responder): Responder {
         {
           id: "v1",
           version_no: 1,
+          /* 源版本已经在 V2 了——「沿用」要沿用到 2，不是回落成 1。 */
+          major_no: 2,
           trial_cycle_unit: null,
           trial_cycle_count: null,
           max_no: 3,
@@ -375,6 +377,73 @@ describe("draft version creation", () => {
 });
 
 // ============================================================================
+// 主版本号：人设定，不自增（owner 2026-09-22）
+//
+// 「版本号不是强绑定日期，是设定的逻辑。V1.20260922 这种样式，都是需要设定的，
+// 不能自己无限增。可以存在 V1 下多个日期版本，如调整了很小的细节，修改一两个配额，
+// 但是价格没有改变。」
+//
+// 三面都写。**「不许倒退」那条是重点**：只写前两条的话，一个「照传什么就写什么」的
+// 实现也会绿，而那允许把 V2 改回 V1，让同一个套餐的代际顺序自相矛盾。
+// ============================================================================
+
+describe("createDraftVersion — 主版本号", () => {
+  /** 落库的 major_no（INSERT 的第 6 个参数）。 */
+  function insertedMajor(tx: {
+    calls: string[];
+    params: unknown[][];
+  }): unknown {
+    const at = tx.calls.findIndex((c) =>
+      c.includes("INSERT INTO product.plan_versions"),
+    );
+    return tx.params[at]?.[5];
+  }
+
+  /* 只读池给详情行，让端点收尾那次 `loadPlanVersionDetail` 正常返回——与邻近
+     用例同一写法。断言看的是落库参数 `tx.params`。 */
+  it("不给 majorNo：沿用源版本的（不自增）", async () => {
+    const tx = makeTxClient(draftVersionResponder());
+    const router = new ProductsRouter(readerOf([DETAIL_ROW]), tx.pool);
+    await router.createDraftVersion(makeReq(MANAGE), PLAN_ID);
+
+    expect(tx.outcome().committed).toBe(true);
+    expect(insertedMajor(tx)).toBe(2);
+  });
+
+  it("显式给更高的：按给的写（升位是人的决定）", async () => {
+    const tx = makeTxClient(draftVersionResponder());
+    const router = new ProductsRouter(readerOf([DETAIL_ROW]), tx.pool);
+    await router.createDraftVersion(makeReq(MANAGE), PLAN_ID, { majorNo: 3 });
+
+    expect(tx.outcome().committed).toBe(true);
+    expect(insertedMajor(tx)).toBe(3);
+  });
+
+  it("给比当前低的：400，且不落库（代际不能倒退）", async () => {
+    const tx = makeTxClient(draftVersionResponder());
+    const router = new ProductsRouter(readerOf([DETAIL_ROW]), tx.pool);
+    await expect(
+      router.createDraftVersion(makeReq(MANAGE), PLAN_ID, { majorNo: 1 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      tx.calls.some((c) => c.includes("INSERT INTO product.plan_versions")),
+    ).toBe(false);
+  });
+
+  it("非整数 / 小于 1：400", async () => {
+    const tx = makeTxClient(draftVersionResponder());
+    const router = new ProductsRouter(readerOf([DETAIL_ROW]), tx.pool);
+    for (const bad of [0, -1, 1.5, "2"]) {
+      await expect(
+        router.createDraftVersion(makeReq(MANAGE), PLAN_ID, {
+          majorNo: bad,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
+});
+
+// ============================================================================
 // Publish tier-occupancy guard
 // ============================================================================
 
@@ -445,6 +514,9 @@ describe("publish — tier occupancy guard", () => {
     expect(tx.calls.some((c) => c.includes("SET current_version_id"))).toBe(
       true,
     );
+    /* 发布时刻必须落库：运营问的「什么时间启用」只有它能答，而 created_at 是
+       草稿何时开的。此前这一列根本不存在。 */
+    expect(tx.calls.some((c) => c.includes("published_at = now()"))).toBe(true);
 
     /*
      * 审计（2026-09-22 补）：发布**此前压根不留痕**。它是这一屏最要紧的动作

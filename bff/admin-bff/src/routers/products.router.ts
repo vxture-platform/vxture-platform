@@ -832,8 +832,12 @@ export class ProductsRouter {
       // publish: freeze the version and make it the plan's live version. A
       // prior published version stays 'published' (subscriptions pinned to it
       // keep resolving) — it just stops being current.
+      /* `published_at` 就在这里落——运营问的「什么时间启用」只有这一刻能答，
+         `created_at` 是草稿何时开的。两列都在 98 的 GRANT 名单里（同批迁移补的）。 */
       await client.query(
-        `UPDATE product.plan_versions SET status = 'published', is_locked = true WHERE id = $1`,
+        `UPDATE product.plan_versions
+            SET status = 'published', is_locked = true, published_at = now()
+          WHERE id = $1`,
         [versionId],
       );
       await client.query(
@@ -1437,13 +1441,31 @@ export class ProductsRouter {
    * prices and trial config all carry over, so an operator edits a delta
    * instead of retyping the whole grant. One draft in flight per plan — a
    * second one would make "the draft" ambiguous for every editor endpoint.
+   *
+   * ── 主版本号（owner 2026-09-22） ──
+   * `majorNo` 由调用方给，**缺省沿用源版本的**——绝大多数新草稿是小改（调一两个
+   * 配额、价格不变），那就还在同一个商业代际里，于是同一 V1 下会有多个日期修订。
+   * 价格或档位结构变了才升位，而升位是**人的决定**，不是自增：所以这里不自动 +1。
+   * 显式给的值只许 ≥ 源版本（代际不能倒退），且必须 ≥ 1。
    */
   @Post("plans/:planId/versions")
   async createDraftVersion(
     @Req() req: Request & RequestContext,
     @Param("planId") planId: string,
+    @Body() body?: { majorNo?: unknown },
   ): Promise<PlanVersionDetail> {
     assertCanManageProducts(req);
+    let requestedMajor: number | null = null;
+    if (body?.majorNo !== undefined && body.majorNo !== null) {
+      if (
+        typeof body.majorNo !== "number" ||
+        !Number.isInteger(body.majorNo) ||
+        body.majorNo < 1
+      ) {
+        throw new BadRequestException("majorNo must be an integer >= 1");
+      }
+      requestedMajor = body.majorNo;
+    }
     let draftId = "";
     await withTransaction(this.rwPool, async (client) => {
       const plan = await client.query<{
@@ -1476,11 +1498,12 @@ export class ProductsRouter {
       const source = await client.query<{
         id: string;
         version_no: number;
+        major_no: number | null;
         trial_cycle_unit: string | null;
         trial_cycle_count: number | null;
         max_no: number;
       }>(
-        `SELECT v.id, v.version_no, v.trial_cycle_unit, v.trial_cycle_count,
+        `SELECT v.id, v.version_no, v.major_no, v.trial_cycle_unit, v.trial_cycle_count,
                 (SELECT max(version_no) FROM product.plan_versions WHERE plan_id = $1) AS max_no
            FROM product.plan_versions v
           WHERE v.plan_id = $1
@@ -1495,10 +1518,17 @@ export class ProductsRouter {
         );
       }
       const nextNo = sourceRow.max_no + 1;
+      const sourceMajor = Number(sourceRow.major_no ?? 1);
+      if (requestedMajor !== null && requestedMajor < sourceMajor) {
+        throw new BadRequestException(
+          `majorNo ${requestedMajor} 低于当前 V${sourceMajor}——商业代际不能倒退`,
+        );
+      }
+      const majorNo = requestedMajor ?? sourceMajor;
       const version = await client.query<{ id: string }>(
         `INSERT INTO product.plan_versions
-           (id, plan_id, version_no, status, is_locked, trial_cycle_unit, trial_cycle_count, created_by, created_at)
-         VALUES (gen_random_uuid(), $1, $2, 'draft', false, $3, $4, $5, now())
+           (id, plan_id, version_no, major_no, status, is_locked, trial_cycle_unit, trial_cycle_count, created_by, created_at)
+         VALUES (gen_random_uuid(), $1, $2, $6, 'draft', false, $3, $4, $5, now())
          RETURNING id`,
         [
           planId,
@@ -1506,6 +1536,7 @@ export class ProductsRouter {
           sourceRow.trial_cycle_unit,
           sourceRow.trial_cycle_count,
           req.user!.id,
+          majorNo,
         ],
       );
       draftId = version.rows[0]!.id;
@@ -1682,11 +1713,24 @@ interface PlanVersionPrice {
 interface PlanVersionSummary {
   id: string;
   versionNo: number;
+  /**
+   * 主版本号 V1/V2…——**人设定的商业代际**，不自增（owner 2026-09-22）。
+   * 价格或档位结构变了才升；只改配额这类小改沿用当前主版本，于是同一 V1 下可以
+   * 有多个日期修订。`versionNo` 仍是内部身份（唯一键、排序、详情路由都拄它）。
+   */
+  majorNo: number;
   status: string;
   isLocked: boolean;
   isCurrent: boolean;
   /** ISO timestamp — the version timeline is unreadable without a date axis. */
   createdAt: string;
+  /**
+   * 发布（启用）那一刻；`null` = 还没发布，或发布于本列上线之前。
+   *
+   * 「什么时间启用」只有这一刻能答——`createdAt` 是草稿何时开的，是另一个时刻。
+   * 存量已发布版本没有这个时刻可考，界面显示「—」，**不拿 createdAt 冒充**。
+   */
+  publishedAt: string | null;
   prices: PlanVersionPrice[];
   /**
    * 还钉在这一版上的订阅数（不含已软删）。
@@ -1792,6 +1836,8 @@ const MAX_BUNDLED_COMPONENTS = 64;
 interface PlanVersionSummaryRow {
   id: string;
   version_no: number;
+  major_no: number | null;
+  published_at: Date | string | null;
   status: string;
   is_locked: boolean;
   is_current: boolean;
@@ -1801,7 +1847,8 @@ interface PlanVersionSummaryRow {
 }
 
 const PLAN_VERSIONS_SQL = `
-  SELECT pv.id, pv.version_no, pv.status, pv.is_locked, pv.created_at,
+  SELECT pv.id, pv.version_no, pv.major_no, pv.published_at,
+         pv.status, pv.is_locked, pv.created_at,
          (pv.id = p.current_version_id) AS is_current,
          (SELECT count(*)::int FROM metering.subscriptions s
            WHERE s.plan_version_id = pv.id AND s.deleted_at IS NULL) AS subscription_count,
@@ -1820,10 +1867,15 @@ function mapPlanVersionSummary(row: PlanVersionSummaryRow): PlanVersionSummary {
   return {
     id: row.id,
     versionNo: row.version_no,
+    /* 读不到按 1 算：主版本号是 NOT NULL DEFAULT 1，回落到 1 不会造出假代际。 */
+    majorNo: Number(row.major_no ?? 1),
     status: row.status,
     isLocked: row.is_locked,
     isCurrent: row.is_current,
     createdAt: new Date(row.created_at).toISOString(),
+    publishedAt: row.published_at
+      ? new Date(row.published_at).toISOString()
+      : null,
     prices: row.prices ?? [],
     subscriptionCount: Number(row.subscription_count ?? 0),
   };
@@ -1843,7 +1895,8 @@ async function loadPlanVersionDetail(
       })[];
     }
   >(
-    `SELECT pv.id, pv.plan_id, pv.version_no, pv.status, pv.is_locked, pv.created_at,
+    `SELECT pv.id, pv.plan_id, pv.version_no, pv.major_no, pv.published_at,
+            pv.status, pv.is_locked, pv.created_at,
             (pv.id = p.current_version_id) AS is_current,
             p.plan_code, p.plan_name,
             COALESCE((
@@ -3602,6 +3655,10 @@ export async function loadProductReleases(
 export interface PlanMatrixVersionRef {
   id: string;
   versionNo: number;
+  /** 主版本号 V1/V2…（人设定的商业代际，不自增）。 */
+  majorNo: number;
+  /** 发布（启用）那一刻；null = 未发布，或发布于该列上线之前。 */
+  publishedAt: string | null;
 }
 
 /** One plan laid on a product's tier ladder. */
@@ -3658,9 +3715,12 @@ interface PlanMatrixRow {
   tier: string | null;
   current_version_id: string | null;
   current_version_no: number | null;
+  current_major_no: number | null;
+  current_published_at: Date | string | null;
   current_prices: PlanVersionPrice[] | null;
   draft_version_id: string | null;
   draft_version_no: number | null;
+  draft_major_no: number | null;
   version_count: number | null;
   subscription_count: number | null;
 }
@@ -3676,8 +3736,10 @@ const PLAN_MATRIX_SQL = `
   SELECT pr.product_code, pr.product_name, pr.status AS product_status,
          plan.plan_id, plan.plan_code, plan.plan_name, plan.plan_status,
          plan.is_public, plan.tier,
-         plan.current_version_id, plan.current_version_no, plan.current_prices,
-         plan.draft_version_id, plan.draft_version_no, plan.version_count,
+         plan.current_version_id, plan.current_version_no,
+         plan.current_major_no, plan.current_published_at, plan.current_prices,
+         plan.draft_version_id, plan.draft_version_no, plan.draft_major_no,
+         plan.version_count,
          plan.subscription_count
     FROM product.products pr
     LEFT JOIN LATERAL (
@@ -3685,12 +3747,14 @@ const PLAN_MATRIX_SQL = `
              p.is_public,
              axis.tier,
              cv.id AS current_version_id, cv.version_no AS current_version_no,
+             cv.major_no AS current_major_no, cv.published_at AS current_published_at,
              COALESCE((
                SELECT jsonb_agg(jsonb_build_object('cycleUnit', pp.cycle_unit, 'price', to_char(pp.price, 'FM999999999990.00'))
                                 ORDER BY pp.cycle_unit)
                  FROM product.plan_prices pp WHERE pp.plan_version_id = cv.id
              ), '[]'::jsonb) AS current_prices,
              d.id AS draft_version_id, d.version_no AS draft_version_no,
+             d.major_no AS draft_major_no,
              (SELECT count(*)::int FROM product.plan_versions v WHERE v.plan_id = p.id) AS version_count,
              -- 跨该套餐的全部版本反查活订阅，不只当前版本：一个客户订的是套餐，
              -- 落到哪个版本由 current_version_id 解析。所以「这个套餐有多少人在用」
@@ -3712,7 +3776,7 @@ const PLAN_MATRIX_SQL = `
         LEFT JOIN product.plan_versions cv
           ON cv.id = p.current_version_id AND cv.status = 'published'
         LEFT JOIN LATERAL (
-          SELECT v.id, v.version_no
+          SELECT v.id, v.version_no, v.major_no
             FROM product.plan_versions v
            WHERE v.plan_id = p.id AND v.status = 'draft' AND NOT v.is_locked
            ORDER BY v.version_no DESC
@@ -3756,12 +3820,22 @@ function groupPlanMatrix(rows: PlanMatrixRow[]): PlanMatrixProduct[] {
           ? {
               id: row.current_version_id,
               versionNo: row.current_version_no,
+              majorNo: Number(row.current_major_no ?? 1),
+              publishedAt: row.current_published_at
+                ? new Date(row.current_published_at).toISOString()
+                : null,
               prices: row.current_prices ?? [],
             }
           : null,
       draftVersion:
         row.draft_version_id && row.draft_version_no !== null
-          ? { id: row.draft_version_id, versionNo: row.draft_version_no }
+          ? {
+              id: row.draft_version_id,
+              versionNo: row.draft_version_no,
+              majorNo: Number(row.draft_major_no ?? 1),
+              /* 草稿没有发布时刻——它还没启用。 */
+              publishedAt: null,
+            }
           : null,
       versionCount: row.version_count ?? 0,
       subscriptionCount: Number(row.subscription_count ?? 0),

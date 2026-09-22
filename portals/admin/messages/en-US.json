@@ -1852,7 +1852,8 @@
       "subscriptions": "Subscribed",
       "tierDrafting": "{tier} · draft",
       "versions": "Versions",
-      "viewPlans": "View plans"
+      "viewPlans": "View plans",
+      "effectiveAt": "Effective"
     },
     "lifecycle": {
       "current": "On sale",
@@ -1924,7 +1925,9 @@
       "makePublicVerb": "Switch to public",
       "makePublicConsequence": "Every customer will see this tier in their plan list and can order it themselves.",
       "makePublicDone": "“{name}” is now public",
-      "visibilityTarget": "plan “{name}”"
+      "visibilityTarget": "plan “{name}”",
+      "newVersionSameMajor": "New draft from current (stay on V{v})",
+      "newVersionBumpMajor": "New draft as V{v}"
     },
     "detail": {
       "backToList": "All products",

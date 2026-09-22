@@ -1852,7 +1852,8 @@
       "subscriptions": "在订阅",
       "tierDrafting": "{tier} · 草稿",
       "versions": "版本",
-      "viewPlans": "查看套餐"
+      "viewPlans": "查看套餐",
+      "effectiveAt": "启用时间"
     },
     "lifecycle": {
       "current": "当前在售",
@@ -1924,7 +1925,9 @@
       "makePublicVerb": "改为公开订阅",
       "makePublicConsequence": "改为公开订阅后，所有客户都能在套餐列表里看到它并自助下单。",
       "makePublicDone": "已将「{name}」改为公开订阅",
-      "visibilityTarget": "套餐「{name}」"
+      "visibilityTarget": "套餐「{name}」",
+      "newVersionSameMajor": "基于当前版开新草稿（沿用 V{v}）",
+      "newVersionBumpMajor": "升到 V{v} 开新草稿"
     },
     "detail": {
       "backToList": "全部产品",

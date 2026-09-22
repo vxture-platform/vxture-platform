@@ -892,7 +892,14 @@ export function PlanVersionsPage() {
               planStatus: "active",
               tier: createTarget.tier,
               currentVersion: null,
-              draftVersion: { id: created.id, versionNo: created.versionNo },
+              draftVersion: {
+                id: created.id,
+                versionNo: created.versionNo,
+                /* 刚建的骨架在第一个商业代际里；草稿没有发布时刻。
+                   下一次 loadMatrix() 会用服务端的真值覆盖它。 */
+                majorNo: 1,
+                publishedAt: null,
+              },
               versionCount: 1,
               // 刚建出来的骨架只有 v1 草稿：草稿不可被订阅，所以这里的 0 是事实，
               // 不是占位。下一次 loadMatrix() 会用服务端的真值覆盖它。

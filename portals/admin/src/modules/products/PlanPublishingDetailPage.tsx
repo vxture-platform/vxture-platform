@@ -95,6 +95,10 @@ import {
   type PlanVersionSummary,
 } from "@/api/admin-bff";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import {
+  planVersionEffectiveDate,
+  planVersionLabel,
+} from "@/modules/shared/plan-version-label";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 import { useTableLabels } from "@/modules/shared/table";
 import {
@@ -444,7 +448,27 @@ export function PlanPublishingDetailPage({
         // 平台列表通例的首列是序号；版本史里版本号本身就是序号，用它更有意义。
         id: "version",
         header: t("list.versions"),
-        cell: (version) => <strong>v{version.versionNo}</strong>,
+        /* 主标签给人看代际与启用日期；内部号仍要露出来——唯一键、排序与详情路由
+           都拄它，排查时得对得上（相似两项上下主辅，全站通例）。 */
+        cell: (version) => (
+          <span className="flex flex-col">
+            <strong>{planVersionLabel(version)}</strong>
+            <span className="text-body-sm text-muted-foreground tabular-nums">
+              v{version.versionNo}
+            </span>
+          </span>
+        ),
+      },
+      {
+        id: "effective",
+        header: t("list.effectiveAt"),
+        /* 「什么时间启用」——取 published_at。读不到显示「—」，不拿 createdAt 冒充：
+           那是草稿何时开的，是另一个时刻。 */
+        cell: (version) => (
+          <span className="tabular-nums">
+            {planVersionEffectiveDate(version)}
+          </span>
+        ),
       },
       {
         id: "state",
@@ -674,14 +698,40 @@ export function PlanPublishingDetailPage({
                  * 一个套餐同时只允许一个在途草稿（再开会 409），所以这里不需要再
                  * 置灰——走到这一支就说明没有草稿。
                  */
+                /*
+                 * 两个入口都给出来，而不是把主版本号藏在默认值里（owner 2026-09-22：
+                 * 「版本号……都是需要设定的，不能自己无限增」）。沿用是常态——改一两个
+                 * 配额、价格没变，还在同一个商业代际里；升位是价格或档位结构真的变了，
+                 * 那是一次决定，得有人按。
+                 */
                 items.push({
-                  id: "new-draft",
-                  label: t("actions.newVersion"),
+                  id: "new-draft-same",
+                  label: t("actions.newVersionSameMajor", {
+                    v: current.majorNo,
+                  }),
                   icon: "plus",
                   disabled: busy,
                   onSelect: () =>
                     void runPlain(
-                      () => createPlanDraftVersion(plan.planId),
+                      () =>
+                        createPlanDraftVersion(plan.planId, current.majorNo),
+                      t("actions.newVersionDone", { n: current.versionNo }),
+                    ),
+                });
+                items.push({
+                  id: "new-draft-bump",
+                  label: t("actions.newVersionBumpMajor", {
+                    v: current.majorNo + 1,
+                  }),
+                  icon: "arrow-up",
+                  disabled: busy,
+                  onSelect: () =>
+                    void runPlain(
+                      () =>
+                        createPlanDraftVersion(
+                          plan.planId,
+                          current.majorNo + 1,
+                        ),
                       t("actions.newVersionDone", { n: current.versionNo }),
                     ),
                 });
@@ -772,7 +822,7 @@ export function PlanPublishingDetailPage({
                         <span className="inline-flex flex-wrap items-center justify-end gap-2xs">
                           {plan.currentVersion ? (
                             <StatusBadge tone="success">
-                              {`v${plan.currentVersion.versionNo} · ${t("lifecycle.current")}`}
+                              {`${planVersionLabel(plan.currentVersion)} · ${t("lifecycle.current")}`}
                             </StatusBadge>
                           ) : (
                             <StatusBadge tone="neutral">
