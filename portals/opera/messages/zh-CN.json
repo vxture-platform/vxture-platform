@@ -215,5 +215,15 @@
     "capabilityMissBody": "没有找到 {id}。可能是 id 拼写有误，或这个能力还没注册到 Runos 的目录里——下面是完整目录。",
     "bindingMissTitle": "链接指向的凭证绑定不在台账里",
     "bindingMissBody": "没有找到 {id}。可能是 id 拼写有误，或这个绑定已被删除——清空下面的搜索框可看全量。"
+  },
+  "metricCatalog": {
+    "action": "命名",
+    "dialogTitle": "命名 · {key}",
+    "dialogDescription": "中文名与说明按「键」保存，所有用到这个键的产品都会显示同一个名字。留空则撤销命名，界面回落显示键本身。",
+    "nameLabel": "中文名",
+    "descLabel": "一句话说明",
+    "submit": "保存",
+    "done": "{key} 已命名",
+    "failed": "命名失败"
   }
 }

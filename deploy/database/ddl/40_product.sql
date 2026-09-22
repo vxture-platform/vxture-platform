@@ -86,8 +86,6 @@ CREATE TABLE product.product_metrics (
     id             uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id     uuid         NOT NULL REFERENCES product.products(id) ON DELETE CASCADE,
     metric_key     varchar(64)  NOT NULL,                             -- doc.words/ai.calls/storage.max/member.max
-    display_name         varchar(128),                            -- 中文名（owner 2026-09-21）；没填则界面回落显示 metric_key，不自动生成
-    description          varchar(256),                            -- 一句话说明这个计量在数什么
     merge_strategy varchar(16)  NOT NULL,                              -- max/union/pool + tiered(非数值能力:取最高档组件的值,2026-07-07)
     consume_mode   varchar(16),                                       -- 仅 pool 时非空 divisible/atomic
     metric_unit    varchar(32),                                       -- words/calls/GB/seats
@@ -108,10 +106,31 @@ CREATE INDEX idx_product_metrics_product_id ON product.product_metrics (product_
 -- 贡献额度（quota jsonb 写数），不得在 product_metrics 重复定义共享键（95 触发器强制）。
 -- kind=counter(流量,consume 瀑布)/gauge(存量,水位,准入制不走 consume——D5)。status=reserved 行
 -- 仅占位键名（compute/egress 类），kind 可空、不开池。
+-- 计量项命名字典（owner 2026-09-22：「更高维度的统一，产品要复用」）。
+--
+-- 中文名是**键的属性**，不是「(产品, 键)」的属性：`member.max`、`retention.days`
+-- 这类通用键每接一个产品就会被再命名一遍，于是同一个键在不同产品下各有各的叫法。
+-- 所以命名住在这里一处，`product_metrics` 与 `platform_metrics` 都按 metric_key 读它。
+--
+-- 2026-10-16 曾把 display_name/description 直接加在那两张表上——落点错了，本表取代
+-- 它们（那两列同批迁移里删掉；生产上一条都没填过，无数据损失）。
+--
+-- 不设 FK：两张表的键值域不相交（trg_product_metrics_no_platform_shadow 保证），
+-- 而本表是**可选**的命名补充——没有对应行时界面回落显示 metric_key 本身，不阻塞。
+-- 平台不替产品命名（`varda.enabled` 该叫「Varda 开关」还是「智能体启用」只有产品
+-- 自己知道），所以这里没有默认值、没有自动生成。
+CREATE TABLE product.metric_catalog (
+    metric_key   varchar(64)  PRIMARY KEY,                          -- 可视码，与两张计量表同值域
+    display_name varchar(128) NOT NULL,                             -- 中文名
+    description  varchar(256),
+    created_by   uuid,                                              -- 裸值→admin.operator_accounts（不建 FK，边界#2）
+    created_at   timestamptz  NOT NULL DEFAULT now(),
+    updated_by   uuid,
+    updated_at   timestamptz  NOT NULL DEFAULT now()
+);
+
 CREATE TABLE product.platform_metrics (
     metric_key    varchar(64)  PRIMARY KEY,
-    display_name  varchar(128),                                     -- 中文名；L0 共享指标跨产品复用，更该有个说得清的名字
-    description   varchar(256),
     kind          varchar(16),                                        -- counter | gauge（reserved 行可空）
     consume_mode  varchar(16),                                        -- divisible/atomic（仅 counter）
     metric_unit   varchar(32),

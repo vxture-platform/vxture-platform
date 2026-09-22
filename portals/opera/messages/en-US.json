@@ -215,5 +215,15 @@
     "capabilityMissBody": "{id} was not found. The id may be misspelled, or the capability is not registered in Runos yet — the full catalogue is below.",
     "bindingMissTitle": "That link points at a credential binding not on file",
     "bindingMissBody": "{id} was not found. The id may be misspelled, or the binding was deleted — clear the search box below to see all of them."
+  },
+  "metricCatalog": {
+    "action": "Name it",
+    "dialogTitle": "Name · {key}",
+    "dialogDescription": "The name and blurb are stored per metric key, so every product using this key shows the same name. Leave blank to remove the name and fall back to the key itself.",
+    "nameLabel": "Display name",
+    "descLabel": "One-line description",
+    "submit": "Save",
+    "done": "{key} named",
+    "failed": "Could not save the name"
   }
 }

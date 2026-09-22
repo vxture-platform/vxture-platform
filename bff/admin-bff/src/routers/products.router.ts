@@ -2555,9 +2555,14 @@ export async function loadProductCapabilities(
   const [products, metrics, webhooks, solutions, versions] = await Promise.all([
     pool.query<ProductCatalogRow>(PRODUCT_CATALOG_SQL),
     pool.query<ProductMetricRow>(
-      `SELECT product_id, metric_key, display_name, description,
-              metric_unit, reset_period, merge_strategy
-         FROM product.product_metrics`,
+      /* 中文名住在 `metric_catalog`（key → 名/说明），不在本表上——它是**键的属性**，
+         同一个 member.max 不该每接一个产品就被再命名一遍（owner 2026-09-22）。
+         LEFT JOIN：没命名过的键回落显示 metric_key 本身，不阻塞。 */
+      `SELECT pm.product_id, pm.metric_key,
+              mc.display_name, mc.description,
+              pm.metric_unit, pm.reset_period, pm.merge_strategy
+         FROM product.product_metrics pm
+         LEFT JOIN product.metric_catalog mc ON mc.metric_key = pm.metric_key`,
     ),
     pool.query<ProductWebhookRow>(
       `SELECT product_id, webhook_url FROM product.product_webhooks`,
