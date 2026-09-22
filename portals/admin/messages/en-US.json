@@ -2034,6 +2034,12 @@
     "empty": {
       "noPlansTitle": "No plans yet",
       "noPlansDescription": "This product has no tier on the shelf, so customers cannot subscribe. Each commercial tier holds one live plan; creating one opens a draft for you to fill in prices and quotas before publishing."
+    },
+    "publishOverride": {
+      "title": "Launch checklist has unmet items",
+      "reasonLabel": "Reason for skipping",
+      "reasonHint": "Say why this needs to ship now",
+      "auditHint": "Fill this in and press Publish again. The reason goes to the operator audit log, together with which items were skipped."
     }
   },
   "skillsPage": {

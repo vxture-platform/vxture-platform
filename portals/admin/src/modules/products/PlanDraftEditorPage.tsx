@@ -52,10 +52,13 @@ import { useRouter } from "next/navigation";
 import {
   ActionButton,
   Badge,
+  Banner,
   Button,
   DestructiveButton,
   DetailPageTemplate,
   EmptyState,
+  Field,
+  FieldLabel,
   Input,
   NativeSelect,
   PanelItem,
@@ -70,6 +73,7 @@ import {
   fetchPlanVersion,
   fetchPlanVersions,
   fetchProductCapabilities,
+  publishChecklistPending,
   publishPlanVersion,
   replacePlanVersionBundledComponents,
   updateDraftPlanVersion,
@@ -163,6 +167,16 @@ export function PlanDraftEditorPage({
   const [catalog, setCatalog] = useState<ProductCapabilityRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  /**
+   * 上架检查未满足时的「带理由跳过」。
+   *
+   * `overridePrompt` 非空 = 服务端点名了缺哪几项（那句话原样拿来当提示）；
+   * `overrideReason` 是人填的理由，填完再点一次发布就带着它重发。
+   * 理由留空则服务端仍然拒——别让一个空格当成理由。
+   */
+  const [overridePrompt, setOverridePrompt] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -364,11 +378,21 @@ export function PlanDraftEditorPage({
           replacePlanVersionBundledComponents(detail.id, bundlePayload()),
         );
       }
-      await runWithStepUp(() => publishPlanVersion(detail.id));
+      /*
+       * 上架检查未满足时不是死路：填个理由可以跳过（与上线门同一套）。
+       * `acceptance` 是自动检查（五段端到端），人工勾不掉——没有这条路，
+       * 这道门对现存产品就是一堵墙。理由进运营审计。
+       */
+      await runWithStepUp(() => publishPlanVersion(detail.id, overrideReason));
       setMessage(t("editorV2.published"));
       router.push(versionPath);
     } catch (err) {
       if (isStepUpCancelled(err)) return;
+      if (publishChecklistPending(err)) {
+        /* 把服务端点名的那几项原样带出来，并把输入框亮出来让人填理由重发。 */
+        setOverridePrompt(err instanceof Error ? err.message : "");
+        return;
+      }
       setMessage(
         err instanceof Error ? err.message : t("editorV2.publishFailed"),
       );
@@ -447,6 +471,37 @@ export function PlanDraftEditorPage({
         <p className="text-body-sm" role="status">
           {message}
         </p>
+      ) : null}
+
+      {/*
+       * 上架检查未满足：把服务端点名的那几项原样显示出来，并给一个理由输入框。
+       * 填完再点发布就带着理由重发（与上线门同一套）。`acceptance` 是自动检查，
+       * 人工勾不掉——没有这条路，这道门对现存产品就是一堵墙。
+       */}
+      {overridePrompt ? (
+        <div className="flex flex-col gap-sm">
+          <Banner
+            tone="warning"
+            title={t("publishOverride.title")}
+            description={overridePrompt}
+          />
+          <Field>
+            <FieldLabel htmlFor="publish-override-reason">
+              {t("publishOverride.reasonLabel")}
+            </FieldLabel>
+            <Input
+              id="publish-override-reason"
+              value={overrideReason}
+              disabled={busy}
+              maxLength={200}
+              placeholder={t("publishOverride.reasonHint")}
+              onChange={(event) => setOverrideReason(event.target.value)}
+            />
+            <span className="text-body-sm text-muted-foreground">
+              {t("publishOverride.auditHint")}
+            </span>
+          </Field>
+        </div>
       ) : null}
 
       {/* ── 版本条：删除草稿在这里，不在底部按钮排 ─────────────────────── */}

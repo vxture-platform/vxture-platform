@@ -767,8 +767,12 @@ export class ProductsRouter {
   async publishPlanVersion(
     @Req() req: Request & RequestContext,
     @Param("versionId") versionId: string,
+    @Body() body?: { override?: { reason?: string } },
   ): Promise<{ published: true; versionId: string }> {
     assertCanManageProducts(req);
+    /* 跳过了哪几项、理由是什么——审计要写，所以提到事务外声明。 */
+    let overriddenItems: string[] = [];
+    let overrideReason = "";
     const client = await this.rwPool.connect();
     try {
       await client.query("BEGIN");
@@ -864,10 +868,31 @@ export class ProductsRouter {
         );
         if (pending.rowCount) {
           const names = pending.rows.map((r) => r.item_name || r.item_code);
-          throw new ConflictException({
-            code: "PUBLISH_CHECKLIST_PENDING",
-            message: `还有 ${names.length} 项上架检查未满足，不能发布套餐：${names.join("、")}。请在运维台的产品接入页完成后再发布。`,
-          });
+          const reason = body?.override?.reason?.trim() ?? "";
+          if (!reason) {
+            throw new ConflictException({
+              code: "PUBLISH_CHECKLIST_PENDING",
+              message: `还有 ${names.length} 项上架检查未满足，不能发布套餐：${names.join("、")}。请在运维台的产品接入页完成，或带理由跳过。`,
+              pendingItems: pending.rows.map((r) => r.item_code),
+            });
+          }
+          /*
+           * 带理由跳过（owner 2026-09-22）。
+           *
+           * ── 为什么这道门必须有逃生口 ──
+           * 上线门（gate='launch'）一开始就带着 override，而我加 publish 门时**没
+           * 照抄这一半**。上线那个 override 的存在本身就是信号：设计它的人早知道
+           * 自动检查会卡住真实的上线动作。
+           *
+           * 装上门的当天就坐实了：`acceptance` 是**自动**检查（登录 → 开通 → 鉴权
+           * → 消费 → 失效 五段），生产上四个产品全部未满足（卡在「用量上报」那段），
+           * 而且人工勾不掉。于是这道门不是门，是墙——没有任何产品能发布任何套餐。
+           *
+           * **条件不删也不降级**：删了它以后什么也证明不了。保留门，另开一条写明
+           * 理由的路，理由进运营审计（问责台账归 audit_logs，同上线门的口径）。
+           */
+          overriddenItems = pending.rows.map((r) => r.item_code);
+          overrideReason = reason;
         }
       }
 
@@ -899,7 +924,15 @@ export class ProductsRouter {
         resourceType: "product_plan_version",
         resourceId: `${row.plan_code} v${row.version_no}`,
         before: { status: row.status, isLocked: false, isCurrent: false },
-        after: { status: "published", isLocked: true, isCurrent: true },
+        after: {
+          status: "published",
+          isLocked: true,
+          isCurrent: true,
+          /* 带缺项发布的事实留在台账里：谁、什么时候、跳过了哪几项、为什么。 */
+          ...(overriddenItems.length
+            ? { overriddenChecklistItems: overriddenItems, overrideReason }
+            : {}),
+        },
       });
       await client.query("COMMIT");
     } catch (err) {

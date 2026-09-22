@@ -25,6 +25,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   Badge,
+  Banner,
   Button,
   DialogForm,
   Field,
@@ -46,6 +47,7 @@ import {
   fetchPlanVersion,
   fetchPlanVersions,
   fetchProductCapabilities,
+  publishChecklistPending,
   publishPlanVersion,
   replacePlanVersionBundledComponents,
   updateDraftPlanVersion,
@@ -178,6 +180,16 @@ export function PlanVersionsPage() {
   const [bundledPick, setBundledPick] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /**
+   * 上架检查未满足时的「带理由跳过」。
+   *
+   * `overridePrompt` 非空 = 服务端点名了缺哪几项（那句话原样拿来当提示）；
+   * `overrideReason` 是人填的理由，填完再点一次发布就带着它重发。
+   * 理由留空则服务端仍然拒——别让一个空格当成理由。
+   */
+  const [overridePrompt, setOverridePrompt] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
 
   const loadMatrix = useCallback(async () => {
@@ -405,12 +417,22 @@ export function PlanVersionsPage() {
           replacePlanVersionBundledComponents(detail.id, components),
         );
       }
-      await runWithStepUp(() => publishPlanVersion(detail.id));
+      /*
+       * 上架检查未满足时不是死路：填个理由可以跳过（与上线门同一套）。
+       * `acceptance` 是自动检查（五段端到端），人工勾不掉——没有这条路，
+       * 这道门对现存产品就是一堵墙。理由进运营审计。
+       */
+      await runWithStepUp(() => publishPlanVersion(detail.id, overrideReason));
       await openVersion(detail.id);
       await refreshAfterWrite(detail.planId);
       setMessage(t("editor.published"));
     } catch (err) {
       if (isStepUpCancelled(err)) {
+        setBusy(false);
+        return;
+      }
+      if (publishChecklistPending(err)) {
+        setOverridePrompt(err instanceof Error ? err.message : "");
         setBusy(false);
         return;
       }
@@ -516,6 +538,37 @@ export function PlanVersionsPage() {
         <p className="text-sm" role="status">
           {message}
         </p>
+      ) : null}
+
+      {/*
+       * 上架检查未满足：把服务端点名的那几项原样显示出来，并给一个理由输入框。
+       * 填完再点发布就带着理由重发（与上线门同一套）。`acceptance` 是自动检查，
+       * 人工勾不掉——没有这条路，这道门对现存产品就是一堵墙。
+       */}
+      {overridePrompt ? (
+        <div className="flex flex-col gap-sm">
+          <Banner
+            tone="warning"
+            title={t("publishOverride.title")}
+            description={overridePrompt}
+          />
+          <Field>
+            <FieldLabel htmlFor="publish-override-reason">
+              {t("publishOverride.reasonLabel")}
+            </FieldLabel>
+            <Input
+              id="publish-override-reason"
+              value={overrideReason}
+              disabled={busy}
+              maxLength={200}
+              placeholder={t("publishOverride.reasonHint")}
+              onChange={(event) => setOverrideReason(event.target.value)}
+            />
+            <span className="text-sm text-muted-foreground">
+              {t("publishOverride.auditHint")}
+            </span>
+          </Field>
+        </div>
       ) : null}
 
       {/* ── product × tier matrix ─────────────────────────────────────────── */}
