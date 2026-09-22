@@ -190,21 +190,67 @@ export class OrderService {
       if (from.workspaceId !== input.workspaceId) {
         throw new ConflictException("原订阅不属于本工作区");
       }
+      /*
+       * 判据是**套餐**，不是版本（owner 2026-09-22）。
+       *
+       * 原来两条都按 `planVersionId` 比。套餐一旦发布新版本，阶梯送的就是新版本
+       * id，于是同一档的老客户想续期被判成升级——周期从现在重置、走折抵报价、订阅
+       * 被重钉到新版，界面还写「升级」，全程不报错。续订问的是「还是不是这个套餐」，
+       * 与它出到第几版无关。
+       */
+      const target = await this.orders.resolveRenewTarget(
+        from.planVersionId,
+        input.planVersionId,
+      );
+      if (!target) {
+        throw new ConflictException("套餐版本不存在，请重新选择");
+      }
       if (input.intent === "upgrade") {
         if (!LIVE.has(from.status)) {
           throw new ConflictException("原订阅不在服务中，请重新订阅");
         }
-        if (from.planVersionId === input.planVersionId) {
+        if (target.samePlan) {
           throw new ConflictException(
-            "目标套餐与当前订阅相同，无需升级（延长周期请使用续订）",
+            "已是该套餐，延长周期请使用续订（换档才是升级）",
           );
         }
       } else {
         if (!RENEWABLE.has(from.status)) {
           throw new ConflictException("原订阅已终止，请重新订阅");
         }
-        if (from.planVersionId !== input.planVersionId) {
+        if (!target.samePlan) {
           throw new ConflictException("续订须与当前套餐相同，换档请使用升级");
+        }
+        /* 退役 = 服务到本周期为止，不再续（owner 裁定）。阶梯里本就没有退役套餐，
+           这里是服务端那一道——判据不能只长在客户端。 */
+        if (target.toPlanStatus !== "active") {
+          throw new ConflictException({
+            code: "PLAN_RETIRED",
+            message: `套餐 ${target.toPlanCode} 已下架，到期后需改选其他档`,
+          });
+        }
+        if (!target.toIsCurrent) {
+          throw new ConflictException("请选择该套餐当前在售的版本");
+        }
+        /*
+         * 跨版本续订要客户**确认过差异**才放行（owner 2026-09-22：客户需要知情权与
+         * 决策权，尤其价格增减、配额增加）。
+         *
+         * 确认钉住他看到的那个来源版本：期间若又发布了新版，`from` 已经变了，旧确认
+         * 自然失效，必须重新看一遍。
+         *
+         * 这一条同时是**自动续订的护栏**：将来的自动续订作业送不出这个确认，于是
+         * 天然跨不了版本——fail closed，而不是靠注释提醒后人。
+         * （现状：auto_renew 只是个开关，`next_renewal_at` 全仓无写入方、无作业。）
+         */
+        if (
+          from.planVersionId !== input.planVersionId &&
+          input.acceptVersionChangeFrom !== from.planVersionId
+        ) {
+          throw new ConflictException({
+            code: "VERSION_CHANGE_NOT_ACKNOWLEDGED",
+            message: "该套餐已有新版本，请先确认新旧差异再续订",
+          });
         }
       }
     }
@@ -532,6 +578,12 @@ export class OrderService {
       await this.subscriptions.updateSubscription(from.id, {
         ...(LIVE.has(from.status) ? {} : { status: "active" }),
         endAt,
+        /* 续订 = 重新签一次，签的是现在在售的那一版（owner 2026-09-22）。不重钉的话
+           「小改开新版本」永远触达不到存量客户——那正是 owner 最初想改已发布套餐的
+           原因。跨版本那一步已在下单时要过客户确认。 */
+        ...(order.planVersionId !== from.planVersionId
+          ? { toPlanVersionId: order.planVersionId }
+          : {}),
         operatorType: actor.actorType,
         ...(actor.actorId ? { operatorId: actor.actorId } : {}),
         operatorRemark: actor.remark ?? `renew order ${order.orderNo}`,

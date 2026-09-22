@@ -515,6 +515,56 @@ export class PgOrderRepository {
   /**
    * 通知展示用的套餐 / 产品名（P2-g）：主组件产品名 + 套餐名；查不到用占位，通知不因目录缺失而失败。
    */
+  /**
+   * 两个版本的「套餐同一性」与目标版本的在售状态——续订/升级的判据来源
+   * （owner 2026-09-22）。
+   *
+   * ── 为什么判据是套餐不是版本 ──
+   * 原来 createOrder 用 `from.planVersionId === input.planVersionId` 判「要不要
+   * 升级」。套餐一旦发布新版本，阶梯送的就是新版本 id，于是**同一档的老客户想续期
+   * 会被判成升级**：周期从现在重置、走折抵报价、订阅被重钉到新版，界面还写着
+   * 「升级」，全程不报错。判据用错了粒度——续订问的是「还是不是这个套餐」。
+   *
+   * ── 目标版本必须是当前在售版 ──
+   * 续订 = 重新签一次，签的是现在在售的那一版（owner 裁定）。顺带把两件事挡住：
+   *   套餐已退役          → 不能续（退役的语义是服务到本周期为止，不再续）
+   *   目标不是当前版      → 不许续到一个陈旧版本上去
+   */
+  async resolveRenewTarget(
+    fromPlanVersionId: string,
+    toPlanVersionId: string,
+  ): Promise<{
+    samePlan: boolean;
+    toIsCurrent: boolean;
+    toPlanStatus: string;
+    toPlanCode: string;
+  } | null> {
+    const res = await this.pool.query<{
+      same_plan: boolean;
+      to_is_current: boolean;
+      to_plan_status: string;
+      to_plan_code: string;
+    }>(
+      `select (pv_from.plan_id = pv_to.plan_id)      as same_plan,
+              (pl_to.current_version_id = pv_to.id)  as to_is_current,
+              pl_to.status                           as to_plan_status,
+              pl_to.plan_code                        as to_plan_code
+         from product.plan_versions pv_from
+         cross join product.plan_versions pv_to
+         join product.plans pl_to on pl_to.id = pv_to.plan_id
+        where pv_from.id = $1 and pv_to.id = $2`,
+      [fromPlanVersionId, toPlanVersionId],
+    );
+    return res.rows[0]
+      ? {
+          samePlan: res.rows[0].same_plan,
+          toIsCurrent: res.rows[0].to_is_current,
+          toPlanStatus: res.rows[0].to_plan_status,
+          toPlanCode: res.rows[0].to_plan_code,
+        }
+      : null;
+  }
+
   async getPlanDisplay(
     planVersionId: string,
   ): Promise<{ productName: string; planName: string }> {

@@ -2515,7 +2515,18 @@
     "orderFailed": "Failed to place the order. Please retry or contact support.",
     "cancelOrderFailed": "Failed to cancel the order. Please retry.",
     "myOrdersEmpty": "No orders yet.",
-    "contactSalesSubject": "{product} enterprise inquiry"
+    "contactSalesSubject": "{product} enterprise inquiry",
+    "retired": {
+      "title": "This plan is no longer sold",
+      "description": "Your current plan has been retired. Service runs to the end of this period; after that you will need to choose another tier. Entitlements are unaffected within this period."
+    },
+    "versionChange": {
+      "title": "Renewing will move you to a newer version",
+      "hint": "Compared with the version you originally subscribed to, the following has changed. Please review before ordering.",
+      "price": "{cycle} price",
+      "featuresAdded": "Added",
+      "featuresRemoved": "Removed"
+    }
   },
   "subscriptionHub": {
     "audience": {

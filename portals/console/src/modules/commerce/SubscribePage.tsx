@@ -300,7 +300,16 @@ export function SubscribePage() {
     );
   }
 
-  const { intent, product, targetTier, current, pendingOrder, plans } = ctx;
+  const {
+    intent,
+    product,
+    targetTier,
+    current,
+    pendingOrder,
+    plans,
+    versionChange,
+    currentPlanRetired,
+  } = ctx;
   if (intent === null || product === null) return null;
 
   // ── 待支付订单：直接引导进付款页（product_321 §6.1）─────────────────────────
@@ -388,10 +397,10 @@ export function SubscribePage() {
   // 兜底预选不选当前套餐：同套餐"升级"是付费空操作（服务端同样拒绝）。
   // 阶梯按 TIERS 升序，优先当前档之上的第一档；已是顶档则不预选。
   const fallbackPlan = (() => {
-    if (!currentLiveVersionId) return plans[0] ?? null;
-    const idx = plans.findIndex(
-      (p) => p.planVersionId === currentLiveVersionId,
-    );
+    if (!currentLiveVersionId || !current) return plans[0] ?? null;
+    /* 按**套餐码**找当前档的位置，不按版本：套餐发布新版本后阶梯里是新版本 id，
+       按版本找会找不到（idx = -1）→ 预选落到 plans[0]，把人送去最低档。 */
+    const idx = plans.findIndex((p) => p.planCode === current.planCode);
     return plans[idx + 1] ?? null;
   })();
 
@@ -403,9 +412,18 @@ export function SubscribePage() {
     (tierMissing ? null : fallbackPlan);
 
   const showTierFallback = (!targetTier || tierMissing) && plans.length > 1;
-  // 选中的就是在用套餐：走「续订」（延长周期，product_330 renew），不再当成付费空操作挡住。
+  /*
+   * 选中的就是在用套餐 → 走「续订」（延长周期）。
+   *
+   * 判据是**套餐码**，不是版本（owner 2026-09-22）。套餐一旦发布新版本，阶梯送的就是
+   * 新版本 id，按版本判会把同一档的老客户判成「升级」——周期从现在重置、走折抵报价、
+   * 订阅被重钉，界面还写「升级」，全程不报错。续订问的是「还是不是这个套餐」。
+   */
   const isCurrentPlan =
-    plan !== null && plan.planVersionId === currentLiveVersionId;
+    plan !== null &&
+    current !== null &&
+    currentLiveVersionId !== null &&
+    plan.planCode === current.planCode;
 
   const isEnterprise = plan !== null && plan.prices.length === 0;
   const price = plan ? priceForCycle(plan, cycle) : undefined;
@@ -443,6 +461,11 @@ export function SubscribePage() {
         autoRenew,
         ...(orderIntent !== "new" && current
           ? { upgradeOfSubscriptionId: current.subscriptionId }
+          : {}),
+        /* 跨版本续订：把差异面板上呈现的那个来源版本回送，作为「客户已知情」的凭据。
+           服务端比对它与原订阅当前钉着的版本——期间若又发版，旧确认失效要重看。 */
+        ...(orderIntent === "renew" && versionChange
+          ? { acceptVersionChangeFrom: versionChange.fromPlanVersionId }
           : {}),
       });
       // 0 元也是订单（owner 2026-08-20）：一律进付款页,付款环节消化 ¥0。
@@ -597,6 +620,66 @@ export function SubscribePage() {
             }
             className={SECTION_TIGHT}
           >
+            {/*
+             * 在用套餐已下架（owner 2026-09-22：退役 = 服务到本周期为止，不再续）。
+             * 此前这种情况会静默把人推进一个写着「升级」的同档位假动作——他既看不到
+             * 自己那一档（阶梯里没有退役套餐），也不知道为什么。
+             */}
+            {currentPlanRetired ? (
+              <Banner
+                tone="warning"
+                title={t("retired.title")}
+                description={t("retired.description")}
+              />
+            ) : null}
+
+            {/*
+             * 续订会换版本：把差异摆出来，客户要有知情权与决策权（owner 2026-09-22）。
+             * 差异由服务端算——两边各算一份迟早分叉成「界面说没变、下单却变了」。
+             * 三项全空时不画表（只翻了版本号、内容没变），但下单仍会回送确认。
+             */}
+            {versionChange &&
+            orderIntent === "renew" &&
+            (versionChange.prices.length > 0 ||
+              versionChange.quota.length > 0 ||
+              versionChange.featuresAdded.length > 0 ||
+              versionChange.featuresRemoved.length > 0) ? (
+              <div className="flex flex-col gap-sm">
+                <Banner
+                  tone="info"
+                  title={t("versionChange.title")}
+                  description={t("versionChange.hint")}
+                />
+                <div className="flex flex-col gap-2xs text-body-sm">
+                  {versionChange.prices.map((row) => (
+                    <span key={`p-${row.cycleUnit}`}>
+                      {t("versionChange.price", {
+                        cycle: t(`cycle.${row.cycleUnit}`),
+                      })}
+                      ：{row.from ?? "—"} → <b>{row.to ?? "—"}</b>
+                    </span>
+                  ))}
+                  {versionChange.quota.map((row) => (
+                    <span key={`q-${row.key}`}>
+                      {row.key}：{row.from ?? "—"} → <b>{row.to ?? "—"}</b>
+                    </span>
+                  ))}
+                  {versionChange.featuresAdded.length > 0 ? (
+                    <span>
+                      {t("versionChange.featuresAdded")}：
+                      {versionChange.featuresAdded.join("、")}
+                    </span>
+                  ) : null}
+                  {versionChange.featuresRemoved.length > 0 ? (
+                    <span>
+                      {t("versionChange.featuresRemoved")}：
+                      {versionChange.featuresRemoved.join("、")}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             {plan ? (
               <>
                 <div className="flex items-baseline justify-between gap-md text-body-md">
