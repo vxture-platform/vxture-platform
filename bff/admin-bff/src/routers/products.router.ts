@@ -95,6 +95,100 @@ export class ProductsRouter {
   }
 
   /**
+   * 调整产品在目录里的先后次序（owner 2026-09-22）。
+   *
+   * ── 为什么要有这条路由 ──
+   * `products.sort` 这一列**从来没有写入方**：DDL 里写着「排序」，官网目录、
+   * appcenter、console 推荐位全都按它排，而全仓没有一条 UPDATE 碰它。于是 17 个
+   * 产品的 sort 全是默认值 0，实际顺序落到并列键 `product_code ASC`——**字母序**。
+   * 字母序看起来像「有某种顺序」，所以一直没被当成缺陷。
+   *
+   * ── 为什么是「移动一格」而不是「提交整个数组」 ──
+   * 产品目录是带筛选与分页的列表页。让前端提交有序数组，等于让它在**筛选后的子集**
+   * 上算全局次序——「上移」到底是在当前视图里上移还是在全集里上移，语义当场含糊。
+   * 所以方向交给服务端：它按全集算，前端只说「哪个、往哪动」。
+   *
+   * ── 每次都重排号 ──
+   * 算完把所有行的 sort 写成 1..n（`WITH ORDINALITY` 从 1 起），而不是只改动的那
+   * 两行。sort 全 0 的存量数据
+   * 没有可交换的号；而归一化之后，任何一次移动的结果都与「当前看到的顺序」一致，
+   * 不会留下空洞或重号。
+   *
+   * 已经在顶/底时**不写库**，原样返回——幂等，且不会在审计里留一串空动作。
+   */
+  @Patch("capabilities/:productCode/move")
+  async moveProduct(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+    @Body() body: { direction?: unknown },
+  ): Promise<{ productCode: string; moved: boolean; position: number }> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(productCode);
+    const direction = body?.direction;
+    if (
+      direction !== "up" &&
+      direction !== "down" &&
+      direction !== "top" &&
+      direction !== "bottom"
+    ) {
+      throw new BadRequestException(
+        "direction must be one of up / down / top / bottom",
+      );
+    }
+
+    let moved = false;
+    let position = -1;
+    await withTransaction(this.rwPool, async (client) => {
+      /* 锁住全集再算：并发两次移动各按自己看到的顺序重排，会互相覆盖。 */
+      const all = await client.query<{ id: string; product_code: string }>(
+        `SELECT id, product_code
+           FROM product.products
+          WHERE deleted_at IS NULL
+          ORDER BY sort ASC, product_code ASC
+          FOR UPDATE`,
+      );
+      const rows = all.rows;
+      const from = rows.findIndex((r) => r.product_code === code);
+      if (from < 0) {
+        throw new NotFoundException(`Product ${code} not found`);
+      }
+      const to =
+        direction === "up"
+          ? Math.max(0, from - 1)
+          : direction === "down"
+            ? Math.min(rows.length - 1, from + 1)
+            : direction === "top"
+              ? 0
+              : rows.length - 1;
+      position = to;
+      if (to === from) return; // 已在端点，不写库
+
+      const next = rows.slice();
+      const [picked] = next.splice(from, 1);
+      next.splice(to, 0, picked!);
+      moved = true;
+
+      /* 一条 UPDATE 写完整个新次序：逐行 UPDATE 会在中途留下重号，而 sort 没有
+         唯一约束，中途状态不会报错、只会让并发读到一个乱序。 */
+      await client.query(
+        `UPDATE product.products AS p
+            SET sort = v.pos, updated_by = $2, updated_at = now()
+           FROM (SELECT * FROM unnest($1::uuid[]) WITH ORDINALITY AS t(id, pos)) AS v
+          WHERE p.id = v.id`,
+        [next.map((r) => r.id), req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.catalog.reorder",
+        resourceType: "product",
+        resourceId: code,
+        before: { position: from },
+        after: { position: to, direction },
+      });
+    });
+    return { productCode: code, moved, position };
+  }
+
+  /**
    * 更新产品**营销内容与呈现**:marketing(营销富字段 jsonb)/ release_stage(成熟度轴)/
    * is_customer_visible(是否上站)。这些是**业务/运营字段**,归 admin 产品目录录入;
    * 技术注册(code/type/origin/OIDC)仍在 opera。PATCH 语义:只改送来的字段,没送的不动。
@@ -2570,7 +2664,13 @@ const PRODUCT_CATALOG_SQL = `
   FROM product.products p
   LEFT JOIN product.product_categories c ON c.id = p.category_id
   WHERE p.deleted_at IS NULL
-  ORDER BY (p.status = 'active') DESC, p.product_name ASC
+  -- 次序 = 目录次序，与官网 /appcenter（website-bff 同一句 ORDER BY）逐字一致。
+  -- 本页是 products.sort 仅有的录入面（行操作里的上移/下移/置顶/置底），所以
+  -- 它必须按 sort 呈现：按别的键排，运营就是在一个自己看不见的次序上按「上移」。
+  -- 原先排的是 (status='active') DESC, product_name ASC——在没有排序功能时是个
+  -- 合理的默认，现在它会让排序动作与眼前的列表对不上。筛选/分页在前端做，不影响
+  -- 这条全集次序。
+  ORDER BY p.sort ASC, p.product_code ASC
 `;
 
 /**
