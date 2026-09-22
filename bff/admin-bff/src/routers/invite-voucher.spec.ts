@@ -118,3 +118,90 @@ describe("POST /api/commercial/voucher-batches · invite", () => {
     expect(rwQuery).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * 发放：邀请券必须定向到人或工作空间（2026-09-22）。
+ *
+ * 死券的第二个形态。第一个是「指向公开套餐」（上面那组守的建批次那道）；这一个是
+ * **租户级批次走「租户全员」**——那条路径把 `assigned_user_id` 与
+ * `assigned_workspace_id` 都写成 NULL，而客户侧的邀请判据认的正是这两列。
+ * 于是券发得出去、界面回「发放成功」还带着券码，客户那边始终看不见套餐。
+ *
+ * 原有的「禁无主券」只管平台级批次（`!batch.tenant_id`），租户级批次那条路是敞的。
+ * 两面都写：邀请券拒，其他券型照旧放行——只写前者的话，一个把所有券型的
+ * 「租户全员」都拒掉的实现也会绿，而那会拦掉代金券本来支持的发法。
+ */
+describe("POST /api/commercial/vouchers/assign · invite 必须定向", () => {
+  const BATCH_ID = "22222222-2222-4222-8222-222222222222";
+
+  /** 按序回答：begin → 取批次(for update) → …；发行量抢占那条回 rowCount。 */
+  function clientOf(kind: string) {
+    const calls: string[] = [];
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+      calls.push(sql);
+      if (sql.includes("from promotion.voucher_batches where id")) {
+        return {
+          rows: [
+            {
+              id: BATCH_ID,
+              /* 租户级批次：原有的「禁无主券」对它不生效，正是缺口所在。 */
+              tenant_id: "33333333-3333-4333-8333-333333333333",
+              kind,
+              code_prefix: null,
+              per_user_limit: 1,
+              status: "active",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("update promotion.voucher_batches")) {
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const pool = {
+      connect: async () => ({ query, release: () => undefined }),
+    } as unknown as Pool;
+    return { pool, query, calls };
+  }
+
+  function operatorReq(): Request & RequestContext {
+    return {
+      user: { id: OPERATOR_ID },
+      operator: { id: OPERATOR_ID },
+      capabilities: MANAGE,
+      ip: "127.0.0.1",
+      headers: {},
+      socket: { remoteAddress: "127.0.0.1" },
+    } as unknown as Request & RequestContext;
+  }
+
+  it("邀请券 + 租户全员（两个目标都不给）：400，且不发券", async () => {
+    const { pool, calls } = clientOf("invite");
+    const error = await new CommercialRouter(pool, pool)
+      .assignVouchers(operatorReq(), { batchId: BATCH_ID, count: 1 })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect(String((error as Error).message)).toContain("必须定向");
+    /* 拦在发行量抢占之前：券一行都不许落，issued_count 也不许动。 */
+    expect(
+      calls.some((s) => s.includes("insert into promotion.vouchers")),
+    ).toBe(false);
+    expect(
+      calls.some((s) => s.includes("update promotion.voucher_batches")),
+    ).toBe(false);
+  });
+
+  it("代金券 + 租户全员：照旧放行（这条发法本来就支持）", async () => {
+    const { pool, calls } = clientOf("credit_voucher");
+    await new CommercialRouter(pool, pool)
+      .assignVouchers(operatorReq(), { batchId: BATCH_ID, count: 1 })
+      .catch(() => undefined);
+
+    expect(
+      calls.some((s) => s.includes("insert into promotion.vouchers")),
+    ).toBe(true);
+  });
+});

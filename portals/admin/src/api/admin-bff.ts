@@ -1036,10 +1036,13 @@ export async function fetchPromotionOperations(): Promise<
 }
 
 // step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
-// Creates a voucher batch (product_321 §4.2; V1 kinds discount /
-// credit_voucher; gate fields rejected server-side).
+// Creates a voucher batch (product_321 §4.2; kinds discount / credit_voucher /
+// invite; gate fields rejected server-side).
+//
+// `invite` 的 effect 只装 `{ planCode }`：它解锁的是「能买」，不改变「要付钱」。
+// 服务端只接受真存在、且真非公开的套餐（公开套餐本来就能买，发了等于骗人）。
 export async function createVoucherBatch(payload: {
-  kind: "discount" | "credit_voucher";
+  kind: "discount" | "credit_voucher" | "invite";
   name: string;
   codePrefix?: string;
   effect: Record<string, unknown>;
