@@ -1927,7 +1927,16 @@
       "makePublicDone": "已将「{name}」改为公开订阅",
       "visibilityTarget": "套餐「{name}」",
       "newVersionSameMajor": "基于当前版开新草稿（沿用 V{v}）",
-      "newVersionBumpMajor": "升到 V{v} 开新草稿"
+      "newVersionBumpMajor": "升到 V{v} 开新草稿",
+      "editPlan": "编辑套餐",
+      "editDescription": "改的是显示用的字段（{code}）。价格、配额、权益属于契约，要改请开新版本。",
+      "editDescLabel": "套餐说明",
+      "editCustomerVisible": "客户端显示",
+      "editWorkforceVisible": "运营端显示",
+      "editVisibilityHint": "显不显示与能不能自助购买是两件事：后者看「订阅方式」。邀请档就是「不公开卖、但持券的人看得见」。",
+      "editDone": "套餐「{name}」已保存",
+      "editInvalid": "套餐名称不能为空",
+      "editSubmit": "保存"
     },
     "detail": {
       "backToList": "全部产品",

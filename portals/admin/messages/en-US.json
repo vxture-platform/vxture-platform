@@ -1927,7 +1927,16 @@
       "makePublicDone": "“{name}” is now public",
       "visibilityTarget": "plan “{name}”",
       "newVersionSameMajor": "New draft from current (stay on V{v})",
-      "newVersionBumpMajor": "New draft as V{v}"
+      "newVersionBumpMajor": "New draft as V{v}",
+      "editPlan": "Edit plan",
+      "editDescription": "These are display fields ({code}). Price, quota and features are contract terms: open a new version to change them.",
+      "editDescLabel": "Description",
+      "editCustomerVisible": "Visible to customers",
+      "editWorkforceVisible": "Visible to operators",
+      "editVisibilityHint": "Being listed and being purchasable are two things: the latter is «Subscription access». An invitation tier is «not sold publicly, but visible to invitation holders».",
+      "editDone": "Plan “{name}” saved",
+      "editInvalid": "Plan name cannot be empty",
+      "editSubmit": "Save"
     },
     "detail": {
       "backToList": "All products",

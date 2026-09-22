@@ -829,6 +829,48 @@ export class ProductsRouter {
           );
         }
       }
+      /*
+       * ── 上架检查的 publish 门（owner 2026-09-22 改指这里）──
+       *
+       * `launch_checklist_items.gate` 有两个值。`launch` 由 opera 在 draft→active
+       * 时卡着，一直在用。`publish` 当初是为了卡 `release_stage` 的 developing→beta，
+       * 但 **beta 那条线已被 owner 简化为纯展示标签**，于是那道门悬空了——
+       * 三项（verification_policy / pricing_set / acceptance）登记着、opera 的抽屉里
+       * 还让人勾，而**全仓零读者**。运营勾完以为有用，实际什么都没卡。
+       *
+       * 按 owner 给的生命周期，它们本来就该卡在「发布套餐」这一步：
+       *   开发中 → 接入调试 → 上线（gate='launch'）→ 发布套餐（gate='publish'）
+       *
+       * 循环自锁在这一版不成立了：`acceptance`（验收）要的端到端订阅链路，现在有
+       * `operator_grant` 与**邀请订阅**两条不发布也能开通的路。
+       *
+       * `coalesce(s.is_satisfied, false)`——没有行的项算未满足，否则「一次都没检查过
+       * 的产品」会被判成通过（这条口径照抄 opera 那一侧，不另写）。
+       */
+      if (primaryAxis?.product_id) {
+        const pending = await client.query<{
+          item_code: string;
+          item_name: string;
+        }>(
+          `SELECT i.item_code, i.item_name
+             FROM product.launch_checklist_items i
+             LEFT JOIN product.product_launch_statuses s
+               ON s.item_code = i.item_code AND s.product_id = $1
+            WHERE i.is_required
+              AND i.gate = 'publish'
+              AND NOT coalesce(s.is_satisfied, false)
+            ORDER BY i.sort ASC`,
+          [primaryAxis.product_id],
+        );
+        if (pending.rowCount) {
+          const names = pending.rows.map((r) => r.item_name || r.item_code);
+          throw new ConflictException({
+            code: "PUBLISH_CHECKLIST_PENDING",
+            message: `还有 ${names.length} 项上架检查未满足，不能发布套餐：${names.join("、")}。请在运维台的产品接入页完成后再发布。`,
+          });
+        }
+      }
+
       // publish: freeze the version and make it the plan's live version. A
       // prior published version stays 'published' (subscriptions pinned to it
       // keep resolving) — it just stops being current.
@@ -1082,6 +1124,139 @@ export class ProductsRouter {
    *
    * 列锁无需变更：`is_public` 本来就在 98 给 platform_svc 的 GRANT 名单里。
    */
+  /**
+   * 改套餐的可改字段（owner 2026-09-22 裁定：A 类字段开放编辑）。
+   *
+   * ── 为什么这些能改、那些不能 ──
+   * 冻结是**两层**，而这一层从来没被锁过：三条 §7 触发器钉的是 `plan_versions` 及
+   * 其以下（components / prices / trial），`product.plans` 这一层**没有任何触发器**，
+   * 98 的 GRANT 也放行。所以「已发布不能改」里，名称/描述/可见性这部分不是被禁止，
+   * 是**一直没有入口**。
+   *
+   * 放行的判据是「改它会不会动客户的契约」：
+   *   plan_name / description   只换显示名。历史单据不受影响——
+   *                             `billing.invoice_items.item_name` 是下单时快照。
+   *   is_customer_visible       展示轴：显不显示
+   *   is_workforce_visible      运营端展示轴
+   * 而 quota / features / 价格 / tier / trial 决定「拿到什么、付多少」，仍由触发器
+   * 钉死：要改就开新版本。
+   *
+   * `is_public`（能不能自助买）不在这里——它是商务开关，有自己的两向确认与 step-up，
+   * 走 `plans/:planId/visibility`。两根轴是 DDL 明写的正交轴，不要合并：
+   *   is_public=false + is_customer_visible=true  → 邀请档（不公开卖，持券的看得见）
+   *   is_public=true  + is_customer_visible=false → 能买但不列出
+   *
+   * 已退役的套餐不给改：它已经下架，改它只会让人以为还在卖（同 visibility 那条）。
+   * 不挂 step-up——改显示名不改「客户买得到什么」，与退役/发布/改售卖方式不同级。
+   */
+  @Patch("plans/:planId")
+  async updatePlan(
+    @Req() req: Request & RequestContext,
+    @Param("planId") planId: string,
+    @Body()
+    body: {
+      planName?: unknown;
+      description?: unknown;
+      isCustomerVisible?: unknown;
+      isWorkforceVisible?: unknown;
+    },
+  ): Promise<{ planCode: string; updated: string[] }> {
+    assertCanManageProducts(req);
+
+    const sets: string[] = [];
+    const values: unknown[] = [planId];
+    const updated: string[] = [];
+    const text = (v: unknown, field: string, max: number): string => {
+      if (typeof v !== "string") {
+        throw new BadRequestException(`${field} must be a string`);
+      }
+      const t = v.trim();
+      if (t.length > max) {
+        throw new BadRequestException(`${field} exceeds ${max} characters`);
+      }
+      return t;
+    };
+
+    if (body.planName !== undefined) {
+      const name = text(body.planName, "planName", 128);
+      if (!name) throw new BadRequestException("planName cannot be empty");
+      values.push(name);
+      sets.push(`plan_name = $${values.length}`);
+      updated.push("planName");
+    }
+    if (body.description !== undefined) {
+      /* 空串 = 清掉说明，是合法意图；落 NULL 与「没填过」同态。 */
+      const desc = text(body.description, "description", 4000);
+      values.push(desc || null);
+      sets.push(`description = $${values.length}`);
+      updated.push("description");
+    }
+    for (const [key, column] of [
+      ["isCustomerVisible", "is_customer_visible"],
+      ["isWorkforceVisible", "is_workforce_visible"],
+    ] as const) {
+      const raw = (body as Record<string, unknown>)[key];
+      if (raw === undefined) continue;
+      if (typeof raw !== "boolean") {
+        throw new BadRequestException(`${key} must be a boolean`);
+      }
+      values.push(raw);
+      sets.push(`${column} = $${values.length}`);
+      updated.push(key);
+    }
+    if (sets.length === 0) {
+      throw new BadRequestException("no editable field supplied");
+    }
+
+    let planCode = "";
+    await withTransaction(this.rwPool, async (client) => {
+      const cur = await client.query<{
+        plan_code: string;
+        plan_name: string;
+        description: string | null;
+        is_customer_visible: boolean;
+        is_workforce_visible: boolean;
+        status: string;
+      }>(
+        `SELECT plan_code, plan_name, description, is_customer_visible,
+                is_workforce_visible, status
+           FROM product.plans
+          WHERE id = $1 AND deleted_at IS NULL
+          FOR UPDATE`,
+        [planId],
+      );
+      const row = cur.rows[0];
+      if (!row) throw new NotFoundException(`Plan ${planId} not found`);
+      planCode = row.plan_code;
+      if (row.status === "deprecated") {
+        throw new BadRequestException(`${row.plan_code} 已退役，不能再改`);
+      }
+
+      values.push(req.user!.id);
+      await client.query(
+        `UPDATE product.plans
+            SET ${sets.join(", ")}, updated_by = $${values.length}, updated_at = now()
+          WHERE id = $1`,
+        values,
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.plan.update",
+        resourceType: "product_plan",
+        resourceId: row.plan_code,
+        before: {
+          planName: row.plan_name,
+          description: row.description,
+          isCustomerVisible: row.is_customer_visible,
+          isWorkforceVisible: row.is_workforce_visible,
+        },
+        after: Object.fromEntries(
+          updated.map((k) => [k, (body as Record<string, unknown>)[k]]),
+        ),
+      });
+    });
+    return { planCode, updated };
+  }
+
   @Patch("plans/:planId/visibility")
   @RequireStepUp()
   async setPlanVisibility(
@@ -3677,6 +3852,12 @@ export interface PlanMatrixPlan {
    * 已经做完了，整条链缺的就是这个开关。
    */
   isPublic: boolean;
+  /** 套餐说明（客户可见）；可改，见 `PATCH plans/:planId`。 */
+  description: string;
+  /** 展示轴：客户端显不显示。与 is_public（能不能自助买）是正交的两根轴。 */
+  isCustomerVisible: boolean;
+  /** 展示轴：运营端显不显示。 */
+  isWorkforceVisible: boolean;
   /** The live version (plans.current_version_id, published); null = never published. */
   currentVersion:
     | (PlanMatrixVersionRef & { prices: PlanVersionPrice[] })
@@ -3712,6 +3893,9 @@ interface PlanMatrixRow {
   plan_name: string | null;
   plan_status: string | null;
   is_public: boolean | null;
+  plan_description: string | null;
+  is_customer_visible: boolean | null;
+  is_workforce_visible: boolean | null;
   tier: string | null;
   current_version_id: string | null;
   current_version_no: number | null;
@@ -3735,7 +3919,8 @@ interface PlanMatrixRow {
 const PLAN_MATRIX_SQL = `
   SELECT pr.product_code, pr.product_name, pr.status AS product_status,
          plan.plan_id, plan.plan_code, plan.plan_name, plan.plan_status,
-         plan.is_public, plan.tier,
+         plan.is_public, plan.plan_description,
+         plan.is_customer_visible, plan.is_workforce_visible, plan.tier,
          plan.current_version_id, plan.current_version_no,
          plan.current_major_no, plan.current_published_at, plan.current_prices,
          plan.draft_version_id, plan.draft_version_no, plan.draft_major_no,
@@ -3744,7 +3929,8 @@ const PLAN_MATRIX_SQL = `
     FROM product.products pr
     LEFT JOIN LATERAL (
       SELECT p.id AS plan_id, p.plan_code, p.plan_name, p.status AS plan_status,
-             p.is_public,
+             p.is_public, coalesce(p.description, '') AS plan_description,
+             p.is_customer_visible, p.is_workforce_visible,
              axis.tier,
              cv.id AS current_version_id, cv.version_no AS current_version_no,
              cv.major_no AS current_major_no, cv.published_at AS current_published_at,
@@ -3814,6 +4000,10 @@ function groupPlanMatrix(rows: PlanMatrixRow[]): PlanMatrixProduct[] {
       planStatus: row.plan_status ?? "active",
       /* 读不到按公开算：漏判成「邀请制」会把一个在售档从客户阶梯里摘掉。 */
       isPublic: row.is_public !== false,
+      description: row.plan_description ?? "",
+      /* 读不到按可见算：漏判成「不可见」会把一个在售档从客户眼前摘掉。 */
+      isCustomerVisible: row.is_customer_visible !== false,
+      isWorkforceVisible: row.is_workforce_visible !== false,
       tier: row.tier as Tier,
       currentVersion:
         row.current_version_id && row.current_version_no !== null

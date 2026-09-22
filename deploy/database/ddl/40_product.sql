@@ -394,7 +394,7 @@ CREATE TABLE product.launch_checklist_items (
     description_key varchar(128),                                   -- i18n 键（product.checklist.{item_code}.desc）
     is_required boolean      NOT NULL DEFAULT true,
     owner       varchar(16)  NOT NULL DEFAULT 'opera',               -- 归属轴：opera=技术接入 / admin=商业前置
-    gate        varchar(16)  NOT NULL DEFAULT 'launch',              -- 门轴：launch=draft→active / publish=developing→beta
+    gate        varchar(16)  NOT NULL DEFAULT 'launch',              -- 门轴：launch=产品上线（draft→active，opera 卡）/ publish=发布套餐（admin 的 publishPlanVersion 卡）。publish 原指 developing→beta，2026-09-22 beta 简化为纯展示标签后那道门悬空，改指「发布套餐」——即 owner 给的生命周期里第 4 步
     sort        int          NOT NULL DEFAULT 0,
     created_at  timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT chk_launch_checklist_items_owner CHECK (owner IN ('opera','admin')),

@@ -481,6 +481,83 @@ describe("publish — tier occupancy guard", () => {
     );
   });
 
+  /*
+   * 上架检查的 publish 门（owner 2026-09-22 改指这里）。
+   *
+   * 此前 `gate='publish'` 的三项（verification_policy / pricing_set / acceptance）
+   * **全仓零读者**——登记着、opera 抽屉里还让人勾，而什么都没卡。beta 那条线简化成
+   * 纯展示标签后，它本来要卡的 developing→beta 也不存在了。
+   *
+   * 两面都写。反面（有未满足项 → 拒且不发布）是重点：只写正面的话，一个压根不查
+   * checklist 的实现也会绿——那正是改之前的样子。
+   */
+  it("publish 门有未满足项：409 PUBLISH_CHECKLIST_PENDING，且不发布", async () => {
+    const tx = makeTxClient((sql) => {
+      if (
+        sql.includes("product.plan_versions pv") &&
+        sql.includes("for update of pv")
+      )
+        return [
+          {
+            plan_id: "plan-a",
+            status: "draft",
+            plan_code: "karda-pro",
+            version_no: 2,
+          },
+        ];
+      if (sql.includes("cv2.status = 'published'")) return [];
+      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
+        return [{ product_id: "p-karda", tier: "pro" }];
+      if (sql.includes("launch_checklist_items"))
+        return [
+          { item_code: "pricing_set", item_name: "定价已设" },
+          { item_code: "acceptance", item_name: "验收" },
+        ];
+      return [];
+    });
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    const err = await router
+      .publishPlanVersion(makeReq(MANAGE), VERSION_ID)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      code: "PUBLISH_CHECKLIST_PENDING",
+    });
+    expect(tx.outcome().rolledBack).toBe(true);
+    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+      false,
+    );
+  });
+
+  it("publish 门只看 gate='publish' 的项（别把上线门那一组也算进来）", async () => {
+    const tx = makeTxClient((sql) => {
+      if (
+        sql.includes("product.plan_versions pv") &&
+        sql.includes("for update of pv")
+      )
+        return [
+          {
+            plan_id: "plan-a",
+            status: "draft",
+            plan_code: "karda-pro",
+            version_no: 2,
+          },
+        ];
+      if (sql.includes("cv2.status = 'published'")) return [];
+      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
+        return [{ product_id: "p-karda", tier: "pro" }];
+      return [];
+    });
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
+
+    const q = tx.calls.find((c) => c.includes("launch_checklist_items"));
+    expect(q).toContain("i.gate = 'publish'");
+    /* 没有行的项要算未满足，否则「一次都没检查过的产品」会被判成通过。 */
+    expect(q).toContain("coalesce(s.is_satisfied, false)");
+  });
+
   it("publishes when the slot is free: freeze + current pointer + commit", async () => {
     const tx = makeTxClient((sql) => {
       /* 这一句现在连 plan_code / version_no 一起取（审计那行要写「哪个套餐第几版」），

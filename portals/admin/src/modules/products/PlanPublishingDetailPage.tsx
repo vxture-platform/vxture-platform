@@ -72,6 +72,8 @@ import {
   PanelList,
   Section,
   StatusBadge,
+  Switch,
+  Textarea,
   useToast,
 } from "@vxture/design-system";
 import type {
@@ -86,6 +88,7 @@ import {
   deletePlanVersion,
   deprecatePlan,
   setPlanVisibility,
+  updateProductPlan,
   fetchPlanDeletable,
   fetchPlanMatrix,
   fetchPlanVersions,
@@ -221,6 +224,18 @@ export function PlanPublishingDetailPage({
   >({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  /**
+   * 正在编辑的套餐（A 类字段：名称/说明/两个展示轴）。null = 没开编辑框。
+   *
+   * 这一层从来没被冻结过——三条 §7 触发器钉的是 plan_versions 及其以下，
+   * `product.plans` 上一个触发器都没有。所以「已发布不能改」里，这几项不是被
+   * 禁止，是一直没有入口（owner 2026-09-22 裁定开放）。
+   */
+  const [editing, setEditing] = useState<PlanMatrixPlan | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editCustomerVisible, setEditCustomerVisible] = useState(true);
+  const [editWorkforceVisible, setEditWorkforceVisible] = useState(true);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [newPlanCode, setNewPlanCode] = useState("");
   const [newPlanName, setNewPlanName] = useState("");
@@ -364,6 +379,49 @@ export function PlanPublishingDetailPage({
    * 开框。两个入口共用它：页头那颗按钮与空态里那颗（owner 2026-09-22 要的）。
    * 同一个动作两个入口是对的——空态是眼睛落点，页头是常驻入口；不重复建页面。
    */
+  const openEdit = useCallback((plan: PlanMatrixPlan) => {
+    setEditName(plan.planName);
+    setEditDesc(plan.description);
+    setEditCustomerVisible(plan.isCustomerVisible);
+    setEditWorkforceVisible(plan.isWorkforceVisible);
+    setEditing(plan);
+  }, []);
+
+  const submitEdit = useCallback(async () => {
+    if (!editing) return;
+    const name = editName.trim();
+    if (!name) {
+      toast({ tone: "danger", title: t("actions.editInvalid") });
+      return;
+    }
+    /* 只送**改过的**键：服务端对 undefined 的字段不碰，这样并发改别处不会被覆盖。 */
+    const body: Parameters<typeof updateProductPlan>[1] = {};
+    if (name !== editing.planName) body.planName = name;
+    if (editDesc !== editing.description) body.description = editDesc;
+    if (editCustomerVisible !== editing.isCustomerVisible)
+      body.isCustomerVisible = editCustomerVisible;
+    if (editWorkforceVisible !== editing.isWorkforceVisible)
+      body.isWorkforceVisible = editWorkforceVisible;
+    if (Object.keys(body).length === 0) {
+      setEditing(null);
+      return;
+    }
+    const ok = await runPlain(
+      () => updateProductPlan(editing.planId, body),
+      t("actions.editDone", { name }),
+    );
+    if (ok) setEditing(null);
+  }, [
+    editCustomerVisible,
+    editDesc,
+    editName,
+    editWorkforceVisible,
+    editing,
+    runPlain,
+    t,
+    toast,
+  ]);
+
   const openNewPlan = useCallback(() => {
     setNewPlanCode("");
     setNewPlanName("");
@@ -736,6 +794,13 @@ export function PlanPublishingDetailPage({
                     ),
                 });
               }
+              items.push({
+                id: "edit-plan",
+                label: t("actions.editPlan"),
+                icon: "edit",
+                disabled: busy,
+                onSelect: () => openEdit(plan),
+              });
               /*
                * 订阅方式：公开订阅 ⇄ 邀请订阅。翻成邀请制后这一档从客户的套餐
                * 阶梯里消失，只有持邀请券的人看得见、买得到；已有订阅与续订都
@@ -1043,6 +1108,82 @@ export function PlanPublishingDetailPage({
           </PanelList>
         )}
       </Section>
+
+      {editing ? (
+        <DialogForm
+          open
+          size="lg"
+          title={t("actions.editPlan")}
+          description={t("actions.editDescription", {
+            code: editing.planCode,
+          })}
+          submitLabel={t("actions.editSubmit")}
+          submitting={busy}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitEdit();
+          }}
+          cancelLabel={tShared("actions.cancel")}
+        >
+          <Field>
+            <FieldLabel htmlFor="edit-plan-name">
+              {t("actions.newPlanNameLabel")}
+            </FieldLabel>
+            <Input
+              id="edit-plan-name"
+              value={editName}
+              disabled={busy}
+              onChange={(event) => setEditName(event.target.value)}
+              maxLength={128}
+            />
+            <span className="text-body-sm text-muted-foreground">
+              {t("actions.newPlanNameHint")}
+            </span>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="edit-plan-desc">
+              {t("actions.editDescLabel")}
+            </FieldLabel>
+            <Textarea
+              id="edit-plan-desc"
+              value={editDesc}
+              disabled={busy}
+              onChange={(event) => setEditDesc(event.target.value)}
+              maxLength={4000}
+              rows={3}
+            />
+          </Field>
+          {/* 两个展示轴与「订阅方式」是正交的三件事，说明里写清楚，别让人以为重复。 */}
+          <Field orientation="horizontal">
+            <FieldLabel htmlFor="edit-plan-cv">
+              {t("actions.editCustomerVisible")}
+            </FieldLabel>
+            <Switch
+              id="edit-plan-cv"
+              checked={editCustomerVisible}
+              disabled={busy}
+              onCheckedChange={setEditCustomerVisible}
+            />
+          </Field>
+          <span className="text-body-sm text-muted-foreground">
+            {t("actions.editVisibilityHint")}
+          </span>
+          <Field orientation="horizontal">
+            <FieldLabel htmlFor="edit-plan-wv">
+              {t("actions.editWorkforceVisible")}
+            </FieldLabel>
+            <Switch
+              id="edit-plan-wv"
+              checked={editWorkforceVisible}
+              disabled={busy}
+              onCheckedChange={setEditWorkforceVisible}
+            />
+          </Field>
+        </DialogForm>
+      ) : null}
 
       {newPlanOpen ? (
         <DialogForm
