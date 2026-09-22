@@ -215,39 +215,41 @@
     "deselectAll": "Deselect all rows on this page",
     "selectRow": "Select row"
   },
-  "ops": {
-    "role": {
-      "sys_config": {
-        "name": "System Config",
-        "desc": "Platform self-governance config meta-role, used as createdBy for system-init data."
-      },
-      "super_admin": {
-        "name": "Super Admin",
-        "desc": "Platform built-in super admin with all permissions."
-      },
-      "administrator": {
-        "name": "Administrator",
-        "desc": "Platform admin: all business domains, excludes operator management and security keys."
-      },
-      "operator": {
-        "name": "Operator",
-        "desc": "Tenant / plan / content / growth operations."
-      },
-      "finance": {
-        "name": "Finance",
-        "desc": "Subscriptions / orders / refunds / invoices / revenue reports."
-      },
-      "engineer": {
-        "name": "Engineer",
-        "desc": "Model supply / release / maintenance windows / system settings."
-      },
-      "support": {
-        "name": "Support",
-        "desc": "Tickets / masked tenant lookup / notifications."
-      },
-      "auditor": {
-        "name": "Auditor",
-        "desc": "Read-only across all domains + audit logs, zero write."
+  "catalog": {
+    "ops": {
+      "role": {
+        "sys_config": {
+          "name": "System Config",
+          "desc": "Platform self-governance config meta-role, used as createdBy for system-init data."
+        },
+        "super_admin": {
+          "name": "Super Admin",
+          "desc": "Platform built-in super admin with all permissions."
+        },
+        "administrator": {
+          "name": "Administrator",
+          "desc": "Platform admin: all business domains, excludes operator management and security keys."
+        },
+        "operator": {
+          "name": "Operator",
+          "desc": "Tenant / plan / content / growth operations."
+        },
+        "finance": {
+          "name": "Finance",
+          "desc": "Subscriptions / orders / refunds / invoices / revenue reports."
+        },
+        "engineer": {
+          "name": "Engineer",
+          "desc": "Model supply / release / maintenance windows / system settings."
+        },
+        "support": {
+          "name": "Support",
+          "desc": "Tickets / masked tenant lookup / notifications."
+        },
+        "auditor": {
+          "name": "Auditor",
+          "desc": "Read-only across all domains + audit logs, zero write."
+        }
       }
     }
   }
