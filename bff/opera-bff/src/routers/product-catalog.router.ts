@@ -2221,8 +2221,10 @@ const LEGACY_WEBHOOK_PATHS = new Map<string, string>([
      少列一个，门就对那个产品变成墙。上一次同型的教训是发布门漏抄 override
      （装上门当天没人去问它现在拦住了谁）。
 
-     名单唯一的权威是 seed 与库里的实际值；这两处与名单**没有机械链路**，
-     下一个动 seed 回调地址的人不会被任何东西提醒回来改这里。补这条链路是 follow-up。 */
+     这份名单与 seed 之间**已经有机械链路**（2026-09-23 补：`lint:webhook-paths`）：
+     seed 把每个产品的回调路径显式声明在 `WEBHOOK_PATHS` 里，守卫双向对账——改了 seed
+     而忘了改这里、或者某条豁免已经迁完却还留着，都会当场红。
+     库里的实际值是另一层，由下面这个函数在写入时把关，两层各管一段。 */
   ["arda", "/provisioning/webhook"],
   ["karda", "/provisioning/webhook"],
 ]);
