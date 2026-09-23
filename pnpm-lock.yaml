@@ -477,6 +477,9 @@ importers:
       '@vxture/service-notice':
         specifier: workspace:*
         version: link:../../services/notification/notice
+      '@vxture/service-subscription':
+        specifier: workspace:*
+        version: link:../../services/commerce/subscription
       bcryptjs:
         specifier: ^3.0.2
         version: 3.0.3

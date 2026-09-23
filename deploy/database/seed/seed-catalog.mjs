@@ -3618,6 +3618,32 @@ export async function seedCatalog(client) {
     );
   }
 
+  // ── 认证沙箱的两件家具（2026-10-31）──────────────────────────────────────
+  // 与 migrations/2026-10-31-certification-sandbox.sql **逐字同一份**：迁移管存量库、
+  // seed 管新库，两边分叉的症状是「老库有沙箱、新库没有」，而且谁也不报错。
+  //
+  // 锚点账号只是 tenancy.tenants.owner_user_id 的落点——它 disabled、不配凭据、
+  // 不进成员表，登录路径无从走通。phone 是哨兵串不是编的手机号：编一个看起来像真号
+  // 的值迟早会和某个真人在 UNIQUE 上撞，而那时报错离现场很远。
+  await client.query(`
+    insert into account.users
+      (id, account, email, phone, phone_verified_at, status, source, created_at, updated_at)
+    values ('00000000-0000-4000-a000-0000000000c1', 'sys.certification.anchor', null,
+            'sys.certification.anchor', now(), 'disabled', 'system', now(), now())
+    on conflict (id) do nothing
+  `);
+  await client.query(`
+    insert into tenancy.tenants
+      (id, name, display_name, type, purpose, owner_user_id, status, created_at, updated_at)
+    values ('00000000-0000-4000-a000-0000000000c2', '接入认证沙箱', '接入认证沙箱',
+            'organization', 'certification',
+            '00000000-0000-4000-a000-0000000000c1', 'active', now(), now())
+    on conflict (id) do nothing
+  `);
+  console.log(
+    "✓  tenancy — certification sandbox (anchor account: disabled + no credential; tenant purpose=certification, excluded from every customer-facing figure)",
+  );
+
   console.log(
     "✓  product — checklist + umbra-free + arda catalog (6 plans; v1 current/locked, v2 seeded as UNPUBLISHED placeholder draft on starter/pro/business/enterprise — all quota params & prices = 1, admin sets real values + publishes; 10 product metrics + 2 L0 contributions)",
   );

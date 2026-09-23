@@ -21,13 +21,17 @@ import { OidcClientRouter } from "./routers/oidc-client.router";
 import { ProductCatalogRouter } from "./routers/product-catalog.router";
 import { ProductOnboardingRouter } from "./routers/product-onboarding.router";
 import { ProductHealthRouter } from "./routers/product-health.router";
+import { SubscriptionModule } from "@vxture/service-subscription";
+import { ProductCertificationRouter } from "./routers/product-certification.router";
 import { ProductIntegrationSignalsRouter } from "./routers/product-integration-signals.router";
 import { RunosRouter } from "./routers/runos.router";
 import { SessionRouter } from "./routers/session.router";
 import { TenancyDirectoryRouter } from "./routers/tenancy-directory.router";
 
 @Module({
-  imports: [OidcRpModule, OperaBffPoolsModule],
+  /* SubscriptionModule：认证订阅走的是**和客户下单落地同一个** createSubscription——
+     同样物化配额池、同样触发开通派发。走特殊路径的认证证明不了生产路径能跑通。 */
+  imports: [OidcRpModule, OperaBffPoolsModule, SubscriptionModule],
   controllers: [
     HealthRouter,
     SessionRouter,
@@ -39,6 +43,7 @@ import { TenancyDirectoryRouter } from "./routers/tenancy-directory.router";
     RunosRouter,
     ProductCatalogRouter,
     ProductOnboardingRouter,
+    ProductCertificationRouter,
     ProductIntegrationSignalsRouter,
     OidcClientRouter,
     AuditLogViewRouter,
