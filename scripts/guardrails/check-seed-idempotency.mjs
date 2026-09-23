@@ -247,62 +247,68 @@ checkCatalogI18nKeys();
 // 这个边界的必然结果，能做的是让它们对不上时当场红。
 // ─────────────────────────────────────────────────────────────────────────────
 function checkMetricNamesInSync() {
-  const migPath = join(
-    SEED_DIR,
-    '..',
-    'migrations',
-    '2026-10-26-metric-catalog-names.sql',
-  );
+  const migDir = join(SEED_DIR, '..', 'migrations');
   const seedPath = join(SEED_DIR, 'seed-catalog.mjs');
-  if (!existsSync(migPath) || !existsSync(seedPath)) return;
+  if (!existsSync(migDir) || !existsSync(seedPath)) return;
 
-  const mig = readFileSync(migPath, 'utf8');
+  /*
+   * 扫**所有**写 product.metric_catalog 的迁移，不钉死某一个文件名。
+   * 第一版钉死了 2026-10-26 那个文件，结果 seat.max 的名字落在 2026-10-28 里，
+   * 它对此完全看不见——而那正是本检查要防的形状（一份事实两处推导）。
+   */
+  const tuple = (text, re) => {
+    const out = new Map();
+    for (const m of text.matchAll(re)) out.set(m[1], `${m[2]}｜${m[3]}`);
+    return out;
+  };
+
+  const fromMig = new Map();
+  for (const name of readdirSync(migDir)) {
+    if (!name.endsWith('.sql')) continue;
+    const text = readFileSync(join(migDir, name), 'utf8');
+    if (!text.includes('product.metric_catalog')) continue;
+    for (const [k, v] of tuple(
+      text,
+      /\(\s*'([a-z_.]+)',\s*'([^']+)',\s*'([^']+)'\s*\)/g,
+    )) {
+      fromMig.set(k, v);
+    }
+  }
+
   const seed = readFileSync(seedPath, 'utf8');
+  const fromSeed = new Map([
+    // 数组式：["key", "名", "说明"]
+    ...tuple(seed, /\["([a-z_.]+)",\s*"([^"]+)",\s*"([^"]+)"\]/g),
+    // 内联 SQL 式：values ('key', '名', '说明')
+    ...tuple(seed, /values\s*\(\s*'([a-z_.]+)',\s*'([^']+)',\s*'([^']+)'\s*\)/g),
+  ]);
 
-  const fromMig = [
-    ...mig.matchAll(/\('([a-z_.]+)',\s*'([^']+)',\s*'([^']+)'\)/g),
-  ].map((m) => `${m[1]} | ${m[2]} | ${m[3]}`);
-
-  const at = seed.indexOf('const METRIC_NAMES = [');
-  if (at < 0) {
+  if (fromMig.size === 0) {
     findings.push({
       file: seedPath,
       line: 1,
-      msg: '找不到 METRIC_NAMES —— 判据读不到就是错，不是通过',
-    });
-    return;
-  }
-  const block = seed.slice(at, seed.indexOf('\n  ];', at));
-  const fromSeed = [
-    ...block.matchAll(/\["([a-z_.]+)",\s*"([^"]+)",\s*"([^"]+)"\]/g),
-  ].map((m) => `${m[1]} | ${m[2]} | ${m[3]}`);
-
-  if (fromMig.length === 0 || fromSeed.length === 0) {
-    findings.push({
-      file: seedPath,
-      line: 1,
-      msg: `计量名解析到 迁移 ${fromMig.length} 条 / seed ${fromSeed.length} 条 —— 空集不算通过`,
+      msg: '没有从任何迁移里解析到 metric_catalog 命名 —— 空集不算通过',
     });
     return;
   }
 
-  const inSeed = new Set(fromSeed);
-  const inMig = new Set(fromMig);
-  for (const row of fromMig) {
-    if (!inSeed.has(row)) {
+  /*
+   * 只以**迁移里出现过的键**为准逐个比对。不报「seed 独有」：seed 里的三元组
+   * 数组不止这一处（ARDA_METRICS 等也是三元组），拿它反向判会误报。
+   */
+  for (const [key, val] of fromMig) {
+    const other = fromSeed.get(key);
+    if (other === undefined) {
       findings.push({
         file: seedPath,
         line: 1,
-        msg: `计量名只在迁移里、seed 缺：${row} —— 新库会显示 metric_key`,
+        msg: `计量名 ${key} 只在迁移里、seed 缺 —— 新库会显示 metric_key`,
       });
-    }
-  }
-  for (const row of fromSeed) {
-    if (!inMig.has(row)) {
+    } else if (other !== val) {
       findings.push({
-        file: migPath,
+        file: seedPath,
         line: 1,
-        msg: `计量名只在 seed 里、迁移缺：${row} —— 存量库拿不到这个名字`,
+        msg: `计量名 ${key} 两处不一致：迁移「${val}」/ seed「${other}」 —— 老库与新库会显示不同的名字`,
       });
     }
   }
