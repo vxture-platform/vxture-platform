@@ -53,6 +53,10 @@ interface Fixture {
     ack_at?: string | null;
     ack_status?: string | null;
   };
+  /** 收口：沙箱工作区（不传 = 不收口，与加这个参数之前逐字等价）。 */
+  scopeWorkspaceId?: string;
+  /** 收口：沙箱测试用户（登录段专用）。 */
+  scopeUserId?: string;
   /** 回调投递：`status='delivered'` 的最近一行。 */
   deliveryRow?: {
     event_type: string;
@@ -64,6 +68,11 @@ interface Fixture {
 
 function makeRouter(fx: Fixture) {
   const sqls: string[] = [];
+  /* 每条查询实际收到的参数，按表名留一份——收口测试断言的是**参数真的传下去了**，
+     而不是「端点没报错」。少了这一份，收口参数传没传到 SQL 上没有任何东西看得见。 */
+  const paramsByTable = new Map<string, unknown[]>();
+  const ws = fx.scopeWorkspaceId ?? null;
+  const uid = fx.scopeUserId ?? null;
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     sqls.push(sql);
     if (/FROM product\.products/.test(sql)) {
@@ -73,25 +82,33 @@ function makeRouter(fx: Fixture) {
       };
     }
     if (/FROM metering\.usage_events/.test(sql)) {
-      expect(params).toEqual([PRODUCT_ID]);
+      paramsByTable.set("usage_events", params ?? []);
+      expect(params).toEqual([PRODUCT_ID, ws]);
       return { rows: fx.usageRow ? [fx.usageRow] : [] };
     }
     if (/FROM session\.refresh_tokens/.test(sql)) {
       /* 按**产品 id** 聚合：子查询先拿 product_id 取客户端集合，
-         而不是拿单个 client_id——一个产品可能有三个渠道客户端。 */
-      expect(params).toEqual([PRODUCT_ID]);
+         而不是拿单个 client_id——一个产品可能有三个渠道客户端。
+         第二个参数是**用户**不是工作区：refresh_tokens 没有 workspace_id
+         （登录发生在选定工作区之前），所以登录段按沙箱测试用户收口。 */
+      paramsByTable.set("refresh_tokens", params ?? []);
+      expect(params).toEqual([PRODUCT_ID, uid]);
       return { rows: fx.loginRow ? [fx.loginRow] : [] };
     }
     if (/FROM provisioning\.provisionings/.test(sql)) {
-      expect(params).toEqual([PRODUCT_ID]);
+      paramsByTable.set("provisionings", params ?? []);
+      expect(params).toEqual([PRODUCT_ID, ws]);
       return { rows: fx.provisionRow ? [fx.provisionRow] : [] };
     }
     if (/FROM provisioning\.webhook_deliveries/.test(sql)) {
-      expect(params).toEqual([PRODUCT_ID]);
+      paramsByTable.set("webhook_deliveries", params ?? []);
+      expect(params).toEqual([PRODUCT_ID, ws]);
       return { rows: fx.deliveryRow ? [fx.deliveryRow] : [] };
     }
     if (/FROM support\.audit_logs/.test(sql)) {
-      /* 按**产品码**反查，不是产品 id——审计里记的是 caller_product。 */
+      /* 按**产品码**反查，不是产品 id——审计里记的是 caller_product。
+         换票**不收口**：audit_logs 没有 workspace_id，而换票也不在认证那五段里。 */
+      paramsByTable.set("audit_logs", params ?? []);
       expect(params).toEqual(["oidc.token_exchange.issued", fx.productCode]);
       return { rows: fx.s2sRow ? [fx.s2sRow] : [] };
     }
@@ -103,7 +120,7 @@ function makeRouter(fx: Fixture) {
     { get },
     { keyPrefix: "vx:" } as RpRuntime,
   );
-  return { router, sqls, get };
+  return { router, sqls, get, paramsByTable };
 }
 
 async function failure(
@@ -407,5 +424,98 @@ describe("parseEntitlementSignal", () => {
     expect(() => parseEntitlementSignal("{not json", "k")).toThrow(
       HttpException,
     );
+  });
+});
+
+/*
+ * 收口（2026-10-30）。这一组守的是**认证只认沙箱里那一次**。
+ *
+ * 不收口时 A 客户的真实使用会把 B 产品的认证喂绿——那正是旧 `acceptance` 判据的
+ * 毛病。所以断言必须落在「参数真的传到 SQL 上了」，而不是「端点没报错」：后者在
+ * 收口参数被悄悄吞掉时照样绿。
+ */
+describe("integration-signals · 沙箱收口", () => {
+  const WS = "8f1c0a44-0000-4000-8000-0000000000aa";
+  const UID = "8f1c0a44-0000-4000-8000-0000000000bb";
+
+  it("四条 SQL 各自收到该收的那个 id：工作区给三条，用户给登录那条", async () => {
+    const { router, paramsByTable } = makeRouter({
+      productCode: "arda",
+      scopeWorkspaceId: WS,
+      scopeUserId: UID,
+    });
+    await router.get(makeReq(), PRODUCT_ID, WS, UID);
+
+    expect(paramsByTable.get("usage_events")).toEqual([PRODUCT_ID, WS]);
+    expect(paramsByTable.get("provisionings")).toEqual([PRODUCT_ID, WS]);
+    expect(paramsByTable.get("webhook_deliveries")).toEqual([PRODUCT_ID, WS]);
+    /* 登录段收的是**用户**：refresh_tokens 没有 workspace_id。 */
+    expect(paramsByTable.get("refresh_tokens")).toEqual([PRODUCT_ID, UID]);
+    /* 换票段**不收口**且不该被误传：audit_logs 没有 workspace_id，
+       而换票也不在认证那五段里（它归上线门）。 */
+    expect(paramsByTable.get("audit_logs")).toEqual([
+      "oidc.token_exchange.issued",
+      "arda",
+    ]);
+  });
+
+  it("不传收口参数时逐字等价于加这个能力之前：四条都收到 null", async () => {
+    const { router, paramsByTable } = makeRouter({ productCode: "arda" });
+    await router.get(makeReq(), PRODUCT_ID);
+    expect(paramsByTable.get("usage_events")).toEqual([PRODUCT_ID, null]);
+    expect(paramsByTable.get("refresh_tokens")).toEqual([PRODUCT_ID, null]);
+    expect(paramsByTable.get("provisionings")).toEqual([PRODUCT_ID, null]);
+    expect(paramsByTable.get("webhook_deliveries")).toEqual([PRODUCT_ID, null]);
+  });
+
+  it("C2 是 Redis 上的键，收口在代码里做：工作区对不上就不算", async () => {
+    const { router } = makeRouter({
+      productCode: "arda",
+      scopeWorkspaceId: WS,
+      redisValue: JSON.stringify({
+        lastSeenAt: "2026-08-31T01:02:03.000Z",
+        via: "s2s",
+        workspaceId: "另一个工作区",
+      }),
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID, WS);
+    expect(out.entitlement).toBeNull();
+  });
+
+  it("C2 工作区对得上：照常算", async () => {
+    const { router } = makeRouter({
+      productCode: "arda",
+      scopeWorkspaceId: WS,
+      redisValue: JSON.stringify({
+        lastSeenAt: "2026-08-31T01:02:03.000Z",
+        via: "s2s",
+        workspaceId: WS,
+      }),
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID, WS);
+    expect(out.entitlement?.workspaceId).toBe(WS);
+  });
+
+  it("C2 没带工作区：收口时算不在范围内，不放行", async () => {
+    /* 保守是有意的：认证要证的是「沙箱里那一次」，证不出来就不该算。
+       放行的代价是一条认证凭着别处的流量通过，而那是静默的。 */
+    const { router } = makeRouter({
+      productCode: "arda",
+      scopeWorkspaceId: WS,
+      redisValue: JSON.stringify({
+        lastSeenAt: "2026-08-31T01:02:03.000Z",
+        via: "s2s",
+        workspaceId: null,
+      }),
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID, WS);
+    expect(out.entitlement).toBeNull();
+  });
+
+  it("收口参数不是合法 uuid：400，不静默退回「不收口」", async () => {
+    /* 悄悄退回不收口 = 一次本该收口的认证读到了全量流量，而没有任何东西看得见。 */
+    const { router } = makeRouter({ productCode: "arda" });
+    const out = await failure(router.get(makeReq(), PRODUCT_ID, "not-a-uuid"));
+    expect(out.status).toBe(400);
   });
 });

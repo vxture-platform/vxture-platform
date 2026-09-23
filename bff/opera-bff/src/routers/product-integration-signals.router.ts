@@ -58,7 +58,7 @@
  * @date 2026-08-31
  */
 
-import { Controller, Get, Inject, Param, Req } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Query, Req } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { internalError, notFound } from "../errors/api-error";
@@ -296,13 +296,40 @@ export class ProductIntegrationSignalsRouter {
    *
    * @throws {ApiError} 400 `VALIDATION_INVALID_UUID` · 404 `CATALOG_PRODUCT_NOT_FOUND`
    */
+  /**
+   * 收口参数（2026-10-30，接入认证用）。**不传 = 与此前逐字等价**：全部信号读该产品
+   * 的任意流量，供「运行健康」观测用。
+   *
+   * 认证要的是另一件事——**只认沙箱里那一次**。不收口的话，A 客户的真实使用会把
+   * B 产品的认证喂绿，而那正是旧 `acceptance` 判据的毛病：它读的是该产品的任意流量。
+   *
+   * ── 为什么登录段收的是用户不是工作区 ──
+   * `session.refresh_tokens` **没有 workspace_id**（登录发生在选定工作区之前，这一点
+   * 本文件早先的注释已经写过）。硬凑一个进去只会把一条本来成立的链判成失败。改按
+   * **沙箱测试用户**收口，判据反而更硬：它证明的是「**那个**沙箱用户真的登进了
+   * 这个产品」，比「某个工作区里发生过登录」更贴近这一段要证的事。
+   *
+   * ── C1 出站换票收不了口，也不需要 ──
+   * `support.audit_logs` 没有 workspace_id（§72 头注写明「不引入 workspace_id」），
+   * 而换票本来就不是工作区范围的动作。它也不在认证那五段里——五段是
+   * 登录 / 开通 / 权益 / 用量 / 回调投递，换票归上线门。所以这里不给它收口参数，
+   * 而不是给一个读不到判据却假装收了口的参数。
+   */
   @Get(":id/integration-signals")
   async get(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
+    @Query("workspaceId") workspaceIdRaw?: string,
+    @Query("userId") userIdRaw?: string,
   ): Promise<IntegrationSignalsRecord> {
     assertCanRead(req);
     const productId = requireUuid(id, "id");
+    /* 传了就必须是合法 uuid：读不到判据时宁可 400，也不要悄悄退回「不收口」——
+       那会让一次本该收口的认证在无人察觉的情况下读到全量流量。 */
+    const scopeWorkspaceId = workspaceIdRaw
+      ? requireUuid(workspaceIdRaw, "workspaceId")
+      : null;
+    const scopeUserId = userIdRaw ? requireUuid(userIdRaw, "userId") : null;
 
     const product = await this.pool.query<{ product_code: string }>(
       `SELECT product_code FROM product.products
@@ -343,9 +370,10 @@ export class ProductIntegrationSignalsRouter {
                    WHERE c.product_id = $1
                      AND c.client_kind = 'product'
                 )
+            AND ($2::uuid IS NULL OR rt.user_id = $2::uuid)
           ORDER BY rt.created_at DESC
           LIMIT 1`,
-        [productId],
+        [productId, scopeUserId],
       ),
       /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
          单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
@@ -356,9 +384,10 @@ export class ProductIntegrationSignalsRouter {
            FROM metering.usage_events
           WHERE product_id = $1
             AND created_at >= now() - interval '${CONSUME_LOOKBACK}'
+            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
           ORDER BY created_at DESC
           LIMIT 1`,
-        [productId],
+        [productId, scopeWorkspaceId],
       ),
       /*
        * C1 出站：**不新开一条写路径**。auth-bff 每次成功换票已经往
@@ -410,18 +439,20 @@ export class ProductIntegrationSignalsRouter {
           WHERE product_id = $1
             AND status = 'provisioned'
             AND provisioned_at IS NOT NULL
+            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
           ORDER BY provisioned_at DESC
           LIMIT 1`,
-        [productId],
+        [productId, scopeWorkspaceId],
       ),
       this.pool.query<DeliveryRow>(
         `SELECT event_type, workspace_id, response_code, last_attempt_at
            FROM provisioning.webhook_deliveries
           WHERE product_id = $1
             AND status = 'delivered'
+            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
           ORDER BY last_attempt_at DESC NULLS LAST
           LIMIT 1`,
-        [productId],
+        [productId, scopeWorkspaceId],
       ),
     ]);
 
@@ -437,7 +468,19 @@ export class ProductIntegrationSignalsRouter {
             clientId: loggedIn.client_id,
           }
         : null,
-      entitlement: parseEntitlementSignal(raw, key),
+      /*
+       * C2 的收口在这里做，不在查询里——它不是 SQL，是 Redis 上的「最近一次」键。
+       *
+       * 拿不到 workspaceId 时**算不在范围内**（保守），而不是放行：认证要证的是
+       * 「沙箱里那一次」，证不出来就不该算。`platform-entitlements.router` 的
+       * workspaceId 来自 `scopeToS2sCaller`，正常路径上是有值的；真出现空值，
+       * 抽屉里会看到这一段没过，那正是该被人看见的事，不是该被悄悄兜底的事。
+       */
+      entitlement: (() => {
+        const sig = parseEntitlementSignal(raw, key);
+        if (!sig || !scopeWorkspaceId) return sig;
+        return sig.workspaceId === scopeWorkspaceId ? sig : null;
+      })(),
       consume: latest
         ? {
             lastEventAt: toIso(latest.created_at),
