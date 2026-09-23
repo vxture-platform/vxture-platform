@@ -41,7 +41,33 @@ function makeReq(): Request & RequestContext {
   } as unknown as Request & RequestContext;
 }
 
+/** 一条台账行；evaluate 的读与写都从它出发。 */
+function runRow() {
+  return {
+    id: RUN_ID,
+    product_id: PRODUCT_ID,
+    contract_version: "C1/C2/C3-2026-09",
+    sandbox_workspace_id: WORKSPACE_ID,
+    plan_version_id: VERSION_ID,
+    component_fingerprint: "fp",
+    segments: {},
+    verdict: "running",
+    stale_reason: null,
+    certified_at: null,
+    created_at: new Date("2026-09-23T00:00:00.000Z"),
+  };
+}
+
 interface Fixture {
+  /** false = 没有进行中的认证。 */
+  runningRun?: boolean;
+  /** 收口之后各段有没有痕迹。 */
+  sig?: {
+    login?: boolean;
+    provision?: boolean;
+    delivery?: boolean;
+    consume?: boolean;
+  };
   productStatus?: string;
   productMissing?: boolean;
   versionStatus?: string;
@@ -52,6 +78,8 @@ interface Fixture {
   workspaceExists?: boolean;
   /** 该沙箱里这个产品已有在活订阅。 */
   liveSubscription?: boolean;
+  /** C2 信号的 Redis 原值（evaluate 用）。 */
+  c2Raw?: string | null;
 }
 
 function makeRouter(fx: Fixture) {
@@ -84,26 +112,74 @@ function makeRouter(fx: Fixture) {
     if (/FROM product\.plan_components/.test(text)) {
       return { rows: [{ line: "p|primary|pro|{}|{}" }] };
     }
-    if (/INSERT INTO product\.certification_runs/.test(text)) {
+    if (/FROM product\.certification_runs/.test(text)) {
+      return { rows: fx.runningRun === false ? [] : [runRow()] };
+    }
+    if (/UPDATE product\.certification_runs/.test(text)) {
+      /* $3 = allPresent。真实的 SQL 用 CASE WHEN 一并写 verdict 与 certified_at
+         （DDL 上那条「互为充要」的 CHECK 不允许它们分两步写）。 */
+      const certified = args?.[2] === true;
       return {
         rows: [
           {
-            id: RUN_ID,
-            product_id: PRODUCT_ID,
-            contract_version: "C1/C2/C3-2026-09",
-            sandbox_workspace_id: WORKSPACE_ID,
-            plan_version_id: VERSION_ID,
-            component_fingerprint: "fp",
-            segments: {},
-            verdict: "running",
-            stale_reason: null,
-            certified_at: null,
-            created_at: new Date("2026-09-23T00:00:00.000Z"),
+            ...runRow(),
+            segments: JSON.parse(String(args?.[1] ?? "{}")),
+            verdict: certified ? "certified" : "running",
+            certified_at: certified ? new Date() : null,
           },
         ],
       };
     }
-    if (/audit_logs/i.test(text)) return { rows: [] };
+    /* readIntegrationSignals 的五条查询 */
+    if (/FROM session\.refresh_tokens/.test(text)) {
+      return {
+        rows: fx.sig?.login ? [{ client_id: "c", created_at: new Date() }] : [],
+      };
+    }
+    if (/FROM metering\.usage_events/.test(text)) {
+      return {
+        rows: fx.sig?.consume
+          ? [{ metric_key: "tokens", created_at: new Date() }]
+          : [],
+      };
+    }
+    if (/FROM support\.audit_logs/.test(text)) {
+      return { rows: [] };
+    }
+    if (/FROM provisioning\.provisionings/.test(text)) {
+      return {
+        rows: fx.sig?.provision
+          ? [
+              {
+                workspace_id: WORKSPACE_ID,
+                provisioned_at: new Date(),
+                ack_at: null,
+                ack_status: null,
+              },
+            ]
+          : [],
+      };
+    }
+    if (/FROM provisioning\.webhook_deliveries/.test(text)) {
+      return {
+        rows: fx.sig?.delivery
+          ? [
+              {
+                event_type: "subscription_changed",
+                workspace_id: WORKSPACE_ID,
+                response_code: 200,
+                last_attempt_at: new Date(),
+              },
+            ]
+          : [],
+      };
+    }
+    if (/INSERT INTO product\.certification_runs/.test(text)) {
+      return { rows: [runRow()] };
+    }
+    /* 写审计。必须和上面那条**读** support.audit_logs 的 S2S 查询分开——
+       用 /audit_logs/i 一把抓的话，「写了审计」这条断言会被那条读查询喂成白过的。 */
+    if (/insert into support\.audit_logs/i.test(text)) return { rows: [] };
     throw new Error(`unexpected sql: ${text}`);
   });
 
@@ -117,7 +193,17 @@ function makeRouter(fx: Fixture) {
   const subscriptions = {
     createSubscription,
   } as unknown as SubscriptionService;
-  const router = new ProductCertificationRouter(pool, pool, subscriptions);
+  /* Redis 读：C2 信号的「最近一次」键。evaluate 用得到，run 用不到——
+     给一个永远回 null 的实现，等于「对方还没拉过权益」。 */
+  const redis = { get: vi.fn(async () => fx.c2Raw ?? null) };
+  const rpRuntime = { keyPrefix: "vx:" } as never;
+  const router = new ProductCertificationRouter(
+    pool,
+    pool,
+    subscriptions,
+    redis,
+    rpRuntime,
+  );
   return { router, calls, createSubscription };
 }
 
@@ -160,7 +246,9 @@ describe("POST /api/products/:id/certification/run", () => {
     expect(
       calls.some((c) => /INSERT INTO tenancy\.workspaces/.test(c.text)),
     ).toBe(true);
-    expect(calls.some((c) => /audit_logs/i.test(c.text))).toBe(true);
+    expect(
+      calls.some((c) => /insert into support\.audit_logs/i.test(c.text)),
+    ).toBe(true);
   });
 
   it("沙箱工作区已存在：复用，不再建一个", async () => {
@@ -240,5 +328,108 @@ describe("POST /api/products/:id/certification/run", () => {
     /* 兜底挑一个的后果是台账记下一条运营从没打算认的版本，而它看起来一切正常。 */
     const { router } = makeRouter({});
     expect(await status(router.run(makeReq(), PRODUCT_ID, {}))).toBe(400);
+  });
+});
+
+describe("POST /api/products/:id/certification/evaluate", () => {
+  const ALL = {
+    login: true,
+    provision: true,
+    delivery: true,
+    consume: true,
+  };
+  /* C2 权益那一段来自 Redis，且**必须带上本次 run 的沙箱工作区**才算数。 */
+  const c2InScope = JSON.stringify({
+    lastSeenAt: "2026-09-23T01:00:00.000Z",
+    via: "s2s",
+    workspaceId: WORKSPACE_ID,
+  });
+
+  it("五段齐：判 certified，并把 certified_at 一并写上", async () => {
+    const { router, calls } = makeRouter({ sig: ALL, c2Raw: c2InScope });
+    const out = await router.evaluate(makeReq(), PRODUCT_ID);
+    expect(out.verdict).toBe("certified");
+    expect(out.certifiedAt).not.toBeNull();
+    expect(out.segments).toEqual({
+      login: true,
+      provision: true,
+      delivery: true,
+      entitlement: true,
+      consume: true,
+    });
+    /* 结论与时刻互为充要（DDL 有 CHECK 钉着），所以必须是**一条** UPDATE。
+       分两条写的话，中间那一瞬是一个 CHECK 不允许的状态。 */
+    const updates = calls.filter((c) =>
+      /UPDATE product\.certification_runs/.test(c.text),
+    );
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.text).toMatch(/certified_at = CASE WHEN/);
+    expect(
+      calls.some((c) => /insert into support\.audit_logs/i.test(c.text)),
+    ).toBe(true);
+  });
+
+  it("收口用的是**本次 run 的沙箱工作区**与认证租户，不是全量流量", async () => {
+    /* 这一条是整个 evaluate 最要紧的断言。不收口的话它就退化成旧 acceptance：
+       读该产品的任意流量，A 客户的使用把 B 的认证喂绿——而那是静默的。 */
+    const { router, calls } = makeRouter({ sig: ALL, c2Raw: c2InScope });
+    await router.evaluate(makeReq(), PRODUCT_ID);
+
+    const byTable = (re: RegExp) =>
+      calls.find((c) => re.test(c.text))?.args ?? [];
+    expect(byTable(/FROM metering\.usage_events/)).toEqual([
+      PRODUCT_ID,
+      WORKSPACE_ID,
+    ]);
+    expect(byTable(/FROM provisioning\.provisionings/)).toEqual([
+      PRODUCT_ID,
+      WORKSPACE_ID,
+    ]);
+    expect(byTable(/FROM provisioning\.webhook_deliveries/)).toEqual([
+      PRODUCT_ID,
+      WORKSPACE_ID,
+    ]);
+    /* 登录段收的是沙箱**租户**：refresh_tokens 没有 workspace_id。 */
+    expect(byTable(/FROM session\.refresh_tokens/)).toEqual([
+      PRODUCT_ID,
+      CERT_TENANT,
+    ]);
+  });
+
+  it("C2 的工作区对不上：权益段不算数，不判 certified", async () => {
+    const { router } = makeRouter({
+      sig: ALL,
+      c2Raw: JSON.stringify({
+        lastSeenAt: "2026-09-23T01:00:00.000Z",
+        via: "s2s",
+        workspaceId: "别处的工作区",
+      }),
+    });
+    const out = await router.evaluate(makeReq(), PRODUCT_ID);
+    expect(out.segments.entitlement).toBe(false);
+    expect(out.verdict).toBe("running");
+  });
+
+  it("缺段：留在 running，并把缺哪几段如实回出去", async () => {
+    /* 不判 failed 是有意的：缺段几乎总是「对方还没调」，而那不由平台决定。
+       判成 failed 会给运营一个没有下一步的结论。 */
+    const { router, calls } = makeRouter({
+      sig: { login: true, provision: true, delivery: true },
+      c2Raw: c2InScope,
+    });
+    const out = await router.evaluate(makeReq(), PRODUCT_ID);
+    expect(out.verdict).toBe("running");
+    expect(out.certifiedAt).toBeNull();
+    expect(out.segments.consume).toBe(false);
+    expect(out.segments.login).toBe(true);
+    /* 没过就不写审计：审计记的是「认证通过了」这件事，不是「有人点了一下判定」。 */
+    expect(
+      calls.some((c) => /insert into support\.audit_logs/i.test(c.text)),
+    ).toBe(false);
+  });
+
+  it("没有进行中的认证：409，不凭空造一条", async () => {
+    const { router } = makeRouter({ runningRun: false });
+    expect(await status(router.evaluate(makeReq(), PRODUCT_ID))).toBe(409);
   });
 });

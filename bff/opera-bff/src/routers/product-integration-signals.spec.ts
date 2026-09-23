@@ -55,8 +55,8 @@ interface Fixture {
   };
   /** 收口：沙箱工作区（不传 = 不收口，与加这个参数之前逐字等价）。 */
   scopeWorkspaceId?: string;
-  /** 收口：沙箱测试用户（登录段专用）。 */
-  scopeUserId?: string;
+  /** 收口：沙箱租户（登录段专用——登录发生在选定工作区之前）。 */
+  scopeTenantId?: string;
   /** 回调投递：`status='delivered'` 的最近一行。 */
   deliveryRow?: {
     event_type: string;
@@ -72,7 +72,7 @@ function makeRouter(fx: Fixture) {
      而不是「端点没报错」。少了这一份，收口参数传没传到 SQL 上没有任何东西看得见。 */
   const paramsByTable = new Map<string, unknown[]>();
   const ws = fx.scopeWorkspaceId ?? null;
-  const uid = fx.scopeUserId ?? null;
+  const tid = fx.scopeTenantId ?? null;
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     sqls.push(sql);
     if (/FROM product\.products/.test(sql)) {
@@ -89,10 +89,10 @@ function makeRouter(fx: Fixture) {
     if (/FROM session\.refresh_tokens/.test(sql)) {
       /* 按**产品 id** 聚合：子查询先拿 product_id 取客户端集合，
          而不是拿单个 client_id——一个产品可能有三个渠道客户端。
-         第二个参数是**用户**不是工作区：refresh_tokens 没有 workspace_id
-         （登录发生在选定工作区之前），所以登录段按沙箱测试用户收口。 */
+         第二个参数是**沙箱租户**不是工作区：refresh_tokens 没有 workspace_id
+         （登录发生在选定工作区之前），所以登录段按「登录的人是这个租户的成员」收口。 */
       paramsByTable.set("refresh_tokens", params ?? []);
-      expect(params).toEqual([PRODUCT_ID, uid]);
+      expect(params).toEqual([PRODUCT_ID, tid]);
       return { rows: fx.loginRow ? [fx.loginRow] : [] };
     }
     if (/FROM provisioning\.provisionings/.test(sql)) {
@@ -436,21 +436,21 @@ describe("parseEntitlementSignal", () => {
  */
 describe("integration-signals · 沙箱收口", () => {
   const WS = "8f1c0a44-0000-4000-8000-0000000000aa";
-  const UID = "8f1c0a44-0000-4000-8000-0000000000bb";
+  const TID = "8f1c0a44-0000-4000-8000-0000000000bb";
 
-  it("四条 SQL 各自收到该收的那个 id：工作区给三条，用户给登录那条", async () => {
+  it("四条 SQL 各自收到该收的那个 id：工作区给三条，沙箱租户给登录那条", async () => {
     const { router, paramsByTable } = makeRouter({
       productCode: "arda",
       scopeWorkspaceId: WS,
-      scopeUserId: UID,
+      scopeTenantId: TID,
     });
-    await router.get(makeReq(), PRODUCT_ID, WS, UID);
+    await router.get(makeReq(), PRODUCT_ID, WS, TID);
 
     expect(paramsByTable.get("usage_events")).toEqual([PRODUCT_ID, WS]);
     expect(paramsByTable.get("provisionings")).toEqual([PRODUCT_ID, WS]);
     expect(paramsByTable.get("webhook_deliveries")).toEqual([PRODUCT_ID, WS]);
-    /* 登录段收的是**用户**：refresh_tokens 没有 workspace_id。 */
-    expect(paramsByTable.get("refresh_tokens")).toEqual([PRODUCT_ID, UID]);
+    /* 登录段收的是**沙箱租户**：refresh_tokens 没有 workspace_id。 */
+    expect(paramsByTable.get("refresh_tokens")).toEqual([PRODUCT_ID, TID]);
     /* 换票段**不收口**且不该被误传：audit_logs 没有 workspace_id，
        而换票也不在认证那五段里（它归上线门）。 */
     expect(paramsByTable.get("audit_logs")).toEqual([
