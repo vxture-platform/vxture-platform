@@ -1,8 +1,8 @@
 /**
- * products-release-stage.spec.ts —— 成熟度只向前走（2026-09-17）。
+ * products-release-stage.spec.ts —— 承诺等级只向前走（2026-09-17）。
  *
  * 此前 `PATCH capabilities/:code/content` 只校 `isValidReleaseStage`（枚举合法），于是
- * `ga → developing` 这种倒退照写。它**没有任何外在症状**：接口回 200，而官网当场把
+ * `stable → preview` 这种倒退照写。它**没有任何外在症状**：接口回 200，而官网当场把
  * 一个已发布产品的订阅入口换成「敬请期待」——要等到客户问「为什么买不了了」才有人发现。
  *
  * 钉三件：
@@ -39,7 +39,7 @@ function catalogReader() {
           product_code: "vxtpl",
           product_type: "general_agent",
           origin: "self",
-          release_stage: "ga",
+          release_stage: "stable",
           marketing: null,
           product_name: "专注训练智能体",
           description: null,
@@ -57,16 +57,16 @@ function catalogReader() {
   } as never;
 }
 
-describe("PATCH capabilities/:code/content · 成熟度状态机", () => {
-  it("ga → developing 倒退：409，且一行都没写", async () => {
+describe("PATCH capabilities/:code/content · 承诺等级状态机", () => {
+  it("stable → preview 倒退：409，且一行都没写", async () => {
     const tx = makeTxClient((sql) =>
-      sql.includes("for update") ? [lockRow("ga")] : [],
+      sql.includes("for update") ? [lockRow("stable")] : [],
     );
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
 
     await expect(
       router.updateProductContent(makeReq(MANAGE), "vxtpl", {
-        releaseStage: "developing",
+        releaseStage: "preview",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
 
@@ -82,7 +82,7 @@ describe("PATCH capabilities/:code/content · 成熟度状态机", () => {
     expect(tx.calls.some((c) => /audit_logs/i.test(c))).toBe(false);
   });
 
-  it("beta → developing 也是倒退：同样 409", async () => {
+  it("beta → preview 也是倒退：同样 409", async () => {
     const tx = makeTxClient((sql) =>
       sql.includes("for update") ? [lockRow("beta")] : [],
     );
@@ -90,7 +90,7 @@ describe("PATCH capabilities/:code/content · 成熟度状态机", () => {
 
     await expect(
       router.updateProductContent(makeReq(MANAGE), "vxtpl", {
-        releaseStage: "developing",
+        releaseStage: "preview",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(tx.calls.some((c) => /UPDATE product\.products/i.test(c))).toBe(
@@ -98,14 +98,14 @@ describe("PATCH capabilities/:code/content · 成熟度状态机", () => {
     );
   });
 
-  it("同态重放（ga → ga）：放行并提交", async () => {
+  it("同态重放（stable → stable）：放行并提交", async () => {
     const tx = makeTxClient((sql) =>
-      sql.includes("for update") ? [lockRow("ga")] : [],
+      sql.includes("for update") ? [lockRow("stable")] : [],
     );
     const router = new ProductsRouter(catalogReader(), tx.pool);
 
     await router.updateProductContent(makeReq(MANAGE), "vxtpl", {
-      releaseStage: "ga",
+      releaseStage: "stable",
     });
 
     expect(tx.outcome().committed).toBe(true);
@@ -114,22 +114,22 @@ describe("PATCH capabilities/:code/content · 成熟度状态机", () => {
     );
   });
 
-  it("developing → ga 跨级向前：放行", async () => {
+  it("preview → stable 跨级向前：放行", async () => {
     const tx = makeTxClient((sql) =>
-      sql.includes("for update") ? [lockRow("developing")] : [],
+      sql.includes("for update") ? [lockRow("preview")] : [],
     );
     const router = new ProductsRouter(catalogReader(), tx.pool);
 
     await router.updateProductContent(makeReq(MANAGE), "vxtpl", {
-      releaseStage: "ga",
+      releaseStage: "stable",
     });
 
     expect(tx.outcome().committed).toBe(true);
   });
 
-  it("不送成熟度（只改可见性）：状态机不介入", async () => {
+  it("不送承诺等级（只改可见性）：状态机不介入", async () => {
     const tx = makeTxClient((sql) =>
-      sql.includes("for update") ? [lockRow("ga")] : [],
+      sql.includes("for update") ? [lockRow("stable")] : [],
     );
     const router = new ProductsRouter(catalogReader(), tx.pool);
 

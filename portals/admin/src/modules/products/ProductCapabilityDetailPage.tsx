@@ -49,6 +49,7 @@ import {
   type DataTableColumn,
   type IconName,
 } from "@vxture/design-system";
+import { isValidReleaseStage } from "@vxture/core-utils";
 import { orUnset } from "@/modules/shared/display";
 import { fetchProductCapability } from "@/api/admin-bff";
 import type {
@@ -103,14 +104,10 @@ function integrationStatusLabel(status: ProductCapabilityIntegrationStatus) {
  */
 function useReleaseStageLabel() {
   const t = useTranslations("enums.releaseStage");
-  return (stage: string) =>
-    stage === "ga"
-      ? t("ga")
-      : stage === "beta"
-        ? t("beta")
-        : stage === "developing"
-          ? t("developing")
-          : stage;
+  /* 词条键 == 受管值，所以按值取；认不得的值原样回显那个码，不编一个「其他」。
+     2026-10-29 改名（ga→stable / developing→preview / 新增 sunset）时，原先那条
+     三元链要逐个分支改，漏一个就静默显示成裸码——按值域遍历就没有这种漏法。 */
+  return (stage: string) => (isValidReleaseStage(stage) ? t(stage) : stage);
 }
 
 function useResetPeriodLabel() {

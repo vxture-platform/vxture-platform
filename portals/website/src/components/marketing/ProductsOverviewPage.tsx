@@ -78,6 +78,7 @@ export default function ProductsOverviewPage({
         beta: t("catalog.badges.beta"),
         active: t("catalog.badges.active"),
         developing: t("catalog.badges.developing"),
+        sunset: t("catalog.badges.sunset"),
       },
       actions: {
         subscribe: t("catalog.actions.subscribe"),

@@ -1303,9 +1303,11 @@ export class SubscriptionRouter {
         where prod.deleted_at is null and prod.status = 'active'
           and prod.is_customer_visible = true
           and prod.standalone_subscribable = true
-          /* 开发中的不进推荐位：它还不能订（下单路径同步卡着），
-             推了只会把人送到一个按不下去的按钮前。 */
-          and prod.release_stage <> 'developing'
+          /* 预览版与停售中的不进推荐位：前者还不能订（下单路径同步卡着），
+             推了只会把人送到一个按不下去的按钮前；后者只接受老客户续订，
+             而推荐位面向的恰恰是尚未订阅这个产品的租户。
+             （2026-10-29 承诺等级改名：developing → preview。） */
+          and prod.release_stage not in ('preview', 'sunset')
           and not exists (
             select 1 from metering.subscriptions ts
               join product.plan_components sub_pc

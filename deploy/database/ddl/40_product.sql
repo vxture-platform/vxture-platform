@@ -49,8 +49,8 @@ CREATE TABLE product.products (
     release_version          varchar(64),                            -- 对外发布号
     build_number             varchar(64),                            -- 内部构建号
     released_at              timestamptz,
-    status                   varchar(32)  NOT NULL DEFAULT 'active',
-    release_stage            varchar(16)  NOT NULL DEFAULT 'developing', -- 成熟度轴:ga=正式版/beta=公测版/developing=开发中。与 status(生命周期)、visibility(可见)正交;新产品默认开发中
+    status                   varchar(32)  NOT NULL DEFAULT 'active',  -- 接入状态:draft=草稿(只在 opera 可见)/developing=开发中(admin 可录营销、官网可预告)/active=已上线/inactive=已停用/deprecated=已退役(终态)
+    release_stage            varchar(16)  NOT NULL DEFAULT 'preview',   -- 承诺等级轴:preview=预览版/beta=公测版/stable=正式版/sunset=停售中。答的是「买了之后平台承诺什么」,不是「代码到第几个里程碑」;与 status(接入状态)、可见域正交;新产品默认预览版
 
     is_customer_visible  boolean      NOT NULL DEFAULT true,   -- 展示可见性（客户端/customer realm）——独立轴，不派生自 status/is_active/is_public/is_enabled
     is_workforce_visible boolean      NOT NULL DEFAULT true,   -- 展示可见性（运营端/workforce realm）
@@ -65,8 +65,8 @@ CREATE TABLE product.products (
     updated_at               timestamptz  NOT NULL DEFAULT now(),
     deleted_at               timestamptz,
     CONSTRAINT uq_products_product_code UNIQUE (product_code),
-    CONSTRAINT chk_products_status CHECK (status IN ('active','inactive','draft','deprecated')),
-    CONSTRAINT chk_products_release_stage CHECK (release_stage IN ('ga','beta','developing')),
+    CONSTRAINT chk_products_status CHECK (status IN ('draft','developing','active','inactive','deprecated')),
+    CONSTRAINT chk_products_release_stage CHECK (release_stage IN ('preview','beta','stable','sunset')),
     CONSTRAINT chk_products_layer CHECK (layer IS NULL OR layer IN ('L1','L2','L3')),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
     CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL)

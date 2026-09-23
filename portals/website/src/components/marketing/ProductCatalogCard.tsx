@@ -75,6 +75,7 @@ export interface ProductCatalogCardLabels {
     beta: string;
     active: string;
     developing: string;
+    sunset: string;
   };
   /** 推荐度奖章的无障碍名（{count} 枚）。 */
   recommended: string;
@@ -108,14 +109,22 @@ export function ProductCatalogCard({
   subscription: ProductSubscriptionState | undefined;
   labels: ProductCatalogCardLabels;
 }) {
-  const developing = product.releaseStage === "developing";
+  /* 2026-10-29 承诺等级改名：developing → preview。本卡片的「不可订」判断仍然只认
+     这一档，与改名前逐字等价——可订性判据换成「存在在售的公开套餐」是后续批次的事。 */
+  const developing = product.releaseStage === "preview";
   const subscribed = !developing && subscription?.subscribed === true;
   const tierLabel =
     subscribed && subscription?.tier
       ? subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)
       : null;
+  /* 按值取徽标。此前是 beta / 其它 二选一，加了 sunset 之后那种写法会把「停售中」
+     显示成「正式版」——错得静默，而停售恰恰是最该让人看见的一档。 */
   const stageBadge =
-    product.releaseStage === "beta" ? labels.badges.beta : labels.badges.stable;
+    product.releaseStage === "beta"
+      ? labels.badges.beta
+      : product.releaseStage === "sunset"
+        ? labels.badges.sunset
+        : labels.badges.stable;
   const productHomeUrl = subscription?.homeUrl ?? null;
   const pricingHref = `/pricing?product=${product.code}`;
   // 推荐度奖章只给「可订、未订阅」的产品——已开通的不用再推，开发中的还不能订。
