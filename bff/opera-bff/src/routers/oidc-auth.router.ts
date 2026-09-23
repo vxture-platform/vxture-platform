@@ -66,9 +66,13 @@ interface AuthReq {
 }
 
 /**
- * Mount-path prefix → provider audience (product_code). The mount points are
- * contract-fixed (10-shell-mount-contract.md §2); a new L1 module = one more
- * entry here + its nginx location block.
+ * Mount-path prefix → provider audience. The mount points are contract-fixed
+ * (10-shell-mount-contract.md §2); a new L1 module = one more entry here + its
+ * nginx location block.
+ *
+ * 这里的 audience 曾经就是 product_code。2026-11-04 起 atlas / runos 不再是目录
+ * 产品（平台基础环境），受众改由 auth-bff 的 PLATFORM_LEVEL_S2S_TARGETS 认定，
+ * 值不变、来源变了——所以往这张表加一项的同时，那个集合也要加。
  */
 const MODULE_AUD_BY_PREFIX: Record<string, string> = {
   "/atlas": "atlas",

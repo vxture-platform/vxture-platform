@@ -107,6 +107,15 @@ const pairs = [
     tsArray(dom, "PRODUCT_LAYERS"),
     ddlCheckIn(p40, "chk_products_layer"),
   ],
+  /* 可选层级（2026-11-04）：值域里还有 L1（软删的 atlas/runos 带着它），但**活着的
+     产品**只能是 L2/L3——owner「L0、L1 层级的产品都是平台的基础环境，不应出现在平台
+     的产品中」。这一对锁的是下拉与库上那条 CHECK 不许各说各的：下拉给了 L1 而库上
+     拦着 = 运营选完撞 500；库上放开而下拉不给 = 规矩只写在一边。 */
+  [
+    "product layer (selectable)",
+    tsArray(dom, "PRODUCT_LAYER_CHOICES"),
+    ddlCheckIn(p40, "chk_products_live_layer_not_l1"),
+  ],
   // 承诺等级（2026-10-29 由「成熟度」改写）：preview/beta/stable/sunset。
   [
     "release stage",

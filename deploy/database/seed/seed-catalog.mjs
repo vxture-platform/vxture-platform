@@ -1989,27 +1989,10 @@ export async function seedCatalog(client) {
        and not exists (select 1 from product.products where product_code = 'umbra')
   `);
 
-  // runos identity correction (platform#205 follow-up + #216): the row was seeded
-  // from the retired "multimodal assistant agent" framing — product_type='agent',
-  // category=agent, an English product_name where every other platform product
-  // carries the Chinese one, and no Chinese name at all. ADR-003 makes runos the
-  // L1 commercial capability plane and the owner fixed its Chinese name as 鲁诺斯
-  // (there is no earlier Chinese name to preserve — 露娜/露娜之语 were Luna-derived
-  // and are purged, not renamed). Same guarded shape as the arda/umbra renames
-  // above and it must run BEFORE the PRODUCTS loop, whose `on conflict do nothing`
-  // would otherwise leave the stale row standing. The product_type='agent' guard
-  // pins the old row, so a re-run after the fix is a no-op.
-  await client.query(`
-    update product.products
-       set product_type = 'general_platform', category_id = 2,
-           product_name = '鲁诺斯', product_nick = 'Runos',
-           description = 'Commercial capability plane: the single gate for a business-scenario agent''s non-model capabilities.',
-           updated_at = now()
-     where product_code = 'runos' and product_type = 'agent'
-  `);
-  console.log(
-    "✓  product.products — runos identity correction (guarded; no-op when done)",
-  );
+  // runos 的身份订正（platform#205 / #216）2026-11-04 随 L1 退出目录一并删除：
+  // 它修的是一行**不该存在的产品行**里的字段。留着不会出错（存量行已软删，那条
+  // update 的 product_type='agent' 守卫早就不命中），但留着等于继续声称目录里有
+  // 一个叫 runos 的产品该长成什么样。
 
   // Which products a seed may create at all — 40-product-registry.md §5. A row
   // belongs here only when (A) platform code references the code literally
@@ -2018,8 +2001,13 @@ export async function seedCatalog(client) {
   // product-level client below may exist only for a product that is in this list.
   // Everything else is registered by an operator in opera → 产品管理 → 产品目录.
   //   umbra  (A: app-scope claim; B: client/plan)       arda  (B: plans/webhook/metrics/client)
-  //   runos  (A: opera /runos module, RUNOS_AUDIENCE)   karda (B: webhook/metrics/client)
-  //   atlas  (A: opera /atlas module, ATLAS_AUDIENCE)   vxtpl (B: client/webhook; product_240 §7)
+  //   karda  (B: webhook/metrics/client)                vxtpl (B: client/webhook; product_240 §7)
+  // atlas / runos 不在此列（owner 2026-09-23）：L0/L1 是平台基础环境，不是面向客户的
+  // 订阅商品——「基础平台的 OIDC 原则上等同 opera、admin、console」。它们的 OIDC 客户端
+  // 在下方以 kind:"platform" 声明，与 ruyin 同型。换票受众不再靠产品行解析（auth-bff
+  // 的 PLATFORM_LEVEL_S2S_TARGETS），opera 的 /atlas /runos 管理页与权限码一概不动——
+  // 退出的是**商品目录**，不是平台能力。存量库由迁移
+  // 2026-11-04-l1-out-of-product-catalog.sql 降级客户端并软删产品行与套餐。
   // ruyin 不在此列(owner 2026-08-31)：它是平台级 first-party 桌面客户端(与 website/
   // console 同类，customer-realm 的 platform 级客户端)，不是目录产品——其 OIDC 客户端
   // 在下方以 kind:"platform" 声明，无需也不得建 product.products 行。存量库由迁移
@@ -2040,15 +2028,6 @@ export async function seedCatalog(client) {
       name: "umbra",
       nick: "umbra",
       desc: "Boundary VPN product (ruyin.ai).",
-    },
-    {
-      code: "runos",
-      type: "general_platform",
-      layer: "L1",
-      cat: 2,
-      name: "鲁诺斯",
-      nick: "Runos",
-      desc: "Commercial capability plane: the single gate for a business-scenario agent's non-model capabilities.",
     },
     {
       code: "arda",
@@ -2083,21 +2062,6 @@ export async function seedCatalog(client) {
       nick: "Vxtpl",
       desc: "Repository template demo instance: a runnable reference product used to verify the three channels and plan tiers end to end.",
     },
-    {
-      // Atlas repo-split prep (see docs/30-design/platform/40-model-platform.md §13):
-      // v1 DRAFT/unlocked/unpublished, same two-phase pattern as karda's A段 registration —
-      // catalog row + OIDC client land now, plan tiers stay empty until Atlas's own repo
-      // and product definition are ready. C2 resolves atlas as "unsubscribed" until published.
-      code: "atlas",
-      type: "general_platform",
-      layer: "L1",
-      // category 2 = 平台（与 runos/arda/karda 同列）；此前误填 1（智能体）。
-      // `on conflict do nothing` 意味着存量库不受影响，只有新库拿到正确分类。
-      cat: 2,
-      name: "模型平台",
-      nick: "Atlas",
-      desc: "Unified model access, routing, quota and metering platform.",
-    },
   ];
   for (const p of PRODUCTS) {
     await client.query(
@@ -2128,10 +2092,8 @@ export async function seedCatalog(client) {
   // 重跑不覆盖 admin 后续改动）。
   const PRODUCT_VERSIONS = {
     arda: "1.4.0",
-    runos: "1.2.0",
     karda: "0.9.0",
     vxtpl: "1.0.0",
-    atlas: "0.1.0",
     umbra: "1.0.0",
   };
   for (const [code, ver] of Object.entries(PRODUCT_VERSIONS)) {
@@ -2344,18 +2306,27 @@ export async function seedCatalog(client) {
       postLogoutUris: [postLogout],
       scopes: ["openid", "profile", "email", "phone"],
     },
+    // runos / atlas — kind:"platform"（owner 2026-09-23）。与 ruyin 同型：登录机制
+    // 一字不变，只是不再挂 product.products 行。它们是平台基础环境（模型平面 /
+    // 能力平面），与 opera、admin、console 同类，不是面向客户的订阅商品。
+    //
+    // 这两个客户端行**必须存在且 active**：auth-bff 的换票受众解析退出产品目录之后，
+    // 改由「PLATFORM_LEVEL_S2S_TARGETS ∩ active 平台级客户端」认定，karda/arda 的 C1
+    // 出站与 opera/admin 自己的管理面调用（aud="atlas"）都落在这条路上。
+    // 密钥发放不受影响：27-provision-client-secrets.sh 按客户端表枚举，不看 kind。
     {
       clientId: "runos",
-      product: "runos",
+      kind: "platform",
       name: "Runos",
       displayName: "Runos",
       realm: "customer",
       redirectUris: appUris(B.runos, betaB.runos),
-      scopes: ["openid", "profile", "email", "runos:subscription"],
+      // runos:subscription 随 APP_SCOPE_CODES 一起退役——不卖的东西不会有订阅声明。
+      scopes: ["openid", "profile", "email", "phone"],
     },
     {
       clientId: "atlas",
-      product: "atlas",
+      kind: "platform",
       name: "Atlas",
       displayName: "Atlas",
       realm: "customer",
@@ -3485,86 +3456,21 @@ export async function seedCatalog(client) {
     );
   }
 
-  // ── atlas catalog — SKELETON ONLY (Atlas repo-split prep, same A段 pattern as
-  // karda above: docs/30-design/platform/40-model-platform.md §13 / product_240 §5) ──
-  // Atlas's own product definition (plan tiers, quota semantics for the four
-  // call types embedding/parse/rerank/generation) is not decided yet — this only
-  // creates the 5 tier plan rows + a DRAFT, UNLOCKED, UNPUBLISHED v1 (empty
-  // features/quota, no price) so the admin backend has something to open once
-  // the Atlas repo lands its own product definition. plans.current_version_id
-  // is intentionally left unset — C2 resolves nothing for atlas until a real
-  // version is published.
-  const atlasId = prodMap["atlas"];
-  if (atlasId) {
-    // [plan_code, plan_name, tier, is_public]
-    const ATLAS_PLANS = [
-      ["atlas-free", "Atlas Free", "free", true],
-      ["atlas-starter", "Atlas Starter", "starter", true],
-      ["atlas-pro", "Atlas Pro", "pro", true],
-      ["atlas-business", "Atlas Business", "business", true],
-      ["atlas-enterprise", "Atlas Enterprise", "enterprise", true],
-    ];
-    for (const [code, name, tier, isPublic] of ATLAS_PLANS) {
-      await client.query(
-        `
-        insert into product.plans
-          (id, plan_code, plan_name, plan_name_key, description, description_key, is_public, status, created_by, created_at, updated_at)
-        values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'active', $7, now(), now())
-        on conflict (plan_code) do nothing
-      `,
-        [
-          code,
-          name,
-          "catalog.product.plan." + code + ".name",
-          name + " tier for Atlas.",
-          "catalog.product.plan." + code + ".desc",
-          isPublic,
-          SYS,
-        ],
-      );
-      const planRow = await client.query(
-        `select id from product.plans where plan_code = $1 limit 1`,
-        [code],
-      );
-      const pId = planRow.rows[0]?.id;
-      if (!pId) continue;
-      // draft v1: unlocked, unpublished, empty component — never overwritten
-      // once inserted (admin owns everything past this point).
-      const v1Ins = await client.query(
-        `
-        insert into product.plan_versions (id, plan_id, version_no, status, is_locked, created_by, created_at)
-        values (gen_random_uuid(), $1, 1, 'draft', false, $2, now())
-        on conflict (plan_id, version_no) do nothing
-        returning id
-      `,
-        [pId, SYS],
-      );
-      if (v1Ins.rows.length === 0) continue;
-      const v1Id = v1Ins.rows[0].id;
-      await client.query(
-        `
-        insert into product.plan_components
-          (id, plan_version_id, product_id, tier, component_role, priority, features, quota, sort_order, created_at)
-        values (gen_random_uuid(), $1, $2, $3, 'primary', 100, ARRAY[]::text[], '{}'::jsonb, 0, now())
-        on conflict (plan_version_id, product_id, tier) do nothing
-      `,
-        [v1Id, atlasId, tier],
-      );
-    }
-    console.log(
-      "✓  product — atlas catalog skeleton (5 plans; v1 DRAFT/unlocked/unpublished, empty features+quota — admin fills in once Atlas repo-split lands a product definition)",
-    );
-  }
+  // atlas catalog skeleton（5 个套餐骨架）2026-11-04 随 L1 退出目录删除。
+  // 它存在的理由是「等 Atlas 仓落地自己的产品定义」——而那个前提已经不成立：
+  // atlas 是平台基础环境，没有要卖的档位。存量库的 5 行由迁移软删。
 
   // ── vxtpl catalog — SKELETON ONLY (first-batch onboarding, owner decision
   // 2026-08-30: vxtpl is the template agent that walks the whole onboarding line;
   // product_100_matrix.md v1.3 §7) ──────────────────────────────────────────
   // One free plan, priced 0 CNY/month, with a DRAFT, UNLOCKED, UNPUBLISHED v1 and
-  // an empty primary component. Left as draft on purpose: bundled atlas/runos
-  // components are attached in admin (80-plan-bundled-components.md) and the
-  // version is published there — that IS the path later agents copy. Never
+  // an empty primary component. Left as draft on purpose: features, quota and any
+  // bundled components are attached in admin (80-plan-bundled-components.md) and
+  // the version is published there — that IS the path later agents copy. Never
   // overwritten once inserted; plans.current_version_id stays unset until admin
   // publishes.
+  // （原文写的是「搭售 atlas/runos 组件」。2026-11-04 起它们不是产品了，搭不进任何
+  //   套餐——基础设施的用量走 L0 平台计量池，不走产品组件。）
   const vxtplId = prodMap["vxtpl"];
   if (vxtplId) {
     await client.query(
@@ -3620,7 +3526,7 @@ export async function seedCatalog(client) {
       }
     }
     console.log(
-      "✓  product — vxtpl catalog skeleton (vxtpl-free; v1 DRAFT/unlocked/unpublished, 0 CNY/month — admin attaches bundled atlas/runos and publishes)",
+      "✓  product — vxtpl catalog skeleton (vxtpl-free; v1 DRAFT/unlocked/unpublished, 0 CNY/month — admin 填 features/quota 后发布)",
     );
   }
 
@@ -3739,7 +3645,7 @@ export async function seedCatalog(client) {
   }
 
   /*
-   * 席位 `seat.max`：六个可订阅产品都登记，每个套餐组件默认 1
+   * 席位 `seat.max`：每个可独立订阅的产品都登记，每个套餐组件默认 1
    * （owner 2026-09-23：「需要补充 seats 指标，必须项，默认为 1」）。
    *
    * 放在最末尾而不是各产品自己的指标块里：席位是**通用概念**，六个产品逐个抄一遍
@@ -3754,7 +3660,7 @@ export async function seedCatalog(client) {
    *
    * 两处都只补**缺的**：运营把某档位设成 10 之后，重跑 seed 不该把它冲回 1。
    */
-  await client.query(
+  const seatMetrics = await client.query(
     `insert into product.product_metrics
        (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period)
      select p.id, 'seat.max', 'max', null, 'seats', 'none'
@@ -3775,8 +3681,11 @@ export async function seedCatalog(client) {
         set quota = quota || '{"seat.max": 1}'::jsonb
       where not (quota ? 'seat.max')`,
   );
+  /* 数字由 rowCount 现报，不写死。上一版写的是「六个可订阅产品」——而这个集合
+     是 `standalone_subscribable` 现算出来的，atlas/runos 一退出目录那句话就错了，
+     且不会有任何东西报错。 */
   console.log(
-    `✓  product — seat.max (六个可订阅产品登记;${seats.rowCount} 个套餐组件补默认值 1)`,
+    `✓  product — seat.max (${seatMetrics.rowCount} 个产品补登记;${seats.rowCount} 个套餐组件补默认值 1)`,
   );
 }
 

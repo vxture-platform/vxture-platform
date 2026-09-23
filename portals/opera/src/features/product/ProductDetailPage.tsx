@@ -76,7 +76,7 @@ import {
 } from "@vxture/core-utils";
 import {
   formatDateTime,
-  PRODUCT_LAYER_DEFS,
+  PRODUCT_LAYER_CHOICES,
   productLayerLabel,
 } from "@vxture-platform/shared";
 import { api, OperaApiError } from "@/lib/api";
@@ -1202,7 +1202,7 @@ export function ProductDetailPage({
                   <FormField
                     id="pd-layer"
                     label="产品分层"
-                    help="L1 基础支撑 / L2 域平台 / L3 智能体；决定它能否被别的套餐绑定"
+                    help="L2 域平台 / L3 智能体；决定它能否被别的套餐绑定"
                   >
                     <NativeSelect
                       id="pd-layer"
@@ -1213,9 +1213,11 @@ export function ProductDetailPage({
                       }
                     >
                       <option value="">未分类</option>
-                      {PRODUCT_LAYER_DEFS.map((d) => (
-                        <option key={d.value} value={d.value}>
-                          {productLayerLabel(d.value, typeLocale)}
+                      {/* CHOICES 不是 DEFS：L1 是平台基础环境，不是商品，库上拦着
+                          活的 L1 产品。DEFS 仍带着 L1 的文案，供历史行显示。 */}
+                      {PRODUCT_LAYER_CHOICES.map((value) => (
+                        <option key={value} value={value}>
+                          {productLayerLabel(value, typeLocale)}
                         </option>
                       ))}
                     </NativeSelect>

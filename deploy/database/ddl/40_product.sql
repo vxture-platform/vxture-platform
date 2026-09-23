@@ -68,6 +68,12 @@ CREATE TABLE product.products (
     CONSTRAINT chk_products_status CHECK (status IN ('draft','developing','active','inactive','deprecated')),
     CONSTRAINT chk_products_release_stage CHECK (release_stage IN ('preview','beta','stable','sunset')),
     CONSTRAINT chk_products_layer CHECK (layer IS NULL OR layer IN ('L1','L2','L3')),
+    -- owner 2026-09-23：「L0、L1 层级的产品都是平台的基础环境，不应出现在平台的产品中」。
+    -- L1 仍留在上面的值域里，因为**已软删的历史行**（atlas / runos）带着这个值，那是
+    -- 事实不是错误；这一条只管活着的行。写侧 opera 的层级下拉也只给 L2/L3
+    -- （PRODUCT_LAYER_CHOICES），两处一致——不然选了 L1 会撞成 500。
+    -- 判据若哪天翻案（某个 L1 真的作为商品出售），删这条约束，别在写侧绕过它。
+    CONSTRAINT chk_products_live_layer_not_l1 CHECK (deleted_at IS NOT NULL OR layer IS NULL OR layer IN ('L2','L3')),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
     CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL)
 );

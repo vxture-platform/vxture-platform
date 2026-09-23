@@ -87,6 +87,32 @@ export const PLATFORM_S2S_AUDIENCE = "vxture";
  */
 const PLATFORM_LEVEL_S2S_CALLERS = new Set(["console"]);
 
+/**
+ * Platform-level *target* allowlist (2026-09-23, L1-out-of-catalog line) —
+ * the mirror image of the caller allowlist above.
+ *
+ * atlas and runos are the platform's own infrastructure (model gateway /
+ * runtime), in the same class as opera/admin/console: not customer-facing
+ * subscription goods. Until today they sat in `product.products` purely so
+ * that `resolveTargetProductCode` could find them — i.e. **a catalog row was
+ * doing an OIDC client's job**, and removing them from the catalog would have
+ * killed karda/arda's C1 outbound *and* opera/admin's own management-plane
+ * calls (`aud = "atlas"`).
+ *
+ * So the question "does this audience exist?" moves to where it belongs: the
+ * client table. Deliberately an explicit set rather than "any active
+ * platform-level client" — website/console/admin/ruyin are downstream
+ * callers, never S2S targets, and minting `aud = "website"` tokens nothing
+ * can ever verify is not a capability worth acquiring by accident. Same
+ * reasoning, and same shape, as PLATFORM_LEVEL_S2S_CALLERS.
+ *
+ * Membership here is necessary, not sufficient: the row must still exist and
+ * be `status = 'active'` platform-level. That split is the point — this set
+ * says *which* clients may be targets, the DB says *whether one counts right
+ * now*. A disabled atlas stops being a valid audience without a code change.
+ */
+const PLATFORM_LEVEL_S2S_TARGETS = new Set(["atlas", "runos"]);
+
 export interface TokenExchangeCaller {
   /** The authenticated client_id (product_210 §2: caller's existing confidential client). */
   clientId: string;
@@ -406,22 +432,49 @@ export class TokenExchangeService {
   }
 
   /**
-   * DB-first, sentinel-fallback (product_100 §1's "L0 不是产品" means no row
-   * exists for PLATFORM_S2S_AUDIENCE today — but checking the table first,
-   * rather than short-circuiting on the literal string, means the DB stays
-   * authoritative if that ever changes, instead of a real product being
-   * silently shadowed by the sentinel).
+   * Three places an audience can be real, checked in this order:
+   *
+   *   1. an active catalog product   — the C1 case: `aud` = 产品码, and the
+   *      product row carries the "does it still count" semantics (a
+   *      suspended product stops being a target, by design).
+   *   2. an active platform-level infrastructure client (atlas / runos) —
+   *      see PLATFORM_LEVEL_S2S_TARGETS. These are not goods and no longer
+   *      have catalog rows (2026-11-04).
+   *   3. the L0 sentinel — product_100 §1's "L0 不是产品" means no row exists
+   *      for PLATFORM_S2S_AUDIENCE today.
+   *
+   * DB-first throughout: the sentinel is checked last, rather than
+   * short-circuiting on the literal string, so a hypothetical future product
+   * literally named "vxture" wins over it instead of being silently shadowed.
+   *
+   * `deleted_at is null` on branch 1 is load-bearing as of 2026-11-04. It was
+   * absent before, and atlas/runos survived their soft-delete only because of
+   * that absence — i.e. the system would have been living on a **missing
+   * filter**, where adding the obviously-correct filter breaks production and
+   * nobody connects the two. Branch 2 makes them reachable for a stated
+   * reason, so the filter can go in.
    */
   private async resolveTargetProductCode(
     audience: string,
   ): Promise<string | null> {
     const res = await this.pool.query<{ product_code: string }>(
       `select product_code from product.products
-        where product_code = $1 and status = 'active'`,
+        where product_code = $1 and status = 'active' and deleted_at is null`,
       [audience],
     );
     if (res.rows[0]) {
       return res.rows[0].product_code;
+    }
+    if (PLATFORM_LEVEL_S2S_TARGETS.has(audience)) {
+      const client = await this.pool.query<{ client_id: string }>(
+        `select client_id from appoidc.oidc_clients
+          where client_id = $1 and status = 'active'
+            and client_kind = 'platform'`,
+        [audience],
+      );
+      if (client.rows[0]) {
+        return client.rows[0].client_id;
+      }
     }
     return audience === PLATFORM_S2S_AUDIENCE ? PLATFORM_S2S_AUDIENCE : null;
   }

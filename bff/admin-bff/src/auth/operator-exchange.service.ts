@@ -4,7 +4,7 @@
  * @layer BFF
  * @description
  *   Exchanges the current operator's RP-session access token for a short-lived
- *   management-plane token (aud = provider product_code, e.g. "atlas") via the
+ *   management-plane token (aud = the provider's audience, e.g. "atlas") via the
  *   platform token endpoint's operator-OBO mode (RFC 8693). The minted token is
  *   what the model-platform proxy forwards to the provider — the BFF never
  *   calls a provider's management API with its own identity (M-1 铁律).

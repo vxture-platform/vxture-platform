@@ -37,6 +37,20 @@ const CALLER_PLATFORM = { clientId: "console", productCode: null };
 // is allowlisted, see the "platform-caller mode" describe block below).
 const CALLER_PLATFORM_UNLISTED = { clientId: "website", productCode: null };
 
+/**
+ * Pick the audit INSERT out of the recorded queries by **what it is**, not by
+ * where it landed in the sequence. The positional form (`calls[3]`) broke the
+ * day resolveTargetProductCode gained a second lookup (2026-11-04) — and it
+ * broke in three places at once while testing nothing about ordering.
+ */
+function auditCall(pool: { mock: { calls: unknown[][] } }): unknown[] {
+  const call = pool.mock.calls.find((c) =>
+    String(c[0]).includes("insert into support.audit_logs"),
+  );
+  if (!call) throw new Error("no audit insert was recorded");
+  return call;
+}
+
 describe("TokenExchangeService.exchange — request validation", () => {
   let m: Mocks;
   beforeEach(() => (m = build()));
@@ -74,6 +88,31 @@ describe("TokenExchangeService.exchange — request validation", () => {
         orgId: undefined,
       }),
     ).rejects.toThrow(BadRequestException);
+    // An audience outside PLATFORM_LEVEL_S2S_TARGETS must not even reach the
+    // client table — the allowlist gates the second lookup, it doesn't merely
+    // filter its result.
+    expect(m.pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  /* atlas/runos left the catalog on 2026-11-04 and are reachable as audiences
+     only through PLATFORM_LEVEL_S2S_TARGETS. Membership there is NECESSARY,
+     not SUFFICIENT: the client row must also exist and be an active
+     platform-level one. Without this test the allowlist would be the whole
+     criterion, and disabling atlas in the client table would silently keep
+     minting tokens for it. */
+  it("rejects a listed platform target whose client row is gone or inactive", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [] }) // not a catalog product
+      .mockResolvedValueOnce({ rows: [] }); // no active platform client either
+    await expect(
+      m.service.exchange(CALLER_ARDA, {
+        audience: "atlas",
+        subjectToken: undefined,
+        workspaceId: "ws-1",
+        orgId: undefined,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.pool.query).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -386,7 +425,10 @@ describe("TokenExchangeService.exchange — audit trail (TD-034)", () => {
 
     const signedJti = (m.keys.sign.mock.calls[0]![1] as { jwtid: string })
       .jwtid;
-    const [sql, params] = m.pool.query.mock.calls[3]!;
+    const [sql, params] = auditCall(m.pool.query) as [
+      string,
+      [string, string, string],
+    ];
     expect(sql).toContain("insert into support.audit_logs");
     expect(sql).toContain("'system'");
     expect(sql).toContain("'oidc.token_exchange.issued'");
@@ -426,7 +468,8 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
 
   it("mints a service-mode token for an allowlisted platform-level caller, act.sub = caller clientId", async () => {
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] }) // target lookup — no D2 query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] }) // target lookup (platform client) — no D2 query
       .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }); // resolveTenantId
 
     const result = await m.service.exchange(CALLER_PLATFORM, {
@@ -455,8 +498,15 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
         jwtid: expect.any(String),
       },
     );
-    // target lookup + tenantId lookup + audit insert — no D2 coverage query (no caller product to check)
-    expect(m.pool.query).toHaveBeenCalledTimes(3);
+    /* The point of this assertion is "no D2 coverage query" (a platform caller
+       has no caller product to check), so say that directly instead of pinning
+       a total — the total moved on 2026-11-04 when target resolution gained the
+       platform-client lookup, and a bare count doesn't tell you which query
+       appeared. */
+    const sqls = m.pool.query.mock.calls.map((c) => String(c[0]));
+    expect(sqls.some((q) => q.includes("as covered"))).toBe(false);
+    // product lookup → platform-client lookup → tenantId → audit insert
+    expect(sqls).toHaveLength(4);
   });
 
   it("rejects a non-allowlisted platform-level caller (unchanged invalid_client behavior)", async () => {
@@ -472,7 +522,9 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
   });
 
   it("rejects an allowlisted caller with no workspace_id declared", async () => {
-    m.pool.query.mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] });
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] });
     await expect(
       m.service.exchange(CALLER_PLATFORM, {
         audience: "atlas",
@@ -498,7 +550,8 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
 
   it("writes the audit row with the caller clientId (not a product code) and mode=service", async () => {
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }) // resolveTenantId
       .mockResolvedValueOnce({ rows: [] }); // audit insert
 
@@ -509,7 +562,7 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
       orgId: undefined,
     });
 
-    const audit = m.pool.query.mock.calls[2]!;
+    const audit = auditCall(m.pool.query) as [string, [string, string, string]];
     expect(String(audit[0])).toContain("insert into support.audit_logs");
     expect(JSON.parse(audit[1][2])).toEqual({
       caller_product: "console",
@@ -539,7 +592,8 @@ describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)"
   it("mints an operator management token for a platform-level workforce client", async () => {
     m.keys.verify.mockReturnValue(operatorClaims());
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] }) // resolveTargetProductCode
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] }) // resolveTargetProductCode → platform branch
       .mockResolvedValueOnce({ rows: [] }); // audit insert
 
     const result = await m.service.exchange(CALLER_ADMIN, {
@@ -578,7 +632,8 @@ describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)"
   it("does not mirror amr/operator_role into the OBO token even when the subject has them", async () => {
     m.keys.verify.mockReturnValue(operatorClaims());
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [] });
 
     await m.service.exchange(CALLER_ADMIN, {
@@ -646,7 +701,8 @@ describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)"
       },
     );
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [] });
 
     await m.service.exchange(CALLER_ADMIN, {
@@ -656,7 +712,7 @@ describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)"
       orgId: undefined,
     });
 
-    const audit = m.pool.query.mock.calls[1]!;
+    const audit = auditCall(m.pool.query) as [string, [string, string, string]];
     expect(String(audit[0])).toContain("insert into support.audit_logs");
     expect(JSON.parse(audit[1][2])).toMatchObject({
       caller_product: "admin",
@@ -691,7 +747,8 @@ describe("TokenExchangeService.exchange — scope 是跨仓契约（atlas TD-036
 
   it("service 模式签出的 S2S 票带 tool:{target}", async () => {
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [{ covered: true }] })
       .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] });
 
@@ -707,7 +764,8 @@ describe("TokenExchangeService.exchange — scope 是跨仓契约（atlas TD-036
 
   it("OBO 模式签出的 S2S 票带 tool:{target}", async () => {
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-9" }] });
     m.keys.verify.mockReturnValue({
       aud: CALLER_ARDA.clientId,
@@ -728,7 +786,8 @@ describe("TokenExchangeService.exchange — scope 是跨仓契约（atlas TD-036
 
   it("平台级调用方（console→atlas）签出的 S2S 票带 tool:{target}", async () => {
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] });
 
     await m.service.exchange(CALLER_PLATFORM, {
@@ -750,7 +809,8 @@ describe("TokenExchangeService.exchange — scope 是跨仓契约（atlas TD-036
       amr: ["pwd", "otp"],
     });
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [] });
 
     await m.service.exchange(
@@ -771,7 +831,8 @@ describe("TokenExchangeService.exchange — scope 是跨仓契约（atlas TD-036
 
   it("scope 由 target 派生，调用方给不进来", async () => {
     m.pool.query
-      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
       .mockResolvedValueOnce({ rows: [{ covered: true }] })
       .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] });
 

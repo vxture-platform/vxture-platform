@@ -46,7 +46,9 @@ export {
   METRIC_KINDS,
   PRODUCT_LAYERS,
   PRODUCT_LAYER_DEFS,
+  PRODUCT_LAYER_CHOICES,
   isValidProductLayer,
+  isSelectableProductLayer,
   productLayerLabel,
 } from "./catalog-domains.constants";
 export type {
