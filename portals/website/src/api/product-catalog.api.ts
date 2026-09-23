@@ -73,7 +73,13 @@ export interface ProductCatalogItem {
   releaseVersion: string | null;
   /** 对外发布时间（ISO 字符串）；未填为 null。 */
   releasedAt: string | null;
-  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。官网据此判徽标与订阅按钮。 */
+  /**
+   * 承诺等级轴（2026-10-29 由「成熟度」改名）：`preview` 预览版 / `beta` 公测版 /
+   * `stable` 正式版 / `sunset` 停售中。官网据此判徽标与订阅按钮。
+   *
+   * 这句注释曾长期写着旧词表 `ga / developing`——值域改过名，注释没跟，于是读它的人
+   * 会去找两个库里不存在的值。2026-09-24 订正。
+   */
   releaseStage: string;
   /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
   marketing: MarketingContent | null;

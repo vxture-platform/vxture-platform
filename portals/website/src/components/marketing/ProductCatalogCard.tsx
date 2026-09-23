@@ -74,7 +74,7 @@ export interface ProductCatalogCardLabels {
     stable: string;
     beta: string;
     active: string;
-    developing: string;
+    preview: string;
     sunset: string;
   };
   /** 推荐度奖章的无障碍名（{count} 枚）。 */
@@ -169,7 +169,7 @@ export function ProductCatalogCard({
         </div>
         {developing ? (
           <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
-            {labels.badges.developing}
+            {labels.badges.preview}
           </span>
         ) : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">

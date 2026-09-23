@@ -20,10 +20,11 @@ import { ProductsRouter } from "./products.router";
 import { MANAGE, makeReq, makeTxClient, noDbPool } from "../testing/pool-mocks";
 
 /** `SELECT ... FOR UPDATE` 读回的改前行。 */
-function lockRow(stage: string) {
+function lockRow(stage: string, status = "active") {
   return {
     id: "p-1",
     release_stage: stage,
+    status,
     is_customer_visible: true,
     marketing: null,
   };
@@ -80,6 +81,29 @@ describe("PATCH capabilities/:code/content · 承诺等级状态机", () => {
       false,
     );
     expect(tx.calls.some((c) => /audit_logs/i.test(c))).toBe(false);
+  });
+
+  it("草稿产品倒退：放行 —— 没承诺过的东西谈不上倒退", async () => {
+    /* 2026-09-24 实测撞上的那一类：hapto / ontos / terra 三个 draft 产品被登记成
+       「正式版」（简介还是空的），要改回预览版时被这条状态机拦下 —— 于是一次**登记
+       订正**变成了做不到的事，而它们对客户根本不可见（官网与 console 的目录都按
+       `status <> 'draft'` 过滤）。
+
+       规则本身没错，错的是**粒度**：它讲的是「撤回一个已经承诺出去的产品」。 */
+    const tx = makeTxClient((sql) =>
+      sql.includes("for update") ? [lockRow("stable", "draft")] : [],
+    );
+    const router = new ProductsRouter(catalogReader(), tx.pool);
+
+    await expect(
+      /* 用 vxtpl 只是因为 catalogReader() 的只读行是它；真实病例是 hapto /
+         ontos / terra 三个 draft 产品。判据只看 status，与产品码无关。 */
+      router.updateProductContent(makeReq(MANAGE), "vxtpl", {
+        releaseStage: "preview",
+      }),
+    ).resolves.toBeDefined();
+
+    expect(tx.outcome().committed).toBe(true);
   });
 
   it("beta → preview 也是倒退：同样 409", async () => {

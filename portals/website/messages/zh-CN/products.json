@@ -111,7 +111,7 @@
       "beta": "公测版",
       "sunset": "停售中",
       "active": "已开通",
-      "developing": "开发中"
+      "preview": "预览版"
     },
     "actions": {
       "subscribe": "订阅",
