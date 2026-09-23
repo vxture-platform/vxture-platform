@@ -71,7 +71,10 @@ export type {
 } from "./constants";
 
 // 套餐版本组件指纹的 SQL：opera 认证时算并落库、admin 发布门重算比对，只此一份。
-export { PLAN_COMPONENT_FINGERPRINT_SQL } from "./constants";
+export {
+  PLAN_COMPONENT_FINGERPRINT_SQL,
+  INTEGRATION_CONTRACT_VERSION,
+} from "./constants";
 
 // Atlas 对象状态 —— 上游契约在消费侧的镜像（product_251 M-B3）。opera 与 admin 读同一批
 // 记录，词表与「deprecated 算不算在服务」的判断只能有一份；见

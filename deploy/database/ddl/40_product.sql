@@ -483,10 +483,15 @@ CREATE TABLE product.certification_runs (
     updated_at           timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT chk_certification_runs_verdict CHECK (verdict IN ('running','certified','failed')),
     -- 值域与 stale 的触发器一一对应；新增一种失效原因要同时改这里与那个触发点。
+    -- 只收**契约变更**。前三个由事件写入（webhook 登记 / rotate-secret /
+    -- PUT redirect-uris），后两个是读时现算、不落库（契约升版比 contract_version、
+    -- 组件变更比指纹）——值留在值域里，是为了「为什么失效」在读侧也能用同一套词说。
+    -- 上游授权被撤**不在其列**：那不是契约变更，认证那句有时间的话仍然成立，断的是
+    -- 运行时，归运行健康。见 migrations/2026-11-02-stale-reason-domain.sql。
     CONSTRAINT chk_certification_runs_stale_reason CHECK (
         stale_reason IS NULL OR stale_reason IN (
             'webhook_changed','secret_rotated','redirect_uri_changed',
-            'upstream_grant_revoked','contract_version_bumped','components_changed')),
+            'contract_version_bumped','components_changed')),
     -- 结论与时刻互为充要：certified 必有时刻，非 certified 必无——否则「认证过没有」
     -- 会有两个互相矛盾的读法，而它是发布门唯一的判据。
     CONSTRAINT chk_certification_runs_certified_at CHECK (

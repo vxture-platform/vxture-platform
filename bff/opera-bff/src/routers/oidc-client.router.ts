@@ -58,6 +58,10 @@ import {
   notFound,
   unauthenticated,
 } from "../errors/api-error";
+import {
+  markCertificationStale,
+  type CertificationStaleReason,
+} from "./certification-stale";
 import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 
@@ -198,6 +202,28 @@ export function normalizeUriList(value: unknown): string[] {
   return out;
 }
 
+/**
+ * 按 OIDC 客户端反查它属于哪个产品，再把该产品的有效认证标成待复认证。
+ *
+ * 客户端与产品是多对一（一个产品可能有 stable / beta / canary 三个客户端），而认证
+ * 是产品级的——改任何一个客户端的登录契约，那条链都不再是当初证过的那条。
+ *
+ * 查不到产品（客户端没挂产品）时什么也不做：那种客户端不在认证的范围内。
+ */
+async function staleByClient(
+  pool: Pool,
+  clientId: string,
+  reason: CertificationStaleReason,
+): Promise<void> {
+  const row = await pool.query<{ product_id: string | null }>(
+    `SELECT product_id FROM appoidc.oidc_clients WHERE client_id = $1`,
+    [clientId],
+  );
+  const productId = row.rows[0]?.product_id;
+  if (!productId) return;
+  await markCertificationStale(pool, productId, reason);
+}
+
 @Controller("api/oidc-clients")
 export class OidcClientRouter {
   constructor(@Inject(OPERA_BFF_RW_POOL) private readonly pool: Pool) {}
@@ -272,6 +298,8 @@ export class OidcClientRouter {
     if (!result.rows[0]) {
       throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
     }
+    /* 客户端密钥换了，对方换票那一段能不能跟上没证过——认证那句有时间的话不再成立。 */
+    await staleByClient(this.pool, clientId, "secret_rotated");
     return { clientId, clientSecret: secret };
   }
 
@@ -358,6 +386,9 @@ export class OidcClientRouter {
     if (!record) {
       throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
     }
+    /* 回调 URI 变了，当初证过的登录段现在指向别处——认证那句「T 时刻这条链跑通过」
+       不再成立。标成待复认证，只挡「再发布新版本」，不把在跑的产品拉下线。 */
+    await staleByClient(this.pool, clientId, "redirect_uri_changed");
     return record;
   }
 
