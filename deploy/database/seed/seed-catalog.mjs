@@ -2133,11 +2133,19 @@ export async function seedCatalog(client) {
   //     only; they are registered through the opera product catalog when their product
   //     definition exists, not pre-created by seed.
   //
-  // Beta URL only registered when {APP}_BETA_BASE_URL env is set.
-  function appUris(prod, betaEnv) {
-    const uris = [`${prod}/auth/callback`];
-    if (betaEnv) uris.push(`${betaEnv}/auth/callback`);
-    return uris;
+  // `appUris()` 已退役（2026-09-23）。它把 beta 的回调地址追加进**stable 客户端**的
+  // 白名单，于是一个客户端带着两个环境——正是接入通则第三个坑：back-channel logout
+  // 只认单值，beta 的登出会打在 prod 上，或者干脆收不到。
+  //
+  // 更直接的后果是登录进不来：atlas / runos 两个仓的 .env.example 都写着
+  // 「BETA OVERRIDES: OIDC_CLIENT_ID=atlas-beta / runos-beta」，而平台从来没建过那两个
+  // 客户端 —— 按它们自己的文档部署一个 beta，token 端点回的是 invalid_client。
+  // 这与 platform#205（硬编码名单漏了 runos）是同一个形状。
+  //
+  // 现在三个用过它的客户端（atlas / runos / vxtpl）都按 arda / karda / ruyin 的写法
+  // 各自登记 stable 与 beta 两个客户端。beta 环境变量没设就只有 stable 一个。
+  function betaClient(base, extra) {
+    return base ? [extra] : [];
   }
 
   // Local fallbacks are the SAME numbers as the port registry (2026-08-10):
@@ -2314,27 +2322,57 @@ export async function seedCatalog(client) {
     // 改由「PLATFORM_LEVEL_S2S_TARGETS ∩ active 平台级客户端」认定，karda/arda 的 C1
     // 出站与 opera/admin 自己的管理面调用（aud="atlas"）都落在这条路上。
     // 密钥发放不受影响：27-provision-client-secrets.sh 按客户端表枚举，不看 kind。
+    // 登出回跳按两个仓自己声明的值登记：
+    //   vxture-runos/.env.example  OIDC_POST_LOGOUT_REDIRECT_URI=https://runos.vxture.com/
+    //   vxture-atlas/.env.example  OIDC_POST_LOGOUT_REDIRECT_URI=https://atlas.vxture.com/
+    // 此前这两个客户端只有账户中心那一条 —— 而没登记的回跳地址会被 IdP 拒掉，
+    // 用户登出后停在账户中心、回不到产品（通则 C1「不登记，用户登出后停在账户中心」）。
+    // 全平台十三个客户端里，只有这两个缺自己的 origin。
     {
       clientId: "runos",
       kind: "platform",
       name: "Runos",
       displayName: "Runos",
       realm: "customer",
-      redirectUris: appUris(B.runos, betaB.runos),
+      redirectUris: [`${B.runos}/auth/callback`],
       // runos:subscription 随 APP_SCOPE_CODES 一起退役——不卖的东西不会有订阅声明。
       scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${B.runos}/`, postLogout],
     },
+    ...betaClient(betaB.runos, {
+      clientId: "runos-beta",
+      kind: "platform",
+      name: "Runos Beta",
+      displayName: "Runos (Beta)",
+      realm: "customer",
+      releaseChannel: "beta",
+      redirectUris: [`${betaB.runos}/auth/callback`],
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${betaB.runos}/`, postLogout],
+    }),
     {
       clientId: "atlas",
       kind: "platform",
       name: "Atlas",
       displayName: "Atlas",
       realm: "customer",
-      redirectUris: appUris(B.atlas, betaB.atlas),
+      redirectUris: [`${B.atlas}/auth/callback`],
       // D12: product commercial scope retired, no {product}:subscription carried in
       // product tokens; aligned to karda's actual 4-scope registration (product_240 §6#20).
       scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${B.atlas}/`, postLogout],
     },
+    ...betaClient(betaB.atlas, {
+      clientId: "atlas-beta",
+      kind: "platform",
+      name: "Atlas Beta",
+      displayName: "Atlas (Beta)",
+      realm: "customer",
+      releaseChannel: "beta",
+      redirectUris: [`${betaB.atlas}/auth/callback`],
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${betaB.atlas}/`, postLogout],
+    }),
     // vxtpl — 模板演示产品（在产，vxtpl.vxture.com）。scope 取 D12 之后的四段式
     // （同 arda/karda/atlas）：token 不携带任何商业字段，权益一律走 C2。不给
     // `vxtpl:subscription`——那是 D12 之前的旧形态，新登记不再复制。
@@ -2344,10 +2382,23 @@ export async function seedCatalog(client) {
       name: "Vxtpl",
       displayName: "Vxtpl",
       realm: "customer",
-      redirectUris: appUris(B.vxtpl, betaB.vxtpl),
+      redirectUris: [`${B.vxtpl}/auth/callback`],
       scopes: ["openid", "profile", "email", "phone"],
       postLogoutUris: [`${B.vxtpl}/`, postLogout],
     },
+    // vxtpl-beta —— 与 atlas / runos 同批从 appUris 拆出来。VXTPL_BETA_BASE_URL
+    // 目前是空的（.env.auth-bff.example），所以这一条现在不产生任何行。
+    ...betaClient(betaB.vxtpl, {
+      clientId: "vxtpl-beta",
+      product: "vxtpl",
+      name: "Vxtpl Beta",
+      displayName: "Vxtpl (Beta)",
+      realm: "customer",
+      releaseChannel: "beta",
+      redirectUris: [`${betaB.vxtpl}/auth/callback`],
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${betaB.vxtpl}/`, postLogout],
+    }),
     {
       clientId: "arda",
       product: "arda",

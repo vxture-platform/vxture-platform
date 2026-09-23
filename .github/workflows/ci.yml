@@ -433,6 +433,17 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:conformance
 
+      # 上游路由对账：平台打给 atlas / runos 的每一条路径，上游有没有注册的路由接得住。
+      # 补的是「调用一个不存在的端点，两侧都不报错」这个盲区——2026-09-23 抓到 opera
+      # 的能力筛选面板自 PR #348 起一直在调 runos 根本没有的 /capability/capability-facets，
+      # 前端 catch 吞掉，面板长期是空的，没人知道。
+      # 与上面那条同一个前提：上游两仓不在 CI 里，**这一步在 CI 上整体跳过**，
+      # 真正的复核在本机带 VX_ATLAS_DIR / VX_RUNOS_DIR 跑。留在这里是为了 CI 日志里
+      # 有一行写着「它没检查」，而不是让人以为检过了。
+      - name: Upstream route reconciliation
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:upstream-routes
+
   # ── 4. Build ───────────────────────────────────────────────────────────────
   build:
     name: build

@@ -2210,6 +2210,21 @@ const STANDARD_WEBHOOK_PATH = "/api/webhooks/vxture";
 const LEGACY_WEBHOOK_PATHS = new Map<string, string>([
   ["vxtpl", "/provisioning/webhook"],
   ["yucer", "/provisioning/webhook"],
+  /* arda / karda 2026-09-23 补入。**这道门原本是一堵墙**：seed 把这两个产品的回调
+     写成 `${base}/provisioning/webhook`（两边的接口文档也是这么写的——
+     `20-specs/210-arda/30-arda_200_interface.md` §接收端点、karda 的登记回信 C），
+     而名单里没有它们。于是运营在 opera 打开 arda 或 karda 的产品页、原样按一次保存，
+     表单把库里那个值原样送回来，当场 400 —— 而报错还告诉他「正确的做法是让产品迁到
+     标准路径」，一个他此刻做不了的事。
+
+     判据：这份名单要列的是**此刻真的登记在旧路径上的那些**，不是「我们希望还剩哪些」。
+     少列一个，门就对那个产品变成墙。上一次同型的教训是发布门漏抄 override
+     （装上门当天没人去问它现在拦住了谁）。
+
+     名单唯一的权威是 seed 与库里的实际值；这两处与名单**没有机械链路**，
+     下一个动 seed 回调地址的人不会被任何东西提醒回来改这里。补这条链路是 follow-up。 */
+  ["arda", "/provisioning/webhook"],
+  ["karda", "/provisioning/webhook"],
 ]);
 
 /**
