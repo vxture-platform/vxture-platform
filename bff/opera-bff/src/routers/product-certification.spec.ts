@@ -48,6 +48,7 @@ function runRow() {
     product_id: PRODUCT_ID,
     contract_version: "C1/C2/C3-2026-09",
     sandbox_workspace_id: WORKSPACE_ID,
+    sandbox_workspace_no: "3000000001",
     plan_version_id: VERSION_ID,
     component_fingerprint: "fp",
     segments: {},
@@ -84,6 +85,10 @@ interface Fixture {
 
 function makeRouter(fx: Fixture) {
   const calls: { text: string; args: unknown[] }[] = [];
+  let lastWrite: {
+    segments: Record<string, boolean>;
+    certified: boolean;
+  } | null = null;
   const query = vi.fn(async (text: string, args?: unknown[]) => {
     calls.push({ text, args: args ?? [] });
     if (/FROM product\.products/.test(text)) {
@@ -112,23 +117,30 @@ function makeRouter(fx: Fixture) {
     if (/FROM product\.plan_components/.test(text)) {
       return { rows: [{ line: "p|primary|pro|{}|{}" }] };
     }
-    if (/FROM product\.certification_runs/.test(text)) {
+    if (/certification_runs r/.test(text)) {
+      /* 写之后的那次回读：把刚写的结论叠上去。 */
+      if (lastWrite)
+        return {
+          rows: [
+            {
+              ...runRow(),
+              segments: lastWrite.segments,
+              verdict: lastWrite.certified ? "certified" : "running",
+              certified_at: lastWrite.certified ? new Date() : null,
+            },
+          ],
+        };
       return { rows: fx.runningRun === false ? [] : [runRow()] };
     }
     if (/UPDATE product\.certification_runs/.test(text)) {
       /* $3 = allPresent。真实的 SQL 用 CASE WHEN 一并写 verdict 与 certified_at
-         （DDL 上那条「互为充要」的 CHECK 不允许它们分两步写）。 */
-      const certified = args?.[2] === true;
-      return {
-        rows: [
-          {
-            ...runRow(),
-            segments: JSON.parse(String(args?.[1] ?? "{}")),
-            verdict: certified ? "certified" : "running",
-            certified_at: certified ? new Date() : null,
-          },
-        ],
+         （DDL 上那条「互为充要」的 CHECK 不允许它们分两步写）。写完路由会再查一次
+         ——RETURNING 取不到左连接来的工作区可视码。 */
+      lastWrite = {
+        segments: JSON.parse(String(args?.[1] ?? "{}")),
+        certified: args?.[2] === true,
       };
+      return { rows: [] };
     }
     /* readIntegrationSignals 的五条查询 */
     if (/FROM session\.refresh_tokens/.test(text)) {
@@ -175,7 +187,7 @@ function makeRouter(fx: Fixture) {
       };
     }
     if (/INSERT INTO product\.certification_runs/.test(text)) {
-      return { rows: [runRow()] };
+      return { rows: [{ id: RUN_ID }] };
     }
     /* 写审计。必须和上面那条**读** support.audit_logs 的 S2S 查询分开——
        用 /audit_logs/i 一把抓的话，「写了审计」这条断言会被那条读查询喂成白过的。 */

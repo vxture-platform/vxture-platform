@@ -95,6 +95,12 @@ interface CertificationRunRecord {
   productId: string;
   contractVersion: string;
   sandboxWorkspaceId: string;
+  /**
+   * 沙箱工作区的**可视码**。裸 UUID 一律不上屏（铁律：任何场景只展示可视码，
+   * 文字 / tooltip / aria / CSV 都算），而运营把沙箱交给对方时需要一个能说出口的号。
+   * 工作区已被清理时为 null——查不到就显示「未知」，**永不退回那个 id**。
+   */
+  sandboxWorkspaceNo: string | null;
   planVersionId: string | null;
   componentFingerprint: string | null;
   segments: Record<string, boolean>;
@@ -109,6 +115,7 @@ interface RunRow {
   product_id: string;
   contract_version: string;
   sandbox_workspace_id: string;
+  sandbox_workspace_no: string | null;
   plan_version_id: string | null;
   component_fingerprint: string | null;
   segments: Record<string, boolean> | null;
@@ -124,6 +131,7 @@ function toRecord(row: RunRow): CertificationRunRecord {
     productId: row.product_id,
     contractVersion: row.contract_version,
     sandboxWorkspaceId: row.sandbox_workspace_id,
+    sandboxWorkspaceNo: row.sandbox_workspace_no,
     planVersionId: row.plan_version_id,
     componentFingerprint: row.component_fingerprint,
     segments: row.segments ?? {},
@@ -134,9 +142,21 @@ function toRecord(row: RunRow): CertificationRunRecord {
   };
 }
 
-const RUN_COLUMNS = `id, product_id, contract_version, sandbox_workspace_id,
-                     plan_version_id, component_fingerprint, segments, verdict,
-                     stale_reason, certified_at, created_at`;
+/**
+ * 台账列 + 沙箱工作区的可视码。
+ *
+ * 可视码用左连接取：工作区被清理之后台账仍然要留得住（「这个产品当时在哪个沙箱里
+ * 认的」是事后追责要答的问题），那时 `workspace_no` 为 null，界面显示「未知」——
+ * **不退回那个 uuid**。
+ */
+const RUN_COLUMNS = `r.id, r.product_id, r.contract_version, r.sandbox_workspace_id,
+                     w.workspace_no::text AS sandbox_workspace_no,
+                     r.plan_version_id, r.component_fingerprint, r.segments, r.verdict,
+                     r.stale_reason, r.certified_at, r.created_at`;
+
+/** 与 RUN_COLUMNS 配套的 FROM：两者必须一起改，分开改就会 42P01。 */
+const RUN_FROM = `product.certification_runs r
+         LEFT JOIN tenancy.workspaces w ON w.id = r.sandbox_workspace_id`;
 
 @Controller("api/products")
 export class ProductCertificationRouter {
@@ -169,15 +189,15 @@ export class ProductCertificationRouter {
 
     const [eff, latest] = await Promise.all([
       this.pool.query<RunRow>(
-        `SELECT ${RUN_COLUMNS} FROM product.certification_runs
-          WHERE product_id = $1 AND verdict = 'certified' AND stale_reason IS NULL
-          ORDER BY certified_at DESC LIMIT 1`,
+        `SELECT ${RUN_COLUMNS} FROM ${RUN_FROM}
+          WHERE r.product_id = $1 AND r.verdict = 'certified' AND r.stale_reason IS NULL
+          ORDER BY r.certified_at DESC LIMIT 1`,
         [productId],
       ),
       this.pool.query<RunRow>(
-        `SELECT ${RUN_COLUMNS} FROM product.certification_runs
-          WHERE product_id = $1
-          ORDER BY created_at DESC LIMIT 1`,
+        `SELECT ${RUN_COLUMNS} FROM ${RUN_FROM}
+          WHERE r.product_id = $1
+          ORDER BY r.created_at DESC LIMIT 1`,
         [productId],
       ),
     ]);
@@ -187,6 +207,59 @@ export class ProductCertificationRouter {
       effective: eff.rows[0] ? toRecord(eff.rows[0]) : null,
       latest: latest.rows[0] ? toRecord(latest.rows[0]) : null,
     };
+  }
+
+  /**
+   * 可认证的候选版本：这个产品当主组件的**草稿**版本。
+   *
+   * 认证要挑一个版本，而版本是商业侧（admin）的东西——运营在 opera 点「发起认证」时
+   * 手上没有那个 id。与其让人在两个门户之间抄 uuid，不如在这里把候选列出来：
+   * 抄 uuid 这种事，抄错了不会报错，只会认到另一版上去。
+   *
+   * 只列草稿：已发布版本没有认证的必要（它已经在卖），而认证的全部意义在于
+   * 「发布之前就把链跑通」。
+   */
+  @Get(":id/certification/candidates")
+  async candidates(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<
+    {
+      planVersionId: string;
+      planCode: string;
+      planName: string;
+      versionNo: number;
+      tier: string | null;
+    }[]
+  > {
+    assertCanRead(req);
+    const productId = requireUuid(id, "id");
+    const rows = await this.pool.query<{
+      plan_version_id: string;
+      plan_code: string;
+      plan_name: string;
+      version_no: number;
+      tier: string | null;
+    }>(
+      `SELECT pv.id AS plan_version_id, pl.plan_code, pl.plan_name,
+              pv.version_no, pc.tier
+         FROM product.plan_components pc
+         JOIN product.plan_versions pv ON pv.id = pc.plan_version_id
+         JOIN product.plans pl ON pl.id = pv.plan_id
+        WHERE pc.product_id = $1
+          AND pc.component_role = 'primary'
+          AND pv.status = 'draft'
+          AND pl.deleted_at IS NULL
+        ORDER BY pl.plan_code ASC, pv.version_no DESC`,
+      [productId],
+    );
+    return rows.rows.map((r) => ({
+      planVersionId: r.plan_version_id,
+      planCode: r.plan_code,
+      planName: r.plan_name,
+      versionNo: r.version_no,
+      tier: r.tier,
+    }));
   }
 
   /**
@@ -293,12 +366,14 @@ export class ProductCertificationRouter {
       });
     }
 
-    const inserted = await this.rwPool.query<RunRow>(
+    /* RETURNING 取不到左连接来的可视码，所以插完再按 id 读一次。多一次往返换
+       「裸 uuid 永不上屏」——这条铁律没有「反正只是内部页面」的例外。 */
+    const insertedId = await this.rwPool.query<{ id: string }>(
       `INSERT INTO product.certification_runs
          (product_id, contract_version, sandbox_workspace_id, plan_version_id,
           component_fingerprint, verdict, run_by)
        VALUES ($1, $2, $3, $4, $5, 'running', $6)
-       RETURNING ${RUN_COLUMNS}`,
+       RETURNING id`,
       [
         productId,
         CONTRACT_VERSION,
@@ -309,6 +384,11 @@ export class ProductCertificationRouter {
       ],
     );
 
+    const inserted = await this.pool.query<RunRow>(
+      `SELECT ${RUN_COLUMNS} FROM ${RUN_FROM} WHERE r.id = $1`,
+      [insertedId.rows[0]!.id],
+    );
+
     const client = await this.rwPool.connect();
     try {
       await insertOperatorAuditLog(client, req, {
@@ -317,7 +397,7 @@ export class ProductCertificationRouter {
         resourceId: prod.product_code,
         before: null,
         after: {
-          runId: inserted.rows[0]!.id,
+          runId: insertedId.rows[0]!.id,
           planVersionId,
           sandboxWorkspaceId: workspaceId,
           contractVersion: CONTRACT_VERSION,
@@ -357,9 +437,9 @@ export class ProductCertificationRouter {
     const productId = requireUuid(id, "id");
 
     const latest = await this.pool.query<RunRow>(
-      `SELECT ${RUN_COLUMNS} FROM product.certification_runs
-        WHERE product_id = $1 AND verdict = 'running'
-        ORDER BY created_at DESC LIMIT 1`,
+      `SELECT ${RUN_COLUMNS} FROM ${RUN_FROM}
+        WHERE r.product_id = $1 AND r.verdict = 'running'
+        ORDER BY r.created_at DESC LIMIT 1`,
       [productId],
     );
     const run = latest.rows[0];
@@ -389,7 +469,7 @@ export class ProductCertificationRouter {
     };
     const allPresent = Object.values(segments).every(Boolean);
 
-    const updated = await this.rwPool.query<RunRow>(
+    await this.rwPool.query(
       `UPDATE product.certification_runs
           SET segments = $2::jsonb,
               verdict = CASE WHEN $3::bool THEN 'certified' ELSE verdict END,
@@ -397,9 +477,12 @@ export class ProductCertificationRouter {
                  分两条语句写的话，中间那一瞬是一个 CHECK 不允许的状态。 */
               certified_at = CASE WHEN $3::bool THEN now() ELSE certified_at END,
               updated_at = now()
-        WHERE id = $1
-        RETURNING ${RUN_COLUMNS}`,
+        WHERE id = $1`,
       [run.id, JSON.stringify(segments), allPresent],
+    );
+    const updated = await this.pool.query<RunRow>(
+      `SELECT ${RUN_COLUMNS} FROM ${RUN_FROM} WHERE r.id = $1`,
+      [run.id],
     );
 
     if (allPresent) {

@@ -91,6 +91,7 @@ import {
   SectionBody,
   ToggleRow,
 } from "./DetailForm";
+import { CertificationDrawer } from "./CertificationDrawer";
 import { LaunchDrawer, type ChecklistEntry } from "./LaunchDrawer";
 import { LoginClientsSection, clientFieldId } from "./LoginClientsSection";
 import { ProductMetricsSection } from "./ProductMetricsSection";
@@ -335,6 +336,9 @@ export function ProductDetailPage({
   const [advisory, setAdvisory] = useState<ProductAction | null>(null);
   const [applying, setApplying] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
+  /* 接入认证与接入检查是两件事：前者答「发布门过不过」，后者答「上线门过不过」。
+     两个抽屉分开，省得一屏里塞两套判据让人分不清哪条卡着哪道门。 */
+  const [certOpen, setCertOpen] = useState(false);
   const [secretsOpen, setSecretsOpen] = useState(false);
   const [busyClientId, setBusyClientId] = useState<string | null>(null);
   const [uploadingIcon, setUploadingIcon] = useState(false);
@@ -419,6 +423,7 @@ export function ProductDetailPage({
     if (load.kind !== "ready" || !product || arrivalHandled.current) return;
     arrivalHandled.current = true;
     if (panel === "checks") setCheckOpen(true);
+    if (panel === "certification") setCertOpen(true);
     if (panel === "secrets") setSecretsOpen(true);
     const hash = window.location.hash;
     if (hash.startsWith("#section-")) {
@@ -847,6 +852,18 @@ export function ProductDetailPage({
                   <Badge variant="outline">{pendingRequired.length}</Badge>
                 ) : null}
               </Button>
+              {/* 认证只在已上线之后有意义：上线门证「对方接通了」，认证证「整条链
+                  跑得通」。产品还没上线时给一个点了会 409 的按钮，不如不给。 */}
+              {product.state === "active" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCertOpen(true)}
+                >
+                  <Icon name="shield-check" size="xs" aria-hidden="true" />
+                  接入认证
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -1517,6 +1534,14 @@ export function ProductDetailPage({
               setCheckOpen(false);
               await reload();
             }}
+          />
+          <CertificationDrawer
+            open={certOpen}
+            onClose={() => setCertOpen(false)}
+            productId={product.id}
+            productCode={product.productCode}
+            canManage={canManage}
+            locale={locale}
           />
           <SecretsDrawer
             open={secretsOpen}
