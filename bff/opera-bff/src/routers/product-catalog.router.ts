@@ -55,6 +55,10 @@ import { UUID_RE } from "./router.shared";
 import type { Request, Response as ExpressResponse } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
+import {
+  isWebhookUrlChanged,
+  markCertificationStale,
+} from "./certification-stale";
 import type { Queryable } from "../db/tx";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
@@ -1423,6 +1427,15 @@ export class ProductCatalogRouter {
        会让人去查地址而不是去查产品码。 */
     assertStandardWebhookPath(webhookUrl, product.product_code);
 
+    /* 改之前先读一眼：**「保存了一次」不等于「改了」**。运营在这张表单上按保存的
+       次数远多于真的换地址，每次都把认证标失效等于让它随手作废——而作废一次就要
+       拉着对方重跑一遍链路。所以判据是值**真的变了**。 */
+    const before = await this.pool.query<{ webhook_url: string | null }>(
+      `SELECT webhook_url FROM product.product_webhooks WHERE product_id = $1`,
+      [id],
+    );
+    const prevWebhookUrl = before.rows[0]?.webhook_url ?? null;
+
     const result = await this.pool.query<{
       home_url: string | null;
       webhook_url: string | null;
@@ -1459,6 +1472,17 @@ export class ProductCatalogRouter {
       ],
     );
     const row = result.rows[0]!;
+
+    /* 回调地址变了、或签名密钥换了，当初证过的那条链就不再是现在这条：末段投递会去
+       别处，或者对方的验签能不能跟上根本没证过。标成待复认证——**不把在跑的产品拉
+       下线**，只挡「再发布新版本」。没有有效认证时是 no-op：这是个正常的运营动作，
+       不能因为「这个产品还没认证过」就失败。 */
+    if (isWebhookUrlChanged(prevWebhookUrl, row.webhook_url)) {
+      await markCertificationStale(this.pool, id, "webhook_changed");
+    } else if (secretTouched) {
+      await markCertificationStale(this.pool, id, "secret_rotated");
+    }
+
     return {
       homeUrl: row.home_url,
       webhookUrl: row.webhook_url,

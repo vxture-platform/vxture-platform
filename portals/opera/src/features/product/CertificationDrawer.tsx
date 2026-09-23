@@ -90,12 +90,16 @@ const SEGMENTS: { key: string; label: string; who: string }[] = [
   { key: "consume", label: "用量上报", who: "对方" },
 ];
 
-/** 失效原因的人话。认不得的值原样显示那个码——没登记正是要看见的事。 */
+/**
+ * 失效原因的人话。认不得的值原样显示那个码——没登记正是要看见的事。
+ *
+ * 这里**没有**「上游授权被撤销」：那不是契约变更，认证那句「T 时刻这条链跑通过」
+ * 仍然成立，断的是运行时——该由运行健康报 degraded，不是把一张历史证书涂掉。
+ */
 const STALE_LABEL: Record<string, string> = {
   webhook_changed: "回调地址变更",
   secret_rotated: "签名密钥轮换",
   redirect_uri_changed: "回调 URI 变更",
-  upstream_grant_revoked: "上游授权被撤销",
   contract_version_bumped: "接入通则契约升版",
   components_changed: "套餐组件改过",
 };

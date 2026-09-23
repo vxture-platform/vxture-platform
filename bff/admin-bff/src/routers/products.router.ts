@@ -19,6 +19,7 @@ import {
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
 import {
+  INTEGRATION_CONTRACT_VERSION,
   PLAN_COMPONENT_FINGERPRINT_SQL,
   TIERS,
   type Tier,
@@ -1009,9 +1010,14 @@ export class ProductsRouter {
             WHERE product_id = $1
               AND verdict = 'certified'
               AND stale_reason IS NULL
+              /* 契约升版即视作待复认证。读时判据而不是一条刷存量的迁移——升版那一刻
+                 全部既有认证自动进入待复认证，不必记得去跑什么。常量与 opera 那一侧
+                 共用（@vxture-platform/shared），各写一份会出现「一边说要重认、
+                 一边放行」。 */
+              AND contract_version = $2
             ORDER BY certified_at DESC
             LIMIT 1`,
-          [primaryAxis.product_id],
+          [primaryAxis.product_id, INTEGRATION_CONTRACT_VERSION],
         );
         const effective = cert.rows[0];
 

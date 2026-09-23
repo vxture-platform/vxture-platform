@@ -59,7 +59,10 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import { PLAN_COMPONENT_FINGERPRINT_SQL } from "@vxture-platform/shared";
+import {
+  INTEGRATION_CONTRACT_VERSION,
+  PLAN_COMPONENT_FINGERPRINT_SQL,
+} from "@vxture-platform/shared";
 import { SubscriptionService } from "@vxture/service-subscription";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { conflict, invalidRequest, notFound } from "../errors/api-error";
@@ -81,11 +84,9 @@ import { requireUuid } from "./router.shared";
  */
 const CERT_TENANT_ID = "00000000-0000-4000-a000-0000000000c2";
 
-/**
- * 《产品接入通则》契约版本。bump 它会让既有认证转 stale——所以它必须是一个**会动**
- * 的值：钉死在这里的好处是改它需要一次提交、一次评审，而不是某天被配置悄悄改掉。
- */
-const CONTRACT_VERSION = "C1/C2/C3-2026-09";
+/* 契约版本在 @vxture-platform/shared：admin 的发布门读同一个常量。各写一份的症状是
+   「一边说要重认、一边放行」，而两边各自看都没错。 */
+const CONTRACT_VERSION = INTEGRATION_CONTRACT_VERSION;
 
 /** 认证订阅的周期：沙箱不计费，取最短周期，过期即自然失效不必人工清。 */
 const CERT_CYCLE_UNIT = "month";
@@ -191,8 +192,11 @@ export class ProductCertificationRouter {
       this.pool.query<RunRow>(
         `SELECT ${RUN_COLUMNS} FROM ${RUN_FROM}
           WHERE r.product_id = $1 AND r.verdict = 'certified' AND r.stale_reason IS NULL
+            /* 契约升版即视作待复认证。写成读时判据而不是一条刷存量的迁移：
+               升版那一刻全部既有认证自动进入待复认证，不必记得去跑什么。 */
+            AND r.contract_version = $2
           ORDER BY r.certified_at DESC LIMIT 1`,
-        [productId],
+        [productId, CONTRACT_VERSION],
       ),
       this.pool.query<RunRow>(
         `SELECT ${RUN_COLUMNS} FROM ${RUN_FROM}

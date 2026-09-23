@@ -42,3 +42,16 @@ export const PLAN_COMPONENT_FINGERPRINT_SQL = `encode(sha256(convert_to(
     coalesce(pc.features::text, '{}') || '|' ||
     coalesce(pc.quota::text, '{}'),
     E'\\n' ORDER BY pc.product_id, pc.component_role), ''), 'UTF8')), 'hex')`;
+
+/**
+ * 《产品接入通则》的契约版本。
+ *
+ * ── 它是一条**读时**判据，不是一个事件 ──
+ * 升版没有「事件」可挂：它是代码里的一个常量，改它是一次提交、一次评审。所以认证
+ * 台账里记下认证当时的 `contract_version`，读的时候比一下——不相等即视作待复认证。
+ *
+ * 这样做的好处是**升版那一刻，全部既有认证自动进入待复认证**，不需要一条把存量行
+ * 刷一遍的迁移；坏处是判据散在读侧，所以它必须只有一份——opera 的认证页与 admin 的
+ * 发布门读同一个常量，各写一份的症状是「一边说要重认、一边放行」。
+ */
+export const INTEGRATION_CONTRACT_VERSION = "C1/C2/C3-2026-09";
