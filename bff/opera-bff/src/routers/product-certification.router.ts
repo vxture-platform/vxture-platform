@@ -59,7 +59,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import { createHash } from "node:crypto";
+import { PLAN_COMPONENT_FINGERPRINT_SQL } from "@vxture-platform/shared";
 import { SubscriptionService } from "@vxture/service-subscription";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { conflict, invalidRequest, notFound } from "../errors/api-error";
@@ -452,23 +452,20 @@ export class ProductCertificationRouter {
   }
 
   /**
-   * 组件指纹：把这一版的组件按稳定次序摊平再哈希。
+   * 本版组件的指纹。算法在 `@vxture-platform/shared` 的
+   * `PLAN_COMPONENT_FINGERPRINT_SQL`——发布门要用同一份重算并比对，各写一份的症状是
+   * 「明明刚认过却说指纹对不上」，一个纯粹的假警报，而且两边各自看都没错。
    *
-   * 取的是**决定权益形状**的那几列（产品、角色、档位、功能、配额），不取 id 与时间戳——
-   * 后者会让「同样的配置重建一次」也算改动，而那不是我们要抓的事。
+   * 本来这里是把行取回来在 JS 里 sha256 的。改成在库里算，两处才可能真的是同一份：
+   * 同样的摊平次序、同样的空值占位、同样的空集语义（`sha256('')`，不是 NULL）。
    */
   private async componentFingerprint(planVersionId: string): Promise<string> {
-    const rows = await this.pool.query<{ line: string }>(
-      `SELECT pc.product_id::text || '|' || pc.component_role || '|' ||
-              coalesce(pc.tier, '') || '|' ||
-              coalesce(pc.features::text, '{}') || '|' ||
-              coalesce(pc.quota::text, '{}') AS line
+    const row = await this.pool.query<{ fingerprint: string }>(
+      `SELECT ${PLAN_COMPONENT_FINGERPRINT_SQL} AS fingerprint
          FROM product.plan_components pc
-        WHERE pc.plan_version_id = $1
-        ORDER BY pc.product_id, pc.component_role`,
+        WHERE pc.plan_version_id = $1`,
       [planVersionId],
     );
-    const body = rows.rows.map((r) => r.line).join("\n");
-    return createHash("sha256").update(body).digest("hex").slice(0, 64);
+    return row.rows[0]?.fingerprint ?? "";
   }
 }

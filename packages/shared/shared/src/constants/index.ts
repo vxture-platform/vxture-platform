@@ -7,6 +7,9 @@
 // Auth constants
 export { AUTH_CONSTANTS } from "./auth.constants";
 
+// 套餐版本组件指纹：认证记一份、发布门重算比对，算法只此一处
+export { PLAN_COMPONENT_FINGERPRINT_SQL } from "./plan-fingerprint.constants";
+
 // Locale constants
 export {
   SUPPORTED_LOCALES,

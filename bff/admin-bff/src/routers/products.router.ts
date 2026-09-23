@@ -18,7 +18,11 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
-import { TIERS, type Tier } from "@vxture-platform/shared";
+import {
+  PLAN_COMPONENT_FINGERPRINT_SQL,
+  TIERS,
+  type Tier,
+} from "@vxture-platform/shared";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { insertOperatorAuditLog } from "../audit/audit-log";
@@ -963,64 +967,94 @@ export class ProductsRouter {
         }
       }
       /*
-       * ── 上架检查的 publish 门（owner 2026-09-22 改指这里）──
+       * ── 发布门：判据换成「这个产品的接入认证有效，且认的就是这一版」──
        *
-       * `launch_checklist_items.gate` 有两个值。`launch` 由 opera 在 draft→active
-       * 时卡着，一直在用。`publish` 当初是为了卡 `release_stage` 的 developing→beta，
-       * 但 **beta 那条线已被 owner 简化为纯展示标签**，于是那道门悬空了——
-       * 三项（verification_policy / pricing_set / acceptance）登记着、opera 的抽屉里
-       * 还让人勾，而**全仓零读者**。运营勾完以为有用，实际什么都没卡。
+       * 旧判据是 `launch_checklist_items` 里 gate='publish' 的必填项。那道门在生产上
+       * 是一堵**墙**，三块砖各有各的问题：
+       *   verification_policy / pricing_set  owner='admin' 而 opera 的检查单两个端点
+       *     写死 `WHERE i.owner='opera'`、admin-bff 对 product_launch_statuses 只有
+       *     一条 SELECT——**全仓没有任何人能勾上它们**。已于 2026-10-29 退役。
+       *   acceptance  它要的端到端链路需要活跃订阅，订阅需要已发布的版本，而发布正
+       *     卡在它自己身上。环在这里闭合。此前那段注释说「有 operator_grant 与邀请
+       *     订阅两条不发布也能开通的路」——**两条都不成立**：operator_grant 当时只是
+       *     CHECK 值域里一个没有写入方的值，邀请订阅解锁的是「谁能买」不是「已不已
+       *     发布」。
        *
-       * 按 owner 给的生命周期，它们本来就该卡在「发布套餐」这一步：
-       *   开发中 → 接入调试 → 上线（gate='launch'）→ 发布套餐（gate='publish'）
+       * 环由**接入认证**断开（2026-10-30~31）：认证订阅指向未发布的草稿版本、不经过
+       * 订单流，平台在沙箱里把整条链跑一遍并落一条 `certification_runs`。所以这里读
+       * 的是那条结论，而不是再去数一遍痕迹——**同一件事只留一处推导**。
        *
-       * 循环自锁在这一版不成立了：`acceptance`（验收）要的端到端订阅链路，现在有
-       * `operator_grant` 与**邀请订阅**两条不发布也能开通的路。
+       * ── 两个条件，都是现算 ──
+       *   ① 有一条有效认证：verdict='certified' 且 stale_reason IS NULL。
+       *      不带时间窗：认证回答「能不能工作」，不回答「有没有人在用」（后者归运行
+       *      健康）。一个安静三个月的正常产品不该因此失效。
+       *   ② 认的就是**这一版**：比对组件指纹。草稿在发布前仍可改，认证过的那一版和
+       *      正在发布的这一版可能已经不是同一个东西了；指纹对不上要求重认。
+       *      用指纹而不是「认证时间晚于最后修改时间」：后者会把「改了又改回来」判成
+       *      失效，而那并没有改变任何权益形状。
        *
-       * `coalesce(s.is_satisfied, false)`——没有行的项算未满足，否则「一次都没检查过
-       * 的产品」会被判成通过（这条口径照抄 opera 那一侧，不另写）。
+       * ── 为什么不再验一次价格 ──
+       * 设计稿里原本还有一条「这一版有没有价格行」。写到这里才发现它**会拦住合法的
+       * 企业版**：没有价格行正是「不可自助购买、请联系销售」的表达方式
+       * （console 的 lookupPlanPrice 查不到就回 NOT_PURCHASABLE）。一条会拦住正常业务
+       * 的门，就是判据写错了——所以不加。
        */
       if (primaryAxis?.product_id) {
-        const pending = await client.query<{
-          item_code: string;
-          item_name: string;
+        const cert = await client.query<{
+          fingerprint: string | null;
+          certified_at: Date;
         }>(
-          `SELECT i.item_code, i.item_name
-             FROM product.launch_checklist_items i
-             LEFT JOIN product.product_launch_statuses s
-               ON s.item_code = i.item_code AND s.product_id = $1
-            WHERE i.is_required
-              AND i.gate = 'publish'
-              AND NOT coalesce(s.is_satisfied, false)
-            ORDER BY i.sort ASC`,
+          `SELECT component_fingerprint AS fingerprint, certified_at
+             FROM product.certification_runs
+            WHERE product_id = $1
+              AND verdict = 'certified'
+              AND stale_reason IS NULL
+            ORDER BY certified_at DESC
+            LIMIT 1`,
           [primaryAxis.product_id],
         );
-        if (pending.rowCount) {
-          const names = pending.rows.map((r) => r.item_name || r.item_code);
+        const effective = cert.rows[0];
+
+        /* 本版组件的指纹，算法与 opera 侧认证时那一份**逐字相同**（产品 / 角色 /
+           算法收在 @vxture-platform/shared 的 PLAN_COMPONENT_FINGERPRINT_SQL。
+           两处各写一份的症状是「明明刚认过却说指纹对不上」——一个纯粹的假警报，
+           而且两边各自看都没错。 */
+        const fpRow = await client.query<{ fingerprint: string }>(
+          `SELECT ${PLAN_COMPONENT_FINGERPRINT_SQL} AS fingerprint
+             FROM product.plan_components pc
+            WHERE pc.plan_version_id = $1`,
+          [versionId],
+        );
+        const currentFp = fpRow.rows[0]?.fingerprint ?? "";
+
+        const blockers: string[] = [];
+        if (!effective) {
+          blockers.push("接入认证未通过");
+        } else if (
+          effective.fingerprint &&
+          effective.fingerprint !== currentFp
+        ) {
+          /* 只在认证记了指纹时比：历史台账（或将来某种不针对具体版本的认证）
+             没有指纹，那时**不拿一个读不到的判据去拦人**——读不到就别装作读到了。 */
+          blockers.push("套餐组件在认证之后改过，需要重新认证");
+        }
+
+        if (blockers.length) {
           const reason = body?.override?.reason?.trim() ?? "";
           if (!reason) {
             throw new ConflictException({
-              code: "PUBLISH_CHECKLIST_PENDING",
-              message: `还有 ${names.length} 项上架检查未满足，不能发布套餐：${names.join("、")}。请在运维台的产品接入页完成，或带理由跳过。`,
-              pendingItems: pending.rows.map((r) => r.item_code),
+              code: "PUBLISH_CERTIFICATION_REQUIRED",
+              message: `不能发布套餐：${blockers.join("；")}。请在运维台的产品接入页跑一次接入认证，或带理由跳过。`,
+              pendingItems: blockers,
             });
           }
           /*
-           * 带理由跳过（owner 2026-09-22）。
-           *
-           * ── 为什么这道门必须有逃生口 ──
-           * 上线门（gate='launch'）一开始就带着 override，而我加 publish 门时**没
-           * 照抄这一半**。上线那个 override 的存在本身就是信号：设计它的人早知道
-           * 自动检查会卡住真实的上线动作。
-           *
-           * 装上门的当天就坐实了：`acceptance` 是**自动**检查（登录 → 开通 → 鉴权
-           * → 消费 → 失效 五段），生产上四个产品全部未满足（卡在「用量上报」那段），
-           * 而且人工勾不掉。于是这道门不是门，是墙——没有任何产品能发布任何套餐。
-           *
-           * **条件不删也不降级**：删了它以后什么也证明不了。保留门，另开一条写明
-           * 理由的路，理由进运营审计（问责台账归 audit_logs，同上线门的口径）。
+           * 逃生口保留，但它现在应该**几乎用不上**了——门变成墙的那三块砖已经拆掉。
+           * 留着的理由和上线门一样：自动判据总有读不到的时候（上游读取失败、沙箱
+           * 被清），那时需要一条留痕的路，而不是让人去把判据改松。
+           * 理由进 support.audit_logs，与上线门同口径。
            */
-          overriddenItems = pending.rows.map((r) => r.item_code);
+          overriddenItems = blockers;
           overrideReason = reason;
         }
       }

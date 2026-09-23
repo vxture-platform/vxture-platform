@@ -2744,8 +2744,15 @@ export async function seedCatalog(client) {
        'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'catalog.product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60),
       -- sort 70 空缺：data_plane 已于 2026-10-09 退役（定义三处矛盾，别补回来）。
       -- 理由见 migrations/2026-10-09-checklist-data-plane-retire.sql 的文件头。
+      -- acceptance 的 is_required 是 **false**（2026-11-01）：它卸下了「门」的角色。
+      -- 它要的端到端链路需要活跃订阅、订阅需要已发布的版本，而发布正卡在它自己身上
+      -- ——环在这里闭合。发布门改读 product.certification_runs（接入认证在沙箱里把
+      -- 整条链跑一遍的结论），同一件事不留两处推导。
+      -- 但这一项**不退役**：它是一条真的在跑的自动检查，opera 的复验页照常测它、
+      -- 照常写回结果（检查单按 owner='opera' 取项，不看 is_required）。它此后属于
+      -- 运行健康——回答「最近还在正常跑吗」，而不是「能不能发布」。
       ('acceptance', '端到端验收', 'catalog.product.checklist.acceptance.name',
-       'Full e2e verified: login → provision → gate → consume → invalidate; launch checklist reviewed.', 'catalog.product.checklist.acceptance.desc', true, 'opera', 'publish', 80)
+       'Full e2e verified: login → provision → gate → consume → invalidate; observational only — the publish gate reads product.certification_runs.', 'catalog.product.checklist.acceptance.desc', false, 'opera', 'publish', 80)
     on conflict (item_code) do nothing
   `);
 

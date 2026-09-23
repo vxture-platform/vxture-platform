@@ -469,6 +469,11 @@ describe("publish — tier occupancy guard", () => {
         return [{ plan_code: "karda-pro-old" }];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
+      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
+         让它走到被测的那一段去。 */
+      if (sql.includes("certification_runs"))
+        return [{ fingerprint: "fp-same", certified_at: new Date() }];
+      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
       return [];
     });
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
@@ -482,16 +487,44 @@ describe("publish — tier occupancy guard", () => {
   });
 
   /*
-   * 上架检查的 publish 门（owner 2026-09-22 改指这里）。
+   * 发布门：判据从「数检查项」换成「读那条认证结论」（2026-11-01）。
    *
-   * 此前 `gate='publish'` 的三项（verification_policy / pricing_set / acceptance）
-   * **全仓零读者**——登记着、opera 抽屉里还让人勾，而什么都没卡。beta 那条线简化成
-   * 纯展示标签后，它本来要卡的 developing→beta 也不存在了。
+   * 旧判据是 `launch_checklist_items` 里 gate='publish' 的必填项，那道门在生产上是
+   * 一堵**墙**：verification_policy / pricing_set 全仓没人能勾（已退役）；acceptance
+   * 要的端到端链路需要活跃订阅、订阅需要已发布的版本，而发布正卡在它自己身上。
    *
-   * 两面都写。反面（有未满足项 → 拒且不发布）是重点：只写正面的话，一个压根不查
-   * checklist 的实现也会绿——那正是改之前的样子。
+   * 环由接入认证断开：认证订阅指向未发布的草稿版本、不经过订单流。所以这里读
+   * `product.certification_runs`，而不是再去数一遍痕迹——同一件事只留一处推导。
+   *
+   * 两面都写。反面（没认证 → 拒且不发布）是重点：只写正面的话，一个压根不查认证的
+   * 实现也会绿——那正是改之前的样子。
    */
-  it("publish 门有未满足项：409 PUBLISH_CHECKLIST_PENDING，且不发布", async () => {
+  /** 有一条有效认证，指纹与本版一致。 */
+  function certifiedResponder(fingerprint: string | null = "fp-same") {
+    return (sql: string) => {
+      if (
+        sql.includes("product.plan_versions pv") &&
+        sql.includes("for update of pv")
+      )
+        return [
+          {
+            plan_id: "plan-a",
+            status: "draft",
+            plan_code: "karda-pro",
+            version_no: 2,
+          },
+        ];
+      if (sql.includes("cv2.status = 'published'")) return [];
+      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
+        return [{ product_id: "p-karda", tier: "pro" }];
+      if (sql.includes("certification_runs"))
+        return [{ fingerprint, certified_at: new Date() }];
+      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
+      return [];
+    };
+  }
+
+  it("没有有效认证：409 PUBLISH_CERTIFICATION_REQUIRED，且不发布", async () => {
     const tx = makeTxClient((sql) => {
       if (
         sql.includes("product.plan_versions pv") &&
@@ -508,12 +541,8 @@ describe("publish — tier occupancy guard", () => {
       if (sql.includes("cv2.status = 'published'")) return [];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
-      if (sql.includes("launch_checklist_items"))
-        return [
-          { item_code: "pricing_set", item_name: "定价已设" },
-          { item_code: "acceptance", item_name: "验收" },
-        ];
-      return [];
+      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
+      return []; // certification_runs 查不到 = 没认过
     });
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
     const err = await router
@@ -522,12 +551,44 @@ describe("publish — tier occupancy guard", () => {
 
     expect(err).toBeInstanceOf(ConflictException);
     expect((err as ConflictException).getResponse()).toMatchObject({
-      code: "PUBLISH_CHECKLIST_PENDING",
+      code: "PUBLISH_CERTIFICATION_REQUIRED",
     });
     expect(tx.outcome().rolledBack).toBe(true);
     expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
       false,
     );
+  });
+
+  it("认证有效且指纹一致：放行", async () => {
+    const tx = makeTxClient(certifiedResponder("fp-same"));
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
+    expect(tx.outcome().committed).toBe(true);
+    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+      true,
+    );
+  });
+
+  it("认证之后组件改过（指纹对不上）：拒——认过的那一版已经不是这一版了", async () => {
+    const tx = makeTxClient(certifiedResponder("fp-old"));
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    const err = await router
+      .publishPlanVersion(makeReq(MANAGE), VERSION_ID)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(String((err as ConflictException).getResponse())).not.toBe("");
+    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+      false,
+    );
+  });
+
+  it("认证没记指纹（历史台账）：不拿一个读不到的判据去拦人", async () => {
+    /* 读不到就别装作读到了——一条读不到判据却回「不通过」的检查，会把一批本来
+       合法的发布拦在门外，而运营完全看不出为什么。 */
+    const tx = makeTxClient(certifiedResponder(null));
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
+    expect(tx.outcome().committed).toBe(true);
   });
 
   /*
@@ -556,9 +617,8 @@ describe("publish — tier occupancy guard", () => {
       if (sql.includes("cv2.status = 'published'")) return [];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
-      if (sql.includes("launch_checklist_items"))
-        return [{ item_code: "acceptance", item_name: "端到端验收" }];
-      return [];
+      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
+      return []; // 没有有效认证
     };
   }
 
@@ -577,7 +637,7 @@ describe("publish — tier occupancy guard", () => {
       c.includes("insert into support.audit_logs"),
     );
     const after = insertParam(tx.calls[at]!, tx.params[at]!, "after");
-    expect(String(after)).toContain("acceptance");
+    expect(String(after)).toContain("接入认证未通过");
     expect(String(after)).toContain("联调环境用量上报未接");
   });
 
@@ -613,6 +673,11 @@ describe("publish — tier occupancy guard", () => {
       if (sql.includes("cv2.status = 'published'")) return [];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
+      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
+         让它走到被测的那一段去。 */
+      if (sql.includes("certification_runs"))
+        return [{ fingerprint: "fp-same", certified_at: new Date() }];
+      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
       return [];
     });
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
@@ -628,7 +693,7 @@ describe("publish — tier occupancy guard", () => {
     ).not.toContain("overrideReason");
   });
 
-  it("publish 门只看 gate='publish' 的项（别把上线门那一组也算进来）", async () => {
+  it("发布门查的是认证结论：通过 + 未 stale + 不带时间窗", async () => {
     const tx = makeTxClient((sql) => {
       if (
         sql.includes("product.plan_versions pv") &&
@@ -645,15 +710,23 @@ describe("publish — tier occupancy guard", () => {
       if (sql.includes("cv2.status = 'published'")) return [];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
+      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
+         让它走到被测的那一段去。 */
+      if (sql.includes("certification_runs"))
+        return [{ fingerprint: "fp-same", certified_at: new Date() }];
+      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
       return [];
     });
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
     await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
 
-    const q = tx.calls.find((c) => c.includes("launch_checklist_items"));
-    expect(q).toContain("i.gate = 'publish'");
-    /* 没有行的项要算未满足，否则「一次都没检查过的产品」会被判成通过。 */
-    expect(q).toContain("coalesce(s.is_satisfied, false)");
+    const q = tx.calls.find((c) => c.includes("certification_runs"));
+    /* 「有效」= 通过且未 stale。少判一个 stale_reason，一条已经失效的认证就会
+       继续放行，而失效恰恰意味着「认过的那件事现在未必还成立」。 */
+    expect(q).toContain("verdict = 'certified'");
+    expect(q).toContain("stale_reason IS NULL");
+    /* 不带时间窗：认证回答「能不能工作」，不回答「有没有人在用」。 */
+    expect(q).not.toContain("interval");
   });
 
   it("publishes when the slot is free: freeze + current pointer + commit", async () => {
@@ -676,6 +749,11 @@ describe("publish — tier occupancy guard", () => {
       if (sql.includes("cv2.status = 'published'")) return [];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
+      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
+         让它走到被测的那一段去。 */
+      if (sql.includes("certification_runs"))
+        return [{ fingerprint: "fp-same", certified_at: new Date() }];
+      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
       return [];
     });
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
