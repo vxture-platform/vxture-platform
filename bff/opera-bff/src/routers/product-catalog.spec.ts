@@ -15,10 +15,12 @@
  *   展示 / 写入归属 → `owner = 'opera'`   回答「这一项归谁勾」
  *   上线门槛        → `gate  = 'launch'`  回答「这一项卡哪一道」
  *
- * `acceptance` 归 opera（仍在抽屉里、仍要人勾）但 `gate = 'publish'`：它要的端到端
- * 链路需要产品先能被订阅，而订阅需要产品已上线——卡在上线门上就是**循环自锁**
- * （owner 2026-09-17 提出）。所以展示不能也按 gate 过滤，否则它会从抽屉里消失、
- * 没人勾得到；而上线门槛不能按 owner 过滤，否则环不会断。
+ 两根轴当初是为 `acceptance` 分开的：它归 opera 但卡 publish，而卡在上线门上就是
+ * 循环自锁。2026-11-03 起它已退出这张表，于是**表里只剩 launch/opera 一类**——
+ * 两根轴因此此刻恒等。
+ *
+ * 轴不删：它们守的是「这张表只答一个问题」。往里加一个别的 gate 或别的 owner 的项，
+ * 这张表就又在同时回答两件事了，而下面那条断言会当场红。
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -29,17 +31,24 @@ const ROUTER_SRC = readFileSync(
   "utf8",
 );
 
-/** seed-catalog.mjs 里 launch_checklist_items 的全部行（sort 升序）与它们的两根轴。 */
+/**
+ * seed-catalog.mjs 里 launch_checklist_items 的全部行（sort 升序）与它们的两根轴。
+ *
+ * 这张表**只剩上线门那一类**了，三次退役各有各的理由：
+ *   10/20  verification_policy / pricing_set  2026-10-29 —— 归 admin，而全仓没有任何
+ *          人能勾上它们（opera 的端点写死 owner='opera'、admin-bff 只有 SELECT）。
+ *          而且这两件本来就是发布时一查就知道的**事实**，不是勾。
+ *   70     data_plane                          2026-10-09 —— 同一项三处定义矛盾。
+ *   80     acceptance                          2026-11-03 —— 检查照跑，退的是它在这张
+ *          表上的席位：检查单答「还差哪几件才能上线」，而它不办也能上线。
+ *          结果改由「运行健康」呈现（三态，没有「未通过」这个说法）。
+ */
 const SEEDED_ITEMS = [
-  { code: "verification_policy", owner: "admin", gate: "publish" }, // 10
-  { code: "pricing_set", owner: "admin", gate: "publish" }, //         20
   { code: "catalog_registered", owner: "opera", gate: "launch" }, //   30
   { code: "c1_identity", owner: "opera", gate: "launch" }, //          40
   { code: "c1_s2s", owner: "opera", gate: "launch" }, //               45
   { code: "c3_metering", owner: "opera", gate: "launch" }, //          50
   { code: "c2_entitlement", owner: "opera", gate: "launch" }, //       60
-  /* sort 70 空缺：`data_plane` 已于 2026-10-09 退役（定义三处矛盾，见退役迁移）。 */
-  { code: "acceptance", owner: "opera", gate: "publish" }, //          80  ← 唯一的自锁项
 ] as const;
 
 describe("检查单的两根轴：展示按 owner，上线门槛按 gate", () => {
@@ -75,34 +84,35 @@ describe("检查单的两根轴：展示按 owner，上线门槛按 gate", () =>
     expect(gateBlock).toMatch(/coalesce\(s\.is_satisfied, false\)/);
   });
 
-  it("acceptance 归 opera 但不卡上线 —— 这正是两个口径必须分开的理由", () => {
-    const acceptance = SEEDED_ITEMS.find((i) => i.code === "acceptance")!;
-    expect(acceptance.owner).toBe("opera"); // 仍在抽屉里，仍要人勾
-    expect(acceptance.gate).toBe("publish"); // 但不卡 draft→active
+  it("这张表只答一个问题：清一色 gate='launch' + owner='opera'", () => {
+    /* 这是「三屏三个问题」在数据层的直接断言（owner 2026-09-23 走查：
+       「几个环节的认证还混淆在一个页面」）。
+         检查单       还差哪几件才能上线
+         认证台账     这条链在沙箱里证过没有  → product.certification_runs
+         运行健康     最近还正常吗            → 派生，不落表
+       往这张表里加一个 gate='publish' 或 owner='admin' 的项，它就又在同时回答两件事。
+       那种回退不会报错，只会让某一屏重新变成一个装着几类东西的袋子——所以钉在这里。 */
+    expect(SEEDED_ITEMS.every((i) => i.gate === "launch")).toBe(true);
+    expect(SEEDED_ITEMS.every((i) => i.owner === "opera")).toBe(true);
   });
 
-  it("上线门槛覆盖的是五项技术检查，acceptance 不在其中", () => {
-    const launchGated = SEEDED_ITEMS.filter((i) => i.gate === "launch").map(
-      (i) => i.code,
-    );
-    expect(launchGated).toEqual([
+  it("上线门槛就是这五项技术检查，退役的三项一个不剩", () => {
+    const codes = SEEDED_ITEMS.map((i) => i.code);
+    expect(codes).toEqual([
       "catalog_registered",
       "c1_identity",
       "c1_s2s",
       "c3_metering",
       "c2_entitlement",
     ]);
-    expect(launchGated).not.toContain("acceptance");
-  });
-
-  it("opera 抽屉里仍有六项（含 acceptance），商业两项不在", () => {
-    const operaOwned = SEEDED_ITEMS.filter((i) => i.owner === "opera").map(
-      (i) => i.code,
-    );
-    expect(operaOwned).toHaveLength(6);
-    expect(operaOwned).toContain("acceptance");
-    expect(operaOwned).not.toContain("verification_policy");
-    expect(operaOwned).not.toContain("pricing_set");
+    for (const retired of [
+      "acceptance",
+      "data_plane",
+      "verification_policy",
+      "pricing_set",
+    ]) {
+      expect(codes).not.toContain(retired);
+    }
   });
 
   it("字典新增项按 DDL 默认值落地：归 opera、卡上线，不改代码即生效", () => {
