@@ -256,10 +256,11 @@ export class ProductsRouter {
       const before = await client.query<{
         id: string;
         release_stage: string;
+        status: string;
         is_customer_visible: boolean;
         marketing: unknown;
       }>(
-        `SELECT id, release_stage, is_customer_visible, marketing
+        `SELECT id, release_stage, status, is_customer_visible, marketing
            FROM product.products
           WHERE product_code = $1 AND deleted_at IS NULL
           FOR UPDATE`,
@@ -279,9 +280,25 @@ export class ProductsRouter {
        * 产品从客户面前收回去，该动的是可见性（`is_customer_visible`）或生命周期
        * （`status`），那两根轴各自有出口；拿成熟度当开关使是在说「它变不成熟了」。
        */
+      /*
+       * ── 草稿不在这条规则里（2026-09-24）──
+       *
+       * 上面那段讲的是**撤回一个已经承诺出去的产品**，而 `draft` 的产品从来没到过
+       * 客户面前：官网与 console 的目录都按 `status <> 'draft'` 过滤。对一个没有发生过
+       * 的承诺，谈不上「倒退」。
+       *
+       * 这不是开倒退口，是**判据的粒度**：规则对**在售产品**是对的，对草稿则把一次
+       * **登记订正**变成了做不到的事。2026-09-24 实测撞上：hapto / ontos / terra 三个
+       * 草稿产品被登记成「正式版」（简介还是空的），要改回预览版时被这条拦下——
+       * 错的登记因此不可纠正，而它们对客户根本不可见。
+       *
+       * 在售产品（`status <> 'draft'`）照旧只能向前。那一侧的出路仍然是原注释写的：
+       * 改可见性或生命周期；拿成熟度当开关使是在说「它变不成熟了」。
+       */
       if (
         body.releaseStage !== undefined &&
         body.releaseStage !== row.release_stage &&
+        row.status !== "draft" &&
         !isForwardReleaseStageMove(row.release_stage, body.releaseStage)
       ) {
         throw new ConflictException(

@@ -77,7 +77,7 @@ export default function AgentMarketplacePage({
         stable: t("agents.badges.stable"),
         beta: t("agents.badges.beta"),
         active: t("agents.badges.active"),
-        developing: t("agents.badges.developing"),
+        preview: t("agents.badges.preview"),
         sunset: t("agents.badges.sunset"),
       },
       actions: {

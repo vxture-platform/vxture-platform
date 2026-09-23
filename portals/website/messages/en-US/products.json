@@ -127,7 +127,7 @@
       "beta": "Beta",
       "sunset": "Sunset",
       "active": "Active",
-      "developing": "In development"
+      "preview": "Preview"
     },
     "actions": {
       "subscribe": "Subscribe",
