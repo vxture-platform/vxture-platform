@@ -48,7 +48,12 @@ import {
 } from "@vxture/core-utils";
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
-import { isValidProductLayer, PRODUCT_LAYERS } from "@vxture-platform/shared";
+import {
+  isValidProductLayer,
+  isSelectableProductLayer,
+  PRODUCT_LAYERS,
+  PRODUCT_LAYER_CHOICES,
+} from "@vxture-platform/shared";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import { createHash } from "node:crypto";
 import { UUID_RE } from "./router.shared";
@@ -2448,6 +2453,17 @@ export function validateWrite(
     throw invalidRequest(
       "VALIDATION_INVALID_VALUE",
       `layer must be one of ${PRODUCT_LAYERS.join()}`,
+      "layer",
+    );
+  }
+  // 值域之外还有一层：L1 是平台基础环境（模型平面 / 能力平面），不是面向客户的
+  // 订阅商品，所以**没有活着的产品可以是 L1**（owner 2026-09-23）。库上有
+  // chk_products_live_layer_not_l1 焊着同一条，这里先接住，免得冒成 500。
+  // 值域仍保留 L1——已软删的 atlas / runos 带着它，那是历史事实。
+  if (body.layer && !isSelectableProductLayer(body.layer.trim())) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      `layer must be one of ${PRODUCT_LAYER_CHOICES.join(", ")}`,
       "layer",
     );
   }

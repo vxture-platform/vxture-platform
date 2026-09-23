@@ -6,7 +6,8 @@
  * @description
  *   Exchanges console-bff's own confidential-client credentials for a
  *   short-lived management-plane token (aud = target product_code, e.g.
- *   "atlas") via the platform token endpoint's new platform-caller mode
+ *   "atlas" — an audience, no longer a catalog product code since 2026-11-04)
+ *   via the platform token endpoint's new platform-caller mode
  *   (`token-exchange.service.ts`'s `PLATFORM_LEVEL_S2S_CALLERS` allowlist).
  *   Unlike admin-bff's `OperatorExchangeService`, this is NOT OBO — there is
  *   no subject_token; console-bff declares the tenant `workspace_id` it has

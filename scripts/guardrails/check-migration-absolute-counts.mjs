@@ -24,8 +24,8 @@
  * 不查这三类，它们都是稳定的、正是想要的写法：
  *   · 断言 **0**（「不该有残留」）或 **1**（「这一个东西在/不在」）——0 和 1 不是
  *     快照，它们由本迁移的动作直接决定，后来者加多少行都不影响。
- *   · 按具体对象过滤的计数（`perm_code IN (...)` / `column_name = '…'` /
- *     `JOIN … VALUES`）——数的是点名的那几个，不是一整类。
+ *   · 按具体对象过滤的计数（`perm_code IN (...)` / `client_id IN (...)` /
+ *     `column_name = '…'` / `JOIN … VALUES`）——数的是点名的那几个，不是一整类。
  *   · 只进 `RAISE NOTICE` 的计数——那是给人看的信息量，不是判据。
  *
  * 初版没有 ≥2 这一条，把 `IF v <> 1`（某列是否存在）和 `IF n_after <> 0`
@@ -48,9 +48,14 @@ const BROAD_COUNT =
 /**
  * 收窄的标志：数的是点名的那几个对象，不是一整类。
  * `column_name` / `table_name` 是 information_schema 那一族的点名方式。
+ *
+ * 2026-11-04 放宽：原本只认 `perm_code IN` 与**裸** `id IN`，于是
+ * `client_id IN ('atlas','runos')`（点名两个客户端、和 2 比）被判成全量计数——
+ * `\bid` 的词边界在 `_id` 前不成立。那是误报，而本文件头注自己写着「误报的守卫比
+ * 没有守卫更糟」。改成通用的 `*_id / *_code / *_key IN (…)`，不再逐列挨个补。
  */
 const NARROWING =
-  /perm_code\s+(IN|=)|\bid\s+IN\b|\bJOIN\b|\bVALUES\b|column_name\s*=|table_name\s*=|grantee\s*=/i;
+  /\b\w*_?(?:code|id|key)\s+IN\s*\(|perm_code\s*=|\bJOIN\b|\bVALUES\b|column_name\s*=|table_name\s*=|grantee\s*=/i;
 
 const problems = [];
 let scanned = 0;

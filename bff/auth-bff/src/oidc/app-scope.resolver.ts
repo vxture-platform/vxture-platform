@@ -30,12 +30,17 @@ const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 // seeded OIDC clients were deleted by the 2026-08-30 migration). Behaviour is
 // unchanged: the query below joins product.products by code, so a code without
 // a row never produced a claim.
+//
+// 2026-11-04 (L1-out-of-catalog): atlas and runos left. They are platform
+// infrastructure, not subscription goods — nobody ever buys "a subscription to
+// atlas", so a subscription claim for them could never be true. Verified in
+// both upstream repos that neither RP reads an app_scope claim, so this is a
+// removal with no counterpart change. umbra is now the only member, exactly as
+// the D12 direction above intends: "they only leave".
 export const APP_SCOPE_CODES = [
   // umbra = the cross-domain RP at ruyin.ai (ex-ruyin, product_300 §2); the new
   // client-side `ruyin` product stays out of the entitlement engine.
   "umbra",
-  "runos",
-  "atlas",
 ] as const;
 
 export type AppScopeCode = (typeof APP_SCOPE_CODES)[number];

@@ -216,9 +216,32 @@ export const PRODUCT_LAYER_DEFS: readonly {
   { value: `L3`, labelZh: `L3 · 智能体`, labelEn: `L3 · Agent` },
 ] as const;
 
-/** Write-side validation, mirroring isValidProductType. */
+/**
+ * 一个**新产品**可以落在哪几层 —— 与 `PRODUCT_LAYERS`（值域）刻意分开。
+ *
+ * owner 2026-09-23：「L0、L1 层级的产品都是平台的基础环境，不应出现在平台的产品中」。
+ * L1 仍留在值域里，因为软删的历史行（atlas / runos）带着这个值——那是事实，不是
+ * 待修的错误。所以这里回答的是另一个问题：**下拉里该给哪几项**。
+ *
+ * 两处必须一致，库上有 `chk_products_live_layer_not_l1` 焊着同一条规则
+ * （lint:catalog-domains 锁这一对）。给了 L1 而库上拦着，运营选完会撞成 500；
+ * 库上放开而这里不给，就是一条只写在一边的规矩。
+ */
+export const PRODUCT_LAYER_CHOICES = ["L2", "L3"] as const;
+
+/**
+ * Write-side validation, mirroring isValidProductType.
+ *
+ * 只验**值域**，不验可选性：一个已存在的 L1 行读回来仍是合法值。写侧「不许新建
+ * L1」由 `isSelectableProductLayer` 与库上的 CHECK 两道管，理由见上。
+ */
 export function isValidProductLayer(value: string): value is ProductLayerValue {
   return (PRODUCT_LAYERS as readonly string[]).includes(value);
+}
+
+/** 这一层还能不能被新产品选中（下拉与写侧共用）。 */
+export function isSelectableProductLayer(value: string): boolean {
+  return (PRODUCT_LAYER_CHOICES as readonly string[]).includes(value);
 }
 
 /** Display label; an unregistered value falls back to itself, never silently blank. */
