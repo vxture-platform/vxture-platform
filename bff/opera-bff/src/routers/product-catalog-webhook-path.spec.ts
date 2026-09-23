@@ -187,8 +187,14 @@ describe("PUT :id/webhook · 回调路径必须是通则规定的那一个", () 
   });
 
   describe("存量登记", () => {
-    it("vxtpl / yucer 可以保留自己那一个旧路径", async () => {
-      for (const code of ["vxtpl", "yucer"]) {
+    /* 这里写死一份名单，**是对名单的复制，不是对性质的断言**——名单少一个，
+       这个用例照样绿。2026-09-23 就是这么漏的：seed 把 arda / karda 的回调也写成
+       `/provisioning/webhook`，而豁免名单里没有它们，于是那两个产品的产品页
+       原样按一次保存就 400，而全套测试全绿。
+       真正管用的判据是「seed 登记在旧路径上的产品，都在豁免名单里」——它要同时读
+       seed 与这份名单，不在本文件的视野内。补它是 follow-up。 */
+    it("vxtpl / yucer / arda / karda 可以保留自己那一个旧路径", async () => {
+      for (const code of ["vxtpl", "yucer", "arda", "karda"]) {
         await expect(
           put(code, `https://${code}.vxture.com/provisioning/webhook`),
         ).resolves.toBeTruthy();
