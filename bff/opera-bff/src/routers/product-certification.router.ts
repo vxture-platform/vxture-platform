@@ -1,0 +1,372 @@
+/**
+ * product-certification.router.ts —— 接入认证：平台自己把整条链在沙箱里跑一遍。
+ *
+ * @package @vxture/bff-opera
+ *
+ * ── 它解决的是一个环，不是「检查太严」 ──
+ *
+ * 发布套餐要 `acceptance`（端到端验收）满足；验收要五段台账落在同一工作区；其中
+ * 开通与回调**只由活跃订阅触发**；而订阅唯一的入口是客户下单，下单查价要求
+ * `plan.current_version_id = pv.id`——那个指针**只有发布会设**。环在这里闭合。
+ *
+ * 代码里曾注释说「有 `operator_grant` 与邀请订阅两条不发布也能开通的路」，两条都
+ * 不成立：`operator_grant` 只是 `50_metering.sql` 的 CHECK 值域里一个值加 seed 演示
+ * 数据，**全仓零写入路径**；邀请订阅解锁的是 `plans.is_public`，改变「谁能买」，
+ * 不改变「已不已发布」。
+ *
+ * 断点只需要一条**新的入边**：一条指向**未发布草稿版本**的订阅，不经过订单流。
+ * 本文件就是那条边，`operator_grant` 在这里第一次真的有了写入方。
+ *
+ * ── 为什么不另造一个「认证套餐」 ──
+ *
+ * 认证订阅指向**待发布的那个草稿版本本身**。这样认证的对象与发布的对象字节相同，
+ * publish 当场 `is_locked=true` 冻结，中间没有可漂移的窗口；而且它顺带跑一遍
+ * `materializeQuotaPools`——**套餐组件配错会在认证时炸，而不是上架后炸**。
+ * 另造一个认证套餐则是在认证一个永远不会卖的东西。
+ *
+ * 草稿在发布前仍可改，所以每次认证记一份**组件指纹**；发布门比对指纹。用指纹而不是
+ * 时间戳，因为「改了又改回来」不该判成失效。
+ *
+ * ── 半驱动半观测 ──
+ *
+ * 五段里平台能自己造的就造，只有对方才能发起的就观测等待：
+ *   登录      人      沙箱测试用户走一次真实授权码流（判据最硬：它蕴含对方 RP 实现完整）
+ *   开通      平台    认证订阅落地即由 SubscriptionService 发 tenant.provisioned
+ *   回调投递  平台    同上，判据是投递状态 delivered
+ *   权益拉取  对方    平台只能等
+ *   用量上报  对方    同上
+ *
+ * 观测那一半**按沙箱收口**（`integration-signals` 的 workspaceId / userId 参数）。
+ * 不收口的话，A 客户的真实使用会把 B 产品的认证喂绿——那正是旧 `acceptance` 判据的
+ * 毛病：它读的是该产品的**任意**流量。
+ *
+ * ── 走的是和客户完全相同的代码路径 ──
+ *
+ * 这里调的是 `SubscriptionService.createSubscription`，与客户下单落地用的是同一个
+ * 方法：同样物化配额池、同样触发开通派发与权益失效。**若认证走一条特殊路径，它就
+ * 证明不了生产路径能跑通**——那是这整套机制唯一的价值所在。
+ * 差别只有两处，且都只在入参里：`activationMethod='operator_grant'`（无订单无钱）
+ * 与「工作区属于认证租户」。
+ */
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Req,
+} from "@nestjs/common";
+import type { Request } from "express";
+import type { Pool } from "pg";
+import { createHash } from "node:crypto";
+import { SubscriptionService } from "@vxture/service-subscription";
+import { insertOperatorAuditLog } from "../audit/audit-log";
+import { conflict, invalidRequest, notFound } from "../errors/api-error";
+import { OPERA_BFF_RO_POOL, OPERA_BFF_RW_POOL } from "../tokens";
+import type { RequestContext } from "../types/request-context";
+import { assertCanManage, assertCanRead } from "./product-authz";
+import { requireUuid } from "./router.shared";
+
+/**
+ * 认证租户（平台固定装置，见 migrations/2026-10-31-certification-sandbox.sql）。
+ *
+ * 写成常量而不是「查 purpose='certification' 的第一行」：那样在有两个认证租户时会
+ * 静默挑一个，而迁移里那条断言正是为了保证**有且只有一个**。常量与断言互为对证。
+ */
+const CERT_TENANT_ID = "00000000-0000-4000-a000-0000000000c2";
+
+/**
+ * 《产品接入通则》契约版本。bump 它会让既有认证转 stale——所以它必须是一个**会动**
+ * 的值：钉死在这里的好处是改它需要一次提交、一次评审，而不是某天被配置悄悄改掉。
+ */
+const CONTRACT_VERSION = "C1/C2/C3-2026-09";
+
+/** 认证订阅的周期：沙箱不计费，取最短周期，过期即自然失效不必人工清。 */
+const CERT_CYCLE_UNIT = "month";
+
+interface CertificationRunRecord {
+  id: string;
+  productId: string;
+  contractVersion: string;
+  sandboxWorkspaceId: string;
+  planVersionId: string | null;
+  componentFingerprint: string | null;
+  segments: Record<string, boolean>;
+  verdict: string;
+  staleReason: string | null;
+  certifiedAt: string | null;
+  createdAt: string;
+}
+
+interface RunRow {
+  id: string;
+  product_id: string;
+  contract_version: string;
+  sandbox_workspace_id: string;
+  plan_version_id: string | null;
+  component_fingerprint: string | null;
+  segments: Record<string, boolean> | null;
+  verdict: string;
+  stale_reason: string | null;
+  certified_at: Date | null;
+  created_at: Date;
+}
+
+function toRecord(row: RunRow): CertificationRunRecord {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    contractVersion: row.contract_version,
+    sandboxWorkspaceId: row.sandbox_workspace_id,
+    planVersionId: row.plan_version_id,
+    componentFingerprint: row.component_fingerprint,
+    segments: row.segments ?? {},
+    verdict: row.verdict,
+    staleReason: row.stale_reason,
+    certifiedAt: row.certified_at ? row.certified_at.toISOString() : null,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+const RUN_COLUMNS = `id, product_id, contract_version, sandbox_workspace_id,
+                     plan_version_id, component_fingerprint, segments, verdict,
+                     stale_reason, certified_at, created_at`;
+
+@Controller("api/products")
+export class ProductCertificationRouter {
+  constructor(
+    @Inject(OPERA_BFF_RO_POOL) private readonly pool: Pool,
+    @Inject(OPERA_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Inject(SubscriptionService)
+    private readonly subscriptions: SubscriptionService,
+  ) {}
+
+  /**
+   * 当前那一条有效认证；没有就是 null。
+   *
+   * 「有效」= `verdict='certified'` 且 `stale_reason IS NULL`。**不带时间窗**：
+   * 认证回答「能不能工作」，不回答「有没有人在用」——后者归运行健康。一个安静了
+   * 三个月的正常产品不该因此失效。
+   */
+  @Get(":id/certification")
+  async current(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<{
+    effective: CertificationRunRecord | null;
+    latest: CertificationRunRecord | null;
+  }> {
+    assertCanRead(req);
+    const productId = requireUuid(id, "id");
+
+    const [eff, latest] = await Promise.all([
+      this.pool.query<RunRow>(
+        `SELECT ${RUN_COLUMNS} FROM product.certification_runs
+          WHERE product_id = $1 AND verdict = 'certified' AND stale_reason IS NULL
+          ORDER BY certified_at DESC LIMIT 1`,
+        [productId],
+      ),
+      this.pool.query<RunRow>(
+        `SELECT ${RUN_COLUMNS} FROM product.certification_runs
+          WHERE product_id = $1
+          ORDER BY created_at DESC LIMIT 1`,
+        [productId],
+      ),
+    ]);
+    /* 两个都给：有效的那条答「能不能发布」，最近的那条答「上次跑到哪儿了」。
+       只给前者的话，一次失败的认证在界面上和「从没认过」长得一模一样。 */
+    return {
+      effective: eff.rows[0] ? toRecord(eff.rows[0]) : null,
+      latest: latest.rows[0] ? toRecord(latest.rows[0]) : null,
+    };
+  }
+
+  /**
+   * 发起一次认证：供给沙箱工作区 → 建认证订阅 → 开一条 running 的台账。
+   *
+   * 订阅创建走 `SubscriptionService`，与客户下单落地同一个方法——这是整套机制的
+   * 立足点，不要为了省事在这里写裸 INSERT。
+   */
+  @Post(":id/certification/run")
+  async run(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: { planVersionId?: string },
+  ): Promise<CertificationRunRecord> {
+    assertCanManage(req);
+    const productId = requireUuid(id, "id");
+    const planVersionId = requireUuid(body?.planVersionId, "planVersionId");
+
+    const product = await this.pool.query<{
+      product_code: string;
+      status: string;
+    }>(
+      `SELECT product_code, status FROM product.products
+        WHERE id = $1 AND deleted_at IS NULL`,
+      [productId],
+    );
+    const prod = product.rows[0];
+    if (!prod) throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+    /* 认证发生在上线之后：上线门证的是「对方接通了」，认证证的是「整条链跑得通」。
+       顺序颠倒的话，认证会在对方还没实现任何接口时去等五段痕迹，白等。 */
+    if (prod.status !== "active") {
+      throw conflict(
+        "CERTIFICATION_PRODUCT_NOT_ACTIVE",
+        `产品当前是「${prod.status}」，认证要在上线之后跑——先过上线门。`,
+      );
+    }
+
+    /* 待认证的必须是**草稿**版本：已发布版本没有认证的必要（它已经在卖），而认证
+       的全部意义在于「发布之前就把链跑通」。 */
+    const version = await this.pool.query<{
+      status: string;
+      owns: boolean;
+    }>(
+      `SELECT pv.status,
+              EXISTS (SELECT 1 FROM product.plan_components pc
+                       WHERE pc.plan_version_id = pv.id
+                         AND pc.component_role = 'primary'
+                         AND pc.product_id = $2) AS owns
+         FROM product.plan_versions pv
+        WHERE pv.id = $1`,
+      [planVersionId, productId],
+    );
+    const ver = version.rows[0];
+    if (!ver)
+      throw notFound(
+        "CATALOG_PLAN_VERSION_NOT_FOUND",
+        "Plan version not found",
+      );
+    if (!ver.owns) {
+      /* 归属校验：`productId` 与 `planVersionId` 是各自独立送来的两个字段。不校验的
+         后果不只是认错对象——台账会记下一条「A 产品在 B 套餐上认过」的假事实。 */
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "这个套餐版本的主组件不是本产品",
+        "planVersionId",
+      );
+    }
+    if (ver.status !== "draft") {
+      throw conflict(
+        "CERTIFICATION_VERSION_NOT_DRAFT",
+        `版本当前是「${ver.status}」，认证针对的是待发布的草稿版本。`,
+      );
+    }
+
+    const workspaceId = await this.ensureSandboxWorkspace(prod.product_code);
+    const fingerprint = await this.componentFingerprint(planVersionId);
+
+    /*
+     * 认证订阅：`uidx_subscriptions_live_per_product` 是 (workspace, product) 唯一，
+     * 所以同一个沙箱工作区里同一个产品至多一条在活——重复发起时复用，不撞唯一索引。
+     */
+    const existing = await this.pool.query<{ id: string }>(
+      `SELECT id FROM metering.subscriptions
+        WHERE workspace_id = $1 AND product_id = $2
+          AND status IN ('active','trialing','expiring','overdue')
+          AND deleted_at IS NULL
+        LIMIT 1`,
+      [workspaceId, productId],
+    );
+    if (!existing.rows[0]) {
+      await this.subscriptions.createSubscription({
+        tenantId: CERT_TENANT_ID,
+        workspaceId,
+        planVersionId,
+        cycleType: CERT_CYCLE_UNIT,
+        startAt: new Date(),
+        autoRenew: false,
+        payAmount: 0,
+        createdBy: req.operator!.id,
+        /* 三个入参就是认证订阅与客户订阅的**全部**差别。 */
+        subscriptionKind: "free",
+        activationMethod: "operator_grant",
+        createdByType: "operator",
+      });
+    }
+
+    const inserted = await this.rwPool.query<RunRow>(
+      `INSERT INTO product.certification_runs
+         (product_id, contract_version, sandbox_workspace_id, plan_version_id,
+          component_fingerprint, verdict, run_by)
+       VALUES ($1, $2, $3, $4, $5, 'running', $6)
+       RETURNING ${RUN_COLUMNS}`,
+      [
+        productId,
+        CONTRACT_VERSION,
+        workspaceId,
+        planVersionId,
+        fingerprint,
+        req.operator?.id ?? null,
+      ],
+    );
+
+    const client = await this.rwPool.connect();
+    try {
+      await insertOperatorAuditLog(client, req, {
+        action: "product.certification.run",
+        resourceType: "product",
+        resourceId: prod.product_code,
+        before: null,
+        after: {
+          runId: inserted.rows[0]!.id,
+          planVersionId,
+          sandboxWorkspaceId: workspaceId,
+          contractVersion: CONTRACT_VERSION,
+        },
+      });
+    } finally {
+      client.release();
+    }
+
+    return toRecord(inserted.rows[0]!);
+  }
+
+  /**
+   * 沙箱工作区：一个认证租户，**每产品一个工作区**。
+   *
+   * 每产品一个而不是共用一个：`uidx_subscriptions_live_per_product` 是
+   * (workspace, product) 唯一，共用一个工作区时多个产品的认证订阅并不冲突——但
+   * 收口就失效了，五段信号会混在同一个 workspace_id 下分不清是谁的。
+   */
+  private async ensureSandboxWorkspace(productCode: string): Promise<string> {
+    const name = `cert-${productCode}`;
+    const found = await this.pool.query<{ id: string }>(
+      `SELECT id FROM tenancy.workspaces
+        WHERE tenant_id = $1 AND name = $2 AND deleted_at IS NULL
+        LIMIT 1`,
+      [CERT_TENANT_ID, name],
+    );
+    if (found.rows[0]) return found.rows[0].id;
+
+    const created = await this.rwPool.query<{ id: string }>(
+      `INSERT INTO tenancy.workspaces (tenant_id, name, description, status)
+       VALUES ($1, $2, $3, 'active')
+       RETURNING id`,
+      [CERT_TENANT_ID, name, `接入认证沙箱 · ${productCode}`],
+    );
+    return created.rows[0]!.id;
+  }
+
+  /**
+   * 组件指纹：把这一版的组件按稳定次序摊平再哈希。
+   *
+   * 取的是**决定权益形状**的那几列（产品、角色、档位、功能、配额），不取 id 与时间戳——
+   * 后者会让「同样的配置重建一次」也算改动，而那不是我们要抓的事。
+   */
+  private async componentFingerprint(planVersionId: string): Promise<string> {
+    const rows = await this.pool.query<{ line: string }>(
+      `SELECT pc.product_id::text || '|' || pc.component_role || '|' ||
+              coalesce(pc.tier, '') || '|' ||
+              coalesce(pc.features::text, '{}') || '|' ||
+              coalesce(pc.quota::text, '{}') AS line
+         FROM product.plan_components pc
+        WHERE pc.plan_version_id = $1
+        ORDER BY pc.product_id, pc.component_role`,
+      [planVersionId],
+    );
+    const body = rows.rows.map((r) => r.line).join("\n");
+    return createHash("sha256").update(body).digest("hex").slice(0, 64);
+  }
+}
