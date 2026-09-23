@@ -92,6 +92,7 @@ import {
   ToggleRow,
 } from "./DetailForm";
 import { CertificationDrawer } from "./CertificationDrawer";
+import { HealthDrawer } from "./HealthDrawer";
 import { LaunchDrawer, type ChecklistEntry } from "./LaunchDrawer";
 import { LoginClientsSection, clientFieldId } from "./LoginClientsSection";
 import { ProductMetricsSection } from "./ProductMetricsSection";
@@ -339,6 +340,10 @@ export function ProductDetailPage({
   /* 接入认证与接入检查是两件事：前者答「发布门过不过」，后者答「上线门过不过」。
      两个抽屉分开，省得一屏里塞两套判据让人分不清哪条卡着哪道门。 */
   const [certOpen, setCertOpen] = useState(false);
+  /* 三屏三个问题：接入检查答「还差哪几件才能上线」、接入认证答「这条链证过没有」、
+     运行健康答「最近还正常吗」。混在一屏时，没有客户的新产品会看到一排红色的
+     「未通过」——而那些红的其实只是「还没有人用过」。 */
+  const [healthOpen, setHealthOpen] = useState(false);
   const [secretsOpen, setSecretsOpen] = useState(false);
   const [busyClientId, setBusyClientId] = useState<string | null>(null);
   const [uploadingIcon, setUploadingIcon] = useState(false);
@@ -424,6 +429,7 @@ export function ProductDetailPage({
     arrivalHandled.current = true;
     if (panel === "checks") setCheckOpen(true);
     if (panel === "certification") setCertOpen(true);
+    if (panel === "health") setHealthOpen(true);
     if (panel === "secrets") setSecretsOpen(true);
     const hash = window.location.hash;
     if (hash.startsWith("#section-")) {
@@ -862,6 +868,17 @@ export function ProductDetailPage({
                 >
                   <Icon name="shield-check" size="xs" aria-hidden="true" />
                   接入认证
+                </Button>
+              ) : null}
+              {/* 运行健康只在已上线之后有意义：没上线的产品没有运行可言。 */}
+              {product.state === "active" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setHealthOpen(true)}
+                >
+                  <Icon name="gauge" size="xs" aria-hidden="true" />
+                  运行健康
                 </Button>
               ) : null}
               <Button
@@ -1534,6 +1551,12 @@ export function ProductDetailPage({
               setCheckOpen(false);
               await reload();
             }}
+          />
+          <HealthDrawer
+            open={healthOpen}
+            onClose={() => setHealthOpen(false)}
+            product={product}
+            locale={locale}
           />
           <CertificationDrawer
             open={certOpen}

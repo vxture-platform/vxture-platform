@@ -2741,18 +2741,17 @@ export async function seedCatalog(client) {
       ('c3_metering', 'C3 计量上报', 'catalog.product.checklist.c3_metering.name',
        'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'catalog.product.checklist.c3_metering.desc', true, 'opera', 'launch', 50),
       ('c2_entitlement', 'C2 权益接入', 'catalog.product.checklist.c2_entitlement.name',
-       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'catalog.product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60),
+       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'catalog.product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60)
       -- sort 70 空缺：data_plane 已于 2026-10-09 退役（定义三处矛盾，别补回来）。
       -- 理由见 migrations/2026-10-09-checklist-data-plane-retire.sql 的文件头。
-      -- acceptance 的 is_required 是 **false**（2026-11-01）：它卸下了「门」的角色。
-      -- 它要的端到端链路需要活跃订阅、订阅需要已发布的版本，而发布正卡在它自己身上
-      -- ——环在这里闭合。发布门改读 product.certification_runs（接入认证在沙箱里把
-      -- 整条链跑一遍的结论），同一件事不留两处推导。
-      -- 但这一项**不退役**：它是一条真的在跑的自动检查，opera 的复验页照常测它、
-      -- 照常写回结果（检查单按 owner='opera' 取项，不看 is_required）。它此后属于
-      -- 运行健康——回答「最近还在正常跑吗」，而不是「能不能发布」。
-      ('acceptance', '端到端验收', 'catalog.product.checklist.acceptance.name',
-       'Full e2e verified: login → provision → gate → consume → invalidate; observational only — the publish gate reads product.certification_runs.', 'catalog.product.checklist.acceptance.desc', false, 'opera', 'publish', 80)
+      -- sort 80 空缺：acceptance 已于 2026-11-03 退出检查单，**别补回来**。
+      -- 它不是被删了——那条检查照跑（opera 的复验页仍然实测五段痕迹），退的是它在
+      -- 这张表上的席位。检查单答的是「还差哪几件才能上线」，而它不办也能上线。
+      -- 结果改由「运行健康」呈现：三态 healthy / degraded / unknown，没有「未通过」
+      -- 这个说法——对一个刚上线、还没有客户的产品，链路当然是空的，画成红色等于
+      -- 把「没人用」说成了「坏了」。
+      -- 发布门改读 product.certification_runs，见
+      -- migrations/2026-11-03-acceptance-off-the-checklist.sql。
     on conflict (item_code) do nothing
   `);
 

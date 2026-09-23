@@ -91,8 +91,10 @@ interface ProductActionBase {
    * 事实。自动探针见 `runLaunchChecks()`（B4b-3）；在它到位之前，这里以检查单的
    * 必填项作为门槛，并在界面上如实说明这是**人工勾选**而非实测。
    *
-   * 「必填项」自 2026-09-17 起限于 `gate = 'launch'` 的那些（见 `gatesLaunch`）——
-   * 发布门的项（`acceptance`）不卡上线，与 BFF 同口径。
+   * 「必填项」自 2026-09-17 起限于 `gate = 'launch'` 的那些（见 `gatesLaunch`）。
+   * 2026-11-03 起检查单上**只剩**这一类：`acceptance` 已退出这张表，它答的是
+   * 「最近还正常吗」，归运行健康。所以那个过滤此后恒等——保留它是因为判据该写在
+   * 它属于的地方，而不是靠「碰巧表里没有别的」。
    */
   requiresChecklist?: boolean;
 }
@@ -252,16 +254,14 @@ export function gatesLaunch(item: { gate?: string }): boolean {
  *   - `c1_identity` 身份接入 —— 平台发 client，**对方要实现登录/回调/会话**
  *   - `c2_entitlement` 权益接入 —— **对方**要接权益拉取与失效
  *   - `c3_metering` 计量上报 —— **对方**要实现 webhook 接收与消费上报
- *   - `acceptance` 端到端验收 —— 两侧一起，卡在这一项通常意味着前面某项其实没真通
  *
  * 归到「对方」不是推卸：这三项都要对方动手才会变绿。把它们标成待对方，是让运营者
  * 知道下一步该发邮件而不是该去改配置。
  *
  * **判定全部归平台**（2026-09-17 起）：对方接通后会在平台存储里留下痕迹，
  * `launch-checks.ts` 读 `GET /api/products/:id/integration-signals` 并写回检查单。
- * C2 / C3 自 2026-08-31 起如此;`c1_identity` 与 `acceptance` 是最后转过来的两项——
- * 前者的判据是**有人真的用平台账号登进了这个产品**（`session.refresh_tokens` 里带该
- * 产品客户端的最近一行，登录没接通就不会有它），后者是五段台账落在同一个工作区。
+ * C2 / C3 自 2026-08-31 起如此;`c1_identity` 的判据是**有人真的用平台账号登进了这个
+ * 产品**（`session.refresh_tokens` 里带该产品客户端的最近一行，登录没接通就不会有它）。
  *
  * **侧的归属不因此改变**——判定是谁做的，与该由谁去动，是两回事：`c1_identity` 红着
  * 时运营者该做的仍然是去找对方，不是去改平台配置。这张表答的是后者。
@@ -283,8 +283,8 @@ export function sideOfChecklistItem(itemCode: string): "ours" | "theirs" {
 export function verificationOf(
   items: readonly ChecklistItem[],
 ): VerificationState {
-  /* 只算卡上线那道门的项：`acceptance` 归发布门，它没勾不该让整个产品显示为
-     「待验证」——那会把一个技术上已经就绪的产品报成没准备好。 */
+  /* 只算卡上线那道门的项。`acceptance` 已于 2026-11-03 退出检查单，所以这里此后
+     恒等；留着这个过滤是因为判据该写在它属于的地方，而不是靠「碰巧表里没有别的」。 */
   const required = items.filter((i) => i.isRequired && gatesLaunch(i));
   if (required.length === 0) return "unverified";
   /* 一次都没勾过 = 未验证。用「有没有 checkedAt」而不是「有没有 satisfied」判断：

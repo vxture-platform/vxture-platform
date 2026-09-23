@@ -201,10 +201,10 @@ const MEASURE_ONLY: Record<
   "atlas-grants": { label: "模型授权", order: 30 },
   "runos-grants": { label: "能力授权", order: 40 },
   webhook: { label: "Webhook 登记", order: 50 },
-  "acceptance-chain": { label: "端到端链路痕迹", order: 71 },
-  /* 回执是次要约定，只报事实。画成「待确认」而不是红——它挡不住上线，
-     `allPassed()` 也跳过它（见 `launch-checks.ts` 的 `advisory`）。 */
-  "provision-ack": { label: "开通回执", order: 72, advisory: true },
+  /* 端到端链路痕迹与开通回执**不在这一屏**（2026-11-03）：它们答的是「跑起来之后
+     最近还正常吗」，不是「还差哪几件才能上线」。混在一屏时，一个刚上线、还没有客户
+     的产品会看到一排红色的「未通过」——而那些红的其实只是「还没有人用过」。
+     它们去了「运行健康」抽屉，在那里是三态，没有「未通过」这个说法。 */
 };
 
 function reason(error: unknown, fallback: string): string {
@@ -517,7 +517,11 @@ export function LaunchDrawer({
     );
   }
 
-  const rows = buildRows(checklist, checks, running);
+  /* **只取上线门那一组**（2026-11-03）。运行健康那两项走另一个抽屉——一屏回答一个
+     问题，结论才说得干净：这一屏的结论只有「可以上线」与「还差 N 项」两种。 */
+  const launchChecks =
+    checks?.filter((c) => (c.scope ?? "launch") === "launch") ?? null;
+  const rows = buildRows(checklist, launchChecks, running);
   const open_ = rows.filter((r) => r.required && r.status !== "pass");
   const openOurs = open_.filter((r) => r.side === "ours").length;
   const openTheirs = open_.length - openOurs;
@@ -598,7 +602,7 @@ export function LaunchDrawer({
       onClose={onClose}
       width="lg"
       title="接入检查"
-      description={product.productCode}
+      description={`${product.productCode} · 还差哪几件才能上线`}
     >
       <div className="flex flex-col gap-xl">
         {/* ── 汇总 ─────────────────────────────────────────────────────── */}
@@ -608,8 +612,8 @@ export function LaunchDrawer({
               {running && !checks
                 ? "检查中…"
                 : open_.length === 0
-                  ? "全部通过"
-                  : `还差 ${open_.length} 项：我方 ${openOurs} · 对方 ${openTheirs}`}
+                  ? "全部通过 —— 可以确认上线"
+                  : `还差 ${open_.length} 项才能上线：我方 ${openOurs} · 对方 ${openTheirs}`}
             </p>
             <p className="text-body-sm text-muted-foreground">
               {checkedAt

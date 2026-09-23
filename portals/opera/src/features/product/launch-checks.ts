@@ -63,9 +63,23 @@ export type CheckStatus = "pass" | "fail" | "skipped";
 /** 谁能让这一项通过。「对方」的项本页测不了，只会出现在检查单上。 */
 export type CheckSide = "ours" | "theirs";
 
+/**
+ * 这一条在回答哪个问题。**一次实测，两屏各取各的。**
+ *
+ *   launch  上线门：还差哪几件才能上线 —— 结论是「通过 / 未通过」
+ *   health  运行健康：跑起来之后最近还正常吗 —— 结论是三态，**没有「未通过」**
+ *
+ * 分开不是为了排版。混在一屏时，一个刚上线、还没有客户的产品会看到一排红色的
+ * 「未通过」——而那些红的其实只是「还没有人用过」。**把「没人用」画成「坏了」，
+ * 运营的第一反应是去修一个根本没坏的东西。**
+ */
+export type CheckScope = "launch" | "health";
+
 export interface CheckResult {
   id: string;
   label: string;
+  /** 缺省按 `launch`：新加的检查默认卡上线门，与加这根轴之前一致。 */
+  scope?: CheckScope;
   /** 这一项在测什么，一句话。 */
   what: string;
   side: CheckSide;
@@ -559,7 +573,10 @@ export async function runLaunchChecks(
         chainDone && sameWorkspace
           ? null
           : "用同一个工作区把整条链走一遍：开通产品 → 拉一次权益 → 报一次用量 → 收到平台回调。",
-      itemCode: "acceptance",
+      /* **没有 itemCode**：`acceptance` 已于 2026-11-03 退出检查单（那条检查照跑，
+         退的是它在那张表上的席位）。还留着 itemCode 的话，复验会去 PATCH 一个不存在
+         的项，拿回 404 —— 而那个 404 会被当成「复验失败」，把一次正常的复验报成故障。 */
+      scope: "health",
       href: entitlementsHref,
     });
     /* 开通回执 —— **advisory**:只报事实，不参与「全部通过」。
@@ -574,6 +591,7 @@ export async function runLaunchChecks(
      */
     results.push({
       id: "provision-ack",
+      scope: "health",
       label: "开通回执",
       what: "对方收到开通事件后，经 POST /provisioning/ack 报回「这个工作区的空间我建好了」。这一项只报事实，不挡上线——回执目前是次要约定，在产产品还没实现它。",
       side: "theirs",
@@ -649,6 +667,32 @@ export async function runLaunchChecks(
  * 算进来，会让每一个产品的上线都掉进「带理由跳过」，而按钮上看不出是被哪一条挡的。
  */
 export function allPassed(results: readonly CheckResult[]): boolean {
-  const counted = results.filter((r) => !r.advisory);
+  const counted = results.filter(
+    (r) => !r.advisory && (r.scope ?? "launch") === "launch",
+  );
   return counted.length > 0 && counted.every((r) => r.status === "pass");
+}
+
+/** 运行健康三态。**没有「未通过」这一档**——那是上线门的说法。 */
+export type HealthVerdict = "healthy" | "degraded" | "unknown";
+
+/**
+ * 运行健康的结论。
+ *
+ * ── `unknown` 是正常态，不是失败 ──
+ * 一个刚上线、还没有客户的产品，链路当然是空的。旧的检查单把它画成红色「未通过」，
+ * 等于把「没人用」说成了「坏了」。三态里 `unknown` 就是为这种情况准备的：
+ * **我们此刻什么都不知道**，而那和「知道它坏了」是两件事。
+ *
+ * ── 为什么不数 advisory ──
+ * 开通回执是次要约定，在产产品一个都还没实现它。让它参与判定等于拿一次平台升级
+ * 把所有产品判成劣化。
+ */
+export function healthVerdict(results: readonly CheckResult[]): HealthVerdict {
+  const counted = results.filter((r) => r.scope === "health" && !r.advisory);
+  if (counted.length === 0) return "unknown";
+  if (counted.every((r) => r.status === "pass")) return "healthy";
+  /* 一条都没有痕迹 = 没人用过（unknown）；有一些有、有一些没有 = 链断在中间（degraded）。
+     两者的下一步完全不同：前者是「等客户来」，后者是「去查哪一段断了」。 */
+  return counted.every((r) => r.status !== "pass") ? "unknown" : "degraded";
 }

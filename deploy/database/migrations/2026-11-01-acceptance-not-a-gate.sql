@@ -50,17 +50,23 @@ BEGIN
     FROM product.launch_checklist_items
    WHERE item_code = 'acceptance';
 
-  /* 这一项必须还在：本迁移卸的是它的门角色，不是退役它。没了就说明有人顺手删了，
-     而那会让 opera 的复验页少一项真的在跑的检查。 */
-  IF acc_exists <> 1 THEN
-    RAISE EXCEPTION '[acceptance-not-a-gate] acceptance 字典行不见了（% 行）—— 本迁移只卸它的门角色，不删它', acc_exists;
-  END IF;
-  IF acc_required THEN
-    RAISE EXCEPTION '[acceptance-not-a-gate] acceptance 仍然是必填项';
-  END IF;
-  /* 归属不变：opera 的检查单按 owner='opera' 取项，改了归属它就从抽屉里消失了。 */
-  IF acc_owner IS DISTINCT FROM 'opera' THEN
-    RAISE EXCEPTION '[acceptance-not-a-gate] acceptance 的归属被改成了 %，它会从 opera 的抽屉里消失', acc_owner;
+  /*
+   * ⚠ 2026-11-03 放宽：`acceptance` 已由 2026-11-03-acceptance-off-the-checklist.sql
+   * **彻底退役**（检查照跑，结果改到「运行健康」里呈现，不再占检查单一行）。
+   *
+   * 28d 是全量重放且按文件名排序，本文件排在那一份前面——原来那条「这一项必须还在」
+   * 的断言会在第二轮重放时当场炸：上一轮已经把它删了。所以这里改成**存在才校验**。
+   *
+   * 这不是把断言放水：本迁移要保证的是「它不再必填」，而「它根本不在了」比
+   * 「它在且不必填」更强地满足这一点。断言要守的是性质，不是那一行的存在。
+   */
+  IF acc_exists = 1 THEN
+    IF acc_required THEN
+      RAISE EXCEPTION '[acceptance-not-a-gate] acceptance 仍然是必填项';
+    END IF;
+    IF acc_owner IS DISTINCT FROM 'opera' THEN
+      RAISE EXCEPTION '[acceptance-not-a-gate] acceptance 的归属被改成了 %', acc_owner;
+    END IF;
   END IF;
 
   /* 旧判据退场的直接证据：gate='publish' 的必填项归零。
@@ -74,5 +80,5 @@ BEGIN
       n_required_publish;
   END IF;
 
-  RAISE NOTICE '[acceptance-not-a-gate] acceptance 仍在、归 opera、不再必填 ✓；gate=publish 必填项已归零 ✓';
+  RAISE NOTICE '[acceptance-not-a-gate] acceptance 不再必填（或已退役）✓；gate=publish 必填项已归零 ✓';
 END $$;
