@@ -41,6 +41,7 @@ DECLARE
   cnt      int;
   cnt2     int;
   cnt3     int;
+  codes    text;
   chk      record;
 BEGIN
   -- ── A. schema set == target set ────────────────────────────────────────────
@@ -206,6 +207,31 @@ BEGIN
   SELECT count(*) INTO cnt3 FROM admin.operator_account WHERE is_customer_visible = true;
   IF cnt > 0 OR cnt3 > 0 THEN
     fails := fails || format('[C3] realm isolation breach: %s operator_role + %s operator_account customer-visible; ', cnt, cnt3);
+  END IF;
+
+  -- ── C4. 平台级 OIDC 客户端不得有同名产品行 ─────────────────────────────────
+  --   owner 2026-09-23：「不是软删，要彻底从产品体系中清理，不留残留」。
+  --
+  --   判据不写死名字：一个 `client_kind='platform'` 的客户端（website / console /
+  --   admin / opera / arche / ruyin / atlas / runos …）是平台自身的登录端，不是目录
+  --   商品；库上 `chk_oidc_clients_kind_product` 已经保证它 product_id 为空。若
+  --   `product.products` 里还躺着一行同名的，那就是「既当客户端又当商品」的旧形态
+  --   残留——**软删也算**，因为一行软删的产品在不过滤 deleted_at 的读路径上照样出现
+  --   （换票受众解析就曾经是这样，2026-09-23 才补上过滤）。
+  --
+  --   这一条抓到过的实例：ruyin 2026-08-31 降级时被软删、之后一直躺在表里；
+  --   atlas / runos 2026-09-23 彻底删除。两者同型。
+  SELECT count(*) INTO cnt
+    FROM product.products p
+    JOIN appoidc.oidc_clients c ON c.client_id = p.product_code
+   WHERE c.client_kind = 'platform';
+  IF cnt > 0 THEN
+    SELECT string_agg(p.product_code || CASE WHEN p.deleted_at IS NOT NULL THEN '(软删)' ELSE '' END, ', ' ORDER BY p.product_code)
+      INTO codes
+      FROM product.products p
+      JOIN appoidc.oidc_clients c ON c.client_id = p.product_code
+     WHERE c.client_kind = 'platform';
+    fails := fails || format('[C4] 平台级客户端还挂着同名产品行（%s）——平台自身的登录端不是目录商品，这一行是旧形态残留; ', codes);
   END IF;
 
   -- ── verdict ────────────────────────────────────────────────────────────────
