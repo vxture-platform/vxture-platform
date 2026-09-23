@@ -44,6 +44,7 @@ DECLARE
   n_usage  bigint;
   n_pool   bigint;
   n_bundle bigint;
+  r        record;
 BEGIN
   /* 连软删的订阅一起数。软删的订阅记的是「这个工作区曾经买过它」——那也是足迹，
      而且它的历史、账单、用量都还在。判据是「有没有人碰过」，不是「现在还在不在」。 */
@@ -62,19 +63,30 @@ BEGIN
      软删 atlas 之后会变成一个指向软删产品的组件——权益解析不报错，只是那一项从
      此不生效。docs 里 80-plan-bundled-components 正好写着这种用法，所以这不是
      假想。 */
-  SELECT count(*) INTO n_bundle
-    FROM product.plan_components pc
-    JOIN product.products p  ON p.id = pc.product_id AND p.layer = 'L1'
-    JOIN product.plan_versions pv ON pv.id = pc.plan_version_id
-    JOIN product.plans pl ON pl.id = pv.plan_id AND pl.deleted_at IS NULL
-   WHERE NOT EXISTS (
-     SELECT 1 FROM product.plan_components pc2
-       JOIN product.products p2 ON p2.id = pc2.product_id
-      WHERE pc2.plan_version_id = pv.id AND pc2.component_role = 'primary'
-        AND p2.layer = 'L1');
+  /* 点名，不只是计数。2026-09-23 生产上这一条真的拦下了一次（7 个组件），而当时
+     它只报了个数字——于是「是哪几档」得再跑一趟才知道。一条拦住动作的断言必须同时
+     说出它拦的是什么，否则每次命中都要额外一个审批周期去问库。 */
+  n_bundle := 0;
+  FOR r IN
+    SELECT pl.plan_code, pv.version_no, p.product_code, pc.component_role, pv.status
+      FROM product.plan_components pc
+      JOIN product.products p  ON p.id = pc.product_id AND p.layer = 'L1'
+      JOIN product.plan_versions pv ON pv.id = pc.plan_version_id
+      JOIN product.plans pl ON pl.id = pv.plan_id AND pl.deleted_at IS NULL
+     WHERE NOT EXISTS (
+       SELECT 1 FROM product.plan_components pc2
+         JOIN product.products p2 ON p2.id = pc2.product_id
+        WHERE pc2.plan_version_id = pv.id AND pc2.component_role = 'primary'
+          AND p2.layer = 'L1')
+     ORDER BY pl.plan_code, pv.version_no, p.product_code
+  LOOP
+    n_bundle := n_bundle + 1;
+    RAISE WARNING '[l1-out-of-catalog] 搭售：套餐 % v% （%） 挂着 %（role=%）',
+      r.plan_code, r.version_no, r.status, r.product_code, r.component_role;
+  END LOOP;
   IF n_bundle <> 0 THEN
     RAISE EXCEPTION
-      '[l1-out-of-catalog] 有 % 个组件把 L1 产品搭售进了别人的套餐 —— 先把那几档改掉，否则它们会静默失效',
+      '[l1-out-of-catalog] 有 % 个组件把 L1 产品搭售进了别人的套餐（逐条见上面的 WARNING）—— 软删会让这些订阅的权益查询静默返回「未订阅」（pg-entitlement.repository 的 SQL 带 prod.deleted_at is null），先定这几档怎么办',
       n_bundle;
   END IF;
 
