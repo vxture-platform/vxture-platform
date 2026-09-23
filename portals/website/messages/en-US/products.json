@@ -234,7 +234,6 @@
       }
     },
     "quotaLabels": {
-      "member_max": "Seats",
       "dataset_max": "Datasets",
       "datasource_max": "Data sources",
       "service_endpoint_max": "Service endpoints",
@@ -245,7 +244,8 @@
       "retention_days": "Data retention (days)",
       "sync_frequency": "Sync frequency",
       "varda_enabled": "varda assistant",
-      "varda_readonly": "varda assistant read-only"
+      "varda_readonly": "varda assistant read-only",
+      "seat_max": "Seats"
     },
     "featureLabels": {
       "governance_quality": "Data quality governance",

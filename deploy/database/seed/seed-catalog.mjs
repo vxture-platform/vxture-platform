@@ -3067,7 +3067,6 @@ export async function seedCatalog(client) {
   if (ardaId2) {
     const ARDA_METRICS = [
       // [metric_key, merge_strategy, consume_mode, unit, reset_period]
-      ["member.max", "max", null, "seats", "none"],
       ["dataset.max", "max", null, "count", "none"],
       ["datasource.max", "max", null, "count", "none"],
       ["service_endpoint.max", "max", null, "count", "none"],
@@ -3106,7 +3105,6 @@ export async function seedCatalog(client) {
         true,
         ["governance.quality"],
         {
-          "member.max": 1,
           "dataset.max": 50,
           "datasource.max": 2,
           "service_endpoint.max": 0,
@@ -3127,7 +3125,6 @@ export async function seedCatalog(client) {
         true,
         ["governance.quality", "governance.standards", "governance.lineage"],
         {
-          "member.max": 1,
           "dataset.max": 500,
           "datasource.max": 5,
           "service_endpoint.max": 1,
@@ -3154,7 +3151,6 @@ export async function seedCatalog(client) {
           "governance.policies",
         ],
         {
-          "member.max": 1,
           "dataset.max": 5000,
           "datasource.max": 20,
           "service_endpoint.max": 10,
@@ -3185,7 +3181,6 @@ export async function seedCatalog(client) {
           "governance.mdm",
         ],
         {
-          "member.max": 5,
           "dataset.max": -1,
           "datasource.max": 100,
           "service_endpoint.max": -1,
@@ -3216,7 +3211,6 @@ export async function seedCatalog(client) {
           "governance.custom",
         ],
         {
-          "member.max": -1,
           "dataset.max": -1,
           "datasource.max": -1,
           "service_endpoint.max": -1,
@@ -3245,7 +3239,6 @@ export async function seedCatalog(client) {
           "governance.policies",
         ],
         {
-          "member.max": 1,
           "dataset.max": 5000,
           "datasource.max": 20,
           "service_endpoint.max": 10,
@@ -3710,6 +3703,47 @@ export async function seedCatalog(client) {
       `✓  identity.oauth_providers — ${p.code} (is_enabled=${enabled})`,
     );
   }
+
+  /*
+   * 席位 `seat.max`：六个可订阅产品都登记，每个套餐组件默认 1
+   * （owner 2026-09-23：「需要补充 seats 指标，必须项，默认为 1」）。
+   *
+   * 放在最末尾而不是各产品自己的指标块里：席位是**通用概念**，六个产品逐个抄一遍
+   * 必然分叉（现状 arda 有 10 个指标、karda 有 3 个、其余四个是零）。一处写、
+   * 按产品展开，与 2026-10-28 那条迁移同一套逻辑——迁移管存量库，这里管新库。
+   *
+   * 键名按 product_220 成文的 `{entity}.max` 惯例，不用裸 `seats`：那样看不出是
+   * 上限类，也进不了 `limits` 键规范。单位仍是 `seats`——键名表意、单位表量纲。
+   *
+   * 不进 platform_metrics：那张表的语义是「有成本的共享池」，席位零成本，
+   * 与 owner「配额只给有成本的」那条裁定打架。
+   *
+   * 两处都只补**缺的**：运营把某档位设成 10 之后，重跑 seed 不该把它冲回 1。
+   */
+  await client.query(
+    `insert into product.product_metrics
+       (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period)
+     select p.id, 'seat.max', 'max', null, 'seats', 'none'
+       from product.products p
+      where p.deleted_at is null and p.standalone_subscribable
+        and not exists (
+          select 1 from product.product_metrics m
+           where m.product_id = p.id and m.metric_key = 'seat.max')`,
+  );
+  await client.query(
+    `insert into product.metric_catalog (metric_key, display_name, description)
+     values ('seat.max', '席位',
+             '该产品可供多少名成员使用；同一个人可同时占用多个产品的席位')
+     on conflict (metric_key) do nothing`,
+  );
+  const seats = await client.query(
+    `update product.plan_components
+        set quota = quota || '{"seat.max": 1}'::jsonb
+      where not (quota ? 'seat.max')`,
+  );
+  console.log(
+    `✓  product — seat.max (六个可订阅产品登记;${seats.rowCount} 个套餐组件补默认值 1)`,
+  );
 }
 
 if (isMain(import.meta.url)) {

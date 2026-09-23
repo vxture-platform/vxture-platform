@@ -218,7 +218,6 @@
       }
     },
     "quotaLabels": {
-      "member_max": "席位",
       "dataset_max": "数据集",
       "datasource_max": "数据源",
       "service_endpoint_max": "服务端点",
@@ -229,7 +228,8 @@
       "retention_days": "数据保留（天）",
       "sync_frequency": "同步频率",
       "varda_enabled": "varda 助手",
-      "varda_readonly": "varda 助手只读"
+      "varda_readonly": "varda 助手只读",
+      "seat_max": "席位"
     },
     "featureLabels": {
       "governance_quality": "数据质量治理",
