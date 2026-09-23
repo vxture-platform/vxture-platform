@@ -436,5 +436,69 @@ CREATE TABLE product.product_launch_statuses (
 );
 CREATE INDEX idx_product_launch_statuses_item_code ON product.product_launch_statuses (item_code);
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 接入认证台账（2026-10-30）。**一次认证跑动的结论**，不是产品行上的一个 enum。
+--
+-- ── 为什么是事件表而不是 products 上的一列 ──
+-- 认证是「后果」，产品的 status 是「意图」——合成一个字段之后，一次复验失败就要把
+-- 一个正在跑的产品改回草稿。同一条原则在 lifecycle.ts 与模型路由的 state/resolution
+-- 上已经用过两次。且「谁在什么时候、对哪个契约版本、在哪个沙箱里认的」要答得出来，
+-- 那是台账才有的形状。
+--
+-- ── 它挂在产品上，不挂在套餐上 ──
+-- 判据是「换个宿主它变吗」：换个套餐它不变，换个产品它才变。所以发第二个套餐不必
+-- 重认一遍——认证认的是**平台与产品方之间那条链**，不是某一档的定价。
+--
+-- ── sandbox_workspace_id 是这张表的要害 ──
+-- 认证的观测那一半（对方拉权益、报用量）必须**按沙箱工作区收口**。不收口的话，
+-- A 客户的真实使用会把 B 产品的认证喂绿——那正是旧 `acceptance` 判据的毛病：
+-- 它读的是该产品的**任意**流量。
+--
+-- ── plan_version_id + component_fingerprint ──
+-- 认证订阅指向**待发布的草稿版本本身**（不是另造一个「认证套餐」），这样认证的对象
+-- 与发布的对象字节相同，且顺带把配额池物化跑通——套餐组件配错会在认证时炸，而不是
+-- 上架后炸。但草稿在发布前仍可改，所以记一份组件指纹：发布门比对指纹，对不上就要求
+-- 重认。指纹而不是时间戳，因为「改了又改回来」不该判成失效。
+--
+-- ── stale 不是 invalid ──
+-- 回调地址变更、密钥轮换、redirect URI 变更、上游授权被撤、契约版本 bump——各自把
+-- 认证标成 stale（`stale_reason` 非空）。stale **只挡「再发布新版本」，不把在跑的
+-- 产品拉下线**。不设按时间自动过期：那会让一个安静了三个月的正常产品突然失效，
+-- 而认证回答的是「能不能工作」，不是「有没有人在用」（后者归运行健康）。
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE TABLE product.certification_runs (
+    id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id           uuid         NOT NULL REFERENCES product.products(id) ON DELETE CASCADE,
+    contract_version     varchar(32)  NOT NULL,                       -- 《产品接入通则》契约版本；bump 即令既有认证 stale
+    sandbox_workspace_id uuid         NOT NULL,                       -- 跨 schema→tenancy.workspaces（90）。观测按它收口
+    plan_version_id      uuid,                                        -- 认证所针对的草稿版本（域内→plan_versions，不建 FK：版本可被删，台账要留证据）
+    component_fingerprint varchar(64),                                -- 认证时刻 plan_components 的指纹；发布门比对，对不上要求重认
+    segments             jsonb        NOT NULL DEFAULT '{}'::jsonb,   -- 五段各自结果 {login,provision,delivery,entitlement,consume}
+    verdict              varchar(16)  NOT NULL DEFAULT 'running',     -- running=进行中 / certified=已认证 / failed=某段没通过或超时
+    stale_reason         varchar(64),                                 -- 非空 = 待复认证；值域见 CHECK
+    certified_at         timestamptz,                                 -- verdict='certified' 的时刻
+    stale_at             timestamptz,
+    run_by               uuid,                                        -- 裸值→admin.operator_accounts（不建 FK，边界#2）
+    created_at           timestamptz  NOT NULL DEFAULT now(),   -- 这一次跑动的开始时刻（不另设 started_at：同一个事实只留一份）
+    updated_at           timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT chk_certification_runs_verdict CHECK (verdict IN ('running','certified','failed')),
+    -- 值域与 stale 的触发器一一对应；新增一种失效原因要同时改这里与那个触发点。
+    CONSTRAINT chk_certification_runs_stale_reason CHECK (
+        stale_reason IS NULL OR stale_reason IN (
+            'webhook_changed','secret_rotated','redirect_uri_changed',
+            'upstream_grant_revoked','contract_version_bumped','components_changed')),
+    -- 结论与时刻互为充要：certified 必有时刻，非 certified 必无——否则「认证过没有」
+    -- 会有两个互相矛盾的读法，而它是发布门唯一的判据。
+    CONSTRAINT chk_certification_runs_certified_at CHECK (
+        (verdict = 'certified') = (certified_at IS NOT NULL)),
+    CONSTRAINT chk_certification_runs_stale_pair CHECK (
+        (stale_reason IS NULL) = (stale_at IS NULL))
+);
+CREATE INDEX idx_certification_runs_product   ON product.certification_runs (product_id);
+CREATE INDEX idx_certification_runs_workspace ON product.certification_runs (sandbox_workspace_id);
+-- 发布门的查询：某产品当前那一条有效认证。部分索引把台账里的历史行整块排除。
+CREATE INDEX idx_certification_runs_effective ON product.certification_runs (product_id, certified_at DESC)
+  WHERE verdict = 'certified' AND stale_reason IS NULL;
+
 -- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
 CREATE INDEX idx_plans_current_version ON product.plans (current_version_id);

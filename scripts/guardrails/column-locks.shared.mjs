@@ -25,6 +25,12 @@ export const EXTRA_ANCHOR = new Set([
    * 与可查的既有事实，它们不改变任何行为或数字。
    */
   "tenancy.tenants.purpose",
+  /*
+   * 认证台账的产品归属（2026-10-30）。形状上是普通外键列，但**换个产品就不是同一
+   * 件事**：改它等于把 A 产品的认证结论挪给 B，而发布门只读结论、不看来历——
+   * 静默的授权转移。一次认证跑动认的就是那一个产品，所以它是出生即定的锚点。
+   */
+  "product.certification_runs.product_id",
 ]);
 
 /**

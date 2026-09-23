@@ -124,6 +124,12 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --  * product.plan_versions.created_by                  → admin.operator_accounts.id   裸 UUID，不建 FK
 --  * product.product_launch_statuses.checked_by        → admin.operator_accounts.id   裸 UUID，不建 FK
 --    （产品目录运营专属，realm=operator 确定；跨 realm 身份 FK 禁止，边界#2）
+--  * product.certification_runs.run_by                 → admin.operator_accounts.id   裸 UUID，不建 FK
+--  * product.certification_runs.sandbox_workspace_id   → tenancy.workspaces.id        裸 UUID，不建 FK
+--    （本域「无出向真 FK」的规则优先；沙箱工作区被清理时台账仍要留得住——
+--      「这个产品当时在哪个沙箱里认的」是事后追责要答的问题，不能随父行消失）
+--  * product.certification_runs.plan_version_id        → product.plan_versions.id     域内，**仍不建 FK**
+--    （草稿版本可被删除，而台账要留证据；这是本域唯一一处有意不内联的域内引用）
 --
 -- ── 被引用（入向真 FK 定义在各来源 schema 的 90 段，非本域职责，此处仅备忘）──────
 --  * commerce.metering.subscriptions.plan_version_id   → product.plan_versions.id

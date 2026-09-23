@@ -279,6 +279,12 @@ GRANT UPDATE (item_name, description, is_required, owner, gate, sort, item_name_
 REVOKE UPDATE ON product.product_launch_statuses FROM platform_svc;
 GRANT UPDATE (is_satisfied, checked_at, checked_by, remark, updated_at) ON product.product_launch_statuses TO platform_svc;
 
+-- product.certification_runs  [anchor: id, product_id, created_at]
+-- product_id 进锚点是本表特有的：一条认证台账**换个产品就不是同一件事**，改它等于
+-- 把 A 产品的认证结论挪给 B，而发布门只读结论、不看来历。
+REVOKE UPDATE ON product.certification_runs FROM platform_svc;
+GRANT UPDATE (contract_version, sandbox_workspace_id, plan_version_id, component_fingerprint, segments, verdict, stale_reason, certified_at, stale_at, run_by, updated_at) ON product.certification_runs TO platform_svc;
+
 -- metering.subscriptions  [anchor: id, created_at]
 REVOKE UPDATE ON metering.subscriptions FROM platform_svc;
 GRANT UPDATE (tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, cycle_count, start_at, end_at, trial_end_at, had_trial_at, status, auto_renew, activation_method, next_renewal_at, renewal_source, payment_mandate_id, pay_amount, product_id, paid_amount, current_order_id, currency, created_by_type, created_by_id, updated_at, deleted_at) ON metering.subscriptions TO platform_svc;
