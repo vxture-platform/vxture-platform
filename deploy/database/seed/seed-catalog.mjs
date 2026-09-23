@@ -2580,9 +2580,30 @@ export async function seedCatalog(client) {
     );
   }
 
+  /*
+   * 每个产品的回调**路径**（域名各自不同，路径不是）。
+   *
+   * 这张表存在的唯一理由是：判据在别处。接入通则规定所有产品同一个路径
+   * `/api/webhooks/vxture`，opera-bff 的 `assertStandardWebhookPath` 在**登记处**
+   * 强制它，存量豁免写在同文件的 `LEGACY_WEBHOOK_PATHS` 里。
+   *
+   * 而在 2026-09-23 之前，这两处**没有任何机械链路**：seed 把 arda / karda / vxtpl
+   * 三个都写成旧路径，豁免名单里却只有 vxtpl 与 yucer——于是运营在 opera 打开 arda
+   * 或 karda 的产品页、原样按一次保存就 400，**门变成了墙**。名单少一个，症状就落在
+   * 一个与它八竿子打不着的保存按钮上。
+   *
+   * 所以路径从这里**显式声明**、三处插入共用，`lint:webhook-paths` 拿它逐条对
+   * `STANDARD_WEBHOOK_PATH` / `LEGACY_WEBHOOK_PATHS` 核账：改这里而忘了改名单（或
+   * 反过来）当场红。终局是这张表里每一条都等于标准路径，那时它和豁免名单一起删掉。
+   */
+  const WEBHOOK_PATHS = {
+    arda: "/provisioning/webhook",
+    karda: "/provisioning/webhook",
+    vxtpl: "/provisioning/webhook",
+  };
+
   // product_webhooks — platform→product provisioning push config (product_310
-  // P2.3). webhook_url follows the business-app contract path (rp-integration
-  // §4: POST /provisioning/webhook); webhook_secret_ref is an env-var name on
+  // P2.3). 路径见上面的 WEBHOOK_PATHS；webhook_secret_ref is an env-var name on
   // the dispatcher host (admin-bff), resolved by the default secret resolver.
   // ARDA_WEBHOOK_BASE_URL (product_230 §3.1 / D11): tailnet delivery target,
   // decoupled from ARDA_BASE_URL because the latter also seeds the OIDC
@@ -2600,7 +2621,7 @@ export async function seedCatalog(client) {
   `,
     [
       B.arda,
-      `${ardaWebhookBase}/provisioning/webhook`,
+      `${ardaWebhookBase}${WEBHOOK_PATHS.arda}`,
       "ARDA_PROVISION_WEBHOOK_SECRET",
     ],
   );
@@ -2625,7 +2646,7 @@ export async function seedCatalog(client) {
     `,
       [
         B.karda,
-        `${kardaWebhookBase}/provisioning/webhook`,
+        `${kardaWebhookBase}${WEBHOOK_PATHS.karda}`,
         "KARDA_PROVISION_WEBHOOK_SECRET",
       ],
     );
@@ -2728,7 +2749,7 @@ export async function seedCatalog(client) {
     `,
       [
         B.vxtpl,
-        `${vxtplWebhookBase}/provisioning/webhook`,
+        `${vxtplWebhookBase}${WEBHOOK_PATHS.vxtpl}`,
         "VXTPL_PROVISION_WEBHOOK_SECRET",
       ],
     );

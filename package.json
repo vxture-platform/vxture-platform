@@ -130,7 +130,8 @@
     "lint:oidc-discovery": "node scripts/guardrails/check-oidc-discovery.mjs",
     "lint:visible-code": "node scripts/guardrails/check-visible-code-display.mjs",
     "lint:public-routes": "node scripts/guardrails/check-public-routes.mjs",
-    "lint:upstream-routes": "node scripts/guardrails/check-upstream-routes.mjs"
+    "lint:upstream-routes": "node scripts/guardrails/check-upstream-routes.mjs",
+    "lint:webhook-paths": "node scripts/guardrails/check-webhook-paths.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",
