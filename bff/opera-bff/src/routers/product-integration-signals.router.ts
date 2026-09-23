@@ -279,6 +279,224 @@ export function parseEntitlementSignal(
   };
 }
 
+/**
+ * 读一次接入信号。**判据只此一份**——`GET :id/integration-signals` 与接入认证的
+ * evaluate 是两个消费方，各抄一遍的话，两边「什么算接通了」迟早不一致，而不一致的
+ * 那天谁也不报错：一边说链跑通了、一边说没有，都言之凿凿。
+ *
+ * 收口（`scope`）不传 = 读该产品的**任意**流量，供运行健康观测用；传了 = 只认那个
+ * 沙箱里的那一次，供认证用。两者是两个问题，不是同一个问题的宽严两档。
+ */
+export async function readIntegrationSignals(
+  deps: {
+    pool: Pool;
+    redis: SignalRedisReader;
+    keyPrefix: string;
+  },
+  productId: string,
+  scope: { workspaceId?: string | null; tenantId?: string | null } = {},
+): Promise<IntegrationSignalsRecord> {
+  const scopeWorkspaceId = scope.workspaceId ?? null;
+  const scopeTenantId = scope.tenantId ?? null;
+
+  const product = await deps.pool.query<{ product_code: string }>(
+    `SELECT product_code FROM product.products
+        WHERE id = $1 AND deleted_at IS NULL`,
+    [productId],
+  );
+  const productCode = product.rows[0]?.product_code;
+  if (!productCode) {
+    throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+  }
+
+  const key = `${deps.keyPrefix}${C2_SIGNAL_KEY_INFIX}${productCode}`;
+  const [raw, login, usage, s2s, provision, delivery] = await Promise.all([
+    deps.redis.get(key),
+    /*
+     * 登录：`acceptance` 链的首段。两步合成一条 SQL——先用
+     * `idx_oidc_clients_product_id` 把客户端收敛到这个产品（该表十几行），
+     * 再回 `session.refresh_tokens` 取最近一行。按 **product_id 聚合**而不是单个
+     * client_id：一个产品可能有 stable / beta / canary 三个客户端，哪个登都算。
+     *
+     * 查询形状：`refresh_tokens.client_id` **没有索引**（只有 user_id /
+     * session_id / status / expires_at 四条）。最坏情况是「这个产品从没人登过」，
+     * 要扫完整张表才能确定没有——而那恰好是本检查项最常被问的状态（与 C1
+     * 出站那条同型）。今天可以这么查：该表只增不删但量级跟登录次数走，
+     * 现阶段是万行以下。**到了不够用那天，加这条索引**，不要改判据：
+     *   create index idx_refresh_tokens_client_created
+     *       on session.refresh_tokens (client_id, created_at desc);
+     *
+     * **不带 `created_at` 下界**：这张表不是分区表，照搬 C3 的时间窗只会把
+     * 「半年前登过、至今在用」的产品判成没人登过。
+     */
+    deps.pool.query<LoginRow>(
+      `SELECT rt.client_id, rt.created_at
+           FROM session.refresh_tokens rt
+          WHERE rt.client_id IN (
+                  SELECT c.client_id
+                    FROM appoidc.oidc_clients c
+                   WHERE c.product_id = $1
+                     AND c.client_kind = 'product'
+                )
+            AND ($2::uuid IS NULL OR rt.user_id IN (
+                  SELECT tm.user_id FROM tenancy.tenant_memberships tm
+                   WHERE tm.tenant_id = $2::uuid
+                ))
+          ORDER BY rt.created_at DESC
+          LIMIT 1`,
+      [productId, scopeTenantId],
+    ),
+    /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
+         单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
+         三四个月分区——对一个上线检查的点击来说够用；真到不够用那天加索引，
+         不在这里改判据。 */
+    deps.pool.query<UsageEventRow>(
+      `SELECT metric_key, created_at
+           FROM metering.usage_events
+          WHERE product_id = $1
+            AND created_at >= now() - interval '${CONSUME_LOOKBACK}'
+            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
+          ORDER BY created_at DESC
+          LIMIT 1`,
+      [productId, scopeWorkspaceId],
+    ),
+    /*
+     * C1 出站：**不新开一条写路径**。auth-bff 每次成功换票已经往
+     * `support.audit_logs` 写一条（product_210 §6 的 append-only 审计），
+     * 带 `after.caller_product`——那条痕迹一直在写，只是从来没人读。
+     *
+     * 这里按 `caller_product` 反查：调用方是本产品，说明它真的换过票去调别人。
+     *
+     * 查询形状：`idx_audit_logs_action` 先把行收敛到换票这一种，再靠
+     * `created_at` 下界做分区裁剪，最后按 jsonb 过滤。`after->>'caller_product'`
+     * **没有索引**——最坏情况是「这个产品从没换过票」，要把窗口内全部换票行扫完
+     * 才能确定没有，而那恰好是本检查项最常被问的状态。
+     *
+     * 今天可以这么查：换票凭证 TTL 300 秒、在跑的智能体个位数，窗口内是几千行量级。
+     * **到了不够用那天，加这条索引**，不要改判据：
+     *   create index idx_audit_logs_s2s_caller
+     *       on support.audit_logs ((after->>'caller_product'), created_at desc)
+     *    where action = 'oidc.token_exchange.issued';
+     */
+    deps.pool.query<S2sAuditRow>(
+      `SELECT after->>'target_product' AS target_product,
+                after->>'mode'           AS mode,
+                created_at
+           FROM support.audit_logs
+          WHERE action = $1
+            AND result = 'success'
+            AND after->>'caller_product' = $2
+            AND created_at >= now() - interval '${S2S_LOOKBACK}'
+          ORDER BY created_at DESC
+          LIMIT 1`,
+      [S2S_AUDIT_ACTION, productCode],
+    ),
+    /*
+     * 开通与投递：`acceptance` 那条链的第二段与末段。
+     *
+     * **这两张表都不是分区表**（`54_provisioning.sql` 里没有 PARTITION BY），
+     * 所以这里**有意不带 `created_at` 下界**——C3 那条带，是因为
+     * `metering.usage_events` 按月分区、谓词里不给下界就要全分区扫。照着 C3 抄一个
+     * 时间窗在这里只会白白把「半年前开通过、至今在用」的产品判成没开通过。
+     *
+     * 两条都靠 `idx_provisionings_product_id` / `idx_webhook_deliveries_product`
+     * 收敛，再取最近一行。
+     */
+    deps.pool.query<ProvisionRow>(
+      `SELECT workspace_id, provisioned_at,
+                metadata->'ack'->>'at'     AS ack_at,
+                metadata->'ack'->>'status' AS ack_status
+           FROM provisioning.provisionings
+          WHERE product_id = $1
+            AND status = 'provisioned'
+            AND provisioned_at IS NOT NULL
+            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
+          ORDER BY provisioned_at DESC
+          LIMIT 1`,
+      [productId, scopeWorkspaceId],
+    ),
+    deps.pool.query<DeliveryRow>(
+      `SELECT event_type, workspace_id, response_code, last_attempt_at
+           FROM provisioning.webhook_deliveries
+          WHERE product_id = $1
+            AND status = 'delivered'
+            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
+          ORDER BY last_attempt_at DESC NULLS LAST
+          LIMIT 1`,
+      [productId, scopeWorkspaceId],
+    ),
+  ]);
+
+  const loggedIn = login.rows[0];
+  const latest = usage.rows[0];
+  const exchange = s2s.rows[0];
+  const provisioned = provision.rows[0];
+  const delivered = delivery.rows[0];
+  return {
+    login: loggedIn
+      ? {
+          lastLoginAt: toIso(loggedIn.created_at),
+          clientId: loggedIn.client_id,
+        }
+      : null,
+    /*
+     * C2 的收口在这里做，不在查询里——它不是 SQL，是 Redis 上的「最近一次」键。
+     *
+     * 拿不到 workspaceId 时**算不在范围内**（保守），而不是放行：认证要证的是
+     * 「沙箱里那一次」，证不出来就不该算。`platform-entitlements.router` 的
+     * workspaceId 来自 `scopeToS2sCaller`，正常路径上是有值的；真出现空值，
+     * 抽屉里会看到这一段没过，那正是该被人看见的事，不是该被悄悄兜底的事。
+     */
+    entitlement: (() => {
+      const sig = parseEntitlementSignal(raw, key);
+      if (!sig || !scopeWorkspaceId) return sig;
+      return sig.workspaceId === scopeWorkspaceId ? sig : null;
+    })(),
+    consume: latest
+      ? {
+          lastEventAt: toIso(latest.created_at),
+          metricKey: latest.metric_key,
+        }
+      : null,
+    s2s: exchange
+      ? {
+          lastSeenAt: toIso(exchange.created_at),
+          /* 审计里这两个是 jsonb 取出来的，理论上可能缺；缺了不算故障
+               （旧行可能没有这两个键），用占位词而不是让整条信号消失。 */
+          target: exchange.target_product ?? "（未记录）",
+          mode: exchange.mode ?? "（未记录）",
+        }
+      : null,
+    provision: provisioned
+      ? {
+          lastProvisionedAt: toIso(provisioned.provisioned_at),
+          workspaceId: provisioned.workspace_id,
+        }
+      : null,
+    /* 回执的时间戳是平台自己写进 metadata 的 ISO 串（`recordAck`），不是列上的
+         timestamptz——所以这里原样带出，不过 `toIso`。`status` 缺失时用占位词而不是
+         让整条信号消失，与 s2s 那两个 jsonb 字段同一处理。 */
+    provisionAck:
+      provisioned && provisioned.ack_at
+        ? {
+            ackedAt: provisioned.ack_at,
+            status: provisioned.ack_status ?? "（未记录）",
+            workspaceId: provisioned.workspace_id,
+          }
+        : null,
+    delivery: delivered
+      ? {
+          eventType: delivered.event_type,
+          workspaceId: delivered.workspace_id,
+          responseCode: delivered.response_code,
+          lastAttemptAt: delivered.last_attempt_at
+            ? toIso(delivered.last_attempt_at)
+            : null,
+        }
+      : null,
+  };
+}
+
 // ============================================================================
 // Router
 // ============================================================================
@@ -303,11 +521,15 @@ export class ProductIntegrationSignalsRouter {
    * 认证要的是另一件事——**只认沙箱里那一次**。不收口的话，A 客户的真实使用会把
    * B 产品的认证喂绿，而那正是旧 `acceptance` 判据的毛病：它读的是该产品的任意流量。
    *
-   * ── 为什么登录段收的是用户不是工作区 ──
+   * ── 为什么登录段收的是租户不是工作区 ──
    * `session.refresh_tokens` **没有 workspace_id**（登录发生在选定工作区之前，这一点
-   * 本文件早先的注释已经写过）。硬凑一个进去只会把一条本来成立的链判成失败。改按
-   * **沙箱测试用户**收口，判据反而更硬：它证明的是「**那个**沙箱用户真的登进了
-   * 这个产品」，比「某个工作区里发生过登录」更贴近这一段要证的事。
+   * 本文件早先的注释已经写过）。硬凑一个进去只会把一条本来成立的链判成失败。
+   *
+   * 改按**沙箱租户的成员**收口。2026-10-30 的第一版收的是**单个用户 id**，那更精确，
+   * 但它要求运营先给每个产品指定一个沙箱账号——而沙箱租户里本来就只住沙箱用户
+   * （锚点账号 disabled 且无凭据，登不进来），所以「登录的人是这个租户的成员」与
+   * 「登录的是沙箱用户」在实际上是同一件事，却不需要谁去指定谁。多账号联调时前者
+   * 还照样成立，后者会漏。
    *
    * ── C1 出站换票收不了口，也不需要 ──
    * `support.audit_logs` 没有 workspace_id（§72 头注写明「不引入 workspace_id」），
@@ -320,7 +542,7 @@ export class ProductIntegrationSignalsRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
     @Query("workspaceId") workspaceIdRaw?: string,
-    @Query("userId") userIdRaw?: string,
+    @Query("tenantId") tenantIdRaw?: string,
   ): Promise<IntegrationSignalsRecord> {
     assertCanRead(req);
     const productId = requireUuid(id, "id");
@@ -329,200 +551,18 @@ export class ProductIntegrationSignalsRouter {
     const scopeWorkspaceId = workspaceIdRaw
       ? requireUuid(workspaceIdRaw, "workspaceId")
       : null;
-    const scopeUserId = userIdRaw ? requireUuid(userIdRaw, "userId") : null;
+    const scopeTenantId = tenantIdRaw
+      ? requireUuid(tenantIdRaw, "tenantId")
+      : null;
 
-    const product = await this.pool.query<{ product_code: string }>(
-      `SELECT product_code FROM product.products
-        WHERE id = $1 AND deleted_at IS NULL`,
-      [productId],
+    return readIntegrationSignals(
+      {
+        pool: this.pool,
+        redis: this.redis,
+        keyPrefix: this.rpRuntime.keyPrefix,
+      },
+      productId,
+      { workspaceId: scopeWorkspaceId, tenantId: scopeTenantId },
     );
-    const productCode = product.rows[0]?.product_code;
-    if (!productCode) {
-      throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
-    }
-
-    const key = `${this.rpRuntime.keyPrefix}${C2_SIGNAL_KEY_INFIX}${productCode}`;
-    const [raw, login, usage, s2s, provision, delivery] = await Promise.all([
-      this.redis.get(key),
-      /*
-       * 登录：`acceptance` 链的首段。两步合成一条 SQL——先用
-       * `idx_oidc_clients_product_id` 把客户端收敛到这个产品（该表十几行），
-       * 再回 `session.refresh_tokens` 取最近一行。按 **product_id 聚合**而不是单个
-       * client_id：一个产品可能有 stable / beta / canary 三个客户端，哪个登都算。
-       *
-       * 查询形状：`refresh_tokens.client_id` **没有索引**（只有 user_id /
-       * session_id / status / expires_at 四条）。最坏情况是「这个产品从没人登过」，
-       * 要扫完整张表才能确定没有——而那恰好是本检查项最常被问的状态（与 C1
-       * 出站那条同型）。今天可以这么查：该表只增不删但量级跟登录次数走，
-       * 现阶段是万行以下。**到了不够用那天，加这条索引**，不要改判据：
-       *   create index idx_refresh_tokens_client_created
-       *       on session.refresh_tokens (client_id, created_at desc);
-       *
-       * **不带 `created_at` 下界**：这张表不是分区表，照搬 C3 的时间窗只会把
-       * 「半年前登过、至今在用」的产品判成没人登过。
-       */
-      this.pool.query<LoginRow>(
-        `SELECT rt.client_id, rt.created_at
-           FROM session.refresh_tokens rt
-          WHERE rt.client_id IN (
-                  SELECT c.client_id
-                    FROM appoidc.oidc_clients c
-                   WHERE c.product_id = $1
-                     AND c.client_kind = 'product'
-                )
-            AND ($2::uuid IS NULL OR rt.user_id = $2::uuid)
-          ORDER BY rt.created_at DESC
-          LIMIT 1`,
-        [productId, scopeUserId],
-      ),
-      /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
-         单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
-         三四个月分区——对一个上线检查的点击来说够用；真到不够用那天加索引，
-         不在这里改判据。 */
-      this.pool.query<UsageEventRow>(
-        `SELECT metric_key, created_at
-           FROM metering.usage_events
-          WHERE product_id = $1
-            AND created_at >= now() - interval '${CONSUME_LOOKBACK}'
-            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
-          ORDER BY created_at DESC
-          LIMIT 1`,
-        [productId, scopeWorkspaceId],
-      ),
-      /*
-       * C1 出站：**不新开一条写路径**。auth-bff 每次成功换票已经往
-       * `support.audit_logs` 写一条（product_210 §6 的 append-only 审计），
-       * 带 `after.caller_product`——那条痕迹一直在写，只是从来没人读。
-       *
-       * 这里按 `caller_product` 反查：调用方是本产品，说明它真的换过票去调别人。
-       *
-       * 查询形状：`idx_audit_logs_action` 先把行收敛到换票这一种，再靠
-       * `created_at` 下界做分区裁剪，最后按 jsonb 过滤。`after->>'caller_product'`
-       * **没有索引**——最坏情况是「这个产品从没换过票」，要把窗口内全部换票行扫完
-       * 才能确定没有，而那恰好是本检查项最常被问的状态。
-       *
-       * 今天可以这么查：换票凭证 TTL 300 秒、在跑的智能体个位数，窗口内是几千行量级。
-       * **到了不够用那天，加这条索引**，不要改判据：
-       *   create index idx_audit_logs_s2s_caller
-       *       on support.audit_logs ((after->>'caller_product'), created_at desc)
-       *    where action = 'oidc.token_exchange.issued';
-       */
-      this.pool.query<S2sAuditRow>(
-        `SELECT after->>'target_product' AS target_product,
-                after->>'mode'           AS mode,
-                created_at
-           FROM support.audit_logs
-          WHERE action = $1
-            AND result = 'success'
-            AND after->>'caller_product' = $2
-            AND created_at >= now() - interval '${S2S_LOOKBACK}'
-          ORDER BY created_at DESC
-          LIMIT 1`,
-        [S2S_AUDIT_ACTION, productCode],
-      ),
-      /*
-       * 开通与投递：`acceptance` 那条链的第二段与末段。
-       *
-       * **这两张表都不是分区表**（`54_provisioning.sql` 里没有 PARTITION BY），
-       * 所以这里**有意不带 `created_at` 下界**——C3 那条带，是因为
-       * `metering.usage_events` 按月分区、谓词里不给下界就要全分区扫。照着 C3 抄一个
-       * 时间窗在这里只会白白把「半年前开通过、至今在用」的产品判成没开通过。
-       *
-       * 两条都靠 `idx_provisionings_product_id` / `idx_webhook_deliveries_product`
-       * 收敛，再取最近一行。
-       */
-      this.pool.query<ProvisionRow>(
-        `SELECT workspace_id, provisioned_at,
-                metadata->'ack'->>'at'     AS ack_at,
-                metadata->'ack'->>'status' AS ack_status
-           FROM provisioning.provisionings
-          WHERE product_id = $1
-            AND status = 'provisioned'
-            AND provisioned_at IS NOT NULL
-            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
-          ORDER BY provisioned_at DESC
-          LIMIT 1`,
-        [productId, scopeWorkspaceId],
-      ),
-      this.pool.query<DeliveryRow>(
-        `SELECT event_type, workspace_id, response_code, last_attempt_at
-           FROM provisioning.webhook_deliveries
-          WHERE product_id = $1
-            AND status = 'delivered'
-            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
-          ORDER BY last_attempt_at DESC NULLS LAST
-          LIMIT 1`,
-        [productId, scopeWorkspaceId],
-      ),
-    ]);
-
-    const loggedIn = login.rows[0];
-    const latest = usage.rows[0];
-    const exchange = s2s.rows[0];
-    const provisioned = provision.rows[0];
-    const delivered = delivery.rows[0];
-    return {
-      login: loggedIn
-        ? {
-            lastLoginAt: toIso(loggedIn.created_at),
-            clientId: loggedIn.client_id,
-          }
-        : null,
-      /*
-       * C2 的收口在这里做，不在查询里——它不是 SQL，是 Redis 上的「最近一次」键。
-       *
-       * 拿不到 workspaceId 时**算不在范围内**（保守），而不是放行：认证要证的是
-       * 「沙箱里那一次」，证不出来就不该算。`platform-entitlements.router` 的
-       * workspaceId 来自 `scopeToS2sCaller`，正常路径上是有值的；真出现空值，
-       * 抽屉里会看到这一段没过，那正是该被人看见的事，不是该被悄悄兜底的事。
-       */
-      entitlement: (() => {
-        const sig = parseEntitlementSignal(raw, key);
-        if (!sig || !scopeWorkspaceId) return sig;
-        return sig.workspaceId === scopeWorkspaceId ? sig : null;
-      })(),
-      consume: latest
-        ? {
-            lastEventAt: toIso(latest.created_at),
-            metricKey: latest.metric_key,
-          }
-        : null,
-      s2s: exchange
-        ? {
-            lastSeenAt: toIso(exchange.created_at),
-            /* 审计里这两个是 jsonb 取出来的，理论上可能缺；缺了不算故障
-               （旧行可能没有这两个键），用占位词而不是让整条信号消失。 */
-            target: exchange.target_product ?? "（未记录）",
-            mode: exchange.mode ?? "（未记录）",
-          }
-        : null,
-      provision: provisioned
-        ? {
-            lastProvisionedAt: toIso(provisioned.provisioned_at),
-            workspaceId: provisioned.workspace_id,
-          }
-        : null,
-      /* 回执的时间戳是平台自己写进 metadata 的 ISO 串（`recordAck`），不是列上的
-         timestamptz——所以这里原样带出，不过 `toIso`。`status` 缺失时用占位词而不是
-         让整条信号消失，与 s2s 那两个 jsonb 字段同一处理。 */
-      provisionAck:
-        provisioned && provisioned.ack_at
-          ? {
-              ackedAt: provisioned.ack_at,
-              status: provisioned.ack_status ?? "（未记录）",
-              workspaceId: provisioned.workspace_id,
-            }
-          : null,
-      delivery: delivered
-        ? {
-            eventType: delivered.event_type,
-            workspaceId: delivered.workspace_id,
-            responseCode: delivered.response_code,
-            lastAttemptAt: delivered.last_attempt_at
-              ? toIso(delivered.last_attempt_at)
-              : null,
-          }
-        : null,
-    };
   }
 }

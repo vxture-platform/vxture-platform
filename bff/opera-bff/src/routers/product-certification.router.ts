@@ -63,6 +63,11 @@ import { createHash } from "node:crypto";
 import { SubscriptionService } from "@vxture/service-subscription";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { conflict, invalidRequest, notFound } from "../errors/api-error";
+import { RP_REDIS, RP_RUNTIME, type RpRuntime } from "../oidc/oidc-rp.tokens";
+import {
+  readIntegrationSignals,
+  type SignalRedisReader,
+} from "./product-integration-signals.router";
 import { OPERA_BFF_RO_POOL, OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 import { assertCanManage, assertCanRead } from "./product-authz";
@@ -140,6 +145,8 @@ export class ProductCertificationRouter {
     @Inject(OPERA_BFF_RW_POOL) private readonly rwPool: Pool,
     @Inject(SubscriptionService)
     private readonly subscriptions: SubscriptionService,
+    @Inject(RP_REDIS) private readonly redis: SignalRedisReader,
+    @Inject(RP_RUNTIME) private readonly rpRuntime: RpRuntime,
   ) {}
 
   /**
@@ -321,6 +328,101 @@ export class ProductCertificationRouter {
     }
 
     return toRecord(inserted.rows[0]!);
+  }
+
+  /**
+   * 判定：读**按沙箱收口**的信号，五段齐则定 certified。
+   *
+   * ── 五段是哪五段，为什么不是六段 ──
+   * 登录 / 开通 / 回调投递 / 权益拉取 / 用量上报。C1 出站换票**不在内**：它归上线门，
+   * 而且 `support.audit_logs` 没有 workspace_id，收不了口——给它一个收不了口的位置，
+   * 等于让一次别处的换票把沙箱认证喂绿。
+   *
+   * ── 判据是「这一次」，不是「有没有过」 ──
+   * 全部信号都按本次 run 的 `sandbox_workspace_id` 收口（登录段按沙箱租户的成员，因为
+   * `refresh_tokens` 没有 workspace_id）。不收口就退化成旧 `acceptance`：读该产品的
+   * 任意流量，A 客户的使用把 B 的认证喂绿。
+   *
+   * ── 为什么不自动把 running 判成 failed ──
+   * 缺段几乎总是「对方还没调」，而对方什么时候调不由平台决定。留在 running 并把缺哪
+   * 几段原样回出去，运营看到的是「还差权益和用量」，而不是一个没有下一步的「失败」。
+   * 真正该 failed 的是「跑过且不可能再成」——那需要一个超时判据，目前没有，所以不编。
+   */
+  @Post(":id/certification/evaluate")
+  async evaluate(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<CertificationRunRecord> {
+    assertCanManage(req);
+    const productId = requireUuid(id, "id");
+
+    const latest = await this.pool.query<RunRow>(
+      `SELECT ${RUN_COLUMNS} FROM product.certification_runs
+        WHERE product_id = $1 AND verdict = 'running'
+        ORDER BY created_at DESC LIMIT 1`,
+      [productId],
+    );
+    const run = latest.rows[0];
+    if (!run) {
+      throw conflict(
+        "CERTIFICATION_NO_RUNNING",
+        "这个产品没有进行中的认证——先发起一次。",
+      );
+    }
+
+    const signals = await readIntegrationSignals(
+      {
+        pool: this.pool,
+        redis: this.redis,
+        keyPrefix: this.rpRuntime.keyPrefix,
+      },
+      productId,
+      { workspaceId: run.sandbox_workspace_id, tenantId: CERT_TENANT_ID },
+    );
+
+    const segments = {
+      login: signals.login !== null,
+      provision: signals.provision !== null,
+      delivery: signals.delivery !== null,
+      entitlement: signals.entitlement !== null,
+      consume: signals.consume !== null,
+    };
+    const allPresent = Object.values(segments).every(Boolean);
+
+    const updated = await this.rwPool.query<RunRow>(
+      `UPDATE product.certification_runs
+          SET segments = $2::jsonb,
+              verdict = CASE WHEN $3::bool THEN 'certified' ELSE verdict END,
+              /* 结论与时刻互为充要（DDL 上有 CHECK 钉着），所以这两列必须一起写。
+                 分两条语句写的话，中间那一瞬是一个 CHECK 不允许的状态。 */
+              certified_at = CASE WHEN $3::bool THEN now() ELSE certified_at END,
+              updated_at = now()
+        WHERE id = $1
+        RETURNING ${RUN_COLUMNS}`,
+      [run.id, JSON.stringify(segments), allPresent],
+    );
+
+    if (allPresent) {
+      const client = await this.rwPool.connect();
+      try {
+        await insertOperatorAuditLog(client, req, {
+          action: "product.certification.certified",
+          resourceType: "product",
+          resourceId: productId,
+          before: { verdict: "running" },
+          after: {
+            verdict: "certified",
+            runId: run.id,
+            sandboxWorkspaceId: run.sandbox_workspace_id,
+            contractVersion: run.contract_version,
+          },
+        });
+      } finally {
+        client.release();
+      }
+    }
+
+    return toRecord(updated.rows[0]!);
   }
 
   /**
