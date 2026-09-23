@@ -1990,7 +1990,7 @@ export async function seedCatalog(client) {
   `);
 
   // runos 的身份订正（platform#205 / #216）2026-11-04 随 L1 退出目录一并删除：
-  // 它修的是一行**不该存在的产品行**里的字段。留着不会出错（存量行已软删，那条
+  // 它修的是一行**不该存在的产品行**里的字段。留着不会出错（存量行已删，那条
   // update 的 product_type='agent' 守卫早就不命中），但留着等于继续声称目录里有
   // 一个叫 runos 的产品该长成什么样。
 
@@ -2007,7 +2007,9 @@ export async function seedCatalog(client) {
   // 在下方以 kind:"platform" 声明，与 ruyin 同型。换票受众不再靠产品行解析（auth-bff
   // 的 PLATFORM_LEVEL_S2S_TARGETS），opera 的 /atlas /runos 管理页与权限码一概不动——
   // 退出的是**商品目录**，不是平台能力。存量库由迁移
-  // 2026-11-04-l1-out-of-product-catalog.sql 降级客户端并软删产品行与套餐。
+  // 2026-11-04-l1-out-of-product-catalog.sql 降级客户端，并**彻底删除**产品行、
+  // 套餐、组件、指标与全部引用（owner 2026-09-23：「不是软删，要彻底清理，不留残留」
+  // ——软删会让搭售了它们的订阅在权益解析里静默返回「未订阅」）。
   // ruyin 不在此列(owner 2026-08-31)：它是平台级 first-party 桌面客户端(与 website/
   // console 同类，customer-realm 的 platform 级客户端)，不是目录产品——其 OIDC 客户端
   // 在下方以 kind:"platform" 声明，无需也不得建 product.products 行。存量库由迁移
@@ -3509,7 +3511,7 @@ export async function seedCatalog(client) {
 
   // atlas catalog skeleton（5 个套餐骨架）2026-11-04 随 L1 退出目录删除。
   // 它存在的理由是「等 Atlas 仓落地自己的产品定义」——而那个前提已经不成立：
-  // atlas 是平台基础环境，没有要卖的档位。存量库的 5 行由迁移软删。
+  // atlas 是平台基础环境，没有要卖的档位。存量库的 5 行由迁移彻底删除。
 
   // ── vxtpl catalog — SKELETON ONLY (first-batch onboarding, owner decision
   // 2026-08-30: vxtpl is the template agent that walks the whole onboarding line;
