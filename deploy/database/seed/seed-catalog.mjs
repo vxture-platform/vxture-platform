@@ -3750,10 +3750,46 @@ export async function seedCatalog(client) {
              '该产品可供多少名成员使用；同一个人可同时占用多个产品的席位')
      on conflict (metric_key) do nothing`,
   );
+  /*
+   * 组件补默认值要**连已锁版本一起**，所以得临时关掉 trg_plan_component_guard_lock。
+   *
+   * 这不是绕过守卫，是与 `2026-10-28-seat-max.sql` 同一个已拍的决定：seat.max 是必须
+   * 项，补进已发布版本是有意的（它是「这一档能用几个席位」的默认值，不是改价）。
+   * 迁移管存量库、这里管新库，两边必须做同一件事。
+   *
+   * 不做的后果是**整个 seed 回滚**：本文件的这条 update 原先无条件扫全表，而 arda 的
+   * v1 由上面那段 seed 自己置成 `current/locked`，于是在**全新库**上触发器当场拦下、
+   * seed 失败——`db-init action=reset` 与任何新环境都起不来。老库上看不见，因为那里的
+   * 组件早就有 seat.max、`where not (quota ? ...)` 命中 0 行。
+   *
+   * 只加 `pv.is_locked = false` 过滤（本文件别处 tier 改名那条就是这么写的）是不够的：
+   * 那样 arda 的 v1 永远缺这一项，而缺的症状是配额解析读不到键，不是报错。
+   *
+   * 照迁移的写法逐条点名——例外要有据可查，不能悄悄发生。
+   */
+  const willPatch = await client.query(
+    `select pl.plan_code, pv.version_no, pv.status, pv.is_locked
+       from product.plan_components pc
+       join product.plan_versions pv on pv.id = pc.plan_version_id
+       join product.plans pl on pl.id = pv.plan_id
+      where not (pc.quota ? 'seat.max')
+      order by pl.plan_code, pv.version_no`,
+  );
+  for (const r of willPatch.rows) {
+    console.log(
+      `   · seat.max 补默认值 ${r.plan_code} v${r.version_no} (${r.status}${r.is_locked ? ", locked" : ""})`,
+    );
+  }
+  await client.query(
+    `alter table product.plan_components disable trigger trg_plan_component_guard_lock`,
+  );
   const seats = await client.query(
     `update product.plan_components
         set quota = quota || '{"seat.max": 1}'::jsonb
       where not (quota ? 'seat.max')`,
+  );
+  await client.query(
+    `alter table product.plan_components enable trigger trg_plan_component_guard_lock`,
   );
   /* 数字由 rowCount 现报，不写死。上一版写的是「六个可订阅产品」——而这个集合
      是 `standalone_subscribable` 现算出来的，atlas/runos 一退出目录那句话就错了，
