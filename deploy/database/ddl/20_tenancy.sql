@@ -25,6 +25,17 @@ CREATE TABLE tenancy.tenants (
     --   所以存量零迁移;某个大客户要更高时,运营只改这一行。
     --   只在租户一层设成员闸:fk_workspace_memberships_tenant_member 强制工作区成员
     --   必须先是租户成员,故任一工作区成员数恒 ≤ 租户成员数,再设一层拦不到新东西。
+    -- 用途轴(2026-09-23):**只区分「有没有那条特权」**,不是给租户分类用的标签位。
+    --   customer      = 真实租户(含我们自有的测试租户、受邀客户)。无特权,计入全部对外口径。
+    --   certification = 接入认证沙箱。有且只有一条特权:认证订阅可指向**未发布**的套餐版本,
+    --                   用来切断「发布要验收 / 验收要订阅 / 订阅要已发布」那个环。不计入任何对外口径。
+    -- 判据:只有带特权才值得占一根排他的轴。「自有测试」「受邀参与」不改变任何行为或数字——
+    -- 前者是 tenancy.tenant_tags 的标签,后者是 promotion.voucher_redemptions 已经记全的
+    -- (租户 × 产品) 关系,两者都**查得出来**,不占这一列。
+    -- 写入面:自助注册路径不带这一列,拿 DEFAULT;certification 只由认证编排写。
+    -- **本列有意不进 98 的 UPDATE 白名单**——没有任何人工场景需要改它,排除在 GRANT 之外
+    -- 就堵死了「手改一行把普通租户变成能订未发布版本的租户」。可变的是标签,不是这一列。
+    purpose              varchar(16)  NOT NULL DEFAULT 'customer',
     member_limit         int,
     workspace_limit      int,
     created_at           timestamptz  NOT NULL DEFAULT now(),
@@ -33,12 +44,14 @@ CREATE TABLE tenancy.tenants (
     CONSTRAINT uq_tenants_tenant_no          UNIQUE (tenant_no),
     CONSTRAINT chk_tenants_type              CHECK (type IN ('personal','organization')),
     CONSTRAINT chk_tenants_status            CHECK (status IN ('active','suspended','deleted')),
+    CONSTRAINT chk_tenants_purpose           CHECK (purpose IN ('customer','certification')),
     CONSTRAINT chk_tenants_verification_status CHECK (verification_status IN ('unverified','pending','verified','rejected')),
     CONSTRAINT chk_tenants_tenant_no           CHECK (public.principal_no_valid(tenant_no, 2))  -- 类别位 2 + Luhn(§11 v4)
 );
 CREATE INDEX idx_tenants_owner_user_id ON tenancy.tenants (owner_user_id);
 CREATE INDEX idx_tenants_type          ON tenancy.tenants (type);
 CREATE INDEX idx_tenants_status        ON tenancy.tenants (status);
+CREATE INDEX idx_tenants_purpose       ON tenancy.tenants (purpose);
 CREATE INDEX idx_tenants_deleted_at    ON tenancy.tenants (deleted_at);
 -- 每 user 至多 1 个 personal 租户（部分唯一）
 CREATE UNIQUE INDEX uq_tenants_one_personal_per_owner ON tenancy.tenants (owner_user_id) WHERE type = 'personal';

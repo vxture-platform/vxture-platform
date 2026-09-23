@@ -14,7 +14,7 @@
  * 装不下这份表单：双语、六个文案字段、三组可增删的数组，还要能看预览。
  *
  * ── admin 在这张表上只能写三样 ──
- * `marketing`（双语富结构）/ `release_stage`（成熟度）/ `is_customer_visible`
+ * `marketing`（双语富结构）/ `release_stage`（承诺等级）/ `is_customer_visible`
  * （客户端可见）。产品的技术资料（编码/类型/来源/计量/接入）写入面在运维台——
  * 这里**显示但不给输入框**（全站规则：禁用输入框不当展示，用文字）。
  *
@@ -45,7 +45,10 @@ import {
   Textarea,
   useToast,
 } from "@vxture/design-system";
-import { RELEASE_STAGE_DEFS } from "@vxture/core-utils";
+import {
+  RELEASE_STAGE_DEFS,
+  RELEASE_STAGES as RELEASE_STAGES_DOMAIN,
+} from "@vxture/core-utils";
 import { SolutionField } from "./SolutionField";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 import { fetchProductCapability, updateProductContent } from "@/api/admin-bff";
@@ -59,12 +62,14 @@ import { PUBLISH_STATUS_TONE } from "@/modules/shared/publish-tone";
 import { useCapabilityTypeLabels } from "@/modules/shared/enum-labels";
 import { formatNumber } from "@/modules/tenants/tenant-utils";
 
-/* 三态与标签的权威源在 `@vxture/core-utils`（RELEASE_STAGE_DEFS）。 */
+/* 值域与标签的权威源在 `@vxture/core-utils`（RELEASE_STAGE_DEFS）。 */
 const RELEASE_STAGES = RELEASE_STAGE_DEFS.map((d) => ({
   value: d.value,
   label: d.labelZh,
 }));
-const STAGE_ORDER = ["developing", "beta", "ga"] as const;
+/* 顺序权威也在 core-utils（RELEASE_STAGES 的数组序 = 承诺链的前进方向），
+   这里不再另抄一份：抄一份就会在加档位那天漏掉新值而无人报错。 */
+const STAGE_ORDER = RELEASE_STAGES_DOMAIN;
 
 type LocaleForm = {
   tagline: string;
@@ -289,7 +294,7 @@ function MarketingForm({
     value: LocaleForm[K],
   ): void => setForm((prev) => ({ ...prev, [key]: value }));
 
-  /* 成熟度只向前：当前档之前的都不可选。把规则画在控件上，而不是等 BFF 409。 */
+  /* 承诺等级只向前：当前档之前的都不可选。把规则画在控件上，而不是等 BFF 409。 */
   const stageItems = useMemo(() => {
     const current = STAGE_ORDER.indexOf(
       product.releaseStage as (typeof STAGE_ORDER)[number],
@@ -457,7 +462,7 @@ function MarketingForm({
               type="date"
               value={expectedReleaseAt}
               onChange={(event) => setExpectedReleaseAt(event.target.value)}
-              disabled={releaseStage !== "developing"}
+              disabled={releaseStage !== "preview"}
             />
           </SolutionField>
         </div>
@@ -607,13 +612,15 @@ function MarketingForm({
               ))}
             </div>
             <span className="text-body-sm text-muted-foreground">
-              {releaseStage === "developing"
+              {releaseStage === "preview"
                 ? expectedReleaseAt
                   ? `预期发布：${expectedReleaseAt}`
                   : "敬请期待"
                 : releaseStage === "beta"
                   ? "公测中，可申请试用"
-                  : "可直接订阅"}
+                  : releaseStage === "sunset"
+                    ? "已停售：老客户照常使用与续订，不再接受新订阅"
+                    : "可直接订阅"}
             </span>
             {!visible ? (
               <span className="text-body-sm text-destructive-text">

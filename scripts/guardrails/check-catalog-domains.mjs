@@ -36,6 +36,14 @@ function ddlCheckIn(src, constraintName) {
 const dom = read(
   "packages/shared/shared/src/constants/catalog-domains.constants.ts",
 );
+/* release_stage 的值域权威不在 @shared 而在 @vxture/core-utils（release-stage.ts 头注
+   写明它是单一权威源）。这里读第二份 TS 源，而不是把那个值域搬进 @shared——搬家会动
+   到所有 import 它的门户与 BFF，为一条对账引入那么大的改动不划算。判据相同：DDL 的
+   CHECK 必须与 TS 值域逐值一致，不一致时**改 DDL，不改 TS**。
+   （2026-10-29 加。此前 release_stage 与 products.status 两族都不在本守卫视野里——
+   改名那天才发现没有任何机械链路盯着它们。products.status 的 TS 侧目前还没有权威源
+   （opera 的 lifecycle.ts 各写了一份联合类型），等它收口到 @shared 再在这里补一对。） */
+const relStage = read("packages/core/utils/src/release-stage.ts");
 const p40 = read("deploy/database/ddl/40_product.sql");
 const p50 = read("deploy/database/ddl/50_metering.sql");
 const p52 = read("deploy/database/ddl/52_billing.sql");
@@ -98,6 +106,12 @@ const pairs = [
     "product layer",
     tsArray(dom, "PRODUCT_LAYERS"),
     ddlCheckIn(p40, "chk_products_layer"),
+  ],
+  // 承诺等级（2026-10-29 由「成熟度」改写）：preview/beta/stable/sunset。
+  [
+    "release stage",
+    tsArray(relStage, "RELEASE_STAGES"),
+    ddlCheckIn(p40, "chk_products_release_stage"),
   ],
   // 2026-09-21：这两族原本没有值域契约，admin 里各有 4~5 份就地写的中文映射函数，
   // 而且互不相同——paySourceLabel 有三份漏了 voucher 分支，把券结算显示成「无」。

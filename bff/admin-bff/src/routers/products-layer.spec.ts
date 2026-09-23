@@ -72,7 +72,7 @@ function catalogRow(over: {
     product_type: over.product_type,
     layer: over.layer,
     origin: "self",
-    release_stage: "ga",
+    release_stage: "stable",
     marketing: null,
     product_name: over.product_code,
     description: null,

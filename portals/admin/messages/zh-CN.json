@@ -2506,9 +2506,10 @@
       "L3": "L3 智能体"
     },
     "releaseStage": {
-      "ga": "正式版",
+      "preview": "预览版",
       "beta": "公测版",
-      "developing": "开发中"
+      "stable": "正式版",
+      "sunset": "停售中"
     },
     "resetPeriod": {
       "none": "不重置",

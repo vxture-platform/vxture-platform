@@ -141,7 +141,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
   it("套餐卖的是别的产品：400 PLAN_PRODUCT_MISMATCH，不再往下走", async () => {
     const { pool, query } = poolOf({
       product_code: "karda",
-      release_stage: "ga",
+      release_stage: "stable",
     });
     const error = await routerWith(pool)
       .createOrder(req(), BODY)
@@ -169,7 +169,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
   it("开发中产品：409 PRODUCT_NOT_RELEASED", async () => {
     const { pool, query } = poolOf({
       product_code: "vxtpl",
-      release_stage: "developing",
+      release_stage: "preview",
     });
     const error = await routerWith(pool)
       .createOrder(req(), BODY)
@@ -198,7 +198,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
   it("ga + 公开套餐：同上", async () => {
     const { pool } = poolOf({
       product_code: "vxtpl",
-      release_stage: "ga",
+      release_stage: "stable",
       plan_is_public: true,
     });
     const error = await routerWith(pool)
@@ -229,7 +229,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
    */
   it("非公开 + 有有效邀请：放行", async () => {
     const { pool, query } = poolOf(
-      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { product_code: "vxtpl", release_stage: "stable", plan_is_public: false },
       { invite: [{ id: "v-1", batch_id: "b-1" }] },
     );
     const error = await routerWith(pool)
@@ -243,7 +243,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
 
   it("非公开 + 无可用邀请：仍然 409，且不写台账", async () => {
     const { pool, query } = poolOf(
-      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { product_code: "vxtpl", release_stage: "stable", plan_is_public: false },
       { invite: [] },
     );
     const error = await routerWith(pool)
@@ -260,7 +260,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
   it("公开套餐：根本不查邀请", async () => {
     const { pool, query } = poolOf({
       product_code: "vxtpl",
-      release_stage: "ga",
+      release_stage: "stable",
       plan_is_public: true,
     });
     const error = await routerWith(pool)
@@ -273,7 +273,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
 
   it("非公开套餐：409 PLAN_NOT_PUBLIC", async () => {
     const { pool } = poolOf(
-      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { product_code: "vxtpl", release_stage: "stable", plan_is_public: false },
       { invite: [] },
     );
     const error = await routerWith(pool)
@@ -295,7 +295,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
    */
   it("非公开 + 续订自己手上这一档：放行，且不动邀请券", async () => {
     const { pool, query } = poolOf(
-      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { product_code: "vxtpl", release_stage: "stable", plan_is_public: false },
       { owns: true },
     );
     const error = await routerWith(pool)
@@ -309,7 +309,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
 
   it("非公开 + 声称续订但手上没有这一档：仍要邀请", async () => {
     const { pool, query } = poolOf(
-      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { product_code: "vxtpl", release_stage: "stable", plan_is_public: false },
       { owns: false, invite: [] },
     );
     const error = await routerWith(pool)
@@ -332,7 +332,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
    */
   it("下单路径上 is_public 只出现在闸门那一条 SQL 里", async () => {
     const { pool, query } = poolOf(
-      { product_code: "vxtpl", release_stage: "ga", plan_is_public: false },
+      { product_code: "vxtpl", release_stage: "stable", plan_is_public: false },
       { invite: [{ id: "v-1", batch_id: "b-1" }] },
     );
     await routerWith(pool)

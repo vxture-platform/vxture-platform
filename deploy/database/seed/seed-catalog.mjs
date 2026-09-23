@@ -2104,7 +2104,7 @@ export async function seedCatalog(client) {
       `
       insert into product.products
         (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, release_stage, origin, origin_provider, created_by, layer, created_at, updated_at)
-      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', 'ga', $8, $9, $10, $11, now(), now())
+      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', 'stable', $8, $9, $10, $11, now(), now())
       on conflict (product_code) do nothing
     `,
       [
@@ -2712,20 +2712,22 @@ export async function seedCatalog(client) {
   }
 
   // launch checklist catalog
-  await client.query(`
-    insert into product.launch_checklist_items
-      (item_code, item_name, item_name_key, description, description_key, is_required, owner, gate, sort) values
-      ('verification_policy', '认证策略已配置', 'catalog.product.checklist.verification_policy.name',
-       'A verification policy is configured for the product.', 'catalog.product.checklist.verification_policy.desc', true, 'admin', 'publish', 10),
-      ('pricing_set', '定价已配置', 'catalog.product.checklist.pricing_set.name',
-       'Pricing is configured for the product.', 'catalog.product.checklist.pricing_set.desc', true, 'admin', 'publish', 20)
-    on conflict (item_code) do nothing
-  `);
+  //
+  // sort 10 / 20 空缺：verification_policy 与 pricing_set 已于 2026-10-29 退役，
+  // **别补回来**。两项都是 owner='admin'、is_required、gate='publish'，而全仓没有
+  // 任何人能勾上它们——opera 的检查单两个端点写死 `WHERE i.owner = 'opera'`，
+  // admin-bff 对 product_launch_statuses 只有一条 SELECT（发布门自己那一查）。
+  // 于是它们永远是 false，发布门成了墙。
+  //
+  // 退役而不是补录入面：这两件事本来就是**发布时一查就知道的事实**，不是勾——
+  // 这一版有没有价格行、这个产品解析得出哪条认证策略。后者尤其明显：
+  // verification_policy 的 baseline seed 建的是 product_id IS NULL 的平台默认行
+  // （personal / organization 各一条），任何产品都解析得到，判据恒为真。
+  // 现算判据落在发布门里，见 migrations/2026-10-29-product-lifecycle-domains.sql。
 
-  // product_200 §7 新产品接入 checklist（六步，technical onboarding；2026-08-12
+  // product_200 §7 新产品接入 checklist（技术 onboarding；2026-08-12
   // 产品发布管理阶段三引入）——复用同一张字典表，不另开一套：一个产品"能不能
-  // 上线"本来就是技术接入 + 商业配置合起来的一张单子，opera 只消费/勾选这六
-  // 项，商业那两项（verification_policy/pricing_set）继续留给 admin。
+  // 上线"本来就是一张单子，opera 消费/勾选这几项。
   await client.query(`
     insert into product.launch_checklist_items
       (item_code, item_name, item_name_key, description, description_key, is_required, owner, gate, sort) values

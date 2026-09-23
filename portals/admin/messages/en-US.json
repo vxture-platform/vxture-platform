@@ -2506,9 +2506,10 @@
       "L3": "L3 Agent"
     },
     "releaseStage": {
-      "ga": "GA",
+      "preview": "Preview",
       "beta": "Beta",
-      "developing": "In development"
+      "stable": "Stable",
+      "sunset": "Sunset"
     },
     "resetPeriod": {
       "none": "No reset",
