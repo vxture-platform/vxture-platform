@@ -63,12 +63,20 @@ function ScoreRow({
           窄屏下 flex-wrap 让它自己退回上下两段，不写断点。 */}
       <div className="flex flex-wrap items-center justify-between gap-md">
         <span className="flex min-w-0 flex-col gap-2xs">
-          <FieldLabel htmlFor={id}>{label}</FieldLabel>
+          {/*
+           * 这里原来是 `<FieldLabel htmlFor={id}>`，而右边的 `Rating` 并没有那个 id
+           * ——`for` 指向一个不存在的元素。浏览器会报「The label's for attribute
+           * doesn't match any element id」，而且自动填充与读屏都拿不到这个关联。
+           *
+           * 星级不是 `<input id>`，所以正确的关联方式不是 `for`，是把标签本身当作
+           * 名字来源：标签带 id，控件用 `aria-labelledby` 指过来。
+           */}
+          <FieldLabel id={id}>{label}</FieldLabel>
           <FieldDescription>{hint}</FieldDescription>
         </span>
         <Rating
           className="shrink-0"
-          aria-label={label}
+          aria-labelledby={id}
           value={value}
           onValueChange={onChange}
           optionLabels={optionLabels}

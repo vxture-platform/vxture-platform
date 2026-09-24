@@ -2665,6 +2665,8 @@
       "provisioning": "开通中",
       "active": "服务中",
       "cancelled": "已取消",
+      "suspended": "已暂停",
+      "terminated": "已终止",
       "closed": "已关闭"
     },
     "term": {

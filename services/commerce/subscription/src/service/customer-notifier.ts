@@ -22,7 +22,12 @@ export type CustomerNotificationTemplate =
      每一条都对应一个已经在跑的方法,不是新流程。 */
   | "order.payment_declared"
   | "order.cancelled"
-  | "order.expired";
+  | "order.expired"
+  /* owner 2026-09-25:退订此前一句话都不发。三条按**退款结果**分，不按动作分——
+     客户点的是「退订」，想知道的是「我的钱怎么样了」。见 dispatch/templates.ts。 */
+  | "subscription.cancelled_refunded"
+  | "subscription.cancelled_no_charge"
+  | "subscription.cancelled_no_refund";
 
 export interface CustomerNotifyInput {
   tenantId: string;

@@ -883,6 +883,104 @@ export class OrderService {
     return this.orders.getRefundByOrder(orderId);
   }
 
+  /**
+   * 退订之后的钱怎么办（owner 2026-09-25）。
+   *
+   * owner 的口径是「**站在客户视角，退订就是退款，毫无歧义**；差别在于能退 / 不能退
+   * （过了限期）/ 无需退款（0 付费）」。在此之前这两件事互不相知：卡片上点「立即退订」
+   * 只改订阅状态，订单不动、退款不提、消息不发——24 小时窗口就这么静静走完，而客户以为
+   * 退订就等于退钱。
+   *
+   * 所以这个方法做两件事，**在同一处**：
+   *   1. 够条件就**替客户发起退款**（不必他再去找入口——那正是窗口被走完的原因）；
+   *   2. 无论结果如何都发一条消息，把「服务停了 + 钱怎么样了」一次说清。
+   *
+   * 当前策略：24 小时内全额退、超过不退（owner 2026-09-25 明确「当前简单模式」）。
+   * 「24 小时内按配额消耗折算」是后续的事——那时改的是 `getRefundEligibility` 与金额，
+   * 这里的三条分支与消息不用动。
+   *
+   * **放在服务层而不是某个 BFF**：退订有两条路（console 客户自助、admin 运营代操作），
+   * 判定只长在一条上就等于给另一条留门。两处都调这一个方法。
+   *
+   * **永不抛**：退订本身已经成功提交了，钱与消息是它的后续。这里抛出去会让一次成功的
+   * 退订在界面上看起来失败，而客户会再点一次。失败只记日志。
+   */
+  async settleAfterCancel(input: {
+    subscriptionId: string;
+    tenantId: string;
+    actorUserId: string;
+    clientIp?: string | null;
+  }): Promise<{
+    outcome: "refunded" | "no_charge" | "no_refund" | "no_order";
+  }> {
+    try {
+      const orderId = await this.orders.findCurrentOrderIdForSubscription(
+        input.subscriptionId,
+      );
+      /* 没有订单的订阅是正常的（历史数据 / 运营手工建）——不发消息，因为没有钱可说。 */
+      if (!orderId) return { outcome: "no_order" };
+
+      const order = await this.getOrder(orderId);
+      const [eligibility, display] = await Promise.all([
+        this.getRefundEligibility(orderId),
+        /* 产品名 / 套餐名在这里自己取，不让两个 BFF 各传一份——那样两处迟早不一致，
+           而消息标题上「哪个产品被退订了」是客户唯一能据以核对的东西。 */
+        this.orders.getPlanDisplay(order.planVersionId),
+      ]);
+
+      const notify = (
+        templateCode: CustomerNotifyInput["templateCode"],
+        amount: string,
+      ) =>
+        this.emit(
+          `subscription_cancelled ${input.subscriptionId}`,
+          async () => ({
+            tenantId: input.tenantId,
+            templateCode,
+            /* 去重键用订阅 id：同一条订阅只该为这件事发一次，重复退订不该刷屏。 */
+            reference: {
+              type: "subscription" as const,
+              id: input.subscriptionId,
+            },
+            params: {
+              productName: display.productName,
+              planName: display.planName,
+              orderNo: order.orderNo,
+              amount: formatNotifyMoney(amount, order.currency),
+            },
+            recipients: [input.actorUserId],
+            link: `/subscribe/pay/${order.id}`,
+          }),
+        );
+
+      if (eligibility.eligible) {
+        await this.requestRefund(orderId, {
+          reason: "客户退订，24 小时内全额退款",
+          userId: input.actorUserId,
+          clientIp: input.clientIp ?? null,
+        });
+        await notify("subscription.cancelled_refunded", eligibility.amount);
+        return { outcome: "refunded" };
+      }
+
+      /* 实付 0 与「过了窗口」对客户是两件事，必须分开说：前者本来就没付钱，
+         后者是付了钱但不退。混成一条会让 0 元用户以为自己损失了什么。 */
+      if (eligibility.reasons.includes("zero_amount")) {
+        await notify("subscription.cancelled_no_charge", order.payableAmount);
+        return { outcome: "no_charge" };
+      }
+
+      await notify("subscription.cancelled_no_refund", order.payableAmount);
+      return { outcome: "no_refund" };
+    } catch (err) {
+      this.logger.error(
+        `settleAfterCancel failed (subscription=${input.subscriptionId}): ${String(err)} — ` +
+          `退订本身已生效，钱与消息需人工跟进`,
+      );
+      return { outcome: "no_order" };
+    }
+  }
+
   /** 客户申请退款：资格不满足 → 409（reasons 随消息带出）。 */
   async requestRefund(
     orderId: string,

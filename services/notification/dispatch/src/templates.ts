@@ -27,7 +27,19 @@ export type NotificationTemplateCode =
   | "order.payment_declared"
   | "order.cancelled"
   | "order.expired"
-  | "tenant.converted";
+  | "tenant.converted"
+  /* owner 2026-09-25:「订阅开通 free 有消息通知，退订没有」「站在客户视角，退订就是
+     退款，毫无歧义。差别在于能退 / 不能退（过了限期）/ 无需退款（0 付费）」。
+     所以这三条**按退款结果命名，不按动作命名**——客户点的是「退订」，想知道的是
+     「我的钱怎么样了」。三种结果各一条，因为它们导向的下一步不同：
+       refunded    → 去看退款进度（另有 refund.requested 那条讲细节）
+       no_charge   → 到此为止，本来就没付钱
+       no_refund   → 到此为止，但要说清为什么（过了 24 小时窗口）
+     当前策略：24 小时内全额退、超过不退（owner 2026-09-25）。24 小时内按配额消耗折算
+     是后续的事——那时这三条不用动，变的是金额与 refunded 那条的文案参数。 */
+  | "subscription.cancelled_refunded"
+  | "subscription.cancelled_no_charge"
+  | "subscription.cancelled_no_refund";
 
 export type NotificationReferenceType =
   | "subscription"
@@ -78,6 +90,11 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "order.cancelled": "订单已取消：{{orderNo}}",
   "order.expired": "订单已关闭：{{orderNo}}",
   "tenant.converted": "{{tenantName}} 已升为组织租户",
+  "subscription.cancelled_refunded":
+    "已退订，退款处理中：{{productName}} {{planName}}",
+  "subscription.cancelled_no_charge": "已退订：{{productName}} {{planName}}",
+  "subscription.cancelled_no_refund":
+    "已退订，本单不退款：{{productName}} {{planName}}",
 };
 
 const BODIES_ZH: Record<NotificationTemplateCode, string> = {
@@ -110,6 +127,14 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
     "付款窗口已过，订单 {{orderNo}}（{{productName}}）自动关闭，未产生费用。需要的话可以重新下单。",
   "tenant.converted":
     "{{tenantName}} 已从个人租户升为组织租户，现在可以邀请成员、按角色分配权限。原有订阅与用量记录不变。",
+  /* 三条都先说「服务已停止」——那是客户按下那个按钮后最先要确认的事；再说钱。
+     不写「感谢使用」这类客套：owner 规则是只写机制、不写承诺。 */
+  "subscription.cancelled_refunded":
+    "服务已停止。订单 {{orderNo}} 在 24 小时退款窗口内，已为你发起全额退款 {{amount}}，进度可在「费用中心」查看。",
+  "subscription.cancelled_no_charge":
+    "服务已停止。订单 {{orderNo}} 实付 {{amount}}，无需退款。",
+  "subscription.cancelled_no_refund":
+    "服务已停止。订单 {{orderNo}} 已超过 24 小时退款窗口，本单不退款。",
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -130,6 +155,11 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "order.cancelled": "Order cancelled: {{orderNo}}",
   "order.expired": "Order closed: {{orderNo}}",
   "tenant.converted": "{{tenantName}} is now an organization tenant",
+  "subscription.cancelled_refunded":
+    "Cancelled, refund in progress: {{productName}} {{planName}}",
+  "subscription.cancelled_no_charge": "Cancelled: {{productName}} {{planName}}",
+  "subscription.cancelled_no_refund":
+    "Cancelled, no refund for this order: {{productName}} {{planName}}",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -160,6 +190,12 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "The payment window has passed, so order {{orderNo}} ({{productName}}) closed automatically. Nothing was charged. You can place a new order whenever you need it.",
   "tenant.converted":
     "{{tenantName}} has been upgraded from a personal tenant to an organization tenant. You can now invite members and assign permissions by role. Existing subscriptions and usage records are unchanged.",
+  "subscription.cancelled_refunded":
+    "Access has stopped. Order {{orderNo}} is within the 24-hour refund window, so a full refund of {{amount}} has been filed for you; track it under Billing.",
+  "subscription.cancelled_no_charge":
+    "Access has stopped. Order {{orderNo}} was paid {{amount}}, so there is nothing to refund.",
+  "subscription.cancelled_no_refund":
+    "Access has stopped. Order {{orderNo}} is past the 24-hour refund window, so this order is not refunded.",
 };
 
 const FOOTER: Record<NotificationLocale, string> = {
@@ -208,6 +244,12 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "order.cancelled": "order_status",
   "order.expired": "order_status",
   "tenant.converted": "tenant_change",
+  /* 退订归 subscription_expiry：这个主题回答的是「我的订阅还在不在」，而退订正是
+     那个问题的一个答案。不归 order_status——客户此刻关心的是服务没了，不是单子；
+     也不归 refund_progress——退款进度那条是 refund.requested，这条讲的是服务终止。 */
+  "subscription.cancelled_refunded": "subscription_expiry",
+  "subscription.cancelled_no_charge": "subscription_expiry",
+  "subscription.cancelled_no_refund": "subscription_expiry",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {

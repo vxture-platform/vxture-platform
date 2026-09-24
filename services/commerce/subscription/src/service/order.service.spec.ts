@@ -149,6 +149,10 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
         existingRefundId: null,
       }),
     ),
+    /* 退订结算要先按订阅找到它的当前订单（2026-09-25）。默认有单——没单那一支单独覆写。 */
+    findCurrentOrderIdForSubscription: vi.fn(
+      async (): Promise<string | null> => "ord-1",
+    ),
     getRefundByOrder: vi.fn(async (): Promise<RefundRecordView | null> => null),
     getRefundById: vi.fn(async (): Promise<RefundRecordView | null> => null),
     createRefundRequest: vi.fn(async () => refundView()),
@@ -501,6 +505,99 @@ describe("OrderService.createOrder guards", () => {
 });
 
 describe("OrderService upgrade proration (P2-a)", () => {
+  /*
+   * 退订之后的钱与消息（owner 2026-09-25：「站在客户视角，退订就是退款」）。
+   * 三条分支各一条——它们对客户是三件不同的事，混在一起就等于什么都没说清。
+   * 当前策略：24 小时内全额退、超过不退。
+   */
+  it("退订：24 小时内够条件 → 替客户发起全额退款并发「退款处理中」", async () => {
+    const { service, orders } = build(
+      order({
+        status: "fulfilled",
+        fulfilledAt: new Date(Date.now() - 1 * 3_600_000),
+      }),
+      sub(),
+    );
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    const r = await service.settleAfterCancel({
+      subscriptionId: "sub-1",
+      tenantId: "t-1",
+      actorUserId: "u-1",
+    });
+    expect(r.outcome).toBe("refunded");
+    /* 关键：**替客户发起**，不是只提醒他自己去找入口——窗口被走完正是因为没人替他做。 */
+    expect(orders.createRefundRequest).toHaveBeenCalled();
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateCode: "subscription.cancelled_refunded",
+      }),
+    );
+  });
+
+  it("退订：超过 24 小时 → 不退款，但要发消息说清为什么", async () => {
+    const { service, orders } = build(
+      order({
+        status: "fulfilled",
+        fulfilledAt: new Date(Date.now() - 30 * 3_600_000),
+      }),
+      sub(),
+    );
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    const r = await service.settleAfterCancel({
+      subscriptionId: "sub-1",
+      tenantId: "t-1",
+      actorUserId: "u-1",
+    });
+    expect(r.outcome).toBe("no_refund");
+    expect(orders.createRefundRequest).not.toHaveBeenCalled();
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateCode: "subscription.cancelled_no_refund",
+      }),
+    );
+  });
+
+  it("退订：实付 0 → 「无需退款」，与「过了窗口」分开说", async () => {
+    const { service, orders } = build(
+      order({
+        status: "fulfilled",
+        payableAmount: "0.00",
+        fulfilledAt: new Date(Date.now() - 1 * 3_600_000),
+      }),
+      sub(),
+    );
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    const r = await service.settleAfterCancel({
+      subscriptionId: "sub-1",
+      tenantId: "t-1",
+      actorUserId: "u-1",
+    });
+    expect(r.outcome).toBe("no_charge");
+    expect(orders.createRefundRequest).not.toHaveBeenCalled();
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateCode: "subscription.cancelled_no_charge",
+      }),
+    );
+  });
+
+  it("退订：订阅没有关联订单 → 不发消息（没有钱可说），也不当成错误", async () => {
+    const { service, orders } = build(order(), sub());
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.findCurrentOrderIdForSubscription.mockResolvedValueOnce(null);
+    const r = await service.settleAfterCancel({
+      subscriptionId: "sub-1",
+      tenantId: "t-1",
+      actorUserId: "u-1",
+    });
+    expect(r.outcome).toBe("no_order");
+    expect(notifier.notify).not.toHaveBeenCalled();
+  });
+
   it("createOrder(upgrade) attaches the quote: credit = P_old × ((1−α)r + αu), payable = P_new − credit", async () => {
     const { service, orders } = build(
       order({ intent: "upgrade", fromSubscriptionId: "sub-1" }),

@@ -2330,14 +2330,28 @@ export class SubscriptionRouter {
           },
         );
       } else {
-        // 自助退订 = 立即终止(服务即停、不退款,前端确认弹窗已明示);
-        // actorType=customer 让历史/审计如实记发起方。
+        /*
+         * 自助退订 = 立即终止（服务即停）。
+         *
+         * 「不退款」那半句 2026-09-25 作废：owner 定「站在客户视角，退订就是退款」。
+         * 终止之后由 `settleAfterCancel` 统一处理钱与消息——24 小时内全额退（替客户
+         * 发起，不让他再去找入口），超窗口或 0 元则如实告知。它**永不抛**：退订已经
+         * 生效了，钱与消息是后续，抛出去会让一次成功的退订看起来失败。
+         *
+         * actorType=customer 让历史/审计如实记发起方。
+         */
         updated = await this.subscriptionService.cancelSubscription(
           subscriptionId,
           changedBy,
           reason,
           "customer",
         );
+        await this.orderService.settleAfterCancel({
+          subscriptionId,
+          tenantId: req.tenant.id,
+          actorUserId: changedBy,
+          clientIp: req.ip ?? null,
+        });
       }
     } catch (err) {
       throw new BadRequestException(

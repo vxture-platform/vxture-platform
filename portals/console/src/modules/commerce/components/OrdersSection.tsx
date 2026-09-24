@@ -60,6 +60,36 @@ import { useDateFormat } from "@/lib/use-date-format";
 
 const ORDERS_PAGE_SIZE = 10;
 
+/**
+ * 订阅当前状态 → 服务轴的 i18n 键。
+ *
+ * 「服务状态」这一列名义上回答「服务还在不在」，而它原来读的是 `SVC_AXIS[orderStatus]`
+ * ——订单走到 `completed` 就再也不动，于是退订 / 暂停 / 过期之后那一列永远写着「服务中」。
+ * 2026-09-24 实撞：owner 退订 vxtpl 后，两张单（含一张**已收款的付费单**）都还显示「服务
+ * 中」，而订阅已经没有了。
+ *
+ * 在用族（active / trialing / expiring / overdue）一律「服务中」；细分（即将到期 / 宽限期）
+ * 在订阅卡上看，订单这一列只需回答在不在。
+ *
+ * **这一版是刻意最小的。** 同一个修复 2026-09-24 随 v0.26.266 上线后 `/billing` 整页加载
+ * 空白（Suspense 边界不解析、服务端无 error digest、API 全 200），当天回退。根因未定位
+ * （生产 SSR 日志取不到），所以这次只动本文件这一个单元格：`OrderDetailPanel` 与
+ * `hubModel` 一个字不碰。若 `/billing` 仍空白，元凶就是这里；若正常，元凶在那两处。
+ * 这是二分，不是「我已经知道了」。
+ */
+const SVC_AXIS_BY_SUBSCRIPTION: Record<
+  string,
+  { key: string; tone: "success" | "danger" | "neutral" }
+> = {
+  active: { key: "active", tone: "success" },
+  trialing: { key: "active", tone: "success" },
+  expiring: { key: "active", tone: "success" },
+  overdue: { key: "active", tone: "success" },
+  suspended: { key: "suspended", tone: "danger" },
+  expired: { key: "terminated", tone: "neutral" },
+  cancelled: { key: "terminated", tone: "neutral" },
+};
+
 export function OrdersSection() {
   const { fmtDate, fmtTime } = useDateFormat();
 
@@ -319,7 +349,12 @@ export function OrdersSection() {
       header: t("orders.colSvcStatus"),
       align: "center",
       cell: (o) => {
-        const axis = SVC_AXIS[o.orderStatus];
+        /* 有订阅就由订阅说话；还没履约时才回落订单轴（那时「服务」还不存在）。
+           认不得的订阅状态也回落，不画一个空徽标。 */
+        const axis =
+          (o.subscriptionStatus
+            ? SVC_AXIS_BY_SUBSCRIPTION[o.subscriptionStatus]
+            : undefined) ?? SVC_AXIS[o.orderStatus];
         return (
           <StatusBadge tone={axis.tone}>{t(`svcAxis.${axis.key}`)}</StatusBadge>
         );
