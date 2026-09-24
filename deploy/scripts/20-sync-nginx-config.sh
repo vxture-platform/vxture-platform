@@ -16,6 +16,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 统一变量入口：compose 里的 ${VX_*} 在调用方进程环境求值，tailnet 地址既不能
 # 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+. "$COMPOSE_DIR/scripts/lib/site-takeover.sh"
 load_compose_env
 SRC="$COMPOSE_DIR/nginx"
 COMPOSE_SRC="$COMPOSE_DIR/compose.nginx.yml"
@@ -197,6 +198,38 @@ if [ -f "$AGENT_RENDERER" ]; then
 fi
 
 echo ""
+# ── 站点接管档位：平台维护 / 临时门户（owner 2026-09-24）────────────────────
+# 「现在站点对外是哪一面」以前散在两个 vhost 的注释里，换形态就要改配置发一次版。
+# 现在是一个档位（off / maintenance / portal），每次同步按下面两处重算：
+#
+#   仓内默认  $SRC/site-takeover.defaults          —— 新机、或从没切过档时的答案
+#   主机现场  /srv/vxture/runtime/site-takeover.state —— 不入仓、deploy 不覆盖
+#
+# 这就是「运维切的档活过下一次发版」的机制：state 在 runtime 下（人工维护区），
+# 本脚本每次都把它重新读进来，而不是靠 sites-enabled 里留下的痕迹——那份目录
+# 本脚本是先清后渲的，任何写在里面的现场状态都活不过一次同步。
+#
+# 顺序要紧：map 数据行必须在下面 `nginx -t` **之前**产出——conf.d/04-site-takeover.conf
+# include 了它，文件不存在则 nginx -t 直接失败（与智能体路由表同一条教训）。
+TAKEOVER_STATE_FILE="${TAKEOVER_STATE_FILE:-/srv/vxture/runtime/site-takeover.state}"
+TAKEOVER_DEFAULTS_FILE="$SRC/site-takeover.defaults"
+if [ ! -f "$TAKEOVER_DEFAULTS_FILE" ]; then
+  echo "错误：找不到 $TAKEOVER_DEFAULTS_FILE" >&2
+  exit 1
+fi
+echo "==> 解析站点接管档位"
+TAKEOVER_RESOLVED="$(takeover_resolve \
+  "$(cat "$TAKEOVER_DEFAULTS_FILE")" \
+  "$(takeover_read_file "$TAKEOVER_STATE_FILE")")"
+takeover_render_map "$TAKEOVER_RESOLVED" "$DST/conf.d/$TAKEOVER_MAP_BASENAME"
+takeover_sync_pages "$SRC/html" /srv/vxture/data/nginx/html "$TAKEOVER_RESOLVED"
+if [ -f "$TAKEOVER_STATE_FILE" ]; then
+  echo "  现场档位来自 $TAKEOVER_STATE_FILE"
+else
+  echo "  $TAKEOVER_STATE_FILE 不存在，按仓内默认（切档用 35-site-takeover.sh）"
+fi
+printf '  %s\n' "$TAKEOVER_RESOLVED"
+
 echo "同步完成，目录内容："
 find "$DST" -type f | sort
 echo "$COMPOSE_DST"

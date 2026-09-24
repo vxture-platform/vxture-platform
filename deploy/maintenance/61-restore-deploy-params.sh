@@ -104,6 +104,10 @@ restore_required "$BACKUP_DIR/runtime/.env.website-bff" "$RUNTIME_DIR/.env.websi
 restore_required "$BACKUP_DIR/runtime/.env.console-bff" "$RUNTIME_DIR/.env.console-bff"
 restore_required "$BACKUP_DIR/runtime/.env.admin-bff" "$RUNTIME_DIR/.env.admin-bff"
 
+# 站点接管的现场档位（docs/50-deployment/14-site-takeover.md）。optional：没有它时
+# 20-sync-nginx-config.sh 按仓内默认渲染，那是安全的一档。
+restore_optional "$BACKUP_DIR/runtime/site-takeover.state" "$RUNTIME_DIR/site-takeover.state"
+
 echo ""
 echo "==> Platform secret files"
 restore_required "$BACKUP_DIR/runtime/secrets/platform.env" "$RUNTIME_DIR/secrets/platform.env"
