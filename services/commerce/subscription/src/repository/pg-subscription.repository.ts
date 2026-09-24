@@ -478,7 +478,21 @@ export class PgSubscriptionRepository {
         where pc_new.plan_version_id = $2
           and pc_new.component_role = 'primary'
           and ts.workspace_id = $1
-          and ts.status in ('active', 'trialing')
+          /*
+           * 在用族，不是只有 active/trialing（2026-09-24）。
+           *
+           * 这里原来只认 active/trialing 两个，而本仓别处三处把在用族写成
+           * active/expiring/overdue（到期扫描、未认领在用订阅、订单侧查在用）。
+           * （本注释在 SQL 模板串里：**不能出现反引号**，它会当场截断字符串，
+           *   报错会落在几十行之外——2026-09-24 我就是这么撞的。）
+           * 差集 = expiring / overdue：订阅还在服务中、只是临近到期或欠费，这时提交一张
+           * 别的档位的新单会被**直接放行**，于是同一产品并存两个档位——而这道守卫存在的
+           * 唯一目的就是不让它发生。
+           *
+           * 并集取全：active / trialing / expiring / overdue。suspended 不进来——它是
+           * 「已停止提供服务」，不构成并存。
+           */
+          and ts.status in ('active', 'trialing', 'expiring', 'overdue')
           and ts.deleted_at is null
           and ($3::uuid is null or ts.id <> $3)
           and pc_old.tier is distinct from pc_new.tier`,

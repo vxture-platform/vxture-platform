@@ -125,6 +125,9 @@ export {
   SEMANTIC_COLORS,
   // Catalog value domains — platform contract, SoT (product_220 §1/§2/§3)
   TIERS,
+  // 档位高低序的唯一判据（2026-09-24 才有消费方；在此之前换档从不判方向）
+  tierRank,
+  isTierUpgrade,
   COMPONENT_ROLES,
   PLAN_VERSION_STATUSES,
   SUBSCRIPTION_STATUSES,

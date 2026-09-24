@@ -2441,6 +2441,8 @@
       "what": "Plan",
       "whatUpgradeNote": "Currently on {plan}. Upgrades take effect immediately; the remaining period is prorated by day.",
       "noFeatures": "See the comparison table for full entitlements.",
+      "downgradeBlocked": "You're on {current} — downgrading isn't supported",
+      "downgradeHint": "Pick a higher tier below. To move to a lower tier, let the current subscription expire first, then choose again.",
       "pickTier": "Pick a tier:",
       "tierUnavailable": "The plan tier from the link isn't available right now — pick a tier below",
       "renewCurrent": "You're on this plan — this order renews it and extends the end date by one period",
@@ -2554,6 +2556,9 @@
         "settleZero": "Auto-settled (¥0)",
         "provision": "Service provisioned",
         "cancelled": "Order cancelled",
+        "terminated": "Service terminated",
+        "serviceExpired": "Service expired",
+        "serviceSuspended": "Service suspended",
         "expiredClosed": "Closed on timeout"
       }
     },
@@ -2663,6 +2668,8 @@
       "provisioning": "Provisioning",
       "active": "In service",
       "cancelled": "Cancelled",
+      "suspended": "Suspended",
+      "terminated": "Terminated",
       "closed": "Closed"
     },
     "term": {

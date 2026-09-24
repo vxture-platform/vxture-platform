@@ -2441,6 +2441,8 @@
       "what": "订阅套餐",
       "whatUpgradeNote": "当前为 {plan}，升级立即生效，剩余周期按天折算。",
       "noFeatures": "权益明细以对比表为准。",
+      "downgradeBlocked": "当前已是 {current} 档，不支持降档",
+      "downgradeHint": "请在下方选择更高的档位。如需降到更低档位，请先让当前订阅到期，再重新选择。",
       "pickTier": "选择档位：",
       "tierUnavailable": "链接指定的档位当前不可订购，请在下方选择档位",
       "renewCurrent": "已是当前套餐：本单为续订，付款后到期日顺延一个周期",
@@ -2554,6 +2556,9 @@
         "settleZero": "自动结清（¥0）",
         "provision": "服务开通",
         "cancelled": "取消订单",
+        "terminated": "服务已终止",
+        "serviceExpired": "服务已到期",
+        "serviceSuspended": "服务已暂停",
         "expiredClosed": "超时关闭"
       }
     },
@@ -2663,6 +2668,8 @@
       "provisioning": "开通中",
       "active": "服务中",
       "cancelled": "已取消",
+      "suspended": "已暂停",
+      "terminated": "已终止",
       "closed": "已关闭"
     },
     "term": {

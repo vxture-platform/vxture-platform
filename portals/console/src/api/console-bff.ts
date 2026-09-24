@@ -1081,6 +1081,13 @@ export interface MyOrder {
   amount: string;
   currency: string;
   orderStatus: OrderState;
+  /**
+   * 该订单开通的订阅**现在**的状态；未履约时 null。
+   *
+   * 「服务在不在」看它，不看 `orderStatus`——后者走完就永远停在 completed，退订之后拿它
+   * 当服务状态就是一句假话（2026-09-24 实撞：退订后两张单仍显示「服务中」）。
+   */
+  subscriptionStatus: string | null;
   orderType: "subscription";
   expireAt: string | null;
   paidAmount: string;

@@ -52,6 +52,8 @@ export {
   isValidProductLayer,
   isSelectableProductLayer,
   productLayerLabel,
+  tierRank,
+  isTierUpgrade,
 } from "./catalog-domains.constants";
 export type {
   Tier,

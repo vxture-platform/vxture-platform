@@ -17,6 +17,16 @@ const PV_FREE = "pv-free";
 const PV_PRO = "pv-pro";
 /** 同一个套餐的下一版——续订跨版本那一组用它。 */
 const PV_PRO_V2 = "pv-pro-v2";
+/** 降档那一组用它（starter 在 free 之上、pro 之下）。 */
+const PV_STARTER = "pv-starter";
+
+/** PV 常量 → 档位。桩用它回 fromTier/toTier；未登记的按 null（=不可比）。 */
+function tierOf(pv: string): string | null {
+  if (pv === PV_FREE) return "free";
+  if (pv === PV_STARTER) return "starter";
+  if (pv === PV_PRO || pv === PV_PRO_V2) return "pro";
+  return null;
+}
 
 function order(over: Partial<OrderRecord> = {}): OrderRecord {
   return {
@@ -120,6 +130,10 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       toIsCurrent: true,
       toPlanStatus: "active",
       toPlanCode: "arda-pro",
+      /* 档位由 PV 常量推出来（2026-09-24 起 upgrade 判方向，桩不给档位的话连
+         合法的升级都会被判成「不可比」）。 */
+      fromTier: tierOf(fromId),
+      toTier: tierOf(toId),
     })),
     grantLeftoverToPrepaid: vi.fn(async () => true),
     getRefundPolicy: vi.fn(async () => ({
@@ -246,6 +260,97 @@ describe("OrderService.createOrder guards", () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  /*
+   * 降档不允许（owner 2026-09-24）。这一组是 ORD-202609-63E0E32517 的回归：
+   * 生产上一张 0 元 Free 单被当作「升级」，就地把付费 Starter 订阅改写成 Free、
+   * 周期重置，`cashDue=0` 即时结清，全程零报错。
+   */
+  it("upgrade: 409 NOT_AN_UPGRADE —— starter → free 是降档（本次事故的正路径）", async () => {
+    const { service, orders } = build(
+      order(),
+      sub({ planVersionId: PV_STARTER, status: "active" }),
+    );
+    await expect(
+      service.createOrder({
+        tenantId: "t-1",
+        workspaceId: WS,
+        planVersionId: PV_FREE,
+        cycleUnit: "month",
+        price: 0,
+        createdBy: "u-1",
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        itemName: "Free",
+      }),
+    ).rejects.toMatchObject({
+      response: { code: "NOT_AN_UPGRADE" },
+    });
+    /* 拒了就不能落单——否则客户在订单列表里看到一张自己没法处理的单。 */
+    expect(orders.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("upgrade: 409 —— pro → starter 同样是降档（不是只挡 free）", async () => {
+    const { service } = build(
+      order(),
+      sub({ planVersionId: PV_PRO, status: "active" }),
+    );
+    await expect(
+      service.createOrder({
+        tenantId: "t-1",
+        workspaceId: WS,
+        planVersionId: PV_STARTER,
+        cycleUnit: "month",
+        price: 1,
+        createdBy: "u-1",
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        itemName: "Starter",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("upgrade: free → pro 照旧放行（别把这道门装成墙）", async () => {
+    const { service, orders } = build(
+      order(),
+      sub({ planVersionId: PV_FREE, status: "active" }),
+    );
+    await service.createOrder({
+      tenantId: "t-1",
+      workspaceId: WS,
+      planVersionId: PV_PRO,
+      cycleUnit: "month",
+      price: 100,
+      createdBy: "u-1",
+      intent: "upgrade",
+      fromSubscriptionId: "sub-1",
+      itemName: "Pro",
+    });
+    expect(orders.createOrder).toHaveBeenCalled();
+  });
+
+  it("upgrade: 档位比不出高低时拒（TIER_NOT_COMPARABLE，fail closed）", async () => {
+    const { service, orders } = build(
+      order(),
+      sub({ planVersionId: "pv-unknown", status: "active" }),
+    );
+    await expect(
+      service.createOrder({
+        tenantId: "t-1",
+        workspaceId: WS,
+        planVersionId: PV_PRO,
+        cycleUnit: "month",
+        price: 100,
+        createdBy: "u-1",
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        itemName: "Pro",
+      }),
+    ).rejects.toMatchObject({
+      response: { code: "TIER_NOT_COMPARABLE" },
+    });
+    expect(orders.createOrder).not.toHaveBeenCalled();
+  });
+
   it("renew: 409 on a plan mismatch (renew is same-plan; switching tiers is an upgrade)", async () => {
     const { service } = build(order(), sub({ planVersionId: PV_FREE }));
     await expect(
@@ -343,6 +448,8 @@ describe("OrderService.createOrder guards", () => {
       toIsCurrent: true,
       toPlanStatus: "deprecated",
       toPlanCode: "arda-pro",
+      fromTier: "pro",
+      toTier: "pro",
     });
     const err = await service
       .createOrder(renewInput({ planVersionId: PV_PRO }))
@@ -364,6 +471,8 @@ describe("OrderService.createOrder guards", () => {
       toIsCurrent: false,
       toPlanStatus: "active",
       toPlanCode: "arda-pro",
+      fromTier: "pro",
+      toTier: "pro",
     });
     await expect(
       service.createOrder(renewInput({ planVersionId: PV_PRO })),
