@@ -2665,8 +2665,6 @@
       "provisioning": "Provisioning",
       "active": "In service",
       "cancelled": "Cancelled",
-      "suspended": "Suspended",
-      "terminated": "Terminated",
       "closed": "Closed"
     },
     "term": {
