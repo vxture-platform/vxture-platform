@@ -39,7 +39,9 @@
 订阅需要 console 可见（`status='active'`）——卡在上线门上就是**环**。移到发布门之后，
 那条链在 `active + developing` 下本来就走得通。
 
-**成熟度轴（`release_stage`，2026-09-17 装上状态机）**：`ga`（正式版）/ `beta`（公测版）/ `developing`（开发中），三态与标签的权威源在 `@vxture/core-utils` 的 `release-stage.ts`。它与 `status`（生命周期）、`is_customer_visible`（上不上站）**仍然正交**——DDL 里「独立轴，不派生」那句话没有改。
+**承诺等级轴（`release_stage`，2026-09-17 装上状态机）**：`preview`（预览版）/ `beta`（公测版）/ `stable`（正式版）/ `sunset`（停售中），四态与标签的权威源在 `@vxture/core-utils` 的 `release-stage.ts`。它与 `status`（生命周期）、`is_customer_visible`（上不上站）**仍然正交**——DDL 里「独立轴，不派生」那句话没有改。
+
+> 这一行原写着三态 `ga / beta / developing`，**两处都已过时**：2026-10-29 改名为 `stable` / `preview` 并补了 `sunset`。而 `developing` 这个词自 2026-09-24 起归**生命周期轴**（见下），两根轴用同一个词是这一批要拆掉的混淆之一——对外说承诺等级最低那一档一律用「预览版」。
 
 - **只向前走**：`developing → beta → ga`，可跨级，同态重放不报错；倒退一律 409。判据在 `isForwardReleaseStageMove`，执行在 admin-bff 的 `PATCH capabilities/:code/content`（事务内、写之前）。**不开倒退口**：要把产品从客户面前收回去，该动的是可见性或生命周期，那两根轴各自有出口；拿成熟度当开关使是在说「它变不成熟了」。
 - **「开发中不可订」已下沉到服务端**：此前它只长在官网卡片上（`ProductCatalogCard` 判 developing 就隐掉订阅按钮），而服务端从头到尾没有一处读 `release_stage`，权威源里的 `isReleaseStageSubscribable` 没有调用者。现在 console-bff 的 `POST /api/subscription/orders` 拒 `PRODUCT_NOT_RELEASED`（409），推荐位也不再出开发中产品。
@@ -55,7 +57,7 @@
 
 **写入口已收口（2026-09-17）**：产品字段的写入只剩合并保存一条路。旧的 `POST /api/products` 与 `PUT /api/products/:id` 已退役——它们自 2026-09-14 起就没有调用方，却绕过了合并保存那道按改动判的 step-up。退役而不是给旁路也挂一把锁：门只有一道，才不存在“有一侧是虚的”。
 
-产品状态机（`portals/opera/src/features/product/lifecycle.ts`）：`draft → active ⇄ inactive`，任一 → `deprecated`（终态）。
+产品状态机（`portals/opera/src/features/product/lifecycle.ts`）：`draft → developing → active ⇄ inactive`，任一 → `deprecated`（终态）。`draft → active` 与 `active → developing` 两条边也在（后者带「卖过就拒」）。值域权威源在 `@vxture-platform/shared` 的 `PRODUCT_STATUSES`，`lint:catalog-domains` 锁它与 `chk_products_status` 一致；逐条判据见 `portals/opera/docs/opera-navigation-design.md` §6.4。
 
 **退役 vs 删除（2026-08-31）**：两条不同的出口，别混。**退役**（`deprecated`）是可见的终态——产品曾合法、现下线，老订阅照付、历史留档。**删除**（软删 `deleted_at`，所有列表都过滤它）是「本不该在册」的出口，产品从目录彻底消失，给误发布的产品用。删除是两步（`GET /api/products/:id/deletion-preview` 预览影响面 → `DELETE /api/products/:id` 带 `confirm:true`，`@RequireStepUp` + 审计 `support.audit_logs`），判据是**无客户足迹即可删**：有用量（`metering.usage_events`）/ 账单（`billing.invoice_items`）/ 开通（`provisioning.provisionings`）/ 权益（`entitlement_caches` · `quota_pools` · `subscription_entitlement_overrides`）/ 上游生效授权任一者 → 409 `PRODUCT_HAS_CUSTOMER_FOOTPRINT`（或 `PRODUCT_HAS_ACTIVE_GRANTS`），只能退役。删除**不阻塞**于登录客户端：同事务把该产品 `product` 型 OIDC 客户端停用（登录中断，是结果不是阻塞项），并连带软删其 primary 套餐。列锁（`98_column_locks.sql`）已放行 `platform_svc` 写 `products.deleted_at` / `plans.deleted_at` / `oidc_clients.status`。
 
@@ -91,7 +93,7 @@ appoidc.oidc_clients (client_id UNIQUE, product_id FK, client_kind, release_chan
 | admin 产品能力                       | `GET /api/products/capabilities` | 无，`active` 排前                                                        | 商业封装的起点                                                       |
 | admin 套餐 / 版本                    | `GET /api/products/plans…`       | 经 `product.plans.product_id` FK                                         | 不单独枚举产品                                                       |
 | console 目录 / 推荐                  | `/api/subscription/*`            | `status='active' AND is_customer_visible`                                | 面向客户                                                             |
-| website 目录                         | `GET /api/products/catalog`      | `status='active' AND is_customer_visible`                                | 公开营销                                                             |
+| website 目录                         | `GET /api/products/catalog`      | `status IN ('active','developing') AND is_customer_visible`              | 公开营销；`developing` 只预告不可订（2026-09-24）                    |
 | auth-bff token-exchange              | —                                | 调用方产品来自 `oidc_clients.product_id`；目标产品要求 `status='active'` | `product_id NULL` 的产品级客户端不再可能存在（§3）                   |
 | auth-bff app-scope claim             | `APP_SCOPE_CODES`                | 遗留豁免集，**只减不增**，成员必须有目录行                               | 2026-08-30 去掉了 6 个无目录行的码；SQL 本就按码 JOIN 目录，行为不变 |
 

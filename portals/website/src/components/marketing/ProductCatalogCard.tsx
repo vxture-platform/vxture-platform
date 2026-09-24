@@ -8,8 +8,8 @@
  * 「进入工作台」跳的是 console 首页而不是产品本身。owner 要求两页的布局 / 逻辑 /
  * 按钮 / 跳转目标 / 卡片信息完全一致——所以收成一个组件，两页只负责喂数据与文案。
  *
- * 动作区裁定（按成熟度 × 订阅态）：
- *   developing            → 「敬请期待」禁用；
+ * 动作区裁定（按「是否已上线」× 订阅态）：
+ *   还没上线                → 「敬请期待」禁用（生命周期 developing 或承诺等级 preview）；
  *   未登录 / 未订阅        → 「订阅」（官网 /pricing?product=，先看价再登录）；「联系我们」已从卡上去掉，
  *                           hero 统一给「预约演示 / 业务咨询」（owner 2026-09-03）；
  *                           右上角按 marketing.recommend 画 1–3 枚推荐奖章（最靠外的位置，其余徽标前移让位）；
@@ -20,7 +20,8 @@
  * 不是 console：console 是订阅管理台，从一个产品的卡片点进去落到管理台是错的落点
  * （owner 2026-09-02：「我从产品进入，为什么是工作台，不是产品本身」）。产品没登记
  * 入口就如实禁用「入口即将开放」，不偷偷改跳别处。
- * 徽标：developing「开发中」；否则 成熟度（正式版 / 公测版）+ 已订阅时「已开通」+ 档位。
+ * 徽标：还没上线的给一枚灰「预览版」；否则 承诺等级（正式版 / 公测版 / 停售中）
+ * + 已订阅时「已开通」+ 档位。
  *
  * 所有指向产品站的链接 target=_blank + rel=noopener noreferrer（营销页不走掉）。
  *
@@ -47,8 +48,13 @@ export interface ProductCatalogCardModel {
   value: string | null;
   /** 能力亮点（marketing.highlights）。 */
   highlights: string[];
-  /** 成熟度轴：ga / beta / developing。 */
+  /** 承诺等级轴：stable / beta / preview / sunset。只管徽标，不管能不能订。 */
   releaseStage: string;
+  /**
+   * 生命周期轴：`active` 已上线 / `developing` 开发中（信息已登记、东西还没建好）。
+   * 「能不能订」认这一根——理由见下面 `notLive` 处的注释。
+   */
+  status: "active" | "developing";
   version: string | null;
   /** 对外发布时间（ISO）；底部「v x.y.z at 日期」用，无则只显示版本。 */
   releasedAt: string | null;
@@ -109,10 +115,31 @@ export function ProductCatalogCard({
   subscription: ProductSubscriptionState | undefined;
   labels: ProductCatalogCardLabels;
 }) {
-  /* 2026-10-29 承诺等级改名：developing → preview。本卡片的「不可订」判断仍然只认
-     这一档，与改名前逐字等价——可订性判据换成「存在在售的公开套餐」是后续批次的事。 */
-  const developing = product.releaseStage === "preview";
-  const subscribed = !developing && subscription?.subscribed === true;
+  /*
+   * 「还没上线」——卡片上所有「不可订」的呈现都由它决定（灰徽标、不给奖章、底部改写
+   * 「预期发布」、动作区给禁用的「敬请期待」）。
+   *
+   * 两根轴都算，而**生命周期那一根是真判据**：
+   *
+   *   · `status === "developing"` 东西还没建好。定价/套餐端点（website-bff 的
+   *     product-plans）按 `status = 'active'` 过滤产品，所以这种产品的定价页是空的
+   *     ——卡上若给「订阅」，客户点进去落到一张空阶梯。**入口承诺一件做不到的事**，
+   *     与 owner 2026-09-22 定 `subscribeAccess` 时说的是同一个毛病。
+   *   · `releaseStage === "preview"` 承诺等级最低那一档。2026-10-29 由旧名改来；在
+   *     生命周期轴接进官网之前（2026-09-24），它一直**替**那根轴干这件事。保留它是
+   *     因为存量数据里「还没上线」就记在这儿。
+   *
+   * 为什么不只留 `preview` 一条：那要靠两根轴永远一致，而没有任何机械约束保证它们
+   * 一致。它们一分叉，症状就是上面那颗假按钮。
+   *
+   * 反过来，灰徽标的字面（`badges.preview`「预览版」）仍借用承诺等级那个词。这是有
+   * 意的：一个还没上线的产品，其承诺等级本就该登记为 `preview`（admin 侧 2026-09-24
+   * 起允许把它降回去，正是为了让这条订正做得到）。与按钮的区别在后果——两轴分叉时
+   * 按钮会把人带进死路，徽标只是措辞偏了一格。
+   */
+  const notLive =
+    product.status === "developing" || product.releaseStage === "preview";
+  const subscribed = !notLive && subscription?.subscribed === true;
   const tierLabel =
     subscribed && subscription?.tier
       ? subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)
@@ -128,7 +155,7 @@ export function ProductCatalogCard({
   const productHomeUrl = subscription?.homeUrl ?? null;
   const pricingHref = `/pricing?product=${product.code}`;
   // 推荐度奖章只给「可订、未订阅」的产品——已开通的不用再推，开发中的还不能订。
-  const medals = !developing && !subscribed ? product.recommend : 0;
+  const medals = !notLive && !subscribed ? product.recommend : 0;
   // 底部左侧一行（owner 2026-09-03）：
   //   上线（ga/beta）→ 「v 1.2.3 at 2026/9/12」，版本与发布时间取目录真列，自动；
   //   开发中           → 「预期发布：2026/9/30」，日期由运营在营销内容里手填（marketing.expectedReleaseAt）。
@@ -136,7 +163,7 @@ export function ProductCatalogCard({
   /* 形态收在 lib/date-format:输出与此前逐字相同(按 locale 数字格式、不补零),
      只是不再各组件各搓一个 Intl——豁免按组件增长会让 §1 那条判据一路失效。 */
   const { numericDate: formatDate } = useWebsiteDateFormat();
-  const versionLine = developing
+  const versionLine = notLive
     ? product.expectedReleaseAt
       ? labels.expectedRelease.replace(
           "{date}",
@@ -167,7 +194,7 @@ export function ProductCatalogCard({
             </h3>
           </div>
         </div>
-        {developing ? (
+        {notLive ? (
           <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
             {labels.badges.preview}
           </span>
@@ -256,7 +283,7 @@ export function ProductCatalogCard({
           >
             {labels.actions.detail}
           </Link>
-          {developing ? (
+          {notLive ? (
             <Button variant="outline" size="md" disabled className="h-10">
               {labels.actions.coming}
             </Button>

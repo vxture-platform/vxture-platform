@@ -595,7 +595,13 @@ export interface ProductPlanRecord {
   updatedAt: string;
 }
 
-export type ProductCapabilityStatus = "active" | "draft" | "archived";
+/* `developing`（开发中）2026-09-24 接入：DDL 里它 2026-10-29 就有了，而这一侧一直
+   把它折进 `archived`（已归档）——一个还没建的产品被说成已归档，比说成已上线还离谱。 */
+export type ProductCapabilityStatus =
+  | "active"
+  | "developing"
+  | "draft"
+  | "archived";
 export type ProductCapabilityVisibility = "public" | "internal";
 export type ProductCapabilityType =
   | "platform"

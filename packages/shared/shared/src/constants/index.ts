@@ -44,6 +44,7 @@ export {
   MERGE_STRATEGIES,
   CONSUME_MODES,
   METRIC_KINDS,
+  PRODUCT_STATUSES,
   PRODUCT_LAYERS,
   PRODUCT_LAYER_DEFS,
   PRODUCT_LAYER_CHOICES,
@@ -64,6 +65,7 @@ export type {
   MergeStrategy,
   ConsumeMode,
   MetricKind,
+  ProductStatusValue,
   ProductLayerValue,
 } from "./catalog-domains.constants";
 // Atlas 对象状态 —— 上游契约在消费侧的镜像（product_251 M-B3）。

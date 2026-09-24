@@ -2465,6 +2465,12 @@
       "data": "数据",
       "service": "服务"
     },
+    "capabilityStatus": {
+      "active": "已上线",
+      "developing": "开发中",
+      "draft": "草稿",
+      "archived": "已归档"
+    },
     "ticketStatus": {
       "open": "待处理",
       "pending": "挂起",

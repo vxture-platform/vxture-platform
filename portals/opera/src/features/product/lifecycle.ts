@@ -27,8 +27,12 @@
  */
 
 import type { IconName, StatusBadgeTone } from "@vxture/design-system";
+import type { ProductStatusValue } from "@vxture-platform/shared";
 
-export type ProductState = "draft" | "active" | "inactive" | "deprecated";
+/* 值域的权威源在 @vxture-platform/shared（`PRODUCT_STATUSES`，lint:catalog-domains
+   锁它与 chk_products_status 一致）。此前这里与 opera-bff 各写一份四值联合类型，
+   谁都不知道另一份存在，于是 2026-10-29 加进 DDL 的 `developing` 两边都没接到。 */
+export type ProductState = ProductStatusValue;
 
 export const PRODUCT_STATE_META: Record<
   ProductState,
@@ -38,6 +42,11 @@ export const PRODUCT_STATE_META: Record<
     label: "草稿",
     tone: "neutral",
     hint: "已登记、拿到产品码，接入尚未完成。草稿会一直留着——等对方配置常常是几天的事，不是重试一次。",
+  },
+  developing: {
+    label: "开发中",
+    tone: "info",
+    hint: "信息已登记，admin 可录营销、官网可预告，但还不能订阅——东西还没建好。「填了信息」与「上了线」是两回事，这一档就是用来分开它们的。",
   },
   active: {
     label: "已上线",

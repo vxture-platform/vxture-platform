@@ -119,6 +119,8 @@ export default function AgentMarketplacePage({
         value: m?.value ?? null,
         highlights: m?.highlights ?? [],
         releaseStage: agent.releaseStage,
+        /* 部署偏斜：旧 BFF 不回这一列，回落「已上线」（此前目录里只可能有 active）。 */
+        status: agent.status ?? "active",
         version: agent.releaseVersion,
         releasedAt: agent.releasedAt,
         recommend: marketingRecommend(agent.marketing),

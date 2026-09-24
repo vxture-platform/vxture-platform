@@ -42,6 +42,8 @@ import type {
 export const PUBLISH_STATUS_TONE: Record<ProductCapabilityStatus, StatusTone> =
   {
     active: "success",
+    /* 开发中不是"出了事"也不是"正常"：它是还没到。用 info，与 opera 那一侧同调。 */
+    developing: "info",
     draft: "warning",
     archived: "neutral",
   };

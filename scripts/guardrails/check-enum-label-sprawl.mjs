@@ -44,6 +44,12 @@ const HAN = /[一-鿿]/;
 /**
  * 每个文件允许的条数(2026-09-20 实测基线,subscriptionStatus 一族收口后)。
  * 不在表里的文件基线为 0。数字只准往下改。
+ *
+ * 2026-09-24 产品上架状态一族收口(7→4 / 12→9):`developing` 那一档接线时,这条
+ * 守卫先报「多了 1」——它拦住的正是它该拦的事(两个页面各写一份四值映射)。收进
+ * `enum-labels.ts` 的 `useCapabilityStatusLabels()` 之后,连带把列表页筛选那三个
+ * 写死中文的 `<option>` 一起抽了,所以是降 6 条而不是降 2 条。
+ * 基线由 `--emit-baseline` 产出,不手抄。
  */
 const BASELINE = new Map([
   ["modules/accounts/AccountDetailPage.tsx", 4],
@@ -62,14 +68,13 @@ const BASELINE = new Map([
   ["modules/ops/SystemNoticesSection.tsx", 3],
   ["modules/orders/OrderOfflinePaymentDialog.tsx", 7],
   ["modules/payments/PaymentsPage.tsx", 11],
-  ["modules/products/ProductCapabilityDetailPage.tsx", 7],
-  ["modules/products/ProductsPage.tsx", 12],
+  ["modules/products/ProductCapabilityDetailPage.tsx", 4],
+  ["modules/products/ProductsPage.tsx", 9],
   ["modules/subscriptions/SubscriptionOperationDialog.tsx", 16],
   ["modules/support/ReviewsPage.tsx", 4],
   ["modules/tenants/tenant-utils.ts", 21],
   ["modules/tenants/VerificationsPage.tsx", 2],
-  ["shared/ip-location.ts", 2],
-]);
+  ["shared/ip-location.ts", 2],]);
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {

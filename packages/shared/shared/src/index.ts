@@ -67,6 +67,7 @@ export type {
   MergeStrategy,
   ConsumeMode,
   MetricKind,
+  ProductStatusValue,
   ProductLayerValue,
 } from "./constants";
 
@@ -135,6 +136,7 @@ export {
   CONSUME_MODES,
   METRIC_KINDS,
   // 定位轴 L1/L2/L3（product_100_matrix §2）——与类型轴、来源轴正交
+  PRODUCT_STATUSES,
   PRODUCT_LAYERS,
   PRODUCT_LAYER_DEFS,
   PRODUCT_LAYER_CHOICES,

@@ -57,6 +57,7 @@ import { isEnabled } from "@/features/atlas/state";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
+  PRODUCT_STATE_META,
   productStateMeta,
   VERIFICATION_META,
   verificationOf,
@@ -783,12 +784,21 @@ function ProductsPageContent() {
               aria-label={tShared("filters.stateLabel")}
             >
               <option value="all">{tShared("filters.allStates")}</option>
-              <option value="draft">草稿</option>
-              <option value="active">已上线</option>
-              <option value="inactive">
-                {tShared("status.generic.disabled")}
-              </option>
-              <option value="deprecated">已退役</option>
+              {/*
+                选项从 `PRODUCT_STATE_META` 生成，不逐个手写。两个理由：
+                · 手写的那份漏了 2026-09-24 接上的「开发中」——值域加一档而筛选框选不到
+                  它，等于这一档的产品在列表里筛不出来（类型放开了，界面没跟上）；
+                · 同页每行的状态徽标用的就是这张表，筛选框另写一份就会出现「筛的词」与
+                  「显示的词」不一样。顺带：`inactive` 原先取 `status.generic.disabled`
+                  （zh 同为「已停用」），改用同一张表后与徽标逐字一致。
+              */}
+              {(Object.keys(PRODUCT_STATE_META) as readonly ProductState[]).map(
+                (st) => (
+                  <option key={st} value={st}>
+                    {PRODUCT_STATE_META[st].label}
+                  </option>
+                ),
+              )}
             </NativeSelect>
           </FilterBar>
         }

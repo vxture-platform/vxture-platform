@@ -30,6 +30,7 @@ import type {
   ProductCapabilityStatus,
   ProductCapabilityType,
 } from "@/entities/console";
+import { useCapabilityStatusLabels } from "@/modules/shared/enum-labels";
 import {
   ACCESS_STATUS_TONE,
   PUBLISH_STATUS_TONE,
@@ -53,12 +54,6 @@ function productTypeLabel(type: ProductCapabilityType) {
 
 function productSourceLabel(source: ProductCapabilitySource) {
   return source === "self" ? "自建" : "三方接入";
-}
-
-function productStatusLabel(status: ProductCapabilityStatus) {
-  if (status === "active") return "已上线";
-  if (status === "draft") return "草稿";
-  return "已归档";
 }
 
 function productAccessLabel(state: ProductCapabilityIntegrationStatus) {
@@ -228,6 +223,7 @@ function useProductColumns(
   onOpenDetails: (productCode: string) => void,
 ): DataTableColumn<ProductCapabilityRecord>[] {
   const tShared = useTranslations();
+  const statusLabels = useCapabilityStatusLabels();
   return [
     {
       id: "product",
@@ -283,7 +279,7 @@ function useProductColumns(
       cell: (product) => (
         <span className="inline-flex flex-col items-center gap-2xs">
           <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
-            {productStatusLabel(product.status)}
+            {statusLabels[product.status]}
           </StatusBadge>
           {/* 副题原来还并了一个 `健康/关注`，而 healthStatus 是由 status 派生的
               （active→normal，其余→warning）——同一件事说两遍。留可见性：那是
@@ -329,6 +325,7 @@ function useProductColumns(
 
 export function ProductsPage() {
   const tShared = useTranslations();
+  const statusLabels = useCapabilityStatusLabels();
   const tableLabels = useTableLabels();
   const router = useRouter();
   const [products, setProducts] = useState<ProductCapabilityRecord[]>([]);
@@ -623,9 +620,10 @@ export function ProductsPage() {
                 aria-label="产品状态"
               >
                 <option value="all">{tShared("filters.allStates")}</option>
-                <option value="active">已上线</option>
-                <option value="draft">{tShared("status.generic.draft")}</option>
-                <option value="archived">已归档</option>
+                <option value="active">{statusLabels.active}</option>
+                <option value="developing">{statusLabels.developing}</option>
+                <option value="draft">{statusLabels.draft}</option>
+                <option value="archived">{statusLabels.archived}</option>
               </NativeSelect>
               <NativeSelect
                 wrapperClassName="w-fit basis-media-xl"

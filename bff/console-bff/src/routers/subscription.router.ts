@@ -1453,11 +1453,13 @@ export class SubscriptionRouter {
      */
     const soldRow = await this.pool.query<{
       product_code: string;
+      product_status: string;
       release_stage: string;
       plan_is_public: boolean;
       plan_code: string;
     }>(
-      `select prod.product_code, prod.release_stage,
+      `select prod.product_code, prod.status as product_status,
+              prod.release_stage,
               pl.is_public as plan_is_public, pl.plan_code
          from product.plan_components pc
          join product.products prod on prod.id = pc.product_id
@@ -1476,10 +1478,31 @@ export class SubscriptionRouter {
         message: "套餐与产品不匹配，请重新选择。",
       });
     }
+    /*
+     * 生命周期轴：没上线的产品不能下单（2026-09-24）。
+     *
+     * 这一条**此前不存在**——上面那句只查 `release_stage`，整个下单路径从头到尾没读
+     * 过 `prod.status`。两个目录（console 的 subscribe-context、官网的定价端点）都按
+     * `status = 'active'` 过滤，所以界面上到不了这里；但**判据不在界面上**：只要拿到
+     * 一个 planVersionId，一个「信息填好了、东西还没建」的产品照样能被下单成功。
+     *
+     * 2026-09-24 有 13 个只填了信息的产品要转 `developing`，这个洞当场变成实际风险
+     * （它们中若有仍挂着公开套餐的，下单会成功）。不靠「承诺等级反正也是 preview」
+     * 兜——那是两根轴碰巧一致，而下一行那条判据只看得见其中一根。
+     */
+    if (sold.product_status !== "active") {
+      throw new ConflictException({
+        code: "PRODUCT_NOT_LIVE",
+        message: "该产品尚未上线，还不能订阅。",
+      });
+    }
     if (!isReleaseStageSubscribable(sold.release_stage)) {
       throw new ConflictException({
         code: "PRODUCT_NOT_RELEASED",
-        message: "该产品尚在开发中，还不能订阅。",
+        /* 「开发中」自 2026-09-24 起是生命周期轴上的一个状态（见上一条），这里说的是
+           承诺等级最低那一档——2026-10-29 已对外改称「预览版」。两句话必须分得开，
+           否则客户拿着错的词去问运营，而运营在两个不同的轴上找。 */
+        message: "该产品尚在预览阶段，还未开放订阅。",
       });
     }
 

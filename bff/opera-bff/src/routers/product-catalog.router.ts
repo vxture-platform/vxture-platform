@@ -53,6 +53,7 @@ import {
   isSelectableProductLayer,
   PRODUCT_LAYERS,
   PRODUCT_LAYER_CHOICES,
+  PRODUCT_STATUSES,
 } from "@vxture-platform/shared";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import { createHash } from "node:crypto";
@@ -83,7 +84,10 @@ import { assertCanManage, assertCanRead } from "./product-authz";
  * 两边分别有自己的稳定性要求。所以下面 `row.status → record.state` 的映射
  * 是有意的，不是遗漏。
  */
-const STATES = ["active", "inactive", "draft", "deprecated"] as const;
+/* 值域的权威源在 @vxture-platform/shared（lint:catalog-domains 锁它与
+   chk_products_status 一致）。此前这里与 opera 门户各写一份四值联合类型，
+   于是 2026-10-29 加进 DDL 的 `developing` 两边都没接到。 */
+const STATES = PRODUCT_STATUSES;
 type ProductState = (typeof STATES)[number];
 
 /**
@@ -103,15 +107,27 @@ type ProductState = (typeof STATES)[number];
  * `draft → inactive` 也不给：草稿从来没上线过，「停用」对它没有意义，真实意图要么是
  * 继续接入要么是退役，两者都有各自的边。
  */
+/*
+ * 生命周期的边。2026-09-24 接上 `developing`（开发中）——它此前只存在于 DDL，
+ * 代码里一处都没有，于是「信息填好了、东西还没建」的产品只能挂在 `active` 上，
+ * opera 与 admin 双双显示「已上线」，而它什么都没部署。
+ *
+ * `active → developing` 是**订正边**，不是下架边：下架走 `inactive`（曾经上线、
+ * 现在关掉），而这条说的是「它从来没真正上线过」。两者在界面上差一个词，在事实上
+ * 差得远，所以它带一条判据 —— 见 `assertNeverSold`：**有客户足迹就不许走**。
+ * 没有那条判据，这条边就成了改写历史的口子。
+ */
 const STATE_TRANSITIONS: Record<ProductState, readonly ProductState[]> = {
-  draft: ["active", "deprecated"],
-  active: ["inactive", "deprecated"],
+  draft: ["developing", "active", "deprecated"],
+  developing: ["active", "draft", "deprecated"],
+  active: ["developing", "inactive", "deprecated"],
   inactive: ["active", "deprecated"],
   deprecated: [],
 };
 
 const STATE_LABELS: Record<ProductState, string> = {
   draft: "草稿",
+  developing: "开发中",
   active: "已上线",
   inactive: "已停用",
   deprecated: "已退役",
@@ -816,8 +832,11 @@ export class ProductCatalogRouter {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const current = await client.query<{ status: ProductState }>(
-        `SELECT status FROM product.products
+      const current = await client.query<{
+        status: ProductState;
+        product_code: string;
+      }>(
+        `SELECT status, product_code FROM product.products
           WHERE id = $1 AND deleted_at IS NULL
           FOR UPDATE`,
         [id],
@@ -930,6 +949,34 @@ export class ProductCatalogRouter {
               : `不允许从${STATE_LABELS[from]}改成${STATE_LABELS[next]}；可以改成：${allowed
                   .map((s) => STATE_LABELS[s])
                   .join(" / ")}。`,
+          );
+        }
+      }
+
+      /*
+       * 订正边的判据：`active → developing` 说的是「它从来没真正上线过」。
+       *
+       * 这句话对**有人买过**的产品就是假的——那是下架，边走 `inactive`（曾经上线、
+       * 现在关掉）。两者在界面上差一个词，在事实上差得远：一个说「还没建好」，
+       * 一个说「不卖了」，而客户的订阅只在后一种情况下需要被交代。
+       *
+       * 没有这条判据，这条边就是一个改写历史的口子：把一个卖过的产品说成开发中，
+       * 而它的订阅、订单与用量还在库里。所以判据不是「运营想不想」，是**有没有足迹**。
+       */
+      if (from === "active" && next === "developing") {
+        const sold = await client.query<{ subs: string; orders: string }>(
+          `SELECT (SELECT count(*) FROM metering.subscriptions WHERE product_id = $1) AS subs,
+                  (SELECT count(*) FROM billing.orders        WHERE product_id = $1) AS orders`,
+          [id],
+        );
+        const subs = Number(sold.rows[0]?.subs ?? 0);
+        const orders = Number(sold.rows[0]?.orders ?? 0);
+        if (subs + orders > 0) {
+          await client.query("ROLLBACK");
+          throw conflict(
+            "CATALOG_PRODUCT_ALREADY_SOLD",
+            `「${current.rows[0]!.product_code}」已经有客户足迹（订阅 ${subs} 条、订单 ${orders} 笔），` +
+              `不能改成开发中——那等于说它从没上线过。要停售请改成${STATE_LABELS.inactive}。`,
           );
         }
       }
