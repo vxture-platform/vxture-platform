@@ -128,6 +128,36 @@ location），接管相关的 location 里不出现 `try_files`。守卫判据 H
 （HSTS / X-Frame-Options / nosniff / Referrer-Policy）就整组不再继承。所以维护页那段把四个
 安全头照抄了一遍，而门户页那段只用 `expires`（它不参与那套继承）就够。
 
+### 5.3 接管页目录有两个身份不同的写者
+
+`/srv/vxture/data/nginx/html/__takeover/` 被两处写：
+
+- `20-sync-nginx-config.sh`（deploy 链）以**部署用户**跑；
+- `35-site-takeover.sh` 要求 sudo，以 **root** 跑。
+
+`takeover_sync_pages` 原来用 `rm -rf "$dst"; mkdir -p "$dst"` 同步，于是**谁跑谁拿走目录归属**。
+root 切过一次档之后，下一次 deploy 就停在
+
+```
+rm: cannot remove '/srv/vxture/data/nginx/html/__takeover/portal.html': Permission denied
+```
+
+——**unlink 看的是目录的写权限，不是文件的归属**，所以部署用户对 root 建的目录里的文件无能为力。
+v0.26.263 的生产 deploy 实际因此失败；在此之前一直正常，因为「先切档、再发版」这个顺序是那天
+第一次出现。
+
+现在的做法：
+
+- 目录**只建不删**，只清内容——归属就不会被重置；
+- 以 root 跑时结束前 `chown -R --reference=<html 根>`，把归属还给部署用户；
+- 已经被锁住的现场能自愈：目录不可写时走 `sudo -n chown --reference`（与
+  `13-prepare-runtime-env.sh` 同一条提权路径），拿不到权限就报错并原样打出该跑的命令；
+- `35-site-takeover.sh` **不创建** `conf.d/` 与 html 根目录，只断言它们存在——以 root 建出来的
+  父目录会让上面那个 `--reference` 基准本身变成 root，自愈就再也修不回来。
+
+单测里对应的那条断言是「同步不重建目标目录（inode 不变）」：归属在非 root 的测试里造不出来，
+而 inode 不变正是被违反的那条性质。
+
 ---
 
 ## 6. 守卫
@@ -147,7 +177,7 @@ location），接管相关的 location 里不出现 `try_files`。守卫判据 H
 - **H** 见 §5.1。
 
 另有 `deploy/scripts/lib/site-takeover.test.sh`（CI 跑 `deploy/scripts/lib/*.test.sh`）：
-合并与拒绝逻辑的纯文本单测，16 条。
+合并与拒绝逻辑的纯文本单测，外加投放函数的目录性质，21 条。
 
 ---
 

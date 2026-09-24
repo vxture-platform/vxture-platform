@@ -116,7 +116,16 @@ mkdir -p "$(dirname "$STATE_FILE")"
 } >"$STATE_FILE"
 
 resolved="$(takeover_resolve "$defaults_text" "$(cat "$STATE_FILE")")"
-mkdir -p "$DST/conf.d" "$HTML_ROOT"
+# 这两个目录由 deploy（20-sync-nginx-config.sh）创建，**本脚本不创建**：以 root 跑的
+# mkdir 会把它们建成 root 所有，而 takeover_sync_pages 正是拿 $HTML_ROOT 的属主当
+# 归属基准的——基准本身变成 root，自愈路径就再也修不回来了。没部署过的主机上也没有
+# 档位可切。
+for d in "$DST/conf.d" "$HTML_ROOT"; do
+  if [ ! -d "$d" ]; then
+    echo "错误：$d 不存在。它由 deploy 创建，请先完成一次部署再切档。" >&2
+    exit 1
+  fi
+done
 takeover_render_map "$resolved" "$DST/conf.d/$TAKEOVER_MAP_BASENAME"
 takeover_sync_pages "$SRC/html" "$HTML_ROOT" "$resolved"
 

@@ -136,6 +136,23 @@ ruyin.work portal" >/dev/null 2>&1; then
 else
   echo "FAIL - 页齐时不该拒绝" >&2; fail=1
 fi
+# ── 目录不重建：重建会把归属重置成当次运行者，而这个目录有两个身份不同的写者 ─────
+# deploy 以部署用户跑、35-site-takeover.sh 以 root 跑。root 建过一次，下一次 deploy
+# 连 unlink 里面的文件都做不到（unlink 看目录的写权限，不看文件归属）——v0.26.263 的
+# 生产 deploy 实际因此失败。归属本身在非 root 的测试里造不出来，**inode 不变**是
+# 「没重建」的可测形式，而它恰好就是那条被违反的性质。
+ino_before="$(stat -c %i "$dst/$TAKEOVER_HTML_SUBDIR")"
+printf 'stale' >"$dst/$TAKEOVER_HTML_SUBDIR/stale.html"
+if takeover_sync_pages "$src" "$dst" "vxture.com maintenance" >/dev/null 2>&1; then
+  assert_eq "同步不重建目标目录（inode 不变）" \
+    "$ino_before" "$(stat -c %i "$dst/$TAKEOVER_HTML_SUBDIR")"
+  assert_eq "目录内容照旧清干净（上一版遗留的页不留下）" \
+    "maintenance.html portal.html" \
+    "$(ls "$dst/$TAKEOVER_HTML_SUBDIR" | sort | tr '\n' ' ' | sed 's/ $//')"
+else
+  echo "FAIL - 目标目录已存在时不该拒绝" >&2; fail=1
+fi
+
 rm -rf "$src" "$dst"
 
 echo ""
