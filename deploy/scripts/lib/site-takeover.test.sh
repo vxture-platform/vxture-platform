@@ -78,6 +78,24 @@ assert_rejects "一行多出第三列" "vxture.com off 还有别的"
 assert_rejects "默认文件一条数据都没有" "# 只有注释"
 assert_rejects "域名写了但没写档位" "vxture.com"
 
+# ── 退役一个域：现场状态还留着它 ─────────────────────────────────────────────
+# 这两条是同一个输入的两种正确答案，按调用方分：
+#   · 35-site-takeover.sh（人在敲命令）→ 拒绝，因为那只可能是敲错了；
+#   · 20-sync-nginx-config.sh（deploy 路径）→ 丢弃，因为「把一个域从登记表里摘掉」是正常
+#     的仓内改动，而报错会让整次 deploy 失败（那个脚本 set -e），等于这件事做不成。
+assert_eq "prune：退役的域从现场状态里丢掉，其余不动" \
+  "vxture.com portal" \
+  "$(takeover_resolve "vxture.com off" "vxture.com portal
+ruyin.work portal" prune)"
+
+assert_rejects "reject（默认）：现场有登记表没有的域就拦下" \
+  "vxture.com off" "vxture.com portal
+ruyin.work portal"
+
+assert_eq "prune 不改变合法行的处理" \
+  "vxture.com maintenance" \
+  "$(takeover_resolve "vxture.com off" "vxture.com maintenance" prune)"
+
 # ── map 的输出形状：nginx map include 的数据行是 `key value;` ────────────────
 tmp="$(mktemp)"
 takeover_render_map "vxture.com off
