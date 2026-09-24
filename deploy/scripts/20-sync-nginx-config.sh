@@ -228,7 +228,9 @@ if [ -f "$TAKEOVER_STATE_FILE" ]; then
 else
   echo "  $TAKEOVER_STATE_FILE 不存在，按仓内默认（切档用 35-site-takeover.sh）"
 fi
-printf '  %s\n' "$TAKEOVER_RESOLVED"
+# 每档一行。`printf '  %s\n' "$var"` 对一个含换行的变量只缩进第一行：它把整个变量
+# 当**一个**参数，格式串不重复。
+printf '%s\n' "$TAKEOVER_RESOLVED" | sed 's/^/  /'
 
 echo "同步完成，目录内容："
 find "$DST" -type f | sort
