@@ -8,15 +8,9 @@
 
 /* ── 分节背景变体 ──────────────────────────────────────────────────────── */
 
-/* 02 屏：网格铺左半屏（解决方案 hero 是右半屏）。 */
-.vx-solutions-grid-layer--left {
-  mask-image: var(--vx-website-solutions-grid-mask-left);
-}
-
-/* 03 屏：网格通铺，上下渐隐。 */
-.vx-solutions-grid-layer--full {
-  mask-image: var(--vx-website-solutions-grid-mask-full);
-}
+/* 这里原有两条网格遮罩变体（--left / --full）。owner 2026-09-24 定「去掉网格」，
+ * 三屏的网格层已从 AboutUsPage 移除，这两条就没有消费方了，一并删除。
+ * 对应的 --vx-website-solutions-grid-mask-left / --full 两个 token 也已随之摘掉。 */
 
 /* 02 屏：路径图案落在右下角（文案在右列，图案垫在其下方留白处，不压文字）。 */
 .vx-about-pattern-corner {

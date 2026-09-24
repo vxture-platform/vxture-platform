@@ -33,7 +33,7 @@
  * `industry_agent` / 将来的子型），不是一张产品码清单。新增一个子型这里一个字不用改
  * ——那正是这一页要兑现的性质。
  *
- * 排版沿用 arda 那页的既有类（`vx-page-surface` / `vx-hero-section` / `vx-hero-content`），
+ * 排版：hero 走 CatalogHero（与 /appcenter 同一款，2026-09-24 旧 hero 壳全面退役），
  * 不自造:同域已有成稿的地方照抄，是这个仓的规矩。
  */
 
@@ -45,7 +45,7 @@ import {
   marketingForLocale,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
-import AnimatedHeroBg from "./AnimatedHeroBg";
+import { CatalogHero, catalogHeroGhostButtonClass } from "./CatalogHero";
 import { productTypeKey } from "./product-catalog-view";
 
 interface AgentProductDetailProps {
@@ -89,63 +89,43 @@ export default function AgentProductDetail({
 
   return (
     <div className="vx-page-surface">
-      <section className="vx-hero-section">
-        <AnimatedHeroBg />
-        <div className="vx-hero-content">
-          <div className="max-w-website-3xl">
-            <p className="vx-website-hero-eyebrow vx-website-hero-eyebrow--wide mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
-              {eyebrow}
-            </p>
-            <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
-              {name}
-            </h1>
-            {lead ? (
-              <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-                {lead}
-              </p>
-            ) : null}
-
-            {highlights.length > 0 ? (
-              <div className="mt-6 flex flex-wrap gap-3">
-                {highlights.map((item) => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-vx-brand-100 bg-vx-white/70 px-3 py-1 text-sm font-medium text-vx-brand-700 shadow-sm shadow-vx-brand-900/5 backdrop-blur dark:border-vx-white/20 dark:bg-vx-white/10 dark:text-vx-gray-100"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              {notLive ? (
-                <Button size="xl" className="px-5" disabled>
-                  {t("catalog.actions.coming")}
-                </Button>
-              ) : (
-                <Button
-                  asChild
-                  size="xl"
-                  className="px-5 hover:bg-vx-brand-500"
-                >
-                  <Link href={`/pricing?product=${product.productCode}`}>
-                    {t("catalog.demoCta")}
-                  </Link>
-                </Button>
-              )}
-              <Button
-                asChild
-                variant="ghost"
-                size="xl"
-                className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/35 dark:bg-transparent dark:text-vx-white dark:hover:border-vx-white dark:hover:bg-vx-white/10"
-              >
-                <Link href="/contact">{t("catalog.consultCta")}</Link>
+      {/*
+       * hero 用 /appcenter 那一款（CatalogHero）：owner 2026-09-24「完全采用 appcenter
+       * 的 herosection」「点线动图效果——完全复用新款」「包括 herosection 的高度」。
+       * 旧壳（.vx-hero-section ＋满强度 AnimatedHeroBg）已全面退役。
+       *
+       * 按钮不跟着目录页走：这一页那颗是「订阅 / 敬请期待」（按 notLive 分叉），
+       * 目录页那颗是「预约演示」——语义不同，所以走 actions 口子整块替换。
+       */}
+      <CatalogHero
+        eyebrow={eyebrow}
+        title={name}
+        description={lead || undefined}
+        highlights={highlights}
+        actions={
+          <>
+            {notLive ? (
+              <Button size="xl" className="px-5" disabled>
+                {t("catalog.actions.coming")}
               </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+            ) : (
+              <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
+                <Link href={`/pricing?product=${product.productCode}`}>
+                  {t("catalog.demoCta")}
+                </Link>
+              </Button>
+            )}
+            <Button
+              asChild
+              variant="ghost"
+              size="xl"
+              className={catalogHeroGhostButtonClass}
+            >
+              <Link href="/contact">{t("catalog.consultCta")}</Link>
+            </Button>
+          </>
+        }
+      />
 
       {detailParagraphs.length > 0 ? (
         <section className="mx-auto max-w-website-3xl px-6 py-16">

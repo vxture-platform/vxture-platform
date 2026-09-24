@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banner, EmptyState } from "@vxture/design-system";
+import { Banner, Button, EmptyState } from "@vxture/design-system";
 import {
   fetchProductSubscriptions,
   type ProductSubscriptionState,
@@ -47,8 +47,32 @@ import {
   type ProductCatalogCardModel,
 } from "./ProductCatalogCard";
 
-/** 卡片数据形状与 /products 产品矩阵同源（ProductCatalogCardModel）。 */
-type AgentCard = ProductCatalogCardModel;
+/** 卡片数据形状与 /products 产品矩阵同源（ProductCatalogCardModel），外加筛选要用的行业。 */
+type AgentCard = ProductCatalogCardModel & {
+  /** 脱敏后的行业标签（marketing.<locale>.industries 去掉 INDUSTRY_DENYLIST）。 */
+  readonly industries: readonly string[];
+};
+
+/**
+ * 不对外呈现的行业标签（owner 2026-09-24：「要脱敏，国防 删除」）。
+ *
+ * 两个语言的值分别登记——`marketing.zh.industries` 与 `marketing.en.industries`
+ * 是两份独立的数组，只挡中文那个等于在英文页面上照样露出来。
+ *
+ * **脱敏掉之后没有剩余行业的产品不另开「其他」桶。** 现在只有 wargaming 属于这种
+ * （它唯一的标签就是国防）。给它开一桶的话，那一桶里只有它一个——谁点「其他」都只会
+ * 看到它，等于换个名字继续暴露，与脱敏的用意相反。它只在「全部」下出现。
+ */
+const INDUSTRY_DENYLIST: ReadonlySet<string> = new Set(["国防", "defense"]);
+
+/** 筛选按钮上限（owner 2026-09-24：「不超过 6+1 个」）。超出的行业折进「其他」。 */
+const MAX_INDUSTRY_BUCKETS = 7;
+
+/**
+ * 筛选按钮只改圆角与内距，选中/未选交给 DS Button 的 default / outline 两个变体——
+ * 颜色自己写一套会和 DS 漂开（ds/no-native-primitive 也正是为此拦下原生 <button>）。
+ */
+const FILTER_CHIP_CLASS = "rounded-full px-3";
 
 interface AgentMarketplacePageProps {
   /** 目录里的智能体产品；null = 目录暂时读不到（与"目录里没有智能体"是两回事） */
@@ -64,6 +88,12 @@ export default function AgentMarketplacePage({
   const user = useAuthStore((state) => state.user);
   // product_type → 类型标签（通用智能体 / 行业智能体）；无 marketing.tagline 时退回它。
   const agentKinds = t.raw("agents.kinds") as Record<string, string>;
+  /* 行业标签词表：DB 里存的是短值（zh 「通用」/ en 「general」），这里给它一个可读的
+     显示名。没登记的值直接显示原值——新标签不会因为没配词条就变成空按钮。 */
+  const industryLabels = t.raw("agents.filters.labels") as Record<
+    string,
+    string
+  >;
   const hasTenantSession = isAuthenticated && Boolean(user);
 
   // 卡片文案：键名与 /products 的 products.catalog.* 一一对应（两页同一形状）。
@@ -126,9 +156,70 @@ export default function AgentMarketplacePage({
         recommend: marketingRecommend(agent.marketing),
         subscribeAccess: agent.subscribeAccess,
         expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
+        industries: (m?.industries ?? []).filter(
+          (i) => !INDUSTRY_DENYLIST.has(i),
+        ),
       };
     });
   }, [agents, agentKinds, locale, t]);
+
+  /*
+   * 行业筛选桶：**全部来自 DB**（marketing.<locale>.industries），不写死一张清单——
+   * 写死的清单会和运营录的标签各说各话，而症状是「点了筛不出东西」。
+   *
+   * 排序：票数降序，同票按**它在目录里第一次出现的次序**（目录次序由运营在 admin 里
+   * 调，是个可改的决定）。纯按票数会在同票时给出不稳定的顺序。
+   *
+   * 上限 MAX_INDUSTRY_BUCKETS 颗；真超了就把尾部折进「其他」。现在 7 个行业刚好装下，
+   * 「其他」不出现（见 INDUSTRY_DENYLIST 头注：脱敏产生的无分类不进「其他」）。
+   */
+  const buckets = useMemo(() => {
+    if (cards === null) return [];
+    const count = new Map<string, number>();
+    const firstSeen = new Map<string, number>();
+    for (const card of cards) {
+      for (const industry of card.industries) {
+        count.set(industry, (count.get(industry) ?? 0) + 1);
+        if (!firstSeen.has(industry)) firstSeen.set(industry, firstSeen.size);
+      }
+    }
+    const ranked = [...count.keys()].sort(
+      (a, b) =>
+        (count.get(b) ?? 0) - (count.get(a) ?? 0) ||
+        (firstSeen.get(a) ?? 0) - (firstSeen.get(b) ?? 0),
+    );
+    const folded = ranked.length > MAX_INDUSTRY_BUCKETS;
+    const kept = folded ? ranked.slice(0, MAX_INDUSTRY_BUCKETS - 1) : ranked;
+    const rest = folded ? ranked.slice(MAX_INDUSTRY_BUCKETS - 1) : [];
+    const list = kept.map((key) => ({
+      key,
+      label: industryLabels[key] ?? key,
+      values: [key],
+      count: count.get(key) ?? 0,
+    }));
+    if (rest.length > 0) {
+      list.push({
+        key: "__other__",
+        label: t("agents.filters.other"),
+        values: rest,
+        count: cards.filter((c) => c.industries.some((i) => rest.includes(i)))
+          .length,
+      });
+    }
+    return list;
+  }, [cards, industryLabels, t]);
+
+  /** 选中的桶（空 = 全部）。多选，取并集——「组合筛选」。 */
+  const [picked, setPicked] = useState<readonly string[]>([]);
+
+  const visible = useMemo(() => {
+    if (cards === null) return null;
+    if (picked.length === 0) return cards;
+    const wanted = new Set(
+      buckets.filter((b) => picked.includes(b.key)).flatMap((b) => b.values),
+    );
+    return cards.filter((c) => c.industries.some((i) => wanted.has(i)));
+  }, [cards, picked, buckets]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。
   const [subs, setSubs] = useState<Map<string, ProductSubscriptionState>>(
@@ -167,6 +258,11 @@ export default function AgentMarketplacePage({
 
       <section id="agent-marketplace" className="vx-section-odd">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
+          {/*
+           * 标题右侧原先是一段解释这份清单从哪来的说明文字。owner 2026-09-24：
+           * 「这个完全不需要，删除」——那段话讲的是实现（清单来自产品目录），
+           * 不是访客要知道的事。那个位置换成按大行业的组合筛选。
+           */}
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
@@ -176,19 +272,65 @@ export default function AgentMarketplacePage({
                 {t("agents.title")}
               </h2>
             </div>
-            <p className="max-w-website-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-              {t("agents.description")}
-            </p>
+
+            {/* 组合筛选：多选、取并集；一个都不选 = 全部。计数是各桶的总数，不随当前
+                选择变化——那样数字会在点击时跳动，看着像 bug。 */}
+            {buckets.length > 0 ? (
+              <div
+                className="flex flex-wrap gap-2 md:justify-end"
+                role="group"
+                aria-label={t("agents.filters.label")}
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={picked.length === 0 ? "default" : "outline"}
+                  onClick={() => setPicked([])}
+                  aria-pressed={picked.length === 0}
+                  className={FILTER_CHIP_CLASS}
+                >
+                  {t("agents.filters.all")}
+                  <span className="ml-1 tabular-nums opacity-70">
+                    {cards?.length ?? 0}
+                  </span>
+                </Button>
+                {buckets.map((bucket) => {
+                  const on = picked.includes(bucket.key);
+                  return (
+                    <Button
+                      key={bucket.key}
+                      type="button"
+                      size="sm"
+                      variant={on ? "default" : "outline"}
+                      onClick={() =>
+                        setPicked((prev) =>
+                          prev.includes(bucket.key)
+                            ? prev.filter((k) => k !== bucket.key)
+                            : [...prev, bucket.key],
+                        )
+                      }
+                      aria-pressed={on}
+                      className={FILTER_CHIP_CLASS}
+                    >
+                      {bucket.label}
+                      <span className="ml-1 tabular-nums opacity-70">
+                        {bucket.count}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
 
-          {cards === null ? (
+          {visible === null ? (
             <Banner
               className="mt-10"
               tone="danger"
               title={t("agents.unavailable.title")}
               description={t("agents.unavailable.description")}
             />
-          ) : cards.length === 0 ? (
+          ) : visible.length === 0 ? (
             <EmptyState
               icon="agent"
               title={t("agents.empty.title")}
@@ -198,7 +340,7 @@ export default function AgentMarketplacePage({
           ) : (
             <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {/* 卡片本体与 /products 产品矩阵共用 ProductCatalogCard：布局 / 徽标 / 动作 / 跳转一处定。 */}
-              {cards.map((agent) => (
+              {visible.map((agent) => (
                 <ProductCatalogCard
                   key={agent.code}
                   product={agent}

@@ -63,6 +63,14 @@
   background-repeat: no-repeat;
 }
 
+/* 案例页 hero 左侧压底（见 token 注释）。图形背景保留，这一层只负责文案可读。 */
+.vx-cases-hero-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--vx-website-cases-hero-wash);
+}
+
 .vx-solutions-industry {
   --solutions-accent: var(--vx-website-solutions-accent-sky);
   position: relative;

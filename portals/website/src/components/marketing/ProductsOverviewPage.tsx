@@ -101,7 +101,21 @@ export default function ProductsOverviewPage({
       return {
         code: product.productCode,
         name: catalogDisplayName(product, locale),
-        typeLabel: t(`catalog.types.${productTypeKey(product.productType)}`),
+        /*
+         * 第一行那句话优先取 marketing.tagline——运营在 admin 里录的就是它，而 Ln 定位
+         * （`L2 · 数据智能` / `L3 · 数字员工 · 标书编写`）正写在这句话的开头。
+         *
+         * 这里原来只写 `t("catalog.types.<product_type>")`：一个**按 product_type 算出来
+         * 的静态词条**，完全不看 tagline。于是运营设了 Ln 也不会出现在这一页上，而
+         * /appcenter 同一张卡（AgentMarketplacePage）一直是按 tagline 画的——同一个卡片
+         * 组件、两个取值口径，「设了不显示」就是这么来的（owner 2026-09-24）。
+         *
+         * 没录 tagline 的产品仍回落到类型词条，所以这不是把静态词条换掉，是给它加一个
+         * 更权威的来源。
+         */
+        typeLabel:
+          m?.tagline ??
+          t(`catalog.types.${productTypeKey(product.productType)}`),
         icon: productTypeIcon(product.productType),
         description: product.description ?? "",
         value: m?.value ?? null,

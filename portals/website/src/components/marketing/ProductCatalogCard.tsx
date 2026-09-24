@@ -40,7 +40,11 @@ import type { ProductSubscriptionState } from "@/api/subscription.api";
 export interface ProductCatalogCardModel {
   code: string;
   name: string;
-  /** 类型标签（/products 取 catalog.types；/appcenter 取 marketing.tagline 或 kinds）。 */
+  /**
+   * 第一行那句话：两页统一先取 marketing.tagline（Ln 定位就写在它开头），没录才回落到
+   * 类型词条（/products 用 catalog.types，/appcenter 用 agents.kinds）。
+   * 2026-09-24 之前 /products 只用静态词条，运营设的 Ln 在那一页不显示。
+   */
   typeLabel: string;
   icon: IconName;
   description: string;
