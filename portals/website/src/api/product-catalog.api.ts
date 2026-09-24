@@ -81,6 +81,21 @@ export interface ProductCatalogItem {
    * 会去找两个库里不存在的值。2026-09-24 订正。
    */
   releaseStage: string;
+  /**
+   * 生命周期轴（2026-09-24 接入）：`active` 已上线 / `developing` 开发中。
+   *
+   * 官网目录此前只放 `active`，于是「信息填好了、东西还没建」的产品只能挂在
+   * `active` 上——opera 与 admin 双双显示「已上线」。`developing` 这一档就是用来
+   * 把「填了信息」与「上了线」分开的：它**出现在官网**（可预告），但**不可订**。
+   *
+   * 不可订必须认这根轴，不能只认 `releaseStage === "preview"`：那是两根轴碰巧
+   * 一致，而定价端点按 `status = 'active'` 过滤产品——两轴一分叉，卡上就是一颗
+   * 点进去落到空阶梯的假按钮。
+   *
+   * 部署偏斜防护：门户先于 BFF 发布时旧响应没有这一列，回落 `active`——那是本
+   * 字段之前的行为（目录里只可能有 active），不会凭空把在售产品标成开发中。
+   */
+  status: "active" | "developing";
   /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
   marketing: MarketingContent | null;
   /**

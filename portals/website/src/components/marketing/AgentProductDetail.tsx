@@ -65,6 +65,16 @@ export default function AgentProductDetail({
   const eyebrow =
     m?.tagline?.trim() ||
     t(`catalog.types.${productTypeKey(product.productType)}`);
+  /*
+   * 还没上线的产品不给「预约演示」那颗按钮——它跳 `/pricing?product=`，而定价端点
+   * 按 `status = 'active'` 过滤产品，落地就是一张空阶梯。判据与产品卡的 `notLive`
+   * 同源（生命周期 developing 或承诺等级 preview），理由见 ProductCatalogCard。
+   *
+   * 换成禁用的「敬请期待」，而不是悄悄改跳别处：这一页存在的意义就是介绍一个还没
+   * 上线的产品，「业务咨询」那颗按钮照旧可用，想聊的人有路可走。
+   */
+  const notLive =
+    product.status === "developing" || product.releaseStage === "preview";
   /* 导语用登记的业务价值，退回目录 description。两者都空时不渲染这一段，而不是留一行空白。 */
   const lead = m?.value?.trim() || product.description?.trim() || "";
   const highlights = (m?.highlights ?? []).filter((x) => x.trim());
@@ -109,11 +119,21 @@ export default function AgentProductDetail({
             ) : null}
 
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
-                <Link href={`/pricing?product=${product.productCode}`}>
-                  {t("catalog.demoCta")}
-                </Link>
-              </Button>
+              {notLive ? (
+                <Button size="xl" className="px-5" disabled>
+                  {t("catalog.actions.coming")}
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  size="xl"
+                  className="px-5 hover:bg-vx-brand-500"
+                >
+                  <Link href={`/pricing?product=${product.productCode}`}>
+                    {t("catalog.demoCta")}
+                  </Link>
+                </Button>
+              )}
               <Button
                 asChild
                 variant="ghost"

@@ -41,8 +41,8 @@ const dom = read(
    到所有 import 它的门户与 BFF，为一条对账引入那么大的改动不划算。判据相同：DDL 的
    CHECK 必须与 TS 值域逐值一致，不一致时**改 DDL，不改 TS**。
    （2026-10-29 加。此前 release_stage 与 products.status 两族都不在本守卫视野里——
-   改名那天才发现没有任何机械链路盯着它们。products.status 的 TS 侧目前还没有权威源
-   （opera 的 lifecycle.ts 各写了一份联合类型），等它收口到 @shared 再在这里补一对。） */
+   改名那天才发现没有任何机械链路盯着它们。products.status 已于 2026-09-24 收口到
+   @shared（`PRODUCT_STATUSES`）并在下面补上了那一对。） */
 const relStage = read("packages/core/utils/src/release-stage.ts");
 const p40 = read("deploy/database/ddl/40_product.sql");
 const p50 = read("deploy/database/ddl/50_metering.sql");
@@ -102,6 +102,16 @@ const pairs = [
   ],
   // products.layer: closed domain (product_100_matrix §2). The DDL CHECK also
   // admits NULL — ddlCheckIn only reads the IN(...) list, so the two still match.
+  /* products.status（接入状态轴）。这一对 2026-09-24 才补上，而它缺席的代价已经
+     付过：`developing` 2026-10-29 进了 DDL，TS 侧却没有权威源（opera-bff 与 opera
+     门户各写一份四值联合类型），于是那个值在 bff/ portals/ packages/ 里**出现 0 次**
+     ——库收得下，没有任何代码能产生、接受或显示它，产品只好全挂在 `active` 上。
+     本文件原先就记着「等它收口到 @shared 再在这里补一对」，现在收口了。 */
+  [
+    "product status",
+    tsArray(dom, "PRODUCT_STATUSES"),
+    ddlCheckIn(p40, "chk_products_status"),
+  ],
   [
     "product layer",
     tsArray(dom, "PRODUCT_LAYERS"),

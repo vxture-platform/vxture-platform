@@ -189,6 +189,36 @@ export const METRIC_KINDS = ["counter", "gauge"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
 /**
+ * 产品生命周期（`product.products.status`）——**接入状态轴**，答的是「这个产品走到
+ * 接入流程的哪一步」。与承诺等级（`release_stage`，答「买了之后平台承诺什么」）、
+ * 层级、类型、来源都正交。
+ *
+ * ── 这份清单此前不存在，而它的缺席让一个值瘫在库里 ──
+ * `developing` 2026-10-29 随 DDL 加进 `chk_products_status`，列注释写着
+ * 「开发中(admin 可录营销、官网可预告)」。但 TS 这一侧**从来没有权威源**：
+ * opera-bff 与 opera 门户各写了一份四值联合类型，谁都不知道另一份存在，于是
+ * `developing` 在 `bff/` `portals/` `packages/` 里**出现 0 次**——库收得下，
+ * 而没有任何代码能产生、接受或显示它。加了值域却不接消费方，值就是死的。
+ * `lint:catalog-domains` 的注释当时就记着「等它收口到 @shared 再补一对」；现在补上。
+ *
+ * ── 各值的判据 ──
+ *   draft       只在 opera 可见。已登记、拿到产品码，接入尚未完成。
+ *   developing  开发中：admin 可录营销、官网可预告，**但不可订阅**。
+ *               「信息填好了，东西还没建」正是这一档——而不是 active。
+ *   active      已上线：可订阅、可进入。
+ *   inactive    已停用：曾经上线，现在关掉了。与 developing 的区别是**有没有上过线**。
+ *   deprecated  已退役（终态）。
+ */
+export const PRODUCT_STATUSES = [
+  "draft",
+  "developing",
+  "active",
+  "inactive",
+  "deprecated",
+] as const;
+export type ProductStatusValue = (typeof PRODUCT_STATUSES)[number];
+
+/**
  * products.layer — where a product sits in the product stack
  * (product_100_matrix.md §2). L1 = foundational capability (atlas, runos),
  * L2 = domain platform (arda, karda, terra), L3 = agent application.

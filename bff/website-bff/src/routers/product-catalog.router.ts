@@ -7,7 +7,8 @@
  *
  * 口径（opera/40-product-registry.md §1 / §4）：product.products 是「平台上有哪些
  * 产品」的唯一权威，官网只读这张表、只加与公开营销相符的一层过滤
- * （`status='active' AND is_customer_visible`），不另起清单、不按产品码点名。
+ * （`status IN ('active','developing') AND is_customer_visible`），不另起清单、
+ * 不按产品码点名。`developing` 2026-09-24 接入：DDL 给它的定义就是「官网可预告」。
  * 官网三处消费面都靠它：/products 的产品矩阵、/appcenter 的智能体广场（两页按
  * `product_type` 分区），以及 /products/[slug] 的存在性判定（不在目录里 = 404）。
  *
@@ -50,8 +51,25 @@ export interface ProductCatalogItem {
   releaseVersion: string | null;
   /** 对外发布时间（released_at，ISO 字符串）；未填为 null。卡片底部「v x.y.z at 日期」用。 */
   releasedAt: string | null;
-  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。官网据此判徽标与订阅按钮。 */
+  /**
+   * 承诺等级轴：stable=正式版 / beta=公测版 / preview=预览版 / sunset=停售中。
+   * 官网据此画徽标。**它不决定能不能订**——那是下面 `status` 与 `subscribeAccess`
+   * 的事。（这行注释曾写着旧词表 `ga / developing`，2026-09-24 随下面那一列订正。）
+   */
   releaseStage: string;
+  /**
+   * 生命周期轴：本端点只放出 `active`（已上线）与 `developing`（开发中）两值。
+   *
+   * 为什么官网非得知道它：`developing` 的定义是「信息已登记、可对外预告，但东西
+   * 还没建好」。这种产品**不可订**，而下游的定价/套餐端点（product-plans.router）
+   * 一直在按 `status = 'active'` 过滤产品——卡片若只看承诺等级就给「订阅」按钮，
+   * 客户点进去是一张空的定价页。**入口承诺一件做不到的事**，与 owner 2026-09-22
+   * 定 `subscribeAccess` 时说的是同一个毛病。
+   *
+   * 不靠「承诺等级也会是 preview」来代替它：那是两根轴碰巧一致，没有任何东西
+   * 保证它们一致，而它们一旦分叉，症状就是那颗假按钮。
+   */
+  status: "active" | "developing";
   /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
   marketing: MarketingContent | null;
   /**
@@ -78,6 +96,7 @@ interface ProductCatalogRow {
   release_version: string | null;
   released_at: Date | string | null;
   release_stage: string;
+  status: string;
   marketing: MarketingContent | null;
   public_plan_count: number | string | null;
   invite_plan_count: number | string | null;
@@ -92,7 +111,7 @@ export class ProductCatalogRouter {
     const res = await this.pool.query<ProductCatalogRow>(
       `select p.product_code, p.product_name, p.product_nick, p.product_type,
               p.description, p.release_version, p.released_at, p.release_stage,
-              p.marketing,
+              p.status, p.marketing,
               /*
                * 订阅入口三态（owner 2026-09-22）。卡片上那颗按钮此前只按成熟度 ×
                * 订阅态决定，**完全不知道这个产品还有没有公开可买的档**——于是把所有
@@ -120,8 +139,13 @@ export class ProductCatalogRouter {
               and pc.component_role = 'primary'
               and pc.tier is not null
          ) sell on true
+        /* 2026-09-24：developing（开发中）也要出。DDL 给这一档写的定义就是
+           「admin 可录营销、官网可预告」，而官网这一半从没实现——于是「信息填好了、
+           东西还没建」的产品只能挂在 active 上，opera 与 admin 双双显示「已上线」。
+           客户那一侧不受影响：能不能订由承诺等级与在售公开套餐决定，不由这个轴决定。
+           注意本注释在 SQL 模板串里，不能出现反引号——它会当场截断字符串。 */
         where p.is_customer_visible = true
-          and p.status = 'active'
+          and p.status in ('active', 'developing')
           and p.deleted_at is null
         order by p.sort asc, p.product_code asc`,
     );
@@ -137,6 +161,9 @@ export class ProductCatalogRouter {
           ? r.released_at.toISOString()
           : (r.released_at ?? null),
       releaseStage: r.release_stage,
+      /* WHERE 只放这两值进来；认不得的值按「不可订」处理——宁可少给一颗按钮，
+         不能把一个查不到的状态当成「已上线」。 */
+      status: r.status === "active" ? "active" : "developing",
       marketing: r.marketing,
       /*
        * 有公开档就是公开订阅；一个公开档都没有但有邀请档 = 邀请订阅；两者都没有

@@ -62,7 +62,12 @@ function poolOf(
           ? []
           : [PRICE_ROW],
     }))
-    .mockResolvedValueOnce({ rows: soldRow ? [soldRow] : [] });
+    .mockResolvedValueOnce({
+      /* 生命周期列（2026-09-24 新门）默认「已上线」：既有用例要证的是别的门，
+         桩少这一列会让它们全部撞在新门上——那时它们测的就不是自己声称的东西了。
+         专测新门的用例显式传 `product_status`。 */
+      rows: soldRow ? [{ product_status: "active", ...soldRow }] : [],
+    });
   if (opts?.owns !== undefined) {
     query.mockResolvedValueOnce({ rows: opts.owns ? [{ one: 1 }] : [] });
   }
@@ -164,6 +169,46 @@ describe("POST orders · 归属与成熟度两道门", () => {
     expect((error as BadRequestException).getResponse()).toMatchObject({
       code: "PLAN_PRODUCT_MISMATCH",
     });
+  });
+
+  /*
+   * 生命周期轴那道门（2026-09-24）。
+   *
+   * 它此前**不存在**：下单路径从头到尾没读过 `prod.status`。两个目录都按
+   * `status = 'active'` 过滤，所以界面上到不了；但判据不在界面上——拿到一个
+   * planVersionId 就能给一个「信息填好了、东西还没建」的产品下单成功。
+   *
+   * `stable` 是这几条的关键：承诺等级那道门会放行，所以拦住它的只能是新门。若两条
+   * 判据在同一根轴上，这几条用例会在旧门上绿，什么也没证明。
+   */
+  it.each(["developing", "draft", "inactive", "deprecated"] as const)(
+    "未上线产品（status=%s，承诺等级 stable）：409 PRODUCT_NOT_LIVE",
+    async (status) => {
+      const { pool } = poolOf({
+        product_code: "vxtpl",
+        product_status: status,
+        release_stage: "stable",
+        plan_is_public: true,
+      });
+      const err = await routerWith(pool)
+        .createOrder(req(), BODY)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(codeOf(err)).toBe("PRODUCT_NOT_LIVE");
+    },
+  );
+
+  it("查不到 status（部署偏斜 / 列没选）也拦：宁可拦住不放过", async () => {
+    const { pool } = poolOf({
+      product_code: "vxtpl",
+      product_status: undefined,
+      release_stage: "stable",
+      plan_is_public: true,
+    });
+    const err = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+    expect(codeOf(err)).toBe("PRODUCT_NOT_LIVE");
   });
 
   it("开发中产品：409 PRODUCT_NOT_RELEASED", async () => {

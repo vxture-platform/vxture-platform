@@ -107,6 +107,8 @@ export default function ProductsOverviewPage({
         value: m?.value ?? null,
         highlights: m?.highlights ?? [],
         releaseStage: product.releaseStage,
+        /* 部署偏斜：旧 BFF 不回这一列，回落「已上线」（此前目录里只可能有 active）。 */
+        status: product.status ?? "active",
         version: product.releaseVersion,
         releasedAt: product.releasedAt,
         recommend: marketingRecommend(product.marketing),

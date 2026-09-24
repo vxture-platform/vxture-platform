@@ -2465,6 +2465,12 @@
       "data": "Data",
       "service": "Service"
     },
+    "capabilityStatus": {
+      "active": "Live",
+      "developing": "In development",
+      "draft": "Draft",
+      "archived": "Archived"
+    },
     "ticketStatus": {
       "open": "Open",
       "pending": "On hold",

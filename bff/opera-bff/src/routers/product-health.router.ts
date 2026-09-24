@@ -65,6 +65,10 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import { OPERA_BFF_RO_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
+import {
+  PRODUCT_STATUSES,
+  type ProductStatusValue,
+} from "@vxture-platform/shared";
 
 const PROBE_TIMEOUT_MS = 4_000;
 /** 优先级顺序：先试前端约定（redirect_uri 指向的多半是用户面前端），再试后端约定。 */
@@ -79,8 +83,17 @@ export type ProductLayer =
   | "external"
   | "unclassified";
 
-/** 与 product.products.status 的 CHECK 词表一致（40_product.sql）。 */
-export type ProductState = "draft" | "active" | "inactive" | "deprecated";
+/**
+ * 与 `product.products.status` 的 CHECK 词表一致（40_product.sql）——**引用，不复述**。
+ *
+ * 这一行原先手写了四个值，注释同样声称「与 CHECK 词表一致」，而 2026-10-29 CHECK 里
+ * 就多了第五个 `developing`。声称一致不等于一致：下面 `toProductState` 认不得它，于是
+ * 服务状态页把一个「开发中」的产品显示成**草稿**——静默、且是个确定的错答案。
+ *
+ * 值域权威源在 `@vxture-platform/shared`（`lint:catalog-domains` 锁它与 CHECK 一致），
+ * 这里引用它，同一个词表不再有第二份抄本。
+ */
+export type ProductState = ProductStatusValue;
 
 /** 与 appoidc.oidc_clients.release_channel 的 CHECK 词表一致（22_appoidc.sql）。 */
 export type ReleaseChannel = "stable" | "beta" | "canary";
@@ -225,11 +238,11 @@ function isReleaseChannel(value: string | null): value is ReleaseChannel {
 }
 
 function toProductState(status: string): ProductState {
-  return status === "draft" ||
-    status === "active" ||
-    status === "inactive" ||
-    status === "deprecated"
-    ? status
+  /* CHECK 保证库里只有这几个值，所以回落分支在真库上到不了；留着是因为这一列
+     将来再加值时，回落到「草稿」至少不会把它说成「已上线」。上一版的回落是**可达**
+     的——`developing` 就落在那儿，被显示成草稿。 */
+  return (PRODUCT_STATUSES as readonly string[]).includes(status)
+    ? (status as ProductState)
     : "draft";
 }
 

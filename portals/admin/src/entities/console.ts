@@ -480,7 +480,14 @@ export interface ProductPlanRecord {
   updatedAt: string;
 }
 
-export type ProductCapabilityStatus = "active" | "draft" | "archived";
+/* 与 admin-bff 的 console.types.ts 逐值对应（这份是门户侧的镜像）。
+   `developing`（开发中）2026-09-24 接入：DDL 里 2026-10-29 就有了，而两侧都把它折进
+   `archived`——一个还没建的产品被说成已归档。值域散成两份正是它漏了两年的原因。 */
+export type ProductCapabilityStatus =
+  | "active"
+  | "developing"
+  | "draft"
+  | "archived";
 export type ProductCapabilityVisibility = "public" | "internal";
 export type ProductCapabilityType =
   | "platform"

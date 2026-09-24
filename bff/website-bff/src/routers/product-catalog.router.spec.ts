@@ -26,6 +26,7 @@ describe("ProductCatalogRouter", () => {
         description: "Enterprise data platform.",
         release_version: "1.4.0",
         released_at: new Date("2026-09-12T00:00:00.000Z"),
+        status: "active",
       },
       {
         product_code: "vxtpl",
@@ -35,6 +36,7 @@ describe("ProductCatalogRouter", () => {
         description: null,
         release_version: null,
         released_at: null,
+        status: "developing",
       },
     ]);
 
@@ -50,6 +52,7 @@ describe("ProductCatalogRouter", () => {
         releaseVersion: "1.4.0",
         // pg 把 timestamptz 交成 Date；对外一律 ISO 字符串
         releasedAt: "2026-09-12T00:00:00.000Z",
+        status: "active",
         /* 两个计数都缺 → 一档都没有 → 不给购买入口。 */
         subscribeAccess: "none",
       },
@@ -61,9 +64,43 @@ describe("ProductCatalogRouter", () => {
         description: null,
         releaseVersion: null,
         releasedAt: null,
+        /* 开发中：官网要预告它，但卡片不给购买入口。 */
+        status: "developing",
         subscribeAccess: "none",
       },
     ]);
+  });
+
+  /*
+   * 生命周期轴只放出两值，**认不得的一律归「开发中」**。
+   *
+   * 方向很重要：回落到 `active` 等于把一个读不懂的状态当成「已上线」，卡片就会给
+   * 一颗订阅按钮，而定价端点（product-plans.router 按 `status = 'active'` 过滤产品）
+   * 会回一张空阶梯——入口承诺一件做不到的事。宁可少给一颗按钮。
+   *
+   * 这一条同时是那颗按钮的**唯一**判据来源：不靠「承诺等级反正也会是 preview」，
+   * 那是两根轴碰巧一致，没有任何东西保证它们一致。
+   */
+  it.each([
+    ["已上线", "active", "active"],
+    ["开发中", "developing", "developing"],
+    ["认不得的值", "retired", "developing"],
+    ["缺这一列（部署偏斜）", undefined, "developing"],
+  ] as const)("生命周期轴：%s", async (_n, raw, expected) => {
+    const { pool } = makePool([
+      {
+        product_code: "umbra",
+        product_name: "企业密码服务平台",
+        product_nick: null,
+        product_type: "general_platform",
+        description: null,
+        release_version: null,
+        released_at: null,
+        status: raw,
+      },
+    ]);
+    const res = await new ProductCatalogRouter(pool).getCatalog();
+    expect(res[0]?.status).toBe(expected);
   });
 
   /*
@@ -120,7 +157,7 @@ describe("ProductCatalogRouter", () => {
     expect(res[0]?.subscribeAccess).toBe("invite");
   });
 
-  it("reads only active, customer-visible, non-deleted products in sort order", async () => {
+  it("reads only live-or-developing, customer-visible, non-deleted products in sort order", async () => {
     const { pool, query } = makePool([]);
     await new ProductCatalogRouter(pool).getCatalog();
 
@@ -128,7 +165,16 @@ describe("ProductCatalogRouter", () => {
     const sql = String(query.mock.calls[0]?.[0]).replace(/\s+/g, " ");
     expect(sql).toContain("from product.products");
     expect(sql).toContain("is_customer_visible = true");
-    expect(sql).toContain("status = 'active'");
+    /*
+     * 产品那一条的生命周期过滤，**带表别名**。
+     *
+     * 这里原先断言的是裸的 `status = 'active'`，而这段 SQL 里还有一句
+     * `pl.status = 'active'`（数在售套餐的那个子查询）。2026-09-24 把产品侧改成
+     * `p.status in ('active','developing')` 之后，这条断言**照样通过**——它匹配到的
+     * 一直是套餐那一句。一条名字叫「只读 active 产品」的断言，其实从来没在看产品。
+     * 带上 `p.` 前缀，它才盯着它声称在盯的东西。
+     */
+    expect(sql).toContain("and p.status in ('active', 'developing')");
     expect(sql).toContain("deleted_at is null");
     expect(sql).toContain("order by p.sort asc");
     /* 三态计数必须真的在查——不然 subscribeAccess 恒为 none，而那看起来像

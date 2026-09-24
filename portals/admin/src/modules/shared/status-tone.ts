@@ -161,6 +161,8 @@ export const CAPABILITY_STATUS_TONE: Record<
   StatusTone
 > = {
   active: "brand",
+  /* 开发中：还没到，不是出了事。 */
+  developing: "info",
   draft: "warning",
   archived: "neutral",
 };

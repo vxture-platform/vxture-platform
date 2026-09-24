@@ -57,11 +57,11 @@ import type {
   ProductCapabilityRecord,
   ProductPlanVersionRecord,
   ProductCapabilitySource,
-  ProductCapabilityStatus,
   ProductCapabilityType,
 } from "@/entities/console";
 import { PUBLISH_STATUS_TONE } from "@/modules/shared/publish-tone";
 import {
+  useCapabilityStatusLabels,
   useCapabilityTypeLabels,
   useMergeStrategyLabels,
   useProductLayerLabels,
@@ -79,12 +79,6 @@ function capabilityTypeIcon(type: ProductCapabilityType): IconName {
 
 function sourceLabel(source: ProductCapabilitySource) {
   return source === "self" ? "自建" : "三方接入";
-}
-
-function statusLabel(status: ProductCapabilityStatus) {
-  if (status === "active") return "已上线";
-  if (status === "draft") return "草稿";
-  return "已归档";
 }
 
 function integrationStatusLabel(status: ProductCapabilityIntegrationStatus) {
@@ -172,6 +166,7 @@ export function ProductCapabilityDetailPage({
   const router = useRouter();
   const tableLabels = useTableLabels();
   const capabilityTypeLabels = useCapabilityTypeLabels();
+  const statusLabels = useCapabilityStatusLabels();
   const mergeStrategyLabels = useMergeStrategyLabels();
   const productLayerLabels = useProductLayerLabels();
   const releaseStageLabel = useReleaseStageLabel();
@@ -362,7 +357,7 @@ export function ProductCapabilityDetailPage({
               <HeadTag>{capabilityTypeLabels[product.productType]}</HeadTag>
               <HeadTag>{sourceLabel(product.source)}</HeadTag>
               <HeadTag tone={PUBLISH_STATUS_TONE[product.status]}>
-                {statusLabel(product.status)}
+                {statusLabels[product.status]}
               </HeadTag>
               <HeadTag icon="shield-check">
                 {integrationStatusLabel(product.integration.status)}
@@ -519,7 +514,7 @@ export function ProductCapabilityDetailPage({
                   <span className="ml-auto inline-flex shrink-0 flex-wrap items-center gap-xs">
                     <Badge variant="outline">{solution.role}</Badge>
                     <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
-                      {statusLabel(solution.status)}
+                      {statusLabels[solution.status]}
                     </StatusBadge>
                     {solution.tierNames.map((tier) => (
                       <Badge key={tier}>{tier}</Badge>

@@ -51,6 +51,7 @@ import type {
 import type {
   BillingBillType,
   OrderOperationStatus,
+  ProductCapabilityStatus,
   ProductCapabilityType,
   SubscriptionOperationCycle,
   SubscriptionOperationQuotaRisk,
@@ -246,6 +247,33 @@ export function useQuotaRiskLabels(): Record<
     warning: t("warning"),
     danger: t("danger"),
   } satisfies Record<SubscriptionOperationQuotaRisk, string>;
+}
+
+/**
+ * 产品的上架状态。收两份（ProductsPage 的 `productStatusLabel` / 产品详情页的
+ * `statusLabel`，逐值一致），以及产品列表筛选那三个写死中文的 `<option>`。
+ *
+ * 值域是 admin-bff 投影出来的四档（`mapProductCapabilityStatus`），不是库里的
+ * `product.products.status` 五值（draft / developing / active / inactive /
+ * deprecated，权威源在 `@vxture-platform/shared` 的 `PRODUCT_STATUSES`）：
+ * inactive 与 deprecated 在 admin 这一侧都投成 `archived`。两轴不得合并——
+ * 一份是运营改状态时能选的值（在 opera），一份是 admin 的读取面分组。
+ *
+ * `developing`（开发中）是 2026-09-24 才接上的一档：它在 DDL 里 2026-10-29 就
+ * 存在，而 admin 两侧都把它折进 `archived`——**一个还没建的产品被说成已归档**。
+ * 那次接线一并把这四条文案收到这里，`satisfies` 从此让漏分支编译不过。
+ */
+export function useCapabilityStatusLabels(): Record<
+  ProductCapabilityStatus,
+  string
+> {
+  const t = useTranslations("enums.capabilityStatus");
+  return {
+    active: t("active"),
+    developing: t("developing"),
+    draft: t("draft"),
+    archived: t("archived"),
+  } satisfies Record<ProductCapabilityStatus, string>;
 }
 
 /**

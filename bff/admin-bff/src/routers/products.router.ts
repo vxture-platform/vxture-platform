@@ -281,24 +281,37 @@ export class ProductsRouter {
        * （`status`），那两根轴各自有出口；拿成熟度当开关使是在说「它变不成熟了」。
        */
       /*
-       * ── 草稿不在这条规则里（2026-09-24）──
+       * ── 草稿与开发中不在这条规则里（2026-09-24）──
        *
-       * 上面那段讲的是**撤回一个已经承诺出去的产品**，而 `draft` 的产品从来没到过
-       * 客户面前：官网与 console 的目录都按 `status <> 'draft'` 过滤。对一个没有发生过
-       * 的承诺，谈不上「倒退」。
+       * 上面那段讲的是**撤回一个已经承诺出去的产品**。判据的关键词是「承诺出去」，
+       * 不是「可见」：
        *
-       * 这不是开倒退口，是**判据的粒度**：规则对**在售产品**是对的，对草稿则把一次
+       *   · `draft`      客户根本看不到（官网与 console 的目录都按 `status <> 'draft'` 过滤）。
+       *   · `developing` 官网能看到（这一档的定义就是「可预告」），但**没有任何人买过**
+       *                  ——`active → developing` 那一跃在 opera 侧带着「卖过就拒」的
+       *                  检查（`CATALOG_PRODUCT_ALREADY_SOLD`，查 subscriptions 与
+       *                  orders），`draft → developing` 更是从未开卖。所以
+       *                  `status = 'developing'` 蕴含「零订阅、零订单」。
+       *
+       * 对一个没人买过的产品，「承诺等级倒退」损害不到任何人，而它正是要被订正的那
+       * 一半：把一个还没建好的产品登记成「正式版」本身就是错的登记。
+       *
+       * 这不是开倒退口，是**判据的粒度**：规则对**在售产品**是对的，对这两档则把一次
        * **登记订正**变成了做不到的事。2026-09-24 实测撞上：hapto / ontos / terra 三个
        * 草稿产品被登记成「正式版」（简介还是空的），要改回预览版时被这条拦下——
-       * 错的登记因此不可纠正，而它们对客户根本不可见。
+       * 错的登记因此不可纠正。同一天把 13 个「只填了信息」的产品转 `developing` 时，
+       * 它们的承诺等级也得跟着降回「预览版」，否则卡片上会同时出现「正式版」与
+       * 「敬请期待」——那是**两根轴各说各话**，不是渲染错。
        *
-       * 在售产品（`status <> 'draft'`）照旧只能向前。那一侧的出路仍然是原注释写的：
-       * 改可见性或生命周期；拿成熟度当开关使是在说「它变不成熟了」。
+       * 在售产品（`active` / `inactive` / `deprecated`）照旧只能向前。那一侧的出路仍然
+       * 是原注释写的：改可见性或生命周期；拿成熟度当开关使是在说「它变不成熟了」。
        */
+      const stageLockedBySales =
+        row.status !== "draft" && row.status !== "developing";
       if (
         body.releaseStage !== undefined &&
         body.releaseStage !== row.release_stage &&
-        row.status !== "draft" &&
+        stageLockedBySales &&
         !isForwardReleaseStageMove(row.release_stage, body.releaseStage)
       ) {
         throw new ConflictException(
@@ -2657,6 +2670,7 @@ function mapProductCapabilityType(productType: string): ProductCapabilityType {
 /** Project the DDL status (active|inactive|draft|deprecated) onto the 3-state capability status. */
 function mapProductCapabilityStatus(status: string): ProductCapabilityStatus {
   if (status === "active") return "active";
+  if (status === "developing") return "developing";
   if (status === "draft") return "draft";
   return "archived"; // inactive | deprecated
 }
@@ -2876,7 +2890,19 @@ export async function loadProductCapabilities(
       : {
           providerName: source === "partner" ? "合作方服务商" : "Vxture",
           providerType: source,
-          status: "not_required",
+          /*
+           * 没有 `product_webhooks` 行 = **还没人登记**，不是「不需要接入」。
+           *
+           * 这里原先判 `not_required`（界面上写「无需接入」），于是 13 个只填了
+           * 信息、什么都没开发的产品在 admin 上显示「已上线 + 无需接入」——两个
+           * 都是假的，而后者尤其：一个智能体产品当然需要接入，只是没人填。
+           * **把「查不到」当成一个肯定的结论**，是这套系统里反复出现的同一个错。
+           *
+           * `not_required` 要留就得有它自己的判据（比如「这个产品按设计不收平台
+           * 下发」），而那个判据今天不存在——靠一行记录的缺席去推断它，等于让沉默
+           * 替人做主张。所以这里判「待配置」：它对每一个目录产品都为真。
+           */
+          status: "config_required",
           endpoint: null,
           protocol: "内部服务",
           authMode: "平台会话",
