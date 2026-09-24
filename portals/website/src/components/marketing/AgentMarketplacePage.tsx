@@ -49,24 +49,37 @@ import {
 
 /** 卡片数据形状与 /products 产品矩阵同源（ProductCatalogCardModel），外加筛选要用的行业。 */
 type AgentCard = ProductCatalogCardModel & {
-  /** 脱敏后的行业标签（marketing.<locale>.industries 去掉 INDUSTRY_DENYLIST）。 */
+  /** 行业标签，**原样读取**（marketing.<locale>.industries），不做任何剔除。 */
   readonly industries: readonly string[];
 };
 
 /**
- * 不对外呈现的行业标签（owner 2026-09-24：「要脱敏，国防 删除」）。
+ * **不单列筛选按钮**的行业标签（owner 2026-09-24：「要脱敏，国防 删除」）。
  *
  * 两个语言的值分别登记——`marketing.zh.industries` 与 `marketing.en.industries`
  * 是两份独立的数组，只挡中文那个等于在英文页面上照样露出来。
  *
- * **脱敏掉之后没有剩余行业的产品不另开「其他」桶。** 现在只有 wargaming 属于这种
- * （它唯一的标签就是国防）。给它开一桶的话，那一桶里只有它一个——谁点「其他」都只会
- * 看到它，等于换个名字继续暴露，与脱敏的用意相反。它只在「全部」下出现。
+ * 注意它挡的是**按钮**，不是数据：owner 2026-09-24「website 保留读取功能，读取不到的
+ * 归到『其他』——注意其他是覆盖没有单列筛选的类别」。所以带这类标签的产品照旧读进来、
+ * 照旧出现在列表里，只是归到「其他」那一桶。
+ *
+ * （我上一版把这些值从数据里抹掉、且不给「其他」桶，理由是「那一桶只有一个产品，等于
+ * 换个名字继续暴露」。owner 否了这个取舍——他的规则下「其他」覆盖**所有**没有单列按钮
+ * 的类别，所以那一桶里不止一类，我原来的担心不成立。）
  */
-const INDUSTRY_DENYLIST: ReadonlySet<string> = new Set(["国防", "defense"]);
+const INDUSTRY_NO_OWN_BUTTON: ReadonlySet<string> = new Set([
+  "国防",
+  "defense",
+]);
 
-/** 筛选按钮上限（owner 2026-09-24：「不超过 6+1 个」）。超出的行业折进「其他」。 */
-const MAX_INDUSTRY_BUCKETS = 7;
+/**
+ * 单列行业按钮的上限。owner 2026-09-24「不超过 6+1 个」——**6 是行业桶，+1 就是
+ * 「其他」**。票数排不进前 6 的行业折进「其他」，与不单列的、读不到的归在一起。
+ */
+const MAX_INDUSTRY_BUCKETS = 6;
+
+/** 「其他」那一桶的键。 */
+const OTHER_BUCKET_KEY = "__other__";
 
 /**
  * 筛选按钮只改圆角与内距，选中/未选交给 DS Button 的 default / outline 两个变体——
@@ -156,9 +169,9 @@ export default function AgentMarketplacePage({
         recommend: marketingRecommend(agent.marketing),
         subscribeAccess: agent.subscribeAccess,
         expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
-        industries: (m?.industries ?? []).filter(
-          (i) => !INDUSTRY_DENYLIST.has(i),
-        ),
+        /* 原样读取，不剔除——脱敏在「哪些值有自己的按钮」那一层做，见
+           INDUSTRY_NO_OWN_BUTTON 头注。 */
+        industries: m?.industries ?? [],
       };
     });
   }, [agents, agentKinds, locale, t]);
@@ -170,8 +183,9 @@ export default function AgentMarketplacePage({
    * 排序：票数降序，同票按**它在目录里第一次出现的次序**（目录次序由运营在 admin 里
    * 调，是个可改的决定）。纯按票数会在同票时给出不稳定的顺序。
    *
-   * 上限 MAX_INDUSTRY_BUCKETS 颗；真超了就把尾部折进「其他」。现在 7 个行业刚好装下，
-   * 「其他」不出现（见 INDUSTRY_DENYLIST 头注：脱敏产生的无分类不进「其他」）。
+   * 单列按钮上限 MAX_INDUSTRY_BUCKETS（6）颗，第 7 颗固定是「其他」——owner 的
+   * 「不超过 6+1 个」就是这么拆的。排不进前 6 的行业折进「其他」，与不单列的（脱敏）、
+   * 读不到的归在一起，所以**没有产品会掉出所有筛选之外**。
    */
   const buckets = useMemo(() => {
     if (cards === null) return [];
@@ -183,27 +197,41 @@ export default function AgentMarketplacePage({
         if (!firstSeen.has(industry)) firstSeen.set(industry, firstSeen.size);
       }
     }
-    const ranked = [...count.keys()].sort(
-      (a, b) =>
-        (count.get(b) ?? 0) - (count.get(a) ?? 0) ||
-        (firstSeen.get(a) ?? 0) - (firstSeen.get(b) ?? 0),
-    );
-    const folded = ranked.length > MAX_INDUSTRY_BUCKETS;
-    const kept = folded ? ranked.slice(0, MAX_INDUSTRY_BUCKETS - 1) : ranked;
-    const rest = folded ? ranked.slice(MAX_INDUSTRY_BUCKETS - 1) : [];
+    /* 有资格单列一颗按钮的：除掉不单列的那些（脱敏）。**它们仍然进「其他」。** */
+    const ranked = [...count.keys()]
+      .filter((i) => !INDUSTRY_NO_OWN_BUTTON.has(i))
+      .sort(
+        (a, b) =>
+          (count.get(b) ?? 0) - (count.get(a) ?? 0) ||
+          (firstSeen.get(a) ?? 0) - (firstSeen.get(b) ?? 0),
+      );
+    const kept = ranked.slice(0, MAX_INDUSTRY_BUCKETS);
+    const keptSet = new Set(kept);
     const list = kept.map((key) => ({
       key,
       label: industryLabels[key] ?? key,
-      values: [key],
       count: count.get(key) ?? 0,
+      matches: (card: AgentCard) => card.industries.includes(key),
     }));
-    if (rest.length > 0) {
+
+    /*
+     * 「其他」覆盖**所有没有单列按钮的类别**，外加一个都读不到的（owner 2026-09-24：
+     * 「读取不到的归到『其他』——注意其他是覆盖没有单列筛选的类别」）。三种来源同一桶：
+     *   · 不单列的（INDUSTRY_NO_OWN_BUTTON，脱敏）；
+     *   · 票数排不进前 6 被折掉的；
+     *   · industries 为空或缺失。
+     * 一个产品可能同时属于某个单列桶与「其他」（多标签），多选取并集时这没问题。
+     */
+    const isOther = (card: AgentCard) =>
+      card.industries.length === 0 ||
+      card.industries.some((i) => !keptSet.has(i));
+    const otherCount = cards.filter(isOther).length;
+    if (otherCount > 0) {
       list.push({
-        key: "__other__",
+        key: OTHER_BUCKET_KEY,
         label: t("agents.filters.other"),
-        values: rest,
-        count: cards.filter((c) => c.industries.some((i) => rest.includes(i)))
-          .length,
+        count: otherCount,
+        matches: isOther,
       });
     }
     return list;
@@ -214,11 +242,9 @@ export default function AgentMarketplacePage({
 
   const visible = useMemo(() => {
     if (cards === null) return null;
-    if (picked.length === 0) return cards;
-    const wanted = new Set(
-      buckets.filter((b) => picked.includes(b.key)).flatMap((b) => b.values),
-    );
-    return cards.filter((c) => c.industries.some((i) => wanted.has(i)));
+    const active = buckets.filter((b) => picked.includes(b.key));
+    if (active.length === 0) return cards;
+    return cards.filter((c) => active.some((b) => b.matches(c)));
   }, [cards, picked, buckets]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。
