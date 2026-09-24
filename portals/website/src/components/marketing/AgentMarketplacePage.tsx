@@ -53,24 +53,17 @@ type AgentCard = ProductCatalogCardModel & {
   readonly industries: readonly string[];
 };
 
-/**
- * **不单列筛选按钮**的行业标签（owner 2026-09-24：「要脱敏，国防 删除」）。
+/*
+ * 敏感行业标签的改写**不在这一层**。
  *
- * 两个语言的值分别登记——`marketing.zh.industries` 与 `marketing.en.industries`
- * 是两份独立的数组，只挡中文那个等于在英文页面上照样露出来。
+ * 曾经这里有一张「不单列按钮」的名单。它解决不了问题：`/appcenter` 是服务端取目录、把
+ * 整条 `marketing` jsonb 传给本组件的，那个串会进 RSC 载荷（`view-source` 可读），而公开
+ * 端点 `GET /api/products/catalog` 本身谁都能 curl。挡按钮挡不住这两条。
  *
- * 注意它挡的是**按钮**，不是数据：owner 2026-09-24「website 保留读取功能，读取不到的
- * 归到『其他』——注意其他是覆盖没有单列筛选的类别」。所以带这类标签的产品照旧读进来、
- * 照旧出现在列表里，只是归到「其他」那一桶。
- *
- * （我上一版把这些值从数据里抹掉、且不给「其他」桶，理由是「那一桶只有一个产品，等于
- * 换个名字继续暴露」。owner 否了这个取舍——他的规则下「其他」覆盖**所有**没有单列按钮
- * 的类别，所以那一桶里不止一类，我原来的担心不成立。）
+ * 改写落在唯一的出口——website-bff 的 `product-catalog.router.ts`
+ * （`PUBLIC_INDUSTRY_REWRITE`，owner 2026-09-24 要求的对外改写）。到本组件时
+ * 读到的已经是改写后的值，这里对它和其它行业一视同仁：票数排不进前 6 就进「其他」。
  */
-const INDUSTRY_NO_OWN_BUTTON: ReadonlySet<string> = new Set([
-  "国防",
-  "defense",
-]);
 
 /**
  * 单列行业按钮的上限。owner 2026-09-24「不超过 6+1 个」——**6 是行业桶，+1 就是
@@ -184,8 +177,8 @@ export default function AgentMarketplacePage({
    * 调，是个可改的决定）。纯按票数会在同票时给出不稳定的顺序。
    *
    * 单列按钮上限 MAX_INDUSTRY_BUCKETS（6）颗，第 7 颗固定是「其他」——owner 的
-   * 「不超过 6+1 个」就是这么拆的。排不进前 6 的行业折进「其他」，与不单列的（脱敏）、
-   * 读不到的归在一起，所以**没有产品会掉出所有筛选之外**。
+   * 「不超过 6+1 个」就是这么拆的。排不进前 6 的行业折进「其他」，与读不到的归在一起，
+   * 所以**没有产品会掉出所有筛选之外**。
    */
   const buckets = useMemo(() => {
     if (cards === null) return [];
@@ -197,14 +190,11 @@ export default function AgentMarketplacePage({
         if (!firstSeen.has(industry)) firstSeen.set(industry, firstSeen.size);
       }
     }
-    /* 有资格单列一颗按钮的：除掉不单列的那些（脱敏）。**它们仍然进「其他」。** */
-    const ranked = [...count.keys()]
-      .filter((i) => !INDUSTRY_NO_OWN_BUTTON.has(i))
-      .sort(
-        (a, b) =>
-          (count.get(b) ?? 0) - (count.get(a) ?? 0) ||
-          (firstSeen.get(a) ?? 0) - (firstSeen.get(b) ?? 0),
-      );
+    const ranked = [...count.keys()].sort(
+      (a, b) =>
+        (count.get(b) ?? 0) - (count.get(a) ?? 0) ||
+        (firstSeen.get(a) ?? 0) - (firstSeen.get(b) ?? 0),
+    );
     const kept = ranked.slice(0, MAX_INDUSTRY_BUCKETS);
     const keptSet = new Set(kept);
     const list = kept.map((key) => ({
@@ -217,7 +207,6 @@ export default function AgentMarketplacePage({
     /*
      * 「其他」覆盖**所有没有单列按钮的类别**，外加一个都读不到的（owner 2026-09-24：
      * 「读取不到的归到『其他』——注意其他是覆盖没有单列筛选的类别」）。三种来源同一桶：
-     *   · 不单列的（INDUSTRY_NO_OWN_BUTTON，脱敏）；
      *   · 票数排不进前 6 被折掉的；
      *   · industries 为空或缺失。
      * 一个产品可能同时属于某个单列桶与「其他」（多标签），多选取并集时这没问题。
