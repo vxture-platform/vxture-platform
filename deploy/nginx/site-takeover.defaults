@@ -1,0 +1,26 @@
+# deploy/nginx/site-takeover.defaults —— 每个域的「站点接管」默认档位
+#
+# 三档，含义各自独立，不是同一件事的强弱：
+#
+#   off          正常站点。根路径回落到各 vhost 自己的去向（vxture.com → website
+#                容器；ruyin.work → 404，那个域本来就只有一张页）。
+#   maintenance  平台维护。**整域**每条路径 503 + 维护页，页面由 nginx 自己发，
+#                所以上游全挂时它照样出得来——这正是维护页存在的理由。
+#   portal       临时门户。**只接管根路径**，站内其余路径一行未变。
+#
+# 本文件是**默认值**，不是现场状态。现场状态在主机上：
+#   /srv/vxture/runtime/site-takeover.state（不入仓，deploy 不覆盖）
+# 改档位用 `deploy/scripts/35-site-takeover.sh <域名> <档位>`，秒级生效、不重建容器。
+# 那份 state 文件不存在时（新机、或从没改过），生效的就是下面这几行。
+#
+# 格式：`<域名> <档位>`，每行一条。`#` 起始为注释。
+# 域名必须与 sites-enabled 下某个 vhost 的 server_name 对得上，且那个 vhost 要真的
+# 接了 `$vx_takeover`——否则这一行是句没人听的话。`check-site-takeover.mjs` 对这一条
+# 双向核对。
+
+# 官网主域：真站在跑。
+vxture.com  off
+
+# 如音的独立域：这个域**只有**那一张门户页，没有「真正的页面」可恢复。
+# 把它改成 off 等于整域 404（见 ruyin.work.conf 文件头 §3）。
+ruyin.work  portal

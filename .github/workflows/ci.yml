@@ -128,6 +128,15 @@ jobs:
       - name: Public repo hygiene guardrail
         run: node scripts/guardrails/check-public-repo-hygiene.mjs
 
+      # 始终运行（含 docs-only）：站点接管（平台维护 / 临时门户）四处对账。纯 node、
+      # 无依赖、秒级，所以和上面两条一样跑在依赖安装之前，不挂 docs_only 跳过条件。
+      #
+      # 这一条**没有** `pnpm lint:` 入口，是有意的：加一个 lint 入口要改根
+      # package.json，而那会触发一次全栈重建（14 个镜像），代价与这条守卫本身不成
+      # 比例。照 audit-env 的先例直接用 runner 自带的 node 调。
+      - name: Site takeover guardrail
+        run: node scripts/guardrails/check-site-takeover.mjs
+
       - name: Docs-only quality gate
         if: steps.changes.outputs.docs_only == 'true'
         run: echo "::notice::Docs-only change; heavy quality gate steps skipped while keeping the required check stable."

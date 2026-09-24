@@ -48,6 +48,10 @@ for file in "$RUNTIME_DIR"/.env.*; do
   copy_if_exists "$file" "$BACKUP_DIR/runtime/$(basename "$file")"
 done
 
+# 站点接管的现场档位（docs/50-deployment/14-site-takeover.md）。它不叫 .env.*，上面那个
+# 循环捞不到；漏掉它的后果是重建主机后站点悄悄回到仓内默认档位。
+copy_if_exists "$RUNTIME_DIR/site-takeover.state" "$BACKUP_DIR/runtime/site-takeover.state"
+
 echo ""
 echo "==> Platform secret files"
 copy_if_exists "$RUNTIME_DIR/secrets/platform.env" "$BACKUP_DIR/runtime/secrets/platform.env"
