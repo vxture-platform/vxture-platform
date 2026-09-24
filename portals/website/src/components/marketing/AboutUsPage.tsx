@@ -5,9 +5,11 @@
  *
  * 2026-09-02 owner 三轮裁定：
  *   · 三个主题要醒目：每屏一句话当亮点（大标题 + 高亮行），几条辅助点各一短句；不做大段卡片，无 icon。
- *   · 借鉴解决方案 hero 板块的思路（渐变底 + 工程网格 + 线框球体），但不套模板，三屏左右 / 结构各异：
+ *   · 借鉴解决方案 hero 板块的思路（渐变底 + 线框球体），但不套模板，三屏左右 / 结构各异：
+ *     2026-09-24 owner：「去掉网格，保留渐变背景和图形背景」——三屏的工程网格层已全部移除，
+ *     渐变底与图案（雷达 / 阶梯路径 / 等轴测叠板）照旧。
  *       01 定位 · 我们是谁     —— 文案靠左，球体靠右；三条判断横排在下（借 hero 思路）
- *       02 方法 · 我们怎么做   —— 镜像：网格靠左；四步阶梯（大号数字）在左，文案在右；三条承诺一行
+ *       02 方法 · 我们怎么做   —— 镜像：四步阶梯（大号数字）在左，文案在右；三条承诺一行
  *       03 能力 · 我们能交付什么 —— 居中：文案居中，四层横向一排，球体居中垫底；CTA 居中
  *   · 文案是判断与主张（重写所有行业、服务所有企业），与产品 / 方案 / 案例页零重复。
  *
@@ -104,13 +106,12 @@ export default function AboutUsPage() {
 
   return (
     <div className="vx-page-surface relative">
-      {/* 01 定位 · 我们是谁 —— 借解决方案 hero 思路：渐变底 + 右半网格 + 右侧球体；文案左，三条判断横排在下 */}
+      {/* 01 定位 · 我们是谁 —— 借解决方案 hero 思路：渐变底 + 右侧球体；文案左，三条判断横排在下 */}
       <section
         id={SECTION_IDS.positioning}
         data-name="About-Positioning"
         className="vx-solutions-hero vx-solutions-industry--sky snap-section flex min-h-screen items-center"
       >
-        <div className="vx-solutions-grid-layer" aria-hidden="true" />
         {/* 01 图案：雷达（同心圆 + 刻度 + 扫描扇面 + 汇聚节点），与解决方案页的球体不同 */}
         <div
           className="vx-solutions-hero-pattern hidden lg:block"
@@ -138,16 +139,12 @@ export default function AboutUsPage() {
         <div className="vx-solutions-hero-fade" aria-hidden="true" />
       </section>
 
-      {/* 02 方法 · 我们怎么做 —— 镜像：网格靠左；左侧四步阶梯（大号数字），右侧一句话亮点 + 三条承诺 */}
+      {/* 02 方法 · 我们怎么做 —— 镜像：左侧四步阶梯（大号数字），右侧一句话亮点 + 三条承诺 */}
       <section
         id={SECTION_IDS.method}
         data-name="About-Method"
         className="vx-solutions-industry vx-solutions-industry--emerald snap-section flex min-h-screen items-center"
       >
-        <div
-          className="vx-solutions-grid-layer vx-solutions-grid-layer--left"
-          aria-hidden="true"
-        />
         {/* 02 图案：点阵上的阶梯路径（四个落点），落在右下角留白处 */}
         <div
           className="vx-about-pattern-corner hidden lg:block"
@@ -211,10 +208,6 @@ export default function AboutUsPage() {
         data-name="About-Capabilities"
         className="vx-solutions-industry vx-solutions-industry--amber snap-section flex min-h-screen items-center"
       >
-        <div
-          className="vx-solutions-grid-layer vx-solutions-grid-layer--full"
-          aria-hidden="true"
-        />
         {/* 03 图案：四层等轴测叠板，居中垫在四项能力后面 */}
         <div
           className="vx-about-pattern-center hidden lg:block"

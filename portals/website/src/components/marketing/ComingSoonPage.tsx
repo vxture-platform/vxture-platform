@@ -21,6 +21,7 @@
 import { Button, Icon } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
+import { MARKETING_GRADIENT_SURFACE } from "./surfaces";
 
 export type ComingSoonAccent = "brand" | "sky" | "amber" | "emerald" | "red";
 
@@ -55,9 +56,8 @@ const ACCENT_CLASSES: Record<
   },
 };
 
-/** 上下渐变底：亮色由品牌浅色收到卡面色，暗色走中性两档。 */
-const SURFACE_CLASS =
-  "bg-linear-to-b from-vx-brand-100 to-vx-surface dark:from-vx-gray-800 dark:to-vx-gray-900";
+/* 渐变底住在 surfaces.ts —— /contact 也用同一款（owner 2026-09-24），抄一份会各自演进。 */
+const SURFACE_CLASS = MARKETING_GRADIENT_SURFACE;
 
 export interface ComingSoonPageProps {
   readonly icon: IconName;

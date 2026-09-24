@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Button, Icon } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
-import AnimatedHeroBg from "./AnimatedHeroBg";
+import { CatalogHero, catalogHeroGhostButtonClass } from "./CatalogHero";
 
 type Capability = {
   title: string;
@@ -30,47 +30,30 @@ export default function ProductDetailPartOne() {
 
   return (
     <div className="vx-page-surface">
-      <section className="vx-hero-section">
-        <AnimatedHeroBg />
-        <div className="vx-hero-content">
-          <div className="max-w-website-3xl">
-            <p className="vx-website-hero-eyebrow vx-website-hero-eyebrow--wide mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
-              {t("hero.eyebrow")}
-            </p>
-            <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
-              {t("hero.title")}
-            </h1>
-            <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-              {t("hero.description")}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {highlights.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-vx-brand-100 bg-vx-white/70 px-3 py-1 text-sm font-medium text-vx-brand-700 shadow-sm shadow-vx-brand-900/5 backdrop-blur dark:border-vx-white/20 dark:bg-vx-white/10 dark:text-vx-gray-100"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
-                <Link href="/pricing?product=arda">
-                  {t("hero.primaryAction")}
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                size="xl"
-                className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/35 dark:bg-transparent dark:text-vx-white dark:hover:border-vx-white dark:hover:bg-vx-white/10"
-              >
-                <a href="#product-capabilities">{t("hero.secondaryAction")}</a>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* hero 与 /appcenter 同一款（旧 hero 壳 2026-09-24 全面退役）；按钮各页自定。 */}
+      <CatalogHero
+        eyebrow={t("hero.eyebrow")}
+        title={t("hero.title")}
+        description={t("hero.description")}
+        highlights={highlights}
+        actions={
+          <>
+            <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
+              <Link href="/pricing?product=arda">
+                {t("hero.primaryAction")}
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="xl"
+              className={catalogHeroGhostButtonClass}
+            >
+              <a href="#product-capabilities">{t("hero.secondaryAction")}</a>
+            </Button>
+          </>
+        }
+      />
 
       <section id="product-capabilities" className="vx-section-odd">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">

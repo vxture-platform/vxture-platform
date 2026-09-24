@@ -185,6 +185,72 @@ describe("ProductCatalogRouter", () => {
     expect(query.mock.calls[0]?.length).toBe(1);
   });
 
+  /*
+   * 对外改写敏感行业标签（owner 2026-09-24）。这条测试盯的是**出口**，而不是某个页面的
+   * 呈现：改在页面上挡不住 RSC 载荷，也挡不住任何人直接 curl 这个公开端点。
+   */
+  it("rewrites the sensitive industry label on the way out, both locales", async () => {
+    const { pool } = makePool([
+      {
+        product_code: "wargaming",
+        product_name: "推演仿真智能体",
+        product_nick: null,
+        product_type: "industry_agent",
+        description: null,
+        release_version: null,
+        released_at: null,
+        release_stage: "preview",
+        status: "developing",
+        marketing: {
+          recommend: 2,
+          zh: {
+            tagline: "L3 · 强业务类 · 推演仿真",
+            industries: ["国防", "数据"],
+          },
+          en: {
+            tagline: "Industry Agent · Simulation",
+            industries: ["defense"],
+          },
+        },
+        public_plan_count: 0,
+        invite_plan_count: 0,
+      },
+    ]);
+
+    const [item] = await new ProductCatalogRouter(pool).getCatalog();
+
+    expect(item?.marketing?.zh?.industries).toEqual(["兵棋", "数据"]);
+    expect(item?.marketing?.en?.industries).toEqual(["Wargaming"]);
+    /* 其余字段不能被顺手改掉——改写只碰 industries。 */
+    expect(item?.marketing?.zh?.tagline).toBe("L3 · 强业务类 · 推演仿真");
+    expect(item?.marketing?.recommend).toBe(2);
+    /* 整条响应里不该再出现那个串（含任何字段、任何语言）。 */
+    expect(JSON.stringify(item)).not.toContain("国防");
+    expect(JSON.stringify(item)).not.toContain("defense");
+  });
+
+  it("leaves marketing alone when there is nothing to rewrite", async () => {
+    const { pool } = makePool([
+      {
+        product_code: "karda",
+        product_name: "知识智能",
+        product_nick: null,
+        product_type: "general_platform",
+        description: null,
+        release_version: null,
+        released_at: null,
+        release_stage: "stable",
+        status: "active",
+        marketing: { zh: { industries: ["数据"] }, en: {} },
+        public_plan_count: 1,
+        invite_plan_count: 0,
+      },
+    ]);
+    const [item] = await new ProductCatalogRouter(pool).getCatalog();
+    expect(item?.marketing?.zh?.industries).toEqual(["数据"]);
+    expect(item?.marketing?.en).toEqual({});
+  });
+
   it("returns an empty list when the catalog has no public products", async () => {
     const { pool } = makePool([]);
     await expect(new ProductCatalogRouter(pool).getCatalog()).resolves.toEqual(

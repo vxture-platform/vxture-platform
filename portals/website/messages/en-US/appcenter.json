@@ -1,7 +1,7 @@
 {
   "hero": {
-    "eyebrow": "General & industry agents",
-    "title": "Agent Marketplace — ready to use, orchestrate on demand",
+    "eyebrow": "Agent Marketplace",
+    "title": "Ready to use, subscribe on demand, works across clients",
     "description": "The agents that are live on the platform and open to customers — digital employees, professional software agents and embodied agents. Sign in to subscribe for free, then integrate and orchestrate them by plan.",
     "primaryAction": "Book a demo",
     "secondaryAction": "Business inquiry"
@@ -9,8 +9,21 @@
   "agents": {
     "eyebrow": "Agents",
     "title": "The agent lineup",
-    "description": "This list comes straight from the platform product catalog: live agents show a Stable badge and can be subscribed to directly, while those still evolving show Preview — each flips to subscribable as it truly ships.",
     "type": "Agent",
+    "filters": {
+      "label": "Filter by industry",
+      "all": "All",
+      "other": "Other",
+      "labels": {
+        "general": "General",
+        "operations": "Operations",
+        "industry": "Industry",
+        "emergency": "Emergency",
+        "legal": "Legal",
+        "data": "Data",
+        "lowAltitude": "Low-altitude"
+      }
+    },
     "kinds": {
       "general_agent": "General Agent",
       "industry_agent": "Industry Agent"

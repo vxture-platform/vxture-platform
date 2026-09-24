@@ -65,16 +65,23 @@ export default function BestPracticePage() {
       <section
         id={HERO_ID}
         data-name="CasesHero"
-        className="vx-solutions-hero snap-section flex min-h-screen items-center"
+        className="vx-solutions-hero vx-solutions-industry--sky snap-section flex min-h-screen items-center"
       >
-        {/* 背景图：专门画的简洁科技底（柔光 + 同心薄弧 + 点阵 + 斜向光线），不用案例照片；
-            左侧再压一层页面底色渐变，文案区干净。 */}
+        {/*
+         * owner 2026-09-24：「去掉网格，重构渐变背景，保留图形背景，渐变背景和 about 一致」。
+         *
+         * 现在三层：
+         *   1. .vx-cases-hero-bg   图形背景（柔光 + 同心薄弧 + 点阵 + 斜向光线），保留；
+         *   2. .vx-cases-hero-wash 左侧压底——文案压在图形上，没有它读不清。原先写的是
+         *      `from-vx-white via-vx-white/70 to-transparent`，前半屏几乎是一整块实色，
+         *      把图形背景盖掉一半；改成三段式、中段 45%，是渐变不是挡板，且跟随亮暗主题；
+         *   3. .vx-solutions-hero-fade 底部渐隐（本来就有），与 about 三屏同一条收尾。
+         *
+         * 网格层已移除。`vx-solutions-industry--sky` 只提供 --solutions-accent，与 about
+         * 01 屏同色；它不带 ::before 那层径向渐变（那要 .vx-solutions-industry 本体）。
+         */}
         <div className="vx-cases-hero-bg" aria-hidden="true" />
-        <div
-          className="absolute inset-0 bg-linear-to-r from-vx-white via-vx-white/70 to-transparent dark:from-vx-gray-900 dark:via-vx-gray-900/70"
-          aria-hidden="true"
-        />
-        <div className="vx-solutions-grid-layer" aria-hidden="true" />
+        <div className="vx-cases-hero-wash" aria-hidden="true" />
 
         <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div className="max-w-website-4xl">

@@ -5,7 +5,7 @@ import { Button, Icon } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import Image from "next/image";
-import AnimatedHeroBg from "./AnimatedHeroBg";
+import { CatalogHero, catalogHeroGhostButtonClass } from "./CatalogHero";
 
 type Pillar = {
   icon: IconName;
@@ -58,52 +58,37 @@ export default function EmergencySolutionPage() {
 
   return (
     <div className="vx-page-surface">
-      <section className="vx-hero-section">
-        <AnimatedHeroBg />
-        <div className="vx-hero-content">
-          <div className="max-w-website-3xl">
-            <Link
-              href="/solutions"
-              className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-vx-brand-600 transition-colors hover:text-vx-brand-700 dark:text-vx-brand-300 dark:hover:text-vx-brand-200"
+      {/* hero 与 /appcenter 同一款（旧 hero 壳 2026-09-24 全面退役）；返回链接走 above。 */}
+      <CatalogHero
+        above={
+          <Link
+            href="/solutions"
+            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-vx-brand-600 transition-colors hover:text-vx-brand-700 dark:text-vx-brand-300 dark:hover:text-vx-brand-200"
+          >
+            <Icon name="arrow-left" className="h-4 w-4" />
+            {tShared("detail.back")}
+          </Link>
+        }
+        eyebrow={t("hero.eyebrow")}
+        title={t("hero.title")}
+        description={t("hero.description")}
+        highlights={highlights}
+        actions={
+          <>
+            <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
+              <Link href="/contact">{t("hero.primaryAction")}</Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="xl"
+              className={catalogHeroGhostButtonClass}
             >
-              <Icon name="arrow-left" className="h-4 w-4" />
-              {tShared("detail.back")}
-            </Link>
-            <p className="vx-website-hero-eyebrow mb-4 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
-              {t("hero.eyebrow")}
-            </p>
-            <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
-              {t("hero.title")}
-            </h1>
-            <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-              {t("hero.description")}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {highlights.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-vx-brand-100 bg-vx-white/70 px-3 py-1 text-sm font-medium text-vx-brand-700 shadow-sm shadow-vx-brand-900/5 backdrop-blur dark:border-vx-white/20 dark:bg-vx-white/10 dark:text-vx-gray-100"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
-                <Link href="/contact">{t("hero.primaryAction")}</Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                size="xl"
-                className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/35 dark:bg-transparent dark:text-vx-white dark:hover:border-vx-white dark:hover:bg-vx-white/10"
-              >
-                <a href="#solution-architecture">{t("hero.secondaryAction")}</a>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+              <a href="#solution-architecture">{t("hero.secondaryAction")}</a>
+            </Button>
+          </>
+        }
+      />
 
       <section id="solution-architecture" className="vx-section-odd">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">

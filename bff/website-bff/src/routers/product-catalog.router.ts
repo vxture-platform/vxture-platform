@@ -39,6 +39,55 @@ export interface MarketingContent {
   expectedReleaseAt?: string;
 }
 
+/**
+ * 对外改写的行业标签。
+ *
+ * owner 2026-09-24：「国防 → 兵棋，坚决抹掉」。
+ *
+ * **为什么改在这里，而不是在官网那一侧。** 官网只挡按钮是不够的：`/appcenter` 与
+ * `/products` 是服务端取目录、把整条 `marketing` jsonb 传给客户端组件的，那个串会进
+ * RSC 载荷，`view-source` 就能读到；而本端点 `GET /api/products/catalog` **本身就是公开
+ * 的**，谁都能直接 curl。所以唯一能真正抹掉的位置是这里——出口只有一个（下方
+ * `marketing:` 那一行），改在这里，公开端点与所有页面载荷一次性都干净。
+ *
+ * 这是**代码层的兜底**，不是数据的替代：DB 里那个值应当在 admin 里一并改成「兵棋」，
+ * 那样运营侧看到的也是它。这张表留着的意义是——即便哪天又有人录进敏感值，对外也不会
+ * 漏出去；它是兜底而不是清理。
+ *
+ * 只改 `industries`：本产品的 tagline / tags / value / highlights 实测已是中性词
+ * （「L3 · 强业务类 · 推演仿真」/「Simulation」），不需要动。
+ */
+const PUBLIC_INDUSTRY_REWRITE: Readonly<Record<string, string>> = {
+  国防: "兵棋",
+  defense: "Wargaming",
+};
+
+/**
+ * 逐语言改写 industries；其余字段原样透传。缺字段与空数组都按原样返回。
+ *
+ * 只对真值调用（见下方调用处）：行类型把这一列写成 `MarketingContent | null`，而实际拿到
+ * 的也可能是 `undefined`——PG 里被选中的列总会在，但单测里的行是手写的、可以整列缺席。
+ * 在调用处分流而不是在这里 `?? null`，是为了让 falsy 的线上形态一个字都不变。
+ */
+function sanitizeMarketing(m: MarketingContent): MarketingContent {
+  /* 只在调用处判过真值后才进来，所以入参与回值都是非可选的——回 `| undefined` 会让
+     `{ zh: fix(m.zh) }` 在 exactOptionalPropertyTypes 下不合法（CI 的 type-check 实测）。 */
+  const fix = (loc: MarketingLocale): MarketingLocale =>
+    loc.industries
+      ? {
+          ...loc,
+          industries: loc.industries.map(
+            (i) => PUBLIC_INDUSTRY_REWRITE[i] ?? i,
+          ),
+        }
+      : loc;
+  return {
+    ...m,
+    ...(m.zh ? { zh: fix(m.zh) } : {}),
+    ...(m.en ? { en: fix(m.en) } : {}),
+  };
+}
+
 export interface ProductCatalogItem {
   productCode: string;
   /** 主名/品牌名（product_name） */
@@ -164,7 +213,8 @@ export class ProductCatalogRouter {
       /* WHERE 只放这两值进来；认不得的值按「不可订」处理——宁可少给一颗按钮，
          不能把一个查不到的状态当成「已上线」。 */
       status: r.status === "active" ? "active" : "developing",
-      marketing: r.marketing,
+      /* 对外改写敏感行业标签——见 PUBLIC_INDUSTRY_REWRITE 头注。 */
+      marketing: r.marketing ? sanitizeMarketing(r.marketing) : r.marketing,
       /*
        * 有公开档就是公开订阅；一个公开档都没有但有邀请档 = 邀请订阅；两者都没有
        * = 还没开卖。先判公开再判邀请：混卖时（公开档 + 邀请档并存）对匿名访客来说

@@ -1,46 +1,21 @@
 /* Website marketing and public page assembly styles. */
 
-.vx-hero-section {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  overflow: hidden;
-  min-height: var(--vx-website-hero-section-min-height);
-  padding-top: var(--vx-website-hero-section-padding-top);
-}
-
-.vx-hero-content {
-  position: relative;
-  width: 100%;
-  max-width: var(--vx-website-hero-content-max-width);
-  margin: 0 auto;
-  padding: var(--vx-website-hero-content-padding);
-}
-
-@media (min-width: 64rem) {
-  .vx-hero-content {
-    padding-left: var(--vx-website-hero-content-padding-x-lg);
-    padding-right: var(--vx-website-hero-content-padding-x-lg);
-  }
-}
-
-@media (min-width: 80rem) {
-  .vx-hero-content {
-    max-width: var(--vx-website-hero-content-max-width-xl);
-  }
-}
+/* 旧 hero 壳（.vx-hero-section / .vx-hero-content / .vx-website-hero-eyebrow--wide）
+ * 已于 2026-09-24 全面退役：owner「原来的这个 herosection 全面退役了，这个效果很不好」
+ * 「点线动图效果——完全复用新款」「包括 herosection 的高度」。它的三个消费方
+ * （智能体详情页 / 平台产品详情页 / 应急方案页）都改用下面这套 .vx-catalog-hero，
+ * 与 /products、/appcenter 同一款。零消费方的规则一并删掉，不留占位。
+ * 随它摘掉的四个零消费方令牌：hero-section-min-height / hero-section-padding-top /
+ * hero-content-padding / hero-eyebrow-tracking-wide（另三个 hero-content-* 仍被
+ * .vx-catalog-hero-content 使用，保留）。 */
 
 .vx-website-hero-eyebrow {
   letter-spacing: var(--vx-website-hero-eyebrow-tracking);
 }
 
-.vx-website-hero-eyebrow--wide {
-  letter-spacing: var(--vx-website-hero-eyebrow-tracking-wide);
-}
-
-/* 目录页 hero（/products、/appcenter）：比通用 .vx-hero-section 矮；文字左对齐、靠上排
- * （紧贴 fixed header 下方开始），不再贴底也不垂直居中（owner 2026-09-02：文字太低、
- * 整体高度再减、靠上对齐）。尺寸在 tokens-website.css §hero。 */
+/* 全站 hero（目录页 / 详情页 / 方案页）：文字左对齐、靠上排（紧贴 fixed header 下方
+ * 开始），不贴底也不垂直居中（owner 2026-09-02：文字太低、整体高度再减、靠上对齐）。
+ * 尺寸在 tokens-website.css §hero。 */
 .vx-catalog-hero {
   position: relative;
   display: flex;

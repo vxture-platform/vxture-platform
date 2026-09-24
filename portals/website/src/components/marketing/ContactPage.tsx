@@ -22,6 +22,7 @@
 
 import { useTranslations } from "next-intl";
 import { Badge, Card, Icon } from "@vxture/design-system";
+import { MARKETING_GRADIENT_SURFACE } from "./surfaces";
 import {
   COMPANY_CONTACT,
   CONTACT_CHANNELS,
@@ -132,10 +133,21 @@ function ContactChannelCard({ channel }: { channel: ContactChannel }) {
 }
 
 export default function ContactPage() {
+  /*
+   * 渐变底与 /industry-scenarios 同一条（owner 2026-09-24：「现在背景是纯白色的」）。
+   *
+   * 它挂在 **section** 上，不挂在外层 `.vx-page-surface` 上——那个类写的是
+   * `background: var(--vx-page-bg)`，**shorthand 会把 background-image 置成 none**，
+   * 而这份样式表不在 Tailwind 的 utilities layer 里，于是它恒赢：渐变会被静默吃掉
+   * （nginx/CSS 那类「写了等于没写」）。ComingSoonPage 本来也是挂在 section 上的，
+   * 这里照抄那条已经在跑的路径。
+   */
   return (
     <div className="vx-page-surface">
       {/* pt-32（128px ≥ 常驻 header 64px）让内容避开 fixed header；min-h-screen 使本节顶到顶撑满一屏。 */}
-      <section className="flex min-h-screen items-center px-4 pb-20 pt-32 sm:px-6 lg:px-8">
+      <section
+        className={`flex min-h-screen items-center px-4 pb-20 pt-32 sm:px-6 lg:px-8 ${MARKETING_GRADIENT_SURFACE}`}
+      >
         <div className="mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-2 xl:max-w-screen-2xl">
           {CONTACT_CHANNELS.map((channel) => (
             <ContactChannelCard key={channel.id} channel={channel} />

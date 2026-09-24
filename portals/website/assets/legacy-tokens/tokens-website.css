@@ -302,17 +302,17 @@
      改 header 高度只改这一处。 */
   --vx-website-header-height: 64px;
 
-  /* 营销页：Hero */
-  --vx-website-hero-section-min-height: 540px;
-  --vx-website-hero-section-padding-top: 80px;
+  /* 营销页：Hero
+     2026-09-24 旧 hero 壳全面退役，随它摘掉四个零消费方令牌：
+     hero-section-min-height / hero-section-padding-top / hero-content-padding /
+     hero-eyebrow-tracking-wide。下面三个留着——.vx-catalog-hero-content 在用。 */
   --vx-website-hero-content-max-width: 1280px;
-  --vx-website-hero-content-padding: 80px 24px 48px;
   --vx-website-hero-content-padding-x-lg: 32px;
   --vx-website-hero-content-max-width-xl: 1536px;
   --vx-website-hero-eyebrow-tracking: 0.16em;
-  --vx-website-hero-eyebrow-tracking-wide: 0.18em;
-  /* 目录页 hero（/products、/appcenter）：比通用 hero 矮一档；文字左对齐靠上排，但顶部
-     要盖住 fixed header（--vx-website-header-height，64px）之后再留一大段呼吸（松散感），底部略收。 */
+  /* 全站 hero（目录页 / 详情页 / 方案页，2026-09-24 起统一这一款）：文字左对齐靠上排，
+     顶部要盖住 fixed header（--vx-website-header-height，64px）之后再留一大段呼吸
+     （松散感），底部略收。 */
   --vx-website-catalog-hero-min-height: 440px;
   --vx-website-catalog-hero-content-padding: 144px 24px 48px;
 
@@ -373,9 +373,12 @@
       var(--vx-color-sky-50) 46%,
       var(--vx-color-white) 100%
     );
+  /* owner 2026-09-24：「非常淡化网格，现在太深了，基本上要似有似无」。10% → 3%。
+   * 这条 token 现在只有解决方案 hero 一个消费方——about 与 cases 的网格层已按同一轮
+   * 请求移除，所以调它不会连带改到别的页。 */
   --vx-website-solutions-grid-line: color-mix(
     in srgb,
-    var(--vx-color-brand-500) 10%,
+    var(--vx-color-brand-500) 3%,
     transparent
   );
   --vx-website-solutions-grid-image:
@@ -417,6 +420,17 @@
   );
   --vx-website-solutions-hero-fade-height: 96px;
 
+  /* 案例页 hero 的左侧压底：文案压在图形背景上，没有它读不清。
+   * owner 2026-09-24「重构渐变背景」——原来是 `from-white via-white/70 to-transparent`，
+   * 前半屏几乎是一整块实色，把图形背景盖掉一半。三段式、中段 45%，让它是渐变不是挡板。
+   * 用 --vx-page-bg 而不是写死白/深灰，亮暗两套自动跟随。 */
+  --vx-website-cases-hero-wash: linear-gradient(
+    90deg,
+    var(--vx-page-bg) 0%,
+    color-mix(in srgb, var(--vx-page-bg) 45%, transparent) 38%,
+    transparent 72%
+  );
+
   /*
    * Industry sections: one accent hue per industry. Only the hue lives here —
    * anything derived from it (washes, soft fills, edges) must be written at the
@@ -457,19 +471,6 @@
   --vx-website-about-point-rule-height: 2px;
   --vx-website-about-step-rail-width: 3px;
   --vx-website-about-transition: 200ms ease;
-  --vx-website-solutions-grid-mask-left: linear-gradient(
-    270deg,
-    transparent 0%,
-    transparent 26%,
-    var(--vx-color-black) 52%
-  );
-  --vx-website-solutions-grid-mask-full: linear-gradient(
-    180deg,
-    transparent 0%,
-    var(--vx-color-black) 28%,
-    var(--vx-color-black) 72%,
-    transparent 100%
-  );
   --vx-website-about-pattern-center-width: 34%;
   --vx-website-about-pattern-center-opacity: 0.32;
   --vx-website-about-pattern-corner-width: 22%;
