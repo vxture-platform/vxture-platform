@@ -199,25 +199,34 @@ export function ProductCatalogCard({
           </div>
         </div>
         {notLive ? (
-          <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
+          <span className="shrink-0 rounded-full border border-vx-gray-200 px-2.5 py-1 text-xs font-normal text-vx-gray-500 dark:border-vx-gray-700 dark:text-vx-gray-400">
             {labels.badges.preview}
           </span>
         ) : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-            <span className="rounded-full border border-vx-info-100 bg-vx-info-50 px-2.5 py-1 text-xs font-medium text-vx-info-700 dark:border-vx-info-400/20 dark:bg-vx-brand-950/30 dark:text-vx-info-200">
+            <span className="rounded-full border border-vx-info-200/60 px-2.5 py-1 text-xs font-normal text-vx-info-600 dark:border-vx-info-400/25 dark:text-vx-info-200">
               {stageBadge}
             </span>
             {subscribed ? (
-              <span className="rounded-full border border-vx-success-200 bg-vx-success-50 px-2.5 py-1 text-xs font-medium text-vx-success-600 dark:border-vx-success-300/30 dark:bg-vx-success-900/30 dark:text-vx-success-300">
+              <span className="rounded-full border border-vx-success-200/60 px-2.5 py-1 text-xs font-normal text-vx-success-600 dark:border-vx-success-300/30 dark:text-vx-success-300">
                 {labels.badges.active}
               </span>
             ) : null}
             {tierLabel ? (
-              <span className="rounded-full border border-vx-brand-200 bg-vx-brand-50 px-2.5 py-1 text-xs font-semibold text-vx-brand-700 dark:border-vx-brand-400/30 dark:bg-vx-brand-950/40 dark:text-vx-brand-200">
+              <span className="rounded-full border border-vx-brand-200/60 px-2.5 py-1 text-xs font-normal text-vx-brand-600 dark:border-vx-brand-400/30 dark:text-vx-brand-200">
                 {tierLabel}
               </span>
             ) : null}
-            {/* 推荐度奖章：右上角最靠外（最优位），其余徽标整体前移让位。 */}
+            {/*
+             * 推荐度奖章：右上角最靠外（最优位），其余徽标整体前移让位。
+             *
+             * owner 2026-09-24：「现在是偏黄色的，应该使用品牌色」「tag 样式要淡化」。
+             * 原来是 vx-warning-*（黄），而同一排还有三颗填色的 tag 在和它抢注意力。
+             * 现在一条规则管两件事：**奖章是这一排里唯一带填色的**，其余 tag 只留淡
+             * 描边、字重降到 normal。各 tag 的色相都保住了（承诺等级 info / 已开通
+             * success / 档位 brand）——淡化的是分量，不是语义，不然「已开通」与
+             * 「公测版」就只能靠读字区分。
+             */}
             {medals > 0 ? (
               <span
                 role="img"
@@ -226,7 +235,7 @@ export function ProductCatalogCard({
                   String(medals),
                 )}
                 title={labels.recommended.replace("{count}", String(medals))}
-                className="inline-flex items-center gap-0.5 rounded-full border border-vx-warning-200 bg-vx-warning-50 px-2 py-1 text-vx-warning-600 dark:border-vx-warning-300/30 dark:bg-vx-warning-900/30 dark:text-vx-warning-300"
+                className="inline-flex items-center gap-0.5 rounded-full border border-vx-brand-200 bg-vx-brand-50 px-2 py-1 text-vx-brand-600 dark:border-vx-brand-400/30 dark:bg-vx-brand-950/40 dark:text-vx-brand-200"
               >
                 {Array.from({ length: medals }, (_, i) => (
                   <Icon
@@ -264,7 +273,7 @@ export function ProductCatalogCard({
           {product.highlights.map((h) => (
             <span
               key={h}
-              className="rounded-full bg-vx-gray-100 px-2.5 py-0.5 text-xs font-normal text-vx-gray-600 dark:bg-vx-gray-800 dark:text-vx-gray-300"
+              className="rounded-full border border-vx-gray-200 px-2.5 py-0.5 text-xs font-normal text-vx-gray-500 dark:border-vx-gray-700 dark:text-vx-gray-400"
             >
               {h}
             </span>
