@@ -55,6 +55,15 @@ CREATE TABLE product.products (
     is_customer_visible  boolean      NOT NULL DEFAULT true,   -- 展示可见性（客户端/customer realm）——独立轴，不派生自 status/is_active/is_public/is_enabled
     is_workforce_visible boolean      NOT NULL DEFAULT true,   -- 展示可见性（运营端/workforce realm）
     origin                   varchar(16)  NOT NULL DEFAULT 'self',    -- 来源轴：self=自建/third_party=三方接入/other；产品发布管理 2026-08-12 引入
+    -- 接入方式轴（2026-09-24）：这个产品收不收平台下发。
+    --   platform_managed = 收（开通/权益/用量回调）→ 没登记回调就是「待配置」，有事等人做
+    --   login_only       = 只用统一登录，平台不向它下发任何东西 → 没有回调是终态，不是缺配置
+    -- 为什么要显式声明而不是看「有没有 product_webhooks 行」：那是**沉默**，而沉默同时
+    -- 兼容「还没配」与「按设计不需要」。两者在界面上是两句相反的话，靠缺席推只能猜一种；
+    -- 2026-09-24 两种猜法都上线过，各错一批产品（先全判 not_required 委屈了 12 个还没接的，
+    -- 改成全判 config_required 又冤了 umbra——它只做统一登录，没有任何配置在等人做）。
+    -- 也不能拿 origin 当代理：合作方产品照样可以收下发，自建产品也可以只用登录。
+    integration_mode         varchar(24)  NOT NULL DEFAULT 'platform_managed',
     origin_provider          varchar(128),                            -- 来源方名称（origin='self' 时留空；third_party 时必填，公司/团队名，不是 product_code）
     launch_override_at       timestamptz,                             -- 带理由跳过上线闸门的时刻；NULL = 从未跳过（正常上线）。理由本身在 support.audit_logs
     launch_override_by       uuid,                                    -- 执行跳过的运营者；裸值→admin.operator_accounts（不建 FK，边界#2）
@@ -75,6 +84,7 @@ CREATE TABLE product.products (
     -- 判据若哪天翻案（某个 L1 真的作为商品出售），删这条约束，别在写侧绕过它。
     CONSTRAINT chk_products_live_layer_not_l1 CHECK (deleted_at IS NOT NULL OR layer IS NULL OR layer IN ('L2','L3')),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
+    CONSTRAINT chk_products_integration_mode CHECK (integration_mode IN ('platform_managed','login_only')),
     CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL)
 );
 CREATE INDEX idx_products_category_id ON product.products (category_id);

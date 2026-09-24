@@ -78,6 +78,7 @@ import {
   formatDateTime,
   PRODUCT_LAYER_CHOICES,
   productLayerLabel,
+  type ProductIntegrationMode,
 } from "@vxture-platform/shared";
 import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
@@ -144,6 +145,11 @@ interface ProductRecord {
   isWorkforceVisible: boolean;
   origin: string;
   originProvider: string | null;
+  /**
+   * 接入方式 platform_managed / login_only。admin 的接入态在「没登记回调」时说
+   * 「待配置」还是「无需接入」由它决定——那两句相反的话此前都由同一个缺席去推。
+   */
+  integrationMode: ProductIntegrationMode;
   /** 分层 L1/L2/L3；null = 未分类。形状与 opera-bff 的 `ProductRecord` 一致。 */
   layer: string | null;
   /**
@@ -197,6 +203,7 @@ interface ProductDraft {
   productType: string;
   /** 分层；空串 = 未分类（下拉的第一项）。 */
   layer: string;
+  integrationMode: ProductIntegrationMode;
   origin: string;
   originProvider: string;
   isCustomerVisible: boolean;
@@ -215,6 +222,9 @@ const EMPTY_DRAFT: ProductDraft = {
   description: "",
   productType: "",
   layer: "",
+  /* 新产品默认「完整接入」：绝大多数产品要收平台下发，而把默认设成 login_only
+     会让一个真的缺接入的产品一开始就被说成「无需接入」，从此没人管它。 */
+  integrationMode: "platform_managed",
   origin: "self",
   originProvider: "",
   isCustomerVisible: true,
@@ -233,6 +243,7 @@ function draftFromProduct(p: ProductRecord): ProductDraft {
     description: p.description ?? "",
     productType: p.productType,
     layer: p.layer ?? "",
+    integrationMode: p.integrationMode ?? "platform_managed",
     origin: p.origin,
     originProvider: p.originProvider ?? "",
     isCustomerVisible: p.isCustomerVisible,
@@ -490,6 +501,7 @@ export function ProductDetailPage({
         description: draft.description.trim() || null,
         productType: draft.productType,
         layer: draft.layer || null,
+        integrationMode: draft.integrationMode,
         origin: draft.origin,
         originProvider: draft.originProvider.trim() || null,
         isCustomerVisible: draft.isCustomerVisible,
@@ -1220,6 +1232,36 @@ export function ProductDetailPage({
                           {productLayerLabel(value, typeLocale)}
                         </option>
                       ))}
+                    </NativeSelect>
+                  </FormField>
+
+                  {/* 接入方式与接入来源并列，但答的是两件事：来源说「谁做的」，
+                      接入方式说「平台向它下发东西吗」。合作方产品照样可以收下发，
+                      自研产品也可以只用统一登录——所以不能拿来源推接入方式。 */}
+                  <FormField
+                    id="pd-integration-mode"
+                    label="接入方式"
+                    help="选「仅统一登录」= 平台不向它下发任何东西，回调栏将不可登记；admin 的接入态也据此显示「无需接入」而不是「待配置」"
+                  >
+                    <NativeSelect
+                      id="pd-integration-mode"
+                      value={draft?.integrationMode ?? "platform_managed"}
+                      disabled={!canManage}
+                      onChange={(e) =>
+                        draft &&
+                        setDraft({
+                          ...draft,
+                          integrationMode: e.target
+                            .value as ProductIntegrationMode,
+                        })
+                      }
+                    >
+                      <option value="platform_managed">
+                        完整接入（收开通 / 权益 / 用量回调）
+                      </option>
+                      <option value="login_only">
+                        仅统一登录（平台不下发任何东西）
+                      </option>
                     </NativeSelect>
                   </FormField>
 

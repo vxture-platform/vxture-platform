@@ -51,6 +51,8 @@ import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import {
   isValidProductLayer,
   isSelectableProductLayer,
+  PRODUCT_INTEGRATION_MODES,
+  type ProductIntegrationMode,
   PRODUCT_LAYERS,
   PRODUCT_LAYER_CHOICES,
   PRODUCT_STATUSES,
@@ -180,6 +182,11 @@ export interface ProductRecord {
   origin: ProductOrigin;
   originProvider: string | null;
   /**
+   * 接入方式 platform_managed / login_only（@shared `PRODUCT_INTEGRATION_MODES`）。
+   * admin 的接入态在「没有回调登记」时说哪句话由它决定，不再由缺席推断。
+   */
+  integrationMode: ProductIntegrationMode;
+  /**
    * 产品分层 L1/L2/L3（product_100_matrix §2）。定位轴，与 productType（类型）、
    * origin（来源）正交——external 是来源不是层级，客户端与内部服务不是目录产品。
    * null = 未分类（存量行在 layer 列落地前都是这个）。
@@ -220,6 +227,7 @@ interface ProductRow {
   is_workforce_visible: boolean;
   origin: ProductOrigin;
   origin_provider: string | null;
+  integration_mode: ProductIntegrationMode;
   layer: string | null;
   launch_override_at: string | null;
   launch_override_pending: string[] | null;
@@ -247,6 +255,10 @@ function toRecord(row: ProductRow): ProductRecord {
     isWorkforceVisible: row.is_workforce_visible,
     origin: row.origin,
     originProvider: row.origin_provider,
+    /* 接入方式（2026-09-24）：这个产品收不收平台下发。admin 的接入态读它，
+       而不再靠「有没有 product_webhooks 行」去猜——沉默同时兼容「还没配」与
+       「按设计不需要」，两者在界面上是两句相反的话。 */
+    integrationMode: row.integration_mode,
     layer: row.layer,
     /* 带理由跳过上线闸门的痕迹（owner 2026-09-17）。产品页据此常驻提示
        「上线时跳过 N 项，待复验」；两列都为空 = 正常上线。理由不在这里，
@@ -325,6 +337,17 @@ export interface ProductWriteBody {
   originProvider?: string | null;
   /** 分层 L1/L2/L3（受管值域 @vxture-platform/shared PRODUCT_LAYERS）；null = 清空。 */
   layer?: string | null;
+  /**
+   * 接入方式（受管值域 `@vxture-platform/shared` 的 `PRODUCT_INTEGRATION_MODES`）。
+   *
+   *   platform_managed  收平台下发（开通 / 权益 / 用量回调）。默认。
+   *   login_only        只用统一登录，平台不向它下发任何东西。
+   *
+   * 它决定 admin 的接入态在「没有回调登记」时说哪句话：「待配置」还是「无需接入」。
+   * 这两句相反的话此前都由同一个缺席去推，于是两种猜法各错一批产品——所以这一根轴
+   * 必须由人**声明**。
+   */
+  integrationMode?: ProductIntegrationMode;
   /** 产品图标。console 应用中心的磁贴、订阅卡在读它——此前库里有列、没有地方能填。 */
   iconUrl?: string | null;
   /**
@@ -375,6 +398,7 @@ const SELECT_COLUMNS = `
   id, product_code, product_type, layer, category_id, product_name, product_nick,
   description, capability_keys, tags, standalone_subscribable, status,
   is_customer_visible, is_workforce_visible, origin, origin_provider,
+  integration_mode,
   launch_override_at, launch_override_pending,
   icon_url, created_at, updated_at,
   /* 平台托管图标的版本号(内容哈希)。同样用裸 id 相关——理由见下面那段。
@@ -1463,8 +1487,11 @@ export class ProductCatalogRouter {
 
        顺带取回 product_code：回调路径的存量登记按产品码记，而这个入口只拿到 uuid。
        多取一列不多一次往返。 */
-    const exists = await this.pool.query<{ product_code: string }>(
-      `SELECT product_code FROM product.products WHERE id = $1`,
+    const exists = await this.pool.query<{
+      product_code: string;
+      integration_mode: ProductIntegrationMode;
+    }>(
+      `SELECT product_code, integration_mode FROM product.products WHERE id = $1`,
       [id],
     );
     /* 判 `rows[0]` 而不是 `rowCount === 0`：两者在运行时等价，但只有前者能让
@@ -1477,6 +1504,11 @@ export class ProductCatalogRouter {
 
     /* 路径校验排在存在性之后：产品码不存在时真实的答案是 404，先报 400
        会让人去查地址而不是去查产品码。 */
+    assertWebhookAllowedForMode(
+      webhookUrl,
+      product.integration_mode,
+      product.product_code,
+    );
     assertStandardWebhookPath(webhookUrl, product.product_code);
 
     /* 改之前先读一眼：**「保存了一次」不等于「改了」**。运营在这张表单上按保存的
@@ -2287,6 +2319,33 @@ const LEGACY_WEBHOOK_PATHS = new Map<string, string>([
  * 空值放行：三项都允许留空是这个入口的既有语义（运营者常常先拿到地址、密钥还没
  * 签发），这道闸门不改它。
  */
+/**
+ * 声明为「仅统一登录」的产品不许登记回调地址。
+ *
+ * 为什么要有这道门：`integration_mode` 是**声明**，而声明如果与事实可以随便分叉，它
+ * 就成了摆设——admin 会照着声明说「无需接入」，而库里其实躺着一个投递地址，两句话
+ * 谁也不知道另一句存在（[[一致性≠正确]]）。所以在**写入面**把它们焊在一起。
+ *
+ * 逃生口是现成的、且在同一个页面上：先把接入方式改成 `platform_managed`，再登记回调。
+ * 报错里明写这条路，不然这道门就变成墙。
+ *
+ * 只管 `webhookUrl`。`homeUrl` / 边缘那几列对仅登录产品照样有意义（console 应用中心
+ * 的「进入」读 home_url），拦它们才是真的挡住正常动作。
+ */
+function assertWebhookAllowedForMode(
+  url: string | null,
+  mode: ProductIntegrationMode,
+  productCode: string,
+): void {
+  if (url === null || mode !== "login_only") return;
+  throw conflict(
+    "CATALOG_PRODUCT_LOGIN_ONLY",
+    `「${productCode}」的接入方式登记为「仅统一登录」，平台不向它下发任何东西，` +
+      `所以不能登记回调地址。要收平台下发，先把接入方式改成「完整接入」` +
+      `（产品页 · 接入方式），再来登记回调。`,
+  );
+}
+
 function assertStandardWebhookPath(
   url: string | null,
   productCode: string,
@@ -2531,6 +2590,19 @@ export function validateWrite(
       "layer",
     );
   }
+  /* 受管值域，非法值先接住免得冒成 500（库上 chk_products_integration_mode 焊着同一条）。 */
+  if (
+    body.integrationMode &&
+    !(PRODUCT_INTEGRATION_MODES as readonly string[]).includes(
+      body.integrationMode,
+    )
+  ) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      `integrationMode must be one of ${PRODUCT_INTEGRATION_MODES.join(", ")}`,
+      "integrationMode",
+    );
+  }
   if (body.origin && !(ORIGINS as readonly string[]).includes(body.origin)) {
     throw invalidRequest(
       "VALIDATION_INVALID_VALUE",
@@ -2739,6 +2811,7 @@ export async function updateProductTx(
          origin_provider         = CASE WHEN $21::bool THEN $22 ELSE origin_provider         END,
          icon_url                = CASE WHEN $23::bool THEN $24 ELSE icon_url                END,
          layer                   = CASE WHEN $29::bool THEN $30 ELSE layer                   END,
+         integration_mode        = CASE WHEN $31::bool THEN $32 ELSE integration_mode        END,
          updated_by = $25, updated_at = now()
        WHERE id = $26 AND deleted_at IS NULL
        RETURNING ${SELECT_COLUMNS}`,
@@ -2776,6 +2849,8 @@ export async function updateProductTx(
         /* 同理排在最后：$29/$30 是 layer 那一对，插在中间会推移前面每一个编号。 */
         has("layer"),
         body.layer?.trim() || null,
+        has("integrationMode"),
+        body.integrationMode ?? "platform_managed",
       ],
     )
     .then((r) => r.rows[0])
@@ -2840,12 +2915,14 @@ export async function upsertEdgeTx(
   client: Queryable,
   productId: string,
   productCode: string,
+  integrationMode: ProductIntegrationMode,
   body: EdgeWriteBody,
 ): Promise<ProductWebhookRecord> {
   const homeUrl = normalizeUrl(body.homeUrl, "homeUrl");
   const webhookUrl = normalizeUrl(body.webhookUrl, "webhookUrl");
   const edgeUpstream = normalizeUpstream(body.edgeUpstream);
   const edgeDomain = normalizeDomain(body.edgeDomain);
+  assertWebhookAllowedForMode(webhookUrl, integrationMode, productCode);
   assertStandardWebhookPath(webhookUrl, productCode);
   const result = await client.query<WebhookRow>(
     `INSERT INTO product.product_webhooks

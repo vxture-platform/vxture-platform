@@ -138,13 +138,65 @@ interface ProductActionDestructive extends ProductActionBase {
 export type ProductAction = ProductActionPlain | ProductActionDestructive;
 
 export const PRODUCT_ACTIONS: readonly ProductAction[] = [
+  /*
+   * ── 这张表是状态机的**第四处** ──────────────────────────────────────────
+   *
+   * 文件头注写着「设计文档 / 本文件 / BFF 的 STATE_TRANSITIONS 三处必须一致」，
+   * 而本文件里其实有**两份**：上面的 `PRODUCT_STATE_META`（有哪些状态）与这里的
+   * `PRODUCT_ACTIONS`（怎么从一个状态走到另一个）。2026-09-24 接 `developing` 时
+   * 前三处都改了、这一张漏了，后果不是少一个按钮：
+   *
+   *   · 没有任何动作的 `to` 是 `developing` ⇒ 运营**进不去**这一档；
+   *   · `launch` 的 `from` 只有 `draft` ⇒ 就算进去了也**出不来**，13 个产品会卡死
+   *     在一个没有出边的状态里。
+   *
+   * 「加了一档状态」与「这一档进得去出得来」是两半，拄一半等于没拄
+   * （[[feedback_copy_both_halves_and_open_the_page]]）。改这张表时对着
+   * `STATE_TRANSITIONS` 逐条比，别只看自己要加的那一条。
+   */
+  {
+    id: "start_dev",
+    label: "转开发中",
+    icon: "code",
+    /*
+     * 两个来向，说的是两件事：
+     *   draft  → developing：正常推进（信息登记完，开始建东西，官网可以预告了）
+     *   active → developing：**订正**——「它从来没真正上线过」。下架走「停用」，
+     *     那是另一条边。BFF 侧带着「卖过就拒」的检查（CATALOG_PRODUCT_ALREADY_SOLD），
+     *     有客户足迹时这条边会被拒，因为那时这句话是假的。
+     */
+    from: ["draft", "active"],
+    to: "developing",
+    advisory: {
+      title: "开发中 = 官网可预告，但不可订阅",
+      description:
+        "产品会出现在官网目录里（带「预览版」徽标与禁用的「敬请期待」），admin 可以录营销内容，但客户买不了。从「已上线」转回来有一条硬条件：这个产品从没卖出去过。有订阅或订单时会被拒——那种情况要下架，请用「停用」。",
+    },
+  },
   {
     id: "launch",
     label: "确认上线",
     icon: "rocket",
-    from: ["draft"],
+    /* `developing` 也能直接上线：它与 draft 的区别是「对外可见」，不是「离上线更远」。
+       上线门（检查单必填项）对两者一视同仁。 */
+    from: ["draft", "developing"],
     to: "active",
     requiresChecklist: true,
+  },
+  {
+    id: "unpreview",
+    label: "撤回预告",
+    icon: "eye-slash",
+    /* developing → draft：把产品从官网撤下来，回到「只在 opera 可见」。
+       预告早了、或者名字/定位还要改的时候用它。与「停用」的区别是：停用说的是
+       「曾经上线、现在关掉」，这一条说的是「还没到能对外讲的程度」。 */
+    from: ["developing"],
+    to: "draft",
+    advisory: {
+      title: "撤回后官网上看不到它",
+      description:
+        "产品会从官网目录里消失（草稿只在 opera 可见），admin 里录好的营销内容都留着，改回「开发中」就会重新出现。它从来不可订阅，所以没有客户受影响。",
+    },
   },
   {
     id: "suspend",
@@ -174,7 +226,9 @@ export const PRODUCT_ACTIONS: readonly ProductAction[] = [
     id: "retire",
     label: "退役",
     icon: "archive",
-    from: ["draft", "active", "inactive"],
+    /* `developing` 也要有退役口：一个谈崩的产品不该因为「还在开发中」就永远躺在
+       目录里，与 2026-08-14 给 draft 补退役边同一条理由。 */
+    from: ["draft", "developing", "active", "inactive"],
     to: "deprecated",
     danger: true,
     destructive: {

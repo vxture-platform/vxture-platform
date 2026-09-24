@@ -44,6 +44,7 @@ export {
   MERGE_STRATEGIES,
   CONSUME_MODES,
   METRIC_KINDS,
+  PRODUCT_INTEGRATION_MODES,
   PRODUCT_STATUSES,
   PRODUCT_LAYERS,
   PRODUCT_LAYER_DEFS,
@@ -65,6 +66,7 @@ export type {
   MergeStrategy,
   ConsumeMode,
   MetricKind,
+  ProductIntegrationMode,
   ProductStatusValue,
   ProductLayerValue,
 } from "./catalog-domains.constants";

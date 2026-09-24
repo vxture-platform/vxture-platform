@@ -189,6 +189,37 @@ export const METRIC_KINDS = ["counter", "gauge"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
 /**
+ * 产品的**接入方式**（`product.products.integration_mode`）——答的是「平台向这个产品
+ * 下发东西吗」。与生命周期（走到哪一步）、承诺等级（承诺什么）、层级、来源都正交。
+ *
+ * ── 为什么非得显式声明 ──
+ * admin 的接入态此前**靠「有没有 product_webhooks 行」去推**，而那是**沉默**，沉默同时
+ * 兼容两件相反的事：「还没配」与「按设计不需要」。2026-09-24 一天之内两种猜法都上线过，
+ * 各错一批产品：
+ *   · 先全判 `not_required`（「无需接入」）—— 12 个什么都没建的智能体被说成不需要接入，
+ *     owner 当场指出「很多产品仅仅填写了信息…应该谈不上接入」。
+ *   · 改成全判 `config_required`（「待配置」）—— 反过来冤了 umbra：它只做账号统一登录，
+ *     其余全在它自己那边，**没有任何配置在等人做**，而界面在催一件不存在的工作。
+ * 一个笼统答案换另一个笼统答案，因为缺的不是更好的推断，是**一处声明**。
+ *
+ * ── 为什么不拿 origin 当代理 ──
+ * 2026-09-24 实测 umbra 是唯一 `origin='third_party'` 的产品，所以「按来源判」当天恰好
+ * 只框中它。但那是巧合：合作方产品照样可以收平台下发，自建产品也可以只用统一登录。
+ * 接入方式是**接入契约**的属性，不是**来源**的属性（[[加列先问这是谁的属性]]）。
+ *
+ * ── 各值的判据 ──
+ *   platform_managed  收平台下发（开通 / 权益 / 用量回调）。默认值：绝大多数产品如此。
+ *                     没登记回调 ⇒ 「待配置」，确实有事等人做。
+ *   login_only        只用统一登录，平台不向它下发任何东西。没有回调 ⇒ 「无需接入」，
+ *                     那是终态而不是缺配置。
+ */
+export const PRODUCT_INTEGRATION_MODES = [
+  "platform_managed",
+  "login_only",
+] as const;
+export type ProductIntegrationMode = (typeof PRODUCT_INTEGRATION_MODES)[number];
+
+/**
  * 产品生命周期（`product.products.status`）——**接入状态轴**，答的是「这个产品走到
  * 接入流程的哪一步」。与承诺等级（`release_stage`，答「买了之后平台承诺什么」）、
  * 层级、类型、来源都正交。

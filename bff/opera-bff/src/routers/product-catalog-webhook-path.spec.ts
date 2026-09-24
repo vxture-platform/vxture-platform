@@ -45,9 +45,16 @@ function makeReq(): Request & RequestContext {
 
 /**
  * `productCode` 决定这个产品在不在存量登记里——闸门按产品码放行旧路径。
- * 这里让 `SELECT product_code` 回什么，就等于在测哪个产品。
+ * 这里让那条 `SELECT` 回什么，就等于在测哪个产品。
+ *
+ * `integrationMode` 默认 `platform_managed`：桩要**按真库的行形状作答**，缺一列
+ * 下游那道门就等于没被测过（2026-09-22 的 `is_public` 就是这么漏的，本仓 spec
+ * 里记过一次）。真库上这一列 NOT NULL DEFAULT 'platform_managed'。
  */
-function makeRouter(productCode: string) {
+function makeRouter(
+  productCode: string,
+  integrationMode: "platform_managed" | "login_only" = "platform_managed",
+) {
   let written: unknown[] = [];
   const client = {
     query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
@@ -56,8 +63,17 @@ function makeRouter(productCode: string) {
   const pool = {
     connect: vi.fn(async () => client as unknown as PoolClient),
     query: vi.fn(async (text: string, args?: unknown[]) => {
-      if (/SELECT product_code FROM product\.products/.test(text)) {
-        return { rows: [{ product_code: productCode }], rowCount: 1 };
+      if (
+        /SELECT product_code, integration_mode FROM product\.products/.test(
+          text,
+        )
+      ) {
+        return {
+          rows: [
+            { product_code: productCode, integration_mode: integrationMode },
+          ],
+          rowCount: 1,
+        };
       }
       if (/INSERT INTO product\.product_webhooks|product_webhooks/.test(text)) {
         written = args ?? [];
@@ -126,6 +142,49 @@ async function put(productCode: string, webhookUrl: string | null) {
   const t = makeRouter(productCode);
   return t.router.putWebhook(makeReq(), PRODUCT_ID, { webhookUrl });
 }
+
+/** 同上，但指定接入方式——`login_only` 的产品不许登记回调。 */
+async function putAs(
+  productCode: string,
+  mode: "platform_managed" | "login_only",
+  webhookUrl: string | null,
+) {
+  const t = makeRouter(productCode, mode);
+  return t.router.putWebhook(makeReq(), PRODUCT_ID, { webhookUrl });
+}
+
+describe("PUT :id/webhook · 声明为「仅统一登录」的产品不许登记回调", () => {
+  /*
+   * `integration_mode` 是**声明**。如果它与库里实际躺着的投递地址可以随便分叉，它就是
+   * 摆设：admin 照声明说「无需接入」，而实际有回调在投，两句话谁都不知道另一句存在。
+   * 所以门在写入面。
+   *
+   * 这里用的路径是**标准路径**：两道门必须各自能拦住自己那件事。若用一个非标路径，
+   * 这条用例在 `assertStandardWebhookPath` 上就红了，什么也没证明。
+   */
+  it("login_only + 标准路径 → 409 CATALOG_PRODUCT_LOGIN_ONLY", async () => {
+    let thrown: unknown;
+    try {
+      await putAs("umbra", "login_only", `https://umbra.vxture.com${STANDARD}`);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeDefined();
+    expect(captured(thrown).code).toBe("CATALOG_PRODUCT_LOGIN_ONLY");
+    /* 报错要指出逃生口，否则这道门就是墙。 */
+    expect(captured(thrown).message).toContain("接入方式");
+  });
+
+  it("同一个产品改成 platform_managed 就放行 —— 证明拦的是声明不是产品", async () => {
+    await expect(
+      putAs("umbra", "platform_managed", `https://umbra.vxture.com${STANDARD}`),
+    ).resolves.toBeTruthy();
+  });
+
+  it("login_only 清空回调（null）照样放行 —— 拦的是「登记」不是「清除」", async () => {
+    await expect(putAs("umbra", "login_only", null)).resolves.toBeTruthy();
+  });
+});
 
 describe("PUT :id/webhook · 回调路径必须是通则规定的那一个", () => {
   it("标准路径放行", async () => {
