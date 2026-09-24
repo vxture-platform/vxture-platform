@@ -163,13 +163,29 @@ function isUsableSha(value) {
   return Boolean(value) && !ZERO_SHA_PATTERN.test(value);
 }
 
+/**
+ * 两个提交之间变了哪些文件。
+ *
+ * **`--no-renames` 是这里最要紧的一个字。** git 的 diff 默认开着改名检测，而
+ * `--name-only` 对一次改名**只打印目的地那一侧**。于是「把一个文件移出某个镜像的源码
+ * 树」这件事在变更清单里根本不存在：移进来会（新路径在清单里），移出去不会。
+ *
+ * 2026-09-24 v0.26.262 实撞：那张门户页从 `portals/website/public/` 改名到
+ * `deploy/nginx/html/__takeover/`，清单里 17 个文件**一个都不在 portals/ 下**，
+ * `affected_images=[]`，website 直接 retag 复用了上一版的镜像——而那一版里那个文件
+ * 还在。构建绿、部署绿、复用的是旧镜像，全程没有任何症状。
+ *
+ * `--no-renames` 让一次改名拆回「一删一增」，两侧路径都进清单。代价是改名会多标一个
+ * 镜像为「变更」，那是**宁可多建不可漏建**的方向：多建一次只是慢，漏建是发了一个不含
+ * 本次改动的镜像。
+ */
 function listChangedFiles(baseSha, headSha) {
   const normalizedHead = isUsableSha(headSha) ? headSha : "HEAD";
 
   if (isUsableSha(baseSha)) {
     try {
       return splitLines(
-        runGit(["diff", "--name-only", baseSha, normalizedHead]),
+        runGit(["diff", "--name-only", "--no-renames", baseSha, normalizedHead]),
       );
     } catch {
       // GitHub 的浅克隆或特殊事件可能缺少 base，下面回退到父提交或全量文件。
@@ -178,7 +194,13 @@ function listChangedFiles(baseSha, headSha) {
 
   try {
     return splitLines(
-      runGit(["diff", "--name-only", `${normalizedHead}^`, normalizedHead]),
+      runGit([
+        "diff",
+        "--name-only",
+        "--no-renames",
+        `${normalizedHead}^`,
+        normalizedHead,
+      ]),
     );
   } catch {
     return splitLines(runGit(["ls-files"]));

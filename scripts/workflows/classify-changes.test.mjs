@@ -17,6 +17,8 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(HERE, "classify-changes.mjs");
@@ -330,4 +332,60 @@ test("matrix: 非 tag 不产生 reuse（main push 不走复用路径）", () => 
   const r = classify(["bff/auth-bff/src/x.ts"], ["--matrix"]);
   assert.deepEqual(JSON.parse(r.reuse).include, []);
   assert.equal(r.any_reuse, "false");
+});
+
+// ── 真 git diff 路径：改名的**两侧**都要进变更清单 ──────────────────────────
+//
+// 上面所有用例都走 `--files` 注入，**绕过了 git diff**——所以它们一条都测不到变更清单
+// 本身是怎么来的。2026-09-24 v0.26.262 正是在那一段翻的车：git 的改名检测默认开着，
+// 而 `--name-only` 对一次改名只打印目的地那一侧。把那张门户页从 `portals/website/public/`
+// 移到 `deploy/nginx/html/__takeover/` 之后，清单里 17 个文件一个都不在 portals/ 下，
+// `affected_images=[]`，website 直接复用了上一版镜像——而那一版里那个文件还在。
+// 构建绿、部署绿、跑的是旧镜像，全程没有任何症状。
+//
+// 所以这一条**必须在真仓上跑**：临时 git 仓 + 一次真 `git mv` + 真 diff。
+test("changed_files: 一次改名要同时报出原路径与新路径（回归 v0.26.262）", () => {
+  const repo = mkdtempSync(join(tmpdir(), "classify-rename-"));
+  try {
+    const git = (...args) =>
+      execFileSync("git", args, { cwd: repo, encoding: "utf8" });
+    git("init", "-q");
+    git("config", "user.email", "t@example.invalid");
+    git("config", "user.name", "t");
+    git("config", "commit.gpgsign", "false");
+    mkdirSync(join(repo, "portals/website/public"), { recursive: true });
+    writeFileSync(join(repo, "portals/website/public/moved.html"), "x\n");
+    git("add", "-A");
+    git("commit", "-qm", "one");
+    const base = git("rev-parse", "HEAD").trim();
+    mkdirSync(join(repo, "deploy/nginx/html/__takeover"), { recursive: true });
+    git(
+      "mv",
+      "portals/website/public/moved.html",
+      "deploy/nginx/html/__takeover/moved.html",
+    );
+    git("commit", "-qm", "two");
+    const head = git("rev-parse", "HEAD").trim();
+
+    const out = execFileSync(
+      process.execPath,
+      [SCRIPT, "--base", base, "--head", head],
+      { cwd: repo, encoding: "utf8" },
+    );
+    const line = out
+      .split(/\r?\n/u)
+      .find((l) => l.startsWith("changed_files="));
+    const files = JSON.parse(line.slice("changed_files=".length)).split("\n");
+
+    assert.ok(
+      files.includes("portals/website/public/moved.html"),
+      `原路径不在清单里 —— 把文件移出一个镜像的源码树时它不会重建。实际：${files.join(" / ")}`,
+    );
+    assert.ok(
+      files.includes("deploy/nginx/html/__takeover/moved.html"),
+      `新路径不在清单里。实际：${files.join(" / ")}`,
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });
