@@ -218,9 +218,14 @@ if [ ! -f "$TAKEOVER_DEFAULTS_FILE" ]; then
   exit 1
 fi
 echo "==> 解析站点接管档位"
+# 第三个参数 `prune`：现场状态里有一个已从登记表退役的域时，丢弃它并提示，而不是报错。
+# 这里报错会让整次 deploy 失败（本脚本 set -e），等于「把一个域从接管登记表里摘掉」这
+# 件事永远做不成——2026-09-24 把 ruyin.work 改成 301 时就会撞上这一条。拒绝该留在
+# `35-site-takeover.sh`：人在敲命令，域名不在登记表里只可能是敲错。
 TAKEOVER_RESOLVED="$(takeover_resolve \
   "$(cat "$TAKEOVER_DEFAULTS_FILE")" \
-  "$(takeover_read_file "$TAKEOVER_STATE_FILE")")"
+  "$(takeover_read_file "$TAKEOVER_STATE_FILE")" \
+  prune)"
 takeover_render_map "$TAKEOVER_RESOLVED" "$DST/conf.d/$TAKEOVER_MAP_BASENAME"
 takeover_sync_pages "$SRC/html" /srv/vxture/data/nginx/html "$TAKEOVER_RESOLVED"
 if [ -f "$TAKEOVER_STATE_FILE" ]; then

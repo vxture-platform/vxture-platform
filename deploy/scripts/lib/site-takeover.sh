@@ -33,8 +33,9 @@ takeover_valid_mode() {
 #     意思的值，或者干脆让 try_files 去找一个不存在的文件（表现为 404，不是报错）。
 #   · 现场登记了默认文件里没有的域 → 报错退出。把域名拼错不会有任何症状，只会「改了
 #     但没生效」，而那正是最难查的一类。
+#     **例外**：第三个参数传 `prune` 时改为丢弃并提示，给 deploy 路径用——见下方注释。
 takeover_resolve() {
-  local defaults_text="${1:-}" state_text="${2:-}"
+  local defaults_text="${1:-}" state_text="${2:-}" unknown_host="${3:-reject}"
   local -A mode=()
   local -a order=()
   local line host m extra
@@ -77,6 +78,17 @@ takeover_resolve() {
       return 1
     fi
     if [ -z "${mode[$host]+x}" ]; then
+      # 两种调用方，两种正确答案：
+      #
+      #   reject（默认，`35-site-takeover.sh` 用）—— 人在敲命令，域名不在登记表里只可能
+      #     是敲错了。悄悄不生效是这一类最难查的故障，所以当场拦下。
+      #   prune（`20-sync-nginx-config.sh` 用）—— 一个域从登记表里退役是**正常的仓内
+      #     改动**，而主机上那份现场状态还留着它。这时候报错会让 deploy 整个失败
+      #     （20- 是 set -e），等于「退役一个域」这件事做不成。丢掉并且说出来。
+      if [ "$unknown_host" = "prune" ]; then
+        echo "  提示：现场档位里的「$host」已不在 site-takeover.defaults，按退役丢弃。" >&2
+        continue
+      fi
       echo "错误：现场档位登记了「$host」，而 site-takeover.defaults 里没有这个域。" >&2
       echo "      域名拼错不会报错、只会悄悄不生效，所以这里直接拦下。" >&2
       return 1

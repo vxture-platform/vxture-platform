@@ -21,6 +21,7 @@
 # 官网主域：真站在跑。
 vxture.com  off
 
-# 如音的独立域：这个域**只有**那一张门户页，没有「真正的页面」可恢复。
-# 把它改成 off 等于整域 404（见 ruyin.work.conf 文件头 §3）。
-ruyin.work  portal
+# ruyin.work 曾经登记在这里（默认 portal）。owner 2026-09-24 定「和 vxture.com 同一个真实
+# 主页」之后，那个域整域 301 到 vxture.com——一个只出 301 的域没有「对外形态」可换，所以
+# 从登记表里摘掉了。摘掉之后主机上那份现场状态里会多出一个已退役的域，
+# `20-sync-nginx-config.sh` 走 prune（丢弃并提示）而不是报错。
