@@ -142,9 +142,42 @@ takeover_sync_pages() {
     return 1
   fi
 
-  rm -rf "$dst"
+  # 目录**不重建**，只清内容。
+  #
+  # 这里原来写的是 `rm -rf "$dst"; mkdir -p "$dst"`，它有一个不在本函数里表现出来的
+  # 后果：重建会把目录的归属重置成**当次运行者**。而这个目录有两个写者，身份不同——
+  #
+  #   · 20-sync-nginx-config.sh（deploy 链）以部署用户跑；
+  #   · 35-site-takeover.sh 要求 sudo，以 root 跑。
+  #
+  # root 建过一次之后，下一次 deploy 连 unlink 里面的文件都做不到：**unlink 看的是
+  # 目录的写权限，不是文件的归属**。2026-09-24 v0.26.263 的生产 deploy 就是这样挂的，
+  # 挂在 `rm: cannot remove '…/portal.html': Permission denied`，而在此之前一切正常，
+  # 因为那时目录还是部署用户建的——先切档、再发版，这个顺序第一次出现就炸。
+  #
+  # 所以：目录只建不删，归属统一对齐到 $dst_root（它由 deploy 创建，是稳定的答案）。
   mkdir -p "$dst"
+
+  # 已经被 root 锁住的现场要能自愈，否则每次 deploy 都会停在同一堵墙前，而修它需要
+  # 上机。提权路径与 13-prepare-runtime-env.sh 一致：`sudo -n`，拿不到就报错并把该跑
+  # 的命令原样打出来。
+  if [ ! -w "$dst" ]; then
+    echo "  提示：$dst 当前不可写（上一次是 root 写的），把归属对齐到 $dst_root。" >&2
+    if ! sudo -n chown -R --reference="$dst_root" "$dst" 2>/dev/null; then
+      echo "错误：$dst 不可写，且无法提权修复归属。" >&2
+      echo "      请在主机上执行：sudo chown -R --reference=$dst_root $dst" >&2
+      return 1
+    fi
+  fi
+
+  find "$dst" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
   cp -f "$src"/*.html "$dst"/
+
+  # 以 root 跑时把归属还给 $dst_root 的属主，否则下一次 deploy 又会撞上面那堵墙。
+  # 非 root 跑时这一步是恒等的（文件本来就是它自己建的），所以不必区分调用方。
+  if [ "$(id -u)" = "0" ]; then
+    chown -R --reference="$dst_root" "$dst"
+  fi
 
   while read -r host m; do
     [ -n "${host:-}" ] || continue
