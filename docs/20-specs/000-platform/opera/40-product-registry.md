@@ -39,6 +39,14 @@
 订阅需要 console 可见（`status='active'`）——卡在上线门上就是**环**。移到发布门之后，
 那条链在 `active + developing` 下本来就走得通。
 
+**接入方式轴（`integration_mode`，2026-09-24）**：`platform_managed`（收平台下发：开通 / 权益 / 用量回调）/ `login_only`（只用统一登录，平台不向它下发任何东西）。值域权威源在 `@vxture-platform/shared` 的 `PRODUCT_INTEGRATION_MODES`，`lint:catalog-domains` 锁它与 `chk_products_integration_mode` 一致。写侧是 opera 产品页的「接入方式」下拉。
+
+> **为什么要有这一根轴。** admin 的接入态（「已接入 / 联调中 / 待配置 / 无需接入」）原先**靠「有没有 `product_webhooks` 行」去推**，而那是**沉默**，沉默同时兼容两件相反的事：「还没配」与「按设计不需要」。2026-09-24 一天之内两种猜法都上线过，各错一批产品：先一律判 `not_required`，12 个只填了信息什么都没建的智能体被说成不需要接入（owner：「很多产品仅仅填写了信息，还没有开发和部署任何内容，应该谈不上接入」）；改成一律判 `config_required` 之后又冤了 umbra——它只做账号统一登录，其余全在它自己那边，**没有任何配置在等人做**，而界面在催一件不存在的工作。**缺的不是更好的推断，是一处声明。**
+>
+> **不拿 `origin` 当代理**：实测 umbra 是唯一 `origin='third_party'` 的产品，所以「按来源判」当天恰好只框中它——那是巧合。合作方产品照样可以收平台下发，自建产品也可以只用统一登录；接入方式是**接入契约**的属性，不是**来源**的属性。
+>
+> **声明与事实焊在写入面**：`login_only` 的产品登记回调地址被拒（409 `CATALOG_PRODUCT_LOGIN_ONLY`，两个入口都拦：`PUT :id/webhook` 与合并保存的 `upsertEdgeTx`）。否则声明就是摆设——admin 照声明说「无需接入」，而库里躺着一个投递地址。逃生口在同一个页面上：先把接入方式改成「完整接入」，报错正文明写这条路。只拦 `webhookUrl`；`home_url` 对仅登录产品照样有意义（console 应用中心的「进入」读它）。
+
 **承诺等级轴（`release_stage`，2026-09-17 装上状态机）**：`preview`（预览版）/ `beta`（公测版）/ `stable`（正式版）/ `sunset`（停售中），四态与标签的权威源在 `@vxture/core-utils` 的 `release-stage.ts`。它与 `status`（生命周期）、`is_customer_visible`（上不上站）**仍然正交**——DDL 里「独立轴，不派生」那句话没有改。
 
 > 这一行原写着三态 `ga / beta / developing`，**两处都已过时**：2026-10-29 改名为 `stable` / `preview` 并补了 `sunset`。而 `developing` 这个词自 2026-09-24 起归**生命周期轴**（见下），两根轴用同一个词是这一批要拆掉的混淆之一——对外说承诺等级最低那一档一律用「预览版」。

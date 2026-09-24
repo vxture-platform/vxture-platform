@@ -112,6 +112,15 @@ const pairs = [
     tsArray(dom, "PRODUCT_STATUSES"),
     ddlCheckIn(p40, "chk_products_status"),
   ],
+  /* products.integration_mode（接入方式轴，2026-09-24 加）。声明式取代「有没有回调行」
+     那个推断：沉默同时兼容「还没配」与「按设计不需要」，而那是界面上两句相反的话。
+     同一天两种笼统猜法都上线过，各错一批产品（12 个没建的被说成「无需接入」；改口之后
+     umbra 这个只做统一登录的被说成「待配置」）。值域一从 DDL 或 TS 单边改动就在这里现形。 */
+  [
+    "product integration mode",
+    tsArray(dom, "PRODUCT_INTEGRATION_MODES"),
+    ddlCheckIn(p40, "chk_products_integration_mode"),
+  ],
   [
     "product layer",
     tsArray(dom, "PRODUCT_LAYERS"),

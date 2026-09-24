@@ -391,7 +391,13 @@ export class ProductOnboardingRouter {
         req.operator?.id ?? null,
       );
       const edge = hasEdgeValues(body.edge)
-        ? await upsertEdgeTx(client, product.id, product.productCode, body.edge)
+        ? await upsertEdgeTx(
+            client,
+            product.id,
+            product.productCode,
+            product.integrationMode,
+            body.edge,
+          )
         : null;
       const issuedSecrets = await applyCreates(client, product, plan);
       const clients = await lockProductClientsTx(client, product.id);
@@ -436,7 +442,13 @@ export class ProductOnboardingRouter {
         req.operator?.id ?? null,
       );
       const edge = body.edge
-        ? await upsertEdgeTx(client, id, product.productCode, body.edge)
+        ? await upsertEdgeTx(
+            client,
+            id,
+            product.productCode,
+            product.integrationMode,
+            body.edge,
+          )
         : null;
       for (const change of plan.changes) {
         const updated = await patchProductClientTx(

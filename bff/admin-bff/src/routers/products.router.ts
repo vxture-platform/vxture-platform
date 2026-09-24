@@ -2611,7 +2611,8 @@ interface ProductCatalogRow {
   product_type: string; // 受管枚举 @vxture/core-utils: general_platform|industry_platform|general_agent|industry_agent|undefined
   layer: string | null; // 定位轴 L1|L2|L3（product_100_matrix §2）；NULL=未分层。绑定候选按它过滤，所以原样透出不加工
   origin: string; // 来源轴 self|third_party|other —— source 从这里判，不再从 product_type='external' 反推
-  release_stage: string; // 成熟度轴 ga|beta|developing
+  integration_mode: string; // 接入方式轴 platform_managed|login_only（@shared PRODUCT_INTEGRATION_MODES）——接入态由它声明，不由「有没有回调行」推
+  release_stage: string; // 承诺等级轴 preview|beta|stable|sunset
   marketing: unknown | null; // 营销内容 jsonb(双语富结构)
   product_name: string;
   description: string | null;
@@ -2719,6 +2720,7 @@ const PRODUCT_CATALOG_SQL = `
     p.product_type,
     p.layer,
     p.origin,
+    p.integration_mode,
     p.release_stage,
     p.marketing,
     p.product_name,
@@ -2891,18 +2893,31 @@ export async function loadProductCapabilities(
           providerName: source === "partner" ? "合作方服务商" : "Vxture",
           providerType: source,
           /*
-           * 没有 `product_webhooks` 行 = **还没人登记**，不是「不需要接入」。
+           * 没有 `product_webhooks` 行意味着什么，**由产品自己声明，不由缺席推断**。
            *
-           * 这里原先判 `not_required`（界面上写「无需接入」），于是 13 个只填了
-           * 信息、什么都没开发的产品在 admin 上显示「已上线 + 无需接入」——两个
-           * 都是假的，而后者尤其：一个智能体产品当然需要接入，只是没人填。
-           * **把「查不到」当成一个肯定的结论**，是这套系统里反复出现的同一个错。
+           * 沉默同时兼容两件相反的事：「还没配」与「按设计不需要」。而它们在界面上
+           * 是两句相反的话，靠缺席推只能猜一种——2026-09-24 一天之内两种猜法都上线
+           * 过，各错一批产品：
            *
-           * `not_required` 要留就得有它自己的判据（比如「这个产品按设计不收平台
-           * 下发」），而那个判据今天不存在——靠一行记录的缺席去推断它，等于让沉默
-           * 替人做主张。所以这里判「待配置」：它对每一个目录产品都为真。
+           *   · 原来一律判 `not_required`（「无需接入」）：12 个只填了信息、什么都
+           *     没建的智能体被说成不需要接入（owner：「很多产品仅仅填写了信息，还没有
+           *     开发和部署任何内容，应该谈不上接入」）。
+           *   · 于是改成一律判 `config_required`（「待配置」）：反过来冤了 umbra——它
+           *     只做账号统一登录，其余全在它自己那边，**没有任何配置在等人做**，而
+           *     界面在催一件不存在的工作。
+           *
+           * 缺的不是更好的推断，是一处声明。现在读 `integration_mode`
+           * （@shared 的 `PRODUCT_INTEGRATION_MODES`，opera 的接入方式下拉写它）：
+           *   platform_managed → 「待配置」，确实有事等人做
+           *   login_only       → 「无需接入」，那是终态
+           *
+           * 认不得的值按 `platform_managed` 处理（保守：宁可催一件其实不用做的事，
+           * 也不要把一个真的缺接入的产品说成不需要接入——后者会让它一直没人管）。
            */
-          status: "config_required",
+          status:
+            row.integration_mode === "login_only"
+              ? "not_required"
+              : "config_required",
           endpoint: null,
           protocol: "内部服务",
           authMode: "平台会话",

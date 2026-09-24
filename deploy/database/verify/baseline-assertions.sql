@@ -234,6 +234,30 @@ BEGIN
     fails := fails || format('[C4] 平台级客户端还挂着同名产品行（%s）——平台自身的登录端不是目录商品，这一行是旧形态残留; ', codes);
   END IF;
 
+  -- ── C5. 声明「仅统一登录」的产品不得挂着回调地址 ───────────────────────────
+  --   `integration_mode` 是**声明**，而声明与事实一旦可以分叉，它就是个摆设：admin
+  --   会照声明显示「无需接入」，而库里其实躺着一个投递地址，两句话谁都不知道另一句
+  --   存在。opera 的写入面已经焊住这件事（登记回调时 409 CATALOG_PRODUCT_LOGIN_ONLY，
+  --   两个入口都拦），但**写入面只管经过它的写入**——seed、迁移、手工 SQL 都绕得过去。
+  --   这一条从库这一侧兜底：任何路径造出的矛盾都会在 migrate 的审计段现形。
+  --
+  --   只看 webhook_url。home_url / 边缘那几列对仅登录产品照样有意义（console 应用
+  --   中心的「进入」读 home_url），拦它们才是真的挡住正常动作。
+  SELECT count(*) INTO cnt
+    FROM product.products p
+    JOIN product.product_webhooks w ON w.product_id = p.id
+   WHERE p.integration_mode = 'login_only'
+     AND coalesce(w.webhook_url, '') <> '';
+  IF cnt > 0 THEN
+    SELECT string_agg(p.product_code, ', ' ORDER BY p.product_code)
+      INTO codes
+      FROM product.products p
+      JOIN product.product_webhooks w ON w.product_id = p.id
+     WHERE p.integration_mode = 'login_only'
+       AND coalesce(w.webhook_url, '') <> '';
+    fails := fails || format('[C5] 声明为「仅统一登录」却登记了回调地址（%s）——声明与事实分叉，admin 会说「无需接入」而平台其实在向它投递; ', codes);
+  END IF;
+
   -- ── verdict ────────────────────────────────────────────────────────────────
   IF fails <> '' THEN
     RAISE EXCEPTION 'baseline audit FAILED: %', fails;

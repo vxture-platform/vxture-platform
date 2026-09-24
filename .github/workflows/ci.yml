@@ -387,6 +387,11 @@ jobs:
           pnpm lint:schema-residue
           pnpm lint:seed
           pnpm lint:catalog-domains
+          # 产品生命周期状态机住在四处(@shared 值域 / opera-bff STATE_TRANSITIONS /
+          # 门户 PRODUCT_STATE_META / 门户 PRODUCT_ACTIONS)。2026-09-24 接 developing
+          # 时漏了第四处:值域、BFF、状态表都改了,动作表没改——运营既进不去那一档,
+          # 进去了也出不来,而 type-check 与另外 64 条守卫全绿。
+          pnpm lint:product-lifecycle
           # 迁移里不得断言「全库某类共 N 个」:migrate 是全量重放,每份跑在最终状态上,
           # 这种数会随后来的任何一次新增而失效(2026-09-09 三条一起炸,连挂三次生产迁移)
           pnpm lint:migration-counts
