@@ -78,8 +78,8 @@ function buildSteps(order: MyOrder, countdown: string | null): Step[] {
         { key: zero ? "settleZero" : "confirm", at: order.confirmedAt },
         { key: "provision", at: null, now: true },
       ];
-    case "completed": {
-      const base = zero
+    case "completed":
+      return zero
         ? [
             submitted,
             { key: "settleZero", at: order.confirmedAt ?? order.createdAt },
@@ -91,31 +91,8 @@ function buildSteps(order: MyOrder, countdown: string | null): Step[] {
             { key: "confirm", at: order.confirmedAt },
             { key: "provision", at: order.activatedAt },
           ];
-      /*
-       * 服务已经不在了就要说出来（owner 2026-09-24：「订单退订完全没有记录」）。
-       *
-       * 这条时间线是**对订单六态的硬编码 switch，不读 order_events**。所以「让退订在订单
-       * 侧留痕」不能靠往 order_events 写一行——写了也没人渲染（界面上一个字都看不到）。
-       * 能回答「服务还在不在」的数据本来就有：订阅的当前状态。
-       *
-       * 没有时刻可标（订阅行上没有「终止时刻」这一列，退订只改 status），所以 at 给 null，
-       * 只如实说明它已经不在服务中，而不是编一个时间出来。
-       */
-      const ended = END_STEP_BY_SUBSCRIPTION[order.subscriptionStatus ?? ""];
-      return ended ? [...base, { key: ended, at: null, now: true }] : base;
-    }
   }
 }
-
-/**
- * 订阅当前状态 → 时间线末尾那一步。在用族（active / trialing / expiring / overdue）不加，
- * 因为服务还在，`provision` 那一步已经说完了。
- */
-const END_STEP_BY_SUBSCRIPTION: Record<string, string | undefined> = {
-  cancelled: "terminated",
-  expired: "serviceExpired",
-  suspended: "serviceSuspended",
-};
 
 /** 展开区小卡：DS Card 组合（soft veil），标题走 CardHeader/CardDescription，
  *  卡底行走 CardFooter（虚线 + 下对齐），三卡因 grid stretch 等高。 */

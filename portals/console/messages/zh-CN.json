@@ -2556,9 +2556,6 @@
         "settleZero": "自动结清（¥0）",
         "provision": "服务开通",
         "cancelled": "取消订单",
-        "terminated": "服务已终止",
-        "serviceExpired": "服务已到期",
-        "serviceSuspended": "服务已暂停",
         "expiredClosed": "超时关闭"
       }
     },
@@ -2668,8 +2665,6 @@
       "provisioning": "开通中",
       "active": "服务中",
       "cancelled": "已取消",
-      "suspended": "已暂停",
-      "terminated": "已终止",
       "closed": "已关闭"
     },
     "term": {

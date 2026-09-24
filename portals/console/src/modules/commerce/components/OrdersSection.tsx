@@ -55,7 +55,7 @@ import { PageSection } from "@/layout/shell";
 import { ListPagination } from "@/components/pagination";
 import { OrderDetailPanel } from "./OrderDetailPanel";
 import { useOrderPolling } from "./pay/useOrderPolling";
-import { PAY_AXIS, formatRemain, svcAxisFor } from "./hubModel";
+import { PAY_AXIS, SVC_AXIS, formatRemain } from "./hubModel";
 import { useDateFormat } from "@/lib/use-date-format";
 
 const ORDERS_PAGE_SIZE = 10;
@@ -319,8 +319,7 @@ export function OrdersSection() {
       header: t("orders.colSvcStatus"),
       align: "center",
       cell: (o) => {
-        /* 服务在不在读订阅；未履约时才回落到订单轴（见 svcAxisFor 头注）。 */
-        const axis = svcAxisFor(o.orderStatus, o.subscriptionStatus);
+        const axis = SVC_AXIS[o.orderStatus];
         return (
           <StatusBadge tone={axis.tone}>{t(`svcAxis.${axis.key}`)}</StatusBadge>
         );

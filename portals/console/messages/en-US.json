@@ -2556,9 +2556,6 @@
         "settleZero": "Auto-settled (¥0)",
         "provision": "Service provisioned",
         "cancelled": "Order cancelled",
-        "terminated": "Service terminated",
-        "serviceExpired": "Service expired",
-        "serviceSuspended": "Service suspended",
         "expiredClosed": "Closed on timeout"
       }
     },
@@ -2668,8 +2665,6 @@
       "provisioning": "Provisioning",
       "active": "In service",
       "cancelled": "Cancelled",
-      "suspended": "Suspended",
-      "terminated": "Terminated",
       "closed": "Closed"
     },
     "term": {
