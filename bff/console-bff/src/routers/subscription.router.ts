@@ -354,6 +354,13 @@ interface MyOrderRecord {
   currency: string;
   /** Six-state contract (product_321 P1) — replaces pending/confirmed/closed. */
   orderStatus: OrderState;
+  /**
+   * 该订单所开通的订阅**现在**是什么状态（SUBSCRIPTION_STATUSES）；未履约时 null。
+   *
+   * 「服务还在不在」只有订阅行能回答。订单状态回答的是「这张单走到哪一步」，它走完之后
+   * 永远停在 fulfilled——拿它当服务状态，退订之后那一列就是一句假话（2026-09-24 实撞）。
+   */
+  subscriptionStatus: string | null;
   /** 'subscription' in V1; 'recharge' reserved for the wallet phase (P6). */
   orderType: "subscription";
   /** ISO deadline while counting down; null = TTL-exempt (paid_amount>0) or terminal. */
@@ -2529,6 +2536,8 @@ interface OrderRow {
   workspace_id: string;
   /** 履约后挂上的订阅；未履约 null */
   subscription_id: string | null;
+  /** 该订阅**当前**状态；未履约（无订阅）时 null。服务在不在看它，不看 order_status。 */
+  subscription_status: string | null;
   /** billing.orders.status（订单实体状态机） */
   order_status: string;
   /** 每单付款时效（分钟，P4 修订）；NULL=存量单 → 回退 env */
@@ -2603,6 +2612,15 @@ select
   o.created_at,
   sub.start_at,
   sub.end_at,
+  /*
+   * 订阅当前状态（2026-09-24）。此前这条 join 只取了 start_at / end_at，**没取 status**,
+   * 于是订单列表那一列「服务状态」只能由订单自己的状态派生——订单走到 fulfilled 就永远
+   * 显示「服务中」，订阅被退订/暂停/过期都不会变。实撞：owner 退订 vxtpl 之后，两张单
+   * （含一张已收款的付费单）仍写着「服务中」，而服务已经没有了。
+   *
+   * 「服务还在不在」的答案在订阅行上，不在订单上。订单只回答「这张单走到哪一步」。
+   */
+  sub.status           as subscription_status,
   tn.name              as tenant_name,
   tn.owner_user_id,
   ws.name              as workspace_name,
@@ -2734,6 +2752,8 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     amount: r.payable_amount,
     currency: r.currency ?? "CNY",
     orderStatus: state,
+    /* 服务在不在：读订阅，不读订单（见 ORDER_ROW_SELECT 里那段注释）。 */
+    subscriptionStatus: r.subscription_status,
     orderType: "subscription",
     expireAt: deriveExpireAt(r, state),
     paidAmount: r.paid_amount ?? "0",

@@ -60,6 +60,38 @@ export const SVC_AXIS: Record<OrderState, AxisView> = {
   expired: { key: "closed", tone: "neutral" },
 };
 
+/** 订阅当前状态 → 服务轴。在用族一律「服务中」，细分（即将到期/宽限期）在订阅卡上看。 */
+const SVC_AXIS_BY_SUBSCRIPTION: Record<string, AxisView> = {
+  active: { key: "active", tone: "success" },
+  trialing: { key: "active", tone: "success" },
+  expiring: { key: "active", tone: "success" },
+  overdue: { key: "active", tone: "success" },
+  suspended: { key: "suspended", tone: "danger" },
+  expired: { key: "terminated", tone: "neutral" },
+  cancelled: { key: "terminated", tone: "neutral" },
+};
+
+/**
+ * 服务状态轴：**订阅说了算**，订单只在还没开通时说话。
+ *
+ * `SVC_AXIS` 单独用是错的——它按订单六态映射，而订单走到 completed 就再也不动了，于是
+ * 退订/暂停/过期之后那一列永远写着「服务中」。2026-09-24 实撞：owner 退订 vxtpl 后，两张
+ * 单（含一张已收款的付费单）都还显示「服务中」，而订阅已经没有了。
+ *
+ * 没有订阅（未履约、已取消的单）时回落到订单轴——那时「服务」还不存在，能回答的只有订单。
+ */
+export function svcAxisFor(
+  orderStatus: OrderState,
+  subscriptionStatus: string | null,
+): AxisView {
+  if (subscriptionStatus) {
+    return (
+      SVC_AXIS_BY_SUBSCRIPTION[subscriptionStatus] ?? SVC_AXIS[orderStatus]
+    );
+  }
+  return SVC_AXIS[orderStatus];
+}
+
 /** 距到期的整天数（向上取整）；无到期（长期有效）→ null。 */
 export function daysLeft(endIso: string | null): number | null {
   if (!endIso) return null;

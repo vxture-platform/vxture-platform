@@ -19,7 +19,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { formatCurrency, type Locale } from "@vxture-platform/shared";
+import {
+  formatCurrency,
+  isTierUpgrade,
+  type Locale,
+} from "@vxture-platform/shared";
 import {
   Banner,
   Button,
@@ -394,6 +398,24 @@ export function SubscribePage() {
     : null;
   const tierMissing = Boolean(targetTier) && tierMatched === null;
 
+  /*
+   * 深链指到一个**不高于当前档**的档位（owner 2026-09-24：「降档完全不允许」）。
+   *
+   * 这是本页最要紧的一道，因为带 `target_tier` 的深链**直接落确认页**、不给二次选择：
+   * 官网 /pricing 的档位 CTA 就是这么进来的，未登录时还会插一段登录，客户回来时看到的
+   * 已经是一张填好的确认单。当时当前档是 Starter、深链带 free，下面那行 orderIntent
+   * 把「在用 + 别的档」一律算成 upgrade（不看方向），服务端 upgrade 分支当时也不判方向
+   * ——于是一张 0 元单就地把付费订阅改写成 Free、周期重置（ORD-202609-63E0E32517）。
+   *
+   * 处置与 `tierMissing` 同一条路：**不预选、退回档位阶梯让人重新挑**，而不是静默换一档。
+   */
+  const tierDowngrade =
+    tierMatched !== null &&
+    current !== null &&
+    currentLiveVersionId !== null &&
+    tierMatched.planCode !== current.planCode &&
+    !isTierUpgrade(current.tier, tierMatched.tier);
+
   // 兜底预选不选当前套餐：同套餐"升级"是付费空操作（服务端同样拒绝）。
   // 阶梯按 TIERS 升序，优先当前档之上的第一档；已是顶档则不预选。
   const fallbackPlan = (() => {
@@ -408,10 +430,11 @@ export function SubscribePage() {
     (pickedVersionId
       ? (plans.find((p) => p.planVersionId === pickedVersionId) ?? null)
       : null) ??
-    tierMatched ??
-    (tierMissing ? null : fallbackPlan);
+    (tierDowngrade ? null : tierMatched) ??
+    (tierMissing || tierDowngrade ? null : fallbackPlan);
 
-  const showTierFallback = (!targetTier || tierMissing) && plans.length > 1;
+  const showTierFallback =
+    (!targetTier || tierMissing || tierDowngrade) && plans.length > 1;
   /*
    * 选中的就是在用套餐 → 走「续订」（延长周期）。
    *
@@ -424,6 +447,18 @@ export function SubscribePage() {
     current !== null &&
     currentLiveVersionId !== null &&
     plan.planCode === current.planCode;
+
+  /*
+   * 最终选中的那一档是不是降档。上面 `tierDowngrade` 只管深链带来的那一档；这一条管
+   * **用户自己从阶梯里挑**的，两者都要挡——服务端是主闸门（409 NOT_AN_UPGRADE），
+   * 这里挡的是「让人点下去再被拒」这件事本身。
+   */
+  const selectedIsDowngrade =
+    plan !== null &&
+    current !== null &&
+    currentLiveVersionId !== null &&
+    plan.planCode !== current.planCode &&
+    !isTierUpgrade(current.tier, plan.tier);
 
   const isEnterprise = plan !== null && plan.prices.length === 0;
   const price = plan ? priceForCycle(plan, cycle) : undefined;
@@ -450,6 +485,8 @@ export function SubscribePage() {
 
   const onSubmit = async () => {
     if (!plan || isEnterprise || !price) return;
+    /* 降档不下单（owner 2026-09-24）。按钮已禁用，这一行是它被绕过时的那道。 */
+    if (selectedIsDowngrade) return;
     setBusy(true);
     setError(null);
     try {
@@ -532,17 +569,46 @@ export function SubscribePage() {
             {/* 「返回订阅重选」已去掉（owner 2026-09-03）：本页是从官网定价页 newtab 进来的，
                 定价页本来就还开着；而且 NEXT_PUBLIC_WEBSITE_URL 未注入时链接会落到 console 自己的
                 /pricing（404，线上实测）。要重选直接回官网那一页。 */}
-            {plan ? (
-              <PlanSummaryCard
-                productName={product.name}
-                plan={plan}
-                note={planNote}
+            {/*
+             * 降档的两种到法各有各的话要说：
+             *   · 深链指到不高于当前档的那一档 → 这里不出确认卡，改出提示 + 下方阶梯，
+             *     人在**同一页**重新挑一个更高的档（owner 2026-09-24：「返回到订阅选择
+             *     页面，让用户重新选择升级」）；
+             *   · 人自己从阶梯里挑了降档 → 确认卡照出（他要看清自己挑了什么），但按提示
+             *     + 禁用提交拦住。
+             */}
+            {tierDowngrade && current ? (
+              <Banner
+                tone="warning"
+                title={t("confirm.downgradeBlocked", {
+                  current: current.tier ?? current.planCode,
+                })}
+                description={t("confirm.downgradeHint")}
               />
-            ) : plans.length > 0 ? (
+            ) : null}
+            {plan ? (
+              <>
+                <PlanSummaryCard
+                  productName={product.name}
+                  plan={plan}
+                  note={planNote}
+                />
+                {selectedIsDowngrade && current ? (
+                  <Banner
+                    className="mt-sm"
+                    tone="warning"
+                    title={t("confirm.downgradeBlocked", {
+                      current: current.tier ?? current.planCode,
+                    })}
+                    description={t("confirm.downgradeHint")}
+                  />
+                ) : null}
+              </>
+            ) : plans.length > 0 && !tierDowngrade ? (
               <Banner tone="warning" title={t("confirm.tierUnavailable")} />
-            ) : (
+            ) : plans.length === 0 ? (
               <EmptyState title={t("noPlans")} />
-            )}
+            ) : null}
             {showTierFallback && plans.length > 0 ? (
               <div className="flex flex-wrap items-center gap-sm">
                 <span className="text-body-sm text-muted-foreground">
@@ -767,7 +833,7 @@ export function SubscribePage() {
                     </div>
                     <Button
                       size="xl"
-                      disabled={busy || !price}
+                      disabled={busy || !price || selectedIsDowngrade}
                       onClick={() => void onSubmit()}
                       className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
                     >

@@ -530,6 +530,15 @@ export class PgOrderRepository {
    *   套餐已退役          → 不能续（退役的语义是服务到本周期为止，不再续）
    *   目标不是当前版      → 不许续到一个陈旧版本上去
    */
+  /**
+   * 换档/续订的目标解析。**同时回两边的档位**（2026-09-24）：`upgrade` 必须判方向，
+   * 而判方向需要「从哪一档到哪一档」——此前这里只回「是不是同一个套餐」，于是
+   * Starter → Free 也算换档、也就当成了升级。
+   *
+   * 两个 `plan_components` 走 LEFT JOIN：缺组件行不该让整条查询回 0 行——那会把
+   * 「这个套餐没有 primary 组件」说成「套餐版本不存在」，指向完全错误的方向。
+   * 拿不到档位时回 null，由 service 按**拒绝**处理（比不出高低就不能放行）。
+   */
   async resolveRenewTarget(
     fromPlanVersionId: string,
     toPlanVersionId: string,
@@ -538,20 +547,32 @@ export class PgOrderRepository {
     toIsCurrent: boolean;
     toPlanStatus: string;
     toPlanCode: string;
+    fromTier: string | null;
+    toTier: string | null;
   } | null> {
     const res = await this.pool.query<{
       same_plan: boolean;
       to_is_current: boolean;
       to_plan_status: string;
       to_plan_code: string;
+      from_tier: string | null;
+      to_tier: string | null;
     }>(
       `select (pv_from.plan_id = pv_to.plan_id)      as same_plan,
               (pl_to.current_version_id = pv_to.id)  as to_is_current,
               pl_to.status                           as to_plan_status,
-              pl_to.plan_code                        as to_plan_code
+              pl_to.plan_code                        as to_plan_code,
+              pc_from.tier                           as from_tier,
+              pc_to.tier                             as to_tier
          from product.plan_versions pv_from
          cross join product.plan_versions pv_to
          join product.plans pl_to on pl_to.id = pv_to.plan_id
+         left join product.plan_components pc_from
+           on pc_from.plan_version_id = pv_from.id
+          and pc_from.component_role = 'primary'
+         left join product.plan_components pc_to
+           on pc_to.plan_version_id = pv_to.id
+          and pc_to.component_role = 'primary'
         where pv_from.id = $1 and pv_to.id = $2`,
       [fromPlanVersionId, toPlanVersionId],
     );
@@ -561,6 +582,8 @@ export class PgOrderRepository {
           toIsCurrent: res.rows[0].to_is_current,
           toPlanStatus: res.rows[0].to_plan_status,
           toPlanCode: res.rows[0].to_plan_code,
+          fromTier: res.rows[0].from_tier,
+          toTier: res.rows[0].to_tier,
         }
       : null;
   }

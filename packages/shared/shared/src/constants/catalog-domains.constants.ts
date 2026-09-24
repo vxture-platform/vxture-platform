@@ -26,6 +26,36 @@ export const TIERS = [
 ] as const;
 export type Tier = (typeof TIERS)[number];
 
+/**
+ * 档位的**高低序**。`TIERS` 本身就是「低 → 高」排的，但在 2026-09-24 之前**全仓没有
+ * 任何消费方**——序摆在那里，没人拿它比过大小。代价是真实的：换档只判「是不是同一个
+ * 套餐」，不判方向，于是一张 0 元 Free 单被当作「升级」，就地把付费 Starter 订阅改写
+ * 成 Free、周期重置，`cashDue=0` 即时结清，全程不报错（生产实撞，ORD-202609-63E0E32517）。
+ *
+ * 不在 `TIERS` 里的值（含 null / 空 / 历史脏值）返回 `-1`，由调用方**按拒绝处理**——
+ * 比不出高低时放行等于没有这道判定，而这道判定管的是钱。
+ */
+export function tierRank(tier: string | null | undefined): number {
+  if (!tier) return -1;
+  return (TIERS as readonly string[]).indexOf(tier);
+}
+
+/**
+ * 从 `from` 换到 `to` 是不是**升档**。
+ *
+ * 两边都必须是已知档位；任一不可比即 false（fail closed）。同档也是 false——同档延长
+ * 周期是续订，不是升级（服务端另有一条 `samePlan` 判定）。
+ */
+export function isTierUpgrade(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): boolean {
+  const a = tierRank(from);
+  const b = tierRank(to);
+  if (a < 0 || b < 0) return false;
+  return b > a;
+}
+
 /** Plan component role (product_220 §2). primary sells a tier; bundled = backing. */
 export const COMPONENT_ROLES = ["primary", "bundled"] as const;
 export type ComponentRole = (typeof COMPONENT_ROLES)[number];

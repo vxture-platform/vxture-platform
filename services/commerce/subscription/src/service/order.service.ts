@@ -40,6 +40,8 @@ import {
   daysLeftOf,
   type ProrationResult,
 } from "../money/proration";
+/* 档位高低序的唯一判据，与值域同处一份（见该文件头注）。 */
+import { isTierUpgrade, tierRank } from "@vxture-platform/shared";
 import type {
   CreateOrderInput,
   CreateOrderResult,
@@ -213,6 +215,38 @@ export class OrderService {
           throw new ConflictException(
             "已是该套餐，延长周期请使用续订（换档才是升级）",
           );
+        }
+        /*
+         * **方向判定**（owner 2026-09-24：「降档完全不允许」）。
+         *
+         * 在此之前 upgrade 只判两件事：原订阅在用、目标套餐不同。**从不比较档位高低**，
+         * 而客户端算 intent 的那一行是「在用且选了别的档 → upgrade」，同样不看方向。
+         * 两处都不判，后果在生产上实撞（ORD-202609-63E0E32517）：一张 0 元 Free 单被当作
+         * 升级，就地把付费 Starter 订阅改写成 Free、周期重置为下单日起算，`cashDue=0`
+         * 即时结清，全程零报错。档位并存守卫（assertTierAvailable）也救不了——它只长在
+         * `intent=new` 分支上，这条路根本走不到它。
+         *
+         * 判据是 shared 的 `TIERS` 序（低 → 高）。那个序早就在仓里，**直到这里才第一次
+         * 有消费方**。
+         *
+         * **比不出高低就拒**：任一侧的 tier 为空或不在值域内（历史脏值、缺 primary 组件）
+         * 都当拒绝。放行等于没有这道判定，而它管的是钱。两种情形给不同语义码，前端据此
+         * 决定是「退回选择页让你重新挑」还是「这个套餐配置有问题」。
+         */
+        if (tierRank(target.fromTier) < 0 || tierRank(target.toTier) < 0) {
+          throw new ConflictException({
+            code: "TIER_NOT_COMPARABLE",
+            message:
+              "无法判断档位高低（套餐未登记档位），请联系我们处理后再变更",
+          });
+        }
+        if (!isTierUpgrade(target.fromTier, target.toTier)) {
+          throw new ConflictException({
+            code: "NOT_AN_UPGRADE",
+            message:
+              `不支持降档：当前 ${target.fromTier}，所选 ${target.toTier}。` +
+              `请重新选择更高的档位；如需降档，请让当前订阅到期后再改选。`,
+          });
         }
       } else {
         if (!RENEWABLE.has(from.status)) {
