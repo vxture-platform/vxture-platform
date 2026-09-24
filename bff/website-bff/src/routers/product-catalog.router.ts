@@ -70,15 +70,17 @@ const PUBLIC_INDUSTRY_REWRITE: Readonly<Record<string, string>> = {
  * 在调用处分流而不是在这里 `?? null`，是为了让 falsy 的线上形态一个字都不变。
  */
 function sanitizeMarketing(m: MarketingContent): MarketingContent {
-  const fix = (
-    loc: MarketingLocale | undefined,
-  ): MarketingLocale | undefined => {
-    if (!loc?.industries) return loc;
-    return {
-      ...loc,
-      industries: loc.industries.map((i) => PUBLIC_INDUSTRY_REWRITE[i] ?? i),
-    };
-  };
+  /* 只在调用处判过真值后才进来，所以入参与回值都是非可选的——回 `| undefined` 会让
+     `{ zh: fix(m.zh) }` 在 exactOptionalPropertyTypes 下不合法（CI 的 type-check 实测）。 */
+  const fix = (loc: MarketingLocale): MarketingLocale =>
+    loc.industries
+      ? {
+          ...loc,
+          industries: loc.industries.map(
+            (i) => PUBLIC_INDUSTRY_REWRITE[i] ?? i,
+          ),
+        }
+      : loc;
   return {
     ...m,
     ...(m.zh ? { zh: fix(m.zh) } : {}),
