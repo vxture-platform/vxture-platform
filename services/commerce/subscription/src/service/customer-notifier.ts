@@ -27,7 +27,16 @@ export type CustomerNotificationTemplate =
      客户点的是「退订」，想知道的是「我的钱怎么样了」。见 dispatch/templates.ts。 */
   | "subscription.cancelled_refunded"
   | "subscription.cancelled_no_charge"
-  | "subscription.cancelled_no_refund";
+  | "subscription.cancelled_no_refund"
+  /* 2026-09-25 状态机定稿（批 2）：五条「事情发生了但没人告诉客户」。overdue 是新接上的
+     「欠费宽限」那一档；suspended / resumed 是运营冻结与恢复；payment_rejected 此前只有
+     付款页横幅；restored 是运营把关掉的单救回来。**这张联合是 dispatch/templates.ts 那
+     张的第二份**——加模板要同时改两处，少改一处这边编译不过（这是好事）。 */
+  | "subscription.overdue"
+  | "subscription.suspended"
+  | "subscription.resumed"
+  | "order.payment_rejected"
+  | "order.restored";
 
 export interface CustomerNotifyInput {
   tenantId: string;

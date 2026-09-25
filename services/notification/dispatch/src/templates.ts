@@ -39,7 +39,20 @@ export type NotificationTemplateCode =
      是后续的事——那时这三条不用动，变的是金额与 refunded 那条的文案参数。 */
   | "subscription.cancelled_refunded"
   | "subscription.cancelled_no_charge"
-  | "subscription.cancelled_no_refund";
+  | "subscription.cancelled_no_refund"
+  /* 2026-09-25 状态机定稿（批 2）补的六条，全是「事情发生了但没人告诉客户」：
+       subscription.overdue        → 新接上的「欠费宽限」这一档（服务还在、钱没到）
+       subscription.suspended/resumed → 运营冻结与恢复，此前客户服务被停了不知为何
+       order.payment_rejected      → 申报被驳回，此前只有付款页横幅，客户不回那页就不知道
+       order.restored              → 运营把关掉的单救回来，客户不知道还能去付
+     本来还想补 refund.failed，撤了：`refunds.refund_status` 的 `failed` 与 `processing`
+     **全仓零写入方**——退款执行没有失败路径，缺的不是一条通知而是一个状态转移。等那条
+     路补上时再连着模板一起加；先加模板就又是一处「做了没接」。 */
+  | "subscription.overdue"
+  | "subscription.suspended"
+  | "subscription.resumed"
+  | "order.payment_rejected"
+  | "order.restored";
 
 export type NotificationReferenceType =
   | "subscription"
@@ -95,6 +108,11 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "subscription.cancelled_no_charge": "已退订：{{productName}} {{planName}}",
   "subscription.cancelled_no_refund":
     "已退订，本单不退款：{{productName}} {{planName}}",
+  "subscription.overdue": "订阅已进入宽限期：{{productName}} {{planName}}",
+  "subscription.suspended": "订阅已暂停：{{productName}} {{planName}}",
+  "subscription.resumed": "订阅已恢复：{{productName}} {{planName}}",
+  "order.payment_rejected": "付款信息未通过核对：订单 {{orderNo}}",
+  "order.restored": "订单已恢复：{{orderNo}}",
 };
 
 const BODIES_ZH: Record<NotificationTemplateCode, string> = {
@@ -135,6 +153,18 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
     "服务已停止。订单 {{orderNo}} 实付 {{amount}}，无需退款。",
   "subscription.cancelled_no_refund":
     "服务已停止。订单 {{orderNo}} 已超过 24 小时退款窗口，本单不退款。",
+  /* 宽限期这条先说「服务仍在运行」——客户看到「宽限期」最先担心的是服务是不是已经停了。
+     再给截止时间与后果，不写「请尽快」这类催促。 */
+  "subscription.overdue":
+    "续费订单尚未付款，服务仍在运行。请在 {{payBy}} 前完成付款；超过该时间服务停止。",
+  "subscription.suspended":
+    "服务已暂停，暂停期间无法使用。如需恢复请联系客服。",
+  "subscription.resumed": "服务已恢复，有效期至 {{endAt}}。",
+  /* 与付款页横幅同一口径（那句话客户可能已经在页面上见过一次，两处不许各写各的）。 */
+  "order.payment_rejected":
+    "原因：{{reason}}。券与折扣已释放，可重新申报付款或取消订单，付款倒计时已重置。",
+  "order.restored":
+    "订单 {{orderNo}}（{{productName}}）已重新开放付款，应付 {{amount}}。",
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -160,6 +190,12 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "subscription.cancelled_no_charge": "Cancelled: {{productName}} {{planName}}",
   "subscription.cancelled_no_refund":
     "Cancelled, no refund for this order: {{productName}} {{planName}}",
+  "subscription.overdue":
+    "Subscription in grace period: {{productName}} {{planName}}",
+  "subscription.suspended": "Subscription paused: {{productName}} {{planName}}",
+  "subscription.resumed": "Subscription resumed: {{productName}} {{planName}}",
+  "order.payment_rejected": "Payment details not confirmed: order {{orderNo}}",
+  "order.restored": "Order reopened: {{orderNo}}",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -196,6 +232,15 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "Access has stopped. Order {{orderNo}} was paid {{amount}}, so there is nothing to refund.",
   "subscription.cancelled_no_refund":
     "Access has stopped. Order {{orderNo}} is past the 24-hour refund window, so this order is not refunded.",
+  "subscription.overdue":
+    "The renewal order is unpaid and your service is still running. Please pay by {{payBy}}; after that the service stops.",
+  "subscription.suspended":
+    "Access is paused and cannot be used while paused. Contact support to have it resumed.",
+  "subscription.resumed": "Access has resumed, valid until {{endAt}}.",
+  "order.payment_rejected":
+    "Reason: {{reason}}. Vouchers and discounts have been released; you can declare payment again or cancel the order, and the payment countdown has been reset.",
+  "order.restored":
+    "Order {{orderNo}} ({{productName}}) is open for payment again, {{amount}} due.",
 };
 
 const FOOTER: Record<NotificationLocale, string> = {
@@ -250,6 +295,14 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "subscription.cancelled_refunded": "subscription_expiry",
   "subscription.cancelled_no_charge": "subscription_expiry",
   "subscription.cancelled_no_refund": "subscription_expiry",
+  /* 欠费宽限归 payment_due 而不是 subscription_expiry：客户此刻要做的事是去付那张续费
+     单，「订阅还在不在」这个问题它的答案是「还在」。暂停 / 恢复才是那个主题——服务在
+     不在，是它们唯一回答的事。 */
+  "subscription.overdue": "payment_due",
+  "subscription.suspended": "subscription_expiry",
+  "subscription.resumed": "subscription_expiry",
+  "order.payment_rejected": "order_status",
+  "order.restored": "order_status",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {

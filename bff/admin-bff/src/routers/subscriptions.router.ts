@@ -36,10 +36,17 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import type { SubscriptionService } from "@vxture/service-subscription";
 import type { ComponentRole } from "@vxture-platform/shared";
 import { extractClientIp, industryLabel } from "@vxture/core-utils";
 import { assertAnyCapability } from "../auth/capability";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
+/*
+ * `ADMIN_SUBSCRIPTION_SERVICE` 早就 provide 了、连 setCustomerNotifier 都调过，此前
+ * **没有任何 router 注入它**（只被 ADMIN_ORDER_SERVICE 的工厂当依赖用）——本仓最常见的
+ * 那种「做了没接」。本批只借它发冻结 / 恢复通知；写路径归一见文件里那段已知缺口注释。
+ */
+import { ADMIN_SUBSCRIPTION_SERVICE } from "../providers/commerce-services.provider";
 import { UUID_RE } from "./governance.shared";
 import type {
   ProductSolutionCapabilityType,
@@ -79,6 +86,8 @@ export class SubscriptionsRouter {
   constructor(
     @Inject(ADMIN_BFF_RO_POOL) private readonly pool: Pool,
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Inject(ADMIN_SUBSCRIPTION_SERVICE)
+    private readonly subscriptions: SubscriptionService,
   ) {}
 
   /**
@@ -174,6 +183,10 @@ export class SubscriptionsRouter {
     const clientIp = extractClientIp(req);
     const subscriptionId = await this.resolveSubscriptionId(id);
 
+    // 提交成功后要发的那条通知（冻结 / 恢复）。在事务外发：通知发不出去不该回滚一次
+    // 已经生效的运营动作，而事务里也没有它的位置（notify 会打网络）。
+    let notify: "suspended" | "resumed" | null = null;
+
     const client = await this.rwPool.connect();
     try {
       await client.query("begin");
@@ -209,6 +222,13 @@ export class SubscriptionsRouter {
 
       await client.query("commit");
 
+      // 冻结 / 恢复通知（2026-09-25，批 2）：此前客户服务被停了不知为何、恢复了也不知道。
+      // 只认真正发生了状态变化的那一次（幂等重放时 fromStatus === toStatus，不再发）。
+      if (fromStatus !== toStatus) {
+        if (toStatus === "suspended") notify = "suspended";
+        else if (action === "resume") notify = "resumed";
+      }
+
       /*
        * **已知缺口（2026-09-25）：运营在这里退订，不会走退款、也不会发消息。**
        *
@@ -231,6 +251,13 @@ export class SubscriptionsRouter {
       throw e;
     } finally {
       client.release();
+    }
+
+    if (notify) {
+      await this.subscriptions.notifyOperatorStatusChange(
+        subscriptionId,
+        notify,
+      );
     }
 
     return this.loadSubscriptionDetail(subscriptionId);

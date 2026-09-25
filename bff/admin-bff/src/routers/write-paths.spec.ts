@@ -78,6 +78,19 @@ function makeTxClient(responder?: Responder) {
   return { pool, client, calls, release, connect, outcome };
 }
 
+/**
+ * 假订阅服务：本 spec 只钉写路径的前置校验与事务收尾，通知是提交之后的事。
+ * 用 `vi.fn()` 而不是 `undefined as never`——这样「什么情况下该发、什么情况下不该发」
+ * 也能在这里断言（见下面 suspend 那两条）。
+ */
+function stubSubscriptions() {
+  return {
+    notifyOperatorStatusChange: vi.fn(async () => undefined),
+  } as unknown as ConstructorParameters<typeof SubscriptionsRouter>[2] & {
+    notifyOperatorStatusChange: ReturnType<typeof vi.fn>;
+  };
+}
+
 /** RO pool that must not be reached (all read-back methods are stubbed in tests). */
 function dummyRoPool(): Pool {
   return {
@@ -93,7 +106,11 @@ describe("subscriptions runSubscriptionAction", () => {
 
   it("rejects a caller without subscription.manage before any DB access", async () => {
     const rw = noDbPool();
-    const router = new SubscriptionsRouter(noDbPool().pool, rw.pool);
+    const router = new SubscriptionsRouter(
+      noDbPool().pool,
+      rw.pool,
+      stubSubscriptions(),
+    );
     await expect(
       router.runSubscriptionAction(
         makeReq(["commerce:subscription.read"]),
@@ -108,7 +125,11 @@ describe("subscriptions runSubscriptionAction", () => {
 
   it("rejects an unknown action before any DB access", async () => {
     const rw = noDbPool();
-    const router = new SubscriptionsRouter(noDbPool().pool, rw.pool);
+    const router = new SubscriptionsRouter(
+      noDbPool().pool,
+      rw.pool,
+      stubSubscriptions(),
+    );
     await expect(
       router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
         action: "explode" as never,
@@ -119,7 +140,11 @@ describe("subscriptions runSubscriptionAction", () => {
 
   it("404 + rollback + release when the subscription is missing", async () => {
     const tx = makeTxClient(() => []); // lock returns no row
-    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool);
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      stubSubscriptions(),
+    );
     await expect(
       router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
         action: "suspend",
@@ -145,7 +170,11 @@ describe("subscriptions runSubscriptionAction", () => {
           ? [{ status, tenant_id: UUID_A, end_at: null }]
           : undefined,
       );
-      const router = new SubscriptionsRouter(dummyRoPool(), tx.pool);
+      const router = new SubscriptionsRouter(
+        dummyRoPool(),
+        tx.pool,
+        stubSubscriptions(),
+      );
       await expect(
         router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
           action: action as never,
@@ -164,7 +193,8 @@ describe("subscriptions runSubscriptionAction", () => {
         ? [{ status: "active", tenant_id: UUID_A, end_at: null }]
         : undefined,
     );
-    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool);
+    const subs = stubSubscriptions();
+    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool, subs);
     (
       router as unknown as { loadSubscriptionDetail: unknown }
     ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
@@ -176,6 +206,52 @@ describe("subscriptions runSubscriptionAction", () => {
     expect(o.committed).toBe(true);
     expect(o.rolledBack).toBe(false);
     expect(o.released).toBe(true);
+    // 2026-09-25：冻结要告诉客户（此前服务被停了，客户不知道为什么、不知道找谁）。
+    expect(subs.notifyOperatorStatusChange).toHaveBeenCalledWith(
+      UUID_A,
+      "suspended",
+    );
+  });
+
+  it("续订不发冻结 / 恢复通知——状态没往那两档走", async () => {
+    const tx = makeTxClient((s) =>
+      s.includes("for update")
+        ? [{ status: "active", tenant_id: UUID_A, end_at: null }]
+        : undefined,
+    );
+    const subs = stubSubscriptions();
+    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool, subs);
+    (
+      router as unknown as { loadSubscriptionDetail: unknown }
+    ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
+
+    await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+      action: "renew",
+    });
+    // renew 把状态置回 active：本来就是 active，没有变化 ⇒ 一条通知都不该发。
+    // 这一条钉的是「幂等重放不打扰客户」，也顺带钉住别把 renew 误判成 resume。
+    expect(subs.notifyOperatorStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("恢复要告诉客户（suspended → active 走 resumed 那条）", async () => {
+    const tx = makeTxClient((s) =>
+      s.includes("for update")
+        ? [{ status: "suspended", tenant_id: UUID_A, end_at: null }]
+        : undefined,
+    );
+    const subs = stubSubscriptions();
+    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool, subs);
+    (
+      router as unknown as { loadSubscriptionDetail: unknown }
+    ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
+
+    await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+      action: "resume",
+    });
+    expect(subs.notifyOperatorStatusChange).toHaveBeenCalledWith(
+      UUID_A,
+      "resumed",
+    );
   });
 });
 

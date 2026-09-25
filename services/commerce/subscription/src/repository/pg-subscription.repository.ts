@@ -56,6 +56,8 @@ interface NotifyDisplayRow {
   end_at: Date | null;
   product_name: string | null;
   plan_name: string | null;
+  /** 读到这一行时的状态，给 CAS 用（expectedStatus）。 */
+  status: string;
 }
 
 export interface NotifyDisplay {
@@ -64,9 +66,14 @@ export interface NotifyDisplay {
   endAt: Date | null;
   productName: string;
   planName: string;
+  /**
+   * 读到这一行时的状态。扫描类调用要拿它当 CAS 的 expectedStatus——一趟扫描到真正下笔
+   * 之间有时间差，输了竞态的那一方必须 0 行 no-op，而不是把赢的那一方盖掉。
+   */
+  status: string;
 }
 
-const NOTIFY_DISPLAY_SELECT = `select s.id, s.tenant_id, s.end_at, pl.plan_name, pr.product_name
+const NOTIFY_DISPLAY_SELECT = `select s.id, s.tenant_id, s.end_at, s.status, pl.plan_name, pr.product_name
          from metering.subscriptions s
          join product.plan_versions pv on pv.id = s.plan_version_id
          join product.plans pl on pl.id = pv.plan_id
@@ -79,6 +86,7 @@ function toNotifyDisplay(r: NotifyDisplayRow): NotifyDisplay {
     endAt: r.end_at,
     productName: r.product_name ?? "—",
     planName: r.plan_name ?? "—",
+    status: r.status,
   };
 }
 
@@ -520,19 +528,69 @@ export class PgSubscriptionRepository {
    */
   async findExpiredSubscriptionIds(
     limit: number,
+    graceDays: number,
   ): Promise<{ id: string; status: string }[]> {
     const result = await this.pool.query<{ id: string; status: string }>(
-      `select id, status from metering.subscriptions
-        where subscription_kind <> 'trial'
-          and status in ('active', 'expiring', 'overdue')
-          and end_at is not null
-          and end_at <= now()
-          and deleted_at is null
-        order by end_at asc
+      `select s.id, s.status from metering.subscriptions s
+        where s.subscription_kind <> 'trial'
+          -- 'suspended' 是 2026-09-25 补的。此前只扫在用三态，于是被运营冻结的订阅
+          -- end_at 过了也没有任何人动它——永不到期、永不释放，也永不再计费。这一条不
+          -- 改 end_at（冻结期间是否顺延是另一个待裁定的题），只让它能走到终点。
+          and s.status in ('active', 'expiring', 'overdue', 'suspended')
+          and s.end_at is not null
+          and s.end_at <= now()
+          and s.deleted_at is null
+          -- 宽限期内不收口：自动续费开着、续费单还在途、且还没过 end_at + 宽限的行，
+          -- 归 overdue 那一档管（S8/S11）。少这一条，到期扫描会在 end_at 当天就把行
+          -- 扫成 expired，于是「续费单还能付、服务已经终止」——客户付了钱没服务。
+          -- 宽限天数与续费单 TTL 读同一个 env（作业里一处取值传两处），不得各算各的。
+          and not (
+            s.auto_renew
+            and s.end_at + make_interval(days => $2) >= now()
+            and exists (
+              select 1 from billing.orders o
+               where o.from_subscription_id = s.id
+                 and o.intent = 'renew'
+                 and o.status in ('pending_payment', 'pending_verify', 'paid')
+            )
+          )
+        order by s.end_at asc
         limit $1`,
-      [limit],
+      [limit, graceDays],
     );
     return result.rows;
+  }
+
+  /**
+   * 欠费宽限候选（S8）：自动续费开着、周期已过但还在宽限里、续费单在途未付。
+   *
+   * 与 findExpiredSubscriptionIds 的排除条件是同一个谓词的两面——那边排除的正是这边
+   * 收下的，所以两处必须收同一个 graceDays。带展示名与当前状态（CAS 用）。
+   */
+  async findOverdueCandidates(
+    graceDays: number,
+    limit: number,
+  ): Promise<NotifyDisplay[]> {
+    const result = await this.pool.query<NotifyDisplayRow>(
+      `${NOTIFY_DISPLAY_SELECT}
+        where s.auto_renew
+          and s.deleted_at is null
+          and s.subscription_kind <> 'trial'
+          and s.status in ('active', 'expiring')
+          and s.end_at is not null
+          and s.end_at <= now()
+          and s.end_at + make_interval(days => $1) >= now()
+          and exists (
+            select 1 from billing.orders o
+             where o.from_subscription_id = s.id
+               and o.intent = 'renew'
+               and o.status in ('pending_payment', 'pending_verify', 'paid')
+          )
+        order by s.end_at asc
+        limit $2`,
+      [graceDays, limit],
+    );
+    return result.rows.map(toNotifyDisplay);
   }
 
   /**
@@ -542,15 +600,7 @@ export class PgSubscriptionRepository {
   async findExpiringSoon(
     leadDays: number,
     limit: number,
-  ): Promise<
-    {
-      id: string;
-      tenantId: string;
-      endAt: Date;
-      productName: string;
-      planName: string;
-    }[]
-  > {
+  ): Promise<(NotifyDisplay & { endAt: Date })[]> {
     const result = await this.pool.query<NotifyDisplayRow>(
       `${NOTIFY_DISPLAY_SELECT}
         where s.auto_renew = false

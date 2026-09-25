@@ -69,28 +69,6 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * 到期前提醒（P2-g）：自动续费关着、leadDays 内到期的在用非试用订阅——站内 + 邮件。
-   * 去重由 dispatcher 按 (收件人, 模板, 订阅:到期日) 做；作业每分钟重跑只会碰唯一键。
-   * 返回本趟真正交给 notifier 的条数（不含未注入 / 失败）。
-   */
-  async notifyExpiringSoon(leadDays: number, limit = 200): Promise<number> {
-    if (!this.notifier) return 0;
-    const rows = await this.repo.findExpiringSoon(leadDays, limit);
-    let sent = 0;
-    for (const r of rows) {
-      const days = Math.max(
-        0,
-        Math.ceil((r.endAt.getTime() - Date.now()) / 86_400_000),
-      );
-      const ok = await this.emit(`expiring_soon ${r.id}`, async () =>
-        this.subscriptionNotice("subscription.expiring_soon", r, { days }),
-      );
-      if (ok) sent += 1;
-    }
-    return sent;
-  }
-
   /** 订阅生命周期通知的共同形状：引用 = 订阅 × 到期日（去重键），链接去「我的订阅」。 */
   private subscriptionNotice(
     templateCode: CustomerNotifyInput["templateCode"],
@@ -370,8 +348,8 @@ export class SubscriptionService {
     rows: { id: string; status: string }[],
     label: string,
     remark: string,
-  ): Promise<string[]> {
-    const transitioned: string[] = [];
+  ): Promise<{ id: string; from: string }[]> {
+    const transitioned: { id: string; from: string }[] = [];
     for (const { id, status } of rows) {
       try {
         const before = await this.getSubscription(id);
@@ -389,7 +367,8 @@ export class SubscriptionService {
           continue;
         }
         await this.applyTransitionHooks(`sweep:${id}`, id, before, result);
-        transitioned.push(id);
+        // 带上「从哪一档来的」：调用方要按它决定通知发不发（冻结中到期不发）。
+        transitioned.push({ id, from: status });
       } catch (err) {
         this.logger.error(
           `${label}: subscription ${id} failed to transition — ${String(err)}`,
@@ -405,21 +384,158 @@ export class SubscriptionService {
    * CAS：expectedStatus = 读到的当前状态，与并发的续订履约（updateSubscription 延长
    * end_at / 复活）互不清 clobber——输了的一方 0 行 no-op。
    */
-  async sweepExpiredSubscriptions(limit = 100): Promise<number> {
-    const rows = await this.repo.findExpiredSubscriptionIds(limit);
+  async sweepExpiredSubscriptions(limit = 100, graceDays = 0): Promise<number> {
+    const rows = await this.repo.findExpiredSubscriptionIds(limit, graceDays);
     const expired = await this.sweepToExpired(
       rows,
       "expiry sweep",
       "cycle ended without renewal (expiry sweep)",
     );
     // P2-g：到期通知（站内 + 邮件），按订阅 × 到期日去重；付款履约复活后再到期会再通知。
-    for (const id of expired) {
+    for (const { id, from } of expired) {
+      // 冻结中到期不通知（2026-09-25）：服务在被暂停那一刻就停了，客户已经知道。此刻再
+      // 发一封「订阅已到期」只会让人以为又出了新状况。留 histories 就够，那是给运营看的。
+      // 这条也是 suspended 进扫描集合的前提——否则存量里所有过期的冻结行会在第一趟之后
+      // 一次性把邮件发出去。
+      if (from === "suspended") continue;
       await this.emit(`expired ${id}`, async () => {
         const d = await this.repo.getNotifyDisplay(id);
         return d ? this.subscriptionNotice("subscription.expired", d) : null;
       });
     }
     return expired.length;
+  }
+
+  /**
+   * 「即将到期」这一档的写入方（S6，2026-09-25 补）。
+   *
+   * 到期提醒的邮件一直在发，**状态却从来没人写**：`expiring` 在值域里、被多处查询读，
+   * 全仓零写入方。客户收到一封信，回到页面上看到的还是「服务中」。
+   *
+   * 不新建作业也不新写谓词：`findExpiringSoon` 的条件本来就是这一档的闸门（自动续费
+   * 关着 + 非试用 + 非永久 + leadDays 内到期）。只从 `active` CAS 过去——`overdue` 是更强
+   * 的陈述（钱已经晚了），不能被这一档盖掉；已是 `expiring` 的行 CAS 不命中，天然幂等。
+   *
+   * 返回 { notified, marked }：通知条数与真正改了状态的条数不是一回事（窗口内每趟都会
+   * 扫到同一批行，通知靠 dispatcher 按订阅 × 到期日去重，状态则只在第一趟改一次）。
+   */
+  async notifyExpiringSoon(
+    leadDays: number,
+    limit = 200,
+  ): Promise<{ notified: number; marked: number }> {
+    if (!this.notifier) return { notified: 0, marked: 0 };
+    const rows = await this.repo.findExpiringSoon(leadDays, limit);
+    let notified = 0;
+    let marked = 0;
+    for (const r of rows) {
+      const days = Math.max(
+        0,
+        Math.ceil((r.endAt.getTime() - Date.now()) / 86_400_000),
+      );
+      const ok = await this.emit(`expiring_soon ${r.id}`, async () =>
+        this.subscriptionNotice("subscription.expiring_soon", r, { days }),
+      );
+      if (ok) notified += 1;
+      if (r.status === "active" && (await this.markExpiring(r.id))) marked += 1;
+    }
+    return { notified, marked };
+  }
+
+  /**
+   * 运营冻结 / 恢复的通知（2026-09-25）。
+   *
+   * 这两个动作今天走的是 admin-bff 里那条裸 SQL 事务（`subscriptions.router`），不经本
+   * service，所以拿不到 `updateSubscription` 的写完成尾。客户那边的后果是：服务被停了，
+   * 不知道为什么、不知道找谁；恢复了也不知道。这里只补「告诉客户」那一半——事务提交后
+   * 调用，发不出去只记日志。
+   *
+   * 把那条写路径整体搬进 service（顺带拿到 transition hooks 与退订结算）是批 4 的事：
+   * 那一批必须动它，改动与风险才配得上。
+   */
+  async notifyOperatorStatusChange(
+    subscriptionId: string,
+    action: "suspended" | "resumed",
+  ): Promise<void> {
+    await this.emit(`${action} ${subscriptionId}`, async () => {
+      const d = await this.repo.getNotifyDisplay(subscriptionId);
+      if (!d) return null;
+      return this.subscriptionNotice(
+        action === "suspended"
+          ? "subscription.suspended"
+          : "subscription.resumed",
+        d,
+      );
+    });
+  }
+
+  /** active → expiring 的单行 CAS；输了竞态返回 false，不抛。 */
+  private async markExpiring(id: string): Promise<boolean> {
+    try {
+      const before = await this.getSubscription(id);
+      if (before.status !== "active") return false;
+      const result = await this.repo.update(id, before, {
+        status: "expiring",
+        operatorType: "system",
+        operatorRemark: "entered expiry notice window (renewal reminder pass)",
+        expectedStatus: "active",
+      });
+      if (!result) return false;
+      await this.applyTransitionHooks(`expiring:${id}`, id, before, result);
+      return true;
+    } catch (err) {
+      this.logger.error(`mark expiring: ${id} failed — ${String(err)}`);
+      return false;
+    }
+  }
+
+  /**
+   * 「欠费宽限」这一档的写入方（S8，2026-09-25 补）。
+   *
+   * 现状是：自动续费的单没在到期前付上，到期当天服务直接终止——3 天宽限只存在于续费单的
+   * TTL 里，服务侧不认。行业里这一档（Stripe `past_due` / 阿里云「欠费中」）的意思是
+   * **服务还在、钱没到**，催款与多轮提醒都在它里面做。
+   *
+   * 权益不变（`overdue` 仍在 live 唯一索引的集合里），只是把状态说清楚并通知客户。宽限
+   * 窗与 `findExpiredSubscriptionIds` 的排除条件是同一个谓词的两面，必须收同一个
+   * graceDays——作业里一处取值传两处。
+   */
+  async markOverdue(graceDays: number, limit = 100): Promise<number> {
+    const rows = await this.repo.findOverdueCandidates(graceDays, limit);
+    let marked = 0;
+    for (const r of rows) {
+      try {
+        const before = await this.getSubscription(r.id);
+        if (before.status !== r.status) continue; // moved since the scan
+        const result = await this.repo.update(r.id, before, {
+          status: "overdue",
+          operatorType: "system",
+          operatorRemark: "renewal order unpaid past period end (grace window)",
+          expectedStatus: r.status,
+        });
+        if (!result) continue;
+        await this.applyTransitionHooks(
+          `overdue:${r.id}`,
+          r.id,
+          before,
+          result,
+        );
+        marked += 1;
+        await this.emit(`overdue ${r.id}`, async () =>
+          this.subscriptionNotice("subscription.overdue", r, {
+            payBy: formatNotifyDate(
+              r.endAt
+                ? new Date(r.endAt.getTime() + graceDays * 86_400_000)
+                : null,
+            ),
+          }),
+        );
+      } catch (err) {
+        this.logger.error(
+          `mark overdue: subscription ${r.id} failed — ${String(err)}`,
+        );
+      }
+    }
+    return marked;
   }
 
   /**
