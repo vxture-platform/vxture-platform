@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * ProductCatalogCard.tsx - 产品目录卡（/products 产品矩阵 与 /appcenter 智能体广场共用）
  *
@@ -32,6 +34,7 @@
 
 import { useWebsiteDateFormat } from "@/lib/date-format";
 import { Button, Icon } from "@vxture/design-system";
+import { SuspensionDetailDialog } from "./SuspensionDetailDialog";
 import type { IconName } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import type { ProductSubscriptionState } from "@/api/subscription.api";
@@ -118,6 +121,11 @@ export interface ProductCatalogCardLabels {
     paused: string;
     hintExtend: string;
     hint: string;
+    since: string;
+    expected: string;
+    countdown: string;
+    contact: string;
+    close: string;
   };
 }
 
@@ -164,6 +172,7 @@ export function ProductCatalogCard({
    * 点进去是个死控件），也不给「升级」（换档会改动那条被平台冻结的订阅）。只说明白发生
    * 了什么。
    */
+  const [suspensionOpen, setSuspensionOpen] = useState(false);
   const suspendedState = subscribed
     ? (subscription?.suspensionState ?? null)
     : null;
@@ -334,18 +343,14 @@ export function ProductCatalogCard({
               {labels.actions.coming}
             </Button>
           ) : suspendedLabel ? (
-            /* 三个入口都不给：订阅会造重复行、进入是死控件、升级会动那条被冻结的订阅。
-               留一个说明白状态的禁用按钮，悬停给出这段时间算不算有效期。 */
+            /* 三个购买/进入入口都不给：订阅会造重复行、进入是死控件（产品正停着服务）、
+               升级会动那条被平台冻结的订阅。留下的这一个**不是死的**——它开详情弹窗，
+               说清楚停了多久、什么时候回来、这些天算不算有效期。 */
             <Button
               variant="outline"
               size="md"
-              disabled
               className="h-10"
-              title={
-                subscription?.suspensionExtendsTerm
-                  ? labels.suspension.hintExtend
-                  : labels.suspension.hint
-              }
+              onClick={() => setSuspensionOpen(true)}
             >
               {suspendedLabel}
             </Button>
@@ -404,6 +409,26 @@ export function ProductCatalogCard({
           )}
         </div>
       </div>
+      {/* 详情弹窗挂在卡片内：状态字那个按钮开它。只在冻结态渲染。 */}
+      {suspendedLabel ? (
+        <SuspensionDetailDialog
+          open={suspensionOpen}
+          onOpenChange={setSuspensionOpen}
+          labels={{
+            title: suspendedLabel,
+            hint: subscription?.suspensionExtendsTerm
+              ? labels.suspension.hintExtend
+              : labels.suspension.hint,
+            since: labels.suspension.since,
+            expected: labels.suspension.expected,
+            countdown: labels.suspension.countdown,
+            contact: labels.suspension.contact,
+            close: labels.suspension.close,
+          }}
+          suspendedSince={subscription?.suspendedSince ?? null}
+          expectedResumeAt={subscription?.expectedResumeAt ?? null}
+        />
+      ) : null}
     </article>
   );
 }

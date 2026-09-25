@@ -97,6 +97,14 @@ export default function ProductsOverviewPage({
         paused: t("catalog.suspension.paused"),
         hintExtend: t("catalog.suspension.hintExtend"),
         hint: t("catalog.suspension.hint"),
+        /* 这三条带占位符，且**只有渲染时才知道值**（停了几天、还剩多久）。
+           用 t() 会在这里就把占位符替换掉——传 0 进去，弹窗里永远显示「已暂停 0 天」，
+           而且不报错。取原串交给弹窗自己填。 */
+        since: t.raw("catalog.suspension.since") as string,
+        expected: t.raw("catalog.suspension.expected") as string,
+        countdown: t.raw("catalog.suspension.countdown") as string,
+        contact: t("catalog.suspension.contact"),
+        close: t("catalog.suspension.close"),
       },
     }),
     [t],

@@ -2543,7 +2543,9 @@
     "extends": "The term is extended on resume; paused days do not count against it.",
     "noExtends": "The term is not extended; paused days count against it as usual.",
     "extendsShort": "term extended on resume",
-    "noExtendsShort": "term not extended"
+    "noExtendsShort": "term not extended",
+    "expectedResume": "Expected resume time",
+    "expectedResumeHint": "Optional. If set, the customer sees a countdown; otherwise only how long it has been paused."
   },
   "orderDetailPage": {
     "title": "Order detail",

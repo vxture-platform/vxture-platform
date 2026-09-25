@@ -29,6 +29,8 @@ export interface ProductSubscriptionState {
   suspendedSince: string | null;
   /** 停掉的这些天恢复后还不还给客户。未冻结 / 存量无 episode 为 null。 */
   suspensionExtendsTerm: boolean | null;
+  /** 运营填的预计恢复时间（ISO）；null = 没填，界面只显示已暂停多久。 */
+  expectedResumeAt: string | null;
 }
 
 export async function fetchProductSubscriptions(): Promise<

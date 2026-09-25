@@ -443,6 +443,7 @@ export function SubscriptionDetailPage({
   async function handleSubmitSubscriptionAction(
     reason: string,
     suspendReason: string | null,
+    expectedResumeAt: string | null,
   ) {
     if (!subscription || !pendingAction) return;
 
@@ -456,6 +457,7 @@ export function SubscriptionDetailPage({
           action: pendingAction,
           reason,
           suspendReason,
+          expectedResumeAt,
         },
       );
 

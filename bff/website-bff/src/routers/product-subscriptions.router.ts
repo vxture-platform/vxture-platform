@@ -78,6 +78,11 @@ export interface ProductSubscriptionState {
    * 所以这个布尔出网，而**原因不出网**。未冻结 / 存量无 episode 为 null。
    */
   suspensionExtendsTerm: boolean | null;
+  /**
+   * 运营填的预计恢复时间（ISO）。界面据此倒计时；null = 没填，只显示已暂停多久。
+   * **不是**用最长暂停期算的——那是内部处置阈值，不是对客户的承诺。
+   */
+  expectedResumeAt: string | null;
 }
 
 @Controller("api/me")
@@ -99,6 +104,7 @@ export class ProductSubscriptionsRouter {
       suspension_reason: string | null;
       suspended_since: Date | null;
       suspension_extends_term: boolean | null;
+      expected_resume_at: Date | null;
     }>(
       `with ranked as (
          select prod.id as product_id, prod.product_code, ts.status, pc.tier,
@@ -132,6 +138,7 @@ export class ProductSubscriptionsRouter {
               sus.reason as suspension_reason,
               sus.paused_at as suspended_since,
               sus.extends_term as suspension_extends_term,
+              sus.expected_resume_at,
               -- 当前档之上是否还有可售档：同产品、current 已发布版本、primary 组件的
               -- tier 在五档阶梯（$3）里排在当前档之后。当前档为空（越梯/自定义）→ false。
               exists (
@@ -149,7 +156,7 @@ export class ProductSubscriptionsRouter {
          from ranked r
          left join product.product_webhooks pw on pw.product_id = r.product_id
          left join lateral (
-           select s2.reason, s2.paused_at, s2.extends_term
+           select s2.reason, s2.paused_at, s2.extends_term, s2.expected_resume_at
              from metering.subscription_suspensions s2
              join metering.subscriptions sub on sub.id = s2.subscription_id
             where sub.workspace_id = (
@@ -185,6 +192,9 @@ export class ProductSubscriptionsRouter {
           ? (r.suspended_since?.toISOString() ?? null)
           : null,
         suspensionExtendsTerm: suspended ? r.suspension_extends_term : null,
+        expectedResumeAt: suspended
+          ? (r.expected_resume_at?.toISOString() ?? null)
+          : null,
       };
     });
   }

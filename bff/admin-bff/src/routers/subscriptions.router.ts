@@ -93,6 +93,11 @@ interface SubscriptionActionBody {
   action?: unknown;
   reason?: unknown;
   suspendReason?: unknown;
+  /**
+   * 预计恢复时间（选填，ISO）。客户界面据此倒计时；不填就只显示已暂停了多久。
+   * **不拿最长暂停期当终点**——那是内部处置阈值，不是对客户的承诺。
+   */
+  expectedResumeAt?: unknown;
 }
 
 /**
@@ -227,6 +232,7 @@ export class SubscriptionsRouter {
     const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
     const remark = reason.length > 0 ? reason : null;
     const suspendReason = parseSuspendReason(action, body?.suspendReason);
+    const expectedResumeAt = parseExpectedResumeAt(body?.expectedResumeAt);
     const actorId = req.user?.id ?? null;
     const clientIp = extractClientIp(req);
     const subscriptionId = await this.resolveSubscriptionId(id);
@@ -304,6 +310,7 @@ export class SubscriptionsRouter {
              那一刻**的值。锁行时读到的就是它——这句是在同一笔事务里、UPDATE 已经把它置
              false 之前读的那份快照。 */
           current.auto_renew,
+          expectedResumeAt,
           actorId,
           clientIp,
         ]);
@@ -472,6 +479,24 @@ function parseSuspendReason(
   throw new BadRequestException(
     `Suspending requires suspendReason (expected ${SUSPENSION_REASONS.join("/")})`,
   );
+}
+
+/**
+ * 预计恢复时间：选填，且**不校验它是否晚于现在**。
+ *
+ * 运营填错了时间是个可改的估计，不是该让整条暂停动作被拒的事；界面过点之后落回
+ * 「已暂停 N 天」，不翻负数。只拒解析不出来的值——那说明前端送了别的东西。
+ */
+function parseExpectedResumeAt(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string") {
+    throw new BadRequestException("expectedResumeAt 必须是 ISO 时间字符串");
+  }
+  const t = Date.parse(raw);
+  if (!Number.isFinite(t)) {
+    throw new BadRequestException("expectedResumeAt 不是合法时间");
+  }
+  return new Date(t).toISOString();
 }
 
 function isPastEndAt(endAt: Date | string | null): boolean {
@@ -1149,7 +1174,7 @@ insert into metering.subscription_histories (
  * 那是「按设计没有」，不是缺一条记录。
  */
 const SUSPENSION_OPEN_READ_SQL = `
-select reason, reason_note, extends_term, paused_at
+select reason, reason_note, extends_term, paused_at, expected_resume_at
   from metering.subscription_suspensions
  where subscription_id = $1 and resumed_at is null
  limit 1
@@ -1160,6 +1185,7 @@ interface SuspensionRow {
   reason_note: string | null;
   extends_term: boolean;
   paused_at: Date | string;
+  expected_resume_at: Date | string | null;
 }
 
 function mapSuspensionRow(
@@ -1171,6 +1197,7 @@ function mapSuspensionRow(
     reasonNote: row.reason_note,
     extendsTerm: row.extends_term,
     pausedAt: toIso(row.paused_at),
+    expectedResumeAt: toIsoNullable(row.expected_resume_at),
   };
 }
 
@@ -1185,8 +1212,8 @@ function mapSuspensionRow(
 const SUSPENSION_OPEN_SQL = `
 insert into metering.subscription_suspensions (
   subscription_id, tenant_id, reason, reason_note, extends_term, auto_renew_before,
-  actor_type, actor_id, client_ip
-) values ($1, $2, $3, $4, $5, $6, 'operator', $7, $8)
+  expected_resume_at, actor_type, actor_id, client_ip
+) values ($1, $2, $3, $4, $5, $6, $7, 'operator', $8, $9)
 `;
 
 /**

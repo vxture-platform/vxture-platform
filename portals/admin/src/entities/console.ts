@@ -1230,6 +1230,11 @@ export interface SubscriptionSuspensionSnapshot {
   reasonNote: string | null;
   extendsTerm: boolean;
   pausedAt: string;
+  /**
+   * 运营填的预计恢复时间（选填）。客户界面据此倒计时；null = 没填，只显示已暂停多久。
+   * **不是**用最长暂停期算出来的——那是内部处置阈值，不是对客户的承诺。
+   */
+  expectedResumeAt: string | null;
 }
 
 export interface SubscriptionOperationDetailRecord extends SubscriptionOperationRecord {

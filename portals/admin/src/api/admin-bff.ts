@@ -1612,6 +1612,8 @@ export async function submitSubscriptionOperation(
     reason: string;
     /* 暂停必带（服务端强校验）：它决定恢复后要不要顺延服务期。其余动作不送。 */
     suspendReason?: string | null;
+    /* 预计恢复时间（选填，ISO）。客户界面据此倒计时。 */
+    expectedResumeAt?: string | null;
   },
 ): Promise<SubscriptionOperationDetailRecord> {
   const response = await fetch(

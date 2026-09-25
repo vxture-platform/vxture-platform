@@ -63,7 +63,12 @@
       "restricted": "Service restricted",
       "paused": "Paused",
       "hintExtend": "Service is temporarily unavailable; this time does not count against your term.",
-      "hint": "Service is temporarily unavailable."
+      "hint": "Service is temporarily unavailable.",
+      "since": "Paused for {days} day(s)",
+      "expected": "Expected back around {time}",
+      "countdown": "{remain} to go",
+      "contact": "Contact support",
+      "close": "Got it"
     }
   }
 }
