@@ -226,7 +226,7 @@ GRANT UPDATE (tenant_id, workspace_id, pack_id, pack_code, pack_name, metric_key
 --   resumed_at（结束时刻）、granted_seconds（恢复时结算的顺延秒数）、updated_at。
 --   reason 与 extends_term 锁住是有意的——改政策不该改写已经发生的那一次暂停。
 REVOKE UPDATE ON metering.subscription_suspensions FROM platform_svc;
-GRANT UPDATE (reason_note, resumed_at, granted_seconds, updated_at) ON metering.subscription_suspensions TO platform_svc;
+GRANT UPDATE (reason_note, expected_resume_at, resumed_at, granted_seconds, updated_at) ON metering.subscription_suspensions TO platform_svc;
 
 -- metering.resource_sharing_policies  [anchor: id, created_at]  (a policy row is add/remove, not mutate)
 REVOKE UPDATE ON metering.resource_sharing_policies FROM platform_svc;

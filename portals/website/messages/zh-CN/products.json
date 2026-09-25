@@ -157,7 +157,12 @@
       "restricted": "服务受限",
       "paused": "已暂停",
       "hintExtend": "服务暂时不可用，暂停的这段时间不计入有效期。",
-      "hint": "服务暂时不可用。"
+      "hint": "服务暂时不可用。",
+      "since": "已暂停 {days} 天",
+      "expected": "预计 {time} 恢复",
+      "countdown": "距恢复还有 {remain}",
+      "contact": "联系支持",
+      "close": "知道了"
     }
   },
   "agentDetail": {

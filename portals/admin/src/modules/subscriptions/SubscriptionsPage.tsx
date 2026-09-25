@@ -503,6 +503,7 @@ export function SubscriptionsPage() {
   async function handleSubmitSubscriptionAction(
     reason: string,
     suspendReason: string | null,
+    expectedResumeAt: string | null,
   ) {
     if (!actionTarget) return;
 
@@ -514,6 +515,7 @@ export function SubscriptionsPage() {
         action: actionTarget.action,
         reason,
         suspendReason,
+        expectedResumeAt,
       });
       const records = await fetchSubscriptionOperations();
       setSubscriptions(records);

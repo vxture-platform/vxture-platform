@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import {
   DialogForm,
   Icon,
+  Input,
   Label,
   NativeSelect,
   Textarea,
@@ -160,13 +161,20 @@ export function SubscriptionOperationDialog({
   busy: boolean;
   error: string | null;
   onCancel: () => void;
-  onSubmit: (reason: string, suspendReason: SuspensionReason | null) => void;
+  onSubmit: (
+    reason: string,
+    suspendReason: SuspensionReason | null,
+    expectedResumeAt: string | null,
+  ) => void;
 }) {
   const tShared = useTranslations();
   const tSuspension = useTranslations("subscriptionSuspension");
   const suspensionReasonLabels = useSuspensionReasonLabels();
   const [reason, setReason] = useState("");
   const [suspendReason, setSuspendReason] = useState<SuspensionReason | "">("");
+  /* 预计恢复时间：选填。填了客户界面就倒计时，不填只显示已暂停多久——**不拿最长暂停期
+     当终点**，那是内部处置阈值，不是对客户的承诺。 */
+  const [expectedResumeAt, setExpectedResumeAt] = useState("");
   const trimmedReason = reason.trim();
   /* 暂停必须选原因：它决定恢复后要不要顺延服务期，服务端也会拒掉不带原因的请求。
      在这里也拦一道是为了别让运营填完一段说明再吃一个 400。 */
@@ -175,6 +183,7 @@ export function SubscriptionOperationDialog({
   useEffect(() => {
     setReason("");
     setSuspendReason("");
+    setExpectedResumeAt("");
   }, [action, subscriptionName]);
 
   /* 原来是一整套手搓的模态：自己的遮罩、面板、头部、页脚、两个按钮，外加一个
@@ -210,7 +219,13 @@ export function SubscriptionOperationDialog({
       onSubmit={(event) => {
         event.preventDefault();
         if (!trimmedReason || needsSuspendReason) return;
-        onSubmit(trimmedReason, suspendReason === "" ? null : suspendReason);
+        onSubmit(
+          trimmedReason,
+          suspendReason === "" ? null : suspendReason,
+          /* datetime-local 是本地时区的无时区串，转成 ISO 再送——否则同一个「下午三点」
+             在服务端会按 UTC 解析，客户看到的倒计时差好几个小时。 */
+          expectedResumeAt ? new Date(expectedResumeAt).toISOString() : null,
+        );
       }}
     >
       <p className="m-0 text-body-sm text-muted-foreground">
@@ -237,6 +252,18 @@ export function SubscriptionOperationDialog({
           </NativeSelect>
           <p className="m-0 text-body-sm text-muted-foreground">
             {suspendReasonHint(suspendReason, tSuspension)}
+          </p>
+          <Label htmlFor="vx-subscription-expected-resume">
+            {tSuspension("expectedResume")}
+          </Label>
+          <Input
+            id="vx-subscription-expected-resume"
+            type="datetime-local"
+            value={expectedResumeAt}
+            onChange={(event) => setExpectedResumeAt(event.target.value)}
+          />
+          <p className="m-0 text-body-sm text-muted-foreground">
+            {tSuspension("expectedResumeHint")}
           </p>
         </>
       ) : null}

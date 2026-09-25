@@ -151,6 +151,10 @@ CREATE TABLE metering.subscription_suspensions (
     resumed_at        timestamptz,                                -- NULL = 进行中
     /* 恢复时结算的顺延秒数；被最长暂停期截断时小于实际时长。NULL = 还没结算。 */
     granted_seconds   bigint,
+    /* 预计恢复时间（选填，2026-09-26）。运营暂停时填，客户界面据此倒计时；没填就只显示
+       已暂停了多久——**拿最长暂停期当倒计时终点是错的**，那是内部处置阈值，不是对客户的
+       承诺。本列**可改**（不进锚点）：维护拖长了运营该能改它，一个改不了的估计比没有更糟。 */
+    expected_resume_at timestamptz,
     /* 暂停前 auto_renew 的值。暂停会把它关掉（不该在冻结期间自动续上一期），恢复时要
        还原——而「还原成什么」只有暂停那一刻知道：无脑置 true 会给一条本来就关着自动
        续费的订阅悄悄打开它。NULL = 存量 episode（本列 2026-09-25 后加）→ 恢复时不动。 */

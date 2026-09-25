@@ -2543,7 +2543,9 @@
     "extends": "恢复后服务期顺延，暂停的天数不计入有效期。",
     "noExtends": "服务期不顺延，暂停的天数照常消耗有效期。",
     "extendsShort": "恢复后顺延",
-    "noExtendsShort": "不顺延"
+    "noExtendsShort": "不顺延",
+    "expectedResume": "预计恢复时间",
+    "expectedResumeHint": "选填。填了客户会看到倒计时；不填只显示已暂停多久。"
   },
   "orderDetailPage": {
     "title": "订单详情",
