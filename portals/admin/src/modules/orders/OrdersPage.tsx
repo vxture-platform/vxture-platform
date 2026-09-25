@@ -83,7 +83,8 @@ function formatCurrency(value: number, currency: string) {
 function orderStatusIcon(status: OrderOperationStatus): IconName {
   if (status === "confirmed") return "check";
   if (status === "pending" || status === "pending_verify") return "clock";
-  if (status === "closed") return "x";
+  // 已退款与已关闭都是「这张单不再走了」，同一个收口图标；差别由文案说。
+  if (status === "closed" || status === "refunded") return "x";
   return "warning";
 }
 
@@ -648,7 +649,17 @@ export function OrdersPage() {
                 <option value="all">全部订单</option>
                 <option value="pending">待付款</option>
                 <option value="pending_verify">待复核</option>
+                {/* 这三档此前筛不出来：置顶排序能让它们浮上来，但运营想单独看一眼
+                    「收了一半的」「收了钱没开通的」「退过款的」没有入口。文案取
+                    `useOrderStatusLabels()`，与表格里那一列同一个源。 */}
+                <option value="partial_pending">
+                  {orderStatusLabels.partial_pending}
+                </option>
+                <option value="paid_unprovisioned">
+                  {orderStatusLabels.paid_unprovisioned}
+                </option>
                 <option value="confirmed">已确认</option>
+                <option value="refunded">{orderStatusLabels.refunded}</option>
                 <option value="overdue">
                   {tShared("status.generic.overdue")}
                 </option>

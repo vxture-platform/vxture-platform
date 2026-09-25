@@ -1225,7 +1225,9 @@ export type OrderOperationStatus =
   | "abnormal"
   // product_321 §4.2 — non-terminal money states surfaced to operators:
   | "paid_unprovisioned"
-  | "partial_pending";
+  | "partial_pending"
+  // 收过钱又退了出去，与「未付就关掉」不是一档（此前两者都是 closed）。
+  | "refunded";
 export type OrderPaymentStatus =
   | "not_required"
   | "unpaid"

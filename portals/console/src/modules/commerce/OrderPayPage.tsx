@@ -78,11 +78,24 @@ const POLL_MS = 15_000;
 const STATE_TONE: Record<OrderState, StatusBadgeTone> = {
   pending_payment: "warning",
   paid_pending_verify: "warning",
+  // 钱只到了一半：要客户动手补，与待付款同档。
+  partially_paid: "warning",
   activating: "info",
   completed: "success",
+  // 退款中是流程在走，不需要客户动手——info，不是 warning。
+  refunding: "info",
+  // 已退款 / 部分退款都是「按约定办完了」，不是故障，落中性。
+  refunded: "neutral",
+  partially_refunded: "neutral",
   cancelled: "danger",
   expired: "danger",
 };
+
+/** 还能继续付款的族（与 console-bff 的 PAYABLE_STATES 同口径）。 */
+const PAYABLE_STATES: readonly OrderState[] = [
+  "pending_payment",
+  "partially_paid",
+];
 
 /** 货币展示统一走 shared formatCurrency（110-locale-layer 指定入口）。 */
 function fmtWith(locale: Locale) {
@@ -257,7 +270,7 @@ export function OrderPayPage() {
 
   // Quote re-run on any voucher selection change (pending state only).
   useEffect(() => {
-    if (!detail || detail.orderState !== "pending_payment") return;
+    if (!detail || !PAYABLE_STATES.includes(detail.orderState)) return;
     let cancelled = false;
     quoteOrder(detail.orderId, {
       ...(discountId ? { discountVoucherId: discountId } : {}),
@@ -411,7 +424,8 @@ export function OrderPayPage() {
   }
 
   const state = detail.orderState;
-  const isPending = state === "pending_payment";
+  // 付款区（选渠道 + 申报）对「还能付」的族都要开着：部分到账的单剩下的钱得能补。
+  const isPending = PAYABLE_STATES.includes(state);
   const fullVoucherCover =
     isPending && cashDue !== null && Number(cashDue) === 0;
 

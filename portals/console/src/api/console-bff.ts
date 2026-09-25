@@ -1061,11 +1061,20 @@ export interface CreateOrderResult {
   expireAt: string | null;
 }
 
-/** Six-state order contract (product_321 P1). */
+/**
+ * 订单轴十态（wire contract，与 console-bff 的同名联合一字不差）。
+ *
+ * 原六态把三件事压掉了：已退款压进 `cancelled`（于是退过款的单显示「已取消 · 未付款」，
+ * 而它付过钱）、钱只到一半、退款在路上。`partially_refunded` 暂不可达，值域先留。
+ */
 export type OrderState =
   | "activating"
   | "completed"
   | "paid_pending_verify"
+  | "partially_paid"
+  | "refunding"
+  | "refunded"
+  | "partially_refunded"
   | "cancelled"
   | "expired"
   | "pending_payment";

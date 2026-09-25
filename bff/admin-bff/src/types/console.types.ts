@@ -1273,7 +1273,10 @@ export type OrderOperationStatus =
   // product_321 P1/§4.2 — operator-visible non-terminal states that must NOT
   // read as "confirmed" (both were invisible-to-ops blind spots):
   | "paid_unprovisioned" // invoice paid but subscription still pending (stage-2 hang)
-  | "partial_pending"; // money collected but invoice unclear (legacy partial)
+  | "partial_pending" // money collected but invoice unclear (legacy partial)
+  // 退款过的单此前并进 `closed`（与「未付就关掉」同一档），于是运营看不出这张单
+  // 收过钱又退了出去。钱进过账的单必须与从没成立过的单分开。
+  | "refunded";
 export type OrderPaymentStatus =
   | "not_required"
   | "unpaid"

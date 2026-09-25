@@ -43,7 +43,12 @@ interface Step {
   note?: string;
 }
 
-/** 六态 → 进度时间线（0 元单收款步改写为「自动结清（¥0）」）。 */
+/**
+ * 十态 → 进度时间线（0 元单收款步改写为「自动结清（¥0）」）。
+ *
+ * 这个 switch **刻意不写 default**：订单轴加一档状态时，编译器会在这里报「缺少返回」，
+ * 迫使人回答「这一档的时间线长什么样」。写了 default 就会静默落到一条错的时间线上。
+ */
 function buildSteps(order: MyOrder, countdown: string | null): Step[] {
   const zero = Number.parseFloat(order.amount) === 0;
   const submitted: Step = { key: "submitted", at: order.createdAt };
@@ -71,6 +76,14 @@ function buildSteps(order: MyOrder, countdown: string | null): Step[] {
         { key: "confirm", at: null, now: true },
         { key: "provision", at: null },
       ];
+    // 钱只到了一半：申报那一步过了，收款这一步停在「部分到账」——还等客户把剩下的补上。
+    case "partially_paid":
+      return [
+        submitted,
+        { key: "declared", at: order.declaredAt },
+        { key: "partialReceived", at: order.confirmedAt, now: true },
+        { key: "provision", at: null },
+      ];
     case "activating":
       return [
         submitted,
@@ -79,19 +92,40 @@ function buildSteps(order: MyOrder, countdown: string | null): Step[] {
         { key: "provision", at: null, now: true },
       ];
     case "completed":
-      return zero
-        ? [
-            submitted,
-            { key: "settleZero", at: order.confirmedAt ?? order.createdAt },
-            { key: "provision", at: order.activatedAt },
-          ]
-        : [
-            submitted,
-            { key: "declared", at: order.declaredAt },
-            { key: "confirm", at: order.confirmedAt },
-            { key: "provision", at: order.activatedAt },
-          ];
+      return settledSteps(order, zero, submitted);
+    // 退款三态都发生在四步走完之后：前四步照原样画完，钱的去向另起一步。
+    case "refunding":
+      return [
+        ...settledSteps(order, zero, submitted),
+        { key: "refundRequested", at: null, now: true },
+      ];
+    case "refunded":
+      return [
+        ...settledSteps(order, zero, submitted),
+        { key: "refunded", at: null },
+      ];
+    case "partially_refunded":
+      return [
+        ...settledSteps(order, zero, submitted),
+        { key: "partiallyRefunded", at: null },
+      ];
   }
+}
+
+/** 已结清 + 已开通的四步（0 元单把「申报 + 收款」两步压成「自动结清」一步）。 */
+function settledSteps(order: MyOrder, zero: boolean, submitted: Step): Step[] {
+  return zero
+    ? [
+        submitted,
+        { key: "settleZero", at: order.confirmedAt ?? order.createdAt },
+        { key: "provision", at: order.activatedAt },
+      ]
+    : [
+        submitted,
+        { key: "declared", at: order.declaredAt },
+        { key: "confirm", at: order.confirmedAt },
+        { key: "provision", at: order.activatedAt },
+      ];
 }
 
 /** 展开区小卡：DS Card 组合（soft veil），标题走 CardHeader/CardDescription，

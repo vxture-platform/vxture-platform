@@ -6,8 +6,8 @@
  * @layer Application
  * @category Module
  *
- * 「下单 → 付款 → 收款 → 开通」是六态订单状态机（product_321 P1）的用户视角
- * 投影：六态是后端契约，四步是给人看的旅程，映射关系收在本件，不外泄。
+ * 「下单 → 付款 → 收款 → 开通」是订单状态机（十态，product_321 P1）的用户视角
+ * 投影：状态是后端契约，四步是给人看的旅程，映射关系收在本件，不外泄。
  * 已完成步骤可带时间戳；右端可挂订单状态徽章（语气由调用方判断）。
  * cancelled/expired 停在「待付款」一步，异常语义由右端徽章表达——流程条只画
  * 走到哪，不画为什么停。
@@ -17,13 +17,17 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Icon, cn } from "@vxture/design-system";
 
-/** 「下单中」是尚未生成订单的确认页；其余六态来自订单契约。 */
+/** 「下单中」是尚未生成订单的确认页；其余十态来自订单契约（OrderState）。 */
 export type OrderFlowStage =
   | "ordering"
   | "pending_payment"
   | "paid_pending_verify"
+  | "partially_paid"
   | "activating"
   | "completed"
+  | "refunding"
+  | "refunded"
+  | "partially_refunded"
   | "cancelled"
   | "expired";
 
@@ -34,9 +38,15 @@ export type OrderFlowStep = (typeof STEPS)[number];
 const STAGE_CURSOR: Record<OrderFlowStage, number> = {
   ordering: 0,
   pending_payment: 1,
+  // 部分到账停在「付款」这一步：钱进来一半，这一步还没走完。
+  partially_paid: 1,
   paid_pending_verify: 2,
   activating: 3,
   completed: 4,
+  // 退款三态都发生在四步全部走完之后——流程条画到头，钱的去向由右端徽章说。
+  refunding: 4,
+  refunded: 4,
+  partially_refunded: 4,
   cancelled: 1,
   expired: 1,
 };

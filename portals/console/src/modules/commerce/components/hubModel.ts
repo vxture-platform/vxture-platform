@@ -40,22 +40,41 @@ interface AxisView {
   tone: StatusBadgeTone;
 }
 
-/** 付费状态轴。completed 的 ¥0 单在调用点改写为 settledZero（已结清）。 */
+/**
+ * 付费状态轴。completed 的 ¥0 单在调用点改写为 settledZero（已结清）。
+ *
+ * `cancelled` / `expired` 映「未付款」是对的（这两态只对未收过钱的单成立），但此前
+ * `refunded` 被折进 `cancelled`，于是一张**付过钱又退了款**的单在这一列写着「未付款」
+ * ——关于钱的假话。现在它自己一档。
+ */
 export const PAY_AXIS: Record<OrderState, AxisView> = {
   pending_payment: { key: "pending", tone: "warning" },
   paid_pending_verify: { key: "declared", tone: "info" },
+  partially_paid: { key: "partial", tone: "warning" },
   activating: { key: "received", tone: "success" },
   completed: { key: "received", tone: "success" },
+  // 退款中：钱还在账上，尚未退出去——仍是「已收款」，进度由订单状态那一列说。
+  refunding: { key: "received", tone: "info" },
+  refunded: { key: "refunded", tone: "neutral" },
+  partially_refunded: { key: "partiallyRefunded", tone: "neutral" },
   cancelled: { key: "unpaid", tone: "neutral" },
   expired: { key: "unpaid", tone: "neutral" },
 };
 
-/** 服务状态轴。 */
+/**
+ * 服务状态轴 —— **只在订单还没履约时使用**。履约之后「服务在不在」的答案在订阅行上，
+ * 调用点先查 `SVC_AXIS_BY_SUBSCRIPTION`（OrdersSection），查不到才回落这里。
+ */
 export const SVC_AXIS: Record<OrderState, AxisView> = {
   pending_payment: { key: "notProvisioned", tone: "neutral" },
   paid_pending_verify: { key: "notProvisioned", tone: "neutral" },
+  partially_paid: { key: "notProvisioned", tone: "neutral" },
   activating: { key: "provisioning", tone: "info" },
   completed: { key: "active", tone: "success" },
+  // 已履约的单一律由订阅说话；走到这里只有一种情况：订阅状态认不出来。
+  refunding: { key: "active", tone: "success" },
+  refunded: { key: "terminated", tone: "neutral" },
+  partially_refunded: { key: "active", tone: "success" },
   cancelled: { key: "cancelled", tone: "neutral" },
   expired: { key: "closed", tone: "neutral" },
 };

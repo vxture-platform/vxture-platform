@@ -93,14 +93,48 @@ const CYCLE_UNITS = ["month", "year"] as const;
 
 // ── payment flow vocabulary (product_321 P1) ────────────────────────────────
 
-/** Six-state ordered derivation — wire slugs are the orderStatus contract. */
+/**
+ * 订单轴 wire 值域（orderStatus 契约）。
+ *
+ * 原来是六态，把「已退款」压进了 `cancelled`——于是一张退过款的单在界面上写着「已取消 ·
+ * 未付款」，而那张单**付过钱**。取消是「从没成立过」，退款是「成立过又退回」，两件事。
+ * 另外两个也是压掉的：钱只到了一半（账单 `partial`）与退款在路上（退款单在审/在执行）。
+ *
+ * 十态里 `partially_refunded` 当前不可达（全仓没有创建部分退款单的路径，见 DDL 的
+ * `chk_refunds_refund_type`）。先把它写进值域，折算退上线那天就不必再改一次契约。
+ */
 type OrderState =
   | "activating"
   | "completed"
   | "paid_pending_verify"
+  | "partially_paid"
+  | "refunding"
+  | "refunded"
+  | "partially_refunded"
   | "cancelled"
   | "expired"
   | "pending_payment";
+
+/**
+ * 已履约族：订单已经把服务开出去过。`completed` 之外的三个都是「开过之后钱有动静」，
+ * 服务开通时刻这类派生字段必须一并认它们——只写 `=== "completed"` 的话，一张退款中的
+ * 单会突然失去它的开通时间。
+ */
+const FULFILLED_STATES: ReadonlySet<OrderState> = new Set<OrderState>([
+  "completed",
+  "refunding",
+  "refunded",
+  "partially_refunded",
+]);
+
+/**
+ * 还能继续付款的族。`partially_paid` 必须在里面：钱只到了一半的单，客户要能把剩下的补上。
+ * 这一档是从 `pending_payment` 里分出来的——分完不把它加回这些判据，等于当天堵死补款。
+ */
+const PAYABLE_STATES: ReadonlySet<OrderState> = new Set<OrderState>([
+  "pending_payment",
+  "partially_paid",
+]);
 
 const DECLARE_CHANNELS = ["alipay", "bank_transfer"] as const;
 type DeclareChannel = (typeof DECLARE_CHANNELS)[number];
@@ -1764,7 +1798,7 @@ export class SubscriptionRouter {
       userId: req.user.id,
     };
     const [vouchers, legs, rejectReason, refund] = await Promise.all([
-      state === "pending_payment"
+      PAYABLE_STATES.has(state)
         ? this.promotionService.listAvailableVouchers(scope)
         : Promise.resolve([] as AvailableVoucher[]),
       this.loadPaymentLegs(row.invoice_id),
@@ -1861,7 +1895,7 @@ export class SubscriptionRouter {
     if (!req.user || !req.tenant) throw new UnauthorizedException("会话已失效");
     const row = await this.loadOrderRow(req.tenant.id, orderId?.trim());
     if (!row) throw new BadRequestException("订单不存在或无权查看");
-    if (deriveOrderState(row) !== "pending_payment")
+    if (!PAYABLE_STATES.has(deriveOrderState(row)))
       throw new ConflictException("订单不是待付款状态");
 
     const scope = {
@@ -2571,6 +2605,10 @@ interface OrderRow {
   discount_amount: string | null;
   voucher_paid: string | null;
   ttl_anchor: Date;
+  /** 有退款单在审或在执行（`audit_status='pending'`，或已通过但还没落 success/failed）。 */
+  refund_in_flight: boolean;
+  /** 已退成功金额合计（NUMERIC 字符串）；没退过是 "0"。 */
+  refunded_amount: string | null;
   paid_at: Date | null;
   created_at: Date;
   /** 履约订阅的周期（new 新建 / upgrade、renew 原订阅）；未履约 null */
@@ -2622,6 +2660,25 @@ select
        where e.order_id = o.id and e.event_type = 'payment_rejected'
     ), o.created_at)
   )                    as ttl_anchor,
+  /*
+   * 退款两问，都挂订单（refunds.order_id，product_330 §5）。
+   *
+   * 在途 = 还没落定：待审，或审过了但执行还没出结果。被驳回（rejected）与执行失败
+   * （failed）都不算在途——它们不阻塞下一次申请（getRefundEligibility 同口径），也不
+   * 该让订单一直显示「退款中」。
+   *
+   * 本段在模板串里，不要写反引号：它会当场结束这个字符串，报错落在几十行以外。
+   */
+  exists (
+    select 1 from billing.refunds r
+     where r.order_id = o.id
+       and r.audit_status <> 'rejected'
+       and r.refund_status not in ('success', 'failed')
+  )                    as refund_in_flight,
+  coalesce((
+    select sum(r.refund_amount) from billing.refunds r
+     where r.order_id = o.id and r.refund_status = 'success'
+  ), 0)                as refunded_amount,
   inv.paid_at,
   o.created_at,
   sub.start_at,
@@ -2676,24 +2733,58 @@ order by o.created_at desc
 limit 100
 `;
 
-/** 订单实体状态 → 付款页六态（product_321 P1 wire contract）。 */
+/**
+ * 订单实体状态 → 订单轴十态（wire contract）。
+ *
+ * 三个派生分支不是订单实体状态能回答的，各有自己的权威源：
+ *   · 部分到账 —— 账单知道「收了多少、还差多少」，订单只知道「够不够」。够了才翻 `paid`，
+ *     不够则订单实体停在原态，钱记在 `invoices.bill_status='partial'` 上。所以这一档必须
+ *     问账单，**但只在「待付款」上派生**：那时客户能把剩下的补上（`markDeclaredTx` 收
+ *     `pending_payment`）。待核对 + partial 不改写，理由见那一支的注释。
+ *   · 退款中 —— 退款单在审或在执行，服务通常已经停了，但钱还在路上。订单实体此刻仍是
+ *     `fulfilled`，只有 `refunds` 知道。
+ *   · 部分退款 —— 同上，且退款成功但金额小于实付。
+ *
+ * 分支顺序有讲究：`fulfilled` 那一支里「在途」要压在「已部分退」前面，否则一张先退过一
+ * 半、又在申请第二笔的单会显示成部分退款，把正在走的流程藏掉。
+ */
 function deriveOrderState(r: OrderRow): OrderState {
   switch (r.order_status) {
     case "pending_verify":
+      // 账单 partial 在这一支**不**改写状态。确认收款不足额之后订单停在 pending_verify，
+      // 而 markDeclaredTx 只接 pending_payment ⇒ 客户没法再申报一次。显示成「部分到账」
+      // 会连带把付款区打开（它在 PAYABLE_STATES 里），给客户一个按下去必定 409 的按钮。
+      // 这张单等的是运营再确认剩余款，所以照实说「已申报 · 待核对」。
       return "paid_pending_verify";
     case "paid":
       return "activating";
     case "fulfilled":
+      if (r.refund_in_flight) return "refunding";
+      if (isPartiallyRefunded(r)) return "partially_refunded";
       return "completed";
-    case "cancelled":
     case "refunded":
+      return "refunded";
+    case "cancelled":
       return "cancelled";
     case "expired":
       return "expired";
     case "pending_payment":
     default:
-      return "pending_payment";
+      return r.bill_status === "partial" ? "partially_paid" : "pending_payment";
   }
+}
+
+/**
+ * 部分退款 = 退成功过，且退回去的比收进来的少。
+ *
+ * 判据是**金额**不是 `refund_type`：类型是申请时写下的意图，金额是事实。反过来用类型推
+ * 金额，遇到一张 `normal` 却只退了一半的单就会说成全额退。
+ */
+function isPartiallyRefunded(r: OrderRow): boolean {
+  const refunded = Number(r.refunded_amount ?? 0);
+  if (!(refunded > 0)) return false;
+  const collected = Number(r.paid_amount ?? 0);
+  return collected > 0 && refunded < collected;
 }
 
 /**
@@ -2795,8 +2886,11 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     endAt: r.end_at?.toISOString() ?? null,
     declaredAt: r.declared_at?.toISOString() ?? null,
     subscriptionId: r.subscription_id,
-    // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）
+    // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）。
+    // 认整个已履约族：退款中/已退款的单也开通过，开通时间不会因为退款而消失。
     activatedAt:
-      state === "completed" && r.start_at ? r.start_at.toISOString() : null,
+      FULFILLED_STATES.has(state) && r.start_at
+        ? r.start_at.toISOString()
+        : null,
   };
 }
