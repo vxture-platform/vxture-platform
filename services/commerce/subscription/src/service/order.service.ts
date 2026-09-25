@@ -1175,6 +1175,87 @@ export class OrderService {
   }
 
   /**
+   * 运营发起退款（2026-09-25 批 6）——**自动资格判定的逃生口**。
+   *
+   * 今天运营**没有任何办法**给客户发起一笔退款：admin 只有审核 / 执行 / 标失败，三个都
+   * 作用在已存在的退款单上；创建那一步只有客户自助那条路，而它被六条资格判定卡着。于是
+   * 24 小时窗口一过，无论什么理由（我们算错了价、服务出过事故、上一次审核是误驳回、客服
+   * 已经答应了客户）都退不了钱。
+   *
+   * 本仓的规矩是「判据自动算的就必需逃生口」（不然门就成了墙）。这里给的就是那个口子。
+   *
+   * **什么放开、什么不放开**——分界是「政策」还是「事实」：
+   *   放开：时间窗、是否首购、用量比例。这三条是我们自己定的政策，运营有权按个案推翻。
+   *   不放开：订单必须已履约、实付必须大于 0、不能已有在途退款单。这三条不是政策，是
+   *           事实与账目完整性——没履约的单没有可退的钱，0 元单退什么，两张在途退款单
+   *           会把同一笔钱退两次。
+   *
+   * 金额缺省取折算值（与客户自助同一个公式），运营可显式覆盖（例如事故补偿按全额退，
+   * 或善意部分退），但不得超过实付。理由必填，落 `refund_reason` 与 `order_events`。
+   *
+   * 创建之后仍走审核 → 执行两段，不自动通过：库级门（chk_refunds_execute_needs_approval）
+   * 要求审核通过才能动执行状态，那道门对这条路一视同仁。
+   */
+  async createOperatorRefund(input: {
+    orderId: string;
+    reason: string;
+    operatorId: string;
+    /** 元字符串；缺省取折算值。必须 > 0 且 ≤ 实付。 */
+    amount?: string;
+    clientIp?: string | null;
+  }): Promise<RefundRecordView> {
+    const [order, basis, eligibility] = await Promise.all([
+      this.getOrder(input.orderId),
+      this.orders.getRefundBasis(input.orderId),
+      this.getRefundEligibility(input.orderId),
+    ]);
+
+    /* 三条不放开的：不是政策，是事实与账目完整性。 */
+    if (order.status !== "fulfilled") {
+      throw new ConflictException("订单未履约，没有可退的款项");
+    }
+    if (!(Number(order.payableAmount) > 0)) {
+      throw new ConflictException("0 元订单无需退款");
+    }
+    if (basis?.existingRefundId) {
+      throw new ConflictException("该订单已有在途退款单");
+    }
+    if (!basis?.payRecordId || !basis.invoiceId) {
+      throw new ConflictException("订单没有可退的支付记录");
+    }
+
+    const paid = Number(order.payableAmount);
+    const amount = input.amount ?? eligibility.amount;
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new ConflictException("退款金额必须大于 0");
+    }
+    if (value > paid) {
+      throw new ConflictException(
+        `退款金额不能超过实付 ${order.payableAmount}`,
+      );
+    }
+
+    const created = await this.orders.createRefundRequest({
+      order,
+      invoiceId: basis.invoiceId,
+      payRecordId: basis.payRecordId,
+      amount: value.toFixed(2),
+      refundType: value >= paid ? "normal" : "partial",
+      /* 理由前缀点名这是逃生口走的：运营在后台看到的那一行要能一眼看出它绕过了哪几条。 */
+      reason: `运营发起（绕过自动资格判定）：${input.reason}`,
+      userId: input.operatorId,
+      createdByType: "operator",
+      clientIp: input.clientIp ?? null,
+    });
+    await this.emit(`refund_requested ${created.refundNo}`, async () =>
+      /* 收件人走默认口径（订单创建人）——发起人是运营，不能把消息发给运营自己。 */
+      this.refundNotice("refund.requested", created, order, "requested"),
+    );
+    return created;
+  }
+
+  /**
    * 退款执行失败（2026-09-25）：钱没打出去。
    *
    * 与 `executeRefund` 成对。此前这条路不存在——`refund_status` 的 `failed` 全仓零写入

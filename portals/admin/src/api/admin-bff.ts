@@ -1417,6 +1417,23 @@ export function failOrderRefund(
   );
 }
 
+/**
+ * 运营发起退款（批 6）：自动资格判定的逃生口。金额留空 = 按已消耗配额折算的缺省值。
+ * 同码同门（commerce:payment.settle + step-up），理由必填。
+ */
+export function createOrderRefund(
+  orderId: string,
+  reason: string,
+  amount?: string,
+): Promise<OrderOperationDetailRecord> {
+  return postOrderAction(
+    orderId,
+    "refund-create",
+    amount ? { reason, amount } : { reason },
+    "Creating the refund did not go through",
+  );
+}
+
 export async function fetchBillingRecords(): Promise<BillingRecord[]> {
   return readJsonStrict<BillingRecord[]>("/api/billing");
 }

@@ -780,6 +780,48 @@ export class OrdersRouter {
   }
 
   /**
+   * 运营发起退款（2026-09-25 批 6）：自动资格判定的**逃生口**。
+   *
+   * 此前运营没有任何办法给客户发起一笔退款——本路由只有审核 / 执行 / 标失败，三个都作用
+   * 在已存在的退款单上；创建那一步只有客户自助那条路，而它被六条资格判定卡着。24 小时窗
+   * 口一过，计费错误、服务事故、上一次误驳回、客服已答应的承诺，全都退不了。
+   *
+   * 放开的是**政策**（时间窗 / 是否首购 / 用量），不放开的是**事实与账目完整性**（未履约、
+   * 0 元单、已有在途退款单）——判据见 service 层那段注释。
+   *
+   * 同码同门（`commerce:payment.settle` + step-up）：它与审核 / 执行是同一类动作，权限尺度
+   * 不该有差别。要收得更紧（例如只给 super）是角色目录里把这个码从非 super 角色摘掉的事，
+   * 不是这里再加一层。理由必填，会带前缀落进 refund_reason 与 order_events。
+   */
+  @Post(":orderId/refund-create")
+  @RequireStepUp()
+  async createRefund(
+    @Req() req: Request & RequestContext,
+    @Param("orderId") orderId: string,
+    @Body() body: VoidOrderBody & { amount?: string },
+  ): Promise<OrderOperationDetailRecord> {
+    assertCanSettleOrderPayment(req);
+    const actorId = requireOperatorId(req.user?.id);
+    const orderEntityId = await this.resolveOrderId(orderId);
+    const reason = normalizeVoidReason(body);
+    const amount =
+      typeof body?.amount === "string" && body.amount.trim()
+        ? body.amount.trim()
+        : undefined;
+    await this.orders.createOperatorRefund({
+      orderId: orderEntityId,
+      reason,
+      operatorId: actorId,
+      ...(amount ? { amount } : {}),
+      clientIp: extractClientIp(req),
+    });
+    const detail = await this.getOrder(req, orderEntityId);
+    if (!detail)
+      throw new NotFoundException("Order not found after refund create");
+    return detail;
+  }
+
+  /**
    * 退款执行失败（2026-09-25）：钱**没有**打出去（账号不对、银行退回）。
    *
    * 与 refund-execute 成对、同码同级（`commerce:payment.settle` + step-up）：两个动作都
