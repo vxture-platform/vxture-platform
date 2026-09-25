@@ -191,3 +191,73 @@ describe("到期扫描：冻结的行也要能走到终点，但不打扰客户"
     expect(m.notifier.notify).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * 外部写路径（admin-bff 的裸 SQL）补跑写完成尾（批 5）。
+ *
+ * 钉三件事：退订真的会 deprovision、暂停只失效缓存不 deprovision（按设计——suspended
+ * 既不在 ACTIVATED 也不在 DEACTIVATED，平台不停服，产品按信封里的状态自己停）、
+ * 以及什么都没变时一个钩子都不发。
+ */
+describe("applyExternalStatusChange：裸 SQL 写完之后补跑同一套写完成尾", () => {
+  let m: SweepMocks;
+  beforeEach(() => (m = buildSweepMocks(VXTPL)));
+
+  it("active → cancelled：发 deprovision", async () => {
+    m.repo.getById.mockResolvedValue(
+      subscriptionFixture({ id: "s-1", status: "cancelled" }),
+    );
+    await m.service.applyExternalStatusChange("s-1", {
+      status: "active",
+      planVersionId: "pv-1",
+    });
+    expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalled();
+  });
+
+  it("active → suspended：不 deprovision（平台不停服），但权益缓存要失效", async () => {
+    m.repo.getById.mockResolvedValue(
+      subscriptionFixture({ id: "s-1", status: "suspended" }),
+    );
+    await m.service.applyExternalStatusChange("s-1", {
+      status: "active",
+      planVersionId: "pv-1",
+    });
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+    // 失效走 enqueueEvent（C2 信封作废）——这正是 admin 侧此前完全没做的那一半。
+    expect(m.provisioning.enqueueEvent).toHaveBeenCalled();
+  });
+
+  it("suspended → active：发 provisioned（恢复要让产品重新起来）", async () => {
+    m.repo.getById.mockResolvedValue(
+      subscriptionFixture({ id: "s-1", status: "active" }),
+    );
+    await m.service.applyExternalStatusChange("s-1", {
+      status: "suspended",
+      planVersionId: "pv-1",
+    });
+    expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalled();
+  });
+
+  it("状态与版本都没变：一个钩子都不发", async () => {
+    m.repo.getById.mockResolvedValue(
+      subscriptionFixture({ id: "s-1", status: "active" }),
+    );
+    await m.service.applyExternalStatusChange("s-1", {
+      status: "active",
+      planVersionId: "pv-1",
+    });
+    expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+    expect(m.provisioning.enqueueEvent).not.toHaveBeenCalled();
+  });
+
+  it("读不到订阅也不抛——运营动作已经生效，不该因为通知产品侧失败而回滚", async () => {
+    m.repo.getById.mockResolvedValue(null);
+    await expect(
+      m.service.applyExternalStatusChange("gone", {
+        status: "active",
+        planVersionId: "pv-1",
+      }),
+    ).resolves.toBeUndefined();
+  });
+});

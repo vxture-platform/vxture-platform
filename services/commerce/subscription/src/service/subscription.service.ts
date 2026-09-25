@@ -287,10 +287,15 @@ export class SubscriptionService {
    * label ("update"/"update:invalidate" vs "sweep:<id>"/"sweep:<id>:invalidate"),
    * unchanged from each caller's prior inline behavior.
    */
+  /**
+   * `before` 只收它真正用到的两个字段（状态与版本）。收窄是有意的：外部写路径
+   * （admin-bff 的裸 SQL 事务）只能拿到锁行时读到的那几列，给不出整条
+   * `SubscriptionRecord`；把依赖写在签名上，比让调用方去凑一个假记录好。
+   */
   private async applyTransitionHooks(
     hookPrefix: string,
     id: string,
-    before: SubscriptionRecord,
+    before: Pick<SubscriptionRecord, "status" | "planVersionId">,
     result: SubscriptionRecord,
   ): Promise<void> {
     await this.safeProvisioningHook(hookPrefix, id, () =>
@@ -466,6 +471,45 @@ export class SubscriptionService {
         d,
       );
     });
+  }
+
+  /**
+   * 外部写路径改完状态之后，补跑**与本服务同一套**写完成尾（2026-09-25 批 5）。
+   *
+   * 为什么需要它：admin-bff 的 `subscriptions.router` 用裸 SQL 事务改订阅状态——那条
+   * 路上整个文件搜不到一处 provisioning，于是运营暂停 / 恢复 / 退订 / 续期之后：
+   *   · 退订：**不发 deprovision**，产品侧从未被告知，服务可能还在给；
+   *   · 暂停 / 恢复：**不失效 C2 权益缓存**，产品侧照旧看到旧状态直到 TTL 到点。
+   * 客户自助那条路（走本服务）两样都做。同一件事只长在一条分支上，另一条就是洞。
+   *
+   * 为什么不把那条写路径整体搬进来：它的 SQL 还带着三件本服务今天表达不出来的东西
+   * ——`renew` 的 `change_type='renewed'`（本服务会按状态派生成 'resumed'）、试用转付费
+   * 的 `subscription_kind` 翻转、以及在库里按 `cycle_unit/cycle_count` 算 `end_at`。
+   * 照搬会动到审计轨迹与周期数学，那是另一次改动；本方法只补缺的那一半：**副作用**。
+   * hooks 仍然只有一份实现（`applyTransitionHooks`），不新造第二套。
+   *
+   * 由调用方在**事务提交之后**调；`before` 是它在事务里锁行时读到的状态与版本。
+   * 内部一律 best-effort（`safeProvisioningHook` 吞异常只记日志）：运营动作已经生效，
+   * 通知产品侧失败不该让那个请求失败。
+   */
+  async applyExternalStatusChange(
+    id: string,
+    before: Pick<SubscriptionRecord, "status" | "planVersionId">,
+  ): Promise<void> {
+    try {
+      const after = await this.getSubscription(id);
+      if (
+        after.status === before.status &&
+        after.planVersionId === before.planVersionId
+      ) {
+        return; // 什么都没变（幂等重放）——不必打扰产品侧
+      }
+      await this.applyTransitionHooks(`external:${id}`, id, before, after);
+    } catch (err) {
+      this.logger.error(
+        `external status change hooks failed for ${id} — ${String(err)}`,
+      );
+    }
   }
 
   /** active → expiring 的单行 CAS；输了竞态返回 false，不抛。 */
@@ -745,7 +789,8 @@ export class SubscriptionService {
 
   /** Generic update: derive events from the status/version transition. */
   private async fireStatusTransition(
-    before: SubscriptionRecord,
+    /* 同 applyTransitionHooks：这里只读状态与版本两件事，签名照实写。 */
+    before: Pick<SubscriptionRecord, "status" | "planVersionId">,
     after: SubscriptionRecord,
   ): Promise<void> {
     if (before.planVersionId !== after.planVersionId) {

@@ -5,7 +5,15 @@
  * Description: 平台订阅运营只读接口，接 metering.subscriptions（18-schema）。
  *   列表 join product.plan_versions→product.plans 取套餐名、tenancy.tenants/tenant_profiles 取归属，
  *   聚合 metering.quota_pools 出配额快照；详情附 plan_components 权益、subscription_histories/
- *   subscription_renewals 运营时间线。写路径（续订/暂停/恢复/取消）见 completion-plan。
+ *   subscription_renewals 运营时间线。
+ *
+ *   写路径（续订/暂停/恢复/取消）：状态改动仍是本文件的裸 SQL 事务（它带着三件服务层
+ *   表达不出来的东西——renew 的 change_type='renewed'、试用转付费的 subscription_kind
+ *   翻转、在库里按 cycle_unit×cycle_count 算 end_at），但**副作用一律走
+ *   SubscriptionService**：提交后调 applyExternalStatusChange（provisioning /
+ *   权益缓存失效）、notifyOperatorStatusChange（冻结恢复通知）、settleAfterCancel
+ *   （退订即退款）。三条都在事务外、都 best-effort——运营动作已经生效，通知产品侧或
+ *   客户失败不该让请求失败。
  *
  *   18-schema 备忘：旧 commerce.subscription → metering.subscriptions；tenant.tenant → tenancy.tenants
  *   （展示字段迁 tenancy.tenant_profiles）；套餐取 product.plans，方案归属经 product.solution_plans
@@ -197,6 +205,12 @@ export class SubscriptionsRouter {
     let notify: "suspended" | "resumed" | null = null;
     /** 提交成功后要做的退款结算（仅退订，且这次真的终止了）。同样在事务外。 */
     let settle: { subscriptionId: string; tenantId: string } | null = null;
+    /**
+     * 提交成功后要补跑的「写完成尾」（批 5）：本路由用裸 SQL 改状态，绕过了
+     * SubscriptionService 的 provisioning 钩子——退订不发 deprovision、暂停/恢复不失效
+     * C2 权益缓存，于是**产品侧照旧按旧状态服务**。`before` 是锁行时读到的那两件事。
+     */
+    let hooksBefore: { status: string; planVersionId: string } | null = null;
 
     const client = await this.rwPool.connect();
     try {
@@ -213,6 +227,10 @@ export class SubscriptionsRouter {
 
       const fromStatus = current.status;
       const toStatus = resolveTargetStatus(action, current);
+      hooksBefore = {
+        status: fromStatus,
+        planVersionId: current.plan_version_id,
+      };
 
       await client.query(SUBSCRIPTION_ACTION_UPDATE_SQL, [
         subscriptionId,
@@ -263,6 +281,17 @@ export class SubscriptionsRouter {
       client.release();
     }
 
+    /*
+     * 顺序有意：先把产品侧的状态对齐（deprovision / 权益缓存失效），再发消息与结算钱。
+     * 反过来的话，客户先收到「已退订」，而产品那边还在服务——那比晚一点通知更糟。
+     * 本调用自己吞异常（service 内 try/catch + safeProvisioningHook），不会让请求失败。
+     */
+    if (hooksBefore) {
+      await this.subscriptions.applyExternalStatusChange(
+        subscriptionId,
+        hooksBefore,
+      );
+    }
     if (notify) {
       await this.subscriptions.notifyOperatorStatusChange(
         subscriptionId,
@@ -919,7 +948,10 @@ select
   s.cycle_unit,
   s.cycle_count,
   s.end_at,
-  s.subscription_kind
+  s.subscription_kind,
+  -- 写完之后要把「从哪到哪」交给 SubscriptionService 的写完成尾（批 5），它判的是
+  -- 状态 + 版本两件事，所以版本在这里一起读出来。
+  s.plan_version_id
 from metering.subscriptions s
 where s.id = $1 and s.deleted_at is null
 for update of s
@@ -984,4 +1016,5 @@ interface SubscriptionActionRow {
   cycle_count: number;
   end_at: Date | string | null;
   subscription_kind: string;
+  plan_version_id: string;
 }
