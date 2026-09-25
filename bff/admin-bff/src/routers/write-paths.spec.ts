@@ -86,8 +86,11 @@ function makeTxClient(responder?: Responder) {
 function stubSubscriptions() {
   return {
     notifyOperatorStatusChange: vi.fn(async () => undefined),
+    /* 批 5：裸 SQL 写完之后补跑的写完成尾（provisioning / 权益缓存失效）。 */
+    applyExternalStatusChange: vi.fn(async () => undefined),
   } as unknown as ConstructorParameters<typeof SubscriptionsRouter>[2] & {
     notifyOperatorStatusChange: ReturnType<typeof vi.fn>;
+    applyExternalStatusChange: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -257,6 +260,74 @@ describe("subscriptions runSubscriptionAction", () => {
     // renew 把状态置回 active：本来就是 active，没有变化 ⇒ 一条通知都不该发。
     // 这一条钉的是「幂等重放不打扰客户」，也顺带钉住别把 renew 误判成 resume。
     expect(subs.notifyOperatorStatusChange).not.toHaveBeenCalled();
+  });
+
+  /*
+   * 批 5：本路由用裸 SQL 改状态，此前整条路**不触发任何 provisioning**——退订不发
+   * deprovision、暂停/恢复不失效 C2 权益缓存，于是产品侧照旧按旧状态服务。四个动作
+   * 现在都要把「从哪到哪」交给 SubscriptionService 的同一套写完成尾。
+   */
+  it.each([
+    ["suspend", "active"],
+    ["resume", "suspended"],
+    ["cancel", "active"],
+    ["renew", "expired"],
+  ])("%s（原态 %s）提交后补跑写完成尾", async (action, status) => {
+    const tx = makeTxClient((s) =>
+      s.includes("for update")
+        ? [
+            {
+              status,
+              tenant_id: UUID_A,
+              end_at: null,
+              plan_version_id: "pv-1",
+              cycle_unit: "month",
+              cycle_count: 1,
+              subscription_kind: "paid",
+            },
+          ]
+        : undefined,
+    );
+    const subs = stubSubscriptions();
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      subs,
+      stubOrders(),
+    );
+    (
+      router as unknown as { loadSubscriptionDetail: unknown }
+    ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
+
+    await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+      action: action as never,
+    });
+    // before 必须是锁行时读到的状态与版本——hooks 全靠它判「从哪到哪」。
+    expect(subs.applyExternalStatusChange).toHaveBeenCalledWith(UUID_A, {
+      status,
+      planVersionId: "pv-1",
+    });
+  });
+
+  it("前置校验就 409 时不补跑写完成尾（什么都没改，别打扰产品侧）", async () => {
+    const tx = makeTxClient((s) =>
+      s.includes("for update")
+        ? [{ status: "suspended", tenant_id: UUID_A, end_at: null }]
+        : undefined,
+    );
+    const subs = stubSubscriptions();
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      subs,
+      stubOrders(),
+    );
+    await expect(
+      router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+        action: "suspend",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(subs.applyExternalStatusChange).not.toHaveBeenCalled();
   });
 
   it("退订要结算退款，并且以 operator 身份（此前运营代客户退订钱不退、客户不知道）", async () => {
