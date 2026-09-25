@@ -166,7 +166,15 @@
       "title": "No platform product is live yet",
       "description": "Products appear here automatically once they go live and are visible to customers."
     },
-    "items": []
+    "items": [],
+    "suspension": {
+      "maintenance": "Under maintenance",
+      "review": "Under review",
+      "restricted": "Service restricted",
+      "paused": "Paused",
+      "hintExtend": "Service is temporarily unavailable; this time does not count against your term.",
+      "hint": "Service is temporarily unavailable."
+    }
   },
   "agentDetail": {
     "detailLabel": "Details",

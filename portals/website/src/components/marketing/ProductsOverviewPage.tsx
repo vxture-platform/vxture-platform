@@ -90,6 +90,14 @@ export default function ProductsOverviewPage({
         detail: t("catalog.actions.detail"),
         coming: t("catalog.actions.coming"),
       },
+      suspension: {
+        maintenance: t("catalog.suspension.maintenance"),
+        review: t("catalog.suspension.review"),
+        restricted: t("catalog.suspension.restricted"),
+        paused: t("catalog.suspension.paused"),
+        hintExtend: t("catalog.suspension.hintExtend"),
+        hint: t("catalog.suspension.hint"),
+      },
     }),
     [t],
   );

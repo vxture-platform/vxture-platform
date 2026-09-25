@@ -66,8 +66,13 @@ CREATE INDEX idx_subscriptions_next_renewal_at ON metering.subscriptions (next_r
 CREATE INDEX idx_subscriptions_deleted_at      ON metering.subscriptions (deleted_at);
 CREATE INDEX idx_subscriptions_product_id      ON metering.subscriptions (product_id);
 -- product_330 §8 不变式 1：一个 workspace × product 至多一条"当前"订阅（同档不同档都不能并存）
+-- 「占位」不等于「在服务」（2026-09-26）：`suspended` 也占着这个槽位。
+--   被冻结的订阅没有权益、产品不给服务——但它**还在**，恢复后要回到原地。谓词里漏掉它，
+--   客户就能在冻结期间把同一个产品再买一份（官网卡片当时还会显示「订阅」），而运营随后
+--   点「恢复」会撞 23505：两条在用行同时存在，那条冻结的订阅从此恢复不了。
+--   权益侧的「在用」集合（C2 / 用量 / 消费）仍不含 suspended，那是另一个问题的答案。
 CREATE UNIQUE INDEX uidx_subscriptions_live_per_product ON metering.subscriptions (workspace_id, product_id)
-  WHERE status IN ('active','trialing','expiring','overdue') AND deleted_at IS NULL;
+  WHERE status IN ('active','trialing','expiring','overdue','suspended') AND deleted_at IS NULL;
 
 -- ── §2 订阅变更审计（append-only）。触发器见 95。tenant_id 跨 schema→tenancy.tenants（90）；
 --   subscription_id 域内 FK→subscriptions（内联）。actor_id 裸 UUID（边界#2）。仅 created_at（不可变）。
