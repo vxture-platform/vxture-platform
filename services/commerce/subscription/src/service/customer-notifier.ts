@@ -36,7 +36,10 @@ export type CustomerNotificationTemplate =
   | "subscription.suspended"
   | "subscription.resumed"
   | "order.payment_rejected"
-  | "order.restored";
+  | "order.restored"
+  /* 2026-09-25 批 3：退款执行失败。批 2 本想加它，当时撤掉了——那会儿 `failed` 全仓
+     零写入方，先加模板就是一处「做了没接」。本批把 `failRefund` 这条路补上了。 */
+  | "refund.failed";
 
 export interface CustomerNotifyInput {
   tenantId: string;

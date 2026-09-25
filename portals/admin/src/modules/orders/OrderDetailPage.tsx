@@ -31,6 +31,7 @@ import {
   voidOrder,
   auditOrderRefund,
   executeOrderRefund,
+  failOrderRefund,
 } from "@/api/admin-bff";
 import type { OrderOperationDetailRecord } from "@/entities/console";
 import {
@@ -465,9 +466,13 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [restoreReason, setRestoreReason] = useState("");
   const [submittingRestore, setSubmittingRestore] = useState(false);
-  // 退款（product_330 §5）：approve / reject = 审核；execute = 已打款后执行（订单 refunded + 订阅回滚）
+  /*
+   * 退款（product_330 §5）：approve / reject = 审核；execute = 已打款后执行（订单
+   * refunded + 订阅回滚）；fail = 钱**没**打出去（账号不对、银行退回，2026-09-25 补）。
+   * execute 与 fail 是同一步的两个结果，所以同一个对话框、同一套权限。
+   */
   const [refundDialog, setRefundDialog] = useState<
-    "approve" | "reject" | "execute" | null
+    "approve" | "reject" | "execute" | "fail" | null
   >(null);
   const [refundRemark, setRefundRemark] = useState("");
   const [submittingRefund, setSubmittingRefund] = useState(false);
@@ -615,18 +620,22 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       const updated =
         refundDialog === "execute"
           ? await executeOrderRefund(order.id, refundRemark)
-          : await auditOrderRefund(
-              order.id,
-              refundDialog === "approve" ? "approved" : "rejected",
-              refundRemark,
-            );
+          : refundDialog === "fail"
+            ? await failOrderRefund(order.id, refundRemark)
+            : await auditOrderRefund(
+                order.id,
+                refundDialog === "approve" ? "approved" : "rejected",
+                refundRemark,
+              );
       setOrder(updated);
       setOperationFeedback(
         refundDialog === "execute"
           ? tPage("feedback.refundExecuted")
-          : refundDialog === "approve"
-            ? tPage("feedback.refundApproved")
-            : tPage("feedback.refundRejected"),
+          : refundDialog === "fail"
+            ? tPage("feedback.refundMarkedFailed")
+            : refundDialog === "approve"
+              ? tPage("feedback.refundApproved")
+              : tPage("feedback.refundRejected"),
       );
       setRefundDialog(null);
       setRefundRemark("");
@@ -835,6 +844,23 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                       {tPage("actions.completeRefund")}
                     </Button>
                   ) : null}
+                  {/* 同一步的另一个结果：钱没打出去。放在「完成退款」之后作次要动作。 */}
+                  {order.refund &&
+                  order.refund.auditStatus === "approved" &&
+                  order.refund.refundStatus !== "success" ? (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setOperationError(null);
+                        setOperationFeedback(null);
+                        setRefundRemark("");
+                        setRefundDialog("fail");
+                      }}
+                    >
+                      <Icon name="warning" size="xs" fallback="placeholder" />
+                      {tPage("actions.failRefund")}
+                    </Button>
+                  ) : null}
                 </>
               ) : null}
             </div>
@@ -1002,20 +1028,32 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       {order && order.refund && refundDialog ? (
         <DialogForm
           open
+          /*
+           * size="lg"：DS 的面板预设要求 DialogForm 显式给 sm/lg/xl（默认 md 不在预设里）。
+           * 本处原先没写，是 check-design-system 基线里的存量违规；2026-09-25 改动了这个
+           * 标签的内容，内容寻址的基线不再认它，于是现形——按规矩修掉，不去更新基线。
+           * 取 lg 与本模块的「确认收款」对话框一致：都是长说明 + 一个必填文本域。
+           * （同文件另外三处仍在基线里，各自的尺寸判断留给动到它们的那次改动。）
+           */
+          size="lg"
           title={
             refundDialog === "approve"
               ? tPage("dialogs.refund.titleApprove")
               : refundDialog === "reject"
                 ? tPage("dialogs.refund.titleReject")
-                : tPage("dialogs.refund.titleComplete")
+                : refundDialog === "fail"
+                  ? tPage("dialogs.refund.titleFail")
+                  : tPage("dialogs.refund.titleComplete")
           }
           description={tPage.rich(
             `dialogs.refund.desc${
               refundDialog === "execute"
                 ? "Complete"
-                : refundDialog === "approve"
-                  ? "Approve"
-                  : "Reject"
+                : refundDialog === "fail"
+                  ? "Fail"
+                  : refundDialog === "approve"
+                    ? "Approve"
+                    : "Reject"
             }${order.refund.reason ? "WithReason" : ""}`,
             {
               refundNo: order.refund.refundNo,
@@ -1029,7 +1067,9 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               ? tPage("dialogs.refund.submitApprove")
               : refundDialog === "reject"
                 ? tPage("dialogs.refund.submitReject")
-                : tPage("dialogs.refund.submitComplete")
+                : refundDialog === "fail"
+                  ? tPage("dialogs.refund.submitFail")
+                  : tPage("dialogs.refund.submitComplete")
           }
           cancelLabel={tShared("actions.cancel")}
           submitting={submittingRefund}
@@ -1057,7 +1097,9 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             placeholder={
               refundDialog === "execute"
                 ? tPage("dialogs.refund.placeholderComplete")
-                : tPage("dialogs.refund.placeholderReview")
+                : refundDialog === "fail"
+                  ? tPage("dialogs.refund.placeholderFail")
+                  : tPage("dialogs.refund.placeholderReview")
             }
             maxLength={512}
             rows={3}

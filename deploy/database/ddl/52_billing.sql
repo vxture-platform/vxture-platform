@@ -354,6 +354,12 @@ CREATE TABLE billing.payments (
     updated_at             timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT uq_payments_pay_order_no  UNIQUE (pay_order_no),
     CONSTRAINT chk_payments_pay_source   CHECK (pay_source IN ('online','offline','voucher')),  -- 'voucher' = settlement leg (product_321 P7)
+    -- 值域里有两个**保留值**，2026-09-25 核过：全仓没有写入方。
+    --   'pending'    线下流程里腿一建就是 pending_verify。它同时是本列的 DEFAULT，
+    --                所以**不能**从 CHECK 里摘掉——摘了以后任何不显式给 pay_status 的
+    --                INSERT 当场失败，两个未用值的清理换不来这个风险。
+    --   'refunding'  按设计就不会亮：退款不回改原支付腿与原流水（见本表上方注释），
+    --                退款的状态住在 billing.refunds。
     CONSTRAINT chk_payments_pay_status   CHECK (pay_status IN ('pending','pending_verify','paid','failed','closed','refunding')),
     CONSTRAINT chk_payments_actor_type   CHECK (actor_type IN ('system','customer','operator'))
 );
@@ -389,10 +395,20 @@ CREATE TABLE billing.refunds (
     created_at        timestamptz   NOT NULL DEFAULT now(),
     updated_at        timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT uq_refunds_refund_no          UNIQUE (refund_no),
+    -- 'partial' 等折算退上线时才有创建路径（判据是**金额** < 实付合计，不是这个类型字段）；
+    -- 'dispute'（争议 / 拒付）是预留值：钱走线下对公汇款，没有拒付这回事。2026-09-25 核过。
     CONSTRAINT chk_refunds_refund_type       CHECK (refund_type IN ('normal','partial','dispute')),
     CONSTRAINT chk_refunds_audit_status      CHECK (audit_status IN ('pending','approved','rejected')),
     CONSTRAINT chk_refunds_refund_status     CHECK (refund_status IN ('pending','processing','success','failed')),
-    CONSTRAINT chk_refunds_created_by_type   CHECK (created_by_type IN ('customer','operator'))
+    CONSTRAINT chk_refunds_created_by_type   CHECK (created_by_type IN ('customer','operator')),
+    -- 资金门（2026-09-25，迁移 2026-11-08-refund-execution-needs-approval）：
+    -- **只有审核通过的单才允许离开 refund_status='pending'**。两根状态叉乘 12 种，
+    -- 其中 rejected×success（审核没过却退了钱）与 pending×success（没审就退）是资金
+    -- 事故；此前挡住它们的只有 executeRefund 里那句 where audit_status='approved'，
+    -- 一条旁路 SQL 就能绕过。读法：refund_status 还在 pending 时 audit 可以是任意值，
+    -- 一动（processing/success/failed）就必须已经 approved。
+    CONSTRAINT chk_refunds_execute_needs_approval
+      CHECK (refund_status = 'pending' OR audit_status = 'approved')
 );
 CREATE INDEX idx_refunds_audit_status ON billing.refunds (audit_status);
 CREATE INDEX idx_refunds_tenant_id    ON billing.refunds (tenant_id);

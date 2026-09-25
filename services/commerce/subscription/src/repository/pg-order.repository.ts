@@ -1156,6 +1156,58 @@ export class PgOrderRepository {
     }
   }
 
+  /**
+   * 退款执行失败（2026-09-25）——`executeRefund` 的另一半。
+   *
+   * 钱走线下对公汇款人工打，打不出去是真会发生的（账号不对、银行退回）。此前
+   * `refund_status` 的 `failed` **全仓零写入方**：失败之后库里看不出、客户不知道、运营
+   * 也没有重试的抓手，那笔单会一直显示「已审核待执行」。
+   *
+   * 闸门与成功路同一套（`audit_status='approved'` + `refund_status in (pending,
+   * processing)`），所以并发下「一个人点成功、一个人点失败」只有一方能落地，另一方 0 行。
+   * 订单状态**不动**：钱没退出去，这张单还是已完成；失败原因落 order_events（append-only，
+   * 与 `refunded` 事件同一条时间线），不新开一列。
+   */
+  async markRefundFailed(input: {
+    refund: Pick<RefundRecordView, "id" | "refundNo">;
+    order: Pick<OrderRecord, "id" | "status">;
+    reason: string;
+    actor: OrderActor;
+  }): Promise<RefundRecordView> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const res = await client.query<RefundRow>(
+        `update billing.refunds
+            set refund_status = 'failed', updated_at = now()
+          where id = $1 and audit_status = 'approved'
+            and refund_status in ('pending', 'processing')
+          returning *`,
+        [input.refund.id],
+      );
+      const row = res.rows[0];
+      if (!row) throw new ConflictException("退款单不是已审核待执行状态");
+      await this.insertEventTx(client, {
+        orderId: input.order.id,
+        eventType: "refund_failed",
+        // 订单状态没变——事件记的是钱那一侧的事，不是订单迁移。
+        fromStatus: input.order.status,
+        toStatus: input.order.status,
+        actorType: input.actor.actorType,
+        actorId: input.actor.actorId,
+        remark: `refund ${input.refund.refundNo} failed: ${input.reason}`,
+        clientIp: input.actor.clientIp ?? null,
+      });
+      await client.query("commit");
+      return mapRefund(row);
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async listRefunds(
     status?: "pending" | "approved" | "rejected",
   ): Promise<(RefundRecordView & { orderNo: string; tenantId: string })[]> {

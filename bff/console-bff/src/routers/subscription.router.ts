@@ -489,8 +489,13 @@ export interface OrderRefundView {
   amount: string;
   currency: string;
   reason: string | null;
-  /** requested → approved | rejected → refunded */
-  stage: "requested" | "approved" | "rejected" | "refunded";
+  /**
+   * requested → approved | rejected → refunded | failed
+   *
+   * `failed` 是 2026-09-25 补的：打款失败的单 audit 仍是 approved，此前它落进 `approved`
+   * 那一档，于是客户看到「退款已通过，等待打款」——而钱根本没退回去。
+   */
+  stage: "requested" | "approved" | "rejected" | "refunded" | "failed";
   auditRemark: string | null;
   requestedAt: string;
   auditedAt: string | null;
@@ -509,14 +514,18 @@ export interface RefundEligibilityResult {
 }
 
 function mapRefundView(r: RefundRecordView): OrderRefundView {
+  // 顺序要紧：执行结果先判，再判审核。失败单的 audit 是 approved，反过来写就会把
+  // 「钱没退回去」说成「已通过，等待打款」。
   const stage: OrderRefundView["stage"] =
     r.refundStatus === "success"
       ? "refunded"
-      : r.auditStatus === "rejected"
-        ? "rejected"
-        : r.auditStatus === "approved"
-          ? "approved"
-          : "requested";
+      : r.refundStatus === "failed"
+        ? "failed"
+        : r.auditStatus === "rejected"
+          ? "rejected"
+          : r.auditStatus === "approved"
+            ? "approved"
+            : "requested";
   return {
     refundNo: r.refundNo,
     amount: r.amount,

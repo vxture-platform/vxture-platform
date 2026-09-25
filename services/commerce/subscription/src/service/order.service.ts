@@ -1120,6 +1120,42 @@ export class OrderService {
     return done;
   }
 
+  /**
+   * 退款执行失败（2026-09-25）：钱没打出去。
+   *
+   * 与 `executeRefund` 成对。此前这条路不存在——`refund_status` 的 `failed` 全仓零写入
+   * 方，于是打款失败之后：库里看不出，客户以为钱在路上，运营也没有重试的抓手。
+   *
+   * 订单与订阅都不动（钱没退出去，服务该怎样还怎样）。资格判定里 `refund_exists` 明确
+   * 排除 `failed`，所以客户还能再申请一次——但 24 小时窗口仍在走，拖过窗口就真的退不了，
+   * 这一点写在通知文案里让客户尽快联系客服。
+   */
+  async failRefund(
+    refundId: string,
+    reason: string,
+    actor: OrderActor,
+  ): Promise<RefundRecordView> {
+    const refund = await this.orders.getRefundById(refundId);
+    if (!refund) throw new NotFoundException(`退款单 ${refundId} 不存在`);
+    if (refund.auditStatus !== "approved") {
+      throw new ConflictException("退款申请未审核通过，无从执行失败");
+    }
+    if (refund.refundStatus === "success") {
+      throw new ConflictException("退款已完成，不能再标记失败");
+    }
+    const order = await this.getOrder(refund.orderId);
+    const failed = await this.orders.markRefundFailed({
+      refund,
+      order,
+      reason,
+      actor,
+    });
+    await this.emit(`refund_failed ${refund.refundNo}`, async () =>
+      this.refundNotice("refund.failed", refund, order, "failed"),
+    );
+    return failed;
+  }
+
   async listRefunds(status?: "pending" | "approved" | "rejected") {
     return this.orders.listRefunds(status);
   }

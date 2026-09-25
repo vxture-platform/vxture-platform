@@ -1401,6 +1401,22 @@ export function executeOrderRefund(
   );
 }
 
+/**
+ * 退款执行**失败**（2026-09-25）：钱没打出去。与 executeOrderRefund 成对，同码同门
+ * （commerce:payment.settle + step-up）。原因必填——它是发给客户那封通知的依据。
+ */
+export function failOrderRefund(
+  orderId: string,
+  reason: string,
+): Promise<OrderOperationDetailRecord> {
+  return postOrderAction(
+    orderId,
+    "refund-fail",
+    { reason },
+    "Marking the refund failed did not go through",
+  );
+}
+
 export async function fetchBillingRecords(): Promise<BillingRecord[]> {
   return readJsonStrict<BillingRecord[]>("/api/billing");
 }

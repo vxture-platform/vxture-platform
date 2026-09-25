@@ -52,7 +52,10 @@ export type NotificationTemplateCode =
   | "subscription.suspended"
   | "subscription.resumed"
   | "order.payment_rejected"
-  | "order.restored";
+  | "order.restored"
+  /* 2026-09-25 批 3：退款执行失败（`failRefund`）。批 2 撤掉过一次，理由与现在补上的
+     理由是同一个——那时没有写入方，现在有了。 */
+  | "refund.failed";
 
 export type NotificationReferenceType =
   | "subscription"
@@ -113,6 +116,7 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "subscription.resumed": "订阅已恢复：{{productName}} {{planName}}",
   "order.payment_rejected": "付款信息未通过核对：订单 {{orderNo}}",
   "order.restored": "订单已恢复：{{orderNo}}",
+  "refund.failed": "退款未能完成：订单 {{orderNo}}",
 };
 
 const BODIES_ZH: Record<NotificationTemplateCode, string> = {
@@ -165,6 +169,10 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
     "原因：{{reason}}。券与折扣已释放，可重新申报付款或取消订单，付款倒计时已重置。",
   "order.restored":
     "订单 {{orderNo}}（{{productName}}）已重新开放付款，应付 {{amount}}。",
+  /* 只说事实：钱没退回去。不写「我们会重新处理」——那是替人工许诺。
+     提一句「尽快」是因为 24 小时退款窗仍在走，拖过就真退不了。 */
+  "refund.failed":
+    "退款 {{amount}} 未能完成，款项尚未退回。请尽快联系客服跟进。",
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -196,6 +204,7 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "subscription.resumed": "Subscription resumed: {{productName}} {{planName}}",
   "order.payment_rejected": "Payment details not confirmed: order {{orderNo}}",
   "order.restored": "Order reopened: {{orderNo}}",
+  "refund.failed": "Refund could not be completed: order {{orderNo}}",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -241,6 +250,8 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "Reason: {{reason}}. Vouchers and discounts have been released; you can declare payment again or cancel the order, and the payment countdown has been reset.",
   "order.restored":
     "Order {{orderNo}} ({{productName}}) is open for payment again, {{amount}} due.",
+  "refund.failed":
+    "The {{amount}} refund could not be completed and the money has not been returned yet. Please contact support soon.",
 };
 
 const FOOTER: Record<NotificationLocale, string> = {
@@ -303,6 +314,7 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "subscription.resumed": "subscription_expiry",
   "order.payment_rejected": "order_status",
   "order.restored": "order_status",
+  "refund.failed": "refund_progress",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {
