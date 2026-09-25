@@ -56,6 +56,14 @@
     "unavailable": {
       "title": "智能体清单暂时不可用",
       "description": "产品目录暂时读不到，请稍后刷新重试。"
+    },
+    "suspension": {
+      "maintenance": "维护中",
+      "review": "审核中",
+      "restricted": "服务受限",
+      "paused": "已暂停",
+      "hintExtend": "服务暂时不可用，暂停的这段时间不计入有效期。",
+      "hint": "服务暂时不可用。"
     }
   }
 }

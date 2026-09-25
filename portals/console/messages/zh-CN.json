@@ -2478,7 +2478,9 @@
       "creditPending": "折抵试算中…",
       "creditFailed": "折抵计算失败，当前按原价显示；提交后以服务端实算为准。",
       "creditRetry": "重试",
-      "startNoteRenew": "续订周期在当前订阅到期后接续起算，不会缩短剩余时间"
+      "startNoteRenew": "续订周期在当前订阅到期后接续起算，不会缩短剩余时间",
+      "suspendedBlocked": "订阅已暂停，暂不能下单",
+      "suspendedHint": "服务暂时不可用，请联系支持恢复后再操作。"
     },
     "pending": {
       "title": "订单待确认",

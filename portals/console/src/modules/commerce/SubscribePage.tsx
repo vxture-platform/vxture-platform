@@ -463,6 +463,16 @@ export function SubscribePage() {
    * **用户自己从阶梯里挑**的，两者都要挡——服务端是主闸门（409 NOT_AN_UPGRADE），
    * 这里挡的是「让人点下去再被拒」这件事本身。
    */
+  /*
+   * 冻结中不能下单（2026-09-26）。服务端有守卫（console-bff 的
+   * `assertNoSuspendedSubscriptionForProduct`）与库级唯一索引兜底，这里关的是按钮——
+   * 一个点下去必定 409 的按钮是死控件，比灰着更糟。
+   *
+   * 为什么冻结中一单都不能下：`new` 会造出第二条在用订阅（恢复时撞唯一索引，那条被冻结
+   * 的订阅从此恢复不了）；`upgrade`/`renew` 会改动那条被平台冻结的订阅，等于客户自己解了冻。
+   */
+  const currentSuspended = current?.status === "suspended";
+
   const selectedIsDowngrade =
     plan !== null &&
     current !== null &&
@@ -497,6 +507,7 @@ export function SubscribePage() {
     if (!plan || isEnterprise || !price) return;
     /* 降档不下单（owner 2026-09-24）。按钮已禁用，这一行是它被绕过时的那道。 */
     if (selectedIsDowngrade) return;
+    if (currentSuspended) return;
     setBusy(true);
     setError(null);
     try {
@@ -603,6 +614,14 @@ export function SubscribePage() {
                   plan={plan}
                   note={planNote}
                 />
+                {currentSuspended ? (
+                  <Banner
+                    className="mt-sm"
+                    tone="warning"
+                    title={t("confirm.suspendedBlocked")}
+                    description={t("confirm.suspendedHint")}
+                  />
+                ) : null}
                 {selectedIsDowngrade && current ? (
                   <Banner
                     className="mt-sm"
@@ -843,7 +862,12 @@ export function SubscribePage() {
                     </div>
                     <Button
                       size="xl"
-                      disabled={busy || !price || selectedIsDowngrade}
+                      disabled={
+                        busy ||
+                        !price ||
+                        selectedIsDowngrade ||
+                        currentSuspended
+                      }
                       onClick={() => void onSubmit()}
                       className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
                     >

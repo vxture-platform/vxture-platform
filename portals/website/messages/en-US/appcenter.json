@@ -56,6 +56,14 @@
     "unavailable": {
       "title": "Agent list temporarily unavailable",
       "description": "The product catalog could not be read. Please refresh in a moment."
+    },
+    "suspension": {
+      "maintenance": "Under maintenance",
+      "review": "Under review",
+      "restricted": "Service restricted",
+      "paused": "Paused",
+      "hintExtend": "Service is temporarily unavailable; this time does not count against your term.",
+      "hint": "Service is temporarily unavailable."
     }
   }
 }

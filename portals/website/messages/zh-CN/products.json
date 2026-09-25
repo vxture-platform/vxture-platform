@@ -150,7 +150,15 @@
       "title": "暂无上线的平台级产品",
       "description": "产品上线并对客户可见后会自动出现在这里。"
     },
-    "items": []
+    "items": [],
+    "suspension": {
+      "maintenance": "维护中",
+      "review": "审核中",
+      "restricted": "服务受限",
+      "paused": "已暂停",
+      "hintExtend": "服务暂时不可用，暂停的这段时间不计入有效期。",
+      "hint": "服务暂时不可用。"
+    }
   },
   "agentDetail": {
     "detailLabel": "产品详情",

@@ -17,8 +17,37 @@ import { SUBSCRIPTION_STATUSES, TIERS } from "@vxture-platform/shared";
 import { WEBSITE_BFF_RO_POOL } from "../providers/pg-pool.provider";
 import type { RequestContext } from "../types/auth.types";
 
-// 授予权益的「在用」状态（含 overdue 宽限）；据此判 subscribed。
-const LIVE_STATUSES = new Set<string>(["active", "trialing", "overdue"]);
+/**
+ * 「这个租户在这个产品上有没有订阅」的状态集（2026-09-26 修）。
+ *
+ * **`suspended` 必须在里面。** 它此前不在，于是冻结期间卡片落到「订阅」分支——客户能把
+ * 同一个产品再买一份，运营随后点「恢复订阅」会撞唯一索引，那条订阅从此恢复不了。
+ *
+ * 注意这和**权益**的「在用」集合不是同一个东西，两者在 `suspended` 这一档上答案相反：
+ *   · 权益（C2 / 用量 / 消费）：冻结中**不给**服务 —— 那些地方不含 suspended，是对的。
+ *   · 占位（还能不能再买、恢复后回不回得到原地）：冻结中**仍然占着**。
+ * 一个集合被两个问题共用，就会在某一档上同时对一个、错一个。这里只答占位那一个。
+ */
+const HELD_STATUSES = new Set<string>([
+  "active",
+  "trialing",
+  "overdue",
+  "suspended",
+]);
+
+/**
+ * 暂停原因 → **面向客户的展示态**。
+ *
+ * 原因本身不出网：值域里有 `customer_violation`，那是运营的判断，不该从客户界面读出来。
+ * 但也不能一律说成「维护中」——对一个因违规被停的客户那么说，是平台在替自己撒谎。
+ * 所以映射成一组客户看得懂、且都为真的词，原因留在运营侧。
+ */
+const SUSPENSION_DISPLAY: Record<string, string> = {
+  platform_ops: "maintenance", // 平台运维 → 维护中
+  dispute_review: "review", // 争议 / 合规审查 → 审核中
+  customer_violation: "restricted", // 客户违规 → 服务受限
+  other: "paused", // 其他 → 已暂停
+};
 
 export interface ProductSubscriptionState {
   productCode: string;
@@ -33,9 +62,22 @@ export interface ProductSubscriptionState {
   homeUrl: string | null;
   /**
    * 当前档之上还有可售（已发布 current 版本）的档位。没有就不该给「升级」按钮——
-   * 顶档也显示「升级」是此前的问题之一。
+   * 顶档也显示「升级」是此前的问题之一。**冻结中恒为 false**：换档会改动那条被平台
+   * 冻结的订阅，等于让客户自己解了冻。
    */
   canUpgrade: boolean;
+  /**
+   * 冻结中的展示态：`maintenance` / `review` / `restricted` / `paused`；未冻结为 null。
+   * 由暂停原因映射而来（原因本身不出网，见 SUSPENSION_DISPLAY）。
+   */
+  suspensionState: string | null;
+  /** 本次冻结开始时间（ISO），供界面显示「已暂停 N 天」。未冻结为 null。 */
+  suspendedSince: string | null;
+  /**
+   * 这一次暂停恢复后要不要顺延服务期。客户真正关心的是「停掉的这些天还不还给我」，
+   * 所以这个布尔出网，而**原因不出网**。未冻结 / 存量无 episode 为 null。
+   */
+  suspensionExtendsTerm: boolean | null;
 }
 
 @Controller("api/me")
@@ -54,6 +96,9 @@ export class ProductSubscriptionsRouter {
       tier: string | null;
       home_url: string | null;
       can_upgrade: boolean;
+      suspension_reason: string | null;
+      suspended_since: Date | null;
+      suspension_extends_term: boolean | null;
     }>(
       `with ranked as (
          select prod.id as product_id, prod.product_code, ts.status, pc.tier,
@@ -82,6 +127,11 @@ export class ProductSubscriptionsRouter {
        )
        select r.product_code, r.status, r.tier,
               pw.home_url,
+              -- 进行中那一次暂停的原因与起始时刻。只取未闭合的那条；读不到 → null
+              -- （没在暂停，或存量冻结行没有 episode——原因轴 2026-09-25 才加）。
+              sus.reason as suspension_reason,
+              sus.paused_at as suspended_since,
+              sus.extends_term as suspension_extends_term,
               -- 当前档之上是否还有可售档：同产品、current 已发布版本、primary 组件的
               -- tier 在五档阶梯（$3）里排在当前档之后。当前档为空（越梯/自定义）→ false。
               exists (
@@ -98,19 +148,43 @@ export class ProductSubscriptionsRouter {
               ) as can_upgrade
          from ranked r
          left join product.product_webhooks pw on pw.product_id = r.product_id
+         left join lateral (
+           select s2.reason, s2.paused_at, s2.extends_term
+             from metering.subscription_suspensions s2
+             join metering.subscriptions sub on sub.id = s2.subscription_id
+            where sub.workspace_id = (
+                    select id from tenancy.workspaces
+                     where tenant_id = $1 and is_default
+                     limit 1
+                  )
+              and sub.product_id = r.product_id
+              and s2.resumed_at is null
+            limit 1
+         ) sus on true
         where r.rn = 1`,
       [req.tenantId, [...SUBSCRIPTION_STATUSES], [...TIERS]],
     );
 
     return res.rows.map((r) => {
-      const subscribed = LIVE_STATUSES.has(r.status);
+      const subscribed = HELD_STATUSES.has(r.status);
+      const suspended = r.status === "suspended";
       return {
         productCode: r.product_code,
         subscribed,
         tier: r.tier,
         status: r.status,
         homeUrl: r.home_url,
-        canUpgrade: subscribed && r.can_upgrade,
+        /* 冻结中不给换档：升级走履约会改动那条被平台冻结的订阅，等于客户自己解了冻。 */
+        canUpgrade: subscribed && !suspended && r.can_upgrade,
+        /* 没有 episode 的存量冻结行落到 `paused`——说不清原因时用最中性的那个词，
+           而不是猜一个更好听的。 */
+        suspensionState: suspended
+          ? (SUSPENSION_DISPLAY[r.suspension_reason ?? ""] ?? "paused")
+          : null,
+        suspendedSince: suspended
+          ? (r.suspended_since?.toISOString() ?? null)
+          : null,
+        suspensionExtendsTerm: suspended ? r.suspension_extends_term : null,
       };
     });
   }

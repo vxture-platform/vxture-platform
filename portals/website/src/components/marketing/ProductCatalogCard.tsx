@@ -107,6 +107,18 @@ export interface ProductCatalogCardLabels {
     detail: string;
     coming: string;
   };
+  /**
+   * 冻结中的展示文案（2026-09-26）。键与 BFF 的 `suspensionState` 一一对应；
+   * `hintExtend` / `hint` 按这一次暂停算不算顺延选。
+   */
+  suspension: {
+    maintenance: string;
+    review: string;
+    restricted: string;
+    paused: string;
+    hintExtend: string;
+    hint: string;
+  };
 }
 
 export function ProductCatalogCard({
@@ -144,6 +156,21 @@ export function ProductCatalogCard({
   const notLive =
     product.status === "developing" || product.releaseStage === "preview";
   const subscribed = !notLive && subscription?.subscribed === true;
+  /*
+   * 冻结中（2026-09-26）。此前这一档落到「未订阅」分支显示「订阅」——客户点下去会把同一
+   * 个产品再买一份，而运营随后点「恢复订阅」会撞唯一索引，那条订阅从此恢复不了。
+   *
+   * 现在它走**自己的分支**：既不给「订阅」（会造重复），也不给「进入」（产品正停着服务，
+   * 点进去是个死控件），也不给「升级」（换档会改动那条被平台冻结的订阅）。只说明白发生
+   * 了什么。
+   */
+  const suspendedState = subscribed
+    ? (subscription?.suspensionState ?? null)
+    : null;
+  const suspendedLabel = suspendedState
+    ? (labels.suspension[suspendedState as keyof typeof labels.suspension] ??
+      labels.suspension.paused)
+    : null;
   const tierLabel =
     subscribed && subscription?.tier
       ? subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)
@@ -207,7 +234,13 @@ export function ProductCatalogCard({
             <span className="rounded-full border border-vx-info-200/60 px-2.5 py-1 text-xs font-normal text-vx-info-600 dark:border-vx-info-400/25 dark:text-vx-info-200">
               {stageBadge}
             </span>
-            {subscribed ? (
+            {suspendedLabel ? (
+              /* 冻结中压过绿色「已订阅」：这时候告诉客户「已订阅」是对的但没用，
+                 他要知道的是**为什么用不了**。 */
+              <span className="rounded-full border border-vx-warning-200/60 px-2.5 py-1 text-xs font-normal text-vx-warning-600 dark:border-vx-warning-300/30 dark:text-vx-warning-300">
+                {suspendedLabel}
+              </span>
+            ) : subscribed ? (
               <span className="rounded-full border border-vx-success-200/60 px-2.5 py-1 text-xs font-normal text-vx-success-600 dark:border-vx-success-300/30 dark:text-vx-success-300">
                 {labels.badges.active}
               </span>
@@ -299,6 +332,22 @@ export function ProductCatalogCard({
           {notLive ? (
             <Button variant="outline" size="md" disabled className="h-10">
               {labels.actions.coming}
+            </Button>
+          ) : suspendedLabel ? (
+            /* 三个入口都不给：订阅会造重复行、进入是死控件、升级会动那条被冻结的订阅。
+               留一个说明白状态的禁用按钮，悬停给出这段时间算不算有效期。 */
+            <Button
+              variant="outline"
+              size="md"
+              disabled
+              className="h-10"
+              title={
+                subscription?.suspensionExtendsTerm
+                  ? labels.suspension.hintExtend
+                  : labels.suspension.hint
+              }
+            >
+              {suspendedLabel}
             </Button>
           ) : subscribed ? (
             <>

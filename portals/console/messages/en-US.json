@@ -2478,7 +2478,9 @@
       "creditPending": "Calculating credit…",
       "creditFailed": "Could not calculate the upgrade credit; showing the list price. The final amount is computed on submit.",
       "creditRetry": "Retry",
-      "startNoteRenew": "Renewal starts when the current subscription ends; remaining time is not shortened"
+      "startNoteRenew": "Renewal starts when the current subscription ends; remaining time is not shortened",
+      "suspendedBlocked": "Subscription paused — ordering is unavailable",
+      "suspendedHint": "Service is temporarily unavailable. Contact support to restore it first."
     },
     "pending": {
       "title": "Order awaiting confirmation",

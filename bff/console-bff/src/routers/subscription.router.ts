@@ -1651,6 +1651,11 @@ export class SubscriptionRouter {
     // One open order per (workspace × product)，0 元订单同样受限（P3/§7.3）；
     // 库级部分唯一索引 uidx_orders_open_per_product 兜底并发。
     await this.assertNoPendingOrderForProduct(workspaceId, productCode);
+    // 冻结中的订阅占着槽位：买第二份会让它恢复不了（见方法头注）。
+    await this.assertNoSuspendedSubscriptionForProduct(
+      workspaceId,
+      productCode,
+    );
 
     // 原订阅：upgrade / renew 由客户端指定；renew 未指定时取本产品的代表订阅（续订即延长它）。
     let effectiveIntent = intent as OrderCreateIntent;
@@ -2218,6 +2223,44 @@ export class SubscriptionRouter {
     );
 
     return row.id;
+  }
+
+  /**
+   * 冻结中的订阅仍然占着这个 workspace×product 的槽位（2026-09-26）。
+   *
+   * 少了这一条，客户能在暂停期间把同一个产品再买一份，运营随后点「恢复订阅」会撞
+   * `uidx_subscriptions_live_per_product`（23505）——那条被冻结的订阅从此恢复不了，
+   * 付费档还多付了一次钱。库里那条唯一索引同批已经把 suspended 加进谓词兜底，这里拦的
+   * 是**正常路径**：让客户看到一句说得清的话，而不是履约深处抛出来的 500。
+   *
+   * 「列表能滤掉不等于下单拦得住」——这个文件自己写过两次的教训（release_stage、
+   * is_public），这次是第三次：官网卡片把冻结态显示成「订阅」，而下单端点根本没问过
+   * 这个产品上有没有冻结中的订阅。
+   *
+   * 不区分 intent：`new` 会造重复行；`upgrade`/`renew` 会改那条冻结行的档位或周期，等于
+   * 让客户自己把平台冻结的东西动了。暂停是平台动作，解冻也只能是平台动作。
+   */
+  private async assertNoSuspendedSubscriptionForProduct(
+    workspaceId: string,
+    productCode: string,
+  ): Promise<void> {
+    const { rows } = await this.pool.query<{ id: string }>(
+      `select s.id
+         from metering.subscriptions s
+         join product.products p on p.id = s.product_id
+        where s.workspace_id = $1
+          and p.product_code = $2
+          and s.status = 'suspended'
+          and s.deleted_at is null
+        limit 1`,
+      [workspaceId, productCode],
+    );
+    if (rows.length > 0) {
+      throw new ConflictException({
+        code: "SUBSCRIPTION_SUSPENDED",
+        message: "该产品的订阅当前已暂停，暂不能下单。请联系支持恢复后再操作。",
+      });
+    }
   }
 
   private async assertNoPendingOrderForProduct(

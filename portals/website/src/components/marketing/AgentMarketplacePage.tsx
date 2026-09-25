@@ -126,6 +126,14 @@ export default function AgentMarketplacePage({
         detail: t("agents.actions.detail"),
         coming: t("agents.actions.coming"),
       },
+      suspension: {
+        maintenance: t("agents.suspension.maintenance"),
+        review: t("agents.suspension.review"),
+        restricted: t("agents.suspension.restricted"),
+        paused: t("agents.suspension.paused"),
+        hintExtend: t("agents.suspension.hintExtend"),
+        hint: t("agents.suspension.hint"),
+      },
     }),
     [t],
   );
