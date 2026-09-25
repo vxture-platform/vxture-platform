@@ -500,7 +500,10 @@ export function SubscriptionsPage() {
     );
   }
 
-  async function handleSubmitSubscriptionAction(reason: string) {
+  async function handleSubmitSubscriptionAction(
+    reason: string,
+    suspendReason: string | null,
+  ) {
     if (!actionTarget) return;
 
     setSubmittingAction(true);
@@ -510,6 +513,7 @@ export function SubscriptionsPage() {
       await submitSubscriptionOperation(actionTarget.subscription.id, {
         action: actionTarget.action,
         reason,
+        suspendReason,
       });
       const records = await fetchSubscriptionOperations();
       setSubscriptions(records);

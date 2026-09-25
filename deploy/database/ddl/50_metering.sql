@@ -122,6 +122,56 @@ CREATE TABLE metering.subscription_renewals (
 CREATE INDEX idx_subscription_renewals_queue     ON metering.subscription_renewals (status, next_retry_at);  -- 队列领取
 CREATE INDEX idx_subscription_renewals_tenant_id ON metering.subscription_renewals (tenant_id);
 
+-- ── §2.2 暂停 episode（2026-09-25，owner 定「暂停是平台动作 + 客户不承担暂停期间的代价」）。
+--
+--   为什么是一张表而不是 subscriptions 上加两列：**原因是「一次暂停」的属性，不是订阅的
+--   属性**。挂在订阅行上只存得住最近一次，同一条订阅先后因两种原因被暂停就丢了信息；而
+--   「本周期累计顺延了多少天」「顺不顺延要看那一次是谁的错」都要按次聚合。
+--
+--   extends_term 落库而不是每次从 reason 现算：政策以后可能改（比如 owner 改主意说争议
+--   审查也顺延），但**已经发生的那一次暂停不该被改写**。同 plan_versions 不可变的道理。
+--
+--   subscription_id 域内 FK→subscriptions（内联）；tenant_id 跨 schema→tenancy.tenants（90）；
+--   actor_id 裸 UUID（边界#2，按 actor_type 解引用）。
+CREATE TABLE metering.subscription_suspensions (
+    id                uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id   uuid          NOT NULL REFERENCES metering.subscriptions(id) ON DELETE CASCADE,  -- 域内 FK
+    tenant_id         uuid          NOT NULL,                     -- 跨 schema→tenancy.tenants（90）
+    -- 谁的错决定顺不顺延：平台自身 → 顺延；客户违规 → 不顺延；争议审查 → 按结论补。
+    reason            varchar(32)   NOT NULL,
+    reason_note       text,                                       -- reason='other' 时应用层要求必填
+    /* 本次暂停是否顺延服务期。由 reason 派生但落库——见上方注释。 */
+    extends_term      boolean       NOT NULL,
+    paused_at         timestamptz   NOT NULL DEFAULT now(),
+    resumed_at        timestamptz,                                -- NULL = 进行中
+    /* 恢复时结算的顺延秒数；被最长暂停期截断时小于实际时长。NULL = 还没结算。 */
+    granted_seconds   bigint,
+    actor_type        varchar(16)   NOT NULL DEFAULT 'operator',   -- §0.1：system/customer/operator
+    actor_id          uuid,                                       -- 裸值（边界#2）
+    client_ip         varchar(64),
+    created_at        timestamptz   NOT NULL DEFAULT now(),
+    updated_at        timestamptz   NOT NULL DEFAULT now(),
+    -- 值域权威 = @vxture-platform/shared catalog-domains SUSPENSION_REASONS（lint:catalog-domains 强制一致）。
+    --   顺不顺延由原因派生，派生表也在那里：两个消费方（写 extends_term 的 admin-bff、
+    --   告诉运营「这一次算不算顺延」的 admin 界面）必须同口径。
+    CONSTRAINT chk_subscription_suspensions_reason      CHECK (reason IN ('platform_ops','dispute_review','customer_violation','other')),
+    CONSTRAINT chk_subscription_suspensions_actor_type
+      CHECK (actor_type IN ('system','customer','operator')),
+    -- 结束时刻不能早于开始时刻；顺延秒数非负。
+    CONSTRAINT chk_subscription_suspensions_window
+      CHECK (resumed_at IS NULL OR resumed_at >= paused_at),
+    CONSTRAINT chk_subscription_suspensions_granted
+      CHECK (granted_seconds IS NULL OR granted_seconds >= 0),
+    -- 还没结束的那一次不可能已经结算出顺延秒数。
+    CONSTRAINT chk_subscription_suspensions_settle_order
+      CHECK (resumed_at IS NOT NULL OR granted_seconds IS NULL)
+);
+CREATE INDEX idx_subscription_suspensions_subscription ON metering.subscription_suspensions (subscription_id);
+CREATE INDEX idx_subscription_suspensions_tenant_id    ON metering.subscription_suspensions (tenant_id);
+-- 一条订阅同时只能有一次「进行中」的暂停。两次并存会让有效到期日算两遍。
+CREATE UNIQUE INDEX uidx_subscription_suspensions_open ON metering.subscription_suspensions (subscription_id)
+  WHERE resumed_at IS NULL;
+
 -- ── §3 运营手工权益覆盖。subscription_id 域内 FK→subscriptions（内联）；product_id 跨 schema→product.products（90）。
 --   operator_id：权益覆盖 realm 确定=operator，逻辑引用 admin.operator_accounts，裸 UUID（边界#2）。
 CREATE TABLE metering.subscription_entitlement_overrides (

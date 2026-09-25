@@ -42,6 +42,7 @@ import type {
   BillStatus,
   PaySource,
   SubscriptionStatus,
+  SuspensionReason,
   TicketPriority,
   MergeStrategy,
   ProductLayerValue,
@@ -78,6 +79,27 @@ export function useSubscriptionStatusLabels(): Record<
     expired: t("expired"),
     cancelled: t("cancelled"),
   } satisfies Record<SubscriptionStatus, string>;
+}
+
+/**
+ * 暂停原因的界面文案。
+ *
+ * 值域在 `@vxture-platform/shared` 的 catalog-domains（`SUSPENSION_REASONS`，与
+ * `chk_subscription_suspensions_reason` 由 `lint:catalog-domains` 逐值对账），所以它
+ * 满足本模块的收录边界：先有值域契约,再谈它的展示映射。
+ *
+ * **不在这里判「顺不顺延」**：那是政策，同一份派生表（`SUSPENSION_REASON_EXTENDS_TERM`）
+ * 既被 admin-bff 用来写 `extends_term`、又被这一侧用来告诉运营他正要做什么。文案与政策
+ * 分开放，是为了改译名不会碰到政策。
+ */
+export function useSuspensionReasonLabels(): Record<SuspensionReason, string> {
+  const t = useTranslations("enums.suspensionReason");
+  return {
+    platform_ops: t("platform_ops"),
+    dispute_review: t("dispute_review"),
+    customer_violation: t("customer_violation"),
+    other: t("other"),
+  } satisfies Record<SuspensionReason, string>;
 }
 
 /**

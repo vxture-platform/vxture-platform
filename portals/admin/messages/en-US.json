@@ -2419,6 +2419,12 @@
       "expired": "Expired",
       "cancelled": "Cancelled"
     },
+    "suspensionReason": {
+      "platform_ops": "Platform maintenance",
+      "dispute_review": "Dispute or compliance review",
+      "customer_violation": "Customer violation",
+      "other": "Other"
+    },
     "subscriptionCycle": {
       "monthly": "Monthly",
       "yearly": "Annual",
@@ -2529,6 +2535,15 @@
       "app": "Mobile",
       "miniprogram": "Mini program"
     }
+  },
+  "subscriptionSuspension": {
+    "label": "Suspension reason",
+    "placeholder": "Select one",
+    "unselected": "Pick a suspension reason.",
+    "extends": "The term is extended on resume; paused days do not count against it.",
+    "noExtends": "The term is not extended; paused days count against it as usual.",
+    "extendsShort": "term extended on resume",
+    "noExtendsShort": "term not extended"
   },
   "orderDetailPage": {
     "title": "Order detail",

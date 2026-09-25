@@ -2,8 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { DialogForm, Icon, Label, Textarea } from "@vxture/design-system";
+import {
+  DialogForm,
+  Icon,
+  Label,
+  NativeSelect,
+  Textarea,
+} from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
+import {
+  SUSPENSION_REASONS,
+  SUSPENSION_REASON_EXTENDS_TERM,
+} from "@vxture-platform/shared";
+import type { SuspensionReason } from "@vxture-platform/shared";
+import { useSuspensionReasonLabels } from "@/modules/shared/enum-labels";
 import type {
   SubscriptionOperationAction,
   SubscriptionOperationCycle,
@@ -91,6 +103,23 @@ function isPastEndAt(value: string | null): boolean {
   return Number.isFinite(endAt) && endAt < Date.now();
 }
 
+/*
+ * 暂停原因轴（owner 2026-09-25）。值域与「顺不顺延」的派生都来自
+ * `@vxture-platform/shared` 的 catalog-domains——它同时对账 DDL 的
+ * `chk_subscription_suspensions_reason`，也是 admin-bff 写 `extends_term` 的依据。
+ * 这一侧只负责让运营**看见自己选的那一档意味着什么**：暂停期间客户用不了服务，除了他
+ * 自己违规，那些天都该在恢复后还给他。
+ *
+ * 不给默认值是有意的：默认会让顺延（或不顺延）悄悄发生，而运营根本没被问过。
+ */
+function suspendReasonHint(
+  value: SuspensionReason | "",
+  t: (key: string) => string,
+): string {
+  if (value === "") return t("unselected");
+  return SUSPENSION_REASON_EXTENDS_TERM[value] ? t("extends") : t("noExtends");
+}
+
 function subscriptionActionDescription(action: SubscriptionOperationAction) {
   if (action === "renew")
     return "人工确认合同、付款或续约审批已生效，系统据此延长当前周期；临期、逾期、暂停订阅会重新进入已生效状态。本动作不记账：新订单的收款请在订单管理「确认收款」。";
@@ -122,14 +151,21 @@ export function SubscriptionOperationDialog({
   busy: boolean;
   error: string | null;
   onCancel: () => void;
-  onSubmit: (reason: string) => void;
+  onSubmit: (reason: string, suspendReason: SuspensionReason | null) => void;
 }) {
   const tShared = useTranslations();
+  const tSuspension = useTranslations("subscriptionSuspension");
+  const suspensionReasonLabels = useSuspensionReasonLabels();
   const [reason, setReason] = useState("");
+  const [suspendReason, setSuspendReason] = useState<SuspensionReason | "">("");
   const trimmedReason = reason.trim();
+  /* 暂停必须选原因：它决定恢复后要不要顺延服务期，服务端也会拒掉不带原因的请求。
+     在这里也拦一道是为了别让运营填完一段说明再吃一个 400。 */
+  const needsSuspendReason = action === "suspend" && suspendReason === "";
 
   useEffect(() => {
     setReason("");
+    setSuspendReason("");
   }, [action, subscriptionName]);
 
   /* 原来是一整套手搓的模态：自己的遮罩、面板、头部、页脚、两个按钮，外加一个
@@ -158,18 +194,43 @@ export function SubscriptionOperationDialog({
       cancelLabel={tShared("actions.discard")}
       pendingLabel={tShared("status.generic.processing")}
       submitting={busy}
-      submitDisabled={!trimmedReason}
+      submitDisabled={!trimmedReason || needsSuspendReason}
       onOpenChange={(open) => {
         if (!open) onCancel();
       }}
       onSubmit={(event) => {
         event.preventDefault();
-        if (trimmedReason) onSubmit(trimmedReason);
+        if (!trimmedReason || needsSuspendReason) return;
+        onSubmit(trimmedReason, suspendReason === "" ? null : suspendReason);
       }}
     >
       <p className="m-0 text-body-sm text-muted-foreground">
         {subscriptionActionDescription(action)}
       </p>
+      {action === "suspend" ? (
+        <>
+          <Label htmlFor="vx-subscription-suspend-reason">
+            {tSuspension("label")}
+          </Label>
+          <NativeSelect
+            id="vx-subscription-suspend-reason"
+            value={suspendReason}
+            onChange={(event) =>
+              setSuspendReason(event.target.value as SuspensionReason | "")
+            }
+          >
+            <option value="">{tSuspension("placeholder")}</option>
+            {SUSPENSION_REASONS.map((value) => (
+              <option key={value} value={value}>
+                {suspensionReasonLabels[value]}
+              </option>
+            ))}
+          </NativeSelect>
+          <p className="m-0 text-body-sm text-muted-foreground">
+            {suspendReasonHint(suspendReason, tSuspension)}
+          </p>
+        </>
+      ) : null}
       <Label htmlFor="vx-subscription-action-reason">操作原因</Label>
       <Textarea
         id="vx-subscription-action-reason"

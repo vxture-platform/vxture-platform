@@ -1757,6 +1757,22 @@ export async function seedCatalog(client) {
     "✓  admin — settings refund.window_hours=24 / refund.max_usage_ratio=0.10",
   );
 
+  // 暂停期上限（product_330 §6，owner 2026-09-25）：平台原因的暂停要顺延服务期，没有上限
+  // 的话有效到期日会随暂停时长一直往后走 —— 那条订阅永不到期、永不释放、也永不再计费。
+  // 到点按原因处置（平台原因→强制恢复，客户原因→终止）。运营在治理台「平台参数」改值即生效。
+  await client.query(
+    `
+    insert into admin.settings (config_group, config_key, value_type, config_value, description, description_key, created_by, created_at, updated_at)
+    values
+      ('commerce', 'subscription.max_suspend_days', 'int', '60',
+       'Maximum days a single suspension episode may stay open before the platform must act.',
+       'ops.setting.subscription.max_suspend_days.desc', $1, now(), now())
+    on conflict (config_key) do nothing
+  `,
+    [SYS],
+  );
+  console.log("✓  admin — settings subscription.max_suspend_days=60");
+
   // ── 2. access.permissions (governance catalog; unified fields, console-mode) ─
   // perm_name = human label; is_system=true, created_by=SYS. 操作码行 do-nothing
   // (不覆盖运营改过的显示名);parent_id / perm_type 在下面按菜单树统一回写。

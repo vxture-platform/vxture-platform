@@ -1210,10 +1210,26 @@ export interface SubscriptionOperationRecord {
   updatedAt: string;
 }
 
+/**
+ * 进行中的那一次暂停（metering.subscription_suspensions，未闭合的一条）。
+ *
+ * `extendsTerm` 是这一次暂停开始时按原因定下的，**不是每次现算**：政策以后可能改，
+ * 但已经发生的那一次暂停不该被改写。null = 没在暂停，或存量冻结行没有 episode
+ * （原因轴是 2026-09-25 才加的）——界面显示「—」。
+ */
+export interface SubscriptionSuspensionSnapshot {
+  reason: string;
+  reasonNote: string | null;
+  extendsTerm: boolean;
+  pausedAt: string;
+}
+
 export interface SubscriptionOperationDetailRecord extends SubscriptionOperationRecord {
   solutionAssociation: SubscriptionSolutionAssociation;
   entitlementSnapshot: SubscriptionEntitlementSnapshot[];
   operationTimeline: SubscriptionOperationEvent[];
+  /** 现在为什么停着；不在暂停中则为 null。 */
+  suspension: SubscriptionSuspensionSnapshot | null;
 }
 
 export type OrderOperationStatus =

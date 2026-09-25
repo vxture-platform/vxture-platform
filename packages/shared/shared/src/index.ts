@@ -59,6 +59,7 @@ export type {
   ComponentRole,
   PlanVersionStatus,
   SubscriptionStatus,
+  SuspensionReason,
   BillStatus,
   PaySource,
   TicketStatus,
@@ -131,6 +132,10 @@ export {
   COMPONENT_ROLES,
   PLAN_VERSION_STATUSES,
   SUBSCRIPTION_STATUSES,
+  // 暂停原因轴：顺不顺延服务期只由它决定（owner 2026-09-25）
+  SUSPENSION_REASONS,
+  SUSPENSION_REASON_EXTENDS_TERM,
+  isSuspensionReason,
   BILL_STATUSES,
   PAY_SOURCES,
   TICKET_STATUSES,
