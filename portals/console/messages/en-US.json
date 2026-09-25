@@ -2391,6 +2391,7 @@
       "renewOff": "Auto-renew is off - your plan lapses at period end. Renew below.",
       "overdue": "Payment is overdue - settle to keep your entitlements.",
       "suspended": "This subscription is suspended. Contact support to restore it.",
+      "suspendedExtended": "This subscription is suspended. Contact support to restore it. The term is extended on resume; paused days do not count against it.",
       "expired": "Your subscription has expired - renew below to restore access.",
       "cancelled": "Your subscription was cancelled - resubscribe below."
     },

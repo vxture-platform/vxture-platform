@@ -243,6 +243,15 @@ interface SubscribeCurrent {
   endAt: string | null;
   trialEndAt: string | null;
   autoRenew: boolean;
+  /**
+   * 这一次暂停恢复后要不要顺延服务期（2026-09-25 步骤三）。
+   *
+   * 只有这个布尔，**没有暂停原因**：原因里有「客户违规」那一档，是运营的判断，不从客户
+   * 界面读出来。客户需要知道的只有一件——停掉的这些天会不会还给他。
+   *
+   * null = 没在暂停中，或存量冻结行没有 episode（原因轴是后加的）→ 界面什么都不多说。
+   */
+  suspensionExtendsTerm: boolean | null;
 }
 
 /**
@@ -1059,11 +1068,26 @@ export class SubscriptionRouter {
       plan_version_id: string;
       end_at: Date | null;
       trial_end_at: Date | null;
+      suspension_extends_term: boolean | null;
       auto_renew: boolean;
       tier: string | null;
       plan_code: string;
     }>(
       `select ts.id, ts.status, ts.plan_version_id, ts.end_at, ts.trial_end_at,
+              /*
+               * 这一次暂停恢复后要不要顺延服务期（2026-09-25 步骤三）。
+               *
+               * 只回传这个布尔，**不回传暂停原因**：原因里有 customer_violation 这一档，
+               * 那是运营的判断，不该从客户界面读出来。客户需要知道的只有一件事——停掉的
+               * 这些天会不会还给他。
+               *
+               * NULL = 没在暂停中，或存量冻结行没有 episode（原因轴 2026-09-25 才加）。
+               * 界面据此什么都不多说，而不是猜一个。
+               */
+              (select sus.extends_term
+                 from metering.subscription_suspensions sus
+                where sus.subscription_id = ts.id and sus.resumed_at is null
+                limit 1) as suspension_extends_term,
               ts.auto_renew, pc.tier, pl.plan_code
          from metering.subscriptions ts
          join product.plan_components pc
@@ -1092,6 +1116,7 @@ export class SubscriptionRouter {
       endAt: row.end_at?.toISOString() ?? null,
       trialEndAt: row.trial_end_at?.toISOString() ?? null,
       autoRenew: row.auto_renew,
+      suspensionExtendsTerm: row.suspension_extends_term,
     };
   }
 

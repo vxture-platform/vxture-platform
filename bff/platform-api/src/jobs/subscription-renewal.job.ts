@@ -1,7 +1,7 @@
 /**
  * subscription-renewal.job.ts — 到期扫描 + 自动续费（product_330 P2-c）。
  *
- * 每 tick 四趟，顺序固定：
+ * 每 tick 六趟，顺序固定：
  *  1. 自动续费：到期前 SUBSCRIPTION_RENEW_LEAD_DAYS（默认 3，owner 2026-09-03：到期前 3 天即可）内、auto_renew 开的订阅开 renew 单；
  *     ¥0 即时结清履约（end_at 顺延），付费单等客户付款（TTL = 到期 + SUBSCRIPTION_RENEW_GRACE_DAYS，默认 3）。
  *  2. 入宽限（2026-09-25，S8）：end_at 已过但还在宽限里、续费单在途未付的行 → overdue。权益不变，
@@ -9,7 +9,12 @@
  *  3. 到期扫描：end_at 已过、不在宽限里的非试用订阅 → expired（provisioning 钩子照常），付款后履约再复活。
  *     冻结（suspended）的行 2026-09-25 起也进这一趟——此前它们永不到期、永不释放。
  *  4. 到期前提醒 + 写 expiring（S6）。
+ *  5. 暂停到点处置（2026-09-25 步骤三）：暂停超过 subscription.max_suspend_days 还没恢复的，
+ *     平台原因强制恢复、客户违规终止——顺延让有效到期日一直往后走，没有上限那条订阅永不到期。
+ *  6. 顺延结算兜底：已闭合但没结算的 episode 结成天数加到 end_at。运营恢复时 admin-bff 会
+ *     立刻结算一次，这一趟只捞那次失败/漏掉的（判据是 granted_seconds is null，幂等）。
  * 先续后扫，¥0 续上的行 end_at 已后移不会被扫到；入宽限必须在到期扫描之前。
+ * 到点处置放在到期扫描**之后**：先让该到期的走完，剩下的才是真正「停太久」的。
  *
  * 宿主模式同其它 sweep 作业（runHeartbeatTick：心跳 + 失败不杀 interval）；实例 inFlight 防重入，
  * 跨实例竞态由服务层 CAS / 行锁解决。SUBSCRIPTION_RENEWAL_SWEEP_INTERVAL_MS 调节频率（默认 60s）。
@@ -109,6 +114,26 @@ export class SubscriptionRenewalJob {
         `expiry reminders: ${soon.notified} notified, ${soon.marked} → expiring`,
       );
     }
-    return renewal.created + overdue + expired + soon.notified;
+    // 5. 暂停到点处置（步骤三）：天数在 admin.settings 里，服务层自己读。
+    const deadline = await this.subscriptions.sweepOverdueSuspensions();
+    if (deadline.resumed > 0 || deadline.terminated > 0) {
+      this.logger.log(
+        `suspension deadline: ${deadline.resumed} force-resumed, ${deadline.terminated} terminated`,
+      );
+    }
+    // 6. 顺延结算兜底：正常路径上 admin-bff 恢复后就结算了，这一趟捞漏掉的那些。
+    const settled = await this.subscriptions.settleSuspensionExtension();
+    if (settled > 0) {
+      this.logger.log(`suspension settle: ${settled} episode(s) settled`);
+    }
+    return (
+      renewal.created +
+      overdue +
+      expired +
+      soon.notified +
+      deadline.resumed +
+      deadline.terminated +
+      settled
+    );
   }
 }

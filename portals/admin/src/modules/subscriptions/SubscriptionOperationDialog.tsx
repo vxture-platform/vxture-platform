@@ -39,6 +39,13 @@ type SubscriptionActionTarget =
   | {
       status: SubscriptionOperationStatus;
       endAt: string | null;
+      /**
+       * **有效到期日**（2026-09-25 步骤三）：`endAt` 加上进行中那次暂停已累计的时长。
+       * 判「能不能恢复」用它——顺延在恢复时才结算进 `endAt`，照 `endAt` 判会把一条因平台
+       * 故障停了一个月的订阅灰掉，而服务端已经放行，控件与规则各说各话。
+       * 传不到时退回 `endAt`（老调用点），不至于比现状更差。
+       */
+      effectiveEndAt?: string | null;
       cycleType?: SubscriptionOperationCycle;
     };
 
@@ -69,7 +76,9 @@ export function subscriptionActionDisabledReason(
   target: SubscriptionActionTarget,
 ): string | null {
   const status = typeof target === "string" ? target : target.status;
-  const endAt = typeof target === "string" ? null : target.endAt;
+  // 恢复的闸门按有效到期日；没给就退回 endAt。
+  const endAt =
+    typeof target === "string" ? null : (target.effectiveEndAt ?? target.endAt);
 
   if (action === "renew") {
     return status === "cancelled" ? "已取消订阅为终态，不能续期确认。" : null;

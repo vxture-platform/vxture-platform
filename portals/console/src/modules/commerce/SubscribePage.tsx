@@ -383,6 +383,16 @@ export function SubscribePage() {
   const stateKey = (() => {
     if (!current) return "none";
     if (current.status === "active" && !current.autoRenew) return "renewOff";
+    /*
+     * 暂停分两句（2026-09-25 步骤三）：顺延只在这一次暂停「不是客户自己违规」时成立，
+     * 无条件写成「恢复后顺延」就是对违规暂停的假承诺。标志为 null（不在暂停 / 存量冻结行
+     * 没有 episode）时走中性那句——什么都不多说，而不是猜一个。
+     *
+     * 不把暂停原因传到客户界面：那里有「客户违规」这一档，是运营的判断。
+     */
+    if (current.status === "suspended" && current.suspensionExtendsTerm) {
+      return "suspendedExtended";
+    }
     return STATUS_KEYS.has(current.status) ? current.status : "none";
   })();
 
