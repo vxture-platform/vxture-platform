@@ -133,6 +133,7 @@ describe("subscriptions runSubscriptionAction", () => {
         UUID_A,
         {
           action: "suspend",
+          suspendReason: "platform_ops",
         },
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -166,6 +167,7 @@ describe("subscriptions runSubscriptionAction", () => {
     await expect(
       router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
         action: "suspend",
+        suspendReason: "platform_ops",
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
     const o = tx.outcome();
@@ -197,6 +199,10 @@ describe("subscriptions runSubscriptionAction", () => {
       await expect(
         router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
           action: action as never,
+          /* suspend 现在必带原因（原因轴，2026-09-25）。这一组验的是**状态不变量**，
+             所以每条都带上合法原因——否则 suspend 那两行会先吃 400，换个理由变红，
+             而 409 那条判据从此再也没被跑到。 */
+          suspendReason: "platform_ops",
         }),
       ).rejects.toBeInstanceOf(ConflictException);
       const o = tx.outcome();
@@ -225,6 +231,7 @@ describe("subscriptions runSubscriptionAction", () => {
 
     await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
       action: "suspend",
+      suspendReason: "platform_ops",
     });
     const o = tx.outcome();
     expect(o.committed).toBe(true);
@@ -301,6 +308,8 @@ describe("subscriptions runSubscriptionAction", () => {
 
     await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
       action: action as never,
+      /* 只有 suspend 会读它；其余动作忽略（原因轴，2026-09-25）。 */
+      suspendReason: "platform_ops",
     });
     // before 必须是锁行时读到的状态与版本——hooks 全靠它判「从哪到哪」。
     expect(subs.applyExternalStatusChange).toHaveBeenCalledWith(UUID_A, {
@@ -325,6 +334,7 @@ describe("subscriptions runSubscriptionAction", () => {
     await expect(
       router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
         action: "suspend",
+        suspendReason: "platform_ops",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(subs.applyExternalStatusChange).not.toHaveBeenCalled();
@@ -380,6 +390,7 @@ describe("subscriptions runSubscriptionAction", () => {
 
     await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
       action: "suspend",
+      suspendReason: "platform_ops",
     });
     expect(orders.settleAfterCancel).not.toHaveBeenCalled();
   });

@@ -29,7 +29,13 @@
  * @category Router
  */
 
-import { SUBSCRIPTION_STATUSES, TIERS } from "@vxture-platform/shared";
+import {
+  SUBSCRIPTION_STATUSES,
+  SUSPENSION_REASONS,
+  SUSPENSION_REASON_EXTENDS_TERM,
+  isSuspensionReason,
+  TIERS,
+} from "@vxture-platform/shared";
 import {
   BadRequestException,
   Body,
@@ -74,6 +80,7 @@ import type {
   SubscriptionOperationRecord,
   SubscriptionOperationStatus,
   SubscriptionSolutionAssociation,
+  SubscriptionSuspensionSnapshot,
   TenantOperationStatus,
   TenantOperationType,
 } from "../types/console.types";
@@ -85,7 +92,25 @@ type SubscriptionActionType = "renew" | "suspend" | "resume" | "cancel";
 interface SubscriptionActionBody {
   action?: unknown;
   reason?: unknown;
+  suspendReason?: unknown;
 }
+
+/**
+ * 暂停原因轴（owner 2026-09-25）。**值域与「顺不顺延」的派生都在
+ * `@vxture-platform/shared` 的 catalog-domains**，不在这里——那一份同时是
+ * `chk_subscription_suspensions_reason` 的对账源（lint:catalog-domains），也是 admin
+ * 界面那段提示的依据。三个消费方挑一份当权威，剩下两份引用它：只改一处不会报错，只会
+ * 让运营在不知道后果的情况下按下按钮。
+ *
+ * 为什么必须有这根轴：owner 定了三条——不做退钱、客户不承担暂停期间的代价、暂停是平台
+ * 动作。前两条合起来意味着**暂停要顺延服务期**；但「一律顺延」是错的，平台因客户违规
+ * 暂停时顺延等于让违规者白得那些天。所以顺不顺延取决于「那一次是谁的错」，而在此之前
+ * `suspended` 就是 `suspended`，无从判断。
+ *
+ * 派生值写进 episode 行而不是每次从 reason 现算：政策以后可能改，但**已经发生的那一次
+ * 暂停不该被改写**（同 plan_versions 不可变的道理）。
+ */
+type SuspendReason = (typeof SUSPENSION_REASONS)[number];
 
 // change_type（open varchar32，写审计快照口径，见 50_metering.sql §2）。
 const ACTION_CHANGE_TYPE: Record<SubscriptionActionType, string> = {
@@ -163,21 +188,26 @@ export class SubscriptionsRouter {
 
     const base = mapSubscriptionRow(row);
 
-    const [entitlementRes, historyRes, renewalRes] = await Promise.all([
-      row.plan_version_id
-        ? this.pool.query<EntitlementRow>(SUBSCRIPTION_ENTITLEMENT_SQL, [
-            row.plan_version_id,
-          ])
-        : Promise.resolve({ rows: [] as EntitlementRow[] }),
-      this.pool.query<HistoryRow>(SUBSCRIPTION_HISTORY_SQL, [subscriptionId]),
-      this.pool.query<RenewalRow>(SUBSCRIPTION_RENEWAL_SQL, [subscriptionId]),
-    ]);
+    const [entitlementRes, historyRes, renewalRes, suspensionRes] =
+      await Promise.all([
+        row.plan_version_id
+          ? this.pool.query<EntitlementRow>(SUBSCRIPTION_ENTITLEMENT_SQL, [
+              row.plan_version_id,
+            ])
+          : Promise.resolve({ rows: [] as EntitlementRow[] }),
+        this.pool.query<HistoryRow>(SUBSCRIPTION_HISTORY_SQL, [subscriptionId]),
+        this.pool.query<RenewalRow>(SUBSCRIPTION_RENEWAL_SQL, [subscriptionId]),
+        this.pool.query<SuspensionRow>(SUSPENSION_OPEN_READ_SQL, [
+          subscriptionId,
+        ]),
+      ]);
 
     return {
       ...base,
       solutionAssociation: buildSolutionAssociation(row),
       entitlementSnapshot: entitlementRes.rows.map(mapEntitlementRow),
       operationTimeline: buildTimeline(historyRes.rows, renewalRes.rows),
+      suspension: mapSuspensionRow(suspensionRes.rows[0]),
     };
   }
 
@@ -196,6 +226,7 @@ export class SubscriptionsRouter {
     const action = parseAction(body?.action);
     const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
     const remark = reason.length > 0 ? reason : null;
+    const suspendReason = parseSuspendReason(action, body?.suspendReason);
     const actorId = req.user?.id ?? null;
     const clientIp = extractClientIp(req);
     const subscriptionId = await this.resolveSubscriptionId(id);
@@ -248,6 +279,31 @@ export class SubscriptionsRouter {
         remark,
         clientIp,
       ]);
+
+      /*
+       * 暂停 episode（2026-09-25，原因轴）：判据是**状态转移**，不是动作名。
+       *   进 suspended → 开一条（带原因与「这次算不算顺延」）
+       *   离开 suspended → 闭合那一条（resume / renew / cancel 三条路都在这里）
+       * 幂等重放时 fromStatus === toStatus，两支都不进，不会开出第二条。
+       */
+      if (fromStatus !== "suspended" && toStatus === "suspended") {
+        if (!suspendReason) {
+          // 不可达（只有 suspend 会把状态推到 suspended，而它必带原因）。留着是因为
+          // 兜个默认值更糟：会让「顺延」悄悄发生在一次本该不顺延的暂停上。
+          throw new BadRequestException("Suspending requires suspendReason");
+        }
+        await client.query(SUSPENSION_OPEN_SQL, [
+          subscriptionId,
+          current.tenant_id,
+          suspendReason.reason,
+          remark,
+          suspendReason.extendsTerm,
+          actorId,
+          clientIp,
+        ]);
+      } else if (fromStatus === "suspended" && toStatus !== "suspended") {
+        await client.query(SUSPENSION_CLOSE_SQL, [subscriptionId]);
+      }
 
       await client.query("commit");
 
@@ -328,21 +384,24 @@ export class SubscriptionsRouter {
 
     const base = mapSubscriptionRow(row);
 
-    const [entitlementRes, historyRes, renewalRes] = await Promise.all([
-      row.plan_version_id
-        ? this.pool.query<EntitlementRow>(SUBSCRIPTION_ENTITLEMENT_SQL, [
-            row.plan_version_id,
-          ])
-        : Promise.resolve({ rows: [] as EntitlementRow[] }),
-      this.pool.query<HistoryRow>(SUBSCRIPTION_HISTORY_SQL, [id]),
-      this.pool.query<RenewalRow>(SUBSCRIPTION_RENEWAL_SQL, [id]),
-    ]);
+    const [entitlementRes, historyRes, renewalRes, suspensionRes] =
+      await Promise.all([
+        row.plan_version_id
+          ? this.pool.query<EntitlementRow>(SUBSCRIPTION_ENTITLEMENT_SQL, [
+              row.plan_version_id,
+            ])
+          : Promise.resolve({ rows: [] as EntitlementRow[] }),
+        this.pool.query<HistoryRow>(SUBSCRIPTION_HISTORY_SQL, [id]),
+        this.pool.query<RenewalRow>(SUBSCRIPTION_RENEWAL_SQL, [id]),
+        this.pool.query<SuspensionRow>(SUSPENSION_OPEN_READ_SQL, [id]),
+      ]);
 
     return {
       ...base,
       solutionAssociation: buildSolutionAssociation(row),
       entitlementSnapshot: entitlementRes.rows.map(mapEntitlementRow),
       operationTimeline: buildTimeline(historyRes.rows, renewalRes.rows),
+      suspension: mapSuspensionRow(suspensionRes.rows[0]),
     };
   }
 }
@@ -360,6 +419,24 @@ function parseAction(raw: unknown): SubscriptionActionType {
   }
   throw new BadRequestException(
     "Invalid subscription action (expected renew/suspend/resume/cancel)",
+  );
+}
+
+/**
+ * 暂停原因：`suspend` 必填，其余动作忽略（恢复/续费/退订不需要原因轴，它们的 remark
+ * 已经进 subscription_histories）。不给默认值是有意的——默认成 platform_ops 会让
+ * 「顺延」悄悄发生在一次本该不顺延的违规暂停上，而运营根本没被问过。
+ */
+function parseSuspendReason(
+  action: SubscriptionActionType,
+  raw: unknown,
+): { reason: SuspendReason; extendsTerm: boolean } | null {
+  if (action !== "suspend") return null;
+  if (isSuspensionReason(raw)) {
+    return { reason: raw, extendsTerm: SUSPENSION_REASON_EXTENDS_TERM[raw] };
+  }
+  throw new BadRequestException(
+    `Suspending requires suspendReason (expected ${SUSPENSION_REASONS.join("/")})`,
   );
 }
 
@@ -1005,6 +1082,69 @@ insert into metering.subscription_histories (
   remark,
   client_ip
 ) values ($1, $2, $3, $4, $5, 'operator', $6, $7, $8)
+`;
+
+/**
+ * 读「进行中的那一次暂停」。$1 subscription_id。
+ *
+ * 只读未闭合的那条：已闭合的历次暂停属于审计，详情卡上只回答「现在为什么停着」。
+ * 读不到 → null，界面显示「—」：存量被冻结的行确实没有 episode（原因轴是后加的），
+ * 那是「按设计没有」，不是缺一条记录。
+ */
+const SUSPENSION_OPEN_READ_SQL = `
+select reason, reason_note, extends_term, paused_at
+  from metering.subscription_suspensions
+ where subscription_id = $1 and resumed_at is null
+ limit 1
+`;
+
+interface SuspensionRow {
+  reason: string;
+  reason_note: string | null;
+  extends_term: boolean;
+  paused_at: Date | string;
+}
+
+function mapSuspensionRow(
+  row: SuspensionRow | undefined,
+): SubscriptionSuspensionSnapshot | null {
+  if (!row) return null;
+  return {
+    reason: row.reason,
+    reasonNote: row.reason_note,
+    extendsTerm: row.extends_term,
+    pausedAt: toIso(row.paused_at),
+  };
+}
+
+/**
+ * 开一次暂停 episode。$1 subscription_id / $2 tenant_id / $3 reason / $4 reason_note /
+ *   $5 extends_term / $6 actor_id / $7 client_ip。
+ *
+ * 与状态变更同事务：`status = 'suspended'` 和「有一条未闭合的 episode」必须一起成立，
+ * 否则顺延就会算在一条没人记得为什么被停的订阅上。表上那条部分唯一索引
+ * （`uidx_subscription_suspensions_open`）兜住并发：同一条订阅同时只能有一次进行中。
+ */
+const SUSPENSION_OPEN_SQL = `
+insert into metering.subscription_suspensions (
+  subscription_id, tenant_id, reason, reason_note, extends_term, actor_type, actor_id, client_ip
+) values ($1, $2, $3, $4, $5, 'operator', $6, $7)
+`;
+
+/**
+ * 闭合进行中的 episode。$1 subscription_id。
+ *
+ * 按**状态转移**闭合，不按动作名：离开 suspended 的路不止 `resume` 一条——`renew` 也会
+ * 把冻结行翻回 active，`cancel` 会把它带进终态。只认 resume 就等于给另外两条留门，
+ * 那条 episode 会永远挂着（而步骤三的到点处置正是按未闭合 episode 扫的）。
+ *
+ * `granted_seconds` 这一步不写：顺延的计算是下一步的事，CHECK 允许「已闭合但还没结算」。
+ * 存量被冻结的行没有 episode（原因轴是今天才加的），更新 0 行是正常的，不是错误。
+ */
+const SUSPENSION_CLOSE_SQL = `
+update metering.subscription_suspensions
+   set resumed_at = now(), updated_at = now()
+ where subscription_id = $1 and resumed_at is null
 `;
 
 interface SubscriptionActionRow {

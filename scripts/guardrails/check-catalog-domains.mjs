@@ -81,6 +81,11 @@ const pairs = [
     ddlCheckIn(p50, "chk_subscriptions_status"),
   ],
   [
+    "suspension reason",
+    tsArray(dom, "SUSPENSION_REASONS"),
+    ddlCheckIn(p50, "chk_subscription_suspensions_reason"),
+  ],
+  [
     "merge_strategy",
     tsArray(dom, "MERGE_STRATEGIES"),
     ddlCheckIn(p40, "chk_product_metrics_merge_strategy"),

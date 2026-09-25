@@ -110,6 +110,58 @@ export const SUBSCRIPTION_STATUSES = [
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 /**
+ * metering.subscription_suspensions.reason — why a subscription is paused, and
+ * therefore whether the paused days are given back.
+ *
+ * A suspension is a platform action: a customer cannot pause their own service
+ * (the self-service action domain is upgrade/cancel only). Since the customer
+ * cannot use the service while it is paused, those days are owed back to them
+ * unless the pause is their own fault — so extension is the default and
+ * `customer_violation` is the single exception. Extending a violation pause
+ * would hand the violator the days for free.
+ *
+ * platform_ops      — platform-side maintenance, incident or migration.
+ * dispute_review    — a dispute, risk or compliance review is in progress. Still
+ *                     extends: if the review clears the customer, they should not
+ *                     be out those days; if it confirms a violation, the operator
+ *                     re-handles it under customer_violation.
+ * customer_violation— the customer broke the terms. The only non-extending reason.
+ * other             — anything unclassified; defaults to the customer's side.
+ *
+ * Mirrors chk_subscription_suspensions_reason (50_metering.sql). The *decision*
+ * lives here rather than in either portal because both admin-bff (which writes
+ * `extends_term`) and the admin UI (which tells the operator what they are about
+ * to do) must agree — two copies would drift into an operator pausing a
+ * subscription without knowing whether the term moves.
+ *
+ * `extends_term` is snapshotted onto the episode row at pause time, not derived
+ * on read: this policy may change, but a pause that already happened must not be
+ * rewritten (same reason plan_versions are immutable).
+ */
+export const SUSPENSION_REASONS = [
+  "platform_ops",
+  "dispute_review",
+  "customer_violation",
+  "other",
+] as const;
+export type SuspensionReason = (typeof SUSPENSION_REASONS)[number];
+
+/** Does this reason give the paused days back on resume? */
+export const SUSPENSION_REASON_EXTENDS_TERM = {
+  platform_ops: true,
+  dispute_review: true,
+  customer_violation: false,
+  other: true,
+} as const satisfies Record<SuspensionReason, boolean>;
+
+export function isSuspensionReason(value: unknown): value is SuspensionReason {
+  return (
+    typeof value === "string" &&
+    (SUSPENSION_REASONS as readonly string[]).includes(value)
+  );
+}
+
+/**
  * billing.invoices.bill_status — where a bill sits on the way to being settled.
  *
  * unpaid → paying (a payment attempt is in flight) → paid. partial = money

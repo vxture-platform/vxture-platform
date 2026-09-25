@@ -1607,7 +1607,12 @@ export async function submitBillingBillAction(
 
 export async function submitSubscriptionOperation(
   subscriptionId: string,
-  payload: { action: SubscriptionOperationAction; reason: string },
+  payload: {
+    action: SubscriptionOperationAction;
+    reason: string;
+    /* 暂停必带（服务端强校验）：它决定恢复后要不要顺延服务期。其余动作不送。 */
+    suspendReason?: string | null;
+  },
 ): Promise<SubscriptionOperationDetailRecord> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/subscriptions/${encodeURIComponent(subscriptionId)}/actions`,

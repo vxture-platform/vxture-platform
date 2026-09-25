@@ -221,6 +221,13 @@ GRANT UPDATE (pack_code, pack_name, metric_key, amount, validity_days, price, cu
 REVOKE UPDATE ON metering.addon_purchases FROM platform_svc;
 GRANT UPDATE (tenant_id, workspace_id, pack_id, pack_code, pack_name, metric_key, amount, validity_days, price, currency, status, payment_ttl_minutes, invoice_id, quota_pool_id, activated_at, cancelled_at, cancel_reason, created_by_type, created_by_id, updated_at) ON metering.addon_purchases TO platform_svc;
 
+-- metering.subscription_suspensions  [anchor: id, subscription_id, tenant_id, reason, extends_term, paused_at, actor_*, created_at]
+--   一次暂停的「是什么、谁的错、什么时候开始、谁做的」写下就不改；可变的只有收尾那几列：
+--   resumed_at（结束时刻）、granted_seconds（恢复时结算的顺延秒数）、updated_at。
+--   reason 与 extends_term 锁住是有意的——改政策不该改写已经发生的那一次暂停。
+REVOKE UPDATE ON metering.subscription_suspensions FROM platform_svc;
+GRANT UPDATE (reason_note, resumed_at, granted_seconds, updated_at) ON metering.subscription_suspensions TO platform_svc;
+
 -- metering.resource_sharing_policies  [anchor: id, created_at]  (a policy row is add/remove, not mutate)
 REVOKE UPDATE ON metering.resource_sharing_policies FROM platform_svc;
 GRANT UPDATE (workspace_id, tenant_id, metric_key, product_id, created_by_type, created_by_id) ON metering.resource_sharing_policies TO platform_svc;

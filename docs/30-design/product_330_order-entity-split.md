@@ -102,6 +102,30 @@ create unique index uidx_orders_open_per_product on billing.orders (workspace_id
 TTL 重锚（最近一次 `payment_rejected`）与付款页驳回横幅（`remark`）改读本表；admin 订单时间线 = 本表 ∪ 履约订阅的 `subscription_histories`。
 迁移把 P1-a 回填出来的订单的旧订阅行历史复制一份进来（按 order_id × event_type × created_at 去重）。
 
+### 2.5 `metering.subscription_suspensions`（2026-09-25，暂停原因轴）
+
+owner 定的三条前提：**不做退钱**、**客户不承担暂停期间的代价**、**暂停是平台动作**（客户无法自助暂停，自助值域只剩 upgrade / cancel）。前两条合起来意味着暂停要**顺延服务期**——不退钱，就把那些天还回去。
+
+但「一律顺延」是错的：平台因**客户违规**暂停，顺延等于让违规者白得那些天。所以顺不顺延取决于「那一次是谁的错」，而此前 `suspended` 就是 `suspended`，无从判断。
+
+一次暂停 = 一行（episode），不是订阅上加两列——**原因是「一次暂停」的属性，不是订阅的属性**：挂在订阅行上只存得住最近一次，而「本周期累计顺延几天」「到点了该恢复还是终止」都要按次聚合。`metering.subscriptions` 一列都不加。
+
+| 列                                      | 说明                                                                                                                                                                                                                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reason`                                | 四档：`platform_ops` / `dispute_review` / `customer_violation` / `other`。值域权威在 `@vxture-platform/shared` catalog-domains（`SUSPENSION_REASONS`），与 `chk_subscription_suspensions_reason` 由 `lint:catalog-domains` 逐值对账                                            |
+| `extends_term`                          | 由 `reason` 派生（`SUSPENSION_REASON_EXTENDS_TERM`，同一份被 admin-bff 与 admin 界面共用）。**除了客户违规一律顺延**——公道的那一侧是默认值不是例外。争议审查也顺延：审查期间客户用不了服务，查完无事凭什么让他损失那些天；真查实了违规，运营再按 `customer_violation` 重新处置 |
+| `paused_at` / `resumed_at`              | 这一次暂停的窗口。`resumed_at is null` = 进行中，靠部分唯一索引 `uidx_subscription_suspensions_open` 保证同一条订阅同时只有一次                                                                                                                                                |
+| `granted_seconds`                       | 恢复时结算的顺延秒数（**步骤三写**，本步恒为 NULL；CHECK 允许「已闭合但还没结算」）                                                                                                                                                                                            |
+| `reason_note` / `actor_*` / `client_ip` | 运营补充说明与审计痕迹                                                                                                                                                                                                                                                         |
+
+`extends_term` **落库而不是每次从 reason 现算**：政策以后可能改，但已经发生的那一次暂停不该被改写（同 `plan_versions` 不可变）。除收尾三列（`resumed_at` / `granted_seconds` / `reason_note`）外全部进锚点列锁（`column-locks.shared.mjs` 的 `EXTRA_ANCHOR`）。
+
+**episode 的开合按状态转移判，不按动作名**：离开 `suspended` 的路不止 `resume` 一条——`renew` 会把冻结行翻回 `active`、`cancel` 会把它带进终态。只认 `resume` 就是给另外两条留门，那条 episode 会永远挂着，而到点处置正是按未闭合 episode 扫的。
+
+**参数**：`admin.settings` 的 `subscription.max_suspend_days`（默认 60，与 `refund.window_hours` 同机制，运营台可改）。没有上限的话有效到期日会随暂停时长一直往后走，那条订阅永不到期、永不释放、也永不再计费。
+
+**未做（步骤三）**：顺延本身——到期扫描改用有效到期日、恢复时结算 `granted_seconds` 并加到 `end_at`（按天向上取整）、延长配额 `period_anchor`、恢复 `auto_renew`、到点处置（平台原因→强制恢复，客户原因→终止）、客户侧「已暂停，恢复后顺延」的文案。存量被冻结的订阅没有 episode（原因轴是这一步才加的）——那是「按设计没有」，步骤三的扫描要容得下它：无 episode = 不顺延，没有要补的账。
+
 ## 3. 订单状态机
 
 ```

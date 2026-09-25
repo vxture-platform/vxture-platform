@@ -29,6 +29,7 @@ import type {
   SubscriptionOperationAction,
   SubscriptionOperationDetailRecord,
 } from "@/entities/console";
+import type { SuspensionReason } from "@vxture-platform/shared";
 import {
   QUOTA_RISK_TONE,
   SUBSCRIPTION_OPERATION_TONE,
@@ -41,6 +42,7 @@ import {
   useQuotaRiskLabels,
   useSubscriptionCycleLabels,
   useSubscriptionStatusLabels,
+  useSuspensionReasonLabels,
 } from "@/modules/shared/enum-labels";
 import {
   canRunSubscriptionAction,
@@ -157,6 +159,8 @@ function SubscriptionDetails({
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
   const quotaRiskLabels = useQuotaRiskLabels();
+  const tSuspension = useTranslations("subscriptionSuspension");
+  const suspensionReasonLabels = useSuspensionReasonLabels();
   const capabilityTypeLabels = useCapabilityTypeLabels();
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
@@ -183,6 +187,27 @@ function SubscriptionDetails({
           <DetailRow label="订阅状态">
             {orUnset(subscriptionStatusLabels[subscription.status])}
           </DetailRow>
+          {/* 只在暂停中出现：对一条在用的订阅，这一行没有宾语。存量冻结行没有
+              episode（原因轴 2026-09-25 才加），那时显示「—」——按设计没有，不是丢了。 */}
+          {subscription.status === "suspended" ? (
+            <DetailRow label={tSuspension("label")}>
+              {orUnset(
+                subscription.suspension
+                  ? /* 原因与「这一次算不算顺延」挤在一行是有意的：运营看「为什么停着」
+                       时真正要判断的就是客户的有效期有没有被吃掉，分两行反而要对照读。 */
+                    `${
+                      suspensionReasonLabels[
+                        subscription.suspension.reason as SuspensionReason
+                      ] ?? subscription.suspension.reason
+                    }（${
+                      subscription.suspension.extendsTerm
+                        ? tSuspension("extendsShort")
+                        : tSuspension("noExtendsShort")
+                    }）`
+                  : "",
+              )}
+            </DetailRow>
+          ) : null}
           <DetailRow label="计费周期">
             {orUnset(cycleLabels[subscription.cycleType])}
           </DetailRow>
@@ -415,7 +440,10 @@ export function SubscriptionDetailPage({
     setPendingAction(action);
   }
 
-  async function handleSubmitSubscriptionAction(reason: string) {
+  async function handleSubmitSubscriptionAction(
+    reason: string,
+    suspendReason: string | null,
+  ) {
     if (!subscription || !pendingAction) return;
 
     setSubmittingAction(true);
@@ -427,6 +455,7 @@ export function SubscriptionDetailPage({
         {
           action: pendingAction,
           reason,
+          suspendReason,
         },
       );
 

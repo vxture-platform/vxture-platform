@@ -31,6 +31,29 @@ export const EXTRA_ANCHOR = new Set([
    * 静默的授权转移。一次认证跑动认的就是那一个产品，所以它是出生即定的锚点。
    */
   "product.certification_runs.product_id",
+  /*
+   * 暂停 episode 的出生事实（2026-09-25，metering.subscription_suspensions）。
+   * 形状上它们都是普通可写列，语义上**整条 episode 除了收尾那几列全是出生即定**：
+   *
+   *   reason / extends_term —— 这一次暂停为什么发生、因此要不要顺延服务期。改 reason
+   *     等于改写历史：一次违规暂停被改成「平台运维」，客户凭空得到那几十天；反过来，
+   *     一次平台故障被改成「客户违规」，客户凭空损失同样多。两个方向都静默。政策以后
+   *     可能改，但**已经发生的那一次不该被改写**（同 plan_versions 不可变）。
+   *   subscription_id / tenant_id / paused_at —— 这次暂停发生在谁身上、从哪一刻起。
+   *     paused_at 一动，顺延的天数就跟着动。
+   *   actor_type / actor_id / client_ip —— 谁按的那个按钮。审计痕迹不该可改。
+   *
+   * 可写的只有 `resumed_at` / `granted_seconds`（恢复时收尾）与 `reason_note`
+   * （运营补说明）/ `updated_at`，98 里 GRANT 的正是这四列。
+   */
+  "metering.subscription_suspensions.subscription_id",
+  "metering.subscription_suspensions.tenant_id",
+  "metering.subscription_suspensions.reason",
+  "metering.subscription_suspensions.extends_term",
+  "metering.subscription_suspensions.paused_at",
+  "metering.subscription_suspensions.actor_type",
+  "metering.subscription_suspensions.actor_id",
+  "metering.subscription_suspensions.client_ip",
 ]);
 
 /**
