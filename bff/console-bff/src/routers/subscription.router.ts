@@ -505,8 +505,13 @@ export interface OrderRefundView {
 export interface RefundEligibilityResult {
   eligible: boolean;
   reasons: string[];
+  /** 可退金额（2026-09-25 起按已消耗配额折算，不再恒等于实付） */
   amount: string;
   currency: string;
+  /** 本单实付（折算前）——界面要能说清「退多少、留多少」 */
+  paidAmount: string;
+  /** 平台留下的那一份 = paidAmount − amount */
+  keptAmount: string;
   windowEndsAt: string | null;
   usageRatio: number;
   windowHours: number;
@@ -1856,6 +1861,8 @@ export class SubscriptionRouter {
       reasons: e.reasons,
       amount: e.amount,
       currency: e.currency,
+      paidAmount: e.paidAmount,
+      keptAmount: e.keptAmount,
       windowEndsAt: e.windowEndsAt?.toISOString() ?? null,
       usageRatio: e.usageRatio,
       windowHours: e.policy.windowHours,

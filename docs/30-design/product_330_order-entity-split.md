@@ -145,9 +145,12 @@ leftover= max(0, credit − P_new)   → 进 billing.credits（trade_type='grant
 
 1. 订单 `fulfilled_at` 起 24 小时内（平台参数 `refund.window_hours`，默认 24）；
 2. 该 workspace × product 的**首次** fulfilled 订单（折抵后的升级单不算首次）；
-3. 履约后消耗性配额使用率 < 阈值（平台参数 `refund.max_usage_ratio`，默认 0.1）。
+3. ~~履约后消耗性配额使用率 < 阈值（平台参数 `refund.max_usage_ratio`，默认 0.1）。~~
 
-动作：`refunds(order_id)` 两段审核 → 执行成功 → 订单 `refunded` → 订阅**整体回到未订阅**（`cancelled`，end=now，池 retire），含 free——旧档价值已折进这张单、旧周期已在升级时结清。退款金额 = `payable_amount`；leftover 已进预付款的部分一并冲回。
+动作：`refunds(order_id)` 两段审核 → 执行成功 → 订单 `refunded` → 订阅**整体回到未订阅**（`cancelled`，end=now，池 retire），含 free——旧档价值已折进这张单、旧周期已在升级时结清。leftover 已进预付款的部分一并冲回。
+
+- **修订（2026-09-25）——第 3 条改为折算退，退款金额不再等于 `payable_amount`**：owner 决定「考虑配额消耗，后续再补充再 24H 内，也需要折算，我们有成本」。用量**不再是不可退的理由**，而是决定退多少：`refund = round2(实付 × (1 − α × 已用比))`，α 就是升级折抵那个 `_pricing.consumable_share`（`money/proration.ts` 的 `computeWindowRefund`，与 `computeProration` 同一文件同一个 α，不另写一套）。**窗口内 `r` 取 1**：退款窗口恰好是「刚买、几乎没用」那段时间，原样代入 `r = daysLeft/daysTotal` 会让买了 2 小时就退的月付单只退 96.7%，是对「24h 全额退」的回退。`refund.max_usage_ratio` 这个参数与 `usage_over_threshold` 这个原因码**都保留但不再产生**——将来要重新立「用超多少不得退」的规则，两样都是现成开关。折算下来为 0（α=1 且配额用尽）时不可退，新原因码 `fully_consumed`（不开一张 ¥0 的退款单：那对客户是「已退款 ¥0」的假象）。退款单的 `refund_type` 按**金额**判（少于实付 = `partial`），不反过来用类型推金额。完整算例见 owner 定稿文档《订单与服务状态机》的「折算退的算例」一节。
+- **修订（2026-09-25）——运营侧退订也走结算**：admin 的订阅动作在 `cancel` 且确实终止时调同一个 `OrderService.settleAfterCancel`，`actorType='operator'` 决定退款单的 `created_by_type` 与**通知发给客户而不是发给运营**。**仍存的缺口**：那条写路径是裸 SQL，不触发 provisioning 的 deprovision / entitlement invalidate（客户自助那条会触）——运营停了服务，产品侧可能还在给。要修得把那条写路径整体改走 `SubscriptionService`。
 
 console 订单确认页与订单详情页放「退款说明」链接（新页 `/legal/refund-policy`，官网统一维护，newtab，不打断确认）。
 

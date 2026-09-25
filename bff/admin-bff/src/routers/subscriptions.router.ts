@@ -36,7 +36,10 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import type { SubscriptionService } from "@vxture/service-subscription";
+import type {
+  OrderService,
+  SubscriptionService,
+} from "@vxture/service-subscription";
 import type { ComponentRole } from "@vxture-platform/shared";
 import { extractClientIp, industryLabel } from "@vxture/core-utils";
 import { assertAnyCapability } from "../auth/capability";
@@ -46,7 +49,10 @@ import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
  * **没有任何 router 注入它**（只被 ADMIN_ORDER_SERVICE 的工厂当依赖用）——本仓最常见的
  * 那种「做了没接」。本批只借它发冻结 / 恢复通知；写路径归一见文件里那段已知缺口注释。
  */
-import { ADMIN_SUBSCRIPTION_SERVICE } from "../providers/commerce-services.provider";
+import {
+  ADMIN_ORDER_SERVICE,
+  ADMIN_SUBSCRIPTION_SERVICE,
+} from "../providers/commerce-services.provider";
 import { UUID_RE } from "./governance.shared";
 import type {
   ProductSolutionCapabilityType,
@@ -88,6 +94,9 @@ export class SubscriptionsRouter {
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
     @Inject(ADMIN_SUBSCRIPTION_SERVICE)
     private readonly subscriptions: SubscriptionService,
+    /* 退订要结算退款（2026-09-25 批 4）。与 orders.router 用的是同一个 provider。 */
+    @Inject(ADMIN_ORDER_SERVICE)
+    private readonly orders: OrderService,
   ) {}
 
   /**
@@ -186,6 +195,8 @@ export class SubscriptionsRouter {
     // 提交成功后要发的那条通知（冻结 / 恢复）。在事务外发：通知发不出去不该回滚一次
     // 已经生效的运营动作，而事务里也没有它的位置（notify 会打网络）。
     let notify: "suspended" | "resumed" | null = null;
+    /** 提交成功后要做的退款结算（仅退订，且这次真的终止了）。同样在事务外。 */
+    let settle: { subscriptionId: string; tenantId: string } | null = null;
 
     const client = await this.rwPool.connect();
     try {
@@ -230,22 +241,21 @@ export class SubscriptionsRouter {
       }
 
       /*
-       * **已知缺口（2026-09-25）：运营在这里退订，不会走退款、也不会发消息。**
+       * 退订 = 退款（owner 2026-09-25：「站在客户视角，退订就是退款，毫无歧义」）。
        *
-       * 客户自助那条路（console-bff `executeAction` 的 cancel 分支）在终止之后会调
-       * `OrderService.settleAfterCancel`：24 小时内替客户发起全额退款，并按结果发一条
-       * 「服务已停止 + 钱怎么样了」的消息（owner 2026-09-25：「站在客户视角，退订就是
-       * 退款」）。这一条路没有。
+       * 这一支此前是本文件里写着的「已知缺口」：运营代客户退订，钱不退、客户也收不到任
+       * 何消息——而客户自助那条路一直会结算。**同一件事只长在一条分支上**，另一条就是
+       * 洞（[[feedback-guard-on-one-branch-only]] 那一族）。
        *
-       * 原因是本路由**直接写 SQL**、admin-bff 的模块里根本没有那两个服务；接进来会连带
-       * 邮件与 provisioning 依赖，是一次架构改动，不该夹在那一批里顺手做。
-       *
-       * 后果具体是：运营代客户退订时，够条件的退款不会自动发起（客户仍可自己在费用中心
-       * 申请，但 24 小时窗口可能已走完），客户也收不到任何消息。
-       *
-       * 要补的正路是让本路由改用 SubscriptionService / OrderService 而不是裸 SQL——
-       * 那样这类「判定只长在一条分支上」的洞会一起消失，而不是再补一次。
+       * 现在两条路调同一个 `settleAfterCancel`，差别只在 actorType：它决定退款单的
+       * created_by_type，也决定**通知发给谁**——运营代办时这条消息发给客户，不是发给
+       * 运营。结算在事务外做（它自己开事务、且会打网络），失败只记日志：退订本身已经
+       * 生效，不该因为退款没发起而回滚。
        */
+      settle =
+        action === "cancel" && fromStatus !== "cancelled"
+          ? { subscriptionId, tenantId: current.tenant_id }
+          : null;
     } catch (e) {
       await client.query("rollback");
       throw e;
@@ -258,6 +268,17 @@ export class SubscriptionsRouter {
         subscriptionId,
         notify,
       );
+    }
+    if (settle && actorId) {
+      /* settleAfterCancel 自己吞掉一切异常（只记日志）——退订已经生效，钱的那一步失败
+         不该让这个请求失败。运营在订单侧仍能手工发起退款。 */
+      await this.orders.settleAfterCancel({
+        subscriptionId: settle.subscriptionId,
+        tenantId: settle.tenantId,
+        actorUserId: actorId,
+        actorType: "operator",
+        clientIp,
+      });
     }
 
     return this.loadSubscriptionDetail(subscriptionId);

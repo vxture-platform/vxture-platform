@@ -94,3 +94,59 @@ export function daysLeftOf(endAt: Date, now: Date = new Date()): number {
     Math.floor((endAt.getTime() - now.getTime()) / 86_400_000),
   );
 }
+
+// ── 折算退（owner 2026-09-25）────────────────────────────────────────────────
+
+export interface WindowRefundInput {
+  /** 本单实付（元） */
+  paid: number;
+  /** 套餐消耗性权重 α [0,1]（与升级折抵同一个值、同一个来源） */
+  alpha: number;
+  /** 已消耗的消耗性配额比 [0,1]；无消耗性池 → 0 */
+  usedRatio: number;
+}
+
+export interface WindowRefundResult {
+  paid: number;
+  alpha: number;
+  usedRatio: number;
+  /** 退客户（元，两位小数） */
+  amount: number;
+  /** 平台留下的那一份（元）= paid − amount，只因为配额被消耗掉了 */
+  kept: number;
+  /** 是否全额（用于 refund_type：全额 normal / 少于实付 partial） */
+  full: boolean;
+}
+
+/**
+ * 退款窗口内的折算退。**与升级折抵是同一个公式**（`computeProration`），只是 `r` 取 1：
+ *
+ *     refund = round2( paid × ((1−α)·1 + α·u) ) = round2( paid × (1 − α·used) )
+ *
+ * 为什么 `r = 1`：退款窗口（默认 24 小时）恰好就是「刚买、几乎没用」那段时间，按天扣它
+ * 没有意义。原样代入 `r = daysLeft / daysTotal` 的话，买了 2 小时就退的月付单
+ * `daysLeft` 向下取整 = 29，`r = 29/30`——**全额退变成退 96.7%**，是对 owner 现行口径
+ * （24h 全额退）的回退，客户一定会问那 3.3% 去哪了。
+ *
+ * 所以这个函数只做一件事：把**消耗掉的配额那一份**留下，其余退回。
+ *   · 无消耗性池 / 一点没用 → used = 0 → 全额退（与今天一致）
+ *   · α = 1（价值全在配额里）且用光 → 退 0，此时不该开退款单（调用方判）
+ *
+ * 超出窗口不退，那一档不走这里（资格检查先拦）。
+ */
+export function computeWindowRefund(
+  input: WindowRefundInput,
+): WindowRefundResult {
+  const paid = round2(Math.max(0, input.paid));
+  const alpha = clamp01(input.alpha);
+  const usedRatio = clamp01(input.usedRatio);
+  const amount = round2(paid * (1 - alpha * usedRatio));
+  return {
+    paid,
+    alpha,
+    usedRatio: Math.round(usedRatio * 10000) / 10000,
+    amount,
+    kept: round2(paid - amount),
+    full: amount >= paid,
+  };
+}

@@ -36,6 +36,7 @@ import type { OpsAlerter } from "./ops-alerter";
 import {
   DEFAULT_CONSUMABLE_SHARE,
   computeProration,
+  computeWindowRefund,
   cycleDays,
   daysLeftOf,
   type ProrationResult,
@@ -864,15 +865,31 @@ export class OrderService {
       reasons.push("window_elapsed");
     }
     const usageRatio = basis?.usageRatio ?? 0;
-    if (usageRatio >= policy.maxUsageRatio)
-      reasons.push("usage_over_threshold");
+    /*
+     * 2026-09-25：`maxUsageRatio` 不再当门（owner：「考虑配额消耗，后续再补充再 24H 内，
+     * 也需要折算，我们有成本」）。用多了的答案是**退得少**，不是不退——此前用掉 10% 配额
+     * 就一分退不到，而我们实际只花了那 10% 的成本。
+     * 那个策略项与 `usage_over_threshold` 这个码都留着：将来要重新立「用超多少不得退」
+     * 的规则，两样都是现成的开关。
+     */
+    const refund = computeWindowRefund({
+      paid: Number(order.payableAmount),
+      alpha: basis?.consumableShare ?? DEFAULT_CONSUMABLE_SHARE,
+      usedRatio: usageRatio,
+    });
     if (!(Number(order.payableAmount) > 0)) reasons.push("zero_amount");
+    // 实付大于 0 却折算成 0：配额用尽（α=1 的产品）。开一张 ¥0 的退款单能跑，但那对
+    // 客户是个「已退款 ¥0」的假象，所以这里当作不可退，并给出自己的原因码。
+    else if (refund.amount <= 0) reasons.push("fully_consumed");
     if (basis?.existingRefundId) reasons.push("refund_exists");
     return {
       eligible: reasons.length === 0,
       reasons,
-      amount: order.payableAmount,
+      amount: refund.amount.toFixed(2),
       currency: order.currency,
+      paidAmount: refund.paid.toFixed(2),
+      keptAmount: refund.kept.toFixed(2),
+      consumableShare: refund.alpha,
       windowEndsAt,
       usageRatio: Math.round(usageRatio * 10000) / 10000,
       policy,
@@ -910,6 +927,12 @@ export class OrderService {
     tenantId: string;
     actorUserId: string;
     clientIp?: string | null;
+    /**
+     * 谁按下的退订；缺省 customer（客户自助）。2026-09-25 运营侧接上来时必须给 operator：
+     * 它同时决定退款单的 created_by_type 与**通知发给谁**——运营代办时这条消息要发给
+     * 客户，不是发给运营。
+     */
+    actorType?: "customer" | "operator";
   }): Promise<{
     outcome: "refunded" | "no_charge" | "no_refund" | "no_order";
   }> {
@@ -948,15 +971,24 @@ export class OrderService {
               orderNo: order.orderNo,
               amount: formatNotifyMoney(amount, order.currency),
             },
-            recipients: [input.actorUserId],
+            /* 运营代办时不指定收件人，交给 dispatcher 的默认口径（租户 owner）。 */
+            ...(input.actorType === "operator"
+              ? {}
+              : { recipients: [input.actorUserId] }),
             link: `/subscribe/pay/${order.id}`,
           }),
         );
 
       if (eligibility.eligible) {
         await this.requestRefund(orderId, {
-          reason: "客户退订，24 小时内全额退款",
+          /* 理由随金额说实话：折算退之后「全额」不再恒成立（2026-09-25）。这行文字会
+             进退款单的 refund_reason，运营在后台看到的就是它。 */
+          reason:
+            eligibility.amount === eligibility.paidAmount
+              ? "客户退订，退款窗口内全额退款"
+              : `客户退订，按已消耗配额折算退款（实付 ${eligibility.paidAmount}，退 ${eligibility.amount}）`,
           userId: input.actorUserId,
+          ...(input.actorType ? { actorType: input.actorType } : {}),
           clientIp: input.clientIp ?? null,
         });
         await notify("subscription.cancelled_refunded", eligibility.amount);
@@ -984,7 +1016,13 @@ export class OrderService {
   /** 客户申请退款：资格不满足 → 409（reasons 随消息带出）。 */
   async requestRefund(
     orderId: string,
-    input: { userId: string; reason: string | null; clientIp?: string | null },
+    input: {
+      userId: string;
+      reason: string | null;
+      clientIp?: string | null;
+      /** 发起人身份；缺省 customer（客户自助）。运营代客户退订时必须显式给 operator。 */
+      actorType?: "customer" | "operator";
+    },
   ): Promise<RefundRecordView> {
     const eligibility = await this.getRefundEligibility(orderId);
     if (!eligibility.eligible) {
@@ -1001,17 +1039,33 @@ export class OrderService {
     if (!basis?.payRecordId || !basis.invoiceId) {
       throw new ConflictException("订单没有可退的支付记录");
     }
+    /*
+     * 金额取**资格判定算出来的那一个**，不在这里重算。重算一遍就会有两份公式，而两次读库
+     * 之间配额还可能又被消耗一点——客户看到的金额与最终落库的金额不一致，是最难解释的一
+     * 种不一致。类型按金额判（少于实付即 partial），不反过来用类型推金额。
+     */
     const created = await this.orders.createRefundRequest({
       order,
       invoiceId: basis.invoiceId,
       payRecordId: basis.payRecordId,
+      amount: eligibility.amount,
+      refundType:
+        eligibility.amount === eligibility.paidAmount ? "normal" : "partial",
       reason: input.reason,
       userId: input.userId,
+      createdByType: input.actorType ?? "customer",
       clientIp: input.clientIp ?? null,
     });
     await this.emit(`refund_requested ${created.refundNo}`, async () =>
       this.refundNotice("refund.requested", created, order, "requested", {
-        recipients: [input.userId],
+        /*
+         * 收件人：客户自助时就是他本人；**运营代办时不能发给运营**——那个 id 是
+         * operator，既不在 account.users 里，客户也就永远收不到这条消息。那时回落到
+         * 订单创建人（customerRecipients 的默认口径）。
+         */
+        ...(input.actorType === "operator"
+          ? {}
+          : { recipients: [input.userId] }),
       }),
     );
     return created;

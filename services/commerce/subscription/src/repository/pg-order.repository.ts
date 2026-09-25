@@ -115,6 +115,14 @@ export interface RefundBasis {
   earlierFulfilledCount: number;
   /** 消耗性配额已用比 [0,1]（无池 0） */
   usageRatio: number;
+  /**
+   * 套餐主组件的消耗性权重 α；null = 套餐没声明（调用方用 DEFAULT_CONSUMABLE_SHARE）。
+   *
+   * 2026-09-25 折算退加的：退多少要按「消耗掉的配额占价钱的几成」算，而那个比例就是
+   * 升级折抵用的同一个 α（`plan_components.quota._pricing.consumable_share`）。两处取同
+   * 一个值、同一个来源——分头各取一次迟早漂成两套定价。
+   */
+  consumableShare: number | null;
   payRecordId: string | null;
   invoiceId: string | null;
   /** 未被驳回/失败的既有退款单 */
@@ -876,6 +884,7 @@ export class PgOrderRepository {
       earlier_fulfilled: string;
       usage_used: string | null;
       usage_limit: string | null;
+      consumable_share: string | null;
       pay_record_id: string | null;
       invoice_id: string | null;
       existing_refund: string | null;
@@ -886,6 +895,9 @@ export class PgOrderRepository {
              and p.status in ('fulfilled', 'refunded') and p.id <> o.id
              and p.fulfilled_at < o.fulfilled_at)::text as earlier_fulfilled,
          pools.usage_used, pools.usage_limit,
+         -- α：与 getProrationBasis 同一个来源（主组件的 _pricing.consumable_share）。
+         -- 折算退与升级折抵必须取同一个值，否则同一套餐两处定价会漂。
+         pc.quota #>> '{_pricing,consumable_share}' as consumable_share,
          (select p.id from billing.payments p
            join billing.invoices i on i.id = p.bill_id
           where i.order_id = o.id and p.pay_status = 'paid'
@@ -898,6 +910,12 @@ export class PgOrderRepository {
              and not (r.audit_status = 'rejected' or r.refund_status = 'failed')
            order by r.created_at desc limit 1) as existing_refund
        from billing.orders o
+       left join metering.subscriptions s on s.id = o.subscription_id
+       left join lateral (
+         select quota from product.plan_components
+          where plan_version_id = s.plan_version_id and component_role = 'primary'
+          order by priority asc, sort_order asc limit 1
+       ) pc on true
        left join lateral (
          select sum(qp.quota_used)::text as usage_used, sum(qp.quota_limit)::text as usage_limit
            from metering.quota_pools qp
@@ -917,9 +935,12 @@ export class PgOrderRepository {
     const r = res.rows[0];
     if (!r) return null;
     const limit = Number(r.usage_limit ?? 0);
+    const share =
+      r.consumable_share === null ? null : Number(r.consumable_share);
     return {
       earlierFulfilledCount: Number(r.earlier_fulfilled),
       usageRatio: limit > 0 ? Number(r.usage_used ?? 0) / limit : 0,
+      consumableShare: Number.isFinite(share as number) ? share : null,
       payRecordId: r.pay_record_id,
       invoiceId: r.invoice_id,
       existingRefundId: r.existing_refund,
@@ -949,8 +970,21 @@ export class PgOrderRepository {
     order: OrderRecord;
     invoiceId: string;
     payRecordId: string;
+    /**
+     * 退款金额（元字符串）。2026-09-25 起由**调用方算好传进来**（折算退），此前这里写死
+     * 取 `order.payableAmount`。缺省仍回落到实付，保住既有调用点的行为。
+     */
+    amount?: string;
+    /** 'normal' = 全额，'partial' = 少于实付。判据是金额，不是反过来。 */
+    refundType?: "normal" | "partial";
     reason: string | null;
     userId: string;
+    /**
+     * 发起人身份。`created_by_type` 此前**写死 customer**——运营代客户退订接上来之后，
+     * 那会把 operator 的 id 标成 customer，而按边界#2 这个 id 要按 type 去
+     * `account.users` 解引用，解不到人。所以身份必须跟着 id 一起传。
+     */
+    createdByType?: "customer" | "operator";
     clientIp?: string | null;
   }): Promise<RefundRecordView> {
     const client = await this.pool.connect();
@@ -961,8 +995,8 @@ export class PgOrderRepository {
            tenant_id, bill_id, pay_record_id, order_id, refund_no,
            refund_amount, currency, refund_reason, refund_type,
            audit_status, refund_status, created_by_type, created_by_id, created_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, 'normal',
-                   'pending', 'pending', 'customer', $9, now(), now())
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $10,
+                   'pending', 'pending', $11, $9, now(), now())
          returning *`,
         [
           input.order.tenantId,
@@ -970,10 +1004,12 @@ export class PgOrderRepository {
           input.payRecordId,
           input.order.id,
           visibleCode("RFD"),
-          input.order.payableAmount,
+          input.amount ?? input.order.payableAmount,
           input.order.currency,
           input.reason,
           input.userId,
+          input.refundType ?? "normal",
+          input.createdByType ?? "customer",
         ],
       );
       await this.insertEventTx(client, {
@@ -981,7 +1017,7 @@ export class PgOrderRepository {
         eventType: "refund_requested",
         fromStatus: input.order.status,
         toStatus: input.order.status,
-        actorType: "customer",
+        actorType: input.createdByType ?? "customer",
         actorId: input.userId,
         remark: input.reason,
         clientIp: input.clientIp ?? null,

@@ -1270,7 +1270,8 @@
         "window_elapsed": "已超过退款窗口",
         "usage_over_threshold": "消耗性配额使用率已超过阈值",
         "zero_amount": "0 元订单无需退款",
-        "refund_exists": "已有退款申请"
+        "refund_exists": "已有退款申请",
+        "fully_consumed": "本周期配额已用尽，没有可退金额"
       },
       "dialogTitle": "申请退款",
       "dialogDescription": "退款金额为本单实付 {amount}。退款完成后该产品的订阅将回到未订阅状态，权益即时停止。",
@@ -1289,7 +1290,9 @@
       "noPermission": "申请退款需要商业管理权限,请联系租户所有者",
       "auditRemarkLine": "审核备注：{remark}",
       "ineligibleLine": "不符合退款条件：{reasons}",
-      "reasonSeparator": "；"
+      "reasonSeparator": "；",
+      "requestHintProrated": "可申请退款 {amount}（{deadline} 前）；已消耗配额对应的 {kept} 不在退款范围内。",
+      "dialogDescriptionProrated": "本单实付 {paid}，按已消耗配额折算后退回 {amount}，已消耗的 {kept} 不退。退款完成后该产品的订阅将回到未订阅状态，权益即时停止。"
     },
     "cancelConfirm": {
       "verb": "取消订单",

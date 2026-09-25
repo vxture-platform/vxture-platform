@@ -1239,8 +1239,13 @@ export interface OrderRefundView {
 export interface RefundEligibility {
   eligible: boolean;
   reasons: string[];
+  /** 可退金额：按已消耗配额折算后的数（2026-09-25 起不再恒等于实付）。 */
   amount: string;
   currency: string;
+  /** 本单实付（折算前）。 */
+  paidAmount: string;
+  /** 已消耗配额对应的那一份，不退。 */
+  keptAmount: string;
   windowEndsAt: string | null;
   usageRatio: number;
   windowHours: number;

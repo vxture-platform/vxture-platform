@@ -130,9 +130,19 @@ export interface RefundEligibility {
   eligible: boolean;
   /** 不满足的原因码（全部列出，前端按码翻译） */
   reasons: RefundIneligibleReason[];
-  /** 可退金额（= 订单实付） */
+  /**
+   * 可退金额。2026-09-25 起**按已消耗配额折算**（owner：「我们有成本」），不再恒等于实付：
+   *   amount = round2(实付 × (1 − α × 已用比))
+   * 无消耗性池 / 一点没用 → 等于实付（与此前一致）。
+   */
   amount: string;
   currency: string;
+  /** 本单实付（折算前），给界面把「退多少 / 留多少」说清楚 */
+  paidAmount: string;
+  /** 平台留下的那一份 = paidAmount − amount，只因为配额被消耗掉了 */
+  keptAmount: string;
+  /** 折算用的 α（套餐主组件 consumable_share；套餐没声明时是默认值） */
+  consumableShare: number;
   /** 窗口截止时刻（fulfilled_at + windowHours） */
   windowEndsAt: Date | null;
   /** 消耗性配额已用比 [0,1]（无池 0） */
@@ -144,8 +154,15 @@ export type RefundIneligibleReason =
   | "not_fulfilled"
   | "not_first_purchase"
   | "window_elapsed"
+  /**
+   * 2026-09-25 起**不再产生**：折算退之后「用多了」的答案是退得少，不是不退。
+   * 保留这个码与 `policy.maxUsageRatio` 那个开关——将来若要重新立「用超多少就不得退」
+   * 的规则，两样都是现成的。前端的文案也留着。
+   */
   | "usage_over_threshold"
   | "zero_amount"
+  /** 折算下来一分都不该退（α=1 且配额用尽）。开一张 ¥0 的退款单对客户是个假象。 */
+  | "fully_consumed"
   | "refund_exists";
 
 export interface RefundRecordView {

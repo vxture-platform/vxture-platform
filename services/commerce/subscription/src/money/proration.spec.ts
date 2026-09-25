@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeProration, cycleDays, daysLeftOf } from "./proration";
+import {
+  computeProration,
+  computeWindowRefund,
+  cycleDays,
+  daysLeftOf,
+} from "./proration";
 
 // product_330 §4.1 / owner 决策 2：credit = P_old × ((1−α)·r + α·u)，
 // payable = max(0, P_new − credit)，leftover = max(0, credit − P_new)。
@@ -106,5 +111,65 @@ describe("cycle day helpers", () => {
       ),
     ).toBe(7);
     expect(daysLeftOf(start, new Date("2026-10-01T00:00:00Z"))).toBe(0);
+  });
+});
+
+/*
+ * 折算退（owner 2026-09-25：「考虑配额消耗，后续再补充再 24H 内，也需要折算，我们有成本」）。
+ * 下面这张表就是定稿文档里那张算例表，一行一条断言——文档与代码不许各说一套。
+ */
+describe("computeWindowRefund：24 小时窗口内的折算退", () => {
+  it.each([
+    // α,   已用,  实付,   退客户, 平台留
+    [0, 0, 100, 100, 0], // 无消耗性池：零成本，全额退（与今天一致）
+    [0.5, 0, 100, 100, 0], // 开通了没用
+    [0.5, 0.1, 100, 95, 5], // 今天这一档一分不退，实际成本只有 5 元
+    [0.5, 0.6, 100, 70, 30], // owner 说的「我们有成本」那一档
+    [0.5, 1, 100, 50, 50], // 配额用光仍退一半：另一半价钱不在配额上
+    [1, 1, 100, 0, 100], // 价值全在配额里的产品，用光就不退
+    [0.5, 0.6, 0.1, 0.07, 0.03], // 小额仍走 round2
+  ])(
+    "α=%s 已用=%s 实付=%s → 退 %s / 留 %s",
+    (alpha, usedRatio, paid, amount, kept) => {
+      const r = computeWindowRefund({ paid, alpha, usedRatio });
+      expect(r.amount).toBe(amount);
+      expect(r.kept).toBe(kept);
+    },
+  );
+
+  it("窗口内不按天扣——时间那一份整份退回（否则 2 小时就退只退 96.7%）", () => {
+    // 与 computeProration 的对照：同 α、同 u，但那边 r=29/30，这边 r=1。
+    const byFormula = computeProration({
+      pOld: 100,
+      pNew: 0,
+      daysTotal: 30,
+      daysLeft: 29,
+      usageRemainingRatio: 1,
+      consumableShare: 0.5,
+    });
+    expect(byFormula.credit).toBe(98.33); // = 100 × (0.5×29/30 + 0.5×1)
+    const byWindow = computeWindowRefund({
+      paid: 100,
+      alpha: 0.5,
+      usedRatio: 0,
+    });
+    expect(byWindow.amount).toBe(100);
+  });
+
+  it("full 标志决定 refund_type（全额 normal / 少于实付 partial）", () => {
+    expect(
+      computeWindowRefund({ paid: 100, alpha: 0.5, usedRatio: 0 }).full,
+    ).toBe(true);
+    expect(
+      computeWindowRefund({ paid: 100, alpha: 0.5, usedRatio: 0.6 }).full,
+    ).toBe(false);
+  });
+
+  it("入参越界一律夹住，不靠调用方保证", () => {
+    const r = computeWindowRefund({ paid: -5, alpha: 9, usedRatio: 9 });
+    expect(r.paid).toBe(0);
+    expect(r.alpha).toBe(1);
+    expect(r.usedRatio).toBe(1);
+    expect(r.amount).toBe(0);
   });
 });

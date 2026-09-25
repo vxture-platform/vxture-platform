@@ -152,7 +152,8 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
   /* 三条都先说「服务已停止」——那是客户按下那个按钮后最先要确认的事；再说钱。
      不写「感谢使用」这类客套：owner 规则是只写机制、不写承诺。 */
   "subscription.cancelled_refunded":
-    "服务已停止。订单 {{orderNo}} 在 24 小时退款窗口内，已为你发起全额退款 {{amount}}，进度可在「费用中心」查看。",
+    "服务已停止。订单 {{orderNo}} 在退款窗口内，已为你发起退款 {{amount}}，进度可在「费用中心」查看。" +
+    "已消耗的配额不在退款范围内。",
   "subscription.cancelled_no_charge":
     "服务已停止。订单 {{orderNo}} 实付 {{amount}}，无需退款。",
   "subscription.cancelled_no_refund":
@@ -236,7 +237,7 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
   "tenant.converted":
     "{{tenantName}} has been upgraded from a personal tenant to an organization tenant. You can now invite members and assign permissions by role. Existing subscriptions and usage records are unchanged.",
   "subscription.cancelled_refunded":
-    "Access has stopped. Order {{orderNo}} is within the 24-hour refund window, so a full refund of {{amount}} has been filed for you; track it under Billing.",
+    "Access has stopped. Order {{orderNo}} is within the refund window, so a refund of {{amount}} has been filed for you; track it under Billing. Quota you already used is not part of the refund.",
   "subscription.cancelled_no_charge":
     "Access has stopped. Order {{orderNo}} was paid {{amount}}, so there is nothing to refund.",
   "subscription.cancelled_no_refund":
