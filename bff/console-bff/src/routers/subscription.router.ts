@@ -69,7 +69,18 @@ const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 // 订阅操作类型
 // ============================================================================
 
-type SubscriptionAction = "upgrade" | "pause" | "resume" | "cancel";
+/**
+ * 客户自助能对订阅做的事（2026-09-25 收窄）。
+ *
+ * **`pause` 与 `resume` 一起摘掉了。** owner 定：暂停是平台动作，客户不能控制暂停。
+ * 而「控制 resume 就是控制暂停」——收 pause 不收 resume 更糟：平台因违规暂停了服务，
+ * 客户调一次 resume 就把服务拿回去，那条端点带的是 `tenant.billing.manage`，任何租户
+ * 管理员都能调。此前它对「是谁暂停的」一个字都不判。
+ *
+ * 从值域里删掉而不是保留后拒绝：这样重新接上去要先改这一行，编译期就拦住。
+ * 界面上本来也只有退订一个按钮（console 的 SubscriptionPage 只调 cancel）。
+ */
+type SubscriptionAction = "upgrade" | "cancel";
 
 // ============================================================================
 // /subscribe deep-link landing context (product_200 §3.2 / arda_303 §2.2)
@@ -2315,14 +2326,14 @@ export class SubscriptionRouter {
     if (!subscriptionId?.trim())
       throw new BadRequestException("subscriptionId 不能为空");
 
-    const VALID: SubscriptionAction[] = [
-      "upgrade",
-      "pause",
-      "resume",
-      "cancel",
-    ];
-    if (!VALID.includes(action))
+    const VALID: SubscriptionAction[] = ["upgrade", "cancel"];
+    if (!VALID.includes(action)) {
+      /* pause / resume 单独给一句人话：它们不是拼错，是**不再对客户开放**。 */
+      if (action === ("pause" as string) || action === ("resume" as string)) {
+        throw new BadRequestException("暂停与恢复是平台操作，请联系客服处理");
+      }
       throw new BadRequestException(`无效操作类型：${String(action)}`);
+    }
 
     if (action === "upgrade" && !planId?.trim()) {
       throw new BadRequestException("upgrade 操作需要提供 planId");
@@ -2352,33 +2363,15 @@ export class SubscriptionRouter {
         throw new BadRequestException(
           "升级请通过下单流程完成：POST /api/subscription/orders (intent=upgrade)",
         );
-      } else if (action === "pause") {
-        // 'suspended' per the @vxture-platform/shared six-value domain — the legacy
-        // 'paused' literal never existed in the DDL CHECK and threw at write
-        // time; actor_type CHECK only admits system/customer/operator, so the
-        // legacy 'user' literal is 'customer' here (self-service actor).
-        updated = await this.subscriptionService.updateSubscription(
-          subscriptionId,
-          {
-            status: "suspended",
-            operatorType: "customer",
-            ...(changedBy
-              ? { operatorId: changedBy, updatedBy: changedBy }
-              : {}),
-            ...(reason ? { operatorRemark: reason } : {}),
-          },
-        );
-      } else if (action === "resume") {
-        updated = await this.subscriptionService.updateSubscription(
-          subscriptionId,
-          {
-            status: "active",
-            operatorType: "customer",
-            ...(changedBy
-              ? { operatorId: changedBy, updatedBy: changedBy }
-              : {}),
-          },
-        );
+        /*
+         * 这里原来还有 pause / resume 两支（2026-09-25 删）。
+         *
+         * 删 resume 比删 pause 更要紧：它把 status 直接写回 `active`，**对「是谁暂停的」
+         * 一个字都不判**。于是平台因违规暂停之后，客户自己调一次 resume 就把服务拿回去
+         * 了——而这条端点带的权限是 `tenant.billing.manage`，任何租户管理员都能调。
+         *
+         * 暂停与恢复现在只由运营做（admin 的 subscriptions.router），原因必填。
+         */
       } else {
         /*
          * 自助退订 = 立即终止（服务即停）。
@@ -2471,10 +2464,9 @@ export class SubscriptionRouter {
 // 内部：构建操作确认邮件
 // ============================================================================
 
+/* 值域收窄后这里也跟着少两条——编译期逃不掉（Record 穷尽）。 */
 const ACTION_LABELS: Record<SubscriptionAction, string> = {
   upgrade: "套餐升级",
-  pause: "订阅暂停",
-  resume: "订阅恢复",
   cancel: "订阅取消",
 };
 
