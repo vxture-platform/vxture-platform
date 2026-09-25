@@ -41,7 +41,13 @@ export interface SweepMocks {
     findExpiredSubscriptionIds: ReturnType<typeof vi.fn>;
     listVersionProducts: ReturnType<typeof vi.fn>;
     hasOtherActiveCoverage: ReturnType<typeof vi.fn>;
+    /* 2026-09-25（批 2）：服务轴两个新写入方与「冻结中到期不通知」都要能在这里断言。 */
+    findOverdueCandidates: ReturnType<typeof vi.fn>;
+    findExpiringSoon: ReturnType<typeof vi.fn>;
+    getNotifyDisplay: ReturnType<typeof vi.fn>;
   };
+  /** 客户通知（已注入）：断言「该发的发了、不该发的一条没发」。 */
+  notifier: { notify: ReturnType<typeof vi.fn> };
   provisioning: {
     onSubscriptionActivated: ReturnType<typeof vi.fn>;
     onSubscriptionDeactivated: ReturnType<typeof vi.fn>;
@@ -62,6 +68,9 @@ export const buildSweepMocks = (product: {
     findExpiredSubscriptionIds: vi.fn().mockResolvedValue([]),
     listVersionProducts: vi.fn().mockResolvedValue([product]),
     hasOtherActiveCoverage: vi.fn().mockResolvedValue(false),
+    findOverdueCandidates: vi.fn().mockResolvedValue([]),
+    findExpiringSoon: vi.fn().mockResolvedValue([]),
+    getNotifyDisplay: vi.fn().mockResolvedValue(null),
   };
   const provisioning = {
     onSubscriptionActivated: vi
@@ -76,5 +85,10 @@ export const buildSweepMocks = (product: {
     repo as unknown as PgSubscriptionRepository,
     provisioning as unknown as ProvisioningService,
   );
-  return { repo, provisioning, service };
+  /* 注入 notifier：不注入的话 `emit` 在第一行就 return false，通知那一半根本跑不到，
+     「该发没发」这类断言会全绿地测了个空。getNotifyDisplay 默认回 null，于是已有的
+     那些 spec 行为不变（emit 拿不到 input，照样不发）。 */
+  const notifier = { notify: vi.fn(async () => undefined) };
+  service.setCustomerNotifier(notifier);
+  return { repo, provisioning, service, notifier };
 };

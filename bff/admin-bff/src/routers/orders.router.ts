@@ -652,6 +652,10 @@ export class OrdersRouter {
       client.release();
     }
 
+    // 事务外发通知（2026-09-25）：此前驳回的唯一出口是付款页顶部那条横幅，客户不回那一
+    // 页就不知道要重新申报——而倒计时已经重新开始走了。发不出去只记日志，不影响驳回结果。
+    await this.orders.notifyPaymentRejected(orderEntityId, reason);
+
     const detail = await this.getOrder(req, orderEntityId);
     if (!detail) {
       throw new NotFoundException("Order not found after reject");

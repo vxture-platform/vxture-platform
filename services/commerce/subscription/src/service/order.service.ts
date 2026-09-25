@@ -1159,8 +1159,60 @@ export class OrderService {
     return cancelled;
   }
 
+  /**
+   * 申报被驳回的通知（2026-09-25）。
+   *
+   * 驳回本身在 admin-bff 的那条裸 SQL 事务里（券释放 + 计价回滚 + TTL 重锚要在同一个事务
+   * 里，搬不动），这里只补「告诉客户」那一半：此前唯一的出口是付款页顶部的横幅，客户不
+   * 回那一页就永远不知道要重新申报，而倒计时已经重新开始走了。
+   *
+   * 事务提交后调用；发不出去只记日志，不回滚人家的事务（emit 本身不抛）。
+   */
+  async notifyPaymentRejected(orderId: string, reason: string): Promise<void> {
+    await this.emit(`payment_rejected ${orderId}`, async () => {
+      const order = await this.orders.getById(orderId);
+      if (!order) return null;
+      const display = await this.orders.getPlanDisplay(order.planVersionId);
+      return {
+        tenantId: order.tenantId,
+        templateCode: "order.payment_rejected",
+        reference: { type: "order", id: order.id },
+        params: {
+          orderNo: order.orderNo,
+          productName: display.productName,
+          planName: display.planName,
+          reason,
+        },
+        recipients: customerRecipients(order.createdByType, order.createdById),
+        link: `/subscribe/pay/${order.id}`,
+      };
+    });
+  }
+
   async restore(orderId: string, actor: OrderActor): Promise<OrderRecord> {
-    return this.orders.restoreOrder(orderId, actor);
+    const restored = await this.orders.restoreOrder(orderId, actor);
+    // 运营把已取消 / 已超时关闭的单救回来——客户那边不知道这张单又能付了，倒计时也重新
+    // 开始走。此前这一步一句话都不发（cancel 那一侧一直有通知，恢复这一侧没有）。
+    await this.emit(`restored ${restored.orderNo}`, async () => {
+      const display = await this.orders.getPlanDisplay(restored.planVersionId);
+      return {
+        tenantId: restored.tenantId,
+        templateCode: "order.restored",
+        reference: { type: "order", id: restored.id },
+        params: {
+          orderNo: restored.orderNo,
+          productName: display.productName,
+          planName: display.planName,
+          amount: formatNotifyMoney(restored.payableAmount, restored.currency),
+        },
+        recipients: customerRecipients(
+          restored.createdByType,
+          restored.createdById,
+        ),
+        link: `/subscribe/pay/${restored.id}`,
+      };
+    });
+    return restored;
   }
 
   /** 超时关闭（§4.3 duty 1）：逐单失败只记日志。 */
