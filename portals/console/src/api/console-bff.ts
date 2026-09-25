@@ -1384,7 +1384,14 @@ export async function fetchCredits(): Promise<{
  * three actions that need no plan choice. The server also emails a
  * confirmation; failures there do not block the action.
  */
-export type SubscriptionLifecycleAction = "pause" | "resume" | "cancel";
+/**
+ * 客户自助能对订阅做的事（2026-09-25 收窄到只剩退订）。
+ *
+ * pause / resume 已从 BFF 值域删掉：暂停是平台动作，而「控制 resume 就是控制
+ * 暂停」——旧的 resume 不判是谁暂停的，平台因违规停服后客户自己就能拿回去。
+ * 这边一并收，免得界面层还能构造出一个服务端已经不收的动作。
+ */
+export type SubscriptionLifecycleAction = "cancel";
 
 export async function executeSubscriptionAction(payload: {
   subscriptionId: string;
