@@ -778,6 +778,41 @@ export class OrdersRouter {
     if (!detail) throw new NotFoundException("Order not found after refund");
     return detail;
   }
+
+  /**
+   * 退款执行失败（2026-09-25）：钱**没有**打出去（账号不对、银行退回）。
+   *
+   * 与 refund-execute 成对、同码同级（`commerce:payment.settle` + step-up）：两个动作都
+   * 在陈述「那笔钱到底怎么了」，权限尺度不该有差别。原因必填——它既是给客户那封通知的
+   * 依据，也是 order_events 时间线上唯一能解释这一步的记录。
+   *
+   * 订单与订阅都不动。客户可以再申请一次（资格判定明确排除 failed），但 24 小时窗口仍
+   * 在走，所以通知里那句「尽快联系客服」是实话，不是客套。
+   */
+  @Post(":orderId/refund-fail")
+  @RequireStepUp()
+  async failRefund(
+    @Req() req: Request & RequestContext,
+    @Param("orderId") orderId: string,
+    @Body() body: VoidOrderBody,
+  ): Promise<OrderOperationDetailRecord> {
+    assertCanSettleOrderPayment(req);
+    const actorId = requireOperatorId(req.user?.id);
+    const orderEntityId = await this.resolveOrderId(orderId);
+    const reason = normalizeVoidReason(body);
+    const refund = await this.orders.getRefundForOrder(orderEntityId);
+    if (!refund) throw new BadRequestException("该订单没有退款申请");
+    await this.orders.failRefund(refund.id, reason, {
+      actorType: "operator",
+      actorId,
+      remark: reason,
+      clientIp: extractClientIp(req),
+    });
+    const detail = await this.getOrder(req, orderEntityId);
+    if (!detail)
+      throw new NotFoundException("Order not found after refund failure");
+    return detail;
+  }
 }
 
 // 读取租户预付款池当前余额（无池视为 0）——供流水 balance 快照。

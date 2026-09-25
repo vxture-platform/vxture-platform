@@ -1282,7 +1282,8 @@
         "requested": "Refund under review",
         "approved": "Refund approved, payout pending",
         "rejected": "Refund request rejected",
-        "refunded": "Refunded"
+        "refunded": "Refunded",
+        "failed": "Payout failed, the money has not been returned"
       },
       "auditRemark": "Review note",
       "noPermission": "Requesting a refund requires billing management; ask the tenant owner",

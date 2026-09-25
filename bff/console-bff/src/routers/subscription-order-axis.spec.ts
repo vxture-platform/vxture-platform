@@ -17,6 +17,8 @@ import { SubscriptionRouter } from "./subscription.router";
 import type { RequestContext } from "../types/console.types";
 
 const NOW = new Date("2026-09-25T02:00:00.000Z");
+/** 详情端点的 `loadOrderRow` 先按 UUID_RE 过一遍再查库，所以这里必须是真 UUID。 */
+const ORDER_UUID = "33333333-3333-4333-8333-333333333333";
 
 /** 一张走完全程的付费单；每个用例只改它关心的那几个字段。 */
 function row(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -68,6 +70,54 @@ function routerWith(rows: Record<string, unknown>[]): SubscriptionRouter {
   } as unknown as Pool;
   const none = undefined as never;
   return new SubscriptionRouter(none, none, none, none, none, pool, none, none);
+}
+
+/**
+ * 详情端点用的 router：pool 按调用序作答（第一次订单行，其余空），退款单由假 service 给。
+ * 券服务在已履约的单上不会被调到（`PAYABLE_STATES` 不含 completed 族）。
+ */
+function detailRouterWith(
+  orderRow: Record<string, unknown>,
+  refund: Record<string, unknown> | null,
+): SubscriptionRouter {
+  let call = 0;
+  const pool = {
+    query: async () => (call++ === 0 ? { rows: [orderRow] } : { rows: [] }),
+  } as unknown as Pool;
+  const orderService = {
+    getRefundForOrder: async () => refund,
+  } as unknown as never;
+  const none = undefined as never;
+  return new SubscriptionRouter(
+    none,
+    orderService,
+    none,
+    none,
+    none,
+    pool,
+    none,
+    none,
+  );
+}
+
+function refundRow(
+  over: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: "rfd-1",
+    refundNo: "RFD20260925001",
+    orderId: "o-1",
+    amount: "100.00",
+    currency: "CNY",
+    reason: null,
+    auditStatus: "approved",
+    auditRemark: null,
+    refundStatus: "pending",
+    requestedAt: NOW,
+    auditedAt: NOW,
+    refundedAt: null,
+    ...over,
+  };
 }
 
 function req(): Request & RequestContext {
@@ -180,5 +230,40 @@ describe("退款在途与部分退款", () => {
         refunded_amount: "0",
       }),
     ).toBe("completed");
+  });
+});
+
+describe("退款展示：打款失败不能说成「已通过，等待打款」", () => {
+  it("failed → stage failed", async () => {
+    const router = detailRouterWith(
+      row(),
+      refundRow({ refundStatus: "failed" }),
+    );
+    const detail = await router.getOrderDetail(req(), ORDER_UUID);
+    expect(detail.refund?.stage).toBe("failed");
+  });
+
+  it("failed 的单 audit 仍是 approved —— 判定顺序反了就会显示成 approved", async () => {
+    const router = detailRouterWith(
+      row(),
+      refundRow({ refundStatus: "failed", auditStatus: "approved" }),
+    );
+    const detail = await router.getOrderDetail(req(), ORDER_UUID);
+    expect(detail.refund?.stage).not.toBe("approved");
+  });
+
+  it("审过未执行仍是 approved（别把门修成墙）", async () => {
+    const router = detailRouterWith(row(), refundRow());
+    const detail = await router.getOrderDetail(req(), ORDER_UUID);
+    expect(detail.refund?.stage).toBe("approved");
+  });
+
+  it("退成功仍是 refunded", async () => {
+    const router = detailRouterWith(
+      row(),
+      refundRow({ refundStatus: "success", refundedAt: NOW }),
+    );
+    const detail = await router.getOrderDetail(req(), ORDER_UUID);
+    expect(detail.refund?.stage).toBe("refunded");
   });
 });

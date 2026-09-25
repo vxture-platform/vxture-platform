@@ -2602,7 +2602,8 @@
       "restoreOrder": "恢复订单",
       "approveRefund": "同意退款",
       "rejectRefund": "驳回退款",
-      "completeRefund": "退款完成（已打款）"
+      "completeRefund": "退款完成（已打款）",
+      "failRefund": "打款失败"
     },
     "declaration": {
       "title": "客户付款申报",
@@ -2638,7 +2639,8 @@
       "retryProvisionFailed": "重试开通失败，请稍后重试。",
       "rejectOrderFailed": "驳回订单失败，请稍后重试。",
       "refundFailed": "退款操作失败，请稍后重试。",
-      "restoreFailed": "恢复订单失败，请稍后重试。"
+      "restoreFailed": "恢复订单失败，请稍后重试。",
+      "refundMarkedFailed": "已记为打款失败：订单与订阅不变，客户已收到通知。"
     },
     "dialogs": {
       "rejectDeclaration": {
@@ -2667,7 +2669,12 @@
         "placeholderReview": "例如：符合 24 小时首购退款条件；或：已超出退款窗口 / 用量已超阈值。",
         "descApproveWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。通过后请按原支付渠道打款，再回到本页点「退款完成」。",
         "descRejectWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。驳回原因将展示给客户。",
-        "descCompleteWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。"
+        "descCompleteWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。",
+        "titleFail": "打款失败（钱没有退出去）",
+        "descFail": "退款单 <b>{refundNo}</b> · {amount}。标记失败后订单与订阅都不变（钱没退出去，服务该怎样还怎样），客户会收到一条「未能完成」的通知。客户可以再申请一次，但 24 小时退款窗口仍在走。",
+        "descFailWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。标记失败后订单与订阅都不变（钱没退出去，服务该怎样还怎样），客户会收到一条「未能完成」的通知。客户可以再申请一次，但 24 小时退款窗口仍在走。",
+        "submitFail": "确认打款失败",
+        "placeholderFail": "例如：9/25 汇款被银行退回，收款账号与开户名不一致"
       },
       "rejectOrder": {
         "title": "驳回订单",

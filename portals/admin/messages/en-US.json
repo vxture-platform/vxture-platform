@@ -2602,7 +2602,8 @@
       "restoreOrder": "Restore order",
       "approveRefund": "Approve refund",
       "rejectRefund": "Reject refund",
-      "completeRefund": "Refund completed (paid out)"
+      "completeRefund": "Refund completed (paid out)",
+      "failRefund": "Payout failed"
     },
     "declaration": {
       "title": "Customer payment declaration",
@@ -2638,7 +2639,8 @@
       "retryProvisionFailed": "Could not retry provisioning. Try again shortly.",
       "rejectOrderFailed": "Could not reject the order. Try again shortly.",
       "refundFailed": "The refund action failed. Try again shortly.",
-      "restoreFailed": "Could not restore the order. Try again shortly."
+      "restoreFailed": "Could not restore the order. Try again shortly.",
+      "refundMarkedFailed": "Recorded as a failed payout: order and subscription unchanged, the customer has been notified."
     },
     "dialogs": {
       "rejectDeclaration": {
@@ -2667,7 +2669,12 @@
         "placeholderReview": "e.g. Meets the 24-hour first-purchase refund window; or: past the refund window / usage above threshold.",
         "descApproveWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. Once approved, pay out through the original channel, then come back and mark it completed.",
         "descRejectWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. The rejection reason is shown to the customer.",
-        "descCompleteWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. On execution the order becomes refunded and the whole product subscription returns to unsubscribed (including any free tier it was upgraded from). Entitlements stop immediately, and prepaid credit from offset overflow is reversed."
+        "descCompleteWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. On execution the order becomes refunded and the whole product subscription returns to unsubscribed (including any free tier it was upgraded from). Entitlements stop immediately, and prepaid credit from offset overflow is reversed.",
+        "titleFail": "Payout failed (the money did not go back)",
+        "descFail": "Refund <b>{refundNo}</b> · {amount}. Marking it failed leaves the order and the subscription untouched — the money never left, so access stays as it is. The customer gets a “could not be completed” notice and can file again, but the 24-hour refund window keeps running.",
+        "descFailWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. Marking it failed leaves the order and the subscription untouched — the money never left, so access stays as it is. The customer gets a “could not be completed” notice and can file again, but the 24-hour refund window keeps running.",
+        "submitFail": "Mark payout failed",
+        "placeholderFail": "e.g. Bank returned the transfer on 9/25: account name does not match"
       },
       "rejectOrder": {
         "title": "Reject order",

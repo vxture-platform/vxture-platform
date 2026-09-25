@@ -161,6 +161,9 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       refund: refundView({ auditStatus: "approved", refundStatus: "success" }),
       order: order({ status: "refunded" }),
     })),
+    markRefundFailed: vi.fn(async () =>
+      refundView({ auditStatus: "approved", refundStatus: "failed" }),
+    ),
     findExpiredIds: vi.fn(
       async (_ttl: number, _limit: number): Promise<string[]> => [],
     ),
@@ -860,6 +863,67 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       "op",
       expect.stringContaining("RFD-"),
       "operator",
+    );
+  });
+
+  /*
+   * 退款执行失败（2026-09-25，批 3）。此前这条路根本不存在：`refund_status` 的 `failed`
+   * 全仓零写入方，打款失败之后库里看不出、客户不知道、运营也没有重试的抓手。
+   */
+  it("failRefund: 未审的单不能标失败", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(refundView());
+    await expect(
+      service.failRefund("rfd-1", "银行退回", {
+        actorType: "operator",
+        actorId: "op",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.markRefundFailed).not.toHaveBeenCalled();
+  });
+
+  it("failRefund: 已成功的单不能再标失败", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved", refundStatus: "success" }),
+    );
+    await expect(
+      service.failRefund("rfd-1", "银行退回", {
+        actorType: "operator",
+        actorId: "op",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.markRefundFailed).not.toHaveBeenCalled();
+  });
+
+  it("failRefund: 审过的单标失败 —— 订单与订阅都不动，客户收到通知", async () => {
+    const { service, orders, subscriptions } = build(fulfilled(), null);
+    (subscriptions as unknown as Record<string, unknown>).cancelSubscription =
+      vi.fn(async () => sub({ id: "sub-new", status: "cancelled" }));
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+
+    const out = await service.failRefund("rfd-1", "银行退回，户名不符", {
+      actorType: "operator",
+      actorId: "op",
+    });
+
+    expect(out.refundStatus).toBe("failed");
+    expect(orders.markRefundFailed).toHaveBeenCalledTimes(1);
+    // 钱没退出去 ⇒ 订单不转 refunded、订阅不回滚。这两条是本用例的要点。
+    expect(orders.executeRefund).not.toHaveBeenCalled();
+    expect(
+      (
+        subscriptions as unknown as {
+          cancelSubscription: ReturnType<typeof vi.fn>;
+        }
+      ).cancelSubscription,
+    ).not.toHaveBeenCalled();
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ templateCode: "refund.failed" }),
     );
   });
 

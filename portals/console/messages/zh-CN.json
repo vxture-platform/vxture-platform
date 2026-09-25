@@ -1282,7 +1282,8 @@
         "requested": "退款审核中",
         "approved": "退款已通过，等待打款",
         "rejected": "退款申请被驳回",
-        "refunded": "已退款"
+        "refunded": "已退款",
+        "failed": "打款失败，款项尚未退回"
       },
       "auditRemark": "审核备注",
       "noPermission": "申请退款需要商业管理权限,请联系租户所有者",

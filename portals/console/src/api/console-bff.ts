@@ -1228,7 +1228,8 @@ export interface OrderRefundView {
   amount: string;
   currency: string;
   reason: string | null;
-  stage: "requested" | "approved" | "rejected" | "refunded";
+  /** `failed` = 打款失败，钱没退回去（2026-09-25 补；此前它显示成「已通过」）。 */
+  stage: "requested" | "approved" | "rejected" | "refunded" | "failed";
   auditRemark: string | null;
   requestedAt: string;
   auditedAt: string | null;
