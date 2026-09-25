@@ -758,15 +758,36 @@ export function OrderPayPage() {
                   </>
                 ) : refundEligibility?.eligible ? (
                   <>
+                    {/*
+                     * 两种说法，按**这一单算出来的金额**选，不按策略猜（2026-09-25 折算退）：
+                     * 一点没用 → 全额；用过配额 → 说清退多少、留多少。写死「可申请全额退款」
+                     * 在折算之后就是一句不成立的承诺。
+                     */}
                     <span className="text-muted-foreground">
-                      {t("refund.requestHint", {
-                        hours: refundEligibility.windowHours,
-                        deadline: refundEligibility.windowEndsAt
-                          ? new Date(
-                              refundEligibility.windowEndsAt,
-                            ).toLocaleString(locale)
-                          : "—",
-                      })}
+                      {refundEligibility.amount === refundEligibility.paidAmount
+                        ? t("refund.requestHint", {
+                            hours: refundEligibility.windowHours,
+                            deadline: refundEligibility.windowEndsAt
+                              ? new Date(
+                                  refundEligibility.windowEndsAt,
+                                ).toLocaleString(locale)
+                              : "—",
+                          })
+                        : t("refund.requestHintProrated", {
+                            amount: fmt(
+                              refundEligibility.amount,
+                              refundEligibility.currency,
+                            ),
+                            kept: fmt(
+                              refundEligibility.keptAmount,
+                              refundEligibility.currency,
+                            ),
+                            deadline: refundEligibility.windowEndsAt
+                              ? new Date(
+                                  refundEligibility.windowEndsAt,
+                                ).toLocaleString(locale)
+                              : "—",
+                          })}
                     </span>
                     {canManageBilling ? (
                       <Button
@@ -811,13 +832,37 @@ export function OrderPayPage() {
               {refundDialogOpen && refundEligibility ? (
                 <DialogForm
                   open
+                  /*
+                   * size="lg"：DS 面板预设要求显式给 sm/lg/xl（默认 md 不在预设里）。
+                   * 本处原是 check-design-system 基线里的存量违规；2026-09-25 改了这个标签
+                   * 的内容（折算退的两种说明），内容寻址的基线不再认它而现形——按规矩修掉，
+                   * 不更新基线。取 lg 与 admin 侧的退款对话框一致：长说明 + 一个文本域。
+                   */
+                  size="lg"
                   title={t("refund.dialogTitle")}
-                  description={t("refund.dialogDescription", {
-                    amount: fmt(
-                      refundEligibility.amount,
-                      refundEligibility.currency,
-                    ),
-                  })}
+                  description={
+                    refundEligibility.amount === refundEligibility.paidAmount
+                      ? t("refund.dialogDescription", {
+                          amount: fmt(
+                            refundEligibility.amount,
+                            refundEligibility.currency,
+                          ),
+                        })
+                      : t("refund.dialogDescriptionProrated", {
+                          amount: fmt(
+                            refundEligibility.amount,
+                            refundEligibility.currency,
+                          ),
+                          paid: fmt(
+                            refundEligibility.paidAmount,
+                            refundEligibility.currency,
+                          ),
+                          kept: fmt(
+                            refundEligibility.keptAmount,
+                            refundEligibility.currency,
+                          ),
+                        })
+                  }
                   submitLabel={t("refund.submit")}
                   cancelLabel={t("actions.cancel")}
                   submitting={submittingRefund}

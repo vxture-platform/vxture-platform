@@ -144,6 +144,9 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       async (_id: string): Promise<RefundBasis> => ({
         earlierFulfilledCount: 0,
         usageRatio: 0.02,
+        /* α：与升级折抵同一个来源。桩给 0.5（默认值），于是折算退能被算出来——
+           不给的话折算那一半在测试里根本跑不到。 */
+        consumableShare: 0.5,
         payRecordId: "pay-1",
         invoiceId: "inv-1",
         existingRefundId: null,
@@ -769,8 +772,55 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
     const e = await service.getRefundEligibility("ord-1");
     expect(e.eligible).toBe(true);
     expect(e.reasons).toEqual([]);
-    expect(e.amount).toBe("100.00");
+    /*
+     * 2026-09-25 折算退：可退金额不再恒等于实付。桩里已用 2% 配额、α=0.5 ⇒
+     * 100 × (1 − 0.5×0.02) = 99.00，平台留下 1.00（那 2% 配额的成本）。
+     * 这一行原来断言 100.00——改口径就该改到断言上。
+     */
+    expect(e.amount).toBe("99.00");
+    expect(e.paidAmount).toBe("100.00");
+    expect(e.keptAmount).toBe("1.00");
     expect(e.windowEndsAt!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("一点没用就是全额退（与折算前的行为一致）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundBasis.mockResolvedValueOnce({
+      earlierFulfilledCount: 0,
+      usageRatio: 0,
+      consumableShare: 0.5,
+      payRecordId: "pay-1",
+      invoiceId: "inv-1",
+      existingRefundId: null,
+    });
+    const e = await service.getRefundEligibility("ord-1");
+    expect(e.amount).toBe("100.00");
+    expect(e.keptAmount).toBe("0.00");
+  });
+
+  it("配额用尽且 α=1 → 不可退，原因是 fully_consumed（不开一张 ¥0 的退款单）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundBasis.mockResolvedValueOnce({
+      earlierFulfilledCount: 0,
+      usageRatio: 1,
+      consumableShare: 1,
+      payRecordId: "pay-1",
+      invoiceId: "inv-1",
+      existingRefundId: null,
+    });
+    const e = await service.getRefundEligibility("ord-1");
+    expect(e.eligible).toBe(false);
+    expect(e.reasons).toContain("fully_consumed");
+    // zero_amount 是「这张单本来就是 0 元」，与「折算成 0」不是一回事，不许混用。
+    expect(e.reasons).not.toContain("zero_amount");
+  });
+
+  it("折算后的金额与类型一起传给仓储（partial 判金额，不判类型）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    await service.requestRefund("ord-1", { userId: "u-1", reason: null });
+    expect(orders.createRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: "99.00", refundType: "partial" }),
+    );
   });
 
   it("lists every failing condition: window elapsed + not first + usage + upgrade intent + existing refund", async () => {
@@ -785,6 +835,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
     orders.getRefundBasis.mockResolvedValueOnce({
       earlierFulfilledCount: 1,
       usageRatio: 0.5,
+      consumableShare: 0.5,
       payRecordId: "pay-1",
       invoiceId: "inv-1",
       existingRefundId: "rfd-0",
@@ -795,10 +846,18 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       expect.arrayContaining([
         "not_first_purchase",
         "window_elapsed",
-        "usage_over_threshold",
         "refund_exists",
       ]),
     );
+    /*
+     * 2026-09-25：用量**不再是**不可退的理由（owner：折算退）。用掉 50% 配额的答案是
+     * 「退一半多」，不是「一分不退」。这条断言此前要求 `usage_over_threshold` 在列，
+     * 现在要求它**不在**——改口径就该改到这一行上，不是把它留着当摆设。
+     */
+    expect(e.reasons).not.toContain("usage_over_threshold");
+    // α=0.5、已用 50% ⇒ 退 100 × (1 − 0.5×0.5) = 75.00
+    expect(e.amount).toBe("75.00");
+    expect(e.keptAmount).toBe("25.00");
   });
 
   it("zero-amount and not-yet-fulfilled orders are never refundable", async () => {
@@ -825,6 +884,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
     orders.getRefundBasis.mockResolvedValue({
       earlierFulfilledCount: 1,
       usageRatio: 0,
+      consumableShare: 0.5,
       payRecordId: "pay-1",
       invoiceId: "inv-1",
       existingRefundId: null,

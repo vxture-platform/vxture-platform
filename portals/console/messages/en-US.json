@@ -1270,7 +1270,8 @@
         "window_elapsed": "The refund window has passed",
         "usage_over_threshold": "Consumable quota usage is above the threshold",
         "zero_amount": "Zero-amount orders need no refund",
-        "refund_exists": "A refund request already exists"
+        "refund_exists": "A refund request already exists",
+        "fully_consumed": "This cycle's quota is fully used, so there is nothing to refund"
       },
       "dialogTitle": "Request a refund",
       "dialogDescription": "The refund equals what you paid for this order ({amount}). Once completed, the subscription for this product returns to unsubscribed and entitlements stop immediately.",
@@ -1289,7 +1290,9 @@
       "noPermission": "Requesting a refund requires billing management; ask the tenant owner",
       "auditRemarkLine": "Review note: {remark}",
       "ineligibleLine": "Not eligible for refund: {reasons}",
-      "reasonSeparator": "; "
+      "reasonSeparator": "; ",
+      "requestHintProrated": "You can request a {amount} refund (before {deadline}); the {kept} matching quota you already used is not refundable.",
+      "dialogDescriptionProrated": "You paid {paid} for this order. After prorating for the quota you already used, {amount} goes back and {kept} does not. Once the refund completes, this product returns to unsubscribed and access stops immediately."
     },
     "cancelConfirm": {
       "verb": "Cancel order",

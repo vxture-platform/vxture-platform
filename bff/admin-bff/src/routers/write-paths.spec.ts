@@ -91,6 +91,18 @@ function stubSubscriptions() {
   };
 }
 
+/**
+ * 假订单服务：退订之后的退款结算（2026-09-25 批 4）。真实实现自己吞异常，这里只要能
+ * 断言「退订调了它、别的动作没调」。
+ */
+function stubOrders() {
+  return {
+    settleAfterCancel: vi.fn(async () => ({ outcome: "no_order" as const })),
+  } as unknown as ConstructorParameters<typeof SubscriptionsRouter>[3] & {
+    settleAfterCancel: ReturnType<typeof vi.fn>;
+  };
+}
+
 /** RO pool that must not be reached (all read-back methods are stubbed in tests). */
 function dummyRoPool(): Pool {
   return {
@@ -110,6 +122,7 @@ describe("subscriptions runSubscriptionAction", () => {
       noDbPool().pool,
       rw.pool,
       stubSubscriptions(),
+      stubOrders(),
     );
     await expect(
       router.runSubscriptionAction(
@@ -129,6 +142,7 @@ describe("subscriptions runSubscriptionAction", () => {
       noDbPool().pool,
       rw.pool,
       stubSubscriptions(),
+      stubOrders(),
     );
     await expect(
       router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
@@ -144,6 +158,7 @@ describe("subscriptions runSubscriptionAction", () => {
       dummyRoPool(),
       tx.pool,
       stubSubscriptions(),
+      stubOrders(),
     );
     await expect(
       router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
@@ -174,6 +189,7 @@ describe("subscriptions runSubscriptionAction", () => {
         dummyRoPool(),
         tx.pool,
         stubSubscriptions(),
+        stubOrders(),
       );
       await expect(
         router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
@@ -194,7 +210,12 @@ describe("subscriptions runSubscriptionAction", () => {
         : undefined,
     );
     const subs = stubSubscriptions();
-    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool, subs);
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      subs,
+      stubOrders(),
+    );
     (
       router as unknown as { loadSubscriptionDetail: unknown }
     ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
@@ -220,7 +241,12 @@ describe("subscriptions runSubscriptionAction", () => {
         : undefined,
     );
     const subs = stubSubscriptions();
-    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool, subs);
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      subs,
+      stubOrders(),
+    );
     (
       router as unknown as { loadSubscriptionDetail: unknown }
     ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
@@ -233,6 +259,60 @@ describe("subscriptions runSubscriptionAction", () => {
     expect(subs.notifyOperatorStatusChange).not.toHaveBeenCalled();
   });
 
+  it("退订要结算退款，并且以 operator 身份（此前运营代客户退订钱不退、客户不知道）", async () => {
+    const tx = makeTxClient((s) =>
+      s.includes("for update")
+        ? [{ status: "active", tenant_id: UUID_A, end_at: null }]
+        : undefined,
+    );
+    const subs = stubSubscriptions();
+    const orders = stubOrders();
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      subs,
+      orders,
+    );
+    (
+      router as unknown as { loadSubscriptionDetail: unknown }
+    ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
+
+    await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+      action: "cancel",
+    });
+    expect(orders.settleAfterCancel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscriptionId: UUID_A,
+        tenantId: UUID_A,
+        // 身份决定退款单的 created_by_type 与「通知发给谁」——传错就会把消息发给运营。
+        actorType: "operator",
+      }),
+    );
+  });
+
+  it("暂停不结算退款——只有退订才是「钱的事」", async () => {
+    const tx = makeTxClient((s) =>
+      s.includes("for update")
+        ? [{ status: "active", tenant_id: UUID_A, end_at: null }]
+        : undefined,
+    );
+    const orders = stubOrders();
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      stubSubscriptions(),
+      orders,
+    );
+    (
+      router as unknown as { loadSubscriptionDetail: unknown }
+    ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
+
+    await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+      action: "suspend",
+    });
+    expect(orders.settleAfterCancel).not.toHaveBeenCalled();
+  });
+
   it("恢复要告诉客户（suspended → active 走 resumed 那条）", async () => {
     const tx = makeTxClient((s) =>
       s.includes("for update")
@@ -240,7 +320,12 @@ describe("subscriptions runSubscriptionAction", () => {
         : undefined,
     );
     const subs = stubSubscriptions();
-    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool, subs);
+    const router = new SubscriptionsRouter(
+      dummyRoPool(),
+      tx.pool,
+      subs,
+      stubOrders(),
+    );
     (
       router as unknown as { loadSubscriptionDetail: unknown }
     ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
