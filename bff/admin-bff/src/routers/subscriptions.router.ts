@@ -208,6 +208,24 @@ export class SubscriptionsRouter {
       ]);
 
       await client.query("commit");
+
+      /*
+       * **已知缺口（2026-09-25）：运营在这里退订，不会走退款、也不会发消息。**
+       *
+       * 客户自助那条路（console-bff `executeAction` 的 cancel 分支）在终止之后会调
+       * `OrderService.settleAfterCancel`：24 小时内替客户发起全额退款，并按结果发一条
+       * 「服务已停止 + 钱怎么样了」的消息（owner 2026-09-25：「站在客户视角，退订就是
+       * 退款」）。这一条路没有。
+       *
+       * 原因是本路由**直接写 SQL**、admin-bff 的模块里根本没有那两个服务；接进来会连带
+       * 邮件与 provisioning 依赖，是一次架构改动，不该夹在那一批里顺手做。
+       *
+       * 后果具体是：运营代客户退订时，够条件的退款不会自动发起（客户仍可自己在费用中心
+       * 申请，但 24 小时窗口可能已走完），客户也收不到任何消息。
+       *
+       * 要补的正路是让本路由改用 SubscriptionService / OrderService 而不是裸 SQL——
+       * 那样这类「判定只长在一条分支上」的洞会一起消失，而不是再补一次。
+       */
     } catch (e) {
       await client.query("rollback");
       throw e;

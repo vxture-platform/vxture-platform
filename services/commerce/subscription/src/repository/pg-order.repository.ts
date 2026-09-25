@@ -826,6 +826,29 @@ export class PgOrderRepository {
 
   // ── 退款（product_330 §5）────────────────────────────────────────────────────
 
+  /**
+   * 这条订阅当前挂着的订单（`metering.subscriptions.current_order_id`）。
+   *
+   * 退订要回答「这笔钱怎么办」，而钱在订单上。用 current_order_id 而不是「最近一张
+   * 同产品的单」：前者是履约时写下的**这条订阅是哪张单开的**，后者只是猜。
+   *
+   * 返回 null 的两种情形都正常：订阅从未被订单履约过（历史数据 / 运营手工建的），
+   * 或那张单已被删除。调用方按「没有可退的单」处理，不要当成错误。
+   */
+  async findCurrentOrderIdForSubscription(
+    subscriptionId: string,
+  ): Promise<string | null> {
+    const res = await this.pool.query<{ current_order_id: string | null }>(
+      `select o.id as current_order_id
+         from metering.subscriptions s
+         join billing.orders o on o.id = s.current_order_id
+        where s.id = $1
+        limit 1`,
+      [subscriptionId],
+    );
+    return res.rows[0]?.current_order_id ?? null;
+  }
+
   /** 平台参数：refund.window_hours（int，默认 24）/ refund.max_usage_ratio（默认 0.10）。 */
   async getRefundPolicy(): Promise<RefundPolicy> {
     const res = await this.pool.query<{
