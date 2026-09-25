@@ -2603,7 +2603,8 @@
       "approveRefund": "Approve refund",
       "rejectRefund": "Reject refund",
       "completeRefund": "Refund completed (paid out)",
-      "failRefund": "Payout failed"
+      "failRefund": "Payout failed",
+      "createRefund": "File a refund"
     },
     "declaration": {
       "title": "Customer payment declaration",
@@ -2640,7 +2641,8 @@
       "rejectOrderFailed": "Could not reject the order. Try again shortly.",
       "refundFailed": "The refund action failed. Try again shortly.",
       "restoreFailed": "Could not restore the order. Try again shortly.",
-      "refundMarkedFailed": "Recorded as a failed payout: order and subscription unchanged, the customer has been notified."
+      "refundMarkedFailed": "Recorded as a failed payout: order and subscription unchanged, the customer has been notified.",
+      "refundCreated": "Refund filed: the customer has been notified; it still needs review and then execution."
     },
     "dialogs": {
       "rejectDeclaration": {
@@ -2674,7 +2676,11 @@
         "descFail": "Refund <b>{refundNo}</b> · {amount}. Marking it failed leaves the order and the subscription untouched — the money never left, so access stays as it is. The customer gets a “could not be completed” notice and can file again, but the 24-hour refund window keeps running.",
         "descFailWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. Marking it failed leaves the order and the subscription untouched — the money never left, so access stays as it is. The customer gets a “could not be completed” notice and can file again, but the 24-hour refund window keeps running.",
         "submitFail": "Mark payout failed",
-        "placeholderFail": "e.g. Bank returned the transfer on 9/25: account name does not match"
+        "placeholderFail": "e.g. Bank returned the transfer on 9/25: account name does not match",
+        "titleCreate": "File a refund (bypasses the automatic eligibility check)",
+        "descCreate": "This order was paid <b>{amount}</b>. This path skips three policy checks — the time window, first-purchase, and usage ratio. Orders that were never fulfilled, zero-amount orders, and orders with a refund already in flight are still refused: those are facts and ledger integrity, not policy. The amount is prorated for quota already used; the refund still needs review and then execution.",
+        "submitCreate": "File the refund",
+        "placeholderCreate": "e.g. 6-hour outage on 9/20; compensation agreed with the customer (ticket 123)"
       },
       "rejectOrder": {
         "title": "Reject order",

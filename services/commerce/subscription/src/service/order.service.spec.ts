@@ -930,6 +930,111 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
    * 退款执行失败（2026-09-25，批 3）。此前这条路根本不存在：`refund_status` 的 `failed`
    * 全仓零写入方，打款失败之后库里看不出、客户不知道、运营也没有重试的抓手。
    */
+  /*
+   * 运营发起退款（批 6）：自动资格判定的逃生口。此前运营**没有任何办法**给客户发起退款，
+   * 24 小时窗口一过，计费错误 / 服务事故 / 误驳回全都退不了。
+   *
+   * 这组用例的重点是那条分界：放开的是**政策**（时间窗 / 首购 / 用量），不放开的是
+   * **事实与账目完整性**（未履约 / 0 元单 / 已有在途退款单）。
+   */
+  it("跳过三条政策判定：过了窗口、非首购、用量超阈值照样能发起", async () => {
+    const { service, orders } = build(
+      fulfilled({
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        fulfilledAt: new Date(Date.now() - 30 * 3_600_000), // 早过 24h
+      }),
+      null,
+    );
+    orders.getRefundBasis.mockResolvedValue({
+      earlierFulfilledCount: 3, // 非首购
+      usageRatio: 0.9, // 用量远超旧阈值
+      consumableShare: 0.5,
+      payRecordId: "pay-1",
+      invoiceId: "inv-1",
+      existingRefundId: null,
+    });
+
+    // 同一张单走客户自助必被拒——对照组，证明这条路确实绕过了那三条。
+    const e = await service.getRefundEligibility("ord-1");
+    expect(e.eligible).toBe(false);
+
+    const r = await service.createOperatorRefund({
+      orderId: "ord-1",
+      reason: "服务中断补偿",
+      operatorId: "op-1",
+    });
+    expect(r.refundNo).toMatch(/^RFD-/);
+    expect(orders.createRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdByType: "operator",
+        // 金额缺省取折算值：α=0.5、已用 90% ⇒ 100 × (1 − 0.45) = 55.00
+        amount: "55.00",
+        refundType: "partial",
+      }),
+    );
+  });
+
+  it("运营可以显式覆盖金额（事故补偿按全额退）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    await service.createOperatorRefund({
+      orderId: "ord-1",
+      reason: "事故全额补偿",
+      operatorId: "op-1",
+      amount: "100.00",
+    });
+    expect(orders.createRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: "100.00", refundType: "normal" }),
+    );
+  });
+
+  it("金额不得超过实付", async () => {
+    const { service } = build(fulfilled(), null);
+    await expect(
+      service.createOperatorRefund({
+        orderId: "ord-1",
+        reason: "手滑多打了一位",
+        operatorId: "op-1",
+        amount: "1000.00",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it.each([
+    ["未履约的单", { status: "paid" as const }],
+    ["0 元单", { payableAmount: "0.00" }],
+  ])("不放开：%s 仍然拒绝（那是事实，不是政策）", async (_label, over) => {
+    const { service, orders } = build(fulfilled(over), null);
+    await expect(
+      service.createOperatorRefund({
+        orderId: "ord-1",
+        reason: "不管什么理由都不该过",
+        operatorId: "op-1",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.createRefundRequest).not.toHaveBeenCalled();
+  });
+
+  it("不放开：已有在途退款单仍然拒绝（否则同一笔钱退两次）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundBasis.mockResolvedValue({
+      earlierFulfilledCount: 0,
+      usageRatio: 0,
+      consumableShare: 0.5,
+      payRecordId: "pay-1",
+      invoiceId: "inv-1",
+      existingRefundId: "rfd-0",
+    });
+    await expect(
+      service.createOperatorRefund({
+        orderId: "ord-1",
+        reason: "重复发起",
+        operatorId: "op-1",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.createRefundRequest).not.toHaveBeenCalled();
+  });
+
   it("failRefund: 未审的单不能标失败", async () => {
     const { service, orders } = build(fulfilled(), null);
     orders.getRefundById.mockResolvedValueOnce(refundView());
