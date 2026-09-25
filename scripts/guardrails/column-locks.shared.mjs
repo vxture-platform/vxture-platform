@@ -54,6 +54,9 @@ export const EXTRA_ANCHOR = new Set([
   "metering.subscription_suspensions.actor_type",
   "metering.subscription_suspensions.actor_id",
   "metering.subscription_suspensions.client_ip",
+  /* 暂停前的 auto_renew（2026-09-25 步骤三）：同样是出生即定——恢复时要还原成暂停那一
+     刻的值，而不是「现在觉得应该是什么」。改它等于替客户改了续费意愿。 */
+  "metering.subscription_suspensions.auto_renew_before",
 ]);
 
 /**

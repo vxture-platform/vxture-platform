@@ -45,6 +45,11 @@ export interface SweepMocks {
     findOverdueCandidates: ReturnType<typeof vi.fn>;
     findExpiringSoon: ReturnType<typeof vi.fn>;
     getNotifyDisplay: ReturnType<typeof vi.fn>;
+    /* 2026-09-25 步骤三：暂停顺延（结算 + 到点处置）。 */
+    settleResumedSuspensions: ReturnType<typeof vi.fn>;
+    findOverdueSuspensions: ReturnType<typeof vi.fn>;
+    closeSuspension: ReturnType<typeof vi.fn>;
+    getMaxSuspendDays: ReturnType<typeof vi.fn>;
   };
   /** 客户通知（已注入）：断言「该发的发了、不该发的一条没发」。 */
   notifier: { notify: ReturnType<typeof vi.fn> };
@@ -71,6 +76,10 @@ export const buildSweepMocks = (product: {
     findOverdueCandidates: vi.fn().mockResolvedValue([]),
     findExpiringSoon: vi.fn().mockResolvedValue([]),
     getNotifyDisplay: vi.fn().mockResolvedValue(null),
+    settleResumedSuspensions: vi.fn().mockResolvedValue([]),
+    findOverdueSuspensions: vi.fn().mockResolvedValue([]),
+    closeSuspension: vi.fn().mockResolvedValue(undefined),
+    getMaxSuspendDays: vi.fn().mockResolvedValue(60),
   };
   const provisioning = {
     onSubscriptionActivated: vi

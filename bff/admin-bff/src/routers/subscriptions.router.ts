@@ -242,6 +242,8 @@ export class SubscriptionsRouter {
      * C2 权益缓存，于是**产品侧照旧按旧状态服务**。`before` 是锁行时读到的那两件事。
      */
     let hooksBefore: { status: string; planVersionId: string } | null = null;
+    /** 提交后要结算的顺延（步骤三）：这次动作闭合了一条 episode。 */
+    let settleSuspension = false;
 
     const client = await this.rwPool.connect();
     try {
@@ -298,11 +300,35 @@ export class SubscriptionsRouter {
           suspendReason.reason,
           remark,
           suspendReason.extendsTerm,
+          /* 暂停会把 auto_renew 关掉（冻结期间不该自动续上一期），恢复时要还原成**暂停
+             那一刻**的值。锁行时读到的就是它——这句是在同一笔事务里、UPDATE 已经把它置
+             false 之前读的那份快照。 */
+          current.auto_renew,
           actorId,
           clientIp,
         ]);
       } else if (fromStatus === "suspended" && toStatus !== "suspended") {
-        await client.query(SUSPENSION_CLOSE_SQL, [subscriptionId]);
+        const closed = await client.query<{
+          extends_term: boolean;
+          auto_renew_before: boolean | null;
+        }>(SUSPENSION_CLOSE_SQL, [subscriptionId]);
+        const episode = closed.rows[0];
+        /* 还原续费意愿。顺序 load-bearing：状态 UPDATE 已经跑过（它把 suspend 时的 false
+           带到现在），这一句在它之后才赢。退订不还原——终态本来就不续。 */
+        if (
+          toStatus !== "cancelled" &&
+          episode &&
+          episode.auto_renew_before !== null
+        ) {
+          await client.query(SUSPENSION_RESTORE_AUTO_RENEW_SQL, [
+            subscriptionId,
+            episode.auto_renew_before,
+          ]);
+        }
+        /* 顺延要结算（步骤三）。不在这笔事务里算：离开 suspended 的路有四条（恢复 / 续期 /
+           退订 / 到点强制恢复），四个写入方各写一份同样的算式必然漂移。这里只闭合 episode，
+           结算交给提交后那一次调用与作业兜底——判据是「已闭合且未结算」，失败会自愈。 */
+        settleSuspension = episode !== undefined;
       }
 
       await client.query("commit");
@@ -353,6 +379,14 @@ export class SubscriptionsRouter {
         subscriptionId,
         notify,
       );
+    }
+    /*
+     * 顺延结算（步骤三）。在这里调是为了**客户马上就能在页面上看到新的到期日**；作业每趟
+     * 还会扫一遍兜底。服务层自己吞异常（顺延是欠客户的账，不能因为一次失败就丢，但也不该
+     * 让已经生效的恢复动作失败）。
+     */
+    if (settleSuspension) {
+      await this.subscriptions.settleSuspensionExtension(subscriptionId);
     }
     if (settle && actorId) {
       /* settleAfterCancel 自己吞掉一切异常（只记日志）——退订已经生效，钱的那一步失败
@@ -477,7 +511,9 @@ function resolveTargetStatus(
       if (status !== "suspended") {
         throw new ConflictException("Only suspended subscriptions can resume");
       }
-      if (isPastEndAt(current.end_at)) {
+      // 按**有效到期日**判，不是 end_at（步骤三）：顺延在恢复时才结算进 end_at，照
+      // end_at 判会把「停期间到期了」的订阅挡在门外，而那些天本来就该还给客户。
+      if (isPastEndAt(current.effective_end_at)) {
         throw new ConflictException(
           "Suspended subscription has expired; renew before resuming",
         );
@@ -704,6 +740,7 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     operationHint: operationHint(status, row.auto_renew),
     startAt: toIso(row.start_at),
     endAt: toIsoNullable(row.end_at),
+    effectiveEndAt: toIsoNullable(row.effective_end_at),
     trialEndAt: toIsoNullable(row.trial_end_at),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
@@ -965,6 +1002,8 @@ interface SubscriptionRow {
   created_by_id: string | null;
   start_at: Date | string;
   end_at: Date | string | null;
+  /** end_at + 进行中那次暂停已累计的时长（见 SUBSCRIPTION_BASE_SQL 的注释）。 */
+  effective_end_at: Date | string | null;
   trial_end_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -1028,7 +1067,25 @@ select
   s.subscription_kind,
   -- 写完之后要把「从哪到哪」交给 SubscriptionService 的写完成尾（批 5），它判的是
   -- 状态 + 版本两件事，所以版本在这里一起读出来。
-  s.plan_version_id
+  s.plan_version_id,
+  /*
+   * **有效到期日**（2026-09-25 步骤三）：end_at 加上进行中那一次暂停已经累计的时长。
+   *
+   * 恢复的前置条件必须按它判，不是按 end_at。顺延在恢复时才结算进 end_at，所以冻结期间
+   * end_at 还是暂停前那个值——照它判，一条因平台故障停了一个月的订阅会被拒在门外
+   * （「暂停订阅已过期，请先做续期确认」），而客户明明还有剩余服务期。那正是 owner 说的
+   * 「不能为暂停期间的代价让客户承担」。
+   *
+   * extends_term = false（客户违规）不加：那一档本来就不顺延。
+   */
+  s.end_at + coalesce((
+    select now() - sus.paused_at
+      from metering.subscription_suspensions sus
+     where sus.subscription_id = s.id
+       and sus.resumed_at is null
+       and sus.extends_term
+     limit 1
+  ), interval '0') as effective_end_at
 from metering.subscriptions s
 where s.id = $1 and s.deleted_at is null
 for update of s
@@ -1127,8 +1184,9 @@ function mapSuspensionRow(
  */
 const SUSPENSION_OPEN_SQL = `
 insert into metering.subscription_suspensions (
-  subscription_id, tenant_id, reason, reason_note, extends_term, actor_type, actor_id, client_ip
-) values ($1, $2, $3, $4, $5, 'operator', $6, $7)
+  subscription_id, tenant_id, reason, reason_note, extends_term, auto_renew_before,
+  actor_type, actor_id, client_ip
+) values ($1, $2, $3, $4, $5, $6, 'operator', $7, $8)
 `;
 
 /**
@@ -1145,6 +1203,25 @@ const SUSPENSION_CLOSE_SQL = `
 update metering.subscription_suspensions
    set resumed_at = now(), updated_at = now()
  where subscription_id = $1 and resumed_at is null
+returning extends_term, auto_renew_before
+`;
+
+/**
+ * 恢复暂停前的续费意愿。$1 subscription_id / $2 auto_renew_before。
+ *
+ * 为什么不能无脑置 true：那会给一条本来就关着自动续费的订阅悄悄打开它，下个周期客户账上
+ * 多一笔。为什么不能不管：暂停那一步把它关了，不还原等于运营暂停一次就替客户永久关掉了
+ * 自动续费——两个方向都静默。
+ *
+ * 只在离开 suspended 且**不是**进终态时调（退订本来就不续）。存量 episode 的
+ * auto_renew_before 为 NULL ⇒ 调用方不调这一句：那是「按设计没有」，猜一个比不动更糟。
+ */
+const SUSPENSION_RESTORE_AUTO_RENEW_SQL = `
+update metering.subscriptions
+   set auto_renew = $2,
+       next_renewal_at = case when $2::boolean is false then null else next_renewal_at end,
+       updated_at = now()
+ where id = $1 and deleted_at is null
 `;
 
 interface SubscriptionActionRow {
@@ -1152,6 +1229,8 @@ interface SubscriptionActionRow {
   tenant_id: string;
   status: string;
   auto_renew: boolean;
+  /** end_at + 进行中那次暂停已累计的时长（顺延还没结算进 end_at）。NULL = 永久订阅。 */
+  effective_end_at: Date | string | null;
   cycle_unit: string;
   cycle_count: number;
   end_at: Date | string | null;

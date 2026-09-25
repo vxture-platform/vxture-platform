@@ -412,6 +412,129 @@ export class SubscriptionService {
   }
 
   /**
+   * 顺延结算（2026-09-25 步骤三）。把已闭合但还没结算的暂停 episode 结成天数，加到订阅
+   * 的 `end_at` 上。
+   *
+   * owner 定的三条前提里，「不做退钱」+「客户不承担暂停期间的代价」合起来就是这件事：
+   * 不退钱，就把停掉的那些天还回去。还多少由那一次暂停的原因决定（`extends_term`），
+   * 在暂停发生时就定了。
+   *
+   * 两个调用点、一段结算：运营恢复之后 admin-bff 立刻带 `subscriptionId` 调一次（客户
+   * 马上就能在页面上看到新到期日），作业每趟不带参数扫一遍兜底。**幂等靠
+   * `granted_seconds is null`**，所以两边同时跑也只结一次；某一次失败下一趟自愈——顺延
+   * 是欠客户的账，不能静默丢。
+   */
+  async settleSuspensionExtension(subscriptionId?: string): Promise<number> {
+    try {
+      const settled = await this.repo.settleResumedSuspensions(
+        // exactOptionalPropertyTypes：不带 subscriptionId 时**整个键不能出现**，
+        // 传 undefined 与不传在这里是两种类型。
+        subscriptionId ? { subscriptionId, limit: 100 } : { limit: 100 },
+      );
+      for (const row of settled) {
+        if (row.grantedSeconds > 0 && !row.extended) {
+          // 永久订阅没有到期日可顺延。记下来而不是静默跳过：将来若要换别的补偿方式，
+          // 账在 granted_seconds 里。
+          this.logger.log(
+            `suspension settle: subscription ${row.subscriptionId} has no end_at, ` +
+              `${row.grantedSeconds}s recorded but not applied`,
+          );
+        }
+      }
+      return settled.length;
+    } catch (err) {
+      // 结算失败不该让恢复订阅这个动作失败（它已经生效了），下一趟作业会自愈。
+      this.logger.error(`suspension settle failed — ${String(err)}`);
+      return 0;
+    }
+  }
+
+  /**
+   * 到点处置（2026-09-25 步骤三）：暂停超过 `subscription.max_suspend_days` 还没恢复的，
+   * 平台必须动一下。
+   *
+   * 为什么必须有：顺延让有效到期日随暂停时长一直往后走。没有上限的话那条订阅永不到期、
+   * 永不释放、也永不再计费——批 2 刚修掉的死胡同会以另一种形态回来。
+   *
+   * 动作按**原因**分，这是三条前提推出来的：
+   *   · 平台自己的原因（运维 / 争议审查 / 其他）→ **强制恢复**。拖着不查是平台的问题，
+   *     不该让客户一直停着；顺延照算，客户不亏那些天。
+   *   · 客户违规 → **终止**。查实了就该结束，而不是无限期挂着占着位子。
+   *
+   * 恢复时把 `auto_renew` 还原成暂停那一刻的值（`auto_renew_before`）。存量 episode 该
+   * 列为 NULL ⇒ 不动它：那是「按设计没有」，猜一个比不动更糟。
+   *
+   * 走 `repo.update` + `applyTransitionHooks`，与到期扫描同一条路——产品侧的
+   * provisioning / 权益缓存由同一套钩子对齐，不另写一份。
+   */
+  async sweepOverdueSuspensions(): Promise<{
+    resumed: number;
+    terminated: number;
+  }> {
+    // 天数从 admin.settings 读（运营台可改，不用发版）；读不到用代码侧默认 60。
+    const maxDays = await this.repo.getMaxSuspendDays();
+    const rows = await this.repo.findOverdueSuspensions(maxDays);
+    let resumed = 0;
+    let terminated = 0;
+    for (const row of rows) {
+      const terminate = !row.extendsTerm;
+      try {
+        const before = await this.getSubscription(row.subscriptionId);
+        if (before.status !== "suspended") continue; // moved since the scan
+        // 终止不还原续费意愿（终态本来就不续）；恢复才还原，而存量 episode 的
+        // auto_renew_before 为 NULL ⇒ 整个键不出现（= 不动它），不是传 undefined。
+        const autoRenew = terminate ? false : row.autoRenewBefore;
+        const result = await this.repo.update(row.subscriptionId, before, {
+          status: terminate ? "cancelled" : "active",
+          ...(autoRenew === null ? {} : { autoRenew }),
+          operatorType: "system",
+          operatorRemark: terminate
+            ? `suspension exceeded ${maxDays} days (reason=${row.reason}) — terminated`
+            : `suspension exceeded ${maxDays} days (reason=${row.reason}) — force resumed`,
+          expectedStatus: "suspended",
+        });
+        if (!result) {
+          this.logger.debug(
+            `suspension deadline: subscription ${row.subscriptionId} changed under us, skipped`,
+          );
+          continue;
+        }
+        // 先闭合 episode 再结算：结算的判据是「已闭合且未结算」，顺序反了这一趟捞不到它
+        // （下一趟会捞到，但客户要多等一个 tick 才看到新到期日）。
+        await this.repo.closeSuspension(row.subscriptionId);
+        await this.applyTransitionHooks(
+          `suspension-deadline:${row.subscriptionId}`,
+          row.subscriptionId,
+          before,
+          result,
+        );
+        await this.settleSuspensionExtension(row.subscriptionId);
+        // 客户侧要知道：服务被停了很久之后，它是恢复了还是彻底结束了。
+        await this.emit(
+          `suspension deadline ${row.subscriptionId}`,
+          async () => {
+            const d = await this.repo.getNotifyDisplay(row.subscriptionId);
+            if (!d) return null;
+            return this.subscriptionNotice(
+              terminate
+                ? "subscription.suspension_ended"
+                : "subscription.resumed",
+              d,
+            );
+          },
+        );
+        if (terminate) terminated += 1;
+        else resumed += 1;
+      } catch (err) {
+        this.logger.error(
+          `suspension deadline: subscription ${row.subscriptionId} failed — ${String(err)}`,
+        );
+      }
+    }
+    return { resumed, terminated };
+  }
+
+  /**
    * 「即将到期」这一档的写入方（S6，2026-09-25 补）。
    *
    * 到期提醒的邮件一直在发，**状态却从来没人写**：`expiring` 在值域里、被多处查询读，

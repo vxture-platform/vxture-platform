@@ -35,6 +35,8 @@ export type CustomerNotificationTemplate =
   | "subscription.overdue"
   | "subscription.suspended"
   | "subscription.resumed"
+  /* 暂停到点被终止（2026-09-25 步骤三）：服务不会再恢复。 */
+  | "subscription.suspension_ended"
   | "order.payment_rejected"
   | "order.restored"
   /* 2026-09-25 批 3：退款执行失败。批 2 本想加它，当时撤掉了——那会儿 `failed` 全仓

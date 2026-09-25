@@ -985,6 +985,15 @@ export interface SubscribeCurrent {
   endAt: string | null;
   trialEndAt: string | null;
   autoRenew: boolean;
+  /**
+   * 这一次暂停恢复后要不要顺延服务期（2026-09-25 步骤三）。
+   *
+   * 只有这个布尔，**没有暂停原因**：原因里有「客户违规」那一档，是运营的判断，不从客户
+   * 界面读出来。客户需要知道的只有一件——停掉的这些天会不会还给他。
+   *
+   * null = 没在暂停中，或存量冻结行没有 episode（原因轴是后加的）→ 界面什么都不多说。
+   */
+  suspensionExtendsTerm: boolean | null;
 }
 
 export interface PendingOrderSummary {

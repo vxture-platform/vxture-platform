@@ -40,7 +40,13 @@ function makeReq(): Request & RequestContext {
 }
 
 /** 事务池：记下每条 SQL 与它的参数，锁行查询回一条可控的订阅。 */
-function makeRwPool(status: string) {
+function makeRwPool(
+  status: string,
+  opts: { autoRenew?: boolean; autoRenewBefore?: boolean | null } = {},
+) {
+  const autoRenew = opts.autoRenew ?? true;
+  const autoRenewBefore =
+    opts.autoRenewBefore === undefined ? true : opts.autoRenewBefore;
   const calls: { sql: string; params: unknown[] }[] = [];
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     const text = String(sql);
@@ -52,14 +58,22 @@ function makeRwPool(status: string) {
             id: SUB_ID,
             tenant_id: TENANT_ID,
             status,
-            auto_renew: true,
+            auto_renew: autoRenew,
             cycle_unit: "month",
             cycle_count: 1,
             end_at: new Date(Date.now() + 30 * 86400_000),
+            // 步骤三：恢复的闸门按有效到期日判，锁行查询把它一起读出来。
+            effective_end_at: new Date(Date.now() + 30 * 86400_000),
             subscription_kind: "paid",
             plan_version_id: PLAN_VERSION_ID,
           },
         ],
+      };
+    }
+    // 闭合 episode 会 returning 一行：续费意愿还原与「要不要结算」都看它。
+    if (/update metering\.subscription_suspensions/i.test(text)) {
+      return {
+        rows: [{ extends_term: true, auto_renew_before: autoRenewBefore }],
       };
     }
     return { rows: [] };
@@ -80,11 +94,17 @@ function makeRoPool() {
   return { query } as unknown as Pool;
 }
 
-function makeRouter(status: string) {
-  const rw = makeRwPool(status);
+function makeRouter(
+  status: string,
+  opts: { autoRenew?: boolean; autoRenewBefore?: boolean | null } = {},
+) {
+  const rw = makeRwPool(status, opts);
+  const settle = vi.fn(async () => 0);
   const subscriptions = {
     applyExternalStatusChange: vi.fn(async () => undefined),
     notifyOperatorStatusChange: vi.fn(async () => undefined),
+    /* 步骤三：顺延结算。提交后调，客户马上能看到新的到期日。 */
+    settleSuspensionExtension: settle,
   } as unknown as SubscriptionService;
   const orders = {
     settleAfterCancel: vi.fn(async () => undefined),
@@ -95,7 +115,7 @@ function makeRouter(status: string) {
     subscriptions,
     orders,
   );
-  return { router, rw };
+  return { router, rw, settle };
 }
 
 /** 详情读回会 404（只读池回空行）——本线只看事务里写了什么，到这一步已经写完了。 */
@@ -200,6 +220,78 @@ describe("episode 的开合按状态转移，不按动作名", () => {
   it("active → cancelled：既不开也不闭合", async () => {
     const { router, rw } = makeRouter("active");
     await run(router, { action: "cancel", reason: "客户不再续约" });
-    expect(rw.find(/metering\.subscription_suspensions/)).toBeUndefined();
+    /* 判的是「有没有写」，不是「有没有提到这张表」：锁行查询本身就带着有效到期日那个
+       子查询（步骤三），它 select 得到这张表是正常的。粒度放宽一格就恒真。 */
+    expect(
+      rw.find(/insert into metering\.subscription_suspensions/),
+    ).toBeUndefined();
+    expect(
+      rw.find(/update metering\.subscription_suspensions/),
+    ).toBeUndefined();
+  });
+});
+
+describe("顺延的两个半边：记下续费意愿、恢复时还原（步骤三）", () => {
+  it("暂停把暂停前的 auto_renew 记进 episode —— 恢复时要还原成它，不是猜", async () => {
+    const { router, rw } = makeRouter("active", { autoRenew: true });
+    await run(router, {
+      action: "suspend",
+      reason: "平台迁移",
+      suspendReason: "platform_ops",
+    });
+    const open = rw.find(/insert into metering\.subscription_suspensions/);
+    // $6 = auto_renew_before（锁行时读到的那份快照，UPDATE 置 false 之前的值）
+    expect(open?.params[5]).toBe(true);
+    expect(open?.sql.toLowerCase()).toContain("auto_renew_before");
+  });
+
+  it("本来就关着自动续费的订阅：记下的是 false", async () => {
+    const { router, rw } = makeRouter("active", { autoRenew: false });
+    await run(router, {
+      action: "suspend",
+      reason: "平台迁移",
+      suspendReason: "platform_ops",
+    });
+    expect(
+      rw.find(/insert into metering\.subscription_suspensions/)?.params[5],
+    ).toBe(false);
+  });
+
+  it("恢复时把 auto_renew 还原成 episode 里那个值", async () => {
+    const { router, rw } = makeRouter("suspended", { autoRenewBefore: true });
+    await run(router, { action: "resume", reason: "复核完成" });
+    const restore = rw.calls.find(
+      (c) => /set$/m.test("") || /auto_renew = \$2/.test(c.sql),
+    );
+    expect(restore).toBeDefined();
+    expect(restore?.params).toEqual([SUB_ID, true]);
+  });
+
+  it("存量 episode 没记（null）→ 一句都不发，不动 auto_renew", async () => {
+    const { router, rw } = makeRouter("suspended", { autoRenewBefore: null });
+    await run(router, { action: "resume", reason: "复核完成" });
+    expect(rw.calls.some((c) => /auto_renew = \$2/.test(c.sql))).toBe(false);
+  });
+
+  it("退订不还原续费意愿 —— 终态本来就不续", async () => {
+    const { router, rw } = makeRouter("suspended", { autoRenewBefore: true });
+    await run(router, { action: "cancel", reason: "客户不再续约" });
+    expect(rw.calls.some((c) => /auto_renew = \$2/.test(c.sql))).toBe(false);
+  });
+
+  it("闭合了 episode 就在提交后结算顺延（只结这一条）", async () => {
+    const { router, settle } = makeRouter("suspended");
+    await run(router, { action: "resume", reason: "复核完成" });
+    expect(settle).toHaveBeenCalledWith(SUB_ID);
+  });
+
+  it("没闭合任何 episode 的动作不触发结算", async () => {
+    const { router, settle } = makeRouter("active");
+    await run(router, {
+      action: "suspend",
+      reason: "平台迁移",
+      suspendReason: "platform_ops",
+    });
+    expect(settle).not.toHaveBeenCalled();
   });
 });

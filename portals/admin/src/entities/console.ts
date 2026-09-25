@@ -1205,6 +1205,14 @@ export interface SubscriptionOperationRecord {
   operationHint: string;
   startAt: string;
   endAt: string | null;
+  /**
+   * **有效到期日** = `endAt` + 进行中那一次暂停已累计的时长（2026-09-25 步骤三）。
+   *
+   * 顺延在恢复时才结算进 `endAt`，所以冻结期间 `endAt` 仍是暂停前那个值。判「能不能恢复」
+   * 要用这一个——照 `endAt` 判会把「停期间到期了」的订阅灰掉，而服务端已经放行。
+   * 展示到期时间仍用 `endAt`（那是账上的事实）。
+   */
+  effectiveEndAt: string | null;
   trialEndAt: string | null;
   createdAt: string;
   updatedAt: string;

@@ -534,11 +534,31 @@ export class PgSubscriptionRepository {
       `select s.id, s.status from metering.subscriptions s
         where s.subscription_kind <> 'trial'
           -- 'suspended' 是 2026-09-25 补的。此前只扫在用三态，于是被运营冻结的订阅
-          -- end_at 过了也没有任何人动它——永不到期、永不释放，也永不再计费。这一条不
-          -- 改 end_at（冻结期间是否顺延是另一个待裁定的题），只让它能走到终点。
+          -- end_at 过了也没有任何人动它——永不到期、永不释放，也永不再计费。
           and s.status in ('active', 'expiring', 'overdue', 'suspended')
           and s.end_at is not null
-          and s.end_at <= now()
+          /*
+           * **有效到期日**，不是 end_at（2026-09-25 步骤三）。
+           *
+           * 顺延在**恢复时**才结算进 end_at（那时才知道停了多久）。所以冻结期间 end_at
+           * 仍是暂停前那个值——照它扫，一条因平台故障被暂停的订阅会在冻结中间「到期」，
+           * 客户白丢那些天，而 owner 定的恰恰是「不能为暂停期间的代价让客户承担」。
+           *
+           * 这里只把**进行中那一次**已经累计的时长加回去（已闭合的那些早已进了 end_at，
+           * 再加一次就是重复顺延）。extends_term = false（客户违规）不加：那一档本来
+           * 就不顺延，停着照样走到期。
+           *
+           * 只长在谓词里、不写库：冻结期间 end_at 一直在变会让「到期时间」这一列每次
+           * 刷新都不一样，而顺延还没结算。
+           */
+          and s.end_at + coalesce((
+                select now() - sus.paused_at
+                  from metering.subscription_suspensions sus
+                 where sus.subscription_id = s.id
+                   and sus.resumed_at is null
+                   and sus.extends_term
+                 limit 1
+              ), interval '0') <= now()
           and s.deleted_at is null
           -- 宽限期内不收口：自动续费开着、续费单还在途、且还没过 end_at + 宽限的行，
           -- 归 overdue 那一档管（S8/S11）。少这一条，到期扫描会在 end_at 当天就把行
@@ -995,6 +1015,185 @@ export class PgSubscriptionRepository {
       updatedAt: row.updated_at,
       deletedAt: row.deleted_at,
     };
+  }
+
+  /**
+   * 顺延结算（2026-09-25 步骤三）：把**已闭合但还没结算**的暂停 episode 结成天数，加到
+   * 订阅的 `end_at` 上。
+   *
+   * 为什么是「事后扫」而不是在恢复那一笔事务里算完：离开 `suspended` 的路有三条（运营
+   * 恢复 / 续期 / 退订），加上到点强制恢复那一条就是四个写入方。把这段数学放进每一个
+   * 写入方，等于四份同样的算式各自漂移；放在这里，**谁闭合 episode 都由同一段结算**。
+   * 幂等判据是 `granted_seconds is null`：结算失败下一趟自愈，不会静默吞掉客户的天数
+   * （那正是「不能为暂停期间的代价让客户承担」最容易破在的地方）。
+   *
+   * 取整**向上取天**：停了 3 小时也还一整天。差额由平台吃，因为这段时间的不可用是平台
+   * 造成的——向下取整会让所有不足一天的暂停归零。
+   *
+   * `extends_term = false`（客户违规）也要结算，结成 0：否则那条 episode 永远「未结算」，
+   * 每一趟都被捞起来重算一遍。
+   *
+   * `end_at IS NULL`（永久订阅）不加：它没有到期日可顺延。仍写 `granted_seconds`，
+   * 记下那一次本该给多少——将来若改成别的补偿方式，账在那里。
+   *
+   * `for update skip locked`：多实例同时扫不会互相等，也不会把同一条结算两次。
+   */
+  async settleResumedSuspensions(input: {
+    subscriptionId?: string;
+    limit?: number;
+  }): Promise<
+    {
+      id: string;
+      subscriptionId: string;
+      grantedSeconds: number;
+      extended: boolean;
+    }[]
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const { rows } = await client.query<{
+        id: string;
+        subscription_id: string;
+        granted_seconds: string;
+        has_end_at: boolean;
+      }>(
+        `select sus.id,
+                sus.subscription_id,
+                case when sus.extends_term
+                     then (ceil(extract(epoch from (sus.resumed_at - sus.paused_at)) / 86400)
+                           * 86400)::bigint
+                     else 0::bigint
+                end as granted_seconds,
+                (s.end_at is not null) as has_end_at
+           from metering.subscription_suspensions sus
+           join metering.subscriptions s on s.id = sus.subscription_id
+          where sus.resumed_at is not null
+            and sus.granted_seconds is null
+            and ($1::uuid is null or sus.subscription_id = $1)
+          order by sus.resumed_at asc
+          limit $2
+            for update of sus skip locked`,
+        [input.subscriptionId ?? null, input.limit ?? 100],
+      );
+
+      const settled: {
+        id: string;
+        subscriptionId: string;
+        grantedSeconds: number;
+        extended: boolean;
+      }[] = [];
+      for (const row of rows) {
+        const granted = Number(row.granted_seconds);
+        await client.query(
+          `update metering.subscription_suspensions
+              set granted_seconds = $2, updated_at = now()
+            where id = $1 and granted_seconds is null`,
+          [row.id, granted],
+        );
+        const extend = granted > 0 && row.has_end_at;
+        if (extend) {
+          await client.query(
+            `update metering.subscriptions
+                set end_at = end_at + make_interval(secs => $2), updated_at = now()
+              where id = $1 and end_at is not null`,
+            [row.subscription_id, granted],
+          );
+        }
+        settled.push({
+          id: row.id,
+          subscriptionId: row.subscription_id,
+          grantedSeconds: granted,
+          extended: extend,
+        });
+      }
+
+      await client.query("commit");
+      return settled;
+    } catch (e) {
+      await client.query("rollback");
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 超过最长暂停期、还没闭合的 episode（2026-09-25 步骤三）。
+   *
+   * 为什么必须有到点处置：顺延让有效到期日随暂停时长一直往后走，没有上限的话那条订阅
+   * 永不到期、永不释放、也永不再计费——2026-09-25 批 2 刚修掉的死胡同会以另一种形态回来。
+   *
+   * 处置动作按**原因**分（owner 2026-09-25 的三条前提推出来的）：平台自己的原因到点要
+   * 强制恢复（拖着不查是平台的问题，不该让客户一直停着）；客户违规到点终止（查实了就
+   * 该结束，而不是无限期挂着）。所以这里把 reason 与 extends_term 一起带出去。
+   */
+  async findOverdueSuspensions(
+    maxDays: number,
+    limit = 50,
+  ): Promise<
+    {
+      id: string;
+      subscriptionId: string;
+      status: string;
+      reason: string;
+      extendsTerm: boolean;
+      autoRenewBefore: boolean | null;
+    }[]
+  > {
+    const { rows } = await this.pool.query<{
+      id: string;
+      subscription_id: string;
+      status: string;
+      reason: string;
+      extends_term: boolean;
+      auto_renew_before: boolean | null;
+    }>(
+      `select sus.id, sus.subscription_id, s.status, sus.reason, sus.extends_term,
+              sus.auto_renew_before
+         from metering.subscription_suspensions sus
+         join metering.subscriptions s on s.id = sus.subscription_id
+        where sus.resumed_at is null
+          and sus.paused_at + make_interval(days => $1) <= now()
+          and s.deleted_at is null
+          -- 订阅已经不在冻结态了（别的路径改过状态而 episode 没闭合）→ 交给闭合那一段
+          -- 处理，不在这里当「超期暂停」处置。
+          and s.status = 'suspended'
+        order by sus.paused_at asc
+        limit $2`,
+      [maxDays, limit],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      subscriptionId: r.subscription_id,
+      status: r.status,
+      reason: r.reason,
+      extendsTerm: r.extends_term,
+      autoRenewBefore: r.auto_renew_before,
+    }));
+  }
+
+  /**
+   * 最长暂停期（天）。与 `getRefundPolicy` 同一个机制：值在 `admin.settings`，运营台可改
+   * 不用发版；读不到就用代码侧默认值 60，不让一条缺失的配置把整趟扫描变成「不限期」。
+   */
+  async getMaxSuspendDays(): Promise<number> {
+    const res = await this.pool.query<{ config_value: string }>(
+      `select config_value from admin.settings
+        where config_key = 'subscription.max_suspend_days'`,
+    );
+    const days = Number(res.rows[0]?.config_value);
+    return Number.isFinite(days) && days > 0 ? days : 60;
+  }
+
+  /** 闭合一条 episode（到点处置用；运营路径在 admin-bff 的同一事务里闭合）。 */
+  async closeSuspension(subscriptionId: string): Promise<void> {
+    await this.pool.query(
+      `update metering.subscription_suspensions
+          set resumed_at = now(), updated_at = now()
+        where subscription_id = $1 and resumed_at is null`,
+      [subscriptionId],
+    );
   }
 
   private mapHistory(row: HistoryRow): SubscriptionHistoryRecord {

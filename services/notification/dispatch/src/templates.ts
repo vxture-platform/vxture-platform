@@ -40,6 +40,9 @@ export type NotificationTemplateCode =
   | "subscription.cancelled_refunded"
   | "subscription.cancelled_no_charge"
   | "subscription.cancelled_no_refund"
+  /* 暂停到点被终止（2026-09-25 步骤三）。不复用 cancelled_* 那三条：它们讲的是「退订
+     这张单退不退钱」，而这条讲的是「服务不会再恢复了」，客户此刻要知道的是后者。 */
+  | "subscription.suspension_ended"
   /* 2026-09-25 状态机定稿（批 2）补的六条，全是「事情发生了但没人告诉客户」：
        subscription.overdue        → 新接上的「欠费宽限」这一档（服务还在、钱没到）
        subscription.suspended/resumed → 运营冻结与恢复，此前客户服务被停了不知为何
@@ -111,6 +114,7 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "subscription.cancelled_no_charge": "已退订：{{productName}} {{planName}}",
   "subscription.cancelled_no_refund":
     "已退订，本单不退款：{{productName}} {{planName}}",
+  "subscription.suspension_ended": "订阅已终止：{{productName}} {{planName}}",
   "subscription.overdue": "订阅已进入宽限期：{{productName}} {{planName}}",
   "subscription.suspended": "订阅已暂停：{{productName}} {{planName}}",
   "subscription.resumed": "订阅已恢复：{{productName}} {{planName}}",
@@ -158,6 +162,8 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
     "服务已停止。订单 {{orderNo}} 实付 {{amount}}，无需退款。",
   "subscription.cancelled_no_refund":
     "服务已停止。订单 {{orderNo}} 已超过 24 小时退款窗口，本单不退款。",
+  "subscription.suspension_ended":
+    "暂停时间已超过上限，订阅已终止，服务不再恢复。如需继续使用请重新订购。",
   /* 宽限期这条先说「服务仍在运行」——客户看到「宽限期」最先担心的是服务是不是已经停了。
      再给截止时间与后果，不写「请尽快」这类催促。 */
   "subscription.overdue":
@@ -199,6 +205,8 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "subscription.cancelled_no_charge": "Cancelled: {{productName}} {{planName}}",
   "subscription.cancelled_no_refund":
     "Cancelled, no refund for this order: {{productName}} {{planName}}",
+  "subscription.suspension_ended":
+    "Subscription ended: {{productName}} {{planName}}",
   "subscription.overdue":
     "Subscription in grace period: {{productName}} {{planName}}",
   "subscription.suspended": "Subscription paused: {{productName}} {{planName}}",
@@ -242,6 +250,8 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "Access has stopped. Order {{orderNo}} was paid {{amount}}, so there is nothing to refund.",
   "subscription.cancelled_no_refund":
     "Access has stopped. Order {{orderNo}} is past the 24-hour refund window, so this order is not refunded.",
+  "subscription.suspension_ended":
+    "The pause exceeded the allowed limit and the subscription has ended. Service will not resume. To continue, place a new order.",
   "subscription.overdue":
     "The renewal order is unpaid and your service is still running. Please pay by {{payBy}}; after that the service stops.",
   "subscription.suspended":
@@ -311,6 +321,7 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
      单，「订阅还在不在」这个问题它的答案是「还在」。暂停 / 恢复才是那个主题——服务在
      不在，是它们唯一回答的事。 */
   "subscription.overdue": "payment_due",
+  "subscription.suspension_ended": "subscription_expiry",
   "subscription.suspended": "subscription_expiry",
   "subscription.resumed": "subscription_expiry",
   "order.payment_rejected": "order_status",
