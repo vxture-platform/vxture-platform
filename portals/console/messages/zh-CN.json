@@ -1138,6 +1138,10 @@
     "rejectBanner": "上次付款申报未通过：{reason} 券与折扣已释放，可重新申报或取消订单，倒计时已重置。",
     "cycleStartNote": "订阅周期自服务开通时刻起算",
     "status": {
+      "partially_paid": "部分到账",
+      "refunding": "退款中",
+      "refunded": "已退款",
+      "partially_refunded": "部分退款",
       "pending_payment": "待付款",
       "paid_pending_verify": "已付款 · 待确认",
       "activating": "开通处理中",
@@ -1146,6 +1150,9 @@
       "expired": "已超时"
     },
     "stateTitle": {
+      "refunding": "退款处理中",
+      "refunded": "订单已退款",
+      "partially_refunded": "订单已部分退款",
       "paid_pending_verify": "我们正在核对你的付款",
       "activating": "付款成功 · 开通处理中",
       "completed": "订阅已生效",
@@ -1153,6 +1160,9 @@
       "expired": "订单已超时关闭"
     },
     "stateHint": {
+      "refunding": "退款申请已受理，处理完成后会通知你。",
+      "refunded": "退款已完成。如需继续使用，请重新下单。",
+      "partially_refunded": "本单已部分退款，具体金额见退款记录。",
       "paid_pending_verify": "已收到付款申报，确认到账后订阅立即生效，一般 1 个工作日内完成，页面会自动刷新。",
       "activating": "款项已结清，正在为你开通订阅，通常几分钟内完成，页面会自动刷新。",
       "completed": "订阅已生效，可前往订阅页查看权益。",
@@ -2549,6 +2559,10 @@
       "progress": "订单进度",
       "payRemain": "剩余 {time}，超时自动关闭",
       "step": {
+        "partialReceived": "部分到账",
+        "refundRequested": "退款处理中",
+        "refunded": "已退款",
+        "partiallyRefunded": "部分退款",
         "submitted": "提交订单",
         "pay": "付款",
         "declared": "付款申报",
@@ -2615,6 +2629,9 @@
       "title": "我的资源包"
     },
     "payAxis": {
+      "partial": "部分到账",
+      "refunded": "已退款",
+      "partiallyRefunded": "部分退款",
       "pending": "待付款",
       "declared": "已申报 · 核验中",
       "received": "已收款",

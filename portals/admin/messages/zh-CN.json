@@ -2444,6 +2444,7 @@
       "prepaid": "预付费"
     },
     "orderStatus": {
+      "refunded": "已退款",
       "pending": "待付款",
       "pending_verify": "待复核",
       "confirmed": "已确认",

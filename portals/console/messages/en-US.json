@@ -1138,6 +1138,10 @@
     "rejectBanner": "Your payment declaration was rejected: {reason} Vouchers were released; you can re-declare or cancel the order. The countdown has been reset.",
     "cycleStartNote": "The subscription cycle starts when the service is provisioned",
     "status": {
+      "partially_paid": "Partially paid",
+      "refunding": "Refund in progress",
+      "refunded": "Refunded",
+      "partially_refunded": "Partially refunded",
       "pending_payment": "Awaiting payment",
       "paid_pending_verify": "Paid · awaiting confirmation",
       "activating": "Activating",
@@ -1146,6 +1150,9 @@
       "expired": "Expired"
     },
     "stateTitle": {
+      "refunding": "Refund in progress",
+      "refunded": "Order refunded",
+      "partially_refunded": "Order partially refunded",
       "paid_pending_verify": "We are verifying your payment",
       "activating": "Paid · activating your subscription",
       "completed": "Subscription is live",
@@ -1153,6 +1160,9 @@
       "expired": "Order expired"
     },
     "stateHint": {
+      "refunding": "We have accepted your refund request and will notify you once it is processed.",
+      "refunded": "The refund is complete. Place a new order if you would like to subscribe again.",
+      "partially_refunded": "This order has been partially refunded. See the refund record for the exact amount.",
       "paid_pending_verify": "Declaration received. Your subscription activates once we confirm the funds, usually within 1 business day. This page refreshes automatically.",
       "activating": "Funds settled. Activation usually completes within minutes; this page refreshes automatically.",
       "completed": "Your subscription is live. Check the subscription page for entitlements.",
@@ -2549,6 +2559,10 @@
       "progress": "Order progress",
       "payRemain": "{time} left — closes automatically on timeout",
       "step": {
+        "partialReceived": "Partially paid",
+        "refundRequested": "Refund in progress",
+        "refunded": "Refunded",
+        "partiallyRefunded": "Partially refunded",
         "submitted": "Order placed",
         "pay": "Payment",
         "declared": "Payment declared",
@@ -2615,6 +2629,9 @@
       "title": "My resource packs"
     },
     "payAxis": {
+      "partial": "Partially paid",
+      "refunded": "Refunded",
+      "partiallyRefunded": "Partially refunded",
       "pending": "Awaiting payment",
       "declared": "Declared · verifying",
       "received": "Payment received",

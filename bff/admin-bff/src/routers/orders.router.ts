@@ -1270,6 +1270,9 @@ function mapPaymentStatus(
   /** 订单侧补充：¥0 单无需支付；账单已清但无支付腿（券结清 / 回填单）按已支付。 */
   order?: { amount: number; billStatus: string | null },
 ): OrderPaymentStatus {
+  // 部分到账是订单层面的事实，压在腿之前判。确认收款不足额时现金腿已经是 `paid`
+  // （那一笔确实到账了），只看腿会把「收了一半」的单显示成「已支付」——账上还差钱。
+  if (order?.billStatus === "partial") return "partial";
   if (!payStatus && order) {
     if (order.amount === 0) return "not_required";
     if (order.billStatus === "paid") return "paid";
@@ -1311,15 +1314,27 @@ function mapEntityOrderStatus(
   billStatus: string | null,
 ): OrderOperationStatus {
   switch (entityStatus) {
+    // 下面这一支必须是**恒等映射，partial 也不例外**，而且 `case` 与 `return` 之间不要
+    // 插注释——check-ops-todo-alerts 按「case 紧跟 return」的文本相邻判这层对应。
+    //
+    // 2026-09-25 我曾改成「partial 就显示部分到账挂账」，被那条守卫拦下，它是对的：
+    //   1. 告警扫的是原始态 `pending_verify`（owner 2026-09-08 裁定：告警），而
+    //      `partial_pending` 那一类的裁定是**不**告警（「在等客户，不在等运营」）。
+    //      一改，页面上写着等客户、邮件却照发给运营。
+    //   2. 更要紧的是它不是事实：确认收款不足额之后订单停在 `pending_verify`，而
+    //      `markDeclaredTx` 只接 `pending_payment` ⇒ **客户无法二次申报**。这张单唯一的
+    //      出路是运营再确认一次剩余款——它等的就是运营。
+    // 账上已经有钱这件事由「付款状态」那一列说（mapPaymentStatus 判 partial）。
     case "pending_verify":
       return "pending_verify";
     case "paid":
       return "paid_unprovisioned";
     case "fulfilled":
       return "confirmed";
+    case "refunded":
+      return "refunded";
     case "cancelled":
     case "expired":
-    case "refunded":
       return "closed";
     case "pending_payment":
     default:
@@ -1428,6 +1443,7 @@ const OPERATION_HINTS: Partial<Record<OrderOperationStatus, string>> = {
   pending_verify: "客户已申报付款，请核对到账后确认或驳回",
   paid_unprovisioned: "已收款未开通（自愈中/需人工重驱动）",
   partial_pending: "部分收款挂账，待客户申报剩余或线下协商",
+  refunded: "款项已退回，本单不再履约",
 };
 
 function mapInvoiceItemRow(row: InvoiceItemRow): OrderInvoiceItemRecord {

@@ -79,6 +79,8 @@ export const ORDER_STATUS_TONE: Record<OrderOperationStatus, StatusTone> = {
   paid_unprovisioned: "warning",
   // CSS 无规则。部分收款待处理，与 billing 的 partial 同档。
   partial_pending: "warning",
+  // 退款已执行完：按约定办完了，不是故障也不需要跟进，落中性。
+  refunded: "neutral",
 };
 
 /** 账单态。`paying`（支付中）是流程在走，不需要人动手，落 `info` 不落 `warning`。 */

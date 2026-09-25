@@ -2444,6 +2444,7 @@
       "prepaid": "Prepaid"
     },
     "orderStatus": {
+      "refunded": "Refunded",
       "pending": "Awaiting payment",
       "pending_verify": "Awaiting review",
       "confirmed": "Confirmed",

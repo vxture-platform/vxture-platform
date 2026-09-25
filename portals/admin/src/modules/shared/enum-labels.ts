@@ -213,13 +213,15 @@ export function useBillTypeLabels(): Record<BillingBillType, string> {
  * 这个值域不对应任何 DB CHECK,所以**没有提升进 shared 的 catalog-domains**
  * （那份文件的定位是「DB CHECK / seed / 服务对齐的值域契约」）。它是
  * `mapEntityOrderStatus()` 用订单实体状态 + 账单状态**算出来**的运营视图:
- *   · DDL 的 cancelled/expired/refunded 三态合并成 `closed`（运营视角不分）
- *   · `pending_payment` + 账单 partial → `partial_pending`（两个字段派生）
+ *   · DDL 的 cancelled/expired 合并成 `closed`（都是「未收过钱就关掉」）
+ *   · `refunded` 自己一档（2026-09-25）——此前也并进 `closed`,于是一张**收过钱又退
+ *     出去**的单与从没成立过的单长得一样,运营看不出钱动过
+ *   · 账单 partial → `partial_pending`（未付与待复核两态都判,钱只在账单上）
  *   · `paid` 单独浮出成 `paid_unprovisioned`,刻意不并进 `confirmed`
  *     ——否则已收款未履约的悬挂单在运营视角「已完结」,永不被发现
  *
  * ⚠ `overdue` 与 `abnormal` 目前是**死值**:`mapEntityOrderStatus()` 只产出其余
- * 六个,全 BFF 搜不到写这两个值的地方。留着不删——类型里少一个分支,将来真有
+ * 七个,全 BFF 搜不到写这两个值的地方。留着不删——类型里少一个分支,将来真有
  * 地方产出时会静默落到别处;留着则 `satisfies` 保证它有文案。
  */
 export function useOrderStatusLabels(): Record<OrderOperationStatus, string> {
@@ -232,6 +234,7 @@ export function useOrderStatusLabels(): Record<OrderOperationStatus, string> {
     closed: t("closed"),
     paid_unprovisioned: t("paid_unprovisioned"),
     partial_pending: t("partial_pending"),
+    refunded: t("refunded"),
     abnormal: t("abnormal"),
   } satisfies Record<OrderOperationStatus, string>;
 }
