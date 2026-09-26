@@ -412,6 +412,32 @@ export class SubscriptionService {
   }
 
   /**
+   * 服务期重起时把配额周期锚点拨到现在（2026-09-26，owner 决策）。
+   *
+   * 给 admin「续期确认」那条裸 SQL 路径用：它不走订单履约，所以此前**从不重锚**——
+   * 在用续期恰好对（不该重锚），但过期后续期是错的（该重锚而没重）。
+   *
+   * 判据由调用方用 `@shared` 的 `renewalRestartsPeriod` 给，与订单履约那侧同一份：
+   * 配额锚点 ≡ 服务期起点，没动起点的不许动锚点。
+   *
+   * 自己吞异常：续期本身已经生效，重锚失败不该让那个请求失败——下次续期或消费会自愈。
+   */
+  async reanchorAfterPeriodRestart(subscriptionId: string): Promise<number> {
+    try {
+      const n = await this.repo.reanchorPeriodicPools(subscriptionId);
+      if (n > 0) {
+        this.logger.log(
+          `reanchor: subscription ${subscriptionId} — ${n} periodic pool(s) re-anchored (service period restarted)`,
+        );
+      }
+      return n;
+    } catch (err) {
+      this.logger.error(`reanchor ${subscriptionId} failed — ${String(err)}`);
+      return 0;
+    }
+  }
+
+  /**
    * 顺延结算（2026-09-25 步骤三）。把已闭合但还没结算的暂停 episode 结成天数，加到订阅
    * 的 `end_at` 上。
    *

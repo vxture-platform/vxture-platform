@@ -109,3 +109,26 @@ export function needsQuotaReset(input: {
   );
   return input.currentPeriodStart.getTime() < boundary.getTime();
 }
+
+/**
+ * 这一次续期会不会**重起服务期**（而不是接着旧的往后延）。
+ *
+ * 判据只有一条：到期日还在未来 ⇒ 接着延（服务期连续）；已过或没有 ⇒ 从现在重起。
+ * 与 `OrderService` 算 `end_at` 用的 `base = endAt > now ? endAt : now` 是同一条线，
+ * 提出来是因为**另一条续期路径**（admin 运营的「续期确认」，裸 SQL）也要问同一个问题——
+ * 两处各写一遍迟早分叉。
+ *
+ * 为什么它决定要不要重锚配额周期（2026-09-26，owner 决策）：
+ * **配额锚点 ≡ 服务期起点**。在用续订服务期是连续的，这一期的起点没变，配额刷新日就不该
+ * 变；而过期后复活是新的一期从现在开始，锚点跟着走才对。
+ *
+ * 此前两种情形合用一条分支、一律重锚 —— 于是 15 号订的客户只要在 17 号续上一次，刷新日
+ * 就永久变成 17 号，每续一次漂一次。这与铁律五承诺的「15 号订即每月 15 号刷新」相矛盾，
+ * 而且在配额重置还按日历月的年代**看不出来**（锚点没人读）。
+ */
+export function renewalRestartsPeriod(
+  currentEndAt: Date | null,
+  now: Date,
+): boolean {
+  return !(currentEndAt !== null && currentEndAt.getTime() > now.getTime());
+}

@@ -1275,6 +1275,16 @@ export class PgOrderRepository {
       cycleCount: number;
       payAmount: string;
       orderId: string;
+      /**
+       * 这次续期是否**重起服务期**（2026-09-26，owner 决策）。
+       *
+       * 配额锚点 ≡ 服务期起点：在用续订是接着旧 `end_at` 往后延、这一期的起点没变，
+       * 配额刷新日就不该变；过期后复活是新的一期从现在开始，锚点跟着走才对。
+       * 判据在 `@shared` 的 `renewalRestartsPeriod`——admin 的「续期确认」也问同一个问题。
+       *
+       * `upgrade` 不看这个字段：它本来就显式把 `start_at` 拨到 now，服务期一定重起。
+       */
+      restartsPeriod?: boolean;
     },
   ): Promise<void> {
     const client = await this.pool.connect();
@@ -1333,7 +1343,14 @@ export class PgOrderRepository {
               and pool_source = 'subscription' and reset_period = 'none' and quota_used > 0`,
           [subscriptionId],
         );
-        await this.reanchorPeriodicPoolsTx(client, subscriptionId);
+        /* 周期池只在**服务期重起**时重锚（owner 2026-09-26）。在用续订服务期是连续的
+           （end_at 从旧值往后延），这一期的起点没变，客户的刷新日就不该跟着动——此前
+           两种情形合用一条分支一律重锚，于是 15 号订的客户在 17 号续一次，刷新日就永久
+           变成 17 号，每续一次漂一次。非周期池（reset_period='none'）不受影响：它们按
+           「一期一发」归零重发，与锚点无关。 */
+        if (terms.restartsPeriod) {
+          await this.reanchorPeriodicPoolsTx(client, subscriptionId);
+        }
       } else {
         await client.query(
           `update metering.subscriptions

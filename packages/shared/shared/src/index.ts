@@ -170,6 +170,7 @@ export {
   // 配额周期锚定推进（铁律五）——算式单一权威
   anchoredPeriodStart,
   needsQuotaReset,
+  renewalRestartsPeriod,
   formatDay,
   formatNumber,
   // Object utils

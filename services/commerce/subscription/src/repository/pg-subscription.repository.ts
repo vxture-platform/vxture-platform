@@ -1186,6 +1186,25 @@ export class PgSubscriptionRepository {
     return Number.isFinite(days) && days > 0 ? days : 60;
   }
 
+  /**
+   * 把周期配额池的锚点拨到现在（2026-09-26，owner 决策）。
+   *
+   * **只在服务期重起时调**：配额锚点 ≡ 服务期起点。在用续订是接着旧 `end_at` 往后延、
+   * 这一期的起点没变，刷新日就不该动；过期后复活是新的一期从现在开始，锚点跟着走才对。
+   *
+   * 供 admin「续期确认」那条**裸 SQL** 路径用——客户自助续订走订单履约，那一侧在
+   * `applySubscriptionTerms` 里做同一件事。两条路径、一条判据（`renewalRestartsPeriod`）。
+   */
+  async reanchorPeriodicPools(subscriptionId: string): Promise<number> {
+    const res = await this.pool.query(
+      `update metering.quota_pools
+          set period_anchor = now(), current_period_start = now(), updated_at = now()
+        where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
+      [subscriptionId],
+    );
+    return res.rowCount ?? 0;
+  }
+
   /** 闭合一条 episode（到点处置用；运营路径在 admin-bff 的同一事务里闭合）。 */
   async closeSuspension(subscriptionId: string): Promise<void> {
     await this.pool.query(
