@@ -30,6 +30,7 @@
  */
 
 import {
+  renewalRestartsPeriod,
   SUBSCRIPTION_STATUSES,
   SUSPENSION_REASONS,
   SUSPENSION_REASON_EXTENDS_TERM,
@@ -251,6 +252,15 @@ export class SubscriptionsRouter {
     let hooksBefore: { status: string; planVersionId: string } | null = null;
     /** 提交后要结算的顺延（步骤三）：这次动作闭合了一条 episode。 */
     let settleSuspension = false;
+    /**
+     * 提交后要不要把配额周期锚点拨到现在（owner 2026-09-26）。
+     *
+     * 配额锚点 ≡ 服务期起点。「续期确认」有两种：到期日还在未来 = 接着延，**这一期的
+     * 起点没变，刷新日不该动**；已经过期 = 新的一期从现在开始，锚点跟着走。此前这条
+     * 裸 SQL 路径从不重锚，于是后一种情形一直是错的。
+     * 判据走 `@shared` 那一份，与客户自助续订（订单履约）同源。
+     */
+    let reanchorPools = false;
 
     const client = await this.rwPool.connect();
     try {
@@ -271,6 +281,14 @@ export class SubscriptionsRouter {
         status: fromStatus,
         planVersionId: current.plan_version_id,
       };
+
+      /* 锁行时读到的 end_at 就是「续期前」的那个值——判据要在 UPDATE 之前取。 */
+      if (action === "renew") {
+        reanchorPools = renewalRestartsPeriod(
+          current.end_at === null ? null : new Date(current.end_at),
+          new Date(),
+        );
+      }
 
       await client.query(SUBSCRIPTION_ACTION_UPDATE_SQL, [
         subscriptionId,
@@ -395,6 +413,9 @@ export class SubscriptionsRouter {
      */
     if (settleSuspension) {
       await this.subscriptions.settleSuspensionExtension(subscriptionId);
+    }
+    if (reanchorPools) {
+      await this.subscriptions.reanchorAfterPeriodRestart(subscriptionId);
     }
     if (settle && actorId) {
       /* settleAfterCancel 自己吞掉一切异常（只记日志）——退订已经生效，钱的那一步失败

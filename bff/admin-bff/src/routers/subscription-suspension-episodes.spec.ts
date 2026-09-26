@@ -295,3 +295,26 @@ describe("顺延的两个半边：记下续费意愿、恢复时还原（步骤�
     expect(settle).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * 「续期确认」要不要重锚配额周期（owner 2026-09-26 决策）。
+ *
+ * 配额锚点 ≡ 服务期起点。这条裸 SQL 路径**从不重锚**，于是「过期后续期」一直是错的
+ * （新的一期从现在开始，锚点却没跟上）；而「在用续期」恰好对——它本来就不该重锚。
+ * 判据必须在 UPDATE **之前**从锁行结果里取：UPDATE 一跑，end_at 就已经是续期后的值了。
+ */
+describe("续期确认：只有过期后续期才重锚", () => {
+  it("到期日还在未来（在用续期）→ 不重锚，刷新日守住", async () => {
+    const { router, rw } = makeRouter("active");
+    const reanchor = vi.fn(async () => 0);
+    (
+      router as unknown as {
+        subscriptions: { reanchorAfterPeriodRestart: unknown };
+      }
+    ).subscriptions.reanchorAfterPeriodRestart = reanchor;
+    await run(router, { action: "renew", reason: "合同已续签" });
+    expect(reanchor).not.toHaveBeenCalled();
+    // 锁行 mock 的 end_at 是 now + 30 天，确实在未来。
+    expect(rw.find(/for update of s/)).toBeDefined();
+  });
+});

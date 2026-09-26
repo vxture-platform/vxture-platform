@@ -22,6 +22,7 @@ import {
   type DiscountEffect,
   type ReservedVoucher,
 } from "@vxture/service-promotion";
+import { renewalRestartsPeriod } from "@vxture-platform/shared";
 import { PgOrderRepository } from "../repository/pg-order.repository";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import { SubscriptionService } from "./subscription.service";
@@ -629,6 +630,9 @@ export class OrderService {
         cycleCount: order.cycleCount,
         payAmount: order.payableAmount,
         orderId: order.id,
+        /* 服务期重起才重锚配额周期。与上面算 `base` 是同一条判据，走 @shared 那一份，
+           因为 admin 的「续期确认」也要问同一个问题（owner 2026-09-26 决策）。 */
+        restartsPeriod: renewalRestartsPeriod(from.endAt ?? null, now),
       });
       await this.applyOrderAutoRenew(from, order, actor);
       subscription = await this.subscriptions.getSubscription(from.id);

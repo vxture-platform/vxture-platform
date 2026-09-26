@@ -10,7 +10,11 @@
  *      要修掉的东西。
  */
 import { describe, expect, it } from "vitest";
-import { anchoredPeriodStart, needsQuotaReset } from "./quota-period.utils";
+import {
+  anchoredPeriodStart,
+  needsQuotaReset,
+  renewalRestartsPeriod,
+} from "./quota-period.utils";
 
 const d = (iso: string) => new Date(iso);
 
@@ -170,5 +174,46 @@ describe("needsQuotaReset", () => {
         now: d("2026-10-11T00:00:00Z"),
       }),
     ).toBe(true);
+  });
+});
+
+/**
+ * 续期会不会重起服务期（owner 2026-09-26 决策：订阅/续订应该是同一个刷新日）。
+ *
+ * owner 的判断：「续订不应该漂移」这句话里的「续订」被代码混成了两件事。核下来确实是——
+ * `end_at` 的计算分了两种情形（`base = endAt > now ? endAt : now`），而配额锚点没分，
+ * 一律拨到 now。于是 15 号订的客户在 17 号续一次，刷新日永久变成 17 号，每续一次漂一次。
+ *
+ * 四种情形里只有「在用续订」是错的：
+ *   · 在用续订   服务期接着旧 end_at 延，起点没变 → **不该重锚**
+ *   · 过期复活   新的一期从现在开始         → 该重锚
+ *   · 到期换档   下单时就判成 new、新建订阅行 → 天然新锚，不走这条判据
+ *   · 在用升级   显式 start_at = now()      → 该重锚
+ */
+describe("renewalRestartsPeriod：只有「接着延」不重起", () => {
+  const now = new Date("2026-09-17T10:00:00Z");
+
+  it("到期日还在未来 → 接着延，不重起（刷新日守住）", () => {
+    expect(renewalRestartsPeriod(new Date("2026-10-15T00:00:00Z"), now)).toBe(
+      false,
+    );
+  });
+
+  it("到期日已过 → 新的一期从现在开始，重起", () => {
+    expect(renewalRestartsPeriod(new Date("2026-09-10T00:00:00Z"), now)).toBe(
+      true,
+    );
+  });
+
+  it("**正好到点**归到「已过」那一侧", () => {
+    expect(renewalRestartsPeriod(now, now)).toBe(true);
+  });
+
+  it("永久订阅（没有到期日）→ 重起", () => {
+    expect(renewalRestartsPeriod(null, now)).toBe(true);
+  });
+
+  it("差一毫秒也算还在未来", () => {
+    expect(renewalRestartsPeriod(new Date(now.getTime() + 1), now)).toBe(false);
   });
 });

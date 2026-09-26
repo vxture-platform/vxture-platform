@@ -88,9 +88,14 @@ function stubSubscriptions() {
     notifyOperatorStatusChange: vi.fn(async () => undefined),
     /* 批 5：裸 SQL 写完之后补跑的写完成尾（provisioning / 权益缓存失效）。 */
     applyExternalStatusChange: vi.fn(async () => undefined),
+    /* 2026-09-26：续期若重起服务期，提交后把配额周期锚点拨到现在。
+       桩里必须有它——少一个方法，续期那几条会以 TypeError 变红，而红的原因
+       与被测的行为无关。 */
+    reanchorAfterPeriodRestart: vi.fn(async () => 0),
   } as unknown as ConstructorParameters<typeof SubscriptionsRouter>[2] & {
     notifyOperatorStatusChange: ReturnType<typeof vi.fn>;
     applyExternalStatusChange: ReturnType<typeof vi.fn>;
+    reanchorAfterPeriodRestart: ReturnType<typeof vi.fn>;
   };
 }
 
