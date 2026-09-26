@@ -449,3 +449,36 @@ DROP TRIGGER IF EXISTS trg_subscriptions_fill_product_id ON metering.subscriptio
 CREATE TRIGGER trg_subscriptions_fill_product_id
   BEFORE INSERT OR UPDATE OF plan_version_id, product_id ON metering.subscriptions
   FOR EACH ROW EXECUTE FUNCTION metering.fill_subscription_product_id();
+
+-- ═══ 2026-09-26：退订即退役配额池 ═══
+-- product_330 §5 写着「退订 → 订阅整体回到未订阅（cancelled，end=now，**池 retire**）」，
+-- 但代码里**退役只有一个写入方**，而且只覆盖换版本（升级/续订换 plan_version 时退旧建新）。
+-- 退订、到期都不退役，于是生产上出现「订阅 cancelled、三个配额池仍 status='active'」
+-- （2026-09-26 在 arda 上实测到 3 条）。
+--
+-- 今天没有权益泄漏，因为消费/权益/用量三条读写路径**每一条都回头查订阅状态**（D10 门）。
+-- 但那正是问题：`quota_pools.status` 不再是「这个池还活着」的可信信号，每个新查询都得记得
+-- 再加一道门——本次就是一条盘点查询忘了加门才把它翻出来。
+--
+-- 为什么放触发器而不是放某条写路径：订阅状态**有两个写入方**（service 走 repo.update、
+-- admin 运营动作走裸 SQL），挂在任何一条上都会给另一条留门。不变式放在谁也绕不过去的
+-- 地方——与上面 fill_subscription_product_id 同一个理由。
+--
+-- 只认 cancelled，**不动 expired**：到期后的池是有意留着的（admin 续期 expired→active
+-- 直接复活，不必重新物化，见 pg-consume 的 D10 注释）。suspended 更不动——冻结不是终态。
+-- 幂等：CREATE OR REPLACE FUNCTION + DROP TRIGGER IF EXISTS。
+CREATE OR REPLACE FUNCTION metering.retire_pools_on_cancel() RETURNS trigger AS $$
+BEGIN
+  UPDATE metering.quota_pools
+     SET status = 'retired', retired_at = now(), updated_at = now()
+   WHERE subscription_id = NEW.id AND status = 'active';
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_subscriptions_retire_pools_on_cancel ON metering.subscriptions;
+CREATE TRIGGER trg_subscriptions_retire_pools_on_cancel
+  AFTER UPDATE OF status ON metering.subscriptions
+  FOR EACH ROW
+  WHEN (NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled')
+  EXECUTE FUNCTION metering.retire_pools_on_cancel();
