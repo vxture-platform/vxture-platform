@@ -267,6 +267,8 @@ describe("buildQuotaPoolView (§11.3 path B, period-aware read)", () => {
     priority: 10,
     resetPeriod: "none",
     currentPeriodStart: null,
+    /* 铁律五：不给锚点时退回拿 currentPeriodStart 当锚点，既有用例的语义不变。 */
+    periodAnchor: null,
     ...partial,
   });
 
@@ -311,22 +313,45 @@ describe("buildQuotaPoolView (§11.3 path B, period-aware read)", () => {
   });
 });
 
-describe("needsReset parity with the consume path", () => {
+/**
+ * 与消费写路径同一条判据 —— 2026-09-26 起是**锚定推进**（铁律五），不再是日历对齐。
+ *
+ * 本组原来的两条断言钉的正是被换掉的那条规则（「UTC 日期变了就重置」「上个月就重置」），
+ * 所以它们翻面是**这次改动的目的**，不是回归。两份实现现在都转发到
+ * `@shared` 的 `needsQuotaReset`，这一组仍留着——它钉的是「platform-api 这一侧真的走了
+ * 那一份」，而不是「那一份算得对」（后者在 shared 的 quota-period.utils.test 里）。
+ */
+describe("needsReset：与消费写路径同走锚定推进", () => {
   const now = new Date("2026-07-07T12:00:00Z");
-  it("null period start always resets", () => {
+
+  it("从没初始化过 → 重置", () => {
     expect(needsReset("day", null, now)).toBe(true);
   });
-  it("day: different UTC date resets", () => {
-    expect(needsReset("day", new Date("2026-07-06T23:59:59Z"), now)).toBe(true);
-    expect(needsReset("day", new Date("2026-07-07T00:00:00Z"), now)).toBe(
-      false,
-    );
+
+  it("日周期按**锚点时刻**满 24 小时翻篇，不按 UTC 零点", () => {
+    const anchor = new Date("2026-07-06T23:59:59Z");
+    // 旧口径：跨过了 UTC 零点 ⇒ 重置。锚定口径：还差 12 小时才满一格 ⇒ 不重置。
+    expect(needsReset("day", anchor, now, anchor)).toBe(false);
+    // 再过 12 小时零 1 秒就满一格了。
+    expect(
+      needsReset("day", anchor, new Date("2026-07-07T23:59:59Z"), anchor),
+    ).toBe(true);
   });
-  it("month: same month holds, previous month resets", () => {
+
+  it("月周期从订阅那天推进，不按自然月", () => {
+    const anchor = new Date("2026-06-30T00:00:00Z");
+    // 旧口径：6 月 ≠ 7 月 ⇒ 重置。锚定口径：这一格到 7/30 才结束 ⇒ 不重置。
+    expect(needsReset("month", anchor, now, anchor)).toBe(false);
+    expect(
+      needsReset("month", anchor, new Date("2026-07-30T00:00:00Z"), anchor),
+    ).toBe(true);
+  });
+
+  it("不给锚点时退回拿 currentPeriodStart 当锚点（存量池）", () => {
     expect(needsReset("month", new Date("2026-07-01T00:00:00Z"), now)).toBe(
       false,
     );
-    expect(needsReset("month", new Date("2026-06-30T00:00:00Z"), now)).toBe(
+    expect(needsReset("month", new Date("2026-05-31T00:00:00Z"), now)).toBe(
       true,
     );
   });

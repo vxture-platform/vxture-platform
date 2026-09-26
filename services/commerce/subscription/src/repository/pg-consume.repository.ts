@@ -1,5 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
+import { anchoredPeriodStart, needsQuotaReset } from "@vxture-platform/shared";
+import type { QuotaResetPeriod } from "@vxture-platform/shared";
 import { COMMERCE_PG_POOL } from "../tokens";
 import type {
   ConsumeInput,
@@ -112,8 +114,11 @@ export class PgConsumeRepository {
         quota_used: string;
         reset_period: string;
         current_period_start: Date | null;
+        /* 铁律五：周期从订阅锚点推进，所以锚点得跟着查出来。 */
+        period_anchor: Date | null;
       }>(
-        `select id, product_id, quota_limit, quota_used, reset_period, current_period_start
+        `select id, product_id, quota_limit, quota_used, reset_period,
+                current_period_start, period_anchor
            from metering.quota_pools qp
           where qp.workspace_id = $1
             and qp.metric_key = $3
@@ -155,13 +160,28 @@ export class PgConsumeRepository {
           (b.product_id === input.productId ? 0 : 1),
       );
 
-      // 3. lazy zero-out for pools whose reset period rolled over
+      /*
+       * 3. 周期翻篇就懒归零。**锚定推进**（铁律五，2026-09-26 落地）：新的周期起点是
+       *    `period_anchor + k×reset_period` 中最后一个 ≤ now 的，不再是 `date_trunc(now())`。
+       *
+       *    算式在 `@vxture-platform/shared` 的 `quota-period.utils`——此前这条判据住在
+       *    三处各写各的（本处、platform-api 的 entitlement-view、metering-read 的 SQL），
+       *    一处改了另两处不报错，只会让同一个池在三个接口上显示三个余量。
+       *
+       *    归零时刻由 TS 算好当参数送进去，不在 SQL 里再实现一遍：SQL 与 TS 各一份月末
+       *    夹取逻辑，迟早在 1/31 那天对不上。
+       */
       const pools: { id: string; available: bigint }[] = [];
+      const now = new Date();
       for (const p of orderedRows) {
         let used = BigInt(p.quota_used);
         if (
-          p.reset_period !== "none" &&
-          needsReset(p.reset_period, p.current_period_start)
+          needsQuotaReset({
+            resetPeriod: p.reset_period,
+            periodAnchor: p.period_anchor,
+            currentPeriodStart: p.current_period_start,
+            now,
+          })
         ) {
           await client.query(
             `insert into metering.quota_pool_resets (pool_id, period_start, used_before_reset, reset_at)
@@ -170,9 +190,16 @@ export class PgConsumeRepository {
           );
           await client.query(
             `update metering.quota_pools
-                set quota_used = 0, current_period_start = date_trunc($2, now()), updated_at = now()
+                set quota_used = 0, current_period_start = $2, updated_at = now()
               where id = $1`,
-            [p.id, p.reset_period === "day" ? "day" : "month"],
+            [
+              p.id,
+              anchoredPeriodStart(
+                p.period_anchor ?? p.current_period_start ?? now,
+                p.reset_period as QuotaResetPeriod,
+                now,
+              ),
+            ],
           );
           used = 0n;
         }
@@ -322,26 +349,4 @@ export class PgConsumeRepository {
     );
     return res.rows[0]!.event_id;
   }
-}
-
-/** True when the pool's current period started before the current period floor. */
-function needsReset(
-  resetPeriod: string,
-  currentPeriodStart: Date | null,
-): boolean {
-  if (currentPeriodStart === null) return true;
-  const now = new Date();
-  const floor = new Date(currentPeriodStart);
-  if (resetPeriod === "day") {
-    return (
-      floor.getUTCFullYear() !== now.getUTCFullYear() ||
-      floor.getUTCMonth() !== now.getUTCMonth() ||
-      floor.getUTCDate() !== now.getUTCDate()
-    );
-  }
-  // month
-  return (
-    floor.getUTCFullYear() !== now.getUTCFullYear() ||
-    floor.getUTCMonth() !== now.getUTCMonth()
-  );
 }

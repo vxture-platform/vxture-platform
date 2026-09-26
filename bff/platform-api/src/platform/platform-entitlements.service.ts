@@ -60,6 +60,7 @@ interface PoolSqlRow {
   priority: number;
   reset_period: string;
   current_period_start: Date | null;
+  period_anchor: Date | null;
 }
 
 @Injectable()
@@ -332,7 +333,7 @@ export class PlatformEntitlementsService {
   ): Promise<PoolRow[]> {
     const res = await this.pool.query<PoolSqlRow>(
       `SELECT prod.product_code, qp.metric_key, qp.quota_limit, qp.quota_used,
-              qp.priority, qp.reset_period, qp.current_period_start
+              qp.priority, qp.reset_period, qp.current_period_start, qp.period_anchor
        FROM metering.quota_pools qp
        JOIN product.products prod ON prod.id = qp.product_id
        WHERE qp.workspace_id = $1
@@ -360,6 +361,7 @@ export class PlatformEntitlementsService {
       priority: r.priority,
       resetPeriod: r.reset_period,
       currentPeriodStart: r.current_period_start,
+      periodAnchor: r.period_anchor,
     }));
   }
 
@@ -380,7 +382,7 @@ export class PlatformEntitlementsService {
       // must still count toward the workspace's limit Σ.
       `SELECT prod.product_code AS contributing_product_code, qp.metric_key,
               qp.quota_limit, qp.quota_used, qp.priority, qp.reset_period,
-              qp.current_period_start, plm.kind
+              qp.current_period_start, qp.period_anchor, plm.kind
        FROM metering.quota_pools qp
        JOIN product.platform_metrics plm ON plm.metric_key = qp.metric_key
        LEFT JOIN product.products prod ON prod.id = qp.product_id
@@ -405,6 +407,7 @@ export class PlatformEntitlementsService {
       priority: r.priority,
       resetPeriod: r.reset_period,
       currentPeriodStart: r.current_period_start,
+      periodAnchor: r.period_anchor,
       kind: r.kind,
     }));
   }

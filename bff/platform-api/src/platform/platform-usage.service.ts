@@ -23,6 +23,7 @@ interface PoolIdentitySqlRow {
   priority: number;
   reset_period: string;
   current_period_start: Date | null;
+  period_anchor: Date | null;
 }
 
 @Injectable()
@@ -65,7 +66,8 @@ export class PlatformUsageService {
   ): Promise<PoolIdentity[]> {
     const res = await this.pool.query<PoolIdentitySqlRow>(
       `SELECT qp.id, qp.subscription_id, qp.metric_key, qp.quota_limit,
-              qp.quota_used, qp.priority, qp.reset_period, qp.current_period_start
+              qp.quota_used, qp.priority, qp.reset_period, qp.current_period_start,
+              qp.period_anchor
        FROM metering.quota_pools qp
        WHERE qp.workspace_id = $1
          AND qp.metric_key = $3
@@ -98,6 +100,7 @@ export class PlatformUsageService {
         metricKey: r.metric_key,
         quotaLimit: r.quota_limit,
         quotaUsed: r.quota_used,
+        periodAnchor: r.period_anchor,
         priority: r.priority,
         resetPeriod: r.reset_period,
         currentPeriodStart: r.current_period_start,
