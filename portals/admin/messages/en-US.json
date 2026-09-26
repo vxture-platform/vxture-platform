@@ -2545,7 +2545,12 @@
     "extendsShort": "term extended on resume",
     "noExtendsShort": "term not extended",
     "expectedResume": "Expected resume time",
-    "expectedResumeHint": "Optional. If set, the customer sees a countdown; otherwise only how long it has been paused."
+    "expectedResumeHint": "Optional. If set, the customer sees a countdown; otherwise only how long it has been paused.",
+    "editLabel": "Edit",
+    "cancelLabel": "Cancel",
+    "saveLabel": "Save",
+    "updateFailed": "Update failed. Please try again.",
+    "updated": "Expected resume time updated."
   },
   "orderDetailPage": {
     "title": "Order detail",

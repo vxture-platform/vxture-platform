@@ -13,6 +13,7 @@ export {
   formatCurrency,
   formatDate,
   formatDateTime,
+  PLATFORM_TIME_ZONE,
   formatDay,
   formatNumber,
 } from "./format.utils";

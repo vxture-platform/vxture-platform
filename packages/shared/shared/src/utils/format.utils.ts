@@ -52,6 +52,22 @@ export function formatCurrency(
  * **字段顺序交给 locale，不写死**：日期的字段顺序属于语言——中文 `2026/09/08`，
  * 英文 `09/08/2026`。同一串数字，读出来是两个日期。所以走 Intl 而不是手拼。
  */
+/**
+ * 平台展示时区（owner 2026-09-26 裁定）。
+ *
+ * 不配这一项的后果是**同一条数据在不同地方显示成不同的日子**：next-intl 未配 `timeZone`
+ * 时，服务端渲染按容器时区（UTC），客户端渲染按浏览器时区。2026-09-26 走查实测——同一条
+ * 订阅，console 显示 `2026/09/25 ~ 2026/10/26`，admin 显示 `09/26 ~ 10/27`，**整整差一天**。
+ * 差的不是格式，是日期本身，而且两边各自看都「正常」。
+ *
+ * 固定而不是跟随浏览器：跟随浏览器就没法服务端渲染（SSR 那一遍不知道浏览器在哪），
+ * 强行做会得到 hydration 不一致——那正是上面那个现象的成因。
+ *
+ * 将来要支持按用户偏好显示，改的是**这一个常量的消费方**（六个门户的 next-intl 配置），
+ * 不是各页面各自 `toLocale*`——那条路 lint:datetime-discipline 已经堵死。
+ */
+export const PLATFORM_TIME_ZONE = "Asia/Shanghai";
+
 export type DateVariant = "long" | "short";
 
 const DATE_STYLES = {
@@ -77,7 +93,13 @@ export interface DateFormatOptions {
   date?: DateVariant;
   /** 时间形态，默认长时间（含秒；平台当前口径）。仅 formatDateTime 有意义。 */
   time?: DateVariant;
-  /** 固定时区。计量窗口按 UTC、邮件按发信方时区，这类场合才传。 */
+  /**
+   * 覆盖展示时区。**不传就是 `PLATFORM_TIME_ZONE`**（2026-09-26 起），不是运行时默认。
+   *
+   * 改成默认固定而不是跟随运行时：跟随运行时的后果是同一条数据在服务端与客户端、在两个
+   * 门户之间显示成**不同的日子**（实测差一天）。要按 UTC 看计量窗口、按发信方时区排邮件
+   * 这类场合，显式传。
+   */
   timeZone?: string;
 }
 
@@ -150,7 +172,7 @@ export function formatDay(
     locale,
     {
       ...DATE_STYLES[opts.date ?? "long"],
-      ...(opts.timeZone ? { timeZone: opts.timeZone } : {}),
+      timeZone: opts.timeZone ?? PLATFORM_TIME_ZONE,
     },
     () => d.toISOString().slice(0, 10),
   );
@@ -172,7 +194,7 @@ export function formatDateTime(
     {
       ...DATE_STYLES[opts.date ?? "long"],
       ...TIME_STYLES[opts.time ?? "long"],
-      ...(opts.timeZone ? { timeZone: opts.timeZone } : {}),
+      timeZone: opts.timeZone ?? PLATFORM_TIME_ZONE,
     },
     () => d.toISOString(),
   );
@@ -199,7 +221,7 @@ export function formatClock(
     locale,
     {
       ...TIME_STYLES[opts.time ?? "long"],
-      ...(opts.timeZone ? { timeZone: opts.timeZone } : {}),
+      timeZone: opts.timeZone ?? PLATFORM_TIME_ZONE,
     },
     () => d.toISOString().slice(11, 19),
   );

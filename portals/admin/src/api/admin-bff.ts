@@ -1605,6 +1605,43 @@ export async function submitBillingBillAction(
   return (await response.json()) as BillingDetailRecord;
 }
 
+/**
+ * 改进行中那一次暂停的「预计恢复时间」（2026-09-26）。
+ *
+ * 与四个状态动作分开：它不改订阅状态、不触发钩子、不发通知，只修正一个估计。
+ * `expectedResumeAt` 传 null = 清空（客户界面随即不再倒计时，只显示已暂停多久）。
+ */
+export async function updateSuspensionEstimate(
+  subscriptionId: string,
+  expectedResumeAt: string | null,
+): Promise<SubscriptionOperationDetailRecord> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/subscriptions/${encodeURIComponent(subscriptionId)}/suspension`,
+    {
+      method: "PATCH",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedResumeAt }),
+    },
+  );
+
+  if (!response.ok) {
+    let message = "Update suspension failed";
+    try {
+      const body = (await response.json()) as { message?: string | string[] };
+      message = Array.isArray(body.message)
+        ? (body.message[0] ?? message)
+        : (body.message ?? message);
+    } catch {
+      // Preserve a useful typed error even when a proxy returns non-JSON.
+    }
+    throw new AdminBffError(message, response.status);
+  }
+
+  return (await response.json()) as SubscriptionOperationDetailRecord;
+}
+
 export async function submitSubscriptionOperation(
   subscriptionId: string,
   payload: {

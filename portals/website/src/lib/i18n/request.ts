@@ -9,6 +9,7 @@
 
 import { getRequestConfig } from "next-intl/server";
 import { routing } from "./routing";
+import { PLATFORM_TIME_ZONE } from "@vxture-platform/shared";
 
 // ── 类型定义 ─────────────────────────────────────────────────────────────────
 
@@ -276,5 +277,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
     setNested(messages, entry.key, pageValues[i]),
   );
 
-  return { locale, messages, routing };
+  /* 展示时区固定（owner 2026-09-26）：不配它时 SSR 按容器 UTC、客户端按浏览器，
+     同一条数据在两个门户显示成不同的日子（实测差一天）。权威在 @shared。 */
+  return { locale, messages, routing, timeZone: PLATFORM_TIME_ZONE };
 });

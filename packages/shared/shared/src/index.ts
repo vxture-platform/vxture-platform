@@ -166,6 +166,7 @@ export {
   formatDate,
   formatClock,
   formatDateTime,
+  PLATFORM_TIME_ZONE,
   formatDay,
   formatNumber,
   // Object utils

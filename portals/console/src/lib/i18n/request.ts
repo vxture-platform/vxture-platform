@@ -11,6 +11,7 @@
 import { getRequestConfig } from "next-intl/server";
 import { routing } from "./routing";
 import { DATETIME_FORMATS } from "./formats";
+import { PLATFORM_TIME_ZONE } from "@vxture-platform/shared";
 
 export default getRequestConfig(async ({ requestLocale }) => {
   let locale = await requestLocale;
@@ -30,5 +31,12 @@ export default getRequestConfig(async ({ requestLocale }) => {
           unknown
         >);
 
-  return { locale, messages, formats: DATETIME_FORMATS };
+  /* 展示时区固定（owner 2026-09-26）：不配它时 SSR 按容器 UTC、客户端按浏览器，
+     同一条数据在两个门户显示成不同的日子（实测差一天）。权威在 @shared。 */
+  return {
+    locale,
+    messages,
+    formats: DATETIME_FORMATS,
+    timeZone: PLATFORM_TIME_ZONE,
+  };
 });

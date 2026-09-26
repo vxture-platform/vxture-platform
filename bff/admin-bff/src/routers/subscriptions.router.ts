@@ -45,6 +45,7 @@ import {
   Inject,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Req,
 } from "@nestjs/common";
@@ -405,6 +406,66 @@ export class SubscriptionsRouter {
         actorType: "operator",
         clientIp,
       });
+    }
+
+    return this.loadSubscriptionDetail(subscriptionId);
+  }
+
+  /**
+   * 改进行中那一次暂停的「预计恢复时间」（2026-09-26）。
+   *
+   * 客户界面拿它倒计时，所以它必须能被修正：维护拖长了、审查提前结束了，运营改一下就是。
+   * 不校验它是否晚于现在——运营填错了是个可改的估计，不是该被拒的事；界面过点之后落回
+   * 「已暂停 N 天」，不翻负数。
+   *
+   * 不是状态转移，所以不走 `runSubscriptionAction`：它不改订阅状态、不触发任何钩子、
+   * 不发通知。但**要留痕**——往 subscription_histories 写一条，运营记录里看得见谁在什么
+   * 时候改成了什么。
+   */
+  @Patch(":id/suspension")
+  async updateSuspensionEstimate(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: { expectedResumeAt?: unknown },
+  ): Promise<SubscriptionOperationDetailRecord> {
+    assertCanManageSubscriptions(req);
+
+    const expectedResumeAt = parseExpectedResumeAt(body?.expectedResumeAt);
+    const actorId = req.user?.id ?? null;
+    const clientIp = extractClientIp(req);
+    const subscriptionId = await this.resolveSubscriptionId(id);
+
+    const client = await this.rwPool.connect();
+    try {
+      await client.query("begin");
+      const { rows } = await client.query<{ tenant_id: string }>(
+        SUSPENSION_UPDATE_EXPECTED_SQL,
+        [subscriptionId, expectedResumeAt],
+      );
+      const episode = rows[0];
+      if (!episode) {
+        throw new ConflictException("该订阅当前没有进行中的暂停");
+      }
+      /* 留痕：不是状态转移，所以 from/to 都写 suspended——这一行回答的是「谁改了那个
+         估计」，不是「状态变了」。remark 记下改成了什么（清空时记「已清空」）。 */
+      await client.query(SUBSCRIPTION_HISTORY_INSERT_SQL, [
+        episode.tenant_id,
+        subscriptionId,
+        "suspension_updated",
+        "suspended",
+        "suspended",
+        actorId,
+        expectedResumeAt
+          ? `预计恢复时间改为 ${expectedResumeAt}`
+          : "预计恢复时间已清空",
+        clientIp,
+      ]);
+      await client.query("commit");
+    } catch (e) {
+      await client.query("rollback");
+      throw e;
+    } finally {
+      client.release();
     }
 
     return this.loadSubscriptionDetail(subscriptionId);
@@ -816,6 +877,11 @@ const CHANGE_TITLE: Record<string, string> = {
   upgraded: "套餐升级",
   downgraded: "套餐降级",
   cancelled: "订阅取消",
+  /* 这三条此前不在表里，于是运营记录上直接显示原始码 `suspended` / `resumed`
+     （2026-09-26 走查看到的）。缺键不报错，只是把内部词汇摆给人看。 */
+  suspended: "订阅暂停",
+  resumed: "订阅恢复",
+  suspension_updated: "暂停信息更新",
 };
 
 function historyTone(changeType: string): SubscriptionOperationEvent["tone"] {
@@ -1249,6 +1315,23 @@ update metering.subscriptions
        next_renewal_at = case when $2::boolean is false then null else next_renewal_at end,
        updated_at = now()
  where id = $1 and deleted_at is null
+`;
+
+/**
+ * 改进行中那一次暂停的「预计恢复时间」。$1 subscription_id / $2 expected_resume_at。
+ *
+ * 为什么必须有这个入口：这一列是按**可改**设计的（见 2026-11-12 的迁移：一个改不了的
+ * 估计比没有更糟——维护拖长了运营该能改它）。可此前只有暂停那一刻能写它，列锁放开了
+ * 却没有任何写入方——「做了没接」。
+ *
+ * 只认未闭合的那条：已经结束的暂停不该再被改（它的估计已经没有意义，改它只会让审计
+ * 看起来像有人在事后修饰）。0 行 → 调用方 409。
+ */
+const SUSPENSION_UPDATE_EXPECTED_SQL = `
+update metering.subscription_suspensions
+   set expected_resume_at = $2, updated_at = now()
+ where subscription_id = $1 and resumed_at is null
+returning tenant_id
 `;
 
 interface SubscriptionActionRow {

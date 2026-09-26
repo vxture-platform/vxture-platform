@@ -21,6 +21,7 @@ import {
   formatDateTime,
   formatDay,
   formatNumber,
+  PLATFORM_TIME_ZONE,
 } from "./format.utils";
 
 /** 固定时刻：UTC 07:04:05，用 Asia/Shanghai 看是 15:04:05。 */
@@ -250,5 +251,38 @@ describe("Intl 实例缓存", () => {
     const second = formatDay(ISO, "不是语言标签");
     expect(second).toBe(first);
     expect(first).toBe("2026-09-10"); // toISOString().slice(0,10) 兜底
+  });
+});
+
+/**
+ * 展示时区固定（2026-09-26，owner 裁定 Asia/Shanghai）。
+ *
+ * 【现场】同一条订阅，console 显示 `2026/09/25 ~ 2026/10/26`，admin 显示 `09/26 ~ 10/27`，
+ * **整整差一天**。差的不是格式是日期本身，而且两边各自看都「正常」。根因是谁都没定时区：
+ * 服务端渲染按容器的 UTC、客户端按浏览器。
+ *
+ * 【判据】这一组**不测「配置里有没有这一项」**，测的是「跨过零点那一侧的时刻会被渲染成
+ * 哪一天」——只有它才能分辨「固定成了北京时间」与「碰巧跑测机器就是东八区」。
+ */
+describe("展示时区：不传就按平台口径，不跟运行时走", () => {
+  /** 2026-09-25T16:00Z = 北京时间 09/26 00:00。跑测机器在哪个时区都不影响这个事实。 */
+  const ACROSS_MIDNIGHT = "2026-09-25T16:00:00.000Z";
+
+  it("不传 timeZone → 按 Asia/Shanghai 渲染成 09/26（不是 UTC 的 09/25）", () => {
+    expect(formatDay(ACROSS_MIDNIGHT, "zh-CN")).toBe("2026/09/26");
+  });
+
+  it("formatDateTime 同口径", () => {
+    expect(formatDateTime(ACROSS_MIDNIGHT, "zh-CN")).toContain("2026/09/26");
+  });
+
+  it("显式传 UTC 仍然生效 —— 计量窗口那类场合要的就是这个", () => {
+    expect(formatDay(ACROSS_MIDNIGHT, "zh-CN", "—", { timeZone: "UTC" })).toBe(
+      "2026/09/25",
+    );
+  });
+
+  it("PLATFORM_TIME_ZONE 就是那个常量本身（改它会让上面三条一起变）", () => {
+    expect(PLATFORM_TIME_ZONE).toBe("Asia/Shanghai");
   });
 });

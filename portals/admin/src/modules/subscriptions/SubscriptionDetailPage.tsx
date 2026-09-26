@@ -8,8 +8,10 @@ import {
   DetailList,
   DetailPageTemplate,
   DetailRow,
+  EditableRow,
   EmptyState,
   Icon,
+  Input,
   MetricGrid,
   PanelItem,
   PanelList,
@@ -23,6 +25,7 @@ import type { IconName, StatusBadgeTone } from "@vxture/design-system";
 import {
   fetchSubscriptionOperation,
   submitSubscriptionOperation,
+  updateSuspensionEstimate,
 } from "@/api/admin-bff";
 import type {
   ProductSolutionCapabilityType,
@@ -152,10 +155,20 @@ function SubscriptionSummary({
 
 function SubscriptionDetails({
   subscription,
+  onSaveResumeEstimate,
 }: {
   subscription: SubscriptionOperationDetailRecord;
+  /** 保存「预计恢复时间」。抛错由本组件接住并显示在行内——它是这一行自己的事，
+      不该走页面级的那条操作反馈（那条是给状态动作用的）。 */
+  onSaveResumeEstimate: (expectedResumeAt: string | null) => Promise<void>;
 }) {
   const locale = useLocale();
+  /* datetime-local 收的是**本地时区的无时区串**，所以进出都要转：读回来按本地拆成
+     `YYYY-MM-DDTHH:mm`，送出去转 ISO。少一头，运营看到的时刻会和他填的差好几个小时。 */
+  const [editingResume, setEditingResume] = useState(false);
+  const [resumeDraft, setResumeDraft] = useState("");
+  const [savingResume, setSavingResume] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const tShared = useTranslations();
   const subscriptionStatusLabels = useSubscriptionStatusLabels();
   const cycleLabels = useSubscriptionCycleLabels();
@@ -163,6 +176,23 @@ function SubscriptionDetails({
   const tSuspension = useTranslations("subscriptionSuspension");
   const suspensionReasonLabels = useSuspensionReasonLabels();
   const capabilityTypeLabels = useCapabilityTypeLabels();
+  async function saveResumeEstimate() {
+    setSavingResume(true);
+    setResumeError(null);
+    try {
+      await onSaveResumeEstimate(
+        resumeDraft ? new Date(resumeDraft).toISOString() : null,
+      );
+      setEditingResume(false);
+    } catch (error) {
+      setResumeError(
+        error instanceof Error ? error.message : tSuspension("updateFailed"),
+      );
+    } finally {
+      setSavingResume(false);
+    }
+  }
+
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
     : null;
@@ -212,15 +242,51 @@ function SubscriptionDetails({
           {/* 运营填的预计恢复时间（2026-09-26 走查补）。此前它只写进库、回传给客户界面，
               运营自己看不到——填完就再也不知道填了什么。没填显示「—」。 */}
           {subscription.status === "suspended" ? (
-            <DetailRow label={tSuspension("expectedResume")}>
-              {/* 到时刻：只到日的话「今天下午三点恢复」会显示成「今天」，运营无从判断。 */}
-              {orUnset(
-                formatDateTime(
-                  subscription.suspension?.expectedResumeAt ?? null,
-                  locale,
-                ),
+            /*
+             * 可改字段就用 EditableRow（本仓通则：禁用输入框不当展示）。这一列是按可改
+             * 设计的——维护拖长了、审查提前结束了，运营改一下就是；改不了的估计比没有
+             * 更糟，客户会盯着一个早就过期的倒计时。
+             *
+             * 到时刻不只到日：只到日的话「今天下午三点恢复」会显示成「今天」。
+             */
+            <EditableRow
+              label={tSuspension("expectedResume")}
+              value={formatDateTime(
+                subscription.suspension?.expectedResumeAt ?? null,
+                locale,
               )}
-            </DetailRow>
+              editing={editingResume}
+              onEdit={() => {
+                setResumeDraft(
+                  toLocalInputValue(
+                    subscription.suspension?.expectedResumeAt ?? null,
+                  ),
+                );
+                setEditingResume(true);
+              }}
+              onCancel={() => setEditingResume(false)}
+              labels={{
+                edit: tSuspension("editLabel"),
+                cancel: tSuspension("cancelLabel"),
+              }}
+              hint={resumeError ?? tSuspension("expectedResumeHint")}
+              disabled={savingResume}
+            >
+              <div className="flex items-center gap-sm">
+                <Input
+                  type="datetime-local"
+                  value={resumeDraft}
+                  onChange={(event) => setResumeDraft(event.target.value)}
+                />
+                <Button
+                  size="sm"
+                  disabled={savingResume}
+                  onClick={() => void saveResumeEstimate()}
+                >
+                  {tSuspension("saveLabel")}
+                </Button>
+              </div>
+            </EditableRow>
           ) : null}
           <DetailRow label="计费周期">
             {orUnset(cycleLabels[subscription.cycleType])}
@@ -414,12 +480,25 @@ function SubscriptionDetails({
   );
 }
 
+/**
+ * ISO → `datetime-local` 要的本地无时区串。直接 `slice(0,16)` 是错的：那截的是 UTC，
+ * 东八区会少 8 小时，运营点「修改」看到的时刻和他上次填的对不上。
+ */
+function toLocalInputValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function SubscriptionDetailPage({
   subscriptionId,
 }: {
   subscriptionId: string;
 }) {
   const tShared = useTranslations();
+  const tSuspensionPage = useTranslations("subscriptionSuspension");
   const [subscription, setSubscription] =
     useState<SubscriptionOperationDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -632,7 +711,17 @@ export function SubscriptionDetailPage({
       {subscription ? (
         <>
           <SubscriptionSummary subscription={subscription} />
-          <SubscriptionDetails subscription={subscription} />
+          <SubscriptionDetails
+            subscription={subscription}
+            onSaveResumeEstimate={async (expectedResumeAt) => {
+              const updated = await updateSuspensionEstimate(
+                subscription.id,
+                expectedResumeAt,
+              );
+              setSubscription(updated);
+              setOperationFeedback(tSuspensionPage("updated"));
+            }}
+          />
         </>
       ) : (
         <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
