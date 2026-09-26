@@ -21,6 +21,8 @@ export type { DateInput } from "./format.utils";
 
 // 配额周期：锚定推进（铁律五）。算式只此一份，三个消费方都引它。
 export {
+  addCyclePeriod,
+  addUtcMonths,
   anchoredPeriodStart,
   needsQuotaReset,
   renewalRestartsPeriod,
