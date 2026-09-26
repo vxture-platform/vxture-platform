@@ -482,3 +482,30 @@ CREATE TRIGGER trg_subscriptions_retire_pools_on_cancel
   FOR EACH ROW
   WHEN (NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled')
   EXECUTE FUNCTION metering.retire_pools_on_cancel();
+
+-- ═══ 2026-09-27：退订即释放产品席位（metering.product_seats）═══
+-- 与上面退役配额池是同一条不变式的另一半：订阅没了，它授予的东西就不该还占着。
+-- 席位比配额池更需要这一条——占用数是**新人能不能加进来**的判据，一个没释放的席位
+-- 直接表现为「席位已满」，而客户看不出是哪来的。
+--
+-- 同样挂触发器而不是写路径：订阅状态两个写入方（service repo.update / admin 裸 SQL）。
+-- 同样只认 cancelled，不动 expired / suspended：那两个状态的订阅还会回来，回来时席位
+-- 要在原位（冻结期间没有权益是读侧的事，不是把占用记录抹掉）。
+--
+-- 撤销人留空 = 系统撤销（退订），与「运营点了回收」区分得开。
+-- 幂等：CREATE OR REPLACE FUNCTION + DROP TRIGGER IF EXISTS。
+CREATE OR REPLACE FUNCTION metering.revoke_seats_on_cancel() RETURNS trigger AS $$
+BEGIN
+  UPDATE metering.product_seats
+     SET revoked_at = now()
+   WHERE subscription_id = NEW.id AND revoked_at IS NULL;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_subscriptions_revoke_seats_on_cancel ON metering.subscriptions;
+CREATE TRIGGER trg_subscriptions_revoke_seats_on_cancel
+  AFTER UPDATE OF status ON metering.subscriptions
+  FOR EACH ROW
+  WHEN (NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled')
+  EXECUTE FUNCTION metering.revoke_seats_on_cancel();

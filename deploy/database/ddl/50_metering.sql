@@ -468,6 +468,50 @@ CREATE INDEX idx_addon_purchases_pack      ON metering.addon_purchases (pack_id)
 CREATE INDEX idx_addon_purchases_invoice   ON metering.addon_purchases (invoice_id);
 CREATE INDEX idx_addon_purchases_pool      ON metering.addon_purchases (quota_pool_id);
 
+-- ── §11 产品席位占用（2026-09-27，owner 四条裁定之①「要明细表，每个产品清楚谁在当前使用」）。
+--   设计权威：data_commerce_250_member-cap-and-seats.md §2/§3。
+--
+--   席位 = 某个**产品**在某个工作区里，允许哪些自然人使用。数量上限是目录侧的
+--   `seat.max`（`product_metrics`/`plan_components.quota`，`merge_strategy='max'`），
+--   本表是**占用明细**——上限有了地方存，占用此前全库无处可查：`usage_events.end_user_id`
+--   回答的是「谁用过」（事后日志），不是「谁被授权」。
+--
+--   为什么同时挂 subscription_id 与 (workspace_id, product_id)：与 quota_pools 同形。
+--   席位是订阅权益的一部分，所以要知道是哪条订阅授予的（退订即释放，见 95 的
+--   trg_subscriptions_revoke_seats_on_cancel）；而**套餐可以捆多个产品**，
+--   `subscriptions.product_id` 只是主组件，所以被授权的那个产品必须自己一列。
+--   升级不动本表：product_330「升级/续订改本行、不新增行」⇒ subscription_id 稳定。
+--
+--   软撤销（revoked_at）而非硬删：回收要留痕，否则查不出谁占过。
+--   **一个已知缺口**：下方 90 那条指向 workspace_memberships 的级联外键是**硬删**——
+--   成员被移出工作区时，他的席位行连同痕迹一起消失。两者取舍是有意的：
+--   「人走席位不自动释放」是席位模型最容易漏、后果最直接的一条（席位被占满、
+--   新人加不进来），由库兜住比留痕重要；而那种情况下「谁用过」仍可查 usage_events。
+--
+--   跨 schema：(workspace_id, user_id) 复合→tenancy.workspace_memberships（90，CASCADE）、
+--   product_id→product.products（90）。granted_by / revoked_by 裸 UUID（边界#2）。
+--   不设 created_at/updated_at：一行席位一生只有两个事件（授予、撤销），已各有各的时刻列，
+--   再加两列只是它们的副本（同 quota_pool_resets / usage_event_pools 的做法）。
+CREATE TABLE metering.product_seats (
+    id              uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id    uuid         NOT NULL,                     -- 复合跨 schema→tenancy.workspace_memberships(workspace_id,user_id)（90，CASCADE）
+    user_id         uuid         NOT NULL,                     -- 同上复合；占席位者必须先是本工作区成员
+    product_id      uuid         NOT NULL,                     -- 跨 schema→product.products（90），被授权的产品（可为捆绑组件）
+    subscription_id uuid         NOT NULL REFERENCES metering.subscriptions(id),  -- 域内 FK：授予这个席位的订阅
+    granted_by      uuid,                                      -- 裸值（边界#2）；NULL = 系统随订阅开通自动授予
+    granted_at      timestamptz  NOT NULL DEFAULT now(),
+    revoked_at      timestamptz,                               -- 软撤销；NULL = 当前占用中
+    revoked_by      uuid,                                      -- 裸值（边界#2）；NULL = 系统撤销（退订/降档）
+    -- 没撤销就不该有撤销人：否则「谁回收的」这一列会在还占着的行上给出答案
+    CONSTRAINT chk_product_seats_revoked_by CHECK (revoked_at IS NOT NULL OR revoked_by IS NULL)
+);
+-- 占用数 = 该 (workspace_id, product_id) 下 revoked_at IS NULL 的行数。部分唯一 ⇒
+-- 同一人在同一产品上不能重复占位，但撤销后可以再次授予（历史行不挡）。
+CREATE UNIQUE INDEX uidx_product_seats_live ON metering.product_seats (workspace_id, product_id, user_id) WHERE revoked_at IS NULL;
+CREATE INDEX idx_product_seats_member       ON metering.product_seats (workspace_id, user_id);   -- 复合 FK 支撑（级联删要走它）+「这个人占了哪些产品」
+CREATE INDEX idx_product_seats_subscription ON metering.product_seats (subscription_id);
+CREATE INDEX idx_product_seats_product      ON metering.product_seats (product_id);              -- FK 支撑
+
 -- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
 CREATE INDEX idx_subscriptions_payment_mandate     ON metering.subscriptions (payment_mandate_id);
 CREATE INDEX idx_quota_pools_subscription          ON metering.quota_pools (subscription_id);

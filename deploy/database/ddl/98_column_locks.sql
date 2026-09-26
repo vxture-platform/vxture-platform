@@ -312,6 +312,13 @@ GRANT UPDATE (subscription_id, product_id, override_tier_code, operator_id, reas
 REVOKE UPDATE ON metering.quota_pools FROM platform_svc;
 GRANT UPDATE (workspace_id, subscription_id, product_id, metric_key, quota_limit, quota_used, priority, component_role, pool_source, reset_period, period_anchor, current_period_start, status, retired_at, granted_by, grant_reason, effective_at, expires_at, updated_at) ON metering.quota_pools TO platform_svc;
 
+-- metering.product_seats  [anchor: id, workspace_id, user_id, product_id, subscription_id, granted_by, granted_at]
+-- 一行席位的**出生事实全是锚点**：谁、在哪个工作区、用哪个产品、由哪条订阅授予、谁授予的、何时。
+-- 改其中任何一个都不是「修正」，是把这个席位换成另一个席位（而占用数不变、没有异常）。
+-- 可写的只有撤销那两列——见 column-locks.shared.mjs 的 EXTRA_ANCHOR。
+REVOKE UPDATE ON metering.product_seats FROM platform_svc;
+GRANT UPDATE (revoked_at, revoked_by) ON metering.product_seats TO platform_svc;
+
 -- metering.quota_pool_resets  [anchor: id]
 REVOKE UPDATE ON metering.quota_pool_resets FROM platform_svc;
 GRANT UPDATE (pool_id, period_start, used_before_reset, reset_at) ON metering.quota_pool_resets TO platform_svc;

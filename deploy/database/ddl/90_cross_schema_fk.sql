@@ -196,6 +196,21 @@ DO $$ BEGIN
     FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- ── metering.product_seats（2026-09-27）──────────────────────────────────────
+-- 复合外键指向 workspace_memberships 而不是 workspaces + users 两条单列外键：
+-- 那样只能保证「这个工作区存在」和「这个人存在」，保不住**这个人是这个工作区的成员**。
+-- CASCADE 是这条外键的重点：移出工作区（两处都是硬 DELETE）时席位自动消失，
+-- 「人走席位留」不靠应用层记得删——与 fk_workspace_memberships_tenant_member 同一做法。
+DO $$ BEGIN
+  ALTER TABLE metering.product_seats ADD CONSTRAINT fk_product_seats_ws_member
+    FOREIGN KEY (workspace_id, user_id)
+    REFERENCES tenancy.workspace_memberships (workspace_id, user_id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.product_seats ADD CONSTRAINT fk_product_seats_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- ── metering → product（plan_version 不可变版本 / products）─────────────────────
 DO $$ BEGIN
   ALTER TABLE metering.subscriptions ADD CONSTRAINT fk_subscriptions_plan_version
