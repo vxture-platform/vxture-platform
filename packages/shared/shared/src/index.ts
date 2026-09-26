@@ -167,6 +167,9 @@ export {
   formatClock,
   formatDateTime,
   PLATFORM_TIME_ZONE,
+  // 配额周期锚定推进（铁律五）——算式单一权威
+  anchoredPeriodStart,
+  needsQuotaReset,
   formatDay,
   formatNumber,
   // Object utils
@@ -208,6 +211,8 @@ export {
 
 // 日期形态的输入类型（formatDay / formatDateTime 的参数）
 export type { DateInput } from "./utils/format.utils";
+/* 配额周期值域（铁律五）。算式与类型同源，见 utils/quota-period.utils。 */
+export type { QuotaResetPeriod } from "./utils/quota-period.utils";
 
 // 官网品牌名的单一权威(owner 2026-09-10:tab 标题漏改)。
 export { BRAND_NAME, BRAND_TITLE } from "./constants";

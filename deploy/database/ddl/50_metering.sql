@@ -204,29 +204,20 @@ CREATE INDEX idx_subscription_overrides_product ON metering.subscription_entitle
 -- ── §4 实时余量 SoT（瀑布定序扣减，软退役不硬删）。禁裸读 quota_used（§4.1 周期感知表达式）。
 --   subscription_id 域内 FK→subscriptions（内联，可空 manual_override）；
 --   workspace_id 跨 schema→tenancy.workspaces、product_id→product.products（90）；granted_by 裸 UUID（边界#2）。
---   period_anchor = 订阅 start_at。
+--   period_anchor = 订阅 start_at；周期从此点按 reset_period **整段推进**（15 号订即每月
+--   15 号刷新，非月初）。这是 data_commerce_200_metering.md 的**铁律五**。
 --
---   ⚠ **设计与实现背离**（2026-09-26 查证）。本行原注释写着「周期从此点按 reset_period
---   整段推进（非 date_trunc 日历对齐）」，设计文档 data_commerce_200_metering.md 更把它
---   列为**铁律五**「锚定周期、非自然月」（15 号订即每月 15 号刷新）。
---   **代码没有这么做。** 真实的重置判据在
---   `pg-consume.repository.ts` 的 `needsReset()` + `current_period_start = date_trunc(...)`，
---   **按日历对齐**：月池在自然月 1 号归零，与订阅从哪天开始无关。
+--   2026-09-26：此前代码并没有这么做——重置按 `date_trunc` 日历对齐，`period_anchor`
+--   全仓只有写入方、没有读者。本批把它落地：算式收在 `@vxture-platform/shared` 的
+--   `quota-period.utils`（`needsQuotaReset` / `anchoredPeriodStart`），**三个消费方都引
+--   同一份**——consume 写路径、platform-api 读时投影、metering-read（那一处原本是 SQL 里
+--   的 case 表达式，已改成查原值、由 TS 判）。
 --
---   `period_anchor` 全仓**只有写入方**（建池时写、某条订单路径重置为 now()），
---   读侧只在 `quota_pool_resets` 落 period_start 时当过兜底 coalesce——它不参与任何
---   「下次什么时候重置」的判断。也就是说：改它是个**看起来生效的空操作**。
+--   月末夹取：31 号锚定的池 2 月落当月最后一天，**3 月仍回到 31 号**——每步都从原始锚点
+--   加 k 个月算，不在上次结果上再加一个月（后者会把刷新日一年往前拖三天）。
 --
---   2026-09-26 的暂停顺延本来打算「顺延时把 period_anchor 往后推」，验了一遍发现推它
---   什么也不会发生；而真把 `current_period_start` 往后推，效果**恰好相反**——客户会
---   更晚拿到下一期额度。所以那一项撤掉了，配额侧的公道由服务期顺延本身给。
---
---   后果的方向：日历对齐会在**首个不完整月**多发一份额度（9/15 订，9/30 就重置一次，
---   10/1 又一份），代价落在平台而不是客户——所以它不是紧急故障，但它与铁律五不符，且
---   「按周年刷新」这件事客户是按文档预期的。
---
---   **不要把文档改成迁就代码**：那是把缺陷洗成规范。要么按铁律五改实现（会动到所有
---   客户的额度刷新节奏），要么 owner 明确改口径。两条都不是这里能定的。
+--   口径是 UTC，与本列 timestamptz 的存储一致；与「界面按 Asia/Shanghai 显示」
+--   （PLATFORM_TIME_ZONE）是两件事：一个是周期什么时候翻篇，一个是把时刻写给人看成哪一天。
 CREATE TABLE metering.quota_pools (
     id                   uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id         uuid          NOT NULL,                   -- 跨 schema→tenancy.workspaces（90）

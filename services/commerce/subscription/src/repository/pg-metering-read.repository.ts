@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
+import { needsQuotaReset } from "@vxture-platform/shared";
 import { COMMERCE_PG_POOL } from "../tokens";
 import type {
   QuotaPoolRow,
@@ -75,8 +76,13 @@ export class PgMeteringReadRepository {
 
   /**
    * 活跃可用池(与 consume/C2 同门:活跃、未过期、订阅池须订阅 live——D10)。
-   * effective_used = 懒重置周期感知视图(周期翻篇按 0 计,只读不落库,归零
-   * 仍归 consume 写路径),UTC 口径与引擎 needsReset 一致。
+   * effective_used = 懒重置周期感知视图(周期翻篇按 0 计,只读不落库,归零仍归 consume
+   * 写路径)。
+   *
+   * **判据不在 SQL 里算**（2026-09-26 收口）：此前这里有一段 `date_trunc` 的 case 表达式,
+   * 与 consume 写路径、platform-api 读时投影各写各的,三份都按日历月。改铁律五时一处改了
+   * 另两处不报错——只会让同一个池在三个接口上显示三个余量。现在查原值,由
+   * `@shared` 的 `needsQuotaReset` 统一判,算式全仓只此一份。
    */
   async listActivePools(workspaceId: string): Promise<QuotaPoolRow[]> {
     const res = await this.pool.query<{
@@ -85,7 +91,9 @@ export class PgMeteringReadRepository {
       product_code: string | null;
       product_name: string | null;
       quota_limit: string;
-      effective_used: string;
+      quota_used: string;
+      current_period_start: Date | null;
+      period_anchor: Date | null;
       reset_period: string;
       expires_at: Date | null;
       platform_kind: string | null;
@@ -95,17 +103,8 @@ export class PgMeteringReadRepository {
       `select qp.metric_key, qp.pool_source,
               prod.product_code, prod.product_name,
               qp.quota_limit::text as quota_limit,
-              (case
-                 when qp.reset_period = 'day'
-                      and qp.current_period_start is not null
-                      and date_trunc('day', qp.current_period_start at time zone 'UTC')
-                          <> date_trunc('day', now() at time zone 'UTC') then 0
-                 when qp.reset_period = 'month'
-                      and qp.current_period_start is not null
-                      and date_trunc('month', qp.current_period_start at time zone 'UTC')
-                          <> date_trunc('month', now() at time zone 'UTC') then 0
-                 else qp.quota_used
-               end)::text as effective_used,
+              qp.quota_used::text as quota_used,
+              qp.current_period_start, qp.period_anchor,
               qp.reset_period, qp.expires_at, qp.grant_reason, qp.effective_at,
               plm.kind as platform_kind
          from metering.quota_pools qp
@@ -122,13 +121,22 @@ export class PgMeteringReadRepository {
         order by qp.metric_key asc, qp.priority asc, qp.effective_at asc`,
       [workspaceId],
     );
+    const now = new Date();
     return res.rows.map((r) => ({
       metricKey: r.metric_key,
       poolSource: r.pool_source,
       productCode: r.product_code,
       productName: r.product_name,
       quotaLimit: Number(r.quota_limit),
-      effectiveUsed: Number(r.effective_used),
+      /* 周期翻篇了就按 0 读——库里的 quota_used 要等下一次消费才归零（懒重置）。 */
+      effectiveUsed: needsQuotaReset({
+        resetPeriod: r.reset_period,
+        periodAnchor: r.period_anchor,
+        currentPeriodStart: r.current_period_start,
+        now,
+      })
+        ? 0
+        : Number(r.quota_used),
       resetPeriod: r.reset_period,
       expiresAt: r.expires_at,
       platformKind: r.platform_kind,
