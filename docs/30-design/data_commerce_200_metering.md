@@ -16,6 +16,20 @@
 
 **周期模型（§2.2.4 铁律五，锚定周期、非自然月）**：订阅可在**任意日**开始，配额/计费一律**锚定订阅周期**（周年制——15 号订即每月 15 号刷新/结算），**不用日历自然月**。三个周期必须**同源**：① 配额重置锚点 `quota_pools.period_anchor`、② 计费周期 `subscriptions.start_at`、③ 结算窗口（billing 从 `usage_events` 按 `[cycle_start, cycle_end)` 求和）。**`usage_summary_*` 是纯统计/分析/看板，从不作计费依据**（§9）——否则"日历月汇总对不上锚定周期"必然错账。
 
+> **实现状态（2026-09-26）**：本条此前**只写在文档里，代码没做**——配额重置按 `date_trunc` 日历对齐，`period_anchor` 全仓只有写入方、没有读者。当天 owner 裁定单独排一批改实现，已落地（#505，v0.26.273）：算式收在 `@vxture-platform/shared` 的 `quota-period.utils`（`needsQuotaReset` / `anchoredPeriodStart`），消费写路径、`platform-api` 读时投影、`metering-read` 三个消费方引同一份。月末锚点按当月天数夹取但**不累积漂移**（31 号锚的池 2 月落 28、3 月回到 31）。
+>
+> 切换当天在生产上核过一遍（只读）：9 个活跃月池、**0 个缺锚点**、**0 个因换口径而多出来的重置**——待重置的 3 个在旧口径下同样该重置。`current_period_start` 当时全都停在锚点日而非月初，说明日历重置路径在这些池上从未真正跑过。
+>
+> **同一次盘点翻出一个更底层的问题**（owner 看出「同一个产品怎么会有两个锚点日」）：锚点是**订阅**的属性（一条订阅的各 metric 池共用一个），两个锚点日意味着两批订阅——而其中一批的订阅**早已取消，池却仍是 `active`**。根因是 `quota_pools` 的退役全仓只有一个写入方且只覆盖换版本。已修（`trg_subscriptions_retire_pools_on_cancel`，见 `95_triggers.sql`）。
+>
+> **另外两根轴当天一并核了**（铁律五要求三者同源）：
+>
+> - **计费周期**：续期推进是 `greatest(end_at, now()) + make_interval(cycle)`，从订阅自己的到期点推进 —— 锚定，✓。
+> - **结算窗口**：履约开票写的是 `cycle_start_date = now()::date`、`cycle_end_date = now() + 1 周期` —— 锚定，✓。但**没有任何代码从 `usage_events` 按这个窗口求和**（billing 侧根本不读 `usage_events`）：按量计费这一段还不存在，所以铁律五的第 ③ 项目前是「窗口对了，但还没有消费方」。
+> - `usage_summary_*` 的 `date_trunc('hour'/'week'/'month')` **是对的**，本条注释正上方已写明它们是纯统计、从不作计费依据。
+>
+> 唯一仍可疑的是 `billing.invoices.bill_cycle` 写的是 `to_char(now(),'YYYYMM')` 年月串，而 seed 往同一列写 `monthly`/`yearly` 字面量 —— 那是**那一列的语义问题**，不是周期对齐问题，已单独记在案。
+
 **跨 schema FK 修正（铁律一 sweep）**：本文所有 `workspace_id`/`tenant_id`/`subscription_id` 等域内引用，凡属普通引用（非四类边界）一律建真 FK——纠正旧文档"commerce 不建跨 schema FK 到 identity"的表述（该表述已按 §2.2.4 铁律一作废）。
 
 ### 0.1 actor 字段约定（commerce 三 schema `metering`/`billing`/`provisioning` 通用）
