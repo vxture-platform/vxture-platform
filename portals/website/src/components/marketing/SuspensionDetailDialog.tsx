@@ -24,7 +24,8 @@
 import { useEffect, useState } from "react";
 import { DialogForm } from "@vxture/design-system";
 import { formatDateTime } from "@vxture-platform/shared";
-import { COMPANY_CONTACT } from "@/data/company/contact.data";
+import { useRouter } from "@/lib/i18n/navigation";
+import { daysSince, remainingUntil } from "./suspension-detail.logic";
 
 export interface SuspensionDetailLabels {
   /** 弹窗标题 = 卡片上那个状态字（维护中 / 审核中 / 服务受限 / 已暂停）。 */
@@ -43,32 +44,6 @@ export interface SuspensionDetailLabels {
   close: string;
 }
 
-/** 整天数，向上取整到 1——停了两小时也算「已暂停 1 天」，与顺延的取整口径一致。 */
-function daysSince(iso: string): number {
-  const started = Date.parse(iso);
-  if (!Number.isFinite(started)) return 0;
-  return Math.max(1, Math.ceil((Date.now() - started) / 86_400_000));
-}
-
-/** 剩余时长，`dd天hh时mm分`；已过点或解析不出来返回 null（调用方落回「已暂停 N 天」）。 */
-function remainingUntil(iso: string | null): string | null {
-  if (!iso) return null;
-  const target = Date.parse(iso);
-  if (!Number.isFinite(target)) return null;
-  const ms = target - Date.now();
-  if (ms <= 0) return null;
-  const totalMinutes = Math.floor(ms / 60_000);
-  const d = Math.floor(totalMinutes / 1440);
-  const h = Math.floor((totalMinutes % 1440) / 60);
-  const m = totalMinutes % 60;
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-/** 两段算式单独导出给 spec：弹窗本身是几个 div，会错而且不报错的是这两段。 */
-export const __testables = { daysSince, remainingUntil };
-
 export function SuspensionDetailDialog({
   open,
   onOpenChange,
@@ -82,6 +57,7 @@ export function SuspensionDetailDialog({
   suspendedSince: string | null;
   expectedResumeAt: string | null;
 }) {
+  const router = useRouter();
   /* 每分钟重算一次：倒计时显示到分钟，再密只是让页面忙。弹窗关着时不跑。 */
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -111,7 +87,7 @@ export function SuspensionDetailDialog({
       title={labels.title}
       description={labels.hint}
       /*
-       * 页脚两个键各有各的事（2026-09-26 走查修）：主键真的去联系支持（mailto），次键关窗。
+       * 页脚两个键各有各的事（2026-09-26 走查修）：主键去「联系我们」，次键关窗。
        *
        * 上一版为了躲开「cancelLabel 不带动作 ⇒ 写『联系支持』是假动作」这个坑，把两个键
        * 都设成了关闭语义——结果页脚成了两个一模一样的「知道了」。躲开一个坑掉进另一个：
@@ -122,7 +98,10 @@ export function SuspensionDetailDialog({
       onOpenChange={onOpenChange}
       onSubmit={(event) => {
         event.preventDefault();
-        window.location.href = `mailto:${COMPANY_CONTACT.service_email}`;
+        /* 统一跳「联系我们」，不开 mailto（owner 2026-09-26）：那一页把电话、邮箱、表单
+           都摆在一起，而 mailto 在没配邮件客户端的机器上什么都不会发生——又是个假动作。
+           走 i18n 的 Link 路由（同站内部跳转），不用 window.location 整页刷。 */
+        router.push("/contact");
       }}
     >
       <dl className="grid gap-2 text-sm">

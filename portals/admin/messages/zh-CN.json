@@ -2545,7 +2545,12 @@
     "extendsShort": "恢复后顺延",
     "noExtendsShort": "不顺延",
     "expectedResume": "预计恢复时间",
-    "expectedResumeHint": "选填。填了客户会看到倒计时；不填只显示已暂停多久。"
+    "expectedResumeHint": "选填。填了客户会看到倒计时；不填只显示已暂停多久。",
+    "editLabel": "修改",
+    "cancelLabel": "取消",
+    "saveLabel": "保存",
+    "updateFailed": "修改失败，请稍后重试。",
+    "updated": "预计恢复时间已更新。"
   },
   "orderDetailPage": {
     "title": "订单详情",

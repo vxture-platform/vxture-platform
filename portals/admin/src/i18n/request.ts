@@ -23,12 +23,16 @@
 import { getRequestConfig } from "next-intl/server";
 import { headers } from "next/headers";
 import { adminLocale, adminMessages, adminMessageFallback } from "@/lib/intl";
+import { PLATFORM_TIME_ZONE } from "@vxture-platform/shared";
 
 export default getRequestConfig(async () => {
   const locale = adminLocale(await headers());
   return {
     locale,
     messages: adminMessages(locale),
+    /* 展示时区固定（owner 2026-09-26）：不配它时 SSR 按容器 UTC、客户端按浏览器，
+       同一条数据在两个门户显示成不同的日子（实测差一天）。权威在 @shared。 */
+    timeZone: PLATFORM_TIME_ZONE,
     /* 缺键回落成键路径而不是抛异常，见 `adminMessageFallback` 的头注。
        它只能挂在这里：next-intl 的 provider 会从 server component 继承
        locale / messages / formats 这些**可序列化**的值，但函数不能跨 RSC

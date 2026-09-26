@@ -13,9 +13,7 @@
  * 结果永远显示「已暂停 0 天」，静默。
  */
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { __testables } from "./SuspensionDetailDialog";
-
-const { daysSince, remainingUntil } = __testables;
+import { daysSince, remainingUntil } from "./suspension-detail.logic";
 
 const NOW = new Date("2026-09-26T12:00:00Z");
 
