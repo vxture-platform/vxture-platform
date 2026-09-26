@@ -20,7 +20,7 @@ import {
   TableTitleCell,
   toneSurfaceClasses,
 } from "@vxture/design-system";
-import { orUnset } from "@/modules/shared/display";
+import { orUnset, seatLimitLabel } from "@/modules/shared/display";
 import type { IconName, StatusBadgeTone } from "@vxture/design-system";
 import {
   fetchSubscriptionOperation,
@@ -137,7 +137,9 @@ function SubscriptionSummary({
               help: "本周期已用配额占额度的百分比。",
               label: "配额消耗",
               value: `${formatNumber(subscription.quota.usageRate)}%`,
-              tags: [`${formatNumber(subscription.quota.maxUsers)} 席位`],
+              tags: [
+                `席位 ${subscription.quota.seatUsed} / ${seatLimitLabel(subscription.quota.maxUsers)}`,
+              ],
             },
             {
               id: "operation",
@@ -406,8 +408,11 @@ function SubscriptionDetails({
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="chart-bar" title="配额快照" />
         <DetailList columns={3}>
-          <DetailRow label="最大席位">
-            {orUnset(`${formatNumber(subscription.quota.maxUsers)} 人`)}
+          <DetailRow label="席位上限">
+            {seatLimitLabel(subscription.quota.maxUsers)}
+          </DetailRow>
+          <DetailRow label="席位已占">
+            {`${subscription.quota.seatUsed} 人`}
           </DetailRow>
           <DetailRow label="Token 配额">
             {orUnset(formatNumber(subscription.quota.periodTokens))}

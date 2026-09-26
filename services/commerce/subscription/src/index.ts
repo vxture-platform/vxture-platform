@@ -16,6 +16,13 @@ export type {
 export type { OpsAlerter, OpsSelfHealGaveUpInput } from "./service/ops-alerter";
 export { ConsumeService } from "./service/consume.service";
 export { PgSubscriptionRepository } from "./repository/pg-subscription.repository";
+export { ProductSeatService } from "./service/product-seat.service";
+export { PgProductSeatRepository } from "./repository/pg-product-seat.repository";
+export type {
+  ProductSeatGrantOutcome,
+  ProductSeatHolder,
+  WorkspaceProductSeats,
+} from "./types/product-seat.types";
 export { PgOrderRepository } from "./repository/pg-order.repository";
 export type {
   AutoRenewCandidate,

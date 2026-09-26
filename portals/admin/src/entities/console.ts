@@ -1137,7 +1137,14 @@ export type SubscriptionSolutionAssociationSource =
   | "legacy_plan";
 
 export interface SubscriptionOperationQuotaSnapshot {
-  maxUsers: number;
+  /**
+   * 产品席位上限（主组件口径）。**null = 读不到**，界面显示「—」不显示 0——
+   * 「一个人都不能用」和「没读到」不是一件事，而这个字段此前正是写死的 0。
+   * -1 = 无限（目录哨兵）。
+   */
+  maxUsers: number | null;
+  /** 当前占着这条订阅席位的人数。 */
+  seatUsed: number;
   periodTokens: number;
   usedTokens: number;
   usageRate: number;

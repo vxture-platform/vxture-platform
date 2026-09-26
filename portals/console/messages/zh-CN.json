@@ -161,7 +161,9 @@
       "tenant_workspace_member_add": "加入工作空间",
       "tenant_workspace_member_remove": "移出工作空间",
       "tenant_workspace_set_default": "设为默认工作空间",
-      "tenant_workspace_update": "修改工作空间"
+      "tenant_workspace_update": "修改工作空间",
+      "tenant_workspace_product_seat_grant": "指派产品席位",
+      "tenant_workspace_product_seat_revoke": "撤销产品席位"
     },
     "table": {
       "title": "操作记录",
@@ -3437,7 +3439,8 @@
       "setMyDefault": "设为我的默认",
       "alreadyMyDefault": "已经是我的默认落点",
       "createPlannedLabel": "新建工作空间（规划中）",
-      "createPlanned": "多工作空间功能规划中，后续将按付费开通。"
+      "createPlanned": "多工作空间功能规划中，后续将按付费开通。",
+      "productSeats": "产品席位"
     },
     "dialog": {
       "createTitle": "新建工作空间",
@@ -3507,5 +3510,30 @@
     "body": "可以关掉这个页面，回到应用继续。",
     "failedTitle": "没能完成登录",
     "failedBody": "这次请求缺少有效的设备标识，应用不会收到登录结果。请回到应用重新发起一次登录。"
+  },
+  "workspaceProductSeats": {
+    "title": "产品席位 · {name}",
+    "description": "这个工作空间每个已订阅产品可以给几个人用、现在是谁在用。满了要先撤销，或到套餐版本里把席位数改大。",
+    "done": "完成",
+    "close": "关闭",
+    "loading": "正在读取…",
+    "loadFailed": "读取席位失败，请稍后重试。",
+    "noProducts": "这个工作空间还没有在服务中的订阅",
+    "noProductsHint": "订阅一个产品之后，它的席位会出现在这里。",
+    "occupancy": "已占 {occupied} / 上限 {limit}",
+    "unlimited": "无限",
+    "nobody": "还没有人使用",
+    "assignTo": "指派给",
+    "assignPlaceholder": "选择一位成员",
+    "assign": "指派",
+    "revoke": "撤销",
+    "fullHint": "席位已满：先撤销一个，或到套餐版本里把席位数改大。",
+    "errors": {
+      "seat_limit_reached": "席位已满，无法再指派。先撤销一个，或到套餐版本里把席位数改大。",
+      "already_granted": "这个人已经占着这个产品的席位了。",
+      "product_not_covered": "这个工作空间没有在服务中的订阅覆盖这个产品。",
+      "not_a_member": "这个人不在这个工作空间里，先把他加进来。",
+      "generic": "操作失败，请稍后重试。"
+    }
   }
 }

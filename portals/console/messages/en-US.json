@@ -161,7 +161,9 @@
       "tenant_workspace_member_add": "Add to workspace",
       "tenant_workspace_member_remove": "Remove from workspace",
       "tenant_workspace_set_default": "Set default workspace",
-      "tenant_workspace_update": "Update workspace"
+      "tenant_workspace_update": "Update workspace",
+      "tenant_workspace_product_seat_grant": "Assign product seat",
+      "tenant_workspace_product_seat_revoke": "Revoke product seat"
     },
     "table": {
       "title": "Activity",
@@ -3437,7 +3439,8 @@
       "setMyDefault": "Set as my default",
       "alreadyMyDefault": "Already your default",
       "createPlannedLabel": "New workspace (planned)",
-      "createPlanned": "Multiple workspaces are planned and will be unlocked as a paid capability."
+      "createPlanned": "Multiple workspaces are planned and will be unlocked as a paid capability.",
+      "productSeats": "Product seats"
     },
     "dialog": {
       "createTitle": "New workspace",
@@ -3507,5 +3510,30 @@
     "body": "You can close this page and return to the app.",
     "failedTitle": "Sign-in did not complete",
     "failedBody": "This request was missing a valid device identifier, so the app will not receive the result. Start sign-in again from the app."
+  },
+  "workspaceProductSeats": {
+    "title": "Product seats · {name}",
+    "description": "How many people each subscribed product allows in this workspace, and who holds a seat right now. When it is full, revoke one or raise the seat count on the plan version.",
+    "done": "Done",
+    "close": "Close",
+    "loading": "Loading…",
+    "loadFailed": "Could not load seats. Please try again.",
+    "noProducts": "No live subscription in this workspace",
+    "noProductsHint": "Once you subscribe to a product, its seats show up here.",
+    "occupancy": "{occupied} of {limit} used",
+    "unlimited": "unlimited",
+    "nobody": "Nobody yet",
+    "assignTo": "Assign to",
+    "assignPlaceholder": "Pick a member",
+    "assign": "Assign",
+    "revoke": "Revoke",
+    "fullHint": "All seats taken: revoke one, or raise the seat count on the plan version.",
+    "errors": {
+      "seat_limit_reached": "All seats are taken. Revoke one, or raise the seat count on the plan version.",
+      "already_granted": "This person already holds a seat for this product.",
+      "product_not_covered": "No live subscription in this workspace covers this product.",
+      "not_a_member": "This person is not in this workspace yet — add them first.",
+      "generic": "That did not work. Please try again."
+    }
   }
 }
