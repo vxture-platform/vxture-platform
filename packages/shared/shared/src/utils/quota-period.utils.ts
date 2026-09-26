@@ -32,8 +32,14 @@ export type QuotaResetPeriod = "none" | "day" | "month";
 
 const DAY_MS = 86_400_000;
 
-/** 保留时刻、按目标月份天数夹取日期的「加 N 个月」（UTC）。 */
-function addUtcMonths(base: Date, months: number): Date {
+/**
+ * 保留时刻、按目标月份天数**夹取**日期的「加 N 个月」（UTC）。
+ *
+ * 夹取而不是溢出：1/31 加一个月是 2/28，不是 3/03。JS 原生的 `setUTCMonth(+1)` 会把
+ * 「2 月 31 日」滚到 3 月 3 日——那不是任何人对「按月」的理解，而且它与 Postgres 的
+ * `+ interval '1 month'`（夹取）不一致，两根轴会在月末分叉。
+ */
+export function addUtcMonths(base: Date, months: number): Date {
   const absMonth = base.getUTCMonth() + months;
   const year = base.getUTCFullYear() + Math.floor(absMonth / 12);
   const month = ((absMonth % 12) + 12) % 12;
@@ -131,4 +137,34 @@ export function renewalRestartsPeriod(
   now: Date,
 ): boolean {
   return !(currentEndAt !== null && currentEndAt.getTime() > now.getTime());
+}
+
+/**
+ * 按周期单位推进一个时刻——**「按月」「按年」一律夹取，不溢出**（2026-09-26）。
+ *
+ * 全仓「加一个月」此前有三份实现：本文件（夹取）、Postgres 的 `interval`（夹取）、
+ * `order.service` 的 `addCycle`（用 JS `setUTCMonth`，**溢出**）。前两份一致，第三份在
+ * 月末与它们分叉：1/31 订的月付单，服务期落到 3/03，而配额锚点与账单窗口都落 2/28。
+ *
+ * 这个分叉一直存在，但在配额改成锚定推进之前**看不出来**——那时配额按日历月重置，
+ * 根本没有第二个口径可对照。
+ *
+ * 年也一样：2/29 加一年是 2/28，不是 3/01。
+ *
+ * `perpetual` 与未知单位原样返回：永久订阅没有下一期。
+ */
+export function addCyclePeriod(base: Date, unit: string, count: number): Date {
+  switch (unit) {
+    case "day":
+      return new Date(base.getTime() + count * DAY_MS);
+    case "week":
+      return new Date(base.getTime() + count * 7 * DAY_MS);
+    case "month":
+      return addUtcMonths(base, count);
+    case "year":
+      /* 按 12 个月加，复用同一套夹取——`setUTCFullYear` 在 2/29 上同样会溢出到 3/01。 */
+      return addUtcMonths(base, count * 12);
+    default:
+      return new Date(base.getTime());
+  }
 }

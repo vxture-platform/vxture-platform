@@ -22,7 +22,7 @@ import {
   type DiscountEffect,
   type ReservedVoucher,
 } from "@vxture/service-promotion";
-import { renewalRestartsPeriod } from "@vxture-platform/shared";
+import { addCyclePeriod, renewalRestartsPeriod } from "@vxture-platform/shared";
 import { PgOrderRepository } from "../repository/pg-order.repository";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import { SubscriptionService } from "./subscription.service";
@@ -84,24 +84,18 @@ export interface FulfillResult {
  * 未知 unit 原样返回不推进——宁可到期日不动被人发现,也不要悄悄按某个默认单位算。
  */
 export function addCycle(base: Date, unit: string, count: number): Date {
-  const d = new Date(base.getTime());
-  switch (unit) {
-    case "day":
-      d.setUTCDate(d.getUTCDate() + count);
-      break;
-    case "week":
-      d.setUTCDate(d.getUTCDate() + 7 * count);
-      break;
-    case "month":
-      d.setUTCMonth(d.getUTCMonth() + count);
-      break;
-    case "year":
-      d.setUTCFullYear(d.getUTCFullYear() + count);
-      break;
-    default:
-      break;
-  }
-  return d;
+  /*
+   * 委托给 `@shared` 的 `addCyclePeriod`（2026-09-26）。
+   *
+   * 原实现是 `d.setUTCMonth(d.getUTCMonth() + count)` —— JS **溢出不夹取**：1/31 加一个月
+   * 变成 3/03（「2 月 31 日」滚过去），2/29 加一年变成 3/01。而 Postgres 的
+   * `+ interval '1 month'`（admin 续期、开票窗口用的）与配额锚点推进都**夹取**到当月最后
+   * 一天。于是 1/31 订的月付客户服务期落 3/03、配额刷新日落 2/28，两根轴差三天，而且每
+   * 续一次差得更多。
+   *
+   * 这个分叉一直存在，只是在配额改成锚定推进之前没有第二个口径能照出它来。
+   */
+  return addCyclePeriod(base, unit, count);
 }
 
 @Injectable()
