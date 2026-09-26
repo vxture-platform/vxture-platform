@@ -57,6 +57,27 @@ export const EXTRA_ANCHOR = new Set([
   /* 暂停前的 auto_renew（2026-09-25 步骤三）：同样是出生即定——恢复时要还原成暂停那一
      刻的值，而不是「现在觉得应该是什么」。改它等于替客户改了续费意愿。 */
   "metering.subscription_suspensions.auto_renew_before",
+  /*
+   * 产品席位的出生事实（2026-09-27，metering.product_seats）。形状上这几列都是普通可写列
+   * （非 PK、非 `_no`、非 created_*），语义上**一行席位除了撤销那两列全是出生即定**：
+   *
+   *   workspace_id / user_id / product_id —— 谁、在哪、用哪个产品。这三列就是席位的身份，
+   *     改任何一个等于把 A 的席位改成 B 的，而**占用数不变、部分唯一索引也不报错**：
+   *     两边都只有一行，只是占位的人换了。静默的授权转移。
+   *   subscription_id —— 由哪条订阅授予。它决定退订时谁被释放（95 的
+   *     trg_subscriptions_revoke_seats_on_cancel 按它筛）。改它 = 把席位挂到另一条订阅上，
+   *     于是该释放的不释放、不该释放的被释放。
+   *   granted_by / granted_at —— 谁在什么时候授予的。审计痕迹不该可改。
+   *
+   * 可写的只有 `revoked_at` / `revoked_by`（回收时收尾），98 里 GRANT 的正是这两列。
+   * 要把席位从 A 换到 B 不是 UPDATE：撤销 A 那一行、给 B 插一行——两个动作都该留痕。
+   */
+  "metering.product_seats.workspace_id",
+  "metering.product_seats.user_id",
+  "metering.product_seats.product_id",
+  "metering.product_seats.subscription_id",
+  "metering.product_seats.granted_by",
+  "metering.product_seats.granted_at",
 ]);
 
 /**
