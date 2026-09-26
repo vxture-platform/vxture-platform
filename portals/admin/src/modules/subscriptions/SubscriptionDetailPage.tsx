@@ -54,6 +54,7 @@ import {
 } from "@/modules/subscriptions/SubscriptionOperationDialog";
 import {
   formatDate,
+  formatDateTime,
   formatMoney,
   formatNumber,
   typeLabel,
@@ -205,6 +206,19 @@ function SubscriptionDetails({
                         : tSuspension("noExtendsShort")
                     }）`
                   : "",
+              )}
+            </DetailRow>
+          ) : null}
+          {/* 运营填的预计恢复时间（2026-09-26 走查补）。此前它只写进库、回传给客户界面，
+              运营自己看不到——填完就再也不知道填了什么。没填显示「—」。 */}
+          {subscription.status === "suspended" ? (
+            <DetailRow label={tSuspension("expectedResume")}>
+              {/* 到时刻：只到日的话「今天下午三点恢复」会显示成「今天」，运营无从判断。 */}
+              {orUnset(
+                formatDateTime(
+                  subscription.suspension?.expectedResumeAt ?? null,
+                  locale,
+                ),
               )}
             </DetailRow>
           ) : null}

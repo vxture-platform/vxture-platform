@@ -22,7 +22,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Button, DialogForm } from "@vxture/design-system";
+import { DialogForm } from "@vxture/design-system";
 import { formatDateTime } from "@vxture-platform/shared";
 import { COMPANY_CONTACT } from "@/data/company/contact.data";
 
@@ -110,14 +110,19 @@ export function SuspensionDetailDialog({
       size="sm"
       title={labels.title}
       description={labels.hint}
-      submitLabel={labels.close}
-      /* 取消键也只是关窗，所以两个键都用「关」的语义——把「联系支持」放在页脚会是个
-         假动作（它不会联系任何人）。真正的联系入口是下面那个 mailto，它是条真链接。 */
+      /*
+       * 页脚两个键各有各的事（2026-09-26 走查修）：主键真的去联系支持（mailto），次键关窗。
+       *
+       * 上一版为了躲开「cancelLabel 不带动作 ⇒ 写『联系支持』是假动作」这个坑，把两个键
+       * 都设成了关闭语义——结果页脚成了两个一模一样的「知道了」。躲开一个坑掉进另一个：
+       * 重复控件同样是没想清楚。正解是让主键担起那件唯一值得做的事。
+       */
+      submitLabel={labels.contact}
       cancelLabel={labels.close}
       onOpenChange={onOpenChange}
       onSubmit={(event) => {
         event.preventDefault();
-        onOpenChange(false);
+        window.location.href = `mailto:${COMPANY_CONTACT.service_email}`;
       }}
     >
       <dl className="grid gap-2 text-sm">
@@ -146,9 +151,6 @@ export function SuspensionDetailDialog({
           </>
         ) : null}
       </dl>
-      <Button asChild variant="outline" className="w-full">
-        <a href={`mailto:${COMPANY_CONTACT.service_email}`}>{labels.contact}</a>
-      </Button>
     </DialogForm>
   );
 }

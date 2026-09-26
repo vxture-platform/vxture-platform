@@ -41,6 +41,7 @@ import {
   buildWebsiteProductUrl,
 } from "@/lib/website-entry";
 import type { SubscribedProduct } from "@/api/console-bff";
+import { hubCardEntries } from "./hubCards.logic";
 import { useConfirmLabels } from "@/lib/destructive";
 import {
   SUB_STATUS_TONES,
@@ -164,16 +165,27 @@ export function SubscriptionProductCard({
   const audience = item.tier ? TIER_AUDIENCE[item.tier] : undefined;
   const left = daysLeft(item.endAt);
   const expired = item.status === "expired";
+  /*
+   * 冻结中（2026-09-26 走查补）。卡片上的三个入口都要关掉：
+   *   · 升级 / 续费 —— 会走到下单，而下单端有守卫、库里有唯一索引，客户只是多走一步再
+   *     吃闭门羹（控件不该把人带到死路）。
+   *   · 自动续费开关 —— 更隐蔽：客户在暂停期间打开它，恢复时平台会用 `auto_renew_before`
+   *     把它**悄悄改回**暂停前的值。让他按一个注定被覆盖的开关，比不给还糟。
+   * 退订不关：客户随时有权离开，而退订不会造出第二条订阅。
+   */
+  const suspended = item.status === "suspended";
   const percent = cyclePercent(item.startAt, item.endAt);
   const nearExpiry = !expired && left != null && left <= RENEW_THRESHOLD_DAYS;
-  const showUpgrade =
-    !expired && (item.tier === "free" || item.tier === "starter");
-  const showRenew = expired || nearExpiry;
+  const { showUpgrade, showRenew, renewToggleable } = hubCardEntries({
+    status: item.status,
+    tier: item.tier ?? null,
+    endAt: item.endAt,
+    nearExpiry,
+  });
   const productCode = item.productCode ?? "";
-  // 续费开关适用面:有界周期、未终态。free 档与普通订阅一样按周期到期、可开可关
-  // （owner 2026-09-03 决策 5）；此前按 kind==='paid' 判，而 free 订单入库 kind 写死
-  // 'paid'，两个判据打架，free 卡永远显示「到期不续」却又不给开关。
-  const renewToggleable = !expired && item.endAt !== null;
+  // 三个入口的判据抽进 hubCards.logic.ts（可测）：free 档与普通订阅一样按周期到期、
+  // 可开可关（owner 2026-09-03 决策 5）；此前按 kind==='paid' 判，而 free 订单入库
+  // kind 写死 'paid'，两个判据打架，free 卡永远显示「到期不续」却又不给开关。
   const optedOut = !item.autoRenew && item.endAt !== null && !expired;
   const autoRenewOn = item.autoRenew && item.endAt !== null && !expired;
 
@@ -183,13 +195,28 @@ export function SubscriptionProductCard({
           id: "renew-on",
           label: t("card.autoRenewOn"),
           disabled: !renewToggleable,
+          /* 此前只有「关」那一支带 hint，「开」这一支灰着不说为什么——而冻结中恰恰是
+             客户最想把它打开的时候。 */
+          ...(renewToggleable
+            ? {}
+            : {
+                hint: suspended
+                  ? t("card.autoRenewSuspended")
+                  : t("card.autoRenewNa"),
+              }),
           onSelect: () => onSetAutoRenew(item, true),
         }
       : {
           id: "renew-off",
           label: t("card.autoRenewOff"),
           disabled: !renewToggleable,
-          ...(renewToggleable ? {} : { hint: t("card.autoRenewNa") }),
+          ...(renewToggleable
+            ? {}
+            : {
+                hint: suspended
+                  ? t("card.autoRenewSuspended")
+                  : t("card.autoRenewNa"),
+              }),
           onSelect: () => onSetAutoRenew(item, false),
         },
     // 评价放在退订之前:退订是危操作,永远压轴。
