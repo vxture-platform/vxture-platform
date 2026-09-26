@@ -15,7 +15,10 @@ import {
   isValidIndustry,
 } from "@vxture/core-utils";
 import { verificationLevelOf } from "../lib/verification-level";
-import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
+import {
+  COMMERCE_PG_POOL,
+  ProductSeatService,
+} from "@vxture/service-subscription";
 import {
   AccountService,
   USERNAME_CHANGE_COOLDOWN_DAYS,
@@ -88,6 +91,8 @@ export class SessionAggregator {
     /** 直查 tenancy.workspaces 取名称+可视码（identity 服务未暴露 workspace_no；
      * 与 subscription.router 的 resolveDefaultWorkspace 同一通道与理由）。 */
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
+    /** 产品席位（2026-09-27 裁定①②）：上限判据在库里，这里只过作用域门。 */
+    @Inject(ProductSeatService) private readonly seats: ProductSeatService,
   ) {}
 
   /** Default-workspace 名称 + 可视码 per tenant——UUID 禁展示（owner 2026-08-20），
@@ -1228,6 +1233,76 @@ export class SessionAggregator {
     );
     if (result.ok) this.invalidateCapabilities(memberUserId, resolved.orgId);
     return result;
+  }
+
+  /**
+   * 产品席位：读实况 / 指派 / 撤销。三个都走 `assertCanManageWorkspaceMembers`——
+   * 指派某人用某个产品**就是**成员管理，与「把他加进这个空间」同一件事的粒度更细一层，
+   * 所以不另立权限码（另立就要改五处 + 给存量库灌迁移，而语义上并没有第二个决定要做）。
+   *
+   * 上限不在这里判：库里的 `trg_product_seats_enforce_limit` 判，因为席位有两个写入方
+   * （这条自助线 + admin 运营代操作），判据挂在任何一条上都会给另一条留门。
+   */
+  async listWorkspaceProductSeats(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.assertCanManageWorkspaceMembers(
+      userId,
+      resolved.orgId,
+      workspaceId,
+    );
+    return this.seats.listWorkspaceSeats(workspaceId);
+  }
+
+  async grantProductSeatScoped(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+    productId: string,
+    memberUserId: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.assertCanManageWorkspaceMembers(
+      userId,
+      resolved.orgId,
+      workspaceId,
+    );
+    return this.seats.grant({
+      workspaceId,
+      productId,
+      userId: memberUserId,
+      grantedBy: userId,
+    });
+  }
+
+  async revokeProductSeatScoped(
+    userId: string,
+    orgId: string | undefined,
+    workspaceId: string,
+    productId: string,
+    memberUserId: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.assertCanManageWorkspaceMembers(
+      userId,
+      resolved.orgId,
+      workspaceId,
+    );
+    const removed = await this.seats.revoke({
+      workspaceId,
+      productId,
+      userId: memberUserId,
+      revokedBy: userId,
+    });
+    /* 本来就没占着 = 已经是想要的状态（同 removeWorkspaceMember 的取舍）：
+       重复点「撤销」的两次意图完全一样，报错只会让人以为出了问题。 */
+    return { ok: true as const, removed };
   }
 
   /**

@@ -97,6 +97,8 @@ const KNOWN_ACTIONS = new Set([
   "tenant.workspace.archive",
   "tenant.workspace.member_add",
   "tenant.workspace.member_remove",
+  "tenant.workspace.product_seat_grant",
+  "tenant.workspace.product_seat_revoke",
   "tenant.workspace.create",
   "tenant.workspace.set_default",
   "tenant.workspace.update",

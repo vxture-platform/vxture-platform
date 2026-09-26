@@ -499,6 +499,74 @@ export async function removeWorkspaceMember(
   if (!response.ok) await throwMemberError(response, "");
 }
 
+/** 一个产品在这个工作空间的席位实况（上限 / 占用 / 占用者）。 */
+export interface ProductSeatRow {
+  productId: string;
+  productCode: string;
+  productName: string;
+  subscriptionId: string;
+  /** -1 = 无限；null = 读不到（界面显示「—」，不显示 0）。 */
+  seatMax: number | null;
+  occupied: number;
+  holders: {
+    userId: string;
+    userNo: string;
+    displayName: string | null;
+    grantedAt: string;
+  }[];
+}
+
+/** 席位指派的四种拒因（BFF message）；页面据此选文案。 */
+export const PRODUCT_SEAT_ERROR_CODES = [
+  "seat_limit_reached",
+  "already_granted",
+  "product_not_covered",
+  "not_a_member",
+] as const;
+export type ProductSeatErrorCode = (typeof PRODUCT_SEAT_ERROR_CODES)[number];
+
+export async function fetchProductSeats(
+  workspaceId: string,
+): Promise<ProductSeatRow[]> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/product-seats`)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+  const body = (await response.json()) as { seats: ProductSeatRow[] };
+  return body.seats;
+}
+
+export async function grantProductSeat(
+  workspaceId: string,
+  productId: string,
+  userId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/product-seats`)}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId, userId }),
+    },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
+export async function revokeProductSeat(
+  workspaceId: string,
+  productId: string,
+  userId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/workspaces/${encodeURIComponent(workspaceId)}/product-seats/${encodeURIComponent(productId)}/${encodeURIComponent(userId)}`)}`,
+    { method: "DELETE", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) await throwMemberError(response, "");
+}
+
 /** 停用。**不是删**——订阅 / 订单 / 配额池 / 用量都挂着 workspace_id。 */
 export async function archiveWorkspace(workspaceId: string): Promise<void> {
   const response = await fetch(

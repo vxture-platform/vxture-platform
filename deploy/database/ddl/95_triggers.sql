@@ -509,3 +509,94 @@ CREATE TRIGGER trg_subscriptions_revoke_seats_on_cancel
   FOR EACH ROW
   WHEN (NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled')
   EXECUTE FUNCTION metering.revoke_seats_on_cancel();
+
+-- ═══ 2026-09-27：席位上限硬拦（owner 裁定②「超限硬拦截，席位已满」）═══
+-- `seat.max` 在 2026-10-28 就登记了，但**全仓没有任何读者**——上限存在，没人拦。
+-- 这里给它第一个读者，并且把它放在**谁也绕不过去的地方**：席位将有两个写入方
+-- （console 客户自助指派、admin 运营代操作），判据挂在任何一条写路径上都会给另一条留门。
+--
+-- ── 「在服务中」取哪个集合 ──
+-- 本仓已有两个成文集合，这里**复用**而不是再造第三个：
+--   · 权益/消费集合 `('active','trialing')` —— 能烧配额、进 C2（D10 门）
+--   · 在服务中集合 `('active','trialing','expiring','overdue')` —— 「还在服务中，只是
+--     临近到期或欠费」（pg-subscription.repository 那道并存守卫的原话）
+-- 席位问的是**谁被授权**，不是**此刻烧不烧得动配额**：一张迟付的发票不该连带把团队的
+-- 产品指派搞乱，所以取后者。`suspended` 不在内——那是「已停止提供服务」。
+--
+-- ── 为什么要 advisory lock ──
+-- 只数一遍再插入是不够的：两个并发事务各自在自己的快照里数到 N-1，两个都放行，
+-- 于是 N+1 个席位。按 (工作区, 产品) 取事务级 advisory lock 把同一格的授予排成队；
+-- 不同格不互相等待，锁在事务结束自动释放。不用 `SELECT ... FOR UPDATE` 锁订阅行：
+-- 那要求表级 UPDATE 权限，而 platform_svc 在 subscriptions 上只有**按列**的 UPDATE。
+--
+-- ── 「他已经有席位了」不是「席位满了」 ──
+-- 同一人重复授予时**放行本触发器**，交给部分唯一索引报 23505。BEFORE 触发器跑在唯一
+-- 索引之前，不让路的话，给一个已持有席位的人再点一次「指派」，得到的会是「席位已满」
+-- ——一个把原因说错的报错。（这同时让 2026-11-14 的审计探针仍能拿到 23505：迁移是
+-- 全量重放，那份跑的时候本触发器早已存在。）
+CREATE OR REPLACE FUNCTION metering.resolve_seat_max(p_workspace_id uuid, p_product_id uuid)
+RETURNS int LANGUAGE sql STABLE AS $$
+  -- NULL = 该工作区没有在服务中的订阅覆盖这个产品；-1 = 无限（沿用目录的哨兵约定）
+  SELECT CASE
+           WHEN count(*) = 0                        THEN NULL
+           WHEN bool_or(coalesce(v, 0) = -1)        THEN -1
+           ELSE max(coalesce(v, 0))
+         END
+    FROM (
+      SELECT (pc.quota->>'seat.max')::int AS v
+        FROM metering.subscriptions s
+        JOIN product.plan_components pc ON pc.plan_version_id = s.plan_version_id
+       WHERE s.workspace_id = p_workspace_id
+         AND pc.product_id  = p_product_id
+         AND s.deleted_at IS NULL
+         AND s.status IN ('active','trialing','expiring','overdue')
+    ) t;
+$$;
+
+CREATE OR REPLACE FUNCTION metering.enforce_seat_limit() RETURNS trigger AS $$
+DECLARE
+  v_max  int;
+  v_live int;
+BEGIN
+  /* 撤销/已撤销的行不占席位，不必检查。 */
+  IF NEW.revoked_at IS NOT NULL THEN RETURN NEW; END IF;
+  /* UPDATE 且本来就是活的 ⇒ 占用数没变（其余列都是锚点，98 不授权改）。 */
+  IF TG_OP = 'UPDATE' AND OLD.revoked_at IS NULL THEN RETURN NEW; END IF;
+
+  /* 同一人已持有活席位 ⇒ 让部分唯一索引去报，它的原因说得准。 */
+  IF EXISTS (
+    SELECT 1 FROM metering.product_seats
+     WHERE workspace_id = NEW.workspace_id
+       AND product_id   = NEW.product_id
+       AND user_id      = NEW.user_id
+       AND revoked_at IS NULL
+       AND (TG_OP = 'INSERT' OR id <> NEW.id)
+  ) THEN RETURN NEW; END IF;
+
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(NEW.workspace_id::text || ':' || NEW.product_id::text, 0));
+
+  v_max := metering.resolve_seat_max(NEW.workspace_id, NEW.product_id);
+  IF v_max IS NULL THEN
+    RAISE EXCEPTION 'no live subscription covers this product in this workspace'
+      USING ERRCODE = 'VX404';
+  END IF;
+  IF v_max = -1 THEN RETURN NEW; END IF;   -- 无限
+
+  SELECT count(*) INTO v_live
+    FROM metering.product_seats
+   WHERE workspace_id = NEW.workspace_id
+     AND product_id   = NEW.product_id
+     AND revoked_at IS NULL
+     AND (TG_OP = 'INSERT' OR id <> NEW.id);
+  IF v_live >= v_max THEN
+    RAISE EXCEPTION 'product seats are full (limit %)', v_max USING ERRCODE = 'VX409';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_product_seats_enforce_limit ON metering.product_seats;
+CREATE TRIGGER trg_product_seats_enforce_limit
+  BEFORE INSERT OR UPDATE OF revoked_at ON metering.product_seats
+  FOR EACH ROW EXECUTE FUNCTION metering.enforce_seat_limit();

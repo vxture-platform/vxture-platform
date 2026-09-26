@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useTableLabels } from "@/lib/table";
+import { WorkspaceProductSeatsDialog } from "./components/WorkspaceProductSeatsDialog";
 import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
@@ -56,12 +57,14 @@ import {
   ConsoleBffError,
   archiveWorkspace,
   createWorkspace,
+  fetchMembers,
   fetchWorkspaces,
   setDefaultWorkspace,
   setMyDefaultWorkspace,
   updateWorkspace,
   type ConsoleWorkspace,
 } from "@/api/console-bff";
+import type { MemberRecord } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { PageSection } from "@/layout/shell";
@@ -135,6 +138,11 @@ export function WorkspacesPage() {
   /* 一次只处理一件：两个写动作同时在飞，失败提示会互相盖掉。 */
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
+  /** 打开「产品席位」对话框的目标空间（null = 没开）。 */
+  const [seatsFor, setSeatsFor] = useState<ConsoleWorkspace | null>(null);
+  /* 席位候选人必须先是本空间成员，所以要租户成员全集。只在开对话框时才取——
+     列表页本身用不到它，进页面就拉一遍等于给每个访问都加一次无谓往返。 */
+  const [members, setMembers] = useState<MemberRecord[] | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -239,6 +247,30 @@ export function WorkspacesPage() {
    * 「设为我的默认」谁都有。
    */
   const menuItems = (w: ConsoleWorkspace): ActionMenuItem[] => {
+    /* 产品席位（owner 2026-09-27 裁定①）：这个空间每个被订阅覆盖的产品，谁在当前使用。
+       与管理三项同一个门——指派某人用某个产品就是成员管理的更细一层。
+       停用的空间不给开：既不能指派，也不该让人以为还能用。 */
+    const seats: ActionMenuItem[] = canManage
+      ? [
+          {
+            id: "seats",
+            label: t("actions.productSeats"),
+            icon: "users",
+            disabled: busy || w.status !== "active",
+            ...(w.status !== "active"
+              ? { hint: t("actions.archivedHint") }
+              : {}),
+            onSelect: () => {
+              setSeatsFor(w);
+              if (members === null) {
+                void fetchMembers()
+                  .then(setMembers)
+                  .catch(() => setMembers([]));
+              }
+            },
+          },
+        ]
+      : [];
     const manage: ActionMenuItem[] = canManage
       ? [
           {
@@ -320,7 +352,7 @@ export function WorkspacesPage() {
         ]
       : [];
 
-    return [...manage, mine, ...archive];
+    return [...seats, ...manage, mine, ...archive];
   };
 
   const columns: DataTableColumn<ConsoleWorkspace>[] = [
@@ -479,6 +511,15 @@ export function WorkspacesPage() {
           />
         </div>
       </PageSection>
+
+      {seatsFor ? (
+        <WorkspaceProductSeatsDialog
+          workspaceId={seatsFor.id}
+          workspaceName={seatsFor.name}
+          members={members ?? []}
+          onClose={() => setSeatsFor(null)}
+        />
+      ) : null}
 
       {form ? (
         <DialogForm

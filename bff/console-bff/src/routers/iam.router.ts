@@ -102,6 +102,26 @@ const WORKSPACE_ERRORS: Record<WorkspaceRejection, (reason: string) => Error> =
     planned: (reason) => new ConflictException(reason),
   };
 
+/**
+ * 席位指派的四种拒因 → 四种状态码。库里的触发器抛 VX409 / VX404，仓库层翻成这些原因。
+ *   · seat_limit_reached 409：请求没错，是**当前状态**满了——去发布档位把 seat.max 改大。
+ *   · already_granted    409：他已经占着了。不是错误，但也不是「又发了一个」。
+ *   · product_not_covered 404：这个工作空间没有在服务中的订阅覆盖这个产品。
+ *   · not_a_member       404：这个人不在这个工作空间里（库的复合外键也挡，但没有上下文）。
+ */
+const PRODUCT_SEAT_ERRORS: Record<
+  | "seat_limit_reached"
+  | "already_granted"
+  | "product_not_covered"
+  | "not_a_member",
+  (reason: string) => Error
+> = {
+  seat_limit_reached: (reason) => new ConflictException(reason),
+  already_granted: (reason) => new ConflictException(reason),
+  product_not_covered: (reason) => new NotFoundException(reason),
+  not_a_member: (reason) => new NotFoundException(reason),
+};
+
 const ACCEPT_INVITATION_ERRORS: Record<
   AcceptInvitationRejection,
   (reason: string) => Error
@@ -732,6 +752,97 @@ export class IamRouter {
       resourceType: "workspace",
       resourceId: workspaceId,
       after: { userId: memberUserId },
+    });
+    return { ok: true };
+  }
+
+  /**
+   * 产品席位：这个工作空间每个**被订阅覆盖的产品**的上限 / 占用 / 占用者。
+   *
+   * owner 2026-09-27 裁定①「每个产品清楚谁在当前使用」。一个端点回答两个方向的问题：
+   * 按产品看是谁在用（明细表），按人看他能用哪些产品（成员行的席位对话框）。
+   *
+   * 门与成员管理同一个：指派某人用某个产品**就是**成员管理。作用域再由 aggregator
+   * 判一次（`workspace.member.manage` 在 tenant:owner 是全租户的、在 workspace:manager
+   * 只来自当前空间）。
+   */
+  @RequireCapability("workspace.member.manage")
+  @Get("workspaces/:workspaceId/product-seats")
+  async listProductSeats(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const seats = await this.sessionAggregator.listWorkspaceProductSeats(
+      accountId,
+      tenantId,
+      workspaceId,
+    );
+    if (!seats) throw new NotFoundException("Tenant context is required");
+    return { seats };
+  }
+
+  /**
+   * 指派席位。**满了直接拦**（owner 裁定②），不做超额计费。
+   *
+   * 四种失败各说各的话——合成一句「指派失败」会把「席位满了」「他已经有了」
+   * 「这个产品没订阅」「他不在这个空间」说成同一件事，而这四件的下一步动作完全不同
+   * （去发布档位改数字 / 什么都不用做 / 去订阅 / 先把人加进来）。
+   */
+  @RequireCapability("workspace.member.manage")
+  @Post("workspaces/:workspaceId/product-seats")
+  async grantProductSeat(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Body() body: { productId?: string; userId?: string },
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    if (!body?.productId)
+      throw new BadRequestException("productId is required");
+    if (!body?.userId) throw new BadRequestException("userId is required");
+    const result = await this.sessionAggregator.grantProductSeatScoped(
+      accountId,
+      tenantId,
+      workspaceId,
+      body.productId,
+      body.userId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+    if (!result.ok) throw PRODUCT_SEAT_ERRORS[result.reason](result.reason);
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.product_seat_grant",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { productId: body.productId, userId: body.userId },
+    });
+    return { ok: true };
+  }
+
+  /** 撤销席位（软撤销，留痕）。本来没占着也回 ok——重复点撤销的两次意图一样。 */
+  @RequireCapability("workspace.member.manage")
+  @Delete("workspaces/:workspaceId/product-seats/:productId/:memberUserId")
+  async revokeProductSeat(
+    @Req() req: Request & RequestContext,
+    @Param("workspaceId") workspaceId: string,
+    @Param("productId") productId: string,
+    @Param("memberUserId") memberUserId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const result = await this.sessionAggregator.revokeProductSeatScoped(
+      accountId,
+      tenantId,
+      workspaceId,
+      productId,
+      memberUserId,
+    );
+    if (!result) throw new NotFoundException("Tenant context is required");
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.workspace.product_seat_revoke",
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      after: { productId, userId: memberUserId, removed: result.removed },
     });
     return { ok: true };
   }

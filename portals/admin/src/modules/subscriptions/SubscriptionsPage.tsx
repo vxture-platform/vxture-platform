@@ -47,6 +47,7 @@ import type {
   SubscriptionOperationStatus,
 } from "@/entities/console";
 import { SUBSCRIPTION_OPERATION_TONE } from "@/modules/shared/status-tone";
+import { seatLimitLabel } from "@/modules/shared/display";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
@@ -324,7 +325,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       cell: (subscription) => (
         <span className="inline-flex flex-col items-end gap-2xs">
           {`${formatNumber(subscription.quota.usageRate)}%`}
-          <span className="text-body-sm text-muted-foreground">{`${quotaRiskLabels[subscription.quota.risk]} · ${formatNumber(subscription.quota.maxUsers)} 席位`}</span>
+          <span className="text-body-sm text-muted-foreground">{`${quotaRiskLabels[subscription.quota.risk]} · 席位 ${subscription.quota.seatUsed} / ${seatLimitLabel(subscription.quota.maxUsers)}`}</span>
         </span>
       ),
     },

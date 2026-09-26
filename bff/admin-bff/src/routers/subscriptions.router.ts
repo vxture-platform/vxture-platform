@@ -759,8 +759,17 @@ function buildQuota(
   row: SubscriptionRow,
   cycle: SubscriptionOperationCycle,
 ): SubscriptionOperationQuotaSnapshot {
-  // periodTokens/usedTokens = 该订阅全部 active quota_pools 的 quota_limit/quota_used 之和
-  // （跨 metric 汇总，运营总览口径）。maxUsers/allowedModelCount/allowCustomModel 新库无独立列 → 兜底。
+  /* periodTokens/usedTokens = 该订阅全部 active quota_pools 的 quota_limit/quota_used 之和
+     （跨 metric 汇总，运营总览口径）。
+
+     seats（2026-09-27）：`maxUsers` 此前是写死的 `0`，注释说「新库无独立列 → 兜底」——
+     于是运营台的订阅详情一直显示「0 席位 / 0 人」，一个假装是事实的死值。现在上限由
+     `metering.resolve_seat_max` 现算（与硬拦触发器同一个答案）、占用数来自
+     `metering.product_seats`。**读不到就是 null**，界面显示「—」不显示 0：
+     「一个人都不能用」和「没读到」不是一件事。
+
+     allowedModelCount/allowCustomModel 仍是兜底——那两个新库确实没有对应列，
+     且没有任何裁定说它们该显示什么。留 0 不是结论，是还没接。 */
   const periodTokens = toNumber(row.quota_limit_sum);
   const usedTokens = toNumber(row.quota_used_sum);
   const usageRate =
@@ -770,7 +779,8 @@ function buildQuota(
   const risk =
     usageRate >= 0.9 ? "danger" : usageRate >= 0.7 ? "warning" : "normal";
   return {
-    maxUsers: 0,
+    maxUsers: row.seat_max,
+    seatUsed: row.seat_used ?? 0,
     periodTokens,
     usedTokens,
     usageRate,
@@ -994,6 +1004,8 @@ select
   tier.tier as tier_code,
   quota.quota_limit_sum,
   quota.quota_used_sum,
+  seats.seat_max,
+  seats.seat_used,
   cur.order_no as current_order_no
 from metering.subscriptions s
 join tenancy.tenants t on t.id = s.tenant_id
@@ -1028,6 +1040,19 @@ left join lateral (
   from metering.quota_pools qp
   where qp.subscription_id = s.id and qp.status = 'active'
 ) quota on true
+-- 产品席位（2026-09-27）：上限从库里的 resolve_seat_max 现算（它读的是套餐版本的
+-- seat.max，与硬拦触发器同一个答案），占用数是本订阅名下没撤销的席位行。
+-- 口径是主组件：这一行代表一条订阅，而席位是按产品给的；套餐捆多个产品时，
+-- 上限取主组件那一个，明细在 console 的「产品席位」里按产品逐个看。
+-- 上限可能是 null（这个产品没登记 seat.max / 读不到）—— 那就让它是 null，
+-- 界面显示「—」。千万不要回落成 0：0 的意思是「一个人都不能用」，与「没读到」不是一件事，
+-- 而这一列原本正是写死的 maxUsers: 0，运营台因此一直显示「0 席位」。
+left join lateral (
+  select
+    metering.resolve_seat_max(s.workspace_id, s.product_id) as seat_max,
+    (select count(*) from metering.product_seats ps
+      where ps.subscription_id = s.id and ps.revoked_at is null)::int as seat_used
+) seats on true
 `;
 
 const SUBSCRIPTION_LIST_SQL = `
@@ -1132,6 +1157,8 @@ interface SubscriptionRow {
   operator_name: string | null;
   tier_code: string | null;
   quota_limit_sum: string | null;
+  seat_max: number | null;
+  seat_used: number | null;
   quota_used_sum: string | null;
 }
 

@@ -124,13 +124,21 @@ DECLARE
   has_trg boolean;
   n_missing int;
 BEGIN
-  -- 候选：一条在用订阅 + 同工作区的一名成员。找不到就不实测（并且明说没测）。
-  SELECT s.workspace_id, wm.user_id, s.id, s.product_id
+  /* 候选：一条在服务中订阅 + 同工作区的一名成员。找不到就不实测（并且明说没测）。
+   *
+   * 产品要从 `plan_components` 取，**不能拿 `subscriptions.product_id`**：
+   *   ① 席位可以发给**捆绑组件**的产品，而 product_id 只是主组件；
+   *   ② 那一列是触发器回填的冗余值，**会与套餐组件对不上**——本机库里就有一条
+   *     `product_id = karda` 而它 plan_version 的唯一组件是 `umbra`。拿它当候选，
+   *     探针会去给一个该订阅并未覆盖的产品发席位，然后被 2026-11-15 的硬拦
+   *     正确地拒掩（VX404）——**拦得对，错的是候选**。
+   * 席位的定义本来就是「这个套餐含的哪个产品」，跟着组件走才是对的。 */
+  SELECT s.workspace_id, wm.user_id, s.id, pc.product_id
     INTO v_ws, v_user, v_sub, v_prod
     FROM metering.subscriptions s
+    JOIN product.plan_components pc ON pc.plan_version_id = s.plan_version_id
     JOIN tenancy.workspace_memberships wm ON wm.workspace_id = s.workspace_id
    WHERE s.deleted_at IS NULL
-     AND s.product_id IS NOT NULL
      AND s.status IN ('active','trialing','expiring','overdue')
    LIMIT 1;
 
@@ -152,16 +160,22 @@ BEGIN
         RAISE EXCEPTION '[product-seats] 同一人在同一产品上竟能占两个席位——占用数从此不可信';
       END IF;
 
+      /* ② 的另一半：撤销之后同一人可以再次被授予（部分唯一索引，不是全表唯一）。
+       * **必须在退订之前做**：2026-11-15 上了席位硬拦，而它拒给「没有在服务中订阅
+       * 覆盖的产品」发席位（VX404）——订阅一旦 cancelled，这一步就该被拦，而且拦得对。
+       * 迁移是**全量重放**：本份每次都跑在最终状态上，所以顺序要按最终规则排，
+       * 不是按它当年被写下时的规则。（全目录重放才能发现这一点，单跑新那份发现不了。） */
+      UPDATE metering.product_seats SET revoked_at = now() WHERE id = v_seat;
+      INSERT INTO metering.product_seats (workspace_id, user_id, product_id, subscription_id)
+      VALUES (v_ws, v_user, v_prod, v_sub)
+      RETURNING id INTO v_seat;
+
       -- ③ 退订即释放（触发器）
       UPDATE metering.subscriptions SET status = 'cancelled' WHERE id = v_sub;
       SELECT revoked_at INTO v_revoked FROM metering.product_seats WHERE id = v_seat;
       IF v_revoked IS NULL THEN
         RAISE EXCEPTION '[product-seats] 订阅已 cancelled，席位却还占着——触发器没生效';
       END IF;
-
-      -- ② 的另一半：撤销之后同一人可以再次被授予（部分唯一索引，不是全表唯一）
-      INSERT INTO metering.product_seats (workspace_id, user_id, product_id, subscription_id)
-      VALUES (v_ws, v_user, v_prod, v_sub);
 
       -- ① 人走席位自动释放（复合外键 CASCADE）
       DELETE FROM tenancy.workspace_memberships WHERE workspace_id = v_ws AND user_id = v_user;

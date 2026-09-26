@@ -15,6 +15,8 @@ import { AddonService } from "../service/addon.service";
 import { ConsumeService } from "../service/consume.service";
 import { PgMeteringReadRepository } from "../repository/pg-metering-read.repository";
 import { MeteringReadService } from "../service/metering-read.service";
+import { PgProductSeatRepository } from "../repository/pg-product-seat.repository";
+import { ProductSeatService } from "../service/product-seat.service";
 
 @Module({
   // ProvisioningModule: the subscription lifecycle is the provisioning-enqueue
@@ -65,6 +67,9 @@ import { MeteringReadService } from "../service/metering-read.service";
     // console 批 3:配额总览 / 用量分析的读侧从 console-bff 下沉
     PgMeteringReadRepository,
     MeteringReadService,
+    // 2026-09-27 席位裁定①②：占用明细与指派硬拦
+    PgProductSeatRepository,
+    ProductSeatService,
   ],
   exports: [
     COMMERCE_PG_POOL,
@@ -74,6 +79,7 @@ import { MeteringReadService } from "../service/metering-read.service";
     PgUsageRollupRepository,
     AddonService,
     MeteringReadService,
+    ProductSeatService,
   ],
 })
 export class SubscriptionModule {}
