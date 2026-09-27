@@ -1019,18 +1019,15 @@ left join product.solution_plans spl on spl.plan_id = pl.id
 left join product.solutions sol on sol.id = spl.solution_id and sol.deleted_at is null
 left join admin.operator_account op
   on op.id = s.created_by_id and s.created_by_type = 'operator'
+-- 代表档位 = 套餐的档位轴，即主组件的 tier（与 admin 套餐矩阵、官网阶梯同一口径）；
+-- 没有主组件的旧版本退回「订的那个产品」的组件。此前这里是一段手写的 CASE 阶梯
+-- （还带着早已不存在的 'standard'、缺 'free'）按「最高档赢」挑——阶梯只许有 @shared
+-- 一份，SQL 里不再手抄（2026-09-27）。
 left join lateral (
   select pc.tier
   from product.plan_components pc
   where pc.plan_version_id = s.plan_version_id
-  order by case pc.tier
-    when 'enterprise' then 0
-    when 'business'   then 1
-    when 'pro'        then 2
-    when 'starter'    then 3
-    when 'standard'   then 4
-    else 5
-  end
+  order by (pc.component_role = 'primary') desc, (pc.product_id = s.product_id) desc
   limit 1
 ) tier on true
 left join lateral (

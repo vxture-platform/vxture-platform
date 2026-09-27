@@ -9,9 +9,9 @@
  *
  * Run: node scripts/guardrails/check-catalog-domains.mjs  (pnpm lint:catalog-domains)
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => readFileSync(resolve(root, p), "utf8");
@@ -189,6 +189,41 @@ for (const [label, shared, ddl] of pairs) {
         (onlyDdl.length ? `\n      only in DDL: ${onlyDdl.join(",")}` : ""),
     );
   }
+}
+
+// ── 手抄阶梯（2026-09-27）──
+// 值域一致只是第一半；第二半是**顺序**。owner 撞到「官网阶梯正常、后台一团乱」：
+// 后台五处套餐列表按 plan_code 字母序，一处 SQL 把五个档位字面量抄进 array_position，
+// 另一处订阅代表档位用手写 CASE（还带着早已不存在的 'standard'、缺 'free'）。
+// 修法是把 @shared TIERS 当参数绑进 SQL（array_position($n::text[], tier)），或在 TS 里用
+// tierRank()。这里扫 bff 源码：再出现 ARRAY['free'…] / CASE WHEN 'starter' 这类手抄阶梯就红。
+function walk(dir, out) {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === "dist" || name.startsWith(".")) continue;
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else if (p.endsWith(".ts")) out.push(p);
+  }
+  return out;
+}
+const HAND_LADDER = [
+  /ARRAY\['(free|starter|pro|business|enterprise|standard)'/i,
+  /when\s+'(free|starter|pro|business|enterprise|standard)'\s+then/i,
+];
+const ladderHits = [];
+for (const file of walk(resolve(root, "bff"), [])) {
+  const lines = readFileSync(file, "utf8").split("\n");
+  lines.forEach((line, i) => {
+    if (HAND_LADDER.some((re) => re.test(line))) {
+      ladderHits.push(`${relative(root, file).replace(/\\/g, "/")}:${i + 1}: ${line.trim()}`);
+    }
+  });
+}
+if (ladderHits.length) {
+  errors.push(
+    `  ✗ 手抄档位阶梯（应绑 @shared TIERS 为参数用 array_position，或在 TS 用 tierRank）:\n      ` +
+      ladderHits.join("\n      "),
+  );
 }
 
 console.log("── 汇总 ──");

@@ -86,22 +86,31 @@ export function tierBadgeClass(tierCode: string | null | undefined): string {
   return tier ? TIER_CLASS[tier] : FREE_CLASS;
 }
 
+const TIER_FILTER_LABELS: Record<Tier, string> = {
+  free: "Free",
+  starter: "Starter",
+  pro: "Pro",
+  business: "Business",
+  enterprise: "Enterprise",
+};
+
 /**
  * 筛选下拉的档位集：五档 + 「其他」。
  *
  * `其他` 保留，但含义变窄了——此前它兜的是 starter/business/自定义三类，现在只兜
  * **不在 `TIERS` 里的自定义套餐名**。starter 与 business 各自成档，可以单独筛。
+ *
+ * 顺序来自 @shared 的 `TIERS` 阶梯（低 → 高），不再手抄一份（2026-09-27：前后台顺序要一致）。
  */
-export const TIER_FILTER_OPTIONS = [
-  { value: "free", label: "Free" },
-  { value: "starter", label: "Starter" },
-  { value: "pro", label: "Pro" },
-  { value: "business", label: "Business" },
-  { value: "enterprise", label: "Enterprise" },
+export const TIER_FILTER_OPTIONS: ReadonlyArray<{
+  value: Tier | "other";
+  label: string;
+}> = [
+  ...TIERS.map((tier) => ({ value: tier, label: TIER_FILTER_LABELS[tier] })),
   { value: "other", label: "其他" },
-] as const;
+];
 
-export type TierFilterValue = (typeof TIER_FILTER_OPTIONS)[number]["value"];
+export type TierFilterValue = Tier | "other";
 
 /** Display label for a tier code ("pro" → "Pro"); unknown codes echo as-is. */
 export function tierLabel(tierCode: string | null | undefined): string {
