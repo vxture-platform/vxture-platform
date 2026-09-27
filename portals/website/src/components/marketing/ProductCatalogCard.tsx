@@ -444,9 +444,8 @@ export function ProductCatalogCard({
                 </Button>
               )}
             </>
-          ) : maintenance ? /* 升级维护中（未登录 / 未订阅）：按钮位置只放按钮，没有可做的动作就留空——
-               状态与预计恢复时间在徽标行（owner 2026-09-28：别把两行说明塞进按钮位）。 */
-          null : notLive ? (
+          ) : maintenance /* 升级维护中（未登录 / 未订阅）：按钮位置只放按钮，没有可做的动作就留空——
+               状态与预计恢复时间在徽标行（owner 2026-09-28：别把两行说明塞进按钮位）。 */ ? null : notLive ? (
             <Button variant="outline" size="md" disabled className="h-10">
               {labels.actions.coming}
             </Button>
@@ -458,8 +457,8 @@ export function ProductCatalogCard({
                   三态各给各的落点：能自助买的去定价页；只有邀请档的仍去同一页——
                   那页会讲清「此产品为邀请订阅」与怎么拿到邀请，所以不是假动作；
                   一档都没有的给禁用按钮 + 悬停写明原因，而不是把人送进一个空页面。 */}
-              {sunset ? /* 停售：徽标已写「停售中」，按钮位置不再放说明——没有可做的动作就留空。 */
-              null : product.subscribeAccess === "none" ? (
+              {sunset /* 停售：徽标已写「停售中」，按钮位置不再放说明——没有可做的动作就留空。 */ ? null : product.subscribeAccess ===
+                "none" ? (
                 <Button disabled title={labels.actions.notForSale}>
                   {labels.actions.notForSale}
                 </Button>

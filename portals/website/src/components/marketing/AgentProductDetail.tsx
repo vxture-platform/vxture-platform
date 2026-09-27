@@ -135,13 +135,11 @@ export default function AgentProductDetail({
         }
         actions={
           <>
-            {maintenance ? /* 升级维护中：按钮位置留空，「业务咨询」照旧；状态与预计恢复在徽标行。 */
-            null : notLive ? (
+            {maintenance /* 升级维护中：按钮位置留空，「业务咨询」照旧；状态与预计恢复在徽标行。 */ ? null : notLive ? (
               <Button size="xl" className="px-5" disabled>
                 {t("catalog.actions.coming")}
               </Button>
-            ) : sunset ? /* 停售：徽标已写「停售中」，按钮位置留空。 */
-            null : (
+            ) : sunset /* 停售：徽标已写「停售中」，按钮位置留空。 */ ? null : (
               <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
                 <Link href={`/pricing?product=${product.productCode}`}>
                   {t("catalog.demoCta")}
