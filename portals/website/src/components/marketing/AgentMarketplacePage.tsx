@@ -120,6 +120,8 @@ export default function AgentMarketplacePage({
         subscribe: t("agents.actions.subscribe"),
         inviteSubscribe: t("agents.actions.inviteSubscribe"),
         notForSale: t("agents.actions.notForSale"),
+        sunset: t("agents.actions.sunset"),
+        sunsetHint: t("agents.actions.sunsetHint"),
         upgrade: t("agents.actions.upgrade"),
         enter: t("agents.actions.enter"),
         noEntry: t("agents.actions.noEntry"),

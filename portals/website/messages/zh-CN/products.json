@@ -121,7 +121,9 @@
       "detail": "产品介绍",
       "coming": "敬请期待",
       "inviteSubscribe": "邀请订阅",
-      "notForSale": "暂未开卖"
+      "notForSale": "暂未开卖",
+      "sunset": "停售中",
+      "sunsetHint": "现有订阅不受影响"
     },
     "types": {
       "general_platform": "通用平台",
@@ -183,6 +185,8 @@
     "currentPlan": "当前套餐",
     "lowerPlan": "低于当前套餐",
     "upgradeTo": "升级到{plan}",
+    "sunset": "停售中",
+    "sunsetHint": "现有订阅不受影响",
     "pendingOrder": {
       "view": "查看订单状态",
       "blocked": "已有订单进行中"

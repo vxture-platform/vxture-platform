@@ -17,6 +17,8 @@ import { useState } from "react";
  *                           右上角按 marketing.recommend 画 1–3 枚推荐奖章（最靠外的位置，其余徽标前移让位）；
  *   已订阅                → 「升级」（同一个 /pricing：登录后该页会标出当前档、只放行更高档；
  *                           只在 canUpgrade 时出现）+ 「进入」。
+ *   停售中（sunset）      → 未订阅给一段状态字「停售中 / 现有订阅不受影响」，不给订阅；
+ *                           已订阅只留「进入」，不给「升级」（换档是新进一档）。
  *
  * 「进入」的目标是**产品本身**（product_webhooks.home_url，如 vxtpl.vxture.com），
  * 不是 console：console 是订阅管理台，从一个产品的卡片点进去落到管理台是错的落点
@@ -102,6 +104,9 @@ export interface ProductCatalogCardLabels {
     inviteSubscribe: string;
     /** 一档都没有时的禁用按钮字样 + 悬停原因。 */
     notForSale: string;
+    /** 停售中的状态字（不是按钮）与它的副行「现有订阅不受影响」。 */
+    sunset: string;
+    sunsetHint: string;
     upgrade: string;
     /** 「进入」——目标是产品自己的站点（home_url）。 */
     enter: string;
@@ -165,6 +170,16 @@ export function ProductCatalogCard({
     product.status === "developing" || product.releaseStage === "preview";
   const subscribed = !notLive && subscription?.subscribed === true;
   /*
+   * 停售中（承诺等级 sunset，2026-09-27）。此前这一档只换了徽标，动作区照旧给「订阅」
+   * ——点进去 /pricing 阶梯还在，再往下 console 下单撞 409 PRODUCT_NOT_RELEASED。
+   * 入口承诺一件做不到的事，与 subscribeAccess 那次是同一个毛病。
+   *
+   * 停售只拦「新进」：未订阅的不给「订阅 / 邀请订阅」，已订阅的不给「升级」（换档是
+   * 新进一档）；「进入」照旧——老客户的服务不受影响，这正是 sunset 与停用的区别。
+   * 「还没上线」优先：两轴分叉时那一档的呈现（灰徽标 + 敬请期待）已经把入口收掉了。
+   */
+  const sunset = !notLive && product.releaseStage === "sunset";
+  /*
    * 冻结中（2026-09-26）。此前这一档落到「未订阅」分支显示「订阅」——客户点下去会把同一
    * 个产品再买一份，而运营随后点「恢复订阅」会撞唯一索引，那条订阅从此恢复不了。
    *
@@ -194,8 +209,9 @@ export function ProductCatalogCard({
         : labels.badges.stable;
   const productHomeUrl = subscription?.homeUrl ?? null;
   const pricingHref = `/pricing?product=${product.code}`;
-  // 推荐度奖章只给「可订、未订阅」的产品——已开通的不用再推，开发中的还不能订。
-  const medals = !notLive && !subscribed ? product.recommend : 0;
+  // 推荐度奖章只给「可订、未订阅」的产品——已开通的不用再推，开发中的还不能订，
+  // 停售的不该再推。
+  const medals = !notLive && !subscribed && !sunset ? product.recommend : 0;
   // 底部左侧一行（owner 2026-09-03）：
   //   上线（ga/beta）→ 「v 1.2.3 at 2026/9/12」，版本与发布时间取目录真列，自动；
   //   开发中           → 「预期发布：2026/9/30」，日期由运营在营销内容里手填（marketing.expectedReleaseAt）。
@@ -356,7 +372,7 @@ export function ProductCatalogCard({
             </Button>
           ) : subscribed ? (
             <>
-              {subscription?.canUpgrade ? (
+              {subscription?.canUpgrade && !sunset ? (
                 <Button asChild variant="outline">
                   <Link href={pricingHref} target="_blank">
                     {labels.actions.upgrade}
@@ -387,7 +403,18 @@ export function ProductCatalogCard({
                   三态各给各的落点：能自助买的去定价页；只有邀请档的仍去同一页——
                   那页会讲清「此产品为邀请订阅」与怎么拿到邀请，所以不是假动作；
                   一档都没有的给禁用按钮 + 悬停写明原因，而不是把人送进一个空页面。 */}
-              {product.subscribeAccess === "none" ? (
+              {sunset ? (
+                /* 停售：一段状态字而不是禁用按钮——这里没有动作可做，灰按钮会让人以为
+                   「等一等就能点」。副行只说老客户不受影响，不写续费 / 永久之类的承诺。 */
+                <span className="flex h-10 flex-col items-end justify-center text-right leading-tight">
+                  <span className="text-sm font-medium text-vx-gray-500 dark:text-vx-gray-400">
+                    {labels.actions.sunset}
+                  </span>
+                  <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
+                    {labels.actions.sunsetHint}
+                  </span>
+                </span>
+              ) : product.subscribeAccess === "none" ? (
                 <Button disabled title={labels.actions.notForSale}>
                   {labels.actions.notForSale}
                 </Button>

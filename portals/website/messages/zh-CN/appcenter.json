@@ -47,7 +47,9 @@
       "detail": "产品介绍",
       "coming": "敬请期待",
       "inviteSubscribe": "邀请订阅",
-      "notForSale": "暂未开卖"
+      "notForSale": "暂未开卖",
+      "sunset": "停售中",
+      "sunsetHint": "现有订阅不受影响"
     },
     "empty": {
       "title": "更多智能体陆续上线",

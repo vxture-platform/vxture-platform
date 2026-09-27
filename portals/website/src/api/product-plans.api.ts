@@ -44,6 +44,13 @@ export interface ProductPlansProduct {
   name: string;
   nick: string | null;
   releaseVersion: string | null;
+  /**
+   * 承诺等级（preview / beta / stable / sunset，2026-09-27）：preview 走「暂未开放订阅」
+   * 空态，sunset 阶梯照画但 CTA 换成「停售中」。
+   *
+   * 部署偏斜防护：旧 BFF 不回这一列时为 null——两种特殊呈现都不触发，即本字段之前的行为。
+   */
+  releaseStage: string | null;
 }
 
 export interface ProductPlansResponse {
@@ -69,8 +76,12 @@ export async function fetchProductPlans(
   const data = res.data;
   const access = (data as { subscribeAccess?: unknown } | undefined)
     ?.subscribeAccess;
+  const product = data?.product ?? null;
+  const stage = (product as { releaseStage?: unknown } | null)?.releaseStage;
   return {
-    product: data?.product ?? null,
+    product: product
+      ? { ...product, releaseStage: typeof stage === "string" ? stage : null }
+      : null,
     plans: Array.isArray(data?.plans) ? data.plans : [],
     subscribeAccess:
       access === "public" || access === "invite" || access === "none"

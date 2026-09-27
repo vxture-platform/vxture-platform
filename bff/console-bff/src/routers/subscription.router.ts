@@ -1590,12 +1590,21 @@ export class SubscriptionRouter {
       });
     }
     if (!isReleaseStageSubscribable(sold.release_stage)) {
+      /*
+       * 同一个码，两句话（2026-09-27）：不可订的承诺等级有两档，preview 是「还没到」，
+       * sunset 是「已经过了」。此前一律说「尚在预览阶段」——对停售产品的客户这句是错的，
+       * 他会拿着「预览」去问运营，而运营在承诺链的另一头找。码不拆：console 直接展示
+       * message、没有按码翻译的表，拆码只是多一处要对齐的地方。
+       */
+      const sunset = sold.release_stage === "sunset";
       throw new ConflictException({
         code: "PRODUCT_NOT_RELEASED",
         /* 「开发中」自 2026-09-24 起是生命周期轴上的一个状态（见上一条），这里说的是
            承诺等级最低那一档——2026-10-29 已对外改称「预览版」。两句话必须分得开，
            否则客户拿着错的词去问运营，而运营在两个不同的轴上找。 */
-        message: "该产品尚在预览阶段，还未开放订阅。",
+        message: sunset
+          ? "该产品已停售，不再接受新订阅。"
+          : "该产品尚在预览阶段，还未开放订阅。",
       });
     }
 

@@ -6,7 +6,8 @@ import { ProductPlansRouter } from "./product-plans.router";
 //   1. 正常产品 → product 元数据 + 按 TIERS 排序的阶梯(features/quota/seats/prices 透传);
 //   2. 未知/不可见产品 → { product: null, plans: [] },且不再查询阶梯;
 //   3. 有产品但无已发布套餐 → plans: [];
-//   4. 非法产品码 → 空响应且完全不触 DB(公开端点不做 4xx)。
+//   4. 非法产品码 → 空响应且完全不触 DB(公开端点不做 4xx);
+//   5. 承诺等级 preview / sunset → subscribeAccess 恒 none、releaseStage 外露、阶梯照回。
 // 与 console-bff queryPlanLadder 的口径一致性由 SQL 文本对齐保证,此处只测行为。
 
 const ARDA = {
@@ -14,6 +15,18 @@ const ARDA = {
   product_name: "Arda",
   product_nick: "Arda 数据平台",
   release_version: "1.4.0",
+  release_stage: "stable",
+};
+
+/** 一条能卖的公开档（阶梯非空 → 没有承诺等级那道门时该是 public）。 */
+const PRO_ROW = {
+  plan_code: "arda-pro",
+  plan_name: "Arda Pro",
+  description: null,
+  tier: "pro",
+  features: [],
+  quota: null,
+  prices: [],
 };
 
 /**
@@ -78,6 +91,7 @@ describe("ProductPlansRouter", () => {
       name: "Arda",
       nick: "Arda 数据平台",
       releaseVersion: "1.4.0",
+      releaseStage: "stable",
     });
     // TIERS 排序:free 在 pro 前,无论 SQL 返回顺序。
     expect(res.plans.map((p) => p.tier)).toEqual(["free", "pro"]);
@@ -161,6 +175,65 @@ describe("ProductPlansRouter", () => {
     const { pool } = makePool([ARDA], [], "3" as unknown as number);
     const res = await new ProductPlansRouter(pool).getProductPlans("arda");
     expect(res.subscribeAccess).toBe("invite");
+  });
+
+  /*
+   * 承诺等级那道门（2026-09-27）。
+   *
+   * 此前本端点从头到尾没读 release_stage：目录卡把停售产品指到 /pricing，落地页照样
+   * 给「订阅」，再往下 console 下单撞 409。三面各一条：sunset / preview 判 none 且阶梯
+   * 照回（停售的要留给老客户参考，画不画由页面决定），beta 与 stable 一样放行。
+   * 「不可订就不去数邀请」也写上：答案不会变，多问一次是白打一次库。
+   */
+  it("sunset → subscribeAccess none、releaseStage 外露、阶梯照回，且不数邀请", async () => {
+    const { pool, query } = makePool(
+      [{ ...ARDA, release_stage: "sunset" }],
+      [PRO_ROW],
+      3,
+    );
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.product?.releaseStage).toBe("sunset");
+    expect(res.plans.map((p) => p.tier)).toEqual(["pro"]);
+    expect(res.subscribeAccess).toBe("none");
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("sunset 且只剩邀请档 → 仍是 none，不问邀请计数", async () => {
+    const { pool, query } = makePool(
+      [{ ...ARDA, release_stage: "sunset" }],
+      [],
+      3,
+    );
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.subscribeAccess).toBe("none");
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("preview → 同样 none + releaseStage 外露", async () => {
+    const { pool } = makePool(
+      [{ ...ARDA, release_stage: "preview" }],
+      [PRO_ROW],
+    );
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.product?.releaseStage).toBe("preview");
+    expect(res.plans).toHaveLength(1);
+    expect(res.subscribeAccess).toBe("none");
+  });
+
+  it.each(["beta", "stable"])(
+    "%s + 公开档 → public（承诺等级那道门不误伤在售档）",
+    async (stage) => {
+      const { pool } = makePool([{ ...ARDA, release_stage: stage }], [PRO_ROW]);
+      const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+      expect(res.product?.releaseStage).toBe(stage);
+      expect(res.subscribeAccess).toBe("public");
+    },
+  );
+
+  it("未登记的承诺等级按不可订处理（保守）", async () => {
+    const { pool } = makePool([{ ...ARDA, release_stage: "ga" }], [PRO_ROW]);
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.subscribeAccess).toBe("none");
   });
 
   it("rejects a malformed product code without touching the pool", async () => {

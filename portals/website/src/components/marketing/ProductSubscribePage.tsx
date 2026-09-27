@@ -24,6 +24,10 @@
  * 三态：加载中 = 骨架卡；请求失败 = danger Banner + 重试；产品不可见或没有
  * 已发布套餐 = 「暂未开放订阅」空态——不再拿 i18n 假价兜底。
  *
+ * 2026-09-27 承诺等级接进来：preview 走同一个「暂未开放订阅」空态（BFF 判 none）；sunset
+ * 阶梯照画、每张卡的 CTA 换成状态字「停售中」；冻结中的租户（suspensionState）高档不再
+ * 给「升级到 X」深链——目录卡早就不给，这一页此前只读 subscribed 没读冻结态。
+ *
  * 2026-09-03 owner：标题后的产品下拉去掉（产品从目录卡进来，页内不再切产品）；
  * 金额小数位全页统一（priceFractionDigits：有一个带小数就全两位，否则全整数）。
  */
@@ -154,6 +158,10 @@ export default function ProductSubscribePage() {
   const user = useAuthStore((state) => state.user);
   const hasSession = isAuthenticated && Boolean(user);
   const [currentTier, setCurrentTier] = useState<string | null>(null);
+  /* 冻结中的展示态（maintenance / review / restricted / paused）；未冻结为 null。
+     HELD_STATUSES 含 suspended，所以 currentTier 照常有值（当前档仍要标出来），
+     但换档的 CTA 要靠这一项收掉。 */
+  const [suspensionState, setSuspensionState] = useState<string | null>(null);
   /* 同产品进行中的订单（owner 2026-09-27）：该档 CTA 变「查看订单状态」，同产品其他档
      灰成「已有订单进行中」；其他产品不受影响。未登录 / 读失败 → 与没有在途单同样处理。 */
   const [pendingOrder, setPendingOrder] = useState<PendingOrderRef | null>(
@@ -162,6 +170,7 @@ export default function ProductSubscribePage() {
   useEffect(() => {
     if (!hasSession) {
       setCurrentTier(null);
+      setSuspensionState(null);
       setPendingOrder(null);
       return;
     }
@@ -171,6 +180,9 @@ export default function ProductSubscribePage() {
         if (cancelled) return;
         const mine = list.find((s) => s.productCode === productCode);
         setCurrentTier(mine?.subscribed ? mine.tier : null);
+        setSuspensionState(
+          mine?.subscribed ? (mine.suspensionState ?? null) : null,
+        );
         setPendingOrder(
           mine?.pendingOrder
             ? {
@@ -183,6 +195,7 @@ export default function ProductSubscribePage() {
       .catch(() => {
         if (cancelled) return;
         setCurrentTier(null);
+        setSuspensionState(null);
         setPendingOrder(null);
       });
     return () => {
@@ -244,6 +257,10 @@ export default function ProductSubscribePage() {
    */
   const inviteOnly =
     load.status === "ready" && load.data.subscribeAccess === "invite";
+  /* 停售且没有公开档（比如只剩邀请档）：空态也要说「停售中」，不能说「暂未开放」——
+     那是「还没开卖」的话，对一个卖过的产品是错的。 */
+  const sunsetNoLadder =
+    load.status === "ready" && load.data.product?.releaseStage === "sunset";
 
   /* 邀请是定向发到账号上的，落点是控制台的订阅页（登录后即可看到解锁的那一档）。 */
   const consoleSubscribeHref = buildConsoleSubscribeUrl(
@@ -313,9 +330,19 @@ export default function ProductSubscribePage() {
              */
             <EmptyState
               icon={inviteOnly ? "ticket" : "package"}
-              title={inviteOnly ? t("inviteOnlyTitle") : t("unavailableTitle")}
+              title={
+                inviteOnly
+                  ? t("inviteOnlyTitle")
+                  : sunsetNoLadder
+                    ? t("sunset")
+                    : t("unavailableTitle")
+              }
               description={
-                inviteOnly ? t("inviteOnlyDescription") : t("unavailable")
+                inviteOnly
+                  ? t("inviteOnlyDescription")
+                  : sunsetNoLadder
+                    ? t("sunsetHint")
+                    : t("unavailable")
               }
               className="mx-auto max-w-website-xl"
               action={
@@ -434,7 +461,9 @@ export default function ProductSubscribePage() {
                       selected={plan.tier === activeTier}
                       onSelect={() => setSelectedTier(plan.tier)}
                       currentTier={currentTier}
+                      suspensionState={suspensionState}
                       pendingOrder={pendingOrder}
+                      sunset={model.sunset}
                       fractionDigits={fractionDigits}
                     />
                   ))}

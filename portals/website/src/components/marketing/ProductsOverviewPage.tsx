@@ -84,6 +84,8 @@ export default function ProductsOverviewPage({
         subscribe: t("catalog.actions.subscribe"),
         inviteSubscribe: t("catalog.actions.inviteSubscribe"),
         notForSale: t("catalog.actions.notForSale"),
+        sunset: t("catalog.actions.sunset"),
+        sunsetHint: t("catalog.actions.sunsetHint"),
         upgrade: t("catalog.actions.upgrade"),
         enter: t("catalog.actions.enter"),
         noEntry: t("catalog.actions.noEntry"),
