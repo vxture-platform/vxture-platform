@@ -48,9 +48,6 @@
       "coming": "敬请期待",
       "inviteSubscribe": "邀请订阅",
       "notForSale": "暂未开卖",
-      "sunset": "停售中",
-      "sunsetHint": "现有订阅不受影响",
-      "maintenance": "升级维护中，暂不可订阅",
       "maintenanceUntil": "预计 {time} 恢复"
     },
     "empty": {

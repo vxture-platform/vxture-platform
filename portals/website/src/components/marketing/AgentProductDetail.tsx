@@ -119,44 +119,29 @@ export default function AgentProductDetail({
         /* 眉题上方那一行：维护中给一枚 warning 徽标，让人在读标题前就看见它。 */
         above={
           maintenance ? (
-            <div className="mb-4">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
               <StatusBadge tone="warning">
                 {t("catalog.suspension.maintenance")}
               </StatusBadge>
+              {maintenanceUntil ? (
+                <span className="text-xs text-vx-gray-500 dark:text-vx-gray-300">
+                  {t("catalog.actions.maintenanceUntil", {
+                    time: maintenanceUntil,
+                  })}
+                </span>
+              ) : null}
             </div>
           ) : undefined
         }
         actions={
           <>
-            {maintenance ? (
-              /* 升级维护中：一段状态字而不是禁用按钮——没有「等一等就能点」的动作；
-                 「业务咨询」照旧可用。副行只给运营填的预计恢复时间，没有就不画。 */
-              <span className="inline-flex flex-col justify-center px-1 text-left leading-tight">
-                <span className="text-base font-semibold text-vx-gray-700 dark:text-vx-white">
-                  {t("catalog.actions.maintenance")}
-                </span>
-                {maintenanceUntil ? (
-                  <span className="text-xs text-vx-gray-500 dark:text-vx-gray-300">
-                    {t("catalog.actions.maintenanceUntil", {
-                      time: maintenanceUntil,
-                    })}
-                  </span>
-                ) : null}
-              </span>
-            ) : notLive ? (
+            {maintenance ? /* 升级维护中：按钮位置留空，「业务咨询」照旧；状态与预计恢复在徽标行。 */
+            null : notLive ? (
               <Button size="xl" className="px-5" disabled>
                 {t("catalog.actions.coming")}
               </Button>
-            ) : sunset ? (
-              <span className="inline-flex flex-col justify-center px-1 text-left leading-tight">
-                <span className="text-base font-semibold text-vx-gray-700 dark:text-vx-white">
-                  {t("catalog.actions.sunset")}
-                </span>
-                <span className="text-xs text-vx-gray-500 dark:text-vx-gray-300">
-                  {t("catalog.actions.sunsetHint")}
-                </span>
-              </span>
-            ) : (
+            ) : sunset ? /* 停售：徽标已写「停售中」，按钮位置留空。 */
+            null : (
               <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
                 <Link href={`/pricing?product=${product.productCode}`}>
                   {t("catalog.demoCta")}

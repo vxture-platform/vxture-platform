@@ -116,11 +116,6 @@ export interface ProductCatalogCardLabels {
     inviteSubscribe: string;
     /** 一档都没有时的禁用按钮字样 + 悬停原因。 */
     notForSale: string;
-    /** 停售中的状态字（不是按钮）与它的副行「现有订阅不受影响」。 */
-    sunset: string;
-    sunsetHint: string;
-    /** 升级维护中的状态字「升级维护中，暂不可订阅」（不是按钮）。 */
-    maintenance: string;
     /** 副行「预计 {time} 恢复」——**原串**（t.raw），时间只有渲染时才知道，由卡片自己填。 */
     maintenanceUntil: string;
     upgrade: string;
@@ -247,9 +242,17 @@ export function ProductCatalogCard({
     !notLive && !subscribed && !sunset && !maintenance ? product.recommend : 0;
   /* 「升级维护中」徽标：warning 语气，与冻结态那枚同一种描边写法（同一排只有奖章带填色）。 */
   const maintenanceBadge = maintenance ? (
-    <span className="rounded-full border border-vx-warning-200/60 px-2.5 py-1 text-xs font-normal text-vx-warning-600 dark:border-vx-warning-300/30 dark:text-vx-warning-300">
-      {labels.suspension.maintenance}
-    </span>
+    <>
+      <span className="rounded-full border border-vx-warning-200/60 px-2.5 py-1 text-xs font-normal text-vx-warning-600 dark:border-vx-warning-300/30 dark:text-vx-warning-300">
+        {labels.suspension.maintenance}
+      </span>
+      {/* 预计恢复时间只在这里说一次（一小行灰字），按钮位置不再重复。 */}
+      {maintenanceUntilLine ? (
+        <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
+          {maintenanceUntilLine}
+        </span>
+      ) : null}
+    </>
   ) : null;
   // 底部左侧一行（owner 2026-09-03）：
   //   上线（ga/beta）→ 「v 1.2.3 at 2026/9/12」，版本与发布时间取目录真列，自动；
@@ -416,13 +419,8 @@ export function ProductCatalogCard({
             </Button>
           ) : subscribed ? (
             <>
-              {/* 升级维护中：只留「进入」+ 状态字（徽标已说「升级维护中」，这里补预计恢复），
-                  不给「升级」——换档是新进一档，维护期间不接。 */}
-              {maintenanceUntilLine ? (
-                <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
-                  {maintenanceUntilLine}
-                </span>
-              ) : null}
+              {/* 升级维护中：只留「进入」，不给「升级」——换档是新进一档，维护期间不接。
+                  状态与预计恢复都在徽标行说，这里不重复。 */}
               {subscription?.canUpgrade && !sunset && !maintenance ? (
                 <Button asChild variant="outline">
                   <Link href={pricingHref} target="_blank">
@@ -446,21 +444,9 @@ export function ProductCatalogCard({
                 </Button>
               )}
             </>
-          ) : maintenance ? (
-            /* 升级维护中（未登录 / 未订阅）：一段状态字而不是灰按钮——照停售那套的形态。
-               优先于「还没上线」与停售：维护是临时运行态，先说它；副行只给运营填的预计
-               恢复时间，没有就不画。 */
-            <span className="flex h-10 flex-col items-end justify-center text-right leading-tight">
-              <span className="text-sm font-medium text-vx-gray-500 dark:text-vx-gray-400">
-                {labels.actions.maintenance}
-              </span>
-              {maintenanceUntilLine ? (
-                <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
-                  {maintenanceUntilLine}
-                </span>
-              ) : null}
-            </span>
-          ) : notLive ? (
+          ) : maintenance ? /* 升级维护中（未登录 / 未订阅）：按钮位置只放按钮，没有可做的动作就留空——
+               状态与预计恢复时间在徽标行（owner 2026-09-28：别把两行说明塞进按钮位）。 */
+          null : notLive ? (
             <Button variant="outline" size="md" disabled className="h-10">
               {labels.actions.coming}
             </Button>
@@ -472,18 +458,8 @@ export function ProductCatalogCard({
                   三态各给各的落点：能自助买的去定价页；只有邀请档的仍去同一页——
                   那页会讲清「此产品为邀请订阅」与怎么拿到邀请，所以不是假动作；
                   一档都没有的给禁用按钮 + 悬停写明原因，而不是把人送进一个空页面。 */}
-              {sunset ? (
-                /* 停售：一段状态字而不是禁用按钮——这里没有动作可做，灰按钮会让人以为
-                   「等一等就能点」。副行只说老客户不受影响，不写续费 / 永久之类的承诺。 */
-                <span className="flex h-10 flex-col items-end justify-center text-right leading-tight">
-                  <span className="text-sm font-medium text-vx-gray-500 dark:text-vx-gray-400">
-                    {labels.actions.sunset}
-                  </span>
-                  <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
-                    {labels.actions.sunsetHint}
-                  </span>
-                </span>
-              ) : product.subscribeAccess === "none" ? (
+              {sunset ? /* 停售：徽标已写「停售中」，按钮位置不再放说明——没有可做的动作就留空。 */
+              null : product.subscribeAccess === "none" ? (
                 <Button disabled title={labels.actions.notForSale}>
                   {labels.actions.notForSale}
                 </Button>
