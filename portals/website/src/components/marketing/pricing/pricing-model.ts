@@ -64,6 +64,12 @@ export interface PricingPlan {
   /** 配额键值（plan_components.quota） */
   quota: Record<string, unknown>;
   audience: PlanAudience;
+  /**
+   * 该档的订阅入口（owner 2026-09-28）：public 自助可买 → CTA「订阅」；invite 凭邀请
+   * → CTA「邀请订阅」（弹窗：已有邀请去 console / 没有的申请）。邀请订阅是套餐级的，
+   * 所以它是档的属性，不是产品的。
+   */
+  access: "public" | "invite";
 }
 
 /** 对比表单元格：渲染层按 kind 决定图标/文案/格式化 */
@@ -149,7 +155,8 @@ const QUOTA_KEY_ORDER = [
 
 /**
  * 把 BFF 响应适配成页面模型。产品不可见或没有已发布套餐 → null，由页面渲染
- * 「暂未开放订阅」空态（不再拿任何静态价兜底）。
+ * 「暂未开放订阅」空态（不再拿任何静态价兜底）。邀请档也是档（2026-09-28 起 BFF 把它
+ * 放进阶梯）：只有邀请档的产品照样有模型、照样画阶梯，不再是空态。
  *
  * @param data - `GET /api/products/:code/plans` 响应
  * @param displayName - 营销名（products.catalog.items 里的 name），无则退回目录名
@@ -200,6 +207,7 @@ function toPricingPlan(option: ProductPlanOption): PricingPlan {
     features: [...option.features],
     quota: option.quota ?? {},
     audience: TIER_AUDIENCE[option.tier] ?? "person",
+    access: option.access,
   };
 }
 

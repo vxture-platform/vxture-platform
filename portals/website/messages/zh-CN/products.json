@@ -230,7 +230,8 @@
       "free": "无需付款，即时开通",
       "paid": "跳转控制台完成下单",
       "enterprise": "sales@vxture.com",
-      "pendingOrder": "该产品已有一笔订单进行中，在控制台查看进度。"
+      "pendingOrder": "该产品已有一笔订单进行中，在控制台查看进度。",
+      "invite": "仅接受邀请订阅"
     },
     "tierCount": "{count} 档",
     "scrollHint": "更多详情",
@@ -301,10 +302,11 @@
       ]
     },
     "inviteOnlyTitle": "邀请订阅",
-    "inviteOnlyDescription": "该产品的套餐目前凭邀请开放。邀请会发到你的账号上，收到后登录控制台即可看到对应套餐并自助下单，价格与公开套餐一致。",
+    "inviteOnlyDescription": "该档位仅接受邀请订阅。邀请会发到你的账号上，收到后登录控制台即可看到这一档并自助下单；还没有邀请，可以向我们申请。",
     "inviteRequest": "申请邀请",
-    "inviteRequestSubject": "{product} 邀请订阅申请",
-    "inviteHolder": "我已有邀请"
+    "inviteRequestSubject": "{product} {plan} 邀请订阅申请",
+    "inviteHolder": "我已有邀请",
+    "inviteClose": "关闭"
   },
   "comingSoon": {
     "eyebrow": "Coming Soon",

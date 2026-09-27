@@ -28,6 +28,11 @@
  * 阶梯照画、每张卡的 CTA 换成状态字「停售中」；冻结中的租户（suspensionState）高档不再
  * 给「升级到 X」深链——目录卡早就不给，这一页此前只读 subscribed 没读冻结态。
  *
+ * 2026-09-28 邀请档进阶梯（owner：「闸门卡的太死了，完全看不到订阅档位的按钮」）：邀请
+ * 订阅是套餐级的，BFF 阶梯里每档带 access，卡片按档换 CTA（「订阅」/「邀请订阅」弹窗）。
+ * 此前这一页的「只有邀请档」空态（EmptyState + 我已有邀请 / 申请邀请）随之退役——空态只
+ * 剩「一档都没有」那一种（维护 / 停售 / 暂未开放三种说法）。
+ *
  * 2026-09-03 owner：标题后的产品下拉去掉（产品从目录卡进来，页内不再切产品）；
  * 金额小数位全页统一（priceFractionDigits：有一个带小数就全两位，否则全整数）。
  */
@@ -44,7 +49,6 @@ import {
   StatusBadge,
 } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
-import { buildConsoleSubscribeUrl } from "@/lib/console-entry";
 import { maintenanceUntilText } from "@/api/product-catalog.api";
 import {
   fetchProductPlans,
@@ -253,34 +257,20 @@ export default function ProductSubscribePage() {
     .filter(Boolean)
     .join(" ");
 
-  /**
-   * 只有邀请档（`plans` 为空但库里有非公开档）。判据来自服务端，不由前端猜：
-   * 「空阶梯」本身分不出「还没开卖」与「全是邀请档」。
-   */
-  const inviteOnly =
-    load.status === "ready" && load.data.subscribeAccess === "invite";
-  /* 停售且没有公开档（比如只剩邀请档）：空态也要说「停售中」，不能说「暂未开放」——
-     那是「还没开卖」的话，对一个卖过的产品是错的。 */
+  /* 停售且没有阶梯：空态也要说「停售中」，不能说「暂未开放」——那是「还没开卖」的话，
+     对一个卖过的产品是错的。 */
   const sunsetNoLadder =
     load.status === "ready" && load.data.product?.releaseStage === "sunset";
   /*
    * 升级维护中（产品级维护窗口，owner 2026-09-27）。plan bar 上一枚 warning 徽标 + 「预计 …
-   * 恢复」，每张卡的 CTA 由 PricingPlanCard 换成状态字；空态（只有邀请档 / 一档都没有 /
-   * 停售无阶梯）也先说维护——「我已有邀请」那颗按钮这时不给，它落到 console 下单只会撞 409。
-   * 优先级：维护 > 停售 > 其他。
+   * 恢复」，每张卡的 CTA 由 PricingPlanCard 换成状态字；空态（一档都没有 / 停售无阶梯）
+   * 也先说维护。优先级：维护 > 停售 > 其他。
    */
   const maintenance = load.status === "ready" ? load.data.maintenance : null;
   const maintenanceUntil = maintenanceUntilText(maintenance, locale);
   const maintenanceUntilLine = maintenanceUntil
     ? t("maintenanceUntil", { time: maintenanceUntil })
     : null;
-
-  /* 邀请是定向发到账号上的，落点是控制台的订阅页（登录后即可看到解锁的那一档）。 */
-  const consoleSubscribeHref = buildConsoleSubscribeUrl(
-    locale,
-    productCode,
-    "subscribe",
-  );
 
   const contactHref = (subject: string) =>
     `mailto:sales@vxture.com?subject=${encodeURIComponent(subject)}`;
@@ -334,33 +324,26 @@ export default function ProductSubscribePage() {
             />
           ) : !model ? (
             /*
-             * 空阶梯分两种，此前都说「暂未开放订阅」——而那对邀请制产品是**错的**：
-             * umbra 配好了两档、只是都改成了邀请订阅，页面却说没开放（owner
-             * 2026-09-22 报）。
-             *
-             *   invite  只有邀请档 → 讲清怎么拿到邀请，并给「我已有邀请」的去处
-             *   none    一档都没有 → 如实说还没开放，不拿静态价兜底
+             * 一档都没有（含 preview 还没开卖）。如实说还没开放，不拿静态价兜底；维护 /
+             * 停售各有各的说法。「只有邀请档」不再落到这里——邀请档从 2026-09-28 起就在
+             * 阶梯里，由档位卡自己讲怎么拿到邀请。
              */
             <EmptyState
-              icon={maintenance ? "clock" : inviteOnly ? "ticket" : "package"}
+              icon={maintenance ? "clock" : "package"}
               title={
                 maintenance
                   ? t("maintenance")
-                  : inviteOnly
-                    ? t("inviteOnlyTitle")
-                    : sunsetNoLadder
-                      ? t("sunset")
-                      : t("unavailableTitle")
+                  : sunsetNoLadder
+                    ? t("sunset")
+                    : t("unavailableTitle")
               }
               description={
                 maintenance
                   ? (maintenanceUntilLine ??
                     tProducts("catalog.suspension.hint"))
-                  : inviteOnly
-                    ? t("inviteOnlyDescription")
-                    : sunsetNoLadder
-                      ? t("sunsetHint")
-                      : t("unavailable")
+                  : sunsetNoLadder
+                    ? t("sunsetHint")
+                    : t("unavailable")
               }
               className="mx-auto max-w-website-xl"
               action={
@@ -368,28 +351,15 @@ export default function ProductSubscribePage() {
                   <Button asChild variant="outline">
                     <a
                       href={contactHref(
-                        t(
-                          inviteOnly
-                            ? "inviteRequestSubject"
-                            : "contactSubject",
-                          {
-                            product: catalogItem?.name ?? productCode,
-                          },
-                        ),
+                        t("contactSubject", {
+                          product: catalogItem?.name ?? productCode,
+                        }),
                       )}
                     >
-                      {inviteOnly ? t("inviteRequest") : t("contact")}
+                      {t("contact")}
                     </a>
                   </Button>
-                  {inviteOnly && !maintenance ? (
-                    /* 「我已有邀请」——邀请是定向发到账号上的，登录后在控制台的订阅页
-                       就看得到那一档，不用输码。这颗按钮不是装饰：它是那条路径的入口。
-                       维护中不给：落到 console 下单只会撞 409，那就成了假动作。 */
-                    <Button asChild>
-                      <a href={consoleSubscribeHref}>{t("inviteHolder")}</a>
-                    </Button>
-                  ) : null}
-                  <Button asChild variant={inviteOnly ? "ghost" : "default"}>
+                  <Button asChild>
                     <Link href="/products">{t("back")}</Link>
                   </Button>
                 </div>
@@ -487,6 +457,7 @@ export default function ProductSubscribePage() {
                       plan={plan}
                       cycle={effectiveCycle}
                       productCode={productCode}
+                      productName={model.name}
                       contactSubject={t("contactSubject", {
                         product: model.name,
                       })}

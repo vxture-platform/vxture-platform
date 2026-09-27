@@ -55,6 +55,8 @@ describe("ProductCatalogRouter", () => {
         status: "active",
         /* 两个计数都缺 → 一档都没有 → 不给购买入口。 */
         subscribeAccess: "none",
+        hasPublicTier: false,
+        hasInviteTier: false,
         /* 没挂维护窗口 → null（不是 undefined：这是契约里的一项，不是可缺的）。 */
         maintenance: null,
       },
@@ -69,6 +71,8 @@ describe("ProductCatalogRouter", () => {
         /* 开发中：官网要预告它，但卡片不给购买入口。 */
         status: "developing",
         subscribeAccess: "none",
+        hasPublicTier: false,
+        hasInviteTier: false,
         maintenance: null,
       },
     ]);
@@ -190,13 +194,13 @@ describe("ProductCatalogRouter", () => {
    * 「有邀请档就算 invite」的实现也会绿。
    */
   it.each([
-    ["有公开档", 2, 0, "public"],
-    ["只有邀请档", 0, 3, "invite"],
-    ["一档都没有", 0, 0, "none"],
-    ["公开与邀请并存 → 仍算公开", 1, 2, "public"],
+    ["有公开档", 2, 0, "public", true, false],
+    ["只有邀请档", 0, 3, "invite", false, true],
+    ["一档都没有", 0, 0, "none", false, false],
+    ["公开与邀请并存 → 三态仍算公开，两根布尔都真", 1, 2, "public", true, true],
   ] as const)(
-    "订阅入口三态：%s",
-    async (_n, publicCount, inviteCount, expected) => {
+    "订阅入口三态 + 两根布尔：%s",
+    async (_n, publicCount, inviteCount, expected, hasPublic, hasInvite) => {
       const { pool } = makePool([
         {
           product_code: "umbra",
@@ -212,6 +216,10 @@ describe("ProductCatalogRouter", () => {
       ]);
       const res = await new ProductCatalogRouter(pool).getCatalog();
       expect(res[0]?.subscribeAccess).toBe(expected);
+      /* 邀请订阅是套餐级的：混卖时卡上要同时画「邀请订阅」与「订阅」，靠的是这两根
+         布尔而不是三态（owner 2026-09-28）。 */
+      expect(res[0]?.hasPublicTier).toBe(hasPublic);
+      expect(res[0]?.hasInviteTier).toBe(hasInvite);
     },
   );
 
@@ -231,6 +239,8 @@ describe("ProductCatalogRouter", () => {
     ]);
     const res = await new ProductCatalogRouter(pool).getCatalog();
     expect(res[0]?.subscribeAccess).toBe("invite");
+    expect(res[0]?.hasPublicTier).toBe(false);
+    expect(res[0]?.hasInviteTier).toBe(true);
   });
 
   it("reads only live-or-developing, customer-visible, non-deleted products in sort order", async () => {

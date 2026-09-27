@@ -135,6 +135,16 @@ export interface ProductCatalogItem {
    */
   subscribeAccess: "public" | "invite" | "none";
   /**
+   * 两根布尔（owner 2026-09-28）：有没有自助可买的档 / 有没有凭邀请的档。
+   *
+   * 邀请订阅是**套餐级**的（admin 按档设 is_public），所以「混卖」（公开档 + 邀请档并存）
+   * 是常态而不是边角。`subscribeAccess` 三态在混卖时只说 public，卡片就只画「订阅」——
+   * 邀请档在卡上完全看不见。owner：「只要有邀请订阅档位，就显示邀请订阅」。两根布尔
+   * 各答各的问题，卡片有几档就画几颗按钮；三态留给「一档都没有」那条与旧读者。
+   */
+  hasPublicTier: boolean;
+  hasInviteTier: boolean;
+  /**
    * 产品级升级维护窗口（owner 2026-09-27）：非空 = 产品正在「升级维护中」，`until` 是
    * 运营填的预计恢复时间（ISO）。**无论是否订阅**，这段时间里产品都不可用：未订阅的
    * 暂不能订，已订阅的只留「进入」。
@@ -237,38 +247,44 @@ export class ProductCatalogRouter {
           and p.deleted_at is null
         order by p.sort asc, p.product_code asc`,
     );
-    return res.rows.map((r) => ({
-      productCode: r.product_code,
-      productName: r.product_name,
-      productNick: r.product_nick,
-      productType: r.product_type,
-      description: r.description,
-      releaseVersion: r.release_version,
-      releasedAt:
-        r.released_at instanceof Date
-          ? r.released_at.toISOString()
-          : (r.released_at ?? null),
-      releaseStage: r.release_stage,
-      /* WHERE 只放这两值进来；认不得的值按「不可订」处理——宁可少给一颗按钮，
+    return res.rows.map((r) => {
+      const hasPublicTier = Number(r.public_plan_count ?? 0) > 0;
+      const hasInviteTier = Number(r.invite_plan_count ?? 0) > 0;
+      return {
+        productCode: r.product_code,
+        productName: r.product_name,
+        productNick: r.product_nick,
+        productType: r.product_type,
+        description: r.description,
+        releaseVersion: r.release_version,
+        releasedAt:
+          r.released_at instanceof Date
+            ? r.released_at.toISOString()
+            : (r.released_at ?? null),
+        releaseStage: r.release_stage,
+        /* WHERE 只放这两值进来；认不得的值按「不可订」处理——宁可少给一颗按钮，
          不能把一个查不到的状态当成「已上线」。 */
-      status: r.status === "active" ? "active" : "developing",
-      /* 对外改写敏感行业标签——见 PUBLIC_INDUSTRY_REWRITE 头注。 */
-      marketing: r.marketing ? sanitizeMarketing(r.marketing) : r.marketing,
-      /*
-       * 有公开档就是公开订阅；一个公开档都没有但有邀请档 = 邀请订阅；两者都没有
-       * = 还没开卖。先判公开再判邀请：混卖时（公开档 + 邀请档并存）对匿名访客来说
-       * 它就是个能买的产品，邀请档不进公开阶梯，不该把整个产品标成邀请制。
-       */
-      subscribeAccess:
-        Number(r.public_plan_count ?? 0) > 0
+        status: r.status === "active" ? "active" : "developing",
+        /* 对外改写敏感行业标签——见 PUBLIC_INDUSTRY_REWRITE 头注。 */
+        marketing: r.marketing ? sanitizeMarketing(r.marketing) : r.marketing,
+        /*
+         * 有公开档就是公开订阅；一个公开档都没有但有邀请档 = 邀请订阅；两者都没有
+         * = 还没开卖。先判公开再判邀请：混卖时（公开档 + 邀请档并存）对匿名访客来说
+         * 它就是个能买的产品，不该把整个产品标成邀请制。混卖时卡上那颗「邀请订阅」
+         * 由下面两根布尔给，不由三态给。
+         */
+        subscribeAccess: hasPublicTier
           ? "public"
-          : Number(r.invite_plan_count ?? 0) > 0
+          : hasInviteTier
             ? "invite"
             : "none",
-      maintenance: readMaintenance(
-        r.maintenance_window_id,
-        r.maintenance_until,
-      ),
-    }));
+        hasPublicTier,
+        hasInviteTier,
+        maintenance: readMaintenance(
+          r.maintenance_window_id,
+          r.maintenance_until,
+        ),
+      };
+    });
   }
 }

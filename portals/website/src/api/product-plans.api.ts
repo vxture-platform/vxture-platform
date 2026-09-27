@@ -34,6 +34,13 @@ export interface ProductPlanOption {
   planName: string;
   description: string | null;
   tier: string;
+  /**
+   * 该档的订阅入口（owner 2026-09-28）：public = 自助可买；invite = 凭邀请（运营定向
+   * 发券、持券人登录 console 才看得到这一档）。档位卡据此换 CTA：「订阅」/「邀请订阅」。
+   *
+   * 部署偏斜防护：旧 BFF 不回这一列，回落 `public`——旧阶梯里本来就只有公开档。
+   */
+  access: "public" | "invite";
   /** 该档开放功能键（plan_components.features），展示文案由前端 i18n 映射 */
   features: string[];
   /** 该档配额键值（plan_components.quota 原样透传） */
@@ -61,10 +68,9 @@ export interface ProductPlansResponse {
   product: ProductPlansProduct | null;
   plans: ProductPlanOption[];
   /**
-   * 订阅入口三态：public 阶梯里有档 / invite 只有邀请档 / none 一档都没有。
-   *
-   * `plans` 里永远不含邀请档（匿名端点无会话，无邀请可言），所以空阶梯此前无法区分
-   * 「还没开卖」与「全是邀请档」——页面两种都说「暂未开放订阅」。
+   * 订阅入口三态：public 阶梯里有公开档 / invite 只有邀请档 / none 一档都没有。
+   * 2026-09-28 起邀请档也在 `plans` 里（各带 access），页面按档画 CTA；这一项留给
+   * 目录卡与「一档都没有」的空态。
    *
    * 部署偏斜防护：旧响应没有这个字段时回落 `none`，即本字段之前的行为。
    */
@@ -75,6 +81,15 @@ export interface ProductPlansResponse {
    * 与阶梯照旧，维护不改变正常流程里的判定。部署偏斜：旧响应没有这一项时回落 null。
    */
   maintenance: ProductMaintenance | null;
+}
+
+/**
+ * 部署偏斜防护：旧 BFF 的阶梯里只有公开档、没有 `access` 列，回落 `public`。只认明确的
+ * `invite`——认不得的值按公开处理，与旧行为一致。
+ */
+function normalizePlan(raw: ProductPlanOption): ProductPlanOption {
+  const access = (raw as { access?: unknown }).access;
+  return { ...raw, access: access === "invite" ? "invite" : "public" };
 }
 
 export async function fetchProductPlans(
@@ -92,7 +107,7 @@ export async function fetchProductPlans(
     product: product
       ? { ...product, releaseStage: typeof stage === "string" ? stage : null }
       : null,
-    plans: Array.isArray(data?.plans) ? data.plans : [],
+    plans: Array.isArray(data?.plans) ? data.plans.map(normalizePlan) : [],
     subscribeAccess:
       access === "public" || access === "invite" || access === "none"
         ? access

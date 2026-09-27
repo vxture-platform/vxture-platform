@@ -6,11 +6,18 @@
  * 权益键），为官网定价页提供 DB 真源（替代 i18n 硬编码价格的第一步）。
  * **公开端点**（无需登录）：AuthMiddleware 非阻断，匿名亦可读。
  *
- * 口径与 console-bff subscribe-context 的 queryPlanLadder 完全一致（两端必须
- * 展示同一套可售阶梯）：public active plan、current_version 指向、published
- * 即 is_locked 的版本、primary 组件（bundled 无商业档位，不进阶梯）。website
- * 额外收紧产品可见性轴（is_customer_visible + status='active'，对齐
- * product-catalog.router 的公开目录口径）。
+ * 口径与 console-bff subscribe-context 的 queryPlanLadder 同源：active plan、
+ * current_version 指向、published 即 is_locked 的版本、primary 组件（bundled 无商业
+ * 档位，不进阶梯）。website 额外收紧产品可见性轴（is_customer_visible +
+ * status='active'，对齐 product-catalog.router 的公开目录口径）。
+ *
+ * 邀请档（owner 2026-09-28）：`is_public = false` 的档**也进阶梯**，每档带
+ * `access: public | invite`。邀请订阅是套餐级的机制（admin 按档设 is_public，运营给
+ * 账号定向发邀请券，console-bff 只对持券人露出那一档）；官网此前把它整个产品级地
+ * 拦在门外——阶梯只回公开档，一个产品只要全是邀请档，定价页就只剩一块空态，档位、
+ * 价格、权益全看不见。现在阶梯照回，档位卡按 access 换 CTA：公开档「订阅」，邀请档
+ * 「邀请订阅」（弹窗讲怎么拿到邀请 / 已有邀请去 console）。与 console-bff 的差别只在
+ * 「露不露邀请档」：console 只给持券人看（那是下单的门），官网给所有人看（那是营销面）。
  *
  * 承诺等级（release_stage，2026-09-27）也参与 subscribeAccess：preview / sunset 不接
  * 新订阅，一律判 none；阶梯本身照回（停售的要留给老客户参考，画不画由页面按档决定）。
@@ -68,6 +75,11 @@ export interface ProductPlanOption {
   /** product.plans.description 原样透传（可空；官网档位卡副标题）。 */
   description: string | null;
   tier: string;
+  /**
+   * 该档的订阅入口：public = 自助可买（is_public）；invite = 凭邀请（非 is_public，
+   * 运营定向发券、持券人登录 console 才看得到这一档）。官网档位卡据此换 CTA。
+   */
+  access: "public" | "invite";
   /** 该档开放功能键（plan_components.features，展示文案由前端 i18n 映射）。 */
   features: string[];
   /** 该档配额键值（plan_components.quota 原样透传，前端提炼展示项）。 */
@@ -88,11 +100,9 @@ export interface ProductPlansResponse {
   } | null;
   plans: ProductPlanOption[];
   /**
-   * 订阅入口三态（owner 2026-09-22）：public 阶梯里有档 / invite 只有邀请档 /
-   * none 一档都没有。
-   *
-   * `plans` 里永远不含邀请档（匿名端点无会话，无邀请可言），所以「空阶梯」此前无法
-   * 区分「还没开卖」与「全是邀请档」——落地页两种都说「暂未开放订阅」。
+   * 订阅入口三态（owner 2026-09-22）：public 阶梯里有公开档 / invite 只有邀请档 /
+   * none 一档都没有。2026-09-28 起直接从 `plans` 的 access 归纳（阶梯已含邀请档，
+   * 不再另问一次计数）；保留这一项是给目录卡与「一档都没有」的空态用。
    *
    * 承诺等级不可订（preview / sunset）时恒为 none，与阶梯里有没有档无关。
    */
@@ -168,11 +178,14 @@ export class ProductPlansRouter {
       plan_name: string;
       description: string | null;
       tier: string;
+      is_public: boolean;
       features: string[];
       quota: Record<string, unknown> | null;
       prices: ProductPlanPrice[];
     }>(
-      `select pl.plan_code, pl.plan_name, pl.description, pc.tier, pc.features, pc.quota,
+      /* 邀请档（is_public = false）也进阶梯——它是套餐级的属性，由每档的 access 说话；
+         此前这里有一句 pl.is_public = true，把整个产品的定价页拦成空态。 */
+      `select pl.plan_code, pl.plan_name, pl.description, pl.is_public, pc.tier, pc.features, pc.quota,
               coalesce(
                 jsonb_agg(jsonb_build_object(
                   'cycleUnit', pp.cycle_unit, 'cycleCount', pp.cycle_count,
@@ -188,10 +201,10 @@ export class ProductPlansRouter {
          join product.plans pl
            on pl.id = pv.plan_id and pl.current_version_id = pv.id
           and pl.deleted_at is null and pl.status = 'active'
-          and pl.is_public = true and pl.is_customer_visible = true
+          and pl.is_customer_visible = true
          left join product.plan_prices pp on pp.plan_version_id = pv.id
         where prod.product_code = $1 and pc.tier is not null
-        group by pl.plan_code, pl.plan_name, pl.description, pc.tier, pc.features, pc.quota`,
+        group by pl.plan_code, pl.plan_name, pl.description, pl.is_public, pc.tier, pc.features, pc.quota`,
       [productCode],
     );
 
@@ -200,52 +213,33 @@ export class ProductPlansRouter {
       return i < 0 ? Infinity : i;
     };
     const plans = ladderRes.rows
-      .map((r) => ({
-        planCode: r.plan_code,
-        planName: r.plan_name,
-        description: r.description ?? null,
-        tier: r.tier,
-        features: r.features ?? [],
-        quota: publicQuota(r.quota),
-        seats: readSeats(r.quota),
-        prices: r.prices,
-      }))
+      .map(
+        (r): ProductPlanOption => ({
+          planCode: r.plan_code,
+          planName: r.plan_name,
+          description: r.description ?? null,
+          tier: r.tier,
+          /* 只有明确的 true 才算公开：列是 NOT NULL boolean，正常拿不到别的值；万一拿到，
+           把邀请档误标成「订阅」会把人送进 console 一个看不见的档，比反过来更糟。 */
+          access: r.is_public === true ? "public" : "invite",
+          features: r.features ?? [],
+          quota: publicQuota(r.quota),
+          seats: readSeats(r.quota),
+          prices: r.prices,
+        }),
+      )
       .sort((a, b) => rank(a.tier) - rank(b.tier));
 
     /*
-     * 订阅入口三态（owner 2026-09-22）。
+     * 订阅入口三态（owner 2026-09-22）直接从阶梯归纳：有公开档 = public；一个公开档
+     * 都没有但有邀请档 = invite；一档都没有 = none。2026-09-28 之前阶梯不含邀请档，
+     * 这里要另打一次库数邀请档；现在邀请档就在 `plans` 里，多问那一次没有意义。
      *
-     * 阶梯里**一个非公开档都不该出现**——这是匿名端点，没有会话就没有邀请可言，
-     * 上面那条 `is_public = true` 保留不动。但「一档都没有」与「只有邀请档」对访客
-     * 是两件不同的事：前者只能如实说还没开卖，后者该指路（怎么拿到邀请）。此前两者
-     * 都退化成 `plans: []`，页面一律显示「暂未开放订阅」——而 umbra 明明配好了两档、
-     * 只是都改成了邀请订阅。
-     *
-     * 所以另问一次计数，判据除可见性外与阶梯完全一致。
+     * 承诺等级不可订时入口一律 none：邀请档也不接新进（邀请解锁的是「能买」，停售
+     * 与预览连「能买」都没有）。
      */
-    /* 承诺等级不可订时入口一律 none：邀请档也不接新进（邀请解锁的是「能买」，停售
-       与预览连「能买」都没有）。 */
     const stageOpen = SUBSCRIBABLE_RELEASE_STAGES.has(productRow.release_stage);
-    /* 只在阶梯为空时才问——有公开档就已经是 public 了，再问一次是给每个产品页
-       平白加一次查库；承诺等级已判不可订的也不问，答案不会变。 */
-    const inviteRes =
-      plans.length > 0 || !stageOpen
-        ? null
-        : await this.pool.query<{ invite_count: number | string }>(
-            `select count(*) as invite_count
-         from product.products prod
-         join product.plan_components pc
-           on pc.product_id = prod.id and pc.component_role = 'primary'
-         join product.plan_versions pv
-           on pv.id = pc.plan_version_id and pv.is_locked = true
-         join product.plans pl
-           on pl.id = pv.plan_id and pl.current_version_id = pv.id
-          and pl.deleted_at is null and pl.status = 'active'
-          and pl.is_public = false and pl.is_customer_visible = true
-        where prod.product_code = $1 and pc.tier is not null`,
-            [productCode],
-          );
-    const inviteCount = Number(inviteRes?.rows[0]?.invite_count ?? 0);
+    const hasPublicTier = plans.some((p) => p.access === "public");
 
     return {
       product: {
@@ -258,9 +252,9 @@ export class ProductPlansRouter {
       plans,
       subscribeAccess: !stageOpen
         ? "none"
-        : plans.length > 0
+        : hasPublicTier
           ? "public"
-          : inviteCount > 0
+          : plans.length > 0
             ? "invite"
             : "none",
       maintenance: readMaintenance(

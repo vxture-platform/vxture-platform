@@ -184,7 +184,8 @@ export default function AgentMarketplacePage({
         version: agent.releaseVersion,
         releasedAt: agent.releasedAt,
         recommend: marketingRecommend(agent.marketing),
-        subscribeAccess: agent.subscribeAccess,
+        hasPublicTier: agent.hasPublicTier,
+        hasInviteTier: agent.hasInviteTier,
         expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
         maintenance: agent.maintenance,
         /* 原样读取，不剔除——脱敏在「哪些值有自己的按钮」那一层做，见

@@ -14,6 +14,9 @@ import { useState } from "react";
  *   还没上线                → 「敬请期待」禁用（生命周期 developing 或承诺等级 preview）；
  *   未登录 / 未订阅        → 「订阅」（官网 /pricing?product=，先看价再登录）；「联系我们」已从卡上去掉，
  *                           hero 统一给「预约演示 / 业务咨询」（owner 2026-09-03）；
+ *                           邀请订阅是套餐级的（owner 2026-09-28）：有邀请档就给「邀请订阅」
+ *                           （outline），有公开档就给「订阅」，两者并存两颗都画（邀请在前），
+ *                           都落到同一张定价页；一档都没有 → 禁用的「暂未开卖」；
  *                           右上角按 marketing.recommend 画 1–3 枚推荐奖章（最靠外的位置，其余徽标前移让位）；
  *   已订阅                → 「升级」（同一个 /pricing：登录后该页会标出当前档、只放行更高档；
  *                           只在 canUpgrade 时出现）+ 「进入」。
@@ -80,14 +83,15 @@ export interface ProductCatalogCardModel {
   /** 推荐度 0–3（marketing.recommend）：未订阅时右上角按数量画奖章。 */
   recommend: number;
   /**
-   * 订阅入口三态（owner 2026-09-22）：public 有公开可买的档 / invite 只有邀请档 /
-   * none 一档都没有。
+   * 有没有自助可买的档 / 有没有凭邀请的档（owner 2026-09-28）。
    *
    * 这颗按钮原先只按成熟度 × 订阅态决定，**不知道有没有公开可买的档**——把一个产品
-   * 的档全改成邀请订阅之后，卡上照样写「订阅」，点进去落到「暂未开放订阅」。入口与
-   * 落地页各说各话，而错的是入口在承诺一件做不到的事。
+   * 的档全改成邀请订阅之后，卡上照样写「订阅」，点进去落到「暂未开放订阅」（owner
+   * 2026-09-22）。后来改成三态 public / invite / none，混卖时只说 public，邀请档在卡上
+   * 又看不见了。邀请订阅是套餐级的，所以是两根布尔：有哪种档就画哪颗按钮。
    */
-  subscribeAccess: "public" | "invite" | "none";
+  hasPublicTier: boolean;
+  hasInviteTier: boolean;
   /** 产品级升级维护窗口；null = 不在维护中。见 product-catalog.api 的 ProductMaintenance。 */
   maintenance: ProductMaintenance | null;
 }
@@ -110,7 +114,7 @@ export interface ProductCatalogCardLabels {
   expectedRelease: string;
   actions: {
     subscribe: string;
-    /** 只有邀请档时按钮的字样（落地页会讲清怎么拿到邀请）。 */
+    /** 有邀请档时那颗 outline 按钮的字样（落地页的档位卡会讲清怎么拿到邀请）。 */
     inviteSubscribe: string;
     /** 一档都没有时的禁用按钮字样 + 悬停原因。 */
     notForSale: string;
@@ -467,27 +471,32 @@ export function ProductCatalogCard({
               {/* 未订阅：先去官网定价页看价格 + 功能，登录后置。
                   「联系我们」不再放卡上——hero 已统一给「预约演示 / 业务咨询」（owner 2026-09-03）。
 
-                  三态各给各的落点：能自助买的去定价页；只有邀请档的仍去同一页——
-                  那页会讲清「此产品为邀请订阅」与怎么拿到邀请，所以不是假动作；
-                  一档都没有的给禁用按钮 + 悬停写明原因，而不是把人送进一个空页面。 */}
-              {sunset /* 停售：徽标已写「停售中」，按钮位置不再放说明——没有可做的动作就留空。 */ ? null : product.subscribeAccess ===
-                "none" ? (
+                  按档给按钮（owner 2026-09-28）：有邀请档给 outline 的「邀请订阅」，有公开档
+                  给「订阅」，并存时两颗都画（邀请在前、订阅在后）——都落到同一张定价页，
+                  那页的档位卡按档讲清怎么买 / 怎么拿到邀请，所以都不是假动作；一档都没有的
+                  给禁用按钮 + 悬停写明原因，而不是把人送进一个空页面。 */}
+              {sunset /* 停售：徽标已写「停售中」，按钮位置不再放说明——没有可做的动作就留空。 */ ? null : !product.hasPublicTier &&
+                !product.hasInviteTier ? (
                 <Button disabled title={labels.actions.notForSale}>
                   {labels.actions.notForSale}
                 </Button>
               ) : (
-                <Button
-                  asChild
-                  variant={
-                    product.subscribeAccess === "invite" ? "outline" : "default"
-                  }
-                >
-                  <Link href={pricingHref} target="_blank">
-                    {product.subscribeAccess === "invite"
-                      ? labels.actions.inviteSubscribe
-                      : labels.actions.subscribe}
-                  </Link>
-                </Button>
+                <>
+                  {product.hasInviteTier ? (
+                    <Button asChild variant="outline">
+                      <Link href={pricingHref} target="_blank">
+                        {labels.actions.inviteSubscribe}
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {product.hasPublicTier ? (
+                    <Button asChild>
+                      <Link href={pricingHref} target="_blank">
+                        {labels.actions.subscribe}
+                      </Link>
+                    </Button>
+                  ) : null}
+                </>
               )}
             </>
           )}

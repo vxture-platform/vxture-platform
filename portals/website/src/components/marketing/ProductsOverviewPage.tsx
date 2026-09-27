@@ -150,7 +150,8 @@ export default function ProductsOverviewPage({
         version: product.releaseVersion,
         releasedAt: product.releasedAt,
         recommend: marketingRecommend(product.marketing),
-        subscribeAccess: product.subscribeAccess,
+        hasPublicTier: product.hasPublicTier,
+        hasInviteTier: product.hasInviteTier,
         expectedReleaseAt: marketingExpectedReleaseAt(product.marketing),
         maintenance: product.maintenance,
       };
