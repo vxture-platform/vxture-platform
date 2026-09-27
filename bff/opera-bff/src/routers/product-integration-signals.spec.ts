@@ -53,6 +53,10 @@ interface Fixture {
     ack_at?: string | null;
     ack_status?: string | null;
   };
+  /** 环节③：已发布、组件含本产品的套餐版本（最近一个）。 */
+  planRow?: { plan_code: string; version_no: number; published_at: Date };
+  /** 环节④：覆盖本产品的有效订阅（最近一条）。 */
+  subscriptionRow?: { workspace_id: string; status: string; start_at: Date };
   /** 回调投递：`status='delivered'` 的最近一行。 */
   deliveryRow?: {
     event_type: string;
@@ -89,6 +93,14 @@ function makeRouter(fx: Fixture) {
     if (/FROM provisioning\.webhook_deliveries/.test(sql)) {
       expect(params).toEqual([PRODUCT_ID]);
       return { rows: fx.deliveryRow ? [fx.deliveryRow] : [] };
+    }
+    if (/FROM product\.plan_versions/.test(sql)) {
+      expect(params).toEqual([PRODUCT_ID]);
+      return { rows: fx.planRow ? [fx.planRow] : [] };
+    }
+    if (/FROM metering\.subscriptions/.test(sql)) {
+      expect(params).toEqual([PRODUCT_ID]);
+      return { rows: fx.subscriptionRow ? [fx.subscriptionRow] : [] };
     }
     if (/FROM support\.audit_logs/.test(sql)) {
       /* 按**产品码**反查，不是产品 id——审计里记的是 caller_product。 */
@@ -149,6 +161,8 @@ describe("GET /api/products/:id/integration-signals", () => {
       provision: null,
       provisionAck: null,
       delivery: null,
+      plan: null,
+      subscription: null,
     });
     expect(get).toHaveBeenCalledWith("vx:integration:c2:arda");
 
@@ -159,7 +173,7 @@ describe("GET /api/products/:id/integration-signals", () => {
     expect(usageSql).toMatch(/LIMIT 1/);
   });
 
-  it("都没有：七个字段都是 null（不是 404，产品在，只是没接通）", async () => {
+  it("都没有：九个字段都是 null（不是 404，产品在，只是没接通）", async () => {
     const { router } = makeRouter({ productCode: "karda" });
     await expect(router.get(makeReq(), PRODUCT_ID)).resolves.toEqual({
       login: null,
@@ -169,6 +183,8 @@ describe("GET /api/products/:id/integration-signals", () => {
       provision: null,
       provisionAck: null,
       delivery: null,
+      plan: null,
+      subscription: null,
     });
   });
 
@@ -298,6 +314,43 @@ describe("GET /api/products/:id/integration-signals", () => {
        会把「半年前开通、至今在用」的产品判成没开通过。这一条就是拦那个的。 */
     expect(provSql).not.toContain("interval");
     expect(delSql).not.toContain("interval");
+  });
+
+  it("环节③④：套餐已发布按组件反查、订阅只认 active/trialing 且走 plan_components", async () => {
+    const { router, sqls } = makeRouter({
+      productCode: "arda",
+      planRow: {
+        plan_code: "arda-pro",
+        version_no: 2,
+        published_at: new Date("2026-09-20T00:00:00.000Z"),
+      },
+      subscriptionRow: {
+        workspace_id: "ws-9",
+        status: "trialing",
+        start_at: new Date("2026-09-21T00:00:00.000Z"),
+      },
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.plan).toEqual({
+      planCode: "arda-pro",
+      versionNo: 2,
+      publishedAt: "2026-09-20T00:00:00.000Z",
+    });
+    expect(out.subscription).toEqual({
+      workspaceId: "ws-9",
+      status: "trialing",
+      startAt: "2026-09-21T00:00:00.000Z",
+    });
+    /* 判据落在 SQL 上：套餐按 status='published' + 组件含本产品；订阅按状态白名单 +
+       plan_components 反查，不碰 subscriptions 上任何冗余产品列。 */
+    const planSql = sqls.find((q) => /FROM product\.plan_versions/.test(q))!;
+    expect(planSql).toMatch(/pv\.status = 'published'/);
+    expect(planSql).toMatch(/plan_components pc/);
+    expect(planSql).toMatch(/pc\.product_id = \$1/);
+    const subSql = sqls.find((q) => /FROM metering\.subscriptions/.test(q))!;
+    expect(subSql).toMatch(/s\.status IN \('active', 'trialing'\)/);
+    expect(subSql).toMatch(/plan_components pc/);
+    expect(subSql).not.toMatch(/s\.product_id/);
   });
 
   it("C1 出站：从换票审计读出来，且按产品码而不是产品 id 反查", async () => {

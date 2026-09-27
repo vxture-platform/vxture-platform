@@ -182,6 +182,8 @@ export interface ProductRecord {
    * admin 的接入态在「没有回调登记」时说哪句话由它决定，不再由缺席推断。
    */
   integrationMode: ProductIntegrationMode;
+  /** 承诺等级（preview / beta / stable / sunset）。只读：写在 admin。 */
+  releaseStage: string;
   /**
    * 产品分层 L1/L2/L3（product_100_matrix §2）。定位轴，与 productType（类型）、
    * origin（来源）正交——external 是来源不是层级，客户端与内部服务不是目录产品。
@@ -224,6 +226,8 @@ interface ProductRow {
   origin: ProductOrigin;
   origin_provider: string | null;
   integration_mode: ProductIntegrationMode;
+  /** 承诺等级 preview / beta / stable / sunset——只读带出，写在 admin（release_stage 只向前走）。 */
+  release_stage: string;
   layer: string | null;
   launch_override_at: string | null;
   launch_override_pending: string[] | null;
@@ -255,6 +259,7 @@ function toRecord(row: ProductRow): ProductRecord {
        而不再靠「有没有 product_webhooks 行」去猜——沉默同时兼容「还没配」与
        「按设计不需要」，两者在界面上是两句相反的话。 */
     integrationMode: row.integration_mode,
+    releaseStage: row.release_stage,
     layer: row.layer,
     /* 带理由跳过上线闸门的痕迹（owner 2026-09-17）。产品页据此常驻提示
        「上线时跳过 N 项，待复验」；两列都为空 = 正常上线。理由不在这里，
@@ -394,7 +399,7 @@ const SELECT_COLUMNS = `
   id, product_code, product_type, layer, category_id, product_name, product_nick,
   description, capability_keys, tags, standalone_subscribable, status,
   is_customer_visible, is_workforce_visible, origin, origin_provider,
-  integration_mode,
+  integration_mode, release_stage,
   launch_override_at, launch_override_pending,
   icon_url, created_at, updated_at,
   /* 平台托管图标的版本号(内容哈希)。同样用裸 id 相关——理由见下面那段。

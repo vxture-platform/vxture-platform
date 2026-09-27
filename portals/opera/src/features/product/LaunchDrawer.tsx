@@ -1,32 +1,39 @@
 "use client";
 
 /**
- * LaunchDrawer.tsx — 产品页「接入检查」抽屉：一份清单、交给对方、确认上线。
+ * LaunchDrawer.tsx — 产品页「接入检查」抽屉：四个环节、逐环节确认、交给对方、确认上线。
  * @package @vxture/opera
  * @layer Presentation
  * @category Features - Product
  *
- * ── 2026-09-14 下午：两份列表合成一份 ──
- * 上午的版本把「复验结果」（8 项实测）和「接入检查单」（7 项，库里的）上下摆着。owner 走查：
- * 「接入检查单的逻辑和显示感觉还有问题」。问题是具体的——
- *  1. **同一件事出现两次、名字还不一样**：产品登记 / 目录已登记，C2 权益拉取 / C2 权益接入……
- *     两份里有四项是同一个判定，读的人得自己去对。
- *  2. 检查单的说明来自 seed 的 `description` 列，是英文。
- *  3. 未通过的项也写着「xx 确认」——`checked_at` 记的是「判过」，不是「通过」；
- *     状态只靠一个复选框表达，失败原因（`remark`）存在库里却不显示。
- *  4. 顺序按 `sort`，C3（50）排在 C2（60）前。
+ * ── 2026-09-27：按环节拆开（owner：「接入检查的面板一团浆糊」）──
+ * 此前是一张长清单，三道门的项混在一屏：上线阶段还测不到的项灰着挂着写「待确认」，既不能
+ * 在这一屏确认、也没有手动确认的口子，运营只能猜。owner 的规矩：
+ *   「按照设计的每个步骤拆开，全部转绿可以下一步。不能自动的先手动确认，在下一个环节可以
+ *    自动确认。完全不能自动的保留手动确认。但必须在该环节能够全部确认，不是猜测。不留红
+ *    执行下一步。」
+ * 于是：
+ *  ① 登记与配置          我方配置，全部实测
+ *  ② 对方接入 · 上线前确认  登录接通实测；换票 / 权益 / 用量 / 回调接收端此时平台看不见，
+ *                          按对方回报**人工确认**——全绿才「确认上线」
+ *  ③ 发布套餐            套餐已发布（实测；动作在 admin）
+ *  ④ 测试租户验证 · 转正式版  测试租户已订阅 + 换票 / 权益 / 用量（②里人工确认过的三件事，
+ *                          到这里由真实使用**自动**点亮）；全绿后在 admin 改承诺等级
+ * 环节按顺序解锁：当前环节展开，已完成的折起，后面的只写「上一环节完成后开始」——不把
+ * 后面环节的项摆在前面让人猜。回调接收端的验签 / 幂等平台永远看不见，它只在②人工确认一次。
  *
- * 现在只有一份清单：一行一项，按「我方 / 对方」分组，每行是状态 + 名字 + 原因与下一步 + 来源。
- *  - **平台实测**的项：打开抽屉就跑一遍实测（只读，不写库），状态与原因当场可见；
- *    「重新复验」才把能写回检查单的几项落库（`source: "auto"`）。
- *  - **人工确认**的项：「标记完成 / 撤销确认」，平台观测不到的只有这几项。
- *  - 授权、Webhook 这类实测项没有对应的检查单行，照样列在同一张表里——上线前要看的是合集。
+ * 环节由 `lifecycle.ts` 的 `stageOfCheck` 派生（launch 门 → ①②，stable 门 → ③④），
+ * 不是第三根轴。「带缺项上线」从界面拿掉了（owner：不再出现带缺陷上线）；BFF 侧的
+ * override 参数仍在，那是给事故用的逃生口，不是运营的常规路。
  *
- * **不跳转**（owner 2026-09-11：「切记不能跳转」）：「去处理」以 `#` 开头时交给页面就地处理，
- * 其它去处新标签页打开。
- *
- * **确认上线先重跑**：不接受「三天前通过」——重跑全通过、且检查单必填项全满足，才把草稿
- * 转成已上线；失败不改状态。
+ * ── 更早的几条约束照旧 ──
+ *  - 一份清单、名字只有一套（ITEM_META），说明不读 seed 的英文 description。
+ *  - **平台实测**的项：打开抽屉就跑一遍实测（只读，不写库）；「重新复验」与「确认上线」
+ *    才把能写回检查单的几项落库（`source: "auto"`）。
+ *  - **人工确认**的项：「标记完成 / 撤销确认」。
+ *  - **不跳转**（owner 2026-09-11）：「去处理」以 `#` 开头时交给页面就地处理。
+ *  - **确认上线先重跑**：不接受「三天前通过」——重跑①②全通过、且人工确认项齐，才把
+ *    草稿 / 开发中转成已上线；失败不改状态。
  */
 
 import { useEffect, useState } from "react";
@@ -34,13 +41,11 @@ import {
   Badge,
   Banner,
   Button,
-  DialogForm,
   Drawer,
   Icon,
   SectionHeader,
   Separator,
   StatusBadge,
-  Textarea,
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
@@ -56,10 +61,13 @@ import {
 } from "./launch-checks";
 import {
   canLaunchFrom,
-  gatesLaunch,
+  CHECKLIST_STAGES,
   pendingBySide,
   productStateMeta,
   sideOfChecklistItem,
+  stageGatesLaunch,
+  stageOfCheck,
+  type ChecklistStage,
   type ProductState,
 } from "./lifecycle";
 import type { ClientRecord, WebhookRecord } from "./onboarding-model";
@@ -71,10 +79,10 @@ export interface ChecklistEntry {
   description?: string | null;
   isRequired: boolean;
   /**
-   * 卡哪一道门：`launch` 卡上线、`publish` 卡发布（2026-09-17 起由 BFF 返回）。
+   * 卡哪一道门：`launch` 卡上线、`stable` 卡转正式版（由 BFF 返回）。
    *
    * 这个字段必须一路带到 `lifecycle.ts` 的判定里——它缺席时那边按 `launch` 兜底，
-   * 于是 `acceptance` 又会被算进「上线还差几项」，与 BFF 的闸门重新分叉。
+   * stable 门的项就会被算进「上线还差几项」，与 BFF 的闸门分叉。
    */
   gate?: string;
   isSatisfied: boolean;
@@ -88,6 +96,8 @@ export interface LaunchDrawerProduct {
   productCode: string;
   productName: string;
   state: ProductState;
+  /** 承诺等级；`stable` = 环节④已完成。 */
+  releaseStage: string;
   origin: string;
   originProvider: string | null;
 }
@@ -114,6 +124,7 @@ const STATUS_META: Record<RowStatus, { label: string; tone: StatusBadgeTone }> =
   {
     pass: { label: "通过", tone: "success" },
     fail: { label: "未通过", tone: "danger" },
+    /* 只给人工项用：等运营按对方回报勾。它不是猜——这一项在这一屏就能确认。 */
     pending: { label: "待确认", tone: "warning" },
     unchecked: { label: "未检查", tone: "neutral" },
     /* 「自动」不写进标签:旁边的「平台实测」徽标已经说了，而现有四个标签都是三字，
@@ -122,9 +133,8 @@ const STATUS_META: Record<RowStatus, { label: string; tone: StatusBadgeTone }> =
   };
 
 interface Row {
-  /** gate='stable'：不卡上线、卡转正式版（2026-11-16 regate）。 */
-  stableGate?: boolean;
   key: string;
+  stage: ChecklistStage;
   label: string;
   side: CheckSide;
   source: "auto" | "manual";
@@ -145,9 +155,9 @@ interface Row {
  * 检查单各项的中文名、说明与排序。
  *
  * **名字只有一套**：实测结果与检查单是同一个判定时用这里的名字，不再各叫各的。
- * 说明不读 seed 的 `description`（英文），在这里写——它是给运营者看的，不是给库看的。
- * 侧（我方 / 对方）不在这里：它由 `lifecycle.ts` 的 `sideOfChecklistItem` 统一给，
- * 目录页的验证态徽标用的是同一份。
+ * 说明不读 seed 的 `description` 列（英文），在这里写——它是给运营者看的。
+ * 侧（我方 / 对方）与环节不在这里：由 `lifecycle.ts` 的 `sideOfChecklistItem` /
+ * `stageOfCheck` 统一给，目录页用的是同一份。
  */
 const ITEM_META: Record<
   string,
@@ -158,30 +168,57 @@ const ITEM_META: Record<
     what: "产品码已登记、来源信息完整。",
     order: 10,
   },
-  acceptance: {
-    label: "端到端验收",
-    what: "登录 → 开通 → 权益门控 → 用量上报 → 失效，整条链实际跑通过一次。卡在这一项通常意味着前面某项其实没真通。",
-    order: 70,
-  },
   c1_identity: {
-    label: "C1 身份接入",
-    what: "对方实现了登录、回调与会话，用平台账号能登进产品。平台只看得到客户端注册，看不到对方实现，按对方回报确认。",
+    label: "登录接入",
+    what: "有人真的用平台账号登进了这个产品——登录流程没接通就不会有这一行。",
     order: 110,
+  },
+  /* 环节②的四项人工确认：这一屏平台观测不到对方做没做，按对方回报勾。前三项到环节④
+     由同名去掉 _declared 的实测项自动点亮；回调接收端那一项平台永远测不了。 */
+  c1_s2s_declared: {
+    label: "对方已实现 S2S 换票",
+    what: "对方按《产品接入通则》C1 出站实现了 token-exchange 客户端（service / OBO 任一）。上线前换不到票——服务模式换票要过覆盖门，先得有订阅——所以这里按对方回报确认；到环节④由真实换票自动点亮。",
+    order: 120,
+  },
+  c2_entitlement_declared: {
+    label: "对方已实现权益拉取与门控",
+    what: "对方实现了 GET /platform/entitlements 的拉取、45 秒缓存与失效、UI 门控 tier != null。到环节④由真实拉取自动点亮。",
+    order: 130,
+  },
+  c3_metering_declared: {
+    label: "对方已实现用量上报",
+    what: "对方实现了 POST /usage/consume（带 idempotency_key，gated 当信息不当异常）。到环节④由真实上报自动点亮。",
+    order: 140,
+  },
+  webhook_receiver_declared: {
+    label: "对方回调接收端就绪",
+    what: "对方在 /api/webhooks/vxture 验签（X-Vxture-Signature，原始字节）、按投递 id 幂等、按 seq 拒倒序。验签与幂等平台永远看不见——这一项只能人工确认，仅统一登录的产品确认「不适用」即可。",
+    order: 150,
+  },
+  plan_published: {
+    label: "套餐已发布",
+    what: "有已发布、且组件含本产品的套餐版本。",
+    order: 210,
+  },
+  tenant_subscribed: {
+    label: "测试租户已订阅",
+    what: "有一条覆盖本产品的有效订阅。",
+    order: 310,
   },
   c1_s2s: {
     label: "C1 出站换票",
     what: "对方用 S2S 令牌去调 Atlas / Runos / Karda。",
-    order: 120,
+    order: 320,
   },
   c2_entitlement: {
-    label: "C2 权益接入",
+    label: "C2 权益拉取",
     what: "对方拉过权益。",
-    order: 130,
+    order: 330,
   },
   c3_metering: {
     label: "C3 用量上报",
     what: "对方上报过用量。",
-    order: 140,
+    order: 340,
   },
 };
 
@@ -189,26 +226,28 @@ const ITEM_META: Record<
  * 没有检查单行的实测项：排序与没跑之前的占位。
  *
  * **这张表是「实测结果能不能被看见」的唯一开关。** 不在这里、又没有 `itemCode` 的
- * 条目，`buildRows` 一行都不建——但 `allPassed()` 数的是 `runLaunchChecks()` 的**全部**
- * 返回值。`acceptance-chain` 此前正好落在这个缝里:它几乎必然不通过（要求五段落在同一
- * 工作区），于是每个产品点上线都得到「N 项实测未通过」，而清单里找得到的红项比 N 少
- * 一个——提示还写着「未通过的项在清单里标红」，对它是句空话。
- *
- * 2026-09-17 补进来:让它现形。**不是让它不算数**——五段同工作区是真条件，
- * 该算;它只是不该隐身。
+ * 条目，`buildRows` 一行都不建。
  */
 const MEASURE_ONLY: Record<
   string,
   { label: string; order: number; advisory?: boolean }
 > = {
-  client: { label: "登录接入", order: 20 },
+  client: { label: "登录客户端", order: 20 },
   "atlas-grants": { label: "模型授权", order: 30 },
   "runos-grants": { label: "能力授权", order: 40 },
   webhook: { label: "Webhook 登记", order: 50 },
   /* 端到端链路痕迹与开通回执**不在这一屏**（2026-11-03）：它们答的是「跑起来之后
-     最近还正常吗」，不是「还差哪几件才能上线」。混在一屏时，一个刚上线、还没有客户
-     的产品会看到一排红色的「未通过」——而那些红的其实只是「还没有人用过」。
-     它们去了「运行健康」抽屉，在那里是三态，没有「未通过」这个说法。 */
+     最近还正常吗」，去了「运行健康」抽屉，在那里是三态，没有「未通过」这个说法。 */
+};
+
+const STAGE_ICON: Record<
+  ChecklistStage,
+  "settings" | "plug" | "receipt" | "rocket"
+> = {
+  configure: "settings",
+  prelaunch: "plug",
+  publish: "receipt",
+  verify: "rocket",
 };
 
 function reason(error: unknown, fallback: string): string {
@@ -221,6 +260,11 @@ function reason(error: unknown, fallback: string): string {
 function remarkDetail(remark: string | null | undefined): string | null {
   const text = (remark ?? "").replace(/^自动检查：/, "").trim();
   return text || null;
+}
+
+/** 一条实测结果落在哪个环节（检查单项按 item_code，纯实测项按 id）。 */
+function stageOfResult(r: CheckResult): ChecklistStage {
+  return stageOfCheck(r.itemCode ?? r.id);
 }
 
 function buildRows(
@@ -249,18 +293,14 @@ function buildRows(
     } else {
       status = item.isSatisfied ? "pass" : "fail";
     }
-    /* gate='stable' 的项（对方发起型三项，2026-11-16 起）不卡上线：它们在产品拿到一条
-       订阅之前根本发不出，卡的是「转正式版」。这里 required=false、未过画「待点亮」
-       不画红——红色在这张清单上的意思一直是「这条挡着上线」。 */
-    const gatesStable = (item.gate ?? "launch") === "stable";
     rows.push({
       key: item.itemCode,
+      stage: stageOfCheck(item.itemCode, item.gate),
       label: meta?.label ?? item.itemName ?? item.itemCode,
       side: sideOfChecklistItem(item.itemCode),
       source: auto ? "auto" : "manual",
-      required: item.isRequired && gatesLaunch(item),
-      status: gatesStable && status === "fail" ? "pending" : status,
-      stableGate: gatesStable,
+      required: item.isRequired,
+      status,
       what: meta?.what ?? "",
       detail: auto ? (live?.detail ?? remarkDetail(item.remark)) : null,
       remedy: live && live.status !== "pass" ? live.remedy : null,
@@ -275,12 +315,12 @@ function buildRows(
     const live = (checks ?? []).find((c) => c.id === id);
     rows.push({
       key: id,
+      stage: stageOfCheck(id),
       label: meta.label,
       side: live?.side ?? "ours",
       source: "auto",
       required: !meta.advisory,
-      /* advisory 项没通过时画「待确认」不画红:它报的是事实，不是准入条件，
-         而红色在这张清单上的意思一直是「这条挡着上线」。 */
+      /* advisory 项没通过时画「待确认」不画红:它报的是事实，不是准入条件。 */
       status: live
         ? live.status === "pass"
           ? "pass"
@@ -297,10 +337,59 @@ function buildRows(
     });
   }
 
-  return rows.sort(
-    (a, b) =>
-      (a.side === b.side ? 0 : a.side === "ours" ? -1 : 1) || a.order - b.order,
-  );
+  return rows.sort((a, b) => a.order - b.order);
+}
+
+type StageState = "done" | "current" | "locked";
+
+interface StageView {
+  key: ChecklistStage;
+  no: number;
+  title: string;
+  hint: string;
+  rows: Row[];
+  /** 必填且未通过的行（人工项「待确认」也算未通过——它就是这一屏要做的事）。 */
+  open: Row[];
+  state: StageState;
+}
+
+/**
+ * 四个环节的完成判据。**完成不只看这一屏的项**：环节②的完成是「已上线」这一事实——
+ * 一个早就上线的产品即便②里有人工项没勾，也不该把它退回上线前；同理环节④看的是
+ * 承诺等级已是正式版。当前环节 = 第一个没完成的；再往后的锁着。
+ */
+function buildStages(rows: Row[], product: LaunchDrawerProduct): StageView[] {
+  const launched = !canLaunchFrom(product.state);
+  const byKey = (k: ChecklistStage) => rows.filter((r) => r.stage === k);
+  const openOf = (list: Row[]) =>
+    list.filter((r) => r.required && r.status !== "pass");
+  const doneByFact: Record<ChecklistStage, boolean> = {
+    configure: launched || openOf(byKey("configure")).length === 0,
+    prelaunch: launched,
+    publish: byKey("publish").some(
+      (r) => r.key === "plan_published" && r.status === "pass",
+    ),
+    verify: product.releaseStage === "stable",
+  };
+  let currentTaken = false;
+  return CHECKLIST_STAGES.map((s) => {
+    const list = byKey(s.key);
+    let state: StageState;
+    if (doneByFact[s.key] && !currentTaken) state = "done";
+    else if (!currentTaken) {
+      state = "current";
+      currentTaken = true;
+    } else state = "locked";
+    return {
+      key: s.key,
+      no: s.no,
+      title: s.title,
+      hint: s.hint,
+      rows: list,
+      open: openOf(list),
+      state,
+    };
+  });
 }
 
 export function LaunchDrawer({
@@ -321,11 +410,10 @@ export function LaunchDrawer({
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [launching, setLaunching] = useState(false);
-  /* 带理由跳过上线闸门（owner 2026-09-17：“先上线再联调”）。
-     null = 对话框没开；开着时存的是已输入的理由。 */
-  const [overrideReason, setOverrideReason] = useState<string | null>(null);
   const { runWithStepUp } = useStepUp();
   const [ticking, setTicking] = useState<string | null>(null);
+  /* 已完成的环节默认折起；点标题展开。当前环节永远展开，锁着的环节没有内容可展。 */
+  const [expanded, setExpanded] = useState<Set<ChecklistStage>>(new Set());
 
   async function reloadChecklist(): Promise<ChecklistEntry[] | null> {
     const fresh = await api
@@ -382,6 +470,7 @@ export function LaunchDrawer({
     if (!open) {
       setChecks(null);
       setCheckedAt(null);
+      setExpanded(new Set());
       return;
     }
     void runChecks(false);
@@ -407,18 +496,27 @@ export function LaunchDrawer({
     }
   }
 
-  async function confirmLaunch(overrideWith?: string) {
+  /**
+   * 确认上线：重跑环节①②的实测、人工项全勾、再改状态。
+   *
+   * 只数卡上线门的两个环节——环节③④的实测项（套餐、订阅、对方三项）在上线前必然是
+   * 红的，那是它们该在的状态，不是上不了线的理由。
+   */
+  async function confirmLaunch() {
     setLaunching(true);
     try {
       const results = await runChecks(true);
       if (!results) return;
-      if (!allPassed(results) && !overrideWith) {
-        const failed = results.filter((r) => r.status !== "pass").length;
+      const launchResults = results.filter((r) =>
+        stageGatesLaunch(stageOfResult(r)),
+      );
+      if (!allPassed(launchResults)) {
+        const failed = launchResults.filter((r) => r.status !== "pass").length;
         toast({
           tone: "danger",
           title: `${failed} 项实测未通过，未上线`,
           description:
-            "生命周期状态没有改变。未通过的项在清单里标红，各自写着下一步。",
+            "生命周期状态没有改变。未通过的项在环节①②里标红，各自写着下一步。",
         });
         return;
       }
@@ -435,21 +533,23 @@ export function LaunchDrawer({
         items.map((i) => ({
           itemCode: i.itemCode,
           isRequired: i.isRequired,
-          /* gate 必须带上：缺席时 gatesLaunch 按 launch 兜底，gate='stable' 的三项
-             就会被算进「上线还差几项」——与 BFF 的闸门分叉（2026-11-16 regate）。 */
+          /* gate 必须带上：缺席时 gatesLaunch 按 launch 兜底，stable 门的项会被算进来。 */
           ...(i.gate ? { gate: i.gate } : {}),
           isSatisfied: i.isSatisfied,
           checkedAt: i.checkedAt,
           ...(i.itemName ? { itemName: i.itemName } : {}),
         })),
       );
-      const pending = ours.length + theirs.length;
-      if (pending > 0 && !overrideWith) {
+      const pending = [...ours, ...theirs];
+      if (pending.length > 0) {
         toast({
           tone: "danger",
-          title: `还有 ${pending} 项人工确认没有完成`,
-          description:
-            "实测项已过，但数据面就绪、端到端验收这类平台观测不到的项还没确认。",
+          title: `还有 ${pending.length} 项人工确认没有完成`,
+          description: `${pending
+            .map(
+              (i) => ITEM_META[i.itemCode]?.label ?? i.itemName ?? i.itemCode,
+            )
+            .join("、")}——在环节②按对方回报逐项「标记完成」。`,
         });
         return;
       }
@@ -457,17 +557,12 @@ export function LaunchDrawer({
          这条路径本身已经是「看完整份检查单再落锤」，意图已经表达过一次，
          所以不再叠一个确认框；身份那一道由 step-up 负责。 */
       await runWithStepUp(() =>
-        api.patch(`/api/products/${product.id}/state`, {
-          state: "active",
-          ...(overrideWith ? { override: { reason: overrideWith } } : {}),
-        }),
+        api.patch(`/api/products/${product.id}/state`, { state: "active" }),
       );
-      setOverrideReason(null);
       toast({
         tone: "success",
-        title: overrideWith
-          ? `${product.productName} 已上线（带缺项）`
-          : `${product.productName} 已上线`,
+        title: `${product.productName} 已上线`,
+        description: "下一步：在 admin · 服务套餐发布本产品的套餐版本。",
       });
       await onLaunched();
     } catch (error) {
@@ -529,19 +624,25 @@ export function LaunchDrawer({
     );
   }
 
-  /* **只取上线门那一组**（2026-11-03）。运行健康那两项走另一个抽屉——一屏回答一个
-     问题，结论才说得干净：这一屏的结论只有「可以上线」与「还差 N 项」两种。 */
+  /* **只取上线门那一组**（2026-11-03）。运行健康那两项走另一个抽屉——一屏回答一个问题。 */
   const launchChecks =
     checks?.filter((c) => (c.scope ?? "launch") === "launch") ?? null;
   const rows = buildRows(checklist, launchChecks, running);
-  const open_ = rows.filter((r) => r.required && r.status !== "pass");
-  const openOurs = open_.filter((r) => r.side === "ours").length;
-  const openTheirs = open_.length - openOurs;
+  const stages = buildStages(rows, product);
+  const current = stages.find((s) => s.state === "current") ?? null;
+
+  function toggleStage(key: ChecklistStage) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   function renderRow(row: Row) {
     /* 自动项在复验期间一律显示「探测中…」——包括已经有上一轮结果的时候。
-       旧结果让位一瞬，换来的是这个标签名副其实:它说的是此刻在做什么，
-       不是此刻恰好没有数据。 */
+       旧结果让位一瞬，换来的是这个标签名副其实:它说的是此刻在做什么。 */
     const status: RowStatus =
       running && row.source === "auto" ? "probing" : row.status;
     const meta = STATUS_META[status];
@@ -558,6 +659,9 @@ export function LaunchDrawer({
             <span className="text-label-md text-foreground">{row.label}</span>
             <Badge variant={row.source === "auto" ? "secondary" : "outline"}>
               {row.source === "auto" ? "平台实测" : "人工确认"}
+            </Badge>
+            <Badge variant="outline">
+              {row.side === "ours" ? "我方" : "对方"}
             </Badge>
             {!row.required ? <Badge variant="outline">可选</Badge> : null}
           </div>
@@ -605,10 +709,136 @@ export function LaunchDrawer({
     );
   }
 
-  const ours = rows.filter((r) => r.side === "ours");
-  const theirs = rows.filter((r) => r.side === "theirs" && !r.stableGate);
-  /* 对方发起型三项：不卡上线，测试用途的真实租户订阅并使用后点亮，卡「转正式版」。 */
-  const stableRows = rows.filter((r) => r.stableGate);
+  /** 环节标题右侧的一句话：完成 / 还差几项 / 锁着。 */
+  function stageStatus(s: StageView): { tone: StatusBadgeTone; label: string } {
+    if (s.state === "locked") return { tone: "neutral", label: "未开始" };
+    if (s.state === "done") {
+      return s.open.length === 0
+        ? { tone: "success", label: "已完成" }
+        : { tone: "warning", label: `已完成 · ${s.open.length} 项待补` };
+    }
+    if (running && s.rows.some((r) => r.source === "auto"))
+      return { tone: "info", label: "复验中…" };
+    return s.open.length === 0
+      ? { tone: "success", label: "全部通过" }
+      : { tone: "danger", label: `还差 ${s.open.length} 项` };
+  }
+
+  /** 每个环节的终点动作或说明——只在当前环节出现。 */
+  function renderStageAction(s: StageView) {
+    if (s.state !== "current") return null;
+    const allGreen = s.open.length === 0;
+    if (s.key === "configure") {
+      return (
+        <Banner
+          tone={allGreen ? "success" : "info"}
+          title={allGreen ? "配置齐了" : `还差 ${s.open.length} 项`}
+          description="全部通过后进入环节②。这一屏的项都在产品页上改，改完「重新复验」。"
+        />
+      );
+    }
+    if (s.key === "prelaunch") {
+      if (!canLaunchFrom(product.state)) {
+        return (
+          <Banner
+            tone="info"
+            title={`当前是「${productStateMeta(product.state).label}」，这里只做复验`}
+            description={productStateMeta(product.state).hint}
+          />
+        );
+      }
+      const manualOpen = s.open.filter((r) => r.source === "manual").length;
+      return (
+        <Banner
+          tone={allGreen ? "success" : "info"}
+          title={allGreen ? "可以确认上线" : `还差 ${s.open.length} 项才能上线`}
+          description={
+            allGreen
+              ? "确认上线会先重跑一遍环节①②的实测，全通过且人工确认项齐了，才把产品转成已上线。失败不改状态。"
+              : manualOpen > 0
+                ? `其中 ${manualOpen} 项要按对方回报「标记完成」。这一屏的每一项都能在这里确认——没有下一步才测得到的项。`
+                : "未通过的项各自写着下一步。"
+          }
+          {...(canManage && allGreen
+            ? {
+                action: (
+                  <Button
+                    type="button"
+                    disabled={running || launching}
+                    onClick={() => void confirmLaunch()}
+                  >
+                    <Icon name="rocket" size="sm" aria-hidden="true" />
+                    {launching ? "检查中…" : "确认上线"}
+                  </Button>
+                ),
+              }
+            : {})}
+        />
+      );
+    }
+    if (s.key === "publish") {
+      return (
+        <Banner
+          tone="info"
+          title="在 admin 发布套餐"
+          description="admin · 服务套餐 → 本产品 → 发布版本。发布没有别的前置；发布后回这里「重新复验」，套餐那一项就绿。"
+        />
+      );
+    }
+    return (
+      <Banner
+        tone={allGreen ? "success" : "info"}
+        title={allGreen ? "五项全绿，可以转正式版" : `还差 ${s.open.length} 项`}
+        description={
+          allGreen
+            ? "在 admin · 产品内容把承诺等级改成「正式版」。admin 会再验一次这五项，缺任一项拒绝（409）。"
+            : "让一个测试用途的真实租户在 console 订阅本产品并真实使用一次：登录、换票、拉权益、报用量各发生一次，这几项就由平台观测点亮。不用人勾。"
+        }
+      />
+    );
+  }
+
+  function renderStage(s: StageView) {
+    const status = stageStatus(s);
+    const isOpen =
+      s.state === "current" || (s.state === "done" && expanded.has(s.key));
+    return (
+      <div key={s.key} className="flex flex-col gap-sm">
+        <SectionHeader
+          level={3}
+          icon={STAGE_ICON[s.key]}
+          title={`环节 ${s.no} · ${s.title}`}
+          action={
+            <div className="flex items-center gap-sm">
+              <StatusBadge tone={status.tone} dot>
+                {status.label}
+              </StatusBadge>
+              {s.state === "done" ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  onClick={() => toggleStage(s.key)}
+                >
+                  {isOpen ? "收起" : "展开"}
+                </Button>
+              ) : null}
+            </div>
+          }
+        />
+        <p className="text-body-sm text-muted-foreground">{s.hint}</p>
+        {s.state === "locked" ? (
+          <p className="text-body-sm text-muted-foreground">
+            上一环节完成后开始。这一屏有 {s.rows.length}{" "}
+            项，到时在这里实测或确认。
+          </p>
+        ) : isOpen ? (
+          s.rows.map(renderRow)
+        ) : null}
+        {renderStageAction(s)}
+      </div>
+    );
+  }
 
   return (
     <Drawer
@@ -616,7 +846,7 @@ export function LaunchDrawer({
       onClose={onClose}
       width="lg"
       title="接入检查"
-      description={`${product.productCode} · 还差哪几件才能上线`}
+      description={`${product.productCode} · 四个环节，逐环节确认`}
     >
       <div className="flex flex-col gap-xl">
         {/* ── 汇总 ─────────────────────────────────────────────────────── */}
@@ -625,9 +855,13 @@ export function LaunchDrawer({
             <p className="text-label-md text-foreground">
               {running && !checks
                 ? "检查中…"
-                : open_.length === 0
-                  ? "全部通过 —— 可以确认上线"
-                  : `还差 ${open_.length} 项才能上线：我方 ${openOurs} · 对方 ${openTheirs}`}
+                : current
+                  ? `当前环节 ${current.no} / ${CHECKLIST_STAGES.length} · ${current.title}${
+                      current.open.length === 0
+                        ? " —— 全部通过"
+                        : ` —— 还差 ${current.open.length} 项`
+                    }`
+                  : "四个环节全部完成 —— 已是正式版"}
             </p>
             <p className="text-body-sm text-muted-foreground">
               {checkedAt
@@ -646,42 +880,8 @@ export function LaunchDrawer({
           </Button>
         </div>
 
-        {/* ── 我方 ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-sm">
-          <SectionHeader
-            level={3}
-            icon="settings"
-            title={`我方 · 平台侧配置${openOurs > 0 ? `（还差 ${openOurs} 项）` : ""}`}
-          />
-          {ours.map(renderRow)}
-        </div>
-
-        {/* ── 对方 ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-sm">
-          <SectionHeader
-            level={3}
-            icon="plug"
-            title={`对方 · 产品侧接通${openTheirs > 0 ? `（还差 ${openTheirs} 项）` : ""}`}
-          />
-          {theirs.map(renderRow)}
-        </div>
-
-        {/* ── 转正式版前 ─────────────────────────────────────────────── */}
-        {stableRows.length > 0 ? (
-          <div className="flex flex-col gap-sm">
-            <SectionHeader
-              level={3}
-              icon="rocket"
-              title="转正式版前 · 由测试租户真实使用点亮"
-            />
-            <p className="text-body-sm text-muted-foreground">
-              这三项不卡上线，也不卡发布套餐：产品拿到一条订阅之前换不到票、读不了权益、报不了用量。
-              套餐发布后让测试用途的真实租户订阅并使用一次，平台自己观测到痕迹就点亮；
-              三项全绿才允许把成熟度标成「正式版」（admin 拦 409）。
-            </p>
-            {stableRows.map(renderRow)}
-          </div>
-        ) : null}
+        {/* ── 四个环节 ─────────────────────────────────────────────────── */}
+        {stages.map(renderStage)}
 
         <Separator />
 
@@ -735,89 +935,7 @@ export function LaunchDrawer({
             note="产品侧按这个地址收开通与停用事件；签名密钥在「密钥管理」。"
           />
         </div>
-
-        {/* ── 终点动作 ─────────────────────────────────────────────────── */}
-        {/* 能不能从这一档「确认上线」，问 lifecycle 的 PRODUCT_ACTIONS，不在这里再写一遍
-            状态名。2026-09-24 接 `developing` 时 lifecycle 把 launch.from 改成了
-            ["draft","developing"]、BFF 的 STATE_TRANSITIONS 也放行了，而这里仍写死
-            `=== "draft"`——于是 13 个开发中的产品在界面上只看得到「只做复验」，上不了线。
-            [[feedback_copy_both_halves_and_open_the_page]]：加一档状态与「进得去出得来」是两半。 */}
-        {canLaunchFrom(product.state) ? (
-          <Banner
-            tone={open_.length === 0 ? "success" : "info"}
-            title={
-              open_.length === 0
-                ? "可以确认上线"
-                : `还差 ${open_.length} 项，全部通过才能上线`
-            }
-            description={
-              open_.length === 0
-                ? "确认上线会先重跑一遍实测：全通过、且人工确认项齐了，才把草稿转成已上线。失败不改状态。"
-                : "上线只验我方配置与登录接入。对方的换票 / 权益 / 用量三项不在这道门上——它们由套餐发布后的测试租户真实使用点亮，卡的是「转正式版」。"
-            }
-            {...(canManage
-              ? {
-                  action: (
-                    <Button
-                      type="button"
-                      disabled={running || launching}
-                      onClick={() =>
-                        open_.length > 0
-                          ? setOverrideReason("")
-                          : void confirmLaunch()
-                      }
-                    >
-                      <Icon name="rocket" size="sm" aria-hidden="true" />
-                      {launching
-                        ? "检查中…"
-                        : open_.length > 0
-                          ? "带缺项上线…"
-                          : "确认上线"}
-                    </Button>
-                  ),
-                }
-              : {})}
-          />
-        ) : (
-          <Banner
-            tone="info"
-            title={`当前是「${productStateMeta(product.state).label}」，这里只做复验`}
-            description={
-              product.state === "active"
-                ? "对方改过配置、或密钥轮换后应当跑一次。复验失败不会自动停用——自动停用一个正在跑的产品，是把监测信号变成破坏性动作。要停由人在页头的生命周期菜单里停。"
-                : productStateMeta(product.state).hint
-            }
-          />
-        )}
       </div>
-      {/* 带理由跳过上线闸门。**条件不删也不降级**，只多一条写明理由的路；
-          理由进审计，缺哪几项写在产品行上，产品页据此常驻提示直到复验补齐。 */}
-      <DialogForm
-        size="sm"
-        open={overrideReason !== null}
-        onOpenChange={(next) => {
-          if (!next) setOverrideReason(null);
-        }}
-        title="带缺项上线"
-        description={`还差 ${open_.length} 项：${open_
-          .map((r) => r.label)
-          .join("、")}。上线后这几项会一直显在产品页上，直到复验通过。`}
-        submitLabel="写明理由并上线"
-        submitting={launching}
-        onSubmit={(e) => {
-          e.preventDefault();
-          const reason = (overrideReason ?? "").trim();
-          if (!reason) return;
-          void confirmLaunch(reason);
-        }}
-      >
-        <Textarea
-          rows={4}
-          value={overrideReason ?? ""}
-          placeholder="例如：对方后端下周才能接入联调，先上线以便对方能拿到 token-exchange 目标。"
-          onChange={(e) => setOverrideReason(e.target.value)}
-        />
-      </DialogForm>
     </Drawer>
   );
 }

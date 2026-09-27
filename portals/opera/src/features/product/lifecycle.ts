@@ -348,11 +348,96 @@ const THEIR_SIDE = new Set([
   "c1_s2s",
   "c2_entitlement",
   "c3_metering",
+  /* 环节②「上线前」的四项人工确认（2026-09-27）：确认的是对方实现了没有——归对方侧，
+     红着时运营该做的是去问对方，不是改平台配置。 */
+  "c1_s2s_declared",
+  "c2_entitlement_declared",
+  "c3_metering_declared",
+  "webhook_receiver_declared",
 ]);
 
 /** 一项检查归哪一侧。目录页的验证态与接入检查抽屉的分组都读这一处。 */
 export function sideOfChecklistItem(itemCode: string): "ours" | "theirs" {
   return THEIR_SIDE.has(itemCode) ? "theirs" : "ours";
+}
+
+/**
+ * 接入检查的四个环节（owner 2026-09-27：「按照设计的每个步骤拆开，全部转绿可以下一步；
+ * 不能自动的先手动确认，在下一个环节可以自动确认；完全不能自动的保留手动确认」）。
+ *
+ * 环节不是第三根轴：它由 `gate` 派生——launch 门的项分成「我方配置」与「对方接入 ·
+ * 上线前确认」两屏，stable 门的项分成「发布套餐」与「测试租户验证」两屏。拆开的理由是
+ * 每一屏只回答一个问题、且这一屏的每一项**在这一屏就能确认**（实测或人工），而不是把
+ * 后面环节才测得到的项灰着挂在前面让人猜。
+ */
+export type ChecklistStage = "configure" | "prelaunch" | "publish" | "verify";
+
+export const CHECKLIST_STAGES: readonly {
+  key: ChecklistStage;
+  no: number;
+  title: string;
+  hint: string;
+}[] = [
+  {
+    key: "configure",
+    no: 1,
+    title: "登记与配置",
+    hint: "我方在平台侧配的东西，全部由平台实测。",
+  },
+  {
+    key: "prelaunch",
+    no: 2,
+    title: "对方接入 · 上线前确认",
+    hint: "登录接通由平台实测；换票 / 权益 / 用量 / 回调接收端此时平台看不见，按对方回报人工确认。全部通过才能确认上线。",
+  },
+  {
+    key: "publish",
+    no: 3,
+    title: "发布套餐",
+    hint: "在 admin · 服务套餐为本产品发布套餐版本。发布没有别的前置。",
+  },
+  {
+    key: "verify",
+    no: 4,
+    title: "测试租户验证 · 转正式版",
+    hint: "测试用途的真实租户订阅并使用后，换票 / 权益 / 用量三项由平台观测自动点亮。全部通过后在 admin 把承诺等级改成正式版。",
+  },
+];
+
+/* 检查项（含没有检查单行的实测项，按 launch-checks 的 id）→ 环节。 */
+const STAGE_OF: Record<string, ChecklistStage> = {
+  catalog_registered: "configure",
+  client: "configure",
+  "atlas-grants": "configure",
+  "runos-grants": "configure",
+  webhook: "configure",
+  c1_identity: "prelaunch",
+  c1_s2s_declared: "prelaunch",
+  c2_entitlement_declared: "prelaunch",
+  c3_metering_declared: "prelaunch",
+  webhook_receiver_declared: "prelaunch",
+  plan_published: "publish",
+  tenant_subscribed: "verify",
+  c1_s2s: "verify",
+  c2_entitlement: "verify",
+  c3_metering: "verify",
+};
+
+/**
+ * 一项检查在哪个环节。`key` 是检查单的 item_code 或实测项的 id。
+ *
+ * 没登记在表里的项按 `gate` 兜底：launch 门归「上线前确认」、stable 门归「测试租户验证」
+ * ——新加一行检查项而忘了登记环节时，它仍然落在正确的那道门里，不会消失。
+ */
+export function stageOfCheck(key: string, gate?: string): ChecklistStage {
+  const known = STAGE_OF[key];
+  if (known) return known;
+  return (gate ?? "launch") === "stable" ? "verify" : "prelaunch";
+}
+
+/** 卡上线门的两个环节。确认上线只数这两屏的实测与人工项。 */
+export function stageGatesLaunch(stage: ChecklistStage): boolean {
+  return stage === "configure" || stage === "prelaunch";
 }
 
 export function verificationOf(
