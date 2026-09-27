@@ -1152,6 +1152,15 @@ select
   pay.pay_status                   as pay_status,
   pay.paid_amount                  as payment_paid_amount,
   pay.paid_at                      as payment_paid_at,
+  -- 客户申报（product_321 P8/P10）：lateral 一直在，列曾漏出 SELECT，于是接口的
+  -- declaredPayment 恒为 null——admin 上「驳回申报」按钮从来渲染不出来、确认弹窗也锁不住
+  -- 申报金额（服务端仍拦，只是运营看不见为什么）。2026-09-27 生产实单抓到。
+  declared.declared_channel,
+  declared.declared_payer,
+  declared.declared_transaction_no,
+  declared.declared_remark,
+  declared.declared_amount,
+  declared.declared_at,
   rf.refund_id,
   rf.refund_no,
   rf.refund_amount,
