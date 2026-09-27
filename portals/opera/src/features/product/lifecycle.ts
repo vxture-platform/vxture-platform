@@ -247,6 +247,18 @@ export function actionsFor(state: ProductState): readonly ProductAction[] {
   return PRODUCT_ACTIONS.filter((a) => a.from.includes(state));
 }
 
+/**
+ * 这一档能不能「确认上线」——只问 PRODUCT_ACTIONS 里 launch 的 from，不在别处再写状态名。
+ *
+ * 2026-09-27 查出的漏洞：launch.from 与 BFF 的 STATE_TRANSITIONS 都早已放行 developing，
+ * 而 LaunchDrawer 的页脚仍写死 `state === "draft"`——13 个「开发中」的产品在界面上只看得到
+ * 「只做复验」，上不了线。三处必须一致的表，第四处（渲染条件）没人对表。
+ * 把判定收进这里，渲染只问这一个函数；再加一档状态时改表即可。
+ */
+export function canLaunchFrom(state: ProductState): boolean {
+  return actionsFor(state).some((a) => a.id === "launch");
+}
+
 /* ── 验证态 ──────────────────────────────────────────────────────────────── */
 
 export type VerificationState = "unverified" | "ours" | "theirs" | "passed";
