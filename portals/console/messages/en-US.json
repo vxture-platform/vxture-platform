@@ -3537,5 +3537,17 @@
       "not_a_member": "This person is not in this workspace yet — add them first.",
       "generic": "That did not work. Please try again."
     }
+  },
+  "enums": {
+    "suspensionState": {
+      "platform_ops": "Under maintenance",
+      "dispute_review": "Under review",
+      "customer_violation": "Service restricted",
+      "other": "Paused"
+    },
+    "suspensionHint": {
+      "expected": "Expected back around {time}",
+      "extendsTerm": "Paused time does not count against your term"
+    }
   }
 }

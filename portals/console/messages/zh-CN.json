@@ -3537,5 +3537,17 @@
       "not_a_member": "这个人不在这个工作空间里，先把他加进来。",
       "generic": "操作失败，请稍后重试。"
     }
+  },
+  "enums": {
+    "suspensionState": {
+      "platform_ops": "升级维护中",
+      "dispute_review": "审核中",
+      "customer_violation": "服务受限",
+      "other": "已暂停"
+    },
+    "suspensionHint": {
+      "expected": "预计 {time} 恢复",
+      "extendsTerm": "暂停期间不计入有效期"
+    }
   }
 }

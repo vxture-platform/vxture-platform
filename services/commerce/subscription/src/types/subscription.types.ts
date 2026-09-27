@@ -121,6 +121,53 @@ export interface UpdateSubscriptionInput {
   expectedStatus?: string;
 }
 
+// ── 暂停 episode（metering.subscription_suspensions）────────────────────────
+// 运营对单条订阅的暂停 / 恢复走 admin-bff 的裸 SQL 事务（subscriptions.router 的
+// SUSPENSION_OPEN_SQL）；这里是服务侧写入方的契约——产品级维护窗口的批量暂停
+// （2026-09-27）由 platform-api 作业经本服务开 episode。
+
+/** 开一条暂停 episode。镜像 admin-bff SUSPENSION_OPEN_SQL 的列，外加窗口归属。 */
+export interface OpenSuspensionInput {
+  subscriptionId: string;
+  tenantId: string;
+  /** @shared SUSPENSION_REASONS 之一；顺不顺延由它派生但**落库**（extendsTerm）。 */
+  reason: string;
+  reasonNote?: string | null;
+  extendsTerm: boolean;
+  /** 暂停那一刻的 auto_renew，恢复时还原；不知道就 null（= 恢复时不动）。 */
+  autoRenewBefore: boolean | null;
+  expectedResumeAt: Date | null;
+  actorType: "system" | "customer" | "operator";
+  actorId?: string | null;
+  clientIp?: string | null;
+  /** 产品级维护窗口批量开的 episode 带窗口 id；个例暂停为 null。 */
+  maintenanceWindowId?: string | null;
+}
+
+/** 进窗口候选：产品打着窗口、订阅在服务中、没有未闭合 episode。 */
+export interface MaintenanceCandidate {
+  subscriptionId: string;
+  tenantId: string;
+  /** 扫到时的状态，给 CAS 用（expectedStatus）。 */
+  status: string;
+  autoRenew: boolean;
+  productId: string;
+  maintenanceWindowId: string;
+  /** 产品上的 maintenance_until = 这次暂停的预计恢复时间。 */
+  maintenanceUntil: Date;
+}
+
+/** 出窗口候选：未闭合 episode 带窗口 id，而产品上已不再打着同一个窗口 id。 */
+export interface MaintenanceRelease {
+  /** episode id */
+  id: string;
+  subscriptionId: string;
+  /** 扫到时的订阅状态（谓词已限定 suspended，带出来给服务层复核）。 */
+  status: string;
+  autoRenewBefore: boolean | null;
+  maintenanceWindowId: string;
+}
+
 // ── Payment declaration (product_321 P8) ────────────────────────────────────
 // Orders live in billing.orders (product_330); the declare orchestration is
 // OrderService.declarePayment. These types are the shared contract for it.

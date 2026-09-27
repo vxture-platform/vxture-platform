@@ -93,4 +93,7 @@ export type {
   DeclarePayChannel,
   DeclarePaymentInput,
   DeclarePaymentResult,
+  OpenSuspensionInput,
+  MaintenanceCandidate,
+  MaintenanceRelease,
 } from "./types/subscription.types";

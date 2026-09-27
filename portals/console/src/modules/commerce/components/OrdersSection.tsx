@@ -57,6 +57,7 @@ import { OrderDetailPanel } from "./OrderDetailPanel";
 import { useOrderPolling } from "./pay/useOrderPolling";
 import { PAY_AXIS, SVC_AXIS, formatRemain } from "./hubModel";
 import { useDateFormat } from "@/lib/use-date-format";
+import { useSuspensionLabels } from "@/modules/shared/enum-labels";
 
 const ORDERS_PAGE_SIZE = 10;
 
@@ -92,6 +93,7 @@ const SVC_AXIS_BY_SUBSCRIPTION: Record<
 
 export function OrdersSection() {
   const { fmtDate, fmtTime } = useDateFormat();
+  const suspension = useSuspensionLabels();
 
   const t = useTranslations("subscriptionHub");
   const tableLabels = useTableLabels();
@@ -356,7 +358,11 @@ export function OrdersSection() {
             ? SVC_AXIS_BY_SUBSCRIPTION[o.subscriptionStatus]
             : undefined) ?? SVC_AXIS[o.orderStatus];
         return (
-          <StatusBadge tone={axis.tone}>{t(`svcAxis.${axis.key}`)}</StatusBadge>
+          <StatusBadge tone={axis.tone}>
+            {o.subscriptionStatus === "suspended"
+              ? suspension.state(o.subscriptionSuspension)
+              : t(`svcAxis.${axis.key}`)}
+          </StatusBadge>
         );
       },
     },
