@@ -1,53 +1,59 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
   ActionMenu,
   Badge,
+  Button,
   DataTable,
   EmptyState,
+  EntryCard,
   FilterBar,
   Input,
   ListPageTemplate,
-  MetricGrid,
   NativeSelect,
   Section,
-  SegmentedControl,
   StatusBadge,
   TableTitleCell,
-  Button,
 } from "@vxture/design-system";
 import type { IconName, StatusBadgeTone } from "@vxture/design-system";
+import type { TicketPriority } from "@vxture-platform/shared";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import type { PageSize } from "@/modules/shared/PageSizePicker";
+import { useTicketPriorityLabels } from "@/modules/shared/enum-labels";
+import { isUnset } from "@/modules/shared/display";
+import { formatCurrency } from "@/modules/commercial/CommercialUtils";
 import {
+  fetchOperatorNotices,
   fetchOrderOperations,
   fetchSupportTicketsStrict,
   fetchTenantOperationsStrict,
 } from "@/api/admin-bff";
+import type { OperatorNoticeItem } from "@/api/admin-bff";
 import type {
   OrderOperationRecord,
   SupportTicketRecord,
   TenantOperationRecord,
+  TenantOperationType,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import { SystemNoticesSection } from "./SystemNoticesSection";
 import {
   formatNumber,
   riskLabel,
   statusLabel,
   typeLabel,
-  verifiedLabel,
 } from "@/modules/tenants/tenant-utils";
-import { formatClock, formatDay } from "@vxture-platform/shared";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
-type TodoSeverity = "rose" | "amber" | "blue" | "green";
+type TPage = ReturnType<typeof useTranslations<"opsTodosPage">>;
+
+/** 紧急 / 关注 / 一般。此前还有一档 `green`，没有任何来源产出它，随本次摘掉。 */
+type TodoSeverity = "rose" | "amber" | "blue";
 /**
  * `payment`（收款确认）2026-09-02 加入：客户已申报付款 / 钱到了没开通 / 收了一半的
  * 订单，是全平台最紧急的人工事项，此前只在订单列表的状态筛选里，总览待办看不到
@@ -57,46 +63,77 @@ type TodoSeverity = "rose" | "amber" | "blue" | "green";
  */
 type TodoType = "payment" | "verification" | "risk" | "ticket";
 
+/**
+ * 「任务」列那一句话的**素材**，不是成句。句子在渲染时按界面语言由 `taskSentence`
+ * 拼出来；这里只记它是哪一种、带哪几个参数。金额在这一层就格式化好——CSV 与表格
+ * 两处要同一个写法。
+ */
+type TaskSpec =
+  | { kind: "confirmPayment"; amount: string }
+  | { kind: "reprovision"; amount: string }
+  | { kind: "followUpBalance"; amount: string; paid: string }
+  | { kind: "verification" }
+  | { kind: "risk" }
+  | { kind: "ticket"; title: string };
+
+/**
+ * 「进展」列的档位。订单待办按运营侧五步（下单 → 客户申报 → 核对到账 → 自动开通
+ * → 完成）报「第几步」；其余三类没有步骤，只报一个状态词。
+ */
+type ProgressKey =
+  | "pendingVerify"
+  | "paidUnprovisioned"
+  | "partialPending"
+  | "verification"
+  | "risk"
+  | "ticketOpen"
+  | "ticketProcessing"
+  | "ticketBlocked";
+
 interface OpsTodoItem {
   id: string;
   type: TodoType;
-  title: string;
   /**
-   * 事项的**可视编号**,单独成字段而不是揉进 `title`。
+   * 事项的**可视编号**,单独成字段而不是揉进句子。
    *
    * 三路来源各有各的码:订单 `order_no`、工单 `ticket_no`(BFF 侧
    * `id: row.ticket_no`,不是主键)、租户级事项没有单据号故用 `tenantCode`。
    * 一律是可视码,**任何场景不展示 UUID**。
    */
   code: string;
-  description: string;
+  task: TaskSpec;
+  /** 「任务」列的副行：单号 · 套餐 / 租户码 · 风险 / 工单号 · 优先级。 */
+  secondary: string;
   tenantId: string;
   /** 面向用户的租户编码，跳转用——地址栏不出 UUID。 */
   tenantCode: string;
   tenantName: string;
+  tenantType: TenantOperationType;
   /**
-   * 租户侧的**联系人**(`ownerName`),租户列的副行。
+   * 租户列的副行：**是谁在等**。
    *
-   * 订单记录本身不带它——`operatorName` 是平台经办人,不是客户——所以订单待办
-   * 走本页已载入的租户表按 `tenantId` 反查;查不到就是「—」,**不退回 UUID,也不
-   * 拿经办人冒充客户**。
+   * 订单待办取申报腿的申报人（`declaredBy.displayName`，接口 2026-09-27 起下发）——
+   * 客服要联系的正是这个人；接口没带时退回本页已载入的租户表按 `tenantId` 反查
+   * 联系人。其余三类就是租户联系人。查不到就是「—」，**不退回 UUID，也不拿平台
+   * 经办人冒充客户**。
    */
-  tenantUser: string;
+  contactName: string;
   tenantMeta: string;
   href: string;
   severity: TodoSeverity;
   priority: number;
-  updatedAt: string;
-  icon: IconName;
-  tags: string[];
+  /**
+   * 等待起点（ISO）。「等待」列与统计卡的「最久等了」都从它算：
+   * 订单待办取客户申报时刻（钱在途）/ 确认收款时刻（已付未开通）；认证取提交时刻；
+   * 工单只有 `updatedAt` 一根时间列，先用它。
+   */
+  waitingSince: string;
+  /** 只有收款确认才有金额；其余显示「—」。 */
+  amountText: string | null;
+  progress: ProgressKey;
+  /** 搜索框匹配的全文，小写。 */
+  searchText: string;
 }
-
-const TODO_TYPE_LABEL: Record<TodoType, string> = {
-  payment: "收款确认",
-  verification: "认证审核",
-  risk: "风险复核",
-  ticket: "工单处理",
-};
 
 const TODO_TYPE_ICON: Record<TodoType, IconName> = {
   payment: "credit-card",
@@ -108,11 +145,9 @@ const TODO_TYPE_ICON: Record<TodoType, IconName> = {
 /**
  * 分类栏只列这三档（owner 2026-09-20：「去掉 风险复核」）。
  *
- * **去的是筛选栏这一层，不是这类待办本身**——`risk` 仍在 buildOpsTodos 里产出、
- * 仍进「全部」档与表格的「类型」列、仍可处理。若连产出一并摘掉，现存的风险事项
- * 会在运营台完全不可见，成为没人看得见的孤儿。
- *
- * 所以此处单独列清单而不是从 TODO_TYPE_LABEL 删键：标签与图标仍要给表格用。
+ * **去的是主页这一层，不是这类待办本身**——`risk` 仍在 buildOpsTodos 里产出、
+ * 仍进「全部任务」页并可处理。若连产出一并摘掉，现存的风险事项会在运营台完全
+ * 不可见，成为没人看得见的孤儿。
  */
 export type TodoScope = "queue" | "all";
 
@@ -122,78 +157,48 @@ const TODO_FILTER_TYPES: readonly TodoType[] = [
   "ticket",
 ];
 
-/** 读不到联系人时的占位。显示「—」而不是空白,空白分不清「没有」与「没加载」。 */
-const UNKNOWN_USER = "—";
-
-/**
- * 每类待办的**主操作**:去哪一页、按钮叫什么。
- *
- * 此前四类共用一个「处理入口」,点之前不知道会跳到哪;`href` 本来就已按类型分流
- * (订单详情 / 认证审核页 / 租户详情 / 工单列表),缺的只是把去处写进按钮。
- * `listHref` 是同类全量列表——运营处理完一条常要看这类还剩多少。
- */
-const TODO_ACTION: Record<
-  TodoType,
-  { label: string; icon: IconName; listLabel: string; listHref: string }
-> = {
-  payment: {
-    label: "去确认收款",
-    icon: "credit-card",
-    listLabel: "查看全部订单",
-    listHref: "/orders",
-  },
-  verification: {
-    label: "去审核认证",
-    icon: "medal",
-    listLabel: "查看全部认证",
-    listHref: "/verifications",
-  },
-  risk: {
-    label: "去复核风险",
-    icon: "warning",
-    listLabel: "查看全部租户",
-    listHref: "/tenants",
-  },
-  ticket: {
-    label: "去处理工单",
-    icon: "chat-circle",
-    listLabel: "查看全部工单",
-    listHref: "/tickets",
-  },
+/** 每类待办的次要去处：同类全量列表——运营处理完一条常要看这类还剩多少。 */
+const TODO_LIST_HREF: Record<TodoType, string> = {
+  payment: "/orders",
+  verification: "/verifications",
+  risk: "/tenants",
+  ticket: "/tickets",
 };
 
 /**
  * 需要运营动手的订单态 → 待办。与订单列表的 ATTENTION_RANK（product_321 §4.2）同一
  * 口径：钱在途（客户已申报，等核对到账）最急；钱到了没开通（段 2 未落）其次；
  * 收了一半挂账再次。`pending`（客户还没付）不是待办——那是客户的事，TTL 自动关。
+ *
+ * 键名与结构被 `check-ops-todo-alerts` 守卫读取（每类待办都要有「推不推告警」的
+ * 裁定），改形状先看那条守卫。
  */
 const ORDER_TODO: Partial<
   Record<
     OrderOperationRecord["orderStatus"],
     {
-      title: string;
-      description: string;
+      task: "confirmPayment" | "reprovision" | "followUpBalance";
+      progress: ProgressKey;
       severity: TodoSeverity;
       priority: number;
     }
   >
 > = {
   pending_verify: {
-    title: "客户已申报付款，待确认收款",
-    description:
-      "客户已完成支付并申报，请核对到账后在订单里确认收款（自动开通）或驳回申报。",
+    task: "confirmPayment",
+    progress: "pendingVerify",
     severity: "rose",
     priority: 2,
   },
   paid_unprovisioned: {
-    title: "已收款但权益未开通",
-    description: "账单已结清，开通没有落地，请在订单里重试开通。",
+    task: "reprovision",
+    progress: "paidUnprovisioned",
     severity: "rose",
     priority: 3,
   },
   partial_pending: {
-    title: "部分收款，尾款挂账",
-    description: "已收到部分款项但未结清，请跟进尾款并在订单里确认收款。",
+    task: "followUpBalance",
+    progress: "partialPending",
     severity: "amber",
     priority: 15,
   },
@@ -202,9 +207,16 @@ const ORDER_TODO: Partial<
 function severityOrder(severity: TodoSeverity) {
   if (severity === "rose") return 0;
   if (severity === "amber") return 1;
-  if (severity === "blue") return 2;
-  return 3;
+  return 2;
 }
+
+const SEVERITY_TONE: Record<TodoSeverity, StatusBadgeTone> = {
+  rose: "danger",
+  amber: "warning",
+  blue: "info",
+};
+
+const SEVERITIES: readonly TodoSeverity[] = ["rose", "amber", "blue"];
 
 function buildTenantMeta(tenant: TenantOperationRecord) {
   return `${typeLabel(tenant.tenantType)} / ${tenant.region} / ${statusLabel(tenant.status)}`;
@@ -223,10 +235,55 @@ function ticketPriority(ticket: SupportTicketRecord) {
   return 50;
 }
 
+function ticketProgress(status: SupportTicketRecord["status"]): ProgressKey {
+  if (status === "blocked") return "ticketBlocked";
+  if (status === "processing") return "ticketProcessing";
+  return "ticketOpen";
+}
+
+/**
+ * 订单待办的等待起点。钱在途：从客户申报那一刻起算（`declaredPayment.declaredAt`）；
+ * 已付未开通：从确认收款那一刻起算；都读不到就退回最近更新时刻——宁可少算也
+ * 不能没有。
+ */
+function orderWaitingSince(order: OrderOperationRecord) {
+  if (order.orderStatus === "pending_verify") {
+    return order.declaredPayment?.declaredAt ?? order.updatedAt;
+  }
+  if (order.orderStatus === "paid_unprovisioned") {
+    return order.confirmedAt ?? order.updatedAt;
+  }
+  return order.updatedAt;
+}
+
+function orderTask(
+  kind: "confirmPayment" | "reprovision" | "followUpBalance",
+  order: OrderOperationRecord,
+): TaskSpec {
+  const amount = formatCurrency(order.amount, order.currency);
+  if (kind === "followUpBalance") {
+    return {
+      kind,
+      amount,
+      paid: formatCurrency(order.paidAmount, order.currency),
+    };
+  }
+  if (kind === "reprovision") return { kind, amount };
+  return { kind, amount };
+}
+
+/** 派生待办时要用到的、按界面语言取的文案。纯函数拿不到 `t`，由组件传进来。 */
+interface TodoLabels {
+  unknown: string;
+  ticketPriority: Record<TicketPriority, string>;
+  riskMeta: (risk: string, status: string) => string;
+}
+
 function buildOpsTodos(
   tenants: TenantOperationRecord[],
   tickets: SupportTicketRecord[],
   orders: OrderOperationRecord[],
+  labels: TodoLabels,
 ): OpsTodoItem[] {
   // 订单待办的联系人要从租户表借。用 Map 而不是每单 find:租户上限 500 行、
   // 订单可比它多,逐单线性扫是 O(n·m)。
@@ -237,25 +294,40 @@ function buildOpsTodos(
   const orderTodos = orders.flatMap((order) => {
     const spec = ORDER_TODO[order.orderStatus];
     if (!spec) return [];
+    const secondary = [
+      order.orderNo,
+      isUnset(order.servicePlanName) ? null : order.servicePlanName,
+      isUnset(order.tierName) ? null : order.tierName,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const contactName =
+      order.declaredBy?.displayName ||
+      tenantOwnerById.get(order.tenantId) ||
+      labels.unknown;
     return [
       {
         id: `${order.tenantId}-order-${order.id}`,
         type: "payment" as const,
         code: order.orderNo,
-        title: spec.title,
-        description: `${order.tenantName} · ${order.solutionName} · ${order.servicePlanName}，金额 ${order.currency} ${order.amount.toFixed(2)}。${spec.description}`,
+        task: orderTask(spec.task, order),
+        secondary,
         tenantId: order.tenantId,
         tenantCode: formatPrincipalNoOr(order.tenantCode, "tenant", "—"),
         tenantName: order.tenantName,
-        tenantUser: tenantOwnerById.get(order.tenantId) ?? UNKNOWN_USER,
+        tenantType: order.tenantType,
+        contactName,
         tenantMeta: `${typeLabel(order.tenantType)} / ${order.region}`,
-        // 直达订单详情（可读码 order_no），「确认收款」按钮就在那一页。
+        // 直达订单详情（可读码 order_no），「确认收款」按钮就在那一页的任务卡上。
         href: `/orders/${encodeURIComponent(order.orderNo)}`,
         severity: spec.severity,
         priority: spec.priority,
-        updatedAt: order.updatedAt,
-        icon: TODO_TYPE_ICON.payment,
-        tags: [TODO_TYPE_LABEL.payment, order.tierName],
+        waitingSince: orderWaitingSince(order),
+        amountText: formatCurrency(order.amount, order.currency),
+        progress: spec.progress,
+        searchText: [secondary, order.tenantName, contactName]
+          .join(" ")
+          .toLowerCase(),
       },
     ];
   });
@@ -263,45 +335,56 @@ function buildOpsTodos(
   const tenantTodos = tenants.flatMap((tenant) => {
     const items: OpsTodoItem[] = [];
     const tenantMeta = buildTenantMeta(tenant);
+    const code = formatPrincipalNoOr(tenant.tenantCode, "tenant", "—");
+    const contactName = tenant.ownerName || labels.unknown;
     // 地址栏走可读码。此前这里是 `tenant.id`(UUID),与表格租户列那处的
     // `tenantCode` 各走各的——全站规则是任何路由都不出 UUID。
     const tenantHref = `/tenants/${encodeURIComponent(tenant.tenantCode)}`;
 
     if (tenant.verifiedStatus === "pending") {
+      const secondary = [code, tenant.industry, tenant.scale]
+        .filter(Boolean)
+        .join(" · ");
       items.push({
         id: `${tenant.id}-verification`,
         type: "verification",
-        code: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
-        title: "认证待审核",
-        description: `当前认证状态为${verifiedLabel(tenant.verifiedStatus)}，需要核验资质材料与联系人信息。`,
+        code,
+        task: { kind: "verification" },
+        secondary,
         tenantId: tenant.id,
-        tenantCode: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
+        tenantCode: code,
         tenantName: tenant.displayName,
-        tenantUser: tenant.ownerName || UNKNOWN_USER,
+        tenantType: tenant.tenantType,
+        contactName,
         tenantMeta,
         href: "/verifications",
         severity: "amber",
         priority: 20,
-        updatedAt:
-          tenant.verificationSubmittedAt ??
-          tenant.lastActiveAt ??
-          tenant.createdAt,
-        icon: TODO_TYPE_ICON.verification,
-        tags: [tenant.industry, tenant.scale],
+        waitingSince: tenant.verificationSubmittedAt ?? tenant.createdAt,
+        amountText: null,
+        progress: "verification",
+        searchText: [secondary, tenant.displayName, contactName]
+          .join(" ")
+          .toLowerCase(),
       });
     }
 
     if (tenant.riskLevel !== "normal" || tenant.status === "suspended") {
+      const secondary = `${code} · ${labels.riskMeta(
+        riskLabel(tenant.riskLevel),
+        statusLabel(tenant.status),
+      )}`;
       items.push({
         id: `${tenant.id}-risk`,
         type: "risk",
-        code: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
-        title: "风险状态需复核",
-        description: tenant.notes,
+        code,
+        task: { kind: "risk" },
+        secondary,
         tenantId: tenant.id,
-        tenantCode: formatPrincipalNoOr(tenant.tenantCode, "tenant", "—"),
+        tenantCode: code,
         tenantName: tenant.displayName,
-        tenantUser: tenant.ownerName || UNKNOWN_USER,
+        tenantType: tenant.tenantType,
+        contactName,
         tenantMeta,
         href: tenantHref,
         severity:
@@ -309,10 +392,13 @@ function buildOpsTodos(
             ? "rose"
             : "amber",
         priority: tenant.riskLevel === "high" ? 5 : 25,
-        updatedAt: tenant.lastActiveAt ?? tenant.createdAt,
-        icon: TODO_TYPE_ICON.risk,
-        // SLA 标签删了：租户投影里那个字段从来是字面量 "未设置"，没有来源（2026-08-30）。
-        tags: [`风险 ${riskLabel(tenant.riskLevel)}`],
+        // 风险没有「进入风险态」的时刻列，只能拿最近活跃 / 创建时刻当起点。
+        waitingSince: tenant.lastActiveAt ?? tenant.createdAt,
+        amountText: null,
+        progress: "risk",
+        searchText: [secondary, tenant.displayName, contactName]
+          .join(" ")
+          .toLowerCase(),
       });
     }
 
@@ -326,72 +412,286 @@ function buildOpsTodos(
 
   const ticketTodos = tickets
     .filter((ticket) => ticket.status !== "closed")
-    .map((ticket) => ({
-      id: `${ticket.tenantId}-${ticket.id}`,
-      type: "ticket" as const,
-      code: ticket.id,
-      title: ticket.title,
-      description: `${ticket.tenantName} 的 ${ticket.priority.toUpperCase()} 工单处于${ticket.status === "blocked" ? "阻塞" : ticket.status === "processing" ? "处理中" : "待处理"}状态。`,
-      tenantId: ticket.tenantId,
-      tenantCode: formatPrincipalNoOr(ticket.tenantCode, "tenant", "—"),
-      tenantName: ticket.tenantName,
-      tenantUser: ticket.ownerName || UNKNOWN_USER,
-      tenantMeta: `${typeLabel(ticket.tenantType)} / ${ticket.region} / ${statusLabel(ticket.tenantStatus)}`,
-      // 跳这张工单本身（2026-09-21）。原先这里是 `/tickets`，于是行操作里的
-      // 「去处理工单」与「查看全部工单」是同一个地址——点进去还得自己
-      // 在列表里找回那一条。`ticket.id` 是可读码 `ticket_no`（BFF 投影就是它）。
-      href: `/tickets/${encodeURIComponent(ticket.id)}`,
-      severity: ticketSeverity(ticket),
-      priority: ticketPriority(ticket),
-      updatedAt: ticket.updatedAt,
-      icon: TODO_TYPE_ICON.ticket,
-      tags: [ticket.priority.toUpperCase(), TODO_TYPE_LABEL.ticket],
-    }));
+    .map((ticket) => {
+      const secondary = `${ticket.id} · ${labels.ticketPriority[ticket.priority]}`;
+      const contactName = ticket.ownerName || labels.unknown;
+      return {
+        id: `${ticket.tenantId}-${ticket.id}`,
+        type: "ticket" as const,
+        code: ticket.id,
+        task: { kind: "ticket" as const, title: ticket.title },
+        secondary,
+        tenantId: ticket.tenantId,
+        tenantCode: formatPrincipalNoOr(ticket.tenantCode, "tenant", "—"),
+        tenantName: ticket.tenantName,
+        tenantType: ticket.tenantType,
+        contactName,
+        tenantMeta: `${typeLabel(ticket.tenantType)} / ${ticket.region} / ${statusLabel(ticket.tenantStatus)}`,
+        // 跳这张工单本身（2026-09-21）。原先这里是 `/tickets`，于是行操作里的
+        // 「去处理工单」与「查看全部工单」是同一个地址——点进去还得自己
+        // 在列表里找回那一条。`ticket.id` 是可读码 `ticket_no`（BFF 投影就是它）。
+        href: `/tickets/${encodeURIComponent(ticket.id)}`,
+        severity: ticketSeverity(ticket),
+        priority: ticketPriority(ticket),
+        waitingSince: ticket.updatedAt,
+        amountText: null,
+        progress: ticketProgress(ticket.status),
+        searchText: [secondary, ticket.title, ticket.tenantName, contactName]
+          .join(" ")
+          .toLowerCase(),
+      };
+    });
 
+  // 同一档紧急度里，等得最久的排最前——这一页是排班表，不是动态流。
   return [...orderTodos, ...tenantTodos, ...ticketTodos].sort((left, right) => {
     const severityDiff =
       severityOrder(left.severity) - severityOrder(right.severity);
     if (severityDiff !== 0) return severityDiff;
     return (
       left.priority - right.priority ||
-      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+      new Date(left.waitingSince).getTime() -
+        new Date(right.waitingSince).getTime()
     );
   });
 }
 
-const SEVERITY_LABEL: Record<TodoSeverity, string> = {
-  rose: "紧急",
-  amber: "关注",
-  blue: "一般",
-  green: "正常",
-};
+/** 把等待时长拆成天 / 小时 / 分钟；起点读不出来按 0 算，不让一条坏数据把整页拖垮。 */
+function elapsedParts(sinceIso: string, now: number) {
+  const since = new Date(sinceIso).getTime();
+  const ms = Number.isFinite(since) ? Math.max(0, now - since) : 0;
+  const totalMinutes = Math.floor(ms / 60_000);
+  return {
+    ms,
+    days: Math.floor(totalMinutes / 1440),
+    hours: Math.floor((totalMinutes % 1440) / 60),
+    minutes: totalMinutes % 60,
+  };
+}
 
-const SEVERITY_TONE: Record<TodoSeverity, StatusBadgeTone> = {
-  rose: "danger",
-  amber: "warning",
-  blue: "info",
-  green: "success",
-};
+const DAY_MS = 24 * 60 * 60_000;
 
-const CSV_COLUMNS: readonly CsvColumn<OpsTodoItem>[] = [
-  // 编号单列一栏:它此前揉在 title 里,拆出去之后若不补这一列,导出的 CSV 会**丢掉
-  // 编号**——而运营拿 CSV 正是为了按单号去对账。
-  { label: "编号", value: (item) => item.code },
-  { label: "事项", value: (item) => item.title },
-  { label: "说明", value: (item) => item.description },
-  { label: "租户", value: (item) => item.tenantName },
-  { label: "用户", value: (item) => item.tenantUser },
-  { label: "租户属性", value: (item) => item.tenantMeta },
-  { label: "类型", value: (item) => TODO_TYPE_LABEL[item.type] },
-  { label: "紧急度", value: (item) => SEVERITY_LABEL[item.severity] },
-  { label: "标签", value: (item) => item.tags.join(" / ") },
-  { label: "更新时间", value: (item) => item.updatedAt },
-];
+/** 超 24 小时橙、超 3 天红（设计稿 §4）。 */
+function waitTone(ms: number): StatusBadgeTone {
+  if (ms > 3 * DAY_MS) return "danger";
+  if (ms > DAY_MS) return "warning";
+  return "neutral";
+}
+
+function waitText(t: TPage, parts: ReturnType<typeof elapsedParts>) {
+  if (parts.days > 0) {
+    return t("wait.days", { days: parts.days, hours: parts.hours });
+  }
+  if (parts.hours > 0) {
+    return t("wait.hours", { hours: parts.hours, minutes: parts.minutes });
+  }
+  if (parts.minutes > 0) return t("wait.minutes", { minutes: parts.minutes });
+  return t("wait.justNow");
+}
+
+function taskSentence(t: TPage, task: TaskSpec): string {
+  switch (task.kind) {
+    case "confirmPayment":
+      return t("task.confirmPayment", { amount: task.amount });
+    case "reprovision":
+      return t("task.reprovision", { amount: task.amount });
+    case "followUpBalance":
+      return t("task.followUpBalance", {
+        amount: task.amount,
+        paid: task.paid,
+      });
+    case "verification":
+      return t("task.verification");
+    case "risk":
+      return t("task.risk");
+    case "ticket":
+      return t("task.ticket", { title: task.title });
+  }
+}
+
+/** 一条待办里等得最久的那个起点；空集合为 null。 */
+function oldestWaitingSince(items: readonly OpsTodoItem[]): string | null {
+  let oldest: string | null = null;
+  let oldestMs = Number.POSITIVE_INFINITY;
+  for (const item of items) {
+    const ms = new Date(item.waitingSince).getTime();
+    if (Number.isFinite(ms) && ms < oldestMs) {
+      oldestMs = ms;
+      oldest = item.waitingSince;
+    }
+  }
+  return oldest;
+}
+
+function useTodoTypeLabels(): Record<TodoType, string> {
+  const tTypes = useTranslations("opsTodosPage.types");
+  return {
+    payment: tTypes("payment"),
+    verification: tTypes("verification"),
+    risk: tTypes("risk"),
+    ticket: tTypes("ticket"),
+  };
+}
+
+function useSeverityLabels(): Record<TodoSeverity, string> {
+  const tSeverity = useTranslations("opsTodosPage.severity");
+  return {
+    rose: tSeverity("urgent"),
+    amber: tSeverity("attention"),
+    blue: tSeverity("normal"),
+  };
+}
+
+function useProgressLabels(): Record<ProgressKey, string> {
+  const tProgress = useTranslations("opsTodosPage.progress");
+  return {
+    pendingVerify: tProgress("pendingVerify"),
+    paidUnprovisioned: tProgress("paidUnprovisioned"),
+    partialPending: tProgress("partialPending"),
+    verification: tProgress("verification"),
+    risk: tProgress("risk"),
+    ticketOpen: tProgress("ticketOpen"),
+    ticketProcessing: tProgress("ticketProcessing"),
+    ticketBlocked: tProgress("ticketBlocked"),
+  };
+}
+
+/**
+ * 每类待办的**主按钮**叫什么、次要去处叫什么。
+ *
+ * 此前四类共用一个「处理入口」藏在 ⋯ 菜单里，点之前不知道会跳到哪；现在主按钮
+ * 直接摆在行尾，`href` 本来就已按类型分流（订单详情 / 认证审核页 / 租户详情 / 工单）。
+ */
+function useTodoActionLabels(): Record<
+  TodoType,
+  { primary: string; list: string }
+> {
+  const tActions = useTranslations("opsTodosPage.actions");
+  return {
+    payment: {
+      primary: tActions("goVerify"),
+      list: tActions("viewAllOrders"),
+    },
+    verification: {
+      primary: tActions("goReview"),
+      list: tActions("viewAllVerifications"),
+    },
+    risk: {
+      primary: tActions("goRecheck"),
+      list: tActions("viewAllTenants"),
+    },
+    ticket: {
+      primary: tActions("goHandle"),
+      list: tActions("viewAllTickets"),
+    },
+  };
+}
+
+/* 收 `t` 的工厂而不是模块级常量：常量在模块加载时就求值了，那一刻没有任何
+   运行时上下文，而列头与文案要按界面语言取（同 OrdersPage 的 orderCsvColumns）。 */
+function todoCsvColumns(
+  t: TPage,
+  typeLabels: Record<TodoType, string>,
+  severityLabels: Record<TodoSeverity, string>,
+  progressLabels: Record<ProgressKey, string>,
+): readonly CsvColumn<OpsTodoItem>[] {
+  return [
+    // 编号单列一栏——运营拿 CSV 正是为了按单号去对账。
+    { label: t("csv.code"), value: (item) => item.code },
+    { label: t("csv.task"), value: (item) => taskSentence(t, item.task) },
+    { label: t("csv.tenant"), value: (item) => item.tenantName },
+    { label: t("csv.contact"), value: (item) => item.contactName },
+    // 租户属性(类型/地区/状态)不进表格,仍留在 CSV 里——那是对账要用的。
+    { label: t("csv.tenantMeta"), value: (item) => item.tenantMeta },
+    { label: t("csv.type"), value: (item) => typeLabels[item.type] },
+    {
+      label: t("csv.severity"),
+      value: (item) => severityLabels[item.severity],
+    },
+    { label: t("csv.amount"), value: (item) => item.amountText },
+    { label: t("csv.waitingSince"), value: (item) => item.waitingSince },
+    {
+      label: t("csv.progress"),
+      value: (item) => progressLabels[item.progress],
+    },
+  ];
+}
+
+/**
+ * 待办页尾的「系统消息」一行（owner 2026-09-27：块保留，改成一行摘要 + 「查看全部」）。
+ *
+ * 只报「几条未读、最新一条是什么」，不在这里列消息、不在这里点已读——那些在
+ * /messages（`SystemNoticesSection` 的 all 档）。摘要读的是 digest 档（当天已读 +
+ * 所有未读），取其中第一条未读当「最新」。
+ */
+function SystemNoticesSummary() {
+  const tPage = useTranslations("opsTodosPage");
+  const router = useRouter();
+  const [state, setState] = useState<
+    | { status: "loading" }
+    | { status: "error" }
+    | { status: "ready"; unread: number; latest: OperatorNoticeItem | null }
+  >({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchOperatorNotices({ scope: "digest", limit: 10, offset: 0 })
+      .then((result) => {
+        if (cancelled) return;
+        setState({
+          status: "ready",
+          unread: result.unread,
+          latest: result.items.find((item) => item.readAt === null) ?? null,
+        });
+      })
+      .catch(() => {
+        // 读失败要显影，不能画成「没有未读」——那是两件事。
+        if (!cancelled) setState({ status: "error" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  let line: string;
+  if (state.status === "loading") {
+    line = tPage("notices.loading");
+  } else if (state.status === "error") {
+    line = tPage("notices.loadFailed");
+  } else if (state.unread > 0) {
+    line = state.latest
+      ? tPage("notices.unread", {
+          count: formatNumber(state.unread),
+          title: state.latest.title,
+        })
+      : tPage("notices.unreadOnly", { count: formatNumber(state.unread) });
+  } else {
+    line = tPage("notices.none");
+  }
+
+  return (
+    <Section
+      title={tPage("notices.title")}
+      icon="bell"
+      level={2}
+      action={
+        <ActionButton
+          variant="outline"
+          icon="arrow-right"
+          onClick={() => router.push("/messages")}
+        >
+          {tPage("notices.viewAll")}
+        </ActionButton>
+      }
+    >
+      <p className="text-body-sm text-muted-foreground">{line}</p>
+    </Section>
+  );
+}
 
 /**
  * 两个视图共用本件（owner 2026-09-20：「全部任务做二级页面展示」）。
  *
- *   queue（/ops-todos）     主页。只列与统计卡、筛选栏对齐的**三类**。
+ *   queue（/ops-todos）     主页。只列与统计卡对齐的**三类**。
  *   all  （/ops-todos/all） 全部任务。四类齐全，风险复核在这里有落点。
  *
  * 拆成两个视图而不是两份代码：表格列、操作菜单、CSV 列、翻页全都一样，复制一份
@@ -399,9 +699,14 @@ const CSV_COLUMNS: readonly CsvColumn<OpsTodoItem>[] = [
  */
 export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
   const isAll = scope === "all";
-  const locale = useLocale();
+  const tPage = useTranslations("opsTodosPage");
   const tShared = useTranslations();
   const tableLabels = useTableLabels();
+  const typeLabels = useTodoTypeLabels();
+  const severityLabels = useSeverityLabels();
+  const progressLabels = useProgressLabels();
+  const actionLabels = useTodoActionLabels();
+  const ticketPriorityLabels = useTicketPriorityLabels();
   const router = useRouter();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
@@ -410,15 +715,29 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
   const [tenantLoadError, setTenantLoadError] = useState<string | null>(null);
   const [ticketLoadError, setTicketLoadError] = useState<string | null>(null);
   const [orderLoadError, setOrderLoadError] = useState<string | null>(null);
-  /** 四类全量。H0 的「任务 N」报的是这个数——owner：「tag 显示 全部代办数量」。 */
+  /**
+   * 「等待」列的参照时刻。数据到手那一刻定一次，不在渲染里现取——渲染里取会让
+   * 每次重渲染都换一个数，也会让服务端与客户端首屏对不上。
+   */
+  const [now, setNow] = useState(() => Date.now());
+
+  const todoLabels = useMemo<TodoLabels>(
+    () => ({
+      unknown: tPage("unknown"),
+      ticketPriority: ticketPriorityLabels,
+      riskMeta: (risk, status) => tPage("secondary.riskMeta", { risk, status }),
+    }),
+    [tPage, ticketPriorityLabels],
+  );
+  /** 四类全量。页头的「任务 N」报的是这个数——owner：「tag 显示 全部代办数量」。 */
   const allTodos = useMemo(
-    () => buildOpsTodos(tenants, tickets, orders),
-    [tenants, tickets, orders],
+    () => buildOpsTodos(tenants, tickets, orders, todoLabels),
+    [tenants, tickets, orders, todoLabels],
   );
   /**
    * 本视图实际要列的那些。
    *
-   * 主页只列三类:统计卡是那三张、筛选栏是那三档,表格再混进第四类就对不上了。
+   * 主页只列三类:统计卡是那三张,表格再混进第四类就对不上了。
    * 风险复核不是被删掉,是搬到「全部任务」——那一页四类齐全。
    */
   const todos = useMemo(
@@ -430,12 +749,6 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
   );
   /** 主页上被折进「全部任务」的那些,区块说明要把这个数说出来。 */
   const hiddenCount = allTodos.length - todos.length;
-  const paymentTodos = todos.filter((todo) => todo.type === "payment");
-  const verificationTodos = todos.filter(
-    (todo) => todo.type === "verification",
-  );
-  const ticketTodos = todos.filter((todo) => todo.type === "ticket");
-  const riskTodos = todos.filter((todo) => todo.type === "risk");
   const [typeFilter, setTypeFilter] = useState<TodoType | "all">("all");
   const [severityFilter, setSeverityFilter] = useState<TodoSeverity | "all">(
     "all",
@@ -452,10 +765,7 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
       if (severityFilter !== "all" && todo.severity !== severityFilter)
         return false;
       if (!keyword) return true;
-      return [todo.title, todo.description, todo.tenantName, ...todo.tags]
-        .join(" ")
-        .toLowerCase()
-        .includes(keyword);
+      return todo.searchText.includes(keyword);
     });
   }, [todos, typeFilter, severityFilter, query]);
 
@@ -468,50 +778,91 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
   const selectedTodos = filteredTodos.filter((todo) =>
     selectedKeys.includes(todo.id),
   );
+  const hasActiveFilter =
+    Boolean(query) || typeFilter !== "all" || severityFilter !== "all";
 
-  const todoActions = (item: OpsTodoItem) => {
-    const action = TODO_ACTION[item.type];
+  /** 点卡片即筛选；再点一次回到全部。换分类即换行集，旧选择与页码随之失效。 */
+  const toggleTypeFilter = (type: TodoType) => {
+    setTypeFilter((current) => (current === type ? "all" : type));
+    setSelectedKeys([]);
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setQuery("");
+    setTypeFilter("all");
+    setSeverityFilter("all");
+    setSelectedKeys([]);
+    setPage(1);
+  };
+
+  /**
+   * 统计卡的一句人话：「N 笔待你核对，最久等了 6 分钟」。没有就说没有；
+   * 那一路数据没读到就说没读到——空白与 0 在这里是两件事。
+   */
+  const cardSentence = (type: TodoType, items: readonly OpsTodoItem[]) => {
+    if (isLoading) return tPage("cards.loading");
+    const oldest = oldestWaitingSince(items);
+    const params = {
+      count: formatNumber(items.length),
+      wait: oldest ? waitText(tPage, elapsedParts(oldest, now)) : "",
+    };
+    switch (type) {
+      case "payment":
+        if (items.length) return tPage("cards.payment", params);
+        return orderLoadError
+          ? tPage("cards.paymentUnavailable")
+          : tPage("cards.paymentEmpty");
+      case "verification":
+        return items.length
+          ? tPage("cards.verification", params)
+          : tPage("cards.verificationEmpty");
+      case "ticket":
+        if (items.length) return tPage("cards.ticket", params);
+        return ticketLoadError
+          ? tPage("cards.ticketUnavailable")
+          : tPage("cards.ticketEmpty");
+      case "risk":
+        return items.length
+          ? tPage("cards.risk", params)
+          : tPage("cards.riskEmpty");
+    }
+  };
+
+  // 卡的清单跟着视图走：全部任务页多一张风险复核，主页不列这一类——列了卡就成了
+  // 点不到的数。
+  const cardTypes: readonly TodoType[] = isAll
+    ? ["payment", "verification", "ticket", "risk"]
+    : TODO_FILTER_TYPES;
+
+  const todoMenu = (item: OpsTodoItem) => {
+    const tenantHref = `/tenants/${encodeURIComponent(item.tenantCode)}`;
     return (
       <ActionMenu
-        label={`${item.title} 待办操作`}
+        label={tPage("actions.menuLabel", { code: item.code })}
         items={[
-          {
-            id: "entry",
-            label: action.label,
-            icon: action.icon,
-            onSelect: () => router.push(item.href),
-          },
-          {
-            id: "tenant",
-            label: tShared("actions.viewTenant"),
-            icon: "buildings",
-            onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(item.tenantCode)}`),
-          },
+          // 主按钮已经去租户页的（风险复核）不再重复列一次「查看租户」。
+          ...(item.href === tenantHref
+            ? []
+            : [
+                {
+                  id: "tenant",
+                  label: tShared("actions.viewTenant"),
+                  icon: "buildings" as const,
+                  onSelect: () => router.push(tenantHref),
+                },
+              ]),
           {
             id: "list",
-            label: action.listLabel,
-            icon: "table",
-            onSelect: () => router.push(action.listHref),
+            label: actionLabels[item.type].list,
+            icon: "table" as const,
+            onSelect: () => router.push(TODO_LIST_HREF[item.type]),
           },
         ]}
       />
     );
   };
 
-  const pagination = (
-    <ListPagination
-      currentPage={activePage}
-      pageCount={pageCount}
-      total={filteredTodos.length}
-      pageSize={pageSize}
-      onPageSizeChange={(value) => {
-        setPageSize(value);
-        setPage(1);
-      }}
-      onPageChange={setPage}
-    />
-  );
   useEffect(() => {
     let cancelled = false;
 
@@ -525,7 +876,9 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
       fetchSupportTicketsStrict().catch((error) => {
         if (!cancelled) {
           setTicketLoadError(
-            error instanceof Error ? error.message : "工单数据读取失败",
+            error instanceof Error
+              ? error.message
+              : tPage("empty.ticketsFailed"),
           );
         }
         return [];
@@ -534,7 +887,9 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
       fetchOrderOperations().catch((error) => {
         if (!cancelled) {
           setOrderLoadError(
-            error instanceof Error ? error.message : "订单数据读取失败",
+            error instanceof Error
+              ? error.message
+              : tPage("empty.ordersFailed"),
           );
         }
         return [];
@@ -545,6 +900,7 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
           setTenants(tenantRecords);
           setTickets(ticketRecords);
           setOrders(orderRecords);
+          setNow(Date.now());
         }
       })
       .catch((error) => {
@@ -553,7 +909,9 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
           setTickets([]);
           setOrders([]);
           setTenantLoadError(
-            error instanceof Error ? error.message : "租户运营数据读取失败",
+            error instanceof Error
+              ? error.message
+              : tPage("empty.tenantsFailed"),
           );
         }
       })
@@ -566,7 +924,23 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tPage]);
+
+  const sectionDescription = [
+    tPage("section.summary", { count: formatNumber(todos.length) }),
+    // 主页把「本页列了几条」与「总共几条」的差额**说出来**:页头 badge 报四类全量,
+    // 这里只列三类,不点破就会被当成数字对不上。
+    !isAll && hiddenCount > 0
+      ? tPage("section.hiddenRisk", { count: formatNumber(hiddenCount) })
+      : null,
+    typeFilter !== "all"
+      ? tPage("section.filteringType", { type: typeLabels[typeFilter] })
+      : null,
+    ticketLoadError ? tPage("section.ticketsUnavailable") : null,
+    orderLoadError ? tPage("section.ordersUnavailable") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <ListPageTemplate
@@ -574,151 +948,89 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
       header={
         <PageHeader
           icon="table"
-          title={isAll ? "全部任务" : "待办任务"}
+          title={isAll ? tPage("header.allTitle") : tPage("header.queueTitle")}
           description={
             isAll
-              ? "四类待办的全量清单，含只在本页出现的风险复核。"
-              : "聚合待确认收款的订单、认证审核与工单，帮助运营按优先级推进人工处理。"
+              ? tPage("header.allDescription")
+              : tPage("header.queueDescription")
           }
           secondary={
-            <span className="inline-flex items-center gap-xs">
-              {/* 标题行直接报总量,免得运营为了知道"还剩多少"去数统计卡。
-                  **两个视图都报四类全量**(owner:「tag 显示 全部代办数量」)——
-                  它是这件事的总数,不是本页列了几条,所以既不随筛选变、也不随
-                  视图变。主页与它的差额由区块说明点明。 */}
-              <Badge>任务 {formatNumber(allTodos.length)}</Badge>
-              <Badge>只读聚合</Badge>
-            </span>
+            /* 标题行直接报总量,免得运营为了知道"还剩多少"去数统计卡。
+               **两个视图都报四类全量**(owner:「tag 显示 全部代办数量」)——
+               它是这件事的总数,不是本页列了几条,所以既不随筛选变、也不随
+               视图变。主页与它的差额由区块说明点明。 */
+            <Badge>
+              {tPage("header.totalBadge", {
+                count: formatNumber(allTodos.length),
+              })}
+            </Badge>
           }
         />
       }
       summary={
-        <MetricGrid
-          loading={isLoading}
-          aria-label="待办任务统计"
-          // 卡与下方筛选栏**同名同图标同口径**(owner 2026-09-20:「保留与统计区
-          // 对应的三个,注意名称一致」)——标签一律取 TODO_TYPE_LABEL,杜绝两处各写
-          // 一套中文("待确认收款" vs "收款确认")导致运营以为是两个不同的数。
-          //
-          // 列数跟着**卡数**走:全部任务页多一张风险复核,写死 3 会在右侧空出一块
-          // (2026-09-20 owner 实看报过一次同样的病)。
-          columns={isAll ? 4 : 3}
-          items={[
-            {
-              id: "payment",
-              help: "客户已申报付款待确认、已收款未开通、部分收款挂账的订单。",
-              icon: TODO_TYPE_ICON.payment,
-              label: TODO_TYPE_LABEL.payment,
-              value: formatNumber(paymentTodos.length),
-              tags: [orderLoadError ? "订单未接入" : "订单侧确认"],
-              tone: paymentTodos.length ? "danger" : "success",
-            },
-            {
-              id: "verification",
-              help: "来源为租户认证审核的待办。",
-              icon: TODO_TYPE_ICON.verification,
-              label: TODO_TYPE_LABEL.verification,
-              value: formatNumber(verificationTodos.length),
-              tags: ["组织资质"],
-              tone: verificationTodos.length ? "warning" : "success",
-            },
-            {
-              id: "tickets",
-              help: "来源为工单的待办。",
-              icon: TODO_TYPE_ICON.ticket,
-              label: TODO_TYPE_LABEL.ticket,
-              value: formatNumber(ticketTodos.length),
-              tags: [
-                `P0/P1 ${formatNumber(ticketTodos.filter((todo) => todo.priority <= 10).length)}`,
-              ],
-              tone: ticketTodos.length ? "warning" : "success",
-            },
-            // 第四张只在全部任务页出现——主页不列这一类,列了卡就成了点不到的数。
-            ...(isAll
-              ? [
-                  {
-                    id: "risk",
-                    help: "风险等级异常或已暂停的租户。",
-                    icon: TODO_TYPE_ICON.risk,
-                    label: TODO_TYPE_LABEL.risk,
-                    value: formatNumber(riskTodos.length),
-                    tags: ["仅本页可见"],
-                    tone: (riskTodos.length
-                      ? "danger"
-                      : "success") as StatusBadgeTone,
-                  },
-                ]
-              : []),
-          ]}
-        />
+        /* 统计卡就是分类筛选（设计稿 §4：「点卡片即筛选，下面的分段按钮就不要了——
+           二选一」）。用 EntryCard 而不是 MetricGrid：前者整卡可点、自带键盘与
+           role=button，后者只报数。三张 / 四张随视图走，列数跟着卡数。 */
+        <div
+          className={
+            isAll
+              ? "grid min-w-0 grid-cols-1 gap-md sm:grid-cols-2 xl:grid-cols-4"
+              : "grid min-w-0 grid-cols-1 gap-md sm:grid-cols-3"
+          }
+        >
+          {cardTypes.map((type) => {
+            const items = todos.filter((todo) => todo.type === type);
+            const active = typeFilter === type;
+            return (
+              <EntryCard
+                key={type}
+                icon={TODO_TYPE_ICON[type]}
+                title={typeLabels[type]}
+                meta={isLoading ? tPage("unknown") : formatNumber(items.length)}
+                description={cardSentence(type, items)}
+                aria-pressed={active}
+                onClick={() => toggleTypeFilter(type)}
+              >
+                {active ? (
+                  <StatusBadge tone="info" dot>
+                    {tPage("cards.filtering")}
+                  </StatusBadge>
+                ) : null}
+              </EntryCard>
+            );
+          })}
+        </div>
       }
       table={
         <>
           <Section
             // 全部任务页的页头已经叫「全部任务」了,区块再叫一遍等于把同一个词
             // 摞两层;这里说的是它列的是什么。
-            title={isAll ? "任务明细" : "任务队列"}
+            title={
+              isAll ? tPage("section.allTitle") : tPage("section.queueTitle")
+            }
             // 图标跟随当前分类，"全部"档退回队列自身图标。
             icon={typeFilter === "all" ? "table" : TODO_TYPE_ICON[typeFilter]}
             level={2}
-            // 主页把「本页列了几条」与「总共几条」的差额**说出来**:标题 badge 报
-            // 四类全量,这里只列三类,不点破就会被当成数字对不上。
-            description={`按紧急度与优先级排序，共 ${formatNumber(todos.length)} 条${
-              !isAll && hiddenCount > 0
-                ? `；另有 ${formatNumber(hiddenCount)} 条${TODO_TYPE_LABEL.risk}在「全部任务」里`
-                : ""
-            }${ticketLoadError ? "（工单未接入）" : ""}${orderLoadError ? "（订单未接入）" : ""}。`}
-            action={
-              <SegmentedControl
-                ariaLabel="待办分类"
-                value={typeFilter}
-                onChange={(next) => {
-                  setTypeFilter(next);
-                  // 换分类即换行集，旧选择与页码随之失效。
-                  setSelectedKeys([]);
-                  setPage(1);
-                }}
-                items={[
-                  { value: "all" as const, label: "全部", count: todos.length },
-                  ...(isAll
-                    ? (Object.keys(TODO_TYPE_LABEL) as TodoType[])
-                    : TODO_FILTER_TYPES
-                  ).map((type) => ({
-                    value: type,
-                    label: TODO_TYPE_LABEL[type],
-                    icon: TODO_TYPE_ICON[type],
-                    count: todos.filter((todo) => todo.type === type).length,
-                  })),
-                ]}
-              />
-            }
+            description={sectionDescription}
           >
             <FilterBar
-              view="list"
-              onViewChange={() => {}}
-              cardsDisabledReason={tShared("common.cardsRetired")}
-              aria-label="待办任务筛选"
+              aria-label={tPage("filters.ariaLabel")}
               count={formatNumber(filteredTodos.length)}
               search={
                 <Input
                   type="search"
                   className="min-w-media-2xl grow basis-0 max-w-panel-sm"
-                  placeholder="搜索事项、租户、标签…"
+                  placeholder={tPage("filters.searchPlaceholder")}
                   value={query}
                   onChange={(event) => {
                     setQuery(event.target.value);
                     setPage(1);
                   }}
-                  aria-label="搜索待办任务"
+                  aria-label={tPage("filters.searchAriaLabel")}
                 />
               }
-              onReset={() => {
-                setQuery("");
-                setTypeFilter("all");
-                setSeverityFilter("all");
-                setSelectedKeys([]);
-                setPage(1);
-              }}
+              onReset={resetFilters}
               actions={
                 /* 无"新建"：待办由聚合产生。 */
                 <>
@@ -731,7 +1043,9 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
                       router.push(isAll ? "/ops-todos" : "/ops-todos/all")
                     }
                   >
-                    {isAll ? "回到待办队列" : "查看全部任务"}
+                    {isAll
+                      ? tPage("filters.backToQueue")
+                      : tPage("filters.toAll")}
                   </ActionButton>
                   <ActionButton
                     icon="arrow-down"
@@ -740,7 +1054,12 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
                     onClick={() =>
                       exportRowsToCsv(
                         isAll ? "ops-todos-all" : "ops-todos",
-                        CSV_COLUMNS,
+                        todoCsvColumns(
+                          tPage,
+                          typeLabels,
+                          severityLabels,
+                          progressLabels,
+                        ),
                         selectedTodos,
                       )
                     }
@@ -757,102 +1076,109 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
                   setSeverityFilter(event.target.value as TodoSeverity | "all");
                   setPage(1);
                 }}
-                aria-label="紧急度"
+                aria-label={tPage("filters.severityAriaLabel")}
               >
                 {/* 「全部紧急度」四字会顶到下拉箭头底下(owner 2026-09-20 实看),
                   收成「全部」——aria-label 已经说明这一栏是紧急度。 */}
-                <option value="all">全部</option>
-                {(Object.keys(SEVERITY_LABEL) as TodoSeverity[]).map(
-                  (severity) => (
-                    <option key={severity} value={severity}>
-                      {SEVERITY_LABEL[severity]}
-                    </option>
-                  ),
-                )}
+                <option value="all">{tPage("filters.severityAll")}</option>
+                {SEVERITIES.map((severity) => (
+                  <option key={severity} value={severity}>
+                    {severityLabels[severity]}
+                  </option>
+                ))}
               </NativeSelect>
             </FilterBar>
 
+            {/* 七列定宽（设计稿 §4）：紧急度 / 任务 / 租户 · 申报人 / 金额 / 等待 /
+                进展 / 操作。短列走 DataTable 的宽度分档（它是最小宽度，DS 不开
+                自由 px），任务与租户两列留 auto 分掉余下的空间；任务格主辅两行各自
+                截断、整句放进 title，1440 宽下不出横向滚动。 */}
             <DataTable
               labels={tableLabels}
               columns={[
                 {
-                  id: "item",
-                  header: "事项",
-                  cell: (item) => (
-                    <TableTitleCell
-                      icon={item.icon}
-                      title={
-                        <span className="inline-flex flex-wrap items-baseline gap-2xs">
-                          <span>{item.title}</span>
-                          <span className="font-mono text-body-sm text-muted-foreground">
-                            {item.code}
-                          </span>
-                        </span>
-                      }
-                      description={item.description}
-                      onTitleClick={() => router.push(item.href)}
-                    />
-                  ),
-                },
-                {
-                  id: "tenant",
-                  header: "租户",
-                  cell: (item) => (
-                    <span className="inline-flex flex-col items-center gap-2xs">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() =>
-                          router.push(
-                            `/tenants/${encodeURIComponent(item.tenantCode)}`,
-                          )
-                        }
-                      >
-                        {item.tenantName}
-                      </Button>
-                      {/* 副行是**联系人**(owner 2026-09-20:「租户名称 + 用户,主副
-                        两行显示」)。租户属性(类型/地区/状态)不进表格,仍留在 CSV
-                        导出里——那是对账要用的,屏幕上一行放不下。 */}
-                      <span className="text-body-sm text-muted-foreground">
-                        {item.tenantUser}
-                      </span>
-                    </span>
-                  ),
-                },
-                {
-                  id: "type",
-                  header: tShared("columns.kind"),
-                  cell: (item) => TODO_TYPE_LABEL[item.type],
-                },
-                {
                   id: "severity",
-                  header: "紧急度",
+                  header: tPage("columns.severity"),
                   cell: (item) => (
-                    <StatusBadge tone={SEVERITY_TONE[item.severity]}>
-                      {SEVERITY_LABEL[item.severity]}
+                    <StatusBadge tone={SEVERITY_TONE[item.severity]} dot>
+                      {severityLabels[item.severity]}
                     </StatusBadge>
                   ),
                 },
                 {
-                  id: "tags",
-                  header: "标签",
+                  id: "task",
+                  header: tPage("columns.task"),
+                  align: "left",
+                  cell: (item) => {
+                    const sentence = taskSentence(tPage, item.task);
+                    return (
+                      <TableTitleCell
+                        icon={TODO_TYPE_ICON[item.type]}
+                        title={sentence}
+                        description={item.secondary}
+                        tooltip={`${sentence} · ${item.secondary}`}
+                        onTitleClick={() => router.push(item.href)}
+                      />
+                    );
+                  },
+                },
+                {
+                  id: "tenant",
+                  header: tPage("columns.tenant"),
+                  align: "left",
                   cell: (item) => (
-                    <span className="flex flex-wrap justify-center gap-xs">
-                      {item.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag}>{tag}</Badge>
-                      ))}
-                    </span>
+                    <TableTitleCell
+                      icon={
+                        item.tenantType === "company"
+                          ? "buildings"
+                          : "building-office"
+                      }
+                      title={item.tenantName}
+                      description={item.contactName}
+                      tooltip={`${item.tenantName} · ${item.contactName}`}
+                      onTitleClick={() =>
+                        router.push(
+                          `/tenants/${encodeURIComponent(item.tenantCode)}`,
+                        )
+                      }
+                    />
                   ),
                 },
                 {
-                  id: "updated",
-                  header: tShared("columns.updatedAt"),
+                  id: "amount",
+                  header: tPage("columns.amount"),
+                  align: "money",
+                  cell: (item) => item.amountText ?? tPage("unknown"),
+                },
+                {
+                  id: "wait",
+                  header: tPage("columns.wait"),
+                  width: "xs",
+                  cell: (item) => {
+                    const parts = elapsedParts(item.waitingSince, now);
+                    return (
+                      <StatusBadge tone={waitTone(parts.ms)} dot>
+                        {waitText(tPage, parts)}
+                      </StatusBadge>
+                    );
+                  },
+                },
+                {
+                  id: "progress",
+                  header: tPage("columns.progress"),
+                  width: "sm",
+                  cell: (item) => progressLabels[item.progress],
+                },
+                {
+                  id: "actions",
+                  header: tPage("columns.actions"),
+                  width: "sm",
                   cell: (item) => (
-                    <span className="inline-flex flex-col gap-2xs">
-                      <span>{formatDay(item.updatedAt, locale)}</span>
-                      <span className="text-body-sm text-muted-foreground">
-                        {formatClock(item.updatedAt, locale)}
-                      </span>
+                    <span className="inline-flex items-center gap-xs">
+                      <Button size="sm" onClick={() => router.push(item.href)}>
+                        {actionLabels[item.type].primary}
+                      </Button>
+                      {todoMenu(item)}
                     </span>
                   ),
                 },
@@ -865,28 +1191,52 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
               loading={isLoading}
               empty={
                 <EmptyState
-                  title={tenantLoadError ? "待办数据读取失败" : "当前没有待办"}
+                  title={
+                    tenantLoadError
+                      ? tPage("empty.loadFailedTitle")
+                      : tPage("empty.title")
+                  }
                   description={
                     tenantLoadError ??
-                    (query || typeFilter !== "all" || severityFilter !== "all"
+                    (hasActiveFilter
                       ? tShared("common.adjustFiltersHint")
-                      : (ticketLoadError ?? "数据库中没有匹配的待办任务。"))
+                      : ticketLoadError)
+                  }
+                  action={
+                    hasActiveFilter && !tenantLoadError ? (
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={resetFilters}
+                      >
+                        {tShared("common.clearFilters")}
+                      </ActionButton>
+                    ) : undefined
                   }
                 />
               }
-              rowActions={todoActions}
             />
             {/* 翻页行与上方筛选行**同为 Section 的直接子元素**,于是左右边距一致
               (owner 2026-09-20:「表格的头部操作行,底部翻页行,格式没有统一」)。
-              此前它走 DataTable 的 `footer` 槽——那一槽渲染在表格卡片**内**、
-              贴着表格左右边,比卡片外的筛选行窄一圈。 */}
-            {pagination}
+              只在装不下一页时才出现——一条任务配一整条翻页器是空转。 */}
+            {filteredTodos.length > pageSize ? (
+              <ListPagination
+                currentPage={activePage}
+                pageCount={pageCount}
+                total={filteredTodos.length}
+                pageSize={pageSize}
+                onPageSizeChange={(value) => {
+                  setPageSize(value);
+                  setPage(1);
+                }}
+                onPageChange={setPage}
+              />
+            ) : null}
           </Section>
 
           {/* S2 系统消息——只在主页出现;全部任务页是待办的二级页,不该把消息区
-            再画一遍。数据来自 admin.operator_notices(发布面在 opera)。
-            摘要规则「当天已读 + 所有未读」与二级页 /messages 共用一个件。 */}
-          {isAll ? null : <SystemNoticesSection />}
+            再画一遍。数据来自 admin.operator_notices(发布面在 opera)。 */}
+          {isAll ? null : <SystemNoticesSummary />}
         </>
       }
     />

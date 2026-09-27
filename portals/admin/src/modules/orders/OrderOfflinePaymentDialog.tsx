@@ -1,62 +1,70 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   DialogForm,
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
   Icon,
   Input,
-  Label,
   NativeSelect,
   Textarea,
 } from "@vxture/design-system";
+import { formatDay } from "@vxture-platform/shared";
 import type {
   OrderOfflinePaymentType,
   OrderOperationRecord,
 } from "@/entities/console";
+import { formatOrderAmount } from "@/modules/orders/order-format";
 
 export function remainingOrderAmount(order: OrderOperationRecord) {
   return Math.max(0, order.amount - order.paidAmount);
 }
 
 export function canConfirmOrderOfflinePayment(order: OrderOperationRecord) {
-  if (order.amount <= 0) return false;
-  if (remainingOrderAmount(order) <= 0) return false;
-  if (order.orderStatus === "confirmed" || order.orderStatus === "closed")
-    return false;
-  if (
-    order.paymentStatus === "not_required" ||
-    order.paymentStatus === "paid" ||
-    order.paymentStatus === "closed" ||
-    order.paymentStatus === "refunding"
-  )
-    return false;
-  return true;
+  return confirmOfflinePaymentDisabledReasonKey(order) === null;
 }
 
-export function confirmOfflinePaymentDisabledReason(
+/**
+ * 为什么不能确认收款——四档原因码，文案由调用方按自己的词条出
+ * （详情页走 `orderDetailPage.disabled.confirm.*`）。
+ */
+export type ConfirmDisabledReason = "free" | "done" | "closed" | "refunding";
+
+export function confirmOfflinePaymentDisabledReasonKey(
   order: OrderOperationRecord,
-) {
+): ConfirmDisabledReason | null {
   if (order.amount <= 0 || order.paymentStatus === "not_required")
-    return "免费订单不需要确认收款。";
+    return "free";
   if (
     remainingOrderAmount(order) <= 0 ||
     order.paymentStatus === "paid" ||
     order.orderStatus === "confirmed"
   )
-    return "订单已完成收款确认。";
+    return "done";
   if (order.orderStatus === "closed" || order.paymentStatus === "closed")
-    return "已关闭订单不能确认收款。";
-  if (order.paymentStatus === "refunding") return "退款中的订单不能确认收款。";
+    return "closed";
+  if (order.paymentStatus === "refunding") return "refunding";
   return null;
 }
 
-function formatCurrency(value: number, currency: string) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: currency || "CNY",
-    maximumFractionDigits: 2,
-  }).format(value);
+/**
+ * 列表页（OrdersPage）仍消费这份中文；它整页还没抽 i18n，只抽这四句会造出半中英。
+ * 详情页已改走 `confirmOfflinePaymentDisabledReasonKey` + 词条；列表页抽完后删本函数。
+ */
+export function confirmOfflinePaymentDisabledReason(
+  order: OrderOperationRecord,
+) {
+  const key = confirmOfflinePaymentDisabledReasonKey(order);
+  if (key === "free") return "免费订单不需要确认收款。";
+  if (key === "done") return "订单已完成收款确认。";
+  if (key === "closed") return "已关闭订单不能确认收款。";
+  if (key === "refunding") return "退款中的订单不能确认收款。";
+  return null;
 }
 
 function localDateTimeValue(date: Date) {
@@ -64,19 +72,20 @@ function localDateTimeValue(date: Date) {
   return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
 }
 
-function offlinePaymentTypeLabel(type: OrderOfflinePaymentType) {
-  if (type === "bank_transfer") return "银行转账";
-  if (type === "cash") return "现金";
-  return "其他";
-}
-
-/** 必填星号（与 products/SolutionField 同一写法：DS Label 不带 required 语义，由调用方内联）。 */
-function RequiredMark() {
-  return (
-    <span className="text-destructive-text" aria-label="必填">
-      *
-    </span>
-  );
+/**
+ * 确认后订阅大约到什么时候：新订 / 升级从现在起算一个周期，续订从现有到期日顺延。
+ * 这是弹窗里的**预告**，真实生效期由履约段写入订阅；一次性周期没有到期日。
+ */
+function estimateEndAt(order: OrderOperationRecord): Date | null {
+  if (order.cycleType === "once") return null;
+  const base =
+    order.intent === "renew" && order.fulfilledSubscription?.endAt
+      ? new Date(order.fulfilledSubscription.endAt)
+      : new Date();
+  const end = new Date(base.getTime());
+  if (order.cycleType === "yearly") end.setFullYear(end.getFullYear() + 1);
+  else end.setMonth(end.getMonth() + 1);
+  return end;
 }
 
 export function OrderOfflinePaymentDialog({
@@ -101,17 +110,18 @@ export function OrderOfflinePaymentDialog({
   }) => void;
 }) {
   const tShared = useTranslations();
+  const tPage = useTranslations("orderDetailPage");
+  const locale = useLocale();
   const remainingAmount = useMemo(() => remainingOrderAmount(order), [order]);
-  // Declared order (product_321 P9): the amount is LOCKED to the customer's
-  // declared cash-leg amount — full-amount-or-reject, no partial acceptance.
+  // 已申报的单（product_321 P9）：确认金额锁定为客户申报的现金腿金额——全额确认或驳回，
+  // 不接受部分确认。
   const declared = order.declaredPayment;
   const lockedAmount = declared ? declared.amount : remainingAmount;
   const [paidAmount, setPaidAmount] = useState(
     String(lockedAmount || order.amount),
   );
   const [offlinePayType, setOfflinePayType] = useState<OrderOfflinePaymentType>(
-    // declared channel: 'bank' → bank_transfer; 'alipay' has no dedicated
-    // offline_pay_type value → 'other'.
+    // 申报渠道 bank → bank_transfer；alipay 在 offline_pay_type 里没有专属值 → other。
     declared && declared.channel === "alipay" ? "other" : "bank_transfer",
   );
   const [payerName, setPayerName] = useState(
@@ -142,6 +152,24 @@ export function OrderOfflinePaymentDialog({
     setReason("");
   }, [order, remainingAmount, lockedAmount, declared]);
 
+  const planLabel = [order.servicePlanName, order.tierName]
+    .filter(Boolean)
+    .join(" · ");
+  const endAt = estimateEndAt(order);
+  const previewParams = {
+    plan: planLabel || order.solutionName,
+    date: endAt ? formatDay(endAt, locale, "—") : "—",
+    autoRenew: order.autoRenew ? tPage("autoRenew.on") : tPage("autoRenew.off"),
+  };
+  // 点确认会发生什么（设计稿 §3.2 第三样）：按订单意图各一句，一次性周期没有到期日。
+  const preview = !endAt
+    ? tPage("confirmDialog.preview.once", previewParams)
+    : order.intent === "upgrade"
+      ? tPage("confirmDialog.preview.upgrade", previewParams)
+      : order.intent === "renew"
+        ? tPage("confirmDialog.preview.renew", previewParams)
+        : tPage("confirmDialog.preview.new", previewParams);
+
   return (
     <DialogForm
       open
@@ -154,15 +182,21 @@ export function OrderOfflinePaymentDialog({
             fallback="placeholder"
             aria-hidden="true"
           />
-          确认线下收款
+          {tPage("confirmDialog.title")}
         </span>
       }
-      description={`${order.orderNo} · ${
+      description={
         declared
-          ? `客户申报 ${formatCurrency(declared.amount, order.currency)}`
-          : `剩余应收 ${formatCurrency(remainingAmount, order.currency)}`
-      }`}
-      submitLabel="确认收款"
+          ? tPage("confirmDialog.descriptionDeclared", {
+              orderNo: order.orderNo,
+              amount: formatOrderAmount(declared.amount, order.currency),
+            })
+          : tPage("confirmDialog.descriptionRemaining", {
+              orderNo: order.orderNo,
+              amount: formatOrderAmount(remainingAmount, order.currency),
+            })
+      }
+      submitLabel={tPage("confirmDialog.submit")}
       cancelLabel={tShared("actions.discard")}
       pendingLabel={tShared("status.generic.processing")}
       submitting={busy}
@@ -185,86 +219,140 @@ export function OrderOfflinePaymentDialog({
         });
       }}
     >
-      <p className="m-0 text-body-sm text-muted-foreground">
-        {declared
-          ? "客户已申报付款。确认金额锁定为申报金额（全额确认）；实际到账与申报不符时请改用「驳回申报」，由客户重新申报或线下协商。"
-          : "仅用于运营人员确认银行转账、现金或其他线下回款。确认金额须等于剩余应收（全额确认）。"}
+      <p className="m-0 text-body-sm font-semibold text-foreground">
+        {preview}
       </p>
-      <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-        {/* 必填项带红星（同 SolutionField 的约定）：提交钮灰着却不说缺哪项，运营
-            看不出该补什么（owner 2026-09-02）。 */}
-        <Label>
-          确认金额{declared ? "（申报锁定）" : ""}
-          <RequiredMark />
-        </Label>
-        <Input
-          value={paidAmount}
-          onChange={(event) => setPaidAmount(event.target.value)}
-          inputMode="decimal"
-          readOnly={Boolean(declared)}
-        />
-        <Label>
-          收款方式
-          <RequiredMark />
-        </Label>
-        <NativeSelect
-          value={offlinePayType}
-          onChange={(event) =>
-            setOfflinePayType(event.target.value as OrderOfflinePaymentType)
-          }
-        >
-          {(["bank_transfer", "cash", "other"] as const).map((type) => (
-            <option key={type} value={type}>
-              {offlinePaymentTypeLabel(type)}
+      <FieldGroup columns={2}>
+        <Field>
+          <FieldLabel
+            htmlFor="vx-order-confirm-amount"
+            required
+            requiredLabel={tPage("confirmDialog.required")}
+          >
+            {tPage("confirmDialog.amountLabel")}
+          </FieldLabel>
+          <Input
+            id="vx-order-confirm-amount"
+            value={paidAmount}
+            onChange={(event) => setPaidAmount(event.target.value)}
+            inputMode="decimal"
+            readOnly={Boolean(declared)}
+          />
+          <FieldDescription>
+            {declared
+              ? tPage("confirmDialog.amountLockedHint")
+              : tPage("confirmDialog.amountFreeHint", {
+                  amount: formatOrderAmount(remainingAmount, order.currency),
+                })}
+          </FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel
+            htmlFor="vx-order-confirm-channel"
+            required
+            requiredLabel={tPage("confirmDialog.required")}
+          >
+            {tPage("confirmDialog.channelLabel")}
+          </FieldLabel>
+          <NativeSelect
+            id="vx-order-confirm-channel"
+            value={offlinePayType}
+            onChange={(event) =>
+              setOfflinePayType(event.target.value as OrderOfflinePaymentType)
+            }
+          >
+            <option value="bank_transfer">
+              {tPage("confirmDialog.offlinePayType.bank_transfer")}
             </option>
-          ))}
-        </NativeSelect>
-        <Label>
-          付款方
-          <RequiredMark />
-        </Label>
-        <Input
-          value={payerName}
-          onChange={(event) => setPayerName(event.target.value)}
+            <option value="cash">
+              {tPage("confirmDialog.offlinePayType.cash")}
+            </option>
+            <option value="other">
+              {tPage("confirmDialog.offlinePayType.other")}
+            </option>
+          </NativeSelect>
+        </Field>
+        <Field>
+          <FieldLabel
+            htmlFor="vx-order-confirm-payer"
+            required
+            requiredLabel={tPage("confirmDialog.required")}
+          >
+            {tPage("confirmDialog.payerLabel")}
+          </FieldLabel>
+          <Input
+            id="vx-order-confirm-payer"
+            value={payerName}
+            onChange={(event) => setPayerName(event.target.value)}
+          />
+          {declared?.payerName ? (
+            <FieldDescription>
+              {tPage("confirmDialog.prefilledFromDeclaration")}
+            </FieldDescription>
+          ) : null}
+        </Field>
+        <Field>
+          <FieldLabel
+            htmlFor="vx-order-confirm-paid-at"
+            required
+            requiredLabel={tPage("confirmDialog.required")}
+          >
+            {tPage("confirmDialog.paidAtLabel")}
+          </FieldLabel>
+          <Input
+            id="vx-order-confirm-paid-at"
+            type="datetime-local"
+            value={paidAt}
+            onChange={(event) => setPaidAt(event.target.value)}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="vx-order-confirm-txn">
+            {tPage("confirmDialog.txnLabel")}
+          </FieldLabel>
+          <Input
+            id="vx-order-confirm-txn"
+            value={transactionNo}
+            onChange={(event) => setTransactionNo(event.target.value)}
+            placeholder={tPage("confirmDialog.optional")}
+          />
+          {declared?.transactionNo ? (
+            <FieldDescription>
+              {tPage("confirmDialog.prefilledFromDeclaration")}
+            </FieldDescription>
+          ) : null}
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="vx-order-confirm-evidence">
+            {tPage("confirmDialog.evidenceLabel")}
+          </FieldLabel>
+          <Input
+            id="vx-order-confirm-evidence"
+            value={evidenceUrl}
+            onChange={(event) => setEvidenceUrl(event.target.value)}
+            placeholder={tPage("confirmDialog.optional")}
+          />
+        </Field>
+      </FieldGroup>
+      <Field>
+        <FieldLabel
+          htmlFor="vx-order-confirm-note"
+          required
+          requiredLabel={tPage("confirmDialog.required")}
+          hint={tPage("confirmDialog.noteHint")}
+        >
+          {tPage("confirmDialog.noteLabel")}
+        </FieldLabel>
+        <Textarea
+          id="vx-order-confirm-note"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder={tPage("confirmDialog.notePlaceholder")}
+          maxLength={512}
+          rows={3}
         />
-        <Label>
-          收款时间
-          <RequiredMark />
-        </Label>
-        <Input
-          type="datetime-local"
-          value={paidAt}
-          onChange={(event) => setPaidAt(event.target.value)}
-        />
-        <Label>流水号</Label>
-        <Input
-          value={transactionNo}
-          onChange={(event) => setTransactionNo(event.target.value)}
-          placeholder="可选"
-        />
-        <Label>凭证地址</Label>
-        <Input
-          value={evidenceUrl}
-          onChange={(event) => setEvidenceUrl(event.target.value)}
-          placeholder="可选"
-        />
-      </div>
-      <Label>
-        确认原因
-        <RequiredMark />
-        <small className="font-normal text-muted-foreground">
-          （最少 4 字）
-        </small>
-      </Label>
-      <Textarea
-        value={reason}
-        onChange={(event) => setReason(event.target.value)}
-        placeholder="例如：财务已核对银行回单，确认线下转账到账。"
-        maxLength={512}
-      />
-      {error ? (
-        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
-      ) : null}
+      </Field>
+      <FieldError>{error}</FieldError>
     </DialogForm>
   );
 }

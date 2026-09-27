@@ -1305,11 +1305,30 @@ export interface OrderPaymentRecord {
 
 export interface OrderOperationEvent {
   id: string;
-  title: string;
-  description: string;
-  actor: string;
+  /**
+   * 事件种类：billing.order_events.event_type（created / payment_declared / payment_rejected /
+   * payment_confirmed / fulfilled / cancelled / order_expired / restored / refund_requested /
+   * refund_approved / refund_rejected / refunded / refund_failed）或履约后订阅变更的
+   * subscription_histories.change_type。界面按它选人话句式（i18n），不再把机器词直出。
+   */
+  kind: string;
+  /** order = 订单阶段事件；subscription = 履约后的订阅变更（时间线里单独一组）。 */
+  group: "order" | "subscription";
+  actorType: "customer" | "operator" | "system";
+  /** 操作者显示名（客户显示名 / 运营账号名）；系统或查不到为 null。永不下发 UUID。 */
+  actorName: string | null;
   at: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  /** 原始备注（驳回原因、作废理由等），界面作为句式参数或折叠详情。 */
+  remark: string | null;
   tone: "success" | "warning" | "danger" | "neutral";
+  /** @deprecated 机器词标题（= kind）。2026-09-27 起界面按 kind 走 i18n；留给尚未改造的读者。 */
+  title: string;
+  /** @deprecated 「from → to」或 remark；同上。 */
+  description: string;
+  /** @deprecated actorType 的别名；同上。 */
+  actor: string;
 }
 
 export interface OrderOperationRecord {
@@ -1353,6 +1372,48 @@ export interface OrderOperationRecord {
     remark: string | null;
     amount: number;
     declaredAt: string;
+  } | null;
+  // ── 2026-09-27 订单详情页重构补的字段（owner：运营/客服要一眼看出「什么单、卡哪步、我做什么」）──
+  /** 订单意图（billing.orders.intent）：new 新订 / upgrade 升级 / renew 续订。 */
+  intent: "new" | "upgrade" | "renew";
+  /** 客户下单时选的自动续费（billing.orders.auto_renew），履约时写进订阅。 */
+  autoRenew: boolean;
+  /** 金额构成：标价 / 升级折抵 / 折抵溢出进预付款（billing.orders 三列）；amount 是应付。 */
+  listAmount: number;
+  creditAmount: number;
+  leftoverAmount: number;
+  /** 关闭原因（customer_cancel / operator_void / ttl_expired / refunded / backfill）；未关闭 null。 */
+  closeReason: string | null;
+  /**
+   * 付款截止：只在待付款态有 expireAt（greatest(created_at, 最近 payment_rejected) + TTL）；
+   * 客户申报后时钟冻结（frozen=true、expireAt=null）；其余状态 null。
+   */
+  paymentDeadline: { expireAt: string | null; frozen: boolean } | null;
+  /**
+   * 申报人：申报腿的 actor → account.users（显示名 / 邮箱 / 手机）。客服要联系的人
+   * （owner 2026-09-27：必须放）。没有申报腿或查不到为 null。永不下发 UUID。
+   */
+  declaredBy: {
+    displayName: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
+  /** 租户联系人：优先 tenant_contacts.billing，没有则 primary；都没有 null。 */
+  billingContact: {
+    contactType: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+  } | null;
+  /**
+   * 履约后的订阅（可视码就是本单订单号，界面不显示 subscriptionId）。未履约 null——
+   * 此前 subscriptionStatus 在未履约时给 `suspended`，界面把「还没开通」画成「暂停」。
+   */
+  fulfilledSubscription: {
+    status: string;
+    startAt: string | null;
+    endAt: string | null;
+    autoRenew: boolean;
   } | null;
   /** 最近一张退款单（product_330 §5）；null = 没申请过。部署偏斜下可能缺字段。 */
   refund?: OrderRefundSummary | null;

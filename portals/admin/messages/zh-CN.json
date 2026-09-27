@@ -2562,137 +2562,142 @@
       "title": "订单不存在",
       "description": "该订单可能已归档，或当前账号无权访问。"
     },
-    "summary": {
-      "amount": "订单金额",
-      "amountHelp": "订单成交金额，按订单币种展示。",
-      "receivedHelp": "已核销到本订单的回款金额。",
-      "plan": "业务方案",
-      "planHelp": "本订单开通的业务方案。",
-      "action": "运营动作",
-      "actionHelp": "按当前订单状态给出的建议处理动作。",
-      "ariaLabel": "{orderNo} 订单详情"
-    },
     "sections": {
-      "basic": "基础资料",
-      "tenantPlan": "租户与套餐",
-      "subscription": "关联订阅",
-      "billing": "账单与收款",
-      "billItems": "账单明细",
-      "payments": "支付记录",
-      "opsLog": "运营记录"
+      "declaration": "客户申报",
+      "amounts": "金额构成",
+      "timeline": "时间线",
+      "subscriptionEvents": "开通后的订阅变更",
+      "order": "订单信息",
+      "tenant": "租户与联系人",
+      "fulfillment": "开通后",
+      "refund": "退款"
     },
     "fields": {
-      "orderNo": "订单编号",
-      "orderStatus": "订单状态",
-      "payStatus": "支付状态",
-      "paySource": "支付来源",
-      "payMethod": "支付方式",
-      "createdAt": "创建时间",
-      "confirmedAt": "确认时间",
+      "orderNo": "订单号",
       "tenant": "租户",
       "region": "所属区域",
       "industry": "所属行业",
-      "plan": "业务方案",
-      "servicePlan": "服务套餐",
-      "planTier": "套餐层级",
-      "subscriptionId": "订阅 ID",
       "subscriptionStatus": "订阅状态",
-      "billingCycle": "计费周期",
-      "billNo": "账单编号",
-      "billStatus": "账单状态",
+      "billNo": "账单号",
       "payNo": "支付单号",
-      "orderAmount": "订单金额",
-      "remaining": "剩余应收"
-    },
-    "notGenerated": "未生成",
-    "unitPrice": "单价 {price}",
-    "payments": {
-      "empty": "暂无支付记录",
-      "emptyHint": "等待线上支付或运营确认线下收款",
-      "unpaid": "未收款",
-      "unpaidHint": "确认线下收款后会自动写入支付记录。"
+      "remaining": "剩余应收",
+      "intent": "订单类型",
+      "placedAt": "下单时间",
+      "source": "来源",
+      "autoRenew": "自动续费",
+      "deadline": "付款倒计时",
+      "deadlineFrozen": "已冻结（客户已申报）",
+      "deadlineUntil": "截止 {day} {clock}",
+      "closeReason": "关闭原因",
+      "billingContact": "账务联系人",
+      "primaryContact": "主要联系人",
+      "listPrice": "标价",
+      "credit": "升级折抵",
+      "creditHint": "按原订阅剩余天数与配额折抵",
+      "leftover": "折抵溢出",
+      "leftoverHint": "折抵超出的部分计入预付款",
+      "due": "应付",
+      "received": "已收",
+      "subscriptionCode": "订阅编码",
+      "validity": "生效期",
+      "refundNo": "退款单号",
+      "refundAmount": "退款金额",
+      "refundReason": "客户申请原因",
+      "refundRequestedAt": "申请时间",
+      "refundAudit": "审核",
+      "refundAuditRemark": "审核备注",
+      "refundPayout": "打款"
     },
     "links": {
-      "subscription": "订阅详情",
-      "tenant": "租户详情"
+      "subscription": "查看订阅"
     },
     "actions": {
       "confirmPayment": "确认收款",
       "rejectDeclaration": "驳回申报",
-      "retryProvision": "重试开通",
-      "rejectOrder": "驳回订单",
+      "retryProvision": "重新开通",
       "restoreOrder": "恢复订单",
       "approveRefund": "同意退款",
       "rejectRefund": "驳回退款",
       "completeRefund": "退款完成（已打款）",
       "failRefund": "打款失败",
-      "createRefund": "发起退款"
+      "createRefund": "发起退款",
+      "voidOrder": "作废订单",
+      "more": "更多操作"
     },
     "declaration": {
-      "title": "客户付款申报",
-      "hint": "客户在付款页提交的申报信息，确认前请核对到账；实收不符请「驳回申报」。",
       "amount": "申报金额",
       "channel": "支付渠道",
-      "payer": "付款方",
-      "txnNo": "流水号",
+      "payer": "付款人",
+      "txnNo": "交易号",
       "declaredAt": "申报时间",
-      "remark": "备注",
-      "notFilled": "未填写"
+      "remark": "客户备注",
+      "notFilled": "客户未填",
+      "waited": "已等 {duration}",
+      "declaredBy": "申报人"
     },
     "channels": {
       "alipay": "支付宝",
-      "bank": "银行转账"
+      "bank": "银行转账",
+      "other": "其他渠道"
     },
     "disabled": {
-      "hasPayment": "已收到支付的订单不能驳回，请走结算流程。",
-      "notPending": "该订单不是待支付状态，无需驳回。",
-      "notRestorable": "该订单不是可恢复的已取消状态（已激活过的订阅取消后无法在此恢复）。"
+      "hasPayment": "已收到款的订单不能作废，请走退款流程。",
+      "notPending": "只有待付款的订单能作废。",
+      "notRestorable": "这张单不能恢复：只有从未开通、也没收过钱的已关闭订单才能恢复。",
+      "declaredFirst": "客户已申报付款，先驳回申报再作废。",
+      "confirm": {
+        "free": "¥0 订单不需要确认收款。",
+        "done": "本单已确认收款。",
+        "closed": "已关闭的订单不能确认收款。",
+        "refunding": "退款中的订单不能确认收款。"
+      }
     },
     "feedback": {
-      "paymentConfirmed": "线下收款已确认。",
-      "declarationRejected": "付款申报已驳回，券与折扣已释放，客户端将看到驳回原因。",
-      "provisionRetried": "已重试开通（段 2 重驱动）。",
-      "orderRejected": "订单已驳回。",
-      "orderRestored": "订单已恢复为待支付状态。",
-      "refundExecuted": "退款已执行：订单已退款，订阅已回到未订阅状态。",
-      "refundApproved": "退款申请已通过，请按原渠道打款后点「退款完成」。",
+      "paymentConfirmed": "已确认收款，系统正在开通。",
+      "declarationRejected": "已驳回申报：券与折扣已释放，订单回到待付款，客户会看到驳回原因。",
+      "provisionRetried": "已重新开通。",
+      "orderRestored": "订单已恢复为待付款。",
+      "refundExecuted": "退款已完成：订单转为已退款，订阅已回到未订阅状态。",
+      "refundApproved": "退款申请已通过，请按原渠道打款后回来点「退款完成」。",
       "refundRejected": "退款申请已驳回。",
-      "confirmPaymentFailed": "确认线下收款失败，请稍后重试。",
-      "rejectDeclarationFailed": "驳回付款申报失败，请稍后重试。",
-      "retryProvisionFailed": "重试开通失败，请稍后重试。",
-      "rejectOrderFailed": "驳回订单失败，请稍后重试。",
-      "refundFailed": "退款操作失败，请稍后重试。",
-      "restoreFailed": "恢复订单失败，请稍后重试。",
+      "confirmPaymentFailed": "确认收款没有成功，请稍后重试。",
+      "rejectDeclarationFailed": "驳回申报没有成功，请稍后重试。",
+      "retryProvisionFailed": "重新开通没有成功，请稍后重试。",
+      "refundFailed": "退款操作没有成功，请稍后重试。",
+      "restoreFailed": "恢复订单没有成功，请稍后重试。",
       "refundMarkedFailed": "已记为打款失败：订单与订阅不变，客户已收到通知。",
-      "refundCreated": "退款已发起：客户已收到通知，接下来需要审核、再执行。"
+      "refundCreated": "退款已发起：客户已收到通知，接下来需要审核、再执行。",
+      "actionFailed": "操作没有成功",
+      "orderVoided": "订单已作废。",
+      "voidFailed": "作废订单没有成功，请稍后重试。"
     },
     "dialogs": {
       "rejectDeclaration": {
         "title": "驳回付款申报",
-        "description": "订单号：<b>{orderNo}</b>。驳回后券与折扣自动释放，订单回到待付款，驳回原因将展示在客户付款页。",
+        "description": "订单号：<b>{orderNo}</b>。驳回后券与折扣自动释放，订单回到待付款，驳回原因会显示在客户的付款页。",
         "submitLabel": "确认驳回申报",
         "reasonLabel": "驳回原因",
-        "reasonHint": "（必填，最少 4 字；将展示给客户）",
+        "reasonHint": "必填，最少 4 字；客户会看到这句话。",
         "placeholder": "例如：未查到对应转账记录，请核对金额后重新付款；实收 500 与申报 860 不符。",
-        "descriptionWithAmount": "订单号：<b>{orderNo}</b> · 申报 {amount}。驳回后券与折扣自动释放，订单回到待付款，驳回原因将展示在客户付款页。"
+        "descriptionWithAmount": "订单号：<b>{orderNo}</b> · 客户申报 {amount}。驳回后券与折扣自动释放，订单回到待付款，驳回原因会显示在客户的付款页。"
       },
       "refund": {
         "titleApprove": "同意退款申请",
         "titleReject": "驳回退款申请",
         "titleComplete": "退款完成（已按原渠道打款）",
         "descApprove": "退款单 <b>{refundNo}</b> · {amount}。通过后请按原支付渠道打款，再回到本页点「退款完成」。",
-        "descReject": "退款单 <b>{refundNo}</b> · {amount}。驳回原因将展示给客户。",
+        "descReject": "退款单 <b>{refundNo}</b> · {amount}。驳回原因会显示给客户。",
         "descComplete": "退款单 <b>{refundNo}</b> · {amount}。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。",
         "submitApprove": "确认通过",
         "submitReject": "确认驳回",
         "submitComplete": "确认退款完成",
         "remarkLabel": "备注",
-        "remarkHintCustomer": "（必填，最少 4 字；将展示给客户）",
-        "remarkHint": "（必填，最少 4 字）",
+        "remarkHintCustomer": "必填，最少 4 字；客户会看到这句话。",
+        "remarkHint": "必填，最少 4 字。",
         "placeholderComplete": "例如：已于 9/4 通过支付宝原路退回 ¥0.10，流水号 …",
         "placeholderReview": "例如：符合 24 小时首购退款条件；或：已超出退款窗口 / 用量已超阈值。",
         "descApproveWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。通过后请按原支付渠道打款，再回到本页点「退款完成」。",
-        "descRejectWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。驳回原因将展示给客户。",
+        "descRejectWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。驳回原因会显示给客户。",
         "descCompleteWithReason": "退款单 <b>{refundNo}</b> · {amount} · 客户原因：{reason}。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。",
         "titleFail": "打款失败（钱没有退出去）",
         "descFail": "退款单 <b>{refundNo}</b> · {amount}。标记失败后订单与订阅都不变（钱没退出去，服务该怎样还怎样），客户会收到一条「未能完成」的通知。客户可以再申请一次，但 24 小时退款窗口仍在走。",
@@ -2704,24 +2709,245 @@
         "submitCreate": "确认发起退款",
         "placeholderCreate": "例如：9/20 服务中断 6 小时，已与客户约定补偿（工单 123）"
       },
-      "rejectOrder": {
-        "title": "驳回订单",
-        "description": "订单号：<b>{orderNo}</b>",
-        "submitLabel": "确认驳回",
-        "reasonLabel": "驳回原因",
-        "reasonHint": "（必填，最少 4 字）",
-        "placeholder": "例如：客户电话取消，重复下单。",
-        "descriptionWithTenant": "订单号：<b>{orderNo}</b> · {tenantName}"
-      },
       "restoreOrder": {
         "title": "恢复订单",
-        "description": "订单号：<b>{orderNo}</b>。恢复后订单回到待付款状态，账单与折扣一并复原。",
+        "description": "订单号：<b>{orderNo}</b>。恢复后订单回到待付款，账单与折扣一并复原。",
         "submitLabel": "确认恢复",
         "reasonLabel": "恢复原因",
-        "reasonHint": "（必填，最少 4 字）",
-        "placeholder": "例如：客户已确认继续购买，误操作驳回，现恢复订单。",
-        "descriptionWithTenant": "订单号：<b>{orderNo}</b> · {tenantName}。恢复后订单回到待付款状态，账单与折扣一并复原。"
+        "reasonHint": "必填，最少 4 字，会记入订单时间线。",
+        "placeholder": "例如：客户已确认继续购买，误操作作废，现恢复订单。",
+        "descriptionWithTenant": "订单号：<b>{orderNo}</b> · {tenantName}。恢复后订单回到待付款，账单与折扣一并复原。"
+      },
+      "voidOrder": {
+        "title": "作废订单",
+        "description": "订单号：<b>{orderNo}</b>。作废后这张单不再等付款，客户要买需要重新下单。",
+        "descriptionWithTenant": "订单号：<b>{orderNo}</b> · {tenantName}。作废后这张单不再等付款，客户要买需要重新下单。",
+        "submitLabel": "确认作废",
+        "reasonLabel": "作废原因",
+        "reasonHint": "必填，最少 4 字，会记入订单时间线。",
+        "placeholder": "例如：客户电话取消，重复下单。"
       }
+    },
+    "empty": "—",
+    "status": {
+      "order": {
+        "pending": "待客户付款",
+        "pending_verify": "等你核对",
+        "paid_unprovisioned": "开通处理中",
+        "partial_pending": "部分到账",
+        "confirmed": "已开通",
+        "closed": "已关闭",
+        "refunded": "已退款",
+        "overdue": "已逾期",
+        "abnormal": "需要处理"
+      },
+      "orderHint": {
+        "pending": "等客户付款并申报，倒计时中",
+        "pending_verify": "客户已申报付款，等你核对到账",
+        "paid_unprovisioned": "已收款，系统正在开通",
+        "partial_pending": "存量单：账上收了一部分，等客户补齐或线下协商",
+        "confirmed": "订阅生效中",
+        "closed": "客户取消或超时未付款",
+        "refunded": "款已退回客户，订阅已回退",
+        "overdue": "付款期限已过，等系统关闭",
+        "abnormal": "状态异常，请联系技术支持核查"
+      }
+    },
+    "stages": {
+      "ariaLabel": "订单进度",
+      "placed": "下单",
+      "declared": "客户付款并申报",
+      "verify": "运营核对",
+      "confirm": "确认收款",
+      "provision": "自动开通 / 完成",
+      "refund": "退款"
+    },
+    "header": {
+      "copyOrderNo": "复制订单号",
+      "copied": "订单号已复制",
+      "placed": "{day} {clock} 下单 · {source}",
+      "due": "应付",
+      "received": "已收"
+    },
+    "task": {
+      "sectionTitle": "现在该做什么",
+      "title": {
+        "pending": "等客户付款并申报",
+        "pending_verify": "核对 {amount} 是否到账",
+        "paid_unprovisioned": "已收款，正在自动开通",
+        "partial_pending": "部分到账，等客户补齐",
+        "confirmed": "已开通，订阅生效中",
+        "closed": "订单已关闭",
+        "refunded": "已退款",
+        "refunding": "退款处理中",
+        "abnormal": "这张单需要人工处理"
+      },
+      "body": {
+        "pending": "客户付款后会在付款页申报，你暂时不用做什么。超时未付款系统会自动关闭。",
+        "pending_verify": "到账就点「确认收款」；找不到这笔钱或金额不符，就「驳回申报」并写明原因，客户会收到通知并可重新申报。",
+        "paid_unprovisioned": "系统会自动开通，通常两分钟内完成。超过十分钟还停在这里，点「重新开通」再推一次。",
+        "partial_pending": "这是存量单：账上已收到 {received}，还差 {remaining}。客户补齐后再确认剩余款，或线下协商处理。",
+        "confirmed": "本单已完成。客户若来问，看下面「开通后」里的生效期与自动续费。",
+        "closed": "关闭原因：{reason}。如果客户还想买，可以恢复订单（只有没收过钱的单能恢复）。",
+        "refunded": "款已退回客户，订阅已回到未订阅状态。",
+        "refundPending": "客户申请退款 {amount}。符合条件就「同意退款」，之后按原渠道打款再回来点「退款完成」；不符合就驳回并写明原因。",
+        "refundApproved": "退款 {amount} 已审核通过。打款后点「退款完成」；钱没打出去就点「打款失败」。",
+        "refundFailed": "上一次打款 {amount} 没有成功。核对收款账号后重新打款，成功点「退款完成」，仍失败就再记一次「打款失败」。",
+        "abnormal": "状态异常，界面上不能操作。请把订单号发给技术支持核查。"
+      },
+      "declared": "客户 {day} {clock} 申报：{channel} · 付款人 {payer} · 交易号 {txn}",
+      "guidance": {
+        "alipay": "到哪里找这笔钱：支付宝商家后台 → 账单，按交易号、金额、时间查。",
+        "bank": "到哪里找这笔钱：对公账户流水，按付款人、金额、时间查这笔转账。",
+        "generic": "到哪里找这笔钱：按申报的金额和时间在收款账户里查。"
+      },
+      "deadline": {
+        "until": "付款截止 {day} {clock}，还剩 {remaining}",
+        "frozen": "客户已申报，付款倒计时已冻结",
+        "overdue": "付款期限已过，系统会自动关闭这张单"
+      },
+      "fulfilled": "订阅 {code} 生效至 {date}，自动续费：{autoRenew}",
+      "fulfilledNoEnd": "订阅 {code} 已生效，不设到期",
+      "refundReason": "客户申请原因：{reason}"
+    },
+    "duration": {
+      "minutes": "{minutes} 分钟",
+      "hours": "{hours} 小时 {minutes} 分钟",
+      "days": "{days} 天 {hours} 小时"
+    },
+    "intent": {
+      "new": "新订",
+      "upgrade": "升级",
+      "renew": "续订"
+    },
+    "autoRenew": {
+      "on": "开",
+      "off": "关"
+    },
+    "closeReason": {
+      "customer_cancel": "客户取消",
+      "operator_void": "运营作废",
+      "ttl_expired": "超时未付款",
+      "refunded": "已退款",
+      "backfill": "历史补录",
+      "other": "已关闭"
+    },
+    "invoiceItemTypes": {
+      "subscription_fee": "订阅费",
+      "discount": "折扣券",
+      "credit_adjustment": "升级折抵",
+      "voucher": "代金券",
+      "addon": "加购包",
+      "usage": "用量费",
+      "adjustment": "调整",
+      "other": "其他费用"
+    },
+    "fulfillment": {
+      "pending": "确认收款后系统自动开通，订阅信息会出现在这里。",
+      "closed": "订单已关闭，不会开通。",
+      "refunded": "已退款，订阅已回到未订阅状态。",
+      "validity": "{start} ~ {end}",
+      "noEnd": "{start} 起，不设到期"
+    },
+    "refund": {
+      "audit": {
+        "pending": "待审核",
+        "approved": "已通过",
+        "rejected": "已驳回"
+      },
+      "status": {
+        "pending": "未打款",
+        "processing": "打款中",
+        "success": "已打款",
+        "failed": "打款失败"
+      }
+    },
+    "timeline": {
+      "empty": "还没有记录",
+      "details": "详情",
+      "hideDetails": "收起",
+      "actor": {
+        "customer": "客户",
+        "operator": "运营",
+        "system": "系统"
+      },
+      "detail": {
+        "transition": "状态：{from} → {to}",
+        "remark": "原始备注：{remark}",
+        "kind": "事件码：{kind}"
+      },
+      "order": {
+        "created": "{actor} 下单 · {product} · {amount}",
+        "payment_declared": "{actor} 申报已付款",
+        "payment_declaredWithRemark": "{actor} 申报已付款：{remark}",
+        "payment_rejected": "{actor} 驳回申报 · 订单回到待付款，倒计时重置",
+        "payment_rejectedWithRemark": "{actor} 驳回申报：{remark} · 订单回到待付款，倒计时重置",
+        "payment_confirmed": "{actor} 确认收款 {amount}",
+        "payment_confirmedWithRemark": "{actor} 确认收款 {amount}：{remark}",
+        "fulfilled": "系统开通订阅 {code}",
+        "fulfilledWithEnd": "系统开通订阅 {code} · 生效至 {date}",
+        "cancelledByCustomer": "{actor} 取消了订单",
+        "cancelledByCustomerWithRemark": "{actor} 取消了订单：{remark}",
+        "cancelledByOperator": "{actor} 作废了订单",
+        "cancelledByOperatorWithRemark": "{actor} 作废了订单：{remark}",
+        "order_expired": "超时关闭：客户未在期限内付款",
+        "restored": "{actor} 恢复了订单 · 回到待付款",
+        "restoredWithRemark": "{actor} 恢复了订单：{remark} · 回到待付款",
+        "refund_requested": "{actor} 申请退款 {amount}",
+        "refund_requestedWithRemark": "{actor} 申请退款 {amount}：{remark}",
+        "refund_approved": "{actor} 审核通过退款",
+        "refund_approvedWithRemark": "{actor} 审核通过退款：{remark}",
+        "refund_rejected": "{actor} 驳回了退款申请",
+        "refund_rejectedWithRemark": "{actor} 驳回了退款申请：{remark}",
+        "refunded": "已退款 {amount} · 订阅回到未订阅",
+        "refundedWithRemark": "已退款 {amount}：{remark} · 订阅回到未订阅",
+        "refund_failed": "打款失败，钱没有退出去",
+        "refund_failedWithRemark": "打款失败：{remark}",
+        "other": "{actor} 更新了订单"
+      },
+      "subscription": {
+        "created": "{actor} 创建了订阅",
+        "activated": "{actor} 激活了订阅",
+        "renewed": "{actor} 续订了订阅",
+        "upgraded": "{actor} 升级了套餐",
+        "downgraded": "{actor} 降级了套餐",
+        "cancelled": "{actor} 取消了订阅",
+        "suspended": "{actor} 暂停了订阅",
+        "resumed": "{actor} 恢复了订阅",
+        "suspension_updated": "{actor} 更新了暂停信息",
+        "other": "{actor} 变更了订阅"
+      }
+    },
+    "confirmDialog": {
+      "title": "确认收款",
+      "descriptionDeclared": "{orderNo} · 客户申报 {amount}",
+      "descriptionRemaining": "{orderNo} · 剩余应收 {amount}",
+      "preview": {
+        "new": "确认后将开通 {plan}，生效至 {date}，自动续费：{autoRenew}，并通知客户。",
+        "upgrade": "确认后将把客户现有订阅升级为 {plan}，生效至 {date}，自动续费：{autoRenew}，并通知客户。",
+        "renew": "确认后将续订 {plan}，到期日顺延至 {date}，自动续费：{autoRenew}，并通知客户。",
+        "once": "确认后将开通 {plan}（一次性，不设到期），自动续费：{autoRenew}，并通知客户。"
+      },
+      "required": "必填",
+      "optional": "可选",
+      "amountLabel": "确认金额",
+      "amountLockedHint": "已锁定为客户申报的金额，必须一致；实收不符请改用「驳回申报」。",
+      "amountFreeHint": "运营手工补录：不能超过剩余应收 {amount}。",
+      "channelLabel": "收款方式",
+      "offlinePayType": {
+        "bank_transfer": "银行转账",
+        "cash": "现金",
+        "other": "其他（含支付宝）"
+      },
+      "payerLabel": "付款人",
+      "prefilledFromDeclaration": "已按客户申报预填，可以改。",
+      "paidAtLabel": "到账时间",
+      "txnLabel": "交易号 / 流水号",
+      "evidenceLabel": "凭证链接",
+      "noteLabel": "核对说明",
+      "noteHint": "最少 4 字：写下你在哪里看到这笔钱、看到的金额和时间。",
+      "notePlaceholder": "例如：支付宝商家后台已见 199.00 到账，2026-09-27 17:05",
+      "submit": "确认收款"
     }
   },
   "ticketDetail": {
@@ -2734,5 +2960,133 @@
       "closed": "已关闭",
       "reopened": "重新打开"
     }
+  },
+  "opsTodosPage": {
+    "header": {
+      "queueTitle": "待办任务",
+      "queueDescription": "客户已申报付款的订单、等审核的认证、没结的工单都在这里，按紧急程度排好，从上往下处理。",
+      "allTitle": "全部任务",
+      "allDescription": "四类待办的全量清单，含只在本页出现的风险复核。",
+      "totalBadge": "任务 {count}"
+    },
+    "types": {
+      "payment": "收款确认",
+      "verification": "认证审核",
+      "risk": "风险复核",
+      "ticket": "工单处理"
+    },
+    "cards": {
+      "loading": "读取中",
+      "filtering": "只看这一类，再点一次显示全部",
+      "payment": "{count} 笔待你核对，最久等了 {wait}",
+      "paymentEmpty": "没有等你核对的订单",
+      "paymentUnavailable": "订单数据没有读到，这一栏可能不全",
+      "verification": "{count} 家租户等审核，最久等了 {wait}",
+      "verificationEmpty": "没有等审核的认证",
+      "ticket": "{count} 张工单没结，最久等了 {wait}",
+      "ticketEmpty": "没有没结的工单",
+      "ticketUnavailable": "工单数据没有读到，这一栏可能不全",
+      "risk": "{count} 家租户要复核，最久等了 {wait}",
+      "riskEmpty": "没有要复核的租户"
+    },
+    "section": {
+      "queueTitle": "任务队列",
+      "allTitle": "任务明细",
+      "summary": "按紧急程度排序，共 {count} 条",
+      "hiddenRisk": "另有 {count} 条风险复核在「全部任务」里",
+      "filteringType": "正在只看：{type}",
+      "ticketsUnavailable": "工单数据没有读到",
+      "ordersUnavailable": "订单数据没有读到"
+    },
+    "filters": {
+      "ariaLabel": "待办任务筛选",
+      "searchPlaceholder": "搜索单号、租户、工单…",
+      "searchAriaLabel": "搜索待办任务",
+      "severityAriaLabel": "紧急程度",
+      "severityAll": "全部",
+      "toAll": "查看全部任务",
+      "backToQueue": "回到待办队列"
+    },
+    "severity": {
+      "urgent": "紧急",
+      "attention": "关注",
+      "normal": "一般"
+    },
+    "columns": {
+      "severity": "紧急度",
+      "task": "任务",
+      "tenant": "租户 · 申报人 / 联系人",
+      "amount": "金额",
+      "wait": "等待",
+      "progress": "进展",
+      "actions": "操作"
+    },
+    "task": {
+      "confirmPayment": "核对 {amount} 到账并确认收款",
+      "reprovision": "已收款 {amount}，重新开通权益",
+      "followUpBalance": "跟进尾款：已收 {paid}，应付 {amount}",
+      "verification": "审核资质材料并给出结论",
+      "risk": "复核风险状态，决定是否解除",
+      "ticket": "处理工单：{title}"
+    },
+    "secondary": {
+      "riskMeta": "风险 {risk} · {status}"
+    },
+    "progress": {
+      "pendingVerify": "3/5 · 等你核对",
+      "paidUnprovisioned": "4/5 · 开通处理中",
+      "partialPending": "3/5 · 部分到账",
+      "verification": "待审核",
+      "risk": "待复核",
+      "ticketOpen": "待处理",
+      "ticketProcessing": "处理中",
+      "ticketBlocked": "阻塞中"
+    },
+    "wait": {
+      "justNow": "刚刚",
+      "minutes": "{minutes} 分钟",
+      "hours": "{hours} 小时 {minutes} 分钟",
+      "days": "{days} 天 {hours} 小时"
+    },
+    "actions": {
+      "goVerify": "去核对",
+      "goReview": "去审核",
+      "goRecheck": "去复核",
+      "goHandle": "去处理",
+      "menuLabel": "{code} 的更多操作",
+      "viewAllOrders": "查看全部订单",
+      "viewAllVerifications": "查看全部认证",
+      "viewAllTenants": "查看全部租户",
+      "viewAllTickets": "查看全部工单"
+    },
+    "empty": {
+      "title": "今天没有要处理的任务",
+      "loadFailedTitle": "待办数据读取失败",
+      "tenantsFailed": "租户运营数据读取失败",
+      "ticketsFailed": "工单数据读取失败",
+      "ordersFailed": "订单数据读取失败"
+    },
+    "notices": {
+      "title": "系统消息",
+      "viewAll": "查看全部",
+      "loading": "正在读取消息…",
+      "loadFailed": "消息读取失败",
+      "unread": "{count} 条未读，最新一条：{title}",
+      "unreadOnly": "{count} 条未读",
+      "none": "没有未读消息"
+    },
+    "csv": {
+      "code": "编号",
+      "task": "任务",
+      "tenant": "租户",
+      "contact": "申报人 / 联系人",
+      "tenantMeta": "租户属性",
+      "type": "类型",
+      "severity": "紧急度",
+      "amount": "金额",
+      "waitingSince": "等待起点",
+      "progress": "进展"
+    },
+    "unknown": "—"
   }
 }

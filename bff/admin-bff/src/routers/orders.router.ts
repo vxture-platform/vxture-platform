@@ -8,6 +8,9 @@
  *   履约后的订阅经 orders.subscription_id。详情附账单明细 billing.invoice_items、全部支付
  *   记录 billing.payments、时间线 = billing.order_events ∪ 履约订阅的 subscription_histories。
  *   写路径：确认收款（段1 资金裸 SQL + 段2 OrderService.fulfill）、驳回申报、作废、恢复。
+ *   2026-09-27 详情页重构：payload 补齐意图 / 金额构成 / 关闭原因 / 付款截止 / 申报人与
+ *   租户联系人 / 履约订阅；时间线改下发机器词 + 操作者显示名，句子由界面按 kind 走 i18n。
+ *   任何字段都不下发 UUID（可视码或显示名，查不到给 null）。
  *
  * @author AI-Generated
  * @date 2026-07-04
@@ -101,7 +104,8 @@ export class OrdersRouter {
     const { rows } = await this.pool.query<OrderRow>(`${ORDER_BASE_SQL}
       order by ord.created_at desc
       limit 500`);
-    return rows.map(mapOrderRow);
+    const canReadPii = hasPiiAccess(req);
+    return rows.map((row) => mapOrderRow(row, { canReadPii }));
   }
 
   @Get(":orderId")
@@ -132,7 +136,7 @@ export class OrdersRouter {
     ]);
 
     return {
-      ...mapOrderRow(base),
+      ...mapOrderRow(base, { canReadPii: hasPiiAccess(req) }),
       invoiceItems: items.rows.map(mapInvoiceItemRow),
       paymentRecords: payments.rows.map(mapPaymentRow),
       operationTimeline: timeline.rows.map(mapHistoryRow),
@@ -1113,6 +1117,42 @@ function assertCanRestoreOrder(req: Request & RequestContext): void {
   assertAnyCapability(req, ["commerce:order.restore"]);
 }
 
+// 申报人的邮箱 / 手机按 user:pii.read 危码脱敏（订单详情重设计 §3.3，与 accounts.router
+// 同一道闸门、同一套掩码）。掩码函数是 accounts.router 的复制品——那边没导出，而这里
+// 不该为此去动账号路由；两处要一起改。
+function hasPiiAccess(req: Request & RequestContext): boolean {
+  return req.capabilities?.includes("user:pii.read") ?? false;
+}
+
+// j***@example.com — 保留首字符与整个域名；空串原样。
+function maskEmail(email: string): string {
+  if (!email) return "";
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  const first = email[0] ?? "";
+  return `${first}***${email.slice(at)}`;
+}
+
+// 137****5678 — 只留末四位；null 原样。
+function maskPhone(phone: string | null): string | null {
+  if (!phone) return phone;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length <= 4) return "****";
+  return `${digits.slice(0, digits.length - 8 > 0 ? 3 : 0)}****${digits.slice(-4)}`;
+}
+
+/**
+ * 付款时效兜底（P4）：2026-08-20 起每张单自带 payment_ttl_minutes，env 只给更早的存量行
+ * 兜底。读法与 console-bff / platform-api 的超时扫描**逐字相同**（ORDER_PAYMENT_TTL_MINUTES，
+ * 默认 30）。生产的 .env.admin-bff 没配这个键——但 console-bff 与 platform-api 的 example
+ * 也只是注释掉的默认值，三边都落在 30；只有运营在别的服务单独调过这个值而这里没跟上，
+ * 且订单还是存量无 TTL 那批，截止时刻才会对不上。
+ */
+function paymentTtlFallbackMinutes(): number {
+  const raw = Number(process.env["ORDER_PAYMENT_TTL_MINUTES"]);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 30;
+}
+
 // ── 合成主 SELECT（product_330 P1-b2）：billing.orders 为订单主体，横向取最近账单/支付（LATERAL），
 //   套餐名取 plan_versions→plans；履约后的订阅经 ord.subscription_id。
 //   region 无 province/city 源列 → 空态兜底；operatorName 按 created_by_type 解 admin.operator_account。
@@ -1130,6 +1170,37 @@ select
   ord.updated_at,
   ord.subscription_id              as fulfilled_subscription_id,
   tsub.status                      as target_subscription_status,
+  -- 2026-09-27 订单详情页重构：下面这批列此前有的选了没进记录（intent）、有的根本没选。
+  -- 运营要回答「什么单、卡在哪一步、我该做什么」，每一列都对应页面上一句话。
+  ord.auto_renew                   as order_auto_renew,
+  ord.list_amount                  as order_list_amount,
+  ord.credit_amount                as order_credit_amount,
+  ord.leftover_amount              as order_leftover_amount,
+  ord.close_reason                 as order_close_reason,
+  ord.payment_ttl_minutes          as order_payment_ttl_minutes,
+  -- 付款倒计时锚点：与 pg-order.repository.findExpiredIds / console-bff 的 ttl_anchor
+  -- 同一条表达式——创建时刻与最近一次驳回申报取晚者。三处若不同式，运营看到的截止
+  -- 时刻就会和系统真正关单的时刻对不上。
+  greatest(
+    ord.created_at,
+    coalesce((
+      select max(e.created_at) from billing.order_events e
+       where e.order_id = ord.id and e.event_type = 'payment_rejected'
+    ), ord.created_at)
+  )                                as ttl_anchor,
+  tsub.start_at                    as target_subscription_start_at,
+  tsub.end_at                      as target_subscription_end_at,
+  tsub.auto_renew                  as target_subscription_auto_renew,
+  -- 申报人（owner 2026-09-27：必须放，客服要能联系到人）：申报腿 actor → account.users。
+  -- 只投影显示名 / 登录句柄 / 邮箱 / 手机，不投影 id——UUID 不进 payload。
+  dup.display_name                 as declared_by_display_name,
+  du.account                       as declared_by_account,
+  du.email                         as declared_by_email,
+  du.phone                         as declared_by_phone,
+  bc.contact_type                  as billing_contact_type,
+  bc.name                          as billing_contact_name,
+  bc.email                         as billing_contact_email,
+  bc.phone                         as billing_contact_phone,
   tier.tier                        as tier_code,
   tenant.id                        as tenant_id,
   tenant.tenant_no::text           as tenant_code,
@@ -1210,12 +1281,27 @@ left join lateral (
          p.channel_transaction_no as declared_transaction_no,
          p.operate_remark as declared_remark,
          p.total_amount   as declared_amount,
-         p.created_at     as declared_at
+         p.created_at     as declared_at,
+         p.actor_type     as declared_actor_type,
+         p.actor_id       as declared_actor_id
   from billing.payments p
   where p.bill_id = inv.id and p.pay_status = 'pending_verify'
   order by p.created_at desc
   limit 1
 ) declared on true
+-- 申报人：申报腿只可能由客户写（OrderService.declare），actor_type 仍作 join 条件——
+-- 裸值 actor_id 按 type 解引用是本库的边界约定（边界#2），不按 type 解就是在猜。
+left join account.users du
+  on du.id = declared.declared_actor_id and declared.declared_actor_type = 'customer'
+left join account.user_profiles dup on dup.user_id = du.id
+-- 租户联系人：账务联系人优先，没有则主联系人；其它类型（technical / legal…）不拿来凑数。
+left join lateral (
+  select c.contact_type, c.name, c.email, c.phone
+    from tenancy.tenant_contacts c
+   where c.tenant_id = tenant.id and c.contact_type in ('billing', 'primary')
+   order by (c.contact_type = 'billing') desc, (c.contact_type = 'primary') desc, c.created_at asc
+   limit 1
+) bc on true
 -- 最近一张退款单（product_330 §5）
 left join lateral (
   select r.id as refund_id, r.refund_no, r.refund_amount, r.refund_reason,
@@ -1268,14 +1354,49 @@ order by pay.created_at desc
 
 // 时间线 = 订单阶段事件（billing.order_events）∪ 履约订阅的变更历史（subscription_histories）。
 // $2 = ord.subscription_id，未履约时为 null → 只有订单事件。
+//
+// 2026-09-27：操作者解成显示名（operator → admin.operator_account；customer → account.users
+// + user_profiles，与 tenants.router 的审计段同款），**不再投影 actor_id**——此前它随行
+// 下发，页面把 UUID 直接画在了运营记录里。两段各自 join 再 union：union 之后再 join 得
+// 靠 actor_type 分支，两次 join 反而更直白。
 const TIMELINE_SQL = `
-select id, event_type as change_type, from_status, to_status, remark, actor_type, actor_id, created_at
-  from billing.order_events
- where order_id = $1
+select e.id,
+       e.event_type       as change_type,
+       'order'            as event_group,
+       e.from_status,
+       e.to_status,
+       e.remark,
+       e.actor_type,
+       e.created_at,
+       op.display_name    as operator_name,
+       cup.display_name   as customer_display_name,
+       cu.account         as customer_account
+  from billing.order_events e
+  left join admin.operator_account op
+    on op.id = e.actor_id and e.actor_type = 'operator'
+  left join account.users cu
+    on cu.id = e.actor_id and e.actor_type = 'customer'
+  left join account.user_profiles cup on cup.user_id = cu.id
+ where e.order_id = $1
 union all
-select id, change_type, from_status, to_status, remark, actor_type, actor_id, created_at
-  from metering.subscription_histories
- where $2::uuid is not null and subscription_id = $2::uuid
+select h.id,
+       h.change_type,
+       'subscription'     as event_group,
+       h.from_status,
+       h.to_status,
+       h.remark,
+       h.actor_type,
+       h.created_at,
+       op.display_name    as operator_name,
+       cup.display_name   as customer_display_name,
+       cu.account         as customer_account
+  from metering.subscription_histories h
+  left join admin.operator_account op
+    on op.id = h.actor_id and h.actor_type = 'operator'
+  left join account.users cu
+    on cu.id = h.actor_id and h.actor_type = 'customer'
+  left join account.user_profiles cup on cup.user_id = cu.id
+ where $2::uuid is not null and h.subscription_id = $2::uuid
 order by created_at desc
 limit 200
 `;
@@ -1432,7 +1553,50 @@ function mapEntityOrderStatus(
   }
 }
 
-function mapOrderRow(row: OrderRow): OrderOperationRecord {
+/** mapOrderRow 的调用方上下文：只有一个开关，来自请求的能力集。 */
+export interface OrderRowMapOptions {
+  /** 持 user:pii.read 才给申报人明文邮箱 / 手机，否则掩码。 */
+  canReadPii: boolean;
+}
+
+/** billing.orders.intent 的三值（DDL chk_orders_intent 同源）。 */
+function mapIntent(value: string | null): OrderOperationRecord["intent"] {
+  if (value === "upgrade" || value === "renew") return value;
+  return "new";
+}
+
+/**
+ * 付款截止（product_321 P4）。
+ *   · 待付款且零实收：anchor + coalesce(单上的 TTL, env 兜底) —— 与超时扫描同一公式；
+ *   · 待付款但账上已有钱（存量部分到账）：超时扫描永远不碰它，没有截止，返回 null；
+ *   · 已申报：时钟冻结，expireAt 不给，frozen=true；
+ *   · 其余状态：没有倒计时这回事，null。
+ */
+function derivePaymentDeadline(
+  row: OrderRow,
+  paidAmount: number,
+): OrderOperationRecord["paymentDeadline"] {
+  if (row.order_entity_status === "pending_verify") {
+    return { expireAt: null, frozen: true };
+  }
+  if (row.order_entity_status !== "pending_payment") return null;
+  if (paidAmount > 0) return null;
+  const anchor = row.ttl_anchor ?? row.created_at;
+  if (!anchor) return null;
+  const anchorMs =
+    anchor instanceof Date ? anchor.getTime() : new Date(anchor).getTime();
+  if (!Number.isFinite(anchorMs)) return null;
+  const ttl = row.order_payment_ttl_minutes ?? paymentTtlFallbackMinutes();
+  return {
+    expireAt: new Date(anchorMs + ttl * 60_000).toISOString(),
+    frozen: false,
+  };
+}
+
+export function mapOrderRow(
+  row: OrderRow,
+  options: OrderRowMapOptions = { canReadPii: false },
+): OrderOperationRecord {
   const hasInvoice = Boolean(row.bill_id);
   // 订单金额 = 订单实体的应付（product_330）——不看订阅行 pay_amount（它是"本周期实付"，
   // 升级/续订履约后会被改写，不再代表这张单）。
@@ -1506,6 +1670,48 @@ function mapOrderRow(row: OrderRow): OrderOperationRecord {
           declaredAt: toIso(row.declared_at),
         }
       : null,
+    intent: mapIntent(row.order_intent),
+    autoRenew: row.order_auto_renew === true,
+    listAmount: toNumber(row.order_list_amount),
+    creditAmount: toNumber(row.order_credit_amount),
+    leftoverAmount: toNumber(row.order_leftover_amount),
+    closeReason: row.order_close_reason ?? null,
+    paymentDeadline: derivePaymentDeadline(row, paidAmount),
+    // 申报人：以 users 行是否 join 到为准——登录句柄 account 是 NOT NULL 列，join 到了
+    // 它一定有值；显示名可空，回落到句柄。没有申报腿 / 人已被清 → null。
+    declaredBy:
+      row.declared_by_account || row.declared_by_display_name
+        ? {
+            displayName:
+              row.declared_by_display_name ?? row.declared_by_account ?? null,
+            email: row.declared_by_email
+              ? options.canReadPii
+                ? row.declared_by_email
+                : maskEmail(row.declared_by_email)
+              : null,
+            phone: options.canReadPii
+              ? (row.declared_by_phone ?? null)
+              : maskPhone(row.declared_by_phone ?? null),
+          }
+        : null,
+    billingContact:
+      row.billing_contact_type && row.billing_contact_name
+        ? {
+            contactType: row.billing_contact_type,
+            name: row.billing_contact_name,
+            email: row.billing_contact_email ?? null,
+            phone: row.billing_contact_phone ?? null,
+          }
+        : null,
+    // 履约后才有订阅行（chk_orders_fulfilled：subscription_id 与 fulfilled 同生）。
+    fulfilledSubscription: row.target_subscription_status
+      ? {
+          status: mapSubscriptionStatus(row.target_subscription_status),
+          startAt: toIsoOrNull(row.target_subscription_start_at ?? null),
+          endAt: toIsoOrNull(row.target_subscription_end_at ?? null),
+          autoRenew: row.target_subscription_auto_renew === true,
+        }
+      : null,
     refund: row.refund_id
       ? {
           id: row.refund_id,
@@ -1576,7 +1782,7 @@ function mapPaymentRow(row: PaymentRow): OrderPaymentRecord {
 }
 
 const TIMELINE_TONES: Record<string, OrderOperationEvent["tone"]> = {
-  // 订单阶段（billing.order_events）
+  // 订单阶段（billing.order_events，十三种；created 与订阅段共用一档）
   cancelled: "danger",
   order_expired: "danger",
   payment_rejected: "warning",
@@ -1584,6 +1790,11 @@ const TIMELINE_TONES: Record<string, OrderOperationEvent["tone"]> = {
   payment_confirmed: "success",
   fulfilled: "success",
   restored: "neutral",
+  refund_requested: "warning",
+  refund_approved: "neutral",
+  refund_rejected: "warning",
+  refunded: "danger",
+  refund_failed: "danger",
   // 订阅阶段（subscription_histories）
   created: "success",
   renewed: "success",
@@ -1592,24 +1803,48 @@ const TIMELINE_TONES: Record<string, OrderOperationEvent["tone"]> = {
   downgraded: "warning",
 };
 
-function mapHistoryRow(row: HistoryRow): OrderOperationEvent {
+function mapActorType(value: string | null): OrderOperationEvent["actorType"] {
+  if (value === "customer" || value === "operator") return value;
+  return "system";
+}
+
+/**
+ * 时间线一行：机器词（kind / group / 状态）+ 操作者显示名 + 原始备注，句子由界面按 kind
+ * 拼（i18n）。title / description / actor 三个旧字段照旧下发给还没改造的读者。
+ */
+export function mapHistoryRow(row: HistoryRow): OrderOperationEvent {
   const tone: OrderOperationEvent["tone"] =
     TIMELINE_TONES[row.change_type] ?? "neutral";
+  const actorType = mapActorType(row.actor_type);
+  // 显示名回落到登录句柄；系统事件与查不到的人一律 null，界面自己写「系统」。
+  const actorName =
+    actorType === "operator"
+      ? row.operator_name || null
+      : actorType === "customer"
+        ? row.customer_display_name || row.customer_account || null
+        : null;
   return {
     id: row.id,
+    kind: row.change_type,
+    group: row.event_group === "subscription" ? "subscription" : "order",
+    actorType,
+    actorName,
+    at: toIso(row.created_at),
+    fromStatus: row.from_status ?? null,
+    toStatus: row.to_status ?? null,
+    remark: row.remark ?? null,
+    tone,
     title: row.change_type,
     description:
       row.remark ??
       [row.from_status, row.to_status].filter(Boolean).join(" → "),
     actor: row.actor_type,
-    at: toIso(row.created_at),
-    tone,
   };
 }
 
 // ────────────────────────────── 行接口 ──────────────────────────────
 
-interface OrderRow {
+export interface OrderRow {
   id: string;
   order_no: string;
   /** billing.orders.status（product_330 订单实体状态机） */
@@ -1624,6 +1859,26 @@ interface OrderRow {
   /** 履约后指向的订阅（new 新建 / upgrade、renew 原订阅）；未履约 null */
   fulfilled_subscription_id: string | null;
   target_subscription_status: string | null;
+  // ── 2026-09-27 订单详情页重构 ──
+  order_auto_renew: boolean | null;
+  order_list_amount: string | number | null;
+  order_credit_amount: string | number | null;
+  order_leftover_amount: string | number | null;
+  order_close_reason: string | null;
+  order_payment_ttl_minutes: number | null;
+  /** greatest(created_at, 最近 payment_rejected)；SQL 算好，映射只加 TTL */
+  ttl_anchor: Date | string | null;
+  target_subscription_start_at?: Date | string | null;
+  target_subscription_end_at?: Date | string | null;
+  target_subscription_auto_renew?: boolean | null;
+  declared_by_display_name?: string | null;
+  declared_by_account?: string | null;
+  declared_by_email?: string | null;
+  declared_by_phone?: string | null;
+  billing_contact_type?: string | null;
+  billing_contact_name?: string | null;
+  billing_contact_email?: string | null;
+  billing_contact_phone?: string | null;
   /** 目标套餐在本产品上的档位（plan_components.tier）；无 → 自定义 */
   tier_code: string | null;
   tenant_id: string;
@@ -1692,13 +1947,19 @@ interface PaymentRow {
   operator_name: string | null;
 }
 
-interface HistoryRow {
+export interface HistoryRow {
   id: string;
   change_type: string;
+  /** order = billing.order_events；subscription = metering.subscription_histories */
+  event_group: string;
   from_status: string | null;
   to_status: string | null;
   remark: string | null;
   actor_type: string;
-  actor_id: string | null;
   created_at: Date | string | null;
+  /** actor_type='operator' 时 admin.operator_account.display_name */
+  operator_name: string | null;
+  /** actor_type='customer' 时 account.user_profiles.display_name / users.account */
+  customer_display_name: string | null;
+  customer_account: string | null;
 }
