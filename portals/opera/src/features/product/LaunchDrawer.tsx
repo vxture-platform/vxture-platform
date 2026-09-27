@@ -59,6 +59,7 @@ import {
   productStateMeta,
   sideOfChecklistItem,
   type ProductState,
+  canLaunchFrom,
 } from "./lifecycle";
 import type { ClientRecord, WebhookRecord } from "./onboarding-model";
 
@@ -706,7 +707,12 @@ export function LaunchDrawer({
         </div>
 
         {/* ── 终点动作 ─────────────────────────────────────────────────── */}
-        {product.state === "draft" ? (
+        {/* 能不能从这一档「确认上线」，问 lifecycle 的 PRODUCT_ACTIONS，不在这里再写一遍
+            状态名。2026-09-24 接 `developing` 时 lifecycle 把 launch.from 改成了
+            ["draft","developing"]、BFF 的 STATE_TRANSITIONS 也放行了，而这里仍写死
+            `=== "draft"`——于是 13 个开发中的产品在界面上只看得到「只做复验」，上不了线。
+            [[feedback_copy_both_halves_and_open_the_page]]：加一档状态与「进得去出得来」是两半。 */}
+        {canLaunchFrom(product.state) ? (
           <Banner
             tone={open_.length === 0 ? "success" : "info"}
             title={
