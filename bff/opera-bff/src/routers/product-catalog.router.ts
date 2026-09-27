@@ -34,6 +34,7 @@ import {
   Inject,
   Param,
   Patch,
+  Post,
   Put,
   Query,
   Res,
@@ -59,11 +60,17 @@ import {
 } from "@vxture-platform/shared";
 import { isAutoDeterminedChecklistItem } from "@vxture/core-utils";
 import { createHash } from "node:crypto";
-import { UUID_RE } from "./router.shared";
+import {
+  optionalText,
+  parseIso,
+  requireOperatorId,
+  toIso,
+  UUID_RE,
+} from "./router.shared";
 import type { Request, Response as ExpressResponse } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
-import type { Queryable } from "../db/tx";
+import { withTransaction, type Queryable } from "../db/tx";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import { conflict, invalidRequest, notFound } from "../errors/api-error";
@@ -75,6 +82,14 @@ import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 // Capability gate shared with product-integration-signals.router.ts (2026-08-31).
 import { assertCanManage, assertCanRead } from "./product-authz";
+/* 升级维护的写路径住在窗口 router 里（三个 *Tx helper），产品页入口只是换了
+   一个站位去调它——两个入口一套状态机、一套审计（owner 2026-09-28）。 */
+import {
+  assertCanManageMaintenanceWindows,
+  completeMaintenanceWindowTx,
+  createMaintenanceWindowTx,
+  startMaintenanceWindowTx,
+} from "./maintenance-windows.router";
 
 /**
  * 「算不算数」的字段名统一叫 `state`（product_251 B-3）——**接口层**改名，
@@ -207,6 +222,23 @@ export interface ProductRecord {
   iconVersion: string | null;
   /** 可露出的端（受管枚举）。一个都没勾时是空数组，不是 null。 */
   surfaces: string[];
+  /**
+   * 升级维护中（owner 2026-09-28 产品页入口）。null = 不在维护中。
+   *
+   * 读的是 `product.products` 的两列运行态（维护窗口 start 时打上、complete /
+   * cancel 清掉），不是绑定计划——官网 / console 也只看这两列，三处口径一致。
+   * `windowId` 是这里**唯一**出接口的 uuid，只供产品页调「结束维护」时不必再查
+   * 一遍；界面不渲染它（铁律二）。
+   */
+  maintenance: ProductMaintenanceState | null;
+}
+
+export interface ProductMaintenanceState {
+  windowId: string;
+  /** 窗口标题（admin.maintenance_windows.title），产品页入口拼的是「<产品名> 升级维护」。 */
+  title: string;
+  /** 预计恢复时间 = 窗口 end_at（ISO）。运维顺延时同步。 */
+  until: string;
 }
 
 interface ProductRow {
@@ -236,6 +268,11 @@ interface ProductRow {
   icon_url: string | null;
   icon_version: string | null;
   surfaces: string[];
+  /* 维护占用：两列成对（DDL chk_products_maintenance_pair），标题由子查询带出。
+     旧 spec 的行夹具没有这三列——映射按 undefined 当 null 处理。 */
+  maintenance_window_id?: string | null;
+  maintenance_until?: Date | string | null;
+  maintenance_title?: string | null;
 }
 
 function toRecord(row: ProductRow): ProductRecord {
@@ -271,6 +308,16 @@ function toRecord(row: ProductRow): ProductRecord {
     iconUrl: row.icon_url,
     iconVersion: row.icon_version,
     surfaces: row.surfaces ?? [],
+    maintenance:
+      row.maintenance_window_id && row.maintenance_until
+        ? {
+            windowId: row.maintenance_window_id,
+            /* 窗口行被人工删了（表无 deleted_at，正常不会）时标题为空串而不是 null：
+               「在维护中但不知道叫什么」仍然是在维护中。 */
+            title: row.maintenance_title ?? "",
+            until: toIso(row.maintenance_until),
+          }
+        : null,
   };
 }
 
@@ -402,6 +449,11 @@ const SELECT_COLUMNS = `
   integration_mode, release_stage,
   launch_override_at, launch_override_pending,
   icon_url, created_at, updated_at,
+  /* 升级维护的运行态两列 + 窗口标题。标题同样用裸列名相关（maintenance_window_id
+     只在 products 上有，admin.maintenance_windows 没有同名列，两种上下文都解析到
+     外层那一行）。跨 schema 只读，不建 FK（40_product.sql 边界#2）。 */
+  maintenance_window_id, maintenance_until,
+  (select w.title from admin.maintenance_windows w where w.id = maintenance_window_id) as maintenance_title,
   /* 平台托管图标的版本号(内容哈希)。同样用裸 id 相关——理由见下面那段。
      只取版本不取字节:这个常量用在列表查询上,把 bytea 拖进每一行是灾难。 */
   (select i.checksum from product.product_icons i where i.product_id = id) as icon_version,
@@ -1029,6 +1081,146 @@ export class ProductCatalogRouter {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * 升级维护 —— 产品页入口（owner 2026-09-28）。
+   *
+   * 「现在 opera 只有停用，点击后 website 完全开不到了。暂停和恢复入口没有找到。」
+   * 停用（`inactive`）是把产品从官网彻底拿掉；升级维护是**另一根轴**：官网 / console
+   * 对所有人显示「升级维护中」、停止新订阅，已订阅租户由 platform-api 的作业
+   * 暂停并顺延（v0.26.285）。两根轴并存：维护中的产品仍可停用 / 退役。
+   *
+   * 这一条只是**站位不同**：写路径就是维护窗口的 create → start（一笔事务），
+   * 结束就是 complete。三步 SQL 与审计从窗口 router 抽成 helper 共用，产品页和
+   * 运维 → 维护窗口页看到的是同一个窗口（标题「<产品名> 升级维护」）。
+   *
+   * 能力码沿用 `ops:maintenance.manage`——它管的是「谁能让产品进维护」，与
+   * `integration:product.manage`（谁能改目录）不是一件事。不挂 step-up，与窗口页
+   * 同一档：维护可逆、不减少任何东西，状态迁移那条路由才是高危写。
+   *
+   * 路径参数与 `GET :idOrCode` 同一规则：uuid 或产品码都认（`productWhere`）。
+   *
+   *   POST :code/maintenance/start    { endAt: ISO（必须在未来）, description? }
+   *     → 409 PRODUCT_ALREADY_UNDER_MAINTENANCE 已在维护中
+   *   POST :code/maintenance/complete
+   *     → 409 PRODUCT_NOT_UNDER_MAINTENANCE 不在维护中
+   * 两条都回刷新后的产品记录（`maintenance` 已置 / 已清）。
+   */
+  @Post(":code/maintenance/start")
+  async startMaintenance(
+    @Req() req: Request & RequestContext,
+    @Param("code") code: string,
+    @Body() body: ProductMaintenanceStartBody | undefined,
+  ): Promise<ProductRecord> {
+    assertCanManageMaintenanceWindows(req);
+    const operatorId = requireOperatorId(req);
+    const endAt = parseIso(body?.endAt, "endAt");
+    /* 「预计结束」在过去等于一开始就到期——官网会显示「预计 <过去某刻> 恢复」，
+       而它并不会自动恢复（没有调度器）。校验在事务外：不合法的输入不该开事务。 */
+    if (new Date(endAt).getTime() <= Date.now()) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "endAt must be in the future",
+        "endAt",
+      );
+    }
+    const description = optionalText(body?.description, "description", 10000);
+
+    return withTransaction(this.pool, async (client) => {
+      /* 先锁产品行再判占用（与窗口 start 同一条理由）：两个人同时点「开始」，
+         后到的那笔看见前一笔打的标，409；不锁就是两个窗口都以为自己占住了。 */
+      const current = await lockProductForMaintenance(client, code);
+      if (!current) {
+        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+      }
+      if (current.maintenance_window_id) {
+        throw conflict(
+          "PRODUCT_ALREADY_UNDER_MAINTENANCE",
+          `「${current.product_code}」已经在升级维护中，先结束当前维护再开始新的。`,
+        );
+      }
+      const startAt = new Date().toISOString();
+      const windowId = await createMaintenanceWindowTx(
+        client,
+        req,
+        {
+          severity: "minor",
+          /* 标题在代码里拼：运维页上一眼认得出「这是产品页开的」，且不让运营者
+             为一个只有一种写法的标题多填一格。varchar(256) 兜底截断。 */
+          title: `${current.product_name} 升级维护`.slice(0, 256),
+          description,
+          impactDescription: null,
+          affectedServices: [],
+          productCodes: [current.product_code],
+          startAt,
+          endAt,
+        },
+        operatorId,
+      );
+      const started = await startMaintenanceWindowTx(
+        client,
+        req,
+        windowId,
+        operatorId,
+      );
+      /* 产品维度再记一条：窗口那两条的 resourceId 是窗口 uuid，按产品查审计时
+         看不见「谁把这个产品送进了维护」。 */
+      await insertOperatorAuditLog(client, req, {
+        action: "catalog.product.maintenance_start",
+        resourceType: "product",
+        resourceId: current.id,
+        after: {
+          windowId,
+          maintenanceUntil: started.maintenanceUntil,
+          description,
+        },
+      });
+      return fetchProductTx(client, current.id);
+    });
+  }
+
+  @Post(":code/maintenance/complete")
+  async completeMaintenance(
+    @Req() req: Request & RequestContext,
+    @Param("code") code: string,
+  ): Promise<ProductRecord> {
+    assertCanManageMaintenanceWindows(req);
+    const operatorId = requireOperatorId(req);
+
+    return withTransaction(this.pool, async (client) => {
+      const current = await lockProductForMaintenance(client, code);
+      if (!current) {
+        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+      }
+      if (!current.maintenance_window_id) {
+        throw conflict(
+          "PRODUCT_NOT_UNDER_MAINTENANCE",
+          `「${current.product_code}」当前不在升级维护中。`,
+        );
+      }
+      const windowId = current.maintenance_window_id;
+      /* complete 按 maintenance_window_id = 本窗口清标：同一个窗口挂了别的产品
+         （从运维页建的多产品窗口）也一起恢复——窗口是一个整体，不能只结束一半。
+         productsReleased 进审计，让这件事看得见。 */
+      const completed = await completeMaintenanceWindowTx(
+        client,
+        req,
+        windowId,
+        null,
+        operatorId,
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "catalog.product.maintenance_complete",
+        resourceType: "product",
+        resourceId: current.id,
+        after: {
+          windowId,
+          productsReleased: completed.productsReleased,
+        },
+      });
+      return fetchProductTx(client, current.id);
+    });
   }
 
   /**
@@ -2060,6 +2252,50 @@ export class ProductCatalogRouter {
  * 样本里的 `id` / `grantId` 是给机器的；门户展示只用 `endpointCode` /
  * `capabilityId`（UUID 不上屏）。
  */
+interface ProductMaintenanceStartBody {
+  endAt?: unknown;
+  description?: unknown;
+}
+
+interface ProductMaintenanceLockRow {
+  id: string;
+  product_code: string;
+  product_name: string;
+  maintenance_window_id: string | null;
+}
+
+/** 锁住产品行并读当前占用（uuid 或产品码）。不存在 / 已删除 → null。 */
+async function lockProductForMaintenance(
+  db: Queryable,
+  idOrCode: string,
+): Promise<ProductMaintenanceLockRow | null> {
+  const { rows } = await db.query<ProductMaintenanceLockRow>(
+    `SELECT p.id, p.product_code, p.product_name, p.maintenance_window_id
+       FROM product.products p
+      WHERE ${productWhere(idOrCode)} AND p.deleted_at IS NULL
+        FOR UPDATE OF p`,
+    [idOrCode],
+  );
+  return rows[0] ?? null;
+}
+
+/** 事务内回读一行产品（写完之后回给页面的就是它，maintenance 已随两列刷新）。 */
+async function fetchProductTx(
+  db: Queryable,
+  id: string,
+): Promise<ProductRecord> {
+  const { rows } = await db.query<ProductRow>(
+    `SELECT ${SELECT_COLUMNS} FROM product.products
+      WHERE id = $1 AND deleted_at IS NULL`,
+    [id],
+  );
+  const row = rows[0];
+  if (!row) {
+    throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+  }
+  return toRecord(row);
+}
+
 export function productHasActiveGrants(
   grants: ActiveUpstreamGrants,
 ): HttpException {

@@ -237,5 +237,32 @@
       "lockedLive": "Affected products are locked while the window is in progress; complete or cancel it to change them.",
       "chipsLabel": "Affected products"
     }
+  },
+  "productMaintenance": {
+    "badge": "Under maintenance",
+    "until": "Expected back {time}",
+    "start": {
+      "button": "Start maintenance",
+      "title": "Start maintenance",
+      "effect": "The website and console will show \"Under maintenance\" to everyone and stop new subscriptions; subscribed tenants are paused within a minute and their terms extended. It does not end by itself when the time comes — come back here and click \"End maintenance\".",
+      "endAt": "Expected end",
+      "endAtHint": "Must be later than now. It only tells customers roughly when to expect the product back; nothing resumes automatically.",
+      "endAtInvalid": "The expected end must be later than now",
+      "note": "Notes",
+      "noteHint": "Optional. Stored on the maintenance window, visible under Ops → Maintenance windows.",
+      "submit": "Start maintenance",
+      "done": "{name} is now under maintenance",
+      "already": "{name} is already under maintenance",
+      "failed": "Could not start maintenance"
+    },
+    "end": {
+      "button": "End maintenance",
+      "title": "End maintenance for {target}?",
+      "consequence": "The website and console become subscribable again immediately; paused subscriptions resume within a minute with their terms extended.",
+      "submit": "End maintenance",
+      "done": "Maintenance for {name} has ended",
+      "notUnder": "{name} is not under maintenance",
+      "failed": "Could not end maintenance"
+    }
   }
 }
