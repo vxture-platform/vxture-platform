@@ -1025,7 +1025,9 @@ export class SubscriptionRouter {
       v === null || v === undefined ? null : String(v);
     const qa = before.quota ?? {};
     const qb = after.quota ?? {};
+    /* 以 `_` 开头的是套餐内部配置（折抵权重等），不是客户额度，不进「版本变了什么」。 */
     const quota = [...new Set([...Object.keys(qa), ...Object.keys(qb)])]
+      .filter((key) => !key.startsWith("_"))
       .sort()
       .map((key) => ({ key, from: asText(qa[key]), to: asText(qb[key]) }))
       .filter((x) => x.from !== x.to);

@@ -269,6 +269,17 @@ export function SubscriptionPage() {
     () => orders.filter((o) => o.orderStatus === "pending_payment"),
     [orders],
   );
+  /* 已申报待确认 / 已收款待开通的单：客户的钱已经出去了，订阅还没出现在下面的卡片里
+     （「未支付、未开通的订单不在此列」）——不提示一句，他会以为单丢了。 */
+  const inflightOrders = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          o.orderStatus === "paid_pending_verify" ||
+          o.orderStatus === "activating",
+      ),
+    [orders],
+  );
   const nextDeadline = useMemo(
     () =>
       pendingOrders
@@ -371,6 +382,33 @@ export function SubscriptionPage() {
             <Button size="md" onClick={() => router.push("/billing")}>
               <Icon name="receipt" size="xs" fallback="placeholder" />
               <span>{t("pendingBanner.action")}</span>
+            </Button>
+          }
+        />
+      ) : null}
+
+      {!loadFailed &&
+      pendingOrders.length === 0 &&
+      inflightOrders.length > 0 ? (
+        <Banner
+          tone="info"
+          title={t("pendingBanner.inflightTitle", {
+            count: inflightOrders.length,
+          })}
+          description={t("pendingBanner.inflightDescription")}
+          action={
+            <Button
+              size="md"
+              onClick={() =>
+                router.push(
+                  inflightOrders.length === 1
+                    ? `/subscribe/pay/${inflightOrders[0]!.orderId}`
+                    : "/billing",
+                )
+              }
+            >
+              <Icon name="receipt" size="xs" fallback="placeholder" />
+              <span>{t("pendingBanner.inflightAction")}</span>
             </Button>
           }
         />

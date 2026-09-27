@@ -27,8 +27,6 @@ import {
 import {
   Banner,
   Button,
-  DetailList,
-  DetailRow,
   EmptyState,
   Icon,
   StatusBadge,
@@ -54,7 +52,6 @@ import {
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { CyclePicker } from "./components/CyclePicker";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
-import { useCountdown } from "./components/pay/useCountdown";
 import { PlanSummaryCard } from "./components/PlanSummaryCard";
 import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
 import { WorkspacePicker } from "./components/WorkspacePicker";
@@ -253,6 +250,20 @@ export function SubscribePage() {
           router.replace("/subscription?notice=unknown-link");
           return;
         }
+        /* 在途订单：直接落到订单状态页（owner 2026-09-27：「进入后应该直接到流程，
+           显示当前的状态」）。此前这里渲染一块「订单待确认 / 去付款」中间面板，客户已经
+           申报过付款还被要求再点一次「去付款」。深链要的档位 / 周期随 query 带过去，
+           与在途单不一致时订单页提示一句。 */
+        if (result.pendingOrder) {
+          const requested = new URLSearchParams();
+          if (query.targetTier)
+            requested.set("requested_tier", query.targetTier);
+          requested.set("requested_cycle", initialCycle);
+          router.replace(
+            `/subscribe/pay/${result.pendingOrder.orderId}?${requested.toString()}`,
+          );
+          return;
+        }
         setCtx(result);
         setAutoRenew(result.current?.autoRenew ?? false);
         setLoading(false);
@@ -265,7 +276,7 @@ export function SubscribePage() {
     return () => {
       cancelled = true;
     };
-  }, [query, router, reloadKey]);
+  }, [query, router, reloadKey, initialCycle]);
 
   const reload = useCallback(async () => {
     try {
@@ -277,12 +288,6 @@ export function SubscribePage() {
       setError(e instanceof Error && e.message ? e.message : tLoad("title"));
     }
   }, [query, tLoad]);
-
-  // 待支付面板的倒计时:到点重取,让超时关闭显影。
-  const pendingCountdown = useCountdown(
-    ctx?.pendingOrder?.expireAt ?? null,
-    () => void reload(),
-  );
 
   if (loadFailed) {
     return (
@@ -309,76 +314,11 @@ export function SubscribePage() {
     product,
     targetTier,
     current,
-    pendingOrder,
     plans,
     versionChange,
     currentPlanRetired,
   } = ctx;
   if (intent === null || product === null) return null;
-
-  // ── 待支付订单：直接引导进付款页（product_321 §6.1）─────────────────────────
-  if (pendingOrder) {
-    return (
-      <ViewLayout className="mx-auto w-full max-w-content-base-xl">
-        <ViewHeader
-          icon="credit-card"
-          title={t("pending.title")}
-          description={t("pending.awaiting")}
-          action={
-            pendingCountdown ? (
-              <StatusBadge tone="warning">
-                {t("pending.countdown", { time: pendingCountdown })}
-              </StatusBadge>
-            ) : undefined
-          }
-        />
-        {pendingCountdown === "00:00" ? (
-          <Banner tone="warning" title={t("pending.expired")} />
-        ) : null}
-        <OrderFlowStrip
-          stage={pendingOrder.paymentState ?? "pending_payment"}
-          times={{ order: pendingOrder.createdAt }}
-        />
-        <PageSection
-          tone="raised"
-          level={2}
-          title={<SectionTitle icon="clock">{t("pending.title")}</SectionTitle>}
-          className={SECTION_TIGHT}
-        >
-          <DetailList>
-            <DetailRow label={t("pending.orderNo")}>
-              <span className="font-mono">{pendingOrder.orderNo}</span>
-            </DetailRow>
-            <DetailRow label={t("plansSection")}>
-              {/* 展示名，不是编码：产品主名 · 套餐名（此前渲染 plan_code，客户看到的是
-                  「vxtpl-starter」这种机器码）。 */}
-              {[pendingOrder.productName, pendingOrder.planName]
-                .filter(Boolean)
-                .join(" · ") || pendingOrder.planCode}
-              {pendingOrder.tier ? ` · ${pendingOrder.tier}` : ""}
-            </DetailRow>
-            <DetailRow label={t("pending.amount")}>
-              {formatMoney(pendingOrder.amount, pendingOrder.currency)} /{" "}
-              {t(`cycle.${pendingOrder.cycleUnit}`)}
-            </DetailRow>
-          </DetailList>
-          <div className="flex flex-wrap items-center gap-sm">
-            <Button
-              onClick={() =>
-                router.push(`/subscribe/pay/${pendingOrder.orderId}`)
-              }
-            >
-              {t("pending.goPay")}
-            </Button>
-            <Button variant="outline" onClick={() => void reload()}>
-              {t("actions.refresh")}
-            </Button>
-          </div>
-        </PageSection>
-        {error ? <Banner tone="danger" title={error} /> : null}
-      </ViewLayout>
-    );
-  }
 
   const stateKey = (() => {
     if (!current) return "none";

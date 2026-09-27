@@ -156,7 +156,7 @@ export class ProductPlansRouter {
         description: r.description ?? null,
         tier: r.tier,
         features: r.features ?? [],
-        quota: r.quota,
+        quota: publicQuota(r.quota),
         seats: readSeats(r.quota),
         prices: r.prices,
       }))
@@ -208,6 +208,20 @@ export class ProductPlansRouter {
 }
 
 /** quota["member.max"] → 席位数；缺失或非有限数值 → null。 */
+/**
+ * 以 `_` 开头的配额键是套餐的内部配置（如 `_pricing.consumable_share`，折抵权重），
+ * 不是客户能用的额度。此前原样透传，官网「对比所有功能」把 `_pricing {"consumable_share":0.5}`
+ * 当一行配额打了出来（2026-09-27 实测 tenderforge）。
+ */
+function publicQuota(
+  quota: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!quota) return quota;
+  return Object.fromEntries(
+    Object.entries(quota).filter(([key]) => !key.startsWith("_")),
+  );
+}
+
 function readSeats(quota: Record<string, unknown> | null): number | null {
   const raw = quota?.[SEATS_QUOTA_KEY];
   const n = typeof raw === "string" ? Number(raw) : raw;

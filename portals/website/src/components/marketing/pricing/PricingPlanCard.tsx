@@ -30,7 +30,10 @@ import {
 } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { TIERS } from "@vxture-platform/shared";
-import { buildConsoleSubscribeUrl } from "@/lib/console-entry";
+import {
+  buildConsoleOrderStatusUrl,
+  buildConsoleSubscribeUrl,
+} from "@/lib/console-entry";
 import { usePlanLabels } from "./plan-labels";
 import {
   displayedPrice,
@@ -59,6 +62,12 @@ const GRADIENT_CTA =
   "w-full border-0 bg-linear-to-r from-vx-brand-600 to-vx-info-600 text-vx-white " +
   "hover:from-vx-brand-700 hover:to-vx-info-700";
 
+/** 定价页需要知道的在途单：去哪看（orderId）、是哪一档（tier）。 */
+export interface PendingOrderRef {
+  orderId: string;
+  tier: string | null;
+}
+
 export function PricingPlanCard({
   plan,
   cycle,
@@ -67,6 +76,7 @@ export function PricingPlanCard({
   selected,
   onSelect,
   currentTier = null,
+  pendingOrder = null,
   fractionDigits = 2,
 }: {
   plan: PricingPlan;
@@ -84,6 +94,12 @@ export function PricingPlanCard({
    * 再下单，而不是被系统替客户挑一档直接结账。
    */
   currentTier?: string | null;
+  /**
+   * 同产品进行中的订单（owner 2026-09-27）。有值时：订单那一档 CTA 变「查看订单状态」
+   * 直达 console 的订单状态页，其余档禁用「已有订单进行中」——一产品同时只能有一张
+   * 在途单（uidx_orders_open_per_product），再点「订阅」只会在 console 撞 409。
+   */
+  pendingOrder?: PendingOrderRef | null;
 }) {
   const t = useTranslations("products.subscription");
   const labels = usePlanLabels();
@@ -265,6 +281,29 @@ export function PricingPlanCard({
                 {t("contact")}
               </a>
             </Button>
+          ) : pendingOrder ? (
+            pendingOrder.tier === plan.tier ? (
+              <Button
+                asChild
+                variant={selected ? "default" : "outline"}
+                className={selected ? GRADIENT_CTA : "w-full"}
+              >
+                <a
+                  href={buildConsoleOrderStatusUrl(
+                    locale,
+                    pendingOrder.orderId,
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t("pendingOrder.view")}
+                </a>
+              </Button>
+            ) : (
+              <Button variant="outline" className="w-full" disabled>
+                {t("pendingOrder.blocked")}
+              </Button>
+            )
           ) : relation === "current" || relation === "lower" ? (
             <Button variant="outline" className="w-full" disabled>
               {relation === "current" ? t("currentPlan") : t("lowerPlan")}
@@ -300,9 +339,11 @@ export function PricingPlanCard({
         <p className="mt-2 text-center text-xs text-vx-gray-400 dark:text-vx-gray-500">
           {isContact
             ? t("note.enterprise")
-            : isFree
-              ? t("note.free")
-              : t("note.paid")}
+            : pendingOrder
+              ? t("note.pendingOrder")
+              : isFree
+                ? t("note.free")
+                : t("note.paid")}
         </p>
       </CardContent>
     </Card>

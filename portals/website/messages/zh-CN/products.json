@@ -183,6 +183,10 @@
     "currentPlan": "当前套餐",
     "lowerPlan": "低于当前套餐",
     "upgradeTo": "升级到{plan}",
+    "pendingOrder": {
+      "view": "查看订单状态",
+      "blocked": "已有订单进行中"
+    },
     "cycle": {
       "monthly": "月付",
       "yearly": "年付"
@@ -214,7 +218,8 @@
     "note": {
       "free": "无需付款，即时开通",
       "paid": "跳转控制台完成下单",
-      "enterprise": "sales@vxture.com"
+      "enterprise": "sales@vxture.com",
+      "pendingOrder": "该产品已有一笔订单进行中，在控制台查看进度。"
     },
     "tierCount": "{count} 档",
     "scrollHint": "更多详情",

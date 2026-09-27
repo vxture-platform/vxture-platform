@@ -199,6 +199,10 @@
     "currentPlan": "Current plan",
     "lowerPlan": "Below current plan",
     "upgradeTo": "Upgrade to {plan}",
+    "pendingOrder": {
+      "view": "View order status",
+      "blocked": "Order in progress"
+    },
     "cycle": {
       "monthly": "Monthly",
       "yearly": "Yearly"
@@ -230,7 +234,8 @@
     "note": {
       "free": "No payment needed — instant activation",
       "paid": "Checkout continues in Console",
-      "enterprise": "sales@vxture.com"
+      "enterprise": "sales@vxture.com",
+      "pendingOrder": "An order for this product is already in progress — track it in the console."
     },
     "tierCount": "{count, plural, one {# tier} other {# tiers}}",
     "scrollHint": "More details",

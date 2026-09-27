@@ -1161,6 +1161,10 @@
       "cancelled": "Order cancelled",
       "expired": "Order expired"
     },
+    "requestMismatch": {
+      "title": "An order is already in progress",
+      "description": "The tier or cycle you picked differs from this order — the one in progress is {plan} ({cycle}). Once it completes or is cancelled, place a new order with your choice."
+    },
     "stateHint": {
       "refunding": "We have accepted your refund request and will notify you once it is processed.",
       "refunded": "The refund is complete. Place a new order if you would like to subscribe again.",
@@ -2485,22 +2489,8 @@
       "suspendedHint": "Service is temporarily unavailable. Contact support to restore it first."
     },
     "pending": {
-      "title": "Order awaiting confirmation",
-      "orderNo": "Order No.",
-      "amount": "Amount due",
-      "awaiting": "Order created. Transfer the amount below and put the order number in the reference; it activates automatically once finance confirms receipt.",
-      "bankTitle": "Offline transfer details",
-      "accountName": "Account name",
-      "bankName": "Bank",
-      "accountNo": "Account no.",
-      "reference": "Reference",
-      "referenceHint": "Include the order number for reconciliation.",
-      "configPending": "Bank details not configured — please contact support for transfer instructions.",
-      "cancel": "Cancel order",
-      "goPay": "Pay now",
-      "cancelling": "Cancelling…",
-      "countdown": "{time} left to pay",
-      "expired": "The payment window has closed; refreshing the order…"
+      "title": "Order in progress",
+      "redirecting": "An order is already in progress — opening its status…"
     },
     "orderCreated": "Order created; awaiting finance confirmation.",
     "orderFailed": "Failed to place the order. Please retry or contact support.",
@@ -2601,6 +2591,7 @@
       "colPlaced": "Placed",
       "colAction": "Action",
       "payNow": "Pay now",
+      "viewStatus": "View order status",
       "voucherOff": "voucher −{amount}",
       "empty": "No orders yet.",
       "total": "{count} orders",
@@ -2652,7 +2643,10 @@
       "title": "{count} order(s) awaiting payment",
       "description": "Pay in the billing center; the subscription activates once the order is fulfilled.",
       "deadline": "The earliest expires at {time}; it closes automatically after that.",
-      "action": "Pay in billing center"
+      "action": "Pay in billing center",
+      "inflightTitle": "{count} order(s) in progress",
+      "inflightDescription": "Payment declared and awaiting confirmation; once confirmed it activates automatically and the subscription appears below.",
+      "inflightAction": "View order status"
     },
     "stats": {
       "groupLabel": "Subscription metrics",

@@ -106,3 +106,14 @@ export function buildConsoleProfileUrl(locale: string): string {
   });
   return `${CONSOLE_BASE_URL}/${locale}/profile?${queryString}`;
 }
+
+/**
+ * 进行中的订单在 console 的状态页（/subscribe/pay/[orderId]：四步进度 + 当前态）。
+ * 定价页在有在途单时不再经 /subscribe 中转——那一页只会再问一次「要不要去付款」。
+ */
+export function buildConsoleOrderStatusUrl(
+  locale: string,
+  orderId: string,
+): string {
+  return `${CONSOLE_BASE_URL}/${locale}/subscribe/pay/${encodeURIComponent(orderId)}`;
+}

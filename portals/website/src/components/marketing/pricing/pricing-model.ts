@@ -199,7 +199,12 @@ function pickPrice(
 
 function buildComparison(plans: PricingPlan[]): ComparisonGroup[] {
   const quotaKeys = orderQuotaKeys(
-    unionInOrder(plans.map((plan) => Object.keys(plan.quota))),
+    /* `_` 开头的是内部配置键（BFF 已过滤，这里兜底）：客户面不显示。 */
+    unionInOrder(
+      plans.map((plan) =>
+        Object.keys(plan.quota).filter((key) => !key.startsWith("_")),
+      ),
+    ),
   );
   const featureKeys = unionInOrder(plans.map((plan) => plan.features));
 

@@ -31,6 +31,18 @@ export interface ProductSubscriptionState {
   suspensionExtendsTerm: boolean | null;
   /** 运营填的预计恢复时间（ISO）；null = 没填，界面只显示已暂停多久。 */
   expectedResumeAt: string | null;
+  /**
+   * 本工作区在该产品上**进行中的订单**（待付款 / 已申报待确认 / 已收款待开通）；无则 null。
+   * 订阅行履约才建，所以一笔等确认的新订单在 `subscribed` 上仍是 false——定价页要据此
+   * 把该档换成「查看订单状态」、同产品其他档灰成「已有订单进行中」。
+   */
+  pendingOrder: {
+    orderId: string;
+    orderNo: string;
+    tier: string | null;
+    cycleUnit: string;
+    state: "pending_payment" | "pending_verify" | "paid";
+  } | null;
 }
 
 export async function fetchProductSubscriptions(): Promise<

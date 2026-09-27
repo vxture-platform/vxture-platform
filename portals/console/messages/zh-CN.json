@@ -1161,6 +1161,10 @@
       "cancelled": "订单已取消",
       "expired": "订单已超时关闭"
     },
+    "requestMismatch": {
+      "title": "已有一笔订单进行中",
+      "description": "你选的档位或周期与这笔订单不同——进行中的是 {plan}（{cycle}）。等它完成或取消后，再按新的档位下单。"
+    },
     "stateHint": {
       "refunding": "退款申请已受理，处理完成后会通知你。",
       "refunded": "退款已完成。如需继续使用，请重新下单。",
@@ -2485,22 +2489,8 @@
       "suspendedHint": "服务暂时不可用，请联系支持恢复后再操作。"
     },
     "pending": {
-      "title": "订单待确认",
-      "orderNo": "订单号",
-      "amount": "应付金额",
-      "awaiting": "订单已生成。请按下方信息汇款并在备注填写订单号；财务确认到账后自动开通。",
-      "bankTitle": "线下汇款信息",
-      "accountName": "收款户名",
-      "bankName": "开户行",
-      "accountNo": "账号",
-      "reference": "汇款备注",
-      "referenceHint": "务必填写订单号，便于核销",
-      "configPending": "收款账户信息待配置，请联系客服获取汇款方式。",
-      "cancel": "取消订单",
-      "goPay": "去付款",
-      "cancelling": "取消中…",
-      "countdown": "付款剩余 {time}",
-      "expired": "付款时限已到，正在刷新订单状态…"
+      "title": "订单进行中",
+      "redirecting": "已有一笔订单进行中，正在打开订单状态…"
     },
     "orderCreated": "订单已创建，等待财务确认收款。",
     "orderFailed": "下单失败，请稍后重试或联系支持。",
@@ -2601,6 +2591,7 @@
       "colPlaced": "下单时间",
       "colAction": "操作",
       "payNow": "去支付",
+      "viewStatus": "查看订单状态",
       "voucherOff": "券 −{amount}",
       "empty": "暂无订单记录。",
       "total": "共 {count} 条",
@@ -2652,7 +2643,10 @@
       "title": "有 {count} 笔订单待支付",
       "description": "去费用中心完成支付,订单履约后订阅才会开通。",
       "deadline": "最早一笔 {time} 到期,逾期自动关闭。",
-      "action": "去费用中心支付"
+      "action": "去费用中心支付",
+      "inflightTitle": "有 {count} 笔订单进行中",
+      "inflightDescription": "已收到付款申报，等待确认到账；确认后自动开通，订阅会出现在下面。",
+      "inflightAction": "查看订单状态"
     },
     "stats": {
       "groupLabel": "产品订阅统计",

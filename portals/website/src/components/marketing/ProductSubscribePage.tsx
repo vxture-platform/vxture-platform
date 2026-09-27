@@ -52,7 +52,10 @@ import {
   priceFractionDigits,
   type BillingCycle,
 } from "./pricing/pricing-model";
-import { PricingPlanCard } from "./pricing/PricingPlanCard";
+import {
+  PricingPlanCard,
+  type PendingOrderRef,
+} from "./pricing/PricingPlanCard";
 import { TiersSideCard } from "./pricing/TeamTiersGhostCard";
 import { PlanCompareTable } from "./pricing/PlanCompareTable";
 import { PricingFaq } from "./pricing/PricingFaq";
@@ -151,9 +154,15 @@ export default function ProductSubscribePage() {
   const user = useAuthStore((state) => state.user);
   const hasSession = isAuthenticated && Boolean(user);
   const [currentTier, setCurrentTier] = useState<string | null>(null);
+  /* 同产品进行中的订单（owner 2026-09-27）：该档 CTA 变「查看订单状态」，同产品其他档
+     灰成「已有订单进行中」；其他产品不受影响。未登录 / 读失败 → 与没有在途单同样处理。 */
+  const [pendingOrder, setPendingOrder] = useState<PendingOrderRef | null>(
+    null,
+  );
   useEffect(() => {
     if (!hasSession) {
       setCurrentTier(null);
+      setPendingOrder(null);
       return;
     }
     let cancelled = false;
@@ -162,9 +171,19 @@ export default function ProductSubscribePage() {
         if (cancelled) return;
         const mine = list.find((s) => s.productCode === productCode);
         setCurrentTier(mine?.subscribed ? mine.tier : null);
+        setPendingOrder(
+          mine?.pendingOrder
+            ? {
+                orderId: mine.pendingOrder.orderId,
+                tier: mine.pendingOrder.tier,
+              }
+            : null,
+        );
       })
       .catch(() => {
-        if (!cancelled) setCurrentTier(null);
+        if (cancelled) return;
+        setCurrentTier(null);
+        setPendingOrder(null);
       });
     return () => {
       cancelled = true;
@@ -415,6 +434,7 @@ export default function ProductSubscribePage() {
                       selected={plan.tier === activeTier}
                       onSelect={() => setSelectedTier(plan.tier)}
                       currentTier={currentTier}
+                      pendingOrder={pendingOrder}
                       fractionDigits={fractionDigits}
                     />
                   ))}
