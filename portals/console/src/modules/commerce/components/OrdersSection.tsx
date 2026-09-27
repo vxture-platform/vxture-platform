@@ -474,6 +474,17 @@ export function OrdersSection() {
                 >
                   {t("orders.payNow")}
                 </Button>
+              ) : o.orderStatus === "paid_pending_verify" ||
+                o.orderStatus === "activating" ? (
+                /* 已申报 / 开通中的单也要有一键直达：此前这两态没有任何按钮，客户只能
+                   展开时间线看，找不到订单状态页（owner 2026-09-27）。 */
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
+                >
+                  {t("orders.viewStatus")}
+                </Button>
               ) : null}
               <ActionMenu
                 label={t("orders.menuLabel")}

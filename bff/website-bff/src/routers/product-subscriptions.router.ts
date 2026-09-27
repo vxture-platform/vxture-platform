@@ -49,10 +49,28 @@ const SUSPENSION_DISPLAY: Record<string, string> = {
   other: "paused", // 其他 → 已暂停
 };
 
+/**
+ * 本工作区在该产品上**进行中的订单**：待付款 / 已申报待确认 / 已收款待开通
+ * （billing.orders 的三个在途态；uidx_orders_open_per_product 保证一产品至多一张）。
+ *
+ * 为什么要单独给：订阅行只在履约时才建（product_330），所以一笔已申报、等运营确认收款的
+ * 新订单在 product-subscriptions 里是「未订阅」——官网定价页据此照样给「订阅」按钮，
+ * 客户点进去才发现 console 拦着一张在途单（owner 2026-09-27 实测 tenderforge）。
+ */
+export interface PendingOrderState {
+  orderId: string;
+  orderNo: string;
+  /** 目标套餐版本上本产品主组件的档位；越梯 / 自定义为 null。 */
+  tier: string | null;
+  cycleUnit: string;
+  state: "pending_payment" | "pending_verify" | "paid";
+}
+
 export interface ProductSubscriptionState {
   productCode: string;
   subscribed: boolean;
   tier: string | null;
+  /** 代表订阅行的状态；只有在途订单、没有订阅行时为 `none`。 */
   status: string;
   /**
    * 产品自己的工作台入口（product.product_webhooks.home_url）；未登记为 null。
@@ -83,6 +101,33 @@ export interface ProductSubscriptionState {
    * **不是**用最长暂停期算的——那是内部处置阈值，不是对客户的承诺。
    */
   expectedResumeAt: string | null;
+  /** 进行中的订单；无则 null。见 PendingOrderState。 */
+  pendingOrder: PendingOrderState | null;
+}
+
+const OPEN_ORDER_STATUSES = [
+  "pending_payment",
+  "pending_verify",
+  "paid",
+] as const;
+
+interface OpenOrderRow {
+  product_code: string;
+  order_id: string;
+  order_no: string;
+  status: string;
+  cycle_unit: string;
+  tier: string | null;
+}
+
+function toPendingOrder(row: OpenOrderRow): PendingOrderState {
+  return {
+    orderId: row.order_id,
+    orderNo: row.order_no,
+    tier: row.tier,
+    cycleUnit: row.cycle_unit,
+    state: row.status as PendingOrderState["state"],
+  };
 }
 
 @Controller("api/me")
@@ -172,7 +217,38 @@ export class ProductSubscriptionsRouter {
       [req.tenantId, [...SUBSCRIPTION_STATUSES], [...TIERS]],
     );
 
-    return res.rows.map((r) => {
+    /* 在途订单与订阅行是两张表：订阅行履约才建，所以这里第二次查库、按产品合并。
+       工作区口径与上面一致（租户默认工作区）——console 的下单守卫按当前工作区判，
+       多工作区租户两边可能不一致，那是既有的口径差，不在这里另起一套。 */
+    const open = await this.pool.query<OpenOrderRow>(
+      `select prod.product_code, o.id as order_id, o.order_no, o.status, o.cycle_unit,
+              pc.tier
+         from billing.orders o
+         join product.products prod on prod.id = o.product_id
+         left join lateral (
+           select pc.tier from product.plan_components pc
+            where pc.plan_version_id = o.plan_version_id and pc.product_id = o.product_id
+            order by (pc.component_role = 'primary') desc, pc.priority asc
+            limit 1
+         ) pc on true
+        where o.workspace_id = (
+                select id from tenancy.workspaces
+                 where tenant_id = $1 and is_default
+                 limit 1
+              )
+          and o.status = any($2::text[])
+        order by o.created_at desc`,
+      [req.tenantId, [...OPEN_ORDER_STATUSES]],
+    );
+    const pendingByProduct = new Map<string, PendingOrderState>();
+    for (const row of open.rows) {
+      /* 唯一索引保证一产品一张；万一存量有多张，按 created_at desc 取最新那张。 */
+      if (!pendingByProduct.has(row.product_code)) {
+        pendingByProduct.set(row.product_code, toPendingOrder(row));
+      }
+    }
+
+    const states = res.rows.map((r) => {
       const subscribed = HELD_STATUSES.has(r.status);
       const suspended = r.status === "suspended";
       return {
@@ -195,7 +271,28 @@ export class ProductSubscriptionsRouter {
         expectedResumeAt: suspended
           ? (r.expected_resume_at?.toISOString() ?? null)
           : null,
+        pendingOrder: pendingByProduct.get(r.product_code) ?? null,
       };
     });
+
+    /* 只有在途订单、还没有订阅行的产品也要出现：官网要据此把「订阅」换成「查看订单状态」。 */
+    const covered = new Set(states.map((st) => st.productCode));
+    for (const [productCode, pendingOrder] of pendingByProduct) {
+      if (covered.has(productCode)) continue;
+      states.push({
+        productCode,
+        subscribed: false,
+        tier: null,
+        status: "none",
+        homeUrl: null,
+        canUpgrade: false,
+        suspensionState: null,
+        suspendedSince: null,
+        suspensionExtendsTerm: null,
+        expectedResumeAt: null,
+        pendingOrder,
+      });
+    }
+    return states;
   }
 }

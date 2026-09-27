@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -179,6 +179,8 @@ function VoucherChoice({
 
 export function OrderPayPage() {
   const t = useTranslations("orderPay");
+  const tHub = useTranslations("subscriptionHub");
+  const searchParams = useSearchParams();
   const fmt = fmtWith(useLocale() as Locale);
   const withLabels = useConfirmLabels();
   const tChannels = useTranslations("payChannels");
@@ -453,7 +455,17 @@ export function OrderPayPage() {
   // 只写套餐名（入门版）看不出是哪个产品的入门版；编码只作最后兜底。
   const planLabel = `${[detail.productName, detail.planName || detail.planCode]
     .filter(Boolean)
-    .join(" · ")}${detail.tier ? ` · ${detail.tier}` : ""}`;
+    .join(" · ")}${detail.tier ? ` · ${tHub(`tier.${detail.tier}`)}` : ""}`;
+
+  /* 从官网 / 订阅页深链进来时带着想要的档位与周期；与这张在途单不一致就说一句——
+     客户点的是年付 Pro，落到的却是月付 Pro 的进行中订单，不说他会以为下错了单。 */
+  const requestedTier = searchParams.get("requested_tier");
+  const requestedCycle = searchParams.get("requested_cycle");
+  const requestMismatch =
+    (requestedTier !== null &&
+      detail.tier !== null &&
+      requestedTier !== detail.tier) ||
+    (requestedCycle !== null && requestedCycle !== detail.cycleUnit);
 
   const stateBadge = (
     <StatusBadge tone={STATE_TONE[state]}>{t(`status.${state}`)}</StatusBadge>
@@ -484,6 +496,16 @@ export function OrderPayPage() {
         <Banner
           tone="danger"
           title={t("rejectBanner", { reason: detail.rejectReason })}
+        />
+      ) : null}
+      {requestMismatch ? (
+        <Banner
+          tone="info"
+          title={t("requestMismatch.title")}
+          description={t("requestMismatch.description", {
+            plan: planLabel,
+            cycle: t(`cycle.${detail.cycleUnit}`),
+          })}
         />
       ) : null}
       {isPending && countdownExpired ? (
