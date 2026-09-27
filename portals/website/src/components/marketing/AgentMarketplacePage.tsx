@@ -120,8 +120,6 @@ export default function AgentMarketplacePage({
         subscribe: t("agents.actions.subscribe"),
         inviteSubscribe: t("agents.actions.inviteSubscribe"),
         notForSale: t("agents.actions.notForSale"),
-        /* 带占位符、渲染时才知道值（预计恢复时间）：取原串交给卡片自己填，理由同下面 suspension 三条。 */
-        maintenanceUntil: t.raw("agents.actions.maintenanceUntil") as string,
         upgrade: t("agents.actions.upgrade"),
         enter: t("agents.actions.enter"),
         noEntry: t("agents.actions.noEntry"),
@@ -143,6 +141,14 @@ export default function AgentMarketplacePage({
         countdown: t.raw("agents.suspension.countdown") as string,
         contact: t("agents.suspension.contact"),
         close: t("agents.suspension.close"),
+      },
+      maintenanceDialog: {
+        visitor: t("agents.maintenanceDialog.visitor"),
+        subscriber: t("agents.maintenanceDialog.subscriber"),
+        countdown: t("agents.maintenanceDialog.countdown"),
+        /* 「{d} 天」只有渲染时才知道天数：取原串交给弹窗自己填，理由同上面 suspension 三条。 */
+        days: t.raw("agents.maintenanceDialog.days") as string,
+        elapsed: t("agents.maintenanceDialog.elapsed"),
       },
     }),
     [t],

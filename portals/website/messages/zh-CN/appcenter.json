@@ -47,8 +47,7 @@
       "detail": "产品介绍",
       "coming": "敬请期待",
       "inviteSubscribe": "邀请订阅",
-      "notForSale": "暂未开卖",
-      "maintenanceUntil": "预计 {time} 恢复"
+      "notForSale": "暂未开卖"
     },
     "empty": {
       "title": "更多智能体陆续上线",
@@ -70,6 +69,13 @@
       "countdown": "距恢复还有 {remain}",
       "contact": "联系支持",
       "close": "知道了"
+    },
+    "maintenanceDialog": {
+      "visitor": "产品正在升级维护，暂不可订阅。",
+      "subscriber": "已订阅的服务暂停期间不计入有效期，恢复后自动顺延。",
+      "countdown": "距恢复还有",
+      "days": "{d} 天",
+      "elapsed": "恢复时间已到，正在收尾"
     }
   }
 }
