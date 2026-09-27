@@ -201,15 +201,14 @@ export function PricingPlanCard({
      深链同一口径）；已有当前档的按 upgrade 进去，console 那边按意图落位。 */
   const isInvite = plan.access === "invite";
   const [inviteOpen, setInviteOpen] = useState(false);
-  const inviteConsoleHref = shown
-    ? buildConsoleSubscribeUrl(
-        locale,
-        productCode,
-        relation === "higher" ? "upgrade" : "subscribe",
-        plan.tier,
-        shown.unit,
-      )
-    : null;
+  /* 没挂价的邀请档（如只谈价的企业档）也要能开弹窗：深链不带周期，console 端 cycle 可选。 */
+  const inviteConsoleHref = buildConsoleSubscribeUrl(
+    locale,
+    productCode,
+    relation === "higher" ? "upgrade" : "subscribe",
+    plan.tier,
+    shown?.unit,
+  );
   const inviteRequestHref = `mailto:sales@vxture.com?subject=${encodeURIComponent(
     t("inviteRequestSubject", { product: productName, plan: plan.name }),
   )}`;
@@ -363,7 +362,7 @@ export function PricingPlanCard({
 
           {/* CTA + 脚注 */}
           <div className="mt-4">
-            {isContact ? (
+            {isContact && !isInvite ? (
               (notice ?? (
                 <Button asChild variant="outline" className="w-full">
                   <a
@@ -416,8 +415,8 @@ export function PricingPlanCard({
                「我已有邀请」在窗里。停售时与公开档一样只剩状态字。 */
               (sunsetNotice ?? (
                 <Button
-                  variant="outline"
-                  className="w-full"
+                  variant={selected ? "default" : "outline"}
+                  className={selected ? GRADIENT_CTA : "w-full"}
                   onClick={() => setInviteOpen(true)}
                 >
                   {tCatalog("actions.inviteSubscribe")}
@@ -438,7 +437,9 @@ export function PricingPlanCard({
                       plan.tier,
                       // 传实际展示的周期（wire 值域 month|year）：console 严格匹配
                       // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
-                      shown.unit,
+                      // 到这一支时 shown 必非 null（无价的公开档在链首落「联系销售」），
+                      // 但 TS 经 isInvite 那一层已收窄不到，写成可选与深链的 cycle 可选一致。
+                      shown?.unit,
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -477,7 +478,7 @@ export function PricingPlanCard({
       </Card>
       {/* 邀请弹窗挂在卡片旁边而不是卡片里：Card 自己有 onClick / onKeyDown（选中态），
         portal 里的事件会沿 React 树冒回去。Dialog 根本身不占 DOM，栅格不多一格。 */}
-      {isInvite && inviteConsoleHref ? (
+      {isInvite ? (
         <InviteSubscribeDialog
           open={inviteOpen}
           onOpenChange={setInviteOpen}
