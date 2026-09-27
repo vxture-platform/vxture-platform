@@ -15,6 +15,16 @@
  * 写 = 事务 + 事务内审计。锚点列 id / created_by / created_at 永不出现在 SET
  * （deploy/database/ddl/98_column_locks.sql）。
  *
+ * ── 产品级维护窗口（owner 2026-09-27）──
+ * 窗口可挂 0..n 个产品（`productCodes`；0 = 平台级公告）。绑定是**计划**
+ * （admin.maintenance_window_products），占用是**运行态**（product.products 的
+ * maintenance_window_id / maintenance_until 两列，读者只看这两列）：
+ *   start    → 把绑定产品的两列打上（窗口 id + end_at）；某个产品已被**另一个**进行中
+ *              的窗口占着 → 409，整笔回滚，一个都不打；
+ *   complete / cancel → 清掉（WHERE maintenance_window_id = 本窗口）；
+ *   in_progress 顺延 end_at → 同步 maintenance_until。
+ * 产品行的这两列只在这个文件里写。
+ *
  * 设计权威仍是 docs/product/platform/admin/governance-write-paths.md §3.3/§4。
  */
 
@@ -32,7 +42,7 @@ import {
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
-import { withTransaction } from "../db/tx";
+import { withTransaction, type Queryable } from "../db/tx";
 import {
   conflict,
   internalError,
@@ -55,6 +65,12 @@ import {
   toIsoOrNull,
 } from "./router.shared";
 
+/** 窗口挂着的一个产品。只回可视码与名字——uuid 不出接口（铁律二）。 */
+export interface MaintenanceWindowProduct {
+  productCode: string;
+  productName: string;
+}
+
 export interface MaintenanceWindowItem {
   id: string;
   severity: "minor" | "major" | "critical";
@@ -69,6 +85,8 @@ export interface MaintenanceWindowItem {
   description: string | null;
   impactDescription: string | null;
   affectedServices: string[];
+  /** 受影响产品（按目录次序）。空数组 = 平台级公告，不挂产品。 */
+  products: MaintenanceWindowProduct[];
   startAt: string;
   endAt: string;
   actualEndAt: string | null;
@@ -164,7 +182,9 @@ export class MaintenanceWindowsRouter {
   // POST /api/maintenance-windows
   //   body: { title(<=256), startAt: ISO, endAt: ISO(> startAt；过去的窗口允许
   //           补录), severity?, description?, impactDescription?,
-  //           affectedServices?: string[] }。state 起始 'scheduled'。
+  //           affectedServices?: string[], productCodes?: string[] }。
+  //   state 起始 'scheduled'。productCodes 必须都在产品目录里（未删除），否则 400
+  //   点名不认识的码——写进去一个不存在的产品，start 时什么也打不上，而且没人知道。
   @Post()
   async createMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -175,6 +195,7 @@ export class MaintenanceWindowsRouter {
     const input = normalizeMaintenanceWindowInput(body);
 
     return withTransaction(this.rwPool, async (client) => {
+      const productIds = await resolveProductIds(client, input.productCodes);
       const { rows } = await client.query<{ id: string }>(
         MAINTENANCE_WINDOW_INSERT_SQL,
         [
@@ -197,6 +218,7 @@ export class MaintenanceWindowsRouter {
           "Maintenance window insert returned no row",
         );
       }
+      await replaceWindowProducts(client, created.id, productIds);
       await insertOperatorAuditLog(client, req, {
         action: "governance.maintenance.create",
         resourceType: "maintenance_window",
@@ -206,6 +228,7 @@ export class MaintenanceWindowsRouter {
           severity: input.severity,
           startAt: input.startAt,
           endAt: input.endAt,
+          productCodes: input.productCodes,
         },
       });
       return this.fetchMaintenanceWindow(client, created.id);
@@ -224,6 +247,9 @@ export class MaintenanceWindowsRouter {
    *
    * 现在的规则（B-1）：**送来的锁定字段与库里不同就拒**，相同则视为无操作放行。
    * 后者不能少——控制台编辑框在 live 模式下是 disabled 而不是不提交，它送的是原值。
+   *
+   * `productCodes` 同属锁定字段：进行中的窗口换产品等于要给新产品打标、给旧产品清标，
+   * 那是另一次 start / complete，不是一次编辑。
    */
   @Put(":id")
   async updateMaintenanceWindow(
@@ -241,14 +267,10 @@ export class MaintenanceWindowsRouter {
         severity: MaintenanceWindowItem["severity"];
         title: string;
         affected_services: string[];
+        product_codes: string[];
         start_at: Date;
         end_at: Date;
-      }>(
-        `select status, severity, title, affected_services, start_at, end_at
-           from admin.maintenance_windows
-          where id = $1 for update`,
-        [windowId],
-      );
+      }>(MAINTENANCE_WINDOW_LOCK_FOR_UPDATE_SQL, [windowId]);
       const row = current.rows[0];
       if (!row) {
         throw notFound(
@@ -257,8 +279,10 @@ export class MaintenanceWindowsRouter {
         );
       }
 
+      let productCodes: string[] = row.product_codes ?? [];
       if (row.status === "scheduled") {
         const input = normalizeMaintenanceWindowInput(body);
+        const productIds = await resolveProductIds(client, input.productCodes);
         await client.query(MAINTENANCE_WINDOW_FULL_UPDATE_SQL, [
           windowId,
           input.severity,
@@ -270,6 +294,8 @@ export class MaintenanceWindowsRouter {
           input.endAt,
           updatedBy,
         ]);
+        await replaceWindowProducts(client, windowId, productIds);
+        productCodes = input.productCodes;
       } else if (row.status === "in_progress") {
         assertLiveEditable(body, row);
         const description = optionalText(
@@ -306,6 +332,14 @@ export class MaintenanceWindowsRouter {
           impactDescription,
           updatedBy,
         ]);
+        /* 顺延要跟到产品行上：官网 / console 显示的「预计 … 恢复」读的是
+           products.maintenance_until，不是窗口的 end_at。 */
+        if (endAt !== null) {
+          await client.query(PRODUCTS_MAINTENANCE_UNTIL_SYNC_SQL, [
+            windowId,
+            endAt,
+          ]);
+        }
       } else {
         throw conflict(
           "MAINTENANCE_WINDOW_READ_ONLY",
@@ -321,29 +355,82 @@ export class MaintenanceWindowsRouter {
           state: row.status,
           startAt: toIso(row.start_at),
           endAt: toIso(row.end_at),
+          productCodes: row.product_codes ?? [],
         },
+        after: { productCodes },
       });
       return this.fetchMaintenanceWindow(client, windowId);
     });
   }
 
   // POST /api/maintenance-windows/:id/start — scheduled → in_progress（手动触发，无调度器）
+  //   顺带把绑定产品打上「升级维护中」。某个产品已被另一个进行中的窗口占着 → 409，
+  //   整笔回滚（窗口不会半开：状态没变、一个产品都没打）。
   @Post(":id/start")
   async startMaintenanceWindow(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
   ): Promise<MaintenanceWindowItem> {
-    return this.transitionMaintenanceWindow(
-      req,
-      id,
-      "start",
-      MAINTENANCE_WINDOW_START_SQL,
-      "Only a scheduled window can be started",
-    );
+    assertCanManageMaintenanceWindows(req);
+    const updatedBy = requireOperatorId(req);
+    const windowId = requireUuid(id, "id", "Invalid maintenance window id");
+
+    return withTransaction(this.rwPool, async (client) => {
+      const started = await client.query<{ end_at: Date | string }>(
+        MAINTENANCE_WINDOW_START_SQL,
+        [windowId, updatedBy],
+      );
+      const startedRow = started.rows[0];
+      if (!startedRow) {
+        await this.throwNotFoundOrConflict(
+          client,
+          windowId,
+          "Only a scheduled window can be started",
+        );
+      }
+      /* 先锁产品行再判占用：FOR UPDATE 等到并发那笔提交后才返回，读到的是提交后的
+         值——两个窗口同时 start 同一个产品，后到的那笔看见前一笔打的标，409。
+         不锁直接 UPDATE 是「最后写的赢」，两个窗口都以为自己占住了。 */
+      const bound = await client.query<{
+        product_code: string;
+        maintenance_window_id: string | null;
+      }>(MAINTENANCE_WINDOW_BOUND_PRODUCTS_LOCK_SQL, [windowId]);
+      const busy = bound.rows.filter(
+        (r) =>
+          r.maintenance_window_id !== null &&
+          r.maintenance_window_id !== windowId,
+      );
+      if (busy.length > 0) {
+        throw conflict(
+          "MAINTENANCE_WINDOW_PRODUCT_BUSY",
+          `这些产品已经在另一个进行中的维护窗口里：${busy
+            .map((r) => r.product_code)
+            .join(
+              " / ",
+            )}。同一产品同时只能在一个进行中的窗口里，先完成或取消那个窗口再开始这个。`,
+        );
+      }
+      const endAt = toIso(startedRow!.end_at);
+      const stamped = await client.query(PRODUCTS_MAINTENANCE_STAMP_SQL, [
+        windowId,
+        endAt,
+      ]);
+      await insertOperatorAuditLog(client, req, {
+        action: "governance.maintenance.start",
+        resourceType: "maintenance_window",
+        resourceId: windowId,
+        after: {
+          productCodes: bound.rows.map((r) => r.product_code),
+          productsStamped: stamped.rowCount ?? 0,
+          maintenanceUntil: endAt,
+        },
+      });
+      return this.fetchMaintenanceWindow(client, windowId);
+    });
   }
 
   // POST /api/maintenance-windows/:id/complete { actualEndAt?: ISO }
-  //   in_progress → completed；actual_end_at 取 body 值或 now()。
+  //   in_progress → completed；actual_end_at 取 body 值或 now()。产品行的占用随之清掉。
   @Post(":id/complete")
   async completeMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -373,52 +460,47 @@ export class MaintenanceWindowsRouter {
           "Only an in_progress window can be completed",
         );
       }
+      const released = await releaseWindowProducts(client, windowId);
       await insertOperatorAuditLog(client, req, {
         action: "governance.maintenance.complete",
         resourceType: "maintenance_window",
         resourceId: windowId,
-        after: { actualEndAt },
+        after: { actualEndAt, productsReleased: released },
       });
       return this.fetchMaintenanceWindow(client, windowId);
     });
   }
 
   // POST /api/maintenance-windows/:id/cancel — scheduled|in_progress → cancelled
-  //   （取消一个进行中的窗口会记 actual_end_at）。
+  //   （取消一个进行中的窗口会记 actual_end_at，并清掉产品行的占用；取消一个
+  //   scheduled 的窗口本来就没打过标，清 0 行）。
   @Post(":id/cancel")
   async cancelMaintenanceWindow(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-  ): Promise<MaintenanceWindowItem> {
-    return this.transitionMaintenanceWindow(
-      req,
-      id,
-      "cancel",
-      MAINTENANCE_WINDOW_CANCEL_SQL,
-      "Maintenance window is already terminal",
-    );
-  }
-
-  private async transitionMaintenanceWindow(
-    req: Request & RequestContext,
-    id: string,
-    verb: "start" | "cancel",
-    sql: string,
-    conflictMessage: string,
   ): Promise<MaintenanceWindowItem> {
     assertCanManageMaintenanceWindows(req);
     const updatedBy = requireOperatorId(req);
     const windowId = requireUuid(id, "id", "Invalid maintenance window id");
 
     return withTransaction(this.rwPool, async (client) => {
-      const { rowCount } = await client.query(sql, [windowId, updatedBy]);
+      const { rowCount } = await client.query(MAINTENANCE_WINDOW_CANCEL_SQL, [
+        windowId,
+        updatedBy,
+      ]);
       if (rowCount === 0) {
-        await this.throwNotFoundOrConflict(client, windowId, conflictMessage);
+        await this.throwNotFoundOrConflict(
+          client,
+          windowId,
+          "Maintenance window is already terminal",
+        );
       }
+      const released = await releaseWindowProducts(client, windowId);
       await insertOperatorAuditLog(client, req, {
-        action: `governance.maintenance.${verb}`,
+        action: "governance.maintenance.cancel",
         resourceType: "maintenance_window",
         resourceId: windowId,
+        after: { productsReleased: released },
       });
       return this.fetchMaintenanceWindow(client, windowId);
     });
@@ -426,7 +508,7 @@ export class MaintenanceWindowsRouter {
 
   /** 条件 UPDATE 影响 0 行有两种可能：行不存在（404），或状态不允许（409）。 */
   private async throwNotFoundOrConflict(
-    db: Pick<Pool, "query">,
+    db: Queryable,
     windowId: string,
     conflictMessage: string,
   ): Promise<never> {
@@ -444,7 +526,7 @@ export class MaintenanceWindowsRouter {
   }
 
   private async fetchMaintenanceWindow(
-    db: Pick<Pool, "query">,
+    db: Queryable,
     id: string,
   ): Promise<MaintenanceWindowItem> {
     const { rows } = await db.query<MaintenanceWindowRow>(
@@ -461,6 +543,7 @@ export class MaintenanceWindowsRouter {
   }
 }
 
+// products 子查询按目录次序（sort, product_code）带出，与产品目录页同一句。
 const MAINTENANCE_WINDOW_SELECT = `
 select
   w.id,
@@ -470,6 +553,14 @@ select
   w.description,
   w.impact_description,
   w.affected_services,
+  coalesce(
+    (select json_agg(json_build_object('productCode', p.product_code, 'productName', p.product_name)
+                     order by p.sort, p.product_code)
+       from admin.maintenance_window_products mp
+       join product.products p on p.id = mp.product_id
+      where mp.window_id = w.id),
+    '[]'::json
+  ) as products,
   w.start_at,
   w.end_at,
   w.actual_end_at,
@@ -489,6 +580,21 @@ insert into admin.maintenance_windows
 values
   ($1, 'scheduled', $2, $3, $4, $5::varchar[], $6, $7, $8)
 returning id
+`;
+
+// PUT 前先锁窗口行，顺带把当前绑定的产品码带出来给 in_progress 的锁定字段比对。
+const MAINTENANCE_WINDOW_LOCK_FOR_UPDATE_SQL = `
+select w.status, w.severity, w.title, w.affected_services, w.start_at, w.end_at,
+       array(
+         select p.product_code
+           from admin.maintenance_window_products mp
+           join product.products p on p.id = mp.product_id
+          where mp.window_id = w.id
+          order by p.product_code
+       )::varchar[] as product_codes
+  from admin.maintenance_windows w
+ where w.id = $1
+   for update of w
 `;
 
 // scheduled only —— 锚点列（id/created_by/created_at）永不进 SET。
@@ -517,10 +623,12 @@ set end_at             = coalesce($2, end_at),
 where id = $1 and status = 'in_progress'
 `;
 
+// returning end_at：产品行要打的 maintenance_until 就是它。
 const MAINTENANCE_WINDOW_START_SQL = `
 update admin.maintenance_windows
 set status = 'in_progress', updated_by = $2, updated_at = now()
 where id = $1 and status = 'scheduled'
+returning end_at
 `;
 
 const MAINTENANCE_WINDOW_COMPLETE_SQL = `
@@ -541,6 +649,111 @@ set actual_end_at = case when status = 'in_progress' then now() else actual_end_
 where id = $1 and status in ('scheduled', 'in_progress')
 `;
 
+// ── 绑定（计划）────────────────────────────────────────────────────────────
+
+const PRODUCT_IDS_BY_CODE_SQL = `
+select id, product_code
+  from product.products
+ where product_code = any($1::varchar[])
+   and deleted_at is null
+`;
+
+const MAINTENANCE_WINDOW_PRODUCTS_DELETE_SQL = `
+delete from admin.maintenance_window_products where window_id = $1
+`;
+
+const MAINTENANCE_WINDOW_PRODUCTS_INSERT_SQL = `
+insert into admin.maintenance_window_products (window_id, product_id)
+select $1, unnest($2::uuid[])
+on conflict do nothing
+`;
+
+// ── 占用（运行态）：product.products 的两列只在下面三条里写 ──────────────────
+// 不碰 products.updated_at：打标 / 清标是运行态变化，不是目录内容的一次编辑，
+// 目录页按更新时间排序不该因为一次维护而抖动。
+
+// start 时锁住绑定产品的行并读占用；for update of p 只锁产品行，不锁绑定表。
+const MAINTENANCE_WINDOW_BOUND_PRODUCTS_LOCK_SQL = `
+select p.product_code, p.maintenance_window_id
+  from admin.maintenance_window_products mp
+  join product.products p on p.id = mp.product_id
+ where mp.window_id = $1
+ order by p.product_code
+   for update of p
+`;
+
+const PRODUCTS_MAINTENANCE_STAMP_SQL = `
+update product.products
+   set maintenance_window_id = $1,
+       maintenance_until = $2
+ where id in (select product_id from admin.maintenance_window_products where window_id = $1)
+`;
+
+const PRODUCTS_MAINTENANCE_UNTIL_SYNC_SQL = `
+update product.products
+   set maintenance_until = $2
+ where maintenance_window_id = $1
+`;
+
+const PRODUCTS_MAINTENANCE_RELEASE_SQL = `
+update product.products
+   set maintenance_window_id = null,
+       maintenance_until = null
+ where maintenance_window_id = $1
+`;
+
+/**
+ * 产品码 → id。**每个码都必须在目录里**（未删除）：写进一个不存在的产品，start 时
+ * 什么也打不上，而且没人知道。回的 id 顺序与传入的码一致。
+ */
+async function resolveProductIds(
+  db: Queryable,
+  productCodes: readonly string[],
+): Promise<string[]> {
+  if (productCodes.length === 0) return [];
+  const { rows } = await db.query<{ id: string; product_code: string }>(
+    PRODUCT_IDS_BY_CODE_SQL,
+    [productCodes],
+  );
+  const byCode = new Map(rows.map((r) => [r.product_code, r.id]));
+  const unknown = productCodes.filter((c) => !byCode.has(c));
+  if (unknown.length > 0) {
+    throw invalidRequest(
+      "MAINTENANCE_WINDOW_PRODUCT_UNKNOWN",
+      `产品目录里没有这些产品码（或已删除）：${unknown.join(" / ")}`,
+      "productCodes",
+    );
+  }
+  return productCodes.map((c) => byCode.get(c)!);
+}
+
+/** 全量替换绑定（PUT 语义）：删光再插。绑定没有可 UPDATE 的列（98：全主键）。 */
+async function replaceWindowProducts(
+  db: Queryable,
+  windowId: string,
+  productIds: readonly string[],
+): Promise<void> {
+  await db.query(MAINTENANCE_WINDOW_PRODUCTS_DELETE_SQL, [windowId]);
+  if (productIds.length > 0) {
+    await db.query(MAINTENANCE_WINDOW_PRODUCTS_INSERT_SQL, [
+      windowId,
+      productIds,
+    ]);
+  }
+}
+
+/** complete / cancel：清掉本窗口打的标。按 maintenance_window_id 清，不按绑定表——
+ *  绑定在 scheduled 时可以改，占用只认「是这个窗口打的」。 */
+async function releaseWindowProducts(
+  db: Queryable,
+  windowId: string,
+): Promise<number> {
+  const { rowCount } = await db.query(PRODUCTS_MAINTENANCE_RELEASE_SQL, [
+    windowId,
+  ]);
+  return rowCount ?? 0;
+}
+
 interface MaintenanceWindowRow {
   id: string;
   severity: MaintenanceWindowItem["severity"];
@@ -549,6 +762,7 @@ interface MaintenanceWindowRow {
   description: string | null;
   impact_description: string | null;
   affected_services: string[] | null;
+  products: MaintenanceWindowProduct[] | null;
   start_at: Date | string;
   end_at: Date | string;
   actual_end_at: Date | string | null;
@@ -565,6 +779,7 @@ interface MaintenanceWindowWriteBody {
   description?: unknown;
   impactDescription?: unknown;
   affectedServices?: unknown;
+  productCodes?: unknown;
   startAt?: unknown;
   endAt?: unknown;
 }
@@ -575,6 +790,7 @@ interface NormalizedMaintenanceWindowInput {
   description: string | null;
   impactDescription: string | null;
   affectedServices: string[];
+  productCodes: string[];
   startAt: string;
   endAt: string;
 }
@@ -590,6 +806,7 @@ function mapMaintenanceWindowRow(
     description: row.description,
     impactDescription: row.impact_description,
     affectedServices: row.affected_services ?? [],
+    products: row.products ?? [],
     startAt: toIso(row.start_at),
     endAt: toIso(row.end_at),
     actualEndAt: toIsoOrNull(row.actual_end_at),
@@ -599,6 +816,11 @@ function mapMaintenanceWindowRow(
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
+}
+
+/** 按**集合**比，不按顺序、不认重复与首尾空格。 */
+function setKey(xs: readonly unknown[]): string {
+  return [...new Set(xs.map((v) => String(v).trim()))].sort().join(" ");
 }
 
 /**
@@ -613,6 +835,7 @@ export function assertLiveEditable(
     severity: MaintenanceWindowItem["severity"];
     title: string;
     affected_services: string[];
+    product_codes: string[];
     start_at: Date;
   },
 ): void {
@@ -641,10 +864,14 @@ export function assertLiveEditable(
        没改。`affectedServices` 回答的是「哪些服务受影响」，先后不承载任何语义。
        **误拒比漏拒更伤**：漏拒是少挡一次，误拒是让人对着一个自己没做过的改动
        找半天，还找不到。 */
-    const key = (xs: readonly string[]) =>
-      [...new Set(xs.map((v) => String(v).trim()))].sort().join(" ");
-    if (key(body.affectedServices) !== key(row.affected_services ?? [])) {
+    if (setKey(body.affectedServices) !== setKey(row.affected_services ?? [])) {
       locked.push("affectedServices");
+    }
+  }
+  if (Array.isArray(body.productCodes)) {
+    /* 同 affectedServices：集合比。进行中的窗口换产品不是编辑，是另一次 start / complete。 */
+    if (setKey(body.productCodes) !== setKey(row.product_codes ?? [])) {
+      locked.push("productCodes");
     }
   }
 
@@ -707,6 +934,10 @@ function normalizeMaintenanceWindowInput(
       body.affectedServices,
       "affectedServices",
     ),
+    /* 去重：同一个码送两遍是一个产品，不是两个；绑定表的主键也只认一次。 */
+    productCodes: [
+      ...new Set(normalizeStringArray(body.productCodes, "productCodes")),
+    ],
     startAt,
     endAt,
   };

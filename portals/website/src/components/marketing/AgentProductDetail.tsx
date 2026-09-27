@@ -38,10 +38,11 @@
  */
 
 import { useLocale, useTranslations } from "next-intl";
-import { Button, Icon } from "@vxture/design-system";
+import { Button, Icon, StatusBadge } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import {
   catalogDisplayName,
+  maintenanceUntilText,
   marketingForLocale,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
@@ -81,6 +82,13 @@ export default function AgentProductDetail({
    * 影响」而不是禁用按钮：这里没有「等一等就能点」的动作。判据与产品卡同源。
    */
   const sunset = !notLive && product.releaseStage === "sunset";
+  /*
+   * 升级维护中（产品级维护窗口，owner 2026-09-27）：徽标「升级维护中」挂在标题上方，
+   * 那颗跳 /pricing 的按钮换成不可点的状态字「升级维护中，暂不可订阅」+「预计 … 恢复」。
+   * 优先于「还没上线」与停售——维护是临时运行态，先说它。判据与产品卡同源。
+   */
+  const maintenance = product.maintenance;
+  const maintenanceUntil = maintenanceUntilText(maintenance, locale);
   /* 导语用登记的业务价值，退回目录 description。两者都空时不渲染这一段，而不是留一行空白。 */
   const lead = m?.value?.trim() || product.description?.trim() || "";
   const highlights = (m?.highlights ?? []).filter((x) => x.trim());
@@ -108,9 +116,34 @@ export default function AgentProductDetail({
         title={name}
         description={lead || undefined}
         highlights={highlights}
+        /* 眉题上方那一行：维护中给一枚 warning 徽标，让人在读标题前就看见它。 */
+        above={
+          maintenance ? (
+            <div className="mb-4">
+              <StatusBadge tone="warning">
+                {t("catalog.suspension.maintenance")}
+              </StatusBadge>
+            </div>
+          ) : undefined
+        }
         actions={
           <>
-            {notLive ? (
+            {maintenance ? (
+              /* 升级维护中：一段状态字而不是禁用按钮——没有「等一等就能点」的动作；
+                 「业务咨询」照旧可用。副行只给运营填的预计恢复时间，没有就不画。 */
+              <span className="inline-flex flex-col justify-center px-1 text-left leading-tight">
+                <span className="text-base font-semibold text-vx-gray-700 dark:text-vx-white">
+                  {t("catalog.actions.maintenance")}
+                </span>
+                {maintenanceUntil ? (
+                  <span className="text-xs text-vx-gray-500 dark:text-vx-gray-300">
+                    {t("catalog.actions.maintenanceUntil", {
+                      time: maintenanceUntil,
+                    })}
+                  </span>
+                ) : null}
+              </span>
+            ) : notLive ? (
               <Button size="xl" className="px-5" disabled>
                 {t("catalog.actions.coming")}
               </Button>

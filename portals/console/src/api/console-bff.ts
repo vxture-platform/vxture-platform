@@ -1101,7 +1101,12 @@ export interface RenewVersionChange {
 
 export interface SubscribeContext {
   intent: "subscribe" | "upgrade" | "renew" | "addon" | null;
-  product: { code: string; name: string } | null;
+  product: {
+    code: string;
+    name: string;
+    /** 产品升级维护中；null = 不在维护中。 */
+    maintenance: ProductMaintenance | null;
+  } | null;
   targetTier: string | null;
   metric: string | null;
   current: SubscribeCurrent | null;
@@ -1201,6 +1206,16 @@ export interface MyOrder {
 
 // ── 产品订阅总览（「我的订阅」卡 + 「新品推荐」卡，product_330）─────────────
 
+/**
+ * 产品级维护窗口（owner 2026-09-27）：升级 / 迁移期间产品「当前不可用」，未订阅的暂时
+ * 不能订阅、已订阅的给时间补偿（批量暂停 / 恢复是下一步，本步只提示）。
+ * 判据在服务端（product.products 两列），这里只读结果。
+ */
+export interface ProductMaintenance {
+  /** 预计恢复时刻（ISO）；服务端读不到时 null，界面画「—」。 */
+  until: string | null;
+}
+
 export interface SubscribedProduct {
   subscriptionId: string;
   productId: string | null;
@@ -1220,6 +1235,8 @@ export interface SubscribedProduct {
   endAt: string | null;
   autoRenew: boolean;
   favorite: boolean;
+  /** 产品升级维护中；null = 不在维护中。 */
+  maintenance: ProductMaintenance | null;
 }
 
 export interface RecommendedProduct {
@@ -1560,6 +1577,12 @@ export async function fetchSubscribeContext(params: {
     null;
   ctx.currentPlanRetired =
     (ctx as { currentPlanRetired?: boolean }).currentPlanRetired === true;
+  /* 同上：维护窗口字段（2026-09-27）旧响应没有 → 回落成「不在维护中」，即它之前的行为。 */
+  if (ctx.product) {
+    ctx.product.maintenance =
+      (ctx.product as { maintenance?: ProductMaintenance | null })
+        .maintenance ?? null;
+  }
   return ctx;
 }
 
@@ -1650,9 +1673,15 @@ export async function fetchMyOrders(): Promise<MyOrder[]> {
 }
 
 export async function fetchSubscribedProducts(): Promise<SubscribedProduct[]> {
-  return readJsonStrict<SubscribedProduct[]>(
+  const list = await readJsonStrict<SubscribedProduct[]>(
     "/api/subscription/subscribed-products",
   );
+  /* 部署偏斜防护：维护窗口字段（2026-09-27）旧响应没有 → 视为不在维护中。 */
+  for (const item of list) {
+    item.maintenance =
+      (item as { maintenance?: ProductMaintenance | null }).maintenance ?? null;
+  }
+  return list;
 }
 
 /** 「热门推荐」读:未订阅的产品。消费方是智能体页(shell 的 AppCenter)。 */

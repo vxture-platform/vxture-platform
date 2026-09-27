@@ -47,6 +47,7 @@ import type {
   SubscriptionRecord,
 } from "@vxture/service-subscription";
 import {
+  formatDateTime,
   SUBSCRIPTION_STATUSES,
   TIERS,
   type ProductEntitlementView,
@@ -310,7 +311,12 @@ export interface SubscribeContext {
   /** Normalized known intent, or null = unknown/absent → client degrades. */
   intent: SubscribeIntent | null;
   /** null = unknown product code → client degrades to the subscription home. */
-  product: { code: string; name: string } | null;
+  product: {
+    code: string;
+    name: string;
+    /** 升级维护中（见 ProductMaintenanceView）；null = 不在维护中。 */
+    maintenance: ProductMaintenanceView | null;
+  } | null;
   /** Validated against the @vxture-platform/shared five-tier ladder; invalid → null. */
   targetTier: Tier | null;
   metric: string | null;
@@ -661,6 +667,46 @@ export interface SubscribedProductView {
   autoRenew: boolean;
   /** ★ 收藏（account.user_product_favorites）——收藏即排序优先。 */
   favorite: boolean;
+  /** 产品升级维护中（见 ProductMaintenanceView）；null = 不在维护中。 */
+  maintenance: ProductMaintenanceView | null;
+}
+
+/**
+ * 产品级维护窗口（owner 2026-09-27）。
+ *
+ * 升级 / 迁移期间产品「当前不可用」——**无论是否订阅**：已订阅的给时间补偿（批量暂停 /
+ * 恢复是下一步），未订阅的暂时不能订阅。opera 在窗口 start 时把 `product.products` 的
+ * `maintenance_window_id` / `maintenance_until` 打上，complete / cancel 时清空。
+ *
+ * **读者只看这两列**：`maintenance_window_id IS NOT NULL` = 升级维护中，
+ * `maintenance_until` = 预计恢复。不读 admin schema。
+ */
+export interface ProductMaintenanceView {
+  /**
+   * 预计恢复时刻（窗口 end_at，ISO）。库级 CHECK 保证它与 window id 同空同非空，
+   * null 只在部署偏斜 / 桩数据下出现——那时仍算维护中（判据是 window id），只是没有时间。
+   */
+  until: string | null;
+}
+
+/** `product.products` 上那两列的行形状；各查询 select 了它们就能喂给 maintenanceOf。 */
+interface ProductMaintenanceColumns {
+  maintenance_window_id: string | null;
+  maintenance_until: Date | string | null;
+}
+
+function isoOf(value: Date | string | null | undefined): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** 一处判据：window id 非空 = 维护中。三个读者（subscribe-context / 我的订阅 / 下单闸门）共用。 */
+function maintenanceOf(
+  row: Partial<ProductMaintenanceColumns>,
+): ProductMaintenanceView | null {
+  if (!row.maintenance_window_id) return null;
+  return { until: isoOf(row.maintenance_until) };
 }
 
 /** 「新品推荐」卡：租户尚未订阅过的可单独订购产品 + 起价。 */
@@ -893,16 +939,26 @@ export class SubscriptionRouter {
     const rawProduct = query.product?.trim() ?? "";
     let product: SubscribeContext["product"] = null;
     if (PRODUCT_CODE_RE.test(rawProduct)) {
-      const res = await this.pool.query<{
-        product_code: string;
-        product_name: string;
-      }>(
-        `select product_code, product_name from product.products
+      const res = await this.pool.query<
+        {
+          product_code: string;
+          product_name: string;
+        } & ProductMaintenanceColumns
+      >(
+        `select product_code, product_name,
+                maintenance_window_id, maintenance_until
+           from product.products
           where product_code = $1 and deleted_at is null`,
         [rawProduct],
       );
       const row = res.rows[0];
-      if (row) product = { code: row.product_code, name: row.product_name };
+      if (row)
+        product = {
+          code: row.product_code,
+          name: row.product_name,
+          /* 维护中时 SubscribePage 顶部出横幅、档位按钮禁用；下单路径另有闸门。 */
+          maintenance: maintenanceOf(row),
+        };
     }
     if (product === null) {
       this.logger.warn(
@@ -1302,10 +1358,13 @@ export class SubscriptionRouter {
       start_at: Date | null;
       end_at: Date | null;
       auto_renew: boolean;
+      maintenance_window_id: string | null;
+      maintenance_until: Date | null;
     }>(
       `select ts.id as subscription_id,
               prod.id as product_id, prod.product_code, prod.product_name,
               prod.product_nick, prod.release_version, prod.released_at,
+              prod.maintenance_window_id, prod.maintenance_until,
               pl.plan_name, pc.tier, pc.quota->>'member.max' as seats,
               ts.subscription_kind, ts.cycle_unit, ts.status,
               ts.start_at, ts.end_at, ts.auto_renew
@@ -1345,6 +1404,7 @@ export class SubscriptionRouter {
       endAt: r.end_at?.toISOString() ?? null,
       autoRenew: r.auto_renew,
       favorite: r.product_id != null && favorites.has(r.product_id),
+      maintenance: maintenanceOf(r),
     }));
   }
 
@@ -1548,11 +1608,14 @@ export class SubscriptionRouter {
       product_code: string;
       product_status: string;
       release_stage: string;
+      maintenance_window_id: string | null;
+      maintenance_until: Date | string | null;
       plan_is_public: boolean;
       plan_code: string;
     }>(
       `select prod.product_code, prod.status as product_status,
               prod.release_stage,
+              prod.maintenance_window_id, prod.maintenance_until,
               pl.is_public as plan_is_public, pl.plan_code
          from product.plan_components pc
          join product.products prod on prod.id = pc.product_id
@@ -1605,6 +1668,26 @@ export class SubscriptionRouter {
         message: sunset
           ? "该产品已停售，不再接受新订阅。"
           : "该产品尚在预览阶段，还未开放订阅。",
+      });
+    }
+
+    /*
+     * 产品级维护窗口（owner 2026-09-27）：升级 / 迁移期间产品「当前不可用」，未订阅的
+     * 暂时不能订阅。这是**非正常**的一道，放在生命周期与承诺等级之后——正常流程的判定
+     * 一条不动，维护只是额外加的一道；又放在套餐可见性之前：维护是产品级、可见性是
+     * 套餐级，先答产品再答套餐，而且拦在这里就不会为一张注定拒掉的单烧掉一张邀请券。
+     *
+     * 判据只看 `product.products` 的两列（不读 admin schema）：window id 非空 = 维护中，
+     * `maintenance_until` = 预计恢复。时间走共用件（平台时区，与 console 其他时间同形）。
+     * console 直接展示 message、没有按码翻译的表，所以时间要在这句话里。
+     */
+    if (sold.maintenance_window_id) {
+      const until = formatDateTime(sold.maintenance_until, "zh-CN", "");
+      throw new ConflictException({
+        code: "PRODUCT_UNDER_MAINTENANCE",
+        message: until
+          ? `该产品升级维护中，预计 ${until} 恢复，暂不可订阅。`
+          : "该产品升级维护中，暂不可订阅。",
       });
     }
 

@@ -393,6 +393,21 @@ CREATE TABLE admin.maintenance_windows (
 CREATE INDEX idx_maintenance_windows_start_at ON admin.maintenance_windows (start_at);
 CREATE INDEX idx_maintenance_windows_status   ON admin.maintenance_windows (status);
 
+-- 窗口 ↔ 产品绑定（owner 2026-09-27 产品级维护窗口）。一个窗口挂 0..n 个产品；0 个 = 平台级公告，
+-- 不挂产品。绑定是**计划**：start 时 opera-bff 把 product.products.maintenance_window_id /
+-- maintenance_until 打上（那两列才是运行态的占用），complete / cancel 清掉。「同一产品同时只在
+-- 一个进行中的窗口里」在占用列上判（start 撞上 → 409），不在这张表上建约束——两个 scheduled
+-- 窗口计划同一个产品是合法的。
+-- window_id 域内真 FK + CASCADE（绑定没有独立价值）；product_id → product.products 是跨 schema
+-- FK，集中在 90_cross_schema_fk.sql（铁律一）。全部列都是主键 → 98 只 REVOKE 不 GRANT。
+CREATE TABLE admin.maintenance_window_products (
+    window_id   uuid NOT NULL REFERENCES admin.maintenance_windows(id) ON DELETE CASCADE,
+    product_id  uuid NOT NULL,                                     -- → product.products(id)，FK 在 90
+    PRIMARY KEY (window_id, product_id)
+);
+-- 「这个产品挂在哪些窗口上」按产品查。
+CREATE INDEX idx_maintenance_window_products_product ON admin.maintenance_window_products (product_id);
+
 -- 租户风险评估。tenant_id 裸值→tenancy.tenants（边界#3：须活过租户注销，不建 FK）。
 -- reviewer_id 域内 FK→operator_account（同 schema 真 FK，ON DELETE SET NULL）。
 CREATE TABLE admin.risk_records (

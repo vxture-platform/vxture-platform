@@ -22,6 +22,7 @@
  * 用的公开基址（生产镜像烘入的 NEXT_PUBLIC_WEBSITE_BFF_URL；本地默认 localhost:3001）。
  */
 
+import { formatDateTime } from "@vxture-platform/shared";
 import { API_BASE_URL } from "./client";
 
 /** marketing jsonb 的单语部分（营销文案富字段,全部可缺）。镜像 website-bff。 */
@@ -59,6 +60,50 @@ export function marketingRecommend(
   const raw = Number(marketing?.recommend ?? 0);
   if (!Number.isFinite(raw)) return 0;
   return Math.max(0, Math.min(3, Math.round(raw)));
+}
+
+/**
+ * 产品级升级维护窗口（owner 2026-09-27）：非空 = 产品正在「升级维护中」，`until` 是运营
+ * 填的预计恢复时间（ISO）。镜像 website-bff 的 ProductMaintenance；目录端点与套餐端点
+ * 同一形状。**无论是否订阅**，这段时间里产品都不可用：未订阅的暂不能订，已订阅的只留
+ * 「进入」。呈现优先级：维护 > 停售 > 其他（维护是临时的运行态，先说它）。
+ */
+export interface ProductMaintenance {
+  until: string;
+}
+
+/**
+ * 部署偏斜防护：旧 BFF 不回这一项 → null，即本字段之前的行为（没有维护态）。形状不对
+ * （不是对象 / until 不是字符串）也按没有——宁可少画一枚徽标，不能凭一个读不懂的值
+ * 把产品标成维护中。
+ */
+export function normalizeMaintenance(raw: unknown): ProductMaintenance | null {
+  if (!raw || typeof raw !== "object") return null;
+  const until = (raw as { until?: unknown }).until;
+  return typeof until === "string" ? { until } : null;
+}
+
+/**
+ * 「预计 {time} 恢复」里的那个 time。
+ *
+ * 与订阅冻结弹窗（SuspensionDetailDialog）同一形态——长日期 + 短时间（2026/10/01 10:00），
+ * 走 shared 的 formatDateTime（lint:datetime-discipline 只认它，时区默认 PLATFORM_TIME_ZONE）。
+ * 与弹窗不同的一点：locale 传**站点 locale**而不是运行时默认。目录卡与详情 hero 在服务端
+ * 就渲染这一行，服务端与浏览器的运行时 locale 不一致会 hydration 对不上；弹窗只在点开
+ * 后才渲染，没有这个问题。
+ *
+ * until 解析不了 → null，调用方只画徽标不画这一行。
+ */
+export function maintenanceUntilText(
+  maintenance: ProductMaintenance | null | undefined,
+  locale: string,
+): string | null {
+  if (!maintenance) return null;
+  const text = formatDateTime(maintenance.until, locale, "", {
+    date: "long",
+    time: "short",
+  });
+  return text || null;
 }
 
 export interface ProductCatalogItem {
@@ -109,6 +154,11 @@ export interface ProductCatalogItem {
    * 字段之前的行为（卡上一律「订阅」），不会凭空把在售产品标成邀请制。
    */
   subscribeAccess: "public" | "invite" | "none";
+  /**
+   * 产品级升级维护窗口；null = 不在维护中。部署偏斜防护：旧响应没有这一项时回落 null，
+   * 即本字段之前的行为。见 ProductMaintenance。
+   */
+  maintenance: ProductMaintenance | null;
 }
 
 /** 取当前 locale 的营销单语块（zh-* → zh,其余 → en,缺则回退另一语）。 */
@@ -215,6 +265,9 @@ function normalizeCatalogItem(raw: unknown): ProductCatalogItem {
       access === "invite" || access === "none" || access === "public"
         ? access
         : "public",
+    maintenance: normalizeMaintenance(
+      (raw as { maintenance?: unknown }).maintenance,
+    ),
   };
 }
 

@@ -13,6 +13,7 @@ const ROW = {
   severity: "minor" as const,
   title: "网关切换",
   affected_services: ["alpha", "beta"],
+  product_codes: ["karda", "arda"],
   start_at: new Date("2026-08-16T20:00:00Z"),
 };
 
@@ -21,6 +22,7 @@ const BASE = {
   severity: "minor" as const,
   startAt: "2026-08-16T20:00:00Z",
   affectedServices: ["alpha", "beta"],
+  productCodes: ["karda", "arda"],
 };
 
 const lockedFields = (body: Record<string, unknown>): string | null => {
@@ -121,6 +123,32 @@ describe("affectedServices 按集合比 —— 联调证伪过按序比", () => 
   it("清空 —— 拒", () => {
     expect(lockedFields({ ...BASE, affectedServices: [] })).toContain(
       "affectedServices",
+    );
+  });
+});
+
+describe("productCodes 同属锁定字段 —— 进行中的窗口换产品不是编辑", () => {
+  it("换序 / 重复 —— 放行（集合比，同 affectedServices）", () => {
+    expect(
+      lockedFields({ ...BASE, productCodes: ["arda", "karda", "arda"] }),
+    ).toBeNull();
+  });
+
+  it("不送 productCodes —— 放行（没提到就不算改）", () => {
+    const { productCodes: _omit, ...rest } = BASE;
+    void _omit;
+    expect(lockedFields(rest)).toBeNull();
+  });
+
+  it("多挂一个产品 —— 拒，点名 productCodes", () => {
+    expect(
+      lockedFields({ ...BASE, productCodes: ["karda", "arda", "vxtpl"] }),
+    ).toContain("productCodes");
+  });
+
+  it("清空 —— 拒", () => {
+    expect(lockedFields({ ...BASE, productCodes: [] })).toContain(
+      "productCodes",
     );
   });
 });

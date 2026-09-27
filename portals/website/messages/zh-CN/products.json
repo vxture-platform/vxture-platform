@@ -123,7 +123,9 @@
       "inviteSubscribe": "邀请订阅",
       "notForSale": "暂未开卖",
       "sunset": "停售中",
-      "sunsetHint": "现有订阅不受影响"
+      "sunsetHint": "现有订阅不受影响",
+      "maintenance": "升级维护中，暂不可订阅",
+      "maintenanceUntil": "预计 {time} 恢复"
     },
     "types": {
       "general_platform": "通用平台",
@@ -154,7 +156,7 @@
     },
     "items": [],
     "suspension": {
-      "maintenance": "维护中",
+      "maintenance": "升级维护中",
       "review": "审核中",
       "restricted": "服务受限",
       "paused": "已暂停",
@@ -187,6 +189,8 @@
     "upgradeTo": "升级到{plan}",
     "sunset": "停售中",
     "sunsetHint": "现有订阅不受影响",
+    "maintenance": "升级维护中，暂不可订阅",
+    "maintenanceUntil": "预计 {time} 恢复",
     "pendingOrder": {
       "view": "查看订单状态",
       "blocked": "已有订单进行中"

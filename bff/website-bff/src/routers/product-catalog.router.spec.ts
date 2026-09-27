@@ -55,6 +55,8 @@ describe("ProductCatalogRouter", () => {
         status: "active",
         /* 两个计数都缺 → 一档都没有 → 不给购买入口。 */
         subscribeAccess: "none",
+        /* 没挂维护窗口 → null（不是 undefined：这是契约里的一项，不是可缺的）。 */
+        maintenance: null,
       },
       {
         productCode: "vxtpl",
@@ -67,8 +69,82 @@ describe("ProductCatalogRouter", () => {
         /* 开发中：官网要预告它，但卡片不给购买入口。 */
         status: "developing",
         subscribeAccess: "none",
+        maintenance: null,
       },
     ]);
+  });
+
+  /*
+   * 产品级升级维护窗口（owner 2026-09-27）。真源是 product.products 的两列：窗口 id 非空
+   * = 维护中，until = 预计恢复。三面：挂着窗口 → 对象（until 转 ISO）；没挂 → null；
+   * 只看窗口 id 不看 until——CHECK 保证两列同空同非空，但判「在不在维护」的是窗口 id。
+   */
+  it("挂着维护窗口 → maintenance.until 是 ISO；pg 交出来的 Date 也转", async () => {
+    const { pool } = makePool([
+      {
+        product_code: "karda",
+        product_name: "知识智能",
+        product_nick: null,
+        product_type: "general_platform",
+        description: null,
+        release_version: "1.0.0",
+        released_at: null,
+        release_stage: "stable",
+        status: "active",
+        public_plan_count: 1,
+        invite_plan_count: 0,
+        maintenance_window_id: "6b1f1e9a-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
+        maintenance_until: new Date("2026-10-01T02:00:00.000Z"),
+      },
+    ]);
+    const [item] = await new ProductCatalogRouter(pool).getCatalog();
+    expect(item?.maintenance).toEqual({ until: "2026-10-01T02:00:00.000Z" });
+    /* 维护不改变正常流程里的判定：有公开档照样是 public，页面自己按优先级压掉入口。 */
+    expect(item?.subscribeAccess).toBe("public");
+    /* 窗口 id 是运营侧的事，不出网。 */
+    expect(JSON.stringify(item)).not.toContain("6b1f1e9a");
+  });
+
+  it("until 已是字符串（部署偏斜 / 手写行）→ 原样透传", async () => {
+    const { pool } = makePool([
+      {
+        product_code: "karda",
+        product_name: "知识智能",
+        product_nick: null,
+        product_type: "general_platform",
+        description: null,
+        release_version: null,
+        released_at: null,
+        status: "active",
+        maintenance_window_id: "6b1f1e9a-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
+        maintenance_until: "2026-10-01T02:00:00.000Z",
+      },
+    ]);
+    const [item] = await new ProductCatalogRouter(pool).getCatalog();
+    expect(item?.maintenance).toEqual({ until: "2026-10-01T02:00:00.000Z" });
+  });
+
+  it.each([
+    ["两列都空", null, null],
+    ["缺这两列（BFF 先于 DDL 发布）", undefined, undefined],
+    ["窗口已清、until 残留（不可能，但判据只看窗口 id）", null, new Date()],
+  ] as const)("没挂维护窗口 → null：%s", async (_n, windowId, until) => {
+    const { pool } = makePool([
+      {
+        product_code: "karda",
+        product_name: "知识智能",
+        product_nick: null,
+        product_type: "general_platform",
+        description: null,
+        release_version: null,
+        released_at: null,
+        status: "active",
+        maintenance_window_id: windowId,
+        maintenance_until: until,
+      },
+    ]);
+    const [item] = await new ProductCatalogRouter(pool).getCatalog();
+    expect(item?.maintenance).toBeNull();
   });
 
   /*
@@ -181,6 +257,9 @@ describe("ProductCatalogRouter", () => {
        「这些产品都还没开卖」，不像「判据没在查」。 */
     expect(sql).toContain("public_plan_count");
     expect(sql).toContain("invite_plan_count");
+    /* 维护两列必须真的在选——不然 maintenance 恒为 null，看起来像「没有产品在维护」。 */
+    expect(sql).toContain("p.maintenance_window_id");
+    expect(sql).toContain("p.maintenance_until");
     // 不接受调用方参数：公开端点没有任何按码点名的入口。
     expect(query.mock.calls[0]?.length).toBe(1);
   });

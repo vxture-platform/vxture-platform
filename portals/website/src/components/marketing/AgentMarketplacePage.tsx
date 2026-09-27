@@ -122,6 +122,9 @@ export default function AgentMarketplacePage({
         notForSale: t("agents.actions.notForSale"),
         sunset: t("agents.actions.sunset"),
         sunsetHint: t("agents.actions.sunsetHint"),
+        maintenance: t("agents.actions.maintenance"),
+        /* 带占位符、渲染时才知道值（预计恢复时间）：取原串交给卡片自己填，理由同下面 suspension 三条。 */
+        maintenanceUntil: t.raw("agents.actions.maintenanceUntil") as string,
         upgrade: t("agents.actions.upgrade"),
         enter: t("agents.actions.enter"),
         noEntry: t("agents.actions.noEntry"),
@@ -180,6 +183,7 @@ export default function AgentMarketplacePage({
         recommend: marketingRecommend(agent.marketing),
         subscribeAccess: agent.subscribeAccess,
         expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
+        maintenance: agent.maintenance,
         /* 原样读取，不剔除——脱敏在「哪些值有自己的按钮」那一层做，见
            INDUSTRY_NO_OWN_BUTTON 头注。 */
         industries: m?.industries ?? [],

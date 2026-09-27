@@ -31,7 +31,8 @@
 -- 核对（含分区父表/复合主键的脚本 bug 修复）后落此文件，非脚本直接落库。
 -- 幂等：REVOKE/GRANT 每次 apply 重新执行（--reset 重建 18 schema 后表是新的，
 -- 权限需重新授予）。仅覆盖非空 GRANT——若某表全部列均为锚点则只 REVOKE（本次无
--- 此情形，106 表均保留 ≥1 可写列）。
+-- 此情形，106 表均保留 ≥1 可写列；2026-09-27 起有一张：admin.maintenance_window_products
+-- 两列都是复合主键，只 REVOKE）。
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- account.users  [anchor: id, user_no, level_no, created_at]
@@ -199,7 +200,7 @@ GRANT UPDATE (parent_id, code, name, sort, name_key, is_customer_visible, is_wor
 
 -- product.products  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON product.products FROM platform_svc;
-GRANT UPDATE (product_code, product_type, layer, category_id, product_name, product_nick, description, capability_keys, tags, standalone_subscribable, icon_url, sort, config, release_version, build_number, released_at, status, updated_by, description_key, is_customer_visible, is_workforce_visible, origin, origin_provider, integration_mode, release_stage, marketing, launch_override_at, launch_override_by, launch_override_pending, updated_at, deleted_at) ON product.products TO platform_svc;
+GRANT UPDATE (product_code, product_type, layer, category_id, product_name, product_nick, description, capability_keys, tags, standalone_subscribable, icon_url, sort, config, release_version, build_number, released_at, status, updated_by, description_key, is_customer_visible, is_workforce_visible, origin, origin_provider, integration_mode, release_stage, marketing, launch_override_at, launch_override_by, launch_override_pending, maintenance_window_id, maintenance_until, updated_at, deleted_at) ON product.products TO platform_svc;
 
 -- product.product_metrics  [anchor: id, created_at]
 REVOKE UPDATE ON product.product_metrics FROM platform_svc;
@@ -552,6 +553,10 @@ GRANT UPDATE (read_at) ON admin.operator_notice_reads TO platform_svc;
 -- admin.maintenance_windows  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON admin.maintenance_windows FROM platform_svc;
 GRANT UPDATE (severity, status, title, description, impact_description, affected_services, start_at, end_at, actual_end_at, updated_by, updated_at) ON admin.maintenance_windows TO platform_svc;
+
+-- admin.maintenance_window_products  [anchor: window_id, product_id]
+--   全部列都是复合主键：绑定关系改了就是另一条绑定（DELETE + INSERT），没有可 UPDATE 的列 → 只 REVOKE。
+REVOKE UPDATE ON admin.maintenance_window_products FROM platform_svc;
 
 -- admin.risk_records  [anchor: id, created_at]
 REVOKE UPDATE ON admin.risk_records FROM platform_svc;

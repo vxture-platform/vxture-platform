@@ -423,3 +423,101 @@ describe("POST orders · 归属与成熟度两道门", () => {
     expect(sqlsMentioning(query, "is_public")).toBe(1);
   });
 });
+
+/*
+ * 产品级维护窗口（owner 2026-09-27）。
+ *
+ * 升级 / 迁移期间产品「当前不可用」——未订阅的暂时不能订阅。判据只看
+ * `product.products` 的两列：`maintenance_window_id` 非空 = 维护中，`maintenance_until`
+ * = 预计恢复。这是**非正常**的一道，排在生命周期与承诺等级之后、套餐可见性之前。
+ *
+ * 五面：
+ *   维护中          → 409 PRODUCT_UNDER_MAINTENANCE，话里带「升级维护中」与预计恢复时刻
+ *   两列都空        → 与此前一样穿过所有带码的门（新门不许误伤正常流程）
+ *   维护中 + 未上线 → 先报 PRODUCT_NOT_LIVE（正常流程的判定一条不动）
+ *   维护中 + 停售   → 先报 PRODUCT_NOT_RELEASED（同上）
+ *   维护中 + 非公开 → 拦在维护这道，**不去消耗邀请券**——门排在邀请之后就会白烧一张券
+ * 外加一条查性质：闸门那条 SQL 真的 select 了那两列。判据读一个没查的列不报错，
+ * 只是永远为 undefined、门永远不关——「存在≠在跑」。
+ */
+describe("POST orders · 升级维护中", () => {
+  const MAINTAINED = {
+    product_code: "vxtpl",
+    release_stage: "stable",
+    plan_is_public: true,
+    maintenance_window_id: "w-1",
+    /* UTC 02:00 = Asia/Shanghai 10:00 —— 时区错了这条就红。 */
+    maintenance_until: new Date("2026-10-01T02:00:00Z"),
+  };
+
+  it("维护中：409 PRODUCT_UNDER_MAINTENANCE，话里带「升级维护中」与预计恢复时刻", async () => {
+    const { pool, query } = poolOf(MAINTAINED);
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(codeOf(error)).toBe("PRODUCT_UNDER_MAINTENANCE");
+    expect(messageOf(error)).toContain("升级维护中");
+    /* 平台时区 + 长日期长时间：与 console 其他时间同一形态。 */
+    expect(messageOf(error)).toContain("2026/10/01 10:00:00");
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("两列都空：与此前一样穿过所有带码的门", async () => {
+    const { pool } = poolOf({
+      ...MAINTAINED,
+      maintenance_window_id: null,
+      maintenance_until: null,
+    });
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expectPassedAllGates(error);
+  });
+
+  it("维护中但产品未上线：先报 PRODUCT_NOT_LIVE——正常流程的判定不动", async () => {
+    const { pool } = poolOf({ ...MAINTAINED, product_status: "developing" });
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expect(codeOf(error)).toBe("PRODUCT_NOT_LIVE");
+  });
+
+  it("维护中但已停售：先报 PRODUCT_NOT_RELEASED，话说的仍是「已停售」", async () => {
+    const { pool } = poolOf({ ...MAINTAINED, release_stage: "sunset" });
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expect(codeOf(error)).toBe("PRODUCT_NOT_RELEASED");
+    expect(messageOf(error)).toContain("停售");
+  });
+
+  it("维护中 + 非公开套餐：拦在维护这道，不去消耗邀请券", async () => {
+    const { pool, query } = poolOf(
+      { ...MAINTAINED, plan_is_public: false },
+      { invite: [{ id: "v-1", batch_id: "b-1" }] },
+    );
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expect(codeOf(error)).toBe("PRODUCT_UNDER_MAINTENANCE");
+    expect(touched(query, "promotion.vouchers")).toBe(false);
+    expect(touched(query, "voucher_redemptions")).toBe(false);
+  });
+
+  it("闸门那条 SQL 真的 select 了那两列", async () => {
+    const { pool, query } = poolOf(MAINTAINED);
+    await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch(() => undefined);
+
+    const gateSql = String(query.mock.calls[1]?.[0]);
+    expect(gateSql).toContain("maintenance_window_id");
+    expect(gateSql).toContain("maintenance_until");
+  });
+});

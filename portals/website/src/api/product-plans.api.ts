@@ -15,6 +15,10 @@
  */
 
 import { apiClient } from "./client";
+import {
+  normalizeMaintenance,
+  type ProductMaintenance,
+} from "./product-catalog.api";
 
 export interface ProductPlanPrice {
   /** plan_prices.cycle_unit：day | week | month | year | perpetual */
@@ -65,6 +69,12 @@ export interface ProductPlansResponse {
    * 部署偏斜防护：旧响应没有这个字段时回落 `none`，即本字段之前的行为。
    */
   subscribeAccess: "public" | "invite" | "none";
+  /**
+   * 产品级升级维护窗口（owner 2026-09-27）；null = 不在维护中。与目录端点同一形状、同一
+   * 真源。定价页据此把每张卡的 CTA 换成状态字「升级维护中，暂不可订阅」；`subscribeAccess`
+   * 与阶梯照旧，维护不改变正常流程里的判定。部署偏斜：旧响应没有这一项时回落 null。
+   */
+  maintenance: ProductMaintenance | null;
 }
 
 export async function fetchProductPlans(
@@ -87,5 +97,8 @@ export async function fetchProductPlans(
       access === "public" || access === "invite" || access === "none"
         ? access
         : "none",
+    maintenance: normalizeMaintenance(
+      (data as { maintenance?: unknown } | undefined)?.maintenance,
+    ),
   };
 }
