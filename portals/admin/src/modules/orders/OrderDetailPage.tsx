@@ -1,94 +1,108 @@
 "use client";
 
+/**
+ * OrderDetailPage.tsx — 交易订单详情（运营 / 客服视角）。
+ *
+ * @package @vxture/admin
+ * @layer Presentation
+ * @category Modules - Orders
+ *
+ * 2026-09-27 按设计稿重排（scratchpad/order-detail-redesign.md §3 / §3.8 / §5）。
+ * 整页只回答三件事：这是什么单、现在卡在哪一步、我该做什么——
+ *   页头（是什么单）→ 任务卡（卡在哪、做什么：五步进度 + 一句任务 + 主按钮）
+ *   → 左栏（客户申报 / 金额构成 / 时间线）+ 右栏（订单信息 / 租户与联系人 / 开通后 / 退款）。
+ *
+ * 拿掉的：四张带柱状图的统计卡、重复的卡片头、原始 JSON / 枚举 / UUID、「未设置」占位
+ * （真没填写「客户未填」，这一步没到就整块不显示）、手写的反馈 div（改 DS Banner + toast）。
+ *
+ * 动作与接口一个没动（确认 / 驳回 / 作废 / 恢复 / 退款审核-执行-失败），只补了一处
+ * 已知缺陷：退款四个动作的端点都 @RequireStepUp，页面此前直接调用不走 runWithStepUp。
+ */
+
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  ActionMenu,
+  Banner,
   Button,
   DetailList,
   DetailPageTemplate,
   DetailRow,
   DialogForm,
   EmptyState,
+  FactList,
+  Field,
+  FieldError,
+  FieldLabel,
   Icon,
-  Label,
-  MetricGrid,
   PanelItem,
   PanelList,
-  SHELL_PANEL_HAIRLINE,
+  Section,
+  SectionHeader,
   StatusBadge,
   TableTitleCell,
   Textarea,
   toneSurfaceClasses,
+  useToast,
+  ViewHeader,
 } from "@vxture/design-system";
-import type { StatusBadgeTone } from "@vxture/design-system";
-import { orUnset } from "@/modules/shared/display";
+import type { ActionMenuItem, StatusBadgeTone } from "@vxture/design-system";
 import {
+  formatClock,
+  formatDay,
+  formatPrincipalNoOr,
+} from "@vxture-platform/shared";
+import {
+  auditOrderRefund,
   confirmOrderOfflinePayment,
+  createOrderRefund,
+  executeOrderRefund,
+  failOrderRefund,
   fetchOrderOperation,
   rejectOrderPaymentDeclaration,
   restoreOrder,
   voidOrder,
-  auditOrderRefund,
-  executeOrderRefund,
-  failOrderRefund,
-  createOrderRefund,
 } from "@/api/admin-bff";
-import type { OrderOperationDetailRecord } from "@/entities/console";
+import type {
+  OrderOperationDetailRecord,
+  OrderOperationEvent,
+} from "@/entities/console";
+import { isUnset } from "@/modules/shared/display";
 import {
-  ORDER_STATUS_TONE,
-  PAYMENT_STATUS_TONE,
-} from "@/modules/shared/status-tone";
-import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
-import { PageHeader } from "@/modules/shared/PageHeader";
-import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
-import {
-  useOrderStatusLabels,
   usePaySourceLabel,
   useSubscriptionCycleLabels,
   useSubscriptionStatusLabels,
 } from "@/modules/shared/enum-labels";
+import { typeLabel } from "@/modules/tenants/tenant-utils";
+import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 import {
   canConfirmOrderOfflinePayment,
-  confirmOfflinePaymentDisabledReason,
+  confirmOfflinePaymentDisabledReasonKey,
   OrderOfflinePaymentDialog,
 } from "@/modules/orders/OrderOfflinePaymentDialog";
+import { formatOrderAmount } from "@/modules/orders/order-format";
 import {
-  formatDate,
-  formatQuantity,
-  typeLabel,
-} from "@/modules/tenants/tenant-utils";
-import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
-import { formatPrincipalNoOr } from "@vxture-platform/shared";
+  ORDER_STATUS_HINT_KEY,
+  ORDER_STATUS_LABEL_KEY,
+  ORDER_STATUS_TONE_MAP,
+  orderStagePlan,
+} from "@/modules/orders/order-status";
+import { OrderStageStrip } from "@/modules/orders/components/OrderStageStrip";
 
-/** 时间线圆点的语气。原来是 `--subscription-timeline-bg/-color` 两个变量，
- * 由三个 `--success/--warning/--danger` 修饰类喂进去。 */
-const TIMELINE_TONE: Record<string, StatusBadgeTone> = {
-  success: "success",
-  warning: "warning",
-  danger: "danger",
-};
-
-function formatCurrency(value: number, currency: string) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: currency || "CNY",
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-/** 渠道码 → 词条键。文案走 `orderDetailPage.channels.*`，这里只留映射。 */
 /** 本页命名空间的取词函数类型。模块级函数收它当参数（组件外拿不到 hook）。 */
 type TPage = ReturnType<typeof useTranslations<"orderDetailPage">>;
 
-const DECLARED_CHANNEL_KEYS: Record<string, string> = {
-  alipay: "channels.alipay",
-  bank: "channels.bank",
-};
+type Order = OrderOperationDetailRecord;
 
-// 仅真正的待支付订单可驳回——已有任何收款请走结算而非驳回（product_320 §4.3）。
+type RefundDialogMode = "approve" | "reject" | "execute" | "fail" | "create";
+
+// ── 判定 ─────────────────────────────────────────────────────────────────────
+
+// 仅真正的待支付订单可作废——已有任何收款请走结算而非作废（product_320 §4.3）。
 // product_321 P2：已申报（pending_verify）订单须先「驳回申报」再作废。
-function canVoidOrder(order: OrderOperationDetailRecord) {
+function canVoidOrder(order: Order) {
   return (
     order.orderStatus === "pending" &&
     order.paidAmount <= 0 &&
@@ -96,365 +110,1293 @@ function canVoidOrder(order: OrderOperationDetailRecord) {
   );
 }
 
-function voidDisabledReason(order: OrderOperationDetailRecord, tPage: TPage) {
+function voidDisabledReason(order: Order, tPage: TPage) {
   if (canVoidOrder(order)) return null;
   if (order.paidAmount > 0) return tPage("disabled.hasPayment");
+  if (order.declaredPayment) return tPage("disabled.declaredFirst");
   return tPage("disabled.notPending");
 }
 
 // restorable 由后端判定：从未激活过（订阅 end_at 为空）且没有支付记录的
 // 已取消/已过期订单才可恢复；已激活后再取消的订阅不在此列（见 admin-bff）。
-function restoreDisabledReason(
-  order: OrderOperationDetailRecord,
-  tPage: TPage,
-) {
+function restoreDisabledReason(order: Order, tPage: TPage) {
   if (order.restorable) return null;
   return tPage("disabled.notRestorable");
 }
 
-function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
-  const t = useTranslations();
-  const tPage = useTranslations("orderDetailPage");
-  const cycleLabels = useSubscriptionCycleLabels();
-  const paySourceLabel = usePaySourceLabel();
-  const orderStatusLabels = useOrderStatusLabels();
-  const tShared = useTranslations();
+function confirmDisabledReason(order: Order, tPage: TPage) {
+  const key = confirmOfflinePaymentDisabledReasonKey(order);
+  if (key === "free") return tPage("disabled.confirm.free");
+  if (key === "done") return tPage("disabled.confirm.done");
+  if (key === "closed") return tPage("disabled.confirm.closed");
+  if (key === "refunding") return tPage("disabled.confirm.refunding");
+  return null;
+}
+
+/** 退款是否还在走（有单、没驳回、没打款成功）。有则任务卡与进度条都以它为准。 */
+function refundInFlight(order: Order) {
+  const refund = order.refund ?? null;
+  if (!refund) return null;
+  if (refund.auditStatus === "rejected") return null;
+  if (refund.refundStatus === "success" || order.orderStatus === "refunded")
+    return null;
+  return refund;
+}
+
+// ── 小工具 ─────────────────────────────────────────────────────────────────
+
+/**
+ * 当前时刻，每分钟刷新一次，给倒计时与「等了多久」用。
+ * 首次渲染给 null：服务端与浏览器的 Date.now() 不一样，直接用会 hydration 不一致。
+ */
+function useNow(intervalMs = 60_000) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+function formatDuration(ms: number, tPage: TPage) {
+  const minutes = Math.max(0, Math.floor(ms / 60_000));
+  if (minutes < 60) return tPage("duration.minutes", { minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24)
+    return tPage("duration.hours", { hours, minutes: minutes % 60 });
+  const days = Math.floor(hours / 24);
+  return tPage("duration.days", { days, hours: hours % 24 });
+}
+
+function dayAndClock(value: string | null, locale: string) {
+  if (!value) return "—";
+  return `${formatDay(value, locale, "—")} ${formatClock(value, locale, "")}`.trim();
+}
+
+/** 申报渠道码 → 人话。未登记的码不直出（那是机器词），归到「其他渠道」。 */
+function channelLabel(channel: string | null, tPage: TPage) {
+  if (channel === "alipay") return tPage("channels.alipay");
+  if (channel === "bank") return tPage("channels.bank");
+  if (!channel) return tPage("declaration.notFilled");
+  return tPage("channels.other");
+}
+
+function intentLabel(intent: Order["intent"], tPage: TPage) {
+  if (intent === "upgrade") return tPage("intent.upgrade");
+  if (intent === "renew") return tPage("intent.renew");
+  return tPage("intent.new");
+}
+
+function closeReasonLabel(reason: string | null, tPage: TPage) {
+  switch (reason) {
+    case "customer_cancel":
+      return tPage("closeReason.customer_cancel");
+    case "operator_void":
+      return tPage("closeReason.operator_void");
+    case "ttl_expired":
+      return tPage("closeReason.ttl_expired");
+    case "refunded":
+      return tPage("closeReason.refunded");
+    case "backfill":
+      return tPage("closeReason.backfill");
+    default:
+      return tPage("closeReason.other");
+  }
+}
+
+function invoiceItemTypeLabel(itemType: string, tPage: TPage) {
+  switch (itemType) {
+    case "subscription_fee":
+      return tPage("invoiceItemTypes.subscription_fee");
+    case "discount":
+      return tPage("invoiceItemTypes.discount");
+    case "credit_adjustment":
+      return tPage("invoiceItemTypes.credit_adjustment");
+    case "voucher":
+      return tPage("invoiceItemTypes.voucher");
+    case "addon":
+      return tPage("invoiceItemTypes.addon");
+    case "usage":
+      return tPage("invoiceItemTypes.usage");
+    case "adjustment":
+      return tPage("invoiceItemTypes.adjustment");
+    default:
+      return tPage("invoiceItemTypes.other");
+  }
+}
+
+function refundAuditLabel(
+  status: "pending" | "approved" | "rejected",
+  tPage: TPage,
+) {
+  if (status === "approved") return tPage("refund.audit.approved");
+  if (status === "rejected") return tPage("refund.audit.rejected");
+  return tPage("refund.audit.pending");
+}
+
+function refundStatusLabel(
+  status: "pending" | "processing" | "success" | "failed",
+  tPage: TPage,
+) {
+  if (status === "success") return tPage("refund.status.success");
+  if (status === "failed") return tPage("refund.status.failed");
+  if (status === "processing") return tPage("refund.status.processing");
+  return tPage("refund.status.pending");
+}
+
+function contactLine(
+  contact: { name?: string | null; email: string | null; phone: string | null },
+  fallback: string,
+) {
+  const parts = [contact.name, contact.email, contact.phone].filter(
+    (value): value is string => Boolean(value && value.trim()),
+  );
+  return parts.length ? parts.join(" · ") : fallback;
+}
+
+// ── 时间线句式 ───────────────────────────────────────────────────────────────
+
+const SUBSCRIPTION_EVENT_KINDS = new Set([
+  "created",
+  "renewed",
+  "upgraded",
+  "downgraded",
+  "cancelled",
+  "suspended",
+  "resumed",
+  "suspension_updated",
+  "activated",
+]);
+
+interface TimelineContext {
+  readonly order: Order;
+  readonly locale: string;
+  readonly tPage: TPage;
+  readonly productLine: string;
+}
+
+function actorLabel(event: OrderOperationEvent, tPage: TPage) {
+  if (event.actorName) return event.actorName;
+  if (event.actorType === "customer") return tPage("timeline.actor.customer");
+  if (event.actorType === "operator") return tPage("timeline.actor.operator");
+  return tPage("timeline.actor.system");
+}
+
+/**
+ * 一条事件 → 一句人话。13 个订单事件各一句（带备注的另有 WithRemark 变体，
+ * 条件片段不拼接，每种组合一条完整句）；履约后的订阅变更单独一组；不认识的事件码
+ * 回落到「更新了订单」，机器词只进「详情」折叠区。
+ */
+function timelineSentence(event: OrderOperationEvent, ctx: TimelineContext) {
+  const { order, locale, tPage } = ctx;
+  const actor = actorLabel(event, tPage);
+  const remark = event.remark?.trim() || null;
+  const amount = formatOrderAmount(order.amount, order.currency);
+
+  if (event.group === "subscription") {
+    const kind = SUBSCRIPTION_EVENT_KINDS.has(event.kind)
+      ? event.kind
+      : "other";
+    return tPage(`timeline.subscription.${kind}`, { actor });
+  }
+
+  switch (event.kind) {
+    case "created":
+      return tPage("timeline.order.created", {
+        actor,
+        product: ctx.productLine,
+        amount,
+      });
+    case "payment_declared":
+      return remark
+        ? tPage("timeline.order.payment_declaredWithRemark", { actor, remark })
+        : tPage("timeline.order.payment_declared", { actor });
+    case "payment_rejected":
+      return remark
+        ? tPage("timeline.order.payment_rejectedWithRemark", { actor, remark })
+        : tPage("timeline.order.payment_rejected", { actor });
+    case "payment_confirmed":
+      return remark
+        ? tPage("timeline.order.payment_confirmedWithRemark", {
+            actor,
+            amount,
+            remark,
+          })
+        : tPage("timeline.order.payment_confirmed", { actor, amount });
+    case "fulfilled": {
+      const endAt = order.fulfilledSubscription?.endAt ?? null;
+      return endAt
+        ? tPage("timeline.order.fulfilledWithEnd", {
+            code: order.orderNo,
+            date: formatDay(endAt, locale, "—"),
+          })
+        : tPage("timeline.order.fulfilled", { code: order.orderNo });
+    }
+    case "cancelled":
+      if (event.actorType === "customer") {
+        return remark
+          ? tPage("timeline.order.cancelledByCustomerWithRemark", {
+              actor,
+              remark,
+            })
+          : tPage("timeline.order.cancelledByCustomer", { actor });
+      }
+      return remark
+        ? tPage("timeline.order.cancelledByOperatorWithRemark", {
+            actor,
+            remark,
+          })
+        : tPage("timeline.order.cancelledByOperator", { actor });
+    case "order_expired":
+      return tPage("timeline.order.order_expired");
+    case "restored":
+      return remark
+        ? tPage("timeline.order.restoredWithRemark", { actor, remark })
+        : tPage("timeline.order.restored", { actor });
+    case "refund_requested": {
+      const refundAmount = formatOrderAmount(
+        order.refund?.amount ?? order.amount,
+        order.currency,
+      );
+      return remark
+        ? tPage("timeline.order.refund_requestedWithRemark", {
+            actor,
+            amount: refundAmount,
+            remark,
+          })
+        : tPage("timeline.order.refund_requested", {
+            actor,
+            amount: refundAmount,
+          });
+    }
+    case "refund_approved":
+      return remark
+        ? tPage("timeline.order.refund_approvedWithRemark", { actor, remark })
+        : tPage("timeline.order.refund_approved", { actor });
+    case "refund_rejected":
+      return remark
+        ? tPage("timeline.order.refund_rejectedWithRemark", { actor, remark })
+        : tPage("timeline.order.refund_rejected", { actor });
+    case "refunded": {
+      const refundAmount = formatOrderAmount(
+        order.refund?.amount ?? order.amount,
+        order.currency,
+      );
+      return remark
+        ? tPage("timeline.order.refundedWithRemark", {
+            amount: refundAmount,
+            remark,
+          })
+        : tPage("timeline.order.refunded", { amount: refundAmount });
+    }
+    case "refund_failed":
+      return remark
+        ? tPage("timeline.order.refund_failedWithRemark", { remark })
+        : tPage("timeline.order.refund_failed");
+    default:
+      return tPage("timeline.order.other", { actor });
+  }
+}
+
+function timelineIcon(tone: OrderOperationEvent["tone"]) {
+  if (tone === "danger" || tone === "warning") return "warning" as const;
+  if (tone === "success") return "check" as const;
+  return "info" as const;
+}
+
+function TimelineEntry({
+  event,
+  ctx,
+}: {
+  event: OrderOperationEvent;
+  ctx: TimelineContext;
+}) {
+  const { locale, tPage } = ctx;
+  const [open, setOpen] = useState(false);
+  // 技术细节只在「详情」里：状态迁移、原始备注、事件码。默认不展开。
+  const details: string[] = [];
+  if (event.fromStatus || event.toStatus) {
+    details.push(
+      tPage("timeline.detail.transition", {
+        from: event.fromStatus ?? "—",
+        to: event.toStatus ?? "—",
+      }),
+    );
+  }
+  if (event.remark?.trim()) {
+    details.push(tPage("timeline.detail.remark", { remark: event.remark }));
+  }
+  details.push(tPage("timeline.detail.kind", { kind: event.kind }));
+
   return (
-    <DetailSummaryHeader
-      icon="table"
-      title={order.orderNo}
-      subtitle={
-        <>
-          {order.tenantName} / {order.tierName}
-        </>
+    <PanelItem
+      lead={
+        <span
+          aria-hidden="true"
+          className={`inline-grid size-icon-md place-items-center rounded-full border ${toneSurfaceClasses[event.tone as StatusBadgeTone] ?? toneSurfaceClasses.neutral}`}
+        >
+          <Icon
+            name={timelineIcon(event.tone)}
+            size="xs"
+            fallback="placeholder"
+          />
+        </span>
       }
-      badges={
-        <>
-          <StatusBadge tone={ORDER_STATUS_TONE[order.orderStatus]}>
-            {orderStatusLabels[order.orderStatus]}
-          </StatusBadge>
-          <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
-            {t(`status.orderPayment.${order.paymentStatus}`)}
-          </StatusBadge>
-        </>
+      main={
+        <span className="grid min-w-0 gap-2xs">
+          <TableTitleCell
+            title={<>{timelineSentence(event, ctx)}</>}
+            description={<>{dayAndClock(event.at, locale)}</>}
+          />
+          {open ? (
+            <ul className="m-0 grid list-none gap-2xs p-0 text-body-sm text-muted-foreground">
+              {details.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+        </span>
       }
-      aside={
-        <MetricGrid
-          items={[
-            {
-              id: "amount",
-              help: tPage("summary.amountHelp"),
-              label: tPage("summary.amount"),
-              value: formatCurrency(order.amount, order.currency),
-              tags: [cycleLabels[order.cycleType]],
-            },
-            {
-              id: "paid",
-              help: tPage("summary.receivedHelp"),
-              label: tShared("columns.receivedAmount"),
-              value: formatCurrency(order.paidAmount, order.currency),
-              tags: [paySourceLabel(order.paySource)],
-            },
-            {
-              id: "solution",
-              help: tPage("summary.planHelp"),
-              label: tPage("summary.plan"),
-              value: order.solutionName,
-              tags: [order.servicePlanName],
-            },
-            {
-              id: "operation",
-              help: tPage("summary.actionHelp"),
-              label: tPage("summary.action"),
-              value: order.operationHint,
-              tags: [order.operatorName],
-            },
-          ]}
-        />
+      trail={
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? tPage("timeline.hideDetails") : tPage("timeline.details")}
+        </Button>
       }
     />
   );
 }
 
-function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
-  const t = useTranslations();
+// ── 页头 ─────────────────────────────────────────────────────────────────────
+
+function OrderHeader({
+  order,
+  productLine,
+  busy,
+  onConfirm,
+  onReject,
+  menuItems,
+}: {
+  order: Order;
+  productLine: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onReject: () => void;
+  menuItems: readonly ActionMenuItem[];
+}) {
   const tPage = useTranslations("orderDetailPage");
   const locale = useLocale();
-  const tShared = useTranslations();
-  const subscriptionStatusLabels = useSubscriptionStatusLabels();
-  const cycleLabels = useSubscriptionCycleLabels();
   const paySourceLabel = usePaySourceLabel();
-  const orderStatusLabels = useOrderStatusLabels();
+  const { toast } = useToast();
+
+  async function copyOrderNo() {
+    try {
+      await navigator.clipboard?.writeText(order.orderNo);
+      toast({ tone: "success", title: tPage("header.copied") });
+    } catch {
+      /* 剪贴板不可用（http 页面、权限被拒）：订单号就在眼前，手抄即可，不报错打扰。 */
+    }
+  }
+
+  const tenantCode = formatPrincipalNoOr(order.tenantCode, "tenant", "—");
+  const showPrimary = order.orderStatus === "pending_verify";
+
+  /* 用 DS `ViewHeader` 而不是 admin 的 `PageHeader` 壳：壳把 title 收成 string，
+     而这里的标题是「等宽订单号 + 复制钮」两个节点。壳本身就是 ViewHeader 的形状适配层。 */
   return (
-    <section
-      className="grid min-w-0 gap-xl"
-      aria-label={tPage("summary.ariaLabel", { orderNo: order.orderNo })}
+    <ViewHeader
+      icon="receipt"
+      title={
+        <span className="inline-flex min-w-0 items-center gap-xs">
+          <span className="font-mono">{order.orderNo}</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0"
+            aria-label={tPage("header.copyOrderNo")}
+            title={tPage("header.copyOrderNo")}
+            onClick={() => void copyOrderNo()}
+          >
+            <Icon name="copy" size="xs" fallback="placeholder" />
+          </Button>
+        </span>
+      }
+      secondary={
+        /* 一枚徽标 + 一句话（§3.1）：支付态不再单独当徽标，它由这句话与任务卡说。 */
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-xs">
+          <StatusBadge tone={ORDER_STATUS_TONE_MAP[order.orderStatus]}>
+            {tPage(ORDER_STATUS_LABEL_KEY[order.orderStatus])}
+          </StatusBadge>
+          <span className="text-body-sm font-normal text-muted-foreground">
+            {tPage(ORDER_STATUS_HINT_KEY[order.orderStatus])}
+          </span>
+        </span>
+      }
+      description={
+        <span className="grid min-w-0 gap-2xs">
+          <span className="flex min-w-0 flex-wrap items-center gap-xs">
+            <Link
+              href={`/tenants/${encodeURIComponent(order.tenantCode)}`}
+              className="font-semibold text-primary-text no-underline"
+            >
+              {order.tenantName}
+            </Link>
+            <span className="font-mono">{tenantCode}</span>
+            <span>{typeLabel(order.tenantType)}</span>
+            {productLine ? (
+              <span className="font-semibold text-foreground">
+                {productLine}
+              </span>
+            ) : null}
+          </span>
+          <span>
+            {tPage("header.placed", {
+              day: formatDay(order.createdAt, locale, "—"),
+              clock: formatClock(order.createdAt, locale, ""),
+              source: paySourceLabel(order.paySource),
+            })}
+          </span>
+        </span>
+      }
+      action={
+        <div className="flex min-w-0 flex-col items-end gap-sm">
+          <FactList
+            facts={[
+              {
+                label: tPage("header.due"),
+                value: formatOrderAmount(order.amount, order.currency),
+              },
+              {
+                label: tPage("header.received"),
+                value: formatOrderAmount(order.paidAmount, order.currency),
+                // 收齐了才染绿；没收齐是事实不是状态，跟随正文。
+                ...(order.paidAmount >= order.amount
+                  ? { tone: "success" as const }
+                  : {}),
+              },
+            ]}
+          />
+          <div className="flex flex-wrap items-center justify-end gap-xs">
+            {showPrimary ? (
+              <>
+                <Button
+                  onClick={onConfirm}
+                  disabled={busy || !canConfirmOrderOfflinePayment(order)}
+                  title={confirmDisabledReason(order, tPage) ?? undefined}
+                >
+                  <Icon name="check" size="xs" fallback="placeholder" />
+                  {tPage("actions.confirmPayment")}
+                </Button>
+                <Button variant="outline" onClick={onReject} disabled={busy}>
+                  <Icon name="x" size="xs" fallback="placeholder" />
+                  {tPage("actions.rejectDeclaration")}
+                </Button>
+              </>
+            ) : null}
+            <ActionMenu
+              label={tPage("actions.more")}
+              items={menuItems}
+              disabled={busy}
+            />
+          </div>
+        </div>
+      }
+    />
+  );
+}
+
+// ── 任务卡 ───────────────────────────────────────────────────────────────────
+
+function OrderTaskCard({
+  order,
+  busy,
+  onConfirm,
+  onReject,
+  onRedrive,
+  onRestore,
+  onRefund,
+}: {
+  order: Order;
+  busy: boolean;
+  onConfirm: () => void;
+  onReject: () => void;
+  onRedrive: () => void;
+  onRestore: () => void;
+  onRefund: (mode: RefundDialogMode) => void;
+}) {
+  const tPage = useTranslations("orderDetailPage");
+  const locale = useLocale();
+  const now = useNow();
+  const amount = formatOrderAmount(order.amount, order.currency);
+  const declared = order.declaredPayment;
+  const refund = refundInFlight(order);
+  const status = order.orderStatus;
+
+  // 一句任务 + 语气：退款在途优先于订单态（退款是当前的活）。
+  let tone: StatusBadgeTone = "info";
+  let title: string;
+  let body: string;
+  if (refund) {
+    const refundAmount = formatOrderAmount(refund.amount, order.currency);
+    tone = refund.auditStatus === "pending" ? "warning" : "info";
+    title = tPage("task.title.refunding");
+    body =
+      refund.auditStatus === "pending"
+        ? tPage("task.body.refundPending", { amount: refundAmount })
+        : refund.refundStatus === "failed"
+          ? tPage("task.body.refundFailed", { amount: refundAmount })
+          : tPage("task.body.refundApproved", { amount: refundAmount });
+  } else {
+    switch (status) {
+      case "pending":
+        tone = "info";
+        title = tPage("task.title.pending");
+        body = tPage("task.body.pending");
+        break;
+      case "pending_verify":
+        tone = "warning";
+        title = tPage("task.title.pending_verify", { amount });
+        body = tPage("task.body.pending_verify");
+        break;
+      case "paid_unprovisioned":
+        tone = "info";
+        title = tPage("task.title.paid_unprovisioned");
+        body = tPage("task.body.paid_unprovisioned");
+        break;
+      case "partial_pending":
+        tone = "warning";
+        title = tPage("task.title.partial_pending");
+        body = tPage("task.body.partial_pending", {
+          received: formatOrderAmount(order.paidAmount, order.currency),
+          remaining: formatOrderAmount(
+            Math.max(0, order.amount - order.paidAmount),
+            order.currency,
+          ),
+        });
+        break;
+      case "confirmed":
+        tone = "success";
+        title = tPage("task.title.confirmed");
+        body = tPage("task.body.confirmed");
+        break;
+      case "closed":
+        tone = "neutral";
+        title = tPage("task.title.closed");
+        body = tPage("task.body.closed", {
+          reason: closeReasonLabel(order.closeReason, tPage),
+        });
+        break;
+      case "refunded":
+        tone = "neutral";
+        title = tPage("task.title.refunded");
+        body = tPage("task.body.refunded");
+        break;
+      default:
+        tone = "danger";
+        title = tPage("task.title.abnormal");
+        body = tPage("task.body.abnormal");
+    }
+  }
+
+  // 任务卡还要带的三样（§3.2）：申报摘要、到哪里找这笔钱、倒计时走不走。
+  const lines: Array<{ key: string; text: string; tone?: StatusBadgeTone }> =
+    [];
+  if (
+    declared &&
+    (status === "pending_verify" || status === "partial_pending")
+  ) {
+    lines.push({
+      key: "declared",
+      text: tPage("task.declared", {
+        day: formatDay(declared.declaredAt, locale, "—"),
+        clock: formatClock(declared.declaredAt, locale, ""),
+        channel: channelLabel(declared.channel, tPage),
+        payer: declared.payerName || tPage("declaration.notFilled"),
+        txn: declared.transactionNo || tPage("declaration.notFilled"),
+      }),
+    });
+    lines.push({
+      key: "guidance",
+      text:
+        declared.channel === "alipay"
+          ? tPage("task.guidance.alipay")
+          : declared.channel === "bank"
+            ? tPage("task.guidance.bank")
+            : tPage("task.guidance.generic"),
+    });
+  }
+  const deadline = order.paymentDeadline;
+  if (deadline) {
+    if (deadline.frozen) {
+      lines.push({ key: "deadline", text: tPage("task.deadline.frozen") });
+    } else if (deadline.expireAt) {
+      const expireMs = new Date(deadline.expireAt).getTime();
+      const remainingMs = now === null ? null : expireMs - now;
+      if (remainingMs !== null && remainingMs <= 0) {
+        lines.push({
+          key: "deadline",
+          text: tPage("task.deadline.overdue"),
+          tone: "danger",
+        });
+      } else {
+        lines.push({
+          key: "deadline",
+          text: tPage("task.deadline.until", {
+            day: formatDay(deadline.expireAt, locale, "—"),
+            clock: formatClock(deadline.expireAt, locale, ""),
+            remaining:
+              remainingMs === null ? "—" : formatDuration(remainingMs, tPage),
+          }),
+        });
+      }
+    }
+  }
+  if (status === "confirmed" && order.fulfilledSubscription) {
+    const sub = order.fulfilledSubscription;
+    lines.push({
+      key: "fulfilled",
+      text: sub.endAt
+        ? tPage("task.fulfilled", {
+            code: order.orderNo,
+            date: formatDay(sub.endAt, locale, "—"),
+            autoRenew: sub.autoRenew
+              ? tPage("autoRenew.on")
+              : tPage("autoRenew.off"),
+          })
+        : tPage("task.fulfilledNoEnd", { code: order.orderNo }),
+    });
+  }
+  if (refund) {
+    lines.push({
+      key: "refund-reason",
+      text: tPage("task.refundReason", {
+        reason: refund.reason?.trim() || tPage("declaration.notFilled"),
+      }),
+    });
+  }
+
+  // 主按钮：只放当前这一步能做的事，其余在页头「更多」。
+  let actions: React.ReactNode = null;
+  if (refund) {
+    actions =
+      refund.auditStatus === "pending" ? (
+        <>
+          <Button onClick={() => onRefund("approve")} disabled={busy}>
+            <Icon name="check" size="xs" fallback="placeholder" />
+            {tPage("actions.approveRefund")}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onRefund("reject")}
+            disabled={busy}
+          >
+            <Icon name="x" size="xs" fallback="placeholder" />
+            {tPage("actions.rejectRefund")}
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button onClick={() => onRefund("execute")} disabled={busy}>
+            <Icon name="check" size="xs" fallback="placeholder" />
+            {tPage("actions.completeRefund")}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onRefund("fail")}
+            disabled={busy}
+          >
+            <Icon name="warning" size="xs" fallback="placeholder" />
+            {tPage("actions.failRefund")}
+          </Button>
+        </>
+      );
+  } else if (status === "pending_verify") {
+    actions = (
+      <>
+        <Button
+          onClick={onConfirm}
+          disabled={busy || !canConfirmOrderOfflinePayment(order)}
+          title={confirmDisabledReason(order, tPage) ?? undefined}
+        >
+          <Icon name="check" size="xs" fallback="placeholder" />
+          {tPage("actions.confirmPayment")}
+        </Button>
+        <Button variant="outline" onClick={onReject} disabled={busy}>
+          <Icon name="x" size="xs" fallback="placeholder" />
+          {tPage("actions.rejectDeclaration")}
+        </Button>
+      </>
+    );
+  } else if (status === "paid_unprovisioned") {
+    actions = (
+      <Button variant="outline" onClick={onRedrive} disabled={busy}>
+        <Icon name="play" size="xs" fallback="placeholder" />
+        {tPage("actions.retryProvision")}
+      </Button>
+    );
+  } else if (status === "closed" && order.restorable) {
+    actions = (
+      <Button variant="outline" onClick={onRestore} disabled={busy}>
+        <Icon name="undo" size="xs" fallback="placeholder" />
+        {tPage("actions.restoreOrder")}
+      </Button>
+    );
+  } else if (status === "confirmed" && order.fulfilledSubscription) {
+    actions = (
+      <Button asChild variant="outline">
+        <Link href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}>
+          <Icon name="star" size="xs" fallback="placeholder" />
+          {tPage("links.subscription")}
+        </Link>
+      </Button>
+    );
+  }
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="list-checks"
+      title={tPage("task.sectionTitle")}
+      className="min-w-0"
     >
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="table" title={tPage("sections.basic")} />
-        <DetailList columns={3}>
-          <DetailRow label={tPage("fields.orderNo")}>
-            {orUnset(order.orderNo)}
-          </DetailRow>
-          <DetailRow label={tPage("fields.orderStatus")}>
-            {orUnset(orderStatusLabels[order.orderStatus])}
-          </DetailRow>
-          <DetailRow label={tPage("fields.payStatus")}>
-            {orUnset(t(`status.orderPayment.${order.paymentStatus}`))}
-          </DetailRow>
-          <DetailRow label={tPage("fields.paySource")}>
-            {orUnset(paySourceLabel(order.paySource))}
-          </DetailRow>
-          <DetailRow label={tPage("fields.payMethod")}>
-            {orUnset(order.payMethod)}
-          </DetailRow>
-          <DetailRow label={tPage("fields.createdAt")}>
-            {orUnset(formatDate(order.createdAt, locale))}
-          </DetailRow>
-          <DetailRow label={tPage("fields.confirmedAt")}>
-            {orUnset(formatDate(order.confirmedAt, locale))}
-          </DetailRow>
-          <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(order.updatedAt, locale))}
-          </DetailRow>
-        </DetailList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading
-          icon="buildings"
-          title={tPage("sections.tenantPlan")}
+      <div className="grid min-w-0 gap-md">
+        <OrderStageStrip stages={orderStagePlan(order)} />
+        <Banner
+          tone={tone}
+          title={title}
+          description={
+            <span className="grid min-w-0 gap-xs">
+              <span>{body}</span>
+              {lines.map((line) => (
+                <span
+                  key={line.key}
+                  className={
+                    line.tone === "danger"
+                      ? "font-semibold text-destructive-text"
+                      : undefined
+                  }
+                >
+                  {line.text}
+                </span>
+              ))}
+            </span>
+          }
+          action={
+            actions ? (
+              <span className="flex flex-wrap items-center gap-xs">
+                {actions}
+              </span>
+            ) : undefined
+          }
         />
-        <DetailList columns={3}>
-          <DetailRow label={tPage("fields.tenant")}>
-            {orUnset(order.tenantName)}
+      </div>
+    </Section>
+  );
+}
+
+// ── 左栏 ─────────────────────────────────────────────────────────────────────
+
+function DeclarationSection({ order }: { order: Order }) {
+  const tPage = useTranslations("orderDetailPage");
+  const locale = useLocale();
+  const now = useNow();
+  const declared = order.declaredPayment;
+  const declaredBy = order.declaredBy;
+  if (!declared && !declaredBy) return null;
+
+  const notFilled = tPage("declaration.notFilled");
+  const waitedMs =
+    declared && now !== null
+      ? now - new Date(declared.declaredAt).getTime()
+      : null;
+  // 超过 24 小时没人核对，等待时长标橙——这是客服最该先处理的单。
+  const waitedTone: StatusBadgeTone =
+    waitedMs !== null && waitedMs > 24 * 60 * 60_000 ? "warning" : "neutral";
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="receipt"
+      title={tPage("sections.declaration")}
+      className="min-w-0"
+    >
+      <DetailList columns={1}>
+        {declared ? (
+          <>
+            <DetailRow label={tPage("declaration.declaredAt")}>
+              <span className="inline-flex flex-wrap items-center gap-xs">
+                <span>{dayAndClock(declared.declaredAt, locale)}</span>
+                {waitedMs !== null ? (
+                  <StatusBadge tone={waitedTone} icon={false}>
+                    {tPage("declaration.waited", {
+                      duration: formatDuration(waitedMs, tPage),
+                    })}
+                  </StatusBadge>
+                ) : null}
+              </span>
+            </DetailRow>
+            <DetailRow label={tPage("declaration.amount")}>
+              <span className="font-semibold">
+                {formatOrderAmount(declared.amount, order.currency)}
+              </span>
+            </DetailRow>
+            <DetailRow label={tPage("declaration.channel")}>
+              {channelLabel(declared.channel, tPage)}
+            </DetailRow>
+            <DetailRow label={tPage("declaration.payer")}>
+              {declared.payerName || notFilled}
+            </DetailRow>
+            <DetailRow label={tPage("declaration.txnNo")}>
+              {declared.transactionNo ? (
+                <span className="font-mono">{declared.transactionNo}</span>
+              ) : (
+                notFilled
+              )}
+            </DetailRow>
+            <DetailRow label={tPage("declaration.remark")}>
+              {declared.remark?.trim() || notFilled}
+            </DetailRow>
+          </>
+        ) : null}
+        {declaredBy ? (
+          <DetailRow label={tPage("declaration.declaredBy")}>
+            {contactLine(
+              {
+                name: declaredBy.displayName,
+                email: declaredBy.email,
+                phone: declaredBy.phone,
+              },
+              tPage("empty"),
+            )}
           </DetailRow>
-          <DetailRow label={tShared("columns.tenantCode")}>
-            {orUnset(formatPrincipalNoOr(order.tenantCode, "tenant", "—"))}
+        ) : null}
+      </DetailList>
+    </Section>
+  );
+}
+
+function AmountsSection({ order }: { order: Order }) {
+  const tPage = useTranslations("orderDetailPage");
+  const money = (value: number) => formatOrderAmount(value, order.currency);
+  const remaining = Math.max(0, order.amount - order.paidAmount);
+  const showRemaining =
+    remaining > 0 &&
+    order.orderStatus !== "closed" &&
+    order.orderStatus !== "refunded";
+  // 标价没下发（0）时不单列一行——应付那一行已经是全部信息。
+  const showListPrice =
+    order.listAmount > 0 &&
+    (order.creditAmount > 0 || order.listAmount !== order.amount);
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="coins"
+      title={tPage("sections.amounts")}
+      className="min-w-0"
+    >
+      <DetailList columns={1}>
+        {order.invoiceItems.map((item) => (
+          <DetailRow
+            key={item.id}
+            label={invoiceItemTypeLabel(item.itemType, tPage)}
+          >
+            <span className="grid min-w-0 gap-2xs">
+              <span>{money(item.totalAmount)}</span>
+              <span className="text-body-sm text-muted-foreground">
+                {item.itemName}
+              </span>
+            </span>
           </DetailRow>
-          <DetailRow label={tShared("columns.tenantType")}>
-            {orUnset(typeLabel(order.tenantType))}
+        ))}
+        {showListPrice ? (
+          <DetailRow label={tPage("fields.listPrice")}>
+            {money(order.listAmount)}
           </DetailRow>
-          <DetailRow label={tPage("fields.region")}>
-            {orUnset(order.region)}
+        ) : null}
+        {order.creditAmount > 0 ? (
+          <DetailRow label={tPage("fields.credit")}>
+            <span className="grid min-w-0 gap-2xs">
+              <span>{`− ${money(order.creditAmount)}`}</span>
+              <span className="text-body-sm text-muted-foreground">
+                {tPage("fields.creditHint")}
+              </span>
+            </span>
           </DetailRow>
+        ) : null}
+        {order.leftoverAmount > 0 ? (
+          <DetailRow label={tPage("fields.leftover")}>
+            <span className="grid min-w-0 gap-2xs">
+              <span>{money(order.leftoverAmount)}</span>
+              <span className="text-body-sm text-muted-foreground">
+                {tPage("fields.leftoverHint")}
+              </span>
+            </span>
+          </DetailRow>
+        ) : null}
+        <DetailRow label={tPage("fields.due")}>
+          <span className="font-semibold text-foreground">
+            {money(order.amount)}
+          </span>
+        </DetailRow>
+        <DetailRow label={tPage("fields.received")}>
+          {money(order.paidAmount)}
+        </DetailRow>
+        {showRemaining ? (
+          <DetailRow label={tPage("fields.remaining")}>
+            {money(remaining)}
+          </DetailRow>
+        ) : null}
+      </DetailList>
+    </Section>
+  );
+}
+
+function TimelineSection({
+  order,
+  productLine,
+}: {
+  order: Order;
+  productLine: string;
+}) {
+  const tPage = useTranslations("orderDetailPage");
+  const locale = useLocale();
+  const ctx: TimelineContext = { order, locale, tPage, productLine };
+  const orderEvents = order.operationTimeline.filter(
+    (event) => event.group !== "subscription",
+  );
+  const subscriptionEvents = order.operationTimeline.filter(
+    (event) => event.group === "subscription",
+  );
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="clock"
+      title={tPage("sections.timeline")}
+      className="min-w-0"
+    >
+      <div className="grid min-w-0 gap-md">
+        <PanelList empty={tPage("timeline.empty")}>
+          {orderEvents.map((event) => (
+            <TimelineEntry key={event.id} event={event} ctx={ctx} />
+          ))}
+        </PanelList>
+        {subscriptionEvents.length ? (
+          <>
+            <SectionHeader
+              level={3}
+              icon="star"
+              title={tPage("sections.subscriptionEvents")}
+            />
+            <PanelList>
+              {subscriptionEvents.map((event) => (
+                <TimelineEntry key={event.id} event={event} ctx={ctx} />
+              ))}
+            </PanelList>
+          </>
+        ) : null}
+      </div>
+    </Section>
+  );
+}
+
+// ── 右栏 ─────────────────────────────────────────────────────────────────────
+
+function OrderInfoSection({ order }: { order: Order }) {
+  const tPage = useTranslations("orderDetailPage");
+  const locale = useLocale();
+  const paySourceLabel = usePaySourceLabel();
+  const now = useNow();
+  const deadline = order.paymentDeadline;
+  let deadlineText: string | null = null;
+  if (deadline?.frozen) deadlineText = tPage("fields.deadlineFrozen");
+  else if (deadline?.expireAt) {
+    const remainingMs =
+      now === null ? null : new Date(deadline.expireAt).getTime() - now;
+    deadlineText =
+      remainingMs !== null && remainingMs <= 0
+        ? tPage("task.deadline.overdue")
+        : tPage("fields.deadlineUntil", {
+            day: formatDay(deadline.expireAt, locale, "—"),
+            clock: formatClock(deadline.expireAt, locale, ""),
+          });
+  }
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="file-text"
+      title={tPage("sections.order")}
+      className="min-w-0"
+    >
+      <DetailList columns={1}>
+        <DetailRow label={tPage("fields.orderNo")}>
+          <span className="font-mono">{order.orderNo}</span>
+        </DetailRow>
+        <DetailRow label={tPage("fields.billNo")}>
+          {order.billNo ? (
+            <span className="font-mono">{order.billNo}</span>
+          ) : (
+            tPage("empty")
+          )}
+        </DetailRow>
+        <DetailRow label={tPage("fields.payNo")}>
+          {order.paymentNo ? (
+            <span className="font-mono">{order.paymentNo}</span>
+          ) : (
+            tPage("empty")
+          )}
+        </DetailRow>
+        <DetailRow label={tPage("fields.intent")}>
+          {intentLabel(order.intent, tPage)}
+        </DetailRow>
+        <DetailRow label={tPage("fields.placedAt")}>
+          {dayAndClock(order.createdAt, locale)}
+        </DetailRow>
+        <DetailRow label={tPage("fields.source")}>
+          {paySourceLabel(order.paySource)}
+        </DetailRow>
+        <DetailRow label={tPage("fields.autoRenew")}>
+          {order.autoRenew ? tPage("autoRenew.on") : tPage("autoRenew.off")}
+        </DetailRow>
+        {deadlineText ? (
+          <DetailRow label={tPage("fields.deadline")}>{deadlineText}</DetailRow>
+        ) : null}
+        {order.orderStatus === "closed" ? (
+          <DetailRow label={tPage("fields.closeReason")}>
+            {closeReasonLabel(order.closeReason, tPage)}
+          </DetailRow>
+        ) : null}
+      </DetailList>
+    </Section>
+  );
+}
+
+function TenantSection({ order }: { order: Order }) {
+  const tPage = useTranslations("orderDetailPage");
+  const tShared = useTranslations();
+  const contact = order.billingContact;
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="buildings"
+      title={tPage("sections.tenant")}
+      className="min-w-0"
+      action={
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/tenants/${encodeURIComponent(order.tenantCode)}`}>
+            <Icon name="buildings" size="xs" fallback="placeholder" />
+            {tShared("actions.viewTenant")}
+          </Link>
+        </Button>
+      }
+    >
+      <DetailList columns={1}>
+        <DetailRow label={tPage("fields.tenant")}>
+          <Link
+            href={`/tenants/${encodeURIComponent(order.tenantCode)}`}
+            className="font-semibold text-primary-text no-underline"
+          >
+            {order.tenantName}
+          </Link>
+        </DetailRow>
+        <DetailRow label={tShared("columns.tenantCode")}>
+          <span className="font-mono">
+            {formatPrincipalNoOr(order.tenantCode, "tenant", "—")}
+          </span>
+        </DetailRow>
+        <DetailRow label={tShared("columns.tenantType")}>
+          {typeLabel(order.tenantType)}
+        </DetailRow>
+        {!isUnset(order.industry) ? (
           <DetailRow label={tPage("fields.industry")}>
-            {orUnset(order.industry)}
+            {order.industry}
           </DetailRow>
-          <DetailRow label={tPage("fields.plan")}>
-            {orUnset(order.solutionName)}
-          </DetailRow>
-          <DetailRow label={tPage("fields.servicePlan")}>
-            {orUnset(order.servicePlanName)}
-          </DetailRow>
-          <DetailRow label={tPage("fields.planTier")}>
-            {orUnset(order.tierName)}
-          </DetailRow>
-        </DetailList>
-      </section>
+        ) : null}
+        {!isUnset(order.region) ? (
+          <DetailRow label={tPage("fields.region")}>{order.region}</DetailRow>
+        ) : null}
+        <DetailRow
+          label={
+            contact?.contactType === "primary"
+              ? tPage("fields.primaryContact")
+              : tPage("fields.billingContact")
+          }
+        >
+          {contact ? contactLine(contact, tPage("empty")) : tPage("empty")}
+        </DetailRow>
+      </DetailList>
+    </Section>
+  );
+}
 
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading
-          icon="star"
-          title={tPage("sections.subscription")}
-        />
-        <DetailList columns={3}>
-          <DetailRow label={tPage("fields.subscriptionId")}>
-            {orUnset(order.subscriptionId)}
-          </DetailRow>
-          <DetailRow label={tPage("fields.subscriptionStatus")}>
-            {orUnset(subscriptionStatusLabels[order.subscriptionStatus])}
-          </DetailRow>
-          <DetailRow label={tPage("fields.billingCycle")}>
-            {orUnset(cycleLabels[order.cycleType])}
-          </DetailRow>
-        </DetailList>
-        <div className="inline-flex flex-wrap items-center justify-end gap-sm justify-start ">
-          <Button asChild variant="outline">
+function FulfillmentSection({ order }: { order: Order }) {
+  const tPage = useTranslations("orderDetailPage");
+  const locale = useLocale();
+  const subscriptionStatusLabels = useSubscriptionStatusLabels();
+  const sub = order.fulfilledSubscription;
+  // 订阅状态值域与 admin 的运营视角不完全同集，认识的才显示，不认识的不硬翻。
+  const statusLabel = sub
+    ? ((subscriptionStatusLabels as Record<string, string>)[sub.status] ?? null)
+    : null;
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="star"
+      title={tPage("sections.fulfillment")}
+      className="min-w-0"
+      action={
+        sub ? (
+          <Button asChild variant="outline" size="sm">
             <Link href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}>
               <Icon name="star" size="xs" fallback="placeholder" />
               {tPage("links.subscription")}
             </Link>
           </Button>
-          <Button asChild variant="outline">
-            <Link href={`/tenants/${encodeURIComponent(order.tenantCode)}`}>
-              <Icon name="buildings" size="xs" fallback="placeholder" />
-              {tPage("links.tenant")}
-            </Link>
-          </Button>
-        </div>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="key" title={tPage("sections.billing")} />
-        <DetailList columns={3}>
-          <DetailRow label={tPage("fields.billNo")}>
-            {order.billNo || tPage("notGenerated")}
+        ) : undefined
+      }
+    >
+      {sub ? (
+        <DetailList columns={1}>
+          <DetailRow label={tPage("fields.subscriptionCode")}>
+            <span className="font-mono">{order.orderNo}</span>
           </DetailRow>
-          <DetailRow label={tPage("fields.billStatus")}>
-            {order.billStatus || tPage("notGenerated")}
+          {statusLabel ? (
+            <DetailRow label={tPage("fields.subscriptionStatus")}>
+              {statusLabel}
+            </DetailRow>
+          ) : null}
+          <DetailRow label={tPage("fields.validity")}>
+            {sub.endAt
+              ? tPage("fulfillment.validity", {
+                  start: formatDay(sub.startAt, locale, "—"),
+                  end: formatDay(sub.endAt, locale, "—"),
+                })
+              : tPage("fulfillment.noEnd", {
+                  start: formatDay(sub.startAt, locale, "—"),
+                })}
           </DetailRow>
-          <DetailRow label={tPage("fields.payNo")}>
-            {order.paymentNo || tPage("notGenerated")}
-          </DetailRow>
-          <DetailRow label={tPage("fields.orderAmount")}>
-            {orUnset(formatCurrency(order.amount, order.currency))}
-          </DetailRow>
-          <DetailRow label={tShared("columns.receivedAmount")}>
-            {orUnset(formatCurrency(order.paidAmount, order.currency))}
-          </DetailRow>
-          <DetailRow label={tPage("fields.remaining")}>
-            {orUnset(
-              formatCurrency(
-                Math.max(0, order.amount - order.paidAmount),
-                order.currency,
-              ),
-            )}
+          <DetailRow label={tPage("fields.autoRenew")}>
+            {sub.autoRenew ? tPage("autoRenew.on") : tPage("autoRenew.off")}
           </DetailRow>
         </DetailList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="list" title={tPage("sections.billItems")} />
-        <PanelList>
-          {order.invoiceItems.map((item) => (
-            <PanelItem
-              key={item.id}
-              lead={<Icon name="table" size="sm" fallback="placeholder" />}
-              main={
-                <TableTitleCell
-                  title={<>{item.itemName}</>}
-                  description={
-                    <>
-                      {item.itemType} | {formatQuantity(item.quantity)}{" "}
-                      {item.itemUnit ?? ""}
-                    </>
-                  }
-                />
-              }
-              trail={
-                <span className="grid justify-items-end gap-2xs">
-                  <span className="text-body-md font-semibold text-foreground">
-                    {formatCurrency(item.totalAmount, order.currency)}
-                  </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
-                    {item.remark ??
-                      `${tPage("unitPrice", { price: formatCurrency(item.unitPrice, order.currency) })}`}
-                  </span>
-                </span>
-              }
-            />
-          ))}
-        </PanelList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="check" title={tPage("sections.payments")} />
-        <PanelList>
-          {order.paymentRecords.length ? (
-            order.paymentRecords.map((payment) => (
-              <PanelItem
-                key={payment.id}
-                lead={<Icon name="check" size="sm" fallback="placeholder" />}
-                main={
-                  <TableTitleCell
-                    title={<>{payment.paymentNo}</>}
-                    description={
-                      <>
-                        {paySourceLabel(payment.paySource)} |{" "}
-                        {t(`status.orderPayment.${payment.paymentStatus}`)} |{" "}
-                        {formatDate(payment.paidAt, locale)}
-                      </>
-                    }
-                  />
-                }
-                trail={
-                  <span className="grid justify-items-end gap-2xs">
-                    <span className="text-body-md font-semibold text-foreground">
-                      {formatCurrency(payment.paidAmount, payment.currency)}
-                    </span>
-                    <span className="truncate text-body-sm text-muted-foreground">
-                      {payment.remark ?? payment.operatorName}
-                    </span>
-                  </span>
-                }
-              />
-            ))
-          ) : (
-            <PanelItem
-              lead={<Icon name="clock" size="sm" fallback="placeholder" />}
-              main={
-                <TableTitleCell
-                  title={<>{tPage("payments.empty")}</>}
-                  description={<>{tPage("payments.emptyHint")}</>}
-                />
-              }
-              trail={
-                <span className="grid justify-items-end gap-2xs">
-                  <span className="text-body-md font-semibold text-foreground">
-                    {tPage("payments.unpaid")}
-                  </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
-                    {tPage("payments.unpaidHint")}
-                  </span>
-                </span>
-              }
-            />
-          )}
-        </PanelList>
-      </section>
-
-      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
-        <DetailSectionHeading icon="clock" title={tPage("sections.opsLog")} />
-        <PanelList>
-          {order.operationTimeline.map((event) => (
-            <PanelItem
-              key={event.id}
-              lead={
-                <span
-                  aria-hidden="true"
-                  className={`inline-grid size-icon-md place-items-center rounded-full border ${toneSurfaceClasses[TIMELINE_TONE[event.tone] ?? "neutral"]}`}
-                >
-                  <Icon
-                    name={
-                      event.tone === "danger"
-                        ? "warning"
-                        : event.tone === "success"
-                          ? "check"
-                          : "info"
-                    }
-                    size="xs"
-                    fallback="placeholder"
-                  />
-                </span>
-              }
-              main={
-                <span className="grid min-w-0 gap-2xs">
-                  <strong className="block text-body-md font-semibold text-foreground">
-                    {event.title}
-                  </strong>
-                  <p className="m-0 text-body-sm leading-relaxed text-muted-foreground">
-                    {event.description}
-                  </p>
-                  <small className="block text-body-sm text-muted-foreground">
-                    {event.actor} · {formatDate(event.at, locale)}
-                  </small>
-                </span>
-              }
-            />
-          ))}
-        </PanelList>
-      </section>
-    </section>
+      ) : (
+        <p className="m-0 text-body-sm text-muted-foreground">
+          {order.orderStatus === "closed"
+            ? tPage("fulfillment.closed")
+            : order.orderStatus === "refunded"
+              ? tPage("fulfillment.refunded")
+              : tPage("fulfillment.pending")}
+        </p>
+      )}
+    </Section>
   );
 }
 
-export function OrderDetailPage({ orderId }: { orderId: string }) {
+function RefundSection({ order }: { order: Order }) {
+  const tPage = useTranslations("orderDetailPage");
   const locale = useLocale();
+  const refund = order.refund ?? null;
+  if (!refund) return null;
+
+  return (
+    <Section
+      tone="glass"
+      level={2}
+      icon="undo"
+      title={tPage("sections.refund")}
+      className="min-w-0"
+    >
+      <DetailList columns={1}>
+        <DetailRow label={tPage("fields.refundNo")}>
+          <span className="font-mono">{refund.refundNo}</span>
+        </DetailRow>
+        <DetailRow label={tPage("fields.refundAmount")}>
+          {formatOrderAmount(refund.amount, order.currency)}
+        </DetailRow>
+        <DetailRow label={tPage("fields.refundReason")}>
+          {refund.reason?.trim() || tPage("declaration.notFilled")}
+        </DetailRow>
+        <DetailRow label={tPage("fields.refundRequestedAt")}>
+          {dayAndClock(refund.requestedAt, locale)}
+        </DetailRow>
+        <DetailRow label={tPage("fields.refundAudit")}>
+          <span className="inline-flex flex-wrap items-center gap-xs">
+            <StatusBadge
+              tone={
+                refund.auditStatus === "approved"
+                  ? "success"
+                  : refund.auditStatus === "rejected"
+                    ? "danger"
+                    : "warning"
+              }
+            >
+              {refundAuditLabel(refund.auditStatus, tPage)}
+            </StatusBadge>
+            {refund.auditedAt ? (
+              <span className="text-body-sm text-muted-foreground">
+                {dayAndClock(refund.auditedAt, locale)}
+              </span>
+            ) : null}
+          </span>
+        </DetailRow>
+        {refund.auditRemark?.trim() ? (
+          <DetailRow label={tPage("fields.refundAuditRemark")}>
+            {refund.auditRemark}
+          </DetailRow>
+        ) : null}
+        <DetailRow label={tPage("fields.refundPayout")}>
+          <span className="inline-flex flex-wrap items-center gap-xs">
+            <StatusBadge
+              tone={
+                refund.refundStatus === "success"
+                  ? "success"
+                  : refund.refundStatus === "failed"
+                    ? "danger"
+                    : refund.refundStatus === "processing"
+                      ? "info"
+                      : "neutral"
+              }
+            >
+              {refundStatusLabel(refund.refundStatus, tPage)}
+            </StatusBadge>
+            {refund.refundedAt ? (
+              <span className="text-body-sm text-muted-foreground">
+                {dayAndClock(refund.refundedAt, locale)}
+              </span>
+            ) : null}
+          </span>
+        </DetailRow>
+      </DetailList>
+    </Section>
+  );
+}
+
+// ── 页面 ─────────────────────────────────────────────────────────────────────
+
+export function OrderDetailPage({ orderId }: { orderId: string }) {
   const tPage = useTranslations("orderDetailPage");
   const tShared = useTranslations();
+  const router = useRouter();
+  const cycleLabels = useSubscriptionCycleLabels();
   const { runWithStepUp } = useStepUp();
-  const [order, setOrder] = useState<OrderOperationDetailRecord | null>(null);
+  const { toast } = useToast();
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -472,15 +1414,12 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
    * refunded + 订阅回滚）；fail = 钱**没**打出去（账号不对、银行退回，2026-09-25 补）。
    * execute 与 fail 是同一步的两个结果，所以同一个对话框、同一套权限。
    */
-  const [refundDialog, setRefundDialog] = useState<
-    "approve" | "reject" | "execute" | "fail" | "create" | null
-  >(null);
+  const [refundDialog, setRefundDialog] = useState<RefundDialogMode | null>(
+    null,
+  );
   const [refundRemark, setRefundRemark] = useState("");
   const [submittingRefund, setSubmittingRefund] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
-  const [operationFeedback, setOperationFeedback] = useState<string | null>(
-    null,
-  );
 
   useEffect(() => {
     let active = true;
@@ -499,22 +1438,42 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     };
   }, [orderId]);
 
+  const busy =
+    submittingPayment ||
+    submittingReject ||
+    submittingVoid ||
+    submittingRestore ||
+    submittingRefund;
+  const anyDialogOpen =
+    paymentDialogOpen ||
+    rejectDialogOpen ||
+    voidDialogOpen ||
+    restoreDialogOpen ||
+    refundDialog !== null;
+
+  function openDialog(open: () => void) {
+    setOperationError(null);
+    open();
+  }
+
+  function succeed(message: string) {
+    toast({ tone: "success", title: message });
+  }
+
   async function handleConfirmOfflinePayment(
     payload: Parameters<typeof confirmOrderOfflinePayment>[1],
   ) {
     if (!order) return;
-
     setSubmittingPayment(true);
     setOperationError(null);
-
     try {
-      // Offline payment confirmation is 危 commerce:payment.settle → step-up.
-      const updatedOrder = await runWithStepUp(() =>
+      // 确认线下收款是 危 commerce:payment.settle → step-up。
+      const updated = await runWithStepUp(() =>
         confirmOrderOfflinePayment(order.id, payload),
       );
-      setOrder(updatedOrder);
-      setOperationFeedback(tPage("feedback.paymentConfirmed"));
+      setOrder(updated);
       setPaymentDialogOpen(false);
+      succeed(tPage("feedback.paymentConfirmed"));
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
@@ -529,19 +1488,17 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
   async function handleRejectDeclaration() {
     if (!order) return;
-
     setSubmittingReject(true);
     setOperationError(null);
-
     try {
-      // Reject shares the settle danger class (commerce:payment.settle) → step-up.
-      const updatedOrder = await runWithStepUp(() =>
+      // 驳回与确认同一个危码（commerce:payment.settle）→ step-up。
+      const updated = await runWithStepUp(() =>
         rejectOrderPaymentDeclaration(order.id, rejectReason),
       );
-      setOrder(updatedOrder);
-      setOperationFeedback(tPage("feedback.declarationRejected"));
+      setOrder(updated);
       setRejectDialogOpen(false);
       setRejectReason("");
+      succeed(tPage("feedback.declarationRejected"));
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
@@ -556,14 +1513,11 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
   async function handleRedriveProvisioning() {
     if (!order) return;
-
     setSubmittingPayment(true);
     setOperationError(null);
-
     try {
-      // Same endpoint as confirm — the backend detects the paid-but-hung order
-      // and re-drives stage 2 without requiring declaration fields (P8 ③).
-      const updatedOrder = await runWithStepUp(() =>
+      // 与确认收款同一个端点：后端识别「已付未开通」的挂单，重驱动段 2，不要求申报字段（P8 ③）。
+      const updated = await runWithStepUp(() =>
         confirmOrderOfflinePayment(order.id, {
           paidAmount: 0,
           offlinePayType: "other",
@@ -572,8 +1526,8 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           reason: "manual stage-2 re-drive",
         }),
       );
-      setOrder(updatedOrder);
-      setOperationFeedback(tPage("feedback.provisionRetried"));
+      setOrder(updated);
+      succeed(tPage("feedback.provisionRetried"));
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
@@ -588,25 +1542,22 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
   async function handleVoidOrder() {
     if (!order) return;
-
     setSubmittingVoid(true);
     setOperationError(null);
-
     try {
-      // Void is 危 commerce:order.void → step-up.
-      const updatedOrder = await runWithStepUp(() =>
-        voidOrder(order.id, voidReason),
+      // 作废是 危 commerce:order.void → step-up。
+      const updated = await runWithStepUp(
+        () => voidOrder(order.id, voidReason),
+        { danger: true },
       );
-      setOrder(updatedOrder);
-      setOperationFeedback(tPage("feedback.orderRejected"));
+      setOrder(updated);
       setVoidDialogOpen(false);
       setVoidReason("");
+      succeed(tPage("feedback.orderVoided"));
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
-        error instanceof Error
-          ? error.message
-          : tPage("feedback.rejectOrderFailed"),
+        error instanceof Error ? error.message : tPage("feedback.voidFailed"),
       );
     } finally {
       setSubmittingVoid(false);
@@ -618,20 +1569,23 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     setSubmittingRefund(true);
     setOperationError(null);
     try {
-      const updated =
+      // 退款四个端点都 @RequireStepUp；此前这里直接调用不走 runWithStepUp，
+      // 没有有效 step-up cookie 时对话框里直接出现 step_up_required（设计稿 §6.2 第 1 条）。
+      const updated = await runWithStepUp(() =>
         refundDialog === "execute"
-          ? await executeOrderRefund(order.id, refundRemark)
+          ? executeOrderRefund(order.id, refundRemark)
           : refundDialog === "fail"
-            ? await failOrderRefund(order.id, refundRemark)
+            ? failOrderRefund(order.id, refundRemark)
             : refundDialog === "create"
-              ? await createOrderRefund(order.id, refundRemark)
-              : await auditOrderRefund(
+              ? createOrderRefund(order.id, refundRemark)
+              : auditOrderRefund(
                   order.id,
                   refundDialog === "approve" ? "approved" : "rejected",
                   refundRemark,
-                );
+                ),
+      );
       setOrder(updated);
-      setOperationFeedback(
+      succeed(
         refundDialog === "execute"
           ? tPage("feedback.refundExecuted")
           : refundDialog === "fail"
@@ -645,6 +1599,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       setRefundDialog(null);
       setRefundRemark("");
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       setOperationError(
         error instanceof Error ? error.message : tPage("feedback.refundFailed"),
       );
@@ -655,19 +1610,17 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
   async function handleRestoreOrder() {
     if (!order) return;
-
     setSubmittingRestore(true);
     setOperationError(null);
-
     try {
-      // Restore is 危 commerce:order.restore → step-up.
-      const updatedOrder = await runWithStepUp(() =>
+      // 恢复是 危 commerce:order.restore → step-up。
+      const updated = await runWithStepUp(() =>
         restoreOrder(order.id, restoreReason),
       );
-      setOrder(updatedOrder);
-      setOperationFeedback(tPage("feedback.orderRestored"));
+      setOrder(updated);
       setRestoreDialogOpen(false);
       setRestoreReason("");
+      succeed(tPage("feedback.orderRestored"));
     } catch (error) {
       if (isStepUpCancelled(error)) return;
       setOperationError(
@@ -680,24 +1633,29 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     }
   }
 
+  const backLink = (
+    <Link
+      className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
+      href="/orders"
+    >
+      <Icon name="arrow-left" size="xs" fallback="placeholder" />
+      {tShared("actions.backToList")}
+    </Link>
+  );
+
   if (!loading && !order) {
     return (
       <DetailPageTemplate
         className="min-w-0"
         header={
-          <PageHeader
-            icon="table"
-            title={tPage("title")}
-            description={tPage("notFound.description")}
-            action={
-              <Button asChild variant="outline">
-                <Link href="/orders">
-                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  {tShared("actions.backToList")}
-                </Link>
-              </Button>
-            }
-          />
+          <>
+            {backLink}
+            <ViewHeader
+              icon="receipt"
+              title={tPage("title")}
+              description={tPage("notFound.description")}
+            />
+          </>
         }
       >
         <EmptyState
@@ -708,287 +1666,227 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     );
   }
 
+  if (!order) {
+    return (
+      <DetailPageTemplate
+        className="min-w-0"
+        header={
+          <>
+            {backLink}
+            <ViewHeader
+              icon="receipt"
+              title={tPage("title")}
+              description={tPage("loading")}
+            />
+          </>
+        }
+      >
+        <p className="m-0 text-body-sm text-muted-foreground">
+          {tShared("common.loading")}
+        </p>
+      </DetailPageTemplate>
+    );
+  }
+
+  // 「买的是什么」一行：方案 · 套餐 · 档位 · 周期，没值的段落不占位。
+  const productLine = [
+    order.solutionName,
+    order.servicePlanName,
+    order.tierName,
+    cycleLabels[order.cycleType],
+  ]
+    .filter((value) => !isUnset(value))
+    .join(" · ");
+
+  const refund = order.refund ?? null;
+  const openRefundDialog = (mode: RefundDialogMode) =>
+    openDialog(() => {
+      setRefundRemark("");
+      setRefundDialog(mode);
+    });
+
+  // 「更多」：按当前状态只列能做的事；灰着的项要说为什么灰。
+  const menuItems: ActionMenuItem[] = [
+    {
+      id: "tenant",
+      label: tShared("actions.viewTenant"),
+      icon: "buildings",
+      onSelect: () =>
+        router.push(`/tenants/${encodeURIComponent(order.tenantCode)}`),
+    },
+  ];
+  if (order.fulfilledSubscription) {
+    menuItems.push({
+      id: "subscription",
+      label: tPage("links.subscription"),
+      icon: "star",
+      onSelect: () =>
+        router.push(`/subscriptions/${encodeURIComponent(order.orderNo)}`),
+    });
+  }
+  if (order.orderStatus === "paid_unprovisioned") {
+    menuItems.push({
+      id: "redrive",
+      label: tPage("actions.retryProvision"),
+      icon: "play",
+      separatorBefore: true,
+      disabled: busy,
+      onSelect: () => void handleRedriveProvisioning(),
+    });
+  }
+  // 逃生口（批 6）：已履约、还没有退款单时，运营可以发起一笔——
+  // 此前 24 小时窗口一过就谁也退不了，连误驳回都救不回来。
+  if (order.orderStatus === "confirmed" && !refund) {
+    menuItems.push({
+      id: "refund-create",
+      label: tPage("actions.createRefund"),
+      icon: "undo",
+      separatorBefore: true,
+      onSelect: () => openRefundDialog("create"),
+    });
+  }
+  if (refund && refund.auditStatus === "pending") {
+    menuItems.push(
+      {
+        id: "refund-approve",
+        label: tPage("actions.approveRefund"),
+        icon: "check",
+        separatorBefore: true,
+        onSelect: () => openRefundDialog("approve"),
+      },
+      {
+        id: "refund-reject",
+        label: tPage("actions.rejectRefund"),
+        icon: "x",
+        onSelect: () => openRefundDialog("reject"),
+      },
+    );
+  }
+  if (
+    refund &&
+    refund.auditStatus === "approved" &&
+    refund.refundStatus !== "success"
+  ) {
+    menuItems.push(
+      {
+        id: "refund-execute",
+        label: tPage("actions.completeRefund"),
+        icon: "check",
+        separatorBefore: true,
+        onSelect: () => openRefundDialog("execute"),
+      },
+      {
+        id: "refund-fail",
+        label: tPage("actions.failRefund"),
+        icon: "warning",
+        onSelect: () => openRefundDialog("fail"),
+      },
+    );
+  }
+  if (order.orderStatus === "closed") {
+    menuItems.push({
+      id: "restore",
+      label: tPage("actions.restoreOrder"),
+      icon: "undo",
+      separatorBefore: true,
+      disabled: !order.restorable,
+      hint: restoreDisabledReason(order, tPage) ?? undefined,
+      onSelect: () =>
+        openDialog(() => {
+          setRestoreReason("");
+          setRestoreDialogOpen(true);
+        }),
+    });
+  }
+  if (
+    order.orderStatus === "pending" ||
+    order.orderStatus === "pending_verify" ||
+    order.orderStatus === "partial_pending"
+  ) {
+    menuItems.push({
+      id: "void",
+      label: tPage("actions.voidOrder"),
+      icon: "prohibit",
+      separatorBefore: true,
+      disabled: !canVoidOrder(order),
+      hint: voidDisabledReason(order, tPage) ?? undefined,
+      onSelect: () =>
+        openDialog(() => {
+          setVoidReason("");
+          setVoidDialogOpen(true);
+        }),
+    });
+  }
+
+  const openConfirm = () => openDialog(() => setPaymentDialogOpen(true));
+  const openReject = () =>
+    openDialog(() => {
+      setRejectReason("");
+      setRejectDialogOpen(true);
+    });
+
   return (
     <DetailPageTemplate
-      className="min-w-0 vx-order-detail-page"
+      className="min-w-0"
       header={
-        <PageHeader
-          icon="table"
-          title={order ? order.orderNo : tPage("title")}
-          description={
-            order
-              ? `${order.tenantName} · ${order.solutionName} · ${order.servicePlanName}`
-              : tPage("loading")
-          }
-          action={
-            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
-              <Button asChild variant="outline">
-                <Link href="/orders">
-                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  {tShared("actions.backToList")}
-                </Link>
-              </Button>
-              {order ? (
-                <>
-                  <Button asChild variant="outline">
-                    <Link
-                      href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}
-                    >
-                      <Icon name="star" size="xs" fallback="placeholder" />
-                      {tPage("links.subscription")}
-                    </Link>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setOperationError(null);
-                      setOperationFeedback(null);
-                      setPaymentDialogOpen(true);
-                    }}
-                    disabled={!canConfirmOrderOfflinePayment(order)}
-                    title={
-                      confirmOfflinePaymentDisabledReason(order) ?? undefined
-                    }
-                  >
-                    <Icon name="check" size="xs" fallback="placeholder" />
-                    {tPage("actions.confirmPayment")}
-                  </Button>
-                  {order.declaredPayment ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setOperationError(null);
-                        setOperationFeedback(null);
-                        setRejectReason("");
-                        setRejectDialogOpen(true);
-                      }}
-                    >
-                      <Icon name="warning" size="xs" fallback="placeholder" />
-                      {tPage("actions.rejectDeclaration")}
-                    </Button>
-                  ) : null}
-                  {order.orderStatus === "paid_unprovisioned" ? (
-                    <Button
-                      variant="outline"
-                      onClick={handleRedriveProvisioning}
-                      disabled={submittingPayment}
-                    >
-                      <Icon name="play" size="xs" fallback="placeholder" />
-                      {tPage("actions.retryProvision")}
-                    </Button>
-                  ) : null}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setOperationError(null);
-                      setOperationFeedback(null);
-                      setVoidReason("");
-                      setVoidDialogOpen(true);
-                    }}
-                    disabled={!canVoidOrder(order)}
-                    title={voidDisabledReason(order, tPage) ?? undefined}
-                  >
-                    <Icon name="x" size="xs" fallback="placeholder" />
-                    {tPage("actions.rejectOrder")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setOperationError(null);
-                      setOperationFeedback(null);
-                      setRestoreReason("");
-                      setRestoreDialogOpen(true);
-                    }}
-                    disabled={!order.restorable}
-                    title={restoreDisabledReason(order, tPage) ?? undefined}
-                  >
-                    <Icon name="play" size="xs" fallback="placeholder" />
-                    {tPage("actions.restoreOrder")}
-                  </Button>
-                  {/* 逃生口（批 6）：已履约、还没有退款单时，运营可以发起一笔——
-                      此前 24 小时窗口一过就谁也退不了，连误驳回都救不回来。 */}
-                  {order.orderStatus === "confirmed" && !order.refund ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setOperationError(null);
-                        setOperationFeedback(null);
-                        setRefundRemark("");
-                        setRefundDialog("create");
-                      }}
-                    >
-                      <Icon
-                        name="arrow-left"
-                        size="xs"
-                        fallback="placeholder"
-                      />
-                      {tPage("actions.createRefund")}
-                    </Button>
-                  ) : null}
-                  {order.refund && order.refund.auditStatus === "pending" ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setOperationError(null);
-                          setOperationFeedback(null);
-                          setRefundRemark("");
-                          setRefundDialog("approve");
-                        }}
-                      >
-                        <Icon name="check" size="xs" fallback="placeholder" />
-                        {tPage("actions.approveRefund")}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setOperationError(null);
-                          setOperationFeedback(null);
-                          setRefundRemark("");
-                          setRefundDialog("reject");
-                        }}
-                      >
-                        <Icon name="x" size="xs" fallback="placeholder" />
-                        {tPage("actions.rejectRefund")}
-                      </Button>
-                    </>
-                  ) : null}
-                  {order.refund &&
-                  order.refund.auditStatus === "approved" &&
-                  order.refund.refundStatus !== "success" ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setOperationError(null);
-                        setOperationFeedback(null);
-                        setRefundRemark("");
-                        setRefundDialog("execute");
-                      }}
-                    >
-                      <Icon name="check" size="xs" fallback="placeholder" />
-                      {tPage("actions.completeRefund")}
-                    </Button>
-                  ) : null}
-                  {/* 同一步的另一个结果：钱没打出去。放在「完成退款」之后作次要动作。 */}
-                  {order.refund &&
-                  order.refund.auditStatus === "approved" &&
-                  order.refund.refundStatus !== "success" ? (
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setOperationError(null);
-                        setOperationFeedback(null);
-                        setRefundRemark("");
-                        setRefundDialog("fail");
-                      }}
-                    >
-                      <Icon name="warning" size="xs" fallback="placeholder" />
-                      {tPage("actions.failRefund")}
-                    </Button>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-          }
-        />
+        <>
+          {backLink}
+          <OrderHeader
+            order={order}
+            productLine={productLine}
+            busy={busy}
+            onConfirm={openConfirm}
+            onReject={openReject}
+            menuItems={menuItems}
+          />
+        </>
       }
     >
-      {operationFeedback ? (
-        <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
-          {operationFeedback}
-        </div>
-      ) : null}
-
       {/*
-       * 页头动作（「重试开通」）不开对话框，失败时 operationError 此前只在五个
-       * 对话框内部渲染 —— 报错等于没报：2026-09-07 生产上运营点「重试开通」、
-       * TOTP 过了、后端报错了，界面上什么都没有。错误必须有页面级落脚处。
+       * 页头动作（「重新开通」）不开对话框，报错必须有页面级落脚处：2026-09-07 生产上
+       * 运营点「重试开通」、TOTP 过了、后端报错了，界面上什么都没有。
        */}
-      {!paymentDialogOpen &&
-      !rejectDialogOpen &&
-      !voidDialogOpen &&
-      !restoreDialogOpen &&
-      !refundDialog &&
-      operationError ? (
-        <div
-          className="inline-flex w-fit items-center rounded-lg px-sm py-xs text-body-sm font-semibold text-destructive-text"
-          role="alert"
-        >
-          {operationError}
-        </div>
+      {!anyDialogOpen && operationError ? (
+        <Banner
+          tone="danger"
+          title={tPage("feedback.actionFailed")}
+          description={operationError}
+          onDismiss={() => setOperationError(null)}
+          dismissLabel={tShared("actions.cancel")}
+        />
       ) : null}
 
-      {order ? (
-        <>
-          {order.declaredPayment ? (
-            <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-              <DetailSectionHeading
-                icon="clock"
-                title={tPage("declaration.title")}
-              />
-              <p className="m-0 text-body-sm text-muted-foreground">
-                {tPage("declaration.hint")}
-              </p>
-              <div className="vx-detail-grid">
-                <div>
-                  <Label>{tPage("declaration.amount")}</Label>
-                  <p>
-                    {formatCurrency(
-                      order.declaredPayment.amount,
-                      order.currency,
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <Label>{tPage("declaration.channel")}</Label>
-                  <p>
-                    {(() => {
-                      const code = order.declaredPayment.channel;
-                      if (!code) return tPage("declaration.notFilled");
-                      const key = DECLARED_CHANNEL_KEYS[code];
-                      // 未登记的渠道码原样显示——它是 DB 里的值，不是文案，
-                      // 编一个「其他」会把运营能拿去查的那个码藏掉。
-                      return key ? tPage(key) : code;
-                    })()}
-                  </p>
-                </div>
-                <div>
-                  <Label>{tPage("declaration.payer")}</Label>
-                  <p>
-                    {order.declaredPayment.payerName ??
-                      tPage("declaration.notFilled")}
-                  </p>
-                </div>
-                <div>
-                  <Label>{tPage("declaration.txnNo")}</Label>
-                  <p>
-                    {order.declaredPayment.transactionNo ??
-                      tPage("declaration.notFilled")}
-                  </p>
-                </div>
-                <div>
-                  <Label>{tPage("declaration.declaredAt")}</Label>
-                  <p>{formatDate(order.declaredPayment.declaredAt, locale)}</p>
-                </div>
-                <div>
-                  <Label>{tPage("declaration.remark")}</Label>
-                  <p>
-                    {order.declaredPayment.remark ?? tShared("common.none")}
-                  </p>
-                </div>
-              </div>
-            </section>
-          ) : null}
-          <OrderSummary order={order} />
-          <OrderDetails order={order} />
-        </>
-      ) : (
-        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-          <span>{tShared("common.loading")}</span>
-        </section>
-      )}
+      <OrderTaskCard
+        order={order}
+        busy={busy}
+        onConfirm={openConfirm}
+        onReject={openReject}
+        onRedrive={() => void handleRedriveProvisioning()}
+        onRestore={() =>
+          openDialog(() => {
+            setRestoreReason("");
+            setRestoreDialogOpen(true);
+          })
+        }
+        onRefund={openRefundDialog}
+      />
 
-      {order && paymentDialogOpen ? (
+      {/* 宽屏左 3 / 右 2，窄屏单栏；任务卡永远在最上（§3.8）。 */}
+      <div className="grid min-w-0 grid-cols-1 items-start gap-xl xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="grid min-w-0 gap-xl">
+          <DeclarationSection order={order} />
+          <AmountsSection order={order} />
+          <TimelineSection order={order} productLine={productLine} />
+        </div>
+        <div className="grid min-w-0 gap-xl">
+          <OrderInfoSection order={order} />
+          <TenantSection order={order} />
+          <FulfillmentSection order={order} />
+          <RefundSection order={order} />
+        </div>
+      </div>
+
+      {paymentDialogOpen ? (
         <OrderOfflinePaymentDialog
           order={order}
           busy={submittingPayment}
@@ -1000,15 +1898,16 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         />
       ) : null}
 
-      {order && rejectDialogOpen ? (
+      {rejectDialogOpen ? (
         <DialogForm
           open
+          size="lg"
           title={tPage("dialogs.rejectDeclaration.title")}
           description={
             order.declaredPayment
               ? tPage.rich("dialogs.rejectDeclaration.descriptionWithAmount", {
                   orderNo: order.orderNo,
-                  amount: formatCurrency(
+                  amount: formatOrderAmount(
                     order.declaredPayment.amount,
                     order.currency,
                   ),
@@ -1031,37 +1930,34 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             void handleRejectDeclaration();
           }}
         >
-          <Label htmlFor="order-reject-reason">
-            {tPage("dialogs.rejectDeclaration.reasonLabel")}{" "}
-            <small>{tPage("dialogs.rejectDeclaration.reasonHint")}</small>
-          </Label>
-          <Textarea
-            id="order-reject-reason"
-            value={rejectReason}
-            onChange={(event) => setRejectReason(event.target.value)}
-            placeholder={tPage("dialogs.rejectDeclaration.placeholder")}
-            maxLength={512}
-            rows={3}
-            autoFocus
-          />
-          {operationError ? (
-            <p className="text-sm text-vx-danger">{operationError}</p>
-          ) : null}
+          <Field>
+            <FieldLabel
+              htmlFor="vx-order-reject-reason"
+              required
+              requiredLabel={tPage("confirmDialog.required")}
+              hint={tPage("dialogs.rejectDeclaration.reasonHint")}
+            >
+              {tPage("dialogs.rejectDeclaration.reasonLabel")}
+            </FieldLabel>
+            <Textarea
+              id="vx-order-reject-reason"
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder={tPage("dialogs.rejectDeclaration.placeholder")}
+              maxLength={512}
+              rows={3}
+              autoFocus
+            />
+          </Field>
+          <FieldError>{operationError}</FieldError>
         </DialogForm>
       ) : null}
 
       {/* create 这一档**还没有**退款单（它要创建的就是那一张），所以条件不能只看
           order.refund——照抄会让按钮点了没反应，比灰着更糟。 */}
-      {order && refundDialog && (order.refund || refundDialog === "create") ? (
+      {refundDialog && (refund || refundDialog === "create") ? (
         <DialogForm
           open
-          /*
-           * size="lg"：DS 的面板预设要求 DialogForm 显式给 sm/lg/xl（默认 md 不在预设里）。
-           * 本处原先没写，是 check-design-system 基线里的存量违规；2026-09-25 改动了这个
-           * 标签的内容，内容寻址的基线不再认它，于是现形——按规矩修掉，不去更新基线。
-           * 取 lg 与本模块的「确认收款」对话框一致：都是长说明 + 一个必填文本域。
-           * （同文件另外三处仍在基线里，各自的尺寸判断留给动到它们的那次改动。）
-           */
           size="lg"
           title={
             refundDialog === "approve"
@@ -1075,11 +1971,11 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                     : tPage("dialogs.refund.titleComplete")
           }
           description={
-            /* 按 order.refund 本身判而不是按模式判：两者等价（只有 create 这一档没有
+            /* 按 refund 本身判而不是按模式判：两者等价（只有 create 这一档没有
                退款单），但这样写 TypeScript 能在另一支里收窄，不必上非空断言。 */
-            !order.refund
+            !refund
               ? tPage.rich("dialogs.refund.descCreate", {
-                  amount: formatCurrency(order.amount, order.currency),
+                  amount: formatOrderAmount(order.amount, order.currency),
                   b: (chunks) => <strong>{chunks}</strong>,
                 })
               : tPage.rich(
@@ -1091,13 +1987,11 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                         : refundDialog === "approve"
                           ? "Approve"
                           : "Reject"
-                  }${order.refund.reason ? "WithReason" : ""}`,
+                  }${refund.reason ? "WithReason" : ""}`,
                   {
-                    refundNo: order.refund.refundNo,
-                    amount: formatCurrency(order.refund.amount, order.currency),
-                    ...(order.refund.reason
-                      ? { reason: order.refund.reason }
-                      : {}),
+                    refundNo: refund.refundNo,
+                    amount: formatOrderAmount(refund.amount, order.currency),
+                    ...(refund.reason ? { reason: refund.reason } : {}),
                     b: (chunks) => <strong>{chunks}</strong>,
                   },
                 )
@@ -1124,54 +2018,60 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             void handleRefundAction();
           }}
         >
-          <Label htmlFor="vx-order-refund-remark">
-            {tPage("dialogs.refund.remarkLabel")}{" "}
-            <small>
-              {refundDialog === "reject"
-                ? tPage("dialogs.refund.remarkHintCustomer")
-                : tPage("dialogs.refund.remarkHint")}
-            </small>
-          </Label>
-          <Textarea
-            id="vx-order-refund-remark"
-            value={refundRemark}
-            onChange={(event) => setRefundRemark(event.target.value)}
-            placeholder={
-              refundDialog === "execute"
-                ? tPage("dialogs.refund.placeholderComplete")
-                : refundDialog === "fail"
-                  ? tPage("dialogs.refund.placeholderFail")
-                  : refundDialog === "create"
-                    ? tPage("dialogs.refund.placeholderCreate")
-                    : tPage("dialogs.refund.placeholderReview")
-            }
-            maxLength={512}
-            rows={3}
-            autoFocus
-          />
-          {operationError ? (
-            <p className="text-sm text-vx-danger">{operationError}</p>
-          ) : null}
+          <Field>
+            <FieldLabel
+              htmlFor="vx-order-refund-remark"
+              required
+              requiredLabel={tPage("confirmDialog.required")}
+              hint={
+                refundDialog === "reject"
+                  ? tPage("dialogs.refund.remarkHintCustomer")
+                  : tPage("dialogs.refund.remarkHint")
+              }
+            >
+              {tPage("dialogs.refund.remarkLabel")}
+            </FieldLabel>
+            <Textarea
+              id="vx-order-refund-remark"
+              value={refundRemark}
+              onChange={(event) => setRefundRemark(event.target.value)}
+              placeholder={
+                refundDialog === "execute"
+                  ? tPage("dialogs.refund.placeholderComplete")
+                  : refundDialog === "fail"
+                    ? tPage("dialogs.refund.placeholderFail")
+                    : refundDialog === "create"
+                      ? tPage("dialogs.refund.placeholderCreate")
+                      : tPage("dialogs.refund.placeholderReview")
+              }
+              maxLength={512}
+              rows={3}
+              autoFocus
+            />
+          </Field>
+          <FieldError>{operationError}</FieldError>
         </DialogForm>
       ) : null}
 
-      {order && voidDialogOpen ? (
+      {voidDialogOpen ? (
         <DialogForm
           open
-          title={tPage("dialogs.rejectOrder.title")}
+          size="lg"
+          danger
+          title={tPage("dialogs.voidOrder.title")}
           description={
             order.tenantName
-              ? tPage.rich("dialogs.rejectOrder.descriptionWithTenant", {
+              ? tPage.rich("dialogs.voidOrder.descriptionWithTenant", {
                   orderNo: order.orderNo,
                   tenantName: order.tenantName,
                   b: (chunks) => <strong>{chunks}</strong>,
                 })
-              : tPage.rich("dialogs.rejectOrder.description", {
+              : tPage.rich("dialogs.voidOrder.description", {
                   orderNo: order.orderNo,
                   b: (chunks) => <strong>{chunks}</strong>,
                 })
           }
-          submitLabel={tPage("dialogs.rejectOrder.submitLabel")}
+          submitLabel={tPage("dialogs.voidOrder.submitLabel")}
           cancelLabel={tShared("actions.cancel")}
           submitting={submittingVoid}
           submitDisabled={voidReason.trim().length < 4}
@@ -1183,27 +2083,32 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             void handleVoidOrder();
           }}
         >
-          <Label htmlFor="vx-order-void-reason">
-            {tPage("dialogs.rejectOrder.reasonLabel")}{" "}
-            <small>{tPage("dialogs.rejectOrder.reasonHint")}</small>
-          </Label>
-          <Textarea
-            id="vx-order-void-reason"
-            value={voidReason}
-            onChange={(e) => setVoidReason(e.target.value)}
-            rows={3}
-            placeholder={tPage("dialogs.rejectOrder.placeholder")}
-            autoFocus
-          />
-          {operationError ? (
-            <p className="text-sm text-vx-danger">{operationError}</p>
-          ) : null}
+          <Field>
+            <FieldLabel
+              htmlFor="vx-order-void-reason"
+              required
+              requiredLabel={tPage("confirmDialog.required")}
+              hint={tPage("dialogs.voidOrder.reasonHint")}
+            >
+              {tPage("dialogs.voidOrder.reasonLabel")}
+            </FieldLabel>
+            <Textarea
+              id="vx-order-void-reason"
+              value={voidReason}
+              onChange={(event) => setVoidReason(event.target.value)}
+              rows={3}
+              placeholder={tPage("dialogs.voidOrder.placeholder")}
+              autoFocus
+            />
+          </Field>
+          <FieldError>{operationError}</FieldError>
         </DialogForm>
       ) : null}
 
-      {order && restoreDialogOpen ? (
+      {restoreDialogOpen ? (
         <DialogForm
           open
+          size="lg"
           title={tPage("dialogs.restoreOrder.title")}
           description={
             order.tenantName
@@ -1229,21 +2134,25 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             void handleRestoreOrder();
           }}
         >
-          <Label htmlFor="vx-order-restore-reason">
-            {tPage("dialogs.restoreOrder.reasonLabel")}{" "}
-            <small>{tPage("dialogs.restoreOrder.reasonHint")}</small>
-          </Label>
-          <Textarea
-            id="vx-order-restore-reason"
-            value={restoreReason}
-            onChange={(e) => setRestoreReason(e.target.value)}
-            rows={3}
-            placeholder={tPage("dialogs.restoreOrder.placeholder")}
-            autoFocus
-          />
-          {operationError ? (
-            <p className="text-sm text-vx-danger">{operationError}</p>
-          ) : null}
+          <Field>
+            <FieldLabel
+              htmlFor="vx-order-restore-reason"
+              required
+              requiredLabel={tPage("confirmDialog.required")}
+              hint={tPage("dialogs.restoreOrder.reasonHint")}
+            >
+              {tPage("dialogs.restoreOrder.reasonLabel")}
+            </FieldLabel>
+            <Textarea
+              id="vx-order-restore-reason"
+              value={restoreReason}
+              onChange={(event) => setRestoreReason(event.target.value)}
+              rows={3}
+              placeholder={tPage("dialogs.restoreOrder.placeholder")}
+              autoFocus
+            />
+          </Field>
+          <FieldError>{operationError}</FieldError>
         </DialogForm>
       ) : null}
     </DetailPageTemplate>

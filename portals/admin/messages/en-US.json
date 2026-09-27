@@ -2562,166 +2562,392 @@
       "title": "Order not found",
       "description": "The order may have been archived, or this account cannot access it."
     },
-    "summary": {
-      "amount": "Order amount",
-      "amountHelp": "Transaction amount, shown in the order currency.",
-      "receivedHelp": "Money already reconciled against this order.",
-      "plan": "Solution",
-      "planHelp": "The solution this order provisions.",
-      "action": "Suggested action",
-      "actionHelp": "Suggested handling based on the current order status.",
-      "ariaLabel": "Order detail for {orderNo}"
-    },
     "sections": {
-      "basic": "Basics",
-      "tenantPlan": "Tenant and plan",
-      "subscription": "Linked subscription",
-      "billing": "Bill and collection",
-      "billItems": "Bill items",
-      "payments": "Payment records",
-      "opsLog": "Operation log"
+      "declaration": "Customer declaration",
+      "amounts": "Amount breakdown",
+      "timeline": "Timeline",
+      "subscriptionEvents": "Subscription changes after provisioning",
+      "order": "Order information",
+      "tenant": "Tenant and contacts",
+      "fulfillment": "After provisioning",
+      "refund": "Refund"
     },
     "fields": {
       "orderNo": "Order no.",
-      "orderStatus": "Order status",
-      "payStatus": "Payment status",
-      "paySource": "Payment source",
-      "payMethod": "Payment method",
-      "createdAt": "Created at",
-      "confirmedAt": "Confirmed at",
       "tenant": "Tenant",
       "region": "Region",
       "industry": "Industry",
-      "plan": "Solution",
-      "servicePlan": "Service plan",
-      "planTier": "Plan tier",
-      "subscriptionId": "Subscription ID",
       "subscriptionStatus": "Subscription status",
-      "billingCycle": "Billing cycle",
       "billNo": "Bill no.",
-      "billStatus": "Bill status",
       "payNo": "Payment no.",
-      "orderAmount": "Order amount",
-      "remaining": "Outstanding"
-    },
-    "notGenerated": "Not generated",
-    "unitPrice": "Unit price {price}",
-    "payments": {
-      "empty": "No payment records yet",
-      "emptyHint": "Waiting for an online payment, or for an operator to confirm an offline one",
-      "unpaid": "Unpaid",
-      "unpaidHint": "Confirming an offline payment writes a payment record automatically."
+      "remaining": "Remaining due",
+      "intent": "Order type",
+      "placedAt": "Placed at",
+      "source": "Source",
+      "autoRenew": "Auto-renew",
+      "deadline": "Payment countdown",
+      "deadlineFrozen": "Frozen (customer has declared)",
+      "deadlineUntil": "Until {day} {clock}",
+      "closeReason": "Close reason",
+      "billingContact": "Billing contact",
+      "primaryContact": "Primary contact",
+      "listPrice": "List price",
+      "credit": "Upgrade credit",
+      "creditHint": "Credited from the remaining days and quota of the previous subscription",
+      "leftover": "Credit overflow",
+      "leftoverHint": "The part of the credit exceeding the price goes to prepaid balance",
+      "due": "Due",
+      "received": "Received",
+      "subscriptionCode": "Subscription code",
+      "validity": "Validity",
+      "refundNo": "Refund no.",
+      "refundAmount": "Refund amount",
+      "refundReason": "Customer's reason",
+      "refundRequestedAt": "Requested at",
+      "refundAudit": "Review",
+      "refundAuditRemark": "Review note",
+      "refundPayout": "Payout"
     },
     "links": {
-      "subscription": "Subscription detail",
-      "tenant": "Tenant detail"
+      "subscription": "View subscription"
     },
     "actions": {
       "confirmPayment": "Confirm payment",
       "rejectDeclaration": "Reject declaration",
-      "retryProvision": "Retry provisioning",
-      "rejectOrder": "Reject order",
+      "retryProvision": "Provision again",
       "restoreOrder": "Restore order",
       "approveRefund": "Approve refund",
       "rejectRefund": "Reject refund",
       "completeRefund": "Refund completed (paid out)",
       "failRefund": "Payout failed",
-      "createRefund": "File a refund"
+      "createRefund": "File a refund",
+      "voidOrder": "Void order",
+      "more": "More actions"
     },
     "declaration": {
-      "title": "Customer payment declaration",
-      "hint": "What the customer submitted on the payment page. Verify the money arrived before confirming; if the amount does not match, use Reject declaration.",
       "amount": "Declared amount",
       "channel": "Payment channel",
       "payer": "Payer",
       "txnNo": "Transaction no.",
       "declaredAt": "Declared at",
-      "remark": "Remark",
-      "notFilled": "Not provided"
+      "remark": "Customer note",
+      "notFilled": "Not provided by customer",
+      "waited": "Waiting {duration}",
+      "declaredBy": "Declared by"
     },
     "channels": {
       "alipay": "Alipay",
-      "bank": "Bank transfer"
+      "bank": "Bank transfer",
+      "other": "Other channel"
     },
     "disabled": {
-      "hasPayment": "An order that has received money cannot be rejected; settle it instead.",
-      "notPending": "This order is not awaiting payment, so there is nothing to reject.",
-      "notRestorable": "This order is not in a restorable cancelled state (a subscription cancelled after activation cannot be restored here)."
+      "hasPayment": "An order that has received money cannot be voided; use the refund flow.",
+      "notPending": "Only orders awaiting payment can be voided.",
+      "notRestorable": "This order cannot be restored: only closed orders that were never provisioned and never received money can be.",
+      "declaredFirst": "The customer has declared a payment; reject the declaration before voiding.",
+      "confirm": {
+        "free": "A ¥0 order does not need a payment confirmation.",
+        "done": "Payment for this order is already confirmed.",
+        "closed": "A closed order cannot have a payment confirmed.",
+        "refunding": "An order being refunded cannot have a payment confirmed."
+      }
     },
     "feedback": {
-      "paymentConfirmed": "Offline payment confirmed.",
-      "declarationRejected": "Payment declaration rejected. Vouchers and discounts are released, and the customer will see the reason.",
-      "provisionRetried": "Provisioning retried (stage 2 redrive).",
-      "orderRejected": "Order rejected.",
+      "paymentConfirmed": "Payment confirmed; the system is provisioning.",
+      "declarationRejected": "Declaration rejected: vouchers and discounts are released, the order is back to awaiting payment, and the customer will see the reason.",
+      "provisionRetried": "Provisioning triggered again.",
       "orderRestored": "Order restored to awaiting payment.",
-      "refundExecuted": "Refund executed: the order is refunded and the subscription is back to unsubscribed.",
-      "refundApproved": "Refund approved. Pay out through the original channel, then come back and mark it completed.",
+      "refundExecuted": "Refund completed: the order is refunded and the subscription is back to unsubscribed.",
+      "refundApproved": "Refund approved. Pay out through the original channel, then come back and click \"Refund completed\".",
       "refundRejected": "Refund request rejected.",
-      "confirmPaymentFailed": "Could not confirm the offline payment. Try again shortly.",
-      "rejectDeclarationFailed": "Could not reject the payment declaration. Try again shortly.",
-      "retryProvisionFailed": "Could not retry provisioning. Try again shortly.",
-      "rejectOrderFailed": "Could not reject the order. Try again shortly.",
+      "confirmPaymentFailed": "Could not confirm the payment. Try again shortly.",
+      "rejectDeclarationFailed": "Could not reject the declaration. Try again shortly.",
+      "retryProvisionFailed": "Could not trigger provisioning. Try again shortly.",
       "refundFailed": "The refund action failed. Try again shortly.",
       "restoreFailed": "Could not restore the order. Try again shortly.",
       "refundMarkedFailed": "Recorded as a failed payout: order and subscription unchanged, the customer has been notified.",
-      "refundCreated": "Refund filed: the customer has been notified; it still needs review and then execution."
+      "refundCreated": "Refund filed: the customer has been notified; it still needs review and then execution.",
+      "actionFailed": "The action did not go through",
+      "orderVoided": "Order voided.",
+      "voidFailed": "Could not void the order. Try again shortly."
     },
     "dialogs": {
       "rejectDeclaration": {
         "title": "Reject payment declaration",
-        "description": "Order <b>{orderNo}</b>. Rejecting releases the voucher and discount, returns the order to awaiting payment, and shows the reason on the customer payment page.",
+        "description": "Order <b>{orderNo}</b>. Vouchers and discounts are released, the order goes back to awaiting payment, and the reason is shown on the customer's payment page.",
         "submitLabel": "Reject declaration",
         "reasonLabel": "Reason",
-        "reasonHint": "(required, at least 4 characters; shown to the customer)",
-        "placeholder": "e.g. No matching transfer found. Check the amount and pay again; received 500 does not match the declared 860.",
-        "descriptionWithAmount": "Order <b>{orderNo}</b> · declared {amount}. Rejecting releases the voucher and discount, returns the order to awaiting payment, and shows the reason on the customer payment page."
+        "reasonHint": "Required, at least 4 characters; the customer will see it.",
+        "placeholder": "e.g. No matching transfer found, please check the amount and pay again; received 500 but 860 was declared.",
+        "descriptionWithAmount": "Order <b>{orderNo}</b> · customer declared {amount}. Vouchers and discounts are released, the order goes back to awaiting payment, and the reason is shown on the customer's payment page."
       },
       "refund": {
         "titleApprove": "Approve refund request",
         "titleReject": "Reject refund request",
         "titleComplete": "Refund completed (paid out through the original channel)",
-        "descApprove": "Refund <b>{refundNo}</b> · {amount}. Once approved, pay out through the original channel, then come back and mark it completed.",
-        "descReject": "Refund <b>{refundNo}</b> · {amount}. The rejection reason is shown to the customer.",
-        "descComplete": "Refund <b>{refundNo}</b> · {amount}. On execution the order becomes refunded and the whole product subscription returns to unsubscribed (including any free tier it was upgraded from). Entitlements stop immediately, and prepaid credit from offset overflow is reversed.",
+        "descApprove": "Refund <b>{refundNo}</b> · {amount}. After approving, pay out through the original channel, then come back and click \"Refund completed\".",
+        "descReject": "Refund <b>{refundNo}</b> · {amount}. The reason is shown to the customer.",
+        "descComplete": "Refund <b>{refundNo}</b> · {amount}. On execution the order becomes refunded, the product subscription goes back to unsubscribed as a whole (including the free tier before an upgrade), entitlements stop immediately, and any credit overflow that went to prepaid balance is reversed.",
         "submitApprove": "Approve",
         "submitReject": "Reject",
         "submitComplete": "Mark refund completed",
-        "remarkLabel": "Remark",
-        "remarkHintCustomer": "(required, at least 4 characters; shown to the customer)",
-        "remarkHint": "(required, at least 4 characters)",
-        "placeholderComplete": "e.g. Refunded 0.10 CNY via Alipay on 9/4, transaction no. …",
-        "placeholderReview": "e.g. Meets the 24-hour first-purchase refund window; or: past the refund window / usage above threshold.",
-        "descApproveWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. Once approved, pay out through the original channel, then come back and mark it completed.",
-        "descRejectWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. The rejection reason is shown to the customer.",
-        "descCompleteWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. On execution the order becomes refunded and the whole product subscription returns to unsubscribed (including any free tier it was upgraded from). Entitlements stop immediately, and prepaid credit from offset overflow is reversed.",
-        "titleFail": "Payout failed (the money did not go back)",
-        "descFail": "Refund <b>{refundNo}</b> · {amount}. Marking it failed leaves the order and the subscription untouched — the money never left, so access stays as it is. The customer gets a “could not be completed” notice and can file again, but the 24-hour refund window keeps running.",
-        "descFailWithReason": "Refund <b>{refundNo}</b> · {amount} · customer reason: {reason}. Marking it failed leaves the order and the subscription untouched — the money never left, so access stays as it is. The customer gets a “could not be completed” notice and can file again, but the 24-hour refund window keeps running.",
+        "remarkLabel": "Note",
+        "remarkHintCustomer": "Required, at least 4 characters; the customer will see it.",
+        "remarkHint": "Required, at least 4 characters.",
+        "placeholderComplete": "e.g. Returned ¥0.10 via Alipay on 9/4, transaction no. …",
+        "placeholderReview": "e.g. Qualifies for the 24-hour first-purchase refund; or: outside the refund window / usage over threshold.",
+        "descApproveWithReason": "Refund <b>{refundNo}</b> · {amount} · customer's reason: {reason}. After approving, pay out through the original channel, then come back and click \"Refund completed\".",
+        "descRejectWithReason": "Refund <b>{refundNo}</b> · {amount} · customer's reason: {reason}. The reason is shown to the customer.",
+        "descCompleteWithReason": "Refund <b>{refundNo}</b> · {amount} · customer's reason: {reason}. On execution the order becomes refunded, the product subscription goes back to unsubscribed as a whole (including the free tier before an upgrade), entitlements stop immediately, and any credit overflow that went to prepaid balance is reversed.",
+        "titleFail": "Payout failed (money did not go out)",
+        "descFail": "Refund <b>{refundNo}</b> · {amount}. Marking it failed leaves the order and subscription unchanged (no money went out, service continues as is); the customer receives a \"could not complete\" notice. They can request again, but the 24-hour refund window keeps running.",
+        "descFailWithReason": "Refund <b>{refundNo}</b> · {amount} · customer's reason: {reason}. Marking it failed leaves the order and subscription unchanged (no money went out, service continues as is); the customer receives a \"could not complete\" notice. They can request again, but the 24-hour refund window keeps running.",
         "submitFail": "Mark payout failed",
-        "placeholderFail": "e.g. Bank returned the transfer on 9/25: account name does not match",
-        "titleCreate": "File a refund (bypasses the automatic eligibility check)",
-        "descCreate": "This order was paid <b>{amount}</b>. This path skips three policy checks — the time window, first-purchase, and usage ratio. Orders that were never fulfilled, zero-amount orders, and orders with a refund already in flight are still refused: those are facts and ledger integrity, not policy. The amount is prorated for quota already used; the refund still needs review and then execution.",
-        "submitCreate": "File the refund",
-        "placeholderCreate": "e.g. 6-hour outage on 9/20; compensation agreed with the customer (ticket 123)"
-      },
-      "rejectOrder": {
-        "title": "Reject order",
-        "description": "Order <b>{orderNo}</b>",
-        "submitLabel": "Reject",
-        "reasonLabel": "Reason",
-        "reasonHint": "(required, at least 4 characters)",
-        "placeholder": "e.g. Customer cancelled by phone; duplicate order.",
-        "descriptionWithTenant": "Order <b>{orderNo}</b> · {tenantName}"
+        "placeholderFail": "e.g. Transfer bounced by the bank on 9/25, account number and holder name do not match",
+        "titleCreate": "File a refund (bypass automatic eligibility)",
+        "descCreate": "This order was paid <b>{amount}</b>. This path skips the three <b>policy</b> checks (time window, first purchase, usage ratio); unprovisioned, ¥0 and orders with a refund already in flight are still refused (that is fact and ledger integrity, not policy). The amount is prorated by consumed quota; it still needs review and then execution.",
+        "submitCreate": "File refund",
+        "placeholderCreate": "e.g. 6-hour outage on 9/20, compensation agreed with the customer (ticket 123)"
       },
       "restoreOrder": {
         "title": "Restore order",
-        "description": "Order <b>{orderNo}</b>. Restoring returns it to awaiting payment and brings back the bill and discount.",
-        "submitLabel": "Restore",
+        "description": "Order <b>{orderNo}</b>. The order goes back to awaiting payment; the bill and discounts are restored with it.",
+        "submitLabel": "Restore order",
         "reasonLabel": "Reason",
-        "reasonHint": "(required, at least 4 characters)",
-        "placeholder": "e.g. Customer confirmed they want to continue; rejected by mistake, restoring now.",
-        "descriptionWithTenant": "Order <b>{orderNo}</b> · {tenantName}. Restoring returns it to awaiting payment and brings back the bill and discount."
+        "reasonHint": "Required, at least 4 characters; recorded in the order timeline.",
+        "placeholder": "e.g. Customer confirmed they still want to buy; voided by mistake, restoring.",
+        "descriptionWithTenant": "Order <b>{orderNo}</b> · {tenantName}. The order goes back to awaiting payment; the bill and discounts are restored with it."
+      },
+      "voidOrder": {
+        "title": "Void order",
+        "description": "Order <b>{orderNo}</b>. After voiding, the order no longer waits for payment; the customer must place a new order to buy.",
+        "descriptionWithTenant": "Order <b>{orderNo}</b> · {tenantName}. After voiding, the order no longer waits for payment; the customer must place a new order to buy.",
+        "submitLabel": "Void order",
+        "reasonLabel": "Reason",
+        "reasonHint": "Required, at least 4 characters; recorded in the order timeline.",
+        "placeholder": "e.g. Customer cancelled by phone, duplicate order."
       }
+    },
+    "empty": "—",
+    "status": {
+      "order": {
+        "pending": "Awaiting customer payment",
+        "pending_verify": "Needs your check",
+        "paid_unprovisioned": "Provisioning",
+        "partial_pending": "Partially received",
+        "confirmed": "Provisioned",
+        "closed": "Closed",
+        "refunded": "Refunded",
+        "overdue": "Overdue",
+        "abnormal": "Needs attention"
+      },
+      "orderHint": {
+        "pending": "Waiting for the customer to pay and declare; the countdown is running",
+        "pending_verify": "The customer declared a payment; verify it arrived",
+        "paid_unprovisioned": "Money received; the system is provisioning",
+        "partial_pending": "Legacy order: part of the money arrived; waiting for the rest or an offline arrangement",
+        "confirmed": "The subscription is active",
+        "closed": "Cancelled by the customer or timed out unpaid",
+        "refunded": "Money returned to the customer; the subscription was rolled back",
+        "overdue": "The payment deadline passed; waiting for the system to close it",
+        "abnormal": "Unexpected state; ask technical support to check"
+      }
+    },
+    "stages": {
+      "ariaLabel": "Order progress",
+      "placed": "Placed",
+      "declared": "Customer pays and declares",
+      "verify": "Operator verifies",
+      "confirm": "Payment confirmed",
+      "provision": "Auto-provisioned / done",
+      "refund": "Refund"
+    },
+    "header": {
+      "copyOrderNo": "Copy order number",
+      "copied": "Order number copied",
+      "placed": "Placed {day} {clock} · {source}",
+      "due": "Due",
+      "received": "Received"
+    },
+    "task": {
+      "sectionTitle": "What to do now",
+      "title": {
+        "pending": "Wait for the customer to pay and declare",
+        "pending_verify": "Check whether {amount} has arrived",
+        "paid_unprovisioned": "Money received, provisioning automatically",
+        "partial_pending": "Partially received, waiting for the rest",
+        "confirmed": "Provisioned, subscription active",
+        "closed": "Order closed",
+        "refunded": "Refunded",
+        "refunding": "Refund in progress",
+        "abnormal": "This order needs manual handling"
+      },
+      "body": {
+        "pending": "After paying, the customer declares it on the payment page. Nothing for you to do yet. If they do not pay in time the system closes the order.",
+        "pending_verify": "If the money arrived, click \"Confirm payment\". If you cannot find it or the amount differs, click \"Reject declaration\" and say why; the customer is notified and can declare again.",
+        "paid_unprovisioned": "The system provisions automatically, usually within two minutes. If it is still here after ten minutes, click \"Provision again\".",
+        "partial_pending": "Legacy order: {received} has arrived, {remaining} is still missing. Confirm the rest once the customer pays it, or settle it offline.",
+        "confirmed": "This order is done. If the customer asks, the validity and auto-renew setting are under \"After provisioning\" below.",
+        "closed": "Reason: {reason}. If the customer still wants to buy, you can restore the order (only orders that never received money can be restored).",
+        "refunded": "The money went back to the customer and the subscription is back to unsubscribed.",
+        "refundPending": "The customer requested a refund of {amount}. If it qualifies, approve it, pay out through the original channel, then come back and click \"Refund completed\"; otherwise reject it and say why.",
+        "refundApproved": "The refund of {amount} is approved. After paying out click \"Refund completed\"; if the money did not go out click \"Payout failed\".",
+        "refundFailed": "The last payout of {amount} did not go through. Check the receiving account and pay again; click \"Refund completed\" on success, or record \"Payout failed\" again.",
+        "abnormal": "The state is unexpected and cannot be acted on here. Send the order number to technical support."
+      },
+      "declared": "Customer declared on {day} {clock}: {channel} · payer {payer} · transaction no. {txn}",
+      "guidance": {
+        "alipay": "Where to look: Alipay merchant console → Bills, search by transaction number, amount and time.",
+        "bank": "Where to look: the corporate bank account statement, search by payer, amount and time.",
+        "generic": "Where to look: search the receiving account by the declared amount and time."
+      },
+      "deadline": {
+        "until": "Payment deadline {day} {clock}, {remaining} left",
+        "frozen": "The customer has declared; the payment countdown is frozen",
+        "overdue": "The payment deadline has passed; the system will close this order"
+      },
+      "fulfilled": "Subscription {code} valid until {date}, auto-renew: {autoRenew}",
+      "fulfilledNoEnd": "Subscription {code} is active with no end date",
+      "refundReason": "Customer's reason: {reason}"
+    },
+    "duration": {
+      "minutes": "{minutes} min",
+      "hours": "{hours} h {minutes} min",
+      "days": "{days} d {hours} h"
+    },
+    "intent": {
+      "new": "New subscription",
+      "upgrade": "Upgrade",
+      "renew": "Renewal"
+    },
+    "autoRenew": {
+      "on": "On",
+      "off": "Off"
+    },
+    "closeReason": {
+      "customer_cancel": "Cancelled by customer",
+      "operator_void": "Voided by operator",
+      "ttl_expired": "Timed out unpaid",
+      "refunded": "Refunded",
+      "backfill": "Historical backfill",
+      "other": "Closed"
+    },
+    "invoiceItemTypes": {
+      "subscription_fee": "Subscription fee",
+      "discount": "Discount coupon",
+      "credit_adjustment": "Upgrade credit",
+      "voucher": "Voucher",
+      "addon": "Add-on pack",
+      "usage": "Usage fee",
+      "adjustment": "Adjustment",
+      "other": "Other charge"
+    },
+    "fulfillment": {
+      "pending": "The system provisions automatically after the payment is confirmed; the subscription will appear here.",
+      "closed": "The order is closed and will not be provisioned.",
+      "refunded": "Refunded; the subscription is back to unsubscribed.",
+      "validity": "{start} ~ {end}",
+      "noEnd": "From {start}, no end date"
+    },
+    "refund": {
+      "audit": {
+        "pending": "Pending review",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "status": {
+        "pending": "Not paid out",
+        "processing": "Paying out",
+        "success": "Paid out",
+        "failed": "Payout failed"
+      }
+    },
+    "timeline": {
+      "empty": "No records yet",
+      "details": "Details",
+      "hideDetails": "Hide",
+      "actor": {
+        "customer": "Customer",
+        "operator": "Operator",
+        "system": "System"
+      },
+      "detail": {
+        "transition": "Status: {from} → {to}",
+        "remark": "Raw note: {remark}",
+        "kind": "Event code: {kind}"
+      },
+      "order": {
+        "created": "{actor} placed the order · {product} · {amount}",
+        "payment_declared": "{actor} declared a payment",
+        "payment_declaredWithRemark": "{actor} declared a payment: {remark}",
+        "payment_rejected": "{actor} rejected the declaration · order back to awaiting payment, countdown reset",
+        "payment_rejectedWithRemark": "{actor} rejected the declaration: {remark} · order back to awaiting payment, countdown reset",
+        "payment_confirmed": "{actor} confirmed payment of {amount}",
+        "payment_confirmedWithRemark": "{actor} confirmed payment of {amount}: {remark}",
+        "fulfilled": "System provisioned subscription {code}",
+        "fulfilledWithEnd": "System provisioned subscription {code} · valid until {date}",
+        "cancelledByCustomer": "{actor} cancelled the order",
+        "cancelledByCustomerWithRemark": "{actor} cancelled the order: {remark}",
+        "cancelledByOperator": "{actor} voided the order",
+        "cancelledByOperatorWithRemark": "{actor} voided the order: {remark}",
+        "order_expired": "Closed on timeout: the customer did not pay in time",
+        "restored": "{actor} restored the order · back to awaiting payment",
+        "restoredWithRemark": "{actor} restored the order: {remark} · back to awaiting payment",
+        "refund_requested": "{actor} requested a refund of {amount}",
+        "refund_requestedWithRemark": "{actor} requested a refund of {amount}: {remark}",
+        "refund_approved": "{actor} approved the refund",
+        "refund_approvedWithRemark": "{actor} approved the refund: {remark}",
+        "refund_rejected": "{actor} rejected the refund request",
+        "refund_rejectedWithRemark": "{actor} rejected the refund request: {remark}",
+        "refunded": "Refunded {amount} · subscription back to unsubscribed",
+        "refundedWithRemark": "Refunded {amount}: {remark} · subscription back to unsubscribed",
+        "refund_failed": "Payout failed, the money did not go out",
+        "refund_failedWithRemark": "Payout failed: {remark}",
+        "other": "{actor} updated the order"
+      },
+      "subscription": {
+        "created": "{actor} created the subscription",
+        "activated": "{actor} activated the subscription",
+        "renewed": "{actor} renewed the subscription",
+        "upgraded": "{actor} upgraded the plan",
+        "downgraded": "{actor} downgraded the plan",
+        "cancelled": "{actor} cancelled the subscription",
+        "suspended": "{actor} suspended the subscription",
+        "resumed": "{actor} resumed the subscription",
+        "suspension_updated": "{actor} updated the suspension details",
+        "other": "{actor} changed the subscription"
+      }
+    },
+    "confirmDialog": {
+      "title": "Confirm payment",
+      "descriptionDeclared": "{orderNo} · customer declared {amount}",
+      "descriptionRemaining": "{orderNo} · remaining due {amount}",
+      "preview": {
+        "new": "On confirmation {plan} is provisioned, valid until {date}, auto-renew: {autoRenew}, and the customer is notified.",
+        "upgrade": "On confirmation the customer's current subscription is upgraded to {plan}, valid until {date}, auto-renew: {autoRenew}, and the customer is notified.",
+        "renew": "On confirmation {plan} is renewed and the end date moves to {date}, auto-renew: {autoRenew}, and the customer is notified.",
+        "once": "On confirmation {plan} is provisioned (one-off, no end date), auto-renew: {autoRenew}, and the customer is notified."
+      },
+      "required": "Required",
+      "optional": "Optional",
+      "amountLabel": "Confirmed amount",
+      "amountLockedHint": "Locked to the amount the customer declared and must match; if the money received differs, use \"Reject declaration\" instead.",
+      "amountFreeHint": "Manual operator entry: cannot exceed the remaining due of {amount}.",
+      "channelLabel": "Payment method",
+      "offlinePayType": {
+        "bank_transfer": "Bank transfer",
+        "cash": "Cash",
+        "other": "Other (incl. Alipay)"
+      },
+      "payerLabel": "Payer",
+      "prefilledFromDeclaration": "Prefilled from the customer's declaration; you can change it.",
+      "paidAtLabel": "Received at",
+      "txnLabel": "Transaction / reference no.",
+      "evidenceLabel": "Evidence link",
+      "noteLabel": "Verification note",
+      "noteHint": "At least 4 characters: where you saw the money, the amount and the time.",
+      "notePlaceholder": "e.g. Seen 199.00 received in the Alipay merchant console, 2026-09-27 17:05",
+      "submit": "Confirm payment"
     }
   },
   "ticketDetail": {
@@ -2734,5 +2960,133 @@
       "closed": "Closed",
       "reopened": "Reopened"
     }
+  },
+  "opsTodosPage": {
+    "header": {
+      "queueTitle": "To-do tasks",
+      "queueDescription": "Orders whose customer has declared a payment, verifications waiting for review and open tickets, sorted by urgency. Work from the top down.",
+      "allTitle": "All tasks",
+      "allDescription": "The full list across all four kinds of to-dos, including risk reviews, which only appear here.",
+      "totalBadge": "{count} tasks"
+    },
+    "types": {
+      "payment": "Payment confirmation",
+      "verification": "Verification review",
+      "risk": "Risk review",
+      "ticket": "Ticket handling"
+    },
+    "cards": {
+      "loading": "Loading",
+      "filtering": "Showing only this kind. Click again to show all.",
+      "payment": "{count} waiting for your check, longest {wait}",
+      "paymentEmpty": "No orders waiting for your check",
+      "paymentUnavailable": "Order data could not be loaded, so this card may be incomplete",
+      "verification": "{count} tenants waiting for review, longest {wait}",
+      "verificationEmpty": "No verifications waiting for review",
+      "ticket": "{count} open tickets, longest {wait}",
+      "ticketEmpty": "No open tickets",
+      "ticketUnavailable": "Ticket data could not be loaded, so this card may be incomplete",
+      "risk": "{count} tenants to re-check, longest {wait}",
+      "riskEmpty": "No tenants to re-check"
+    },
+    "section": {
+      "queueTitle": "Task queue",
+      "allTitle": "Task list",
+      "summary": "Sorted by urgency, {count} in total",
+      "hiddenRisk": "{count} more risk reviews are under All tasks",
+      "filteringType": "Showing only: {type}",
+      "ticketsUnavailable": "ticket data could not be loaded",
+      "ordersUnavailable": "order data could not be loaded"
+    },
+    "filters": {
+      "ariaLabel": "To-do filters",
+      "searchPlaceholder": "Search by number, tenant or ticket…",
+      "searchAriaLabel": "Search to-dos",
+      "severityAriaLabel": "Urgency",
+      "severityAll": "All",
+      "toAll": "View all tasks",
+      "backToQueue": "Back to the queue"
+    },
+    "severity": {
+      "urgent": "Urgent",
+      "attention": "Attention",
+      "normal": "Normal"
+    },
+    "columns": {
+      "severity": "Urgency",
+      "task": "Task",
+      "tenant": "Tenant · declarer / contact",
+      "amount": "Amount",
+      "wait": "Waiting",
+      "progress": "Progress",
+      "actions": "Actions"
+    },
+    "task": {
+      "confirmPayment": "Check that {amount} has arrived, then confirm the payment",
+      "reprovision": "{amount} received, re-run provisioning",
+      "followUpBalance": "Chase the balance: {paid} received of {amount} due",
+      "verification": "Review the submitted documents and give a decision",
+      "risk": "Re-check the risk status and decide whether to lift it",
+      "ticket": "Handle ticket: {title}"
+    },
+    "secondary": {
+      "riskMeta": "Risk {risk} · {status}"
+    },
+    "progress": {
+      "pendingVerify": "3/5 · your check",
+      "paidUnprovisioned": "4/5 · provisioning",
+      "partialPending": "3/5 · partly paid",
+      "verification": "Awaiting review",
+      "risk": "Awaiting re-check",
+      "ticketOpen": "Open",
+      "ticketProcessing": "In progress",
+      "ticketBlocked": "Blocked"
+    },
+    "wait": {
+      "justNow": "just now",
+      "minutes": "{minutes} min",
+      "hours": "{hours} h {minutes} min",
+      "days": "{days} d {hours} h"
+    },
+    "actions": {
+      "goVerify": "Check",
+      "goReview": "Review",
+      "goRecheck": "Re-check",
+      "goHandle": "Handle",
+      "menuLabel": "More actions for {code}",
+      "viewAllOrders": "View all orders",
+      "viewAllVerifications": "View all verifications",
+      "viewAllTenants": "View all tenants",
+      "viewAllTickets": "View all tickets"
+    },
+    "empty": {
+      "title": "Nothing to handle today",
+      "loadFailedTitle": "Could not load to-dos",
+      "tenantsFailed": "Could not load tenant operations data",
+      "ticketsFailed": "Could not load ticket data",
+      "ordersFailed": "Could not load order data"
+    },
+    "notices": {
+      "title": "System messages",
+      "viewAll": "View all",
+      "loading": "Loading messages…",
+      "loadFailed": "Could not load messages",
+      "unread": "{count} unread, latest: {title}",
+      "unreadOnly": "{count} unread",
+      "none": "No unread messages"
+    },
+    "csv": {
+      "code": "Number",
+      "task": "Task",
+      "tenant": "Tenant",
+      "contact": "Declarer / contact",
+      "tenantMeta": "Tenant attributes",
+      "type": "Type",
+      "severity": "Urgency",
+      "amount": "Amount",
+      "waitingSince": "Waiting since",
+      "progress": "Progress"
+    },
+    "unknown": "—"
   }
 }
