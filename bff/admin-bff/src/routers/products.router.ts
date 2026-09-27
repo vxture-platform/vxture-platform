@@ -415,7 +415,9 @@ export class ProductsRouter {
   ): Promise<ProductPlanRecord[]> {
     assertCanManageProducts(req);
 
-    const planRows = await this.pool.query<ProductPlanRow>(PRODUCT_PLAN_SQL);
+    const planRows = await this.pool.query<ProductPlanRow>(PRODUCT_PLAN_SQL, [
+      [...TIERS],
+    ]);
 
     // Versioned model (§7): a plan is browsed via its current published
     // plan_version (single price). The old per-plan relational feature/agent
@@ -1699,8 +1701,11 @@ export class ProductsRouter {
        开关写成 ($1::bool OR ...) 而不是拼 SQL:一插值 lint:anchor-writes
        就抽不到列名、当场变瞎且恒绿。 */
     const includeDeprecated = include === "deprecated";
+    /* $2 = 档位阶梯（@shared TIERS，低 → 高），SQL 里 array_position 按它排；绑参数
+       而不是把五个字面量抄进 SQL——阶梯只有 @shared 一份（owner 2026-09-27：前后台顺序要一致）。 */
     const { rows } = await this.pool.query<PlanMatrixRow>(PLAN_MATRIX_SQL, [
       includeDeprecated,
+      [...TIERS],
     ]);
     return groupPlanMatrix(rows);
   }
@@ -2519,8 +2524,9 @@ async function resolveBundledComponents(
 /**
  * 套餐版本历史（DS04）。
  *
- * 排序：先按套餐码，再按版本号**倒序**——同一个套餐的最新版在上，人找的是
- * 「现在是第几版」而不是「当初第一版」。
+ * 排序：先按档位阶梯（$1 = @shared TIERS，低 → 高），同档再按套餐码，最后版本号
+ * **倒序**——同一个套餐的最新版在上，人找的是「现在是第几版」而不是「当初第一版」。
+ * SELECT DISTINCT 要求排序表达式出现在选择列里，所以 tier_rank 显式选出来。
  */
 const PRODUCT_PLAN_VERSIONS_SQL = `
   SELECT DISTINCT
@@ -2531,11 +2537,13 @@ const PRODUCT_PLAN_VERSIONS_SQL = `
     pv.status,
     pv.is_locked,
     comp.component_role,
+    comp.tier,
+    array_position($1::text[], comp.tier) AS tier_rank,
     pv.created_at
   FROM product.plan_components comp
   JOIN product.plan_versions pv ON pv.id = comp.plan_version_id
   JOIN product.plans pl ON pl.id = pv.plan_id
-  ORDER BY pl.plan_code ASC, pv.version_no DESC
+  ORDER BY tier_rank NULLS LAST, pl.plan_code ASC, pv.version_no DESC
 `;
 
 interface ProductPlanVersionRow {
@@ -2648,7 +2656,8 @@ export const PRODUCT_SOLUTION_LINKS_SQL = `
          s.status AS solution_status,
          sp.role,
          COALESCE(
-           ARRAY_AGG(pl.plan_name ORDER BY spl.tier) FILTER (WHERE pl.plan_name IS NOT NULL),
+           ARRAY_AGG(pl.plan_name ORDER BY array_position($1::text[], spl.tier) NULLS LAST)
+             FILTER (WHERE pl.plan_name IS NOT NULL),
            ARRAY[]::text[]
          ) AS tier_names
     FROM product.solution_products sp
@@ -2763,8 +2772,10 @@ export async function loadProductCapabilities(
     pool.query<ProductWebhookRow>(
       `SELECT product_id, webhook_url FROM product.product_webhooks`,
     ),
-    pool.query<ProductSolutionLinkRow>(PRODUCT_SOLUTION_LINKS_SQL),
-    pool.query<ProductPlanVersionRow>(PRODUCT_PLAN_VERSIONS_SQL),
+    pool.query<ProductSolutionLinkRow>(PRODUCT_SOLUTION_LINKS_SQL, [
+      [...TIERS],
+    ]),
+    pool.query<ProductPlanVersionRow>(PRODUCT_PLAN_VERSIONS_SQL, [[...TIERS]]),
   ]);
 
   /* 套餐版本按产品归堆。一个版本可能挂多个产品（plan_components 里 primary 之外
@@ -3048,8 +3059,20 @@ const PRODUCT_PLAN_SQL = `
      ORDER BY CASE cycle_unit WHEN 'month' THEN 0 ELSE 1 END, cycle_count ASC
      LIMIT 1
   ) pp ON true
+  -- 档位轴：主组件的 tier + 所属产品，只用于排序（取法同 PLAN_MATRIX_SQL：当前版本优先，否则最新版）。
+  LEFT JOIN LATERAL (
+    SELECT pc.tier, pr.sort AS product_sort, pr.product_code
+      FROM product.plan_versions pv3
+      JOIN product.plan_components pc
+        ON pc.plan_version_id = pv3.id AND pc.component_role = 'primary'
+      JOIN product.products pr ON pr.id = pc.product_id
+     WHERE pv3.plan_id = p.id
+     ORDER BY (pv3.id = p.current_version_id) DESC, pv3.version_no DESC
+     LIMIT 1
+  ) axis ON true
   WHERE p.deleted_at IS NULL
-  ORDER BY p.plan_code ASC
+  ORDER BY axis.product_sort ASC NULLS LAST, axis.product_code ASC NULLS LAST,
+           array_position($1::text[], axis.tier) NULLS LAST, p.plan_code ASC
 `;
 
 // ── 解决方案：状态机 · 校验 · 写路径辅助（2026-08-31，TD-029 收口）──────────────
@@ -3486,7 +3509,7 @@ const SOLUTION_SQL = `
                     'status', pl.status, 'isPublic', pl.is_public,
                     'price', pr.price, 'currency', pr.currency,
                     'cycleUnit', pr.cycle_unit, 'cycleCount', pr.cycle_count)
-                  ORDER BY array_position(ARRAY['free','starter','pro','business','enterprise'], spl.tier))
+                  ORDER BY array_position($2::text[], spl.tier) NULLS LAST)
              FROM product.solution_plans spl
              JOIN product.plans pl ON pl.id = spl.plan_id AND pl.deleted_at IS NULL
              ${PLAN_VERSION_PICK_LATERAL}
@@ -3706,7 +3729,10 @@ export function projectSolutionDetail(
 export async function loadProductSolutions(
   pool: Reader,
 ): Promise<ProductSolutionRecord[]> {
-  const { rows } = await pool.query<SolutionRow>(SOLUTION_SQL, [null]);
+  const { rows } = await pool.query<SolutionRow>(SOLUTION_SQL, [
+    null,
+    [...TIERS],
+  ]);
   return rows.map(projectSolution);
 }
 
@@ -3714,7 +3740,10 @@ async function loadSolutionRow(
   pool: Reader,
   solutionCode: string,
 ): Promise<SolutionRow> {
-  const { rows } = await pool.query<SolutionRow>(SOLUTION_SQL, [solutionCode]);
+  const { rows } = await pool.query<SolutionRow>(SOLUTION_SQL, [
+    solutionCode,
+    [...TIERS],
+  ]);
   const row = rows[0];
   if (!row) {
     throw new NotFoundException(`Product solution ${solutionCode} not found`);
@@ -3980,7 +4009,7 @@ const RELEASES_SQL = `
     FROM product.plan_versions pv
     JOIN product.plans p ON p.id = pv.plan_id
     JOIN LATERAL (
-      SELECT pr.product_code, pr.product_name, pr.status, pr.origin
+      SELECT pr.product_code, pr.product_name, pr.status, pr.origin, pc.tier
         FROM product.plan_components pc
         JOIN product.products pr ON pr.id = pc.product_id
        WHERE pc.plan_version_id = pv.id AND pc.component_role = 'primary'
@@ -3988,7 +4017,8 @@ const RELEASES_SQL = `
        LIMIT 1
     ) prod ON true
    WHERE pv.status = 'published' AND p.deleted_at IS NULL
-   ORDER BY prod.product_code ASC, p.plan_code ASC, pv.version_no DESC
+   ORDER BY prod.product_code ASC, array_position($1::text[], prod.tier) NULLS LAST,
+            p.plan_code ASC, pv.version_no DESC
 `;
 
 function projectReleaseFeature(
@@ -4047,7 +4077,7 @@ export function projectRelease(row: ReleaseRow): ProductReleaseRecord {
 export async function loadProductReleases(
   pool: Reader,
 ): Promise<ProductReleaseRecord[]> {
-  const { rows } = await pool.query<ReleaseRow>(RELEASES_SQL);
+  const { rows } = await pool.query<ReleaseRow>(RELEASES_SQL, [[...TIERS]]);
   return rows.map(projectRelease);
 }
 // ── plan publishing desk: matrix read model · create inputs ─────────────────
@@ -4198,7 +4228,8 @@ const PLAN_MATRIX_SQL = `
          AND ($1::bool OR p.status <> 'deprecated')
     ) plan ON true
    WHERE pr.deleted_at IS NULL AND pr.standalone_subscribable
-   ORDER BY pr.sort ASC, pr.product_name ASC, pr.product_code ASC, plan.plan_code ASC
+   ORDER BY pr.sort ASC, pr.product_name ASC, pr.product_code ASC,
+            array_position($2::text[], plan.tier) NULLS LAST, plan.plan_code ASC
 `;
 
 function groupPlanMatrix(rows: PlanMatrixRow[]): PlanMatrixProduct[] {
