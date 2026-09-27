@@ -58,7 +58,7 @@
  * @date 2026-08-31
  */
 
-import { Controller, Get, Inject, Param, Query, Req } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Req } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { internalError, notFound } from "../errors/api-error";
@@ -280,12 +280,12 @@ export function parseEntitlementSignal(
 }
 
 /**
- * 读一次接入信号。**判据只此一份**——`GET :id/integration-signals` 与接入认证的
- * evaluate 是两个消费方，各抄一遍的话，两边「什么算接通了」迟早不一致，而不一致的
- * 那天谁也不报错：一边说链跑通了、一边说没有，都言之凿凿。
+ * 读一次接入信号。**判据只此一份**——运行健康与接入检查的对方三项都读它，各抄
+ * 一遍的话，两边「什么算接通了」迟早不一致，而不一致的那天谁也不报错。
  *
- * 收口（`scope`）不传 = 读该产品的**任意**流量，供运行健康观测用；传了 = 只认那个
- * 沙箱里的那一次，供认证用。两者是两个问题，不是同一个问题的宽严两档。
+ * 读的是该产品的**任意**流量。曾有按沙箱工作区 / 租户收口的参数（2026-10-30，给沙箱
+ * 「接入认证」用）——认证 2026-09-27 退役后没有调用方，一并摘掉：测试用途的真实租户
+ * 订阅一次就是认证，任何真实使用点亮三项都算数，不需要「只认那一次」。
  */
 export async function readIntegrationSignals(
   deps: {
@@ -294,11 +294,7 @@ export async function readIntegrationSignals(
     keyPrefix: string;
   },
   productId: string,
-  scope: { workspaceId?: string | null; tenantId?: string | null } = {},
 ): Promise<IntegrationSignalsRecord> {
-  const scopeWorkspaceId = scope.workspaceId ?? null;
-  const scopeTenantId = scope.tenantId ?? null;
-
   const product = await deps.pool.query<{ product_code: string }>(
     `SELECT product_code FROM product.products
         WHERE id = $1 AND deleted_at IS NULL`,
@@ -338,13 +334,9 @@ export async function readIntegrationSignals(
                    WHERE c.product_id = $1
                      AND c.client_kind = 'product'
                 )
-            AND ($2::uuid IS NULL OR rt.user_id IN (
-                  SELECT tm.user_id FROM tenancy.tenant_memberships tm
-                   WHERE tm.tenant_id = $2::uuid
-                ))
           ORDER BY rt.created_at DESC
           LIMIT 1`,
-      [productId, scopeTenantId],
+      [productId],
     ),
     /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
          单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
@@ -355,10 +347,9 @@ export async function readIntegrationSignals(
            FROM metering.usage_events
           WHERE product_id = $1
             AND created_at >= now() - interval '${CONSUME_LOOKBACK}'
-            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
           ORDER BY created_at DESC
           LIMIT 1`,
-      [productId, scopeWorkspaceId],
+      [productId],
     ),
     /*
      * C1 出站：**不新开一条写路径**。auth-bff 每次成功换票已经往
@@ -410,20 +401,18 @@ export async function readIntegrationSignals(
           WHERE product_id = $1
             AND status = 'provisioned'
             AND provisioned_at IS NOT NULL
-            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
           ORDER BY provisioned_at DESC
           LIMIT 1`,
-      [productId, scopeWorkspaceId],
+      [productId],
     ),
     deps.pool.query<DeliveryRow>(
       `SELECT event_type, workspace_id, response_code, last_attempt_at
            FROM provisioning.webhook_deliveries
           WHERE product_id = $1
             AND status = 'delivered'
-            AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
           ORDER BY last_attempt_at DESC NULLS LAST
           LIMIT 1`,
-      [productId, scopeWorkspaceId],
+      [productId],
     ),
   ]);
 
@@ -439,19 +428,7 @@ export async function readIntegrationSignals(
           clientId: loggedIn.client_id,
         }
       : null,
-    /*
-     * C2 的收口在这里做，不在查询里——它不是 SQL，是 Redis 上的「最近一次」键。
-     *
-     * 拿不到 workspaceId 时**算不在范围内**（保守），而不是放行：认证要证的是
-     * 「沙箱里那一次」，证不出来就不该算。`platform-entitlements.router` 的
-     * workspaceId 来自 `scopeToS2sCaller`，正常路径上是有值的；真出现空值，
-     * 抽屉里会看到这一段没过，那正是该被人看见的事，不是该被悄悄兜底的事。
-     */
-    entitlement: (() => {
-      const sig = parseEntitlementSignal(raw, key);
-      if (!sig || !scopeWorkspaceId) return sig;
-      return sig.workspaceId === scopeWorkspaceId ? sig : null;
-    })(),
+    entitlement: parseEntitlementSignal(raw, key),
     consume: latest
       ? {
           lastEventAt: toIso(latest.created_at),
@@ -514,47 +491,13 @@ export class ProductIntegrationSignalsRouter {
    *
    * @throws {ApiError} 400 `VALIDATION_INVALID_UUID` · 404 `CATALOG_PRODUCT_NOT_FOUND`
    */
-  /**
-   * 收口参数（2026-10-30，接入认证用）。**不传 = 与此前逐字等价**：全部信号读该产品
-   * 的任意流量，供「运行健康」观测用。
-   *
-   * 认证要的是另一件事——**只认沙箱里那一次**。不收口的话，A 客户的真实使用会把
-   * B 产品的认证喂绿，而那正是旧 `acceptance` 判据的毛病：它读的是该产品的任意流量。
-   *
-   * ── 为什么登录段收的是租户不是工作区 ──
-   * `session.refresh_tokens` **没有 workspace_id**（登录发生在选定工作区之前，这一点
-   * 本文件早先的注释已经写过）。硬凑一个进去只会把一条本来成立的链判成失败。
-   *
-   * 改按**沙箱租户的成员**收口。2026-10-30 的第一版收的是**单个用户 id**，那更精确，
-   * 但它要求运营先给每个产品指定一个沙箱账号——而沙箱租户里本来就只住沙箱用户
-   * （锚点账号 disabled 且无凭据，登不进来），所以「登录的人是这个租户的成员」与
-   * 「登录的是沙箱用户」在实际上是同一件事，却不需要谁去指定谁。多账号联调时前者
-   * 还照样成立，后者会漏。
-   *
-   * ── C1 出站换票收不了口，也不需要 ──
-   * `support.audit_logs` 没有 workspace_id（§72 头注写明「不引入 workspace_id」），
-   * 而换票本来就不是工作区范围的动作。它也不在认证那五段里——五段是
-   * 登录 / 开通 / 权益 / 用量 / 回调投递，换票归上线门。所以这里不给它收口参数，
-   * 而不是给一个读不到判据却假装收了口的参数。
-   */
   @Get(":id/integration-signals")
   async get(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-    @Query("workspaceId") workspaceIdRaw?: string,
-    @Query("tenantId") tenantIdRaw?: string,
   ): Promise<IntegrationSignalsRecord> {
     assertCanRead(req);
     const productId = requireUuid(id, "id");
-    /* 传了就必须是合法 uuid：读不到判据时宁可 400，也不要悄悄退回「不收口」——
-       那会让一次本该收口的认证在无人察觉的情况下读到全量流量。 */
-    const scopeWorkspaceId = workspaceIdRaw
-      ? requireUuid(workspaceIdRaw, "workspaceId")
-      : null;
-    const scopeTenantId = tenantIdRaw
-      ? requireUuid(tenantIdRaw, "tenantId")
-      : null;
-
     return readIntegrationSignals(
       {
         pool: this.pool,
@@ -562,7 +505,6 @@ export class ProductIntegrationSignalsRouter {
         keyPrefix: this.rpRuntime.keyPrefix,
       },
       productId,
-      { workspaceId: scopeWorkspaceId, tenantId: scopeTenantId },
     );
   }
 }

@@ -31,9 +31,10 @@
 --   20 pricing_set          admin  publish  同上
 --   30 catalog_registered   opera  launch   登记即满足，无前置
 --   40 c1_identity          opera  launch   对方 RP 实现；draft 下即可完成
---   45 c1_s2s               opera  launch   换票作为调用方，draft 下即可完成
---   50 c3_metering          opera  launch   对方上报，draft 下即可完成
---   60 c2_entitlement       opera  launch   对方拉权益，draft 下即可完成
+--   45 c1_s2s               opera  stable   （2026-09-27 改）对方发起型：拿到订阅前换不到 service 票，
+--                                          卡上线门是环；改卡「转正式版」，由测试租户真实订阅点亮
+--   50 c3_metering          opera  stable   同上（2026-09-27 改）
+--   60 c2_entitlement       opera  stable   同上（2026-09-27 改）
 --   70 data_plane           opera  launch   对方库里的 schema，与我方状态无关
 --   80 acceptance           opera  publish  ← 唯一自锁项：它要的链路在
 --                                             `active + developing` 下本来就走得通
@@ -70,7 +71,9 @@ ALTER TABLE product.launch_checklist_items
 ALTER TABLE product.launch_checklist_items
   DROP CONSTRAINT IF EXISTS chk_launch_checklist_items_gate;
 ALTER TABLE product.launch_checklist_items
-  ADD CONSTRAINT chk_launch_checklist_items_gate CHECK (gate IN ('launch','publish'));
+  -- 2026-09-27 加 'stable'（2026-11-16-regate）。迁移全量重放：本份每次都跑在最终状态上，
+  -- 值域必须按最终规则写，否则它会把已在 stable 门上的三行判成违约。
+  ADD CONSTRAINT chk_launch_checklist_items_gate CHECK (gate IN ('launch','publish','stable'));
 
 -- ── 回填：按 item_code 点名，不靠顺序、不靠通配 ────────────────────────────
 UPDATE product.launch_checklist_items i
@@ -80,9 +83,9 @@ UPDATE product.launch_checklist_items i
     ('pricing_set',         'admin', 'publish'),
     ('catalog_registered',  'opera', 'launch'),
     ('c1_identity',         'opera', 'launch'),
-    ('c1_s2s',              'opera', 'launch'),
-    ('c3_metering',         'opera', 'launch'),
-    ('c2_entitlement',      'opera', 'launch'),
+    ('c1_s2s',              'opera', 'stable'),
+    ('c3_metering',         'opera', 'stable'),
+    ('c2_entitlement',      'opera', 'stable'),
     ('data_plane',          'opera', 'launch'),
     ('acceptance',          'opera', 'publish')
   ) AS v(code, owner, gate)
@@ -109,9 +112,9 @@ BEGIN
       ('pricing_set',         'admin', 'publish'),
       ('catalog_registered',  'opera', 'launch'),
       ('c1_identity',         'opera', 'launch'),
-      ('c1_s2s',              'opera', 'launch'),
-      ('c3_metering',         'opera', 'launch'),
-      ('c2_entitlement',      'opera', 'launch'),
+      ('c1_s2s',              'opera', 'stable'),
+      ('c3_metering',         'opera', 'stable'),
+      ('c2_entitlement',      'opera', 'stable'),
       ('data_plane',          'opera', 'launch'),
       ('acceptance',          'opera', 'publish')
     ) AS v(code, owner, gate) ON v.code = i.item_code

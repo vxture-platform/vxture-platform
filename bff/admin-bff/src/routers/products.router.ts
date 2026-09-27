@@ -18,12 +18,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
-import {
-  INTEGRATION_CONTRACT_VERSION,
-  PLAN_COMPONENT_FINGERPRINT_SQL,
-  TIERS,
-  type Tier,
-} from "@vxture-platform/shared";
+import { TIERS, type Tier } from "@vxture-platform/shared";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { insertOperatorAuditLog } from "../audit/audit-log";
@@ -319,6 +314,39 @@ export class ProductsRouter {
         );
       }
 
+      /*
+       * ── 转正式版的门（2026-09-27，owner）──
+       * 对方发起型三项（c1_s2s / c2_entitlement / c3_metering）自 2026-11-16 起
+       * gate='stable'：它们不能卡上线（产品拿到订阅前换不到票，卡上线就是环），
+       * 卡的是「这个产品能不能标成正式版」。判据读 product_launch_statuses——
+       * 那是 opera 复验页按平台自己的台账（换票审计 / C2 Redis 标记 / usage_events）
+       * 写回的机器判定，测试用途的真实租户订阅并使用之后自然点亮。
+       * 只拦「变成 stable」这一跃；已经是 stable 的产品改别的字段不受影响。
+       */
+      if (body.releaseStage === "stable" && row.release_stage !== "stable") {
+        const pending = await client.query<{
+          item_code: string;
+          item_name: string;
+        }>(
+          `SELECT i.item_code, i.item_name
+             FROM product.launch_checklist_items i
+             LEFT JOIN product.product_launch_statuses s
+               ON s.item_code = i.item_code AND s.product_id = $1
+            WHERE i.is_required
+              AND i.gate = 'stable'
+              AND NOT coalesce(s.is_satisfied, false)
+            ORDER BY i.sort ASC`,
+          [row.id],
+        );
+        if (pending.rowCount && pending.rowCount > 0) {
+          const names = pending.rows.map((r) => r.item_name || r.item_code);
+          throw new ConflictException({
+            code: "RELEASE_STAGE_VERIFY_PENDING",
+            message: `还不能标成正式版：${names.join("、")} 尚未由真实使用点亮。让测试用途的租户订阅并使用一次，再到运维台产品页跑一次复验。`,
+            pendingItems: pending.rows.map((r) => r.item_code),
+          });
+        }
+      }
       const sets: string[] = [];
       const values: unknown[] = [];
       if (body.marketing !== undefined) {
@@ -931,12 +959,8 @@ export class ProductsRouter {
   async publishPlanVersion(
     @Req() req: Request & RequestContext,
     @Param("versionId") versionId: string,
-    @Body() body?: { override?: { reason?: string } },
   ): Promise<{ published: true; versionId: string }> {
     assertCanManageProducts(req);
-    /* 跳过了哪几项、理由是什么——审计要写，所以提到事务外声明。 */
-    let overriddenItems: string[] = [];
-    let overrideReason = "";
     const client = await this.rwPool.connect();
     try {
       await client.query("BEGIN");
@@ -998,103 +1022,17 @@ export class ProductsRouter {
         }
       }
       /*
-       * ── 发布门：判据换成「这个产品的接入认证有效，且认的就是这一版」──
+       * ── 发布门（2026-09-27，owner）：这里不再读 certification_runs ──
        *
-       * 旧判据是 `launch_checklist_items` 里 gate='publish' 的必填项。那道门在生产上
-       * 是一堵**墙**，三块砖各有各的问题：
-       *   verification_policy / pricing_set  owner='admin' 而 opera 的检查单两个端点
-       *     写死 `WHERE i.owner='opera'`、admin-bff 对 product_launch_statuses 只有
-       *     一条 SELECT——**全仓没有任何人能勾上它们**。已于 2026-10-29 退役。
-       *   acceptance  它要的端到端链路需要活跃订阅，订阅需要已发布的版本，而发布正
-       *     卡在它自己身上。环在这里闭合。此前那段注释说「有 operator_grant 与邀请
-       *     订阅两条不发布也能开通的路」——**两条都不成立**：operator_grant 当时只是
-       *     CHECK 值域里一个没有写入方的值，邀请订阅解锁的是「谁能买」不是「已不已
-       *     发布」。
+       * 2026-10-30~31 的接入认证把「发布」挂在「沙箱里认证过这一版」上，而认证端点又要求
+       * 产品已 active、上线门又要求对方三项（换票/权益/用量）点亮、那三项在产品拿到一条
+       * 订阅之前根本发不出（平台换票的覆盖门）——环换了个地方闭上。
        *
-       * 环由**接入认证**断开（2026-10-30~31）：认证订阅指向未发布的草稿版本、不经过
-       * 订单流，平台在沙箱里把整条链跑一遍并落一条 `certification_runs`。所以这里读
-       * 的是那条结论，而不是再去数一遍痕迹——**同一件事只留一处推导**。
-       *
-       * ── 两个条件，都是现算 ──
-       *   ① 有一条有效认证：verdict='certified' 且 stale_reason IS NULL。
-       *      不带时间窗：认证回答「能不能工作」，不回答「有没有人在用」（后者归运行
-       *      健康）。一个安静三个月的正常产品不该因此失效。
-       *   ② 认的就是**这一版**：比对组件指纹。草稿在发布前仍可改，认证过的那一版和
-       *      正在发布的这一版可能已经不是同一个东西了；指纹对不上要求重认。
-       *      用指纹而不是「认证时间晚于最后修改时间」：后者会把「改了又改回来」判成
-       *      失效，而那并没有改变任何权益形状。
-       *
-       * ── 为什么不再验一次价格 ──
-       * 设计稿里原本还有一条「这一版有没有价格行」。写到这里才发现它**会拦住合法的
-       * 企业版**：没有价格行正是「不可自助购买、请联系销售」的表达方式
-       * （console 的 lookupPlanPrice 查不到就回 NOT_PURCHASABLE）。一条会拦住正常业务
-       * 的门，就是判据写错了——所以不加。
+       * owner 的模型：每一道门只验那一阶段验得了的事。发布套餐验的是**这一版本身**——
+       * 档位占位（上面）、发布即冻结（下面）；「对方接通了没有」由测试用途的真实租户
+       * 订阅之后点亮，卡的是「转正式版」（release_stage → stable，见 patchContent）。
+       * 价格行也不验：没有价格正是「联系销售」的表达（lookupPlanPrice → NOT_PURCHASABLE）。
        */
-      if (primaryAxis?.product_id) {
-        const cert = await client.query<{
-          fingerprint: string | null;
-          certified_at: Date;
-        }>(
-          `SELECT component_fingerprint AS fingerprint, certified_at
-             FROM product.certification_runs
-            WHERE product_id = $1
-              AND verdict = 'certified'
-              AND stale_reason IS NULL
-              /* 契约升版即视作待复认证。读时判据而不是一条刷存量的迁移——升版那一刻
-                 全部既有认证自动进入待复认证，不必记得去跑什么。常量与 opera 那一侧
-                 共用（@vxture-platform/shared），各写一份会出现「一边说要重认、
-                 一边放行」。 */
-              AND contract_version = $2
-            ORDER BY certified_at DESC
-            LIMIT 1`,
-          [primaryAxis.product_id, INTEGRATION_CONTRACT_VERSION],
-        );
-        const effective = cert.rows[0];
-
-        /* 本版组件的指纹，算法与 opera 侧认证时那一份**逐字相同**（产品 / 角色 /
-           算法收在 @vxture-platform/shared 的 PLAN_COMPONENT_FINGERPRINT_SQL。
-           两处各写一份的症状是「明明刚认过却说指纹对不上」——一个纯粹的假警报，
-           而且两边各自看都没错。 */
-        const fpRow = await client.query<{ fingerprint: string }>(
-          `SELECT ${PLAN_COMPONENT_FINGERPRINT_SQL} AS fingerprint
-             FROM product.plan_components pc
-            WHERE pc.plan_version_id = $1`,
-          [versionId],
-        );
-        const currentFp = fpRow.rows[0]?.fingerprint ?? "";
-
-        const blockers: string[] = [];
-        if (!effective) {
-          blockers.push("接入认证未通过");
-        } else if (
-          effective.fingerprint &&
-          effective.fingerprint !== currentFp
-        ) {
-          /* 只在认证记了指纹时比：历史台账（或将来某种不针对具体版本的认证）
-             没有指纹，那时**不拿一个读不到的判据去拦人**——读不到就别装作读到了。 */
-          blockers.push("套餐组件在认证之后改过，需要重新认证");
-        }
-
-        if (blockers.length) {
-          const reason = body?.override?.reason?.trim() ?? "";
-          if (!reason) {
-            throw new ConflictException({
-              code: "PUBLISH_CERTIFICATION_REQUIRED",
-              message: `不能发布套餐：${blockers.join("；")}。请在运维台的产品接入页跑一次接入认证，或带理由跳过。`,
-              pendingItems: blockers,
-            });
-          }
-          /*
-           * 逃生口保留，但它现在应该**几乎用不上**了——门变成墙的那三块砖已经拆掉。
-           * 留着的理由和上线门一样：自动判据总有读不到的时候（上游读取失败、沙箱
-           * 被清），那时需要一条留痕的路，而不是让人去把判据改松。
-           * 理由进 support.audit_logs，与上线门同口径。
-           */
-          overriddenItems = blockers;
-          overrideReason = reason;
-        }
-      }
-
       // publish: freeze the version and make it the plan's live version. A
       // prior published version stays 'published' (subscriptions pinned to it
       // keep resolving) — it just stops being current.
@@ -1128,9 +1066,6 @@ export class ProductsRouter {
           isLocked: true,
           isCurrent: true,
           /* 带缺项发布的事实留在台账里：谁、什么时候、跳过了哪几项、为什么。 */
-          ...(overriddenItems.length
-            ? { overriddenChecklistItems: overriddenItems, overrideReason }
-            : {}),
         },
       });
       await client.query("COMMIT");

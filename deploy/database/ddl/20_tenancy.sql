@@ -33,6 +33,8 @@ CREATE TABLE tenancy.tenants (
     -- 前者是 tenancy.tenant_tags 的标签,后者是 promotion.voucher_redemptions 已经记全的
     -- (租户 × 产品) 关系,两者都**查得出来**,不占这一列。
     -- 写入面:自助注册路径不带这一列,拿 DEFAULT;certification 只由认证编排写。
+    --   2026-09-27:认证编排已退役(测试租户走真实订阅就是认证),再没有新的 certification 行;
+    --   值域暂留给存量行,连同 certification_runs 一起等 DROP 迁移。
     -- **本列有意不进 98 的 UPDATE 白名单**——没有任何人工场景需要改它,排除在 GRANT 之外
     -- 就堵死了「手改一行把普通租户变成能订未发布版本的租户」。可变的是标签,不是这一列。
     purpose              varchar(16)  NOT NULL DEFAULT 'customer',

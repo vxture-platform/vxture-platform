@@ -619,7 +619,7 @@ export async function runLaunchChecks(
         : "最近 30 天内没有以这个产品码拉过权益。",
       remedy: entitlement
         ? null
-        : "把交接信息（产品码、client_id）发给对方；对方以 S2S 令牌调一次权益接口后重跑。这一项不要求先有客户、订阅或套餐——没有活跃订阅时接口落 free 兜底，照样算一次成功读取。",
+        : "这一项卡「转正式版」，不卡上线。上线、发布套餐之后，让一个测试用途的真实租户订阅并使用；对方在那个工作空间以 S2S 令牌拉一次权益后重跑。",
       itemCode: "c2_entitlement",
       href: entitlementsHref,
     });
@@ -634,7 +634,7 @@ export async function runLaunchChecks(
         : "最近 90 天内没有这个产品的用量事件。",
       remedy: consume
         ? null
-        : "对方接通消费上报（POST /usage/consume）调一次后重跑。不要求真扣到额度——没有配额池时走零扣减分支，用量事件照样落库（引擎只记录、不裁决），所以也不必先有客户、订阅或套餐。",
+        : "这一项卡「转正式版」，不卡上线。测试租户订阅并真实使用后，对方会上报用量（POST /usage/consume），落一笔就绿；不要求真扣到额度。",
       itemCode: "c3_metering",
       href: entitlementsHref,
     });
@@ -652,7 +652,7 @@ export async function runLaunchChecks(
         : "最近 90 天内没有以这个产品码换过票。",
       remedy: s2s
         ? null
-        : "凡是要用模型/能力/知识的智能体都要接这一步。把交接信息发给对方，对方按《产品接入通则》C1 出站实现换票后重跑。产品还是草稿也能换——目标是平台受众时恒可解析，审计按调用方归因。",
+        : "这一项卡「转正式版」，不卡上线。服务模式换票要过覆盖门——那个工作空间得有这个产品的订阅，所以先上线、发布套餐、让测试租户订阅；对方按《产品接入通则》C1 出站换一次票后重跑。",
       itemCode: "c1_s2s",
     });
   }

@@ -26,7 +26,6 @@ import {
 import { ProductsRouter } from "./products.router";
 import {
   MANAGE,
-  insertParam,
   makeReq,
   makeTxClient,
   noDbPool,
@@ -469,11 +468,6 @@ describe("publish — tier occupancy guard", () => {
         return [{ plan_code: "karda-pro-old" }];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
-      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
-         让它走到被测的那一段去。 */
-      if (sql.includes("certification_runs"))
-        return [{ fingerprint: "fp-same", certified_at: new Date() }];
-      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
       return [];
     });
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
@@ -487,20 +481,16 @@ describe("publish — tier occupancy guard", () => {
   });
 
   /*
-   * 发布门：判据从「数检查项」换成「读那条认证结论」（2026-11-01）。
+   * 发布门（2026-09-27，owner）：**不再读 certification_runs**。
    *
-   * 旧判据是 `launch_checklist_items` 里 gate='publish' 的必填项，那道门在生产上是
-   * 一堵**墙**：verification_policy / pricing_set 全仓没人能勾（已退役）；acceptance
-   * 要的端到端链路需要活跃订阅、订阅需要已发布的版本，而发布正卡在它自己身上。
+   * 2026-11-01 把判据换成「读那条认证结论」，而认证端点要求产品已 active、上线门要求
+   * 对方三项点亮、那三项在产品拿到订阅前发不出——环换了个地方闭上。owner 的模型是每一道
+   * 门只验那一阶段验得了的事：发布验这一版本身（档位占位、发布冻结），「对方接通了没有」
+   * 由测试用途的真实租户订阅后点亮，卡「转正式版」。
    *
-   * 环由接入认证断开：认证订阅指向未发布的草稿版本、不经过订单流。所以这里读
-   * `product.certification_runs`，而不是再去数一遍痕迹——同一件事只留一处推导。
-   *
-   * 两面都写。反面（没认证 → 拒且不发布）是重点：只写正面的话，一个压根不查认证的
-   * 实现也会绿——那正是改之前的样子。
+   * 反面要写：一个仍然去查 certification_runs 的实现，在这里会被「一次都不许查」抓到。
    */
-  /** 有一条有效认证，指纹与本版一致。 */
-  function certifiedResponder(fingerprint: string | null = "fp-same") {
+  function publishableResponder() {
     return (sql: string) => {
       if (
         sql.includes("product.plan_versions pv") &&
@@ -517,276 +507,145 @@ describe("publish — tier occupancy guard", () => {
       if (sql.includes("cv2.status = 'published'")) return [];
       if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
         return [{ product_id: "p-karda", tier: "pro" }];
-      if (sql.includes("certification_runs"))
-        return [{ fingerprint, certified_at: new Date() }];
-      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
       return [];
     };
   }
 
-  it("没有有效认证：409 PUBLISH_CERTIFICATION_REQUIRED，且不发布", async () => {
-    const tx = makeTxClient((sql) => {
-      if (
-        sql.includes("product.plan_versions pv") &&
-        sql.includes("for update of pv")
-      )
+  it("没有任何认证记录也放行，并且一次都不查 certification_runs", async () => {
+    const tx = makeTxClient(publishableResponder());
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await expect(
+      router.publishPlanVersion(makeReq(MANAGE), VERSION_ID),
+    ).resolves.toMatchObject({ published: true, versionId: VERSION_ID });
+    expect(tx.outcome().committed).toBe(true);
+    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+      true,
+    );
+    expect(tx.calls.some((c) => c.includes("certification_runs"))).toBe(false);
+  });
+
+  it("发布审计里不再出现跳过/理由字段（发布门已无可跳过的项）", async () => {
+    const tx = makeTxClient(publishableResponder());
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
+    const audit = tx.calls.find((c) => c.includes("audit"));
+    expect(JSON.stringify(tx.calls)).not.toContain("overrideReason");
+    expect(JSON.stringify(tx.calls)).not.toContain("overriddenChecklistItems");
+    void audit;
+  });
+});
+
+/*
+ * 转正式版的门（2026-11-16 regate）：对方发起型三项（c1_s2s / c2_entitlement /
+ * c3_metering）gate='stable'。它们卡的不是上线、不是发布，是 release_stage → stable。
+ *
+ * 两面都写：三项未齐 → 409 RELEASE_STAGE_VERIFY_PENDING 且不写；三项齐 → 写入。
+ * 还要写「不是变成 stable 的改动不受影响」——否则一个把所有 PATCH 都拦住的实现也会绿。
+ */
+describe("release_stage → stable — 对方三项的门", () => {
+  /** 门放行之后处理器会用只读池重读产品做响应；夹具给的是空读者，那一步会 NotFound——
+   *  它发生在 COMMIT 之后，与被测的门无关，吞掉它、只断言事务里发生了什么。 */
+  async function runIgnoringPostCommitRead(p: Promise<unknown>) {
+    try {
+      await p;
+    } catch (e) {
+      if (!(e instanceof NotFoundException)) throw e;
+    }
+  }
+
+  function contentResponder(opts: {
+    current: string;
+    status?: string;
+    pending: { item_code: string; item_name: string }[];
+  }) {
+    return (sql: string) => {
+      if (sql.includes("release_stage") && sql.includes("product_code = $1"))
         return [
           {
-            plan_id: "plan-a",
-            status: "draft",
-            plan_code: "karda-pro",
-            version_no: 2,
+            id: "p-tf",
+            release_stage: opts.current,
+            status: opts.status ?? "active",
+            is_customer_visible: true,
+            marketing: null,
           },
         ];
-      if (sql.includes("cv2.status = 'published'")) return [];
-      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
-        return [{ product_id: "p-karda", tier: "pro" }];
-      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
-      return []; // certification_runs 查不到 = 没认过
-    });
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    const err = await router
-      .publishPlanVersion(makeReq(MANAGE), VERSION_ID)
-      .catch((e: unknown) => e);
+      if (sql.includes("i.gate = 'stable'")) return opts.pending;
+      return [];
+    };
+  }
 
+  it("三项里有未点亮的 → 409 RELEASE_STAGE_VERIFY_PENDING，且不写 release_stage", async () => {
+    const tx = makeTxClient(
+      contentResponder({
+        current: "preview",
+        pending: [{ item_code: "c2_entitlement", item_name: "C2 权益接入" }],
+      }),
+    );
+    const router = new ProductsRouter(readerOf([]), tx.pool);
+    let err: unknown;
+    try {
+      await router.updateProductContent(makeReq(MANAGE), "tenderforge", {
+        releaseStage: "stable",
+      } as never);
+    } catch (e) {
+      err = e;
+    }
     expect(err).toBeInstanceOf(ConflictException);
     expect((err as ConflictException).getResponse()).toMatchObject({
-      code: "PUBLISH_CERTIFICATION_REQUIRED",
+      code: "RELEASE_STAGE_VERIFY_PENDING",
+      pendingItems: ["c2_entitlement"],
     });
-    expect(tx.outcome().rolledBack).toBe(true);
-    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+    expect(tx.calls.some((c) => c.includes("UPDATE product.products"))).toBe(
       false,
     );
   });
 
-  it("认证有效且指纹一致：放行", async () => {
-    const tx = makeTxClient(certifiedResponder("fp-same"));
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
-    expect(tx.outcome().committed).toBe(true);
-    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
+  it("三项全绿 → 放行写入 stable", async () => {
+    const tx = makeTxClient(contentResponder({ current: "beta", pending: [] }));
+    const router = new ProductsRouter(readerOf([]), tx.pool);
+    await runIgnoringPostCommitRead(
+      router.updateProductContent(makeReq(MANAGE), "tenderforge", {
+        releaseStage: "stable",
+      } as never),
+    );
+    expect(tx.calls.some((c) => c.includes("UPDATE product.products"))).toBe(
+      true,
+    );
+    expect(tx.calls.some((c) => c.includes("i.gate = 'stable'"))).toBe(true);
+  });
+
+  it("不是转 stable 的改动（preview → beta）不查这道门", async () => {
+    const tx = makeTxClient(
+      contentResponder({
+        current: "preview",
+        pending: [{ item_code: "c1_s2s", item_name: "C1 出站换票" }],
+      }),
+    );
+    const router = new ProductsRouter(readerOf([]), tx.pool);
+    await runIgnoringPostCommitRead(
+      router.updateProductContent(makeReq(MANAGE), "tenderforge", {
+        releaseStage: "beta",
+      } as never),
+    );
+    expect(tx.calls.some((c) => c.includes("i.gate = 'stable'"))).toBe(false);
+    expect(tx.calls.some((c) => c.includes("UPDATE product.products"))).toBe(
       true,
     );
   });
 
-  it("认证之后组件改过（指纹对不上）：拒——认过的那一版已经不是这一版了", async () => {
-    const tx = makeTxClient(certifiedResponder("fp-old"));
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    const err = await router
-      .publishPlanVersion(makeReq(MANAGE), VERSION_ID)
-      .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(ConflictException);
-    expect(String((err as ConflictException).getResponse())).not.toBe("");
-    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
-      false,
+  it("已经是 stable 的产品改别的字段不受影响", async () => {
+    const tx = makeTxClient(
+      contentResponder({
+        current: "stable",
+        pending: [{ item_code: "c1_s2s", item_name: "C1 出站换票" }],
+      }),
     );
-  });
-
-  it("认证没记指纹（历史台账）：不拿一个读不到的判据去拦人", async () => {
-    /* 读不到就别装作读到了——一条读不到判据却回「不通过」的检查，会把一批本来
-       合法的发布拦在门外，而运营完全看不出为什么。 */
-    const tx = makeTxClient(certifiedResponder(null));
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
-    expect(tx.outcome().committed).toBe(true);
-  });
-
-  /*
-   * 带理由跳过（owner 2026-09-22）。
-   *
-   * 装上门的当天就坐实了它是**墙不是门**：`acceptance` 是自动检查（五段端到端），
-   * 生产上四个产品全部未满足且人工勾不掉——没有任何产品能发布任何套餐。
-   * 上线门（gate='launch'）一开始就带 override，我加 publish 门时没照抄这一半。
-   *
-   * 条件不删也不降级：删了以后它什么也证明不了。保留门，另开一条写明理由的路。
-   */
-  function pendingResponder() {
-    return (sql: string) => {
-      if (
-        sql.includes("product.plan_versions pv") &&
-        sql.includes("for update of pv")
-      )
-        return [
-          {
-            plan_id: "plan-a",
-            status: "draft",
-            plan_code: "karda-pro",
-            version_no: 2,
-          },
-        ];
-      if (sql.includes("cv2.status = 'published'")) return [];
-      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
-        return [{ product_id: "p-karda", tier: "pro" }];
-      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
-      return []; // 没有有效认证
-    };
-  }
-
-  it("有未满足项 + 带理由 → 放行，并把跳过的项与理由写进审计", async () => {
-    const tx = makeTxClient(pendingResponder());
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID, {
-      override: { reason: "联调环境用量上报未接，先发内测档" },
-    });
-
-    expect(tx.outcome().committed).toBe(true);
-    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
-      true,
+    const router = new ProductsRouter(readerOf([]), tx.pool);
+    await runIgnoringPostCommitRead(
+      router.updateProductContent(makeReq(MANAGE), "tenderforge", {
+        isCustomerVisible: false,
+      } as never),
     );
-    const at = tx.calls.findIndex((c) =>
-      c.includes("insert into support.audit_logs"),
-    );
-    const after = insertParam(tx.calls[at]!, tx.params[at]!, "after");
-    expect(String(after)).toContain("接入认证未通过");
-    expect(String(after)).toContain("联调环境用量上报未接");
-  });
-
-  it("理由是空白 → 仍然拒（别让一个空格当成理由）", async () => {
-    const tx = makeTxClient(pendingResponder());
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    const err = await router
-      .publishPlanVersion(makeReq(MANAGE), VERSION_ID, {
-        override: { reason: "   " },
-      })
-      .catch((e: unknown) => e);
-
-    expect(err).toBeInstanceOf(ConflictException);
-    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
-      false,
-    );
-  });
-
-  it("没有未满足项时：审计里不该出现跳过字段（别给正常发布留个假痕迹）", async () => {
-    const tx = makeTxClient((sql) => {
-      if (
-        sql.includes("product.plan_versions pv") &&
-        sql.includes("for update of pv")
-      )
-        return [
-          {
-            plan_id: "plan-a",
-            status: "draft",
-            plan_code: "karda-pro",
-            version_no: 2,
-          },
-        ];
-      if (sql.includes("cv2.status = 'published'")) return [];
-      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
-        return [{ product_id: "p-karda", tier: "pro" }];
-      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
-         让它走到被测的那一段去。 */
-      if (sql.includes("certification_runs"))
-        return [{ fingerprint: "fp-same", certified_at: new Date() }];
-      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
-      return [];
-    });
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID, {
-      override: { reason: "不该被用上的理由" },
-    });
-
-    const at = tx.calls.findIndex((c) =>
-      c.includes("insert into support.audit_logs"),
-    );
-    expect(
-      String(insertParam(tx.calls[at]!, tx.params[at]!, "after")),
-    ).not.toContain("overrideReason");
-  });
-
-  it("发布门查的是认证结论：通过 + 未 stale + 不带时间窗", async () => {
-    const tx = makeTxClient((sql) => {
-      if (
-        sql.includes("product.plan_versions pv") &&
-        sql.includes("for update of pv")
-      )
-        return [
-          {
-            plan_id: "plan-a",
-            status: "draft",
-            plan_code: "karda-pro",
-            version_no: 2,
-          },
-        ];
-      if (sql.includes("cv2.status = 'published'")) return [];
-      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
-        return [{ product_id: "p-karda", tier: "pro" }];
-      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
-         让它走到被测的那一段去。 */
-      if (sql.includes("certification_runs"))
-        return [{ fingerprint: "fp-same", certified_at: new Date() }];
-      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
-      return [];
-    });
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
-
-    const q = tx.calls.find((c) => c.includes("certification_runs"));
-    /* 「有效」= 通过且未 stale。少判一个 stale_reason，一条已经失效的认证就会
-       继续放行，而失效恰恰意味着「认过的那件事现在未必还成立」。 */
-    expect(q).toContain("verdict = 'certified'");
-    expect(q).toContain("stale_reason IS NULL");
-    /* 不带时间窗：认证回答「能不能工作」，不回答「有没有人在用」。 */
-    expect(q).not.toContain("interval");
-  });
-
-  it("publishes when the slot is free: freeze + current pointer + commit", async () => {
-    const tx = makeTxClient((sql) => {
-      /* 这一句现在连 plan_code / version_no 一起取（审计那行要写「哪个套餐第几版」），
-         所以别按整段 SQL 文本匹配——照 `for update of pv` 这个稳定特征认。 */
-      if (
-        sql.includes("product.plan_versions pv") &&
-        sql.includes("for update of pv")
-      )
-        return [
-          {
-            plan_id: "plan-a",
-            status: "draft",
-            plan_code: "karda-pro",
-            version_no: 2,
-          },
-        ];
-      // Order matters: the clash query also mentions component_role='primary'.
-      if (sql.includes("cv2.status = 'published'")) return [];
-      if (sql.includes("component_role = 'primary'") && sql.includes("limit 1"))
-        return [{ product_id: "p-karda", tier: "pro" }];
-      /* 本条测的不是发布门本身，所以夹具给一条有效认证 + 一致的指纹，
-         让它走到被测的那一段去。 */
-      if (sql.includes("certification_runs"))
-        return [{ fingerprint: "fp-same", certified_at: new Date() }];
-      if (sql.includes("sha256")) return [{ fingerprint: "fp-same" }];
-      return [];
-    });
-    const router = new ProductsRouter(noDbPool().pool, tx.pool);
-    const result = await router.publishPlanVersion(makeReq(MANAGE), VERSION_ID);
-
-    expect(result).toEqual({ published: true, versionId: VERSION_ID });
-    expect(tx.outcome().committed).toBe(true);
-    expect(tx.calls.some((c) => c.includes("SET status = 'published'"))).toBe(
-      true,
-    );
-    expect(tx.calls.some((c) => c.includes("SET current_version_id"))).toBe(
-      true,
-    );
-    /* 发布时刻必须落库：运营问的「什么时间启用」只有它能答，而 created_at 是
-       草稿何时开的。此前这一列根本不存在。 */
-    expect(tx.calls.some((c) => c.includes("published_at = now()"))).toBe(true);
-
-    /*
-     * 审计（2026-09-22 补）：发布**此前压根不留痕**。它是这一屏最要紧的动作
-     * （决定客户买不到/买得到，还把版本连同 components/prices 一起冻结），也挂着
-     * step-up，而七个已登记的审计动作里偏偏没有它。「谁在什么时候把哪一版放上
-     * 货架」查不到。
-     */
-    const auditAt = tx.calls.findIndex((c) =>
-      c.includes("insert into support.audit_logs"),
-    );
-    expect(auditAt).toBeGreaterThanOrEqual(0);
-    expect(insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "action")).toBe(
-      "product.plan_version.publish",
-    );
-    /* resourceId 只许是可读码，不许落 uuid（owner 铁律）。 */
-    expect(
-      insertParam(tx.calls[auditAt]!, tx.params[auditAt]!, "resource_id"),
-    ).toBe("karda-pro v2");
+    expect(tx.calls.some((c) => c.includes("i.gate = 'stable'"))).toBe(false);
   });
 });
