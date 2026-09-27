@@ -25,8 +25,15 @@
  * 同日再加一档：升级维护中（产品级维护窗口 `maintenance`）——每张卡的 CTA 换成状态字
  * 「升级维护中，暂不可订阅」+ 副行「预计 … 恢复」，形态照 sunset 那套；优先级高于停售
  * 与冻结（临时运行态先说）。同样只收购买 / 升级 / 联系销售入口。
+ *
+ * 2026-09-28 邀请档（plan.access = invite）：CTA 是一颗 outline 的「邀请订阅」，开
+ * InviteSubscribeDialog（已有邀请 → console 深链带这一档与当前周期；没有 → 申请邀请
+ * mailto），脚注「仅接受邀请订阅」。它排在维护 / 停售 / 在途单 / 当前档 / 低档 / 冻结之后
+ * ——那些状态下邀请档与公开档一个样，先说状态；登录租户的当前档若是邀请档，
+ * 「当前套餐 / 低于当前套餐 / 升级到 X」的关系照旧。
  */
 
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@vxture-platform/shared";
 import {
@@ -47,6 +54,7 @@ import {
   type ProductMaintenance,
 } from "@/api/product-catalog.api";
 import { usePlanLabels } from "./plan-labels";
+import { InviteSubscribeDialog } from "./InviteSubscribeDialog";
 import {
   displayedPrice,
   formatPrice,
@@ -92,6 +100,7 @@ export function PricingPlanCard({
   plan,
   cycle,
   productCode,
+  productName,
   contactSubject,
   selected,
   onSelect,
@@ -105,6 +114,8 @@ export function PricingPlanCard({
   plan: PricingPlan;
   cycle: BillingCycle;
   productCode: string;
+  /** 页面标题用的产品名（营销名优先）：邀请申请邮件的主题要带它。 */
+  productName: string;
   contactSubject: string;
   selected: boolean;
   onSelect: () => void;
@@ -186,6 +197,22 @@ export function PricingPlanCard({
   ) : null;
   const notice = maintenanceNotice ?? sunsetNotice;
   const maintenanceUntil = maintenanceUntilText(maintenance, locale);
+  /* 邀请档：CTA 换成「邀请订阅」开弹窗。深链带这一档与实际展示的周期（与公开档的订阅
+     深链同一口径）；已有当前档的按 upgrade 进去，console 那边按意图落位。 */
+  const isInvite = plan.access === "invite";
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const inviteConsoleHref = shown
+    ? buildConsoleSubscribeUrl(
+        locale,
+        productCode,
+        relation === "higher" ? "upgrade" : "subscribe",
+        plan.tier,
+        shown.unit,
+      )
+    : null;
+  const inviteRequestHref = `mailto:sales@vxture.com?subject=${encodeURIComponent(
+    t("inviteRequestSubject", { product: productName, plan: plan.name }),
+  )}`;
   // 省额徽章只在「年付展示 + 两个周期都有价 + 年付真的更便宜」时出现。
   const savings =
     isPaid && shown.unit === "year" && plan.monthly && plan.yearly
@@ -207,231 +234,264 @@ export function PricingPlanCard({
         : t("seats.count", { count: plan.seats });
 
   return (
-    <Card
-      role="radio"
-      aria-checked={selected}
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        // CTA 链接/按钮上的回车不劫持（让其正常跳转）
-        if ((event.target as HTMLElement).closest("a,button")) return;
-        event.preventDefault();
-        onSelect();
-      }}
-      className={`flex cursor-pointer flex-col rounded-2xl shadow-none transition ${
-        selected
-          ? SELECTED_CARD
-          : "hover:border-vx-brand-200 dark:hover:border-vx-brand-500/30"
-      }`}
-    >
-      {/* 卡内上下留白收一档（owner 2026-09-03：权益多把卡撑高、页面超一屏） */}
-      <CardContent className="flex flex-1 flex-col px-5 py-4">
-        {/* 档名/描述 + 受众图标 */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-base font-semibold text-vx-text-primary">
-              {plan.name}
-            </p>
-            {plan.description ? (
-              <p className="mt-0.5 text-xs text-vx-text-muted">
-                {plan.description}
+    <>
+      <Card
+        role="radio"
+        aria-checked={selected}
+        tabIndex={0}
+        onClick={onSelect}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          // CTA 链接/按钮上的回车不劫持（让其正常跳转）
+          if ((event.target as HTMLElement).closest("a,button")) return;
+          event.preventDefault();
+          onSelect();
+        }}
+        className={`flex cursor-pointer flex-col rounded-2xl shadow-none transition ${
+          selected
+            ? SELECTED_CARD
+            : "hover:border-vx-brand-200 dark:hover:border-vx-brand-500/30"
+        }`}
+      >
+        {/* 卡内上下留白收一档（owner 2026-09-03：权益多把卡撑高、页面超一屏） */}
+        <CardContent className="flex flex-1 flex-col px-5 py-4">
+          {/* 档名/描述 + 受众图标 */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-vx-text-primary">
+                {plan.name}
               </p>
+              {plan.description ? (
+                <p className="mt-0.5 text-xs text-vx-text-muted">
+                  {plan.description}
+                </p>
+              ) : null}
+            </div>
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-vx-primary-soft text-vx-primary-strong">
+              <Icon
+                name={AUDIENCE_ICON[plan.audience]}
+                className="h-4 w-4"
+                aria-hidden
+              />
+            </span>
+          </div>
+
+          {/* 价格。年付：主数字 = 年付总额「/ 年」（真正要支付的数），小字「约 xx / 月」只是
+            比较参考——此前主数字是折合月价，会让人误以为按月付这个数（owner 2026-09-03）。 */}
+          <div className="mt-4 flex flex-wrap items-baseline gap-1.5">
+            {isContact ? (
+              <span className="text-3xl font-semibold tracking-tight text-vx-text-primary">
+                {t("price.custom")}
+              </span>
+            ) : isFree ? (
+              <>
+                {/* ¥0 也是按周期订阅、会到期的档，标「/ 月」「/ 年」，不写「永久免费」
+                  （owner 2026-09-03：不要超出批准做商业承诺）。 */}
+                <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
+                  {money(0)}
+                </span>
+                <span className="text-xs text-vx-text-muted">
+                  {shown.unit === "year"
+                    ? t("price.perYear")
+                    : t("price.perMonth")}
+                </span>
+              </>
+            ) : shown.unit === "year" ? (
+              <>
+                <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
+                  {money(shown.price.amount)}
+                </span>
+                <span className="text-xs text-vx-text-muted">
+                  {t("price.perYear")} ·{" "}
+                  {t("price.monthlyApprox", {
+                    amount: money(monthlyEquivalent(shown.price.amount)),
+                  })}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
+                  {money(shown.price.amount)}
+                </span>
+                <span className="text-xs text-vx-text-muted">
+                  {t("price.perMonth")}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* 省额槽位固定高度，保证各卡分隔线对齐 */}
+          <div className="mt-1.5 min-h-6">
+            {savings && savings.save > 0 ? (
+              <StatusBadge tone="success">
+                {t("price.saveBadge", {
+                  amount: money(savings.save),
+                  percent: savings.percent,
+                })}
+              </StatusBadge>
             ) : null}
           </div>
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-vx-primary-soft text-vx-primary-strong">
+
+          {/* 受众 · 席位 */}
+          <div className="mt-3 flex items-center gap-2 border-t border-vx-border pt-3 text-sm text-vx-text-muted">
             <Icon
               name={AUDIENCE_ICON[plan.audience]}
-              className="h-4 w-4"
+              className="h-4 w-4 shrink-0 text-vx-primary"
               aria-hidden
             />
-          </span>
-        </div>
-
-        {/* 价格。年付：主数字 = 年付总额「/ 年」（真正要支付的数），小字「约 xx / 月」只是
-            比较参考——此前主数字是折合月价，会让人误以为按月付这个数（owner 2026-09-03）。 */}
-        <div className="mt-4 flex flex-wrap items-baseline gap-1.5">
-          {isContact ? (
-            <span className="text-3xl font-semibold tracking-tight text-vx-text-primary">
-              {t("price.custom")}
+            <span>
+              {t(`audience.${plan.audience}`)}
+              {seatsLabel ? ` · ${seatsLabel}` : null}
             </span>
-          ) : isFree ? (
-            <>
-              {/* ¥0 也是按周期订阅、会到期的档，标「/ 月」「/ 年」，不写「永久免费」
-                  （owner 2026-09-03：不要超出批准做商业承诺）。 */}
-              <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {money(0)}
-              </span>
-              <span className="text-xs text-vx-text-muted">
-                {shown.unit === "year"
-                  ? t("price.perYear")
-                  : t("price.perMonth")}
-              </span>
-            </>
-          ) : shown.unit === "year" ? (
-            <>
-              <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {money(shown.price.amount)}
-              </span>
-              <span className="text-xs text-vx-text-muted">
-                {t("price.perYear")} ·{" "}
-                {t("price.monthlyApprox", {
-                  amount: money(monthlyEquivalent(shown.price.amount)),
-                })}
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {money(shown.price.amount)}
-              </span>
-              <span className="text-xs text-vx-text-muted">
-                {t("price.perMonth")}
-              </span>
-            </>
-          )}
-        </div>
+          </div>
 
-        {/* 省额槽位固定高度，保证各卡分隔线对齐 */}
-        <div className="mt-1.5 min-h-6">
-          {savings && savings.save > 0 ? (
-            <StatusBadge tone="success">
-              {t("price.saveBadge", {
-                amount: money(savings.save),
-                percent: savings.percent,
-              })}
-            </StatusBadge>
-          ) : null}
-        </div>
-
-        {/* 受众 · 席位 */}
-        <div className="mt-3 flex items-center gap-2 border-t border-vx-border pt-3 text-sm text-vx-text-muted">
-          <Icon
-            name={AUDIENCE_ICON[plan.audience]}
-            className="h-4 w-4 shrink-0 text-vx-primary"
-            aria-hidden
-          />
-          <span>
-            {t(`audience.${plan.audience}`)}
-            {seatsLabel ? ` · ${seatsLabel}` : null}
-          </span>
-        </div>
-
-        {/* 功能清单（plan_components.features） */}
-        <ul className="mt-2.5 flex-1 space-y-2">
-          {plan.features.map((feature) => (
-            <li
-              key={feature}
-              className="flex gap-2 text-sm leading-5 text-vx-text-muted"
-            >
-              <Icon
-                name="check"
-                className="mt-0.5 h-4 w-4 shrink-0 text-vx-primary"
-              />
-              <span>{labels.feature(feature)}</span>
-            </li>
-          ))}
-        </ul>
-
-        {/* CTA + 脚注 */}
-        <div className="mt-4">
-          {isContact ? (
-            (notice ?? (
-              <Button asChild variant="outline" className="w-full">
-                <a
-                  href={`mailto:sales@vxture.com?subject=${encodeURIComponent(
-                    contactSubject,
-                  )}`}
-                >
-                  {t("contact")}
-                </a>
-              </Button>
-            ))
-          ) : pendingOrder ? (
-            pendingOrder.tier === plan.tier ? (
-              <Button
-                asChild
-                variant={selected ? "default" : "outline"}
-                className={selected ? GRADIENT_CTA : "w-full"}
+          {/* 功能清单（plan_components.features） */}
+          <ul className="mt-2.5 flex-1 space-y-2">
+            {plan.features.map((feature) => (
+              <li
+                key={feature}
+                className="flex gap-2 text-sm leading-5 text-vx-text-muted"
               >
-                <a
-                  href={buildConsoleOrderStatusUrl(
-                    locale,
-                    pendingOrder.orderId,
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Icon
+                  name="check"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-vx-primary"
+                />
+                <span>{labels.feature(feature)}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* CTA + 脚注 */}
+          <div className="mt-4">
+            {isContact ? (
+              (notice ?? (
+                <Button asChild variant="outline" className="w-full">
+                  <a
+                    href={`mailto:sales@vxture.com?subject=${encodeURIComponent(
+                      contactSubject,
+                    )}`}
+                  >
+                    {t("contact")}
+                  </a>
+                </Button>
+              ))
+            ) : pendingOrder ? (
+              pendingOrder.tier === plan.tier ? (
+                <Button
+                  asChild
+                  variant={selected ? "default" : "outline"}
+                  className={selected ? GRADIENT_CTA : "w-full"}
                 >
-                  {t("pendingOrder.view")}
-                </a>
-              </Button>
-            ) : (
+                  <a
+                    href={buildConsoleOrderStatusUrl(
+                      locale,
+                      pendingOrder.orderId,
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t("pendingOrder.view")}
+                  </a>
+                </Button>
+              ) : (
+                <Button variant="outline" className="w-full" disabled>
+                  {t("pendingOrder.blocked")}
+                </Button>
+              )
+            ) : relation === "current" || relation === "lower" ? (
               <Button variant="outline" className="w-full" disabled>
-                {t("pendingOrder.blocked")}
+                {relation === "current" ? t("currentPlan") : t("lowerPlan")}
               </Button>
-            )
-          ) : relation === "current" || relation === "lower" ? (
-            <Button variant="outline" className="w-full" disabled>
-              {relation === "current" ? t("currentPlan") : t("lowerPlan")}
-            </Button>
-          ) : maintenanceNotice ? (
-            /* 升级维护中压过冻结态与停售：产品级的临时运行态先说。 */
-            maintenanceNotice
-          ) : frozenLabel ? (
-            /* 冻结中：与「当前套餐」同一种禁用态，字样换成冻结态（维护中 / 审核中 / …）。
+            ) : maintenanceNotice ? (
+              /* 升级维护中压过冻结态与停售：产品级的临时运行态先说。 */
+              maintenanceNotice
+            ) : frozenLabel ? (
+              /* 冻结中：与「当前套餐」同一种禁用态，字样换成冻结态（维护中 / 审核中 / …）。
                不给「升级到 X」——换档会动那条被平台冻结的订阅。 */
-            <Button variant="outline" className="w-full" disabled>
-              {frozenLabel}
-            </Button>
-          ) : (
-            (sunsetNotice ?? (
-              <Button
-                asChild
-                variant={selected ? "default" : "outline"}
-                className={selected ? GRADIENT_CTA : "w-full"}
-              >
-                <a
-                  href={buildConsoleSubscribeUrl(
-                    locale,
-                    productCode,
-                    relation === "higher" ? "upgrade" : "subscribe",
-                    plan.tier,
-                    // 传实际展示的周期（wire 值域 month|year）：console 严格匹配
-                    // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
-                    shown.unit,
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {relation === "higher"
-                    ? t("upgradeTo", { plan: plan.name })
-                    : isFree
-                      ? t("freeCta")
-                      : t("subscribe", { plan: plan.name })}
-                </a>
+              <Button variant="outline" className="w-full" disabled>
+                {frozenLabel}
               </Button>
-            ))
-          )}
-        </div>
-        <p className="mt-2 text-center text-xs text-vx-gray-400 dark:text-vx-gray-500">
-          {/* 维护中的脚注先于其它：预计恢复时间；运营没填（或解析不了）就只说服务暂时不可用。 */}
-          {maintenance
-            ? maintenanceUntil
-              ? t("maintenanceUntil", { time: maintenanceUntil })
-              : tCatalog("suspension.hint")
-            : isContact && !sunset
-              ? t("note.enterprise")
-              : pendingOrder
-                ? t("note.pendingOrder")
-                : frozenLabel
-                  ? tCatalog("suspension.hint")
-                  : sunset
-                    ? t("sunsetHint")
-                    : isFree
-                      ? t("note.free")
-                      : t("note.paid")}
-        </p>
-      </CardContent>
-    </Card>
+            ) : isInvite ? (
+              /* 邀请档：不直接深链——匿名访客点过去 console 也看不到这一档。开弹窗讲清楚，
+               「我已有邀请」在窗里。停售时与公开档一样只剩状态字。 */
+              (sunsetNotice ?? (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setInviteOpen(true)}
+                >
+                  {tCatalog("actions.inviteSubscribe")}
+                </Button>
+              ))
+            ) : (
+              (sunsetNotice ?? (
+                <Button
+                  asChild
+                  variant={selected ? "default" : "outline"}
+                  className={selected ? GRADIENT_CTA : "w-full"}
+                >
+                  <a
+                    href={buildConsoleSubscribeUrl(
+                      locale,
+                      productCode,
+                      relation === "higher" ? "upgrade" : "subscribe",
+                      plan.tier,
+                      // 传实际展示的周期（wire 值域 month|year）：console 严格匹配
+                      // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
+                      shown.unit,
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {relation === "higher"
+                      ? t("upgradeTo", { plan: plan.name })
+                      : isFree
+                        ? t("freeCta")
+                        : t("subscribe", { plan: plan.name })}
+                  </a>
+                </Button>
+              ))
+            )}
+          </div>
+          <p className="mt-2 text-center text-xs text-vx-gray-400 dark:text-vx-gray-500">
+            {/* 维护中的脚注先于其它：预计恢复时间；运营没填（或解析不了）就只说服务暂时不可用。 */}
+            {maintenance
+              ? maintenanceUntil
+                ? t("maintenanceUntil", { time: maintenanceUntil })
+                : tCatalog("suspension.hint")
+              : isContact && !sunset
+                ? t("note.enterprise")
+                : pendingOrder
+                  ? t("note.pendingOrder")
+                  : frozenLabel
+                    ? tCatalog("suspension.hint")
+                    : sunset
+                      ? t("sunsetHint")
+                      : isInvite
+                        ? t("note.invite")
+                        : isFree
+                          ? t("note.free")
+                          : t("note.paid")}
+          </p>
+        </CardContent>
+      </Card>
+      {/* 邀请弹窗挂在卡片旁边而不是卡片里：Card 自己有 onClick / onKeyDown（选中态），
+        portal 里的事件会沿 React 树冒回去。Dialog 根本身不占 DOM，栅格不多一格。 */}
+      {isInvite && inviteConsoleHref ? (
+        <InviteSubscribeDialog
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          labels={{
+            title: t("inviteOnlyTitle"),
+            description: t("inviteOnlyDescription"),
+            holder: t("inviteHolder"),
+            request: t("inviteRequest"),
+            close: t("inviteClose"),
+          }}
+          consoleHref={inviteConsoleHref}
+          requestHref={inviteRequestHref}
+        />
+      ) : null}
+    </>
   );
 }

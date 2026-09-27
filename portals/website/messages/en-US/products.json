@@ -246,7 +246,8 @@
       "free": "No payment needed — instant activation",
       "paid": "Checkout continues in Console",
       "enterprise": "sales@vxture.com",
-      "pendingOrder": "An order for this product is already in progress — track it in the console."
+      "pendingOrder": "An order for this product is already in progress — track it in the console.",
+      "invite": "By invitation only"
     },
     "tierCount": "{count, plural, one {# tier} other {# tiers}}",
     "scrollHint": "More details",
@@ -317,10 +318,11 @@
       ]
     },
     "inviteOnlyTitle": "By invitation",
-    "inviteOnlyDescription": "This product's plans are currently open by invitation. An invitation is issued to your account; once you have one, sign in to the console to see the plan and order it yourself, at the same price as a public plan.",
+    "inviteOnlyDescription": "This tier is open by invitation only. An invitation is issued to your account; once you have one, sign in to the console to see this tier and order it yourself. No invitation yet? Ask us for one.",
     "inviteRequest": "Request an invitation",
-    "inviteRequestSubject": "{product} invitation request",
-    "inviteHolder": "I have an invitation"
+    "inviteRequestSubject": "{product} {plan} invitation request",
+    "inviteHolder": "I have an invitation",
+    "inviteClose": "Close"
   },
   "comingSoon": {
     "eyebrow": "Coming Soon",

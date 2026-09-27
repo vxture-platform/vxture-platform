@@ -7,7 +7,9 @@ import { ProductPlansRouter } from "./product-plans.router";
 //   2. 未知/不可见产品 → { product: null, plans: [] },且不再查询阶梯;
 //   3. 有产品但无已发布套餐 → plans: [];
 //   4. 非法产品码 → 空响应且完全不触 DB(公开端点不做 4xx);
-//   5. 承诺等级 preview / sunset → subscribeAccess 恒 none、releaseStage 外露、阶梯照回。
+//   5. 承诺等级 preview / sunset → subscribeAccess 恒 none、releaseStage 外露、阶梯照回;
+//   6. 邀请档(is_public = false)进阶梯、每档带 access,subscribeAccess 由阶梯归纳,
+//      不再另问一次邀请计数(owner 2026-09-28)。
 // 与 console-bff queryPlanLadder 的口径一致性由 SQL 文本对齐保证,此处只测行为。
 
 const ARDA = {
@@ -24,25 +26,34 @@ const PRO_ROW = {
   plan_name: "Arda Pro",
   description: null,
   tier: "pro",
+  is_public: true,
+  features: [],
+  quota: null,
+  prices: [],
+};
+
+/** 一条邀请档（is_public = false）：进阶梯，access = invite。 */
+const INVITE_BUSINESS_ROW = {
+  plan_code: "arda-business",
+  plan_name: "Arda Business",
+  description: null,
+  tier: "business",
+  is_public: false,
   features: [],
   quota: null,
   prices: [],
 };
 
 /**
- * 依查询顺序编程的 pool：第 1 次 = 产品行，第 2 次 = 阶梯行，
- * 第 3 次 = 邀请档计数（判 subscribeAccess 的那一问）。
+ * 依查询顺序编程的 pool：第 1 次 = 产品行，第 2 次 = 阶梯行。**只有两问**——
+ * 邀请档就在阶梯里，subscribeAccess 由它归纳；第三问（旧的邀请计数）若还发生，
+ * 会拿到 undefined 而不是 rows，调用处就会炸，这里就靠这一点抓「多问了一次」。
  */
-function makePool(
-  productRows: unknown[],
-  ladderRows: unknown[] = [],
-  inviteCount = 0,
-) {
+function makePool(productRows: unknown[], ladderRows: unknown[] = []) {
   const query = vi
     .fn()
     .mockResolvedValueOnce({ rows: productRows })
-    .mockResolvedValueOnce({ rows: ladderRows })
-    .mockResolvedValueOnce({ rows: [{ invite_count: inviteCount }] });
+    .mockResolvedValueOnce({ rows: ladderRows });
   return { pool: { query } as unknown as Pool, query };
 }
 
@@ -56,6 +67,7 @@ describe("ProductPlansRouter", () => {
           plan_name: "Arda Pro",
           description: "Arda Pro tier for Arda.",
           tier: "pro",
+          is_public: true,
           features: ["sync.realtime", "varda.enabled"],
           quota: { "member.max": 1, "storage.gb": 500 },
           prices: [
@@ -78,6 +90,7 @@ describe("ProductPlansRouter", () => {
           plan_name: "Arda Free",
           description: null,
           tier: "free",
+          is_public: true,
           features: [],
           quota: null,
           prices: [],
@@ -105,6 +118,9 @@ describe("ProductPlansRouter", () => {
     expect(pro?.quota).toEqual({ "member.max": 1, "storage.gb": 500 });
     expect(pro?.prices).toHaveLength(2);
     expect(free?.seats).toBeNull();
+    /* 公开档 → access public；两档都公开 → 入口 public。 */
+    expect(res.plans.map((p) => p.access)).toEqual(["public", "public"]);
+    expect(res.subscribeAccess).toBe("public");
   });
 
   it("degrades to an empty ladder for an unknown product without querying plans", async () => {
@@ -128,54 +144,74 @@ describe("ProductPlansRouter", () => {
   });
 
   /*
-   * 订阅入口三态（owner 2026-09-22）。
+   * 邀请档进阶梯（owner 2026-09-28）。
    *
-   * `plans` 里永远不含邀请档——这是匿名端点，没有会话就没有邀请可言。于是「空阶梯」
-   * 此前无法区分「还没开卖」与「全是邀请档」，落地页两种都说「暂未开放订阅」。
-   * 而 umbra 明明配好了两档、只是都改成了邀请订阅：页面说得跟事实不符。
+   * 邀请订阅是**套餐级**的：admin 按档设 is_public，运营给账号定向发券。此前本端点把
+   * `is_public = true` 写死在阶梯 SQL 里，再另问一次计数只为了在「全是邀请档」时给一个
+   * 空态——一个产品只要全是邀请档，定价页就一档也看不见（owner：「闸门卡的太死了」）。
    *
-   * 三面都写。**「有公开档时不去数邀请」那一面是重点**：只写前两面的话，一个对每个
-   * 产品都平白多打一次库的实现也会绿。
+   * 现在阶梯照回、每档带 access，subscribeAccess 由阶梯归纳。四面都写，**「只问两次」
+   * 那一面是重点**：makePool 只编了两问，第三问若还发生会拿到 undefined 而炸掉。
    */
-  it("阶梯里有档 → public，且不再多问一次邀请计数", async () => {
-    const { pool, query } = makePool(
-      [ARDA],
-      [
-        {
-          plan_code: "arda-pro",
-          plan_name: "Arda Pro",
-          description: null,
-          tier: "pro",
-          features: [],
-          quota: null,
-          prices: [],
-        },
-      ],
-      7,
-    );
+  it("只有邀请档 → 阶梯照回、每档 access invite、入口 invite，只问两次库", async () => {
+    const { pool, query } = makePool([ARDA], [INVITE_BUSINESS_ROW]);
     const res = await new ProductPlansRouter(pool).getProductPlans("arda");
-    expect(res.subscribeAccess).toBe("public");
-    /* 产品行 + 阶梯 = 2 次；有公开档就没必要再问邀请。 */
+    expect(res.plans.map((p) => [p.tier, p.access])).toEqual([
+      ["business", "invite"],
+    ]);
+    expect(res.subscribeAccess).toBe("invite");
+    /* 产品行 + 阶梯 = 2 次；旧的邀请计数那一问不再发生。 */
     expect(query).toHaveBeenCalledTimes(2);
   });
 
-  it("阶梯为空但有邀请档 → invite（不是「暂未开放」）", async () => {
-    const { pool } = makePool([ARDA], [], 2);
+  it("公开档与邀请档并存 → 两种 access 都在阶梯里、入口 public，仍按 TIERS 排", async () => {
+    const { pool, query } = makePool([ARDA], [INVITE_BUSINESS_ROW, PRO_ROW]);
     const res = await new ProductPlansRouter(pool).getProductPlans("arda");
-    expect(res.plans).toEqual([]);
-    expect(res.subscribeAccess).toBe("invite");
+    expect(res.plans.map((p) => [p.tier, p.access])).toEqual([
+      ["pro", "public"],
+      ["business", "invite"],
+    ]);
+    expect(res.subscribeAccess).toBe("public");
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
-  it("阶梯为空且无邀请档 → none", async () => {
-    const { pool } = makePool([ARDA], [], 0);
+  it("只有公开档 → 与此前完全一样：access public、入口 public", async () => {
+    const { pool, query } = makePool([ARDA], [PRO_ROW]);
     const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.plans.map((p) => p.access)).toEqual(["public"]);
+    expect(res.subscribeAccess).toBe("public");
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("阶梯为空 → none（一档都没有，不是「只有邀请档」）", async () => {
+    const { pool } = makePool([ARDA], []);
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.plans).toEqual([]);
     expect(res.subscribeAccess).toBe("none");
   });
 
-  it("计数是字符串也认（pg 的 count() 交出来是 string）", async () => {
-    const { pool } = makePool([ARDA], [], "3" as unknown as number);
+  it("is_public 不是明确的 true（缺列 / null）→ 按邀请档处理（保守）", async () => {
+    const { pool } = makePool(
+      [ARDA],
+      [
+        { ...PRO_ROW, is_public: null },
+        { ...INVITE_BUSINESS_ROW, is_public: undefined },
+      ],
+    );
     const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.plans.map((p) => p.access)).toEqual(["invite", "invite"]);
     expect(res.subscribeAccess).toBe("invite");
+  });
+
+  it("阶梯那一问真的不再按 is_public 过滤，且把它选了出来", async () => {
+    const { pool, query } = makePool([ARDA], [PRO_ROW]);
+    await new ProductPlansRouter(pool).getProductPlans("arda");
+    const sql = String(query.mock.calls[1]?.[0]).replace(/\s+/g, " ");
+    expect(sql).not.toContain("is_public = true");
+    expect(sql).not.toContain("is_public = false");
+    expect(sql).toContain("pl.is_public");
+    /* 产品码只许绑定参数进 SQL。 */
+    expect(query.mock.calls[1]?.[1]).toEqual(["arda"]);
   });
 
   /*
@@ -184,13 +220,11 @@ describe("ProductPlansRouter", () => {
    * 此前本端点从头到尾没读 release_stage：目录卡把停售产品指到 /pricing，落地页照样
    * 给「订阅」，再往下 console 下单撞 409。三面各一条：sunset / preview 判 none 且阶梯
    * 照回（停售的要留给老客户参考，画不画由页面决定），beta 与 stable 一样放行。
-   * 「不可订就不去数邀请」也写上：答案不会变，多问一次是白打一次库。
    */
-  it("sunset → subscribeAccess none、releaseStage 外露、阶梯照回，且不数邀请", async () => {
+  it("sunset → subscribeAccess none、releaseStage 外露、阶梯照回", async () => {
     const { pool, query } = makePool(
       [{ ...ARDA, release_stage: "sunset" }],
       [PRO_ROW],
-      3,
     );
     const res = await new ProductPlansRouter(pool).getProductPlans("arda");
     expect(res.product?.releaseStage).toBe("sunset");
@@ -199,14 +233,14 @@ describe("ProductPlansRouter", () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
 
-  it("sunset 且只剩邀请档 → 仍是 none，不问邀请计数", async () => {
+  it("sunset 且只剩邀请档 → 仍是 none（邀请档也不接新进），阶梯照回", async () => {
     const { pool, query } = makePool(
       [{ ...ARDA, release_stage: "sunset" }],
-      [],
-      3,
+      [INVITE_BUSINESS_ROW],
     );
     const res = await new ProductPlansRouter(pool).getProductPlans("arda");
     expect(res.subscribeAccess).toBe("none");
+    expect(res.plans.map((p) => p.access)).toEqual(["invite"]);
     expect(query).toHaveBeenCalledTimes(2);
   });
 

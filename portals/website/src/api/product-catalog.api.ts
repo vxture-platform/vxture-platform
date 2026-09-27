@@ -163,6 +163,16 @@ export interface ProductCatalogItem {
    */
   subscribeAccess: "public" | "invite" | "none";
   /**
+   * 两根布尔（owner 2026-09-28）：有没有自助可买的档 / 有没有凭邀请的档。邀请订阅是
+   * 套餐级的，混卖（公开档 + 邀请档并存）时卡上要同时画「邀请订阅」与「订阅」——三态
+   * 在混卖时只说 public，画不出第二颗按钮。
+   *
+   * 部署偏斜防护：旧 BFF 不回这两列时由三态推回去（public → 有公开档；invite → 有
+   * 邀请档），即本字段之前卡片能画出的那一颗。
+   */
+  hasPublicTier: boolean;
+  hasInviteTier: boolean;
+  /**
    * 产品级升级维护窗口；null = 不在维护中。部署偏斜防护：旧响应没有这一项时回落 null，
    * 即本字段之前的行为。见 ProductMaintenance。
    */
@@ -267,12 +277,20 @@ export async function fetchPublicProductCatalog(): Promise<
 function normalizeCatalogItem(raw: unknown): ProductCatalogItem {
   const item = raw as ProductCatalogItem;
   const access = (raw as { subscribeAccess?: unknown }).subscribeAccess;
+  const subscribeAccess =
+    access === "invite" || access === "none" || access === "public"
+      ? access
+      : "public";
+  const rawPublic = (raw as { hasPublicTier?: unknown }).hasPublicTier;
+  const rawInvite = (raw as { hasInviteTier?: unknown }).hasInviteTier;
   return {
     ...item,
-    subscribeAccess:
-      access === "invite" || access === "none" || access === "public"
-        ? access
-        : "public",
+    subscribeAccess,
+    /* 旧 BFF 不回这两列 → 由三态推回去（那就是旧卡片能画出的那一颗按钮）。 */
+    hasPublicTier:
+      typeof rawPublic === "boolean" ? rawPublic : subscribeAccess === "public",
+    hasInviteTier:
+      typeof rawInvite === "boolean" ? rawInvite : subscribeAccess === "invite",
     maintenance: normalizeMaintenance(
       (raw as { maintenance?: unknown }).maintenance,
     ),
