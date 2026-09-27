@@ -84,8 +84,6 @@ export default function ProductsOverviewPage({
         subscribe: t("catalog.actions.subscribe"),
         inviteSubscribe: t("catalog.actions.inviteSubscribe"),
         notForSale: t("catalog.actions.notForSale"),
-        /* 带占位符、渲染时才知道值（预计恢复时间）：取原串交给卡片自己填，理由同下面 suspension 三条。 */
-        maintenanceUntil: t.raw("catalog.actions.maintenanceUntil") as string,
         upgrade: t("catalog.actions.upgrade"),
         enter: t("catalog.actions.enter"),
         noEntry: t("catalog.actions.noEntry"),
@@ -107,6 +105,14 @@ export default function ProductsOverviewPage({
         countdown: t.raw("catalog.suspension.countdown") as string,
         contact: t("catalog.suspension.contact"),
         close: t("catalog.suspension.close"),
+      },
+      maintenanceDialog: {
+        visitor: t("catalog.maintenanceDialog.visitor"),
+        subscriber: t("catalog.maintenanceDialog.subscriber"),
+        countdown: t("catalog.maintenanceDialog.countdown"),
+        /* 「{d} 天」只有渲染时才知道天数：取原串交给弹窗自己填，理由同上面 suspension 三条。 */
+        days: t.raw("catalog.maintenanceDialog.days") as string,
+        elapsed: t("catalog.maintenanceDialog.elapsed"),
       },
     }),
     [t],

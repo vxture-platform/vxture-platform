@@ -37,16 +37,17 @@
  * 不自造:同域已有成稿的地方照抄，是这个仓的规矩。
  */
 
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Button, Icon, StatusBadge } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import {
   catalogDisplayName,
-  maintenanceUntilText,
   marketingForLocale,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import { CatalogHero, catalogHeroGhostButtonClass } from "./CatalogHero";
+import { MaintenanceDetailDialog } from "./MaintenanceDetailDialog";
 import { productTypeKey } from "./product-catalog-view";
 
 interface AgentProductDetailProps {
@@ -83,12 +84,13 @@ export default function AgentProductDetail({
    */
   const sunset = !notLive && product.releaseStage === "sunset";
   /*
-   * 升级维护中（产品级维护窗口，owner 2026-09-27）：徽标「升级维护中」挂在标题上方，
-   * 那颗跳 /pricing 的按钮换成不可点的状态字「升级维护中，暂不可订阅」+「预计 … 恢复」。
+   * 升级维护中（产品级维护窗口，owner 2026-09-27 / 09-28）：徽标「升级维护中」挂在标题上方，
+   * 那颗跳 /pricing 的按钮换成「升级维护中」——开详情弹窗（说明 + 预计恢复时间 + 走秒倒计时，
+   * 与产品卡同一扇 MaintenanceDetailDialog）。预计恢复时间只在弹窗里说，徽标旁不再重复。
    * 优先于「还没上线」与停售——维护是临时运行态，先说它。判据与产品卡同源。
    */
   const maintenance = product.maintenance;
-  const maintenanceUntil = maintenanceUntilText(maintenance, locale);
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   /* 导语用登记的业务价值，退回目录 description。两者都空时不渲染这一段，而不是留一行空白。 */
   const lead = m?.value?.trim() || product.description?.trim() || "";
   const highlights = (m?.highlights ?? []).filter((x) => x.trim());
@@ -123,19 +125,22 @@ export default function AgentProductDetail({
               <StatusBadge tone="warning">
                 {t("catalog.suspension.maintenance")}
               </StatusBadge>
-              {maintenanceUntil ? (
-                <span className="text-xs text-vx-gray-500 dark:text-vx-gray-300">
-                  {t("catalog.actions.maintenanceUntil", {
-                    time: maintenanceUntil,
-                  })}
-                </span>
-              ) : null}
             </div>
           ) : undefined
         }
         actions={
           <>
-            {maintenance /* 升级维护中：按钮位置留空，「业务咨询」照旧；状态与预计恢复在徽标行。 */ ? null : notLive ? (
+            {maintenance /* 升级维护中：这颗开详情弹窗（说明 + 倒计时），「业务咨询」照旧。
+                 样式走 hero 的辅助键（ghost + catalogHeroGhostButtonClass）：outline 在深色 hero 上没了描边。 */ ? (
+              <Button
+                size="xl"
+                variant="ghost"
+                className={catalogHeroGhostButtonClass}
+                onClick={() => setMaintenanceOpen(true)}
+              >
+                {t("catalog.suspension.maintenance")}
+              </Button>
+            ) : notLive ? (
               <Button size="xl" className="px-5" disabled>
                 {t("catalog.actions.coming")}
               </Button>
@@ -157,6 +162,29 @@ export default function AgentProductDetail({
           </>
         }
       />
+      {/* 「升级维护中」详情弹窗：hero 里那颗按钮开它。详情页是公开页、不知道订阅态，
+          所以只说给所有人的那一句（subscribed=false）。 */}
+      {maintenance ? (
+        <MaintenanceDetailDialog
+          open={maintenanceOpen}
+          onOpenChange={setMaintenanceOpen}
+          labels={{
+            title: t("catalog.suspension.maintenance"),
+            visitor: t("catalog.maintenanceDialog.visitor"),
+            subscriber: t("catalog.maintenanceDialog.subscriber"),
+            /* 带占位符、渲染时才知道值的三条取原串，弹窗自己填（同产品卡）。 */
+            expected: t.raw("catalog.suspension.expected") as string,
+            countdown: t("catalog.maintenanceDialog.countdown"),
+            countdownReadable: t.raw("catalog.suspension.countdown") as string,
+            days: t.raw("catalog.maintenanceDialog.days") as string,
+            elapsed: t("catalog.maintenanceDialog.elapsed"),
+            contact: t("catalog.suspension.contact"),
+            close: t("catalog.suspension.close"),
+          }}
+          until={maintenance.until}
+          subscribed={false}
+        />
+      ) : null}
 
       {detailParagraphs.length > 0 ? (
         <section className="mx-auto max-w-website-3xl px-6 py-16">

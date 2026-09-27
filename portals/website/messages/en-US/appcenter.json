@@ -47,8 +47,7 @@
       "detail": "Product details",
       "coming": "Coming soon",
       "inviteSubscribe": "By invitation",
-      "notForSale": "Not on sale yet",
-      "maintenanceUntil": "Expected back around {time}"
+      "notForSale": "Not on sale yet"
     },
     "empty": {
       "title": "More agents are on the way",
@@ -70,6 +69,13 @@
       "countdown": "{remain} to go",
       "contact": "Contact support",
       "close": "Got it"
+    },
+    "maintenanceDialog": {
+      "visitor": "This product is being upgraded and cannot be subscribed to right now.",
+      "subscriber": "For existing subscriptions, the paused time does not count against your term and is added back automatically once service resumes.",
+      "countdown": "Time until service resumes",
+      "days": "{d} day(s)",
+      "elapsed": "The expected time has passed; we are wrapping up."
     }
   }
 }
