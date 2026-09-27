@@ -237,5 +237,32 @@
       "lockedLive": "进行中的窗口不能改受影响产品；要换产品请先完成或取消这个窗口。",
       "chipsLabel": "受影响产品清单"
     }
+  },
+  "productMaintenance": {
+    "badge": "升级维护中",
+    "until": "预计 {time} 恢复",
+    "start": {
+      "button": "开始升级维护",
+      "title": "开始升级维护",
+      "effect": "官网与 console 会对所有人显示「升级维护中」并停止新订阅；已订阅租户一分钟内自动暂停并顺延有效期。到时未结束不会自动恢复，需要回到这里点「结束维护」。",
+      "endAt": "预计结束时间",
+      "endAtHint": "必须晚于现在。它只告诉客户大概什么时候回来，到点不会自动恢复。",
+      "endAtInvalid": "预计结束时间必须晚于现在",
+      "note": "说明",
+      "noteHint": "可选。记进维护窗口，运维 → 维护窗口里能看到。",
+      "submit": "开始维护",
+      "done": "{name} 已进入升级维护",
+      "already": "{name} 已经在升级维护中",
+      "failed": "开始维护失败"
+    },
+    "end": {
+      "button": "结束维护",
+      "title": "结束{target}的升级维护？",
+      "consequence": "官网与 console 立即恢复可订阅；已暂停的订阅会在一分钟内自动恢复并顺延有效期。",
+      "submit": "结束维护",
+      "done": "{name} 已结束升级维护",
+      "notUnder": "{name} 当前不在升级维护中",
+      "failed": "结束维护失败"
+    }
   }
 }

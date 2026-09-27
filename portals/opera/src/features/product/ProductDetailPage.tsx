@@ -53,6 +53,10 @@ import {
   DetailRow,
   DialogForm,
   EmptyState,
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
   FileTrigger,
   Icon,
   Input,
@@ -84,6 +88,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { LockedInput } from "@/components/form/LockedInput";
+import { FIELD_LABEL_A11Y } from "@/lib/form-labels";
 import { actionsFor, gatesLaunch, type ProductAction } from "./lifecycle";
 import {
   CopyableInput,
@@ -107,6 +112,8 @@ import {
 } from "./onboarding-model";
 
 const MANAGE = "integration:product.manage";
+/** 升级维护的能力码，与 BFF 的能力门同名（`ops:maintenance.manage`，与运维 → 维护窗口页同一把）。 */
+const MAINTAIN = "ops:maintenance.manage";
 
 /** 与 BFF、库上的 CHECK 同一套。不收 SVG——它可以带脚本。 */
 const ICON_ACCEPT = ["image/png", "image/webp", "image/jpeg"];
@@ -166,6 +173,11 @@ interface ProductRecord {
   iconVersion: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * 升级维护中（owner 2026-09-28）。null = 不在维护中。形状与 opera-bff 的
+   * `ProductMaintenanceState` 一致。`windowId` 只供调用「结束维护」，**不渲染**。
+   */
+  maintenance: { windowId: string; title: string; until: string } | null;
 }
 
 interface CategoryLite {
@@ -191,6 +203,26 @@ function reason(error: unknown, fallback: string): string {
   return error instanceof OperaApiError && error.message
     ? error.message
     : fallback;
+}
+
+/** `datetime-local` 要的是本地时间字面量，不是 ISO——直接塞 ISO 会差一个时区。 */
+function toLocalInputValue(date: Date): string {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+/** 升级维护对话框的表单。`endAt` 是 datetime-local 字面量。 */
+interface MaintenanceForm {
+  endAt: string;
+  description: string;
+}
+
+/** 预计结束默认两小时后：一次升级维护的常见长度，改一下就是了。 */
+function defaultMaintenanceForm(): MaintenanceForm {
+  return {
+    endAt: toLocalInputValue(new Date(Date.now() + 2 * 60 * 60 * 1000)),
+    description: "",
+  };
 }
 
 interface ProductDraft {
@@ -313,6 +345,7 @@ export function ProductDetailPage({
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
+  const canMaintain = can(MAINTAIN);
   const { runWithStepUp } = useStepUp();
   const router = useRouter();
   const panel = useSearchParams().get("panel");
@@ -358,6 +391,11 @@ export function ProductDetailPage({
   const [secretsOpen, setSecretsOpen] = useState(false);
   const [busyClientId, setBusyClientId] = useState<string | null>(null);
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  /* 升级维护：开始（表单）与结束（确认）各一个对话框，同一个 busy。 */
+  const [maintenanceForm, setMaintenanceForm] =
+    useState<MaintenanceForm | null>(null);
+  const [endMaintenanceOpen, setEndMaintenanceOpen] = useState(false);
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
@@ -773,6 +811,100 @@ export function ProductDetailPage({
     }
   }
 
+  /* ── 升级维护（owner 2026-09-28）──
+     「现在 opera 只有停用，点击后 website 完全开不到了。暂停和恢复入口没有找到。」
+     停用与维护是两根轴：停用把产品从官网拿掉；维护让官网 / console 显示「升级维护中」
+     并停止新订阅，已订阅租户由后台作业暂停并顺延。两个动作都是维护窗口的
+     create+start / complete，只是站在产品页上做。BFF 不挂 step-up（与维护窗口页
+     同档），所以这里不走 runWithStepUp。 */
+  const maintenanceEndValid = (() => {
+    if (!maintenanceForm) return false;
+    const ts = new Date(maintenanceForm.endAt).getTime();
+    return !Number.isNaN(ts) && ts > Date.now();
+  })();
+
+  async function submitMaintenanceStart(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!product || !maintenanceForm || !maintenanceEndValid) return;
+    setMaintenanceBusy(true);
+    try {
+      await api.post(
+        `/api/products/${encodeURIComponent(product.productCode)}/maintenance/start`,
+        {
+          endAt: new Date(maintenanceForm.endAt).toISOString(),
+          description: maintenanceForm.description.trim() || undefined,
+        },
+      );
+      toast({
+        tone: "success",
+        title: tShared("productMaintenance.start.done", {
+          name: product.productName,
+        }),
+      });
+      setMaintenanceForm(null);
+      await reload();
+    } catch (error) {
+      /* 判码不判文案。已在维护中 = 别人刚点过：关掉表单、重读，让页面显示真实状态。 */
+      const code = error instanceof OperaApiError ? error.code : undefined;
+      if (code === "PRODUCT_ALREADY_UNDER_MAINTENANCE") {
+        toast({
+          tone: "warning",
+          title: tShared("productMaintenance.start.already", {
+            name: product.productName,
+          }),
+        });
+        setMaintenanceForm(null);
+        await reload();
+      } else {
+        toast({
+          tone: "danger",
+          title: tShared("productMaintenance.start.failed"),
+          description: reason(error, tShared("common.actionFailed")),
+        });
+      }
+    } finally {
+      setMaintenanceBusy(false);
+    }
+  }
+
+  async function submitMaintenanceEnd() {
+    if (!product) return;
+    setMaintenanceBusy(true);
+    try {
+      await api.post(
+        `/api/products/${encodeURIComponent(product.productCode)}/maintenance/complete`,
+      );
+      toast({
+        tone: "success",
+        title: tShared("productMaintenance.end.done", {
+          name: product.productName,
+        }),
+      });
+      setEndMaintenanceOpen(false);
+      await reload();
+    } catch (error) {
+      const code = error instanceof OperaApiError ? error.code : undefined;
+      if (code === "PRODUCT_NOT_UNDER_MAINTENANCE") {
+        toast({
+          tone: "warning",
+          title: tShared("productMaintenance.end.notUnder", {
+            name: product.productName,
+          }),
+        });
+        setEndMaintenanceOpen(false);
+        await reload();
+      } else {
+        toast({
+          tone: "danger",
+          title: tShared("productMaintenance.end.failed"),
+          description: reason(error, tShared("common.actionFailed")),
+        });
+      }
+    } finally {
+      setMaintenanceBusy(false);
+    }
+  }
+
   function toggleSurface(value: ProductSurface, on: boolean) {
     if (!draft) return;
     setDraft({
@@ -841,9 +973,26 @@ export function ProductDetailPage({
       }
       secondary={
         product ? (
-          <StatusBadge tone={STATE_TONE[product.state]} dot>
-            {STATE_LABEL[product.state]}
-          </StatusBadge>
+          <span className="inline-flex flex-wrap items-center gap-sm">
+            <StatusBadge tone={STATE_TONE[product.state]} dot>
+              {STATE_LABEL[product.state]}
+            </StatusBadge>
+            {/* 维护是与生命周期正交的一根轴，所以是第二枚徽标而不是换掉第一枚：
+                「已上线 · 升级维护中」两件事都成立。预计恢复读产品行的
+                maintenance_until——官网 / console 显示的也是它。 */}
+            {product.maintenance ? (
+              <>
+                <StatusBadge tone="warning" dot>
+                  {tShared("productMaintenance.badge")}
+                </StatusBadge>
+                <span className="text-label-sm text-muted-foreground">
+                  {tShared("productMaintenance.until", {
+                    time: formatDateTime(product.maintenance.until, locale),
+                  })}
+                </span>
+              </>
+            ) : null}
+          </span>
         ) : undefined
       }
       action={
@@ -888,6 +1037,30 @@ export function ProductDetailPage({
                 <Icon name="key" size="xs" aria-hidden="true" />
                 密钥管理
               </Button>
+              {/* 升级维护的入口就在这一排（owner 2026-09-28「暂停和恢复入口没有找到」）：
+                  维护中 → 主按钮「结束维护」；已上线且不在维护中 → 「开始升级维护」。
+                  没上线的产品官网本来就不卖，没有可维护的东西。 */}
+              {canMaintain && product.maintenance ? (
+                <Button
+                  type="button"
+                  variant="default"
+                  disabled={maintenanceBusy}
+                  onClick={() => setEndMaintenanceOpen(true)}
+                >
+                  <Icon name="play" size="xs" aria-hidden="true" />
+                  {tShared("productMaintenance.end.button")}
+                </Button>
+              ) : canMaintain && product.state === "active" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={maintenanceBusy}
+                  onClick={() => setMaintenanceForm(defaultMaintenanceForm())}
+                >
+                  <Icon name="settings" size="xs" aria-hidden="true" />
+                  {tShared("productMaintenance.start.button")}
+                </Button>
+              ) : null}
             </>
           ) : null}
           {product ? (
@@ -1710,6 +1883,89 @@ export function ProductDetailPage({
           <Icon name="copy" size="sm" aria-hidden="true" />
           复制全部
         </Button>
+      </DialogForm>
+
+      {/* ── 开始升级维护：预计结束 + 说明，正文把后果讲清 ───────────────── */}
+      <DialogForm
+        size="sm"
+        open={maintenanceForm !== null}
+        onOpenChange={(open) => {
+          if (!open) setMaintenanceForm(null);
+        }}
+        title={tShared("productMaintenance.start.title")}
+        description={tShared("productMaintenance.start.effect")}
+        submitLabel={tShared("productMaintenance.start.submit")}
+        submitting={maintenanceBusy}
+        submitDisabled={!maintenanceEndValid}
+        onSubmit={(e) => void submitMaintenanceStart(e)}
+        cancelLabel={tShared("actions.cancel")}
+      >
+        <FieldGroup>
+          <Field>
+            <FieldLabel {...FIELD_LABEL_A11Y} required htmlFor="pd-maint-end">
+              {tShared("productMaintenance.start.endAt")}
+            </FieldLabel>
+            <Input
+              id="pd-maint-end"
+              type="datetime-local"
+              value={maintenanceForm?.endAt ?? ""}
+              min={toLocalInputValue(new Date())}
+              aria-invalid={maintenanceForm !== null && !maintenanceEndValid}
+              onChange={(e) =>
+                setMaintenanceForm((f) =>
+                  f ? { ...f, endAt: e.target.value } : f,
+                )
+              }
+              required
+            />
+            <FieldDescription>
+              {maintenanceForm !== null && !maintenanceEndValid
+                ? tShared("productMaintenance.start.endAtInvalid")
+                : tShared("productMaintenance.start.endAtHint")}
+            </FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="pd-maint-note">
+              {tShared("productMaintenance.start.note")}
+            </FieldLabel>
+            <Textarea
+              id="pd-maint-note"
+              rows={3}
+              maxLength={10000}
+              value={maintenanceForm?.description ?? ""}
+              onChange={(e) =>
+                setMaintenanceForm((f) =>
+                  f ? { ...f, description: e.target.value } : f,
+                )
+              }
+            />
+            <FieldDescription>
+              {tShared("productMaintenance.start.noteHint")}
+            </FieldDescription>
+          </Field>
+        </FieldGroup>
+      </DialogForm>
+
+      {/* ── 结束维护：确认框（动词 + 对象 + 后果），与 advisory 同一个壳 ───── */}
+      <DialogForm
+        size="sm"
+        open={endMaintenanceOpen}
+        onOpenChange={(open) => {
+          if (!open) setEndMaintenanceOpen(false);
+        }}
+        title={tShared("productMaintenance.end.title", {
+          target: product?.productName ?? "",
+        })}
+        description={tShared("productMaintenance.end.consequence")}
+        submitLabel={tShared("productMaintenance.end.submit")}
+        submitting={maintenanceBusy}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submitMaintenanceEnd();
+        }}
+        cancelLabel={tShared("actions.cancel")}
+      >
+        {null}
       </DialogForm>
 
       {/* advisory 的二次确认。**提醒不是门闩**：它只是拦一下让人看一眼（「恢复」那一档）。 */}

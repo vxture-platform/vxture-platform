@@ -25,6 +25,14 @@
  *   in_progress 顺延 end_at → 同步 maintenance_until。
  * 产品行的这两列只在这个文件里写。
  *
+ * ── 产品页入口（owner 2026-09-28）──
+ * 「暂停和恢复入口没有找到」：运营者站在产品页上，找不到把一个产品送进 / 拉出
+ * 升级维护的按钮（只有「停用」，而停用会让产品从官网彻底消失）。入口现在长在
+ * 产品页（product-catalog.router.ts `POST /api/products/:code/maintenance/start|complete`），
+ * 但**写路径仍是这一份**：create / start / complete 三步抽成下面三个 `*Tx` helper
+ * （收事务 client），窗口页的端点与产品页的端点走同一段 SQL、同一段审计——两个入口
+ * 不会各长一套状态机。
+ *
  * 设计权威仍是 docs/product/platform/admin/governance-write-paths.md §3.3/§4。
  */
 
@@ -195,43 +203,13 @@ export class MaintenanceWindowsRouter {
     const input = normalizeMaintenanceWindowInput(body);
 
     return withTransaction(this.rwPool, async (client) => {
-      const productIds = await resolveProductIds(client, input.productCodes);
-      const { rows } = await client.query<{ id: string }>(
-        MAINTENANCE_WINDOW_INSERT_SQL,
-        [
-          input.severity,
-          input.title,
-          input.description,
-          input.impactDescription,
-          input.affectedServices,
-          input.startAt,
-          input.endAt,
-          createdBy,
-        ],
+      const windowId = await createMaintenanceWindowTx(
+        client,
+        req,
+        input,
+        createdBy,
       );
-      const created = rows[0];
-      if (!created) {
-        /* 库没有按要求插进去——这是本方故障。原来这里回 400，运营者会以为是
-           自己填错了，然后反复改一个永远改不好的输入。 */
-        throw internalError(
-          "MAINTENANCE_WINDOW_INSERT_FAILED",
-          "Maintenance window insert returned no row",
-        );
-      }
-      await replaceWindowProducts(client, created.id, productIds);
-      await insertOperatorAuditLog(client, req, {
-        action: "governance.maintenance.create",
-        resourceType: "maintenance_window",
-        resourceId: created.id,
-        after: {
-          title: input.title,
-          severity: input.severity,
-          startAt: input.startAt,
-          endAt: input.endAt,
-          productCodes: input.productCodes,
-        },
-      });
-      return this.fetchMaintenanceWindow(client, created.id);
+      return this.fetchMaintenanceWindow(client, windowId);
     });
   }
 
@@ -376,55 +354,7 @@ export class MaintenanceWindowsRouter {
     const windowId = requireUuid(id, "id", "Invalid maintenance window id");
 
     return withTransaction(this.rwPool, async (client) => {
-      const started = await client.query<{ end_at: Date | string }>(
-        MAINTENANCE_WINDOW_START_SQL,
-        [windowId, updatedBy],
-      );
-      const startedRow = started.rows[0];
-      if (!startedRow) {
-        await this.throwNotFoundOrConflict(
-          client,
-          windowId,
-          "Only a scheduled window can be started",
-        );
-      }
-      /* 先锁产品行再判占用：FOR UPDATE 等到并发那笔提交后才返回，读到的是提交后的
-         值——两个窗口同时 start 同一个产品，后到的那笔看见前一笔打的标，409。
-         不锁直接 UPDATE 是「最后写的赢」，两个窗口都以为自己占住了。 */
-      const bound = await client.query<{
-        product_code: string;
-        maintenance_window_id: string | null;
-      }>(MAINTENANCE_WINDOW_BOUND_PRODUCTS_LOCK_SQL, [windowId]);
-      const busy = bound.rows.filter(
-        (r) =>
-          r.maintenance_window_id !== null &&
-          r.maintenance_window_id !== windowId,
-      );
-      if (busy.length > 0) {
-        throw conflict(
-          "MAINTENANCE_WINDOW_PRODUCT_BUSY",
-          `这些产品已经在另一个进行中的维护窗口里：${busy
-            .map((r) => r.product_code)
-            .join(
-              " / ",
-            )}。同一产品同时只能在一个进行中的窗口里，先完成或取消那个窗口再开始这个。`,
-        );
-      }
-      const endAt = toIso(startedRow!.end_at);
-      const stamped = await client.query(PRODUCTS_MAINTENANCE_STAMP_SQL, [
-        windowId,
-        endAt,
-      ]);
-      await insertOperatorAuditLog(client, req, {
-        action: "governance.maintenance.start",
-        resourceType: "maintenance_window",
-        resourceId: windowId,
-        after: {
-          productCodes: bound.rows.map((r) => r.product_code),
-          productsStamped: stamped.rowCount ?? 0,
-          maintenanceUntil: endAt,
-        },
-      });
+      await startMaintenanceWindowTx(client, req, windowId, updatedBy);
       return this.fetchMaintenanceWindow(client, windowId);
     });
   }
@@ -448,25 +378,13 @@ export class MaintenanceWindowsRouter {
         : parseIso(body.actualEndAt, "actualEndAt");
 
     return withTransaction(this.rwPool, async (client) => {
-      const { rowCount } = await client.query(MAINTENANCE_WINDOW_COMPLETE_SQL, [
+      await completeMaintenanceWindowTx(
+        client,
+        req,
         windowId,
         actualEndAt,
         updatedBy,
-      ]);
-      if (rowCount === 0) {
-        await this.throwNotFoundOrConflict(
-          client,
-          windowId,
-          "Only an in_progress window can be completed",
-        );
-      }
-      const released = await releaseWindowProducts(client, windowId);
-      await insertOperatorAuditLog(client, req, {
-        action: "governance.maintenance.complete",
-        resourceType: "maintenance_window",
-        resourceId: windowId,
-        after: { actualEndAt, productsReleased: released },
-      });
+      );
       return this.fetchMaintenanceWindow(client, windowId);
     });
   }
@@ -489,7 +407,7 @@ export class MaintenanceWindowsRouter {
         updatedBy,
       ]);
       if (rowCount === 0) {
-        await this.throwNotFoundOrConflict(
+        await throwWindowNotFoundOrConflict(
           client,
           windowId,
           "Maintenance window is already terminal",
@@ -504,25 +422,6 @@ export class MaintenanceWindowsRouter {
       });
       return this.fetchMaintenanceWindow(client, windowId);
     });
-  }
-
-  /** 条件 UPDATE 影响 0 行有两种可能：行不存在（404），或状态不允许（409）。 */
-  private async throwNotFoundOrConflict(
-    db: Queryable,
-    windowId: string,
-    conflictMessage: string,
-  ): Promise<never> {
-    const { rowCount } = await db.query(
-      `select 1 from admin.maintenance_windows where id = $1`,
-      [windowId],
-    );
-    if (rowCount === 0) {
-      throw notFound(
-        "MAINTENANCE_WINDOW_NOT_FOUND",
-        "Maintenance window not found",
-      );
-    }
-    throw conflict("MAINTENANCE_WINDOW_INVALID_TRANSITION", conflictMessage);
   }
 
   private async fetchMaintenanceWindow(
@@ -754,6 +653,183 @@ async function releaseWindowProducts(
   return rowCount ?? 0;
 }
 
+// ── 三步写路径（窗口页与产品页共用）───────────────────────────────────────
+// 每个 helper 都收**事务 client**：调用方负责 BEGIN/COMMIT（withTransaction），
+// helper 只管「这一步的 SQL + 这一步的审计」。抛出即整笔回滚——与端点内联时一样。
+
+/** 条件 UPDATE 影响 0 行有两种可能：行不存在（404），或状态不允许（409）。 */
+async function throwWindowNotFoundOrConflict(
+  db: Queryable,
+  windowId: string,
+  conflictMessage: string,
+): Promise<never> {
+  const { rowCount } = await db.query(
+    `select 1 from admin.maintenance_windows where id = $1`,
+    [windowId],
+  );
+  if (rowCount === 0) {
+    throw notFound(
+      "MAINTENANCE_WINDOW_NOT_FOUND",
+      "Maintenance window not found",
+    );
+  }
+  throw conflict("MAINTENANCE_WINDOW_INVALID_TRANSITION", conflictMessage);
+}
+
+/**
+ * 建窗口（scheduled）+ 绑定产品 + 审计 create。回窗口 id。
+ * `input` 已经过 `normalizeMaintenanceWindowInput` 或由调用方在代码里构造
+ * （产品页入口：标题按产品名拼、severity minor、start_at = now()）。
+ */
+export async function createMaintenanceWindowTx(
+  client: Queryable,
+  req: Request & RequestContext,
+  input: NormalizedMaintenanceWindowInput,
+  createdBy: string,
+): Promise<string> {
+  const productIds = await resolveProductIds(client, input.productCodes);
+  const { rows } = await client.query<{ id: string }>(
+    MAINTENANCE_WINDOW_INSERT_SQL,
+    [
+      input.severity,
+      input.title,
+      input.description,
+      input.impactDescription,
+      input.affectedServices,
+      input.startAt,
+      input.endAt,
+      createdBy,
+    ],
+  );
+  const created = rows[0];
+  if (!created) {
+    /* 库没有按要求插进去——这是本方故障。原来这里回 400，运营者会以为是
+       自己填错了，然后反复改一个永远改不好的输入。 */
+    throw internalError(
+      "MAINTENANCE_WINDOW_INSERT_FAILED",
+      "Maintenance window insert returned no row",
+    );
+  }
+  await replaceWindowProducts(client, created.id, productIds);
+  await insertOperatorAuditLog(client, req, {
+    action: "governance.maintenance.create",
+    resourceType: "maintenance_window",
+    resourceId: created.id,
+    after: {
+      title: input.title,
+      severity: input.severity,
+      startAt: input.startAt,
+      endAt: input.endAt,
+      productCodes: input.productCodes,
+    },
+  });
+  return created.id;
+}
+
+/** start 的结果：给调用方写自己那条审计用。 */
+export interface MaintenanceWindowStarted {
+  /** 打到产品行上的 maintenance_until（= 窗口 end_at）。 */
+  maintenanceUntil: string;
+  productCodes: string[];
+  productsStamped: number;
+}
+
+/**
+ * scheduled → in_progress，顺带把绑定产品打上「升级维护中」。
+ * 某个产品已被**另一个**进行中的窗口占着 → 409，整笔回滚（窗口不会半开：
+ * 状态没变、一个产品都没打）。
+ */
+export async function startMaintenanceWindowTx(
+  client: Queryable,
+  req: Request & RequestContext,
+  windowId: string,
+  updatedBy: string,
+): Promise<MaintenanceWindowStarted> {
+  const started = await client.query<{ end_at: Date | string }>(
+    MAINTENANCE_WINDOW_START_SQL,
+    [windowId, updatedBy],
+  );
+  const startedRow = started.rows[0];
+  if (!startedRow) {
+    await throwWindowNotFoundOrConflict(
+      client,
+      windowId,
+      "Only a scheduled window can be started",
+    );
+  }
+  /* 先锁产品行再判占用：FOR UPDATE 等到并发那笔提交后才返回，读到的是提交后的
+     值——两个窗口同时 start 同一个产品，后到的那笔看见前一笔打的标，409。
+     不锁直接 UPDATE 是「最后写的赢」，两个窗口都以为自己占住了。 */
+  const bound = await client.query<{
+    product_code: string;
+    maintenance_window_id: string | null;
+  }>(MAINTENANCE_WINDOW_BOUND_PRODUCTS_LOCK_SQL, [windowId]);
+  const busy = bound.rows.filter(
+    (r) =>
+      r.maintenance_window_id !== null && r.maintenance_window_id !== windowId,
+  );
+  if (busy.length > 0) {
+    throw conflict(
+      "MAINTENANCE_WINDOW_PRODUCT_BUSY",
+      `这些产品已经在另一个进行中的维护窗口里：${busy
+        .map((r) => r.product_code)
+        .join(
+          " / ",
+        )}。同一产品同时只能在一个进行中的窗口里，先完成或取消那个窗口再开始这个。`,
+    );
+  }
+  const endAt = toIso(startedRow!.end_at);
+  const stamped = await client.query(PRODUCTS_MAINTENANCE_STAMP_SQL, [
+    windowId,
+    endAt,
+  ]);
+  const result: MaintenanceWindowStarted = {
+    maintenanceUntil: endAt,
+    productCodes: bound.rows.map((r) => r.product_code),
+    productsStamped: stamped.rowCount ?? 0,
+  };
+  await insertOperatorAuditLog(client, req, {
+    action: "governance.maintenance.start",
+    resourceType: "maintenance_window",
+    resourceId: windowId,
+    after: result,
+  });
+  return result;
+}
+
+/**
+ * in_progress → completed；actual_end_at 取 `actualEndAt` 或 now()。
+ * 产品行的占用随之清掉（按 maintenance_window_id = 本窗口）。回清掉的产品数。
+ */
+export async function completeMaintenanceWindowTx(
+  client: Queryable,
+  req: Request & RequestContext,
+  windowId: string,
+  actualEndAt: string | null,
+  updatedBy: string,
+): Promise<{ productsReleased: number }> {
+  const { rowCount } = await client.query(MAINTENANCE_WINDOW_COMPLETE_SQL, [
+    windowId,
+    actualEndAt,
+    updatedBy,
+  ]);
+  if (rowCount === 0) {
+    await throwWindowNotFoundOrConflict(
+      client,
+      windowId,
+      "Only an in_progress window can be completed",
+    );
+  }
+  const released = await releaseWindowProducts(client, windowId);
+  await insertOperatorAuditLog(client, req, {
+    action: "governance.maintenance.complete",
+    resourceType: "maintenance_window",
+    resourceId: windowId,
+    after: { actualEndAt, productsReleased: released },
+  });
+  return { productsReleased: released };
+}
+
 interface MaintenanceWindowRow {
   id: string;
   severity: MaintenanceWindowItem["severity"];
@@ -784,7 +860,7 @@ interface MaintenanceWindowWriteBody {
   endAt?: unknown;
 }
 
-interface NormalizedMaintenanceWindowInput {
+export interface NormalizedMaintenanceWindowInput {
   severity: MaintenanceWindowItem["severity"];
   title: string;
   description: string | null;
@@ -958,7 +1034,7 @@ function assertCanReadMaintenanceWindows(req: Request & RequestContext): void {
   }
 }
 
-function assertCanManageMaintenanceWindows(
+export function assertCanManageMaintenanceWindows(
   req: Request & RequestContext,
 ): void {
   if (!req.operator) {
