@@ -50,6 +50,11 @@ export interface SweepMocks {
     findOverdueSuspensions: ReturnType<typeof vi.fn>;
     closeSuspension: ReturnType<typeof vi.fn>;
     getMaxSuspendDays: ReturnType<typeof vi.fn>;
+    /* 2026-09-27 产品级维护窗口：批量暂停 / 恢复 / 顺延同步。 */
+    openSuspension: ReturnType<typeof vi.fn>;
+    findMaintenanceCandidates: ReturnType<typeof vi.fn>;
+    findMaintenanceReleases: ReturnType<typeof vi.fn>;
+    syncMaintenanceExpectedResume: ReturnType<typeof vi.fn>;
   };
   /** 客户通知（已注入）：断言「该发的发了、不该发的一条没发」。 */
   notifier: { notify: ReturnType<typeof vi.fn> };
@@ -80,6 +85,10 @@ export const buildSweepMocks = (product: {
     findOverdueSuspensions: vi.fn().mockResolvedValue([]),
     closeSuspension: vi.fn().mockResolvedValue(undefined),
     getMaxSuspendDays: vi.fn().mockResolvedValue(60),
+    openSuspension: vi.fn().mockResolvedValue("sus-new"),
+    findMaintenanceCandidates: vi.fn().mockResolvedValue([]),
+    findMaintenanceReleases: vi.fn().mockResolvedValue([]),
+    syncMaintenanceExpectedResume: vi.fn().mockResolvedValue(0),
   };
   const provisioning = {
     onSubscriptionActivated: vi

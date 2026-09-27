@@ -48,9 +48,11 @@ import type {
 } from "@vxture/service-subscription";
 import {
   formatDateTime,
+  isSuspensionReason,
   SUBSCRIPTION_STATUSES,
   TIERS,
   type ProductEntitlementView,
+  type SuspensionReason,
   type Tier,
 } from "@vxture-platform/shared";
 import { isReleaseStageSubscribable } from "@vxture/core-utils";
@@ -244,15 +246,8 @@ interface SubscribeCurrent {
   endAt: string | null;
   trialEndAt: string | null;
   autoRenew: boolean;
-  /**
-   * 这一次暂停恢复后要不要顺延服务期（2026-09-25 步骤三）。
-   *
-   * 只有这个布尔，**没有暂停原因**：原因里有「客户违规」那一档，是运营的判断，不从客户
-   * 界面读出来。客户需要知道的只有一件——停掉的这些天会不会还给他。
-   *
-   * null = 没在暂停中，或存量冻结行没有 episode（原因轴是后加的）→ 界面什么都不多说。
-   */
-  suspensionExtendsTerm: boolean | null;
+  /** 进行中那一次暂停；只在 status = suspended 时非 null。见 SubscriptionSuspensionView。 */
+  suspension: SubscriptionSuspensionView | null;
 }
 
 /**
@@ -421,6 +416,8 @@ interface MyOrderRecord {
    * 永远停在 fulfilled——拿它当服务状态，退订之后那一列就是一句假话（2026-09-24 实撞）。
    */
   subscriptionStatus: string | null;
+  /** 那条订阅进行中的暂停（subscriptionStatus = suspended 时非 null）；「服务状态」那一列按它分词。 */
+  subscriptionSuspension: SubscriptionSuspensionView | null;
   /** 'subscription' in V1; 'recharge' reserved for the wallet phase (P6). */
   orderType: "subscription";
   /** ISO deadline while counting down; null = TTL-exempt (paid_amount>0) or terminal. */
@@ -620,6 +617,9 @@ interface MySubscriptionRow {
   end_at: Date | null;
   auto_renew: boolean;
   subscription_kind: string;
+  suspension_reason: string | null;
+  suspension_expected_resume_at: Date | null;
+  suspension_extends_term: boolean | null;
 }
 
 export interface ConsoleSubscriptionView {
@@ -634,6 +634,8 @@ export interface ConsoleSubscriptionView {
   nextBillingDate: string | null;
   autoRenew: boolean;
   isTrial: boolean;
+  /** 进行中那一次暂停；只在 status = suspended 时非 null。见 SubscriptionSuspensionView。 */
+  suspension: SubscriptionSuspensionView | null;
 }
 
 // ── 产品订阅总览（console「我的订阅」卡片，product_330 页面重构）────────────
@@ -669,6 +671,8 @@ export interface SubscribedProductView {
   favorite: boolean;
   /** 产品升级维护中（见 ProductMaintenanceView）；null = 不在维护中。 */
   maintenance: ProductMaintenanceView | null;
+  /** 进行中那一次暂停；只在 status = suspended 时非 null。见 SubscriptionSuspensionView。 */
+  suspension: SubscriptionSuspensionView | null;
 }
 
 /**
@@ -707,6 +711,67 @@ function maintenanceOf(
 ): ProductMaintenanceView | null {
   if (!row.maintenance_window_id) return null;
   return { until: isoOf(row.maintenance_until) };
+}
+
+/**
+ * 进行中那一次暂停，客户视角（产品维护窗口 PR B，2026-11-20）。
+ *
+ * 只在 status = suspended 时非 null；三个字段各自可空——存量冻结行没有 episode
+ * （原因轴 2026-09-25 才加）时三者都是 null，界面落到最中性的「已暂停」。
+ *
+ * **原因出网了**（改掉 2026-09-25「只回布尔」的裁定）：产品级维护会把一个产品名下所有
+ * 租户一起暂停，那时对客户说「已暂停」等于把平台自己的维护说成他的事；而
+ * customer_violation 对应的词是「服务受限」——对客户为真、又不替运营下判词。四个原因
+ * 各配一个词，词表只在 console 的 enum-labels 一处，与官网 products.catalog.suspension.*
+ * 同词。
+ */
+export interface SubscriptionSuspensionView {
+  /** SUSPENSION_REASONS 之一；存量无 episode → null。 */
+  reason: SuspensionReason | null;
+  /** 运营填的预计恢复时刻（ISO）；维护窗口的 episode 由作业按 maintenance_until 同步。 */
+  expectedResumeAt: string | null;
+  /** 恢复后是否顺延服务期；true 才写「暂停期间不计入有效期」。 */
+  extendsTerm: boolean | null;
+}
+
+/** 未闭合 episode 的三列；各查询挂上 openSuspensionLateralSql 就能喂给 suspensionOf。 */
+interface SuspensionColumns {
+  suspension_reason: string | null;
+  suspension_expected_resume_at: Date | string | null;
+  suspension_extends_term: boolean | null;
+}
+
+/**
+ * 把订阅行的未闭合 episode 挂到旁边（别名 `sus`）。`sub` 是外层订阅表的别名。
+ * uidx（一条订阅至多一条未闭合 episode）保证 limit 1 不是在挑。
+ */
+function openSuspensionLateralSql(sub: string): string {
+  return `left join lateral (
+           select s2.reason as suspension_reason,
+                  s2.expected_resume_at as suspension_expected_resume_at,
+                  s2.extends_term as suspension_extends_term
+             from metering.subscription_suspensions s2
+            where s2.subscription_id = ${sub}.id and s2.resumed_at is null
+            limit 1
+         ) sus on true`;
+}
+
+/**
+ * 一处判据：只有 suspended 才带 episode；不在暂停中即使查到了列也回 null（闭合的 episode
+ * 本来就不会被查到，这一层是防桩数据）。认不得的原因值当作没有——库里的生词不漏到界面。
+ */
+function suspensionOf(
+  status: string,
+  row: Partial<SuspensionColumns>,
+): SubscriptionSuspensionView | null {
+  if (status !== "suspended") return null;
+  return {
+    reason: isSuspensionReason(row.suspension_reason)
+      ? row.suspension_reason
+      : null,
+    expectedResumeAt: isoOf(row.suspension_expected_resume_at),
+    extendsTerm: row.suspension_extends_term ?? null,
+  };
 }
 
 /** 「新品推荐」卡：租户尚未订阅过的可单独订购产品 + 起价。 */
@@ -1126,26 +1191,19 @@ export class SubscriptionRouter {
       plan_version_id: string;
       end_at: Date | null;
       trial_end_at: Date | null;
+      suspension_reason: string | null;
+      suspension_expected_resume_at: Date | null;
       suspension_extends_term: boolean | null;
       auto_renew: boolean;
       tier: string | null;
       plan_code: string;
     }>(
       `select ts.id, ts.status, ts.plan_version_id, ts.end_at, ts.trial_end_at,
-              /*
-               * 这一次暂停恢复后要不要顺延服务期（2026-09-25 步骤三）。
-               *
-               * 只回传这个布尔，**不回传暂停原因**：原因里有 customer_violation 这一档，
-               * 那是运营的判断，不该从客户界面读出来。客户需要知道的只有一件事——停掉的
-               * 这些天会不会还给他。
-               *
-               * NULL = 没在暂停中，或存量冻结行没有 episode（原因轴 2026-09-25 才加）。
-               * 界面据此什么都不多说，而不是猜一个。
-               */
-              (select sus.extends_term
-                 from metering.subscription_suspensions sus
-                where sus.subscription_id = ts.id and sus.resumed_at is null
-                limit 1) as suspension_extends_term,
+              /* 进行中那一次暂停：原因 / 预计恢复 / 顺不顺延，三列一起出网（见
+                 SubscriptionSuspensionView 的说明）。全 NULL = 没在暂停中，或存量冻结行
+                 没有 episode（原因轴 2026-09-25 才加）——界面落到最中性的「已暂停」。 */
+              sus.suspension_reason, sus.suspension_expected_resume_at,
+              sus.suspension_extends_term,
               ts.auto_renew, pc.tier, pl.plan_code
          from metering.subscriptions ts
          join product.plan_components pc
@@ -1154,6 +1212,7 @@ export class SubscriptionRouter {
            on prod.id = pc.product_id and prod.product_code = $2
          join product.plan_versions pv on pv.id = ts.plan_version_id
          join product.plans pl on pl.id = pv.plan_id
+         ${openSuspensionLateralSql("ts")}
         where ts.tenant_id = $1
           and ts.deleted_at is null
           and not (ts.subscription_kind = 'trial'
@@ -1174,7 +1233,7 @@ export class SubscriptionRouter {
       endAt: row.end_at?.toISOString() ?? null,
       trialEndAt: row.trial_end_at?.toISOString() ?? null,
       autoRenew: row.auto_renew,
-      suspensionExtendsTerm: row.suspension_extends_term,
+      suspension: suspensionOf(row.status, row),
     };
   }
 
@@ -1298,10 +1357,13 @@ export class SubscriptionRouter {
     const res = await this.pool.query<MySubscriptionRow>(
       `select ts.id, ts.tenant_id, pl.id as plan_id, pl.plan_name, ts.status,
               ts.pay_amount, ts.currency, ts.cycle_unit, ts.end_at, ts.auto_renew,
-              ts.subscription_kind
+              ts.subscription_kind,
+              sus.suspension_reason, sus.suspension_expected_resume_at,
+              sus.suspension_extends_term
          from metering.subscriptions ts
          join product.plan_versions pv on pv.id = ts.plan_version_id
          join product.plans pl on pl.id = pv.plan_id
+         ${openSuspensionLateralSql("ts")}
         where ts.tenant_id = $1 and ts.deleted_at is null
         order by ts.created_at desc
         limit 100`,
@@ -1319,6 +1381,7 @@ export class SubscriptionRouter {
       nextBillingDate: r.end_at ? r.end_at.toISOString() : null,
       autoRenew: r.auto_renew,
       isTrial: r.subscription_kind === "trial",
+      suspension: suspensionOf(r.status, r),
     }));
   }
 
@@ -1360,6 +1423,9 @@ export class SubscriptionRouter {
       auto_renew: boolean;
       maintenance_window_id: string | null;
       maintenance_until: Date | null;
+      suspension_reason: string | null;
+      suspension_expected_resume_at: Date | null;
+      suspension_extends_term: boolean | null;
     }>(
       `select ts.id as subscription_id,
               prod.id as product_id, prod.product_code, prod.product_name,
@@ -1367,7 +1433,9 @@ export class SubscriptionRouter {
               prod.maintenance_window_id, prod.maintenance_until,
               pl.plan_name, pc.tier, pc.quota->>'member.max' as seats,
               ts.subscription_kind, ts.cycle_unit, ts.status,
-              ts.start_at, ts.end_at, ts.auto_renew
+              ts.start_at, ts.end_at, ts.auto_renew,
+              sus.suspension_reason, sus.suspension_expected_resume_at,
+              sus.suspension_extends_term
          from metering.subscriptions ts
          join product.plan_versions pv on pv.id = ts.plan_version_id
          join product.plans pl on pl.id = pv.plan_id
@@ -1377,6 +1445,7 @@ export class SubscriptionRouter {
             limit 1
          ) pc on true
          left join product.products prod on prod.id = pc.product_id
+         ${openSuspensionLateralSql("ts")}
         where ts.workspace_id = $1 and ts.deleted_at is null
           -- 下单只建 billing.orders（product_330 P1-b2），订阅行只在履约后存在；旧模型的
           -- 待收款壳已在 P2 迁移里软删。页头「未支付、未开通的订单不在此列」由此成立。
@@ -1405,6 +1474,7 @@ export class SubscriptionRouter {
       autoRenew: r.auto_renew,
       favorite: r.product_id != null && favorites.has(r.product_id),
       maintenance: maintenanceOf(r),
+      suspension: suspensionOf(r.status, r),
     }));
   }
 
@@ -2756,6 +2826,9 @@ interface OrderRow {
   subscription_id: string | null;
   /** 该订阅**当前**状态；未履约（无订阅）时 null。服务在不在看它，不看 order_status。 */
   subscription_status: string | null;
+  suspension_reason: string | null;
+  suspension_expected_resume_at: Date | null;
+  suspension_extends_term: boolean | null;
   /** billing.orders.status（订单实体状态机） */
   order_status: string;
   /** 每单付款时效（分钟，P4 修订）；NULL=存量单 → 回退 env */
@@ -2862,6 +2935,9 @@ select
    * 「服务还在不在」的答案在订阅行上，不在订单上。订单只回答「这张单走到哪一步」。
    */
   sub.status           as subscription_status,
+  sus.suspension_reason,
+  sus.suspension_expected_resume_at,
+  sus.suspension_extends_term,
   tn.name              as tenant_name,
   tn.owner_user_id,
   ws.name              as workspace_name,
@@ -2877,6 +2953,7 @@ select
   ))                   as declared_at
 from billing.orders o
 left join metering.subscriptions sub on sub.id = o.subscription_id
+${openSuspensionLateralSql("sub")}
 left join product.plan_versions pv on pv.id = o.plan_version_id
 left join product.plans plan on plan.id = pv.plan_id
 left join lateral (
@@ -3029,6 +3106,9 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     orderStatus: state,
     /* 服务在不在：读订阅，不读订单（见 ORDER_ROW_SELECT 里那段注释）。 */
     subscriptionStatus: r.subscription_status,
+    subscriptionSuspension: r.subscription_status
+      ? suspensionOf(r.subscription_status, r)
+      : null,
     orderType: "subscription",
     expireAt: deriveExpireAt(r, state),
     paidAmount: r.paid_amount ?? "0",

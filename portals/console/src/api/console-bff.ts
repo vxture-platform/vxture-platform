@@ -1,3 +1,4 @@
+import type { SuspensionReason } from "@vxture-platform/shared";
 import type {
   AccountDeletionState,
   Capability,
@@ -23,6 +24,19 @@ import type {
 
 // ── 订阅与账单 DTO（与 BFF 响应结构对齐）────────────────────────────────────
 
+/**
+ * 进行中那一次暂停，客户视角（产品维护窗口 PR B）。只在 status = suspended 时非 null；
+ * 三个字段各自可空——存量冻结行没有 episode 时三者都是 null，界面落到最中性的「已暂停」。
+ * 状态词按 reason 分词，词表只在 `modules/shared/enum-labels.ts` 一处。
+ */
+export interface SubscriptionSuspension {
+  reason: SuspensionReason | null;
+  /** 预计恢复时刻（ISO）；null = 运营没填。 */
+  expectedResumeAt: string | null;
+  /** 恢复后是否顺延服务期；true 才写「暂停期间不计入有效期」。 */
+  extendsTerm: boolean | null;
+}
+
 export interface ConsoleSubscription {
   id: string;
   tenantId: string;
@@ -36,6 +50,7 @@ export interface ConsoleSubscription {
   nextBillingDate: string | null;
   autoRenew: boolean;
   isTrial: boolean;
+  suspension: SubscriptionSuspension | null;
 }
 
 function normalizeOrigin(value: string | undefined): string {
@@ -1053,15 +1068,8 @@ export interface SubscribeCurrent {
   endAt: string | null;
   trialEndAt: string | null;
   autoRenew: boolean;
-  /**
-   * 这一次暂停恢复后要不要顺延服务期（2026-09-25 步骤三）。
-   *
-   * 只有这个布尔，**没有暂停原因**：原因里有「客户违规」那一档，是运营的判断，不从客户
-   * 界面读出来。客户需要知道的只有一件——停掉的这些天会不会还给他。
-   *
-   * null = 没在暂停中，或存量冻结行没有 episode（原因轴是后加的）→ 界面什么都不多说。
-   */
-  suspensionExtendsTerm: boolean | null;
+  /** 进行中那一次暂停；只在 status = suspended 时非 null。 */
+  suspension: SubscriptionSuspension | null;
 }
 
 export interface PendingOrderSummary {
@@ -1179,6 +1187,8 @@ export interface MyOrder {
    * 当服务状态就是一句假话（2026-09-24 实撞：退订后两张单仍显示「服务中」）。
    */
   subscriptionStatus: string | null;
+  /** 那条订阅进行中的暂停（subscriptionStatus = suspended 时非 null）；「服务状态」列按它分词。 */
+  subscriptionSuspension: SubscriptionSuspension | null;
   orderType: "subscription";
   expireAt: string | null;
   paidAmount: string;
@@ -1237,6 +1247,8 @@ export interface SubscribedProduct {
   favorite: boolean;
   /** 产品升级维护中；null = 不在维护中。 */
   maintenance: ProductMaintenance | null;
+  /** 进行中那一次暂停；只在 status = suspended 时非 null。 */
+  suspension: SubscriptionSuspension | null;
 }
 
 export interface RecommendedProduct {

@@ -1,7 +1,7 @@
 /**
  * subscription-renewal.job.ts — 到期扫描 + 自动续费（product_330 P2-c）。
  *
- * 每 tick 六趟，顺序固定：
+ * 每 tick 七趟，顺序固定：
  *  1. 自动续费：到期前 SUBSCRIPTION_RENEW_LEAD_DAYS（默认 3，owner 2026-09-03：到期前 3 天即可）内、auto_renew 开的订阅开 renew 单；
  *     ¥0 即时结清履约（end_at 顺延），付费单等客户付款（TTL = 到期 + SUBSCRIPTION_RENEW_GRACE_DAYS，默认 3）。
  *  2. 入宽限（2026-09-25，S8）：end_at 已过但还在宽限里、续费单在途未付的行 → overdue。权益不变，
@@ -13,6 +13,9 @@
  *     平台原因强制恢复、客户违规终止——顺延让有效到期日一直往后走，没有上限那条订阅永不到期。
  *  6. 顺延结算兜底：已闭合但没结算的 episode 结成天数加到 end_at。运营恢复时 admin-bff 会
  *     立刻结算一次，这一趟只捞那次失败/漏掉的（判据是 granted_seconds is null，幂等）。
+ *  7. 产品级维护窗口对账（2026-09-27，owner 定「窗口进行中该产品所有已订阅租户给时间补偿」）：
+ *     产品打着窗口 → 名下在服务中的订阅批量暂停（episode 带窗口 id、顺延）；窗口清掉 → 恢复并结算；
+ *     窗口顺延 → 同窗口 episode 的预计恢复跟着改。判据全在库里（状态 + 未闭合 episode + 窗口 id），幂等。
  * 先续后扫，¥0 续上的行 end_at 已后移不会被扫到；入宽限必须在到期扫描之前。
  * 到点处置放在到期扫描**之后**：先让该到期的走完，剩下的才是真正「停太久」的。
  *
@@ -126,6 +129,19 @@ export class SubscriptionRenewalJob {
     if (settled > 0) {
       this.logger.log(`suspension settle: ${settled} episode(s) settled`);
     }
+    // 7. 产品级维护窗口对账：进窗口批量暂停、出窗口恢复 + 结算、顺延同步。放在结算兜底之后：
+    //    本趟恢复的行自己会立刻结算，这里不依赖第 6 趟；到点处置（第 5 趟）若强制恢复了一条
+    //    仍在维护中的订阅，下一 tick 本趟会再次暂停它——产品确实还在维护。
+    const maintenance = await this.subscriptions.sweepProductMaintenance();
+    if (
+      maintenance.suspended > 0 ||
+      maintenance.resumed > 0 ||
+      maintenance.synced > 0
+    ) {
+      this.logger.log(
+        `product maintenance: ${maintenance.suspended} suspended, ${maintenance.resumed} resumed, ${maintenance.synced} expected-resume synced`,
+      );
+    }
     return (
       renewal.created +
       overdue +
@@ -133,7 +149,10 @@ export class SubscriptionRenewalJob {
       soon.notified +
       deadline.resumed +
       deadline.terminated +
-      settled
+      settled +
+      maintenance.suspended +
+      maintenance.resumed +
+      maintenance.synced
     );
   }
 }

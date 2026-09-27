@@ -159,6 +159,12 @@ CREATE TABLE metering.subscription_suspensions (
        还原——而「还原成什么」只有暂停那一刻知道：无脑置 true 会给一条本来就关着自动
        续费的订阅悄悄打开它。NULL = 存量 episode（本列 2026-09-25 后加）→ 恢复时不动。 */
     auto_renew_before boolean,
+    -- 产品级维护窗口（2026-09-27，owner 定「窗口进行中该产品所有已订阅租户给时间补偿」）：这一次
+    -- 暂停是哪一个窗口批量开的。裸值→admin.maintenance_windows（跨 schema 不建 FK，边界#2）。
+    -- NULL = 个例暂停（运营对单条订阅手工做的），本趟对账不碰它。platform-api 作业按它对账：
+    -- 产品上的 products.maintenance_window_id 不再等于它 → 出窗口恢复；窗口顺延 → 同窗口未闭合
+    -- episode 的 expected_resume_at 跟着改。可改（同 expected_resume_at，不进锚点）。
+    maintenance_window_id uuid,
     actor_type        varchar(16)   NOT NULL DEFAULT 'operator',   -- §0.1：system/customer/operator
     actor_id          uuid,                                       -- 裸值（边界#2）
     client_ip         varchar(64),
@@ -184,6 +190,9 @@ CREATE INDEX idx_subscription_suspensions_tenant_id    ON metering.subscription_
 -- 一条订阅同时只能有一次「进行中」的暂停。两次并存会让有效到期日算两遍。
 CREATE UNIQUE INDEX uidx_subscription_suspensions_open ON metering.subscription_suspensions (subscription_id)
   WHERE resumed_at IS NULL;
+-- 产品级维护窗口的对账索引（2026-09-27）：出窗口 / 顺延同步都按「未闭合 + 带窗口 id」捞，部分索引即可。
+CREATE INDEX idx_subscription_suspensions_maintenance_open ON metering.subscription_suspensions (maintenance_window_id)
+  WHERE resumed_at IS NULL AND maintenance_window_id IS NOT NULL;
 
 -- ── §3 运营手工权益覆盖。subscription_id 域内 FK→subscriptions（内联）；product_id 跨 schema→product.products（90）。
 --   operator_id：权益覆盖 realm 确定=operator，逻辑引用 admin.operator_accounts，裸 UUID（边界#2）。

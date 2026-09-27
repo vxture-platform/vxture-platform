@@ -52,6 +52,7 @@ import {
   type PlanAudience,
 } from "./hubModel";
 import { useDateFormat } from "@/lib/use-date-format";
+import { useSuspensionLabels } from "@/modules/shared/enum-labels";
 
 const AUDIENCE_ICON: Record<PlanAudience, IconName> = {
   person: "user",
@@ -157,6 +158,7 @@ export function SubscriptionProductCard({
   onReview?: (item: SubscribedProduct) => void;
 }) {
   const { fmtDate } = useDateFormat();
+  const suspension = useSuspensionLabels();
 
   const t = useTranslations("subscriptionHub");
   const withLabels = useConfirmLabels();
@@ -174,6 +176,8 @@ export function SubscriptionProductCard({
    * 退订不关：客户随时有权离开，而退订不会造出第二条订阅。
    */
   const suspended = item.status === "suspended";
+  /* 冻结中的副句：「预计 {time} 恢复 · 暂停期间不计入有效期」，两半各自有条件；都没有就不画行。 */
+  const suspensionHint = suspended ? suspension.hint(item.suspension) : null;
   const percent = cyclePercent(item.startAt, item.endAt);
   const nearExpiry = !expired && left != null && left <= RENEW_THRESHOLD_DAYS;
   const { showUpgrade, showRenew, renewToggleable } = hubCardEntries({
@@ -269,8 +273,17 @@ export function SubscriptionProductCard({
               <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
                 {item.productName ?? item.planName}
               </span>
-              <StatusBadge tone={SUB_STATUS_TONES[item.status] ?? "neutral"}>
-                {t(`subStatus.${item.status}`)}
+              <StatusBadge
+                tone={
+                  suspended
+                    ? suspension.tone(item.suspension)
+                    : (SUB_STATUS_TONES[item.status] ?? "neutral")
+                }
+              >
+                {/* 冻结中按原因分词（升级维护中 / 审核中 / 服务受限 / 已暂停），词表在 enum-labels。 */}
+                {suspended
+                  ? suspension.state(item.suspension)
+                  : t(`subStatus.${item.status}`)}
               </StatusBadge>
               <FavoriteStar
                 active={item.favorite}
@@ -306,6 +319,12 @@ export function SubscriptionProductCard({
             {item.cycleUnit === "year" ? t("cycle.year") : t("cycle.month")}
           </Badge>
         </div>
+
+        {suspensionHint ? (
+          <span className="text-body-sm text-muted-foreground">
+            {suspensionHint}
+          </span>
+        ) : null}
 
         {/* ── 权益区:这份订阅给到什么时候 ──────────────────────────────
             进度条走 DS 的 Progress,填充是 `bg-primary`(品牌色,当前就是蓝)——

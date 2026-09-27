@@ -7,6 +7,7 @@ import {
   ConflictException,
 } from "@nestjs/common";
 import { ProvisioningService } from "@vxture/service-provisioning";
+import { SUSPENSION_REASON_EXTENDS_TERM } from "@vxture-platform/shared";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import {
   formatNotifyDate,
@@ -558,6 +559,146 @@ export class SubscriptionService {
       }
     }
     return { resumed, terminated };
+  }
+
+  /**
+   * 产品级维护窗口对账（2026-09-27，owner 定「窗口进行中，该产品所有已订阅租户给时间补偿，
+   * 恢复后结算；个例暂停机制不变」）。
+   *
+   * 不在 opera-bff 的窗口事务里做：一个窗口可能挂几百条订阅，每条要 CAS、开 episode、跑
+   * provisioning 钩子、发通知，那不是一笔运营请求该等的事；而且窗口期间新履约开通的订阅
+   * 也要补偿——放在作业里下一 tick 自然捞到（开通即补偿），履约路径不必加钩子。
+   *
+   * 与 sweepOverdueSuspensions 同一条路：`repo.update` CAS + episode 开 / 闭 +
+   * `applyTransitionHooks` + `settleSuspensionExtension` + 通知。三段：
+   *   1. 进窗口：产品打着窗口、订阅在服务中、没有未闭合 episode → suspended，开一条
+   *      reason=platform_ops（顺延由 @shared 的政策表派生，落库）、actor=system、带窗口 id
+   *      的 episode，expected_resume_at = 产品上的 maintenance_until。
+   *   2. 出窗口：未闭合 episode 带窗口 id、产品已不再打着同一个窗口 → active（还原暂停那
+   *      一刻的 auto_renew）、闭合、结算顺延、通知恢复。
+   *   3. 顺延同步：窗口 maintenance_until 变了 → 同窗口未闭合 episode 的预计恢复跟着改。
+   * 幂等靠判据本身（状态 + 有无未闭合 episode + 窗口 id 是否仍打在产品上），重跑不重复。
+   * 运营手工暂停的（episode 没有窗口 id）不受影响；窗口期间运营手工恢复某条订阅，下一 tick
+   * 会再次被暂停——产品确实还在维护，这是对的。
+   *
+   * 单行失败只记日志，趟不中断（同其它 sweep）。
+   */
+  async sweepProductMaintenance(): Promise<{
+    suspended: number;
+    resumed: number;
+    synced: number;
+  }> {
+    let suspended = 0;
+    let resumed = 0;
+
+    // 1. 进窗口
+    const candidates = await this.repo.findMaintenanceCandidates();
+    for (const c of candidates) {
+      try {
+        const before = await this.getSubscription(c.subscriptionId);
+        if (before.status !== c.status) continue; // moved since the scan
+        const result = await this.repo.update(c.subscriptionId, before, {
+          status: "suspended",
+          // 冻结期间不该自动续上一期（同 admin-bff 暂停那条 UPDATE）；恢复时按 episode
+          // 记下的 auto_renew_before 还原。
+          autoRenew: false,
+          operatorType: "system",
+          operatorRemark: `product maintenance window ${c.maintenanceWindowId}`,
+          expectedStatus: c.status,
+        });
+        if (!result) {
+          this.logger.debug(
+            `product maintenance: subscription ${c.subscriptionId} changed under us, skipped (lost race)`,
+          );
+          continue;
+        }
+        await this.repo.openSuspension({
+          subscriptionId: c.subscriptionId,
+          tenantId: before.tenantId,
+          reason: "platform_ops",
+          extendsTerm: SUSPENSION_REASON_EXTENDS_TERM.platform_ops,
+          autoRenewBefore: before.autoRenew,
+          expectedResumeAt: c.maintenanceUntil,
+          actorType: "system",
+          maintenanceWindowId: c.maintenanceWindowId,
+        });
+        await this.applyTransitionHooks(
+          `maintenance:${c.subscriptionId}`,
+          c.subscriptionId,
+          before,
+          result,
+        );
+        await this.emit(
+          `maintenance suspended ${c.subscriptionId}`,
+          async () => {
+            const d = await this.repo.getNotifyDisplay(c.subscriptionId);
+            return d
+              ? this.subscriptionNotice("subscription.suspended", d)
+              : null;
+          },
+        );
+        suspended += 1;
+      } catch (err) {
+        this.logger.error(
+          `product maintenance: subscription ${c.subscriptionId} failed to suspend — ${String(err)}`,
+        );
+      }
+    }
+
+    // 2. 出窗口
+    const releases = await this.repo.findMaintenanceReleases();
+    for (const r of releases) {
+      try {
+        const before = await this.getSubscription(r.subscriptionId);
+        if (before.status !== "suspended") continue; // moved since the scan
+        // 还原暂停那一刻的续费意愿；episode 没记（null）⇒ 整个键不出现（= 不动它）。
+        const result = await this.repo.update(r.subscriptionId, before, {
+          status: "active",
+          ...(r.autoRenewBefore === null
+            ? {}
+            : { autoRenew: r.autoRenewBefore }),
+          operatorType: "system",
+          operatorRemark: `product maintenance window ${r.maintenanceWindowId} ended — resumed`,
+          expectedStatus: "suspended",
+        });
+        if (!result) {
+          this.logger.debug(
+            `product maintenance: subscription ${r.subscriptionId} changed under us, skipped (lost race)`,
+          );
+          continue;
+        }
+        // 先闭合再结算：结算的判据是「已闭合且未结算」（同到点处置）。
+        await this.repo.closeSuspension(r.subscriptionId);
+        await this.applyTransitionHooks(
+          `maintenance-release:${r.subscriptionId}`,
+          r.subscriptionId,
+          before,
+          result,
+        );
+        await this.settleSuspensionExtension(r.subscriptionId);
+        await this.emit(`maintenance resumed ${r.subscriptionId}`, async () => {
+          const d = await this.repo.getNotifyDisplay(r.subscriptionId);
+          return d ? this.subscriptionNotice("subscription.resumed", d) : null;
+        });
+        resumed += 1;
+      } catch (err) {
+        this.logger.error(
+          `product maintenance: subscription ${r.subscriptionId} failed to resume — ${String(err)}`,
+        );
+      }
+    }
+
+    // 3. 顺延同步：一条 UPDATE，自己的失败自己记，不影响前两段已生效的结果。
+    let synced = 0;
+    try {
+      synced = await this.repo.syncMaintenanceExpectedResume();
+    } catch (err) {
+      this.logger.error(
+        `product maintenance: expected-resume sync failed — ${String(err)}`,
+      );
+    }
+
+    return { suspended, resumed, synced };
   }
 
   /**

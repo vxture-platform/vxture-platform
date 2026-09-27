@@ -9,7 +9,22 @@ import type {
   ListSubscriptionsResult,
   CreateSubscriptionInput,
   UpdateSubscriptionInput,
+  OpenSuspensionInput,
+  MaintenanceCandidate,
+  MaintenanceRelease,
 } from "../types/subscription.types";
+
+/**
+ * 「在服务中」的状态族：active / trialing / expiring / overdue。
+ *
+ * 本文件已有三处谓词写的就是这个并集——findTierConflicts（2026-09-24 的注释定的：
+ * expiring / overdue 只是临近到期或欠费，服务还在）、findUnclaimedLiveForProduct（与
+ * uidx_subscriptions_live_per_product 的 INSERT 拦截集合对齐）、findExpiredSubscriptionIds
+ * 的「在用族」。suspended 占着槽位（那条唯一索引把它算进去）但**不在服务中**，所以不在
+ * 这里；@shared 的 SUBSCRIPTION_STATUSES 是全集，今天没有这一族的常量，本文件即权威。
+ * 产品级维护窗口的进窗口候选按它筛：已经停着的（suspended）、终态的都不该再被暂停一次。
+ */
+const IN_SERVICE_STATUSES = ["active", "trialing", "expiring", "overdue"];
 
 interface SubscriptionRow {
   id: string;
@@ -1213,6 +1228,148 @@ export class PgSubscriptionRepository {
         where subscription_id = $1 and resumed_at is null`,
       [subscriptionId],
     );
+  }
+
+  // ── 产品级维护窗口（2026-09-27，owner 定「窗口进行中该产品所有已订阅租户给时间补偿」）──
+  // 批量暂停 / 恢复不在 opera-bff 的事务里做：platform-api 作业每 tick 用下面四个查询对账
+  // （SubscriptionService.sweepProductMaintenance）。判据全是「状态 + 有无未闭合 episode +
+  // 窗口 id 是否仍打在产品上」，重跑不重复开 / 闭。窗口 id 落在 episode 上（本列 2026-11-20
+  // 加），运营手工做的个例暂停（NULL）不受影响。
+
+  /**
+   * 开一条 episode。镜像 admin-bff `SUSPENSION_OPEN_SQL` 的列，外加 actor_type 与窗口归属
+   * （那条 SQL 把 actor_type 写死 'operator'；这里由调用方给——作业是 system）。
+   *
+   * 不写 on conflict：uidx_subscription_suspensions_open 保证一条订阅同时只有一次进行中的
+   * 暂停，撞上 23505 说明别的写入方抢先开了一条——那是该抛给调用方记日志的事，不该静默。
+   */
+  async openSuspension(input: OpenSuspensionInput): Promise<string> {
+    const res = await this.pool.query<{ id: string }>(
+      `insert into metering.subscription_suspensions (
+         subscription_id, tenant_id, reason, reason_note, extends_term, auto_renew_before,
+         expected_resume_at, actor_type, actor_id, client_ip, maintenance_window_id
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       returning id`,
+      [
+        input.subscriptionId,
+        input.tenantId,
+        input.reason,
+        input.reasonNote ?? null,
+        input.extendsTerm,
+        input.autoRenewBefore,
+        input.expectedResumeAt,
+        input.actorType,
+        input.actorId ?? null,
+        input.clientIp ?? null,
+        input.maintenanceWindowId ?? null,
+      ],
+    );
+    return res.rows[0]!.id;
+  }
+
+  /**
+   * 进窗口候选：产品打着窗口（products.maintenance_window_id 非空）、订阅在服务中
+   * （IN_SERVICE_STATUSES）、`product_id = 该产品`、没有未闭合 episode。
+   *
+   * 「没有未闭合 episode」是幂等的关键：本趟上一 tick 开过的、运营手工暂停的（窗口 id NULL
+   * 但同样未闭合）都不再进来。窗口期间履约开通的新订阅下一 tick 自然被捞到——开通即补偿，
+   * 履约路径不必加钩子。带当前状态给 CAS 用。
+   */
+  async findMaintenanceCandidates(
+    limit = 100,
+  ): Promise<MaintenanceCandidate[]> {
+    const { rows } = await this.pool.query<{
+      subscription_id: string;
+      tenant_id: string;
+      status: string;
+      auto_renew: boolean;
+      product_id: string;
+      maintenance_window_id: string;
+      maintenance_until: Date;
+    }>(
+      `select s.id as subscription_id, s.tenant_id, s.status, s.auto_renew,
+              p.id as product_id, p.maintenance_window_id, p.maintenance_until
+         from product.products p
+         join metering.subscriptions s on s.product_id = p.id
+        where p.maintenance_window_id is not null
+          and p.maintenance_until is not null
+          and s.deleted_at is null
+          and s.status = any($1::text[])
+          and not exists (
+            select 1 from metering.subscription_suspensions sus
+             where sus.subscription_id = s.id and sus.resumed_at is null
+          )
+        order by s.created_at asc
+        limit $2`,
+      [IN_SERVICE_STATUSES, limit],
+    );
+    return rows.map((r) => ({
+      subscriptionId: r.subscription_id,
+      tenantId: r.tenant_id,
+      status: r.status,
+      autoRenew: r.auto_renew,
+      productId: r.product_id,
+      maintenanceWindowId: r.maintenance_window_id,
+      maintenanceUntil: r.maintenance_until,
+    }));
+  }
+
+  /**
+   * 出窗口候选：未闭合 episode 带窗口 id，而其产品上的 maintenance_window_id 已不等于它
+   * （complete / cancel 清成 NULL，或产品被硬删 → left join 为空，两者都算「不再打着」）。
+   *
+   * 只认还停着的（status = suspended）：别的路径已经把状态改走而 episode 没闭合的，同
+   * findOverdueSuspensions 的处理，不在这里当作维护恢复。
+   */
+  async findMaintenanceReleases(limit = 100): Promise<MaintenanceRelease[]> {
+    const { rows } = await this.pool.query<{
+      id: string;
+      subscription_id: string;
+      status: string;
+      auto_renew_before: boolean | null;
+      maintenance_window_id: string;
+    }>(
+      `select sus.id, sus.subscription_id, s.status, sus.auto_renew_before,
+              sus.maintenance_window_id
+         from metering.subscription_suspensions sus
+         join metering.subscriptions s on s.id = sus.subscription_id
+         left join product.products p on p.id = s.product_id
+        where sus.resumed_at is null
+          and sus.maintenance_window_id is not null
+          and p.maintenance_window_id is distinct from sus.maintenance_window_id
+          and s.deleted_at is null
+          and s.status = 'suspended'
+        order by sus.paused_at asc
+        limit $1`,
+      [limit],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      subscriptionId: r.subscription_id,
+      status: r.status,
+      autoRenewBefore: r.auto_renew_before,
+      maintenanceWindowId: r.maintenance_window_id,
+    }));
+  }
+
+  /**
+   * 顺延同步：窗口进行中运营改了 end_at（opera-bff 同步到 products.maintenance_until），
+   * 同窗口未闭合 episode 的 expected_resume_at 跟着改。一条 UPDATE，只改真的不同的行，
+   * 返回改了几条。expected_resume_at 是可改列（98 白名单里），不碰锚点。
+   */
+  async syncMaintenanceExpectedResume(): Promise<number> {
+    const res = await this.pool.query(
+      `update metering.subscription_suspensions sus
+          set expected_resume_at = p.maintenance_until, updated_at = now()
+         from metering.subscriptions s
+         join product.products p on p.id = s.product_id
+        where s.id = sus.subscription_id
+          and sus.resumed_at is null
+          and sus.maintenance_window_id is not null
+          and p.maintenance_window_id = sus.maintenance_window_id
+          and sus.expected_resume_at is distinct from p.maintenance_until`,
+    );
+    return res.rowCount ?? 0;
   }
 
   private mapHistory(row: HistoryRow): SubscriptionHistoryRecord {

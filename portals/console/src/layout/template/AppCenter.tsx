@@ -71,6 +71,7 @@ import { getPathname } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductUrl } from "@/lib/website-entry";
 import { useDateFormat } from "@/lib/use-date-format";
+import { useSuspensionLabels } from "@/modules/shared/enum-labels";
 import type {
   ProductAppTile,
   RecommendedProduct,
@@ -209,6 +210,7 @@ export function AppCenter({
   labels,
 }: AppCenterProps) {
   const { fmtDate } = useDateFormat();
+  const suspension = useSuspensionLabels();
 
   const locale = useLocale();
   /* 订阅这个域的词典(档位/周期/状态/期限),与 hubCards、OrdersSection、付款页共用。 */
@@ -303,12 +305,18 @@ export function AppCenter({
                         </span>
                       </span>
                       <StatusBadge
-                        tone={SUB_STATUS_TONES[status] ?? "neutral"}
+                        tone={
+                          status === "suspended"
+                            ? suspension.tone(sub?.suspension ?? null)
+                            : (SUB_STATUS_TONES[status] ?? "neutral")
+                        }
                         className="shrink-0"
                       >
                         {status === "trialing"
                           ? labels.trialing
-                          : tSub(`subStatus.${status}`)}
+                          : status === "suspended"
+                            ? suspension.state(sub?.suspension ?? null)
+                            : tSub(`subStatus.${status}`)}
                       </StatusBadge>
                     </div>
 
