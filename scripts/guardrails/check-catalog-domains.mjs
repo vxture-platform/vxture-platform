@@ -196,13 +196,14 @@ for (const [label, shared, ddl] of pairs) {
 // 后台五处套餐列表按 plan_code 字母序，一处 SQL 把五个档位字面量抄进 array_position，
 // 另一处订阅代表档位用手写 CASE（还带着早已不存在的 'standard'、缺 'free'）。
 // 修法是把 @shared TIERS 当参数绑进 SQL（array_position($n::text[], tier)），或在 TS 里用
-// tierRank()。这里扫 bff 源码：再出现 ARRAY['free'…] / CASE WHEN 'starter' 这类手抄阶梯就红。
+// tierRank()。这里扫 bff 源码（测试文件除外——断言「没有字面量」的 spec 会把字面量写在注释里）：
+// 再出现 ARRAY[五个档位字面量] / CASE WHEN 某档位 THEN 这类手抄阶梯就红。
 function walk(dir, out) {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name.startsWith(".")) continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) walk(p, out);
-    else if (p.endsWith(".ts")) out.push(p);
+    else if (p.endsWith(".ts") && !/\.(spec|test)\.ts$/.test(p)) out.push(p);
   }
   return out;
 }
