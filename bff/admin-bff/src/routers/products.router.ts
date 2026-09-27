@@ -1090,6 +1090,16 @@ export class ProductsRouter {
    * 但并发下指针可能刚被挪过来，所以事务内一并复核，不假定。
    *
    * owner 2026-09-18：**所有删除一律 step-up**，不按「草稿不可售所以无害」分级。
+   *
+   * ── 套餐唯一的版本不许删（2026-09-27） ──
+   * 建套餐是「套餐行 + v1 草稿 + 主组件」一个事务，而这里只删版本行：删掉套餐唯一的
+   * 版本会留下一条**零版本的壳**——矩阵按「版本→主组件」定档位，壳被 JOIN 丢掉、桌面上
+   * 看不见；再建同码时档位占用检查只看版本、放行，INSERT 撞 `uq_plans_plan_code`，
+   * 运营看到「被占用、无法创建」；给壳开新草稿又要从已有版本克隆。三条路全死。
+   * 生产上 tenderforge-free / -starter、karda-business / -enterprise 四条壳就是这么
+   * 来的（owner 2026-09-27 撞到；清理见迁移 2026-11-18-drop-versionless-plan-shells）。
+   * 所以：唯一版本 → 409，改走「删除套餐」（两步确认 + 影响面预检 + step-up）；
+   * 草稿编辑页在这种情形下直接把按钮换成「删除套餐」，这条 409 只是后端兜底。
    */
   @Delete("plan-versions/:versionId")
   @RequireStepUp()
@@ -1106,9 +1116,12 @@ export class ProductsRouter {
         status: string;
         is_locked: boolean;
         is_current: boolean;
+        sibling_count: number;
       }>(
         `SELECT pv.plan_id, p.plan_code, pv.version_no, pv.status, pv.is_locked,
-                (pv.id = p.current_version_id) AS is_current
+                (pv.id = p.current_version_id) AS is_current,
+                (SELECT count(*) FROM product.plan_versions s
+                  WHERE s.plan_id = pv.plan_id AND s.id <> pv.id)::int AS sibling_count
            FROM product.plan_versions pv
            JOIN product.plans p ON p.id = pv.plan_id
           WHERE pv.id = $1
@@ -1127,6 +1140,13 @@ export class ProductsRouter {
       if (row.is_current) {
         throw new ConflictException(
           `${row.plan_code}@v${row.version_no} is the plan's current version`,
+        );
+      }
+      /* 同一套餐同时只有一个未锁草稿（createDraftVersion 保证），所以这个计数不会被
+         并发的另一次删版本顶偏——无需再锁套餐行。 */
+      if (Number(row.sibling_count) === 0) {
+        throw new ConflictException(
+          `${row.plan_code}@v${row.version_no} is the plan's only version — deleting it would leave a plan with no versions (invisible on the desk, its code still taken). Delete the plan instead.`,
         );
       }
       /* prices / components 是 ON DELETE CASCADE 的子行，随版本行一并消失。 */

@@ -67,8 +67,10 @@ import {
   StatusBadge,
 } from "@vxture/design-system";
 import {
+  deletePlan,
   deletePlanVersion,
   fetchMetricOptions,
+  fetchPlanDeletable,
   fetchPlanMatrix,
   fetchPlanVersion,
   fetchPlanVersions,
@@ -78,6 +80,7 @@ import {
   replacePlanVersionBundledComponents,
   updateDraftPlanVersion,
   type MetricOption,
+  type PlanDeletionImpact,
   type PlanMatrixPlan,
   type PlanVersionBundledComponentInput,
   type PlanVersionDetail,
@@ -162,6 +165,8 @@ export function PlanDraftEditorPage({
   const { runWithStepUp } = useStepUp();
 
   const [plan, setPlan] = useState<PlanMatrixPlan | null>(null);
+  /* 套餐只有这一个版本时「删除草稿」换成「删除套餐」；能不能删由预检说了算，null = 预检没读到。 */
+  const [impact, setImpact] = useState<PlanDeletionImpact | null>(null);
   const [detail, setDetail] = useState<PlanVersionDetail | null>(null);
   const [metrics, setMetrics] = useState<MetricOption[]>([]);
   const [catalog, setCatalog] = useState<ProductCapabilityRecord[]>([]);
@@ -227,6 +232,15 @@ export function PlanDraftEditorPage({
       const found = product?.plans.find((p) => p.planCode === planCode) ?? null;
       setPlan(found);
       if (!found) return;
+      if (found.versionCount === 1) {
+        try {
+          setImpact(await fetchPlanDeletable(found.planId));
+        } catch {
+          setImpact(null);
+        }
+      } else {
+        setImpact(null);
+      }
       const versions = await fetchPlanVersions(found.planId);
       const target = versions.find((v) => v.versionNo === versionNo);
       if (!target) return;
@@ -244,6 +258,22 @@ export function PlanDraftEditorPage({
   }, [load]);
 
   const editable = detail?.status === "draft" && !detail.isLocked;
+
+  /**
+   * 这是套餐唯一的版本：删掉它就等于删掉套餐。只删版本行会留下一条零版本的壳——
+   * 矩阵按「版本→主组件」定档位，壳被 JOIN 丢掉、桌面看不见；同码再建撞唯一约束；
+   * 开新草稿又无版本可克隆（2026-09-27 生产上四条壳就是这么来的）。所以这里直接把
+   * 按钮换成「删除套餐」，走两步删除（预检 + 确认 + step-up）；BFF 同样拒删唯一版本。
+   */
+  const onlyVersion = plan !== null && plan.versionCount === 1;
+  const planDeletable = impact?.deletable === true;
+  const draftHelp = !onlyVersion
+    ? t("lifecycle.draftHelp")
+    : planDeletable
+      ? t("lifecycle.draftOnlyVersionHelp")
+      : impact
+        ? t("actions.blocked", { reasons: impact.blockers.join(" / ") })
+        : t("detail.blockedHint");
 
   const chosenKeys = useMemo(
     () => new Set(entries.map((e) => e.key)),
@@ -510,9 +540,35 @@ export function PlanDraftEditorPage({
         level={2}
         icon="clock"
         title={t("lifecycle.draft")}
-        description={t("lifecycle.draftHelp")}
+        description={draftHelp}
         action={
-          detail ? (
+          detail && onlyVersion && plan ? (
+            <DestructiveButton
+              size="sm"
+              icon="trash"
+              disabled={busy || !planDeletable}
+              confirm={withLabels({
+                verb: t("actions.softDeleteVerb"),
+                target: t("actions.softDeleteTarget", { name: plan.planName }),
+                consequence: t("actions.softDeleteConsequence"),
+                onConfirm: async () => {
+                  try {
+                    await runWithStepUp(() => deletePlan(plan.planId));
+                    router.push(
+                      `/plan-versions/${encodeURIComponent(productCode)}`,
+                    );
+                  } catch (err) {
+                    if (isStepUpCancelled(err)) return;
+                    setMessage(
+                      err instanceof Error ? err.message : t("actions.failed"),
+                    );
+                  }
+                },
+              })}
+            >
+              {t("actions.deletePlanWhole")}
+            </DestructiveButton>
+          ) : detail ? (
             <DestructiveButton
               size="sm"
               icon="trash"
