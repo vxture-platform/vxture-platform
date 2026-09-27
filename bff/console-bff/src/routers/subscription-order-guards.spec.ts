@@ -127,6 +127,14 @@ function touched(query: { mock: { calls: unknown[][] } }, table: string) {
   );
 }
 
+/** 从封套里取给客户看的那句话；console 直接展示它，没有按码翻译的表。 */
+function messageOf(error: unknown): string | undefined {
+  const res = (error as { getResponse?: () => unknown })?.getResponse?.();
+  return typeof res === "object" && res !== null
+    ? (res as { message?: string }).message
+    : undefined;
+}
+
 /** 从封套里取语义码；不是 HttpException 或没带码都回 undefined。 */
 function codeOf(error: unknown): string | undefined {
   const res = (error as { getResponse?: () => unknown })?.getResponse?.();
@@ -211,7 +219,7 @@ describe("POST orders · 归属与成熟度两道门", () => {
     expect(codeOf(err)).toBe("PRODUCT_NOT_LIVE");
   });
 
-  it("开发中产品：409 PRODUCT_NOT_RELEASED", async () => {
+  it("预览版产品：409 PRODUCT_NOT_RELEASED，话说的是「预览」", async () => {
     const { pool, query } = poolOf({
       product_code: "vxtpl",
       release_stage: "preview",
@@ -224,6 +232,31 @@ describe("POST orders · 归属与成熟度两道门", () => {
     expect((error as ConflictException).getResponse()).toMatchObject({
       code: "PRODUCT_NOT_RELEASED",
     });
+    expect(messageOf(error)).toContain("预览");
+    expect(messageOf(error)).not.toContain("停售");
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  /*
+   * 停售（sunset，2026-09-27）：同一个码，但话必须说成「已停售」。此前一律说「尚在
+   * 预览阶段」——对一个卖过的产品这句是错的，客户拿着「预览」去问运营会找错方向。
+   * 码不拆（console 直接展示 message），所以两面都要写：preview 那条不能被改成
+   * 「停售」，sunset 这条不能还说「预览」。
+   */
+  it("停售产品：同一个 409 PRODUCT_NOT_RELEASED，话说的是「已停售」", async () => {
+    const { pool, query } = poolOf({
+      product_code: "vxtpl",
+      release_stage: "sunset",
+      plan_is_public: true,
+    });
+    const error = await routerWith(pool)
+      .createOrder(req(), BODY)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(codeOf(error)).toBe("PRODUCT_NOT_RELEASED");
+    expect(messageOf(error)).toContain("停售");
+    expect(messageOf(error)).not.toContain("预览");
     expect(query).toHaveBeenCalledTimes(2);
   });
 

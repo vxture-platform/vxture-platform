@@ -94,6 +94,11 @@ export interface PricingModel {
   name: string;
   plans: PricingPlan[];
   comparison: ComparisonGroup[];
+  /**
+   * 停售中（承诺等级 sunset）：阶梯照画给老客户参考，但每张卡的 CTA 换成状态字
+   * 「停售中」——不接新订阅，也不给已订阅的「升级」。
+   */
+  sunset: boolean;
 }
 
 // ============================================================================
@@ -149,6 +154,13 @@ export function buildPricingModel(
   locale?: string,
 ): PricingModel | null {
   if (!data.product || data.plans.length === 0) return null;
+  /*
+   * 预览版（承诺等级 preview）还没开放订阅：BFF 把 subscribeAccess 判成 none，但阶梯照回。
+   * 这里按「没开卖」处理，页面走既有的「暂未开放订阅」空态——不是把阶梯画出来再把每颗
+   * 按钮灰掉：预览阶段的价目本身还不是承诺。停售（sunset）相反：阶梯要留给老客户参考，
+   * 由卡片把 CTA 换成「停售中」，不在这里截。
+   */
+  if (data.product.releaseStage === "preview") return null;
   const plans = data.plans.map(toPricingPlan);
   // 标题按 locale 取名，与 /products 的 catalogDisplayName 同判：中文页用产品主名
   // product_name（「专注训练智能体」），英文页用副名 nick（品牌/英文名）。此前无条件
@@ -165,6 +177,7 @@ export function buildPricingModel(
     name: displayName ?? catalogName ?? data.product.code,
     plans,
     comparison: buildComparison(plans),
+    sunset: data.product.releaseStage === "sunset",
   };
 }
 

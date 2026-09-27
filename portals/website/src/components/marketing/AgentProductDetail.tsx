@@ -75,6 +75,12 @@ export default function AgentProductDetail({
    */
   const notLive =
     product.status === "developing" || product.releaseStage === "preview";
+  /*
+   * 停售中（承诺等级 sunset，2026-09-27）：同样不给那颗跳 /pricing 的按钮——落地的阶梯
+   * 已不接受新订阅，再往下 console 下单是 409。换成一段状态字「停售中 / 现有订阅不受
+   * 影响」而不是禁用按钮：这里没有「等一等就能点」的动作。判据与产品卡同源。
+   */
+  const sunset = !notLive && product.releaseStage === "sunset";
   /* 导语用登记的业务价值，退回目录 description。两者都空时不渲染这一段，而不是留一行空白。 */
   const lead = m?.value?.trim() || product.description?.trim() || "";
   const highlights = (m?.highlights ?? []).filter((x) => x.trim());
@@ -94,8 +100,8 @@ export default function AgentProductDetail({
        * 的 herosection」「点线动图效果——完全复用新款」「包括 herosection 的高度」。
        * 旧壳（.vx-hero-section ＋满强度 AnimatedHeroBg）已全面退役。
        *
-       * 按钮不跟着目录页走：这一页那颗是「订阅 / 敬请期待」（按 notLive 分叉），
-       * 目录页那颗是「预约演示」——语义不同，所以走 actions 口子整块替换。
+       * 按钮不跟着目录页走：这一页那颗是「订阅 / 敬请期待 / 停售中」（按 notLive 与
+       * sunset 分叉），目录页那颗是「预约演示」——语义不同，所以走 actions 口子整块替换。
        */}
       <CatalogHero
         eyebrow={eyebrow}
@@ -108,6 +114,15 @@ export default function AgentProductDetail({
               <Button size="xl" className="px-5" disabled>
                 {t("catalog.actions.coming")}
               </Button>
+            ) : sunset ? (
+              <span className="inline-flex flex-col justify-center px-1 text-left leading-tight">
+                <span className="text-base font-semibold text-vx-gray-700 dark:text-vx-white">
+                  {t("catalog.actions.sunset")}
+                </span>
+                <span className="text-xs text-vx-gray-500 dark:text-vx-gray-300">
+                  {t("catalog.actions.sunsetHint")}
+                </span>
+              </span>
             ) : (
               <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
                 <Link href={`/pricing?product=${product.productCode}`}>

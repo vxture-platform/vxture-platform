@@ -47,7 +47,9 @@
       "detail": "Product details",
       "coming": "Coming soon",
       "inviteSubscribe": "By invitation",
-      "notForSale": "Not on sale yet"
+      "notForSale": "Not on sale yet",
+      "sunset": "No longer on sale",
+      "sunsetHint": "Existing subscriptions are not affected"
     },
     "empty": {
       "title": "More agents are on the way",

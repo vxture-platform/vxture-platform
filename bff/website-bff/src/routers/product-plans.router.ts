@@ -12,6 +12,11 @@
  * 额外收紧产品可见性轴（is_customer_visible + status='active'，对齐
  * product-catalog.router 的公开目录口径）。
  *
+ * 承诺等级（release_stage，2026-09-27）也参与 subscribeAccess：preview / sunset 不接
+ * 新订阅，一律判 none；阶梯本身照回（停售的要留给老客户参考，画不画由页面按档决定）。
+ * 此前这根轴在本端点上完全没读——目录卡把停售产品指到 /pricing，落地页照样给「订阅」，
+ * 再往下 console 下单撞 409。
+ *
  * 容错契约（对齐 product-catalog / console 深链降级）：产品不存在、不可见或
  * 无已发布套餐 → { product: null | …, plans: [] }，不抛 4xx/5xx；对比表的
  * 标签文案仍走 i18n，此处只供权威数据（价格/周期/features/quota + 档位名与
@@ -31,6 +36,19 @@ const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 
 /** 席位在 quota jsonb 中的指标键（seed/biz-260 口径）。 */
 const SEATS_QUOTA_KEY = "member.max";
+
+/**
+ * 承诺等级里能接新订阅的档：beta / stable；preview / sunset 与未登记值一律不可订。
+ *
+ * 镜像 packages/core/utils/src/release-stage.ts 的 RELEASE_STAGE_DEFS[].subscribable
+ * （isReleaseStageSubscribable）。本包没有依赖 @vxture/core-utils，而那条判据按其头注
+ * 是过渡态（将换成「存在在售的公开套餐」）——不为一个要退役的谓词新拉一条包依赖。
+ * 两处若分叉，console-bff 下单那道门是最终裁定；这里只决定官网给不给入口。
+ */
+const SUBSCRIBABLE_RELEASE_STAGES: ReadonlySet<string> = new Set([
+  "beta",
+  "stable",
+]);
 
 export interface ProductPlanPrice {
   cycleUnit: string;
@@ -61,6 +79,8 @@ export interface ProductPlansResponse {
     name: string;
     nick: string | null;
     releaseVersion: string | null;
+    /** 承诺等级（preview / beta / stable / sunset）：页面按它决定空态还是「停售中」。 */
+    releaseStage: string;
   } | null;
   plans: ProductPlanOption[];
   /**
@@ -69,6 +89,8 @@ export interface ProductPlansResponse {
    *
    * `plans` 里永远不含邀请档（匿名端点无会话，无邀请可言），所以「空阶梯」此前无法
    * 区分「还没开卖」与「全是邀请档」——落地页两种都说「暂未开放订阅」。
+   *
+   * 承诺等级不可订（preview / sunset）时恒为 none，与阶梯里有没有档无关。
    */
   subscribeAccess: "public" | "invite" | "none";
 }
@@ -96,8 +118,10 @@ export class ProductPlansRouter {
       product_name: string;
       product_nick: string | null;
       release_version: string | null;
+      release_stage: string;
     }>(
-      `select product_code, product_name, product_nick, release_version
+      `select product_code, product_name, product_nick, release_version,
+              release_stage
          from product.products
         where product_code = $1
           and is_customer_visible = true
@@ -173,12 +197,16 @@ export class ProductPlansRouter {
      *
      * 所以另问一次计数，判据除可见性外与阶梯完全一致。
      */
+    /* 承诺等级不可订时入口一律 none：邀请档也不接新进（邀请解锁的是「能买」，停售
+       与预览连「能买」都没有）。 */
+    const stageOpen = SUBSCRIBABLE_RELEASE_STAGES.has(productRow.release_stage);
     /* 只在阶梯为空时才问——有公开档就已经是 public 了，再问一次是给每个产品页
-       平白加一次查库。 */
-    const inviteRes = plans.length
-      ? null
-      : await this.pool.query<{ invite_count: number | string }>(
-          `select count(*) as invite_count
+       平白加一次查库；承诺等级已判不可订的也不问，答案不会变。 */
+    const inviteRes =
+      plans.length > 0 || !stageOpen
+        ? null
+        : await this.pool.query<{ invite_count: number | string }>(
+            `select count(*) as invite_count
          from product.products prod
          join product.plan_components pc
            on pc.product_id = prod.id and pc.component_role = 'primary'
@@ -189,8 +217,8 @@ export class ProductPlansRouter {
           and pl.deleted_at is null and pl.status = 'active'
           and pl.is_public = false and pl.is_customer_visible = true
         where prod.product_code = $1 and pc.tier is not null`,
-          [productCode],
-        );
+            [productCode],
+          );
     const inviteCount = Number(inviteRes?.rows[0]?.invite_count ?? 0);
 
     return {
@@ -199,10 +227,16 @@ export class ProductPlansRouter {
         name: productRow.product_name,
         nick: productRow.product_nick,
         releaseVersion: productRow.release_version,
+        releaseStage: productRow.release_stage,
       },
       plans,
-      subscribeAccess:
-        plans.length > 0 ? "public" : inviteCount > 0 ? "invite" : "none",
+      subscribeAccess: !stageOpen
+        ? "none"
+        : plans.length > 0
+          ? "public"
+          : inviteCount > 0
+            ? "invite"
+            : "none",
     };
   }
 }

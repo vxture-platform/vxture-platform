@@ -17,6 +17,10 @@
  *   而不是把月价当年价；两个周期都没价 = 联系销售；
  * - 「最受欢迎」徽章随 highlight 一起去掉——没有任何数据支撑那个说法；
  * - 功能清单是 plan_components.features 的键，文案走词典、缺词回落键名。
+ *
+ * 2026-09-27 两档「不给换档」：停售（sunset）每张卡的 CTA 换成状态字「停售中」+ 副行
+ * 「现有订阅不受影响」；冻结中（suspensionState）高档不再给「升级到 X」，改成目录卡
+ * 同款的冻结态字样。两者都只收购买 / 升级入口，「当前套餐 / 低于当前套餐」照旧标出。
  */
 
 import { useLocale, useTranslations } from "next-intl";
@@ -62,6 +66,14 @@ const GRADIENT_CTA =
   "w-full border-0 bg-linear-to-r from-vx-brand-600 to-vx-info-600 text-vx-white " +
   "hover:from-vx-brand-700 hover:to-vx-info-700";
 
+/** BFF suspensionState 的值域；认不得的值落到最中性的 paused，不让键名冒出来。 */
+const SUSPENSION_STATES: ReadonlySet<string> = new Set([
+  "maintenance",
+  "review",
+  "restricted",
+  "paused",
+]);
+
 /** 定价页需要知道的在途单：去哪看（orderId）、是哪一档（tier）。 */
 export interface PendingOrderRef {
   orderId: string;
@@ -78,6 +90,8 @@ export function PricingPlanCard({
   currentTier = null,
   pendingOrder = null,
   fractionDigits = 2,
+  sunset = false,
+  suspensionState = null,
 }: {
   plan: PricingPlan;
   cycle: BillingCycle;
@@ -100,8 +114,21 @@ export function PricingPlanCard({
    * 在途单（uidx_orders_open_per_product），再点「订阅」只会在 console 撞 409。
    */
   pendingOrder?: PendingOrderRef | null;
+  /**
+   * 停售中（承诺等级 sunset，2026-09-27）：阶梯留给老客户参考，但每张卡的购买 / 升级 /
+   * 联系销售入口都换成状态字「停售中」——不接新订阅，也不给已订阅的换档。
+   */
+  sunset?: boolean;
+  /**
+   * 登录租户在该产品上的冻结态（maintenance / review / restricted / paused）；null = 未冻结。
+   * 有值时高档不再给「升级到 X」：换档会改动那条被平台冻结的订阅，等于客户自己解了冻。
+   * 目录卡早就这么做（BFF 的 canUpgrade 冻结中恒 false），这一页此前只读 currentTier。
+   */
+  suspensionState?: string | null;
 }) {
   const t = useTranslations("products.subscription");
+  /* 冻结态的词与目录卡同一份（products.catalog.suspension.*）：同一个状态在两页不该有两套叫法。 */
+  const tCatalog = useTranslations("products.catalog");
   const labels = usePlanLabels();
   const locale = useLocale();
   // 站点 locale 值域即 Locale（zh-CN | en-US），供 shared formatCurrency 使用。
@@ -122,6 +149,19 @@ export function PricingPlanCard({
         : tierRank(plan.tier) < tierRank(currentTier)
           ? "lower"
           : "higher";
+  const frozenLabel = suspensionState
+    ? tCatalog(
+        `suspension.${SUSPENSION_STATES.has(suspensionState) ? suspensionState : "paused"}`,
+      )
+    : null;
+  /* 停售：一段状态字而不是灰按钮——这里没有「等一等就能点」的动作。它替换的是购买 /
+     升级 / 联系销售三种入口，所以在下面出现两次；isContact 仍留在链首，TS 靠它把
+     shown 收窄成非 null。 */
+  const sunsetNotice = sunset ? (
+    <p className="flex h-10 items-center justify-center text-sm font-medium text-vx-text-muted">
+      {t("sunset")}
+    </p>
+  ) : null;
   // 省额徽章只在「年付展示 + 两个周期都有价 + 年付真的更便宜」时出现。
   const savings =
     isPaid && shown.unit === "year" && plan.monthly && plan.yearly
@@ -272,15 +312,17 @@ export function PricingPlanCard({
         {/* CTA + 脚注 */}
         <div className="mt-4">
           {isContact ? (
-            <Button asChild variant="outline" className="w-full">
-              <a
-                href={`mailto:sales@vxture.com?subject=${encodeURIComponent(
-                  contactSubject,
-                )}`}
-              >
-                {t("contact")}
-              </a>
-            </Button>
+            (sunsetNotice ?? (
+              <Button asChild variant="outline" className="w-full">
+                <a
+                  href={`mailto:sales@vxture.com?subject=${encodeURIComponent(
+                    contactSubject,
+                  )}`}
+                >
+                  {t("contact")}
+                </a>
+              </Button>
+            ))
           ) : pendingOrder ? (
             pendingOrder.tier === plan.tier ? (
               <Button
@@ -308,42 +350,54 @@ export function PricingPlanCard({
             <Button variant="outline" className="w-full" disabled>
               {relation === "current" ? t("currentPlan") : t("lowerPlan")}
             </Button>
-          ) : (
-            <Button
-              asChild
-              variant={selected ? "default" : "outline"}
-              className={selected ? GRADIENT_CTA : "w-full"}
-            >
-              <a
-                href={buildConsoleSubscribeUrl(
-                  locale,
-                  productCode,
-                  relation === "higher" ? "upgrade" : "subscribe",
-                  plan.tier,
-                  // 传实际展示的周期（wire 值域 month|year）：console 严格匹配
-                  // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
-                  shown.unit,
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {relation === "higher"
-                  ? t("upgradeTo", { plan: plan.name })
-                  : isFree
-                    ? t("freeCta")
-                    : t("subscribe", { plan: plan.name })}
-              </a>
+          ) : frozenLabel ? (
+            /* 冻结中：与「当前套餐」同一种禁用态，字样换成冻结态（维护中 / 审核中 / …）。
+               不给「升级到 X」——换档会动那条被平台冻结的订阅。 */
+            <Button variant="outline" className="w-full" disabled>
+              {frozenLabel}
             </Button>
+          ) : (
+            (sunsetNotice ?? (
+              <Button
+                asChild
+                variant={selected ? "default" : "outline"}
+                className={selected ? GRADIENT_CTA : "w-full"}
+              >
+                <a
+                  href={buildConsoleSubscribeUrl(
+                    locale,
+                    productCode,
+                    relation === "higher" ? "upgrade" : "subscribe",
+                    plan.tier,
+                    // 传实际展示的周期（wire 值域 month|year）：console 严格匹配
+                    // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
+                    shown.unit,
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {relation === "higher"
+                    ? t("upgradeTo", { plan: plan.name })
+                    : isFree
+                      ? t("freeCta")
+                      : t("subscribe", { plan: plan.name })}
+                </a>
+              </Button>
+            ))
           )}
         </div>
         <p className="mt-2 text-center text-xs text-vx-gray-400 dark:text-vx-gray-500">
-          {isContact
+          {isContact && !sunset
             ? t("note.enterprise")
             : pendingOrder
               ? t("note.pendingOrder")
-              : isFree
-                ? t("note.free")
-                : t("note.paid")}
+              : frozenLabel
+                ? tCatalog("suspension.hint")
+                : sunset
+                  ? t("sunsetHint")
+                  : isFree
+                    ? t("note.free")
+                    : t("note.paid")}
         </p>
       </CardContent>
     </Card>

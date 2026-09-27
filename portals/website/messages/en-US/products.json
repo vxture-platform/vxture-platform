@@ -137,7 +137,9 @@
       "detail": "Learn more",
       "coming": "Coming soon",
       "inviteSubscribe": "By invitation",
-      "notForSale": "Not on sale yet"
+      "notForSale": "Not on sale yet",
+      "sunset": "No longer on sale",
+      "sunsetHint": "Existing subscriptions are not affected"
     },
     "types": {
       "general_platform": "General Platform",
@@ -199,6 +201,8 @@
     "currentPlan": "Current plan",
     "lowerPlan": "Below current plan",
     "upgradeTo": "Upgrade to {plan}",
+    "sunset": "No longer on sale",
+    "sunsetHint": "Existing subscriptions are not affected",
     "pendingOrder": {
       "view": "View order status",
       "blocked": "Order in progress"
