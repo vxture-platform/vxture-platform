@@ -22,6 +22,7 @@
  */
 
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
+import type { ProductMaintenance } from "@/api/product-catalog.api";
 import type {
   ProductPlanOption,
   ProductPlanPrice,
@@ -99,6 +100,11 @@ export interface PricingModel {
    * 「停售中」——不接新订阅，也不给已订阅的「升级」。
    */
   sunset: boolean;
+  /**
+   * 产品级升级维护窗口（owner 2026-09-27）：非空时阶梯照画，但每张卡的 CTA 换成状态字
+   * 「升级维护中，暂不可订阅」+ 副行「预计 … 恢复」。优先级高于 sunset（临时运行态先说）。
+   */
+  maintenance: ProductMaintenance | null;
 }
 
 // ============================================================================
@@ -178,6 +184,7 @@ export function buildPricingModel(
     plans,
     comparison: buildComparison(plans),
     sunset: data.product.releaseStage === "sunset",
+    maintenance: data.maintenance,
   };
 }
 

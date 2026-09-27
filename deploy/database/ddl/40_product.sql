@@ -68,6 +68,14 @@ CREATE TABLE product.products (
     launch_override_at       timestamptz,                             -- 带理由跳过上线闸门的时刻；NULL = 从未跳过（正常上线）。理由本身在 support.audit_logs
     launch_override_by       uuid,                                    -- 执行跳过的运营者；裸值→admin.operator_accounts（不建 FK，边界#2）
     launch_override_pending  jsonb,                                   -- 跳过当时尚未满足的 gate=launch 必填项 item_code 数组；产品页据此常驻提示，复验后转满足即不再提示
+    -- 产品级维护窗口的运行态（owner 2026-09-27）：升级 / 维护 / 迁移期间产品「升级维护中」——无论是否
+    -- 订阅都进入当前不可用；未订阅的暂不能订阅。两列**只由 opera-bff 在窗口状态转移时写**
+    -- （start 打上、complete / cancel 清掉、in_progress 顺延 end_at 时同步 maintenance_until）。
+    -- 读者（website-bff / console-bff）只看这两列：maintenance_window_id IS NOT NULL = 维护中，
+    -- maintenance_until = 预计恢复；不需要任何 BFF 去读 admin schema。绑定关系（计划）在
+    -- admin.maintenance_window_products；这里是占用（运行态），同一产品同时只能被一个进行中的窗口占着。
+    maintenance_window_id    uuid,                                    -- 进行中的维护窗口 id；裸值→admin.maintenance_windows（跨 schema 不建 FK，边界#2 同 created_by）
+    maintenance_until        timestamptz,                             -- 该窗口的计划结束时间（窗口 end_at；运营顺延时同步改）= 预计恢复时间
     created_by               uuid,                                    -- 裸值→admin.operator_accounts（不建 FK，边界#2）
     updated_by               uuid,                                    -- 裸值→admin.operator_accounts（不建 FK，边界#2）
     created_at               timestamptz  NOT NULL DEFAULT now(),
@@ -85,7 +93,8 @@ CREATE TABLE product.products (
     CONSTRAINT chk_products_live_layer_not_l1 CHECK (deleted_at IS NOT NULL OR layer IS NULL OR layer IN ('L2','L3')),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
     CONSTRAINT chk_products_integration_mode CHECK (integration_mode IN ('platform_managed','login_only')),
-    CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL)
+    CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL),
+    CONSTRAINT chk_products_maintenance_pair CHECK ((maintenance_window_id IS NULL) = (maintenance_until IS NULL))
 );
 CREATE INDEX idx_products_category_id ON product.products (category_id);
 CREATE INDEX idx_products_status      ON product.products (status);
@@ -95,6 +104,8 @@ CREATE INDEX idx_products_layer       ON product.products (layer);
 CREATE INDEX idx_products_deleted_at  ON product.products (deleted_at);
 CREATE INDEX idx_products_tags_gin    ON product.products USING gin (tags);
 CREATE INDEX idx_products_cap_gin     ON product.products USING gin (capability_keys);
+-- complete / cancel 按窗口清占用（WHERE maintenance_window_id = ?）；部分索引，维护中的产品极少。
+CREATE INDEX idx_products_maintenance_window ON product.products (maintenance_window_id) WHERE maintenance_window_id IS NOT NULL;
 
 -- 计量维度（供 commerce.metering consume 分支）。merge_strategy=max/union 能力型（不消费）/
 -- pool 消耗型（配额池瀑布扣）；pool 时 consume_mode 非空。product_id 域内 FK→products（CASCADE）。

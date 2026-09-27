@@ -21,7 +21,9 @@ import {
 } from "react";
 import {
   ActionMenu,
+  Badge,
   Button,
+  Checkbox,
   DataTable,
   DialogForm,
   EmptyState,
@@ -69,6 +71,8 @@ interface MaintenanceWindowItem {
   description: string | null;
   impactDescription: string | null;
   affectedServices: string[];
+  /** 受影响产品（可视码 + 名字，按目录次序）。空 = 平台级公告，不挂产品。 */
+  products: { productCode: string; productName: string }[];
   startAt: string;
   endAt: string;
   actualEndAt: string | null;
@@ -78,6 +82,19 @@ interface MaintenanceWindowItem {
   createdAt: string;
   updatedAt: string;
 }
+
+/** 产品目录一行（`GET /api/products`，与 product/clients 页同一形状）。 */
+interface ProductLite {
+  id: string;
+  productCode: string;
+  productName: string;
+}
+
+type CatalogState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "error" }
+  | { kind: "ready"; products: ProductLite[] };
 
 const STATE_LABELS: Record<MaintenanceWindowItem["state"], string> = {
   scheduled: "已计划",
@@ -136,6 +153,8 @@ interface WindowForm {
   description: string;
   impactDescription: string;
   affectedServices: string;
+  /** 受影响产品的可视码。多选来自产品目录，不手打。 */
+  productCodes: string[];
   startAt: string;
   endAt: string;
 }
@@ -161,6 +180,7 @@ function createDefaultForm(): WindowForm {
     description: "",
     impactDescription: "",
     affectedServices: "",
+    productCodes: [],
     startAt: toLocalInputValue(start),
     endAt: toLocalInputValue(end),
   };
@@ -173,6 +193,7 @@ function formFromRecord(item: MaintenanceWindowItem): WindowForm {
     description: item.description ?? "",
     impactDescription: item.impactDescription ?? "",
     affectedServices: item.affectedServices.join(", "),
+    productCodes: item.products.map((p) => p.productCode),
     startAt: isoToLocalInput(item.startAt),
     endAt: isoToLocalInput(item.endAt),
   };
@@ -188,6 +209,7 @@ function buildPayload(form: WindowForm) {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+    productCodes: form.productCodes,
     startAt: new Date(form.startAt).toISOString(),
     endAt: new Date(form.endAt).toISOString(),
   };
@@ -222,6 +244,10 @@ export default function MaintenanceWindowsPage() {
   const [editing, setEditing] = useState<MaintenanceWindowItem | null>(null);
   const [form, setForm] = useState<WindowForm>(createDefaultForm);
   const [submitting, setSubmitting] = useState(false);
+  /* 产品目录只在打开编辑框时取一次：列表页本身不需要它（芯片的名字随窗口一起回来）。
+     读它要 integration:product.read——没这个能力的运营者照常能建平台级窗口，只是
+     挂不了产品，界面上说清楚而不是静默空列表。 */
+  const [catalog, setCatalog] = useState<CatalogState>({ kind: "idle" });
 
   const { can } = useOperatorSession();
   const { toast } = useToast();
@@ -249,6 +275,16 @@ export default function MaintenanceWindowsPage() {
     void reload();
   }, [reload]);
 
+  const loadCatalog = useCallback(async () => {
+    setCatalog({ kind: "loading" });
+    try {
+      const products = await api.get<ProductLite[]>("/api/products");
+      setCatalog({ kind: "ready", products });
+    } catch {
+      setCatalog({ kind: "error" });
+    }
+  }, []);
+
   const visible = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
     return rows.filter(
@@ -256,7 +292,12 @@ export default function MaintenanceWindowsPage() {
         (state === "all" || r.state === state) &&
         (kw === "" ||
           r.title.toLowerCase().includes(kw) ||
-          r.affectedServices.some((s) => s.toLowerCase().includes(kw))),
+          r.affectedServices.some((s) => s.toLowerCase().includes(kw)) ||
+          r.products.some(
+            (p) =>
+              p.productCode.toLowerCase().includes(kw) ||
+              p.productName.toLowerCase().includes(kw),
+          )),
     );
   }, [rows, keyword, state]);
 
@@ -289,12 +330,23 @@ export default function MaintenanceWindowsPage() {
     setEditing(null);
     setForm(createDefaultForm());
     setDialogMode("create");
+    void loadCatalog();
   }
 
   function openEdit(item: MaintenanceWindowItem) {
     setEditing(item);
     setForm(formFromRecord(item));
     setDialogMode("edit");
+    void loadCatalog();
+  }
+
+  function toggleProduct(code: string) {
+    setForm((f) => ({
+      ...f,
+      productCodes: f.productCodes.includes(code)
+        ? f.productCodes.filter((c) => c !== code)
+        : [...f.productCodes, code],
+    }));
   }
 
   function closeDialog() {
@@ -464,8 +516,34 @@ export default function MaintenanceWindowsPage() {
                   <TableTitleCell
                     icon="clock"
                     title={r.title}
-                    {...(r.affectedServices.length > 0
-                      ? { description: r.affectedServices.join(" · ") }
+                    {...(r.products.length > 0 || r.affectedServices.length > 0
+                      ? {
+                          description: (
+                            <span className="flex flex-wrap items-center gap-2xs">
+                              {r.products.length > 0 ? (
+                                <span
+                                  className="flex flex-wrap gap-2xs"
+                                  aria-label={tShared(
+                                    "maintenanceWindowsPage.products.chipsLabel",
+                                  )}
+                                >
+                                  {r.products.map((p) => (
+                                    <Badge
+                                      key={p.productCode}
+                                      variant="secondary"
+                                      title={p.productCode}
+                                    >
+                                      {p.productName}
+                                    </Badge>
+                                  ))}
+                                </span>
+                              ) : null}
+                              {r.affectedServices.length > 0 ? (
+                                <span>{r.affectedServices.join(" · ")}</span>
+                              ) : null}
+                            </span>
+                          ),
+                        }
                       : {})}
                   />
                 ),
@@ -740,6 +818,67 @@ export default function MaintenanceWindowsPage() {
                   }
                   placeholder="如 auth-bff, admin-bff"
                 />
+              </Field>
+              <Field span="full">
+                <FieldLabel
+                  hint={tShared("maintenanceWindowsPage.products.hint")}
+                  {...FIELD_LABEL_A11Y}
+                >
+                  {tShared("maintenanceWindowsPage.products.label")}
+                </FieldLabel>
+                {catalog.kind === "ready" ? (
+                  catalog.products.length === 0 ? (
+                    <FieldDescription>
+                      {tShared("maintenanceWindowsPage.products.empty")}
+                    </FieldDescription>
+                  ) : (
+                    <div className="flex flex-col gap-2xs rounded-md border border-border p-xs">
+                      {catalog.products.map((p) => {
+                        const on = form.productCodes.includes(p.productCode);
+                        return (
+                          <label
+                            key={p.id}
+                            className="flex cursor-pointer items-center gap-sm rounded-sm px-xs py-2xs hover:bg-accent"
+                          >
+                            <Checkbox
+                              checked={on}
+                              disabled={liveEditOnly}
+                              aria-label={p.productName}
+                              onCheckedChange={() =>
+                                toggleProduct(p.productCode)
+                              }
+                            />
+                            <span className="flex min-w-0 flex-col">
+                              <span className="text-body-sm text-foreground">
+                                {p.productName}
+                              </span>
+                              <span className="truncate font-mono text-code-sm text-muted-foreground">
+                                {p.productCode}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : catalog.kind === "error" ? (
+                  <FieldDescription>
+                    {tShared("maintenanceWindowsPage.products.loadFailed")}
+                  </FieldDescription>
+                ) : (
+                  <FieldDescription>
+                    {tShared("common.loading")}
+                  </FieldDescription>
+                )}
+                <FieldDescription>
+                  {liveEditOnly
+                    ? tShared("maintenanceWindowsPage.products.lockedLive")
+                    : form.productCodes.length === 0
+                      ? tShared("maintenanceWindowsPage.products.none")
+                      : tShared("maintenanceWindowsPage.products.selected", {
+                          count: form.productCodes.length,
+                        })}
+                </FieldDescription>
               </Field>
             </FieldGroup>
           </FieldTier>

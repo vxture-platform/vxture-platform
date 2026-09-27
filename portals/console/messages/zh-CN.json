@@ -2497,6 +2497,10 @@
     "cancelOrderFailed": "取消订单失败，请稍后重试。",
     "myOrdersEmpty": "暂无订单。",
     "contactSalesSubject": "{product} 企业版咨询",
+    "maintenance": {
+      "title": "升级维护中，暂不可订阅",
+      "until": "预计 {time} 恢复"
+    },
     "retired": {
       "title": "该套餐已下架",
       "description": "你当前的套餐已停售，服务至本周期结束为止，到期后需改选其他档。权益在本周期内照常，不受影响。"
@@ -2705,6 +2709,10 @@
     },
     "title": "产品订阅",
     "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。",
+    "maintenance": {
+      "title": "{product} 升级维护中",
+      "until": "预计 {time} 恢复"
+    },
     "review": {
       "title": "聊聊 {product}",
       "intro": "欢迎说说这一程用得怎么样。三项都可以留空，只评你想评的那一项。",

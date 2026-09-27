@@ -2497,6 +2497,10 @@
     "cancelOrderFailed": "Failed to cancel the order. Please retry.",
     "myOrdersEmpty": "No orders yet.",
     "contactSalesSubject": "{product} enterprise inquiry",
+    "maintenance": {
+      "title": "Under maintenance — subscribing is unavailable for now",
+      "until": "Expected back at {time}"
+    },
     "retired": {
       "title": "This plan is no longer sold",
       "description": "Your current plan has been retired. Service runs to the end of this period; after that you will need to choose another tier. Entitlements are unaffected within this period."
@@ -2705,6 +2709,10 @@
     },
     "title": "Product Subscriptions",
     "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview.",
+    "maintenance": {
+      "title": "{product} is under maintenance",
+      "until": "Expected back at {time}"
+    },
     "review": {
       "title": "Tell us about {product}",
       "intro": "We'd love to hear how this run went. Leave any of the three blank — rate only what you want to.",

@@ -50,6 +50,7 @@ import {
   type SubscribePlanPrice,
 } from "@/api/console-bff";
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
+import { useDateFormat } from "@/lib/use-date-format";
 import { CyclePicker } from "./components/CyclePicker";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
 import { PlanSummaryCard } from "./components/PlanSummaryCard";
@@ -196,6 +197,7 @@ export function SubscribePage() {
   const router = useRouter();
   const params = useSearchParams();
   const formatMoney = moneyFor(useLocale() as Locale);
+  const { fmtDateTime } = useDateFormat();
 
   const query = useMemo(
     () => ({
@@ -319,6 +321,14 @@ export function SubscribePage() {
     currentPlanRetired,
   } = ctx;
   if (intent === null || product === null) return null;
+
+  /*
+   * 产品级维护窗口（owner 2026-09-27）：升级 / 迁移期间未订阅的暂时不能订阅。服务端有
+   * 闸门（409 PRODUCT_UNDER_MAINTENANCE），这里关的是按钮——点下去必定 409 的按钮是死
+   * 控件。判据来自 subscribe-context 的 product.maintenance，前端不另算。
+   */
+  const maintenance = product.maintenance;
+  const underMaintenance = maintenance !== null;
 
   const stateKey = (() => {
     if (!current) return "none";
@@ -448,6 +458,7 @@ export function SubscribePage() {
     /* 降档不下单（owner 2026-09-24）。按钮已禁用，这一行是它被绕过时的那道。 */
     if (selectedIsDowngrade) return;
     if (currentSuspended) return;
+    if (underMaintenance) return;
     setBusy(true);
     setError(null);
     try {
@@ -502,6 +513,16 @@ export function SubscribePage() {
         }
         description={t(`hint.${stateKey}`)}
       />
+
+      {maintenance ? (
+        <Banner
+          tone="warning"
+          title={t("maintenance.title")}
+          description={t("maintenance.until", {
+            time: fmtDateTime(maintenance.until),
+          })}
+        />
+      ) : null}
 
       <OrderFlowStrip stage="ordering" />
 
@@ -592,6 +613,7 @@ export function SubscribePage() {
                         ? "secondary"
                         : "outline"
                     }
+                    disabled={underMaintenance}
                     onClick={() => setPickedVersionId(option.planVersionId)}
                     className={cn(
                       "rounded-4xl",
@@ -619,6 +641,7 @@ export function SubscribePage() {
             <CyclePicker
               value={cycle}
               onChange={(next) => setCycle(next)}
+              disabled={underMaintenance}
               // 续订接在当前订阅到期之后;新订 / 升级从此刻起算(升级立即生效)。
               startAt={
                 orderIntent === "renew" && isLive
@@ -806,7 +829,8 @@ export function SubscribePage() {
                         busy ||
                         !price ||
                         selectedIsDowngrade ||
-                        currentSuspended
+                        currentSuspended ||
+                        underMaintenance
                       }
                       onClick={() => void onSubmit()}
                       className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"

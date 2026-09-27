@@ -288,6 +288,19 @@ export function SubscriptionPage() {
         .sort()[0],
     [pendingOrders],
   );
+  /* 产品级维护窗口（owner 2026-09-27）：已订阅的产品在升级维护中 → 一行提示。批量暂停 /
+     恢复与补偿是下一步，到时这里会出现暂停记录；本步只把「为什么现在打不开」说出来。
+     按产品去重：同一产品多条订阅只提示一次；已过期的不提示——它本来就打不开。 */
+  const maintainedProducts = useMemo(() => {
+    const seen = new Set<string>();
+    return products.filter((p) => {
+      if (!p.maintenance || p.status === "expired") return false;
+      const key = p.productCode ?? p.subscriptionId;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [products]);
 
   // ── 概览指标（DS MetricGrid）───────────────────────────────────────────────
   const stats = useMemo<MetricGridItem[]>(() => {
@@ -413,6 +426,21 @@ export function SubscriptionPage() {
           }
         />
       ) : null}
+
+      {!loadFailed
+        ? maintainedProducts.map((item) => (
+            <Banner
+              key={`maintenance-${item.subscriptionId}`}
+              tone="warning"
+              title={t("maintenance.title", {
+                product: item.productName ?? item.planName,
+              })}
+              description={t("maintenance.until", {
+                time: fmtDateTime(item.maintenance?.until),
+              })}
+            />
+          ))
+        : null}
 
       {/* 本页业务 2 个指标 → columns=2（列数随业务定，不写死）。 */}
       <MetricGrid

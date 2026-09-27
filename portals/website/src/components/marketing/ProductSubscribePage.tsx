@@ -41,9 +41,11 @@ import {
   EmptyState,
   Icon,
   Skeleton,
+  StatusBadge,
 } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import { buildConsoleSubscribeUrl } from "@/lib/console-entry";
+import { maintenanceUntilText } from "@/api/product-catalog.api";
 import {
   fetchProductPlans,
   type ProductPlansResponse,
@@ -261,6 +263,17 @@ export default function ProductSubscribePage() {
      那是「还没开卖」的话，对一个卖过的产品是错的。 */
   const sunsetNoLadder =
     load.status === "ready" && load.data.product?.releaseStage === "sunset";
+  /*
+   * 升级维护中（产品级维护窗口，owner 2026-09-27）。plan bar 上一枚 warning 徽标 + 「预计 …
+   * 恢复」，每张卡的 CTA 由 PricingPlanCard 换成状态字；空态（只有邀请档 / 一档都没有 /
+   * 停售无阶梯）也先说维护——「我已有邀请」那颗按钮这时不给，它落到 console 下单只会撞 409。
+   * 优先级：维护 > 停售 > 其他。
+   */
+  const maintenance = load.status === "ready" ? load.data.maintenance : null;
+  const maintenanceUntil = maintenanceUntilText(maintenance, locale);
+  const maintenanceUntilLine = maintenanceUntil
+    ? t("maintenanceUntil", { time: maintenanceUntil })
+    : null;
 
   /* 邀请是定向发到账号上的，落点是控制台的订阅页（登录后即可看到解锁的那一档）。 */
   const consoleSubscribeHref = buildConsoleSubscribeUrl(
@@ -329,20 +342,25 @@ export default function ProductSubscribePage() {
              *   none    一档都没有 → 如实说还没开放，不拿静态价兜底
              */
             <EmptyState
-              icon={inviteOnly ? "ticket" : "package"}
+              icon={maintenance ? "clock" : inviteOnly ? "ticket" : "package"}
               title={
-                inviteOnly
-                  ? t("inviteOnlyTitle")
-                  : sunsetNoLadder
-                    ? t("sunset")
-                    : t("unavailableTitle")
+                maintenance
+                  ? t("maintenance")
+                  : inviteOnly
+                    ? t("inviteOnlyTitle")
+                    : sunsetNoLadder
+                      ? t("sunset")
+                      : t("unavailableTitle")
               }
               description={
-                inviteOnly
-                  ? t("inviteOnlyDescription")
-                  : sunsetNoLadder
-                    ? t("sunsetHint")
-                    : t("unavailable")
+                maintenance
+                  ? (maintenanceUntilLine ??
+                    tProducts("catalog.suspension.hint"))
+                  : inviteOnly
+                    ? t("inviteOnlyDescription")
+                    : sunsetNoLadder
+                      ? t("sunsetHint")
+                      : t("unavailable")
               }
               className="mx-auto max-w-website-xl"
               action={
@@ -363,9 +381,10 @@ export default function ProductSubscribePage() {
                       {inviteOnly ? t("inviteRequest") : t("contact")}
                     </a>
                   </Button>
-                  {inviteOnly ? (
+                  {inviteOnly && !maintenance ? (
                     /* 「我已有邀请」——邀请是定向发到账号上的，登录后在控制台的订阅页
-                       就看得到那一档，不用输码。这颗按钮不是装饰：它是那条路径的入口。 */
+                       就看得到那一档，不用输码。这颗按钮不是装饰：它是那条路径的入口。
+                       维护中不给：落到 console 下单只会撞 409，那就成了假动作。 */
                     <Button asChild>
                       <a href={consoleSubscribeHref}>{t("inviteHolder")}</a>
                     </Button>
@@ -387,6 +406,19 @@ export default function ProductSubscribePage() {
                   <span className="hidden rounded-full bg-vx-brand-50 px-3 py-1 text-xs font-semibold text-vx-brand-700 sm:inline-block dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
                     {t("tierCount", { count: model.plans.length })}
                   </span>
+                  {/* 升级维护中：徽标 + 预计恢复，挂在产品名旁边，进页第一眼就看见。 */}
+                  {model.maintenance ? (
+                    <>
+                      <StatusBadge tone="warning">
+                        {tProducts("catalog.suspension.maintenance")}
+                      </StatusBadge>
+                      {maintenanceUntilLine ? (
+                        <span className="text-xs text-vx-gray-500 dark:text-vx-gray-400">
+                          {maintenanceUntilLine}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -464,6 +496,7 @@ export default function ProductSubscribePage() {
                       suspensionState={suspensionState}
                       pendingOrder={pendingOrder}
                       sunset={model.sunset}
+                      maintenance={model.maintenance}
                       fractionDigits={fractionDigits}
                     />
                   ))}

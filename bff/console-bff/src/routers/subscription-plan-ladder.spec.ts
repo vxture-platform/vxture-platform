@@ -90,3 +90,73 @@ describe("subscribe-context · 套餐阶梯的邀请可见性", () => {
     expect(sql).not.toMatch(/\binsert\s+into\s+promotion\./);
   });
 });
+
+/**
+ * 产品级维护窗口（owner 2026-09-27）：subscribe-context 回 `product.maintenance`，
+ * SubscribePage 据此在顶部出横幅、禁用档位与周期按钮。判据只看 `product.products`
+ * 两列，不读 admin schema。
+ *
+ * 与上面那个 recordingPool 分开：这里要控制产品那一行的内容，而不只是记 SQL。
+ */
+function poolWithProduct(productRow: Record<string, unknown>) {
+  /* 只认产品那一条（按 where 子句）：在途订单那条 SQL 也同时提到 product_code 与
+     product_name，按列名认会把产品行喂给它，然后在 created_at 上炸。 */
+  const query = vi.fn(async (sql: string) =>
+    sql.includes("from product.products") &&
+    sql.includes("where product_code = $1")
+      ? { rows: [productRow] }
+      : { rows: [] },
+  );
+  return { pool: { query } as unknown as Pool, query };
+}
+
+describe("subscribe-context · 升级维护中", () => {
+  const MAINTAINED = {
+    product_code: "arda",
+    product_name: "Arda",
+    maintenance_window_id: "w-1",
+    maintenance_until: new Date("2026-10-01T02:00:00Z"),
+  };
+
+  it("window id 非空：product.maintenance 带预计恢复时刻（ISO）", async () => {
+    const { pool } = poolWithProduct(MAINTAINED);
+    const ctx = await routerWith(pool).getSubscribeContext(req(), {
+      product: "arda",
+      intent: "new",
+    });
+
+    expect(ctx.product).toEqual({
+      code: "arda",
+      name: "Arda",
+      maintenance: { until: "2026-10-01T02:00:00.000Z" },
+    });
+  });
+
+  it("两列都空：maintenance 是 null，不是 undefined——前端按 null 判", async () => {
+    const { pool } = poolWithProduct({
+      ...MAINTAINED,
+      maintenance_window_id: null,
+      maintenance_until: null,
+    });
+    const ctx = await routerWith(pool).getSubscribeContext(req(), {
+      product: "arda",
+      intent: "new",
+    });
+
+    expect(ctx.product?.maintenance).toBeNull();
+  });
+
+  it("产品那条 SQL 真的 select 了那两列（判据不许读一个没查的列）", async () => {
+    const { pool, query } = poolWithProduct(MAINTAINED);
+    await routerWith(pool).getSubscribeContext(req(), {
+      product: "arda",
+      intent: "new",
+    });
+
+    const sql = query.mock.calls
+      .map((c) => String(c[0]))
+      .find((s) => s.includes("product_name") && s.includes("product_code"));
+    expect(sql).toContain("maintenance_window_id");
+    expect(sql).toContain("maintenance_until");
+  });
+});

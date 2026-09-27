@@ -114,6 +114,7 @@ describe("ProductPlansRouter", () => {
       product: null,
       plans: [],
       subscribeAccess: "none",
+      maintenance: null,
     });
     /* 产品都不存在就不该再问阶梯，也不该问邀请档。 */
     expect(query).toHaveBeenCalledTimes(1);
@@ -246,7 +247,53 @@ describe("ProductPlansRouter", () => {
       product: null,
       plans: [],
       subscribeAccess: "none",
+      maintenance: null,
     });
     expect(query).not.toHaveBeenCalled();
+  });
+
+  /*
+   * 产品级升级维护窗口（owner 2026-09-27）。与目录端点同一真源（product.products 两列）：
+   * 挂着窗口 → maintenance.until（ISO）；没挂 → null。**不动 subscribeAccess**——维护是
+   * 临时运行态，正常流程里的判定照算，定价页自己按优先级把每张卡的 CTA 换成状态字。
+   */
+  it("挂着维护窗口 → maintenance.until 是 ISO，且 subscribeAccess 照旧", async () => {
+    const { pool } = makePool(
+      [
+        {
+          ...ARDA,
+          maintenance_window_id: "6b1f1e9a-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
+          maintenance_until: new Date("2026-10-01T02:00:00.000Z"),
+        },
+      ],
+      [PRO_ROW],
+    );
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.maintenance).toEqual({ until: "2026-10-01T02:00:00.000Z" });
+    expect(res.subscribeAccess).toBe("public");
+    expect(res.plans).toHaveLength(1);
+    /* 窗口 id 不出网。 */
+    expect(JSON.stringify(res)).not.toContain("6b1f1e9a");
+  });
+
+  it("没挂维护窗口 → maintenance null（两列为空 / 缺列都算）", async () => {
+    for (const row of [
+      { ...ARDA, maintenance_window_id: null, maintenance_until: null },
+      ARDA,
+    ]) {
+      const { pool } = makePool([row], [PRO_ROW]);
+      const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+      expect(res.maintenance).toBeNull();
+    }
+  });
+
+  it("产品那一问真的在选维护两列", async () => {
+    const { pool, query } = makePool([ARDA], [PRO_ROW]);
+    await new ProductPlansRouter(pool).getProductPlans("arda");
+    const sql = String(query.mock.calls[0]?.[0]).replace(/\s+/g, " ");
+    expect(sql).toContain("maintenance_window_id");
+    expect(sql).toContain("maintenance_until");
+    /* 产品码只许绑定参数进 SQL。 */
+    expect(query.mock.calls[0]?.[1]).toEqual(["arda"]);
   });
 });

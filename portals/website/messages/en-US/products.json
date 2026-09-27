@@ -139,7 +139,9 @@
       "inviteSubscribe": "By invitation",
       "notForSale": "Not on sale yet",
       "sunset": "No longer on sale",
-      "sunsetHint": "Existing subscriptions are not affected"
+      "sunsetHint": "Existing subscriptions are not affected",
+      "maintenance": "Under maintenance — subscriptions unavailable for now",
+      "maintenanceUntil": "Expected back around {time}"
     },
     "types": {
       "general_platform": "General Platform",
@@ -203,6 +205,8 @@
     "upgradeTo": "Upgrade to {plan}",
     "sunset": "No longer on sale",
     "sunsetHint": "Existing subscriptions are not affected",
+    "maintenance": "Under maintenance — subscriptions unavailable for now",
+    "maintenanceUntil": "Expected back around {time}",
     "pendingOrder": {
       "view": "View order status",
       "blocked": "Order in progress"

@@ -30,6 +30,10 @@ import { Controller, Get, Inject, Logger, Param } from "@nestjs/common";
 import type { Pool } from "pg";
 import { TIERS } from "@vxture-platform/shared";
 import { WEBSITE_BFF_RO_POOL } from "../providers/pg-pool.provider";
+import {
+  readMaintenance,
+  type ProductMaintenance,
+} from "./product-catalog.router";
 
 /** 与 console-bff subscription.router 相同的产品码形状约束。 */
 const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -93,6 +97,16 @@ export interface ProductPlansResponse {
    * 承诺等级不可订（preview / sunset）时恒为 none，与阶梯里有没有档无关。
    */
   subscribeAccess: "public" | "invite" | "none";
+  /**
+   * 产品级升级维护窗口（owner 2026-09-27）：非空 = 升级维护中，`until` 预计恢复（ISO）。
+   * 与目录端点同一形状、同一真源（product.products 两列），定价页据此把每张卡的 CTA 换成
+   * 状态字「升级维护中，暂不可订阅」。
+   *
+   * **不动 `subscribeAccess`**：维护是临时运行态，正常流程里的判定（承诺等级、公开档 /
+   * 邀请档）照算——窗口一结束，页面拿掉状态字就回到原样，不用再问一次。
+   * 产品不存在 / 非法码时与其它字段一样回空（null）。
+   */
+  maintenance: ProductMaintenance | null;
 }
 
 @Controller("api/products")
@@ -110,7 +124,12 @@ export class ProductPlansRouter {
       this.logger.warn(
         `product plans: malformed product code "${productCode}" — returning empty ladder`,
       );
-      return { product: null, plans: [], subscribeAccess: "none" };
+      return {
+        product: null,
+        plans: [],
+        subscribeAccess: "none",
+        maintenance: null,
+      };
     }
 
     const productRes = await this.pool.query<{
@@ -119,9 +138,11 @@ export class ProductPlansRouter {
       product_nick: string | null;
       release_version: string | null;
       release_stage: string;
+      maintenance_window_id: string | null;
+      maintenance_until: Date | string | null;
     }>(
       `select product_code, product_name, product_nick, release_version,
-              release_stage
+              release_stage, maintenance_window_id, maintenance_until
          from product.products
         where product_code = $1
           and is_customer_visible = true
@@ -134,7 +155,12 @@ export class ProductPlansRouter {
       this.logger.warn(
         `product plans: unknown or non-public product "${productCode}" — returning empty ladder`,
       );
-      return { product: null, plans: [], subscribeAccess: "none" };
+      return {
+        product: null,
+        plans: [],
+        subscribeAccess: "none",
+        maintenance: null,
+      };
     }
 
     const ladderRes = await this.pool.query<{
@@ -237,6 +263,10 @@ export class ProductPlansRouter {
           : inviteCount > 0
             ? "invite"
             : "none",
+      maintenance: readMaintenance(
+        productRow.maintenance_window_id,
+        productRow.maintenance_until,
+      ),
     };
   }
 }

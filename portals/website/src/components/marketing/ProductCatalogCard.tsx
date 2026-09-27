@@ -19,6 +19,11 @@ import { useState } from "react";
  *                           只在 canUpgrade 时出现）+ 「进入」。
  *   停售中（sunset）      → 未订阅给一段状态字「停售中 / 现有订阅不受影响」，不给订阅；
  *                           已订阅只留「进入」，不给「升级」（换档是新进一档）。
+ *   升级维护中（maintenance，owner 2026-09-27）
+ *                         → 产品级的临时运行态，**优先于停售与其它**：徽标「升级维护中」+
+ *                           副行「预计 … 恢复」；未订阅给不可点的状态字「升级维护中，暂不可
+ *                           订阅」；已订阅只留「进入」（产品打不开是产品自己的事，入口不藏），
+ *                           不给「升级」。它不改变正常流程里的判定，窗口一关就回原样。
  *
  * 「进入」的目标是**产品本身**（product_webhooks.home_url，如 vxtpl.vxture.com），
  * 不是 console：console 是订阅管理台，从一个产品的卡片点进去落到管理台是错的落点
@@ -34,12 +39,17 @@ import { useState } from "react";
  * @category Components - Marketing
  */
 
+import { useLocale } from "next-intl";
 import { useWebsiteDateFormat } from "@/lib/date-format";
 import { Button, Icon } from "@vxture/design-system";
 import { SuspensionDetailDialog } from "./SuspensionDetailDialog";
 import type { IconName } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import type { ProductSubscriptionState } from "@/api/subscription.api";
+import {
+  maintenanceUntilText,
+  type ProductMaintenance,
+} from "@/api/product-catalog.api";
 
 /** 卡片数据（两页各自从目录 + marketing jsonb 算好后传入）。 */
 export interface ProductCatalogCardModel {
@@ -80,6 +90,8 @@ export interface ProductCatalogCardModel {
    * 落地页各说各话，而错的是入口在承诺一件做不到的事。
    */
   subscribeAccess: "public" | "invite" | "none";
+  /** 产品级升级维护窗口；null = 不在维护中。见 product-catalog.api 的 ProductMaintenance。 */
+  maintenance: ProductMaintenance | null;
 }
 
 /** 卡片文案——两页各自的命名空间里键名相同，形状在这里定死。 */
@@ -107,6 +119,10 @@ export interface ProductCatalogCardLabels {
     /** 停售中的状态字（不是按钮）与它的副行「现有订阅不受影响」。 */
     sunset: string;
     sunsetHint: string;
+    /** 升级维护中的状态字「升级维护中，暂不可订阅」（不是按钮）。 */
+    maintenance: string;
+    /** 副行「预计 {time} 恢复」——**原串**（t.raw），时间只有渲染时才知道，由卡片自己填。 */
+    maintenanceUntil: string;
     upgrade: string;
     /** 「进入」——目标是产品自己的站点（home_url）。 */
     enter: string;
@@ -180,6 +196,21 @@ export function ProductCatalogCard({
    */
   const sunset = !notLive && product.releaseStage === "sunset";
   /*
+   * 升级维护中（产品级维护窗口，owner 2026-09-27）。真源是目录端点的 `maintenance`
+   * （product.products 两列，opera 在窗口 start / complete 时写）。它是临时的运行态，
+   * **优先于停售与「还没上线」**：徽标先说它，未订阅的入口换成不可点的状态字，已订阅的
+   * 只留「进入」不给「升级」。窗口一关，这些呈现自动消失，别的判定一个都没动过。
+   *
+   * 副行「预计 … 恢复」的时间按站点 locale 格式化（见 maintenanceUntilText 为什么不用
+   * 运行时 locale）；until 解析不了就只画徽标不画这一行。
+   */
+  const maintenance = product.maintenance;
+  const locale = useLocale();
+  const maintenanceUntil = maintenanceUntilText(maintenance, locale);
+  const maintenanceUntilLine = maintenanceUntil
+    ? labels.actions.maintenanceUntil.replace("{time}", maintenanceUntil)
+    : null;
+  /*
    * 冻结中（2026-09-26）。此前这一档落到「未订阅」分支显示「订阅」——客户点下去会把同一
    * 个产品再买一份，而运营随后点「恢复订阅」会撞唯一索引，那条订阅从此恢复不了。
    *
@@ -210,8 +241,16 @@ export function ProductCatalogCard({
   const productHomeUrl = subscription?.homeUrl ?? null;
   const pricingHref = `/pricing?product=${product.code}`;
   // 推荐度奖章只给「可订、未订阅」的产品——已开通的不用再推，开发中的还不能订，
-  // 停售的不该再推。
-  const medals = !notLive && !subscribed && !sunset ? product.recommend : 0;
+  // 停售的不该再推，维护中的这会儿订不了（同一排里一边说「推荐」一边说「暂不可订阅」
+  // 是自相矛盾）。
+  const medals =
+    !notLive && !subscribed && !sunset && !maintenance ? product.recommend : 0;
+  /* 「升级维护中」徽标：warning 语气，与冻结态那枚同一种描边写法（同一排只有奖章带填色）。 */
+  const maintenanceBadge = maintenance ? (
+    <span className="rounded-full border border-vx-warning-200/60 px-2.5 py-1 text-xs font-normal text-vx-warning-600 dark:border-vx-warning-300/30 dark:text-vx-warning-300">
+      {labels.suspension.maintenance}
+    </span>
+  ) : null;
   // 底部左侧一行（owner 2026-09-03）：
   //   上线（ga/beta）→ 「v 1.2.3 at 2026/9/12」，版本与发布时间取目录真列，自动；
   //   开发中           → 「预期发布：2026/9/30」，日期由运营在营销内容里手填（marketing.expectedReleaseAt）。
@@ -251,15 +290,23 @@ export function ProductCatalogCard({
           </div>
         </div>
         {notLive ? (
-          <span className="shrink-0 rounded-full border border-vx-gray-200 px-2.5 py-1 text-xs font-normal text-vx-gray-500 dark:border-vx-gray-700 dark:text-vx-gray-400">
-            {labels.badges.preview}
-          </span>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {/* 还没上线也可能被挂进维护窗口（运营从目录里选产品）：维护是临时运行态，先说它。 */}
+            {maintenanceBadge}
+            <span className="rounded-full border border-vx-gray-200 px-2.5 py-1 text-xs font-normal text-vx-gray-500 dark:border-vx-gray-700 dark:text-vx-gray-400">
+              {labels.badges.preview}
+            </span>
+          </div>
         ) : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
             <span className="rounded-full border border-vx-info-200/60 px-2.5 py-1 text-xs font-normal text-vx-info-600 dark:border-vx-info-400/25 dark:text-vx-info-200">
               {stageBadge}
             </span>
-            {suspendedLabel ? (
+            {maintenanceBadge ? (
+              /* 维护 > 冻结 > 已订阅：这一格只说一件事，说当下最要紧的那件。产品级维护
+                 对所有人成立，个例的冻结态还在动作区那颗按钮（开详情弹窗）上说。 */
+              maintenanceBadge
+            ) : suspendedLabel ? (
               /* 冻结中压过绿色「已订阅」：这时候告诉客户「已订阅」是对的但没用，
                  他要知道的是**为什么用不了**。 */
               <span className="rounded-full border border-vx-warning-200/60 px-2.5 py-1 text-xs font-normal text-vx-warning-600 dark:border-vx-warning-300/30 dark:text-vx-warning-300">
@@ -354,14 +401,11 @@ export function ProductCatalogCard({
           >
             {labels.actions.detail}
           </Link>
-          {notLive ? (
-            <Button variant="outline" size="md" disabled className="h-10">
-              {labels.actions.coming}
-            </Button>
-          ) : suspendedLabel ? (
+          {suspendedLabel ? (
             /* 三个购买/进入入口都不给：订阅会造重复行、进入是死控件（产品正停着服务）、
                升级会动那条被平台冻结的订阅。留下的这一个**不是死的**——它开详情弹窗，
-               说清楚停了多久、什么时候回来、这些天算不算有效期。 */
+               说清楚停了多久、什么时候回来、这些天算不算有效期。
+               （冻结态只在已订阅时有值，所以它天然在「还没上线」之后——顺序调整不改变行为。） */
             <Button
               variant="outline"
               size="md"
@@ -372,7 +416,14 @@ export function ProductCatalogCard({
             </Button>
           ) : subscribed ? (
             <>
-              {subscription?.canUpgrade && !sunset ? (
+              {/* 升级维护中：只留「进入」+ 状态字（徽标已说「升级维护中」，这里补预计恢复），
+                  不给「升级」——换档是新进一档，维护期间不接。 */}
+              {maintenanceUntilLine ? (
+                <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
+                  {maintenanceUntilLine}
+                </span>
+              ) : null}
+              {subscription?.canUpgrade && !sunset && !maintenance ? (
                 <Button asChild variant="outline">
                   <Link href={pricingHref} target="_blank">
                     {labels.actions.upgrade}
@@ -395,6 +446,24 @@ export function ProductCatalogCard({
                 </Button>
               )}
             </>
+          ) : maintenance ? (
+            /* 升级维护中（未登录 / 未订阅）：一段状态字而不是灰按钮——照停售那套的形态。
+               优先于「还没上线」与停售：维护是临时运行态，先说它；副行只给运营填的预计
+               恢复时间，没有就不画。 */
+            <span className="flex h-10 flex-col items-end justify-center text-right leading-tight">
+              <span className="text-sm font-medium text-vx-gray-500 dark:text-vx-gray-400">
+                {labels.actions.maintenance}
+              </span>
+              {maintenanceUntilLine ? (
+                <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
+                  {maintenanceUntilLine}
+                </span>
+              ) : null}
+            </span>
+          ) : notLive ? (
+            <Button variant="outline" size="md" disabled className="h-10">
+              {labels.actions.coming}
+            </Button>
           ) : (
             <>
               {/* 未订阅：先去官网定价页看价格 + 功能，登录后置。

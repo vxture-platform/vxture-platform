@@ -134,6 +134,40 @@ export interface ProductCatalogItem {
    * （登录看你的邀请 / 申请邀请），后者只能如实说还没开卖。
    */
   subscribeAccess: "public" | "invite" | "none";
+  /**
+   * 产品级升级维护窗口（owner 2026-09-27）：非空 = 产品正在「升级维护中」，`until` 是
+   * 运营填的预计恢复时间（ISO）。**无论是否订阅**，这段时间里产品都不可用：未订阅的
+   * 暂不能订，已订阅的只留「进入」。
+   *
+   * 真源只有 product.products 的两列（opera-bff 在窗口 start / complete 时写）：
+   * `maintenance_window_id IS NOT NULL` 就是「维护中」，`maintenance_until` 是预计恢复。
+   * 官网不读 admin schema 的窗口表——它要知道的只是「现在能不能用、大约什么时候好」。
+   *
+   * 与 `subscribeAccess` / `releaseStage` 正交：维护是临时的运行态，不改变正常订阅流程
+   * 里的判定（停售、在途订单、档位比较）。呈现优先级由页面定：维护 > 停售 > 其他。
+   */
+  maintenance: ProductMaintenance | null;
+}
+
+/** 升级维护中的对外形状：只有预计恢复时间（ISO）。窗口 id 是运营侧的事，不出网。 */
+export interface ProductMaintenance {
+  until: string;
+}
+
+/**
+ * 两列 → 对外形状。以 `maintenance_window_id` 判「在不在维护」（契约定的真源），
+ * `maintenance_until` 只负责时间。DDL 的 CHECK 保证两列同空同非空，所以 until 为空
+ * 而窗口非空在库里不可能出现；万一（部署偏斜）真出现了，宁可回一个空串让页面只画
+ * 徽标不画「预计 … 恢复」，也不能把一个正在维护的产品说成可订。
+ */
+export function readMaintenance(
+  windowId: string | null | undefined,
+  until: Date | string | null | undefined,
+): ProductMaintenance | null {
+  if (!windowId) return null;
+  return {
+    until: until instanceof Date ? until.toISOString() : (until ?? ""),
+  };
 }
 
 interface ProductCatalogRow {
@@ -149,6 +183,8 @@ interface ProductCatalogRow {
   marketing: MarketingContent | null;
   public_plan_count: number | string | null;
   invite_plan_count: number | string | null;
+  maintenance_window_id: string | null;
+  maintenance_until: Date | string | null;
 }
 
 @Controller("api/products")
@@ -161,6 +197,9 @@ export class ProductCatalogRouter {
       `select p.product_code, p.product_name, p.product_nick, p.product_type,
               p.description, p.release_version, p.released_at, p.release_stage,
               p.status, p.marketing,
+              /* 产品级维护窗口（2026-09-27）：窗口 id 非空 = 升级维护中，until = 预计恢复。
+                 由 opera-bff 在窗口 start / complete 时写，这里只读。 */
+              p.maintenance_window_id, p.maintenance_until,
               /*
                * 订阅入口三态（owner 2026-09-22）。卡片上那颗按钮此前只按成熟度 ×
                * 订阅态决定，**完全不知道这个产品还有没有公开可买的档**——于是把所有
@@ -226,6 +265,10 @@ export class ProductCatalogRouter {
           : Number(r.invite_plan_count ?? 0) > 0
             ? "invite"
             : "none",
+      maintenance: readMaintenance(
+        r.maintenance_window_id,
+        r.maintenance_until,
+      ),
     }));
   }
 }

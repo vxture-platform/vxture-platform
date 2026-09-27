@@ -567,7 +567,8 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- ═══════════════════════════════════════════════════════════════════════════
 -- admin schema — 跨 schema / 跨 realm 引用清单（结论：无真 FK，全部裸 UUID / 按值解析）。
 -- 依据 docs/design/data_admin_200_schema.md §0 红线 + §3 FK/边界速查表。
--- 本 schema 不向 90_cross_schema_fk.sql 贡献任何 ADD CONSTRAINT —— 以下为审计说明，非可执行 DDL。
+-- 本 schema 只向 90_cross_schema_fk.sql 贡献一条 ADD CONSTRAINT（第 7 条，2026-09-27 加）；
+-- 其余为审计说明，非可执行 DDL。
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- 1) admin.operator_*  →  客户 realm 各 schema
@@ -592,6 +593,15 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --
 -- 5) 审计：admin 域不建审计表，运营全链路审计复用 support.audit_logs(actor_type='operator')，无 FK。
 -- 6) 共享基础设施：iam.oidc_clients(admin) + iam.signing_keys（RS256 JWKS 双 realm 共用），对 operator 账号无 FK。
+-- 7) admin.maintenance_window_products.product_id → product.products(id)（产品级维护窗口，2026-09-27）
+--    = 真 FK。product 不是 realm 边界（同 kyc / appoidc / metering → product 的先例），一条指向不存在
+--      产品的绑定没有任何意义。ON DELETE CASCADE：产品硬删（无客户足迹的那条路，见 opera-bff
+--      deleteProduct）时绑定随之消失，窗口本身留着——不级联的话硬删会撞裸 23503 → 500，而删产品那段
+--      代码按表名逐张清引用，每加一张表都得回去补一行。
+DO $$ BEGIN
+  ALTER TABLE admin.maintenance_window_products ADD CONSTRAINT fk_maintenance_window_products_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- resource_sharing_policies → tenancy / product（D8，铁律一：跨 schema FK 集中于此，幂等）。
 -- metric_key → product.platform_metrics 为 loose 引用（策略路由，不建 FK；表可先于策略存在）。
 DO $$ BEGIN

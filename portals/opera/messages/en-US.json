@@ -225,5 +225,17 @@
     "submit": "Save",
     "done": "{key} named",
     "failed": "Could not save the name"
+  },
+  "maintenanceWindowsPage": {
+    "products": {
+      "label": "Affected products",
+      "hint": "Pick from the product catalog; leave empty for a platform-wide notice. Starting the window puts these products under maintenance and holds new subscriptions; completing or cancelling restores them.",
+      "selected": "{count} selected",
+      "none": "No products attached",
+      "empty": "The product catalog is empty",
+      "loadFailed": "Could not load the product catalog, so affected products cannot be changed this time; retry and edit again.",
+      "lockedLive": "Affected products are locked while the window is in progress; complete or cancel it to change them.",
+      "chipsLabel": "Affected products"
+    }
   }
 }

@@ -21,6 +21,10 @@
  * 2026-09-27 两档「不给换档」：停售（sunset）每张卡的 CTA 换成状态字「停售中」+ 副行
  * 「现有订阅不受影响」；冻结中（suspensionState）高档不再给「升级到 X」，改成目录卡
  * 同款的冻结态字样。两者都只收购买 / 升级入口，「当前套餐 / 低于当前套餐」照旧标出。
+ *
+ * 同日再加一档：升级维护中（产品级维护窗口 `maintenance`）——每张卡的 CTA 换成状态字
+ * 「升级维护中，暂不可订阅」+ 副行「预计 … 恢复」，形态照 sunset 那套；优先级高于停售
+ * 与冻结（临时运行态先说）。同样只收购买 / 升级 / 联系销售入口。
  */
 
 import { useLocale, useTranslations } from "next-intl";
@@ -38,6 +42,10 @@ import {
   buildConsoleOrderStatusUrl,
   buildConsoleSubscribeUrl,
 } from "@/lib/console-entry";
+import {
+  maintenanceUntilText,
+  type ProductMaintenance,
+} from "@/api/product-catalog.api";
 import { usePlanLabels } from "./plan-labels";
 import {
   displayedPrice,
@@ -92,6 +100,7 @@ export function PricingPlanCard({
   fractionDigits = 2,
   sunset = false,
   suspensionState = null,
+  maintenance = null,
 }: {
   plan: PricingPlan;
   cycle: BillingCycle;
@@ -125,6 +134,12 @@ export function PricingPlanCard({
    * 目录卡早就这么做（BFF 的 canUpgrade 冻结中恒 false），这一页此前只读 currentTier。
    */
   suspensionState?: string | null;
+  /**
+   * 产品级升级维护窗口（owner 2026-09-27）；null = 不在维护中。有值时购买 / 升级 / 联系
+   * 销售入口都换成状态字「升级维护中，暂不可订阅」，脚注写「预计 … 恢复」。优先于停售与
+   * 冻结态；「当前套餐 / 低于当前套餐」与在途单的「查看订单状态」照旧。
+   */
+  maintenance?: ProductMaintenance | null;
 }) {
   const t = useTranslations("products.subscription");
   /* 冻结态的词与目录卡同一份（products.catalog.suspension.*）：同一个状态在两页不该有两套叫法。 */
@@ -162,6 +177,15 @@ export function PricingPlanCard({
       {t("sunset")}
     </p>
   ) : null;
+  /* 升级维护中：同一形态的状态字。维护 > 停售——两者都只是把入口换成一句话，维护是
+     临时运行态先说它；停售那句等窗口关了自然又露出来。 */
+  const maintenanceNotice = maintenance ? (
+    <p className="flex h-10 items-center justify-center text-center text-sm font-medium text-vx-text-muted">
+      {t("maintenance")}
+    </p>
+  ) : null;
+  const notice = maintenanceNotice ?? sunsetNotice;
+  const maintenanceUntil = maintenanceUntilText(maintenance, locale);
   // 省额徽章只在「年付展示 + 两个周期都有价 + 年付真的更便宜」时出现。
   const savings =
     isPaid && shown.unit === "year" && plan.monthly && plan.yearly
@@ -312,7 +336,7 @@ export function PricingPlanCard({
         {/* CTA + 脚注 */}
         <div className="mt-4">
           {isContact ? (
-            (sunsetNotice ?? (
+            (notice ?? (
               <Button asChild variant="outline" className="w-full">
                 <a
                   href={`mailto:sales@vxture.com?subject=${encodeURIComponent(
@@ -350,6 +374,9 @@ export function PricingPlanCard({
             <Button variant="outline" className="w-full" disabled>
               {relation === "current" ? t("currentPlan") : t("lowerPlan")}
             </Button>
+          ) : maintenanceNotice ? (
+            /* 升级维护中压过冻结态与停售：产品级的临时运行态先说。 */
+            maintenanceNotice
           ) : frozenLabel ? (
             /* 冻结中：与「当前套餐」同一种禁用态，字样换成冻结态（维护中 / 审核中 / …）。
                不给「升级到 X」——换档会动那条被平台冻结的订阅。 */
@@ -387,17 +414,22 @@ export function PricingPlanCard({
           )}
         </div>
         <p className="mt-2 text-center text-xs text-vx-gray-400 dark:text-vx-gray-500">
-          {isContact && !sunset
-            ? t("note.enterprise")
-            : pendingOrder
-              ? t("note.pendingOrder")
-              : frozenLabel
-                ? tCatalog("suspension.hint")
-                : sunset
-                  ? t("sunsetHint")
-                  : isFree
-                    ? t("note.free")
-                    : t("note.paid")}
+          {/* 维护中的脚注先于其它：预计恢复时间；运营没填（或解析不了）就只说服务暂时不可用。 */}
+          {maintenance
+            ? maintenanceUntil
+              ? t("maintenanceUntil", { time: maintenanceUntil })
+              : tCatalog("suspension.hint")
+            : isContact && !sunset
+              ? t("note.enterprise")
+              : pendingOrder
+                ? t("note.pendingOrder")
+                : frozenLabel
+                  ? tCatalog("suspension.hint")
+                  : sunset
+                    ? t("sunsetHint")
+                    : isFree
+                      ? t("note.free")
+                      : t("note.paid")}
         </p>
       </CardContent>
     </Card>
