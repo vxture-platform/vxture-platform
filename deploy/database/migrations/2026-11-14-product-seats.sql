@@ -106,6 +106,26 @@ BEGIN
     EXECUTE format('GRANT %s ON metering.product_seats TO %I', r.privilege_type, r.grantee);
   END LOOP;
 END $$;
+-- ── 列级锁：本迁移自己先锁一次 ─────────────────────────────
+-- 28d 的顺序是「先重放 migrations/，再重放 98_column_locks.sql」，而新表在 CREATE
+-- 那一刻就因 97 的 ALTER DEFAULT PRIVILEGES 拿到了全列 UPDATE。只写进 98 的话，
+-- **本轮 migrate 里这张表是不设防的**，下一轮才锁上——而末尾那条断言正是在本轮跑的。
+--
+-- 2026-09-27 在生产上就是这么红的（run 36284113219）。本机两个库都没复现，
+-- 因为那两个库的 `product_seats` 都是先经 98 锁过才跑到这段的——**第一次建表那一轮
+-- 才是真实顺序，而我本机没有任何一个库处于那个状态**。
+--
+-- 做法照 2026-10-30-certification-runs / 2026-10-25-tenant-abuse-caps 的先例：
+-- 这里自己锁一遍，98 之后重放同样的语句，两边逐字一致。
+-- （那份迁移的头注把这个坑写得很清楚，我没去找。）
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platform_svc') THEN
+    REVOKE UPDATE ON metering.product_seats FROM platform_svc;
+    GRANT UPDATE (revoked_at, revoked_by) ON metering.product_seats TO platform_svc;
+  END IF;
+END $$;
+
 COMMIT;
 
 -- ── 审计：证明三条不变式**拦得住/放得过**，而不只是「建出来了」 ───────────────
