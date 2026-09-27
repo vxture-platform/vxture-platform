@@ -84,9 +84,6 @@ export default function ProductsOverviewPage({
         subscribe: t("catalog.actions.subscribe"),
         inviteSubscribe: t("catalog.actions.inviteSubscribe"),
         notForSale: t("catalog.actions.notForSale"),
-        sunset: t("catalog.actions.sunset"),
-        sunsetHint: t("catalog.actions.sunsetHint"),
-        maintenance: t("catalog.actions.maintenance"),
         /* 带占位符、渲染时才知道值（预计恢复时间）：取原串交给卡片自己填，理由同下面 suspension 三条。 */
         maintenanceUntil: t.raw("catalog.actions.maintenanceUntil") as string,
         upgrade: t("catalog.actions.upgrade"),

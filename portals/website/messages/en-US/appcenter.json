@@ -48,9 +48,6 @@
       "coming": "Coming soon",
       "inviteSubscribe": "By invitation",
       "notForSale": "Not on sale yet",
-      "sunset": "No longer on sale",
-      "sunsetHint": "Existing subscriptions are not affected",
-      "maintenance": "Under maintenance — subscriptions unavailable for now",
       "maintenanceUntil": "Expected back around {time}"
     },
     "empty": {

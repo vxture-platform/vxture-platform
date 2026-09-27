@@ -22,7 +22,7 @@
  * 用的公开基址（生产镜像烘入的 NEXT_PUBLIC_WEBSITE_BFF_URL；本地默认 localhost:3001）。
  */
 
-import { formatDateTime } from "@vxture-platform/shared";
+import { formatClock, formatDateTime } from "@vxture-platform/shared";
 import { API_BASE_URL } from "./client";
 
 /** marketing jsonb 的单语部分（营销文案富字段,全部可缺）。镜像 website-bff。 */
@@ -99,10 +99,18 @@ export function maintenanceUntilText(
   locale: string,
 ): string | null {
   if (!maintenance) return null;
-  const text = formatDateTime(maintenance.until, locale, "", {
-    date: "long",
-    time: "short",
-  });
+  const until = new Date(maintenance.until);
+  if (Number.isNaN(until.getTime())) return null;
+  /* 一行灰字只够放一个时刻：24 小时内只说「02:17」，更远才带短日期。owner 2026-09-28：
+     按钮位置塞两行说明「变态」——时间要短到能挤在徽标旁边。 */
+  const withinDay =
+    Math.abs(until.getTime() - Date.now()) < 24 * 60 * 60 * 1000;
+  const text = withinDay
+    ? formatClock(maintenance.until, locale, "", { time: "short" })
+    : formatDateTime(maintenance.until, locale, "", {
+        date: "short",
+        time: "short",
+      });
   return text || null;
 }
 
