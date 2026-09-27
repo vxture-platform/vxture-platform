@@ -22,6 +22,7 @@
  * 轴不删：它们守的是「这张表只答一个问题」。往里加一个别的 gate 或别的 owner 的项，
  * 这张表就又在同时回答两件事了，而下面那条断言会当场红。
  */
+import { AUTO_DETERMINED_CHECKLIST_ITEMS } from "@vxture/core-utils";
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -46,7 +47,15 @@ const ROUTER_SRC = readFileSync(
 const SEEDED_ITEMS = [
   { code: "catalog_registered", owner: "opera", gate: "launch" }, //   30
   { code: "c1_identity", owner: "opera", gate: "launch" }, //          40
-  { code: "c1_s2s", owner: "opera", gate: "stable" }, //               45
+  /* 环节②「上线前」四项人工确认（2026-11-17-checklist-stages）：不在 AUTO_DETERMINED 里。 */
+  { code: "c1_s2s_declared", owner: "opera", gate: "launch" }, //      41
+  { code: "c2_entitlement_declared", owner: "opera", gate: "launch" }, // 42
+  { code: "c3_metering_declared", owner: "opera", gate: "launch" }, // 43
+  { code: "webhook_receiver_declared", owner: "opera", gate: "launch" }, // 44
+  /* 环节③④：套餐 / 订阅两项前置排在三项对方实测之前——它们就是靠那两项才发得出。 */
+  { code: "plan_published", owner: "opera", gate: "stable" }, //       46
+  { code: "tenant_subscribed", owner: "opera", gate: "stable" }, //    47
+  { code: "c1_s2s", owner: "opera", gate: "stable" }, //               48
   { code: "c3_metering", owner: "opera", gate: "stable" }, //          50
   { code: "c2_entitlement", owner: "opera", gate: "stable" }, //       60
 ] as const;
@@ -89,28 +98,54 @@ describe("检查单的两根轴：展示按 owner，上线门槛按 gate", () =>
     expect(gateBlock).toMatch(/from === "draft" \|\| from === "developing"/);
   });
 
-  it("两道门、各答一个问题：launch=我方配置+登录接入，stable=对方发起型三项", () => {
+  it("两道门、各答一个问题：launch=我方配置+登录接入+对方四项人工确认，stable=套餐/订阅+对方实测三项", () => {
     /* owner 2026-09-27：每一道门只验那一阶段验得了的事。对方发起型三项（换票 / 权益 /
        用量）在产品拿到一条订阅之前发不出——平台换票的覆盖门拒 invalid_target——卡上线
        就是环（tenderforge 2026-09-22/24 实测）。它们改卡「转正式版」（release_stage →
        stable，admin-bff 拦 409）。往 launch 门上再放一项对方发起型检查，环就回来了。 */
     const byGate = (g: string) =>
       SEEDED_ITEMS.filter((i) => i.gate === g).map((i) => i.code);
-    expect(byGate("launch")).toEqual(["catalog_registered", "c1_identity"]);
+    expect(byGate("launch")).toEqual([
+      "catalog_registered",
+      "c1_identity",
+      "c1_s2s_declared",
+      "c2_entitlement_declared",
+      "c3_metering_declared",
+      "webhook_receiver_declared",
+    ]);
     expect(byGate("stable")).toEqual([
+      "plan_published",
+      "tenant_subscribed",
       "c1_s2s",
       "c3_metering",
       "c2_entitlement",
     ]);
+    /* 上线门上的对方项必须全是人工确认（平台此时观测不到），实测三项一个都不能在。 */
+    const auto = new Set(AUTO_DETERMINED_CHECKLIST_ITEMS as readonly string[]);
+    const theirsOnLaunch = byGate("launch").filter((c) =>
+      c.endsWith("_declared"),
+    );
+    expect(theirsOnLaunch.every((c) => !auto.has(c))).toBe(true);
+    expect(
+      byGate("launch").some((c) =>
+        ["c1_s2s", "c2_entitlement", "c3_metering"].includes(c),
+      ),
+    ).toBe(false);
     expect(byGate("publish")).toEqual([]);
     expect(SEEDED_ITEMS.every((i) => i.owner === "opera")).toBe(true);
   });
 
-  it("上线门槛就是这五项技术检查，退役的三项一个不剩", () => {
+  it("检查单就是这十一项（四个环节），退役的四项一个不剩", () => {
     const codes = SEEDED_ITEMS.map((i) => i.code);
     expect(codes).toEqual([
       "catalog_registered",
       "c1_identity",
+      "c1_s2s_declared",
+      "c2_entitlement_declared",
+      "c3_metering_declared",
+      "webhook_receiver_declared",
+      "plan_published",
+      "tenant_subscribed",
       "c1_s2s",
       "c3_metering",
       "c2_entitlement",

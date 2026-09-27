@@ -132,6 +132,26 @@ export interface DeliverySignal {
   lastAttemptAt: string | null;
 }
 
+/** 环节③：最近一个已发布、且组件含本产品的套餐版本。 */
+export interface PlanPublishedSignal {
+  planCode: string;
+  versionNo: number;
+  publishedAt: string;
+}
+
+/**
+ * 环节④：最近一条覆盖本产品的有效订阅（active / trialing）。
+ *
+ * 判据走 `plan_components.product_id`，不走 `subscriptions` 上的任何冗余产品列——
+ * 本机 dev 库里就有一条 product_id = karda 而版本组件是 umbra 的订阅，拿冗余列当
+ * 判据会把「订了别的产品」判成「订了本产品」。
+ */
+export interface SubscriptionSignal {
+  workspaceId: string;
+  status: string;
+  startAt: string;
+}
+
 /** C1 出站：对方最近一次换票去调别的产品。`target` 是它调的谁。 */
 export interface S2sSignal {
   lastSeenAt: string;
@@ -168,6 +188,10 @@ export interface IntegrationSignalsRecord {
   provision: ProvisionSignal | null;
   provisionAck: ProvisionAckSignal | null;
   delivery: DeliverySignal | null;
+  /** 环节③：套餐已发布（自动判定 `plan_published`）。 */
+  plan: PlanPublishedSignal | null;
+  /** 环节④：测试租户已订阅（自动判定 `tenant_subscribed`）。 */
+  subscription: SubscriptionSignal | null;
 }
 
 /** 只用到 GET；ioredis 满足它，单测给假的。 */
@@ -193,6 +217,16 @@ interface DeliveryRow {
   workspace_id: string;
   response_code: number | null;
   last_attempt_at: Date | string | null;
+}
+interface PlanRow {
+  plan_code: string;
+  version_no: number;
+  published_at: Date;
+}
+interface SubscriptionRow {
+  workspace_id: string;
+  status: string;
+  start_at: Date;
 }
 
 interface LoginRow {
@@ -306,27 +340,28 @@ export async function readIntegrationSignals(
   }
 
   const key = `${deps.keyPrefix}${C2_SIGNAL_KEY_INFIX}${productCode}`;
-  const [raw, login, usage, s2s, provision, delivery] = await Promise.all([
-    deps.redis.get(key),
-    /*
-     * 登录：`acceptance` 链的首段。两步合成一条 SQL——先用
-     * `idx_oidc_clients_product_id` 把客户端收敛到这个产品（该表十几行），
-     * 再回 `session.refresh_tokens` 取最近一行。按 **product_id 聚合**而不是单个
-     * client_id：一个产品可能有 stable / beta / canary 三个客户端，哪个登都算。
-     *
-     * 查询形状：`refresh_tokens.client_id` **没有索引**（只有 user_id /
-     * session_id / status / expires_at 四条）。最坏情况是「这个产品从没人登过」，
-     * 要扫完整张表才能确定没有——而那恰好是本检查项最常被问的状态（与 C1
-     * 出站那条同型）。今天可以这么查：该表只增不删但量级跟登录次数走，
-     * 现阶段是万行以下。**到了不够用那天，加这条索引**，不要改判据：
-     *   create index idx_refresh_tokens_client_created
-     *       on session.refresh_tokens (client_id, created_at desc);
-     *
-     * **不带 `created_at` 下界**：这张表不是分区表，照搬 C3 的时间窗只会把
-     * 「半年前登过、至今在用」的产品判成没人登过。
-     */
-    deps.pool.query<LoginRow>(
-      `SELECT rt.client_id, rt.created_at
+  const [raw, login, usage, s2s, provision, delivery, plan, subscription] =
+    await Promise.all([
+      deps.redis.get(key),
+      /*
+       * 登录：`acceptance` 链的首段。两步合成一条 SQL——先用
+       * `idx_oidc_clients_product_id` 把客户端收敛到这个产品（该表十几行），
+       * 再回 `session.refresh_tokens` 取最近一行。按 **product_id 聚合**而不是单个
+       * client_id：一个产品可能有 stable / beta / canary 三个客户端，哪个登都算。
+       *
+       * 查询形状：`refresh_tokens.client_id` **没有索引**（只有 user_id /
+       * session_id / status / expires_at 四条）。最坏情况是「这个产品从没人登过」，
+       * 要扫完整张表才能确定没有——而那恰好是本检查项最常被问的状态（与 C1
+       * 出站那条同型）。今天可以这么查：该表只增不删但量级跟登录次数走，
+       * 现阶段是万行以下。**到了不够用那天，加这条索引**，不要改判据：
+       *   create index idx_refresh_tokens_client_created
+       *       on session.refresh_tokens (client_id, created_at desc);
+       *
+       * **不带 `created_at` 下界**：这张表不是分区表，照搬 C3 的时间窗只会把
+       * 「半年前登过、至今在用」的产品判成没人登过。
+       */
+      deps.pool.query<LoginRow>(
+        `SELECT rt.client_id, rt.created_at
            FROM session.refresh_tokens rt
           WHERE rt.client_id IN (
                   SELECT c.client_id
@@ -336,41 +371,41 @@ export async function readIntegrationSignals(
                 )
           ORDER BY rt.created_at DESC
           LIMIT 1`,
-      [productId],
-    ),
-    /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
+        [productId],
+      ),
+      /* 分区裁剪靠 created_at 的下界（见 CONSUME_LOOKBACK）。product_id 上没有
          单独索引（idx_usage_events_route 以 workspace_id 打头），裁剪后最多扫
          三四个月分区——对一个上线检查的点击来说够用；真到不够用那天加索引，
          不在这里改判据。 */
-    deps.pool.query<UsageEventRow>(
-      `SELECT metric_key, created_at
+      deps.pool.query<UsageEventRow>(
+        `SELECT metric_key, created_at
            FROM metering.usage_events
           WHERE product_id = $1
             AND created_at >= now() - interval '${CONSUME_LOOKBACK}'
           ORDER BY created_at DESC
           LIMIT 1`,
-      [productId],
-    ),
-    /*
-     * C1 出站：**不新开一条写路径**。auth-bff 每次成功换票已经往
-     * `support.audit_logs` 写一条（product_210 §6 的 append-only 审计），
-     * 带 `after.caller_product`——那条痕迹一直在写，只是从来没人读。
-     *
-     * 这里按 `caller_product` 反查：调用方是本产品，说明它真的换过票去调别人。
-     *
-     * 查询形状：`idx_audit_logs_action` 先把行收敛到换票这一种，再靠
-     * `created_at` 下界做分区裁剪，最后按 jsonb 过滤。`after->>'caller_product'`
-     * **没有索引**——最坏情况是「这个产品从没换过票」，要把窗口内全部换票行扫完
-     * 才能确定没有，而那恰好是本检查项最常被问的状态。
-     *
-     * 今天可以这么查：换票凭证 TTL 300 秒、在跑的智能体个位数，窗口内是几千行量级。
-     * **到了不够用那天，加这条索引**，不要改判据：
-     *   create index idx_audit_logs_s2s_caller
-     *       on support.audit_logs ((after->>'caller_product'), created_at desc)
-     *    where action = 'oidc.token_exchange.issued';
-     */
-    deps.pool.query<S2sAuditRow>(
-      `SELECT after->>'target_product' AS target_product,
+        [productId],
+      ),
+      /*
+       * C1 出站：**不新开一条写路径**。auth-bff 每次成功换票已经往
+       * `support.audit_logs` 写一条（product_210 §6 的 append-only 审计），
+       * 带 `after.caller_product`——那条痕迹一直在写，只是从来没人读。
+       *
+       * 这里按 `caller_product` 反查：调用方是本产品，说明它真的换过票去调别人。
+       *
+       * 查询形状：`idx_audit_logs_action` 先把行收敛到换票这一种，再靠
+       * `created_at` 下界做分区裁剪，最后按 jsonb 过滤。`after->>'caller_product'`
+       * **没有索引**——最坏情况是「这个产品从没换过票」，要把窗口内全部换票行扫完
+       * 才能确定没有，而那恰好是本检查项最常被问的状态。
+       *
+       * 今天可以这么查：换票凭证 TTL 300 秒、在跑的智能体个位数，窗口内是几千行量级。
+       * **到了不够用那天，加这条索引**，不要改判据：
+       *   create index idx_audit_logs_s2s_caller
+       *       on support.audit_logs ((after->>'caller_product'), created_at desc)
+       *    where action = 'oidc.token_exchange.issued';
+       */
+      deps.pool.query<S2sAuditRow>(
+        `SELECT after->>'target_product' AS target_product,
                 after->>'mode'           AS mode,
                 created_at
            FROM support.audit_logs
@@ -380,21 +415,21 @@ export async function readIntegrationSignals(
             AND created_at >= now() - interval '${S2S_LOOKBACK}'
           ORDER BY created_at DESC
           LIMIT 1`,
-      [S2S_AUDIT_ACTION, productCode],
-    ),
-    /*
-     * 开通与投递：`acceptance` 那条链的第二段与末段。
-     *
-     * **这两张表都不是分区表**（`54_provisioning.sql` 里没有 PARTITION BY），
-     * 所以这里**有意不带 `created_at` 下界**——C3 那条带，是因为
-     * `metering.usage_events` 按月分区、谓词里不给下界就要全分区扫。照着 C3 抄一个
-     * 时间窗在这里只会白白把「半年前开通过、至今在用」的产品判成没开通过。
-     *
-     * 两条都靠 `idx_provisionings_product_id` / `idx_webhook_deliveries_product`
-     * 收敛，再取最近一行。
-     */
-    deps.pool.query<ProvisionRow>(
-      `SELECT workspace_id, provisioned_at,
+        [S2S_AUDIT_ACTION, productCode],
+      ),
+      /*
+       * 开通与投递：`acceptance` 那条链的第二段与末段。
+       *
+       * **这两张表都不是分区表**（`54_provisioning.sql` 里没有 PARTITION BY），
+       * 所以这里**有意不带 `created_at` 下界**——C3 那条带，是因为
+       * `metering.usage_events` 按月分区、谓词里不给下界就要全分区扫。照着 C3 抄一个
+       * 时间窗在这里只会白白把「半年前开通过、至今在用」的产品判成没开通过。
+       *
+       * 两条都靠 `idx_provisionings_product_id` / `idx_webhook_deliveries_product`
+       * 收敛，再取最近一行。
+       */
+      deps.pool.query<ProvisionRow>(
+        `SELECT workspace_id, provisioned_at,
                 metadata->'ack'->>'at'     AS ack_at,
                 metadata->'ack'->>'status' AS ack_status
            FROM provisioning.provisionings
@@ -403,24 +438,56 @@ export async function readIntegrationSignals(
             AND provisioned_at IS NOT NULL
           ORDER BY provisioned_at DESC
           LIMIT 1`,
-      [productId],
-    ),
-    deps.pool.query<DeliveryRow>(
-      `SELECT event_type, workspace_id, response_code, last_attempt_at
+        [productId],
+      ),
+      deps.pool.query<DeliveryRow>(
+        `SELECT event_type, workspace_id, response_code, last_attempt_at
            FROM provisioning.webhook_deliveries
           WHERE product_id = $1
             AND status = 'delivered'
           ORDER BY last_attempt_at DESC NULLS LAST
           LIMIT 1`,
-      [productId],
-    ),
-  ]);
+        [productId],
+      ),
+      /* 环节③：已发布的套餐版本，按组件反查本产品。plans.current_version_id 不用——
+       它答的是「当前卖哪一版」，这里问的是「发布过没有」。 */
+      deps.pool.query<PlanRow>(
+        `SELECT p.plan_code, pv.version_no, pv.published_at
+           FROM product.plan_versions pv
+           JOIN product.plans p ON p.id = pv.plan_id
+          WHERE pv.status = 'published'
+            AND pv.published_at IS NOT NULL
+            AND EXISTS (
+                  SELECT 1 FROM product.plan_components pc
+                   WHERE pc.plan_version_id = pv.id AND pc.product_id = $1
+                )
+          ORDER BY pv.published_at DESC
+          LIMIT 1`,
+        [productId],
+      ),
+      /* 环节④：覆盖本产品的有效订阅。判据同席位触发器（metering.resolve_seat_max）：
+       订阅 → plan_components → product_id，不看 subscriptions 上的冗余产品列。 */
+      deps.pool.query<SubscriptionRow>(
+        `SELECT s.workspace_id, s.status, s.start_at
+           FROM metering.subscriptions s
+          WHERE s.status IN ('active', 'trialing')
+            AND EXISTS (
+                  SELECT 1 FROM product.plan_components pc
+                   WHERE pc.plan_version_id = s.plan_version_id AND pc.product_id = $1
+                )
+          ORDER BY s.start_at DESC
+          LIMIT 1`,
+        [productId],
+      ),
+    ]);
 
   const loggedIn = login.rows[0];
   const latest = usage.rows[0];
   const exchange = s2s.rows[0];
   const provisioned = provision.rows[0];
   const delivered = delivery.rows[0];
+  const published = plan.rows[0];
+  const subscribed = subscription.rows[0];
   return {
     login: loggedIn
       ? {
@@ -469,6 +536,20 @@ export async function readIntegrationSignals(
           lastAttemptAt: delivered.last_attempt_at
             ? toIso(delivered.last_attempt_at)
             : null,
+        }
+      : null,
+    plan: published
+      ? {
+          planCode: published.plan_code,
+          versionNo: published.version_no,
+          publishedAt: toIso(published.published_at),
+        }
+      : null,
+    subscription: subscribed
+      ? {
+          workspaceId: subscribed.workspace_id,
+          status: subscribed.status,
+          startAt: toIso(subscribed.start_at),
         }
       : null,
   };

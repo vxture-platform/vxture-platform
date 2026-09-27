@@ -149,6 +149,8 @@ interface ProductRecord {
    * 「待配置」还是「无需接入」由它决定——那两句相反的话此前都由同一个缺席去推。
    */
   integrationMode: ProductIntegrationMode;
+  /** 承诺等级 preview / beta / stable / sunset。只读：写在 admin。接入检查抽屉据它判环节④完成没有。 */
+  releaseStage: string;
   /** 分层 L1/L2/L3；null = 未分类。形状与 opera-bff 的 `ProductRecord` 一致。 */
   layer: string | null;
   /**

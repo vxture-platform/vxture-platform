@@ -199,6 +199,14 @@ interface IntegrationSignalsLite {
     responseCode: number | null;
     lastAttemptAt: string | null;
   } | null;
+  /** 环节③：已发布、且组件含本产品的套餐版本（最近一个）。 */
+  plan: { planCode: string; versionNo: number; publishedAt: string } | null;
+  /** 环节④：覆盖本产品的有效订阅（active / trialing，最近一条）。 */
+  subscription: {
+    workspaceId: string;
+    status: string;
+    startAt: string;
+  } | null;
 }
 
 function reason(error: unknown, fallback: string): string {
@@ -505,6 +513,26 @@ export async function runLaunchChecks(
         remedy: "读不到不等于没接。先解决读取失败，再重跑。",
         itemCode: "c1_s2s",
       },
+      {
+        id: "plan-published",
+        label: "套餐已发布",
+        what: "有已发布、且组件含本产品的套餐版本。",
+        side: "ours",
+        status: "fail",
+        detail,
+        remedy: "读不到不等于没发布。先解决读取失败，再重跑。",
+        itemCode: "plan_published",
+      },
+      {
+        id: "tenant-subscribed",
+        label: "测试租户已订阅",
+        what: "有一条覆盖本产品的有效订阅。",
+        side: "ours",
+        status: "fail",
+        detail,
+        remedy: "读不到不等于没订阅。先解决读取失败，再重跑。",
+        itemCode: "tenant_subscribed",
+      },
     );
   } else {
     const {
@@ -515,6 +543,8 @@ export async function runLaunchChecks(
       provision,
       provisionAck,
       delivery,
+      plan,
+      subscription,
     } = signals;
     /* 端到端链路 —— **呈现型，不写回检查单**（没有 itemCode）。
      *
@@ -654,6 +684,36 @@ export async function runLaunchChecks(
         ? null
         : "这一项卡「转正式版」，不卡上线。服务模式换票要过覆盖门——那个工作空间得有这个产品的订阅，所以先上线、发布套餐、让测试租户订阅；对方按《产品接入通则》C1 出站换一次票后重跑。",
       itemCode: "c1_s2s",
+    });
+    /* 环节③④的两项前置——都是平台自己的表，纯实测。没有套餐就没有订阅，没有订阅
+       上面三项对方检查永远点不亮；把它们摆在同一屏，红在哪一格就知道卡在哪一步。 */
+    results.push({
+      id: "plan-published",
+      label: "套餐已发布",
+      what: "有已发布、且组件含本产品的套餐版本（admin · 服务套餐）。",
+      side: "ours",
+      status: plan ? "pass" : "fail",
+      detail: plan
+        ? `${plan.planCode} v${plan.versionNo}，发布于 ${formatAt(plan.publishedAt, opts.locale)}`
+        : "还没有含本产品的已发布套餐版本。",
+      remedy: plan
+        ? null
+        : "去 admin · 服务套餐为本产品建套餐并发布，然后重跑。发布没有别的前置。",
+      itemCode: "plan_published",
+    });
+    results.push({
+      id: "tenant-subscribed",
+      label: "测试租户已订阅",
+      what: "有一条覆盖本产品的有效订阅（active / trialing）。测试用途的真实租户订阅一次即可。",
+      side: "ours",
+      status: subscription ? "pass" : "fail",
+      detail: subscription
+        ? `最近一条 ${subscription.status}，始于 ${formatAt(subscription.startAt, opts.locale)}`
+        : "还没有覆盖本产品的有效订阅。",
+      remedy: subscription
+        ? null
+        : "套餐发布后，让一个测试用途的真实租户在 console 订阅本产品（0 元档也走订单），订阅生效后重跑。",
+      itemCode: "tenant_subscribed",
     });
   }
 

@@ -74,6 +74,11 @@
  * 与 `portals/opera/src/features/product/launch-checks.ts` 里带 `itemCode` 的检查
  * 一一对应；那边负责**怎么测**，这里负责**哪几项算机器说了算**。
  *
+ * **不在这张表上的检查项 = 人工确认**（2026-09-27 起有四项：`c1_s2s_declared` /
+ * `c2_entitlement_declared` / `c3_metering_declared` / `webhook_receiver_declared`）。
+ * 它们是环节②「上线前」平台观测不到的事，由运营按对方回报勾；前三项到环节④由同名
+ * 去掉 `_declared` 的实测项自动点亮，回调接收端那一项平台永远测不了，保留人工。
+ *
  * 判据取不到时没有人工兜底这条路——那是有意的，也是有代价的：一项自动检查若因为
  * 上游读取失败而红着，运营者只能走「带理由跳过」（`launch_override_*`，v0.26.202），
  * 那条路会留痕并在产品页常驻提示。**不要为了绕开一次读取失败把某项改回人工**，
@@ -96,6 +101,16 @@ export const AUTO_DETERMINED_CHECKLIST_ITEMS = [
    * `support.audit_logs` 留下的最近一条（`after.caller_product` = 本产品）。
    */
   "c1_s2s",
+  /**
+   * 环节③：有一个 status='published' 的套餐版本，其组件含本产品——纯读平台自己的表。
+   * 转正式版的前置：没有套餐就没有订阅，没有订阅三项对方检查永远点不亮。
+   */
+  "plan_published",
+  /**
+   * 环节④：有一条 active / trialing 的订阅覆盖本产品（metering.subscriptions 经
+   * plan_components 反查）。测试用途的真实租户订阅一次即满足——它就是「认证」。
+   */
+  "tenant_subscribed",
 ] as const;
 
 export type AutoDeterminedChecklistItem =

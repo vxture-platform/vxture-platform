@@ -2796,7 +2796,27 @@ export async function seedCatalog(client) {
        'Product code/layer/type registered in product.products; checklist + plan structure scaffolded.', 'catalog.product.checklist.catalog_registered.desc', true, 'opera', 'launch', 30),
       ('c1_identity', 'C1 身份接入', 'catalog.product.checklist.c1_identity.name',
        'OIDC client registered; RP implementation (login/callback/session) completed.', 'catalog.product.checklist.c1_identity.desc', true, 'opera', 'launch', 40),
-      -- sort 45：紧跟 c1_identity。两项是同一个身份面的入站与出站，中间不插别的。
+      -- 环节②「对方接入 · 上线前确认」的四项人工确认（2026-09-27，owner）：这一阶段平台
+      -- 观测不到对方实现了没有——换票 / 权益 / 用量要先有订阅才发得出，回调验签与幂等
+      -- 永远看不见——所以先由运营按对方回报手动确认；到环节④，前三项由测试租户的
+      -- 真实使用自动点亮（c1_s2s / c2_entitlement / c3_metering），回调接收端那一项
+      -- 平台永远测不了，保留人工。不在 AUTO_DETERMINED_CHECKLIST_ITEMS 里 = 允许人勾。
+      -- 环节③④的两项平台实测前置（gate='stable'）：转正式版之前得先有已发布的套餐、
+      -- 再有一条覆盖本产品的真实订阅——三项对方发起型检查就是靠它点亮的。
+      -- 见 migrations/2026-11-17-checklist-stages.sql。
+      ('c1_s2s_declared', '对方已实现 S2S 换票', 'catalog.product.checklist.c1_s2s_declared.name',
+       'Product side confirms the outbound S2S token-exchange client is implemented (manual, pre-launch; verified live by c1_s2s before stable).', 'catalog.product.checklist.c1_s2s_declared.desc', true, 'opera', 'launch', 41),
+      ('c2_entitlement_declared', '对方已实现权益拉取与门控', 'catalog.product.checklist.c2_entitlement_declared.name',
+       'Product side confirms entitlement fetch, cache invalidation and gating are implemented (manual, pre-launch; verified live by c2_entitlement before stable).', 'catalog.product.checklist.c2_entitlement_declared.desc', true, 'opera', 'launch', 42),
+      ('c3_metering_declared', '对方已实现用量上报', 'catalog.product.checklist.c3_metering_declared.name',
+       'Product side confirms usage reporting via POST /usage/consume is implemented (manual, pre-launch; verified live by c3_metering before stable).', 'catalog.product.checklist.c3_metering_declared.desc', true, 'opera', 'launch', 43),
+      ('webhook_receiver_declared', '对方回调接收端就绪', 'catalog.product.checklist.webhook_receiver_declared.name',
+       'Product side confirms the webhook receiver at /api/webhooks/vxture verifies the HMAC signature, is idempotent by delivery id and rejects stale seq (manual; never platform-observable).', 'catalog.product.checklist.webhook_receiver_declared.desc', true, 'opera', 'launch', 44),
+      ('plan_published', '套餐已发布', 'catalog.product.checklist.plan_published.name',
+       'A published plan version whose components include this product exists (auto; read from product.plan_versions).', 'catalog.product.checklist.plan_published.desc', true, 'opera', 'stable', 46),
+      ('tenant_subscribed', '测试租户已订阅', 'catalog.product.checklist.tenant_subscribed.name',
+       'An active or trialing subscription covering this product exists (auto; read from metering.subscriptions via plan_components).', 'catalog.product.checklist.tenant_subscribed.desc', true, 'opera', 'stable', 47),
+      -- sort 48：三项对方发起型检查排在套餐 / 订阅两项之后——它们就是靠那两项才发得出。
       -- gate='stable'（2026-09-27，owner）：c1_s2s / c3_metering / c2_entitlement 三项都是
       -- 「对方发起过调用」的痕迹，而产品在拿到一条订阅之前换不到 service 模式的票
       -- （平台换票的覆盖门），所以它们**不能**卡上线门。它们卡的是「转正式版」
@@ -2804,7 +2824,7 @@ export async function seedCatalog(client) {
       -- 由测试用途的真实租户订阅、真实使用把三项点亮，平台自己观测。
       -- 见 migrations/2026-11-16-regate-theirs-to-stable.sql。
       ('c1_s2s', 'C1 出站换票', 'catalog.product.checklist.c1_s2s.name',
-       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'catalog.product.checklist.c1_s2s.desc', true, 'opera', 'stable', 45),
+       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'catalog.product.checklist.c1_s2s.desc', true, 'opera', 'stable', 48),
       ('c3_metering', 'C3 计量上报', 'catalog.product.checklist.c3_metering.name',
        'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'catalog.product.checklist.c3_metering.desc', true, 'opera', 'stable', 50),
       ('c2_entitlement', 'C2 权益接入', 'catalog.product.checklist.c2_entitlement.name',
