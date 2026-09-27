@@ -45,7 +45,7 @@ import {
 const VERSION_ID = "22222222-2222-4222-8222-222222222222";
 const PLAN_ID = "33333333-3333-4333-8333-333333333333";
 
-/** 可删的草稿：未锁、非当前。 */
+/** 可删的草稿：未锁、非当前、且套餐还有别的版本（不是唯一一个）。 */
 const DRAFT_ROW = {
   plan_id: PLAN_ID,
   plan_code: "karda-pro",
@@ -53,6 +53,7 @@ const DRAFT_ROW = {
   status: "draft",
   is_locked: false,
   is_current: false,
+  sibling_count: 2,
 };
 
 const PLAN_ROW = { id: PLAN_ID, plan_code: "karda-pro", status: "active" };
@@ -246,6 +247,30 @@ describe("删草稿 —— plan_versions 没有 deleted_at，删就是真删", (
       router.deletePlanVersion(makeReq(MANAGE), VERSION_ID),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(tx.outcome().rolledBack).toBe(true);
+  });
+
+  /* 2026-09-27：删掉套餐唯一的版本会留下零版本的壳——矩阵看不见、同码再建撞唯一约束、
+     开新草稿又无版本可克隆。生产上四条壳（tenderforge-free / -starter、karda-business /
+     -enterprise）就是这么来的。唯一版本 → 409，改走「删除套餐」。 */
+  it("套餐唯一的版本 → 409 且回滚，一行都不删（否则留下零版本的壳）", async () => {
+    const tx = makeTxClient(
+      versionResponder((sql) =>
+        sql.includes("for update of pv")
+          ? [{ ...DRAFT_ROW, sibling_count: 0 }]
+          : undefined,
+      ),
+    );
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await expect(
+      router.deletePlanVersion(makeReq(MANAGE), VERSION_ID),
+    ).rejects.toThrow(/only version/);
+    expect(tx.outcome().rolledBack).toBe(true);
+    expect(
+      tx.calls.some((c) => c.includes("DELETE FROM product.plan_versions")),
+    ).toBe(false);
+    /* 锁行那一句必须把兄弟版本数一起带回来：判据不是另一次读，是同一把锁下的读。 */
+    const lockSql = tx.calls.find((c) => c.includes("FOR UPDATE OF pv"));
+    expect(lockSql).toContain("sibling_count");
   });
 });
 
