@@ -429,11 +429,11 @@ CREATE TABLE product.launch_checklist_items (
     description_key varchar(128),                                   -- i18n 键（product.checklist.{item_code}.desc）
     is_required boolean      NOT NULL DEFAULT true,
     owner       varchar(16)  NOT NULL DEFAULT 'opera',               -- 归属轴：opera=技术接入 / admin=商业前置
-    gate        varchar(16)  NOT NULL DEFAULT 'launch',              -- 门轴：launch=产品上线（draft→active，opera 卡）/ publish=发布套餐（admin 的 publishPlanVersion 卡）。publish 原指 developing→beta，2026-09-22 beta 简化为纯展示标签后那道门悬空，改指「发布套餐」——即 owner 给的生命周期里第 4 步
+    gate        varchar(16)  NOT NULL DEFAULT 'launch',              -- 门轴：launch=产品上线（draft/developing→active，opera 卡）/ publish=发布套餐（admin 的 publishPlanVersion 卡；2026-09-27 起此门无检查项）/ stable=转正式版（release_stage→stable，admin 卡；2026-09-27 owner：对方三项由测试租户真实订阅点亮后才允许转正式）
     sort        int          NOT NULL DEFAULT 0,
     created_at  timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT chk_launch_checklist_items_owner CHECK (owner IN ('opera','admin')),
-    CONSTRAINT chk_launch_checklist_items_gate  CHECK (gate  IN ('launch','publish'))
+    CONSTRAINT chk_launch_checklist_items_gate  CHECK (gate  IN ('launch','publish','stable'))
 );
 
 -- 每 product × 每检查项完成态（复合 PK）。可上架由本表推导（所有 required 项 satisfied），主表不加汇总字段。
@@ -482,6 +482,10 @@ CREATE INDEX idx_product_launch_statuses_item_code ON product.product_launch_sta
 -- 产品拉下线**。不设按时间自动过期：那会让一个安静了三个月的正常产品突然失效，
 -- 而认证回答的是「能不能工作」，不是「有没有人在用」（后者归运行健康）。
 -- ═══════════════════════════════════════════════════════════════════════════
+-- ── 2026-09-27 退役（owner）：本表已无读者、无写者 ──
+-- 沙箱「接入认证」退役：测试用途的真实租户订阅一次就是认证，对方三项改卡
+-- release_stage → stable（launch_checklist_items.gate = 'stable'）。发布门不再读本表，
+-- opera 的认证路由与失效标记已删。表与列锁暂留，等存量行处置后另开一条 DROP 迁移。
 CREATE TABLE product.certification_runs (
     id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id           uuid         NOT NULL REFERENCES product.products(id) ON DELETE CASCADE,

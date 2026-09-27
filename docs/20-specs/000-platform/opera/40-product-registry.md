@@ -17,27 +17,32 @@
 
 新部署、`db-init` 跑完 DDL + seed 之后，目录里只有 §5 列出的自有产品；其余都是空的。接入一个新产品是下面这条线，**没有任何一步需要改代码或改 seed**：
 
-| 步  | 在哪里                                                | 做什么                                                                                                                                                                                                                                                                                                                                                                                    | 之后各业务面看到什么                                                                                                           |
-| --- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | opera · 产品目录 · 接入产品（`/product/catalog/new`） | 一页填完：产品码、类型、来源、名称；边缘与回调；按渠道添加 OIDC 客户端（`release_channel` = stable / beta / canary）。**一个事务**写入，落 `status='draft'`。签发客户端要过 step-up，client_secret 明文只在保存后显示一次                                                                                                                                                                 | 目录出现草稿行；服务状态出现同一行，有启用客户端的渠道开始探测；auth-bff token-exchange 能解析出 `act.sub`；admin 产品能力可见 |
-| 2   | 同一页 · 「密钥管理」面板                             | 登记 webhook 签名密钥与引用；轮换 client_secret。两者都挂 step-up                                                                                                                                                                                                                                                                                                                         | 平台可对开通 / 停用事件签名投递                                                                                                |
-| 3   | 同一页 · 「接入检查」抽屉                             | 跑复验：opera 的七项里**四项自动判定并写回**（`catalog_registered` / `c2_entitlement` / `c3_metering` / `c1_s2s`）；`c1_identity` / `data_plane` / `acceptance` 不写回（前两项人工勾，`acceptance` 只呈现）——判据见下「一项检查只有在它的全部内容都被实测覆盖时才写回」。**那三项自动检查不需要客户 / 订阅 / 套餐**：它们问的是「对方真的调过平台没有」，产品后端发起三次联调调用即可点亮 | —                                                                                                                              |
-| 4   | 同一抽屉 · 确认上线                                   | 先重跑复验，全通过且**卡上线那道门**的必填项齐（`gate='launch'`，六项），才把草稿转为已上线（`status='active'`）。`acceptance` 归发布门，不卡这一步——见下「两根轴」                                                                                                                                                                                                                       | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标                                                            |
-| 5   | admin · 套餐 / 版本 / 方案                            | 为产品建套餐并发布                                                                                                                                                                                                                                                                                                                                                                        | console 订阅、权益、计量按套餐工作                                                                                             |
-| 6   | opera · 模型授权 / 能力授权                           | 把模型路由、能力授给产品                                                                                                                                                                                                                                                                                                                                                                  | 权益配置页汇总                                                                                                                 |
+| 步  | 在哪里                                                 | 做什么                                                                                                                                                                                                                                                        | 之后各业务面看到什么                                                                                                           |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | opera · 产品目录 · 接入产品（`/product/catalog/new`）  | 一页填完：产品码、类型、来源、名称；边缘与回调；按渠道添加 OIDC 客户端（`release_channel` = stable / beta / canary）。**一个事务**写入，落 `status='draft'`。签发客户端要过 step-up，client_secret 明文只在保存后显示一次                                     | 目录出现草稿行；服务状态出现同一行，有启用客户端的渠道开始探测；auth-bff token-exchange 能解析出 `act.sub`；admin 产品能力可见 |
+| 2   | 同一页 · 「密钥管理」面板                              | 登记 webhook 签名密钥与引用；轮换 client_secret。两者都挂 step-up                                                                                                                                                                                             | 平台可对开通 / 停用事件签名投递                                                                                                |
+| 3   | 同一页 · 「接入检查」抽屉                              | 跑复验：全部检查项由平台实测判定并写回（`AUTO_DETERMINED_CHECKLIST_ITEMS`），没有人工勾选。抽屉分三组：我方配置、对方发起型三项（`c1_s2s` / `c2_entitlement` / `c3_metering`，**只呈现不卡上线**）、运行健康                                                  | 写回 `product_launch_statuses`                                                                                                 |
+| 4   | 同一抽屉 · 确认上线                                    | 先重跑复验，**卡上线那道门**的必填项齐（`gate='launch'`：`catalog_registered` + `c1_identity`——我方配置齐、登录接得通）就把草稿 / 开发中转为已上线（`status='active'`）。对方三项不卡这一步——见下「三道门」                                                   | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标                                                            |
+| 5   | admin · 套餐 / 版本 / 方案 → 测试租户 → admin · 正式版 | 为产品建套餐并发布（发布只看 `gate='publish'` 的商业前置，**没有认证前置**）。然后让一个测试用途的真实租户订阅并使用：换票、拉权益、报用量三项在那个工作空间里点亮之后，admin 才能把 `release_stage` 改成 `stable`（否则 409 `RELEASE_STAGE_VERIFY_PENDING`） | 三项绿 = 整条链在生产路径上跑通过一次                                                                                          |
+| 6   | opera · 模型授权 / 能力授权                            | 把模型路由、能力授给产品                                                                                                                                                                                                                                      | 权益配置页汇总                                                                                                                 |
 
-**检查项的两根轴（2026-09-17，owner 提出的循环自锁）**：`product.launch_checklist_items`
-上有 `owner`（opera | admin）与 `gate`（launch | publish）两列，**正交**。
+**检查项的两根轴（2026-09-17，owner 提出的循环自锁；2026-09-27 加第三道门）**：`product.launch_checklist_items`
+上有 `owner`（opera | admin）与 `gate`（launch | publish | stable）两列，**正交**。
 
-- `owner` 回答「这一项归谁勾」——opera 的抽屉只读写 `owner='opera'` 的项（七项），
+- `owner` 回答「这一项归谁勾」——opera 的抽屉只读写 `owner='opera'` 的项，
   商业前置两项归 admin。
-- `gate` 回答「这一项卡哪一道门」——上线门槛（`draft→active`）只看 `gate='launch'`
-  的必填项（六项）。
+- `gate` 回答「这一项卡哪一道门」，三道门各答一个问题：
+  - `launch`（`draft/developing → active`）：我方配置齐了、登录接得通——`catalog_registered`、`c1_identity`。
+  - `publish`（admin 发布套餐版本）：商业前置——`verification_policy`、`pricing_set`。发布本身没有别的前置。
+  - `stable`（admin `release_stage → stable`）：对方发起型三项——`c1_s2s`、`c2_entitlement`、`c3_metering`。执行在 admin-bff `PATCH capabilities/:code/content`，缺一项回 409 `RELEASE_STAGE_VERIFY_PENDING`。
 
-`acceptance` 是唯一 `owner='opera'` 而 `gate='publish'` 的项：它的判据是
-`login → provision → gate → consume → invalidate` 全链路，而 provision 需要客户订阅、
-订阅需要 console 可见（`status='active'`）——卡在上线门上就是**环**。移到发布门之后，
-那条链在 `active + developing` 下本来就走得通。
+**为什么对方三项不能卡上线（2026-09-27，owner）**：它们要先有订阅才可能发生——服务模式换票要过
+覆盖门（那个工作空间得有这个产品的订阅），拉权益、报用量都在换票之后。订阅要先上线、先发布套餐。
+三段互相等，链就锁死了：tenderforge 就是这样卡了两周（日志里反复 `invalid_target`）。
+新口径是「每个阶段做完、能验的验过就往下走」：上线只验我方半边；发布套餐没有认证前置；
+**让一个测试用途的真实租户先订阅、先用**，三项在生产路径上点亮，才算这条链跑通，才能标正式版。
+沙箱「接入认证」（在 `purpose='certification'` 的租户里造一条指向草稿版本的订阅把链路跑一遍）是为
+同一个死锁造的旁路，同日退役——真实租户的订阅就是认证，不需要第二套判据。`certification_runs` 表暂留待 DROP。
 
 **接入方式轴（`integration_mode`，2026-09-24）**：`platform_managed`（收平台下发：开通 / 权益 / 用量回调）/ `login_only`（只用统一登录，平台不向它下发任何东西）。值域权威源在 `@vxture-platform/shared` 的 `PRODUCT_INTEGRATION_MODES`，`lint:catalog-domains` 锁它与 `chk_products_integration_mode` 一致。写侧是 opera 产品页的「接入方式」下拉。
 

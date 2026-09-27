@@ -92,7 +92,6 @@ import {
   SectionBody,
   ToggleRow,
 } from "./DetailForm";
-import { CertificationDrawer } from "./CertificationDrawer";
 import { HealthDrawer } from "./HealthDrawer";
 import { LaunchDrawer, type ChecklistEntry } from "./LaunchDrawer";
 import { LoginClientsSection, clientFieldId } from "./LoginClientsSection";
@@ -348,12 +347,11 @@ export function ProductDetailPage({
   const [advisory, setAdvisory] = useState<ProductAction | null>(null);
   const [applying, setApplying] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
-  /* 接入认证与接入检查是两件事：前者答「发布门过不过」，后者答「上线门过不过」。
-     两个抽屉分开，省得一屏里塞两套判据让人分不清哪条卡着哪道门。 */
-  const [certOpen, setCertOpen] = useState(false);
-  /* 三屏三个问题：接入检查答「还差哪几件才能上线」、接入认证答「这条链证过没有」、
-     运行健康答「最近还正常吗」。混在一屏时，没有客户的新产品会看到一排红色的
-     「未通过」——而那些红的其实只是「还没有人用过」。 */
+  /* 两屏两个问题：接入检查答「还差哪几件才能上线 / 转正式版」、运行健康答
+     「最近还正常吗」。混在一屏时，没有客户的新产品会看到一排红色的「未通过」——
+     而那些红的其实只是「还没有人用过」。（曾有第三屏「接入认证」：在沙箱里造一条
+     订阅把链路跑一遍。2026-09-27 退役——测试租户的真实订阅就是认证，见 LaunchDrawer
+     的「转正式版前」一组。） */
   const [healthOpen, setHealthOpen] = useState(false);
   const [secretsOpen, setSecretsOpen] = useState(false);
   const [busyClientId, setBusyClientId] = useState<string | null>(null);
@@ -439,7 +437,6 @@ export function ProductDetailPage({
     if (load.kind !== "ready" || !product || arrivalHandled.current) return;
     arrivalHandled.current = true;
     if (panel === "checks") setCheckOpen(true);
-    if (panel === "certification") setCertOpen(true);
     if (panel === "health") setHealthOpen(true);
     if (panel === "secrets") setSecretsOpen(true);
     const hash = window.location.hash;
@@ -870,18 +867,6 @@ export function ProductDetailPage({
                   <Badge variant="outline">{pendingRequired.length}</Badge>
                 ) : null}
               </Button>
-              {/* 认证只在已上线之后有意义：上线门证「对方接通了」，认证证「整条链
-                  跑得通」。产品还没上线时给一个点了会 409 的按钮，不如不给。 */}
-              {product.state === "active" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCertOpen(true)}
-                >
-                  <Icon name="shield-check" size="xs" aria-hidden="true" />
-                  接入认证
-                </Button>
-              ) : null}
               {/* 运行健康只在已上线之后有意义：没上线的产品没有运行可言。 */}
               {product.state === "active" ? (
                 <Button
@@ -1600,14 +1585,6 @@ export function ProductDetailPage({
             open={healthOpen}
             onClose={() => setHealthOpen(false)}
             product={product}
-            locale={locale}
-          />
-          <CertificationDrawer
-            open={certOpen}
-            onClose={() => setCertOpen(false)}
-            productId={product.id}
-            productCode={product.productCode}
-            canManage={canManage}
             locale={locale}
           />
           <SecretsDrawer

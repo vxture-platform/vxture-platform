@@ -55,11 +55,12 @@ import {
   type CheckSide,
 } from "./launch-checks";
 import {
+  canLaunchFrom,
+  gatesLaunch,
   pendingBySide,
   productStateMeta,
   sideOfChecklistItem,
   type ProductState,
-  canLaunchFrom,
 } from "./lifecycle";
 import type { ClientRecord, WebhookRecord } from "./onboarding-model";
 
@@ -121,6 +122,8 @@ const STATUS_META: Record<RowStatus, { label: string; tone: StatusBadgeTone }> =
   };
 
 interface Row {
+  /** gate='stable'：不卡上线、卡转正式版（2026-11-16 regate）。 */
+  stableGate?: boolean;
   key: string;
   label: string;
   side: CheckSide;
@@ -246,13 +249,18 @@ function buildRows(
     } else {
       status = item.isSatisfied ? "pass" : "fail";
     }
+    /* gate='stable' 的项（对方发起型三项，2026-11-16 起）不卡上线：它们在产品拿到一条
+       订阅之前根本发不出，卡的是「转正式版」。这里 required=false、未过画「待点亮」
+       不画红——红色在这张清单上的意思一直是「这条挡着上线」。 */
+    const gatesStable = (item.gate ?? "launch") === "stable";
     rows.push({
       key: item.itemCode,
       label: meta?.label ?? item.itemName ?? item.itemCode,
       side: sideOfChecklistItem(item.itemCode),
       source: auto ? "auto" : "manual",
-      required: item.isRequired,
-      status,
+      required: item.isRequired && gatesLaunch(item),
+      status: gatesStable && status === "fail" ? "pending" : status,
+      stableGate: gatesStable,
       what: meta?.what ?? "",
       detail: auto ? (live?.detail ?? remarkDetail(item.remark)) : null,
       remedy: live && live.status !== "pass" ? live.remedy : null,
@@ -427,6 +435,9 @@ export function LaunchDrawer({
         items.map((i) => ({
           itemCode: i.itemCode,
           isRequired: i.isRequired,
+          /* gate 必须带上：缺席时 gatesLaunch 按 launch 兜底，gate='stable' 的三项
+             就会被算进「上线还差几项」——与 BFF 的闸门分叉（2026-11-16 regate）。 */
+          ...(i.gate ? { gate: i.gate } : {}),
           isSatisfied: i.isSatisfied,
           checkedAt: i.checkedAt,
           ...(i.itemName ? { itemName: i.itemName } : {}),
@@ -595,7 +606,9 @@ export function LaunchDrawer({
   }
 
   const ours = rows.filter((r) => r.side === "ours");
-  const theirs = rows.filter((r) => r.side === "theirs");
+  const theirs = rows.filter((r) => r.side === "theirs" && !r.stableGate);
+  /* 对方发起型三项：不卡上线，测试用途的真实租户订阅并使用后点亮，卡「转正式版」。 */
+  const stableRows = rows.filter((r) => r.stableGate);
 
   return (
     <Drawer
@@ -652,6 +665,23 @@ export function LaunchDrawer({
           />
           {theirs.map(renderRow)}
         </div>
+
+        {/* ── 转正式版前 ─────────────────────────────────────────────── */}
+        {stableRows.length > 0 ? (
+          <div className="flex flex-col gap-sm">
+            <SectionHeader
+              level={3}
+              icon="rocket"
+              title="转正式版前 · 由测试租户真实使用点亮"
+            />
+            <p className="text-body-sm text-muted-foreground">
+              这三项不卡上线，也不卡发布套餐：产品拿到一条订阅之前换不到票、读不了权益、报不了用量。
+              套餐发布后让测试用途的真实租户订阅并使用一次，平台自己观测到痕迹就点亮；
+              三项全绿才允许把成熟度标成「正式版」（admin 拦 409）。
+            </p>
+            {stableRows.map(renderRow)}
+          </div>
+        ) : null}
 
         <Separator />
 
@@ -723,7 +753,7 @@ export function LaunchDrawer({
             description={
               open_.length === 0
                 ? "确认上线会先重跑一遍实测：全通过、且人工确认项齐了，才把草稿转成已上线。失败不改状态。"
-                : "三项自动检查只要对方后端各调一次平台就能点亮，不需要先有客户、订阅或套餐。确实要先上线再联调的话，可以写明理由带缺项上线——跳过的事实会留在产品页上。"
+                : "上线只验我方配置与登录接入。对方的换票 / 权益 / 用量三项不在这道门上——它们由套餐发布后的测试租户真实使用点亮，卡的是「转正式版」。"
             }
             {...(canManage
               ? {

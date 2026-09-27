@@ -2797,12 +2797,18 @@ export async function seedCatalog(client) {
       ('c1_identity', 'C1 身份接入', 'catalog.product.checklist.c1_identity.name',
        'OIDC client registered; RP implementation (login/callback/session) completed.', 'catalog.product.checklist.c1_identity.desc', true, 'opera', 'launch', 40),
       -- sort 45：紧跟 c1_identity。两项是同一个身份面的入站与出站，中间不插别的。
+      -- gate='stable'（2026-09-27，owner）：c1_s2s / c3_metering / c2_entitlement 三项都是
+      -- 「对方发起过调用」的痕迹，而产品在拿到一条订阅之前换不到 service 模式的票
+      -- （平台换票的覆盖门），所以它们**不能**卡上线门。它们卡的是「转正式版」
+      -- （release_stage→stable，admin 的 PATCH capabilities/:code/content）：套餐发布后
+      -- 由测试用途的真实租户订阅、真实使用把三项点亮，平台自己观测。
+      -- 见 migrations/2026-11-16-regate-theirs-to-stable.sql。
       ('c1_s2s', 'C1 出站换票', 'catalog.product.checklist.c1_s2s.name',
-       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'catalog.product.checklist.c1_s2s.desc', true, 'opera', 'launch', 45),
+       'S2S token exchange wired: the product has obtained a delegated token to call Atlas/Runos/Karda.', 'catalog.product.checklist.c1_s2s.desc', true, 'opera', 'stable', 45),
       ('c3_metering', 'C3 计量上报', 'catalog.product.checklist.c3_metering.name',
-       'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'catalog.product.checklist.c3_metering.desc', true, 'opera', 'launch', 50),
+       'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'catalog.product.checklist.c3_metering.desc', true, 'opera', 'stable', 50),
       ('c2_entitlement', 'C2 权益接入', 'catalog.product.checklist.c2_entitlement.name',
-       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'catalog.product.checklist.c2_entitlement.desc', true, 'opera', 'launch', 60)
+       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'catalog.product.checklist.c2_entitlement.desc', true, 'opera', 'stable', 60)
       -- sort 70 空缺：data_plane 已于 2026-10-09 退役（定义三处矛盾，别补回来）。
       -- 理由见 migrations/2026-10-09-checklist-data-plane-retire.sql 的文件头。
       -- sort 80 空缺：acceptance 已于 2026-11-03 退出检查单，**别补回来**。

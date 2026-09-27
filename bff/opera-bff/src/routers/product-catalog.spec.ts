@@ -46,9 +46,9 @@ const ROUTER_SRC = readFileSync(
 const SEEDED_ITEMS = [
   { code: "catalog_registered", owner: "opera", gate: "launch" }, //   30
   { code: "c1_identity", owner: "opera", gate: "launch" }, //          40
-  { code: "c1_s2s", owner: "opera", gate: "launch" }, //               45
-  { code: "c3_metering", owner: "opera", gate: "launch" }, //          50
-  { code: "c2_entitlement", owner: "opera", gate: "launch" }, //       60
+  { code: "c1_s2s", owner: "opera", gate: "stable" }, //               45
+  { code: "c3_metering", owner: "opera", gate: "stable" }, //          50
+  { code: "c2_entitlement", owner: "opera", gate: "stable" }, //       60
 ] as const;
 
 describe("检查单的两根轴：展示按 owner，上线门槛按 gate", () => {
@@ -77,22 +77,32 @@ describe("检查单的两根轴：展示按 owner，上线门槛按 gate", () =>
     /* 门槛那段必须同时保留 is_required 与 coalesce(...,false)：
        前者是「必填才卡」，后者是「没写过 = 未满足」（LEFT JOIN 的 NULL）。 */
     const gateBlock = ROUTER_SRC.slice(
-      ROUTER_SRC.indexOf("i.gate = 'launch'") - 400,
+      /* 窗口要盖住 if 条件：它在查询之前、隔着一段解释性注释（2026-09-27 加宽）。 */
+      ROUTER_SRC.indexOf("i.gate = 'launch'") - 1400,
       ROUTER_SRC.indexOf("i.gate = 'launch'") + 200,
     );
     expect(gateBlock).toMatch(/i\.is_required/);
     expect(gateBlock).toMatch(/coalesce\(s\.is_satisfied, false\)/);
+    /* 2026-09-27：developing → active 同样过这道门。lifecycle.ts 的 launch.from 自
+       2026-09-24 起就是 ["draft","developing"]，界面按它渲染；这里只拦 draft 时，
+       「开发中」的产品一条 curl 就能零项满足地上线。 */
+    expect(gateBlock).toMatch(/from === "draft" \|\| from === "developing"/);
   });
 
-  it("这张表只答一个问题：清一色 gate='launch' + owner='opera'", () => {
-    /* 这是「三屏三个问题」在数据层的直接断言（owner 2026-09-23 走查：
-       「几个环节的认证还混淆在一个页面」）。
-         检查单       还差哪几件才能上线
-         认证台账     这条链在沙箱里证过没有  → product.certification_runs
-         运行健康     最近还正常吗            → 派生，不落表
-       往这张表里加一个 gate='publish' 或 owner='admin' 的项，它就又在同时回答两件事。
-       那种回退不会报错，只会让某一屏重新变成一个装着几类东西的袋子——所以钉在这里。 */
-    expect(SEEDED_ITEMS.every((i) => i.gate === "launch")).toBe(true);
+  it("两道门、各答一个问题：launch=我方配置+登录接入，stable=对方发起型三项", () => {
+    /* owner 2026-09-27：每一道门只验那一阶段验得了的事。对方发起型三项（换票 / 权益 /
+       用量）在产品拿到一条订阅之前发不出——平台换票的覆盖门拒 invalid_target——卡上线
+       就是环（tenderforge 2026-09-22/24 实测）。它们改卡「转正式版」（release_stage →
+       stable，admin-bff 拦 409）。往 launch 门上再放一项对方发起型检查，环就回来了。 */
+    const byGate = (g: string) =>
+      SEEDED_ITEMS.filter((i) => i.gate === g).map((i) => i.code);
+    expect(byGate("launch")).toEqual(["catalog_registered", "c1_identity"]);
+    expect(byGate("stable")).toEqual([
+      "c1_s2s",
+      "c3_metering",
+      "c2_entitlement",
+    ]);
+    expect(byGate("publish")).toEqual([]);
     expect(SEEDED_ITEMS.every((i) => i.owner === "opera")).toBe(true);
   });
 

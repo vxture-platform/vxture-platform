@@ -49,6 +49,7 @@ DECLARE
   n_item     int;
   n_status   int;
   n_launch   int;
+  n_theirs_on_launch int;
   n_publish  int;
   codes      text;
 BEGIN
@@ -75,12 +76,12 @@ BEGIN
      数下界而不是精确值——将来新增技术检查项是常态（DDL 原话「新增检查项 = INSERT 一行」）。 */
   SELECT count(*) INTO n_launch FROM product.launch_checklist_items
    WHERE gate = 'launch' AND is_required;
-  IF n_launch < 5 THEN
-    SELECT coalesce(string_agg(item_code, '、' ORDER BY sort), '(无)') INTO codes
-      FROM product.launch_checklist_items WHERE gate = 'launch' AND is_required;
+  SELECT count(*) INTO n_theirs_on_launch FROM product.launch_checklist_items
+   WHERE gate = 'launch' AND item_code IN ('c1_s2s','c2_entitlement','c3_metering');
+  IF n_launch < 2 OR n_theirs_on_launch <> 0 THEN
     RAISE EXCEPTION
-      '[acceptance-off-checklist] 上线门只剩 % 项必填（%）—— 少于 5 项说明误伤了上线门',
-      n_launch, codes;
+      '[acceptance-off-checklist] 上线门形状不对：必填 % 项、其中对方发起型 % 项（应为 ≥2 且 0）—— 2026-09-27 起上线门只验我方配置与登录接入，对方三项卡「转正式版」',
+      n_launch, n_theirs_on_launch;
   END IF;
 
   SELECT string_agg(item_code, '、' ORDER BY sort) INTO codes
