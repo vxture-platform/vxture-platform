@@ -30,9 +30,15 @@ import {
 import type { Request } from "express";
 import type { Pool } from "pg";
 import {
+  NoticeFilterError,
   NoticeService,
   isNoticeId,
+  parseNoticeFilters,
+  type MarkAllNoticesReadResult,
+  type NoticeFilterQuery,
+  type NoticeFilters,
   type NoticePlane,
+  type NoticeSeverityCounts,
   type OperatorNoticeView,
 } from "@vxture/service-notice";
 import { PLANE_ROOT } from "../auth/plane";
@@ -116,6 +122,20 @@ export class DashboardRouter {
    * `scope=digest`（默认）落 owner 那条摘要规则：**当天已读 + 所有未读**。
    * `scope=all` 给二级页，去掉已读那一条谓词。
    *
+   * 四项筛选（2026-09-28 第四批）：`severity`（逗号分隔多选或重复给）、`source`、
+   * `unread`、`q`（标题或正文含它）。**它们与 scope 是两类入参**：scope 定「这个人能
+   * 看见哪一份」，筛选定「他此刻想少看几行」。前者不能来自请求（否则就有了一个读别人
+   * 平面的探测面），后者只能来自请求。
+   *
+   * 这四个名字与 opera 发布面**逐字相同，值的词汇也相同**——两侧都调
+   * `@vxture/service-notice` 的 `parseNoticeFilters`。此前两边各解析一份，名字一样而
+   * 值分岔了三处（`unread=1` 这边静默忽略 / `severity=all` 这边回 400 / 关键词上限
+   * 200 对 128），于是同一个 URL 在两个平面上是两种行为，而没有一处会报错。
+   *
+   * `counts` 是三档各有多少条，口径「除严重度以外的筛选都算上」——见服务包里的注释。
+   * 它给 /messages 那一排数字当数据源；写成随严重度变的话，勾了「紧急」之后另两档
+   * 恒为 0，那排数字就再也不能当入口用了。
+   *
    * 谓词本身在 `@vxture/service-notice`——admin 与 arche 读的是同一张表、同一条
    * 可见性规则，各写一份的话没有守卫盯得住「两边一样地错」。
    */
@@ -125,7 +145,16 @@ export class DashboardRouter {
     @Query("scope") scopeParam?: string,
     @Query("limit") limitParam?: string,
     @Query("offset") offsetParam?: string,
-  ): Promise<{ items: OperatorNoticeView[]; total: number; unread: number }> {
+    @Query("severity") severityParam?: string | string[],
+    @Query("source") sourceParam?: string,
+    @Query("unread") unreadParam?: string,
+    @Query("q") keywordParam?: string,
+  ): Promise<{
+    items: OperatorNoticeView[];
+    total: number;
+    unread: number;
+    counts: NoticeSeverityCounts;
+  }> {
     assertCanReadDashboard(req);
     const operatorId = req.user?.id;
     if (!operatorId) throw new UnauthorizedException("No active session");
@@ -140,7 +169,37 @@ export class DashboardRouter {
       digest,
       limit,
       offset,
+      ...noticeFiltersOr400({
+        severity: severityParam,
+        source: sourceParam,
+        unread: unreadParam,
+        q: keywordParam,
+      }),
     });
+  }
+
+  /**
+   * POST /api/dashboard/notices/read-all —— 把本平面此刻可见且未读的通告一次读掉。
+   *
+   * 与读同一道门（本平面根码）：**这里不新立权限码**。能看见这些通告的人就是能把
+   * 自己的未读标记掉的人——已读是「我和这条通告」之间的关系，不是对通告本身的修改
+   * （标记谁都不会改变别人看到的内容）。
+   *
+   * 作用域刻意**不收筛选参数**：这个动作由铃铛抽屉里的「全部标记已读」发起，而铃铛
+   * 角标数的是本平面全部未读。收了筛选，同一个按钮在不同页面就是不同的意思。
+   *
+   * 幂等：没有未读时回 `{ marked: 0 }`，不是 404——「已经全读过了」是个答案。
+   */
+  @Post("notices/read-all")
+  async markAllNoticesRead(
+    @Req() req: Request & RequestContext,
+  ): Promise<MarkAllNoticesReadResult> {
+    assertCanReadDashboard(req);
+    const operatorId = req.user?.id;
+    if (!operatorId) throw new UnauthorizedException("No active session");
+
+    const marked = await this.notices.markAllRead(PLANE_NAME, operatorId);
+    return { marked };
   }
 
   /** POST /api/dashboard/notices/:id/read —— 标记本人已读。幂等。 */
@@ -164,6 +223,30 @@ export class DashboardRouter {
 
 /** 本平面的代号，与 target_planes 里的值同一套（PLANE_ROOT 是 "admin.plane"）。 */
 const PLANE_NAME = PLANE_ROOT.split(".")[0] as NoticePlane;
+
+/**
+ * 四个查询参数 → `NoticeFilters`。**值的词汇不在这里**：它在
+ * `@vxture/service-notice` 的 `filters/notice-filters.ts`，opera 的发布面读的是同一
+ * 份，第三个平面接上来时也只该读那一份。三处曾经的分岔与取舍理由都写在那个文件头。
+ *
+ * 留在这一侧的只有 HTTP 关切：把包里的 `NoticeFilterError` 翻成 admin 的 400。
+ * `message` 以出错的字段名开头（`severity` / `source` / `keyword`），调用方据此知道
+ * 是哪一格——**认不出的值一律 400、不当没给**：`severity=urgent` 静默返回全部三档，
+ * 而调用方会以为自己筛过了。筛选器最坏的失败不是报错，是报成功而没筛。
+ *
+ * 不给的那一项**不出现在返回对象里**（包里就是那么拼的）：`{ severities: undefined }`
+ * 与不返回它在类型上等价，但会让 `buildListQuery` 多认一种「给了一个空值」的形状。
+ */
+function noticeFiltersOr400(raw: NoticeFilterQuery): NoticeFilters {
+  try {
+    return parseNoticeFilters(raw);
+  } catch (error) {
+    if (error instanceof NoticeFilterError) {
+      throw new BadRequestException(error.message);
+    }
+    throw error;
+  }
+}
 
 export interface ReviewListItem {
   /** 可视码：租户号。列表的行标识用它，不用主键。 */

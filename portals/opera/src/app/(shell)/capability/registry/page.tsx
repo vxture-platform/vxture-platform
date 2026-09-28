@@ -114,6 +114,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
+import { useDebounced } from "@/lib/useDebounced";
 import { DateCell } from "@/components/table/ConfigCells";
 
 const MANAGE = "capability:runos.manage";
@@ -298,26 +299,9 @@ interface EndpointInstanceRecord {
   createdAt: string;
 }
 
-/**
- * 文本框的值与**真正发出去的值**分开。
- *
- * 两个文本筛选（关键词、标签）都直接进取数的依赖，不防抖就是**每敲一个字符一次请求**
- * ——而每次请求在 runos 那边是一次 COUNT 加一页查询。搜 "invoice" 就是七次。
- *
- * 关键词此前是本地过滤、零请求，这条回归是服务端分页带来的;标签是既有行为，同一个
- * 机制顺手一起收——同一个页面上两个文本框行为不一样，比两个都慢更难解释。
- *
- * 没做成共享件:opera 全站此前没有防抖先例，一个用例撑不起一个约定。第二个用例出现
- * 时再提。
- */
-function useDebounced<T>(value: T, delay = 300): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const id = window.setTimeout(() => setSettled(value), delay);
-    return () => window.clearTimeout(id);
-  }, [value, delay]);
-  return settled;
-}
+/* 防抖钩子原本就写在这里，头注里定过合并条件：「第二个用例出现时再提」。
+   2026-09-28 运营通告页的关键词也改成服务端筛选，第二个用例到了，于是搬进
+   `@/lib/useDebounced`。两个文本筛选（关键词、标签）的行为一个字没动。 */
 
 /** 目录列表的一页。两个游标都是 `null` 不是缺席——「这一侧没有了」要说得出来。 */
 interface CapabilityPage {

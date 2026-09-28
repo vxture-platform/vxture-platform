@@ -27,6 +27,16 @@ export interface DrawerNotif {
   meta: string;
   /** 落地页；没有就渲染成不可点的一行（见 notificationCenterHref 的注释）。 */
   href?: string | undefined;
+  /**
+   * 点开这一行（走 `href`）**之前**做一件事，典型是把它标成已读（2026-09-28）。
+   *
+   * 为什么在这里而不是让外壳去猜：点进去这个动作只有本件知道发生了。外壳能看到的
+   * 只有 `onNavigate(href)`，而 href 不是行的身份——两条通告可以指向同一个订单，
+   * 按 href 反查会把没点的那条也一起标掉。
+   *
+   * 只有可点的行会调到它：不可点的行整行降级成静态展示，没有「点开」这回事。
+   */
+  onActivate?: (() => void) | undefined;
 }
 
 /**
@@ -41,8 +51,26 @@ export interface DrawerNotifSection {
   loading?: boolean | undefined;
   emptyTitle: string;
   emptyDescription?: string | undefined;
-  /** 段尾去处（如「查看全部」→ /messages）；不给就没有按钮。 */
-  action?: { label: string; href: string } | undefined;
+  /**
+   * 段首的按钮们（如「全部标记已读」、「查看全部」）；不给就没有按钮。
+   *
+   * 原来只收一个 `action`（一个 href）。一个段要同时给「去别处」和「就地做一件事」
+   * 两个按钮，所以改成列表，并且分成两种：`href` 的点了关抽屉再跳；`onClick` 的
+   * **不关抽屉**——标记已读之后这一段要当场刷新给人看见，关掉就什么也看不到了。
+   */
+  actions?: readonly DrawerNotifSectionAction[] | undefined;
+}
+
+/** 段首一个按钮。`href` 与 `onClick` 二选一：前者是去处，后者是动作。 */
+export interface DrawerNotifSectionAction {
+  readonly key: string;
+  readonly label: string;
+  /** Phosphor 类名；与行图标同一套。不给就只有文字。 */
+  readonly icon?: string | undefined;
+  readonly href?: string | undefined;
+  readonly onClick?: (() => void) | undefined;
+  /** 在办中：按钮禁用，免得连按两次发两个请求。 */
+  readonly disabled?: boolean | undefined;
 }
 
 export interface TemplateDrawerProps {
@@ -124,6 +152,10 @@ function NotifRows({
               ? {
                   type: "button" as const,
                   onClick: () => {
+                    /* 先标已读再跳：跳走之后这一段就卸载了，放在后面等于不做。
+                       标记本身是乐观的（外壳先改本地态再发请求），所以它不会
+                       让这一下点击变慢。 */
+                    n.onActivate?.();
                     onClose();
                     onNavigate(href);
                   },
@@ -193,29 +225,41 @@ export function TemplateDrawer({
       {isNotif ? (
         <div className="flex flex-col gap-xs">
           {(sections ?? []).map((section, index) => {
-            const action = section.action;
+            const actions = section.actions ?? [];
             return (
               <ShellPanelSection
                 key={section.key}
                 title={section.title}
                 divided={index > 0}
               >
-                {action ? (
+                {actions.length > 0 ? (
                   <div className="flex items-center justify-end gap-2xs">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        onClose();
-                        onNavigate(action.href);
-                      }}
-                    >
-                      <i
-                        className="ph ph-arrow-square-out"
-                        aria-hidden="true"
-                      ></i>
-                      {action.label}
-                    </Button>
+                    {actions.map((action) => (
+                      <Button
+                        key={action.key}
+                        variant="ghost"
+                        size="sm"
+                        disabled={action.disabled ?? false}
+                        onClick={() => {
+                          /* 有 href 的是去处：关抽屉再跳。只有 onClick 的是就地
+                             动作：抽屉留着，人要看见这一段跟着变了。 */
+                          if (action.href) {
+                            onClose();
+                            onNavigate(action.href);
+                            return;
+                          }
+                          action.onClick?.();
+                        }}
+                      >
+                        {action.icon ? (
+                          <i
+                            className={"ph " + action.icon}
+                            aria-hidden="true"
+                          ></i>
+                        ) : null}
+                        {action.label}
+                      </Button>
+                    ))}
                   </div>
                 ) : null}
                 <NotifRows

@@ -49,6 +49,11 @@ const HAN = /[一-鿿]/;
  * 守卫先报「多了 1」——它拦住的正是它该拦的事(两个页面各写一份四值映射)。收进
  * `enum-labels.ts` 的 `useCapabilityStatusLabels()` 之后,连带把列表页筛选那三个
  * 写死中文的 `<option>` 一起抽了,所以是降 6 条而不是降 2 条。
+ *
+ * 2026-09-28 SystemNoticesSection 的那 3 条清零,**整条从表里删掉**而不是改成 0:
+ * 留一条 `[…, 0]` 是在给一笔已经不存在的债发许可,下一个读表的人会以为那个文件
+ * 还欠着什么。运营通告读侧整件抽进 `systemNotices.*` 词条(严重度三档连同来源、
+ * 空态、动作一起),所以这里不是「搬进 enum-labels.ts」而是「文案整体进目录」。
  * 基线由 `--emit-baseline` 产出,不手抄。
  */
 const BASELINE = new Map([
@@ -64,7 +69,6 @@ const BASELINE = new Map([
   ["modules/commercial/PromotionsPage.tsx", 7],
   ["modules/commercial/UsageMeteringPage.tsx", 4],
   ["modules/invoices/InvoicesPage.tsx", 17],
-  ["modules/ops/SystemNoticesSection.tsx", 3],
   ["modules/orders/OrderOfflinePaymentDialog.tsx", 4],
   ["modules/payments/PaymentsPage.tsx", 11],
   ["modules/products/ProductCapabilityDetailPage.tsx", 4],

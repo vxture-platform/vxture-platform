@@ -2146,6 +2146,9 @@
     "notices": {
       "title": "Operator notices",
       "viewAll": "View all",
+      "markAll": "Mark all as read",
+      "markAllDone": "Marked {count} notice(s) as read.",
+      "markAllFailed": "Could not mark all as read.",
       "unread": "Unread",
       "loadFailed": "Could not load notices",
       "empty": {
@@ -3156,5 +3159,61 @@
       "progress": "Progress"
     },
     "unknown": "—"
+  },
+  "systemNotices": {
+    "digest": {
+      "title": "System messages",
+      "description": "Platform notices from opera and the product side: launches, new capabilities, change notices. Nothing unread.",
+      "descriptionUnread": "Platform notices from opera and the product side: launches, new capabilities, change notices. {unread} unread."
+    },
+    "all": {
+      "title": "All messages",
+      "description": "Platform notices from opera and the product side, plus the operator mirror of customer-side events. Filter by severity, source, unread and keyword."
+    },
+    "severity": {
+      "critical": "Critical",
+      "warning": "Important",
+      "info": "Normal"
+    },
+    "source": {
+      "manual": "Published by a person",
+      "system": "System"
+    },
+    "unread": "Unread",
+    "actions": {
+      "viewAll": "View all",
+      "backToTodos": "Back to tasks",
+      "retry": "Retry",
+      "open": "Open",
+      "gotIt": "Got it"
+    },
+    "states": {
+      "loadingTitle": "Loading messages",
+      "loadingDescription": "One moment.",
+      "errorTitle": "Could not load messages",
+      "errorFallback": "Could not load messages.",
+      "emptyDigestTitle": "Nothing to read",
+      "emptyDigestDescription": "Unread messages and the ones you read today are listed here; older ones live under All messages.",
+      "emptyAllTitle": "No messages yet",
+      "emptyAllDescription": "Notices published from opera, and the operator mirror of customer payments, refunds and cancellations, will show up here.",
+      "emptyFilteredTitle": "No messages match",
+      "emptyFilteredDescription": "There are other messages; this set of conditions just did not match any. Change a condition or clear the filters."
+    },
+    "filters": {
+      "ariaLabel": "Message filters",
+      "count": "{count} records",
+      "reset": "Clear filters",
+      "searchPlaceholder": "Search title, body…",
+      "searchAriaLabel": "Search messages",
+      "unreadAriaLabel": "Read state",
+      "unreadAll": "All",
+      "unreadOnly": "Unread only",
+      "sourceAriaLabel": "Message source",
+      "sourceAll": "All sources",
+      "severityLabel": "Severity",
+      "confirm": "Apply",
+      "clear": "Clear",
+      "noOptions": "No values available"
+    }
   }
 }

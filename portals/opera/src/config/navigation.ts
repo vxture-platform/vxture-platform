@@ -224,6 +224,18 @@ export const operaNavSections: OperaNavSection[] = [
         icon: "clock",
         description: "计划内停机与影响范围",
       },
+      {
+        /* 2026-09-28 补进侧栏。页面与权限节点（seed 的 `opera.menu.ops_notice`）从
+           2026-09-20 起就在，只是导航里一直没有这一项——于是那一页只能靠手打地址
+           进去，本仓最常见的那类缺陷（做了没接）。
+           label 必须**逐字**等于 seed 里的 `name`：配角色的人在治理台权限树上看到的
+           就是那个词，两边对不上时 `lint:operator-menu-names` 会点名。 */
+        href: "/ops/notices",
+        label: "运营通告",
+        subLabel: "Notice",
+        icon: "bell",
+        description: "发给运营者的消息：发布、收件与未读",
+      },
     ],
   },
   {

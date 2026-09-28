@@ -2146,6 +2146,9 @@
     "notices": {
       "title": "运营通告",
       "viewAll": "查看全部",
+      "markAll": "全部标记已读",
+      "markAllDone": "已把 {count} 条标记为已读。",
+      "markAllFailed": "全部标记已读没有成功。",
       "unread": "未读",
       "loadFailed": "通告读取失败",
       "empty": {
@@ -3156,5 +3159,61 @@
       "progress": "进展"
     },
     "unknown": "—"
+  },
+  "systemNotices": {
+    "digest": {
+      "title": "系统消息",
+      "description": "来自 opera 与产品侧的平台通知：产品上线、能力新增、变更通告。没有未读。",
+      "descriptionUnread": "来自 opera 与产品侧的平台通知：产品上线、能力新增、变更通告。{unread} 条未读。"
+    },
+    "all": {
+      "title": "全部消息",
+      "description": "来自 opera 与产品侧的平台通知，以及客户侧事件在运营端的镜像。按严重程度、来源、未读与关键词筛。"
+    },
+    "severity": {
+      "critical": "紧急",
+      "warning": "重要",
+      "info": "一般"
+    },
+    "source": {
+      "manual": "人工发布",
+      "system": "系统"
+    },
+    "unread": "未读",
+    "actions": {
+      "viewAll": "查看全部",
+      "backToTodos": "回到待办",
+      "retry": "重试",
+      "open": "去看看",
+      "gotIt": "知道了"
+    },
+    "states": {
+      "loadingTitle": "正在读取消息",
+      "loadingDescription": "稍候。",
+      "errorTitle": "消息读取失败",
+      "errorFallback": "消息读取失败。",
+      "emptyDigestTitle": "没有要看的消息",
+      "emptyDigestDescription": "未读的消息与今天读过的都会列在这里；更早的到「全部消息」里查。",
+      "emptyAllTitle": "还没有消息",
+      "emptyAllDescription": "opera 发布的通告，以及客户付款、退款、退订这些事件的运营镜像，都会出现在这里。",
+      "emptyFilteredTitle": "没有符合条件的消息",
+      "emptyFilteredDescription": "库里还有别的消息，只是这一组条件没命中。换个条件或清空筛选再看。"
+    },
+    "filters": {
+      "ariaLabel": "消息筛选",
+      "count": "{count} 条",
+      "reset": "清空筛选",
+      "searchPlaceholder": "搜索标题、正文…",
+      "searchAriaLabel": "搜索消息",
+      "unreadAriaLabel": "已读状态",
+      "unreadAll": "全部",
+      "unreadOnly": "只看未读",
+      "sourceAriaLabel": "消息来源",
+      "sourceAll": "全部来源",
+      "severityLabel": "严重程度",
+      "confirm": "确定",
+      "clear": "清空",
+      "noOptions": "暂无可选值"
+    }
   }
 }
