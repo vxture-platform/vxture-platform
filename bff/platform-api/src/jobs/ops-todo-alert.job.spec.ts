@@ -1,6 +1,6 @@
 /**
  * ops-todo-alert.job.spec.ts —— 作业只挑类别 / 停留 / 上限，判据在共享算法里；
- * 邮件素材由 todoAlertInput 纯函数给（这里一并钉三类文案与去重键）。
+ * 邮件素材由 todoAlertInput 纯函数给（这里一并钉九类文案与去重键）。
  */
 import { describe, expect, it, vi } from "vitest";
 import type { OpsTodo, OpsTodoRepository } from "@vxture/service-ops-todos";
@@ -26,7 +26,7 @@ const todo = (over: Partial<OpsTodo>): OpsTodo => ({
   priority: 2,
   subject: { type: "order", no: "ORD-1" },
   // 作业那一拼不带跨 schema 富化块，所以申报人与风险档本来就是 null
-  // （svc_platform_api 碰不到 account / admin，见仓储头注与 97_service_roles.sql）。
+  // （svc_platform_api 碰不到 account / admin 的那几张，见仓储头注与 97_service_roles.sql）。
   tenant: {
     no: "200000010",
     name: "示例租户",
@@ -44,6 +44,8 @@ const todo = (over: Partial<OpsTodo>): OpsTodo => ({
   // 3 小时 12 分钟前
   waitingSince: new Date(NOW.getTime() - (3 * 60 + 12) * 60_000).toISOString(),
   href: "/orders/ORD-1",
+  escalated: false,
+  escalationStep: 0,
   ...over,
 });
 
@@ -63,7 +65,7 @@ const jobWith = (
 };
 
 describe("OpsTodoAlertJob.pass", () => {
-  it("向共享算法要裁定过的三类、默认 15 分钟、上限 50、不要富化块，每条各发一封", async () => {
+  it("向共享算法要裁定过的九类、默认 15 分钟、上限 50、不要富化块，每条各发一封", async () => {
     const items = [
       todo({}),
       todo({
@@ -79,17 +81,31 @@ describe("OpsTodoAlertJob.pass", () => {
       kinds: ALERT_KINDS,
       minAgeMinutes: 15,
       limit: 50,
-      // 少了这一项，生产上整条查询 42501：本进程的角色没有 account / admin。
+      // 少了这一项，生产上整条查询 42501：本进程的角色没有 account / admin 的多数表。
       includeApplicant: false,
     });
+    expect(alertTodo).toHaveBeenCalledTimes(2);
+    expect(alertTodo).toHaveBeenCalledWith(items[0]);
+    expect(alertTodo).toHaveBeenCalledWith(items[1]);
+  });
+
+  /**
+   * 裁定表逐字钉在这里：改 ALERT_KINDS 是改 owner 的裁定，不该顺手改。
+   * 与共享算法的类别值域、与 todoAlertInput 的分支之间的对账在
+   * scripts/guardrails/check-ops-todo-alerts.mjs（那一道是 CI 门）。
+   */
+  it("九类逐字：全是严重度恒 rose 的那些", () => {
     expect(ALERT_KINDS).toEqual([
       "confirm_payment",
       "reprovision",
       "refund_audit",
+      "refund_execute",
+      "refund_processing_stuck",
+      "refund_failed",
+      "addon_pending_confirm",
+      "ticket_sla",
+      "maintenance_overdue",
     ]);
-    expect(alertTodo).toHaveBeenCalledTimes(2);
-    expect(alertTodo).toHaveBeenCalledWith(items[0]);
-    expect(alertTodo).toHaveBeenCalledWith(items[1]);
   });
 
   it("没有待办就不发", async () => {
@@ -108,7 +124,7 @@ describe("OpsTodoAlertJob.pass", () => {
   });
 });
 
-describe("todoAlertInput：三类各一封，去重键是 code + 可视码", () => {
+describe("todoAlertInput：九类各一封，去重键是 code + 可视码", () => {
   it("confirm_payment 沿用 #231 原文", () => {
     const input = todoAlertInput(todo({}), {
       link: "https://y.vxture.com/orders/ORD-1",
@@ -143,7 +159,7 @@ describe("todoAlertInput：三类各一封，去重键是 code + 可视码", () 
     expect(input.link).toBeUndefined();
   });
 
-  it("refund_audit：新一条，主体是退款单号，金额是退款额，链接落到订单详情", () => {
+  it("refund_audit：主体是退款单号，金额是退款额，链接落到订单详情", () => {
     const input = todoAlertInput(
       todo({
         id: "refund_audit:RFD-202609-4E7BD7BEC1",
@@ -168,6 +184,118 @@ describe("todoAlertInput：三类各一封，去重键是 code + 可视码", () 
     });
   });
 
+  /**
+   * 退款剩下三格各一个模板码：去重键 = (code, reference_type, reference_id, channel)，
+   * 所以三格**不能**共用 `ops.refund.pending_audit`——共用的话，审核通过那一刻
+   * 「该执行了」这封会被前一封的 4h 静默窗口吞掉，而那正是钱该出去的时刻。
+   */
+  it("退款另外三格：模板码各不相同，主体仍是退款单号", () => {
+    const refund = (kind: OpsTodo["kind"]) =>
+      todoAlertInput(
+        todo({
+          kind,
+          subject: { type: "refund", no: "RFD-2" },
+          href: "/orders/ORD-9",
+        }),
+        { link: undefined, now: NOW },
+      );
+    const codes = [
+      "refund_execute",
+      "refund_processing_stuck",
+      "refund_failed",
+    ].map((k) => refund(k as OpsTodo["kind"]).code);
+    expect(codes).toEqual([
+      "ops.refund.pending_execute",
+      "ops.refund.processing_stuck",
+      "ops.refund.failed",
+    ]);
+    expect(new Set(codes).size).toBe(3);
+    for (const kind of [
+      "refund_execute",
+      "refund_processing_stuck",
+      "refund_failed",
+    ] as const) {
+      expect(refund(kind).reference).toEqual({ type: "refund", id: "RFD-2" });
+      expect(refund(kind).subject).toContain("RFD-2");
+      expect(refund(kind).subject).toContain("3 小时 12 分钟");
+    }
+    // 审过没退那封要说清「客户已经被告知通过了」——这是它与待审那封的区别。
+    expect(refund("refund_execute").lines.join("\n")).toContain(
+      "客户这边已经收到",
+    );
+  });
+
+  it("加油包待核销：主体是加油包单号，宾语类别单列（不与订单撞去重键）", () => {
+    const input = todoAlertInput(
+      todo({
+        kind: "addon_pending_confirm",
+        subject: { type: "addon", no: "ORD-202609-ADDON1" },
+        product: { code: "pack-1", name: "Token 加油包", planName: null },
+        href: "/addon-orders",
+      }),
+      { link: "https://y.vxture.com/addon-orders", now: NOW },
+    );
+    expect(input.code).toBe("ops.addon.pending_confirm");
+    expect(input.reference).toEqual({
+      type: "addon_order",
+      id: "ORD-202609-ADDON1",
+    });
+    expect(input.subject).toBe(
+      "ORD-202609-ADDON1 加油包待核销（已等 3 小时 12 分钟）",
+    );
+    expect(input.lines[0]).toContain("Token 加油包");
+    expect(input.lines[2]).toContain("确认即刻授予配额");
+  });
+
+  it("工单首响超时：带标题与优先级，并写出四档时限", () => {
+    const input = todoAlertInput(
+      todo({
+        kind: "ticket_sla",
+        subject: { type: "ticket", no: "TCK-9" },
+        amount: null,
+        product: null,
+        href: "/tickets/TCK-9",
+        ticket: { title: "支付页打不开", priority: "p0", status: "open" },
+      }),
+      { link: "https://y.vxture.com/tickets/TCK-9", now: NOW },
+    );
+    expect(input.code).toBe("ops.ticket.first_response_overdue");
+    expect(input.reference).toEqual({ type: "ticket", id: "TCK-9" });
+    expect(input.lines[0]).toContain("支付页打不开");
+    expect(input.lines[0]).toContain("p0");
+    expect(input.lines[1]).toContain("p0 1 小时");
+  });
+
+  it("维护窗口超时：主体是窗口标题，没有链接时正文自己说去哪儿办", () => {
+    const input = todoAlertInput(
+      todo({
+        // 维护窗口那一类的待办身份是窗口主键：标题上没有唯一约束，也长到 256。
+        id: "maintenance_overdue:aaaaaaaa-1111-4111-8111-111111111111",
+        kind: "maintenance_overdue",
+        subject: { type: "maintenance", no: "数据库主从切换" },
+        tenant: null,
+        amount: null,
+        product: null,
+        // admin 里没有维护窗口这一页，所以 href 是 null，作业也给不出绝对链接。
+        href: null,
+      }),
+      { link: undefined, now: NOW },
+    );
+    expect(input.code).toBe("ops.maintenance.window_overdue");
+    /* 去重键跟**身份**走、不跟标题走（两者的差别与长度收口见
+       operator-alerts.wiring.spec 里 todoAlertInput 那一组）。这个键只进账本，不上屏。 */
+    expect(input.reference).toEqual({
+      type: "maintenance_window",
+      id: "maintenance_overdue:aaaaaaaa-1111-4111-8111-111111111111",
+    });
+    // 上屏的仍然是运营给它起的那个名字。
+    expect(input.subject).toBe(
+      "维护窗口已超过计划结束时间 3 小时 12 分钟：数据库主从切换",
+    );
+    expect(input.link).toBeUndefined();
+    expect(input.lines[2]).toContain("运维台");
+  });
+
   it("租户已删除 / 没有产品时文案不留空洞", () => {
     const input = todoAlertInput(
       todo({
@@ -184,11 +312,18 @@ describe("todoAlertInput：三类各一封，去重键是 code + 可视码", () 
   });
 
   it("没裁定过的类别直接抛，不静默跳过", () => {
-    expect(() =>
-      todoAlertInput(
-        todo({ kind: "ticket", subject: { type: "ticket", no: "TCK-1" } }),
-        { link: undefined, now: NOW },
-      ),
-    ).toThrow(/没有告警裁定/);
+    for (const kind of [
+      "ticket",
+      "subscription_overdue",
+      "invoice_applying",
+      "deletion_pending",
+    ] as const) {
+      expect(() =>
+        todoAlertInput(todo({ kind, subject: { type: "ticket", no: "X-1" } }), {
+          link: undefined,
+          now: NOW,
+        }),
+      ).toThrow(/没有告警裁定/);
+    }
   });
 });

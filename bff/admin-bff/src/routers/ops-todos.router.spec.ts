@@ -66,11 +66,34 @@ describe("GET /api/ops/todos 的能力门", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it("有租户管理权、没有订单读权 → 只要租户 / 工单三类", async () => {
+  it("有租户管理权、没有订单读权 → 只要租户 / 工单 / 账号 / 维护七类，账务一类都不给", async () => {
     const { router, list } = routerWith();
     await router.listTodos(makeReq(["platform.tenant.manage"]));
     expect(list).toHaveBeenCalledWith({ kinds: TENANT_KINDS });
-    expect(TENANT_KINDS).toEqual(["verification", "risk", "ticket"]);
+    expect(TENANT_KINDS).toEqual([
+      "verification",
+      "risk",
+      "ticket",
+      "ticket_sla",
+      "maintenance_overdue",
+      "deletion_pending",
+      "purge_imminent",
+    ]);
+    // 2026-09-28 第三批的回归判据：钱那一侧的十二类一条都不能漏进来。
+    // 此前这一列是 `OPS_TODO_KINDS.filter(不在账务四类)`，值域一扩，退款执行 / 发票 /
+    // 加油包 / 欠费订阅会**默认**落进这一列——不报错，只是悄悄放宽。
+    for (const money of [
+      "refund_execute",
+      "refund_processing_stuck",
+      "refund_failed",
+      "order_pending_payment_aging",
+      "subscription_overdue",
+      "invoice_applying",
+      "invoice_approved",
+      "addon_pending_confirm",
+    ]) {
+      expect(TENANT_KINDS, money).not.toContain(money);
+    }
   });
 
   it("两权齐 → 不传 kinds，全量", async () => {
@@ -84,24 +107,40 @@ describe("GET /api/ops/todos 的能力门", () => {
   });
 });
 
-describe("kindsFor：账务四类与其余三类正好把值域分完", () => {
-  it("两组不重叠且并集是全部类别", () => {
+describe("kindsFor：账务十二类与其余七类正好把值域分完", () => {
+  it("两组不重叠且并集是全部类别（加一类没归边，模块加载时就该抛）", () => {
     const overlap = ORDER_READ_KINDS.filter((k) => TENANT_KINDS.includes(k));
     expect(overlap).toEqual([]);
+    // 并集 == 共享算法的整个值域。逐字列出来而不是拿 OPS_TODO_KINDS 比：
+    // 拿值域比自己，等于「两边一样地错也算过」——那道自比在 router 里由
+    // assertKindsPartitioned 做（它管「有没有漏」），这里管「分得对不对」。
     expect([...ORDER_READ_KINDS, ...TENANT_KINDS].sort()).toEqual(
       [
         "confirm_payment",
-        "follow_up_balance",
-        "refund_audit",
         "reprovision",
+        "follow_up_balance",
+        "order_pending_payment_aging",
+        "refund_audit",
+        "refund_execute",
+        "refund_processing_stuck",
+        "refund_failed",
+        "subscription_overdue",
+        "invoice_applying",
+        "invoice_approved",
+        "addon_pending_confirm",
+        "verification",
         "risk",
         "ticket",
-        "verification",
+        "ticket_sla",
+        "maintenance_overdue",
+        "deletion_pending",
+        "purge_imminent",
       ].sort(),
     );
+    expect([...ORDER_READ_KINDS, ...TENANT_KINDS]).toHaveLength(19);
   });
 
-  it("持订单读权 → undefined；否则租户三类", () => {
+  it("持订单读权 → undefined；否则只给非账务那一列", () => {
     expect(kindsFor(makeReq(["commerce:order.read"]))).toBeUndefined();
     expect(kindsFor(makeReq([]))).toBe(TENANT_KINDS);
   });

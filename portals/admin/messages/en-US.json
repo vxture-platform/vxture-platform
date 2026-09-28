@@ -2979,9 +2979,9 @@
   "opsTodosPage": {
     "header": {
       "queueTitle": "To-do tasks",
-      "queueDescription": "Orders whose customer has declared a payment, refunds waiting for review, verifications waiting for review and open tickets, sorted by urgency. Work from the top down.",
+      "queueDescription": "Everything someone is waiting on us for: payments, refunds, verifications, tickets, subscriptions, invoices, add-on packs and maintenance, sorted by urgency. Work from the top down.",
       "allTitle": "All tasks",
-      "allDescription": "The full list across all five kinds of to-dos, including risk reviews, which only appear here.",
+      "allDescription": "The full list of every kind of to-do, including risk reviews and account closures, which only appear here.",
       "totalBadge": "{count} tasks"
     },
     "types": {
@@ -2989,7 +2989,12 @@
       "refund": "Refund review",
       "verification": "Verification review",
       "risk": "Risk review",
-      "ticket": "Ticket handling"
+      "ticket": "Ticket handling",
+      "subscription": "Overdue subscriptions",
+      "invoice": "Invoicing",
+      "addon": "Add-on packs",
+      "account": "Account closures",
+      "maintenance": "Overdue maintenance"
     },
     "cards": {
       "loading": "Loading",
@@ -3003,13 +3008,23 @@
       "ticket": "{count} open tickets, longest {wait}",
       "ticketEmpty": "No open tickets",
       "risk": "{count} tenants to re-check, longest {wait}",
-      "riskEmpty": "No tenants to re-check"
+      "riskEmpty": "No tenants to re-check",
+      "subscription": "{count} overdue subscriptions, longest {wait}",
+      "subscriptionEmpty": "No overdue subscriptions",
+      "invoice": "{count} invoices to handle, longest {wait}",
+      "invoiceEmpty": "No invoices to handle",
+      "addon": "{count} add-on packs to confirm, longest {wait}",
+      "addonEmpty": "No add-on packs to confirm",
+      "account": "{count} account closures in flight, longest {wait}",
+      "accountEmpty": "No account closures in flight",
+      "maintenance": "{count} maintenance windows past their end, longest {wait}",
+      "maintenanceEmpty": "No maintenance windows past their end"
     },
     "section": {
       "queueTitle": "Task queue",
       "allTitle": "Task list",
       "summary": "Sorted by urgency, {count} in total",
-      "hiddenRisk": "{count} more risk reviews are under All tasks",
+      "hiddenInAll": "{count} more (risk reviews, account closures) are under All tasks",
       "filteringType": "Showing only: {type}"
     },
     "filters": {
@@ -3024,7 +3039,8 @@
     "severity": {
       "urgent": "Urgent",
       "attention": "Attention",
-      "normal": "Normal"
+      "normal": "Normal",
+      "escalated": "Overdue"
     },
     "columns": {
       "severity": "Urgency",
@@ -3040,10 +3056,23 @@
       "reprovision": "{amount} received, re-run provisioning",
       "followUpBalance": "Chase the balance: {paid} received of {amount} due",
       "followUpBalanceAmountOnly": "Chase the balance: {amount} due",
+      "orderPendingPaymentAging": "Chase the customer for {amount} — the order has never been paid",
       "refundAudit": "Review the {amount} refund request",
+      "refundExecute": "Pay out the approved {amount} refund",
+      "refundProcessingStuck": "Look into the {amount} refund stuck in processing",
+      "refundFailed": "Retry the {amount} refund — the last payout failed",
       "verification": "Review the submitted documents and give a decision",
       "risk": "Re-check the risk status and decide whether to lift it",
-      "ticket": "Handle ticket: {title}"
+      "ticket": "Handle ticket: {title}",
+      "ticketSla": "Reply to this overdue ticket first: {title}",
+      "subscriptionOverdueNoAmount": "Chase the overdue subscription: collect or suspend",
+      "invoiceApplying": "Review the {amount} invoice request",
+      "invoiceApproved": "Issue the approved {amount} invoice",
+      "addonPendingConfirm": "Confirm the {amount} add-on pack payment",
+      "deletionPending": "Handle the account closure request and check nothing is left behind",
+      "purgeImminent": "Check the account data that is about to be purged for good",
+      "maintenanceOverdue": "The maintenance window is past its planned end: end it on the Infrastructure Platform under Monitoring · Maintenance windows",
+      "unknownKind": "Handle {code}: this kind of to-do has no wording yet"
     },
     "secondary": {
       "riskMeta": "Risk {risk} · {status}"
@@ -3057,7 +3086,19 @@
       "risk": "Awaiting re-check",
       "ticketOpen": "Open",
       "ticketProcessing": "In progress",
-      "ticketBlocked": "Blocked"
+      "ticketBlocked": "Blocked",
+      "orderAging": "2/5 · awaiting payment",
+      "refundExecute": "Awaiting payout",
+      "refundProcessing": "Payout in progress",
+      "refundFailed": "Payout failed",
+      "ticketSla": "Response overdue",
+      "subscriptionOverdue": "Subscription overdue",
+      "invoiceApplying": "Invoice pending review",
+      "invoiceApproved": "Approved, not issued",
+      "addonPendingConfirm": "Add-on pack pending confirmation",
+      "deletionPending": "Closure pending",
+      "purgeImminent": "Purge imminent",
+      "maintenanceOverdue": "Maintenance overdue"
     },
     "wait": {
       "justNow": "just now",
@@ -3070,11 +3111,24 @@
       "goReview": "Review",
       "goRecheck": "Re-check",
       "goHandle": "Handle",
+      "goProvision": "Provision",
+      "goFollowUp": "Follow up",
+      "goRemind": "Chase payment",
+      "goPayout": "Pay out",
+      "goInspect": "Investigate",
+      "goRetry": "Retry",
+      "goIssue": "Issue",
+      "goConfirm": "Confirm",
+      "maintenanceElsewhere": "Handle on the Infra Platform",
       "menuLabel": "More actions for {code}",
       "viewAllOrders": "View all orders",
       "viewAllVerifications": "View all verifications",
       "viewAllTenants": "View all tenants",
-      "viewAllTickets": "View all tickets"
+      "viewAllTickets": "View all tickets",
+      "viewAllSubscriptions": "View all subscriptions",
+      "viewAllInvoices": "View all invoices",
+      "viewAllAddonOrders": "View all add-on packs",
+      "viewAllAccounts": "View all accounts"
     },
     "empty": {
       "title": "Nothing to handle today",

@@ -60,25 +60,113 @@ type TPage = ReturnType<typeof useTranslations<"opsTodosPage">>;
  * 筛选 / 排序 / 分页 / CSV / 渲染，不再自己派生。
  */
 
+/*
+ * 分类栏怎么分（2026-09-28 批 3：服务端从七个 kind 扩到十九个）。
+ *
+ * owner 这一轮的规矩是「先把通知，信息，任务，提醒这些信息做全，做多，后续再
+ * 订阅选择上再做筛选」——所以**一个类别都不为了怕吵而不产出**。但十九张卡摆成
+ * 一排没人扫得完，于是十九个 kind 收成**十档**，一档一张卡、一张卡就是一个筛选：
+ *
+ *   收款   confirm_payment · reprovision · follow_up_balance · order_pending_payment_aging
+ *   退款   refund_audit · refund_execute · refund_processing_stuck · refund_failed
+ *   认证   verification
+ *   工单   ticket · ticket_sla
+ *   订阅   subscription_overdue
+ *   发票   invoice_applying · invoice_approved
+ *   加油包 addon_pending_confirm
+ *   维护   maintenance_overdue
+ *   风险   risk                               ← 只在「全部任务」
+ *   账号   deletion_pending · purge_imminent   ← 只在「全部任务」
+ *
+ * 「开通」不单列成第十一档，理由**不在排布上**——主页那一排早就不是一行了（4 列 × 2 行
+ * 八档，全部任务 5 列 × 2 行十档），再多一档也只是换个位置。理由是「一张订单一张卡」：
+ * `reprovision` 是**同一张订单**的 4/5 步（钱收了、权益还没发），与收款同链、同单号、
+ * 同一个列表页（/orders），主按钮点开的还是那一页的同一张任务卡。单列会把一张订单的
+ * 生命周期劈在两张卡上——运营盯着「收款」那张卡等这一单办完，钱一到账它就从那张卡上
+ * 消失，而那恰恰是最该继续盯着的时刻。这不是把它藏起来——它的
+ * 任务句、进度词、主按钮（「去开通」）各有独立一份，只是**归在收款那张卡下**。
+ *
+ * 风险与账号留在「全部任务」：主页那一排说的是「有人在等我们动手」，这两类等的是
+ * 我们自己的时钟（复核期、清除期）。主页少列了几条由区块说明报出来，不闷掉。
+ *
+ * 每个 kind 自己的三样东西——任务句、进度词、主按钮的文案与去处——都是**逐 kind**
+ * 一份（`taskSentence` / `useProgressLabels` / `useKindActionLabels` /
+ * `KIND_FALLBACK_HREF`）。分组只影响 chip 与统计卡，不影响一行看起来说什么。
+ */
+
 /** 紧急 / 关注 / 一般——服务端三档，页面沿用。 */
 type TodoSeverity = OpsTodoSeverity;
 /**
- * 统计卡 / 分类筛选的档位。服务端的七个 kind 收成五档：三种收款态订单同属
- * 「收款确认」（owner 2026-09-02：「这种需要紧急处理的确认付款事项，应该推送到
- * 待办事项中」），其余各自一档。`refund`（退款审核）2026-09-28 加入——那张没人
- * 看见的退款单正属于这一类。
+ * 统计卡 / 分类筛选的档位——十档，分组的判据见文件头那一段。
+ *
+ * （owner 2026-09-02：「这种需要紧急处理的确认付款事项，应该推送到待办事项中」
+ * 是「收款」这一档的由来；`refund` 2026-09-28 加入——那张没人看见的退款单正属于
+ * 这一类，批 3 又把退款拆出了打款 / 卡单 / 失败三种停顿，仍归这一档。）
  */
-type TodoType = "payment" | "refund" | "verification" | "risk" | "ticket";
+type TodoType =
+  | "payment"
+  | "refund"
+  | "verification"
+  | "risk"
+  | "ticket"
+  | "subscription"
+  | "invoice"
+  | "addon"
+  | "account"
+  | "maintenance";
 
 const KIND_TYPE: Record<OpsTodoKind, TodoType> = {
   confirm_payment: "payment",
   reprovision: "payment",
   follow_up_balance: "payment",
+  order_pending_payment_aging: "payment",
   refund_audit: "refund",
+  refund_execute: "refund",
+  refund_processing_stuck: "refund",
+  refund_failed: "refund",
   verification: "verification",
   risk: "risk",
   ticket: "ticket",
+  ticket_sla: "ticket",
+  subscription_overdue: "subscription",
+  invoice_applying: "invoice",
+  invoice_approved: "invoice",
+  addon_pending_confirm: "addon",
+  deletion_pending: "account",
+  purge_imminent: "account",
+  maintenance_overdue: "maintenance",
 };
+
+/**
+ * kind → 档。**表里没有的 kind 归「风险」而不是丢掉**：服务端加了一类而这一页还
+ * 没跟上时，丢掉等于让一条真实待办从运营台消失，而这一页的全部来由就是「那张没人
+ * 看见的退款单」。归到风险是因为那一档的语义是「平台自己盯着的事」，且它在页头
+ * 总数与「全部任务」里都在——不会既错类又消失。
+ */
+function kindType(kind: OpsTodoKind): TodoType {
+  return (KIND_TYPE as Record<string, TodoType | undefined>)[kind] ?? "risk";
+}
+
+const UUID_IN_PATH =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/**
+ * 服务端给的去处要**过一道**，两条判据：只收站内相对路径，且路径里不许有 UUID
+ * （「任何场景不展示 UUID」，地址栏也是一个场景——admin 的四条详情路由为此都改
+ * 成了可读码）。不收的退到该类别的兜底列表页：那不是假动作，运营在列表里找得到
+ * 这一条。连兜底页都没有（今天只有维护窗口，处置面在运维平台）就返回 null，由
+ * 调用方改说一句「去哪儿办」。
+ */
+function safeHref(href: string | null, fallback: string | null): string | null {
+  if (
+    typeof href === "string" &&
+    href.startsWith("/") &&
+    !UUID_IN_PATH.test(href)
+  ) {
+    return href;
+  }
+  return fallback;
+}
 
 /**
  * 表格 / CSV 直接消费的一行。由 `toRow` 从服务端的 `OpsTodo` 拍平——只做文案与
@@ -111,8 +199,18 @@ interface TodoRow {
   /** 联系人 + 邮箱 + 手机，只进 title 提示，不占列宽。 */
   contactTooltip: string;
   tenantMeta: string;
-  href: string;
+  /**
+   * 主按钮与任务标题的去处。**null = admin 里没有落点**（今天只有
+   * `maintenance_overdue`，结束维护是运维平台的动作），那时不画按钮、改说一句
+   * 「去哪儿办」——跳回原地的假动作比没有按钮更糟。
+   */
+  href: string | null;
   severity: TodoSeverity;
+  /**
+   * 服务端判的「已经超过该被处理的时限」。页面只负责让它看得见：紧急度列上多一枚
+   * danger 标，且同一紧急度里排最前。读不到当作没超时——读不到与超时是两件事。
+   */
+  escalated: boolean;
   priority: number;
   /**
    * 等待起点（ISO）。「等待」列与统计卡的「最久等了」都从它算；起点按哪个时刻
@@ -139,32 +237,93 @@ const TODO_TYPE_ICON: Record<TodoType, IconName> = {
   verification: "medal",
   risk: "warning",
   ticket: "chat-circle",
+  subscription: "refresh",
+  invoice: "receipt",
+  addon: "package",
+  // 账号那一档只有注销与清除两种待办，图说的就是它要做的事。
+  account: "trash",
+  maintenance: "timer",
 };
 
 /**
- * 主页分类栏列四档（owner 2026-09-20：「去掉 风险复核」）。
+ * 主页分类栏列八档，「全部任务」列十档（owner 2026-09-20：「去掉 风险复核」；
+ * 2026-09-28 批 3 把十九个 kind 收成十档，主页那一排从四档长到八档）。
  *
- * **去的是主页这一层，不是这类待办本身**——`risk` 仍由服务端产出、仍进「全部
- * 任务」页并可处理。若连产出一并摘掉，现存的风险事项会在运营台完全不可见，
+ * **去的是主页这一层，不是这类待办本身**——`risk` 与账号注销两档仍由服务端产出、
+ * 仍进「全部任务」页并可处理。若连产出一并摘掉，现存的风险事项会在运营台完全不可见，
  * 成为没人看得见的孤儿。
  */
 export type TodoScope = "queue" | "all";
 
+/** 主页那一排（八档）：有人在等我们动手的那些。 */
 const TODO_FILTER_TYPES: readonly TodoType[] = [
   "payment",
   "refund",
   "verification",
   "ticket",
+  "subscription",
+  "invoice",
+  "addon",
+  "maintenance",
 ];
 
-/** 每类待办的次要去处：同类全量列表——运营处理完一条常要看这类还剩多少。 */
-const TODO_LIST_HREF: Record<TodoType, string> = {
+/** 「全部任务」那一排（十档）：再加两类等我们自己时钟的。 */
+const TODO_ALL_TYPES: readonly TodoType[] = [
+  ...TODO_FILTER_TYPES,
+  "risk",
+  "account",
+];
+
+/**
+ * 每档待办的次要去处：同类全量列表——运营处理完一条常要看这类还剩多少。
+ * null = admin 里没有这类的列表页，那一项就不进 ⋯ 菜单（一个跳不到地方的
+ * 菜单项比没有更糟）。
+ */
+const TODO_LIST_HREF: Record<TodoType, string | null> = {
   payment: "/orders",
   // 退款没有独立列表页：退款单挂在订单详情的任务卡上，同类全量看订单列表。
   refund: "/orders",
   verification: "/verifications",
   risk: "/tenants",
   ticket: "/tickets",
+  subscription: "/subscriptions",
+  invoice: "/invoices",
+  addon: "/addon-orders",
+  account: "/accounts",
+  // 维护窗口在 admin 里没有任何页面（列表与处置都在运维平台）。
+  maintenance: null,
+};
+
+/**
+ * 逐 kind 的兜底去处：服务端的 href 不可用时（不是站内路径、或路径里带 UUID）
+ * 走这里。
+ *
+ * `subscription_overdue` 兜的是**列表页**而不是详情页：admin 的订阅详情路由是
+ * /subscriptions/[subscriptionId]，只认 UUID，而 UUID 不许进链接——所以这一类
+ * 只能落在列表页，运营在那里按租户找到这一条。
+ * `maintenance_overdue` 是 null：admin 没有维护页面，结束维护是运维平台
+ * 「运行监控 · 维护窗口」的动作，主按钮位上改说一句去哪儿办。
+ */
+const KIND_FALLBACK_HREF: Record<OpsTodoKind, string | null> = {
+  confirm_payment: "/orders",
+  reprovision: "/orders",
+  follow_up_balance: "/orders",
+  order_pending_payment_aging: "/orders",
+  refund_audit: "/orders",
+  refund_execute: "/orders",
+  refund_processing_stuck: "/orders",
+  refund_failed: "/orders",
+  verification: "/verifications",
+  risk: "/tenants",
+  ticket: "/tickets",
+  ticket_sla: "/tickets",
+  subscription_overdue: "/subscriptions",
+  invoice_applying: "/invoices",
+  invoice_approved: "/invoices",
+  addon_pending_confirm: "/addon-orders",
+  deletion_pending: "/accounts",
+  purge_imminent: "/accounts",
+  maintenance_overdue: null,
 };
 
 function severityOrder(severity: TodoSeverity) {
@@ -261,6 +420,40 @@ function tenantMetaText(tenant: OpsTodo["tenant"], labels: TodoLabels): string {
   );
 }
 
+/**
+ * 一行的「编号」。单据类原样就是可视码；主体类要带展示前缀（租户 T- / 账号 U-），
+ * 不然上屏是一串裸数字——admin 曾有 62 处这么裸着。
+ *
+ * 按 `subject.type` 判而不按 kind 判：同一类待办的主体可能是租户也可能是账号
+ * （注销就是），问「这是谁的号」比问「这是哪类待办」更接近要回答的问题。镜像之外
+ * 的主体类型原样上屏——少一个前缀，而不是多一个假的号。
+ */
+function subjectCode(
+  subject: OpsTodo["subject"],
+  tenantCode: string,
+  unknown: string,
+): string {
+  const type: string = subject.type;
+  if (type === "tenant") return tenantCode;
+  if (type === "account" || type === "user") {
+    return formatPrincipalNoOr(subject.no, "user", unknown);
+  }
+  return subject.no;
+}
+
+/**
+ * 进度词。档位的值域在服务端与这一页各有一份（见 entities/console 的
+ * `OpsTodoProgress`），所以查不到的时候要**看得出来**：显示「—」而不是空白。
+ * 空白会被读成「这条没有进展」，而真相是「这个档位页面还没有文案」。
+ */
+function progressText(
+  labels: Record<OpsTodoProgress, string>,
+  progress: OpsTodoProgress,
+  unknown: string,
+): string {
+  return (labels as Record<string, string>)[progress] ?? unknown;
+}
+
 function ticketPriorityText(priority: string, labels: TodoLabels): string {
   return (
     (labels.ticketPriority as Record<string, string>)[priority] ?? priority
@@ -296,6 +489,8 @@ function secondaryLine(
       .filter(Boolean)
       .join(" · ");
   }
+  // 单据类（订单 / 退款 / 发票 / 加油包 / 订阅 / 维护窗口）都走这一段：单号 +
+  // 产品 / 套餐。读不到的那一段不占位。
   return [
     code,
     todo.product && !isUnset(todo.product.name) ? todo.product.name : null,
@@ -310,8 +505,7 @@ function secondaryLine(
 function toRow(todo: OpsTodo, labels: TodoLabels): TodoRow {
   const tenantNo = todo.tenant?.no ?? null;
   const tenantCode = formatPrincipalNoOr(tenantNo, "tenant", labels.unknown);
-  // 租户级事项的「编号」就是租户号，上屏要带前缀；单据类原样是可视码。
-  const code = todo.subject.type === "tenant" ? tenantCode : todo.subject.no;
+  const code = subjectCode(todo.subject, tenantCode, labels.unknown);
   const tenantName = todo.tenant?.name || labels.unknown;
   const contactName = todo.applicant?.name || labels.unknown;
   const contactTooltip =
@@ -329,7 +523,7 @@ function toRow(todo: OpsTodo, labels: TodoLabels): TodoRow {
   return {
     id: todo.id,
     kind: todo.kind,
-    type: KIND_TYPE[todo.kind],
+    type: kindType(todo.kind),
     code,
     secondary,
     // 地址栏走可读码，不带显示前缀（BFF 双接受，但规范形是裸号）。
@@ -340,8 +534,9 @@ function toRow(todo: OpsTodo, labels: TodoLabels): TodoRow {
     contactName,
     contactTooltip,
     tenantMeta: tenantMetaText(todo.tenant, labels),
-    href: todo.href,
+    href: safeHref(todo.href, KIND_FALLBACK_HREF[todo.kind] ?? null),
     severity: todo.severity,
+    escalated: todo.escalated === true,
     priority: todo.priority,
     waitingSince: todo.waitingSince,
     amountText,
@@ -363,9 +558,12 @@ function toRow(todo: OpsTodo, labels: TodoLabels): TodoRow {
 }
 
 /**
- * 拍平 + 排序。同一档紧急度里，优先级小的在前、等得最久的排最前——这一页是
- * 排班表，不是动态流。服务端也按同一规则排过，这里再排一次是让筛选后的子集
- * 仍然成立，不依赖接口的输出顺序。
+ * 拍平 + 排序。同一档紧急度里：**已超时的排最前**，然后优先级小的在前、等得最久
+ * 的在前——这一页是排班表，不是动态流。服务端也按同一规则排过，这里再排一次是让
+ * 筛选后的子集仍然成立，不依赖接口的输出顺序。
+ *
+ * 超时只在**档内**提前，不跨档提前：一条「一般」的超时件仍排在所有「紧急」件之后。
+ * 跨档会让那枚红标凌驾于紧急度之上，而紧急度是服务端按后果算的，超时只是「等久了」。
  */
 function buildRows(todos: readonly OpsTodo[], labels: TodoLabels): TodoRow[] {
   return todos
@@ -374,6 +572,9 @@ function buildRows(todos: readonly OpsTodo[], labels: TodoLabels): TodoRow[] {
       const severityDiff =
         severityOrder(left.severity) - severityOrder(right.severity);
       if (severityDiff !== 0) return severityDiff;
+      const escalatedDiff =
+        (left.escalated ? 0 : 1) - (right.escalated ? 0 : 1);
+      if (escalatedDiff !== 0) return escalatedDiff;
       return (
         left.priority - right.priority ||
         new Date(left.waitingSince).getTime() -
@@ -432,14 +633,56 @@ function taskSentence(t: TPage, row: TodoRow): string {
       return row.paidText
         ? t("task.followUpBalance", { amount, paid: row.paidText })
         : t("task.followUpBalanceAmountOnly", { amount });
+    case "order_pending_payment_aging":
+      return t("task.orderPendingPaymentAging", { amount });
     case "refund_audit":
       return t("task.refundAudit", { amount });
+    case "refund_execute":
+      return t("task.refundExecute", { amount });
+    case "refund_processing_stuck":
+      return t("task.refundProcessingStuck", { amount });
+    case "refund_failed":
+      return t("task.refundFailed", { amount });
     case "verification":
       return t("task.verification");
     case "risk":
       return t("task.risk");
     case "ticket":
       return t("task.ticket", { title: row.ticketTitle ?? row.code });
+    case "ticket_sla":
+      return t("task.ticketSla", { title: row.ticketTitle ?? row.code });
+    /* 这两组的金额是**契约定死的一边**，不是「不一定读得到」，所以各只有一句话：
+       · `subscription_overdue` 恒**不带**金额。欠的是续费单上的钱，而订阅行上的
+         pay_amount 是上一个周期实付的快照——服务端的 SUBSCRIPTION_TODOS_HEAD 故意把
+         amount_value 写成 null，因为拿一个像是的数上屏比不给更坏（运营会照它去对账）。
+       · `invoice_applying` / `invoice_approved` 恒**带**金额：
+         billing.invoice_receipts.invoice_amount 是 NOT NULL（52_billing.sql），
+         「开票额还没填」在库里不存在。
+       所以这三处与 confirm_payment 那几支同写法：要金额的直接用 `amount`，不要的一个数都不提。
+       此前这里各写了两半，其中三个半边永远走不到、词条也一直挂在两份语言包里。
+
+       留下的那个词条名仍是 `…NoAmount`：它描述的是**这句话本身**（不提数的那一句），
+       而不是「两半里的哪一半」，所以名字没错。不把它改回 `subscriptionOverdue`，
+       是因为那个名字刚被删掉、且带 {amount} 占位符——同名换内容会让还在用旧名的分支
+       静默拿到另一句话（next-intl 对多送来的参数不报错）。 */
+    case "subscription_overdue":
+      return t("task.subscriptionOverdueNoAmount");
+    case "invoice_applying":
+      return t("task.invoiceApplying", { amount });
+    case "invoice_approved":
+      return t("task.invoiceApproved", { amount });
+    case "addon_pending_confirm":
+      return t("task.addonPendingConfirm", { amount });
+    case "deletion_pending":
+      return t("task.deletionPending");
+    case "purge_imminent":
+      return t("task.purgeImminent");
+    case "maintenance_overdue":
+      return t("task.maintenanceOverdue");
+    default:
+      // 服务端加了类别而这一页还没跟上。说一句笼统的话也比让这一行只剩一个编号
+      // 好——运营至少知道有这么一条、点得进去；而「笼统」本身就是该去补文案的信号。
+      return t("task.unknownKind", { code: row.code });
   }
 }
 
@@ -465,6 +708,11 @@ function useTodoTypeLabels(): Record<TodoType, string> {
     verification: tTypes("verification"),
     risk: tTypes("risk"),
     ticket: tTypes("ticket"),
+    subscription: tTypes("subscription"),
+    invoice: tTypes("invoice"),
+    addon: tTypes("addon"),
+    account: tTypes("account"),
+    maintenance: tTypes("maintenance"),
   };
 }
 
@@ -489,42 +737,70 @@ function useProgressLabels(): Record<OpsTodoProgress, string> {
     ticketOpen: tProgress("ticketOpen"),
     ticketProcessing: tProgress("ticketProcessing"),
     ticketBlocked: tProgress("ticketBlocked"),
+    orderAging: tProgress("orderAging"),
+    refundExecute: tProgress("refundExecute"),
+    refundProcessing: tProgress("refundProcessing"),
+    refundFailed: tProgress("refundFailed"),
+    ticketSla: tProgress("ticketSla"),
+    subscriptionOverdue: tProgress("subscriptionOverdue"),
+    invoiceApplying: tProgress("invoiceApplying"),
+    invoiceApproved: tProgress("invoiceApproved"),
+    addonPendingConfirm: tProgress("addonPendingConfirm"),
+    deletionPending: tProgress("deletionPending"),
+    purgeImminent: tProgress("purgeImminent"),
+    maintenanceOverdue: tProgress("maintenanceOverdue"),
   };
 }
 
 /**
- * 每类待办的**主按钮**叫什么、次要去处叫什么。
+ * 主按钮上写什么动词——**逐 kind 一份**，不按档共用。
  *
  * 此前四类共用一个「处理入口」藏在 ⋯ 菜单里，点之前不知道会跳到哪；现在主按钮
- * 直接摆在行尾，`href` 由服务端按类型分流（订单详情 / 认证审核页 / 租户详情 / 工单）。
+ * 直接摆在行尾，去处由服务端按 kind 分流（`safeHref` 过一道）。动词按 kind 分是
+ * 因为同一档里的事不是同一件：退款那一档四个 kind 分别是去审核 / 去打款 / 去排查 /
+ * 去重试，共用「去处理」等于把已知的信息丢掉。
  */
-function useTodoActionLabels(): Record<
-  TodoType,
-  { primary: string; list: string }
-> {
+function useKindActionLabels(): Record<OpsTodoKind, string> {
   const tActions = useTranslations("opsTodosPage.actions");
   return {
-    payment: {
-      primary: tActions("goVerify"),
-      list: tActions("viewAllOrders"),
-    },
-    // 退款审核在订单详情页的任务卡上做，主按钮与认证同一个动词「去审核」。
-    refund: {
-      primary: tActions("goReview"),
-      list: tActions("viewAllOrders"),
-    },
-    verification: {
-      primary: tActions("goReview"),
-      list: tActions("viewAllVerifications"),
-    },
-    risk: {
-      primary: tActions("goRecheck"),
-      list: tActions("viewAllTenants"),
-    },
-    ticket: {
-      primary: tActions("goHandle"),
-      list: tActions("viewAllTickets"),
-    },
+    confirm_payment: tActions("goVerify"),
+    reprovision: tActions("goProvision"),
+    follow_up_balance: tActions("goFollowUp"),
+    order_pending_payment_aging: tActions("goRemind"),
+    refund_audit: tActions("goReview"),
+    refund_execute: tActions("goPayout"),
+    refund_processing_stuck: tActions("goInspect"),
+    refund_failed: tActions("goRetry"),
+    verification: tActions("goReview"),
+    risk: tActions("goRecheck"),
+    ticket: tActions("goHandle"),
+    ticket_sla: tActions("goHandle"),
+    subscription_overdue: tActions("goFollowUp"),
+    invoice_applying: tActions("goReview"),
+    invoice_approved: tActions("goIssue"),
+    addon_pending_confirm: tActions("goConfirm"),
+    deletion_pending: tActions("goHandle"),
+    purge_imminent: tActions("goConfirm"),
+    // admin 没有维护页面：这一行没有主按钮，这个词只在别处（CSV 不取它）用不到，
+    // 但表里不留洞——值域全覆盖才编译得过，也才不会漏掉下一个 kind。
+    maintenance_overdue: tActions("goHandle"),
+  };
+}
+
+/** ⋯ 菜单里那一项「同类全量」叫什么。null = 这一档在 admin 里没有列表页。 */
+function useTypeListLabels(): Record<TodoType, string | null> {
+  const tActions = useTranslations("opsTodosPage.actions");
+  return {
+    payment: tActions("viewAllOrders"),
+    refund: tActions("viewAllOrders"),
+    verification: tActions("viewAllVerifications"),
+    risk: tActions("viewAllTenants"),
+    ticket: tActions("viewAllTickets"),
+    subscription: tActions("viewAllSubscriptions"),
+    invoice: tActions("viewAllInvoices"),
+    addon: tActions("viewAllAddonOrders"),
+    account: tActions("viewAllAccounts"),
+    maintenance: null,
   };
 }
 
@@ -547,13 +823,19 @@ function todoCsvColumns(
     { label: t("csv.type"), value: (item) => typeLabels[item.type] },
     {
       label: t("csv.severity"),
-      value: (item) => severityLabels[item.severity],
+      // 「已超时」不另开一列（列形不变），拼在紧急度里——导出的人按这一列筛，
+      // 而超时件正是他要先筛出来的那批。
+      value: (item) =>
+        item.escalated
+          ? `${severityLabels[item.severity]} · ${t("severity.escalated")}`
+          : severityLabels[item.severity],
     },
     { label: t("csv.amount"), value: (item) => item.amountText },
     { label: t("csv.waitingSince"), value: (item) => item.waitingSince },
     {
       label: t("csv.progress"),
-      value: (item) => progressLabels[item.progress],
+      value: (item) =>
+        progressText(progressLabels, item.progress, t("unknown")),
     },
   ];
 }
@@ -633,8 +915,8 @@ function SystemNoticesSummary() {
 /**
  * 两个视图共用本件（owner 2026-09-20：「全部任务做二级页面展示」）。
  *
- *   queue（/ops-todos）     主页。只列与统计卡对齐的**四类**。
- *   all  （/ops-todos/all） 全部任务。五类齐全，风险复核在这里有落点。
+ *   queue（/ops-todos）     主页。只列与统计卡对齐的**八档**。
+ *   all  （/ops-todos/all） 全部任务。十档齐全，风险复核与账号注销在这里有落点。
  *
  * 拆成两个视图而不是两份代码：表格列、操作菜单、CSV 列、翻页全都一样，复制一份
  * 迟早两边长歪。差别只有「列哪几类」与「有没有那个去处按钮」，用一个 prop 收住。
@@ -647,7 +929,8 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
   const typeLabels = useTodoTypeLabels();
   const severityLabels = useSeverityLabels();
   const progressLabels = useProgressLabels();
-  const actionLabels = useTodoActionLabels();
+  const actionLabels = useKindActionLabels();
+  const listLabels = useTypeListLabels();
   const ticketPriorityLabels = useTicketPriorityLabels();
   const router = useRouter();
   const [serverTodos, setServerTodos] = useState<OpsTodo[]>([]);
@@ -668,7 +951,7 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
     }),
     [tPage, ticketPriorityLabels],
   );
-  /** 五类全量。页头的「任务 N」报的是这个数——owner：「tag 显示 全部代办数量」。 */
+  /** 十档全量。页头的「任务 N」报的是这个数——owner：「tag 显示 全部代办数量」。 */
   const allTodos = useMemo(
     () => buildRows(serverTodos, todoLabels),
     [serverTodos, todoLabels],
@@ -676,8 +959,8 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
   /**
    * 本视图实际要列的那些。
    *
-   * 主页只列四类：统计卡是那四张，表格再混进第五类就对不上了。
-   * 风险复核不是被删掉，是搬到「全部任务」——那一页五类齐全。
+   * 主页只列八档：统计卡是那八张，表格再混进另外两档就对不上了。
+   * 风险复核与账号注销不是被删掉，是搬到「全部任务」——那一页十档齐全。
    */
   const todos = useMemo(
     () =>
@@ -768,13 +1051,33 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
         return items.length
           ? tPage("cards.risk", params)
           : tPage("cards.riskEmpty");
+      case "subscription":
+        return items.length
+          ? tPage("cards.subscription", params)
+          : tPage("cards.subscriptionEmpty");
+      case "invoice":
+        return items.length
+          ? tPage("cards.invoice", params)
+          : tPage("cards.invoiceEmpty");
+      case "addon":
+        return items.length
+          ? tPage("cards.addon", params)
+          : tPage("cards.addonEmpty");
+      case "account":
+        return items.length
+          ? tPage("cards.account", params)
+          : tPage("cards.accountEmpty");
+      case "maintenance":
+        return items.length
+          ? tPage("cards.maintenance", params)
+          : tPage("cards.maintenanceEmpty");
     }
   };
 
-  // 卡的清单跟着视图走：全部任务页多一张风险复核，主页不列这一类——列了卡就成了
-  // 点不到的数。
+  // 卡的清单跟着视图走：全部任务页多「风险」与「账号」两张，主页不列这两档——
+  // 列了卡就成了点不到的数。
   const cardTypes: readonly TodoType[] = isAll
-    ? [...TODO_FILTER_TYPES, "risk"]
+    ? TODO_ALL_TYPES
     : TODO_FILTER_TYPES;
 
   const todoMenu = (item: TodoRow) => {
@@ -782,27 +1085,37 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
     // 主按钮已经去租户页的（风险复核）不再重复列一次「查看租户」；没有租户号的
     // 也不列——一个跳不到地方的菜单项比没有更糟。
     const showTenant = tenantHref !== "" && item.href !== tenantHref;
+    const listHref = TODO_LIST_HREF[item.type];
+    const listLabel = listLabels[item.type];
+    const items = [
+      ...(showTenant
+        ? [
+            {
+              id: "tenant",
+              label: tShared("actions.viewTenant"),
+              icon: "buildings" as const,
+              onSelect: () => router.push(tenantHref),
+            },
+          ]
+        : []),
+      ...(listHref !== null && listLabel !== null
+        ? [
+            {
+              id: "list",
+              label: listLabel,
+              icon: "table" as const,
+              onSelect: () => router.push(listHref),
+            },
+          ]
+        : []),
+    ];
+    // 一项都没有就连触发器都不出：点开一个空菜单比没有这个按钮更糟。维护窗口那一
+    // 类正是这种行——它既没有租户，admin 里也没有它的列表页。
+    if (items.length === 0) return null;
     return (
       <ActionMenu
         label={tPage("actions.menuLabel", { code: item.code })}
-        items={[
-          ...(showTenant
-            ? [
-                {
-                  id: "tenant",
-                  label: tShared("actions.viewTenant"),
-                  icon: "buildings" as const,
-                  onSelect: () => router.push(tenantHref),
-                },
-              ]
-            : []),
-          {
-            id: "list",
-            label: actionLabels[item.type].list,
-            icon: "table" as const,
-            onSelect: () => router.push(TODO_LIST_HREF[item.type]),
-          },
-        ]}
+        items={items}
       />
     );
   };
@@ -844,10 +1157,10 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
 
   const sectionDescription = [
     tPage("section.summary", { count: formatNumber(todos.length) }),
-    // 主页把「本页列了几条」与「总共几条」的差额**说出来**：页头 badge 报五类全量，
-    // 这里只列四类，不点破就会被当成数字对不上。
+    // 主页把「本页列了几条」与「总共几条」的差额**说出来**：页头 badge 报全部档位
+    // 的全量，这里只列八档，不点破就会被当成数字对不上。
     !isAll && hiddenCount > 0
-      ? tPage("section.hiddenRisk", { count: formatNumber(hiddenCount) })
+      ? tPage("section.hiddenInAll", { count: formatNumber(hiddenCount) })
       : null,
     typeFilter !== "all"
       ? tPage("section.filteringType", { type: typeLabels[typeFilter] })
@@ -870,7 +1183,7 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
           }
           secondary={
             /* 标题行直接报总量，免得运营为了知道"还剩多少"去数统计卡。
-               **两个视图都报五类全量**（owner：「tag 显示 全部代办数量」）——
+               **两个视图都报十档全量**（owner：「tag 显示 全部代办数量」）——
                它是这件事的总数，不是本页列了几条，所以既不随筛选变、也不随
                视图变。主页与它的差额由区块说明点明。 */
             <Badge>
@@ -884,7 +1197,8 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
       summary={
         /* 统计卡就是分类筛选（设计稿 §4：「点卡片即筛选，下面的分段按钮就不要了——
            二选一」）。用 EntryCard 而不是 MetricGrid：前者整卡可点、自带键盘与
-           role=button，后者只报数。四张 / 五张随视图走，列数跟着卡数。 */
+           role=button，后者只报数。主页八张（4 列 × 2 行）、全部任务十张（5 列 × 2
+           行）——列数没动，是行数在动，所以两个视图的栅格类名与 owner 排的那版一样。 */
         <div
           className={
             isAll
@@ -1017,10 +1331,20 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
                 {
                   id: "severity",
                   header: tPage("columns.severity"),
+                  // 超时标摆在紧急度旁边而不是另开一列：七列是 owner 排定的，
+                  // 而「已超时」回答的正是这一列在回答的问题——这条有多急。
+                  // 窄屏下它换行到第二行，不去挤任务列。
                   cell: (item) => (
-                    <StatusBadge tone={SEVERITY_TONE[item.severity]} dot>
-                      {severityLabels[item.severity]}
-                    </StatusBadge>
+                    <span className="inline-flex flex-wrap items-center gap-2xs">
+                      <StatusBadge tone={SEVERITY_TONE[item.severity]} dot>
+                        {severityLabels[item.severity]}
+                      </StatusBadge>
+                      {item.escalated ? (
+                        <StatusBadge tone="danger">
+                          {tPage("severity.escalated")}
+                        </StatusBadge>
+                      ) : null}
+                    </span>
                   ),
                 },
                 {
@@ -1029,13 +1353,18 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
                   align: "left",
                   cell: (item) => {
                     const sentence = taskSentence(tPage, item);
+                    const href = item.href;
                     return (
                       <TableTitleCell
                         icon={TODO_TYPE_ICON[item.type]}
                         title={sentence}
                         description={item.secondary}
                         tooltip={`${sentence} · ${item.secondary}`}
-                        onTitleClick={() => router.push(item.href)}
+                        // admin 里没有落点的那一类，标题不做成可点的——
+                        // 句子本身已经说了去哪儿办。
+                        {...(href !== null
+                          ? { onTitleClick: () => router.push(href) }
+                          : {})}
                       />
                     );
                   },
@@ -1086,20 +1415,37 @@ export function OpsTodosPage({ scope = "queue" }: { scope?: TodoScope } = {}) {
                   id: "progress",
                   header: tPage("columns.progress"),
                   width: "sm",
-                  cell: (item) => progressLabels[item.progress],
+                  cell: (item) =>
+                    progressText(
+                      progressLabels,
+                      item.progress,
+                      tPage("unknown"),
+                    ),
                 },
                 {
                   id: "actions",
                   header: tPage("columns.actions"),
                   width: "sm",
-                  cell: (item) => (
-                    <span className="inline-flex items-center gap-xs">
-                      <Button size="sm" onClick={() => router.push(item.href)}>
-                        {actionLabels[item.type].primary}
-                      </Button>
-                      {todoMenu(item)}
-                    </span>
-                  ),
+                  cell: (item) => {
+                    const href = item.href;
+                    return (
+                      <span className="inline-flex flex-wrap items-center gap-xs">
+                        {href !== null ? (
+                          <Button size="sm" onClick={() => router.push(href)}>
+                            {actionLabels[item.kind]}
+                          </Button>
+                        ) : (
+                          /* admin 里没有这一类的落点（今天只有维护窗口）：说一句
+                             在哪儿办，不摆一个点了跳回原地的按钮。完整去处写在
+                             任务句里。 */
+                          <span className="text-body-sm text-muted-foreground">
+                            {tPage("actions.maintenanceElsewhere")}
+                          </span>
+                        )}
+                        {todoMenu(item)}
+                      </span>
+                    );
+                  },
                 },
               ]}
               rows={pageTodos}

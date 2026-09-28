@@ -2979,9 +2979,9 @@
   "opsTodosPage": {
     "header": {
       "queueTitle": "待办任务",
-      "queueDescription": "客户已申报付款的订单、等审核的退款、等审核的认证、没结的工单都在这里，按紧急程度排好，从上往下处理。",
+      "queueDescription": "有人在等我们动手的那些：收款、退款、认证、工单、订阅、发票、加油包、维护，按紧急程度排好，从上往下处理。",
       "allTitle": "全部任务",
-      "allDescription": "五类待办的全量清单，含只在本页出现的风险复核。",
+      "allDescription": "全部待办的全量清单，含只在本页出现的风险复核与账号注销。",
       "totalBadge": "任务 {count}"
     },
     "types": {
@@ -2989,7 +2989,12 @@
       "refund": "退款审核",
       "verification": "认证审核",
       "risk": "风险复核",
-      "ticket": "工单处理"
+      "ticket": "工单处理",
+      "subscription": "订阅逾期",
+      "invoice": "发票开具",
+      "addon": "加油包确认",
+      "account": "账号注销",
+      "maintenance": "维护超期"
     },
     "cards": {
       "loading": "读取中",
@@ -3003,13 +3008,23 @@
       "ticket": "{count} 张工单没结，最久等了 {wait}",
       "ticketEmpty": "没有没结的工单",
       "risk": "{count} 家租户要复核，最久等了 {wait}",
-      "riskEmpty": "没有要复核的租户"
+      "riskEmpty": "没有要复核的租户",
+      "subscription": "{count} 笔订阅逾期，最久等了 {wait}",
+      "subscriptionEmpty": "没有逾期的订阅",
+      "invoice": "{count} 张发票等处理，最久等了 {wait}",
+      "invoiceEmpty": "没有等处理的发票",
+      "addon": "{count} 笔加油包等确认，最久等了 {wait}",
+      "addonEmpty": "没有等确认的加油包",
+      "account": "{count} 个账号注销在办，最久等了 {wait}",
+      "accountEmpty": "没有在办的账号注销",
+      "maintenance": "{count} 个维护窗口超期，最久 {wait}",
+      "maintenanceEmpty": "没有超期的维护窗口"
     },
     "section": {
       "queueTitle": "任务队列",
       "allTitle": "任务明细",
       "summary": "按紧急程度排序，共 {count} 条",
-      "hiddenRisk": "另有 {count} 条风险复核在「全部任务」里",
+      "hiddenInAll": "另有 {count} 条（风险复核、账号注销）在「全部任务」里",
       "filteringType": "正在只看：{type}"
     },
     "filters": {
@@ -3024,7 +3039,8 @@
     "severity": {
       "urgent": "紧急",
       "attention": "关注",
-      "normal": "一般"
+      "normal": "一般",
+      "escalated": "已超时"
     },
     "columns": {
       "severity": "紧急度",
@@ -3040,10 +3056,23 @@
       "reprovision": "已收款 {amount}，重新开通权益",
       "followUpBalance": "跟进尾款：已收 {paid}，应付 {amount}",
       "followUpBalanceAmountOnly": "跟进尾款：应付 {amount}",
+      "orderPendingPaymentAging": "催客户支付 {amount}，订单一直没付",
       "refundAudit": "审核 {amount} 退款申请",
+      "refundExecute": "给客户打款 {amount}，退款已批准",
+      "refundProcessingStuck": "排查 {amount} 退款：卡在处理中",
+      "refundFailed": "重试 {amount} 退款：上次打款失败",
       "verification": "审核资质材料并给出结论",
       "risk": "复核风险状态，决定是否解除",
-      "ticket": "处理工单：{title}"
+      "ticket": "处理工单：{title}",
+      "ticketSla": "优先回复超时工单：{title}",
+      "subscriptionOverdueNoAmount": "跟进逾期订阅：催付或停服",
+      "invoiceApplying": "审核 {amount} 的开票申请",
+      "invoiceApproved": "开出 {amount} 的发票，已审批",
+      "addonPendingConfirm": "确认 {amount} 加油包已到账",
+      "deletionPending": "处理账号注销申请，确认没有遗留",
+      "purgeImminent": "核对即将永久清除的账号数据",
+      "maintenanceOverdue": "维护窗口已过计划结束时间：去运维平台「运行监控 · 维护窗口」结束维护",
+      "unknownKind": "处理 {code}：这一类待办还没有对应的说明"
     },
     "secondary": {
       "riskMeta": "风险 {risk} · {status}"
@@ -3057,7 +3086,19 @@
       "risk": "待复核",
       "ticketOpen": "待处理",
       "ticketProcessing": "处理中",
-      "ticketBlocked": "阻塞中"
+      "ticketBlocked": "阻塞中",
+      "orderAging": "2/5 · 等客户付款",
+      "refundExecute": "退款待打款",
+      "refundProcessing": "退款处理中",
+      "refundFailed": "退款打款失败",
+      "ticketSla": "响应超时",
+      "subscriptionOverdue": "订阅逾期",
+      "invoiceApplying": "开票待审核",
+      "invoiceApproved": "已审批待开票",
+      "addonPendingConfirm": "加油包待确认",
+      "deletionPending": "注销待处理",
+      "purgeImminent": "即将清除",
+      "maintenanceOverdue": "维护超期"
     },
     "wait": {
       "justNow": "刚刚",
@@ -3070,11 +3111,24 @@
       "goReview": "去审核",
       "goRecheck": "去复核",
       "goHandle": "去处理",
+      "goProvision": "去开通",
+      "goFollowUp": "去跟进",
+      "goRemind": "去催付",
+      "goPayout": "去打款",
+      "goInspect": "去排查",
+      "goRetry": "去重试",
+      "goIssue": "去开票",
+      "goConfirm": "去确认",
+      "maintenanceElsewhere": "在运维平台处理",
       "menuLabel": "{code} 的更多操作",
       "viewAllOrders": "查看全部订单",
       "viewAllVerifications": "查看全部认证",
       "viewAllTenants": "查看全部租户",
-      "viewAllTickets": "查看全部工单"
+      "viewAllTickets": "查看全部工单",
+      "viewAllSubscriptions": "查看全部订阅",
+      "viewAllInvoices": "查看全部发票",
+      "viewAllAddonOrders": "查看全部加油包",
+      "viewAllAccounts": "查看全部账号"
     },
     "empty": {
       "title": "今天没有要处理的任务",
