@@ -20,7 +20,12 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
 import { MailService } from "@vxture/core-mail";
+import { formatPrincipalNo } from "@vxture-platform/shared";
 import type { NotificationDispatcher } from "@vxture/service-notification";
+import {
+  PgNoticeRepository,
+  type CreateSystemNoticeInput,
+} from "@vxture/service-notice";
 import { CUSTOMER_NOTIFIER } from "../services/customer-notifications.wiring";
 import {
   SessionAggregator,
@@ -122,6 +127,116 @@ const PRODUCT_SEAT_ERRORS: Record<
   not_a_member: (reason) => new NotFoundException(reason),
 };
 
+/* ── 席位已满 → 一条运营通告（2026-09-28 第二批 C-3）──────────────────────────── */
+
+/**
+ * 本批热路径信号的 reference_type。与 platform-api 的 ops-notice.ts、订阅服务包的
+ * order.service 是同一个字面量（三处各一份）：它只做去重命名空间、不上屏，真漂了也只是
+ * 把键分到两个命名空间里，各自仍然一事一条。为一个字面量在三个包之间立一条依赖不值。
+ */
+const OPS_SIGNAL_REFERENCE_TYPE = "ops_signal";
+/** info 档保留 30 天后退出列表（不删行），与批一 / platform-api 同一个数。 */
+const OPS_NOTICE_INFO_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Asia/Shanghai 与 UTC 的固定时差（中国自 1991 年起无夏令时，全年恒 +8）。
+ * 与 platform-api 的 ops-notice.opsNoticeDayKey 同一口径、各一份：为一个偏移量在
+ * 两个 BFF 之间立依赖不值，但**口径必须同**，所以两处互相注明。
+ */
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * 「一天一条」的日期键：**Asia/Shanghai 日历日**，不是 UTC 日。**导出仅为可测**。
+ *
+ * 取 UTC 日的话，北京时间 08:00 前撞上限写的那一条落进前一天那格：同一个租户同一个
+ * 产品在 00:00–08:00 与 08:00 之后各播一条（跨午夜重复播），而看这块板的人在北京。
+ * 审计巡检那一侧早就是这个口径（SQL 里 at time zone Asia/Shanghai）。
+ */
+export function seatNoticeDayKey(at: Date): string {
+  return new Date(at.getTime() + SHANGHAI_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * 席位通告要的四样可视信息。**导出仅为可测**：假 pool 不解析 SQL，谓词只能靠字面断言钉住
+ * （与 operator-mirror 的 MIRROR_* 同一手法）。
+ *
+ * 只读 tenancy 与 product 两处：console-bff 的库角色两个 schema 都在授权面内
+ * （97_service_roles.sql），不需要新的 GRANT。
+ */
+export const SEAT_LIMIT_SUBJECT_SQL = `select t.tenant_no::text as tenant_no,
+              coalesce(nullif(t.display_name, ''), t.name) as tenant_name,
+              w.name as workspace_name,
+              p.product_code, p.product_name
+         from tenancy.workspaces w
+         join tenancy.tenants t on t.id = w.tenant_id
+         left join product.products p on p.id = $2
+        where w.id = $1`;
+
+export interface SeatLimitNoticeFacts {
+  readonly tenantNo: string | null;
+  readonly tenantName: string | null;
+  readonly workspaceName: string | null;
+  readonly productCode: string | null;
+  readonly productName: string | null;
+  /** 去重键里的当天（Asia/Shanghai 日历日，seatNoticeDayKey 算的）。 */
+  readonly dayKey: string;
+  readonly now?: Date;
+}
+
+/**
+ * 纯函数：事实 → 一条待写的系统通告。
+ *
+ * info 而不是 warning：上限是**按设计**拦的（owner 2026-09-27 裁定②「超限硬拦截」），
+ * 客户撤一个席位或换更高档位就能继续，运营这边不必动手——但要知道有人撞到了，
+ * 这正是「该升档」的信号。planes 只给 admin：客户经营事实。
+ *
+ * 一天一条，不是一次一条：同一个空间里可能连着点几个成员，每次都播会刷屏；
+ * 而「哪一个成员没指派上」不该进标题——当天多半不止一个，写一个名字会误导。
+ */
+export function composeSeatLimitNotice(
+  facts: SeatLimitNoticeFacts,
+): CreateSystemNoticeInput {
+  const name = facts.tenantName?.trim() ?? "";
+  /* 前缀走 @shared 的那一份实现（T-）：裸的十位数字在屏幕上分不出是租户还是工作空间，
+     复制去搜也搜不到——别处显示的都是带前缀的。referenceId 里仍用裸号（那是键，不上屏）。 */
+  const tenantNo = formatPrincipalNo(facts.tenantNo, "tenant");
+  const who =
+    tenantNo && name
+      ? `${name}（${tenantNo}）`
+      : tenantNo
+        ? `租户 ${tenantNo}`
+        : name || "（租户未知）";
+  const product =
+    facts.productName && facts.productCode
+      ? `${facts.productName}（${facts.productCode}）`
+      : facts.productName || facts.productCode || "（产品未知）";
+  const ws = facts.workspaceName?.trim() || "（空间名未知）";
+  const now = facts.now ?? new Date();
+  return {
+    targetPlanes: ["admin"],
+    severity: "info",
+    title: `产品席位已满：${who} · ${product}`.slice(0, 256),
+    body: [
+      `${who} 在工作空间 ${ws} 给成员指派 ${product} 的席位时被席位上限拦下` +
+        "（库里的 trg_product_seats_enforce_limit 判的，不是超额计费）。",
+      "客户侧的出路是先撤一个在用席位，或换席位更多的档位；" +
+        "运营侧可在该产品的套餐版本里核对 seat.max 这一项是否与实际售出的一致。",
+      `同一租户同一产品当天只播一条（${facts.dayKey}）。`,
+    ].join("\n"),
+    link: facts.tenantNo
+      ? `/tenants/${encodeURIComponent(facts.tenantNo)}`
+      : null,
+    referenceType: OPS_SIGNAL_REFERENCE_TYPE,
+    /*
+     * 去重键：seat_limit:{tenant_no}:{product_code}:{当天}。
+     * 长度 = 11 + ≤19 + 1 + ≤32 + 1 + 10，远低于 reference_id 的 128 列宽。
+     * 解析不出可视码时用 unknown 占位——宁可当天多播一条，也不要因为查不到名字就不播。
+     */
+    referenceId: `seat_limit:${facts.tenantNo ?? "unknown"}:${facts.productCode ?? "unknown"}:${facts.dayKey}`,
+    expiresAt: new Date(now.getTime() + OPS_NOTICE_INFO_TTL_MS),
+  };
+}
+
 const ACCEPT_INVITATION_ERRORS: Record<
   AcceptInvitationRejection,
   (reason: string) => Error
@@ -143,6 +258,10 @@ const ACCEPT_INVITATION_ERRORS: Record<
 @Controller("api/iam")
 export class IamRouter {
   private readonly logger = new Logger(IamRouter.name);
+  /** 运营通告的写侧（席位已满这一条用），懒建；见 noteSeatLimit。 */
+  private seatNotices: {
+    createSystemNotice(input: CreateSystemNoticeInput): Promise<unknown>;
+  } | null = null;
 
   constructor(
     @Inject(SessionAggregator)
@@ -155,6 +274,45 @@ export class IamRouter {
     @Inject(CUSTOMER_NOTIFIER)
     private readonly notifier: NotificationDispatcher,
   ) {}
+
+  /**
+   * 席位已满 → 一条运营通告。**永不抛**：客户要拿到的是那个 409，
+   * 通告写不进去只是运营少一条信号，两者不可交换。
+   *
+   * 写侧懒建：本 router 手上的池就是那个库（同名 DI 令牌在一个容器里会互相覆盖，
+   * 所以不引 NoticeModule 的池令牌），与 services/notification/dispatch 同一手法。
+   * 解析不到可视码也照发——少一个名字的通告仍然是一条通告。
+   */
+  private async noteSeatLimit(
+    workspaceId: string,
+    productId: string,
+  ): Promise<void> {
+    try {
+      const res = await this.pool.query<{
+        tenant_no: string | null;
+        tenant_name: string | null;
+        workspace_name: string | null;
+        product_code: string | null;
+        product_name: string | null;
+      }>(SEAT_LIMIT_SUBJECT_SQL, [workspaceId, productId]);
+      const row = res.rows[0];
+      if (!this.seatNotices) {
+        this.seatNotices = new PgNoticeRepository(this.pool);
+      }
+      await this.seatNotices.createSystemNotice(
+        composeSeatLimitNotice({
+          tenantNo: row?.tenant_no ?? null,
+          tenantName: row?.tenant_name ?? null,
+          workspaceName: row?.workspace_name ?? null,
+          productCode: row?.product_code ?? null,
+          productName: row?.product_name ?? null,
+          dayKey: seatNoticeDayKey(new Date()),
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(`席位已满的运营通告写入失败 — ${String(err)}`);
+    }
+  }
 
   /** 邀请链接:CONSOLE_BASE_URL + 语言前缀(console 路由 localePrefix=always)+ 接受页。 */
   private inviteLink(token: string, language: string | null): string {
@@ -808,7 +966,17 @@ export class IamRouter {
       body.userId,
     );
     if (!result) throw new NotFoundException("Tenant context is required");
-    if (!result.ok) throw PRODUCT_SEAT_ERRORS[result.reason](result.reason);
+    if (!result.ok) {
+      /*
+       * 席位满了这件事此前**库里一行都不留**：库的触发器抛 VX409、这一层翻成 409 给客户，
+       * 运营那边看不出任何痕迹（2026-09-28 owner「把信息做全做多」）。所以在抛之前顺手写
+       * 一条通告——先写后抛，且写失败不改变这个 409（noteSeatLimit 永不抛）。
+       */
+      if (result.reason === "seat_limit_reached") {
+        await this.noteSeatLimit(workspaceId, body.productId);
+      }
+      throw PRODUCT_SEAT_ERRORS[result.reason](result.reason);
+    }
 
     auditCustomerAction(this.pool, req, {
       action: "tenant.workspace.product_seat_grant",

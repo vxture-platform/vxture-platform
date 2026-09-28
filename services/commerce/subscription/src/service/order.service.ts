@@ -22,7 +22,11 @@ import {
   type DiscountEffect,
   type ReservedVoucher,
 } from "@vxture/service-promotion";
-import { addCyclePeriod, renewalRestartsPeriod } from "@vxture-platform/shared";
+import {
+  addCyclePeriod,
+  formatPrincipalNo,
+  renewalRestartsPeriod,
+} from "@vxture-platform/shared";
 import { PgOrderRepository } from "../repository/pg-order.repository";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import { SubscriptionService } from "./subscription.service";
@@ -34,6 +38,10 @@ import {
   type CustomerNotifyInput,
 } from "./customer-notifier";
 import type { OpsAlerter } from "./ops-alerter";
+import type {
+  CreateSystemNoticeInput,
+  CreateSystemNoticeResult,
+} from "@vxture/service-notice";
 import {
   DEFAULT_CONSUMABLE_SHARE,
   computeProration,
@@ -97,6 +105,180 @@ export function addCycle(base: Date, unit: string, count: number): Date {
   return addCyclePeriod(base, unit, count);
 }
 
+/* ── 自动续费的两条「库里没有行可观测」的信号（2026-09-28 第二批 C-1）────────── */
+
+/**
+ * 运营通告的写侧 + 跨 schema 的可视码解析。装配处注入（platform-api 的
+ * operator-alerts.wiring），与 setCustomerNotifier / setOpsAlerter 同一手法：
+ * SubscriptionModule 是自包含模块，跨模块 DI 令牌在这里看不见。未注入 = 不写（本地 / 单测）。
+ *
+ * 为什么连「租户叫什么」也走这个口子：本包的池只碰 billing / metering / product，
+ * tenant_no 与显示名住 tenancy —— 那是装配处那一侧的授权面。而通告的标题、正文、链接里
+ * 一律不许出现 UUID（全站铁律），所以「这是谁的订阅」只能由能读 tenancy 的那一侧回答。
+ */
+export interface OpsNoticePort {
+  createSystemNotice(
+    input: CreateSystemNoticeInput,
+  ): Promise<CreateSystemNoticeResult>;
+  resolveTenantIdentity(
+    tenantId: string,
+  ): Promise<{ no: string | null; name: string | null }>;
+}
+
+/**
+ * 本批热路径信号的 reference_type。与 platform-api 的 ops-notice.ts 是同一个字面量：
+ * 它只做去重命名空间、不上屏，两边真漂了也只是把键分到两个命名空间里（各自仍然一事一条），
+ * 不会撞成一条。跨包共享一个常量的代价比这个后果大，所以留两处、互相注明。
+ */
+export const OPS_SIGNAL_REFERENCE_TYPE = "ops_signal";
+
+/**
+ * 自动续费信号的事实。`subscriptionId` 只进去重键，不进标题正文。
+ *
+ * 这里**没有** planVersionId：两支的宾语都是「这一条订阅」，套餐版本只用来查显示名
+ * （那一步在 noteAutoRenew 里，用的是候选行）。留一个没人读的 uuid 字段等于把
+ * 「按版本去重」那条已经修掉的缺陷摆回手边。
+ */
+export interface AutoRenewNoticeFacts {
+  /** failed = 开单那一步抛了；no_price = 没有同周期价目，整条跳过。 */
+  readonly kind: "failed" | "no_price";
+  readonly subscriptionId: string;
+  readonly productName: string;
+  readonly planName: string;
+  readonly cycleUnit: string;
+  readonly cycleCount: number;
+  readonly currency: string;
+  readonly endAt: Date;
+  readonly tenant: { no: string | null; name: string | null };
+  /** 失败那一支的原因文本；跳过那一支没有。 */
+  readonly error?: string | null;
+}
+
+/**
+ * 通告里的租户称呼：显示名（T- 可视码）。两样都没有就说未知，不写 UUID。
+ *
+ * 前缀走 @shared 的 `formatPrincipalNo`（U- / T- / W- 的唯一实现），不在这里拼：
+ * 三种主体码都是 10 位纯数字，裸号在屏幕上分不出是哪一类，复制去搜也搜不到——
+ * 别处显示的是带前缀的。platform-api 的 opsNoticeTenantLabel 与 console-bff 的
+ * composeSeatLimitNotice 是同一函数的另两份，三处都经这一个格式化器。
+ */
+function noticeTenantLabel(tenant: {
+  no: string | null;
+  name: string | null;
+}): string {
+  const name = tenant.name?.trim() ?? "";
+  const no = formatPrincipalNo(tenant.no, "tenant");
+  if (no && name) return `${name}（${no}）`;
+  if (no) return `租户 ${no}`;
+  if (name) return name;
+  return "（租户未知）";
+}
+
+/**
+ * 去重键与正文里的日期：**Asia/Shanghai 日历日**，不是 UTC 日。
+ *
+ * 取 UTC 日的话，北京时间 08:00 之前写的那一条落进前一天那格——同一件事在
+ * 00:00–08:00 与 08:00 之后各播一条（跨午夜重复播），而看这块板的人在北京。
+ *
+ * 形状借 `formatNotifyDate`（客户通知的日期参数，严格 YYYY-MM-DD、Asia/Shanghai）：
+ * 本包只该有**一份**「北京日历日」的实现，而那一份正是它——check-datetime-discipline
+ * 对本包也只豁免了 customer-notifier 这一个文件用 Intl。
+ */
+function noticeDateKey(at: Date): string {
+  return formatNotifyDate(at);
+}
+
+/** uuid 形状的子串（全局 + 忽略大小写：一段错误文本里可能带好几个）。 */
+const UUID_IN_TEXT_RE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/**
+ * 把要嵌进通告正文的**外来文本**里的 uuid 抹掉。与 platform-api 的
+ * `notifications/ops-notice.ts` 里的 redactUuids 是同一个函数的另一份（跨包共享一个
+ * 三行函数要立一条依赖，代价比这个后果大；两处互相注明，标记文字也一致）。
+ *
+ * 为什么需要：通告的标题、正文、链接里一律不出现 UUID（全站铁律），而自动续费失败
+ * 那一支偏偏要把**开单抛出来的原文**放进正文，那正是最常带 uuid 的东西
+ * （「订阅 xxx 不存在」、pg 唯一键冲突把整行键值打出来）。铁律不能只靠「我们自己不写」。
+ *
+ * 只抹 uuid 形状：可视码、订单号、SQLSTATE 都要留着，那是运营据以定位的东西。
+ * 抹在**截断之前**：先截后抹会留下半截 uuid，半截仍然是一串没人看得懂也搜不到的字。
+ */
+function redactUuids(text: string): string {
+  return text.replace(UUID_IN_TEXT_RE, "（已隐去内部 id）");
+}
+
+/**
+ * 纯函数：事实 → 一条待写的系统通告。单测逐支断言的就是它。
+ *
+ * 两支都是 warning、都不过期：一个到期日只会来一次，通告留着直到有人处理它
+ * （批一的口径：在等运营动手的那一档不设过期）。
+ *
+ * 链接：失败那支给 admin 的租户页（`/tenants/{tenant_no}`，两个平面里只有 admin 有这页，
+ * 而这支只投 admin）。跳过那支同时投 opera（缺价目是目录侧的事），**相对路径在两个平面里
+ * 各自解析**，opera 没有租户页，给了就是一个点开 404 的链接——所以那支不给链接，
+ * 正文直说去哪补价目。
+ */
+export function composeAutoRenewNotice(
+  facts: AutoRenewNoticeFacts,
+): CreateSystemNoticeInput {
+  const who = noticeTenantLabel(facts.tenant);
+  const plan = `${facts.productName} ${facts.planName}`.trim();
+  const cycle = `${facts.cycleCount} ${facts.cycleUnit}`;
+  const endAt = noticeDateKey(facts.endAt);
+  const failed = facts.kind === "failed";
+  const title = failed
+    ? `自动续费开单失败：${who} · ${plan}（${endAt} 到期）`
+    : `自动续费缺同周期价目已跳过：${who} · ${plan}（${endAt} 到期）`;
+  const body = failed
+    ? [
+        `${who} 的订阅 ${plan}（周期 ${cycle}，${endAt} 到期）在系统自动开续费单时失败。`,
+        "客户不会收到这张续费单，到期即按到期处理；请在运营台为该订阅手工开一张续费单，" +
+          "或先查 platform-api 日志定位失败原因。",
+        facts.error
+          ? `失败原因：${redactUuids(facts.error).slice(0, 500)}`
+          : "（这一轮没有留下原因文本。）",
+      ].join("\n")
+    : [
+        `${who} 的订阅 ${plan}（周期 ${cycle}，${endAt} 到期）没有 ${cycle} / ${facts.currency} 的价目行，` +
+          "系统无法定价，本轮已跳过，且不会再重试。",
+        "两条路：在该套餐版本里补一条同周期价目（补上后下一轮自动开单），" +
+          "或由运营手工为这位客户续。",
+      ].join("\n");
+  return {
+    targetPlanes: failed ? ["admin"] : ["admin", "opera"],
+    severity: "warning",
+    // 列宽 varchar(256)；租户名与套餐名来自库里，正常远不到，截断只是兜底。
+    title: title.slice(0, 256),
+    body,
+    link:
+      failed && facts.tenant.no
+        ? `/tenants/${encodeURIComponent(facts.tenant.no)}`
+        : null,
+    referenceType: OPS_SIGNAL_REFERENCE_TYPE,
+    /*
+     * 去重键（reference_id 是 varchar(128)）：**两支都按订阅**。
+     *   失败 → autorenew_failed:{订阅 uuid}:{到期日}   = 16 + 36 + 1 + 10 = 63
+     *   跳过 → autorenew_no_price:{订阅 uuid}:{到期日} = 18 + 36 + 1 + 10 = 65
+     * 两支都定长且远低于 128，所以这里不做长度收口（配额那条键含 metric_key 才需要）。
+     * 一个到期日一条：同一轮扫多次、进程重启重扫都落成 inserted: false。
+     *
+     * 跳过那支原来按**套餐版本**去重（`planVersionId`），而它的标题和正文点的是
+     * **某一个租户**的某一条订阅。缺同周期价目是套餐版本的毛病，所以同一版本上所有
+     * 到期日相同的订阅会一起撞上它——第一条写进去，其余的被表上那条唯一索引判成
+     * inserted: false 静默吞掉。于是「谁的自动续费失效了」只报得出第一个客户，后面
+     * 几个连一行日志之外的痕迹都没有；而这条通告存在的理由正是「客户到期就停了、
+     * 没人知道是谁」。键的粒度必须与文案的宾语一致：文案说的是一条订阅，键就按订阅。
+     * 想按版本收敛一条「这个版本缺价目」的通告，那是另一条信号（宾语是版本，正文里
+     * 不该出现租户名），不是把这条的键换粗。
+     */
+    referenceId: failed
+      ? `autorenew_failed:${facts.subscriptionId}:${endAt}`
+      : `autorenew_no_price:${facts.subscriptionId}:${endAt}`,
+    expiresAt: null,
+  };
+}
+
 @Injectable()
 export class OrderService {
   private readonly logger = new Logger(OrderService.name);
@@ -106,6 +288,8 @@ export class OrderService {
   private notifier: CustomerNotifier | null = null;
   /** 运营告警（#231）：装配处 setOpsAlerter 注入；未注入 = 不发。 */
   private opsAlerter: OpsAlerter | null = null;
+  /** 运营通告（2026-09-28 第二批）：装配处 setOpsNoticePort 注入；未注入 = 不写。 */
+  private opsNotices: OpsNoticePort | null = null;
   /** 自愈最后一次失败的原因，供放弃时报给运营（内存，随 reconcileFailures 同生命周期）。 */
   private readonly reconcileLastError = new Map<string, string>();
 
@@ -124,6 +308,10 @@ export class OrderService {
 
   setOpsAlerter(alerter: OpsAlerter | null): void {
     this.opsAlerter = alerter;
+  }
+
+  setOpsNoticePort(port: OpsNoticePort | null): void {
+    this.opsNotices = port;
   }
 
   /**
@@ -750,6 +938,9 @@ export class OrderService {
         this.logger.warn(
           `auto-renew: subscription ${c.subscriptionId} has no ${c.cycleCount} ${c.cycleUnit} price row — skipped (manual renewal)`,
         );
+        // 运营侧信号（2026-09-28）：这条跳过此前只有一行日志，库里不留任何行——
+        // 没人在看日志，客户的自动续费就这么静默失效了。通告永不抛，见 noteAutoRenew。
+        await this.noteAutoRenew("no_price", c, null);
         continue;
       }
       try {
@@ -823,9 +1014,65 @@ export class OrderService {
         this.logger.error(
           `auto-renew: subscription ${c.subscriptionId} failed — ${String(err)}`,
         );
+        // 同上：开单失败也不留行。一条 candidate 失败不影响后面的（本轮 catch 之内），
+        // 通告本身失败也不影响这一条——两层都不抛。
+        await this.noteAutoRenew("failed", c, String(err));
       }
     }
     return { created, fulfilled, skipped };
+  }
+
+  /**
+   * 自动续费的两条信号 → 一条运营通告。**永不抛**：通告写不进去是运营侧的缺口，
+   * 把续费这一轮打断是另一回事，两者不可交换（与 reportGaveUp 同一条纪律）。
+   *
+   * 三步各自降级：套餐显示名查不到用候选里的套餐名兜底，租户号解析不到就写「租户未知」，
+   * 落库失败只记日志。少一个名字的通告仍然是一条通告；不发才是缺口。
+   */
+  private async noteAutoRenew(
+    kind: "failed" | "no_price",
+    candidate: {
+      subscriptionId: string;
+      planVersionId: string;
+      tenantId: string;
+      planName: string;
+      cycleUnit: string;
+      cycleCount: number;
+      currency: string;
+      endAt: Date;
+    },
+    error: string | null,
+  ): Promise<void> {
+    const port = this.opsNotices;
+    if (!port) return;
+    try {
+      const [display, tenant] = await Promise.all([
+        this.orders
+          .getPlanDisplay(candidate.planVersionId)
+          .catch(() => ({ productName: "—", planName: candidate.planName })),
+        port
+          .resolveTenantIdentity(candidate.tenantId)
+          .catch(() => ({ no: null, name: null })),
+      ]);
+      await port.createSystemNotice(
+        composeAutoRenewNotice({
+          kind,
+          subscriptionId: candidate.subscriptionId,
+          productName: display.productName,
+          planName: display.planName,
+          cycleUnit: candidate.cycleUnit,
+          cycleCount: candidate.cycleCount,
+          currency: candidate.currency,
+          endAt: candidate.endAt,
+          tenant,
+          error,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `auto-renew: subscription ${candidate.subscriptionId} 的运营通告写入失败（${kind}）— ${String(err)}`,
+      );
+    }
   }
 
   // ── 退款（product_330 §5，owner 决策 3）──────────────────────────────────────

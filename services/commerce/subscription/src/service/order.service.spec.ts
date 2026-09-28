@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ConflictException, NotFoundException } from "@nestjs/common";
-import { OrderService } from "./order.service";
+import { OrderService, composeAutoRenewNotice } from "./order.service";
 import type { OrderRecord, RefundRecordView } from "../types/order.types";
 import type {
   ProrationBasis,
@@ -1474,5 +1474,256 @@ describe("订单取消 / 逾期的通知", () => {
       actorId: "u-1",
     });
     expect(result.status).toBe("cancelled");
+  });
+});
+
+/**
+ * 自动续费的两条运营信号（2026-09-28 第二批 C-1）。
+ *
+ * 这两支此前**只有一行日志**：客户开着自动续费，到期前系统开不出单（或缺同周期价目直接
+ * 跳过），库里不留任何行，运营那边看不出任何异常——客户到期就停了，谁都不知道为什么。
+ * 所以钉三件：两支各写一条、去重键一个到期日一条、以及**通告失败不许打断这一轮续费**。
+ */
+describe("OrderService.runAutoRenewalPass 的运营通告 (C-1)", () => {
+  const END_AT = new Date("2026-10-05T00:00:00.000Z");
+
+  const candidate = (over: Record<string, unknown> = {}) => ({
+    subscriptionId: "sub-1",
+    tenantId: "t-1",
+    workspaceId: WS,
+    productId: "prod-1",
+    planVersionId: PV_PRO,
+    cycleUnit: "month",
+    cycleCount: 1,
+    endAt: END_AT,
+    status: "active",
+    kind: "paid",
+    createdById: "u-1",
+    currency: "CNY",
+    planName: "Pro",
+    price: "100.00",
+    ...over,
+  });
+
+  /** 端口的真实形状（从 setter 的参数取，避免在 spec 里另抄一份签名）。 */
+  type NoticePort = NonNullable<
+    Parameters<OrderService["setOpsNoticePort"]>[0]
+  >;
+
+  function buildWithPort(
+    cands: Record<string, unknown>[],
+    port: Partial<NoticePort> = {},
+  ) {
+    const base = build(
+      order({ intent: "renew", fromSubscriptionId: "sub-1" }),
+      sub({ planVersionId: PV_PRO, endAt: new Date() }),
+    );
+    const orders = base.orders as typeof base.orders & {
+      findAutoRenewCandidates: ReturnType<typeof vi.fn>;
+    };
+    orders.findAutoRenewCandidates = vi.fn(async () => cands);
+    const createSystemNotice = vi.fn(
+      port.createSystemNotice ??
+        (async () => ({ inserted: true, id: "notice-1" })),
+    );
+    const resolveTenantIdentity = vi.fn(
+      port.resolveTenantIdentity ??
+        (async () => ({ no: "2000000107", name: "示例科技" })),
+    );
+    base.service.setOpsNoticePort({
+      createSystemNotice,
+      resolveTenantIdentity,
+    });
+    return { ...base, orders, createSystemNotice, resolveTenantIdentity };
+  }
+
+  it("缺同周期价目：warning、投 admin + opera、去重键按订阅 × 到期日", async () => {
+    const { service, createSystemNotice } = buildWithPort([
+      candidate({ price: null }),
+    ]);
+    const out = await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(out.skipped).toBe(1);
+    expect(createSystemNotice).toHaveBeenCalledTimes(1);
+    const notice = createSystemNotice.mock.calls[0]![0];
+    expect(notice.severity).toBe("warning");
+    expect(notice.targetPlanes).toEqual(["admin", "opera"]);
+    expect(notice.referenceType).toBe("ops_signal");
+    expect(notice.referenceId).toBe("autorenew_no_price:sub-1:2026-10-05");
+    // opera 里没有租户页，相对路径在两个平面各自解析 → 这一支不给链接。
+    expect(notice.link).toBeNull();
+    /* 租户码上屏带 T-（@shared 的 formatPrincipalNo）：裸的十位数字分不出主体类别。 */
+    expect(notice.title).toContain("示例科技（T-2000000107）");
+    expect(notice.body).toContain("1 month / CNY");
+  });
+
+  /*
+   * 同一个套餐版本上有几条订阅同一天到期，是**常态**（缺同周期价目是那个版本的毛病，
+   * 所以该版本下每一条自动续费的订阅都会走到这一支）。
+   *
+   * 去重键原来按 `planVersionId` × 到期日，而标题与正文点的是某一个租户的某一条订阅：
+   * 于是第一条写进去，其余的被 operator_notices 上那条唯一索引判成 inserted: false
+   * 静默吞掉——运营只看得见第一个客户，后面几个「自动续费失效了」谁都不知道。
+   * 而这条通告存在的全部理由就是「客户到期就停了、没人知道是谁」。
+   */
+  it("同一套餐版本、同一到期日的两条订阅：两条通告都发得出去", async () => {
+    const { service, createSystemNotice } = buildWithPort([
+      candidate({ price: null, subscriptionId: "sub-1", tenantId: "t-1" }),
+      candidate({ price: null, subscriptionId: "sub-2", tenantId: "t-2" }),
+    ]);
+    const out = await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(out.skipped).toBe(2);
+    expect(createSystemNotice).toHaveBeenCalledTimes(2);
+    const keys = createSystemNotice.mock.calls.map(
+      (c) => (c[0] as { referenceId: string }).referenceId,
+    );
+    // 两个键不同才有两条；相同就是同一条挡住另一条（唯一索引吞掉后者）。
+    expect(keys).toEqual([
+      "autorenew_no_price:sub-1:2026-10-05",
+      "autorenew_no_price:sub-2:2026-10-05",
+    ]);
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it("开单失败：warning、只投 admin、链接走 tenant_no、正文带失败原因", async () => {
+    const { service, orders, createSystemNotice } = buildWithPort([
+      candidate(),
+    ]);
+    orders.createOrder.mockRejectedValueOnce(
+      new ConflictException("dup order"),
+    );
+    await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(createSystemNotice).toHaveBeenCalledTimes(1);
+    const notice = createSystemNotice.mock.calls[0]![0];
+    expect(notice.targetPlanes).toEqual(["admin"]);
+    expect(notice.referenceId).toBe("autorenew_failed:sub-1:2026-10-05");
+    expect(notice.link).toBe("/tenants/2000000107");
+    expect(notice.body).toContain("dup order");
+    expect(notice.expiresAt).toBeNull();
+  });
+
+  it("通告写炸了：这一轮的计数与后面的候选都不受影响", async () => {
+    const createSystemNotice = async () => {
+      throw new Error("42501 permission denied");
+    };
+    const { service } = buildWithPort(
+      [candidate({ price: null }), candidate({ subscriptionId: "sub-2" })],
+      { createSystemNotice },
+    );
+    const out = await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(out).toEqual({ created: 1, fulfilled: 0, skipped: 1 });
+  });
+
+  it("租户解析炸了也照发（少一个名字仍然是一条通告）", async () => {
+    const resolveTenantIdentity = async () => {
+      throw new Error("relation tenancy.tenants does not exist");
+    };
+    const { service, createSystemNotice } = buildWithPort(
+      [candidate({ price: null })],
+      { resolveTenantIdentity },
+    );
+    await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    const notice = createSystemNotice.mock.calls[0]![0];
+    expect(notice.title).toContain("（租户未知）");
+  });
+
+  it("套餐显示名查不到：回落到候选里的套餐名，不因此不发", async () => {
+    const { service, orders, createSystemNotice } = buildWithPort([
+      candidate({ price: null, planName: "候选里的 Pro" }),
+    ]);
+    orders.getPlanDisplay.mockRejectedValueOnce(new Error("no such plan"));
+    await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(createSystemNotice.mock.calls[0]![0].title).toContain(
+      "候选里的 Pro",
+    );
+  });
+
+  it("没注入端口（本地 / 单测）：一条都不写，也不炸", async () => {
+    const base = build(
+      order({ intent: "renew", fromSubscriptionId: "sub-1" }),
+      sub({ planVersionId: PV_PRO, endAt: new Date() }),
+    );
+    const orders = base.orders as typeof base.orders & {
+      findAutoRenewCandidates: ReturnType<typeof vi.fn>;
+    };
+    orders.findAutoRenewCandidates = vi.fn(async () => [
+      candidate({ price: null }),
+    ]);
+    const out = await base.service.runAutoRenewalPass({
+      leadDays: 7,
+      graceDays: 3,
+    });
+    expect(out.skipped).toBe(1);
+  });
+
+  it("composeAutoRenewNotice 不把 uuid 写进标题、正文或链接", () => {
+    const notice = composeAutoRenewNotice({
+      kind: "failed",
+      subscriptionId: "11111111-1111-4111-8111-111111111111",
+      productName: "Karda",
+      planName: "专业版",
+      cycleUnit: "month",
+      cycleCount: 1,
+      currency: "CNY",
+      endAt: END_AT,
+      tenant: { no: "2000000107", name: "示例科技" },
+      error: "boom",
+    });
+    for (const text of [notice.title, notice.body, notice.link ?? ""]) {
+      expect(text).not.toContain("11111111-1111-4111-8111-111111111111");
+    }
+    // uuid 只许待在去重键里。reference_id 是 varchar(128)，这两支恒 65 字以内。
+    expect(notice.referenceId).toContain(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(notice.referenceId.length).toBeLessThanOrEqual(128);
+  });
+
+  /*
+   * 失败那一支要把**开单抛出来的原文**放进正文，而那正是最常带 uuid 的东西
+   * （pg 的唯一键冲突会把整行键值打出来）。「我们自己不写 uuid」守不住这一半，
+   * 必须在引入外部文本的那一刻过一遍。
+   */
+  it("失败原因里的 uuid 被抹掉，其余定位线索留着", () => {
+    const notice = composeAutoRenewNotice({
+      kind: "failed",
+      subscriptionId: "11111111-1111-4111-8111-111111111111",
+      productName: "Karda",
+      planName: "专业版",
+      cycleUnit: "month",
+      cycleCount: 1,
+      currency: "CNY",
+      endAt: END_AT,
+      tenant: { no: "2000000107", name: "示例科技" },
+      error:
+        'duplicate key value violates unique constraint "uidx_orders_live" ' +
+        "Key (subscription_id)=(11111111-1111-4111-8111-111111111111)",
+    });
+    expect(notice.body).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    expect(notice.body).toContain("已隐去内部 id");
+    expect(notice.body).toContain("uidx_orders_live");
+  });
+
+  /*
+   * 到期日按 Asia/Shanghai 判：北京 10/01 00:30 到期的订阅，UTC 看是 09/30 16:30。
+   * 按 UTC 日算，键与文案上的日期都会写成 09-30——差一天的到期日是运营核对不出来的
+   * 那种错，而键跨午夜还会把同一件事播两条。
+   */
+  it("到期日与去重键都取北京日历日，不取 UTC 日", () => {
+    const notice = composeAutoRenewNotice({
+      kind: "no_price",
+      subscriptionId: "sub-9",
+      productName: "Karda",
+      planName: "专业版",
+      cycleUnit: "month",
+      cycleCount: 1,
+      currency: "CNY",
+      endAt: new Date("2026-09-30T16:30:00.000Z"),
+      tenant: { no: "2000000107", name: "示例科技" },
+      error: null,
+    });
+    expect(notice.referenceId).toBe("autorenew_no_price:sub-9:2026-10-01");
+    expect(notice.title).toContain("2026-10-01 到期");
   });
 });

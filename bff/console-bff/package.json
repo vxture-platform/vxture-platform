@@ -32,6 +32,7 @@
     "@vxture/service-billing": "workspace:*",
     "@vxture/service-iam": "workspace:*",
     "@vxture/service-notification": "workspace:*",
+    "@vxture/service-notice": "workspace:*",
     "@vxture/service-organization": "workspace:*",
     "@vxture/service-promotion": "workspace:*",
     "@vxture/service-review": "workspace:*",

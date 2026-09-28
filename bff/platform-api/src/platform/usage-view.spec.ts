@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildConsumeResponse,
+  composeQuotaExhaustedNotice,
   parseConsumeBody,
   parseGaugeBody,
+  quotaPeriodStartKey,
   type EngineConsumeResult,
   type PoolIdentity,
 } from "./usage-view";
@@ -243,5 +245,159 @@ describe("parseGaugeBody (D5 gauge body)", () => {
     ["invalid_observed_at", { observed_at: undefined }],
   ])("rejects %s", (code, override) => {
     expect(() => parseGaugeBody({ ...valid, ...override })).toThrow(code);
+  });
+});
+
+/**
+ * 配额耗尽的运营通告（2026-09-28 第二批 C-2）。
+ *
+ * 这一条钉三件事，因为三件都会**静默地坏**：
+ *   · 通告里出现 UUID —— 全站铁律，页面上没人会去核；
+ *   · 去重键不带周期起点 —— 客户端重试会把运营台刷满；
+ *   · 去重键超过 reference_id 的 128 列宽 —— 22001，通告静默丢一条。
+ */
+describe("quotaPeriodStartKey", () => {
+  const withStart = (poolId: string, start: Date | null): PoolIdentity => ({
+    poolId,
+    subscriptionId: null,
+    view: { metric: "doc.words", limit: 100, remaining: 0, priority: 10 },
+    periodStart: start,
+  });
+
+  it("取最晚的那个周期起点（瀑布里混着一次性加油包时它才是当前这一格）", () => {
+    expect(
+      quotaPeriodStartKey([
+        withStart("p1", new Date("2026-09-01T00:00:00.000Z")),
+        withStart("p2", null),
+        withStart("p3", new Date("2026-09-20T08:30:00.000Z")),
+      ]),
+    ).toBe("2026-09-20");
+  });
+
+  it("一个周期起点都没有（全是不重置的池）→ 回落当月 1 日，不是「这辈子一条」", () => {
+    expect(
+      quotaPeriodStartKey(
+        [withStart("p1", null)],
+        new Date("2026-09-28T12:00:00.000Z"),
+      ),
+    ).toBe("2026-09-01");
+  });
+
+  /*
+   * 日期键按 Asia/Shanghai 算，不按 UTC。两处各有一个跨午夜的错法，且都只在
+   * 每天（每月）那八小时里现形——按 UTC 判的话本地测试机在任何时区都看不出来。
+   */
+  it("周期起点按北京日历日：库里 10/01 00:00 重置（UTC 09/30 16:00）就是 10-01", () => {
+    expect(
+      quotaPeriodStartKey([
+        withStart("p1", new Date("2026-09-30T16:00:00.000Z")),
+      ]),
+    ).toBe("2026-10-01");
+    // 北京 09/30 23:59:59 仍然是 09-30（差一秒就换格，正是要钉的那条边）。
+    expect(
+      quotaPeriodStartKey([
+        withStart("p1", new Date("2026-09-30T15:59:59.000Z")),
+      ]),
+    ).toBe("2026-09-30");
+  });
+
+  it("回落的「当月」也按北京：北京 10/01 01:00（UTC 09/30 17:00）回落 10-01 不是 09-01", () => {
+    expect(
+      quotaPeriodStartKey(
+        [withStart("p1", null)],
+        new Date("2026-09-30T17:00:00.000Z"),
+      ),
+    ).toBe("2026-10-01");
+  });
+
+  it("periodStart 缺省（既有调用方没给）也不炸", () => {
+    const pool: PoolIdentity = {
+      poolId: "p1",
+      subscriptionId: null,
+      view: { metric: "doc.words", limit: 100, remaining: 0, priority: 10 },
+    };
+    expect(
+      quotaPeriodStartKey([pool], new Date("2026-02-15T00:00:00.000Z")),
+    ).toBe("2026-02-01");
+  });
+});
+
+describe("composeQuotaExhaustedNotice", () => {
+  const NOW = new Date("2026-09-28T12:00:00.000Z");
+  const facts = (over: Record<string, unknown> = {}) =>
+    ({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      productCode: "karda",
+      metric: "doc.words",
+      amount: "500",
+      remainingTotal: 12,
+      periodStartKey: "2026-09-20",
+      tenant: { no: "2000000107", name: "示例科技", workspaceName: "默认空间" },
+      now: NOW,
+      ...over,
+    }) as Parameters<typeof composeQuotaExhaustedNotice>[0];
+
+  it("warning、只投 admin、链接走 tenant_no、30 天后退出列表", () => {
+    const notice = composeQuotaExhaustedNotice(facts());
+    expect(notice.severity).toBe("warning");
+    expect(notice.targetPlanes).toEqual(["admin"]);
+    expect(notice.link).toBe("/tenants/2000000107");
+    expect(notice.expiresAt!.getTime()).toBe(
+      NOW.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+    /* 租户码上屏必须带 T-（@shared 的 formatPrincipalNo）：裸的十位数字分不出主体类别。 */
+    expect(notice.title).toBe(
+      "配额已耗尽：示例科技（T-2000000107） · karda / doc.words",
+    );
+    expect(notice.body).toContain("默认空间");
+    expect(notice.body).toContain("本次请求 500");
+    expect(notice.body).toContain("扣减后可用合计 12");
+  });
+
+  it("标题正文链接里不出现 workspace 的 uuid", () => {
+    const notice = composeQuotaExhaustedNotice(facts());
+    const uuid = "11111111-1111-4111-8111-111111111111";
+    expect(notice.title).not.toContain(uuid);
+    expect(notice.body).not.toContain(uuid);
+    expect(notice.link ?? "").not.toContain(uuid);
+    // uuid 只许待在去重键里——它不上屏。
+    expect(notice.referenceId).toContain(uuid);
+  });
+
+  it("查不到租户号：照发，说「租户未知」，且不给一个点开 404 的链接", () => {
+    const notice = composeQuotaExhaustedNotice(
+      facts({ tenant: { no: null, name: null, workspaceName: null } }),
+    );
+    expect(notice.title).toContain("（租户未知）");
+    expect(notice.body).toContain("（空间名未知）");
+    expect(notice.link).toBeNull();
+    expect(notice.referenceId).toContain("quota_exhausted:");
+  });
+
+  it("去重键带周期起点：同周期同键，跨周期两键", () => {
+    expect(composeQuotaExhaustedNotice(facts()).referenceId).toBe(
+      "quota_exhausted:11111111-1111-4111-8111-111111111111:karda:doc.words:2026-09-20",
+    );
+    expect(
+      composeQuotaExhaustedNotice(facts({ periodStartKey: "2026-10-20" }))
+        .referenceId,
+    ).not.toBe(composeQuotaExhaustedNotice(facts()).referenceId);
+  });
+
+  it("超长的指标键不会把 reference_id 顶过 128（22001 会让通告静默丢一条）", () => {
+    const longMetric = "m" + "a".repeat(63);
+    const notice = composeQuotaExhaustedNotice(
+      facts({ metric: longMetric, productCode: "p".repeat(32) }),
+    );
+    expect(notice.referenceId.length).toBeLessThanOrEqual(128);
+    // 截断后仍然一事一条：换一个指标键就是另一个 reference_id。
+    const other = composeQuotaExhaustedNotice(
+      facts({
+        metric: longMetric.slice(0, 63) + "b",
+        productCode: "p".repeat(32),
+      }),
+    );
+    expect(other.referenceId).not.toBe(notice.referenceId);
+    expect(other.referenceId.length).toBeLessThanOrEqual(128);
   });
 });

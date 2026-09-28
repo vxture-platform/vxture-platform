@@ -19,6 +19,9 @@ regexes = [
   '''(?i)(your[-_][a-z0-9-]+|<[a-z0-9._-]+>|change[-_]?me|placeholder|dummy|example[-_.]|xxxx+)''',
   # 具名测试夹具（bff/auth-bff/.../operator-mfa.service.spec.ts 的 TOTP 加密测试键）
   '''test-operator-totp-encryption-key-0123456789''',
+  # 平台可视码（ORD-/RFD-/INV-/PAY-/RDM-/TKT- + 年月 + 十六进制尾号）——给人看的业务单号，
+  # 不是凭证。高熵会被 generic-api-key 误判（2026-09-28 实撞测试夹具里的假订单号）。
+  '''[A-Z]{3,4}-20[0-9]{4}-[0-9A-F]{8,12}''',
 ]
 paths = [
   '''pnpm-lock\.yaml''',           # 第三方依赖元数据（integrity 哈希，非凭证）

@@ -16,6 +16,14 @@
  * post-consume total, not the literal 0 of the ADR example: an atomic
  * over-limit call deducts nothing and can leave a positive balance.
  */
+import type { CreateSystemNoticeInput } from "@vxture/service-notice";
+import {
+  OPS_NOTICE_INFO_TTL_MS,
+  OPS_SIGNAL_REFERENCE_TYPE,
+  opsNoticeDayKey,
+  opsNoticeReferenceId,
+  opsNoticeTenantLabel,
+} from "../notifications/ops-notice";
 import type { QuotaPoolView } from "./entitlement-view";
 // C3 consume response body now lives in @vxture-platform/shared (single SoT); re-export
 // so existing `from "./usage-view"` importers stay unchanged.
@@ -36,6 +44,12 @@ export interface PoolIdentity {
   poolId: string;
   subscriptionId: string | null;
   view: QuotaPoolView;
+  /**
+   * 该池当前计费周期的起点（metering.quota_pools.current_period_start）。可选：
+   * 只有配额耗尽那条运营通告要它（一个周期一条的去重键），既有调用方与既有 spec
+   * 不必因此改形状。不重置的池本来就是 null。
+   */
+  periodStart?: Date | null;
 }
 
 export function buildConsumeResponse(
@@ -78,6 +92,111 @@ export function buildConsumeResponse(
     body.reason = "quota_exhausted";
   }
   return { statusCode: 200, body };
+}
+
+/* ── 配额耗尽 → 一条运营通告（2026-09-28 第二批 C-2）───────────────────────── */
+
+/**
+ * 「本次调用没被配额覆盖」这件事，此前在库里**一行都不留**：gated 只出现在回给调用方的
+ * 响应体里，metering.usage_events 记的是实际扣减，运营这边看不出任何异常。owner
+ * 2026-09-28「把信息做全做多」，所以这一刻要留一条通告。
+ *
+ * 一个计费周期一条，不是一次请求一条：gated 是**持续状态**，客户的集成多半会接着重试，
+ * 按请求发会在半分钟里刷满整页。去重键带周期起点，所以下一个周期它会自己再播一次
+ * （那时才是新信息）。判重的两道：进程内的一层（不必每次都打库）与表上的部分唯一索引
+ * （多实例、重启后仍然一事一条）。
+ */
+export interface QuotaExhaustedFacts {
+  /** 只进去重键，不进标题正文——通告里不出现 UUID。 */
+  readonly workspaceId: string;
+  readonly productCode: string;
+  readonly metric: string;
+  /** 本次请求量（引擎是 bigint 值，按串传）。 */
+  readonly amount: string;
+  /** 扣减后的可用合计。原子超限调用一分不扣，所以它可能仍大于 0。 */
+  readonly remainingTotal: number;
+  /** 计费周期起点的日期键（quotaPeriodStartKey 算的）。 */
+  readonly periodStartKey: string;
+  readonly tenant: {
+    readonly no: string | null;
+    readonly name: string | null;
+    readonly workspaceName: string | null;
+  };
+  readonly now?: Date;
+}
+
+/**
+ * 计费周期起点 → 日期键（**Asia/Shanghai 日历日**，见 opsNoticeDayKey）。
+ *
+ * 取候选池里**最晚**的那个 current_period_start：瀑布里可能既有按月重置的池、又有
+ * 一次性的加油包（后者 period_start 恒为 null），最晚的那个就是当前这一格的起点。
+ * 一个都没有（全是不重置的池）时回落到**当月 1 日**——那类池没有周期概念，按自然月收敛
+ * 成「一个月最多一条」，也不至于变成「这辈子只播一条」（漏播比多播坏）。
+ *
+ * 两处都按 Asia/Shanghai 判「哪一天 / 哪一月」，不按 UTC（此前两处都是 toISOString）：
+ *   · 起点：库里按北京时间 10/01 00:00 重置的池，UTC 看是 09/30 16:00，键会写成上个月；
+ *   · 回落：每月 1 日的 00:00–08:00 会被算进上个月那一格，于是月初那八小时与随后的
+ *     同一件事各播一条。
+ */
+export function quotaPeriodStartKey(
+  pools: PoolIdentity[],
+  now: Date = new Date(),
+): string {
+  let latest: number | null = null;
+  for (const p of pools) {
+    const start = p.periodStart;
+    if (!start) continue;
+    const t = start.getTime();
+    if (latest === null || t > latest) latest = t;
+  }
+  if (latest !== null) return opsNoticeDayKey(new Date(latest));
+  /* 当前这一天的 YYYY-MM 就是当前这一月——月首日不必再算一次时区。 */
+  return `${opsNoticeDayKey(now).slice(0, 7)}-01`;
+}
+
+/**
+ * 纯函数：事实 → 一条待写的系统通告。severity=warning、planes 只给 admin
+ * （配额是客户经营事实，不是运维或治理的事）。
+ *
+ * 保留 30 天：它是一个周期的信号，不是一件等人处理的事——下个周期会有新的一条，
+ * 留着旧的只会让列表越读越长（批一给 info 档定的同一个数）。
+ */
+export function composeQuotaExhaustedNotice(
+  facts: QuotaExhaustedFacts,
+): CreateSystemNoticeInput {
+  const who = opsNoticeTenantLabel(facts.tenant);
+  const ws = facts.tenant.workspaceName?.trim() || "（空间名未知）";
+  const now = facts.now ?? new Date();
+  const body = [
+    `${who} 的工作空间 ${ws} 在产品 ${facts.productCode} 的 ${facts.metric} 上配额不足：` +
+      `本次请求 ${facts.amount}，扣减后可用合计 ${facts.remainingTotal}。`,
+    `计费周期起点 ${facts.periodStartKey}；同一周期同一指标只播一条，下一周期会再播。`,
+    "调用方已收到 gated 标记（请求本身仍是 200，平台只记录不裁决），" +
+      "接着调用会一直被拦。客户侧的出路是加购加油包或换更高档位；" +
+      "运营侧可在该租户的订阅里核对这个指标的池、上限与重置周期。",
+  ].join("\n");
+  return {
+    targetPlanes: ["admin"],
+    severity: "warning",
+    title: `配额已耗尽：${who} · ${facts.productCode} / ${facts.metric}`.slice(
+      0,
+      256,
+    ),
+    body,
+    link: facts.tenant.no
+      ? `/tenants/${encodeURIComponent(facts.tenant.no)}`
+      : null,
+    referenceType: OPS_SIGNAL_REFERENCE_TYPE,
+    /*
+     * 键含 workspace uuid（36）+ product_code（≤32）+ metric_key（≤64），最长会到 161，
+     * 而 reference_id 是 varchar(128)：越界是 22001，通告静默丢一条。所以过 128 时由
+     * opsNoticeReferenceId 截断并缀内容哈希（仍然一事一条）。
+     */
+    referenceId: opsNoticeReferenceId(
+      `quota_exhausted:${facts.workspaceId}:${facts.productCode}:${facts.metric}:${facts.periodStartKey}`,
+    ),
+    expiresAt: new Date(now.getTime() + OPS_NOTICE_INFO_TTL_MS),
+  };
 }
 
 const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,31}$/;

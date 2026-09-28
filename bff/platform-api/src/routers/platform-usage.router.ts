@@ -21,6 +21,7 @@ import {
   Controller,
   Headers,
   Inject,
+  Logger,
   Post,
   Put,
   Res,
@@ -41,6 +42,8 @@ import {
 @Controller()
 @UseGuards(PlatformAuthGuard)
 export class PlatformUsageRouter {
+  private readonly logger = new Logger(PlatformUsageRouter.name);
+
   constructor(
     @Inject(PlatformUsageService)
     private readonly usage: PlatformUsageService,
@@ -103,6 +106,26 @@ export class PlatformUsageRouter {
       pools,
       parsed.metric,
     );
+    // 配额没覆盖住这次调用（2026-09-28 第二批）：库里本来一行都不留，运营看不见。
+    // 这一刻顺手写一条运营通告——一个计费周期一条，见 noteQuotaExhausted。
+    // 它自己已经不抛；这里再包一层是因为**响应不能因为通告而变**：调用方已经完成了扣减，
+    // 让它收到 500 会让它以为用量没记上，然后重试（幂等键挡得住，但它会以为失败了）。
+    if (responseBody.gated) {
+      try {
+        await this.usage.noteQuotaExhausted({
+          workspaceId,
+          productCode: parsed.productCode,
+          metric: parsed.metric,
+          amount: parsed.amount,
+          remainingTotal: responseBody.remaining_total,
+          pools,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `配额耗尽的运营通告没写成（${parsed.productCode} / ${parsed.metric}）— ${String(err)}`,
+        );
+      }
+    }
     res.status(statusCode);
     return responseBody;
   }

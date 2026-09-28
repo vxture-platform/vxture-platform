@@ -32,6 +32,7 @@ import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
 import { JobHealthAlertJob } from "./jobs/job-health-alert.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
 import { OpsTodoAlertJob } from "./jobs/ops-todo-alert.job";
+import { OperatorSignalSweepJob } from "./jobs/operator-signal-sweep.job";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
 import { ProvisioningDispatchJob } from "./jobs/provisioning-dispatch.job";
 import { SharingExpiryJob } from "./jobs/sharing-expiry.job";
@@ -86,6 +87,9 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // #231：运营待办告警（只发邮件，4h 静默窗口）；自愈放弃经 setOpsAlerter 挂 OrderService
     OperatorAlertsWiring,
     OpsTodoAlertJob,
+    // 2026-09-28 第二批：运营侧信号巡检（业务事件 11 类 + 审计白名单动作），
+    // 产出 admin.operator_notices 的系统通告；去重键挡住回看窗口的重叠。
+    OperatorSignalSweepJob,
     // #231 第二段：后台作业健康（失败 + 静默）——静默是真盲区，作业死了什么都不留
     JobHealthAlertJob,
     ProvisioningDispatchJob,
