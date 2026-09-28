@@ -264,5 +264,136 @@
       "notUnder": "{name} 当前不在升级维护中",
       "failed": "结束维护失败"
     }
+  },
+  "noticeBell": {
+    "label": "运营通告",
+    "labelWithCount": "运营通告（{count} 条未读）",
+    "overflow": "99+"
+  },
+  "operatorNoticesPage": {
+    "title": "运营通告",
+    "description": "发给运营者的消息：产品上线、能力新增、变更通告，以及维护窗口、作业心跳、webhook 死信这些系统自动播报的事。三个平台由不同人员使用，消息在这里同步。",
+    "loadFailed": "运营通告读取失败",
+    "loadingDescription": "正在取运营通告清单。",
+    "systemAuthor": "系统",
+    "allPlanes": "全部平面",
+    "noExpiry": "长期有效",
+    "severity": {
+      "info": "一般",
+      "warning": "重要",
+      "critical": "紧急"
+    },
+    "source": {
+      "manual": "人工发布",
+      "system": "系统播报"
+    },
+    "planes": {
+      "admin": "运营台",
+      "opera": "运维台",
+      "arche": "治理台"
+    },
+    "readState": {
+      "unread": "未读",
+      "read": "已读",
+      "offPlane": "不投放本平面"
+    },
+    "needsAction": {
+      "title": "需要处理",
+      "loading": "正在取本平面的未读通告。",
+      "loadFailed": "未读通告读取失败",
+      "loadFailedHint": "未读数与「需要处理」都取不到，先重试一次。",
+      "summary": "投放到运维台、你还没读过的：紧急 {critical} 条 · 重要 {warning} 条 · 一般 {info} 条",
+      "summaryNone": "投放到运维台的通告都读过了。",
+      "markAll": "全部标记已读（{count}）",
+      "showUnread": "只看未读（{count}）",
+      "emptyAll": "本平面没有未读通告。",
+      "emptyUrgent": "没有紧急或重要的未读。",
+      "emptyUrgentWithInfo": "没有紧急或重要的未读；还有 {count} 条「一般」没读，在下面的清单里。",
+      "more": "紧急与重要的未读共 {total} 条，这里只列前 {shown} 条，其余到下面的清单里看。",
+      "open": "去看看",
+      "markOne": "知道了"
+    },
+    "count": {
+      "all": "{total} 条",
+      "filtered": "{matched} / {total} 条"
+    },
+    "search": {
+      "placeholder": "搜索标题 / 正文…",
+      "label": "搜索运营通告"
+    },
+    "filters": {
+      "severityLabel": "严重度",
+      "allSeverities": "全部严重度",
+      "severityOption": "{label}（{count}）",
+      "sourceLabel": "来源",
+      "allSources": "全部来源",
+      "readLabel": "已读状态",
+      "allRead": "全部通告",
+      "unreadOnly": "只看未读",
+      "expiryLabel": "时效",
+      "live": "仍在生效",
+      "withExpired": "含已过期"
+    },
+    "columns": {
+      "notice": "通告",
+      "readState": "状态",
+      "planes": "投放范围",
+      "severity": "严重度",
+      "publishedAt": "发布于",
+      "expiresAt": "失效于",
+      "createdBy": "发布人"
+    },
+    "noMatch": {
+      "title": "没有匹配的通告",
+      "description": "换个严重度、来源或关键词再看。"
+    },
+    "empty": {
+      "title": "还没有通告",
+      "description": "产品上线、能力新增、变更通告发在这里，三个平面的人都看得到；系统自动播报的事也会落到这张表上。"
+    },
+    "actions": {
+      "publish": "发布通告"
+    },
+    "rowActions": {
+      "label": "通告操作",
+      "markRead": "标记已读",
+      "markReadOffPlane": "这条没有投放到运维台，没有「我读过没有」可言。",
+      "markReadAlready": "你已经读过这一条了。",
+      "withdraw": "撤回通告"
+    },
+    "withdraw": {
+      "verb": "撤回",
+      "target": "通告「{title}」",
+      "consequence": "撤回后它从三个平面的列表里消失，已经读过的人不会再看到。已读记录保留，通告本身也留档，但不能再恢复显示——要再发一次得新建一条。"
+    },
+    "toast": {
+      "published": "通告已发布",
+      "publishFailed": "发布失败",
+      "withdrawn": "通告已撤回",
+      "withdrawFailed": "撤回失败",
+      "markReadFailed": "标记已读失败",
+      "markAllRead": "已标记 {count} 条为已读"
+    },
+    "dialog": {
+      "title": "发布运营通告",
+      "description": "发给运营者看，客户端不可见。客户公告请到运营台的「平台公告」发。",
+      "submit": "发布",
+      "identityHint": "标题与正文是三个平面上直接看到的内容。",
+      "titleLabel": "标题",
+      "titlePlaceholder": "如 karda v1.2 已上线",
+      "bodyLabel": "正文",
+      "bodyPlaceholder": "说清楚发生了什么、对谁有影响、要不要做什么",
+      "detailsHint": "默认发给三个平面；只与某一边有关时再收窄。",
+      "planesLabel": "投放范围",
+      "planesEmpty": "一个都不选的话这条通告谁也看不到，至少选一个",
+      "severityLabel": "严重度",
+      "expiresLabel": "失效时间",
+      "expiresHint": "留空 = 长期有效",
+      "linkTier": "跳转",
+      "linkHint": "给一个平面内的相对路径，收到的人可以直接点过去。",
+      "linkLabel": "链接",
+      "linkPlaceholder": "如 /products/karda"
+    },
+    "truncated": "命中 {matched} 条，这一次只取回了前 {shown} 条（单次上限）。收窄严重度、来源或关键词再看，翻页只在取回来的这一批里。"
   }
 }

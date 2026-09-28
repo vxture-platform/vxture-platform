@@ -2666,25 +2666,68 @@ export interface OperatorNoticeItem {
   createdByName: string | null;
 }
 
+/** 三档各有多少条。键是全集,缺档会被读成 0 而不是「没这个档」。 */
+export interface OperatorNoticeCounts {
+  info: number;
+  warning: number;
+  critical: number;
+}
+
+/**
+ * 运营通告列表的筛选项。全部可选,给了才进查询串。
+ *
+ * 与 `scope` 是两类:scope 定「能看见哪一份」(它是服务端按平面与会话算的),
+ * 这四项定「此刻想少看几行」。所以它们可以自由拼,而 scope 只有两档。
+ */
+export interface OperatorNoticeFilters {
+  /** 严重度多选。空数组与不给等价。 */
+  severities?: readonly OperatorNoticeItem["severity"][];
+  source?: OperatorNoticeItem["source"];
+  unreadOnly?: boolean;
+  /** 标题或正文含它。服务端做 ILIKE 并转义通配符。 */
+  keyword?: string;
+}
+
 /**
  * 运营通告列表。
  *
  * `scope` 缺省 `digest` —— owner 2026-09-20 定的摘要规则：**当天已读 + 所有未读**。
- * 二级页传 `all` 看全部。`unread` 是本平面可见的未读总数,不随 scope 变。
+ * 二级页传 `all` 看全部。`unread` 是本平面可见的未读总数,不随 scope 也不随筛选变
+ * ——铃铛角标要的是「还有几条没看」。
+ *
+ * `counts` 是三档各有多少条,口径「除严重度以外的筛选都算上」:勾了「紧急」之后
+ * 另两档还报得出数,那排数字才能当入口用。
  */
-export async function fetchOperatorNotices(params: {
-  scope?: "digest" | "all";
-  limit?: number;
-  offset?: number;
-}): Promise<{ items: OperatorNoticeItem[]; total: number; unread: number }> {
+export async function fetchOperatorNotices(
+  params: {
+    scope?: "digest" | "all";
+    limit?: number;
+    offset?: number;
+  } & OperatorNoticeFilters,
+): Promise<{
+  items: OperatorNoticeItem[];
+  total: number;
+  unread: number;
+  counts: OperatorNoticeCounts;
+}> {
   const query = new URLSearchParams();
   if (params.scope) query.set("scope", params.scope);
   if (params.limit !== undefined) query.set("limit", String(params.limit));
   if (params.offset !== undefined) query.set("offset", String(params.offset));
+  // 空数组不写进查询串:服务端把「给了个空的」与「没给」当同一件事,这里也一样,
+  // 免得出现一个只在客户端存在的第三态。
+  if (params.severities && params.severities.length > 0) {
+    query.set("severity", params.severities.join(","));
+  }
+  if (params.source) query.set("source", params.source);
+  if (params.unreadOnly) query.set("unread", "true");
+  const keyword = params.keyword?.trim();
+  if (keyword) query.set("q", keyword);
   return readJsonStrict<{
     items: OperatorNoticeItem[];
     total: number;
     unread: number;
+    counts: OperatorNoticeCounts;
   }>(`/api/dashboard/notices${query.size ? `?${query.toString()}` : ""}`);
 }
 
@@ -2694,11 +2737,29 @@ export async function markOperatorNoticeRead(
 ): Promise<{ id: string; readAt: string }> {
   // 走本文件既有的 mutateJson,不另手搓一份 fetch:它统一了 credentials、
   // 断网时的 503 与错误文案提取。
+  //
+  // **不传兜底文案**：兜底只在服务端没给 message 时用，写在本文件里就
+  // 只能是一种语言；谁拿它当 toast 的说明，谁就得到一句不跟 locale 走的话。
+  // 开发者向的兜底交给 mutateJson 自己那句，界面文案只从 messages 目录取。
   return mutateJson<{ id: string; readAt: string }>(
     `/api/dashboard/notices/${encodeURIComponent(noticeId)}/read`,
     "POST",
-    undefined,
-    "标记已读失败",
+  );
+}
+
+/**
+ * 把本平面此刻可见且未读的通告一次全部标记已读,回真的标上了几条。
+ *
+ * **不收筛选**:服务端那一侧的作用域就是铃铛角标数的那个集合。带筛选过去的话,
+ * 同一个按钮在铃铛抽屉里和在筛过的 /messages 上会是两个意思。
+ */
+export async function markAllOperatorNoticesRead(): Promise<{
+  marked: number;
+}> {
+  // 兜底文案同上：不传，用 mutateJson 自己那句开发者向的。
+  return mutateJson<{ marked: number }>(
+    "/api/dashboard/notices/read-all",
+    "POST",
   );
 }
 

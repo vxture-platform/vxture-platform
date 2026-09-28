@@ -264,5 +264,136 @@
       "notUnder": "{name} is not under maintenance",
       "failed": "Could not end maintenance"
     }
+  },
+  "noticeBell": {
+    "label": "Operator notices",
+    "labelWithCount": "Operator notices ({count} unread)",
+    "overflow": "99+"
+  },
+  "operatorNoticesPage": {
+    "title": "Operator notices",
+    "description": "Messages for operators: product launches, new capabilities and change notices, plus what the platform broadcasts on its own — maintenance windows, job heartbeats, webhook dead letters. The three operator planes are staffed by different people; this is where the word gets across.",
+    "loadFailed": "Could not load operator notices",
+    "loadingDescription": "Fetching the operator notice list.",
+    "systemAuthor": "System",
+    "allPlanes": "All planes",
+    "noExpiry": "No expiry",
+    "severity": {
+      "info": "Info",
+      "warning": "Important",
+      "critical": "Critical"
+    },
+    "source": {
+      "manual": "Published by a person",
+      "system": "Broadcast by the platform"
+    },
+    "planes": {
+      "admin": "Operations",
+      "opera": "Runtime",
+      "arche": "Governance"
+    },
+    "readState": {
+      "unread": "Unread",
+      "read": "Read",
+      "offPlane": "Not sent to this plane"
+    },
+    "needsAction": {
+      "title": "Needs action",
+      "loading": "Fetching this plane's unread notices.",
+      "loadFailed": "Could not load unread notices",
+      "loadFailedHint": "Neither the unread count nor the needs-action list came back. Try again.",
+      "summary": "Sent to the runtime plane and still unread by you: {critical} critical, {warning} important, {info} info",
+      "summaryNone": "You have read every notice sent to the runtime plane.",
+      "markAll": "Mark all {count} as read",
+      "showUnread": "Show unread only ({count})",
+      "emptyAll": "Nothing unread on this plane.",
+      "emptyUrgent": "Nothing critical or important is unread.",
+      "emptyUrgentWithInfo": "Nothing critical or important is unread; {count} info notices are still unread and listed below.",
+      "more": "{total} critical or important notices are unread; the first {shown} are shown here, the rest are in the list below.",
+      "open": "Open",
+      "markOne": "Got it"
+    },
+    "count": {
+      "all": "{total} notices",
+      "filtered": "{matched} of {total}"
+    },
+    "search": {
+      "placeholder": "Search title or body…",
+      "label": "Search operator notices"
+    },
+    "filters": {
+      "severityLabel": "Severity",
+      "allSeverities": "All severities",
+      "severityOption": "{label} ({count})",
+      "sourceLabel": "Source",
+      "allSources": "All sources",
+      "readLabel": "Read state",
+      "allRead": "All notices",
+      "unreadOnly": "Unread only",
+      "expiryLabel": "Validity",
+      "live": "Still in effect",
+      "withExpired": "Include expired"
+    },
+    "columns": {
+      "notice": "Notice",
+      "readState": "State",
+      "planes": "Sent to",
+      "severity": "Severity",
+      "publishedAt": "Published",
+      "expiresAt": "Expires",
+      "createdBy": "Published by"
+    },
+    "noMatch": {
+      "title": "No matching notices",
+      "description": "Try another severity, source or keyword."
+    },
+    "empty": {
+      "title": "No notices yet",
+      "description": "Product launches, new capabilities and change notices are published here and reach all three operator planes; what the platform broadcasts on its own lands in this table too."
+    },
+    "actions": {
+      "publish": "Publish notice"
+    },
+    "rowActions": {
+      "label": "Notice actions",
+      "markRead": "Mark as read",
+      "markReadOffPlane": "This notice was not sent to the runtime plane, so there is no read state for you on it.",
+      "markReadAlready": "You have already read this one.",
+      "withdraw": "Withdraw notice"
+    },
+    "withdraw": {
+      "verb": "Withdraw",
+      "target": "notice {title}",
+      "consequence": "Once withdrawn it disappears from all three planes and the people who read it will not see it again. Read receipts and the notice itself are kept on record, but it cannot be shown again — publishing it once more means creating a new one."
+    },
+    "toast": {
+      "published": "Notice published",
+      "publishFailed": "Could not publish",
+      "withdrawn": "Notice withdrawn",
+      "withdrawFailed": "Could not withdraw",
+      "markReadFailed": "Could not mark as read",
+      "markAllRead": "Marked {count} as read"
+    },
+    "dialog": {
+      "title": "Publish an operator notice",
+      "description": "Operators see this; customers do not. Customer-facing announcements are published from the operations plane.",
+      "submit": "Publish",
+      "identityHint": "Title and body are what all three planes see directly.",
+      "titleLabel": "Title",
+      "titlePlaceholder": "e.g. karda v1.2 is live",
+      "bodyLabel": "Body",
+      "bodyPlaceholder": "Say what happened, who it affects, and whether anything needs doing",
+      "detailsHint": "Sent to all three planes by default; narrow it only when one side is the only side that cares.",
+      "planesLabel": "Send to",
+      "planesEmpty": "With none selected nobody sees this notice — pick at least one",
+      "severityLabel": "Severity",
+      "expiresLabel": "Expires at",
+      "expiresHint": "Leave empty for no expiry",
+      "linkTier": "Jump target",
+      "linkHint": "A path inside the plane, so whoever receives it can go straight there.",
+      "linkLabel": "Link",
+      "linkPlaceholder": "e.g. /products/karda"
+    },
+    "truncated": "{matched} notices match; only the first {shown} were fetched (per-request cap). Narrow the severity, source or keyword — paging only moves within what was fetched."
   }
 }

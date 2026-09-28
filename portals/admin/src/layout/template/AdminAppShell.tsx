@@ -26,12 +26,18 @@ import {
   ShellSidebarFrame,
   ShellSidebarNav,
   useTheme,
+  useToast,
   type Density,
   type ShellNavSection,
 } from "@vxture/design-system";
 import { formatDateTime, writeNavCollapsed } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
-import { fetchNotificationLogs, fetchOperatorNotices } from "@/api/admin-bff";
+import {
+  fetchNotificationLogs,
+  fetchOperatorNotices,
+  markAllOperatorNoticesRead,
+  markOperatorNoticeRead,
+} from "@/api/admin-bff";
 import type { OperatorNoticeItem } from "@/api/admin-bff";
 import type { NotificationLogRecord } from "@/entities/console";
 import {
@@ -88,8 +94,15 @@ const NOTIF_ICON: Record<string, string> = {
  * 客户申报付款 / 申请退款 / 退订这些事件，客户收到消息的同时由通知分发器镜像成
  * 一条运营通告（2026-09-28 根治：「运营端收到的信息和客户侧要完整一致」）；opera
  * 手工发布的通告也在同一张表。角标 = 本平面未读数；抽屉列 digest 档（当天已读 +
- * 所有未读）最近几条，「查看全部」落到 /messages。已读在 /messages 里点，抽屉
- * 不代点——点开一条不等于处理完。投递日志退为第二段，功能不删。 */
+ * 所有未读）最近几条，「查看全部」落到 /messages。投递日志退为第二段，功能不删。
+ *
+ * 2026-09-28 第四批改了「已读」这一半（前三批把信号做全，这一批让它读得懂）：
+ *   · 抽屉里给一颗「全部标记已读」。作用域 = 角标数的那个集合（本平面全部未读），
+ *     所以按完角标必然归零；筛选不参与——那一层在 /messages 上。
+ *   · **点开一条就把它标成已读**。此前刻意不代点，理由是「点开一条不等于处理完」；
+ *     但角标数的是「有没有看过」，不是「有没有办完」，于是三批信号做全之后角标长期
+ *     停在两位数、谁也不再看它——一个永远不归零的角标等于没有角标。办没办完由通告
+ *     指向的那张单子自己回答（订单页、退款页），不由这里的已读位代答。 */
 const DRAWER_NOTICE_LIMIT = 10;
 /** 未读数轮询间隔。与 console 站内收件箱同一节奏。 */
 const NOTICE_POLL_MS = 60_000;
@@ -150,6 +163,7 @@ function ShellFrame({
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const { mode: themeMode, density } = useTheme();
+  const { toast } = useToast();
 
   /* 初始值由服务端从 cookie 读出后传入，首帧即最终态。写死 false 再在 effect
    * 里纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
@@ -171,6 +185,9 @@ function ShellFrame({
   const [notices, setNotices] = useState<OperatorNoticeItem[] | null>(null);
   const [noticesFailed, setNoticesFailed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  /* 「全部标记已读」在办中。按钮禁用，免得连按两次发两个请求——第二个会回
+     marked:0，而人会读成「只标上了 0 条」。 */
+  const [markingAll, setMarkingAll] = useState(false);
   const loadNotices = useCallback(async () => {
     try {
       const result = await fetchOperatorNotices({
@@ -187,6 +204,57 @@ function ShellFrame({
       setNoticesFailed(true);
     }
   }, []);
+
+  /* 点开一条时把它标成已读。
+     先改本地态再发请求：这一步没有失败代价（重标幂等），等一圈往返才变灰会让人
+     以为没点上——而这一下点击紧接着就是路由跳转，抽屉当场卸载，根本等不到回包。
+     失败时下一次轮询（每分钟）自会把真值读回来。 */
+  const markNoticeRead = useCallback((notice: OperatorNoticeItem) => {
+    if (notice.readAt !== null) return;
+    const readAt = new Date().toISOString();
+    setNotices((prev) =>
+      prev
+        ? prev.map((item) =>
+            item.id === notice.id ? { ...item, readAt } : item,
+          )
+        : prev,
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+    void markOperatorNoticeRead(notice.id).catch(() => {
+      /* 本地已经画成已读了，纠正交给下一次轮询：这里再弹一个错，会在人已经
+         跳到订单页之后从背后冒出来说「刚才那下没成」，而他也无从处置。 */
+    });
+  }, []);
+
+  /* 「全部标记已读」。
+     这一下**不乐观更新**：它一次动几十条，猜错的面比单条大得多，而且它不伴随
+     路由跳转，等一个往返是可以接受的。回来之后重读一次——角标归不归零由库里的
+     真值说，不由这里的减法说。 */
+  const markAllNoticesRead = useCallback(async () => {
+    setMarkingAll(true);
+    try {
+      const { marked } = await markAllOperatorNoticesRead();
+      toast({
+        tone: "success",
+        title: tDrawer("notices.markAllDone", { count: marked }),
+      });
+    } catch {
+      /* 失败要说出来。不说的话界面上什么都没变，而「什么都没变」同时兼容
+         「没有未读可标」与「请求挂了」——两者对人的含义完全不同。
+
+         **只给目录里的标题，不挂 cause.message**：那串没有哪一侧保证它
+         跟着 locale 走——服务端没给 message 时它还会是客户端写死的兜底句，
+         于是英文标题下面跟一句中文说明。壳层这两个 toast 因此同一形状：
+         只一句标题，字句全部来自 messages 目录。 */
+      toast({
+        tone: "danger",
+        title: tDrawer("notices.markAllFailed"),
+      });
+    } finally {
+      setMarkingAll(false);
+      await loadNotices();
+    }
+  }, [loadNotices, toast, tDrawer]);
 
   /* 会话就绪后拉一次，之后每分钟刷新；抽屉每次打开再拉一次，列出来的一定是
    * 当下的。 */
@@ -351,6 +419,8 @@ function ShellFrame({
       .join(" · "),
     // link 是 admin 内相对路径（/orders/{order_no} 之类）；没有就整行不可点。
     ...(notice.link ? { href: notice.link } : {}),
+    // 点开就算看过了。已读的行不再发第二次请求（markNoticeRead 自己先挡）。
+    onActivate: () => markNoticeRead(notice),
   }));
   const noticeSection: DrawerNotifSection = {
     key: "notices",
@@ -363,7 +433,30 @@ function ShellFrame({
     emptyDescription: noticesFailed
       ? undefined
       : tDrawer("notices.empty.description"),
-    action: { label: tDrawer("notices.viewAll"), href: "/messages" },
+    actions: [
+      /* 没有未读时不画这颗按钮：一颗按下去恒回「0 条」的按钮比灰按钮更糟——
+         它看起来能做事，按了却什么也没发生。读失败时也不画：拿不到数就不报数，
+         更不该在不知道有几条未读的时候提供一个「全都标掉」。 */
+      ...(unreadCount > 0 && !noticesFailed
+        ? [
+            {
+              key: "mark-all",
+              label: tDrawer("notices.markAll"),
+              icon: "ph-checks",
+              disabled: markingAll,
+              onClick: () => {
+                void markAllNoticesRead();
+              },
+            },
+          ]
+        : []),
+      {
+        key: "view-all",
+        label: tDrawer("notices.viewAll"),
+        icon: "ph-arrow-square-out",
+        href: "/messages",
+      },
+    ],
   };
   const settingsRows: Array<[string, string]> = [
     [tDrawer("settings.rows.theme.label"), tShell(THEME_LABEL_KEY[themeMode])],

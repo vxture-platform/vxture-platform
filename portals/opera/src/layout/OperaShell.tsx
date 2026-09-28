@@ -57,6 +57,7 @@ import {
   useTheme,
 } from "@vxture/design-system";
 import { operaNavSections } from "@/config/navigation";
+import { NoticeBell } from "@/layout/NoticeBell";
 import { writeNavCollapsed } from "@vxture-platform/shared";
 import {
   useOperatorSession,
@@ -379,15 +380,20 @@ export function OperaShell({
                       onClick={toggleAssistant}
                     />
                   ) : null}
-                  {/* 没有「告警通知」：opera 没有任何通知源（无告警表、无订阅、无
-                      推送），一个点了什么都不发生的铃铛只会让人以为告警会到这里来。
-                      有通知源的那天再加，不先摆一个空按钮占位（2026-08-30）。 */}
+                  {/* 铃铛 2026-08-30 刻意留空，当时的理由是「opera 没有任何通知源
+                      （无告警表、无订阅、无推送），一个点了什么都不发生的铃铛只会让
+                      人以为告警会到这里来」，并写下条件：有通知源的那天再加。
+                      2026-09-28 前三批把源做出来了（维护窗口逾期 / 产品生命周期 /
+                      作业心跳 / webhook 死信都往 admin.operator_notices 写投放到本
+                      平面的系统通告），所以按那条注释自己定的条件补上。没有
+                      ops:notice.* 能力的人看不到它——见 NoticeBell。 */}
                   <ShellIconGroup label="系统">
                     <ShellIconButton
                       icon="help"
                       label="帮助"
                       onClick={() => {}}
                     />
+                    <NoticeBell />
                     <ShellIconButton
                       icon="settings"
                       label="系统设置"

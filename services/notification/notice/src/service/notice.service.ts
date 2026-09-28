@@ -13,6 +13,7 @@ import type {
   ListNoticesParams,
   ListNoticesResult,
   MarkNoticeReadResult,
+  NoticePlane,
 } from "../types/notice.types";
 
 /** 一条 uuid 的形状。标记已读前先挡，免得把一个明显不是 id 的串送进库。 */
@@ -32,9 +33,12 @@ export class NoticeService {
   ) {}
 
   /**
-   * 读一页本平面可见的通告。
+   * 读一页本平面可见的通告，连同三档的计数汇总。
    *
    * 平面与运营者由调用方（各自的 BFF）从自身身份与会话里取，**不收请求参数**。
+   * 筛选（严重度 / 来源 / 只看未读 / 关键词）反过来**只能**来自请求——它们是「这个人
+   * 此刻想少看几行」，不是「这个人能看见哪一份」。两类入参混成一个袋子，就会出现
+   * 一个能读别人平面的探测面。
    */
   async list(params: ListNoticesParams): Promise<ListNoticesResult> {
     return this.repository.list(params);
@@ -51,6 +55,16 @@ export class NoticeService {
     operatorId: string,
   ): Promise<MarkNoticeReadResult | null> {
     return this.repository.markRead(noticeId, operatorId);
+  }
+
+  /**
+   * 把本平面此刻可见且未读的通告一次全部记上，回真的记上了几条。
+   *
+   * 幂等：再按一次回 0，不抛——「已经全读过了」不是错误。作用域与铃铛角标同一个
+   * （见 `MARK_ALL_READ_SQL`），所以按完角标必然归零；筛选**不参与**，那一层归页面。
+   */
+  async markAllRead(plane: NoticePlane, operatorId: string): Promise<number> {
+    return this.repository.markAllRead(plane, operatorId);
   }
 
   /**

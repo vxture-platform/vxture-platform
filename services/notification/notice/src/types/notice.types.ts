@@ -52,13 +52,44 @@ export interface OperatorNoticeView {
 }
 
 /**
+ * 读侧筛选。**每一项都是可选的，给了才长出一条谓词**（见 `buildListQuery`）。
+ *
+ * 为什么不用「$n 恒在谓词里、由 null 关掉」那一手（LIST 的 `$3::bool` 就是那么写的）：
+ * 那一手成立的前提是关掉的写法和打开的写法是同一个表达式。`severity = any($n)` 与
+ * `title ilike $n` 都做不到——关掉要多套一层 `coalesce` / `or $n is null`，读的人得先
+ * 在脑子里代入 null 才知道它此刻拦不拦。于是这里换成显式拼装：**只拼谓词文本，值一律
+ * 绑定**，谁也不进 SQL 串。拼装那一步有测试钉着「不给的那一项一个字都不出现」。
+ *
+ * 筛选是「在同一份数据里少看几行」，不是换一份数据：`plane` / `operatorId` / `digest`
+ * 三项仍然不来自请求体，它们定的是这个人能看见哪一份。
+ */
+export interface NoticeFilters {
+  /**
+   * 严重度多选。空数组与不给等价（= 三档都要）。
+   *
+   * 它比另外三项**晚一步**生效：`counts` 那一排数字要在「除严重度以外都筛过」的集合
+   * 上算，否则勾了「紧急」之后另两档恒为 0，那排数字就再也不能当入口用了。
+   */
+  readonly severities?: readonly NoticeSeverity[];
+  /** 来源。人发的与系统播的常常要分开看——追一件事时只想看系统那一路。 */
+  readonly source?: NoticeSource;
+  /**
+   * 只看未读。与 `digest` 可以同时给：摘要档留着「当天已读」，这一项把它收掉。
+   * 两者不是一回事，所以不合并成一个开关。
+   */
+  readonly unreadOnly?: boolean;
+  /** 标题或正文含它（ILIKE）。值绑定，`%` 与 `_` 已转义——见 `likePattern`。 */
+  readonly keyword?: string;
+}
+
+/**
  * 读一页通告的入参。
  *
  * `plane` 与 `operatorId` **都不来自请求体**：平面是 BFF 自己的身份（它就是那个
  * 平面），运营者是会话里的人。两者任一可由调用方指定，这个接口就变成了一个
  * 「读别的平面 / 别人已读状态」的探测面。
  */
-export interface ListNoticesParams {
+export interface ListNoticesParams extends NoticeFilters {
   readonly plane: NoticePlane;
   readonly operatorId: string;
   /**
@@ -81,12 +112,38 @@ export interface ListNoticesResult {
    * 不是「本页列了几条」。
    */
   readonly unread: number;
+  /**
+   * 三档各有多少条（2026-09-28 第四批：前三批刻意把信号做全，这一批让它变得读得懂）。
+   *
+   * 口径：**除严重度以外的筛选都算上**。严重度自己那一维不参与——参与的话，勾了
+   * 「紧急」之后「重要 0 / 一般 0」，而库里明明还有几十条，那排数字就从入口退化成
+   * 当前筛选的回声。
+   *
+   * 它和 `total` / `unread` 一样**不跟着分页走**，而且**空页也报得出数**：三个计数由
+   * 一条不带 limit/offset 的汇总语句出（`buildListQuery.summarySql`）。写成页行的附加列
+   * 的话，筛出 0 条时整排数字会一起变成 0——而那正是最需要看见「别的档还有几条」的
+   * 时候。
+   */
+  readonly counts: NoticeSeverityCounts;
 }
+
+/** 三档各自的条数。键是 `NoticeSeverity` 的全集，不缺档——缺档会被读成 0。 */
+export type NoticeSeverityCounts = Readonly<Record<NoticeSeverity, number>>;
 
 /** 标记已读的结果。`null` = 通告不存在或已撤回。 */
 export interface MarkNoticeReadResult {
   readonly id: string;
   readonly readAt: string;
+}
+
+/**
+ * 「全部标记已读」的结果。
+ *
+ * `marked` = 本次真的从未读变成已读的条数，不是「可见的总条数」。它要能回答「刚才那
+ * 一下管到了几条」——已经读过的不算，0 条也是个合法答案（角标本来就是 0）。
+ */
+export interface MarkAllNoticesReadResult {
+  readonly marked: number;
 }
 
 /**
