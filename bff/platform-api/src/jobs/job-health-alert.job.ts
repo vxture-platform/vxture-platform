@@ -111,6 +111,9 @@ export class JobHealthAlertJob {
         intervalMs: row.intervalMs,
         lastError: row.lastError,
         failureCount: row.failureCount,
+        // 通告的去重键要它才能分「一次 episode」（2026-09-28）：静默时它是冻住的，
+        // 所以整段静默只落一条；失败时每一轮都推进，所以每一轮失败各落一条。
+        lastStartedAt: row.lastStartedAt,
       });
       if (result.noRecipient) unreachable += 1;
       else if (result.sent > 0) alerted += 1;

@@ -21,7 +21,11 @@ import { ConflictException, NotFoundException } from "@nestjs/common";
 import type { Pool } from "pg";
 import type { Request } from "express";
 
-import { IamRouter } from "./iam.router";
+import {
+  IamRouter,
+  composeSeatLimitNotice,
+  seatNoticeDayKey,
+} from "./iam.router";
 import type { RequestContext } from "../types/console.types";
 
 const WS = "11111111-1111-4111-8111-111111111111";
@@ -149,5 +153,206 @@ describe("产品席位：入参与幂等", () => {
     await expect(router.listProductSeats(req(), WS)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+});
+
+/**
+ * 席位已满要在运营台留一条（2026-09-28 第二批 C-3）。
+ *
+ * 此前这条路**库里一行都不留**：触发器抛 VX409、这一层翻成 409 给客户，运营那边看不出
+ * 有人撞到了上限——而「撞到上限」正是「该升档」的信号，owner 2026-09-28「把信息做全做多」。
+ * 这里钉的是：只有 seat_limit_reached 这一支写、写的内容里没有 UUID、以及**写失败不改变
+ * 那个 409**（客户要拿到的是那个状态码，不是通告的成败）。
+ */
+function seatPool(opts: { subject?: boolean; insertThrows?: boolean } = {}) {
+  const inserts: unknown[][] = [];
+  const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+    if (sql.includes("admin.operator_notices")) {
+      inserts.push(params);
+      if (opts.insertThrows) throw new Error("42501 permission denied");
+      return { rows: [{ id: "notice-1" }], rowCount: 1 };
+    }
+    if (sql.includes("tenancy.workspaces")) {
+      return opts.subject === false
+        ? { rows: [], rowCount: 0 }
+        : {
+            rows: [
+              {
+                tenant_no: "2000000107",
+                tenant_name: "示例科技",
+                workspace_name: "默认空间",
+                product_code: "karda",
+                product_name: "Karda",
+              },
+            ],
+            rowCount: 1,
+          };
+    }
+    // 审计写钩子（fire-and-forget）落这里。
+    return { rows: [], rowCount: 0 };
+  });
+  return { pool: query, inserts };
+}
+
+function routerWithPool(
+  aggregator: Record<string, unknown>,
+  poolQuery: ReturnType<typeof vi.fn>,
+): IamRouter {
+  const none = undefined as never;
+  return new IamRouter(
+    aggregator as never,
+    { query: poolQuery } as unknown as Pool,
+    none,
+    none,
+    none,
+  );
+}
+
+const seatLimitAggregator = () => ({
+  grantProductSeatScoped: vi.fn(async () => ({
+    ok: false as const,
+    reason: "seat_limit_reached" as const,
+  })),
+});
+
+describe("产品席位：满了要在运营台留一条", () => {
+  it("写一条 info 通告：admin 平面、链接走 tenant_no、去重键一天一条", async () => {
+    const { pool, inserts } = seatPool();
+    const router = routerWithPool(seatLimitAggregator(), pool);
+    await expect(
+      router.grantProductSeat(req(), WS, {
+        productId: PRODUCT,
+        userId: MEMBER,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(inserts).toHaveLength(1);
+    const [planes, severity, title, body, link, refType, refId] = inserts[0]!;
+    expect(planes).toEqual(["admin"]);
+    expect(severity).toBe("info");
+    /* 租户码上屏必须带 T-（@shared 的 formatPrincipalNo）：三种主体码都是十位纯数字。 */
+    expect(String(title)).toBe(
+      "产品席位已满：示例科技（T-2000000107） · Karda（karda）",
+    );
+    expect(String(body)).toContain("默认空间");
+    expect(link).toBe("/tenants/2000000107");
+    expect(refType).toBe("ops_signal");
+    expect(String(refId)).toMatch(
+      /^seat_limit:2000000107:karda:\d{4}-\d{2}-\d{2}$/,
+    );
+  });
+
+  it("通告写炸了：客户拿到的仍然是那个 409", async () => {
+    const { pool, inserts } = seatPool({ insertThrows: true });
+    const router = routerWithPool(seatLimitAggregator(), pool);
+    await expect(
+      router.grantProductSeat(req(), WS, {
+        productId: PRODUCT,
+        userId: MEMBER,
+      }),
+    ).rejects.toMatchObject({ message: "seat_limit_reached" });
+    expect(inserts).toHaveLength(1);
+  });
+
+  it("可视码解析不到也照发，只是不给一个点开 404 的链接", async () => {
+    const { pool, inserts } = seatPool({ subject: false });
+    const router = routerWithPool(seatLimitAggregator(), pool);
+    await expect(
+      router.grantProductSeat(req(), WS, {
+        productId: PRODUCT,
+        userId: MEMBER,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(String(inserts[0]![2])).toContain("（租户未知）");
+    expect(inserts[0]![4]).toBeNull();
+    expect(String(inserts[0]![6])).toContain("seat_limit:unknown:unknown:");
+  });
+
+  it("其余三种拒因不写通告（它们不是「该升档」的信号）", async () => {
+    for (const reason of [
+      "already_granted",
+      "product_not_covered",
+      "not_a_member",
+    ] as const) {
+      const { pool, inserts } = seatPool();
+      const router = routerWithPool(
+        {
+          grantProductSeatScoped: vi.fn(async () => ({
+            ok: false as const,
+            reason,
+          })),
+        },
+        pool,
+      );
+      await expect(
+        router.grantProductSeat(req(), WS, {
+          productId: PRODUCT,
+          userId: MEMBER,
+        }),
+      ).rejects.toThrow();
+      expect(inserts).toHaveLength(0);
+    }
+  });
+
+  it("composeSeatLimitNotice 不把 uuid 写进标题、正文或链接", () => {
+    const notice = composeSeatLimitNotice({
+      tenantNo: "2000000107",
+      tenantName: "示例科技",
+      workspaceName: "默认空间",
+      productCode: "karda",
+      productName: "Karda",
+      dayKey: "2026-09-28",
+      now: new Date("2026-09-28T12:00:00.000Z"),
+    });
+    for (const text of [notice.title, notice.body, notice.link ?? ""]) {
+      expect(text).not.toContain(WS);
+      expect(text).not.toContain(PRODUCT);
+      expect(text).not.toContain(MEMBER);
+    }
+    /* 去重键里仍是裸号：键不上屏，而 admin 的详情路由也吃裸号。 */
+    expect(notice.referenceId).toBe("seat_limit:2000000107:karda:2026-09-28");
+    expect(notice.expiresAt!.getTime()).toBe(
+      new Date("2026-09-28T12:00:00.000Z").getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+  });
+
+  /*
+   * 「一天一条」的那个「天」按 Asia/Shanghai 算。按 UTC 算的话，北京 08:00 之前撞上限
+   * 写的那一条落进前一天那格——同一个租户同一个产品在 00:00–08:00 与 08:00 之后各播
+   * 一条，而看这块板的人在北京。这条差别只在每天那八小时里现形，所以必须钉死时刻。
+   */
+  it("日期键按北京日历日：北京 00:30（UTC 前一天 16:30）算新的一天", () => {
+    expect(seatNoticeDayKey(new Date("2026-09-27T16:30:00.000Z"))).toBe(
+      "2026-09-28",
+    );
+    // 北京 08:00 整（UTC 00:00）算当天，不算前一天——UTC 口径正是在这里错的。
+    expect(seatNoticeDayKey(new Date("2026-09-28T00:00:00.000Z"))).toBe(
+      "2026-09-28",
+    );
+    // 北京 23:59:59.999 还是同一天，再一毫秒才换格。
+    expect(seatNoticeDayKey(new Date("2026-09-28T15:59:59.999Z"))).toBe(
+      "2026-09-28",
+    );
+    expect(seatNoticeDayKey(new Date("2026-09-28T16:00:00.000Z"))).toBe(
+      "2026-09-29",
+    );
+  });
+
+  it("真路径也用它：UTC 09-30 16:30 写的通告键是 10-01（不是 09-30）", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-30T16:30:00.000Z"));
+    try {
+      const { pool, inserts } = seatPool();
+      const router = routerWithPool(seatLimitAggregator(), pool);
+      await expect(
+        router.grantProductSeat(req(), WS, {
+          productId: PRODUCT,
+          userId: MEMBER,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      const refId = String(inserts[0]![6]);
+      expect(refId).toBe("seat_limit:2000000107:karda:2026-10-01");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

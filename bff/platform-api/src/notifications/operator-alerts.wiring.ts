@@ -33,6 +33,18 @@ import {
   type OpsSelfHealGaveUpInput,
 } from "@vxture/service-subscription";
 import type { OpsTodo } from "@vxture/service-ops-todos";
+import {
+  PgNoticeRepository,
+  type CreateSystemNoticeInput,
+} from "@vxture/service-notice";
+import {
+  OPS_NOTICE_INFO_TTL_MS,
+  OPS_SIGNAL_REFERENCE_TYPE,
+  redactUuids,
+  resolveOpsNoticeTenant,
+  writeOpsNotice,
+  type SystemNoticeWriter,
+} from "./ops-notice";
 
 /** 「已等待 3 小时 12 分钟」——运营看的是等了多久，不是时间戳。 */
 export function humanizeWaiting(since: Date, now = new Date()): string {
@@ -119,6 +131,144 @@ export function todoAlertInput(
   }
 }
 
+/* ── 两条已有邮件告警，各再加一条运营通告（2026-09-28 第二批 C-4 / C-5）────────── */
+
+/**
+ * 停了会直接卡住客户的作业。这三条的异常不只是运维的事，所以通告**同时投 admin**：
+ *   · subscription-renewal   —— 续费单不开，客户到期即停
+ *   · order-payment-expiry   —— 超时单不关，客户的单一直挂着（券也不释放）
+ *   · provisioning-dispatch  —— 已收款的权益不落地
+ * 其余作业（用量归集 / 池补充 / 清扫类）坏了先是运维的事，只投 opera。
+ * 名字与各作业文件里的 JOB_NAME 逐字一致——它就是 provisioning.background_jobs 的主键。
+ */
+export const CUSTOMER_BLOCKING_JOBS: ReadonlySet<string> = new Set([
+  "subscription-renewal",
+  "order-payment-expiry",
+  "provisioning-dispatch",
+]);
+
+export interface JobHealthNoticeFacts {
+  readonly verdict: "failed" | "stalled";
+  readonly jobName: string;
+  readonly idleMs: number;
+  readonly thresholdMs: number;
+  readonly intervalMs: number | null;
+  readonly lastError: string | null;
+  readonly failureCount: number;
+  /**
+   * 心跳里的 last_started_at —— 去重键就靠它分「一次episode」。
+   * 静默时它是冻住的（所以整段静默只播一条）；失败时每一轮都会推进（所以每一轮失败各播一条，
+   * 这正是要的：连续失败的次数本身是信息）。从没跑过（null）则按当天收敛。
+   */
+  readonly lastStartedAt: Date | null;
+  readonly now?: Date;
+}
+
+/**
+ * 纯函数：作业健康裁定 → 一条待写的通告。
+ *
+ * 静默 = critical（作业死了什么都不留，是真盲区），失败 = warning（下一轮会重试）。
+ * 静默那条不过期——它一直是真的，直到有人让作业跑起来；失败那条 30 天后退出列表。
+ *
+ * 链接：`/ops/jobs` 只在 opera 里存在。planes 含 admin 时**不给链接**——通告的 link 是
+ * 平面内相对路径，各平面各自解析，给了就是一个在 admin 里点开 404 的链接。
+ */
+export function composeJobHealthNotice(
+  facts: JobHealthNoticeFacts,
+): CreateSystemNoticeInput {
+  const now = facts.now ?? new Date();
+  const idle = humanizeWaiting(new Date(now.getTime() - facts.idleMs), now);
+  const stalled = facts.verdict === "stalled";
+  const blocking = CUSTOMER_BLOCKING_JOBS.has(facts.jobName);
+  const planes: ("admin" | "opera")[] = blocking
+    ? ["opera", "admin"]
+    : ["opera"];
+  const heartbeat = facts.intervalMs
+    ? `${Math.round(facts.intervalMs / 1000)} 秒`
+    : "未记录";
+  const lines = stalled
+    ? [
+        `作业 ${facts.jobName} 距上次开跑已 ${idle}，超过 ${Math.round(facts.thresholdMs / 60000)} 分钟阈值（心跳间隔 ${heartbeat}）。`,
+        "两种可能：调度没起来（进程 / 注册），或卡在某一轮出不来。两种都不会留下失败记录。",
+        "先在 opera 的任务调度看这一行的最后状态，再查 platform-api 容器日志。",
+      ]
+    : [
+        `作业 ${facts.jobName} 最近一轮执行失败，累计失败 ${facts.failureCount} 次。`,
+        /* 心跳里的错误原文是外来的字：作业抛什么就存什么，里面常带 uuid
+           （「订阅 xxx 不存在」、pg 把整行冲突键值打出来）。先抹再截，见 redactUuids。 */
+        facts.lastError
+          ? `错误：${redactUuids(facts.lastError).slice(0, 800)}`
+          : "（心跳里没有留下错误文本。）",
+        "一轮失败不会让作业停摆，下一轮会重试；连续失败才需要人介入。",
+      ];
+  if (blocking) {
+    lines.push(
+      "这条作业停着客户会直接受影响（续费单不开 / 超时单不关 / 已收款的开通不落地），" +
+        "所以运营台也收到了同一条。",
+    );
+  }
+  return {
+    targetPlanes: planes,
+    severity: stalled ? "critical" : "warning",
+    title: (stalled
+      ? `后台作业静默：${facts.jobName}（已 ${idle} 未开跑）`
+      : `后台作业执行失败：${facts.jobName}（累计失败 ${facts.failureCount} 次）`
+    ).slice(0, 256),
+    body: lines.join("\n"),
+    link: planes.length === 1 ? "/ops/jobs" : null,
+    referenceType: OPS_SIGNAL_REFERENCE_TYPE,
+    /*
+     * 一个 episode 一条：键带 last_started_at。作业名是库主键（varchar(64)），
+     * 加上前缀与 ISO 时刻远低于 reference_id 的 128 列宽。
+     * 从没跑过的作业没有时刻可用，按当天收敛——否则「never」会变成这辈子只播一条。
+     */
+    referenceId: `job_${facts.verdict}:${facts.jobName}:${
+      facts.lastStartedAt
+        ? facts.lastStartedAt.toISOString()
+        : `never:${now.toISOString().slice(0, 10)}`
+    }`,
+    expiresAt: stalled
+      ? null
+      : new Date(now.getTime() + OPS_NOTICE_INFO_TTL_MS),
+  };
+}
+
+/**
+ * 纯函数：自愈放弃 → 一条 critical 通告。只投 admin：出路在订单详情页
+ * （重试开通 / 看订单事件），而那一页只有 admin 有，所以链接给得出来。
+ *
+ * 去重键带 attempts（= 放弃点的失败次数）。放弃状态是持续的，这条分支每 tick 都会走到，
+ * 进程重启后计数归零重来也仍然撞到同一个键——一单一条，不刷屏。不过期：钱已经收了、
+ * 权益没开通，这件事不会自己变好。
+ */
+export function composeSelfHealGaveUpNotice(facts: {
+  readonly orderNo: string;
+  readonly attempts: number;
+  readonly lastError: string | null;
+}): CreateSystemNoticeInput {
+  return {
+    targetPlanes: ["admin"],
+    severity: "critical",
+    title:
+      `自动开通已放弃重试：${facts.orderNo}（失败 ${facts.attempts} 次）`.slice(
+        0,
+        256,
+      ),
+    body: [
+      `订单 ${facts.orderNo} 已收款但开通失败 ${facts.attempts} 次，自动重试已停止。`,
+      "这单不会再自愈，必须人工介入：在订单详情页重试开通，失败则查看订单事件。",
+      facts.lastError
+        ? // 开通失败的原文最常带 uuid（订阅 id、provisioning 的 request id）。
+          `最后一次失败原因：${redactUuids(facts.lastError).slice(0, 500)}`
+        : "（本进程内没有留下失败原因，多半是重启后重新计数到上限。）",
+    ].join("\n"),
+    link: `/orders/${encodeURIComponent(facts.orderNo)}`,
+    referenceType: OPS_SIGNAL_REFERENCE_TYPE,
+    referenceId: `selfheal_gave_up:${facts.orderNo}:${facts.attempts}`,
+    expiresAt: null,
+  };
+}
+
 @Injectable()
 export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
   private readonly logger = new Logger(OperatorAlertsWiring.name);
@@ -127,6 +277,12 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
   private readonly adminBaseUrl: string | null;
   /** 运维台（opera）绝对前缀，作业健康告警的深链用。 */
   private readonly operaBaseUrl: string | null;
+  /**
+   * 通告写侧（2026-09-28 第二批）。懒建：手上的 COMMERCE_PG_POOL 与 NoticeModule 自带的
+   * 池令牌是两回事（同名 token 在一个容器里会静默互相覆盖），库是同一个，直接用这只池
+   * ——与 services/notification/dispatch 里 new PgNoticeRepository(pool) 同一手法。
+   */
+  private noticeWriter: SystemNoticeWriter | null = null;
 
   constructor(
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
@@ -140,8 +296,25 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
     });
   }
 
+  private notices(): SystemNoticeWriter {
+    if (!this.noticeWriter) {
+      this.noticeWriter = new PgNoticeRepository(this.pool);
+    }
+    return this.noticeWriter;
+  }
+
   onModuleInit(): void {
     this.orders.setOpsAlerter(this);
+    /*
+     * 自动续费的两条信号（开单失败 / 无同周期价目）由订阅服务自己报——它们在库里不留行，
+     * 只有那一轮的代码知道。订阅包碰不到 tenancy，所以「谁的订阅」这一步在这里解析
+     * （通告里不许出现 UUID）。与 setOpsAlerter 同一手法：跨模块 DI 令牌在那边看不见。
+     */
+    this.orders.setOpsNoticePort({
+      createSystemNotice: (input) => this.notices().createSystemNotice(input),
+      resolveTenantIdentity: (tenantId) =>
+        resolveOpsNoticeTenant(this.pool, tenantId, this.logger),
+    });
     const missing = [
       this.adminBaseUrl ? null : "ADMIN_BASE_URL",
       this.operaBaseUrl ? null : "OPERA_BASE_URL",
@@ -175,10 +348,25 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
     );
   }
 
-  /** 自愈放弃：级别更高——自愈都不试了，说明这单靠系统自己好不了。 */
+  /**
+   * 自愈放弃：级别更高——自愈都不试了，说明这单靠系统自己好不了。
+   *
+   * 邮件照旧（4h 静默窗口在 dispatcher 里），另加一条 critical 通告：邮件漏看就没了，
+   * 通告留在运营台的列表里直到有人读它。通告先写、且失败不影响邮件（见 writeOpsNotice）。
+   */
   async orderSelfHealGaveUp(
     input: OpsSelfHealGaveUpInput,
   ): Promise<OperatorAlertResult> {
+    await writeOpsNotice(
+      this.notices(),
+      composeSelfHealGaveUpNotice({
+        orderNo: input.orderNo,
+        attempts: input.attempts,
+        lastError: input.lastError,
+      }),
+      this.logger,
+      `selfheal_gave_up ${input.orderNo}`,
+    );
     return this.alert({
       code: "ops.order.selfheal_gave_up",
       reference: { type: "order", id: input.orderId },
@@ -187,7 +375,8 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
         `订单 ${input.orderNo} 已收款但开通失败 ${input.attempts} 次，自动重试已停止。`,
         "这单不会再自愈，必须人工介入：在订单详情页「重试开通」，失败则查看订单事件。",
         input.lastError
-          ? `最后一次失败原因：${input.lastError.slice(0, 500)}`
+          ? // 邮件也是人在读，同一条铁律（通告那半在 composeSelfHealGaveUpNotice）。
+            `最后一次失败原因：${redactUuids(input.lastError).slice(0, 500)}`
           : "（本进程内没有留下失败原因，多半是重启后重新计数到上限。）",
       ],
       link: this.orderLink(input.orderNo),
@@ -206,7 +395,26 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
     intervalMs: number | null;
     lastError: string | null;
     failureCount: number;
+    /** 心跳的 last_started_at：通告的去重键靠它分 episode（邮件侧不用）。 */
+    lastStartedAt: Date | null;
   }): Promise<OperatorAlertResult> {
+    // 邮件之外再写一条通告（2026-09-28）：邮件有 4h 静默窗口且漏看就没了，
+    // 通告留在列表里。写失败不影响邮件——这一段永不抛。
+    await writeOpsNotice(
+      this.notices(),
+      composeJobHealthNotice({
+        verdict: input.verdict,
+        jobName: input.jobName,
+        idleMs: input.idleMs,
+        thresholdMs: input.thresholdMs,
+        intervalMs: input.intervalMs,
+        lastError: input.lastError,
+        failureCount: input.failureCount,
+        lastStartedAt: input.lastStartedAt,
+      }),
+      this.logger,
+      `job_${input.verdict} ${input.jobName}`,
+    );
     const idle = humanizeWaiting(new Date(Date.now() - input.idleMs));
     if (input.verdict === "stalled") {
       return this.alert({
@@ -229,7 +437,8 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
       lines: [
         `作业 ${input.jobName} 最近一轮执行失败，累计失败 ${input.failureCount} 次。`,
         input.lastError
-          ? `错误：${input.lastError.slice(0, 800)}`
+          ? // 同上：邮件正文也不许带 uuid（通告那半在 composeJobHealthNotice）。
+            `错误：${redactUuids(input.lastError).slice(0, 800)}`
           : "（心跳里没有留下错误文本。）",
         "作业本身不会因为一轮失败停摆,下一轮会重试;连续失败才需要人介入。",
       ],

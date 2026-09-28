@@ -14,6 +14,7 @@
     "@nestjs/swagger": "^11.0.0",
     "@vxture/core-api": "workspace:*",
     "@vxture/core-config": "workspace:*",
+    "@vxture/service-notice": "workspace:*",
     "@vxture/service-promotion": "workspace:*",
     "@vxture/service-provisioning": "workspace:*",
     "@vxture-platform/shared": "workspace:*",

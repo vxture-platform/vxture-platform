@@ -6,11 +6,21 @@
  * the contract's remaining_total / per_pool_breakdown enrichment (read-only —
  * this layer never touches quota_used).
  */
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { Pool } from "pg";
 import { ConsumeService } from "@vxture/service-subscription";
+import { PgNoticeRepository } from "@vxture/service-notice";
+import {
+  resolveOpsNoticeWorkspace,
+  type SystemNoticeWriter,
+} from "../notifications/ops-notice";
 import { buildQuotaPoolView } from "./entitlement-view";
-import type { EngineConsumeResult, PoolIdentity } from "./usage-view";
+import {
+  composeQuotaExhaustedNotice,
+  quotaPeriodStartKey,
+  type EngineConsumeResult,
+  type PoolIdentity,
+} from "./usage-view";
 
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 
@@ -28,10 +38,85 @@ interface PoolIdentitySqlRow {
 
 @Injectable()
 export class PlatformUsageService {
+  private readonly logger = new Logger(PlatformUsageService.name);
+  /**
+   * 通告写侧。懒建而不是构造器注入：本模块拿到的是 COMMERCE_PG_POOL，
+   * 而 NoticeModule 自带另一个池令牌（同名 token 在一个容器里会静默互相覆盖，
+   * 见 @vxture/service-notice 的 tokens.ts）。库是同一个，直接用手上的池即可——
+   * 与 services/notification/dispatch 里 new PgNoticeRepository(pool) 同一手法。
+   */
+  private noticeWriter: SystemNoticeWriter | null = null;
+  /**
+   * 本进程已播过的「工作空间 × 产品 × 指标 × 周期」。gated 是持续状态，客户端会重试，
+   * 这一层挡住「每个请求都去打一次库」；跨实例与重启后的一事一条由表上的部分唯一索引兜。
+   * 只在**写成功之后**记：写失败就不记，下一次 gated 请求会再试一次。
+   */
+  private readonly noticedQuotaPeriods = new Set<string>();
+  /** 上限只是防无界增长（键含指标与周期，正常量级远小于此）；满了整体清空，代价是再写一条。 */
+  private static readonly QUOTA_NOTICE_CACHE_MAX = 500;
+
   constructor(
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
     @Inject(ConsumeService) private readonly consumeService: ConsumeService,
   ) {}
+
+  private notices(): SystemNoticeWriter {
+    if (!this.noticeWriter)
+      this.noticeWriter = new PgNoticeRepository(this.pool);
+    return this.noticeWriter;
+  }
+
+  /**
+   * 配额耗尽 → 一条运营通告（2026-09-28 第二批 C-2）。**永不抛**：C3 consume 是热路径，
+   * 通告写不进去只是运营少一条，把客户的调用打断是另一回事。
+   *
+   * 一个计费周期一条（去重键带周期起点）。租户可视码解析失败也照发——少一个名字的通告
+   * 仍然是一条通告。
+   */
+  async noteQuotaExhausted(input: {
+    workspaceId: string;
+    productCode: string;
+    metric: string;
+    amount: string;
+    remainingTotal: number;
+    pools: PoolIdentity[];
+    now?: Date;
+  }): Promise<void> {
+    const now = input.now ?? new Date();
+    const periodStartKey = quotaPeriodStartKey(input.pools, now);
+    const cacheKey = `${input.workspaceId}:${input.productCode}:${input.metric}:${periodStartKey}`;
+    if (this.noticedQuotaPeriods.has(cacheKey)) return;
+    const tenant = await resolveOpsNoticeWorkspace(
+      this.pool,
+      input.workspaceId,
+      this.logger,
+    );
+    try {
+      await this.notices().createSystemNotice(
+        composeQuotaExhaustedNotice({
+          workspaceId: input.workspaceId,
+          productCode: input.productCode,
+          metric: input.metric,
+          amount: input.amount,
+          remainingTotal: input.remainingTotal,
+          periodStartKey,
+          tenant,
+          now,
+        }),
+      );
+      if (
+        this.noticedQuotaPeriods.size >=
+        PlatformUsageService.QUOTA_NOTICE_CACHE_MAX
+      ) {
+        this.noticedQuotaPeriods.clear();
+      }
+      this.noticedQuotaPeriods.add(cacheKey);
+    } catch (err) {
+      this.logger.warn(
+        `配额耗尽的运营通告写入失败（${cacheKey}）— ${String(err)}`,
+      );
+    }
+  }
 
   /** product_code → id; null when the code is not in the catalog. */
   async resolveProductId(productCode: string): Promise<string | null> {
@@ -110,6 +195,8 @@ export class PlatformUsageService {
       poolId: r.id,
       subscriptionId: r.subscription_id,
       view: views[i]!,
+      // 配额耗尽那条通告按计费周期去重，周期起点只有这一处读得到（列已在上面选出）。
+      periodStart: r.current_period_start,
     }));
   }
 

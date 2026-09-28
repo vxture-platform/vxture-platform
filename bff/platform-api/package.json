@@ -27,6 +27,7 @@
     "@vxture/service-account": "workspace:*",
     "@vxture/service-organization": "workspace:*",
     "@vxture/service-notification": "workspace:*",
+    "@vxture/service-notice": "workspace:*",
     "@vxture/service-ops-todos": "workspace:*",
     "@vxture/service-sms": "workspace:*",
     "@vxture/service-provisioning": "workspace:*",

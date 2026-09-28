@@ -174,3 +174,37 @@ $$;
 -- （ON CONFLICT 的部分唯一索引），别的 admin 表一律不给。
 GRANT USAGE ON SCHEMA admin TO svc_platform_api;
 GRANT SELECT, INSERT ON admin.operator_notices TO svc_platform_api;
+
+-- ── svc_platform_api 的读面例外：运营侧信号巡检（OperatorSignalSweepJob，2026-09-28）──
+-- 第二批「做全做多」加了两条巡检（bff/platform-api/src/jobs/operator-signal-sweep.job.ts）：
+-- 业务事件 11 类各一条 SQL，运营动作扫 support.audit_logs 的白名单动作码，逐行写一条
+-- 运营通告。Postgres 对语句里**出现过**的每一个关系查权限（哪一支返不返回行都一样），
+-- 所以下面这几张表少一张，整段巡检就是 42501 —— 运营端又一次「一条都没有」。
+--
+-- 为什么不是给 account / kyc / support 三个 schema 的 ALL TABLES：那会顺带把凭据
+-- （credential 虽是另一 schema，但 account 里还有头像字节、三方绑定）、工单正文附件、
+-- 通知投递账本、收件箱全给进去。巡检只读下面七张，逐表授权、且只给 SELECT
+-- （它一行也不改这些表——写只写 admin.operator_notices）。也不给
+-- ALTER DEFAULT PRIVILEGES：将来新增的表不会跟着漏进来。
+--
+-- support.audit_logs 是按 created_at 分区的（96_partitions.sql）。分区表经父表访问时
+-- 权限查在**父表**上，所以这一行就够，不必逐分区授——新分区自动可读。
+--
+-- 有意不授的两张（不是漏了）：
+--   · admin.risk_records —— 2026-11-21 那份 grant 迁移的审计段把它与 operator_account /
+--     operator_credential 一起**显式断言为 0 项权限**，授了会让那份已合并迁移在下一次
+--     全量重放时抛 EXCEPTION。租户风险标记的运营可见性因此走审计巡检的
+--     governance.risk.*（人在治理台按出来的动作有审计行），不直接扫那张表。
+--   · admin.operator_account —— 同上。代价是审计通告的正文说不出运营者真名，回落成
+--     按 actor_console 分的角色称谓（见 audit-event-signals.ts 头注）。两条都要 owner
+--     先放宽那句断言才能改，不在实施侧自决。
+GRANT USAGE ON SCHEMA account TO svc_platform_api;
+GRANT USAGE ON SCHEMA kyc TO svc_platform_api;
+GRANT USAGE ON SCHEMA support TO svc_platform_api;
+GRANT SELECT ON account.users TO svc_platform_api;
+GRANT SELECT ON account.user_profiles TO svc_platform_api;
+GRANT SELECT ON kyc.tenant_verifications TO svc_platform_api;
+GRANT SELECT ON support.product_reviews TO svc_platform_api;
+GRANT SELECT ON support.tickets TO svc_platform_api;
+GRANT SELECT ON support.audit_logs TO svc_platform_api;
+GRANT SELECT ON admin.maintenance_windows TO svc_platform_api;
