@@ -13,18 +13,27 @@
  *   · 看不见 console 那份手写主题清单的 `planned` 标与两本词条。「有模板却还标着开发中」
  *     那一半钉在 @vxture/service-account 的 notification-preferences.service.spec.ts 里
  *     ——那边能同时看到本包的 topicOf 与偏好中心的 PLANNED 集合。
+ *   · 文案表本身看不见 `mandatory`（那是 dispatcher 每次调用传的参数）。所以「成员邀请
+ *     主题从开发中放开之后，客户关掉它仍然关不掉邀请本身」那一条在本文件末尾**跑分发器**
+ *     来证，不写成断言。
  *   · 看不见短信模板：新码没进 `smsParams` 的 switch（默认回 {}），所以它们不发短信。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { Pool } from "pg";
 import {
   NOTIFICATION_TEMPLATES,
+  ROLE_PARAM,
   render,
+  roleNameOf,
   topicOf,
   type NotificationLocale,
   type NotificationTemplateCode,
   type NotificationTopic,
   type TemplateParams,
 } from "./templates";
+/* 「关掉主题关不掉邀请本身」那一组要真的跑一遍分发器：mandatory 是**调用参数**不是模板
+   属性，静态断言证不了它。 */
+import { NotificationDispatcher } from "./dispatcher";
 /**
  * 跨包相对导入（services → services，dep-cruiser 允许同层）。
  * 不写成 `@vxture/service-subscription`：那个别名会把整包源码拖进本包的程序
@@ -387,29 +396,498 @@ describe("代客续期与自助续费是两条，判据是那笔钱在不在", (
   });
 });
 
+/**
+ * 成员邀请四态（2026-09-29）。
+ *
+ * `tenancy.invitations` 的五态里，pending 之外那四个此前一句话都不发。这一组钉三件事：
+ *   1. 四条都落在 `member_invitation`（与已在发的 `tenant.invitation` 同一个主题）；
+ *   2. 四条各自的**收件人视角**——accepted / declined / expired 写给邀请人，revoked 写给
+ *      被邀请人。写错视角不会报错，只会让人收到一句在说别人的话；
+ *   3. 文案里一个 uuid 都没有：邀请由租户名 + 角色名 + 邀请人当初填的那个账号认领。
+ */
+describe("成员邀请四态", () => {
+  const INVITATION_CODES = [
+    "tenant.invitation_accepted",
+    "tenant.invitation_declined",
+    "tenant.invitation_revoked",
+    "tenant.invitation_expired",
+  ] as const;
+
+  const TENANT = "Acme 科技";
+  /* 角色参数传的是**码**（`access.roles.role_code`），成词是渲染层的事——只有那一层知道
+     收件人读哪种语言。所以这一组按语言取词断言，不写死一个中文名。 */
+  const ROLE_CODE = "member";
+  const ROLE_LABEL: Record<NotificationLocale, string> = {
+    "zh-CN": "成员",
+    "en-US": "Member",
+  };
+  const INVITEE = "ann@acme.example";
+  const params: TemplateParams = {
+    tenantName: TENANT,
+    roleKey: ROLE_CODE,
+    inviteeName: INVITEE,
+    expiresAt: "2026-10-06",
+  };
+
+  it("四条，都在模板表里，且都归 invitation_activity（**与邀请本身不同主题**）", () => {
+    expect(INVITATION_CODES).toHaveLength(4);
+    for (const code of INVITATION_CODES) {
+      expect(Object.keys(NOTIFICATION_TEMPLATES)).toContain(code);
+      expect(topicOf(code)).toBe("invitation_activity");
+      /* owner 2026-09-29 看过页面后拆的那一刀就在这一句上：四条周知与「邀请本身」**不是**
+         同一个主题，客户才能只静音周知而不影响邀请送达（本批最初两者同主题，于是站内那一档
+         为了保住邀请本身必须锁死，四条跟着关不掉）。 */
+      expect(topicOf(code)).not.toBe(topicOf("tenant.invitation"));
+    }
+    // 邀请本身留在原主题里：那一行只剩它一条，站内恒锁。
+    expect(topicOf("tenant.invitation")).toBe("member_invitation");
+  });
+
+  it("文案参数集合就是约定的那几个（撤回那条不需要被邀请人自己的账号）", () => {
+    const set = (code: NotificationTemplateCode) => {
+      const def = NOTIFICATION_TEMPLATES[code];
+      return placeholders(def.title, def.body);
+    };
+    expect(set("tenant.invitation_accepted")).toEqual([
+      "inviteeName",
+      "roleKey",
+      "tenantName",
+    ]);
+    expect(set("tenant.invitation_declined")).toEqual([
+      "inviteeName",
+      "roleKey",
+      "tenantName",
+    ]);
+    /* 撤回是写给**被邀请人**的：把他自己的账号念给他听没有意义，认领靠租户名 + 角色。 */
+    expect(set("tenant.invitation_revoked")).toEqual(["roleKey", "tenantName"]);
+    expect(set("tenant.invitation_expired")).toEqual([
+      "expiresAt",
+      "inviteeName",
+      "roleKey",
+      "tenantName",
+    ]);
+  });
+
+  for (const code of INVITATION_CODES) {
+    for (const locale of LOCALES) {
+      it(`${code}（${locale}）带可视把手、不含 uuid、参数无残留`, () => {
+        const text = rendered(code, params, locale);
+        expect(text).toContain(TENANT);
+        expect(text).toContain(ROLE_LABEL[locale]);
+        // 上线过的那个缺陷：中文正文里印出英文角色码。
+        expect(text).not.toContain(ROLE_CODE);
+        expect(text).not.toMatch(UUID_ANYWHERE);
+        expect(text).not.toMatch(/\{\{/);
+        expect(text).not.toContain("**");
+      });
+    }
+  }
+
+  it("写给邀请人的三条都点名被邀请人：谁、哪个租户、什么角色", () => {
+    for (const code of [
+      "tenant.invitation_accepted",
+      "tenant.invitation_declined",
+      "tenant.invitation_expired",
+    ] as const) {
+      for (const locale of LOCALES) {
+        const text = rendered(code, params, locale);
+        // 三样缺一样，邀请人就得回邀请记录里自己对——那正是这几条通知要省掉的事。
+        expect(text).toContain(INVITEE);
+        expect(text).toContain(TENANT);
+        expect(text).toContain(ROLE_LABEL[locale]);
+      }
+    }
+  });
+
+  it("拒绝那条明说「没有加入」并给出下一步，不揣测原因", () => {
+    const zh = rendered("tenant.invitation_declined", params, "zh-CN");
+    // 只写「拒绝了邀请」会让邀请人去成员列表里自己数人。
+    expect(zh).toContain("没有加入");
+    expect(zh).toContain("重新邀请");
+    // 库里只有一个 declined 状态，为什么拒绝没有任何数据支持。
+    for (const guess of ["原因", "可能", "也许", "为什么"]) {
+      expect(zh).not.toContain(guess);
+    }
+    const en = rendered("tenant.invitation_declined", params, "en-US");
+    expect(en.toLowerCase()).toContain("did not join");
+    expect(en.toLowerCase()).toContain("new invitation");
+    for (const guess of ["reason", "maybe", "perhaps", "probably"]) {
+      expect(en.toLowerCase()).not.toContain(guess);
+    }
+  });
+
+  it("撤回那条写给被邀请人：只说撤回 + 不再有效，不指责不揣测", () => {
+    const zh = rendered("tenant.invitation_revoked", params, "zh-CN");
+    expect(zh).toContain("撤回");
+    expect(zh).toContain("不再有效");
+    /* 对着被邀请人写「你没有及时接受」是把撤回说成他的问题；写「对方可能…」是替邀请人
+       编话。两种都不许出现。 */
+    for (const blame of [
+      "未及时",
+      "没有及时",
+      "拒绝",
+      "原因",
+      "可能",
+      "违规",
+    ]) {
+      expect(zh).not.toContain(blame);
+    }
+    const en = rendered("tenant.invitation_revoked", params, "en-US");
+    expect(en.toLowerCase()).toContain("withdrawn");
+    expect(en.toLowerCase()).toContain("no longer");
+    for (const blame of ["reason", "failed to", "too late", "declined"]) {
+      expect(en.toLowerCase()).not.toContain(blame);
+    }
+  });
+
+  it("过期那条说清「截止前没被接受」+ 可以重新邀请，不写成「对方拒绝了」", () => {
+    const zh = rendered("tenant.invitation_expired", params, "zh-CN");
+    expect(zh).toContain("2026-10-06");
+    expect(zh).toContain("已过期");
+    expect(zh).toContain("重新邀请");
+    // 没人接受与明确拒绝是两件事，库里也是两个状态。
+    expect(zh).not.toContain("拒绝");
+    const en = rendered("tenant.invitation_expired", params, "en-US");
+    expect(en).toContain("2026-10-06");
+    expect(en.toLowerCase()).toContain("expired");
+    expect(en.toLowerCase()).toContain("new invitation");
+    expect(en.toLowerCase()).not.toContain("declined");
+  });
+
+  it("四条正文互不相同（拒绝与过期没有合成一句「或者…或者」）", () => {
+    const bodies = INVITATION_CODES.map(
+      (code) => NOTIFICATION_TEMPLATES[code].body,
+    );
+    expect(new Set(bodies).size).toBe(4);
+    for (const body of bodies) expect(body).not.toContain("或者");
+  });
+
+  /* 邀请本身那条只改了**一件事**：角色参数从 roleName 换成 roleKey（它有同一个缺陷——
+     中文正文里印出英文码，见「角色码在渲染时成词」那一组）。有效期与邀请人一个没少。 */
+  it("邀请本身那条只换了角色参数名：有效期与邀请人仍在", () => {
+    expect(
+      placeholders(
+        NOTIFICATION_TEMPLATES["tenant.invitation"].title,
+        NOTIFICATION_TEMPLATES["tenant.invitation"].body,
+      ),
+    ).toEqual(["expiresAt", "inviterName", "roleKey", "tenantName"]);
+  });
+});
+
+/**
+ * 角色名（2026-09-29）。修的是一处**已经上线**的缺陷：发侧把 `access.roles.role_code`
+ * 原样塞进文案，于是中文正文读作「以「member」身份加入」。
+ *
+ * 契约：参数名 `roleKey`，值是**码**；翻成词在渲染时做，因为只有那一层知道收件人读哪种
+ * 语言（`localeOf(account.users.language)`）。所以这一组的判据是**同一个码、两种语言、两个
+ * 不同的词**——少了后半句，发侧先翻好再传进来也能全绿，而那恰恰是要防的做法。
+ */
+describe("角色码在渲染时成词", () => {
+  /** 五个码 = `access.roles.role_code` 的全集；词与 console 的 `role.*` 词条逐字相同。 */
+  const ROLE_WORDS: Record<string, Record<NotificationLocale, string>> = {
+    owner: { "zh-CN": "所有者", "en-US": "Owner" },
+    manager: { "zh-CN": "管理员", "en-US": "Manager" },
+    member: { "zh-CN": "成员", "en-US": "Member" },
+    readonly: { "zh-CN": "只读成员", "en-US": "Read-only" },
+    guest: { "zh-CN": "访客", "en-US": "Guest" },
+  };
+
+  /** 带角色的五条：邀请本身（已上线）+ 四个终态。 */
+  const ROLE_TEMPLATES = [
+    "tenant.invitation",
+    "tenant.invitation_accepted",
+    "tenant.invitation_declined",
+    "tenant.invitation_revoked",
+    "tenant.invitation_expired",
+  ] as const;
+
+  /** 角色之外的参数给全，免得「少一个参数」把断言带向别的原因。 */
+  const base: TemplateParams = {
+    tenantName: "Acme 科技",
+    inviterName: "Ann",
+    inviteeName: "ann@acme.example",
+    expiresAt: "2026-10-06",
+  };
+
+  it("五个码两种语言各有词，且查表就是那张表（不落回落档）", () => {
+    for (const [code, words] of Object.entries(ROLE_WORDS)) {
+      for (const locale of LOCALES) {
+        expect(roleNameOf(code, locale)).toBe(words[locale]);
+      }
+    }
+    expect(Object.keys(ROLE_WORDS)).toHaveLength(5);
+  });
+
+  it("五条模板都用 roleKey 这一个参数名，全表不留旧名 roleName", () => {
+    for (const code of ROLE_TEMPLATES) {
+      const def = NOTIFICATION_TEMPLATES[code];
+      expect(placeholders(def.title, def.body)).toContain(ROLE_PARAM);
+    }
+    /* 两个名字并存的话，只改了一处的人不会收到任何提醒——而症状是正文里一个空洞。 */
+    for (const code of Object.keys(
+      NOTIFICATION_TEMPLATES,
+    ) as NotificationTemplateCode[]) {
+      const def = NOTIFICATION_TEMPLATES[code];
+      expect(placeholders(def.title, def.body)).not.toContain("roleName");
+    }
+  });
+
+  it("同一个码、两种语言、两个词；中文正文里一个英文码都不剩", () => {
+    for (const code of ROLE_TEMPLATES) {
+      for (const [roleKey, words] of Object.entries(ROLE_WORDS)) {
+        const zh = rendered(code, { ...base, roleKey }, "zh-CN");
+        expect(zh).toContain(words["zh-CN"]);
+        // 这一句就是那个缺陷本身：中文里印出 `member` / `guest` 这种内部值。
+        expect(zh).not.toContain(roleKey);
+        expect(rendered(code, { ...base, roleKey }, "en-US")).toContain(
+          words["en-US"],
+        );
+      }
+    }
+  });
+
+  it("码不认识、或者压根没给：两种语言各回落成一句实话，不印码也不留空洞", () => {
+    for (const code of ROLE_TEMPLATES) {
+      for (const params of [
+        // 目录外的码：将来加了角色而这张表没跟。
+        { ...base, roleKey: "sysadmin" },
+        // 发侧整个忘了传这个参数（`interpolate` 对缺参本来是替换成空串）。
+        { ...base },
+      ]) {
+        const zh = rendered(code, params, "zh-CN");
+        expect(zh).toContain("未指定角色");
+        expect(zh).not.toContain("sysadmin");
+        /* 空洞长这样：「以「」身份加入」。回落必须把它填上——一句带洞的话比一个陌生的码
+           更难读，而两者都是把「我不知道」说成了别的东西。 */
+        expect(zh).not.toContain("「」");
+        expect(rendered(code, params, "en-US")).toContain(
+          "an unspecified role",
+        );
+      }
+    }
+  });
+});
+
+/**
+ * 「关掉主题关不掉邀请本身」「关掉邀请本身关不掉那四条周知」——**跑一遍分发器**来证。
+ *
+ * 为什么必须是运行证明而不是断言：这里要证的两件事都**不在模板表里**——
+ *   · `mandatory` 是 dispatcher 每次调用传的参数（`tenant.invitation`：站内那条消息**就是**
+ *     邀请，关掉它邀请人会收到「已送达对方账号」而对方那边什么也没有，owner 2026-09-09）；
+ *   · 「关掉哪个主题会静音哪几条」是 `topicOf` 与偏好门**跑起来之后**的行为。
+ *
+ * 2026-09-29 owner 把邀请拆成两个主题（`member_invitation` 只剩邀请本身，四条周知归
+ * `invitation_activity`），所以这一组现在钉**两个方向**：
+ *   关掉「邀请动态」 ⇒ 四条周知不落，而邀请本身照样落（验收就是这一条）；
+ *   关掉「成员邀请」 ⇒ 邀请本身照样落（mandatory 短路），而四条周知**不再被连带静音**
+ *                     ——拆开之前那四条跟着一起哑掉，那正是拆行要解决的事。
+ * 只验一个方向证不了拆开生效：两个主题其实还是同一个，也能让「关掉 A 之后 B 不发」全绿。
+ *
+ * 判据先验它会不会动：第一条用例证明这个假开关**只关指定的那一个主题**——否则「关了照样
+ * 送到」可能只是因为开关根本没生效，那是个恒真的判据。
+ */
+describe("拆开之后两个主题各自管得住自己", () => {
+  /** 只装分发器在这条路径上会碰的几张表；未知 SQL 一律抛（多一条查询不该静默变成查不到）。 */
+  function invitePool() {
+    const inbox = new Set<string>();
+    const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes("select owner_user_id from tenancy.tenants")) {
+        return { rows: [{ owner_user_id: "inviter-1" }], rowCount: 1 };
+      }
+      if (sql.includes("from account.users")) {
+        return {
+          rows: [{ email: null, phone: null, language: "zh-CN" }],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("insert into support.inbox_messages")) {
+        const key = [params[1], params[2], params[6], params[7]].join("|");
+        if (inbox.has(key)) return { rows: [], rowCount: 0 };
+        inbox.add(key);
+        return { rows: [{ id: `msg-${inbox.size}` }], rowCount: 1 };
+      }
+      if (sql.includes("insert into support.notification_logs")) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`unexpected sql: ${sql}`);
+    });
+    return { pool: { query } as unknown as Pool, inbox };
+  }
+
+  /**
+   * 探针：对**指定的那一个**主题的任何渠道都回 false，其余主题照常放行。
+   *
+   * 这是探针而不是一个真实的库内状态——偏好服务把 `member_invitation` 的**站内**档锁成了开
+   * （@vxture/service-account 的 `LOCKED.member_invitation`，那边有用例），所以现实里站内
+   * 这一档永远是 true，客户真能关的是邮件 / 短信。这里故意把站内也关掉，为的是让用例落在
+   * dispatcher 那一个短路的两侧：mandatory 绕过、不带 mandatory 不绕过。
+   *
+   * 带参数而不是写死一个主题：拆开之后要两个主题各关一次，才看得出那一刀真的切在中间。
+   * 而 `invitation_activity` 三个渠道都**没有**锁（那正是拆开的目的），所以关掉它是客户
+   * 真做得到的事，不只是探针。
+   */
+  const topicOff = (denied: NotificationTopic) => ({
+    allows: async (_userId: string, topic: NotificationTopic) =>
+      topic !== denied,
+  });
+
+  function dispatcher(pool: Pool, denied: NotificationTopic) {
+    return new NotificationDispatcher(pool, {
+      prefs: topicOff(denied),
+      // 运营镜像另有自己的用例；这里关掉，免得假 pool 还要装它那三条查询。
+      operatorMirror: null,
+      logger: { warn: () => {} },
+    });
+  }
+
+  const invitation = {
+    tenantId: "t-1",
+    reference: {
+      type: "invitation" as const,
+      id: "8800000012:7a1b2c3d4e5f:sent",
+    },
+    params: {
+      tenantName: "Acme 科技",
+      inviterName: "Ann",
+      roleName: "成员",
+      expiresAt: "2026-10-06",
+    },
+  };
+
+  it("这个假开关只关指定的那一个主题：别的主题照样送到（否则下面几条是恒真的）", async () => {
+    const f = invitePool();
+    const res = await dispatcher(f.pool, "invitation_activity").notify({
+      tenantId: "t-1",
+      templateCode: "subscription.expiring_soon",
+      reference: { type: "subscription", id: "sub-1:2026-10-06" },
+      params: {
+        productName: "Arda",
+        planName: "Pro",
+        endAt: "2026-10-06",
+        days: 7,
+      },
+    });
+    expect(res.inboxCreated).toBe(1);
+  });
+
+  it("mandatory 的邀请本身：自己那个主题关着也照样落进被邀请人的收件箱", async () => {
+    const f = invitePool();
+    const res = await dispatcher(f.pool, "member_invitation").notify({
+      ...invitation,
+      templateCode: "tenant.invitation",
+      exactRecipients: ["invitee-1"],
+      mandatory: true,
+      inboxOnly: true,
+      link: "/inbox",
+    });
+    expect(res.inboxCreated).toBe(1);
+    expect(res.skipped).toBe(0);
+  });
+
+  /** 四条周知的公共调用形状（收件人是邀请人；四条各自的引用锚不同）。 */
+  function activity(code: NotificationTemplateCode) {
+    return {
+      tenantId: "t-1",
+      templateCode: code,
+      reference: {
+        type: "invitation" as const,
+        id: `8800000012:7a1b2c3d4e5f:${code}`,
+      },
+      params: {
+        tenantName: "Acme 科技",
+        roleKey: "member",
+        inviteeName: "ann@acme.example",
+        expiresAt: "2026-10-06",
+      },
+      exactRecipients: ["inviter-1"],
+    };
+  }
+
+  const ACTIVITY_CODES = [
+    "tenant.invitation_accepted",
+    "tenant.invitation_declined",
+    "tenant.invitation_revoked",
+    "tenant.invitation_expired",
+  ] as NotificationTemplateCode[];
+
+  it("关掉「邀请动态」：四条周知停在门口（不带 mandatory 就不绕过偏好门）", async () => {
+    /* 这一条同时是「上一条不是因为门没生效」的对照：四条周知**没有** mandatory，所以它们
+       真的被拦住了。拆主题之后关掉的是 `invitation_activity`——客户在偏好页上把这一行的三
+       档全关掉就是这个状态（那一行没有 LOCKED，见偏好服务）。 */
+    for (const code of ACTIVITY_CODES) {
+      const f = invitePool();
+      const res = await dispatcher(f.pool, "invitation_activity").notify(
+        activity(code),
+      );
+      expect(res.inboxCreated).toBe(0);
+      expect(res.skipped).toBe(1);
+      expect(f.inbox.size).toBe(0);
+    }
+  });
+
+  it("关掉「邀请动态」的同时，mandatory 的邀请本身仍然送达（owner 要的验收）", async () => {
+    const f = invitePool();
+    const res = await dispatcher(f.pool, "invitation_activity").notify({
+      ...invitation,
+      templateCode: "tenant.invitation",
+      exactRecipients: ["invitee-1"],
+      mandatory: true,
+      inboxOnly: true,
+      link: "/inbox",
+    });
+    expect(res.inboxCreated).toBe(1);
+    expect(res.skipped).toBe(0);
+    expect(f.inbox.size).toBe(1);
+  });
+
+  it("反过来：关掉「成员邀请」不再连带静音那四条周知（拆行的全部意义）", async () => {
+    /* 拆开之前四条与邀请本身同住一行，站内那一档为了保住邀请本身必须锁死，于是客户要么
+       忍着四条、要么把整行关掉（而关掉的那一档根本关不动）。这条用例就是那个连带效应
+       现在不存在了——同一个探针关着 member_invitation，四条照样落。 */
+    for (const code of ACTIVITY_CODES) {
+      const f = invitePool();
+      const res = await dispatcher(f.pool, "member_invitation").notify(
+        activity(code),
+      );
+      expect(res.inboxCreated).toBe(1);
+      expect(res.skipped).toBe(0);
+    }
+  });
+});
+
 describe("全表通则", () => {
   const codes = Object.keys(
     NOTIFICATION_TEMPLATES,
   ) as NotificationTemplateCode[];
 
-  /** 该模板两种语言都该用到的参数 → 标记值。标记既当填充也当探针。 */
+  /**
+   * 该模板两种语言都该用到的参数 → 标记值。标记既当填充也当探针。
+   *
+   * `roleKey` 例外：它是**码不是展示值**，渲染时被换成该语言的角色名，所以标记穿不过它
+   * （硬塞一个 `<roleKey>` 只会落进「码不认识」的回落档）。给它一个真码，另在 `echo` 里
+   * 摘出去——它那一半的判据在「角色码在渲染时成词」那一组，以及下面参数集合那条用例里。
+   */
   function markers(code: NotificationTemplateCode): {
     names: string[];
     params: TemplateParams;
+    echo: string[];
   } {
     const def = NOTIFICATION_TEMPLATES[code];
     const names = placeholders(def.title, def.body);
     return {
       names,
-      params: Object.fromEntries(names.map((p) => [p, `<${p}>`])),
+      params: Object.fromEntries(
+        names.map((p) => [p, p === ROLE_PARAM ? "member" : `<${p}>`]),
+      ),
+      echo: names.filter((p) => p !== ROLE_PARAM),
     };
   }
 
   it("每条模板两种语言的标题与正文都非空", () => {
     /* = 模板码总数。加一条码就在这里 +1 —— 这个数字当探针的全部意义就是「加了码却没有
        任何一条用例覆盖到它」当场红。2026-09-28 收尾加两条（运营代客续期 / 升级维护暂停）：
-       32 → 34。 */
-    expect(codes).toHaveLength(34);
+       32 → 34。2026-09-29 成员邀请四态：34 → 38。 */
+    expect(codes).toHaveLength(38);
     for (const code of codes) {
       const { params } = markers(code);
       for (const locale of LOCALES) {
@@ -430,11 +908,16 @@ describe("全表通则", () => {
    */
   it("两种语言的参数集合逐条一致", () => {
     for (const code of codes) {
-      const { names, params } = markers(code);
+      const { names, echo, params } = markers(code);
       for (const locale of LOCALES) {
         const text = rendered(code, params, locale);
         expect(text).not.toMatch(/\{\{/);
-        for (const name of names) expect(text).toContain(`<${name}>`);
+        for (const name of echo) expect(text).toContain(`<${name}>`);
+        /* roleKey 那一半：标记换不过去，改成按语言断言它成了那个语言的角色名——⊇ 那个
+           方向（「这个参数该语言也用到了」）的判据没有丢。 */
+        if (names.includes(ROLE_PARAM)) {
+          expect(text).toContain(roleNameOf("member", locale));
+        }
       }
     }
   });
@@ -484,6 +967,18 @@ const EXPECTED_MISSING_IN_SECOND_COPY: Record<string, string> = {
     "企业认证审核的写入方是 admin-bff 的 reviewVerification（批 5）",
   "tenant.verification_rejected":
     "企业认证审核的写入方是 admin-bff 的 reviewVerification（批 5）",
+  /* 2026-09-29 成员邀请四态：写入方在 @vxture/service-organization 的成员仓储
+     （accepted / declined / revoked 三个活方法）与邀请过期巡检，都不在订阅包里。
+     **不往第二副本里加**——那份副本只列写入方住在那个包里的模板码，加进去就是声明一件
+     不存在的事，而这张差集表正是为这种情况准备的逃生口。 */
+  "tenant.invitation_accepted":
+    "邀请接受的写入方在 identity/organization 的成员仓储，不在订阅包",
+  "tenant.invitation_declined":
+    "邀请拒绝的写入方在 identity/organization 的成员仓储，不在订阅包",
+  "tenant.invitation_revoked":
+    "邀请撤回的写入方在 identity/organization 的成员仓储，不在订阅包",
+  "tenant.invitation_expired":
+    "邀请过期没有写入方，靠巡检补齐（与加油包池巡检同一形状），不在订阅包",
 };
 
 describe("第二份模板码副本", () => {

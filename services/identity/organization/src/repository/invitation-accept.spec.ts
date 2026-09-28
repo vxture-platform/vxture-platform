@@ -215,7 +215,11 @@ describe("MockOrganizationRepository invitations & member status", () => {
       "pending",
     );
 
-    expect(await repo.revokeInvitation(invitation.id, orgId)).toBe(true);
+    /* 2026-09-29:返回值从布尔改成 `{ ok, notify? }`——撤销要把通知受邀人用的那几列
+       带回来。mock 这一份不带 `notify`（进程内假数据拼不出诚实的事实）。 */
+    expect(await repo.revokeInvitation(invitation.id, orgId)).toEqual({
+      ok: true,
+    });
     expect(await repo.rotateInvitationToken(invitation.id, orgId)).toBeNull();
     expect(
       await repo.acceptInvitation({ token: rotated!.token }, "u-ann", {

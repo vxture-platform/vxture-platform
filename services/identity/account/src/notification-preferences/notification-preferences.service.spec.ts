@@ -55,6 +55,10 @@ describe("通知偏好规整", () => {
       // 那份去证明它自己」，改错了两边一起错，测不出来。
       // 2026-09-28 批 5 再加两个：认证结果（驳回了不知道，企业认证一直卡着，订阅与开票
       // 跟着卡）、额度用尽（花钱买的加油包用完了不知道，业务在没有余量的情况下空跑）。
+      // 2026-09-29 owner 把邀请拆成两个主题之后，**这两行都不在名单里**（邮件默认关），
+      // 各有各的理由：member_invitation 只剩 tenant.invitation 一条而那条是 inboxOnly 的
+      // （默认打开一个永远不会发出邮件的开关 = 页面在说假话）；invitation_activity 是
+      // **周知**不是事务性（owner 的分类），所以照 announcement 走，默认只进站内。
       const transactional = (
         [
           "subscription_expiry",
@@ -91,6 +95,63 @@ describe("通知偏好规整", () => {
     // 落库的那份也必须是强制后的值,不能只在返回值上装样子。
     const persisted = JSON.parse(query.mock.calls[0]![1]![1] as string);
     expect(persisted.security.inbox).toBe(true);
+  });
+
+  /**
+   * 成员邀请的站内档也锁（2026-09-29）。
+   *
+   * 拆分之后这个主题下**只剩一条**模板：`tenant.invitation`——站内那条消息**就是**邀请。
+   * 站内可关的话，界面会出现「未订阅」而邀请照样进收件箱的假象。真正兜住「关不掉邀请本身」
+   * 的是 dispatcher 的 mandatory 短路（那一条在 @vxture/service-notification 的
+   * templates.spec.ts 里**跑分发器**证过）；这里钉的是界面看到的那一半：服务端强制，不靠
+   * 前端把开关画成 disabled。
+   */
+  it("成员邀请的站内档锁定为开，邮件那一档照常可关", async () => {
+    const { service, query } = build({
+      member_invitation: { inbox: false, email: false, sms: false },
+    });
+    const prefs = await service.get("u-1");
+    expect(prefs.member_invitation.inbox).toBe(true);
+    // 邮件 / 短信不锁（owner 2026-09-29：站内恒锁、邮件短信可开关）；默认关，因为这一行
+    // 唯一那条模板是 inboxOnly 的。
+    expect(prefs.member_invitation.email).toBe(false);
+    expect(prefs.member_invitation.sms).toBe(false);
+
+    const saved = await service.replace("u-1", {
+      member_invitation: { inbox: false, email: true },
+    });
+    expect(saved.member_invitation.inbox).toBe(true);
+    expect(saved.member_invitation.email).toBe(true);
+    // 落库的那份也必须是强制后的值,不能只在返回值上装样子。
+    const persisted = JSON.parse(query.mock.calls[1]![1]![1] as string);
+    expect(persisted.member_invitation.inbox).toBe(true);
+  });
+
+  /**
+   * 邀请动态**三档全关得掉**（2026-09-29 拆主题的验收）。
+   *
+   * 与上一条用例成对：同样提交「三档全关」，`member_invitation` 的站内被强制回 true，
+   * 而这一行三档都留在关的状态。少了这一条，「新主题被顺手加进 LOCKED」不会有任何东西
+   * 报错——症状是客户按下去、保存、回来又是开着的，而那正是拆行要解决的毛病。
+   */
+  it("邀请动态不在锁定集合里：三个渠道都关得掉，落库也是关的", async () => {
+    const { service, query } = build(null);
+    const saved = await service.replace("u-1", {
+      invitation_activity: { inbox: false, email: false, sms: false },
+    });
+    expect(saved.invitation_activity).toEqual({
+      inbox: false,
+      email: false,
+      sms: false,
+    });
+    // 落库的那份也得是关的，不能只在返回值上装样子。
+    const persisted = JSON.parse(query.mock.calls[0]![1]![1] as string);
+    expect(persisted.invitation_activity.inbox).toBe(false);
+    // 对照：同一次提交里那条「就是邀请本身」的主题，站内仍然被强制为开。
+    const locked = await service.replace("u-1", {
+      member_invitation: { inbox: false },
+    });
+    expect(locked.member_invitation.inbox).toBe(true);
   });
 
   it("未知主题与未知渠道一律丢弃", async () => {
@@ -154,23 +215,29 @@ describe("通知偏好规整", () => {
  * 的信。本文件自己的表头写着「给一个按下去不起作用的开关比不给更糟」，这条守卫就是那句话
  * 的机器版。
  *
- * 判据**不是**「有模板就不许 planned」：那条会当场红在一条 owner 明文裁定上——
- * `member_invitation` 故意留在 PLANNED 里，尽管 `tenant.invitation` 已经在发，理由是那条
- * 消息是 `mandatory` 的（站内这条**就是**邀请本身）。而 `mandatory` 是 dispatcher 每次调用
- * 传的参数、不是模板属性，静态看不见。所以判据换成能真正判定的那一半：
+ * 判据**不是**「有模板就不许 planned」。那条判据建这道守卫时会当场红在一条 owner 明文裁定
+ * 上：`member_invitation` 当时故意留在 PLANNED 里，尽管 `tenant.invitation` 已经在发，理由是
+ * 那条消息是 `mandatory` 的（站内这条**就是**邀请本身）。而 `mandatory` 是 dispatcher 每次
+ * 调用传的参数、不是模板属性，静态看不见。所以判据换成能真正判定的那一半：
  *
  *   **凡是 PLANNED 里还有模板落上去的主题，必须在下面这张带理由的例外表里出现。**
  *
  * 抓的是沉默，不是抓某个方向：下一轮谁接了模板忘了动开关，这里要求他写下理由。
  *
+ * 2026-09-29：那条裁定要求的四条可选周知接上了，`member_invitation` 已移出 PLANNED，例外表
+ * 因此空了（清空的理由与它现在活在哪里，见表上的注释）。判据本身一个字没改——它防的不是
+ * 那一条，是「下一个人接了模板忘了动开关」这件事。
+ *
  * 看不见什么：console 那份 `planned` 标与两本词条（在门户包里，另一个测试运行器）。
  * 这条守卫绿了只说明**后端**这一半是真的。
  */
 const PLANNED_WITH_TEMPLATE_EXCEPTIONS: Record<string, string> = {
-  member_invitation:
-    "owner 2026-09-09：tenant.invitation 是 mandatory 的——站内这条消息就是邀请本身，" +
-    "关掉它邀请人会收到「已送达」而对方那边什么也没有。等 accepted / declined / revoked " +
-    "三条可选周知接上，再把它挪出 PLANNED。",
+  /* 2026-09-29：**这张表现在是空的**。里面唯一那条（member_invitation，owner 2026-09-09
+     的裁定）随着主题移出 PLANNED 一起删掉了——留着就是「为不存在的债发许可」。
+     表本身留下：下一个人接了模板忘了放开关，上面那条用例会当场要求他在这里写理由。
+     那条裁定的实质没有丢，它现在活在两个能跑的地方——服务端 `LOCKED.member_invitation`
+     的站内锁（本文件上面有用例），与 dispatcher 的 mandatory 短路（@vxture/service-
+     notification 的 templates.spec.ts 里跑分发器证的那一组）。 */
 };
 
 describe("主题清单与派发侧模板对账", () => {
@@ -202,6 +269,9 @@ describe("主题清单与派发侧模板对账", () => {
   });
 
   it("例外表不给不存在的债发许可：每一条都必须仍然是「planned 且有模板」", () => {
+    /* 这张表今天是空的，所以本用例此刻**一条断言都不做** —— 写下来，免得它被当成一条
+       还在看着什么的守卫。它看的是将来：谁往表里加一条，这里就查那条是否真的还「planned
+       且有模板」。表为空这件事本身由上一条用例把着（空表 ⇒ PLANNED 里不许有带模板的主题）。 */
     for (const [topic, reason] of Object.entries(
       PLANNED_WITH_TEMPLATE_EXCEPTIONS,
     )) {
@@ -217,6 +287,28 @@ describe("主题清单与派发侧模板对账", () => {
       expect(topicsWithTemplates.has(topic)).toBe(true);
       expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).not.toContain(topic);
     }
+  });
+
+  it("邀请拆成两个主题：成员邀请只剩邀请本身，四个终态归邀请动态", () => {
+    for (const topic of ["member_invitation", "invitation_activity"]) {
+      expect([...NOTIFICATION_TOPICS] as string[]).toContain(topic);
+      expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).not.toContain(topic);
+    }
+    /* owner 2026-09-29 看过页面后裁定拆开。判据是**性质不同**：`tenant.invitation` 就是
+       邀请本身（mandatory + inboxOnly，站内恒锁，关掉它邀请派不出去），四个终态是周知
+       （嫌吵就该能关）。合成一行时那条站内锁会把四条周知一起锁住，客户只能二选一。
+       这两句数的就是那一刀切在了哪里——落错一条不会报错，只会让某一条跟着锁死或跟着哑掉。 */
+    expect(
+      codes.filter((code) => topicOf(code) === "member_invitation"),
+    ).toEqual(["tenant.invitation"]);
+    expect(
+      codes.filter((code) => topicOf(code) === "invitation_activity").sort(),
+    ).toEqual([
+      "tenant.invitation_accepted",
+      "tenant.invitation_declined",
+      "tenant.invitation_expired",
+      "tenant.invitation_revoked",
+    ]);
   });
 
   it("仍标「开发中」且确实没有模板的三个：security / invoice_progress / ticket_activity", () => {

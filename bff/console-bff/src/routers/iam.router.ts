@@ -45,6 +45,7 @@ import {
   renderInvitationMail,
 } from "../services/invitation-mail";
 import type { RequestContext } from "../types/console.types";
+import { invitationReferenceId } from "@vxture/service-organization";
 import type {
   AcceptInvitationRejection,
   WorkspaceRejection,
@@ -64,7 +65,14 @@ function requireTenantSession(req: Request & RequestContext) {
     throw new UnauthorizedException("Tenant context is required");
   }
 
-  return { accountId: req.user.id, tenantId: req.tenant.id };
+  /* tenantNo（租户可视码）一并带出：站内邀请通知的去重锚用它,不用 uuid。
+     它本来就在这份上下文里,不必为它多跑一趟查询。可为 null——旧的 / 平台态
+     上下文解析不到租户号,那时由拼锚的一方兜底。 */
+  return {
+    accountId: req.user.id,
+    tenantId: req.tenant.id,
+    tenantNo: req.tenant.tenantNo ?? null,
+  };
 }
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
@@ -369,9 +377,10 @@ export class IamRouter {
   private async deliverInvitation(
     outcome: InviteMemberOutcome,
     tenantId: string,
+    tenantNo: string | null,
   ) {
     if (outcome.targetType === "user_no") {
-      await this.notifyInviteeInApp(outcome, tenantId);
+      await this.notifyInviteeInApp(outcome, tenantId, tenantNo);
       return {
         member: outcome.member,
         invitationId: outcome.invitationId,
@@ -420,6 +429,7 @@ export class IamRouter {
   private async notifyInviteeInApp(
     outcome: InviteMemberOutcome,
     tenantId: string,
+    tenantNo: string | null,
   ) {
     if (!outcome.targetUserId) return;
     try {
@@ -428,11 +438,56 @@ export class IamRouter {
            唯一索引(查过 pg_index),按名字 join 可能挑错租户。 */
         tenantId,
         templateCode: "tenant.invitation",
-        reference: { type: "invitation", id: outcome.invitationId },
+        /*
+         * 去重锚**不放邀请行的 uuid**(2026-09-29 修;上一批给「认证结果」修掉的是
+         * 同一类问题)。为什么这是个泄漏:inbox 的读路由把 reference_id 原样投影给
+         * 浏览器(InboxMessage.referenceId,console 的 API 类型里也有这一项),
+         * 所以放什么进去就等于给浏览器递什么。铁律是可视码之外不出 id。
+         *
+         * 用与邀请四态**同一个**函数拼(@vxture/service-organization 的
+         * invitationReferenceId),不在这里自己拼第二种形状:同一条邀请在收件箱里
+         * 长出两种锚,读侧就分不出它们说的是同一件事,而「分不出」不会报错。
+         * 状态段是 `pending`——这一封发出去的时刻这条邀请就是 pending,那四封各带
+         * 自己的终态,于是五封互不相撞。
+         *
+         * 「一封邀请只落一条」这个性质照旧:锚 = 租户码 + 邀请 id 的摘要 + 状态,
+         * 三段对同一条邀请恒定(重发只换 token 与到期时刻,不换邀请 id),所以重发
+         * 不会在对方收件箱里堆出第二条——与换掉 uuid 之前逐字相同。
+         *
+         * 位宽:10(租户码)+ 1 + 12(摘要)+ 1 + 7(`pending`)= 31,而
+         * support.inbox_messages.reference_id 是 varchar(128),余 97。dispatcher
+         * 不截这一列,所以位宽要算得出来。运营镜像那一侧的锚由这一项**派生**
+         * (`{模板}:invitation:{引用 id}`),所以它跟着变短:17 + 1 + 10 + 1 + 31
+         * = 60,比原先带 uuid 的 65 还短,admin.operator_notices 那一列同宽,无风险。
+         *
+         * 这一项**不是**任何东西的标识符,所以换掉它不会弄坏谁:收件箱那条上的
+         * 「同意 / 拒绝」凭的是 `invitations/incoming` 给的邀请 id,不是这个锚
+         * (前端只把 referenceId 用在 subscription / order 两类的待办去重上,
+         * useDerivedTodos 的 ACTIONABLE_TEMPLATES 里没有邀请)。查过才敢改。
+         *
+         * 租户码解析不出来时退到 `unknown`(与席位闸那条通知同一个兜底写法):
+         * 这一封**就是邀请本身**,宁可锚短一截也不能不发。唯一性仍由摘要担着。
+         *
+         * 存量:改之前落下的行锚的是 uuid。一条已经送达过的邀请若在改版后重发,
+         * 会因为锚变了而在收件箱里多出一条(新锚一条、旧锚一条)。不回填、不改旧行:
+         * 旧行是已经送到客户眼前的东西,改它等于篡改客户读过的内容;而 pending 的
+         * 邀请本来只活到到期,这个重叠是有界的。运营镜像那一侧同理,界限相同。
+         */
+        reference: {
+          type: "invitation",
+          id: invitationReferenceId(
+            tenantNo ?? "unknown",
+            outcome.invitationId,
+            "pending",
+          ),
+        },
         params: {
           tenantName: outcome.tenantName,
           inviterName: outcome.inviterName,
-          roleName: outcome.roleCode,
+          /* 角色**码**,不是译好的词:译成人话在派送器的模板层做(只有它知道收件人
+             读哪种语言)。参数名 `roleKey` 是发侧与模板层的约定,与邀请四态同一个
+             名字,任何一侧都不许单方面改。 */
+          roleKey: outcome.roleCode,
           expiresAt: outcome.expiresAt.toISOString().slice(0, 10),
         },
         exactRecipients: [outcome.targetUserId],
@@ -634,7 +689,7 @@ export class IamRouter {
     @Req() req: Request & RequestContext,
     @Param("invitationId") invitationId: string,
   ) {
-    const { accountId, tenantId } = requireTenantSession(req);
+    const { accountId, tenantId, tenantNo } = requireTenantSession(req);
     const outcome = await this.sessionAggregator.resendInvitation(
       accountId,
       tenantId,
@@ -643,7 +698,7 @@ export class IamRouter {
     if (!outcome) {
       throw new NotFoundException("Invitation not found or not pending");
     }
-    const delivered = await this.deliverInvitation(outcome, tenantId);
+    const delivered = await this.deliverInvitation(outcome, tenantId, tenantNo);
     auditCustomerAction(this.pool, req, {
       action: "tenant.invitation.resend",
       resourceType: "invitation",
@@ -1171,7 +1226,7 @@ export class IamRouter {
     @Req() req: Request & RequestContext,
     @Body() body: UpsertMemberDto,
   ) {
-    const { accountId, tenantId } = requireTenantSession(req);
+    const { accountId, tenantId, tenantNo } = requireTenantSession(req);
 
     const outcome = await this.sessionAggregator.inviteMember(
       accountId,
@@ -1181,7 +1236,7 @@ export class IamRouter {
     if (!outcome) {
       throw new NotFoundException("Tenant member could not be invited");
     }
-    const delivered = await this.deliverInvitation(outcome, tenantId);
+    const delivered = await this.deliverInvitation(outcome, tenantId, tenantNo);
 
     auditCustomerAction(this.pool, req, {
       action: "tenant.member.invite",

@@ -1062,6 +1062,9 @@
         "member_invitation": {
           "title": "成员邀请"
         },
+        "invitation_activity": {
+          "title": "邀请动态"
+        },
         "quota_alert": {
           "title": "配额告警"
         },

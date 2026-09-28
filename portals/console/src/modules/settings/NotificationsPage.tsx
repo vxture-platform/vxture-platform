@@ -37,6 +37,7 @@ type TopicKey =
   | "invoice_progress"
   | "verification_result"
   | "member_invitation"
+  | "invitation_activity"
   | "quota_alert"
   | "ticket_activity";
 
@@ -68,11 +69,16 @@ const CHANNELS: ChannelMeta[] = [
  * 主题清单（owner 2026-09-08 重排；2026-09-09 补两个）。**平铺，不分组**：各自四字自足，
  * 组名拼进项名等于把删掉的分组用文字再写一遍，还占列宽。
  *
- * 前 9 个有模板已经在发；后 4 个的**事件源都已存在**（各自的状态机或 webhook 事件
+ * 前 10 个有模板已经在发；后 3 个的**事件源都已存在**（各自的状态机或 webhook 事件
  * 类型跑着），只是通知模板还没接——`planned: true` 让它们在界面上挂「开发中」标并
  * **禁用三个渠道开关**。
  *
  * 2026-09-28 批 5：`verification_result` 与 `quota_alert` 取下 `planned`（模板本批上线）。
+ * 2026-09-29：`member_invitation` 取下 `planned` 并挪到「已在发」那一段（接受 / 拒绝 /
+ * 撤回 / 过期四条模板本批上线）；它的站内档换成 `lockedChannels`，理由见那一行的注释。
+ * 2026-09-29（owner 看过这一页之后）：**邀请拆成两行**——`member_invitation` 只留邀请本身
+ * （站内恒锁），`invitation_activity` 装那四条周知（三档全可点）。一行装两种性质的东西时，
+ * 站内锁为了保住邀请本身必须存在，四条周知的站内档就跟着关不掉，客户被迫二选一。
  * 这一处与服务端的 `NOTIFICATION_TOPICS_PLANNED`、两本词条是**手工同步**的三处；漏掉
  * 这一处的后果不是报错，是客户收到一封开关禁着、关不掉的信。
  *
@@ -80,8 +86,8 @@ const CHANNELS: ChannelMeta[] = [
  * 头上（`account` / `security` / `usage`），客户勾了等于没勾——**页面在说假话**。
  * 现在要么有模板、要么明说「开发中」并关掉开关，没有第三种。
  *
- * 事务性的那几个（到期/开通/待付/退款/订单状态/租户变更/认证结果/额度用尽——错过了会有
- * 实际损失）邮件默认开、可关，与服务端 `NotificationPreferencesService` 的
+ * 事务性的那几个（到期/开通/待付/退款/订单状态/租户变更/认证结果/额度用尽/成员邀请——
+ * 错过了会有实际损失）邮件默认开、可关，与服务端 `NotificationPreferencesService` 的
  * `TOPIC_DEFAULT_OVERRIDES` 同源:「恢复默认」用的就是这一份，两份不一致的症状是
  * 「按一下恢复默认，保存后开关又变了」。
  */
@@ -140,6 +146,32 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
       icon: "gauge",
       channels: { inbox: true, email: true, sms: false },
     },
+    /* 2026-09-29：成员邀请接上四条模板（接受 / 拒绝 / 撤回 / 过期），所以**不再带
+       planned 标**。它与上面那几个不同的一点是**站内那一档锁着**：这个主题下还有一条
+       `mandatory` 的模板——按用户号邀请时，站内那条消息**就是**邀请本身，关掉它邀请人会
+       收到「已送达对方账号」而对方那边什么也没有（owner 2026-09-09）。
+       站内可关会让这一行出现「未订阅」而邀请照样进收件箱的假象，而本页抬头写着「站内消息
+       始终可查」；所以这一档挂「策略锁定」、由**服务端**的 LOCKED 强制（前端画不画是可以
+       绕过的）。邮件那一档照常可点，作用对象是那四条可选周知——邀请本身是 inboxOnly 的，
+       开着邮件也不会把邀请变成一封邮件。事务性（错过了会误判自己的权限状态）⇒ 邮件默认开。 */
+    {
+      key: "member_invitation",
+      icon: "users",
+      /* 邮件默认**关**：这一行只剩「邀请本身」一条模板，而那条是 inboxOnly 的，默认打开一个
+         永远不会发出邮件的开关就是这一页此前的老毛病（页面在说假话）。开关仍可点——与服务端
+         TOPIC_DEFAULT_OVERRIDES 同源，「恢复默认」用的就是这一份。 */
+      channels: { inbox: true, email: false, sms: false },
+      lockedChannels: ["inbox"],
+    },
+    /* 2026-09-29 拆出来的第二行：邀请的四个终态（接受 / 拒绝 / 撤回 / 过期）。
+       **没有 lockedChannels**：这四条没有一条是「送达手段本身」，客户把三档全关掉也不会让
+       任何人少收到一条邀请——关掉的是发给自己的那份周知。这正是拆行的全部意义。
+       邮件默认关：它是**周知**不是事务性（owner 2026-09-29 的分类），判据同平台公告。 */
+    {
+      key: "invitation_activity",
+      icon: "user-plus",
+      channels: { inbox: true, email: false, sms: false },
+    },
     {
       key: "security",
       icon: "shield-check",
@@ -150,12 +182,6 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
     {
       key: "invoice_progress",
       icon: "receipt",
-      channels: { inbox: true, email: false, sms: false },
-      planned: true,
-    },
-    {
-      key: "member_invitation",
-      icon: "users",
       channels: { inbox: true, email: false, sms: false },
       planned: true,
     },

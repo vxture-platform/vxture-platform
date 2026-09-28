@@ -108,6 +108,35 @@ export class GovernanceController {
    * Accept an invitation as the caller. 邮箱邀请只能由该邮箱对应的账号接受
    * (仓储层校验),所以这里要把接受人的邮箱一起递进去;拒绝原因原样作 message,
    * 调用方按码给文案。
+   *
+   * ── 这个面**不发客户通知**,是决定不是漏(2026-09-29)──
+   * 接受邀请会给邀请人发一条 `tenant.invitation_accepted`。发不发的总开关是
+   * `OrganizationService.setCustomerNotifier`,由**装配处**打开:console-bff 的
+   * services/customer-notifications.wiring.ts 打开一次(接受 / 拒绝 / 撤销),
+   * platform-api 的 notifications/customer-notifications.wiring.ts 打开一次
+   * (到期巡检)。**auth-bff 一处都没有**,所以经本端点接受的邀请,邀请人一句话也
+   * 收不到——而且不会报错:未注入 = 静默不发,那是那个接口刻意的默认。
+   *
+   * ── 权威面是 console-bff 的 `POST /api/iam/invitations/accept` ──
+   *   · 客户端只走它:portals/console/src/api/console-bff.ts 的两处接受调用指的都是
+   *     那一条,本端点今天**零调用方**(2026-09-29 全仓搜过 `invitations/accept`)。
+   *   · 接受是一条会长出两级成员关系、会发通知、会进客户收件箱的写路径。这种路径该
+   *     只有一个落点:两个面都能写,以后问「这一次接受为什么没发通知」就得先去查是谁
+   *     调的,而那是一个查不出来的问题(两个面的日志不在一起)。
+   *
+   * ── 为什么没有顺手把 auth-bff 也接上 ──
+   * 派送器要 MailService / SmsService / NotificationPreferencesService 与通知库的
+   * 连接池,而 auth-bff 一个都没有(package.json 里没有 @vxture/service-notification)。
+   * 为一个零调用方的端点给**认证面**装上邮件与短信依赖,代价是把 auth-bff 的启动面
+   * 变宽,而它是登录链路上最不该多带东西的进程:它挂了,所有门户都登不进去。
+   *
+   * ── 真要启用这个面,按顺序做三件事 ──
+   *   ① 把 wiring 抄一份到 auth-bff(连带 package.json 的依赖);
+   *   ② 像另外两个面那样补一个「装配处真的调了 setCustomerNotifier」的用例——
+   *      漏挂不报错,tsc、守卫、boot-smoke 都不会有任何意见(本仓最常见的缺陷就是
+   *      「做了没接」);
+   *   ③ 把这段注释改成「两个面都发」,并说清同一条邀请为什么不会被发两次。
+   * 在那之前:接受请收在 console-bff 那一条上,本端点保持沉默。
    */
   @Post("invitations/accept")
   @HttpCode(HttpStatus.OK)

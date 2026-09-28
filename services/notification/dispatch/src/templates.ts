@@ -96,7 +96,24 @@ export type NotificationTemplateCode =
      两条的分岔靠**暂停原因**，不靠新开一个标记：维护那条腿开的 episode 写的是
      `platform_ops`，而 `SUSPENSION_REASON_EXTENDS_TERM.platform_ops === true`——所以正文里
      「暂停的天数不计入有效期」不是新加的承诺，是把已经成立的事说出来。 */
-  | "subscription.suspended_maintenance";
+  | "subscription.suspended_maintenance"
+  /* 2026-09-29：**成员邀请的四个终态**。`tenancy.invitations` 的五态里
+     pending 之外那四个此前一句话都不发——accepted / declined / revoked 各有活的写入方
+     （identity/organization 的成员仓储，只写一行审计），expired 连写入方都没有（读时按
+     expires_at 算出来），所以它要一趟巡检。
+
+     为什么是四条而不是两条：declined 与 revoked 在 DDL 里就是两个状态，表上的注释写着
+     理由——declined 是被邀请人自己拒绝，revoked 是邀请人撤回，合成一个会把「对方不来」
+     记成「我撤回了」。通知这一侧连**收件人都不同**：accepted / declined / expired 写给
+     邀请人（`created_by`），revoked 写给被邀请人。一条模板写不出两个收件人视角。
+
+     四条都不带邀请行的 uuid：邀请由**租户名 + 角色名 + 邀请人当初填的那个账号**认领
+     （`tenancy.invitations.target`）。reference_id 被客户收件箱的读路径原样投影给浏览器，
+     所以去重锚也只用可视值 + 一段不可逆的短摘要（形状见 operator-mirror.ts）。 */
+  | "tenant.invitation_accepted"
+  | "tenant.invitation_declined"
+  | "tenant.invitation_revoked"
+  | "tenant.invitation_expired";
 
 /**
  * 业务引用类型 = 「reference_id 住在哪张表」这个问题的答案（`support.inbox_messages`
@@ -125,10 +142,9 @@ export type NotificationReferenceType =
 /**
  * 偏好主题（与 @vxture/service-account NOTIFICATION_TOPICS 同一集合）。
  *
- * 这里只列**本包发得出模板**的那几个；那边的全集还含事件源已存在、模板待接的四个
- * （界面标「开发中」：security / invoice_progress / ticket_activity，以及故意留在那里
- * 的 member_invitation）。两边不一致会被 `topicOf` 的穷尽映射挡住——它对每个模板键
- * 显式给主题，加模板忘了给主题就编译不过。
+ * 这里只列**本包发得出模板**的那几个；那边的全集还含事件源已存在、模板待接的三个
+ * （界面标「开发中」：security / invoice_progress / ticket_activity）。两边不一致会被
+ * `topicOf` 的穷尽映射挡住——它对每个模板键显式给主题，加模板忘了给主题就编译不过。
  *
  * 2026-09-28 批 5 加两个：`verification_result`（企业认证结果）与 `quota_alert`
  * （额度用尽）。**偏好中心的主题清单与这张联合是两个清单**——那边早就占了位，这边没有
@@ -141,6 +157,13 @@ export type NotificationTopic =
   | "refund_progress"
   | "announcement"
   | "member_invitation"
+  /* 2026-09-29 owner 看过页面后裁定：邀请**拆成两个主题**。`member_invitation` 只留强制
+     那一条（`tenant.invitation`——站内那条消息就是邀请本身），四个终态挪到下面这一个。
+     两件事性质不同：一个**是**邀请本身，关掉它等于让邀请派不出去；另一个是周知，客户嫌吵
+     就该能关。合成一行时开关只有「主题 × 渠道」这一个粒度，客户于是被迫二选一。
+     偏好中心那张清单必须同改（@vxture/service-account 的 NOTIFICATION_TOPICS）——漏了由
+     那边「派发侧每个主题都在偏好清单里」那条用例当场红。 */
+  | "invitation_activity"
   | "order_status"
   | "tenant_change"
   | "verification_result"
@@ -193,6 +216,11 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
     "订阅已续期：{{productName}} {{planName}}",
   "subscription.suspended_maintenance":
     "订阅已暂停，产品升级维护中：{{productName}} {{planName}}",
+  "tenant.invitation_accepted": "{{inviteeName}} 已加入 {{tenantName}}",
+  "tenant.invitation_declined":
+    "{{inviteeName}} 拒绝了加入 {{tenantName}} 的邀请",
+  "tenant.invitation_revoked": "{{tenantName}} 的邀请已撤回",
+  "tenant.invitation_expired": "邀请已过期：{{tenantName}}",
 };
 
 const BODIES_ZH: Record<NotificationTemplateCode, string> = {
@@ -214,7 +242,7 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
   /* 只说机制:谁、什么身份、到什么时候截止。不写「欢迎加入」这类替对方做决定的话——
      这条消息的意义就是那个决定还没做。 */
   "tenant.invitation":
-    "{{inviterName}} 邀请你以「{{roleName}}」身份加入 {{tenantName}}，{{expiresAt}} 前有效。",
+    "{{inviterName}} 邀请你以「{{roleKey}}」身份加入 {{tenantName}}，{{expiresAt}} 前有效。",
   /* 只说机制，不做承诺：核对要多久由人工决定，写「很快」就是替他们许诺。 */
   "order.payment_declared":
     "金额 {{amount}}。我们会核对到账情况，确认后订单自动开通；在此之前订单保持待确认。",
@@ -310,6 +338,29 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
   "subscription.suspended_maintenance":
     "产品正在升级维护，维护期间服务暂停，预计 {{resumeAt}} 恢复。维护结束后服务自动恢复，无需你操作；" +
     "暂停的天数不计入有效期，恢复后服务期顺延。维护时间有变动会再通知你。",
+  /* ── 成员邀请四态（2026-09-29）────────────────────────────────────────────
+     三条写给**邀请人**、一条写给**被邀请人**，每条都自己说清三件事：谁、哪个租户、
+     什么角色。参数名与已在发的 `tenant.invitation` 同一套（tenantName / roleKey /
+     expiresAt），新增的只有 inviteeName —— 邀请人当初在输入框里填的那个账号
+     （`tenancy.invitations.target`，用户号或邮箱），因为邀请人是按它认领这条邀请的。
+     **一个 uuid 都不写**：邀请行的 id 不进文案，也不进去重锚。
+     accepted / declined / expired 这三条给「下一步」时都指向「成员管理」——那一页上就有
+     「邀请成员」按钮，不写一个不存在的入口。 */
+  "tenant.invitation_accepted":
+    "{{inviteeName}} 已接受邀请，以「{{roleKey}}」身份加入 {{tenantName}}。成员与角色可在「成员管理」查看。",
+  /* 「没有加入」必须明说出来：只写「拒绝了邀请」会让邀请人去成员列表里自己数人。
+   **不揣测原因**——库里只有一个 declined 状态，为什么拒绝没有任何数据支持。 */
+  "tenant.invitation_declined":
+    "{{inviteeName}} 拒绝了以「{{roleKey}}」身份加入 {{tenantName}} 的邀请，没有加入，这条邀请到此结束。需要的话可以在「成员管理」重新邀请。",
+  /* 写给被邀请人。只说两件事：那条邀请被撤回了、它不再有效。**不指责也不解释**——
+     撤回的理由平台不知道，写「对方可能…」是替邀请人编话；而对着被邀请人写「你没有及时
+     接受」更是把撤回说成了他的问题。 */
+  "tenant.invitation_revoked":
+    "你收到的以「{{roleKey}}」身份加入 {{tenantName}} 的邀请已被撤回，该邀请不再有效。",
+  /* 过期这条来自巡检（读时按 expires_at 算出来的状态，此前没有写入方）。不写「对方拒绝
+     了」——没人接受与明确拒绝是两件事，库里也是两个状态。 */
+  "tenant.invitation_expired":
+    "{{inviteeName}} 未在 {{expiresAt}} 前接受以「{{roleKey}}」身份加入 {{tenantName}} 的邀请，这条邀请已过期。需要的话可以在「成员管理」重新邀请。",
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -357,6 +408,11 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
     "Subscription renewed for you: {{productName}} {{planName}}",
   "subscription.suspended_maintenance":
     "Paused for product maintenance: {{productName}} {{planName}}",
+  "tenant.invitation_accepted": "{{inviteeName}} joined {{tenantName}}",
+  "tenant.invitation_declined":
+    "{{inviteeName}} declined the invitation to {{tenantName}}",
+  "tenant.invitation_revoked": "Invitation to {{tenantName}} withdrawn",
+  "tenant.invitation_expired": "Invitation expired: {{tenantName}}",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -378,7 +434,7 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "The refund of {{amount}} has been returned via the original payment channel and the subscription is back to unsubscribed.",
   "announcement.published": "{{content}}",
   "tenant.invitation":
-    "{{inviterName}} invited you to join {{tenantName}} as {{roleName}}. The invitation is valid until {{expiresAt}}.",
+    "{{inviterName}} invited you to join {{tenantName}} as {{roleKey}}. The invitation is valid until {{expiresAt}}.",
   "order.payment_declared":
     "Amount {{amount}}. We will check the payment against our records; the order activates once confirmed and stays pending until then.",
   "order.cancelled":
@@ -426,7 +482,78 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "The product is under an upgrade, so access is paused for the maintenance window and is expected back on {{resumeAt}}. " +
     "Access resumes by itself once the maintenance finishes — nothing for you to do; the paused days do not count against your term, so the term moves out by that much on resume. " +
     "If the maintenance window changes, you will hear from us again.",
+  "tenant.invitation_accepted":
+    "{{inviteeName}} accepted the invitation and joined {{tenantName}} as {{roleKey}}. Members and their roles are under Members.",
+  "tenant.invitation_declined":
+    "{{inviteeName}} declined the invitation to join {{tenantName}} as {{roleKey}} and did not join, so this invitation is closed. You can send a new invitation under Members.",
+  "tenant.invitation_revoked":
+    "The invitation for you to join {{tenantName}} as {{roleKey}} has been withdrawn and can no longer be used.",
+  "tenant.invitation_expired":
+    "{{inviteeName}} did not accept the invitation to join {{tenantName}} as {{roleKey}} before {{expiresAt}}, so the invitation has expired. You can send a new invitation under Members.",
 };
+
+/**
+ * 角色码 → 角色名，两种语言各一份。
+ *
+ * **发侧传码、渲染时才成词。** `access.roles.role_code` 的五个值（owner / manager /
+ * member / readonly / guest）由调用方原样放进 `roleKey` 参数，翻成词是这一层的事——只有
+ * 派送器知道收件人读哪种语言（`localeOf(account.users.language)`）。发侧翻译的话，一封
+ * 中文正文里就会印出英文码：已上线的 `tenant.invitation` 正是如此，中文读作
+ * 「以「member」身份加入」（2026-09-29 修）。
+ *
+ * 名字与 console 的 `role.*` 词条逐字相同（portals/console/messages/*.json 是权威那一份；
+ * 「owner 叫『所有者』不叫『主管理员』」是 owner 2026-09-06 的裁定，见 RoleTag.tsx 头注）。
+ * 这里抄一份而不是 import：服务层不依赖门户包，也不依赖 `@vxture/core-utils`（本包没装，
+ * 加依赖会动 package.json）。那边改名时这里要跟着改——两处各五行，漏了的症状是同一个角色
+ * 在页面与通知里两个名字。
+ */
+const ROLE_NAMES: Record<
+  NotificationLocale,
+  Readonly<Record<string, string>>
+> = {
+  "zh-CN": {
+    owner: "所有者",
+    manager: "管理员",
+    member: "成员",
+    readonly: "只读成员",
+    guest: "访客",
+  },
+  "en-US": {
+    owner: "Owner",
+    manager: "Manager",
+    member: "Member",
+    readonly: "Read-only",
+    guest: "Guest",
+  },
+};
+
+/**
+ * 目录外的码、或者调用方压根没给：回落成一句**实话**。
+ *
+ * 另两种做法都是把「我不知道」说成别的东西：原样印出码（客户读到 `member` 这种内部值，
+ * 正是本次要修的缺陷）、印空串（`interpolate` 对缺参就是这么干的，正文于是变成
+ * 「以「」身份加入」，一句带洞的话）。也**不猜「成员」**——猜错的代价是告诉客户一个他
+ * 没被授予的权限档。
+ */
+const ROLE_FALLBACK: Record<NotificationLocale, string> = {
+  "zh-CN": "未指定角色",
+  "en-US": "an unspecified role",
+};
+
+/** 模板里唯一的角色参数名。发侧只认这一个名字，且放**码**不放词。 */
+export const ROLE_PARAM = "roleKey";
+
+/**
+ * 角色码 → 该语言的角色名；码不认识或没给就回落（见 ROLE_FALLBACK）。
+ *
+ * 导出给运营镜像用（`operator-mirror.ts` 的标题也要角色名，那一面固定中文）。
+ * **不从包的 barrel 导出**：发侧能拿到它，就会有人在发侧先翻好再传进来，而发侧不知道
+ * 收件人读哪种语言——那正是这次要修的缺陷的形状。
+ */
+export function roleNameOf(code: unknown, locale: NotificationLocale): string {
+  const key = code === undefined || code === null ? "" : String(code).trim();
+  return ROLE_NAMES[locale][key] ?? ROLE_FALLBACK[locale];
+}
 
 const FOOTER: Record<NotificationLocale, string> = {
   "zh-CN": "此邮件由系统自动发送；通知偏好可在控制台「通知设置」调整。",
@@ -512,6 +639,18 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   /* 维护暂停与 `subscription.suspended` 同一个主题：两条回答的是同一个问题——「我的服务
      现在在不在」。不另立「维护」主题，那会让客户为同一个问题勾两个开关。 */
   "subscription.suspended_maintenance": "subscription_expiry",
+  /* 邀请四态 → `invitation_activity`，**与 `tenant.invitation` 不同主题**（owner
+     2026-09-29 看过页面后裁定，推翻了本批最初「同一个主题」的落点）。
+     判据是**性质不同**，不是「客户问的是不是同一件事」：`tenant.invitation` 就**是**邀请
+     本身（所以它 mandatory + inboxOnly，站内那条消息即邀请，关掉它邀请派不出去），四条终态
+     是周知（客户嫌吵就该能关）。挂在一个主题下时，站内那一档为了保住邀请本身必须锁死，四条
+     周知的站内档就跟着关不掉——一行开关逼客户在「收得到邀请」与「别吵我」之间二选一。
+     拆开之后：member_invitation 只剩强制那一条、站内恒锁；invitation_activity 三个渠道全部
+     可开关（**不进锁定集合**，见 @vxture/service-account 的 LOCKED）。 */
+  "tenant.invitation_accepted": "invitation_activity",
+  "tenant.invitation_declined": "invitation_activity",
+  "tenant.invitation_revoked": "invitation_activity",
+  "tenant.invitation_expired": "invitation_activity",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {
@@ -630,6 +769,21 @@ export interface RenderedNotification {
   text: string;
 }
 
+/**
+ * 渲染前把参数里的角色**码**换成该语言的角色**名**。
+ *
+ * 放在这条路径上而不是逐条模板特例化：`render` 是唯一拿到 locale 的地方，而角色名已经出现
+ * 在五条模板里（邀请本身 + 四个终态），还会更多。**无条件写回**这个键（而不是「有才换」）：
+ * 调用方整个忘了传 roleKey 时，回落的是一句实话，不是一个空洞。不用这个参数的模板原样不受
+ * 影响——`interpolate` 只认模板里出现过的占位符。
+ */
+function localizeParams(
+  params: TemplateParams,
+  locale: NotificationLocale,
+): TemplateParams {
+  return { ...params, [ROLE_PARAM]: roleNameOf(params[ROLE_PARAM], locale) };
+}
+
 export function render(
   code: NotificationTemplateCode,
   params: TemplateParams,
@@ -637,8 +791,9 @@ export function render(
   locale: NotificationLocale = "zh-CN",
 ): RenderedNotification {
   const t = TABLES[locale];
-  const title = interpolate(t.titles[code], params);
-  const body = interpolate(t.bodies[code], params);
+  const p = localizeParams(params, locale);
+  const title = interpolate(t.titles[code], p);
+  const body = interpolate(t.bodies[code], p);
   const subject = `[Vxture] ${title}`;
   const linkHtml = absoluteLink
     ? `<p><a href="${escapeHtml(absoluteLink)}">${escapeHtml(absoluteLink)}</a></p>`

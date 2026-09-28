@@ -3,7 +3,7 @@
  * @package @vxture/bff-platform-api
  *
  * owner 2026-09-03「通知先做站内 + 邮件」：作业（到期提醒 / 到期 / 续费单 / ¥0 自动续费履约 /
- * 公告推送）发出的通知经 NotificationDispatcher 落 support.inbox_messages（站内）并按用户偏好
+ * 公告推送 / 邀请到期）发出的通知经 NotificationDispatcher 落 support.inbox_messages（站内）并按用户偏好
  * 发邮件（core-mail，SMTP_* 来自 platform-mail.env），每次投递记 support.notification_logs。
  * 用 setter 注入而不是构造器依赖：SubscriptionModule 是自包含模块，跨模块 DI 令牌不可见；
  * 三个 BFF 都用同一个 setter 装配（admin-bff 的 module-less 工厂同理）。
@@ -17,6 +17,7 @@ import {
   NotificationDispatcher,
   smsTemplatesFromEnv,
 } from "@vxture/service-notification";
+import { OrganizationService } from "@vxture/service-organization";
 import { SmsService } from "@vxture/service-sms";
 import {
   AddonService,
@@ -38,6 +39,11 @@ export class CustomerNotificationsWiring implements OnModuleInit {
     /* 批 5：加油包四条客户通知。开通那条由 admin 侧核销触发，另外三档由本进程的
        addon-lifecycle 作业巡检——作业与 service 在同一个进程里，必须在这里挂上。 */
     @Inject(AddonService) private readonly addons: AddonService,
+    /* 邀请到期（2026-09-29）：写入方是本进程的 invitation-expiry 作业，
+       它经 OrganizationService.sweepExpiredInvitations 改状态并通知邀请人。
+       作业与 service 在同一个进程里，必须在这里挂上，否则那一趟只改状态、
+       一句话都不发——而那正是「做了没接」最难查的一种。 */
+    @Inject(OrganizationService) private readonly orgs: OrganizationService,
   ) {
     this.dispatcher = new NotificationDispatcher(this.pool, {
       mail: new MailService(),
@@ -54,6 +60,7 @@ export class CustomerNotificationsWiring implements OnModuleInit {
     this.orders.setCustomerNotifier(this.dispatcher);
     this.subscriptions.setCustomerNotifier(this.dispatcher);
     this.addons.setCustomerNotifier(this.dispatcher);
+    this.orgs.setCustomerNotifier(this.dispatcher);
     this.logger.log(
       `customer notifications wired (inbox + email${process.env.CONSOLE_BASE_URL ? ", links → " + process.env.CONSOLE_BASE_URL : ""})`,
     );

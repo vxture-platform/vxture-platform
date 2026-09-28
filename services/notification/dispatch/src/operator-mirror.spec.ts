@@ -27,6 +27,19 @@ import {
   type NotificationTemplateCode,
   type TemplateParams,
 } from "./templates";
+/**
+ * 发侧（@vxture/service-organization）的引用 id 辅助函数。**样本从这里取，不手抄。**
+ *
+ * 跨包相对导入的理由与 templates.spec.ts 里那一处相同：`invitation-notifications.ts` 只
+ * import node:crypto 与两个同包的零依赖文件，所以按路径只拉它们几个，类型与运行时都成立
+ * （dep-cruiser 允许 services → services 同层）。它搬家时这条导入当场报错——那正是希望的
+ * 行为：一个事实两处各写一份的对账不该悄悄失效。
+ */
+import {
+  invitationDigest,
+  invitationReferenceId,
+  type InvitationTerminalState,
+} from "../../../identity/organization/src/service/invitation-notifications";
 
 const ORDER_ID = "6f1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 const REFUND_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
@@ -53,6 +66,36 @@ const verifyRef = (reviewedAt: string): MirrorReference => ({
   type: "tenant",
   id: `${VERIFY_TENANT_NO}:${reviewedAt}`,
 });
+/* 2026-09-29 成员邀请四态。引用 id = `{租户可视码}:{邀请 id 的短摘要}:{终态}`，过期那一档
+   末尾再缀一个到期日，一律**不含邀请行的 uuid**（reference_id 被客户收件箱的读路径原样投影
+   给浏览器，与批 5 认证那两条同一条理由）。终态进锚是为了「每个状态各发一次」——同一条邀请
+   的 accepted 与 expired 不会被唯一键互相吞掉。租户可视码沿用上面那个常量：是同一个租户。
+
+   **样本调发侧那个函数算，不手抄一串字面量。** 此前这里是手抄的，于是发侧改了摘要位宽、
+   或者给某一档加了新的段（过期那一档的到期日就是这么加上的），这边照样绿——注释里那句
+   「= 32，镜像锚 70」两处各写一份，也就一起错、一起没人发现。
+   邀请行 id 用一个真 uuid：摘要要盖住它，下面的断言按「原样的 uuid 不许出现」验。 */
+const INVITE_ID = "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f";
+/** 到期日进的是**过期那一档**的引用 id：重发会把过期行救回 pending 并顺延，同一行能过期多次。 */
+const INVITE_EXPIRES_AT = new Date("2026-10-06T03:00:00Z");
+const inviteRef = (state: InvitationTerminalState): MirrorReference => ({
+  type: "invitation",
+  id: invitationReferenceId(
+    VERIFY_TENANT_NO,
+    INVITE_ID,
+    state,
+    INVITE_EXPIRES_AT,
+  ),
+});
+const inviteParams = {
+  tenantName: "Acme",
+  /* 参数里是**角色码**（发侧原样传），运营标题里该出现的是中文角色名——词由模板层给，
+     见 templates.ts 的 roleNameOf。此前这里传的是码、断言的也是码，于是运营列表里读到的角色
+     是那个内部码而不是词。 */
+  roleKey: "member",
+  inviteeName: "ann@acme.example",
+  expiresAt: "2026-10-06",
+};
 
 const planParams = { productName: "Arda", planName: "Pro" };
 const orderParams = { ...planParams, orderNo: "ORD-202609-1" };
@@ -138,11 +181,11 @@ const CASES: Record<NotificationTemplateCode, Case> = {
     params: {
       tenantName: "Acme",
       inviterName: "Ann",
-      roleName: "member",
+      roleKey: "member",
       expiresAt: "2026-09-12",
     },
     severity: "info",
-    title: "Acme 邀请了新成员（member）",
+    title: "Acme 邀请了新成员（成员）",
   },
   "order.payment_declared": {
     reference: orderRef,
@@ -297,6 +340,34 @@ const CASES: Record<NotificationTemplateCode, Case> = {
     severity: "info",
     title: "产品升级维护，客户订阅已暂停 Arda Pro（预计 2026-09-30 恢复）",
   },
+  /* 成员邀请四态（2026-09-29）：**四条全 info**。邀请的收发是租户自助，运营在整条链上
+     没有位置——按本文件对 warning 的成文含义（「在等运营动手」⇒ 不过期）逐条问「哪个运营
+     动作能让这条消失」，四条的答案都是「没有」。过期那条还来自每趟重扫同一批行的巡检，
+     给成不过期的 warning 只会越堆越多。理由与「为什么仍然镜像」写在 operator-mirror.ts。 */
+  "tenant.invitation_accepted": {
+    reference: inviteRef("accepted"),
+    params: inviteParams,
+    severity: "info",
+    title: "Acme 新成员已加入（成员）",
+  },
+  "tenant.invitation_declined": {
+    reference: inviteRef("declined"),
+    params: inviteParams,
+    severity: "info",
+    title: "Acme 的成员邀请被拒绝（成员）",
+  },
+  "tenant.invitation_revoked": {
+    reference: inviteRef("revoked"),
+    params: inviteParams,
+    severity: "info",
+    title: "Acme 撤回了成员邀请（成员）",
+  },
+  "tenant.invitation_expired": {
+    reference: inviteRef("expired"),
+    params: inviteParams,
+    severity: "info",
+    title: "Acme 的成员邀请已过期（成员）",
+  },
 };
 
 const NOW = new Date("2026-09-28T10:00:00Z");
@@ -448,6 +519,56 @@ describe("composeOperatorNotice 正文与去重键", () => {
     expect(mirrorLink("tenant", { orderNo: "ORD-1" }, "88")).toBe(
       "/orders/ORD-1",
     );
+  });
+
+  it("成员邀请四态：去重锚不含 uuid、每个终态各一条、不给链接", () => {
+    const codes = [
+      "tenant.invitation_accepted",
+      "tenant.invitation_declined",
+      "tenant.invitation_revoked",
+      "tenant.invitation_expired",
+    ] as NotificationTemplateCode[];
+    const keys = codes.map((code) =>
+      mirrorDedupeKey(code, CASES[code].reference),
+    );
+    // 每个终态各一条：四个锚互不相同，同一条邀请的 accepted 与 expired 不互相吞掉。
+    expect(new Set(keys).size).toBe(4);
+    for (const key of keys) {
+      expect(key).not.toMatch(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+      );
+      // 摘要要盖住邀请行 id：原样的那串一个字符都不许漏出来。
+      expect(key).not.toContain(INVITE_ID);
+      expect(key.length).toBeLessThanOrEqual(128);
+    }
+    /* 算术（reference_id varchar(128)）**分两档**。此前这里（与发侧的注释）只写了前一档，
+       而过期那一档的引用 id 末尾带一个到期日，所以最坏情况比 70 长：
+         三个终态（accepted / declined / revoked）：引用 id = 可视码 10 + 1 + 摘要 12 + 1 +
+           终态最长 8 = 32；镜像锚 = 最长模板码 `tenant.invitation_declined` 26 + 1 +
+           `invitation` 10 + 1 + 32 = 70。
+         过期：引用 id = 10 + 1 + 12 + 1 + 7 + 1 + 到期日 10 = 42；
+           镜像锚 = `tenant.invitation_expired` 25 + 1 + 10 + 1 + 42 = 79。
+       最坏 **79，余 49** —— 仍然远在列宽之内（行为一直没有风险，错的只是这个数）。
+       摘要位宽由发侧的 `invitationDigest` 定，上面的样本也从那里取：改那个常量，下面三条
+       长度断言当场红（实测把 12 改成 13：红；改回：绿）。 */
+    const longest = mirrorDedupeKey(
+      "tenant.invitation_declined",
+      inviteRef("declined"),
+    );
+    expect(longest).toBe(
+      `tenant.invitation_declined:invitation:${VERIFY_TENANT_NO}:${invitationDigest(INVITE_ID)}:declined`,
+    );
+    expect(longest.length).toBe(70);
+    /* 过期那一档单独钉：最坏情况在这里，而它是本批新加的那一档——上一行的 70 看不见它。 */
+    const expired = mirrorDedupeKey(
+      "tenant.invitation_expired",
+      inviteRef("expired"),
+    );
+    expect(expired.endsWith(":expired:2026-10-06")).toBe(true);
+    expect(expired.length).toBe(79);
+    expect(expired.length).toBeLessThanOrEqual(128);
+    // 邀请引用落在 null 那一档：admin 侧没有按邀请的详情页（判据与订阅 / 公告相同）。
+    for (const code of codes) expect(compose(code).link).toBeNull();
   });
 
   it("租户引用给租户页链接", () => {

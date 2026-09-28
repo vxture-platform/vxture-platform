@@ -2,7 +2,8 @@
  * customer-notifications.wiring.ts — 客户通知分发器挂到订阅 / 订单服务（product_330 P2-g）。
  * @package @vxture/bff-console
  *
- * console 侧触发的通知：客户申请退款（refund.requested）、¥0 新订即时履约（order.fulfilled）。
+ * console 侧触发的通知：客户申请退款（refund.requested）、¥0 新订即时履约（order.fulfilled）、
+ * 入组邀请的接受 / 拒绝 / 撤销（tenant.invitation_accepted / _declined / _revoked）。
  * 站内落 support.inbox_messages，邮件走 MailModule 的 MailService，按 NotificationPreferences
  * 的 subscription / billing 主题过滤，每次投递记 support.notification_logs。
  * 工厂 provider 在模块初始化时即执行（Nest 急切实例化），用 setter 注入——SubscriptionModule
@@ -16,6 +17,7 @@ import {
   NotificationDispatcher,
   smsTemplatesFromEnv,
 } from "@vxture/service-notification";
+import { OrganizationService } from "@vxture/service-organization";
 import { SmsService } from "@vxture/service-sms";
 import {
   AddonService,
@@ -36,6 +38,7 @@ export const customerNotificationsProvider: Provider = {
     OrderService,
     SubscriptionService,
     AddonService,
+    OrganizationService,
   ],
   useFactory: (
     pool: Pool,
@@ -45,6 +48,7 @@ export const customerNotificationsProvider: Provider = {
     orders: OrderService,
     subscriptions: SubscriptionService,
     addons: AddonService,
+    orgs: OrganizationService,
   ): NotificationDispatcher => {
     const dispatcher = new NotificationDispatcher(pool, {
       mail,
@@ -65,6 +69,14 @@ export const customerNotificationsProvider: Provider = {
      * 代价是一行、零运行时行为；不挂的代价是一次查不出来的沉默。
      */
     addons.setCustomerNotifier(dispatcher);
+    /*
+     * 邀请四态（2026-09-29）：接受 / 拒绝 / 撤销三条转移的写入方都在
+     * @vxture/service-organization，而三条都由 console 这条路触发（成员页撤销、
+     * 收件箱里点同意 / 拒绝）——**这一处漏了，那三条就一句话都不发**，而编译器、
+     * 守卫、boot-smoke 都不会有任何意见（本仓最常见的缺陷是「做了没接」）。
+     * 到期那一条的写入方是巡检作业，不在本进程，由 platform-api 那侧挂。
+     */
+    orgs.setCustomerNotifier(dispatcher);
     return dispatcher;
   },
 };

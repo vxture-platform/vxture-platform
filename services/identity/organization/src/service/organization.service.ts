@@ -1,5 +1,14 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ORGANIZATION_REPOSITORY } from "../tokens";
+import type {
+  CustomerNotifier,
+  CustomerNotifyInput,
+} from "./customer-notifier";
+import {
+  invitationDigest,
+  invitationNotice,
+  type InvitationTerminalState,
+} from "./invitation-notifications";
 import type {
   AcceptInvitationResult,
   CreateInvitationInput,
@@ -8,6 +17,7 @@ import type {
   IncomingInvitation,
   InvitationLocator,
   InvitationLookup,
+  InvitationNotifyFacts,
   InvitationView,
   OrgLogoRecord,
   OrgMemberDetail,
@@ -30,6 +40,14 @@ import type {
   WorkspaceView,
 } from "../types/organization.types";
 
+const DAY_MS = 86_400_000;
+
+/**
+ * 一趟巡检最多看多少行。作业那侧不另写一个数字：两处各写一个会让「满了」的判据
+ * 静默跑偏，用例钉着「作业不传 limit」。
+ */
+const DEFAULT_INVITATION_SWEEP_LIMIT = 200;
+
 /**
  * OrganizationService — identity-core Organization + Workspace + Membership.
  * Owns org/workspace/membership lifecycle. Governance permission *enforcement*
@@ -38,10 +56,68 @@ import type {
  */
 @Injectable()
 export class OrganizationService {
+  private readonly logger = new Logger(OrganizationService.name);
+
   constructor(
     @Inject(ORGANIZATION_REPOSITORY)
     private readonly repo: OrganizationReadRepository,
   ) {}
+
+  /**
+   * 客户通知（邀请四态，2026-09-29）：装配处 `setCustomerNotifier` 注入；
+   * **未注入 = 一条都不发**，此时本服务的行为与加这段之前逐字相同。
+   */
+  private notifier: CustomerNotifier | null = null;
+
+  setCustomerNotifier(notifier: CustomerNotifier | null): void {
+    this.notifier = notifier;
+  }
+
+  /**
+   * 通知一律 best-effort：业务写**已经提交**，通知失败只记日志、不抛、不回滚。
+   * build 延迟求值（与 subscription / order / addon 的 emit 同形，这条纪律不该有
+   * 第四种写法）。
+   */
+  private async emit(
+    label: string,
+    build: () => Promise<CustomerNotifyInput | null>,
+  ): Promise<boolean> {
+    if (!this.notifier) return false;
+    try {
+      const input = await build();
+      if (!input) return false;
+      await this.notifier.notify(input);
+      return true;
+    } catch (err) {
+      this.logger.warn(`notify ${label} failed — ${String(err)}`);
+      return false;
+    }
+  }
+
+  /**
+   * 一次邀请终态通知。发不出去的两种情形**记一行日志**，不静默返回：
+   *   `no_tenant`              邀请行的 tenant_id 为 NULL（workspace 作用域的旧邀请），
+   *                            没有租户就没有可视码、也没有收件人所属的租户。
+   *   `no_recipient_account`   收件人在平台上没有账号——按邮箱邀请一个还没注册的人
+   *                            就是这种，站内消息没有收件箱可投。**这不是异常**，
+   *                            但它必须留下痕迹：否则「没发」和「发了」在日志里一样。
+   * 日志里放摘要而不是邀请 id：那一列是 uuid，日志也是人在读。
+   */
+  private async notifyInvitation(
+    state: InvitationTerminalState,
+    facts: InvitationNotifyFacts,
+  ): Promise<boolean> {
+    if (!this.notifier) return false;
+    const outcome = invitationNotice(state, facts);
+    if (!outcome.ok) {
+      this.logger.log(
+        `invitation ${state} not notified (${outcome.gap}) — ` +
+          `ref ${invitationDigest(facts.invitationId)}`,
+      );
+      return false;
+    }
+    return this.emit(`invitation ${state}`, async () => outcome.input);
+  }
 
   /** Registration primitive (§13.1): personal org + default workspace + owner at both levels. */
   createPersonalOrg(
@@ -63,7 +139,12 @@ export class OrganizationService {
     return this.repo.convertPersonalToOrganization(tenantId, ownerUserId, name);
   }
 
-  /** 注销组织租户(走查 2026-09-05);不可回退。 */
+  /**
+   * 注销组织租户(走查 2026-09-05);不可回退。
+   *
+   * 这条路里的批量撤销**有意不通知**受邀人,三条理由写在仓储那一处
+   * (closeTenant 里那段注释),不在这里复述——判据只该有一个落点。
+   */
   closeTenant(tenantId: string, ownerUserId: string) {
     return this.repo.closeTenant(tenantId, ownerUserId);
   }
@@ -100,11 +181,29 @@ export class OrganizationService {
   listInvitations(tenantId: string) {
     return this.repo.listInvitations(tenantId);
   }
-  revokeInvitation(invitationId: string, tenantId: string) {
-    return this.repo.revokeInvitation(invitationId, tenantId);
+  /**
+   * 撤销一条 pending 邀请,并通知受邀人(2026-09-29)。
+   *
+   * 对外仍然回布尔——BFF 一侧零改动。通知只在真的改到了行之后发:
+   * 仓储那条语句里 `status = 'pending'` 就是 CAS,没改到就没有事实带回来。
+   */
+  async revokeInvitation(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<boolean> {
+    const outcome = await this.repo.revokeInvitation(invitationId, tenantId);
+    if (outcome.ok && outcome.notify) {
+      await this.notifyInvitation("revoked", outcome.notify);
+    }
+    return outcome.ok;
   }
 
-  /** Account deletion: revoke every pending invitation the user sent; returns the count. */
+  /**
+   * Account deletion: revoke every pending invitation the user sent; returns the count.
+   *
+   * **有意不通知**(2026-09-29):理由写在仓储那一处——借「邀请人撤回了」那条模板
+   * 去说「邀请人注销了账号」是偷换,而 owner 没有要那第二条模板。
+   */
   revokeInvitationsCreatedBy(userId: string): Promise<number> {
     return this.repo.revokeInvitationsCreatedBy(userId);
   }
@@ -212,12 +311,23 @@ export class OrganizationService {
   ): Promise<{ invitation: InvitationView; token: string }> {
     return this.repo.createInvitation(input);
   }
-  acceptInvitation(
+  /**
+   * 接受邀请,并通知邀请人(2026-09-29)。
+   *
+   * `notify` 在这里被**剥掉**再返回:这个返回值会一路进路由的响应体,而事实里的
+   * 收件人 id 是 uuid。剥的手法是重建成功分支而不是 `delete`——后者改的是同一个
+   * 对象,漏一处就还是递出去了。
+   */
+  async acceptInvitation(
     locator: InvitationLocator,
     userId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<AcceptInvitationResult> {
-    return this.repo.acceptInvitation(locator, userId, identity);
+    const result = await this.repo.acceptInvitation(locator, userId, identity);
+    if (!result.ok) return result;
+    const { notify, ...rest } = result;
+    if (notify) await this.notifyInvitation("accepted", notify);
+    return rest;
   }
   listInvitationsForIdentity(
     identity: { email: string | null; userNo: string | null },
@@ -225,11 +335,69 @@ export class OrganizationService {
   ): Promise<IncomingInvitation[]> {
     return this.repo.listInvitationsForIdentity(identity, limit);
   }
-  declineInvitation(
+  /** 拒绝邀请,并通知邀请人(2026-09-29)。`notify` 同样剥掉再返回。 */
+  async declineInvitation(
     invitationId: string,
     identity: { email: string | null; userNo: string | null },
   ): Promise<DeclineInvitationResult> {
-    return this.repo.declineInvitation(invitationId, identity);
+    const result = await this.repo.declineInvitation(invitationId, identity);
+    if (!result.ok) return result;
+    const { notify, ...rest } = result;
+    if (notify) await this.notifyInvitation("declined", notify);
+    return rest;
+  }
+
+  /**
+   * 到期巡检(2026-09-29)：pending ∧ expires_at 已过 → `expired`，并通知邀请人。
+   *
+   * ── 为什么要写状态,不只发通知 ──
+   * 本仓已有答案:订阅到期扫描(`sweepExpiredSubscriptions`)既写 `expired` 也发通知。
+   * 照它办,不另起一套。`expired` 此前**全库零写入方**,靠读侧按 expires_at 派生;
+   * 派生仍然留着(未被扫到的行照旧显示为已过期),但库里那一列从此说真话。
+   *
+   * ── 两条上一批学到的纪律 ──
+   *   · 存量闸门:`backlogDays` 之外的行**只改状态、不发通知**。首趟不许把历史上
+   *     每一条过期邀请都播一遍(加油包与订阅到期都踩过)。闸门只闸通知,不闸状态——
+   *     查询没有年龄下限,存量才扫得完。
+   *   · 饱和要出声:取数到上限的一趟与繁忙的一趟,在心跳与日志里长得一模一样。
+   *
+   * CAS 输了(那一行同一瞬间被接受 / 拒绝 / 撤回)就一条都不发。单行出错只记日志,
+   * 一趟不中断。未注入 notifier 时**照样改状态**——这一趟的活不只是发通知
+   * (与加油包巡检的差别:那一趟除了通知不做别的,所以它可以直接返回)。
+   */
+  async sweepExpiredInvitations(window: {
+    backlogDays: number;
+    limit?: number;
+  }): Promise<{ expired: number; notified: number; saturated: boolean }> {
+    const limit = window.limit ?? DEFAULT_INVITATION_SWEEP_LIMIT;
+    const rows = await this.repo.findExpiredInvitationCandidates({ limit });
+    /* 一趟之内用同一个「现在」:逐行取会让闸门在同一趟里有两个口径。 */
+    const backlogFrom = Date.now() - window.backlogDays * DAY_MS;
+    let expired = 0;
+    let notified = 0;
+    for (const facts of rows) {
+      try {
+        if (!(await this.repo.markInvitationExpired(facts.invitationId))) {
+          continue;
+        }
+        expired += 1;
+        if (facts.expiresAt.getTime() < backlogFrom) continue;
+        if (await this.notifyInvitation("expired", facts)) notified += 1;
+      } catch (err) {
+        this.logger.error(
+          `invitation expiry sweep: ${invitationDigest(facts.invitationId)} ` +
+            `failed — ${String(err)}`,
+        );
+      }
+    }
+    const saturated = rows.length >= limit;
+    if (saturated) {
+      this.logger.warn(
+        `invitation expiry sweep: candidate query hit its cap (${rows.length}) — ` +
+          `the tail of this pass was not examined`,
+      );
+    }
+    return { expired, notified, saturated };
   }
   resolveWorkspaceForSession(
     orgId: string,
