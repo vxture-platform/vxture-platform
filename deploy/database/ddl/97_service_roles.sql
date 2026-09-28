@@ -208,3 +208,19 @@ GRANT SELECT ON support.product_reviews TO svc_platform_api;
 GRANT SELECT ON support.tickets TO svc_platform_api;
 GRANT SELECT ON support.audit_logs TO svc_platform_api;
 GRANT SELECT ON admin.maintenance_windows TO svc_platform_api;
+
+-- ── svc_platform_api 的写面例外：客户通知的投递（批 5，2026-09-28）─────────
+-- 这一条今天**没有运行时效果**：5 个服务容器仍由
+-- deploy/scripts/32-provision-service-db-roles.sh 生成的 platform-app.env 统一走
+-- platform_svc，那个角色在 2026-09-08-inbox-messages.sql 里已经有完整权限。
+-- 写在这里是为了拦下**按服务分角色切换的那一天**：到时 svc_platform_api
+-- 接上去而 support 不在它的 schema 数组里，platform-api 里所有客户通知会统一撑 42501——
+-- 而派送器是失败隔离的（每个收件人各自 try/catch），所以那会是**静默全没**，
+-- 不是报错。本批把这条路上的通知从 5 条加到 9 条，陷阱只会更大。
+--
+-- 只给这两张、只给读写不给 DELETE；也不给 ALTER DEFAULT PRIVILEGES（同上面那段的理由）。
+-- SELECT 是必需的：去重靠 uq_inbox_messages_dedupe 的 on conflict，而投递账本要回读重试次数。
+-- 注意：本文件是 apply 路径的权威，**不会被 migrate 重放到存量库**；
+-- 切角色那一次需要另写一份迁移把这两行灌进活库（跟 98 列锁同一个毛病）。
+GRANT SELECT, INSERT, UPDATE ON support.inbox_messages TO svc_platform_api;
+GRANT SELECT, INSERT, UPDATE ON support.notification_logs TO svc_platform_api;
