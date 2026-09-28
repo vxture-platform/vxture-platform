@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import type { Pool } from "pg";
 import type { Request } from "express";
 import { TenantsRouter } from "./tenants.router";
+import { notifierSpy } from "../testing/pool-mocks";
 import type { RequestContext } from "../types/console.types";
 
 // GET /api/tenants/:id 投影（2026-08-30 去占位）。这里守两件 tsc 看不见的事：
@@ -190,7 +191,7 @@ const REMOVED_FIELDS = [
 describe("GET /api/tenants/:id detail projection", () => {
   it("rejects a caller without tenant.manage before any DB access", async () => {
     const ro = noDbPool();
-    const router = new TenantsRouter(ro, noDbPool());
+    const router = new TenantsRouter(ro, noDbPool(), notifierSpy().notifier);
     await expect(
       router.getTenant(makeReq(["platform.tenant.read"]), TENANT_ID),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -199,7 +200,11 @@ describe("GET /api/tenants/:id detail projection", () => {
 
   it("404s on a missing tenant without firing the detail queries", async () => {
     const ro = makeRoPool((sql) => route(sql, { base: [] }));
-    const router = new TenantsRouter(ro.pool, noDbPool());
+    const router = new TenantsRouter(
+      ro.pool,
+      noDbPool(),
+      notifierSpy().notifier,
+    );
     await expect(
       router.getTenant(makeReq(MANAGE), TENANT_ID),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -208,7 +213,11 @@ describe("GET /api/tenants/:id detail projection", () => {
 
   it("maps the scalar counts from the base row and fires exactly seven detail queries", async () => {
     const ro = makeRoPool((sql) => route(sql));
-    const router = new TenantsRouter(ro.pool, noDbPool());
+    const router = new TenantsRouter(
+      ro.pool,
+      noDbPool(),
+      notifierSpy().notifier,
+    );
     const record = await router.getTenant(makeReq(MANAGE), TENANT_ID);
 
     /* 1 条基底 + 7 条明细（成员 / 订阅 / 用量 / 审计 / 工单 / 运营备注 / 工作空间）。
@@ -230,7 +239,11 @@ describe("GET /api/tenants/:id detail projection", () => {
 
   it("maps the five detail arrays from their own rows", async () => {
     const ro = makeRoPool((sql) => route(sql));
-    const router = new TenantsRouter(ro.pool, noDbPool());
+    const router = new TenantsRouter(
+      ro.pool,
+      noDbPool(),
+      notifierSpy().notifier,
+    );
     const record = await router.getTenant(makeReq(MANAGE), TENANT_ID);
 
     expect(record.members).toEqual([
@@ -308,7 +321,11 @@ describe("GET /api/tenants/:id detail projection", () => {
 
   it("carries none of the former placeholder fields", async () => {
     const ro = makeRoPool((sql) => route(sql));
-    const router = new TenantsRouter(ro.pool, noDbPool());
+    const router = new TenantsRouter(
+      ro.pool,
+      noDbPool(),
+      notifierSpy().notifier,
+    );
     const record = await router.getTenant(makeReq(MANAGE), TENANT_ID);
     for (const field of REMOVED_FIELDS) {
       expect(record).not.toHaveProperty(field);
@@ -324,7 +341,11 @@ describe("GET /api/tenants/:id detail projection", () => {
         ],
       }),
     );
-    const router = new TenantsRouter(ro.pool, noDbPool());
+    const router = new TenantsRouter(
+      ro.pool,
+      noDbPool(),
+      notifierSpy().notifier,
+    );
     const record = await router.getTenant(makeReq(MANAGE), TENANT_ID);
     expect(record.riskLevel).toBe("normal");
     expect(record.lastActiveAt).toBeNull();
@@ -339,7 +360,11 @@ describe("GET /api/tenants/:id detail projection", () => {
     const ro = makeRoPool((sql) =>
       route(sql, { subscriptions: [{ ...SUB_ROW, status: "past_due" }] }),
     );
-    const router = new TenantsRouter(ro.pool, noDbPool());
+    const router = new TenantsRouter(
+      ro.pool,
+      noDbPool(),
+      notifierSpy().notifier,
+    );
     await expect(router.getTenant(makeReq(MANAGE), TENANT_ID)).rejects.toThrow(
       /Unknown subscription status/,
     );
@@ -349,7 +374,11 @@ describe("GET /api/tenants/:id detail projection", () => {
 describe("GET /api/tenants list projection", () => {
   it("maps the same scalar counts but carries no detail arrays", async () => {
     const ro = makeRoPool((sql) => route(sql));
-    const router = new TenantsRouter(ro.pool, noDbPool());
+    const router = new TenantsRouter(
+      ro.pool,
+      noDbPool(),
+      notifierSpy().notifier,
+    );
     const [record] = await router.listTenants(makeReq(MANAGE));
 
     expect(ro.calls).toHaveLength(1);

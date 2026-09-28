@@ -28,6 +28,7 @@ import { SubscriptionModule } from "@vxture/service-subscription";
 import { PlatformAuthGuard } from "./authn/platform-auth.guard";
 import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
 import { AccountDeletionPurgeJob } from "./jobs/account-deletion-purge.job";
+import { AddonLifecycleJob } from "./jobs/addon-lifecycle.job";
 import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
 import { JobHealthAlertJob } from "./jobs/job-health-alert.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
@@ -95,6 +96,9 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     ProvisioningDispatchJob,
     SharingExpiryJob,
     TrialExpiryJob,
+    // 2026-09-28 批 5：加油包生命周期客户通知（即将到期 / 已用尽 / 已过期）。
+    // 三档都没有写入方可挂，只能巡检；去重靠客户收件箱的唯一键，每趟重扫同一批行。
+    AddonLifecycleJob,
     OrderPaymentExpiryJob,
     SubscriptionRenewalJob,
     // P2-h：公告推送（站内 + 按偏好邮件），publish_at 到点即播

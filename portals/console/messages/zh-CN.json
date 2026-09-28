@@ -999,9 +999,6 @@
       "save": "保存偏好",
       "reset": "恢复默认"
     },
-    "backend": {
-      "pending": "待后端实现"
-    },
     "channels": {
       "short": {
         "inbox": "站内",

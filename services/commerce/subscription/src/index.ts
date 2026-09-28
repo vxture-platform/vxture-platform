@@ -71,7 +71,13 @@ export type {
 export { AddonService } from "./service/addon.service";
 export { PgAddonRepository } from "./repository/pg-addon.repository";
 export type {
+  AddonLifecycleKind,
+  AddonLifecycleWindow,
+} from "./service/addon-lifecycle";
+export type {
+  AddonNotifyDisplay,
   AddonPackRecord,
+  AddonPoolCandidate,
   AddonPurchaseRecord,
   CreateAddonOrderInput,
   DeclareAddonPaymentInput,

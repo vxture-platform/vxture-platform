@@ -69,6 +69,7 @@ interface NotifyDisplayRow {
   id: string;
   tenant_id: string;
   end_at: Date | null;
+  trial_end_at: Date | null;
   product_name: string | null;
   plan_name: string | null;
   /** 读到这一行时的状态，给 CAS 用（expectedStatus）。 */
@@ -79,6 +80,13 @@ export interface NotifyDisplay {
   id: string;
   tenantId: string;
   endAt: Date | null;
+  /**
+   * 试用的截止日（2026-09-28 批 5）。**与 `endAt` 是两根轴**：试用行的 `end_at` 常为
+   * NULL（付费周期还没开始），试用什么时候到点只写在 `trial_end_at` 上。
+   * 试用到期通知要说的那个日子就是它——只读 `endAt` 的话文案上是「—」，
+   * 而去重键会退化成「今天」（见 subscription.service 的 subscriptionNotice）。
+   */
+  trialEndAt: Date | null;
   productName: string;
   planName: string;
   /**
@@ -88,7 +96,7 @@ export interface NotifyDisplay {
   status: string;
 }
 
-const NOTIFY_DISPLAY_SELECT = `select s.id, s.tenant_id, s.end_at, s.status, pl.plan_name, pr.product_name
+const NOTIFY_DISPLAY_SELECT = `select s.id, s.tenant_id, s.end_at, s.trial_end_at, s.status, pl.plan_name, pr.product_name
          from metering.subscriptions s
          join product.plan_versions pv on pv.id = s.plan_version_id
          join product.plans pl on pl.id = pv.plan_id
@@ -99,6 +107,7 @@ function toNotifyDisplay(r: NotifyDisplayRow): NotifyDisplay {
     id: r.id,
     tenantId: r.tenant_id,
     endAt: r.end_at,
+    trialEndAt: r.trial_end_at,
     productName: r.product_name ?? "—",
     planName: r.plan_name ?? "—",
     status: r.status,
@@ -1354,11 +1363,23 @@ export class PgSubscriptionRepository {
 
   /**
    * 顺延同步：窗口进行中运营改了 end_at（opera-bff 同步到 products.maintenance_until），
-   * 同窗口未闭合 episode 的 expected_resume_at 跟着改。一条 UPDATE，只改真的不同的行，
-   * 返回改了几条。expected_resume_at 是可改列（98 白名单里），不碰锚点。
+   * 同窗口未闭合 episode 的 expected_resume_at 跟着改。一条 UPDATE，只改真的不同的行。
+   * expected_resume_at 是可改列（98 白名单里），不碰锚点。
+   *
+   * **回送被改的那几行**（2026-09-28 收尾），不只回一个条数：预计恢复时间是**对客户的
+   * 承诺**，它变了就得告诉本人，而服务层拿一个 `3` 没法知道该告诉谁。`returning` 就在这
+   * 同一条 UPDATE 上，不是第二次查询——两步之间会有另一个 tick 把同一批行又改一次，那时
+   * 读回来的是新值、发出去的是错人。条数由调用方按数组长度算，返回契约的语义不变。
+   * `expected_resume_at` 回送成 `Date | null`：窗口还打着而 `maintenance_until` 被清空是
+   * 可能的，那时没有日子可承诺，调用方不发信（而不是发一条写着「—」的）。
    */
-  async syncMaintenanceExpectedResume(): Promise<number> {
-    const res = await this.pool.query(
+  async syncMaintenanceExpectedResume(): Promise<
+    { subscriptionId: string; expectedResumeAt: Date | null }[]
+  > {
+    const res = await this.pool.query<{
+      subscription_id: string;
+      expected_resume_at: Date | null;
+    }>(
       `update metering.subscription_suspensions sus
           set expected_resume_at = p.maintenance_until, updated_at = now()
          from metering.subscriptions s
@@ -1367,9 +1388,13 @@ export class PgSubscriptionRepository {
           and sus.resumed_at is null
           and sus.maintenance_window_id is not null
           and p.maintenance_window_id = sus.maintenance_window_id
-          and sus.expected_resume_at is distinct from p.maintenance_until`,
+          and sus.expected_resume_at is distinct from p.maintenance_until
+       returning sus.subscription_id, sus.expected_resume_at`,
     );
-    return res.rowCount ?? 0;
+    return res.rows.map((r) => ({
+      subscriptionId: r.subscription_id,
+      expectedResumeAt: r.expected_resume_at,
+    }));
   }
 
   private mapHistory(row: HistoryRow): SubscriptionHistoryRecord {

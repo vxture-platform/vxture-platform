@@ -19,6 +19,7 @@ import {
 } from "@vxture/service-notification";
 import { SmsService } from "@vxture/service-sms";
 import {
+  AddonService,
   COMMERCE_PG_POOL,
   OrderService,
   SubscriptionService,
@@ -34,6 +35,9 @@ export class CustomerNotificationsWiring implements OnModuleInit {
     @Inject(OrderService) private readonly orders: OrderService,
     @Inject(SubscriptionService)
     private readonly subscriptions: SubscriptionService,
+    /* 批 5：加油包四条客户通知。开通那条由 admin 侧核销触发，另外三档由本进程的
+       addon-lifecycle 作业巡检——作业与 service 在同一个进程里，必须在这里挂上。 */
+    @Inject(AddonService) private readonly addons: AddonService,
   ) {
     this.dispatcher = new NotificationDispatcher(this.pool, {
       mail: new MailService(),
@@ -49,6 +53,7 @@ export class CustomerNotificationsWiring implements OnModuleInit {
   onModuleInit(): void {
     this.orders.setCustomerNotifier(this.dispatcher);
     this.subscriptions.setCustomerNotifier(this.dispatcher);
+    this.addons.setCustomerNotifier(this.dispatcher);
     this.logger.log(
       `customer notifications wired (inbox + email${process.env.CONSOLE_BASE_URL ? ", links → " + process.env.CONSOLE_BASE_URL : ""})`,
     );

@@ -1,5 +1,5 @@
 /**
- * operator-mirror.spec.ts — 25 个客户模板每个至少一条断言（严重度 / 标题 / 去重键），
+ * operator-mirror.spec.ts — **每个**客户模板至少一条断言（严重度 / 标题 / 去重键），
  * 警告类再断言链接；镜像与写库 / 查库分开测：composeOperatorNotice 是纯函数，
  * OperatorMirror 用假 pool 只测解析与降级。
  *
@@ -41,9 +41,26 @@ const subRef: MirrorReference = {
   type: "subscription",
   id: "sub-1:2026-09-10",
 };
+/* 批 5：加油包引用 = 加油包单号（可视码，住 metering.addon_purchases，不是
+   billing.orders——所以引用类型另立一档）。
+   认证引用 = `{租户可视码}:{本次审核时刻}`（2026-09-28 收尾改的形状）：锚在**这一次
+   审核**上，锚租户的话驳回后重新提交再审就被唯一键吞掉；而**不放认证行的 uuid**，
+   因为 reference_id 被客户收件箱的读路径原样投影给浏览器（console-bff 的
+   inbox.router → InboxMessage.referenceId）。 */
+const addonRef: MirrorReference = { type: "addon", id: "ORD-202609-7a1b2c" };
+const VERIFY_TENANT_NO = "8800000012";
+const verifyRef = (reviewedAt: string): MirrorReference => ({
+  type: "tenant",
+  id: `${VERIFY_TENANT_NO}:${reviewedAt}`,
+});
 
 const planParams = { productName: "Arda", planName: "Pro" };
 const orderParams = { ...planParams, orderNo: "ORD-202609-1" };
+const addonParams = {
+  packName: "AI 加油包 10 万 tokens",
+  orderNo: "ORD-202609-7a1b2c",
+  endAt: "2026-12-27",
+};
 
 interface Case {
   reference: MirrorReference;
@@ -214,6 +231,72 @@ const CASES: Record<NotificationTemplateCode, Case> = {
     title: "退款执行失败 · RFD-202609-1",
     link: "/orders/ORD-202609-1",
   },
+  /* 批 5（2026-09-28）：七条**全 info**。判据是本文件对 warning 的成文含义——
+     「在等运营动手，直到处理才消失」。两条认证结果是运营刚刚自己审的回执；试用到期
+     没有「处理试用到期」这个动作；加油包四条客户自助再买一份即可，而且来自每趟重扫
+     同一批行的巡检，给成不过期的 warning 只会越堆越多。 */
+  "tenant.verification_approved": {
+    reference: verifyRef("2026-09-28T02:30:00.000Z"),
+    params: { tenantName: "Acme", reviewedAt: "2026-09-28" },
+    severity: "info",
+    title: "企业认证已通过 Acme",
+  },
+  /* 第二次审核 = 另一个审核时刻，去重锚因此不同（同一个租户可视码也不会撞）——这就是
+     「驳回后重新提交再审，客户要再收到一次」那一条靠的东西。 */
+  "tenant.verification_rejected": {
+    reference: verifyRef("2026-09-30T06:00:00.000Z"),
+    params: { tenantName: "Acme", reason: "营业执照号与企业名称不一致" },
+    severity: "info",
+    title: "企业认证已驳回 Acme",
+  },
+  "subscription.trial_expired": {
+    reference: subRef,
+    params: { ...planParams, endAt: "2026-09-10" },
+    severity: "info",
+    title: "客户试用到期未转化 Arda Pro",
+  },
+  "addon.activated": {
+    reference: addonRef,
+    params: { ...addonParams, amount: "¥99.00" },
+    severity: "info",
+    title: "加油包已开通 AI 加油包 10 万 tokens · ORD-202609-7a1b2c（¥99.00）",
+  },
+  "addon.expiring_soon": {
+    // 发侧的去重键是 `单号:到期日`（到期日被改了该再提醒一次）；这里照那个形状。
+    reference: { type: "addon", id: "ORD-202609-7a1b2c:2026-12-27" },
+    params: { ...addonParams, days: 7 },
+    severity: "info",
+    title:
+      "客户加油包即将到期 AI 加油包 10 万 tokens · ORD-202609-7a1b2c（2026-12-27）",
+  },
+  "addon.exhausted": {
+    reference: addonRef,
+    params: addonParams,
+    severity: "info",
+    title: "客户加油包额度已用尽 AI 加油包 10 万 tokens · ORD-202609-7a1b2c",
+  },
+  "addon.expired": {
+    reference: addonRef,
+    params: addonParams,
+    severity: "info",
+    title: "客户加油包已到期 AI 加油包 10 万 tokens · ORD-202609-7a1b2c",
+  },
+  /* 代客续期（2026-09-28 收尾）：发侧的去重键是「订阅 × **新的**到期日」（续一期、
+     日期变了，下一次续期自然是另一条）。info——运营自己刚做的动作，镜像是回执。 */
+  "subscription.renewed_by_operator": {
+    reference: { type: "subscription", id: "sub-1:2027-09-10" },
+    params: { ...planParams, endAt: "2027-09-10" },
+    severity: "info",
+    title: "运营代客续期 Arda Pro（2027-09-10）",
+  },
+  /* 维护暂停（2026-09-28 收尾）：发侧的去重键是「订阅 × **预计恢复日期**」，不是订阅 ×
+     到期日——窗口一延长，日期变了，同一条模板自然再发 / 再镜像一条。这里照那个形状。 */
+  "subscription.suspended_maintenance": {
+    reference: { type: "subscription", id: "sub-1:2026-09-30" },
+    params: { ...planParams, resumeAt: "2026-09-30" },
+    severity: "info",
+    title: "产品升级维护，客户订阅已暂停 Arda Pro（预计 2026-09-30 恢复）",
+  },
 };
 
 const NOW = new Date("2026-09-28T10:00:00Z");
@@ -369,6 +452,65 @@ describe("composeOperatorNotice 正文与去重键", () => {
 
   it("租户引用给租户页链接", () => {
     expect(compose("tenant.converted").link).toBe("/tenants/8800000012");
+    // 认证结果也是租户引用：运营点开落在那个租户上。
+    expect(compose("tenant.verification_rejected").link).toBe(
+      "/tenants/8800000012",
+    );
+  });
+
+  it("加油包引用**不给链接**：admin 只有列表页，没有按加油包单号的详情页", () => {
+    // 判据与订阅 / 邀请 / 公告那几档相同：有详情页才给链接。单号参数也因此叫
+    // addonOrderNo 而不是 orderNo——后者会命中 /orders/{单号}，给出一个按 billing
+    // 单号查不到的死链。
+    for (const code of [
+      "addon.activated",
+      "addon.expiring_soon",
+      "addon.exhausted",
+      "addon.expired",
+    ] as NotificationTemplateCode[]) {
+      expect(compose(code).link).toBeNull();
+    }
+    // 真正的陷阱形状：参数里**有** orderNo（发侧就是这么传的），只有引用类型能分辨
+    // 这个单号住哪张表。同一个参数走 order 引用时，订单详情页链接照旧要给。
+    expect(
+      mirrorLink("addon", { orderNo: "ORD-202609-7a1b2c" }, "88"),
+    ).toBeNull();
+    expect(mirrorLink("order", { orderNo: "ORD-202609-1" }, "88")).toBe(
+      "/orders/ORD-202609-1",
+    );
+  });
+
+  it("加油包与认证的去重锚都是可视值，不含 uuid；长度在 varchar(128) 之内", () => {
+    /* 2026-09-28 收尾：认证那两条此前锚的是认证行 uuid，注释里写着「引用 id 从不上屏」
+       ——那句话是错的：console-bff 的 inbox.router 把 reference_id 原样投影成
+       `InboxMessage.referenceId` 交给浏览器。所以这条断言现在管到认证。 */
+    const addonKey = mirrorDedupeKey("addon.exhausted", addonRef);
+    expect(addonKey).toBe("addon.exhausted:addon:ORD-202609-7a1b2c");
+    for (const code of [
+      "addon.exhausted",
+      "addon.expiring_soon",
+      "tenant.verification_approved",
+      "tenant.verification_rejected",
+    ] as NotificationTemplateCode[]) {
+      const key = mirrorDedupeKey(code, CASES[code].reference);
+      expect(key).not.toMatch(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+      );
+      // 认证那条最长：模板 28 + 1 + "tenant" 6 + 1 + 可视码 10 + 1 + ISO 24 = 71。
+      expect(key.length).toBeLessThanOrEqual(128);
+    }
+    /* 同一个租户的两次审核必须是两条：这就是去重锚里那个审核时刻的全部用处。 */
+    expect(
+      mirrorDedupeKey(
+        "tenant.verification_rejected",
+        verifyRef("2026-09-28T02:30:00.000Z"),
+      ),
+    ).not.toBe(
+      mirrorDedupeKey(
+        "tenant.verification_rejected",
+        verifyRef("2026-09-30T06:00:00.000Z"),
+      ),
+    );
   });
 });
 

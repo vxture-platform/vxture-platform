@@ -88,7 +88,9 @@ export const buildSweepMocks = (product: {
     openSuspension: vi.fn().mockResolvedValue("sus-new"),
     findMaintenanceCandidates: vi.fn().mockResolvedValue([]),
     findMaintenanceReleases: vi.fn().mockResolvedValue([]),
-    syncMaintenanceExpectedResume: vi.fn().mockResolvedValue(0),
+    /* 回送**被改的那几行**（2026-09-28 收尾），不是条数：预计恢复变了要通知本人。
+       默认空数组 = 没有窗口被延长，既有 spec 的行为不变。 */
+    syncMaintenanceExpectedResume: vi.fn().mockResolvedValue([]),
   };
   const provisioning = {
     onSubscriptionActivated: vi

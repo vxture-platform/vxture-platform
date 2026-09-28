@@ -999,9 +999,6 @@
       "save": "Save preferences",
       "reset": "Restore defaults"
     },
-    "backend": {
-      "pending": "Backend pending"
-    },
     "channels": {
       "short": {
         "inbox": "Inbox",

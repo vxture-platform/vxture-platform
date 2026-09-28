@@ -13,6 +13,7 @@ import { AdminBffPoolsModule } from "./providers/pools.module";
 import {
   addonServiceProvider,
   commerceServicesProvider,
+  customerNotifierProvider,
   orderServiceProvider,
   promotionServiceProvider,
 } from "./providers/commerce-services.provider";
@@ -99,6 +100,8 @@ import { SearchRouter } from "./routers/search.router";
     OperatorStepUpService,
     OperatorAdminService,
     commerceServicesProvider,
+    // 批 5：客户通知分发器有了名字，裸 SQL 的运营路由（租户实名审核）才能注入它。
+    customerNotifierProvider,
     orderServiceProvider,
     promotionServiceProvider,
     addonServiceProvider,

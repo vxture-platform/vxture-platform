@@ -12,6 +12,7 @@ import { SubscriptionsRouter } from "./subscriptions.router";
 import { PaymentsRouter } from "./payments.router";
 import { TenantsRouter } from "./tenants.router";
 import { BillingRouter } from "./billing.router";
+import { notifierSpy } from "../testing/pool-mocks";
 import type { RequestContext } from "../types/console.types";
 import { UUID_RE } from "./governance.shared";
 
@@ -249,7 +250,7 @@ describe("subscriptions runSubscriptionAction", () => {
     );
   });
 
-  it("续订不发冻结 / 恢复通知——状态没往那两档走", async () => {
+  it("续订发的是代客续期通知，不是冻结 / 恢复那两条", async () => {
     const tx = makeTxClient((s) =>
       s.includes("for update")
         ? [{ status: "active", tenant_id: UUID_A, end_at: null }]
@@ -269,9 +270,15 @@ describe("subscriptions runSubscriptionAction", () => {
     await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
       action: "renew",
     });
-    // renew 把状态置回 active：本来就是 active，没有变化 ⇒ 一条通知都不该发。
-    // 这一条钉的是「幂等重放不打扰客户」，也顺带钉住别把 renew 误判成 resume。
-    expect(subs.notifyOperatorStatusChange).not.toHaveBeenCalled();
+    /* renew 把状态置回 active：本来就是 active，状态什么都没变——但**服务期变了**
+       （UPDATE 里那段 make_interval），所以 2026-09-28 收尾起这一档要发一条代客续期
+       通知。判据因此是**动作**而不是状态转移；按状态判的话这一档永远发不出去。
+       这一条仍然钉住「别把 renew 误判成 resume」：动作码必须是 renewed，且只有一条。 */
+    expect(subs.notifyOperatorStatusChange).toHaveBeenCalledTimes(1);
+    expect(subs.notifyOperatorStatusChange).toHaveBeenCalledWith(
+      UUID_A,
+      "renewed",
+    );
   });
 
   /*
@@ -542,7 +549,11 @@ describe("tenant verification approve/reject", () => {
 
   it("approve rejects a caller without tenant.manage before any DB access", async () => {
     const rw = noDbPool();
-    const router = new TenantsRouter(noDbPool().pool, rw.pool);
+    const router = new TenantsRouter(
+      noDbPool().pool,
+      rw.pool,
+      notifierSpy().notifier,
+    );
     await expect(
       router.approveTenantVerification(
         makeReq(["platform.tenant.read"]),
@@ -554,7 +565,11 @@ describe("tenant verification approve/reject", () => {
 
   it("reject requires a reason before any DB access", async () => {
     const rw = noDbPool();
-    const router = new TenantsRouter(noDbPool().pool, rw.pool);
+    const router = new TenantsRouter(
+      noDbPool().pool,
+      rw.pool,
+      notifierSpy().notifier,
+    );
     await expect(
       router.rejectTenantVerification(makeReq(MANAGE), UUID_A, {
         reason: "  ",
@@ -565,7 +580,11 @@ describe("tenant verification approve/reject", () => {
 
   it("404 + rollback + release when the verification is missing", async () => {
     const tx = makeTxClient(() => []);
-    const router = new TenantsRouter(dummyRoPool(), tx.pool);
+    const router = new TenantsRouter(
+      dummyRoPool(),
+      tx.pool,
+      notifierSpy().notifier,
+    );
     await expect(
       router.approveTenantVerification(makeReq(MANAGE), UUID_A),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -581,7 +600,11 @@ describe("tenant verification approve/reject", () => {
         ? [{ id: UUID_A, tenant_id: UUID_A }]
         : undefined,
     );
-    const router = new TenantsRouter(dummyRoPool(), tx.pool);
+    const router = new TenantsRouter(
+      dummyRoPool(),
+      tx.pool,
+      notifierSpy().notifier,
+    );
     (router as unknown as { loadVerification: unknown }).loadVerification = vi
       .fn()
       .mockResolvedValue({ id: UUID_A });
