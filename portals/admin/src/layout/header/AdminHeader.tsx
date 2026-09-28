@@ -75,6 +75,8 @@ export interface AdminHeaderProps {
   /** 当前工作域名，占品牌右侧那一槽。 */
   activeMenuName: string;
   openDrawer: (type: "notifications" | "settings") => void;
+  /** 运营通告未读数，铃铛角标。0 不画——空角标是噪音。 */
+  unreadCount?: number | undefined;
   onNavigate: (href: string) => void;
   onSwitchUser: () => void;
   onSignOut: () => void;
@@ -89,6 +91,7 @@ export function AdminHeader({
   onSelectView,
   activeMenuName,
   openDrawer,
+  unreadCount = 0,
   onNavigate,
   onSwitchUser,
   onSignOut,
@@ -219,11 +222,28 @@ export function AdminHeader({
           {/* Varda 助手入口已随独立仓迁出移除(2026-08-18),重构发包后恢复。 */}
           <ShellIconGroup label={t("settings")}>
             <ShellIconButton icon="help" label={t("help")} onClick={() => {}} />
-            <ShellIconButton
-              icon="bell"
-              label={t("notifications")}
-              onClick={() => openDrawer("notifications")}
-            />
+            {/* 未读角标：运营通告（admin.operator_notices）的未读数——客户申报付款 /
+                申请退款这类事件镜像过来的，加上 opera 手工发布的。0 不画——空角标
+                是噪音。与 console 站内收件箱同一形态。 */}
+            <span className="relative inline-flex">
+              <ShellIconButton
+                icon="bell"
+                label={
+                  unreadCount > 0
+                    ? `${t("notifications")} (${unreadCount})`
+                    : t("notifications")
+                }
+                onClick={() => openDrawer("notifications")}
+              />
+              {unreadCount > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-2xs -top-2xs inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-2xs text-label-sm leading-4 text-danger-foreground tabular-nums"
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </span>
             <ShellIconButton
               icon="settings"
               label={t("settings")}

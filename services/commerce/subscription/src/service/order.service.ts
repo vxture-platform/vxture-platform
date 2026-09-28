@@ -47,7 +47,6 @@ import { isTierUpgrade, tierRank } from "@vxture-platform/shared";
 import type {
   CreateOrderInput,
   CreateOrderResult,
-  OpsTodoOrderRow,
   OrderActor,
   OrderRecord,
   RefundEligibility,
@@ -125,14 +124,6 @@ export class OrderService {
 
   setOpsAlerter(alerter: OpsAlerter | null): void {
     this.opsAlerter = alerter;
-  }
-
-  /** 运营待办告警的候选单（#231）；判据与注释见仓储层 findOpsTodoOrders。 */
-  async listOpsTodoOrders(
-    minAgeMinutes: number,
-    limit = 50,
-  ): Promise<OpsTodoOrderRow[]> {
-    return this.orders.findOpsTodoOrders(minAgeMinutes, limit);
   }
 
   /**

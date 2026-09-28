@@ -1,5 +1,5 @@
 /**
- * pg-notice.repository.ts — 运营通告读侧的唯一数据出口。
+ * pg-notice.repository.ts — 运营通告读侧的唯一数据出口 + 系统来源的唯一写路。
  * @package @vxture/service-notice
  * @layer Infrastructure
  * @category Repository
@@ -7,12 +7,17 @@
  * 「谁能看见哪些通告」这条谓词**只写在这里**。它此前在 admin-bff 里，arche 接入
  * 时本该复制第二份——两份一样的 SQL 没有守卫能盯住：比对两份是否一致的检查抓
  * 不到「两边一样地错」，而改漏一处又要等到有人报「arche 看不到那条通告」才发现。
+ *
+ * 写侧只收 **system** 来源（2026-09-28，客户事件的运营镜像）：人工发布仍在 opera
+ * 自己的发布面。两条写路判重规则不同（见 CreateSystemNoticeInput），不合并。
  */
 
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
 import { NOTICE_PG_POOL } from "../tokens";
 import type {
+  CreateSystemNoticeInput,
+  CreateSystemNoticeResult,
   ListNoticesParams,
   ListNoticesResult,
   MarkNoticeReadResult,
@@ -106,6 +111,34 @@ const MARK_READ_SQL = `
   returning read_at
 `;
 
+/**
+ * 系统来源通告的唯一写路（2026-09-28）。
+ *
+ * `on conflict ... do nothing` 的冲突目标**必须原样照抄** `uq_operator_notices_system`
+ * 的列与 where 谓词（`source = 'system' and deleted_at is null`）——部分唯一索引只有
+ * 谓词完全匹配时 Postgres 才认它是可用的冲突仲裁；写漏 where，语句直接报
+ * 「there is no unique or exclusion constraint matching the ON CONFLICT specification」。
+ *
+ * `do nothing` 而不是 `do update`：同一件事已经播过一次，再来一次不该把标题、正文
+ * 或 published_at 刷新——那会让一条已读的通告重新浮到未读上面。代价是 returning 在
+ * 冲突时不回行，所以结果用 `inserted` 说话。
+ *
+ * `created_by` 写 null：系统没有运营账号；读侧对 null 回 createdByName=null，前端画「—」。
+ *
+ * **导出仅为可测**：假 pool 不解析 SQL，谓词只能靠字面断言钉住（与 dispatch 包的
+ * DEDUPE_SQL 同一手法）。
+ */
+export const CREATE_SYSTEM_NOTICE_SQL = `
+  insert into admin.operator_notices
+    (target_planes, severity, title, body, link, source,
+     reference_type, reference_id, expires_at, created_by)
+  values ($1::varchar(16)[], $2, $3, $4, $5, 'system', $6, $7, $8, null)
+  on conflict (reference_type, reference_id)
+    where source = 'system' and deleted_at is null
+    do nothing
+  returning id
+`;
+
 @Injectable()
 export class PgNoticeRepository {
   // 必须显式 @Inject：BFF 打包走 esbuild，它**不产 emitDecoratorMetadata**。
@@ -140,5 +173,29 @@ export class PgNoticeRepository {
     ]);
     const row = result.rows[0];
     return row ? { id: noticeId, readAt: row.read_at.toISOString() } : null;
+  }
+
+  /**
+   * 写一条系统来源通告；同一去重锚已有未撤回的一条时不写，回 `inserted: false`。
+   * 参数全部绑定，不拼串——标题正文里有客户填的退款理由，那是外部输入。
+   */
+  async createSystemNotice(
+    input: CreateSystemNoticeInput,
+  ): Promise<CreateSystemNoticeResult> {
+    const result = await this.pool.query<{ id: string }>(
+      CREATE_SYSTEM_NOTICE_SQL,
+      [
+        [...input.targetPlanes],
+        input.severity,
+        input.title,
+        input.body,
+        input.link ?? null,
+        input.referenceType,
+        input.referenceId,
+        input.expiresAt ?? null,
+      ],
+    );
+    const row = result.rows[0];
+    return row ? { inserted: true, id: row.id } : { inserted: false, id: null };
   }
 }

@@ -21,6 +21,7 @@ import { ScheduleModule } from "@nestjs/schedule";
 import { VxConfigModule } from "@vxture/core-config";
 import { AccountModule } from "@vxture/service-account";
 import { OrganizationModule } from "@vxture/service-organization";
+import { OpsTodosModule } from "@vxture/service-ops-todos";
 import { ProvisioningModule } from "@vxture/service-provisioning";
 import { SharingModule } from "@vxture/service-sharing";
 import { SubscriptionModule } from "@vxture/service-subscription";
@@ -62,6 +63,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // 批 5b:删除账号 30 天保留期清扫(AccountDeletionPurgeJob)要账号与租户两个服务
     AccountModule,
     OrganizationModule,
+    // 2026-09-28 根治批：待办告警作业改读 @vxture/service-ops-todos（与 admin 待办页同一份算法）
+    OpsTodosModule,
   ],
   controllers: [
     HealthRouter,

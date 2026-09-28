@@ -9,7 +9,13 @@
  * 同源；原先 1:1 转写自设计稿的 `.vxh-*` / `.sidebar` / `.content-*` 遗留类
  * 不再被本文件引用。 */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -25,7 +31,8 @@ import {
 } from "@vxture/design-system";
 import { formatDateTime, writeNavCollapsed } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
-import { fetchNotificationLogs } from "@/api/admin-bff";
+import { fetchNotificationLogs, fetchOperatorNotices } from "@/api/admin-bff";
+import type { OperatorNoticeItem } from "@/api/admin-bff";
 import type { NotificationLogRecord } from "@/entities/console";
 import {
   adminWorkspaces,
@@ -36,7 +43,11 @@ import { useLocale, useTranslations } from "next-intl";
 import { AdminHeader, type AdminHeaderViewOption } from "../header/AdminHeader";
 import type { NavSearchEntry } from "../header/useAdminSearch";
 import type { ShellView, ShellDrawerType } from "./shell/types";
-import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
+import {
+  TemplateDrawer,
+  type DrawerNotif,
+  type DrawerNotifSection,
+} from "./TemplateDrawer";
 
 /* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template/app.css）。
  * 等价 Tailwind 写法搬到这里，admin 因此不再依赖那份 CSS 的布局规则。
@@ -71,6 +82,31 @@ const NOTIF_ICON: Record<string, string> = {
   inapp: "ph-bell",
   webhook: "ph-webhooks-logo",
   push: "ph-device-mobile",
+};
+
+/* ── 通知抽屉第一段 + 铃铛角标：运营通告（admin.operator_notices）──
+ * 客户申报付款 / 申请退款 / 退订这些事件，客户收到消息的同时由通知分发器镜像成
+ * 一条运营通告（2026-09-28 根治：「运营端收到的信息和客户侧要完整一致」）；opera
+ * 手工发布的通告也在同一张表。角标 = 本平面未读数；抽屉列 digest 档（当天已读 +
+ * 所有未读）最近几条，「查看全部」落到 /messages。已读在 /messages 里点，抽屉
+ * 不代点——点开一条不等于处理完。投递日志退为第二段，功能不删。 */
+const DRAWER_NOTICE_LIMIT = 10;
+/** 未读数轮询间隔。与 console 站内收件箱同一节奏。 */
+const NOTICE_POLL_MS = 60_000;
+/** 严重度 → 抽屉行语气。 */
+const NOTICE_LEVEL: Record<
+  OperatorNoticeItem["severity"],
+  DrawerNotif["level"]
+> = {
+  critical: "danger",
+  warning: "warning",
+  info: "info",
+};
+/** 严重度 → Phosphor 类名。抽屉行的图标仍走字体图标，与投递日志同一套。 */
+const NOTICE_ICON: Record<OperatorNoticeItem["severity"], string> = {
+  critical: "ph-warning-octagon",
+  warning: "ph-warning",
+  info: "ph-megaphone",
 };
 
 function formatNotifTime(value: string, locale: string) {
@@ -130,6 +166,43 @@ function ShellFrame({
     setDrawer(null);
     setNotifLogs(null);
   };
+  /* 运营通告：`null` = 还没回来；读失败记 `noticesFailed`，抽屉里说「读取失败」
+   * 而不是画成「没有通告」——那是两件事。角标在失败时不画：拿不到数就不报数。 */
+  const [notices, setNotices] = useState<OperatorNoticeItem[] | null>(null);
+  const [noticesFailed, setNoticesFailed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const loadNotices = useCallback(async () => {
+    try {
+      const result = await fetchOperatorNotices({
+        scope: "digest",
+        limit: DRAWER_NOTICE_LIMIT,
+        offset: 0,
+      });
+      setNotices(result.items);
+      setUnreadCount(result.unread);
+      setNoticesFailed(false);
+    } catch {
+      setNotices([]);
+      setUnreadCount(0);
+      setNoticesFailed(true);
+    }
+  }, []);
+
+  /* 会话就绪后拉一次，之后每分钟刷新；抽屉每次打开再拉一次，列出来的一定是
+   * 当下的。 */
+  useEffect(() => {
+    if (status !== "ready") return;
+    void loadNotices();
+    const timer = setInterval(() => {
+      void loadNotices();
+    }, NOTICE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [status, loadNotices]);
+
+  useEffect(() => {
+    if (drawer !== "notifications") return;
+    void loadNotices();
+  }, [drawer, loadNotices]);
 
   useEffect(() => {
     if (drawer !== "notifications") return;
@@ -265,6 +338,33 @@ function ShellFrame({
         .join(" · "),
     };
   });
+  const drawerNotices: DrawerNotif[] = (notices ?? []).map((notice) => ({
+    id: notice.id,
+    level: NOTICE_LEVEL[notice.severity],
+    icon: NOTICE_ICON[notice.severity],
+    title: notice.title,
+    meta: [
+      notice.readAt === null ? tDrawer("notices.unread") : null,
+      formatNotifTime(notice.publishedAt, locale),
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    // link 是 admin 内相对路径（/orders/{order_no} 之类）；没有就整行不可点。
+    ...(notice.link ? { href: notice.link } : {}),
+  }));
+  const noticeSection: DrawerNotifSection = {
+    key: "notices",
+    title: tDrawer("notices.title"),
+    items: drawerNotices,
+    loading: notices === null,
+    emptyTitle: noticesFailed
+      ? tDrawer("notices.loadFailed")
+      : tDrawer("notices.empty.title"),
+    emptyDescription: noticesFailed
+      ? undefined
+      : tDrawer("notices.empty.description"),
+    action: { label: tDrawer("notices.viewAll"), href: "/messages" },
+  };
   const settingsRows: Array<[string, string]> = [
     [tDrawer("settings.rows.theme.label"), tShell(THEME_LABEL_KEY[themeMode])],
     [
@@ -363,6 +463,7 @@ function ShellFrame({
         onSelectView={selectView}
         activeMenuName={activeWorkspace.label}
         openDrawer={(t) => setDrawer(t)}
+        unreadCount={unreadCount}
         onNavigate={navigate}
         onSwitchUser={handleSwitchUser}
         onSignOut={handleSignOut}
@@ -402,6 +503,8 @@ function ShellFrame({
           type={drawer}
           onClose={closeDrawer}
           onNavigate={navigate}
+          sections={[noticeSection]}
+          notificationsTitle={tDrawer("deliveries.title")}
           notifications={drawerNotifs}
           notificationsLoading={notifLogs === null}
           settingsRows={settingsRows}

@@ -41,6 +41,7 @@ import { extractClientIp, industryLabel } from "@vxture/core-utils";
 import type { PromotionService } from "@vxture/service-promotion";
 import type { OrderService } from "@vxture/service-subscription";
 import { assertAnyCapability } from "../auth/capability";
+import { hasPiiAccess, maskEmail, maskPhone } from "../lib/pii-mask";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import {
@@ -1118,28 +1119,8 @@ function assertCanRestoreOrder(req: Request & RequestContext): void {
 }
 
 // 申报人的邮箱 / 手机按 user:pii.read 危码脱敏（订单详情重设计 §3.3，与 accounts.router
-// 同一道闸门、同一套掩码）。掩码函数是 accounts.router 的复制品——那边没导出，而这里
-// 不该为此去动账号路由；两处要一起改。
-function hasPiiAccess(req: Request & RequestContext): boolean {
-  return req.capabilities?.includes("user:pii.read") ?? false;
-}
-
-// j***@example.com — 保留首字符与整个域名；空串原样。
-function maskEmail(email: string): string {
-  if (!email) return "";
-  const at = email.indexOf("@");
-  if (at <= 0) return "***";
-  const first = email[0] ?? "";
-  return `${first}***${email.slice(at)}`;
-}
-
-// 137****5678 — 只留末四位；null 原样。
-function maskPhone(phone: string | null): string | null {
-  if (!phone) return phone;
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length <= 4) return "****";
-  return `${digits.slice(0, digits.length - 8 > 0 ? 3 : 0)}****${digits.slice(-4)}`;
-}
+// 同一道闸门、同一套掩码）。闸门与掩码住在 ../lib/pii-mask——同一条规则此前在这里与
+// accounts.router 各有一份复制品，2026-09-28 运营待办接口要用第三份时收成一处。
 
 /**
  * 付款时效兜底（P4）：2026-08-20 起每张单自带 payment_ttl_minutes，env 只给更早的存量行

@@ -49,7 +49,6 @@ export type {
   OrderActorType,
   OrderEventRecord,
   OrderInvoice,
-  OpsTodoOrderRow,
   CreateOrderInput,
   CreateOrderResult,
 } from "./types/order.types";

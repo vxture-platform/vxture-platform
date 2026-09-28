@@ -88,3 +88,38 @@ export interface MarkNoticeReadResult {
   readonly id: string;
   readonly readAt: string;
 }
+
+/**
+ * 系统来源通告的写入参数（2026-09-28，owner：「用户订阅的退款、退订，admin 平台一条
+ * 消息都没有」）。
+ *
+ * 与 opera 的人工发布面是**两条写路**：人发的没有去重锚（同一件事可以发两条，那是他的
+ * 判断）；系统发的必须带 `referenceType` + `referenceId`，表上 `chk_operator_notices_reference`
+ * 强制这一点，`uq_operator_notices_system` 保证**一事一条**——事件侧重放、作业重扫都
+ * 只会落成一次 `inserted: false`，不会刷屏。
+ *
+ * `targetPlanes` 空数组 = 三个平面都可见（与读侧谓词同一约定）。
+ */
+export interface CreateSystemNoticeInput {
+  readonly targetPlanes: readonly NoticePlane[];
+  readonly severity: NoticeSeverity;
+  readonly title: string;
+  readonly body: string;
+  /** 平面内相对路径（点开去哪）；没有就 null。 */
+  readonly link?: string | null;
+  /** 去重锚：业务对象类别（如 `refund`、`subscription_cancelled`）。 */
+  readonly referenceType: string;
+  /** 去重锚：业务对象标识。**用可视码**（refund_no）或不展示的内部 id 都可以——它不上屏。 */
+  readonly referenceId: string;
+  /** 到期即退出列表，不删行；缺省不过期。 */
+  readonly expiresAt?: Date | null;
+}
+
+/**
+ * `inserted: false` = 同一去重锚已有一条未撤回的系统通告，本次没写（不是错误）。
+ * `id` 只在 inserted 时有值——`on conflict do nothing` 不回行。
+ */
+export interface CreateSystemNoticeResult {
+  readonly inserted: boolean;
+  readonly id: string | null;
+}

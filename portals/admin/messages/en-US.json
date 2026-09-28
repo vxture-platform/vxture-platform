@@ -2143,6 +2143,19 @@
   "drawer": {
     "close": "Close",
     "openCenter": "Open message center",
+    "notices": {
+      "title": "Operator notices",
+      "viewAll": "View all",
+      "unread": "Unread",
+      "loadFailed": "Could not load notices",
+      "empty": {
+        "title": "No notices",
+        "description": "No operator notices recently."
+      }
+    },
+    "deliveries": {
+      "title": "Delivery log"
+    },
     "notifications": {
       "title": "Message center",
       "empty": {
@@ -2966,13 +2979,14 @@
   "opsTodosPage": {
     "header": {
       "queueTitle": "To-do tasks",
-      "queueDescription": "Orders whose customer has declared a payment, verifications waiting for review and open tickets, sorted by urgency. Work from the top down.",
+      "queueDescription": "Orders whose customer has declared a payment, refunds waiting for review, verifications waiting for review and open tickets, sorted by urgency. Work from the top down.",
       "allTitle": "All tasks",
-      "allDescription": "The full list across all four kinds of to-dos, including risk reviews, which only appear here.",
+      "allDescription": "The full list across all five kinds of to-dos, including risk reviews, which only appear here.",
       "totalBadge": "{count} tasks"
     },
     "types": {
       "payment": "Payment confirmation",
+      "refund": "Refund review",
       "verification": "Verification review",
       "risk": "Risk review",
       "ticket": "Ticket handling"
@@ -2982,12 +2996,12 @@
       "filtering": "Showing only this kind. Click again to show all.",
       "payment": "{count} waiting for your check, longest {wait}",
       "paymentEmpty": "No orders waiting for your check",
-      "paymentUnavailable": "Order data could not be loaded, so this card may be incomplete",
+      "refund": "{count} refunds waiting for your review, longest {wait}",
+      "refundEmpty": "No refunds waiting for review",
       "verification": "{count} tenants waiting for review, longest {wait}",
       "verificationEmpty": "No verifications waiting for review",
       "ticket": "{count} open tickets, longest {wait}",
       "ticketEmpty": "No open tickets",
-      "ticketUnavailable": "Ticket data could not be loaded, so this card may be incomplete",
       "risk": "{count} tenants to re-check, longest {wait}",
       "riskEmpty": "No tenants to re-check"
     },
@@ -2996,9 +3010,7 @@
       "allTitle": "Task list",
       "summary": "Sorted by urgency, {count} in total",
       "hiddenRisk": "{count} more risk reviews are under All tasks",
-      "filteringType": "Showing only: {type}",
-      "ticketsUnavailable": "ticket data could not be loaded",
-      "ordersUnavailable": "order data could not be loaded"
+      "filteringType": "Showing only: {type}"
     },
     "filters": {
       "ariaLabel": "To-do filters",
@@ -3027,6 +3039,8 @@
       "confirmPayment": "Check that {amount} has arrived, then confirm the payment",
       "reprovision": "{amount} received, re-run provisioning",
       "followUpBalance": "Chase the balance: {paid} received of {amount} due",
+      "followUpBalanceAmountOnly": "Chase the balance: {amount} due",
+      "refundAudit": "Review the {amount} refund request",
       "verification": "Review the submitted documents and give a decision",
       "risk": "Re-check the risk status and decide whether to lift it",
       "ticket": "Handle ticket: {title}"
@@ -3038,6 +3052,7 @@
       "pendingVerify": "3/5 · your check",
       "paidUnprovisioned": "4/5 · provisioning",
       "partialPending": "3/5 · partly paid",
+      "refundAudit": "Refund pending review",
       "verification": "Awaiting review",
       "risk": "Awaiting re-check",
       "ticketOpen": "Open",
@@ -3063,10 +3078,7 @@
     },
     "empty": {
       "title": "Nothing to handle today",
-      "loadFailedTitle": "Could not load to-dos",
-      "tenantsFailed": "Could not load tenant operations data",
-      "ticketsFailed": "Could not load ticket data",
-      "ordersFailed": "Could not load order data"
+      "loadFailedTitle": "Could not load to-dos"
     },
     "notices": {
       "title": "System messages",

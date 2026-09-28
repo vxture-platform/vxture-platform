@@ -10,8 +10,12 @@
  * 公告类通知自带标题 / 正文（announcement.lang 已定），不走模板表。
  * 全程 best-effort：单个收件人失败只记日志，方法不抛（除非收件人查询本身失败）。
  * 收件人 = 调用方给的 ∪ 租户 owner。
+ * 客户消息第一次落库成功后，按 OPERATOR_MIRROR 再写一条运营通告（operator-mirror.ts）：
+ * 一个客户事件一条、失败只记日志——owner 2026-09-28「运营端收到的信息和客户侧要完整一致」。
  */
 import type { Pool } from "pg";
+import { PgNoticeRepository } from "@vxture/service-notice";
+import { OperatorMirror, type OperatorMirrorPort } from "./operator-mirror";
 import {
   localeOf,
   render,
@@ -107,6 +111,11 @@ export interface NotificationDispatcherOptions {
   /** 邮件里链接的绝对前缀（如 https://console.vxture.com）；未设则相对链接不进邮件。 */
   consoleBaseUrl?: string | null | undefined;
   logger?: NotifyLogger | undefined;
+  /**
+   * 运营镜像（2026-09-28）：客户消息落库后再写一条 admin.operator_notices。
+   * 缺省 = 用同一个 pool 写；显式 null = 不镜像（只给测试 / 明确不要镜像的装配处）。
+   */
+  operatorMirror?: OperatorMirrorPort | null | undefined;
 }
 
 export interface NotifyResult {
@@ -128,6 +137,7 @@ export class NotificationDispatcher {
   private readonly provider: string;
   private readonly consoleBaseUrl: string | null;
   private readonly logger: NotifyLogger;
+  private readonly operatorMirror: OperatorMirrorPort | null;
 
   constructor(
     private readonly pool: Pool,
@@ -142,6 +152,10 @@ export class NotificationDispatcher {
     this.logger = options.logger ?? {
       warn: (m) => console.warn(`[notification] ${m}`),
     };
+    this.operatorMirror =
+      options.operatorMirror === undefined
+        ? new OperatorMirror(pool, new PgNoticeRepository(pool), this.logger)
+        : options.operatorMirror;
   }
 
   async notify(input: NotifyInput): Promise<NotifyResult> {
@@ -163,6 +177,7 @@ export class NotificationDispatcher {
     }
     const topic = topicOf(input.templateCode);
     const absoluteLink = this.absoluteLink(input.link);
+    let mirrored = false;
 
     for (const accountId of recipients) {
       try {
@@ -215,6 +230,15 @@ export class NotificationDispatcher {
           delivered: true,
         });
 
+        /* 运营镜像：一个客户事件只镜像一次，挂在**第一个**站内落库成功的收件人之后
+           （落库成功 = 这件事确实第一次通知到了客户；冲突的那些是重放）。
+           先置位再 await：镜像抛也不在下一个收件人上重试——它自己有去重锚，
+           但没必要多跑一轮查询。 */
+        if (!mirrored) {
+          mirrored = true;
+          await this.mirrorToOperators(input, rendered);
+        }
+
         if (!input.inboxOnly) {
           await this.sendEmail(
             input,
@@ -241,6 +265,32 @@ export class NotificationDispatcher {
       }
     }
     return result;
+  }
+
+  /**
+   * 运营镜像。**永不抛**：抛出去会被收件人循环的 catch 计成 skipped、连邮件都不发
+   * ——镜像失败是运营侧的缺口，不能反过来让客户那条少一个通道。
+   */
+  private async mirrorToOperators(
+    input: NotifyInput,
+    rendered: { title: string; body: string },
+  ): Promise<void> {
+    if (!this.operatorMirror) return;
+    try {
+      await this.operatorMirror.mirror(
+        {
+          tenantId: input.tenantId,
+          templateCode: input.templateCode,
+          reference: input.reference,
+          params: input.params,
+        },
+        { title: rendered.title, body: rendered.body },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `operator mirror threw for ${input.templateCode} ${input.reference.type}:${input.reference.id} — ${String(err)}`,
+      );
+    }
   }
 
   /** 邮件：有 sender、偏好允许、有邮箱才发；成功 / 失败各记一行账本，不抛。 */

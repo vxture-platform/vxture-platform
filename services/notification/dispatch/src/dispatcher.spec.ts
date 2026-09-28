@@ -3,19 +3,35 @@ import type { Pool } from "pg";
 import { NotificationDispatcher, type NotifyInput } from "./dispatcher";
 import { interpolate, render } from "./templates";
 
-// A tiny in-memory stand-in for the two tables the dispatcher touches: the
-// inbox unique key and the logs ledger are what the behaviour hinges on.
+interface MirroredNotice {
+  planes: unknown;
+  severity: unknown;
+  title: unknown;
+  body: unknown;
+  link: unknown;
+  referenceType: unknown;
+  referenceId: string;
+  expiresAt: unknown;
+}
+
+// A tiny in-memory stand-in for the tables the dispatcher touches: the inbox
+// unique key and the logs ledger are what the customer behaviour hinges on;
+// the operator mirror adds tenants / orders / refunds lookups and its own
+// unique-keyed write (admin.operator_notices).
 function fakePool(
   opts: {
     owner?: string | null;
     emails?: Record<string, string>;
     languages?: Record<string, string>;
+    /** 让运营镜像的写入抛：证明客户消息不受影响。 */
+    mirrorFails?: boolean;
   } = {},
 ) {
   const inbox = new Set<string>();
   const logs: Record<string, unknown>[] = [];
+  const notices: MirroredNotice[] = [];
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
-    if (sql.includes("from tenancy.tenants")) {
+    if (sql.includes("select owner_user_id from tenancy.tenants")) {
       return {
         rows:
           opts.owner === null
@@ -23,6 +39,43 @@ function fakePool(
             : [{ owner_user_id: opts.owner ?? "owner-1" }],
         rowCount: 1,
       };
+    }
+    if (
+      sql.includes("as tenant_name") &&
+      sql.includes("from tenancy.tenants")
+    ) {
+      return {
+        rows: [{ tenant_no: "8800000012", tenant_name: "Acme" }],
+        rowCount: 1,
+      };
+    }
+    if (
+      sql.includes("from billing.refunds") ||
+      sql.includes("from billing.orders")
+    ) {
+      return {
+        rows: [{ refund_no: "RFD-DB", order_no: "ORD-DB" }],
+        rowCount: 1,
+      };
+    }
+    if (sql.includes("insert into admin.operator_notices")) {
+      if (opts.mirrorFails) throw new Error("operator_notices down");
+      const referenceId = String(params[6]);
+      // uq_operator_notices_system: 一事一条。
+      if (notices.some((n) => n.referenceId === referenceId)) {
+        return { rows: [], rowCount: 0 };
+      }
+      notices.push({
+        planes: params[0],
+        severity: params[1],
+        title: params[2],
+        body: params[3],
+        link: params[4],
+        referenceType: params[5],
+        referenceId,
+        expiresAt: params[7],
+      });
+      return { rows: [{ id: `n-${notices.length}` }], rowCount: 1 };
     }
     if (sql.includes("insert into support.inbox_messages")) {
       const key = [params[1], params[2], params[6], params[7]].join("|");
@@ -52,8 +105,13 @@ function fakePool(
     }
     throw new Error(`unexpected sql: ${sql}`);
   });
-  return { pool: { query } as unknown as Pool, query, inbox, logs };
+  return { pool: { query } as unknown as Pool, query, inbox, logs, notices };
 }
+
+const mirrorWrites = (f: ReturnType<typeof fakePool>) =>
+  f.query.mock.calls.filter((c) =>
+    String(c[0]).includes("insert into admin.operator_notices"),
+  );
 
 const input: NotifyInput = {
   tenantId: "t-1",
@@ -386,5 +444,123 @@ describe("定向送达的三个开关", () => {
     });
     expect(mail.send).not.toHaveBeenCalled();
     expect(res.inboxCreated).toBe(1); // 站内那一路照走
+  });
+});
+
+/**
+ * 运营镜像（owner 2026-09-28「运营端收到的信息和客户侧要完整一致」）。
+ * 这里只测「挂在哪、挂几次、抛了怎样」；标题 / 严重度 / 链接逐模板在
+ * operator-mirror.spec.ts。
+ */
+describe("运营镜像", () => {
+  it("一个客户事件多个收件人只落一条运营通告，挂在第一个站内成功之后", async () => {
+    const f = fakePool({
+      emails: { "owner-1": "o@x.test", "u-2": "u2@x.test" },
+    });
+    const out = await new NotificationDispatcher(f.pool).notify({
+      ...input,
+      recipients: ["u-2"],
+    });
+    expect(out.inboxCreated).toBe(2);
+    // 写入只发生一次——不是每个收件人各写一次再靠去重挡。
+    expect(mirrorWrites(f)).toHaveLength(1);
+    expect(f.notices).toHaveLength(1);
+    const n = f.notices[0]!;
+    expect(n.planes).toEqual(["admin"]);
+    expect(n.severity).toBe("info");
+    expect(n.title).toBe("客户订阅即将到期 Arda Pro（2026-09-10）");
+    expect(n.referenceType).toBe("customer_event");
+    expect(n.referenceId).toBe(
+      "subscription.expiring_soon:subscription:sub-1:2026-09-10",
+    );
+    // 完整一致：客户收到的那条原文（标题 + 正文）进运营正文。
+    expect(n.body).toBe(
+      "租户 Acme · Arda Pro · 客户收到：「订阅即将到期：Arda Pro」将于 2026-09-10 到期（3 天后）。未开启自动续费，到期后权益停止；可在「我的订阅」续费或开启自动续费。",
+    );
+    expect(n.link).toBeNull();
+    expect(n.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it("站内已通知过（唯一键冲突）的收件人不触发镜像；全冲突则一次都不试", async () => {
+    const f = fakePool({
+      emails: { "owner-1": "o@x.test", "u-2": "u2@x.test" },
+    });
+    const d = new NotificationDispatcher(f.pool);
+    await d.notify(input); // owner 首次 → 1 条镜像
+    // owner 冲突、u-2 新落 → 在 u-2 上试一次，被去重锚挡下：仍只有 1 条。
+    await d.notify({ ...input, recipients: ["u-2"] });
+    expect(f.notices).toHaveLength(1);
+    expect(mirrorWrites(f)).toHaveLength(2);
+    // 全部冲突 → 没有「第一个成功的收件人」，镜像不试。
+    const again = await d.notify(input);
+    expect(again.inboxCreated).toBe(0);
+    expect(mirrorWrites(f)).toHaveLength(2);
+  });
+
+  it("警告类：退款申请 → warning、不过期、链接落到订单页", async () => {
+    const f = fakePool();
+    await new NotificationDispatcher(f.pool).notify({
+      tenantId: "t-1",
+      templateCode: "refund.requested",
+      reference: {
+        type: "refund",
+        id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d:requested",
+      },
+      params: { orderNo: "ORD-202609-1", amount: "¥99.00" },
+      link: "/subscribe/pay/x",
+    });
+    const n = f.notices[0]!;
+    expect(n.severity).toBe("warning");
+    expect(n.title).toBe("客户申请退款 ¥99.00 · ORD-202609-1");
+    expect(n.link).toBe("/orders/ORD-202609-1");
+    expect(n.expiresAt).toBeNull();
+  });
+
+  it("镜像写库抛 → 客户消息不受影响：站内照落、邮件照发、不计 skipped，只记日志", async () => {
+    const f = fakePool({
+      emails: { "owner-1": "o@x.test" },
+      mirrorFails: true,
+    });
+    const mail = { send: vi.fn(async () => undefined) };
+    const warn = vi.fn();
+    const out = await new NotificationDispatcher(f.pool, {
+      mail,
+      logger: { warn },
+    }).notify(input);
+    expect(out).toMatchObject({
+      inboxCreated: 1,
+      emailsSent: 1,
+      emailsFailed: 0,
+      skipped: 0,
+    });
+    expect(f.notices).toHaveLength(0);
+    expect(warn.mock.calls.map((c) => String(c[0]))).toEqual([
+      expect.stringContaining("operator mirror skipped"),
+    ]);
+  });
+
+  it("注入的镜像本身抛（不是库抛）同样不影响；显式 null 则不镜像", async () => {
+    const f = fakePool({ emails: { "owner-1": "o@x.test" } });
+    const mail = { send: vi.fn(async () => undefined) };
+    const warn = vi.fn();
+    const out = await new NotificationDispatcher(f.pool, {
+      mail,
+      logger: { warn },
+      operatorMirror: {
+        mirror: async () => {
+          throw new Error("boom");
+        },
+      },
+    }).notify(input);
+    expect(out).toMatchObject({ inboxCreated: 1, emailsSent: 1, skipped: 0 });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]![0])).toContain("operator mirror threw");
+
+    const off = fakePool();
+    await new NotificationDispatcher(off.pool, { operatorMirror: null }).notify(
+      input,
+    );
+    expect(off.notices).toHaveLength(0);
+    expect(mirrorWrites(off)).toHaveLength(0);
   });
 });

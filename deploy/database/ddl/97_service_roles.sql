@@ -161,3 +161,16 @@ BEGIN
   END LOOP;
 END
 $$;
+
+-- ── svc_platform_api 的一处跨域例外：admin.operator_notices（运营镜像）──────────
+-- 2026-09-28 根治批起，客户消息落库后由 NotificationDispatcher 顺手镜像一条运营通告
+-- （services/notification/dispatch 的 OperatorMirror → PgNoticeRepository.createSystemNotice
+-- → insert into admin.operator_notices）。这条镜像路**在每一个 BFF 里都会走**，包括
+-- platform-api 的到期 / 续订 / 逾期 / 暂停 / 恢复那些作业——而上面的 7 schema 授权面里
+-- 没有 admin，那些客户消息会照常发出去、镜像那一步静默失败（写失败只记日志，不影响
+-- 客户消息）。结果就是运营端又一次「一条都没有」，而且不报错。
+--
+-- 只开这一张表（不是整个 admin schema 的 ALL TABLES）：镜像只 INSERT，去重要 SELECT
+-- （ON CONFLICT 的部分唯一索引），别的 admin 表一律不给。
+GRANT USAGE ON SCHEMA admin TO svc_platform_api;
+GRANT SELECT, INSERT ON admin.operator_notices TO svc_platform_api;
