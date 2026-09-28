@@ -21,18 +21,19 @@
 | session      |    RW    |     R     |     RW      |      R      |      ·       |       ·        |
 | loyalty      |    W     |     ·     |      W      |      R      |      ·       |       ·        |
 | metering     |    RW    |    RW     |     RW      |      ·      |      RW      |       RW       |
-| billing      |    ·     |    RW     |     RW      |      ·      |      ·       |       ·        |
+| billing      |    ·     |    RW     |     RW      |      ·      |      RW      |       ·        |
 | provisioning |    R     |     ·     |      ·      |      ·      |      RW      |       ·        |
-| promotion    |    ·     |     R     |      ·      |      ·      |      ·       |       ·        |
+| promotion    |    ·     |     R     |      ·      |      ·      |      RW      |       ·        |
 | product      |    R     |    RW     |      R      |      ·      |      R       |       ·        |
 | model        |    ·     |     ·     |      ·      |      ·      |      ·       |       RW       |
 | **safety**   |    ·     |     ·     |      ·      |      ·      |      ·       |       ·        |
 | support      |    W     |    RW     |      W      |      ·      |      ·       |       ·        |
-| admin        |    RW    |    RW     |     RW      |      ·      |      ·       |       ·        |
+| admin        |    RW    |    RW     |     RW      |      ·      |      W²      |       ·        |
 | sharing      |    ·     |     ·     |      ·      |      ·      |      RW      |       ·        |
-| **触达数**   |  **13**  |  **11**   |   **13**    |    **7**    |    **5**     |     **2**      |
+| **触达数**   |  **13**  |  **11**   |   **13**    |    **7**    |    **8**     |     **2**      |
 
 ¹ website-bff 的 account 写 = `PUT /api/me/profile`（name/email）；其余多为读，但 AccountModule/OrganizationModule 写能力在同池。
+² platform-api 的 admin 不是整 schema，而是**一张表**：`admin.operator_notices` 的 SELECT + INSERT（运营镜像，见 §2 的表级例外）。billing / promotion 两格是 product_321 的超时/对账 sweep 与券释放（§2 已记，2026-09-28 补进本矩阵）。
 **`safety` schema 零进程访问**——现 platform_svc 授它纯属多余。
 
 ## 2. 角色设计（本轮授权面）
@@ -45,8 +46,10 @@
 | `svc_admin_bff`      | admin-bff      | admin, billing, kyc, metering, product, support, tenancy, access, account, promotion, session, provisioning（12；provisioning 为 320 期缺口，随 product_321 PR2 收口）                                    |
 | `svc_console_bff`    | console-bff    | account, identity, credential, session, loyalty, tenancy, access, billing, metering, product, admin, support, appoidc, promotion, provisioning（15；后两项 product_321：券结算 + cashDue=0 段 2 enqueue） |
 | `svc_website_bff`    | website-bff    | account, identity, credential, session, tenancy, access, loyalty（7）                                                                                                                                     |
-| `svc_platform_api`   | platform-api   | metering, product, sharing, provisioning, tenancy, billing, promotion（7；后两项 product_321：超时/对账 sweep + 券释放）                                                                                  |
+| `svc_platform_api`   | platform-api   | metering, product, sharing, provisioning, tenancy, billing, promotion（7；后两项 product_321：超时/对账 sweep + 券释放）+ 表级例外 `admin.operator_notices`                                               |
 | `svc_model_platform` | model-platform | model, metering（2）                                                                                                                                                                                      |
+
+**表级例外：`svc_platform_api` ← `admin.operator_notices`（SELECT + INSERT，2026-09-28）**。客户消息落库后由 `NotificationDispatcher` 顺手镜像一条运营通告（`OperatorMirror` → `PgNoticeRepository.createSystemNotice` → `insert into admin.operator_notices`）。这条镜像路长在 dispatcher 里，**每一个**构造它的 BFF 都会走，platform-api 的到期 / 续订 / 逾期 / 暂停 / 恢复作业都在内；而 platform-api 的 7 schema 面里没有 admin，那些镜像会 42501。镜像失败**只记日志、不影响客户消息**（那是设计），所以症状是运营端「一条都没有」且不报错——与 2026-09-28 那张挂着的 ¥99 退款单同一个病理。授权面按用法给到表一级：镜像只判重（SELECT，走部分唯一索引 `uq_operator_notices_system`）+ 插一行（INSERT），不改不删、不碰 admin 的运营账号 / 角色 / 审计 / 风险记录，所以**不是** `ALL TABLES IN SCHEMA admin`，也不给 `ALTER DEFAULT PRIVILEGES`（将来新增的 admin 表不会跟着漏进去）。落点：`97_service_roles.sql` 文件末尾两行 + 活库迁移 `2026-11-21-platform-api-operator-notices-grant.sql`（逐字一致，全量重放幂等）。
 
 **为什么本轮不精调 R-vs-RW**：schema 级收窄已拿到主要爆炸半径收益（如 website-bff 从全库降到 7 schema，碰不到 billing/metering/admin/model/kyc 等 12 个）。R-vs-RW 逐 schema 精调易错——AccountModule/OrganizationModule 写能力在同池、一个新增写路径就让"设为 R 的 schema"运行时炸；且已发现映射中 website-bff account 实为 RW（me/profile 写）。精调留独立后续项（先确认每进程每 schema 的确切写路径）。`safety` 一律不授。
 
@@ -80,4 +83,5 @@
 
 - ✅ **本轮**：6 角色 + 最小权限授权 DDL 落 `97_service_roles.sql`（活库 rolled-back 事务验证过：6 角色建成、授权面正确收窄、零残留）；本设计文档。角色随 reseed 建成即在库、无人用、零运行时影响。
 - ⏳ **待 owner**：§4 env 机制变更 + §3 逐进程 DATABASE_URL 切换（分批窗口）。
+- ✅ **2026-09-28**：`svc_platform_api` 的表级例外（`admin.operator_notices` SELECT + INSERT）落 97 + 迁移，本机活库跑过两遍幂等、授权面实测只多这一张表的两项。
 - 后续项：R-vs-RW 精调（§2）；platform_svc 退役。

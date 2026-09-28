@@ -1,8 +1,8 @@
 {
-  "name": "@vxture/service-notification",
+  "name": "@vxture/service-ops-todos",
   "version": "0.1.0",
   "private": true,
-  "description": "Customer notification dispatcher — in-app inbox (support.inbox_messages) + email via an injected sender, every delivery logged to support.notification_logs",
+  "description": "运营待办的唯一算法 - admin 待办页与 platform-api 告警作业读同一份",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
@@ -10,7 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@vxture/service-notice": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@vxture/core-config": "workspace:*",
     "pg": "^8.13.3"
   },
   "devDependencies": {

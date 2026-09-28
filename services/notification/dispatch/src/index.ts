@@ -9,6 +9,26 @@ export {
   type SmsSender,
 } from "./dispatcher";
 export {
+  MIRROR_ORDER_SQL,
+  MIRROR_REFUND_SQL,
+  MIRROR_TENANT_SQL,
+  OPERATOR_MIRROR,
+  OPERATOR_MIRROR_INFO_TTL_MS,
+  OPERATOR_MIRROR_PLANES,
+  OPERATOR_MIRROR_REFERENCE_TYPE,
+  OperatorMirror,
+  composeOperatorNotice,
+  mirrorDedupeKey,
+  mirrorLink,
+  type MirrorReference,
+  type OperatorMirrorEntry,
+  type OperatorMirrorFacts,
+  type OperatorMirrorInput,
+  type OperatorMirrorPort,
+  type OperatorMirrorSeverity,
+  type SystemNoticeWriter,
+} from "./operator-mirror";
+export {
   NOTIFICATION_TEMPLATES,
   escapeHtml,
   interpolate,

@@ -1,5 +1,5 @@
 /**
- * notice.service.ts — 运营通告读侧。
+ * notice.service.ts — 运营通告读侧 + 系统来源写路。
  * @package @vxture/service-notice
  * @layer Application
  * @category Service
@@ -8,6 +8,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { PgNoticeRepository } from "../repository/pg-notice.repository";
 import type {
+  CreateSystemNoticeInput,
+  CreateSystemNoticeResult,
   ListNoticesParams,
   ListNoticesResult,
   MarkNoticeReadResult,
@@ -49,5 +51,17 @@ export class NoticeService {
     operatorId: string,
   ): Promise<MarkNoticeReadResult | null> {
     return this.repository.markRead(noticeId, operatorId);
+  }
+
+  /**
+   * 写一条系统来源通告（客户事件的运营镜像等）。
+   *
+   * 同一去重锚已有未撤回的一条 → `inserted: false`，不抛：事件侧重放不是错误，
+   * 是这条写路存在的理由之一。人工发布不走这里——那条路在 opera 自己的发布面。
+   */
+  async createSystemNotice(
+    input: CreateSystemNoticeInput,
+  ): Promise<CreateSystemNoticeResult> {
+    return this.repository.createSystemNotice(input);
   }
 }

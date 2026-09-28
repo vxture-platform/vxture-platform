@@ -40,6 +40,8 @@ export type OperatorAlertCode =
   | "ops.order.pending_verify"
   | "ops.order.paid_unprovisioned"
   | "ops.order.selfheal_gave_up"
+  // 运营平面（admin）：退款审核待办（2026-09-28 根治批——此前退款单挂着无人知）
+  | "ops.refund.pending_audit"
   // 运维平面（opera）：后台作业健康
   | "ops.job.failed"
   | "ops.job.stalled";
@@ -50,7 +52,7 @@ export type OperatorAlertCode =
  * 其中任何一个，硬塞进去会让客户侧的类型跟着长出运营概念。
  * 落库同一列（varchar(64)，无枚举约束）。
  */
-export type OperatorAlertReferenceType = "order" | "job";
+export type OperatorAlertReferenceType = "order" | "refund" | "job";
 
 /** 成功投递后的静默时长（owner 2026-09-08 定 4 小时）。 */
 export const OPS_ALERT_SILENCE_MS = 4 * 60 * 60 * 1000;

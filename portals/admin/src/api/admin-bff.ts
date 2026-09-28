@@ -21,6 +21,7 @@ import type {
   OrderOfflinePaymentType,
   OrderOperationDetailRecord,
   OrderOperationRecord,
+  OpsTodo,
   PaymentOperationRecord,
   ModelPolicyRecord,
   ModelPriceRuleRecord,
@@ -2699,4 +2700,20 @@ export async function markOperatorNoticeRead(
     undefined,
     "标记已读失败",
   );
+}
+
+// ── 运营待办（GET /api/ops/todos；判据只有 @vxture/service-ops-todos 一份）────────
+
+/**
+ * 运营待办全量。**严格读**：失败抛 AdminBffError——页面要把「读不到」与「没有」
+ * 分开画，回落成 [] 会把接口故障画成「今天没事」。页面与告警作业读的是同一份
+ * 服务端算法，这里不派生、不过滤，只把响应体收成数组。
+ */
+export async function fetchOpsTodos(): Promise<OpsTodo[]> {
+  const body = await readJsonStrict<OpsTodo[] | { items?: OpsTodo[] }>(
+    "/api/ops/todos",
+  );
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body.items)) return body.items;
+  throw new AdminBffError("Unexpected response shape: /api/ops/todos", 502);
 }

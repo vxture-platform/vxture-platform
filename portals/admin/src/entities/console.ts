@@ -1856,3 +1856,80 @@ export interface AccountOperationDetailRecord extends AccountOperationRecord {
   /** 近 50 次登录尝试（倒序）；界面默认只展开近 10 条。 */
   loginHistory: AccountLoginAttempt[];
 }
+
+// ── 运营待办（admin-bff GET /api/ops/todos；算法只有 @vxture/service-ops-todos 一份）──
+
+/**
+ * 待办的种类：三种收款态订单、退款审核、租户认证、租户风险、未关闭工单。判据
+ * 全在服务端 SQL 里，页面与告警作业读同一份（owner 2026-09-28：「页面和作业读
+ * 同一份，尤其运营端收到的信息和客户侧要完整一致」）。
+ */
+export type OpsTodoKind =
+  | "confirm_payment"
+  | "reprovision"
+  | "follow_up_balance"
+  | "refund_audit"
+  | "verification"
+  | "risk"
+  | "ticket";
+
+/** 紧急 / 关注 / 一般。 */
+export type OpsTodoSeverity = "rose" | "amber" | "blue";
+
+/** 「进展」列的档位；订单类按运营侧五步报第几步，其余只报一个状态词。 */
+export type OpsTodoProgress =
+  | "pendingVerify"
+  | "paidUnprovisioned"
+  | "partialPending"
+  | "refundAudit"
+  | "verification"
+  | "risk"
+  | "ticketOpen"
+  | "ticketProcessing"
+  | "ticketBlocked";
+
+export interface OpsTodo {
+  /** `${kind}:${可视码}`，稳定，可作 React key。 */
+  id: string;
+  kind: OpsTodoKind;
+  severity: OpsTodoSeverity;
+  priority: number;
+  /** 只给可视码（order_no / refund_no / tenant_no / ticket_no），绝不给 UUID。 */
+  subject: { type: "order" | "refund" | "tenant" | "ticket"; no: string };
+  /**
+   * 租户的可视属性。`type` 是页面口径 `individual` / `company`；`status` 与
+   * `riskLevel` 是库里的枚举原值（`active` / `suspended` / … · `normal` /
+   * `follow_up` / `high`），文案由页面按界面语言取；`region` / `industry` /
+   * `scale` 是租户自填的自由文本。读不到就是 null，页面显示「—」或整段不占位，
+   * 不拿默认档冒充事实。
+   */
+  tenant: {
+    no: string | null;
+    name: string;
+    type: string | null;
+    status: string | null;
+    riskLevel: string | null;
+    region: string | null;
+    industry: string | null;
+    scale: string | null;
+  } | null;
+  /** 申报人 / 申请人 / 联系人，有就带。 */
+  applicant: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
+  /**
+   * 收款：应收；退款：退款额；其他 null。`value` / `paid` 都是十进制字符串
+   * （不转浮点）。`paid` 只有部分收款的尾款待办带——「已收多少」是客服打电话时
+   * 要说的那个数；读不到就是 null，句子退回只说应收的那一版。
+   */
+  amount: { value: string; currency: string; paid: string | null } | null;
+  product: { code: string; name: string; planName: string | null } | null;
+  progress: OpsTodoProgress;
+  /** ISO；等待起点按各类的规则由服务端取（申报 / 确认收款 / 退款申请 / 认证提交 / …）。 */
+  waitingSince: string;
+  /** admin 内相对路径：/orders/{order_no} · /verifications · /tenants/{tenant_no} · /tickets/{ticket_no}。 */
+  href: string;
+  ticket?: { title: string; priority: string; status: string };
+}

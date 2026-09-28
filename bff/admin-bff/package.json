@@ -27,6 +27,7 @@
     "@vxture/core-mail": "workspace:*",
     "@vxture/service-notification": "workspace:*",
     "@vxture/service-notice": "workspace:*",
+    "@vxture/service-ops-todos": "workspace:*",
     "@vxture/service-sms": "workspace:*",
     "@vxture/service-account": "workspace:*",
     "@vxture/core-oidc-rp": "workspace:*",

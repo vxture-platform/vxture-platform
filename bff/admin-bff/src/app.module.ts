@@ -8,6 +8,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { VxConfigModule } from "@vxture/core-config";
 import { MailModule } from "@vxture/core-mail";
 import { NoticeModule } from "@vxture/service-notice";
+import { OpsTodosModule } from "@vxture/service-ops-todos";
 import { AdminBffPoolsModule } from "./providers/pools.module";
 import {
   addonServiceProvider,
@@ -42,6 +43,7 @@ import { BillingRouter } from "./routers/billing.router";
 import { InvoicesRouter } from "./routers/invoices.router";
 import { AddonOrdersRouter } from "./routers/addon-orders.router";
 import { OrdersRouter } from "./routers/orders.router";
+import { OpsTodosRouter } from "./routers/ops-todos.router";
 import { PaymentsRouter } from "./routers/payments.router";
 import { SubscriptionsRouter } from "./routers/subscriptions.router";
 import { CommercialRouter } from "./routers/commercial.router";
@@ -54,6 +56,8 @@ import { SearchRouter } from "./routers/search.router";
     }),
     MailModule,
     NoticeModule,
+    // 2026-09-28 根治批：运营待办的唯一算法，待办页与 platform-api 告警作业读同一份
+    OpsTodosModule,
     AdminBffPoolsModule,
     OidcRpModule,
     // The commerce background jobs (provisioning dispatch, sharing/trial
@@ -76,6 +80,7 @@ import { SearchRouter } from "./routers/search.router";
     BillingRouter,
     InvoicesRouter,
     OrdersRouter,
+    OpsTodosRouter,
     AddonOrdersRouter,
     PaymentsRouter,
     SubscriptionsRouter,

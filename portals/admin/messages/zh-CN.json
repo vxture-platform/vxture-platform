@@ -2143,6 +2143,19 @@
   "drawer": {
     "close": "关闭",
     "openCenter": "前往消息中心",
+    "notices": {
+      "title": "运营通告",
+      "viewAll": "查看全部",
+      "unread": "未读",
+      "loadFailed": "通告读取失败",
+      "empty": {
+        "title": "暂无通告",
+        "description": "最近没有运营通告。"
+      }
+    },
+    "deliveries": {
+      "title": "投递日志"
+    },
     "notifications": {
       "title": "消息中心",
       "empty": {
@@ -2966,13 +2979,14 @@
   "opsTodosPage": {
     "header": {
       "queueTitle": "待办任务",
-      "queueDescription": "客户已申报付款的订单、等审核的认证、没结的工单都在这里，按紧急程度排好，从上往下处理。",
+      "queueDescription": "客户已申报付款的订单、等审核的退款、等审核的认证、没结的工单都在这里，按紧急程度排好，从上往下处理。",
       "allTitle": "全部任务",
-      "allDescription": "四类待办的全量清单，含只在本页出现的风险复核。",
+      "allDescription": "五类待办的全量清单，含只在本页出现的风险复核。",
       "totalBadge": "任务 {count}"
     },
     "types": {
       "payment": "收款确认",
+      "refund": "退款审核",
       "verification": "认证审核",
       "risk": "风险复核",
       "ticket": "工单处理"
@@ -2982,12 +2996,12 @@
       "filtering": "只看这一类，再点一次显示全部",
       "payment": "{count} 笔待你核对，最久等了 {wait}",
       "paymentEmpty": "没有等你核对的订单",
-      "paymentUnavailable": "订单数据没有读到，这一栏可能不全",
+      "refund": "{count} 笔退款等你审核，最久等了 {wait}",
+      "refundEmpty": "没有等审核的退款",
       "verification": "{count} 家租户等审核，最久等了 {wait}",
       "verificationEmpty": "没有等审核的认证",
       "ticket": "{count} 张工单没结，最久等了 {wait}",
       "ticketEmpty": "没有没结的工单",
-      "ticketUnavailable": "工单数据没有读到，这一栏可能不全",
       "risk": "{count} 家租户要复核，最久等了 {wait}",
       "riskEmpty": "没有要复核的租户"
     },
@@ -2996,9 +3010,7 @@
       "allTitle": "任务明细",
       "summary": "按紧急程度排序，共 {count} 条",
       "hiddenRisk": "另有 {count} 条风险复核在「全部任务」里",
-      "filteringType": "正在只看：{type}",
-      "ticketsUnavailable": "工单数据没有读到",
-      "ordersUnavailable": "订单数据没有读到"
+      "filteringType": "正在只看：{type}"
     },
     "filters": {
       "ariaLabel": "待办任务筛选",
@@ -3027,6 +3039,8 @@
       "confirmPayment": "核对 {amount} 到账并确认收款",
       "reprovision": "已收款 {amount}，重新开通权益",
       "followUpBalance": "跟进尾款：已收 {paid}，应付 {amount}",
+      "followUpBalanceAmountOnly": "跟进尾款：应付 {amount}",
+      "refundAudit": "审核 {amount} 退款申请",
       "verification": "审核资质材料并给出结论",
       "risk": "复核风险状态，决定是否解除",
       "ticket": "处理工单：{title}"
@@ -3038,6 +3052,7 @@
       "pendingVerify": "3/5 · 等你核对",
       "paidUnprovisioned": "4/5 · 开通处理中",
       "partialPending": "3/5 · 部分到账",
+      "refundAudit": "退款待审核",
       "verification": "待审核",
       "risk": "待复核",
       "ticketOpen": "待处理",
@@ -3063,10 +3078,7 @@
     },
     "empty": {
       "title": "今天没有要处理的任务",
-      "loadFailedTitle": "待办数据读取失败",
-      "tenantsFailed": "租户运营数据读取失败",
-      "ticketsFailed": "工单数据读取失败",
-      "ordersFailed": "订单数据读取失败"
+      "loadFailedTitle": "待办数据读取失败"
     },
     "notices": {
       "title": "系统消息",

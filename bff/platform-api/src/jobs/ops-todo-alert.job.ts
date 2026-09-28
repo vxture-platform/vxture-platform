@@ -1,12 +1,29 @@
 /**
- * ops-todo-alert.job.ts — 运营待办告警巡检（#231，owner 2026-09-08 定档）。
+ * ops-todo-alert.job.ts — 运营待办告警巡检（#231，owner 2026-09-08 定档；2026-09-28 根治批改读共享算法）。
  * @package @vxture/bff-platform-api
  *
- * 扫两类停留过久的订单态待办，按 4h 静默窗口发邮件给在用运营账号：
- *   · pending_verify —— 客户已申报付款，等运营确认收款（客户的钱在等着）
- *   · paid           —— 钱已到、权益没开通（2026-09-08 事故就是这一类）
+ * 扫停留过久的三类待办，按 4h 静默窗口发邮件给在用运营账号：
+ *   · confirm_payment —— 客户已申报付款，等运营确认收款（客户的钱在等着）
+ *   · reprovision     —— 钱已到、权益没开通（2026-09-08 事故就是这一类）
+ *   · refund_audit    —— 客户申请退款，等运营审核（2026-09-28 根治：此前退款单挂着无人知）
  * 「部分收款尾款挂账」不在此列：那一类在等客户，不在等运营。
- * 自愈放弃是第三条告警，由 OrderService 在放弃点直接报（见 ops-alerter.ts），不在这里扫。
+ * 自愈放弃是另一条告警，由 OrderService 在放弃点直接报（见 ops-alerter.ts），不在这里扫。
+ *
+ * ── 读的是哪一份 ──
+ * `@vxture/service-ops-todos` 的 OpsTodoRepository——admin 待办页读的也是它。此前作业自己
+ * 在 OrderService.listOpsTodoOrders 里另写一套谓词，页面在浏览器里再派生一套，两边各写各的
+ * 谁也不认识谁；现在判据只有一处，这里只挑类别、停留时长与上限。
+ * 哪几类要告警是 owner 的裁定，`scripts/guardrails/check-ops-todo-alerts.mjs` 读下面的
+ * ALERT_KINDS 与共享算法的类别表对账。
+ *
+ * ── 为什么这里传 includeApplicant: false ──
+ * 本进程的库角色是 `svc_platform_api`，只有 7 个 schema（metering / product / sharing /
+ * provisioning / tenancy / billing / promotion，见 deploy/database/ddl/97_service_roles.sql）。
+ * Postgres 对 SQL 里**出现过的每一个关系**查权限——哪一支返不返回行都一样——所以一条
+ * 顺手 join 了 `account.users`（申报人）或 `admin.risk_records`（租户风险档）的待办查询
+ * 在本机（owner 连库）畅通无阻，到生产就是 42501，整轮作业失败。
+ * 而告警邮件一个都不用这两样（todoAlertInput 只取 tenant.name / amount / product /
+ * waitingSince），所以整块不要：仓储据此**不把那些 join 放进文本**。
  *
  * ── 为什么是状态扫描而不是事件触发 ──
  * `paid` 是每张正常订单都会瞬间路过的中间态（收款 → 履约同一轮内完成），
@@ -21,10 +38,20 @@
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { OrderService } from "@vxture/service-subscription";
+import { OpsTodoRepository, type OpsTodoKind } from "@vxture/service-ops-todos";
 import { OperatorAlertsWiring } from "../notifications/operator-alerts.wiring";
 import { JobHeartbeatService } from "./job-heartbeat.service";
 import { runHeartbeatTick, sweepIntervalMs } from "./sweep-interval.util";
+
+/**
+ * owner 裁定要告警的类别。改这里等于改裁定——`check-ops-todo-alerts` 会拿它对账，
+ * 且 OperatorAlertsWiring.alertTodo 对不在此列的类别直接抛。
+ */
+export const ALERT_KINDS: readonly OpsTodoKind[] = [
+  "confirm_payment",
+  "reprovision",
+  "refund_audit",
+];
 
 /** 待办要停留多久才值得打扰运营。 */
 const minAgeMinutes = (): number => {
@@ -32,7 +59,7 @@ const minAgeMinutes = (): number => {
   return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 15;
 };
 
-/** 一轮最多告警多少单——异常放量时别把邮箱打爆。 */
+/** 一轮最多告警多少条——异常放量时别把邮箱打爆。 */
 const SCAN_LIMIT = 50;
 
 /** 默认 5 分钟一轮：待办不是分钟级紧急，60s 巡检没意义。 */
@@ -49,7 +76,7 @@ export class OpsTodoAlertJob {
   private readonly intervalMs = intervalOf();
 
   constructor(
-    @Inject(OrderService) private readonly orders: OrderService,
+    @Inject(OpsTodoRepository) private readonly todos: OpsTodoRepository,
     @Inject(OperatorAlertsWiring)
     private readonly alerts: OperatorAlertsWiring,
     @Inject(JobHeartbeatService)
@@ -78,23 +105,26 @@ export class OpsTodoAlertJob {
 
   /** @returns 本轮实际发出的告警条数（命中静默窗口的不计）。 */
   private async pass(): Promise<number> {
-    const rows = await this.orders.listOpsTodoOrders(
-      minAgeMinutes(),
-      SCAN_LIMIT,
-    );
-    if (rows.length === 0) return 0;
+    const todos = await this.todos.list({
+      kinds: ALERT_KINDS,
+      minAgeMinutes: minAgeMinutes(),
+      limit: SCAN_LIMIT,
+      // 申报人与租户风险档来自本进程角色碰不到的 schema，且邮件用不到——见头注。
+      includeApplicant: false,
+    });
+    if (todos.length === 0) return 0;
 
     let alerted = 0;
     let unreachable = 0;
-    for (const row of rows) {
-      const result = await this.alerts.alertOrderTodo(row);
+    for (const todo of todos) {
+      const result = await this.alerts.alertTodo(todo);
       if (result.noRecipient) unreachable += 1;
       else if (result.sent > 0) alerted += 1;
     }
 
     if (alerted > 0) {
       this.logger.log(
-        `ops todo alert: ${alerted}/${rows.length} 条待办已通知运营（其余在 4h 静默窗口内）`,
+        `ops todo alert: ${alerted}/${todos.length} 条待办已通知运营（其余在 4h 静默窗口内）`,
       );
     }
     if (unreachable > 0) {

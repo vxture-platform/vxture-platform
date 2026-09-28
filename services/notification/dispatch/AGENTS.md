@@ -23,3 +23,4 @@
 - 模板在代码里（`templates.ts`），键稳定（治理台「通知审计」按 `template_code` 搜）；文案只写机制不写承诺；zh-CN / en-US 两张平表按收件人 `user_profiles.language` 选（别写成同形对象字面量，Sonar 会判重复）。
 - 短信是第三通道（`SmsSender.sendTemplate`，阿里云短信服务 SendSms）：只在「模板配了 `ALIYUN_SMS_TPL_*` 模板码 + 用户开了 sms 偏好（默认关）+ 有手机号」时发；变量由 `smsParams` 截 20 字、金额去币符；账本 channel=sms、provider_message_id=BizId。验证码走的是另一条路（号码认证服务），别混。
 - 公告推送（`announcements.ts`）：行级 `meta.broadcast_at` + 收件人级唯一键两层幂等；公告自带语言与正文，`announcement.published` 模板只是 `{{title}}` / `{{content}}` 透传。
+- **运营镜像**（`operator-mirror.ts`，owner 2026-09-28「运营端收到的信息和客户侧要完整一致」）：客户消息第一次站内落库成功后，按 `OPERATOR_MIRROR` 再写一条 `admin.operator_notices`（source=system、planes=admin），一个客户事件一条——去重锚 `customer_event` + `{模板}:{引用类型}:{引用id}`，落库走 `@vxture/service-notice` 的 `createSystemNotice`。表是 `Record<NotificationTemplateCode, …>`：加客户模板不配镜像编译不过。正文 = 租户名 · 产品 套餐 · 金额 · 客户收到的原文；warning（退款申请 / 退订退款 / 申报待确认 / 退款执行失败）不过期，info 30 天。镜像失败只记日志，不影响客户消息。

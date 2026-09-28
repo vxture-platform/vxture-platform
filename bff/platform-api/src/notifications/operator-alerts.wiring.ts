@@ -5,9 +5,15 @@
  * owner 定的四条：**只发邮件**、**4h 静默窗口**、推「客户已申报付款」与「已收款未开通」
  * 两类待办、外加「自愈放弃」独立一条且级别更高。「部分收款尾款挂账」不推——那一类在
  * 等客户，不在等运营。站内暂时给不了运营（inbox_messages 是租户表），短信不做。
+ * 2026-09-28 根治批加第三类待办「退款审核」：此前退款单挂着无人知（RFD-202609-4E7BD7BEC1）。
  *
- * 三条告警的文案都在这里，好让它们读起来是一套。收件人解析、去重、账本在
- * OperatorAlertDispatcher（@vxture/service-notification）。
+ * 待办本身不在这里算：OpsTodoAlertJob 从 `@vxture/service-ops-todos` 取（admin 待办页读的
+ * 同一份），这里只把一条待办翻成一封邮件。四条告警的文案都在这里，好让它们读起来是一套。
+ * 收件人解析、去重、账本在 OperatorAlertDispatcher（@vxture/service-notification）。
+ *
+ * 静默窗口的去重键 = code + reference(type, id)。待办接口只出可视码，所以 reference.id 是
+ * order_no / refund_no（此前是订单 uuid）；切换后首轮可能对 4h 内已告警过的单再发一次，
+ * 一次性代价，接受。
  *
  * 自愈放弃走 setOpsAlerter 注入，与 [[customer-notifications.wiring]] 同一手法：
  * SubscriptionModule 自包含，跨模块 DI 令牌不可见，只能在装配处按接口挂。
@@ -25,8 +31,8 @@ import {
   OrderService,
   type OpsAlerter,
   type OpsSelfHealGaveUpInput,
-  type OpsTodoOrderRow,
 } from "@vxture/service-subscription";
+import type { OpsTodo } from "@vxture/service-ops-todos";
 
 /** 「已等待 3 小时 12 分钟」——运营看的是等了多久，不是时间戳。 */
 export function humanizeWaiting(since: Date, now = new Date()): string {
@@ -46,6 +52,71 @@ export function humanizeWaiting(since: Date, now = new Date()): string {
 function money(amount: number, currency: string): string {
   const symbol = currency === "CNY" ? "¥" : `${currency} `;
   return `${symbol}${amount.toFixed(2)}`;
+}
+
+/**
+ * 一条待办 → 一封邮件的素材。纯函数，导出为可测。
+ * 两类订单的主题 / 行沿用 #231 原文；退款一条按 2026-09-28 契约新加。
+ * 不在 ALERT_KINDS 里的类别直接抛——作业只会传裁定过要告警的三类，传了别的说明接线错了，
+ * 静默跳过会把「没发」藏起来（#231 的病根正是这种坏法）。
+ */
+export function todoAlertInput(
+  todo: OpsTodo,
+  opts: { link: string | undefined; now?: Date },
+): OperatorAlertInput {
+  const waited = humanizeWaiting(new Date(todo.waitingSince), opts.now);
+  const amount = money(
+    Number(todo.amount?.value ?? 0),
+    todo.amount?.currency ?? "CNY",
+  );
+  const tenantName = todo.tenant?.name?.trim() || "（租户已删除）";
+  const no = todo.subject.no;
+  switch (todo.kind) {
+    case "confirm_payment":
+      return {
+        code: "ops.order.pending_verify",
+        reference: { type: "order", id: no },
+        subject: `${no} 客户已申报付款，待确认收款（已等 ${waited}）`,
+        lines: [
+          `${tenantName} 申报已完成支付，金额 ${amount}，等待运营核对到账。`,
+          `订单 ${no}，已等待 ${waited}。`,
+          "核对到账后在订单详情页「确认收款」（确认即自动开通），或驳回申报。",
+        ],
+        link: opts.link,
+      };
+    case "reprovision":
+      return {
+        code: "ops.order.paid_unprovisioned",
+        reference: { type: "order", id: no },
+        subject: `${no} 已收款但权益未开通（已等 ${waited}）`,
+        lines: [
+          `${tenantName} 的账单已结清，金额 ${amount}，但开通没有落地。`,
+          `订单 ${no}，已等待 ${waited}。`,
+          "系统会自动重试开通；若长时间不变，请在订单详情页「重试开通」。",
+        ],
+        link: opts.link,
+      };
+    case "refund_audit": {
+      const product = todo.product
+        ? `（${[todo.product.name, todo.product.planName].filter(Boolean).join(" ")}）`
+        : "";
+      return {
+        code: "ops.refund.pending_audit",
+        reference: { type: "refund", id: no },
+        subject: `${no} 客户申请退款，待审核（已等 ${waited}）`,
+        lines: [
+          `${tenantName} 申请退款 ${amount}${product}，等待运营审核。`,
+          `退款单 ${no}，已等待 ${waited}。`,
+          "在订单详情页「审核退款」：通过后执行退款，或驳回并写明原因。",
+        ],
+        link: opts.link,
+      };
+    }
+    default:
+      throw new Error(
+        `待办类别 ${todo.kind} 没有告警裁定（见 scripts/guardrails/check-ops-todo-alerts.mjs）`,
+      );
+  }
 }
 
 @Injectable()
@@ -91,35 +162,17 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
     return `${this.operaBaseUrl}/ops/jobs`;
   }
 
-  /** 两类订单态待办。文案按类分，处理动作说清楚在哪一页做什么。 */
-  async alertOrderTodo(row: OpsTodoOrderRow): Promise<OperatorAlertResult> {
-    const waited = humanizeWaiting(row.waitingSince);
-    const amount = money(row.payableAmount, row.currency);
-    const input: OperatorAlertInput =
-      row.status === "pending_verify"
-        ? {
-            code: "ops.order.pending_verify",
-            reference: { type: "order", id: row.id },
-            subject: `${row.orderNo} 客户已申报付款，待确认收款（已等 ${waited}）`,
-            lines: [
-              `${row.tenantName} 申报已完成支付，金额 ${amount}，等待运营核对到账。`,
-              `订单 ${row.orderNo}，已等待 ${waited}。`,
-              "核对到账后在订单详情页「确认收款」（确认即自动开通），或驳回申报。",
-            ],
-            link: this.orderLink(row.orderNo),
-          }
-        : {
-            code: "ops.order.paid_unprovisioned",
-            reference: { type: "order", id: row.id },
-            subject: `${row.orderNo} 已收款但权益未开通（已等 ${waited}）`,
-            lines: [
-              `${row.tenantName} 的账单已结清，金额 ${amount}，但开通没有落地。`,
-              `订单 ${row.orderNo}，已等待 ${waited}。`,
-              "系统会自动重试开通；若长时间不变，请在订单详情页「重试开通」。",
-            ],
-            link: this.orderLink(row.orderNo),
-          };
-    return this.alert(input);
+  /** 待办接口给的是 admin 内相对路径；邮件里要绝对链接，没配前缀就不给。 */
+  private adminLink(href: string): string | undefined {
+    if (!this.adminBaseUrl) return undefined;
+    return `${this.adminBaseUrl}${href}`;
+  }
+
+  /** 三类待办（confirm_payment / reprovision / refund_audit）→ 各一封邮件。 */
+  async alertTodo(todo: OpsTodo): Promise<OperatorAlertResult> {
+    return this.alert(
+      todoAlertInput(todo, { link: this.adminLink(todo.href) }),
+    );
   }
 
   /** 自愈放弃：级别更高——自愈都不试了，说明这单靠系统自己好不了。 */
