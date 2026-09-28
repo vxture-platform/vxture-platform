@@ -28,11 +28,15 @@ import { ACCOUNT_PG_POOL } from "../tokens";
  * `security` / `usage` 三个没有任何模板会落到它们头上（见 dispatch 的 `topicOf`），
  * 客户勾了等于没勾——页面在说假话。
  *
- * 现在 13 个主题，前 7 个有模板已经在发，后 6 个的**事件源都已存在**（各自的状态机
- * 或 webhook 事件类型跑着），只是通知模板还没接：这些在界面上挂「开发中」标并**禁用
- * 三个渠道开关**，不给假开关。
+ * 13 个主题，**前 9 个有模板已经在发**，后 4 个的事件源都已存在（各自的状态机或
+ * webhook 事件类型跑着），只是通知模板还没接：这些在界面上挂「开发中」标并**禁用三个
+ * 渠道开关**，不给假开关。
  *
- * 顺序即页面顺序（平铺，不分组）。
+ * 2026-09-28 批 5：`verification_result` 与 `quota_alert` 从后一段挪到前一段——本批给
+ * 它们接上了模板（企业认证通过 / 驳回；加油包额度用尽）。**这两半必须同时动**：模板上线
+ * 而开关还禁着，客户就收得到一封关不掉的信，比不发更糟。
+ *
+ * 顺序即页面顺序（平铺，不分组；console 的 NotificationsPage 那份手写清单同序）。
  */
 export const NOTIFICATION_TOPICS = [
   // ── 已有模板 ──────────────────────────────────────────────────────────────
@@ -46,17 +50,25 @@ export const NOTIFICATION_TOPICS = [
   // 或 provision_result(「开通了吗」),那会让那两个开关名不副实。
   "order_status", // order.payment_declared / cancelled / expired
   "tenant_change", // tenant.converted
+  // 2026-09-28 批 5 接上模板的两个（此前有位无模板，界面标「开发中」）。
+  "verification_result", // tenant.verification_approved / rejected
+  // 本批只接了「加油包额度用尽」这一条；provisioning webhook 的 quota_warning
+  // （订阅池告警）仍然零模板——同一个主题下缺的那半，不是这一批的范围。
+  "quota_alert", // addon.exhausted
   // ── 事件源已存在、模板待接（界面标「开发中」）────────────────────────────
   "security", // 站内强制锁定；异地登录/凭据变更等
   "invoice_progress", // billing.invoice_receipts 六态
-  "verification_result", // kyc.tenant_verifications 四态
-  "member_invitation", // tenancy.invitations 四态
-  "quota_alert", // provisioning webhook 的 quota_warning
+  "member_invitation", // tenancy.invitations 四态（见下方：故意留在「开发中」）
   "ticket_activity", // support.tickets 七态
 ] as const;
 
 /**
  * 事件源已存在但通知模板未接：界面上标「开发中」并禁用三个渠道开关。
+ *
+ * 2026-09-28 批 5 移出两个：`verification_result`（企业认证通过 / 驳回）与 `quota_alert`
+ * （加油包额度用尽）的模板本批上线，开关必须同时放开——否则客户收得到却关不掉。仍留在
+ * 这张表里的是 `security` / `invoice_progress` / `ticket_activity`（事件源在、模板未接），
+ * 加上下面这条故意的例外。
  *
  * `member_invitation` 留在这张表里是**故意的**（owner 2026-09-09）：它下面已经有一个
  * 模板在发（`tenant.invitation`，按用户号邀请的站内送达），但那条是 `mandatory` 的——
@@ -67,9 +79,7 @@ export const NOTIFICATION_TOPICS = [
 export const NOTIFICATION_TOPICS_PLANNED = [
   "security",
   "invoice_progress",
-  "verification_result",
   "member_invitation",
-  "quota_alert",
   "ticket_activity",
 ] as const;
 
@@ -119,6 +129,13 @@ const TOPIC_DEFAULT_OVERRIDES: Partial<
      订单或权限状态——邮件默认开、可关。 */
   order_status: { email: true },
   tenant_change: { email: true },
+  /* 2026-09-28 批 5 的两个，判据与上面六个同一条：**错过了会有实际损失**。
+     认证结果——驳回了不知道，企业认证就一直卡着，订阅与开票都跟着卡；
+     额度用尽——花钱买的加油包用完了不知道，业务在没有余量的情况下继续跑。
+     所以跟着事务性那几个走「邮件默认开、可关」，而不是照抄它们此前在「开发中」段里
+     的那一行默认值（那时候三个开关都是禁用的，默认值根本没被人选择过）。 */
+  verification_result: { email: true },
+  quota_alert: { email: true },
 };
 
 function defaults(): NotificationPreferences {

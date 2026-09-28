@@ -94,3 +94,96 @@ describe("sweepLapsedTrials", () => {
     expect(m.repo.findLapsedTrialIds).toHaveBeenCalledWith(25);
   });
 });
+
+/* ── 试用到期通知（2026-09-28 批 5）────────────────────────────────────────────
+ *
+ * 此前这一趟把转移过的行丢掉只返回条数，于是试用结束客户一句话都收不到；付费到期
+ * 那一支早就在发。这一组钉四件事：只对真的发生了的转移发、日期取**试用**截止日、
+ * 通知炸了不影响业务结果、客户看得见的那部分不出现 uuid。
+ */
+const TRIAL_UUID = "11111111-1111-4111-8111-111111111111";
+const UUID_SHAPE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+const trialDisplay = (over: Record<string, unknown> = {}) => ({
+  id: TRIAL_UUID,
+  tenantId: "org-1",
+  /* 试用行的 end_at 常为 NULL——付费周期还没开始。 */
+  endAt: null,
+  trialEndAt: new Date("2026-07-01T00:00:00Z"),
+  productName: "Arda",
+  planName: "Arda 试用版",
+  status: "expired",
+  ...over,
+});
+
+describe("sweepLapsedTrials —— 客户通知", () => {
+  let m: SweepMocks;
+  beforeEach(() => (m = buildSweepMocks(ARDA)));
+
+  const oneLapsedTrial = () => {
+    m.repo.findLapsedTrialIds.mockResolvedValue([TRIAL_UUID]);
+    m.repo.getById.mockResolvedValueOnce(trialSub(TRIAL_UUID));
+    m.repo.update.mockResolvedValueOnce(trialSub(TRIAL_UUID, "expired"));
+  };
+
+  it("一次真的转移 → 一封 subscription.trial_expired，日期与去重键都按试用截止日", async () => {
+    oneLapsedTrial();
+    m.repo.getNotifyDisplay.mockResolvedValue(trialDisplay());
+    await expect(m.service.sweepLapsedTrials()).resolves.toBe(1);
+    expect(m.notifier.notify).toHaveBeenCalledTimes(1);
+    expect(m.notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "org-1",
+        templateCode: "subscription.trial_expired",
+        /* 去重键的日期是 trial_end_at 那一天，不是「今天」（endAt 为 NULL 时的回落）。 */
+        reference: { type: "subscription", id: `${TRIAL_UUID}:2026-07-01` },
+        params: expect.objectContaining({
+          productName: "Arda",
+          planName: "Arda 试用版",
+          endAt: "2026-07-01",
+        }),
+        link: "/subscription",
+      }),
+    );
+  });
+
+  it("客户看得见的那一半不出现 uuid（引用键是去重用的，不上屏）", async () => {
+    oneLapsedTrial();
+    m.repo.getNotifyDisplay.mockResolvedValue(trialDisplay());
+    await m.service.sweepLapsedTrials();
+    const input = m.notifier.notify.mock.calls[0]![0];
+    expect(JSON.stringify(input.params)).not.toMatch(UUID_SHAPE);
+    expect(String(input.link)).not.toMatch(UUID_SHAPE);
+  });
+
+  it("转移没发生（CAS 输了）一封都不发", async () => {
+    m.repo.findLapsedTrialIds.mockResolvedValue([TRIAL_UUID]);
+    m.repo.getById.mockResolvedValueOnce(trialSub(TRIAL_UUID));
+    m.repo.update.mockResolvedValueOnce(null);
+    m.repo.getNotifyDisplay.mockResolvedValue(trialDisplay());
+    await expect(m.service.sweepLapsedTrials()).resolves.toBe(0);
+    expect(m.notifier.notify).not.toHaveBeenCalled();
+  });
+
+  it("展示数据取不到就不发，也不报错（并发删了之类）", async () => {
+    oneLapsedTrial();
+    m.repo.getNotifyDisplay.mockResolvedValue(null);
+    await expect(m.service.sweepLapsedTrials()).resolves.toBe(1);
+    expect(m.notifier.notify).not.toHaveBeenCalled();
+  });
+
+  it("notifier 抛异常：业务结果不变，本趟不中断", async () => {
+    m.repo.findLapsedTrialIds.mockResolvedValue([TRIAL_UUID, "t-2"]);
+    m.repo.getById
+      .mockResolvedValueOnce(trialSub(TRIAL_UUID))
+      .mockResolvedValueOnce(trialSub("t-2"));
+    m.repo.update
+      .mockResolvedValueOnce(trialSub(TRIAL_UUID, "expired"))
+      .mockResolvedValueOnce(trialSub("t-2", "expired"));
+    m.repo.getNotifyDisplay.mockResolvedValue(trialDisplay());
+    m.notifier.notify.mockRejectedValue(new Error("smtp down"));
+    await expect(m.service.sweepLapsedTrials()).resolves.toBe(2);
+    expect(m.notifier.notify).toHaveBeenCalledTimes(2);
+  });
+});

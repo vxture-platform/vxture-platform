@@ -134,7 +134,7 @@ describe.runIf(RUN)(
       expect(releases.map((r) => r.subscriptionId)).not.toContain(
         subscriptionId,
       );
-      expect(synced).toBe(0);
+      expect(synced).toEqual([]);
     });
 
     it("进窗口：窗口 + 绑定 + 产品打标后，名下在服务中的订阅被捞为候选", async () => {
@@ -172,7 +172,7 @@ describe.runIf(RUN)(
 
       // 还没有 episode：释放 / 同步都没东西可做。
       expect(await repo.findMaintenanceReleases()).toEqual([]);
-      expect(await repo.syncMaintenanceExpectedResume()).toBe(0);
+      expect(await repo.syncMaintenanceExpectedResume()).toEqual([]);
     });
 
     it("开 episode（system / platform_ops / 顺延 / 带窗口 id）→ 不再是候选（幂等）", async () => {
@@ -229,7 +229,7 @@ describe.runIf(RUN)(
       );
 
       // 同步：expected_resume_at 已等于 maintenance_until → 0 行。
-      expect(await repo.syncMaintenanceExpectedResume()).toBe(0);
+      expect(await repo.syncMaintenanceExpectedResume()).toEqual([]);
       // 运营顺延一小时（opera-bff 会同步 products.maintenance_until）→ 1 行。
       const later = new Date(until.getTime() + 3600_000);
       await client.query(
@@ -238,7 +238,8 @@ describe.runIf(RUN)(
       );
       const synced = await repo.syncMaintenanceExpectedResume();
       trace("synced after extending maintenance_until", synced);
-      expect(synced).toBe(1);
+      // 回送被改的那一行（不只条数）：预计恢复变了，发侧凭它知道该通知谁、说哪个日子。
+      expect(synced).toEqual([{ subscriptionId, expectedResumeAt: later }]);
       const after = await client.query<{ expected_resume_at: Date }>(
         `select expected_resume_at from metering.subscription_suspensions where id = $1`,
         [episodeId],
@@ -246,7 +247,7 @@ describe.runIf(RUN)(
       trace("episode expected_resume_at after sync", after.rows[0]);
       expect(after.rows[0]!.expected_resume_at.getTime()).toBe(later.getTime());
       // 再跑一遍：已经一致，0 行。
-      expect(await repo.syncMaintenanceExpectedResume()).toBe(0);
+      expect(await repo.syncMaintenanceExpectedResume()).toEqual([]);
     });
 
     it("产品换了别的窗口 / 清了标 → episode 被捞为释放；闭合后不再捞", async () => {
@@ -273,7 +274,7 @@ describe.runIf(RUN)(
         maintenanceWindowId: windowId,
       });
       // 同步不碰它：窗口 id 已不同。
-      expect(await repo.syncMaintenanceExpectedResume()).toBe(0);
+      expect(await repo.syncMaintenanceExpectedResume()).toEqual([]);
 
       // complete / cancel 清标（两列同空）。
       await client.query(

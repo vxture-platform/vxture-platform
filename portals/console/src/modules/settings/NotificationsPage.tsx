@@ -68,17 +68,22 @@ const CHANNELS: ChannelMeta[] = [
  * 主题清单（owner 2026-09-08 重排；2026-09-09 补两个）。**平铺，不分组**：各自四字自足，
  * 组名拼进项名等于把删掉的分组用文字再写一遍，还占列宽。
  *
- * 前 7 个有模板已经在发；后 6 个的**事件源都已存在**（各自的状态机或 webhook 事件
+ * 前 9 个有模板已经在发；后 4 个的**事件源都已存在**（各自的状态机或 webhook 事件
  * 类型跑着），只是通知模板还没接——`planned: true` 让它们在界面上挂「开发中」标并
  * **禁用三个渠道开关**。
+ *
+ * 2026-09-28 批 5：`verification_result` 与 `quota_alert` 取下 `planned`（模板本批上线）。
+ * 这一处与服务端的 `NOTIFICATION_TOPICS_PLANNED`、两本词条是**手工同步**的三处；漏掉
+ * 这一处的后果不是报错，是客户收到一封开关禁着、关不掉的信。
  *
  * 为什么要把未接的也列出来：改之前页面有 6 个主题，其中 3 个没有任何模板会落到它们
  * 头上（`account` / `security` / `usage`），客户勾了等于没勾——**页面在说假话**。
  * 现在要么有模板、要么明说「开发中」并关掉开关，没有第三种。
  *
- * 事务性的四个（到期/开通/待付/退款——错过了会有实际损失）邮件默认开、可关，与服务端
- * `NotificationPreferencesService` 的 `TOPIC_DEFAULT_OVERRIDES` 同源:「恢复默认」用的
- * 就是这一份。
+ * 事务性的那几个（到期/开通/待付/退款/订单状态/租户变更/认证结果/额度用尽——错过了会有
+ * 实际损失）邮件默认开、可关，与服务端 `NotificationPreferencesService` 的
+ * `TOPIC_DEFAULT_OVERRIDES` 同源:「恢复默认」用的就是这一份，两份不一致的症状是
+ * 「按一下恢复默认，保存后开关又变了」。
  */
 const DEFAULT_NOTIFICATION_STATE: NotificationState = {
   topics: [
@@ -121,6 +126,20 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
       icon: "buildings",
       channels: { inbox: true, email: true, sms: false },
     },
+    /* 批 5（2026-09-28）接上模板的两个，所以**不再带 planned 标**、三个开关可点：
+       verification_result 是企业认证通过 / 驳回；quota_alert 是加油包额度用尽。
+       两者都属事务性（驳回了不知道认证一直卡着；额度用完了不知道业务在空跑），
+       邮件默认开、可关——与服务端 TOPIC_DEFAULT_OVERRIDES 同源，「恢复默认」用这一份。 */
+    {
+      key: "verification_result",
+      icon: "shield",
+      channels: { inbox: true, email: true, sms: false },
+    },
+    {
+      key: "quota_alert",
+      icon: "gauge",
+      channels: { inbox: true, email: true, sms: false },
+    },
     {
       key: "security",
       icon: "shield-check",
@@ -135,20 +154,8 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
       planned: true,
     },
     {
-      key: "verification_result",
-      icon: "shield",
-      channels: { inbox: true, email: false, sms: false },
-      planned: true,
-    },
-    {
       key: "member_invitation",
       icon: "users",
-      channels: { inbox: true, email: false, sms: false },
-      planned: true,
-    },
-    {
-      key: "quota_alert",
-      icon: "gauge",
       channels: { inbox: true, email: false, sms: false },
       planned: true,
     },

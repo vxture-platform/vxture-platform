@@ -8,7 +8,10 @@ import {
 } from "@nestjs/common";
 import { ProvisioningService } from "@vxture/service-provisioning";
 import { SUSPENSION_REASON_EXTENDS_TERM } from "@vxture-platform/shared";
-import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
+import {
+  PgSubscriptionRepository,
+  type NotifyDisplay,
+} from "../repository/pg-subscription.repository";
 import {
   formatNotifyDate,
   type CustomerNotifier,
@@ -32,6 +35,29 @@ import type {
 const ACTIVATED = new Set(["active", "trialing"]);
 /** Terminal statuses that trigger the per-component deprovision check. */
 const DEACTIVATED = new Set(["cancelled", "expired"]);
+
+/**
+ * 运营代客动作的三档（`notifyOperatorStatusChange` 的入参）。
+ *
+ * 导出是为了让 `.d.ts` 能指名这个联合（本类型不进包 barrel，调用方传字面量即可）。
+ */
+export type OperatorSubscriptionAction = "suspended" | "resumed" | "renewed";
+
+/**
+ * 动作 → 客户模板。用 `Record` 而不是三目：加一档忘了配模板**编译不过**，不会静默
+ * 落进某个兜底（与 dispatch 侧 TOPIC_OF 同一手法）。
+ *
+ * 续期这一档另立模板码：`subscription.renewed` 的正文要说「实付 {{amount}}」，而代客
+ * 续期是订阅侧的直接动作，没有订单也没有付款——那个字段没有诚实的值可填。
+ */
+const OPERATOR_ACTION_TEMPLATE: Record<
+  OperatorSubscriptionAction,
+  CustomerNotifyInput["templateCode"]
+> = {
+  suspended: "subscription.suspended",
+  resumed: "subscription.resumed",
+  renewed: "subscription.renewed_by_operator",
+};
 
 @Injectable()
 export class SubscriptionService {
@@ -96,6 +122,38 @@ export class SubscriptionService {
         ...extraParams,
       },
       link: "/subscription",
+    };
+  }
+
+  /**
+   * 产品升级维护那条暂停通知的形状（2026-09-28 收尾）。
+   *
+   * 为什么不复用 `subscription.suspended`：那条正文写着「如需恢复请联系客服」——对**人工**
+   * 暂停是对的（只有运营放得开），对产品维护是假话：`sweepProductMaintenance` 的第 2 段
+   * 自己把订阅放回 active、闭合 episode、结算顺延、发恢复通知。让客户去问一件系统自己会
+   * 做完的事，既错，又白造工单。
+   *
+   * 去重锚换成「订阅 × **预计恢复日期**」而不是共同形状的「订阅 × 到期日」：窗口被延长时
+   * （第 3 段的 `syncMaintenanceExpectedResume` 把未闭合 episode 的预计恢复改掉），日期变了，
+   * 收件箱那个唯一键（account × 模板 × 引用类型 × 引用 id）就不再命中，同一条模板自然再发
+   * 一条带新日期的——所以**第 3 段不必自己发通知**，「承诺的回来时间变了而当事人不知道」
+   * 这个洞由键的粒度补掉。与 `notifyExpiringSoon`（订阅 × 到期日，窗口内每趟重扫同一批行）
+   * 是同一个机关。
+   *
+   * 键里那个日期与文案里那个日期**必须是同一个字符串**（都过 `formatNotifyDate`）：各算一次
+   * 的话（一个 UTC 一个 Asia/Shanghai），跨日那几个小时会出现「屏幕上的日子变了却不再通知」
+   * ——那正是这条键要防的事。
+   */
+  private maintenancePauseNotice(
+    d: NotifyDisplay,
+    expectedResumeAt: Date,
+  ): CustomerNotifyInput {
+    const resumeAt = formatNotifyDate(expectedResumeAt);
+    return {
+      ...this.subscriptionNotice("subscription.suspended_maintenance", d, {
+        resumeAt,
+      }),
+      reference: { type: "subscription", id: `${d.id}:${resumeAt}` },
     };
   }
 
@@ -343,6 +401,28 @@ export class SubscriptionService {
       "trial expiry sweep",
       "trial ended without conversion (expiry sweep)",
     );
+    /*
+     * 试用到期通知（2026-09-28 批 5）。此前这一趟把 rows 丢掉只返回条数，于是
+     * **试用结束客户一句话都收不到**——付费到期那一支（sweepExpiredSubscriptions）
+     * 早就在发了。照抄那一支：只对**真的发生了转移**的行发（`done` 里的行都过了 CAS），
+     * 单行失败只记日志不中断（emit 自己吞），去重靠 dispatcher 的唯一键。
+     *
+     * 这里没有「从哪一档来的」这道过滤：本趟扫描的候选谓词写死 status='trialing'
+     * （findLapsedTrialIds），`from` 恒为 trialing，不存在付费那侧「冻结中到期不通知」
+     * 那种要分辨来源的情形。
+     */
+    for (const { id } of done) {
+      await this.emit(`trial expired ${id}`, async () => {
+        const d = await this.repo.getNotifyDisplay(id);
+        if (!d) return null;
+        /* 试用的那个日子在 trial_end_at 上（试用行的 end_at 常为 NULL），
+           所以显式换掉展示与去重键里的日期，而不是让它落成「—」+「今天」。 */
+        return this.subscriptionNotice("subscription.trial_expired", {
+          ...d,
+          endAt: d.trialEndAt ?? d.endAt,
+        });
+      });
+    }
     return done.length;
   }
 
@@ -573,10 +653,15 @@ export class SubscriptionService {
    * `applyTransitionHooks` + `settleSuspensionExtension` + 通知。三段：
    *   1. 进窗口：产品打着窗口、订阅在服务中、没有未闭合 episode → suspended，开一条
    *      reason=platform_ops（顺延由 @shared 的政策表派生，落库）、actor=system、带窗口 id
-   *      的 episode，expected_resume_at = 产品上的 maintenance_until。
+   *      的 episode，expected_resume_at = 产品上的 maintenance_until，**通知维护暂停**
+   *      （`subscription.suspended_maintenance`，不是人工暂停那条）。
    *   2. 出窗口：未闭合 episode 带窗口 id、产品已不再打着同一个窗口 → active（还原暂停那
    *      一刻的 auto_renew）、闭合、结算顺延、通知恢复。
    *   3. 顺延同步：窗口 maintenance_until 变了 → 同窗口未闭合 episode 的预计恢复跟着改。
+   *      **这一段不自己发通知，但延长确实会通知到客户**：第 1 段那条的去重锚带着预计恢复
+   *      日期（见 `maintenancePauseNotice`），日期一变收件箱唯一键就不再命中，下一 tick
+   *      同一条模板自然再发一条带新日期的。承诺的回来时间变了而当事人不知道，靠的是键的
+   *      粒度而不是这里再加一个 emit——两个发信点会各自漏各自的。
    * 幂等靠判据本身（状态 + 有无未闭合 episode + 窗口 id 是否仍打在产品上），重跑不重复。
    * 运营手工暂停的（episode 没有窗口 id）不受影响；窗口期间运营手工恢复某条订阅，下一 tick
    * 会再次被暂停——产品确实还在维护，这是对的。
@@ -628,12 +713,15 @@ export class SubscriptionService {
           before,
           result,
         );
+        /* 维护专属的那条，不是人工暂停那条：说清「为什么停 / 预计什么时候回来 / 回来
+           不用你操作」，去重锚带预计恢复日期（见 maintenancePauseNotice）。
+           `emit` 自己吞异常 ⇒ 通知失败不会把这条订阅算成失败、更不会中断整趟。 */
         await this.emit(
           `maintenance suspended ${c.subscriptionId}`,
           async () => {
             const d = await this.repo.getNotifyDisplay(c.subscriptionId);
             return d
-              ? this.subscriptionNotice("subscription.suspended", d)
+              ? this.maintenancePauseNotice(d, c.maintenanceUntil)
               : null;
           },
         );
@@ -688,10 +776,29 @@ export class SubscriptionService {
       }
     }
 
-    // 3. 顺延同步：一条 UPDATE，自己的失败自己记，不影响前两段已生效的结果。
+    /* 3. 顺延同步：一条 UPDATE，自己的失败自己记，不影响前两段已生效的结果。
+       改完**要告诉客户**：预计恢复时间是对他的承诺，承诺变了而当事人不知道，是这一段此前
+       缺的那一半。不另立模板——发的还是第 1 段那条，只是带着新日期；去重锚含预计恢复日期，
+       所以哪怕这段被重复执行，同一个日子也只会落一条（收件箱唯一键 do nothing）。
+       **为什么这里必须自己发**：第 1 段的候选查询排除「有未闭合 episode」的订阅，所以已经
+       停着的行永远不会再被它扫到——与「即将到期」那条每趟重扫同一批行不同，光有去重锚的
+       粒度不会自己再发一条。单行的发信失败由 `emit` 自己吞掉，不影响 synced 计数。 */
     let synced = 0;
     try {
-      synced = await this.repo.syncMaintenanceExpectedResume();
+      const shifted = await this.repo.syncMaintenanceExpectedResume();
+      synced = shifted.length;
+      for (const s of shifted) {
+        // 窗口还打着而 maintenance_until 被清空：没有日子可承诺，不发一条写着「—」的信。
+        if (!s.expectedResumeAt) continue;
+        const resumeAt = s.expectedResumeAt;
+        await this.emit(
+          `maintenance resume shifted ${s.subscriptionId}`,
+          async () => {
+            const d = await this.repo.getNotifyDisplay(s.subscriptionId);
+            return d ? this.maintenancePauseNotice(d, resumeAt) : null;
+          },
+        );
+      }
     } catch (err) {
       this.logger.error(
         `product maintenance: expected-resume sync failed — ${String(err)}`,
@@ -737,29 +844,30 @@ export class SubscriptionService {
   }
 
   /**
-   * 运营冻结 / 恢复的通知（2026-09-25）。
+   * 运营代客动作的通知（2026-09-25 冻结 / 恢复；2026-09-28 收尾补上续期）。
    *
-   * 这两个动作今天走的是 admin-bff 里那条裸 SQL 事务（`subscriptions.router`），不经本
+   * 这三个动作今天走的是 admin-bff 里那条裸 SQL 事务（`subscriptions.router`），不经本
    * service，所以拿不到 `updateSubscription` 的写完成尾。客户那边的后果是：服务被停了，
-   * 不知道为什么、不知道找谁；恢复了也不知道。这里只补「告诉客户」那一半——事务提交后
-   * 调用，发不出去只记日志。
+   * 不知道为什么、不知道找谁；恢复了也不知道；**代客续期同样一句话都收不到**，而自助
+   * 续费与自动续费两条路一直在发。这里只补「告诉客户」那一半——事务提交后调用，发不
+   * 出去只记日志（`emit` 吞异常）：运营动作已经生效，通知失败不该让那个请求失败，更
+   * 不该回滚它。
    *
    * 把那条写路径整体搬进 service（顺带拿到 transition hooks 与退订结算）是批 4 的事：
    * 那一批必须动它，改动与风险才配得上。
    */
   async notifyOperatorStatusChange(
     subscriptionId: string,
-    action: "suspended" | "resumed",
+    action: OperatorSubscriptionAction,
   ): Promise<void> {
     await this.emit(`${action} ${subscriptionId}`, async () => {
       const d = await this.repo.getNotifyDisplay(subscriptionId);
       if (!d) return null;
-      return this.subscriptionNotice(
-        action === "suspended"
-          ? "subscription.suspended"
-          : "subscription.resumed",
-        d,
-      );
+      /* 续期而**没有新的到期日**：只可能是 perpetual 周期（那条 UPDATE 的 end_at 分支
+         明确跳过它），这一次续期没有挪动任何一个日子。「新周期至 —」不是一句话，宁可
+         不发；冻结 / 恢复两档不受此限——它们说的是服务在不在，与到期日无关。 */
+      if (action === "renewed" && d.endAt === null) return null;
+      return this.subscriptionNotice(OPERATOR_ACTION_TEMPLATE[action], d);
     });
   }
 

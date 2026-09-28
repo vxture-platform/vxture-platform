@@ -11,7 +11,7 @@
  *   表达不出来的东西——renew 的 change_type='renewed'、试用转付费的 subscription_kind
  *   翻转、在库里按 cycle_unit×cycle_count 算 end_at），但**副作用一律走
  *   SubscriptionService**：提交后调 applyExternalStatusChange（provisioning /
- *   权益缓存失效）、notifyOperatorStatusChange（冻结恢复通知）、settleAfterCancel
+ *   权益缓存失效）、notifyOperatorStatusChange（冻结 / 恢复 / 代客续期通知）、settleAfterCancel
  *   （退订即退款）。三条都在事务外、都 best-effort——运营动作已经生效，通知产品侧或
  *   客户失败不该让请求失败。
  *
@@ -63,7 +63,7 @@ import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 /*
  * `ADMIN_SUBSCRIPTION_SERVICE` 早就 provide 了、连 setCustomerNotifier 都调过，此前
  * **没有任何 router 注入它**（只被 ADMIN_ORDER_SERVICE 的工厂当依赖用）——本仓最常见的
- * 那种「做了没接」。本批只借它发冻结 / 恢复通知；写路径归一见文件里那段已知缺口注释。
+ * 那种「做了没接」。本批只借它发冻结 / 恢复 / 代客续期通知；写路径归一见文件里那段已知缺口注释。
  */
 import {
   ADMIN_ORDER_SERVICE,
@@ -239,9 +239,10 @@ export class SubscriptionsRouter {
     const clientIp = extractClientIp(req);
     const subscriptionId = await this.resolveSubscriptionId(id);
 
-    // 提交成功后要发的那条通知（冻结 / 恢复）。在事务外发：通知发不出去不该回滚一次
-    // 已经生效的运营动作，而事务里也没有它的位置（notify 会打网络）。
-    let notify: "suspended" | "resumed" | null = null;
+    /* 提交成功后要发的那条通知（冻结 / 恢复 / 代客续期）。在事务外发：通知发不出去不该
+       回滚一次已经生效的运营动作，而事务里也没有它的位置（notify 会打网络）。
+       隔离在服务层那一侧（`SubscriptionService.emit` 吞异常只记日志），三档同一条路。 */
+    let notify: "suspended" | "resumed" | "renewed" | null = null;
     /** 提交成功后要做的退款结算（仅退订，且这次真的终止了）。同样在事务外。 */
     let settle: { subscriptionId: string; tenantId: string } | null = null;
     /**
@@ -359,9 +360,21 @@ export class SubscriptionsRouter {
 
       await client.query("commit");
 
-      // 冻结 / 恢复通知（2026-09-25，批 2）：此前客户服务被停了不知为何、恢复了也不知道。
-      // 只认真正发生了状态变化的那一次（幂等重放时 fromStatus === toStatus，不再发）。
-      if (fromStatus !== toStatus) {
+      /*
+       * 冻结 / 恢复通知（2026-09-25，批 2）：此前客户服务被停了不知为何、恢复了也不知道。
+       * 只认真正发生了状态变化的那一次（幂等重放时 fromStatus === toStatus，不再发）。
+       *
+       * 代客续期（2026-09-28 收尾）判的是**动作**，不是状态转移——这一点与上面两档相反，
+       * 也正是这一档此前落空的原因：续期把状态置回 active，而绝大多数续期本来就在 active
+       * 上做，`fromStatus !== toStatus` 恒假。真正变了的是**服务期**（UPDATE 里那段
+       * make_interval），所以只要 renew 走到这里，客户就该知道续到了哪天。
+       * 模板另立一条（`subscription.renewed_by_operator`）：自助续费那条的正文要说实付
+       * 金额，而代客续期没有订单、没有付款。perpetual 周期没有新的到期日可说，那一档由
+       * 服务层按 endAt 收掉（见 notifyOperatorStatusChange）。
+       */
+      if (action === "renew") {
+        notify = "renewed";
+      } else if (fromStatus !== toStatus) {
         if (toStatus === "suspended") notify = "suspended";
         else if (action === "resume") notify = "resumed";
       }

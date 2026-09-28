@@ -386,12 +386,21 @@ export function composeSelfHealGaveUpNotice(facts: {
  * 身份就是可视码，读库的人一眼看得懂是哪件事）。级数就是「等待 / 阈值」的整数倍，所以
  * **每跨过一个阈值周期播一条**：拖 4 小时一条、拖 8 小时再一条。一件事拖得越久，
  * 台面上挂着的 critical 越多，而不是同一条被静默窗口吞掉（#231 的病根）。
- * 只投 admin：出路（确认收款 / 审核退款 / 重试开通 / 看认证）都在运营台那几页上。
  *
  * 不过期：与自愈放弃同一条判断——它不会自己变好。
  *
- * 链接可以没有（`href` 为 null 的类别在 admin 里没有对应页面），那时不给 link，
- * 正文里说清去哪儿办。
+ * ── 投哪个平面：跟着「这活在哪儿干」走（2026-09-28 批 5 修）──
+ * 十八类待办的出路（确认收款 / 审核退款 / 重试开通 / 看认证）都在运营台那几页上，
+ * 所以它们投 admin。**「维护窗口超时」那一类恰好相反**：它 `href` 为 null 正是因为
+ * 处置面在运维台（opera），正文自己也这么写。此前这一条写死 admin ⇒ 「维护窗口跑过了
+ * 计划结束时间」这件事**唯一的信号，投给了一个没人能结束它的平面**。
+ *
+ * 判据取 `href`：没有平面内链接 = 这活不在 admin 干 ⇒ 投 opera **与** admin 两个平面。
+ * 为什么不是只投 opera：窗口超时意味着客户还被锁在产品外面，运营台该看得见这件事。
+ *
+ * 链接仍然是待办自己的（两平面那一支它恒为 null）。不给 opera 补一条 `/ops/...`：
+ * 通告的 link 是**平面内相对路径**，各平面各自解析，给了就是一个在 admin 里点开 404 的
+ * 链接——与本文件顶上 composeJobHealthNotice 同一个取舍。
  */
 export function composeEscalatedTodoNotice(
   todo: OpsTodo,
@@ -414,7 +423,7 @@ export function composeEscalatedTodoNotice(
     "这一条不会自己消失——待办处置掉之前，每多拖一个时限周期就会再来一条。",
   ].filter((line): line is string => line !== null);
   return {
-    targetPlanes: ["admin"],
+    targetPlanes: todo.href ? ["admin"] : ["opera", "admin"],
     severity: "critical",
     title:
       `待办已超时：${subjectLabel} ${todo.subject.no}（已等 ${waited}）`.slice(

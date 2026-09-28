@@ -28,6 +28,7 @@ import {
   ForbiddenException,
   Get,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -40,8 +41,11 @@ import {
 import type { Request, Response } from "express";
 import type { Pool } from "pg";
 import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
+import type { NotificationDispatcher } from "@vxture/service-notification";
+import { formatNotifyDate } from "@vxture/service-subscription";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
+import { ADMIN_CUSTOMER_NOTIFIER } from "../providers/commerce-services.provider";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import type {
   RequestContext,
@@ -60,9 +64,15 @@ import { industryLabel } from "@vxture/core-utils";
 
 @Controller("api/tenants")
 export class TenantsRouter {
+  private readonly logger = new Logger(TenantsRouter.name);
+
+  /* 三个令牌都显式写出来：esbuild 打包不保留装饰器元数据，少一个 `@Inject`
+     编译得过、启动烟测也过，到线上才以 undefined 现形。 */
   constructor(
     @Inject(ADMIN_BFF_RO_POOL) private readonly pool: Pool,
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Inject(ADMIN_CUSTOMER_NOTIFIER)
+    private readonly notifier: NotificationDispatcher,
   ) {}
 
   /**
@@ -861,7 +871,83 @@ export class TenantsRouter {
       after: { status: nextStatus, ...(reason ? { reason } : {}) },
     });
 
-    return this.loadVerification(verificationId);
+    /* 客户通知（批 5）。此前审核落库之后客户那边一句话都没有——「我交的资料批了没有」
+       只能自己回那一页看。
+
+       **从读回的记录发，不在事务里发**：commit 那一刻作用域里只剩 uuid（verificationId /
+       record.tenant_id），没有租户编码、没有租户名，而客户看的那句话里一个 uuid 都不许有。
+       下面这条读回的记录带着 tenant_no / tenant_name / reviewed_at / reject_reason，
+       正好是要用的那几个。顺带也就得到了「提交失败 → 抛 → 不发」：审核回滚时连这行都走不到。 */
+    const reviewed = await this.loadVerification(verificationId);
+    await this.notifyVerificationReviewed(reviewed);
+    return reviewed;
+  }
+
+  /**
+   * 认证结果通知（批 5）。**永不影响审核本身**：审核已经 commit，这里出任何岔子
+   * 只记一行日志就过——与 SubscriptionService 的 `emit` 同一条纪律。
+   *
+   * 收件人不额外指定。`kyc.tenant_verifications` 全表没有提交人那一列
+   * （16_kyc.sql:32-51），所以「除了 owner 还有谁」这个问题在库里没有答案——
+   * `customerRecipients(createdByType, createdById)` 那个助手要的两个入参这张表
+   * 一个都拿不到，不是不复用它，是没有东西可以喂给它。分发器恒定追加租户 owner，
+   * 那就是此刻唯一能确定的收件人。
+   */
+  private async notifyVerificationReviewed(
+    record: TenantVerificationRecord,
+  ): Promise<void> {
+    /* 只有「批了」和「驳回了」是决定。pending / unverified 到不了这里（本方法只被
+       approve / reject 调），但读回的状态若不是这两个就说明库里的行不是我们刚写的那条，
+       此时发通知等于按一个不知来源的状态通知客户。 */
+    if (record.status !== "verified" && record.status !== "rejected") return;
+    try {
+      await this.notifier.notify({
+        tenantId: record.tenantId,
+        templateCode:
+          record.status === "verified"
+            ? "tenant.verification_approved"
+            : "tenant.verification_rejected",
+        /* 去重锚取**这一次审核**：`{租户可视码}:{本次审核时刻}`。两半各有理由：
+             · 审核时刻 —— 同一租户驳回后重新提交、重新审核是另一件事，客户要再收到
+               一次；只锚租户第二轮就被收件箱唯一键吞掉。
+             · 可视码而**不是**认证行的 uuid —— `reference_id` 被客户收件箱的读路径
+               原样投影给浏览器（console-bff 的 inbox.router 把它映成
+               `InboxMessage.referenceId`，console 的 API 类型也照收），uuid 一进这一
+               列就过了客户端那条线，而本仓的规则是客户端任何地方都不出现 uuid。
+           形状照仓里既有的那条（console-bff 席位通告的 `seat_limit:{租户号}:{产品码}:
+           {当天}`）：冒号连接的可视值 + 一个会变的键。
+           引用类型只能用已有的 `tenant`——`NotificationReferenceType` 里没有
+           verification 这一档。 */
+        reference: {
+          type: "tenant",
+          id: verificationDedupeRef(record.tenantNo, record.reviewedAt),
+        },
+        /* 可视码 + 租户名 + 审核日期 + 驳回原因，一个 uuid 都不带。
+           键名对着 dispatch/templates.ts 那两条模板逐个核过：通过那条插
+           `{{tenantName}}` / `{{reviewedAt}}`，驳回那条插 `{{tenantName}}` /
+           `{{reason}}`（`reason` 这个键名也是仓里既有驳回类模板的写法——
+           refund.rejected / order.payment_rejected 都叫它）。缺参数的占位符会被
+           渲染成空串而不是报错，所以这几个键名错一个字就是一句缺半截的话。
+
+           `tenantCode` 眼下没有任何模板插它（运营镜像的 /tenants/{tenant_no}
+           链接是自己回库查的）。留着它是因为这份载荷里指认租户的值一律是可视码——
+           去重锚也是（见上面那段）；有多给的参数不会渲染出空洞。 */
+        params: {
+          tenantName: record.tenantName,
+          tenantCode: visibleTenantCode(record.tenantNo),
+          reviewedAt: formatNotifyDate(
+            record.reviewedAt ? new Date(record.reviewedAt) : null,
+          ),
+          reason: record.rejectReason ?? "",
+        },
+        // console 内的认证页（旧地址 /organization/verification 已改跳转到这里）。
+        link: "/tenant/verification",
+      });
+    } catch (err) {
+      this.logger.warn(
+        `tenant verification notice for ${record.id} failed — ${String(err)}`,
+      );
+    }
   }
 
   // ── 读回助手（复用现有只读投影，返回操作后最新状态）───────────────────────────
@@ -1012,6 +1098,34 @@ function toIsoOrNull(value: Date | string | null): string | null {
   return value instanceof Date
     ? value.toISOString()
     : new Date(value).toISOString();
+}
+
+/**
+ * 可视码上屏前的兜底：解不出来就说「未知」，不把 `null` / 空串当成一个编码送给客户。
+ * （`tenant_no` 是 NOT NULL 且有唯一约束，正常路径永远有值；这道兜底是为了万一
+ * 投影变了之后，客户收到的不是字面量 "null"。）
+ */
+function visibleTenantCode(value: string | null | undefined): string {
+  const text = (value ?? "").trim();
+  return text && text !== "null" ? text : "未知";
+}
+
+/**
+ * 认证结果通知的去重锚：`{租户可视码}:{本次审核时刻}`。**导出仅为可测**。
+ *
+ * 长度：租户号 10 位 + 1 + ISO 时刻 24 位 = 35；运营镜像再前缀
+ * `tenant.verification_approved:tenant:`（36）共 71，`reference_id` 是 varchar(128)
+ * （72_support.sql：收件箱与运营通告两张表同宽），余量充足。
+ *
+ * 审核时刻读不到时退回「此刻」：宁可同一次审核多发一条，也不要让两次审核撞成一条被
+ * 唯一键吞掉——「客户没收到第二次的结果」比「收到两条」糟。（正常路径上它永远有值：
+ * 那条 update 把 `reviewed_at` 写成 now() 之后才读回。）
+ */
+export function verificationDedupeRef(
+  tenantNo: string | null | undefined,
+  reviewedAt: string | null,
+): string {
+  return `${visibleTenantCode(tenantNo)}:${reviewedAt ?? new Date().toISOString()}`;
 }
 
 function toCount(value: string | number | null): number {

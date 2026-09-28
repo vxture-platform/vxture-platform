@@ -71,6 +71,18 @@ function order(params: TemplateParams): string {
 }
 
 /**
+ * 加油包段：包名 · 加油包单号。缺哪个就不出现那一段，不留空的分隔符。
+ *
+ * 单号参数与订单共用 `orderNo`（全仓一套词汇）。它住 `metering.addon_purchases`
+ * 而不是 `billing.orders`，这件事由**引用类型**承担，不由参数名承担：见 `mirrorLink`。
+ */
+function addon(params: TemplateParams): string {
+  return [pick(params, "packName"), order(params)]
+    .filter((v) => v !== "")
+    .join(" · ");
+}
+
+/**
  * 客户模板 → 运营镜像。标题写运营视角，事实与客户模板同一条。
  * 严重度只在 warning / info 两档里选：critical 留给运维事故，客户事件不用。
  */
@@ -186,6 +198,74 @@ export const OPERATOR_MIRROR: Readonly<
     severity: "warning",
     title: (p) => `退款执行失败 · ${pick(p, "refundNo") || order(p)}`,
   },
+  /* ── 批 5（2026-09-28）的七条，逐条定过，结论是**七条全 info**。────────────
+     本文件的 warning 有一个成文含义：「在等运营动手」，于是**不过期**、留在列表里
+     直到有人处理。按这条判据逐条问「哪个运营动作能让这条消失」：
+       · 两条认证结果 —— 运营**刚刚**自己审的（写入方就是 admin-bff 的 reviewVerification），
+         镜像是回执；驳回之后球在客户那边（改资料重交），运营这边没有下一步。
+       · 试用到期未转化 —— 没有任何「处理试用到期」的动作；那是销售跟进，不是待办。
+       · 加油包开通 / 即将到期 / 用尽 / 过期 —— 客户自助再买一份即可，运营无动作；而且
+         这三条来自**每趟重扫同一批行**的巡检，给成不过期的 warning 会在列表里越堆越多。
+     给一条永远没人能「处理完」的 warning，正是 info / warning 这个分档要防的事。
+     去重锚（mirrorDedupeKey = 模板:引用类型:引用 id）：
+       认证 → `tenant:{租户可视码}:{本次审核时刻}`（发侧锚在**这一次审核**上，不锚租户：
+         驳回后重新提交再审是另一件事，客户要再收到一次——所以审核时刻必须在键里。
+         **不放认证行的 uuid**：`reference_id` 被客户收件箱的读路径原样投影给浏览器
+         （console-bff 的 inbox.router → `InboxMessage.referenceId`），uuid 一进这一列
+         就过了客户端那条线。形状照 console-bff 席位通告那条：冒号连接的可视码 + 一个
+         会变的键。同形的历史债是 `tenant.converted`——那条今天仍是租户 uuid）；
+       加油包 → `addon:{加油包单号}`（一单一池、池不重置，每条各一次）；
+       「即将到期」那条再带上到期日（`单号:到期日`）：到期日被改了就该再提醒一次。
+     链接：认证走引用类型 tenant → `/tenants/{tenant_no}`；加油包**没有**链接——admin 侧
+     只有 `/addon-orders` 列表页，按本文件判据（有详情页才给链接）不给列表页链接，
+     `mirrorLink` 为此按引用类型把 addon 排除在 `/orders/…` 之外。 */
+  "tenant.verification_approved": {
+    severity: "info",
+    title: (p) => `企业认证已通过 ${pick(p, "tenantName")}`,
+  },
+  "tenant.verification_rejected": {
+    severity: "info",
+    title: (p) => `企业认证已驳回 ${pick(p, "tenantName")}`,
+  },
+  "subscription.trial_expired": {
+    severity: "info",
+    title: (p) => `客户试用到期未转化 ${plan(p)}`,
+  },
+  "addon.activated": {
+    severity: "info",
+    title: (p) => `加油包已开通 ${addon(p)}（${pick(p, "amount")}）`,
+  },
+  "addon.expiring_soon": {
+    severity: "info",
+    title: (p) => `客户加油包即将到期 ${addon(p)}（${pick(p, "endAt")}）`,
+  },
+  "addon.exhausted": {
+    severity: "info",
+    title: (p) => `客户加油包额度已用尽 ${addon(p)}`,
+  },
+  "addon.expired": {
+    severity: "info",
+    title: (p) => `客户加油包已到期 ${addon(p)}`,
+  },
+  /* 代客续期（2026-09-28 收尾）。**info**：运营自己刚按下的那个按钮，镜像是回执，
+     没有任何「下一步」在等人做——正是本文件 warning（不过期、直到处理）要防的反面。
+     标题里带上新的到期日：运营在列表里要能一眼看出续到了哪天。 */
+  "subscription.renewed_by_operator": {
+    severity: "info",
+    title: (p) => `运营代客续期 ${plan(p)}（${pick(p, "endAt")}）`,
+  },
+  /* 维护暂停（2026-09-28 收尾）。**info，不是 warning**，按本文件对 warning 的成文含义
+     （「在等运营动手」⇒ 不过期）逐条问「哪个运营动作能让这条消失」：
+       · 暂停这件事是运营自己开维护窗口造成的，镜像是回执；
+       · 恢复不需要人动手（窗口结束后作业自己放回来），单条订阅这边没有下一步；
+       · 而且窗口一延长，同一条模板会带着新的预计恢复日期再镜像一条——给成不过期的
+         warning 只会在列表里越堆越多。
+     标题带上预计恢复日期：运营看这条最常被问的就是「什么时候回来」。 */
+  "subscription.suspended_maintenance": {
+    severity: "info",
+    title: (p) =>
+      `产品升级维护，客户订阅已暂停 ${plan(p)}（预计 ${pick(p, "resumeAt")} 恢复）`,
+  },
 };
 
 /** 去重锚的 reference_type。与 opera 人工发布（reference 两列为空）天然分开。 */
@@ -214,6 +294,14 @@ export function mirrorDedupeKey(
  *   · 引用是租户 → /tenants/{tenant_no}
  *   · 其余 null（订阅到期 / 暂停 / 邀请 / 公告没有对应的详情页）
  * 只给可视码，绝不把 uuid 放进地址栏。
+ *
+ * **加油包（引用类型 addon）故意落在 null 这一档**：admin 只有 `/addon-orders` 列表页，
+ * 没有按加油包单号的详情页，判据是「有详情页才给链接」。
+ *
+ * 它的单号参数与订单一样叫 `orderNo`（全仓一套词汇，调用方按直觉就是这么传的），所以
+ * 第一条必须**按引用类型**把 addon 排除掉：`metering.addon_purchases.order_no` 在
+ * `billing.orders` 里查不到，`/orders/{加油包单号}` 是一条点开 404 的死链。把这道防线
+ * 放在参数名上是只长在一条分支的守卫——下一个人照直觉传 `orderNo` 就又开了门。
  */
 export function mirrorLink(
   referenceType: NotificationReferenceType,
@@ -221,7 +309,9 @@ export function mirrorLink(
   tenantNo: string | null,
 ): string | null {
   const orderNo = order(params);
-  if (orderNo) return `/orders/${encodeURIComponent(orderNo)}`;
+  if (orderNo && referenceType !== "addon") {
+    return `/orders/${encodeURIComponent(orderNo)}`;
+  }
   if (referenceType === "tenant" && tenantNo) {
     return `/tenants/${encodeURIComponent(tenantNo)}`;
   }

@@ -3,8 +3,20 @@ import type { Pool } from "pg";
 import {
   NOTIFICATION_CHANNELS,
   NOTIFICATION_TOPICS,
+  NOTIFICATION_TOPICS_PLANNED,
   NotificationPreferencesService,
 } from "./notification-preferences.service";
+/**
+ * 跨包相对导入（services → services，dep-cruiser 允许同层）。
+ * 不用 `@vxture/service-notification`：**没有**这个路径别名，而 templates.ts 自身零
+ * import，按路径只拉它一个文件，类型与运行时都成立。这是唯一能同时看到「派发侧哪些
+ * 主题真有模板」与「偏好中心还把哪些标成开发中」的地方——这两半此前全仓无人对账。
+ */
+import {
+  NOTIFICATION_TEMPLATES,
+  topicOf,
+  type NotificationTemplateCode,
+} from "../../../../notification/dispatch/src/templates";
 
 /**
  * 规整逻辑(normalize)的守卫。它是这条链路上唯一有安全内容的地方:
@@ -41,6 +53,8 @@ describe("通知偏好规整", () => {
       // 2026-09-09 从四个变六个：订单最后怎么样了、租户升组织，错过同样会误判自己
       // 的订单或权限状态。这张名单**手写、不引服务端的表**：引过来就成了「拿被测的
       // 那份去证明它自己」，改错了两边一起错，测不出来。
+      // 2026-09-28 批 5 再加两个：认证结果（驳回了不知道，企业认证一直卡着，订阅与开票
+      // 跟着卡）、额度用尽（花钱买的加油包用完了不知道，业务在没有余量的情况下空跑）。
       const transactional = (
         [
           "subscription_expiry",
@@ -49,6 +63,8 @@ describe("通知偏好规整", () => {
           "refund_progress",
           "order_status",
           "tenant_change",
+          "verification_result",
+          "quota_alert",
         ] as readonly string[]
       ).includes(topic);
       expect(prefs[topic].email).toBe(transactional);
@@ -126,5 +142,87 @@ describe("通知偏好规整", () => {
     await expect(service.allows("u-1", "payment_due", "sms")).resolves.toBe(
       false,
     );
+  });
+});
+
+/**
+ * 「有模板却还标着开发中」这道守卫（2026-09-28 批 5 补）。
+ *
+ * 三处是**手工同步**的：本服务的 PLANNED 集合、console NotificationsPage 那份手写清单的
+ * `planned` 标、两本词条。漏掉后两处的症状是界面说假话；漏掉这一处（把一个已有模板的主题
+ * 留在 PLANNED 里）的症状更糟——页面据此**禁用三个渠道开关**，于是客户收得到一封关不掉
+ * 的信。本文件自己的表头写着「给一个按下去不起作用的开关比不给更糟」，这条守卫就是那句话
+ * 的机器版。
+ *
+ * 判据**不是**「有模板就不许 planned」：那条会当场红在一条 owner 明文裁定上——
+ * `member_invitation` 故意留在 PLANNED 里，尽管 `tenant.invitation` 已经在发，理由是那条
+ * 消息是 `mandatory` 的（站内这条**就是**邀请本身）。而 `mandatory` 是 dispatcher 每次调用
+ * 传的参数、不是模板属性，静态看不见。所以判据换成能真正判定的那一半：
+ *
+ *   **凡是 PLANNED 里还有模板落上去的主题，必须在下面这张带理由的例外表里出现。**
+ *
+ * 抓的是沉默，不是抓某个方向：下一轮谁接了模板忘了动开关，这里要求他写下理由。
+ *
+ * 看不见什么：console 那份 `planned` 标与两本词条（在门户包里，另一个测试运行器）。
+ * 这条守卫绿了只说明**后端**这一半是真的。
+ */
+const PLANNED_WITH_TEMPLATE_EXCEPTIONS: Record<string, string> = {
+  member_invitation:
+    "owner 2026-09-09：tenant.invitation 是 mandatory 的——站内这条消息就是邀请本身，" +
+    "关掉它邀请人会收到「已送达」而对方那边什么也没有。等 accepted / declined / revoked " +
+    "三条可选周知接上，再把它挪出 PLANNED。",
+};
+
+describe("主题清单与派发侧模板对账", () => {
+  const codes = Object.keys(
+    NOTIFICATION_TEMPLATES,
+  ) as NotificationTemplateCode[];
+  const topicsWithTemplates = new Set<string>(
+    codes.map((code) => topicOf(code)),
+  );
+
+  it("读到了派发侧的模板表（读不到要红，不许当成通过）", () => {
+    expect(codes.length).toBeGreaterThan(20);
+    expect(topicsWithTemplates.size).toBeGreaterThan(5);
+  });
+
+  it("派发侧每个主题都在偏好清单里（否则那类通知客户根本没有开关）", () => {
+    for (const topic of topicsWithTemplates) {
+      expect([...NOTIFICATION_TOPICS] as string[]).toContain(topic);
+    }
+  });
+
+  it("PLANNED 里还有模板的主题，必须在例外表里写下理由", () => {
+    const plannedWithTemplate = ([...NOTIFICATION_TOPICS_PLANNED] as string[])
+      .filter((topic) => topicsWithTemplates.has(topic))
+      .sort();
+    expect(plannedWithTemplate).toEqual(
+      Object.keys(PLANNED_WITH_TEMPLATE_EXCEPTIONS).sort(),
+    );
+  });
+
+  it("例外表不给不存在的债发许可：每一条都必须仍然是「planned 且有模板」", () => {
+    for (const [topic, reason] of Object.entries(
+      PLANNED_WITH_TEMPLATE_EXCEPTIONS,
+    )) {
+      expect([...NOTIFICATION_TOPICS] as string[]).toContain(topic);
+      expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).toContain(topic);
+      expect(topicsWithTemplates.has(topic)).toBe(true);
+      expect(reason.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("批 5 接上模板的两个主题已经不在「开发中」里", () => {
+    for (const topic of ["verification_result", "quota_alert"]) {
+      expect(topicsWithTemplates.has(topic)).toBe(true);
+      expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).not.toContain(topic);
+    }
+  });
+
+  it("仍标「开发中」且确实没有模板的三个：security / invoice_progress / ticket_activity", () => {
+    for (const topic of ["security", "invoice_progress", "ticket_activity"]) {
+      expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).toContain(topic);
+      expect(topicsWithTemplates.has(topic)).toBe(false);
+    }
   });
 });

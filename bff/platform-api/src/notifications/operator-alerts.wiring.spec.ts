@@ -119,7 +119,7 @@ const escalatedTodo = (over: Partial<OpsTodo> = {}): OpsTodo => ({
 });
 
 describe("composeEscalatedTodoNotice", () => {
-  it("critical、只投 admin、不过期，链接就是待办的处置页", () => {
+  it("有处置页的那一类：critical、只投 admin、不过期，链接就是待办的处置页", () => {
     const notice = composeEscalatedTodoNotice(escalatedTodo());
     expect(notice).toMatchObject({
       targetPlanes: ["admin"],
@@ -152,6 +152,26 @@ describe("composeEscalatedTodoNotice", () => {
       composeEscalatedTodoNotice(escalatedTodo({ escalationStep: 1 }))
         .referenceId,
     ).toBe(first.referenceId);
+  });
+
+  /**
+   * 平面跟着「这活在哪儿干」走（2026-09-28 批 5 修）。维护窗口超时的 href 为 null 正是
+   * 因为处置面在运维台；此前这一条写死 admin ⇒ 「窗口跑过了计划结束时间」这件事唯一的
+   * 信号投给了一个没人能结束它的平面。两个平面都投：客户还被锁在产品外面，运营台该看见。
+   * 链接仍然是 null——通告的 link 是平面内相对路径，给 opera 的路径在 admin 里点开 404。
+   */
+  it("没有处置页的那一类：投运维台 + 运营台两个平面", () => {
+    const notice = composeEscalatedTodoNotice(
+      escalatedTodo({
+        kind: "maintenance_overdue",
+        subject: { type: "maintenance", no: "数据库主从切换" },
+        tenant: null,
+        amount: null,
+        href: null,
+      }),
+    );
+    expect(notice.targetPlanes).toEqual(["opera", "admin"]);
+    expect(notice.link).toBeNull();
   });
 
   it("没有处置页的那一类：不给链接，正文说去运维台", () => {

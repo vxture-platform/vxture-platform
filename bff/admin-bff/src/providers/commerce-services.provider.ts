@@ -43,6 +43,16 @@ export const ADMIN_SUBSCRIPTION_SERVICE = "ADMIN_SUBSCRIPTION_SERVICE";
 export const ADMIN_ORDER_SERVICE = "ADMIN_ORDER_SERVICE";
 export const ADMIN_PROMOTION_SERVICE = "ADMIN_PROMOTION_SERVICE";
 export const ADMIN_ADDON_SERVICE = "ADMIN_ADDON_SERVICE";
+/**
+ * 客户通知分发器的公开令牌（批 5）。
+ *
+ * 此前 `customerNotifier()` 只是本文件私有的一个工厂，订阅 / 订单两个 provider
+ * 自己拿去 setter 注入。于是**不经服务层**的运营动作就没有落点可用——租户实名审核
+ * 整段写在 tenants.router 的裸 SQL 里，客户那边一句话都收不到。把它作为独立
+ * provider 暴露出来，路由用 `@Inject(ADMIN_CUSTOMER_NOTIFIER)` 显式取：
+ * esbuild 打包不留装饰器元数据，隐式类型注入会静默拿到 undefined、启动烟测照绿。
+ */
+export const ADMIN_CUSTOMER_NOTIFIER = "ADMIN_CUSTOMER_NOTIFIER";
 
 /**
  * 订单实体编排（product_330 P1-b2）：orders.router 的履约 / 作废 / 恢复走它。
@@ -68,6 +78,18 @@ function customerNotifier(
     logger: new Logger("CustomerNotifications"),
   });
 }
+
+/**
+ * 分发器 provider（批 5）：与订阅 / 订单那两处**同一个工厂**，只是这一份有名字，
+ * 路由可以注入。用 RW 池——它要写 support.inbox_messages / notification_logs
+ * 与运营镜像那条通告。
+ */
+export const customerNotifierProvider: Provider = {
+  provide: ADMIN_CUSTOMER_NOTIFIER,
+  inject: [ADMIN_BFF_RW_POOL, MailService],
+  useFactory: (pool: Pool, mail: MailService): NotificationDispatcher =>
+    customerNotifier(pool, mail),
+};
 
 export const orderServiceProvider: Provider = {
   provide: ADMIN_ORDER_SERVICE,
@@ -95,9 +117,15 @@ export const orderServiceProvider: Provider = {
  */
 export const addonServiceProvider: Provider = {
   provide: ADMIN_ADDON_SERVICE,
-  inject: [ADMIN_BFF_RW_POOL],
-  useFactory: (pool: Pool): AddonService =>
-    new AddonService(new PgAddonRepository(pool)),
+  inject: [ADMIN_BFF_RW_POOL, MailService],
+  useFactory: (pool: Pool, mail: MailService): AddonService => {
+    const addons = new AddonService(new PgAddonRepository(pool));
+    /* 批 5：运营确认线下付款 → 加油包激活。此前这里一个通知器都不接，于是核销成功
+       客户一句话都收不到——买到手的东西什么时候能用只能自己去页面上翻。与订单侧
+       （orderServiceProvider）同一条装配纪律，同一个工厂。 */
+    addons.setCustomerNotifier(customerNotifier(pool, mail));
+    return addons;
+  },
 };
 
 /**

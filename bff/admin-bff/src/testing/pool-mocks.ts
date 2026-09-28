@@ -18,6 +18,7 @@
 import { vi } from "vitest";
 import type { Pool, PoolClient } from "pg";
 import type { Request } from "express";
+import type { NotificationDispatcher } from "@vxture/service-notification";
 import type { RequestContext } from "../types/console.types";
 
 export const OPERATOR_ID = "11111111-1111-4111-8111-111111111111";
@@ -32,6 +33,28 @@ export function makeReq(capabilities: string[]): Request & RequestContext {
     headers: {},
     socket: { remoteAddress: "127.0.0.1" },
   } as unknown as Request & RequestContext;
+}
+
+/**
+ * 客户通知分发器的替身：记下每一次 `notify`，本身什么都不做。
+ *
+ * **只有这一个形状，没有「一调用就抛」的那一种。** 路由里的 emit 是 best-effort
+ * （按设计吞掉异常），所以一个会抛的替身根本传不出信号——用它写「这条路径不该发」
+ * 会变成一条永远绿的断言。要断言「不该发」就断言 `notify` 没被调用过。
+ */
+export function notifierSpy(): {
+  notifier: NotificationDispatcher;
+  notify: ReturnType<typeof vi.fn>;
+} {
+  const notify = vi.fn(async () => ({
+    inboxCreated: 1,
+    emailsSent: 0,
+    emailsFailed: 0,
+    smsSent: 0,
+    smsFailed: 0,
+    skipped: 0,
+  }));
+  return { notifier: { notify } as unknown as NotificationDispatcher, notify };
 }
 
 /** A pool whose every use throws — proves a guard fired before DB access. */

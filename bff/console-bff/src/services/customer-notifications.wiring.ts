@@ -18,6 +18,7 @@ import {
 } from "@vxture/service-notification";
 import { SmsService } from "@vxture/service-sms";
 import {
+  AddonService,
   COMMERCE_PG_POOL,
   OrderService,
   SubscriptionService,
@@ -34,6 +35,7 @@ export const customerNotificationsProvider: Provider = {
     NotificationPreferencesService,
     OrderService,
     SubscriptionService,
+    AddonService,
   ],
   useFactory: (
     pool: Pool,
@@ -42,6 +44,7 @@ export const customerNotificationsProvider: Provider = {
     prefs: NotificationPreferencesService,
     orders: OrderService,
     subscriptions: SubscriptionService,
+    addons: AddonService,
   ): NotificationDispatcher => {
     const dispatcher = new NotificationDispatcher(pool, {
       mail,
@@ -53,6 +56,15 @@ export const customerNotificationsProvider: Provider = {
     });
     orders.setCustomerNotifier(dispatcher);
     subscriptions.setCustomerNotifier(dispatcher);
+    /*
+     * 加油包（2026-09-28 批 5）：console 侧**今天一条都发不出来**——这个进程上的
+     * AddonService 只跑下单 / 申报 / 取消，四条通知的触发点（核销、巡检）都在别的进程。
+     * 仍然挂上，理由与上面两个一样：装配处是「这个进程的 service 会不会发通知」的唯一
+     * 开关，漏挂的后果是将来某条 console 自助写路径（自助退订加油包之类）接上 emit 时
+     * **静默不发**，而编译器与守卫都不会有任何意见（本仓最常见的缺陷是「做了没接」）。
+     * 代价是一行、零运行时行为；不挂的代价是一次查不出来的沉默。
+     */
+    addons.setCustomerNotifier(dispatcher);
     return dispatcher;
   },
 };

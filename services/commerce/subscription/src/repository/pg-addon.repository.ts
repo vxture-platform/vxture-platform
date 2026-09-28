@@ -3,13 +3,19 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
 import type {
+  AddonNotifyDisplay,
   AddonPackRecord,
+  AddonPoolCandidate,
   AddonPurchaseRecord,
   CreateAddonOrderInput,
   DeclareAddonPaymentInput,
 } from "../types/addon.types";
 
 /**
+ * 2026-09-28 批 5 加的两个读：`getNotifyDisplay`（开通通知的展示行）与
+ * `findLifecycleCandidates`（即将到期 / 已用尽 / 已过期三档的候选）。判据不在这里，
+ * 见 service/addon-lifecycle.ts。
+ *
  * Addon pack purchase flow (加油包自助购买闭环, owner 2026-08-20):
  *   place order  → metering.addon_purchases (pending_payment, catalog SNAPSHOT)
  *                  + billing.invoices (bill_type='one_off') + invoice_items
@@ -516,6 +522,79 @@ export class PgAddonRepository {
     return swept;
   }
 
+  /**
+   * 通知展示（2026-09-28 批 5）：一条加油包单 + 它授予的池 + 指标中文名，一个查询取齐。
+   *
+   * 为什么不复用 `getById`：`AddonPurchaseRecord` 是接口回给浏览器的那张单，而这里要的
+   * 是「买它的人是谁」（裸值 actor）与「池什么时候到期」。把前者加进那张单等于顺路把它
+   * 发给前端；后者根本不在那张单上（`confirmPayment` 重新读回来的记录没有到期日）。
+   */
+  async getNotifyDisplay(
+    purchaseId: string,
+  ): Promise<AddonNotifyDisplay | null> {
+    const res = await this.pool.query<NotifyDisplayRow>(
+      `select ap.order_no, ap.tenant_id, ap.pack_name,
+              ap.price::text as price, ap.currency,
+              ap.created_by_type, ap.created_by_id,
+              qp.expires_at
+         from metering.addon_purchases ap
+         left join metering.quota_pools qp on qp.id = ap.quota_pool_id
+        where ap.id = $1`,
+      [purchaseId],
+    );
+    const r = res.rows[0];
+    return r ? toAddonNotifyDisplay(r) : null;
+  }
+
+  /**
+   * 生命周期巡检的候选（2026-09-28 批 5）：已开通的加油包 × 它授予的那个池。
+   *
+   * 这一段 SQL 只把范围收窄到**有界**，不做裁定——哪一行算哪一档由
+   * `classifyAddonPool`（service/addon-lifecycle.ts）一处说了算。所以下面的
+   * 「水位到顶」那一条是**取数条件**而不是判据：它故意不带 reset_period 与 gauge 两个
+   * 语义约束（那两条在裁定那一侧，带两遍就会有两份各错一处的判据）。裸比水位在这里安全
+   * 的理由只有一个：多取几行没有后果，取漏了才有。
+   *
+   * 三个窗口都从库里的 now() 算，参数全部绑定：
+   *   即将到期 = (now, now + leadDays]；已过期 = [now - backlogDays, now]；
+   *   水位到顶 = 池上最后一次写入落在 [now - backlogDays, now]（存量闸门，首趟不播历史）。
+   * 一次 join 取齐通知要用的全部标识（可视码、包名、指标、量、买的人），不做逐行二次查询。
+   */
+  async findLifecycleCandidates(params: {
+    leadDays: number;
+    backlogDays: number;
+    limit?: number;
+  }): Promise<AddonPoolCandidate[]> {
+    const res = await this.pool.query<LifecycleCandidateRow>(
+      `select ap.order_no, ap.tenant_id, ap.pack_name,
+              ap.price::text as price, ap.currency,
+              ap.created_by_type, ap.created_by_id,
+              qp.expires_at, qp.updated_at as pool_updated_at,
+              qp.reset_period,
+              qp.quota_limit::text as quota_limit,
+              qp.quota_used::text as quota_used,
+              plm.kind as metric_kind
+         from metering.addon_purchases ap
+         join metering.quota_pools qp on qp.id = ap.quota_pool_id
+         left join product.platform_metrics plm on plm.metric_key = qp.metric_key
+        where ap.status = 'completed'
+          and qp.status = 'active'
+          and qp.expires_at is not null
+          and (
+                (qp.expires_at > now()
+                 and qp.expires_at <= now() + make_interval(days => $1))
+             or (qp.expires_at <= now()
+                 and qp.expires_at >= now() - make_interval(days => $2))
+             or (qp.quota_used >= qp.quota_limit
+                 and qp.updated_at >= now() - make_interval(days => $2))
+          )
+        order by qp.expires_at asc
+        limit $3`,
+      [params.leadDays, params.backlogDays, params.limit ?? 200],
+    );
+    return res.rows.map(toLifecycleCandidate);
+  }
+
   // ── shared tx pieces ──────────────────────────────────────────────────────
 
   private async lockPurchase(
@@ -578,6 +657,53 @@ interface PurchaseLockRow {
   status: string;
   invoice_id: string | null;
   order_no: string;
+}
+
+/** 通知展示行（批 5）：单 + 授予池。 */
+interface NotifyDisplayRow {
+  order_no: string;
+  tenant_id: string;
+  pack_name: string;
+  price: string;
+  currency: string;
+  expires_at: Date | null;
+  created_by_type: string | null;
+  created_by_id: string | null;
+}
+
+/** 生命周期候选行（批 5）= 通知展示行 + 池的水位与周期事实。 */
+interface LifecycleCandidateRow extends NotifyDisplayRow {
+  expires_at: Date;
+  pool_updated_at: Date;
+  reset_period: string;
+  quota_limit: string;
+  quota_used: string;
+  metric_kind: string | null;
+}
+
+function toAddonNotifyDisplay(r: NotifyDisplayRow): AddonNotifyDisplay {
+  return {
+    orderNo: r.order_no,
+    tenantId: r.tenant_id,
+    packName: r.pack_name,
+    price: r.price,
+    currency: r.currency,
+    expiresAt: r.expires_at,
+    createdByType: r.created_by_type,
+    createdById: r.created_by_id,
+  };
+}
+
+function toLifecycleCandidate(r: LifecycleCandidateRow): AddonPoolCandidate {
+  return {
+    ...toAddonNotifyDisplay(r),
+    expiresAt: r.expires_at,
+    metricKind: r.metric_kind,
+    resetPeriod: r.reset_period,
+    quotaLimit: r.quota_limit,
+    quotaUsed: r.quota_used,
+    poolUpdatedAt: r.pool_updated_at,
+  };
 }
 
 interface PurchaseRow {
