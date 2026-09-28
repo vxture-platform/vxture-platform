@@ -376,7 +376,7 @@ describe("定向送达的三个开关", () => {
     params: {
       tenantName: "Acme",
       inviterName: "Ann",
-      roleName: "成员",
+      roleKey: "member",
       expiresAt: "2026-09-12",
     },
     link: "/inbox",

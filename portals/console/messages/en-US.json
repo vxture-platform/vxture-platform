@@ -1062,6 +1062,9 @@
         "member_invitation": {
           "title": "Member invitations"
         },
+        "invitation_activity": {
+          "title": "Invitation activity"
+        },
         "quota_alert": {
           "title": "Quota alerts"
         },

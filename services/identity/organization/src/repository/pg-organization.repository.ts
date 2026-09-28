@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, Logger } from "@nestjs/common";
 import { createHash, randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { ORG_PG_POOL } from "../tokens";
@@ -7,6 +7,8 @@ import { ALLOW_MULTI_WORKSPACE } from "../types/organization.types";
 import type {
   AcceptInvitationResult,
   CloseTenantResult,
+  InvitationNotifyFacts,
+  RevokeInvitationOutcome,
   CreateInvitationInput,
   CreateWorkspaceInput,
   DeclineInvitationResult,
@@ -146,6 +148,67 @@ const DEFAULT_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * invitations), with governance RBAC via access.roles/permissions and member
  * joins to account.users. Mirrors the @vxture/service-account pg-repository convention.
  */
+/**
+ * 邀请终态通知要用到的那几列（2026-09-29）。
+ *
+ * 三条真实转移与巡检**共用这一份**取数片段：同一份事实在四处各写一遍，迟早有一处
+ * 少一列或换一个回落，而少一列不报错——只是让客户读到一句带洞的话。
+ *
+ * 只连主键 / 唯一键上的 join（租户、角色、邀请人本人及其 profile），刻意**不在这里
+ * 回查受邀人**：按邮箱回查要 `lower(email)` 全表扫（账号登录那条路径同形），
+ * 而这几条语句里有两条是**持着行锁**的事务。扫表的活挪到提交之后、且只在真的需要
+ * 受邀人账号时才做（撤销那一条）——见 resolveInvitee。
+ */
+const INVITATION_FACTS_SELECT = `i.id as invitation_id, i.tenant_id,
+              t.tenant_no::text as tenant_no, t.name as tenant_name,
+              rc.role_code, i.expires_at, i.target,
+              iu.id as inviter_user_id,
+              coalesce(nullif(ip.display_name, ''), iu.account) as inviter_name`;
+
+const INVITATION_FACTS_JOINS = `left join tenancy.tenants t on t.id = i.tenant_id
+         left join access.roles rc on rc.id = i.role_id
+         left join account.users iu on iu.id = i.created_by and iu.deleted_at is null
+         left join account.user_profiles ip on ip.user_id = iu.id`;
+
+interface InvitationFactsRow {
+  invitation_id: string;
+  tenant_id: string | null;
+  tenant_no: string | null;
+  tenant_name: string | null;
+  role_code: string | null;
+  expires_at: Date;
+  target: string;
+  inviter_user_id: string | null;
+  inviter_name: string | null;
+}
+
+/**
+ * 行 → 通知事实。受邀人那两项默认空缺：
+ *   · 显示名回落到 `target`（邀请人当初填的那一行,他在台账里看到的就是它）；
+ *   · 账号 id 只有撤销那一条真的需要，由调用方补（resolveInvitee）。
+ */
+function toNotifyFacts(
+  row: InvitationFactsRow,
+  invitee: { inviteeUserId: string | null; inviteeName: string | null } = {
+    inviteeUserId: null,
+    inviteeName: null,
+  },
+): InvitationNotifyFacts {
+  return {
+    invitationId: row.invitation_id,
+    tenantId: row.tenant_id,
+    tenantNo: row.tenant_no,
+    tenantName: row.tenant_name,
+    roleCode: row.role_code,
+    expiresAt: row.expires_at,
+    target: row.target,
+    inviterUserId: row.inviter_user_id,
+    inviterName: row.inviter_name,
+    inviteeUserId: invitee.inviteeUserId,
+    inviteeName: invitee.inviteeName,
+  };
+}
+
 /** 邀请 ID 的形状门。见 acceptInvitation 里的说明。 */
 const ACCEPT_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -284,6 +347,14 @@ export async function assertTenantWorkspaceHeadroom(
 
 @Injectable()
 export class PgOrganizationRepository implements OrganizationReadRepository {
+  /**
+   * 只服务**提交之后**那一小段（撤销邀请的收件人回查）。字段初始化而不是构造器
+   * 参数：本仓的 Nest × esbuild 纪律要求构造器参数一律显式 @Inject，而 Logger
+   * 不是注入项——写进构造器会让 explicit-inject 那条守卫红，或者更糟：装配处
+   * 拿不到它而静默注入 undefined。
+   */
+  private readonly logger = new Logger(PgOrganizationRepository.name);
+
   constructor(@Inject(ORG_PG_POOL) private readonly pool: Pool) {}
 
   createPersonalOrg(
@@ -554,6 +625,14 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
           where id = $1`,
         [tenantId],
       );
+      /* 批量撤销：**有意不发通知**（2026-09-29 的决定，不是漏的）。三条理由，
+         每一条单独都够：
+           ① 词不对。`tenant.invitation_revoked` 说的是「邀请人撤回了」，这里发生的
+              是租户注销——借那条模板会把「这家关门了」记成「我撤回了」。
+           ② 收件人多半不存在。走到这一步的租户「除所有者外无活跃成员」，未接受的
+              邀请大半是发给还没注册的邮箱，没有收件箱可投。
+           ③ 链接会指向一个已经软删的租户。
+         单条撤销那条路径照发（revokeInvitation），所以偏好开关不是个空开关。 */
       await client.query(
         `update tenancy.invitations
             set status = 'revoked', updated_at = now()
@@ -2227,17 +2306,24 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
-      const found = await client.query<{
-        id: string;
-        status: string;
-        expires_at: Date;
-        target_type: string;
-        target: string;
-      }>(
-        `select id, status, expires_at, target_type, target
-           from tenancy.invitations
-          where id = $1
-            for update`,
+      /* 2026-09-29 加宽：原来这条只取判定要的五列，**连租户都没取**——
+         而拒绝要通知邀请人，通知要租户可视码(去重键)与租户名(正文)。
+         加的是 tenant_id / tenant_no / tenant_name / role_code / created_by
+         与邀请人显示名(INVITATION_FACTS_SELECT)。`for update of i` 而不是裸
+         `for update`：有了外连接，裸写法会被 PG 拒（不能锁外连接的可空侧）。 */
+      const found = await client.query<
+        InvitationFactsRow & {
+          id: string;
+          status: string;
+          target_type: string;
+        }
+      >(
+        `select i.id, i.status, i.target_type,
+                ${INVITATION_FACTS_SELECT}
+           from tenancy.invitations i
+           ${INVITATION_FACTS_JOINS}
+          where i.id = $1
+            for update of i`,
         [invitationId],
       );
       const row = found.rows[0];
@@ -2265,7 +2351,9 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         [row.id],
       );
       await client.query("commit");
-      return { ok: true };
+      /* 通知事实随返回值上交，**发通知在服务层、在提交之后**：在事务里发，
+         一次投递失败就会把「对方不来」这件事回滚掉。 */
+      return { ok: true, notify: toNotifyFacts(row) };
     } catch (error) {
       await client.query("rollback");
       throw error;
@@ -2274,7 +2362,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     }
   }
 
-  // ── 邀请台账(P1;expired 读侧派生:pending ∧ expires_at 已过)────────────
+  // ── 邀请台账(P1;expired 由巡检写入,未扫到的行仍按 expires_at 读侧派生)──
   async listInvitations(
     tenantId: string,
     limit = 100,
@@ -2319,19 +2407,121 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     }));
   }
 
+  /**
+   * 撤销一条 pending 邀请，并带回通知受邀人要用的那几列。
+   *
+   * 用 `update … returning` 外面套一层 select，而不是「先查后改」：后者两步之间
+   * 那条邀请可能刚被接受，于是通知说的和库里发生的不是同一件事。这一条语句里
+   * `status = 'pending'` 本身就是 CAS——没改到行就没有 returning 行，也就不发。
+   *
+   * ── 与接受 / 拒绝的差别（2026-09-29 逐条查过）──
+   * 那两条把通知要的**全部**事实都取在自己事务里的 locked SELECT 上（受邀人就是
+   * 入参，按主键 `au.id = $2::uuid` 连一次），`commit` 之后不再查任何东西，所以
+   * 它们没有「提交之后还会失败」的那一段。三条转移里只有撤销要在提交后回查受邀人
+   * 账号（收件人是受邀人，而那个人未必有账号），于是只有这一条需要下面那道兜底。
+   */
   async revokeInvitation(
     invitationId: string,
     tenantId: string,
-  ): Promise<boolean> {
-    const res = await this.pool.query(
-      `update tenancy.invitations
-          set status = 'revoked', updated_at = now()
-        where id = $1 and tenant_id = $2 and status = 'pending'`,
+  ): Promise<RevokeInvitationOutcome> {
+    const res = await this.pool.query<
+      InvitationFactsRow & { target_type: string }
+    >(
+      `with revoked as (
+         update tenancy.invitations
+            set status = 'revoked', updated_at = now()
+          where id = $1 and tenant_id = $2 and status = 'pending'
+         returning id, tenant_id, target_type, target, role_id, expires_at, created_by
+       )
+       select i.target_type,
+              ${INVITATION_FACTS_SELECT}
+         from revoked i
+         ${INVITATION_FACTS_JOINS}`,
       [invitationId, tenantId],
     );
-    return (res.rowCount ?? 0) > 0;
+    const row = res.rows[0];
+    if (!row) return { ok: false };
+    /*
+     * ── 这一行往下是 best-effort 区（2026-09-29 补的兜底）──
+     * 上面那条语句走 `this.pool.query`，**没有外层事务**：它一返回，撤销就已经提交、
+     * 不可撤回了。所以从这里往下的任何失败都不许冒到调用方——冒上去会把一次
+     * **成功的撤销**报成失败：页面上那一行仍显示 pending，客户再点一次拿到 404
+     * （CAS 已经不成立了），于是「撤销坏了」而库里其实早就撤销了。这条兜底既不在
+     * 服务层（那里只包了发通知那一段），也不在 BFF 的聚合器里，所以必须在这里。
+     *
+     * 收件人是受邀人，所以这一条**必须**回查账号（accept 那条不用：受邀人就是入参）。
+     * 回查是一次按 `lower(email)` 的扫表，可能超时、可能撞上连接池耗尽——那时的处置
+     * 是「不带收件人地返回成功」：服务层拿不到 inviteeUserId 就落到
+     * `no_recipient_account` 那一档，记一行日志、不发。这里另记一行 warn，因为
+     * 「查失败」与「这个人还没注册」在服务层那一行日志里长得一样，而两者要做的事
+     * 不同（前者是故障，后者是常态）。
+     *
+     * 兜底刻意**不写进 resolveInvitee 内部**：它本身诚实地会抛，将来若有人在提交
+     * 之前调它（那时失败应当回滚），不会被这里的宽容静默吃掉。边界属于这条路径，
+     * 不属于那个取数函数。
+     *
+     * 日志里放**租户可视码 + 通道**而不是邀请 id：那一列是 uuid，而日志也是人在读
+     * （铁律：可视码之外不出 id）。这两项足够把那条邀请找出来，也不会把收件邮箱
+     * 抄进日志。
+     */
+    let invitee: {
+      inviteeUserId: string | null;
+      inviteeName: string | null;
+    } = { inviteeUserId: null, inviteeName: null };
+    try {
+      invitee = await this.resolveInvitee(row.target_type, row.target);
+    } catch (error) {
+      this.logger.warn(
+        `revokeInvitation: invitee lookup failed after commit ` +
+          `(tenant ${row.tenant_no}, ${row.target_type}) — the revoke stands, ` +
+          `nobody is notified: ${String(error)}`,
+      );
+    }
+    return { ok: true, notify: toNotifyFacts(row, invitee) };
   }
 
+  /**
+   * 收件目标 → 平台账号（撤销通知的收件人）。
+   *
+   * 两条通道各自比对：`user_no` 比可视码，`email` 大小写不敏感（与账号登录那条
+   * 路径同一形状）。查不到 = 这个人还没有平台账号，**不是异常**：按邮箱邀请一个
+   * 陌生人本来就是常态，那时站内消息没有收件人可投，由服务层记一行日志、不发。
+   *
+   * 只滤 `deleted_at`：`status='deleting'` 的账号在 30 天保留期内仍然在用、仍然
+   * 读收件箱，按 active 过滤会把它们悄悄藏掉。
+   */
+  private async resolveInvitee(
+    targetType: string,
+    target: string,
+  ): Promise<{ inviteeUserId: string | null; inviteeName: string | null }> {
+    const raw = target.trim();
+    const res = await this.pool.query<{ id: string; name: string | null }>(
+      `select u.id, coalesce(nullif(p.display_name, ''), u.account) as name
+         from account.users u
+         left join account.user_profiles p on p.user_id = u.id
+        where u.deleted_at is null
+          and (
+            ($2 = 'user_no' and u.user_no::text = $1)
+            or ($2 = 'email' and lower(coalesce(u.email, '')) = lower($1))
+          )
+        limit 1`,
+      [raw, targetType],
+    );
+    const row = res.rows[0];
+    return row
+      ? { inviteeUserId: row.id, inviteeName: row.name }
+      : { inviteeUserId: null, inviteeName: null };
+  }
+
+  /**
+   * 账号注销时撤销本人发出的全部 pending 邀请。
+   *
+   * **有意不发通知**（2026-09-29 的决定，不是漏的）：单条撤销发的是
+   * `tenant.invitation_revoked`，那句话说的是「邀请人撤回了」——而这里的成因是
+   * 邀请人的账号被注销，没有人撤回任何东西。借那条模板去说这件事，等于把
+   * 「他走了」记成「我撤回了」，与 tenancy.invitations 的 status CHECK 注释所拦的
+   * 是同一种偷换。真要告诉受邀人，需要它自己的一条模板（owner 未提，不自造）。
+   */
   async revokeInvitationsCreatedBy(userId: string): Promise<number> {
     const res = await this.pool.query(
       `update tenancy.invitations
@@ -2340,6 +2530,41 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       [userId],
     );
     return res.rowCount ?? 0;
+  }
+
+  /**
+   * 到点未被接受的邀请（巡检候选）。最旧的在前——理由见接口那侧的注释：
+   * 扫到即改成 expired，改完离开候选集，所以从最旧的啃过去能单调收敛。
+   *
+   * 不设年龄下限（理由见接口注释：库里的 pending 必须能被扫完，否则「还没轮到」
+   * 与「故意不要」分不开）。一趟的有界性靠 `limit`，饱和由调用方报。
+   * 发不发通知的**存量闸门**在服务层，两处各写一遍判据必有一处先漂。
+   */
+  async findExpiredInvitationCandidates(params: {
+    limit: number;
+  }): Promise<InvitationNotifyFacts[]> {
+    const res = await this.pool.query<InvitationFactsRow>(
+      `select ${INVITATION_FACTS_SELECT}
+         from tenancy.invitations i
+         ${INVITATION_FACTS_JOINS}
+        where i.status = 'pending'
+          and i.expires_at <= now()
+        order by i.expires_at asc
+        limit $1`,
+      [params.limit],
+    );
+    return res.rows.map((row) => toNotifyFacts(row));
+  }
+
+  /** CAS 改 expired：只动仍是 pending 的那一行，输了竞态回 false（一条都不发）。 */
+  async markInvitationExpired(invitationId: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `update tenancy.invitations
+          set status = 'expired', updated_at = now()
+        where id = $1 and status = 'pending'`,
+      [invitationId],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   async softDeletePersonalOrg(ownerUserId: string): Promise<boolean> {
@@ -2352,6 +2577,22 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return (res.rowCount ?? 0) > 0;
   }
 
+  /**
+   * 重发 = 换 token + 顺延有效期。
+   *
+   * 取档 `status in ('pending','expired')`，**且把 expired 的行救回 pending**
+   * （2026-09-29）。
+   *
+   * 为什么要动这一句：邀请台账**有意允许重发已过期的邀请**
+   * （portals/console 的 InvitationsPage：`canResend = pending | expired`）。
+   * 在 `expired` 还没有写入方的年代，那件事之所以成立纯属巧合——过期只是读侧派生，
+   * 库里那一行仍然是 `pending`，所以这条语句照样改得到它。到期巡检一旦真的把状态写下去，
+   * 同一个按钮就会开始静默失败（返回 null → 404），而页面上它还在。
+   * 一个状态写入不该顺手拿掉一个已有的入口，所以把「能重发的档」写明成两个。
+   *
+   * `revoked` / `declined` / `accepted` 仍然重发不了：那三个是真正终结这条邀请的档，
+   * 已有用例钉着「撤销后不能重发」。
+   */
   async rotateInvitationToken(
     invitationId: string,
     tenantId: string,
@@ -2368,8 +2609,10 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
          update tenancy.invitations i
             set token_hash = $3,
                 expires_at = now() + ($4 || ' seconds')::interval,
+                status = 'pending',
                 updated_at = now()
-          where i.id = $1 and i.tenant_id = $2 and i.status = 'pending'
+          where i.id = $1 and i.tenant_id = $2
+            and i.status in ('pending', 'expired')
           returning i.expires_at, i.target_type, i.target, i.role_id
        )
        select r.expires_at, r.target_type, r.target, rr.role_code
@@ -2493,26 +2736,32 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       await client.query("begin");
       // 先锁行再判定:两个标签页同时点「接受」,后到的那个要看到 accepted 而不是
       // 各自都成功一次。拒绝矩阵在 invitation-rules.ts,与 mock 仓储共用。
-      const found = await client.query<{
-        id: string;
-        scope: string;
-        tenant_id: string | null;
-        workspace_id: string | null;
-        role_id: string;
-        role_scope: string;
-        status: string;
-        expires_at: Date;
-        target_type: string;
-        target: string;
-        tenant_name: string | null;
-      }>(
-        `select i.id, i.scope, i.tenant_id, i.workspace_id, i.role_id, i.role_scope,
-                i.status, i.expires_at, i.target_type, i.target, t.name as tenant_name
+      /* 2026-09-29 加宽：接受要通知邀请人，所以补上 tenant_no(去重键)、role_code、
+         created_by 与邀请人显示名（INVITATION_FACTS_SELECT，与拒绝 / 撤销 / 巡检
+         共用一份）。受邀人就是 $2 这个人，按主键连一次即可——不必走回查那条扫表路径。 */
+      const found = await client.query<
+        InvitationFactsRow & {
+          id: string;
+          scope: string;
+          workspace_id: string | null;
+          role_id: string;
+          role_scope: string;
+          status: string;
+          target_type: string;
+          acceptor_name: string | null;
+        }
+      >(
+        `select i.id, i.scope, i.workspace_id, i.role_id, i.role_scope,
+                i.status, i.target_type,
+                coalesce(nullif(ap.display_name, ''), au.account) as acceptor_name,
+                ${INVITATION_FACTS_SELECT}
            from tenancy.invitations i
-           left join tenancy.tenants t on t.id = i.tenant_id
+           ${INVITATION_FACTS_JOINS}
+           left join account.users au on au.id = $2::uuid
+           left join account.user_profiles ap on ap.user_id = au.id
           where ${byToken ? "i.token_hash" : "i.id"} = $1
             for update of i`,
-        [key],
+        [key, userId],
       );
       const row = found.rows[0];
       const rejection = row
@@ -2593,7 +2842,16 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         };
       }
       await client.query("commit");
-      return { ok: true, membership, tenantName: row.tenant_name };
+      /* 通知在服务层、在提交之后：邀请人收不到信不该让成员关系回滚。 */
+      return {
+        ok: true,
+        membership,
+        tenantName: row.tenant_name,
+        notify: toNotifyFacts(row, {
+          inviteeUserId: userId,
+          inviteeName: row.acceptor_name,
+        }),
+      };
     } catch (error) {
       await client.query("rollback");
       if (isUniqueViolation(error))

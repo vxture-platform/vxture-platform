@@ -30,6 +30,7 @@ import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
 import { AccountDeletionPurgeJob } from "./jobs/account-deletion-purge.job";
 import { AddonLifecycleJob } from "./jobs/addon-lifecycle.job";
 import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
+import { InvitationExpiryJob } from "./jobs/invitation-expiry.job";
 import { JobHealthAlertJob } from "./jobs/job-health-alert.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
 import { OpsTodoAlertJob } from "./jobs/ops-todo-alert.job";
@@ -99,6 +100,9 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // 2026-09-28 批 5：加油包生命周期客户通知（即将到期 / 已用尽 / 已过期）。
     // 三档都没有写入方可挂，只能巡检；去重靠客户收件箱的唯一键，每趟重扫同一批行。
     AddonLifecycleJob,
+    // 2026-09-29：入组邀请到期。`expired` 此前全库零写入方（只在读侧按 expires_at
+    // 派生），这一趟把状态写实并通知邀请人；存量闸门只闸通知，状态照扫。
+    InvitationExpiryJob,
     OrderPaymentExpiryJob,
     SubscriptionRenewalJob,
     // P2-h：公告推送（站内 + 按偏好邮件），publish_at 到点即播

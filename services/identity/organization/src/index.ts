@@ -19,6 +19,27 @@ export {
 } from "./repository";
 export { ORG_PG_POOL, ORGANIZATION_REPOSITORY } from "./tokens";
 
+/**
+ * 客户通知的最小契约（邀请四态）。装配处（console-bff / platform-api）用它给
+ * `OrganizationService.setCustomerNotifier` 传真实的 NotificationDispatcher；
+ * 结构兼容，不引 notification 包。
+ */
+export {
+  ORGANIZATION_NOTIFICATION_TEMPLATES,
+  type CustomerNotifier,
+  type CustomerNotifyInput,
+  type OrganizationNotificationTemplate,
+} from "./service/customer-notifier";
+export {
+  invitationDigest,
+  invitationNotice,
+  invitationReferenceId,
+  type InvitationNoticeGap,
+  type InvitationNoticeOutcome,
+  type InvitationNoticeState,
+  type InvitationTerminalState,
+} from "./service/invitation-notifications";
+
 export type {
   ConvertPersonalResult,
   CloseTenantResult,
@@ -52,6 +73,8 @@ export type {
   CreateWorkspaceInput,
   UpdateWorkspaceInput,
   InvitationLocator,
+  InvitationNotifyFacts,
+  RevokeInvitationOutcome,
   IncomingInvitation,
   DeclineInvitationResult,
   AcceptInvitationRejection,

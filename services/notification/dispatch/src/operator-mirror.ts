@@ -40,6 +40,7 @@ import type {
   CreateSystemNoticeResult,
   NoticePlane,
 } from "@vxture/service-notice";
+import { ROLE_PARAM, roleNameOf } from "./templates";
 import type {
   NotificationReferenceType,
   NotificationTemplateCode,
@@ -60,6 +61,18 @@ export interface OperatorMirrorEntry {
 function pick(params: TemplateParams, key: string): string {
   const v = params[key];
   return v === undefined || v === null ? "" : String(v);
+}
+
+/**
+ * 角色段。参数里放的是**角色码**（`access.roles.role_code`，发侧原样传，见 templates.ts 的
+ * roleNameOf），词由模板层按收件人语言给；运营这一面固定中文——本文件整张表的标题都是写死
+ * 的中文，运营平面不按语言渲染。
+ *
+ * 此前这里直接把码印出来，于是运营列表里读到「Acme 邀请了新成员（member）」——与客户那边
+ * 「以「member」身份加入」是同一个缺陷的两处现场。
+ */
+function role(params: TemplateParams): string {
+  return roleNameOf(params[ROLE_PARAM], "zh-CN");
 }
 
 function plan(params: TemplateParams): string {
@@ -134,8 +147,7 @@ export const OPERATOR_MIRROR: Readonly<
   },
   "tenant.invitation": {
     severity: "info",
-    title: (p) =>
-      `${pick(p, "tenantName")} 邀请了新成员（${pick(p, "roleName")}）`,
+    title: (p) => `${pick(p, "tenantName")} 邀请了新成员（${role(p)}）`,
   },
   /* 客户已申报、在等确认收款：拖着就是拖客户的钱。 */
   "order.payment_declared": {
@@ -265,6 +277,58 @@ export const OPERATOR_MIRROR: Readonly<
     severity: "info",
     title: (p) =>
       `产品升级维护，客户订阅已暂停 ${plan(p)}（预计 ${pick(p, "resumeAt")} 恢复）`,
+  },
+  /* ── 成员邀请四态（2026-09-29）：**四条全 info**。────────────────────────────
+     先问要不要镜像。邀请的收发是**租户自助**，运营在整条链上没有任何位置——发邀请、撤回、
+     接受、拒绝都由客户自己点，过期由巡检算出来。按理这四条一条都不必进运营平面。
+     但 `OPERATOR_MIRROR` 的类型是 `Record<NotificationTemplateCode, …>` 且分发器在第一个
+     收件人落库后无条件镜像：这个形状**没有「不镜像」这一档**，只有 info / warning。硬造
+     一档（比如 `skip: true`）要改分发器那条无条件路径，不在本次范围里，所以按现有形状走
+     info——而且已经有先例：`tenant.invitation`（邀请发出）本来就是 info 镜像的，这四条正是
+     它的另一半，只镜像「发出」不镜像「结果」反而是半截账。
+
+     为什么不是 warning：本文件对 warning 的成文含义是「在等运营动手」⇒ 不过期、留在列表里
+     直到有人处理。逐条问「哪个运营动作能让这条消失」：
+       · accepted —— 人已经进来了，没有下一步；
+       · declined —— 球在客户那边（要不要再邀请是他的事），运营不替他决定；
+       · revoked  —— 客户自己撤的，镜像是回执；
+       · expired  —— 来自**每趟重扫同一批行**的巡检，给成不过期的 warning 只会越堆越多，
+                     而且平台没有「处理过期邀请」这个动作。
+     给一条永远没人能「处理完」的 warning，正是 info / warning 这个分档要防的事。
+
+     链接：引用类型是 `invitation` ⇒ `mirrorLink` 落在 null 那一档。判据与订阅 / 公告相同
+     ——admin 侧没有按邀请的详情页，不给列表页链接。
+
+     去重锚（`{模板}:invitation:{引用 id}`）：引用 id 的形状是
+     `{租户可视码 10}:{邀请 id 的短摘要 12}:{终态}`，**过期那一档末尾再缀一个到期日**
+     （`:{YYYY-MM-DD}`），一律**不含邀请行的 uuid**（reference_id 被客户收件箱的读路径原样
+     投影给浏览器，见批 5 认证那段的同一条理由）。终态进锚是为了「每个状态各发一次」：同一条
+     邀请 accepted 与 expired 不会互相吞掉。
+     算术（列宽 varchar(128)）**分两档**——过期那一档长一截，此前这里只算了另一档：
+       三个终态（accepted / declined / revoked）：引用 id = 10 + 1 + 12 + 1 + 终态最长 8
+         = 32；镜像锚 = 最长模板码 `tenant.invitation_declined` 26 + 1 + `invitation` 10
+         + 1 + 32 = 70。
+       过期：重发会把过期行救回 pending 并顺延有效期，同一行能过期多次，所以发侧把到期日也
+         写进引用 id（`invitationReferenceId`）：10 + 1 + 12 + 1 + 7 + 1 + 10 = 42；
+         镜像锚 = `tenant.invitation_expired` 25 + 1 + 10 + 1 + 42 = 79。
+     最坏情况 **79，余 49** —— 仍然远在列宽之内（行为一直没有风险，错的只是这个数）。
+     摘要位宽由发侧定（@vxture/service-organization 的 invitationDigest，今天是 sha256 前
+     12 位）；用例的样本现在**从那个函数取**而不是手抄，所以位宽一改这里当场红。 */
+  "tenant.invitation_accepted": {
+    severity: "info",
+    title: (p) => `${pick(p, "tenantName")} 新成员已加入（${role(p)}）`,
+  },
+  "tenant.invitation_declined": {
+    severity: "info",
+    title: (p) => `${pick(p, "tenantName")} 的成员邀请被拒绝（${role(p)}）`,
+  },
+  "tenant.invitation_revoked": {
+    severity: "info",
+    title: (p) => `${pick(p, "tenantName")} 撤回了成员邀请（${role(p)}）`,
+  },
+  "tenant.invitation_expired": {
+    severity: "info",
+    title: (p) => `${pick(p, "tenantName")} 的成员邀请已过期（${role(p)}）`,
   },
 };
 

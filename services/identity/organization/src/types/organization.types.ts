@@ -427,9 +427,47 @@ export interface IncomingInvitation {
   createdAt: Date;
 }
 
+/**
+ * 一次邀请终态转移带出来的**通知事实**（2026-09-29）。
+ *
+ * 由仓储在**做转移的那一条语句里**一并取出（加宽后的 locked SELECT / update …
+ * returning），而不是提交后再查一遍：再查一遍既多一趟往返，又会读到别人后来改过的行，
+ * 「通知里说的事」和「刚刚提交的事」就可能不是同一件。
+ *
+ * 这个类型**不出本包**：服务层拿它拼通知，拼完就丢，绝不回给路由层。理由是
+ * `inviterUserId` / `inviteeUserId` 是 uuid，而接受 / 拒绝的返回值会被路由原样投影
+ * 给浏览器——把它挂在返回值上，等于给浏览器递 uuid（铁律：可视码之外不出 id）。
+ */
+export interface InvitationNotifyFacts {
+  /** 邀请行 id。只用来算不透明摘要（invitationDigest），不进任何 payload。 */
+  invitationId: string;
+  /** 邀请行的 tenant_id，可为 NULL（workspace 作用域的旧邀请）。 */
+  tenantId: string | null;
+  /** 租户可视码 tenants.tenant_no 的十进制串；去重键的第一段。 */
+  tenantNo: string | null;
+  tenantName: string | null;
+  roleCode: string | null;
+  expiresAt: Date;
+  /**
+   * 邀请人 = tenancy.invitations.created_by。账号已注销（deleted_at 非空）时为
+   * null —— 那时这条通知没有收件人，服务层记一行日志、不发。
+   */
+  inviterUserId: string | null;
+  inviterName: string | null;
+  /**
+   * 受邀人在平台上的账号 id：按 target_type 回查（user_no → users.user_no，
+   * email → users.email）。**按邮箱邀请一个还没注册的人时它就是 null**，
+   * 那是正常情形而不是异常：站内消息没有收件人可投。
+   */
+  inviteeUserId: string | null;
+  inviteeName: string | null;
+  /** 原样的收件目标（邮箱地址或用户号）：受邀人没有账号时当显示名回落。 */
+  target: string;
+}
+
 /** 拒绝邀请的产出。拒绝理由沿用接受那套矩阵——无权接受者亦无权拒绝。 */
 export type DeclineInvitationResult =
-  | { ok: true }
+  | { ok: true; notify?: InvitationNotifyFacts }
   | { ok: false; reason: AcceptInvitationRejection };
 
 /**
@@ -447,8 +485,29 @@ export const ALLOW_MULTI_WORKSPACE = false;
 export type InvitationLocator = { token: string } | { invitationId: string };
 
 export type AcceptInvitationResult =
-  | { ok: true; membership: OrgMembershipView; tenantName: string | null }
+  | {
+      ok: true;
+      membership: OrgMembershipView;
+      tenantName: string | null;
+      /**
+       * 通知事实。**服务层消费后必须剥掉**（OrganizationService.acceptInvitation
+       * 重建成功分支再返回）：这条返回值会一路走到路由的响应体。
+       */
+      notify?: InvitationNotifyFacts;
+    }
   | { ok: false; reason: AcceptInvitationRejection };
+
+/**
+ * 撤销邀请的产出。
+ *
+ * 从 `boolean` 改成对象（2026-09-29）：撤销要通知受邀人，而通知需要的那些列只有
+ * 做转移的那条语句能可靠地给出（见 InvitationNotifyFacts）。`ok` 的语义与原来的
+ * 布尔逐字相同——服务层仍然只把它回成布尔，BFF 一侧零改动。
+ */
+export type RevokeInvitationOutcome = {
+  ok: boolean;
+  notify?: InvitationNotifyFacts;
+};
 
 /** Data access contract for identity-core organizations (raw SQL impl + mock impl). */
 export interface OrganizationReadRepository {
@@ -747,8 +806,31 @@ export interface OrganizationReadRepository {
     tenantId: string,
     limit?: number,
   ): Promise<InvitationListItem[]>;
-  /** 撤销 pending 邀请;非 pending / 不属本租户返回 false。 */
-  revokeInvitation(invitationId: string, tenantId: string): Promise<boolean>;
+  /** 撤销 pending 邀请;非 pending / 不属本租户返回 ok=false。 */
+  revokeInvitation(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<RevokeInvitationOutcome>;
+  /**
+   * 到点未被接受的邀请（status='pending' ∧ expires_at 已过），**最旧的在前**。
+   *
+   * 巡检作业用它取候选。排序方向不是随手定的：本扫描会把扫到的行真的改成
+   * `expired`，改完它就离开候选集，所以最旧的先处理能让存量单调收敛；若按最新的
+   * 在前，`limit` 截断时最旧的那批永远轮不到。
+   *
+   * **查询不设年龄下限**：本扫描会把行真的改成 `expired`，所以存量必须扫得完——
+   * 设了下限，比下限更旧的 pending 行就永远停在 pending，而那时「库里还是 pending」
+   * 既可能是「巡检还没轮到」也可能是「巡检故意不要它」，两件事分不开。
+   * 存量闸门只管**通知**（服务层按 backlogDays 闸；判据不在 SQL 里）。
+   */
+  findExpiredInvitationCandidates(params: {
+    limit: number;
+  }): Promise<InvitationNotifyFacts[]>;
+  /**
+   * 把一条邀请改成 `expired`。CAS：只改 status 仍为 `pending` 的行，
+   * 输了竞态（同一瞬间被接受 / 拒绝 / 撤回）返回 false，调用方据此一条通知都不发。
+   */
+  markInvitationExpired(invitationId: string): Promise<boolean>;
   /** Revoke every pending invitation the user sent (account deletion); returns the count. */
   revokeInvitationsCreatedBy(userId: string): Promise<number>;
   /**

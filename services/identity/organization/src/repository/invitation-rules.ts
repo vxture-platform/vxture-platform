@@ -2,8 +2,13 @@
  * invitation-rules.ts — 邀请状态判定的纯函数(pg 与 mock 两份仓储共用)。
  * @package @vxture/service-organization
  *
- * 两条规则都是「读侧派生」:库里 pending 行不会被清扫成 expired,过期由 expires_at
- * 算出来;接受时的拒绝矩阵也在这里——两份仓储的取档必须一致,所以只写一次。
+ * 两条规则都在读侧派生,接受时的拒绝矩阵也在这里——两份仓储的取档必须一致,
+ * 所以只写一次。
+ *
+ * 2026-09-29 起 `expired` **有写入方了**(platform-api 的 invitation-expiry 作业经
+ * OrganizationService.sweepExpiredInvitations 改 status)。派生并没有因此作废:
+ * 巡检还没轮到的行、以及作业停着的时候,库里仍然是 pending 而事实已经过期,
+ * 读侧必须照旧显示「已过期」。两者的关系是「先派生、后落库」,不是二选一。
  */
 import type {
   AcceptInvitationRejection,
@@ -12,6 +17,9 @@ import type {
 
 /**
  * 行状态 + 到期时刻 → 对外状态(pending 且已过期 → expired)。
+ *
+ * 巡检落库之后这一行仍然要在:它答的是「此刻这条邀请对外是什么状态」,
+ * 而巡检答的是「库里那一列什么时候追上事实」。
  *
  * 每个终态都要在上面这张白名单里点名。漏掉一个的后果不是报错,而是它悄悄
  * 落到兜底的 `expired`——`declined`(对方拒绝)会在邀请台账里显示成「已过期」,

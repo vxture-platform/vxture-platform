@@ -28,13 +28,27 @@ import { ACCOUNT_PG_POOL } from "../tokens";
  * `security` / `usage` 三个没有任何模板会落到它们头上（见 dispatch 的 `topicOf`），
  * 客户勾了等于没勾——页面在说假话。
  *
- * 13 个主题，**前 9 个有模板已经在发**，后 4 个的事件源都已存在（各自的状态机或
+ * 13 个主题，**前 10 个有模板已经在发**，后 3 个的事件源都已存在（各自的状态机或
  * webhook 事件类型跑着），只是通知模板还没接：这些在界面上挂「开发中」标并**禁用三个
  * 渠道开关**，不给假开关。
  *
  * 2026-09-28 批 5：`verification_result` 与 `quota_alert` 从后一段挪到前一段——本批给
  * 它们接上了模板（企业认证通过 / 驳回；加油包额度用尽）。**这两半必须同时动**：模板上线
  * 而开关还禁着，客户就收得到一封关不掉的信，比不发更糟。
+ *
+ * 2026-09-29：`member_invitation` 也挪到前一段。它此前是「开发中」段里**故意留着**的一条
+ * （下面 PLANNED 那张表的旧表头记着 owner 2026-09-09 的理由），因为它当时只有一条模板而
+ * 那条是 mandatory 的。本次把邀请的四个终态（接受 / 拒绝 / 撤回 / 过期）接上了模板，四条
+ * 都是可选周知，开关于是有了真正的作用对象。那条 mandatory 的仍然不许变成可开关的——
+ * 见下面 `LOCKED` 对这个主题的说明。
+ *
+ * 2026-09-29（owner 看过那一页之后当天再裁定）：**邀请拆成两个主题**。
+ * `member_invitation` 只留强制那一条（`tenant.invitation`，站内恒锁），四个终态另立
+ * `invitation_activity`，三个渠道全部可开关。
+ * 理由是**两件事性质不同**：一个**是**邀请本身，关掉它等于让邀请派不出去；另一个是周知，
+ * 客户嫌吵就该能关。而这张矩阵的粒度只有「主题 × 渠道」——两者同住一行时，站内那一档为了
+ * 保住邀请本身必须锁死，四条周知的站内档就跟着关不掉，客户被迫在「收得到邀请」与「别吵我」
+ * 之间二选一。拆开之后两件事各有自己的开关。
  *
  * 顺序即页面顺序（平铺，不分组；console 的 NotificationsPage 那份手写清单同序）。
  */
@@ -55,10 +69,15 @@ export const NOTIFICATION_TOPICS = [
   // 本批只接了「加油包额度用尽」这一条；provisioning webhook 的 quota_warning
   // （订阅池告警）仍然零模板——同一个主题下缺的那半，不是这一批的范围。
   "quota_alert", // addon.exhausted
+  // 2026-09-29 接上四个终态后移出「开发中」；同日 owner 又把它**拆成两行**（见文件头最后
+  // 一段）。这一行只剩强制那一条——站内那条消息**就是**邀请本身，所以站内恒锁（见 LOCKED）。
+  "member_invitation", // tenant.invitation（仅此一条，mandatory + inboxOnly）
+  // 四个终态的周知。**紧跟在成员邀请后面**就是页面顺序：两行相邻，客户才看得出差别在哪。
+  // 不进 LOCKED：这四条没有一条是「送达手段本身」，嫌吵就该能整条关掉。
+  "invitation_activity", // tenant.invitation_accepted / _declined / _revoked / _expired
   // ── 事件源已存在、模板待接（界面标「开发中」）────────────────────────────
   "security", // 站内强制锁定；异地登录/凭据变更等
   "invoice_progress", // billing.invoice_receipts 六态
-  "member_invitation", // tenancy.invitations 四态（见下方：故意留在「开发中」）
   "ticket_activity", // support.tickets 七态
 ] as const;
 
@@ -66,20 +85,20 @@ export const NOTIFICATION_TOPICS = [
  * 事件源已存在但通知模板未接：界面上标「开发中」并禁用三个渠道开关。
  *
  * 2026-09-28 批 5 移出两个：`verification_result`（企业认证通过 / 驳回）与 `quota_alert`
- * （加油包额度用尽）的模板本批上线，开关必须同时放开——否则客户收得到却关不掉。仍留在
- * 这张表里的是 `security` / `invoice_progress` / `ticket_activity`（事件源在、模板未接），
- * 加上下面这条故意的例外。
+ * （加油包额度用尽）的模板本批上线，开关必须同时放开——否则客户收得到却关不掉。
  *
- * `member_invitation` 留在这张表里是**故意的**（owner 2026-09-09）：它下面已经有一个
- * 模板在发（`tenant.invitation`，按用户号邀请的站内送达），但那条是 `mandatory` 的——
- * 站内这条消息**就是**邀请本身，关掉它，邀请人会收到「已送达对方账号」而对方那边
- * 什么也没有。给一个按下去不起作用的开关比不给更糟。等 accepted / declined / revoked
- * 三态的模板接上（那三条是可选的周知），再把它挪出去。
+ * 2026-09-29 移出 `member_invitation`。owner 2026-09-09 当初把它**故意**留在这里，理由是
+ * 它下面唯一那条模板（`tenant.invitation`）是 `mandatory` 的——站内这条消息**就是**邀请
+ * 本身，关掉它邀请人会收到「已送达对方账号」而对方那边什么也没有；那条裁定还写着「等
+ * accepted / declined / revoked 三态的模板接上，再把它挪出去」。本次连 expired 一共接上
+ * 四条可选周知，所以移出。**那条裁定的实质没有失效**：mandatory 那条仍然不许变成可开关
+ * 的，守住它的是 `LOCKED` 里这个主题的站内档 + dispatcher 的 mandatory 短路（见下）。
+ *
+ * 剩下三个是事件源在、模板未接：`security` / `invoice_progress` / `ticket_activity`。
  */
 export const NOTIFICATION_TOPICS_PLANNED = [
   "security",
   "invoice_progress",
-  "member_invitation",
   "ticket_activity",
 ] as const;
 
@@ -102,12 +121,34 @@ const DEFAULT_CHANNELS: NotificationChannelState = {
 };
 
 /**
- * 不可关闭的通道。安全类通知(异地登录、密码变更)必须至少有一个到达路径,
- * 否则账号被接管时用户无从得知——这是安全兜底,不是产品偏好,所以由服务端
- * 强制而不是靠前端把开关画成 disabled。
+ * 不可关闭的通道。由服务端强制而不是靠前端把开关画成 disabled——前端画不画是可以绕过的。
+ * 今天有两条各自成立的理由住在这张表里：
+ *
+ *  · `security`（安全兜底）——异地登录、凭据变更必须至少有一个到达路径，否则账号被接管时
+ *    用户无从得知。这不是产品偏好。
+ *  · `member_invitation`（**这条消息本身就是送达手段**）——2026-09-29 拆分之后，这个主题
+ *    下**只剩一条**模板：`tenant.invitation`，`mandatory` + `inboxOnly`。
+ *      站内 —— 锁定为开。邀请本身走的就是站内，关掉它邀请人会收到「已送达对方账号」而
+ *              对方那边什么也没有（owner 2026-09-09）。让这一档可关，界面就会出现「未订阅」
+ *              而邀请照样进收件箱的假象，而那一页的抬头写着「站内消息始终可查」。
+ *      邮件 / 短信 —— 不锁（owner 2026-09-29：站内恒锁、邮件短信可开关）。但邀请本身是
+ *              `inboxOnly` 的（call site 见 console-bff 的 `notifyInviteeInApp`，前端明说了
+ *              「不发邮件」），这两档今天没有作用对象，所以**默认关**——见
+ *              `TOPIC_DEFAULT_OVERRIDES` 那段。
+ *
+ * **`invitation_activity` 故意不在这张表里**（拆分的全部意义就在这里）。四个终态的周知没有
+ * 一条是「送达手段本身」：客户把三个渠道全关掉，也不会让任何人少收到一条邀请——
+ * accepted / declined / expired 的收件人是邀请人自己，revoked 的收件人是被邀请人自己，
+ * 关掉的是发给**自己**的那份周知。2026-09-29 拆分之前这四条与邀请本身同住一行，于是被上面
+ * 那条站内锁连带锁住，客户只能二选一。
+ *
+ *    真正兜住「关不掉邀请本身」的不是这张表，是 dispatcher 里
+ *    `!input.mandatory && !(await this.allows(...))` 这个短路：偏好即使全关，mandatory 那条
+ *    照样落库。那一条有**跑分发器**的用例（templates.spec.ts 末尾一组），不是一句注释。
  */
 const LOCKED: Partial<Record<NotificationTopic, NotificationChannel[]>> = {
   security: ["inbox"],
+  member_invitation: ["inbox"],
 };
 
 /**
@@ -116,7 +157,7 @@ const LOCKED: Partial<Record<NotificationTopic, NotificationChannel[]>> = {
  *
  * 2026-09-08 主题重排后，原「订阅」「账单」两档拆成了四个，事务性的判据不变：
  * 到期提醒、开通结果、待付订单、退款进度——**错过了会有实际损失**的那几件。
- * 公告与「开发中」的六个都不属于此列。
+ * 公告与仍标「开发中」的那三个都不属于此列。
  */
 const TOPIC_DEFAULT_OVERRIDES: Partial<
   Record<NotificationTopic, Partial<NotificationChannelState>>
@@ -136,6 +177,16 @@ const TOPIC_DEFAULT_OVERRIDES: Partial<
      的那一行默认值（那时候三个开关都是禁用的，默认值根本没被人选择过）。 */
   verification_result: { email: true },
   quota_alert: { email: true },
+  /* 2026-09-29 拆成两个主题之后，**邀请这两行都不在这张表里**（= 邮件默认关）。两行各有
+     自己的理由，不是同一条：
+       `member_invitation` —— 它只剩 `tenant.invitation` 一条，而那条是 `inboxOnly` 的。
+         默认打开一个**永远不会发出邮件**的开关，正是这一页改之前的老毛病：页面在说假话。
+         开关本身仍然留着可点（owner 2026-09-29 的裁定），只是默认关。
+       `invitation_activity` —— 四条终态是**周知**不是事务性（owner 2026-09-29 的分类）。
+         这张表的判据只有一条：**错过了会有实际损失**（上面那八个，错过就误判自己的订单、
+         权限、认证或余量状态）。邀请的接受 / 拒绝 / 撤回 / 过期错过了，代价是「晚一点才知道
+         席位没补上」，与平台公告同一档 —— 所以照 `announcement` 走：默认只进站内，想要邮件
+         的自己开。默认开外发通道等于替用户同意打扰。 */
 };
 
 function defaults(): NotificationPreferences {

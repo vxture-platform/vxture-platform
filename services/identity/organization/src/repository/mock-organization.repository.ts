@@ -10,6 +10,7 @@ import type {
   InvitationListItem,
   InvitationLocator,
   InvitationLookup,
+  InvitationNotifyFacts,
   InvitationView,
   OrgLogoRecord,
   OrgMemberDetail,
@@ -23,6 +24,7 @@ import type {
   OrganizationReadRepository,
   PermissionCatalogEntry,
   ProvisionedOrg,
+  RevokeInvitationOutcome,
   RotatedInvitation,
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
@@ -173,22 +175,46 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     return false;
   }
 
+  /**
+   * 撤销（离线回退实现）。
+   *
+   * **不带 `notify`**：这一份是进程内假数据，没有租户可视码、没有账号表，
+   * 拼不出一条诚实的通知事实。缺它的后果正是本该如此——服务层拿不到事实就一条都
+   * 不发，离线开发不会往任何人的收件箱里写东西。真库那一份（pg）才带事实。
+   */
   async revokeInvitation(
     invitationId: string,
     tenantId: string,
-  ): Promise<boolean> {
+  ): Promise<RevokeInvitationOutcome> {
     const inv = this.invitations.get(invitationId);
     if (
       !inv ||
       inv.view.organizationId !== tenantId ||
       inv.view.status !== "pending"
     ) {
-      return false;
+      return { ok: false };
     }
     inv.view.status = "revoked";
-    return true;
+    return { ok: true };
   }
 
+  /** 巡检候选：离线回退不跑巡检（作业只住 platform-api，那边连真库）。 */
+  async findExpiredInvitationCandidates(_params: {
+    limit: number;
+  }): Promise<InvitationNotifyFacts[]> {
+    return [];
+  }
+
+  /** 同上：没有候选就不会有人来改，恒 false。 */
+  async markInvitationExpired(_invitationId: string): Promise<boolean> {
+    return false;
+  }
+
+  /**
+   * 重发。取档与 pg 那份一致：`pending` 与 `expired` 都能重发，救回 pending
+   * （邀请台账有意允许重发过期的邀请；见 pg 那侧的注释）。两份仓储的取档必须一致——
+   * 各写一份迟早有一份先翻开，而分叉出来的症状是「测试全绿、线上不对」。
+   */
   async rotateInvitationToken(
     invitationId: string,
     tenantId: string,
@@ -197,12 +223,15 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     if (
       !inv ||
       inv.view.organizationId !== tenantId ||
-      inv.view.status !== "pending"
+      (inv.view.status !== "pending" && inv.view.status !== "expired")
     ) {
       return null;
     }
     inv.token = crypto.randomUUID();
     inv.view.expiresAt = new Date(Date.now() + MOCK_INVITE_TTL_MS);
+    /* 与 pg 那份一致：重发把过期的行救回 pending（这一份里没有巡检写 expired，
+       所以这一行今天是空转，但两侧取档不该有第二种说法）。 */
+    inv.view.status = "pending";
     return {
       token: inv.token,
       expiresAt: inv.view.expiresAt,
