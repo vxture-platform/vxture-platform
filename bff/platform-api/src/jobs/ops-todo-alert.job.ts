@@ -2,12 +2,36 @@
  * ops-todo-alert.job.ts — 运营待办告警巡检（#231，owner 2026-09-08 定档；2026-09-28 根治批改读共享算法）。
  * @package @vxture/bff-platform-api
  *
- * 扫停留过久的三类待办，按 4h 静默窗口发邮件给在用运营账号：
- *   · confirm_payment —— 客户已申报付款，等运营确认收款（客户的钱在等着）
- *   · reprovision     —— 钱已到、权益没开通（2026-09-08 事故就是这一类）
- *   · refund_audit    —— 客户申请退款，等运营审核（2026-09-28 根治：此前退款单挂着无人知）
+ * 扫停留过久的九类待办（2026-09-28 第三批从三类扩到九类），按 4h 静默窗口发邮件给
+ * 在用运营账号：
+ *   · confirm_payment         —— 客户已申报付款，等运营确认收款（客户的钱在等着）
+ *   · reprovision             —— 钱已到、权益没开通（2026-09-08 事故就是这一类）
+ *   · refund_audit            —— 客户申请退款，等运营审核（此前退款单挂着无人知）
+ *   · refund_execute          —— 审过了、钱还没退出去
+ *   · refund_processing_stuck —— 退款卡在处理中
+ *   · refund_failed           —— 退款失败，客户的钱没回去
+ *   · addon_pending_confirm   —— 加油包申报了款，等运营核销
+ *   · ticket_sla              —— 工单首次响应已超时
+ *   · maintenance_overdue     —— 维护窗口过了计划结束时间还挂着（客户还被拦着）
  * 「部分收款尾款挂账」不在此列：那一类在等客户，不在等运营。
  * 自愈放弃是另一条告警，由 OrderService 在放弃点直接报（见 ops-alerter.ts），不在这里扫。
+ *
+ * ── 升档另写一条运营通告 ──
+ * 待办自己带「等太久了」的位（`escalated` / `escalationStep`，算在共享算法的 SQL 里）。
+ * 邮件有 4h 静默窗口、且漏看就没了；所以升档的那些**另外**写一条 critical 运营通告，
+ * 留在运营台的列表里直到有人读它。每跨过一个阈值倍数写一条（去重键带 step），
+ * 于是一件事拖得越久，台面上的 critical 就越多——而不是同一条被静默吞掉。
+ * 这一步在 OperatorAlertsWiring.alertTodo 里做（文案与那三条告警在一处）。
+ *
+ * 通告这一半**只覆盖 ALERT_KINDS**：它写在 alertTodo 里，而本作业只把 ALERT_KINDS 交给它。
+ * 有升档阈值的四类中，confirm_payment / refund_audit / reprovision 都在下面那张表里，
+ * 两半都有；`verification` 不在——它从未被 owner 裁定过要不要告警（明写在
+ * scripts/guardrails/check-ops-todo-alerts.mjs 的 UNRULED）。而且它不是「顺手加进
+ * ALERT_KINDS 就行」的一类：认证那一段要先拼 tenant_base，它引用
+ * kyc.tenant_verifications / admin.risk_records / session.auth_sessions，全在本进程角色
+ * svc_platform_api 的授权面之外（见下面「为什么这里传 includeApplicant: false」），
+ * 加进来整轮作业就是 42501。所以 `verification` 升档后**只有待办页上的「已超时」标记，
+ * 没有 critical 通告**——这要 owner 裁定 + 扩 97 的授权面两件事，不是漏接线。
  *
  * ── 读的是哪一份 ──
  * `@vxture/service-ops-todos` 的 OpsTodoRepository——admin 待办页读的也是它。此前作业自己
@@ -46,11 +70,27 @@ import { runHeartbeatTick, sweepIntervalMs } from "./sweep-interval.util";
 /**
  * owner 裁定要告警的类别。改这里等于改裁定——`check-ops-todo-alerts` 会拿它对账，
  * 且 OperatorAlertsWiring.alertTodo 对不在此列的类别直接抛。
+ *
+ * ── 2026-09-28 第三批的裁定规则 ──
+ * **严重度恒为 rose 的类别推邮件**，其余只上页面。rose 在这套契约里的意思就是「有人
+ * 在等、而且等的是钱或是服务」——那正是值得在工作时间外打扰运营的那一档。
+ * 逐个写出来而不是从算法里算（`kinds.filter(rose)`）：这是一张**裁定表**，
+ * 谁要多收一封邮件就得在这里改一行，而不是顺手把某一类的严重度调红就自动开始发信。
+ *
+ * `risk` 与 `ticket` 的严重度**随行变**（风险档 high / 工单 p0 才 rose），所以那条规则
+ * 对它们不成立，仍留在守卫的 UNRULED 里等 owner 裁定；`ticket_sla` 不同——它是本批
+ * 新立的类别、恒 rose，且问的事情明确（首次响应已超时）。
  */
 export const ALERT_KINDS: readonly OpsTodoKind[] = [
   "confirm_payment",
   "reprovision",
   "refund_audit",
+  "refund_execute",
+  "refund_processing_stuck",
+  "refund_failed",
+  "addon_pending_confirm",
+  "ticket_sla",
+  "maintenance_overdue",
 ];
 
 /** 待办要停留多久才值得打扰运营。 */

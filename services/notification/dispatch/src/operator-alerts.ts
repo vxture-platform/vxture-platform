@@ -42,6 +42,16 @@ export type OperatorAlertCode =
   | "ops.order.selfheal_gave_up"
   // 运营平面（admin）：退款审核待办（2026-09-28 根治批——此前退款单挂着无人知）
   | "ops.refund.pending_audit"
+  // 运营平面（admin）：2026-09-28 第三批「把信息做全」——待办告警从三类扩到九类。
+  // 这一列只是**模板码的值域**（落 notification_logs.template_code，去重键的一格）；
+  // 文案在 bff/platform-api 的 operator-alerts.wiring，裁定表在
+  // scripts/guardrails/check-ops-todo-alerts.mjs。
+  | "ops.refund.pending_execute"
+  | "ops.refund.processing_stuck"
+  | "ops.refund.failed"
+  | "ops.addon.pending_confirm"
+  | "ops.ticket.first_response_overdue"
+  | "ops.maintenance.window_overdue"
   // 运维平面（opera）：后台作业健康
   | "ops.job.failed"
   | "ops.job.stalled";
@@ -52,7 +62,15 @@ export type OperatorAlertCode =
  * 其中任何一个，硬塞进去会让客户侧的类型跟着长出运营概念。
  * 落库同一列（varchar(64)，无枚举约束）。
  */
-export type OperatorAlertReferenceType = "order" | "refund" | "job";
+export type OperatorAlertReferenceType =
+  | "order"
+  | "refund"
+  | "job"
+  // 2026-09-28 第三批的三个新宾语。去重键 = (template_code, reference_type,
+  // reference_id, channel)，所以宾语类别混用会让两件事撞进同一个 4h 静默窗口。
+  | "addon_order"
+  | "ticket"
+  | "maintenance_window";
 
 /** 成功投递后的静默时长（owner 2026-09-08 定 4 小时）。 */
 export const OPS_ALERT_SILENCE_MS = 4 * 60 * 60 * 1000;

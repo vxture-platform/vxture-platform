@@ -15,6 +15,14 @@
  * order_no / refund_no（此前是订单 uuid）；切换后首轮可能对 4h 内已告警过的单再发一次，
  * 一次性代价，接受。
  *
+ * **维护窗口那一类是例外**：它的称呼是运营自己填的窗口标题，不唯一（title 上没有唯一约束）
+ * 也不短（varchar(256)，而 notification_logs.reference_id 是 varchar(128)）。拿标题当键
+ * 有两种坏法，都不报错：超 128 是 22001——账本写不进去，下一轮去重失效、每 tick 重发；
+ * 两个前缀相同的长标题截断后撞成一条——后一个窗口的告警被前一个的静默窗口吞掉。
+ * 所以那一类的键取待办自己的身份（`todo.id`，即窗口主键，见 service-ops-todos 的
+ * MAINTENANCE_TODOS_HEAD），再经 `opsNoticeReferenceId` 收口到 128——与通告侧同一个助手。
+ * 这个键只进台账，一个字都不上屏。
+ *
  * 自愈放弃走 setOpsAlerter 注入，与 [[customer-notifications.wiring]] 同一手法：
  * SubscriptionModule 自包含，跨模块 DI 令牌不可见，只能在装配处按接口挂。
  */
@@ -40,6 +48,7 @@ import {
 import {
   OPS_NOTICE_INFO_TTL_MS,
   OPS_SIGNAL_REFERENCE_TYPE,
+  opsNoticeReferenceId,
   redactUuids,
   resolveOpsNoticeTenant,
   writeOpsNotice,
@@ -68,9 +77,11 @@ function money(amount: number, currency: string): string {
 
 /**
  * 一条待办 → 一封邮件的素材。纯函数，导出为可测。
- * 两类订单的主题 / 行沿用 #231 原文；退款一条按 2026-09-28 契约新加。
- * 不在 ALERT_KINDS 里的类别直接抛——作业只会传裁定过要告警的三类，传了别的说明接线错了，
+ * 两类订单的主题 / 行沿用 #231 原文；退款审核那条按 2026-09-28 契约加；
+ * 余下六条是 2026-09-28 第三批（ALERT_KINDS 从三类扩到九类）。
+ * 不在 ALERT_KINDS 里的类别直接抛——作业只会传裁定过要告警的那几类，传了别的说明接线错了，
  * 静默跳过会把「没发」藏起来（#231 的病根正是这种坏法）。
+ * `check-ops-todo-alerts` 第 6 段反过来钉住：裁定要告警的每一类在这里都有一个分支。
  */
 export function todoAlertInput(
   todo: OpsTodo,
@@ -120,6 +131,101 @@ export function todoAlertInput(
           `${tenantName} 申请退款 ${amount}${product}，等待运营审核。`,
           `退款单 ${no}，已等待 ${waited}。`,
           "在订单详情页「审核退款」：通过后执行退款，或驳回并写明原因。",
+        ],
+        link: opts.link,
+      };
+    }
+    case "refund_execute":
+      return {
+        code: "ops.refund.pending_execute",
+        reference: { type: "refund", id: no },
+        subject: `${no} 退款已审核通过，钱还没退出去（已等 ${waited}）`,
+        lines: [
+          `${tenantName} 的退款 ${amount} 已审核通过，但退款还没执行。`,
+          `退款单 ${no}，自审核通过起已等待 ${waited}。`,
+          "客户这边已经收到「退款申请已通过」，钱不到账就是我们欠着。" +
+            "在订单详情页「执行退款」。",
+        ],
+        link: opts.link,
+      };
+    case "refund_processing_stuck":
+      return {
+        code: "ops.refund.processing_stuck",
+        reference: { type: "refund", id: no },
+        subject: `${no} 退款卡在处理中（已 ${waited}）`,
+        lines: [
+          `${tenantName} 的退款 ${amount} 处于「处理中」已 ${waited}，没有落终态。`,
+          `退款单 ${no}。线下对公退款要人去银行确认到账，没有回调会替我们收尾。`,
+          "先确认这笔钱到底出去了没有，再在订单详情页把它落成成功或失败——" +
+            "停在处理中的单，客户那边看到的是「正在退款」。",
+        ],
+        link: opts.link,
+      };
+    case "refund_failed":
+      return {
+        code: "ops.refund.failed",
+        reference: { type: "refund", id: no },
+        subject: `${no} 退款失败，客户的钱没回去（已 ${waited}）`,
+        lines: [
+          `${tenantName} 的退款 ${amount} 执行失败，已 ${waited} 没有处置。`,
+          `退款单 ${no}。失败不会自己重试：钱还在我们这里，客户在等。`,
+          "在订单详情页看失败原因（收款账户 / 金额 / 渠道），改对之后重新执行。",
+        ],
+        link: opts.link,
+      };
+    case "addon_pending_confirm":
+      return {
+        code: "ops.addon.pending_confirm",
+        reference: { type: "addon_order", id: no },
+        subject: `${no} 加油包待核销（已等 ${waited}）`,
+        lines: [
+          `${tenantName} 的加油包订单 ${amount}${
+            todo.product ? `（${todo.product.name}）` : ""
+          }在等运营核销。`,
+          `加油包单 ${no}，已等待 ${waited}。`,
+          "核对到账后在「加油包订单」里确认收款——确认即刻授予配额，不确认客户就一直没有额度。",
+        ],
+        link: opts.link,
+      };
+    case "ticket_sla":
+      return {
+        code: "ops.ticket.first_response_overdue",
+        reference: { type: "ticket", id: no },
+        subject: `${no} 工单首次响应已超时（已等 ${waited}）`,
+        lines: [
+          `${tenantName} 的工单${
+            todo.ticket ? `「${todo.ticket.title}」` : ""
+          }建单 ${waited} 还没有任何回复${
+            todo.ticket ? `（优先级 ${todo.ticket.priority}）` : ""
+          }。`,
+          `工单 ${no}。首次响应时限按优先级算：p0 1 小时 / p1 4 小时 / p2 24 小时 / p3 72 小时。`,
+          "先回一句「已收到、正在看」也算响应——客户等的是有人接手，不是一步到位的答案。",
+        ],
+        link: opts.link,
+      };
+    case "maintenance_overdue": {
+      /*
+       * 这一支的主体码是**运营在运维台自己填的一段自由文本**（窗口标题），别的类别都是
+       * 我们自己发的号。于是它比别的分支多两道处理，两道都不是可选的：
+       *
+       * ① 上屏的那一份过 `redactUuids`。邮件也是人在读，与通告那半
+       *    （composeEscalatedTodoNotice）同一条铁律；把一个内部 id 粘进窗口标题是常事，
+       *    抹不掉就是一串谁也查不了的十六进制发到运营邮箱。
+       * ② 去重键**不拿标题**，取待办自己的身份（见文件头注那一段）。`opsNoticeReferenceId`
+       *    与通告侧同一个助手：128 以内原样、超长截断并缀内容哈希，所以两件事不会撞成一条。
+       */
+      const title = redactUuids(no);
+      return {
+        code: "ops.maintenance.window_overdue",
+        reference: {
+          type: "maintenance_window",
+          id: opsNoticeReferenceId(todo.id),
+        },
+        subject: `维护窗口已超过计划结束时间 ${waited}：${title}`,
+        lines: [
+          `维护窗口「${title}」的计划结束时间已过 ${waited}，状态还是「进行中」。`,
+          "窗口不收，挂在它上面的产品就一直显示维护中——客户看到的是产品坏了，不是在维护。",
+          "在运维台「维护窗口」里结束维护，或把结束时间改到真实的收工时刻。",
         ],
         link: opts.link,
       };
@@ -269,6 +375,78 @@ export function composeSelfHealGaveUpNotice(facts: {
   };
 }
 
+/**
+ * 纯函数：一条**升档**的待办 → 一条 critical 运营通告（2026-09-28 第三批）。
+ *
+ * 为什么邮件之外还要这一条：邮件有 4h 静默窗口，而且漏看就没了。升档的意思是
+ * 「这件事已经超过它该被处理的时限」——那正是最不该只靠一封可能被漏看的邮件承载的一类。
+ * 通告留在运营台的列表里直到有人读它。
+ *
+ * 去重键 = `{待办身份}:{升档级数}`（`todo.id` 已经是 `{类别}:{身份}`，十九类里的十八类
+ * 身份就是可视码，读库的人一眼看得懂是哪件事）。级数就是「等待 / 阈值」的整数倍，所以
+ * **每跨过一个阈值周期播一条**：拖 4 小时一条、拖 8 小时再一条。一件事拖得越久，
+ * 台面上挂着的 critical 越多，而不是同一条被静默窗口吞掉（#231 的病根）。
+ * 只投 admin：出路（确认收款 / 审核退款 / 重试开通 / 看认证）都在运营台那几页上。
+ *
+ * 不过期：与自愈放弃同一条判断——它不会自己变好。
+ *
+ * 链接可以没有（`href` 为 null 的类别在 admin 里没有对应页面），那时不给 link，
+ * 正文里说清去哪儿办。
+ */
+export function composeEscalatedTodoNotice(
+  todo: OpsTodo,
+): CreateSystemNoticeInput {
+  const waited = humanizeWaiting(new Date(todo.waitingSince));
+  const tenantName = todo.tenant?.name?.trim() ?? "";
+  const amount = todo.amount
+    ? money(Number(todo.amount.value), todo.amount.currency)
+    : null;
+  const subjectLabel = TODO_SUBJECT_LABELS[todo.subject.type] ?? "待办";
+  const lines = [
+    `${subjectLabel} ${todo.subject.no}${tenantName ? `（${tenantName}）` : ""}` +
+      `已等待 ${waited}，超过这一类的处理时限${
+        todo.escalationStep > 1 ? ` ${todo.escalationStep} 倍` : ""
+      }。`,
+    amount ? `涉及金额 ${amount}。` : null,
+    todo.href
+      ? "点开这条通告直接去处置页。"
+      : `处置面不在运营台：${MAINTENANCE_ELSEWHERE}`,
+    "这一条不会自己消失——待办处置掉之前，每多拖一个时限周期就会再来一条。",
+  ].filter((line): line is string => line !== null);
+  return {
+    targetPlanes: ["admin"],
+    severity: "critical",
+    title:
+      `待办已超时：${subjectLabel} ${todo.subject.no}（已等 ${waited}）`.slice(
+        0,
+        256,
+      ),
+    /* 正文里的可视码、租户名、金额都是我们自己写的字，不带 uuid；
+       但主体码里可能混进外来文本（维护窗口标题是人填的），同一条铁律过一遍。 */
+    body: redactUuids(lines.join("\n")),
+    link: todo.href,
+    referenceType: OPS_SIGNAL_REFERENCE_TYPE,
+    referenceId: opsNoticeReferenceId(`${todo.id}:${todo.escalationStep}`),
+    expiresAt: null,
+  };
+}
+
+/** 通告标题里怎么称呼这条待办的宾语。缺省回落「待办」，不硬编码一个可能错的词。 */
+const TODO_SUBJECT_LABELS: Readonly<Record<string, string>> = {
+  order: "订单",
+  refund: "退款单",
+  subscription: "订阅",
+  invoice: "发票申请",
+  addon: "加油包单",
+  tenant: "租户",
+  user: "账号",
+  ticket: "工单",
+  maintenance: "维护窗口",
+};
+
+/** 只有维护窗口这一类的出路在别的平面上；文案在这里成一处，两个地方都引它。 */
+const MAINTENANCE_ELSEWHERE = "去运维台的「维护窗口」处理。";
+
 @Injectable()
 export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
   private readonly logger = new Logger(OperatorAlertsWiring.name);
@@ -335,14 +513,35 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
     return `${this.operaBaseUrl}/ops/jobs`;
   }
 
-  /** 待办接口给的是 admin 内相对路径；邮件里要绝对链接，没配前缀就不给。 */
-  private adminLink(href: string): string | undefined {
-    if (!this.adminBaseUrl) return undefined;
+  /**
+   * 待办接口给的是 admin 内相对路径；邮件里要绝对链接，没配前缀就不给。
+   * `href` 为 null 的类别（maintenance_overdue）在 admin 里没有页面——那时也不给链接，
+   * 邮件正文自己说清去哪儿办（见 todoAlertInput 那一支）。
+   */
+  private adminLink(href: string | null): string | undefined {
+    if (!href || !this.adminBaseUrl) return undefined;
     return `${this.adminBaseUrl}${href}`;
   }
 
-  /** 三类待办（confirm_payment / reprovision / refund_audit）→ 各一封邮件。 */
+  /**
+   * 九类待办（见 ops-todo-alert.job 的 ALERT_KINDS）→ 各一封邮件。
+   * 升档的那些**另外**写一条 critical 运营通告：邮件有 4h 静默窗口、漏看就没了，
+   * 通告留在列表里。通告先写、写失败不影响邮件（writeOpsNotice 永不抛）。
+   *
+   * 「升档 → 通告」这半只对**走到这里**的类别成立，也就是 ALERT_KINDS 那九类。
+   * 四个有升档阈值的类别里，`verification` 不在 ALERT_KINDS（owner 未裁定，且它那一段
+   * SQL 碰的 schema 在本进程角色的授权面之外），所以它只有页面上的「已超时」标记、
+   * 没有通告——见 service-ops-todos 的 `OpsTodo.escalated` 注释。
+   */
   async alertTodo(todo: OpsTodo): Promise<OperatorAlertResult> {
+    if (todo.escalated) {
+      await writeOpsNotice(
+        this.notices(),
+        composeEscalatedTodoNotice(todo),
+        this.logger,
+        `todo_escalated ${todo.kind} ${todo.subject.no} step ${todo.escalationStep}`,
+      );
+    }
     return this.alert(
       todoAlertInput(todo, { link: this.adminLink(todo.href) }),
     );

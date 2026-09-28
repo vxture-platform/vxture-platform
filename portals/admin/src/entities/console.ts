@@ -1860,23 +1860,59 @@ export interface AccountOperationDetailRecord extends AccountOperationRecord {
 // ── 运营待办（admin-bff GET /api/ops/todos；算法只有 @vxture/service-ops-todos 一份）──
 
 /**
- * 待办的种类：三种收款态订单、退款审核、租户认证、租户风险、未关闭工单。判据
- * 全在服务端 SQL 里，页面与告警作业读同一份（owner 2026-09-28：「页面和作业读
- * 同一份，尤其运营端收到的信息和客户侧要完整一致」）。
+ * 待办的种类。判据全在服务端 SQL 里，页面与告警作业读同一份（owner 2026-09-28：
+ * 「页面和作业读同一份，尤其运营端收到的信息和客户侧要完整一致」）。
+ *
+ * 2026-09-28 批 3 把七类扩到十九类（owner：「先把通知，信息，任务，提醒这些信息
+ * 做全，做多，后续再订阅选择上再做筛选」）。这里是**页面侧的镜像**，与
+ * `@vxture/service-ops-todos` 的 `OPS_TODO_KINDS` 同一份值域；页面对镜像之外的值
+ * 不崩（`OpsTodosPage` 的 `kindType` / `taskSentence` 都有兜底分支），但会退成
+ * 一句笼统的话——所以两边加类别要同一批做。
+ *
+ * **没有 `webhook_dead`**：全仓没有任何一处把 `provisioning.webhook_deliveries.status`
+ * 写成 `dead`（services/commerce、services/provisioning、bff/platform-api 零命中），
+ * 那一类的判据**永远不会命中**。摆一个恒空的类别等于在运营台上摆一张永远是 0 的卡，
+ * 不如不摆——等真有写者了再同时加服务端判据与这里的值域。
  */
 export type OpsTodoKind =
+  // 收款链：同一张订单在运营侧五步里的四种停顿。
   | "confirm_payment"
   | "reprovision"
   | "follow_up_balance"
+  | "order_pending_payment_aging"
+  // 退款链：申请待审 → 已批待打款 → 处理中卡住 → 打款失败。
   | "refund_audit"
+  | "refund_execute"
+  | "refund_processing_stuck"
+  | "refund_failed"
+  // 租户：认证待审、风险待复核。
   | "verification"
   | "risk"
-  | "ticket";
+  // 工单：未关闭、以及已超出响应时限的那些。
+  | "ticket"
+  | "ticket_sla"
+  // 订阅 / 发票 / 加油包：钱与权益的另外三条线。
+  | "subscription_overdue"
+  | "invoice_applying"
+  | "invoice_approved"
+  | "addon_pending_confirm"
+  // 账号注销时钟：待处理的注销申请、以及即将到达清除期的那些。
+  | "deletion_pending"
+  | "purge_imminent"
+  // 维护窗口已过计划结束时间（处置面在 opera，不在 admin）。
+  | "maintenance_overdue";
 
 /** 紧急 / 关注 / 一般。 */
 export type OpsTodoSeverity = "rose" | "amber" | "blue";
 
-/** 「进展」列的档位；订单类按运营侧五步报第几步，其余只报一个状态词。 */
+/**
+ * 「进展」列的档位；订单类按运营侧五步报第几步，其余只报一个状态词。
+ *
+ * 批 3 新增的那些一律是 **kind 的 camelCase**（`refund_execute` → `refundExecute`）。
+ * 取名是机械规则而不是各自起名：这份值域在服务端与页面各有一份，唯一不会漂的
+ * 取名法就是从 kind 机械派生。页面读不到某个档位时显示「—」而不是空白
+ * （`OpsTodosPage` 的 `progressText`）——读不到与没有进展是两件事。
+ */
 export type OpsTodoProgress =
   | "pendingVerify"
   | "paidUnprovisioned"
@@ -1886,16 +1922,53 @@ export type OpsTodoProgress =
   | "risk"
   | "ticketOpen"
   | "ticketProcessing"
-  | "ticketBlocked";
+  | "ticketBlocked"
+  | "orderAging"
+  | "refundExecute"
+  | "refundProcessing"
+  | "refundFailed"
+  | "ticketSla"
+  | "subscriptionOverdue"
+  | "invoiceApplying"
+  | "invoiceApproved"
+  | "addonPendingConfirm"
+  | "deletionPending"
+  | "purgeImminent"
+  | "maintenanceOverdue";
 
 export interface OpsTodo {
-  /** `${kind}:${可视码}`，稳定，可作 React key。 */
+  /**
+   * `${kind}:${身份}`，稳定，可作 React key。
+   *
+   * **只当键用，任何场景不上屏**：十九类里的十八类身份就是 `subject.no`（可视码），
+   * 但 `maintenance_overdue` 的称呼是运营自己填的窗口标题、不唯一，所以那一类的身份是
+   * 窗口主键（UUID）。要显示的号一律取 `subject.no`。
+   */
   id: string;
   kind: OpsTodoKind;
   severity: OpsTodoSeverity;
   priority: number;
-  /** 只给可视码（order_no / refund_no / tenant_no / ticket_no），绝不给 UUID。 */
-  subject: { type: "order" | "refund" | "tenant" | "ticket"; no: string };
+  /**
+   * 只给可视码（order_no / refund_no / tenant_no / ticket_no / invoice_no / …），
+   * **绝不给 UUID**。
+   *
+   * `type` 是服务端的主体口径。页面只对两种做前缀化（`tenant` → `T-`、
+   * `account` → `U-`），其余原样上屏，所以这个联合里出现镜像之外的值也不会错
+   * ——它只是少一个前缀，不会变成一个假的号。
+   */
+  subject: {
+    type:
+      | "order"
+      | "refund"
+      | "subscription"
+      | "invoice"
+      | "addon"
+      | "tenant"
+      | "user"
+      | "ticket"
+      | "maintenance";
+    no: string;
+  };
   /**
    * 租户的可视属性。`type` 是页面口径 `individual` / `company`；`status` 与
    * `riskLevel` 是库里的枚举原值（`active` / `suspended` / … · `normal` /
@@ -1929,7 +2002,32 @@ export interface OpsTodo {
   progress: OpsTodoProgress;
   /** ISO；等待起点按各类的规则由服务端取（申报 / 确认收款 / 退款申请 / 认证提交 / …）。 */
   waitingSince: string;
-  /** admin 内相对路径：/orders/{order_no} · /verifications · /tenants/{tenant_no} · /tickets/{ticket_no}。 */
-  href: string;
+  /**
+   * 服务端判定的「这一条已经超过它该被处理的时限」。判据在服务端（各类的时限
+   * 不同），页面只负责让它**看得见**：danger 语气的「已超时」标 + 同一紧急度里排最前。
+   *
+   * 契约里必给，这里仍写成可选：旧版 BFF 回的旧形状会让它是 undefined，那时该退回
+   * 「没超时」而不是渲染出一个 undefined——**读不到不等于超时**。
+   */
+  escalated?: boolean;
+  /**
+   * 升了几级（服务端：等待 / 阈值，封顶 12；`escalated` 即 `>= 1`）。
+   *
+   * 页面**不展示这个数**：一行上「超时 3 级」对运营不构成任何不同的动作，而严重度
+   * 已经把升档的后果算进去了。记在契约里是为了别人来看时知道那枚标从哪来。
+   */
+  escalationStep?: number;
+  /**
+   * admin 内相对路径：/orders/{order_no} · /subscriptions/{order_no} ·
+   * /tenants/{tenant_no} · /tickets/{ticket_no} · /accounts/{user_no} ·
+   * /verifications · /invoices · /addon-orders。
+   *
+   * **可以是 null**：`maintenance_overdue` 的处置面在运维平台，admin 里没有维护窗口
+   * 这一页；href 是**平面内**相对路径，给一个别的平面的路径等于在 admin 里点开 404。
+   * 页面另外还会把两种「像路径但不能跳」的挡掉（见 `OpsTodosPage` 的 `safeHref`）：
+   * 不是站内相对路径的，以及路径里带 UUID 的（**任何链接都不许出现 UUID**）——
+   * 那时退到该类别的列表页，而不是一个点开 404 的假动作。
+   */
+  href: string | null;
   ticket?: { title: string; priority: string; status: string };
 }

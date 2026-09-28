@@ -4,6 +4,8 @@ export {
   OpsTodoRepository,
   DEFAULT_LIST_LIMIT,
   MAX_LIST_LIMIT,
+  DEFAULT_OPS_TODO_THRESHOLDS,
+  opsTodoThresholds,
 } from "./repository/pg-ops-todo.repository";
 export { OPS_TODOS_PG_POOL } from "./tokens";
 export {
@@ -18,4 +20,5 @@ export type {
   OpsTodoProgress,
   OpsTodoSeverity,
   OpsTodoSubjectType,
+  OpsTodoThresholds,
 } from "./types";

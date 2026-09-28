@@ -41,7 +41,14 @@ import type {
  */
 export const OPS_SIGNAL_REFERENCE_TYPE = "ops_signal";
 
-/** admin.operator_notices.reference_id 的列宽。超了是 22001，不是「截断后照写」。 */
+/**
+ * admin.operator_notices.reference_id 的列宽。超了是 22001，不是「截断后照写」。
+ *
+ * `support.notification_logs.reference_id`（运营告警邮件的 4h 静默窗口键）**也是
+ * varchar(128)**，而 OperatorAlertDispatcher 写账本时不截这一列——所以邮件那一侧也用
+ * `opsNoticeReferenceId` 收口（见 operator-alerts.wiring 的 maintenance_overdue 一支）。
+ * 两张表的列宽将来若分家，这个常量要跟着分成两个，别只改一头。
+ */
 export const OPS_NOTICE_REFERENCE_ID_MAX = 128;
 
 /**
