@@ -30,6 +30,15 @@ export function buildWebsiteProductsUrl(locale: string): string {
   return `${WEBSITE_BASE_URL}/${locale}/products`;
 }
 
+/**
+ * 联系客服：/{locale}/contact。官网那一页是**真页**（2026-08-22 起从占位登记表出栈），
+ * 上面有客服电话与邮箱。console 的文案**不写死联系方式**，指过去就行——
+ * 改电话或邮箱时只改官网那一处，不用满仓找副本。
+ */
+export function buildWebsiteContactUrl(locale: string): string {
+  return `${WEBSITE_BASE_URL}/${locale}/contact`;
+}
+
 /** 退款说明（product_330 §5，官网统一维护，newtab）：/{locale}/legal/refund。 */
 export function buildWebsiteRefundPolicyUrl(locale: string): string {
   return `${WEBSITE_BASE_URL}/${locale}/legal/refund`;

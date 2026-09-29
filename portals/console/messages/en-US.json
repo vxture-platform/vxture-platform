@@ -250,7 +250,6 @@
     "invoicing": {
       "applyAction": "Request invoice",
       "mergeAction": "Merge into one invoice",
-      "mergeActionCount": "Merge into one invoice ({count} selected)",
       "writeFailed": "Operation failed — please try again later",
       "status": {
         "applying": "Applying",
@@ -262,7 +261,7 @@
       },
       "phase": {
         "none": "Not invoiced",
-        "processing": "In progress",
+        "processing": "Requested",
         "issued": "Invoiced"
       },
       "type": {
@@ -276,7 +275,7 @@
       },
       "records": {
         "title": "Invoices",
-        "description": "Invoices issued against settled bills — both direct subscription payments and prepaid deduction statements qualify; download here once issued",
+        "description": "Invoice requests you have submitted and invoices already issued; download them here once issued.",
         "colNo": "Application no.",
         "colBill": "Bill no.",
         "colTitle": "Title / Type",
@@ -284,11 +283,11 @@
         "colStatus": "Status",
         "colDelivery": "File / Shipping",
         "download": "Download",
-        "empty": "No invoices yet — use \"Request invoice\" on a settled bill above"
+        "empty": "No invoices yet."
       },
       "addresses": {
         "title": "Invoice Titles",
-        "description": "Title details are snapshotted into each application; later edits never affect submitted requests",
+        "description": "Keep your invoice titles here. A submitted request holds a snapshot of the title as it was, so later edits never change it.",
         "add": "Add title",
         "addTitle": "Add invoice title",
         "editTitle": "Edit invoice title",
@@ -301,6 +300,7 @@
         "setDefault": "Set default",
         "delete": "Delete",
         "save": "Save",
+        "cancel": "Cancel",
         "rowMenu": "Title actions",
         "fieldTitle": "Title",
         "fieldTaxNo": "Tax number",
@@ -312,29 +312,19 @@
         "deleteVerb": "Delete billing profile",
         "deleteConsequence": "This profile is removed and there is no undo. Invoices already issued are unaffected, but the next one needs the tax ID, bank and address entered again."
       },
-      "apply": {
-        "title": "Request invoice",
-        "description": "Bill {billNo} · {amount} (tax incl.). Platform operations will review and issue it",
-        "address": "Invoice title",
-        "type": "Invoice type",
-        "noAddress": "No invoice title yet — create one first",
-        "createAddress": "Create a title",
-        "cancel": "Cancel",
-        "submit": "Submit",
-        "blockedLite": "Simple business verification does not support invoicing",
-        "blockedUnverified": "Complete business verification before requesting an invoice",
-        "blockedHint": "See Tenant → Business verification for the available methods; invoicing opens once face or document verification ships."
-      },
       "rowMenu": "Bill actions",
-      "applyHintUnpaid": "Available once the bill is settled",
-      "applyHintApplied": "An application already exists",
-      "applyHintZero": "A zero-amount bill has nothing to invoice",
-      "applyHintNoPermission": "Your role cannot manage invoices"
+      "applyHintPlanned": "Invoicing is still being planned, so requests cannot be submitted online — contact support if you need an invoice.",
+      "planned": {
+        "notice": "Invoicing is still being planned",
+        "noticeBills": "Invoice requests cannot be submitted online yet. Contact support with your bill number and invoice title; invoices already issued stay available under Invoices & titles.",
+        "noticeLedger": "Invoice requests cannot be submitted online yet. Contact support with your bill number and invoice title; requests already submitted and invoices already issued stay listed below, where you can view and download them.",
+        "contactCta": "Contact support"
+      }
     },
     "viewInvoices": "Invoices & titles",
     "invoicesPage": {
       "title": "Invoices & titles",
-      "description": "Issued invoices and billing titles; apply for an invoice from a bill row in the billing center.",
+      "description": "Invoice requests you have submitted, invoices already issued, and your invoice titles.",
       "backToBilling": "Back to billing center"
     }
   },

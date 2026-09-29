@@ -18,6 +18,11 @@
  * 现在完整地落在一页:下单(OrdersSection)→ 出账(账单记录)→ 付款 → 开票。
  * 发票记录与开票抬头是**台账**,降为二级页 `/billing/invoices`;「申请发票」是账单行
  * 上的**动作**,留在本页(动作要发生在对象所在的那一页)。
+ *
+ * **2026-09-29 owner 裁定「发票整体灰掉,规划中」**:「申请发票」不再是一个可用动作。
+ * 菜单项留在原位但常灰、hint 讲清为什么(凭空消失会被读成「功能坏了」),申请弹窗与
+ * 勾选列一并撤掉——后者唯一的下游是「合并开票」的候选集。发票列照旧画真实状态:
+ * 运营线下开出的票、以及客户此前提交还停在那里的申请,都必须看得见。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,6 +31,7 @@ import { useTableLabels } from "@/lib/table";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   ActionMenu,
+  Banner,
   Button,
   DataTable,
   EmptyState,
@@ -44,14 +50,11 @@ import type {
 } from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import {
-  fetchBillingAddresses,
   fetchBillingSummary,
   fetchBills,
   fetchCredits,
-  fetchTenantVerification,
   fetchInvoiceReceipts,
   type ConsoleBill,
-  type ConsoleBillingAddress,
   type ConsoleBillingSummary,
   type ConsoleInvoiceReceipt,
 } from "@/api/console-bff";
@@ -67,8 +70,8 @@ import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { ADDON_SECTION_ID } from "./addon-routes";
 import { useDateFormat } from "@/lib/use-date-format";
+import { buildWebsiteContactUrl } from "@/lib/website-entry";
 import { OrdersSection } from "./components/OrdersSection";
-import { InvoiceSections } from "./components/InvoiceSections";
 
 const BILLS_PAGE_SIZE = 10;
 
@@ -95,9 +98,13 @@ const KNOWN_BILL_TYPES = new Set([
  * 要回答的只有一个问题:这张账单的票办到哪一步了。
  *
  * 为什么不压成两值:「已开票」是对税务凭证的事实陈述,票还没开出来就写「已开票」
- * 是假的。`applying` / `approved` 归「开票中」。
+ * 是假的。`applying` / `approved` 归中间那一档。
  * `rejected` / `voided` 不在这张表里——它们已被 `receiptByBill` 滤掉,账单因此回到
- * 「未开票」,可以重新申请。
+ * 「未开票」。
+ *
+ * 2026-09-29「灰掉」之后中间那一档的文案从「开票中」改成「已申请」:没有人在开这张
+ * 票,写「开票中」会和同一屏的「规划中」横幅正面矛盾。改的是这条**派生态**的词,不是
+ * `status.*` 那六个库值的词——后者说的是记录自己的状态,运营侧用同一套词。
  */
 type InvoicePhase = "none" | "processing" | "issued";
 
@@ -142,7 +149,6 @@ export function BillingPage() {
     currency: string;
   } | null>(null);
   const [receipts, setReceipts] = useState<ConsoleInvoiceReceipt[]>([]);
-  const [addresses, setAddresses] = useState<ConsoleBillingAddress[]>([]);
   const [billsTotal, setBillsTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [billsLoading, setBillsLoading] = useState(true);
@@ -151,52 +157,20 @@ export function BillingPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [page, setPage] = useState(1);
-  const [applyBill, setApplyBill] = useState<ConsoleBill | null>(null);
-  /* 勾选（合并开票的候选集）。表是服务端分页的,勾选只在本页内有效——翻页即清空:
-   * 跨页累积会让「合并开票」把用户当下看不见的账单也开进一张票里。 */
-  const [selectedBillIds, setSelectedBillIds] = useState<readonly string[]>([]);
 
-  /**
-   * 开票的认证门(owner 2026-09-06):简易企业实名认证可订阅、不可开票。这里只为
-   * **提前告知**——真门在 console-bff。故单独一路读、失败不显影也不锁页面:读不到
-   * 认证态就当不挡(null),让后端去拒,而不是因为一次读失败把开票入口关掉。
-   */
-  const [invoiceBlockedBy, setInvoiceBlockedBy] = useState<
-    "lite" | "none" | null
-  >(null);
-
-  const reloadInvoicing = useCallback(async () => {
-    const [receiptRows, addressRows] = await Promise.all([
-      fetchInvoiceReceipts(),
-      fetchBillingAddresses(),
-    ]);
-    setReceipts(receiptRows);
-    setAddresses(addressRows);
+  /* 发票记录:本页只有两个读者——发票列的三态与行菜单的「下载发票」。抬头簿不在
+     本页读了,它只服务已经撤掉的申请弹窗,留在二级页。认证等级那一路读也随之撤:
+     它只为申请弹窗的提前告知而存在。 */
+  const reloadReceipts = useCallback(async () => {
+    setReceipts(await fetchInvoiceReceipts());
   }, []);
-
-  useEffect(() => {
-    let active = true;
-    fetchTenantVerification()
-      .then((s) => {
-        if (!active) return;
-        setInvoiceBlockedBy(
-          s.canIssueInvoice ? null : s.level === "lite" ? "lite" : "none",
-        );
-      })
-      .catch(() => {
-        if (active) setInvoiceBlockedBy(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [session.tenant?.id, reloadKey]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setLoadFailed(false);
     setPage(1);
-    Promise.all([fetchBillingSummary(), fetchCredits(), reloadInvoicing()])
+    Promise.all([fetchBillingSummary(), fetchCredits(), reloadReceipts()])
       .then(([sum, creditRecord]) => {
         if (!active) return;
         setSummary(sum);
@@ -214,7 +188,7 @@ export function BillingPage() {
     return () => {
       active = false;
     };
-  }, [session.tenant?.id, reloadInvoicing, reloadKey]);
+  }, [session.tenant?.id, reloadReceipts, reloadKey]);
 
   /* 账单表服务端分页(批 3):翻页只取那一页,total 由库数——此前一次拉 100 条在
    * 页面里翻,第 101 张账单起看不到也没人说。 */
@@ -252,10 +226,6 @@ export function BillingPage() {
     return map;
   }, [receipts]);
 
-  useEffect(() => {
-    setSelectedBillIds([]);
-  }, [page, reloadKey]);
-
   /** 账单 → 发票三态。未开票 = 没有活跃申请（驳回/作废已在上面滤掉）。 */
   const invoicePhase = useCallback(
     (b: ConsoleBill): InvoicePhase => {
@@ -264,24 +234,6 @@ export function BillingPage() {
       return INVOICE_PHASE_BY_STATUS[receipt.invoiceStatus] ?? "processing";
     },
     [receiptByBill],
-  );
-
-  /**
-   * 可开票 = 已结清 ∧ 非零 ∧ 未开票（owner 2026-09-07）。
-   *
-   * 非零是这次新加的门:¥0 账单没有可开的税额,不该出现在开票链路里（¥0 订单同样
-   * 出账是既有口径,见文件头）。金额取 `payableAmount`——它是账单的应付面额,也是表上
-   * 显示、发票上要开的那个数。
-   *
-   * 同一个判据供三处用:行操作的「申请发票」是否可点、哪些行可勾选、以及勾选后
-   * 「合并开票」的候选集。三者必须同源,否则会出现「能勾但不能开」这种自相矛盾。
-   */
-  const canApplyInvoice = useCallback(
-    (b: ConsoleBill) =>
-      b.billStatus === "paid" &&
-      Number.parseFloat(b.payableAmount || "0") > 0 &&
-      invoicePhase(b) === "none",
-    [invoicePhase],
   );
 
   const money = useCallback(
@@ -444,27 +396,21 @@ export function BillingPage() {
   // ── 账单行操作(表格规范:操作归 rowActions 单列)──────────────────────────
   const billActions = (b: ConsoleBill): ActionMenuItem[] => {
     const receipt = receiptByBill.get(b.id);
-    const zeroAmount = Number.parseFloat(b.payableAmount || "0") <= 0;
     return [
       {
+        /* 常灰(2026-09-29「发票整体灰掉」)。留在原位而不是删掉:入口凭空消失会被
+           读成「功能坏了」。理由挂在 hint 上——DS 的 hint 就是为「讲清这一项为什么
+           灰着」准备的;同一句话在本节顶部的横幅里也看得见,不必悬停才知道。
+           不再按结清/金额/是否已申请分支:那些判据现在一条都改变不了结果,留着
+           只会让人以为某个条件满足了就点得动。 */
         id: "apply-invoice",
         label: t("invoicing.applyAction"),
-        // 开票资格 = 已结清 ∧ 非零 ∧ 未开票(canApplyInvoice 同一判据)。
-        // 不限来源(直接订阅付款/预付款扣费对账单同栈)。
-        // 申请动作 = tenant.invoice.manage(与 BFF 守卫同码)。
-        disabled: !canManageInvoices || !canApplyInvoice(b),
-        ...(!canManageInvoices
-          ? { hint: t("invoicing.applyHintNoPermission") }
-          : b.billStatus !== "paid"
-            ? { hint: t("invoicing.applyHintUnpaid") }
-            : zeroAmount
-              ? { hint: t("invoicing.applyHintZero") }
-              : receipt
-                ? { hint: t("invoicing.applyHintApplied") }
-                : {}),
-        onSelect: () => setApplyBill(b),
+        disabled: true,
+        hint: t("invoicing.applyHintPlanned"),
       },
       {
+        /* 下载照旧可用:运营线下开出的发票是客户已经拿到的凭证,灰掉入口不该
+           顺手把它藏了。 */
         id: "download-invoice",
         label: t("invoicing.records.download"),
         disabled: !receipt?.invoiceFileUrl,
@@ -531,24 +477,40 @@ export function BillingPage() {
           /* 合并开票:一张发票覆盖多张账单。库里还表达不了——invoice_receipts.bill_id
            * 是 NOT NULL 单值外键,一票一单;要做得先加关联表并改 admin 的审核/开具侧。
            * 按本页 exportStatement 的既有做法:意图可见、禁用不装样。
-           * 与选择列同一个门:没有开票权限的角色不出这个动作。 */
+           * 勾选列随申请入口一起撤了,所以标题不再带条数——没有可勾的东西。
+           * 没有开票权限的角色不出这个动作。 */
           canManageInvoices ? (
             <span className="flex items-center gap-sm">
               <Button size="md" variant="outline" disabled>
                 <Icon name="receipt" size="xs" fallback="placeholder" />
-                <span>
-                  {selectedBillIds.length > 0
-                    ? t("invoicing.mergeActionCount", {
-                        count: selectedBillIds.length,
-                      })
-                    : t("invoicing.mergeAction")}
-                </span>
+                <span>{t("invoicing.mergeAction")}</span>
               </Button>
               <PlannedBadge />
             </span>
           ) : undefined
         }
       >
+        {/* 灰掉要说得出口。行菜单的 hint 只在悬停时出现,所以这一节需要一条
+            看得见的说明;它落在这里而不是页头,因为本页灰掉的只是发票这一块。
+            文案只讲客户要知道的两件事:现在不能在线申请、需要发票怎么办;「怎么办」
+            配一个真出口——官网 /contact 是真页(有电话与邮箱),联系方式不在这里
+            写死,改的时候只改官网那一处。 */}
+        <Banner
+          tone="info"
+          title={t("invoicing.planned.notice")}
+          description={t("invoicing.planned.noticeBills")}
+          action={
+            <Button asChild size="sm" variant="outline">
+              <a
+                href={buildWebsiteContactUrl(locale)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t("invoicing.planned.contactCta")}
+              </a>
+            </Button>
+          }
+        />
         <DataTable<ConsoleBill>
           labels={tableLabels}
           columns={billColumns}
@@ -556,16 +518,8 @@ export function BillingPage() {
           rowKey={(b) => b.id}
           loading={loading || billsLoading}
           indexStart={(page - 1) * BILLS_PAGE_SIZE + 1}
-          /* 选择列只对能开票的人出现（DS:给了 selectedKeys 才有这一列）。没有
-           * tenant.invoice.manage 的角色勾了也没有能做的事,给一列点不动的复选框
-           * 比不给更糟。行级判据与「申请发票」同源,避免「勾得上却开不了」。 */
-          {...(canManageInvoices
-            ? {
-                selectedKeys: selectedBillIds,
-                onSelectionChange: setSelectedBillIds,
-                isRowSelectable: canApplyInvoice,
-              }
-            : {})}
+          /* 勾选列撤掉(2026-09-29):它唯一的下游是「合并开票」的候选集,而开票入口
+             已经灰掉——勾得上却什么都做不了的复选框就是个死控件。 */
           rowActions={(b) => (
             <ActionMenu label={t("invoicing.rowMenu")} items={billActions(b)} />
           )}
@@ -608,21 +562,6 @@ export function BillingPage() {
           }
         />
       </PageSection>
-
-      {/* 申请发票弹窗:动作留在账单所在的这一页;发票记录与开票抬头两块台账
-          在二级页 `/billing/invoices`(owner 2026-09-06) */}
-      <InvoiceSections
-        mode="apply"
-        receipts={receipts}
-        addresses={addresses}
-        loading={loading}
-        readOnly={!canManageInvoices}
-        applyBill={applyBill}
-        onApplyClose={() => setApplyBill(null)}
-        onChanged={reloadInvoicing}
-        money={money}
-        invoiceBlockedBy={invoiceBlockedBy}
-      />
 
       {/* ③ 加油包与扩展包(自助购买闭环;2026-09-08 从配额页迁来)。
           放在两张台账之后:来费用中心的人多半是来看账的,买的入口不该把账挤下去。

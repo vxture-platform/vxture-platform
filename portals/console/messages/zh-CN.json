@@ -250,7 +250,6 @@
     "invoicing": {
       "applyAction": "申请发票",
       "mergeAction": "合并开票",
-      "mergeActionCount": "合并开票（已选 {count} 张）",
       "writeFailed": "操作失败,请稍后重试",
       "status": {
         "applying": "申请中",
@@ -262,7 +261,7 @@
       },
       "phase": {
         "none": "未开票",
-        "processing": "开票中",
+        "processing": "已申请",
         "issued": "已开票"
       },
       "type": {
@@ -276,7 +275,7 @@
       },
       "records": {
         "title": "发票记录",
-        "description": "对已结清账单开具的发票:直接订阅付款与预付款扣费对账单均可申请,开具后此处下载",
+        "description": "已提交的开票申请与已开出的发票都在这里，开具后可以下载。",
         "colNo": "申请号",
         "colBill": "账单号",
         "colTitle": "抬头 / 类型",
@@ -284,11 +283,11 @@
         "colStatus": "状态",
         "colDelivery": "文件 / 寄送",
         "download": "下载发票",
-        "empty": "暂无发票记录,在账单表对已结清账单点「申请发票」"
+        "empty": "暂无发票记录。"
       },
       "addresses": {
         "title": "开票抬头",
-        "description": "抬头信息在申请时快照进发票,后续修改不影响已提交的申请",
+        "description": "保存常用的开票抬头。已提交的申请里存的是提交当时的快照，这里的修改不影响它们。",
         "add": "新增抬头",
         "addTitle": "新增开票抬头",
         "editTitle": "编辑开票抬头",
@@ -301,6 +300,7 @@
         "setDefault": "设为默认",
         "delete": "删除",
         "save": "保存",
+        "cancel": "取消",
         "rowMenu": "抬头操作",
         "fieldTitle": "抬头名称",
         "fieldTaxNo": "税号",
@@ -312,29 +312,19 @@
         "deleteVerb": "删除开票抬头",
         "deleteConsequence": "这条抬头会被删掉，且没有回收站。已开出的发票不受影响，但下次开票要重新录入税号、开户行与地址。"
       },
-      "apply": {
-        "title": "申请发票",
-        "description": "账单 {billNo} · 价税合计 {amount}。提交后由平台运营审核开具",
-        "address": "开票抬头",
-        "type": "发票类型",
-        "noAddress": "还没有开票抬头,请先创建一条",
-        "createAddress": "去创建抬头",
-        "cancel": "取消",
-        "submit": "提交申请",
-        "blockedLite": "简易企业实名认证不支持开票",
-        "blockedUnverified": "开票前需先完成企业实名认证",
-        "blockedHint": "请到「租户信息 → 企业认证」查看认证方式;法人扫脸认证与提交资料认证上线后即可开票。"
-      },
       "rowMenu": "账单操作",
-      "applyHintUnpaid": "账单结清后可申请",
-      "applyHintApplied": "已有开票申请",
-      "applyHintZero": "¥0 账单没有可开票的金额",
-      "applyHintNoPermission": "你的角色没有发票管理权限"
+      "applyHintPlanned": "开票功能正在规划中，暂时不能在线申请；需要发票请联系客服。",
+      "planned": {
+        "notice": "开票功能正在规划中",
+        "noticeBills": "暂时不能在线申请发票。需要发票请联系客服，告知账单号与开票抬头；已开出的发票仍可在「发票与抬头」里查看和下载。",
+        "noticeLedger": "暂时不能在线申请发票。需要发票请联系客服，告知账单号与开票抬头；已提交的申请与已开出的发票仍在下方，可以查看和下载。",
+        "contactCta": "联系客服"
+      }
     },
     "viewInvoices": "发票与抬头",
     "invoicesPage": {
       "title": "发票与抬头",
-      "description": "已开发票记录与开票抬头;申请发票在费用中心的账单行上发起。",
+      "description": "已提交的开票申请、已开出的发票，以及开票抬头。",
       "backToBilling": "返回费用中心"
     }
   },
