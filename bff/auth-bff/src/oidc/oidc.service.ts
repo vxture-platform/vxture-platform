@@ -2270,7 +2270,16 @@ export class OidcService {
     };
   }
 
-  /** refresh_token grant → rotated token response (reuse detection revokes the chain). */
+  /**
+   * refresh_token grant → 轮换后的令牌响应。
+   *
+   * 顺序是关键：**先校验、再消费**。三项校验（client 绑定 / 中央会话存在 /
+   * 是否已远程下线）全部跑在 `consumeRefreshToken` 之前。
+   *
+   * 旧写法把 `rotateRefreshToken` 放在最前面，于是上面任一项校验失败都已经
+   * **烧掉了一枚令牌**（标 rotated + 插入一枚永不交付的子令牌）；客户端重试时
+   * 拿的还是那枚已 rotated 的旧令牌 ⇒ 走重放门 ⇒ 整条链被吊销。
+   */
   async tokenWithRefresh(
     creds: OidcClientCredentials,
     grant: OidcRefreshGrant,
@@ -2280,26 +2289,37 @@ export class OidcService {
     }
     const client = await this.authClient(creds);
 
-    let rotated;
+    let located;
     try {
-      rotated = await this.token.rotateRefreshToken(grant.refreshToken);
+      located = await this.token.inspectRefreshToken(grant.refreshToken);
     } catch {
       throw new BadRequestException("invalid_grant");
     }
-    if (rotated.clientId !== client.clientId) {
+    const presented = located.rec;
+    if (presented.clientId !== client.clientId) {
       throw new BadRequestException("invalid_grant");
     }
-    const session = await this.redis.getOidcSession(rotated.sessionId);
+    const session = await this.redis.getOidcSession(presented.sessionId);
     if (!session) {
       throw new BadRequestException("invalid_grant");
     }
     // console「下线此设备」只翻持久镜像的 status:刷新时回查,已吊销就把 Redis 会话
     // 一并收掉——远程下线在下一次刷新生效。
-    if (await this.durableSession.isRevoked(rotated.sessionId)) {
-      await this.redis.deleteOidcSession(rotated.sessionId);
-      await this.token.revokeSession(rotated.sessionId);
+    if (await this.durableSession.isRevoked(presented.sessionId)) {
+      await this.redis.deleteOidcSession(presented.sessionId);
+      // 真登出：这里才该收整条会话（不传 clientId）。
+      await this.token.revokeSession(presented.sessionId);
       throw new BadRequestException("invalid_grant");
     }
+
+    /* 三项都过了，现在才消费。 */
+    let rotated;
+    try {
+      rotated = await this.token.consumeRefreshToken(located);
+    } catch {
+      throw new BadRequestException("invalid_grant");
+    }
+
     const activeOrg =
       (await this.redis.getOidcActiveOrg(rotated.sessionId, client.clientId)) ??
       null;
