@@ -680,28 +680,48 @@ export class AccountService {
     userId: string,
     reason: string,
   ): Promise<{ user: UserView; revoked: number }> {
-    const changed = await this.users.adminSetAccountStatus(userId, "disabled");
+    const changed = await this.setAdminStatus(
+      userId,
+      "disabled",
+      "account.locked",
+      reason,
+    );
+    const revoked = await this.users.revokeAllSessions(userId);
+    return { user: changed.user, revoked };
+  }
+
+  /**
+   * 运营改账号状态的共用外壳（锁定 / 解锁两条路只差一个状态值与一个模板码）。
+   *
+   * 抽它不是为了短，是因为中间那一句判据容易只改一半：
+   * **真改动了才发**（`changed.changed`）。本来就是那个状态的账号再执行一次，
+   * 什么都没变，不该再发一条（运营双击、重放都会走到）。而这一条**靠不了
+   * 收件箱的唯一键兑**：安全事件的去重锚按设计带时刻，两次锁定就是两条。
+   */
+  private async setAdminStatus(
+    userId: string,
+    status: "active" | "disabled",
+    code: AccountNotificationTemplate,
+    reason: string,
+  ): Promise<{ user: UserView; changed: boolean }> {
+    const changed = await this.users.adminSetAccountStatus(userId, status);
     if (!changed) {
       throw new NotFoundException("account_not_found");
     }
-    const revoked = await this.users.revokeAllSessions(userId);
-    /* 本来就是 disabled ⇒ 这一趟什么都没改 ⇒ 不发第二条（运营双击、admin 重放）。
-       靠不了收件箱的唯一键：安全事件的去重锚按设计带时刻，两次锁定是两条。 */
     if (changed.changed) {
-      await this.notifySecurity("account.locked", userId, { reason });
+      await this.notifySecurity(code, userId, { reason });
     }
-    return { user: changed.user, revoked };
+    return changed;
   }
 
   /** Re-enable a disabled customer account (status='active'). `reason` 同上。 */
   async adminEnableAccount(userId: string, reason: string): Promise<UserView> {
-    const changed = await this.users.adminSetAccountStatus(userId, "active");
-    if (!changed) {
-      throw new NotFoundException("account_not_found");
-    }
-    if (changed.changed) {
-      await this.notifySecurity("account.unlocked", userId, { reason });
-    }
+    const changed = await this.setAdminStatus(
+      userId,
+      "active",
+      "account.unlocked",
+      reason,
+    );
     return changed.user;
   }
 
