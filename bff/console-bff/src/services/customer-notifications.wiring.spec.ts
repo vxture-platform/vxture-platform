@@ -12,7 +12,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FactoryProvider } from "@nestjs/common";
 import { MailService } from "@vxture/core-mail";
-import { NotificationPreferencesService } from "@vxture/service-account";
+import {
+  AccountService,
+  NotificationPreferencesService,
+} from "@vxture/service-account";
 import { OrganizationService } from "@vxture/service-organization";
 import { SmsService } from "@vxture/service-sms";
 import {
@@ -42,43 +45,92 @@ describe("customerNotificationsProvider", () => {
       SubscriptionService,
       AddonService,
       OrganizationService,
+      AccountService,
     ]);
   });
 
-  it("四个服务都拿到同一个分发器（少挂一个 = 那一批通知静默不发）", () => {
-    const orders = stub();
-    const subscriptions = stub();
-    const addons = stub();
-    const orgs = stub();
-    const dispatcher = provider.useFactory(
-      {},
-      {},
-      {},
-      {},
-      orders,
-      subscriptions,
-      addons,
-      orgs,
-    );
-    expect(dispatcher).toBeDefined();
-    for (const svc of [orders, subscriptions, addons, orgs]) {
+  it("四个商务 / 组织服务都拿到同一个分发器（少挂一个 = 那一批通知静默不发）", () => {
+    const wired = build();
+    expect(wired.dispatcher).toBeDefined();
+    for (const svc of [
+      wired.orders,
+      wired.subscriptions,
+      wired.addons,
+      wired.orgs,
+    ]) {
       expect(svc.setCustomerNotifier).toHaveBeenCalledTimes(1);
-      expect(svc.setCustomerNotifier).toHaveBeenCalledWith(dispatcher);
+      expect(svc.setCustomerNotifier).toHaveBeenCalledWith(wired.dispatcher);
     }
   });
 
   it("组织服务在名单上：邀请的接受 / 拒绝 / 撤销全走 console 这条路", () => {
-    const orgs = stub();
-    const dispatcher = provider.useFactory(
-      {},
-      {},
-      {},
-      {},
-      stub(),
-      stub(),
-      stub(),
-      orgs,
+    const wired = build();
+    expect(wired.orgs.setCustomerNotifier).toHaveBeenCalledWith(
+      wired.dispatcher,
     );
-    expect(orgs.setCustomerNotifier).toHaveBeenCalledWith(dispatcher);
+  });
+
+  /*
+   * 账号安全事件（2026-09-29）。这三条用例合起来就是「拆掉接线就红」的那道门：
+   * 少挂 AccountService ⇒ 第一条红；把它挂到共享的那个分发器上 ⇒ 第二条红
+   * （运营通告流会被客户每次改密、换号、解绑刷满，owner 裁定 5 明文不许）；
+   * 忘了 `operatorMirror: null` ⇒ 第三条红。
+   */
+  it("账号服务拿到通知器（漏挂 = 十四条安全通知一句话都不发）", () => {
+    const wired = build();
+    expect(wired.accounts.setCustomerNotifier).toHaveBeenCalledTimes(1);
+    expect(wired.accounts.setCustomerNotifier.mock.calls[0]?.[0]).toBeDefined();
+  });
+
+  it("账号服务拿到的**不是**共享那一个：安全事件不进运营通告流", () => {
+    const wired = build();
+    expect(wired.securityDispatcher).not.toBe(wired.dispatcher);
+  });
+
+  it("安全那一个显式关掉了运营镜像（共享那一个照旧镜像）", () => {
+    const wired = build();
+    expect(mirrorOf(wired.securityDispatcher)).toBeNull();
+    expect(mirrorOf(wired.dispatcher)).not.toBeNull();
   });
 });
+
+/**
+ * 一次装配，把七个被注入方都换成桩。`inject` 与 `useFactory` 的形参是**位置对应**的两份
+ * 清单，所以这里的实参顺序也钉着上面那条用例里的顺序。
+ */
+function build() {
+  const orders = stub();
+  const subscriptions = stub();
+  const addons = stub();
+  const orgs = stub();
+  const accounts = stub();
+  const dispatcher = provider.useFactory(
+    {},
+    {},
+    {},
+    {},
+    orders,
+    subscriptions,
+    addons,
+    orgs,
+    accounts,
+  );
+  return {
+    dispatcher,
+    orders,
+    subscriptions,
+    addons,
+    orgs,
+    accounts,
+    securityDispatcher: accounts.setCustomerNotifier.mock.calls[0]?.[0],
+  };
+}
+
+/**
+ * 分发器有没有装运营镜像。读的是私有字段——刻意的：**这条用例要证的就是构造选项里那一个
+ * `operatorMirror: null` 还在**，而那件事在公开面上看不出来（`notify` 要一个真 pool 才跑）。
+ * 用私有字段当判据的代价是它随实现改名会红；那正是希望的：改名的人必须看到这条裁定。
+ */
+function mirrorOf(dispatcher: unknown): unknown {
+  return (dispatcher as { operatorMirror?: unknown }).operatorMirror ?? null;
+}

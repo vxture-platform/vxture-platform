@@ -1050,8 +1050,11 @@
         "tenant_change": {
           "title": "租户变更"
         },
-        "security": {
-          "title": "安全提醒"
+        "security_event": {
+          "title": "账号安全事件"
+        },
+        "login_activity": {
+          "title": "登录活动"
         },
         "invoice_progress": {
           "title": "开票进度"

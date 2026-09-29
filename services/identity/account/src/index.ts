@@ -31,7 +31,38 @@ export {
   ACCOUNT_DELETION_RETENTION_DAYS,
   USERNAME_CHANGE_COOLDOWN_DAYS,
   type DeletionRequestResult,
+  type PasswordWriteCause,
+  type PasswordWriteContext,
+  type PendingSignInNotice,
 } from "./service/account.service";
+
+/**
+ * 账号安全事件的客户通知契约（2026-09-29）。装配处（console-bff / auth-bff）拿
+ * `CustomerNotifier` 把 NotificationDispatcher 注进 AccountService——**结构兼容，不引包**。
+ */
+export {
+  ACTOR_PARAM,
+  PROVIDER_PARAM,
+  SECURITY_ACTORS,
+  SECURITY_NOTIFICATION_TEMPLATES,
+  SECURITY_REFERENCE_TYPE,
+  formatOccurredAt,
+  securityEventOf,
+  securityReferenceId,
+  type AccountNotificationTemplate,
+  type CustomerNotifier,
+  type CustomerNotifyInput,
+} from "./service/customer-notifier";
+export {
+  UNSEEN_DEVICE_LOOKBACK_DAYS,
+  deviceFingerprint,
+  isUnseenDevice,
+  securityNotice,
+  type SecurityNotifyExtras,
+  type SecurityNotifyFacts,
+  type SecurityNotifyGap,
+  type SecurityNotifyOutcome,
+} from "./service/security-notifications";
 export { PgUserRepository, MockUserRepository } from "./repository";
 export { ACCOUNT_PG_POOL, USER_REPOSITORY } from "./tokens";
 
@@ -56,4 +87,6 @@ export type {
   LastLoginRecord,
   LoginHistoryEntry,
   AuthSessionRecord,
+  AdminStatusChange,
+  SignInDeviceHistory,
 } from "./types/account.types";

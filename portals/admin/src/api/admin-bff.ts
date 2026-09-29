@@ -1741,39 +1741,44 @@ export async function resetTenantLogo(
 }
 
 // ── C12: admin-delegated customer account lifecycle (user:account.manage) ──
+//   处置原因**必填**（owner 2026-09-29）：那句话会被照抄进客户收到的那条通知。
+//   所以这三个函数的 `reason` 不再是可选的，请求体也不再有「没填就不带」那一档：
+//   admin-bff 与 IdP 两道边界都已经拿空值回 400，那一档能产出的**只有一个被拒的请求**。
+//   留着它不是宽容，是把失败往后拖一跳：类型上看不出问题，运营在界面上看到的是一句
+//   没有上下文的请求失败。（运营者自己那一侧的禁用 / 启用不在此列：那条边界没变。）
 
 export async function disableAccount(
   accountId: string,
-  reason?: string,
+  reason: string,
 ): Promise<{ ok: true; status: string; revoked: number }> {
   return mutateJson(
     `/api/accounts/${encodeURIComponent(accountId)}/disable`,
     "POST",
-    reason ? { reason } : {},
+    { reason },
     "Account disable failed",
   );
 }
 
 export async function enableAccount(
   accountId: string,
-  reason?: string,
+  reason: string,
 ): Promise<{ ok: true; status: string }> {
   return mutateJson(
     `/api/accounts/${encodeURIComponent(accountId)}/enable`,
     "POST",
-    reason ? { reason } : {},
+    { reason },
     "Account enable failed",
   );
 }
 
 export async function forceLogoutAccount(
   accountId: string,
-  reason?: string,
+  reason: string,
 ): Promise<{ ok: true; revoked: number }> {
   return mutateJson(
     `/api/accounts/${encodeURIComponent(accountId)}/force-logout`,
     "POST",
-    reason ? { reason } : {},
+    { reason },
     "Account force-logout failed",
   );
 }

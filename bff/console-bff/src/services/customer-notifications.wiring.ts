@@ -12,7 +12,10 @@
 import { Logger, type Provider } from "@nestjs/common";
 import type { Pool } from "pg";
 import { MailService } from "@vxture/core-mail";
-import { NotificationPreferencesService } from "@vxture/service-account";
+import {
+  AccountService,
+  NotificationPreferencesService,
+} from "@vxture/service-account";
 import {
   NotificationDispatcher,
   smsTemplatesFromEnv,
@@ -39,6 +42,7 @@ export const customerNotificationsProvider: Provider = {
     SubscriptionService,
     AddonService,
     OrganizationService,
+    AccountService,
   ],
   useFactory: (
     pool: Pool,
@@ -49,15 +53,17 @@ export const customerNotificationsProvider: Provider = {
     subscriptions: SubscriptionService,
     addons: AddonService,
     orgs: OrganizationService,
+    accounts: AccountService,
   ): NotificationDispatcher => {
-    const dispatcher = new NotificationDispatcher(pool, {
+    const options = {
       mail,
       sms,
       smsTemplates: smsTemplatesFromEnv(),
       prefs,
       consoleBaseUrl: process.env.CONSOLE_BASE_URL?.replace(/\/$/, ""),
       logger: new Logger("CustomerNotifications"),
-    });
+    };
+    const dispatcher = new NotificationDispatcher(pool, options);
     orders.setCustomerNotifier(dispatcher);
     subscriptions.setCustomerNotifier(dispatcher);
     /*
@@ -77,6 +83,28 @@ export const customerNotificationsProvider: Provider = {
      * 到期那一条的写入方是巡检作业，不在本进程，由 platform-api 那侧挂。
      */
     orgs.setCustomerNotifier(dispatcher);
+    /*
+     * 账号安全事件（2026-09-29）：**另一个分发器**，只为了 `operatorMirror: null`。
+     *
+     * owner 裁定 5：「安全事件不进运营通告流。」而镜像在两处都是无条件的——`OPERATOR_MIRROR`
+     * 的类型是 `Record<NotificationTemplateCode, …>`（每个模板都必须配一条，那张表里只有
+     * `info | warning` 两档加一个 `broadcast`，**没有「不镜像」这一档**），分发器又在第一个
+     * 站内收件人落库之后直接镜像、不看模板。所以把上面那个共享分发器交给 AccountService，
+     * 等于让客户每次自助改密、换手机号、解绑第三方、下线一台设备都在运营通告列表里生成一行。
+     *
+     * 现有形状里表达「这条不镜像」的地方**只有装配处**：`operatorMirror` 显式传 `null`，
+     * 那个选项的注释原话就是「显式 null = 不镜像（只给测试 / 明确不要镜像的装配处）」。
+     * 这是**既有的逃生口，不是发明的一档**——裁定明文写着「没有就停下来说，不要自己发明」，
+     * 所以这里用它，而没有去给 `OperatorMirrorEntry` 加字段、改分发器那条无条件路径。
+     * dispatch 那一侧同一件事也记在 `operator-mirror.ts` 账号安全线那一段里，并把「要不要
+     * 在模板这一层也能关掉」留作 owner 的开放项。
+     *
+     * 两个分发器共用同一个 pool / 邮件 / 短信 / 偏好：站内、邮件、偏好、投递账本的行为逐字
+     * 相同，差别只有镜像这一件。多一个实例的代价是一个对象，不多一条连接。
+     */
+    accounts.setCustomerNotifier(
+      new NotificationDispatcher(pool, { ...options, operatorMirror: null }),
+    );
     return dispatcher;
   },
 };

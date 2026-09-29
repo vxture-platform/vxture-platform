@@ -46,6 +46,7 @@ import { AvatarController } from "./avatar/avatar.controller";
 import { AvatarUploadController } from "./avatar/avatar-upload.controller";
 import { RedisModule } from "./redis/redis.module";
 import { HealthRouter } from "./routers/health.router";
+import { customerNotificationsProvider } from "./notifications/customer-notifications.wiring";
 
 @Module({
   imports: [
@@ -96,6 +97,13 @@ import { HealthRouter } from "./routers/health.router";
     InternalAuthGuard,
     TenantLoginGuard,
     AccessTokenGuard,
+    /*
+     * 账号安全事件的通知开关（2026-09-29）。**必须列在这里**：`AccountService` 的通知器
+     * 是 setter 注入的，未注入 = 一条都不发，而十四条里有七条只在本进程发生（邮件重置
+     * 令牌改密、运营锁定 / 解锁 / 下线全部会话、没见过的设备登录）。删掉这一行，那七条
+     * 静默消失而编译、守卫、boot-smoke 全绿——理由与验收条件都在 wiring 文件头里。
+     */
+    customerNotificationsProvider,
   ],
 })
 export class AppModule {}

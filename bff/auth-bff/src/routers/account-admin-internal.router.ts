@@ -15,6 +15,8 @@
  * verified-email semantics) is a deferred follow-up, not in this router.
  */
 import {
+  BadRequestException,
+  Body,
   Controller,
   HttpCode,
   HttpStatus,
@@ -25,6 +27,34 @@ import {
 } from "@nestjs/common";
 import { AccountService } from "@vxture/service-account";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
+
+/**
+ * S2S 请求体。admin-bff 的 `delegate` 一直就送 `{ actorOperatorId, reason }`——本路由此前
+ * 把整个 body 丢掉了，所以运营填的原因走到 IdP 就没了。
+ *
+ * `actorOperatorId` 这一批不用：客户正文里点名一个运营者的身份既无必要也是泄露，客户要
+ * 知道的是「平台做了这件事，原因是什么」。留着声明是为了说明这个字段确实在线上、不是猜的。
+ */
+interface AdminAccountActionBody {
+  actorOperatorId?: string;
+  reason?: string;
+}
+
+/**
+ * 运营填的原因：**必填**（owner 2026-09-29 裁定第 3 条），并原样进客户正文。
+ *
+ * 为什么门守在这里而不是只守在 admin 的表单上：表单是可以绕过的（这是 S2S 端点），而
+ * 「没有原因」的下游后果不是少一个字段，是**整条客户通知发不出去**——被平台锁掉的人于是
+ * 只能从一个他打不开的界面里猜为什么。空原因当场 400，比静默发一条半截话好。
+ *
+ * 这一条与 admin-bff 把那个字段改必填是**同一批的两半**：先合本半的话，admin 侧还在送
+ * undefined 的窗口期里这三个端点会 400。两半同一个 tag 出。
+ */
+function requireReason(body: AdminAccountActionBody | undefined): string {
+  const reason = body?.reason?.trim();
+  if (!reason) throw new BadRequestException("reason_required");
+  return reason;
+}
 
 @Controller("internal/account/users")
 @UseGuards(InternalAuthGuard)
@@ -38,16 +68,26 @@ export class AccountAdminInternalRouter {
   @HttpCode(HttpStatus.OK)
   async disable(
     @Param("id") id: string,
+    @Body() body: AdminAccountActionBody,
   ): Promise<{ ok: true; status: string; revoked: number }> {
-    const { user, revoked } = await this.accounts.adminDisableAccount(id);
+    const { user, revoked } = await this.accounts.adminDisableAccount(
+      id,
+      requireReason(body),
+    );
     return { ok: true, status: user.status, revoked };
   }
 
   // POST /internal/account/users/:id/enable — status='active'.
   @Post(":id/enable")
   @HttpCode(HttpStatus.OK)
-  async enable(@Param("id") id: string): Promise<{ ok: true; status: string }> {
-    const user = await this.accounts.adminEnableAccount(id);
+  async enable(
+    @Param("id") id: string,
+    @Body() body: AdminAccountActionBody,
+  ): Promise<{ ok: true; status: string }> {
+    const user = await this.accounts.adminEnableAccount(
+      id,
+      requireReason(body),
+    );
     return { ok: true, status: user.status };
   }
 
@@ -56,8 +96,12 @@ export class AccountAdminInternalRouter {
   @HttpCode(HttpStatus.OK)
   async revokeSessions(
     @Param("id") id: string,
+    @Body() body: AdminAccountActionBody,
   ): Promise<{ ok: true; revoked: number }> {
-    const { revoked } = await this.accounts.adminForceLogout(id);
+    const { revoked } = await this.accounts.adminForceLogout(
+      id,
+      requireReason(body),
+    );
     return { ok: true, revoked };
   }
 }

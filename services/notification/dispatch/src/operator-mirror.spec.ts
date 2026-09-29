@@ -23,8 +23,11 @@ import {
 } from "./operator-mirror";
 import {
   NOTIFICATION_TEMPLATES,
+  SECURITY_TEMPLATE_CODES,
   render,
+  securityEventStamp,
   type NotificationTemplateCode,
+  type SecurityTemplateCode,
   type TemplateParams,
 } from "./templates";
 /**
@@ -95,6 +98,25 @@ const inviteParams = {
   roleKey: "member",
   inviteeName: "ann@acme.example",
   expiresAt: "2026-10-06",
+};
+
+/* ── 账号安全线（2026-09-29）──
+   引用与展示时刻都**从 `securityEventStamp` 取，不手抄**：那个函数保证两者出自同一个 Date，
+   而手抄一串字面量的代价这一批已经付过一次（邀请那一组的长度算术两处各写一份、一起错）。
+   时刻故意带秒（平台的日期时间纪律点名了通知：同一分钟内的先后顺序最要紧）。 */
+const SEC_USER_NO = "8800000012";
+const SEC_AT = new Date("2026-09-29T12:14:32Z");
+const secStamp = (code: NotificationTemplateCode) =>
+  securityEventStamp(code as SecurityTemplateCode, SEC_USER_NO, SEC_AT);
+const secRef = (code: NotificationTemplateCode): MirrorReference =>
+  secStamp(code).reference;
+/** 十四条共用的展示时刻（同一个 Date ⇒ 同一个串）。 */
+const SEC_WHEN = secStamp("account.locked").occurredAt;
+const secParams: TemplateParams = { occurredAt: SEC_WHEN };
+/** 运营填的原因（owner 裁定 3：那三个弹窗的原因改必填，并照搬给客户）。 */
+const secReasonParams: TemplateParams = {
+  occurredAt: SEC_WHEN,
+  reason: "风控命中：同一账号在 10 分钟内 40 次失败登录",
 };
 
 const planParams = { productName: "Arda", planName: "Pro" };
@@ -368,6 +390,100 @@ const CASES: Record<NotificationTemplateCode, Case> = {
     severity: "info",
     title: "Acme 的成员邀请已过期（成员）",
   },
+  /* ── 账号安全线（2026-09-29）：**十四条全 info**。────────────────────────────
+     严重度的理由逐条写在 operator-mirror.ts 那一段里（问「哪个运营动作能让这条消失」，
+     十四条的答案都是「没有」）。**这十四条本该一条都不进运营通告流**（owner 裁定 5），
+     而这张表没有「不镜像」那一档——所以它们仍然有条目，只是现有形状里唯一的关法在装配处
+     （`operatorMirror: null`）。整件事记在 operator-mirror.ts 那一段里，这里只钉住行为：
+     真镜像出去的时候，标题与正文里**没有 IP、没有设备串、没有地区、没有 uuid**。 */
+  "account.locked": {
+    reference: secRef("account.locked"),
+    params: secReasonParams,
+    severity: "info",
+    title: `客户账号已被平台锁定（${SEC_WHEN}）`,
+  },
+  "account.unlocked": {
+    reference: secRef("account.unlocked"),
+    params: secReasonParams,
+    severity: "info",
+    title: `客户账号已解除锁定（${SEC_WHEN}）`,
+  },
+  "account.sessions_ended_by_operator": {
+    reference: secRef("account.sessions_ended_by_operator"),
+    params: secReasonParams,
+    severity: "info",
+    title: `客户账号已被平台全端下线（${SEC_WHEN}）`,
+  },
+  /* 操作者不进标题（那个词是客户视角写的），但**要进客户正文**——下面「完整一致」那条
+     断言会连正文一起比，所以这里给一个真码。 */
+  "account.password_changed": {
+    reference: secRef("account.password_changed"),
+    params: { occurredAt: SEC_WHEN, actorLabel: "tenant_admin" },
+    severity: "info",
+    title: `客户登录密码已修改（${SEC_WHEN}）`,
+  },
+  "account.password_reset": {
+    reference: secRef("account.password_reset"),
+    params: secParams,
+    severity: "info",
+    title: `客户已用邮件链接重置登录密码（${SEC_WHEN}）`,
+  },
+  "account.phone_changed": {
+    reference: secRef("account.phone_changed"),
+    params: secParams,
+    severity: "info",
+    title: `客户账号手机号已更换（${SEC_WHEN}）`,
+  },
+  "account.email_changed_old": {
+    reference: secRef("account.email_changed_old"),
+    params: secParams,
+    severity: "info",
+    title: `客户账号邮箱已换走，已通知原地址（${SEC_WHEN}）`,
+  },
+  "account.email_changed_new": {
+    reference: secRef("account.email_changed_new"),
+    params: secParams,
+    severity: "info",
+    title: `客户账号邮箱已换为新地址（${SEC_WHEN}）`,
+  },
+  /* 第三方登录参数里是**码**（dingtalk），标题里该出现的是词（钉钉）——与角色那一处
+     同一个缺陷形状，所以这里传码、断言词。 */
+  "account.identity_linked": {
+    reference: secRef("account.identity_linked"),
+    params: { occurredAt: SEC_WHEN, providerName: "dingtalk" },
+    severity: "info",
+    title: `客户绑定了「钉钉」登录（${SEC_WHEN}）`,
+  },
+  "account.identity_unlinked": {
+    reference: secRef("account.identity_unlinked"),
+    params: { occurredAt: SEC_WHEN, providerName: "dingtalk" },
+    severity: "info",
+    title: `客户解绑了「钉钉」登录（${SEC_WHEN}）`,
+  },
+  "account.password_login_enabled": {
+    reference: secRef("account.password_login_enabled"),
+    params: secParams,
+    severity: "info",
+    title: `客户开启了账号密码登录（${SEC_WHEN}）`,
+  },
+  "account.password_login_disabled": {
+    reference: secRef("account.password_login_disabled"),
+    params: secParams,
+    severity: "info",
+    title: `客户关闭了账号密码登录（${SEC_WHEN}）`,
+  },
+  "account.session_ended_by_self": {
+    reference: secRef("account.session_ended_by_self"),
+    params: secParams,
+    severity: "info",
+    title: `客户自行下线了一台设备（${SEC_WHEN}）`,
+  },
+  "account.new_device_signin": {
+    reference: secRef("account.new_device_signin"),
+    params: secParams,
+    severity: "info",
+    title: `客户在新设备上登录（${SEC_WHEN}）`,
+  },
 };
 
 const NOW = new Date("2026-09-28T10:00:00Z");
@@ -569,6 +685,68 @@ describe("composeOperatorNotice 正文与去重键", () => {
     expect(expired.length).toBeLessThanOrEqual(128);
     // 邀请引用落在 null 那一档：admin 侧没有按邀请的详情页（判据与订阅 / 公告相同）。
     for (const code of codes) expect(compose(code).link).toBeNull();
+  });
+
+  it("账号安全十四条：锚不含 uuid、每件事各一条、不给链接、最长仍在 128 之内", () => {
+    const codes = [...SECURITY_TEMPLATE_CODES];
+    /* 读不到要红，不许当成通过：这个数字也是「加了码却没进这一组」的探针。 */
+    expect(codes).toHaveLength(14);
+
+    const keys = codes.map((code) =>
+      mirrorDedupeKey(code, CASES[code].reference),
+    );
+    // 每件事各一条：十四个锚互不相同（模板名在锚里，所以同一时刻的两件事不互相吞掉）。
+    expect(new Set(keys).size).toBe(14);
+    for (const key of keys) {
+      expect(key).not.toMatch(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+      );
+      expect(key).toContain(SEC_USER_NO);
+      expect(key.length).toBeLessThanOrEqual(128);
+    }
+    /* 长度**按真实码表算，不手抄一个数**：最长模板码 + `security` + 锚。上一批的注释里
+       手抄的那个数算漏了一档，所以这里连「最长的是哪一条」都让代码去找。 */
+    const longestCode = codes.reduce((a, b) => (b.length > a.length ? b : a));
+    expect(longestCode).toBe("account.sessions_ended_by_operator");
+    const longestKey = mirrorDedupeKey(
+      longestCode,
+      CASES[longestCode].reference,
+    );
+    expect(
+      longestKey.startsWith(`${longestCode}:security:sec:${SEC_USER_NO}:`),
+    ).toBe(true);
+    expect(longestKey.length).toBe(110);
+    expect(128 - longestKey.length).toBe(18);
+    // 安全事件没有 admin 详情页（判据与订阅 / 邀请 / 公告相同）。
+    for (const code of codes) expect(compose(code).link).toBeNull();
+  });
+
+  it("账号安全的镜像正文里没有 IP、没有设备串、没有地区、没有邮箱手机号", () => {
+    /* 这一条是 owner 裁定 5 的**第二半**：那一档「不镜像」这张表表达不出来（理由见
+       operator-mirror.ts），所以至少要钉住「万一镜像出去了，运营屏幕上也不会出现客户的
+       设备与位置」。判据落在**镜像正文**上而不是模板表上：正文 = 客户收到的原文，原文里
+       没有的东西这里也变不出来，反过来说原文里一旦被加上，这条当场红。 */
+    for (const code of [...SECURITY_TEMPLATE_CODES]) {
+      const body = compose(code).body;
+      for (const leak of [
+        "User-Agent",
+        "user-agent",
+        "Mozilla",
+        "Chrome",
+        "Windows",
+        "iPhone",
+        "@",
+        "IP",
+        "ip 地址",
+        "地区",
+        "城市",
+      ]) {
+        expect(body).not.toContain(leak);
+      }
+      // 纯数字的一串（IPv4 的点分十进制、或一个手机号）也不许出现。
+      expect(body).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+      expect(body).not.toMatch(/\b1\d{10}\b/);
+    }
   });
 
   it("租户引用给租户页链接", () => {

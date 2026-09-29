@@ -12,6 +12,8 @@ import type {
   LastLoginRecord,
   LoginHistoryEntry,
   SetAvatarInput,
+  SignInDeviceHistory,
+  AdminStatusChange,
   UpdateProfileInput,
   UserCredentialRecord,
   UserReadRepository,
@@ -46,6 +48,26 @@ interface UserRow {
  * pending 照旧隐身。三条读谓词共用这一句,别各写各的。
  */
 const READABLE_STATUS_SQL = `u.status in ('active', 'deleting')`;
+
+/**
+ * UserView 的列清单与三张表的连接,一处定义。
+ *
+ * 抽出来是因为 2026-09-29 起有**两个**读谓词共用它:面向客户的 `getUserById`
+ * (按 READABLE_STATUS_SQL 过滤) 与面向运营的 `findUserForAdmin`(不过滤状态)。
+ * 各抄一份列清单的后果不是报错,而是某天只给一边加了新字段——而那一边正好不是
+ * 你在看的那一边。这里拼进模板串的是**静态片段**,没有任何值走字符串拼接。
+ */
+const USER_VIEW_SELECT_SQL = `select u.id, u.account, u.email, u.email_verified_at::text as email_verified_at,
+              u.phone, u.phone_verified_at::text as phone_verified_at,
+              p.display_name as name, u.status, p.avatar_hash, p.bio, p.gender, p.timezone, p.language,
+              u.account_changed_at::text as account_changed_at,
+              u.account_login_disabled,
+              u.user_no::text as user_no, u.created_at::text as created_at,
+              (c.password_hash is not null) as has_password,
+              u.deletion_requested_at::text as deletion_requested_at
+         from account.users u
+         left join account.user_profiles p on p.user_id = u.id
+         left join credential.user_credentials c on c.user_id = u.id`;
 
 interface UserCredentialRow {
   id: string;
@@ -155,18 +177,33 @@ export class PgUserRepository implements UserReadRepository {
 
   async getUserById(userId: string): Promise<UserView | null> {
     const result = await this.pool.query<UserRow>(
-      `select u.id, u.account, u.email, u.email_verified_at::text as email_verified_at,
-              u.phone, u.phone_verified_at::text as phone_verified_at,
-              p.display_name as name, u.status, p.avatar_hash, p.bio, p.gender, p.timezone, p.language,
-              u.account_changed_at::text as account_changed_at,
-              u.account_login_disabled,
-              u.user_no::text as user_no, u.created_at::text as created_at,
-              (c.password_hash is not null) as has_password,
-              u.deletion_requested_at::text as deletion_requested_at
-         from account.users u
-         left join account.user_profiles p on p.user_id = u.id
-         left join credential.user_credentials c on c.user_id = u.id
+      `${USER_VIEW_SELECT_SQL}
         where u.id = $1 and u.deleted_at is null and ${READABLE_STATUS_SQL}
+        limit 1`,
+      [userId],
+    );
+    return mapUser(result.rows[0]);
+  }
+
+  /**
+   * 运营视角的读：**不按状态过滤**（2026-09-29）。
+   *
+   * 为什么必须另有这一条：`getUserById` 的读谓词是 `status in ('active','deleting')`，
+   * 于是「把账号置为 disabled 之后回读它」恒为 null。三条运营处置全被这一点噎住：
+   *   · `adminSetAccountStatus(userId,'disabled')` 写成功之后回读拿到 null，
+   *     `adminDisableAccount` 据此抛 404 —— 账号**已经**被禁用、会话却还没吊，
+   *     而运营那边读到的是「账号不存在」。
+   *   · `adminForceLogout` 先 `getUserById` 当存在性门，所以已锁定的账号根本强制不了下线。
+   * 这不是通知这一批引入的，是这一批第一次需要它成立（没有它，
+   * `security.account_locked` 那条通知的写入方永远走不到）。
+   *
+   * 仍然过滤 `deleted_at is null`：清扫过的账号对运营也不该再出现。realm 隔离不变——
+   * 只读 `account.users`，运营 id 照旧落空回 null。
+   */
+  async findUserForAdmin(userId: string): Promise<UserView | null> {
+    const result = await this.pool.query<UserRow>(
+      `${USER_VIEW_SELECT_SQL}
+        where u.id = $1 and u.deleted_at is null
         limit 1`,
       [userId],
     );
@@ -372,10 +409,10 @@ export class PgUserRepository implements UserReadRepository {
     }
   }
 
-  async bindIdentity(input: BindIdentityInput): Promise<void> {
+  async bindIdentity(input: BindIdentityInput): Promise<boolean> {
     const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
     try {
-      await this.pool.query(
+      const result = await this.pool.query(
         `insert into identity.identities
            (user_id, provider, provider_subject, metadata, created_at, updated_at)
          values ($1, $2, $3, $4, now(), now())
@@ -387,6 +424,9 @@ export class PgUserRepository implements UserReadRepository {
           metadata,
         ],
       );
+      /* 0 行 = 这个 (provider, subject) 早就绑过了，本趟什么都没改（社交登录每次都会
+         走到这里）。调用方据此不发通知——「你绑定了新的第三方账号」一天发五遍是错的。 */
+      return (result.rowCount ?? 0) > 0;
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException("identity already bound");
@@ -395,12 +435,13 @@ export class PgUserRepository implements UserReadRepository {
     }
   }
 
-  async removeIdentity(userId: string, provider: string): Promise<void> {
-    await this.pool.query(
+  async removeIdentity(userId: string, provider: string): Promise<boolean> {
+    const result = await this.pool.query(
       `delete from identity.identities
         where user_id = $1 and provider = $2`,
       [userId, provider.trim()],
     );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async findUserByProviderSubject(
@@ -681,6 +722,59 @@ export class PgUserRepository implements UserReadRepository {
     }));
   }
 
+  /**
+   * 回看窗口内**成功**登录过的设备史（未见过的设备提醒）。
+   *
+   * 两件事一趟问完：按 user_agent 分组 + 每组行数 —— 组数就是「见过哪些设备」，行数之和
+   * 就是「之前成功登录过几次」。分两趟查会让「第一次登录」这个判据与设备集合各看一个
+   * 时点，中间又来一次登录就两头对不上。
+   *
+   * 天数走 `make_interval(days => $2::int)` 而不是拼 `$2 || ' days'`：值一律绑定，
+   * 别让一个数字走字符串拼接这条路（lint:anchor-writes 的那条纪律对所有 SQL 成立，
+   * 不只对写路径）。
+   */
+  async listRecentSignInDevices(
+    userId: string,
+    withinDays: number,
+  ): Promise<SignInDeviceHistory> {
+    const days = Math.min(Math.max(Math.trunc(withinDays), 1), 3650);
+    const result = await this.pool.query<{
+      user_agent: string | null;
+      hits: number;
+    }>(
+      `select user_agent, count(*)::int as hits
+         from session.login_attempts
+        where user_id = $1
+          and result = 'success'
+          and created_at > now() - make_interval(days => $2::int)
+        group by user_agent`,
+      [userId, days],
+    );
+    let priorSuccesses = 0;
+    const userAgents: (string | null)[] = [];
+    for (const row of result.rows) {
+      priorSuccesses += row.hits;
+      userAgents.push(row.user_agent);
+    }
+    return { priorSuccesses, userAgents };
+  }
+
+  /**
+   * 个人租户 id。`type = 'personal'` 上有部分唯一索引（一个账号至多一个），所以
+   * `limit 1` 只是防御性的，不是在挑一行。过滤 `deleted_at is null`：软删掉的个人租户
+   * 不能再当收件箱的归属，否则一条外键还在、界面却查不到那个租户。
+   */
+  async findPersonalTenantId(userId: string): Promise<string | null> {
+    const result = await this.pool.query<{ id: string }>(
+      `select id
+         from tenancy.tenants
+        where owner_user_id = $1 and type = 'personal' and deleted_at is null
+        limit 1`,
+      [userId],
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
   async listSessions(userId: string): Promise<AuthSessionRecord[]> {
     const result = await this.pool.query<{
       sid: string;
@@ -725,14 +819,20 @@ export class PgUserRepository implements UserReadRepository {
   async adminSetAccountStatus(
     userId: string,
     status: "active" | "disabled",
-  ): Promise<UserView | null> {
-    await this.pool.query(
+  ): Promise<AdminStatusChange | null> {
+    /* `status <> $2` 把「这一趟改了什么吗」变成 rowCount 能回答的问题:重复锁定
+       (运营双击、admin 重放) 于是 changed=false,调用方据此不发第二条通知——
+       而通知的去重键带时刻,不靠它挡不住重复。端点仍然幂等:回读照样给视图。 */
+    const result = await this.pool.query(
       `update account.users
           set status = $2, updated_at = now()
-        where id = $1 and deleted_at is null`,
+        where id = $1 and deleted_at is null and status <> $2`,
       [userId, status],
     );
-    return this.getUserById(userId);
+    /* 回读走 findUserForAdmin 而不是 getUserById:置为 disabled 之后后者恒为 null
+       (读谓词只放行 active / deleting),于是整条处置在写成功之后抛 404。 */
+    const user = await this.findUserForAdmin(userId);
+    return user ? { user, changed: (result.rowCount ?? 0) > 0 } : null;
   }
 
   async revokeAllSessions(userId: string): Promise<number> {

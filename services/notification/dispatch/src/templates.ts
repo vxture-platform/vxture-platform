@@ -113,7 +113,62 @@ export type NotificationTemplateCode =
   | "tenant.invitation_accepted"
   | "tenant.invitation_declined"
   | "tenant.invitation_revoked"
-  | "tenant.invitation_expired";
+  | "tenant.invitation_expired"
+  /* ── 账号安全线（2026-09-29，owner 六条裁定）──────────────────────────────
+     普查的结论是**每一件账号安全上的事都没有人告诉客户**：运营锁定 / 解锁 / 强制下线，
+     客户自己改密码、改手机号、改邮箱、绑解绑三方、翻密码登录开关、下线自己的设备，
+     以及在没见过的设备上登录。其中最要紧的一条是**凭据被重置令牌改掉**
+     （auth-bff 的邮件链接那条路）——它今天既不落审计行也不发通知，而那正是账号被接管时
+     真正会走的那条路。所以这一批**在写路径上直接发**，不靠扫审计行：两条改密路径
+     （auth-bff 的重置令牌、website-bff 的改密）都没有审计行，按审计做判据的巡检会
+     静默漏掉恰恰最要紧的两条。
+
+     **十四条，不是十二条。** 三处按「事实不同就拆开」拆了（判据与 subscription.cancelled_*
+     三条、加油包「用尽 / 过期」两条相同）：
+       · 邮箱变更 = **两条**（owner 裁定 4：旧地址与新地址都发）。不是「一条模板发两次」：
+         两个收件人视角不同，而**旧地址那条不许要求客户还进得去账号**——被接管之后登录与
+         找回都已指向新邮箱，写「去「我的账号」改密码」就是让他去一个他已经进不去的地方。
+         同一条判据在邀请四态那里已经用过：「一条模板写不出两个收件人视角」。
+       · 密码登录开关 = **两条**（开 / 关）。关掉之后「只能用手机 / 邮箱 / 三方动态验证登录」
+         是一句必须说出来的话，开启之后要说的是另一件事，一条里写「或者…或者」说不清。
+       · 全端下线（运营）与自己下线一台设备 = **两条**。前者是平台的处置、带运营填的原因、
+         客户什么也不用做只需重新登录；后者是客户自己刚点的，回执的意义在于「如果不是你点的，
+         这是你唯一的线索」。
+
+     **不做的三件**（做了就是死代码，各自缺前置，见 security-line 普查）：多因素认证的
+     启用 / 解绑（三张表字段与列锁全建好，全仓零写入方）、按国家地区的异地登录
+     （`session.login_attempts.country_code` 列在、唯一的 INSERT 从不写它）、靠
+     `session.auth_sessions` 巡检补发「会话被结束」（耐久镜像是尽力而为、Redis 才是主）。
+
+     **参数契约**（本批三个写入方共用，不许各自另起一套）：
+       occurredAt  事情发生的时刻，**已格式化的字符串**，由 `securityEventStamp` 产出；
+                   绝不传 Date——`interpolate` 会把它 String() 成一串英文 GMT。
+       actorLabel  操作者，只有「谁做的会变」的那一条要（密码修改：本人 / 组织管理员）。
+                   **放码不放词**，理由与 roleKey 完全相同，见 ACTOR_PARAM 那一段。
+       providerName 第三方登录的**码**（google / feishu / dingtalk / wechat），同样渲染时成词。
+       reason      运营填的原因，owner 裁定 3 把运营那三个弹窗的原因改成**必填并照搬给客户**。
+                   形状照已在发的 `refund.rejected` / `order.payment_rejected`。
+     **一个 uuid 都不写**：文案里没有，去重锚里也没有——`reference_id` 被客户收件箱的读
+     路径原样投影给浏览器（console-bff 的 inbox.router → `InboxMessage.referenceId`），
+     所以锚只用可视的用户号 + 事件名 + 时刻（见 `securityEventStamp`）。时刻**必须在锚里**：
+     这些事会重复（客户一天可以改两次密码），少了它收件箱那个唯一键会把第二次压掉。
+
+     **短信**：这十四条一条都没进 `smsParams` 的 switch（默认回 `{}`），所以不发短信。
+     不是遗漏——短信模板要按模板码逐条去阿里云报备，没报备的模板发不出去。 */
+  | "account.locked"
+  | "account.unlocked"
+  | "account.sessions_ended_by_operator"
+  | "account.password_changed"
+  | "account.password_reset"
+  | "account.phone_changed"
+  | "account.email_changed_old"
+  | "account.email_changed_new"
+  | "account.identity_linked"
+  | "account.identity_unlinked"
+  | "account.password_login_enabled"
+  | "account.password_login_disabled"
+  | "account.session_ended_by_self"
+  | "account.new_device_signin";
 
 /**
  * 业务引用类型 = 「reference_id 住在哪张表」这个问题的答案（`support.inbox_messages`
@@ -137,13 +192,25 @@ export type NotificationReferenceType =
   | "announcement"
   | "invitation"
   | "tenant"
-  | "addon";
+  | "addon"
+  /**
+   * 2026-09-29 账号安全线新增。**它故意不指向任何一张表**：账号安全事件在库里没有一行
+   * 属于自己的记录（两条改密路径连审计行都没有），reference_id 是算出来的
+   * （`securityEventStamp`：可视用户号 + 事件名 + 时刻）。
+   *
+   * 不复用 `tenant`：那个值的既有含义是 `tenancy.tenants` 的行，而 `mirrorLink` 对它会
+   * 产出 `/tenants/{tenant_no}`——安全事件的引用 id 不是 tenant_no，那会是一条点开 404
+   * 的死链（与批 5 不肯把加油包并进 `order` 是同一条理由）。
+   * 这个值落在 `mirrorLink` 与 `resolveCodes` 的兜底档里：不查库、不给链接。
+   * 先例：`ops_signal`（platform-api 的热路径信号）同样是「库里没有行」的引用类型。
+   */
+  | "security";
 
 /**
  * 偏好主题（与 @vxture/service-account NOTIFICATION_TOPICS 同一集合）。
  *
- * 这里只列**本包发得出模板**的那几个；那边的全集还含事件源已存在、模板待接的三个
- * （界面标「开发中」：security / invoice_progress / ticket_activity）。两边不一致会被
+ * 这里只列**本包发得出模板**的那几个；那边的全集还含事件源已存在、模板待接的两个
+ * （界面标「开发中」：invoice_progress / ticket_activity）。两边不一致会被
  * `topicOf` 的穷尽映射挡住——它对每个模板键显式给主题，加模板忘了给主题就编译不过。
  *
  * 2026-09-28 批 5 加两个：`verification_result`（企业认证结果）与 `quota_alert`
@@ -167,7 +234,22 @@ export type NotificationTopic =
   | "order_status"
   | "tenant_change"
   | "verification_result"
-  | "quota_alert";
+  | "quota_alert"
+  /* 2026-09-29 账号安全线：**两个主题，不是一个**（owner 裁定 2，判据与邀请那一刀完全相同
+     ——一行开关的粒度只有「主题 × 渠道」，两种性质不同的事同住一行时，为了保住必须送到的
+     那一半，另一半就跟着关不掉）。
+       `security_event`  —— 账号安全事件（十三条：运营处置、凭据与联系方式变更、三方绑解绑、
+         密码登录开关、自己下线设备）。**站内恒锁**：账号被接管时客户必须至少有一条到达路径，
+         这不是产品偏好。**邮件默认开**（owner 裁定 1）——被锁定、被全端下线的客户打不开站内
+         收件箱，解释躺在一个他进不去的地方等于没送到。
+       `login_activity`  —— 只装「没见过的设备登录」这一条（owner 裁定 6：只算设备不算 IP，
+         不然用移动网络的客户几乎每次登录都收一条）。**三个渠道全部可开关、不进锁定集合**：
+         拆两行的全部意义就在这里，客户嫌吵能整条关掉，而关掉它不会连带静音「你的密码被改了」。
+     偏好中心那张清单（@vxture/service-account 的 NOTIFICATION_TOPICS）把旧的 `security`
+     改成 `security_event` 并新增 `login_activity`；漏了由那边「派发侧每个主题都在偏好清单里」
+     那条用例当场红。 */
+  | "security_event"
+  | "login_activity";
 
 export type NotificationLocale = "zh-CN" | "en-US";
 
@@ -221,7 +303,48 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
     "{{inviteeName}} 拒绝了加入 {{tenantName}} 的邀请",
   "tenant.invitation_revoked": "{{tenantName}} 的邀请已撤回",
   "tenant.invitation_expired": "邀请已过期：{{tenantName}}",
+  /* ── 账号安全线（2026-09-29）──
+     标题只说**发生了什么**，时刻与下一步在正文里：标题也是邮件主题，把时刻塞进主题行会
+     把它挤到看不见（收件箱列表与邮件客户端都截宽）。
+     **一律不出现 IP 与 User-Agent**：那两串是给排查用的，念给客户听既读不懂又会被照抄
+     进运营镜像的正文（见 operator-mirror.ts 那一段）。 */
+  "account.locked": "账号已被锁定",
+  "account.unlocked": "账号已解除锁定",
+  "account.sessions_ended_by_operator": "账号已在所有设备退出登录",
+  "account.password_changed": "登录密码已修改",
+  "account.password_reset": "登录密码已通过邮件链接重置",
+  "account.phone_changed": "账号手机号已更换",
+  "account.email_changed_old": "账号邮箱已从这个地址换走",
+  "account.email_changed_new": "账号邮箱已更换为这个地址",
+  /* 第三方的名字进「」：它是插值，而「钉钉」与「Google」对空格的要求相反
+     （中文与拉丁之间该有空格、两段中文之间不该有），一条模板做不到两头都对。
+     「」是本仓既有的写法（「我的账号」「成员管理」），两种名字放进去都读得顺。 */
+  "account.identity_linked": "已绑定「{{providerName}}」登录",
+  "account.identity_unlinked": "已解绑「{{providerName}}」登录",
+  "account.password_login_enabled": "账号密码登录已开启",
+  "account.password_login_disabled": "账号密码登录已关闭",
+  "account.session_ended_by_self": "已有一台设备退出登录",
+  "account.new_device_signin": "新设备登录",
 };
+
+/**
+ * 账号安全线的「如果不是你」尾句，两种语言各一句，**十条模板共用同一句**。
+ *
+ * 抽成常量而不是逐条抄：这句话里许诺的两个动作必须**真的存在**，而它们都在
+ * 「我的账号」的「账号安全」卡片上（`portals/console/.../profile/SecurityCard.tsx`：
+ * 密码一行可改、「活跃会话」一行每条可「下线」）。逐条抄十遍，改一处就会有九处仍指向
+ * 一个已经搬走的入口——而客户按着一句失效的指引去处置账号被接管，代价落在他身上。
+ *
+ * 「无法登录时请联系客服」是**必要的第二条腿**：账号已经被接管的人往往登不进去，
+ * 而「联系客服」是本仓既有的逃生口（`subscription.suspended` / `refund.rejected` /
+ * `refund.failed` 都用它）。不新造一个入口。
+ *
+ * **不写原因、不写猜测**：平台不知道那次操作是谁做的，写「可能是你在别处登录」是编话。
+ */
+const IF_NOT_YOU_ZH =
+  "如果不是你本人操作，请立即在「我的账号」重新设置密码，并把其它设备下线；无法登录时请联系客服。";
+const IF_NOT_YOU_EN =
+  "If this was not you, set a new password under My account right away and sign your other devices out; contact support if you cannot sign in.";
 
 const BODIES_ZH: Record<NotificationTemplateCode, string> = {
   "subscription.expiring_soon":
@@ -361,6 +484,57 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
      了」——没人接受与明确拒绝是两件事，库里也是两个状态。 */
   "tenant.invitation_expired":
     "{{inviteeName}} 未在 {{expiresAt}} 前接受以「{{roleKey}}」身份加入 {{tenantName}} 的邀请，这条邀请已过期。需要的话可以在「成员管理」重新邀请。",
+  /* ── 账号安全线（2026-09-29）──
+     每一条都说齐三件事：**发生了什么 / 什么时候 / 如果不是你该做什么**。
+     第三件是这一批存在的理由——少了它，客户读完只剩恐慌，不知道下一步去哪。
+     运营处置那三条的第三件不是「改密码」而是「联系客服」：那三条里客户没有可自助的动作，
+     而被锁定的人根本进不去「我的账号」。 */
+  "account.locked":
+    "平台已于 {{occurredAt}} 锁定你的账号，锁定期间无法登录。原因：{{reason}}。如需解除锁定请联系客服。",
+  "account.unlocked":
+    "平台已于 {{occurredAt}} 解除你账号的锁定，现在可以正常登录。原因：{{reason}}。如有疑问请联系客服。",
+  "account.sessions_ended_by_operator":
+    "平台已于 {{occurredAt}} 结束你账号在所有设备上的登录，需要重新登录一次。原因：{{reason}}。如有疑问请联系客服。",
+  "account.password_changed":
+    "你的登录密码已于 {{occurredAt}} 由{{actorLabel}}修改，旧密码不再可用。" +
+    IF_NOT_YOU_ZH,
+  "account.password_reset":
+    "你的登录密码已于 {{occurredAt}} 通过发往你邮箱的重置链接重新设置，旧密码不再可用。" +
+    IF_NOT_YOU_ZH,
+  "account.phone_changed":
+    "你账号绑定的手机号已于 {{occurredAt}} 更换，之后的短信通知与手机号验证都发往新号码。" +
+    IF_NOT_YOU_ZH,
+  /* 写给**旧地址**。这条不许要求客户还进得去账号：邮箱被换掉之后登录与找回都已指向新地址，
+     让他去「我的账号」改密码就是把他指向一个他已经进不去的地方。所以只留「联系客服」。
+     也**不印出新地址**：这封信正发往一个可能已经不属于本人的信箱的对面那一半。 */
+  "account.email_changed_old":
+    "你账号绑定的邮箱已于 {{occurredAt}} 换成另一个地址。这个邮箱不再收到该账号的通知，也不能再用于登录和找回。如果不是你本人操作，请立即联系客服——此时账号的登录与找回都已指向新邮箱。",
+  "account.email_changed_new":
+    "你账号绑定的邮箱已于 {{occurredAt}} 更换为这个地址，之后的通知与邮箱登录都用它。" +
+    IF_NOT_YOU_ZH,
+  "account.identity_linked":
+    "你的账号已于 {{occurredAt}} 绑定「{{providerName}}」，之后可以用它登录。" +
+    IF_NOT_YOU_ZH,
+  "account.identity_unlinked":
+    "你的账号已于 {{occurredAt}} 解绑「{{providerName}}」，它不能再用于登录。" +
+    IF_NOT_YOU_ZH,
+  "account.password_login_enabled":
+    "你的账号已于 {{occurredAt}} 开启账号密码登录，现在可以用密码登录。" +
+    IF_NOT_YOU_ZH,
+  /* 「只能用手机 / 邮箱 / 三方动态验证登录」与「我的账号」那一页的提示逐字同源
+     （profilePage.security.accountLoginHint）——同一件事两处不许各写各的。 */
+  "account.password_login_disabled":
+    "你的账号已于 {{occurredAt}} 关闭账号密码登录，之后只能用手机 / 邮箱 / 三方动态验证登录。" +
+    IF_NOT_YOU_ZH,
+  "account.session_ended_by_self":
+    "你于 {{occurredAt}} 把一台设备从账号中下线，该设备需要重新登录。" +
+    IF_NOT_YOU_ZH,
+  /* 只说「一台此前没有用过的设备」，**不印设备串也不印 IP**：User-Agent 是给排查看的，
+     念给客户听既读不懂、又会连带出现在运营镜像的正文里。哪台设备客户在「我的账号」的
+     「活跃会话」里看得到，那一页是给这件事准备的。 */
+  "account.new_device_signin":
+    "你的账号于 {{occurredAt}} 在一台此前没有用过的设备上登录。" +
+    IF_NOT_YOU_ZH,
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -413,6 +587,22 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
     "{{inviteeName}} declined the invitation to {{tenantName}}",
   "tenant.invitation_revoked": "Invitation to {{tenantName}} withdrawn",
   "tenant.invitation_expired": "Invitation expired: {{tenantName}}",
+  "account.locked": "Your account has been locked",
+  "account.unlocked": "Your account has been unlocked",
+  "account.sessions_ended_by_operator": "You were signed out on every device",
+  "account.password_changed": "Your sign-in password was changed",
+  "account.password_reset":
+    "Your sign-in password was reset with an emailed link",
+  "account.phone_changed": "The phone number on your account changed",
+  "account.email_changed_old":
+    "Your account email was moved away from this address",
+  "account.email_changed_new": "This address is now your account email",
+  "account.identity_linked": "{{providerName}} sign-in connected",
+  "account.identity_unlinked": "{{providerName}} sign-in disconnected",
+  "account.password_login_enabled": "Password sign-in turned on",
+  "account.password_login_disabled": "Password sign-in turned off",
+  "account.session_ended_by_self": "A device was signed out of your account",
+  "account.new_device_signin": "Sign-in from a new device",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -490,6 +680,44 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "The invitation for you to join {{tenantName}} as {{roleKey}} has been withdrawn and can no longer be used.",
   "tenant.invitation_expired":
     "{{inviteeName}} did not accept the invitation to join {{tenantName}} as {{roleKey}} before {{expiresAt}}, so the invitation has expired. You can send a new invitation under Members.",
+  "account.locked":
+    "We locked your account on {{occurredAt}}; you cannot sign in while it is locked. Reason: {{reason}}. Contact support to have the lock removed.",
+  "account.unlocked":
+    "We removed the lock on your account on {{occurredAt}} and you can sign in again. Reason: {{reason}}. Contact support if you have questions.",
+  "account.sessions_ended_by_operator":
+    "We ended every session on your account on {{occurredAt}}, so you need to sign in once more. Reason: {{reason}}. Contact support if you have questions.",
+  "account.password_changed":
+    "Your sign-in password was changed on {{occurredAt}} by {{actorLabel}}, and the old password no longer works. " +
+    IF_NOT_YOU_EN,
+  "account.password_reset":
+    "Your sign-in password was reset on {{occurredAt}} with the reset link sent to your mailbox, and the old password no longer works. " +
+    IF_NOT_YOU_EN,
+  "account.phone_changed":
+    "The phone number on your account was changed on {{occurredAt}}; SMS notices and phone verification now go to the new number. " +
+    IF_NOT_YOU_EN,
+  "account.email_changed_old":
+    "The email on your account was changed to a different address on {{occurredAt}}. This mailbox no longer receives notices for that account and can no longer be used to sign in or recover it. If this was not you, contact support right away — sign-in and recovery now point at the new address.",
+  "account.email_changed_new":
+    "The email on your account was changed to this address on {{occurredAt}}; notices and email sign-in now use it. " +
+    IF_NOT_YOU_EN,
+  "account.identity_linked":
+    "{{providerName}} was connected to your account on {{occurredAt}} and can now be used to sign in. " +
+    IF_NOT_YOU_EN,
+  "account.identity_unlinked":
+    "{{providerName}} was disconnected from your account on {{occurredAt}} and can no longer be used to sign in. " +
+    IF_NOT_YOU_EN,
+  "account.password_login_enabled":
+    "Password sign-in was turned on for your account on {{occurredAt}}, so a password now works for signing in. " +
+    IF_NOT_YOU_EN,
+  "account.password_login_disabled":
+    "Password sign-in was turned off for your account on {{occurredAt}}; from now on only phone, email or social one-time codes work. " +
+    IF_NOT_YOU_EN,
+  "account.session_ended_by_self":
+    "On {{occurredAt}} one device was signed out of your account and has to sign in again. " +
+    IF_NOT_YOU_EN,
+  "account.new_device_signin":
+    "Your account signed in on {{occurredAt}} from a device it has not been used on before. " +
+    IF_NOT_YOU_EN,
 };
 
 /**
@@ -540,19 +768,119 @@ const ROLE_FALLBACK: Record<NotificationLocale, string> = {
   "en-US": "an unspecified role",
 };
 
+/**
+ * 操作者码 → 该语言的说法（2026-09-29 账号安全线）。
+ *
+ * 与角色码**同一条理由、同一条路径**：发侧传码、渲染时成词。发侧不知道收件人读哪种语言，
+ * 在那边先翻好就会在一封中文正文里印出英文——`tenant.invitation` 上线过的正是这个缺陷。
+ * 参数名 `actorLabel` 由本批三个写入方的共同契约钉住（不叫 actorKey），但**值一律是码**；
+ * 名字读起来像词而值是码这件事，只能靠这段注释和用例守住，所以两处都写了。
+ *
+ * 今天真有写入方的只有前两个：`self`（客户自己在「我的账号」改密码 / 首次设密）与
+ * `tenant_admin`（组织管理员代设成员密码）。`operator` 留着是**跨包的安全网**：三个写入方
+ * 分在三个包里，谁传了一个这张表没有的码，客户读到的就是回落那句「未能确认的操作者」——
+ * 一句实话，但不是我们想让他读到的实话。多一行翻译比多一次误报便宜。
+ */
+const ACTOR_NAMES: Record<
+  NotificationLocale,
+  Readonly<Record<string, string>>
+> = {
+  "zh-CN": {
+    self: "你本人",
+    tenant_admin: "你所在组织的管理员",
+    operator: "平台",
+  },
+  "en-US": {
+    self: "you",
+    tenant_admin: "an administrator of your organization",
+    operator: "our team",
+  },
+};
+
+/**
+ * 第三方登录码 → 该语言的名字。码取自 console 的 `ThirdPartyProvider`
+ * （google / feishu / dingtalk / wechat），名字与 console 的
+ * `profilePage.connectedAccounts.providers.*.name` 逐字相同——同一家在页面与通知里
+ * 两个名字，客户会以为是两回事。
+ *
+ * 这里抄一份而不是 import：服务层不依赖门户包（与 ROLE_NAMES 同一条理由与同一处代价
+ * ——那边改名时这里要跟着改）。
+ */
+const PROVIDER_NAMES: Record<
+  NotificationLocale,
+  Readonly<Record<string, string>>
+> = {
+  "zh-CN": {
+    google: "Google",
+    feishu: "飞书",
+    dingtalk: "钉钉",
+    wechat: "微信",
+  },
+  "en-US": {
+    google: "Google",
+    feishu: "Feishu",
+    dingtalk: "DingTalk",
+    wechat: "WeChat",
+  },
+};
+
+const ACTOR_FALLBACK: Record<NotificationLocale, string> = {
+  "zh-CN": "未能确认的操作者",
+  "en-US": "an actor we could not identify",
+};
+
+const PROVIDER_FALLBACK: Record<NotificationLocale, string> = {
+  "zh-CN": "未知的第三方登录",
+  "en-US": "an unidentified sign-in method",
+};
+
 /** 模板里唯一的角色参数名。发侧只认这一个名字，且放**码**不放词。 */
 export const ROLE_PARAM = "roleKey";
+/** 模板里唯一的操作者参数名。同样放**码**不放词（见 ACTOR_NAMES）。 */
+export const ACTOR_PARAM = "actorLabel";
+/** 模板里唯一的第三方登录参数名。同样放**码**不放词（见 PROVIDER_NAMES）。 */
+export const PROVIDER_PARAM = "providerName";
+
+/**
+ * 码 → 该语言的词；码不认识、或者压根没给，回落成一句**实话**。
+ *
+ * 三张表一个查法。另两种做法都是把「我不知道」说成别的东西：原样印出码（客户读到
+ * `member` / `dingtalk` 这种内部值），或者印空串（`interpolate` 对缺参就是这么干的，
+ * 正文于是变成「以「」身份加入」，一句带洞的话）。也不猜一个最可能的值——猜错的代价是
+ * 告诉客户一件没发生的事。
+ */
+function wordOf(
+  table: Record<NotificationLocale, Readonly<Record<string, string>>>,
+  fallback: Record<NotificationLocale, string>,
+  code: unknown,
+  locale: NotificationLocale,
+): string {
+  const key = code === undefined || code === null ? "" : String(code).trim();
+  return table[locale][key] ?? fallback[locale];
+}
 
 /**
  * 角色码 → 该语言的角色名；码不认识或没给就回落（见 ROLE_FALLBACK）。
  *
  * 导出给运营镜像用（`operator-mirror.ts` 的标题也要角色名，那一面固定中文）。
  * **不从包的 barrel 导出**：发侧能拿到它，就会有人在发侧先翻好再传进来，而发侧不知道
- * 收件人读哪种语言——那正是这次要修的缺陷的形状。
+ * 收件人读哪种语言——那正是这次要修的缺陷的形状。同理 `actorNameOf` / `providerNameOf`。
  */
 export function roleNameOf(code: unknown, locale: NotificationLocale): string {
-  const key = code === undefined || code === null ? "" : String(code).trim();
-  return ROLE_NAMES[locale][key] ?? ROLE_FALLBACK[locale];
+  return wordOf(ROLE_NAMES, ROLE_FALLBACK, code, locale);
+}
+
+/** 操作者码 → 该语言的说法。导出给运营镜像用，理由同 roleNameOf。 */
+export function actorNameOf(code: unknown, locale: NotificationLocale): string {
+  return wordOf(ACTOR_NAMES, ACTOR_FALLBACK, code, locale);
+}
+
+/** 第三方登录码 → 该语言的名字。导出给运营镜像用，理由同 roleNameOf。 */
+export function providerNameOf(
+  code: unknown,
+  locale: NotificationLocale,
+): string {
+  return wordOf(PROVIDER_NAMES, PROVIDER_FALLBACK, code, locale);
 }
 
 const FOOTER: Record<NotificationLocale, string> = {
@@ -651,6 +979,27 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "tenant.invitation_declined": "invitation_activity",
   "tenant.invitation_revoked": "invitation_activity",
   "tenant.invitation_expired": "invitation_activity",
+  /* ── 账号安全线（2026-09-29，owner 裁定 2）：**十三 + 一**。────────────────────
+     十三条归 `security_event`：它们回答的是同一个问题——「我的账号本身出了什么事」。
+     只有「没见过的设备登录」归 `login_activity`，因为它回答的是另一个问题——「谁在登录」，
+     而那个问题的答案会**经常变**（换台电脑、换个浏览器就是一条），是客户可能嫌吵的唯一
+     一条。合成一个主题的代价与邀请那一刀完全相同、而且更贵：`security_event` 的站内档
+     必须锁死（账号被接管时唯一的到达路径），于是「新设备登录」的站内档也跟着关不掉，
+     客户被迫在「收得到密码被改了」与「别每次换浏览器都吵我」之间二选一。 */
+  "account.locked": "security_event",
+  "account.unlocked": "security_event",
+  "account.sessions_ended_by_operator": "security_event",
+  "account.password_changed": "security_event",
+  "account.password_reset": "security_event",
+  "account.phone_changed": "security_event",
+  "account.email_changed_old": "security_event",
+  "account.email_changed_new": "security_event",
+  "account.identity_linked": "security_event",
+  "account.identity_unlinked": "security_event",
+  "account.password_login_enabled": "security_event",
+  "account.password_login_disabled": "security_event",
+  "account.session_ended_by_self": "security_event",
+  "account.new_device_signin": "login_activity",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {
@@ -676,6 +1025,106 @@ export const NOTIFICATION_TEMPLATES: Record<
 ) as Record<NotificationTemplateCode, TemplateDef>;
 
 export type TemplateParams = Record<string, string | number>;
+
+/**
+ * 账号安全事件的引用类型。**不指向任何一张表**，见 NotificationReferenceType 那一段。
+ */
+export const SECURITY_REFERENCE_TYPE: Extract<
+  NotificationReferenceType,
+  "security"
+> = "security";
+
+/**
+ * 账号安全线的模板码全集，**从主题映射算出来，不手抄第二份**。
+ *
+ * 手抄一份的代价是它会和联合漂：加了码忘了加进名单，按名单做的守卫就静默少看一条。
+ * 类型那一半用模板字面量从权威联合里筛（`account.` 前缀），运行时这一半按主题筛——
+ * 两条**互相独立**的推导，用例断言它们相等（那是一条真判据，不是拿被测的那份证明它自己）。
+ */
+export const SECURITY_TEMPLATE_CODES: readonly NotificationTemplateCode[] = (
+  Object.keys(TITLES_ZH) as NotificationTemplateCode[]
+).filter(
+  (code) =>
+    TOPIC_OF[code] === "security_event" || TOPIC_OF[code] === "login_activity",
+);
+
+/** 账号安全线的模板码（`account.*`）。 */
+export type SecurityTemplateCode = Extract<
+  NotificationTemplateCode,
+  `account.${string}`
+>;
+
+/** 中国标准时间与 UTC 的固定时差。中国不用夏令时，所以这是个常数而不是一张规则表。 */
+const CHINA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/** 可视用户号的形状（`account.users.user_no`，主体码 v4 是 10 位数字）。 */
+const VISIBLE_USER_NO = /^\d{6,20}$/;
+
+/**
+ * `occurredAt` 参数的唯一格式：`2026-09-29 20:14:32 (UTC+8)`。
+ *
+ * **三件事都是有意的**：
+ *   · **带秒**。平台的日期时间纪律写着「显示时间必须带秒」，理由点名了通知：
+ *     「排查订单、审计、通知时，同一分钟内的先后顺序恰恰最要紧」。安全事件更是如此——
+ *     「20:14 改了密码、20:14 换了邮箱」摆在一起看不出谁先谁后。
+ *   · **带时区**。不写时区的时刻对不在这个时区的客户是个谜；写死 UTC+8 而不按收件人时区
+ *     渲染，是因为这一个字符串要同时进两种语言的正文与一封邮件，而 `render` 拿得到 locale
+ *     拿不到时区偏好。
+ *   · **不走共用的 `formatDay` / `formatDateTime`**。那两个是**界面**渲染件，输出是 locale
+ *     形状（`2026/09/08 15:04:05`）；这里要的是形状固定、与语言无关的**数据串**，理由与
+ *     `formatNotifyDate`（@vxture/service-subscription）完全相同。也不用 `Intl`：这一条
+ *     只需要一个固定偏移的算术，引 `Intl` 反而要多解释它为什么不按 locale 变。
+ *
+ * **不从包的 barrel 导出**：发侧拿不到它，就只能走 `securityEventStamp`，而那个函数保证
+ * 展示串与去重锚里的时刻**出自同一个 Date**。两处各自格式化的话，重试时会得到两个时刻。
+ */
+export function formatOccurredAt(at: Date): string {
+  const shifted = new Date(at.getTime() + CHINA_OFFSET_MS).toISOString();
+  return `${shifted.slice(0, 10)} ${shifted.slice(11, 19)} (UTC+8)`;
+}
+
+/**
+ * 一次调用，拿到账号安全事件要的两样东西：展示用的 `occurredAt` 与去重锚 `reference`。
+ *
+ * **为什么住在这个包**：本批的写入方分在 auth-bff（重置令牌、三方绑解绑、新设备登录）、
+ * website-bff（改密）与 admin-bff（锁定 / 解锁 / 全端下线）三处。锚的形状写在文档里让三处
+ * 各自拼，就是三份会漂的副本——而漂的症状不是报错：锚少了时刻，收件箱那个唯一键
+ * `(account_id, template_code, reference_type, reference_id)` 会把客户第二次改密码静默压掉。
+ *
+ * 锚 = `sec:{可视用户号}:{事件名}:{ISO 时刻}`。
+ *   · **事件名从模板码算**（去掉 `account.` 前缀），不另收一个参数：少一个要对齐的名字。
+ *   · **时刻必须在里面**。这些事会重复，去重键的粒度就是「哪一次」。
+ *   · **一个 uuid 都没有**。`reference_id` 被客户收件箱的读路径原样投影给浏览器
+ *     （console-bff 的 inbox.router → `InboxMessage.referenceId`）。所以这里对用户号**验形状**：
+ *     不是可视号就退成 `unknown`，宁可让锚少一个可读的把手，也不让一个 uuid 过客户端那条线
+ *     ——而锚仍然唯一，因为时刻在里面。
+ *   · 长度：最长模板码 `account.sessions_ended_by_operator`（34）⇒ 事件名 26，
+ *     锚 = 4 + 10 + 1 + 26 + 1 + 24 = 66，远在 `reference_id` 的 varchar(128) 之内；
+ *     运营镜像那一层还要再套一层 `{模板}:{引用类型}:{锚}` = 34+1+8+1+66 = 110，也在 128 内。
+ *     这两个数由用例按真实的码表重算，不手抄（上一批手抄的那个算漏了一档）。
+ *
+ * **看不见什么**：调用方实际传进来的是不是当时那个 Date、user_no 是不是这个账号的，
+ * 本函数一概不知道；它只保证「格式对、两处同源、不含 uuid」。
+ */
+export function securityEventStamp(
+  code: SecurityTemplateCode,
+  userNo: string,
+  at: Date,
+): {
+  occurredAt: string;
+  reference: { type: NotificationReferenceType; id: string };
+} {
+  const trimmed = String(userNo ?? "").trim();
+  const who = VISIBLE_USER_NO.test(trimmed) ? trimmed : "unknown";
+  const event = code.slice("account.".length);
+  return {
+    occurredAt: formatOccurredAt(at),
+    reference: {
+      type: SECURITY_REFERENCE_TYPE,
+      id: `sec:${who}:${event}:${at.toISOString()}`,
+    },
+  };
+}
 
 /**
  * 短信模板变量（P2-i）。阿里云通知类模板变量有长度上限（20 字），这里统一截断；金额去掉货币符号
@@ -770,18 +1219,23 @@ export interface RenderedNotification {
 }
 
 /**
- * 渲染前把参数里的角色**码**换成该语言的角色**名**。
+ * 渲染前把参数里的**码**换成该语言的**词**：角色、操作者、第三方登录三个。
  *
- * 放在这条路径上而不是逐条模板特例化：`render` 是唯一拿到 locale 的地方，而角色名已经出现
- * 在五条模板里（邀请本身 + 四个终态），还会更多。**无条件写回**这个键（而不是「有才换」）：
- * 调用方整个忘了传 roleKey 时，回落的是一句实话，不是一个空洞。不用这个参数的模板原样不受
- * 影响——`interpolate` 只认模板里出现过的占位符。
+ * 放在这条路径上而不是逐条模板特例化：`render` 是唯一拿到 locale 的地方，而这三类值已经
+ * 出现在十几条模板里，还会更多。**无条件写回**这三个键（而不是「有才换」）：调用方整个
+ * 忘了传时，回落的是一句实话，不是一个空洞。不用这些参数的模板原样不受影响——
+ * `interpolate` 只认模板里出现过的占位符。
  */
 function localizeParams(
   params: TemplateParams,
   locale: NotificationLocale,
 ): TemplateParams {
-  return { ...params, [ROLE_PARAM]: roleNameOf(params[ROLE_PARAM], locale) };
+  return {
+    ...params,
+    [ROLE_PARAM]: roleNameOf(params[ROLE_PARAM], locale),
+    [ACTOR_PARAM]: actorNameOf(params[ACTOR_PARAM], locale),
+    [PROVIDER_PARAM]: providerNameOf(params[PROVIDER_PARAM], locale),
+  };
 }
 
 export function render(

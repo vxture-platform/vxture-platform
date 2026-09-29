@@ -205,6 +205,30 @@ export class SessionAggregator {
   /**
    * Change password for PUT /api/me/password. Throws 401 when the current
    * password is wrong (preserving the previous router contract).
+   *
+   * ── 这条路上的 `account.password_changed` 今天**发不出去**（2026-09-29，已登记）──
+   * `AccountService.changePassword` 收口到 `setPassword`，写完就 emit
+   * `account.password_changed`（actor=`self`）。但那个 emit 要装配处先
+   * `setCustomerNotifier` 一个分发器，而**本进程一处都没有**——未注入 = 静默不发，
+   * 不报错、不记异常。所以经这个端点改掉的密码，本人一句话也收不到。
+   *
+   * 为什么没有顺手接上：另外三个面（console-bff / platform-api / auth-bff）的 wiring 要
+   * `NotificationDispatcher` + 一个邮件发送方 + 一个短信发送方，而 website-bff 三样都没有
+   * （既无 MailModule 也无 SmsModule），照抄过来要给这个**面向公网的营销站 BFF** 加三个
+   * 依赖、把它的启动面拓宽一圈。只接站内那一半（mail/sms 传 null）更糟：同一条模板在两条
+   * 路上投递档位不同，以后问「我改了密码为什么没收到邮件」要先查是谁调的。
+   *
+   * 今天的实际暴露面：`portals/website/src/api/auth.api.ts` 的 `changeUserPassword`
+   * **零调用方**（2026-09-29 全 portals 搜过）；在跑的改密界面是 console 的
+   * `modules/account/profile/ProfilePage.tsx` → console-bff 的 `PUT /api/me/password`，
+   * 那条路**已接**。也就是说这个端点活着但没有页面走它。
+   *
+   * 两条出路，都要 owner 点头，别默认第一条：
+   *   ① 退役这个端点，改密只留 console 那一条——理由与 auth-bff 邀请接受面那段一样：
+   *      一条会发通知的写路径该只有一个落点；
+   *   ② 真要留，就把三个依赖补齐、照 auth-bff 的
+   *      `src/notifications/customer-notifications.wiring.ts` 抄一份，并同样配一条
+   *      「装配处真的调了 setCustomerNotifier」的用例。
    */
   async changePassword(
     userId: string,

@@ -124,18 +124,22 @@ export class GovernanceController {
    *     只有一个落点:两个面都能写,以后问「这一次接受为什么没发通知」就得先去查是谁
    *     调的,而那是一个查不出来的问题(两个面的日志不在一起)。
    *
-   * ── 为什么没有顺手把 auth-bff 也接上 ──
-   * 派送器要 MailService / SmsService / NotificationPreferencesService 与通知库的
-   * 连接池,而 auth-bff 一个都没有(package.json 里没有 @vxture/service-notification)。
-   * 为一个零调用方的端点给**认证面**装上邮件与短信依赖,代价是把 auth-bff 的启动面
-   * 变宽,而它是登录链路上最不该多带东西的进程:它挂了,所有门户都登不进去。
+   * ── 为什么 auth-bff 有了分发器,这个面**仍然**不发 ──
+   * 2026-09-29 起 auth-bff 装了一个通知分发器(src/notifications/customer-notifications.wiring.ts
+   * 连带 package.json 的 @vxture/service-notification),理由与邀请无关:十四条账号安全通知里
+   * 有七条的写入方只在本进程(邮件重置令牌改密、运营锁定 / 解锁 / 下线全部会话、没见过的
+   * 设备登录)。那个 provider **只**调 `AccountService.setCustomerNotifier`,**故意没调**
+   * `OrganizationService` 的那一个。
    *
-   * ── 真要启用这个面,按顺序做三件事 ──
-   *   ① 把 wiring 抄一份到 auth-bff(连带 package.json 的依赖);
-   *   ② 像另外两个面那样补一个「装配处真的调了 setCustomerNotifier」的用例——
-   *      漏挂不报错,tsc、守卫、boot-smoke 都不会有任何意见(本仓最常见的缺陷就是
+   * 所以「依赖装不上」这条旧理由已经不成立了,但结论没变,换成了上面那一条:一条会发通知的
+   * 写路径该只有一个落点。挂上 OrganizationService 等于给一个零调用方的端点偷偷开第二通知源,
+   * 而下一次问「这一次接受为什么没发通知」时又得先查是谁调的。
+   *
+   * ── 真要启用这个面,按顺序做两件事 ──
+   *   ① 在那个 wiring 里加一行 `orgs.setCustomerNotifier(dispatcher)`,并给它的用例加一条
+   *      断言——漏挂不报错,tsc、守卫、boot-smoke 都不会有任何意见(本仓最常见的缺陷就是
    *      「做了没接」);
-   *   ③ 把这段注释改成「两个面都发」,并说清同一条邀请为什么不会被发两次。
+   *   ② 把这段注释改成「两个面都发」,并说清同一条邀请为什么不会被发两次。
    * 在那之前:接受请收在 console-bff 那一条上,本端点保持沉默。
    */
   @Post("invitations/accept")

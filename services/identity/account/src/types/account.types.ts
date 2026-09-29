@@ -136,6 +136,35 @@ export interface LoginHistoryEntry {
   result: string;
 }
 
+/**
+ * 运营置换账号状态的结果。
+ *
+ * `changed` 回答的是「这一趟真的改了吗」:重复锁定(运营双击 / admin 重放)时它为 false,
+ * 调用方据此**不发第二条通知**——通知的去重键按设计带时刻(同一件事会重复发生),所以
+ * 挡重复必须靠这个事实,靠不了唯一键。端点本身仍然幂等:`user` 照样给回视图。
+ */
+export interface AdminStatusChange {
+  user: UserView;
+  changed: boolean;
+}
+
+/**
+ * 回看窗口内**成功**登录的设备史（未见过的设备提醒，2026-09-29）。
+ *
+ * 两个字段各答一个问题，缺一个都判不出来：
+ *   `priorSuccesses` —— 之前成功登录过吗。0 = 这是本人第一次登录，此时一条都不发
+ *                        （给刚注册的人发「检测到新设备」是在吓他）。
+ *   `userAgents`     —— 见过哪些设备。裸串由服务层折成指纹再比（见
+ *                        security-notifications.ts 的 deviceFingerprint：按族比，
+ *                        按裸串比会让 Chrome 每次自升都算一台新设备）。
+ * 只统计 `result = 'success'`：失败尝试里的 UA 是攻击者的，算进「见过」等于让一次撞库
+ * 失败给后续的成功登录发了通行证。
+ */
+export interface SignInDeviceHistory {
+  priorSuccesses: number;
+  userAgents: (string | null)[];
+}
+
 /** An active central session (session.auth_sessions) — device list, §1.5. */
 export interface AuthSessionRecord {
   sid: string;
@@ -190,9 +219,14 @@ export interface UserReadRepository {
   ): Promise<UserView | null>;
   /** Fill empty name/email from a provider; skips (no throw) on email collision. */
   backfillProfile(userId: string, input: BackfillProfileInput): Promise<void>;
-  bindIdentity(input: BindIdentityInput): Promise<void>;
-  /** Unbind a federated identity (by provider) from the user; no-op if absent. */
-  removeIdentity(userId: string, provider: string): Promise<void>;
+  /**
+   * 绑定一个第三方身份。**返回是否真的插了一行**（2026-09-29）：SQL 是
+   * `on conflict do nothing`，重复登录时这一趟什么都没改——而「改了什么都没改」在通知这
+   * 一侧是两件事（没改就不该发一条「你绑定了新的第三方账号」）。
+   */
+  bindIdentity(input: BindIdentityInput): Promise<boolean>;
+  /** 解绑一个第三方身份。**返回是否真的删了一行**（理由同 bindIdentity）。 */
+  removeIdentity(userId: string, provider: string): Promise<boolean>;
   findUserByProviderSubject(
     provider: string,
     providerSubject: string,
@@ -239,6 +273,23 @@ export interface UserReadRepository {
   getLastLogin(userId: string): Promise<LastLoginRecord | null>;
   /** Recent login attempts (success + failed), newest first, capped by limit. */
   listLoginHistory(userId: string, limit: number): Promise<LoginHistoryEntry[]>;
+  /**
+   * 回看窗口内成功登录过的设备（未见过的设备提醒）。窗口天数由服务层给
+   * （UNSEEN_DEVICE_LOOKBACK_DAYS，一处定义）。
+   */
+  listRecentSignInDevices(
+    userId: string,
+    withinDays: number,
+  ): Promise<SignInDeviceHistory>;
+  /**
+   * 账号的**个人租户** id（`tenancy.tenants` 里 owner_user_id = 本人且 type = 'personal'
+   * 的那一行）；没有则 null。
+   *
+   * 只为一件事存在：`support.inbox_messages.tenant_id` 是 NOT NULL，而账号安全事件是
+   * 账号级的。每个账号必有个人租户（注册时自动开通、部分唯一索引保证 ≤1），而收件箱读取
+   * 只按 account_id 过滤、不按租户，所以填它即可，用户以任何身份浏览都看得见。
+   */
+  findPersonalTenantId(userId: string): Promise<string | null>;
   /** Active central sessions for the user (tenant realm), newest activity first. */
   listSessions(userId: string): Promise<AuthSessionRecord[]>;
   /** Revoke one of the user's sessions by sid; true when a row was revoked. */
@@ -250,7 +301,12 @@ export interface UserReadRepository {
   adminSetAccountStatus(
     userId: string,
     status: "active" | "disabled",
-  ): Promise<UserView | null>;
+  ): Promise<AdminStatusChange | null>;
+  /**
+   * 运营视角的单人读：**不按状态过滤**（`getUserById` 只放行 active / deleting）。
+   * 运营要能处置已锁定的账号——锁定之后回读、以及对已锁定账号强制下线，都走这一条。
+   */
+  findUserForAdmin(userId: string): Promise<UserView | null>;
   /** Admin: revoke ALL of the user's active customer-realm sessions; returns the count. */
   revokeAllSessions(userId: string): Promise<number>;
   /** Revoke ALL of the user's active refresh tokens (session.refresh_tokens); returns the count. */

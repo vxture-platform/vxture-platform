@@ -40,7 +40,12 @@ import type {
   CreateSystemNoticeResult,
   NoticePlane,
 } from "@vxture/service-notice";
-import { ROLE_PARAM, roleNameOf } from "./templates";
+import {
+  PROVIDER_PARAM,
+  ROLE_PARAM,
+  providerNameOf,
+  roleNameOf,
+} from "./templates";
 import type {
   NotificationReferenceType,
   NotificationTemplateCode,
@@ -73,6 +78,26 @@ function pick(params: TemplateParams, key: string): string {
  */
 function role(params: TemplateParams): string {
   return roleNameOf(params[ROLE_PARAM], "zh-CN");
+}
+
+/**
+ * 第三方登录段。与 `role` 完全同形，同一条理由：参数里放的是**码**，成词是模板层按收件人
+ * 语言做的事，而运营这一面固定中文（本文件整张表的标题都是写死的中文）。此前 `role` 那里
+ * 直接把码印出来，运营列表里于是读到「Acme 邀请了新成员（member）」。
+ *
+ * **操作者（`actorLabel`）故意没有对应的这么一段。** 它的词是从**客户视角**写的
+ * （「你本人」「你所在组织的管理员」，见 templates.ts 的 ACTOR_NAMES），搬进运营标题会读成
+ * 「客户登录密码已修改（你所在组织的管理员）」——对着运营说「你的组织」，视角错了。
+ * 再为运营写第二张表又是同一个事实的第二处文案。所以操作者不进标题：它在正文里，而正文
+ * 明写着「客户收到：…」，那一段用客户视角的措辞正是对的。
+ */
+function provider(params: TemplateParams): string {
+  return providerNameOf(params[PROVIDER_PARAM], "zh-CN");
+}
+
+/** 账号安全事件的时刻段（已由发侧的 `securityEventStamp` 格式化好，这里不再加工）。 */
+function occurredAt(params: TemplateParams): string {
+  return pick(params, "occurredAt");
 }
 
 function plan(params: TemplateParams): string {
@@ -329,6 +354,136 @@ export const OPERATOR_MIRROR: Readonly<
   "tenant.invitation_expired": {
     severity: "info",
     title: (p) => `${pick(p, "tenantName")} 的成员邀请已过期（${role(p)}）`,
+  },
+  /* ══ 账号安全线（2026-09-29）：**这张表没有「不镜像」这一档，而 owner 裁定要的正是它** ══
+     owner 裁定 5：「安全事件不进运营通告流。」裁定同时写着：镜像是**按模板强制配**的，
+     所以落码时要查清这张表有没有「运营侧看不见 / 不打扰」的那一档，**没有就停下来说，
+     不要自己发明一个**。
+
+     查的结果是：**没有**。逐条核实过，写在这里，免得下一个人再查一遍：
+       · `OperatorMirrorEntry` 只有三个字段：`severity`（成文的两档 `info | warning`）、
+         `title`、`broadcast?: true`。
+       · `broadcast` **不是**「不镜像」：它只让 `mirrorBody` 不查租户、正文不带租户名
+         （见 `composeOperatorNotice`），那一行照样写进 `admin.operator_notices`。
+       · `composeOperatorNotice` 无条件返回一条待写的通告，没有「返回空」的形状。
+       · 分发器那一侧也是无条件的：`notify` 在**第一个**站内落库成功之后直接
+         `await this.mirrorToOperators(...)`，不看模板。
+     所以在本文件里表达「这条不镜像」，只能给 `OperatorMirrorEntry` 加一个字段并在分发器那条
+     无条件路径上开一个分支——那是**发明一档**，裁定明文不许，本批因此没有做。
+     （成员邀请四态那一段里已经记着同一件事：「硬造一档（比如 skip: true）要改分发器那条
+     无条件路径，不在本次范围里」。那一批的结论是照现有形状走 info；本批不能照抄那个结论，
+     因为 owner 对安全事件**明确裁定过相反的方向**。）
+
+     ── 那么这十四条现在怎么办 ──
+     现有形状里**唯一**能表达「不镜像」的地方不在本文件，而在装配处：
+     `NotificationDispatcherOptions.operatorMirror` 显式传 `null`，它的注释原话是
+     「显式 null = 不镜像（只给测试 / 明确不要镜像的装配处）」——**这是既有的逃生口，不是
+     发明的**。本批的写入方里：
+       · auth-bff（重置令牌、三方绑解绑、新设备登录）与 website-bff（改密）今天**没有**
+         任何 `new NotificationDispatcher`，要新建装配，所以它们那一侧**必须**传
+         `operatorMirror: null` —— 客户自助的那十一条就此一条都不进运营通告流，裁定 5 成立。
+       · 锁定 / 解锁 / 全端下线这三条的写入方**不在 admin-bff**。admin-bff 从来不
+         构造 `AccountService`：`commerce-services.provider.ts` 里那个共享分发器只交给
+         订单 / 加油包 / 订阅三个 service（`setCustomerNotifier` 就这三处），而这三个动作
+         走的是 `OperatorAdminService.delegate`——一次 S2S POST 打到 IdP 的
+         `/internal/account/users/:id/{disable,enable,sessions/revoke}`。所以它们和客户自助
+         那几条**跑在同一个进程里**：auth-bff 的 `AccountAdminInternalRouter`
+         → `AccountService.adminDisableAccount / adminEnableAccount / adminForceLogout`
+         → `notifySecurity`。
+         而那个进程在本批之前**一个分发器都没有**，`setCustomerNotifier` 从未被调过，
+         而未注入 = 一条都不发——**这才是这三条今天没在镜像的唯一原因**，不是「共享
+         分发器做不到按模板关掉」。一个零调用方的缺口被记成了一条技术约束。
+         本批给那个进程新建的装配（auth-bff 的
+         `notifications/customer-notifications.wiring.ts`）因此**必须**传 `operatorMirror: null`，
+         与 console-bff 交给 `AccountService` 那个逐字相同。而一个进程一条装配、一条装配
+         管落在它身上的全部模板，所以这个逃生口是**全有或全无**的：今天做不到「只
+         镜像运营这三条、压掉客户自助那些」。
+         （这三条本身的性质没变：它们是**运营自己刚按下的那个按钮**的回执，与
+         `tenant.verification_approved` 同一形状，既不是客户侧的流水、也不带任何设备与位置
+         信息，不构成裁定 5 说的那个「淹没」——所以该不该镜像仍然是个开放项，只是拦住
+         它的不是技术上做不到。）
+     **这一条是给 owner 的开放项**：要让它在模板这一层也能关掉，就得在 `OperatorMirrorEntry`
+     上开一档并改分发器那条无条件路径；本批按裁定停在这里，不替他决定。
+
+     ── 落进这些标题里的东西，逐样过了一遍 ──
+     **没有 IP、没有 User-Agent、没有设备串、没有地区、没有邮箱与手机号、没有 uuid。**
+     客户文案里本来就一个都没写（见 templates.ts 那几段），而镜像正文是「客户收到的原文」
+     ——原文里没有的东西，镜像里也变不出来。所以即使某一处装配忘了传 `operatorMirror: null`，
+     运营屏幕上出现的也只是「某租户的某个账号在某时刻发生了某件事」，不会是一串客户的设备与
+     位置。这是本段第二个必须守住的点，与上面那个同等重要。
+
+     ── 为什么十四条**全 info**，一条 warning 都没有 ──
+     本文件对 warning 有一个成文含义：「在等运营动手」⇒ **不过期**、留在列表里直到有人处理。
+     逐条问「哪个运营动作能让这条消失」：
+       · 锁定 / 解锁 / 全端下线 —— 运营**刚刚**自己做的，镜像是回执，没有下一步；
+       · 改密 / 重置 / 换手机号 / 换邮箱 / 绑解绑 / 密码登录开关 / 自己下线设备 —— 全是客户
+         自助，运营一个动作都没有；真被接管了，客户走的是「联系客服」那条人工线，不是通告列表；
+       · 新设备登录 —— 同上，而且它是本批里唯一会**反复**发生的一条，给成不过期的 warning
+         只会在列表里越堆越多。
+     给一条永远没人能「处理完」的 warning，正是 info / warning 这个分档要防的事。
+
+     去重锚 = `{模板}:security:{sec:可视用户号:事件名:ISO 时刻}`（形状与长度见 templates.ts 的
+     `securityEventStamp`，用例按真实码表重算，不手抄）。链接一律 null：引用类型 `security`
+     落在 `mirrorLink` 的兜底档，admin 侧没有按安全事件的详情页（判据与订阅 / 邀请 / 公告相同）。 */
+  "account.locked": {
+    severity: "info",
+    title: (p) => `客户账号已被平台锁定（${occurredAt(p)}）`,
+  },
+  "account.unlocked": {
+    severity: "info",
+    title: (p) => `客户账号已解除锁定（${occurredAt(p)}）`,
+  },
+  "account.sessions_ended_by_operator": {
+    severity: "info",
+    title: (p) => `客户账号已被平台全端下线（${occurredAt(p)}）`,
+  },
+  /* 标题不带操作者（是客户自己改的还是组织管理员代设的）：那个词是客户视角写的，
+     见 `provider` 上面那段。运营要分辨时看正文里客户收到的原文。 */
+  "account.password_changed": {
+    severity: "info",
+    title: (p) => `客户登录密码已修改（${occurredAt(p)}）`,
+  },
+  "account.password_reset": {
+    severity: "info",
+    title: (p) => `客户已用邮件链接重置登录密码（${occurredAt(p)}）`,
+  },
+  "account.phone_changed": {
+    severity: "info",
+    title: (p) => `客户账号手机号已更换（${occurredAt(p)}）`,
+  },
+  /* 邮箱变更两条各自成条：运营要能看出「原地址那封发出去了」——那封是真正的本人唯一
+     可能收到的线索，漏发与发了在处理接管投诉时是两回事。**两条都不印地址。** */
+  "account.email_changed_old": {
+    severity: "info",
+    title: (p) => `客户账号邮箱已换走，已通知原地址（${occurredAt(p)}）`,
+  },
+  "account.email_changed_new": {
+    severity: "info",
+    title: (p) => `客户账号邮箱已换为新地址（${occurredAt(p)}）`,
+  },
+  "account.identity_linked": {
+    severity: "info",
+    title: (p) => `客户绑定了「${provider(p)}」登录（${occurredAt(p)}）`,
+  },
+  "account.identity_unlinked": {
+    severity: "info",
+    title: (p) => `客户解绑了「${provider(p)}」登录（${occurredAt(p)}）`,
+  },
+  "account.password_login_enabled": {
+    severity: "info",
+    title: (p) => `客户开启了账号密码登录（${occurredAt(p)}）`,
+  },
+  "account.password_login_disabled": {
+    severity: "info",
+    title: (p) => `客户关闭了账号密码登录（${occurredAt(p)}）`,
+  },
+  "account.session_ended_by_self": {
+    severity: "info",
+    title: (p) => `客户自行下线了一台设备（${occurredAt(p)}）`,
+  },
+  "account.new_device_signin": {
+    severity: "info",
+    title: (p) => `客户在新设备上登录（${occurredAt(p)}）`,
   },
 };
 
