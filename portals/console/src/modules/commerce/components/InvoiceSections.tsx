@@ -1,17 +1,24 @@
 "use client";
 
 /**
- * InvoiceSections.tsx — 发票管理(账单管理页组合件,owner 2026-08-21 归集裁定)。
+ * InvoiceSections.tsx — 发票台账(二级页组合件,owner 2026-08-21 归集裁定)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 两个区块(位置:账单表下方、收款与计费口径上方)+ 两个弹窗:
+ * 两块台账,都在二级页 `/billing/invoices`:
  *   ① 发票记录:申请号/账单/抬头/金额/六态状态/文件下载与寄送信息;
- *   ② 开票抬头:抬头簿 CRUD + 设默认(专票强制税号+开户信息);
- *   申请弹窗:从账单表「申请发票」进入(资格 = 已结清,普票/专票随抬头类型)。
- * 开票两个来源(直接订阅付款 + 预付款扣费对账单)同为已结清账单,不按类型分流。
- * 申请后运营在 admin 发票台账开具/寄送,状态回流本区。DS 组合件,无自造样式。
+ *   ② 开票抬头:抬头簿 CRUD + 设默认(专票强制税号+开户信息)。
+ *
+ * **2026-09-29 owner 裁定「发票整体灰掉,规划中」**:在线申请那一半从本件整体撤掉
+ * ——申请弹窗、它的认证提示、以及 `mode` 开关一并去掉,本件只剩台账。撤的理由不是
+ * 「还没做完」而是「接不下去」:客户提交后落 `applying` 的那一行,库里没有写者能把它
+ * 推进(approved / rejected 两值全仓零写者;运营真开票时是另插一行),所以这个入口
+ * 收的是答不了的请求。撤掉的只是**入口**,不是读路径——已提交的申请与运营线下开出的
+ * 发票照旧在这两张表里可读可下载:把停住的请求藏起来等于把它弄丢。
+ *
+ * 抬头簿保持可编辑:它是客户自己的数据,增删改都真落库,不是空跑的控件。
+ * DS 组合件,无自造样式。
  */
 
 import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder";
@@ -43,12 +50,10 @@ import type {
   StatusBadgeTone,
 } from "@vxture/design-system";
 import {
-  applyInvoiceReceipt,
   createBillingAddress,
   deleteBillingAddress,
   setDefaultBillingAddress,
   updateBillingAddress,
-  type ConsoleBill,
   type ConsoleBillingAddress,
   type ConsoleBillingAddressInput,
   type ConsoleInvoiceReceipt,
@@ -95,43 +100,21 @@ const EMPTY_ADDRESS_FORM: AddressFormState = {
 };
 
 export function InvoiceSections({
-  mode,
   receipts,
   addresses,
   loading,
   readOnly = false,
-  applyBill,
-  onApplyClose,
   onChanged,
   money,
-  invoiceBlockedBy = null,
 }: {
-  /**
-   * 拆页之后本件有两个用法(owner 2026-09-06:发票与抬头降为二级页):
-   *   · `"apply"`  —— 只出申请弹窗。它挂在**费用中心**,因为「申请发票」是账单行上的
-   *                   动作,动作要发生在对象所在的那一页;
-   *   · `"ledger"` —— 只出发票记录与开票抬头两块台账,在二级页 `/billing/invoices`。
-   * 两个用法共用同一份表单逻辑与文案,所以是一件带开关,不是两件各写一遍。
-   */
-  mode: "apply" | "ledger";
   receipts: ConsoleInvoiceReceipt[];
   addresses: ConsoleBillingAddress[];
   loading: boolean;
   /** 无 tenant.invoice.manage:只看发票记录与抬头,不出现新增/编辑/删除入口。 */
   readOnly?: boolean;
-  /** 账单表「申请发票」选中的账单;null = 弹窗关闭 */
-  applyBill: ConsoleBill | null;
-  onApplyClose: () => void;
   /** 任一写操作成功后,父页重取发票/抬头数据 */
   onChanged: () => Promise<void>;
   money: (v: string, currency: string) => string;
-  /**
-   * 认证等级挡住开票时的原因(owner 2026-09-06「需要提醒局限性」):
-   * `"lite"` = 简易企业实名认证不支持开票;`"none"` = 还没认证;null = 不挡。
-   * 这里只是**提前告知**,真门在 console-bff(填完一屏再被拒是糟糕的体验,
-   * 但读不到认证态时也不该反过来锁住页面——所以父页读失败传 null)。
-   */
-  invoiceBlockedBy?: "lite" | "none" | null;
 }) {
   const { fmtDateTime } = useDateFormat();
 
@@ -141,33 +124,12 @@ export function InvoiceSections({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [addressForm, setAddressForm] = useState<AddressFormState | null>(null);
-  const [applyAddressId, setApplyAddressId] = useState<string>("");
-  const [applyType, setApplyType] = useState<string>("");
   const withLabels = useConfirmLabels();
 
   const statusLabel = (s: string): string =>
     KNOWN_RECEIPT_STATUSES.has(s) ? t(`status.${s}`) : s;
   const typeLabel = (v: string): string =>
     KNOWN_INVOICE_TYPES.has(v) ? t(`type.${v}`) : v;
-
-  // ── 申请弹窗派生态:默认抬头预选 + 类型随抬头约束 ─────────────────────────
-  const applyAddress = useMemo(
-    () =>
-      addresses.find((a) => a.id === applyAddressId) ??
-      addresses.find((a) => a.isDefault) ??
-      addresses[0] ??
-      null,
-    [addresses, applyAddressId],
-  );
-  const applyTypeOptions = useMemo(() => {
-    if (!applyAddress) return [];
-    return applyAddress.invoiceTaxType === "special"
-      ? ["electronic_special", "paper_special"]
-      : ["electronic_general"];
-  }, [applyAddress]);
-  const effectiveApplyType = applyTypeOptions.includes(applyType)
-    ? applyType
-    : (applyTypeOptions[0] ?? "");
 
   const runWrite = async (fn: () => Promise<unknown>): Promise<boolean> => {
     setBusy(true);
@@ -182,18 +144,6 @@ export function InvoiceSections({
     } finally {
       setBusy(false);
     }
-  };
-
-  const handleApply = async () => {
-    if (!applyBill || !applyAddress || !effectiveApplyType) return;
-    const ok = await runWrite(() =>
-      applyInvoiceReceipt({
-        billId: applyBill.id,
-        addressId: applyAddress.id,
-        invoiceType: effectiveApplyType,
-      }),
-    );
-    if (ok) onApplyClose();
   };
 
   const handleSaveAddress = async () => {
@@ -397,332 +347,216 @@ export function InvoiceSections({
 
   return (
     <>
-      {/* ② 发票记录(台账,二级页) */}
-      {mode === "ledger" ? (
-        <>
-          <PageSection
-            icon="file-text"
-            level={2}
-            title={t("records.title")}
-            description={t("records.description")}
-          >
-            {error ? <Banner tone="danger" title={error} /> : null}
-            <DataTable<ConsoleInvoiceReceipt>
-              labels={tableLabels}
-              columns={receiptColumns}
-              rows={sortedReceipts}
-              {...(receiptSortState ? { sort: receiptSortState } : {})}
-              onSortChange={onReceiptSortChange}
-              rowKey={(r) => r.id}
-              /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
-                 与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
-              leadingSpacer
-              /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
-                 先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
-                 不是整张表的列结构（owner 2026-09-07）。 */
-              rowActions={() => <RowActionsPlaceholder />}
-              loading={loading}
-              indexStart={1}
-              empty={<EmptyState title={t("records.empty")} />}
-            />
-          </PageSection>
+      {/* ① 发票记录 */}
+      <PageSection
+        icon="file-text"
+        level={2}
+        title={t("records.title")}
+        description={t("records.description")}
+      >
+        {error ? <Banner tone="danger" title={error} /> : null}
+        <DataTable<ConsoleInvoiceReceipt>
+          labels={tableLabels}
+          columns={receiptColumns}
+          rows={sortedReceipts}
+          {...(receiptSortState ? { sort: receiptSortState } : {})}
+          onSortChange={onReceiptSortChange}
+          rowKey={(r) => r.id}
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+             与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
+          /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
+             先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
+             不是整张表的列结构（owner 2026-09-07）。 */
+          rowActions={() => <RowActionsPlaceholder />}
+          loading={loading}
+          indexStart={1}
+          empty={<EmptyState title={t("records.empty")} />}
+        />
+      </PageSection>
 
-          {/* ③ 开票抬头 */}
-          <PageSection
-            icon="buildings"
-            level={2}
-            title={t("addresses.title")}
-            description={t("addresses.description")}
-            action={
-              readOnly ? undefined : (
-                <Button
-                  size="md"
-                  variant="outline"
-                  onClick={() => setAddressForm({ ...EMPTY_ADDRESS_FORM })}
-                >
-                  {t("addresses.add")}
-                </Button>
-              )
-            }
-          >
-            <DataTable<ConsoleBillingAddress>
-              labels={tableLabels}
-              columns={addressColumns}
-              rows={addresses}
-              rowKey={(a) => a.id}
-              /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
-                 与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
-              leadingSpacer
-              loading={loading}
-              indexStart={1}
-              {...(readOnly
-                ? {}
-                : {
-                    rowActions: (a: ConsoleBillingAddress) => (
-                      <ActionMenu
-                        label={t("addresses.rowMenu")}
-                        items={addressActions(a)}
-                      />
-                    ),
-                  })}
-              empty={<EmptyState title={t("addresses.empty")} />}
-            />
-          </PageSection>
-        </>
-      ) : null}
+      {/* ② 开票抬头 */}
+      <PageSection
+        icon="buildings"
+        level={2}
+        title={t("addresses.title")}
+        description={t("addresses.description")}
+        action={
+          readOnly ? undefined : (
+            <Button
+              size="md"
+              variant="outline"
+              onClick={() => setAddressForm({ ...EMPTY_ADDRESS_FORM })}
+            >
+              {t("addresses.add")}
+            </Button>
+          )
+        }
+      >
+        <DataTable<ConsoleBillingAddress>
+          labels={tableLabels}
+          columns={addressColumns}
+          rows={addresses}
+          rowKey={(a) => a.id}
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+             与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
+          loading={loading}
+          indexStart={1}
+          {...(readOnly
+            ? {}
+            : {
+                rowActions: (a: ConsoleBillingAddress) => (
+                  <ActionMenu
+                    label={t("addresses.rowMenu")}
+                    items={addressActions(a)}
+                  />
+                ),
+              })}
+          empty={<EmptyState title={t("addresses.empty")} />}
+        />
+      </PageSection>
 
-      {/* 申请发票弹窗(动作,挂在账单所在的费用中心) */}
-      {mode === "apply" ? (
-        <Dialog
-          open={applyBill !== null}
-          onOpenChange={(open) => {
-            if (!open) onApplyClose();
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("apply.title")}</DialogTitle>
-              <DialogDescription>
-                {applyBill
-                  ? t("apply.description", {
-                      billNo: applyBill.billNo,
-                      amount: money(
-                        applyBill.payableAmount,
-                        applyBill.currency,
-                      ),
+      {/* ③ 抬头新增/编辑弹窗 */}
+      <Dialog
+        open={addressForm !== null}
+        onOpenChange={(open) => {
+          if (!open) setAddressForm(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {addressForm?.id
+                ? t("addresses.editTitle")
+                : t("addresses.addTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("addresses.formHint")}</DialogDescription>
+          </DialogHeader>
+
+          {addressForm ? (
+            <div className="flex flex-col gap-sm">
+              <div className="flex flex-col gap-xs">
+                <FieldLabel htmlFor="addr-tax-type">
+                  {t("addresses.colTaxType")}
+                </FieldLabel>
+                <NativeSelect
+                  id="addr-tax-type"
+                  value={addressForm.invoiceTaxType}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      invoiceTaxType: e.target.value as "general" | "special",
                     })
-                  : null}
-              </DialogDescription>
-            </DialogHeader>
-
-            {invoiceBlockedBy ? (
-              <Banner
-                tone="warning"
-                title={t(
-                  invoiceBlockedBy === "lite"
-                    ? "apply.blockedLite"
-                    : "apply.blockedUnverified",
-                )}
-                description={t("apply.blockedHint")}
-              />
-            ) : null}
-
-            {addresses.length === 0 ? (
-              <Banner tone="info" title={t("apply.noAddress")} />
-            ) : (
-              <div className="flex flex-col gap-sm">
-                <div className="flex flex-col gap-xs">
-                  <FieldLabel htmlFor="receipt-address">
-                    {t("apply.address")}
-                  </FieldLabel>
-                  <NativeSelect
-                    id="receipt-address"
-                    value={applyAddress?.id ?? ""}
-                    onChange={(e) => setApplyAddressId(e.target.value)}
-                  >
-                    {addresses.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.title}
-                        {a.isDefault
-                          ? ` (${t("addresses.default")})`
-                          : ""} · {t(`taxType.${a.invoiceTaxType}`)}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </div>
-                <div className="flex flex-col gap-xs">
-                  <FieldLabel htmlFor="receipt-type">
-                    {t("apply.type")}
-                  </FieldLabel>
-                  <NativeSelect
-                    id="receipt-type"
-                    value={effectiveApplyType}
-                    onChange={(e) => setApplyType(e.target.value)}
-                  >
-                    {applyTypeOptions.map((v) => (
-                      <option key={v} value={v}>
-                        {typeLabel(v)}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </div>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button variant="outline" onClick={onApplyClose} disabled={busy}>
-                {t("apply.cancel")}
-              </Button>
-              {addresses.length === 0 ? (
-                <Button
-                  onClick={() => {
-                    onApplyClose();
-                    setAddressForm({ ...EMPTY_ADDRESS_FORM });
-                  }}
-                >
-                  {t("apply.createAddress")}
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => void handleApply()}
-                  disabled={
-                    busy ||
-                    !applyAddress ||
-                    !effectiveApplyType ||
-                    invoiceBlockedBy !== null
                   }
                 >
-                  {t("apply.submit")}
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      ) : null}
-
-      {/* 抬头新增/编辑弹窗 */}
-      {/* 抬头表单弹窗:属台账那一半 */}
-      {mode === "ledger" ? (
-        <Dialog
-          open={addressForm !== null}
-          onOpenChange={(open) => {
-            if (!open) setAddressForm(null);
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {addressForm?.id
-                  ? t("addresses.editTitle")
-                  : t("addresses.addTitle")}
-              </DialogTitle>
-              <DialogDescription>{t("addresses.formHint")}</DialogDescription>
-            </DialogHeader>
-
-            {addressForm ? (
-              <div className="flex flex-col gap-sm">
-                <div className="flex flex-col gap-xs">
-                  <FieldLabel htmlFor="addr-tax-type">
-                    {t("addresses.colTaxType")}
-                  </FieldLabel>
-                  <NativeSelect
-                    id="addr-tax-type"
-                    value={addressForm.invoiceTaxType}
-                    onChange={(e) =>
-                      setAddressForm({
-                        ...addressForm,
-                        invoiceTaxType: e.target.value as "general" | "special",
-                      })
-                    }
-                  >
-                    <option value="general">{t("taxType.general")}</option>
-                    <option value="special">{t("taxType.special")}</option>
-                  </NativeSelect>
-                </div>
-                <div className="flex flex-col gap-xs">
-                  <FieldLabel htmlFor="addr-title">
-                    {t("addresses.fieldTitle")}
-                  </FieldLabel>
-                  <Input
-                    id="addr-title"
-                    value={addressForm.title}
-                    onChange={(e) =>
-                      setAddressForm({ ...addressForm, title: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-xs">
-                  <FieldLabel htmlFor="addr-tax-no">
-                    {t("addresses.fieldTaxNo")}
-                    {specialForm ? " *" : ""}
-                  </FieldLabel>
-                  <Input
-                    id="addr-tax-no"
-                    value={addressForm.taxNo ?? ""}
-                    onChange={(e) =>
-                      setAddressForm({ ...addressForm, taxNo: e.target.value })
-                    }
-                  />
-                </div>
-                {specialForm ? (
-                  <>
-                    <div className="flex flex-col gap-xs">
-                      <FieldLabel htmlFor="addr-bank-name">
-                        {t("addresses.fieldBankName")} *
-                      </FieldLabel>
-                      <Input
-                        id="addr-bank-name"
-                        value={addressForm.bankName ?? ""}
-                        onChange={(e) =>
-                          setAddressForm({
-                            ...addressForm,
-                            bankName: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="flex flex-col gap-xs">
-                      <FieldLabel htmlFor="addr-bank-account">
-                        {t("addresses.fieldBankAccount")} *
-                      </FieldLabel>
-                      <Input
-                        id="addr-bank-account"
-                        value={addressForm.bankAccount ?? ""}
-                        onChange={(e) =>
-                          setAddressForm({
-                            ...addressForm,
-                            bankAccount: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </>
-                ) : null}
-                <div className="flex flex-col gap-xs">
-                  <FieldLabel htmlFor="addr-phone">
-                    {t("addresses.fieldPhone")}
-                  </FieldLabel>
-                  <Input
-                    id="addr-phone"
-                    value={addressForm.phone ?? ""}
-                    onChange={(e) =>
-                      setAddressForm({ ...addressForm, phone: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-xs">
-                  <FieldLabel htmlFor="addr-address">
-                    {t("addresses.fieldAddress")}
-                  </FieldLabel>
-                  <Input
-                    id="addr-address"
-                    value={addressForm.address ?? ""}
-                    onChange={(e) =>
-                      setAddressForm({
-                        ...addressForm,
-                        address: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+                  <option value="general">{t("taxType.general")}</option>
+                  <option value="special">{t("taxType.special")}</option>
+                </NativeSelect>
               </div>
-            ) : null}
+              <div className="flex flex-col gap-xs">
+                <FieldLabel htmlFor="addr-title">
+                  {t("addresses.fieldTitle")}
+                </FieldLabel>
+                <Input
+                  id="addr-title"
+                  value={addressForm.title}
+                  onChange={(e) =>
+                    setAddressForm({ ...addressForm, title: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex flex-col gap-xs">
+                <FieldLabel htmlFor="addr-tax-no">
+                  {t("addresses.fieldTaxNo")}
+                  {specialForm ? " *" : ""}
+                </FieldLabel>
+                <Input
+                  id="addr-tax-no"
+                  value={addressForm.taxNo ?? ""}
+                  onChange={(e) =>
+                    setAddressForm({ ...addressForm, taxNo: e.target.value })
+                  }
+                />
+              </div>
+              {specialForm ? (
+                <>
+                  <div className="flex flex-col gap-xs">
+                    <FieldLabel htmlFor="addr-bank-name">
+                      {t("addresses.fieldBankName")} *
+                    </FieldLabel>
+                    <Input
+                      id="addr-bank-name"
+                      value={addressForm.bankName ?? ""}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          bankName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-xs">
+                    <FieldLabel htmlFor="addr-bank-account">
+                      {t("addresses.fieldBankAccount")} *
+                    </FieldLabel>
+                    <Input
+                      id="addr-bank-account"
+                      value={addressForm.bankAccount ?? ""}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          bankAccount: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              ) : null}
+              <div className="flex flex-col gap-xs">
+                <FieldLabel htmlFor="addr-phone">
+                  {t("addresses.fieldPhone")}
+                </FieldLabel>
+                <Input
+                  id="addr-phone"
+                  value={addressForm.phone ?? ""}
+                  onChange={(e) =>
+                    setAddressForm({ ...addressForm, phone: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex flex-col gap-xs">
+                <FieldLabel htmlFor="addr-address">
+                  {t("addresses.fieldAddress")}
+                </FieldLabel>
+                <Input
+                  id="addr-address"
+                  value={addressForm.address ?? ""}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      address: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          ) : null}
 
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setAddressForm(null)}
-                disabled={busy}
-              >
-                {t("apply.cancel")}
-              </Button>
-              <Button onClick={() => void handleSaveAddress()} disabled={busy}>
-                {t("addresses.save")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddressForm(null)}
+              disabled={busy}
+            >
+              {t("addresses.cancel")}
+            </Button>
+            <Button onClick={() => void handleSaveAddress()} disabled={busy}>
+              {t("addresses.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

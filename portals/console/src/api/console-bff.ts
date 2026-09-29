@@ -2901,6 +2901,12 @@ export async function deleteBillingAddress(id: string): Promise<void> {
   );
 }
 
+/**
+ * 提交开票申请。**2026-09-29 起本门户零调用方**:owner 裁定「发票整体灰掉,规划中」,
+ * 账单行上的「申请发票」改为常灰,申请弹窗撤掉。函数留着不删是因为端点还活着
+ * (运营那侧要继续处理库里已有的申请行),重新开放入口时这里不必重写;但在那之前
+ * 它不是一条在跑的路——别按「有这个函数」推断客户能在线申请。
+ */
 export async function applyInvoiceReceipt(input: {
   billId: string;
   addressId: string;
