@@ -6,6 +6,7 @@
  *   1. 站内：insert support.inbox_messages（唯一键 收件人 × 模板 × 业务引用；冲突 = 已通知过 → 整条跳过）
  *      并记 notification_logs(channel=inapp, delivered)。
  *   2. 邮件：站内落成 且 注入了 sender 且 偏好允许 → 查邮箱 → 发；成功 / 失败各记一行 logs。
+ *      （只有一例例外：调用方给了 `emailTo`，那这一半改送它 —— 见 `NotifyInput.emailTo`。）
  * 文案按收件人语言渲染（account.user_profiles.language，en* → en-US，其余 zh-CN；P2-h）；
  * 公告类通知自带标题 / 正文（announcement.lang 已定），不走模板表。
  * 全程 best-effort：单个收件人失败只记日志，方法不抛（除非收件人查询本身失败）。
@@ -64,6 +65,21 @@ export interface NotifyInput {
    * 待 owner 定;真要发,改这里一个开关即可。)
    */
   inboxOnly?: boolean | undefined;
+  /**
+   * 这一条的**邮件那一半**改送这个地址；**站内那一半不变**，照旧落在该账号名下。
+   *
+   * 唯一的用例是换邮箱时写给**旧地址**的那一封（`account.email_changed_old`）：事情
+   * 已经落库，账号上挂着的是新地址，而这封信恰恰要送到刚被换掉的那个地址去——真正
+   * 需要知道「有人把你的邮箱换走了」的人只在那一头。
+   *
+   * **不是第二条投递路径**：渲染、偏好开关、去重、账本全部照原样走（偏好仍然按**该账号**
+   * 在 `security_event` 上的邮件档问：这封信写的是他的账号，只是寄到他的旧信箱），
+   * 只有 `to` 换成这个值；`support.notification_logs.recipient` 也记这个值——账本要能答
+   * 「这封到底送去了哪」。站内那一条仍在该账号名下，所以本人换完邮箱登录进来照样看得到。
+   *
+   * 不给 = 今天的行为一字不变。
+   */
+  emailTo?: string | undefined;
   /** console 内相对路径，或（公告 CTA）绝对 URL。 */
   link?: string | undefined;
 }
@@ -293,7 +309,15 @@ export class NotificationDispatcher {
     }
   }
 
-  /** 邮件：有 sender、偏好允许、有邮箱才发；成功 / 失败各记一行账本，不抛。 */
+  /**
+   * 邮件：有 sender、偏好允许、有地址才发；成功 / 失败各记一行账本，不抛。
+   *
+   * 收件地址就在这一句里定下来，**只在这一处**：给了 `emailTo` 就送那个地址，否则送
+   * `lookupRecipient` 从账号上查到的那个。空串 / 全空白算没给——一个空的 `to` 只会
+   * 让 sender 抛，而抛出来的账本行写着 failed，读的人无从知道是调用方送了个空串。
+   * 邮箱换走之后账号上那一个也可能本就是空的（编辑过程中的中间态），所以 `emailTo`
+   * 在前、账号那个在后，而不是“先要求账号有邮箱”。
+   */
   private async sendEmail(
     input: NotifyInput,
     accountId: string,
@@ -302,17 +326,18 @@ export class NotificationDispatcher {
     rendered: { subject: string; html: string; text: string },
     result: NotifyResult,
   ): Promise<void> {
-    if (!this.mail || !email) return;
+    const to = input.emailTo?.trim() || email;
+    if (!this.mail || !to) return;
     if (!(await this.allows(accountId, topic, "email"))) return;
     const outcome = await this.attempt(
       () =>
         this.mail!.send({
-          to: email,
+          to,
           subject: rendered.subject,
           html: rendered.html,
           text: rendered.text,
         }),
-      `${input.templateCode} → ${email}: email failed`,
+      `${input.templateCode} → ${to}: email failed`,
     );
     if (outcome.ok) result.emailsSent += 1;
     else result.emailsFailed += 1;
@@ -323,7 +348,7 @@ export class NotificationDispatcher {
       status: outcome.ok ? "sent" : "failed",
       templateCode: input.templateCode,
       reference: input.reference,
-      recipient: email,
+      recipient: to,
       subject: rendered.subject,
       provider: this.provider,
       ...(outcome.ok ? {} : { errorMessage: outcome.error }),

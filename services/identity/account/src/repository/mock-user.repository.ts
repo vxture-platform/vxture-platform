@@ -9,6 +9,8 @@ import type {
   LastLoginRecord,
   LoginHistoryEntry,
   SetAvatarInput,
+  SignInDeviceHistory,
+  AdminStatusChange,
   UpdateProfileInput,
   UserCredentialRecord,
   UserReadRepository,
@@ -163,19 +165,23 @@ export class MockUserRepository implements UserReadRepository {
     }
   }
 
-  async bindIdentity(input: BindIdentityInput): Promise<void> {
-    this.identities.set(
-      `${input.provider}:${input.providerSubject}`,
-      input.userId,
-    );
+  async bindIdentity(input: BindIdentityInput): Promise<boolean> {
+    const key = `${input.provider}:${input.providerSubject}`;
+    /* 与 pg 那侧同义:已经绑过的再绑一次**什么都没改**,回 false。 */
+    if (this.identities.get(key) === input.userId) return false;
+    this.identities.set(key, input.userId);
+    return true;
   }
 
-  async removeIdentity(userId: string, provider: string): Promise<void> {
+  async removeIdentity(userId: string, provider: string): Promise<boolean> {
+    let removed = false;
     for (const [key, uid] of this.identities.entries()) {
       if (uid === userId && key.startsWith(`${provider}:`)) {
         this.identities.delete(key);
+        removed = true;
       }
     }
+    return removed;
   }
 
   async findUserByProviderSubject(
@@ -311,6 +317,23 @@ export class MockUserRepository implements UserReadRepository {
     return [];
   }
 
+  /**
+   * 离线模式没有登录流水。回 `priorSuccesses: 0` 的含义是**明确的**:
+   * 「一次成功登录都没见过」⇒ 按 isUnseenDevice 的第二条,一条提醒都不发。
+   * 这正是离线 / 单测该有的行为——mock 库上发通知只会让本机跑出与生产不同的结论。
+   */
+  async listRecentSignInDevices(
+    _userId: string,
+    _withinDays: number,
+  ): Promise<SignInDeviceHistory> {
+    return { priorSuccesses: 0, userAgents: [] };
+  }
+
+  /** 离线模式没有 tenancy 表。null ⇒ 安全通知一条也发不出(各自记一行 no_personal_tenant)。 */
+  async findPersonalTenantId(_userId: string): Promise<string | null> {
+    return null;
+  }
+
   async listSessions(_userId: string): Promise<AuthSessionRecord[]> {
     return [];
   }
@@ -322,11 +345,17 @@ export class MockUserRepository implements UserReadRepository {
   async adminSetAccountStatus(
     userId: string,
     status: "active" | "disabled",
-  ): Promise<UserView | null> {
+  ): Promise<AdminStatusChange | null> {
     const u = this.users.get(userId);
     if (!u) return null;
+    const changed = u.status !== status;
     u.status = status;
-    return toView(u);
+    return { user: toView(u), changed };
+  }
+
+  /** 离线模式的 users map 本来就不按状态过滤,所以与 getUserById 同一个实现。 */
+  async findUserForAdmin(userId: string): Promise<UserView | null> {
+    return this.getUserById(userId);
   }
 
   async revokeAllSessions(_userId: string): Promise<number> {

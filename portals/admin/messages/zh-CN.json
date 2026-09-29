@@ -3215,5 +3215,37 @@
       "clear": "清空",
       "noOptions": "暂无可选值"
     }
+  },
+  "accountsPage": {
+    "actionDialog": {
+      "required": "必填",
+      "reasonLabel": "处置原因",
+      "reasonHint": "客户会原样读到这句话。请写成他看得懂的一句话，不要用内部简写或代号。",
+      "disable": {
+        "title": "停用账号",
+        "description": "将停用 {name}（{email}）：封禁全部登录路径并吊销其所有会话，可稍后恢复。同时会把你填写的原因告知该客户。",
+        "submitLabel": "确认停用",
+        "reasonPlaceholder": "例如：该账号存在异常登录，为保护账号已暂时停用，请联系客服核验身份后恢复。"
+      },
+      "enable": {
+        "title": "恢复账号",
+        "description": "将恢复 {name} 的账号为正常状态。同时会把你填写的原因告知该客户。",
+        "submitLabel": "确认恢复",
+        "reasonPlaceholder": "例如：身份核验已通过，账号恢复正常使用。"
+      },
+      "forceLogout": {
+        "title": "强制下线",
+        "description": "将吊销 {name} 的全部活跃会话，该用户需重新登录。同时会把你填写的原因告知该客户。",
+        "submitLabel": "确认下线",
+        "reasonPlaceholder": "例如：检测到异常登录设备，已退出全部登录，请修改密码后重新登录。"
+      }
+    },
+    "toast": {
+      "disabled": "已停用账号",
+      "enabled": "已恢复账号",
+      "forcedLogout": "已强制下线",
+      "forcedLogoutDetail": "已吊销 {count} 个会话。",
+      "failed": "操作失败"
+    }
   }
 }

@@ -235,7 +235,16 @@ export class AuthnService {
   async resetPassword(token: string, newPassword: string): Promise<boolean> {
     const userId = await this.passwordReset.consume(token);
     if (!userId) return false;
-    await this.account.setPassword(userId, newPassword);
+    /*
+     * 通知在写路径里（AccountService.setPassword），不在这一层：这条路此前**既不落审计行
+     * 也不发任何消息**，而它正是账号被接管时真正会被走的那一条——凭据被重置令牌改掉，
+     * 本人一句话都收不到。判据建在审计行上会静默漏掉恰好最要紧的这一条（这里与
+     * website-bff 的改密路径都没有审计行），所以交代来由、由写路径自己发。
+     * 收件箱与邮件能不能真的送出去，取决于本进程有没有装通知分发器——见交付说明。
+     */
+    await this.account.setPassword(userId, newPassword, {
+      cause: "reset_by_email",
+    });
     return true;
   }
 }

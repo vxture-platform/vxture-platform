@@ -21,14 +21,22 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import {
+  ACTOR_PARAM,
   NOTIFICATION_TEMPLATES,
+  PROVIDER_PARAM,
   ROLE_PARAM,
+  SECURITY_REFERENCE_TYPE,
+  SECURITY_TEMPLATE_CODES,
+  actorNameOf,
+  providerNameOf,
   render,
   roleNameOf,
+  securityEventStamp,
   topicOf,
   type NotificationLocale,
   type NotificationTemplateCode,
   type NotificationTopic,
+  type SecurityTemplateCode,
   type TemplateParams,
 } from "./templates";
 /* 「关掉主题关不掉邀请本身」那一组要真的跑一遍分发器：mandatory 是**调用参数**不是模板
@@ -855,6 +863,404 @@ describe("拆开之后两个主题各自管得住自己", () => {
   });
 });
 
+/**
+ * 账号安全线（2026-09-29，owner 六条裁定）。
+ *
+ * 这一组钉的是**文案的责任**，不是渲染机制：每条安全通知都必须说齐三件事——发生了什么、
+ * 什么时候、**如果不是你该做什么**。第三件是这一批存在的理由；少了它，客户读完只剩恐慌。
+ * 而「该做什么」必须**真的存在**：十条自助的指向「我的账号」（那一页上密码可改、活跃会话
+ * 每条可下线），四条指向「联系客服」——其中**旧邮箱那条只许指向客服**，因为邮箱被换走之后
+ * 登录与找回都已指向新地址，让他去「我的账号」就是指向一个他已经进不去的地方。
+ *
+ * 另外三件同样钉在这里：
+ *   · 正文里**没有 IP、没有 User-Agent、没有设备串**（owner 裁定 6 只要「没见过的设备」这个
+ *     事实，不要那两串给排查用的东西；它们还会连带出现在运营镜像的正文里）；
+ *   · 操作者与第三方登录**传码、渲染时成词**（与 roleKey 同一个缺陷形状：发侧不知道收件人
+ *     读哪种语言，在那边先翻好就会在中文正文里印出英文码）；
+ *   · 去重锚带时刻、不含 uuid（`securityEventStamp`）——少了时刻，客户第二次改密码会被
+ *     收件箱那个唯一键静默压掉。
+ *
+ * ── 这一组看不见什么 ──
+ *   · 看不见**偏好那一半**（`security_event` 站内恒锁、邮件默认开、`login_activity` 三档
+ *     全可关）：那三件事住在 @vxture/service-account 的 notification-preferences.service，
+ *     有自己的用例。这里只证「两个主题分别是哪几条」。
+ *   · 看不见**运营镜像该不该发**：owner 裁定 5 要的那一档 `OPERATOR_MIRROR` 表达不出来，
+ *     整件事记在 operator-mirror.ts 里，那边的用例钉住「万一发了也不含设备与位置」。
+ *   · 看不见调用方实际传了什么（谁把一个原始 UA 串塞进 occurredAt，本 spec 一行都照不到）。
+ */
+describe("账号安全线：十四条", () => {
+  const SEC_USER_NO = "8800000012";
+  const SEC_AT = new Date("2026-09-29T12:14:32Z");
+  /** 展示时刻从 `securityEventStamp` 取，不手抄——它与锚里的 ISO 时刻同源。 */
+  const SEC_WHEN = securityEventStamp(
+    "account.locked",
+    SEC_USER_NO,
+    SEC_AT,
+  ).occurredAt;
+  const REASON = "风控命中：同一账号在 10 分钟内 40 次失败登录";
+
+  /** 「下一步」落在哪：自助的指「我的账号」，另四条只指客服。 */
+  type NextStep = "self" | "support";
+
+  interface SecurityCase {
+    readonly topic: NotificationTopic;
+    readonly placeholders: readonly string[];
+    readonly params: TemplateParams;
+    readonly next: NextStep;
+  }
+
+  const base: TemplateParams = { occurredAt: SEC_WHEN };
+  const withReason: TemplateParams = { occurredAt: SEC_WHEN, reason: REASON };
+
+  const CASES: Record<string, SecurityCase> = {
+    "account.locked": {
+      topic: "security_event",
+      placeholders: ["occurredAt", "reason"],
+      params: withReason,
+      next: "support",
+    },
+    "account.unlocked": {
+      topic: "security_event",
+      placeholders: ["occurredAt", "reason"],
+      params: withReason,
+      next: "support",
+    },
+    "account.sessions_ended_by_operator": {
+      topic: "security_event",
+      placeholders: ["occurredAt", "reason"],
+      params: withReason,
+      next: "support",
+    },
+    "account.password_changed": {
+      topic: "security_event",
+      placeholders: ["actorLabel", "occurredAt"],
+      params: { occurredAt: SEC_WHEN, actorLabel: "tenant_admin" },
+      next: "self",
+    },
+    "account.password_reset": {
+      topic: "security_event",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "self",
+    },
+    "account.phone_changed": {
+      topic: "security_event",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "self",
+    },
+    /* 旧地址那条：**只许指向客服**。见本组的文件头。 */
+    "account.email_changed_old": {
+      topic: "security_event",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "support",
+    },
+    "account.email_changed_new": {
+      topic: "security_event",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "self",
+    },
+    "account.identity_linked": {
+      topic: "security_event",
+      placeholders: ["occurredAt", "providerName"],
+      params: { occurredAt: SEC_WHEN, providerName: "dingtalk" },
+      next: "self",
+    },
+    "account.identity_unlinked": {
+      topic: "security_event",
+      placeholders: ["occurredAt", "providerName"],
+      params: { occurredAt: SEC_WHEN, providerName: "dingtalk" },
+      next: "self",
+    },
+    "account.password_login_enabled": {
+      topic: "security_event",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "self",
+    },
+    "account.password_login_disabled": {
+      topic: "security_event",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "self",
+    },
+    "account.session_ended_by_self": {
+      topic: "security_event",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "self",
+    },
+    /* 唯一归 `login_activity` 的一条：它回答的是「谁在登录」，答案会经常变，是客户可能
+       嫌吵的唯一一条——所以它必须能整条关掉，而那正是拆两个主题的全部意义。 */
+    "account.new_device_signin": {
+      topic: "login_activity",
+      placeholders: ["occurredAt"],
+      params: base,
+      next: "self",
+    },
+  };
+
+  it("十四条，不多不少，都在模板表里，且两条推导彼此相等", () => {
+    expect(Object.keys(CASES)).toHaveLength(14);
+    for (const code of Object.keys(CASES)) {
+      expect(Object.keys(NOTIFICATION_TEMPLATES)).toContain(code);
+    }
+    /* `SECURITY_TEMPLATE_CODES` 按**主题**筛，本组这张表是**手写**的：两条互相独立的推导
+       相等，才说明没有哪一条落在名单外（拿被测的那份证明它自己是个恒真的判据）。 */
+    expect([...SECURITY_TEMPLATE_CODES].sort()).toEqual(
+      Object.keys(CASES).sort(),
+    );
+    /* 类型那一半：`account.` 前缀筛出来的联合就是这十四条（错一个字符编译不过）。 */
+    const typed: SecurityTemplateCode[] = Object.keys(
+      CASES,
+    ) as SecurityTemplateCode[];
+    expect(typed).toHaveLength(14);
+  });
+
+  it("十三条归账号安全事件，只有「新设备登录」归登录活动", () => {
+    const byTopic = (topic: NotificationTopic) =>
+      Object.keys(CASES).filter((code) => CASES[code]!.topic === topic);
+    expect(byTopic("security_event")).toHaveLength(13);
+    expect(byTopic("login_activity")).toEqual(["account.new_device_signin"]);
+    for (const [code, c] of Object.entries(CASES)) {
+      expect(topicOf(code as NotificationTemplateCode)).toBe(c.topic);
+    }
+    /* 两个主题不许是同一个：合成一行时，`security_event` 的站内档必须锁死（账号被接管时
+       唯一的到达路径），「新设备登录」的站内档就跟着关不掉。 */
+    expect(topicOf("account.password_changed")).not.toBe(
+      topicOf("account.new_device_signin"),
+    );
+  });
+
+  for (const [code, c] of Object.entries(CASES)) {
+    const key = code as NotificationTemplateCode;
+
+    it(`${code} 的文案参数集合就是约定的那几个`, () => {
+      const def = NOTIFICATION_TEMPLATES[key];
+      expect(placeholders(def.title, def.body)).toEqual([...c.placeholders]);
+      // 契约里的名字：时刻这一个每条都有，绝不叫别的。
+      expect(c.placeholders).toContain("occurredAt");
+    });
+
+    for (const locale of LOCALES) {
+      it(`${code}（${locale}）说齐三件事，且不含 IP / 设备串 / uuid`, () => {
+        const text = rendered(key, c.params, locale);
+        // ① 什么时候：时刻带秒带时区，原样出现在正文里。
+        expect(text).toContain(SEC_WHEN);
+        expect(text).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC\+8\)/);
+        // ② 下一步落在真实存在的地方（「我的账号」那一页 / 客服）。
+        const selfServe = locale === "zh-CN" ? "我的账号" : "My account";
+        const support = locale === "zh-CN" ? "联系客服" : "contact support";
+        expect(text.toLowerCase()).toContain(support.toLowerCase());
+        if (c.next === "self") {
+          expect(text).toContain(selfServe);
+        } else {
+          /* 旧邮箱那条与三条运营处置：**不许**把客户指回一个他可能已经进不去的页面。 */
+          expect(text).not.toContain(selfServe);
+        }
+        // ③ 不含给排查用的那两串，也不含 uuid、不含 markdown 星号、参数无残留。
+        for (const leak of [
+          "User-Agent",
+          "user-agent",
+          "Mozilla",
+          "Chrome",
+          "Safari",
+          "Windows NT",
+        ]) {
+          expect(text).not.toContain(leak);
+        }
+        expect(text).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+        expect(text).not.toMatch(UUID_ANYWHERE);
+        expect(text).not.toMatch(/\{\{/);
+        expect(text).not.toContain("**");
+      });
+    }
+  }
+
+  it("运营那三条照搬运营填的原因（owner 裁定 3：那个字段改必填）", () => {
+    for (const code of [
+      "account.locked",
+      "account.unlocked",
+      "account.sessions_ended_by_operator",
+    ] as NotificationTemplateCode[]) {
+      for (const locale of LOCALES) {
+        expect(rendered(code, withReason, locale)).toContain(REASON);
+      }
+    }
+  });
+
+  it("不揣测原因：自助那十条一个「可能 / 也许」都没有", () => {
+    for (const [code, c] of Object.entries(CASES)) {
+      if (c.next === "support" && code !== "account.email_changed_old")
+        continue;
+      const zh = rendered(code as NotificationTemplateCode, c.params, "zh-CN");
+      for (const guess of ["可能", "也许", "大概", "怀疑", "疑似"]) {
+        expect(zh).not.toContain(guess);
+      }
+      const en = rendered(
+        code as NotificationTemplateCode,
+        c.params,
+        "en-US",
+      ).toLowerCase();
+      for (const guess of ["maybe", "perhaps", "probably", "we suspect"]) {
+        expect(en).not.toContain(guess);
+      }
+    }
+  });
+
+  it("邮箱变更是两条各自完整的话，旧地址那条不要求客户还进得去账号", () => {
+    const oldSide = NOTIFICATION_TEMPLATES["account.email_changed_old"].body;
+    const newSide = NOTIFICATION_TEMPLATES["account.email_changed_new"].body;
+    // 两个收件人视角写不进一条模板（判据与邀请四态、退订三态相同）。
+    expect(oldSide).not.toBe(newSide);
+    for (const locale of LOCALES) {
+      const text = rendered("account.email_changed_old", base, locale);
+      // 旧地址这封的收件人**可能已经失去账号**：既不指望他能登录，也不印出新地址。
+      expect(text).not.toContain(
+        locale === "zh-CN" ? "我的账号" : "My account",
+      );
+      expect(text).not.toContain("@");
+      expect(text).toContain(
+        locale === "zh-CN" ? "不再收到" : "no longer receives",
+      );
+    }
+    // 新地址那条反过来：它的收件人手上就是这个账号，所以给自助的两个动作。
+    for (const locale of LOCALES) {
+      expect(rendered("account.email_changed_new", base, locale)).toContain(
+        locale === "zh-CN" ? "我的账号" : "My account",
+      );
+    }
+  });
+
+  it("密码登录开关是两条，关掉那条说清「之后只能怎么登录」", () => {
+    const on = NOTIFICATION_TEMPLATES["account.password_login_enabled"].body;
+    const off = NOTIFICATION_TEMPLATES["account.password_login_disabled"].body;
+    expect(on).not.toBe(off);
+    // 与「我的账号」那一页的提示同源（同一件事两处不许各写各的）。
+    expect(
+      rendered("account.password_login_disabled", base, "zh-CN"),
+    ).toContain("只能用手机 / 邮箱 / 三方动态验证登录");
+    expect(
+      rendered("account.password_login_disabled", base, "en-US").toLowerCase(),
+    ).toContain("only phone, email or social one-time codes work");
+    for (const body of [on, off]) expect(body).not.toContain("或者");
+  });
+
+  it("操作者与第三方登录：同一个码、两种语言、两个词，中文里不剩英文码", () => {
+    for (const [paramName, sample, host] of [
+      [ACTOR_PARAM, "tenant_admin", "account.password_changed"],
+      [PROVIDER_PARAM, "dingtalk", "account.identity_linked"],
+    ] as const) {
+      const words = {
+        "zh-CN":
+          paramName === ACTOR_PARAM
+            ? actorNameOf(sample, "zh-CN")
+            : providerNameOf(sample, "zh-CN"),
+        "en-US":
+          paramName === ACTOR_PARAM
+            ? actorNameOf(sample, "en-US")
+            : providerNameOf(sample, "en-US"),
+      } as const;
+      expect(words["zh-CN"]).not.toBe(words["en-US"]);
+      for (const locale of LOCALES) {
+        const text = rendered(
+          host,
+          { occurredAt: SEC_WHEN, [paramName]: sample },
+          locale,
+        );
+        expect(text).toContain(words[locale]);
+        // 这一句就是那个缺陷本身：中文正文里印出内部码。
+        expect(text).not.toContain(sample);
+      }
+    }
+  });
+
+  it("码不认识、或者压根没给：回落成一句实话，不印码也不留空洞", () => {
+    for (const [host, zhFallback, enFallback, bad] of [
+      [
+        "account.password_changed",
+        actorNameOf("nope", "zh-CN"),
+        actorNameOf("nope", "en-US"),
+        "sysadmin",
+      ],
+      [
+        "account.identity_linked",
+        providerNameOf("nope", "zh-CN"),
+        providerNameOf("nope", "en-US"),
+        "twitter",
+      ],
+    ] as const) {
+      for (const params of [
+        { occurredAt: SEC_WHEN, actorLabel: bad, providerName: bad },
+        { occurredAt: SEC_WHEN },
+      ]) {
+        const zh = rendered(host as NotificationTemplateCode, params, "zh-CN");
+        expect(zh).toContain(zhFallback);
+        expect(zh).not.toContain(bad);
+        // 空洞长这样：「绑定「」」。回落必须把它填上。
+        expect(zh).not.toContain("「」");
+        expect(
+          rendered(host as NotificationTemplateCode, params, "en-US"),
+        ).toContain(enFallback);
+      }
+    }
+  });
+
+  it("去重锚：带时刻、不含 uuid、可视用户号；同一件事两次各一条", () => {
+    const first = securityEventStamp(
+      "account.password_changed",
+      SEC_USER_NO,
+      SEC_AT,
+    );
+    const second = securityEventStamp(
+      "account.password_changed",
+      SEC_USER_NO,
+      new Date(SEC_AT.getTime() + 60_000),
+    );
+    expect(first.reference.type).toBe(SECURITY_REFERENCE_TYPE);
+    expect(first.reference.id).toBe(
+      `sec:${SEC_USER_NO}:password_changed:${SEC_AT.toISOString()}`,
+    );
+    /* 时刻在锚里 ⇒ 客户一天改两次密码，收件箱那个唯一键不会把第二次压掉。这是本批最容易
+       静默出错的一处：少了时刻不报错，只是第二条通知不见了。 */
+    expect(second.reference.id).not.toBe(first.reference.id);
+    expect(first.reference.id).not.toMatch(UUID_ANYWHERE);
+    /* 展示串与锚里的 ISO 时刻同源（同一个 Date），所以两者一定对得上。 */
+    expect(first.occurredAt).toBe(SEC_WHEN);
+  });
+
+  it("发侧传了一个 uuid 当用户号：退成占位符，绝不让它过客户端那条线", () => {
+    /* `reference_id` 被客户收件箱的读路径原样投影给浏览器。宁可锚少一个可读的把手，
+       也不让一个 uuid 出现在浏览器里——而锚仍然唯一，因为时刻在里面。 */
+    const leaked = securityEventStamp(
+      "account.new_device_signin",
+      "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+      SEC_AT,
+    );
+    expect(leaked.reference.id).not.toMatch(UUID_ANYWHERE);
+    expect(leaked.reference.id).toBe(
+      `sec:unknown:new_device_signin:${SEC_AT.toISOString()}`,
+    );
+  });
+
+  it("引用 id 与镜像锚都在 varchar(128) 之内（按真实码表算，不手抄）", () => {
+    const codes = [...SECURITY_TEMPLATE_CODES];
+    const longest = codes.reduce((a, b) => (b.length > a.length ? b : a));
+    const id = securityEventStamp(
+      longest as SecurityTemplateCode,
+      SEC_USER_NO,
+      SEC_AT,
+    ).reference.id;
+    // 收件箱那一列：`sec:` 4 + 可视号 10 + 1 + 事件名 26 + 1 + ISO 24 = 66。
+    expect(id.length).toBe(66);
+    expect(id.length).toBeLessThanOrEqual(128);
+    /* 运营镜像再套一层 `{模板}:{引用类型}:{锚}`，那一层的断言在 operator-mirror.spec.ts
+       （它拿得到 mirrorDedupeKey）。这里只记下这条链有两层，别只算一层。 */
+  });
+});
+
 describe("全表通则", () => {
   const codes = Object.keys(
     NOTIFICATION_TEMPLATES,
@@ -867,6 +1273,25 @@ describe("全表通则", () => {
    * （硬塞一个 `<roleKey>` 只会落进「码不认识」的回落档）。给它一个真码，另在 `echo` 里
    * 摘出去——它那一半的判据在「角色码在渲染时成词」那一组，以及下面参数集合那条用例里。
    */
+  /**
+   * 值是**码不是展示值**的参数：标记穿不过它们（硬塞一个 `<actorLabel>` 只会落进「码不
+   * 认识」的回落档）。所以给一个真码 + 该语言的取词函数，另在 `echo` 里摘出去。
+   *
+   * 2026-09-29 从一个（roleKey）变成三个。这张表**必须与 `localizeParams` 改写的那几个键
+   * 一一对应**：漏一个，下面「两种语言的参数集合逐条一致」那条就会因为回落值不含标记而红，
+   * 而红的原因看起来像文案写错了——所以写在这里，不写成三个散落的 `p === X` 判断。
+   */
+  const CODE_VALUED: Readonly<
+    Record<string, { sample: string; word: (l: NotificationLocale) => string }>
+  > = {
+    [ROLE_PARAM]: { sample: "member", word: (l) => roleNameOf("member", l) },
+    [ACTOR_PARAM]: { sample: "self", word: (l) => actorNameOf("self", l) },
+    [PROVIDER_PARAM]: {
+      sample: "dingtalk",
+      word: (l) => providerNameOf("dingtalk", l),
+    },
+  };
+
   function markers(code: NotificationTemplateCode): {
     names: string[];
     params: TemplateParams;
@@ -877,17 +1302,17 @@ describe("全表通则", () => {
     return {
       names,
       params: Object.fromEntries(
-        names.map((p) => [p, p === ROLE_PARAM ? "member" : `<${p}>`]),
+        names.map((p) => [p, CODE_VALUED[p]?.sample ?? `<${p}>`]),
       ),
-      echo: names.filter((p) => p !== ROLE_PARAM),
+      echo: names.filter((p) => !(p in CODE_VALUED)),
     };
   }
 
   it("每条模板两种语言的标题与正文都非空", () => {
     /* = 模板码总数。加一条码就在这里 +1 —— 这个数字当探针的全部意义就是「加了码却没有
        任何一条用例覆盖到它」当场红。2026-09-28 收尾加两条（运营代客续期 / 升级维护暂停）：
-       32 → 34。2026-09-29 成员邀请四态：34 → 38。 */
-    expect(codes).toHaveLength(38);
+       32 → 34。2026-09-29 成员邀请四态：34 → 38；同日账号安全线十四条：38 → 52。 */
+    expect(codes).toHaveLength(52);
     for (const code of codes) {
       const { params } = markers(code);
       for (const locale of LOCALES) {
@@ -913,10 +1338,11 @@ describe("全表通则", () => {
         const text = rendered(code, params, locale);
         expect(text).not.toMatch(/\{\{/);
         for (const name of echo) expect(text).toContain(`<${name}>`);
-        /* roleKey 那一半：标记换不过去，改成按语言断言它成了那个语言的角色名——⊇ 那个
-           方向（「这个参数该语言也用到了」）的判据没有丢。 */
-        if (names.includes(ROLE_PARAM)) {
-          expect(text).toContain(roleNameOf("member", locale));
+        /* 三个「码不是展示值」的参数那一半：标记换不过去，改成按语言断言它成了那个语言的
+           词——⊇ 那个方向（「这个参数该语言也用到了」）的判据没有丢。 */
+        for (const name of names) {
+          const coded = CODE_VALUED[name];
+          if (coded) expect(text).toContain(coded.word(locale));
         }
       }
     }
@@ -979,6 +1405,36 @@ const EXPECTED_MISSING_IN_SECOND_COPY: Record<string, string> = {
     "邀请撤回的写入方在 identity/organization 的成员仓储，不在订阅包",
   "tenant.invitation_expired":
     "邀请过期没有写入方，靠巡检补齐（与加油包池巡检同一形状），不在订阅包",
+  /* 2026-09-29 账号安全线十四条：写入方分在 auth-bff（凭据与登录那几条）、website-bff
+     （改密）与 admin-bff（运营对账号的三个处置）三处，**一条都不在订阅包**。
+     所以同样不往第二副本里加——那份副本只列写入方住在那个包里的模板码，加进去就是替别的包
+     声明它能发什么。逐条写下来而不是一句「安全那十四条都不在」：这张表的另一半用例要求每一
+     条都仍然「在权威表里且不在副本里」，笼统一条就查不出「某一条后来搬进订阅包了」。 */
+  "account.locked": "运营锁定账号的写入方在 admin-bff 的账号处置，不在订阅包",
+  "account.unlocked": "运营解锁账号的写入方在 admin-bff 的账号处置，不在订阅包",
+  "account.sessions_ended_by_operator":
+    "运营强制全端下线的写入方在 admin-bff 的账号处置，不在订阅包",
+  "account.password_changed":
+    "改密（含首次设密与组织管理员代设）的写入方在门户侧的账号接口，不在订阅包",
+  "account.password_reset":
+    "邮件重置链接改密的写入方在 auth-bff 的重置令牌路径，不在订阅包",
+  "account.phone_changed": "手机号变更的写入方在账号的联系方式接口，不在订阅包",
+  "account.email_changed_old":
+    "邮箱变更发给旧地址那封，写入方在账号的联系方式接口，不在订阅包",
+  "account.email_changed_new":
+    "邮箱变更发给新地址那封，写入方在账号的联系方式接口，不在订阅包",
+  "account.identity_linked":
+    "三方登录绑定的写入方在 auth-bff 的三方流，不在订阅包",
+  "account.identity_unlinked":
+    "三方登录解绑的写入方在 auth-bff 的三方流，不在订阅包",
+  "account.password_login_enabled":
+    "密码登录开关的写入方在账号的登录方式接口，不在订阅包",
+  "account.password_login_disabled":
+    "密码登录开关的写入方在账号的登录方式接口，不在订阅包",
+  "account.session_ended_by_self":
+    "客户自己撤销会话的写入方在会话接口，不在订阅包",
+  "account.new_device_signin":
+    "没见过的设备登录，写入方在 auth-bff 的登录路径，不在订阅包",
 };
 
 describe("第二份模板码副本", () => {

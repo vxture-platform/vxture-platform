@@ -39,7 +39,11 @@ import { OperatorAdminService } from "../auth/operator-admin.service";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { TICKET_STATUSES } from "@vxture-platform/shared";
 import type { TicketStatus } from "@vxture-platform/shared";
-import { requireOperatorId, requireUuid } from "./governance.shared";
+import {
+  requireOperatorId,
+  requireText,
+  requireUuid,
+} from "./governance.shared";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,6 +58,21 @@ import type {
   RequestContext,
   TenantOperationType,
 } from "../types/console.types";
+
+/**
+ * 处置原因的长度上限。与列表页弹窗那个 `maxLength` 是**同一个数**：两边不一致时
+ * 界面允许输入而接口回 400，运营看到的只是「点了没反应」。
+ */
+const ACCOUNT_ACTION_REASON_MAX = 512;
+
+/**
+ * 三条处置的请求体。`reason` 在**类型上**仍写成可选——浏览器确实可以不送，而
+ * 「不送」正是要被 400 挡住的那种输入。写成必需只会让编译期看着很齐、运行期照旧
+ * 收到 undefined；必填由 `requireText` 在运行期落实。
+ */
+interface AccountLifecycleActionBody {
+  reason?: string;
+}
 
 @Controller("api/accounts")
 export class AccountsRouter {
@@ -226,75 +245,102 @@ export class AccountsRouter {
 
   // ── C12 write path — admin处置 C 端账号（委派 IdP，守卫 user:account.manage）──
   // 凭据/会话由 IdP 拥有；admin-bff 只委派 + 本地写审计。actor = RP 会话，非请求体。
+  //
+  // **`reason` 由可选改为必填**（owner 2026-09-29）。这三件事从此会通知到客户本人，
+  // 而正文照抄运营填的这句话；留成可选，客户就会收到一条「你的账号已被停用」而没有
+  // 任何可问的去处。缺、空串、全空白一律 400 `reason is required`——校验走
+  // `requireText`，与本包其它必填文本同一条出口，空白串因此不能冒充已填。
+  //
+  // 同一句话进审计行的 `after.reason`（照 tenants.router 审核驳回那处的写法）。在这
+  // 之前它哪儿都没落地：IdP 的 internal 端点连 `@Body()` 都不收，这边也没写进审计，
+  // 而弹窗上却写着「将写入审计日志」。
 
   // POST /api/accounts/:id/disable — 全禁用（status='disabled'）+ 吊销全部会话。
+  // 请求体：{ reason: string }（必填，≤512；会照抄进客户收到的那条消息）。
   @Post(":id/disable")
   async disableAccount(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-    @Body() body: { reason?: string },
+    @Body() body: AccountLifecycleActionBody,
   ): Promise<{ ok: true; status: string; revoked: number }> {
     assertCanManageAccountLifecycle(req);
     const actorId = requireOperatorId(req);
     const userId = requireUuid(id, "Invalid account id");
+    const reason = requireText(
+      body?.reason,
+      "reason",
+      ACCOUNT_ACTION_REASON_MAX,
+    );
     const result = await this.operatorAdmin.disableAccount(
       userId,
       actorId,
-      body?.reason,
+      reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
       action: "account.disable",
       resourceType: "account_user",
       resourceId: userId,
-      after: { status: result.status, revoked: result.revoked },
+      after: { status: result.status, revoked: result.revoked, reason },
     });
     return result;
   }
 
   // POST /api/accounts/:id/enable — 恢复（status='active'）。
+  // 请求体：{ reason: string }（必填，≤512；会照抄进客户收到的那条消息）。
   @Post(":id/enable")
   async enableAccount(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-    @Body() body: { reason?: string },
+    @Body() body: AccountLifecycleActionBody,
   ): Promise<{ ok: true; status: string }> {
     assertCanManageAccountLifecycle(req);
     const actorId = requireOperatorId(req);
     const userId = requireUuid(id, "Invalid account id");
+    const reason = requireText(
+      body?.reason,
+      "reason",
+      ACCOUNT_ACTION_REASON_MAX,
+    );
     const result = await this.operatorAdmin.enableAccount(
       userId,
       actorId,
-      body?.reason,
+      reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
       action: "account.enable",
       resourceType: "account_user",
       resourceId: userId,
-      after: { status: result.status },
+      after: { status: result.status, reason },
     });
     return result;
   }
 
   // POST /api/accounts/:id/force-logout — 吊销该用户全部活跃会话。
+  // 请求体：{ reason: string }（必填，≤512；会照抄进客户收到的那条消息）。
   @Post(":id/force-logout")
   async forceLogoutAccount(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-    @Body() body: { reason?: string },
+    @Body() body: AccountLifecycleActionBody,
   ): Promise<{ ok: true; revoked: number }> {
     assertCanManageAccountLifecycle(req);
     const actorId = requireOperatorId(req);
     const userId = requireUuid(id, "Invalid account id");
+    const reason = requireText(
+      body?.reason,
+      "reason",
+      ACCOUNT_ACTION_REASON_MAX,
+    );
     const result = await this.operatorAdmin.forceLogoutAccount(
       userId,
       actorId,
-      body?.reason,
+      reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
       action: "account.force_logout",
       resourceType: "account_user",
       resourceId: userId,
-      after: { revoked: result.revoked },
+      after: { revoked: result.revoked, reason },
     });
     return result;
   }

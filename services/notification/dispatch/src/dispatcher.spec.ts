@@ -448,6 +448,90 @@ describe("定向送达的三个开关", () => {
 });
 
 /**
+ * `emailTo`（2026-09-29 账号安全线）：邮件那一半改送指定地址，站内那一半不动。
+ * 用例按唯一的真实用途写：换邮箱时写给**旧地址**的那一封。两个方向都要有用例——
+ * 只测「给了它会去新地址」证不了「不给它今天的行为没变」。
+ */
+describe("emailTo：邮件改送旧地址", () => {
+  const emailChanged: NotifyInput = {
+    tenantId: "t-1",
+    templateCode: "account.email_changed_old",
+    reference: {
+      type: "security",
+      id: "sec:8800000012:email_changed_old:2026-09-29T12:14:32.000Z",
+    },
+    params: { occurredAt: "2026-09-29 20:14:32 (UTC+8)" },
+    exactRecipients: ["acct-1"],
+    link: "/account",
+  };
+  const toOf = (calls: unknown[], i: number) =>
+    ((calls as unknown[][])[i]![0] as { to: string }).to;
+
+  it("给了 emailTo：邮件只去旧地址，站内仍落在该账号名下，账本两行各记各的收件人", async () => {
+    const mail = { send: vi.fn(async () => ({ messageId: "m-1" })) };
+    // 账号上挂着的已经是**新**地址（事情已经落库）——这正是要区开的两个值。
+    const f = fakePool({ emails: { "acct-1": "new@example.com" } });
+    const res = await new NotificationDispatcher(f.pool, {
+      mail,
+      operatorMirror: null,
+    }).notify({ ...emailChanged, emailTo: "old@example.com" });
+
+    expect(res).toMatchObject({ inboxCreated: 1, emailsSent: 1 });
+    expect(mail.send).toHaveBeenCalledTimes(1);
+    expect(toOf(mail.send.mock.calls, 0)).toBe("old@example.com");
+    // 站内那一半没动：唯一键的第一段就是 account_id，换完邮箱登录进来照样读得到。
+    expect([...f.inbox]).toEqual([
+      "acct-1|account.email_changed_old|security|sec:8800000012:email_changed_old:2026-09-29T12:14:32.000Z",
+    ]);
+    // 账本：站内那行记 account id，邮件那行记**真正寄到的地址**。
+    expect(f.logs.map((l) => [l.channel, l.recipient])).toEqual([
+      ["inapp", "acct-1"],
+      ["email", "old@example.com"],
+    ]);
+  });
+
+  it("不给 emailTo：一切照旧，邮件送账号上挂着的那个地址", async () => {
+    const mail = { send: vi.fn(async () => ({ messageId: "m-1" })) };
+    const f = fakePool({ emails: { "acct-1": "new@example.com" } });
+    const res = await new NotificationDispatcher(f.pool, {
+      mail,
+      operatorMirror: null,
+    }).notify(emailChanged);
+
+    expect(res).toMatchObject({ inboxCreated: 1, emailsSent: 1 });
+    expect(toOf(mail.send.mock.calls, 0)).toBe("new@example.com");
+    expect(f.logs.map((l) => [l.channel, l.recipient])).toEqual([
+      ["inapp", "acct-1"],
+      ["email", "new@example.com"],
+    ]);
+  });
+
+  it("偏好关掉邮件档的人，给了 emailTo 也不寄：它换的是地址，不是门", async () => {
+    const mail = { send: vi.fn(async () => ({ messageId: "m-1" })) };
+    const f = fakePool({ emails: { "acct-1": "new@example.com" } });
+    const res = await new NotificationDispatcher(f.pool, {
+      mail,
+      operatorMirror: null,
+      // 只关邮件一档，站内照开（真实形态：security_event 的站内档是锁的）。
+      prefs: { allows: async (_u, _t, channel) => channel !== "email" },
+    }).notify({ ...emailChanged, emailTo: "old@example.com" });
+
+    expect(res).toMatchObject({ inboxCreated: 1, emailsSent: 0 });
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it("emailTo 是空串 / 全空白 = 没给：退回账号那个地址，不拿空串去捣 sender", async () => {
+    const mail = { send: vi.fn(async () => ({ messageId: "m-1" })) };
+    const f = fakePool({ emails: { "acct-1": "new@example.com" } });
+    await new NotificationDispatcher(f.pool, {
+      mail,
+      operatorMirror: null,
+    }).notify({ ...emailChanged, emailTo: "   " });
+    expect(toOf(mail.send.mock.calls, 0)).toBe("new@example.com");
+  });
+});
+
+/**
  * 运营镜像（owner 2026-09-28「运营端收到的信息和客户侧要完整一致」）。
  * 这里只测「挂在哪、挂几次、抛了怎样」；标题 / 严重度 / 链接逐模板在
  * operator-mirror.spec.ts。

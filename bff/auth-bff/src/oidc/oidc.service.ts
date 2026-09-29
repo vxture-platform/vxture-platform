@@ -18,7 +18,11 @@ import {
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
 import { VxConfigService } from "@vxture/core-config";
-import { AccountService, type UserView } from "@vxture/service-account";
+import {
+  AccountService,
+  type PendingSignInNotice,
+  type UserView,
+} from "@vxture/service-account";
 import { ActiveContextService } from "@vxture/service-organization";
 import {
   authMethodToAmr,
@@ -2021,7 +2025,23 @@ export class OidcService {
   // ─── operator audit (best-effort: never break a login) ─────────────────────
 
   /** Append an operator_login_attempt row; failures are logged, not thrown. */
-  /** Customer-realm login audit (session.login_attempts); best-effort. */
+  /**
+   * Customer-realm login audit (session.login_attempts); best-effort.
+   *
+   * 顺手承担「没见过的设备登录」这条通知（2026-09-29），因为**只有这里知道那件事**：
+   * 判据就是这张表里本人此前成功登录过的设备，而这一批四条登录出口（密码 / 手机码 /
+   * 邮箱码 / 社交与绑手机尾巴）全都经过这一个写入方。挂在四个出口上是四份会漂的副本。
+   *
+   * 顺序是硬的：**先问,再写,后发**。
+   *   · 问必须在写**之前**——本次这一行一落库,它自己就成了「这台设备我见过」的证据,
+   *     判据于是恒为假(这条通知会看起来「装好了」却永远不响,正是本仓最常见的那种缺陷)。
+   *   · 发必须在写**之后**——通知是对已发生事实的回执,不是对将要发生的事的预告。
+   *   · 两步都不许让登录失败,而且这道门长在**本方法里**:三段各自 try/catch。被调用方
+   *     今天也各自吞异常(detectUnseenDevice 整段读 try 住、notifySecurity 走的 emit
+   *     只记日志),但那是另一个包里的实现细节——合同写在这里,门就不能寄在别人身上。
+   * 只对成功的登录问:失败尝试的 UA 是攻击者的,拿它当「见过」等于让一次撞库失败给
+   * 后续的成功登录发通行证(判据里那条 `result = 'success'` 是同一件事的另一半)。
+   */
   private async recordTenantAttempt(input: {
     userId?: string | null;
     identifier: string;
@@ -2030,10 +2050,37 @@ export class OidcService {
     ipAddress?: string | undefined;
     userAgent?: string | undefined;
   }): Promise<void> {
+    /*
+     * 三段各自 try/catch,一段都不许把异常抛回登录链路。
+     *
+     * 「两步都不许让登录失败」上面写着,但**光靠被调用方自己吞是不够的**:那是另一个包里
+     * 的实现细节,今天 `detectUnseenDevice` 整段读 try 住了、`notifySecurity` 走的 emit
+     * 只记日志,明天谁在那两个方法的早期加一句取参数的读查询(或者通知器换个实现),异常就
+     * 从这里抛出去——而这一层的每个调用点都是 `await this.recordTenantAttempt(...)`,
+     * 抛出去的后果是**一次本来成功的登录变成 500**。合同写在本方法的文档里,门就得长在
+     * 本方法里,不能寄在别人身上。
+     */
+    let pending: PendingSignInNotice | null = null;
+    if (input.result === "success" && input.userId) {
+      try {
+        pending = await this.account.detectUnseenDevice(
+          input.userId,
+          input.userAgent ?? null,
+        );
+      } catch (err) {
+        /* 判据取不到就**不发**:默认「没见过」会把每次登录都变成一条假警报。 */
+        this.logger.warn(`unseen-device criterion read failed: ${String(err)}`);
+      }
+    }
     try {
       await this.loginAttempts.record(input);
     } catch (err) {
       this.logger.warn(`login_attempt write failed: ${String(err)}`);
+    }
+    try {
+      await this.account.notifyUnseenDevice(pending);
+    } catch (err) {
+      this.logger.warn(`unseen-device notice failed: ${String(err)}`);
     }
   }
 

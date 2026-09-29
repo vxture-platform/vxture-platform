@@ -3215,5 +3215,37 @@
       "clear": "Clear",
       "noOptions": "No values available"
     }
+  },
+  "accountsPage": {
+    "actionDialog": {
+      "required": "Required",
+      "reasonLabel": "Reason",
+      "reasonHint": "The customer reads this wording exactly as you write it. Write one sentence they can understand, with no internal shorthand or codes.",
+      "disable": {
+        "title": "Disable account",
+        "description": "Disables {name} ({email}): every sign-in path is blocked and all sessions are revoked. It can be restored later. The reason you write is passed on to that customer.",
+        "submitLabel": "Disable account",
+        "reasonPlaceholder": "e.g. Unusual sign-in activity was found on this account, so it is disabled for now; contact support to verify your identity and have it restored."
+      },
+      "enable": {
+        "title": "Restore account",
+        "description": "Returns the account of {name} to normal. The reason you write is passed on to that customer.",
+        "submitLabel": "Restore account",
+        "reasonPlaceholder": "e.g. Identity verification passed, the account is back to normal use."
+      },
+      "forceLogout": {
+        "title": "Sign out everywhere",
+        "description": "Revokes every active session of {name}; they will have to sign in again. The reason you write is passed on to that customer.",
+        "submitLabel": "Sign out everywhere",
+        "reasonPlaceholder": "e.g. An unfamiliar device was signed in, so all sessions were ended; change your password and sign in again."
+      }
+    },
+    "toast": {
+      "disabled": "Account disabled",
+      "enabled": "Account restored",
+      "forcedLogout": "Signed out everywhere",
+      "forcedLogoutDetail": "{count} sessions revoked.",
+      "failed": "Action failed"
+    }
   }
 }

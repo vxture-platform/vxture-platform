@@ -271,9 +271,15 @@ export class SessionAggregator {
     return this.account.listIdentitiesByUser(userId);
   }
 
-  /** Unbind a federated identity (by provider) from the caller. */
-  removeUserIdentity(userId: string, provider: string): Promise<void> {
-    return this.account.removeIdentity(userId, provider);
+  /**
+   * Unbind a federated identity (by provider) from the caller.
+   *
+   * 返回值刻意丢掉：`removeIdentity` 现在回「真的删了一行吗」（通知只在真删了时才发），
+   * 而路由那一侧的契约是 204 无内容——解绑一个本来就没绑的渠道照旧算成功，那是幂等，
+   * 不是错误，不该因为服务层多了一个返回值就变成一个客户看得见的差别。
+   */
+  async removeUserIdentity(userId: string, provider: string): Promise<void> {
+    await this.account.removeIdentity(userId, provider);
   }
 
   getUserLastLogin(userId: string): Promise<LastLoginRecord | null> {
@@ -1481,7 +1487,12 @@ export class SessionAggregator {
       memberUserId,
     );
     if (!member) return false;
-    await this.account.setPassword(memberUserId, nextPassword);
+    /* 来由必须交代：成员收到的那条回执要说清「由你所在组织的管理员修改」，否则他读到的
+       是一句「你本人修改了密码」——而他本人什么也没做，那正是这条通知要帮他识破的情形。
+       操作者放**码**不放名字：词由通知模板层按收件人语言给（见 SECURITY_ACTORS）。 */
+    await this.account.setPassword(memberUserId, nextPassword, {
+      cause: "reset_by_admin",
+    });
     return true;
   }
 

@@ -1050,8 +1050,11 @@
         "tenant_change": {
           "title": "Tenant changes"
         },
-        "security": {
-          "title": "Security alerts"
+        "security_event": {
+          "title": "Account security"
+        },
+        "login_activity": {
+          "title": "Sign-in activity"
         },
         "invoice_progress": {
           "title": "Invoice progress"

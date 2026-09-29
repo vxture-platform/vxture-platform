@@ -269,11 +269,21 @@ export class OperatorAdminService {
   //   Reuses the same S2S delegate; targets resolve via account.users only at the
   //   IdP (an operator id yields 404). No rank gate / anti-lockout (an operator may
   //   fully disable an abusive customer). Disable also revokes all their sessions.
+  //
+  //   `reason` is REQUIRED on these three (owner 2026-09-29). The IdP boundary
+  //   (auth-bff AccountAdminInternalRouter) now answers a missing / blank reason with
+  //   400 `reason_required`, because that sentence is copied verbatim into the
+  //   notification the CUSTOMER receives: an account locked with no stated reason
+  //   leaves its owner guessing, from a console he can no longer open.
+  //   Declaring it optional here did not make it lenient, it only moved the refusal
+  //   one hop later - any caller that omitted it could produce nothing but a rejected
+  //   request. The operator-realm actions above keep it optional: that boundary did
+  //   not change, and its reason is not shown to anyone outside admin.
 
   disableAccount(
     userId: string,
     actorOperatorId: string,
-    reason?: string,
+    reason: string,
   ): Promise<{ ok: true; status: string; revoked: number }> {
     return this.delegate(
       `/internal/account/users/${encodeURIComponent(userId)}/disable`,
@@ -285,7 +295,7 @@ export class OperatorAdminService {
   enableAccount(
     userId: string,
     actorOperatorId: string,
-    reason?: string,
+    reason: string,
   ): Promise<{ ok: true; status: string }> {
     return this.delegate(
       `/internal/account/users/${encodeURIComponent(userId)}/enable`,
@@ -297,7 +307,7 @@ export class OperatorAdminService {
   forceLogoutAccount(
     userId: string,
     actorOperatorId: string,
-    reason?: string,
+    reason: string,
   ): Promise<{ ok: true; revoked: number }> {
     return this.delegate(
       `/internal/account/users/${encodeURIComponent(userId)}/sessions/revoke`,

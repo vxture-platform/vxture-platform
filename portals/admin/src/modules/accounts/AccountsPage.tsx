@@ -437,6 +437,7 @@ function useAccountColumns(
 
 export function AccountsPage() {
   const tShared = useTranslations();
+  const tPage = useTranslations("accountsPage");
   const tableLabels = useTableLabels();
   const pageCopy = accountsPageCopy;
   const router = useRouter();
@@ -514,21 +515,26 @@ export function AccountsPage() {
     event.preventDefault();
     if (!pendingAction) return;
     const { account, kind } = pendingAction;
-    const reason = actionReason.trim() || undefined;
+    /* 处置原因**必填**（owner 2026-09-29：它会被告知客户）。提交按钮已按
+       同一条判据置灰，这里再拦一道：置灰的是按钮，不是表单的提交路径。 */
+    const reason = actionReason.trim();
+    if (!reason) return;
     setActionBusy(true);
     try {
       if (kind === "disable") {
         await disableAccount(account.id, reason);
-        toast({ tone: "success", title: "已停用账号" });
+        toast({ tone: "success", title: tPage("toast.disabled") });
       } else if (kind === "enable") {
         await enableAccount(account.id, reason);
-        toast({ tone: "success", title: "已恢复账号" });
+        toast({ tone: "success", title: tPage("toast.enabled") });
       } else {
         const result = await forceLogoutAccount(account.id, reason);
         toast({
           tone: "success",
-          title: "已强制下线",
-          description: `已吊销 ${result.revoked} 个会话。`,
+          title: tPage("toast.forcedLogout"),
+          description: tPage("toast.forcedLogoutDetail", {
+            count: result.revoked,
+          }),
         });
       }
       const refreshed = await fetchAccountOperations();
@@ -539,7 +545,7 @@ export function AccountsPage() {
     } catch (error) {
       toast({
         tone: "danger",
-        title: "操作失败",
+        title: tPage("toast.failed"),
         ...(error instanceof Error && error.message
           ? { description: error.message }
           : {}),
@@ -557,6 +563,40 @@ export function AccountsPage() {
     onViewDetail: (account) =>
       router.push(`/accounts/${encodeURIComponent(account.accountCode)}`),
   };
+
+  /* 弹窗四段文案按档一次取齐。键全写成**字面量**而不是拼串：拼出来的键
+     grep 不到，而改名漏改正是从「搜不到」开始的。 */
+  const actionCopy = !pendingAction
+    ? null
+    : pendingAction.kind === "disable"
+      ? {
+          title: tPage("actionDialog.disable.title"),
+          description: tPage("actionDialog.disable.description", {
+            name: pendingAction.account.displayName,
+            email: pendingAction.account.email,
+          }),
+          submitLabel: tPage("actionDialog.disable.submitLabel"),
+          reasonPlaceholder: tPage("actionDialog.disable.reasonPlaceholder"),
+        }
+      : pendingAction.kind === "enable"
+        ? {
+            title: tPage("actionDialog.enable.title"),
+            description: tPage("actionDialog.enable.description", {
+              name: pendingAction.account.displayName,
+            }),
+            submitLabel: tPage("actionDialog.enable.submitLabel"),
+            reasonPlaceholder: tPage("actionDialog.enable.reasonPlaceholder"),
+          }
+        : {
+            title: tPage("actionDialog.forceLogout.title"),
+            description: tPage("actionDialog.forceLogout.description", {
+              name: pendingAction.account.displayName,
+            }),
+            submitLabel: tPage("actionDialog.forceLogout.submitLabel"),
+            reasonPlaceholder: tPage(
+              "actionDialog.forceLogout.reasonPlaceholder",
+            ),
+          };
 
   const accountColumns = useAccountColumns(accountActions.onViewDetail);
 
@@ -846,32 +886,23 @@ export function AccountsPage() {
           />
         }
       />
-      {pendingAction ? (
+      {pendingAction && actionCopy ? (
         <DialogForm
           open
-          title={
-            pendingAction.kind === "disable"
-              ? "停用账号"
-              : pendingAction.kind === "enable"
-                ? "恢复账号"
-                : "强制下线"
-          }
-          description={
-            pendingAction.kind === "disable"
-              ? `将停用 ${pendingAction.account.displayName}（${pendingAction.account.email}）：封禁全部登录路径并吊销其所有会话，可稍后恢复。`
-              : pendingAction.kind === "enable"
-                ? `将恢复 ${pendingAction.account.displayName} 的账号为正常状态。`
-                : `将吊销 ${pendingAction.account.displayName} 的全部活跃会话，该用户需重新登录。`
-          }
-          submitLabel={
-            pendingAction.kind === "disable"
-              ? "确认停用"
-              : pendingAction.kind === "enable"
-                ? "确认恢复"
-                : "确认下线"
-          }
+          /* 「处置 + 必填原因」这一类弹窗在本仓一律 lg（订单的驳回申报 / 作废 /
+             恢复三处同款）：一段说明加一个多行输入，sm 的宽度会把说明挤成一叠
+             短行。此前这里没写 size，靠 DS 守卫的基线挂着一张旧许可；内容一改
+             那张许可自然失效，补上预设而不是续签它。 */
+          size="lg"
+          title={actionCopy.title}
+          description={actionCopy.description}
+          submitLabel={actionCopy.submitLabel}
           danger={pendingAction.kind === "disable"}
           submitting={actionBusy}
+          /* 原因必填 ⇒ 空着就不给提交。判据与 admin-bff 那一道**逐字相同**
+             （`trim()` 后非空），否则界面放过去的东西接口回 400。写法照
+             租户验证的驳回弹窗（tenants/VerificationsPage）。 */
+          submitDisabled={!actionReason.trim()}
           onOpenChange={(open) => {
             if (!open) closePending();
           }}
@@ -879,14 +910,24 @@ export function AccountsPage() {
           cancelLabel={tShared("actions.cancel")}
         >
           <Field>
-            <FieldLabel htmlFor="accountspage-field">备注（可选）</FieldLabel>
+            <FieldLabel
+              htmlFor="accountspage-reason"
+              required
+              requiredLabel={tPage("actionDialog.required")}
+              hint={tPage("actionDialog.reasonHint")}
+            >
+              {tPage("actionDialog.reasonLabel")}
+            </FieldLabel>
             <Textarea
-              id="accountspage-field"
+              id="accountspage-reason"
               value={actionReason}
               onChange={(e) => setActionReason(e.target.value)}
               rows={3}
-              placeholder="记录处置原因，将写入审计日志"
+              placeholder={actionCopy.reasonPlaceholder}
+              /* 512 = admin-bff 的 ACCOUNT_ACTION_REASON_MAX。两边不一致时，
+                 界面放你敲完而接口回 400。 */
               maxLength={512}
+              autoFocus
             />
           </Field>
         </DialogForm>

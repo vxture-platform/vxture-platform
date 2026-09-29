@@ -33,7 +33,8 @@ type TopicKey =
   | "announcement"
   | "order_status"
   | "tenant_change"
-  | "security"
+  | "security_event"
+  | "login_activity"
   | "invoice_progress"
   | "verification_result"
   | "member_invitation"
@@ -69,9 +70,9 @@ const CHANNELS: ChannelMeta[] = [
  * 主题清单（owner 2026-09-08 重排；2026-09-09 补两个）。**平铺，不分组**：各自四字自足，
  * 组名拼进项名等于把删掉的分组用文字再写一遍，还占列宽。
  *
- * 前 10 个有模板已经在发；后 3 个的**事件源都已存在**（各自的状态机或 webhook 事件
+ * 前 13 个有模板已经在发；后 2 个的**事件源都已存在**（各自的状态机或 webhook 事件
  * 类型跑着），只是通知模板还没接——`planned: true` 让它们在界面上挂「开发中」标并
- * **禁用三个渠道开关**。
+ * **禁用三个渠道开关**。这两个数字与下面那张清单是同一份事实的两处写法，一起改。
  *
  * 2026-09-28 批 5：`verification_result` 与 `quota_alert` 取下 `planned`（模板本批上线）。
  * 2026-09-29：`member_invitation` 取下 `planned` 并挪到「已在发」那一段（接受 / 拒绝 /
@@ -79,6 +80,10 @@ const CHANNELS: ChannelMeta[] = [
  * 2026-09-29（owner 看过这一页之后）：**邀请拆成两行**——`member_invitation` 只留邀请本身
  * （站内恒锁），`invitation_activity` 装那四条周知（三档全可点）。一行装两种性质的东西时，
  * 站内锁为了保住邀请本身必须存在，四条周知的站内档就跟着关不掉，客户被迫二选一。
+ * 2026-09-29（同日，账号安全线）：旧的 `security` 这一行**改名成 `security_event` 并拆出
+ * `login_activity`**，两行都取下 `planned`（本批接上十四条模板）。与邀请那一刀同一条判据、
+ * 同一处代价：安全事件的站内档必须锁死（账号被接管时唯一的到达路径），所以「没见过的设备
+ * 登录」若与它同住一行，客户换个浏览器就来一条而且关不掉。
  * 这一处与服务端的 `NOTIFICATION_TOPICS_PLANNED`、两本词条是**手工同步**的三处；漏掉
  * 这一处的后果不是报错，是客户收到一封开关禁着、关不掉的信。
  *
@@ -86,10 +91,12 @@ const CHANNELS: ChannelMeta[] = [
  * 头上（`account` / `security` / `usage`），客户勾了等于没勾——**页面在说假话**。
  * 现在要么有模板、要么明说「开发中」并关掉开关，没有第三种。
  *
- * 事务性的那几个（到期/开通/待付/退款/订单状态/租户变更/认证结果/额度用尽/成员邀请——
+ * 事务性的那几个（到期/开通/待付/退款/订单状态/租户变更/认证结果/额度用尽——
  * 错过了会有实际损失）邮件默认开、可关，与服务端 `NotificationPreferencesService` 的
  * `TOPIC_DEFAULT_OVERRIDES` 同源:「恢复默认」用的就是这一份，两份不一致的症状是
  * 「按一下恢复默认，保存后开关又变了」。
+ * 账号安全那两行邮件也默认开，但**判据是另一条**（站内这个通道在那一档上不可信，
+ * 不是「错过了会有损失」）——理由写在它们各自那一行上。
  */
 const DEFAULT_NOTIFICATION_STATE: NotificationState = {
   topics: [
@@ -172,12 +179,25 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
       icon: "user-plus",
       channels: { inbox: true, email: false, sms: false },
     },
+    /* 2026-09-29 账号安全线的两行，紧挨着（两行相邻，客户才看得出差别在哪）。
+       都**不再带 planned 标**：本批接上十四条模板。 */
     {
-      key: "security",
+      key: "security_event",
       icon: "shield-check",
-      channels: { inbox: true, email: false, sms: false },
+      /* 邮件默认**开**（owner 裁定 1：「锁定与强制下线两类，站内送不到——账号都进不去了」）。
+         站内那一档挂「策略锁定」、由**服务端**的 LOCKED 强制：前端画不画是可以绕过的。 */
+      channels: { inbox: true, email: true, sms: false },
       lockedChannels: ["inbox"],
-      planned: true,
+    },
+    /* 拆出来的第二行：只装「没见过的设备登录」一条。**没有 lockedChannels**——这正是拆行的
+       全部意义：它是这条线上唯一会反复发生的一条，客户嫌吵就该能整条关掉，而关掉它不会让
+       「你的密码被改了」少送一条。邮件默认开、可关：要警告的那个人手上就握着这个收件箱，
+       所以默认走另一个信箱；嫌吵的自己关。与服务端 TOPIC_DEFAULT_OVERRIDES 同源，
+       「恢复默认」用的就是这一份。 */
+    {
+      key: "login_activity",
+      icon: "sign-in",
+      channels: { inbox: true, email: true, sms: false },
     },
     {
       key: "invoice_progress",

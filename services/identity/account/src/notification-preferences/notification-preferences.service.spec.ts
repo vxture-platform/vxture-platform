@@ -23,7 +23,8 @@ import {
  *
  *  · **安全类站内信强制开启** —— 账号被接管时用户必须有一个到达路径。这不是
  *    产品偏好,所以由服务端强制而不是靠前端把开关画成 disabled;前端画不画,
- *    是可以被绕过的。
+ *    是可以被绕过的。2026-09-29 这一行改名成 `security_event`，并且**只有它**锁站内
+ *    ——同日拆出来的 `login_activity`（没见过的设备登录）三档全可关，下面有成对的用例。
  *  · **未知键丢弃** —— 库里存下未知主题会让「这个开关是什么」永远没人答得上来。
  *  · **缺省补齐** —— 返回的永远是完整矩阵,前端因此不必自带第二份默认值。
  *
@@ -69,6 +70,14 @@ describe("通知偏好规整", () => {
           "tenant_change",
           "verification_result",
           "quota_alert",
+          /* 2026-09-29 账号安全线两行都默认开邮件，但**不是**因为「错过了会有实际损失」这条
+             判据——是因为 owner 裁定 1 给的那条更硬的判据：**站内这个通道在这一档上不可信**。
+             `security_event`：被锁定 / 被全端下线的客户打不开收件箱。
+             `login_activity`：要警告的那个人手上就握着这个收件箱（站内消息他读得到、标得掉），
+             所以要走另一个信箱。两行的完整理由写在服务端那张表上，这份名单**手写、不引服务端
+             的表**（引过来就成了拿被测的那份证明它自己）。 */
+          "security_event",
+          "login_activity",
         ] as readonly string[]
       ).includes(topic);
       expect(prefs[topic].email).toBe(transactional);
@@ -79,22 +88,91 @@ describe("通知偏好规整", () => {
 
   it("安全类站内信即使库里存着 false 也强制为 true", async () => {
     const { service } = build({
-      security: { inbox: false, email: false, sms: false },
+      security_event: { inbox: false, email: false, sms: false },
     });
     const prefs = await service.get("u-1");
-    expect(prefs.security.inbox).toBe(true);
+    expect(prefs.security_event.inbox).toBe(true);
   });
 
-  it("写入时同样强制:提交 security.inbox=false 落库仍是 true", async () => {
+  it("写入时同样强制:提交 security_event.inbox=false 落库仍是 true", async () => {
     const { service, query } = build(null);
     const saved = await service.replace("u-1", {
-      security: { inbox: false },
+      security_event: { inbox: false },
     });
 
-    expect(saved.security.inbox).toBe(true);
+    expect(saved.security_event.inbox).toBe(true);
     // 落库的那份也必须是强制后的值,不能只在返回值上装样子。
     const persisted = JSON.parse(query.mock.calls[0]![1]![1] as string);
-    expect(persisted.security.inbox).toBe(true);
+    expect(persisted.security_event.inbox).toBe(true);
+  });
+
+  /**
+   * 登录活动**三档全关得掉**（2026-09-29 拆两行的验收）。
+   *
+   * 与上面那两条成对：同样提交「三档全关」，`security_event` 的站内被强制回 true，而这一行
+   * 三档都留在关的状态。少了这一条，「新主题被顺手加进 LOCKED」不会有任何东西报错——症状是
+   * 客户按下去、保存、回来又是开着的，而那正是拆行要解决的毛病（与邀请那一刀同一形状，
+   * 那边也有一条一模一样的用例）。
+   */
+  it("登录活动不在锁定集合里：三个渠道都关得掉，落库也是关的", async () => {
+    const { service, query } = build(null);
+    const saved = await service.replace("u-1", {
+      login_activity: { inbox: false, email: false, sms: false },
+    });
+    expect(saved.login_activity).toEqual({
+      inbox: false,
+      email: false,
+      sms: false,
+    });
+    const persisted = JSON.parse(query.mock.calls[0]![1]![1] as string);
+    expect(persisted.login_activity.inbox).toBe(false);
+    // 对照：同一次提交里安全事件那一行，站内仍然被强制为开。
+    const locked = await service.replace("u-1", {
+      security_event: { inbox: false },
+    });
+    expect(locked.security_event.inbox).toBe(true);
+  });
+
+  /**
+   * 旧的 `security` 键是**未知主题**（2026-09-29 改名的那一半）。
+   *
+   * 钉住的不是「改名对不对」，是改名的**代价确实只有这么大**：库里存着的旧键被丢弃、两个新
+   * 主题回落成默认值（站内开、邮件开）。这条用例让它变成一句能跑的话，而不是一句声明。
+   *
+   * **而这个代价不是零**：新默认是邮件开，旧那一行存的是邮件关。补这一半的是
+   * 2026-11-24-notification-topic-security-split.sql（它搬的是**开着的**那几档）。
+   * 下面那条用例钉的正是那个迁移依赖的契约：它写回的残缺对象能被这里补齐。
+   */
+  it("库里存着的旧 security 键被当未知主题丢弃，两个新主题回落默认", async () => {
+    const { service } = build({ security: { inbox: false, email: false } });
+    const prefs = await service.get("u-1");
+    expect(prefs).not.toHaveProperty("security");
+    expect(prefs.security_event).toEqual({
+      inbox: true,
+      email: true,
+      sms: false,
+    });
+    expect(prefs.login_activity).toEqual({
+      inbox: true,
+      email: true,
+      sms: false,
+    });
+  });
+
+  /**
+   * 主题改名迁移写回的是**残缺对象**（只含客户真的开过的那几档，如 `{ sms: true }`），
+   * 不是整张矩阵——它有意不在 SQL 里抄一份默认值，默认值只住 `TOPIC_DEFAULT_OVERRIDES`。
+   * 那个决定成立的前提就是这一条：缺的档按默认补齐、带的档照客户的值。前提写成用例，
+   * 否则哪天 `normalize` 改成「整条不认残缺对象」，迁移过的客户会静默丢掉他开过的短信档。
+   */
+  it("残缺的主题对象按默认补齐，带着的那一档照存量（主题改名迁移依赖这一条）", async () => {
+    const { service } = build({ security_event: { sms: true } });
+    const prefs = await service.get("u-1");
+    expect(prefs.security_event).toEqual({
+      inbox: true, // LOCKED 强制
+      email: true, // TOPIC_DEFAULT_OVERRIDES 的默认
+      sms: true, // 迁移搬过来的那一档
+    });
   });
 
   /**
@@ -311,8 +389,36 @@ describe("主题清单与派发侧模板对账", () => {
     ]);
   });
 
-  it("仍标「开发中」且确实没有模板的三个：security / invoice_progress / ticket_activity", () => {
-    for (const topic of ["security", "invoice_progress", "ticket_activity"]) {
+  it("账号安全拆成两个主题：十三条归安全事件，只有「新设备登录」归登录活动", () => {
+    for (const topic of ["security_event", "login_activity"]) {
+      expect([...NOTIFICATION_TOPICS] as string[]).toContain(topic);
+      /* 移出「开发中」与接上模板是**同一件事的两半**，漏掉这一半的症状是客户收得到一封
+         开关禁着、关不掉的信。 */
+      expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).not.toContain(topic);
+      expect(topicsWithTemplates.has(topic)).toBe(true);
+    }
+    /* 这两句数的就是那一刀切在了哪里——落错一条不会报错，只会让某一条跟着锁死（进了安全
+       事件就再也关不掉）或者跟着哑掉。 */
+    expect(
+      codes.filter((code) => topicOf(code) === "security_event"),
+    ).toHaveLength(13);
+    expect(codes.filter((code) => topicOf(code) === "login_activity")).toEqual([
+      "account.new_device_signin",
+    ]);
+  });
+
+  it("旧的 security 主题已经不在两张清单里（改名那一半做完了）", () => {
+    expect([...NOTIFICATION_TOPICS] as string[]).not.toContain("security");
+    expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).not.toContain(
+      "security",
+    );
+  });
+
+  it("仍标「开发中」且确实没有模板的两个：invoice_progress / ticket_activity", () => {
+    /* 从三个变两个（2026-09-29 账号安全接上了模板）。这个数字当探针的意义是：谁把一个还没
+       模板的主题从 PLANNED 里拿掉，这里会红。 */
+    expect(NOTIFICATION_TOPICS_PLANNED).toHaveLength(2);
+    for (const topic of ["invoice_progress", "ticket_activity"]) {
       expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).toContain(topic);
       expect(topicsWithTemplates.has(topic)).toBe(false);
     }
