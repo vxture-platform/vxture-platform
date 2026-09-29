@@ -117,12 +117,23 @@ describe("env 解析", () => {
 });
 
 describe("业务事件段", () => {
-  it("十一段各跑一次，参数是 [回看, 上限]", async () => {
+  it("每段各跑一次，参数是 [回看, 上限, ...该类自己的]", async () => {
     const { pool, calls } = fakePool({});
     const notices = writer();
     const result = await runBusinessEventSweep(pool, notices, OPTS);
     expect(calls).toHaveLength(BUSINESS_EVENT_PASSES.length);
-    for (const call of calls) expect(call.params).toEqual([30, 200]);
+    /* 初版这里写的是「每段参数都是 [30, 200]」——那时候确实如此。
+       客户回复那一类要把事件词**绑参**传进去（SQL 里手拄词不会被类型系统
+       看见），所以不再统一。现在钉的是真正的不变式：**每段拿到的就是它声明的
+       那几个**。多给一个会被 pg 扔回来（bind message supplies N parameters），
+       少给一个则是谓词静静地换了规则——后者一个字也不报。 */
+    BUSINESS_EVENT_PASSES.forEach((pass, i) => {
+      expect(calls[i]!.params, pass.code).toEqual([
+        30,
+        200,
+        ...(pass.extraParams ?? []),
+      ]);
+    });
     expect(result).toEqual({ scanned: 0, inserted: 0, failures: [] });
   });
 

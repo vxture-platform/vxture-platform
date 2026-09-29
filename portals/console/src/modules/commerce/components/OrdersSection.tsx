@@ -46,6 +46,7 @@ import { useConfirmLabels } from "@/lib/destructive";
 import { useTableLabels } from "@/lib/table";
 import { useTableSort } from "@/lib/table-sort";
 import { useRouter } from "@/lib/i18n/navigation";
+import { buildTicketComposeHref } from "@/lib/ticket-compose";
 import { Banner } from "@vxture/design-system";
 import {
   LoadFailedBanner,
@@ -96,6 +97,9 @@ export function OrdersSection() {
   const suspension = useSuspensionLabels();
 
   const t = useTranslations("subscriptionHub");
+  /* 求助入口的词在 `tickets.jump.*`:同一句话要在订单 / 账单 / 订阅三处出现,
+     跟着工单那一族走,不复制进本页的词典。 */
+  const tJump = useTranslations("tickets.jump");
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const locale = useLocale();
@@ -404,6 +408,18 @@ export function OrdersSection() {
           ? { hint: t("orders.menuSubscriptionHint") }
           : {}),
         onSelect: () => router.push("/subscription"),
+      },
+      /* 「就这张订单求助」(owner 2026-09-29 第 5 条裁决):**只跳转,不在这里长出
+         第二个提单表单**。带上订单可视码,到 /tickets 由那一页唯一的提单对话框
+         把标题替客户写好第一句。地址拼在 `lib/ticket-compose.ts` 一处。 */
+      {
+        id: "help",
+        label: tJump("order"),
+        icon: "headset",
+        onSelect: () =>
+          router.push(
+            buildTicketComposeHref({ type: "order", code: o.orderNo }),
+          ),
       },
       // 取消订单 = tenant.billing.manage(与 BFF 守卫同码);无码的人只看到详情与去处。
       ...(canManageBilling

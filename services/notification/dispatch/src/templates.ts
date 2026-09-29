@@ -168,7 +168,37 @@ export type NotificationTemplateCode =
   | "account.password_login_enabled"
   | "account.password_login_disabled"
   | "account.session_ended_by_self"
-  | "account.new_device_signin";
+  | "account.new_device_signin"
+  /* ── 工单线（2026-09-29 批 2）：**三条，全是「客户问了、我们答了、他不知道」** ────────
+     批 1 把写入路径做出来（运营代客建单、内部备注与正式回复分离、明确的关闭），于是
+     `support.tickets` 第一次有了行；但客户那边一句话都收不到——工单进度只能自己回页面上翻，
+     而「回来看一眼」恰恰是提了工单的人最不会做的事（他在等我们）。owner 裁决 6：通知走
+     现有消息中心，点开跳转到工单详情页。
+
+     **为什么是这三件事，不是七个状态各一条**：判据是「客户此刻要做的下一步不同」
+     （与 `subscription.cancelled_*` 三条、加油包「用尽 / 过期」两条同一条）：
+       replied  → 去读回复，可能要接着答一句；
+       resolved → 去核对到底好没好，没好就在那页说一声（可逆，单子还能继续）；
+       closed   → 这张单不再处理了，还有问题得另提一张（终态）。
+     其余四个状态一条都不发，各有理由，写下来免得下一个人当成漏了：
+       · open / pending / in_progress —— 内部排期的推进，客户没有任何下一步；
+         「我们在看了」这件事由 `replied` 那条承担（真有进展就会有一句回复）。
+       · reopened —— **客户自己**把单子顶回来的那一刻（或运营替他重开），发给他是回声。
+       · cancelled —— 撤单今天在 admin 与 console 都没有入口（`:id/status` 收这个值，
+         但界面上没有按钮），先加模板就是一处「做了没接」。有入口时再补，判据同上。
+
+     **正文不许引用运营写的那段话**（回复正文、解决说明、关闭原因一概不进）。两条理由：
+       · 内容只留一份 —— 回复全文在工单详情页，那是唯一能读全文的地方（owner 第 5 条裁决
+         的三层分工：消息中心答「有没有新动静」，详情页才是读全文的地方）。两处各存一份，
+         改一处另一处就是旧的。
+       · 更硬的一条：**一旦把流水正文搬进通知，哪天可见性判据漏一处，泄露的就是内部备注**。
+         通知这一层压根不看 `event_type`，它没有能力分辨手上这段话给谁看；不搬，就没有这个
+         失效模式。（`refund.rejected` / `order.payment_rejected` 那种「原因照搬给客户」是
+         另一回事：那两个原因字段本来就只有客户这一个读者。）
+     所以三条的参数只有**一个**：可视工单码 `ticketNo`。客户凭它在页面上认领这张单。 */
+  | "ticket.replied"
+  | "ticket.resolved"
+  | "ticket.closed";
 
 /**
  * 业务引用类型 = 「reference_id 住在哪张表」这个问题的答案（`support.inbox_messages`
@@ -204,13 +234,26 @@ export type NotificationReferenceType =
    * 这个值落在 `mirrorLink` 与 `resolveCodes` 的兜底档里：不查库、不给链接。
    * 先例：`ops_signal`（platform-api 的热路径信号）同样是「库里没有行」的引用类型。
    */
-  | "security";
+  | "security"
+  /**
+   * 2026-09-29 工单线。引用的是 `support.tickets` 的行，但 `reference_id` 里放的是它的
+   * **可视码** `ticket_no`（TK-{YYYYMM}-{10}）加上事件名与时刻，不是行的 uuid——
+   * `reference_id` 被客户收件箱的读路径原样投影给浏览器（console-bff 的 inbox.router →
+   * `InboxMessage.referenceId`），形状与长度见 `ticketEventReference`。
+   *
+   * 不复用 `tenant`：那个值会让 `mirrorLink` 产出 `/tenants/{tenant_no}`，而工单的引用 id
+   * 不是租户号，点开是 404（与批 5 不肯把加油包并进 `order` 是同一条理由）。
+   * 这一档在 `mirrorLink` 里**有自己的链接**：admin 侧确实有按工单码的详情页
+   * （`portals/admin/src/app/(admin)/tickets/[ticketId]`），判据就是「有详情页才给链接」。
+   */
+  | "ticket";
 
 /**
  * 偏好主题（与 @vxture/service-account NOTIFICATION_TOPICS 同一集合）。
  *
- * 这里只列**本包发得出模板**的那几个；那边的全集还含事件源已存在、模板待接的两个
- * （界面标「开发中」：invoice_progress / ticket_activity）。两边不一致会被
+ * 这里只列**本包发得出模板**的那几个；那边的全集还含事件源已存在、模板待接的**一个**
+ * （界面标「开发中」：invoice_progress。2026-09-29 工单线接上三条模板之后，
+ * `ticket_activity` 从那一档挪进了这张联合）。两边不一致会被
  * `topicOf` 的穷尽映射挡住——它对每个模板键显式给主题，加模板忘了给主题就编译不过。
  *
  * 2026-09-28 批 5 加两个：`verification_result`（企业认证结果）与 `quota_alert`
@@ -249,7 +292,15 @@ export type NotificationTopic =
      改成 `security_event` 并新增 `login_activity`；漏了由那边「派发侧每个主题都在偏好清单里」
      那条用例当场红。 */
   | "security_event"
-  | "login_activity";
+  | "login_activity"
+  /* 2026-09-29 工单线：`ticket_activity`。这一行**偏好中心早就占着位**（它是那边
+     `NOTIFICATION_TOPICS` 里两个「事件源在、模板未接」的其中一个，界面标「开发中」并禁用
+     三个渠道开关），本包这边没有它就写不出 `topicOf` 的映射。三条工单模板接上之后，那边
+     必须同时把它从 `NOTIFICATION_TOPICS_PLANNED` 里挪出来——**两半必须同时动**：模板上线
+     而开关还禁着，客户就收得到一封关不掉的信，比不发更糟（批 5 那两个主题也是这么挪的）。
+     三条同一个主题：它们回答的是同一个问题——「我那张单办到哪了」。不按状态拆三个主题，
+     那会让客户为同一个问题勾三个开关。 */
+  | "ticket_activity";
 
 export type NotificationLocale = "zh-CN" | "en-US";
 
@@ -325,6 +376,13 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "account.password_login_disabled": "账号密码登录已关闭",
   "account.session_ended_by_self": "已有一台设备退出登录",
   "account.new_device_signin": "新设备登录",
+  /* ── 工单线（2026-09-29）──
+     标题带上**可视工单码**：收件箱列表里同一个客户可能有好几张单，只写「工单有新回复」他
+     认领不了是哪一张。码是客户在页面上看得到的那一串（TK-…），不是 uuid。
+     标题**不带**回复内容与处理说明（标题也是邮件主题，而那段话只在详情页留一份）。 */
+  "ticket.replied": "工单有新回复：{{ticketNo}}",
+  "ticket.resolved": "工单已处理完：{{ticketNo}}",
+  "ticket.closed": "工单已关闭：{{ticketNo}}",
 };
 
 /**
@@ -535,6 +593,23 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
   "account.new_device_signin":
     "你的账号于 {{occurredAt}} 在一台此前没有用过的设备上登录。" +
     IF_NOT_YOU_ZH,
+  /* ── 工单线（2026-09-29）──
+     每条只说两件事：**发生了什么** + **下一步去哪**。回复正文 / 处理说明 / 关闭原因一个字
+     都不引用（理由见联合那一段：内容只留一份，而且通知这一层分辨不出手上那段话给谁看）。
+     三条的「下一步」各不相同，那正是它们分成三条的判据：
+       replied  → 去详情页读，可以接着回；
+       resolved → 去核对，没好就在那页说一声（`reopened` 是可逆的，单子能继续）；
+       closed   → 终态，还有问题要另提一张单。
+     **不写「感谢你的耐心」这类客套**（owner 规则：只写机制、不写承诺），也不替人工许诺
+     「会尽快」——回复要多久由人决定。
+     正文里**再写一次工单码**（标题已经有一个）：站内那条消息与邮件正文都可能被单独读到
+     （收件箱详情只展开正文那一段），少了它这句话就只剩「这张工单」，客户认领不了是哪一张。 */
+  "ticket.replied":
+    "我们已在工单 {{ticketNo}} 上回复你。完整回复在工单详情页，你可以在那里接着回复我们。",
+  "ticket.resolved":
+    "工单 {{ticketNo}} 已标记为处理完成，处理说明在工单详情页。如果问题还在，在那里回复一句，我们接着处理。",
+  "ticket.closed":
+    "工单 {{ticketNo}} 已关闭，不再继续处理，关闭说明在工单详情页。如果问题还在，请重新提交一张工单。",
 };
 
 const TITLES_EN: Record<NotificationTemplateCode, string> = {
@@ -603,6 +678,9 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "account.password_login_disabled": "Password sign-in turned off",
   "account.session_ended_by_self": "A device was signed out of your account",
   "account.new_device_signin": "Sign-in from a new device",
+  "ticket.replied": "New reply on ticket {{ticketNo}}",
+  "ticket.resolved": "Ticket {{ticketNo}} has been handled",
+  "ticket.closed": "Ticket {{ticketNo}} is closed",
 };
 
 const BODIES_EN: Record<NotificationTemplateCode, string> = {
@@ -718,6 +796,12 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
   "account.new_device_signin":
     "Your account signed in on {{occurredAt}} from a device it has not been used on before. " +
     IF_NOT_YOU_EN,
+  "ticket.replied":
+    "We replied on ticket {{ticketNo}}. The full reply is on the ticket page, where you can answer us back.",
+  "ticket.resolved":
+    "Ticket {{ticketNo}} is marked as handled and the notes are on the ticket page. If the problem is still there, reply on that page and we will pick it up again.",
+  "ticket.closed":
+    "Ticket {{ticketNo}} is closed and will not be worked on further; the closing notes are on the ticket page. If the problem is still there, please submit a new ticket.",
 };
 
 /**
@@ -1000,6 +1084,12 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "account.password_login_disabled": "security_event",
   "account.session_ended_by_self": "security_event",
   "account.new_device_signin": "login_activity",
+  /* 工单三条一个主题（2026-09-29）：回答的是同一个问题——「我那张单办到哪了」。
+     按状态拆三个主题会让客户为同一个问题勾三个开关；而反过来把它并进别的主题也不行——
+     `ticket_activity` 在偏好中心早就单独占着一行（此前标「开发中」），本批正是来填它的。 */
+  "ticket.replied": "ticket_activity",
+  "ticket.resolved": "ticket_activity",
+  "ticket.closed": "ticket_activity",
 };
 
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {
@@ -1123,6 +1213,72 @@ export function securityEventStamp(
       type: SECURITY_REFERENCE_TYPE,
       id: `sec:${who}:${event}:${at.toISOString()}`,
     },
+  };
+}
+
+/** 工单事件的引用类型。可视码 + 事件名 + 时刻，见 `ticketEventReference`。 */
+export const TICKET_REFERENCE_TYPE: Extract<
+  NotificationReferenceType,
+  "ticket"
+> = "ticket";
+
+/** 工单线的模板码（`ticket.*`）。 */
+export type TicketTemplateCode = Extract<
+  NotificationTemplateCode,
+  `ticket.${string}`
+>;
+
+/**
+ * 工单线的模板码全集，**从主题映射算出来，不手抄第二份**（与 `SECURITY_TEMPLATE_CODES`
+ * 同一手法与同一理由：手抄的名单会和联合漂，而漂了之后按名单做的检查只是静默少看一条）。
+ * 类型那一半用模板字面量从权威联合里筛（`ticket.` 前缀），运行时这一半按主题筛——两条
+ * 互相独立的推导，用例断言它们相等。
+ */
+export const TICKET_TEMPLATE_CODES: readonly NotificationTemplateCode[] = (
+  Object.keys(TITLES_ZH) as NotificationTemplateCode[]
+).filter((code) => TOPIC_OF[code] === "ticket_activity");
+
+/** 可视工单码的形状（`support.tickets.ticket_no`：`TK-{YYYYMM}-{10 位大写十六进制}`）。 */
+const VISIBLE_TICKET_NO = /^TK-\d{6}-[0-9A-F]{10}$/;
+
+/**
+ * 工单事件的去重锚。`{可视工单码}:{事件名}:{ISO 时刻}`。
+ *
+ * **时刻必须在里面，这是这个函数存在的主要理由。** 收件箱的唯一键是
+ * `(account_id, template_code, reference_type, reference_id)`，而一张单会被回复**很多次**
+ * ——锚只到工单这一层的话，第一条回复之后的每一条都会被那个唯一键静默压掉（不报错、
+ * 日志里只多一行 skipped）。同一个机关本仓已经用过三次：`notifyExpiringSoon`（订阅 × 到期日）、
+ * `maintenancePauseNotice`（订阅 × 预计恢复日）、`securityEventStamp`（用户号 × 事件 × 时刻）。
+ * 这里跟的是最后那一个的形状——工单事件的粒度就是「哪一次」，日期不够（一天回三次）。
+ *
+ * **事件名从模板码算**（去掉 `ticket.` 前缀），不另收一个参数：少一个要对齐的名字。
+ * 它进锚是为了「每种事各发一次」：同一秒里的 resolved 与 closed 不会互相吞掉（模板码
+ * 本来也在镜像那一层的锚里，但客户收件箱那个唯一键的 reference_id 只有这一段）。
+ *
+ * **一个 uuid 都没有。** `reference_id` 被客户收件箱的读路径原样投影给浏览器
+ * （console-bff 的 inbox.router → `InboxMessage.referenceId`），所以这里对工单码**验形状**：
+ * 不是可视码就退成 `unknown`（工单的 uuid 与可视码长得完全不同，而路由的 `:id` 两个都收，
+ * 所以调用方拿错的那个传进来是真会发生的事）。退成 unknown 之后锚仍然唯一——时刻在里面。
+ *
+ * 长度（`reference_id` 是 varchar(128)）：可视码 20（`TK-` 3 + 年月 6 + `-` 1 + 10）
+ * + 1 + 最长事件名 8（`resolved`）+ 1 + ISO 24 = 54；运营镜像那一层还要再套一层
+ * `{模板}:{引用类型}:{锚}` = 15 + 1 + 6 + 1 + 54 = 77，都在 128 之内。
+ * 这两个数由用例**按真实码表重算**，不手抄（上一批手抄的那个算漏了一档）。
+ *
+ * **看不见什么**：传进来的工单码是不是那张单的、Date 是不是那一行的 created_at，本函数一概
+ * 不知道；它只保证「形状对、不含 uuid、每次事件各一个锚」。
+ */
+export function ticketEventReference(
+  code: TicketTemplateCode,
+  ticketNo: string,
+  at: Date,
+): { type: NotificationReferenceType; id: string } {
+  const trimmed = String(ticketNo ?? "").trim();
+  const which = VISIBLE_TICKET_NO.test(trimmed) ? trimmed : "unknown";
+  const event = code.slice("ticket.".length);
+  return {
+    type: TICKET_REFERENCE_TYPE,
+    id: `${which}:${event}:${at.toISOString()}`,
   };
 }
 

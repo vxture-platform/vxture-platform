@@ -297,6 +297,23 @@ export const TICKET_EVENT_INTERNAL_NOTE = "internal_note";
 export const TICKET_EVENT_REPLY = "reply";
 
 /**
+ * 客户自己发言用的那个词。
+ *
+ * **它一开始没有导出常量，是有理由的**：当时 `comment` 只有一个写入方（客户面的
+ * BFF），读它的地方只需要「读到这个词该怎么画」，所以 console 的 ticket-labels 与
+ * console-bff 各写了一个本地常量，并在注释里写明「不去 shared 加导出，加了就有两处
+ * 声明同一件事」。
+ *
+ * 那个理由现在不成立了：运营侧信号巡检（platform-api 的 `ticket.customer_replied`）
+ * 要在 **SQL 的谓词里**绑这个词——「客户说了话」是它的判据本身。于是同一个词有了第三
+ * 处声明，而第三处在另一个进程、另一种语言（SQL）里，再也不是「只是读法」。
+ * 三处字面量里有一处写错，后果是该发的运营通告一条都不发，而且不报错。
+ *
+ * 所以现在它和 `reply` / `internal_note` 并列：一个词一处声明，写入方与判据方都取它。
+ */
+export const TICKET_EVENT_COMMENT = "comment";
+
+/**
  * support.tickets.priority — how far up the queue a ticket jumps.
  *
  * p0 is the only one that means "now"; p1..p3 are ordinary backlog ordering.

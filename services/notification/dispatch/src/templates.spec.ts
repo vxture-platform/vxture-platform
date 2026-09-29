@@ -27,17 +27,21 @@ import {
   ROLE_PARAM,
   SECURITY_REFERENCE_TYPE,
   SECURITY_TEMPLATE_CODES,
+  TICKET_REFERENCE_TYPE,
+  TICKET_TEMPLATE_CODES,
   actorNameOf,
   providerNameOf,
   render,
   roleNameOf,
   securityEventStamp,
+  ticketEventReference,
   topicOf,
   type NotificationLocale,
   type NotificationTemplateCode,
   type NotificationTopic,
   type SecurityTemplateCode,
   type TemplateParams,
+  type TicketTemplateCode,
 } from "./templates";
 /* 「关掉主题关不掉邀请本身」那一组要真的跑一遍分发器：mandatory 是**调用参数**不是模板
    属性，静态断言证不了它。 */
@@ -1261,6 +1265,126 @@ describe("账号安全线：十四条", () => {
   });
 });
 
+/**
+ * 工单线三条（2026-09-29 批 2）。
+ *
+ * 钉四件事，每一件都是「错了不会报错」的那种：
+ *   1. 三条不多不少、同一个主题（偏好中心那一行此前标着「开发中」，本批填的就是它）；
+ *   2. 参数**只有可视工单码**——运营写的那段话（回复正文 / 处理说明 / 关闭原因）一个字都不
+ *      进通知。一旦搬进来，通知这一层压根不看 `event_type`，分辨不出手上那段话给谁看，
+ *      于是哪天可见性判据漏一处，泄露的就是内部备注；
+ *   3. 三条的**下一步各不相同**（那正是它们分成三条而不是一条写「或者…或者」的判据）；
+ *   4. 去重锚随事件变。少了这一条，一张单第二次被回复起的每一条通知都会被客户收件箱那个
+ *      唯一键静默压掉——不报错，日志里只多一行 skipped。
+ *
+ * **这一组看不见什么**：看不见 admin-bff 真的在那三处调了分发器（那一半在
+ * bff/admin-bff 的 tickets-notifications.spec.ts 里跑路由证），也看不见客户那一屏上
+ * 会不会真的显示这条消息。
+ */
+describe("工单线三条", () => {
+  const TICKET_NO = "TK-202609-ABCDEF0123";
+  const AT = new Date("2026-09-29T12:14:32Z");
+  const TICKET_CODES = [
+    "ticket.replied",
+    "ticket.resolved",
+    "ticket.closed",
+  ] as const;
+
+  it("三条不多不少，运行时与类型两条独立推导对得上", () => {
+    /* 一条按主题筛（运行时），一条按 `ticket.` 前缀手写在上面（与类型那一半同形）。
+       两条推导互相独立，所以这一句不是拿被测的那份证明它自己。 */
+    expect([...TICKET_TEMPLATE_CODES].sort()).toEqual([...TICKET_CODES].sort());
+    for (const code of TICKET_CODES) {
+      expect(Object.keys(NOTIFICATION_TEMPLATES)).toContain(code);
+      expect(topicOf(code)).toBe("ticket_activity");
+    }
+  });
+
+  it("参数只有可视工单码：运营写的那段话一个字都不进通知", () => {
+    for (const code of TICKET_CODES) {
+      const def = NOTIFICATION_TEMPLATES[code];
+      /* 参数集合就是这一个。多出任何一个装正文的参数（body / note / reason / comment），
+         这条当场红——而那正是「通知里泄露内部备注」的第一步。 */
+      expect(placeholders(def.title, def.body)).toEqual(["ticketNo"]);
+    }
+  });
+
+  it("两种语言渲染后都带可视码、不含 uuid、没有留空的占位符", () => {
+    for (const code of TICKET_CODES) {
+      for (const locale of LOCALES) {
+        const text = rendered(code, { ticketNo: TICKET_NO }, locale);
+        expect(text).toContain(TICKET_NO);
+        expect(text).not.toMatch(UUID_ANYWHERE);
+        expect(text).not.toMatch(/\{\{/);
+      }
+    }
+  });
+
+  it("三条的下一步各不相同（不是一条里写「或者…或者」）", () => {
+    const bodies = TICKET_CODES.map(
+      (code) => NOTIFICATION_TEMPLATES[code].body,
+    );
+    expect(new Set(bodies).size).toBe(3);
+    /* 回复 → 去读、可以接着回；处理完成 → 去核对，没好就在那页说一句（可逆）；
+       关闭 → 终态，还有问题要另提一张。三句话的落点必须真的不同。 */
+    expect(NOTIFICATION_TEMPLATES["ticket.replied"].body).toContain("接着回复");
+    expect(NOTIFICATION_TEMPLATES["ticket.resolved"].body).toContain(
+      "如果问题还在",
+    );
+    expect(NOTIFICATION_TEMPLATES["ticket.closed"].body).toContain(
+      "重新提交一张工单",
+    );
+    // 关闭是终态：不许对客户说「在那里回复我们就接着处理」。
+    expect(NOTIFICATION_TEMPLATES["ticket.closed"].body).not.toContain(
+      "接着处理",
+    );
+  });
+
+  it("去重锚随事件变：同一张单回复两次是两条，不是一条", () => {
+    const first = ticketEventReference("ticket.replied", TICKET_NO, AT);
+    const second = ticketEventReference(
+      "ticket.replied",
+      TICKET_NO,
+      new Date(AT.getTime() + 1000),
+    );
+    expect(first.type).toBe(TICKET_REFERENCE_TYPE);
+    expect(first.id).toBe(`${TICKET_NO}:replied:${AT.toISOString()}`);
+    expect(second.id).not.toBe(first.id);
+    /* 同一时刻的三种事也互不相同（事件名在锚里）。 */
+    const sameMoment = TICKET_CODES.map(
+      (code) => ticketEventReference(code, TICKET_NO, AT).id,
+    );
+    expect(new Set(sameMoment).size).toBe(3);
+  });
+
+  it("发侧传了工单 uuid 而不是可视码：退成占位符，绝不让它过客户端那条线", () => {
+    /* 路由的 `:id` 同时收 uuid 与可视码，所以「调用方拿错那个传进来」是真会发生的事。
+       `reference_id` 被客户收件箱的读路径原样投影给浏览器，宁可锚少一个可读的把手。 */
+    const leaked = ticketEventReference(
+      "ticket.closed",
+      "44444444-4444-4444-8444-444444444444",
+      AT,
+    );
+    expect(leaked.id).not.toMatch(UUID_ANYWHERE);
+    expect(leaked.id).toBe(`unknown:closed:${AT.toISOString()}`);
+  });
+
+  it("引用 id 在 varchar(128) 之内（按真实码表算，不手抄）", () => {
+    const longest = [...TICKET_TEMPLATE_CODES].reduce((a, b) =>
+      b.length > a.length ? b : a,
+    );
+    const id = ticketEventReference(
+      longest as TicketTemplateCode,
+      TICKET_NO,
+      AT,
+    ).id;
+    // 可视码 20 + 1 + 最长事件名 8（resolved）+ 1 + ISO 24 = 54。
+    expect(id.length).toBe(54);
+    expect(id.length).toBeLessThanOrEqual(128);
+    /* 运营镜像再套一层 `{模板}:{引用类型}:{锚}` = 77，那一层的断言在 operator-mirror.spec.ts。 */
+  });
+});
+
 describe("全表通则", () => {
   const codes = Object.keys(
     NOTIFICATION_TEMPLATES,
@@ -1311,8 +1435,9 @@ describe("全表通则", () => {
   it("每条模板两种语言的标题与正文都非空", () => {
     /* = 模板码总数。加一条码就在这里 +1 —— 这个数字当探针的全部意义就是「加了码却没有
        任何一条用例覆盖到它」当场红。2026-09-28 收尾加两条（运营代客续期 / 升级维护暂停）：
-       32 → 34。2026-09-29 成员邀请四态：34 → 38；同日账号安全线十四条：38 → 52。 */
-    expect(codes).toHaveLength(52);
+       32 → 34。2026-09-29 成员邀请四态：34 → 38；同日账号安全线十四条：38 → 52；
+       同日工单线三条（回复 / 处理完成 / 关闭）：52 → 55。 */
+    expect(codes).toHaveLength(55);
     for (const code of codes) {
       const { params } = markers(code);
       for (const locale of LOCALES) {
@@ -1435,6 +1560,17 @@ const EXPECTED_MISSING_IN_SECOND_COPY: Record<string, string> = {
     "客户自己撤销会话的写入方在会话接口，不在订阅包",
   "account.new_device_signin":
     "没见过的设备登录，写入方在 auth-bff 的登录路径，不在订阅包",
+  /* 2026-09-29 工单线三条：写入方在 **admin-bff 的 tickets.router**（运营按下「回复客户」、
+     「标记已解决」、「关闭工单」那三处），一条都不在订阅包。所以同样不往第二副本里加——
+     那份副本只列写入方住在那个包里的模板码，加进去就是替别的包声明它能发什么。
+     逐条写下来而不是一句「工单那三条都不在」：这张表的另一半用例要求每一条都仍然「在权威表
+     里且不在副本里」，笼统一条就查不出某一条后来搬进了订阅包。 */
+  "ticket.replied":
+    "工单回复的写入方在 admin-bff 的 tickets.router（:id/replies），不在订阅包",
+  "ticket.resolved":
+    "工单标记处理完成的写入方在 admin-bff 的 tickets.router（:id/status），不在订阅包",
+  "ticket.closed":
+    "工单关闭的写入方在 admin-bff 的 tickets.router（:id/close），不在订阅包",
 };
 
 describe("第二份模板码副本", () => {

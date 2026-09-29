@@ -32,6 +32,18 @@ export function inboxPresentation(templateCode: string): {
       return { level: "info", icon: "seal-check" };
     case "announcement.published":
       return { level: "info", icon: "bell" };
+    /* 工单三条（2026-09-29 批 2）。图标按**客户的下一步**分，不按"是好消息还是坏
+       消息"：读回复 / 核对结果 / 这张单归档了。`ticket.replied` 用的是时间线上运营
+       回复那一格的同一个图标（`headset`），两处指的就是同一件事，客户从收件箱点进
+       详情页时认得出自己刚看的是哪一条。
+       三条都是 info：关单是正常收尾，不是出了问题——给它 warning 会让每一次结案都
+       在收件箱里亮一下。 */
+    case "ticket.replied":
+      return { level: "info", icon: "headset" };
+    case "ticket.resolved":
+      return { level: "info", icon: "seal-check" };
+    case "ticket.closed":
+      return { level: "info", icon: "archive" };
     default:
       return { level: "info", icon: "bell" };
   }

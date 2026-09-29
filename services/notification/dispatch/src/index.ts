@@ -37,10 +37,17 @@ export {
  * 收件人读哪种语言，也没法保证展示时刻与锚里的 ISO 时刻出自同一个 Date。留一条路进去，
  * 那条路就是对的那条。
  */
+/*
+ * 工单线（2026-09-29）同样只导出三样：模板码全集、引用类型，与那个产出去重锚的
+ * `ticketEventReference`。理由与上面那一段一字不差——发侧只有这一条路拼得出锚，而锚少了
+ * 时刻，客户收件箱的唯一键会把第二条回复起的每一条都静默压掉。
+ */
 export {
   NOTIFICATION_TEMPLATES,
   SECURITY_REFERENCE_TYPE,
   SECURITY_TEMPLATE_CODES,
+  TICKET_REFERENCE_TYPE,
+  TICKET_TEMPLATE_CODES,
   escapeHtml,
   interpolate,
   localeOf,
@@ -48,6 +55,7 @@ export {
   securityEventStamp,
   smsParams,
   smsTemplatesFromEnv,
+  ticketEventReference,
   topicOf,
   type NotificationLocale,
   type NotificationReferenceType,
@@ -57,6 +65,7 @@ export {
   type SecurityTemplateCode,
   type TemplateDef,
   type TemplateParams,
+  type TicketTemplateCode,
 } from "./templates";
 export {
   DEDUPE_SQL,

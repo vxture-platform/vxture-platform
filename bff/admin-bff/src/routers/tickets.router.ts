@@ -8,6 +8,7 @@ import {
   ForbiddenException,
   Get,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -16,6 +17,12 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
+import {
+  ticketEventReference,
+  type NotificationDispatcher,
+  type TicketTemplateCode,
+} from "@vxture/service-notification";
+import { ADMIN_CUSTOMER_NOTIFIER } from "../providers/commerce-services.provider";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import type {
   RequestContext,
@@ -34,9 +41,17 @@ import { pgErrorCode, withTransaction } from "../db/tx";
 
 @Controller("api/tickets")
 export class TicketsRouter {
+  private readonly logger = new Logger(TicketsRouter.name);
+
+  /* 三个令牌都显式写出来：esbuild 打包不保留装饰器元数据，少一个 `@Inject`
+     编译得过、启动烟测也过，到线上才以 undefined 现形（tenants.router 同一段话）。
+     分发器就是「客户会不会收到工单通知」的唯一开关——漏掉它，三条通知一句话都不发，
+     而那种缺口没有任何运行时信号。 */
   constructor(
     @Inject(ADMIN_BFF_RO_POOL) private readonly pool: Pool,
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Inject(ADMIN_CUSTOMER_NOTIFIER)
+    private readonly notifier: NotificationDispatcher,
   ) {}
 
   @Get()
@@ -322,7 +337,16 @@ export class TicketsRouter {
     );
   }
 
-  /** 两个词共用一条写入路径：差别只有 event_type，其余一个字都不该分叉。 */
+  /**
+   * 两个词共用一条写入路径：差别只有 event_type，其余一个字都不该分叉。
+   *
+   * ── 只有 `reply` 那一档发客户通知 ──
+   * 判据与可见性完全同一条：**给谁看只由 event_type 决定**。`internal_note` 客户看不见，
+   * 给它发一条「工单有新回复」就是把一件他永远读不到的事通告给他——而他点进详情页什么
+   * 也找不到（那一屏按 `CUSTOMER_VISIBLE_TICKET_EVENT_TYPES` 过滤）。所以这里**按词分档，
+   * 不按端点分**：旧的 `:id/comments` 别名落 internal_note，于是它也自然不发通知，
+   * 不必在那边另写一次判断。
+   */
   private async appendOperatorComment(
     req: Request & RequestContext,
     id: string,
@@ -338,17 +362,40 @@ export class TicketsRouter {
       TICKET_COMMENT_INSERT_SQL,
       [ref, actor.id, actor.name, text, eventType],
     );
-    if (!rows[0]) {
+    const written = rows[0];
+    if (!written) {
       throw new NotFoundException("Ticket not found");
     }
-    return mapTicketCommentRow(rows[0]);
+    /* 落库之后才发（这条 insert 是单语句，返回即已提交）。`internal_note` 不发，见头注。
+       正文 `text` **不进通知**：回复全文只在工单详情页留一份，见 dispatch/templates.ts。 */
+    if (eventType === TICKET_EVENT_REPLY) {
+      await this.notifyTicketEvent("ticket.replied", async () => ({
+        /* 这条 insert…select 的 `returning` 只拿得到 ticket_comments 自己的列（pg 的限制），
+           所以租户与可视工单码要再查一次。这一步也在 `notifyTicketEvent` 的 try 里面：
+           它要碰库，而库出问题不该反过来让运营刚写成的那条回复失败。 */
+        target: await this.notifyTargetOf(written.ticket_id),
+        /* 锚里的时刻取**这一行流水自己的 created_at**，不另取一个 `new Date()`：
+           两处各算一次就有两个时刻，而锚是「哪一次」的唯一判据。 */
+        at: eventMoment(written.created_at),
+      }));
+    }
+    return mapTicketCommentRow(written);
   }
 
   // Contract: POST /api/tickets/:id/assign
   //   body: { assigneeId: string(uuid), assigneeName: string, note?: string }
   //   updates tickets.assignee_id/assignee_name and appends a ticket_comments row
-  //     (event_type='assigned', actor_type='operator', payload={assignee_id,assignee_name,note}).
+  //     (event_type='assigned', actor_type='operator', payload={assignee_name,note}).
   //   Transactional. response: SupportTicketRecord (refreshed).  404 if ticket not found.
+  //
+  // ── payload 里**不放坐席的 uuid**（2026-09-29 修）──
+  // 这段 payload 被时间线读取原样投影给浏览器（`mapTicketCommentRow` 的 `payload` 字段），
+  // 而本仓的规则是客户端任何地方都不出现 uuid。`assignee_id` 写进 `support.tickets` 那一列
+  // （那是库内的外键，不上屏），时间线上要的是**名字**——人读时间线认的是人名。
+  // 这条流水的 event_type `assigned` 不在 CUSTOMER_VISIBLE_TICKET_EVENT_TYPES 里，所以它
+  // 到不了客户那一屏；但「到不了客户那屏」不等于「可以放 uuid」：运营那一屏也是浏览器。
+  // 这不是删一个字段而已 —— 它是那道规则在这条路径上唯一的破口，删掉之后这个端点的响应与
+  // 时间线里再没有 uuid（`insertSelectParam` 那条 spec 现在也钉着它）。
   @Post(":id/assign")
   async assignTicket(
     @Req() req: Request & RequestContext,
@@ -392,11 +439,8 @@ export class TicketsRouter {
         "assigned",
         actor.id,
         actor.name,
-        JSON.stringify({
-          assignee_id: assigneeId,
-          assignee_name: assigneeName,
-          note,
-        }),
+        // 坐席 uuid 不进 payload（见上面那段）：它在 tickets.assignee_id 那一列。
+        JSON.stringify({ assignee_name: assigneeName, note }),
       ]);
       await client.query("commit");
     } catch (error) {
@@ -452,10 +496,13 @@ export class TicketsRouter {
       return this.closeTicket(req, id, note);
     }
 
+    /* commit 成功之后才发通知，所以这里先把通知要的三样存下来（租户、可视工单码、这一行流水
+       的时刻）：commit 之后作用域里就只剩 `ref`，而 ref 可能是 uuid。 */
+    let notice: { target: TicketNotifyTarget; at: Date | null } | null = null;
     const client = await this.rwPool.connect();
     try {
       await client.query("begin");
-      const ticketRes = await client.query<{ id: string; status: string }>(
+      const ticketRes = await client.query<TicketLockRow>(
         TICKET_LOCK_STATUS_SQL,
         [ref],
       );
@@ -464,19 +511,37 @@ export class TicketsRouter {
         throw new NotFoundException("Ticket not found");
       }
       await client.query(TICKET_STATUS_UPDATE_SQL, [ticket.id, status]);
-      await client.query(TICKET_EVENT_INSERT_SQL, [
-        ticket.id,
-        "status_changed",
-        actor.id,
-        actor.name,
-        JSON.stringify({ from: ticket.status, to: status, note }),
-      ]);
+      const event = await client.query<{ created_at: Date | string | null }>(
+        TICKET_EVENT_INSERT_SQL,
+        [
+          ticket.id,
+          "status_changed",
+          actor.id,
+          actor.name,
+          JSON.stringify({ from: ticket.status, to: status, note }),
+        ],
+      );
       await client.query("commit");
+      /* 七个状态里只有 `resolved` 有模板，其余四个（open / pending / in_progress /
+         reopened）一条都不发 —— 客户在那几档上没有任何下一步，理由逐条写在
+         dispatch/templates.ts 的工单那一段。`closed` 走上面那条转交，不在这里。
+         判据写成一次显式比较，不查一张「状态 → 模板」的表：今天只有一档，多一张表就是
+         多一处会漂的映射。 */
+      if (status === "resolved") {
+        notice = {
+          target: notifyTargetOfRow(ticket),
+          at: eventMoment(event.rows[0]?.created_at),
+        };
+      }
     } catch (error) {
       await client.query("rollback");
       throw error;
     } finally {
       client.release();
+    }
+    if (notice) {
+      const pending = notice;
+      await this.notifyTicketEvent("ticket.resolved", async () => pending);
     }
     return this.fetchTicketDetail(id);
   }
@@ -540,40 +605,139 @@ export class TicketsRouter {
       throw new BadRequestException("reason exceeds 1000 characters");
     }
 
-    await withTransaction(this.rwPool, async (client: PoolClient) => {
-      const ticketRes = await client.query<{ id: string; status: string }>(
-        TICKET_LOCK_STATUS_SQL,
-        [ref],
-      );
-      const ticket = ticketRes.rows[0];
-      if (!ticket) {
-        throw new NotFoundException("Ticket not found");
-      }
-      if (ticket.status === "closed") {
-        throw new ConflictException("Ticket is already closed");
-      }
-      if (ticket.status === "cancelled") {
-        throw new ConflictException(
-          "Ticket was cancelled; a cancelled ticket cannot be closed",
+    /* `withTransaction` 返回即已 commit（它自己在回调抛出时 rollback 并重抛），所以把通知
+       要的三样从事务里带出来，在外面发。**不在事务里发**：通知失败不该回滚一次已经做成的关闭，
+       而通知成功也不该被随后的回滚变成一句假话。 */
+    const notice = await withTransaction(
+      this.rwPool,
+      async (client: PoolClient) => {
+        const ticketRes = await client.query<TicketLockRow>(
+          TICKET_LOCK_STATUS_SQL,
+          [ref],
         );
-      }
-      await client.query(TICKET_STATUS_UPDATE_SQL, [ticket.id, "closed"]);
-      await client.query(TICKET_EVENT_INSERT_SQL, [
-        ticket.id,
-        "status_changed",
-        actor.id,
-        actor.name,
-        JSON.stringify({ from: ticket.status, to: "closed", note: reason }),
-      ]);
-      await insertOperatorAuditLog(client, req, {
-        action: "ticket.close",
-        resourceType: "support_ticket",
-        resourceId: ref,
-        before: { status: ticket.status },
-        after: { status: "closed", reason },
-      });
-    });
+        const ticket = ticketRes.rows[0];
+        if (!ticket) {
+          throw new NotFoundException("Ticket not found");
+        }
+        if (ticket.status === "closed") {
+          throw new ConflictException("Ticket is already closed");
+        }
+        if (ticket.status === "cancelled") {
+          throw new ConflictException(
+            "Ticket was cancelled; a cancelled ticket cannot be closed",
+          );
+        }
+        await client.query(TICKET_STATUS_UPDATE_SQL, [ticket.id, "closed"]);
+        const event = await client.query<{ created_at: Date | string | null }>(
+          TICKET_EVENT_INSERT_SQL,
+          [
+            ticket.id,
+            "status_changed",
+            actor.id,
+            actor.name,
+            JSON.stringify({ from: ticket.status, to: "closed", note: reason }),
+          ],
+        );
+        await insertOperatorAuditLog(client, req, {
+          action: "ticket.close",
+          resourceType: "support_ticket",
+          resourceId: ref,
+          before: { status: ticket.status },
+          after: { status: "closed", reason },
+        });
+        return {
+          target: notifyTargetOfRow(ticket),
+          at: eventMoment(event.rows[0]?.created_at),
+        };
+      },
+    );
+    /* 关闭原因 `reason` **不进通知**：它已经写在 `status_changed` 的 payload 里，而那个词是
+       客户看得见的 ⇒ 工单详情页上就有这句话。通知里再存一份就是同一段话的第二个副本。 */
+    await this.notifyTicketEvent("ticket.closed", async () => notice);
     return this.fetchTicketDetail(id);
+  }
+
+  /**
+   * 客户通知（工单线批 2，owner 裁决 6：通知走现有消息中心，点开跳转到工单详情页）。
+   *
+   * ── 永不抛 ──
+   * 三处调用点都在**写入已提交之后**，所以这里出的任何岔子都只该是一行日志：运营刚按下的
+   * 那个「回复 / 标记处理完成 / 关闭」已经做成了，让一条通知把它变成 500 是本末倒置
+   * （与 SubscriptionService 的 `emit`、tenants.router 的 `notifyVerificationReviewed`
+   * 同一条纪律）。解析收件对象那一步（要查一次库）也在 try 里面，理由同上。
+   *
+   * ── 三样缺一就不发，而且要留下日志 ──
+   * 租户、可视工单码、事件时刻。缺任何一样时**不凑**：
+   *   · 没有可视工单码 —— 那就只剩 uuid 可写，而 `reference_id` 被客户收件箱的读路径原样
+   *     投影给浏览器。宁可不发，也不让一个 uuid 过客户端那条线。
+   *   · 没有时刻 —— 锚就只到工单这一层，第二条回复起会被收件箱那个唯一键静默压掉，
+   *     而那种压掉没有任何症状。
+   * 所以缺就跳过并记一行 —— **不是静默 return**：一条发不出去的通知必须留下痕迹，否则
+   * 「客户没收到」这件事在库里、日志里、屏幕上三处都看不出来。
+   *
+   * ── 收件人 ──
+   * 报单账号（有的话）+ 租户 owner（分发器恒定追加）。工单的可见范围是**租户级**
+   * （owner 第 1 条裁决），所以 owner 那一半不是多余的；而报单人必须在里面——他才是在等
+   * 这句回复的那个人，而 `support.tickets.account_id` 可以是 NULL（运营代客建单时电话里
+   * 那个人未必有账号，见 `createTicket` 头注），NULL 时就只剩 owner。
+   */
+  private async notifyTicketEvent(
+    code: TicketTemplateCode,
+    resolve: () => Promise<{
+      target: TicketNotifyTarget | null;
+      at: Date | null;
+    }>,
+  ): Promise<void> {
+    try {
+      const { target, at } = await resolve();
+      const ticketNo = target?.ticketNo ?? null;
+      if (!target?.tenantId || !ticketNo || !at) {
+        this.logger.warn(
+          `${code}: customer notice skipped — ticket=${ticketNo ?? "?"} ` +
+            `tenant=${target?.tenantId ? "ok" : "missing"} at=${at ? "ok" : "missing"}`,
+        );
+        return;
+      }
+      await this.notifier.notify({
+        tenantId: target.tenantId,
+        templateCode: code,
+        /* 去重锚由 @vxture/service-notification 的 `ticketEventReference` 产出，本文件不自己
+           拼：锚少了时刻，第二条回复起全被收件箱唯一键压掉，而形状写在文档里让调用方各自拼
+           就是几份会漂的副本（那是 `securityEventStamp` 立下的规矩，理由一字不差）。 */
+        reference: ticketEventReference(code, ticketNo, at),
+        /* 参数只有可视码。回复正文 / 处理说明 / 关闭原因一个字都不传——内容只在工单详情页
+           留一份，而通知这一层看不见 `event_type`，分辨不出手上那段话给谁看。 */
+        params: { ticketNo },
+        ...(target.accountId ? { recipients: [target.accountId] } : {}),
+        /* console 内的相对路径（分发器给邮件那一半补绝对前缀）。地址栏走可视码。 */
+        link: `/tickets/${encodeURIComponent(ticketNo)}`,
+      });
+    } catch (error) {
+      this.logger.warn(`${code}: customer notice failed — ${String(error)}`);
+    }
+  }
+
+  /**
+   * 通知的收件对象（租户 / 报单账号 / 可视工单码），按工单 uuid 查。时刻不在这里——它来自
+   * 那一行流水自己的 `created_at`（见三处调用点）。
+   *
+   * 只有回复那条路径需要它：`insert…select` 的 `returning` 在 pg 里只拿得到被插入表自己的
+   * 列，所以那条语句带不回 `tickets.tenant_id`。状态变更两条路径在事务里已经锁了工单行，
+   * 直接从那一行取（`notifyTargetOfRow`），不多查一次。
+   *
+   * **走写池（主库）而不是 `this.pool`**：只读池可能指向 `REPORTING_RO_DATABASE_URL`
+   * （见 pools.module.ts），而运营刚建完单立刻回复是真实会发生的顺序——从带延迟的副本上查，
+   * 那张单可能还不在，于是通知被跳过。这是一次按主键的点查，落在主库上没有代价。
+   */
+  private async notifyTargetOf(
+    ticketId: string,
+  ): Promise<TicketNotifyTarget | null> {
+    const { rows } = await this.rwPool.query<TicketLockRow>(
+      TICKET_NOTIFY_TARGET_SQL,
+      [ticketId],
+    );
+    const row = rows[0];
+    return row ? notifyTargetOfRow(row) : null;
   }
 
   private async fetchTicketDetail(id: string): Promise<SupportTicketRecord> {
@@ -851,12 +1015,25 @@ for update
 `;
 
 // 事务内锁定工单行 + 取旧 status（status change，用于 payload.from）。
+// 另取三列给客户通知用：tenant_id（分发器要它）、account_id（报单人，收件人之一，可为 NULL）、
+// ticket_no（**可视码**，进文案、进去重锚、进跳转链接——这三处都不许出现 uuid）。
+// 在这条已经 `for update` 的查询上多取三列，比 commit 之后再查一次省一趟往返，
+// 也免掉「读到的是不是刚写的那一行」这个问题。
 const TICKET_LOCK_STATUS_SQL = `
-select id, status
+select id, status, tenant_id, account_id, ticket_no
 from support.tickets
 where (id::text = $1 or ticket_no = $1)
   and deleted_at is null
 for update
+`;
+
+// 客户通知的收件对象，按工单 uuid 点查。只有回复那条路径用它——理由见 notifyTargetOf。
+const TICKET_NOTIFY_TARGET_SQL = `
+select id, status, tenant_id, account_id, ticket_no
+from support.tickets
+where id = $1::uuid
+  and deleted_at is null
+limit 1
 `;
 
 const TICKET_ASSIGN_UPDATE_SQL = `
@@ -892,10 +1069,13 @@ where id = $1
 `;
 
 // 事务内事件插入（assigned / status_changed）。$1=ticket uuid（已解析）。
+// `returning created_at`：客户通知的去重锚要一个「哪一次」的时刻，而它必须是**这一行流水
+// 自己的**那个，不是应用侧另取的 `new Date()`——两处各算一次就有两个时刻，而锚是唯一判据。
 const TICKET_EVENT_INSERT_SQL = `
 insert into support.ticket_comments
   (ticket_id, event_type, actor_type, actor_id, actor_name, payload)
 values ($1, $2, 'operator', $3::uuid, $4, $5::jsonb)
+returning created_at
 `;
 
 /**
@@ -995,6 +1175,47 @@ interface AssignTicketBody {
 interface ChangeTicketStatusBody {
   status?: unknown;
   note?: unknown;
+}
+
+/** 事务里锁到的那一行工单（status change / close），以及按 uuid 点查回来的同一形状。 */
+interface TicketLockRow {
+  id: string;
+  status: string;
+  tenant_id: string | null;
+  account_id: string | null;
+  ticket_no: string | null;
+}
+
+/**
+ * 客户通知的收件对象。**只带 uuid 与可视码各自该在的那一半**：
+ * `tenantId` / `accountId` 是分发器内部要的（它按 account_id 落 support.inbox_messages），
+ * `ticketNo` 是唯一会上屏、进文案、进去重锚、进链接的那个值。
+ */
+interface TicketNotifyTarget {
+  tenantId: string | null;
+  accountId: string | null;
+  ticketNo: string | null;
+}
+
+function notifyTargetOfRow(row: TicketLockRow): TicketNotifyTarget {
+  return {
+    tenantId: row.tenant_id,
+    accountId: row.account_id,
+    ticketNo: row.ticket_no,
+  };
+}
+
+/**
+ * 流水行的 `created_at` → 去重锚要的那个 Date。
+ *
+ * 认不出来就回 null，**不回落成 `new Date()`**：回落是第二个时刻来源，而这个值的全部用处
+ * 就是当「哪一次」的唯一判据。拿不到时上层会跳过通知并记一行日志（见 notifyTicketEvent），
+ * 那比发一条锚不可信的通知好——锚错了的症状是第二条回复起被收件箱唯一键静默压掉。
+ */
+function eventMoment(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const at = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
 interface TicketCommentRow {

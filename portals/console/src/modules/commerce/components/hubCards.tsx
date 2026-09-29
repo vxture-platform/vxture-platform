@@ -35,7 +35,8 @@ import {
   cn,
 } from "@vxture/design-system";
 import type { ActionMenuItem, IconName } from "@vxture/design-system";
-import { Link } from "@/lib/i18n/navigation";
+import { Link, useRouter } from "@/lib/i18n/navigation";
+import { buildTicketComposeHref } from "@/lib/ticket-compose";
 import {
   buildWebsitePricingUrl,
   buildWebsiteProductUrl,
@@ -160,7 +161,10 @@ export function SubscriptionProductCard({
   const { fmtDate } = useDateFormat();
   const suspension = useSuspensionLabels();
 
+  const router = useRouter();
   const t = useTranslations("subscriptionHub");
+  /* 求助入口的词在 `tickets.jump.*`(订单 / 账单 / 订阅三处同一族)。 */
+  const tJump = useTranslations("tickets.jump");
   const withLabels = useConfirmLabels();
   const locale = useLocale();
 
@@ -235,6 +239,20 @@ export function SubscriptionProductCard({
           } satisfies ActionMenuItem,
         ]
       : []),
+    /* 「就这个订阅求助」(owner 2026-09-29 第 5 条裁决):**只跳转,不在卡上长出
+       第二个提单表单**。带的是**产品可视码**而不是订阅 id——订阅在客户这一侧
+       没有可视码(投影里只有 uuid 的 subscriptionId),而 uuid 不过河;产品码正好
+       回答了「关于哪个东西」。产品码缺失时不带对象,只跳(见 ticket-compose)。 */
+    {
+      id: "help",
+      label: tJump("subscription"),
+      onSelect: () =>
+        router.push(
+          buildTicketComposeHref(
+            productCode ? { type: "subscription", code: productCode } : null,
+          ),
+        ),
+    },
     {
       id: "unsubscribe",
       label: t("card.unsubscribe"),

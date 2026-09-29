@@ -24,11 +24,14 @@ import {
 import {
   NOTIFICATION_TEMPLATES,
   SECURITY_TEMPLATE_CODES,
+  TICKET_TEMPLATE_CODES,
   render,
   securityEventStamp,
+  ticketEventReference,
   type NotificationTemplateCode,
   type SecurityTemplateCode,
   type TemplateParams,
+  type TicketTemplateCode,
 } from "./templates";
 /**
  * 发侧（@vxture/service-organization）的引用 id 辅助函数。**样本从这里取，不手抄。**
@@ -118,6 +121,17 @@ const secReasonParams: TemplateParams = {
   occurredAt: SEC_WHEN,
   reason: "风控命中：同一账号在 10 分钟内 40 次失败登录",
 };
+
+/* ── 工单线（2026-09-29）──
+   引用**从 `ticketEventReference` 取，不手抄一串字面量**：那个函数是发侧唯一拼得出锚的路，
+   改了它的形状这一组当场红。锚里带时刻，因为一张单会被回复很多次——少了它，客户收件箱那个
+   唯一键会把第二条回复起的每一条都静默压掉。 */
+const TICKET_NO = "TK-202609-ABCDEF0123";
+const TICKET_AT = new Date("2026-09-29T12:14:32Z");
+const ticketRef = (code: NotificationTemplateCode): MirrorReference =>
+  ticketEventReference(code as TicketTemplateCode, TICKET_NO, TICKET_AT);
+/** 三条工单模板的全部参数就是这一个可视码（回复原文一个字都不进通知）。 */
+const ticketParams: TemplateParams = { ticketNo: TICKET_NO };
 
 const planParams = { productName: "Arda", planName: "Pro" };
 const orderParams = { ...planParams, orderNo: "ORD-202609-1" };
@@ -484,6 +498,28 @@ const CASES: Record<NotificationTemplateCode, Case> = {
     severity: "info",
     title: `客户在新设备上登录（${SEC_WHEN}）`,
   },
+  /* 工单三条（2026-09-29）。全 info：三件事都是运营**刚刚**自己按下的那个按钮，镜像是回执，
+     没有任何「下一步」在等人做——正是本文件 warning（不过期、直到处理）要防的反面。
+     `link` 在这张表里只有 warning 那一档会被断言，所以工单的链接另有一条专门的用例
+     （三条都该落 `/tickets/{可视码}`：admin 有按工单码的详情页）。 */
+  "ticket.replied": {
+    reference: ticketRef("ticket.replied"),
+    params: ticketParams,
+    severity: "info",
+    title: `工单已回复客户 · ${TICKET_NO}`,
+  },
+  "ticket.resolved": {
+    reference: ticketRef("ticket.resolved"),
+    params: ticketParams,
+    severity: "info",
+    title: `工单已标记处理完成 · ${TICKET_NO}`,
+  },
+  "ticket.closed": {
+    reference: ticketRef("ticket.closed"),
+    params: ticketParams,
+    severity: "info",
+    title: `工单已关闭 · ${TICKET_NO}`,
+  },
 };
 
 const NOW = new Date("2026-09-28T10:00:00Z");
@@ -635,6 +671,77 @@ describe("composeOperatorNotice 正文与去重键", () => {
     expect(mirrorLink("tenant", { orderNo: "ORD-1" }, "88")).toBe(
       "/orders/ORD-1",
     );
+    /* 工单（2026-09-29）：admin 有按可视工单码的详情页 ⇒ 给链接（判据「有详情页才给链接」）。
+       码取不到时回 null，不产出一条指向列表页的半截链接。 */
+    expect(mirrorLink("ticket", { ticketNo: TICKET_NO }, "88")).toBe(
+      `/tickets/${TICKET_NO}`,
+    );
+    expect(mirrorLink("ticket", {}, "88")).toBeNull();
+  });
+
+  it("工单三条：锚不含 uuid、每种事各一条、链接到工单详情页、最长仍在 128 之内", () => {
+    const codes = [...TICKET_TEMPLATE_CODES];
+    /* 读不到要红，不许当成通过：这个数字也是「加了工单模板却没进这一组」的探针。 */
+    expect(codes).toHaveLength(3);
+
+    const keys = codes.map((code) =>
+      mirrorDedupeKey(code, CASES[code].reference),
+    );
+    /* 每种事各一条：三个锚互不相同，同一秒里的 resolved 与 closed 不互相吞掉。 */
+    expect(new Set(keys).size).toBe(3);
+    for (const key of keys) {
+      expect(key).not.toMatch(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+      );
+      // 可视工单码是这条锚上唯一可读的把手（客户端拿到的就是它）。
+      expect(key).toContain(TICKET_NO);
+      expect(key.length).toBeLessThanOrEqual(128);
+    }
+    /* 同一张单被回复两次 ⇒ 两个不同的锚。这一条是整条链上唯一挡住「第二条回复起全被唯一键
+       压掉」的判据，而那种压掉不报错、日志里只多一行 skipped。 */
+    const again = ticketEventReference(
+      "ticket.replied",
+      TICKET_NO,
+      new Date(TICKET_AT.getTime() + 1000),
+    );
+    expect(mirrorDedupeKey("ticket.replied", again)).not.toBe(keys[0]);
+
+    /* 长度**按真实码表算，不手抄一个数**（上一批手抄的那个算漏了一档）。 */
+    const longestCode = codes.reduce((a, b) => (b.length > a.length ? b : a));
+    expect(longestCode).toBe("ticket.resolved");
+    const longestKey = mirrorDedupeKey(
+      longestCode,
+      CASES[longestCode].reference,
+    );
+    expect(longestKey).toBe(
+      `ticket.resolved:ticket:${TICKET_NO}:resolved:${TICKET_AT.toISOString()}`,
+    );
+    expect(longestKey.length).toBe(77);
+    expect(128 - longestKey.length).toBe(51);
+
+    // 三条都给工单详情页链接——这是它与订阅 / 邀请 / 加油包落 null 的分水岭。
+    for (const code of codes) {
+      expect(compose(code).link).toBe(`/tickets/${TICKET_NO}`);
+    }
+  });
+
+  /**
+   * 镜像正文里**没有运营写的那段话**（回复正文 / 处理说明 / 关闭原因）。
+   *
+   * 判据落在**镜像正文**上而不是模板表上，与安全那一组同一手法：正文的最后一段是「客户收到
+   * 的原文」，原文里没有的东西这里变不出来，反过来说原文里一旦被加上，这条当场红。
+   * 为什么值得一条用例：一旦有人把回复正文搬进通知参数，通知这一层**分辨不出手上那段话给
+   * 谁看**（它压根不看 `event_type`），于是哪天可见性判据漏一处，泄露的就是内部备注。
+   */
+  it("工单镜像正文不含运营写的流水正文，只有可视码与客户收到的那句话", () => {
+    const leak = "内部备注：这个客户上季度欠款，先拖两天等法务回话";
+    for (const code of [...TICKET_TEMPLATE_CODES]) {
+      const body = compose(code).body;
+      expect(body).toContain(TICKET_NO);
+      expect(body).not.toContain(leak);
+      // 客户那三条文案里没有任何一个装正文的参数名，所以这里也不可能有。
+      expect(Object.keys(CASES[code].params)).toEqual(["ticketNo"]);
+    }
   });
 
   it("成员邀请四态：去重锚不含 uuid、每个终态各一条、不给链接", () => {

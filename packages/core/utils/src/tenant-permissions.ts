@@ -113,6 +113,8 @@ export const TENANT_MENU_CODES = [
   "tenant.menu.vouchers",
   "tenant.menu.quotas",
   "tenant.menu.usage",
+  "tenant.menu.help_support",
+  "tenant.menu.tickets",
   "tenant.menu.advanced_settings",
   "tenant.menu.notifications",
   "tenant.menu.audit_logs",
@@ -192,6 +194,20 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
       },
       { code: "tenant.menu.usage", route: "/usage" },
     ],
+  },
+  // 帮助与支持（owner 2026-09-29 裁决：新组，**放在「设置与安全」上方**）。
+  //
+  // **不挂 perms**：owner 裁决「工单可见范围 = 租户级」，同租户成员看同一批单；
+  // 挂一个码等于让租户里的一部分人看不到自己单位提过什么单，而求助不是一项需要
+  // 被授权的能力。与 `tenant.menu.inbox` 同形（那一节点也无 perms）。
+  //
+  // 这一组必须进树，不是「顺便登记」：导航 href 与菜单树是**同一份东西的两半**，
+  // 守卫 ③ 要求每个 href 都解析到一个节点。不挂码不等于不进树——`/` 与 `/inbox`
+  // 正是靠无 perms 的节点注册的。第一版我只加了 navigation.ts，
+  // `pnpm lint:permission-catalog` 当场红。
+  {
+    code: "tenant.menu.help_support",
+    children: [{ code: "tenant.menu.tickets", route: "/tickets" }],
   },
   {
     code: "tenant.menu.advanced_settings",

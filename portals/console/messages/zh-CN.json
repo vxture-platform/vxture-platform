@@ -2290,6 +2290,7 @@
       "workspace": "工作台",
       "org": "组织与成员",
       "billing": "订阅与计费",
+      "helpSupport": "帮助与支持",
       "settings": "设置与安全",
       "capability": "模型与能力"
     },
@@ -2371,12 +2372,17 @@
       "skillTools": {
         "label": "技能工具",
         "description": "本工作空间可用的技能与工具（开发中）"
+      },
+      "tickets": {
+        "label": "我的工单",
+        "description": "提交问题、跟进处理进度与我们的回复"
       }
     },
     "sections": {
       "workspace": "工作空间",
       "accountTenant": "账户与租户",
       "subscriptionBilling": "订阅与计费",
+      "helpSupport": "帮助与支持",
       "settingsSecurity": "设置与安全",
       "capability": "模型与能力"
     },
@@ -3551,6 +3557,167 @@
     "suspensionHint": {
       "expected": "预计 {time} 恢复",
       "extendsTerm": "暂停期间不计入有效期"
+    }
+  },
+  "tickets": {
+    "status": {
+      "open": "待处理",
+      "pending": "挂起",
+      "in_progress": "处理中",
+      "resolved": "已解决",
+      "closed": "已关闭",
+      "reopened": "重新打开",
+      "cancelled": "已取消"
+    },
+    "event": {
+      "mine": "我发的",
+      "reply": "我们的回复",
+      "statusChange": "进度更新",
+      "other": "进展"
+    },
+    "jump": {
+      "order": "就这张订单求助",
+      "bill": "就这张账单求助",
+      "subscription": "就这个订阅求助"
+    },
+    "list": {
+      "title": "我的工单",
+      "description": "提交问题、跟进处理进度。同一租户的成员看到的是同一批工单。",
+      "metrics": {
+        "groupLabel": "工单概览",
+        "unresolved": "正在处理",
+        "unresolvedHint": "还在跟进中的工单",
+        "awaiting": "等你确认",
+        "awaitingHint": "已给出处理结果,问题还在就回复一句",
+        "total": "全部工单",
+        "totalHint": "含已关闭与已取消"
+      },
+      "table": {
+        "title": "工单记录",
+        "description": "点标题读全文与回复。",
+        "colTicket": "工单",
+        "colStatus": "状态",
+        "colActivity": "最后动静",
+        "colCreated": "提交时间",
+        "reporter": "提交人 {name}",
+        "empty": "还没有提过工单",
+        "emptyHint": "遇到问题随时提一张,处理过程都留在那张单上。",
+        "emptyFiltered": "没有符合条件的工单"
+      },
+      "filters": {
+        "groupLabel": "工单筛选",
+        "listOnly": "工单只有列表视图",
+        "count": "共 {count} 条",
+        "searchPlaceholder": "搜工单号或标题",
+        "searchAriaLabel": "搜索工单",
+        "statusAriaLabel": "按状态筛选",
+        "statusUnresolved": "正在处理",
+        "statusAll": "全部状态",
+        "reset": "清空筛选"
+      },
+      "actions": {
+        "menuLabel": "工单操作",
+        "detail": "查看详情",
+        "copy": "复制工单号",
+        "copied": "已复制"
+      },
+      "notes": {
+        "title": "关于工单",
+        "description": "几件先说清楚的事。",
+        "scopeTitle": "同租户的成员都看得见",
+        "scopeBody": "工单属于租户,不属于某一个人——你的同事能接着跟进同一张单。",
+        "noticeTitle": "有新动静会通知你",
+        "noticeBody": "我们回复、给出处理结果或关闭工单时,消息会进消息中心,点开就到那张单上。",
+        "closedTitle": "结束了还能重新打开",
+        "closedBody": "已关闭或已取消的工单不再接收回复,但问题还在的话可以在那张单上重新打开——前后经过留在同一处,不用另开一张。"
+      }
+    },
+    "compose": {
+      "open": "提交工单",
+      "title": "提交工单",
+      "description": "说清遇到了什么。之后的回复与处理过程都留在这张单上。",
+      "titleLabel": "一句话说明问题",
+      "titlePlaceholder": "例如:付款成功但订阅没有开通",
+      "titleHint": "这句话会出现在工单列表与通知里。",
+      "bodyLabel": "详细描述",
+      "bodyPlaceholder": "什么时候发生的、做到哪一步、看到了什么。",
+      "bodyHint": "写清经过能少一轮来回。",
+      "submit": "提交",
+      "cancel": "取消",
+      "failed": "提交没有成功,请稍后再试。",
+      "prefillOrder": "关于订单 {code} 的问题",
+      "prefillBill": "关于账单 {code} 的问题",
+      "prefillSubscription": "关于 {code} 订阅的问题"
+    },
+    "detail": {
+      "backToList": "返回工单列表",
+      "headerMeta": "{code} · 提交于 {created}",
+      "loadingTitle": "正在打开工单",
+      "notFoundTitle": "找不到这张工单",
+      "notFoundDescription": "地址里的工单号在当前租户下没有对应的工单。",
+      "notFoundHint": "核对一下工单号,或者回列表里挑一张。",
+      "facts": {
+        "title": "工单信息",
+        "code": "工单号",
+        "status": "状态",
+        "createdAt": "提交时间",
+        "lastActivityAt": "最后动静"
+      },
+      "problem": {
+        "title": "你提交的问题",
+        "description": "提交时写下的那段描述,原文保留。"
+      },
+      "timeline": {
+        "title": "处理过程",
+        "description": "你发的消息、我们的回复,以及进度变化。",
+        "movedTo": "进度更新为{status}",
+        "progressTag": "进度",
+        "emptyTitle": "还没有新动静",
+        "emptyDescription": "有进展会更新在这里,并给你发一条消息。"
+      },
+      "reply": {
+        "title": "回复我们",
+        "description": "补充信息或者追问,都写在这里。",
+        "label": "你的回复",
+        "placeholder": "还有什么要补充的?",
+        "submit": "发送",
+        "pending": "发送中…",
+        "failed": "没有发送成功,请稍后再试。",
+        "finishedSectionTitle": "这张工单已经结束",
+        "finishedSectionHint": "不再接收回复。问题还在的话把它重新打开。",
+        "finishedTitle": "这张工单已经结束",
+        "finishedDescription": "已关闭或已取消的工单不再接收回复。问题还在的话把这张单重新打开,前后经过接着往下记,不用另开一张。",
+        "finishedAction": "重新打开这张工单",
+        "resolvedTitle": "我们认为这件事已经处理完了",
+        "resolvedDescription": "如果问题还在,在这里回一句——这张单会回到处理中,不用另开一张。"
+      },
+      "reopen": {
+        "title": "重新打开工单",
+        "description": "说一句还差什么,这张单会回到处理中。",
+        "label": "还差什么",
+        "placeholder": "例如:按说明操作之后还是同样的报错。",
+        "submit": "重新打开",
+        "cancel": "取消",
+        "failed": "重新打开没有成功,请稍后再试。"
+      },
+      "errors": {
+        "stale": "这张单的状态刚变过(同租户的其他人或我们这边动过),刷新一下再操作。",
+        "gone": "这张工单已经不在了。回列表看看。"
+      }
+    },
+    "drawer": {
+      "title": "我的工单进度",
+      "description": "正在处理的工单,以及各自最后一次动静。",
+      "close": "关闭",
+      "activity": "{what} · {when}",
+      "noActivity": "还没有新动静",
+      "emptyTitle": "没有正在处理的工单",
+      "emptyDescription": "遇到问题随时提一张,处理过程都留在那张单上。",
+      "failedTitle": "工单读取失败",
+      "failedDescription": "这会儿读不到你的工单。重试一下;一直失败请稍后再来。",
+      "retry": "重试",
+      "submit": "提交工单",
+      "viewAll": "查看全部工单"
     }
   }
 }

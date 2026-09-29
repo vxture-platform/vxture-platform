@@ -8,7 +8,8 @@
  *
  * ── 为什么是巡检，不是在十个包的热路径里插代码 ──
  * 盘出来的业务事件里，绝大多数在库里**本来就有一行带时刻的记录**（注册、建租户、
- * 提认证、下单、买加油包、申请开票、评价、核销、注销申请、关自动续费、开工单）。
+ * 提认证、下单、买加油包、申请开票、评价、核销、注销申请、关自动续费、开工单、
+ * 客户在工单里回话）。
  * 于是这一批不动业务代码：每类一条 SQL，扫「最近 N 分钟新出现的行」，一行写一条
  * 运营通告。好处是一处实现、一处测试、失败只影响巡检自己；以后加事件只加一条 SQL。
  *
@@ -54,7 +55,10 @@
  * status 值域只有 pending_payment / completed / cancelled（DDL chk_addon_purchases_status），
  * 没有申报态、也没有 declared_at 列——库里根本没有那个事实，不是漏写。
  */
-import { formatPrincipalNo } from "@vxture-platform/shared";
+import {
+  formatPrincipalNo,
+  TICKET_EVENT_COMMENT,
+} from "@vxture-platform/shared";
 import type {
   CreateSystemNoticeInput,
   NoticePlane,
@@ -86,6 +90,7 @@ export const BUSINESS_EVENT_CODES = [
   "account.deletion_requested",
   "subscription.autorenew_off",
   "ticket.created",
+  "ticket.customer_replied",
 ] as const;
 export type BusinessEventCode = (typeof BUSINESS_EVENT_CODES)[number];
 
@@ -140,6 +145,13 @@ export interface BusinessEventPass {
   readonly label: string;
   /** $1 = 回看分钟数，$2 = 本轮上限。两个都是绑定参数，不拼串。 */
   readonly sql: string;
+  /**
+   * 这一类自己还要的参数，按 $3、$4… 顺次接在后面（runner 展开）。
+   *
+   * 只有工单回复用到：它的可见性判据是值域里的一个词，**绑参传进来**而不是写进
+   * SQL 字面量——SQL 里手抄的词不会被类型系统看见，也不会随值域改动而改。
+   */
+  readonly extraParams?: readonly unknown[];
   readonly shape: (row: SignalRow) => ShapedSignal;
 }
 
@@ -288,6 +300,18 @@ const TICKET_PRIORITY: Readonly<Record<string, string>> = {
   p1: "P1 高",
   p2: "P2 中",
   p3: "P3 低",
+};
+
+/**
+ * 工单状态的人话。`resolved` 也在表里：客户在「已解决」上回一句会把单**自动重开**
+ * （console-bff 的 addReply），通告要说出它回来了，不能只说「有新回复」。
+ */
+const TICKET_STATUS_LABEL: Readonly<Record<string, string>> = {
+  open: "待处理",
+  pending: "待客户回复",
+  in_progress: "处理中",
+  reopened: "已重开",
+  resolved: "已解决",
 };
 
 const TICKET_SOURCE: Readonly<Record<string, string>> = {
@@ -538,7 +562,9 @@ const AUTORENEW_OFF_SQL = `
 
 /**
  * 新工单：support.tickets 按 created_at。
- * 客户端目前没有开单入口，运营代建（source='admin'）也算——扫的是表，不是入口。
+ * 客户自助（source='console'）与运营代建（source='admin'）都算——扫的是表，不是入口。
+ * （2026-09-29 之前客户端确实没有开单入口；这句原先写着「客户端目前没有开单入口」，
+ * 客户侧工单上线后它就成了一句错话，所以改掉。）
  */
 const TICKET_CREATED_SQL = `
   select k.ticket_no as dedupe_key,
@@ -554,6 +580,55 @@ const TICKET_CREATED_SQL = `
    where k.deleted_at is null
      and k.created_at > now() - make_interval(mins => $1::int)
    order by k.created_at asc
+   limit $2::int
+`;
+
+/**
+ * 客户回复：`support.ticket_comments` 里客户自己发的言，按 created_at。
+ *
+ * ── 为什么非得有这一条 ──
+ * 出站方向（我们 → 客户）这一批做全了，入站方向（客户 → 我们）**一条信号都没有**。
+ * 客户在一张 in_progress 的单上回一句话，今天会发生的事是：没有客户通知模板 ⇒ 没有
+ * 运营镜像 ⇒ `admin.operator_notices` 没有行；ops-todos 的 `ticket` 那一档只看状态
+ * （`status not in (resolved/closed/cancelled)`），本来就在列表里、不换档也不换严重度
+ * ——也就是屏幕上什么都不变。而 `support.ticket_comments` 在 ops-todos 的**禁用关系
+ * 清单**上，那条算法按设计不读流水，所以「未读回复」这个概念全仓不存在。
+ *
+ * ── 一条回复一条通告，不算「有没有人答过」 ──
+ * 去重键带上这条回复自己的时刻（`{ticket_no}:{ISO}`），所以客户回三句就是三条通告。
+ * 不去算「运营答过了没有」：那是个会动的状态，算在巡检的那一刻就意味着运营两分钟内
+ * 答了这条就永远不会有记录，而「2 分钟内答了」是巡检节奏的巧合，不是判据。owner 的
+ * 方向是「宁可多一条，不漏一条」，收敛留给后续的订阅筛选。
+ *
+ * ── 判据是 `event_type` 绑参，不是 SQL 里手写 'comment' ──
+ * 绑的是值域里的 `TICKET_EVENT_COMMENT`（$3）。同一个词在 console 展示层、
+ * console-bff 写入方和这里都取那一份；三处各写一个字面量的下场是其中一处写错、
+ * 该发的通告一条不发、而且不报错。`actor_type = 'customer'` 是第二道：词与身份
+ * 都对得上才算客户说话。
+ *
+ * **正文里不带任何评论文本。** 只用工单标题、单号、状态与租户——内部备注永远不可能
+ * 被这条 SQL 取到（谓词只认客户发言那一个词），但更稳的做法是连客户自己的话也不引：
+ * 运营通告是「有事发生了，去看」，不是内容转投。
+ */
+const TICKET_CUSTOMER_REPLIED_SQL = `
+  select k.ticket_no || ':' ||
+         to_char(c.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                                                          as dedupe_key,
+         k.ticket_no                                      as code,
+         k.title                                          as subject_text,
+         k.priority                                       as priority,
+         k.status                                         as note,
+         c.actor_name                                     as display_name,
+         t.tenant_no::text                                as tenant_no,
+         coalesce(nullif(t.display_name, ''), t.name)     as tenant_name
+    from support.ticket_comments c
+    join support.tickets k on k.id = c.ticket_id
+    join tenancy.tenants t on t.id = k.tenant_id
+   where c.event_type = any($3::text[])
+     and c.actor_type = 'customer'
+     and k.deleted_at is null
+     and c.created_at > now() - make_interval(mins => $1::int)
+   order by c.created_at asc
    limit $2::int
 `;
 
@@ -767,6 +842,29 @@ export const BUSINESS_EVENT_PASSES: readonly BusinessEventPass[] = [
         `租户 ${tenantName(row)}${codeSuffix(row.tenant_no, "tenant")}`,
         text(row.kind).length > 0 ? `分类 ${text(row.kind)}` : "",
         `来源 ${labelOf(TICKET_SOURCE, row.note, "未记录")}`,
+      ]),
+      link: path("/tickets/", row.code),
+    }),
+  },
+  {
+    code: "ticket.customer_replied",
+    label: "客户回复工单",
+    sql: TICKET_CUSTOMER_REPLIED_SQL,
+    extraParams: [[TICKET_EVENT_COMMENT]],
+    shape: (row) => ({
+      /* 与新工单同一把尺：p0 是「现在就得有人看」，其余在等运营。warning 不过期,
+         所以一条没人理的客户回复会一直留在通告板上——这正是这一条存在的目的。 */
+      severity: text(row.priority) === "p0" ? "critical" : "warning",
+      title:
+        `客户回复工单 ${text(row.code) || "无单号"}：` +
+        `${text(row.subject_text) || "无标题"}`,
+      body: join([
+        `租户 ${tenantName(row)}${codeSuffix(row.tenant_no, "tenant")}`,
+        text(row.display_name).length > 0
+          ? `回复人 ${text(row.display_name)}`
+          : "",
+        `当前状态 ${labelOf(TICKET_STATUS_LABEL, row.note, "状态未记录")}`,
+        `优先级 ${labelOf(TICKET_PRIORITY, row.priority, "未记录")}`,
       ]),
       link: path("/tickets/", row.code),
     }),

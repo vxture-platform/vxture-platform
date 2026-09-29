@@ -28,8 +28,8 @@ import { ACCOUNT_PG_POOL } from "../tokens";
  * `security` / `usage` 三个没有任何模板会落到它们头上（见 dispatch 的 `topicOf`），
  * 客户勾了等于没勾——页面在说假话。
  *
- * 15 个主题（2026-09-29 两批拆分之后的数），**前 13 个有模板已经在发**，后 2 个的事件源
- * 都已存在（各自的状态机或 webhook 事件类型跑着），只是通知模板还没接：这些在界面上挂
+ * 15 个主题（2026-09-29 两批拆分之后的数），**前 14 个有模板已经在发**，最后 1 个的事件源
+ * 已存在（`billing.invoice_receipts` 六态跑着），只是通知模板还没接：它在界面上挂
  *「开发中」标并**禁用三个渠道开关**，不给假开关。
  * 这个数字与下面那张清单是同一份事实的两处写法；改清单时要一起改，否则注释就在说假话。
  *
@@ -50,6 +50,9 @@ import { ACCOUNT_PG_POOL } from "../tokens";
  * 客户嫌吵就该能关。而这张矩阵的粒度只有「主题 × 渠道」——两者同住一行时，站内那一档为了
  * 保住邀请本身必须锁死，四条周知的站内档就跟着关不掉，客户被迫在「收得到邀请」与「别吵我」
  * 之间二选一。拆开之后两件事各有自己的开关。
+ *
+ * 2026-09-29（同日，工单线批 2）：`ticket_activity` 接上三条模板（运营回复 / 标记处理完成 /
+ * 关闭），从「开发中」挪进前一段。与批 5 那两个主题同一条纪律：模板与开关**两半同时动**。
  *
  * 2026-09-29（同日，账号安全线）：旧的 `security` **改名成 `security_event` 并拆出
  * `login_activity`**（owner 裁定 2），两行都接上了模板、都移出「开发中」。
@@ -103,9 +106,13 @@ export const NOTIFICATION_TOPICS = [
   // identity_unlinked / password_login_enabled / _disabled /
   // session_ended_by_self（十三条）
   "login_activity", // account.new_device_signin（仅此一条）
+  // 2026-09-29 工单线：接上三条模板后移出「开发中」。**紧挨在这里**是页面顺序——它与上面
+  // 两行同属「有人对我的东西做了什么」，而下面那一行仍是开发中，开发中的排在最后。
+  // 不进 LOCKED：三条都是周知，客户把三档全关掉也不会让任何人少收到一条回复（回复本身在
+  // 工单详情页，与「站内这条消息就是邀请本身」那种情形不同）。
+  "ticket_activity", // ticket.replied / ticket.resolved / ticket.closed
   // ── 事件源已存在、模板待接（界面标「开发中」）────────────────────────────
   "invoice_progress", // billing.invoice_receipts 六态
-  "ticket_activity", // support.tickets 七态
 ] as const;
 
 /**
@@ -127,12 +134,17 @@ export const NOTIFICATION_TOPICS = [
  * 翻密码登录开关、下线自己的设备，以及在没见过的设备上登录。**两半必须同时动**：模板上线
  * 而开关还禁着，客户就收得到一封关不掉的信，比不发更糟。
  *
- * 剩下两个是事件源在、模板未接：`invoice_progress` / `ticket_activity`。
+ * 2026-09-29 移出 `ticket_activity`（工单线批 2）。批 1 建起写入路径之后
+ * `support.tickets` 才第一次有行，本批给三件客户真的在等的事接上了模板：运营回复、标记处理
+ * 完成、关闭（`ticket.replied` / `_resolved` / `_closed`，见 @vxture/service-notification
+ * 的 `topicOf`）。**两半必须同时动**：模板上线而开关还禁着，客户就收得到一封关不掉的信，
+ * 比不发更糟——而工单这一条尤其明显，提了工单的人本来就在等我们说话。
+ * 其余四个工单状态（open / pending / in_progress / reopened / cancelled）没有模板，
+ * 理由逐条写在 templates.ts 的工单那一段；它们不影响这一行的判断——这个主题**已经有模板**了。
+ *
+ * 剩下**一个**是事件源在、模板未接：`invoice_progress`。
  */
-export const NOTIFICATION_TOPICS_PLANNED = [
-  "invoice_progress",
-  "ticket_activity",
-] as const;
+export const NOTIFICATION_TOPICS_PLANNED = ["invoice_progress"] as const;
 
 export const NOTIFICATION_CHANNELS = ["inbox", "email", "sms"] as const;
 
@@ -229,6 +241,22 @@ const TOPIC_DEFAULT_OVERRIDES: Partial<
        频次压到「换设备才发」。默认开、可关，是这两件事唯一都成立的组合。 */
   security_event: { email: true },
   login_activity: { email: true },
+  /* ── 工单线（2026-09-29）：**邮件默认开**，判据是这张表原本那一条，不是照抄上面两行。 ──
+     这张表的判据只有一条：**错过了会有实际损失**（上面那八个错过就误判自己的订单、权限、
+     认证或余量状态）。逐条按它算过这三条模板：
+       · `ticket.replied`  —— 客户提了工单就是在等我们说话。回复错过了，他会以为没人管，
+         而工单那一侧会因为没人回话走向 resolved / closed；
+       · `ticket.resolved` —— 这一条给的是**一个有时限的动作**：不认可就要回一句，否则单子
+         接着走向关闭。错过它就等于默认「好了」；
+       · `ticket.closed`   —— 终态。错过之后客户还在等一个不会再来的回复。
+     三条都符合，所以跟着事务性那几个走「邮件默认开、可关」。
+     **不照抄 `security_event` 那条更硬的判据**（站内通道本身不可信）：工单的客户账号好着，
+     站内他打得开；这里成立的是普通的那一条。
+     也不照 `announcement` / `invitation_activity` 的「周知 ⇒ 默认只进站内」：那两类错过了
+     只是晚一点知道一件与自己无关的事，而这三条每一条都指着一个客户自己要做的下一步。
+     三个渠道全部可开关（**不进 `LOCKED`**）：客户把它们全关掉不会让任何人少收到一条回复
+     ——回复本身在工单详情页留着，站内这条消息只是入口，不是回复本身。 */
+  ticket_activity: { email: true },
   /* 2026-09-29 拆成两个主题之后，**邀请这两行都不在这张表里**（= 邮件默认关）。两行各有
      自己的理由，不是同一条：
        `member_invitation` —— 它只剩 `tenant.invitation` 一条，而那条是 `inboxOnly` 的。

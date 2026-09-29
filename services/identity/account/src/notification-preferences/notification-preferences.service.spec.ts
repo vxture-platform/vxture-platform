@@ -78,6 +78,13 @@ describe("通知偏好规整", () => {
              的表**（引过来就成了拿被测的那份证明它自己）。 */
           "security_event",
           "login_activity",
+          /* 2026-09-29 工单线：邮件默认开，判据是这张名单原本那一条（**错过了会有实际
+             损失**），不是安全那两行的「站内通道本身不可信」——工单的客户账号好着，站内他
+             打得开。三条都符合：提了工单的人在等我们说话（replied）；「已处理完成」给的是
+             一个有时限的动作，错过就等于默认「好了」（resolved）；关闭之后他还在等一个不会
+             再来的回复（closed）。这份名单**手写、不引服务端的表**（引过来就成了拿被测的
+             那份证明它自己）。 */
+          "ticket_activity",
         ] as readonly string[]
       ).includes(topic);
       expect(prefs[topic].email).toBe(transactional);
@@ -414,11 +421,43 @@ describe("主题清单与派发侧模板对账", () => {
     );
   });
 
-  it("仍标「开发中」且确实没有模板的两个：invoice_progress / ticket_activity", () => {
-    /* 从三个变两个（2026-09-29 账号安全接上了模板）。这个数字当探针的意义是：谁把一个还没
-       模板的主题从 PLANNED 里拿掉，这里会红。 */
-    expect(NOTIFICATION_TOPICS_PLANNED).toHaveLength(2);
-    for (const topic of ["invoice_progress", "ticket_activity"]) {
+  it("工单动态接上模板后已经不在「开发中」里，三条模板都落在它头上", () => {
+    /* 移出「开发中」与接上模板是**同一件事的两半**。漏掉这一半的症状不是报错：页面据此
+       禁用三个渠道开关，于是客户收得到一封关不掉的信——而工单这一条尤其刺眼，提了工单的人
+       本来就在等我们说话。 */
+    expect([...NOTIFICATION_TOPICS] as string[]).toContain("ticket_activity");
+    expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).not.toContain(
+      "ticket_activity",
+    );
+    expect(topicsWithTemplates.has("ticket_activity")).toBe(true);
+    /* 三条落在同一个主题：按状态拆三个主题会让客户为同一个问题勾三个开关。数出来而不是
+       只看「有没有」——少一条不会报错，只会让某一件事哑掉。 */
+    expect(
+      codes.filter((code) => topicOf(code) === "ticket_activity").sort(),
+    ).toEqual(["ticket.closed", "ticket.replied", "ticket.resolved"]);
+    /* 它**不进锁定集合**：三档全关得掉（客户全关也不会让任何人少收到一条回复——回复本身
+       在工单详情页留着，站内这条只是入口）。这一句与下面那条落库用例是同一件事的两面。 */
+  });
+
+  it("工单动态不在锁定集合里：三个渠道都关得掉，落库也是关的", async () => {
+    const { service, query } = build(null);
+    const saved = await service.replace("u-1", {
+      ticket_activity: { inbox: false, email: false, sms: false },
+    });
+    expect(saved.ticket_activity).toEqual({
+      inbox: false,
+      email: false,
+      sms: false,
+    });
+    const persisted = JSON.parse(query.mock.calls[0]![1]![1] as string);
+    expect(persisted.ticket_activity.inbox).toBe(false);
+  });
+
+  it("仍标「开发中」且确实没有模板的：只剩 invoice_progress", () => {
+    /* 三个 → 两个（2026-09-29 账号安全接上模板）→ 一个（同日工单线接上三条）。这个数字
+       当探针的意义是：谁把一个**还没模板**的主题从 PLANNED 里拿掉，这里会红。 */
+    expect(NOTIFICATION_TOPICS_PLANNED).toHaveLength(1);
+    for (const topic of ["invoice_progress"]) {
       expect([...NOTIFICATION_TOPICS_PLANNED] as string[]).toContain(topic);
       expect(topicsWithTemplates.has(topic)).toBe(false);
     }

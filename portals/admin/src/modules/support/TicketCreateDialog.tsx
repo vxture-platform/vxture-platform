@@ -25,8 +25,15 @@
  * 这两个框因此带着**和详情页回复框同一枚徽标**（`ticketAudience.customerVisible`）
  * 加一句字段说明。全屏一条规矩：**客户会读到的字段自己说出来**——运营在这个门户
  * 里只要学一次「带标的会发给客户」，就该在每一屏都成立。不带标的地方
- * （租户、优先级两个下拉，以及报单人姓名）不是漏了：下拉写进去的是值域里的码，
- * 客户看到的是渲染后的状态词而不是运营的原话，而姓名栏写不进内部判断。
+ * （租户、优先级两个下拉）不是漏了：下拉写进去的是值域里的码，
+ * 客户看到的是渲染后的状态词而不是运营的原话。
+ *
+ * ── 报单人姓名也带标（2026-09-29 补）──
+ * 初版把它归在「不带标」那一档，理由写的是「姓名栏写不进内部判断」。真正的理由其实是
+ * 那一天客户侧**根本没有工单读取路径**，给它加标等于断言一条不存在的路径。
+ * 客户侧工单列表现在把 `reporter_name` 画在首列上（租户级可见 ⇒ 「同事里谁提的」
+ * 是一列真信息），那条路径存在了，所以徐标在**同一次改动里**补上：
+ * 规矩要普遍成立才有用——凡值会进客户可见记录的框，框自己就说出来。
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -228,7 +235,10 @@ export function TicketCreateDialog({
             hint={t("reporterHint")}
             hintLabel={t("hintLabel")}
           >
-            {t("reporterLabel")}
+            {t("reporterLabel")}{" "}
+            <StatusBadge tone="info" icon="eye">
+              {tAudience("customerVisible")}
+            </StatusBadge>
           </FieldLabel>
           <Input
             id="vx-ticket-create-reporter"

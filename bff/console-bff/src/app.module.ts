@@ -45,6 +45,7 @@ import { QuotaRouter } from "./routers/quota.router";
 import { SearchRouter } from "./routers/search.router";
 import { SubscriptionRouter } from "./routers/subscription.router";
 import { TenantContextRouter } from "./routers/tenant-context.router";
+import { TicketsRouter } from "./routers/tickets.router";
 import { TenantSwitchRouter } from "./routers/tenant-switch.router";
 import { UsageRouter } from "./routers/usage.router";
 import { VerificationRouter } from "./routers/verification.router";
@@ -72,6 +73,7 @@ import { VerificationRouter } from "./routers/verification.router";
     MeRouter,
     InboxRouter,
     ReviewRouter,
+    TicketsRouter,
     CapabilitiesRouter,
     TenantContextRouter,
     TenantSwitchRouter,

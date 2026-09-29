@@ -24,8 +24,13 @@
 // 凡是**不在运营面**的源码文件，其 SQL 读到 `support.ticket_comments` 时：
 //
 //   ① 必须有 `event_type` 上的**绑参**谓词（`= any($n)` / `in ($n)`）。
-//   ② 那个数组必须来自权威常量：本文件必须 **import** 它
+//   ② 那个数组必须来自权威值域：本文件必须 **import** 它
 //      （从 @vxture-platform/shared，或工单域的 visibility 门面）。
+//      白名单常量本身算；**值域文件里那几个单词常量**（`TICKET_EVENT_COMMENT`
+//      之类，值落在白名单内）也算——绑一个更窄的子集永远不会多给，
+//      而运营侧信号巡检要的就是「只认客户发言那一个词」，绑整张白名单反而是错的
+//      （它会把运营自己的回复也当成客户来了消息）。值不在白名单里的单词常量
+//      （`TICKET_EVENT_INTERNAL_NOTE`）**不算**，自检里有这一条的反例。
 //   ③ 不许用**黑名单方向**（`event_type <> 'internal_note'` / `not in`）。
 //      方向错的过滤今天也能挡住内部备注，但下一个新词会默认放行——
 //      而放行才是会泄露的那个方向。
@@ -135,6 +140,27 @@ const REGISTERED_EXEMPTIONS = [
 
 // ── 读权威值域 ───────────────────────────────────────────────────────────────
 
+/**
+ * 值域文件里**单个词**的导出常量中，值落在白名单内的那些名字。
+ *
+ * 绑其中一个（如 `[TICKET_EVENT_COMMENT]`）是合法的「更窄」：子集不可能多给。
+ * `TICKET_EVENT_INTERNAL_NOTE` 的值不在白名单里，所以不会进这个集合——
+ * 拿它当谓词是「只显示内部备注」，那正是要拦的方向。
+ */
+function loadNarrowerConsts(kinds) {
+  let src;
+  try {
+    src = readFileSync(join(REPO_ROOT, DOMAIN_FILE), "utf8");
+  } catch {
+    return [];
+  }
+  const names = [];
+  for (const m of src.matchAll(/export const ([A-Z0-9_]+)\s*=\s*"([^"]+)"/g)) {
+    if (kinds.includes(m[2])) names.push(m[1]);
+  }
+  return names;
+}
+
 function loadVisibleKinds() {
   let src;
   try {
@@ -223,10 +249,12 @@ function isOperatorPlane(relPath) {
   return OPERATOR_PLANES.some((p) => relPath.startsWith(p));
 }
 
-function importsDomainConst(source) {
-  // 常量名出现在某条 import 语句里，且来源在白名单中。
+function importsDomainConst(source, narrower = []) {
+  // 权威名之一出现在某条 import 语句里，且来源在白名单中。
+  const accepted = [DOMAIN_CONST, ...narrower];
   for (const m of source.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
-    if (!m[1].includes(DOMAIN_CONST)) continue;
+    const named = m[1].split(",").map((x) => x.trim().split(/\s+as\s+/)[0].trim());
+    if (!accepted.some((name) => named.includes(name))) continue;
     const from = m[2];
     if (ALLOWED_IMPORT_SOURCES.some((s) => from === s || from.endsWith(s))) {
       return true;
@@ -271,6 +299,7 @@ function run() {
     };
   }
   const kinds = domain.kinds;
+  const narrower = loadNarrowerConsts(kinds);
 
   const all = SCAN_ROOTS.flatMap((r) => walk(join(REPO_ROOT, r)));
   const files = all.filter((f) => !TEST_FILE.test(f));
@@ -400,14 +429,15 @@ function run() {
         );
         continue;
       }
-      if (!importsDomainConst(source)) {
+      if (!importsDomainConst(source, narrower)) {
         errors.push(
           `${where}\n` +
-            `  有绑参的 event_type 谓词，但本文件没有 import ${DOMAIN_CONST}。\n` +
+            `  有绑参的 event_type 谓词，但本文件没有 import 权威值域里的任何一个名字（${[DOMAIN_CONST, ...narrower].join(" / ")}）。\n` +
             `  谓词绑的那个数组不知道是哪来的 —— 自己就地拼一个数组，写法上和` +
             `正确答案长得一模一样。\n` +
             `  修法：\`import { ${DOMAIN_CONST} } from "@vxture-platform/shared";\`` +
-            ` 并把它作为参数传进去。`,
+            ` 并把它作为参数传进去；只该看见其中一个词时绑那个词的常量` +
+            `（如 \`[TICKET_EVENT_COMMENT]\`），别就地写字面量。`,
         );
       }
     }
@@ -541,6 +571,22 @@ const SELF_TEST_CASES = [
     red: false,
   },
   {
+    name: "绑值域里更窄的那个词（TICKET_EVENT_COMMENT）⇒ 绿",
+    source:
+      'import { TICKET_EVENT_COMMENT } from "@vxture-platform/shared";\n' +
+      "const SQL = `select c.id from support.ticket_comments c " +
+      "where c.event_type = any($3::text[])`;",
+    red: false,
+  },
+  {
+    name: "绑的是白名单外那个词（TICKET_EVENT_INTERNAL_NOTE）⇒ 红",
+    source:
+      'import { TICKET_EVENT_INTERNAL_NOTE } from "@vxture-platform/shared";\n' +
+      "const SQL = `select c.id from support.ticket_comments c " +
+      "where c.event_type = any($3::text[])`;",
+    red: true,
+  },
+  {
     name: "TS 侧第二份清单 ⇒ 红",
     source:
       'import { CUSTOMER_VISIBLE_TICKET_EVENT_TYPES } from "@vxture-platform/shared";\n' +
@@ -552,7 +598,7 @@ const SELF_TEST_CASES = [
 ];
 
 /** 把判据抽出来跑在一段源码文本上（与真树同一套函数）。 */
-function verdictFor(rawSource, kinds) {
+function verdictFor(rawSource, kinds, narrower = []) {
   const problems = [];
   if (!rawSource.includes(TABLE)) return problems;
   const source = stripComments(rawSource);
@@ -568,7 +614,7 @@ function verdictFor(rawSource, kinds) {
     if (hasHandWrittenList(lit.text, kinds)) problems.push("hand-written-list");
     else if (NEGATIVE_EVENT_TYPE.test(lit.text)) problems.push("blacklist");
     else if (!BOUND_EVENT_TYPE.test(lit.text)) problems.push("no-filter");
-    else if (!importsDomainConst(source)) problems.push("no-import");
+    else if (!importsDomainConst(source, narrower)) problems.push("no-import");
   }
   return problems;
 }
@@ -579,10 +625,11 @@ function selfTest() {
     console.error(`✗ 自检无法进行：${domain.error}`);
     return 1;
   }
+  const narrower = loadNarrowerConsts(domain.kinds);
   let bad = 0;
   console.log("══ 判据自检（check-ticket-comment-visibility --self-test）══");
   for (const c of SELF_TEST_CASES) {
-    const problems = verdictFor(c.source, domain.kinds);
+    const problems = verdictFor(c.source, domain.kinds, narrower);
     const red = problems.length > 0;
     const ok = red === c.red;
     if (!ok) bad += 1;

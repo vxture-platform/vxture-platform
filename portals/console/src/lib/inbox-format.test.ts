@@ -24,6 +24,20 @@ describe("inboxPresentation", () => {
     expect(inboxPresentation("announcement.published").icon).toBe("bell");
   });
 
+  it("工单三条各有自己的图标,且都不是 warning", () => {
+    // 图标按客户的下一步分:读回复 / 核对结果 / 归档。`ticket.replied` 与详情页
+    // 时间线上运营回复那一格用的是同一个图标(headset),两处指同一件事。
+    expect(inboxPresentation("ticket.replied")).toEqual({
+      level: "info",
+      icon: "headset",
+    });
+    expect(inboxPresentation("ticket.resolved").icon).toBe("seal-check");
+    expect(inboxPresentation("ticket.closed").icon).toBe("archive");
+    for (const code of ["ticket.replied", "ticket.resolved", "ticket.closed"]) {
+      expect(inboxPresentation(code).level).toBe("info");
+    }
+  });
+
   it("未知模板键回落到 info + bell,而不是抛", () => {
     expect(inboxPresentation("something.new")).toEqual({
       level: "info",

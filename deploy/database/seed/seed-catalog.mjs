@@ -183,6 +183,23 @@ const TENANT_MENU_TREE = [
       },
     ],
   },
+  // 帮助与支持(owner 2026-09-29:新组,放在「设置与安全」上方)。无 perms——
+  // 工单可见范围是租户级,不挂码(与 tenant.menu.inbox 同形)。
+  // **位置就是 sort**:flattenMenuTree 按兄弟下标算 (i+1)*10,所以插在这里会把
+  // advanced_settings 40→50、platform 50→60,存量库要靠迁移同步改这两行的 sort。
+  {
+    code: "tenant.menu.help_support",
+    name: "帮助与支持",
+    icon: "chat-dots",
+    children: [
+      {
+        code: "tenant.menu.tickets",
+        name: "工单",
+        route: "/tickets",
+        icon: "chat-dots",
+      },
+    ],
+  },
   {
     code: "tenant.menu.advanced_settings",
     name: "高级设置",

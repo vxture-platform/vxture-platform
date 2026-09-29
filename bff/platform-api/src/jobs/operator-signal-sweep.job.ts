@@ -7,7 +7,8 @@
  *
  * 一个作业两段，各扫一类，产出都是 `admin.operator_notices` 的系统来源通告：
  *   ① 业务事件（business-event-signals.ts）——注册 / 建组织 / 提认证 / 下单 / 加油包 /
- *      开票 / 评价 / 核销 / 申请注销 / 关自动续费 / 新工单，共 11 类，每类一条 SQL。
+ *      开票 / 评价 / 核销 / 申请注销 / 关自动续费 / 新工单 / 客户回复工单，共 12 类，
+ *      每类一条 SQL。
  *   ② 运营动作（audit-event-signals.ts）——`support.audit_logs` 里白名单内的动作码。
  *
  * ── 为什么两段合在一个作业里 ──
@@ -36,6 +37,8 @@
  * Postgres 对语句里**出现过**的每个关系查权限，哪一支返不返回行都一样。新加的读面
  * 逐表最小授权（只 SELECT）写在 `deploy/database/ddl/97_service_roles.sql` 末尾
  * + 活库迁移 `2026-11-23-platform-api-signal-sweep-grants.sql`，两处逐字一致。
+ * 2026-09-29 的客户回复那一类新读 `support.ticket_comments`，授权同法
+ * （`2026-11-26-platform-api-ticket-comments-grant.sql`）。
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
@@ -124,9 +127,13 @@ export async function runBusinessEventSweep(
 
   for (const pass of BUSINESS_EVENT_PASSES) {
     try {
+      /* $1/$2 每类都有；$3 起是那一类自己的判据参数（今天只有工单回复用到，
+         绑的是值域里的事件词）。展开而不是各写一条 query，是为了让「这一类多一个
+         参数」不需要动 runner 的控制流。 */
       const result = await pool.query<SignalRow>(pass.sql, [
         opts.lookbackMinutes,
         opts.limit,
+        ...(pass.extraParams ?? []),
       ]);
       scanned += result.rows.length;
       for (const row of result.rows) {
