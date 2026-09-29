@@ -359,6 +359,17 @@ jobs:
       - name: Visible code in CSV exports
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:visible-code
+
+      # 工单流水一张表同时装着「给客户看的正式回复」和「只给我们自己看的内部备注」，
+      # 给谁看只由 event_type 决定。客户面漏掉那道过滤 ⇒ 内部备注渲染在客户页面上，
+      # 而这个漏法不抛异常、不进日志、页面看起来完全正常——没有任何运行时信号，
+      # 只能静态守。判据、以及它看不见什么（DB 视图 / 拼出来的表名 / ORM / 测试文件）
+      # 都写在守卫头注里。--self-test 跑判据自己的八条正反例。
+      - name: Ticket comment visibility (customer-facing reads)
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          pnpm lint:ticket-visibility
+          node scripts/guardrails/check-ticket-comment-visibility.mjs --self-test
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |
