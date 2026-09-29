@@ -69,6 +69,7 @@ import {
   parseTicketCompose,
   type TicketSubject,
 } from "@/lib/ticket-compose";
+import { listEmptyReason } from "@/lib/list-empty-reason";
 import { isOpenTicket } from "@/lib/ticket-state";
 import { TicketComposeDialog } from "./TicketComposeDialog";
 import {
@@ -97,7 +98,7 @@ export function TicketsPage() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [filter, setFilter] = useState<TicketFilter>("unresolved");
+  const [filter, setFilter] = useState<TicketFilter>("all");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(TICKETS_PAGE_SIZE);
@@ -155,7 +156,7 @@ export function TicketsPage() {
   }, [copiedNo]);
 
   const resetFilters = useCallback(() => {
-    setFilter("unresolved");
+    setFilter("all");
     setQuery("");
     setPage(1);
   }, []);
@@ -344,7 +345,20 @@ export function TicketsPage() {
     ];
   }
 
-  const filtered = query.trim().length > 0 || filter !== "unresolved";
+  /* 空态的成因比**全集与可见集**，不比「筛选器是不是默认值」。
+
+     2026-09-29 生产上逃不掉的一幕：旧写法是 `filter !== "unresolved"`，把默认值当成
+     「没筛」，而当时的默认值本身在筛。于是只有一张已解决工单的租户，统计卡写着
+     「待你确认 1」，表格却说「还没有提过工单」，还把动作画成「提交工单」
+     ——一句假话加一颗把他推去开重复单的按钮。
+
+     两处都改了，而且两处各管一半：默认值改成了「全部」（owner 裁定，打开页面
+     看到的就是全部）；而这一行保证**哪怕将来又有人把默认值改成会筛的那一档**，
+     空态也不会再说假话——它压根不认识任何一个具体的筛选值。搜索框也能把列表
+     清空，那一条路径旧写法恰好是对的，现在一并由同一个判据管。
+     判据的定义与测试在 lib/list-empty-reason.ts。 */
+  const filtered =
+    listEmptyReason(tickets.length, visible.length) === "filtered";
 
   return (
     <ViewLayout>
@@ -416,6 +430,10 @@ export function TicketsPage() {
               }}
               aria-label={t("filters.statusAriaLabel")}
             >
+              {/* owner 2026-09-29：**全部排第一、且是默认值**。
+                  一个会筛掉东西的默认值，意味着客户打开页面看到的不是他的全部工单，
+                  而这件事屏幕上没有任何提示。默认不筛，要看少一点的人自己选。 */}
+              <option value="all">{t("filters.statusAll")}</option>
               <option value="unresolved">
                 {t("filters.statusUnresolved")}
               </option>
@@ -425,7 +443,6 @@ export function TicketsPage() {
                   {statusLabel(status)}
                 </option>
               ))}
-              <option value="all">{t("filters.statusAll")}</option>
             </NativeSelect>
           </FilterBar>
 
