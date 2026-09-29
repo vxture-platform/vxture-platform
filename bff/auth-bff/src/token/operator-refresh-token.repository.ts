@@ -78,13 +78,26 @@ export class OperatorRefreshTokenRepository implements RefreshStore {
     return (r.rowCount ?? 0) > 0;
   }
 
-  /** Revoke every still-live token for a session (replay response / logout). */
-  async revokeSession(sessionId: string): Promise<void> {
+  /** Revoke every still-live token for a session, or just one client's family. */
+  async revokeSession(sessionId: string, clientId?: string): Promise<void> {
     await this.pool.query(
       `update admin.operator_refresh_token set status = 'revoked'
-        where session_id = $1 and status in ('active', 'rotated')`,
-      [sessionId],
+        where session_id = $1
+          and status in ('active', 'rotated')
+          and ($2::text is null or client_id = $2)`,
+      [sessionId, clientId ?? null],
     );
+  }
+
+  /** 轮换链上仍然 active 的直接后继的签发时刻（宽限窗口的判据）。 */
+  async findActiveChildIssuedAt(id: string): Promise<Date | null> {
+    const r = await this.pool.query<{ created_at: Date }>(
+      `select created_at from admin.operator_refresh_token
+        where rotated_from = $1 and status = 'active'
+        order by created_at desc limit 1`,
+      [id],
+    );
+    return r.rows[0]?.created_at ?? null;
   }
 
   /**
