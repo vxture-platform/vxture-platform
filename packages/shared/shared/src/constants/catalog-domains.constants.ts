@@ -246,6 +246,57 @@ export const TICKET_STATUSES = [
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
 /**
+ * `support.ticket_comments.event_type` 里**客户看得见**的那几种。
+ *
+ * ── 这一份是唯一权威 ──
+ * 一条工单流水给谁看，**只由它的 event_type 决定**，没有第二个判据：没有
+ * 「是否内部」布尔列，payload 里没有标记，也不靠「谁写的」去推断（同一个运营
+ * 既写内部备注也写正式回复，作者分不出这两件事）。
+ *
+ * 判据只有一处，是因为漏一处的代价是**内部话直接印给客户看**，而这种漏法
+ * 不报错、不抛异常、页面看起来完全正常——没有任何症状会把它暴露出来。
+ * 所以客户面的每一条读取都必须 import 这一份，
+ * 由 `lint:ticket-visibility`（scripts/guardrails/check-ticket-comment-visibility.mjs）
+ * 机械盯着：客户面读 `support.ticket_comments` 而不带这道过滤就报红。
+ *
+ * ── 这是**白名单**，不是黑名单 ──
+ * 不在这张表里的一律看不见。`event_type` 是开放集（varchar(64)，无 CHECK，
+ * 见 72_support.sql），将来必然会冒出新的词——新词默认**不可见**，要让客户
+ * 看见得有人明确把它加进来。反过来写成「排除内部那几种」的话，新词默认可见,
+ * 而默认可见的错误方向正是会泄露的那个方向。
+ *
+ * ── 三个值各自为什么在这里 ──
+ *   · `comment`        客户自己发的言。他自己说的话当然给他看。
+ *   · `reply`          运营写给客户读的正式回复（见 TICKET_EVENT_REPLY）。
+ *   · `status_changed` 处理进度（owner 裁决：正式回复与处理流程客户看得见）。
+ *
+ * 刻意**不在**这里的：
+ *   · `internal_note`  运营的内部备注，客户永远看不见（这是本值域存在的理由）。
+ *   · `assigned`       指派事件带着坐席姓名与内部分工，那是我们的排班不是他的事。
+ *   · `created`        建单这件事由工单自己的 created_at 回答一次就够；
+ *                      运营代客建单时它还带着 source/reporter 这类内部口径。
+ */
+export const CUSTOMER_VISIBLE_TICKET_EVENT_TYPES = [
+  "comment",
+  "reply",
+  "status_changed",
+] as const;
+export type CustomerVisibleTicketEventType =
+  (typeof CUSTOMER_VISIBLE_TICKET_EVENT_TYPES)[number];
+
+/**
+ * 运营写入的两种流水，**词本身就是判据**，所以定义在值域这一侧而不是路由里。
+ *
+ * 分成两个词（而不是一个词加一个 `internal: boolean`）是因为布尔标记会被漏设、
+ * 会被默认成错的那一档，而且从库里看不出一行到底给谁看。词分开之后，
+ * 「这行给谁看」在写进去的那一刻就定了，之后任何读者都问同一个问题。
+ *
+ * `internal_note` 不在 CUSTOMER_VISIBLE_TICKET_EVENT_TYPES 里，`reply` 在。
+ */
+export const TICKET_EVENT_INTERNAL_NOTE = "internal_note";
+export const TICKET_EVENT_REPLY = "reply";
+
+/**
  * support.tickets.priority — how far up the queue a ticket jumps.
  *
  * p0 is the only one that means "now"; p1..p3 are ordinary backlog ordering.

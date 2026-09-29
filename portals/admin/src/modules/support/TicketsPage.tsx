@@ -5,20 +5,25 @@ import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
+  ActionButton,
   ActionMenu,
   Badge,
+  Banner,
   Button,
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldError,
+  FieldLabel,
   FilterBar,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
+  useToast,
 } from "@vxture/design-system";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
 import { changeTicketStatus, fetchSupportTicketsStrict } from "@/api/admin-bff";
@@ -27,7 +32,7 @@ import type {
   SupportTicketRecord,
   TenantOperationTicket,
 } from "@/entities/console";
-import { TICKET_STATUSES } from "@vxture-platform/shared";
+import { TICKET_PRIORITIES, TICKET_STATUSES } from "@vxture-platform/shared";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import {
   TICKET_PRIORITY_TONE,
@@ -37,6 +42,7 @@ import {
   useTicketPriorityLabels,
   useTicketStatusLabels,
 } from "@/modules/shared/enum-labels";
+import { TicketCreateDialog } from "@/modules/support/TicketCreateDialog";
 import {
   formatNumber,
   ticketStatusLabel,
@@ -44,6 +50,17 @@ import {
 } from "@/modules/tenants/tenant-utils";
 import { formatDateTime } from "@vxture-platform/shared";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
+
+/**
+ * 批量可设的状态 = 值域**减去** `closed`。
+ *
+ * 关闭对客户是终局（他在这张单上不再等回复），所以它在详情页有自己的动作、
+ * 自带确认框。那道确认只长在详情页那一颗按钮上，而这个下拉如果还留着「已关闭」，
+ * 就是同一个后果的第二扇门——而且是能一次关掉几十张、还不问一句的那扇。
+ * 「还有哪条路到同一后果」是这里该问的问题，不是「这条挡住了吗」。
+ */
+const BATCH_STATUS_CHOICES: readonly TicketStatusInput[] =
+  TICKET_STATUSES.filter((value) => value !== "closed");
 
 type TicketStatusFilter = "all" | TenantOperationTicket["status"];
 type TicketPriorityFilter = "all" | TenantOperationTicket["priority"];
@@ -112,6 +129,72 @@ function TicketActionsMenu({ ticket }: { ticket: SupportTicketRecord }) {
 /** 工单号只在租户内唯一，行 key 必须带上租户。 */
 function ticketKey(ticket: SupportTicketRecord) {
   return `${ticket.tenantId}-${ticket.id}`;
+}
+
+/**
+ * 这一行要不要出现在列表里。**判据只有这一处。**
+ *
+ * 它有两个读者：`visibleTickets`（这一屏渲染谁）和建完单之后那一下（新单会不会
+ * 被当前筛选挡住）。抄成两份，两边迟早给出不同答案，而不一样的那天没有症状——
+ * 屏幕上没有那一行、也没有任何一句话说它被挡住了，运营只会以为建单没成。
+ */
+function matchesTicketFilters(
+  ticket: SupportTicketRecord,
+  filters: {
+    query: string;
+    status: TicketStatusFilter;
+    priority: TicketPriorityFilter;
+  },
+): boolean {
+  const normalizedQuery = filters.query.trim().toLowerCase();
+  return (
+    (!normalizedQuery || ticketSearchText(ticket).includes(normalizedQuery)) &&
+    (filters.status === "all" || ticket.status === filters.status) &&
+    (filters.priority === "all" || ticket.priority === filters.priority)
+  );
+}
+
+/**
+ * 列表的顺序是**服务端定的**：先按优先级，同一档里按更新时间倒序
+ * （admin-bff `SUPPORT_TICKET_SQL` 末尾那个 `order by`）。这里复刻同一把钥匙，
+ * 只为一件事——把本地新建的那一行插到它该在的位置。
+ *
+ * 档位取 `TICKET_PRIORITIES` 的下标而不是另写一张「p0→0」的表：那份值域的顺序
+ * （p0…p3）就是 SQL 里 `case` 的顺序，而投影已经把库里的历史写法
+ * （urgent/high/low…）归一到这四个值（admin-bff `normalizeTicketPriority`），
+ * 所以两边比的是同一件事。手抄一张表就是第二份顺序定义，改一处漏一处。
+ *
+ * 时间比字符串而不是 `Date.parse`：两侧的 `updatedAt` 都由 BFF 的 `toIso()` 产出，
+ * 是同一种 `…Z` 形状的 ISO 串，字典序即时序，也就没有 NaN 那一档要兜。
+ */
+function compareTicketOrder(
+  a: SupportTicketRecord,
+  b: SupportTicketRecord,
+): number {
+  const byPriority =
+    TICKET_PRIORITIES.indexOf(a.priority) -
+    TICKET_PRIORITIES.indexOf(b.priority);
+  if (byPriority !== 0) return byPriority;
+  if (a.updatedAt === b.updatedAt) return 0;
+  return a.updatedAt > b.updatedAt ? -1 : 1;
+}
+
+/**
+ * 把新建的那一行放到上面这把钥匙说的位置上。
+ *
+ * 只动新来的这一行：已有的行保持服务端给的次序原样不动（重排整个列表会在运营
+ * 眼皮底下把行挪位，而那些行的顺序本来就是对的）。
+ */
+function insertTicketInOrder(
+  list: readonly SupportTicketRecord[],
+  created: SupportTicketRecord,
+): SupportTicketRecord[] {
+  const at = list.findIndex(
+    (ticket) => compareTicketOrder(created, ticket) < 0,
+  );
+  return at < 0
+    ? [...list, created]
+    : [...list.slice(0, at), created, ...list.slice(at)];
 }
 
 /**
@@ -210,7 +293,9 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
 
 export function TicketsPage() {
   const tShared = useTranslations();
+  const tPage = useTranslations("ticketsPage");
   const tableLabels = useTableLabels();
+  const { toast } = useToast();
   const ticketStatusInputLabels = useTicketStatusLabels();
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -226,6 +311,7 @@ export function TicketsPage() {
     useState<TicketStatusInput>("in_progress");
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,19 +344,34 @@ export function TicketsPage() {
     };
   }, []);
 
-  const visibleTickets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  const visibleTickets = useMemo(
+    () =>
+      tickets.filter((ticket) =>
+        matchesTicketFilters(ticket, { query, status, priority }),
+      ),
+    [priority, query, status, tickets],
+  );
 
-    return tickets.filter((ticket) => {
-      const matchesQuery =
-        !normalizedQuery || ticketSearchText(ticket).includes(normalizedQuery);
-      return (
-        matchesQuery &&
-        (status === "all" || ticket.status === status) &&
-        (priority === "all" || ticket.priority === priority)
-      );
-    });
-  }, [priority, query, status, tickets]);
+  /**
+   * 刚建好、但被当前筛选挡在列表外的那一张。
+   *
+   * **不替运营把筛选清掉**：筛选是他自己设的视图，替他改掉是又一个没人请求的
+   * 静默动作。这里改成把缺席说出来，并把「清空筛选」作为一颗真按钮递过去——
+   * 决定权留在他手上，而屏幕不再对这张单沉默。
+   */
+  const [createdHiddenTicket, setCreatedHiddenTicket] =
+    useState<SupportTicketRecord | null>(null);
+
+  /* 它是不是**此刻**仍然不在屏幕上——参照物由看得见的那一方给（`visibleTickets`）。
+     于是运营一改筛选、这一行露出来，提示自己就没了，不用另写一处清理；他按了
+     「知道了」也是一样的结果。 */
+  const createdHidden =
+    createdHiddenTicket &&
+    !visibleTickets.some(
+      (ticket) => ticketKey(ticket) === ticketKey(createdHiddenTicket),
+    )
+      ? createdHiddenTicket
+      : null;
 
   const openTickets = tickets.filter((ticket) => ticket.status !== "closed");
   const urgentTickets = tickets.filter(
@@ -323,7 +424,7 @@ export function TicketsPage() {
 
     setBatchSubmitting(false);
     if (failed > 0) {
-      setBatchError(`${failed} 个工单更新失败`);
+      setBatchError(tPage("batchStatus.failed", { count: failed }));
     } else {
       setBatchStatusOpen(false);
       setSelectedTicketIds(new Set());
@@ -340,7 +441,8 @@ export function TicketsPage() {
             eyebrow="客户服务"
             title="工单中心"
             description="聚合租户侧待处理工单，按优先级、阻塞状态和更新时间推进支持闭环。"
-            secondary={<Badge>只读聚合</Badge>}
+            /* 原先这里挂着一枚「只读聚合」。这一页现在能建单、能改状态——那枚标
+               从批量改状态上线那天起就不准了，加上建单入口之后是直接反的。 */
           />
         }
         summary={
@@ -407,6 +509,13 @@ export function TicketsPage() {
               />
             }
             onReset={resetFilters}
+            /* 建单入口跟公告页同一处、同一件（`FilterBar` 的 actions 槽 +
+               `ActionButton icon="plus"`）——列表页的「新建」在这个门户只有一个位置。 */
+            actions={
+              <ActionButton icon="plus" onClick={() => setCreateOpen(true)}>
+                {tPage("create.action")}
+              </ActionButton>
+            }
           >
             {/* 裸 <label aria-label> 去掉：aria-label 挂在 label 上不会标注里面的
                 select，无障碍上是空的。NativeSelect 自己收 aria-label 才有效。 */}
@@ -479,6 +588,22 @@ export function TicketsPage() {
                 </Button>
               </div>
             ) : null}
+            {createdHidden ? (
+              <Banner
+                tone="info"
+                title={tPage("createdHidden.title")}
+                description={tPage("createdHidden.description", {
+                  title: createdHidden.title,
+                })}
+                action={
+                  <Button variant="outline" onClick={resetFilters}>
+                    {tShared("common.clearFilters")}
+                  </Button>
+                }
+                onDismiss={() => setCreatedHiddenTicket(null)}
+                dismissLabel={tPage("createdHidden.dismiss")}
+              />
+            ) : null}
             {/* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */}
             {loadError ? (
               <EmptyState title="工单数据读取失败" description={loadError} />
@@ -496,15 +621,34 @@ export function TicketsPage() {
                 }
                 rowActions={(ticket) => <TicketActionsMenu ticket={ticket} />}
                 empty={
-                  <EmptyState
-                    title="没有匹配的工单"
-                    description="调整筛选条件，或重置后查看全部工单。"
-                    action={
-                      <Button variant="outline" onClick={resetFilters}>
-                        重置
-                      </Button>
-                    }
-                  />
+                  /* 「一条都没有」与「筛掉了」是两件事：库里空着的时候让人去重置
+                     筛选，他会把筛选翻来覆去试一遍，而结果不会变。 */
+                  tickets.length === 0 ? (
+                    <EmptyState
+                      icon="ticket"
+                      title={tPage("empty.title")}
+                      description={tPage("empty.description")}
+                      action={
+                        <ActionButton
+                          icon="plus"
+                          variant="outline"
+                          onClick={() => setCreateOpen(true)}
+                        >
+                          {tPage("create.action")}
+                        </ActionButton>
+                      }
+                    />
+                  ) : (
+                    <EmptyState
+                      title="没有匹配的工单"
+                      description="调整筛选条件，或重置后查看全部工单。"
+                      action={
+                        <Button variant="outline" onClick={resetFilters}>
+                          重置
+                        </Button>
+                      }
+                    />
+                  )
                 }
               />
             )}
@@ -516,9 +660,11 @@ export function TicketsPage() {
         <DialogForm
           open
           size="sm"
-          title="批量变更工单状态"
-          description={`将对已选 ${formatNumber(selectedTickets.length)} 条工单应用新状态。`}
-          submitLabel="确认变更"
+          title={tPage("batchStatus.title")}
+          description={tPage("batchStatus.description", {
+            count: formatNumber(selectedTickets.length),
+          })}
+          submitLabel={tPage("batchStatus.submit")}
           cancelLabel={tShared("actions.cancel")}
           submitting={batchSubmitting}
           submitDisabled={selectedTickets.length === 0}
@@ -530,24 +676,53 @@ export function TicketsPage() {
             void handleBatchStatus();
           }}
         >
-          <Label htmlFor="vx-ticket-batch-status">目标状态</Label>
-          <NativeSelect
-            id="vx-ticket-batch-status"
-            value={batchStatusValue}
-            onChange={(event) =>
-              setBatchStatusValue(event.target.value as TicketStatusInput)
-            }
-          >
-            {TICKET_STATUSES.map((value) => (
-              <option key={value} value={value}>
-                {ticketStatusInputLabels[value]}
-              </option>
-            ))}
-          </NativeSelect>
-          {batchError ? (
-            <p className="text-sm text-vx-danger">{batchError}</p>
-          ) : null}
+          <Field>
+            <FieldLabel
+              htmlFor="vx-ticket-batch-status"
+              required
+              requiredLabel={tPage("create.required")}
+              hint={tPage("batchStatus.closeHint")}
+              hintLabel={tPage("create.hintLabel")}
+            >
+              {tPage("batchStatus.statusLabel")}
+            </FieldLabel>
+            <NativeSelect
+              id="vx-ticket-batch-status"
+              value={batchStatusValue}
+              onChange={(event) =>
+                setBatchStatusValue(event.target.value as TicketStatusInput)
+              }
+            >
+              {BATCH_STATUS_CHOICES.map((value) => (
+                <option key={value} value={value}>
+                  {ticketStatusInputLabels[value]}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <FieldError>{batchError}</FieldError>
         </DialogForm>
+      ) : null}
+
+      {createOpen ? (
+        <TicketCreateDialog
+          onClose={() => setCreateOpen(false)}
+          onCreated={(created) => {
+            /* 插到它那一档的最前面，**不是整个列表的最前面**。列表的次序是服务端
+               给的（优先级，再更新时间倒序），而这一页自己就是这么说的；原先一律
+               unshift，于是一张 P3 新单会坐在 P0 之上，屏幕上分不出这是插错了还是
+               队列真的变了，要等下一次整页重拉才复位。
+               仍然不重新拉一遍：重拉会把人刚设的筛选结果整片换掉。 */
+            setTickets((current) => insertTicketInOrder(current, created));
+            /* 建好了却被当前筛选挡住时，列表上不会出现它——那一幕和「建单失败」
+               在屏幕上长得一模一样。记下这一张，让下面那条提示把缺席说出来。 */
+            if (!matchesTicketFilters(created, { query, status, priority })) {
+              setCreatedHiddenTicket(created);
+            }
+            setCreateOpen(false);
+            toast({ tone: "success", title: tPage("create.success") });
+          }}
+        />
       ) : null}
     </>
   );

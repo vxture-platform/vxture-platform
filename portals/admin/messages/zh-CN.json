@@ -2968,15 +2968,122 @@
       "submit": "确认收款"
     }
   },
+  "ticketAudience": {
+    "customerVisible": "客户可见",
+    "internalOnly": "客户看不到"
+  },
   "ticketDetail": {
     "eventType": {
-      "comment": "回复",
+      "comment": "客户留言",
       "assign": "指派",
       "statusChange": "状态变更",
       "created": "创建",
       "resolved": "已解决",
       "closed": "已关闭",
-      "reopened": "重新打开"
+      "reopened": "重新打开",
+      "internalNote": "内部备注",
+      "reply": "回复客户"
+    },
+    "form": {
+      "required": "必填",
+      "hintLabel": "说明"
+    },
+    "timeline": {
+      "title": "处理时间线",
+      "description": "每一条都标着客户看不看得到它。",
+      "emptyTitle": "暂无时间线记录",
+      "emptyDescription": "这张工单还没有回复、备注、指派或状态变更。"
+    },
+    "reply": {
+      "title": "回复客户",
+      "description": "这一段是写给客户读的：他会在自己的工单上看到全文。发出去就改不了、也撤不回。",
+      "label": "回复内容",
+      "placeholder": "直接写给客户看的话…",
+      "submit": "发送给客户",
+      "pending": "发送中…",
+      "success": "已发送给客户",
+      "failed": "发送失败"
+    },
+    "note": {
+      "title": "内部备注",
+      "description": "只有运营看得到：客户在这张工单上看不到内部备注，也不会收到它。",
+      "label": "备注内容",
+      "placeholder": "沟通下来的结论、你对这件事的判断、要交接给下一班的事…",
+      "submit": "存为内部备注",
+      "pending": "保存中…",
+      "success": "已存为内部备注，客户看不到",
+      "failed": "保存失败"
+    },
+    "close": {
+      "action": "关闭工单",
+      "title": "关闭工单",
+      "description": "工单：<b>{title}</b>",
+      "consequence": "关闭是在说这次支持到此为止。客户在自己的工单上看得到这一步，看到之后他就不再等你的回复了。要继续跟，得把这张单重新打开，或者另开一张。",
+      "reasonLabel": "关闭说明",
+      "reasonHint": "客户会读到这句话：它出现在他自己的工单上，是他看到的结案理由。内部的原因别写在这里，写成内部备注。",
+      "reasonPlaceholder": "例如 已按与您确认的方案处理完毕；后续如再遇到同样情况，回复本单即可…",
+      "submit": "关闭工单",
+      "success": "工单已关闭",
+      "alreadyFinal": "这张工单已经是终态（已关闭，或已撤销），不用再关一次。刷新页面看它现在的状态。",
+      "failed": "关闭失败"
+    },
+    "statusDialog": {
+      "title": "变更工单状态",
+      "description": "工单：<b>{title}</b>",
+      "submit": "确认变更",
+      "statusLabel": "目标状态",
+      "noteLabel": "变更说明",
+      "noteHint": "客户会读到这句话：它出现在他自己的工单上，是他看到的这一步进度说明。内部的判断别写在这里，写成内部备注。",
+      "notePlaceholder": "例如 已经定位到原因，正在修，好了会在这张单上回复你…",
+      "closeHint": "这个清单里没有「已关闭」。关闭要用页头那颗「关闭工单」——那一步会先说清关闭对客户意味着什么。",
+      "failed": "状态变更失败，请重试"
+    }
+  },
+  "ticketsPage": {
+    "create": {
+      "action": "新建工单",
+      "title": "新建工单",
+      "description": "替客户登记一张工单。客户从电话、邮件或群里反馈过来的问题，由你记进来。",
+      "submit": "创建工单",
+      "required": "必填",
+      "hintLabel": "说明",
+      "tenantLabel": "客户租户",
+      "tenantHint": "按租户号或名称搜。工单归整个租户，租户里的成员都看得见，不只归反馈的那一个人。",
+      "tenantPlaceholder": "选择客户租户",
+      "tenantSearchPlaceholder": "搜租户号或名称…",
+      "tenantEmpty": "没有匹配的租户",
+      "tenantsFailed": "租户清单读不回来",
+      "tenantsFailedDetail": "没有租户清单就选不了客户，这张单先建不了。刷新页面重试；一直读不回来就找平台值班。",
+      "titleLabel": "工单标题",
+      "titleHint": "一句话说清客户遇到了什么。客户在自己的工单上会看到这个标题。",
+      "titlePlaceholder": "如 导出报表一直卡在生成中",
+      "priorityLabel": "优先级",
+      "priorityHint": "P0 是客户的活已经干不下去、要马上有人接的。拿不准就留 P2。",
+      "reporterLabel": "报单人",
+      "reporterHint": "反馈这件事的人叫什么，留空也行——工单归整个租户，本来就不一定指名到某个人。",
+      "reporterPlaceholder": "如 张工（留空表示不指名到人）",
+      "descriptionLabel": "客户反馈的情况",
+      "descriptionHint": "照客户的原话写。客户在自己的工单上会读到这一段，所以你自己的判断别写在这里——建完单在详情页写成内部备注。",
+      "descriptionPlaceholder": "客户说了什么、他试过什么、他期望的是什么…",
+      "success": "工单已创建",
+      "failed": "建单失败"
+    },
+    "createdHidden": {
+      "title": "新建的这张工单不在当前筛选结果里",
+      "description": "「{title}」已经建好了，但它不符合当前的搜索或筛选条件，所以没出现在下面的列表里。清空筛选就能看到它。",
+      "dismiss": "知道了"
+    },
+    "batchStatus": {
+      "title": "批量变更工单状态",
+      "description": "将对已选 {count} 条工单应用新状态。",
+      "submit": "确认变更",
+      "statusLabel": "目标状态",
+      "closeHint": "这个清单里没有「已关闭」。关闭要在工单详情页用那颗「关闭工单」——那一步会先说清关闭对客户意味着什么，这里一次几十张地关不合适。",
+      "failed": "{count} 个工单更新失败"
+    },
+    "empty": {
+      "title": "还没有工单",
+      "description": "客户从电话、邮件或群里反馈问题时，在这里替他建一张单，之后的回复和处理都留在那张单上。"
     }
   },
   "opsTodosPage": {

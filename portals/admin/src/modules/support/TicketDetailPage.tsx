@@ -26,12 +26,16 @@ import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
+  Banner,
   Button,
   DetailList,
   DetailPageTemplate,
   DetailRow,
   DialogForm,
   EmptyState,
+  Field,
+  FieldError,
+  FieldLabel,
   Icon,
   Input,
   Label,
@@ -42,12 +46,15 @@ import {
   StatusBadge,
   TableTitleCell,
   Textarea,
+  useToast,
 } from "@vxture/design-system";
 import {
   AdminBffError,
-  addTicketComment,
+  addTicketInternalNote,
+  addTicketReply,
   assignTicket,
   changeTicketStatus,
+  closeTicket,
   fetchTicket,
   fetchTicketComments,
 } from "@/api/admin-bff";
@@ -56,7 +63,12 @@ import type {
   SupportTicketRecord,
   TicketCommentRecord,
 } from "@/entities/console";
-import { TICKET_STATUSES } from "@vxture-platform/shared";
+import {
+  CUSTOMER_VISIBLE_TICKET_EVENT_TYPES,
+  TICKET_EVENT_INTERNAL_NOTE,
+  TICKET_EVENT_REPLY,
+  TICKET_STATUSES,
+} from "@vxture-platform/shared";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
@@ -71,6 +83,30 @@ import {
 import { ticketStatusLabel, typeLabel } from "@/modules/tenants/tenant-utils";
 import { formatDateTime } from "@vxture-platform/shared";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
+
+/** 留言上限与写路径同口径（BFF 的 requireTicketText）。 */
+const MESSAGE_MAX = 10000;
+/** 关闭说明上限，同 BFF 的 `reason exceeds 1000 characters`。 */
+const CLOSE_REASON_MAX = 1000;
+
+/**
+ * 这一条客户看得见吗。
+ *
+ * **判据只有一份**，在 `@vxture-platform/shared` 的
+ * `CUSTOMER_VISIBLE_TICKET_EVENT_TYPES`——客户面的读取按它过滤，运营面这块徽标
+ * 按同一份显示。所以屏幕上写的「客户可见」与客户实际读到的，是同一个集合算出来
+ * 的同一个答案；这里不另抄一张表，抄了就会有一天两边不一样，而不一样的那天
+ * 没有任何症状：运营看到「客户看不到」，客户那边照样读到了。
+ *
+ * 那份值域是**白名单**：没登记的 `event_type` 一律算看不见（`event_type` 是开放集，
+ * 将来必然冒出新词）。于是新词在这块徽标上显示成「客户看不到」，而客户面的过滤
+ * 也确实把它滤掉了——两边仍然一致。
+ */
+function isCustomerVisibleEvent(eventType: string): boolean {
+  return (CUSTOMER_VISIBLE_TICKET_EVENT_TYPES as readonly string[]).includes(
+    eventType,
+  );
+}
 
 /**
  * 时间线事件类型 → 界面文案。
@@ -105,10 +141,17 @@ function useTicketEventTypeLabel(): (eventType: string) => string {
   const t = useTranslations("ticketDetail.eventType");
   return (eventType) => {
     switch (eventType) {
-      // 回复：router 写 comment，service 写 replied。
+      /* `comment` 归**客户自己发的言**（运营写的正式回复现在是 `reply`）。
+         这个词此前标成「回复」，那是运营也写 comment 的时代留下的——两种人写进
+         同一个词里，时间线上就分不出这句话是谁说的。 */
       case "comment":
-      case "replied":
         return t("comment");
+      case TICKET_EVENT_REPLY:
+      // `replied` 是 @vxture/service-ticket（未加载那份）的写法，留着当别名。
+      case "replied":
+        return t("reply");
+      case TICKET_EVENT_INTERNAL_NOTE:
+        return t("internalNote");
       case "assigned":
       // 以下三行是旧码别名，见头注。
       case "assign":
@@ -152,6 +195,279 @@ function ticketEventBodyText(
     return `指派给 ${payload.assigneeName}`;
   }
   return null;
+}
+
+/**
+ * ── 为什么是两个组件、两个板块，而不是一个输入框加一个「仅内部」勾选框 ──
+ *
+ * 勾选框是这件事最容易设错的形状：它平时不显眼、默认值是个静默的决定、而且**写
+ * 完之后从屏幕上看不出当时勾没勾**。设错的代价不对称——把内部判断当成回复发给
+ * 客户，是不可撤回的（`support.ticket_comments` 由 BEFORE UPDATE 触发器封成
+ * 仅追加，改不了也删不掉）。
+ *
+ * 所以两件事在屏幕上从头到尾都是分开的：各有自己的板块、图标、可见性徽标、
+ * 输入框、占位提示、按钮文字、按钮样式（回复是主按钮，备注是 outline）和
+ * 提交后的提示语。**没有任何一个控件同时属于两者**，所以也没有「设错的那一个
+ * 控件」。要发错，得在写完之后按下另一个板块里那颗字面写着别的事的按钮。
+ *
+ * 代码里也不合并：两个函数各自 import 自己那一个写入端点，
+ * `grep addTicketReply` / `grep addTicketInternalNote` 各只有一处落点。
+ * 合并成一个 `audience` 参数省下的是几十行 JSX，换来的是「读代码的人要先追一个
+ * 参数才知道这颗按钮发给谁」——这一处不值得换。
+ */
+function CustomerReplyComposer({
+  ticketId,
+  onPosted,
+}: {
+  ticketId: string;
+  onPosted: () => void;
+}) {
+  const t = useTranslations("ticketDetail.reply");
+  const tAudience = useTranslations("ticketAudience");
+  const { toast } = useToast();
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = body.trim();
+    if (!text) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await addTicketReply(ticketId, text);
+      setBody("");
+      /* 提交后立刻说清刚才那一下发给了谁。追加不可撤回，所以这句提示是运营
+         唯一一次「诶不对」的机会，必须当场出现、且带上读者。 */
+      toast({ tone: "success", title: t("success") });
+      onPosted();
+    } catch (err) {
+      setError(err instanceof AdminBffError ? err.message : t("failed"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
+      <DetailSectionHeading
+        icon="paperplane-tilt"
+        title={t("title")}
+        titleSuffix={
+          <StatusBadge tone="info" icon="eye">
+            {tAudience("customerVisible")}
+          </StatusBadge>
+        }
+        description={t("description")}
+      />
+      <form className="grid gap-sm" onSubmit={handleSubmit}>
+        <Field>
+          <FieldLabel htmlFor="vx-ticket-reply">{t("label")}</FieldLabel>
+          <Textarea
+            id="vx-ticket-reply"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            rows={3}
+            maxLength={MESSAGE_MAX}
+            placeholder={t("placeholder")}
+          />
+        </Field>
+        <FieldError>{error}</FieldError>
+        <div>
+          <Button
+            type="submit"
+            disabled={submitting || body.trim().length === 0}
+          >
+            <Icon name="paperplane-tilt" size="xs" fallback="placeholder" />
+            {submitting ? t("pending") : t("submit")}
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function InternalNoteComposer({
+  ticketId,
+  onPosted,
+}: {
+  ticketId: string;
+  onPosted: () => void;
+}) {
+  const t = useTranslations("ticketDetail.note");
+  const tAudience = useTranslations("ticketAudience");
+  const { toast } = useToast();
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = body.trim();
+    if (!text) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await addTicketInternalNote(ticketId, text);
+      setBody("");
+      toast({ tone: "success", title: t("success") });
+      onPosted();
+    } catch (err) {
+      setError(err instanceof AdminBffError ? err.message : t("failed"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
+      <DetailSectionHeading
+        icon="eye-slash"
+        title={t("title")}
+        titleSuffix={
+          <StatusBadge tone="warning" icon="eye-slash">
+            {tAudience("internalOnly")}
+          </StatusBadge>
+        }
+        description={t("description")}
+      />
+      <form className="grid gap-sm" onSubmit={handleSubmit}>
+        <Field>
+          <FieldLabel htmlFor="vx-ticket-internal-note">
+            {t("label")}
+          </FieldLabel>
+          <Textarea
+            id="vx-ticket-internal-note"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            rows={3}
+            maxLength={MESSAGE_MAX}
+            placeholder={t("placeholder")}
+          />
+        </Field>
+        <FieldError>{error}</FieldError>
+        <div>
+          {/* outline 而不是主按钮：一张工单上主动作是回复客户，备注是旁注。
+              两颗按钮长得不一样，也是「这两颗不是一颗」的一半。 */}
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={submitting || body.trim().length === 0}
+          >
+            <Icon name="lock" size="xs" fallback="placeholder" />
+            {submitting ? t("pending") : t("submit")}
+          </Button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+/**
+ * 关闭工单。
+ *
+ * ── 为什么这里不是 `DestructiveButton` + 一句后果 ──
+ * 本门户终局动作的默认形状是那一件（按钮 + `ConfirmDestructive`），但它收不了
+ * 输入，而**关闭必须带一句说明**（BFF 缺 `reason` 直接 400）。于是用的是本门户
+ * 另一条同样成文的形状：**带必填理由的终局对话框**——订单页驳回申报、作废订单
+ * 走的就是这一条，那两处也是「不可逆 + 必须写清为什么」。对话框自己的提交键就是
+ * 那道确认，而且它比一句 yes/no 更严：不写理由按不下去。
+ *
+ * ── 那句说明**客户会读到** ──
+ * BFF 把 `reason` 写进 `status_changed` 的 payload.note，而 `status_changed` 在
+ * 客户可见白名单里。所以这个输入框和「回复客户」那个框顶着同一枚徽标——它确实
+ * 是同一件事：写下去客户就看得到。运营最容易在这里把内部原因（「这客户老是反复
+ * 提同一件事」）当成结案备注写进去。
+ */
+function TicketCloseDialog({
+  ticket,
+  onClose,
+  onClosed,
+}: {
+  ticket: SupportTicketRecord;
+  onClose: () => void;
+  onClosed: (updated: SupportTicketRecord) => void;
+}) {
+  const t = useTranslations("ticketDetail.close");
+  const tAudience = useTranslations("ticketAudience");
+  const tForm = useTranslations("ticketDetail.form");
+  const tShared = useTranslations();
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = reason.trim().length > 0;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      onClosed(await closeTicket(ticket.id, reason.trim()));
+    } catch (err) {
+      /* 409 是运营真会撞到的那一档（单子已经被别人关了，或者是撤销掉的），
+         那一句得是中文的人话，不是 BFF 的英文短句。其余照原样回显——上游说得
+         比我猜得准。 */
+      setError(
+        err instanceof AdminBffError
+          ? err.status === 409
+            ? t("alreadyFinal")
+            : err.message
+          : t("failed"),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <DialogForm
+      open
+      size="lg"
+      title={t("title")}
+      description={t.rich("description", {
+        title: ticket.title,
+        b: (chunks) => <strong>{chunks}</strong>,
+      })}
+      submitLabel={t("submit")}
+      cancelLabel={tShared("actions.cancel")}
+      submitting={submitting}
+      submitDisabled={!canSubmit}
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+      onSubmit={handleSubmit}
+    >
+      {/* 后果写在最上面，不挂在字段旁边：它要在人动手之前就被读到。 */}
+      <Banner tone="warning" title={t("consequence")} />
+      <Field>
+        <FieldLabel
+          htmlFor="vx-ticket-close-reason"
+          required
+          requiredLabel={tForm("required")}
+          hint={t("reasonHint")}
+          hintLabel={tForm("hintLabel")}
+        >
+          {t("reasonLabel")}{" "}
+          <StatusBadge tone="info" icon="eye">
+            {tAudience("customerVisible")}
+          </StatusBadge>
+        </FieldLabel>
+        <Textarea
+          id="vx-ticket-close-reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          rows={3}
+          maxLength={CLOSE_REASON_MAX}
+          placeholder={t("reasonPlaceholder")}
+          autoFocus
+        />
+      </Field>
+      <FieldError>{error}</FieldError>
+    </DialogForm>
+  );
 }
 
 function TicketAssignDialog({
@@ -227,6 +543,11 @@ function TicketAssignDialog({
         onChange={(event) => setAssigneeName(event.target.value)}
         placeholder="受理人显示名"
       />
+      {/* 这个「备注」**不带客户可见徽标，是对的**：它写进 `assigned` 事件的
+          payload.note，而 `assigned` 刻意不在 CUSTOMER_VISIBLE_TICKET_EVENT_TYPES
+          里（值域头注：指派带着坐席姓名与内部分工，那是我们的排班不是客户的事）。
+          受理人 ID / 名称同理。本屏的规矩是「客户会读到的字段自己说出来」，
+          读不到的不加标——加了就等于把徽标变成装饰，客户可见那几处也就不再有分量。 */}
       <Label htmlFor="vx-ticket-assign-note">
         备注 <small>（可选）</small>
       </Label>
@@ -242,6 +563,23 @@ function TicketAssignDialog({
   );
 }
 
+/**
+ * 变更工单状态。
+ *
+ * ── 这里的「说明」客户会读到 ──
+ * BFF 把它写进 `status_changed` 的 payload.note，而 `status_changed` 在
+ * `CUSTOMER_VISIBLE_TICKET_EVENT_TYPES` 里——和关闭说明是同一条路、同一个读者。
+ *
+ * 所以它带的是和关闭说明**同样的两个记号**：标签里的「客户可见」徽标，和一句
+ * 说明客户会读到它。原先它只写着「备注」，而这一屏其余地方已经把运营教成了
+ * 「带标的才发给客户」：一个不带标、又叫「备注」的框，读起来就是内部那一档。
+ * 于是内部判断会从这扇门漏出去——而漏出去的那一下不报错、不可撤回
+ * （`support.ticket_comments` 由触发器封成仅追加）。
+ *
+ * 徽标与说明是两个独立的记号，不是一个说两遍：徽标一眼扫到，说明讲清后果。
+ * 少哪一个都行不通——只有徽标的话「客户可见」到底意味着什么要靠猜，只有说明的话
+ * 它藏在 hint 里，而人是不点 hint 的。
+ */
 function TicketStatusDialog({
   ticket,
   onClose,
@@ -252,6 +590,9 @@ function TicketStatusDialog({
   onChanged: (updated: SupportTicketRecord) => void;
 }) {
   const tShared = useTranslations();
+  const t = useTranslations("ticketDetail.statusDialog");
+  const tForm = useTranslations("ticketDetail.form");
+  const tAudience = useTranslations("ticketAudience");
   const statusLabels = useTicketStatusLabels();
   const [status, setStatus] = useState<TicketStatusInput>("in_progress");
   const [note, setNote] = useState("");
@@ -270,9 +611,7 @@ function TicketStatusDialog({
       });
       onChanged(updated);
     } catch (err) {
-      setError(
-        err instanceof AdminBffError ? err.message : "状态变更失败，请重试",
-      );
+      setError(err instanceof AdminBffError ? err.message : t("failed"));
     } finally {
       setSubmitting(false);
     }
@@ -282,13 +621,12 @@ function TicketStatusDialog({
     <DialogForm
       open
       size="sm"
-      title="变更工单状态"
-      description={
-        <>
-          工单：<strong>{ticket.title}</strong>
-        </>
-      }
-      submitLabel="确认变更"
+      title={t("title")}
+      description={t.rich("description", {
+        title: ticket.title,
+        b: (chunks) => <strong>{chunks}</strong>,
+      })}
+      submitLabel={t("submit")}
       cancelLabel={tShared("actions.cancel")}
       submitting={submitting}
       onOpenChange={(open) => {
@@ -296,31 +634,57 @@ function TicketStatusDialog({
       }}
       onSubmit={handleSubmit}
     >
-      <Label htmlFor="vx-ticket-status">目标状态</Label>
-      <NativeSelect
-        id="vx-ticket-status"
-        value={status}
-        onChange={(event) => setStatus(event.target.value as TicketStatusInput)}
-      >
-        {/* 顺序取 @shared 的值域本身，不另抄一份：抄一份就会有第二个地方要跟着
-            DB CHECK 改，而那正是 `TicketStatusInput` 原先那份手写联合的下场。 */}
-        {TICKET_STATUSES.map((value) => (
-          <option key={value} value={value}>
-            {statusLabels[value]}
-          </option>
-        ))}
-      </NativeSelect>
-      <Label htmlFor="vx-ticket-status-note">
-        备注 <small>（可选）</small>
-      </Label>
-      <Textarea
-        id="vx-ticket-status-note"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        rows={2}
-        placeholder="状态变更说明…"
-      />
-      {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
+      <Field>
+        <FieldLabel
+          htmlFor="vx-ticket-status"
+          required
+          requiredLabel={tForm("required")}
+          hint={t("closeHint")}
+          hintLabel={tForm("hintLabel")}
+        >
+          {t("statusLabel")}
+        </FieldLabel>
+        <NativeSelect
+          id="vx-ticket-status"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as TicketStatusInput)
+          }
+        >
+          {/* 顺序取 @shared 的值域本身，不另抄一份：抄一份就会有第二个地方要跟着
+              DB CHECK 改，而那正是 `TicketStatusInput` 原先那份手写联合的下场。
+              **减掉 `closed`**：关闭有自己的动作和自己的确认框（见页头那颗
+              DestructiveButton），留在这个下拉里就是同一个后果的第二扇门，
+              而这扇门不问一句。 */}
+          {TICKET_STATUSES.filter((value) => value !== "closed").map(
+            (value) => (
+              <option key={value} value={value}>
+                {statusLabels[value]}
+              </option>
+            ),
+          )}
+        </NativeSelect>
+      </Field>
+      <Field>
+        <FieldLabel
+          htmlFor="vx-ticket-status-note"
+          hint={t("noteHint")}
+          hintLabel={tForm("hintLabel")}
+        >
+          {t("noteLabel")}{" "}
+          <StatusBadge tone="info" icon="eye">
+            {tAudience("customerVisible")}
+          </StatusBadge>
+        </FieldLabel>
+        <Textarea
+          id="vx-ticket-status-note"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          rows={2}
+          placeholder={t("notePlaceholder")}
+        />
+      </Field>
+      <FieldError>{error}</FieldError>
     </DialogForm>
   );
 }
@@ -328,21 +692,22 @@ function TicketStatusDialog({
 export function TicketDetailPage({ ticketId }: { ticketId: string }) {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tPage = useTranslations("ticketDetail");
+  const tClose = useTranslations("ticketDetail.close");
+  const tAudience = useTranslations("ticketAudience");
   const priorityLabels = useTicketPriorityLabels();
   const eventTypeLabel = useTicketEventTypeLabel();
   const statusLabels = useTicketStatusLabels();
+  const { toast } = useToast();
 
   const [ticket, setTicket] = useState<SupportTicketRecord | null>(null);
   const [events, setEvents] = useState<TicketCommentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [replyBody, setReplyBody] = useState("");
-  const [replySubmitting, setReplySubmitting] = useState(false);
-  const [replyError, setReplyError] = useState<string | null>(null);
-
   const [assignOpen, setAssignOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const reloadEvents = useCallback(async () => {
     setEvents(await fetchTicketComments(ticketId));
@@ -376,25 +741,6 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
   function applyUpdated(updated: SupportTicketRecord) {
     setTicket(updated);
     void reloadEvents();
-  }
-
-  async function handleReply(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const body = replyBody.trim();
-    if (!body) return;
-    setReplySubmitting(true);
-    setReplyError(null);
-    try {
-      await addTicketComment(ticketId, body);
-      setReplyBody("");
-      await reloadEvents();
-    } catch (err) {
-      setReplyError(
-        err instanceof AdminBffError ? err.message : "回复失败，请重试",
-      );
-    } finally {
-      setReplySubmitting(false);
-    }
   }
 
   const backToList = (
@@ -462,6 +808,22 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
                     <Icon name="settings" size="xs" fallback="placeholder" />
                     改状态
                   </Button>
+                  {/* 关闭不埋在七个状态值的下拉里：它对客户是终局，而下拉里的
+                      七个值长得一模一样、点中哪个都不问一句。它自己的那道门在
+                      `TicketCloseDialog` 里，后果那一句说的是**客户那边会怎样**，
+                      不是库里会怎样。
+
+                      **已关闭的单上这颗按钮照旧出现**，而不是藏掉。想藏，但藏不
+                      了：投影把七个状态压成四个，`resolved` / `cancelled` /
+                      `reopened` 全都归进 `closed`（admin-bff 的
+                      `normalizeTicketStatus`）。按这一列藏，会把「已解决、正等着
+                      结单」和「刚被重新打开」这两种最需要这颗按钮的单一起藏掉。
+                      按一个分不出这件事的值去藏控件，比多出一颗按钮糟——真关第二
+                      次时 BFF 回 409，对话框照实说。 */}
+                  <Button variant="outline" onClick={() => setCloseOpen(true)}>
+                    <Icon name="lock" size="xs" fallback="placeholder" />
+                    {tClose("action")}
+                  </Button>
                 </>
               ) : null}
             </div>
@@ -516,17 +878,26 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
           <section
             className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}
           >
-            <DetailSectionHeading icon="clock" title="处理时间线" />
+            <DetailSectionHeading
+              icon="clock"
+              title={tPage("timeline.title")}
+              description={tPage("timeline.description")}
+            />
             {events.length ? (
               <PanelList>
                 {events.map((event) => {
                   const bodyText = ticketEventBodyText(event, statusLabels);
+                  /* 已经写下去的那些，也得一眼看出客户读不读得到——否则运营只能
+                     靠回忆判断某句内部判断当时是发出去了还是留在了内部。
+                     记号放在**最左边那条轨道**上（lead），一列扫下来就是答案；
+                     徽标再用文字说一遍，不让一个图标独自承担这件事。 */
+                  const visible = isCustomerVisibleEvent(event.eventType);
                   return (
                     <PanelItem
                       key={event.id}
                       lead={
                         <Icon
-                          name="chat-circle"
+                          name={visible ? "eye" : "eye-slash"}
                           size="sm"
                           fallback="placeholder"
                         />
@@ -535,11 +906,20 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
                          shrink-0，只放短内容，回复正文会把它撑破。 */
                       main={
                         <TableTitleCell
-                          title={
-                            <>
-                              {eventTypeLabel(event.eventType)} ·{" "}
-                              {event.actorName}
-                            </>
+                          title={`${eventTypeLabel(event.eventType)} · ${event.actorName}`}
+                          /* 徽标走 `titleSuffix` 而不是塞进 `title`：这一件的
+                             主行是**截断**的（inline 档），把一枚标挤进去会先
+                             切掉事件名本身；`titleSuffix` 是它给标留的槽，
+                             换行时整体下沉、不切主信息（见件的 props 注释）。 */
+                          titleSuffix={
+                            <StatusBadge
+                              tone={visible ? "info" : "warning"}
+                              icon={visible ? "eye" : "eye-slash"}
+                            >
+                              {visible
+                                ? tAudience("customerVisible")
+                                : tAudience("internalOnly")}
+                            </StatusBadge>
                           }
                           description={bodyText ?? "—"}
                         />
@@ -556,43 +936,23 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
             ) : (
               <EmptyState
                 icon="clock"
-                title="暂无时间线记录"
-                description="这张工单还没有回复、指派或状态变更。"
+                title={tPage("timeline.emptyTitle")}
+                description={tPage("timeline.emptyDescription")}
               />
             )}
           </section>
 
-          <section
-            className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}
-          >
-            <DetailSectionHeading icon="chat-circle" title="回复工单" />
-            <form className="grid gap-sm" onSubmit={handleReply}>
-              <Label htmlFor="vx-ticket-reply">回复内容</Label>
-              <Textarea
-                id="vx-ticket-reply"
-                value={replyBody}
-                onChange={(event) => setReplyBody(event.target.value)}
-                rows={3}
-                placeholder="输入回复内容…"
-              />
-              {replyError ? (
-                <p
-                  className="text-body-sm font-semibold text-destructive-text"
-                  role="alert"
-                >
-                  {replyError}
-                </p>
-              ) : null}
-              <div>
-                <Button
-                  type="submit"
-                  disabled={replySubmitting || replyBody.trim().length === 0}
-                >
-                  {replySubmitting ? "处理中…" : "回复"}
-                </Button>
-              </div>
-            </form>
-          </section>
+          {/* 原先这里只有一个「回复工单」，写什么都会发给客户，而运营本来就需要
+              记内部判断——没有内部备注的地方，内部判断就只能写进回复里。
+              两件事各占一个板块，顺序是「先给客户的，再给自己的」。 */}
+          <CustomerReplyComposer
+            ticketId={ticketId}
+            onPosted={() => void reloadEvents()}
+          />
+          <InternalNoteComposer
+            ticketId={ticketId}
+            onPosted={() => void reloadEvents()}
+          />
         </>
       ) : (
         <EmptyState
@@ -618,6 +978,17 @@ export function TicketDetailPage({ ticketId }: { ticketId: string }) {
           onChanged={(updated) => {
             applyUpdated(updated);
             setStatusOpen(false);
+          }}
+        />
+      ) : null}
+      {closeOpen && ticket ? (
+        <TicketCloseDialog
+          ticket={ticket}
+          onClose={() => setCloseOpen(false)}
+          onClosed={(updated) => {
+            applyUpdated(updated);
+            setCloseOpen(false);
+            toast({ tone: "success", title: tClose("success") });
           }}
         />
       ) : null}

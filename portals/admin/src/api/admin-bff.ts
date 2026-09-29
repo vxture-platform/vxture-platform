@@ -1,4 +1,8 @@
-import type { ObjectState, TicketStatus } from "@vxture-platform/shared";
+import type {
+  ObjectState,
+  TicketPriority,
+  TicketStatus,
+} from "@vxture-platform/shared";
 import type {
   AccountOperationDetailRecord,
   AccountOperationRecord,
@@ -2240,15 +2244,102 @@ export async function fetchTicketComments(
   );
 }
 
-export async function addTicketComment(
+/**
+ * 代客建单的输入。
+ *
+ * **租户用可视码，payload 里不出现 UUID。** 运营在屏幕上认客户靠的是租户号或
+ * 名字（owner 2026-08-20：UUID 任何场景都不面向用户），所以送出去的也是那个码
+ * ——地址栏、表单、请求体三处口径一致，BFF 那一侧按 tenant_no 解析。
+ *
+ * `description` 就是 `support.tickets.description`（工单正文，客户在自己的工单里
+ * 读得到），不是内部备注。内部的话建完单在详情页写成 `internal_note`。
+ */
+export interface CreateTicketInput {
+  /** 租户可视码（tenancy.tenants.tenant_no，十位纯数字，不带 T- 前缀）。 */
+  tenantCode: string;
+  title: string;
+  description: string;
+  priority: TicketPriority;
+  /**
+   * 报单的人叫什么（`support.tickets.reporter_name`）。可空，**空是有含义的**：
+   * 工单归整个租户（owner 裁决：可见范围 = 租户级），没指名到人是常态，不是缺数据。
+   *
+   * 不送 `accountCode`：那要运营手里有客户的用户码，而电话/群里反馈的场合他没有；
+   * 不给就是「这张单属于这个租户」，正是租户级可见那条裁决本来的样子。
+   */
+  reporterName?: string;
+}
+
+export async function createTicket(
+  input: CreateTicketInput,
+): Promise<SupportTicketRecord> {
+  return mutateJson<SupportTicketRecord>(
+    "/api/tickets",
+    "POST",
+    input,
+    "Ticket creation failed",
+  );
+}
+
+/**
+ * 运营写入的两种流水：**两个函数、两个端点**，不是一个函数带一个 kind 参数。
+ *
+ * 一条流水给谁看只由 `event_type` 决定（白名单在 @shared 的
+ * `CUSTOMER_VISIBLE_TICKET_EVENT_TYPES`），而这里决定 `event_type` 的是「调用了
+ * 哪一个函数」。一个带开关的函数写得出「本想发给客户、开关传错了」这种形状，
+ * 两个函数写不出来——调用点少一个能设错的参数。
+ *
+ * 原先的 `addTicketComment` 写的是 `comment`，那个词现在归**客户自己发的言**，
+ * 运营不再写它，所以那个函数连同它唯一的调用点一起去掉了（留着就是第三扇门）。
+ */
+export async function addTicketReply(
   ticketId: string,
   body: string,
 ): Promise<TicketCommentRecord> {
   return mutateJson<TicketCommentRecord>(
-    `/api/tickets/${encodeURIComponent(ticketId)}/comments`,
+    `/api/tickets/${encodeURIComponent(ticketId)}/replies`,
     "POST",
     { body },
-    "Ticket comment failed",
+    "Ticket reply failed",
+  );
+}
+
+export async function addTicketInternalNote(
+  ticketId: string,
+  body: string,
+): Promise<TicketCommentRecord> {
+  return mutateJson<TicketCommentRecord>(
+    `/api/tickets/${encodeURIComponent(ticketId)}/notes`,
+    "POST",
+    { body },
+    "Ticket internal note failed",
+  );
+}
+
+/**
+ * 明确的「关闭」。
+ *
+ * 不复用 `changeTicketStatus(id, { status: "closed" })`：关闭对客户是一个终局
+ * 动作（他在这张单上不再等回复），而那个端点是七值里挑一个、不带任何确认。
+ * 终局动作要有自己的门，界面上也才拦得住——两条路通同一个后果时，守卫只长在
+ * 其中一条等于给另一条留门。写入面因此把 `closed` 从状态下拉里摘掉了。
+ *
+ * **`reason` 必填，而且客户读得到。** BFF 把它写进 `status_changed` 的
+ * payload.note，而 `status_changed` 在 `CUSTOMER_VISIBLE_TICKET_EVENT_TYPES` 里
+ * ——所以界面上收这句话的那个输入框必须标着「客户可见」，不能只当成一条内部
+ * 备注收下来。内部原因走 `addTicketInternalNote`。
+ *
+ * 已是终态（closed / cancelled）时 BFF 回 409。
+ */
+export async function closeTicket(
+  ticketId: string,
+  reason: string,
+): Promise<SupportTicketRecord> {
+  return mutateJson<SupportTicketRecord>(
+    `/api/tickets/${encodeURIComponent(ticketId)}/close`,
+    "POST",
+    { reason },
+    "Ticket close failed",
   );
 }
 

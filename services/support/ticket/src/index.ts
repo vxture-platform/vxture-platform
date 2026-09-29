@@ -31,6 +31,15 @@
 
 export { TicketModule } from "./module/ticket.module";
 export { TicketService } from "./service/ticket.service";
+
+// 工单流水「给谁看」的值域门面。转出自 @vxture-platform/shared——为什么不定义在
+// 本包，见 visibility.ts 头注（本包零消费方，BFF 的 vitest 解析不到它）。
+export {
+  CUSTOMER_VISIBLE_TICKET_EVENT_TYPES,
+  TICKET_EVENT_INTERNAL_NOTE,
+  TICKET_EVENT_REPLY,
+} from "./visibility";
+export type { CustomerVisibleTicketEventType } from "./visibility";
 export type {
   TicketRecord,
   TicketEventRecord,

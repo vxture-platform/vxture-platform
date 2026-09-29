@@ -2968,15 +2968,122 @@
       "submit": "Confirm payment"
     }
   },
+  "ticketAudience": {
+    "customerVisible": "Customer can see this",
+    "internalOnly": "Customer cannot see this"
+  },
   "ticketDetail": {
     "eventType": {
-      "comment": "Reply",
+      "comment": "Customer message",
       "assign": "Assigned",
       "statusChange": "Status change",
       "created": "Created",
       "resolved": "Resolved",
       "closed": "Closed",
-      "reopened": "Reopened"
+      "reopened": "Reopened",
+      "internalNote": "Internal note",
+      "reply": "Reply to customer"
+    },
+    "form": {
+      "required": "Required",
+      "hintLabel": "About this field"
+    },
+    "timeline": {
+      "title": "Handling timeline",
+      "description": "Every entry says whether the customer can see it.",
+      "emptyTitle": "Nothing on the timeline yet",
+      "emptyDescription": "No replies, notes, assignments or status changes on this ticket yet."
+    },
+    "reply": {
+      "title": "Reply to the customer",
+      "description": "This is written for the customer: they read it in full on their own ticket. Once sent it cannot be edited or taken back.",
+      "label": "Your reply",
+      "placeholder": "Written for the customer to read…",
+      "submit": "Send to customer",
+      "pending": "Sending…",
+      "success": "Sent to the customer",
+      "failed": "Could not send the reply"
+    },
+    "note": {
+      "title": "Internal note",
+      "description": "Operations only: the customer never sees internal notes on this ticket and is never sent them.",
+      "label": "Your note",
+      "placeholder": "What was agreed, your own read on it, what the next shift needs to know…",
+      "submit": "Save internal note",
+      "pending": "Saving…",
+      "success": "Saved as an internal note — the customer cannot see it",
+      "failed": "Could not save the note"
+    },
+    "close": {
+      "action": "Close ticket",
+      "title": "Close ticket",
+      "description": "Ticket: <b>{title}</b>",
+      "consequence": "Closing says this piece of support is over. The customer sees the close on their own ticket, and once they do they stop waiting on your reply. Picking it up again means reopening this ticket or logging a new one.",
+      "reasonLabel": "Why you are closing it",
+      "reasonHint": "The customer reads this line: it shows up on their own ticket as the reason you closed it. Keep internal reasons out of here — put those in an internal note.",
+      "reasonPlaceholder": "e.g. Handled as agreed with you; if it happens again, just reply on this ticket…",
+      "submit": "Close ticket",
+      "success": "Ticket closed",
+      "alreadyFinal": "This ticket is already final — closed, or cancelled — so there is nothing to close. Reload the page to see where it stands.",
+      "failed": "Could not close the ticket"
+    },
+    "statusDialog": {
+      "title": "Change ticket status",
+      "description": "Ticket: <b>{title}</b>",
+      "submit": "Apply",
+      "statusLabel": "New status",
+      "noteLabel": "Why the status changed",
+      "noteHint": "The customer reads this line: it shows up on their own ticket as the progress note for this step. Keep your own read on it out of here — put that in an internal note.",
+      "notePlaceholder": "e.g. We found the cause and are on it; we will reply on this ticket once it is fixed…",
+      "closeHint": "Closed is not on this list. Use Close ticket at the top of the page — that dialog first spells out what closing means for the customer.",
+      "failed": "Could not change the status. Try again."
+    }
+  },
+  "ticketsPage": {
+    "create": {
+      "action": "New ticket",
+      "title": "New ticket",
+      "description": "Log a ticket for a customer — something they reported by phone, email or chat.",
+      "submit": "Create ticket",
+      "required": "Required",
+      "hintLabel": "About this field",
+      "tenantLabel": "Customer tenant",
+      "tenantHint": "Search by tenant number or name. The ticket belongs to the whole tenant, so every member there can see it — not just the person who reported it.",
+      "tenantPlaceholder": "Pick the customer tenant",
+      "tenantSearchPlaceholder": "Search tenant number or name…",
+      "tenantEmpty": "No matching tenant",
+      "tenantsFailed": "Could not load the tenant list",
+      "tenantsFailedDetail": "Without the tenant list there is no customer to pick, so this ticket cannot be created yet. Reload the page; if it keeps failing, call the platform on-call.",
+      "titleLabel": "Ticket title",
+      "titleHint": "One line on what the customer ran into. They see this title on their own ticket.",
+      "titlePlaceholder": "e.g. Report export stuck on generating",
+      "priorityLabel": "Priority",
+      "priorityHint": "P0 means the customer is already blocked and someone has to pick it up now. When in doubt leave it at P2.",
+      "reporterLabel": "Reported by",
+      "reporterHint": "Who raised it. Leaving it empty is fine — the ticket belongs to the whole tenant, so it does not have to name a person.",
+      "reporterPlaceholder": "e.g. their ops engineer (empty means no one named)",
+      "descriptionLabel": "What the customer reported",
+      "descriptionHint": "Write it in the customer's own words. They read this on their own ticket, so keep your own read on it out of here — add that as an internal note once the ticket exists.",
+      "descriptionPlaceholder": "What they said, what they already tried, what they expected…",
+      "success": "Ticket created",
+      "failed": "Could not create the ticket"
+    },
+    "createdHidden": {
+      "title": "The ticket you just created is outside the current filters",
+      "description": "{title} was created, but it does not match the current search or filters, so it is not in the list below. Clear the filters to see it.",
+      "dismiss": "Got it"
+    },
+    "batchStatus": {
+      "title": "Change status of the selected tickets",
+      "description": "The new status will be applied to the {count} selected tickets.",
+      "submit": "Apply",
+      "statusLabel": "New status",
+      "closeHint": "Closed is not on this list. Close a ticket from its own page, where the dialog first spells out what closing means for the customer — closing dozens at once is not that.",
+      "failed": "{count} tickets could not be updated"
+    },
+    "empty": {
+      "title": "No tickets yet",
+      "description": "When a customer reports something by phone, email or chat, log a ticket for them here — every reply and every step then lives on that ticket."
     }
   },
   "opsTodosPage": {
