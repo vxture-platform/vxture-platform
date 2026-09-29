@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { listEmptyReason } from "@/lib/list-empty-reason";
 import { useTableLabels } from "@/lib/table";
 import { useTableSort } from "@/lib/table-sort";
 import {
@@ -401,6 +402,14 @@ export function VouchersPage() {
     ];
   }
 
+  /* 空态的成因比**全集与可见集**，不比「筛选器是不是默认值」。
+     旧写法 `query || filter !== "available"` 跟工单页那一处是同一个错：
+     默认值 `available` 本身在筛（已用 / 已过期都被它挡掉），所以券全用完的租户
+     会拿到「一张券都没有」的文案，而且**拿不到「重置筛选」那颗按钮**
+     ——逃生口恰好在需要它的时候不给。判据见 lib/list-empty-reason.ts。 */
+  const emptyIsFiltered =
+    listEmptyReason(vouchers.length, visible.length) === "filtered";
+
   return (
     <ViewLayout>
       <ViewHeader
@@ -495,10 +504,10 @@ export function VouchersPage() {
               ) : (
                 <EmptyState
                   title={t("table.empty")}
-                  {...(query || filter !== "available"
+                  {...(emptyIsFiltered
                     ? {}
                     : { description: t("table.emptyHint") })}
-                  {...(query || filter !== "available"
+                  {...(emptyIsFiltered
                     ? {
                         action: (
                           <Button
