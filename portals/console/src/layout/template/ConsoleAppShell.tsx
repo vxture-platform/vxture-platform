@@ -23,12 +23,14 @@ import {
   fetchMyApps,
   fetchMySubscriptions,
   fetchMyWorkspaces,
+  fetchMyTickets,
   fetchQuotaUsage,
   fetchRecommendedProducts,
   fetchSubscribedProducts,
   markInboxAllRead,
   markInboxRead,
   type ConsoleQuotaUsage,
+  type ConsoleTicket,
   type RecommendedProduct,
   type SubscribedProduct,
   type InboxMessage,
@@ -52,6 +54,8 @@ import {
 } from "../header/ConsoleHeader";
 import type { NavSearchEntry } from "../header/useGlobalSearch";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
+import { HelpDrawer } from "./HelpDrawer";
+import { isOpenTicket } from "@/lib/ticket-state";
 import { AppCenter } from "./AppCenter";
 import { buildWebsiteDocsUrl } from "@/lib/website-entry";
 
@@ -170,6 +174,30 @@ export function ConsoleAppShell({
   useEffect(() => {
     if (drawer === "notifications") reloadTodos();
   }, [drawer, reloadTodos]);
+  /* 帮助抽屉的数据(owner 2026-09-29 第 5 条裁决):未关闭的工单 + 各自最后一次
+     动静。**只在抽屉打开时取**——它是派生视图,不喂角标、不承载已读,所以没有
+     任何理由在每次翻页时都去打一次工单接口。null 区分「还没读到」与「一张都
+     没有」;失败置 ticketsFailed,抽屉画重试而不是画「你没有工单」。 */
+  const [helpTickets, setHelpTickets] = useState<ConsoleTicket[] | null>(null);
+  const [helpLoading, setHelpLoading] = useState(false);
+  const [helpFailed, setHelpFailed] = useState(false);
+  const loadHelpTickets = useCallback(async () => {
+    setHelpLoading(true);
+    setHelpFailed(false);
+    try {
+      const rows = await fetchMyTickets();
+      setHelpTickets(rows.filter((ticket) => isOpenTicket(ticket.status)));
+    } catch {
+      setHelpTickets(null);
+      setHelpFailed(true);
+    } finally {
+      setHelpLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (drawer !== "help") return;
+    void loadHelpTickets();
+  }, [drawer, loadHelpTickets]);
   const [billing, setBilling] = useState<{ amount: number; currency: string }>({
     amount: 0,
     currency: "CNY",
@@ -596,6 +624,17 @@ export function ConsoleAppShell({
           todos={drawerTodos}
           notifications={drawerNotifs}
           labels={drawerLabels}
+        />
+      )}
+
+      {drawer === "help" && (
+        <HelpDrawer
+          onClose={() => setDrawer(null)}
+          onNavigate={openInConsole}
+          tickets={helpTickets}
+          loading={helpLoading}
+          failed={helpFailed}
+          onRetry={() => void loadHelpTickets()}
         />
       )}
     </div>

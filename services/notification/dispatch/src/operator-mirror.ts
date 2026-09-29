@@ -121,6 +121,17 @@ function addon(params: TemplateParams): string {
 }
 
 /**
+ * 工单段：**只有可视工单码**（`support.tickets.ticket_no`，TK-…）。
+ *
+ * 不带标题、不带回复原文：标题是客户（或代录的运营）写的自由文本，而运营在通告列表里认领
+ * 一张单靠的是码——码也是点开那个链接用的那一段。正文里那句「客户收到：…」已经把客户看到
+ * 的原话搬过来了，而那三条文案本身不引用运营写的话（见 templates.ts）。
+ */
+function ticket(params: TemplateParams): string {
+  return pick(params, "ticketNo");
+}
+
+/**
  * 客户模板 → 运营镜像。标题写运营视角，事实与客户模板同一条。
  * 严重度只在 warning / info 两档里选：critical 留给运维事故，客户事件不用。
  */
@@ -485,6 +496,53 @@ export const OPERATOR_MIRROR: Readonly<
     severity: "info",
     title: (p) => `客户在新设备上登录（${occurredAt(p)}）`,
   },
+  /* ── 工单线（2026-09-29）：**三条全 info**。──────────────────────────────────
+     按本文件对 warning 的成文含义（「在等运营动手」⇒ 不过期、留在列表里直到有人处理）
+     逐条问「哪个运营动作能让这条消失」：
+       · replied  —— 运营**刚刚**自己按下的那个「回复客户」，镜像是回执；球回到客户那边
+         （要不要接着说话是他的事），运营这边没有下一步。
+       · resolved —— 同上，是我方刚做出的判断；客户不认可时他会回一句，而那一句由
+         **运营侧信号巡检**单独发一条不过期的 warning（platform-api 的
+         `ticket.customer_replied`），不靠这张表。
+
+         初稿这里写的是「那一句会自己变成待办（由 @vxture/service-ops-todos 那条算法管）」
+         ——**那个机制不存在**。ops-todos 把 `support.ticket_comments` 列在它的禁用关系
+         清单里，按设计不读流水；它的 `ticket` 那一档只看状态
+         （`status not in (resolved/closed/cancelled)`），客户回一句既不换档也不换严重度。
+         写下这条理由时客户侧还没有回复入口，所以没人能发现它是句空话。
+         客户侧上线同一批里补上了巡检那一类，这条理由才算真成立。
+
+         尚未做的一处（已知，不假装它不存在）：客户回复会抬 `tickets.updated_at`，
+         而 ops-todos 未超时时取 `waiting_since = updated_at` 且按它升档——所以客户追得越勤，
+         那张单在待办列表里越不容易升档。信号本身不丢（巡检那条 warning 不过期），
+         但排序这一层要改得动 ops-todos 那条唯一算法的取值语义，不在本批自决。
+       · closed   —— 终态，工作已经裁定不再继续，定义上没有下一步。
+     而且 `replied` 是本批里会**反复**发生的一条（一张单来回十句是常态），给成不过期的
+     warning 只会在列表里越堆越多——这正是 info / warning 这个分档要防的事。
+
+     **正文里不会出现回复原文**：镜像正文的最后一段是「客户收到的那条原文」，而客户那三条
+     文案一个字都不引用运营写的话（见 templates.ts 那一段）。所以运营在通告列表里读到的是
+     「某租户的某张单被回复了」，不是那段话本身——那段话在工单详情页，一处。
+     顺带这也答了一个会被问到的问题：内部备注（`internal_note`）压根不会走到这里，
+     因为它**不发通知**（写入方只在 `reply` / `resolved` / `closed` 三处调分发器）。
+
+     去重锚 = `{模板}:ticket:{可视工单码:事件名:ISO 时刻}`（形状与长度见 templates.ts 的
+     `ticketEventReference`，用例按真实码表重算，不手抄）。
+     链接：引用类型 `ticket` ⇒ `/tickets/{可视工单码}`。判据是本文件一贯的那条「有详情页才
+     给链接」——admin 侧确实有按工单码的详情页（`tickets/[ticketId]`，那个参数收的就是
+     `ticket_no`），这与订阅 / 邀请 / 加油包落在 null 那一档的理由正好相反。 */
+  "ticket.replied": {
+    severity: "info",
+    title: (p) => `工单已回复客户 · ${ticket(p)}`,
+  },
+  "ticket.resolved": {
+    severity: "info",
+    title: (p) => `工单已标记处理完成 · ${ticket(p)}`,
+  },
+  "ticket.closed": {
+    severity: "info",
+    title: (p) => `工单已关闭 · ${ticket(p)}`,
+  },
 };
 
 /** 去重锚的 reference_type。与 opera 人工发布（reference 两列为空）天然分开。 */
@@ -510,8 +568,9 @@ export function mirrorDedupeKey(
 /**
  * 链接：能落到 admin 路由就给。
  *   · 参数里有 orderNo（订单 / 退款 / 退订类都带）→ /orders/{order_no}
+ *   · 引用是工单 → /tickets/{ticket_no}
  *   · 引用是租户 → /tenants/{tenant_no}
- *   · 其余 null（订阅到期 / 暂停 / 邀请 / 公告没有对应的详情页）
+ *   · 其余 null（订阅到期 / 暂停 / 邀请 / 公告 / 安全事件没有对应的详情页）
  * 只给可视码，绝不把 uuid 放进地址栏。
  *
  * **加油包（引用类型 addon）故意落在 null 这一档**：admin 只有 `/addon-orders` 列表页，
@@ -530,6 +589,13 @@ export function mirrorLink(
   const orderNo = order(params);
   if (orderNo && referenceType !== "addon") {
     return `/orders/${encodeURIComponent(orderNo)}`;
+  }
+  /* 工单（2026-09-29）：admin 侧有按可视工单码的详情页（`tickets/[ticketId]`，那个参数收的
+     就是 `ticket_no`），所以按本函数一贯的判据「有详情页才给链接」给出链接。
+     码取不到时回 null 而不是 `/tickets/`——一个指向列表页的半截链接比没有链接更糟。 */
+  if (referenceType === "ticket") {
+    const ticketNo = ticket(params);
+    return ticketNo ? `/tickets/${encodeURIComponent(ticketNo)}` : null;
   }
   if (referenceType === "tenant" && tenantNo) {
     return `/tenants/${encodeURIComponent(tenantNo)}`;

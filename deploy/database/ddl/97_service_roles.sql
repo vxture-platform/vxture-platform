@@ -206,6 +206,10 @@ GRANT SELECT ON account.user_profiles TO svc_platform_api;
 GRANT SELECT ON kyc.tenant_verifications TO svc_platform_api;
 GRANT SELECT ON support.product_reviews TO svc_platform_api;
 GRANT SELECT ON support.tickets TO svc_platform_api;
+-- 客户回复工单那一类（2026-09-29）：判据是流水里客户自己发的言，所以要读这张表。
+-- 通告正文**不引任何评论文本**，只用工单标题/单号/状态；但权限是按语句里出现的关系
+-- 查的，不按用了哪几列，所以这一行免不了。只 SELECT。
+GRANT SELECT ON support.ticket_comments TO svc_platform_api;
 GRANT SELECT ON support.audit_logs TO svc_platform_api;
 GRANT SELECT ON admin.maintenance_windows TO svc_platform_api;
 

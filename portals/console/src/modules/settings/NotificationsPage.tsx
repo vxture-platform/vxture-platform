@@ -70,8 +70,8 @@ const CHANNELS: ChannelMeta[] = [
  * 主题清单（owner 2026-09-08 重排；2026-09-09 补两个）。**平铺，不分组**：各自四字自足，
  * 组名拼进项名等于把删掉的分组用文字再写一遍，还占列宽。
  *
- * 前 13 个有模板已经在发；后 2 个的**事件源都已存在**（各自的状态机或 webhook 事件
- * 类型跑着），只是通知模板还没接——`planned: true` 让它们在界面上挂「开发中」标并
+ * 前 14 个有模板已经在发；最后 1 个的**事件源已存在**（`billing.invoice_receipts` 六态
+ * 跑着），只是通知模板还没接——`planned: true` 让它在界面上挂「开发中」标并
  * **禁用三个渠道开关**。这两个数字与下面那张清单是同一份事实的两处写法，一起改。
  *
  * 2026-09-28 批 5：`verification_result` 与 `quota_alert` 取下 `planned`（模板本批上线）。
@@ -80,6 +80,9 @@ const CHANNELS: ChannelMeta[] = [
  * 2026-09-29（owner 看过这一页之后）：**邀请拆成两行**——`member_invitation` 只留邀请本身
  * （站内恒锁），`invitation_activity` 装那四条周知（三档全可点）。一行装两种性质的东西时，
  * 站内锁为了保住邀请本身必须存在，四条周知的站内档就跟着关不掉，客户被迫二选一。
+ * 2026-09-29（同日，工单线批 2）：`ticket_activity` 取下 `planned` 并挪到「已在发」那一段
+ * （运营回复 / 标记处理完成 / 关闭三条模板本批上线）。它**不挂 lockedChannels**：三条都是
+ * 周知，客户全关掉也不会让任何人少收到一条回复——回复本身在工单详情页留着。
  * 2026-09-29（同日，账号安全线）：旧的 `security` 这一行**改名成 `security_event` 并拆出
  * `login_activity`**，两行都取下 `planned`（本批接上十四条模板）。与邀请那一刀同一条判据、
  * 同一处代价：安全事件的站内档必须锁死（账号被接管时唯一的到达路径），所以「没见过的设备
@@ -91,7 +94,7 @@ const CHANNELS: ChannelMeta[] = [
  * 头上（`account` / `security` / `usage`），客户勾了等于没勾——**页面在说假话**。
  * 现在要么有模板、要么明说「开发中」并关掉开关，没有第三种。
  *
- * 事务性的那几个（到期/开通/待付/退款/订单状态/租户变更/认证结果/额度用尽——
+ * 事务性的那几个（到期/开通/待付/退款/订单状态/租户变更/认证结果/额度用尽/工单动态——
  * 错过了会有实际损失）邮件默认开、可关，与服务端 `NotificationPreferencesService` 的
  * `TOPIC_DEFAULT_OVERRIDES` 同源:「恢复默认」用的就是这一份，两份不一致的症状是
  * 「按一下恢复默认，保存后开关又变了」。
@@ -199,15 +202,23 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
       icon: "sign-in",
       channels: { inbox: true, email: true, sms: false },
     },
-    {
-      key: "invoice_progress",
-      icon: "receipt",
-      channels: { inbox: true, email: false, sms: false },
-      planned: true,
-    },
+    /* 2026-09-29 工单线批 2：接上三条模板（运营回复 / 标记处理完成 / 关闭），所以**不再带
+       planned 标**、三个开关可点。排在这里是因为它与上面两行同属「有人对我的东西做了什么」，
+       而仍标「开发中」的那一行排在最后。
+       **没有 lockedChannels**：三条都是周知，客户把三档全关掉也不会让任何人少收到一条回复
+       ——回复本身在工单详情页留着，站内这条消息只是入口（与「站内这条就是邀请本身」那一行
+       正好相反，所以那一行锁、这一行不锁）。
+       邮件默认**开**：事务性（错过了会有实际损失）——提了工单的人在等我们说话；「已处理完成」
+       给的是一个有时限的动作，错过就等于默认「好了」。与服务端 TOPIC_DEFAULT_OVERRIDES 同源，
+       「恢复默认」用的就是这一份。 */
     {
       key: "ticket_activity",
       icon: "chat-circle",
+      channels: { inbox: true, email: true, sms: false },
+    },
+    {
+      key: "invoice_progress",
+      icon: "receipt",
       channels: { inbox: true, email: false, sms: false },
       planned: true,
     },

@@ -3293,3 +3293,176 @@ export async function submitReview(
   const body = (await response.json()) as { review: MyReview };
   return body.review;
 }
+// ── 客户侧工单（owner 2026-09-29 裁决，批 2）─────────────────────────────────
+
+/**
+ * 一张工单，客户视角。
+ *
+ * ── 为什么没有 `id` ──
+ * 这个投影里**一个 uuid 都不带**。工单在客户这一侧的标识只有可视码
+ * `ticket_no`（`TK-{YYYYMM}-{10}`，NOT NULL + UNIQUE）：地址栏用它、列表上印
+ * 它、通知正文里写的也是它（`services/notification/dispatch` 的三条模板只带
+ * `ticketNo` 一个参数），客户凭它把收件箱里的那条消息和页面上的这张单对上。
+ * 行的 uuid 在客户这一侧没有任何用途——没有用途的标识不该过河。
+ *
+ * ── `tenantCode` 也不在这里 ──
+ * 客户看自己租户的单，租户是「当前上下文」，不是这张单的一个字段。运营侧的
+ * `SupportTicketRecord` 带租户是因为那份投影要跨租户列队列。
+ */
+export interface ConsoleTicket {
+  /** 可视工单码（`TK-{YYYYMM}-{10}`）。路由、列表、通知三处用的是同一串。 */
+  ticketNo: string;
+  title: string;
+  /**
+   * `support.tickets.status`（值域七值在 `@vxture-platform/shared`）。
+   *
+   * 类型写 `string` 而不是 `TicketStatus`——**契约就是 BFF 给的那个形状**
+   * （`bff/console-bff/src/routers/tickets.router.ts` 的 `ConsoleTicket.status`
+   * 也是 string）。在这里收窄等于替服务端做一句它没做的保证：真冒出一个第八个词，
+   * 类型不会报错（运行时没有类型），而页面会拿 `labels[status]` 取到 undefined
+   * 渲染成空白——一个没有状态的徽章。展示侧统一按"认不出就原样回显那个码"处理，
+   * 见 `modules/support/ticket-labels.ts`。
+   */
+  status: string;
+  priority: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+  /**
+   * 最后一次**客户看得见**的动静的时刻。
+   *
+   * 与 `updatedAt` 不是一回事，这是它单独存在的全部理由：运营写一条内部备注也会
+   * 推进 `updated_at`，而那条动静客户读不到。抽屉上写「最后一次动静」如果读的是
+   * `updatedAt`，客户会看到「10 分钟前有动静」然后点进去发现时间线一个字没变——
+   * 那比不显示更糟。取不到（这张单还没有任何客户可见流水）就是 null。
+   */
+  lastActivityAt: string | null;
+  /**
+   * 最后一次客户可见动静的 `event_type`。抽屉与列表据此说"谁动的"（客户自己发了
+   * 一句 / 我们回了一句 / 进度变了）。开放集，界面对认不出的值只说时间不说事由。
+   */
+  lastActivityEventType: string | null;
+  /**
+   * 报单人姓名（`tickets.reporter_name`）。
+   *
+   * 可见范围是租户级，所以这一列答的是「同事里谁提的」。运营代客建单时
+   * 它是运营录的那个名字，admin 那个输入框因此带「客户可见」徐标。
+   */
+  reporterName: string;
+}
+
+/**
+ * 时间线上的一条流水，客户视角。
+ *
+ * **这个数组里只会有客户可见的事件类型**：读侧按
+ * `CUSTOMER_VISIBLE_TICKET_EVENT_TYPES`（`@vxture-platform/shared`，白名单、
+ * 绑参）过滤，`internal_note` / `assigned` / `created` 一条都不会到这里。
+ * 前端**不再自己过滤第二遍**——第二份判据就是第二个会漂的东西，而漂的那天没有
+ * 任何症状（页面照常渲染，只是多印了一段内部话）。前端要做的是别把它当成
+ * 「已经安全」的理由去渲染没读过的字段。
+ *
+ * 没有 `id`：流水行的 uuid 是它唯一的标识，而 uuid 不过河（React key 也算），
+ * 所以这条契约里干脆没有它。时间线是仅追加、按 created_at 升序、不重排的，
+ * 渲染用下标做 key 是稳定的（见 `TicketTimeline`）。
+ */
+export interface ConsoleTicketEvent {
+  /** `support.ticket_comments.event_type`（开放集，认不出的值原样保留）。 */
+  eventType: string;
+  /** `customer` | `operator` | `system`。谁说的这件事，界面据此分三种画法。 */
+  actorType: string;
+  /** 显示名。客户自己那条由界面改写成「我」，不印回自己的名字。 */
+  actorName: string;
+  /** 正文（`payload.body`）；状态事件没有正文就是 null。 */
+  body: string | null;
+  /** 状态事件的落点（`payload.status`）；其余事件为 null。同上不收窄。 */
+  status: string | null;
+  createdAt: string;
+}
+
+export interface ConsoleTicketDetail extends ConsoleTicket {
+  /** 建单时写下的问题描述（`support.tickets.description`，不是一条流水）。 */
+  description: string;
+  events: ConsoleTicketEvent[];
+}
+
+export interface CreateConsoleTicketInput {
+  title: string;
+  description: string;
+}
+
+const TICKETS_URL = `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/support/tickets`;
+
+/** 本租户的工单清单。strict 读：读失败必须与「一张单都没有」分得开。 */
+export async function fetchMyTickets(): Promise<ConsoleTicket[]> {
+  return readJsonStrict<ConsoleTicket[]>("/api/support/tickets");
+}
+
+/** 一张单的详情与时间线。按**可视码**取，不是 uuid。 */
+export async function fetchMyTicket(
+  ticketNo: string,
+): Promise<ConsoleTicketDetail> {
+  return readJsonStrict<ConsoleTicketDetail>(
+    `/api/support/tickets/${encodeURIComponent(ticketNo)}`,
+  );
+}
+
+async function postTicket<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${TICKETS_URL}${path}`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      await extractErrorMessage(response, ""),
+      response.status,
+    );
+  }
+  return (await response.json()) as T;
+}
+
+/**
+ * 提交一张工单。**全 console 只有一个调用点**（`/tickets` 上的那个对话框）。
+ *
+ * owner 2026-09-29 第 5 条裁决：其他页面的求助只做跳转入口，不许再出现第二个
+ * 提单表单。所以对象页那些「就这件事求助」带的是查询串（`?compose=1&about=…`），
+ * 到了 `/tickets` 仍然是这一个表单、这一个端点。
+ */
+export async function createMyTicket(
+  input: CreateConsoleTicketInput,
+): Promise<ConsoleTicket> {
+  return postTicket<ConsoleTicket>("", input);
+}
+
+/**
+ * 在自己的单上回一句。写进的事件类型是**客户发言那个词**（`comment`），由 BFF
+ * 决定——客户端不送 `event_type`：那会让「这句话给谁看」变成一个可以从浏览器
+ * 篡改的参数。
+ */
+export async function replyToMyTicket(
+  ticketNo: string,
+  body: string,
+): Promise<ConsoleTicketEvent> {
+  return postTicket<ConsoleTicketEvent>(
+    `/${encodeURIComponent(ticketNo)}/comments`,
+    { body },
+  );
+}
+
+/**
+ * 把一张已经收尾的单顶回来（`status` → `reopened`），必须带一句「为什么还没好」。
+ *
+ * 那句话**客户和我们都读得到**：BFF 把它写进 `status_changed` 的 payload，而
+ * `status_changed` 在客户可见白名单里。所以它和回复框里的字是同一种东西，不是
+ * 一个只给内部看的理由框。
+ */
+export async function reopenMyTicket(
+  ticketNo: string,
+  reason: string,
+): Promise<ConsoleTicket> {
+  return postTicket<ConsoleTicket>(`/${encodeURIComponent(ticketNo)}/reopen`, {
+    reason,
+  });
+}

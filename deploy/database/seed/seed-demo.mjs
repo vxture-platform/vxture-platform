@@ -636,10 +636,15 @@ export async function seedDemo(client) {
        JSON.stringify({ body: '工单已提交（demo）。' })],
     );
     bump('support.ticket_comments');
+    /* 运营的正式回复是 `reply`，不是 `comment`。`comment` 是**客户自己发言**那个词，
+       而客户侧的展现按 event_type 判归属（故意不看 actor_type）——旧写法会把平台客服说的话
+       在客户的时间线上标成「我发的」并隐去发言人。同时它还会被运营侧巡检的
+       `ticket.customer_replied` 当成客户来信（那一条的第二道门 actor_type='customer'
+       正好拦住了它，但种子本身不应该靠别人的门才正确）。 */
     await client.query(
       `insert into support.ticket_comments
          (id, ticket_id, event_type, actor_type, actor_id, actor_name, payload, created_at)
-       values ($1, $2, 'comment', 'operator', null, '平台客服', $3::jsonb, ${monthsFromNow(-1)})
+       values ($1, $2, 'reply', 'operator', null, '平台客服', $3::jsonb, ${monthsFromNow(-1)})
        on conflict (id) do nothing`,
       [ID.ticketComment(k.n * 2), ID.ticket(k.n),
        JSON.stringify({ body: '已收到，正在跟进（demo）。' })],

@@ -2280,6 +2280,7 @@
       "workspace": "Workspace",
       "org": "Org & Members",
       "billing": "Subscription & Billing",
+      "helpSupport": "Help & support",
       "settings": "Settings & Security",
       "capability": "Models & Capabilities"
     },
@@ -2361,12 +2362,17 @@
       "skillTools": {
         "label": "Skills & Tools",
         "description": "Skills and tools available to this workspace (in development)"
+      },
+      "tickets": {
+        "label": "My tickets",
+        "description": "Raise an issue, follow its progress and read our replies"
       }
     },
     "sections": {
       "workspace": "Workspace",
       "accountTenant": "Account & Tenant",
       "subscriptionBilling": "Subscription & Billing",
+      "helpSupport": "Help & support",
       "settingsSecurity": "Settings & Security",
       "capability": "Models & Capabilities"
     },
@@ -3541,6 +3547,167 @@
     "suspensionHint": {
       "expected": "Expected back around {time}",
       "extendsTerm": "Paused time does not count against your term"
+    }
+  },
+  "tickets": {
+    "status": {
+      "open": "Open",
+      "pending": "On hold",
+      "in_progress": "In progress",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "reopened": "Reopened",
+      "cancelled": "Cancelled"
+    },
+    "event": {
+      "mine": "You wrote",
+      "reply": "Our reply",
+      "statusChange": "Progress update",
+      "other": "Update"
+    },
+    "jump": {
+      "order": "Get help with this order",
+      "bill": "Get help with this bill",
+      "subscription": "Get help with this subscription"
+    },
+    "list": {
+      "title": "My tickets",
+      "description": "Raise an issue and follow how it is going. Everyone in this tenant sees the same tickets.",
+      "metrics": {
+        "groupLabel": "Ticket overview",
+        "unresolved": "Being worked on",
+        "unresolvedHint": "Tickets still open on our side",
+        "awaiting": "Waiting on you",
+        "awaitingHint": "Handled — reply if the problem is still there",
+        "total": "All tickets",
+        "totalHint": "Closed and cancelled ones included"
+      },
+      "table": {
+        "title": "Tickets",
+        "description": "Open a title to read the whole thread and reply.",
+        "colTicket": "Ticket",
+        "colStatus": "Status",
+        "colActivity": "Last activity",
+        "colCreated": "Raised",
+        "reporter": "Filed by {name}",
+        "empty": "No tickets yet",
+        "emptyHint": "Raise one whenever something goes wrong; everything that happens next stays on that ticket.",
+        "emptyFiltered": "No ticket matches these filters"
+      },
+      "filters": {
+        "groupLabel": "Ticket filters",
+        "listOnly": "Tickets only have a list view",
+        "count": "{count} in total",
+        "searchPlaceholder": "Search by ticket code or title",
+        "searchAriaLabel": "Search tickets",
+        "statusAriaLabel": "Filter by status",
+        "statusUnresolved": "Being worked on",
+        "statusAll": "All statuses",
+        "reset": "Clear filters"
+      },
+      "actions": {
+        "menuLabel": "Ticket actions",
+        "detail": "Open ticket",
+        "copy": "Copy ticket code",
+        "copied": "Copied"
+      },
+      "notes": {
+        "title": "About tickets",
+        "description": "A few things worth knowing up front.",
+        "scopeTitle": "Everyone in this tenant can see them",
+        "scopeBody": "A ticket belongs to the tenant, not to one person — a colleague can pick up the same ticket.",
+        "noticeTitle": "You are told when something happens",
+        "noticeBody": "When we reply, hand a ticket back or close it, a message lands in your message centre and opens that ticket.",
+        "closedTitle": "A finished ticket can be reopened",
+        "closedBody": "Closed and cancelled tickets no longer take replies, but if the problem is still there you can reopen the same ticket — the history stays in one place instead of starting again."
+      }
+    },
+    "compose": {
+      "open": "Raise a ticket",
+      "title": "Raise a ticket",
+      "description": "Tell us what happened. Replies and everything that follows stay on this ticket.",
+      "titleLabel": "The problem in one line",
+      "titlePlaceholder": "For example: payment went through but the subscription did not start",
+      "titleHint": "This line shows up in the ticket list and in notifications.",
+      "bodyLabel": "What happened",
+      "bodyPlaceholder": "When it happened, how far you got, what you saw.",
+      "bodyHint": "The more of the sequence you write down, the fewer rounds it takes.",
+      "submit": "Submit",
+      "cancel": "Cancel",
+      "failed": "The ticket was not submitted. Please try again in a moment.",
+      "prefillOrder": "A question about order {code}",
+      "prefillBill": "A question about bill {code}",
+      "prefillSubscription": "A question about the {code} subscription"
+    },
+    "detail": {
+      "backToList": "Back to tickets",
+      "headerMeta": "{code} · raised {created}",
+      "loadingTitle": "Opening the ticket",
+      "notFoundTitle": "No such ticket",
+      "notFoundDescription": "The ticket code in the address does not match any ticket in this tenant.",
+      "notFoundHint": "Check the code, or pick a ticket from the list.",
+      "facts": {
+        "title": "Ticket details",
+        "code": "Ticket code",
+        "status": "Status",
+        "createdAt": "Raised",
+        "lastActivityAt": "Last activity"
+      },
+      "problem": {
+        "title": "What you told us",
+        "description": "The description from when the ticket was raised, kept as written."
+      },
+      "timeline": {
+        "title": "What has happened",
+        "description": "Your messages, our replies, and every change of progress.",
+        "movedTo": "Progress moved to {status}",
+        "progressTag": "Progress",
+        "emptyTitle": "Nothing has happened yet",
+        "emptyDescription": "Any progress shows up here and you get a message about it."
+      },
+      "reply": {
+        "title": "Reply to us",
+        "description": "Extra detail or a follow-up question — write it here.",
+        "label": "Your reply",
+        "placeholder": "Anything else to add?",
+        "submit": "Send",
+        "pending": "Sending…",
+        "failed": "The reply was not sent. Please try again in a moment.",
+        "finishedSectionTitle": "This ticket is finished",
+        "finishedSectionHint": "It no longer takes replies. Reopen it if the problem is still there.",
+        "finishedTitle": "This ticket is finished",
+        "finishedDescription": "Closed and cancelled tickets no longer take replies. If the problem is still there, reopen this one — the history carries on in the same place instead of starting again.",
+        "finishedAction": "Reopen this ticket",
+        "resolvedTitle": "We think this one is handled",
+        "resolvedDescription": "If the problem is still there, reply here — the ticket goes back to being worked on, no need to raise another."
+      },
+      "reopen": {
+        "title": "Reopen ticket",
+        "description": "Say what is still missing and the ticket goes back to being worked on.",
+        "label": "What is still wrong",
+        "placeholder": "For example: followed the steps and got the same error.",
+        "submit": "Reopen",
+        "cancel": "Cancel",
+        "failed": "The ticket was not reopened. Please try again in a moment."
+      },
+      "errors": {
+        "stale": "This ticket just changed (someone else in your tenant, or us). Refresh and try again.",
+        "gone": "This ticket is no longer there. Go back to the list."
+      }
+    },
+    "drawer": {
+      "title": "How my tickets are going",
+      "description": "The tickets being worked on, and the last thing that happened on each.",
+      "close": "Close",
+      "activity": "{what} · {when}",
+      "noActivity": "Nothing has happened yet",
+      "emptyTitle": "No tickets being worked on",
+      "emptyDescription": "Raise one whenever something goes wrong; everything that happens next stays on that ticket.",
+      "failedTitle": "Could not read your tickets",
+      "failedDescription": "Your tickets could not be read just now. Try again; if it keeps failing come back later.",
+      "retry": "Try again",
+      "submit": "Raise a ticket",
+      "viewAll": "See all tickets"
     }
   }
 }

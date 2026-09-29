@@ -270,7 +270,16 @@ export function ConsoleHeader({
         <div className="flex items-center gap-md">
           {/* Varda 助手入口已随独立仓迁出移除(2026-08-18),重构发包后恢复。 */}
           <ShellIconGroup label={t("settings")}>
-            <ShellIconButton icon="help" label={t("help")} onClick={() => {}} />
+            {/* 2026-09-29:这颗按钮此前的 onClick 是 `() => {}`——有图标、有可访问
+                名、有 hover 反馈,点下去什么都不发生。owner 第 5 条裁决把它定成
+                侧边抽屉:列未关闭的工单与各自最后一次动静。
+                **不加角标**:抽屉不承载已读(已读只在消息中心一处),而角标是
+                「有几条没看」的说法,挂上去就等于又开了一份已读。 */}
+            <ShellIconButton
+              icon="help"
+              label={t("help")}
+              onClick={() => openDrawer("help")}
+            />
             {/* 未读角标：站内收件箱（P2-g）。0 不画——空角标是噪音。 */}
             <span className="relative inline-flex">
               <ShellIconButton

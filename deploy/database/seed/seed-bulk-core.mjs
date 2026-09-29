@@ -609,7 +609,10 @@ export async function seedBulkCore(c) {
             eventType,
             actorType,
             actorName,
-            JSON.stringify({ text }),
+            // 键叫 `body`，不叫 `text`：admin-bff 与 console-bff 两个真实写入方写的都是
+            // `body`，而客户侧时间线只认 `body` / `note`。写 `text` 的后果是每条种子
+            // 消息在页面上都渲成「—」——页面照常渲染，没有任何症状。
+            JSON.stringify({ body: text }),
             day(i + Number(seq)),
           ],
         );

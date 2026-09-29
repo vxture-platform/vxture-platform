@@ -65,7 +65,27 @@ const DETAIL_ROW = {
 };
 
 function routerWith(tx: { pool: Pool }, reader: Pool = readerOf([DETAIL_ROW])) {
-  return new TicketsRouter(reader, tx.pool);
+  return new TicketsRouter(reader, tx.pool, silentNotifier());
+}
+
+/**
+ * 分发器替身：**什么也不做，也不抛**（本文件测的是写路径，不是通知）。
+ *
+ * 通知那一半有自己的文件（`tickets-notifications.spec.ts`）——它钉「哪条路径发哪个模板、
+ * 锚长什么样、通知炸了运营的动作照样成功」。这里只要一个不会把写路径带偏的替身：
+ * 少了它，构造函数缺一个参数，tsc 会先红（那也正是我们要的——第三个参数不是可选的）。
+ */
+function silentNotifier() {
+  return {
+    notify: vi.fn(async () => ({
+      inboxCreated: 0,
+      emailsSent: 0,
+      emailsFailed: 0,
+      smsSent: 0,
+      smsFailed: 0,
+      skipped: 0,
+    })),
+  } as unknown as ConstructorParameters<typeof TicketsRouter>[2];
 }
 
 /**
@@ -229,7 +249,7 @@ describe("工单写路径 —— 可见性契约", () => {
 
   it("空正文三个入口一律 400，且不碰库", async () => {
     const tx = noDbPool();
-    const router = new TicketsRouter(tx.pool, tx.pool);
+    const router = new TicketsRouter(tx.pool, tx.pool, silentNotifier());
     await expect(
       router.addTicketReply(makeReq(MANAGE), "TK-1", { body: "   " }),
     ).rejects.toThrow(BadRequestException);
@@ -240,7 +260,7 @@ describe("工单写路径 —— 可见性契约", () => {
 
   it("没有 platform.tenant.manage 时，回复端点在碰库之前就 403", async () => {
     const tx = noDbPool();
-    const router = new TicketsRouter(tx.pool, tx.pool);
+    const router = new TicketsRouter(tx.pool, tx.pool, silentNotifier());
     await expect(
       router.addTicketReply(makeReq([]), "TK-1", { body: "x" }),
     ).rejects.toThrow(ForbiddenException);
@@ -423,17 +443,20 @@ describe("工单写路径 —— 运营代客建单", () => {
   it("uuid 当租户码传进来 → 400（请求体里只收可视码）", async () => {
     const tx = noDbPool();
     await expect(
-      new TicketsRouter(tx.pool, tx.pool).createTicket(makeReq(MANAGE), {
-        ...BODY,
-        tenantCode: TENANT_UUID,
-      }),
+      new TicketsRouter(tx.pool, tx.pool, silentNotifier()).createTicket(
+        makeReq(MANAGE),
+        {
+          ...BODY,
+          tenantCode: TENANT_UUID,
+        },
+      ),
     ).rejects.toThrow(BadRequestException);
     expect(tx.connect).not.toHaveBeenCalled();
   });
 
   it("标题或正文缺失 → 400，不碰库", async () => {
     const tx = noDbPool();
-    const router = new TicketsRouter(tx.pool, tx.pool);
+    const router = new TicketsRouter(tx.pool, tx.pool, silentNotifier());
     await expect(
       router.createTicket(makeReq(MANAGE), { ...BODY, title: "  " }),
     ).rejects.toThrow(BadRequestException);
@@ -462,7 +485,10 @@ describe("工单写路径 —— 运营代客建单", () => {
   it("没有能力时在碰库之前就 403", async () => {
     const tx = noDbPool();
     await expect(
-      new TicketsRouter(tx.pool, tx.pool).createTicket(makeReq([]), BODY),
+      new TicketsRouter(tx.pool, tx.pool, silentNotifier()).createTicket(
+        makeReq([]),
+        BODY,
+      ),
     ).rejects.toThrow(ForbiddenException);
     expect(tx.connect).not.toHaveBeenCalled();
   });
@@ -477,7 +503,7 @@ describe("工单写路径 —— 明确的关闭", () => {
   it("关闭必须带原因，缺了就 400（不碰库）", async () => {
     const tx = noDbPool();
     await expect(
-      new TicketsRouter(tx.pool, tx.pool).closeTicketEndpoint(
+      new TicketsRouter(tx.pool, tx.pool, silentNotifier()).closeTicketEndpoint(
         makeReq(MANAGE),
         "TK-1",
         { reason: "   " },
@@ -560,7 +586,7 @@ describe("工单写路径 —— 明确的关闭", () => {
   it("通用 status 端点收到 closed 且没带 note → 同样 400", async () => {
     const tx = noDbPool();
     await expect(
-      new TicketsRouter(tx.pool, tx.pool).changeTicketStatus(
+      new TicketsRouter(tx.pool, tx.pool, silentNotifier()).changeTicketStatus(
         makeReq(MANAGE),
         "TK-1",
         { status: "closed" },
@@ -611,10 +637,11 @@ describe("工单读取 —— 运营面刻意看得见全部", () => {
         return { rows: [] };
       }),
     } as unknown as Pool;
-    await new TicketsRouter(reader, reader).listTicketComments(
-      makeReq(MANAGE),
-      "TK-1",
-    );
+    await new TicketsRouter(
+      reader,
+      reader,
+      silentNotifier(),
+    ).listTicketComments(makeReq(MANAGE), "TK-1");
     expect(seen[0]).toMatch(/from\s+support\.ticket_comments/);
     expect(seen[0]).not.toMatch(/event_type\s*=\s*any/i);
   });

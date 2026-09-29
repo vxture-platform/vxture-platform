@@ -65,6 +65,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { PlannedBadge } from "@/components/planned";
+import { buildTicketComposeHref } from "@/lib/ticket-compose";
 
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { AddonPacksSection } from "./components/AddonPacksSection";
@@ -125,6 +126,8 @@ export function BillingPage() {
   const { fmtDate, fmtTime, fmtDateTime } = useDateFormat();
 
   const t = useTranslations("billingPage");
+  /* 求助入口的词在 `tickets.jump.*`(订单 / 账单 / 订阅三处同一族)。 */
+  const tJump = useTranslations("tickets.jump");
   const tableLabels = useTableLabels();
   const router = useRouter();
   const locale = useLocale();
@@ -418,6 +421,14 @@ export function BillingPage() {
           if (receipt?.invoiceFileUrl)
             window.open(receipt.invoiceFileUrl, "_blank", "noreferrer");
         },
+      },
+      /* 「就这张账单求助」(owner 2026-09-29 第 5 条裁决):**只跳转**。带上账单
+         可视码去 /tickets,提单表单全 console 只有那一个。 */
+      {
+        id: "help",
+        label: tJump("bill"),
+        onSelect: () =>
+          router.push(buildTicketComposeHref({ type: "bill", code: b.billNo })),
       },
     ];
   };

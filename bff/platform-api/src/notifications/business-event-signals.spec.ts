@@ -11,6 +11,7 @@
  * 真库上的谓词与授权面由 operator-signal-sweep.itest.spec.ts 钉，两边各管一半。
  */
 import { describe, expect, it } from "vitest";
+import { TICKET_EVENT_COMMENT } from "@vxture-platform/shared";
 import {
   BUSINESS_EVENT_CODES,
   BUSINESS_EVENT_INFO_TTL_MS,
@@ -56,6 +57,47 @@ describe("业务事件巡检 —— 表结构不变式", () => {
     for (const pass of BUSINESS_EVENT_PASSES) {
       expect(pass.sql, pass.code).toContain("as dedupe_key");
     }
+  });
+
+  /**
+   * 参数位与 extraParams 必须**数目相等**。两个方向都错得不响：
+   *   · SQL 里多一个 $4 而没给参数 ⇒ pg 抛「bind message supplies 3 parameters」，
+   *     那一类整轮失败（巡检把它 catch 成一段失败，运营端的表现是这一类一条不发）；
+   *   · 给了参数而 SQL 里没有那个位 ⇒ 参数被默默忽略，谓词按别的规则放行，
+   *     **一个字都不会报**。后者正是这一批要防的那种漏法。
+   */
+  it("SQL 里的最大参数位 = 2 + extraParams 的个数", () => {
+    for (const pass of BUSINESS_EVENT_PASSES) {
+      const positions = [...pass.sql.matchAll(/\$(\d+)/g)].map((m) =>
+        Number(m[1]),
+      );
+      const highest = Math.max(...positions);
+      expect(highest, pass.code).toBe(2 + (pass.extraParams?.length ?? 0));
+      // 位号不跳号：$2 与 $4 之间少了 $3，上面那条仍然能过。
+      const distinct = [...new Set(positions)].sort((a, b) => a - b);
+      expect(distinct, pass.code).toEqual(
+        Array.from({ length: highest }, (_, i) => i + 1),
+      );
+    }
+  });
+
+  /**
+   * 读 support.ticket_comments 的那一类：事件词必须**绑参**，不许写进 SQL 字面量。
+   *
+   * 守卫（check-ticket-comment-visibility）查的是「客户面读这张表要带白名单过滤」；
+   * 这一条查的是另一半：运营通告这一侧的判据也得来自值域那一份，不是手抄。
+   * 三处字面量（console 展示层 / console-bff 写入方 / 这条 SQL）里有一处写错，
+   * 后果是该发的通告一条不发，而且不报错。
+   */
+  it("客户回复那一类：事件词绑参取自值域，SQL 里没有手抄的词", () => {
+    const pass = passOf("ticket.customer_replied");
+    expect(pass.sql).toContain("c.event_type = any($3::text[])");
+    expect(pass.sql).not.toContain("'comment'");
+    expect(pass.extraParams).toEqual([[TICKET_EVENT_COMMENT]]);
+    // 第二道门：词对上了还要身份对上（运营也能写出 comment 这个词，见 demo seed 的旧行）。
+    expect(pass.sql).toContain("c.actor_type = 'customer'");
+    // 正文不引评论文本 ⇒ SQL 不取 payload。
+    expect(pass.sql).not.toContain("payload");
   });
 });
 
@@ -272,6 +314,55 @@ describe("业务事件巡检 —— 逐类文案", () => {
         priority: "p2",
       }).severity,
     ).toBe("warning");
+  });
+
+  it("客户回复工单：p0 升 critical，正文说清当前状态与回复人", () => {
+    const shaped = shape("ticket.customer_replied", {
+      dedupe_key: "TCK-202609-0001:2026-09-29T11:28:28.341Z",
+      code: "TCK-202609-0001",
+      subject_text: "登录不了",
+      priority: "p1",
+      note: "resolved",
+      display_name: "张三",
+      tenant_no: "2636605046",
+      tenant_name: "示例科技",
+    });
+    expect(shaped.severity).toBe("warning");
+    expect(shaped.title).toBe("客户回复工单 TCK-202609-0001：登录不了");
+    expect(shaped.body).toContain("回复人 张三");
+    // 「已解决」上的回复会把单自动重开,通告必须说得出它当时是什么状态。
+    expect(shaped.body).toContain("当前状态 已解决");
+    expect(shaped.body).toContain("优先级 P1 高");
+    expect(shaped.body).toContain("示例科技");
+    expect(shaped.link).toBe("/tickets/TCK-202609-0001");
+
+    expect(
+      shape("ticket.customer_replied", {
+        dedupe_key: "TCK-2:t",
+        code: "TCK-2",
+        subject_text: "急",
+        priority: "p0",
+      }).severity,
+    ).toBe("critical");
+  });
+
+  it("客户回复：去重键带回复时刻 ⇒ 同一张单回三句是三条通告", () => {
+    const first = businessEventDedupeKey(
+      "ticket.customer_replied",
+      "TCK-202609-0001:2026-09-29T11:28:28.341Z",
+    );
+    const second = businessEventDedupeKey(
+      "ticket.customer_replied",
+      "TCK-202609-0001:2026-09-29T11:29:02.007Z",
+    );
+    expect(first).not.toBe(second);
+    // 而同一句回话被重扫十几次(回看窗口 30 分钟 / 节奏 2 分钟)只会落成一条。
+    expect(first).toBe(
+      businessEventDedupeKey(
+        "ticket.customer_replied",
+        "TCK-202609-0001:2026-09-29T11:28:28.341Z",
+      ),
+    );
   });
 
   it("值域外的码原样回显，不吞掉也不猜", () => {

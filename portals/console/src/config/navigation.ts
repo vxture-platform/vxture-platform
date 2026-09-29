@@ -177,6 +177,32 @@ const subscriptionBillingSection: NavigationSection = {
   ],
 };
 
+/**
+ * 帮助与支持（owner 2026-09-29 裁决：**新组，放在「设置与安全」上方**）。
+ *
+ * 组里今天只有一项。这不是占位：客户在产品内**从来没有过**求助的去处——真实
+ * 的支持渠道是官网上的一个邮箱地址，而工单表在运营侧开出建单端点之前一行都
+ * 没有。所以这一项本身就是这一组存在的理由。
+ *
+ * **不挂 capability**：owner 裁决「工单可见范围 = 租户级」，同租户成员都看得见
+ * 同一批单。挂一个码等于让租户里的一部分人连自己单位提过什么单都看不到，而
+ * 求助不是一项需要被授权的能力。
+ *
+ * 文档中心（`docs.vxture.com`）是第三批的事——它是第七个门户，不是一个页面。
+ * 那一批落地后这一组会多出第二项。
+ */
+const helpSupportSection: NavigationSection = {
+  titleKey: "helpSupport",
+  items: [
+    {
+      href: "/tickets",
+      labelKey: "tickets.label",
+      icon: "chat-dots",
+      descriptionKey: "tickets.description",
+    },
+  ],
+};
+
 const settingsSecuritySection: NavigationSection = {
   titleKey: "settingsSecurity",
   items: [
@@ -243,6 +269,7 @@ export const navigationSections: NavigationSection[] = [
   workspaceSection,
   accountTenantSection,
   subscriptionBillingSection,
+  helpSupportSection,
   settingsSecuritySection,
 ];
 
@@ -269,6 +296,14 @@ export const consoleDomains: ConsoleDomain[] = [
     labelKey: "billing",
     icon: "chart-bar",
     sections: [subscriptionBillingSection],
+  },
+  /* 顺序即屏幕顺序：帮助与支持在「设置与安全」之前（owner 2026-09-29）。
+     这两条的相对位置由 owner 定，别按字母序或按"新加的放最后"重排。 */
+  {
+    id: "helpSupport",
+    labelKey: "helpSupport",
+    icon: "headset",
+    sections: [helpSupportSection],
   },
   {
     id: "settings",
