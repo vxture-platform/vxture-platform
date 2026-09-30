@@ -38,7 +38,17 @@
 | `#256` | atlas | operator token 签发契约两问：scope/realm/userType 绑定保证 + `mode` 的处置                                                              |
 | `#257` | atlas | `atlas#159` 的 §1/§4/§5/§6 已实现（计量四维、Endpoint 可观测、Provider 探测、审计读端点）                                               |
 
-### 本仓开给外部的（8 个）
+### 本仓开给外部的（11 个）
+
+> **2026-09-30 发现：下表里 atlas / runos 的链接全部解析不了，需要 owner 定怎么处理。**
+> 两个仓现在在 **`vxture-foundation/`** 而不是 `vxture/`（本机 remote 实读：
+> `vxture-foundation/vxture-atlas`、`vxture-foundation/vxture-runos`；karda / arda
+> 仍在 `vxture/`，它们的链接没问题）。而**换成正确的组之后编号也对不上**——
+> `atlas#205` / `#206` / `#131` / `#159` / `#165` 在新组里不存在，
+> `atlas#38` / `runos#65` / `runos#67` 解析到的是**另外三个 PR**，标题与本表描述完全无关。
+> 也就是说这些行**既不能照原样点开，也不能靠改组名修好**：那批 issue 的去向我这侧查不到。
+> 本次**只新增三行、不动既有行**——把八行按猜测重写，只会把「链接坏了」换成
+> 「链接能点但指向错东西」，后者更难发现。
 
 > **2026-08-16 一次性开出 10 个**：`product_251` 三方一致性规范的上游条款，owner 全部授权。
 > **逐条开、不打包**——规范自己的纪律是「逐条签署，不是全有全无」，打成一个 issue 就没法只签一半。
@@ -51,16 +61,19 @@
 > 论证拆掉了我们「需协调」的前提——**那条纪律是我们写宽的**。
 > 回冲代价：runos 硬切路由无并存期，opera 断了一天（已适配，见审查文档 §C7）。
 
-| Issue                                                            | 内容概要                                                                                                                                           |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`atlas#205`](https://github.com/vxture/vxture-atlas/issues/205) | X-4 模型无版本与弃用信号——**已确认为债并记账，不承诺排期**。反提案「不加版本列，`modelCode` 即版本标识」已接受；本条作记账位保持开启               |
-| [`atlas#206`](https://github.com/vxture/vxture-atlas/issues/206) | X-4 路由改名——名字已定（`product-endpoint-grants` / `tenant-model-grants` / `model-routes`）。**等 atlas 部署后 opera 切 `PUT`→`PATCH`，严格顺序** |
-| [`atlas#38`](https://github.com/vxture/vxture-atlas/issues/38)   | 实现 A2 `POST /v1/parse`（A1/A3 已交付并关闭，本条是 A 系列最后一个）                                                                              |
-| [`atlas#131`](https://github.com/vxture/vxture-atlas/issues/131) | grants 上缺 `taskProfile` 字段（自本仓 `#148` 承接；provider-keys 那半 2026-08-12 已解决）                                                         |
-| [`atlas#159`](https://github.com/vxture/vxture-atlas/issues/159) | Atlas 1.0 范围逐条验收 —— 6 项要求 + 路由机制澄清                                                                                                  |
-| [`atlas#165`](https://github.com/vxture/vxture-atlas/issues/165) | step-up 的判据与执行位归 platform/console —— 请撤 `StepUpRequiredGuard` + 注册操作级词表                                                           |
-| [`runos#65`](https://github.com/vxture/vxture-runos/issues/65)   | opera 管理面接入回报 —— 4 项接口问题 + 本仓 `#252` 前提更正                                                                                        |
-| [`runos#67`](https://github.com/vxture/vxture-runos/issues/67)   | step-up 不必对齐 atlas —— 判据归 platform 目录、执行归 console                                                                                     |
+| Issue                                                                       | 内容概要                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`runos#116`](https://github.com/vxture-foundation/vxture-runos/issues/116) | 通则 2026-09-30 采纳 runos 自己发明的 `transport` 字段，并要求 MCP 面加 `transport.mcp_versions`（值 = SDK 的 `SUPPORTED_PROTOCOL_VERSIONS`，**不要求升 SDK**）——分代对着 legacy 服务端问不出来，清单端点是唯一还能说这句话的地方                                         |
+| [`vxtpl#96`](https://github.com/vxture/vx-agent-vxtpl/issues/96)            | 两处仍是通则 2026-09-16 更正前的形状：转化深链出口（console `/subscribe` → 官网定价页）、显示声明来源（`id_token` + UserInfo → `access_token`）。**对 vxtpl 自己都不是故障**，但它是《产品接入范本》的实证仓，会被新产品照抄；同构产品 yucer 两项都已改完，形状可直接照抄 |
+| [`yucer#527`](https://github.com/vxture/vx-agent-yucer/issues/527)          | 上面那两项**已确认改完**（并被引为参考形状，本信只为告知）；仍开着的只有 webhook 路径按 X-4 三步迁出 `LEGACY_WEBHOOK_PATHS`，第 2 步在本仓                                                                                                                                |
+| [`atlas#205`](https://github.com/vxture/vxture-atlas/issues/205)            | X-4 模型无版本与弃用信号——**已确认为债并记账，不承诺排期**。反提案「不加版本列，`modelCode` 即版本标识」已接受；本条作记账位保持开启                                                                                                                                      |
+| [`atlas#206`](https://github.com/vxture/vxture-atlas/issues/206)            | X-4 路由改名——名字已定（`product-endpoint-grants` / `tenant-model-grants` / `model-routes`）。**等 atlas 部署后 opera 切 `PUT`→`PATCH`，严格顺序**                                                                                                                        |
+| [`atlas#38`](https://github.com/vxture/vxture-atlas/issues/38)              | 实现 A2 `POST /v1/parse`（A1/A3 已交付并关闭，本条是 A 系列最后一个）                                                                                                                                                                                                     |
+| [`atlas#131`](https://github.com/vxture/vxture-atlas/issues/131)            | grants 上缺 `taskProfile` 字段（自本仓 `#148` 承接；provider-keys 那半 2026-08-12 已解决）                                                                                                                                                                                |
+| [`atlas#159`](https://github.com/vxture/vxture-atlas/issues/159)            | Atlas 1.0 范围逐条验收 —— 6 项要求 + 路由机制澄清                                                                                                                                                                                                                         |
+| [`atlas#165`](https://github.com/vxture/vxture-atlas/issues/165)            | step-up 的判据与执行位归 platform/console —— 请撤 `StepUpRequiredGuard` + 注册操作级词表                                                                                                                                                                                  |
+| [`runos#65`](https://github.com/vxture/vxture-runos/issues/65)              | opera 管理面接入回报 —— 4 项接口问题 + 本仓 `#252` 前提更正                                                                                                                                                                                                               |
+| [`runos#67`](https://github.com/vxture/vxture-runos/issues/67)              | step-up 不必对齐 atlas —— 判据归 platform 目录、执行归 console                                                                                                                                                                                                            |
 
 ### 不涉本仓（登记备查）
 
