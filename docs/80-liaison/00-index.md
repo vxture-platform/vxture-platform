@@ -38,7 +38,7 @@
 | `#256` | atlas | operator token 签发契约两问：scope/realm/userType 绑定保证 + `mode` 的处置                                                              |
 | `#257` | atlas | `atlas#159` 的 §1/§4/§5/§6 已实现（计量四维、Endpoint 可观测、Provider 探测、审计读端点）                                               |
 
-### 本仓开给外部的（11 个）
+### 本仓开给外部的（4 个）
 
 > **2026-09-30 发现：下表里 atlas / runos 的链接全部解析不了，需要 owner 定怎么处理。**
 > 两个仓现在在 **`vxture-foundation/`** 而不是 `vxture/`（本机 remote 实读：
@@ -47,8 +47,14 @@
 > `atlas#205` / `#206` / `#131` / `#159` / `#165` 在新组里不存在，
 > `atlas#38` / `runos#65` / `runos#67` 解析到的是**另外三个 PR**，标题与本表描述完全无关。
 > 也就是说这些行**既不能照原样点开，也不能靠改组名修好**：那批 issue 的去向我这侧查不到。
-> 本次**只新增三行、不动既有行**——把八行按猜测重写，只会把「链接坏了」换成
+> 当时**只新增三行、没动既有八行**——按猜测重写只会把「链接坏了」换成
 > 「链接能点但指向错东西」，后者更难发现。
+>
+> **2026-09-30 第二步：那八条逐条分诊完了，七条结案、一条留下。**
+> 判据不是「链接还通不通」，是**那件事今天做没做**——逐条去两仓的代码里找证据，
+> 找不到就判 unknown 不猜。结论与出处见下方「历史归档 · 2026-09-30 结案的七条」。
+> **删行之前先把证据落在了那里**：issue 没跟着仓搬走，表里这段文字是它们仅存的记录，
+> 直接删干净等于把「为什么今天是这个形状」的出处一起删掉。
 
 > **2026-08-16 一次性开出 10 个**：`product_251` 三方一致性规范的上游条款，owner 全部授权。
 > **逐条开、不打包**——规范自己的纪律是「逐条签署，不是全有全无」，打成一个 issue 就没法只签一半。
@@ -66,14 +72,7 @@
 | [`runos#116`](https://github.com/vxture-foundation/vxture-runos/issues/116) | 通则 2026-09-30 采纳 runos 自己发明的 `transport` 字段，并要求 MCP 面加 `transport.mcp_versions`（值 = SDK 的 `SUPPORTED_PROTOCOL_VERSIONS`，**不要求升 SDK**）——分代对着 legacy 服务端问不出来，清单端点是唯一还能说这句话的地方                                         |
 | [`vxtpl#96`](https://github.com/vxture/vx-agent-vxtpl/issues/96)            | 两处仍是通则 2026-09-16 更正前的形状：转化深链出口（console `/subscribe` → 官网定价页）、显示声明来源（`id_token` + UserInfo → `access_token`）。**对 vxtpl 自己都不是故障**，但它是《产品接入范本》的实证仓，会被新产品照抄；同构产品 yucer 两项都已改完，形状可直接照抄 |
 | [`yucer#527`](https://github.com/vxture/vx-agent-yucer/issues/527)          | 上面那两项**已确认改完**（并被引为参考形状，本信只为告知）；仍开着的只有 webhook 路径按 X-4 三步迁出 `LEGACY_WEBHOOK_PATHS`，第 2 步在本仓                                                                                                                                |
-| [`atlas#205`](https://github.com/vxture/vxture-atlas/issues/205)            | X-4 模型无版本与弃用信号——**已确认为债并记账，不承诺排期**。反提案「不加版本列，`modelCode` 即版本标识」已接受；本条作记账位保持开启                                                                                                                                      |
-| [`atlas#206`](https://github.com/vxture/vxture-atlas/issues/206)            | X-4 路由改名——名字已定（`product-endpoint-grants` / `tenant-model-grants` / `model-routes`）。**等 atlas 部署后 opera 切 `PUT`→`PATCH`，严格顺序**                                                                                                                        |
-| [`atlas#38`](https://github.com/vxture/vxture-atlas/issues/38)              | 实现 A2 `POST /v1/parse`（A1/A3 已交付并关闭，本条是 A 系列最后一个）                                                                                                                                                                                                     |
-| [`atlas#131`](https://github.com/vxture/vxture-atlas/issues/131)            | grants 上缺 `taskProfile` 字段（自本仓 `#148` 承接；provider-keys 那半 2026-08-12 已解决）                                                                                                                                                                                |
-| [`atlas#159`](https://github.com/vxture/vxture-atlas/issues/159)            | Atlas 1.0 范围逐条验收 —— 6 项要求 + 路由机制澄清                                                                                                                                                                                                                         |
-| [`atlas#165`](https://github.com/vxture/vxture-atlas/issues/165)            | step-up 的判据与执行位归 platform/console —— 请撤 `StepUpRequiredGuard` + 注册操作级词表                                                                                                                                                                                  |
-| [`runos#65`](https://github.com/vxture/vxture-runos/issues/65)              | opera 管理面接入回报 —— 4 项接口问题 + 本仓 `#252` 前提更正                                                                                                                                                                                                               |
-| [`runos#67`](https://github.com/vxture/vxture-runos/issues/67)              | step-up 不必对齐 atlas —— 判据归 platform 目录、执行归 console                                                                                                                                                                                                            |
+| [`atlas#159`](https://github.com/vxture/vxture-atlas/issues/159)            | Atlas 1.0 范围逐条验收 —— 6 项要求 + 路由机制澄清。**2026-09-30 分诊：唯一没结清的一条**——本仓 `#257` 记着「§1/§4/§5/§6 已实现」，但 §2/§3 是什么、有没有落，在本仓与 atlas 仓里都查不出可判的证据，**不猜**。链接已失效（见下），要跟进得先问出 §2/§3 的原文             |
 
 ### 不涉本仓（登记备查）
 
@@ -82,6 +81,25 @@
 | [`arda#211`](https://github.com/vxture/vxture-arda/issues/211) | runos→arda：首个真实 Connector 注册 —— 凭证路径 + 一把测试 API key |
 
 vxture-karda 当前 **0 个 open**。
+
+## 历史归档 · 2026-09-30 结案的七条（原「本仓开给外部的」表）
+
+> 这七条的 issue 已经**够不到**（atlas / runos 搬到 `vxture-foundation` 时 issue 没跟着走，
+> 新组里编号重新开始，旧号解析到的是无关的 PR）。所以结案记录只能落在这里。
+> 每条都去两仓代码里逐项找过证据；**不是按「链接打不开」删的**。
+
+| 原行                                                | 结论                     | 凭什么                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `atlas#205` X-4 模型无版本与弃用信号                | **已结（记账位账已清）** | 反提案「不加版本列、`modelCode` 即版本标识」正是 atlas 今天的形状：`model.models` 建表段内无任何 version 列（按设计没有，不是欠着），弃用信号在 `deploy/database/ddl/00_baseline.sql` 的 `deprecated_at` + 部分索引；版本信号改由派生指纹 `service/src/model-behavior-version.ts` 承担并经 `/v1/models` 的 `behaviorVersion` 对外。本仓 opera 已按此渲染：`portals/opera/src/app/(shell)/model/services/page.tsx` 的 `modelCode` 仅建时可写、三值 `MODEL_STATE_META`、「弃用（仍可调用）/ 撤销弃用」两个动作分开。atlas 自己的符合性表把 X-4 记为 met |
+| `atlas#206` X-4 路由改名 + opera 切 `PUT`→`PATCH`   | **已结**                 | atlas 三个新名都在且**只注册了 `@Patch`**（`service/src/runtime/model-admin.controller.ts`，整个 controller 零个 `@Put`），新旧名并存于同一装饰器；本仓出站已全是新名 + `PATCH`（`bff/opera-bff/src/routers/atlas.router.ts`、`bff/admin-bff/src/routers/atlas.router.ts`），旧出站路径全仓零残留。**「严格顺序」有实测**：`workplans/2026-08-23-opera-atlas-runos-contract-audit.md` 里先核 atlas 部署镜像 digest 与源码一致、再改 opera，并逐方法探到 `PUT → 404 / PATCH → 401`                                                                     |
+| `atlas#165` step-up 判据与执行位归 platform/console | **已结**                 | 与 `runos#67` 同族，判据已收在平台侧目录                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `runos#65` opera 管理面接入回报                     | **已结**                 | 四项接口问题与 `#252` 的前提更正都已落地                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `runos#67` step-up 不必对齐 atlas                   | **已结**                 | 同 `atlas#165`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `atlas#38` 实现 A2 `POST /v1/parse`                 | **前提没了（moot）**     | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `atlas#131` grants 缺 `taskProfile`                 | **前提没了（moot）**     | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+> **没有在新组重开任何一条。** 重开等于再问一遍一件已经完成的事；而「已经做完的记账位」
+> 开在那里也不会有人去读。真正该留下的是上面这张表——它让下一个人能自己去核，而不是相信这句话。
 
 ## 历史归档（既有信件文件，本目录同级，不再新增同类文件）
 
