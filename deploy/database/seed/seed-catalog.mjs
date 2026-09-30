@@ -2562,8 +2562,8 @@ export async function seedCatalog(client) {
       insert into appoidc.oidc_clients
         (client_id, name, display_name, logo_url, realm, product_id, client_kind, release_channel,
          client_secret_hash, redirect_uris, post_logout_redirect_uris, back_channel_logout_uri,
-         allowed_scopes, token_endpoint_auth_method, status, created_at, updated_at)
-      values ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', now(), now())
+         slo_participation, allowed_scopes, token_endpoint_auth_method, status, created_at, updated_at)
+      values ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'active', now(), now())
       on conflict (client_id) do update set
         name = excluded.name,
         display_name = excluded.display_name,
@@ -2588,6 +2588,18 @@ export async function seedCatalog(client) {
         redirect_uris = excluded.redirect_uris,
         post_logout_redirect_uris = excluded.post_logout_redirect_uris,
         back_channel_logout_uri = excluded.back_channel_logout_uri,
+        -- 与 URI 同批写。此前这一列 seed 从来不写（也不在这段 DO UPDATE 里，
+        -- 所以重跑不会动它），于是所有 seed 出来的客户端都躺在列 DEFAULT 'none' 上，
+        -- 而 IdP 那时只看 URI——那一列因此是个没人读的声明。
+        -- 2026-09-30 起 IdP 真的读它（owner 裁定），两个值必须一起讲得通，
+        -- 否则 seed 建出来的客户端「有端点却不参与」，登出通知一条都发不出去。
+        --
+        -- 代价说清楚：**seed 声明的那几个客户端（含 arda/karda/umbra/vxtpl），
+        -- 参与方式以 seed 为准**。运营在 opera 里把某一个关成「登记了先不启用」，
+        -- 下一次重跑 seed 会按 URI 把它打开。这与 redirect_uris / allowed_scopes
+        -- 的既有行为一致（seed 声明的列都是这样），不是本次新增的危险；
+        -- 真要长期保持关闭，得把那个客户端从 seed 里摘掉。
+        slo_participation = excluded.slo_participation,
         allowed_scopes = excluded.allowed_scopes,
         token_endpoint_auth_method = excluded.token_endpoint_auth_method,
         updated_at = now()
@@ -2604,12 +2616,15 @@ export async function seedCatalog(client) {
         c.redirectUris,
         postLogoutUris,
         backChannelUri,
+        // 参与方式与 URI 同源：派了端点就参与，没派就不参与。
+        // 不给第三个值（`front_channel`）——全仓没有实现它的地方。
+        backChannelUri ? "back_channel" : "none",
         c.scopes,
         authMethod,
       ],
     );
     console.log(
-      `✓  appoidc.oidc_clients — ${c.clientId} (${isPlatform ? "platform" : `product=${c.product}`}, realm=${c.realm}, auth=${authMethod}, secret=${secretHash ? "set" : "unset"})`,
+      `✓  appoidc.oidc_clients — ${c.clientId} (${isPlatform ? "platform" : `product=${c.product}`}, realm=${c.realm}, auth=${authMethod}, secret=${secretHash ? "set" : "unset"}, slo=${backChannelUri ? "back_channel" : "none"})`,
     );
   }
 

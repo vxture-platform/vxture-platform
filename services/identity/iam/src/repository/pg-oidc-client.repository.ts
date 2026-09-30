@@ -23,6 +23,19 @@ export interface OidcClientConfig {
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   backChannelLogoutUri: string | null;
+  /**
+   * 单点登出的参与方式。**IdP 真的读它**（2026-09-30 起，owner 裁定）：
+   * 只有 `back_channel` 才会在 end_session 时收到 `logout_token`。
+   *
+   * 在此之前这一列全仓零读者——`sendBackChannelLogouts` 只看
+   * `backChannelLogoutUri` 非空，于是通则里「新登记的客户端
+   * slo_participation=none，收不到后台登出」那句话引用的是一个**不存在的判据**。
+   * 现在它存在了，代价是存量必须先补齐（迁移 2026-11-27）。
+   *
+   * `front_channel` 在库上的 CHECK 里，但**全仓没有实现它的地方**；登记面也不提供
+   * 这一档（一个选了不会发生任何事的选项比灰掉更糟）。
+   */
+  sloParticipation: "none" | "back_channel" | "front_channel";
   allowedScopes: string[];
   accessTokenTtl: number;
   refreshTokenTtl: number;
@@ -60,6 +73,7 @@ interface OidcClientRow {
   redirect_uris: string[];
   post_logout_redirect_uris: string[];
   back_channel_logout_uri: string | null;
+  slo_participation: string;
   allowed_scopes: string[];
   access_token_ttl: number;
   refresh_token_ttl: number;
@@ -72,6 +86,7 @@ interface OidcClientRow {
 const SELECT_COLUMNS = `
   c.client_id, c.name, c.display_name, c.logo_url, c.realm, c.client_secret_hash,
   c.redirect_uris, c.post_logout_redirect_uris, c.back_channel_logout_uri,
+  c.slo_participation,
   c.allowed_scopes, c.access_token_ttl, c.refresh_token_ttl,
   c.pkce_required, c.token_endpoint_auth_method,
   (c.status = 'active') as is_enabled, p.product_code
@@ -88,6 +103,14 @@ function toConfig(row: OidcClientRow): OidcClientConfig {
     redirectUris: row.redirect_uris ?? [],
     postLogoutRedirectUris: row.post_logout_redirect_uris ?? [],
     backChannelLogoutUri: row.back_channel_logout_uri,
+    /* 库上的 CHECK 把值域焊死在这三个里；读到别的只能是有人绕过 DDL 写了行，
+       那时按最保守的一档处理（不发登出通知），不是抛——登出路径不该因为
+       一行坏数据整条失败。 */
+    sloParticipation:
+      row.slo_participation === "back_channel" ||
+      row.slo_participation === "front_channel"
+        ? row.slo_participation
+        : "none",
     allowedScopes: row.allowed_scopes ?? [],
     accessTokenTtl: row.access_token_ttl,
     refreshTokenTtl: row.refresh_token_ttl,

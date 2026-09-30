@@ -92,6 +92,21 @@ export interface OidcClientRecord {
   postLogoutRedirectUris: string[];
   allowedScopes: string[];
   pkceRequired: boolean;
+  /**
+   * IdP 结束会话时 POST `logout_token` 的落点。此前**库里有列、IdP 在读、
+   * 没有任何地方能填**——通则里那句「运营台目前登记不了…找平台运维补登记」
+   * 就是这个洞。owner 2026-09-30 裁定做出来。
+   */
+  backChannelLogoutUri: string | null;
+  /**
+   * 单点登出参与方式。**IdP 真的读它**（2026-09-30 起）：只有 `back_channel`
+   * 才会收到 `logout_token`。
+   *
+   * 读路径照库里的真值返回（含 `front_channel`）——报真话；**写路径只收
+   * `none` / `back_channel`**，因为 `front_channel` 全仓没有实现，
+   * 给一个选了什么都不会发生的选项比灰掉更糟。
+   */
+  sloParticipation: "none" | "back_channel" | "front_channel";
   /** `client_secret_basic`(机密) 或 `none`(RFC 8252 公共客户端)。 */
   tokenEndpointAuthMethod: string;
   state: ClientState;
@@ -112,6 +127,8 @@ interface ClientRow {
   post_logout_redirect_uris: string[];
   allowed_scopes: string[];
   pkce_required: boolean;
+  back_channel_logout_uri: string | null;
+  slo_participation: string;
   token_endpoint_auth_method: string;
   status: ClientState;
   created_at: string;
@@ -121,7 +138,8 @@ interface ClientRow {
 const SELECT_COLUMNS = `
   c.id, c.client_id, c.product_id, p.product_code, c.release_channel, c.name,
   c.display_name, c.logo_url, c.redirect_uris, c.post_logout_redirect_uris,
-  c.allowed_scopes, c.pkce_required, c.token_endpoint_auth_method, c.status,
+  c.allowed_scopes, c.pkce_required, c.back_channel_logout_uri,
+  c.slo_participation, c.token_endpoint_auth_method, c.status,
   c.created_at, c.updated_at
 `;
 const FROM_JOIN = `appoidc.oidc_clients c LEFT JOIN product.products p ON p.id = c.product_id`;
@@ -140,6 +158,14 @@ function toRecord(row: ClientRow): OidcClientRecord {
     redirectUris: row.redirect_uris,
     postLogoutRedirectUris: row.post_logout_redirect_uris ?? [],
     allowedScopes: row.allowed_scopes,
+    backChannelLogoutUri: row.back_channel_logout_uri,
+    /* 库上 CHECK 焊死这三个值；读到别的只能是有人绕过 DDL 写了行，
+       按最保守的一档报（不参与），不抛——一行坏数据不该让整个列表 500。 */
+    sloParticipation:
+      row.slo_participation === "back_channel" ||
+      row.slo_participation === "front_channel"
+        ? row.slo_participation
+        : "none",
     tokenEndpointAuthMethod: row.token_endpoint_auth_method,
     pkceRequired: row.pkce_required,
     state: row.status,
@@ -185,6 +211,7 @@ interface CreateClientBody {
 const RETURNING_COLUMNS = `c.id, c.client_id, c.product_id, c.release_channel, c.name,
                   c.display_name, c.logo_url, c.redirect_uris,
                   c.post_logout_redirect_uris, c.allowed_scopes, c.pkce_required,
+                  c.back_channel_logout_uri, c.slo_participation,
                   c.token_endpoint_auth_method, c.status, c.created_at, c.updated_at`;
 
 /** 去空白、丢空串、去重，顺序保持调用方给的。 */
@@ -201,6 +228,30 @@ export function normalizeUriList(value: unknown): string[] {
 @Controller("api/oidc-clients")
 export class OidcClientRouter {
   constructor(@Inject(OPERA_BFF_RW_POOL) private readonly pool: Pool) {}
+
+  /**
+   * 只读回这一对，给上面那条 PUT 的「补齐没送的那一半再判」用。
+   *
+   * 刻意不复用 `SELECT_COLUMNS`：那份要 join 产品目录取 `product_code`，而这里
+   * 只需要两列——为了两个值去 join 一张表，下一个人会以为这两列和产品目录有关系。
+   */
+  private async currentSloPair(
+    clientId: string,
+  ): Promise<{ uri: string | null; slo: string } | null> {
+    const r = await this.pool.query<{
+      back_channel_logout_uri: string | null;
+      slo_participation: string;
+    }>(
+      `SELECT back_channel_logout_uri, slo_participation
+         FROM appoidc.oidc_clients
+        WHERE client_id = $1 AND realm = 'customer' AND client_kind = 'product'`,
+      [clientId],
+    );
+    const row = r.rows[0];
+    return row
+      ? { uri: row.back_channel_logout_uri, slo: row.slo_participation }
+      : null;
+  }
 
   @Get()
   async list(
@@ -340,20 +391,75 @@ export class OidcClientRouter {
     @Req() req: Request & RequestContext,
     @Param("clientId") clientId: string,
     @Body()
-    body: { redirectUris?: string[]; postLogoutRedirectUris?: string[] },
+    body: {
+      redirectUris?: string[];
+      postLogoutRedirectUris?: string[];
+      /**
+       * 后端通道登出，和上面两个白名单同一道门（2026-09-30 新增）。
+       *
+       * 为什么挂在这条 PUT 上而不另开一个端点：它和登录回调、登出回跳是**同一类
+       * 东西**——「IdP 会往哪个地址送东西」。通则也把这三样归在「改登录回调或
+       * 登出回跳需要二次验证」一句里。而这条 PUT 已经 `@RequireStepUp()`、已经是
+       * 整组替换语义，再开一个端点只会让同一个安全边界有两扇门。
+       *
+       * 字段缺席 = 不动（同 PATCH 语义）；显式 `null` = 清空。
+       */
+      backChannelLogoutUri?: string | null;
+      sloParticipation?: "none" | "back_channel";
+    },
   ): Promise<OidcClientRecord> {
     assertCanManage(req);
     const redirectUris = normalizeUriList(body.redirectUris);
     const postLogoutRedirectUris = normalizeUriList(
       body.postLogoutRedirectUris,
     );
+    const touchesBclo = Object.prototype.hasOwnProperty.call(
+      body,
+      "backChannelLogoutUri",
+    );
+    const touchesSlo = Object.prototype.hasOwnProperty.call(
+      body,
+      "sloParticipation",
+    );
+    /*
+     * 校验要拿**将要落库的那一对**去判，不是只拿这次送来的那一半。
+     *
+     * 只送 `sloParticipation: "back_channel"`、不送地址时，如果只看请求体就会判过，
+     * 然后撞库上的 CHECK 冒 500。所以先读回现状，把没送的那一半补上再判——
+     * 这也是「两处判据前面吃掉后面」那条教训的反面做法。
+     */
+    const current =
+      touchesBclo && touchesSlo ? null : await this.currentSloPair(clientId);
+    if (current === null && !(touchesBclo && touchesSlo)) {
+      throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
+    }
+    const effectiveBclo = touchesBclo
+      ? body.backChannelLogoutUri
+      : current!.uri;
+    const effectiveSlo: "none" | "back_channel" = touchesSlo
+      ? (body.sloParticipation ?? "none")
+      : current!.slo === "back_channel"
+        ? "back_channel"
+        : "none";
     validateClientInput(
-      { clientId, redirectUris, postLogoutRedirectUris },
+      {
+        clientId,
+        redirectUris,
+        postLogoutRedirectUris,
+        ...(effectiveBclo === undefined
+          ? {}
+          : { backChannelLogoutUri: effectiveBclo }),
+        sloParticipation: effectiveSlo,
+      },
       { creating: false },
     );
     const record = await patchProductClientTx(this.pool, clientId, null, {
       redirectUris,
       postLogoutRedirectUris,
+      ...(touchesBclo
+        ? { backChannelLogoutUri: body.backChannelLogoutUri?.trim() || null }
+        : {}),
+      ...(touchesSlo ? { sloParticipation: body.sloParticipation } : {}),
     });
     if (!record) {
       throw notFound("OIDC_CLIENT_NOT_FOUND", "Client not found");
@@ -471,6 +577,9 @@ function validateCreate(body: CreateClientBody): void {
  */
 export interface ProductClientInput {
   clientId?: string;
+  /** 见 `OidcClientRecord.backChannelLogoutUri`。写路径只收 none / back_channel。 */
+  backChannelLogoutUri?: string | null;
+  sloParticipation?: "none" | "back_channel";
   releaseChannel?: ReleaseChannel;
   name?: string;
   displayName?: string | null;
@@ -586,6 +695,42 @@ export function validateClientInput(
       );
     }
   }
+  /*
+   * 后端通道登出：两个字段必须一起讲得通。
+   *
+   * 库上有 `chk_oidc_clients_bclo_uri`（back_channel ⟹ URI 非空）兜底，但它冒出来
+   * 是一条看不懂的约束名 + 500。这里先判，给字段级 400——判据同 `pkceRequired`
+   * 那一段的理由：**库上的不变式该在库上焊死，同时在入口给人话**。
+   */
+  const slo = input.sloParticipation;
+  if (slo !== undefined && slo !== "none" && slo !== "back_channel") {
+    throw invalidRequest(
+      "VALIDATION_ENUM",
+      // front_channel 在库的 CHECK 里，但全仓没有实现它的地方——不开放这一档。
+      "单点登出参与方式取 none(不参与) 或 back_channel(后端通道)",
+      f("sloParticipation"),
+    );
+  }
+  const bclo = input.backChannelLogoutUri?.trim() || null;
+  if (bclo) {
+    assertParsableUris([bclo], f("backChannelLogoutUri"));
+    /* 公共客户端（RFC 8252）没有服务端可以接这个 POST：回调是 loopback 或自定义
+       scheme，IdP 从公网打不到它。seed 也刻意不给 ruyin 派 back-channel 端点。 */
+    if (authMethod === "none") {
+      throw invalidRequest(
+        "VALIDATION_CONFLICT",
+        "公共客户端没有服务端能接后端通道登出（回调是 loopback），不要登记这个地址",
+        f("backChannelLogoutUri"),
+      );
+    }
+  }
+  if (slo === "back_channel" && !bclo) {
+    throw invalidRequest(
+      "VALIDATION_REQUIRED",
+      "选了后端通道就必须给登出接收地址——否则 IdP 无处投递（库上 CHECK 也会拒）",
+      f("backChannelLogoutUri"),
+    );
+  }
   if (
     input.releaseChannel &&
     !(RELEASE_CHANNELS as readonly string[]).includes(input.releaseChannel)
@@ -625,11 +770,12 @@ export async function insertProductClientTx(
          client_id, client_secret_hash, realm, product_id, client_kind,
          release_channel, name, display_name, logo_url, redirect_uris,
          post_logout_redirect_uris, allowed_scopes, pkce_required,
-         token_endpoint_auth_method
-       ) VALUES ($1, $2, 'customer', $3, 'product', $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         token_endpoint_auth_method, back_channel_logout_uri, slo_participation
+       ) VALUES ($1, $2, 'customer', $3, 'product', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id, client_id, product_id, release_channel, name,
                  display_name, logo_url, redirect_uris, post_logout_redirect_uris,
-                 allowed_scopes, pkce_required, token_endpoint_auth_method,
+                 allowed_scopes, pkce_required, back_channel_logout_uri,
+                 slo_participation, token_endpoint_auth_method,
                  status, created_at, updated_at`,
       [
         clientId,
@@ -649,6 +795,15 @@ export async function insertProductClientTx(
            对所有客户端的建议），调用方可以关。 */
         isPublic ? true : (input.pkceRequired ?? true),
         authMethod,
+        /* 后端通道登出。公共客户端这里恒为 null：它没有服务端能接这个 POST
+           （`validateClientInput` 已经把「公共 + 填了地址」挡成 400）。 */
+        isPublic ? null : input.backChannelLogoutUri?.trim() || null,
+        /* 参与方式与地址一起讲得通才写得进去（库上 chk_oidc_clients_bclo_uri）。
+           调用方没声明时按地址推：给了地址就是要参与。 */
+        isPublic
+          ? "none"
+          : (input.sloParticipation ??
+            (input.backChannelLogoutUri?.trim() ? "back_channel" : "none")),
       ],
     );
     row = { ...result.rows[0]!, product_code: productCode };
@@ -678,6 +833,8 @@ export interface ProductClientPatch {
   postLogoutRedirectUris?: string[];
   allowedScopes?: string[];
   pkceRequired?: boolean;
+  backChannelLogoutUri?: string | null;
+  sloParticipation?: "none" | "back_channel";
 }
 
 /**
@@ -708,6 +865,8 @@ export async function patchProductClientTx(
             post_logout_redirect_uris = CASE WHEN  $8::bool THEN  $9::text[] ELSE c.post_logout_redirect_uris END,
             allowed_scopes            = CASE WHEN $10::bool THEN $11::text[] ELSE c.allowed_scopes            END,
             pkce_required             = CASE WHEN $12::bool THEN $13::bool   ELSE c.pkce_required             END,
+            back_channel_logout_uri   = CASE WHEN $15::bool THEN $16         ELSE c.back_channel_logout_uri   END,
+            slo_participation         = CASE WHEN $17::bool THEN $18         ELSE c.slo_participation         END,
             updated_at = now()
       WHERE c.client_id = $1 AND c.realm = 'customer' AND c.client_kind = 'product'
         AND ($14::uuid IS NULL OR c.product_id = $14::uuid)
@@ -727,6 +886,10 @@ export async function patchProductClientTx(
       has("pkceRequired"),
       patch.pkceRequired ?? true,
       productId,
+      has("backChannelLogoutUri"),
+      patch.backChannelLogoutUri ?? null,
+      has("sloParticipation"),
+      patch.sloParticipation ?? "none",
     ],
   );
   const row = result.rows[0];
