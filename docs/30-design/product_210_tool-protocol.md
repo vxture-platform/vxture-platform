@@ -188,7 +188,7 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 
 ```jsonc
 {
-  "code": "QUOTA_EXCEEDED", // SCREAMING_SNAKE,带模块前缀;拒绝类用统一词表
+  "code": "QUOTA_EXCEEDED", // SCREAMING_SNAKE。舰队词不带前缀(下面四个 + RATE_LIMITED),产品局部码才带
   "message": "...", // 给人读
   "retryable": false, // MUST 有
   "field": "workspaceId", // 可选,校验类错误指向具体入参
@@ -196,7 +196,10 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 ```
 
 - **拒绝一律用这四个码**,不得各造各的:`NOT_ENTITLED`(没有授权)· `POLICY_DENIED`(策略拒绝)· `APPROVAL_REQUIRED`(需要人批准——**这是一条出路,不是一个错误**)· `QUOTA_EXCEEDED`(配额耗尽)。
-- **承载位置随传输,字段名不随传输变**:HTTP 走响应体;MCP 走 tool result 的 `structuredContent`(协议规定,非偏好)。
+- **承载位置随传输,字段名不随传输变**:HTTP 走响应体;MCP 走 tool result。
+- **MCP 的执行失败 MUST 带 `isError: true`。** 协议要求的是这一条,不是封套放在哪——MCP 规范对 tool execution error 的定义就是「reported in tool results with `isError: true`」,把封套放进 `structuredContent` 是**本规范自己的约定**。这个区别不是措辞:漏掉 `isError` 的结果按协议是一次**成功**,客户端不会把它当错误交给模型自纠,于是模型读到一份 `isError=false` 的载荷里写着 `NOT_ENTITLED`,当成功继续往下走。
+- **封套放 `content` 里的一个 text 块**(序列化 JSON);`structuredContent` 可以同时放一份,但**MUST NOT 只放它**——声明了 `outputSchema` 的工具,协议要求 `structuredContent` 必须符合那份 schema,失败时往里塞封套(除非 schema 自己容纳了错误形状)本身就是违反协议。runos 现役实现两处都放(`content[0].text` 与 `structuredContent`),那是对的。
+- **强制点在调用方。** 平台不做网关(§0),这两条没有平台侧闸门,所以要么调用方拒,要么没人拒:调用方拿到 `isError` 缺失或为 `false`、而载荷里同时有 `code` 与 `retryable` 的结果,**MUST 当失败处理并报给被调方**,不得按成功继续。不这样做,唯一的症状就是 agent 静默地把一次拒绝当结果用下去——两侧都不报错。
 - HTTP 状态码的语义区分不变:`401`(凭证无效/过期 → 重换 token)≠ `403`(求值拒绝 → 不要重试,提示用户/降级)≠ `409`(配额)。变的只是**体内的码**。
 
 **被替换的旧形状**:`{ error, error_description, retryable }` 与小写码 `quota_exhausted` 已作废。同一件事此前有三种拼法——`quota_exceeded`(runos)/ `QUOTA_EXCEEDED`(atlas)/ `quota_exhausted`(本文),消费方要按错误分支处理时得写三套。此前一版建议"不统一拼写、只做映射表",那是错的:映射表是让每个消费方永远多背一层翻译,而当前零用户零债务,改拼写的成本几乎为零。
@@ -235,12 +238,15 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 | #   | 检查项             | 通过标准                                                                                                                                                                                                                                                                |
 | --- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | 鉴权路径           | 仍且只走本协议 S2S token exchange(§3);不为任何消费方开辟专属凭证形式或旁路鉴权                                                                                                                                                                                          |
-| 2   | 错误语义           | 复用本协议 §7 统一错误封套与语义区分(`invalid_token`/`access_denied`/`quota_exhausted`);限流与配额耗尽必须在 `error` 码上可区分(消费方需要据此决定退避重试还是暂停待续订),不得自造一套 provider 专属错误码                                                              |
+| 2   | 错误语义           | 复用 §7 的封套与拒绝词表(**词表正文只在 X-1 一处**,本表不再复制),不得自造 provider 专属拒绝码;限流与配额耗尽必须在 `code` 上可区分(消费方需要据此决定退避重试还是暂停待续订);MCP 面另加 `isError: true`(§7)                                                             |
 | 3   | 计量归属           | 仍由本 provider 作为执行点统一上报(§6"谁执行谁上报"),消费方不重复计量同一用量;AI 推理用量仍归 Atlas 单一入口                                                                                                                                                            |
 | 4   | workspace 归属原则 | 批处理/资产加工类调用 = 归资产归属方;在线交互类调用 = 归触发请求方;新工具落在哪一类需在描述符/设计稿里明确写出,不留默认假设                                                                                                                                             |
 | 5   | 已知消费方广播     | 设计定稿前已征询全部**已知**消费方(不止最先提需求的一家)——当前已知集合:karda、arda、terra(同构 L2)、raven/anlan/forge/xuanzhen(L3,尚未接入但按 `product_240` §3 天然享有权利);契约形状若明显只服务单一消费方场景,需在设计稿里说明为何其余消费方不适用,而不是未征询      |
 | 6   | 能力发现           | 新工具已在 provider 自己的 `GET /.well-known/vxture-tools` 清单端点(§4.2)登记(`endpoint`/`version`/`deprecated`/`metering`/`authz` 齐全);路径变更(含改名/迁移)必须按 §4.3 双描述符并存,不得只改路径不改描述符;消费方应能通过查询该端点得知可用性与可达性,不依赖书信告知 |
 | 7   | 跨仓事实回填       | 若本次变更改变了某个"稳态事实"(如端点已实现/已部署/地址变化),已同批回填对应登记表(如 `13-infra-allocation-registry.md`),不仅停留在设计稿或书信里                                                                                                                        |
+
+> **2026-09-30 更正两处。** ① 检查项 2 原文照抄的是 §7 **2026-08-16 之前**那一版的封套(`invalid_token` / `access_denied` / `quota_exhausted`,字段名 `error`),而那一版在 §7 末尾已明确作废;本表 2026-07-27 写成,§7 改版时没有连带扫到这里,于是同一份文件里一节作废、另一节仍在教人照做。现在这一格不再复制词表,只指向 X-1——**一份词表只住一处**。
+> ② §7 原文把「封套放 `structuredContent`」写成「协议规定,非偏好」。核过 MCP 规范原文:协议规定的是 `isError: true`,封套放哪是我们自己的选择。把自己的约定标成协议要求,会让引用它的豁免(「传输协议规定」)变得不可反驳,而真正该写成 MUST 的 `isError` 一直没写。
 
 本检查单由 **platform 维护**(因为要对"所有 L1 provider 一视同仁"负责,不能让某个 provider 自行决定
 标准);**由 provider 在自己的设计评审中自查**(platform 不做门禁审批,不违背"平台只出规范与凭证,
