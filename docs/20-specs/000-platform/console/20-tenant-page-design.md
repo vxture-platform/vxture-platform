@@ -121,6 +121,41 @@
 
 > 转换之所以这么轻,是因为主体码 v4「三号解耦」(2026-09-05,见 `data_identity_200_schema.md` §11)把归属从号里摘了出去。v3 时代它要连带换发租户号、整批改写空间号前缀,并且不可逆;现在只是两个字段的 UPDATE。
 
+### 4.4 对各 agent 产品的权益与订阅:零影响
+
+这一节回答的是接入方最会担心的那个问题——**「租户转成组织,我这边的订阅/配额/开通会不会断?」**
+答案是不会,而理由不是「我们小心」,是**数据模型让它做不到**。
+
+**不变量**:所有挂在工作空间上的列都是 `uuid`,而且**没有任何表复制可视码**
+(`tenant_no` / `workspace_no` 只各自住在 `tenancy.tenants` / `tenancy.workspaces` 一列,
+对外编号一律走各表自己的 `*_no`)。转换只改 `tenancy.tenants` 的
+`type` / `name` / `verification_status` 三个字段——v4 之后连号都不动了——其余数据一行不碰。
+
+**今天的实测**(2026-09-30):`workspace_id` 列共 **23** 个,分布在 6 个 schema——
+tenancy 2 · metering 13 · billing 3 · provisioning 2 · promotion 1 · sharing 2,**全部 `uuid`**。
+`tenant_no` / `workspace_no` 在 `20_tenancy.sql` 之外的命中只有注释与取号函数,无第二处存储。
+
+> **数字会烂,别信这里的,自己重数**:
+> `grep -rh '^\s*workspace_id\s\+' deploy/database/ddl/*.sql | awk '{print $2}' | sort | uniq -c`
+> 与 `grep -rn 'tenant_no\|workspace_no' deploy/database/ddl/*.sql | grep -v 20_tenancy`。
+> 重数出别的分布不要紧,要紧的是**两条不变量还成不成立**:全 uuid、无第二处存储。
+
+| 链路                                      | 键                                                          | 转换后                                                             |
+| ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| 订阅(`metering.subscriptions`)            | `workspace_id` / `tenant_id` uuid                           | 不动;状态、周期、自动续费、档位全保留                              |
+| 配额池 / 用量 / 加油包                    | `workspace_id` uuid                                         | 不动;基础池作业按 uuid 巡检                                        |
+| 开通与权益下发(`provisioning.*`)          | `workspace_id` + `product_id` uuid;幂等键派生自 workspace   | 不动;**不需要重发 `subscription_changed`**——订阅事实没变           |
+| 产品侧读权益(C2 `/platform/entitlements`) | 按 `workspace_id` 查;响应里没有租户类型 / 租户号 / 空间号   | 产品**感知不到**这次转换;它们库里也只存 `tenant_id`/`workspace_id` |
+| 订单 / 账单 / 余额 / 卡券                 | `tenant_id` / `workspace_id` uuid;对外编号各表自己的 `*_no` | 不动;已开的待付订单沿用自己存的付款时效,**新**订单起才按组织算     |
+| 套餐档位                                  | 不按租户类型限制                                            | 可订阅的档位不变                                                   |
+| 会话 / 登录                               | `active_org` = tenant id                                    | 不动;刷新会话后拿到新类型 / 名称                                   |
+
+**唯一按租户类型分叉的商业逻辑是付款时效**(个人 30 分钟 / 组织 2880),而且它不在服务层:
+`services/commerce` 与 `services/platform` 里对租户类型的引用**是零**(宽扫 `tenant_type` /
+`tenantType` / `'personal'` 均无命中);分叉落在 `bff/console-bff/src/routers/quota.router.ts`
+与订单侧同一口径(`ORDER_PAYMENT_TTL_MINUTES_ORG`,env 可调)。
+促销、订阅、开通三个服务连租户类型这个概念都没读过。
+
 ---
 
 ## 5. 认证子页 `/tenant/verification`
