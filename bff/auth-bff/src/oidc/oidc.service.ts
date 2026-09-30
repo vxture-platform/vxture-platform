@@ -523,6 +523,24 @@ export class OidcService {
       clientIds.map(async (clientId) => {
         const client = await this.clients.findEnabledByClientId(clientId);
         if (!client?.backChannelLogoutUri) return;
+        /*
+         * 参与方式是**判据**，不再只是个声明（owner 2026-09-30 裁定）。
+         *
+         * 此前这里只看 URI 非空，于是 `slo_participation` 全仓零读者——而通则里
+         * 「新登记的客户端 slo_participation=none，收不到后台登出」那句话引用的
+         * 正是这个不存在的判据，照它去请运维改那一列的人什么也改不到。
+         *
+         * 加上判据之前必须先补存量（迁移 2026-11-27）：实测 13 个客户端全是 'none'，
+         * 其中 11 个 URI 非空、**今天确实在收**。少了那一份，这一行就是一次
+         * 谁都不会报错的全站回归。所以这里留一条 warn：登记了端点却没参与，
+         * 唯一可能的成因就是迁移没跑到，而那件事必须看得见。
+         */
+        if (client.sloParticipation !== "back_channel") {
+          this.logger.warn(
+            `back-channel logout skipped: client=${clientId} has a logout endpoint but slo_participation=${client.sloParticipation}`,
+          );
+          return;
+        }
         const logoutToken = this.keys.sign(
           {
             sid,

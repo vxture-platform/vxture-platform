@@ -54,6 +54,8 @@ function record(over: Partial<OidcClientRecord> = {}): OidcClientRecord {
     postLogoutRedirectUris: [LOGOUT],
     allowedScopes: ["openid", "profile"],
     pkceRequired: true,
+    backChannelLogoutUri: null,
+    sloParticipation: "none",
     tokenEndpointAuthMethod: "client_secret_basic",
     state: "active",
     createdAt: "2026-09-14T00:00:00Z",

@@ -178,7 +178,9 @@ export function planClients(
       );
     }
     /* 以库里的认证方式去校验：「公共客户端不许关 PKCE」要看的是它现在是什么，
-       而页面可能根本没送这一项。 */
+       而页面可能根本没送这一项。
+       后端通道登出那一对同理：只送开关不送地址时，得把库里的地址补上再判，
+       否则这里判过、撞到库上的 CHECK 冒 500。 */
     validateClientInput(
       {
         ...input,
@@ -186,6 +188,16 @@ export function planClients(
           before.tokenEndpointAuthMethod === "none"
             ? "none"
             : "client_secret_basic",
+        backChannelLogoutUri:
+          input.backChannelLogoutUri !== undefined
+            ? input.backChannelLogoutUri
+            : before.backChannelLogoutUri,
+        sloParticipation:
+          input.sloParticipation !== undefined
+            ? input.sloParticipation
+            : before.sloParticipation === "back_channel"
+              ? "back_channel"
+              : "none",
       },
       { creating: false, fieldPrefix: prefix },
     );
@@ -226,6 +238,27 @@ export function planClients(
     ) {
       patch.pkceRequired = input.pkceRequired;
       plan.touchesSecurity = true;
+    }
+    /*
+     * 后端通道登出这一对**算安全边界**，和登录回调、登出回跳同级：
+     * 能改这个地址的人，就能把带 sid / sub 的 logout_token 导到自己控制的端点上。
+     * 所以改动要过二次验证（`touchesSecurity`）。
+     */
+    if (input.backChannelLogoutUri !== undefined) {
+      const v = input.backChannelLogoutUri?.trim() || null;
+      if (v !== before.backChannelLogoutUri) {
+        patch.backChannelLogoutUri = v;
+        plan.touchesSecurity = true;
+      }
+    }
+    if (input.sloParticipation !== undefined) {
+      const v = input.sloParticipation;
+      const beforeSlo =
+        before.sloParticipation === "back_channel" ? "back_channel" : "none";
+      if (v !== beforeSlo) {
+        patch.sloParticipation = v;
+        plan.touchesSecurity = true;
+      }
     }
     if (Object.keys(patch).length > 0) {
       plan.changes.push({ index, clientId, patch });

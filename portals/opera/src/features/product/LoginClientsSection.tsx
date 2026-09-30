@@ -241,6 +241,50 @@ export function LoginClientsSection({
               </FormField>
 
               <FormField
+                id={clientFieldId(i, "backChannelLogoutUri")}
+                label="后端通道登出地址"
+                full
+                error={err("backChannelLogoutUri")}
+                help={
+                  isPublic
+                    ? "公共客户端没有服务端能接这个 POST（回调是 loopback），不适用。"
+                    : "平台结束会话时会往这个地址 POST 一张 logout_token，让产品把自己那边的会话也销掉。一个地址。留空则这个客户端不参与全域登出。改动在保存时要过一次二次验证。"
+                }
+              >
+                <Input
+                  id={clientFieldId(i, "backChannelLogoutUri")}
+                  value={d.backChannelLogoutUri}
+                  disabled={!canManage || isPublic}
+                  aria-invalid={!!err("backChannelLogoutUri")}
+                  placeholder={`https://${host}/auth/backchannel-logout`}
+                  className="font-mono text-code-sm"
+                  onChange={(e) =>
+                    update(i, { backChannelLogoutUri: e.target.value })
+                  }
+                />
+              </FormField>
+
+              <FormField
+                id={clientFieldId(i, "sloParticipation")}
+                label="全域登出"
+                group
+                error={err("sloParticipation")}
+                help={
+                  isPublic
+                    ? "公共客户端不参与。"
+                    : "关着也可以先把地址填好——那是「登记好了、等产品那侧上线再开」。开了但没填地址会被拒。"
+                }
+              >
+                <ToggleRow
+                  id={`${clientFieldId(i, "sloParticipation")}-switch`}
+                  label="参与后端通道登出"
+                  checked={!isPublic && d.backChannelLogoutEnabled}
+                  disabled={!canManage || isPublic}
+                  onChange={(v) => update(i, { backChannelLogoutEnabled: v })}
+                />
+              </FormField>
+
+              <FormField
                 id={clientFieldId(i, "displayName")}
                 label="展示名"
                 error={err("displayName")}

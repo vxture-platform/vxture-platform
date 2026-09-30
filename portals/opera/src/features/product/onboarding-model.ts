@@ -32,6 +32,8 @@ export interface ClientRecord {
   postLogoutRedirectUris: string[];
   allowedScopes: string[];
   pkceRequired: boolean;
+  backChannelLogoutUri: string | null;
+  sloParticipation: "none" | "back_channel" | "front_channel";
   tokenEndpointAuthMethod: string;
 }
 
@@ -59,6 +61,14 @@ export interface ClientDraft {
   /** 空格分隔（也收逗号）。 */
   allowedScopes: string;
   pkceRequired: boolean;
+  /** IdP 结束会话时 POST `logout_token` 的落点。空 = 不登记。 */
+  backChannelLogoutUri: string;
+  /**
+   * 开 = `back_channel`，关 = `none`。**独立于地址**：地址填了但开关关着，
+   * 就是「登记好了、先不启用」——owner 2026-09-30 要的正是这个逗号。
+   * 库里还有一档 `front_channel`，全仓没有实现它的地方，界面不给这个选项。
+   */
+  backChannelLogoutEnabled: boolean;
   tokenEndpointAuthMethod: AuthMethod;
   state: ClientState;
 }
@@ -78,6 +88,8 @@ export function draftFromClient(c: ClientRecord): ClientDraft {
     postLogoutRedirectUris: c.postLogoutRedirectUris.join("\n"),
     allowedScopes: c.allowedScopes.join(" "),
     pkceRequired: c.pkceRequired,
+    backChannelLogoutUri: c.backChannelLogoutUri ?? "",
+    backChannelLogoutEnabled: c.sloParticipation === "back_channel",
     tokenEndpointAuthMethod:
       c.tokenEndpointAuthMethod === "none" ? "none" : "client_secret_basic",
     state: c.state,
@@ -108,6 +120,8 @@ export function newClientDraft(
     postLogoutRedirectUris: "",
     allowedScopes: DEFAULT_SCOPES,
     pkceRequired: true,
+    backChannelLogoutUri: "",
+    backChannelLogoutEnabled: false,
     tokenEndpointAuthMethod: "client_secret_basic",
     state: "active",
   };
@@ -145,6 +159,19 @@ export function clientInputFrom(d: ClientDraft) {
     /* 公共客户端强制 PKCE：开关在界面上锁住了，这里再钉一次，防的是「切成公共之前
        先关了 PKCE」留下的脏草稿。 */
     pkceRequired: d.tokenEndpointAuthMethod === "none" ? true : d.pkceRequired,
+    /* 公共客户端（RFC 8252）没有服务端能接后端通道登出的 POST——回调是 loopback。
+       界面上这两栏对它是锁着的，这里再钉一次，防的是「先填了地址再切成公共」
+       留下的脏草稿（同 pkceRequired 那一行的理由）。 */
+    backChannelLogoutUri:
+      d.tokenEndpointAuthMethod === "none"
+        ? null
+        : d.backChannelLogoutUri.trim() || null,
+    sloParticipation:
+      d.tokenEndpointAuthMethod === "none"
+        ? ("none" as const)
+        : d.backChannelLogoutEnabled
+          ? ("back_channel" as const)
+          : ("none" as const),
     ...(d.isNew ? { tokenEndpointAuthMethod: d.tokenEndpointAuthMethod } : {}),
   };
 }
