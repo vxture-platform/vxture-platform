@@ -97,7 +97,7 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
   "name": "arda.query_dataset", // 命名空间 {product_code}.{tool_name},全局唯一
   "title": "查询数据集",
   "description": "按可见集内的 dataset ref 执行只读查询",
-  "endpoint": { "method": "POST", "path": "/v1/query_dataset" }, // 实际调用路径,§4.1a
+  "endpoint": { "method": "POST", "path": "/v1/query_dataset" }, // 实际调用路径,§4.1a;仅 HTTP 面,见 §4.2a
   "input_schema": {
     /* JSON Schema draft 2020-12 */
   },
@@ -124,10 +124,57 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
   `endpoint.path` 保留、标 `deprecated: true`;新的作为一个新条目并列),消费方按 §4.3 的版本纪律
   平滑迁移,不需要任何带外通知——这正是本字段存在的理由。
 - 按 §7 的演进规则("新增字段向后兼容")是纯新增字段,老消费方忽略它不受影响,可向后兼容发布。
+- **本字段只对 HTTP 面成立**(2026-09-30 补):MCP provider 的工具没有各自的路径,`endpoint` 不适用,由 `transport` 表达可达性——见 §4.2a。本条当初写成无条件必备,而 runos 从那天起就填不了它:**规范少说了一个前置条件,而缺口的形状是「有一个 provider永远无法符合」,不是「有人偷懒」**。
 
 ### 4.2 发现(无中心注册表)
 
 provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`(**tailnet 面,S2S 绝不公网**,#89 裁定;区别于边缘 `/.well-known/openid-configuration` 仅供浏览器)——S2S token 鉴权,返回工具描述符数组 + `protocol_version`。**平台不建中心工具注册表**——"平台知道哪里有数据"归 Arda 目录、"技能引用哪些工具"归 Runos 技能定义,各自以 `{product_code}.{tool_name}` 字符串松引用,调用时按 provider **在平台 tailnet 内网**直连(类 2 产品 S2S 一律 tailnet、绝不公网,权威 = product_230 §1;`arda.vxture.com` 等域名仅是缺省信号,判类以是否在 tailnet 为准)。
+
+### 4.2a 传输画像:HTTP 面与 MCP 面不是同一种可达性(2026-09-30 新增,owner 拍板)
+
+§4.1a 给描述符加了 `endpoint`,前提是「工具有一条自己的 HTTP 路径」。**MCP provider 没有这个东西**:runos 的四个工具全部经 `POST /v1/mcp` 的 `tools/call` 到达,工具名是**参数**不是路径。所以清单端点必须先说「这个面是哪种传输」——`endpoint` 只对 HTTP 面成立。
+
+清单端点 MUST 带 `transport`。**这个字段名取自 runos 已在产的实现,不另起一套**:
+
+```jsonc
+{
+  "service": "runos",
+  "transport": {
+    "kind": "mcp-streamable-http", // 或 "http"
+    "path": "/v1/mcp", // 仅 MCP 面:tools/call 的入口
+    "mcp_versions": ["2025-11-25", "2025-06-18", "2025-03-26"], // 仅 MCP 面,见下
+  },
+  "protocol_version": "...", // **本规范**的版本,与上面那条不是一回事
+  "tools": [
+    /* §4.1 描述符;`endpoint` 仅 kind="http" 时必填 */
+  ],
+}
+```
+
+- `kind="http"` ⇒ 每条描述符的 `endpoint`(§4.1a)**必填**;
+- `kind="mcp-streamable-http"` ⇒ `endpoint` **不适用**,`transport.path` 是唯一入口,工具靠 `name` 在 `tools/call` 里指定。
+
+**`mcp_versions` 是 MCP 协议自己的 revision 列表,不是 `protocol_version`。** 两者是两根轴:`protocol_version` 说「本规范演进到哪一版」,`mcp_versions` 说「这个 MCP 服务端听得懂哪几版 MCP」。把它们合成一个,消费方就会拿本规范的版本号去判 MCP 兼容性。
+
+#### 为什么必须声明,而不是让消费方去问
+
+MCP 在 `2026-07-28` 那一版**取消了 `initialize` 握手**:版本随每个请求走 `_meta` 与 HTTP 头 `MCP-Protocol-Version`,服务端不支持就回 `UnsupportedProtocolVersionError` 并列出它支持的版本。规范把 `2025-11-25` 及更早称为 **legacy**(有握手)、`2026-07-28` 起称为 **modern**(无握手)。
+
+它自己的兼容矩阵里,**modern 客户端 → legacy 服务端 = 失败**,而失败方式写得很直白:服务端「may reject …, **stay silent**, or even **process an era-ambiguous method under legacy semantics**」。
+
+**而分代这件事对着 legacy 服务端问不出来**:modern 那一代的两个带内发现机制(`server/discover`、per-request 的 `UnsupportedProtocolVersionError`)本身都是 modern 行为,legacy 服务端两个都不会。所以这不是「消费方懒得查」,是**协议在这个方向上没有留发现口**。
+
+> **实测(2026-09-30)**:runos 是 legacy 时代服务端——`@modelcontextprotocol/sdk@1.30.0`,该版本自己的常量是 `LATEST_PROTOCOL_VERSION='2025-11-25'`、`SUPPORTED_PROTOCOL_VERSIONS=[2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05, 2024-10-07]`,**`2026-07-28` 不在里面**。`mcp_versions` 照抄这个常量即可,**provider 不需要升 SDK**。
+> 今天没有消费方会踩:平台仓零 MCP 客户端代码,换票审计里只有 `console → atlas`(service)与 `opera → atlas`(operator),全是 REST、深度 1,**没有产品→产品的链**。风险落在**下一个** agent 产品上——它拿一个当前的 MCP 客户端库,默认就是 modern。
+
+#### 强制点(成对,缺一条就不闭合)
+
+平台不做网关(§0),清单端点没有平台侧闸门。所以这两条互为强制点:
+
+- **provider MUST** 在清单端点声明 `transport.kind`;MCP 面 MUST 另带 `mcp_versions`。
+- **caller MUST NOT** 在读不到 `mcp_versions` 时假定 modern。读不到就按 legacy 起手(或先探一次),**并把这件事报给被调方**——因为反方向的症状可能是静默的。
+
+第二条是第一条的强制点:provider 不声明,调用方就必须退到 legacy,而那对 provider 是**可见的损失**(它拿不到新版本的能力)。本规范里少数能靠双方互相约束闭合的条款。
 
 ### 4.3 版本纪律
 
@@ -235,15 +282,15 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 **适用范围**:任何 L1 provider(Atlas / Ontos / Runos 分发面)新增工具描述符(新的 `{product_code}.{tool_name}`)
 或对既有工具描述符做破坏性变更(§4.3 定义的"必升 major"级别变更)时,**发布前**必须逐项确认:
 
-| #   | 检查项             | 通过标准                                                                                                                                                                                                                                                                |
-| --- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 鉴权路径           | 仍且只走本协议 S2S token exchange(§3);不为任何消费方开辟专属凭证形式或旁路鉴权                                                                                                                                                                                          |
-| 2   | 错误语义           | 复用 §7 的封套与拒绝词表(**词表正文只在 X-1 一处**,本表不再复制),不得自造 provider 专属拒绝码;限流与配额耗尽必须在 `code` 上可区分(消费方需要据此决定退避重试还是暂停待续订);MCP 面另加 `isError: true`(§7)                                                             |
-| 3   | 计量归属           | 仍由本 provider 作为执行点统一上报(§6"谁执行谁上报"),消费方不重复计量同一用量;AI 推理用量仍归 Atlas 单一入口                                                                                                                                                            |
-| 4   | workspace 归属原则 | 批处理/资产加工类调用 = 归资产归属方;在线交互类调用 = 归触发请求方;新工具落在哪一类需在描述符/设计稿里明确写出,不留默认假设                                                                                                                                             |
-| 5   | 已知消费方广播     | 设计定稿前已征询全部**已知**消费方(不止最先提需求的一家)——当前已知集合:karda、arda、terra(同构 L2)、raven/anlan/forge/xuanzhen(L3,尚未接入但按 `product_240` §3 天然享有权利);契约形状若明显只服务单一消费方场景,需在设计稿里说明为何其余消费方不适用,而不是未征询      |
-| 6   | 能力发现           | 新工具已在 provider 自己的 `GET /.well-known/vxture-tools` 清单端点(§4.2)登记(`endpoint`/`version`/`deprecated`/`metering`/`authz` 齐全);路径变更(含改名/迁移)必须按 §4.3 双描述符并存,不得只改路径不改描述符;消费方应能通过查询该端点得知可用性与可达性,不依赖书信告知 |
-| 7   | 跨仓事实回填       | 若本次变更改变了某个"稳态事实"(如端点已实现/已部署/地址变化),已同批回填对应登记表(如 `13-infra-allocation-registry.md`),不仅停留在设计稿或书信里                                                                                                                        |
+| #   | 检查项             | 通过标准                                                                                                                                                                                                                                                                                                                                                                      |
+| --- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 鉴权路径           | 仍且只走本协议 S2S token exchange(§3);不为任何消费方开辟专属凭证形式或旁路鉴权                                                                                                                                                                                                                                                                                                |
+| 2   | 错误语义           | 复用 §7 的封套与拒绝词表(**词表正文只在 X-1 一处**,本表不再复制),不得自造 provider 专属拒绝码;限流与配额耗尽必须在 `code` 上可区分(消费方需要据此决定退避重试还是暂停待续订);MCP 面另加 `isError: true`(§7)                                                                                                                                                                   |
+| 3   | 计量归属           | 仍由本 provider 作为执行点统一上报(§6"谁执行谁上报"),消费方不重复计量同一用量;AI 推理用量仍归 Atlas 单一入口                                                                                                                                                                                                                                                                  |
+| 4   | workspace 归属原则 | 批处理/资产加工类调用 = 归资产归属方;在线交互类调用 = 归触发请求方;新工具落在哪一类需在描述符/设计稿里明确写出,不留默认假设                                                                                                                                                                                                                                                   |
+| 5   | 已知消费方广播     | 设计定稿前已征询全部**已知**消费方(不止最先提需求的一家)——当前已知集合:karda、arda、terra(同构 L2)、raven/anlan/forge/xuanzhen(L3,尚未接入但按 `product_240` §3 天然享有权利);契约形状若明显只服务单一消费方场景,需在设计稿里说明为何其余消费方不适用,而不是未征询                                                                                                            |
+| 6   | 能力发现           | 新工具已在 provider 自己的 `GET /.well-known/vxture-tools` 清单端点(§4.2)登记(`version`/`deprecated`/`metering`/`authz` 齐全;`endpoint` 仅 `transport.kind="http"` 时必填,见 §4.2a);清单根上 `transport.kind` 已声明,MCP 面另带 `mcp_versions`;路径变更(含改名/迁移)必须按 §4.3 双描述符并存,不得只改路径不改描述符;消费方应能通过查询该端点得知可用性与可达性,不依赖书信告知 |
+| 7   | 跨仓事实回填       | 若本次变更改变了某个"稳态事实"(如端点已实现/已部署/地址变化),已同批回填对应登记表(如 `13-infra-allocation-registry.md`),不仅停留在设计稿或书信里                                                                                                                                                                                                                              |
 
 > **2026-09-30 更正两处。** ① 检查项 2 原文照抄的是 §7 **2026-08-16 之前**那一版的封套(`invalid_token` / `access_denied` / `quota_exhausted`,字段名 `error`),而那一版在 §7 末尾已明确作废;本表 2026-07-27 写成,§7 改版时没有连带扫到这里,于是同一份文件里一节作废、另一节仍在教人照做。现在这一格不再复制词表,只指向 X-1——**一份词表只住一处**。
 > ② §7 原文把「封套放 `structuredContent`」写成「协议规定,非偏好」。核过 MCP 规范原文:协议规定的是 `isError: true`,封套放哪是我们自己的选择。把自己的约定标成协议要求,会让引用它的豁免(「传输协议规定」)变得不可反驳,而真正该写成 MUST 的 `isError` 一直没写。
