@@ -178,7 +178,12 @@ IdP 发 `POST {back_channel_logout_uri}`，`application/x-www-form-urlencoded`�
 
 ## 3. 客户端注册（`iam.oidc_client` 接入方语义子集）
 
-app 接入须由平台登记一行 `iam.oidc_client`。**完整字段级定义（列 / 类型 / 索引 / 约束）= b §5.3，为唯一权威**；下表仅为**接入方需关心的语义子集**，不重述平台建表 DDL：
+app 接入须由平台登记一行 OIDC 客户端。**完整字段级定义（列 / 类型 / 索引 / 约束）= [`data_identity_200_schema.md`](../data_identity_200_schema.md) §7.1；在产真值以 `deploy/database/ddl/22_appoidc.sql` 为准**；下表仅为**接入方需关心的语义子集**，不重述平台建表 DDL。
+
+> **2026-09-30 改指针**：本行原写「= b §5.3，为唯一权威」，而 b §5.3 讲的是 `iam.oidc_client`
+> ——**那张表不存在**（全库只有 `appoidc.oidc_clients`），且 `data_identity_200_schema.md`
+> 文件头早已声明取代它。照那一节去登记会拿到错的默认值（`back_channel`，实为 `none`）
+> 和一个根本不存在的取值 `local_only`。
 
 | 列（接入方视角）              | 语义                                                                             |
 | ----------------------------- | -------------------------------------------------------------------------------- |
@@ -192,7 +197,12 @@ app 接入须由平台登记一行 `iam.oidc_client`。**完整字段级定义�
 | `product_ref`                 | 可空；置则驱动 `entitlement` claim〔邻域 commerce〕（起步期可不置，见 §5）       |
 | `display_name` / `logo_url`   | 登录页 / 统一登出页品牌展示                                                      |
 
-> 登记方式：平台在 seed catalog 的 oidc_client 列表加该 client（现有 website / console / admin），secret hash 经部署期 `27-provision-client-secrets` 注入；生产 `redirect_uris` 等由对应 `*_BASE_URL` env 派生，须与登记值一致。字段级 DDL / 列 / 索引 / `@@map` / `@@schema` / 初始 seed → **b §5.3** / 落地增量迁移见 [`identity-platform-implementation.md`](./120-implementation.md)。
+> 登记方式**按客户端种类分两条路**（2026-09-30 更正，本行原文只写了后一条，会把接产品的人推回一条已经取消的人工通道）：
+> **产品客户端**（接进来的 agent 产品）由运营在 opera 产品页「登录接入」板块登记——与产品行同一次保存、
+> 同一个事务，secret 签发后只明文显示一次，触及安全边界过二次验证；回调、登出回跳、
+> **后端通道登出地址与开关**都在那里填，见 [`40-register-a-product.md`](../../60-operations/40-register-a-product.md)
+> （它把「改 seed-catalog.mjs」明确列进**不需要做的事**）。
+> **平台自有门户**（website / console / admin / opera / arche）仍由 seed catalog 声明，secret hash 经部署期 `27-provision-client-secrets` 注入；生产 `redirect_uris` 等由对应 `*_BASE_URL` env 派生，须与登记值一致。字段级 DDL / 列 / 索引 / `@@map` / `@@schema` / 初始 seed → **b §5.3** / 落地增量迁移见 [`identity-platform-implementation.md`](./120-implementation.md)。
 
 ---
 

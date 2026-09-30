@@ -371,6 +371,15 @@ CREATE INDEX idx_role_permission_permission_id ON iam.role_permission (permissio
 
 ### 5.3 oidc_client：realm 收窄 + product_id + release_channel + 品牌 + SLO 参与【修订】
 
+> **⚠️ 本节已被取代，且它描述的表不存在（2026-09-30 标注）。**
+> [`data_identity_200_schema.md`](./data_identity_200_schema.md) 文件头早就声明「**取代**本文 §5（iam 域）
+> 字段级内容……旧文对应章节**待下一次改版时标记 superseded**」——这里把那笔欠账付了。
+> 更要紧的是：**全库没有 `iam.oidc_client` 这张表**（实测 `information_schema`：只有
+> `appoidc.oidc_clients`；`deploy/database/ddl/` 里也没有任何文件建它）。所以本节是一份
+> **目标态设计的化石**，不是在产 DDL，下面的 ALTER 增量照抄会与活库的 CHECK 直接冲突。
+> 字段级权威去 `data_identity_200_schema.md` §7.1；在产真值以
+> `deploy/database/ddl/22_appoidc.sql` 为准。
+
 对应 deploy iam.oidc_client + v1.1 §5b + topology D-AU/D-AW。下为**目标态全字段**，随后给在产域 ALTER 增量。
 
 ```sql
@@ -417,6 +426,13 @@ CREATE INDEX idx_oidc_client_product    ON iam.oidc_client (product_id) WHERE pr
   - `back_channel` —— 参与全域 SLO，IdP 经 `back_channel_logout_uri` 强制推送 `logout_token`（默认，子域 RP 取此值）；
   - `local_only` —— 不接收 back-channel，仅本 RP 主动登出时本地清，不被其他 RP 登出连带（适合跨域 ruyin 选择性弱耦合）；
   - `none` —— 完全不参与全域 SLO。
+  - > **⚠️ 2026-09-30：上面这三行与在产实况不符，别照它做。** 在产的是
+    > `appoidc.oidc_clients.slo_participation`，`NOT NULL DEFAULT 'none'`，值域
+    > `none | back_channel | front_channel`。**`local_only` 从未存在过**，写进去会被
+    > `chk_oidc_clients_slo` 拒；「默认、子域 RP 取此值」也反了——默认是**不参与**。
+    > 2026-09-30 起 IdP **真的读这一列**（只有 `back_channel` 才收 `logout_token`），
+    > 所以照本节登记一个新客户端 = 端点填了、开关没开、一条通知都不发，而两侧都不报错。
+    > 现行登记面见 `docs/60-operations/40-register-a-product.md`。
 - **back_channel_logout_uri / post_logout_redirect_uris / redirect_uris / allowed_scopes / pkce_required**：沿用现状；`back_channel_logout_uri` 在 `slo_participation='back_channel'` 时必填（下方 CHECK 行内兜底）。
 
 **在产域迁移增量（保数据，不 reseed）**：
