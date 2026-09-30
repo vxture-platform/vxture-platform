@@ -202,7 +202,7 @@ app 接入须由平台登记一行 `iam.oidc_client`。**完整字段级定义�
 
 > **两概念正交**：**entitlement**（能不能用，token 携带、每请求门控，实时）≠ **provisioning**（业务空间建没建好，webhook，最终一致）。app 即便已 `provisioned`，每请求**仍按 `access_token.entitlement.status` 门控**（`active`/`trial`→放行；`past_due`→宽限只读；`expired`/`canceled`/缺失→跳订阅页）；webhook 只管业务空间生命周期，不作实时门控。两者互不替代。〔entitlement / provisioning 均属**邻域 commerce**，identity 板块不拥有——见 §5。〕
 
-**app 侧接收端点** `POST /provisioning/webhook`，处理顺序（**app 必须实现幂等 + 有序**）：
+**app 侧接收端点** `POST {你的域名}/api/webhooks/vxture`（2026-09-30 更正：本行原写 `/provisioning/webhook`，那是先例而非规范——平台在**登记处**强制标准路径，填别的当场 400，见 `product_200` §4），处理顺序（**app 必须实现幂等 + 有序**）：
 
 1. **验签**（先于一切）：取原始 body 字节 + `X-Vxture-Signature` 的 `t`、`v1`；用 app secret 重算 `v1' = hex(HMAC_SHA256(secret, "{t}.{raw_body}"))`，**常量时间**比对 `v1' == v1`；校验 `t` 在容忍窗 **±5min** 内（防重放）；任一不符 → **401**。轮换期平台可能用新/旧两 secret 之一签名，app 应**对两 secret 各验一次**，任一通过即接受（见 §5）。
 2. **幂等**：按 `id`（= `X-Vxture-Delivery`）查本地已处理表，命中 → **直接 200**（at-least-once 下重复投递必然发生，副作用不可重复执行）。
@@ -242,7 +242,8 @@ pending ──────────────────▶ provisioned �
 **投递契约（平台 → app）**：
 
 ```
-POST {product.product_webhooks.webhook_url}   # 如 https://arda.vxture.com/provisioning/webhook
+POST {product.product_webhooks.webhook_url}   # 标准路径 https://<你的域名>/api/webhooks/vxture
+                                              # （arda 现役登记仍是旧的 /provisioning/webhook，属存量豁免）
 Content-Type: application/json
 X-Vxture-Event: tenant.provisioned        # | tenant.deprovisioned
 X-Vxture-Delivery: <delivery_id>          # 幂等键，= payload.id
