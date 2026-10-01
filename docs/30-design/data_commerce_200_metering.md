@@ -298,7 +298,7 @@ metering.usage_event_pools (
 
 ## 11. consume 契约（唯一写入路径，单事务）
 
-产品端/Model Platform 只 `POST /usage/consume {workspace, product, metric, amount, idempotency_key, request_id}`，**不直写用量表**。单事务（READ COMMITTED + 行锁）：
+产品端/Model Platform 只 `POST /usage/consume {workspace, product, metric, amount, idempotency_key, request_id, intent?}`，**不直写用量表**。单事务（READ COMMITTED + 行锁）：
 
 ```
 1. 幂等先占：INSERT usage_idempotencies(...) ON CONFLICT DO NOTHING RETURNING;
@@ -306,7 +306,13 @@ metering.usage_event_pools (
 2. 锁定候选池：SELECT ... FROM quota_pools WHERE (ws,product,metric) AND active
    FOR UPDATE ORDER BY priority, billing_kind(bundled 先), effective_at, id;
 3. 惰性归零：对 `current_period_start < period_floor(reset_period, period_anchor, now())` 的锁定池归零（**锚定推进、非日历**），同事务写 quota_pool_resets。
-4. 模式分支(product_metric.consume_mode)：atomic → 不足额 ROLLBACK 返 409；divisible → 瀑布扣减。
+4a. 预留闸（2026-10-01）：`intent='reserve'` 且该指标**有成本**（product_metrics.cost_class='cost_bearing'，平台级共享键恒视为有成本）
+   且锁定池 SUM(available) < amount → ROLLBACK，返 409 consumed=0、**不写 head/detail**。
+   调用方还没用，没有用量可记。`intent` 缺省或 `'report'` 时不走本步。
+4. 模式分支(product_metric.consume_mode)：atomic → **扣 0 但照记**；divisible → 瀑布扣减。
+   **两档都照记、都回 200**（2026-08-10 裁定取代原 409 门控）。本行此前仍写「atomic → 不足额
+   ROLLBACK 返 409」，是那次漏改的化石，2026-10-01 按引擎实测订正——今天的 409 只来自 4a，
+   且形状相反（不写事件、consumed=0）。
 5. UPDATE quota_pools.quota_used += took（已锁，安全）。
 6. INSERT usage_events(头) + usage_event_pools × N；回填 usage_idempotencies。
 ```

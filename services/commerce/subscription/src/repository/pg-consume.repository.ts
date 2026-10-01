@@ -24,7 +24,11 @@ import type {
  *   6. INSERT usage_event(head) + usage_event_pools(detail); backfill
  *      usage_idempotency(event_id, consumed, per_pool).
  *
- * This endpoint RECORDS; it does not adjudicate (owner determination
+ * **2026-10-01（owner 裁定，收窄）**：下面这句只管 `intent="report"`。`reserve`
+ * 档在硬限且额度不足时**拒且不记账**（见 consume() 里的 4a 段）——那一档调用方还没
+ * 做事，所以「拒绝写下来不能让它没发生」在那里不成立。
+ *
+ * This endpoint RECORDS (report 档); it does not adjudicate (owner determination
  * 2026-08-10). It answers "how much was used" and "how much quota covered it",
  * and the caller decides what to do about the gap — disable the control, keep
  * serving, upsell. Two consequences fall out of that and both used to be wrong:
@@ -89,15 +93,30 @@ export class PgConsumeRepository {
       );
       const isShared = platRes.rows.length > 0;
       let mode: string;
+      // 处置档（soft/hard）从指标的成本档派生，**不入库**：这里与 C2 读池是两个判定点，
+      // 两处本来就拿得到指标。按池存一份副本会在最该生效的场景里失效——工作空间从没订阅过
+      // 时读不到任何池，而一个有成本的调用恰恰最该被拒。
+      //
+      // 平台级共享键（在 platform_metrics 里的）恒硬限：那张表的语义就是「有成本的共享池」
+      // （seed 里「席位零成本，故不进 platform_metrics」说明了这一点）。
+      let isHard: boolean;
       if (isShared) {
         mode = platRes.rows[0]!.consume_mode ?? "divisible";
+        isHard = true;
       } else {
-        const modeRes = await client.query<{ consume_mode: string | null }>(
-          `select consume_mode from product.product_metrics
+        const modeRes = await client.query<{
+          consume_mode: string | null;
+          cost_class: string | null;
+        }>(
+          `select consume_mode, cost_class from product.product_metrics
             where product_id = $1 and metric_key = $2 limit 1`,
           [input.productId, input.metricKey],
         );
         mode = modeRes.rows[0]?.consume_mode ?? "divisible";
+        // 缺声明按软限处理（不拒），而不是按硬限：库上的 chk_product_metrics_pool_cost
+        // 已经要求 pool 型必须声明，所以这里只会在「指标根本没登记」时命中，那种情况拒绝
+        // 调用方等于用一个配置缺失去掐业务。登记缺失由接入检查单与守卫管，不在这条路上管。
+        isHard = modeRes.rows[0]?.cost_class === "cost_bearing";
       }
 
       // 2. lock candidate pools (product_220 §4.3 reserved/shared). Candidate set:
@@ -209,10 +228,28 @@ export class PgConsumeRepository {
 
       const totalAvailable = pools.reduce((s, p) => s + p.available, 0n);
 
-      // 4. atomic mode: all-or-nothing applies to the POOL DEDUCTION, not to the
+      // 4a. 预留被拒（owner 2026-10-01）。只有**事前问许可**才会走到这里：
+      // `intent="reserve"` 说明调用方还没做事，所以拒绝它是有意义的——不记账，因为
+      // 没有用量。这是下面那段推理的另一半：refusing to write it down does not
+      // un-use it **当且仅当它已经被 use 了**；reserve 的时候还没有。
+      //
+      // 2026-08-10 那条「永远 200、平台记录不裁定」管的是 `report`（默认档），这里**没有
+      // 推翻它**，而是给它划了边界。对外契约见接入通则 C3 上行一节。
+      if (input.intent === "reserve" && isHard && totalAvailable < amount) {
+        await client.query("rollback");
+        return {
+          status: "denied",
+          consumed: "0",
+          perPool: [],
+          replayed: false,
+        };
+      }
+
+      // 4b. atomic mode: all-or-nothing applies to the POOL DEDUCTION, not to the
       // record. The caller has already used what it is reporting — refusing to
       // write it down does not un-use it, it only loses the number. So an
       // over-limit atomic call deducts nothing and is still recorded in full.
+      // （这一段只对 `report` 成立，理由见 4a。）
       const atomicOverLimit = mode === "atomic" && totalAvailable < amount;
 
       // 5. waterfall deduction (divisible allows partial success)
@@ -269,7 +306,8 @@ export class PgConsumeRepository {
         // `consumed` is what the caller used; `status` reports whether quota
         // covered it. Neither is a verdict — the caller decides what to do with
         // an uncovered call (disable the control, keep serving, upsell). The
-        // platform records and reports; it does not gate.
+        // platform records and reports; it does not gate —— **这一段只对 report
+        // 档成立**。reserve 档在上面 4a 段就已经 return 了，走不到这里。
         status: covered >= amount ? "ok" : "insufficient",
         consumed: amount.toString(),
         perPool,

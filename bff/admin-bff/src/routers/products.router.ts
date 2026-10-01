@@ -2597,6 +2597,7 @@ interface ProductMetricRow {
   metric_unit: string | null;
   reset_period: string;
   merge_strategy: string;
+  cost_class: string | null;
 }
 
 interface ProductWebhookRow {
@@ -2765,7 +2766,8 @@ export async function loadProductCapabilities(
          LEFT JOIN：没命名过的键回落显示 metric_key 本身，不阻塞。 */
       `SELECT pm.product_id, pm.metric_key,
               mc.display_name, mc.description,
-              pm.metric_unit, pm.reset_period, pm.merge_strategy
+              pm.metric_unit, pm.reset_period, pm.merge_strategy,
+              pm.cost_class
          FROM product.product_metrics pm
          LEFT JOIN product.metric_catalog mc ON mc.metric_key = pm.metric_key`,
     ),
@@ -2827,6 +2829,8 @@ export async function loadProductCapabilities(
       cycle: metric.reset_period,
       quotaBase: metric.merge_strategy,
       billingMode: metric.merge_strategy === "pool" ? "配额池扣减" : "能力包含",
+      /* 不在这里替 NULL 编一个档——空串的两种意思由 quotaBase 分开（见类型注释）。 */
+      costClass: metric.cost_class ?? "",
     });
     metricsByProduct.set(metric.product_id, list);
   }

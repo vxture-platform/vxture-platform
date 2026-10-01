@@ -1114,7 +1114,7 @@ CREATE INDEX idx_quota_pool_route ON commerce.quota_pool (workspace_id, product_
 
 ### 8.3 consume 契约（唯一写入路径，单事务）
 
-产品端/Model Platform 只 `POST /usage/consume {workspace, product, metric, amount, idempotency_key, request_id}`，**不直写用量表**。commerce consume 服务单事务（READ COMMITTED + 行锁）：
+产品端/Model Platform 只 `POST /usage/consume {workspace, product, metric, amount, idempotency_key, request_id, intent?}`，**不直写用量表**。commerce consume 服务单事务（READ COMMITTED + 行锁）：
 
 ```
  1. 幂等先占：INSERT commerce.usage_idempotency(idempotency_key,...) ON CONFLICT DO NOTHING RETURNING;
@@ -1123,8 +1123,12 @@ CREATE INDEX idx_quota_pool_route ON commerce.quota_pool (workspace_id, product_
        FOR UPDATE ORDER BY priority, billing_kind(bundled 先), effective_at, id;                      [rank 2/3 防超扣/定序/免死锁]
  3. 惰性归零：对 current_period_start < period_floor(reset_period,now()) 的锁定池：quota_used:=0,
        current_period_start:=date_trunc(...); 同事务写 commerce.quota_pool_reset 一行。                [rank 7/8/18]
- 4. 模式分支(product_metric.consume_mode)：atomic → 先算锁定池 SUM(available)，< amount 则 ROLLBACK、
-       返 409 consumed=0、不写任何 head/detail；divisible → 瀑布扣减得 took[]。                        [rank 9]
+4a. 预留闸(2026-10-01)：intent='reserve' 且 product_metrics.cost_class='cost_bearing'(平台级共享键
+       恒视为有成本) 且 SUM(available) < amount → ROLLBACK、返 409 consumed=0、不写任何 head/detail。
+       缺省 intent='report' 不走本步。                                               [2026-10-01]
+ 4. 模式分支(product_metric.consume_mode)：atomic → **扣 0 但照记**；divisible → 瀑布扣减得 took[]。
+       两档都回 200(2026-08-10 裁定)。**本行此前写「atomic → ROLLBACK 返 409」，是那次漏改的
+       化石**，2026-10-01 按引擎实测订正；今天的 409 只来自 4a，且形状相反。          [rank 9]
  5. UPDATE quota_pool.quota_used += took（已锁，安全）。
  6. INSERT tenant_usage_event(头, total_amount=consumed=SUM(took)); INSERT tenant_usage_event_pool × N;
        回填 usage_idempotency(event_id, consumed, per_pool)。                                          [rank 11]
@@ -1875,7 +1879,7 @@ model.model_policy (
 
 要点：
 
-- **解析方向单一**：旧轴 → 新轴，在 Model Platform 调用 `POST /usage/consume`（§8.3）**之前**由 Model Platform 解析完成，consume 只收 `{workspace_id, product_id, metric_key, amount, idempotency_key, request_id}`，**不感知** tenant/application/agent 轴。
+- **解析方向单一**：旧轴 → 新轴，在 Model Platform 调用 `POST /usage/consume`（§8.3）**之前**由 Model Platform 解析完成，consume 只收 `{workspace_id, product_id, metric_key, amount, idempotency_key, request_id, intent?}`，**不感知** tenant/application/agent 轴。
 - **`amount` 的口径**：token 模式下 `amount` = 计费 token 数（单一 BIGINT）；**input/output 拆分不进 commerce**，归 `reqlog`（§8.9② / §11.5）。即 commerce 收"一个数"，AI 明细留在 Model Platform DB。
 - **grant 不参与计量轴改名**：`model_grant` 仍按 tenant/application 轴做**授权 gate**（能不能调），与计量轴解耦；二者经本表口径在边界处对齐，故同一 `request_id` 可串起 grant 决策 / quota 扣减 / reqlog 明细。
 - **`agent_catalog` 归属（跨轮依赖，rank 3）**：`product.agent_catalog`（application/agent → product 映射）在 database.md §3.4 为**规划态**，§7 本轮**不落字段级**（§7 开头澄清）。本章 consume 解析**依赖**其落地——属**跨轮硬前置**：agent_catalog 未落地前 scope-key 不可调和、consume 不可切（runbook §11.6）。其字段级 DDL 待 agent_catalog 立项时按 §7 同构补，登记 runbook §18。

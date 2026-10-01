@@ -80,6 +80,8 @@ export class PlatformUsageService {
     amount: string;
     remainingTotal: number;
     pools: PoolIdentity[];
+    /** 预留被拒（409）还是照记（200）——通告文案两档不同，见 QuotaExhaustedFacts。 */
+    denied?: boolean;
     now?: Date;
   }): Promise<void> {
     const now = input.now ?? new Date();
@@ -101,6 +103,7 @@ export class PlatformUsageService {
           remainingTotal: input.remainingTotal,
           periodStartKey,
           tenant,
+          ...(input.denied ? { denied: true as const } : {}),
           now,
         }),
       );
@@ -136,6 +139,11 @@ export class PlatformUsageService {
     requestId?: string;
     /** optional end-user attribution (NULL bucket when absent). */
     endUserId?: string;
+    /**
+     * 调用意图（owner 2026-10-01）。不传 = report（事后报账，永远记账、永远 200）。
+     * reserve = 事前问许可，硬限且额度不足时引擎回 denied、不写用量事件，HTTP 层转 409。
+     */
+    intent?: "reserve" | "report";
   }): Promise<EngineConsumeResult> {
     return this.consumeService.consume(input);
   }
@@ -188,6 +196,10 @@ export class PlatformUsageService {
         periodAnchor: r.period_anchor,
         priority: r.priority,
         resetPeriod: r.reset_period,
+        // 这一处只为算 C3 响应里的 remaining/breakdown，处置档不参与计算；取 soft 是
+        // **刻意的保守值**而不是判断——真正决定拒不拒的是 consume 引擎自己解析的成本档
+        // （pg-consume.repository），不是这个只读投影。在这里再判一次会出现两套规则。
+        enforcement: "soft" as const,
         currentPeriodStart: r.current_period_start,
       })),
     );

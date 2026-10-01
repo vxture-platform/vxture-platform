@@ -55,6 +55,8 @@ interface StrategySqlRow {
 interface PoolSqlRow {
   product_code: string;
   metric_key: string;
+  /** 'soft' | 'hard'，由下面那条 SQL 从 product_metrics.cost_class 派生。 */
+  enforcement: string;
   quota_limit: string;
   quota_used: string;
   priority: number;
@@ -163,6 +165,10 @@ export class PlatformEntitlementsService {
         limit: Number(a.limit),
         remaining: Number(a.limit - used), // unclamped: negative = overshoot
         priority: a.priority,
+        // gauge 只存在于 platform_metrics（kind='gauge'），所以恒硬限。注意它**不走
+        // consume**（D5：存量型是准入制），所以这个值对 gauge 是给产品侧做 admission 的
+        // 依据，不会有平台侧的 409。
+        enforcement: "hard" as const,
       });
     }
 
@@ -333,9 +339,14 @@ export class PlatformEntitlementsService {
   ): Promise<PoolRow[]> {
     const res = await this.pool.query<PoolSqlRow>(
       `SELECT prod.product_code, qp.metric_key, qp.quota_limit, qp.quota_used,
-              qp.priority, qp.reset_period, qp.current_period_start, qp.period_anchor
+              qp.priority, qp.reset_period, qp.current_period_start, qp.period_anchor,
+              -- 处置档派生自指标的成本档（owner 2026-10-01）。LEFT JOIN 而不是 JOIN：
+              -- 指标没登记时池仍要读得出来（那是登记缺失，由接入检查单管），只是按 soft 报。
+              CASE WHEN pm.cost_class = 'cost_bearing' THEN 'hard' ELSE 'soft' END AS enforcement
        FROM metering.quota_pools qp
        JOIN product.products prod ON prod.id = qp.product_id
+       LEFT JOIN product.product_metrics pm
+              ON pm.product_id = qp.product_id AND pm.metric_key = qp.metric_key
        WHERE qp.workspace_id = $1
          AND prod.product_code = ANY($2::text[])
          AND qp.status = 'active'
@@ -362,6 +373,10 @@ export class PlatformEntitlementsService {
       resetPeriod: r.reset_period,
       currentPeriodStart: r.current_period_start,
       periodAnchor: r.period_anchor,
+      // SQL 已按 product_metrics.cost_class 派生；这里只收窄类型，不在 TS 里再判一遍
+      // （两处各判一次就会有两套规则）。
+      enforcement:
+        r.enforcement === "hard" ? ("hard" as const) : ("soft" as const),
     }));
   }
 
@@ -408,6 +423,10 @@ export class PlatformEntitlementsService {
       resetPeriod: r.reset_period,
       currentPeriodStart: r.current_period_start,
       periodAnchor: r.period_anchor,
+      // 平台级共享键恒硬限：`product.platform_metrics` 的语义就是「有成本的共享池」
+      // （seed 里「席位零成本，故不进 platform_metrics」说明了这一点）。这条查询是
+      // INNER JOIN 那张表，所以命中的每一行都在那个集合里。
+      enforcement: "hard" as const,
       kind: r.kind,
     }));
   }

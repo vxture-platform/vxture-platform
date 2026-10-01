@@ -50,6 +50,7 @@ import {
 import { VxConfigService } from "@vxture/core-config";
 import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import {
+  COST_CLASSES,
   isValidProductLayer,
   isSelectableProductLayer,
   PRODUCT_INTEGRATION_MODES,
@@ -1779,6 +1780,7 @@ export class ProductCatalogRouter {
       consume_mode: string | null;
       metric_unit: string | null;
       reset_period: string;
+      cost_class: string | null;
       display_name: string | null;
       description: string | null;
     }>(
@@ -1786,7 +1788,7 @@ export class ProductCatalogRouter {
          共用一处命名（owner 2026-09-22：更高维度的统一，产品要复用）。
          LEFT JOIN：没命名过的回落显示 metric_key 本身，不阻塞。 */
       `SELECT m.metric_key, m.merge_strategy, m.consume_mode, m.metric_unit,
-              m.reset_period, mc.display_name, mc.description
+              m.reset_period, m.cost_class, mc.display_name, mc.description
          FROM product.product_metrics m
          LEFT JOIN product.metric_catalog mc ON mc.metric_key = m.metric_key
         WHERE m.product_id = $1
@@ -1801,6 +1803,7 @@ export class ProductCatalogRouter {
       consumeMode: r.consume_mode,
       metricUnit: r.metric_unit,
       resetPeriod: r.reset_period,
+      costClass: r.cost_class,
     }));
   }
 
@@ -1900,6 +1903,7 @@ export class ProductCatalogRouter {
       consumeMode?: string | null;
       metricUnit?: string | null;
       resetPeriod?: string | null;
+      costClass?: string | null;
     },
   ): Promise<ProductMetricRecord> {
     assertCanManage(req);
@@ -1953,6 +1957,33 @@ export class ProductCatalogRouter {
         "resetPeriod",
       );
     }
+    /*
+     * 成本档：pool 型必填、非 pool 型不许给（chk_product_metrics_pool_cost +
+     * chk_product_metrics_cost_class）。形状照上面 consumeMode 那两条抄，理由同样是
+     * 「库上有约束，但 23514 冒上来运营者只看到『保存失败』」。
+     *
+     * **这里不设默认值**。缺声明不许被默默当成零成本——那个方向等于不封顶（DDL 上
+     * 那条约束的注释写了同一句）。而默默当成有成本又会在运营者没做过判断的情况下
+     * 开始拒客户的请求。两个方向都不能猜，所以只能让它必填。
+     */
+    const cost = (body.costClass ?? "").trim() || null;
+    if (
+      strategy === "pool" &&
+      !(COST_CLASSES as readonly string[]).includes(cost ?? "")
+    ) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        "pool 型指标必须声明成本档：有成本（cost_bearing）/ 零成本（zero_cost）",
+        "costClass",
+      );
+    }
+    if (strategy !== "pool" && cost) {
+      throw invalidRequest(
+        "VALIDATION_CONFLICT",
+        "只有 pool 型才有成本档",
+        "costClass",
+      );
+    }
     const unit = ((body.metricUnit ?? "").trim() || null)?.slice(0, 32) ?? null;
 
     const exists = await this.pool.query(
@@ -1995,17 +2026,19 @@ export class ProductCatalogRouter {
       consume_mode: string | null;
       metric_unit: string | null;
       reset_period: string;
+      cost_class: string | null;
     }>(
       `INSERT INTO product.product_metrics
-         (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period, cost_class)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (product_id, metric_key) DO UPDATE
          SET merge_strategy = EXCLUDED.merge_strategy,
              consume_mode   = EXCLUDED.consume_mode,
              metric_unit    = EXCLUDED.metric_unit,
-             reset_period   = EXCLUDED.reset_period
-       RETURNING metric_key, merge_strategy, consume_mode, metric_unit, reset_period`,
-      [id, key, strategy, mode, unit, reset],
+             reset_period   = EXCLUDED.reset_period,
+             cost_class     = EXCLUDED.cost_class
+       RETURNING metric_key, merge_strategy, consume_mode, metric_unit, reset_period, cost_class`,
+      [id, key, strategy, mode, unit, reset, cost],
     );
     const row = result.rows[0]!;
     /* 命名不在本表里，upsert 之后补读一次——读与写两处形状必须一致，否则调用方
@@ -2026,6 +2059,7 @@ export class ProductCatalogRouter {
       consumeMode: row.consume_mode,
       metricUnit: row.metric_unit,
       resetPeriod: row.reset_period,
+      costClass: row.cost_class,
     };
   }
 
@@ -2402,6 +2436,14 @@ export interface ProductMetricRecord {
   metricUnit: string | null;
   /** none / day / month；仅 pool 型可非 none。 */
   resetPeriod: string;
+  /**
+   * cost_bearing / zero_cost；**仅 pool 型非空**（DDL chk_product_metrics_pool_cost）。
+   *
+   * 「这一笔会不会让我们付钱给谁」——owner 2026-09-11 的判据。只有接产品的人知道，
+   * 所以它必须是录入项而不是推断项。软/硬限按它派生：有成本 ⇒ 硬限（额度不足时
+   * 平台拒绝预留请求），零成本 ⇒ 软限（照记不拦，由产品自己按档位管）。
+   */
+  costClass: string | null;
 }
 
 export interface ChecklistItemRecord {

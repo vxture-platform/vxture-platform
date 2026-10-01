@@ -249,8 +249,11 @@ describe.skipIf(!RUN)("arda catalog → pool materialization (live DB)", () => {
     // the shadow guard forbids a product from redeclaring a platform key
     await expect(
       pool.query(
-        `insert into product.product_metrics (product_id, metric_key, merge_strategy)
-         select id, 'ai.credit', 'pool' from product.products where product_code='arda'`,
+        /* cost_class 给上：pool 行不给它也会被 chk_product_metrics_pool_cost 拒，
+           那样这条断言就指不住它想指的那个触发器了（触发器先于 CHECK 跑，所以
+           此前仍按原因通过——但那是隐式顺序依赖，不留）。 */
+        `insert into product.product_metrics (product_id, metric_key, merge_strategy, cost_class)
+         select id, 'ai.credit', 'pool', 'cost_bearing' from product.products where product_code='arda'`,
       ),
     ).rejects.toThrow(/platform metric key/);
   });

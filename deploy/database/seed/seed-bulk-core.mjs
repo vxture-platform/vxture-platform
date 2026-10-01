@@ -820,22 +820,28 @@ export async function seedBulkCore(c) {
     // ── 12. 产品度量 / 开通记录 ────────────────────────────────────────
     // 度量的唯一键是 (product_id, metric_key)，所以是**产品数 × 指标数**封顶，
     // 不是 100 —— 这里如实按上限铺满，不硬凑数字。
+    // 末位是 cost_class：**pool 行必填**（chk_product_metrics_pool_cost），
+    // 非 pool 行必须留 null（它只在 pool 档有意义）。两个值都铺上——一列只有
+    // 一个值的话，按成本档分流的那些查询在这个库里什么也验不出。
     const METRICS = [
-      ["api_calls", "pool", "divisible", "次", "month"],
-      ["tokens", "pool", "divisible", "token", "month"],
-      ["storage_gb", "max", null, "GB", "none"],
-      ["seats", "max", null, "个", "none"],
-      ["documents", "pool", "atomic", "份", "month"],
-      ["concurrent_jobs", "max", null, "个", "none"],
+      ["api_calls", "pool", "divisible", "次", "month", "cost_bearing"],
+      ["tokens", "pool", "divisible", "token", "month", "cost_bearing"],
+      ["storage_gb", "max", null, "GB", "none", null],
+      ["seats", "max", null, "个", "none", null],
+      ["documents", "pool", "atomic", "份", "month", "zero_cost"],
+      ["concurrent_jobs", "max", null, "个", "none", null],
     ];
     let metricRows = 0;
     for (const [pi, productId] of products.entries()) {
-      for (const [mi, [key, merge, consume, unit, reset]] of METRICS.entries()) {
+      for (const [
+        mi,
+        [key, merge, consume, unit, reset, cost],
+      ] of METRICS.entries()) {
         const r = await c.query(
           `insert into product.product_metrics
              (id, product_id, metric_key, merge_strategy, consume_mode,
-              metric_unit, reset_period, created_at)
-           values ($1, $2, $3, $4, $5, $6, $7, $8)
+              metric_unit, reset_period, cost_class, created_at)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            on conflict do nothing`,
           [
             `00000000-0000-4000-d000-${KIND.productMetric}${String(pi).padStart(6, "0")}${String(mi).padStart(4, "0")}`,
@@ -845,6 +851,7 @@ export async function seedBulkCore(c) {
             consume,
             unit,
             reset,
+            cost,
             day(pi + mi),
           ],
         );

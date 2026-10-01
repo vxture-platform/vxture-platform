@@ -71,7 +71,10 @@
 **定位：公测演示版**（beta-arda.vxture.com + `vxturebiz_arda_beta`，以演示数据为主）。租户以**授权方式**进入，不走自助购买；配额受控（token 成本上限）：
 
 - **授权载体 = 运营授予的受限订阅**（复用计量引擎，零新机制）：`subscription_kind='trial'` + `trial_end_at` + `activation_method='operator_grant'`；与 prod 商业试用同机制、靠 plan 区分（beta 专用 plan，池额度小）；
-- **配额即成本上限**：beta AI 用量经 Atlas→consume 扣 beta plan 的池，池尽 409 gated 硬停；
+- **配额即成本上限**：beta AI 用量经 Atlas→consume 扣 beta plan 的池，池尽硬停。**硬停要调用方带
+  `intent: "reserve"`**（2026-10-01）——缺省的 `report` 档是 200 + `gated`、照记不拦，
+  所以本行此前写的「池尽 409 gated 硬停」要按 2026-08-10 的裁定重读；详见
+  [`arda_200 §3.1`](./30-arda_200_interface.md)；
 - **两条防串约定**：① `had_trial_at` 仅 `activation_method='trial'` 写，`operator_grant` 不写（公测不烧转正试用资格）；② beta 授权只发未付费租户，转正付费时运营同步取消 beta 授权订阅（防 C2 就高合并把 beta 池变成付费赠送）；
 - **beta 空间 = 懒建**（首次进入时建，定期重置），不依赖 provisioning webhook；**prod 接收端按 `payload.plan` 忽略 beta plan 的开通事件**。
 

@@ -237,6 +237,30 @@ export function ProductCapabilityDetailPage({
         ),
       },
       {
+        id: "cost",
+        header: "成本档",
+        align: "center",
+        width: "xs",
+        /*
+         * 「这一笔会不会让我们付钱给谁」（owner 2026-09-11）。这里是审阅面——
+         * 录入在运维台，本页只负责让缺声明**看得见**。
+         *
+         * 三态而不是两态：非 pool 档没有这一项（「—」）；pool 档已声明（显示档位
+         * 与派生的软/硬限）；pool 档未声明是缺陷，标红而不是落到某一档上——
+         * 「读不到」与「零成本」在钱上是相反的两件事。
+         */
+        cell: (metric) => {
+          if (metric.quotaBase !== "pool") return "—";
+          if (metric.costClass === "cost_bearing") {
+            return <Badge variant="outline">有成本 · 硬限</Badge>;
+          }
+          if (metric.costClass === "zero_cost") {
+            return <Badge variant="secondary">零成本 · 软限</Badge>;
+          }
+          return <Badge variant="destructive">未声明</Badge>;
+        },
+      },
+      {
         id: "cycle",
         header: "重置周期",
         align: "center",

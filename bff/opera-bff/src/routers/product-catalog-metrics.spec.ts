@@ -99,6 +99,7 @@ function makePool({ platformRows = [], inUseRows = [] }: PoolOpts = {}) {
               consume_mode: "divisible",
               metric_unit: "words",
               reset_period: "month",
+              cost_class: "cost_bearing",
             },
           ],
           rowCount: 1,
@@ -152,6 +153,9 @@ const POOL_BODY = {
   consumeMode: "divisible",
   metricUnit: "words",
   resetPeriod: "month",
+  /* pool 型必填（2026-10-01）。不带它这份 body 会先被成本档那道闸拦掉，
+     上面三条平台键断言就全在测错的东西了。 */
+  costClass: "cost_bearing",
 };
 
 describe("登记指标：L0 平台共享键不许被重新定义", () => {
@@ -196,6 +200,89 @@ describe("登记指标：L0 平台共享键不许被重新定义", () => {
     );
     expect(result.metricKey).toBe("doc.words");
     expect(writes).toEqual(["insert"]);
+  });
+});
+
+/**
+ * 成本档这道闸（owner 2026-10-01）。
+ *
+ * 库上是 `chk_product_metrics_pool_cost`，冒上来仍是 23514「保存失败」，所以与上面
+ * 那三条同一个理由钉在这里。**但它比那几条多一层**：这个值决定额度用尽时平台**拒不拒**
+ * 客户的请求，所以「猜一个默认值」比「报一个错」危险——
+ *
+ *   · 猜零成本 ⇒ 这个指标永远不封顶，钱照花；
+ *   · 猜有成本 ⇒ 在运营者没做过判断的情况下开始拒客户。
+ *
+ * 两个方向的代价都落在别人身上，所以这里断言的是**必填**，不是某个默认值。
+ */
+describe("登记指标：pool 型必须声明成本档", () => {
+  it("pool 型没给成本档 → 400，一行都没写", async () => {
+    const { router, writes } = makeRouter({ platformRows: [] });
+    const { consumeMode, metricUnit, resetPeriod } = POOL_BODY;
+    const { status, body } = await failure(
+      router.putMetric(makeReq(), PRODUCT_ID, "doc.words", {
+        mergeStrategy: "pool",
+        consumeMode,
+        metricUnit,
+        resetPeriod,
+      }),
+    );
+    expect(status).toBe(400);
+    expect(body["code"]).toBe("VALIDATION_REQUIRED");
+    expect(body["field"]).toBe("costClass");
+    expect(writes).toEqual([]);
+  });
+
+  it("未知档位不许混进去（不是「非法值当零成本」）", async () => {
+    const { router, writes } = makeRouter({ platformRows: [] });
+    const { status, body } = await failure(
+      router.putMetric(makeReq(), PRODUCT_ID, "doc.words", {
+        ...POOL_BODY,
+        costClass: "free",
+      }),
+    );
+    expect(status).toBe(400);
+    expect(body["field"]).toBe("costClass");
+    expect(writes).toEqual([]);
+  });
+
+  it("非 pool 型给了成本档 → 400（这一档没有这个概念）", async () => {
+    const { router, writes } = makeRouter({ platformRows: [] });
+    const { status, body } = await failure(
+      router.putMetric(makeReq(), PRODUCT_ID, "member.limit", {
+        mergeStrategy: "max",
+        costClass: "zero_cost",
+      }),
+    );
+    expect(status).toBe(400);
+    expect(body["code"]).toBe("VALIDATION_CONFLICT");
+    expect(body["field"]).toBe("costClass");
+    expect(writes).toEqual([]);
+  });
+
+  it("非 pool 型不给 → 照常登记（这道闸是「拦对」不是「全拦」）", async () => {
+    const { router, writes } = makeRouter({ platformRows: [] });
+    const result = await router.putMetric(
+      makeReq(),
+      PRODUCT_ID,
+      "member.limit",
+      {
+        mergeStrategy: "max",
+      },
+    );
+    expect(result.metricKey).toBe("doc.words"); // 桩的固定返回
+    expect(writes).toEqual(["insert"]);
+  });
+
+  it("两个档位都收，并且原样回送", async () => {
+    for (const value of ["cost_bearing", "zero_cost"]) {
+      const { router, writes } = makeRouter({ platformRows: [] });
+      await router.putMetric(makeReq(), PRODUCT_ID, "doc.words", {
+        ...POOL_BODY,
+        costClass: value,
+      });
+      expect(writes).toEqual(["insert"]);
+    }
   });
 });
 

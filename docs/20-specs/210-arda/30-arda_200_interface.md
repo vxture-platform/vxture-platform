@@ -118,7 +118,15 @@ Header: x-vxture-internal-auth: <AUTH_INTERNAL_TOKEN>
 ```
 
 - **200** = 扣减成功，返回瀑布扣减明细；幂等回放附 `"replayed": true`。
-- **409** = gated（额度不足），body 带 `remaining_total`（真实余额）。解除机制**不要发明持久标志**——`gated ⇔ C2 该 metric remaining ≤ 0`，池周期翻转后 C2 读侧自动恢复，下次拉取门自开（[`arda_300`](./40-arda_300_integration-final.md) §1）。
+- **200 + `gated: true`** = 额度没覆盖住这次调用，**仍然记账**（owner 2026-08-10 裁定，取代原 409 门控）。
+  本行此前写「**409** = gated」，自那次裁定起就不成立，2026-10-01 订正。
+- **409 只在你显式要求时出现**：请求体带 `intent: "reserve"`（2026-10-01 增）= 「我还没做，先问能不能做」，
+  此时有成本指标额度不足回 409 且**不写用量事件**（`event_id` 整个不出现，`consumed` 为 0）。
+  **`ai.credit` 的「atomic 预扣（贵操作前置门控）」要的就是这一档：前置门控必须显式带
+  `intent: "reserve"`，平台侧已就绪。**缺省 `report` 的行为与现状逐字一致，所以这是纯增量——
+  但前置门控这件事要等这个字段补上才由平台这一侧成立。
+- 解除机制**不要发明持久标志**——`gated ⇔ C2 该 metric remaining ≤ 0`，池周期翻转后 C2 读侧自动恢复，
+  下次拉取门自开（[`arda_300`](./40-arda_300_integration-final.md) §1）。
 - **消费模式**：`ai.credit` = atomic 预扣（贵操作前置门控）；`service.api.call`/`quality.check.run` = divisible 后报（廉操作后置记账）。
 - **产品侧模式**：`local_usage.usage_raw` 缓冲 + 异步 Job 上报，**不做本地配额裁决**（用量唯一写入方 = 平台 consume）。
 

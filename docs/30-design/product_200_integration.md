@@ -96,12 +96,26 @@ GET {CONSOLE_BASE}/subscribe?product={P}&intent={subscribe|upgrade|renew|addon}[
 ### 4.1 上行:用量上报(consume)
 
 ```
-POST /usage/consume  { workspace_id, product, metric, amount, idempotency_key }
+POST /usage/consume  { workspace_id, product, metric, amount, idempotency_key, intent? }
 → 200 { consumed, remaining_total, per_pool_breakdown, event_id? }                 # 配额覆盖住了
 → 200 { gated: true, reason: "quota_exhausted", consumed, remaining_total, … }    # 没覆盖住(仍是 200)
+→ 409 { gated: true, reason: "quota_exhausted", enforcement: "hard", consumed: 0 } # 仅 intent=reserve 且硬限
 ```
 
-- **本端点记账,不裁决(owner 裁定 2026-08-10;取代原 409 门控)**:它回答"用了多少"和"配额覆盖了多少",
+- **`intent`(2026-10-01 增,owner 裁定;可选,缺省 `report`)**:这一次调用是**事后报账**还是**事前问许可**。
+  两个值:
+  - `report`(缺省)——**与此前逐字相同的行为**,旧调用方一个字都不用改。
+  - `reserve`——你**还没做这件事**,先问能不能做。此时指标若声明了成本(`product_metrics.cost_class
+= 'cost_bearing'`,平台级共享键恒视为有成本)且额度不足,本端点回 **409 且不写任何用量事件**:
+    你还没用,没有用量可记,`event_id` 整个不出现。零成本指标(`zero_cost`)不拒,照 `report` 走。
+  - 判据**不由你声明**:硬限/软限按指标登记的成本档派生,产品侧传 `intent` 只是说明语义,
+    不是请求一个处置。未知值当场 400 `invalid_intent`——静默当成 `report` 会让一个拼错的
+    `reserv` 变成「照常放行」,而调用方以为自己在问许可。
+  - **强制点**:请求体解析在 `platform-api` 的 `parseConsumeBody`(未知值 400);拒绝发生在
+    commerce consume 引擎的事务内、在任何写之前(`pg-consume.repository.ts` 的 4a 段);成本档的必填
+    与值域在 opera 登记接口 + 库上 `chk_product_metrics_pool_cost`。
+- **本端点记账,不裁决(owner 裁定 2026-08-10;取代原 409 门控)。2026-10-01 收窄:这句管 `report` 档**
+  ——它回答"用了多少"和"配额覆盖了多少",
   **不回答"你该怎么办"**——没余量时是禁用按钮、继续服务、还是引导升级,由**调用方**决定。`gated` 留在
   body 里作**信息**,不再是 HTTP 错误。原来的 409 把平台的意见包装成调用方必须服从的错误,而不认同的
   调用方本来就 fail-open 照常服务——**status code 只买到了歧义**。
@@ -111,8 +125,13 @@ POST /usage/consume  { workspace_id, product, metric, amount, idempotency_key }
 - **`event_id`(2026-08-10 增,`@vxture/shared` 1.6.0,回应 liaison platform#220)**:本次写入的
   `metering.usage_events.id`,回显给调用方存在自己的请求记录旁,两边账可以直接对上,不必绕
   `request_id`/`idempotency_key` 间接关联(那只在两侧都不掉队时才成立)。**可选字段、纯增量**,老调用方
-  忽略即可。**409 上也给**:可分割 metric 的部分成功是 409 且 `consumed>0`、确实写了事件——这批行恰恰
-  是最难人工对账的,把关联键只给 200 等于把最需要的那批漏掉。原子拒绝没写事件,字段整个不出现。
+  忽略即可。
+  - **2026-10-01 更正:本段原写「409 上也给:可分割 metric 的部分成功是 409 且 `consumed>0`、确实写了
+    事件」,那描述的是 2026-08-10 之前的 409,而那条路径当天就没有了**(今天覆盖不住是 200 + `gated`,
+    原子超限也是 200:扣 0、照记)。这一段是那次裁定漏改的化石,留到现在。
+  - **今天只有一种 409:`intent=reserve` 且硬限额度不足,而它恰好相反——什么都没写,所以
+    `event_id` 整个不出现、`consumed` 为 0。**照旧文去 409 的 body 里找 `event_id` 一定找不到。
+  - 没写事件时字段整个不出现(不是 `null`)。
 
 - **唯一写入方 = commerce consume 服务**(单事务:校验配额 → 记事件 → 更新池),产品侧与 Model Platform 均禁止直写用量表;
 - 产品侧模式:本地 `local_usage.usage_raw` 缓冲 → 异步 Job 上报;`idempotency_key` 强制(防重放/重复计量);超额语义按 metric 声明(可分割=部分成功 / 原子=全有全无);
