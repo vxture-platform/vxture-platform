@@ -11,7 +11,7 @@
  * 类级装饰器给整个 controller 定默认,方法级覆盖(Reflector.getAllAndOverride)。
  *
  * 全局守卫 `CapabilityGuard` 对**没有声明**的路由一律 403——宁可红也不能默认放行;
- * `scripts/guardrails/check-bff-route-annotations.mjs` 在 lint 期就把漏标的路由抓出来。
+ * `scripts/guardrails/check-bff-route-policies.mjs`(`pnpm lint:route-policies`)在 lint 期就把漏标的路由抓出来。
  *
  * 权限码从哪来:AuthMiddleware → TenantMiddleware → PermissionMiddleware 已经把
  * `req.capabilities` 填成该成员在当前租户的有效治理权限码(GovernanceService 回查,

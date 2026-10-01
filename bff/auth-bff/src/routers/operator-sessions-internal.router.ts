@@ -15,6 +15,7 @@
 import { createHash } from "node:crypto";
 import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
+import { InternalRoute } from "../authn/internal-route-policy";
 import { RedisService } from "../redis/redis.service";
 
 export interface InternalOperatorSession {
@@ -39,6 +40,11 @@ const OPERATOR_SUB_PREFIX = "opr_";
 export class OperatorSessionsInternalRouter {
   constructor(@Inject(RedisService) private readonly redis: RedisService) {}
 
+  @InternalRoute({
+    risk: "read",
+    actor: "none",
+    why: "运营台读「谁还在线」。返回全平台运营者会话，请求里没有主体；会话值本身不出站（只给 sessionRef）",
+  })
   @Get()
   async list(): Promise<{ sessions: InternalOperatorSession[] }> {
     const sessions = await this.redis.listOperatorSessions();

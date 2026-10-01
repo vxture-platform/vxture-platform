@@ -137,6 +137,16 @@ jobs:
       - name: Site takeover guardrail
         run: node scripts/guardrails/check-site-takeover.mjs
 
+      # 始终运行（含 docs-only）：旧凭据（AUTH_INTERNAL_TOKEN）路径的准入面对账。
+      # 纯 node、只读 auth-bff 的 router 源码、秒级，所以和上面几条一样跑在依赖安装
+      # 之前。同样**没有** `pnpm lint:` 入口（加一个要改根 package.json，那会触发一次
+      # 全栈重建），照 site-takeover / audit-env 的先例直接用 runner 自带的 node 调。
+      #
+      # 它钉住的是「共享口令能进哪些路由」这个面，以及其中「主体自报且无绑定」的条数。
+      # 这一步红了不要直接 --update：先确认那条路由是不是真的必须走旧凭据。
+      - name: Internal route policy guardrail
+        run: node scripts/guardrails/check-internal-route-policy.mjs
+
       - name: Docs-only quality gate
         if: steps.changes.outputs.docs_only == 'true'
         run: echo "::notice::Docs-only change; heavy quality gate steps skipped while keeping the required check stable."

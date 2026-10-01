@@ -27,6 +27,7 @@ import {
 } from "@nestjs/common";
 import { AccountService } from "@vxture/service-account";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
+import { InternalRoute } from "../authn/internal-route-policy";
 
 /**
  * S2S 请求体。admin-bff 的 `delegate` 一直就送 `{ actorOperatorId, reason }`——本路由此前
@@ -64,6 +65,11 @@ export class AccountAdminInternalRouter {
   ) {}
 
   // POST /internal/account/users/:id/disable — status='disabled' + revoke all sessions.
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-ignored",
+    why: "admin-bff 代运营者停用客户账号。本路由有意不读 actorOperatorId —— 客户正文里点名一个运营者既无必要也是泄露（见文件头）",
+  })
   @Post(":id/disable")
   @HttpCode(HttpStatus.OK)
   async disable(
@@ -78,6 +84,11 @@ export class AccountAdminInternalRouter {
   }
 
   // POST /internal/account/users/:id/enable — status='active'.
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-ignored",
+    why: "停用的反向动作。同样不读 actorOperatorId",
+  })
   @Post(":id/enable")
   @HttpCode(HttpStatus.OK)
   async enable(
@@ -92,6 +103,11 @@ export class AccountAdminInternalRouter {
   }
 
   // POST /internal/account/users/:id/sessions/revoke — revoke all active customer sessions.
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-ignored",
+    why: "强制客户下线。同样不读 actorOperatorId",
+  })
   @Post(":id/sessions/revoke")
   @HttpCode(HttpStatus.OK)
   async revokeSessions(

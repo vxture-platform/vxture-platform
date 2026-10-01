@@ -34,6 +34,7 @@ import { VxConfigService } from "@vxture/core-config";
 import { PgOperatorRepository } from "@vxture/service-iam";
 import { MailService } from "@vxture/service-mail";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
+import { InternalRoute } from "../authn/internal-route-policy";
 import { OidcService } from "../oidc/oidc.service";
 import { OperatorRefreshTokenRepository } from "../token/operator-refresh-token.repository";
 import { RedisService } from "../redis/redis.service";
@@ -118,6 +119,11 @@ export class OperatorAdminInternalRouter {
    * create-operator reuses the same flow, so it must not reopen the flat-top
    * "creator learns the initial credential" surface).
    */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "admin-bff 代运营者建号。rank 门比的是请求体自报的 actorOperatorId，没有东西证明它——这一档就是共享口令的真实半径",
+  })
   @Post()
   @HttpCode(HttpStatus.OK)
   async create(
@@ -210,6 +216,11 @@ export class OperatorAdminInternalRouter {
    * revoke all their sessions. Anti-lockout: cannot disable self or the last active
    * operator. Idempotent for an already-disabled target (still re-revokes sessions).
    */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "停用另一个运营者。rank 门比自报主体",
+  })
   @Post(":id/disable")
   @HttpCode(HttpStatus.OK)
   async disable(
@@ -242,6 +253,11 @@ export class OperatorAdminInternalRouter {
   }
 
   /** Re-enable a disabled operator (status → active). Idempotent. Rank-gated. */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "停用的反向动作。rank 门比自报主体",
+  })
   @Post(":id/enable")
   @HttpCode(HttpStatus.OK)
   async enable(
@@ -260,6 +276,11 @@ export class OperatorAdminInternalRouter {
   }
 
   /** Force-logout: end every central session and revoke the refresh tokens. Rank-gated. */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "强制目标运营者下线（中央会话 + 刷新令牌）。rank 门比自报主体",
+  })
   @Post(":id/sessions/revoke")
   @HttpCode(HttpStatus.OK)
   async revokeSessions(
@@ -277,6 +298,11 @@ export class OperatorAdminInternalRouter {
    * and revoke all sessions so they must re-auth + re-enroll. Policy is kept, so the
    * MFA requirement still applies on the next login.
    */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "清掉目标运营者的 MFA 注册。rank 门比自报主体",
+  })
   @Post(":id/mfa/reset")
   @HttpCode(HttpStatus.OK)
   async resetMfa(
@@ -301,6 +327,11 @@ export class OperatorAdminInternalRouter {
    * path). Targets without an email are refused (422 no_email — fix the email via
    * metadata first). No plaintext password is ever handled here or by admin-bff.
    */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "签发一次性重置令牌、外发到目标本人邮箱（发起方看不到链接）。rank 门比自报主体",
+  })
   @Post(":id/reset-password")
   @HttpCode(HttpStatus.OK)
   async resetPassword(
@@ -361,6 +392,11 @@ export class OperatorAdminInternalRouter {
    * (step 2) is what writes the new email + sets email_verified=true, which is
    * the ONLY path that restores out-of-band-delivery eligibility.
    */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "改运营者本人邮箱第一步：向新地址发码。本人路径要求自报主体 == 目标 id，而「自报主体是谁」没有证明",
+  })
   @Post(":id/contact/email/start")
   @HttpCode(HttpStatus.OK)
   async startEmailChange(
@@ -392,6 +428,11 @@ export class OperatorAdminInternalRouter {
    * On match, writes the new email + email_verified=true (proven owned).
    * Unique collision → 409; bad/expired code → 400.
    */
+  @InternalRoute({
+    risk: "admin-action",
+    actor: "declared-unbound",
+    why: "改运营者本人邮箱第二步：核码落库。同上，要求自报主体 == 目标 id",
+  })
   @Post(":id/contact/email/verify")
   @HttpCode(HttpStatus.OK)
   async verifyEmailChange(
