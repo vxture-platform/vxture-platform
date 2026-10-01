@@ -117,6 +117,7 @@ CREATE TABLE product.product_metrics (
     consume_mode   varchar(16),                                       -- 仅 pool 时非空 divisible/atomic
     metric_unit    varchar(32),                                       -- words/calls/GB/seats
     reset_period   varchar(16)  NOT NULL DEFAULT 'none',              -- none/day/month（pool 型池的重置周期，物化时投影 quota_pools.reset_period；2026-07-07）
+    cost_class     varchar(16),                                       -- cost_bearing/zero_cost（仅 pool 时非空）：这一笔会不会让我们付钱给谁。owner 2026-09-11 的判据第一次有了落点；软/硬限按它派生（2026-10-01）。平台级共享键不需要它——进 platform_metrics 就意味着有成本
     created_at     timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT uq_product_metrics_product_metric UNIQUE (product_id, metric_key),
     CONSTRAINT chk_product_metrics_merge_strategy CHECK (merge_strategy IN ('max','union','pool','tiered')),
@@ -125,7 +126,12 @@ CREATE TABLE product.product_metrics (
     CONSTRAINT chk_product_metrics_pool_consume CHECK (merge_strategy <> 'pool' OR consume_mode IN ('divisible','atomic')),
     CONSTRAINT chk_product_metrics_reset_period CHECK (reset_period IN ('none','day','month')),
     -- 重置周期仅对 pool 型有意义（能力型恒 none）
-    CONSTRAINT chk_product_metrics_reset_scope  CHECK (merge_strategy = 'pool' OR reset_period = 'none')
+    CONSTRAINT chk_product_metrics_reset_scope  CHECK (merge_strategy = 'pool' OR reset_period = 'none'),
+    -- 值域权威 = @vxture-platform/shared COST_CLASSES（lint:catalog-domains 强制一致）
+    CONSTRAINT chk_product_metrics_cost_class CHECK (cost_class IS NULL OR cost_class IN ('cost_bearing','zero_cost')),
+    -- pool 消耗型必须声明成本档（照上面 consume_mode 那条的先例：能力型放行 NULL）。
+    -- 缺声明不许被默默当成零成本——那个方向等于不封顶。
+    CONSTRAINT chk_product_metrics_pool_cost CHECK (merge_strategy <> 'pool' OR cost_class IN ('cost_bearing','zero_cost'))
 );
 CREATE INDEX idx_product_metrics_product_id ON product.product_metrics (product_id);
 

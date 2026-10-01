@@ -70,6 +70,14 @@ const pairs = [
     tsArray(dom, "COMPONENT_ROLES"),
     ddlCheckIn(p50, "chk_quota_pools_component_role"),
   ],
+  // B1（2026-10-01）：成本声明。CHECK 必须写成单行，否则 ddlCheckIn 的「不跨行」取值取不到。
+  // 处置档（QUOTA_ENFORCEMENTS）**不入库**：它从指标的成本档派生，两个判定点（consume、
+  // C2 读池）本来就拿得到指标，存一份副本只会多一个漂移源。所以那个值域没有 DDL 配对。
+  [
+    "cost_class (product_metrics)",
+    tsArray(dom, "COST_CLASSES"),
+    ddlCheckIn(p40, "chk_product_metrics_cost_class"),
+  ],
   [
     "plan version status",
     tsArray(dom, "PLAN_VERSION_STATUSES"),
