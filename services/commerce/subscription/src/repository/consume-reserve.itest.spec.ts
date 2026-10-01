@@ -186,6 +186,27 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
     expect(await eventCount()).toBe(before + 1);
   });
 
+  /*
+   * 库级反例。**这一条是因为约束曾经形同虚设才存在的**：
+   *
+   * 第一版判据写成 `merge_strategy <> 'pool' OR cost_class IN ('cost_bearing','zero_cost')`，
+   * 而 pool + NULL 时 `cost_class IN (...)` 求值为 NULL，整条得 `false OR NULL` = NULL ——
+   * CHECK **只在 FALSE 时拒**，于是它对唯一想防的那种行恰好放行（2026-10-02 实测插进去了）。
+   * 判据改成 `cost_class IS NOT NULL`。
+   *
+   * 钉在真库测试里而不是静态守卫里：这条性质只有库自己答得出，正则看不出三值逻辑。
+   */
+  it("库级反例：pool 型不带成本档必须插不进去", async () => {
+    await expect(
+      pool.query(
+        `insert into product.product_metrics
+           (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period)
+         values ($1, $2, 'pool', 'divisible', 'x', 'none')`,
+        [PROD_HARD, `b1test.nocost.${RUN_ID}`],
+      ),
+    ).rejects.toThrow(/chk_product_metrics_pool_cost/);
+  });
+
   it("reserve + 硬限 + 额度够用 → 正常扣减", async () => {
     await setPool(PROD_HARD, METRIC_HARD, 100, 0);
     const before = await eventCount();
