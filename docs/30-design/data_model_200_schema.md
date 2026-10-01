@@ -140,7 +140,7 @@ Vxture 付给上游的钱（毛利分析/供应商结算），**不是**客户�
 
 ## 2. scope-key 调和（旧轴 → 新轴，consume 硬前置）
 
-`model_grants`/旧 usage 用 `tenant/application/agent` 轴；`commerce.metering` 用 `workspace/product/metric` 轴。两轴不打通则 consume 无从知扣哪个 quota_pool。**映射在 Model Platform 调 `POST /usage/consume` 之前一次性解析**，consume 只收 `{workspace_id, product_id, metric_key, amount, idempotency_key, request_id}`，不感知旧轴。
+`model_grants`/旧 usage 用 `tenant/application/agent` 轴；`commerce.metering` 用 `workspace/product/metric` 轴。两轴不打通则 consume 无从知扣哪个 quota_pool。**映射在 Model Platform 调 `POST /usage/consume` 之前一次性解析**，consume 只收 `{workspace_id, product_id, metric_key, amount, idempotency_key, request_id, intent?}`，不感知旧轴。
 
 | 新轴           | 来源口径                                                                                                                                     |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

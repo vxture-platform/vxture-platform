@@ -269,12 +269,22 @@ describe("buildQuotaPoolView (§11.3 path B, period-aware read)", () => {
     currentPeriodStart: null,
     /* 铁律五：不给锚点时退回拿 currentPeriodStart 当锚点，既有用例的语义不变。 */
     periodAnchor: null,
+    /* 处置档：既有用例都不关心它，给中性的 soft；专门测它的用例显式传 hard。 */
+    enforcement: "soft",
     ...partial,
   });
 
   it("computes remaining = limit - used for non-resetting pools", () => {
     expect(buildQuotaPoolView([pool({})])).toEqual([
-      { metric: "doc.words", limit: 1000, remaining: 600, priority: 10 },
+      {
+        metric: "doc.words",
+        limit: 1000,
+        remaining: 600,
+        priority: 10,
+        /* 处置档是**必填**字段：写进这条全等断言，这样它哪天从投影里掉出去会当场红
+           （只断言前四项的话，字段消失也照样绿）。 */
+        enforcement: "soft",
+      },
     ]);
   });
 

@@ -10,7 +10,12 @@
  * The commerce consume engine stays the single writer (idempotent waterfall);
  * this router only validates, resolves product_code → id, and enriches the
  * engine result with the contract's remaining_total / per-subscription
- * breakdown via a read-only period-aware pool read. Every consume answers 200
+ * breakdown via a read-only period-aware pool read.
+ *
+ * **2026-10-01（owner 裁定）**：请求体可带 `intent`。默认 `report` —— 行为与此前
+ * 完全一致（旧调用方一个字不用改）。`reserve` 是事前问许可：硬限且额度不足时本端点
+ * 回 **409** 且不写用量事件。下面这句「Every consume answers 200」自此只管 report 档。
+ * Every consume answers 200
  * (2026-08-10): `gated` in the body reports that quota did not cover the call,
  * and the caller decides what that means — the platform records, it does not
  * adjudicate.
@@ -49,7 +54,10 @@ export class PlatformUsageRouter {
     private readonly usage: PlatformUsageService,
   ) {}
 
-  /** POST /usage/consume { workspace_id, product, metric, amount, idempotency_key, end_user_id? } */
+  /**
+   * POST /usage/consume
+   * { workspace_id, product, metric, amount, idempotency_key, end_user_id?, intent? }
+   */
   @Post("usage/consume")
   async consume(
     @Body()
@@ -60,6 +68,9 @@ export class PlatformUsageRouter {
       amount?: unknown;
       idempotency_key?: unknown;
       end_user_id?: unknown;
+      /* 不列它不会报错（parseConsumeBody 收的都是 unknown），但这份声明就会对下一个
+         读者说「请求体没有这个字段」。 */
+      intent?: unknown;
     },
     @Res({ passthrough: true }) res: Response,
     @Headers("x-request-id") requestId?: string,
@@ -94,6 +105,9 @@ export class PlatformUsageRouter {
       idempotencyKey: parsed.idempotencyKey,
       ...(requestId ? { requestId } : {}),
       ...(parsed.endUserId ? { endUserId: parsed.endUserId } : {}),
+      // 不接这一环，reserve 整条分支就是死代码——类型检查看不出来（intent 可选，
+      // 不传完全合法），只有顺着调用链问「这个值从哪来、到哪去」才看得见。
+      ...(parsed.intent ? { intent: parsed.intent } : {}),
     });
 
     const pools = await this.usage.readPools(
@@ -119,6 +133,9 @@ export class PlatformUsageRouter {
           amount: parsed.amount,
           remainingTotal: responseBody.remaining_total,
           pools,
+          /* 409 = 预留被拒。通告文案按它分两档——判据取**这一刻真的回了什么**，
+             不重新推一遍。 */
+          denied: statusCode === 409,
         });
       } catch (err) {
         this.logger.warn(

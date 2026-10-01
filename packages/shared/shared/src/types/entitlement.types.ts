@@ -63,6 +63,15 @@ export interface SaleAxes {
  * actual zero-out happens on consume via C3).
  */
 export interface QuotaPoolView {
+  /**
+   * 这个池的额度用尽之后会怎样（owner 2026-10-01）。由指标的成本档派生、不入库：
+   * `hard` = 平台会拒绝**预留**（`POST /usage/consume` 带 `intent="reserve"` 时回 409）；
+   * `soft` = 照旧只记账。事后报账（默认档）永远 200，与此无关。
+   *
+   * 产品侧可以据它在动作点之前自己停下来，不必等 409——那是更好的用户体验，而 409 是
+   * 平台这一侧的兜底。
+   */
+  enforcement: "soft" | "hard";
   metric: string;
   limit: number;
   remaining: number;
@@ -98,8 +107,13 @@ export interface EntitlementResponseBatch {
  * C3 consume response body: `POST /usage/consume` (product_200 §4.1 / ADR-11
  * §11.7).
  *
- * **Always 200 since 2026-08-10** (owner determination). The endpoint records
- * usage and reports coverage; it does not adjudicate. `gated: true` means "your
+ * **2026-10-01 起这句话有了边界（owner 裁定，收窄而非推翻）**：下面说的「永远 200」
+ * 管的是 `intent="report"`（默认档，事后报账）。另有 `intent="reserve"`（事前问许可）
+ * —— 硬限且额度不足时回 **409** 并且**不记账**：调用方还没做事，所以没有用量可记。
+ * 两档的分界正是下面那段推理的另一半：拒绝写下来不能让它没发生，**当且仅当它已经发生**。
+ *
+ * **Always 200 since 2026-08-10** (owner determination) —— 现在读作「report 档永远 200」。
+ * The endpoint records usage and reports coverage; it does not adjudicate. `gated: true` means "your
  * quota did not cover this call" — information, not an instruction. What to do
  * about it belongs to the caller: disable the control, keep serving, upsell.
  * It used to be a 409, which dressed the platform's opinion as an error the
@@ -114,6 +128,11 @@ export interface EntitlementResponseBatch {
 export interface ConsumeResponseBody {
   gated: boolean;
   reason?: "quota_exhausted";
+  /**
+   * 仅**预留被拒**时出现（HTTP 409）：这一项是硬限，而额度没覆盖住这次预留。
+   * 由指标的成本档派生，不是存出来的。见 `QUOTA_ENFORCEMENTS` 的说明。
+   */
+  enforcement?: "hard";
   consumed: number;
   remaining_total: number;
   per_pool_breakdown: {

@@ -8,9 +8,13 @@
  * body, and decides 200 vs 409 (gated):
  *   engine status "ok"           → 200 { gated:false, consumed, remaining_total, per_pool_breakdown }
  *   engine status "insufficient" → 200 { gated:true,  reason:"quota_exhausted", … }
+ *   engine status "denied"       → 409 { gated:true,  reason:"quota_exhausted",
+ *                                        enforcement:"hard", consumed:0 }   ← intent=reserve only
  *
- * Both are 200 since 2026-08-10: `gated` reports that quota did not cover the
- * call, and the caller decides what that means for it. `consumed` is what the
+ * 前两行自 2026-08-10 起都是 200（**那条裁定管的就是这两行**）：`gated` 只报告配额
+ * 没覆盖住，怎么办由调用方决定。第三行是 2026-10-01 加的、**只在调用方自己要求**
+ * （`intent="reserve"`）时才可能出现——它还没做那件事，所以拒绝是唯一正确的答复，
+ * 而且引擎一个字都没写。`consumed` is what the
  * caller USED, not what the pools covered — the two differ exactly when quota
  * ran out, which is the case worth measuring. remaining_total is the real
  * post-consume total, not the literal 0 of the ADR example: an atomic
@@ -32,7 +36,7 @@ export type { ConsumeResponseBody } from "@vxture-platform/shared";
 
 /** Engine result shape (services/commerce/subscription consume.types). */
 export interface EngineConsumeResult {
-  status: "ok" | "insufficient";
+  status: "ok" | "insufficient" | "denied";
   consumed: string;
   perPool: { poolId: string; took: string }[];
   eventId?: string;
@@ -56,12 +60,16 @@ export function buildConsumeResponse(
   result: EngineConsumeResult,
   pools: PoolIdentity[],
   metric: string,
-): { statusCode: 200; body: ConsumeResponseBody } {
+): { statusCode: 200 | 409; body: ConsumeResponseBody } {
   const byPoolId = new Map(pools.map((p) => [p.poolId, p]));
   const remainingTotal = pools.reduce((s, p) => s + p.view.remaining, 0);
 
   const body: ConsumeResponseBody = {
-    gated: result.status === "insufficient",
+    // denied 也是「配额没覆盖住」，只是它发生在调用方**做事之前**（intent=reserve）。
+    gated: result.status !== "ok",
+    ...(result.status === "denied"
+      ? { enforcement: "hard" as const, reason: "quota_exhausted" as const }
+      : {}),
     consumed: Number(result.consumed),
     remaining_total: remainingTotal,
     per_pool_breakdown: result.perPool.map((t) => {
@@ -75,13 +83,19 @@ export function buildConsumeResponse(
     }),
     ...(result.replayed ? { replayed: true as const } : {}),
     // Echo the usage event id whenever the engine wrote one (platform#220).
-    // Deliberately NOT restricted to the 200 path as the request suggested: a
-    // divisible partial success answers 409 with consumed>0, and that call did
-    // write an event — dropping the id exactly there would leave the hardest
-    // rows to reconcile as the only ones without a correlation key.
+    // 判据是「引擎写了事件吗」，不是「状态码是几」——这样写的时候理由是
+    // 「divisible 部分成功回 409 且确实写了事件，正好是最难对账的那批」。
+    // **2026-10-01：那条路径自 2026-08-10 起就没有了**（覆盖不住今天是 200），
+    // 而今天唯一的 409（intent=reserve 被拒）恰好相反：一个字都没写，所以这里
+    // 自然不出现 event_id。按「写了没有」判，两次改形状都不用动这一行——这正是
+    // 当初不按状态码判的好处，只是那句理由得换成现在还成立的那一条。
     ...(result.eventId ? { event_id: result.eventId } : {}),
   };
-  // Always 200 (owner determination 2026-08-10): this endpoint records usage and
+  // **2026-10-01（owner 裁定，收窄）**：下面这段只管 `intent="report"`（默认档）。
+  // `reserve` 档在硬限且额度不足时回 409（见下面的 return），因为那一档调用方还没
+  // 做事——「拒绝写下来不能让它没发生」在那里不成立。两档的分界就是这一句的边界。
+  //
+  // Always 200 for report (owner determination 2026-08-10): this endpoint records usage and
   // reports coverage; it does not decide what the caller should do about a gap.
   // `gated` stays in the body as INFORMATION — "your quota did not cover this" —
   // and the caller acts on it (disable the control, keep serving, upsell). It
@@ -91,7 +105,9 @@ export function buildConsumeResponse(
   if (result.status === "insufficient") {
     body.reason = "quota_exhausted";
   }
-  return { statusCode: 200, body };
+  // 只有**预留被拒**回 409：调用方还没做事，所以这是一个它必须服从的答复。
+  // 事后报账（默认档）照旧 200——2026-08-10 那条裁定管的是那一档，见接入通则 C3 上行。
+  return { statusCode: result.status === "denied" ? 409 : 200, body };
 }
 
 /* ── 配额耗尽 → 一条运营通告（2026-09-28 第二批 C-2）───────────────────────── */
@@ -115,6 +131,14 @@ export interface QuotaExhaustedFacts {
   readonly amount: string;
   /** 扣减后的可用合计。原子超限调用一分不扣，所以它可能仍大于 0。 */
   readonly remainingTotal: number;
+  /**
+   * 这一次是**被拒了**（`intent=reserve` + 硬限）还是**照记了**（默认档）。
+   *
+   * 两者对客户的影响不同档：被拒 = 他的那次调用没做成；照记 = 做成了、只是超了配额。
+   * 不分开的话通告会对一半的情况说假话——原文「请求本身仍是 200，平台只记录不裁决」
+   * 在被拒那一档两句都不成立，而这是运营**看得见的字**。
+   */
+  readonly denied?: boolean;
   /** 计费周期起点的日期键（quotaPeriodStartKey 算的）。 */
   readonly periodStartKey: string;
   readonly tenant: {
@@ -171,9 +195,15 @@ export function composeQuotaExhaustedNotice(
     `${who} 的工作空间 ${ws} 在产品 ${facts.productCode} 的 ${facts.metric} 上配额不足：` +
       `本次请求 ${facts.amount}，扣减后可用合计 ${facts.remainingTotal}。`,
     `计费周期起点 ${facts.periodStartKey}；同一周期同一指标只播一条，下一周期会再播。`,
-    "调用方已收到 gated 标记（请求本身仍是 200，平台只记录不裁决），" +
-      "接着调用会一直被拦。客户侧的出路是加购加油包或换更高档位；" +
-      "运营侧可在该租户的订阅里核对这个指标的池、上限与重置周期。",
+    facts.denied
+      ? "这一次是平台拒绝了：调用方事先来问能不能做（预留），这个指标是硬限、" +
+        "额度不够，所以平台回了 409，并且没有记这笔用量——那件事没有发生。" +
+        "客户那侧现在是做不成的状态，不是「超了还能用」。" +
+        "出路是加购加油包或换更高档位；运营侧可在该租户的订阅里核对这个指标的池、" +
+        "上限与重置周期。"
+      : "调用方已收到 gated 标记（请求本身仍是 200，平台只记录不裁决），" +
+        "接着调用会一直被拦。客户侧的出路是加购加油包或换更高档位；" +
+        "运营侧可在该租户的订阅里核对这个指标的池、上限与重置周期。",
   ].join("\n");
   return {
     targetPlanes: ["admin"],
@@ -219,6 +249,11 @@ export interface ParsedConsumeBody {
    * NULL "unattributed" bucket (owner 2026-08-20, per-user usage analytics).
    */
   endUserId?: string;
+  /**
+   * 这次调用的意图（owner 2026-10-01）。不传 = `"report"`，与此前行为完全一致——
+   * 这是刻意选的向后兼容方向：旧调用方一个字都不用改。
+   */
+  intent?: "reserve" | "report";
 }
 
 /**
@@ -233,6 +268,7 @@ export function parseConsumeBody(body: {
   amount?: unknown;
   idempotency_key?: unknown;
   end_user_id?: unknown;
+  intent?: unknown;
 }): ParsedConsumeBody {
   const workspaceId =
     typeof body.workspace_id === "string" ? body.workspace_id.trim() : "";
@@ -275,6 +311,16 @@ export function parseConsumeBody(body: {
     endUserId = raw;
   }
 
+  // intent：只认两个字面量，别的值当场拒。**不传按 report**——旧调用方不受影响，
+  // 而把未知值静默当 report 会让一个拼错的 reserve 变成「照常放行」，那是危险的方向。
+  let intent: "reserve" | "report" | undefined;
+  if (body.intent !== undefined) {
+    if (body.intent !== "reserve" && body.intent !== "report") {
+      throw new Error("invalid_intent");
+    }
+    intent = body.intent;
+  }
+
   return {
     workspaceId,
     productCode,
@@ -282,6 +328,7 @@ export function parseConsumeBody(body: {
     amount,
     idempotencyKey,
     ...(endUserId ? { endUserId } : {}),
+    ...(intent ? { intent } : {}),
   };
 }
 

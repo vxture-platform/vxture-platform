@@ -17,7 +17,13 @@ const pool = (
 ): PoolIdentity => ({
   poolId,
   subscriptionId,
-  view: { metric: "doc.words", limit: 1000, remaining, priority },
+  view: {
+    metric: "doc.words",
+    limit: 1000,
+    remaining,
+    priority,
+    enforcement: "soft",
+  },
 });
 
 const okResult = (
@@ -260,7 +266,13 @@ describe("quotaPeriodStartKey", () => {
   const withStart = (poolId: string, start: Date | null): PoolIdentity => ({
     poolId,
     subscriptionId: null,
-    view: { metric: "doc.words", limit: 100, remaining: 0, priority: 10 },
+    view: {
+      metric: "doc.words",
+      limit: 100,
+      remaining: 0,
+      priority: 10,
+      enforcement: "soft",
+    },
     periodStart: start,
   });
 
@@ -314,7 +326,13 @@ describe("quotaPeriodStartKey", () => {
     const pool: PoolIdentity = {
       poolId: "p1",
       subscriptionId: null,
-      view: { metric: "doc.words", limit: 100, remaining: 0, priority: 10 },
+      view: {
+        metric: "doc.words",
+        limit: 100,
+        remaining: 0,
+        priority: 10,
+        enforcement: "soft",
+      },
     };
     expect(
       quotaPeriodStartKey([pool], new Date("2026-02-15T00:00:00.000Z")),
@@ -352,6 +370,32 @@ describe("composeQuotaExhaustedNotice", () => {
     expect(notice.body).toContain("默认空间");
     expect(notice.body).toContain("本次请求 500");
     expect(notice.body).toContain("扣减后可用合计 12");
+  });
+
+  /*
+   * 这条通告在**预留被拒**时也会发（gated 为真就发），而原来那段正文写着「请求本身
+   * 仍是 200，平台只记录不裁决」——在那一档两句都是假的。运营看到的是这段字，所以
+   * 两档各钉一条，并且互相排除：只断言「自己那句在」会让两档共用一段文案也照样绿。
+   */
+  it("照记那一档：说 200、说只记录不裁决", () => {
+    const notice = composeQuotaExhaustedNotice(facts());
+    expect(notice.body).toContain("仍是 200");
+    expect(notice.body).toContain("只记录不裁决");
+    expect(notice.body).not.toContain("平台拒绝了");
+  });
+
+  it("预留被拒那一档：说拒绝、说没记这笔，且不再说「仍是 200」", () => {
+    const notice = composeQuotaExhaustedNotice(facts({ denied: true }));
+    expect(notice.body).toContain("平台拒绝了");
+    expect(notice.body).toContain("没有记这笔用量");
+    expect(notice.body).toContain("409");
+    expect(notice.body).not.toContain("仍是 200");
+    expect(notice.body).not.toContain("只记录不裁决");
+    /* 标题与去重键两档共用——同一个客户、同一个指标、同一个周期仍然只播一条。 */
+    expect(notice.title).toBe(composeQuotaExhaustedNotice(facts()).title);
+    expect(notice.referenceId).toBe(
+      composeQuotaExhaustedNotice(facts()).referenceId,
+    );
   });
 
   it("标题正文链接里不出现 workspace 的 uuid", () => {

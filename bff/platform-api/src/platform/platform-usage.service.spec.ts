@@ -18,7 +18,13 @@ const pools: PoolIdentity[] = [
   {
     poolId: "p1",
     subscriptionId: "sub-1",
-    view: { metric: "doc.words", limit: 1000, remaining: 0, priority: 10 },
+    view: {
+      metric: "doc.words",
+      limit: 1000,
+      remaining: 0,
+      priority: 10,
+      enforcement: "soft",
+    },
     periodStart: new Date("2026-09-20T00:00:00.000Z"),
   },
 ];

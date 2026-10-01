@@ -82,6 +82,8 @@ export interface ProductMetric {
   consumeMode: string | null;
   metricUnit: string | null;
   resetPeriod: string;
+  /** cost_bearing / zero_cost；仅 pool 型非空。 */
+  costClass: string | null;
 }
 
 type MergeStrategy = "max" | "union" | "pool" | "tiered";
@@ -114,6 +116,25 @@ const STRATEGIES: ReadonlyArray<{
   },
 ];
 
+/**
+ * 成本档：「这一笔会不会让我们付钱给谁」（owner 2026-09-11 的判据）。
+ *
+ * 文案按**运营者要做的那个判断**写，不抄 DDL 也不讲派生规则：他要回答的是钱，
+ * 不是软限/硬限。处置后果写进 hint，因为那是他选错时客户会撞到的东西。
+ */
+const COST_CLASSES_UI = [
+  {
+    value: "cost_bearing",
+    label: "有成本",
+    hint: "每一笔都要我们付钱给谁：上游模型、算力、外部接口。",
+  },
+  {
+    value: "zero_cost",
+    label: "零成本",
+    hint: "只是我们自己的计数：条数、次数、记录数。",
+  },
+] as const;
+
 const RESET_PERIODS = [
   { value: "none", label: "不重置" },
   { value: "day", label: "每天" },
@@ -126,6 +147,7 @@ interface Draft {
   consumeMode: string;
   metricUnit: string;
   resetPeriod: string;
+  costClass: string;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -136,6 +158,14 @@ const EMPTY_DRAFT: Draft = {
   consumeMode: "divisible",
   metricUnit: "",
   resetPeriod: "month",
+  /*
+   * **成本档刻意没有默认值**，与上面三项相反。
+   *
+   * 默认「零成本」等于替运营者声明「这个不花钱」，而那个方向不封顶；默认「有成本」
+   * 又会在他没做过判断的情况下开始拒客户的请求。两边猜错的代价都落在别人身上，
+   * 所以这一项空着、提交按钮灰着，逼一次显式选择。
+   */
+  costClass: "",
 };
 
 type LoadState =
@@ -177,6 +207,7 @@ export function ProductMetricsSection({
     () => ({
       metricKey: (r) => r.metricKey,
       strategy: (r) => r.mergeStrategy,
+      cost: (r) => r.costClass ?? "",
       reset: (r) => r.resetPeriod,
     }),
     [],
@@ -220,6 +251,9 @@ export function ProductMetricsSection({
       mergeStrategy: next,
       consumeMode: next === "pool" ? draft.consumeMode || "divisible" : "",
       resetPeriod: next === "pool" ? draft.resetPeriod || "month" : "none",
+      /* 非 pool 清空（BFF 对「非 pool 却给了成本档」报错）；切回 pool 时**不替他
+         补一个值**，仍然要他自己选——见 EMPTY_DRAFT 上那段。 */
+      costClass: next === "pool" ? draft.costClass : "",
     });
   }
 
@@ -237,6 +271,7 @@ export function ProductMetricsSection({
       consumeMode: row.consumeMode ?? "",
       metricUnit: row.metricUnit ?? "",
       resetPeriod: row.resetPeriod,
+      costClass: row.costClass ?? "",
     });
     setDialogOpen(true);
   }
@@ -256,7 +291,9 @@ export function ProductMetricsSection({
           /* 非 pool 时**不带这两个字段**，而不是带一个空串：BFF 对
            「非 pool 却给了 consumeMode」是报错的，空串在 trim 之后虽然也会变 null，
            但显式不带更贴合「这一档没有这个概念」。 */
-          ...(isPool ? { consumeMode: draft.consumeMode } : {}),
+          ...(isPool
+            ? { consumeMode: draft.consumeMode, costClass: draft.costClass }
+            : {}),
           metricUnit: draft.metricUnit.trim() || null,
           resetPeriod: isPool ? draft.resetPeriod : "none",
         },
@@ -452,6 +489,36 @@ export function ProductMetricsSection({
                   ),
                 },
                 {
+                  id: "cost",
+                  header: "成本档",
+                  sortable: true,
+                  /* 非 pool 型本来就没有这一项（库上也是 NULL），显示「—」而不是
+                     挑一个档位填上去。存量 pool 行若还没补声明也走同一条——
+                     「读不到」与「零成本」是两件事。 */
+                  cell: (r) => {
+                    const hit = COST_CLASSES_UI.find(
+                      (c) => c.value === r.costClass,
+                    );
+                    if (!hit) return "—";
+                    return (
+                      <div className="flex items-center justify-center gap-xs">
+                        <Badge
+                          variant={
+                            hit.value === "cost_bearing"
+                              ? "outline"
+                              : "secondary"
+                          }
+                        >
+                          {hit.label}
+                        </Badge>
+                        <span className="text-label-sm text-muted-foreground">
+                          {hit.value === "cost_bearing" ? "硬限" : "软限"}
+                        </span>
+                      </div>
+                    );
+                  },
+                },
+                {
                   id: "reset",
                   header: "重置",
                   sortable: true,
@@ -561,7 +628,12 @@ export function ProductMetricsSection({
         description="登记后，产品就可以按这个键上报用量，套餐也可以按这个键配额度。"
         submitLabel={editing ? "保存" : "登记"}
         submitting={submitting}
-        submitDisabled={draft.metricKey.trim() === ""}
+        /* pool 型必须显式选一个成本档——不设默认值就必须在这里挡住，否则
+           点下去只会换来一句 BFF 的「必填」。 */
+        submitDisabled={
+          draft.metricKey.trim() === "" ||
+          (draft.mergeStrategy === "pool" && draft.costClass === "")
+        }
         onSubmit={submit}
         cancelLabel={tShared("actions.cancel")}
       >
@@ -631,6 +703,36 @@ export function ProductMetricsSection({
                   <option value="divisible">可拆（divisible）</option>
                   <option value="atomic">整取（atomic）</option>
                 </NativeSelect>
+              </Field>
+
+              <Field>
+                <FieldLabel
+                  required
+                  hint="有成本 ⇒ 额度用尽时平台会拒绝产品的预留请求；零成本 ⇒ 照记不拦，由产品自己按档位管。"
+                  {...FIELD_LABEL_A11Y}
+                  htmlFor="metric-cost"
+                >
+                  成本档
+                </FieldLabel>
+                <NativeSelect
+                  id="metric-cost"
+                  value={draft.costClass}
+                  onChange={(e) =>
+                    setDraft({ ...draft, costClass: e.target.value })
+                  }
+                >
+                  {/* 空项排第一且无默认：这一项不许被默默替他选掉。 */}
+                  <option value="">请选择</option>
+                  {COST_CLASSES_UI.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <FieldDescription>
+                  {COST_CLASSES_UI.find((c) => c.value === draft.costClass)
+                    ?.hint ?? "这一笔会不会让我们付钱给谁。"}
+                </FieldDescription>
               </Field>
 
               <Field>

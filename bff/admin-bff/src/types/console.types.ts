@@ -659,6 +659,15 @@ export interface ProductCapabilityMetricRule {
   cycle: string;
   quotaBase: string;
   billingMode: string;
+  /**
+   * 成本档（`product_metrics.cost_class`）：这一笔会不会让我们付钱给谁。
+   * `cost_bearing` ⇒ 硬限，额度用尽时平台拒绝产品的预留请求；`zero_cost` ⇒ 软限。
+   *
+   * **空串有两种意思，靠 `quotaBase` 分**：非 pool 档本来就没有这一项（库上也是
+   * NULL）；pool 档却为空 = 还没声明，那是要显形的缺陷而不是「零成本」。
+   * 录入面在运维台产品接入页，本侧只读。
+   */
+  costClass: string;
 }
 
 /** 套餐版本历史的一行（DS04）。 */

@@ -340,6 +340,10 @@ POST /usage/consume
     consumed,                             # 耗尽前扣减的部分(部分成功语义,见下)
     remaining_total: 0
   }
+# 上面这个 409 已两次被取代，ADR 记录当时的决定、不改写；权威形状见 product_200 §4.1：
+#   ① 2026-08-10（owner 裁定）：整条取消 —— 覆盖不住改回 200 + body 里的 gated，照常记账。
+#   ② 2026-10-01（owner 裁定）：409 以**另一种形状**回来 —— 请求体 intent="reserve" 且指标有成本时
+#      额度不足回 409，consumed=0 且**不写任何事件**（与上面「部分成功也 409」正好相反）。
 
 # ④ 平台→产品端失效通知（与 seed/wipe 共用鉴权通道，§5.1）
 PUSH invalidate { workspace_id, products:[...] }   # 权益变更秒级生效;支持多 product
