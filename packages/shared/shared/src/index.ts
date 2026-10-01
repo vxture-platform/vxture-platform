@@ -69,6 +69,8 @@ export type {
   MergeStrategy,
   ConsumeMode,
   MetricKind,
+  CostClass,
+  QuotaEnforcement,
   ProductIntegrationMode,
   ProductStatusValue,
   ProductLayerValue,
@@ -149,6 +151,8 @@ export {
   MERGE_STRATEGIES,
   CONSUME_MODES,
   METRIC_KINDS,
+  COST_CLASSES,
+  QUOTA_ENFORCEMENTS,
   // 定位轴 L1/L2/L3（product_100_matrix §2）——与类型轴、来源轴正交
   PRODUCT_INTEGRATION_MODES,
   PRODUCT_STATUSES,

@@ -204,7 +204,7 @@ GRANT UPDATE (product_code, product_type, layer, category_id, product_name, prod
 
 -- product.product_metrics  [anchor: id, created_at]
 REVOKE UPDATE ON product.product_metrics FROM platform_svc;
-GRANT UPDATE (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period) ON product.product_metrics TO platform_svc;
+GRANT UPDATE (product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period, cost_class) ON product.product_metrics TO platform_svc;
 
 -- product.platform_metrics  [anchor: metric_key, created_at]
 REVOKE UPDATE ON product.platform_metrics FROM platform_svc;

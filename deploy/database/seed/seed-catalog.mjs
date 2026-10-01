@@ -2707,25 +2707,29 @@ export async function seedCatalog(client) {
     // whether the karda-* plans are published yet. karda.ingest is the only
     // one actually producing usage today; search/ask are declared ahead of
     // their own activation (recall / A4 wiring on karda's side).
+    // cost_class（B1, owner 2026-10-01）：pool 型必须声明「会不会让我们付钱给谁」,
+    // 软/硬限按它派生。karda 三项都要过模型（本平台的推理计量唯一入口是 atlas）,
+    // 所以都是 cost_bearing → 池物化成 hard,超额时 consume 拒。
     const KARDA_METRICS = [
-      // [metric_key, merge_strategy, consume_mode, unit, reset_period]
-      ["karda.ingest", "pool", "divisible", "docs", "month"],
-      ["karda.search", "pool", "divisible", "calls", "month"],
-      ["karda.ask", "pool", "divisible", "calls", "month"],
+      // [metric_key, merge_strategy, consume_mode, unit, reset_period, cost_class]
+      ["karda.ingest", "pool", "divisible", "docs", "month", "cost_bearing"],
+      ["karda.search", "pool", "divisible", "calls", "month", "cost_bearing"],
+      ["karda.ask", "pool", "divisible", "calls", "month", "cost_bearing"],
     ];
-    for (const [key, strategy, mode, unit, reset] of KARDA_METRICS) {
+    for (const [key, strategy, mode, unit, reset, costClass] of KARDA_METRICS) {
       await client.query(
         `
         insert into product.product_metrics
-          (id, product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period, created_at)
-        values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, now())
+          (id, product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period, cost_class, created_at)
+        values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, now())
         on conflict (product_id, metric_key) do update set
           merge_strategy = excluded.merge_strategy,
           consume_mode   = excluded.consume_mode,
           metric_unit    = excluded.metric_unit,
-          reset_period   = excluded.reset_period
+          reset_period   = excluded.reset_period,
+          cost_class     = excluded.cost_class
       `,
-        [prodMap["karda"], key, strategy, mode, unit, reset],
+        [prodMap["karda"], key, strategy, mode, unit, reset, costClass],
       );
     }
     console.log(
@@ -3192,33 +3196,37 @@ export async function seedCatalog(client) {
   // changes after lock require a new version -- rerun is a no-op on locked v1.
   const ardaId2 = prodMap["arda"];
   if (ardaId2) {
+    // cost_class（B1, owner 2026-10-01）：只有 pool 型要声明——非 pool 的 max/tiered 是
+    // 能力声明不是消耗,谈不上超额,留 null。arda 这两项是本产品自有计算,owner 定为
+    // zero_cost → 池物化成 soft,超额照常跑、只记账。
     const ARDA_METRICS = [
-      // [metric_key, merge_strategy, consume_mode, unit, reset_period]
-      ["dataset.max", "max", null, "count", "none"],
-      ["datasource.max", "max", null, "count", "none"],
-      ["service_endpoint.max", "max", null, "count", "none"],
-      ["retention.days", "max", null, "days", "none"],
-      ["varda.enabled", "tiered", null, "flag", "none"],
-      ["varda.readonly", "tiered", null, "flag", "none"],
-      ["sync.frequency", "tiered", null, "level", "none"],
-      ["service.api.call", "pool", "divisible", "calls", "month"],
-      ["quality.check.run", "pool", "divisible", "runs", "month"],
+      // [metric_key, merge_strategy, consume_mode, unit, reset_period, cost_class]
+      ["dataset.max", "max", null, "count", "none", null],
+      ["datasource.max", "max", null, "count", "none", null],
+      ["service_endpoint.max", "max", null, "count", "none", null],
+      ["retention.days", "max", null, "days", "none", null],
+      ["varda.enabled", "tiered", null, "flag", "none", null],
+      ["varda.readonly", "tiered", null, "flag", "none", null],
+      ["sync.frequency", "tiered", null, "level", "none", null],
+      ["service.api.call", "pool", "divisible", "calls", "month", "zero_cost"],
+      ["quality.check.run", "pool", "divisible", "runs", "month", "zero_cost"],
       // storage.bytes + ai.credit are L0 platform metrics (D7) — contributed
       // via plan quota keys below, never declared here (95 shadow guard).
     ];
-    for (const [key, strategy, mode, unit, reset] of ARDA_METRICS) {
+    for (const [key, strategy, mode, unit, reset, costClass] of ARDA_METRICS) {
       await client.query(
         `
         insert into product.product_metrics
-          (id, product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period, created_at)
-        values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, now())
+          (id, product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period, cost_class, created_at)
+        values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, now())
         on conflict (product_id, metric_key) do update set
           merge_strategy = excluded.merge_strategy,
           consume_mode   = excluded.consume_mode,
           metric_unit    = excluded.metric_unit,
-          reset_period   = excluded.reset_period
+          reset_period   = excluded.reset_period,
+          cost_class     = excluded.cost_class
       `,
-        [ardaId2, key, strategy, mode, unit, reset],
+        [ardaId2, key, strategy, mode, unit, reset, costClass],
       );
     }
 

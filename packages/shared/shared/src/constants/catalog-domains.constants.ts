@@ -339,6 +339,58 @@ export const METRIC_KINDS = ["counter", "gauge"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
 /**
+ * `product.product_metrics.cost_class` —— 这个指标**会不会让我们付钱给谁**。
+ *
+ * owner 2026-09-11 的判据是成本不是可计数性：有真实成本的归平台配额，零成本的由产品
+ * 自己按档位管。那条裁定落地时**没有任何列表达它**（2026-10-01 查证：DDL 与本包全仓
+ * 搜 billable/has_cost/cost_bearing/unit_cost 零命中），所以它一直靠人记得。
+ *
+ * owner 2026-10-01 又让它当默认规则（软/硬限「按指标有无成本自动定」），于是必须给它
+ * 一个落点——这就是这个值域。
+ *
+ * **只对 `merge_strategy='pool'` 的产品自有指标要求声明**：
+ *   · 平台级共享键（`product.platform_metrics`）**不需要这一列**——进那张表就意味着
+ *     有成本（见 40_product.sql 该表注释与 seed 里「席位零成本故不进 platform_metrics」
+ *     的说明）。表本身就是成本轴。
+ *   · 非 pool 型（max/union/tiered）是能力声明不是消耗，谈不上超额。
+ *
+ * 两个显式值而不是 boolean：boolean 的「未设」与「false」分不开，而这是一条**声明轴**
+ * ——缺声明必须能被区分出来，不能被默默当成零成本。
+ */
+export const COST_CLASSES = ["cost_bearing", "zero_cost"] as const;
+export type CostClass = (typeof COST_CLASSES)[number];
+
+/**
+ * 额度用尽之后怎么办。**派生值，不入库**。
+ *
+ * 由指标的成本档算出：`cost_bearing` → `hard`，`zero_cost` → `soft`；平台级共享键
+ * （在 `product.platform_metrics` 里的）恒 `hard`。
+ *
+ * **为什么不在池上存一列**（第一版这么写过，然后撤了）：两个判定点本来就拿得到指标
+ * ——consume 已经为 `consume_mode` 查过 platform_metrics → 回落 product_metrics；
+ * C2 读池时已经 `JOIN product.platform_metrics`。而且**零个池**那种情况下池上的列根本
+ * 不存在，可一个有成本的调用恰恰最该被拒。存一份派生副本只会多一个漂移源：那一版连带
+ * 要加一条「有成本的池不许停在 soft」的不变式去给副本当警察，而那个检查本身就是副本
+ * 多余的证据。
+ *
+ * 所以这个值域**没有 DDL CHECK 配对**（见 check-catalog-domains.mjs 里的说明），它的
+ * 用处是 C2/C3 响应里那个字段的类型。
+ *
+ * **owner 2026-10-01 裁定：`hard` 时平台要兜底，consume 直接拒。** 这是对仓里
+ * 2026-08-10 那条「平台记录不裁定、每次 consume 都回 200」的**修正**，不是并存——
+ * supersession 标在被取代的那一头（usage-view.ts / platform-usage.router.ts /
+ * pg-consume.repository.ts 三处注释）。
+ *
+ * 促成它的事实：`metered_overage` 账单行从未生成过（技术债，前置在上游接口），所以
+ * 今天「软限」实际等于**超额免费**，硬限是唯一能封住成本上界的手段。overage 计费接通
+ * 之后这个前提会变，届时要重新讨论默认档。
+ *
+ * `soft` 仍是今天绝大多数池的形态：回 200、`gated: true`，由调用方决定怎么办。
+ */
+export const QUOTA_ENFORCEMENTS = ["soft", "hard"] as const;
+export type QuotaEnforcement = (typeof QUOTA_ENFORCEMENTS)[number];
+
+/**
  * 产品的**接入方式**（`product.products.integration_mode`）——答的是「平台向这个产品
  * 下发东西吗」。与生命周期（走到哪一步）、承诺等级（承诺什么）、层级、来源都正交。
  *
