@@ -1,3 +1,5 @@
+import type { ReadScope } from "@vxture-platform/shared";
+
 export interface InvoiceRecord {
   id: string;
   tenantId: string;
@@ -62,7 +64,12 @@ export interface CreditRecord {
 }
 
 export interface ListInvoicesParams {
-  tenantId?: string;
+  /**
+   * 这次查询代表谁。**必填**——此前是 `tenantId?`，客户面忘了传就会返回所有租户的
+   * 账单，而 SQL 合法、类型通过、界面照常渲染。语义三档与逃生口见
+   * `@vxture-platform/shared` 的 `types/read-scope.types.ts` 文件头。
+   */
+  scope: ReadScope;
   billStatus?: string;
   billCycle?: string;
   billType?: string;

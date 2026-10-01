@@ -1,0 +1,36 @@
+{
+  "note": "本文件由 check-read-scope.mjs --update 生成，不要手改。登记的是「归属作用域仍为可选」的共用查询参数类型；它们今天只被运营面调用，所以可选是安全的。条目只应减少（迁成必填 scope），增加必须是有意的。",
+  "optionalScopeTypes": 6,
+  "entries": [
+    {
+      "type": "ListPaymentsParams",
+      "declaredAt": "services/commerce/payment/src/types/payment.types.ts:79",
+      "takenBy": "PaymentService.listPayments, PgPaymentRepository.listPayments"
+    },
+    {
+      "type": "ListReceiptsParams",
+      "declaredAt": "services/commerce/invoice/src/types/invoice.types.ts:50",
+      "takenBy": "InvoiceService.listReceipts, PgInvoiceRepository.listReceipts"
+    },
+    {
+      "type": "ListRefundsParams",
+      "declaredAt": "services/commerce/payment/src/types/payment.types.ts:92",
+      "takenBy": "PaymentService.listRefunds, PgPaymentRepository.listRefunds"
+    },
+    {
+      "type": "ListReviewsParams",
+      "declaredAt": "services/support/review/src/types/review.types.ts:78",
+      "takenBy": "PgReviewRepository.list, ReviewService.list"
+    },
+    {
+      "type": "ListSubscriptionsParams",
+      "declaredAt": "services/commerce/subscription/src/types/subscription.types.ts:64",
+      "takenBy": "PgSubscriptionRepository.listSubscriptions, SubscriptionService.listSubscriptions"
+    },
+    {
+      "type": "ListTicketsParams",
+      "declaredAt": "services/support/ticket/src/types/ticket.types.ts:73",
+      "takenBy": "PgTicketRepository.listTickets, TicketService.listTickets"
+    }
+  ]
+}

@@ -41,3 +41,7 @@ export {
 // Health / identity endpoint contract (standard 025)
 export { serviceIdentity, buildHealthIdentity } from "./health.utils";
 export type { ServiceIdentity, HealthLiveResponse } from "./health.utils";
+
+// Read scope — ReadScope → SQL 谓词（见 types/read-scope.types.ts 文件头）
+export { scopeCondition, describeScope } from "./read-scope.utils";
+export type { ScopeCondition } from "./read-scope.utils";

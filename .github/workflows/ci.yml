@@ -147,6 +147,14 @@ jobs:
       - name: Internal route policy guardrail
         run: node scripts/guardrails/check-internal-route-policy.mjs
 
+      # 始终运行（含 docs-only）：共用列表仓储的读取作用域。纯 node、只读源码、秒级。
+      # 同样没有 `pnpm lint:` 入口（加入口要改根 package.json → 全栈重建）。
+      #
+      # 它守的那一格：今天只被运营面调用的「可选作用域」列表方法，不许被客户面接上。
+      # 红了不要 --update：把那个参数类型的归属字段改成必填 `scope: ReadScope`。
+      - name: Read scope guardrail
+        run: node scripts/guardrails/check-read-scope.mjs
+
       - name: Docs-only quality gate
         if: steps.changes.outputs.docs_only == 'true'
         run: echo "::notice::Docs-only change; heavy quality gate steps skipped while keeping the required check stable."

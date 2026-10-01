@@ -42,3 +42,6 @@ export type {
   EntitlementResponseBatch,
   ConsumeResponseBody,
 } from "./entitlement.types";
+
+// 共用仓储的读取作用域（A1：把「忘了传租户」变成类型错误）
+export type { ReadScope, ReadScopeKind } from "./read-scope.types";

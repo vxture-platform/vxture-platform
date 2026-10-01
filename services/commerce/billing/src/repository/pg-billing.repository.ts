@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
+import { scopeCondition } from "@vxture-platform/shared";
 import type {
   InvoiceRecord,
   InvoiceItemRecord,
@@ -126,10 +127,14 @@ export class PgBillingRepository {
     const values: unknown[] = [];
     let idx = 1;
 
-    if (params.tenantId) {
-      conditions.push(`i.tenant_id = $${idx++}`);
-      values.push(params.tenantId);
+    // 归属谓词由 scopeCondition 统一构造（一个实现，所有共用仓储复用）：客户面给
+    // tenant/workspace，运营面给 platform 档——不加谓词，但必须写理由。
+    const scoped = scopeCondition("i", params.scope, idx);
+    if (scoped.condition) {
+      conditions.push(scoped.condition);
+      values.push(...scoped.values);
     }
+    idx = scoped.nextParamIndex;
     if (params.billStatus) {
       conditions.push(`i.bill_status = $${idx++}`);
       values.push(params.billStatus);
