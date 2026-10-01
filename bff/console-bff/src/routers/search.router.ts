@@ -102,7 +102,10 @@ export class SearchRouter {
         : Promise.resolve([]),
       canSeeInvoices
         ? this.billingService
-            .listInvoices({ tenantId: req.tenant.id, pageSize: SCAN_LIMIT })
+            .listInvoices({
+              scope: { kind: "tenant", tenantId: req.tenant.id },
+              pageSize: SCAN_LIMIT,
+            })
             .then((result) => result.items)
             .catch(() => [])
         : Promise.resolve([]),

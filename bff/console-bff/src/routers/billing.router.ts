@@ -421,7 +421,7 @@ export class BillingRouter {
 
     const pageSize = Math.min(Number(limit) || 20, 100);
     const result = await this.billingService.listInvoices({
-      tenantId: req.tenant.id,
+      scope: { kind: "tenant", tenantId: req.tenant.id },
       pageSize,
     });
     return result.items;
@@ -449,7 +449,7 @@ export class BillingRouter {
       100,
     );
     const result = await this.billingService.listInvoices({
-      tenantId: req.tenant.id,
+      scope: { kind: "tenant", tenantId: req.tenant.id },
       page,
       pageSize,
     });

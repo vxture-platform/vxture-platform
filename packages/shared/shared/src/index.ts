@@ -230,3 +230,9 @@ export { BRAND_NAME, BRAND_TITLE } from "./constants";
 // 英文页面一个备案号都不显示。官网页脚与 accounts 登录页页脚现在读同一份。
 export { ICP_FILING, PUBLIC_SECURITY_FILING, SITE_FILINGS } from "./constants";
 export type { SiteFiling } from "./constants";
+
+// 共用仓储的读取作用域（A1）。客户面必须给 tenant/workspace，platform 档要写理由——
+// 语义与「为什么是类型不是守卫」见 types/read-scope.types.ts 文件头。
+export type { ReadScope, ReadScopeKind } from "./types";
+export { scopeCondition, describeScope } from "./utils";
+export type { ScopeCondition } from "./utils";
