@@ -25,6 +25,7 @@ import type { Request } from "express";
 import { extractClientIp } from "@vxture/core-utils";
 import { OidcService } from "../oidc/oidc.service";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
+import { InternalRoute } from "../authn/internal-route-policy";
 
 @Controller()
 @UseGuards(InternalAuthGuard)
@@ -32,6 +33,11 @@ export class OperatorStepUpRouter {
   constructor(@Inject(OidcService) private readonly oidc: OidcService) {}
 
   /** Verify TOTP for an authenticated operator → short-lived step-up credential. */
+  @InternalRoute({
+    risk: "credential-mint",
+    actor: "proven",
+    why: "admin / arche / opera-bff 为已登录的运营者换 step-up 票；授权依据是请求体里的 TOTP 码——只有该运营者给得出，不是靠自报身份",
+  })
   @Post("internal/operator/stepup/totp")
   @HttpCode(HttpStatus.OK)
   async totp(

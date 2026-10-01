@@ -1,0 +1,20 @@
+{
+  "note": "本文件由 check-internal-route-policy.mjs --update 生成，不要手改。它钉住的是「旧凭据能进哪些路由」这个面；declaredUnbound 那一档是共享口令的真实半径，增长必须是有意的。",
+  "routes": 13,
+  "declaredUnbound": 8,
+  "surface": [
+    "account-admin-internal.router.ts POST :id/disable risk=admin-action actor=declared-ignored",
+    "account-admin-internal.router.ts POST :id/enable risk=admin-action actor=declared-ignored",
+    "account-admin-internal.router.ts POST :id/sessions/revoke risk=admin-action actor=declared-ignored",
+    "operator-admin-internal.router.ts POST  risk=admin-action actor=declared-unbound",
+    "operator-admin-internal.router.ts POST :id/contact/email/start risk=admin-action actor=declared-unbound",
+    "operator-admin-internal.router.ts POST :id/contact/email/verify risk=admin-action actor=declared-unbound",
+    "operator-admin-internal.router.ts POST :id/disable risk=admin-action actor=declared-unbound",
+    "operator-admin-internal.router.ts POST :id/enable risk=admin-action actor=declared-unbound",
+    "operator-admin-internal.router.ts POST :id/mfa/reset risk=admin-action actor=declared-unbound",
+    "operator-admin-internal.router.ts POST :id/reset-password risk=admin-action actor=declared-unbound",
+    "operator-admin-internal.router.ts POST :id/sessions/revoke risk=admin-action actor=declared-unbound",
+    "operator-sessions-internal.router.ts GET  risk=read actor=none",
+    "operator-stepup.router.ts POST internal/operator/stepup/totp risk=credential-mint actor=proven"
+  ]
+}
