@@ -129,9 +129,10 @@ CREATE TABLE product.product_metrics (
     CONSTRAINT chk_product_metrics_reset_scope  CHECK (merge_strategy = 'pool' OR reset_period = 'none'),
     -- 值域权威 = @vxture-platform/shared COST_CLASSES（lint:catalog-domains 强制一致）
     CONSTRAINT chk_product_metrics_cost_class CHECK (cost_class IS NULL OR cost_class IN ('cost_bearing','zero_cost')),
-    -- pool 消耗型必须声明成本档（照上面 consume_mode 那条的先例：能力型放行 NULL）。
-    -- 缺声明不许被默默当成零成本——那个方向等于不封顶。
-    CONSTRAINT chk_product_metrics_pool_cost CHECK (merge_strategy <> 'pool' OR cost_class IN ('cost_bearing','zero_cost'))
+    -- pool 消耗型必须声明成本档（能力型放行 NULL）。缺声明不许被默默当成零成本——那个方向等于不封顶。
+    -- **判据写 IS NOT NULL，不写 IN (...)**：pool + NULL 时 `cost_class IN (...)` 求值为 NULL，整条 CHECK 得 `false OR NULL` = NULL，而 CHECK 只在 FALSE 时拒 —— 弱版对它唯一想防的那种行恰好放行（2026-10-02 在真库上插进去过）。值域仍由 chk_product_metrics_cost_class 管，两条各管一半。
+    -- 同一个洞也在上面的 chk_product_metrics_pool_consume 里（consume_mode）：那条是既有约束，收紧前要先确认存量库没有违反它的行，留作单独一项。
+    CONSTRAINT chk_product_metrics_pool_cost CHECK (merge_strategy <> 'pool' OR cost_class IS NOT NULL)
 );
 CREATE INDEX idx_product_metrics_product_id ON product.product_metrics (product_id);
 
