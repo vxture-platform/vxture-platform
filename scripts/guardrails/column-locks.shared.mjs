@@ -9,6 +9,21 @@
 export const EXTRA_ANCHOR = new Set([
   "admin.operator_role.rank",
   /*
+   * 幂等权威的归档位（2026-11-30 换主键时从 usage_idempotencies 移进来的行）。
+   * **整行都是锚点**：归档是「把当时的事实原样挪个地方」，挪完就不该有任何更新 ——
+   * 改它等于篡改一条已经封存的记录，而那在计费审计上是最坏的一类静默改动。
+   * 所以这七列列在这里（第八列 created_at 由规则②自动算成锚点），98 对本表
+   * 只 REVOKE、一列都不 GRANT；check-anchor-writes 反过来盯住应用代码别去 UPDATE 它。
+   * 真要清理这张表，另起一条迁移整行 DELETE，不是 UPDATE。
+   */
+  "metering.usage_idempotencies_orphaned.idempotency_key",
+  "metering.usage_idempotencies_orphaned.event_id",
+  "metering.usage_idempotencies_orphaned.event_created_at",
+  "metering.usage_idempotencies_orphaned.consumed",
+  "metering.usage_idempotencies_orphaned.per_pool",
+  "metering.usage_idempotencies_orphaned.archived_at",
+  "metering.usage_idempotencies_orphaned.archived_reason",
+  /*
    * 租户用途（2026-10-29）。形状上它是普通可写列（非 PK、非 `_no`、非 created_*），
    * 所以规则②不会把它当锚点——但它**建了就不该改**，语义上是锚点：
    *   customer      无特权、计入全部对外口径；

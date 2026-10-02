@@ -329,6 +329,23 @@ CREATE TABLE metering.usage_idempotencies (
 );
 CREATE INDEX idx_usage_idempotencies_key ON metering.usage_idempotencies (idempotency_key);  -- 对账时手上只有 key 的那条路
 
+-- ── §8b 幂等权威的归档位（2026-11-30 换主键时从上表移出来的行）。
+--   「占了键但解不出归属」的行：event_id 在 usage_events 里找不到对应行（事件没了或从未写成），
+--   记录的用量为零（consumed/per_pool 都没回填过），但它们挡着 workspace_id 的 NOT NULL。
+--   **移而不删**：删是不可逆的判断，而这里没有必须立刻判的理由；要删另起一条迁移、带着查过的结论删。
+--   本表在新库上是空的（新库走 DDL+seed 不跑迁移，没有历史残留）——它必须在 DDL 里，
+--   因为 30-verify 断言「活库表数 == DDL 表数」，只写在迁移里会让生产比 DDL 多一张表。
+CREATE TABLE metering.usage_idempotencies_orphaned (
+    idempotency_key  varchar(128) NOT NULL,
+    event_id         uuid,
+    event_created_at timestamptz,
+    consumed         bigint,
+    per_pool         jsonb,
+    created_at       timestamptz,
+    archived_at      timestamptz  NOT NULL DEFAULT now(),
+    archived_reason  text         NOT NULL
+);
+
 -- ── §9 多维降采样汇总（纯统计/看板，永不作计费依据）。五档：时/天/周/月/年。
 --   workspace_id 跨 schema→tenancy.workspaces、product_id→product.products（均见 90）。
 --   计费读 usage_events 按订阅锚定周期窗口求和，实时读 quota_pools（§4.1）——本组不承担。
