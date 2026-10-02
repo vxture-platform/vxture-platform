@@ -19,7 +19,9 @@
 //
 // ## 本扫描器的判据
 //
-// 单元 = `.query(` 调用点（`pool.query` / `client.query` / `tx.query` …），不是模板串。
+// 单元 = `.query` 调用点（`pool.query` / `client.query` / `tx.query` …），不是模板串。
+// 泛型参数按深度跳过（`[^>]*` 在嵌套泛型上必然脱靶，实撞过两处）。
+// **读与写都收**：归属问题对写一字不差地成立，而且更重（读是泄露，写是改别人的数据）。
 // 对每个调用点：
 //   ① 取第一个实参并**解析**：反引号 / 双引号 / 单引号字面量，或一个标识符 →
 //      在同文件的 `const NAME = <字面量>` 里查；`${…}` 插值同样按标识符查一层。
@@ -36,7 +38,9 @@
 //
 // ## 自检：它必须先证自己看得见
 //
-// `--self-test` 拿复核点名的五条样本当反例喂进去，**五条全部命中才算这个数法能用**：
+// `--self-test` 拿已知被整类漏掉的样本当反例喂进去，**全部命中才算这个数法能用**，
+// 而且断言的是**写出去的那份清单**（todo.json），不是内部的 sites 数组 ——
+// 第一版断言内部数组，于是出现过「自检绿着、产物瞎着」。样本按**内容**断言不按行号。
 //   1 条件谓词            pg-subscription.repository.ts   conditions.push(`tenant_id = …`)
 //   2 谓词在另一个串里    console-bff/audit.router.ts     const where = `al.tenant_id = $1 …`
 //   3 双引号 + 拼装       pg-ops-todo.repository.ts       selectAll: "  select * from order_todos"
@@ -65,14 +69,29 @@ import process from "node:process";
 const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const SCAN_ROOTS = ["services", "bff", "packages"];
 const SKIP = new Set(["node_modules", "dist", ".next", "coverage", "build"]);
+// 归属列。**2026-10-02 补了三个**：`account_id` / `user_id` / `operator_id`。
+// 缺它们的后果不是漏报缺口（方向是安全侧，少排除几条而已），而是
+// **`pred === "none"` 不能当「这张表没有归属轴」用** —— 一条按 `account_id = $1` 过滤的读
+// 会被判成「无谓词」，判定的人就得自己再去看一遍。customer 单元为此报过 4 条。
 const OWNER_COL =
-  "(?:tenant_id|workspace_id|org_id|organization_id|owner_user_id)";
+  "(?:tenant_id|workspace_id|org_id|organization_id|owner_user_id|account_id|user_id|operator_id)";
 const OWNER_PRED = new RegExp(
   `\\b[\\w.]*${OWNER_COL}\\s*(?:=|in)\\s*(?:\\$\\d+|any\\s*\\()`,
   "i",
 );
 const PUSH_OWNER = new RegExp(`push\\s*\\([^)]*${OWNER_COL}`, "i");
-const SELECTISH = /\b(select|with)\b/i;
+
+// **2026-10-02：从「只收读」改成「收所有碰库的语句」。**
+//
+// 第一版是 `/\b(select|with)\b/i`，于是 `pg-consume.repository.ts:281` 那条真扣减
+// （`update metering.quota_pools set quota_used = …`）整条看不见，而同一个方法里
+// `:376` 的 `with e as (insert …)` 因为带 `with` 反而进了清单 ——
+// **同一条链的写半边，一半在一半不在，而被判成缺口的恰是在的那半。**
+// 按有没有 `with` 随机收一半，比整档不收更坏：它让「清单里没有」既不是「安全」
+// 也不是「没有这回事」。
+//
+// 归属问题对写一字不差地成立（甚至更重：读是泄露，写是改别人的数据），所以一起收。
+const DB_STMT = /\b(select|with|insert|update|delete)\b/i;
 
 /** 运营三平面按设计跨租户（现状文档 ③ 的口径），单独分组而不是算进缺口。 */
 const OPERATOR_FACES = ["bff/admin-bff", "bff/opera-bff", "bff/arche-bff"];
@@ -225,10 +244,37 @@ for (const file of files) {
   if (!src.includes(".query")) continue;
   const consts = constMap(src);
   const r = rel(file);
-  const re = /\.query\s*(?:<[^>]*>)?\s*\(/g;
+  // **只匹配 `.query` 本身，泛型参数按深度跳过。**
+  //
+  // 第一版是 `/\.query\s*(?:<[^>]*>)?\s*\(/`，`[^>]*` 遇嵌套泛型就脱靶 ——
+  // `client.query<{ effect: Record<string, unknown> }>(` 整条不命中。两处实例：
+  // `pg-promotion.repository.ts:139`（voucher reserve，带全套归属谓词的那条 UPDATE）
+  // 与 `bff/arche-bff/src/routers/governance-overview.router.ts:75`。
+  // 更坏的是 rest 单元判 `promotion:162` 安全时引的凭据就是 `:139` ——
+  // **它拿一条从未进过分母的查询当凭据。**
+  const re = /\.query\b/g;
   let m;
   while ((m = re.exec(src))) {
-    const openIdx = src.indexOf("(", m.index + m[0].length - 1);
+    // `.query` 之后可能是 `<…>`（泛型，可嵌套）再是 `(`，也可能直接是 `(`。
+    // 按深度跳过泛型，而不是用正则吃掉它 —— `[^>]*` 在嵌套上必然脱靶。
+    let p = m.index + m[0].length;
+    while (p < src.length && /\s/.test(src[p])) p += 1;
+    if (src[p] === "<") {
+      let depth = 0;
+      for (; p < src.length; p += 1) {
+        if (src[p] === "<") depth += 1;
+        else if (src[p] === ">") {
+          depth -= 1;
+          if (depth === 0) {
+            p += 1;
+            break;
+          }
+        }
+      }
+      while (p < src.length && /\s/.test(src[p])) p += 1;
+    }
+    if (src[p] !== "(") continue; // 不是调用（如 `.query` 出现在类型或注释里）
+    const openIdx = p;
     const argsRaw = balanced(src, openIdx);
     if (!argsRaw) continue;
     // 顶层逗号切分实参
@@ -252,7 +298,8 @@ for (const file of files) {
     }
     parts.push(cur);
     const { sql, unresolved } = resolveSql(parts[0] ?? "", consts);
-    if (!SELECTISH.test(sql) && unresolved === 0) continue; // 不是读
+    // 不是碰库的语句就跳过；解析不出全文（unresolved）的一律留下，由人判。
+    if (!DB_STMT.test(sql) && unresolved === 0) continue;
     const line = src.slice(0, m.index).split("\n").length;
     const body = enclosingBody(src, m.index);
     const pred = OWNER_PRED.test(sql)
@@ -314,6 +361,26 @@ if (process.argv.includes("--self-test")) {
     {
       name: "④ 有归属谓词、但那个 $n 的值经旧凭据可以自报",
       file: "services/commerce/subscription/src/repository/pg-consume.repository.ts",
+      want: (s) => s.pred === "inline",
+    },
+    // ↓ 2026-10-02 补的三条，各钉一个此前被整类漏掉的形状。
+    {
+      name: "⑥ 嵌套泛型：client.query<{ effect: Record<string, unknown> }>(（旧正则 [^>]* 脱靶）",
+      file: "services/commerce/promotion/src/repository/pg-promotion.repository.ts",
+      // 同 ⑦：按内容不按行号。
+      want: (s) => /update promotion\.vouchers/.test(s.head),
+    },
+    {
+      name: "⑦ 写：update … set（旧判据只认 select|with，于是同一条链的写半边一半在一半不在）",
+      file: "services/commerce/subscription/src/repository/pg-consume.repository.ts",
+      // **按内容断言，不按行号。** 第一版写死 `:281`，而它实际落在 `:280` ——
+      // 行号会随上下文漂，拿它当判据会让自检在一次无关的改动之后变红或变瞎。
+      want: (s) =>
+        /update metering\.quota_pools set quota_used = quota_used/.test(s.head),
+    },
+    {
+      name: "⑧ account_id 当归属列（旧 OWNER_COL 缺它，于是按 account_id 过滤的读被判成「无谓词」）",
+      file: "bff/console-bff/src/routers/inbox.router.ts",
       want: (s) => s.pred === "inline",
     },
   ];

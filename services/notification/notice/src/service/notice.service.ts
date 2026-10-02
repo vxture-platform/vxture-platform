@@ -53,8 +53,11 @@ export class NoticeService {
   async markRead(
     noticeId: string,
     operatorId: string,
+    plane: NoticePlane,
   ): Promise<MarkNoticeReadResult | null> {
-    return this.repository.markRead(noticeId, operatorId);
+    /* plane 必填：动作作用域要字面等于视图作用域。此前它不收 plane，于是 admin 平面能把
+       只投给 opera/arche 的通告标成已读并拿到 200——见仓储里 MARK_READ_SQL 的注释。 */
+    return this.repository.markRead(noticeId, operatorId, plane);
   }
 
   /**

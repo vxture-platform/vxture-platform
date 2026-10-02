@@ -699,7 +699,11 @@ export class OperatorNoticesRouter {
     const operatorId = requireOperatorId(req);
     const noticeId = requireUuid(id, "id", "Invalid notice id");
 
-    const marked = await this.notices().markRead(noticeId, operatorId);
+    const marked = await this.notices().markRead(
+      noticeId,
+      operatorId,
+      PLANE_NAME,
+    );
     // 服务层回 null = 通告不存在或已撤回。那是调用方要据以说话的结果，不是故障，
     // 所以 404 在这里翻，不在包里抛。
     if (!marked) {
