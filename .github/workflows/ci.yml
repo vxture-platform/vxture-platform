@@ -155,6 +155,16 @@ jobs:
       - name: Read scope guardrail
         run: node scripts/guardrails/check-read-scope.mjs
 
+      # 始终运行（含 docs-only）：旧凭据那条路上各调用点的作用域档位。纯 node、只读源码、秒级。
+      # 同样没有 `pnpm lint:` 入口（加入口要改根 package.json → 全栈重建）。
+      #
+      # 它守的那一格：走共享 `x-vxture-internal-auth` 进来时 `scopeToS2sCaller` 会原样信任
+      # 请求体自报的 workspace，而那个值下一跳就进 SQL 的归属谓词。根治要五个产品端换凭据
+      # （E2/E3，owner 的取舍 + 对外协调），在那之前守的是**别再悄悄多一处**。
+      # 快照里的 trust-declared 条目是**已登记的缺口**，这个数只该减少。
+      - name: S2S legacy scope guardrail
+        run: node scripts/guardrails/check-s2s-legacy-scope.mjs
+
       - name: Docs-only quality gate
         if: steps.changes.outputs.docs_only == 'true'
         run: echo "::notice::Docs-only change; heavy quality gate steps skipped while keeping the required check stable."

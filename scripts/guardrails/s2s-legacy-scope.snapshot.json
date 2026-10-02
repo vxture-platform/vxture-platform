@@ -1,0 +1,26 @@
+{
+  "note": "本文件由 check-s2s-legacy-scope.mjs --update 生成，不要手改。登记的是走旧凭据（共享 x-vxture-internal-auth，无 s2sCaller）时各调用点的选择。trust-declared 的条目是**已登记的缺口**：那一格今天确实在信任请求体自报的 workspace，收紧要先让五个对接方换凭据（E2/E3）。条目只应减少（改成 deny），增加必须是有意的。",
+  "trustDeclared": 5,
+  "sites": [
+    {
+      "at": "bff/platform-api/src/routers/platform-entitlements.router.ts:75",
+      "policy": "trust-declared"
+    },
+    {
+      "at": "bff/platform-api/src/routers/platform-provisioning.router.ts:132",
+      "policy": "trust-declared"
+    },
+    {
+      "at": "bff/platform-api/src/routers/platform-sharing.router.ts:58",
+      "policy": "trust-declared"
+    },
+    {
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:191",
+      "policy": "trust-declared"
+    },
+    {
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:96",
+      "policy": "deny+trust-declared"
+    }
+  ]
+}

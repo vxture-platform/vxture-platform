@@ -128,10 +128,15 @@ export class PlatformProvisioningRouter {
 
     /* TD-035，同 consume/gauge:产品只能为**自己**回执，工作区取 token 里的那个，
        请求体声明的直接丢弃——调用方自报身份等于没有鉴权（通则被调方纪律第 8 条）。 */
-    const { workspaceId } = scopeToS2sCaller(s2sCaller, {
-      workspaceId: parsed.workspaceId,
-      productCodes: [parsed.productCode],
-    });
+    /* 旧凭据：`trust-declared`（开通回执走这条，有在产调用方）。 */
+    const { workspaceId } = scopeToS2sCaller(
+      s2sCaller,
+      {
+        workspaceId: parsed.workspaceId,
+        productCodes: [parsed.productCode],
+      },
+      "trust-declared",
+    );
 
     const productId = await this.provisioning.resolveProductId(
       parsed.productCode,
