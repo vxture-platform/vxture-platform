@@ -164,7 +164,13 @@ jobs:
               exit 1
               ;;
           esac
-          if ! ls -1 deploy/database/migrations/*.sql | xargs -n1 basename | grep -q -- "$MIGRATE_UNTIL"; then
+          # 不用 `| xargs basename | grep -q`：grep -q 命中即关管道 → xargs 吃 SIGPIPE →
+          # pipefail 下整条非零 → 命中时反而报「匹配不到」（2026-10-02 生产实撞，间歇性）。
+          HIT=0
+          for M in deploy/database/migrations/*.sql; do
+            case "$(basename "$M")" in *"$MIGRATE_UNTIL"*) HIT=1; break ;; esac
+          done
+          if [ "$HIT" != "1" ]; then
             echo "::error::migrate_until=$MIGRATE_UNTIL 在本 ref 的 migrations/ 里匹配不到任何文件" >&2
             exit 1
           fi
