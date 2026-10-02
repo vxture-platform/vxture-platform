@@ -398,6 +398,17 @@ jobs:
         run: |
           pnpm lint:ticket-visibility
           node scripts/guardrails/check-ticket-comment-visibility.mjs --self-test
+
+      # 归属入口盘点器**不是门禁**：它产的是 A2 审查的分母，拦不住任何缺陷。
+      # 这里只跑它的 `--self-test`，因为这个工具**静默变瞎的方式**是词表漂移：
+      # 新写一道门装饰器而它不认识，挂着那道门的入口就一律显示「没门」，而
+      # 「一致地没门」最像「这一面按设计不设门」。自检的十一条里有十条是
+      # 「已知的门必须被读到」的正反例、一条是装饰器词表没漂。
+      # 不加 `pnpm lint:` 入口：那要改根 package.json，会触发全栈 14 镜像重建。
+      - name: Ownership entrypoint census (self-test only, not a gate)
+        if: steps.changes.outputs.docs_only != 'true'
+        run: node scripts/guardrails/scan-ownership-entrypoints.mjs --self-test
+
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |
