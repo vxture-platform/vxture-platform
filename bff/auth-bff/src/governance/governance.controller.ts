@@ -170,9 +170,29 @@ export class GovernanceController {
     };
   }
 
-  /** List org members (any authenticated caller). */
+  /**
+   * List org members (requires tenant.member.read).
+   *
+   * 这里原本写的是「any authenticated caller」，而且**真的没有任何归属判定**：既不取
+   * `@CurrentUser` 也不调 `assertCan`，`orgId` 是裸路径参数 —— 落到
+   * `listOrgMembers` 的 `where m.tenant_id = $1`，于是任何一张能过 `AccessTokenGuard`
+   * 的票都能列出**任意租户**的成员。同一个 controller 里 `setRole`（:184）与
+   * `removeMember`（:203）都有 `assertCan`，**这一个是那条判据没长上来的分支**。
+   *
+   * 今天的暴露面：没有 vhost 把这条路径映射到 auth-bff（accounts 只转
+   * `/oidc/ /auth/ /api/me/ /avatar/`，api 的内部面对 `/internal/` 直接 404），
+   * 且全仓零调用方 —— 内网可达、公网不可达。所以这是补一条没长上来的判据，
+   * 不是修一个正在被利用的洞；而「今天恰好到不了」不是判据，vhost 改一行它就到了。
+   *
+   * 用 `tenant.member.read` 而不是 `tenant.member.manage`：这是读，而 seed 里
+   * `tenant:member` 一档就有 read 没有 manage —— 用 manage 会把正当的成员列表读打掉。
+   */
   @Get("orgs/:orgId/members")
-  async members(@Param("orgId") orgId: string) {
+  async members(
+    @CurrentUser() me: CurrentUserCtx,
+    @Param("orgId") orgId: string,
+  ) {
+    await this.gov.assertCan(me.userId, { orgId }, "tenant.member.read");
     return { members: await this.org.listOrgMembers(orgId) };
   }
 

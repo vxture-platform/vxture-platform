@@ -1176,6 +1176,29 @@ export class SessionAggregator {
     orgId: string,
     workspaceId: string,
   ): Promise<void> {
+    /*
+     * **先把 workspaceId 绑到 orgId，再谈能力。** 两道判据顺序错了会让后面那条变成死代码：
+     *
+     * 原来第一步是 `tenant.workspace.manage` 的租户级能力，为真就直接 return —— 而唯一把
+     * `workspaceId` 绑到租户的那道检查（下面的 `getWorkspaceRole`）在它之后。于是对任何持有
+     * 租户级能力的调用方，`workspaceId` 一个字都没被校验过。而那个能力**每个账号都有**：
+     * 每个人在自己的个人租户里是 `owner`，seed 给 `tenant:owner` 的是 `[...TENANT_ALL, ...WS_ALL]`
+     * （含 `tenant.workspace.manage`），而能力是按**调用方自己的**活跃租户算的。
+     * 后果是 `listWorkspaceProductSeats` 把别家空间的订阅、席位上限，以及占座人的
+     * `user_no` 与 `display_name` 原样回出去（仓储那两条读只收 workspaceId，没有租户过滤）。
+     *
+     * 「我能管我租户里的空间」不蕴含「我能读任意空间」—— 这是两句话，原来的顺序把它们当成了一句。
+     *
+     * 不用 `getWorkspaceRole` 当这道绑定：租户级 owner 完全可能不是该空间的成员，拿它当判据
+     * 会把正当路径一起打掉。要的是「这个空间在不在我的租户里」，所以用 `listWorkspaces(orgId)`。
+     *
+     * 错误码沿用 `workspace_scope_denied`：空间不存在与空间不属于你**给同一个答复**，
+     * 不给存在性探测口。
+     */
+    const inOrg = await this.org.listWorkspaces(orgId);
+    if (!inOrg.some((w) => w.id === workspaceId)) {
+      throw new ForbiddenException("workspace_scope_denied");
+    }
     const tenantWide = await this.gov.can(
       userId,
       { orgId },
