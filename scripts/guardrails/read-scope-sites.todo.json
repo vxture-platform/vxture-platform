@@ -1,0 +1,1766 @@
+{
+  "note": "本文件由 scan-read-scope-sites.mjs 生成，是 A2 要逐条判调用链的集合（客户面 + 服务层，归属谓词 none 或 conditional）。不是快照、不参与门禁 —— 只是把分母写下来供审查消费。旧数法那 103 条是按模板串数的，而且整个 bff/ 不在里面。",
+  "total": 220,
+  "sites": [
+    {
+      "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:157",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": "select count(*) as count from billing.invoices i where /*UNRESOLVED*/"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:161",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": "select i.* from billing.invoices i where /*UNRESOLVED*/ order by i.cre"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:178",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.invoices where id = $1 and deleted_at is null li"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:188",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.invoices where id = $1 and deleted_at is null li"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:192",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.invoice_items where bill_id = $1 and deleted_at "
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:233",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from billing.invoice_receipts where bill_id = $1 and deleted_"
+    },
+    {
+      "at": "services/commerce/invoice/src/repository/pg-invoice.repository.ts:92",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select count(*) as count from billing.invoice_receipts where /*UNRESOL"
+    },
+    {
+      "at": "services/commerce/invoice/src/repository/pg-invoice.repository.ts:96",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select * from billing.invoice_receipts where /*UNRESOLVED*/ order by c"
+    },
+    {
+      "at": "services/commerce/invoice/src/repository/pg-invoice.repository.ts:110",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.invoice_receipts where id = $1 and deleted_at is"
+    },
+    {
+      "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:117",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select count(*) as count from billing.payments where /*UNRESOLVED*/"
+    },
+    {
+      "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:121",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select * from billing.payments where /*UNRESOLVED*/ order by created_a"
+    },
+    {
+      "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:135",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select * from billing.payments where id = $1 limit 1"
+    },
+    {
+      "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:236",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select count(*) as count from billing.refunds where /*UNRESOLVED*/"
+    },
+    {
+      "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:240",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select * from billing.refunds where /*UNRESOLVED*/ order by created_at"
+    },
+    {
+      "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:254",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.refunds where id = $1 limit 1"
+    },
+    {
+      "at": "services/commerce/promotion/src/repository/pg-promotion.repository.ts:162",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id from promotion.voucher_redemptions where voucher_id = $1 lim"
+    },
+    {
+      "at": "services/commerce/provisioning/src/repository/pg-provisioning.repository.ts:154",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into provisioning.webhook_deliveries (id, idempotency_key, prov"
+    },
+    {
+      "at": "services/commerce/provisioning/src/repository/pg-provisioning.repository.ts:187",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "update provisioning.webhook_deliveries d set status = 'delivering', le"
+    },
+    {
+      "at": "services/commerce/provisioning/src/repository/pg-provisioning.repository.ts:211",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select product_id, webhook_url, webhook_secret_ref, webhook_secret_enc"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:39",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, pack_code, pack_name, metric_key, amount::text as amount, v"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:88",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select ap.id, ap.tenant_id, ap.workspace_id, ap.pack_id, ap.pack_code,"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:103",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select ap.id, ap.tenant_id, ap.workspace_id, ap.pack_id, ap.pack_code,"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:112",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select ap.id, ap.tenant_id, ap.workspace_id, ap.pack_id, ap.pack_code,"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:132",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, pack_name, metric_key, amount::text as amount, validity_day"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:259",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from billing.payments where bill_id = $1 and pay_status = 'pe"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:344",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select ap.id, ap.tenant_id, ap.workspace_id, ap.metric_key, ap.amount:"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:485",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select ap.order_no, ap.tenant_id from metering.addon_purchases ap wher"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:535",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select ap.order_no, ap.tenant_id, ap.pack_name, ap.price::text as pric"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:568",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select ap.order_no, ap.tenant_id, ap.pack_name, ap.price::text as pric"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-consume.repository.ts:70",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 3,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-consume.repository.ts:101",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select consume_mode from product.platform_metrics where metric_key = $"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-consume.repository.ts:119",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select consume_mode, cost_class from product.product_metrics where pro"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-consume.repository.ts:376",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "with e as ( insert into metering.usage_events (workspace_id, product_i"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:331",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:202",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.orders where id = $1 limit 1"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:211",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.orders where order_no = $1 limit 1"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:258",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into billing.orders ( order_no, tenant_id, workspace_id, produc"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:407",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.orders where id = $1 for update"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:429",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, bill_no, bill_status, total_amount, payable_amount, paid_am"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:560",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select (pv_from.plan_id = pv_to.plan_id) as same_plan, (pl_to.current_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:601",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select pl.plan_name, pr.product_name from product.plan_versions pv joi"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:633",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select s.id, s.tenant_id, s.workspace_id, s.product_id, s.plan_version"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:719",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select s.paid_amount, s.pay_amount, s.start_at, s.end_at, pc.quota #>>"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:784",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from billing.transactions where related_no = $1 and trade_typ"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:848",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select o.id as current_order_id from metering.subscriptions s join bil"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:861",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select config_key, config_value from admin.settings where config_key i"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:882",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select (select count(*) from billing.orders p where p.workspace_id = o"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:950",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.refunds where order_id = $1 order by created_at "
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:959",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.refunds where id = $1 limit 1"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1089",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.orders where id = $1 for update"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1249",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select r.*, o.order_no from billing.refunds r join billing.orders o on"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1330",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into metering.quota_pool_resets (pool_id, period_start, used_be"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1382",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.orders where id = $1 for update"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1399",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from billing.payments where bill_id = $1 and pay_status = 'pe"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1456",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.orders where id = $1 for update"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1526",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select o.id from billing.orders o left join lateral ( select id, paid_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1557",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select o.id from billing.orders o where o.status = 'paid' and coalesce"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1610",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from billing.order_events where order_id = $1 order by create"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1630",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select remark from billing.order_events where order_id = $1 and event_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:155",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select count(*) as count from metering.subscriptions where /*UNRESOLVE"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:159",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select * from metering.subscriptions where /*UNRESOLVED*/ order by cre"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:173",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from metering.subscriptions where id = $1 and deleted_at is n"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:277",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:379",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from metering.subscription_histories where subscription_id = "
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:399",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select pc.product_id, prod.product_code, p.plan_code from product.plan"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:557",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select s.id, s.status from metering.subscriptions s where s.subscripti"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:618",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select s.id, s.tenant_id, s.end_at, s.trial_end_at, s.status, pl.plan_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:648",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select s.id, s.tenant_id, s.end_at, s.trial_end_at, s.status, pl.plan_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:670",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select s.id, s.tenant_id, s.end_at, s.trial_end_at, s.status, pl.plan_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:679",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id from metering.subscriptions where subscription_kind = 'trial"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:704",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, total_amount from billing.payments where bill_id = $1 and p"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:774",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "update billing.invoices i set total_amount = agg.total, payable_amount"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:919",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into metering.quota_pools ( workspace_id, subscription_id, prod"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:955",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into metering.resource_sharing_policies (workspace_id, tenant_i"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:985",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into metering.quota_pools ( workspace_id, subscription_id, prod"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:1079",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select sus.id, sus.subscription_id, case when sus.extends_term then (c"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:1168",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select sus.id, sus.subscription_id, s.status, sus.reason, sus.extends_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:1205",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select config_value from admin.settings where config_key = 'subscripti"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:1290",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select s.id as subscription_id, s.tenant_id, s.status, s.auto_renew, p"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:1334",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select sus.id, sus.subscription_id, s.status, sus.auto_renew_before, s"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-usage-rollup.repository.ts:104",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/identity/account/src/favorites/favorites.service.ts:24",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select product_id from account.user_product_favorites where user_id = "
+    },
+    {
+      "at": "services/identity/account/src/notification-preferences/notification-preferences.service.ts:314",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select preferences -> 'notifications' as notifications from account.us"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:108",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select account.alloc_user_no() as user_no"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:179",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select u.id, u.account, u.email, u.email_verified_at::text as email_ve"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:204",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select u.id, u.account, u.email, u.email_verified_at::text as email_ve"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:219",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select u.id, u.account, u.email, u.phone, p.display_name as name, u.st"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:263",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select u.id, u.user_no::text as user_no, p.display_name as name, u.acc"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:296",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select u.id, u.account, u.email, u.phone, p.display_name as name, u.st"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:451",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select user_id from identity.identities where provider = $1 and provid"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:462",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select data, content_type, hash from account.user_avatars where user_i"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:509",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select profile_completed_at is not null as done from account.users whe"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:650",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select provider, provider_subject, created_at::text as created_at from"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:669",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select created_at::text as created_at, ip_address, user_agent, country"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:698",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select created_at::text as created_at, ip_address, user_agent, country"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:741",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select user_agent, count(*)::int as hits from session.login_attempts w"
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:779",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select sid, auth_method, ip_address, user_agent, last_active_at::text "
+    },
+    {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:896",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id from account.users where status = 'deleting' and deleted_at "
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-oauth-provider.repository.ts:66",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select code, name, client_id, client_secret, scope, auth_url, token_ur"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-oauth-provider.repository.ts:79",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select code, name, client_id, client_secret, scope, auth_url, token_ur"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-oidc-client.repository.ts:135",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select c.client_id, c.name, c.display_name, c.logo_url, c.realm, c.cli"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-oidc-client.repository.ts:164",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select client_id, name, display_name, logo_url from appoidc.oidc_clien"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator-audit.repository.ts:75",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select distinct ip_address, user_agent from admin.operator_login_attem"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator-audit.repository.ts:100",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select count(*)::int as count from admin.operator_login_attempt where "
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:150",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select a.id, a.username, a.status, c.password_hash, a.email, r.role_co"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:181",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select a.id, a.username, a.status, c.password_hash, a.email, r.role_co"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:194",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select a.id, a.username, a.status, c.password_hash, a.email, r.role_co"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:221",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select a.id, a.username, a.status, a.email, a.email_verified, a.phone,"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:258",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select count(*)::int as n from admin.operator_account where deleted_at"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:281",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 2,
+      "origin": "n/a",
+      "head": "update admin.operator_account set /*UNRESOLVED*/ = $2, /*UNRESOLVED*/ "
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:310",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select rank, role_code from admin.operator_role where id = $1"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:410",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select a.id from admin.operator_account a join admin.operator_role r o"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:457",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from admin.operator_account where id = $1 and deleted_at is n"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:507",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from admin.operator_account where id = $1 and deleted_at is n"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:547",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select r.mfa_min_level as role_floor, m.policy as personal_policy, coa"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:587",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select totp_secret, totp_enabled from admin.operator_mfa where operato"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:692",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select credential_id, transports from admin.operator_webauthn_credenti"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:716",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select credential_id, public_key, sign_count, transports from admin.op"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-operator.repository.ts:740",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, label, aaguid, transports, created_at, last_used_at from ad"
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-signing-key.repository.ts:25",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select public_jwk from appoidc.signing_keys where status in ('active',"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:254",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": "select member_limit as cap from tenancy.tenants where id = $1 /*UNRESO"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:265",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select config_value from admin.settings where config_group = 'tenancy'"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:402",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select type, owner_user_id, tenant_no::text as tenant_no from tenancy."
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:444",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select coalesce(nullif(p.display_name, ''), u.account, u.user_no::text"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:461",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into tenancy.tenant_memberships (tenant_id, user_id, role_id, r"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:468",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into tenancy.workspace_memberships (workspace_id, tenant_id, us"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:476",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select tenant_no::text as tenant_no from tenancy.tenants where id = $1"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:516",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select name, type, verification_status from tenancy.tenants where id ="
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:592",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select type, owner_user_id from tenancy.tenants where id = $1 and dele"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:690",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select coalesce(nullif(p.display_name, ''), u.account, u.user_no::text"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:712",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into tenancy.tenant_memberships (tenant_id, user_id, role_id, r"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:719",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into tenancy.workspace_memberships (workspace_id, tenant_id, us"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:746",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select o.id, o.name, o.display_name, o.type, o.owner_user_id, o.status"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:764",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, name, display_name, type, owner_user_id, status from tenanc"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:878",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select type from tenancy.tenants where id = $1 and deleted_at is null"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:896",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from tenancy.tenants where id = $1 for update"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:925",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into tenancy.workspace_memberships (workspace_id, tenant_id, us"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1088",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select 1 from tenancy.tenants where id = $1 for update"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1492",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select m.tenant_id, m.user_id, rr.role_code as role, m.status, m.creat"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1587",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "with upserted as ( insert into tenancy.tenant_memberships (tenant_id, "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1747",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select type, owner_user_id from tenancy.tenants where id = $1 and dele"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1816",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into tenancy.workspace_memberships (workspace_id, tenant_id, us"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1858",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 2,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1897",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "with ins as ( insert into tenancy.invitations (scope, tenant_id, works"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2105",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select r.role_code as code, r.role_name as name, coalesce(array_agg(p."
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2127",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select p.perm_code as code, p.perm_name as name, p.perm_type as type, "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2254",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select i.id, i.target_type, r.role_code, i.expires_at, i.created_at, i"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2314",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select i.id, i.status, i.target_type, i.id as invitation_id, i.tenant_"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2498",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select u.id, coalesce(nullif(p.display_name, ''), u.account) as name f"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2546",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select i.id as invitation_id, i.tenant_id, t.tenant_no::text as tenant"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2639",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select i.id, i.tenant_id, t.name as tenant_name, i.target, rr.role_cod"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2742",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": "select i.id, i.scope, i.workspace_id, i.role_id, i.role_scope, i.statu"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2795",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "with upserted as ( insert into tenancy.tenant_memberships (tenant_id, "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2819",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "with upserted as ( insert into tenancy.workspace_memberships (workspac"
+    },
+    {
+      "at": "services/notification/dispatch/src/announcements.ts:36",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, title, content, cta_url, target_plans, target_tenant_types "
+    },
+    {
+      "at": "services/notification/dispatch/src/announcements.ts:63",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select t.id from tenancy.tenants t where t.deleted_at is null and t.st"
+    },
+    {
+      "at": "services/notification/dispatch/src/dispatcher.ts:427",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select owner_user_id from tenancy.tenants where id = $1"
+    },
+    {
+      "at": "services/notification/dispatch/src/dispatcher.ts:459",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select u.email, u.phone, p.language from account.users u left join acc"
+    },
+    {
+      "at": "services/notification/dispatch/src/operator-alerts.ts:229",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select max(created_at) filter (where status in ('sent','delivered')) a"
+    },
+    {
+      "at": "services/notification/dispatch/src/operator-alerts.ts:243",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, email, display_name, username from admin.operator_account w"
+    },
+    {
+      "at": "services/notification/dispatch/src/operator-mirror.ts:773",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select tenant_no::text as tenant_no, coalesce(nullif(display_name, '')"
+    },
+    {
+      "at": "services/notification/dispatch/src/operator-mirror.ts:795",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select r.refund_no, o.order_no from billing.refunds r left join billin"
+    },
+    {
+      "at": "services/notification/dispatch/src/operator-mirror.ts:807",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select order_no from billing.orders where id = $1"
+    },
+    {
+      "at": "services/notification/notice/src/repository/pg-notice.repository.ts:293",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/notification/notice/src/repository/pg-notice.repository.ts:294",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/notification/notice/src/repository/pg-notice.repository.ts:315",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into admin.operator_notice_reads (notice_id, operator_id) selec"
+    },
+    {
+      "at": "services/notification/notice/src/repository/pg-notice.repository.ts:328",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "insert into admin.operator_notice_reads (notice_id, operator_id) selec"
+    },
+    {
+      "at": "services/ops/todos/src/repository/pg-ops-todo.repository.ts:1572",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "services/platform/sharing/src/repository/pg-sharing.repository.ts:70",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select w.tenant_id, p.id as product_id from tenancy.workspaces w cross"
+    },
+    {
+      "at": "services/platform/sharing/src/repository/pg-sharing.repository.ts:330",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select g.*, p.product_code as resource_product_code from sharing.grant"
+    },
+    {
+      "at": "services/platform/sharing/src/repository/pg-sharing.repository.ts:354",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select product_code from product.products where id = $1"
+    },
+    {
+      "at": "services/support/review/src/repository/pg-review.repository.ts:112",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "SELECT id, tenant_id, account_id, product_id, subscription_id, ticket_"
+    },
+    {
+      "at": "services/support/review/src/repository/pg-review.repository.ts:130",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT subscription_id FROM support.product_reviews WHERE subscription"
+    },
+    {
+      "at": "services/support/review/src/repository/pg-review.repository.ts:150",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT product_id, AVG(product_score)::numeric(3,2) AS product_avg, CO"
+    },
+    {
+      "at": "services/support/review/src/repository/pg-review.repository.ts:172",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT AVG(product_score)::numeric(3,2) AS product_avg, COUNT(product_"
+    },
+    {
+      "at": "services/support/review/src/repository/pg-review.repository.ts:205",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "SELECT COUNT(*) AS total FROM support.product_reviews WHERE /*UNRESOLV"
+    },
+    {
+      "at": "services/support/review/src/repository/pg-review.repository.ts:210",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 3,
+      "origin": "needs-callgraph",
+      "head": "SELECT id, tenant_id, account_id, product_id, subscription_id, ticket_"
+    },
+    {
+      "at": "services/support/ticket/src/repository/pg-ticket.repository.ts:114",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select count(*) as count from support.tickets where /*UNRESOLVED*/"
+    },
+    {
+      "at": "services/support/ticket/src/repository/pg-ticket.repository.ts:118",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select * from support.tickets where /*UNRESOLVED*/ order by priority a"
+    },
+    {
+      "at": "services/support/ticket/src/repository/pg-ticket.repository.ts:133",
+      "face": "service",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select * from support.tickets where id = $1 and deleted_at is null lim"
+    },
+    {
+      "at": "services/support/ticket/src/repository/pg-ticket.repository.ts:223",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "update support.tickets set /*UNRESOLVED*/ where id = $1 and deleted_at"
+    },
+    {
+      "at": "services/support/ticket/src/repository/pg-ticket.repository.ts:252",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select * from support.ticket_comments where ticket_id = $1 order by cr"
+    },
+    {
+      "at": "services/support/ticket/src/repository/pg-ticket.repository.ts:327",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select count(*) as count from support.audit_logs where /*UNRESOLVED*/"
+    },
+    {
+      "at": "services/support/ticket/src/repository/pg-ticket.repository.ts:331",
+      "face": "service",
+      "pred": "conditional",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select * from support.audit_logs where /*UNRESOLVED*/ order by created"
+    },
+    {
+      "at": "bff/auth-bff/src/authn/session.service.ts:72",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select sid, user_id, realm, expires_at from session.auth_sessions wher"
+    },
+    {
+      "at": "bff/auth-bff/src/authn/session.service.ts:109",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select status from session.auth_sessions where sid = $1 limit 1"
+    },
+    {
+      "at": "bff/auth-bff/src/oidc/token-exchange.service.ts:426",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select tenant_id from tenancy.workspaces where id = $1 and deleted_at "
+    },
+    {
+      "at": "bff/auth-bff/src/oidc/token-exchange.service.ts:460",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select product_code from product.products where product_code = $1 and "
+    },
+    {
+      "at": "bff/auth-bff/src/oidc/token-exchange.service.ts:469",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select client_id from appoidc.oidc_clients where client_id = $1 and st"
+    },
+    {
+      "at": "bff/auth-bff/src/token/operator-refresh-token.repository.ts:53",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, operator_id, session_id, client_id, status, expires_at from"
+    },
+    {
+      "at": "bff/auth-bff/src/token/operator-refresh-token.repository.ts:94",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select created_at from admin.operator_refresh_token where rotated_from"
+    },
+    {
+      "at": "bff/auth-bff/src/token/refresh-token.repository.ts:100",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, user_id, session_id, client_id, status, expires_at from ses"
+    },
+    {
+      "at": "bff/auth-bff/src/token/refresh-token.repository.ts:140",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select created_at from session.refresh_tokens where rotated_from = $1 "
+    },
+    {
+      "at": "bff/console-bff/src/routers/applications.router.ts:56",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "SELECT p.id, p.product_code AS app_code, COALESCE(p.product_name, p.pr"
+    },
+    {
+      "at": "bff/console-bff/src/routers/applications.router.ts:103",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "SELECT i.mime_type, i.bytes, i.checksum FROM product.product_icons i J"
+    },
+    {
+      "at": "bff/console-bff/src/routers/iam.router.ts:299",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select t.tenant_no::text as tenant_no, coalesce(nullif(t.display_name,"
+    },
+    {
+      "at": "bff/console-bff/src/routers/inbox.router.ts:79",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "bff/console-bff/src/routers/inbox.router.ts:121",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, template_code, title, body, link, reference_type, reference"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:1007",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select product_code, product_name, maintenance_window_id, maintenance_"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:1267",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": "select pl.id as plan_id, pl.plan_code, pl.plan_name, pv.id as plan_ver"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:1594",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id from product.products where product_code = $1 and deleted_at"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:1677",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select prod.product_code, prod.status as product_status, prod.release_"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2238",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select id, pay_source, pay_status, total_amount, pay_channel, created_"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2270",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select remark from billing.order_events where order_id = $1 and event_"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2336",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 2,
+      "origin": "n/a",
+      "head": "update promotion.vouchers v set status = 'redeemed', used_count = v.us"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2517",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select pp.price, pp.currency, plan.plan_code, plan.plan_name from prod"
+    },
+    {
+      "at": "bff/platform-api/src/jobs/job-health-alert.job.ts:76",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select job_name, status, interval_ms, last_started_at, last_error, fai"
+    },
+    {
+      "at": "bff/platform-api/src/jobs/operator-signal-sweep.job.ts:133",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "bff/platform-api/src/jobs/operator-signal-sweep.job.ts:170",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "bff/platform-api/src/notifications/ops-notice.ts:209",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select tenant_no::text as tenant_no, coalesce(nullif(display_name, '')"
+    },
+    {
+      "at": "bff/platform-api/src/notifications/ops-notice.ts:227",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select t.tenant_no::text as tenant_no, coalesce(nullif(t.display_name,"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:289",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "SELECT prod.product_code, pm.metric_key, pm.merge_strategy FROM produc"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:302",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "SELECT metric_key FROM product.platform_metrics WHERE status = 'active"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:392",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 1,
+      "origin": "n/a",
+      "head": ""
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-provisioning.service.ts:33",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "SELECT id FROM product.products WHERE product_code = $1 AND deleted_at"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-usage.service.ts:126",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "SELECT id FROM product.products WHERE product_code = $1 AND deleted_at"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-usage.service.ts:220",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "SELECT 1 FROM product.platform_metrics WHERE metric_key = $1 AND kind "
+    },
+    {
+      "at": "bff/website-bff/src/aggregators/session.aggregator.ts:120",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select updated_at from account.user_profiles where user_id = $1"
+    },
+    {
+      "at": "bff/website-bff/src/routers/product-catalog.router.ts:206",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select p.product_code, p.product_name, p.product_nick, p.product_type,"
+    },
+    {
+      "at": "bff/website-bff/src/routers/product-plans.router.ts:145",
+      "face": "customer",
+      "pred": "none",
+      "unresolved": 0,
+      "origin": "n/a",
+      "head": "select product_code, product_name, product_nick, release_version, rele"
+    }
+  ]
+}
