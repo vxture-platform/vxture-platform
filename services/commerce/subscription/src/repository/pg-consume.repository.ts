@@ -12,7 +12,9 @@ import type {
 /**
  * Single-writer usage consume path (platform-data-architecture-schema.md §8.3).
  * One READ COMMITTED transaction:
- *   1. idempotency pre-claim (INSERT usage_idempotency ON CONFLICT DO NOTHING);
+ *   1. idempotency pre-claim (INSERT usage_idempotency ON CONFLICT DO NOTHING).
+ *      键是 (workspace_id, product_id, idempotency_key)（owner 2026-10-02）——key 由产品侧
+ *      自选，全局单列主键会让两家撞键时静默漏扣并互相回池明细。
  *      replay returns the prior committed result.
  *   2. lock candidate quota_pools FOR UPDATE in the total order
  *      priority, component_role(bundled first), effective_at, id (also the lock order).
@@ -56,10 +58,12 @@ export class PgConsumeRepository {
 
       // 1. idempotency pre-claim
       const claim = await client.query(
-        `insert into metering.usage_idempotencies (idempotency_key, created_at)
-         values ($1, now()) on conflict (idempotency_key) do nothing
+        `insert into metering.usage_idempotencies
+           (workspace_id, product_id, idempotency_key, created_at)
+         values ($1, $2, $3, now())
+         on conflict (workspace_id, product_id, idempotency_key) do nothing
          returning idempotency_key`,
-        [input.idempotencyKey],
+        [input.workspaceId, input.productId, input.idempotencyKey],
       );
       if ((claim.rowCount ?? 0) === 0) {
         // key already claimed → return the prior committed result (blocks on in-flight)
@@ -68,9 +72,17 @@ export class PgConsumeRepository {
           consumed: string | null;
           per_pool: ConsumePoolTake[] | null;
         }>(
+          /*
+           * 重放读**必须带上归属**（owner 2026-10-02）。此前这里只按 key 查，而 key 由产品侧
+           * 自选、主键又是全局的，于是任何复用了同一个 key 的调用方都会拿到上一次的
+           * `consumed` 与 `per_pool`（池 id + 扣减量）—— 跨租户读；更现实的一面是它**不扣减**
+           * 却回 ok + replayed，调用方以为记上了，用量消失。
+           * 现在键是 (workspace, product, key)，所以这条 WHERE 与上面占位的 ON CONFLICT 同形。
+           */
           `select event_id, consumed, per_pool from metering.usage_idempotencies
-            where idempotency_key = $1 for share`,
-          [input.idempotencyKey],
+            where workspace_id = $1 and product_id = $2 and idempotency_key = $3
+            for share`,
+          [input.workspaceId, input.productId, input.idempotencyKey],
         );
         await client.query("commit");
         const r = prev.rows[0];
@@ -291,9 +303,11 @@ export class PgConsumeRepository {
       );
       await client.query(
         `update metering.usage_idempotencies
-            set event_id = $2, consumed = $3, per_pool = $4::jsonb
-          where idempotency_key = $1`,
+            set event_id = $4, consumed = $5, per_pool = $6::jsonb
+          where workspace_id = $1 and product_id = $2 and idempotency_key = $3`,
         [
+          input.workspaceId,
+          input.productId,
           input.idempotencyKey,
           eventId ?? null,
           amount.toString(),

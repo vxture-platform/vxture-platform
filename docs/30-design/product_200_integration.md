@@ -134,6 +134,11 @@ POST /usage/consume  { workspace_id, product, metric, amount, idempotency_key, i
   - 没写事件时字段整个不出现(不是 `null`)。
 
 - **唯一写入方 = commerce consume 服务**(单事务:校验配额 → 记事件 → 更新池),产品侧与 Model Platform 均禁止直写用量表;
+- **`idempotency_key` 的唯一性范围(2026-10-02)**:只需在 **(workspace_id, product)** 内唯一,
+  不要求全局唯一——用你自己的业务键即可(`order-123` 这种)。平台侧的主键带上了这两维;此前是
+  全局单列主键,两个调用方撞同一个键时后来那一笔会被判成重放:**不扣减、回 200 + 旧结果**,
+  于是那次用量在两侧都看不出问题却消失了。**这是放宽,你不需要改任何东西**;唯一的影响是
+  ——若你此前跨多个工作空间复用同一串键,那些被静默去重掉的调用从此会各自真实计量。
 - 产品侧模式:本地 `local_usage.usage_raw` 缓冲 → 异步 Job 上报;`idempotency_key` 强制(防重放/重复计量);超额语义按 metric 声明(可分割=部分成功 / 原子=全有全无);
 - 产品侧**不做配额裁决**(只呈现与拦截 UI);AI 推理用量由 Atlas 统一进此通道,产品不重复上报模型 token。
 

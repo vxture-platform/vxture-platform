@@ -1117,7 +1117,8 @@ CREATE INDEX idx_quota_pool_route ON commerce.quota_pool (workspace_id, product_
 产品端/Model Platform 只 `POST /usage/consume {workspace, product, metric, amount, idempotency_key, request_id, intent?}`，**不直写用量表**。commerce consume 服务单事务（READ COMMITTED + 行锁）：
 
 ```
- 1. 幂等先占：INSERT commerce.usage_idempotency(idempotency_key,...) ON CONFLICT DO NOTHING RETURNING;
+ 1. 幂等先占：INSERT commerce.usage_idempotency(workspace_id, product_id, idempotency_key,...)
+       ON CONFLICT (workspace_id, product_id, idempotency_key) DO NOTHING RETURNING;   [2026-10-02]
        无返回 → 键已占（读回已提交行，阻塞等在途事务），返回其 consumed + per_pool（remaining_total 现算）。  [rank 1/12]
  2. 锁定候选池：SELECT ... FROM quota_pool WHERE (ws,product,metric) AND active
        FOR UPDATE ORDER BY priority, billing_kind(bundled 先), effective_at, id;                      [rank 2/3 防超扣/定序/免死锁]
@@ -1161,14 +1162,22 @@ commerce.tenant_usage_event_pool (                             -- 明细，每�
 
 ```sql
 commerce.usage_idempotency (
-  idempotency_key varchar(128) PRIMARY KEY,         -- 全局唯一，非分区表才成立 [rank 1]
+  workspace_id uuid NOT NULL,                       -- 归属（owner 2026-10-02）
+  product_id   uuid NOT NULL,                       -- 上报方
+  idempotency_key varchar(128) NOT NULL,            -- 产品侧自选；只在 (workspace, product) 内唯一
   event_id uuid, event_created_at timestamptz,
   consumed bigint, per_pool jsonb,                  -- 重放直接返回
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (workspace_id, product_id, idempotency_key)   -- [rank 1]
 );
 ```
 
 跨月重试不再双扣；重放/并发重复键经 `ON CONFLICT` 分支返回先前结果（非约束错，rank 12）。
+
+**键里必须带归属（2026-10-02 修正）**：此前是全局单列主键，而 key 由产品侧自选（平台只校验
+可打印 ASCII ≤128）。两家撞键时 replay 分支**不扣减**就回 `ok` + `replayed` 并回对方的
+`per_pool` —— 既是静默漏扣也是跨租户读。`product_id` 一并进键：同一空间下两个产品用同一个
+业务键是正当的，它们是两件事、各自都该扣。
 
 ### 8.6 quota_pool_reset（归零审计）
 
