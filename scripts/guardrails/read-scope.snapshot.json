@@ -1,36 +1,54 @@
 {
-  "note": "本文件由 check-read-scope.mjs --update 生成，不要手改。登记的是「归属作用域仍为可选」的共用查询参数类型；它们今天只被运营面调用，所以可选是安全的。条目只应减少（迁成必填 scope），增加必须是有意的。",
-  "optionalScopeTypes": 6,
+  "note": "本文件由 check-read-scope.mjs --update 生成，不要手改。登记的是「归属作用域仍为可选」的共用读取入口，两条枚举：kind=named 是命名的查询参数类型；kind=inline 是**方法签名里的匿名内联参数**（2026-10-02 补的第二条判据——原来只按类型名枚举，所以 PgTicketRepository.listAuditLogs 这种形状一个都看不见）。它们今天只被运营面调用，所以可选是安全的。条目只应减少（迁成必填 scope），增加必须是有意的。",
+  "optionalScopeTypes": 8,
   "entries": [
     {
       "type": "ListPaymentsParams",
       "declaredAt": "services/commerce/payment/src/types/payment.types.ts:79",
-      "takenBy": "PaymentService.listPayments, PgPaymentRepository.listPayments"
+      "takenBy": "PaymentService.listPayments, PgPaymentRepository.listPayments",
+      "kind": "named"
     },
     {
       "type": "ListReceiptsParams",
       "declaredAt": "services/commerce/invoice/src/types/invoice.types.ts:50",
-      "takenBy": "InvoiceService.listReceipts, PgInvoiceRepository.listReceipts"
+      "takenBy": "InvoiceService.listReceipts, PgInvoiceRepository.listReceipts",
+      "kind": "named"
     },
     {
       "type": "ListRefundsParams",
       "declaredAt": "services/commerce/payment/src/types/payment.types.ts:92",
-      "takenBy": "PaymentService.listRefunds, PgPaymentRepository.listRefunds"
+      "takenBy": "PaymentService.listRefunds, PgPaymentRepository.listRefunds",
+      "kind": "named"
     },
     {
       "type": "ListReviewsParams",
       "declaredAt": "services/support/review/src/types/review.types.ts:78",
-      "takenBy": "PgReviewRepository.list, ReviewService.list"
+      "takenBy": "PgReviewRepository.list, ReviewService.list",
+      "kind": "named"
     },
     {
       "type": "ListSubscriptionsParams",
       "declaredAt": "services/commerce/subscription/src/types/subscription.types.ts:64",
-      "takenBy": "PgSubscriptionRepository.listSubscriptions, SubscriptionService.listSubscriptions"
+      "takenBy": "PgSubscriptionRepository.listSubscriptions, SubscriptionService.listSubscriptions",
+      "kind": "named"
     },
     {
       "type": "ListTicketsParams",
       "declaredAt": "services/support/ticket/src/types/ticket.types.ts:73",
-      "takenBy": "PgTicketRepository.listTickets, TicketService.listTickets"
+      "takenBy": "PgTicketRepository.listTickets, TicketService.listTickets",
+      "kind": "named"
+    },
+    {
+      "type": "PgTicketRepository.listAuditLogs",
+      "declaredAt": "services/support/ticket/src/repository/pg-ticket.repository.ts:292",
+      "takenBy": "PgTicketRepository.listAuditLogs",
+      "kind": "inline"
+    },
+    {
+      "type": "TicketService.listAuditLogs",
+      "declaredAt": "services/support/ticket/src/service/ticket.service.ts:178",
+      "takenBy": "TicketService.listAuditLogs",
+      "kind": "inline"
     }
   ]
 }

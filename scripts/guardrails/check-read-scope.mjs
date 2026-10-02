@@ -116,6 +116,40 @@ for (const file of serviceFiles) {
   }
 }
 
+// ── ①b 另一条枚举：**方法签名里的匿名内联参数** ──────────────────────────────
+//
+// ① 只认命名的 `export interface`，所以
+// `async listAuditLogs(params: { actorId?: string; tenantId?: string; … })`
+// 这种形状一个都看不见 —— 它没有类型名可匹配。2026-10-02 的完备性复核点名了这一处：
+// `PgTicketRepository.listAuditLogs` 读 `support.audit_logs`、可选 `tenantId`、
+// 条件拼接谓词，既不在本守卫的快照里、也不在 A2 的清单里，而今天只有 arche-bff 调它
+// —— 客户面接上去那天没有任何东西会响。
+//
+// 判据：`async <method>(<arg>: { … })`，内联对象里有可选归属字段而**没有**必填归属字段。
+// 没有类型名可登记，所以条目登记的是 `Class.method` 本身。
+const INLINE_CLASS_RE = /export\s+class\s+(\w+)/g;
+const INLINE_RE = /async\s+(\w+)\s*\(\s*\w+\s*:\s*\{/g;
+const inlineFound = new Map(); // "Class.method" -> { file, line }
+for (const file of serviceFiles) {
+  const src = readFileSync(file, "utf8");
+  INLINE_RE.lastIndex = 0;
+  let im;
+  while ((im = INLINE_RE.exec(src))) {
+    const openIdx = src.indexOf("{", im.index + im[0].length - 1);
+    const body = blockAt(src, openIdx);
+    if (!OPT_FIELD.test(body)) continue;
+    if (REQ_FIELD.test(body)) continue; // 有必填归属字段 ⇒ 可选的是收窄
+    let cls = null;
+    INLINE_CLASS_RE.lastIndex = 0;
+    let cm;
+    while ((cm = INLINE_CLASS_RE.exec(src)) && cm.index < im.index) cls = cm[1];
+    inlineFound.set(`${cls ?? "?"}.${im[1]}`, {
+      file: rel(file),
+      line: src.slice(0, im.index).split("\n").length,
+    });
+  }
+}
+
 // ── ③ 推导 class.method：哪个方法收这个参数类型 ──────────────────────────────
 const CLASS_RE = /export\s+class\s+(\w+)/g;
 function ownersOf(typeName) {
@@ -150,6 +184,18 @@ for (const [name, where] of [...found.entries()].sort()) {
       .map((o) => `${o.cls ?? "?"}.${o.method}`)
       .sort()
       .join(", "),
+    kind: "named",
+  });
+}
+
+// 内联参数那一批：没有类型名，`type` 记 `Class.method`，`takenBy` 就是它自己
+// （它既是声明处也是收参数的那个方法）。
+for (const [key, where] of [...inlineFound.entries()].sort()) {
+  entries.push({
+    type: key,
+    declaredAt: `${where.file}:${where.line}`,
+    takenBy: key,
+    kind: "inline",
   });
 }
 
@@ -166,9 +212,13 @@ for (const e of entries) {
     for (const cf of customerFiles) {
       if (!cf.src.includes(cls)) continue;
       if (!new RegExp(`\\.${method}\\s*\\(`).test(cf.src)) continue;
+      const where =
+        e.kind === "inline"
+          ? `签名里的内联参数，${e.declaredAt}`
+          : `参数类型 ${e.type}，${e.declaredAt}`;
       findings.push(
-        `${cf.rel}  客户面调用了可选作用域的 ${cls}.${method}（参数类型 ${e.type}，${e.declaredAt}）\n` +
-          `      → 把 ${e.type} 的归属字段改成必填 \`scope: ReadScope\`（见 packages/shared/shared/src/types/read-scope.types.ts），不要加豁免`,
+        `${cf.rel}  客户面调用了可选作用域的 ${cls}.${method}（${where}）\n` +
+          `      → 把那个归属字段改成必填 \`scope: ReadScope\`（见 packages/shared/shared/src/types/read-scope.types.ts），不要加豁免`,
       );
     }
   }
@@ -176,7 +226,9 @@ for (const e of entries) {
 
 const actual = {
   note:
-    "本文件由 check-read-scope.mjs --update 生成，不要手改。登记的是「归属作用域仍为可选」的共用查询参数类型；" +
+    "本文件由 check-read-scope.mjs --update 生成，不要手改。登记的是「归属作用域仍为可选」的共用读取入口，" +
+    "两条枚举：kind=named 是命名的查询参数类型；kind=inline 是**方法签名里的匿名内联参数**" +
+    "（2026-10-02 补的第二条判据——原来只按类型名枚举，所以 PgTicketRepository.listAuditLogs 这种形状一个都看不见）。" +
     "它们今天只被运营面调用，所以可选是安全的。条目只应减少（迁成必填 scope），增加必须是有意的。",
   optionalScopeTypes: entries.length,
   entries,
