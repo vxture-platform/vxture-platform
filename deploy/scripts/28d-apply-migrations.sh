@@ -50,7 +50,16 @@ echo "=== Vxture Platform forward migrations (idempotent replay) ==="
 MIGRATE_UNTIL="${MIGRATE_UNTIL:-}"
 if [ -n "$MIGRATE_UNTIL" ]; then
   # 匹配不到就退出：静默跑全量比不跑更坏（调用方会以为只跑了一份）。
-  if ! ls -1 "$MIG_DIR"/*.sql | xargs -n1 basename | grep -q -- "$MIGRATE_UNTIL"; then
+  #
+  # **不要用 `… | xargs -n1 basename | grep -q`**：grep -q 一命中就关管道，xargs 吃
+  # SIGPIPE（signal 13），在 pipefail 下整条管道非零，于是这个分支会在**命中时**误触发。
+  # 2026-10-02 生产第一次派发就是这样假红的；本机与 runner 上它只是间歇复现（竞态），
+  # 所以别换成「加个 || true」——那会把真正的匹配不到也一起吞掉。纯 for + case，不开管道。
+  _until_hit=0
+  for _m in "$MIG_DIR"/*.sql; do
+    case "$(basename "$_m")" in *"$MIGRATE_UNTIL"*) _until_hit=1; break ;; esac
+  done
+  if [ "$_until_hit" != "1" ]; then
     echo "错误：MIGRATE_UNTIL=$MIGRATE_UNTIL 在 migrations/ 里匹配不到任何文件。" >&2
     exit 1
   fi
