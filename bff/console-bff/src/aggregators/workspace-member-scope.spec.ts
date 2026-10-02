@@ -26,9 +26,22 @@ function build(opts: {
   tenantWide: boolean;
   /** 我在**目标**工作空间里的角色码；null = 我不在里面。 */
   roleInTarget: string | null;
+  /**
+   * 目标空间在不在**我的租户**里。缺省在。
+   *
+   * 这一维是 2026-10-02 加的：在那之前判定根本不看它，于是持租户级码的调用方
+   * 可以把任意 workspaceId 送进来 —— 而每个账号在自己的个人租户里都是 `owner`、
+   * 都持那个码。详见 session.aggregator 里 assertCanManageWorkspaceMembers 的注释。
+   */
+  targetInMyOrg?: boolean;
 }) {
   const gov = { can: vi.fn(async () => opts.tenantWide) };
   const org = {
+    listWorkspaces: vi.fn(async () =>
+      opts.targetInMyOrg === false
+        ? [{ id: "ws-mine-only" }]
+        : [{ id: "ws-a" }, { id: "ws-b" }],
+    ),
     getWorkspaceRole: vi.fn(async () => opts.roleInTarget),
     getOrgMemberDetail: vi.fn(async () => ({ userId: "u-target" })),
     addWorkspaceMember: vi.fn(async () => undefined),
@@ -53,7 +66,15 @@ function build(opts: {
 }
 
 describe("工作空间成员管理的作用域门", () => {
-  it("租户级 workspace.manage → 任何工作空间都管得了", async () => {
+  /**
+   * **2026-10-02 这一条的标题改过，因为它原来钉错了。**
+   *
+   * 原文是「租户级 workspace.manage → **任何**工作空间都管得了」。那句话把
+   * 「我租户里的任何空间」说成了「任何空间」，而判定当时**真的**是后者：
+   * `tenantWide` 为真就直接 return，`workspaceId` 一个字都没被校验过。
+   * 下面那条新增的反例就是它放过的东西。
+   */
+  it("租户级 workspace.manage → 我租户里的任何工作空间都管得了", async () => {
     const { aggregator, org } = build({
       tenantWide: true,
       roleInTarget: null, // 我甚至不在那个空间里
@@ -69,6 +90,52 @@ describe("工作空间成员管理的作用域门", () => {
     ).resolves.toEqual({ ok: true });
     /* 持租户级码时**不必**再查我在目标空间的角色——那是一次没必要的往返。 */
     expect(org.getWorkspaceRole).not.toHaveBeenCalled();
+    /* 但「这个空间在不在我的租户里」**必须**查过——那是上面那次 return 唯一的前提。 */
+    expect(org.listWorkspaces).toHaveBeenCalledWith("org-1");
+  });
+
+  /**
+   * 这一条是 2026-10-02 补的缺口本体：**持租户级码 + 目标空间不属于我的租户。**
+   *
+   * 修之前它是绿的（判定在 `tenantWide` 那一步就 return 了），而后果不止「管得了成员」——
+   * 同一道门还护着 `listWorkspaceProductSeats`，那条路会把别家空间的订阅、席位上限，
+   * 以及占座人的 `user_no` 与 `display_name` 原样回出去（仓储那两条读只收 workspaceId，
+   * 没有租户过滤）。门槛只是「知道一个 workspace UUID」。
+   */
+  it("租户级码 + 目标空间不在我的租户里 → 403，且不许动手", async () => {
+    const { aggregator, org } = build({
+      tenantWide: true,
+      roleInTarget: "owner", // 连「我在里面是 owner」都不该救它
+      targetInMyOrg: false,
+    });
+    await expect(
+      aggregator.addWorkspaceMemberScoped(
+        "u-1",
+        "org-1",
+        "ws-of-another-tenant",
+        "u-target",
+        "member",
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(org.addWorkspaceMember).not.toHaveBeenCalled();
+    /* 绑定判据必须在能力判据**之前** —— 顺序反了后者就是死代码，那正是原来的样子。 */
+    expect(org.listWorkspaces).toHaveBeenCalled();
+  });
+
+  it("席位读走同一道门：目标空间不在我的租户里就读不到", async () => {
+    const { aggregator } = build({
+      tenantWide: true,
+      roleInTarget: null,
+      targetInMyOrg: false,
+    });
+    Object.assign(aggregator, { seats: { listWorkspaceSeats: vi.fn() } });
+    await expect(
+      aggregator.listWorkspaceProductSeats(
+        "u-1",
+        "org-1",
+        "ws-of-another-tenant",
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("我在目标空间里是 manager → 管得了那一个", async () => {

@@ -1,7 +1,15 @@
 {
   "note": "本文件由 scan-read-scope-sites.mjs 生成，是 A2 要逐条判调用链的集合（客户面 + 服务层，归属谓词 none 或 conditional）。不是快照、不参与门禁 —— 只是把分母写下来供审查消费。旧数法那 103 条是按模板串数的，而且整个 bff/ 不在里面。",
-  "total": 220,
+  "total": 343,
   "sites": [
+    {
+      "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:84",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as total, count(*) filter (where i.bill_status ="
+    },
     {
       "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:157",
       "face": "service",
@@ -43,12 +51,124 @@
       "head": "select * from billing.invoice_items where bill_id = $1 and deleted_at "
     },
     {
+      "at": "services/commerce/billing/src/repository/pg-billing.repository.ts:312",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select * from billing.credits where tenant_id = $1 limit 1"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:32",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ba.id, ba.invoice_tax_type, ba.title, ba.tax_no, ba.phone, ba.a"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:48",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select 1 from billing.billing_addresses where tenant_id = $1 and delet"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:167",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ba.id, ba.invoice_tax_type, ba.title, ba.tax_no, ba.phone, ba.a"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:192",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ir.id, ir.invoice_no, ir.bill_id, inv.bill_no, ir.invoice_type,"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:215",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select id, payable_amount::text as payable_amount, coalesce(currency, "
+    },
+    {
       "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:233",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select 1 from billing.invoice_receipts where bill_id = $1 and deleted_"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:242",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select ba.id, ba.invoice_tax_type, ba.title, ba.tax_no, ba.phone, ba.a"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-receipt.repository.ts:322",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ir.id, ir.invoice_no, ir.bill_id, inv.bill_no, ir.invoice_type,"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-tenant-closure.repository.ts:30",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as unpaid from billing.invoices where tenant_id "
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-tenant-closure.repository.ts:37",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select c.balance::text as balance, c.currency, (select coalesce(sum(t."
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-tenant-closure.repository.ts:53",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as in_progress from billing.refunds where tenant"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-tenant-closure.repository.ts:62",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as in_progress from billing.invoice_receipts whe"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-tenant-closure.repository.ts:69",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select o.id, (o.status = 'pending_verify' or exists (select 1 from bil"
+    },
+    {
+      "at": "services/commerce/billing/src/repository/pg-tenant-closure.repository.ts:85",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as unexpired from metering.subscriptions where t"
     },
     {
       "at": "services/commerce/invoice/src/repository/pg-invoice.repository.ts:92",
@@ -73,6 +193,14 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select * from billing.invoice_receipts where id = $1 and deleted_at is"
+    },
+    {
+      "at": "services/commerce/invoice/src/repository/pg-invoice.repository.ts:209",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select * from billing.billing_addresses where tenant_id = $1 and delet"
     },
     {
       "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:117",
@@ -123,12 +251,44 @@
       "head": "select * from billing.refunds where id = $1 limit 1"
     },
     {
+      "at": "services/commerce/payment/src/repository/pg-payment.repository.ts:313",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select * from billing.transactions where tenant_id = $1 order by creat"
+    },
+    {
+      "at": "services/commerce/promotion/src/repository/pg-promotion.repository.ts:101",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select v.id, v.code, b.kind, b.name as batch_name, b.effect, b.valid_u"
+    },
+    {
+      "at": "services/commerce/promotion/src/repository/pg-promotion.repository.ts:118",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select v.id, v.code, b.kind, b.name as batch_name, b.effect, b.valid_u"
+    },
+    {
       "at": "services/commerce/promotion/src/repository/pg-promotion.repository.ts:162",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select id from promotion.voucher_redemptions where voucher_id = $1 lim"
+    },
+    {
+      "at": "services/commerce/promotion/src/repository/pg-promotion.repository.ts:261",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select v.id, v.code, b.kind, b.name as batch_name, b.effect, v.status,"
     },
     {
       "at": "services/commerce/provisioning/src/repository/pg-provisioning.repository.ts:154",
@@ -155,12 +315,28 @@
       "head": "select product_id, webhook_url, webhook_secret_ref, webhook_secret_enc"
     },
     {
+      "at": "services/commerce/provisioning/src/repository/pg-provisioning.repository.ts:327",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select id, metadata->'ack'->>'at' as prev_at, metadata->'ack'->>'deliv"
+    },
+    {
       "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:39",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select id, pack_code, pack_name, metric_key, amount::text as amount, v"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:76",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ap.id, ap.tenant_id, ap.workspace_id, ap.pack_id, ap.pack_code,"
     },
     {
       "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:88",
@@ -195,6 +371,14 @@
       "head": "select id, pack_name, metric_key, amount::text as amount, validity_day"
     },
     {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:151",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select 1 from metering.addon_purchases where workspace_id = $1 and pac"
+    },
+    {
       "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:259",
       "face": "service",
       "pred": "none",
@@ -209,6 +393,14 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select ap.id, ap.tenant_id, ap.workspace_id, ap.metric_key, ap.amount:"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:396",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select balance::text as balance from billing.credits where tenant_id ="
     },
     {
       "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:485",
@@ -235,6 +427,14 @@
       "head": "select ap.order_no, ap.tenant_id, ap.pack_name, ap.price::text as pric"
     },
     {
+      "at": "services/commerce/subscription/src/repository/pg-addon.repository.ts:604",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ap.id, ap.tenant_id, ap.workspace_id, ap.metric_key, ap.amount:"
+    },
+    {
       "at": "services/commerce/subscription/src/repository/pg-consume.repository.ts:70",
       "face": "service",
       "pred": "none",
@@ -259,12 +459,76 @@
       "head": "select consume_mode, cost_class from product.product_metrics where pro"
     },
     {
+      "at": "services/commerce/subscription/src/repository/pg-consume.repository.ts:141",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select id, product_id, quota_limit, quota_used, reset_period, current_"
+    },
+    {
       "at": "services/commerce/subscription/src/repository/pg-consume.repository.ts:376",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "with e as ( insert into metering.usage_events (workspace_id, product_i"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:68",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id from tenancy.workspaces where tenant_id = $1 and is_default "
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:88",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select qp.metric_key, qp.pool_source, prod.product_code, prod.product_"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:150",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ug.metric_key, prod.product_code, prod.product_name, ug.value::"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:176",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select rsp.metric_key, prod.product_code, prod.product_name from meter"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:217",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 3,
+      "origin": "caller-object",
+      "head": "select /*UNRESOLVED*/ as period, prod.product_code, prod.product_name,"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:261",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select e.created_at, prod.product_code, prod.product_name, e.metric_ke"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:311",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as total, coalesce(sum(e.total_amount), 0)::text"
     },
     {
       "at": "services/commerce/subscription/src/repository/pg-metering-read.repository.ts:331",
@@ -289,6 +553,14 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select * from billing.orders where order_no = $1 limit 1"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:224",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select o.* from billing.orders o join product.products p on p.id = o.p"
     },
     {
       "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:258",
@@ -403,6 +675,14 @@
       "head": "select * from billing.orders where id = $1 for update"
     },
     {
+      "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1099",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select balance from billing.credits where tenant_id = $1"
+    },
+    {
       "at": "services/commerce/subscription/src/repository/pg-order.repository.ts:1249",
       "face": "service",
       "pred": "none",
@@ -475,6 +755,30 @@
       "head": "select remark from billing.order_events where order_id = $1 and event_"
     },
     {
+      "at": "services/commerce/subscription/src/repository/pg-product-seat.repository.ts:44",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select distinct on (pc.product_id) pc.product_id, p.product_code, p.pr"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-product-seat.repository.ts:68",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ps.product_id, ps.user_id, u.user_no, coalesce(up.display_name,"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-product-seat.repository.ts:123",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "insert into metering.product_seats (workspace_id, user_id, product_id,"
+    },
+    {
       "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:155",
       "face": "service",
       "pred": "conditional",
@@ -499,6 +803,14 @@
       "head": "select * from metering.subscriptions where id = $1 and deleted_at is n"
     },
     {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:185",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select * from metering.subscriptions where workspace_id = $1 and statu"
+    },
+    {
       "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:277",
       "face": "service",
       "pred": "none",
@@ -521,6 +833,30 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select pc.product_id, prod.product_code, p.plan_code from product.plan"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:429",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select exists ( select 1 from metering.subscriptions ts join product.p"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:460",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select s.* from metering.subscriptions s where s.workspace_id = $1 and"
+    },
+    {
+      "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:495",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select distinct prod.product_code, pc_new.tier as new_tier, pc_old.tie"
     },
     {
       "at": "services/commerce/subscription/src/repository/pg-subscription.repository.ts:557",
@@ -771,6 +1107,14 @@
       "head": "select user_agent, count(*)::int as hits from session.login_attempts w"
     },
     {
+      "at": "services/identity/account/src/repository/pg-user.repository.ts:768",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id from tenancy.tenants where owner_user_id = $1 and type = 'pe"
+    },
+    {
       "at": "services/identity/account/src/repository/pg-user.repository.ts:779",
       "face": "service",
       "pred": "none",
@@ -785,6 +1129,14 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select id from account.users where status = 'deleting' and deleted_at "
+    },
+    {
+      "at": "services/identity/iam/src/repository/pg-entitlement.repository.ts:53",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select p.plan_code, coalesce(o.override_tier_code, pc.tier) as tier_co"
     },
     {
       "at": "services/identity/iam/src/repository/pg-oauth-provider.repository.ts:66",
@@ -979,6 +1331,30 @@
       "head": "select config_value from admin.settings where config_group = 'tenancy'"
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:296",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select 1 from tenancy.tenant_memberships where tenant_id = $1 and user"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:303",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as n from tenancy.tenant_memberships where tenan"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:335",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as n from tenancy.workspaces where tenant_id = $"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:402",
       "face": "service",
       "pred": "none",
@@ -1027,12 +1403,28 @@
       "head": "select name, type, verification_status from tenancy.tenants where id ="
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:569",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as n from tenancy.tenant_memberships where tenan"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:592",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select type, owner_user_id from tenancy.tenants where id = $1 and dele"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:612",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as n from tenancy.tenant_memberships where tenan"
     },
     {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:690",
@@ -1075,6 +1467,22 @@
       "head": "select id, name, display_name, type, owner_user_id, status from tenanc"
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:802",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select w.id, w.tenant_id, w.name, w.is_default, w.workspace_no::text a"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:826",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select default_workspace_id from tenancy.tenant_memberships where tena"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:878",
       "face": "service",
       "pred": "none",
@@ -1091,12 +1499,44 @@
       "head": "select 1 from tenancy.tenants where id = $1 for update"
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:900",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select 1 from tenancy.workspaces where tenant_id = $1 and deleted_at i"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:925",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "insert into tenancy.workspace_memberships (workspace_id, tenant_id, us"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:963",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select 1 from tenancy.workspaces where id = $1 and tenant_id = $2 and "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:974",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select 1 from tenancy.workspaces where tenant_id = $1 and id <> $2 and"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1028",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select status from tenancy.workspaces where id = $1 and tenant_id = $2"
     },
     {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1088",
@@ -1107,12 +1547,116 @@
       "head": "select 1 from tenancy.tenants where id = $1 for update"
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1092",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select is_default, status from tenancy.workspaces where id = $1 and te"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1106",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*) as n from tenancy.workspaces where tenant_id = $1 and "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1131",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id, tenant_id, name, is_default from tenancy.workspaces where t"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1164",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select w.id, w.tenant_id, w.name, w.is_default, rr.role_code as ws_rol"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1195",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select default_workspace_id from tenancy.tenant_memberships where tena"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1230",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select 1 from tenancy.workspaces w join tenancy.workspace_memberships "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1262",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select w.id, w.tenant_id, w.name, w.is_default from tenancy.workspaces"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1287",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select w.id, w.tenant_id, w.name, w.is_default, wm.role_code as ws_rol"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1335",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 2,
+      "origin": "needs-callgraph",
+      "head": "select /*UNRESOLVED*/ , pc.name as contact_name, pc.title as contact_r"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1359",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 2,
+      "origin": "caller-object",
+      "head": "with up as ( insert into tenancy.tenant_profiles (tenant_id, descripti"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1440",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select data as logo_data, content_type as logo_content_type, hash as l"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1492",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select m.tenant_id, m.user_id, rr.role_code as role, m.status, m.creat"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1528",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select 1 from tenancy.tenant_memberships m join tenancy.tenants o on o"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1564",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select m.tenant_id, m.user_id, rr.role_code as role, m.status from ten"
     },
     {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1587",
@@ -1123,12 +1667,44 @@
       "head": "with upserted as ( insert into tenancy.tenant_memberships (tenant_id, "
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1629",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "with updated as ( update tenancy.tenant_memberships m set role_id = r."
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1701",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "with updated as ( update tenancy.tenant_memberships m set status = $3,"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1747",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select type, owner_user_id from tenancy.tenants where id = $1 and dele"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1770",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select 1 from tenancy.tenant_memberships where tenant_id = $1 and user"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1808",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id from tenancy.workspaces where tenant_id = $1 and is_default "
     },
     {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1816",
@@ -1155,6 +1731,54 @@
       "head": "with ins as ( insert into tenancy.invitations (scope, tenant_id, works"
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1930",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select m.workspace_id, m.user_id, rr.role_code as role, m.status from "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1955",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select u.id as user_id, u.account, u.email, u.phone, p.display_name as"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:1990",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select m.user_id, w.id as workspace_id, w.name, w.is_default, rr.role_"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2041",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select is_default from tenancy.workspaces where id = $1 and tenant_id "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2073",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select rr.role_code from tenancy.workspace_memberships m join access.r"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2089",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select u.id as user_id, u.account, u.email, u.phone, p.display_name as"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2105",
       "face": "service",
       "pred": "none",
@@ -1169,6 +1793,30 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select p.perm_code as code, p.perm_name as name, p.perm_type as type, "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2163",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id, verification_type, verification_method, company_name, busin"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2177",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id, verification_type, verification_method, company_name, busin"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2193",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "select status from kyc.tenant_verifications where tenant_id = $1 order"
     },
     {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2254",
@@ -1187,6 +1835,22 @@
       "head": "select i.id, i.status, i.target_type, i.id as invitation_id, i.tenant_"
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2370",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select i.id, i.target_type, i.target, r.role_code, i.status, i.expires"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2427",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "with revoked as ( update tenancy.invitations set status = 'revoked', u"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2498",
       "face": "service",
       "pred": "none",
@@ -1203,12 +1867,36 @@
       "head": "select i.id as invitation_id, i.tenant_id, t.tenant_no::text as tenant"
     },
     {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2602",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "with rotated as ( update tenancy.invitations i set token_hash = $3, ex"
+    },
+    {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2639",
       "face": "service",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select i.id, i.tenant_id, t.name as tenant_name, i.target, rr.role_cod"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2679",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select distinct p.perm_code as code from tenancy.tenant_memberships m "
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2695",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select distinct p.perm_code as code from tenancy.workspace_memberships"
     },
     {
       "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2742",
@@ -1233,6 +1921,14 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "with upserted as ( insert into tenancy.workspace_memberships (workspac"
+    },
+    {
+      "at": "services/identity/organization/src/repository/pg-organization.repository.ts:2930",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "insert into tenancy.workspace_memberships (workspace_id, tenant_id, us"
     },
     {
       "at": "services/notification/dispatch/src/announcements.ts:36",
@@ -1353,6 +2049,30 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select w.tenant_id, p.id as product_id from tenancy.workspaces w cross"
+    },
+    {
+      "at": "services/platform/sharing/src/repository/pg-sharing.repository.ts:90",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select g.resource_type, g.resource_product_id, p.product_code as resou"
+    },
+    {
+      "at": "services/platform/sharing/src/repository/pg-sharing.repository.ts:128",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select refreshed_at from sharing.visible_set_refresh where workspace_i"
+    },
+    {
+      "at": "services/platform/sharing/src/repository/pg-sharing.repository.ts:141",
+      "face": "service",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select v.resource_type, v.resource_product_id, p.product_code as resou"
     },
     {
       "at": "services/platform/sharing/src/repository/pg-sharing.repository.ts:330",
@@ -1491,6 +2211,14 @@
       "head": "select status from session.auth_sessions where sid = $1 limit 1"
     },
     {
+      "at": "bff/auth-bff/src/oidc/app-scope.resolver.ts:91",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT ts.id, prod.product_code, p.plan_code, ts.status, ts.trial_end_"
+    },
+    {
       "at": "bff/auth-bff/src/oidc/token-exchange.service.ts:426",
       "face": "customer",
       "pred": "none",
@@ -1513,6 +2241,14 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select client_id from appoidc.oidc_clients where client_id = $1 and st"
+    },
+    {
+      "at": "bff/auth-bff/src/oidc/token-exchange.service.ts:558",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select ( exists ( select 1 from metering.subscriptions ts join product"
     },
     {
       "at": "bff/auth-bff/src/token/operator-refresh-token.repository.ts:53",
@@ -1547,6 +2283,22 @@
       "head": "select created_at from session.refresh_tokens where rotated_from = $1 "
     },
     {
+      "at": "bff/console-bff/src/aggregators/session.aggregator.ts:104",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select tenant_id, name, workspace_no::text as workspace_no from tenanc"
+    },
+    {
+      "at": "bff/console-bff/src/lib/product-app-tiles.ts:166",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select prod.product_code, prod.product_name, prod.product_nick, prod.i"
+    },
+    {
       "at": "bff/console-bff/src/routers/applications.router.ts:56",
       "face": "customer",
       "pred": "none",
@@ -1561,6 +2313,22 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "SELECT i.mime_type, i.bytes, i.checksum FROM product.product_icons i J"
+    },
+    {
+      "at": "bff/console-bff/src/routers/audit.router.ts:114",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select count(*)::text as total from support.audit_logs al where al.ten"
+    },
+    {
+      "at": "bff/console-bff/src/routers/audit.router.ts:120",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select al.id, al.created_at, al.actor_type, coalesce(up.display_name, "
     },
     {
       "at": "bff/console-bff/src/routers/iam.router.ts:299",
@@ -1587,6 +2355,46 @@
       "head": "select id, template_code, title, body, link, reference_type, reference"
     },
     {
+      "at": "bff/console-bff/src/routers/promotion.router.ts:146",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "with linked as ( -- ① 已核销:核销行上的真凭据(payment 优先,退回 invoice_item) select "
+    },
+    {
+      "at": "bff/console-bff/src/routers/promotion.router.ts:180",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id from tenancy.workspaces where tenant_id = $1 and is_default "
+    },
+    {
+      "at": "bff/console-bff/src/routers/review.router.ts:113",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select product_id from metering.subscriptions where id = $1 and tenant"
+    },
+    {
+      "at": "bff/console-bff/src/routers/review.router.ts:169",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id from metering.subscriptions where id = any($1::uuid[]) and t"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:943",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select distinct prod.product_code from metering.subscriptions ts join "
+    },
+    {
       "at": "bff/console-bff/src/routers/subscription.router.ts:1007",
       "face": "customer",
       "pred": "none",
@@ -1595,12 +2403,28 @@
       "head": "select product_code, product_name, maintenance_window_id, maintenance_"
     },
     {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:1188",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select ts.id, ts.status, ts.plan_version_id, ts.end_at, ts.trial_end_a"
+    },
+    {
       "at": "bff/console-bff/src/routers/subscription.router.ts:1267",
       "face": "customer",
       "pred": "none",
       "unresolved": 1,
       "origin": "n/a",
       "head": "select pl.id as plan_id, pl.plan_code, pl.plan_name, pv.id as plan_ver"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:1407",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select ts.id as subscription_id, prod.id as product_id, prod.product_c"
     },
     {
       "at": "bff/console-bff/src/routers/subscription.router.ts:1594",
@@ -1619,6 +2443,14 @@
       "head": "select prod.product_code, prod.status as product_status, prod.release_"
     },
     {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2225",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select o.id as order_id, o.order_no, o.workspace_id, o.subscription_id"
+    },
+    {
       "at": "bff/console-bff/src/routers/subscription.router.ts:2238",
       "face": "customer",
       "pred": "none",
@@ -1635,6 +2467,14 @@
       "head": "select remark from billing.order_events where order_id = $1 and event_"
     },
     {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2315",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select 1 as one from metering.subscriptions ts join product.plan_versi"
+    },
+    {
       "at": "bff/console-bff/src/routers/subscription.router.ts:2336",
       "face": "customer",
       "pred": "none",
@@ -1643,12 +2483,76 @@
       "head": "update promotion.vouchers v set status = 'redeemed', used_count = v.us"
     },
     {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2375",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "insert into promotion.voucher_redemptions (redemption_no, voucher_id, "
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2411",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select s.id from metering.subscriptions s join product.products p on p"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2454",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 1,
+      "origin": "needs-callgraph",
+      "head": "select o.id as order_id, o.order_no, o.workspace_id, o.subscription_id"
+    },
+    {
+      "at": "bff/console-bff/src/routers/subscription.router.ts:2486",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id from tenancy.workspaces where tenant_id = $1 and is_default "
+    },
+    {
       "at": "bff/console-bff/src/routers/subscription.router.ts:2517",
       "face": "customer",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "select pp.price, pp.currency, plan.plan_code, plan.plan_name from prod"
+    },
+    {
+      "at": "bff/console-bff/src/routers/tickets.router.ts:467",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select t.ticket_no, t.title, t.status, t.priority, t.category, t.descr"
+    },
+    {
+      "at": "bff/console-bff/src/routers/tickets.router.ts:496",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select c.event_type, c.actor_type, c.actor_name, c.payload, c.created_"
+    },
+    {
+      "at": "bff/console-bff/src/routers/tickets.router.ts:735",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select t.ticket_no, t.title, t.status, t.priority, t.category, t.descr"
+    },
+    {
+      "at": "bff/console-bff/src/routers/tickets.router.ts:775",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select id, status from support.tickets where ticket_no = $1 and tenant"
     },
     {
       "at": "bff/platform-api/src/jobs/job-health-alert.job.ts:76",
@@ -1691,6 +2595,22 @@
       "head": "select t.tenant_no::text as tenant_no, coalesce(nullif(t.display_name,"
     },
     {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:203",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT prod.product_code, COALESCE(o.override_tier_code, pc.tier) AS t"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:242",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT DISTINCT ON (ts.id, prod.product_code) prod.product_code, ts.st"
+    },
+    {
       "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:289",
       "face": "customer",
       "pred": "none",
@@ -1707,12 +2627,44 @@
       "head": "SELECT metric_key FROM product.platform_metrics WHERE status = 'active"
     },
     {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:325",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT id FROM metering.subscriptions WHERE workspace_id = $1 AND stat"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:340",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT prod.product_code, qp.metric_key, qp.quota_limit, qp.quota_used"
+    },
+    {
       "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:392",
       "face": "customer",
       "pred": "none",
       "unresolved": 1,
       "origin": "n/a",
       "head": ""
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:438",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT ug.metric_key, SUM(ug.value)::text AS total FROM metering.usage"
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-entitlements.service.ts:456",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT rsp.metric_key, prod.product_code FROM metering.resource_sharin"
     },
     {
       "at": "bff/platform-api/src/platform/platform-provisioning.service.ts:33",
@@ -1731,12 +2683,28 @@
       "head": "SELECT id FROM product.products WHERE product_code = $1 AND deleted_at"
     },
     {
+      "at": "bff/platform-api/src/platform/platform-usage.service.ts:160",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "SELECT qp.id, qp.subscription_id, qp.metric_key, qp.quota_limit, qp.qu"
+    },
+    {
       "at": "bff/platform-api/src/platform/platform-usage.service.ts:220",
       "face": "customer",
       "pred": "none",
       "unresolved": 0,
       "origin": "n/a",
       "head": "SELECT 1 FROM product.platform_metrics WHERE metric_key = $1 AND kind "
+    },
+    {
+      "at": "bff/platform-api/src/platform/platform-usage.service.ts:265",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "caller-object",
+      "head": "SELECT value::text AS value, observed_at FROM metering.usage_gauges WH"
     },
     {
       "at": "bff/website-bff/src/aggregators/session.aggregator.ts:120",
@@ -1761,6 +2729,22 @@
       "unresolved": 0,
       "origin": "n/a",
       "head": "select product_code, product_name, product_nick, release_version, rele"
+    },
+    {
+      "at": "bff/website-bff/src/routers/product-subscriptions.router.ts:143",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "with ranked as ( select prod.id as product_id, prod.product_code, ts.s"
+    },
+    {
+      "at": "bff/website-bff/src/routers/product-subscriptions.router.ts:223",
+      "face": "customer",
+      "pred": "inline",
+      "unresolved": 0,
+      "origin": "needs-callgraph",
+      "head": "select prod.product_code, o.id as order_id, o.order_no, o.status, o.cy"
     }
   ]
 }

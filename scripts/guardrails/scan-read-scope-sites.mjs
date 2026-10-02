@@ -271,6 +271,28 @@ for (const file of files) {
   }
 }
 
+// ── 待判集合（**必须在自检之前算出来**，见下） ────────────────────────────────
+//
+// **2026-10-02 修**：第一版的过滤是 `pred === "none" || "conditional"`，把整个 `inline`
+// 档扔了 —— 而本文件头 :16-17 自己写着旧数法错在「把带 `owner_col = $n` 的整体排除，
+// 而 A2 要问的那句话对它们一字不改地成立：**那个 `$n` 是谁给的**」。
+// **数法改了、产物没改**：范围内 126 条 inline 一条都没进清单，其中 14 条扫描器自己标了
+// `origin === "caller-object"`（值取自 `params./body./input.`），例如
+// `pg-consume.repository.ts:141`（按自报 workspace 把配额池 for update 锁出来）。
+//
+// 更坏的是**自检当时还是绿的**：它断言样本④在内部 `sites` 数组里，而清单用的是这里过滤出来的
+// `todo` —— 门绿着、产物瞎着。所以三处一起改：① 判据改成下面这条；② 计算提到自检之前；
+// ③ 自检改成断言样本出现在 `todo` 里。
+//
+// 判据：范围内（客户面 / 服务层 / 包）且**不是「谓词在且值来自会话」**。
+// 也就是 `inline + session` 才出局；`inline + caller-object` 与 `inline + needs-callgraph`
+// 都要判 —— 后者正是「这个 `$n` 是谁给的」还没有答案的那一批。
+const IN_SCOPE = new Set(["customer", "service", "package"]);
+const todo = sites.filter(
+  (s) =>
+    IN_SCOPE.has(s.face) && !(s.pred === "inline" && s.origin === "session"),
+);
+
 // ── 自检 ───────────────────────────────────────────────────────────────────
 if (process.argv.includes("--self-test")) {
   const SAMPLES = [
@@ -298,7 +320,10 @@ if (process.argv.includes("--self-test")) {
   let bad = 0;
   console.log("══ 自检：先证这个数法看得见复核点名的那五条 ══\n");
   for (const smp of SAMPLES) {
-    const hit = sites.filter(
+    // **断言的是写出去的那份清单（todo），不是内部的 sites。**
+    // 第一版断言 sites，于是「样本④在 sites 里」为真、而紧接着写出的 todo.json 里没有它
+    // —— 自检绿着、产物瞎着。这一行就是那个教训。
+    const hit = todo.filter(
       (s) => s.at.startsWith(`${smp.file}:`) && smp.want(s),
     );
     const ok = hit.length > 0;
@@ -367,11 +392,8 @@ console.log(
 );
 console.log("     这正是 A2 要逐条判的那句话，文本启发式答不了它。）");
 
-console.log("\n── 要逐条判的集合（客户面 + 服务层，谓词 none 或 conditional）");
-const todo = sites.filter(
-  (s) =>
-    (s.face === "customer" || s.face === "service" || s.face === "package") &&
-    (s.pred === "none" || s.pred === "conditional"),
+console.log(
+  "\n── 要逐条判的集合（客户面 + 服务层；只排除「谓词在且值来自会话」那一档）",
 );
 console.log(`   ${todo.length} 条`);
 for (const [k, n] of by((s) => s.face).filter(([k]) =>
