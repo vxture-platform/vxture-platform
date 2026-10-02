@@ -8,7 +8,11 @@ export interface ConsumeInput {
   metricKey: string;
   /** requested amount (>0); bigint-valued */
   amount: number | string;
-  /** global-unique idempotency key (usage_idempotency PK) */
+  /**
+   * 幂等键。**只要求在 (workspace, product) 内唯一**，不要求全局唯一
+   * （owner 2026-10-02：主键改成三列）。此前是全局单列主键，而这个值由产品侧自选，
+   * 两家撞键时 replay 分支不扣减就回 ok —— 用量静默消失，还会回对方的池明细。
+   */
   idempotencyKey: string;
   requestId?: string;
   /**

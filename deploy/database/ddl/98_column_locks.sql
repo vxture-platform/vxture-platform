@@ -334,7 +334,7 @@ GRANT UPDATE (workspace_id, product_id, metric_key, total_amount, requested_amou
 REVOKE UPDATE ON metering.usage_event_pools FROM platform_svc;
 GRANT UPDATE (took) ON metering.usage_event_pools TO platform_svc;
 
--- metering.usage_idempotencies  [anchor: idempotency_key, created_at]
+-- metering.usage_idempotencies  [anchor: workspace_id, product_id, idempotency_key, created_at]
 REVOKE UPDATE ON metering.usage_idempotencies FROM platform_svc;
 GRANT UPDATE (event_id, event_created_at, consumed, per_pool) ON metering.usage_idempotencies TO platform_svc;
 

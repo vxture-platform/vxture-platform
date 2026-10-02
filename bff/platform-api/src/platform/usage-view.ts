@@ -233,7 +233,13 @@ const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const METRIC_KEY_RE = /^[a-z][a-z0-9_.\-]{0,63}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** metering.usage_idempotencies.idempotency_key is varchar(128). */
+/**
+ * metering.usage_idempotencies.idempotency_key is varchar(128)。
+ *
+ * 这里**刻意不收紧**成 UUID：键的唯一性由主键的 (workspace, product, key) 保证
+ * （owner 2026-10-02），产品侧用自己的业务键（`order-123`）是正当的。
+ * 收紧成 UUID 会把既有调用方全打掉，而它解决的问题已经在库那一侧解决了。
+ */
 const IDEMPOTENCY_KEY_RE = /^[\x21-\x7e]{1,128}$/;
 
 export interface ParsedConsumeBody {

@@ -242,14 +242,26 @@ metering.usage_event_pools (
 
 ## 8. `usage_idempotencies`（幂等权威，非分区）
 
-| 字段               | 类型         | 约束                   | 说明                     |
-| ------------------ | ------------ | ---------------------- | ------------------------ |
-| `idempotency_key`  | varchar(128) | PK                     | 全局唯一，非分区表才成立 |
-| `event_id`         | uuid         | NULL                   |                          |
-| `event_created_at` | timestamptz  | NULL                   |                          |
-| `consumed`         | bigint       | NULL                   |                          |
-| `per_pool`         | jsonb        | NULL                   | 重放直接返回             |
-| `created_at`       | timestamptz  | NOT NULL DEFAULT now() |                          |
+主键 = `(workspace_id, product_id, idempotency_key)`（owner 2026-10-02）。**key 由产品侧自选**，
+平台的校验只是「可打印 ASCII ≤128」（`"1"` 合法），所以键里必须带归属。原来是全局单列主键，
+两家撞同一个键时 replay 分支会**不扣减**就回 `ok` + `replayed`（用量静默消失），并把上一次的
+`consumed` 与 `per_pool`（池 id + 扣减量）回给复用者（跨租户读）。同一修正本仓已为 provisioning
+的幂等表记过一次（`data_commerce_220` §57「派生须含 workspace_id」），usage 这边补齐。
+
+对产品侧是**放宽**：不再需要全局唯一，用自己的业务键即可。唯一的行为变化是——若某产品此前
+跨多个工作空间复用同一串键，那些此前被静默去重的调用现在会各自真实扣减，**它的账会变高，
+而那是对的**。
+
+| 字段               | 类型         | 约束                   | 说明                                         |
+| ------------------ | ------------ | ---------------------- | -------------------------------------------- |
+| `workspace_id`     | uuid         | PK                     | 归属工作空间                                 |
+| `product_id`       | uuid         | PK                     | 上报方产品                                   |
+| `idempotency_key`  | varchar(128) | PK                     | 产品侧自选；只在 (workspace, product) 内唯一 |
+| `event_id`         | uuid         | NULL                   |                                              |
+| `event_created_at` | timestamptz  | NULL                   |                                              |
+| `consumed`         | bigint       | NULL                   |                                              |
+| `per_pool`         | jsonb        | NULL                   | 重放直接返回                                 |
+| `created_at`       | timestamptz  | NOT NULL DEFAULT now() |                                              |
 
 跨月重试不再双扣；重放/并发重复键经 `ON CONFLICT` 分支返回先前结果（非约束错）。
 
@@ -301,7 +313,9 @@ metering.usage_event_pools (
 产品端/Model Platform 只 `POST /usage/consume {workspace, product, metric, amount, idempotency_key, request_id, intent?}`，**不直写用量表**。单事务（READ COMMITTED + 行锁）：
 
 ```
-1. 幂等先占：INSERT usage_idempotencies(...) ON CONFLICT DO NOTHING RETURNING;
+1. 幂等先占：INSERT usage_idempotencies(workspace_id, product_id, idempotency_key, ...)
+   ON CONFLICT (workspace_id, product_id, idempotency_key) DO NOTHING RETURNING;
+   （键带归属，owner 2026-10-02；只按 key 占位会让两家撞键时互相顶掉——见 §8）
    无返回 → 键已占，读回已提交行，返回其 consumed + per_pool。
 2. 锁定候选池：SELECT ... FROM quota_pools WHERE (ws,product,metric) AND active
    FOR UPDATE ORDER BY priority, billing_kind(bundled 先), effective_at, id;

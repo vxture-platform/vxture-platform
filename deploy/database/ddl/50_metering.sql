@@ -310,15 +310,24 @@ CREATE TABLE metering.usage_event_pools (
 ) PARTITION BY RANGE (event_created_at);
 CREATE INDEX idx_usage_event_pools_quota_pool ON metering.usage_event_pools (quota_pool_id);
 
--- ── §8 幂等权威（非分区，全局唯一 key 才成立）。跨月重试不双扣；重放/并发重复键经 ON CONFLICT 返回先前结果。
+-- ── §8 幂等权威（非分区）。跨月重试不双扣；重放/并发重复键经 ON CONFLICT 返回先前结果。
+--   主键 = (workspace_id, product_id, idempotency_key)（owner 2026-10-02）。**key 由产品侧自选**
+--   （校验只是可打印 ASCII ≤128，`"1"` 合法），所以键里必须带归属：原来是全局单列主键，两家撞键时
+--   replay 分支会不扣减就回 ok+replayed（静默漏扣）并把上一次的 per_pool 回给复用者（跨租户读）。
+--   product_id 也进键：同一空间下两个产品用同一个业务键是正当的，它们是两件事、各自都该扣。
+--   同一修正仓里已为 provisioning 的幂等表记过一次（data_commerce_220 §57），usage 这边补齐。
 CREATE TABLE metering.usage_idempotencies (
-    idempotency_key  varchar(128)  PRIMARY KEY,                    -- 全局唯一
+    workspace_id     uuid          NOT NULL,                       -- 跨 schema→tenancy.workspaces（不建 FK：占位发生在校验之前）
+    product_id       uuid          NOT NULL,                       -- 跨 schema→product.products（同上）
+    idempotency_key  varchar(128)  NOT NULL,                       -- 产品侧自选；只在 (workspace, product) 内唯一
     event_id         uuid,
     event_created_at timestamptz,
     consumed         bigint,
     per_pool         jsonb,                                        -- 重放直接返回
-    created_at       timestamptz   NOT NULL DEFAULT now()
+    created_at       timestamptz   NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, product_id, idempotency_key)
 );
+CREATE INDEX idx_usage_idempotencies_key ON metering.usage_idempotencies (idempotency_key);  -- 对账时手上只有 key 的那条路
 
 -- ── §9 多维降采样汇总（纯统计/看板，永不作计费依据）。五档：时/天/周/月/年。
 --   workspace_id 跨 schema→tenancy.workspaces、product_id→product.products（均见 90）。

@@ -22,6 +22,8 @@ const RUN = process.env.SUBSCRIPTION_ITEST === "1";
 const USER = "00000000-0000-4000-8000-0000000b1004";
 const TENANT = "00000000-0000-4000-8000-0000000b1005";
 const WORKSPACE = "00000000-0000-4000-8000-0000000b1001";
+/** 第二个工作空间：幂等键的归属维度只有跨空间才验得出来（同一租户下即可）。 */
+const WORKSPACE_B = "00000000-0000-4000-8000-0000000b1006";
 const PROD_HARD = "00000000-0000-4000-8000-0000000b1002";
 const PROD_SOFT = "00000000-0000-4000-8000-0000000b1003";
 const METRIC_HARD = "b1test.hard";
@@ -37,10 +39,10 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
   let pool: Pool;
   let repo: PgConsumeRepository;
 
-  const eventCount = async (): Promise<number> => {
+  const eventCount = async (ws: string = WORKSPACE): Promise<number> => {
     const r = await pool.query<{ n: string }>(
       `select count(*)::text as n from metering.usage_events where workspace_id = $1`,
-      [WORKSPACE],
+      [ws],
     );
     return Number(r.rows[0]?.n ?? "0");
   };
@@ -50,6 +52,7 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
     metric: string,
     limit: number,
     used: number,
+    ws: string = WORKSPACE,
   ) => {
     await pool.query(
       `insert into metering.quota_pools
@@ -57,7 +60,7 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
           component_role, pool_source, reset_period, status, effective_at)
        values ($1, $2, $3, $4, $5, 100, 'primary', 'manual_override', 'none', 'active', now())
        on conflict do nothing`,
-      [WORKSPACE, productId, metric, String(limit), String(used)],
+      [ws, productId, metric, String(limit), String(used)],
     );
     // 重新激活并设额度：afterAll 把池**退役**（不能删，明细行引用着它），所以重跑时
     // 这里必须把 status 带回 active，否则 consume 找不到候选池——第一版漏了这一句，
@@ -66,7 +69,7 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
       `update metering.quota_pools
           set quota_limit = $4, quota_used = $5, status = 'active', retired_at = null
         where workspace_id = $1 and product_id = $2 and metric_key = $3`,
-      [WORKSPACE, productId, metric, String(limit), String(used)],
+      [ws, productId, metric, String(limit), String(used)],
     );
   };
 
@@ -91,6 +94,12 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
       `insert into tenancy.workspaces (id, tenant_id, name, is_default)
        values ($1, $2, 'B1 WS', true) on conflict (id) do nothing`,
       [WORKSPACE, TENANT],
+    );
+    /* 第二个空间：同一租户下即可，`is_default` 必须为 false（一租户一个默认空间）。 */
+    await pool.query(
+      `insert into tenancy.workspaces (id, tenant_id, name, is_default)
+       values ($1, $2, 'B1 WS B', false) on conflict (id) do nothing`,
+      [WORKSPACE_B, TENANT],
     );
 
     // 两个产品、两个 pool 型指标：一个声明有成本（硬限），一个声明零成本（软限）。
@@ -126,8 +135,8 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
     // fixture 全部 `on conflict do nothing` + 退役，所以重跑干净。
     await pool.query(
       `update metering.quota_pools set status = 'retired', retired_at = now()
-        where workspace_id = $1 and status = 'active'`,
-      [WORKSPACE],
+        where workspace_id = any($1::uuid[]) and status = 'active'`,
+      [[WORKSPACE, WORKSPACE_B]],
     );
     await pool.end();
   });
@@ -196,6 +205,75 @@ describe.skipIf(!RUN)("consume · intent=reserve（真库）", () => {
    *
    * 钉在真库测试里而不是静态守卫里：这条性质只有库自己答得出，正则看不出三值逻辑。
    */
+  /*
+   * 幂等键的归属维度（owner 2026-10-02）。
+   *
+   * 改之前：`usage_idempotencies` 的主键只有 `idempotency_key`，而这个值**由产品侧自选**
+   * （校验只是可打印 ASCII ≤128，`"1"` 合法）。两家撞同一个键时 replay 分支会
+   * **不扣减**就回 `ok` + `replayed: true`，并把上一次的 `consumed` 与 `per_pool`
+   * （池 id + 扣减量）回给复用者。前者是用量静默消失，后者是跨租户读。
+   *
+   * 这条性质**只有真库验得出**：桩里没有主键。判据照完备性审查给的措辞逐字落。
+   */
+  it("同一个键在两个工作空间：两次都真扣，第二次不是重放", async () => {
+    await setPool(PROD_HARD, METRIC_HARD, 100, 0, WORKSPACE);
+    await setPool(PROD_HARD, METRIC_HARD, 100, 0, WORKSPACE_B);
+    const beforeA = await eventCount(WORKSPACE);
+    const beforeB = await eventCount(WORKSPACE_B);
+    /* 刻意用一个最朴素的键——它正是产品侧会写出来的那种。 */
+    const SHARED_KEY = `1-${RUN_ID}`;
+
+    const a = await repo.consume({
+      workspaceId: WORKSPACE,
+      productId: PROD_HARD,
+      metricKey: METRIC_HARD,
+      amount: 5,
+      idempotencyKey: SHARED_KEY,
+    });
+    const b = await repo.consume({
+      workspaceId: WORKSPACE_B,
+      productId: PROD_HARD,
+      metricKey: METRIC_HARD,
+      amount: 7,
+      idempotencyKey: SHARED_KEY,
+    });
+
+    expect(a.status).toBe("ok");
+    expect(a.consumed).toBe("5");
+    expect(b.status).toBe("ok");
+    /* 改之前这里会是 "5"（第一次的量）且 replayed=true，而 B 一分没扣。 */
+    expect(b.consumed).toBe("7");
+    expect(b.replayed).toBe(false);
+    /* 也不许把 A 的池明细回给 B。 */
+    expect(b.perPool.map((p) => p.poolId)).not.toEqual(
+      a.perPool.map((p) => p.poolId),
+    );
+    /* 两边各自落自己的事件。 */
+    expect(await eventCount(WORKSPACE)).toBe(beforeA + 1);
+    expect(await eventCount(WORKSPACE_B)).toBe(beforeB + 1);
+  });
+
+  it("同一工作空间内重放仍然幂等（收紧不许把这一半弄坏）", async () => {
+    await setPool(PROD_HARD, METRIC_HARD, 100, 0, WORKSPACE);
+    const before = await eventCount(WORKSPACE);
+    const input = {
+      workspaceId: WORKSPACE,
+      productId: PROD_HARD,
+      metricKey: METRIC_HARD,
+      amount: 5,
+      idempotencyKey: `replay-${RUN_ID}`,
+    } as const;
+
+    const first = await repo.consume({ ...input });
+    const again = await repo.consume({ ...input });
+
+    expect(first.replayed).toBe(false);
+    expect(again.replayed).toBe(true);
+    expect(again.consumed).toBe(first.consumed);
+    /* 第二次一行都不许多。 */
+    expect(await eventCount(WORKSPACE)).toBe(before + 1);
+  });
+
   it("库级反例：pool 型不带成本档必须插不进去", async () => {
     await expect(
       pool.query(
