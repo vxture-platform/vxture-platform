@@ -338,6 +338,11 @@ GRANT UPDATE (took) ON metering.usage_event_pools TO platform_svc;
 REVOKE UPDATE ON metering.usage_idempotencies FROM platform_svc;
 GRANT UPDATE (event_id, event_created_at, consumed, per_pool) ON metering.usage_idempotencies TO platform_svc;
 
+-- metering.usage_idempotencies_orphaned  [anchor: 全列（七列在 column-locks.shared.mjs 的 EXTRA_ANCHOR，created_at 由规则②自动算）]
+-- 归档位：写一次（2026-11-30 换主键时移进来）之后**不该有任何更新**，所以 REVOKE 之后
+-- 一列都不 GRANT（同 account.user_product_favorites / product.product_surfaces 的做法）。
+REVOKE UPDATE ON metering.usage_idempotencies_orphaned FROM platform_svc;
+
 -- metering.usage_summary_hours  [anchor: id, created_at]
 REVOKE UPDATE ON metering.usage_summary_hours FROM platform_svc;
 GRANT UPDATE (workspace_id, product_id, metric_key, period_hour, total_amount, updated_at) ON metering.usage_summary_hours TO platform_svc;
