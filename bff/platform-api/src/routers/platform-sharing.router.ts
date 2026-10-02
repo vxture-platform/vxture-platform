@@ -49,10 +49,20 @@ export class PlatformSharingRouter {
     }
     // TD-035: an S2S caller can only ask about its own product, and its own
     // workspace_id (the token's, not the caller-declared one) is used.
-    const { workspaceId } = scopeToS2sCaller(s2sCaller, {
-      workspaceId: parsed.workspaceId,
-      productCodes: [parsed.productCode],
-    });
+    //
+    // 旧凭据：`trust-declared`，但**这一格是五处里后果最重的一处**——
+    // `resolveVisibleSet` 下游的 `materialize` 会**往那个自报的工作空间写**物化行
+    // （`sharing.service.ts`），不只是读。收紧它同样要先换凭据，所以今天只能登记。
+    // 下一轮的判据（完备性复核给的）：拿别的工作空间 uuid 走旧凭据打这里要求 4xx，
+    // 且 `sharing.visible_set_current` 上不许新增该工作空间的物化行。
+    const { workspaceId } = scopeToS2sCaller(
+      s2sCaller,
+      {
+        workspaceId: parsed.workspaceId,
+        productCodes: [parsed.productCode],
+      },
+      "trust-declared",
+    );
     return this.sharing.resolveVisibleSet(workspaceId, parsed.productCode);
   }
 }

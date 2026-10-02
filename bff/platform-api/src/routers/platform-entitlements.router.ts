@@ -70,7 +70,13 @@ export class PlatformEntitlementsRouter {
     }
     // TD-035: an S2S caller can only ask about its own product(s), and its
     // own workspace_id (the token's, not the caller-declared one) is used.
-    const { workspaceId } = scopeToS2sCaller(s2sCaller, parsed);
+    // 旧凭据：`trust-declared`。C2 是六个产品里五个仍走共享口令的那条路
+    // （生产 Redis 的 `vx:integration:c2:<code>` 可查），收紧前必须先换凭据。
+    const { workspaceId } = scopeToS2sCaller(
+      s2sCaller,
+      parsed,
+      "trust-declared",
+    );
 
     const views = await this.entitlements.resolve(
       workspaceId,

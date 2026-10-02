@@ -84,10 +84,23 @@ export class PlatformUsageRouter {
     }
     // TD-035: an S2S caller can only consume against its own product, and
     // its own workspace_id (the token's, not the caller-declared one) is used.
-    const { workspaceId } = scopeToS2sCaller(s2sCaller, {
-      workspaceId: parsed.workspaceId,
-      productCodes: [parsed.productCode],
-    });
+    //
+    // 旧凭据那条路分两档（2026-10-02）：
+    //   · `intent="reserve"` → **deny**。它是会**拒绝客户操作**的新机关，不该由一个
+    //     身份不可证的调用方驱动（共享口令每个产品同一个值，请求体里的 `product` 是自报的）。
+    //     它 2026-10-01 才上、没有任何产品在用，所以收紧**零破坏**。
+    //   · 缺省的 `report` → 仍 `trust-declared`。它承载在产的用量上报流量，收紧之前必须
+    //     先与五个对接方换凭据（E2/E3，owner 的取舍 + 对外协调）。
+    //     **这一格是已登记的缺口，不是被忽略的缺口**：见
+    //     `scripts/guardrails/s2s-legacy-scope.snapshot.json`。
+    const { workspaceId } = scopeToS2sCaller(
+      s2sCaller,
+      {
+        workspaceId: parsed.workspaceId,
+        productCodes: [parsed.productCode],
+      },
+      parsed.intent === "reserve" ? "deny" : "trust-declared",
+    );
 
     const productId = await this.usage.resolveProductId(parsed.productCode);
     if (!productId) throw new BadRequestException("unknown_product");
@@ -174,10 +187,15 @@ export class PlatformUsageRouter {
       throw new BadRequestException((e as Error).message);
     }
     // TD-035: same S2S scope binding as consume().
-    const { workspaceId } = scopeToS2sCaller(s2sCaller, {
-      workspaceId: parsed.workspaceId,
-      productCodes: [parsed.productCode],
-    });
+    // 旧凭据：`trust-declared`（在产的存量观测上报走这条，收紧要先换凭据）。
+    const { workspaceId } = scopeToS2sCaller(
+      s2sCaller,
+      {
+        workspaceId: parsed.workspaceId,
+        productCodes: [parsed.productCode],
+      },
+      "trust-declared",
+    );
 
     const productId = await this.usage.resolveProductId(parsed.productCode);
     if (!productId) throw new BadRequestException("unknown_product");
