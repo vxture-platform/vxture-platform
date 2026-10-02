@@ -14,6 +14,10 @@ name: db-init
 #                               -> 30-verify (live baseline audit)
 #   action=migrate           -> 28d replay migrations/*.sql (idempotent, POPULATED db)
 #                               -> 28c restamp ddl baseline -> 30-verify (product_330)
+#                               migrate_until=<文件名/前缀>（可选）：**跑到这一份为止**。
+#                               给 expand/contract 用——「一份加列、一份换主键，中间夹一次
+#                               部署」时新旧代码必须共存一段，全量重放会把那段压成零。
+#                               匹配不到就报错退出，不静默跑全量。
 #   action=migrate-seed      -> 28-apply (clean-baseline DDL, no reset) then 29-seed -> 30-verify
 #   action=reset             -> 28b capture appoidc -> 28-apply --reset (DROP+rebuild 19 schemas)
 #                               -> 29-seed -> 28b restore appoidc (coordinated cutover, §6)
@@ -64,6 +68,10 @@ on:
           - verify
           - test-delivery
           - restamp-ddl-baseline
+      migrate_until:
+        description: "migrate only: 跑到这一份迁移为止（文件名或前缀；expand/contract 中间要夹部署时用）"
+        required: false
+        default: ""
       confirm:
         description: "Type yes to confirm"
         required: true
@@ -139,6 +147,29 @@ jobs:
             echo "pinned: HEAD == expected_sha == $HEAD_SHA"
           fi
 
+      # migrate_until 会变成远端的一个环境变量并参与 shell 展开，所以先把形状卡死：
+      # 只许文件名里会出现的那些字符。顺带抓拼写错——打错一个字就跑成全量是这里最坏的结果。
+      - name: Validate migrate_until
+        if: ${{ inputs.migrate_until != '' }}
+        env:
+          MIGRATE_UNTIL: ${{ inputs.migrate_until }}
+        run: |
+          if [ "${{ inputs.action }}" != "migrate" ]; then
+            echo "::error::migrate_until 只对 action=migrate 有意义（当前 ${{ inputs.action }}）" >&2
+            exit 1
+          fi
+          case "$MIGRATE_UNTIL" in
+            *[!A-Za-z0-9._-]*)
+              echo "::error::migrate_until 只许 [A-Za-z0-9._-]，收到：$MIGRATE_UNTIL" >&2
+              exit 1
+              ;;
+          esac
+          if ! ls -1 deploy/database/migrations/*.sql | xargs -n1 basename | grep -q -- "$MIGRATE_UNTIL"; then
+            echo "::error::migrate_until=$MIGRATE_UNTIL 在本 ref 的 migrations/ 里匹配不到任何文件" >&2
+            exit 1
+          fi
+          echo "migrate_until=$MIGRATE_UNTIL —— 将跑到这一份为止"
+
       - name: Join tailnet
         uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
@@ -173,6 +204,7 @@ jobs:
           # 主机布局来自环境级 vars（治理标准 §6），未设回落已验证默认。
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
           DEPLOY_RUNTIME_DIR: ${{ vars.DEPLOY_RUNTIME_DIR }}
+          MIGRATE_UNTIL: ${{ inputs.migrate_until }}
           TEST_DELIVERY_PRODUCT: ${{ inputs.test_delivery_product }}
           TEST_DELIVERY_ACCOUNT: ${{ inputs.test_delivery_account }}
           TEST_DELIVERY_EVENT: ${{ inputs.test_delivery_event }}
@@ -193,7 +225,7 @@ jobs:
           #   ssh-keyscan -t ed25519 <host> | ssh-keygen -lf - | awk '{print $2}'
           fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           command_timeout: 30m
-          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
+          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,MIGRATE_UNTIL,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
           script: |
             set -e
             SRC="${STAGE_DIR:?}/deploy"
@@ -283,6 +315,8 @@ jobs:
                 # restamp the DDL baseline to the repo authority and verify.
                 # This is the runway 28's create-once baseline apply can't be:
                 # small-step DDL evolution without reset (product_330).
+                # MIGRATE_UNTIL 非空时只跑到那一份为止（expand/contract 中间夹部署）。
+                # 它经 envs: 过来，不插值进脚本体（照同文件 TEST_DELIVERY_* 的做法）。
                 CONFIRM_MIGRATE=yes bash scripts/28d-apply-migrations.sh
                 CONFIRM_RESTAMP=yes bash scripts/28c-restamp-ddl-baseline.sh
                 bash scripts/30-verify-platform-baseline.sh
