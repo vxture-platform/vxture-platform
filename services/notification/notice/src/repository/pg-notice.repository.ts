@@ -215,13 +215,23 @@ function mapCounts(row: NoticeSummaryRow | undefined): NoticeSeverityCounts {
  * `on conflict do update` 而不是 `do nothing`：`do nothing` 时 returning 不回行，
  * 调用方拿不到 read_at，只能自己编一个时间——那就与库里的值分了岔。
  *
- * `where exists` 挡住已撤回与不存在的通告：软删过的通告不该还能被标记已读。
+ * `where exists` 里嵌的是**同一段** `VISIBLE_WHERE`，不是另写一句「看起来一样」的
+ * —— 这正是上面那段注释要求的「动作作用域字面等于视图作用域」。
+ *
+ * **2026-10-02 修**：此前这里只校验 `deleted_at is null`，**少了平面谓词**。于是
+ * admin 平面的运营者拿一个只投给 opera/arche 的通告 uuid 调这条，会落一行 read 并回
+ * 200 + read_at 而不是 404。不泄露内容（只回时间戳）、也到不了客户面，但它是个弱探针：
+ * 200 vs 404 能区分「这个 uuid 是不是一条本平面看不见的通告」。
+ * 更要紧的是纪律：「全部标记已读」拄着 VISIBLE_WHERE，单条却没有 —— **同一个判据长在
+ * 一条分支上，另一条就是门没关**。A2 的两轮审查各自独立撞到过这一处。
+ *
+ * 参数位因此改成 `$1`=平面、`$2`=运营者、`$3`=通告 id（与 VISIBLE_WHERE 对齐）。
  */
 const MARK_READ_SQL = `
   insert into admin.operator_notice_reads (notice_id, operator_id)
-  select $1::uuid, $2::uuid
-   where exists (select 1 from admin.operator_notices
-                  where id = $1::uuid and deleted_at is null)
+  select $3::uuid, $2::uuid
+   where exists (select 1 from admin.operator_notices n
+                  where n.id = $3::uuid and ${VISIBLE_WHERE})
      on conflict (notice_id, operator_id) do update set read_at = now()
   returning read_at
 `;
@@ -324,10 +334,13 @@ export class PgNoticeRepository {
   async markRead(
     noticeId: string,
     operatorId: string,
+    plane: NoticePlane,
   ): Promise<MarkNoticeReadResult | null> {
+    /* 参数顺序跟着 VISIBLE_WHERE：$1 平面、$2 运营者、$3 通告。 */
     const result = await this.pool.query<{ read_at: Date }>(MARK_READ_SQL, [
-      noticeId,
+      plane,
       operatorId,
+      noticeId,
     ]);
     const row = result.rows[0];
     return row ? { id: noticeId, readAt: row.read_at.toISOString() } : null;

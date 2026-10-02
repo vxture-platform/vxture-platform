@@ -213,7 +213,7 @@ export class DashboardRouter {
     if (!operatorId) throw new UnauthorizedException("No active session");
     if (!isNoticeId(id)) throw new BadRequestException("Invalid notice id");
 
-    const marked = await this.notices.markRead(id, operatorId);
+    const marked = await this.notices.markRead(id, operatorId, PLANE_NAME);
     // 通告不存在或已撤回时服务层回 null——那是调用方要据以说话的结果，
     // 不是服务的故障，所以 404 在这里翻，不在包里抛。
     if (!marked) throw new NotFoundException("Notice not found");

@@ -90,7 +90,21 @@ if (!redis.isConnected()) {
 
 ## 3. 内部服务鉴权
 
-BFF 之间或 BFF → agent-server 的内部调用，使用 Header 鉴权：
+> **2026-10-02：本节描述的共享口令是退役路径，新代码不许用它。**
+> 下面保留它是因为还有在产调用方走这条路，按旧文做过事的人需要知道自己当时拄的是什么。
+> 新的内部/产品间调用一律走**换票**（`POST /oidc/token`，token-exchange）——
+> 令牌带 `workspace_id` 并在铸币时校验，见《产品接入通则》「C1 出站 · S2S 换票」。
+
+### 3.1 换票（新代码用这个）
+
+调用方用自己的 `client_id` / `client_secret` 换一张面向被调方的短时票。两种模式按
+**有没有用户在场**选：OBO（上下文从用户票解出，调用方无从伪造）/ service（显式声明
+`requested_context`，**平台铸币时校验覆盖**，不覆盖即 `invalid_target`）。
+
+它比共享口令多给三件：**能分出是谁在调**（审计里 `act.sub` 就是调用方产品码）、
+**能单独吊销一个调用方**、以及**请求体里自报的归属值会被令牌里的覆盖**。
+
+### 3.2 共享口令（退役中，仅存量）
 
 ```
 Header：x-vxture-internal-auth: {AUTH_INTERNAL_TOKEN}
@@ -99,13 +113,37 @@ Header：x-vxture-internal-auth: {AUTH_INTERNAL_TOKEN}
 接收方必须在入口中间件校验此 Header，拒绝不合法请求。
 
 ```typescript
-// ✅ 正确
-if (req.headers["x-vxture-internal-auth"] !== process.env.AUTH_INTERNAL_TOKEN) {
+// ✅ 正确：常量时间比较
+import { timingSafeEqual } from "node:crypto";
+
+const presented = Buffer.from(req.headers["x-vxture-internal-auth"] ?? "");
+const expected = Buffer.from(process.env.AUTH_INTERNAL_TOKEN ?? "");
+if (
+  !process.env.AUTH_INTERNAL_TOKEN ||
+  presented.length !== expected.length ||
+  !timingSafeEqual(presented, expected)
+) {
   throw new UnauthorizedException();
 }
 
+// ❌ 错误：`!==` 直接比字符串 —— 非常量时间，逐字节早退会漏出长度与前缀信息。
+//    本节此前的示例就是这一行，而 auth-bff 自己那份早就是 timingSafeEqual。
+// ❌ 错误：未配 AUTH_INTERNAL_TOKEN 时放行 —— 必须 fail-closed。
 // ❌ 错误：相信调用方来自内网就不校验
 ```
+
+**这条路的真实半径，写清楚免得下一个人低估它**：那个值**每个调用方同一个**，所以
+
+- 审计日志里分不出是谁；吊销只能全体换；默认永不过期；
+- **走这条路进来时，请求体里自报的归属值平台没有东西可以校验**。
+  `bff/platform-api/src/authn/s2s-scope.ts` 的 `legacy === "trust-declared"` 那一支就是
+  原样采用自报的 `workspace_id`，而那个值下一跳就进 SQL 的归属谓词。
+  五个调用点的档位登记在 `scripts/guardrails/s2s-legacy-scope.snapshot.json`，
+  `trustDeclared` 这个数只该减少。
+
+**而这件事与本文下一节自相矛盾**：§4 的 BFF 层写着「❌ 禁止从 request body / query 读取
+tenantId 覆盖 JWT 中的值」—— 共享口令那条路做的正是这件事。两句话不能同时成立，
+以 §4 那句为准；§3.2 是待迁走的存量，不是可以照抄的做法。
 
 ---
 
@@ -133,7 +171,7 @@ if (req.headers["x-vxture-internal-auth"] !== process.env.AUTH_INTERNAL_TOKEN) {
 ### agent-server 层
 
 ```
-✅ 入口必须校验 x-vxture-internal-auth（拒绝外部直连）
+✅ 入口必须有服务间鉴权（新代码走换票，见 §3.1；存量走 x-vxture-internal-auth，见 §3.2）
 ✅ CallerContext 必须二次校验 surface × userType 合法性
 ✅ console surface 工具必须以 ctx.tenantId 过滤数据
 ❌ 禁止接受前端传入的 allowedTools 覆盖白名单
@@ -209,5 +247,6 @@ const REDACTED_KEYS = [
 □ 新增的 BFF endpoint 都经过了 AuthGuard
 □ 新增的 service 方法没有拼接 SQL 字符串
 □ 新增的日志没有打印敏感字段
-□ 新增的内部接口有 x-vxture-internal-auth 校验
+□ 新增的内部接口走换票（§3.1），**不是**加一个 x-vxture-internal-auth 校验
+□ 该接口的归属值来自令牌或会话，不是请求体自报（§4 那条禁令；共享口令那条路违反它）
 ```

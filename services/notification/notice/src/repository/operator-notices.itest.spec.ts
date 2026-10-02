@@ -167,22 +167,47 @@ describe.skipIf(!RUN)("admin.operator_notices 可见性谓词（真库）", () =
 
   it("markRead 幂等，且对已撤回的通告回 null", async () => {
     const id = await insert({ planes: [], title: "标记" });
-    const first = await repo.markRead(id, operatorId);
+    const first = await repo.markRead(id, operatorId, "admin");
     expect(first?.id).toBe(id);
     // 重复标记不报错，只把时间刷新——「我又看了一次」不是错误。
-    const second = await repo.markRead(id, operatorId);
+    const second = await repo.markRead(id, operatorId, "admin");
     expect(second).not.toBeNull();
 
     const gone = await insert({ planes: [], title: "撤回过", deleted: true });
-    expect(await repo.markRead(gone, operatorId)).toBeNull();
+    expect(await repo.markRead(gone, operatorId, "admin")).toBeNull();
+  });
+
+  /*
+   * **动作作用域必须字面等于视图作用域**（见仓储里 VISIBLE_WHERE 那段注释）。
+   *
+   * 2026-10-02 之前 MARK_READ_SQL 只校验 `deleted_at is null`，**少了平面谓词**：
+   * admin 平面拿一个只投给 opera/arche 的通告 uuid 调它，会落一行 read 并回 200 + read_at。
+   * 不泄露内容，但 200 vs 404 是个弱探针，更要紧的是「全部标记已读」拄着 VISIBLE_WHERE、
+   * 单条却没有 —— 同一个判据长在一条分支上，另一条就是门没关。
+   *
+   * 这一条只有真库验得出：平面谓词在 SQL 里，桩没有它。
+   */
+  it("本平面看不见的通告：标记已读回 null，不是 200", async () => {
+    const otherPlane = await insert({ planes: ["opera"], title: "只投 opera" });
+    expect(await repo.markRead(otherPlane, operatorId, "admin")).toBeNull();
+    /* 而本来该看得见的那一条照常能标 —— 不然这道门就成了墙。 */
+    const mine = await insert({ planes: ["admin"], title: "投 admin" });
+    expect((await repo.markRead(mine, operatorId, "admin"))?.id).toBe(mine);
+    /* 过期的同样回 null（VISIBLE_WHERE 的另一半，一并钉住）。 */
+    const expired = await insert({
+      planes: [],
+      title: "过期了",
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    expect(await repo.markRead(expired, operatorId, "admin")).toBeNull();
   });
 
   it("摘要档留下当天已读，隔天的掉出去", async () => {
     const today = await insert({ planes: [], title: "今天读的" });
-    await repo.markRead(today, operatorId);
+    await repo.markRead(today, operatorId, "admin");
 
     const older = await insert({ planes: [], title: "昨天读的" });
-    await repo.markRead(older, operatorId);
+    await repo.markRead(older, operatorId, "admin");
     await pool.query(
       `update admin.operator_notice_reads
           set read_at = now() - interval '2 days'
@@ -287,7 +312,7 @@ describe.skipIf(!RUN)("admin.operator_notices 可见性谓词（真库）", () =
 
   it("unreadOnly 收掉摘要档留下的「当天已读」，且 counts 跟着动", async () => {
     const read = await insert({ planes: [], title: "今天读过" });
-    await repo.markRead(read, operatorId);
+    await repo.markRead(read, operatorId, "admin");
     await insert({ planes: [], title: "没读过" });
 
     // 摘要档本来要留着当天已读那条（免得点完「知道了」它当场消失）。
