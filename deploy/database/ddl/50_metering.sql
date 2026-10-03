@@ -9,6 +9,7 @@
 -- 表序 = 域内依赖序：subscriptions → subscription_histories / subscription_renewals /
 --   subscription_entitlement_overrides → quota_pools → quota_pool_resets →
 --   usage_events → usage_event_pools → usage_idempotencies →
+--   token_usage_events / token_credit_rates / token_credit_carry / token_usage_idempotencies（§6b–§8b，#547）→
 --   usage_summary_hours/days/weeks/months/years → entitlement_caches。
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -345,6 +346,117 @@ CREATE TABLE metering.usage_idempotencies_orphaned (
     archived_at      timestamptz  NOT NULL DEFAULT now(),
     archived_reason  text         NOT NULL
 );
+
+-- ── §6b 原始 token 用量（append-only，月分区）—— vxture-platform#547 / atlas ADR-010 ──
+--   Atlas 替各产品上报的推理用量，**按调用方产品归属**（product_id = S2S 令牌里的 act.sub，
+--   不是 atlas —— L1 不在产品目录里，owner 2026-09-30）。一行 = 一次上游尝试的原始事实：
+--   四维 token 互不重叠（input / output / 写缓存 / 读缓存），外加 rerank 候选数、parse 页数。
+--   **原始事实与额度扣减分两层**：本表只记事实；换算成 ai.credit 后经 §11 的 consume 引擎
+--   扣池、写 usage_events（单一计量入口不破）。换算规则（§6c）随时会改，原始事实都在，可重算。
+--   occurred_at = 调用发生时刻（Atlas 的 started_at），不是上报时刻 —— 补报历史靠它。
+--   分区键仍是 created_at（上报时刻）：补报的行落在上报那个月的分区里，按 occurred_at 查有索引。
+--   跨 schema：workspace_id→tenancy.workspaces、product_id→product.products（均见 90）。
+--   幂等权威在 §8b（分区表不能对不含分区键的列建 UNIQUE）。
+CREATE TABLE metering.token_usage_events (
+    id                 uuid          NOT NULL DEFAULT gen_random_uuid(),
+    workspace_id       uuid          NOT NULL,                     -- 跨 schema→tenancy.workspaces（90）
+    product_id         uuid          NOT NULL,                     -- 调用方产品；跨 schema→product.products（90）
+    request_id         varchar(128)  NOT NULL,                     -- Atlas 一次逻辑请求一个；与 reqlog.request_records.request_id 同值
+    attempt_index      smallint      NOT NULL DEFAULT 0,           -- 故障转移里第几次尝试；同一 request_id 的多行靠它区分
+    outcome            varchar(16)   NOT NULL DEFAULT 'served',    -- served=客户拿到了结果 / failed=尝试失败（上游收了钱、客户没拿到）
+    occurred_at        timestamptz   NOT NULL,                     -- 调用发生时刻，不是上报时刻
+    model_code         varchar(128),
+    provider_code      varchar(64),
+    input_tokens       bigint        NOT NULL DEFAULT 0,           -- 未命中缓存的 input（四维互不重叠，相加即总量）
+    output_tokens      bigint        NOT NULL DEFAULT 0,
+    cache_write_tokens bigint        NOT NULL DEFAULT 0,
+    cache_read_tokens  bigint        NOT NULL DEFAULT 0,
+    reasoning_tokens   bigint,                                     -- output 的子集，只列不加；NULL=上游没拆分
+    rerank_candidates  int,                                        -- rerank 按候选数计，不按 token
+    parse_pages        int,                                        -- parse 按页数计
+    credits_micro      bigint,                                     -- 换算结果，微 credit（1 credit = 1,000,000）；NULL=没换算
+    credit_skip_reason varchar(24),                                -- 没换算的原因：pre_cutover / failed_attempt / no_rate；NULL 且 credits_micro 非空=已入扣减
+    rate_id            uuid,                                       -- 用的哪条费率（§6c，域内引用不建 FK：费率行不删只关窗）
+    created_at         timestamptz   NOT NULL DEFAULT now(),
+    PRIMARY KEY (id, created_at),                                  -- 分区键必须进 PK
+    CONSTRAINT chk_token_usage_events_outcome CHECK (outcome IN ('served','failed')),
+    CONSTRAINT chk_token_usage_events_skip CHECK (credit_skip_reason IS NULL OR credit_skip_reason IN ('pre_cutover','failed_attempt','no_rate')),
+    CONSTRAINT chk_token_usage_events_tokens CHECK (input_tokens >= 0 AND output_tokens >= 0 AND cache_write_tokens >= 0 AND cache_read_tokens >= 0),
+    -- 二选一不能都有：换算了就没有跳过原因，跳过了就没有换算结果
+    CONSTRAINT chk_token_usage_events_credit_xor CHECK ((credits_micro IS NULL) <> (credit_skip_reason IS NULL))
+) PARTITION BY RANGE (created_at);
+CREATE INDEX idx_token_usage_events_route    ON metering.token_usage_events (workspace_id, product_id, occurred_at);
+CREATE INDEX idx_token_usage_events_request  ON metering.token_usage_events (request_id);
+CREATE INDEX idx_token_usage_events_occurred ON metering.token_usage_events (occurred_at);
+
+-- ── §6c token→credit 费率（运营可改的数据，不是代码）────────────────────────────
+--   「token 换算成 credit 的规则由运营随时调整，Atlas 不做换算」（owner 2026-09-30）。
+--   一行 = 一段生效窗口内、某供应商/某模型（NULL=任意）的四维单价，单位：每 1K token 多少微 credit；
+--   rerank 按候选、parse 按页另给单价。选行：模型精确 > 供应商 > 默认，按 occurred_at 落在窗口内。
+--   **费率行不可改**（单价列是锚点，见 column-locks.shared EXTRA_ANCHOR）：改价 = 关掉旧行的窗口
+--   （effective_to）+ 插一行新的。已换算的事件记着 rate_id，事后能复算。
+--   种子只有一行默认档：2K tokens = 1 credit（product_220 §4.2「换算基线 1 credit ≈ 2K tokens」），
+--   四维同价 —— 缓存读写要不要折价是商业判断，不在种子里替 owner 定。
+CREATE TABLE metering.token_credit_rates (
+    id                         uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_code              varchar(64),                        -- NULL=任意供应商
+    model_code                 varchar(128),                       -- NULL=任意模型
+    input_micro_per_1k         bigint        NOT NULL,
+    output_micro_per_1k        bigint        NOT NULL,
+    cache_write_micro_per_1k   bigint        NOT NULL,
+    cache_read_micro_per_1k    bigint        NOT NULL,
+    rerank_micro_per_candidate bigint        NOT NULL DEFAULT 0,
+    parse_micro_per_page       bigint        NOT NULL DEFAULT 0,
+    effective_from             timestamptz   NOT NULL DEFAULT now(),
+    effective_to               timestamptz,                        -- NULL=仍在生效
+    note                       varchar(256),
+    created_by                 uuid,                               -- 裸 UUID→admin.operator_accounts（边界#2）
+    created_at                 timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT chk_token_credit_rates_window CHECK (effective_to IS NULL OR effective_to > effective_from),
+    CONSTRAINT chk_token_credit_rates_nonneg CHECK (input_micro_per_1k >= 0 AND output_micro_per_1k >= 0 AND cache_write_micro_per_1k >= 0 AND cache_read_micro_per_1k >= 0 AND rerank_micro_per_candidate >= 0 AND parse_micro_per_page >= 0)
+);
+-- 同一（供应商, 模型, 起点）只能有一行：seed 的 on conflict 靠它（NULL 用 '' 折叠，否则 NULL≠NULL 永不冲突）
+CREATE UNIQUE INDEX uidx_token_credit_rates_scope_from ON metering.token_credit_rates ((coalesce(provider_code, '')), (coalesce(model_code, '')), effective_from);
+CREATE INDEX idx_token_credit_rates_lookup ON metering.token_credit_rates (provider_code, model_code, effective_from);
+
+-- ── §6d 小数 credit 的结转（owner 2026-10-03「按工作区累计小数」）────────────────
+--   池里的 ai.credit 是整数，而 2K tokens = 1 credit 意味着一次 500-token 调用是 0.25 credit。
+--   每个（工作空间 × 调用方产品）留一个微 credit 余额：本次换算结果加上余额，整数部分走 consume
+--   扣池，小数部分留下。键带 product_id 而不只 workspace_id：usage_events 永远记录「花钱方」
+--   （product_220 §4.2），A 产品攒的小数不该在 B 产品那一次被扣成整数。
+--   carry_micro 恒在 [0, 1e6)：由应用在同一事务里 FOR UPDATE 推进，CHECK 兜住算错的方向。
+CREATE TABLE metering.token_credit_carry (
+    workspace_id uuid          NOT NULL,                           -- 跨 schema→tenancy.workspaces（90）
+    product_id   uuid          NOT NULL,                           -- 跨 schema→product.products（90）
+    carry_micro  bigint        NOT NULL DEFAULT 0,
+    updated_at   timestamptz   NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, product_id),
+    CONSTRAINT chk_token_credit_carry_range CHECK (carry_micro >= 0 AND carry_micro < 1000000)
+);
+
+-- ── §8b 原始 token 用量的幂等权威（非分区）────────────────────────────────────
+--   键 = (workspace, 调用方产品, request_id, attempt_index)。与 §8 同一个理由：键由 Atlas 自选
+--   （request_id），归属必须进键。重放回先前结果（token_event_id / credits / usage_event_id）。
+--   usage_event_id 记在这里而不记在 §6b 的行上：§6b 是 append-only，而扣减是 §6b 落库**之后**
+--   另一个事务做的（consume 引擎自开连接），回填只能落在可更新的这张表。
+--   whole_due = 这次该扣的整数 credit；usage_event_id 仍为 NULL 而 whole_due > 0 = 扣减那一步
+--   没做成（引擎不可达等），下一次同键重放会再试一次 —— 自愈，不必人工 replay。
+CREATE TABLE metering.token_usage_idempotencies (
+    workspace_id           uuid          NOT NULL,
+    product_id             uuid          NOT NULL,
+    request_id             varchar(128)  NOT NULL,
+    attempt_index          smallint      NOT NULL DEFAULT 0,
+    token_event_id         uuid,
+    token_event_created_at timestamptz,
+    credits_micro          bigint,
+    credit_skip_reason     varchar(24),
+    whole_due              bigint        NOT NULL DEFAULT 0,       -- 这次该扣的整数 credit（结转后）
+    usage_event_id         uuid,                                   -- 扣减那一行 usage_events.id；NULL 且 whole_due>0 = 待重放
+    created_at             timestamptz   NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, product_id, request_id, attempt_index)
+);
+CREATE INDEX idx_token_usage_idempotencies_request ON metering.token_usage_idempotencies (request_id);
+CREATE INDEX idx_token_usage_idempotencies_pending ON metering.token_usage_idempotencies (created_at) WHERE usage_event_id IS NULL AND whole_due > 0;
 
 -- ── §9 多维降采样汇总（纯统计/看板，永不作计费依据）。五档：时/天/周/月/年。
 --   workspace_id 跨 schema→tenancy.workspaces、product_id→product.products（均见 90）。

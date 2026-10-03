@@ -370,6 +370,30 @@ export const COST_CLASSES = ["cost_bearing", "zero_cost"] as const;
 export type CostClass = (typeof COST_CLASSES)[number];
 
 /**
+ * 原始 token 用量一行的结果（metering.token_usage_events.outcome，#547 / atlas ADR-010）。
+ *   · served —— 客户拿到了结果，这一行会换算成 ai.credit 扣池；
+ *   · failed —— 故障转移里失败的尝试：上游收了钱、客户没拿到结果。只记原始事实，
+ *     **不扣客户**（owner 2026-10-03）。平台与运营能看见这笔上游成本，客户不为没拿到的结果付费。
+ */
+export const TOKEN_USAGE_OUTCOMES = ["served", "failed"] as const;
+export type TokenUsageOutcome = (typeof TOKEN_USAGE_OUTCOMES)[number];
+
+/**
+ * 一行原始 token 用量**为什么没换算成 credit**（metering.token_usage_events.credit_skip_reason）。
+ * 与 credits_micro 二选一：换算了就没有理由，没换算就必须说清为什么（DB CHECK 钉住的 XOR）。
+ *   · pre_cutover    —— 补报的历史（接收通道上线之前发生的调用）：只补事实，不追溯扣费（owner 2026-10-03）；
+ *   · failed_attempt —— outcome=failed 那一类，见 TOKEN_USAGE_OUTCOMES；
+ *   · no_rate        —— 发生时刻找不到任何生效的费率行。这是配置缺口不是客户的错：照记事实、不扣、
+ *                       运营补上费率后可按 rate 复算。
+ */
+export const TOKEN_CREDIT_SKIP_REASONS = [
+  "pre_cutover",
+  "failed_attempt",
+  "no_rate",
+] as const;
+export type TokenCreditSkipReason = (typeof TOKEN_CREDIT_SKIP_REASONS)[number];
+
+/**
  * 额度用尽之后怎么办。**派生值，不入库**。
  *
  * 由指标的成本档算出：`cost_bearing` → `hard`，`zero_cost` → `soft`；平台级共享键

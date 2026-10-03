@@ -70,6 +70,8 @@ export type {
   ConsumeMode,
   MetricKind,
   CostClass,
+  TokenUsageOutcome,
+  TokenCreditSkipReason,
   QuotaEnforcement,
   ProductIntegrationMode,
   ProductStatusValue,
@@ -152,6 +154,9 @@ export {
   CONSUME_MODES,
   METRIC_KINDS,
   COST_CLASSES,
+  // 原始 token 用量的两根轴（#547）：结果、以及没换算成 credit 的原因
+  TOKEN_USAGE_OUTCOMES,
+  TOKEN_CREDIT_SKIP_REASONS,
   QUOTA_ENFORCEMENTS,
   // 定位轴 L1/L2/L3（product_100_matrix §2）——与类型轴、来源轴正交
   PRODUCT_INTEGRATION_MODES,

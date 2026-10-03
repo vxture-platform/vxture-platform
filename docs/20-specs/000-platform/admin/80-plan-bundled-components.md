@@ -5,7 +5,7 @@
 > - **旧（owner 2026-08-30，已作废）**：「atlas / runos 是基础设施产品，不设客户套餐；它们的配额只能经订阅产品套餐版本里的 bundled 组件进入工作区」。
 > - **新（owner 2026-09-17）**：「模型和能力**不再绑定**，这是基础支撑能力 L1；绑定的是 arda、karda 这些 **L2**；vxtpl 是 L3，**L3 不绑定**（指不能*被*绑——L3 自己的套餐仍可绑 L2）」。
 >
-> 换代的理由不是偏好，是 L1 的额度本来就不走这条路：`ai.credit` 登记在 `product.platform_metrics`（平台级度量键），而 `95_triggers.sql` 的 `trg_product_metrics_no_platform_shadow` 明确禁止任何产品在自己的 `product_metrics` 里声明平台已有的键。套餐里写一行 `ai.credit` 配额 → 进平台级池 → atlas 消费时扣，**全程不需要把 atlas 当成一个 bundled 组件**。
+> 换代的理由不是偏好，是 L1 的额度本来就不走这条路：`ai.credit` 登记在 `product.platform_metrics`（平台级度量键），而 `95_triggers.sql` 的 `trg_product_metrics_no_platform_shadow` 明确禁止任何产品在自己的 `product_metrics` 里声明平台已有的键。套餐里写一行 `ai.credit` 配额 → 进平台级池 → Atlas 按**调用方产品**上报原始 token、平台换算后从该池扣（ADR-013 / #547；Atlas 自己不扣也不上报 `ai.credit`），**全程不需要把 atlas 当成一个 bundled 组件**。
 > 实现：`bff/admin-bff/src/routers/products.router.ts`（`replaceBundledComponents` + `loadPlanVersionDetail`）；门户 `portals/admin/src/modules/products/PlanVersionsPage.tsx`「捆绑组件」区；测试 `products-bundled-components.spec.ts`。
 > 模型权威：`docs/30-design/product_220_catalog-resource-model.md` §2（role 轴）/ §4.2（burn 顺序）；DDL `deploy/database/ddl/40_product.sql`（`plan_components` 三条 CHECK）+ `95_triggers.sql`（锁守卫、优先级守卫）。
 > 起因：`plan_components.component_role = 'bundled'` 自 product_220 起就在模型里，`bff/platform-api` 的 C2 视图也早已按它算 `bundled` 布尔与 `quota_pools`——但 seed 只写 primary 行，admin 只有 `PATCH /plan-versions/:id`（改 primary 配额）和 `publish`，**没有任何入口能给一个版本挂上 bundled 组件**。裁定落地后这就是唯一的缺口：宿主套餐要把**被绑 L2 产品**（arda / karda / terra）的后台能力带给客户，运营却无处可配。（v1.0 时这里写的是「把 atlas、runos 的配额带给客户」——那随 2026-08-30 那条裁定一并作废。）

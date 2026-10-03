@@ -144,6 +144,13 @@ CREATE TRIGGER trg_usage_event_pools_append_only
   BEFORE UPDATE OR DELETE ON metering.usage_event_pools
   FOR EACH ROW EXECUTE FUNCTION metering.forbid_mutation();
 
+-- §6b 原始 token 用量（#547）：原始事实一旦写下就不许改——换算结果可以重算到新行，事实不能被改写。
+--   扣减那一步的回填（usage_event_id）落在 §8b 的幂等表，正因为本表不可更新。
+DROP TRIGGER IF EXISTS trg_token_usage_events_append_only ON metering.token_usage_events;
+CREATE TRIGGER trg_token_usage_events_append_only
+  BEFORE UPDATE OR DELETE ON metering.token_usage_events
+  FOR EACH ROW EXECUTE FUNCTION metering.forbid_mutation();
+
 -- §2 订阅变更审计（append-only）
 DROP TRIGGER IF EXISTS trg_subscription_histories_append_only ON metering.subscription_histories;
 CREATE TRIGGER trg_subscription_histories_append_only

@@ -48,6 +48,7 @@ import { IntegrationSignalService } from "./platform/integration-signal.service"
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
 import { PlatformProvisioningService } from "./platform/platform-provisioning.service";
 import { PlatformUsageService } from "./platform/platform-usage.service";
+import { TokenUsageService } from "./platform/token-usage.service";
 import { HealthRouter } from "./routers/health.router";
 import { PlatformEntitlementsRouter } from "./routers/platform-entitlements.router";
 import { PlatformProvisioningRouter } from "./routers/platform-provisioning.router";
@@ -79,6 +80,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
   providers: [
     PlatformEntitlementsService,
     PlatformUsageService,
+    // #547：原始 token 用量接收（同一个 /usage/consume 端点的 tokens 形态）
+    TokenUsageService,
     PlatformProvisioningService,
     IntegrationSignalService,
     PlatformAuthGuard,

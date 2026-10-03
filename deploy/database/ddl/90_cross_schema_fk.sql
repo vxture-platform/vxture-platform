@@ -171,6 +171,15 @@ DO $$ BEGIN
   ALTER TABLE metering.usage_events ADD CONSTRAINT fk_usage_events_workspace
     FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- #547 原始 token 用量与结转（2026-10-03）
+DO $$ BEGIN
+  ALTER TABLE metering.token_usage_events ADD CONSTRAINT fk_token_usage_events_workspace
+    FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.token_credit_carry ADD CONSTRAINT fk_token_credit_carry_workspace
+    FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE metering.usage_summary_hours ADD CONSTRAINT fk_usage_summary_hours_workspace
     FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
@@ -226,6 +235,15 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE metering.usage_events ADD CONSTRAINT fk_usage_events_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- #547：调用方产品必须在目录里（L0/L1 不在，所以 atlas 自己永远不能当 product_id）
+DO $$ BEGIN
+  ALTER TABLE metering.token_usage_events ADD CONSTRAINT fk_token_usage_events_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.token_credit_carry ADD CONSTRAINT fk_token_credit_carry_product
     FOREIGN KEY (product_id) REFERENCES product.products(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN

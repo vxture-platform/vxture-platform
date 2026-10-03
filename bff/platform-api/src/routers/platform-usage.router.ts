@@ -37,9 +37,11 @@ import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
 import { scopeToS2sCaller } from "../authn/s2s-scope";
 import { PlatformUsageService } from "../platform/platform-usage.service";
+import { TokenUsageService } from "../platform/token-usage.service";
 import {
   buildConsumeResponse,
-  parseConsumeBody,
+  buildTokenConsumeResponse,
+  parseConsumeRequest,
   parseGaugeBody,
   type ConsumeResponseBody,
 } from "../platform/usage-view";
@@ -52,11 +54,17 @@ export class PlatformUsageRouter {
   constructor(
     @Inject(PlatformUsageService)
     private readonly usage: PlatformUsageService,
+    // #547：token 形态走它；Nest × esbuild 要显式 @Inject
+    @Inject(TokenUsageService)
+    private readonly tokens: TokenUsageService,
   ) {}
 
   /**
-   * POST /usage/consume
-   * { workspace_id, product, metric, amount, idempotency_key, end_user_id?, intent? }
+   * POST /usage/consume —— 两种形态，同一个端点（ADR-013 D2）：
+   *   amount 形态 { workspace_id, product, metric, amount, idempotency_key, end_user_id?, intent? }
+   *   tokens 形态 { workspace_id, product(调用方), request_id, occurred_at, tokens:{input,output,cache_write,cache_read},
+   *                attempt_index?, outcome?, model_code?, provider_code?, reasoning_tokens?, rerank_candidates?, parse_pages?, backfill? }
+   * 两种不许混：同时带 tokens 与 metric/amount 是 400。
    */
   @Post("usage/consume")
   async consume(
@@ -71,6 +79,18 @@ export class PlatformUsageRouter {
       /* 不列它不会报错（parseConsumeBody 收的都是 unknown），但这份声明就会对下一个
          读者说「请求体没有这个字段」。 */
       intent?: unknown;
+      /* token 形态（#547）—— 同一个端点，用 tokens 的有无分辨形态。 */
+      tokens?: unknown;
+      request_id?: unknown;
+      occurred_at?: unknown;
+      attempt_index?: unknown;
+      outcome?: unknown;
+      model_code?: unknown;
+      provider_code?: unknown;
+      reasoning_tokens?: unknown;
+      rerank_candidates?: unknown;
+      parse_pages?: unknown;
+      backfill?: unknown;
     },
     @Res({ passthrough: true }) res: Response,
     @Headers("x-request-id") requestId?: string,
@@ -78,7 +98,7 @@ export class PlatformUsageRouter {
   ): Promise<ConsumeResponseBody> {
     let parsed;
     try {
-      parsed = parseConsumeBody(body);
+      parsed = parseConsumeRequest(body);
     } catch (e) {
       throw new BadRequestException((e as Error).message);
     }
@@ -99,11 +119,68 @@ export class PlatformUsageRouter {
         workspaceId: parsed.workspaceId,
         productCodes: [parsed.productCode],
       },
-      parsed.intent === "reserve" ? "deny" : "trust-declared",
+      parsed.kind === "amount" && parsed.intent === "reserve"
+        ? "deny"
+        : "trust-declared",
     );
 
     const productId = await this.usage.resolveProductId(parsed.productCode);
     if (!productId) throw new BadRequestException("unknown_product");
+
+    // ── token 形态（#547 / ADR-013）：原始事实落表 → 换算 → 结转 → 引擎扣 ai.credit ──
+    // 与 amount 形态共用上面那一道 scopeToS2sCaller（同一个调用点：s2s-legacy-scope 快照的
+    // trust-declared 计数只许减少，不新增调用点）。调用方产品必须在目录里（L0/L1 不在，所以
+    // product="atlas" 在这里照样 unknown_product —— 那正是 owner 要的）。
+    if (parsed.kind === "tokens") {
+      const ingested = await this.tokens.ingest({
+        workspaceId,
+        productId,
+        productCode: parsed.productCode,
+        requestId: parsed.requestId,
+        attemptIndex: parsed.attemptIndex,
+        outcome: parsed.outcome,
+        occurredAt: parsed.occurredAt,
+        ...(parsed.modelCode ? { modelCode: parsed.modelCode } : {}),
+        ...(parsed.providerCode ? { providerCode: parsed.providerCode } : {}),
+        tokens: parsed.tokens,
+        ...(parsed.reasoningTokens !== undefined
+          ? { reasoningTokens: parsed.reasoningTokens }
+          : {}),
+        ...(parsed.rerankCandidates !== undefined
+          ? { rerankCandidates: parsed.rerankCandidates }
+          : {}),
+        ...(parsed.parsePages !== undefined
+          ? { parsePages: parsed.parsePages }
+          : {}),
+        backfill: parsed.backfill,
+      });
+      const creditPools = await this.usage.readPools(
+        workspaceId,
+        productId,
+        "ai.credit",
+      );
+      const tokenResp = buildTokenConsumeResponse(ingested, creditPools);
+      if (tokenResp.body.gated && ingested.consume) {
+        // 与 amount 形态同一条通告路径：配额没覆盖住这次换算出来的 credit。永不影响响应。
+        try {
+          await this.usage.noteQuotaExhausted({
+            workspaceId,
+            productCode: parsed.productCode,
+            metric: "ai.credit",
+            amount: ingested.wholeDue.toString(),
+            remainingTotal: tokenResp.body.remaining_total,
+            pools: creditPools,
+            denied: false,
+          });
+        } catch (err) {
+          this.logger.warn(
+            `配额耗尽的运营通告没写成（${parsed.productCode} / ai.credit / tokens）— ${String(err)}`,
+          );
+        }
+      }
+      res.status(tokenResp.statusCode);
+      return tokenResp.body;
+    }
 
     // gauge metrics are stock, not consumable (D5): reject at the boundary.
     if (await this.usage.isGaugeMetric(parsed.metric)) {

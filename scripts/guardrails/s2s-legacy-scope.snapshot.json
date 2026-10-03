@@ -15,12 +15,12 @@
       "policy": "trust-declared"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-usage.router.ts:191",
-      "policy": "trust-declared"
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:116",
+      "policy": "deny+trust-declared"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-usage.router.ts:96",
-      "policy": "deny+trust-declared"
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:268",
+      "policy": "trust-declared"
     }
   ]
 }
