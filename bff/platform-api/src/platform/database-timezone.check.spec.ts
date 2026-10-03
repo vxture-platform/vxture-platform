@@ -49,6 +49,17 @@ describe("DatabaseTimezoneCheck.check", () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it("认的集合就是 {UTC, Etc/UTC}(与 verify/database-timezone.sql 同一个):GMT 照样报", async () => {
+    // 反例:GMT 也是 UTC+0,但三处(本检查 / 30-verify / 迁移自检)都故意不认它——
+    // 要加就三处一起加。这条红了说明集合在一处悄悄变宽了。
+    const error = vi
+      .spyOn(Logger.prototype, "error")
+      .mockImplementation(() => undefined);
+    await new DatabaseTimezoneCheck(poolShowing("GMT")).check();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0]?.[0])).toContain("GMT");
+  });
+
   it("Asia/Shanghai → error 级日志点名该时区,仍返回它、不抛", async () => {
     const error = vi
       .spyOn(Logger.prototype, "error")

@@ -74,6 +74,19 @@ describe("resolveBucketZone", () => {
       reason: "unsupported",
     });
   });
+
+  it("'unsupported' 也优先于 'granularity':hour / week 档遇坏名先说时区坏了", () => {
+    // 2026-10-04 审查:此前 hour 档一律报 'granularity',页面拿坏名去标轴,
+    // 说明写「按 Mars/Olympus 显示」而刻度静默回落成 UTC 的 HH:MM:SS。
+    expect(resolveBucketZone("hour", 24, "Mars/Olympus", false)).toEqual({
+      bucketZone: "UTC",
+      reason: "unsupported",
+    });
+    expect(resolveBucketZone("week", 12, "Mars/Olympus", false)).toEqual({
+      bucketZone: "UTC",
+      reason: "unsupported",
+    });
+  });
 });
 
 type Row = {
@@ -169,7 +182,7 @@ describe("MeteringReadService.getUsageTrend —— 按裁决选表", () => {
     ]);
   });
 
-  it("空串时区当作没设(资料写路径的「清空」落的是 '')", async () => {
+  it("空串时区当作没设(写路径今天把「清空」落成 NULL;存量行可能还是 '')", async () => {
     const { repo, service } = makeService();
     const res = await service.getUsageTrend({
       workspaceId: WS,
@@ -234,7 +247,7 @@ describe("MeteringReadService.getUsageTrend —— 按裁决选表", () => {
     });
   });
 
-  it("week 档 + 用户时区 → UTC 权威表 + 'granularity',且不问库", async () => {
+  it("week 档 + 合法用户时区 → UTC 权威表 + 'granularity'(校验照做,一样问库一次)", async () => {
     const { repo, service } = makeService();
     const res = await service.getUsageTrend({
       workspaceId: WS,
@@ -243,10 +256,42 @@ describe("MeteringReadService.getUsageTrend —— 按裁决选表", () => {
       span: 12,
       zone: "Asia/Shanghai",
     });
-    expect(repo.isKnownTimeZone).not.toHaveBeenCalled();
+    expect(repo.isKnownTimeZone).toHaveBeenCalledTimes(1);
     expect(repo.listTrendRows).toHaveBeenCalledTimes(1);
+    expect(repo.listTrendRowsLocalDays).not.toHaveBeenCalled();
     expect(res.zoneFallbackReason).toBe("granularity");
     expect(res.bucketZone).toBe("UTC");
+  });
+
+  it("hour 档 + Node 认不出的名 → 'unsupported'(不是 'granularity'),且不问库", async () => {
+    const { repo, service } = makeService();
+    const res = await service.getUsageTrend({
+      workspaceId: WS,
+      metric: "ai.credit",
+      granularity: "hour",
+      span: 24,
+      zone: "Beijing",
+    });
+    expect(repo.isKnownTimeZone).not.toHaveBeenCalled();
+    expect(repo.listTrendRows).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({
+      bucketZone: "UTC",
+      userZone: "Beijing",
+      zoneFallbackReason: "unsupported",
+    });
+  });
+
+  it("hour 档 + Node 认、库不认 → 'unsupported'(双重校验对每个档位都成立)", async () => {
+    const { repo, service } = makeService({ knownInDb: false });
+    const res = await service.getUsageTrend({
+      workspaceId: WS,
+      metric: "ai.credit",
+      granularity: "hour",
+      span: 24,
+      zone: "Asia/Shanghai",
+    });
+    expect(repo.isKnownTimeZone).toHaveBeenCalledWith("Asia/Shanghai");
+    expect(res.zoneFallbackReason).toBe("unsupported");
   });
 
   it("pg_timezone_names 的结果按进程缓存一小时", async () => {

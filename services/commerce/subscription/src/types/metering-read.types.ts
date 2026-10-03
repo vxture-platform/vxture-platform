@@ -61,8 +61,10 @@ export type UsageGranularity = "hour" | "day" | "week" | "month" | "year";
 /**
  * `bucketZone` 没能等于用户时区的原因（owner 裁定 4，2026-10-04）：
  *   retention   — 窗口超过小时表可重切的天数（REBUCKET_HORIZON_DAYS），只能回 UTC 日表；
- *   granularity — 只有 day 档按用户时区重切，周/月/年保持 UTC 权威；
+ *   granularity — 只有 day 档按用户时区重切，周/月/年保持 UTC 权威（hour 桶与时区无关）；
  *   unsupported — 账号里存的时区 Node 或 PostgreSQL 认不出，按 UTC 展示并让页面提示重选。
+ *                 对**每个档位**都会报（优先级最高）：hour 档的轴标按 userZone 换算，
+ *                 页面见到它就不得再拿 userZone 去换算 / 标注。
  */
 export type UsageZoneFallbackReason =
   | "retention"

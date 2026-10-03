@@ -335,16 +335,18 @@ export class PgUserRepository implements UserReadRepository {
       // display/localization fields live on user_profile (1:1); upsert so a caller
       // that never triggered profile creation still gets a row. coalesce keeps the
       // current value when the param is null (leave-unchanged sentinel).
+      // gender 与 timezone 是三态:null = 不改;'' = 清成 NULL(未设定);其它 = 设值。
+      // timezone 的 '' 必须真清掉——用量 day 档按它切桶,coalesce 会让「未设置」永远
+      // 回不到默认 UTC(存过一次就再也清不掉;2026-10-04 审查实测)。
       await client.query(
         `insert into account.user_profiles
            (user_id, display_name, bio, gender, timezone, language, created_at, updated_at)
-         values ($1, $2, $3, nullif($4, ''), $5, $6, now(), now())
+         values ($1, $2, $3, nullif($4, ''), nullif($5, ''), $6, now(), now())
          on conflict (user_id) do update set
            display_name = coalesce(excluded.display_name, account.user_profiles.display_name),
            bio          = coalesce(excluded.bio, account.user_profiles.bio),
-           -- gender:null = 不改;'' = 清成 NULL(未设定);其它 = 设值
            gender       = case when $4::text is null then account.user_profiles.gender else nullif($4::text, '') end,
-           timezone     = coalesce(excluded.timezone, account.user_profiles.timezone),
+           timezone     = case when $5::text is null then account.user_profiles.timezone else nullif($5::text, '') end,
            language     = coalesce(excluded.language, account.user_profiles.language),
            updated_at   = now()`,
         [

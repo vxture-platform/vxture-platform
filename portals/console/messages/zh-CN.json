@@ -3097,7 +3097,8 @@
       "statDelta": "最近环比",
       "zoneFallback": {
         "retention": "你设置了 {userZone},但超过 {days} 天的窗口只能按 UTC 日展示",
-        "unsupported": "账号里的时区 {userZone} 无法识别,已按 UTC 显示;到账号信息页重新选择"
+        "unsupported": "账号里的时区 {userZone} 无法识别,已按 UTC 显示;到账号信息页重新选择",
+        "unsupportedHour": "账号里的时区 {userZone} 无法识别,横轴已按浏览器所在时区显示;到账号信息页重新选择"
       }
     },
     "share": {

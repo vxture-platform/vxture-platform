@@ -123,6 +123,7 @@ export class UpdateProfileDto {
   @IsString()
   bio?: string | null;
 
+  /** IANA 名;空串 = 清除(回到默认 UTC);缺省 / null = 不改。格式由域服务校验(400 invalid_timezone)。 */
   @IsOptional()
   @IsString()
   timezone?: string | null;

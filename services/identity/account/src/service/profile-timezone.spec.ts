@@ -90,4 +90,21 @@ describe("AccountService.updateProfile · timezone", () => {
     expect(view?.bio).toBe("hello");
     expect(view?.timezone).toBe("Asia/Shanghai");
   });
+
+  /* 三态(与 gender 同一套):null = 不改,'' = 清成 null。此前 '' 被 coalesce 当成
+   * 「不改」,选过一次时区的人就再也回不到默认 UTC(账号页的选项表里没有 UTC 可选)。
+   * 真库那一半(SQL 的 nullif / case)锁在 pg-user.repository.itest.spec.ts。 */
+  it("null → 不改(存过的时区留着)", async () => {
+    await service.updateProfile(userId, { timezone: "Asia/Shanghai" });
+    const view = await service.updateProfile(userId, { timezone: null });
+    expect(view?.timezone).toBe("Asia/Shanghai");
+    expect((await repo.getUserById(userId))?.timezone).toBe("Asia/Shanghai");
+  });
+
+  it("'' → 清成 null(回到默认 UTC),不是存成空串", async () => {
+    await service.updateProfile(userId, { timezone: "Asia/Shanghai" });
+    const view = await service.updateProfile(userId, { timezone: "" });
+    expect(view?.timezone).toBeNull();
+    expect((await repo.getUserById(userId))?.timezone).toBeNull();
+  });
 });

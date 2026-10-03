@@ -270,8 +270,14 @@ export function UsagePage() {
   // ── ① 总体用量趋势 ───────────────────────────────────────────────────────
   const trendBuckets = useMemo(() => trend?.buckets ?? [], [trend]);
   /* 账号里的时区设置(任一趋势响应都带,与档位无关);桶时区只认当前档位那份响应——
-   * 切档的那一瞬 trend 还是上一档的,拿它的 bucketZone 说当前档会说错。 */
-  const userZone = trend?.userZone ?? null;
+   * 切档的那一瞬 trend 还是上一档的,拿它的 bucketZone 说当前档会说错。
+   * 服务层认不出的名(zoneFallbackReason = 'unsupported')这里当作没设:它会去标 hour
+   * 档的轴,Intl 认不出就静默回落成 UTC 的 HH:MM:SS,而说明文字却写着「按 X 显示」。
+   * 提示文案另读原始值(zoneHint)。 */
+  const userZone =
+    trend && trend.zoneFallbackReason !== "unsupported"
+      ? (trend.userZone ?? null)
+      : null;
   const trendForWindow =
     trend && trend.granularity === trendWindow ? trend : null;
   const trendStats = useMemo(() => {
@@ -299,23 +305,28 @@ export function UsagePage() {
     return stats;
   }, [trendBuckets, trend, t, userZone, locale]);
 
-  /* 没按你的时区切时说一句为什么——只在 day 档(周/月/年一律 UTC,trend.description
-   * 的 {zone} 已经写明,不再单独提示)。放在板块正文第一行,不占按钮格。 */
+  /* 没按你的时区切时说一句为什么——只在会用到用户时区的两档:day(桶按它切)与
+   * hour(轴标按它换算);周/月/年一律 UTC,trend.description 的 {zone} 已经写明,
+   * 不再单独提示。'retention' 只对 day 成立;'unsupported' 两档都要说,hour 档的
+   * 轴这时已回落成浏览器本地,文案要说对回落到哪。放在板块正文第一行,不占按钮格。 */
   const zoneHint = useMemo(() => {
-    if (
-      !trendForWindow ||
-      trendForWindow.granularity !== "day" ||
-      !trendForWindow.userZone
-    )
+    if (!trendForWindow || !trendForWindow.userZone) return null;
+    const g = trendForWindow.granularity;
+    if (trendForWindow.zoneFallbackReason === "unsupported") {
+      if (g === "day")
+        return t("trend.zoneFallback.unsupported", {
+          userZone: trendForWindow.userZone,
+        });
+      if (g === "hour")
+        return t("trend.zoneFallback.unsupportedHour", {
+          userZone: trendForWindow.userZone,
+        });
       return null;
-    if (trendForWindow.zoneFallbackReason === "retention")
+    }
+    if (g === "day" && trendForWindow.zoneFallbackReason === "retention")
       return t("trend.zoneFallback.retention", {
         userZone: zoneLabel(trendForWindow.userZone),
         days: USAGE_REBUCKET_HORIZON_DAYS,
-      });
-    if (trendForWindow.zoneFallbackReason === "unsupported")
-      return t("trend.zoneFallback.unsupported", {
-        userZone: trendForWindow.userZone,
       });
     return null;
   }, [trendForWindow, t]);

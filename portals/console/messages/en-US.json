@@ -3097,7 +3097,8 @@
       "statDelta": "Latest change",
       "zoneFallback": {
         "retention": "Your timezone is {userZone}; windows longer than {days} days are shown in UTC days",
-        "unsupported": "The timezone on your account ({userZone}) is not recognised, so UTC is shown; pick it again on the account page"
+        "unsupported": "The timezone on your account ({userZone}) is not recognised, so UTC is shown; pick it again on the account page",
+        "unsupportedHour": "The timezone on your account ({userZone}) is not recognised, so the axis is shown in your browser's local time; pick it again on the account page"
       }
     },
     "share": {

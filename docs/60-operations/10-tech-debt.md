@@ -1446,7 +1446,7 @@ deploy 重跑要**重新审批一次**，owner 因此被反复打断。
 **实际采用**（2026-10-03/04）：
 
 - 窗口推到 2028-02-01（`96_partitions.sql` 的 `cover_until`，同批一份迁移 `2026-10-03-extend-partition-window.sql`
-  给存量库补子表；两处都 `SET LOCAL TIME ZONE 'UTC'` 钉住边界时区。**2026-10-04 裁定 4 收窄**：「仓里没有任何地方钉住会话时区（RDS 参数组决定）」这半句已不成立——库级默认由 `00_schemas.sql` 末尾与迁移 `2026-10-05-database-timezone-utc.sql` 钉成 UTC，`30-verify` 用 `pg_db_role_setting` 硬断言；这两处 `SET LOCAL` 退为第二道锁，不是唯一的锁。仍留的债：RDS 当前值要 owner 跑 `show timezone` 核实，≠ UTC 则 35 天以上的天/周/月/年表需一次性重建（裁定 4 设计 §4.3））；
+  给存量库补子表；两处都 `SET LOCAL TIME ZONE 'UTC'` 钉住边界时区。**2026-10-04 裁定 4 收窄**：「仓里没有任何地方钉住会话时区（RDS 参数组决定）」这半句已不成立——库级默认由 `00_schemas.sql` 末尾与迁移 `2026-10-05-database-timezone-utc.sql` 钉成 UTC，`30-verify` 用 `pg_db_role_setting` 硬断言；这两处 `SET LOCAL` 退为第二道锁，不是唯一的锁。仍留的债：RDS 当前值要 owner 跑 `show timezone` 核实，≠ UTC 则 35 天以上的天/周/月/年表需一次性重建（裁定 4 设计 §4.3）；另外钉成 UTC 会改变一批**会话依赖**的 `now()::date` / `date_trunc(now())` 读写的结果（清单按 file:line 写在迁移 `2026-10-05-database-timezone-utc.sql` 头部「作用面（二）」），其中 `pg-order.repository.ts` 的 `bill_cycle` / `cycle_start_date` / `cycle_end_date` 与 `pg-addon.repository.ts` 的 YYYYMM 是落库值，要不要改成显式 `at time zone` **待 owner 定**，同批未做）；
 - CI 守卫 `scripts/guardrails/check-partition-window.mjs`：剩余不足 90 天即红，每次提交跑（不按 docs_only 跳过），
   另由 `.github/workflows/partition-window.yml` 每月 1 日定时跑一次，低活跃期也会被求值；
 - 年度手动推一次：守卫红字里写了两步处置（改 DDL 的 `cover_until` + 另写一份同形迁移）。

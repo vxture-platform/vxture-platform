@@ -37,8 +37,29 @@ import { REBUCKET_HORIZON_DAYS } from "../service/usage-periods";
  * `SET LOCAL TIME ZONE 'UTC'`, so even if the database-level default
  * (ALTER DATABASE … SET timezone = 'UTC', 00_schemas.sql) is ever changed
  * underneath us, this job's SQL sees UTC. The bounds above do not need it;
- * it is belt and braces for the one job that writes these tables.
+ * it is belt and braces for the one job that writes these tables. That claim
+ * is locked on its own: HOURS_TO_DAYS_SQL is exported so the itest can run the
+ * statement text on a plain non-UTC session WITHOUT the transaction — a text
+ * revert reds there even though rollup() itself would stay green under SET LOCAL.
  */
+
+/**
+ * hours → days (recompute last REBUCKET_HORIZON_DAYS days; the same constant
+ * bounds the console's per-user-zone re-bucketing of the hour table — both say
+ * how many days of hours count as a reliable source). Module-level so the
+ * itest can execute exactly this text outside rollup()'s SET LOCAL.
+ */
+export const HOURS_TO_DAYS_SQL = `insert into metering.usage_summary_days
+           (workspace_id, product_id, metric_key, period_day, total_amount, created_at, updated_at)
+         select h.workspace_id, h.product_id, h.metric_key,
+                (h.period_hour at time zone 'UTC')::date,
+                sum(h.total_amount), now(), now()
+           from metering.usage_summary_hours h
+          where h.period_hour >= ((now() at time zone 'UTC')::date - ${REBUCKET_HORIZON_DAYS})::timestamp at time zone 'UTC'
+          group by 1, 2, 3, 4
+         on conflict (workspace_id, product_id, metric_key, period_day)
+         do update set total_amount = excluded.total_amount, updated_at = now()`;
+
 @Injectable()
 export class PgUsageRollupRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
@@ -68,22 +89,8 @@ export class PgUsageRollupRepository {
          do update set total_amount = excluded.total_amount, updated_at = now()`,
       );
 
-      // hours → days (recompute last REBUCKET_HORIZON_DAYS days; the same
-      // constant bounds the console's per-user-zone re-bucketing of the hour
-      // table — both say how many days of hours count as a reliable source)
-      touched += await this.exec(
-        client,
-        `insert into metering.usage_summary_days
-           (workspace_id, product_id, metric_key, period_day, total_amount, created_at, updated_at)
-         select h.workspace_id, h.product_id, h.metric_key,
-                (h.period_hour at time zone 'UTC')::date,
-                sum(h.total_amount), now(), now()
-           from metering.usage_summary_hours h
-          where h.period_hour >= ((now() at time zone 'UTC')::date - ${REBUCKET_HORIZON_DAYS})::timestamp at time zone 'UTC'
-          group by 1, 2, 3, 4
-         on conflict (workspace_id, product_id, metric_key, period_day)
-         do update set total_amount = excluded.total_amount, updated_at = now()`,
-      );
+      // hours → days (text lives in HOURS_TO_DAYS_SQL above, see why there)
+      touched += await this.exec(client, HOURS_TO_DAYS_SQL);
 
       // days → weeks (ISO Monday; recompute last ~15 weeks). date vs timestamp
       // comparison never goes through a time zone, so these three stay as is.

@@ -250,8 +250,11 @@ export class PgMeteringReadRepository {
    * 'Asia/Shanghai' 的会话里跑过,结果不变。
    *
    * 已知近似:小时桶按**起点瞬时**归日,对 +05:30 / +05:45 / +09:30 这类非整点时区,
-   * 本地日边界落在整点而不是真正的本地 0 点(Kolkata 实测每天仍 24,但日边界是 18:00Z
-   * 而非 18:30Z)。精确只能回 usage_events 重切,那是计费级表、90 天分区,不值。
+   * 本地日实际从真正的本地 0 点**之后**半小时才开始:Kolkata 的 18:00Z 桶起点是 23:30 IST,
+   * 归前一天,所以本地日从 19:00Z(00:30 IST)起算,而非 18:30Z(实测每天仍 24;窗口两端
+   * `>= 18:30Z` 把首日前的 18:00Z 桶排除、`< 18:30Z` 把末日的 18:00Z 桶收进来,口径自洽)。
+   * 半小时时区的 DST 日也按整桶取整(Lord Howe 24.5 小时的那天算 25 桶)。
+   * 精确只能回 usage_events 重切,那是计费级表、90 天分区,不值。
    *
    * `zone` 必须先过 isIanaTimeZone + isKnownTimeZone:无效名在 PostgreSQL 是错误
    * (`time zone "Mars/Olympus" not recognized`),这里不 try/catch——吞掉它等于把

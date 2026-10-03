@@ -27,8 +27,15 @@ import {
 import type { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 
-/** UTC+0 without DST, either spelling PostgreSQL reports for the pinned default. */
-const UTC_SPELLINGS: ReadonlySet<string> = new Set(["UTC", "Etc/UTC"]);
+/**
+ * UTC+0 without DST, either spelling PostgreSQL reports for the pinned default.
+ * Canonical is 'UTC' (what the migration writes); 'Etc/UTC' is what an RDS owner
+ * may have set by hand and the non-owner migration path leaves untouched. The
+ * SAME set, compared case-insensitively, is what verify/database-timezone.sql
+ * and the migration's self-check accept — two gates on one fact must agree.
+ * GMT / UTC0 are deliberately not in it; add to all three places or none.
+ */
+const UTC_SPELLINGS: ReadonlySet<string> = new Set(["UTC", "ETC/UTC"]);
 
 @Injectable()
 export class DatabaseTimezoneCheck implements OnApplicationBootstrap {
@@ -52,7 +59,7 @@ export class DatabaseTimezoneCheck implements OnApplicationBootstrap {
       const res =
         await this.pool.query<Record<string, string>>("show timezone");
       const zone = Object.values(res.rows[0] ?? {})[0] ?? null;
-      if (zone === null || !UTC_SPELLINGS.has(zone)) {
+      if (zone === null || !UTC_SPELLINGS.has(zone.toUpperCase())) {
         this.logger.error(
           `database session TimeZone is ${zone ?? "unreadable"}, expected UTC. ` +
             "Either the database-level default is not pinned (run as the DB owner: " +

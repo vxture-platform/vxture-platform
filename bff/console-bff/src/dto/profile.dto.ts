@@ -6,6 +6,7 @@ export class UpdateProfileDto {
   gender?: "male" | "female" | "" | null;
   email?: string | null;
   phone?: string | null;
+  /** IANA 名;空串 = 清除(回到默认 UTC);缺省 / null = 不改。格式由域服务校验(400 invalid_timezone)。 */
   timezone?: string | null;
   language?: string | null;
 }

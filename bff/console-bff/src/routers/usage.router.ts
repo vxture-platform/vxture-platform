@@ -76,9 +76,12 @@ export interface UsageTrendView {
   granularity: string;
   /** 桶边界所在时区(IANA)。'UTC' 或用户设置的时区;只有 day 档才可能不是 UTC。 */
   bucketZone: string;
-  /** 请求用户的时区设置;null = 未设置。页面据它换算 hour 档轴标。 */
+  /** 请求用户的时区设置(原样);null = 未设置。页面据它换算 hour 档轴标——除非 zoneFallbackReason = 'unsupported'。 */
   userZone: string | null;
-  /** bucketZone ≠ userZone 时的原因;null = 已按用户时区(或没设 / 设的就是 UTC)。 */
+  /**
+   * bucketZone ≠ userZone 时的原因;null = 已按用户时区(或没设 / 设的就是 UTC)。
+   * 'unsupported' 对每个档位都报且优先级最高(hour 档的轴标也靠 userZone,坏名不能只报 'granularity')。
+   */
   zoneFallbackReason: "retention" | "granularity" | "unsupported" | null;
   buckets: UsageTrendBucket[];
 }

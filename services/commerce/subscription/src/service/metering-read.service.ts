@@ -29,15 +29,18 @@ export interface BucketZoneDecision {
  * 桶时区裁决(纯函数,owner 裁定 4 2026-10-04:「默认按照 UTC+0,如果用户设置了,
  * 按照用户设置时区」)。顺序就是优先级:
  *
- *   granularity ∉ {day}          → UTC;用户设了非 UTC 时区时标 'granularity'(周/月/年
- *                                   保持 UTC 权威,hour 桶与时区无关)
  *   userZone 空 / 'UTC'          → UTC,无原因(没设 = 默认;设的就是 UTC = 已按用户时区)
  *   !zoneIsValid                 → UTC,'unsupported'(Node 或 PG 认不出这个名)
+ *   granularity ∉ {day}          → UTC,'granularity'(周/月/年保持 UTC 权威;hour 桶本身
+ *                                   与时区无关,只有轴标按用户时区换算)
  *   span > REBUCKET_HORIZON_DAYS → UTC,'retention'(超过小时表可重切的天数,只能回 UTC 日表)
  *   其余                          → 用户时区
  *
- * 'unsupported' 排在 'retention' 前面:时区本身坏了比窗口太长更该先告诉用户——前者要
- * 他去账号页重选,后者缩短窗口就好。
+ * 'unsupported' 排在最前:时区本身坏了比「这一档不按时区切」和「窗口太长」都更该先告诉
+ * 用户——他要去账号页重选,其它两条换档 / 缩窗口就好。它必须对**每个档位**成立:hour 档
+ * 的轴标按 userZone 换算,若坏名只报 'granularity',页面就会拿一个 Intl 认不出的名去
+ * 标轴(formatClock 静默回落成 UTC 的 HH:MM:SS)而说明文字却写着「按 X 显示」
+ * (2026-10-04 审查;存量行在写路径校验之前什么都能存)。
  */
 export function resolveBucketZone(
   granularity: UsageGranularity,
@@ -46,11 +49,10 @@ export function resolveBucketZone(
   zoneIsValid: boolean,
 ): BucketZoneDecision {
   const wantsZone = userZone !== null && userZone !== "UTC";
-  if (granularity !== "day") {
-    return { bucketZone: "UTC", reason: wantsZone ? "granularity" : null };
-  }
   if (!wantsZone) return { bucketZone: "UTC", reason: null };
   if (!zoneIsValid) return { bucketZone: "UTC", reason: "unsupported" };
+  if (granularity !== "day")
+    return { bucketZone: "UTC", reason: "granularity" };
   if (span > REBUCKET_HORIZON_DAYS) {
     return { bucketZone: "UTC", reason: "retention" };
   }
@@ -116,8 +118,10 @@ export class MeteringReadService {
     now: Date = new Date(),
   ): Promise<UsageTrendResult> {
     const userZone = query.zone?.trim() || null;
-    const wantsZone =
-      query.granularity === "day" && userZone !== null && userZone !== "UTC";
+    // 每个档位都校验(不只 day):hour 档的轴标也按 userZone 换算,坏名必须报
+    // 'unsupported' 而不是 'granularity'。pg_timezone_names 的结果按进程缓存,代价是
+    // 每个名每小时一次往返。
+    const wantsZone = userZone !== null && userZone !== "UTC";
     const valid = wantsZone
       ? await this.zoneIsValid(userZone, now.getTime())
       : false;

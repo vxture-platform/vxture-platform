@@ -316,8 +316,9 @@ export function ProfilePage() {
       if (genderDirty) patch.gender = genderDraft; // 空串 = 清成未设定
       if (prefs.language !== savedPrefs.language)
         patch.language = prefs.language;
+      // 空串 = 清成未设置(回到默认 UTC);null 在后端是「不改」,选「未设置」就不会落库。
       if (prefs.timezone !== savedPrefs.timezone)
-        patch.timezone = normalizeOptional(prefs.timezone);
+        patch.timezone = prefs.timezone.trim();
       let updated = profile;
       if (Object.keys(patch).length > 0) {
         updated = await updateUserProfile(patch);

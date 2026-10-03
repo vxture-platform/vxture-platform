@@ -80,8 +80,9 @@ export function accountPurgeAt(deletionRequestedAt: string): string {
  * so only a zone the read side can use may be stored — until now any string went
  * in (profile.dto is `string | null`). Same predicate as the read side
  * (`isIanaTimeZone` from @vxture-platform/shared, re-exported by core-utils).
- * null / undefined = leave unchanged, "" = the "unset" the profile page sends;
- * both pass untouched.
+ * Tri-state like gender (pg-user.repository): null / undefined = leave
+ * unchanged, "" = clear to NULL (the console page sends "" for 未设置, which
+ * puts the user back on the UTC default); neither is a zone value, both pass.
  */
 export function assertValidTimezone(timezone: string | null | undefined): void {
   if (timezone === null || timezone === undefined || timezone === "") return;

@@ -17,12 +17,20 @@
  * 夹具:D-36 与 D-35 各 24 个小时行(amount 1),天表两行各 24(= 一次正确的 pass 写过的样子)。
  * 跑 rollup 后两天仍须都是 24。
  *
+ * 两道锁要分开验(2026-10-04 审查):rollup() 整段跑在 SET LOCAL TIME ZONE 'UTC' 的事务里,
+ * 所以前两条用例锁的是「两道锁合起来的结果」——把第 50 行的边界改回旧写法而留着 SET LOCAL,
+ * 它们照样绿。第三条用例把 HOURS_TO_DAYS_SQL 的**语句文本**单独拿到一条不开事务、不 SET LOCAL
+ * 的 Asia/Shanghai 会话上跑:旧文本在这里给 D-36 = 8(实测),新文本 24 / 24。
+ *
  * Gated(需要一个已建库的平台 DB):
  *   SUBSCRIPTION_ITEST=1 DATABASE_URL=postgresql://... pnpm test
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { PgUsageRollupRepository } from "./pg-usage-rollup.repository";
+import {
+  HOURS_TO_DAYS_SQL,
+  PgUsageRollupRepository,
+} from "./pg-usage-rollup.repository";
 
 const RUN = process.env.SUBSCRIPTION_ITEST === "1";
 
@@ -131,6 +139,29 @@ describe.skipIf(!RUN)("usage rollup · 会话 TimeZone ≠ UTC(真库)", () => {
       }
     });
   }
+
+  it("hours → days 的语句文本本身与会话无关:Asia/Shanghai 会话、无事务、无 SET LOCAL,D-36 / D-35 仍各 24", async () => {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      options: "-c timezone=Asia/Shanghai",
+      max: 1,
+    });
+    try {
+      const shown = await pool.query<{ TimeZone: string }>("show timezone");
+      expect(shown.rows[0]?.TimeZone).toBe("Asia/Shanghai");
+
+      await seedFixture();
+      // 不经 rollup():那条路有第二道锁(SET LOCAL),看不见文本的退化。
+      await pool.query(HOURS_TO_DAYS_SQL);
+
+      expect(await dayTotals()).toEqual([
+        { back: 36, total: 24 },
+        { back: 35, total: 24 },
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
 
   it("rollup 不把 SET LOCAL 泄漏到池里的下一位借用者", async () => {
     const pool = new Pool({

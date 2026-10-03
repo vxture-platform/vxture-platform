@@ -26,7 +26,8 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
--- 分区边界按会话 TimeZone 解释，仓里没钉它（RDS 参数组决定）：与 96_partitions.sql /
+-- 分区边界按会话 TimeZone 解释。库级默认自 2026-10-04 起钉成 UTC（00_schemas.sql 末尾 /
+-- 迁移 2026-10-05-database-timezone-utc.sql），本句是第二道锁：与 96_partitions.sql /
 -- 2026-10-03-extend-partition-window.sql 同一个理由钉成 UTC。SET LOCAL 只管本事务。
 SET LOCAL TIME ZONE 'UTC';
 

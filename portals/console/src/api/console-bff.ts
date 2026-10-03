@@ -1998,6 +1998,7 @@ export async function updateUserProfile(payload: {
   gender?: "male" | "female" | "" | null;
   email?: string | null;
   phone?: string | null;
+  /** IANA 名;空串 = 清除(回到默认 UTC);null / 缺省 = 不改。 */
   timezone?: string | null;
   language?: string | null;
 }): Promise<ConsoleUserProfile> {
@@ -2574,12 +2575,12 @@ export interface ConsoleUsageTrend {
   granularity: string;
   /** 桶边界所在时区(IANA):'UTC' 或账号里设置的时区;只有 day 档才可能不是 UTC。 */
   bucketZone: string;
-  /** 账号里设置的时区;null = 未设置。hour 档轴标按它换算。 */
+  /** 账号里设置的时区(原样);null = 未设置。hour 档轴标按它换算——除非 zoneFallbackReason = 'unsupported'。 */
   userZone: string | null;
   /**
    * bucketZone ≠ userZone 的原因;null = 已按你的时区(或没设 / 设的就是 UTC)。
    * retention = 窗口超过可重切的天数;granularity = 周/月/年一律 UTC;
-   * unsupported = 账号里的时区认不出。
+   * unsupported = 账号里的时区认不出(对每个档位都报,优先级最高;见到它就别拿 userZone 标轴)。
    */
   zoneFallbackReason: "retention" | "granularity" | "unsupported" | null;
   buckets: ConsoleUsageTrendBucket[];
