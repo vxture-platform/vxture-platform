@@ -567,8 +567,9 @@ describe("tenant verification approve/reject", () => {
   /* 拆门的反例：这两条就是「门真的分开了」的判据。能改租户资料 ≠ 能下合规裁定；
      拿着整个租户域的读 + 写两码仍然批不了实名审核。
      2026-10-03 之前这两条是**绿**的 —— 那正是被拆掉的那道粗门。 */
-  /* 注入粗码是**关键**：不带它旧门同样 403，这条就证明不了「门分开了」。
-     带上它 = 今天 administrator / operator 的真实持码，旧代码下能批，故为红。 */
+  /* 2026-10-03 写这几条时还注入了旧桥合成的粗码 platform.tenant.manage——不带它旧门同样
+     403，证明不了「门分开了」。桥 2026-10-04 整个删了（auth.service.spec.ts 钉着），注入集回到
+     目录里的真实持码：administrator / operator 今天就是 profile.read + profile.manage。 */
   it("能改租户资料的人（含旧桥合成的粗码）批不了实名审核", async () => {
     const rw = noDbPool();
     const router = new TenantsRouter(
@@ -578,11 +579,7 @@ describe("tenant verification approve/reject", () => {
     );
     await expect(
       router.approveTenantVerification(
-        makeReq([
-          "tenant:profile.read",
-          "tenant:profile.manage",
-          "platform.tenant.manage",
-        ]),
+        makeReq(["tenant:profile.read", "tenant:profile.manage"]),
         UUID_A,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -600,11 +597,9 @@ describe("tenant verification approve/reject", () => {
       notifierSpy().notifier,
     );
     await expect(
-      router.updateTenant(
-        makeReq(["tenant:profile.manage", "platform.tenant.manage"]),
-        UUID_A,
-        { status: "suspended" },
-      ),
+      router.updateTenant(makeReq(["tenant:profile.manage"]), UUID_A, {
+        status: "suspended",
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(rw.connect).not.toHaveBeenCalled();
   });
@@ -617,11 +612,9 @@ describe("tenant verification approve/reject", () => {
       notifierSpy().notifier,
     );
     await expect(
-      router.updateTenant(
-        makeReq(["tenant:profile.manage", "platform.tenant.manage"]),
-        UUID_A,
-        { status: "cancelled" },
-      ),
+      router.updateTenant(makeReq(["tenant:profile.manage"]), UUID_A, {
+        status: "cancelled",
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(rw.connect).not.toHaveBeenCalled();
   });
@@ -635,11 +628,9 @@ describe("tenant verification approve/reject", () => {
     );
     // 没有 lifecycle 码也要能走到解析 tenantId 那一步 —— 403 不该在这里出现。
     await expect(
-      router.updateTenant(
-        makeReq(["tenant:profile.manage", "platform.tenant.manage"]),
-        UUID_A,
-        { displayName: "新简称" },
-      ),
+      router.updateTenant(makeReq(["tenant:profile.manage"]), UUID_A, {
+        displayName: "新简称",
+      }),
     ).rejects.not.toBeInstanceOf(ForbiddenException);
   });
 

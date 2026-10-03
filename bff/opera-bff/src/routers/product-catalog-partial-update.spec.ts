@@ -89,7 +89,8 @@ function makeRouter(opts: { readonly state?: string } = {}) {
 }
 
 /**
- * 详情页真正送的那 11 个字段——照着 ProductDetailPage.tsx 的 `save()` 抄。
+ * 详情页真正送的那 10 个字段——照着 ProductDetailPage.tsx 的 `save()` 抄
+ * （`isCustomerVisible` 2026-10-04 起不送：上站可见性归 admin，送了会被按字段 400）。
  *
  * `origin` 是受管枚举（`ProductOrigin`），不加 `as const` 会被推成 `string`。
  */
@@ -101,7 +102,6 @@ const DETAIL_PAGE_BODY = {
   description: null,
   productType: "general_agent",
   originProvider: null,
-  isCustomerVisible: true,
   isWorkforceVisible: true,
   surfaces: ["web"],
   iconUrl: null,
@@ -121,9 +121,23 @@ describe("updateProductTx · 缺席即不改", () => {
       expect(t.writes(col), `${col} 这次不该被写`).toBe(false);
     }
     /* 送了的照写——否则「一列都不写」也能让上面四条过。 */
-    for (const col of ["product_nick", "is_customer_visible", "icon_url"]) {
+    for (const col of ["product_nick", "is_workforce_visible", "icon_url"]) {
       expect(t.writes(col), `${col} 这次该写`).toBe(true);
     }
+  });
+
+  it("is_customer_visible 不在 SET 列表里——它归 admin（owner 2026-10-04），opera 的 UPDATE 不碰它", async () => {
+    const t = makeRouter();
+    await t.update(DETAIL_PAGE_BODY);
+    /* 只看 SET 列表：RETURNING 里读回它是对的（页面要显示 admin 设的值）。 */
+    expect(t.sql()).not.toMatch(/is_customer_visible\s*=/);
+    expect(t.sql()).toMatch(/RETURNING[\s\S]*is_customer_visible/);
+    /* 摘掉一对 CASE 参数之后，编号必须连续地前移——错位不报错，只会把值写到别的列上。
+       `writes()` 按 SQL 里的 `$n` 去参数里取，这里再核一遍参数总数与最大编号一致。 */
+    const max = Math.max(
+      ...[...t.sql().matchAll(/\$(\d+)/g)].map((m) => Number(m[1])),
+    );
+    expect(t.params()).toHaveLength(max);
   });
 
   it("显式 null 是清空，不是不改——两者不能合并", async () => {

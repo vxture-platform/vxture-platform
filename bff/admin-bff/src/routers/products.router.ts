@@ -4,7 +4,6 @@ import {
   ConflictException,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   Inject,
   NotFoundException,
@@ -14,13 +13,13 @@ import {
   Put,
   Query,
   Req,
-  UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
 import { TIERS, type Tier } from "@vxture-platform/shared";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { RequireStepUp } from "../auth/step-up.decorator";
+import { assertAnyCapability } from "../auth/capability";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import {
   isValidIndustry,
@@ -70,7 +69,7 @@ export class ProductsRouter {
   async listCapabilities(
     @Req() req: Request & RequestContext,
   ): Promise<ProductCapabilityRecord[]> {
-    assertCanManageProducts(req);
+    assertCanReadCapabilityCatalog(req);
     return loadProductCapabilities(this.pool);
   }
 
@@ -79,7 +78,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("productCode") productCode: string,
   ): Promise<ProductCapabilityRecord> {
-    assertCanManageProducts(req);
+    assertCanReadCapabilityCatalog(req);
     const normalizedCode = decodeURIComponent(productCode);
     const capability = (await loadProductCapabilities(this.pool)).find(
       (item) => item.productCode === normalizedCode,
@@ -134,7 +133,7 @@ export class ProductsRouter {
     @Param("productCode") productCode: string,
     @Body() body: { direction?: unknown; anchorCode?: unknown },
   ): Promise<{ productCode: string; moved: boolean; position: number }> {
-    assertCanManageProducts(req);
+    assertCanManageCapabilityCatalog(req);
     const code = decodeURIComponent(productCode);
     const direction = body?.direction;
     if (
@@ -235,7 +234,7 @@ export class ProductsRouter {
     @Param("productCode") productCode: string,
     @Body() body: ProductContentWriteInput,
   ): Promise<ProductCapabilityRecord> {
-    assertCanManageProducts(req);
+    assertCanManageCapabilityCatalog(req);
     const code = decodeURIComponent(productCode);
 
     if (
@@ -405,7 +404,7 @@ export class ProductsRouter {
   async listReleases(
     @Req() req: Request & RequestContext,
   ): Promise<ProductReleaseRecord[]> {
-    assertCanManageProducts(req);
+    assertCanReadPlans(req);
     return loadProductReleases(this.pool);
   }
 
@@ -413,7 +412,7 @@ export class ProductsRouter {
   async listPlans(
     @Req() req: Request & RequestContext,
   ): Promise<ProductPlanRecord[]> {
-    assertCanManageProducts(req);
+    assertCanReadPlans(req);
 
     const planRows = await this.pool.query<ProductPlanRow>(PRODUCT_PLAN_SQL, [
       [...TIERS],
@@ -469,7 +468,7 @@ export class ProductsRouter {
   async listSolutions(
     @Req() req: Request & RequestContext,
   ): Promise<ProductSolutionRecord[]> {
-    assertCanManageProducts(req);
+    assertCanReadSolutions(req);
     return loadProductSolutions(this.pool);
   }
 
@@ -478,7 +477,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
   ): Promise<ProductSolutionDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanReadSolutions(req);
     return loadProductSolutionDetail(
       this.pool,
       decodeURIComponent(solutionCode),
@@ -497,7 +496,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Body() body: ProductSolutionWriteInput,
   ): Promise<ProductSolutionDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanManageSolutions(req);
     const solutionCode = readSolutionCode(body?.solutionCode);
     const fields = readSolutionFields(body, { requireName: true });
     if (!fields.solution_name) {
@@ -551,7 +550,7 @@ export class ProductsRouter {
     @Param("solutionCode") solutionCode: string,
     @Body() body: ProductSolutionWriteInput,
   ): Promise<ProductSolutionDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanManageSolutions(req);
     const code = decodeURIComponent(solutionCode);
     const fields = readSolutionFields(body, { requireName: false });
     const keys = Object.keys(fields) as (keyof SolutionFields)[];
@@ -588,7 +587,7 @@ export class ProductsRouter {
     @Param("solutionCode") solutionCode: string,
     @Body() body: { state?: string },
   ): Promise<ProductSolutionDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanManageSolutions(req);
     const code = decodeURIComponent(solutionCode);
     const next = body?.state;
     if (!next || !isSolutionStatus(next)) {
@@ -641,7 +640,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
   ): Promise<{ solutionCode: string; deleted: true }> {
-    assertCanManageProducts(req);
+    assertCanManageSolutions(req);
     const code = decodeURIComponent(solutionCode);
     await withTransaction(this.rwPool, async (client) => {
       const solution = await lockSolution(client, code);
@@ -696,7 +695,7 @@ export class ProductsRouter {
       | ProductSolutionProductInput[]
       | { products?: ProductSolutionProductInput[] },
   ): Promise<ProductSolutionDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanManageSolutions(req);
     const code = decodeURIComponent(solutionCode);
     const items = readSolutionProductInputs(body);
     await withTransaction(this.rwPool, async (client) => {
@@ -740,7 +739,7 @@ export class ProductsRouter {
     @Param("tier") tierParam: string,
     @Body() body: ProductSolutionPlanBindInput,
   ): Promise<ProductSolutionDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanManageSolutions(req);
     const code = decodeURIComponent(solutionCode);
     const tier = readTier(tierParam);
     const planRef = readPlanRef(body);
@@ -807,7 +806,7 @@ export class ProductsRouter {
     @Param("solutionCode") solutionCode: string,
     @Param("tier") tierParam: string,
   ): Promise<ProductSolutionDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanManageSolutions(req);
     const code = decodeURIComponent(solutionCode);
     const tier = readTier(tierParam);
     await withTransaction(this.rwPool, async (client) => {
@@ -843,7 +842,7 @@ export class ProductsRouter {
     @Param("solutionCode") solutionCode: string,
     @Param("tierCode") tierCode: string,
   ): Promise<ProductServicePlanDetailRecord> {
-    assertCanManageProducts(req);
+    assertCanReadSolutions(req);
     return loadProductServicePlanDetail(
       this.pool,
       decodeURIComponent(solutionCode),
@@ -855,7 +854,7 @@ export class ProductsRouter {
   async listAgents(
     @Req() req: Request & RequestContext,
   ): Promise<ProductAgentRecord[]> {
-    assertCanManageProducts(req);
+    assertCanReadCapabilityCatalog(req);
     return loadProductAgents(this.pool);
   }
 
@@ -869,7 +868,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("planId") planId: string,
   ): Promise<PlanVersionSummary[]> {
-    assertCanManageProducts(req);
+    assertCanReadPlans(req);
     const { rows } = await this.pool.query<PlanVersionSummaryRow>(
       PLAN_VERSIONS_SQL,
       [planId],
@@ -882,7 +881,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("versionId") versionId: string,
   ): Promise<PlanVersionDetail> {
-    assertCanManageProducts(req);
+    assertCanReadPlans(req);
     return loadPlanVersionDetail(this.pool, versionId);
   }
 
@@ -892,7 +891,7 @@ export class ProductsRouter {
     @Param("versionId") versionId: string,
     @Body() body: UpdateDraftVersionInput,
   ): Promise<PlanVersionDetail> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     const client = await this.rwPool.connect();
     try {
       await client.query("BEGIN");
@@ -908,6 +907,42 @@ export class ProductsRouter {
         throw new BadRequestException(
           "Only an unpublished draft version can be edited",
         );
+      }
+      /* 定价第二道门（owner 2026-10-04，与三个新码同批）：改价格与改配额是两类动作，
+         目录里各有自己的码。价格没有独立端点——它只经这一个 PATCH 落到
+         product.plan_prices——所以在同一请求里补判，判在任何写之前。
+
+         判据是「这次请求**改了**哪个周期的价格」，不是「请求里有没有 prices 字段」：
+         两个草稿编辑器（PlanDraftEditorPage / PlanVersionsPage）每次保存都把从详情
+         灌进表单的价格原样送回来（发布前也要重发一遍，否则未保存的改价会被静默丢掉），
+         按字段存在与否判门，只授 plan.manage 的角色连改配额都 403——门拆成了墙。
+         与库里已存的行逐周期比（金额按分比，列是 numeric(12,2)，详情下发的是
+         "99.00" 字符串）；比在 FOR UPDATE 之后，两个人同时改同一版时后到的那个看到
+         的是前一个已提交的价，不会拿着过期的表单值把别人刚改的价写回去。 */
+      if (Array.isArray(body.prices) && body.prices.length > 0) {
+        const stored = await client.query<{
+          cycle_unit: string;
+          price: string;
+        }>(
+          `SELECT cycle_unit, price FROM product.plan_prices
+            WHERE plan_version_id = $1 AND cycle_count = 1 AND currency = 'CNY'`,
+          [versionId],
+        );
+        const storedCents = new Map(
+          stored.rows.map((r) => [
+            r.cycle_unit,
+            Math.round(Number(r.price) * 100),
+          ]),
+        );
+        const changesPrice = body.prices.some((p) => {
+          const have = storedCents.get(String(p.cycleUnit));
+          return (
+            have === undefined || have !== Math.round(Number(p.price) * 100)
+          );
+        });
+        if (changesPrice) {
+          assertCanManagePrices(req);
+        }
       }
       if (Array.isArray(body.prices)) {
         for (const p of body.prices) {
@@ -962,7 +997,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("versionId") versionId: string,
   ): Promise<{ published: true; versionId: string }> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     const client = await this.rwPool.connect();
     try {
       await client.query("BEGIN");
@@ -1109,7 +1144,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("versionId") versionId: string,
   ): Promise<{ deleted: true; versionId: string }> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     await withTransaction(this.rwPool, async (client) => {
       const cur = await client.query<{
         plan_id: string;
@@ -1180,7 +1215,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("planId") planId: string,
   ): Promise<PlanDeletionImpact> {
-    assertCanManageProducts(req);
+    assertCanReadPlans(req);
     const exists = await this.pool.query<{ plan_code: string }>(
       `SELECT plan_code FROM product.plans WHERE id = $1 AND deleted_at IS NULL`,
       [planId],
@@ -1231,7 +1266,7 @@ export class ProductsRouter {
     @Param("planId") planId: string,
     @Body() body: PlanDeleteBody,
   ): Promise<{ deleted: true; planCode: string }> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     /* 服务端也要显式确认——两步删除的第二步不该被一个漏参的 DELETE 顶穿。 */
     if (body?.confirm !== true) {
       throw new BadRequestException(
@@ -1350,7 +1385,7 @@ export class ProductsRouter {
       isWorkforceVisible?: unknown;
     },
   ): Promise<{ planCode: string; updated: string[] }> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
 
     const sets: string[] = [];
     const values: unknown[] = [planId];
@@ -1457,7 +1492,7 @@ export class ProductsRouter {
     isPublic: boolean;
     subscriptionCount: number;
   }> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     if (typeof body?.isPublic !== "boolean") {
       throw new BadRequestException("isPublic must be a boolean");
     }
@@ -1522,7 +1557,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("planId") planId: string,
   ): Promise<{ deprecated: true; planCode: string }> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     let planCode = "";
     await withTransaction(this.rwPool, async (client) => {
       const cur = await client.query<{ plan_code: string; status: string }>(
@@ -1573,7 +1608,11 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Param("productCode") productCode: string,
   ): Promise<MetricOption[]> {
-    assertCanManageProducts(req);
+    /* 读的是产品的度量定义，但三个消费方全是套餐版本页（PlanDraftEditor / PlanVersions /
+       PlanVersionReadonly 取它当配额项的标签与下拉）——产品目录页不读它。按「这一页要什么
+       码」判：套餐读码。finance / auditor 持 plan.read 不持 capability.read，判目录码会让
+       它们的只读版本页少一截。 */
+    assertCanReadPlans(req);
     const code = decodeURIComponent(productCode);
     const product = await this.pool.query<{ id: string }>(
       `SELECT id FROM product.products WHERE product_code = $1 AND deleted_at IS NULL`,
@@ -1618,7 +1657,7 @@ export class ProductsRouter {
     @Param("versionId") versionId: string,
     @Body() body: ReplaceBundledComponentsInput,
   ): Promise<PlanVersionDetail> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     const items = readBundledComponentInputs(body);
     try {
       await withTransaction(this.rwPool, async (client) => {
@@ -1694,7 +1733,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Query("include") include?: string,
   ): Promise<PlanMatrixProduct[]> {
-    assertCanManageProducts(req);
+    assertCanReadPlans(req);
     /* 默认收起已退役的套餐：退役=「这一档不卖了」,它连同全部版本退出主视线,
        但**不是删除**——老订阅仍钉在它的版本上照常解析,所以行还在、查得到。
        `?include=deprecated` 让二级页的「已退役」分区把它们取回来。
@@ -1721,7 +1760,7 @@ export class ProductsRouter {
     @Req() req: Request & RequestContext,
     @Body() body: CreatePlanInput,
   ): Promise<PlanVersionDetail> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     const input = readCreatePlanInput(body);
     let draftId = "";
     try {
@@ -1821,7 +1860,7 @@ export class ProductsRouter {
     @Param("planId") planId: string,
     @Body() body?: { majorNo?: unknown },
   ): Promise<PlanVersionDetail> {
-    assertCanManageProducts(req);
+    assertCanManagePlans(req);
     let requestedMajor: number | null = null;
     if (body?.majorNo !== undefined && body.majorNo !== null) {
       if (
@@ -3002,17 +3041,49 @@ function toIso(value: Date | string | null): string {
     : new Date(value).toISOString();
 }
 
-function assertCanManageProducts(req: Request & RequestContext): void {
-  if (!req.user) {
-    throw new UnauthorizedException("No active session");
-  }
+/* ── 能力门（2026-10-04 按细码拆门；owner：「一个码 tenant manage，和一个码 product
+ * manage，这个必须要拆解，首先是按照 admin，opera 两个平面，再按照同类业务维度」）──
+ *
+ * 此前本文件 32 个入口全判一个遗留扁平码 platform.product.manage，而那个码不在目录里，
+ * 由 auth.service 的旧桥从 product:plan.manage 合成——于是「能改套餐」同时等于能改
+ * 产品目录、能建解决方案、能改价格；反过来，目录里只授 plan.read / price.read /
+ * capability.read 的 finance / engineer / auditor 一个读入口都进不来。
+ *
+ * 现在按本域三条线分：产品目录 / 解决方案 / 套餐。读门收 .read | .manage
+ * （capability.ts：manage 蕴含 read），写门只收 .manage。价格是第四条线：没有独立端点，
+ * 只在套餐草稿 PATCH 里按字段补判（见 updateDraftVersion）。旧桥已随本批删除。 */
+function assertCanReadCapabilityCatalog(req: Request & RequestContext): void {
+  assertAnyCapability(req, [
+    "product:capability.read",
+    "product:capability.manage",
+  ]);
+}
 
-  if (
-    !req.capabilities ||
-    !req.capabilities.includes("platform.product.manage")
-  ) {
-    throw new ForbiddenException("Missing platform.product.manage capability");
-  }
+function assertCanManageCapabilityCatalog(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["product:capability.manage"]);
+}
+
+function assertCanReadSolutions(req: Request & RequestContext): void {
+  assertAnyCapability(req, [
+    "product:solution.read",
+    "product:solution.manage",
+  ]);
+}
+
+function assertCanManageSolutions(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["product:solution.manage"]);
+}
+
+function assertCanReadPlans(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["product:plan.read", "product:plan.manage"]);
+}
+
+function assertCanManagePlans(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["product:plan.manage"]);
+}
+
+function assertCanManagePrices(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["product:price.manage"]);
 }
 
 interface ProductPlanRow {

@@ -4,7 +4,7 @@
   "total": 378,
   "sites": [
     {
-      "at": "bff/admin-bff/src/routers/accounts.router.ts:125",
+      "at": "bff/admin-bff/src/routers/accounts.router.ts:126",
       "face": "operator",
       "verb": "Get",
       "route": ":id",
@@ -14,12 +14,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "id",
-      "gateHints": "assertCanManageAccounts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadAccounts",
+      "gateHintsVia": "assertCanReadAccounts → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/admin-bff/src/routers/accounts.router.ts:170",
+      "at": "bff/admin-bff/src/routers/accounts.router.ts:171",
       "face": "operator",
       "verb": "Get",
       "route": ":id/avatar",
@@ -29,12 +29,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "id",
-      "gateHints": "assertCanManageAccounts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadAccounts",
+      "gateHintsVia": "assertCanReadAccounts → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/admin-bff/src/routers/accounts.router.ts:204",
+      "at": "bff/admin-bff/src/routers/accounts.router.ts:205",
       "face": "operator",
       "verb": "Post",
       "route": ":id/avatar/reset",
@@ -49,7 +49,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里） rwPool.connect@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/accounts.router.ts:260",
+      "at": "bff/admin-bff/src/routers/accounts.router.ts:261",
       "face": "operator",
       "verb": "Post",
       "route": ":id/disable",
@@ -64,7 +64,7 @@
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/accounts.router.ts:290",
+      "at": "bff/admin-bff/src/routers/accounts.router.ts:291",
       "face": "operator",
       "verb": "Post",
       "route": ":id/enable",
@@ -79,7 +79,7 @@
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/accounts.router.ts:320",
+      "at": "bff/admin-bff/src/routers/accounts.router.ts:321",
       "face": "operator",
       "verb": "Post",
       "route": ":id/force-logout",
@@ -739,7 +739,7 @@
       "unresolved": "rwPool.connect@Pool（类不在 bff/** 里） pool.query@Pool（类不在 bff/** 里） industryLabel@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1106",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1141",
       "face": "operator",
       "verb": "Delete",
       "route": "plan-versions/:versionId",
@@ -749,12 +749,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "versionId",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1178",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1213",
       "face": "operator",
       "verb": "Get",
       "route": "plans/:planId/deletable",
@@ -764,12 +764,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "planId",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadPlans",
+      "gateHintsVia": "assertCanReadPlans → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1227",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1262",
       "face": "operator",
       "verb": "Delete",
       "route": "plans/:planId",
@@ -779,12 +779,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "planId",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:131",
+      "at": "bff/admin-bff/src/routers/products.router.ts:130",
       "face": "operator",
       "verb": "Patch",
       "route": "capabilities/:productCode/move",
@@ -794,12 +794,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanManageCapabilityCatalog",
+      "gateHintsVia": "assertCanManageCapabilityCatalog → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1341",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1376",
       "face": "operator",
       "verb": "Patch",
       "route": "plans/:planId",
@@ -809,12 +809,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "planId",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1449",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1484",
       "face": "operator",
       "verb": "Patch",
       "route": "plans/:planId/visibility",
@@ -824,12 +824,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "planId",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1519",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1554",
       "face": "operator",
       "verb": "Post",
       "route": "plans/:planId/deprecate",
@@ -839,12 +839,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "planId",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1614",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1653",
       "face": "operator",
       "verb": "Put",
       "route": "plan-versions/:versionId/bundled-components",
@@ -854,12 +854,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "versionId",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1719",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1758",
       "face": "operator",
       "verb": "Post",
       "route": "plans",
@@ -869,12 +869,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:1818",
+      "at": "bff/admin-bff/src/routers/products.router.ts:1857",
       "face": "operator",
       "verb": "Post",
       "route": "plans/:planId/versions",
@@ -884,12 +884,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "planId",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:231",
+      "at": "bff/admin-bff/src/routers/products.router.ts:230",
       "face": "operator",
       "verb": "Patch",
       "route": "capabilities/:productCode/content",
@@ -899,12 +899,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManageCapabilityCatalog",
+      "gateHintsVia": "assertCanManageCapabilityCatalog → assertAnyCapability",
       "unresolved": "isValidReleaseStage@@vxture/core-utils isForwardReleaseStageMove@@vxture/core-utils releaseStageLabel@@vxture/core-utils extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:494",
+      "at": "bff/admin-bff/src/routers/products.router.ts:493",
       "face": "operator",
       "verb": "Post",
       "route": "solutions",
@@ -914,12 +914,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManageSolutions",
+      "gateHintsVia": "assertCanManageSolutions → assertAnyCapability",
       "unresolved": "isValidIndustry@@vxture/core-utils extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:547",
+      "at": "bff/admin-bff/src/routers/products.router.ts:546",
       "face": "operator",
       "verb": "Put",
       "route": "solutions/:solutionCode",
@@ -929,12 +929,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManageSolutions",
+      "gateHintsVia": "assertCanManageSolutions → assertAnyCapability",
       "unresolved": "isValidIndustry@@vxture/core-utils extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:584",
+      "at": "bff/admin-bff/src/routers/products.router.ts:583",
       "face": "operator",
       "verb": "Patch",
       "route": "solutions/:solutionCode/state",
@@ -944,12 +944,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManageSolutions",
+      "gateHintsVia": "assertCanManageSolutions → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:689",
+      "at": "bff/admin-bff/src/routers/products.router.ts:688",
       "face": "operator",
       "verb": "Put",
       "route": "solutions/:solutionCode/products",
@@ -959,12 +959,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManageSolutions",
+      "gateHintsVia": "assertCanManageSolutions → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:735",
+      "at": "bff/admin-bff/src/routers/products.router.ts:734",
       "face": "operator",
       "verb": "Put",
       "route": "solutions/:solutionCode/plans/:tier",
@@ -974,12 +974,12 @@
       "takesSession": true,
       "idInGate": false,
       "idNames": "",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManageSolutions",
+      "gateHintsVia": "assertCanManageSolutions → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:867",
+      "at": "bff/admin-bff/src/routers/products.router.ts:866",
       "face": "operator",
       "verb": "Get",
       "route": "plans/:planId/versions",
@@ -989,12 +989,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "planId",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadPlans",
+      "gateHintsVia": "assertCanReadPlans → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:880",
+      "at": "bff/admin-bff/src/routers/products.router.ts:879",
       "face": "operator",
       "verb": "Get",
       "route": "plan-versions/:versionId",
@@ -1004,12 +1004,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "versionId",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadPlans",
+      "gateHintsVia": "assertCanReadPlans → assertAnyCapability",
       "unresolved": ""
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:889",
+      "at": "bff/admin-bff/src/routers/products.router.ts:888",
       "face": "operator",
       "verb": "Patch",
       "route": "plan-versions/:versionId",
@@ -1019,12 +1019,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "versionId",
-      "gateHints": "assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "rwPool.connect@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/admin-bff/src/routers/products.router.ts:959",
+      "at": "bff/admin-bff/src/routers/products.router.ts:994",
       "face": "operator",
       "verb": "Post",
       "route": "plan-versions/:versionId/publish",
@@ -1034,8 +1034,8 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "versionId",
-      "gateHints": "@RequireStepUp assertCanManageProducts",
-      "gateHintsVia": "",
+      "gateHints": "@RequireStepUp assertCanManagePlans",
+      "gateHintsVia": "assertCanManagePlans → assertAnyCapability",
       "unresolved": "rwPool.connect@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils"
     },
     {
@@ -1099,7 +1099,7 @@
       "unresolved": "extractClientIp@@vxture/core-utils pool.query@Pool（类不在 bff/** 里） rwPool.connect@Pool（类不在 bff/** 里） industryLabel@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:149",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:148",
       "face": "operator",
       "verb": "Post",
       "route": "verifications/:id/approve",
@@ -1110,11 +1110,11 @@
       "idInGate": true,
       "idNames": "id",
       "gateHints": "reviewVerification",
-      "gateHintsVia": "reviewVerification → assertCanManageTenants",
+      "gateHintsVia": "reviewVerification → assertCanReviewTenantVerification → assertAnyCapability",
       "unresolved": ""
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:163",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:162",
       "face": "operator",
       "verb": "Post",
       "route": "verifications/:id/reject",
@@ -1125,11 +1125,11 @@
       "idInGate": true,
       "idNames": "id",
       "gateHints": "reviewVerification",
-      "gateHintsVia": "reviewVerification → assertCanManageTenants",
+      "gateHintsVia": "reviewVerification → assertCanReviewTenantVerification → assertAnyCapability",
       "unresolved": ""
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:181",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:180",
       "face": "operator",
       "verb": "Get",
       "route": ":id",
@@ -1139,12 +1139,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "id",
-      "gateHints": "assertCanManageTenants",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadTenants",
+      "gateHintsVia": "assertCanReadTenants → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） industryLabel@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:208",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:207",
       "face": "operator",
       "verb": "Put",
       "route": ":id",
@@ -1155,11 +1155,11 @@
       "idInGate": false,
       "idNames": "id",
       "gateHints": "assertCanManageTenants",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTenants → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） rwPool.connect@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils industryLabel@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:406",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:420",
       "face": "operator",
       "verb": "Put",
       "route": ":id/operator-notes",
@@ -1170,11 +1170,11 @@
       "idInGate": false,
       "idNames": "id",
       "gateHints": "assertCanManageTenants",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTenants → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） rwPool.query@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils industryLabel@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:459",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:473",
       "face": "operator",
       "verb": "Get",
       "route": ":id/logo",
@@ -1184,12 +1184,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "id",
-      "gateHints": "assertCanManageTenants",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadTenants",
+      "gateHintsVia": "assertCanReadTenants → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:490",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:504",
       "face": "operator",
       "verb": "Post",
       "route": ":id/logo/reset",
@@ -1200,11 +1200,11 @@
       "idInGate": false,
       "idNames": "id",
       "gateHints": "@RequireStepUp assertCanResetTenantBrand",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanResetTenantBrand → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） rwPool.query@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:521",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:535",
       "face": "operator",
       "verb": "Post",
       "route": ":id/suspend",
@@ -1215,11 +1215,11 @@
       "idInGate": false,
       "idNames": "id",
       "gateHints": "@RequireStepUp assertCanManageTenantLifecycle",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTenantLifecycle → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） rwPool.query@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils industryLabel@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:559",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:573",
       "face": "operator",
       "verb": "Post",
       "route": ":id/resume",
@@ -1230,11 +1230,11 @@
       "idInGate": false,
       "idNames": "id",
       "gateHints": "@RequireStepUp assertCanManageTenantLifecycle",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTenantLifecycle → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） rwPool.query@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils industryLabel@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:597",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:611",
       "face": "operator",
       "verb": "Get",
       "route": ":id/members",
@@ -1244,12 +1244,12 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "id",
-      "gateHints": "assertCanManageTenants",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadTenants",
+      "gateHintsVia": "assertCanReadTenants → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:619",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:633",
       "face": "operator",
       "verb": "Post",
       "route": ":id/members/:userId/role",
@@ -1260,11 +1260,11 @@
       "idInGate": false,
       "idNames": "id userId",
       "gateHints": "assertCanManageTenants",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTenants → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） rwPool.connect@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:706",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:720",
       "face": "operator",
       "verb": "Post",
       "route": ":id/members/:userId/suspend",
@@ -1275,11 +1275,11 @@
       "idInGate": true,
       "idNames": "id userId",
       "gateHints": "setMemberStatus",
-      "gateHintsVia": "setMemberStatus → assertCanManageTenants",
+      "gateHintsVia": "setMemberStatus → assertCanManageTenants → assertAnyCapability",
       "unresolved": ""
     },
     {
-      "at": "bff/admin-bff/src/routers/tenants.router.ts:720",
+      "at": "bff/admin-bff/src/routers/tenants.router.ts:734",
       "face": "operator",
       "verb": "Post",
       "route": ":id/members/:userId/remove",
@@ -1290,7 +1290,7 @@
       "idInGate": true,
       "idNames": "id userId",
       "gateHints": "setMemberStatus",
-      "gateHintsVia": "setMemberStatus → assertCanManageTenants",
+      "gateHintsVia": "setMemberStatus → assertCanManageTenants → assertAnyCapability",
       "unresolved": ""
     },
     {
@@ -1305,7 +1305,7 @@
       "idInGate": false,
       "idNames": "",
       "gateHints": "assertCanManageTickets requireActor",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTickets → assertAnyCapability",
       "unresolved": "randomUUID@node:crypto extractClientIp@@vxture/core-utils pool.query@Pool（类不在 bff/** 里） industryLabel@@vxture/core-utils"
     },
     {
@@ -1319,8 +1319,8 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "id",
-      "gateHints": "assertCanManageTickets",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadTickets",
+      "gateHintsVia": "assertCanReadTickets → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里） industryLabel@@vxture/core-utils"
     },
     {
@@ -1334,8 +1334,8 @@
       "takesSession": false,
       "idInGate": false,
       "idNames": "id",
-      "gateHints": "assertCanManageTickets",
-      "gateHintsVia": "",
+      "gateHints": "assertCanReadTickets",
+      "gateHintsVia": "assertCanReadTickets → assertAnyCapability",
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
@@ -1350,7 +1350,7 @@
       "idInGate": true,
       "idNames": "id",
       "gateHints": "appendOperatorComment",
-      "gateHintsVia": "appendOperatorComment → assertCanManageTickets",
+      "gateHintsVia": "appendOperatorComment → assertCanManageTickets → assertAnyCapability",
       "unresolved": ""
     },
     {
@@ -1365,7 +1365,7 @@
       "idInGate": true,
       "idNames": "id",
       "gateHints": "appendOperatorComment",
-      "gateHintsVia": "appendOperatorComment → assertCanManageTickets",
+      "gateHintsVia": "appendOperatorComment → assertCanManageTickets → assertAnyCapability",
       "unresolved": ""
     },
     {
@@ -1380,7 +1380,7 @@
       "idInGate": true,
       "idNames": "id",
       "gateHints": "appendOperatorComment",
-      "gateHintsVia": "appendOperatorComment → assertCanManageTickets",
+      "gateHintsVia": "appendOperatorComment → assertCanManageTickets → assertAnyCapability",
       "unresolved": ""
     },
     {
@@ -1395,7 +1395,7 @@
       "idInGate": false,
       "idNames": "id",
       "gateHints": "assertCanManageTickets requireActor",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTickets → assertAnyCapability",
       "unresolved": "rwPool.connect@Pool（类不在 bff/** 里） pool.query@Pool（类不在 bff/** 里） industryLabel@@vxture/core-utils"
     },
     {
@@ -1410,7 +1410,7 @@
       "idInGate": true,
       "idNames": "id",
       "gateHints": "assertCanManageTickets requireActor",
-      "gateHintsVia": "",
+      "gateHintsVia": "assertCanManageTickets → assertAnyCapability",
       "unresolved": "extractClientIp@@vxture/core-utils logger.warn@属性类型未声明 logger.warn@NotifyLogger（类不在 bff/** 里） pool.query@Pool（类不在 bff/** 里） ticketEventReference@@vxture/service-notification industryLabel@@vxture/core-utils rwPool.connect@Pool（类不在 bff/** 里）"
     },
     {
@@ -1425,7 +1425,7 @@
       "idInGate": true,
       "idNames": "id",
       "gateHints": "closeTicket",
-      "gateHintsVia": "closeTicket → assertCanManageTickets",
+      "gateHintsVia": "closeTicket → assertCanManageTickets → assertAnyCapability",
       "unresolved": ""
     },
     {
@@ -4069,7 +4069,7 @@
       "unresolved": "repo.submitTenantVerification@OrganizationReadRepository（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1003",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1005",
       "face": "operator",
       "verb": "Post",
       "route": "provider-keys",
@@ -4084,7 +4084,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1022",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1024",
       "face": "operator",
       "verb": "Post",
       "route": "provider-keys/:providerKeyId/rotate",
@@ -4099,7 +4099,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1042",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1044",
       "face": "operator",
       "verb": "Post",
       "route": "provider-keys/:providerKeyId/activate",
@@ -4114,7 +4114,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1061",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1063",
       "face": "operator",
       "verb": "Post",
       "route": "provider-keys/:providerKeyId/deactivate",
@@ -4129,7 +4129,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1103",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1105",
       "face": "operator",
       "verb": "Post",
       "route": "endpoints",
@@ -4144,7 +4144,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1122",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1124",
       "face": "operator",
       "verb": "Patch",
       "route": "endpoints/:endpointId",
@@ -4159,7 +4159,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1142",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1144",
       "face": "operator",
       "verb": "Post",
       "route": "endpoints/:endpointId/activate",
@@ -4174,7 +4174,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1160",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1162",
       "face": "operator",
       "verb": "Post",
       "route": "endpoints/:endpointId/deactivate",
@@ -4189,7 +4189,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1178",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1180",
       "face": "operator",
       "verb": "Delete",
       "route": "endpoints/:endpointId",
@@ -4204,7 +4204,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1213",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1215",
       "face": "operator",
       "verb": "Post",
       "route": "api-keys",
@@ -4219,7 +4219,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1233",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1235",
       "face": "operator",
       "verb": "Post",
       "route": "api-keys/:apiKeyId/rotate",
@@ -4234,7 +4234,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1253",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1255",
       "face": "operator",
       "verb": "Post",
       "route": "api-keys/:apiKeyId/activate",
@@ -4249,7 +4249,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1272",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1274",
       "face": "operator",
       "verb": "Post",
       "route": "api-keys/:apiKeyId/deactivate",
@@ -4264,7 +4264,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1291",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1293",
       "face": "operator",
       "verb": "Post",
       "route": "api-keys/:apiKeyId/revoke",
@@ -4279,7 +4279,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1325",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1327",
       "face": "operator",
       "verb": "Delete",
       "route": "api-keys/:apiKeyId",
@@ -4294,7 +4294,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1346",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1348",
       "face": "operator",
       "verb": "Get",
       "route": "models",
@@ -4309,7 +4309,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1365",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1367",
       "face": "operator",
       "verb": "Post",
       "route": "models",
@@ -4324,7 +4324,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1385",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1387",
       "face": "operator",
       "verb": "Patch",
       "route": "models/:modelId",
@@ -4339,7 +4339,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1405",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1407",
       "face": "operator",
       "verb": "Post",
       "route": "models/:modelId/activate",
@@ -4354,7 +4354,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1423",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1425",
       "face": "operator",
       "verb": "Post",
       "route": "models/:modelId/deactivate",
@@ -4369,7 +4369,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1449",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1451",
       "face": "operator",
       "verb": "Post",
       "route": "models/:modelId/deprecate",
@@ -4384,7 +4384,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1469",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1471",
       "face": "operator",
       "verb": "Post",
       "route": "models/:modelId/undeprecate",
@@ -4399,7 +4399,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1488",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1490",
       "face": "operator",
       "verb": "Delete",
       "route": "models/:modelId",
@@ -4414,7 +4414,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1511",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1513",
       "face": "operator",
       "verb": "Post",
       "route": "models/:modelId/probe",
@@ -4429,7 +4429,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1566",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1568",
       "face": "operator",
       "verb": "Post",
       "route": "product-grants",
@@ -4444,7 +4444,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1587",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1589",
       "face": "operator",
       "verb": "Patch",
       "route": "product-grants/:productGrantId",
@@ -4459,7 +4459,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1607",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1609",
       "face": "operator",
       "verb": "Post",
       "route": "product-grants/:productGrantId/activate",
@@ -4474,7 +4474,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1625",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1627",
       "face": "operator",
       "verb": "Post",
       "route": "product-grants/:productGrantId/deactivate",
@@ -4489,7 +4489,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1643",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1645",
       "face": "operator",
       "verb": "Delete",
       "route": "product-grants/:productGrantId",
@@ -4504,7 +4504,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1665",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1667",
       "face": "operator",
       "verb": "Get",
       "route": "logs",
@@ -4519,7 +4519,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1794",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1796",
       "face": "operator",
       "verb": "Get",
       "route": "audit-logs",
@@ -4534,7 +4534,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:1855",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:1857",
       "face": "operator",
       "verb": "Get",
       "route": "usage-summaries",
@@ -4549,7 +4549,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:838",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:840",
       "face": "operator",
       "verb": "Post",
       "route": "providers",
@@ -4564,7 +4564,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:857",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:859",
       "face": "operator",
       "verb": "Patch",
       "route": "providers/:providerId",
@@ -4579,7 +4579,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:877",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:879",
       "face": "operator",
       "verb": "Post",
       "route": "providers/:providerId/activate",
@@ -4594,7 +4594,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:895",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:897",
       "face": "operator",
       "verb": "Post",
       "route": "providers/:providerId/deactivate",
@@ -4609,7 +4609,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:913",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:915",
       "face": "operator",
       "verb": "Delete",
       "route": "providers/:providerId",
@@ -4624,7 +4624,7 @@
       "unresolved": "makeContractAssert@@vxture-platform/shared extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/atlas.router.ts:944",
+      "at": "bff/opera-bff/src/routers/atlas.router.ts:946",
       "face": "operator",
       "verb": "Post",
       "route": "providers/:providerId/probe",
@@ -4909,7 +4909,7 @@
       "unresolved": ""
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1111",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1112",
       "face": "operator",
       "verb": "Post",
       "route": ":code/maintenance/start",
@@ -4924,7 +4924,7 @@
       "unresolved": "extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1232",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1233",
       "face": "operator",
       "verb": "Get",
       "route": ":id/deletion-preview",
@@ -4939,7 +4939,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1262",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1263",
       "face": "operator",
       "verb": "Delete",
       "route": ":id",
@@ -4954,7 +4954,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里） pool.connect@Pool（类不在 bff/** 里） extractClientIp@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1594",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1595",
       "face": "operator",
       "verb": "Get",
       "route": ":id/webhook",
@@ -4969,7 +4969,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1649",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1650",
       "face": "operator",
       "verb": "Put",
       "route": ":id/webhook",
@@ -4984,7 +4984,7 @@
       "unresolved": "encryptSecret@@vxture/core-utils deriveSecretKey@@vxture/core-utils pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1771",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1772",
       "face": "operator",
       "verb": "Get",
       "route": ":id/metrics",
@@ -4999,7 +4999,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1834",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1835",
       "face": "operator",
       "verb": "Put",
       "route": "metric-catalog/:metricKey",
@@ -5014,7 +5014,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1895",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:1896",
       "face": "operator",
       "verb": "Put",
       "route": ":id/metrics/:metricKey",
@@ -5029,7 +5029,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:2077",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:2078",
       "face": "operator",
       "verb": "Delete",
       "route": ":id/metrics/:metricKey",
@@ -5044,7 +5044,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:2135",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:2136",
       "face": "operator",
       "verb": "Get",
       "route": ":id/checklist",
@@ -5059,7 +5059,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:2154",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:2155",
       "face": "operator",
       "verb": "Patch",
       "route": ":id/checklist/:itemCode",
@@ -5074,7 +5074,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里） isAutoDeterminedChecklistItem@@vxture/core-utils"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:703",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:704",
       "face": "operator",
       "verb": "Put",
       "route": ":id/icon",
@@ -5089,7 +5089,7 @@
       "unresolved": "createHash@node:crypto pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:778",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:779",
       "face": "operator",
       "verb": "Get",
       "route": ":id/icon",
@@ -5104,7 +5104,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:807",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:808",
       "face": "operator",
       "verb": "Delete",
       "route": ":id/icon",
@@ -5119,7 +5119,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:866",
+      "at": "bff/opera-bff/src/routers/product-catalog.router.ts:867",
       "face": "operator",
       "verb": "Patch",
       "route": ":id/state",
@@ -5149,7 +5149,7 @@
       "unresolved": ""
     },
     {
-      "at": "bff/opera-bff/src/routers/product-onboarding.router.ts:407",
+      "at": "bff/opera-bff/src/routers/product-onboarding.router.ts:381",
       "face": "operator",
       "verb": "Post",
       "route": "onboarding",
@@ -5164,7 +5164,7 @@
       "unresolved": "isValidProductType@@vxture/core-utils isValidProductLayer@@vxture-platform/shared isSelectableProductLayer@@vxture-platform/shared isValidProductSurface@@vxture/core-utils randomBytes@node:crypto hash@bcryptjs genSalt@bcryptjs"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-onboarding.router.ts:447",
+      "at": "bff/opera-bff/src/routers/product-onboarding.router.ts:421",
       "face": "operator",
       "verb": "Put",
       "route": ":id/onboarding",
@@ -5179,7 +5179,7 @@
       "unresolved": "isValidProductType@@vxture/core-utils isValidProductLayer@@vxture-platform/shared isSelectableProductLayer@@vxture-platform/shared isValidProductSurface@@vxture/core-utils randomBytes@node:crypto hash@bcryptjs genSalt@bcryptjs"
     },
     {
-      "at": "bff/opera-bff/src/routers/product-onboarding.router.ts:510",
+      "at": "bff/opera-bff/src/routers/product-onboarding.router.ts:480",
       "face": "operator",
       "verb": "Put",
       "route": ":id/webhook-secret",
@@ -5599,7 +5599,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里） pool.connect@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-usage.router.ts:164",
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:241",
       "face": "customer",
       "verb": "Put",
       "route": "usage/gauge",
@@ -5614,7 +5614,7 @@
       "unresolved": "pool.query@Pool（类不在 bff/** 里）"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-usage.router.ts:61",
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:69",
       "face": "customer",
       "verb": "Post",
       "route": "usage/consume",
@@ -5626,7 +5626,7 @@
       "idNames": "",
       "gateHints": "@UseGuards(类级) scopeToS2sCaller",
       "gateHintsVia": "",
-      "unresolved": "pool.query@Pool（类不在 bff/** 里） pool.connect@Pool（类不在 bff/** 里） needsQuotaReset@@vxture-platform/shared anchoredPeriodStart@@vxture-platform/shared noticedQuotaPeriods.has@属性类型未声明 formatPrincipalNo@@vxture-platform/shared createHash@node:crypto noticedQuotaPeriods.clear@属性类型未声明 noticedQuotaPeriods.add@属性类型未声明 logger.warn@属性类型未声明"
+      "unresolved": "pool.query@Pool（类不在 bff/** 里） pool.connect@Pool（类不在 bff/** 里） logger.error@属性类型未声明 needsQuotaReset@@vxture-platform/shared noticedQuotaPeriods.has@属性类型未声明 formatPrincipalNo@@vxture-platform/shared createHash@node:crypto noticedQuotaPeriods.clear@属性类型未声明 noticedQuotaPeriods.add@属性类型未声明 logger.warn@属性类型未声明"
     },
     {
       "at": "bff/website-bff/src/routers/me.router.ts:107",

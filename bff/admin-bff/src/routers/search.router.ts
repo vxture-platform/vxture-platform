@@ -129,7 +129,9 @@ export class SearchRouter {
     /* 两源并发。能力不足的源根本不发查询；发出去的源若失败（超时、连接
      * 耗尽）只丢自己那一类，不整体 500。 */
     const [tenants, orders] = await Promise.all([
-      can("platform.tenant.manage")
+      /* 与 /api/tenants 的读门同一组码（2026-10-04 拆门前这里和那道门都是粗码，
+         自己跟自己一致；门拆了这里不跟着拆，就会出现「能开租户页但搜不到租户」）。 */
+      can("tenant:profile.read") || can("tenant:profile.manage")
         ? this.pool
             .query<TenantHitRow>(TENANT_SEARCH_SQL, [needle])
             .then((r) => r.rows)

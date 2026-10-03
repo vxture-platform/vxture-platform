@@ -17,7 +17,7 @@
 
 **核验①（auditor 五聚合读码全授）**：✅ auditor 补 `commerce:{billing,invoice,payment}.read`（原已有 subscription.read/order.read）→ 五聚合读全覆盖。
 
-**核验②（product:price.manage 硬切干净）**：✅ 全库反查 `platform.pricing.manage`（=`product:price.manage` 桥）在 admin-bff 的消费方**仅四个财务路由**（subscriptions/payments/invoices/commercial），products.router 用的是 `platform.product.manage` 不碰它。四路由切走后**该桥无残留消费 → 已退役**（`auth.service.ts`）。console-bff/console 门户的同名串是租户端独立体系，不受影响。`platform.tenant.manage` 桥保留（tenants/accounts/tickets 仍用，不在本次范围）。
+**核验②（product:price.manage 硬切干净）**：✅ 全库反查 `platform.pricing.manage`（=`product:price.manage` 桥）在 admin-bff 的消费方**仅四个财务路由**（subscriptions/payments/invoices/commercial），products.router 用的是 `platform.product.manage` 不碰它。四路由切走后**该桥无残留消费 → 已退役**（`auth.service.ts`）。console-bff/console 门户的同名串是租户端独立体系，不受影响。`platform.tenant.manage` 桥保留（tenants/accounts/tickets 仍用，不在本次范围）。**后记（2026-10-04）：租户 / 工单（#577，2026-10-03）与账号 / 待办 / 搜索 / 产品目录 / 解决方案 / 套餐 / 定价（2026-10-04）两批拆完，`LEGACY_CAPABILITY_BRIDGE` 整个删除。**
 
 **一个边界判断（需你确认或否决）**：`commercial` 只读仪表盘跨 metering/promotion/billing 三域，而 promotion/usage 域无 perm 码（独立缺口）。本次将其归 `commerce:billing.read`（财务读最贴近码），使 pricing 桥可退役；**后果：operation 无 billing.read → 看不到商业化仪表盘**（此前借 pricing 能看）。若你要 operation 保留仪表盘可见，需另定（如给 operation billing.read，或 commercial 单列 promotion/usage 域码——后者超 TD-027 范围）。
 
@@ -113,7 +113,7 @@ owner 要求：逐个过危码标准（**不可逆性 + 爆炸半径**），动�
    - payments：读→`commerce:payment.read|manage`；verify→`commerce:payment.settle`(危,`@RequireStepUp`)；reject→`commerce:payment.manage`。
    - orders：读→`commerce:order.read|manage`；offline-payment-confirm→`commerce:payment.settle`(危,`@RequireStepUp`)。
    - invoices(只读)/commercial(只读仪表盘)→对应 `.read`（或最小集伞码）。
-3. **摘除借用码**：以上路径不再引用 `platform.pricing.manage`/`platform.tenant.manage`；`product:price.manage` 回归只守 products 定价端点。同步收敛 `LEGACY_CAPABILITY_BRIDGE`（`product:price.manage`→`platform.pricing.manage` 若仅财务在用则可退役该桥项，待确认 products 侧消费）。
+3. **摘除借用码**：以上路径不再引用 `platform.pricing.manage`/`platform.tenant.manage`；`product:price.manage` 回归只守 products 定价端点。同步收敛 `LEGACY_CAPABILITY_BRIDGE`（`product:price.manage`→`platform.pricing.manage` 若仅财务在用则可退役该桥项，待确认 products 侧消费）。**2026-10-04：桥已整个删除。**
 4. **前端**：危码写端点（payment.settle/invoice.void/billing.adjust 对应的 UI 动作）以 `runWithStepUp` 包裹（复用 C2 ceremony）；其余 manage 端点无需前端改动（capability 不足时 403，配合导航过滤另项）。
 5. **危码前端 step-up 包裹点**：BillingDetailPage（discount/adjustment/supplement + 发票红冲）、PaymentsPage（verify）、OrderDetailPage（offline-payment-confirm）。
 

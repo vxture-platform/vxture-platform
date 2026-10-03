@@ -289,11 +289,10 @@ describe("工单写路径 —— 可见性契约", () => {
      LEGACY_CAPABILITY_BRIDGE 据后者合成出 platform.tenant.manage。
      这一组码在拆门前**能写**工单（旧门只认粗码），所以这条用例在旧代码下是红的；
      拆门后它必须 403 —— 对客户说话、内部备注、分派、关单，一条都不行。 */
-  const OPERATOR_TODAY = [
-    "support:ticket.read",
-    "tenant:profile.manage",
-    "platform.tenant.manage",
-  ];
+  /* 2026-10-04：auth.service 的 LEGACY_CAPABILITY_BRIDGE 整个删了（auth.service.spec.ts
+     钉着），req.capabilities 里再没有合成的 platform.tenant.manage——这里也不再注入它。
+     门分开了这件事现在由目录码本身说：持 tenant:profile.manage 不等于持 support:ticket.manage。 */
+  const OPERATOR_TODAY = ["support:ticket.read", "tenant:profile.manage"];
 
   it("operator 今天的持码（只授了工单读码）写不了工单：四个写入口逐个验", async () => {
     const tx = noDbPool();

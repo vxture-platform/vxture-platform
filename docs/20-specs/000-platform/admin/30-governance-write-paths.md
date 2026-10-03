@@ -23,7 +23,7 @@
    - 风险/合规**无现成 code**，需新增（见 §2 GQ1）。
 4. **openRiskCount 语义已固定**（overview 聚合）：未处置 = `deleted_at IS NULL AND reviewer_id IS NULL AND risk_level IN ('follow_up','high')` → 「审阅」动作 = 写 `reviewer_id`，与既有聚合天然一致。
 5. **审计**：`insertOperatorAuditLog`（`bff/admin-bff/src/audit/audit-log.ts`）**须在写事务内调用**（审计行与业务写原子提交）。公告 router 无事务、无审计是历史欠账，本设计不沿袭。
-6. **门控实现形态**：admin-bff 无 capability 装饰器，各 router 手写 `assert*` 断言 `req.capabilities`；新 router 直接检查三段式新码（活库已按新目录 seed，无需走 LEGACY_CAPABILITY_BRIDGE）。
+6. **门控实现形态**：admin-bff 无 capability 装饰器，各 router 手写 `assert*` 断言 `req.capabilities`；新 router 直接检查三段式新码（活库已按新目录 seed；`LEGACY_CAPABILITY_BRIDGE` 已于 2026-10-04 删除，全部 router 都直接判目录码，读门用 `assertAnyCapability(req, [".read", ".manage"])`）。
 
 ## 2. 开放问题的默认决策（可逆，owner 可改判）
 

@@ -3,20 +3,13 @@ import type { Pool } from "pg";
 import type { ConsoleUser } from "../types/console.types";
 import { ADMIN_BFF_RW_POOL } from "../tokens";
 
-// Single-point bridge: three-segment perm_codes (post-cutover DB catalog,
-// data_admin_200 §4.2) → legacy flat strings still checked by business routers.
-// Per-router domain-correct re-gating is a follow-up authz pass; until then the
-// bridge keeps business-router behavior stable across the cutover.
-const LEGACY_CAPABILITY_BRIDGE: Record<string, string[]> = {
-  "tenant:profile.manage": ["platform.tenant.manage"],
-  "product:plan.manage": ["platform.product.manage"],
-  // product:price.manage → platform.pricing.manage retired (TD-027): the finance
-  // routers that borrowed it now check commerce:* domain codes; no admin router
-  // consumes platform.pricing.manage anymore.
-  // model:*.manage → platform.model.manage 与 audit:read → platform.audit.read 两条
-  // 2026-09-14 摘掉：前者是 opera 的码，后者是 arche 的码，三平台严格隔离，admin 不认
-  // 别的平台的码（/atlas 的读门改为 admin 自己的 pricing:model.read）。
-};
+// 2026-10-04：LEGACY_CAPABILITY_BRIDGE 整个删掉。它曾把目录里的三段式码合成成业务
+// router 判的遗留扁平串（tenant:profile.manage → platform.tenant.manage，
+// product:plan.manage → platform.product.manage；更早还有 pricing / model / audit 三条，
+// 分别于 TD-027 与 2026-09-14 摘掉）。租户 / 工单两条线 2026-10-03（#577）、账号 / 待办 /
+// 搜索 / 产品目录 / 解决方案 / 套餐 / 定价 2026-10-04 全部改判目录里本域的细码之后，
+// 两个合成串一个消费方都没有了。req.capabilities 现在**就是** operator_role_permission
+// 里的 perm_code，没有任何一条运行时合成的码。
 
 /**
  * PlatformAuthService — operator (admin.operator_account) authorization source.
@@ -126,19 +119,9 @@ function mapPlatformAdminRow(row?: PlatformAdminRow): PlatformAdminView | null {
   };
 }
 
+/** 去重而已（array_agg distinct 已去过一次；这里是保险，不合成任何码）。 */
 function normalizePlatformPermissions(permissions: string[]): string[] {
-  const normalized = new Set(permissions);
-
-  // Bridge new-catalog codes → legacy flat strings (see LEGACY_CAPABILITY_BRIDGE).
-  for (const [permCode, legacyCaps] of Object.entries(
-    LEGACY_CAPABILITY_BRIDGE,
-  )) {
-    if (normalized.has(permCode)) {
-      legacyCaps.forEach((cap) => normalized.add(cap));
-    }
-  }
-
-  return [...normalized];
+  return [...new Set(permissions)];
 }
 
 function mapPlatformAdminUser(admin: PlatformAdminView): ConsoleUser {

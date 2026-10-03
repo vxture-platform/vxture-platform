@@ -23,7 +23,17 @@ import type { RequestContext } from "../types/console.types";
 
 export const OPERATOR_ID = "11111111-1111-4111-8111-111111111111";
 
-export const MANAGE = ["platform.product.manage"];
+/**
+ * 产品域四条线的写码（2026-10-04 拆门后 products.router 逐入口判这些；此前是一个遗留
+ * 扁平码 platform.product.manage）。既有用例只关心「有权的人走到哪一步」，所以给全。
+ * 要写「门分开了」的反例，别用它——注入单独一条线的码，见 products-role-matrix.spec.ts。
+ */
+export const MANAGE = [
+  "product:capability.manage",
+  "product:solution.manage",
+  "product:plan.manage",
+  "product:price.manage",
+];
 
 export function makeReq(capabilities: string[]): Request & RequestContext {
   return {

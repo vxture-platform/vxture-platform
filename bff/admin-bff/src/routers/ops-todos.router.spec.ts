@@ -1,9 +1,10 @@
 /**
  * ops-todos.router.spec.ts —— 能力门、类别剪裁、申报人脱敏。
  *
- * 页面对 /api/tenants 是硬依赖（platform.tenant.manage），对 /api/orders 是降级
- * （commerce:order.read 缺失时只少订单类）。这里钉住：无会话 401、无租户管理权 403、
- * 无订单读权 → 仓储只被要租户 / 工单三类、两权齐 → 不传 kinds（全量）。
+ * 2026-10-04 拆门：进门 = 持有任一类别的门；每一类待办只给能打开它那一页的人
+ * （KIND_GATES），一个码都没有才 403。此前进门判遗留扁平码 platform.tenant.manage，
+ * 账务类再按 commerce:order.read 收窄——租户 / 工单两条线拆门后那道粗门比它聚合的页面
+ * 更严（support / auditor 能看工单却打不开待办页）。
  *
  * 再钉一道：申报人的邮箱 / 手机按 user:pii.read 脱敏。仓储那一层给的是原文（它是共享
  * 算法，不认识调用方的能力集），掩码只能在这里做；漏了就等于开了一条绕过订单详情页
@@ -12,11 +13,15 @@
 import { ForbiddenException, UnauthorizedException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { Request } from "express";
-import type { OpsTodo, OpsTodoRepository } from "@vxture/service-ops-todos";
 import {
-  ORDER_READ_KINDS,
+  OPS_TODO_KINDS,
+  type OpsTodo,
+  type OpsTodoRepository,
+} from "@vxture/service-ops-todos";
+import {
+  ENTRY_CODES,
+  KIND_GATES,
   OpsTodosRouter,
-  TENANT_KINDS,
   kindsFor,
   maskApplicants,
 } from "./ops-todos.router";
@@ -50,6 +55,21 @@ const todoWithApplicant = (applicant: OpsTodo["applicant"]): OpsTodo =>
     href: "/orders/ORD-1",
   }) as OpsTodo;
 
+const MONEY_KINDS = [
+  "confirm_payment",
+  "reprovision",
+  "follow_up_balance",
+  "order_pending_payment_aging",
+  "refund_audit",
+  "refund_execute",
+  "refund_processing_stuck",
+  "refund_failed",
+  "subscription_overdue",
+  "invoice_applying",
+  "invoice_approved",
+  "addon_pending_confirm",
+];
+
 describe("GET /api/ops/todos 的能力门", () => {
   it("无会话 → 401", async () => {
     const { router } = routerWith();
@@ -58,91 +78,101 @@ describe("GET /api/ops/todos 的能力门", () => {
     );
   });
 
-  it("只有订单读权、没有 platform.tenant.manage → 403（页面此前整页拿不到租户就报错）", async () => {
+  it("一个类别的门都没有 → 403，仓储不被调用", async () => {
     const { router, list } = routerWith();
     await expect(
-      router.listTodos(makeReq(["commerce:order.read"])),
+      router.listTodos(makeReq(["user:pii.read", "promotion:campaign.read"])),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(list).not.toHaveBeenCalled();
   });
 
-  it("有租户管理权、没有订单读权 → 只要租户 / 工单 / 账号 / 维护七类，账务一类都不给", async () => {
+  it("只有订单读权（拆门前整页 403）→ 进门，只拿账务十二类 + 维护窗口", async () => {
     const { router, list } = routerWith();
-    await router.listTodos(makeReq(["platform.tenant.manage"]));
-    expect(list).toHaveBeenCalledWith({ kinds: TENANT_KINDS });
-    expect(TENANT_KINDS).toEqual([
-      "verification",
-      "risk",
-      "ticket",
-      "ticket_sla",
-      "maintenance_overdue",
-      "deletion_pending",
-      "purge_imminent",
-    ]);
-    // 2026-09-28 第三批的回归判据：钱那一侧的十二类一条都不能漏进来。
-    // 此前这一列是 `OPS_TODO_KINDS.filter(不在账务四类)`，值域一扩，退款执行 / 发票 /
-    // 加油包 / 欠费订阅会**默认**落进这一列——不报错，只是悄悄放宽。
-    for (const money of [
-      "refund_execute",
-      "refund_processing_stuck",
-      "refund_failed",
-      "order_pending_payment_aging",
-      "subscription_overdue",
-      "invoice_applying",
-      "invoice_approved",
-      "addon_pending_confirm",
-    ]) {
-      expect(TENANT_KINDS, money).not.toContain(money);
-    }
+    await router.listTodos(makeReq(["commerce:order.read"]));
+    expect(list).toHaveBeenCalledWith({
+      kinds: [...MONEY_KINDS, "maintenance_overdue"],
+    });
   });
 
-  it("两权齐 → 不传 kinds，全量", async () => {
+  it("只有工单读码（support / auditor 那一形）→ 工单两类 + 维护窗口，钱一类都不给", async () => {
+    const { router, list } = routerWith();
+    await router.listTodos(makeReq(["support:ticket.read"]));
+    const kinds = list.mock.calls[0]![0].kinds as string[];
+    expect(kinds.sort()).toEqual(
+      ["ticket", "ticket_sla", "maintenance_overdue"].sort(),
+    );
+    for (const money of MONEY_KINDS) expect(kinds, money).not.toContain(money);
+  });
+
+  it("只有租户读码 → 风险 + 维护窗口；实名审核要自己的码", async () => {
+    const { router, list } = routerWith();
+    await router.listTodos(makeReq(["tenant:profile.read"]));
+    const kinds = list.mock.calls[0]![0].kinds as string[];
+    expect(kinds.sort()).toEqual(["risk", "maintenance_overdue"].sort());
+    expect(kinds).not.toContain("verification");
+  });
+
+  it("只有账号读码 → 删号两类 + 维护窗口（点开的是 /accounts，那一页判 user:profile.read）", async () => {
+    const { router, list } = routerWith();
+    await router.listTodos(makeReq(["user:profile.read"]));
+    const kinds = list.mock.calls[0]![0].kinds as string[];
+    expect(kinds.sort()).toEqual(
+      ["deletion_pending", "purge_imminent", "maintenance_overdue"].sort(),
+    );
+  });
+
+  it("administrator 那一组码 → 不传 kinds，全量", async () => {
     const items = [{ id: "confirm_payment:ORD-1" }];
     const { router, list } = routerWith(vi.fn().mockResolvedValue(items));
     const res = await router.listTodos(
-      makeReq(["platform.tenant.manage", "commerce:order.read"]),
+      makeReq([
+        "tenant:profile.manage",
+        "tenant:verification.review",
+        "support:ticket.manage",
+        "user:profile.read",
+        "commerce:order.read",
+      ]),
     );
     expect(list).toHaveBeenCalledWith({});
     expect(res).toEqual({ items });
   });
 });
 
-describe("kindsFor：账务十二类与其余七类正好把值域分完", () => {
-  it("两组不重叠且并集是全部类别（加一类没归边，模块加载时就该抛）", () => {
-    const overlap = ORDER_READ_KINDS.filter((k) => TENANT_KINDS.includes(k));
-    expect(overlap).toEqual([]);
-    // 并集 == 共享算法的整个值域。逐字列出来而不是拿 OPS_TODO_KINDS 比：
-    // 拿值域比自己，等于「两边一样地错也算过」——那道自比在 router 里由
-    // assertKindsPartitioned 做（它管「有没有漏」），这里管「分得对不对」。
-    expect([...ORDER_READ_KINDS, ...TENANT_KINDS].sort()).toEqual(
-      [
-        "confirm_payment",
-        "reprovision",
-        "follow_up_balance",
-        "order_pending_payment_aging",
-        "refund_audit",
-        "refund_execute",
-        "refund_processing_stuck",
-        "refund_failed",
-        "subscription_overdue",
-        "invoice_applying",
-        "invoice_approved",
-        "addon_pending_confirm",
-        "verification",
-        "risk",
-        "ticket",
-        "ticket_sla",
-        "maintenance_overdue",
-        "deletion_pending",
-        "purge_imminent",
-      ].sort(),
-    );
-    expect([...ORDER_READ_KINDS, ...TENANT_KINDS]).toHaveLength(19);
+describe("KIND_GATES：十九类各归一边，进门码从表里推出", () => {
+  it("表的键集正好是共享算法的值域（加一类没归边，模块加载时就该抛）", () => {
+    expect(Object.keys(KIND_GATES).sort()).toEqual([...OPS_TODO_KINDS].sort());
+    expect(Object.keys(KIND_GATES)).toHaveLength(19);
   });
 
-  it("持订单读权 → undefined；否则只给非账务那一列", () => {
-    expect(kindsFor(makeReq(["commerce:order.read"]))).toBeUndefined();
-    expect(kindsFor(makeReq([]))).toBe(TENANT_KINDS);
+  it("钱那十二类只认 commerce:order.read；维护窗口是唯一「进门即可见」的类", () => {
+    for (const kind of MONEY_KINDS) {
+      expect(KIND_GATES[kind as keyof typeof KIND_GATES], kind).toEqual([
+        "commerce:order.read",
+      ]);
+    }
+    const open = Object.entries(KIND_GATES)
+      .filter(([, gate]) => gate.length === 0)
+      .map(([kind]) => kind);
+    expect(open).toEqual(["maintenance_overdue"]);
+  });
+
+  it("进门码集 = 表里出现过的码，去重且不含遗留扁平串", () => {
+    const fromTable = [...new Set(Object.values(KIND_GATES).flat())];
+    expect([...ENTRY_CODES].sort()).toEqual(fromTable.sort());
+    expect(ENTRY_CODES.some((c) => c.startsWith("platform."))).toBe(false);
+    expect(ENTRY_CODES).toContain("support:ticket.read");
+    expect(ENTRY_CODES).toContain("user:profile.read");
+  });
+
+  it("kindsFor：全开 → undefined；部分 → 只给开了门的那些", () => {
+    expect(kindsFor(makeReq([...ENTRY_CODES]))).toBeUndefined();
+    /* 空码集只剩「进门即可见」那一类——但空码集根本进不了门（上面的 403 用例），
+       kindsFor 不是门，它只在过门之后被调。 */
+    expect(kindsFor(makeReq([]))).toEqual(["maintenance_overdue"]);
+    expect(kindsFor(makeReq(["tenant:verification.review"]))).toEqual([
+      "verification",
+      "maintenance_overdue",
+    ]);
   });
 });
 
@@ -191,7 +221,7 @@ describe("申报人脱敏：判据与掩码同 orders.router 的 declaredBy", ()
 });
 
 describe("GET /api/ops/todos 的脱敏落在响应上", () => {
-  const caps = ["platform.tenant.manage", "commerce:order.read"];
+  const caps = ["commerce:order.read"];
   const raw = todoWithApplicant({
     name: "张三",
     email: "zhangsan@example.com",

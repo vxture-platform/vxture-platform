@@ -41,7 +41,7 @@
 
 > **已知缺陷（不在本轮范围，单独开条）**：console 启动台的磁贴查询 `HELD_PRODUCT_TILES_SQL`（`console-bff/src/lib/product-app-tiles.ts`，走 `GET /api/me/apps`）**不过滤 `component_role`**，它 join 的是 `plan_components` 的全部行。所以绑进来的产品现在**会**作为磁贴出现在用户启动台，带 `home_url`、点得进去——「用户无感」这半代码还做不到。那行注释自陈的理由是「bundled 同样是这个工作空间持有的」：**「持有」是对的，「该有前端入口」是另一回事**。判据现成，不用新字段——`entitlement.types.ts` 已经区分 bundled-only 覆盖（`status: null` + `bundled: true`），那条 SQL 加一条 `pc.component_role = 'primary'` 即可。
 
-## 2. 写接口（`platform.product.manage` + step-up；RW 池 + 事务 + `support.audit_logs`）
+## 2. 写接口（`product:plan.manage` + step-up；RW 池 + 事务 + `support.audit_logs`；2026-10-04 拆门前为 `platform.product.manage`）
 
 **`PUT /api/products/plan-versions/:versionId/bundled-components`**
 

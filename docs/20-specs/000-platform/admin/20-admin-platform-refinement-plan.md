@@ -80,7 +80,7 @@ admin 平台 = portals/admin（44 路由板块）+ bff/admin-bff（29 controller
 ### P1 — RBAC 安全收口（C4–C7，权威=data_admin_200 §4 + seed-catalog.mjs）
 
 - **C4 越权实弹封堵**：announcements 写路径挂 `content:announcement.manage`、audit-logs 挂 `audit:read`（经桥 `platform.audit.read` 已可用）；顺带清理 `platform.admin.manage` 永假死检查与 `tenant:manage` 孤儿 shim。
-- **C5 authz pass（全 router 域对齐）**：逐 router 把守卫从 legacy 平铺串迁到三段式 perm 码正确域（tickets→`support:ticket.*`、subscriptions/orders→`commerce:*`、accounts→`user:profile.read`、billing/payments→对应域），read/manage 分级兑现（auditor 只读可达、operation 不可写金融）；`LEGACY_CAPABILITY_BRIDGE` 收敛计划与 TD 登记。**注意**：先核对角色授权矩阵避免上线即 403（TD-021「先 perm 后代码」教训）。
+- **C5 authz pass（全 router 域对齐）**：逐 router 把守卫从 legacy 平铺串迁到三段式 perm 码正确域（tickets→`support:ticket.*`、subscriptions/orders→`commerce:*`、accounts→`user:profile.read`、billing/payments→对应域），read/manage 分级兑现（auditor 只读可达、operation 不可写金融）；`LEGACY_CAPABILITY_BRIDGE` 收敛计划与 TD 登记。**注意**：先核对角色授权矩阵避免上线即 403（TD-021「先 perm 后代码」教训）。**状态（2026-10-04）：已完成**——租户 / 工单两条线 2026-10-03（#577），账号 / 待办 / 搜索 / 产品目录 / 解决方案 / 套餐 / 定价 2026-10-04，`LEGACY_CAPABILITY_BRIDGE` 已删除；存量库各配一份迁移（`2026-10-03-tenant-ticket-fine-gates.sql` / `2026-10-05-product-fine-gates.sql`）。
 - **C6 危码落地**：`tenant:lifecycle.suspend` 专码替换弱守卫并加 step-up；accounts PII 两级脱敏（默认 masked，持 `user:pii.read` 才明文）。其余三个 designed-only 危码（impersonate/refund/signing_key+oidc_client）归 P4 登记，不投机实现。
 - **C7 金融写路径 step-up**：billing 三写、payments verify/reject、orders 线下支付确认、subscriptions 四动作全部加 `@RequireStepUp`（依赖 C2 ceremony UI 先行）。
 
@@ -123,7 +123,7 @@ admin 平台 = portals/admin（44 路由板块）+ bff/admin-bff（29 controller
 - docs/30-design/auth.md §12、docs/40-implementation/ai/05-bff-data-access-guide.md、docs/40-implementation/packages/00-index.md 的 Turnstile/签发旧口径修正；
 - docs/20-specs/platform/admin/00-index.md 状态表回填（B1–B18/TD-021 后实况）；docs/00-meta/status.md T12/T15 销号；
 - workplans/2026-06-02-admin-turnstile-independent-surface.md 按现行落点（auth-bff/accounts 侧，已生效）关闭销号；
-- tech-debt 新登记：verifications 路由遮蔽（C1 修复后 Resolved）、LEGACY_CAPABILITY_BRIDGE 收敛、announcements/audit-logs 守卫缺失（C4 修复后 Resolved）。
+- tech-debt 新登记：verifications 路由遮蔽（C1 修复后 Resolved）、LEGACY_CAPABILITY_BRIDGE 收敛（2026-10-04 桥已删除，见 TD-027 收尾）、announcements/audit-logs 守卫缺失（C4 修复后 Resolved）。
 
 ## 3. 纪律（沿用前序计划 + 本轮追加）
 

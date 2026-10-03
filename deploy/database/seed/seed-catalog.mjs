@@ -533,6 +533,17 @@ const OPERATOR_PERMISSIONS = [
   ["product:price.read", "View pricing"],
   ["product:price.manage", "Manage pricing"],
   ["product:capability.read", "View the capability catalog"],
+  /* 2026-10-04 拆 platform.product.manage（owner：「一个码 tenant manage，和一个码 product
+   * manage，这个必须要拆解，首先是按照 admin，opera 两个平面，再按照同类业务维度」）：
+   * 产品目录的写（排序 / 营销内容 / 上站可见性）、解决方案的读与写各自一个码。
+   * is_customer_visible / sort 两列归 admin（owner），opera 侧的写入同批摘掉。 */
+  [
+    "product:capability.manage",
+    "Manage the product catalog",
+    "Reorder products, edit marketing content and customer visibility",
+  ],
+  ["product:solution.read", "View solutions"],
+  ["product:solution.manage", "Manage solutions"],
   [
     "pricing:model.read",
     "View models for pricing",
@@ -768,31 +779,45 @@ const MENU_TREE = [
         code: "admin.menu.product_system",
         name: "产品体系",
         children: [
+          /* 2026-10-04 产品体系四个页面按各自的门挂码（此前只有「服务套餐」挂了套餐
+           * 与价格四码，产品目录 / 解决方案 / 产品套餐三页都是纯菜单叶子）：
+           *   · 产品目录 /products：写码 product:capability.manage。读码
+           *     product:capability.read **留在** /skills（能力目录）——它自 2026-09-14 起
+           *     就是 runos.router 那一页的门（三平台拆分时从 opera 的 capability:runos.read
+           *     改过来的），一个码只能挂一处，挪走等于把 /skills 从四个角色的闭包里摘掉。
+           *   · 解决方案 /product-solutions：solution.read + solution.manage。
+           *   · 产品套餐 /plan-versions：套餐 / 价格四码——这一页才是套餐版本编辑器
+           *     （PlanDraftEditorPage / PlanPublishing*），此前它们挂在只读的「服务套餐」上。
+           *   · 服务套餐 /service-plans：方案 × 档位的只读视图，读的是 GET solutions /
+           *     service-plans，门是 solution.read；没有自己的码，按本文件头注成为纯叶子
+           *     （方案详情 / 订阅详情 / 商业总览都有链接指向它）。 */
           {
             code: "admin.menu.product_capability",
             name: "产品目录",
             route: "/products",
+            perms: ["product:capability.manage"],
           },
           {
             code: "admin.menu.solution_package",
             name: "解决方案",
             route: "/product-solutions",
+            perms: ["product:solution.read", "product:solution.manage"],
           },
           {
             code: "admin.menu.service_plan",
             name: "服务套餐",
             route: "/service-plans",
+          },
+          {
+            code: "admin.menu.plan_version",
+            name: "产品套餐",
+            route: "/plan-versions",
             perms: [
               "product:plan.read",
               "product:plan.manage",
               "product:price.read",
               "product:price.manage",
             ],
-          },
-          {
-            code: "admin.menu.plan_version",
-            name: "产品套餐",
-            route: "/plan-versions",
           },
           {
             code: "admin.menu.promotion_campaign",
@@ -1279,6 +1304,9 @@ const OPERATOR_ROLE_PERMS = {
     "product:plan.manage",
     "product:price.read",
     "product:price.manage",
+    "product:capability.manage",
+    "product:solution.read",
+    "product:solution.manage",
     "model:provider.read",
     "model:provider.manage",
     "model:model.read",
@@ -1324,6 +1352,9 @@ const OPERATOR_ROLE_PERMS = {
     "product:plan.manage",
     "product:price.read",
     "product:price.manage",
+    "product:capability.manage",
+    "product:solution.read",
+    "product:solution.manage",
     "model:provider.read",
     "model:model.read",
     "capability:runos.read",

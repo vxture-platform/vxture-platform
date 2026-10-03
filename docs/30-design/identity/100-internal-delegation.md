@@ -91,7 +91,7 @@ auth-bff /internal/… router（@UseGuards(InternalAuthGuard)）
 3. **会话失效**：停用 / 重置密码 / MFA 重置 → 吊销目标主体**全部**会话与刷新令牌（operator：`operator_refresh_token`+`auth_sessions`；customer：`session.refresh_tokens`+`auth_sessions`）。
 4. **防锁死**：不得停用/删除最后一个在职超管；不得停用自己；operator 解绑 MFA 需保留至少一个可登录第二因子或走恢复流（对齐 operator 文档 anti-lockout）。
 5. **Realm 校验**：`/internal/operator/*` 校验目标 id ∈ `admin.operator_account`；`/internal/customer/*` 校验 ∈ `account.users`；越界 404，不泄漏另一 realm 存在性。
-6. **能力守卫**：operator 面 `platform.admin.manage`；customer 面 `platform.tenant.manage`（或细分 `platform.account.manage`，见 D4）。
+6. **能力守卫**：operator 面走治理平台 arche 的 `operator:*` 码；customer 面读 `user:profile.read`、写 `user:account.manage`（2026-10-04 起 admin 的账号读门判前者；原文的 `platform.tenant.manage` / 细分 `platform.account.manage` 已退役，见 D4）。
 
 ## 6. 凭据下发方式（决策项）
 

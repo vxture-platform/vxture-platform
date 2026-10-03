@@ -15,7 +15,8 @@ import type { RequestContext } from "../types/console.types";
 
 const OPERATOR_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "44444444-4444-4444-8444-444444444444";
-const MANAGE = ["platform.tenant.manage"];
+/* 2026-10-04 拆门：账号三个读入口判 user:profile.read（此前是遗留扁平码 platform.tenant.manage）。 */
+const MANAGE = ["user:profile.read"];
 
 function makeReq(capabilities: string[]): Request & RequestContext {
   return {
