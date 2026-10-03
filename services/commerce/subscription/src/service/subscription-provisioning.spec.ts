@@ -231,6 +231,81 @@ describe("updateSubscription → transition-derived events", () => {
   });
 });
 
+/* 2026-10-03 修的缺陷（owner：「这是 bug，你来修正」）。
+   值域七档，撤销钩子原先的判据只认 active/trialing，终态集只有 cancelled/expired ——
+   **expiring / overdue / suspended 三档夹在中间，落在两个集合的缝里**：
+   进这三档时不发信号（对的，服务还在），从这三档进终态时**也不发**（错的）。
+   于是「关了自动续费、正常到期」那一批（必经 expiring）产品侧永远收不到
+   tenant.deprovisioned，而没经过 expiring 的那批收得到 —— 同一个终态、
+   产品侧收到的东西不同。这一组用例在旧代码下全是红的。 */
+describe("中间态 → 终态必须发 deprovisioned（expiring/overdue/suspended 的缝）", () => {
+  let m: Mocks;
+  beforeEach(() => (m = build()));
+
+  const MIDDLE = ["expiring", "overdue", "suspended"] as const;
+  const TERMINAL = ["expired", "cancelled"] as const;
+
+  for (const from of MIDDLE) {
+    for (const to of TERMINAL) {
+      it(`${from} → ${to} 发一条 deprovisioned`, async () => {
+        m.repo.getById.mockResolvedValue({ ...SUB, status: from });
+        m.repo.update.mockResolvedValue({ ...SUB, status: to });
+        await m.service.updateSubscription("sub-1", { status: to } as never);
+        expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith({
+          workspaceId: "ws-1",
+          tenantId: "org-1",
+          applicationId: "prod-arda",
+          appCode: "arda",
+        });
+      });
+    }
+  }
+
+  /* 逃生口：别把判据放宽成「谁都发」。还占着产品的那几档**互相之间**走动时
+     一个信号都不该发 —— 服务没断。 */
+  it("active → expiring 不发任何信号（服务还在）", async () => {
+    m.repo.getById.mockResolvedValue(SUB);
+    m.repo.update.mockResolvedValue({ ...SUB, status: "expiring" });
+    await m.service.updateSubscription("sub-1", {
+      status: "expiring",
+    } as never);
+    expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+  });
+
+  it("expiring → overdue 不发任何信号（两档都还占着）", async () => {
+    m.repo.getById.mockResolvedValue({ ...SUB, status: "expiring" });
+    m.repo.update.mockResolvedValue({ ...SUB, status: "overdue" });
+    await m.service.updateSubscription("sub-1", { status: "overdue" } as never);
+    expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+  });
+
+  /* 第二处同病：换版本那条路的门同样只认 ACTIVATED，于是处在中间态的订阅换版本时
+     被移除的产品在产品侧永远留着。 */
+  it("expiring 态换版本：被移除的产品要发 deprovisioned", async () => {
+    m.repo.getById.mockResolvedValue({ ...SUB, status: "expiring" });
+    m.repo.update.mockResolvedValue({
+      ...SUB,
+      status: "expiring",
+      planVersionId: "pv-2",
+    });
+    m.repo.listVersionProducts.mockImplementation(async (pv: string) =>
+      pv === "pv-2" ? [ARDA] : [ARDA, RUNOS],
+    );
+    await m.service.updateSubscription("sub-1", { toPlanVersionId: "pv-2" });
+    expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      tenantId: "org-1",
+      applicationId: "prod-runos",
+      appCode: "runos",
+    });
+  });
+});
+
 describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () => {
   let m: Mocks;
   beforeEach(() => (m = build()));

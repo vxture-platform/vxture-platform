@@ -84,10 +84,10 @@ export type PlanVersionStatus = (typeof PLAN_VERSION_STATUSES)[number];
  * purpose — an operator freeze must not be masked by an older lapsed row.
  *
  * overdue = renewal charge failed, dunning grace, entitlements retained
- * (contrast: expired = entitlements gone). Reserved ahead of the payment
- * plane — nothing writes it yet; it exists now so the contract and DDL do
- * not move again when payment lands. Exit paths: settle → active, grace
- * lapses → expired.
+ * (contrast: expired = entitlements gone). Exit paths: settle → active, grace
+ * lapses → expired. **写它的是 subscription-renewal 作业第 2 趟**
+ * （`markOverdue`，2026-09-25 S8 起）—— 此处原文写的是「Reserved ahead of the
+ * payment plane — nothing writes it yet」，那句已经过期。
  *
  * expiring = still entitled, end_at is near. A live state, not a lapsed one,
  * which is why it ranks second: an expiring row must not be masked by an
@@ -95,8 +95,17 @@ export type PlanVersionStatus = (typeof PLAN_VERSION_STATUSES)[number];
  * expired — one is a warning, the other is the entitlement being gone, and
  * conflating them tells an operator the opposite of the truth (admin did
  * exactly that until 2026-08-07: it mapped the DB's expired onto overdue).
- * Reserved like overdue — nothing writes it yet; whoever lands renewal
- * reminders flips it from end_at.
+ * **写它的是 subscription-renewal 作业第 4 趟**（`notifyExpiringSoon`，
+ * 2026-09-25 S6 起，按 end_at 翻）—— 此处原文写的是「Reserved like overdue —
+ * nothing writes it yet」，那句已经过期。
+ *
+ * ── 这三档「中间态」有一个共同的坑，2026-10-03 修过一次 ──
+ * expiring / overdue / suspended 都是「服务还在、订阅还占着产品」的档位，
+ * 它们**夹在 active 与 expired 之间**。凡是拿「是不是 active/trialing」当
+ * 「是不是还占着这个产品」的判据，都会把经过这三档的订阅漏掉 —— 一次真实的后果是
+ * provisioning 的撤销钩子对它们一个信号都不发，产品侧因此永远不停服
+ * （见 subscription.service.ts 的 STATUS_COVERAGE）。新增判据时先问：
+ * 我问的是「刚开通」还是「还占着」，这是两根轴。
  */
 export const SUBSCRIPTION_STATUSES = [
   "active",
