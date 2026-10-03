@@ -436,6 +436,19 @@ jobs:
           node scripts/guardrails/check-notice-plane-scope.mjs
           node scripts/guardrails/check-notice-plane-scope.mjs --self-test
 
+      # 分区预建窗口还剩多久（2026-10-03）。Postgres 的声明式分区不会自己长出新分区，
+      # 窗口走到头之后 metering.usage_events（计费事件）等三张表的写入落进 *_default：
+      # 不丢数，但分区失效、按月 detach/drop 做不了，**而且零信号**。
+      # owner「暂时不要复杂化」⇒ 不装 pg_cron、不加作业，靠这道门在到期前 90 天叫一声。
+      # **它的判据随时间自己变化**：同一份代码到窗口剩 90 天内就红。
+      # 不按 docs_only 跳过（2026-10-04）：窗口到头是**时间**触发不是提交触发，只改文档的那次提交
+      # 也该被它看见；低活跃期由 partition-window.yml 每月定时兜住 —— 「不需要谁记得去看」
+      # 这句话有了那份定时 workflow 才成立。它读的是仓库里声明的窗口，读不到生产库实际铺到哪个月。
+      - name: Partition pre-build window (>= 90 days left)
+        run: |
+          node scripts/guardrails/check-partition-window.mjs
+          node scripts/guardrails/check-partition-window.mjs --self-test
+
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |

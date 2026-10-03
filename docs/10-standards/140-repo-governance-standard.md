@@ -258,6 +258,16 @@ vacuum/analyze）。强套 db-init 的"每次人工审批"，实际后果是"半
   加列、改约束的操作，即使"看起来常规"，仍必须走 db-init——结构设计变更的审批门不能被这条新
   通道绕过。
 
+> **平台本仓的现状（2026-10-04，显式偏离，登记 TD-051）**：上面写的 `db-maintenance.yml`、cron、
+> `ddl/incr/*` 维护函数**在本仓一样都不存在**，分区也从未滚动过（2026-10-03 之前窗口只到 2027-02-01，
+> migrations 里一份分区改动都没有）。owner 2026-10-03 裁定「暂时不要复杂化」，本仓实际采用：
+> **把预建窗口推远**（`deploy/database/ddl/96_partitions.sql` 的 `cover_until`，同批一份迁移给存量库）
+>
+> - **CI 守卫**（`scripts/guardrails/check-partition-window.mjs`，剩余不足 90 天即红，每次提交跑、
+>   另由 `partition-window.yml` 每月定时跑一次）+ **年度手动推一次**。这满足本节自陈的目的
+>   「让维护节奏靠信号驱动而非记忆」，但执行通道与本节写的不同。回收条件：本仓真的装上
+>   `db-maintenance.yml` + 维护函数那天，把这段删掉、TD-051 销号。
+
 ---
 
 ## 7. 数据层（若仓库自带独立 DB）
@@ -394,6 +404,8 @@ platform 侧现状（2026-08-22 实测）：8 个持凭据 action 全部 SHA-pin
 - [ ] 生产 DB 走 `db-init` + `expected_sha` + 审批；常规部署链不跑 migration/seed。
 - [ ] （有分区表等周期性维护需求）走 `db-maintenance.yml` 白名单函数，不是裸等人工提醒；
       失败/临近过期需可观测（如 `/readyz` 报剩余 runway）。
+      **平台本仓按 TD-051 显式偏离**：远窗口 + `check-partition-window.mjs`（CI + 月度定时）+ 年度手动推，
+      见上文「已批准维护操作」节末的现状注。核本仓 PR 时以那条为准，别按本行判它不合规。
 - [ ] （有 DB）DDL 单一权威 + @shared 值域 + 最小权限/列锁 + 活库增量幂等 + 护栏。
 - [ ] （有 DB）**改 `ddl/[0-9]*.sql` 的 PR 同批带活库增量**（§7 硬性项）；**`[B0]` 指纹红时按三步走
       （定位差异 → 补齐并读活库确认 → 再 restamp），禁止直接 restamp 消红**。

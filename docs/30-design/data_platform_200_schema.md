@@ -2484,6 +2484,10 @@ CREATE TABLE support.audit_log_default PARTITION OF support.audit_log DEFAULT;
 CREATE OR REPLACE FUNCTION support.fn_audit_log_maintain(retain_months int DEFAULT 24) ...
 ```
 
+- **2026-10-04 现状**：上面第 3 项的「滚动维护（pg_cron 或外部调度）」与 `support.fn_audit_log_maintain`
+  **都未实施**（全仓无此函数、未装 pg_cron）。平台本仓当前靠远窗口 + CI 守卫 + 年度手动推
+  （`96_partitions.sql` 的 `cover_until`、`check-partition-window.mjs`，登记 TD-051）；
+  第 3c 项「巡检 DEFAULT 有行=告警」同样不存在。这段设计保留作目标态，不要当现状读。
 - 留存阈值 24 个月（满足 database.md §3.8"≥2 年"）。审计为高频写、不可删，靠 **DROP PARTITION** 实现 O(1) 过期清理；逐行 DELETE 在审计量级下不可行（且被不可变触发器封死）。
 - 与 §8.4 `tenant_usage_event(_pool)` 同模式（预建 + DEFAULT 兜底 + 滚动 detach/drop），运维脚本可共用一套分区维护函数。
 
