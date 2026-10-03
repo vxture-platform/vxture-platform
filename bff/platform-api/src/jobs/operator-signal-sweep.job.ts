@@ -30,7 +30,26 @@
  *
  * ── 上限 ──
  * 每类每轮最多 `OPERATOR_SIGNAL_SWEEP_LIMIT`（默认 200）行。异常放量（批量导入、
- * 回填脚本）时不把通告板冲掉；没扫完的下一轮继续（回看窗口还在）。
+ * 回填脚本）时不把通告板冲掉 —— 这个上限是**有意**的洪水闸。
+ *
+ * **2026-10-03 更正**：这里原来写的是「没扫完的下一轮继续（回看窗口还在）」。那是假的。
+ * 每条 SQL 都是 `order by <时刻> asc limit $2`，**没有游标、也没有「已通告过的排除掉」**
+ * —— 去重发生在下游（`createSystemNotice` 的 `on conflict do nothing`）。所以已经通告过的
+ * 行照样占满 limit，下一轮取回的还是同一批最老的 200 行；第 201 行往后**一次都不会被取回**，
+ * 等回看窗口滑过去就永久没有通告，而作业一路绿着。
+ *
+ * 举个数：一次导入在一分钟内落 1000 行，窗口 30 分钟、节奏 2 分钟、上限 200 ——
+ * 其中约 800 件事没有任何通告。
+ *
+ * 为什么不在这里偷偷改成分页：**分页会把这个洪水闸拆掉**（1000 行就是 1000 条通告），
+ * 而闸是作者有意装的。「放量时宁可少报还是宁可全报」是产品取舍，不是我顺手能定的，
+ * 所以本轮只做两件事：把上面那句假话改对，并且让**截断有声音**（见 `truncated`）——
+ * 静默永久丢数变成一条 WARN。真要补全，选项是提高上限 / 分页 / 给这一类单独开闸，
+ * 由 owner 定。
+ *
+ * 顺带记一条给将来做分页的人：现在的 `order by <时刻> asc` **没有决胜列**，
+ * 同一时刻的两行在页边界上会被跳过或重复 —— 重复无害（去重键挡着），跳过不是。
+ * 所以分页之前必须先加 `, dedupe_key asc` 之类的决胜列，否则分页本身会引入新的漏扫。
  *
  * ── 库角色 ──
  * 本进程连库的角色是 `svc_platform_api`。两段 SQL 碰到的每一个关系都要有权限——
@@ -107,6 +126,12 @@ export interface SweepPassResult {
   readonly inserted: number;
   /** 出错的子段与原因，人话一行一条。空数组 = 全段成功。 */
   readonly failures: readonly string[];
+  /**
+   * **取满了上限**的子段（`rows.length === limit`）。不是失败 —— 作业按配置做了该做的事；
+   * 但它意味着这一类在这一轮**被截断了**，而被截掉的那些行不会在下一轮补回来（见文件头
+   * 「上限」那一段的更正）。所以它必须有声音，否则就是静默永久丢数。
+   */
+  readonly truncated: readonly string[];
 }
 
 /**
@@ -122,6 +147,7 @@ export async function runBusinessEventSweep(
 ): Promise<SweepPassResult> {
   const now = opts.now ?? new Date();
   const failures: string[] = [];
+  const truncated: string[] = [];
   let scanned = 0;
   let inserted = 0;
 
@@ -136,6 +162,10 @@ export async function runBusinessEventSweep(
         ...(pass.extraParams ?? []),
       ]);
       scanned += result.rows.length;
+      /* 取满上限 = 这一类这一轮被截断了，而截掉的不会在下一轮补回来（见文件头「上限」）。 */
+      if (result.rows.length >= opts.limit) {
+        truncated.push(`${pass.code}（${pass.label}）`);
+      }
       for (const row of result.rows) {
         const written = await notices.createSystemNotice(
           composeBusinessNotice(pass, row, now),
@@ -147,7 +177,7 @@ export async function runBusinessEventSweep(
     }
   }
 
-  return { scanned, inserted, failures };
+  return { scanned, inserted, failures, truncated };
 }
 
 /**
@@ -163,6 +193,7 @@ export async function runAuditEventSweep(
 ): Promise<SweepPassResult> {
   const now = opts.now ?? new Date();
   const failures: string[] = [];
+  const truncated: string[] = [];
   let scanned = 0;
   let inserted = 0;
 
@@ -173,6 +204,10 @@ export async function runAuditEventSweep(
       opts.limit,
     ]);
     scanned = result.rows.length;
+    /* 同上：取满上限即被截断，而截掉的不会在下一轮补回来。 */
+    if (result.rows.length >= opts.limit) {
+      truncated.push("audit_logs（运营动作）");
+    }
     for (const row of result.rows) {
       const input = composeAuditNotice(row, now);
       if (!input) continue;
@@ -183,7 +218,7 @@ export async function runAuditEventSweep(
     failures.push(`audit_logs 巡检：${String(err)}`);
   }
 
-  return { scanned, inserted, failures };
+  return { scanned, inserted, failures, truncated };
 }
 
 @Injectable()
@@ -248,6 +283,18 @@ export class OperatorSignalSweepJob {
         `业务事件 扫 ${business.scanned} 行 / 新增 ${business.inserted} 条，` +
         `运营动作 扫 ${audit.scanned} 行 / 新增 ${audit.inserted} 条`,
     );
+
+    /* 截断不是失败（作业按配置做了该做的事），但不能没有声音：被截掉的那些行不会在
+       下一轮补回来。放量时这一条 WARN 是运营端唯一能看出「少了一批」的地方。 */
+    const truncated = [...business.truncated, ...audit.truncated];
+    if (truncated.length > 0) {
+      this.logger.warn(
+        `operator signal sweep 取满上限 ${opts.limit}：${truncated.join("、")}。` +
+          `这几类这一轮被截断 —— 截掉的那些行不会在下一轮补回来，` +
+          `等回看窗口滑过去就永久没有通告（上限是有意的洪水闸，见文件头「上限」）。` +
+          `要补全就提高 OPERATOR_SIGNAL_SWEEP_LIMIT，或改成分页。`,
+      );
+    }
 
     const failures = [...business.failures, ...audit.failures];
     if (failures.length > 0) {

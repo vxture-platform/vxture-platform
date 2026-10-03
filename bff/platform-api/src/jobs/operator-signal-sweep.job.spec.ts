@@ -134,7 +134,12 @@ describe("业务事件段", () => {
         ...(pass.extraParams ?? []),
       ]);
     });
-    expect(result).toEqual({ scanned: 0, inserted: 0, failures: [] });
+    expect(result).toEqual({
+      scanned: 0,
+      inserted: 0,
+      failures: [],
+      truncated: [],
+    });
   });
 
   it("扫到的行逐条写通告；去重命中不算新增也不算失败", async () => {
@@ -149,6 +154,7 @@ describe("业务事件段", () => {
       scanned: 1,
       inserted: 1,
       failures: [],
+      truncated: [],
     });
     expect(fresh.calls).toHaveLength(1);
 
@@ -163,7 +169,56 @@ describe("业务事件段", () => {
       scanned: 1,
       inserted: 0,
       failures: [],
+      truncated: [],
     });
+  });
+
+  /**
+   * 取满上限必须有声音。
+   *
+   * 这一条钉的是 2026-10-03 更正的那件事：文件头原来写「没扫完的下一轮继续（回看窗口还在）」，
+   * 而每条 SQL 都是 `order by <时刻> asc limit $2`、没有游标也没有「已通告过的排除掉」——
+   * 下一轮取回的还是同一批最老的 N 行，第 N+1 行往后一次都不会被取回，窗口滑过就永久没有通告。
+   *
+   * 上限本身是**有意**的洪水闸（放量时不冲掉通告板），所以这里不改它的行为，只要求
+   * 「被截断」这件事不是静默的。`truncated` 为空的话，放量丢数在日志、心跳、运维台上
+   * 与「什么都没发生」长得一模一样。
+   */
+  it("取满上限的那一类进 truncated（不是 failures —— 作业没失败，是被截断）", async () => {
+    const LIMIT = 2;
+    const { pool } = fakePool({
+      rowsFor: (sql) =>
+        sql.includes("from support.tickets")
+          ? [
+              { dedupe_key: "TCK-1", code: "TCK-1", priority: "p1" },
+              { dedupe_key: "TCK-2", code: "TCK-2", priority: "p1" },
+            ]
+          : [],
+    });
+    const result = await runBusinessEventSweep(pool, writer(true), {
+      ...OPTS,
+      limit: LIMIT,
+    });
+
+    expect(result.scanned).toBe(LIMIT);
+    expect(result.failures).toEqual([]); // 截断不是失败
+    expect(result.truncated).toHaveLength(1);
+    expect(result.truncated[0]).toContain("ticket"); // 点名是哪一类
+  });
+
+  it("没取满就不报截断（免得这条信号天天响、变成背景噪音）", async () => {
+    const { pool } = fakePool({
+      rowsFor: (sql) =>
+        sql.includes("from support.tickets")
+          ? [{ dedupe_key: "TCK-1", code: "TCK-1", priority: "p1" }]
+          : [],
+    });
+    const result = await runBusinessEventSweep(pool, writer(true), {
+      ...OPTS,
+      limit: 200,
+    });
+    expect(result.scanned).toBe(1);
+    expect(result.truncated).toEqual([]);
   });
 
   it("一段炸了，其余十段照跑（失败汇总带上事件码）", async () => {
@@ -227,6 +282,7 @@ describe("运营动作段", () => {
       scanned: 2,
       inserted: 1,
       failures: [],
+      truncated: [],
     });
     expect(notices.calls).toHaveLength(1);
   });
