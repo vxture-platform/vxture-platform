@@ -44,16 +44,42 @@ const LEGACY_DOMAINS = new Set(["platform", "release", "notification"]);
  * 目录里有、本平台源码里没有消费方的码。每条写清为什么留着；
  * 新增一条没有消费方的码必须来这里登记，否则红。
  */
+/**
+ * 2026-10-03：这一条原本是 14 个码共用的理由，而它把**三种处境**写成了一句
+ * 「或」—— 其中一种（「这一页尚未设门」）会是 P0，另两种什么都不是。
+ * 读者分不出自己面对的是哪一种，这句话就不可证伪。
+ *
+ * 逐条核过两个之后，第三种处境还冒出来了（码用错了，不是没设门），见下面
+ * `commerce:refund.execute`。
+ *
+ * 当天的入口盘点（`scan-ownership-entrypoints.mjs`）另外量到：admin-bff 里除了
+ * backchannel-logout，**每个入口都调得到一处会抛 401/403 的判据**。那不等于
+ * 「每个入口的门都对」—— 那份盘点自己写着「有线索 ≠ 拦得住」——
+ * 但它足以说明「整页一行门都没有」这种形状在 admin-bff 里今天找不到。
+ * 所以「或这一页尚未设门」这半句**没有任何一条已知实例**，留着只会让读者
+ * 以为自己可能面对一个 P0。
+ *
+ * 剩下 11 条仍共用这条理由，它们**没有逐条核过**；核的时候要分清是
+ * 「拄旧扁平码」还是「本域只有 manage 有消费方（manage 蕴含 read）」——
+ * 后者不是债，是正常的。
+ */
 const ADMIN_LEGACY_BRIDGE =
-  "admin-bff 仍经 auth.service 的旧桥检查 platform.* 扁平码，或这一页尚未设门；" +
-  "按域重新设门是 admin 平台的待办（C5），码与角色授权保留给那次改造";
+  "admin-bff 这一页仍经 auth.service 的旧桥检查 platform.* 扁平码；" +
+  "按域重新设门是 admin 平台的待办（C5），码与角色授权保留给那次改造。" +
+  "注意：本条**未逐码核实**，可能实际是「只有 manage 有消费方」那种正常情形";
 const UNCONSUMED = {
   "tenant:profile.read": ADMIN_LEGACY_BRIDGE,
   "tenant:verification.review": ADMIN_LEGACY_BRIDGE,
   "tenant:quota.read": ADMIN_LEGACY_BRIDGE,
   "tenant:quota.manage": ADMIN_LEGACY_BRIDGE,
   "user:profile.read": ADMIN_LEGACY_BRIDGE,
-  "commerce:refund.execute": ADMIN_LEGACY_BRIDGE,
+  "commerce:refund.execute":
+    "**不是没设门，是用错了码**（2026-10-03 核实）：orders.router 的四个退款端点" +
+    "（refund-audit / refund-execute / refund-create / refund-fail）都挂 @RequireStepUp，" +
+    "但判的是 commerce:payment.settle —— 收款的码。同一份文件为 void 写明了相反的原则：" +
+    "「与 settle 是不同的危险类别，所以挂自己的 commerce:order.void」。退款是钱出去，" +
+    "目录里早就给了它自己的码，没人用。改过来要给角色授这个码（迁移 + 存量库），" +
+    "是 owner 的取舍，不是顺手改的事",
   "promotion:campaign.read": ADMIN_LEGACY_BRIDGE,
   "product:plan.read": ADMIN_LEGACY_BRIDGE,
   "product:price.read": ADMIN_LEGACY_BRIDGE,
@@ -61,7 +87,9 @@ const UNCONSUMED = {
   "content:announcement.read": ADMIN_LEGACY_BRIDGE,
   "support:ticket.read": ADMIN_LEGACY_BRIDGE,
   "support:ticket.manage": ADMIN_LEGACY_BRIDGE,
-  "support:impersonate": ADMIN_LEGACY_BRIDGE,
+  "support:impersonate":
+    "**功能根本没做**（2026-10-03 核实）：这个码只出现在 seed、本守卫与设计文档里，" +
+    "admin-bff 与门户里一行实现都没有。它不是债也不是缺口，是一个还没到期的需求",
 };
 
 const failures = [];
