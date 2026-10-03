@@ -2556,12 +2556,27 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return res.rows.map((row) => toNotifyFacts(row));
   }
 
-  /** CAS 改 expired：只动仍是 pending 的那一行，输了竞态回 false（一条都不发）。 */
+  /**
+   * CAS 改 expired：只动**仍是 pending 且仍然过期**的那一行，输了竞态回 false（一条都不发）。
+   *
+   * ── 为什么 `expires_at <= now()` 必须也在这里 ──
+   * 候选集是按 `status = 'pending' and expires_at <= now()` 选出来的，而这条 UPDATE
+   * 原来只带了前一半。两半不对等就给了**重发**一个窗口：`rotateInvitationToken` 是
+   * 唯一一个**不改 status** 的写者（它把 status 留在/救回 pending，并把 expires_at
+   * 顺延），所以它不会被 `status = 'pending'` 这一句挡住 —— 一趟巡检会把「取数之后
+   * 才被重发」的邀请改成 expired，且照常给受邀人发一封「邀请已过期」。
+   *
+   * 那条 CAS 原来的注释（以及服务层的）点名的是「同一瞬间被接受 / 拒绝 / 撤回」——
+   * 三个**真会改 status** 的转移全点到了，漏的正好是那个不改的。
+   * 窗口不窄：巡检一趟最多 200 行，而循环体里每行都要同步 await SMTP 发信。
+   *
+   * 口径与候选查询**字面一致**：动作作用域必须等于视图作用域，不是两段看起来一样的文本。
+   */
   async markInvitationExpired(invitationId: string): Promise<boolean> {
     const res = await this.pool.query(
       `update tenancy.invitations
           set status = 'expired', updated_at = now()
-        where id = $1 and status = 'pending'`,
+        where id = $1 and status = 'pending' and expires_at <= now()`,
       [invitationId],
     );
     return (res.rowCount ?? 0) > 0;
