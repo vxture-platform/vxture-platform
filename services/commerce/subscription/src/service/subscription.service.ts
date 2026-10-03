@@ -584,6 +584,25 @@ export class SubscriptionService {
     let resumed = 0;
     let terminated = 0;
     for (const row of rows) {
+      /*
+       * 到点处置读的是 episode 上的**快照** `extends_term`，不是拿 `row.reason` 去查
+       * 当下的政策 —— 这是有意的，别"顺手改成按 reason 算"（2026-10-03 复核过一轮）。
+       *
+       * 仓储那边的注释写「处置动作按**原因**分……所以这里把 reason 与 extends_term
+       * 一起带出去」，读起来像是这里该用 reason。两者今天**是同一个函数**：
+       * `SUSPENSION_REASON_EXTENDS_TERM` 里只有 `customer_violation` 为 false，
+       * 所以 `!extendsTerm` 恰好等于「客户违规 → 终止，平台原因 → 强制恢复」。
+       *
+       * 而它们将来**可能**不等，那时也仍然该用快照：
+       * `catalog-domains.constants` 自己写明「`extends_term` 是暂停那一刻拍在 episode 上的，
+       * 不在读取时派生：政策可以改，但**已经发生的那次暂停不许被改写**」。
+       * 到点处置是终止还是恢复，对客户的影响比顺延更大 —— 用今天的新政策去处置一次
+       * 按旧政策承诺过的暂停，正是那句话要防的事。
+       *
+       * 所以：**快照管承诺（顺延与结算），reason 只进备注给人看。**
+       * 真要让处置与顺延分家（比如新增一个原因，或者处置不再等于 `!extendsTerm`），
+       * 那需要一张自己的处置映射表 + owner 裁定，不是在这里改一个取值。
+       */
       const terminate = !row.extendsTerm;
       try {
         const before = await this.getSubscription(row.subscriptionId);
