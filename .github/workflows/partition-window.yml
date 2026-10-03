@@ -1,0 +1,38 @@
+name: partition-window
+# 分区预建窗口还剩多久 —— 每月问一次，不靠有人推代码（2026-10-04）。
+#
+# 为什么要一份单独的定时 workflow，而不是只靠 ci.yml 里那一步：
+#   ci.yml 的那一步只在有提交时跑。窗口到头是**时间**触发不是提交触发——仓库进入低活跃期
+#   （或那阵子只有文档改动）时，90 天预警窗可能整段不被求值，等有人推代码时余量已经越界。
+#   对抗审查 2026-10-04 指出这一点时，守卫头部还写着「不需要谁记得去看」，那句话在低活跃期
+#   是假的。这份 workflow 让它变成真的：每月 1 日 UTC 02:00 自动跑一次，加上手动触发。
+#
+# 它只跑一个纯静态守卫（读仓库里的 DDL 与迁移），不连库、不要任何 secret、不过审批门，
+# 所以定时触发不会像 platform-alerts.yml 那样卡在环境审批上。
+# 红了怎么办：守卫的失败文案写了两步处置（改 DDL 的 cover_until + 另写一份同形迁移）。
+on:
+  schedule:
+    - cron: "0 2 1 * *"
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: partition-window
+  cancel-in-progress: true
+jobs:
+  partition-window:
+    name: Partition pre-build window (>= 90 days left)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 与仓里其它 workflow 同一个 major（check-action-pinning：官方件可用 major tag，但同仓不得并存两个 major）
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Partition pre-build window (>= 90 days left)
+        run: node scripts/guardrails/check-partition-window.mjs
+      - name: Guard self-test (the counterexamples must still go red)
+        run: node scripts/guardrails/check-partition-window.mjs --self-test

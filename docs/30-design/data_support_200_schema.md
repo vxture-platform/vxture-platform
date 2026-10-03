@@ -89,7 +89,7 @@ support.audit_logs (
 ```
 
 索引：`(tenant_id, created_at DESC)`、`(actor_id, created_at DESC)`、`(action)`、`(resource_type, resource_id)`、`(request_id) WHERE request_id IS NOT NULL`。
-**append-only**：`BEFORE UPDATE OR DELETE RAISE`（分区父声明传播全分区，禁 RULE）。留存 24 月靠 **DROP PARTITION**（O(1) 清理，逐行 DELETE 不可行且被触发器封死），维护脚本与 metering usage_events 共用一套。
+**append-only**：`BEFORE UPDATE OR DELETE RAISE`（分区父声明传播全分区，禁 RULE）。留存 24 月靠 **DROP PARTITION**（O(1) 清理，逐行 DELETE 不可行且被触发器封死），维护脚本与 metering usage_events 共用一套。**那套维护脚本今天不存在**（2026-10-04）：分区只预建、不滚动也不 DROP，窗口由 `96_partitions.sql` 的 `cover_until` + `check-partition-window.mjs` 守着，登记 TD-051。
 
 > **tenant_id/actor_id 不建 FK 的理由**：审计是不可变合规记录，须在租户/actor 注销后继续留存（**边界#3**）；actor 跨 customer/operator 两 realm（**边界#2**）。这是刻意的，非遗漏。
 
