@@ -168,3 +168,11 @@ export {
   encryptSecret,
   decryptSecret,
 } from "./utils/secret-cipher";
+
+// ============================================
+// Time zone（IANA 校验的唯一实现在 @vxture-platform/shared；这里转出口给只依赖 core-utils 的
+// 服务包——service-account 的资料写路径与 service-subscription 的用量读路径必须用同一个判据，
+// 裁定 4 2026-10-04）
+// ============================================
+
+export { isIanaTimeZone } from "@vxture-platform/shared";

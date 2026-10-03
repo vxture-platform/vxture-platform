@@ -31,6 +31,8 @@ export class ConsoleAuthService {
       // 路由挡成 403,console 则提示「撤销删除并重新启用」(050-account §7)。
       accountStatus: user.status,
       deletionRequestedAt: user.deletionRequestedAt ?? null,
+      // 用量趋势按它重切 day 档(裁定 4);UserView 已带,不另查库。
+      timezone: user.timezone ?? null,
     };
   }
 }

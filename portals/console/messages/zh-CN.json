@@ -3082,7 +3082,7 @@
     },
     "trend": {
       "title": "用量趋势",
-      "description": "按周期查看 AI Credits 消耗;桶按 UTC 日切分,窗口内没有用量的周期记 0。统计口径为纯看板数据,不作计费依据",
+      "description": "按周期查看 AI Credits 消耗;桶按 {zone} 日切分,窗口内没有用量的周期记 0。统计口径为纯看板数据,不作计费依据",
       "windowLabel": "统计周期",
       "windowDay": "近 30 天",
       "windowWeek": "近 12 周",
@@ -3090,10 +3090,15 @@
       "windowYear": "近 5 年",
       "empty": "所选周期内暂无用量数据",
       "windowHour": "近 24 小时",
-      "descriptionHour": "近 24 小时逐时消耗;横轴已换算为你的本地时刻。统计口径为纯看板数据,不作计费依据",
+      "descriptionHour": "近 24 小时逐时消耗;横轴按 {zone} 显示。统计口径为纯看板数据,不作计费依据",
+      "descriptionHourBrowser": "近 24 小时逐时消耗;横轴已换算为浏览器所在时区的时刻。统计口径为纯看板数据,不作计费依据",
       "statTotal": "窗口合计",
       "statPeak": "峰值",
-      "statDelta": "最近环比"
+      "statDelta": "最近环比",
+      "zoneFallback": {
+        "retention": "你设置了 {userZone},但超过 {days} 天的窗口只能按 UTC 日展示",
+        "unsupported": "账号里的时区 {userZone} 无法识别,已按 UTC 显示;到账号信息页重新选择"
+      }
     },
     "share": {
       "title": "按产品分布",
@@ -3113,7 +3118,7 @@
       "scopeTitle": "看板不是账单",
       "scopeBody": "本页统一按 AI Credits 口径统计,数字来自按周期降采样的看板数据;实际计费以订单与账单为准,两者可能因统计延迟略有出入。要看别的指标或逐条核对,去调用记录",
       "bucketTitle": "时间怎么切",
-      "bucketBody": "趋势按 UTC 切桶,窗口内每个周期都有一桶(无调用补零);逐时档换算成你所在时区显示,日/周档保持 UTC 日期以对齐后台的桶",
+      "bucketBody": "趋势按 UTC 切桶,窗口内每个周期都有一桶(无调用补零);日档在你设置了时区且窗口不超过 {days} 天时按你的时区重切,其余档位与更长窗口保持 UTC;逐时档轴标按你设置的时区显示,未设置时按浏览器所在时区",
       "attributionTitle": "「未归集」是什么",
       "attributionBody": "产品在调用时没有带上使用者身份,这部分用量归到未归集桶;它照常计入总量,只是分不到具体的人",
       "recordsTitle": "要逐条核对",

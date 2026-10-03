@@ -53,7 +53,11 @@ export type {
   CreateOrderResult,
 } from "./types/order.types";
 export { PgUsageRollupRepository } from "./repository/pg-usage-rollup.repository";
-export { MeteringReadService } from "./service/metering-read.service";
+export {
+  MeteringReadService,
+  resolveBucketZone,
+} from "./service/metering-read.service";
+export { REBUCKET_HORIZON_DAYS } from "./service/usage-periods";
 export type {
   QuotaPoolRow,
   UsageGaugeRow,
@@ -63,6 +67,7 @@ export type {
   UsageTrendQuery,
   UsageTrendBucket,
   UsageTrendResult,
+  UsageZoneFallbackReason,
   UsageEventRow,
   UsageEventsQuery,
   UsageEventsResult,

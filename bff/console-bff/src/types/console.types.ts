@@ -19,6 +19,12 @@ export interface ConsoleUser {
   /** account.users.status: active | deleting(保留期)| … */
   accountStatus?: string;
   deletionRequestedAt?: string | null;
+  /**
+   * account.user_profiles.timezone(IANA 名);null = 未设置。用量趋势的 day 档按它
+   * 重切成本地日(owner 裁定 4,2026-10-04)。必填而不是可选:漏拷这一项不该静默成
+   * 「用户没设」,编译器要当场点名。
+   */
+  timezone: string | null;
 }
 
 export interface ConsoleUserProfile {

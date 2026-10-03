@@ -29,6 +29,15 @@ export {
 } from "./quota-period.utils";
 export type { QuotaResetPeriod } from "./quota-period.utils";
 
+// Time zone — IANA 校验与民用日期投影（owner 裁定 4：用量日表默认 UTC，用户设了按用户时区）。
+// 判据只此一份：service-account 的资料写路径与 service-subscription 的用量读路径都引它。
+export {
+  USAGE_REBUCKET_HORIZON_DAYS,
+  civilDateInZone,
+  isIanaTimeZone,
+} from "./time-zone.utils";
+export type { CivilDate } from "./time-zone.utils";
+
 // Object utils
 export { deepMerge, deepClone, isPlainObject } from "./object.utils";
 

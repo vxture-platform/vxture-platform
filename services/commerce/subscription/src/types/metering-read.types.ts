@@ -58,18 +58,36 @@ export interface QuotaOverviewRows {
 
 export type UsageGranularity = "hour" | "day" | "week" | "month" | "year";
 
+/**
+ * `bucketZone` 没能等于用户时区的原因（owner 裁定 4，2026-10-04）：
+ *   retention   — 窗口超过小时表可重切的天数（REBUCKET_HORIZON_DAYS），只能回 UTC 日表；
+ *   granularity — 只有 day 档按用户时区重切，周/月/年保持 UTC 权威；
+ *   unsupported — 账号里存的时区 Node 或 PostgreSQL 认不出，按 UTC 展示并让页面提示重选。
+ */
+export type UsageZoneFallbackReason =
+  | "retention"
+  | "granularity"
+  | "unsupported";
+
 export interface UsageTrendQuery {
   workspaceId: string;
   metric: string;
   granularity: UsageGranularity;
   /** 桶数;窗口 = 以当前周期为末桶、向前数 span 个桶(含当前)。 */
   span: number;
+  /**
+   * 请求用户的时区设置（account.user_profiles.timezone，IANA 名）；null / 空 = 未设置。
+   * 只影响 day 档（§3）：天表是 workspace 级共享、时区是 user 级，所以天表不改，
+   * 读侧从小时表按这个时区现场重切成本地日。
+   */
+  zone?: string | null;
 }
 
 export interface UsageTrendBucket {
   /**
-   * 桶键(UTC):hour = `YYYY-MM-DD HH:00`;day / week(ISO 周一)= `YYYY-MM-DD`;
-   * month = `YYYYMM`;year = `YYYY`。
+   * 桶键:hour = `YYYY-MM-DD HH:00`（UTC 小时）;day / week(ISO 周一)= `YYYY-MM-DD`;
+   * month = `YYYYMM`;year = `YYYY`。day 档的日期语义跟随 `UsageTrendResult.bucketZone`，
+   * 其余档位恒为 UTC。
    */
   period: string;
   total: number;
@@ -80,6 +98,12 @@ export interface UsageTrendBucket {
 export interface UsageTrendResult {
   metric: string;
   granularity: UsageGranularity;
+  /** 桶边界所在时区（IANA）。'UTC' 或用户设置的时区；只有 day 档才可能不是 UTC。 */
+  bucketZone: string;
+  /** 请求用户的时区设置；null = 未设置。页面据它换算 hour 档轴标。 */
+  userZone: string | null;
+  /** bucketZone ≠ userZone 时的原因；null = 已按用户时区（或用户本就没设 / 设的就是 UTC）。 */
+  zoneFallbackReason: UsageZoneFallbackReason | null;
   buckets: UsageTrendBucket[];
 }
 
