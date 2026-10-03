@@ -531,6 +531,22 @@ export class SubscriptionService {
    * `granted_seconds is null`**，所以两边同时跑也只结一次；某一次失败下一趟自愈——顺延
    * 是欠客户的账，不能静默丢。
    */
+  /**
+   * 暂停半态对账（只读）。详见 `PgSubscriptionRepository.countSuspensionHalfStates`。
+   *
+   * 这里不做任何修复动作 —— 两种半态的根治是把「改状态」与「开/闭 episode」并进一个
+   * 事务，那是 `repo.update` 的事务边界重构（碰钱、调用方众多），单独一轮做。
+   * 本方法只负责让它们**不再隐身**：三条恢复判据都从 episode 或 status 起算，
+   * 没有一条看得见这两种形状。
+   */
+  async countSuspensionHalfStates(): Promise<{
+    suspendedWithoutEpisode: number;
+    resumedWithOpenEpisode: number;
+    samples: { shape: "no_episode" | "open_episode"; subscriptionId: string }[];
+  }> {
+    return this.repo.countSuspensionHalfStates();
+  }
+
   async settleSuspensionExtension(subscriptionId?: string): Promise<number> {
     try {
       const settled = await this.repo.settleResumedSuspensions(

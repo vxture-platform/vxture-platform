@@ -142,6 +142,26 @@ export class SubscriptionRenewalJob {
         `product maintenance: ${maintenance.suspended} suspended, ${maintenance.resumed} resumed, ${maintenance.synced} expected-resume synced`,
       );
     }
+    // 8. 暂停半态对账（只读，不修）。放在最后：本趟自己的写入已经落定，这里报的是
+    //    「跑完这一趟之后库里还剩多少半态」。
+    //
+    //    这两种形状是「改状态」与「开/闭 episode」两个独立事务中途失败的产物，而
+    //    第 5、7 两趟的判据都从 episode 或 status 起算，没有一条看得见它们：
+    //      · suspendedWithoutEpisode —— 客户停着服，整段维护期零补偿零通知；
+    //      · resumedWithOpenEpisode  —— 有效到期日每秒变大，这条订阅永不到期、
+    //        永不释放、永不再计费，欠客户的顺延也永不结算。
+    //    根治是把两步并进一个事务（repo.update 的事务边界重构，单独一轮）；
+    //    在那之前至少不让它们隐身 —— 顺带回答「生产上到底有没有」。
+    const half = await this.subscriptions.countSuspensionHalfStates();
+    if (half.suspendedWithoutEpisode > 0 || half.resumedWithOpenEpisode > 0) {
+      this.logger.error(
+        `suspension half-state: ${half.suspendedWithoutEpisode} 条停了服但没有 episode、` +
+          `${half.resumedWithOpenEpisode} 条已恢复但 episode 没闭合（后者会让订阅永不到期）。` +
+          `样本：${half.samples
+            .map((s) => `${s.shape}=${s.subscriptionId}`)
+            .join("、")}`,
+      );
+    }
     return (
       renewal.created +
       overdue +
