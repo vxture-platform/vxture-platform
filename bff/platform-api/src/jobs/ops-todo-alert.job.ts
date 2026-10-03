@@ -40,6 +40,14 @@
  * 基准档是 amber——一旦 rose 待办 ≥ 50 条，amber 行永远挤不进同一拼，通告半个都没有且
  * 不报错。所以 NOTICE_ONLY_KINDS 单独 list 一次，两拼各自 50。
  *
+ * ── 两拼各自隔离，行与行也各自隔离 ──
+ * 与 OperatorSignalSweepJob 同一形状：每一拼的 list + 处理包在自己的 try 里，拼里的每一行
+ * 再各包一层。否则通告拼那条 SQL 一炸（活库没灌 2026-11-23 的授权 → 42501、瞬时连接错）
+ * 就把已经取回来的九类邮件行全丢掉，每 5 分钟一轮、轮轮如此；反过来一行 alertTodo 抛
+ * （SMTP 挂了）会让通告拼一条都写不出来——而通告根本不依赖邮件。行级也要隔：取行按
+ * rose 优先、等最久优先，顺序稳定，一行坏了不隔就是**同一行每轮挡在最前面**，后面的
+ * 永远轮不到。失败不吞：两拼都跑完再合成一条抛，心跳记失败，opera「任务调度」显红。
+ *
  * ── 读的是哪一份 ──
  * `@vxture/service-ops-todos` 的 OpsTodoRepository——admin 待办页读的也是它。此前作业自己
  * 在 OrderService.listOpsTodoOrders 里另写一套谓词，页面在浏览器里再派生一套，两边各写各的
@@ -163,6 +171,9 @@ export class OpsTodoAlertJob {
 
   /**
    * @returns 本轮实际发出的告警条数（邮件命中静默窗口的不计）+ 只写通告那一拼里升档的条数。
+   *
+   * 两拼各自包在 try 里、拼里每一行再各包一层（见头注「两拼各自隔离」）：一拼 / 一行坏了
+   * 另一拼照跑，跑完把失败合成一条抛。
    */
   private async pass(): Promise<number> {
     const shape = {
@@ -171,46 +182,72 @@ export class OpsTodoAlertJob {
       // 申报人与租户风险档来自本进程角色碰不到的 schema，且邮件 / 通告都用不到——见头注。
       includeApplicant: false,
     } as const;
-    const todos = await this.todos.list({ kinds: ALERT_KINDS, ...shape });
-    // 另起一拼，不并进上面那拼：limit 50 按 rose 优先取，amber 的通告类别会被挤没——见头注。
-    const noticeOnly = await this.todos.list({
-      kinds: NOTICE_ONLY_KINDS,
-      ...shape,
-    });
-    if (todos.length === 0 && noticeOnly.length === 0) return 0;
+    const failures: string[] = [];
 
+    // 拼 ①：ALERT_KINDS——邮件 + 通告两半（alertTodo）。
     let alerted = 0;
     let unreachable = 0;
-    for (const todo of todos) {
-      const result = await this.alerts.alertTodo(todo);
-      if (result.noRecipient) unreachable += 1;
-      else if (result.sent > 0) alerted += 1;
+    let alertTotal = 0;
+    try {
+      const todos = await this.todos.list({ kinds: ALERT_KINDS, ...shape });
+      alertTotal = todos.length;
+      for (const todo of todos) {
+        try {
+          const result = await this.alerts.alertTodo(todo);
+          if (result.noRecipient) unreachable += 1;
+          else if (result.sent > 0) alerted += 1;
+        } catch (err) {
+          failures.push(`${todo.id} 告警：${String(err)}`);
+        }
+      }
+    } catch (err) {
+      failures.push(`邮件拼 list(ALERT_KINDS)：${String(err)}`);
     }
 
+    // 拼 ②：NOTICE_ONLY_KINDS——只写通告。另起一拼，不并进上面那拼：limit 50 按 rose
+    // 优先取，amber 的通告类别会被挤没——见头注。
     let noticed = 0;
-    for (const todo of noticeOnly) {
-      // 没升档的只上页面；升档的才写通告（去重键带 step，同一级只落一条）。
-      if (!todo.escalated) continue;
-      await this.alerts.noticeEscalatedTodo(todo);
-      noticed += 1;
+    let noticeTotal = 0;
+    try {
+      const noticeOnly = await this.todos.list({
+        kinds: NOTICE_ONLY_KINDS,
+        ...shape,
+      });
+      noticeTotal = noticeOnly.length;
+      for (const todo of noticeOnly) {
+        // 没升档的只上页面；升档的才写通告（去重键带 step，同一级只落一条）。
+        if (!todo.escalated) continue;
+        try {
+          await this.alerts.noticeEscalatedTodo(todo);
+          noticed += 1;
+        } catch (err) {
+          failures.push(`${todo.id} 通告：${String(err)}`);
+        }
+      }
+    } catch (err) {
+      failures.push(`通告拼 list(NOTICE_ONLY_KINDS)：${String(err)}`);
     }
 
     if (alerted > 0) {
       this.logger.log(
-        `ops todo alert: ${alerted}/${todos.length} 条待办已通知运营（其余在 4h 静默窗口内）`,
+        `ops todo alert: ${alerted}/${alertTotal} 条待办已通知运营（其余在 4h 静默窗口内）`,
       );
     }
     if (noticed > 0) {
       this.logger.log(
-        `ops todo alert: ${noticed}/${noticeOnly.length} 条只写通告的待办已升档，通告已写（同级去重）`,
+        `ops todo alert: ${noticed}/${noticeTotal} 条只写通告的待办已升档，通告已写（同级去重）`,
       );
     }
     if (unreachable > 0) {
       // 已发出去的那些不回滚（邮件发了就是发了）；抛出去只为把这个洞顶到台前。
-      throw new Error(
+      failures.push(
         `${unreachable} 条待办无人可达：没有 status=active 且 email_verified 的运营账号。` +
           "请在运营台「运营账号」里补齐并验证邮箱，否则待办通知永远发不出去。",
       );
+    }
+    if (failures.length > 0) {
+      // 两拼都跑完才抛：一拼坏不该连带另一拼不跑，但坏了必须显红——静默继续正是 #231 那种坏法。
+      throw new Error(`${failures.length} 处失败：${failures.join("；")}`);
     }
     return alerted + noticed;
   }

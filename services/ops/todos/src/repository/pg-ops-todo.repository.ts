@@ -1548,10 +1548,26 @@ export const DEFAULT_OPS_TODO_THRESHOLDS: OpsTodoThresholds = {
   refundStuckHours: 4,
 };
 
-/** env 里的正整数；空 / 非数 / ≤0 一律用兜底（不抛：一个配歪的阈值不该让整页打不开）。 */
+/**
+ * 阈值在**自己的单位**里的上限（分钟 ≈ 13.9 天、小时 ≈ 2.3 年、天 ≈ 55 年）。
+ *
+ * 上限由 SQL 定，不是口味：tail 里阈值是 `$n::int * 86400` 这样在 int4 里乘出来的秒数，
+ * 24855 天（或 596523 小时）就溢出，Postgres 对**整条**查询报 integer out of range——
+ * 页面打不开、作业轮轮失败，而这正是 positiveIntEnv 承诺不会发生的事。
+ * 超过的按上限算（饱和）而不回兜底：配一个很大的值的意思是「很久 / 别升档」，
+ * 回兜底会让它反而比默认更早升档。spec 里从 tail 的真文本解析出最大乘数，
+ * 钉 MAX × 乘数 ≤ 2^31−1——谁往 tail 里加更大的乘数（按周？）那条就红。
+ */
+export const MAX_OPS_TODO_THRESHOLD = 20000;
+
+/**
+ * env 里的正整数；空 / 非数 / ≤0 一律用兜底，超过 MAX_OPS_TODO_THRESHOLD 按上限算
+ * （都不抛：一个配歪的阈值不该让整页打不开）。
+ */
 function positiveIntEnv(name: string, fallback: number): number {
   const raw = Number(process.env[name]);
-  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : fallback;
+  if (!Number.isFinite(raw) || raw < 1) return fallback;
+  return Math.min(Math.floor(raw), MAX_OPS_TODO_THRESHOLD);
 }
 
 /**

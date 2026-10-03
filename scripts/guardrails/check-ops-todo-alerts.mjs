@@ -65,6 +65,15 @@
  *      邮件裁定不重叠；作业真的把 NOTICE_ONLY_KINDS 传给 list 并调 noticeEscalatedTodo；
  *      每一类的阈值行与升档起点字面钉在 ESCALATION_LITERALS / PREDICATE_LITERALS。
  *   7. 本文件的 NOTICE_ONLY 与作业的 NOTICE_ONLY_KINDS 逐字相等（裁定表只有一份）。
+ *   8. **services 包里抄的两张类别表与作业逐字相等**（2026-10-04 评审补）。itest 用
+ *      `set role svc_platform_api` 实跑作业的两种调用形状——那是最小权限那件事的真判据；
+ *      repository.spec 用假 pool 钉两拼的 SQL 文本。但 services 包不能依赖 bff，所以两处
+ *      都只能抄一份 ALERT_KINDS / NOTICE_ONLY_KINDS。作业加了一类而复本没跟上，那些用例
+ *      拿着旧表照样绿，新一类的片段从没在生产角色下跑过——恰是它们要抓的 42501。
+ *      本段读 KIND_COPIES 里的每个文件，复本与作业对账（找不到声明 → 红，不是空集）。
+ *   9. **两份文档逐字写着 `NOTICE_ONLY_KINDS` / `VERIFICATION_TODOS_`**（2026-10-04 评审补）。
+ *      prettier 会把裸的下划线标识符当强调改写成 `NOTICE*ONLY_KINDS`——文档里就此指向一个
+ *      不存在的名字，grep 零命中。标识符要用反引号包；本段读两份文档，缺了 / 被改写了都红。
  *
  * ── 看不见什么 ──
  *   · 阈值的**值**对不对（那是 env 与 owner 的事；两份 example 的相等由
@@ -75,7 +84,9 @@
  * 用法：node scripts/guardrails/check-ops-todo-alerts.mjs
  *       node scripts/guardrails/check-ops-todo-alerts.mjs --self-test
  *   --self-test 用合成文本证第 6 段三态：SQL 里多一个没登记的阈值要红、登记表多一类要红、
- *   把 NOTICE_ONLY 清空（裁定 3 之前的现场：verification 有阈值没人扫）要红、复原要绿。
+ *   把 NOTICE_ONLY 清空（裁定 3 之前的现场：verification 有阈值没人扫）要红、复原要绿；
+ *   再证第 8 / 9 段会动：itest 复本少一类要红、找不到复本要 null（不是空集）、
+ *   文档里的标识符被 prettier 改写成 NOTICE*ONLY_KINDS 要红。
  */
 
 import { readFileSync } from "node:fs";
@@ -89,6 +100,25 @@ const WIRING = `${ROOT}/bff/platform-api/src/notifications/operator-alerts.wirin
 const MAPPER = `${ROOT}/bff/admin-bff/src/routers/orders.router.ts`;
 const ROLES = `${ROOT}/deploy/database/ddl/97_service_roles.sql`;
 const SCHEMAS = `${ROOT}/deploy/database/ddl/00_schemas.sql`;
+/**
+ * 第 8 段：services 包里抄了作业两张类别表的文件（它们不能 import bff 的常量）。
+ * itest 用 `set role svc_platform_api` 实跑两种调用形状；spec 用假 pool 钉两拼的 SQL 文本。
+ */
+const KIND_COPIES = {
+  "ops-todos.itest": `${ROOT}/services/ops/todos/src/repository/ops-todos.itest.spec.ts`,
+  "pg-ops-todo.repository.spec": `${ROOT}/services/ops/todos/src/repository/pg-ops-todo.repository.spec.ts`,
+};
+/** 第 9 段：记录这条作业的两份文档，以及每份必须逐字出现的标识符。 */
+const DOC_LITERALS = {
+  "docs/30-design/data_platform_330_service-role-least-privilege.md": [
+    "NOTICE_ONLY_KINDS",
+    "VERIFICATION_TODOS_",
+  ],
+  "docs/40-implementation/packages/bff/60-platform-api.md": [
+    "ALERT_KINDS",
+    "NOTICE_ONLY_KINDS",
+  ],
+};
 
 /**
  * 每一类待办在「不带富化块」那一拼里用到哪几段片段常量（pg-ops-todo.repository 里
@@ -431,6 +461,76 @@ function escalationProblems({
   return out;
 }
 
+/* ── 第 8 / 9 段的纯函数（--self-test 同样用合成文本喂反例）──────────────────── */
+
+/**
+ * 一段源码里 `const <name>… = [ "a", "b" ];`（export 可有可无）的字符串成员，排好序。
+ * 找不到那条声明 → null（判据瞎了，调用方要 die，不是放行）。
+ */
+function kindListIn(src, name) {
+  const block = src.match(
+    new RegExp(`(?:export )?const ${name}[^=]*=\\s*\\[([\\s\\S]*?)\\];`),
+  );
+  if (!block) return null;
+  return [...block[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]).sort();
+}
+
+/**
+ * 一份复本文件里的两张表与作业对账：返回问题清单（空 = 对得上）。
+ * @param {string} label 复本文件（只用于报错）
+ * @param {string} src   复本文件的文本
+ * @param {{ ALERT_KINDS: string[], NOTICE_ONLY_KINDS: string[] }} job 作业里解析出的两张表
+ */
+function kindCopyProblems(label, src, job) {
+  const out = [];
+  for (const name of ["ALERT_KINDS", "NOTICE_ONLY_KINDS"]) {
+    const copy = kindListIn(src, name);
+    if (copy === null) {
+      out.push(
+        `${label} 里找不到 ${name} 的复本——` +
+          "没有它，那边钉「作业那两拼」的用例就没在跑作业真传的类别。",
+      );
+      continue;
+    }
+    if (JSON.stringify(copy) !== JSON.stringify(job[name])) {
+      out.push(
+        `${label} 里的 ${name} 复本与作业对不上：\n` +
+          `    复本：${copy.join(", ") || "（空）"}\n` +
+          `    作业：${job[name].join(", ") || "（空）"}\n` +
+          "  → 那边的用例拿着旧表照样绿，新一类的片段从没按作业真传的形状跑过（itest 里就是从没在生产角色下跑过）。",
+      );
+    }
+  }
+  return out;
+}
+
+/** 一个全大写词紧跟 `*` 再跟大写或反斜杠：prettier 把 `A_B_C` 改写成 `A*B_C` / `A*\*` 的痕迹。 */
+const PRETTIER_MANGLED = /[A-Z]{2,}\*[A-Z\\]/;
+
+/**
+ * 一份文档逐字写着它该写的标识符，且没有被 prettier 改写的痕迹：返回问题清单。
+ * @param {string} label 文档路径（只用于报错）
+ * @param {string} text  文档文本
+ * @param {string[]} literals 必须逐字出现的标识符
+ */
+function docIdentifierProblems(label, text, literals) {
+  const out = [];
+  for (const literal of literals) {
+    if (!text.includes(literal)) {
+      out.push(
+        `${label} 里没有逐字出现 \`${literal}\`——它记录的正是这条作业，读者按这个名字去 grep 会零命中。`,
+      );
+    }
+  }
+  const mangled = text.match(PRETTIER_MANGLED);
+  if (mangled) {
+    out.push(
+      `${label} 里有被 prettier 改写的标识符（${mangled[0]}…）：裸写的下划线被当成了强调。标识符要用反引号包。`,
+    );
+  }
+  return out;
+}
+
 const problems = [];
 const die = (msg) => {
   console.error(`${msg} —— 判据失效，拒绝给出通过结论`);
@@ -479,20 +579,34 @@ const repoSrc = readFileSync(REPO, "utf8");
 const wiringSrc = readFileSync(WIRING, "utf8");
 
 const parseKindList = (name) => {
-  const block = jobSrc.match(
-    new RegExp(`export const ${name}[^=]*=\\s*\\[([\\s\\S]*?)\\];`),
-  );
-  if (!block) die(`在 ops-todo-alert.job 里找不到 ${name}`);
-  return [...block[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]).sort();
+  const list = kindListIn(jobSrc, name);
+  if (list === null) die(`在 ops-todo-alert.job 里找不到 ${name}`);
+  return list;
 };
 const scanned = parseKindList("ALERT_KINDS");
 if (scanned.length === 0) die("ALERT_KINDS 解析出 0 个类别");
 const noticeScanned = parseKindList("NOTICE_ONLY_KINDS");
+const jobLists = { ALERT_KINDS: scanned, NOTICE_ONLY_KINDS: noticeScanned };
+const copySrcs = Object.fromEntries(
+  Object.entries(KIND_COPIES).map(([label, path]) => [
+    label,
+    readFileSync(path, "utf8"),
+  ]),
+);
+const itestSrc = copySrcs["ops-todos.itest"];
+const docTexts = Object.fromEntries(
+  Object.keys(DOC_LITERALS).map((rel) => [
+    rel,
+    readFileSync(`${ROOT}/${rel}`, "utf8"),
+  ]),
+);
 
-// ── --self-test：用合成文本证第 6 段会动（三态），不碰真文件 ───────────────────
+// ── --self-test：用合成文本证第 6 / 8 / 9 段会动，不碰真文件 ─────────────────────
 if (process.argv.includes("--self-test")) {
   let bad = 0;
+  let total = 0;
   const say = (ok, msg) => {
+    total += 1;
     if (!ok) bad += 1;
     console.log(`${ok ? "✓" : "✗"} ${msg}`);
   };
@@ -570,12 +684,57 @@ if (process.argv.includes("--self-test")) {
     "复原：真文本 + 本文件登记表 → 又是 0 条",
   );
 
-  console.log(`\n── 汇总 ──\n看得见 ${9 - bad}/9 项`);
+  console.log("\n══ 自检：第 8 段（itest 的两份复本）══\n");
+  say(
+    Object.entries(copySrcs).every(
+      ([label, src]) => kindCopyProblems(label, src, jobLists).length === 0,
+    ),
+    `正例：${Object.keys(copySrcs).join(" / ")} 的复本与作业两张表 → 0 条问题`,
+  );
+  // 反例六：作业多了一类（ticket 进了 NOTICE_ONLY_KINDS），itest 没跟上。
+  const p6 = kindCopyProblems("ops-todos.itest", itestSrc, {
+    ...jobLists,
+    NOTICE_ONLY_KINDS: [...noticeScanned, "ticket"].sort(),
+  });
+  say(
+    p6.some((m) => m.includes("NOTICE_ONLY_KINDS") && m.includes("ticket")),
+    `反例六：作业 NOTICE_ONLY_KINDS 多一个 ticket、itest 复本没动 → 报对不上（${p6.length} 条）`,
+  );
+  // 反例七：itest 里那条声明不见了 → null，报「找不到复本」，不是当作空集通过。
+  const gone = itestSrc.replace(/const NOTICE_ONLY_KINDS[^;]*;/, "");
+  say(
+    kindListIn(gone, "NOTICE_ONLY_KINDS") === null &&
+      kindCopyProblems("ops-todos.itest", gone, jobLists).some((m) =>
+        m.includes("找不到"),
+      ),
+    "反例七：itest 里删掉 NOTICE_ONLY_KINDS 的声明 → 解析得 null、报「找不到复本」",
+  );
+
+  console.log("\n══ 自检：第 9 段（文档里的标识符）══\n");
+  const [docRel, docLiterals] = Object.entries(DOC_LITERALS)[0];
+  const docText = docTexts[docRel];
+  say(
+    docIdentifierProblems(docRel, docText, docLiterals).length === 0,
+    `正例：${docRel} 逐字写着 ${docLiterals.join(" / ")}`,
+  );
+  // 反例八：prettier 把裸标识符改写成强调——评审在 2026-10-04 那一行抓到的现场。
+  const mangledDoc = docText
+    .replace("`NOTICE_ONLY_KINDS`", "NOTICE*ONLY_KINDS")
+    .replace("`VERIFICATION_TODOS_*`", "`VERIFICATION_TODOS*\\*`");
+  const p8 = docIdentifierProblems(docRel, mangledDoc, docLiterals);
+  say(
+    mangledDoc !== docText &&
+      p8.some((m) => m.includes("NOTICE_ONLY_KINDS")) &&
+      p8.some((m) => m.includes("prettier")),
+    `反例八：把文档里的两个标识符改写回 NOTICE*ONLY_KINDS / VERIFICATION_TODOS*\\* → 报缺名 + 改写痕迹（${p8.length} 条）`,
+  );
+
+  console.log(`\n── 汇总 ──\n看得见 ${total - bad}/${total} 项`);
   if (bad) {
     console.log("判据还不能用 —— 先让它看得见上面标 ✗ 的那几条。");
     process.exit(1);
   }
-  console.log("正例绿、五种反例各自红、复原绿。这个判据可以用了。");
+  console.log("正例绿、八种反例各自红、复原绿。这个判据可以用了。");
   process.exit(0);
 }
 
@@ -806,6 +965,16 @@ if (JSON.stringify([...NOTICE_ONLY].sort()) !== JSON.stringify(noticeScanned)) {
       `    本文件 NOTICE_ONLY：${[...NOTICE_ONLY].sort().join(", ") || "（空）"}\n` +
       `    作业 NOTICE_ONLY_KINDS：${noticeScanned.join(", ") || "（空）"}`,
   );
+}
+
+// ── 8'. services 包里抄的两张类别表与作业逐字相等（它们不能 import bff 的常量）──
+for (const [label, src] of Object.entries(copySrcs)) {
+  problems.push(...kindCopyProblems(label, src, jobLists));
+}
+
+// ── 9'. 两份文档逐字写着这条作业的标识符（prettier 会把裸下划线改写成强调）────
+for (const [rel, literals] of Object.entries(DOC_LITERALS)) {
+  problems.push(...docIdentifierProblems(rel, docTexts[rel], literals));
 }
 
 // ── 8. 裁定要告警的每一类在 todoAlertInput 里都有文案 ──────────────────────────

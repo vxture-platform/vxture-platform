@@ -5,6 +5,7 @@ export {
   DEFAULT_LIST_LIMIT,
   MAX_LIST_LIMIT,
   DEFAULT_OPS_TODO_THRESHOLDS,
+  MAX_OPS_TODO_THRESHOLD,
   opsTodoThresholds,
 } from "./repository/pg-ops-todo.repository";
 export { OPS_TODOS_PG_POOL } from "./tokens";

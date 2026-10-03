@@ -16,11 +16,12 @@ import {
 } from "../notifications/operator-alerts.wiring";
 import type { JobHeartbeatService } from "./job-heartbeat.service";
 
-const noopHeartbeat = {
+/** 每个用例一份新的心跳桩：「记了几次失败」要按用例数，不能跨用例累加。 */
+const heartbeatStub = () => ({
   recordStart: vi.fn().mockResolvedValue(undefined),
   recordSuccess: vi.fn().mockResolvedValue(undefined),
   recordFailure: vi.fn().mockResolvedValue(undefined),
-} as unknown as JobHeartbeatService;
+});
 
 const NOW = new Date("2026-09-28T12:00:00.000Z");
 
@@ -56,30 +57,45 @@ const todo = (over: Partial<OpsTodo>): OpsTodo => ({
 
 const ok = { sent: 1, failed: 0, suppressed: false, noRecipient: false };
 
+/** 一拼的桩：回这些行，或者让那一拼的 list 本身抛（42501 / 瞬时连接错的形状）。 */
+type Segment = OpsTodo[] | Error;
+
 /**
  * 假仓储按 `kinds` 分两拼回：ALERT_KINDS 那拼回 items，NOTICE_ONLY_KINDS 那拼回 noticeItems。
  * 实现具名（不走 mockImplementationOnce）：按调用顺序排桩会把「两拼谁先谁后」也钉死，
  * 而那不是契约。
  */
 const jobWith = (
-  items: OpsTodo[],
+  items: Segment,
   alertTodo = vi.fn().mockResolvedValue(ok),
-  noticeItems: OpsTodo[] = [],
+  noticeItems: Segment = [],
+  noticeEscalatedTodo = vi.fn().mockResolvedValue(undefined),
 ) => {
   const impl = async (opts: { kinds: readonly string[] }) => {
-    if (opts.kinds === ALERT_KINDS) return items;
-    if (opts.kinds === NOTICE_ONLY_KINDS) return noticeItems;
-    throw new Error(`list 收到未知的 kinds：${opts.kinds.join(",")}`);
+    const segment =
+      opts.kinds === ALERT_KINDS
+        ? items
+        : opts.kinds === NOTICE_ONLY_KINDS
+          ? noticeItems
+          : null;
+    if (segment === null)
+      throw new Error(`list 收到未知的 kinds：${opts.kinds.join(",")}`);
+    if (segment instanceof Error) throw segment;
+    return segment;
   };
   const list = vi.fn(impl);
-  const noticeEscalatedTodo = vi.fn().mockResolvedValue(undefined);
+  const heartbeat = heartbeatStub();
   const job = new OpsTodoAlertJob(
     { list } as unknown as OpsTodoRepository,
     { alertTodo, noticeEscalatedTodo } as unknown as OperatorAlertsWiring,
-    noopHeartbeat,
+    heartbeat as unknown as JobHeartbeatService,
   );
-  return { job, list, alertTodo, noticeEscalatedTodo };
+  return { job, list, alertTodo, noticeEscalatedTodo, heartbeat };
 };
+
+/** 心跳桩记下的那一条失败原因（recordFailure 的第三个参数）。 */
+const failureReason = (heartbeat: ReturnType<typeof heartbeatStub>): string =>
+  String(heartbeat.recordFailure.mock.calls[0]?.[2] ?? "");
 
 describe("OpsTodoAlertJob.pass", () => {
   it("向共享算法要裁定过的九类、默认 15 分钟、上限 50、不要富化块，每条各发一封；只写通告的类别另起一拼", async () => {
@@ -143,7 +159,7 @@ describe("OpsTodoAlertJob.pass", () => {
       escalated: false,
       escalationStep: 0,
     });
-    const { job, alertTodo, noticeEscalatedTodo } = jobWith(
+    const { job, alertTodo, noticeEscalatedTodo, heartbeat } = jobWith(
       [],
       vi.fn().mockResolvedValue(ok),
       [escalated, calm],
@@ -154,7 +170,8 @@ describe("OpsTodoAlertJob.pass", () => {
     // 一封邮件都不发：verification 的邮件半仍未裁定（守卫的 UNRULED）。
     expect(alertTodo).not.toHaveBeenCalled();
     // 本轮不算失败（没有「无人可达」这回事：通告不要收件人）。
-    expect(noopHeartbeat.recordFailure).not.toHaveBeenCalled();
+    expect(heartbeat.recordFailure).not.toHaveBeenCalled();
+    expect(heartbeat.recordSuccess).toHaveBeenCalledTimes(1);
   });
 
   it("只写通告的类别逐字：verification（有阈值、邮件半未裁的那一类）", () => {
@@ -193,12 +210,133 @@ describe("OpsTodoAlertJob.pass", () => {
   });
 
   it("有待办却无人可达 → 本轮记失败（心跳 recordFailure）", async () => {
-    const { job } = jobWith(
+    const { job, heartbeat } = jobWith(
       [todo({})],
       vi.fn().mockResolvedValue({ ...ok, sent: 0, noRecipient: true }),
     );
     await job.tick();
-    expect(noopHeartbeat.recordFailure).toHaveBeenCalled();
+    expect(heartbeat.recordFailure).toHaveBeenCalledTimes(1);
+    expect(failureReason(heartbeat)).toContain("无人可达");
+  });
+
+  /**
+   * 两拼各自隔离（见作业头注）。每条用例都是「一处坏了、另一处照跑、心跳记一次失败且
+   * 原因点名坏的那处」——缺了隔离时，坏的那处会把另一处整个吞掉而心跳只说一句。
+   */
+  describe("两拼各自隔离：一拼 / 一行坏了，另一拼照跑，跑完合成一条失败", () => {
+    const escalated = todo({
+      id: "verification:200000010",
+      kind: "verification",
+      severity: "rose",
+      priority: 20,
+      subject: { type: "tenant", no: "200000010" },
+      amount: null,
+      product: null,
+      progress: "verification",
+      href: "/verifications",
+      escalated: true,
+      escalationStep: 2,
+    });
+    const alertRows = () => [
+      todo({}),
+      todo({
+        id: "refund_audit:RFD-1",
+        kind: "refund_audit",
+        subject: { type: "refund", no: "RFD-1" },
+        progress: "refundAudit",
+      }),
+    ];
+
+    it("通告拼的 list 抛（活库没授权 → 42501）→ 邮件拼九类照发、心跳记一次失败并点名通告拼", async () => {
+      const rows = alertRows();
+      const { job, alertTodo, noticeEscalatedTodo, heartbeat } = jobWith(
+        rows,
+        vi.fn().mockResolvedValue(ok),
+        new Error("permission denied for table tenant_verifications"),
+      );
+      await job.tick();
+      expect(alertTodo).toHaveBeenCalledTimes(2);
+      expect(alertTodo).toHaveBeenCalledWith(rows[0]);
+      expect(alertTodo).toHaveBeenCalledWith(rows[1]);
+      expect(noticeEscalatedTodo).not.toHaveBeenCalled();
+      expect(heartbeat.recordFailure).toHaveBeenCalledTimes(1);
+      expect(heartbeat.recordSuccess).not.toHaveBeenCalled();
+      expect(failureReason(heartbeat)).toContain("NOTICE_ONLY_KINDS");
+      expect(failureReason(heartbeat)).toContain("tenant_verifications");
+    });
+
+    it("邮件拼的 list 抛 → 通告拼照写、心跳记一次失败并点名邮件拼", async () => {
+      const { job, alertTodo, noticeEscalatedTodo, heartbeat } = jobWith(
+        new Error("connection terminated"),
+        vi.fn().mockResolvedValue(ok),
+        [escalated],
+      );
+      await job.tick();
+      expect(alertTodo).not.toHaveBeenCalled();
+      expect(noticeEscalatedTodo).toHaveBeenCalledTimes(1);
+      expect(noticeEscalatedTodo).toHaveBeenCalledWith(escalated);
+      expect(heartbeat.recordFailure).toHaveBeenCalledTimes(1);
+      expect(failureReason(heartbeat)).toContain("ALERT_KINDS");
+    });
+
+    it("alertTodo 对第一行抛（SMTP 挂了）→ 第二行照发、通告拼照写、失败点名那一行", async () => {
+      const rows = alertRows();
+      const alertTodo = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("SMTP connect ECONNREFUSED"))
+        .mockResolvedValue(ok);
+      const { job, noticeEscalatedTodo, heartbeat } = jobWith(rows, alertTodo, [
+        escalated,
+      ]);
+      await job.tick();
+      // 取行按 rose 优先、等最久优先，顺序稳定：第一行不隔离就是每轮都挡在最前面。
+      expect(alertTodo).toHaveBeenCalledTimes(2);
+      expect(alertTodo).toHaveBeenNthCalledWith(2, rows[1]);
+      expect(noticeEscalatedTodo).toHaveBeenCalledTimes(1);
+      expect(heartbeat.recordFailure).toHaveBeenCalledTimes(1);
+      expect(failureReason(heartbeat)).toContain("confirm_payment:ORD-1");
+      expect(failureReason(heartbeat)).toContain("ECONNREFUSED");
+    });
+
+    it("noticeEscalatedTodo 抛 → 邮件拼不受影响、失败点名那一行", async () => {
+      const rows = alertRows();
+      const { job, alertTodo, heartbeat } = jobWith(
+        rows,
+        vi.fn().mockResolvedValue(ok),
+        [escalated],
+        vi.fn().mockRejectedValue(new Error("insert failed")),
+      );
+      await job.tick();
+      expect(alertTodo).toHaveBeenCalledTimes(2);
+      expect(heartbeat.recordFailure).toHaveBeenCalledTimes(1);
+      expect(failureReason(heartbeat)).toContain("verification:200000010");
+      expect(failureReason(heartbeat)).toContain("insert failed");
+    });
+
+    it("两拼都坏 → 仍只记一次失败，原因里两拼都点到名", async () => {
+      const { job, heartbeat } = jobWith(
+        new Error("alert boom"),
+        vi.fn().mockResolvedValue(ok),
+        new Error("notice boom"),
+      );
+      await job.tick();
+      expect(heartbeat.recordFailure).toHaveBeenCalledTimes(1);
+      expect(failureReason(heartbeat)).toContain("2 处失败");
+      expect(failureReason(heartbeat)).toContain("alert boom");
+      expect(failureReason(heartbeat)).toContain("notice boom");
+    });
+
+    it("无人可达与一拼坏了同时发生 → 一条失败里两件事都在", async () => {
+      const { job, heartbeat } = jobWith(
+        [todo({})],
+        vi.fn().mockResolvedValue({ ...ok, sent: 0, noRecipient: true }),
+        new Error("notice boom"),
+      );
+      await job.tick();
+      expect(heartbeat.recordFailure).toHaveBeenCalledTimes(1);
+      expect(failureReason(heartbeat)).toContain("无人可达");
+      expect(failureReason(heartbeat)).toContain("notice boom");
+    });
   });
 });
 

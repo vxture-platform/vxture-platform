@@ -12,6 +12,8 @@ import {
   DEFAULT_LIST_LIMIT,
   DEFAULT_OPS_TODO_THRESHOLDS,
   LIST_OPS_TODOS_SQL,
+  LIST_OPS_TODOS_TAIL,
+  MAX_OPS_TODO_THRESHOLD,
   OpsTodoRepository,
   TAIL_COMPUTED_COLUMNS,
   TODO_COLUMN_ORDER,
@@ -61,8 +63,9 @@ const baseRow = (over: Partial<OpsTodoRow>): OpsTodoRow => ({
 });
 
 /**
- * 作业读的那一拼：九类 + 不带富化块（逐字同 ops-todo-alert.job 的 ALERT_KINDS；
- * 那边与本文件的一致性由 check-ops-todo-alerts 对账）。
+ * 作业读的那一拼：九类 + 不带富化块（逐字同 ops-todo-alert.job 的 ALERT_KINDS）。
+ * 本包不能依赖 bff，所以这是一份复本；check-ops-todo-alerts 第 8 段读本文件，
+ * 把它与作业那张表逐字对账（作业加了一类而这里没跟上 → CI 红）。
  */
 const ALERT_KINDS: readonly OpsTodoKind[] = [
   "confirm_payment",
@@ -83,7 +86,8 @@ const ALERT_SQL = buildListOpsTodosSql({
 
 /**
  * 作业的第二拼：只写通告的类别（逐字同 ops-todo-alert.job 的 NOTICE_ONLY_KINDS，
- * 2026-10-04 owner 裁定 3）。同样不带富化块、同样跑在 svc_platform_api 下。
+ * 2026-10-04 owner 裁定 3；复本，同上由守卫第 8 段对账）。同样不带富化块、同样跑在
+ * svc_platform_api 下。
  */
 const NOTICE_ONLY_KINDS: readonly OpsTodoKind[] = ["verification"];
 
@@ -261,6 +265,47 @@ describe("opsTodoThresholds：env 为准，读不到就兜底", () => {
       ...DEFAULT_OPS_TODO_THRESHOLDS,
       refundProcessingHours: 1,
     });
+  });
+
+  /**
+   * 超大的合法整数会让 tail 里 `$n::int * 3600` 在 int4 里溢出：真库上
+   * `select 1000000::int * 3600` → integer out of range，整条待办查询倒掉——页面与作业一起。
+   * 这里钉：超过上限按上限算（饱和，不回兜底），上限本身对得住 tail 里最大的乘数。
+   */
+  it("超过上限的按上限算（饱和）——1000000 小时不该让整页打不开", () => {
+    process.env.OPS_ESCALATE_REFUND_EXECUTE_HOURS = "1000000";
+    process.env.OPS_ESCALATE_VERIFICATION_DAYS = "24856";
+    process.env.OPS_ESCALATE_MAINTENANCE_OVERDUE_MINUTES = String(
+      MAX_OPS_TODO_THRESHOLD,
+    );
+    process.env.OPS_ESCALATE_TICKET_SLA_HOURS = String(
+      MAX_OPS_TODO_THRESHOLD + 1,
+    );
+    process.env.OPS_ORDER_AGING_HOURS = "1e300";
+    expect(opsTodoThresholds()).toEqual({
+      ...DEFAULT_OPS_TODO_THRESHOLDS,
+      refundExecuteHours: MAX_OPS_TODO_THRESHOLD,
+      verificationDays: MAX_OPS_TODO_THRESHOLD,
+      maintenanceOverdueMinutes: MAX_OPS_TODO_THRESHOLD,
+      ticketSlaHours: MAX_OPS_TODO_THRESHOLD,
+      orderAgingHours: MAX_OPS_TODO_THRESHOLD,
+    });
+  });
+
+  it("上限 × tail 里最大的乘数仍在 int4 里（谁加更大的乘数这条就红）", () => {
+    // 从真文本解析：`$n::int * 3600` / `* 86400` / `* 60`——不是从记忆里写的数。
+    const multipliers = [
+      ...LIST_OPS_TODOS_TAIL.matchAll(/\$\d+::int \* (\d+)/g),
+    ].map((m) => Number(m[1]));
+    expect(multipliers.length).toBeGreaterThanOrEqual(10);
+    expect(Math.max(...multipliers)).toBe(86400);
+    expect(
+      MAX_OPS_TODO_THRESHOLD * Math.max(...multipliers),
+    ).toBeLessThanOrEqual(2 ** 31 - 1);
+    // 没有上限（Infinity）时这条就是红的：这正是修之前的现场。
+    expect(Number.POSITIVE_INFINITY * 86400).not.toBeLessThanOrEqual(
+      2 ** 31 - 1,
+    );
   });
 });
 

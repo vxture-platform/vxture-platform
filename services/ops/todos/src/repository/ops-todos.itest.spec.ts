@@ -52,7 +52,12 @@ const DIGITS = RUN_ID.replace(/\D/g, "").padEnd(8, "7").slice(0, 8);
 /** 三个用户各要一个唯一手机号（account.users.phone 是强锚点 + 唯一）。 */
 const phoneFor = (index: number) => `+8613${DIGITS}${index}`;
 
-/** 作业实扫的九类，逐字同 bff/platform-api 的 ALERT_KINDS（一致性由守卫对账）。 */
+/**
+ * 作业实扫的九类，逐字同 bff/platform-api 的 ALERT_KINDS。本包不能依赖 bff，所以这是一份
+ * 复本；check-ops-todo-alerts 第 8 段读本文件（与 pg-ops-todo.repository.spec 的那两份），
+ * 把它与作业的那张表逐字对账（作业加了一类而这里没跟上 → CI 红，不然下面
+ * `set role svc_platform_api` 那条用例会拿着旧表照样绿）。
+ */
 const ALERT_KINDS: readonly OpsTodoKind[] = [
   "confirm_payment",
   "reprovision",
@@ -65,7 +70,7 @@ const ALERT_KINDS: readonly OpsTodoKind[] = [
   "maintenance_overdue",
 ];
 
-/** 作业的第二拼：只写通告的类别，逐字同 bff/platform-api 的 NOTICE_ONLY_KINDS（守卫对账）。 */
+/** 作业的第二拼：只写通告的类别，逐字同 bff/platform-api 的 NOTICE_ONLY_KINDS（复本，同上由守卫第 8 段对账）。 */
 const NOTICE_ONLY_KINDS: readonly OpsTodoKind[] = ["verification"];
 
 describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () => {
