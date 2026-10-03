@@ -248,4 +248,41 @@ describe.runIf(RUN)("邀请通知事实（live DB）", () => {
     await repo.revokeInvitation(other, tenantId);
     expect(await repo.rotateInvitationToken(other, tenantId)).toBeNull();
   });
+
+  /**
+   * 反方向的那一半：**重发赶在巡检落笔之前**。
+   *
+   * 上一条测的是「巡检写下 expired 之后重发还得好用」。这一条测的是它的反面，而那一面
+   * 原来是坏的：候选集按 `expires_at <= now()` 选，而 CAS 原来只比 `status = 'pending'`。
+   * 重发是唯一一个不改 status 的写者，所以它不会被那一句挡住 —— 取数之后被重发的邀请
+   * 会被这一趟改成 expired，受邀人还会收到一封「已过期」。
+   *
+   * 窗口不是理论上的：一趟最多 200 行，循环体里每行都同步 await SMTP。
+   */
+  it("重发赶在巡检落笔之前：CAS 必须让掉，不许把刚续期的邀请改成 expired", async () => {
+    const id = await invite("itest-resend-race@example.com", "email");
+    await pool.query(
+      `update tenancy.invitations set expires_at = now() - interval '2 days'
+        where id = $1`,
+      [id],
+    );
+
+    // ① 巡检取数：这一刻它确实是「pending 且已过期」。
+    const rows = await repo.findExpiredInvitationCandidates({ limit: 50 });
+    expect(rows.some((r) => r.invitationId === id)).toBe(true);
+
+    // ② 取数之后、落笔之前，运营点了「重发」：status 仍是 pending，expires_at 顺延。
+    const rotated = await repo.rotateInvitationToken(id, tenantId);
+    expect(rotated).not.toBeNull();
+    expect(rotated!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(await statusOf(id)).toBe("pending");
+
+    // ③ 巡检这才落笔。必须一行都改不到 —— 否则刚续期的邀请被判死，且会发错通知。
+    expect(await repo.markInvitationExpired(id)).toBe(false);
+    expect(await statusOf(id)).toBe("pending");
+
+    // ④ 续期那一刻起它就不该再是候选（口径两边一致才有这个性质）。
+    const after = await repo.findExpiredInvitationCandidates({ limit: 50 });
+    expect(after.some((r) => r.invitationId === id)).toBe(false);
+  });
 });

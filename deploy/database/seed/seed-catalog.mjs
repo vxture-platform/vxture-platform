@@ -1790,6 +1790,36 @@ export async function seedCatalog(client) {
   );
   console.log("✓  admin — settings subscription.max_suspend_days=60");
 
+  // 租户防滥用闸（2026-10-25-tenant-abuse-caps.sql 的 seed 那一半，2026-10-03 补）。
+  //
+  // ── 为什么非补不可：少了它新库的「接受邀请」直接抛 ──
+  // `tenancy.tenants.member_limit` / `workspace_limit` 都是可空且**无 DEFAULT**，建租户时
+  // 也不写，所以每个新租户都是 NULL；而 NULL 的语义是「随 admin.settings 的默认值」。
+  // `resolveTenantCap`（pg-organization.repository.ts）读不到那条设置时**抛错**而不是回落：
+  //   `tenant.member_limit not configured — refusing to proceed without a cap`
+  // 拿不到上限就不放行是对的（防滥用闸不该因为少一行配置而默默失效），
+  // 但那条设置原来只由迁移灌 —— 而**新库是 DDL + seed 建的，不跑迁移**。
+  // 后果：任何按 DDL+seed 起的环境，接受邀请与加成员一律失败，且错误只在那一刻才出现。
+  //
+  // 值与 config_group 与那条迁移逐字一致（500 / 200 / 'tenancy'），不要在这里另定一套。
+  await client.query(
+    `
+    insert into admin.settings (config_group, config_key, value_type, config_value, description, description_key, created_by, created_at, updated_at)
+    values
+      ('tenancy', 'tenant.member_limit', 'int', '500',
+       'Default cap on members per tenant. Abuse guard, not a sold quota; per-tenant override lives on tenancy.tenants.member_limit.',
+       'ops.setting.tenant.member_limit.desc', $1, now(), now()),
+      ('tenancy', 'tenant.workspace_limit', 'int', '200',
+       'Default cap on workspaces per tenant. Abuse guard, not a sold quota; per-tenant override lives on tenancy.tenants.workspace_limit.',
+       'ops.setting.tenant.workspace_limit.desc', $1, now(), now())
+    on conflict (config_key) do nothing
+  `,
+    [SYS],
+  );
+  console.log(
+    "✓  admin — settings tenant.member_limit=500 / tenant.workspace_limit=200",
+  );
+
   // ── 2. access.permissions (governance catalog; unified fields, console-mode) ─
   // perm_name = human label; is_system=true, created_by=SYS. 操作码行 do-nothing
   // (不覆盖运营改过的显示名);parent_id / perm_type 在下面按菜单树统一回写。

@@ -246,6 +246,21 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:seed-constraints
 
+      # 上一条的**镜像**：它管「seed 里那些行的值对不对」，这一条管「行在不在」。
+      # 由来（2026-10-03）：2026-10-25-tenant-abuse-caps.sql 往 admin.settings 插了
+      # tenant.member_limit / workspace_limit 两条，而 seed-catalog.mjs 没跟上。那两列
+      # 可空无 DEFAULT、建租户时不写，resolveTenantCap 读不到就**抛**而不是回落 ——
+      # 生产跑迁移所以没事，**而新库是 DDL + seed 建的、不跑迁移**，于是新环境
+      # 「接受邀请 / 加成员」一律失败，且只在有人真去接受邀请那一刻才现形。
+      # 判据按「代码读不到就拒绝干活」反推必需键（顺一跳到调用点与参数联合类型），
+      # 不硬编码键名清单。--self-test 里有真反例：把一条已 seed 的键从 seed 侧拿掉要变红。
+      # 不加 pnpm lint: 入口（改根 package.json 会触发全栈 14 镜像重建）。
+      - name: Required settings seeded guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          node scripts/guardrails/check-required-settings-seeded.mjs
+          node scripts/guardrails/check-required-settings-seeded.mjs --self-test
+
       # 用户名格式写在三处(后端判据 + 两个补齐页的前端校验),漂了不报错:
       # 前端比后端松 → 用户填得进去、提交被 400 拒;紧 → 后端接受的名字被拦下,
       # 用户永远不知道那可以用。2026-09-08 实际漂过一次,是靠人翻源码撞见的。
