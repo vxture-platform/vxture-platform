@@ -221,25 +221,31 @@ export interface OpsTodo {
    */
   readonly href: string | null;
   /**
-   * 等太久了：已越过本类别的升档阈值（2026-09-28 第三批）。
+   * 等太久了：已越过本类别的升档阈值（2026-09-28 第三批；2026-10-04 owner 裁定 3
+   * 「通告尽量覆盖全」把阈值从四类铺到十类）。
    *
-   * 只有四类有阈值（confirm_payment / refund_audit / reprovision / verification，
-   * 阈值来自 env，见 pg-ops-todo.repository 的 `opsTodoThresholds`），其余类别恒 false。
-   * 升档**同时**作用在 severity 上（blue→amber→rose，rose 已是顶档就留在 rose），
-   * 所以 `severity` 给的是升档后的那一档；这个布尔位是「为什么是这一档」。
+   * 十类有阈值（confirm_payment / refund_audit / reprovision / verification /
+   * refund_execute / refund_processing_stuck / refund_failed / addon_pending_confirm /
+   * ticket_sla / maintenance_overdue，阈值来自 env，见 pg-ops-todo.repository 的
+   * `opsTodoThresholds`），其余类别恒 false。升档**同时**作用在 severity 上
+   * （blue→amber→rose，rose 已是顶档就留在 rose），所以 `severity` 给的是升档后的那一档；
+   * 这个布尔位是「为什么是这一档」。
    *
-   * 页面据它打「已超时」标记；**在 ALERT_KINDS 之内的类别**还会由告警作业另写一条
-   * critical 运营通告——邮件有 4h 静默窗口且漏看就没了，通告留在列表里。
+   * 升档的起点不一定是等待起点（仓储投影里的 `escalate_from`，为 null 即退回
+   * `waiting_since`）：加油包从**申报腿**那一刻算（没申报不升档——未申报的单由 TTL
+   * 清扫自动取消，等的是客户不是运营）、工单首响从**破约时刻**算、卡住的退款从「成为
+   * 卡住」那一刻算（updated_at + OPS_REFUND_STUCK_HOURS）。页面的等待列仍按 waitingSince。
    *
-   * 四类有阈值，其中三类（confirm_payment / refund_audit / reprovision）都在
-   * ALERT_KINDS 里，两半都有；**`verification` 只有页面这一半**，通告那一半没有。
-   * 两个原因叠在一起：①通告是在 OperatorAlertsWiring.alertTodo 里写的，而作业只对
-   * ALERT_KINDS 调它，`verification` 从未被 owner 裁定过要不要告警（明写在
-   * scripts/guardrails/check-ops-todo-alerts.mjs 的 UNRULED）；②就算裁定了也不能只改
-   * 那张表——认证那一段要先拼 tenant_base，它引用 `kyc.tenant_verifications` /
-   * `admin.risk_records` / `session.auth_sessions`，全在告警作业的库角色 `svc_platform_api`
-   * 的授权面之外，整轮作业会 42501（见 `includeApplicant` 那一段）。所以这是要 owner 裁定
-   * 加 97 扩授权面的两件事，不是漏接线。
+   * 页面据它打「已超时」标记；告警作业另写一条 critical 运营通告——邮件有 4h 静默窗口且
+   * 漏看就没了，通告留在列表里。十类里九类在 ALERT_KINDS（邮件 + 通告两半都有，
+   * OperatorAlertsWiring.alertTodo）；`verification` 的邮件半仍未被 owner 裁定
+   * （scripts/guardrails/check-ops-todo-alerts.mjs 的 UNRULED），它走作业的
+   * NOTICE_ONLY_KINDS：只写通告、不发邮件（OperatorAlertsWiring.noticeEscalatedTodo）。
+   * 它那一段 SQL 自 2026-10-04 起从 tenant_base 拆出，只碰 tenancy.* 与
+   * `kyc.tenant_verifications`（97 已授 SELECT，2026-11-23 迁移灌活库），作业角色
+   * `svc_platform_api` 跑得通——ops-todos.itest 里 `set role svc_platform_api` 那条用例证明。
+   * 守卫第 7 段对账：SQL 里有阈值的每一类都必须在 ALERT_KINDS ∪ NOTICE_ONLY_KINDS 里，
+   * 否则就是「升档了也没有通告」——owner 说的「没有通告兜底」被做成了可检查的判据。
    */
   readonly escalated: boolean;
   /**
@@ -260,26 +266,45 @@ export interface OpsTodo {
 }
 
 /**
- * 六个时长阈值（2026-09-28 第三批）。**全部落进绑定参数**，在 SQL 里算——
+ * 十二个时长阈值（2026-09-28 第三批四个升档 + 两个成熟；2026-10-04 owner 裁定 3 再加
+ * 六个升档，让有阈值的类别从四类到十类）。**全部落进绑定参数**，在 SQL 里算——
  * 升档要参与排序（升档后的严重度就是排序键），而排序在 limit 之前，所以它不能等到 TS。
  *
- * 前四个是**升档**阈值：等待超过它，那一类的严重度升一档、`escalated` 置真。
+ * 前十个是**升档**阈值：等待超过它，那一类的严重度升一档、`escalated` 置真。
  * 后两个是**成熟**阈值：等待不到它，那一类**根本还不是待办**（刚下的单、刚进
  * processing 的退款都在正常流程里），所以在外层 where 里直接滤掉。
  *
- * 缺省值来自 env（读不到 / 不是正整数就用括号里的兜底）：
- *   OPS_ESCALATE_CONFIRM_PAYMENT_HOURS  (4)   客户申报付款后多久没人核对
- *   OPS_ESCALATE_REFUND_AUDIT_HOURS     (24)  退款申请后多久没人审
- *   OPS_ESCALATE_REPROVISION_MINUTES    (30)  已收款后多久权益还没落地
- *   OPS_ESCALATE_VERIFICATION_DAYS      (3)   企业认证提交后多久没人看
- *   OPS_ORDER_AGING_HOURS               (24)  待付款单多久没申报才算「挂着」
- *   OPS_REFUND_STUCK_HOURS              (4)   退款在 processing 里多久算「卡住」
+ * 缺省值来自 env（读不到 / 不是正整数就用括号里的兜底）。页面读 admin-bff 的 env、
+ * 作业读 platform-api 的 env，两边值不同就是页面「已超时」与通告对不上——所以两份
+ * example（deploy/.env.platform-api.example / .env.admin-bff.example）登记同一块，
+ * scripts/guardrails/check-ops-threshold-env-parity.mjs 守着两块逐行相等、且与下面
+ * 这张表（`opsTodoThresholds` 真读的 env 名）一个不多一个不少：
+ *   OPS_ESCALATE_CONFIRM_PAYMENT_HOURS        (4)   客户申报付款后多久没人核对
+ *   OPS_ESCALATE_REFUND_AUDIT_HOURS           (24)  退款申请后多久没人审
+ *   OPS_ESCALATE_REPROVISION_MINUTES          (30)  已收款后多久权益还没落地
+ *   OPS_ESCALATE_VERIFICATION_DAYS            (3)   企业认证提交后多久没人看
+ *   OPS_ESCALATE_REFUND_EXECUTE_HOURS         (24)  审核通过后多久钱还没退出去
+ *   OPS_ESCALATE_REFUND_PROCESSING_HOURS      (24)  「卡住」之后再过多久仍没落终态
+ *   OPS_ESCALATE_REFUND_FAILED_HOURS          (4)   退款失败后多久没人处置
+ *   OPS_ESCALATE_ADDON_CONFIRM_HOURS          (4)   加油包申报付款后多久没人核销
+ *   OPS_ESCALATE_TICKET_SLA_HOURS             (4)   首响破约后每多久再升一级
+ *   OPS_ESCALATE_MAINTENANCE_OVERDUE_MINUTES  (30)  维护窗口过了计划结束多久还没收
+ *   OPS_ORDER_AGING_HOURS                     (24)  待付款单多久没申报才算「挂着」
+ *   OPS_REFUND_STUCK_HOURS                    (4)   退款在 processing 里多久算「卡住」
+ * 六个新默认值是设计提议（owner 可调）；`refund_processing_stuck` 今天全仓没有写入
+ * `refund_status='processing'` 的地方，阈值照样接好等它真有写入方那天（需 owner 裁定）。
  */
 export interface OpsTodoThresholds {
   readonly confirmPaymentHours: number;
   readonly refundAuditHours: number;
   readonly reprovisionMinutes: number;
   readonly verificationDays: number;
+  readonly refundExecuteHours: number;
+  readonly refundProcessingHours: number;
+  readonly refundFailedHours: number;
+  readonly addonConfirmHours: number;
+  readonly ticketSlaHours: number;
+  readonly maintenanceOverdueMinutes: number;
   readonly orderAgingHours: number;
   readonly refundStuckHours: number;
 }

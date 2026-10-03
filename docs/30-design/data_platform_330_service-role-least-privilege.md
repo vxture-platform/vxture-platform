@@ -90,7 +90,7 @@
 - `32-provision`：生成 6 个 `platform-app-{svc}.env`（各含该角色 DATABASE_URL）；
 - `compose.platform.yml`：把各服务的 `platform-app.env` 挂载换成对应 `platform-app-{svc}.env`；
 - `39-audit-env.mjs`：为 6 个新 overlay 文件加规则（仅允许 DATABASE_URL/REPORTING_RO_DATABASE_URL）；
-- **staging 安全法**：机制上线时 6 个 overlay 文件的 DATABASE*URL 先全指 `platform_svc`（行为与今日完全一致、零变更），切换 = §3 逐个把某文件改指 svc*\* 角色 + 重建。
+- **staging 安全法**：机制上线时 6 个 overlay 文件的 `DATABASE_URL` 先全指 `platform_svc`（行为与今日完全一致、零变更），切换 = §3 逐个把某文件改指 `svc_*` 角色 + 重建。
 
 本增量与 §3 切换均属 owner 生产窗口，不在建角色的本轮 PR 内。
 
@@ -100,4 +100,5 @@
 - ⏳ **待 owner**：§4 env 机制变更 + §3 逐进程 DATABASE_URL 切换（分批窗口）。
 - ✅ **2026-09-28**：`svc_platform_api` 的表级例外（`admin.operator_notices` SELECT + INSERT）落 97 + 迁移，本机活库跑过两遍幂等、授权面实测只多这一张表的两项。
 - ✅ **2026-09-28（第二批）**：`svc_platform_api` 的第二条表级例外（7 张表 SELECT）落 97 + 迁移 `2026-11-23-platform-api-signal-sweep-grants.sql`，本机活库跑过两遍幂等；并以 `SET ROLE svc_platform_api` 实跑了全部 12 条巡检 SQL，零 42501（含经父表读分区表 `support.audit_logs`）。
-- 后续项：R-vs-RW 精调（§2）；platform_svc 退役；owner 若放宽 2026-11-21 那句断言，可再补 `admin.risk_records` / `admin.operator_account` 两张只读表。
+- ✅ **2026-10-04（owner 裁定 3「通告尽量覆盖全」）**：待办告警作业新增第二拼（`NOTICE_ONLY_KINDS` = verification），读 `kyc.tenant_verifications`——**已在 7 张只读表内**（§2 其二），**授权面不变**。做法是把认证那一类从跨 kyc / admin / session 的 `tenant_base` 拆成自己的片段（`VERIFICATION_TODOS_*`，只碰 `tenancy.*` + `kyc.tenant_verifications`），而不是扩面；`check-ops-todo-alerts`第 5 段按 97 对账该片段，ops-todos.itest 以`SET ROLE svc_platform_api`实跑两种调用形状零 42501。risk 的升档仍需碰`admin.risk_records`，留给 owner（见下一行）。
+- 后续项：R-vs-RW 精调（§2）；platform_svc 退役；owner 若放宽 2026-11-21 那句断言，可再补 `admin.risk_records` / `admin.operator_account` 两张只读表（risk 待办的升档通告也卡在这一条上）。

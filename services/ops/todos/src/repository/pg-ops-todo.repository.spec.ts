@@ -12,6 +12,8 @@ import {
   DEFAULT_LIST_LIMIT,
   DEFAULT_OPS_TODO_THRESHOLDS,
   LIST_OPS_TODOS_SQL,
+  LIST_OPS_TODOS_TAIL,
+  MAX_OPS_TODO_THRESHOLD,
   OpsTodoRepository,
   TAIL_COMPUTED_COLUMNS,
   TODO_COLUMN_ORDER,
@@ -50,6 +52,7 @@ const baseRow = (over: Partial<OpsTodoRow>): OpsTodoRow => ({
   severity: "rose",
   priority: 2,
   waiting_since: new Date("2026-09-28T01:49:00.000Z"),
+  escalate_from: null,
   ticket_title: null,
   ticket_priority: null,
   ticket_status: null,
@@ -60,8 +63,9 @@ const baseRow = (over: Partial<OpsTodoRow>): OpsTodoRow => ({
 });
 
 /**
- * 作业读的那一拼：九类 + 不带富化块（逐字同 ops-todo-alert.job 的 ALERT_KINDS；
- * 那边与本文件的一致性由 check-ops-todo-alerts 对账）。
+ * 作业读的那一拼：九类 + 不带富化块（逐字同 ops-todo-alert.job 的 ALERT_KINDS）。
+ * 本包不能依赖 bff，所以这是一份复本；check-ops-todo-alerts 第 8 段读本文件，
+ * 把它与作业那张表逐字对账（作业加了一类而这里没跟上 → CI 红）。
  */
 const ALERT_KINDS: readonly OpsTodoKind[] = [
   "confirm_payment",
@@ -80,7 +84,19 @@ const ALERT_SQL = buildListOpsTodosSql({
   includeApplicant: false,
 });
 
-/** 九个绑定参数里的后六个（阈值），按默认值展开——各用例只关心前三个。 */
+/**
+ * 作业的第二拼：只写通告的类别（逐字同 ops-todo-alert.job 的 NOTICE_ONLY_KINDS，
+ * 2026-10-04 owner 裁定 3；复本，同上由守卫第 8 段对账）。同样不带富化块、同样跑在
+ * svc_platform_api 下。
+ */
+const NOTICE_ONLY_KINDS: readonly OpsTodoKind[] = ["verification"];
+
+const NOTICE_SQL = buildListOpsTodosSql({
+  kinds: NOTICE_ONLY_KINDS,
+  includeApplicant: false,
+});
+
+/** 十五个绑定参数里的后十二个（阈值），按默认值展开、按 $4..$15 的顺序——各用例只关心前三个。 */
 const DEFAULT_THRESHOLD_PARAMS = [
   DEFAULT_OPS_TODO_THRESHOLDS.confirmPaymentHours,
   DEFAULT_OPS_TODO_THRESHOLDS.refundAuditHours,
@@ -88,10 +104,38 @@ const DEFAULT_THRESHOLD_PARAMS = [
   DEFAULT_OPS_TODO_THRESHOLDS.verificationDays,
   DEFAULT_OPS_TODO_THRESHOLDS.orderAgingHours,
   DEFAULT_OPS_TODO_THRESHOLDS.refundStuckHours,
+  DEFAULT_OPS_TODO_THRESHOLDS.refundExecuteHours,
+  DEFAULT_OPS_TODO_THRESHOLDS.refundProcessingHours,
+  DEFAULT_OPS_TODO_THRESHOLDS.refundFailedHours,
+  DEFAULT_OPS_TODO_THRESHOLDS.addonConfirmHours,
+  DEFAULT_OPS_TODO_THRESHOLDS.ticketSlaHours,
+  DEFAULT_OPS_TODO_THRESHOLDS.maintenanceOverdueMinutes,
 ];
 
 describe("bindListOptions", () => {
-  it("不传选项 = 全类别、不按停留过滤、默认上限、六个阈值取默认", () => {
+  it("十二个阈值按 $4..$15 的顺序绑定（位置漂了就是阈值静默读成另一类的值）", () => {
+    expect(DEFAULT_THRESHOLD_PARAMS).toHaveLength(12);
+    expect(bindListOptions().slice(3)).toEqual(DEFAULT_THRESHOLD_PARAMS);
+    // 六个新阈值各自落在约定的参数位上（与 ESCALATION_LITERALS 里的 $n 对账）。
+    const params = bindListOptions({
+      thresholds: {
+        refundExecuteHours: 101,
+        refundProcessingHours: 102,
+        refundFailedHours: 103,
+        addonConfirmHours: 104,
+        ticketSlaHours: 105,
+        maintenanceOverdueMinutes: 106,
+      },
+    });
+    expect(params[9]).toBe(101); // $10
+    expect(params[10]).toBe(102); // $11
+    expect(params[11]).toBe(103); // $12
+    expect(params[12]).toBe(104); // $13
+    expect(params[13]).toBe(105); // $14
+    expect(params[14]).toBe(106); // $15
+  });
+
+  it("不传选项 = 全类别、不按停留过滤、默认上限、十二个阈值取默认", () => {
     expect(bindListOptions()).toEqual([
       null,
       null,
@@ -142,11 +186,17 @@ describe("bindListOptions", () => {
 
   it("阈值覆盖只动被传的那几个，其余仍走默认", () => {
     const params = bindListOptions({
-      thresholds: { confirmPaymentHours: 1, refundStuckHours: 2 },
+      thresholds: {
+        confirmPaymentHours: 1,
+        refundStuckHours: 2,
+        ticketSlaHours: 7,
+      },
     });
     expect(params[3]).toBe(1);
     expect(params[4]).toBe(DEFAULT_OPS_TODO_THRESHOLDS.refundAuditHours);
     expect(params[8]).toBe(2);
+    expect(params[9]).toBe(DEFAULT_OPS_TODO_THRESHOLDS.refundExecuteHours);
+    expect(params[13]).toBe(7);
   });
 });
 
@@ -156,11 +206,17 @@ describe("opsTodoThresholds：env 为准，读不到就兜底", () => {
     process.env = { ...saved };
   });
 
-  it("六个 env 都认", () => {
+  it("十二个 env 都认", () => {
     process.env.OPS_ESCALATE_CONFIRM_PAYMENT_HOURS = "2";
     process.env.OPS_ESCALATE_REFUND_AUDIT_HOURS = "12";
     process.env.OPS_ESCALATE_REPROVISION_MINUTES = "10";
     process.env.OPS_ESCALATE_VERIFICATION_DAYS = "1";
+    process.env.OPS_ESCALATE_REFUND_EXECUTE_HOURS = "13";
+    process.env.OPS_ESCALATE_REFUND_PROCESSING_HOURS = "14";
+    process.env.OPS_ESCALATE_REFUND_FAILED_HOURS = "15";
+    process.env.OPS_ESCALATE_ADDON_CONFIRM_HOURS = "16";
+    process.env.OPS_ESCALATE_TICKET_SLA_HOURS = "17";
+    process.env.OPS_ESCALATE_MAINTENANCE_OVERDUE_MINUTES = "18";
     process.env.OPS_ORDER_AGING_HOURS = "6";
     process.env.OPS_REFUND_STUCK_HOURS = "3";
     expect(opsTodoThresholds()).toEqual({
@@ -168,9 +224,27 @@ describe("opsTodoThresholds：env 为准，读不到就兜底", () => {
       refundAuditHours: 12,
       reprovisionMinutes: 10,
       verificationDays: 1,
+      refundExecuteHours: 13,
+      refundProcessingHours: 14,
+      refundFailedHours: 15,
+      addonConfirmHours: 16,
+      ticketSlaHours: 17,
+      maintenanceOverdueMinutes: 18,
       orderAgingHours: 6,
       refundStuckHours: 3,
     });
+  });
+
+  it("六个新默认值就是设计提议的那六个（24h / 24h / 4h / 4h / 4h / 30min）", () => {
+    expect(DEFAULT_OPS_TODO_THRESHOLDS).toMatchObject({
+      refundExecuteHours: 24,
+      refundProcessingHours: 24,
+      refundFailedHours: 4,
+      addonConfirmHours: 4,
+      ticketSlaHours: 4,
+      maintenanceOverdueMinutes: 30,
+    });
+    expect(Object.keys(DEFAULT_OPS_TODO_THRESHOLDS)).toHaveLength(12);
   });
 
   it("空 / 非数 / 0 / 负数一律兜底——一个配歪的阈值不该让整页打不开", () => {
@@ -178,9 +252,60 @@ describe("opsTodoThresholds：env 为准，读不到就兜底", () => {
     process.env.OPS_ESCALATE_REFUND_AUDIT_HOURS = "soon";
     process.env.OPS_ESCALATE_REPROVISION_MINUTES = "0";
     process.env.OPS_ESCALATE_VERIFICATION_DAYS = "-3";
+    process.env.OPS_ESCALATE_REFUND_EXECUTE_HOURS = "";
+    process.env.OPS_ESCALATE_REFUND_PROCESSING_HOURS = "1.5";
+    process.env.OPS_ESCALATE_REFUND_FAILED_HOURS = "NaN";
+    process.env.OPS_ESCALATE_ADDON_CONFIRM_HOURS = "0";
+    process.env.OPS_ESCALATE_TICKET_SLA_HOURS = "-1";
+    delete process.env.OPS_ESCALATE_MAINTENANCE_OVERDUE_MINUTES;
     delete process.env.OPS_ORDER_AGING_HOURS;
     delete process.env.OPS_REFUND_STUCK_HOURS;
-    expect(opsTodoThresholds()).toEqual(DEFAULT_OPS_TODO_THRESHOLDS);
+    // 1.5 会被 floor 成 1（正整数），其余全部兜底。
+    expect(opsTodoThresholds()).toEqual({
+      ...DEFAULT_OPS_TODO_THRESHOLDS,
+      refundProcessingHours: 1,
+    });
+  });
+
+  /**
+   * 超大的合法整数会让 tail 里 `$n::int * 3600` 在 int4 里溢出：真库上
+   * `select 1000000::int * 3600` → integer out of range，整条待办查询倒掉——页面与作业一起。
+   * 这里钉：超过上限按上限算（饱和，不回兜底），上限本身对得住 tail 里最大的乘数。
+   */
+  it("超过上限的按上限算（饱和）——1000000 小时不该让整页打不开", () => {
+    process.env.OPS_ESCALATE_REFUND_EXECUTE_HOURS = "1000000";
+    process.env.OPS_ESCALATE_VERIFICATION_DAYS = "24856";
+    process.env.OPS_ESCALATE_MAINTENANCE_OVERDUE_MINUTES = String(
+      MAX_OPS_TODO_THRESHOLD,
+    );
+    process.env.OPS_ESCALATE_TICKET_SLA_HOURS = String(
+      MAX_OPS_TODO_THRESHOLD + 1,
+    );
+    process.env.OPS_ORDER_AGING_HOURS = "1e300";
+    expect(opsTodoThresholds()).toEqual({
+      ...DEFAULT_OPS_TODO_THRESHOLDS,
+      refundExecuteHours: MAX_OPS_TODO_THRESHOLD,
+      verificationDays: MAX_OPS_TODO_THRESHOLD,
+      maintenanceOverdueMinutes: MAX_OPS_TODO_THRESHOLD,
+      ticketSlaHours: MAX_OPS_TODO_THRESHOLD,
+      orderAgingHours: MAX_OPS_TODO_THRESHOLD,
+    });
+  });
+
+  it("上限 × tail 里最大的乘数仍在 int4 里（谁加更大的乘数这条就红）", () => {
+    // 从真文本解析：`$n::int * 3600` / `* 86400` / `* 60`——不是从记忆里写的数。
+    const multipliers = [
+      ...LIST_OPS_TODOS_TAIL.matchAll(/\$\d+::int \* (\d+)/g),
+    ].map((m) => Number(m[1]));
+    expect(multipliers.length).toBeGreaterThanOrEqual(10);
+    expect(Math.max(...multipliers)).toBe(86400);
+    expect(
+      MAX_OPS_TODO_THRESHOLD * Math.max(...multipliers),
+    ).toBeLessThanOrEqual(2 ** 31 - 1);
+    // 没有上限（Infinity）时这条就是红的：这正是修之前的现场。
+    expect(Number.POSITIVE_INFINITY * 86400).not.toBeLessThanOrEqual(
+      2 ** 31 - 1,
+    );
   });
 });
 
@@ -249,12 +374,25 @@ describe("buildListOpsTodosSql：请求哪几类就只拼哪几段", () => {
     expect(sql).toContain("($1::text[] is null or y.kind = any($1::text[]))");
   });
 
-  it("认证 / 风险两类要底座；只要认证时不拼 risk_todos", () => {
+  it("认证自 2026-10-04 起有自己的片段：不拼底座、不碰 admin / session；风险仍要底座", () => {
     const sql = buildListOpsTodosSql({ kinds: ["verification"] });
-    expect(sql).toContain("tenant_base as (");
     expect(sql).toContain("verification_todos as (");
-    expect(sql).not.toContain("risk_todos as (");
     expect(sql).toContain("  select * from verification_todos");
+    expect(sql).toContain("from kyc.tenant_verifications tv");
+    expect(sql).not.toContain("tenant_base as (");
+    expect(sql).not.toContain("risk_todos as (");
+    expect(sql).not.toContain("session.auth_sessions");
+    // 富化块（页面那一拼）才带风险档与 owner。
+    expect(sql).toContain("from admin.risk_records rr");
+    expect(sql).toContain("left join account.users ou");
+
+    const risk = buildListOpsTodosSql({ kinds: ["risk"] });
+    expect(risk).toContain("tenant_base as (");
+    expect(risk).toContain("risk_todos as (");
+    expect(risk).not.toContain("verification_todos as (");
+    // 底座不再替认证算提交时刻、也不再按认证 pending 选行——那是认证片段自己的事。
+    expect(risk).not.toContain("kyc.tenant_verifications");
+    expect(risk).not.toContain("verification_status");
   });
 
   it("空类别集拼不出 SQL，直接抛（调用方该在此之前回空列表）", () => {
@@ -273,7 +411,7 @@ describe("buildListOpsTodosSql：请求哪几类就只拼哪几段", () => {
     expect(body).not.toContain("union all select * from order_todos");
   });
 
-  it("每一拼都引用到 $1..$9：参数个数由文本决定，少一个 $n 就是 bind 报错", () => {
+  it("每一拼都引用到 $1..$15：参数个数由文本决定，少一个 $n 就是 bind 报错", () => {
     for (const kinds of [
       undefined,
       ["refund_audit"] as const,
@@ -281,18 +419,19 @@ describe("buildListOpsTodosSql：请求哪几类就只拼哪几段", () => {
       ["maintenance_overdue"] as const,
       ["deletion_pending"] as const,
       ALERT_KINDS,
+      NOTICE_ONLY_KINDS,
     ]) {
       const sql = kinds
         ? buildListOpsTodosSql({ kinds: [...kinds] })
         : buildListOpsTodosSql();
-      for (let n = 1; n <= 9; n += 1) {
+      for (let n = 1; n <= 15; n += 1) {
         expect(
           sql,
           `kinds=${kinds ? kinds.join(",") : "全部"} 少了 $${n}`,
-        ).toContain(`$${n}`);
+        ).toMatch(new RegExp(`\\$${n}(?!\\d)`));
       }
-      // 没有第十个参数：多一个 $n 同样是 bind 报错。
-      expect(sql).not.toContain("$10");
+      // 没有第十六个参数：多一个 $n 同样是 bind 报错。
+      expect(sql).not.toMatch(/\$1[6-9]|\$[2-9]\d/);
     }
   });
 });
@@ -307,12 +446,16 @@ describe("作业那一拼（includeApplicant: false）只碰 svc_platform_api �
    * `support.tickets`（ticket_sla）与 `admin.maintenance_windows`（maintenance_overdue）。
    * 所以这张名单按**关系**列而不是按 schema 前缀列——按前缀列会把那两张也判成越界。
    */
+  /**
+   * `kyc.tenant_verifications` **不在**这张名单里：它是 97 末尾的表级例外（SELECT，
+   * 2026-11-23 迁移灌活库），NOTICE_ONLY 那一拼合法地读它。ticket_comments / audit_logs
+   * 虽也授了 SELECT，但待办 SQL 不该碰它们，所以仍列在这里。
+   */
   const forbidden = [
     "account.users",
     "account.user_profiles",
     "admin.risk_records",
     "admin.operator_account",
-    "kyc.tenant_verifications",
     "session.auth_sessions",
     "support.audit_logs",
     "support.inbox_messages",
@@ -326,13 +469,29 @@ describe("作业那一拼（includeApplicant: false）只碰 svc_platform_api �
     "tenancy.tenant_contacts",
   ];
 
-  it("一个越界关系都不出现", () => {
+  it("一个越界关系都不出现（邮件那一拼）", () => {
     for (const needle of forbidden) {
       expect(ALERT_SQL, needle).not.toContain(needle);
     }
+    // 邮件那一拼不要认证，所以连表级例外 kyc 也不该出现。
+    expect(ALERT_SQL).not.toContain("kyc.tenant_verifications");
   });
 
-  it("该在的还在：五段 + 两张表级例外 + 九个绑定参数", () => {
+  it("一个越界关系都不出现（只写通告那一拼），而它合法地读 kyc.tenant_verifications", () => {
+    for (const needle of forbidden) {
+      expect(NOTICE_SQL, needle).not.toContain(needle);
+    }
+    expect(NOTICE_SQL).toContain("from kyc.tenant_verifications tv");
+    expect(NOTICE_SQL).toContain("from tenancy.tenants t");
+    expect(NOTICE_SQL).toContain("left join tenancy.tenant_profiles tp");
+    // 底座（admin.risk_records + session.auth_sessions）一个字都不拼进来。
+    expect(NOTICE_SQL).not.toContain("tenant_base as (");
+    expect(NOTICE_SQL).not.toContain("risk_todos as (");
+    expect(NOTICE_SQL).toContain("verification_todos as (");
+    expect(NOTICE_SQL).toMatch(/limit \$3::int\s*$/);
+  });
+
+  it("该在的还在：五段 + 两张表级例外 + 十五个绑定参数", () => {
     expect(ALERT_SQL).toContain("from billing.orders o");
     expect(ALERT_SQL).toContain("from billing.refunds r");
     expect(ALERT_SQL).toContain("from metering.addon_purchases ap");
@@ -340,6 +499,8 @@ describe("作业那一拼（includeApplicant: false）只碰 svc_platform_api �
     expect(ALERT_SQL).toContain("from admin.maintenance_windows mw");
     expect(ALERT_SQL).toContain("join tenancy.tenants t");
     expect(ALERT_SQL).toContain("left join tenancy.tenant_profiles tp");
+    // 加油包的申报腿在 billing（有权）；它是升档起点的来源。
+    expect(ALERT_SQL).toContain("from billing.payments p");
     expect(ALERT_SQL).toMatch(/limit \$3::int\s*$/);
   });
 
@@ -349,6 +510,7 @@ describe("作业那一拼（includeApplicant: false）只碰 svc_platform_api �
       "invoice_todos as (",
       "user_todos as (",
       "tenant_base as (",
+      "verification_todos as (",
       "metering.subscription_histories",
     ]) {
       expect(ALERT_SQL, absent).not.toContain(absent);
@@ -356,10 +518,12 @@ describe("作业那一拼（includeApplicant: false）只碰 svc_platform_api �
   });
 
   it("富化的四列退成 null，列名一个不少（union 要对齐）", () => {
-    expect(ALERT_SQL).toContain("null::text as tenant_risk_level");
-    expect(ALERT_SQL).toContain("null::text as applicant_name");
-    expect(ALERT_SQL).toContain("null::text as applicant_email");
-    expect(ALERT_SQL).toContain("null::text as applicant_phone");
+    for (const sql of [ALERT_SQL, NOTICE_SQL]) {
+      expect(sql).toContain("null::text as tenant_risk_level");
+      expect(sql).toContain("null::text as applicant_name");
+      expect(sql).toContain("null::text as applicant_email");
+      expect(sql).toContain("null::text as applicant_phone");
+    }
   });
 });
 
@@ -397,10 +561,36 @@ describe("union 的投影列逐段对齐", () => {
       [...TODO_COLUMN_ORDER, ...TAIL_COMPUTED_COLUMNS].sort(),
     );
   });
+
+  it("2026-10-04：第 29 列 escalate_from 紧跟 waiting_since，十段都给了它", () => {
+    expect(TODO_COLUMN_ORDER).toHaveLength(29);
+    expect(TODO_COLUMN_ORDER.indexOf("escalate_from")).toBe(
+      TODO_COLUMN_ORDER.indexOf("waiting_since") + 1,
+    );
+    // union all 按位置对齐，少一段这一列就会在查询期才炸；这里按文本先数一遍。
+    for (const cte of unionCteTexts(false)) {
+      expect(cte.sql, cte.name).toMatch(/as escalate_from,/);
+    }
+    // 三类自己给起点，其余七段是 null::timestamptz（退回 waiting_since）。
+    const nulls = unionCteTexts(false).filter((c) =>
+      /null::timestamptz\s+as escalate_from,/.test(c.sql),
+    );
+    expect(nulls.map((c) => c.name).sort()).toEqual(
+      [
+        "order_todos",
+        "subscription_todos",
+        "invoice_todos",
+        "user_todos",
+        "maintenance_todos",
+        "verification_todos",
+        "risk_todos",
+      ].sort(),
+    );
+  });
 });
 
 describe("LIST_OPS_TODOS_SQL 的谓词字面", () => {
-  it("九个参数：前三个「为空即不过滤」，后六个是时长阈值", () => {
+  it("十五个参数：前三个「为空即不过滤」，后十二个是时长阈值", () => {
     expect(LIST_OPS_TODOS_SQL).toContain(
       "($1::text[] is null or y.kind = any($1::text[]))",
     );
@@ -423,8 +613,28 @@ describe("LIST_OPS_TODOS_SQL 的谓词字面", () => {
     expect(LIST_OPS_TODOS_SQL).toContain(
       "when 'order_pending_payment_aging' then make_interval(hours => $8::int)",
     );
+    // 这一行的空白被 check-ops-todo-alerts 的 PREDICATE_LITERALS 钉着，逐字不动。
     expect(LIST_OPS_TODOS_SQL).toContain(
       "when 'refund_processing_stuck'     then make_interval(hours => $9::int)",
+    );
+    // 2026-10-04 覆盖全的六行（参数位 $10..$15 与 bindListOptions 的顺序一致）。
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "when 'refund_execute'  then $10::int * 3600",
+    );
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "when 'refund_processing_stuck' then $11::int * 3600",
+    );
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "when 'refund_failed'   then $12::int * 3600",
+    );
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "when 'addon_pending_confirm'\n                 then case when x.escalate_from is null then null else $13::int * 3600 end",
+    );
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "when 'ticket_sla'      then $14::int * 3600",
+    );
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "when 'maintenance_overdue' then $15::int * 60",
     );
   });
 
@@ -439,6 +649,26 @@ describe("LIST_OPS_TODOS_SQL 的谓词字面", () => {
     expect(LIST_OPS_TODOS_SQL).toContain(
       "then case y.severity when 'blue' then 'amber' else 'rose' end",
     );
+  });
+
+  it("升档起点：已等从 escalate_from 算、没有就退回 waiting_since；三类自己给起点", () => {
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "extract(epoch from (now() - coalesce(x.escalate_from, x.waiting_since)))",
+    );
+    // 卡住的退款：从「成为卡住」那一刻（updated_at + 成熟期 $9）算，不从进入 processing 算。
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "case when r.refund_status = 'processing'\n         then r.updated_at + make_interval(hours => $9::int) end as escalate_from",
+    );
+    // 加油包：申报腿最早一条 pending_verify 的时刻；没申报 → null → 不升档。
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "select min(p.created_at) as declared_at\n      from billing.payments p\n     where p.bill_id = ap.invoice_id and p.pay_status = 'pending_verify'",
+    );
+    expect(LIST_OPS_TODOS_SQL).toContain("decl.declared_at");
+    // 工单首响：破约时刻 = created_at + 本档 SLA，与 breached 共用同一个 deadline。
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "case when sla.breached then sla_at.deadline end",
+    );
+    expect(LIST_OPS_TODOS_SQL).toContain("and sla_at.deadline <= now()");
   });
 
   it("排序 = 升档后的严重度 → 优先级 → 等待起点升序", () => {
@@ -556,10 +786,18 @@ describe("LIST_OPS_TODOS_SQL 的谓词字面", () => {
 
   it("租户：认证 pending / 风险 / 停用", () => {
     expect(LIST_OPS_TODOS_SQL).toContain(
-      "where verification_status = 'pending'",
+      "where t.deleted_at is null and t.verification_status = 'pending'",
+    );
+    // 认证的等待起点 = 最近一次提交（kyc），没有提交记录退回租户创建时刻。
+    expect(LIST_OPS_TODOS_SQL).toContain(
+      "coalesce(kv.submitted_at, t.created_at)                as waiting_since",
     );
     expect(LIST_OPS_TODOS_SQL).toContain(
       "where coalesce(risk_level, 'normal') <> 'normal' or status = 'suspended'",
+    );
+    // 底座只替风险选行：认证 pending 不再是底座的入选条件（只拼 risk 时整条 SQL 里都没有它）。
+    expect(buildListOpsTodosSql({ kinds: ["risk"] })).not.toContain(
+      "verification_status",
     );
   });
 
@@ -1150,7 +1388,7 @@ describe("mapOpsTodoRow", () => {
 });
 
 describe("OpsTodoRepository.list", () => {
-  it("把选项绑成九个参数、按类别拼 SQL，行经映射返回", async () => {
+  it("把选项绑成十五个参数、按类别拼 SQL，行经映射返回", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [baseRow({}), baseRow({ kind: "reprovision" })],
     });

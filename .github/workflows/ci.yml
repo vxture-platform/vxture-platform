@@ -227,9 +227,25 @@ jobs:
       # 运营待办清单在浏览器里拼、告警在服务端扫，两边各写各的判据。往页面上加一类
       # 待办**不报错、不影响构建**，只是那一类永远不会有人被通知——而它看起来完全正常
       # （页面上红红地列着，只是没人收到邮件）。#231 的病根就是这种坏法。
+      # 2026-10-04 起它还有第二根轴：共享算法 SQL 里**有升档阈值**的类别，每一类都必须在
+      # 作业的 ALERT_KINDS ∪ NOTICE_ONLY_KINDS 里——有阈值却没人扫 = 升档了也没有通告，
+      # 页面红着、台面上一条都没有。--self-test 用合成文本证三态：SQL 里多一个没登记的
+      # 阈值要红、登记表多一类要红、把 NOTICE_ONLY 清空（裁定 3 之前的现场）要红、复原要绿。
       - name: Ops todo alert coverage guardrail
         if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:ops-todo-alerts
+        run: |
+          pnpm lint:ops-todo-alerts
+          node scripts/guardrails/check-ops-todo-alerts.mjs --self-test
+
+      # 待办的升档阈值长在**两个进程**的 env 里：页面读 admin-bff 的、作业读 platform-api 的，
+      # 两边值不同就是页面「已超时」与通告对不上，而且不报错。两份 example 各登记一块，
+      # 这一步拿两块逐行对账，并与仓储真读的 env 名对账（登记了没读 / 读了没登记都红）。
+      # 不加 `pnpm lint:` 入口：那要改根 package.json，会触发全栈 14 镜像重建。
+      - name: Ops todo threshold env parity
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          node scripts/guardrails/check-ops-threshold-env-parity.mjs
+          node scripts/guardrails/check-ops-threshold-env-parity.mjs --self-test
 
       # 日期时间三条纪律(owner 2026-09-08),三条都不报错、不影响构建:
       #  §1 界面到秒——手搓一个 Intl 只是那处日期跟别处长得不一样;

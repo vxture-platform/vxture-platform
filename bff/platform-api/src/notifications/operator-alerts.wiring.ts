@@ -537,22 +537,38 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
    * 升档的那些**另外**写一条 critical 运营通告：邮件有 4h 静默窗口、漏看就没了，
    * 通告留在列表里。通告先写、写失败不影响邮件（writeOpsNotice 永不抛）。
    *
-   * 「升档 → 通告」这半只对**走到这里**的类别成立，也就是 ALERT_KINDS 那九类。
-   * 四个有升档阈值的类别里，`verification` 不在 ALERT_KINDS（owner 未裁定，且它那一段
-   * SQL 碰的 schema 在本进程角色的授权面之外），所以它只有页面上的「已超时」标记、
-   * 没有通告——见 service-ops-todos 的 `OpsTodo.escalated` 注释。
+   * 「升档 → 通告」这半与类别无关（composeEscalatedTodoNotice 对任何 kind 都成立）；
+   * 不走邮件的升档类别由 `noticeEscalatedTodo` 单独写同一条通告——两条路同一函数、
+   * 同一去重键，所以十类升档通告读起来是一套。
    */
   async alertTodo(todo: OpsTodo): Promise<OperatorAlertResult> {
     if (todo.escalated) {
-      await writeOpsNotice(
-        this.notices(),
-        composeEscalatedTodoNotice(todo),
-        this.logger,
-        `todo_escalated ${todo.kind} ${todo.subject.no} step ${todo.escalationStep}`,
-      );
+      await this.noticeEscalatedTodo(todo);
     }
     return this.alert(
       todoAlertInput(todo, { link: this.adminLink(todo.href) }),
+    );
+  }
+
+  /**
+   * 只写通告、不发邮件（作业的 NOTICE_ONLY_KINDS，2026-10-04 owner 裁定 3）。
+   *
+   * 传进来的必须已升档：没升档的说明作业接线错了（它该在作业里被跳过），直接抛——
+   * 与 todoAlertInput 的 default throw 同一哲学，静默跳过会把「没写」藏起来。
+   * 通告写失败不抛（writeOpsNotice 只记日志）：一条通告写不进去不该让整轮作业红。
+   */
+  async noticeEscalatedTodo(todo: OpsTodo): Promise<void> {
+    if (!todo.escalated) {
+      throw new Error(
+        `noticeEscalatedTodo 收到未升档的待办 ${todo.kind} ${todo.subject.no}` +
+          "——只有升档的才写通告，作业那边该先过滤（见 ops-todo-alert.job 的 NOTICE_ONLY_KINDS）",
+      );
+    }
+    await writeOpsNotice(
+      this.notices(),
+      composeEscalatedTodoNotice(todo),
+      this.logger,
+      `todo_escalated ${todo.kind} ${todo.subject.no} step ${todo.escalationStep}`,
     );
   }
 
