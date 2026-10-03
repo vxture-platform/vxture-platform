@@ -545,9 +545,10 @@ describe("payments verifyPayment (settle) / rejectPayment", () => {
 
 // ─────────────────────── tenant verifications: approve/reject ───────────────────────
 describe("tenant verification approve/reject", () => {
-  const MANAGE = ["platform.tenant.manage"];
+  // 2026-10-03 拆门：approve/reject 判 tenant:verification.review。
+  const MANAGE = ["tenant:verification.review"];
 
-  it("approve rejects a caller without tenant.manage before any DB access", async () => {
+  it("approve rejects a caller without the review code before any DB access", async () => {
     const rw = noDbPool();
     const router = new TenantsRouter(
       noDbPool().pool,
@@ -559,6 +560,100 @@ describe("tenant verification approve/reject", () => {
         makeReq(["platform.tenant.read"]),
         UUID_A,
       ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(rw.connect).not.toHaveBeenCalled();
+  });
+
+  /* 拆门的反例：这两条就是「门真的分开了」的判据。能改租户资料 ≠ 能下合规裁定；
+     拿着整个租户域的读 + 写两码仍然批不了实名审核。
+     2026-10-03 之前这两条是**绿**的 —— 那正是被拆掉的那道粗门。 */
+  /* 注入粗码是**关键**：不带它旧门同样 403，这条就证明不了「门分开了」。
+     带上它 = 今天 administrator / operator 的真实持码，旧代码下能批，故为红。 */
+  it("能改租户资料的人（含旧桥合成的粗码）批不了实名审核", async () => {
+    const rw = noDbPool();
+    const router = new TenantsRouter(
+      noDbPool().pool,
+      rw.pool,
+      notifierSpy().notifier,
+    );
+    await expect(
+      router.approveTenantVerification(
+        makeReq([
+          "tenant:profile.read",
+          "tenant:profile.manage",
+          "platform.tenant.manage",
+        ]),
+        UUID_A,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(rw.connect).not.toHaveBeenCalled();
+  });
+
+  /* 侧门：PUT /:id 的 status 字段写的是 tenancy.tenants.status —— 与
+     POST /:id/suspend 同一列同一组值。两条路必须要同一个码，否则「拆门」对
+     生命周期这件事只是换了个说法。2026-10-03 之前这两条是**绿**的。 */
+  it("profile.manage 不能借 PUT 的 status 字段停用租户", async () => {
+    const rw = noDbPool();
+    const router = new TenantsRouter(
+      noDbPool().pool,
+      rw.pool,
+      notifierSpy().notifier,
+    );
+    await expect(
+      router.updateTenant(
+        makeReq(["tenant:profile.manage", "platform.tenant.manage"]),
+        UUID_A,
+        { status: "suspended" },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(rw.connect).not.toHaveBeenCalled();
+  });
+
+  it("profile.manage 不能借 status='cancelled' 软删租户", async () => {
+    const rw = noDbPool();
+    const router = new TenantsRouter(
+      noDbPool().pool,
+      rw.pool,
+      notifierSpy().notifier,
+    );
+    await expect(
+      router.updateTenant(
+        makeReq(["tenant:profile.manage", "platform.tenant.manage"]),
+        UUID_A,
+        { status: "cancelled" },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(rw.connect).not.toHaveBeenCalled();
+  });
+
+  it("不带 status 的资料 PUT 不需要 lifecycle 码（别把门变成墙）", async () => {
+    const rw = noDbPool();
+    const router = new TenantsRouter(
+      noDbPool().pool,
+      rw.pool,
+      notifierSpy().notifier,
+    );
+    // 没有 lifecycle 码也要能走到解析 tenantId 那一步 —— 403 不该在这里出现。
+    await expect(
+      router.updateTenant(
+        makeReq(["tenant:profile.manage", "platform.tenant.manage"]),
+        UUID_A,
+        { displayName: "新简称" },
+      ),
+    ).rejects.not.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("只有租户读码的人改不了租户资料", async () => {
+    const rw = noDbPool();
+    const router = new TenantsRouter(
+      noDbPool().pool,
+      rw.pool,
+      notifierSpy().notifier,
+    );
+    await expect(
+      router.updateTenant(makeReq(["tenant:profile.read"]), UUID_A, {
+        name: "x",
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(rw.connect).not.toHaveBeenCalled();
   });

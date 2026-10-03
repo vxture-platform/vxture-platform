@@ -137,7 +137,18 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/tenants` — 租户运营管理
 
-**需要能力：`platform.tenant.manage`**
+**需要能力（2026-10-03 按细码拆门，逐入口不同）**
+
+| 入口                                   | 能力码                       |
+| -------------------------------------- | ---------------------------- |
+| 列表 / 详情 / logo 读 / 成员列表       | `tenant:profile.read`        |
+| 改资料 / 运营备注 / 成员角色·停用·移除 | `tenant:profile.manage`      |
+| 实名审核列表 / 批准 / 驳回             | `tenant:verification.review` |
+| logo 重置（+ step-up）                 | `tenant:brand.reset`         |
+| 停用 / 恢复租户（+ step-up）           | `tenant:lifecycle.suspend`   |
+
+此前整个路由判一个遗留扁平码 `platform.tenant.manage`。成员那三个写入判 `profile.manage`
+是因为目录里今天没有 `tenant:member.*` 这一档，不是因为它们和改资料同一类。
 
 **GET `/api/tenants`** — 租户列表（全量聚合）
 
@@ -166,7 +177,9 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/accounts` — 账号运营管理
 
-**需要能力：`platform.tenant.manage`**
+**需要能力：`platform.tenant.manage`**（列表 / 详情 / 头像读这三个；头像重置判
+`user:avatar.reset`，停用 / 启用 / 强制下线判 `user:account.manage`）。
+账号这一域仍坐在粗码后面 —— owner 2026-10-03 裁决先拆租户与工单，账号 / 待办 / 搜索后做。
 
 **GET `/api/accounts`** — 账号列表（含租户绑定关系）
 
@@ -495,7 +508,9 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/tickets` — 工单管理
 
-**需要能力：`platform.tenant.manage`**
+**需要能力（2026-10-03 按细码拆门）**：读（列表 / 详情 / 评论列表）判
+`support:ticket.read`；写（代客建单 / 内部备注 / 客户可见回复 / 分派 / 改状态 / 关闭）判
+`support:ticket.manage`。此前十个入口全判遗留扁平码 `platform.tenant.manage`。
 
 **GET `/api/tickets`** — 工单列表（按优先级排序）
 
@@ -528,14 +543,17 @@ middleware 顺序：`auth → capabilities → router`
 
 ## 能力守卫汇总
 
-| 能力 code                 | 保护范围                                                             |
-| ------------------------- | -------------------------------------------------------------------- |
-| `platform.tenant.manage`  | tenants / accounts / subscriptions / billing / tickets / admin-roles |
-| `platform.pricing.manage` | subscriptions / billing（与 tenant.manage 任一即可）                 |
-| `platform.product.manage` | products                                                             |
-| `platform.model.manage`   | model-platform                                                       |
-| `capability:runos.read`   | runos（只读目录；`capability:runos.manage` 亦可）                    |
-| `platform.admin.manage`   | platform-admins / admin-roles                                        |
+| 能力 code                         | 保护范围                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `platform.tenant.manage`          | accounts（3 个读）/ 运营待办 / 全局搜索 —— **余 5 个入口**；租户 12 与工单 10 已于 2026-10-03 拆成细码 |
+| `tenant:profile.read` / `.manage` | tenants 读 / 写                                                                                        |
+| `tenant:verification.review`      | 实名审核列表 / 批准 / 驳回                                                                             |
+| `support:ticket.read` / `.manage` | tickets 读 / 写                                                                                        |
+| `platform.pricing.manage`         | subscriptions / billing（与 tenant.manage 任一即可）                                                   |
+| `platform.product.manage`         | products                                                                                               |
+| `platform.model.manage`           | model-platform                                                                                         |
+| `capability:runos.read`           | runos（只读目录；`capability:runos.manage` 亦可）                                                      |
+| `platform.admin.manage`           | platform-admins / admin-roles                                                                          |
 
 ---
 

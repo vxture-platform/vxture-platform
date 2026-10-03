@@ -29,7 +29,8 @@ import type { RequestContext } from "../types/console.types";
 const OPERATOR_ID = "11111111-1111-4111-8111-111111111111";
 const TENANT_ID = "22222222-2222-4222-8222-222222222222";
 const VERIFICATION_ID = "33333333-3333-4333-8333-333333333333";
-const MANAGE = ["platform.tenant.manage"];
+/** 2026-10-03 拆门：实名审核三个入口判自己的码。 */
+const MANAGE = ["tenant:verification.review"];
 /** 读回那一行的 reviewed_at；去重锚的后半截就是它。 */
 const REVIEWED_AT = "2026-09-28T02:30:00.000Z";
 const TENANT_NO = "2012345678";

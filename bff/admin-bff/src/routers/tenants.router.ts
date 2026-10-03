@@ -25,7 +25,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Inject,
   Logger,
@@ -36,7 +35,6 @@ import {
   Query,
   Req,
   Res,
-  UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import type { Pool } from "pg";
@@ -61,6 +59,7 @@ import type {
   TenantVerificationStatus,
 } from "../types/console.types";
 import { industryLabel } from "@vxture/core-utils";
+import { assertAnyCapability } from "../auth/capability";
 
 @Controller("api/tenants")
 export class TenantsRouter {
@@ -106,7 +105,7 @@ export class TenantsRouter {
   async listTenants(
     @Req() req: Request & RequestContext,
   ): Promise<TenantOperationRecord[]> {
-    assertCanManageTenants(req);
+    assertCanReadTenants(req);
 
     const { rows } = await this.pool.query<TenantOperationRow>(TENANT_LIST_SQL);
     return rows.map(mapTenantRow);
@@ -127,7 +126,7 @@ export class TenantsRouter {
     @Req() req: Request & RequestContext,
     @Query("status") status?: string,
   ): Promise<TenantVerificationRecord[]> {
-    assertCanManageTenants(req);
+    assertCanReviewTenantVerification(req);
 
     const statusFilter = status ? assertVerificationStatus(status) : null;
     const { rows } = await this.pool.query<TenantVerificationRow>(
@@ -183,7 +182,7 @@ export class TenantsRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
   ): Promise<TenantOperationDetailRecord> {
-    assertCanManageTenants(req);
+    assertCanReadTenants(req);
     const tenantId = await this.resolveTenantId(id);
     return this.loadTenant(tenantId);
   }
@@ -212,13 +211,28 @@ export class TenantsRouter {
     @Body() body: UpdateTenantBody,
   ): Promise<TenantOperationDetailRecord> {
     assertCanManageTenants(req);
+    // status 这一个字段落到 tenancy.tenants.status，与 POST /:id/suspend|resume 是
+    // **同一列、同一组值**（mapIncomingTenantStatus：suspended→'suspended'、
+    // cancelled→'deleted'）。那两个端点判 tenant:lifecycle.suspend，这里只判
+    // profile.manage ⇒ 2026-10-03 之前 operator 在正门被 403、在这个侧门能把租户停掉，
+    // 甚至能用 cancelled 软删（软删全仓没有别的入口）。拆门就是为了「一个后果一个码」，
+    // 所以这里按字段补判同一个码：带 status 就要 lifecycle.suspend。
+    //
+    // **还没补齐的那一半**：那两个端点还挂 @RequireStepUp()，本端点没有。step-up 是
+    // 路由级 metadata 守卫（step-up.guard 读 @RequireStepUp，在 handler 之前跑），
+    // 没法按 body 有没有 status 条件触发；给整个资料 PUT 挂上 step-up 等于改名字也要
+    // 走一次二次验证，那是产品取舍不是拆门。留给 owner：要么资料 PUT 整体上 step-up，
+    // 要么给软删一个自己的端点、让 status 彻底不走这条路。
+    const dbStatus = mapIncomingTenantStatus(body?.status);
+    if (dbStatus !== null) {
+      assertCanManageTenantLifecycle(req);
+    }
     const tenantId = await this.resolveTenantId(id);
 
     const name = optionalString(body?.name, 128, "name");
     // 96 而不是 128：跟 `tenancy.tenants.display_name` 的 varchar(96) 对齐，
     // 否则超长的名字会走到 PG 才报错，而那时事务已经开了。
     const displayName = optionalString(body?.displayName, 96, "displayName");
-    const dbStatus = mapIncomingTenantStatus(body?.status);
     const industry = optionalString(body?.industry, 64, "industry");
     const scale = optionalString(body?.scale, 32, "scale");
     const description = optionalText(body?.description);
@@ -462,7 +476,7 @@ export class TenantsRouter {
     @Param("id") id: string,
     @Res() res: Response,
   ): Promise<void> {
-    assertCanManageTenants(req);
+    assertCanReadTenants(req);
     const tenantId = await this.resolveTenantId(id);
     const { rows } = await this.pool.query<TenantLogoRow>(
       `select data, content_type, hash from tenancy.tenant_logos
@@ -599,7 +613,7 @@ export class TenantsRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
   ): Promise<TenantMemberRecord[]> {
-    assertCanManageTenants(req);
+    assertCanReadTenants(req);
     const tenantId = await this.resolveTenantId(id);
 
     const { rows } = await this.pool.query<TenantMemberRow>(
@@ -773,7 +787,7 @@ export class TenantsRouter {
     nextStatus: "verified" | "rejected",
     reason: string | null,
   ): Promise<TenantVerificationRecord> {
-    assertCanManageTenants(req);
+    assertCanReviewTenantVerification(req);
     const verificationId = requireUuid(id, "Invalid verification id");
     const reviewerId = requireUuid(
       req.user?.id,
@@ -1048,29 +1062,40 @@ export class TenantsRouter {
   }
 }
 
-function assertCanManageTenants(req: Request & RequestContext): void {
-  if (!req.user) {
-    throw new UnauthorizedException("No active session");
-  }
+/* 2026-10-03，owner 裁决「拆门，按细码粒度」：租户域从遗留扁平码 platform.tenant.manage
+   换成 seed 里 admin.menu.tenant_profile 与 admin.menu.identity_verification 两个菜单节点
+   各自挂的那些码。粒度就照菜单节点来 —— 实名审核是自己一页、自己一个节点、自己一个码，
+   它写 kyc.tenant_verifications 与 tenancy.tenants.verification_status，是合规裁定，
+   此前与「改租户名字」共用一道门。
 
-  if (
-    !req.capabilities ||
-    !req.capabilities.includes("platform.tenant.manage")
-  ) {
-    throw new ForbiddenException("Missing platform.tenant.manage capability");
-  }
+   顺带修掉的事：finance / engineer / support / auditor 四个角色都被授予了
+   tenant:profile.read，withMenuClosure 据此把租户页放进它们的侧栏，但粗门只认
+   platform.tenant.manage（旧桥只从 tenant:profile.manage 合成）⇒ 它们看得见、点不进。
+   改判 .read 之后它们拿到的是**只读**：改资料 / 运营备注 / 成员角色仍判 .manage。
+
+   成员那三个写入（改角色 / 停用 / 移除）判 tenant:profile.manage —— 目录里今天没有
+   tenant:member.* 这一档，而新立一个码要配迁移灌存量库（「加码改五处」）。
+   本轮只用已有的码重新设门，不新增码；成员要不要单独一档，留给 owner。 */
+function assertCanReadTenants(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["tenant:profile.read", "tenant:profile.manage"]);
+}
+
+function assertCanManageTenants(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["tenant:profile.manage"]);
+}
+
+function assertCanReviewTenantVerification(
+  req: Request & RequestContext,
+): void {
+  assertAnyCapability(req, ["tenant:verification.review"]);
 }
 
 // 重置主体标识是内容处置（危码 tenant:brand.reset + step-up）：删掉的原图不留存、
-// 不可撤回，故与宽口径的 platform.tenant.manage 分开设门——能改租户资料的人不等于
-// 能抹掉租户传的标识。
+// 不可撤回，故与改资料的 tenant:profile.manage 分开设门——能改租户资料的人不等于
+// 能抹掉租户传的标识。（2026-10-03 前这句写的是「宽口径的 platform.tenant.manage」，
+// 那道粗门已按细码拆开；这条原则正是拆门的依据。）
 function assertCanResetTenantBrand(req: Request & RequestContext): void {
-  if (!req.user) {
-    throw new UnauthorizedException("No active session");
-  }
-  if (!req.capabilities?.includes("tenant:brand.reset")) {
-    throw new ForbiddenException("Missing tenant:brand.reset capability");
-  }
+  assertAnyCapability(req, ["tenant:brand.reset"]);
 }
 
 // Suspend/resume are tenant lifecycle transitions — a high-risk (危) operation in
@@ -1078,12 +1103,7 @@ function assertCanResetTenantBrand(req: Request & RequestContext): void {
 // (super_admin/admin only) rather than the broader profile.manage, and additionally
 // step-up gated (@RequireStepUp on the handlers).
 function assertCanManageTenantLifecycle(req: Request & RequestContext): void {
-  if (!req.user) {
-    throw new UnauthorizedException("No active session");
-  }
-  if (!req.capabilities?.includes("tenant:lifecycle.suspend")) {
-    throw new ForbiddenException("Missing tenant:lifecycle.suspend capability");
-  }
+  assertAnyCapability(req, ["tenant:lifecycle.suspend"]);
 }
 
 function toIso(value: Date | string | null): string {

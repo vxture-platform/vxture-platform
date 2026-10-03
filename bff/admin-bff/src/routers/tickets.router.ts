@@ -5,7 +5,6 @@ import {
   Body,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   Inject,
   Logger,
@@ -38,6 +37,7 @@ import {
 } from "@vxture-platform/shared";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { pgErrorCode, withTransaction } from "../db/tx";
+import { assertAnyCapability } from "../auth/capability";
 
 @Controller("api/tickets")
 export class TicketsRouter {
@@ -58,7 +58,7 @@ export class TicketsRouter {
   async listTickets(
     @Req() req: Request & RequestContext,
   ): Promise<SupportTicketRecord[]> {
-    assertCanManageTickets(req);
+    assertCanReadTickets(req);
 
     const tableCheck = await this.pool.query<{ table_name: string | null }>(
       "select to_regclass('support.tickets')::text as table_name",
@@ -233,7 +233,7 @@ export class TicketsRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
   ): Promise<SupportTicketRecord> {
-    assertCanManageTickets(req);
+    assertCanReadTickets(req);
     return this.fetchTicketDetail(id);
   }
 
@@ -252,7 +252,7 @@ export class TicketsRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
   ): Promise<TicketCommentRecord[]> {
-    assertCanManageTickets(req);
+    assertCanReadTickets(req);
     const ref = requireTicketRef(id);
     const { rows } = await this.pool.query<TicketCommentRow>(
       TICKET_COMMENTS_SQL,
@@ -568,7 +568,7 @@ export class TicketsRouter {
    * 会声称我们处理过它。其余五个状态都可以进 closed。
    * **重开仍然走通用的 `:id/status`（status='reopened'），本端点不管重开**：
    * 客户回头找上来时必须能接着同一张单谈，另开一张会把历史断掉；权限与关闭同一
-   * 道（platform.tenant.manage），也就是只有运营能重开。谁能重开如果要收得更紧，
+   * 道（support:ticket.manage），也就是只有运营能重开。谁能重开如果要收得更紧，
    * 那是一次独立的权限裁定，不该由「加个关闭端点」顺手带出来。
    *
    * ── reason 是给客户看的 ──
@@ -753,17 +753,25 @@ export class TicketsRouter {
   }
 }
 
-function assertCanManageTickets(req: Request & RequestContext): void {
-  if (!req.user) {
-    throw new UnauthorizedException("No active session");
-  }
+/* 2026-10-03，owner 裁决「拆门，按细码粒度，先做租户和工单那两条」：工单从遗留扁平码
+   platform.tenant.manage 换成本域自己的两个码。那道粗门同时错在**两个方向** ——
 
-  if (
-    !req.capabilities ||
-    !req.capabilities.includes("platform.tenant.manage")
-  ) {
-    throw new ForbiddenException("Missing platform.tenant.manage capability");
-  }
+     · 超授：operator 只被授予 support:ticket.read，但它持有 tenant:profile.manage，
+       auth.service 的 LEGACY_CAPABILITY_BRIDGE 据此给它合成出粗码，于是它能**写**工单：
+       内部备注、客户可见回复、分派、改状态、关单，十个入口全开。
+     · 漏授，而且是功能坏的：support 角色九个码里的业务码就是 ticket.read + ticket.manage，
+       但它没有 tenant:profile.manage ⇒ 拿不到粗码 ⇒ 十个入口全 403。而 seed 的
+       withMenuClosure 恰恰按这两个码把 admin.menu.support_ticket 放进了它的侧栏 ——
+       **专职处理工单的角色今天在侧栏看得见工单，点进来吃 403**。auditor（只读）同形。
+
+   所以这不是单纯收紧：它同时修掉一个坏掉的角色。读写按入口分 —— 对客户说话（replies）
+   与内部备注都算 .manage，列表 / 详情 / 评论列表是 .read。 */
+function assertCanReadTickets(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["support:ticket.read", "support:ticket.manage"]);
+}
+
+function assertCanManageTickets(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["support:ticket.manage"]);
 }
 
 function normalizeTicketStatus(

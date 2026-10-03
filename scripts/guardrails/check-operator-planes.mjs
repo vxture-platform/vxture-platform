@@ -54,13 +54,26 @@ const LEGACY_DOMAINS = new Set(["platform", "release", "notification"]);
  * ② **「没有消费方」是症状，不是病。** 这 12 条不是零散的债，它们精确地聚在
  *    仍由两个遗留扁平码把门的区域：
  *
- *      platform.tenant.manage   → **27** 个 HTTP 入口
+ *      platform.tenant.manage   → 原 **27** 个 HTTP 入口
  *                                 租户 12 / 工单 10 / 账号 3 / 运营待办 1 / 全局搜索 1
  *      platform.product.manage  → **32** 个 HTTP 入口（products.router 全部，含定价）
+ *
+ *    **租户 12 与工单 10 已拆**（owner 2026-10-03 裁决「拆门，按细码粒度，先做租户和
+ *    工单那两条」）：22 个入口改判本域细码，粗门余 **5** 个（账号 3 个读 / 待办 / 搜索）。
+ *    于是 tenant:profile.read、tenant:verification.review、support:ticket.read、
+ *    support:ticket.manage 四条从本登记表里删掉了 —— 它们有消费方了。
  *
  *    27 那个数是**传递算出来的**：只认「函数体里直接出现这个码」时是 19，
  *    而 approveTenantVerification / rejectTenantVerification 调的是私有
  *    reviewVerification，门写在那一层 —— 门往下传一跳就数不到了。
+ *
+ *    而且粗门**两头都错**，这一点是拆门时才量出来的（按 seed 的 OPERATOR_ROLE_PERMS
+ *    + withMenuClosure 复算六个角色）：旧桥只从 tenant:profile.manage 合成粗码，于是
+ *      · operator 只被授予 support:ticket.read，却能**写**工单（十个入口全开）；
+ *      · support 角色持 ticket.read + ticket.manage 两码却拿不到粗码 ⇒ 十个入口全 403，
+ *        而 withMenuClosure 恰按这两码把工单菜单放进了它的侧栏 ——
+ *        **专职处理工单的角色在侧栏看得见、点进来吃 403**；auditor（只读）同形。
+ *    所以「粗门」不只是放得太宽，它同时把该进的人关在外面。
  *
  *    后果说人话：拿到 platform.tenant.manage 的运营者**同时**能改租户资料、
  *    **批准/驳回实名审核**（kyc.tenant_verifications + tenancy.tenants.verification_status）、
@@ -79,9 +92,11 @@ const LEGACY_DOMAINS = new Set(["platform", "release", "notification"]);
  * 是 owner 的决定。本轮只把理由改成真话，一道门都没动。
  */
 const COARSE_TENANT_GATE =
-  "**页面有门，但是粗门**（2026-10-03 核实）：这一页坐在遗留扁平码 platform.tenant.manage 后面，" +
-  "而那一个码同时开着 27 个入口（租户 / 工单 / 账号 / 待办 / 搜索）。目录里给本域留的细码" +
-  "因此没有消费方 —— 症状在这里，病在那道粗门。按域重新设门要配迁移给角色授码，是 owner 的取舍";
+  "**页面有门，但是粗门**（2026-10-03 核实，同日部分拆完）：这一页坐在遗留扁平码 " +
+  "platform.tenant.manage 后面。那个码原先开着 27 个入口，租户 12 与工单 10 已按细码拆门" +
+  "（owner 裁决「先做租户和工单那两条」），**余 5 个**：账号列表 / 账号详情 / 账号头像读（3）" +
+  "＋ 运营待办（1）＋ 全局搜索（1）。本条的细码因此仍没有消费方 —— 症状在这里，病在那道粗门。" +
+  "剩下这三处是 owner 明确后做的那一批";
 const COARSE_PRODUCT_GATE =
   "**页面有门，但是粗门**（2026-10-03 核实）：products.router 32 个入口（含定价写入）全判" +
   "遗留扁平码 platform.product.manage，本域的细码因此没有消费方。" +
@@ -95,12 +110,6 @@ const GRANULARITY_ABSENT =
   "「租户配额」页面或端点。不是缺门，是没有这件事";
 
 const UNCONSUMED = {
-  "tenant:profile.read": COARSE_TENANT_GATE,
-  "tenant:verification.review":
-    COARSE_TENANT_GATE +
-    "。**这一条最该先改**：实名审核（列表 / 批准 / 驳回，共 4 个入口）是合规裁定，" +
-    "它写 kyc.tenant_verifications 与 tenancy.tenants.verification_status，" +
-    "却与「改租户名字」共用同一道门",
   "tenant:quota.read": GRANULARITY_ABSENT,
   "tenant:quota.manage": GRANULARITY_ABSENT,
   "user:profile.read": COARSE_TENANT_GATE,
@@ -116,11 +125,6 @@ const UNCONSUMED = {
   "product:price.read": COARSE_PRODUCT_GATE,
   "product:price.manage": COARSE_PRODUCT_GATE,
   "content:announcement.read": MANAGE_IMPLIES_READ,
-  "support:ticket.read": COARSE_TENANT_GATE,
-  "support:ticket.manage":
-    COARSE_TENANT_GATE +
-    "。工单 10 个入口里有**客户可见回复**与**内部备注**两种写入 —— " +
-    "对客户说话这件事与「改租户资料」共用一道门",
   "support:impersonate":
     "**功能根本没做**（2026-10-03 核实）：这个码只出现在 seed、本守卫与设计文档里，" +
     "admin-bff 与门户里一行实现都没有。它不是债也不是缺口，是一个还没到期的需求",
@@ -134,8 +138,12 @@ const seedSrc = readFileSync(SEED, "utf8");
 
 function literalAfter(marker) {
   const at = seedSrc.indexOf(marker);
-  if (at < 0) throw new Error(`seed 里找不到 ${marker}——守卫读不到事实，不能放行`);
-  const open = seedSrc.indexOf(marker.trim().endsWith("{") ? "{" : "[", at + marker.length - 1);
+  if (at < 0)
+    throw new Error(`seed 里找不到 ${marker}——守卫读不到事实，不能放行`);
+  const open = seedSrc.indexOf(
+    marker.trim().endsWith("{") ? "{" : "[",
+    at + marker.length - 1,
+  );
   const closeCh = seedSrc[open] === "{" ? "}" : "]";
   let depth = 0;
   for (let i = open; i < seedSrc.length; i += 1) {
@@ -143,24 +151,30 @@ function literalAfter(marker) {
     if (ch === seedSrc[open]) depth += 1;
     else if (ch === closeCh) {
       depth -= 1;
-      if (depth === 0) return new Function(`return ${seedSrc.slice(open, i + 1)};`)();
+      if (depth === 0)
+        return new Function(`return ${seedSrc.slice(open, i + 1)};`)();
     }
   }
   throw new Error(`${marker} 的字面量没有闭合`);
 }
 
 const PLANE_DOMAINS = literalAfter("export const OPERATOR_PLANE_DOMAINS = {");
-const CATALOG = literalAfter("const OPERATOR_PERMISSIONS = [").map((row) => row[0]);
+const CATALOG = literalAfter("const OPERATOR_PERMISSIONS = [").map(
+  (row) => row[0],
+);
 const TREE = literalAfter("const MENU_TREE = [");
 
 const domainPlane = new Map();
 for (const plane of PLANES) {
   const domains = PLANE_DOMAINS[plane];
   if (!Array.isArray(domains) || domains.length === 0) {
-    throw new Error(`OPERATOR_PLANE_DOMAINS.${plane} 为空——守卫读不到事实，不能放行`);
+    throw new Error(
+      `OPERATOR_PLANE_DOMAINS.${plane} 为空——守卫读不到事实，不能放行`,
+    );
   }
   for (const d of domains) {
-    if (domainPlane.has(d)) fail(`① 域 ${d} 同时属于 ${domainPlane.get(d)} 与 ${plane}`);
+    if (domainPlane.has(d))
+      fail(`① 域 ${d} 同时属于 ${domainPlane.get(d)} 与 ${plane}`);
     domainPlane.set(d, plane);
   }
 }
@@ -169,28 +183,43 @@ const planeOfCode = (code) => domainPlane.get(code.split(":")[0]);
 
 const catalog = new Set(CATALOG);
 for (const code of CATALOG) {
-  if (!codeRe.test(code)) fail(`① 目录码 ${code} 不是 domain:resource.action 形状`);
+  if (!codeRe.test(code))
+    fail(`① 目录码 ${code} 不是 domain:resource.action 形状`);
   else if (!planeOfCode(code)) fail(`① 目录码 ${code} 的域不属于任何平台`);
 }
 
 // ── ② 三棵树 ────────────────────────────────────────────────────────────────
 const rootCodes = TREE.map((n) => n.code).sort();
-if (rootCodes.join(",") !== PLANES.map((p) => `${p}.plane`).sort().join(",")) {
-  fail(`② 树根应恰好是 ${PLANES.map((p) => `${p}.plane`).join(" / ")}，实际 ${rootCodes.join(" / ")}`);
+if (
+  rootCodes.join(",") !==
+  PLANES.map((p) => `${p}.plane`)
+    .sort()
+    .join(",")
+) {
+  fail(
+    `② 树根应恰好是 ${PLANES.map((p) => `${p}.plane`).join(" / ")}，实际 ${rootCodes.join(" / ")}`,
+  );
 }
 const placed = new Map();
 function walk(node, plane) {
-  if (!node.code.startsWith(`${plane}.`)) fail(`② 节点 ${node.code} 挂在 ${plane}.plane 下，前缀不符`);
+  if (!node.code.startsWith(`${plane}.`))
+    fail(`② 节点 ${node.code} 挂在 ${plane}.plane 下，前缀不符`);
   for (const code of node.perms ?? []) {
-    if (!catalog.has(code)) fail(`② 树上的码 ${code}（${node.code}）不在目录里`);
-    if (planeOfCode(code) !== plane) fail(`② 码 ${code} 属于 ${planeOfCode(code) ?? "?"}，却挂在 ${plane} 的 ${node.code} 下`);
-    if (placed.has(code)) fail(`② 码 ${code} 挂了两次：${placed.get(code)} 与 ${node.code}`);
+    if (!catalog.has(code))
+      fail(`② 树上的码 ${code}（${node.code}）不在目录里`);
+    if (planeOfCode(code) !== plane)
+      fail(
+        `② 码 ${code} 属于 ${planeOfCode(code) ?? "?"}，却挂在 ${plane} 的 ${node.code} 下`,
+      );
+    if (placed.has(code))
+      fail(`② 码 ${code} 挂了两次：${placed.get(code)} 与 ${node.code}`);
     placed.set(code, node.code);
   }
   for (const child of node.children ?? []) walk(child, plane);
 }
 for (const rootNode of TREE) walk(rootNode, rootNode.code.split(".")[0]);
-for (const code of CATALOG) if (!placed.has(code)) fail(`② 目录码 ${code} 没有挂到任何页面`);
+for (const code of CATALOG)
+  if (!placed.has(code)) fail(`② 目录码 ${code} 没有挂到任何页面`);
 
 // ── ③④⑤ 源码 ────────────────────────────────────────────────────────────────
 function listFiles(dir) {
@@ -202,7 +231,8 @@ function listFiles(dir) {
     throw new Error(`读不到 ${relative(ROOT, dir)}——守卫看不见就不能放行`);
   }
   for (const name of entries) {
-    if (name === "node_modules" || name === ".next" || name === "dist") continue;
+    if (name === "node_modules" || name === ".next" || name === "dist")
+      continue;
     const abs = join(dir, name);
     if (statSync(abs).isDirectory()) out.push(...listFiles(abs));
     else if (/\.(ts|tsx|mts|mjs)$/.test(name)) out.push(abs);
@@ -238,7 +268,8 @@ function stringLiterals(src) {
         buf += src[j];
         j += 1;
       }
-      if (!(quote === "`" && buf.includes("${"))) out.push({ value: buf, index: i });
+      if (!(quote === "`" && buf.includes("${")))
+        out.push({ value: buf, index: i });
       i = j + 1;
     } else {
       i += 1;
@@ -252,7 +283,10 @@ const consumed = new Map(PLANES.map((p) => [p, new Set()]));
 let scanned = 0;
 
 for (const plane of PLANES) {
-  const roots = [join(ROOT, `bff/${plane}-bff/src`), join(ROOT, `portals/${plane}/src`)];
+  const roots = [
+    join(ROOT, `bff/${plane}-bff/src`),
+    join(ROOT, `portals/${plane}/src`),
+  ];
   const others = PLANES.filter((p) => p !== plane);
   for (const file of roots.flatMap(listFiles)) {
     scanned += 1;
@@ -272,10 +306,14 @@ for (const plane of PLANES) {
         if (!owner) continue; // node:fs、测试里的 x:y 之类
         if (owner !== plane) {
           if (!isSpec) {
-            fail(`③ ${rel}:${lineOf(src, index)}  "${value}" 属于 ${owner}，${plane} 不许检查它`);
+            fail(
+              `③ ${rel}:${lineOf(src, index)}  "${value}" 属于 ${owner}，${plane} 不许检查它`,
+            );
           }
         } else if (!catalog.has(value)) {
-          fail(`③ ${rel}:${lineOf(src, index)}  "${value}" 不在目录里（拼错或空码）`);
+          fail(
+            `③ ${rel}:${lineOf(src, index)}  "${value}" 不在目录里（拼错或空码）`,
+          );
         } else if (!isSpec) {
           consumed.get(plane).add(value);
         }
@@ -283,16 +321,24 @@ for (const plane of PLANES) {
       }
       const pm = /^(admin|opera|arche)\.(plane|menu\.[a-z_]+)$/.exec(value);
       if (pm && pm[1] !== plane) {
-        fail(`③ ${rel}:${lineOf(src, index)}  "${value}" 是 ${pm[1]} 平台的菜单码`);
+        fail(
+          `③ ${rel}:${lineOf(src, index)}  "${value}" 是 ${pm[1]} 平台的菜单码`,
+        );
       }
     }
 
     for (const m of src.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
       const spec = m[1];
-      const crossBff = others.some((o) => spec.includes(`${o}-bff`) || spec === `@vxture/bff-${o}`);
-      const crossPortal = others.some((o) => new RegExp(`(^|/)portals/${o}(/|$)`).test(spec));
+      const crossBff = others.some(
+        (o) => spec.includes(`${o}-bff`) || spec === `@vxture/bff-${o}`,
+      );
+      const crossPortal = others.some((o) =>
+        new RegExp(`(^|/)portals/${o}(/|$)`).test(spec),
+      );
       if (crossBff || crossPortal) {
-        fail(`④ ${rel}:${lineOf(src, m.index)}  import "${spec}" 跨到了别的平台`);
+        fail(
+          `④ ${rel}:${lineOf(src, m.index)}  import "${spec}" 跨到了别的平台`,
+        );
       }
     }
   }
@@ -303,7 +349,9 @@ for (const code of CATALOG) {
   if (!plane) continue;
   const used = consumed.get(plane).has(code);
   if (!used && !(code in UNCONSUMED)) {
-    fail(`⑤ ${code}（${plane}）在本平台源码里没有消费方——删掉它，或登记到 UNCONSUMED 并写明理由`);
+    fail(
+      `⑤ ${code}（${plane}）在本平台源码里没有消费方——删掉它，或登记到 UNCONSUMED 并写明理由`,
+    );
   }
   if (used && code in UNCONSUMED) {
     fail(`⑤ ${code} 已有消费方，从 UNCONSUMED 里摘掉`);
@@ -314,10 +362,14 @@ for (const code of Object.keys(UNCONSUMED)) {
 }
 
 console.log("══ 运营三平台权限隔离（check-operator-planes）══");
-console.log(`  · 目录 ${CATALOG.length} 个操作码，三棵树，扫描 ${scanned} 个源文件`);
+console.log(
+  `  · 目录 ${CATALOG.length} 个操作码，三棵树，扫描 ${scanned} 个源文件`,
+);
 for (const plane of PLANES) {
   const own = CATALOG.filter((c) => planeOfCode(c) === plane);
-  console.log(`  · ${plane}: ${own.length} 个码，${consumed.get(plane).size} 个有消费方`);
+  console.log(
+    `  · ${plane}: ${own.length} 个码，${consumed.get(plane).size} 个有消费方`,
+  );
 }
 if (failures.length) {
   console.error(`\n✗ ${failures.length} 处违规：`);
