@@ -11,6 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Response } from "express";
 import type { PlatformUsageService } from "../platform/platform-usage.service";
+import type { TokenUsageService } from "../platform/token-usage.service";
 import type { PoolIdentity } from "../platform/usage-view";
 import { PlatformUsageRouter } from "./platform-usage.router";
 
@@ -75,6 +76,12 @@ function routerWith(opts: {
   };
   const router = new PlatformUsageRouter(
     usage as unknown as PlatformUsageService,
+    // token 形态在本 spec 里不走；形状上要给一个（ingest 被叫到就是错的）
+    {
+      ingest: vi.fn(async () => {
+        throw new Error("tokens path must not run here");
+      }),
+    } as unknown as TokenUsageService,
   );
   return { router, usage, noteQuotaExhausted };
 }

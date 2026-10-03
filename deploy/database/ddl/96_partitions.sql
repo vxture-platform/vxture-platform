@@ -42,7 +42,8 @@ BEGIN;
 SET LOCAL TIME ZONE 'UTC';
 DO $$
 DECLARE
-  parts text[] := ARRAY['metering.usage_events', 'metering.usage_event_pools', 'support.audit_logs'];
+  parts text[] := ARRAY['metering.usage_events', 'metering.usage_event_pools', 'support.audit_logs',
+                        'metering.token_usage_events'];  -- #547 原始 token 用量（2026-10-04）
   -- 起点：第一条计费事件所在月，往前不需要分区。
   cover_from date := date '2026-07-01';
   -- PARTITION_COVER_UNTIL（守卫按这个名字找这一行；exclusive 上界）

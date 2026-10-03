@@ -131,7 +131,7 @@ v1.3 已经把它们移出订阅行,但**目录行仍在**——于是它们继�
 
 **配额路径已定(owner 2026-09-23)**:v1.3 写的是「经订阅产品套餐里的 **bundled 组件**进池」。这条路**在生产上真的有人走**——2026-09-23 的迁移前置检查报出 **7 个组件**把 atlas / runos 搭售进了别的产品套餐(本机库是 0,本地怎么跑都出不来)。
 
-它与另外两条轴重复:访问授权走产品轴(`product-endpoint-grants` / `capability-grants`,见上表),配额走 **L0 平台计量池**(`product.platform_metrics` 的 `ai.credit` / `compute.*`,`quota_pools.product_id IS NULL` 的工作区级池),与「配额只给有成本的」一致。而三条里**只有搭售这条**会因为产品行消失而**静默失效**:权益解析那条 SQL 带 `prod.deleted_at is null`,软删之后这些订阅查 atlas 权益直接返回「未订阅」,两侧都不报错。
+它与另外两条轴重复:访问授权走产品轴(`product-endpoint-grants` / `capability-grants`,见上表),配额走 **L0 平台计量池**(`product.platform_metrics` 的 `ai.credit` / `compute.*`,`quota_pools.product_id IS NULL` 的工作区级池),与「配额只给有成本的」一致。扣减由平台在换算后做,Atlas 只上报原始 token、计入调用方产品(ADR-013 / #547)。而三条里**只有搭售这条**会因为产品行消失而**静默失效**:权益解析那条 SQL 带 `prod.deleted_at is null`,软删之后这些订阅查 atlas 权益直接返回「未订阅」,两侧都不报错。
 
 owner 裁定:**不是软删,彻底清理,不留残留**。那 7 个组件随产品行一并删除,逐条在迁移日志里点名(套餐码 / 版本号 / 版本状态 / 产品码 / role)。删它们要临时关掉 `trg_plan_component_guard_lock`——那个守卫保护的是「已发布版本的内容不被偷改」,而此刻的选择不是「改不改它」,是「让它指向一个不存在的产品」还是「把它删掉」,前者外键根本不允许。
 

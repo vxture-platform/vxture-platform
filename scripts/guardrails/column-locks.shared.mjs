@@ -47,6 +47,22 @@ export const EXTRA_ANCHOR = new Set([
    */
   "product.certification_runs.product_id",
   /*
+   * token→credit 费率行（2026-10-03，#547，metering.token_credit_rates）。形状上六个单价列与
+   * 生效起点都是普通可写列，语义上**一行费率就是一段时间里的事实**：已经按它换算过的
+   * token_usage_events 记着 rate_id，事后复算要能拿回同一个数。改单价 = 改写历史账。
+   * 改价的正道是关掉旧行的窗口（effective_to，98 里唯一授权的业务列）+ 插一行新的。
+   */
+  "metering.token_credit_rates.provider_code",
+  "metering.token_credit_rates.model_code",
+  "metering.token_credit_rates.input_micro_per_1k",
+  "metering.token_credit_rates.output_micro_per_1k",
+  "metering.token_credit_rates.cache_write_micro_per_1k",
+  "metering.token_credit_rates.cache_read_micro_per_1k",
+  "metering.token_credit_rates.rerank_micro_per_candidate",
+  "metering.token_credit_rates.parse_micro_per_page",
+  "metering.token_credit_rates.effective_from",
+  "metering.token_credit_rates.created_by",
+  /*
    * 暂停 episode 的出生事实（2026-09-25，metering.subscription_suspensions）。
    * 形状上它们都是普通可写列，语义上**整条 episode 除了收尾那几列全是出生即定**：
    *

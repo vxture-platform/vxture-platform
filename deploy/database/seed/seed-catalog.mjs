@@ -3130,6 +3130,23 @@ export async function seedCatalog(client) {
     "✓  product — platform_metrics (L0 resource catalog: 2 active + 4 reserved)",
   );
 
+  // ── token→credit 默认费率（#547 / ADR-013 D5）──────────────────────────
+  // 2K tokens = 1 credit（product_220 §4.2 基线）：1 credit = 1,000,000 微 ⇒ 每 1K token 500,000 微。
+  // 四维同价、rerank / parse 为 0 —— 缓存折价与按候选 / 按页计价是商业判断，不在种子里替 owner 定；
+  // 运营改价 = 关掉这一行的窗口（effective_to）+ 插一行新的（费率行本身不可改，列锁 + EXTRA_ANCHOR）。
+  // 与 migrations/2026-10-04-token-usage-ingest.sql 第 6 段同一行；effective_from 是自然键的一部分。
+  await client.query(
+    `
+    insert into metering.token_credit_rates
+      (provider_code, model_code, input_micro_per_1k, output_micro_per_1k, cache_write_micro_per_1k, cache_read_micro_per_1k,
+       rerank_micro_per_candidate, parse_micro_per_page, effective_from, note)
+    values (null, null, 500000, 500000, 500000, 500000, 0, 0, timestamptz '2026-01-01 00:00:00+00', $1)
+    on conflict ((coalesce(provider_code, '')), (coalesce(model_code, '')), effective_from) do nothing
+  `,
+    ["默认档：2K tokens = 1 credit（product_220 §4.2 基线）；缓存读写同价、rerank/parse 暂为 0，运营按需另插行"],
+  );
+  console.log("✓  metering — token_credit_rates 默认档（2K tokens = 1 credit）");
+
   // ── addon packs (加油包/扩展包目录,owner 2026-08-20 用量配额线) ──────────
   // 初步预置定价(参考市场,owner 授权;运营侧接管后在 admin 调整——upsert 仅
   // 回写目录字段,已售单持快照不受影响)。有效期一律 365 天;存储包为 WS 级

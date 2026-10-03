@@ -155,4 +155,16 @@ export interface ConsumeResponseBody {
    * reconciliation rather than a duplicate row.
    */
   event_id?: string;
+  /**
+   * 只在 **token 形态**的 consume（#547，请求体带 `tokens` 而不是 `metric`+`amount`）出现：
+   *   · token_event_id —— 这次写下的原始事实行 metering.token_usage_events.id；
+   *   · credits_micro  —— 这次换算出的微 credit（1 credit = 1,000,000）；没换算时缺省；
+   *   · credits_deducted —— 结转之后真正走池扣掉的整数 credit（0 = 这次只进了结转）；
+   *   · credit_skip_reason —— 没换算的原因（TOKEN_CREDIT_SKIP_REASONS），换算了就缺省。
+   * 旧形态的调用方看不到这四个字段，形状不变。
+   */
+  token_event_id?: string;
+  credits_micro?: number;
+  credits_deducted?: number;
+  credit_skip_reason?: "pre_cutover" | "failed_attempt" | "no_rate";
 }

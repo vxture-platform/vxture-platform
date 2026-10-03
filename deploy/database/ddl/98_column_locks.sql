@@ -343,6 +343,25 @@ GRANT UPDATE (event_id, event_created_at, consumed, per_pool) ON metering.usage_
 -- 一列都不 GRANT（同 account.user_product_favorites / product.product_surfaces 的做法）。
 REVOKE UPDATE ON metering.usage_idempotencies_orphaned FROM platform_svc;
 
+-- metering.token_usage_events  [anchor: id, created_at]
+-- #547 原始 token 用量。与 usage_events 同款：95 的 append-only 触发器才是真守卫，这里的白名单
+-- 只是让 check-column-locks 认得出「哪些列形状上可写」。
+REVOKE UPDATE ON metering.token_usage_events FROM platform_svc;
+GRANT UPDATE (workspace_id, product_id, request_id, attempt_index, outcome, occurred_at, model_code, provider_code, input_tokens, output_tokens, cache_write_tokens, cache_read_tokens, reasoning_tokens, rerank_candidates, parse_pages, credits_micro, credit_skip_reason, rate_id) ON metering.token_usage_events TO platform_svc;
+
+-- metering.token_credit_rates  [anchor: id, created_at + 六个单价列与生效起点（column-locks.shared EXTRA_ANCHOR）]
+-- 费率行不可改：改价 = 关旧行的窗口 + 插新行。能动的只有关窗与备注。
+REVOKE UPDATE ON metering.token_credit_rates FROM platform_svc;
+GRANT UPDATE (effective_to, note) ON metering.token_credit_rates TO platform_svc;
+
+-- metering.token_credit_carry  [anchor: workspace_id, product_id]
+REVOKE UPDATE ON metering.token_credit_carry FROM platform_svc;
+GRANT UPDATE (carry_micro, updated_at) ON metering.token_credit_carry TO platform_svc;
+
+-- metering.token_usage_idempotencies  [anchor: workspace_id, product_id, request_id, attempt_index, created_at]
+REVOKE UPDATE ON metering.token_usage_idempotencies FROM platform_svc;
+GRANT UPDATE (token_event_id, token_event_created_at, credits_micro, credit_skip_reason, whole_due, usage_event_id) ON metering.token_usage_idempotencies TO platform_svc;
+
 -- metering.usage_summary_hours  [anchor: id, created_at]
 REVOKE UPDATE ON metering.usage_summary_hours FROM platform_svc;
 GRANT UPDATE (workspace_id, product_id, metric_key, period_hour, total_amount, updated_at) ON metering.usage_summary_hours TO platform_svc;

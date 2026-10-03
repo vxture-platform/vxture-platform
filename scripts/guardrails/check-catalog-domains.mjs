@@ -78,6 +78,17 @@ const pairs = [
     tsArray(dom, "COST_CLASSES"),
     ddlCheckIn(p40, "chk_product_metrics_cost_class"),
   ],
+  // #547 原始 token 用量：结果轴与「没换算」的原因轴，都是声明轴，值域一字不能漂
+  [
+    "token_usage_outcome",
+    tsArray(dom, "TOKEN_USAGE_OUTCOMES"),
+    ddlCheckIn(p50, "chk_token_usage_events_outcome"),
+  ],
+  [
+    "token_credit_skip_reason",
+    tsArray(dom, "TOKEN_CREDIT_SKIP_REASONS"),
+    ddlCheckIn(p50, "chk_token_usage_events_skip"),
+  ],
   [
     "plan version status",
     tsArray(dom, "PLAN_VERSION_STATUSES"),
@@ -208,7 +219,8 @@ for (const [label, shared, ddl] of pairs) {
 // 再出现 ARRAY[五个档位字面量] / CASE WHEN 某档位 THEN 这类手抄阶梯就红。
 function walk(dir, out) {
   for (const name of readdirSync(dir)) {
-    if (name === "node_modules" || name === "dist" || name.startsWith(".")) continue;
+    if (name === "node_modules" || name === "dist" || name.startsWith("."))
+      continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) walk(p, out);
     else if (p.endsWith(".ts") && !/\.(spec|test)\.ts$/.test(p)) out.push(p);
@@ -224,7 +236,9 @@ for (const file of walk(resolve(root, "bff"), [])) {
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, i) => {
     if (HAND_LADDER.some((re) => re.test(line))) {
-      ladderHits.push(`${relative(root, file).replace(/\\/g, "/")}:${i + 1}: ${line.trim()}`);
+      ladderHits.push(
+        `${relative(root, file).replace(/\\/g, "/")}:${i + 1}: ${line.trim()}`,
+      );
     }
   });
 }

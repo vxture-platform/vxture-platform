@@ -396,3 +396,207 @@ export function parseGaugeBody(body: {
 
   return { workspaceId, productCode, metric, value, observedAt };
 }
+
+/* ── #547：同一个端点的 token 形态 ──────────────────────────────────────────── */
+
+const REQUEST_ID_RE = /^[\x21-\x7e]{1,128}$/;
+const MODEL_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9._:\/-]{0,127}$/;
+const PROVIDER_CODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
+
+export interface ParsedTokenConsumeBody {
+  kind: "tokens";
+  workspaceId: string;
+  /** 调用方产品码（act.sub），不是 atlas。 */
+  productCode: string;
+  requestId: string;
+  attemptIndex: number;
+  outcome: "served" | "failed";
+  occurredAt: Date;
+  modelCode?: string;
+  providerCode?: string;
+  tokens: {
+    input: bigint;
+    output: bigint;
+    cacheWrite: bigint;
+    cacheRead: bigint;
+  };
+  reasoningTokens?: bigint;
+  rerankCandidates?: number;
+  parsePages?: number;
+  backfill: boolean;
+}
+
+export type ParsedConsumeRequest =
+  | ({ kind: "amount" } & ParsedConsumeBody)
+  | ParsedTokenConsumeBody;
+
+/** 非负安全整数（number）或纯数字串 → bigint；别的一律 invalid。 */
+function nonNegBigInt(v: unknown, code: string): bigint {
+  if (typeof v === "number") {
+    if (!Number.isSafeInteger(v) || v < 0) throw new Error(code);
+    return BigInt(v);
+  }
+  if (typeof v === "string" && /^\d{1,18}$/.test(v)) return BigInt(v);
+  throw new Error(code);
+}
+
+function optionalNonNegInt(
+  v: unknown,
+  code: string,
+  max = 2_147_483_647,
+): number | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > max)
+    throw new Error(code);
+  return v;
+}
+
+/**
+ * 请求体里带 `tokens` 就是 token 形态（#547 / ADR-013 D2），否则走旧的 metric+amount 形态。
+ * 两种形态**不许混**：同时带 `tokens` 与 `metric`/`amount` 是歧义，400。
+ *
+ * token 形态的字段：workspace_id、product（调用方产品码）、request_id（幂等键的一部分）、
+ * occurred_at（ISO 8601，调用发生时刻）、tokens.{input,output,cache_write,cache_read}（非负整数，互不重叠）；
+ * 可选 attempt_index（0..32767，默认 0）、outcome（served|failed，默认 served）、model_code、provider_code、
+ * reasoning_tokens、rerank_candidates、parse_pages、backfill（布尔，默认 false）。
+ */
+export function parseConsumeRequest(
+  body: Record<string, unknown>,
+): ParsedConsumeRequest {
+  const tokens = body.tokens;
+  if (tokens === undefined || tokens === null) {
+    return {
+      kind: "amount",
+      ...parseConsumeBody(body as Parameters<typeof parseConsumeBody>[0]),
+    };
+  }
+  if (body.metric !== undefined || body.amount !== undefined) {
+    throw new Error("ambiguous_tokens_and_amount");
+  }
+  if (typeof tokens !== "object" || Array.isArray(tokens))
+    throw new Error("invalid_tokens");
+  const t = tokens as Record<string, unknown>;
+
+  const workspaceId =
+    typeof body.workspace_id === "string" ? body.workspace_id.trim() : "";
+  if (!UUID_RE.test(workspaceId)) throw new Error("invalid_workspace_id");
+  const productCode = typeof body.product === "string" ? body.product : "";
+  if (!PRODUCT_CODE_RE.test(productCode)) throw new Error("invalid_product");
+  const requestId = typeof body.request_id === "string" ? body.request_id : "";
+  if (!REQUEST_ID_RE.test(requestId)) throw new Error("invalid_request_id");
+
+  const occurredRaw =
+    typeof body.occurred_at === "string" ? body.occurred_at : "";
+  const occurredAt = new Date(occurredRaw);
+  if (!occurredRaw || Number.isNaN(occurredAt.getTime()))
+    throw new Error("invalid_occurred_at");
+  // 未来时刻是调用方时钟错了，不是用量；超过 5 分钟就拒 —— 否则费率选行会按未来的窗口算。
+  if (occurredAt.getTime() > Date.now() + 5 * 60_000)
+    throw new Error("invalid_occurred_at");
+
+  const attemptIndex =
+    optionalNonNegInt(body.attempt_index, "invalid_attempt_index", 32_767) ?? 0;
+
+  let outcome: "served" | "failed" = "served";
+  if (body.outcome !== undefined) {
+    if (body.outcome !== "served" && body.outcome !== "failed")
+      throw new Error("invalid_outcome");
+    outcome = body.outcome;
+  }
+
+  let modelCode: string | undefined;
+  if (body.model_code !== undefined && body.model_code !== null) {
+    if (
+      typeof body.model_code !== "string" ||
+      !MODEL_CODE_RE.test(body.model_code)
+    )
+      throw new Error("invalid_model_code");
+    modelCode = body.model_code;
+  }
+  let providerCode: string | undefined;
+  if (body.provider_code !== undefined && body.provider_code !== null) {
+    if (
+      typeof body.provider_code !== "string" ||
+      !PROVIDER_CODE_RE.test(body.provider_code)
+    )
+      throw new Error("invalid_provider_code");
+    providerCode = body.provider_code;
+  }
+
+  const parsedTokens = {
+    input: nonNegBigInt(t.input, "invalid_tokens"),
+    output: nonNegBigInt(t.output, "invalid_tokens"),
+    cacheWrite: nonNegBigInt(t.cache_write, "invalid_tokens"),
+    cacheRead: nonNegBigInt(t.cache_read, "invalid_tokens"),
+  };
+  const reasoningTokens =
+    body.reasoning_tokens === undefined || body.reasoning_tokens === null
+      ? undefined
+      : nonNegBigInt(body.reasoning_tokens, "invalid_reasoning_tokens");
+  if (reasoningTokens !== undefined && reasoningTokens > parsedTokens.output) {
+    // 推理是 output 的子集（atlas 口径约定），超过就是口径错了，不收。
+    throw new Error("invalid_reasoning_tokens");
+  }
+  const rerankCandidates = optionalNonNegInt(
+    body.rerank_candidates,
+    "invalid_rerank_candidates",
+  );
+  const parsePages = optionalNonNegInt(body.parse_pages, "invalid_parse_pages");
+
+  let backfill = false;
+  if (body.backfill !== undefined) {
+    if (typeof body.backfill !== "boolean") throw new Error("invalid_backfill");
+    backfill = body.backfill;
+  }
+
+  return {
+    kind: "tokens",
+    workspaceId,
+    productCode,
+    requestId,
+    attemptIndex,
+    outcome,
+    occurredAt,
+    ...(modelCode ? { modelCode } : {}),
+    ...(providerCode ? { providerCode } : {}),
+    tokens: parsedTokens,
+    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+    ...(rerankCandidates !== undefined ? { rerankCandidates } : {}),
+    ...(parsePages !== undefined ? { parsePages } : {}),
+    backfill,
+  };
+}
+
+/** token 形态的回执：有扣减时沿用 buildConsumeResponse（metric=ai.credit），否则给一个「只记了事实」的壳。 */
+export function buildTokenConsumeResponse(
+  r: {
+    tokenEventId: string | null;
+    creditsMicro: bigint | null;
+    creditSkipReason: "pre_cutover" | "failed_attempt" | "no_rate" | null;
+    wholeDue: bigint;
+    consume: EngineConsumeResult | null;
+    replayed: boolean;
+  },
+  pools: PoolIdentity[],
+): { statusCode: 200; body: ConsumeResponseBody } {
+  const base = r.consume
+    ? buildConsumeResponse(r.consume, pools, "ai.credit").body
+    : {
+        gated: false,
+        consumed: 0,
+        remaining_total: pools.reduce((s, p) => s + p.view.remaining, 0),
+        per_pool_breakdown: [],
+        ...(r.replayed ? { replayed: true as const } : {}),
+      };
+  const body: ConsumeResponseBody = {
+    ...base,
+    ...(r.tokenEventId ? { token_event_id: r.tokenEventId } : {}),
+    ...(r.creditsMicro !== null
+      ? { credits_micro: Number(r.creditsMicro) }
+      : {}),
+    credits_deducted: Number(r.wholeDue),
+    ...(r.creditSkipReason ? { credit_skip_reason: r.creditSkipReason } : {}),
+  };
+  // 事后报账：永远 200（2026-08-10 裁定那一档；token 形态没有 reserve）。
+  return { statusCode: 200, body };
+}

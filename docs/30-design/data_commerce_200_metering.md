@@ -240,6 +240,29 @@ metering.usage_event_pools (
 
 **append-only**（**修正**：补与 §6 头表同等强制）：`usage_event_pools` 同挂 `BEFORE UPDATE OR DELETE RAISE EXCEPTION` 触发器（分区父传播全分区，禁用 `DO INSTEAD NOTHING` RULE）——否则明细 `took` 可被篡改/删除，破坏 §5「`quota_used = SUM(命中池 took)` 可重建」不变量。
 
+## 6b. `token_usage_events`（原始 token 用量，append-only，月分区）—— #547 / ADR-013
+
+Atlas 替各产品上报的推理用量，**按调用方产品归属**（`product_id` = S2S 令牌 `act.sub`，永远不是 atlas）。
+一行 = 一次上游尝试的原始事实：四维 token **互不重叠**（`input_tokens` / `output_tokens` / `cache_write_tokens` /
+`cache_read_tokens`，相加即总量），外加 `reasoning_tokens`（output 的子集，只列不加）、`rerank_candidates`、`parse_pages`；
+`occurred_at` = 调用发生时刻（补报历史靠它），分区键仍是 `created_at`（上报时刻）。
+**只记事实不扣额度**：换算结果 `credits_micro`（微 credit，1 credit = 1,000,000）与「没换算的原因」`credit_skip_reason`
+二选一（DB CHECK XOR）；扣减走 §11 的 consume 引擎（`metric='ai.credit'`，归属同一个调用方产品）。
+值域：`outcome ∈ {served, failed}`、`credit_skip_reason ∈ {pre_cutover, failed_attempt, no_rate}`（@shared 同源，守卫锁）。
+
+## 6c. `token_credit_rates`（token→credit 费率，运营可改的数据）
+
+一行 = 一段生效窗口内、某供应商 / 某模型（NULL = 任意）的四维单价（每 1K token 多少微 credit）+ rerank 每候选、
+parse 每页。选行：模型精确 > 供应商 > 默认档，按 `occurred_at` 落在窗口内。**费率行不可改**（单价列与生效起点是
+锚点）：改价 = 关掉旧行的窗口（`effective_to`）+ 插一行新的；事件记 `rate_id`，可复算。种子一行默认档：
+2K tokens = 1 credit（§4.2 基线），四维同价、rerank / parse 为 0。
+
+## 6d. `token_credit_carry`（小数 credit 结转）
+
+池里的 `ai.credit` 是整数，而 500 token 是 0.25 credit。每（工作空间 × 调用方产品）留一个微 credit 余额
+（`carry_micro ∈ [0, 1e6)`，CHECK 兜住）：本次结果加余额，整数走引擎扣、小数留下（owner 2026-10-03「按工作区累计小数」）。
+键带 `product_id`：`usage_events` 永远记录花钱方，A 产品攒的小数不该在 B 产品那一次被扣成整数。
+
 ## 8. `usage_idempotencies`（幂等权威，非分区）
 
 主键 = `(workspace_id, product_id, idempotency_key)`（owner 2026-10-02）。**key 由产品侧自选**，
@@ -264,6 +287,13 @@ metering.usage_event_pools (
 | `created_at`       | timestamptz  | NOT NULL DEFAULT now() |                                              |
 
 跨月重试不再双扣；重放/并发重复键经 `ON CONFLICT` 分支返回先前结果（非约束错）。
+
+## 8b. `token_usage_idempotencies`（原始 token 用量的幂等权威 + 扣减回填位）
+
+键 = `(workspace_id, product_id, request_id, attempt_index)`（与 §8 同一个理由：`request_id` 由 Atlas 自选，归属进键）。
+重放回先前结果。`usage_event_id` 记在这里而不记在 §6b 的行上：§6b append-only，而扣减是 §6b 落库**之后**另一个
+事务做的（consume 引擎自开连接）。`whole_due` = 这次该扣的整数 credit；`usage_event_id IS NULL AND whole_due > 0`
+= 扣减没做成（引擎不可达等），同键重放会再试一次 —— 自愈，不必人工 replay（引擎按自己的幂等键挡双扣）。
 
 ## 9. `usage_summary_hours/_days/_weeks/_months/_years`（多维降采样，纯统计/看板，**永不作计费依据**）
 
@@ -334,6 +364,22 @@ metering.usage_event_pools (
 Model Platform 对本 schema **只读**配额 gate（走 §4.1 表达式），consume 服务独占写。
 
 ---
+
+## 11b. token 形态（同一个端点，#547 / ADR-013 D2）
+
+`POST /usage/consume` 请求体带 `tokens` 即 token 形态（与 `metric`+`amount` 二选一，混带 400）：
+`{ workspace_id, product(调用方), request_id, occurred_at, tokens:{input,output,cache_write,cache_read},
+attempt_index?, outcome?, model_code?, provider_code?, reasoning_tokens?, rerank_candidates?, parse_pages?, backfill? }`。
+
+```
+tx1（本服务）：幂等占位 §8b → 选费率 §6c → 换算 → 结转推进 §6d（FOR UPDATE）→ 原始行 §6b → 回填幂等行 → COMMIT
+tx2（consume 引擎，§11 原样）：metric=ai.credit、amount=整数部分、idempotency_key=tok:<request_id>:<attempt>、intent=report
+     → 成功回填 usage_event_id；失败不抛、记 error，待同键重放自愈
+```
+
+三种不换算（owner 2026-10-03）：`backfill=true` → `pre_cutover`；`outcome=failed` → `failed_attempt`；发生时刻无生效费率
+→ `no_rate`。三种都照记原始行。回执在 §11 的体上多四个可选字段：`token_event_id` / `credits_micro` /
+`credits_deducted` / `credit_skip_reason`；`event_id` 仍是扣减那一行 `usage_events.id`。永远 200（事后报账那一档）。
 
 ## 12. 跨 schema FK 速查表
 
