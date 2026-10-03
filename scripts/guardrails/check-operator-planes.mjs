@@ -45,34 +45,65 @@ const LEGACY_DOMAINS = new Set(["platform", "release", "notification"]);
  * 新增一条没有消费方的码必须来这里登记，否则红。
  */
 /**
- * 2026-10-03：这一条原本是 14 个码共用的理由，而它把**三种处境**写成了一句
- * 「或」—— 其中一种（「这一页尚未设门」）会是 P0，另两种什么都不是。
- * 读者分不出自己面对的是哪一种，这句话就不可证伪。
+ * 2026-10-03 逐码核实（12 条共用理由的那些）。两件事要先说清楚：
  *
- * 逐条核过两个之后，第三种处境还冒出来了（码用错了，不是没设门），见下面
- * `commerce:refund.execute`。
+ * ① **原来那句理由把三种处境写成一句「或」** ——「仍经旧桥检查扁平码，或这一页尚未设门」。
+ *    其中「尚未设门」会是 P0，另一种什么都不是，读者分不出自己面对的是哪一种，
+ *    这句话就不可证伪。核完 12 条：**「这一页尚未设门」一条实例都没有**，那半句已删。
  *
- * 当天的入口盘点（`scan-ownership-entrypoints.mjs`）另外量到：admin-bff 里除了
- * backchannel-logout，**每个入口都调得到一处会抛 401/403 的判据**。那不等于
- * 「每个入口的门都对」—— 那份盘点自己写着「有线索 ≠ 拦得住」——
- * 但它足以说明「整页一行门都没有」这种形状在 admin-bff 里今天找不到。
- * 所以「或这一页尚未设门」这半句**没有任何一条已知实例**，留着只会让读者
- * 以为自己可能面对一个 P0。
+ * ② **「没有消费方」是症状，不是病。** 这 12 条不是零散的债，它们精确地聚在
+ *    仍由两个遗留扁平码把门的区域：
  *
- * 剩下 11 条仍共用这条理由，它们**没有逐条核过**；核的时候要分清是
- * 「拄旧扁平码」还是「本域只有 manage 有消费方（manage 蕴含 read）」——
- * 后者不是债，是正常的。
+ *      platform.tenant.manage   → **27** 个 HTTP 入口
+ *                                 租户 12 / 工单 10 / 账号 3 / 运营待办 1 / 全局搜索 1
+ *      platform.product.manage  → **32** 个 HTTP 入口（products.router 全部，含定价）
+ *
+ *    27 那个数是**传递算出来的**：只认「函数体里直接出现这个码」时是 19，
+ *    而 approveTenantVerification / rejectTenantVerification 调的是私有
+ *    reviewVerification，门写在那一层 —— 门往下传一跳就数不到了。
+ *
+ *    后果说人话：拿到 platform.tenant.manage 的运营者**同时**能改租户资料、
+ *    **批准/驳回实名审核**（kyc.tenant_verifications + tenancy.tenants.verification_status）、
+ *    **读写全部工单**（含客户可见回复与内部备注）、读全部账号、全局搜索。
+ *    目录里给实名审核与工单各留了自己的码，正因为这两道粗门而没有消费方。
+ *
+ *    **本仓自己写明了被违反的原则**：tenants.router 的 assertCanResetTenantBrand 上方写着
+ *    「重置主体标识……故与宽口径的 platform.tenant.manage 分开设门 ——
+ *    能改租户资料的人不等于能抹掉租户传的标识」。同一条推理对合规裁定与对客户说话只会更强。
+ *
+ *    顺带：auth.service 的 LEGACY_CAPABILITY_BRIDGE 今天**只剩两条活的**
+ *    （tenant:profile.manage、product:plan.manage），所以「仍经旧桥」对多数条目并不成立 ——
+ *    真正的理由是「这些路由从没按域重新设门」。
+ *
+ * 处置与 commerce:refund.execute 同一个取舍：**改过来要给角色授细码（迁移 + 灌存量库）**，
+ * 是 owner 的决定。本轮只把理由改成真话，一道门都没动。
  */
-const ADMIN_LEGACY_BRIDGE =
-  "admin-bff 这一页仍经 auth.service 的旧桥检查 platform.* 扁平码；" +
-  "按域重新设门是 admin 平台的待办（C5），码与角色授权保留给那次改造。" +
-  "注意：本条**未逐码核实**，可能实际是「只有 manage 有消费方」那种正常情形";
+const COARSE_TENANT_GATE =
+  "**页面有门，但是粗门**（2026-10-03 核实）：这一页坐在遗留扁平码 platform.tenant.manage 后面，" +
+  "而那一个码同时开着 27 个入口（租户 / 工单 / 账号 / 待办 / 搜索）。目录里给本域留的细码" +
+  "因此没有消费方 —— 症状在这里，病在那道粗门。按域重新设门要配迁移给角色授码，是 owner 的取舍";
+const COARSE_PRODUCT_GATE =
+  "**页面有门，但是粗门**（2026-10-03 核实）：products.router 32 个入口（含定价写入）全判" +
+  "遗留扁平码 platform.product.manage，本域的细码因此没有消费方。" +
+  "注：platform.pricing.manage 已退役（见 auth.service 的注释），所以这不是「旧桥还在用」";
+const MANAGE_IMPLIES_READ =
+  "**正常，不是债**（2026-10-03 核实）：本域只有 .manage 有消费方，而 manage 蕴含 read，" +
+  "页面判 .manage 即可。读码留在目录里是给将来拆只读角色用的";
+const GRANULARITY_ABSENT =
+  "**这个粒度的功能不存在**（2026-10-03 核实）：配额数据是经订阅 / 账务 / 租户三个页读到的，" +
+  "各走自己域的码（commerce:subscription.* / commerce:billing.*）；admin 没有独立的" +
+  "「租户配额」页面或端点。不是缺门，是没有这件事";
+
 const UNCONSUMED = {
-  "tenant:profile.read": ADMIN_LEGACY_BRIDGE,
-  "tenant:verification.review": ADMIN_LEGACY_BRIDGE,
-  "tenant:quota.read": ADMIN_LEGACY_BRIDGE,
-  "tenant:quota.manage": ADMIN_LEGACY_BRIDGE,
-  "user:profile.read": ADMIN_LEGACY_BRIDGE,
+  "tenant:profile.read": COARSE_TENANT_GATE,
+  "tenant:verification.review":
+    COARSE_TENANT_GATE +
+    "。**这一条最该先改**：实名审核（列表 / 批准 / 驳回，共 4 个入口）是合规裁定，" +
+    "它写 kyc.tenant_verifications 与 tenancy.tenants.verification_status，" +
+    "却与「改租户名字」共用同一道门",
+  "tenant:quota.read": GRANULARITY_ABSENT,
+  "tenant:quota.manage": GRANULARITY_ABSENT,
+  "user:profile.read": COARSE_TENANT_GATE,
   "commerce:refund.execute":
     "**不是没设门，是用错了码**（2026-10-03 核实）：orders.router 的四个退款端点" +
     "（refund-audit / refund-execute / refund-create / refund-fail）都挂 @RequireStepUp，" +
@@ -80,13 +111,16 @@ const UNCONSUMED = {
     "「与 settle 是不同的危险类别，所以挂自己的 commerce:order.void」。退款是钱出去，" +
     "目录里早就给了它自己的码，没人用。改过来要给角色授这个码（迁移 + 存量库），" +
     "是 owner 的取舍，不是顺手改的事",
-  "promotion:campaign.read": ADMIN_LEGACY_BRIDGE,
-  "product:plan.read": ADMIN_LEGACY_BRIDGE,
-  "product:price.read": ADMIN_LEGACY_BRIDGE,
-  "product:price.manage": ADMIN_LEGACY_BRIDGE,
-  "content:announcement.read": ADMIN_LEGACY_BRIDGE,
-  "support:ticket.read": ADMIN_LEGACY_BRIDGE,
-  "support:ticket.manage": ADMIN_LEGACY_BRIDGE,
+  "promotion:campaign.read": MANAGE_IMPLIES_READ,
+  "product:plan.read": COARSE_PRODUCT_GATE,
+  "product:price.read": COARSE_PRODUCT_GATE,
+  "product:price.manage": COARSE_PRODUCT_GATE,
+  "content:announcement.read": MANAGE_IMPLIES_READ,
+  "support:ticket.read": COARSE_TENANT_GATE,
+  "support:ticket.manage":
+    COARSE_TENANT_GATE +
+    "。工单 10 个入口里有**客户可见回复**与**内部备注**两种写入 —— " +
+    "对客户说话这件事与「改租户资料」共用一道门",
   "support:impersonate":
     "**功能根本没做**（2026-10-03 核实）：这个码只出现在 seed、本守卫与设计文档里，" +
     "admin-bff 与门户里一行实现都没有。它不是债也不是缺口，是一个还没到期的需求",
