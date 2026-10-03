@@ -55,25 +55,25 @@ app/
 
 ## BFF 接口（console-bff）
 
-| Router 文件                | 职责                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------------- |
-| `oidc-auth.router.ts`      | OIDC 登录回调 / 登出 / 静默续期                                                    |
-| `me.router.ts`             | 当前用户：资料 / 偏好 / 安全 / 通知偏好 / 组织资料与改名 / 转为组织租户 / 删除账号 |
-| `tenant-context.router.ts` | 租户上下文与切换                                                                   |
-| `iam.router.ts`            | 成员 / 角色 / 邀请（含接受邀请）                                                   |
-| `verification.router.ts`   | 企业认证                                                                           |
-| `subscription.router.ts`   | 订阅 / 订单 / 下单 / 付款申报 / 权益                                               |
-| `billing.router.ts`        | 账单 / 发票 / 抬头簿（服务端分页）                                                 |
-| `promotion.router.ts`      | 卡券                                                                               |
-| `quota.router.ts`          | 配额 / 加油包                                                                      |
-| `usage.router.ts`          | 用量趋势                                                                           |
-| `inbox.router.ts`          | 站内消息（游标分页 / 已读）                                                        |
-| `audit.router.ts`          | 审计日志（服务端分页 + 动作筛选）                                                  |
-| `atlas.router.ts`          | 模型接入（models / quotas / usage；quotas 走 `tenant.quota.read`）                 |
-| `capabilities.router.ts`   | 能力列表                                                                           |
-| `applications.router.ts`   | 应用中心磁贴                                                                       |
-| `search.router.ts`         | 全局搜索                                                                           |
-| `health.router.ts`         | 健康检查                                                                           |
+| Router 文件                | 职责                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `oidc-auth.router.ts`      | OIDC 登录回调 / 登出 / 静默续期                                                                       |
+| `me.router.ts`             | 当前用户：资料 / 偏好 / 安全 / 通知偏好 / 组织资料与改名 / 转为组织租户 / 删除账号                    |
+| `tenant-context.router.ts` | 租户上下文与切换                                                                                      |
+| `iam.router.ts`            | 成员 / 角色 / 邀请（含接受邀请）                                                                      |
+| `verification.router.ts`   | 企业认证                                                                                              |
+| `subscription.router.ts`   | 订阅 / 订单 / 下单 / 付款申报 / 权益                                                                  |
+| `billing.router.ts`        | 账单 / 发票 / 抬头簿（服务端分页）                                                                    |
+| `promotion.router.ts`      | 卡券                                                                                                  |
+| `quota.router.ts`          | 配额 / 加油包                                                                                         |
+| `usage.router.ts`          | 用量趋势（day 档按请求用户时区重切，响应带 `bucketZone` / `userZone` / `zoneFallbackReason`；裁定 4） |
+| `inbox.router.ts`          | 站内消息（游标分页 / 已读）                                                                           |
+| `audit.router.ts`          | 审计日志（服务端分页 + 动作筛选）                                                                     |
+| `atlas.router.ts`          | 模型接入（models / quotas / usage；quotas 走 `tenant.quota.read`）                                    |
+| `capabilities.router.ts`   | 能力列表                                                                                              |
+| `applications.router.ts`   | 应用中心磁贴                                                                                          |
+| `search.router.ts`         | 全局搜索                                                                                              |
+| `health.router.ts`         | 健康检查                                                                                              |
 
 ## UI 分层框架
 

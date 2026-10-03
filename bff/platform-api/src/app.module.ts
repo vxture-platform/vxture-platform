@@ -44,6 +44,7 @@ import { UsageRollupJob } from "./jobs/usage-rollup.job";
 import { WsBasePoolJob } from "./jobs/ws-base-pool.job";
 import { CustomerNotificationsWiring } from "./notifications/customer-notifications.wiring";
 import { OperatorAlertsWiring } from "./notifications/operator-alerts.wiring";
+import { DatabaseTimezoneCheck } from "./platform/database-timezone.check";
 import { IntegrationSignalService } from "./platform/integration-signal.service";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
 import { PlatformProvisioningService } from "./platform/platform-provisioning.service";
@@ -87,6 +88,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     PlatformAuthGuard,
     S2sTokenVerifier,
     JobHeartbeatService,
+    // 裁定 4(2026-10-04):库会话时区 ≠ UTC 时启动期记一条 error 日志(只信号,不拒启)
+    DatabaseTimezoneCheck,
     // P2-g：客户通知（站内 + 邮件）挂到 OrderService / SubscriptionService（setter 注入）
     CustomerNotificationsWiring,
     // #231：运营待办告警（只发邮件，4h 静默窗口）；自愈放弃经 setOpsAlerter 挂 OrderService

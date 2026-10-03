@@ -13,7 +13,13 @@ function req(partial: Partial<RequestContext> = {}): Request & RequestContext {
   return partial as Request & RequestContext;
 }
 
-const user = { id: "u1", name: "u", email: "u@x", roleLabel: "" };
+const user = {
+  id: "u1",
+  name: "u",
+  email: "u@x",
+  roleLabel: "",
+  timezone: null,
+};
 const tenant = {
   id: "t1",
   name: "t",

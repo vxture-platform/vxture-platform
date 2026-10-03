@@ -27,7 +27,11 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import {
+  USAGE_REBUCKET_HORIZON_DAYS,
+  formatClock,
+} from "@vxture-platform/shared";
 import {
   BarChart,
   Button,
@@ -53,24 +57,35 @@ import {
 } from "@/components/load/LoadFailed";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtCount } from "@/lib/format-metrics";
+import { formatTimezone } from "@/modules/account/profile/format";
 
 type TrendWindow = "hour" | "day" | "week" | "month" | "year";
 
 /**
- * 桶期间 → 展示文本。桶键全程 UTC(与 rollup 同口径):
- *   - hour:`YYYY-MM-DD HH:00`(UTC)→ 换算成浏览器本地时刻 `HH:00`(逐时看板
- *     跨时区看着才对得上「刚才」);
- *   - day / week 保持 UTC 日期(不做换算——换了日期边界反而对不上后台的桶),
+ * 桶期间 → 展示文本。桶键与 rollup 同口径(owner 裁定 4,2026-10-04):
+ *   - hour:`YYYY-MM-DD HH:00`(UTC)→ 换算成时刻 `HH:00`——账号设了时区按它(走共用件
+ *     的短时间形态),没设才按浏览器本地(逐时看板跨时区看着才对得上「刚才」);
+ *   - day:`bucketZone` 里的日期(设了时区且窗口在 35 天内就是你的本地日,否则 UTC 日),
+ *     不再换算——换了日期边界反而对不上后台的桶;week 保持 UTC 日期,
  *     month=YYYYMM → YYYY-MM,year 原样。
  */
 /* **不走 useDateFormat**:这是**图表轴标**,规范里短形态点名的场景
    (「短形态保留在规范里——窄列、图表轴标这类地方用得上」)。
    小时档只要 `14:00` 这个刻度,套长日期长时间会把一排轴标挤成一团。 */
-const periodLabel = (granularity: string, period: string): string => {
+const periodLabel = (
+  granularity: string,
+  period: string,
+  userZone: string | null,
+  locale: string,
+): string => {
   if (granularity === "hour" && period.length >= 16) {
     const d = new Date(`${period.slice(0, 10)}T${period.slice(11, 16)}:00Z`);
-    return Number.isNaN(d.getTime())
-      ? period.slice(11)
+    if (Number.isNaN(d.getTime())) return period.slice(11);
+    return userZone
+      ? formatClock(d, locale, period.slice(11), {
+          time: "short",
+          timeZone: userZone,
+        })
       : `${String(d.getHours()).padStart(2, "0")}:00`;
   }
   if (granularity === "month" && period.length === 6)
@@ -79,10 +94,19 @@ const periodLabel = (granularity: string, period: string): string => {
 };
 
 /** day 档横轴标签去年份(MM-DD),柱多时更可读。 */
-const axisLabel = (granularity: string, period: string): string =>
+const axisLabel = (
+  granularity: string,
+  period: string,
+  userZone: string | null,
+  locale: string,
+): string =>
   granularity === "day" && period.length === 10
     ? period.slice(5)
-    : periodLabel(granularity, period);
+    : periodLabel(granularity, period, userZone, locale);
+
+/** 时区的展示名:UTC 就写 UTC,否则「UTC+08:00 Asia/Shanghai」(与账号页同一个格式)。 */
+const zoneLabel = (zone: string): string =>
+  zone === "UTC" ? "UTC" : formatTimezone(zone, zone);
 
 /**
  * 图下面那一行紧凑读数。图看形状,这行给「一眼要知道的三个数」;
@@ -131,6 +155,7 @@ function ShareLegend({
 
 export function UsagePage() {
   const t = useTranslations("usagePage");
+  const locale = useLocale();
   const router = useRouter();
   const { session } = useConsoleSession();
   const isOrganization =
@@ -244,6 +269,17 @@ export function UsagePage() {
 
   // ── ① 总体用量趋势 ───────────────────────────────────────────────────────
   const trendBuckets = useMemo(() => trend?.buckets ?? [], [trend]);
+  /* 账号里的时区设置(任一趋势响应都带,与档位无关);桶时区只认当前档位那份响应——
+   * 切档的那一瞬 trend 还是上一档的,拿它的 bucketZone 说当前档会说错。
+   * 服务层认不出的名(zoneFallbackReason = 'unsupported')这里当作没设:它会去标 hour
+   * 档的轴,Intl 认不出就静默回落成 UTC 的 HH:MM:SS,而说明文字却写着「按 X 显示」。
+   * 提示文案另读原始值(zoneHint)。 */
+  const userZone =
+    trend && trend.zoneFallbackReason !== "unsupported"
+      ? (trend.userZone ?? null)
+      : null;
+  const trendForWindow =
+    trend && trend.granularity === trendWindow ? trend : null;
   const trendStats = useMemo(() => {
     if (trendBuckets.length === 0) return [];
     const total = trendBuckets.reduce((s, b) => s + b.total, 0);
@@ -255,7 +291,7 @@ export function UsagePage() {
       { label: t("trend.statTotal"), value: fmtCount(total) },
       {
         label: t("trend.statPeak"),
-        value: `${fmtCount(peak.total)} · ${periodLabel(granularity, peak.period)}`,
+        value: `${fmtCount(peak.total)} · ${periodLabel(granularity, peak.period, userZone, locale)}`,
       },
     ];
     // 环比只在前一桶有量时成立:分母为 0 算不出百分比,写「—」比写「+∞」诚实。
@@ -267,7 +303,33 @@ export function UsagePage() {
       });
     }
     return stats;
-  }, [trendBuckets, trend, t]);
+  }, [trendBuckets, trend, t, userZone, locale]);
+
+  /* 没按你的时区切时说一句为什么——只在会用到用户时区的两档:day(桶按它切)与
+   * hour(轴标按它换算);周/月/年一律 UTC,trend.description 的 {zone} 已经写明,
+   * 不再单独提示。'retention' 只对 day 成立;'unsupported' 两档都要说,hour 档的
+   * 轴这时已回落成浏览器本地,文案要说对回落到哪。放在板块正文第一行,不占按钮格。 */
+  const zoneHint = useMemo(() => {
+    if (!trendForWindow || !trendForWindow.userZone) return null;
+    const g = trendForWindow.granularity;
+    if (trendForWindow.zoneFallbackReason === "unsupported") {
+      if (g === "day")
+        return t("trend.zoneFallback.unsupported", {
+          userZone: trendForWindow.userZone,
+        });
+      if (g === "hour")
+        return t("trend.zoneFallback.unsupportedHour", {
+          userZone: trendForWindow.userZone,
+        });
+      return null;
+    }
+    if (g === "day" && trendForWindow.zoneFallbackReason === "retention")
+      return t("trend.zoneFallback.retention", {
+        userZone: zoneLabel(trendForWindow.userZone),
+        days: USAGE_REBUCKET_HORIZON_DAYS,
+      });
+    return null;
+  }, [trendForWindow, t]);
 
   // ── ② 按产品分布(当前趋势窗口聚合) ──────────────────────────────────────
   const productShares = useMemo(() => {
@@ -360,8 +422,12 @@ export function UsagePage() {
         title={t("trend.title")}
         description={
           trendWindow === "hour"
-            ? t("trend.descriptionHour")
-            : t("trend.description")
+            ? userZone
+              ? t("trend.descriptionHour", { zone: zoneLabel(userZone) })
+              : t("trend.descriptionHourBrowser")
+            : t("trend.description", {
+                zone: zoneLabel(trendForWindow?.bucketZone ?? "UTC"),
+              })
         }
         action={
           <SegmentedControl<TrendWindow>
@@ -378,6 +444,9 @@ export function UsagePage() {
           />
         }
       >
+        {zoneHint ? (
+          <p className="text-body-sm text-muted-foreground">{zoneHint}</p>
+        ) : null}
         {chartBlock(
           !trendLoading && trendBuckets.length > 0,
           <BarChart
@@ -386,7 +455,12 @@ export function UsagePage() {
             formatValue={fmtCount}
             data={trendBuckets.map((b) => ({
               key: b.period,
-              label: axisLabel(trend?.granularity ?? "day", b.period),
+              label: axisLabel(
+                trend?.granularity ?? "day",
+                b.period,
+                userZone,
+                locale,
+              ),
               value: b.total,
             }))}
           />,
@@ -464,7 +538,9 @@ export function UsagePage() {
               },
               {
                 title: t("notes.bucketTitle"),
-                description: t("notes.bucketBody"),
+                description: t("notes.bucketBody", {
+                  days: USAGE_REBUCKET_HORIZON_DAYS,
+                }),
               },
               {
                 title: t("notes.attributionTitle"),

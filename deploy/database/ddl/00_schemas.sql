@@ -100,3 +100,19 @@ BEGIN
   RETURN (v_body || public.luhn_check_digit(v_body)::text)::bigint;
 END;
 $$;
+
+-- ── 库级会话时区默认 UTC（owner 2026-10-03「默认按 UTC+0」；裁定 4 2026-10-04）────────────────
+-- 没有这一句，timestamptz 列与「date - interval」/「now()::date」/「date_trunc(now())」的比较全看
+-- RDS 参数组。真库复现过：pg-usage-rollup 的天表窗口谓词在 Asia/Shanghai 会话下把 35 天前的日合计
+-- 覆写成只含最后 8 小时的残缺值，且滑出窗口后再不重算。默认长在**被连的那一头**（13 个 Pool 工厂、
+-- psql、seed、迁移、reporting_ro 的新会话全部继承），不在每个连的那一头各接一次。
+-- 只对新会话生效。需要库 owner；不是 owner 时只告警不中断（存量库走同形迁移
+-- 2026-10-05-database-timezone-utc.sql；硬断言在 30-verify 的 verify/database-timezone.sql）。
+DO $$
+BEGIN
+  EXECUTE format('ALTER DATABASE %I SET timezone = %L', current_database(), 'UTC');
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE WARNING '[tz] role % is not the owner of database %; database-level TimeZone left unchanged. Run as the DB owner: ALTER DATABASE % SET timezone = ''UTC'';',
+      current_user, current_database(), quote_ident(current_database());
+END $$;

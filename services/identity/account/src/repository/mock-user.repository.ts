@@ -143,7 +143,10 @@ export class MockUserRepository implements UserReadRepository {
     if (input.gender !== undefined && input.gender !== null) {
       u.gender = input.gender === "" ? null : input.gender;
     }
-    if (input.timezone !== undefined) u.timezone = input.timezone;
+    // 与 pg-user.repository 同一套三态:null = 不改,'' = 清成 null,其它 = 设值。
+    if (input.timezone !== undefined && input.timezone !== null) {
+      u.timezone = input.timezone === "" ? null : input.timezone;
+    }
     if (input.language !== undefined) u.language = input.language;
     return toView(u);
   }

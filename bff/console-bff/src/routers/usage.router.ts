@@ -8,7 +8,11 @@
  *   GET /api/usage/trend   — 周期趋势(usage_summary_* 五档降采样,纯统计/
  *                            看板,永不作计费依据):granularity=hour|day|week|
  *                            month|year × span,含按产品拆分;窗口内每个周期
- *                            都有一桶(无数据补零),末桶 = 当前周期,全程 UTC;
+ *                            都有一桶(无数据补零),末桶 = 当前周期。桶边界 UTC,
+ *                            只有 day 档在请求用户设了时区(user_profiles.timezone)
+ *                            且窗口不超过 35 天时按用户时区重切(owner 裁定 4,
+ *                            2026-10-04),响应用 bucketZone / userZone /
+ *                            zoneFallbackReason 说明按谁切、没按用户时区的原因;
  *   GET /api/usage/events  — 任务级调用记录(usage_events,每次 consume 一行,
  *                            含终端用户归因;NULL = 未归集用户容错桶),可筛可
  *                            翻页,并给筛选后合计;
@@ -58,8 +62,9 @@ import { RequireCapability } from "../auth/capability";
 
 export interface UsageTrendBucket {
   /**
-   * UTC 桶键:hour `YYYY-MM-DD HH:00` / day `YYYY-MM-DD` / week `YYYY-MM-DD`
-   * (ISO 周一)/ month `YYYYMM` / year `YYYY`
+   * 桶键:hour `YYYY-MM-DD HH:00`(UTC 小时)/ day `YYYY-MM-DD` / week `YYYY-MM-DD`
+   * (ISO 周一)/ month `YYYYMM` / year `YYYY`。day 档的日期语义跟随
+   * `UsageTrendView.bucketZone`,其余档位恒为 UTC。
    */
   period: string;
   total: number;
@@ -69,6 +74,15 @@ export interface UsageTrendBucket {
 export interface UsageTrendView {
   metric: string;
   granularity: string;
+  /** 桶边界所在时区(IANA)。'UTC' 或用户设置的时区;只有 day 档才可能不是 UTC。 */
+  bucketZone: string;
+  /** 请求用户的时区设置(原样);null = 未设置。页面据它换算 hour 档轴标——除非 zoneFallbackReason = 'unsupported'。 */
+  userZone: string | null;
+  /**
+   * bucketZone ≠ userZone 时的原因;null = 已按用户时区(或没设 / 设的就是 UTC)。
+   * 'unsupported' 对每个档位都报且优先级最高(hour 档的轴标也靠 userZone,坏名不能只报 'granularity')。
+   */
+  zoneFallbackReason: "retention" | "granularity" | "unsupported" | null;
   buckets: UsageTrendBucket[];
 }
 
@@ -237,10 +251,16 @@ export class UsageRouter {
       metric: parseMetric(metricRaw),
       granularity,
       span: parsePositiveInt(spanRaw, limits.def, limits.max),
+      // 请求用户的时区设置(auth.middleware 挂上来的 ConsoleUser 带着它);服务层裁决
+      // 按谁切——BFF 不自己判「能不能按用户时区」。
+      zone: req.user?.timezone ?? null,
     });
     return {
       metric: result.metric,
       granularity: result.granularity,
+      bucketZone: result.bucketZone,
+      userZone: result.userZone,
+      zoneFallbackReason: result.zoneFallbackReason,
       buckets: result.buckets,
     };
   }

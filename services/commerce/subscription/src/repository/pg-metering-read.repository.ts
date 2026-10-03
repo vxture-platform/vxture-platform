@@ -57,7 +57,8 @@ const usageEventsParams = (input: {
 /**
  * 计量读侧仓储(配额总览 / 用量分析;console 批 3 从 console-bff 下沉)。
  * 只读 SELECT;写一律走 consume / addon 服务。所有周期口径 UTC,与 rollup /
- * consume 的周期逻辑一致。
+ * consume 的周期逻辑一致;唯一的例外是 listTrendRowsLocalDays——day 档按请求用户的
+ * 时区把小时表现场重切成本地日(owner 裁定 4,2026-10-04),天表本身仍是 UTC 权威。
  */
 @Injectable()
 export class PgMeteringReadRepository {
@@ -237,6 +238,88 @@ export class PgMeteringReadRepository {
       productName: r.product_name,
       total: Number(r.total),
     }));
+  }
+
+  /**
+   * day 档按用户时区重切(裁定 4):从**小时表**按 `zone` 把每个小时桶归到它起点
+   * 所在的本地日,窗口 `[fromDay, toDayExclusive)` 两端各自在用户时区转成 timestamptz,
+   * DST 切换日自然得到 23 / 25 小时。天表不读、不改——它是 workspace 级共享的 UTC 权威,
+   * 而时区是 user 级设置,同一空间的成员可以各设各的。
+   *
+   * 与会话 TimeZone 无关:所有转换都显式带 `$4`;真库探针在 SET LOCAL TIME ZONE
+   * 'Asia/Shanghai' 的会话里跑过,结果不变。
+   *
+   * 已知近似:小时桶按**起点瞬时**归日,对 +05:30 / +05:45 / +09:30 这类非整点时区,
+   * 本地日实际从真正的本地 0 点**之后**半小时才开始:Kolkata 的 18:00Z 桶起点是 23:30 IST,
+   * 归前一天,所以本地日从 19:00Z(00:30 IST)起算,而非 18:30Z(实测每天仍 24;窗口两端
+   * `>= 18:30Z` 把首日前的 18:00Z 桶排除、`< 18:30Z` 把末日的 18:00Z 桶收进来,口径自洽)。
+   * 半小时时区的 DST 日也按整桶取整(Lord Howe 24.5 小时的那天算 25 桶)。
+   * 精确只能回 usage_events 重切,那是计费级表、90 天分区,不值。
+   *
+   * `zone` 必须先过 isIanaTimeZone + isKnownTimeZone:无效名在 PostgreSQL 是错误
+   * (`time zone "Mars/Olympus" not recognized`),这里不 try/catch——吞掉它等于把
+   * UTC 日贴上用户时区的标签。
+   */
+  async listTrendRowsLocalDays(input: {
+    workspaceId: string;
+    metric: string;
+    /** 已校验的 IANA 名 */
+    zone: string;
+    /** 首桶键 `YYYY-MM-DD`(用户时区里的本地日) */
+    fromDay: string;
+    /** 末桶键的次日 `YYYY-MM-DD`(开区间右端) */
+    toDayExclusive: string;
+  }): Promise<
+    {
+      period: string;
+      productCode: string;
+      productName: string;
+      total: number;
+    }[]
+  > {
+    const res = await this.pool.query<{
+      period: string;
+      product_code: string;
+      product_name: string;
+      total: string;
+    }>(
+      `select to_char(s.period_hour at time zone $4, 'YYYY-MM-DD') as period,
+              prod.product_code, prod.product_name,
+              sum(s.total_amount)::text as total
+         from metering.usage_summary_hours s
+         join product.products prod on prod.id = s.product_id
+        where s.workspace_id = $1
+          and s.metric_key = $2
+          and s.period_hour >= ($3::date::timestamp at time zone $4)
+          and s.period_hour <  ($5::date::timestamp at time zone $4)
+        group by 1, 2, 3
+        order by 1 asc, 2 asc`,
+      [
+        input.workspaceId,
+        input.metric,
+        input.fromDay,
+        input.zone,
+        input.toDayExclusive,
+      ],
+    );
+    return res.rows.map((r) => ({
+      period: r.period,
+      productCode: r.product_code,
+      productName: r.product_name,
+      total: Number(r.total),
+    }));
+  }
+
+  /**
+   * PostgreSQL 认不认这个时区名(pg_timezone_names,单名查找 ≈ 20 ms)。Node 的
+   * Intl 列表与 PG 的 tzdata 可能不同步,两边都认才拿去重切;调用方按进程缓存结果。
+   */
+  async isKnownTimeZone(zone: string): Promise<boolean> {
+    const res = await this.pool.query<{ ok: number }>(
+      `select 1 as ok from pg_timezone_names where name = $1`,
+      [zone],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   /**

@@ -189,6 +189,10 @@ export {
   renewalRestartsPeriod,
   formatDay,
   formatNumber,
+  // Time zone（裁定 4）：IANA 校验、民用日期投影、用量重切上限
+  USAGE_REBUCKET_HORIZON_DAYS,
+  civilDateInZone,
+  isIanaTimeZone,
   // Object utils
   deepMerge,
   deepClone,
@@ -203,6 +207,8 @@ export {
 
 // Health / identity endpoint contract types (standard 025)
 export type { ServiceIdentity, HealthLiveResponse } from "./utils";
+// civilDateInZone 的返回形状
+export type { CivilDate } from "./utils";
 
 // 上游响应契约断言（机制；词表留在各消费方仓内）
 export { makeContractAssert } from "./contracts";

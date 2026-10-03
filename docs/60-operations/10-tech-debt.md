@@ -1,7 +1,7 @@
 # 技术债登记表
 
-**版本**: 1.13.1
-**更新**: 2026-10-04（新增 **TD-051**：分区滚动对治理标准 140 §「已批准维护操作」的显式偏离——`db-maintenance.yml` / cron / `ddl/incr/*` 维护函数本仓一样都没有，owner 2026-10-03「暂时不要复杂化」，实际走远窗口 + CI 守卫 + 年度手动推；按 §偏离纪律记名，回收条件见条目）。此前 2026-08-16（**TD-045 交办完成**，发前复核推翻两条登记：atlas `GET /capability/logs` **已由上游自行修好**，但同表 `billed_amount` 是 Omit 漏网的第四个 bigint 列、属潜伏；runos `GET /audit/calls` **仍在且有数据时 100% 复现**。已发 [`vxture-runos#110`](https://github.com/vxture/vxture-runos/issues/110)、[`vxture-atlas#193`](https://github.com/vxture/vxture-atlas/issues/193)（后者并入 Atlas 三个死列）。opera 侧不兜底不变）。此前 2026-08-14（新增 **TD-045**：atlas `GET /capability/logs` 与 runos `GET /audit/calls` 两条端点抛同一句 `TypeError: Do not know how to serialize a BigInt`，opera 运行监控的两块请求级明细全部读不出；缺陷在上游两仓，本仓只交办不兜底，liaison issue 待发。由 opera 目录重构 B3 验收发现）。此前 2026-07-28 晚（**TD-044 销号**：atlas 自主补齐 C2/C3 全部接线（`vxture-atlas#63/64/72/73/74`），架构缺口不复存在；**TD-043 部分销号**：console-bff 半程彻底解决（四个代理方法全切 atlas 新建的 `/tenancy/*` 数据面，两轮铸票 claim 语义 bug 一并修完），varda 半程仍暂缓，故整体状态改"部分 Resolved"。此前同日，atlas 真实实现逐项审计：新增 **TD-044**（atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见，🔴 HIGH——与 TD-008/TD-043 互为前提）。此前同日，atlas 仓拆分 cutover 完成：新增 **TD-043**（平台调用 atlas 无 S2S 鉴权，varda 侧暂缓）；**TD-005/006/007 作废**、**TD-008 范围收窄**（`services/model/platform` 整体退役，实现迁至 `vxture-atlas`）。此前 2026-07-23（**TD-042** 三阶段整改（S2S 改走 C2 + console 权益展示 + 验收）全部完成，已销号）。此前同日：console 权益展示缺口调研衍生 **TD-042**：console-bff quota-usage 端点绕开 C2 契约直查 DB 并重复实现 reset 逻辑。此前 2026-07-16：GitHub Actions workflow 审查衍生两项，均**待全域确认后执行**：**TD-039** 疑似死 CI 凭证审计清理（跨 org 全仓核引用后 revoke）；**TD-040** 变更门控方法论补进 cicd-optimization-playbook。此前 2026-07-14：backlog 对当前架构审计后修正——**TD-010 作废**、**TD-001 改写**、**TD-033 文档 bug 修复**）
+**版本**: 1.14.0
+**更新**: 2026-10-04（新增 **TD-052**：`usage_summary_hours` 的留存删除不存在——设计写 ~3 个月，仓里零 delete、无限留存；裁定 4（用量日表时区）的读侧重切以它为前提，留存落地时窗口不得短于 35 天。同批 **TD-051** 现状注收窄：库级会话时区默认已由 DDL + 迁移钉成 UTC，`SET LOCAL` 退为第二道锁）。此前同日（新增 **TD-051**：分区滚动对治理标准 140 §「已批准维护操作」的显式偏离——`db-maintenance.yml` / cron / `ddl/incr/*` 维护函数本仓一样都没有，owner 2026-10-03「暂时不要复杂化」，实际走远窗口 + CI 守卫 + 年度手动推；按 §偏离纪律记名，回收条件见条目）。此前 2026-08-16（**TD-045 交办完成**，发前复核推翻两条登记：atlas `GET /capability/logs` **已由上游自行修好**，但同表 `billed_amount` 是 Omit 漏网的第四个 bigint 列、属潜伏；runos `GET /audit/calls` **仍在且有数据时 100% 复现**。已发 [`vxture-runos#110`](https://github.com/vxture/vxture-runos/issues/110)、[`vxture-atlas#193`](https://github.com/vxture/vxture-atlas/issues/193)（后者并入 Atlas 三个死列）。opera 侧不兜底不变）。此前 2026-08-14（新增 **TD-045**：atlas `GET /capability/logs` 与 runos `GET /audit/calls` 两条端点抛同一句 `TypeError: Do not know how to serialize a BigInt`，opera 运行监控的两块请求级明细全部读不出；缺陷在上游两仓，本仓只交办不兜底，liaison issue 待发。由 opera 目录重构 B3 验收发现）。此前 2026-07-28 晚（**TD-044 销号**：atlas 自主补齐 C2/C3 全部接线（`vxture-atlas#63/64/72/73/74`），架构缺口不复存在；**TD-043 部分销号**：console-bff 半程彻底解决（四个代理方法全切 atlas 新建的 `/tenancy/*` 数据面，两轮铸票 claim 语义 bug 一并修完），varda 半程仍暂缓，故整体状态改"部分 Resolved"。此前同日，atlas 真实实现逐项审计：新增 **TD-044**（atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见，🔴 HIGH——与 TD-008/TD-043 互为前提）。此前同日，atlas 仓拆分 cutover 完成：新增 **TD-043**（平台调用 atlas 无 S2S 鉴权，varda 侧暂缓）；**TD-005/006/007 作废**、**TD-008 范围收窄**（`services/model/platform` 整体退役，实现迁至 `vxture-atlas`）。此前 2026-07-23（**TD-042** 三阶段整改（S2S 改走 C2 + console 权益展示 + 验收）全部完成，已销号）。此前同日：console 权益展示缺口调研衍生 **TD-042**：console-bff quota-usage 端点绕开 C2 契约直查 DB 并重复实现 reset 逻辑。此前 2026-07-16：GitHub Actions workflow 审查衍生两项，均**待全域确认后执行**：**TD-039** 疑似死 CI 凭证审计清理（跨 org 全仓核引用后 revoke）；**TD-040** 变更门控方法论补进 cicd-optimization-playbook。此前 2026-07-14：backlog 对当前架构审计后修正——**TD-010 作废**、**TD-001 改写**、**TD-033 文档 bug 修复**）
 **维护人**: 架构组
 
 ---
@@ -108,6 +108,7 @@
 | [TD-049](#td-049--vxtureservice-ticket-零消费方与在跑的实现分叉五处却长得像实现)           | `@vxture/service-ticket` 零消费方，与在跑的实现分叉五处，却长得像实现          | Architecture       | Open          | 🟡 MED                                       |
 | [TD-050](#td-050--acr-认证握手偶发被重置每次都要人工-rerun)                                | ACR 认证握手偶发被重置，发版链每次都要人工 rerun                               | Operations         | Open          | 🟡 MED                                       |
 | [TD-051](#td-051--分区滚动没有按治理标准走-db-maintenanceyml靠远窗口--ci-守卫--年度手动推) | 分区滚动没有按治理标准走 `db-maintenance.yml`，靠远窗口 + CI 守卫 + 年度手动推 | Operations         | Open          | 🟡 MED                                       |
+| [TD-052](#td-052--usage_summary_hours-的留存删除不存在设计写-3-个月实际无限留存)           | `usage_summary_hours` 的留存删除不存在：设计写 ~3 个月，实际无限留存           | Data               | Open          | 🟡 MED                                       |
 
 ---
 
@@ -1445,7 +1446,7 @@ deploy 重跑要**重新审批一次**，owner 因此被反复打断。
 **实际采用**（2026-10-03/04）：
 
 - 窗口推到 2028-02-01（`96_partitions.sql` 的 `cover_until`，同批一份迁移 `2026-10-03-extend-partition-window.sql`
-  给存量库补子表；两处都 `SET LOCAL TIME ZONE 'UTC'` 钉住边界时区）；
+  给存量库补子表；两处都 `SET LOCAL TIME ZONE 'UTC'` 钉住边界时区。**2026-10-04 裁定 4 收窄**：「仓里没有任何地方钉住会话时区（RDS 参数组决定）」这半句已不成立——库级默认由 `00_schemas.sql` 末尾与迁移 `2026-10-05-database-timezone-utc.sql` 钉成 UTC，`30-verify` 用 `pg_db_role_setting` 硬断言；这两处 `SET LOCAL` 退为第二道锁，不是唯一的锁。仍留的债：RDS 当前值要 owner 跑 `show timezone` 核实，≠ UTC 则 35 天以上的天/周/月/年表需一次性重建（裁定 4 设计 §4.3）；另外钉成 UTC 会改变一批**会话依赖**的 `now()::date` / `date_trunc(now())` 读写的结果（清单按 file:line 写在迁移 `2026-10-05-database-timezone-utc.sql` 头部「作用面（二）」），其中 `pg-order.repository.ts` 的 `bill_cycle` / `cycle_start_date` / `cycle_end_date` 与 `pg-addon.repository.ts` 的 YYYYMM 是落库值，要不要改成显式 `at time zone` **待 owner 定**，同批未做）；
 - CI 守卫 `scripts/guardrails/check-partition-window.mjs`：剩余不足 90 天即红，每次提交跑（不按 docs_only 跳过），
   另由 `.github/workflows/partition-window.yml` 每月 1 日定时跑一次，低活跃期也会被求值；
 - 年度手动推一次：守卫红字里写了两步处置（改 DDL 的 `cover_until` + 另写一份同形迁移）。
@@ -1456,3 +1457,27 @@ deploy 重跑要**重新审批一次**，owner 因此被反复打断。
 **回收条件**：本仓真的装上 `db-maintenance.yml` + 白名单维护函数（分区滚动 + 留存 DROP + DEFAULT 巡检）
 那天，删掉 140 §「已批准维护操作」节末的现状注与整顿清单那一行的偏离说明、删 `96_partitions.sql` 头注 ④、
 删本条。`check-partition-window.mjs` 可以留作第二道门，不冲突。
+
+### TD-052 — `usage_summary_hours` 的留存删除不存在：设计写 ~3 个月，实际无限留存
+
+| 字段         | 内容                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------ |
+| **分类**     | Data                                                                                                         |
+| **状态**     | Open                                                                                                         |
+| **登记日期** | 2026-10-04                                                                                                   |
+| **来源**     | 裁定 4（用量日表时区）设计 §1.5：`grep 'delete from metering.usage_summary'` 在 bff / services / deploy 全空 |
+
+**现状**：`data_commerce_200_metering.md` §9 给五张汇总表写了「典型留存」（小时 ~3 个月、天 ~13 个月、周 ~2 年、
+月 ~5 年），并说「过期按批量/分区 DROP」。仓里**一条 delete 都没有**：`usage-rollup` 作业只 upsert，五张表全部无限留存。
+小时表是其中增长最快的一张（每个 workspace × product × metric 每天 24 行）。
+
+**为什么现在才记**：裁定 4 把 console 的 day 档改成「从小时表按用户时区现场重切」，前提是窗口内（35 天，
+`USAGE_REBUCKET_HORIZON_DAYS`）一定有小时数据。今天这个前提靠「从不删」成立，没有任何东西写明它。
+
+**约束**（做留存清理时必须守）：小时表的保留窗口**不得短于** `USAGE_REBUCKET_HORIZON_DAYS`（35 天）——它同时是
+rollup 从小时表重算天表的窗口与读侧重切的上限，两处共用一个常量；短于它，天表会被残缺的小时数据覆写，重切也会少天。
+天表留存不得短于周/月表的重算窗口（15 周 / 3 月）。
+
+**回收条件**：留存删除以 `db-maintenance.yml` 白名单维护函数（与 TD-051 同一套）或 rollup 作业末尾的按窗口
+delete 落地，且窗口写成从同一个常量派生、有一条守卫比对「删除窗口 ≥ 重算窗口」。落地后把 §9 表里「典型留存」
+改成实际值，删本条。

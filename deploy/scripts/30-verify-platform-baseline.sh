@@ -13,6 +13,8 @@
 #   B. 表数 == 权威 DDL 派生（本脚本现场 grep deploy/database/ddl/*.sql，零漂移）
 #   C. seed 基线地板（operator/access RBAC 目录、oidc_clients、oauth_providers、
 #      kyc/loyalty/product/model catalog）+ super_admin 全授等值
+#   D. 列级锁「声明 ↔ 活库」一致（verify/column-locks-drift.sql）
+#   E. 库级会话时区默认 = UTC（verify/database-timezone.sql，pg_db_role_setting）
 # 断言体 = deploy/database/verify/baseline-assertions.sql（单一 DO 块，一次性列全
 # 部失败项）。任一失败 → psql 非零退出 → 本脚本红 → db-init run 红。
 # 只读、无确认门；可随时对生产执行。挂载点 = db-init 的 seed/migrate-seed/reset
@@ -37,6 +39,7 @@ check_file() {
 }
 
 check_file "$VERIFY_DIR/baseline-assertions.sql"
+check_file "$VERIFY_DIR/database-timezone.sql"
 check_file "$PLATFORM_ENV"
 
 # 表数期望从权威 DDL 现场派生（不硬编码常数 → DDL 演进时断言自动跟随）。
@@ -71,5 +74,17 @@ docker run --rm \
   -v "$VERIFY_DIR:/verify:ro" \
   postgres:18-alpine \
   sh -lc 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /verify/column-locks-drift.sql'
+
+# E. 库级会话时区默认 = UTC（owner 裁定 4，2026-10-04「用量日表时区，默认按照 UTC+0」）。
+#    默认长在被连的那一头（ALTER DATABASE … SET timezone = 'UTC'，00_schemas.sql + 迁移
+#    2026-10-05-database-timezone-utc.sql）。那份迁移在非 owner 账号下**只告警不中断**——一条权限
+#    问题不该卡住整条 migrate 链——于是缺口必须有一处每次 verify 都红的地方，就是这里。判据读
+#    pg_db_role_setting（共享目录，reporting_ro 也读得到），只认库级默认，不认当前会话的 show timezone。
+docker run --rm \
+  --network vxture-prod \
+  --env-file "$PLATFORM_ENV" \
+  -v "$VERIFY_DIR:/verify:ro" \
+  postgres:18-alpine \
+  sh -lc 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /verify/database-timezone.sql'
 
 echo "=== Platform baseline audit PASSED ==="

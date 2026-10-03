@@ -47,6 +47,7 @@ export interface UpdateProfileInput {
   bio?: string | null;
   /** 性别:male / female;空串 = 清除;undefined / null = 不改(与其它字段的 coalesce 语义一致)。 */
   gender?: "male" | "female" | "" | null;
+  /** IANA 名;空串 = 清除(回到默认 UTC);undefined / null = 不改。写入前经 assertValidTimezone。 */
   timezone?: string | null;
   language?: string | null;
 }

@@ -7,6 +7,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
+import { isIanaTimeZone } from "@vxture/core-utils";
 import { PasswordHasher } from "../password/password-hasher";
 import { USER_REPOSITORY } from "../tokens";
 import { SECURITY_ACTORS } from "./customer-notifier";
@@ -70,6 +71,24 @@ export function accountPurgeAt(deletionRequestedAt: string): string {
     new Date(deletionRequestedAt).getTime() +
       ACCOUNT_DELETION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
+}
+
+/**
+ * Throw 400 if a user-supplied timezone is not a canonical IANA name.
+ *
+ * Owner ruling 4 (2026-10-04): the usage day view re-buckets through this value,
+ * so only a zone the read side can use may be stored — until now any string went
+ * in (profile.dto is `string | null`). Same predicate as the read side
+ * (`isIanaTimeZone` from @vxture-platform/shared, re-exported by core-utils).
+ * Tri-state like gender (pg-user.repository): null / undefined = leave
+ * unchanged, "" = clear to NULL (the console page sends "" for 未设置, which
+ * puts the user back on the UTC default); neither is a zone value, both pass.
+ */
+export function assertValidTimezone(timezone: string | null | undefined): void {
+  if (timezone === null || timezone === undefined || timezone === "") return;
+  if (!isIanaTimeZone(timezone)) {
+    throw new BadRequestException("invalid_timezone");
+  }
 }
 
 /** Throw 400 if a user-supplied account does not meet the format rules (§4.2). */
@@ -409,11 +428,18 @@ export class AccountService {
     await this.setPassword(userId, password, { cause: "initial_set" });
   }
 
-  /** Update mutable profile fields (name/email/bio/timezone/language). */
-  updateProfile(
+  /**
+   * Update mutable profile fields (name/email/bio/timezone/language).
+   *
+   * `timezone` is validated HERE, in the domain service, because two BFFs write
+   * it (console-bff and website-bff): a gate on one branch only is a door on
+   * the other.
+   */
+  async updateProfile(
     userId: string,
     input: UpdateProfileInput,
   ): Promise<UserView | null> {
+    assertValidTimezone(input.timezone);
     return this.users.updateProfile(userId, input);
   }
 
