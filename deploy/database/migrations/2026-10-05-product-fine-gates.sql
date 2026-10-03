@@ -25,17 +25,22 @@
 --     seed 里这些角色本来就有，补授只服务自建角色）。
 --   · 以上各码的菜单祖先按 parent_id 递归求闭包（与 seed 的 withMenuClosure 同一个结果）。
 --
--- **没有任何访问收回**：目录里本来就持有 product:plan.read / price.read /
+-- **没有任何访问收回**（第 3b 步摘掉的是「服务套餐」菜单节点的闭包残留，今天没有任何门判
+-- admin.menu.*；见那一步的注释）：目录里本来就持有 product:plan.read / price.read /
 -- capability.read / user:profile.read 的 finance / engineer / support / auditor 从本批起能
 -- 进它们目录里说能进的读入口（此前被粗门关在外面）；持 plan.manage 的角色拿到三个新码。
--- 价格第二道门（套餐草稿 PATCH 带 prices 时补判 product:price.manage）：seed 里持
--- plan.manage 的角色都同时持 price.manage，自建角色若只授 plan.manage，改价格会 403——
--- 那是目录在说话，不是本迁移的副作用。
+-- 价格第二道门（套餐草稿 PATCH 里有任一周期的价格与已存不同时补判 product:price.manage；
+-- 编辑器每次保存都原样回送已存价格，原样回送不算改价）：seed 里持 plan.manage 的角色都
+-- 同时持 price.manage，自建角色若只授 plan.manage，改价格会 403、改配额照常——那是目录
+-- 在说话，不是本迁移的副作用。
 --
 -- 新库不跑迁移（DDL + seed 直建），三个新码与菜单挂载、角色绑定都已在 seed-catalog.mjs 里。
 --
 -- 幂等：整份可重跑（INSERT 全部 ON CONFLICT DO NOTHING；唯一一条 UPDATE 是 1b 的改挂，带
---       IS DISTINCT FROM 闸；无 DELETE。第二遍全部 INSERT 0 0 / UPDATE 0）。
+--       IS DISTINCT FROM 闸；唯一一条 DELETE 是 3b 的菜单残留，按「持有子码」判。第二遍
+--       全部 INSERT 0 0 / UPDATE 0 / DELETE 0）。
+-- 迁移库 = 新库：跑完后 角色 × 码 的绑定集合与 DDL + seed 直建的新库逐行相同（2026-10-04
+--       在一次性库上 diff 过：0 行差异）；下一个比闭包的守卫可以拿这句当前提。
 -- 顺序：先 migrate 再 deploy（新镜像按细码校验；旧库上细码还没授出去会 403）。
 -- 用法：CONFIRM_MIGRATE=yes bash scripts/28d-apply-migrations.sh
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -57,7 +62,8 @@ BEGIN
       ('tenant:profile.manage'),
       ('user:profile.read'),
       ('admin.menu.product_capability'),
-      ('admin.menu.solution_package')
+      ('admin.menu.solution_package'),
+      ('admin.menu.plan_version')
     ) AS t(c)
    WHERE NOT EXISTS (SELECT 1 FROM admin.operator_permission p WHERE p.perm_code = t.c);
   IF missing IS NOT NULL THEN
@@ -103,7 +109,9 @@ ON CONFLICT (perm_code) DO NOTHING;
 -- ── 1b. 套餐 / 价格四码改挂到「产品套餐」页（/plan-versions，套餐版本编辑器）────────
 --    seed 的 MENU_TREE 同步改了（此前挂在只读的「服务套餐」/service-plans 上）。
 --    这是菜单树形状，和 seed 的 reparent 一样属于平台持有的结构，所以这里用 UPDATE
---    对齐；IS DISTINCT FROM 让第二遍是 0 行。缺「产品套餐」节点时不动（旧树）。
+--    对齐；IS DISTINCT FROM 让第二遍是 0 行。「产品套餐」节点是第 0 步的锚点之一：缺了
+--    就抛，不静默留在旧树上（否则这四码挂在哪、第 3 步闭包授哪个菜单，都随库而异）；
+--    第 4 步再对四码的 parent 断言一次。
 UPDATE admin.operator_permission p
    SET parent_id = m.id, updated_at = now()
   FROM admin.operator_permission m
@@ -183,7 +191,33 @@ SELECT DISTINCT c.role_id, c.permission_id, r.is_system, s.id, now()
  CROSS JOIN (SELECT id FROM admin.operator_account WHERE username = 'systemadmin') s
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- ── 4. 审计段：授完逐角色打印实况，PR 里贴这张表 ────────────────────────────
+-- ── 3b. 「服务套餐」菜单节点的闭包残留 ──────────────────────────────────────
+--    1b 把套餐 / 价格四码挪到「产品套餐」之后，「服务套餐」（/service-plans）名下没有
+--    任何操作码，成了纯菜单叶子。seed 的规则（seed-catalog.mjs 文件头注）：纯叶子不进任何
+--    非 super_admin 角色——没有判据说谁该看见它。存量库上 administrator / auditor /
+--    finance / operator 的那一行是旧闭包带上的（当年因持 plan.read / price.read），迁移库
+--    不摘，就与新库长期不同形：哪天侧栏按菜单码渲染，finance / auditor 在存量库上看得见
+--    一个点进去 403 的「服务套餐」，新库上看不见。
+--    判据与 seed 的 withMenuClosure 互为逆：持有它名下任一子码就留，一个都不持就摘。
+--    只动系统角色（operator_role.is_system）：治理台自建角色上的菜单节点是治理台授的
+--    （arche 只要求「子码必带祖先」，允许单独授一个菜单节点），归它管。super_admin 的
+--    全量不变式（seed §4.4）不受此影响：它名下每个码都在，不走这条。
+DELETE FROM admin.operator_role_permission rp
+ USING admin.operator_permission m, admin.operator_role r
+ WHERE m.perm_code = 'admin.menu.service_plan'
+   AND rp.permission_id = m.id
+   AND r.id = rp.role_id
+   AND r.is_system
+   AND r.role_code <> 'super_admin'
+   AND NOT EXISTS (
+     SELECT 1
+       FROM admin.operator_role_permission c
+       JOIN admin.operator_permission cp ON cp.id = c.permission_id
+      WHERE c.role_id = rp.role_id
+        AND cp.parent_id = m.id
+   );
+
+-- ── 4. 审计段：先断言本迁移自己的产物，再逐角色打印实况，PR 里贴这张表 ──────────
 DO $$
 DECLARE
   r record;
@@ -193,6 +227,39 @@ BEGIN
    WHERE perm_code IN ('product:capability.manage', 'product:solution.read', 'product:solution.manage');
   IF n <> 3 THEN
     RAISE EXCEPTION '[product-fine-gates] 三个新码应全部在目录里，实际 %', n;
+  END IF;
+
+  -- 1b 的产物：套餐 / 价格四码都挂在「产品套餐」下（第 0 步已保证该节点存在）
+  SELECT count(*) INTO n
+    FROM admin.operator_permission p
+    JOIN admin.operator_permission m ON m.id = p.parent_id
+   WHERE p.perm_code IN ('product:plan.read', 'product:plan.manage', 'product:price.read', 'product:price.manage')
+     AND m.perm_code = 'admin.menu.plan_version';
+  IF n <> 4 THEN
+    RAISE EXCEPTION '[product-fine-gates] 套餐 / 价格四码应全部挂在 admin.menu.plan_version 下，实际 %', n;
+  END IF;
+
+  -- 3b 的产物：判据与 3b 一字不差（系统角色、非 super_admin、名下一个子码都不持），
+  -- 不写成「没有系统角色持有它」——迁移是全量重放，哪天「服务套餐」又挂上了子码并授给
+  -- 了某个角色，那种写法会在重放到这一份时把合法状态报成错。
+  -- （表别名不能叫 r：本块里 r 是下面 FOR 循环声明的 record，PL/pgSQL 会把 r.is_system
+  --   解析成那个还没赋值的变量——2026-10-04 在一次性库上实跑抓到的。）
+  SELECT count(*) INTO n
+    FROM admin.operator_role_permission rp
+    JOIN admin.operator_permission m ON m.id = rp.permission_id
+    JOIN admin.operator_role ro ON ro.id = rp.role_id
+   WHERE m.perm_code = 'admin.menu.service_plan'
+     AND ro.is_system
+     AND ro.role_code <> 'super_admin'
+     AND NOT EXISTS (
+       SELECT 1
+         FROM admin.operator_role_permission c
+         JOIN admin.operator_permission cp ON cp.id = c.permission_id
+        WHERE c.role_id = rp.role_id
+          AND cp.parent_id = m.id
+     );
+  IF n <> 0 THEN
+    RAISE EXCEPTION '[product-fine-gates] 3b 后仍有 % 个系统角色持有名下无子码的 admin.menu.service_plan', n;
   END IF;
 
   RAISE NOTICE '[product-fine-gates] 角色 × 产品域八码 + user:profile.read';

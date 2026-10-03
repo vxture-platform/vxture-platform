@@ -101,7 +101,7 @@ const UNCONSUMED = {
   "product:price.read":
     "**这个粒度的读端点不存在**（2026-10-04 核实）：价格没有自己的读入口，它作为套餐版本" +
     "详情的一部分随 product:plan.read 下发（GET plans / plan-versions/:id / plan-matrix / " +
-    "releases / service-plans）。写侧有门：套餐草稿 PATCH 带 prices 时补判 product:price.manage。" +
+    "releases / service-plans）。写侧有门：套餐草稿 PATCH 改了已存价格时补判 product:price.manage。" +
     "目录里 finance / auditor 两码并授，读的那一个今天不是门",
   "content:announcement.read": MANAGE_IMPLIES_READ,
   "support:impersonate":

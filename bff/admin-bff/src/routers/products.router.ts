@@ -892,14 +892,6 @@ export class ProductsRouter {
     @Body() body: UpdateDraftVersionInput,
   ): Promise<PlanVersionDetail> {
     assertCanManagePlans(req);
-    /* 定价第二道门（owner 2026-10-04，与三个新码同批）：改价格与改配额是两类动作，
-       目录里各有自己的码。价格没有独立端点——它只经这一个 PATCH 落到
-       product.plan_prices——所以按字段在同一请求里补判，判在任何写之前（与
-       tenants.router 的 status 侧门同一个写法）。不带 prices 的草稿 PATCH 仍只要
-       plan.manage：别把门拆成墙。 */
-    if (Array.isArray(body.prices) && body.prices.length > 0) {
-      assertCanManagePrices(req);
-    }
     const client = await this.rwPool.connect();
     try {
       await client.query("BEGIN");
@@ -915,6 +907,42 @@ export class ProductsRouter {
         throw new BadRequestException(
           "Only an unpublished draft version can be edited",
         );
+      }
+      /* 定价第二道门（owner 2026-10-04，与三个新码同批）：改价格与改配额是两类动作，
+         目录里各有自己的码。价格没有独立端点——它只经这一个 PATCH 落到
+         product.plan_prices——所以在同一请求里补判，判在任何写之前。
+
+         判据是「这次请求**改了**哪个周期的价格」，不是「请求里有没有 prices 字段」：
+         两个草稿编辑器（PlanDraftEditorPage / PlanVersionsPage）每次保存都把从详情
+         灌进表单的价格原样送回来（发布前也要重发一遍，否则未保存的改价会被静默丢掉），
+         按字段存在与否判门，只授 plan.manage 的角色连改配额都 403——门拆成了墙。
+         与库里已存的行逐周期比（金额按分比，列是 numeric(12,2)，详情下发的是
+         "99.00" 字符串）；比在 FOR UPDATE 之后，两个人同时改同一版时后到的那个看到
+         的是前一个已提交的价，不会拿着过期的表单值把别人刚改的价写回去。 */
+      if (Array.isArray(body.prices) && body.prices.length > 0) {
+        const stored = await client.query<{
+          cycle_unit: string;
+          price: string;
+        }>(
+          `SELECT cycle_unit, price FROM product.plan_prices
+            WHERE plan_version_id = $1 AND cycle_count = 1 AND currency = 'CNY'`,
+          [versionId],
+        );
+        const storedCents = new Map(
+          stored.rows.map((r) => [
+            r.cycle_unit,
+            Math.round(Number(r.price) * 100),
+          ]),
+        );
+        const changesPrice = body.prices.some((p) => {
+          const have = storedCents.get(String(p.cycleUnit));
+          return (
+            have === undefined || have !== Math.round(Number(p.price) * 100)
+          );
+        });
+        if (changesPrice) {
+          assertCanManagePrices(req);
+        }
       }
       if (Array.isArray(body.prices)) {
         for (const p of body.prices) {

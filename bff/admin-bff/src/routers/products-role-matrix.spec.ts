@@ -13,7 +13,9 @@
  * auditor 持 capability.read。两头都错，与 #577 在租户 / 工单那边量出来的一模一样。
  *
  * ── 拆门后（本文件断言的）──
- * 读门收本线 .read | .manage，写门只收本线 .manage，价格在套餐草稿 PATCH 里按字段补判。
+ * 读门收本线 .read | .manage，写门只收本线 .manage，价格在套餐草稿 PATCH 里按「改了哪个周期
+ * 的价格」补判——不是按「请求里有没有 prices」：两个草稿编辑器每次保存都把详情里的价格原样
+ * 回送，按字段判会让只授 plan.manage 的角色连改配额都 403（门拆成墙，2026-10-04 审查抓到）。
  */
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -21,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { ForbiddenException } from "@nestjs/common";
 import type { Pool } from "pg";
 import { ProductsRouter } from "./products.router";
-import { makeReq, noDbPool } from "../testing/pool-mocks";
+import { makeReq, makeTxClient, noDbPool } from "../testing/pool-mocks";
 
 const SEED = fileURLToPath(
   new URL("../../../../deploy/database/seed/seed-catalog.mjs", import.meta.url),
@@ -73,6 +75,34 @@ function emptyRoPool(): Pool {
   } as unknown as Pool;
 }
 
+/** 库里这一版草稿已存的价格——详情下发的就是这个形状（numeric(12,2) 的字符串）。 */
+const STORED_PRICES: { cycle_unit: string; price: string }[] = [
+  { cycle_unit: "month", price: "99.00" },
+  { cycle_unit: "year", price: "999.00" },
+];
+
+/**
+ * 写池替身：答一版未锁定的草稿 + 已存价格，其余语句回空。价格门要先读库里的行才能判
+ * （判据是「改没改」），所以写入口的 403 不再能用「没碰写池」证明——改证「403 之前没有
+ * 任何一条写语句」（见 writesIn）。
+ */
+function draftTx(stored = STORED_PRICES) {
+  return makeTxClient((sql) => {
+    if (
+      sql.includes("from product.plan_versions") &&
+      sql.includes("for update")
+    )
+      return [{ status: "draft", is_locked: false }];
+    if (sql.includes("from product.plan_prices")) return stored;
+    return undefined;
+  });
+}
+
+/** 事务里跑过的写语句（INSERT / UPDATE / DELETE），BEGIN / SELECT / ROLLBACK 不算。 */
+function writesIn(calls: string[]): string[] {
+  return calls.filter((c) => /^\s*(insert|update|delete)\b/i.test(c));
+}
+
 type Probe = (router: ProductsRouter, caps: string[]) => Promise<unknown>;
 
 /** 每条线一读一写，外加价格那道门。 */
@@ -106,17 +136,17 @@ const EXPECTED: Record<string, string> = {
 };
 
 async function outcome(probe: Probe, caps: string[]): Promise<"✓" | "✗"> {
-  const rw = noDbPool();
+  const rw = draftTx();
   const router = new ProductsRouter(emptyRoPool(), rw.pool);
   try {
     await probe(router, caps);
     return "✓";
   } catch (err) {
     if (err instanceof ForbiddenException) {
-      expect(rw.connect, "403 之前不许碰写池").not.toHaveBeenCalled();
+      expect(writesIn(rw.calls), "403 之前不许写").toEqual([]);
       return "✗";
     }
-    /* 写入口过了门就撞到「DB must not be touched」——那是过门的证据，不是失败。 */
+    /* 写入口过了门就落到替身上，之后缺行 404 / 读详情空集都算过门，不是失败。 */
     return "✓";
   }
 }
@@ -154,59 +184,100 @@ describe("products.router 角色 × 入口矩阵（持码从 seed 读）", () =>
   });
 });
 
-describe("定价第二道门：套餐草稿 PATCH 带 prices 另判 product:price.manage", () => {
-  it("只有 plan.manage：带价格 → 403，且没碰写池（判在任何写之前）", async () => {
-    const rw = noDbPool();
+describe("定价第二道门：套餐草稿 PATCH 改了已存价格才另判 product:price.manage", () => {
+  const PLAN_ONLY = makeReq(["product:plan.manage"]);
+
+  it("只有 plan.manage：月价与已存不同 → 403，事务里没有任何写语句，已回滚", async () => {
+    const rw = draftTx();
     const router = new ProductsRouter(emptyRoPool(), rw.pool);
     await expect(
-      router.updateDraftVersion(makeReq(["product:plan.manage"]), VERSION_ID, {
-        prices: [{ cycleUnit: "month", price: 99 }],
+      router.updateDraftVersion(PLAN_ONLY, VERSION_ID, {
+        prices: [{ cycleUnit: "month", price: 100 }],
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(rw.connect).not.toHaveBeenCalled();
+    expect(writesIn(rw.calls)).toEqual([]);
+    expect(rw.outcome()).toMatchObject({ rolledBack: true, released: true });
+  });
+
+  it("只有 plan.manage：编辑器的保存形状（已存价格原样回送 + 改配额）→ 过门，配额写入并提交", async () => {
+    /* PlanDraftEditorPage.draftBody() / PlanVersionsPage.readDraftBody() 每次保存都把
+       hydrate 进表单的 "99.00" / "999.00" 以 Number 回送——这就是审查里那堵墙。 */
+    const rw = draftTx();
+    const router = new ProductsRouter(emptyRoPool(), rw.pool);
+    await expect(
+      router.updateDraftVersion(PLAN_ONLY, VERSION_ID, {
+        prices: [
+          { cycleUnit: "month", price: Number("99.00") },
+          { cycleUnit: "year", price: Number("999.00") },
+        ],
+        quota: { "doc.words": 2000 },
+      }),
+    ).rejects.not.toBeInstanceOf(ForbiddenException);
+    const writes = writesIn(rw.calls);
+    expect(writes.some((w) => /update product\.plan_components/i.test(w))).toBe(
+      true,
+    );
+    expect(rw.outcome()).toMatchObject({ committed: true, rolledBack: false });
+  });
+
+  it("只有 plan.manage：多送一个库里没有的周期 → 那是新价格，403", async () => {
+    const rw = draftTx([{ cycle_unit: "month", price: "99.00" }]);
+    const router = new ProductsRouter(emptyRoPool(), rw.pool);
+    await expect(
+      router.updateDraftVersion(PLAN_ONLY, VERSION_ID, {
+        prices: [
+          { cycleUnit: "month", price: 99 },
+          { cycleUnit: "year", price: 999 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(writesIn(rw.calls)).toEqual([]);
   });
 
   it("只有 plan.manage：不带价格（只改配额）→ 过门（别把门拆成墙）", async () => {
-    const rw = noDbPool();
+    const rw = draftTx();
     const router = new ProductsRouter(emptyRoPool(), rw.pool);
     await expect(
-      router.updateDraftVersion(makeReq(["product:plan.manage"]), VERSION_ID, {
+      router.updateDraftVersion(PLAN_ONLY, VERSION_ID, {
         quota: { "doc.words": 1000 },
       }),
     ).rejects.not.toBeInstanceOf(ForbiddenException);
-    expect(rw.connect).toHaveBeenCalled();
+    expect(rw.outcome()).toMatchObject({ committed: true });
   });
 
   it("只有 plan.manage：prices 是空数组 → 不算改价格，过门", async () => {
-    const rw = noDbPool();
+    const rw = draftTx();
     const router = new ProductsRouter(emptyRoPool(), rw.pool);
     await expect(
-      router.updateDraftVersion(makeReq(["product:plan.manage"]), VERSION_ID, {
-        prices: [],
-      }),
+      router.updateDraftVersion(PLAN_ONLY, VERSION_ID, { prices: [] }),
     ).rejects.not.toBeInstanceOf(ForbiddenException);
-    expect(rw.connect).toHaveBeenCalled();
+    expect(rw.outcome()).toMatchObject({ committed: true });
   });
 
-  it("plan.manage + price.manage：带价格 → 过门", async () => {
-    const rw = noDbPool();
+  it("plan.manage + price.manage：改价 → 过门，价格写入并提交", async () => {
+    const rw = draftTx();
     const router = new ProductsRouter(emptyRoPool(), rw.pool);
     await expect(
       router.updateDraftVersion(
         makeReq(["product:plan.manage", "product:price.manage"]),
         VERSION_ID,
-        { prices: [{ cycleUnit: "month", price: 99 }] },
+        { prices: [{ cycleUnit: "month", price: 100 }] },
       ),
     ).rejects.not.toBeInstanceOf(ForbiddenException);
-    expect(rw.connect).toHaveBeenCalled();
+    expect(
+      writesIn(rw.calls).some((w) =>
+        /insert into product\.plan_prices/i.test(w),
+      ),
+    ).toBe(true);
+    expect(rw.outcome()).toMatchObject({ committed: true });
   });
 
-  it("只有 price.manage：改不了草稿（第二道门不替代第一道）", async () => {
+  it("只有 price.manage：改不了草稿（第二道门不替代第一道），且没碰写池", async () => {
     const rw = noDbPool();
     const router = new ProductsRouter(emptyRoPool(), rw.pool);
     await expect(
       router.updateDraftVersion(makeReq(["product:price.manage"]), VERSION_ID, {
-        prices: [{ cycleUnit: "month", price: 99 }],
+        prices: [{ cycleUnit: "month", price: 100 }],
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(rw.connect).not.toHaveBeenCalled();
