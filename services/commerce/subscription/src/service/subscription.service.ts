@@ -7,7 +7,10 @@ import {
   ConflictException,
 } from "@nestjs/common";
 import { ProvisioningService } from "@vxture/service-provisioning";
-import { SUSPENSION_REASON_EXTENDS_TERM } from "@vxture-platform/shared";
+import {
+  SUSPENSION_REASON_EXTENDS_TERM,
+  type SubscriptionStatus,
+} from "@vxture-platform/shared";
 import {
   PgSubscriptionRepository,
   type NotifyDisplay,
@@ -32,9 +35,77 @@ import type {
  * — product_220 §3) must join this set AND every active/trialing live-coverage
  * predicate (C2 entitlement queries, quota-pool gates) in the same change.
  */
-const ACTIVATED = new Set(["active", "trialing"]);
+const ACTIVATED: ReadonlySet<string> = new Set<SubscriptionStatus>([
+  "active",
+  "trialing",
+]);
 /** Terminal statuses that trigger the per-component deprovision check. */
-const DEACTIVATED = new Set(["cancelled", "expired"]);
+const DEACTIVATED: ReadonlySet<string> = new Set<SubscriptionStatus>([
+  "cancelled",
+  "expired",
+]);
+
+/**
+ * 每一档状态在「这个工作区还占着这个产品吗」这根轴上的归类（2026-10-03 修）。
+ *
+ * ── 修的是什么 ──
+ * 撤销开通的判据原先写的是 `ACTIVATED.has(before.status)`，而 ACTIVATED 只有
+ * active / trialing 两档。值域有七档，DEACTIVATED 占两档 —— 剩下的
+ * **expiring / overdue / suspended 三档落在两个集合的缝里**，于是：
+ *
+ *   active →(到期前 3 天那一趟) expiring →(到期扫描) expired
+ *     第二步 before.status = 'expiring' ⇒ 不在 ACTIVATED ⇒ **一个 tenant.deprovisioned 都不发**
+ *
+ * 而没经过 expiring 的那批（直接 active → expired）发得到。**同一个终态、产品侧
+ * 收到的东西不同**，而产品侧是靠这个硬信号停服务的。overdue（宽限，权益不变）与
+ * suspended（冻结）两条路一模一样：进去时不发、出来进终态时也不发。
+ *
+ * ── 为什么做成 Record 而不是再加一个 Set ──
+ * `Record<SubscriptionStatus, …>` 让「加一档状态却忘了归类」变成**编译错误**，
+ * 由 type-check:all 当场拦下。再加一个 Set 只会把今天这三档补上，而下一档新状态
+ * 仍然会掉进缝里不报错 —— 本次的缺陷形状正是「掉进缝里且零信号」。
+ *
+ * 开通方向仍只认 ACTIVATED：expiring / overdue / suspended 不是「刚开通」，
+ * 它们是「还占着」。两根轴不是一回事，所以不合并。
+ */
+type CoverageClass = "held" | "terminal";
+const STATUS_COVERAGE: Record<SubscriptionStatus, CoverageClass> = {
+  active: "held",
+  trialing: "held",
+  // 到期前提醒写的那一档：服务照常，只是 end_at 近了。
+  expiring: "held",
+  // 宽限：续费单在途未付，权益不变（product_220 §3）。
+  overdue: "held",
+  // 冻结：平台动作或产品维护窗口；订阅还在，顺延在走。
+  suspended: "held",
+  expired: "terminal",
+  cancelled: "terminal",
+};
+
+/**
+ * 进终态之前是否仍占着这个产品 —— 撤销方向的判据，比 ACTIVATED 宽。
+ *
+ * 入参收 `string` 而不是 `SubscriptionStatus`：`SubscriptionRecord.status` 今天是
+ * `string`（从库里的行直接来），把那个类型收窄会波及所有构造它的地方，不是这个
+ * 缺陷该带的改动。所以类型安全放在 STATUS_COVERAGE 那张表上（漏归类 = 编译错），
+ * 这里只负责**遇到没见过的值要吵**：
+ * 默认成「没占着」正是本次修的那个形状 —— 掉进缝里、零信号、没人知道。
+ * 调用点在 safeProvisioningHook 里，抛出来会被记成
+ * 「state committed without webhook, needs manual replay」：写入不受影响，信号不静默。
+ * 库里有 CHECK 约束、值域又与 SUBSCRIPTION_STATUSES 同源，所以这一支按构造不可达。
+ */
+function heldCoverage(status: string): boolean {
+  const cls = (STATUS_COVERAGE as Record<string, CoverageClass | undefined>)[
+    status
+  ];
+  if (!cls) {
+    throw new Error(
+      `[subscription] 未归类的订阅状态 ${status} —— 先在 STATUS_COVERAGE 里决定它算「还占着」还是「终态」，` +
+        `不要让它默认成不发信号`,
+    );
+  }
+  return cls === "held";
+}
 
 /**
  * 运营代客动作的三档（`notifyOperatorStatusChange` 的入参）。
@@ -1157,7 +1228,12 @@ export class SubscriptionService {
     sub: SubscriptionRecord,
     oldPlanVersionId: string,
   ): Promise<void> {
-    if (!ACTIVATED.has(sub.status)) return;
+    // 同一个缺口的第二处（2026-10-03）：这道门同时守着**两个方向** —— 下面既发新版本
+    // 那批的 provisioned，也撤掉被移除产品的开通。原先判 ACTIVATED，于是一条处在
+    // expiring / overdue / suspended 的订阅换版本时，两个方向一个信号都不发：
+    // 被移除的产品在产品侧永远留着。改判 heldCoverage —— 这几档仍占着产品，
+    // 换版本该发的就得发。
+    if (!heldCoverage(sub.status)) return;
     await this.fireProvisioned(sub, sub.planVersionId);
     const [oldProducts, newProducts] = await Promise.all([
       this.repo.listVersionProducts(oldPlanVersionId),
@@ -1230,11 +1306,12 @@ export class SubscriptionService {
       await this.fireVersionChange(after, before.planVersionId);
       return;
     }
-    const wasActive = ACTIVATED.has(before.status);
     const isActive = ACTIVATED.has(after.status);
-    if (!wasActive && isActive) {
+    if (!ACTIVATED.has(before.status) && isActive) {
       await this.fireProvisioned(after, after.planVersionId);
-    } else if (wasActive && DEACTIVATED.has(after.status)) {
+    } else if (heldCoverage(before.status) && DEACTIVATED.has(after.status)) {
+      // 判据是 heldCoverage 不是 ACTIVATED：经 expiring / overdue / suspended
+      // 走到终态的那些订阅，before 不在 ACTIVATED 里，此前一个信号都不发。
       await this.fireDeprovisionIfUncovered(after, after.planVersionId);
     }
   }
