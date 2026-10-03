@@ -38,3 +38,34 @@ version = "7.1.5"
 ecosystem = "npm"
 ignore = true
 reason = "transitive dev-tooling only (prisma CLI config merge); patch is a major (8.0.0) that @prisma/config does not accept; input is our own config file, not attacker-controlled"
+
+# braces 3.0.3 — GHSA-vfj7-8cjw-p6xm (CVSS 4.0 8.7; stack-exhaustion DoS on deeply
+# nested patterns). Published 2026-09-18, reached the scanner's feed 2026-10-03 and
+# turned `audit` red on an unrelated PR — nothing in this repo changed.
+#
+# There is NO fixed version to bump to, and that is checked, not assumed:
+#   · OSV lists `introduced: 0` / `last_affected: 3.0.3` with no `fixed` event at all;
+#   · npm's `latest` for braces IS 3.0.3 (dist-tags.latest, and 3.0.3 is the highest
+#     3.x published). So this is not a "could have upgraded" case.
+#
+# Not reachable from any production closure, also measured rather than asserted:
+#   · `pnpm why braces --prod -r` → empty. The same probe lists 11+ prod consumers
+#     for `pg` and nothing for dev-only `tsup`, so the empty result is a real answer
+#     and not a silent probe failure.
+#   · The two resolutions are micromatch@4.0.8 (via fast-glob / http-proxy-middleware /
+#     lint-staged) and chokidar@3.6.0 (via c12 / sass / tsup / webpack-dev-server) —
+#     build and dev tooling, fed glob patterns we write ourselves.
+#
+# Impact class is availability only (CVSS vector ...VC:N/VI:N/VA:H...): the worst case
+# is a build or dev-server process exhausting its stack on a pattern we authored.
+#
+# Revisit when braces ships a fix (then this entry stops matching and the alarm
+# returns — the point of per-package-version scoping). Do NOT widen this to an
+# IgnoredVulns-by-GHSA entry: a future regression putting the same CVE on a different
+# version must still be surfaced.
+[[PackageOverrides]]
+name = "braces"
+version = "3.0.3"
+ecosystem = "npm"
+ignore = true
+reason = "no fixed version exists (npm latest IS 3.0.3; OSV has last_affected with no fixed event); build/dev tooling only (micromatch, chokidar) and absent from every --prod closure; availability-only DoS on patterns we author ourselves"
