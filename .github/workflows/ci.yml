@@ -409,6 +409,18 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: node scripts/guardrails/scan-ownership-entrypoints.mjs --self-test
 
+      # 运营三平面在**数据层**只共享一张带平面维度的表（admin.operator_notices.target_planes，
+      # 全仓 DDL 里带平面的列就这一个）。那张表上已经出过一次缺陷：单条标记已读少了平面
+      # 谓词，而同文件的列表与「全部已读」都有——同一个判据长在一条分支上，另一条就是门没关。
+      # 本守卫拦第四条访问路径跳过这道谓词。三档（过滤 / 投影 / 都没有）里「投影」是发布者
+      # 视图的正解，所以它是门不是墙。--self-test 里有一条**真反例**：把 #568 那道谓词摘掉，
+      # 判据必须当场把它归成「都没有」。
+      - name: Operator notice plane predicate
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          node scripts/guardrails/check-notice-plane-scope.mjs
+          node scripts/guardrails/check-notice-plane-scope.mjs --self-test
+
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |
