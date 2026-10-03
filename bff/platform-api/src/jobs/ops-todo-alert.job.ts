@@ -21,17 +21,24 @@
  * 邮件有 4h 静默窗口、且漏看就没了；所以升档的那些**另外**写一条 critical 运营通告，
  * 留在运营台的列表里直到有人读它。每跨过一个阈值倍数写一条（去重键带 step），
  * 于是一件事拖得越久，台面上的 critical 就越多——而不是同一条被静默吞掉。
- * 这一步在 OperatorAlertsWiring.alertTodo 里做（文案与那三条告警在一处）。
+ * ALERT_KINDS 那九类在 OperatorAlertsWiring.alertTodo 里做（邮件 + 通告两半在一处）。
  *
- * 通告这一半**只覆盖 ALERT_KINDS**：它写在 alertTodo 里，而本作业只把 ALERT_KINDS 交给它。
- * 有升档阈值的四类中，confirm_payment / refund_audit / reprovision 都在下面那张表里，
- * 两半都有；`verification` 不在——它从未被 owner 裁定过要不要告警（明写在
- * scripts/guardrails/check-ops-todo-alerts.mjs 的 UNRULED）。而且它不是「顺手加进
- * ALERT_KINDS 就行」的一类：认证那一段要先拼 tenant_base，它引用
- * kyc.tenant_verifications / admin.risk_records / session.auth_sessions，全在本进程角色
- * svc_platform_api 的授权面之外（见下面「为什么这里传 includeApplicant: false」），
- * 加进来整轮作业就是 42501。所以 `verification` 升档后**只有待办页上的「已超时」标记，
- * 没有 critical 通告**——这要 owner 裁定 + 扩 97 的授权面两件事，不是漏接线。
+ * ── 通告覆盖全（2026-10-04，owner 裁定 3「通告尽量覆盖全」）──
+ * 此前只有四类有升档阈值、且通告半只覆盖 ALERT_KINDS：九类里六类升不了档，`verification`
+ * 升了档也没有通告。现在共享算法里**十类**有阈值（六类新加，默认值见
+ * service-ops-todos 的 `opsTodoThresholds`），而有阈值却不在 ALERT_KINDS 的类别走
+ * NOTICE_ONLY_KINDS：只写通告（OperatorAlertsWiring.noticeEscalatedTodo，与 alertTodo 的
+ * 通告半同一函数 composeEscalatedTodoNotice），一封邮件都不发——邮件半仍是 owner 未裁的
+ * 事（check-ops-todo-alerts 的 UNRULED 没动）。
+ * `verification` 进得了本进程，是因为它那一段 SQL 自 2026-10-04 起从 tenant_base 拆出，
+ * 只碰 tenancy.* 与 kyc.tenant_verifications（97 末尾已授 SELECT，2026-11-23 迁移灌活库），
+ * 零授权变更；itest 里 `set role svc_platform_api` 那条用例跑的就是本作业的两种调用形状。
+ * 守卫第 7 段对账：SQL 里有阈值的每一类都必须在 ALERT_KINDS ∪ NOTICE_ONLY_KINDS 里。
+ *
+ * ── 通告类别为什么另起一拼 ──
+ * `list` 的 limit 50 按 rose 优先、等得最久优先取。通告只写给升档行，而 verification 的
+ * 基准档是 amber——一旦 rose 待办 ≥ 50 条，amber 行永远挤不进同一拼，通告半个都没有且
+ * 不报错。所以 NOTICE_ONLY_KINDS 单独 list 一次，两拼各自 50。
  *
  * ── 读的是哪一份 ──
  * `@vxture/service-ops-todos` 的 OpsTodoRepository——admin 待办页读的也是它。此前作业自己
@@ -93,6 +100,17 @@ export const ALERT_KINDS: readonly OpsTodoKind[] = [
   "maintenance_overdue",
 ];
 
+/**
+ * 只写通告、不发邮件的类别（2026-10-04 owner 裁定 3「通告尽量覆盖全」）。
+ *
+ * 放这里的是「有升档阈值、而邮件半未被 owner 裁定」的类别：升档了就另写一条 critical
+ * 运营通告（noticeEscalatedTodo），邮件一封不发。`verification` 的邮件半仍在守卫的
+ * UNRULED 里——这张表不替 owner 裁邮件；要推邮件得先搬进 DECIDED 再进 ALERT_KINDS。
+ * `check-ops-todo-alerts` 第 7 段拿它与 ALERT_KINDS 的并集对账 SQL 里有阈值的类别：
+ * 有阈值却两边都不在 = 升档了也没人写通告，当场红。
+ */
+export const NOTICE_ONLY_KINDS: readonly OpsTodoKind[] = ["verification"];
+
 /** 待办要停留多久才值得打扰运营。 */
 const minAgeMinutes = (): number => {
   const raw = Number(process.env.OPS_TODO_ALERT_MIN_AGE_MINUTES);
@@ -143,16 +161,23 @@ export class OpsTodoAlertJob {
     }
   }
 
-  /** @returns 本轮实际发出的告警条数（命中静默窗口的不计）。 */
+  /**
+   * @returns 本轮实际发出的告警条数（邮件命中静默窗口的不计）+ 只写通告那一拼里升档的条数。
+   */
   private async pass(): Promise<number> {
-    const todos = await this.todos.list({
-      kinds: ALERT_KINDS,
+    const shape = {
       minAgeMinutes: minAgeMinutes(),
       limit: SCAN_LIMIT,
-      // 申报人与租户风险档来自本进程角色碰不到的 schema，且邮件用不到——见头注。
+      // 申报人与租户风险档来自本进程角色碰不到的 schema，且邮件 / 通告都用不到——见头注。
       includeApplicant: false,
+    } as const;
+    const todos = await this.todos.list({ kinds: ALERT_KINDS, ...shape });
+    // 另起一拼，不并进上面那拼：limit 50 按 rose 优先取，amber 的通告类别会被挤没——见头注。
+    const noticeOnly = await this.todos.list({
+      kinds: NOTICE_ONLY_KINDS,
+      ...shape,
     });
-    if (todos.length === 0) return 0;
+    if (todos.length === 0 && noticeOnly.length === 0) return 0;
 
     let alerted = 0;
     let unreachable = 0;
@@ -162,9 +187,22 @@ export class OpsTodoAlertJob {
       else if (result.sent > 0) alerted += 1;
     }
 
+    let noticed = 0;
+    for (const todo of noticeOnly) {
+      // 没升档的只上页面；升档的才写通告（去重键带 step，同一级只落一条）。
+      if (!todo.escalated) continue;
+      await this.alerts.noticeEscalatedTodo(todo);
+      noticed += 1;
+    }
+
     if (alerted > 0) {
       this.logger.log(
         `ops todo alert: ${alerted}/${todos.length} 条待办已通知运营（其余在 4h 静默窗口内）`,
+      );
+    }
+    if (noticed > 0) {
+      this.logger.log(
+        `ops todo alert: ${noticed}/${noticeOnly.length} 条只写通告的待办已升档，通告已写（同级去重）`,
       );
     }
     if (unreachable > 0) {
@@ -174,6 +212,6 @@ export class OpsTodoAlertJob {
           "请在运营台「运营账号」里补齐并验证邮箱，否则待办通知永远发不出去。",
       );
     }
-    return alerted;
+    return alerted + noticed;
   }
 }

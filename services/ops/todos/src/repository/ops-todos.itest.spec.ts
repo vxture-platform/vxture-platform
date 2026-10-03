@@ -10,15 +10,19 @@
  * 一张加油包单、两个注销中的账号、一个超时的维护窗口、一张认证 pending 的租户、
  * 一张未结工单 + 一张首响超时的工单。
  * 另钉三件事：minAge 过滤、kinds 过滤、升档边界（越过阈值才升，级数按倍数）。
+ * 2026-10-04（owner 裁定 3「通告尽量覆盖全」）起十类有升档阈值，六类新加的各一条用例，
+ * 且每一类都带一条「从错的起点算会得到另一个数」：加油包从申报腿算（不从 created_at）、
+ * 工单首响从破约时刻算（不从建单）、卡住的退款从「成为卡住」算（不从进入 processing）。
  *
- * 还钉一条别的地方钉不到的：**告警作业那个调用形状在 `svc_platform_api` 角色下跑得通**。
+ * 还钉一条别的地方钉不到的：**告警作业那两个调用形状在 `svc_platform_api` 角色下跑得通**。
  * Postgres 对语句里出现过的每一个关系查权限——那一支返不返回行都一样——所以一条顺手
  * join 了 `account.users` 的待办查询在本机（owner 连库）畅通无阻，到生产（那个角色只有
  * 7 个 schema + 逐表例外，见 97_service_roles.sql）就是 42501、整轮作业失败。静态守卫
  * （check-ops-todo-alerts 第 5 段）扫文本，这一条真跑。第三批把 ALERT_KINDS 扩到九类，
  * 其中 `ticket_sla` 碰 `support.tickets`、`maintenance_overdue` 碰
- * `admin.maintenance_windows`——两张都是 97 末尾的表级例外（2026-11-23 那份迁移灌的），
- * 所以这一条现在还顺带证明那两张例外真的够用。
+ * `admin.maintenance_windows`——两张都是 97 末尾的表级例外（2026-11-23 那份迁移灌的）；
+ * 2026-10-04 起 NOTICE_ONLY_KINDS 那一拼碰 `kyc.tenant_verifications`（同一份迁移灌的
+ * 第三张），所以这一条现在还顺带证明那三张例外真的够用。
  *
  * 整个 suite 跑在**一笔事务里并 ROLLBACK**（与 product-maintenance.itest 同款）：仓储拿到的
  * 「pool」其实是同一个 client，它发的每一条查询都在这笔事务里。造的用户 / 租户 / 订单 /
@@ -61,11 +65,15 @@ const ALERT_KINDS: readonly OpsTodoKind[] = [
   "maintenance_overdue",
 ];
 
+/** 作业的第二拼：只写通告的类别，逐字同 bff/platform-api 的 NOTICE_ONLY_KINDS（守卫对账）。 */
+const NOTICE_ONLY_KINDS: readonly OpsTodoKind[] = ["verification"];
+
 describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () => {
   let pool: Pool;
   let client: PoolClient;
   let repo: OpsTodoRepository;
   let userId: string;
+  let tenantId: string;
   let tenantNo: string;
   let userNoDeleting: string;
   let userNoPurge: string;
@@ -177,7 +185,7 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
        values ($1, $2, 'organization', $3, 'pending') returning id, tenant_no::text`,
       [`ITEST 认证名 ${RUN_ID}`, `ITEST 简称 ${RUN_ID}`, userId],
     );
-    const tenantId = tenant.rows[0]!.id;
+    tenantId = tenant.rows[0]!.id;
     tenantNo = tenant.rows[0]!.tenant_no;
     // 租户资料：region / industry / scale 三列的来源（region 无 province/city 源列，
     // 取 address 再退 country_code——与 tenants.router 同源）。
@@ -186,9 +194,11 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
        values ($1, 'manufacturing', '50-200', 'CN', 'ITEST 上海市浦东新区')`,
       [tenantId],
     );
+    // 20 分钟前提交：它是 verification 的等待起点，要能过作业的 minAge=15
+    // （作业那两个调用形状在 svc_platform_api 下的用例要在回来的行里看到它）。
     await client.query(
-      `insert into kyc.tenant_verifications (tenant_id, verification_type, status)
-       values ($1, 'enterprise', 'pending')`,
+      `insert into kyc.tenant_verifications (tenant_id, verification_type, status, created_at)
+       values ($1, 'enterprise', 'pending', now() - interval '20 minutes')`,
       [tenantId],
     );
     // 五个工作区：uidx_orders_open_per_product 只允许每个 (workspace, product) 一张在途单，
@@ -495,12 +505,14 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
       [tenantId, ticketNoSla],
     );
 
-    // 进行中的维护窗口，计划 2 小时前就该结束了。created_by 是运营裸值（无 FK）。
+    // 进行中的维护窗口，计划 20 分钟前就该结束了（过作业的 minAge=15，但在默认升档阈值
+    // 30 分钟之内——「全量一条都没升档」那条用例靠它；90 分钟的升档用例在 savepoint 里另改）。
+    // created_by 是运营裸值（无 FK）。
     const windowRow = await client.query<{ id: string }>(
       `insert into admin.maintenance_windows
          (severity, status, title, start_at, end_at, created_by)
        values ('minor', 'in_progress', $1,
-               now() - interval '4 hours', now() - interval '2 hours', gen_random_uuid())
+               now() - interval '80 minutes', now() - interval '20 minutes', gen_random_uuid())
        returning id`,
       [windowTitle],
     );
@@ -578,8 +590,13 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
     expect(
       items.filter((i) => UUID_SHAPE.test(i.id)).map((i) => i.kind),
     ).toEqual(["maintenance_overdue"]);
-    // 一条都没升档：本 suite 的等待时长都在默认阈值之内，除了下面单独试的那两条。
+    // 一条都没升档：本 suite 的等待时长都在十二个默认阈值之内（维护窗口超时 20 分钟 < 30；
+    // 工单首响破约 1 小时 < 4；退款失败 3 小时 < 4；加油包没申报腿；其余更宽）。
+    // 升档的边界各在下面自己的用例里用 thresholds 覆盖钉。
     expect(items.filter((i) => i.escalated).map((i) => i.kind)).toEqual([]);
+    for (const item of items) {
+      expect(item.escalationStep, item.kind).toBe(0);
+    }
   });
 
   it("首批六类的字段按契约（只有可视码，金额 / 产品 / 申报人 / 租户属性各归各）", async () => {
@@ -815,7 +832,12 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
       progress: "maintenanceOverdue",
       href: null,
     });
-    expect(hoursWaited(kinds.get("maintenance_overdue")!)).toBeGreaterThan(1.5);
+    expect(hoursWaited(kinds.get("maintenance_overdue")!) * 60).toBeGreaterThan(
+      15,
+    );
+    expect(hoursWaited(kinds.get("maintenance_overdue")!) * 60).toBeLessThan(
+      30,
+    );
   });
 
   /**
@@ -1076,6 +1098,271 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
     await client.query("rollback to savepoint escalate_probe");
   });
 
+  /* ── 2026-10-04 覆盖全：六类新阈值各一条，且每一类钉住「起点」──────────────────── */
+
+  const stepOf = async (
+    kinds: OpsTodoKind[],
+    thresholds: Record<string, number>,
+    subjectNo: string,
+  ) => {
+    const rows = mine(await repo.list({ kinds, thresholds })).filter(
+      (i) => i.subject.no === subjectNo,
+    );
+    expect(rows, `${kinds.join(",")} / ${subjectNo}`).toHaveLength(1);
+    return rows[0]!;
+  };
+
+  it("refund_execute：从审核时刻算，audit_at 为 null 退回 updated_at", async () => {
+    await client.query("savepoint exec_probe");
+    // 审核通过 48 小时前、最近一次改动 1 小时前：阈值 24h → 2 级；从 updated_at 算会是 0。
+    await client.query(
+      `update billing.refunds
+          set audit_at = now() - interval '48 hours', updated_at = now() - interval '1 hour'
+        where refund_no = $1`,
+      [refundNoExec],
+    );
+    const two = await stepOf(
+      ["refund_execute"],
+      { refundExecuteHours: 24 },
+      refundNoExec,
+    );
+    expect(two).toMatchObject({
+      escalated: true,
+      escalationStep: 2,
+      severity: "rose",
+    });
+    // 阈值 49h → 没越过。
+    expect(
+      await stepOf(
+        ["refund_execute"],
+        { refundExecuteHours: 49 },
+        refundNoExec,
+      ),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    // audit_at 抹掉 → 退回 updated_at（25 小时前）：阈值 24h → 1 级，不再是 2。
+    await client.query(
+      `update billing.refunds set audit_at = null, updated_at = now() - interval '25 hours'
+        where refund_no = $1`,
+      [refundNoExec],
+    );
+    expect(
+      await stepOf(
+        ["refund_execute"],
+        { refundExecuteHours: 24 },
+        refundNoExec,
+      ),
+    ).toMatchObject({ escalated: true, escalationStep: 1 });
+    await client.query("rollback to savepoint exec_probe");
+  });
+
+  it("refund_processing_stuck：从「成为卡住」那一刻（updated_at + 成熟期）算，不从进入 processing 算", async () => {
+    await client.query("savepoint stuck_probe");
+    await client.query(
+      `update billing.refunds set updated_at = now() - interval '10 hours' where refund_no = $1`,
+      [refundNoStuck],
+    );
+    // 进入 processing 10h 前，成熟期 4h → 6h 前成为卡住；阈值 3h → floor(6/3) = 2 级。
+    // 从 updated_at 算会是 floor(10/3) = 3——那就把「还在正常流程里」的 4 小时也记成了超时。
+    const two = await stepOf(
+      ["refund_processing_stuck"],
+      { refundStuckHours: 4, refundProcessingHours: 3 },
+      refundNoStuck,
+    );
+    expect(two).toMatchObject({
+      escalated: true,
+      escalationStep: 2,
+      severity: "rose",
+    });
+    // 等待列仍是 updated_at（10 小时前）——起点改的是升档，不是页面上的「已等」。
+    expect(
+      (Date.now() - new Date(two.waitingSince).getTime()) / 3_600_000,
+    ).toBeGreaterThan(9.5);
+    // 阈值 7h：卡住 6h < 7h → 不升档。
+    expect(
+      await stepOf(
+        ["refund_processing_stuck"],
+        { refundStuckHours: 4, refundProcessingHours: 7 },
+        refundNoStuck,
+      ),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    // 成熟期 11h：进入 processing 才 10h → 根本还不是待办。
+    const notYet = mine(
+      await repo.list({
+        kinds: ["refund_processing_stuck"],
+        thresholds: { refundStuckHours: 11 },
+      }),
+    );
+    expect(notYet).toEqual([]);
+    await client.query("rollback to savepoint stuck_probe");
+  });
+
+  it("refund_failed：从失败时刻（updated_at）算", async () => {
+    await client.query("savepoint failed_probe");
+    await client.query(
+      `update billing.refunds set updated_at = now() - interval '9 hours' where refund_no = $1`,
+      [refundNoFailed],
+    );
+    expect(
+      await stepOf(["refund_failed"], { refundFailedHours: 4 }, refundNoFailed),
+    ).toMatchObject({ escalated: true, escalationStep: 2 });
+    expect(
+      await stepOf(
+        ["refund_failed"],
+        { refundFailedHours: 10 },
+        refundNoFailed,
+      ),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    expect(
+      await stepOf(["refund_failed"], { refundFailedHours: 1 }, refundNoFailed),
+    ).toMatchObject({ escalationStep: 9 });
+    await client.query("rollback to savepoint failed_probe");
+  });
+
+  it("addon_pending_confirm：从申报腿算，没申报过不升档（无论阈值多小）", async () => {
+    await client.query("savepoint addon_probe");
+    // 单是 30 小时前下的，客户 5 小时前才申报。
+    const bill = await client.query<{ id: string }>(
+      `insert into billing.invoices
+         (tenant_id, bill_no, order_id, bill_cycle, cycle_start_date, cycle_end_date,
+          total_amount, payable_amount, paid_amount, bill_status, created_by_type)
+       values ($1, $2, null, 'one_off', current_date, current_date, 99, 99, 0, 'paying', 'customer')
+       returning id`,
+      [tenantId, NO("BILL-ADDON")],
+    );
+    const billId = bill.rows[0]!.id;
+    await client.query(
+      `update metering.addon_purchases
+          set invoice_id = $2, created_at = now() - interval '30 hours'
+        where order_no = $1`,
+      [addonOrderNo, billId],
+    );
+    // 还没申报：阈值 1h 也不升档（从 created_at 算会是 12 级封顶）。
+    expect(
+      await stepOf(
+        ["addon_pending_confirm"],
+        { addonConfirmHours: 1 },
+        addonOrderNo,
+      ),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    const leg = await client.query<{ id: string }>(
+      `insert into billing.payments
+         (tenant_id, bill_id, pay_order_no, pay_source, pay_channel, total_amount,
+          paid_amount, pay_status, actor_type, actor_id, created_at)
+       values ($1, $2, $3, 'offline', 'bank_transfer', 99, 0, 'pending_verify', 'customer', $4,
+               now() - interval '5 hours')
+       returning id`,
+      [tenantId, billId, NO("PAY-ADDON"), userId],
+    );
+    // 申报 5h 前：阈值 4h → 1 级；从 created_at（30h）算会是 7 级。
+    const one = await stepOf(
+      ["addon_pending_confirm"],
+      { addonConfirmHours: 4 },
+      addonOrderNo,
+    );
+    expect(one).toMatchObject({
+      escalated: true,
+      escalationStep: 1,
+      severity: "rose",
+    });
+    // 等待列仍是 created_at（30 小时前）。
+    expect(
+      (Date.now() - new Date(one.waitingSince).getTime()) / 3_600_000,
+    ).toBeGreaterThan(29);
+    expect(
+      await stepOf(
+        ["addon_pending_confirm"],
+        { addonConfirmHours: 6 },
+        addonOrderNo,
+      ),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    // 申报腿撤掉 → 又回到不升档。
+    await client.query(`delete from billing.payments where id = $1`, [
+      leg.rows[0]!.id,
+    ]);
+    expect(
+      await stepOf(
+        ["addon_pending_confirm"],
+        { addonConfirmHours: 1 },
+        addonOrderNo,
+      ),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    await client.query("rollback to savepoint addon_probe");
+  });
+
+  it("ticket_sla：从破约时刻（建单 + 本档 SLA）算，不从建单算", async () => {
+    await client.query("savepoint ticket_sla_probe");
+    // p1 工单 12 小时前建、从没回过：SLA 4h → 8 小时前破约；阈值 4h → 2 级。
+    // 从建单算会是 3 级——那就把 SLA 之内的 4 小时也算成了「破约后拖的」。
+    await client.query(
+      `update support.tickets set created_at = now() - interval '12 hours' where ticket_no = $1`,
+      [ticketNoSla],
+    );
+    const two = await stepOf(
+      ["ticket_sla"],
+      { ticketSlaHours: 4 },
+      ticketNoSla,
+    );
+    expect(two).toMatchObject({
+      escalated: true,
+      escalationStep: 2,
+      severity: "rose",
+    });
+    // 等待列仍从建单算（12 小时前）。
+    expect(
+      (Date.now() - new Date(two.waitingSince).getTime()) / 3_600_000,
+    ).toBeGreaterThan(11.5);
+    expect(
+      await stepOf(["ticket_sla"], { ticketSlaHours: 9 }, ticketNoSla),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    expect(
+      await stepOf(["ticket_sla"], { ticketSlaHours: 1 }, ticketNoSla),
+    ).toMatchObject({ escalationStep: 8 });
+    // 首响一写上，这一类当场消失（已有「同一张工单只出一条」那条用例，这里只证升档也跟着没了）。
+    await client.query(
+      `update support.tickets set first_response_at = now() where ticket_no = $1`,
+      [ticketNoSla],
+    );
+    expect(
+      mine(
+        await repo.list({
+          kinds: ["ticket_sla"],
+          thresholds: { ticketSlaHours: 1 },
+        }),
+      ),
+    ).toEqual([]);
+    await client.query("rollback to savepoint ticket_sla_probe");
+  });
+
+  it("maintenance_overdue：从计划结束时刻算（分钟尺度），收了窗口就不是待办", async () => {
+    await client.query("savepoint window_probe");
+    await client.query(
+      `update admin.maintenance_windows set end_at = now() - interval '90 minutes' where id = $1`,
+      [windowId],
+    );
+    expect(
+      await stepOf(
+        ["maintenance_overdue"],
+        { maintenanceOverdueMinutes: 30 },
+        windowTitle,
+      ),
+    ).toMatchObject({ escalated: true, escalationStep: 3, severity: "rose" });
+    expect(
+      await stepOf(
+        ["maintenance_overdue"],
+        { maintenanceOverdueMinutes: 91 },
+        windowTitle,
+      ),
+    ).toMatchObject({ escalated: false, escalationStep: 0 });
+    await client.query(
+      `update admin.maintenance_windows set status = 'completed' where id = $1`,
+      [windowId],
+    );
+    expect(mine(await repo.list({ kinds: ["maintenance_overdue"] }))).toEqual(
+      [],
+    );
+    await client.query("rollback to savepoint window_probe");
+  });
+
   it("minAge：只留在当前状态里停够久的（刚造的那几条掉出）", async () => {
     const aged = mine(await repo.list({ minAgeMinutes: 10 }));
     trace(
@@ -1083,7 +1370,7 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
       aged.map((i) => i.kind),
     );
     // 刚造的三条掉出：follow_up_balance（updated_at 就是刚才）、refund_audit（created_at
-    // 刚才）、ticket（updated_at 刚才）；verification 的等待起点是刚插的认证记录。
+    // 刚才）、ticket（updated_at 刚才）；verification 的等待起点是 20 分钟前的认证提交，留下。
     expect(aged.map((i) => i.kind).sort()).toEqual(
       [
         "confirm_payment",
@@ -1096,6 +1383,7 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
         "invoice_applying",
         "invoice_approved",
         "addon_pending_confirm",
+        "verification",
         "ticket_sla",
         "maintenance_overdue",
         "deletion_pending",
@@ -1169,15 +1457,19 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
    * schema + 逐条表级例外），不是 owner。Postgres 对语句里**出现过的每一个关系**查权限，
    * 所以只要文本里有一个越界的 join，这一条就 42501——而本机以 owner 跑的所有别的用例都
    * 不会发现它。第三批的九类里有两类落在表级例外上（support.tickets /
-   * admin.maintenance_windows），这一条同时证明那两张例外真的够用。
+   * admin.maintenance_windows）；2026-10-04 起作业的第二拼（NOTICE_ONLY_KINDS）落在第三张
+   * （kyc.tenant_verifications）上——这一条同时证明那三张例外真的够用，且 verification
+   * 从 tenant_base 拆出之后不再把 admin.risk_records / session.auth_sessions 带进文本。
    *
    * 角色本机应当已由 97 建好；万一没有（没供给过 TD-020），就在这笔事务里临时建一个、
    * 按 97 的同一张授权面授权（含末尾那几条表级例外），跟着 rollback 一起消失。
    */
-  it("作业那个调用形状在 svc_platform_api 角色下真跑得通（生产权限面）", async () => {
+  it("作业那两个调用形状在 svc_platform_api 角色下真跑得通（生产权限面，含 verification）", async () => {
     await client.query("savepoint svc_role");
     let executed: OpsTodo[] | null = null;
     let scoped: OpsTodo[] | null = null;
+    let noticeExecuted: OpsTodo[] | null = null;
+    let combined: OpsTodo[] | null = null;
     let failure: unknown = null;
     try {
       const present = await client.query(
@@ -1191,20 +1483,31 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
         await client.query(
           `grant select, insert, update, delete on all tables in schema metering, product, sharing, provisioning, tenancy, billing, promotion to svc_platform_api`,
         );
-        // 97 末尾的表级例外（2026-11-23 那份迁移同款）：作业那一拼要读这两张。
+        // 97 末尾的表级例外（2026-11-23 那份迁移同款）：作业那两拼要读这三张。
         await client.query(`grant usage on schema support to svc_platform_api`);
         await client.query(`grant usage on schema admin to svc_platform_api`);
+        await client.query(`grant usage on schema kyc to svc_platform_api`);
         await client.query(
           `grant select on support.tickets to svc_platform_api`,
         );
         await client.query(
           `grant select on admin.maintenance_windows to svc_platform_api`,
         );
+        await client.query(
+          `grant select on kyc.tenant_verifications to svc_platform_api`,
+        );
       }
       await client.query(`set role svc_platform_api`);
-      // 逐字就是 OpsTodoAlertJob.pass() 的那一套参数。
+      // 逐字就是 OpsTodoAlertJob.pass() 的第一拼。
       executed = await repo.list({
         kinds: [...ALERT_KINDS],
+        minAgeMinutes: 15,
+        limit: 50,
+        includeApplicant: false,
+      });
+      // 第二拼：只写通告的类别（2026-10-04）。
+      noticeExecuted = await repo.list({
+        kinds: [...NOTICE_ONLY_KINDS],
         minAgeMinutes: 15,
         limit: 50,
         includeApplicant: false,
@@ -1212,6 +1515,12 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
       // 同一角色下再取一遍不限 50 条的，好在共享的本机库里稳定地找到本 suite 造的行。
       scoped = await repo.list({
         kinds: [...ALERT_KINDS],
+        minAgeMinutes: 15,
+        includeApplicant: false,
+      });
+      // 两拼并成一拼也跑得通（守卫第 5 段按并集对账片段文本，这里按并集真跑一次）。
+      combined = await repo.list({
+        kinds: [...ALERT_KINDS, ...NOTICE_ONLY_KINDS],
         minAgeMinutes: 15,
         includeApplicant: false,
       });
@@ -1224,6 +1533,7 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
     if (failure) throw failure;
 
     expect(Array.isArray(executed)).toBe(true);
+    expect(Array.isArray(noticeExecuted)).toBe(true);
     const ours = mine(scoped!);
     trace(
       "svc_platform_api",
@@ -1242,6 +1552,22 @@ describe.runIf(RUN)("ops todos — repository SQL (live DB, rolled back)", () =>
         "maintenance_overdue",
       ].sort(),
     );
+    // 第二拼回来的行里有本 suite 的认证待办（提交于 20 分钟前，过 minAge=15），且只有这一类。
+    const oursNotice = mine(noticeExecuted!);
+    expect(oursNotice.map((i) => i.kind)).toEqual(["verification"]);
+    expect(oursNotice[0]).toMatchObject({
+      id: `verification:${tenantNo}`,
+      subject: { type: "tenant", no: tenantNo },
+      href: "/verifications",
+      applicant: null,
+      tenant: { name: `ITEST 简称 ${RUN_ID}`, riskLevel: null },
+    });
+    // 并集那一拼 = 八类 + verification。
+    expect(
+      mine(combined!)
+        .map((i) => i.kind)
+        .sort(),
+    ).toEqual([...ours.map((i) => i.kind), "verification"].sort());
     for (const todo of ours) {
       // 富化块整块不要：申报人为 null，风险档为 null。
       expect(todo.applicant, todo.kind).toBeNull();

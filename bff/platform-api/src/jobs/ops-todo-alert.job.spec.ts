@@ -1,10 +1,15 @@
 /**
  * ops-todo-alert.job.spec.ts —— 作业只挑类别 / 停留 / 上限，判据在共享算法里；
  * 邮件素材由 todoAlertInput 纯函数给（这里一并钉九类文案与去重键）。
+ * 2026-10-04 起作业有两拼：ALERT_KINDS（邮件 + 通告）与 NOTICE_ONLY_KINDS（只写通告）。
  */
 import { describe, expect, it, vi } from "vitest";
 import type { OpsTodo, OpsTodoRepository } from "@vxture/service-ops-todos";
-import { ALERT_KINDS, OpsTodoAlertJob } from "./ops-todo-alert.job";
+import {
+  ALERT_KINDS,
+  NOTICE_ONLY_KINDS,
+  OpsTodoAlertJob,
+} from "./ops-todo-alert.job";
 import {
   todoAlertInput,
   type OperatorAlertsWiring,
@@ -51,21 +56,33 @@ const todo = (over: Partial<OpsTodo>): OpsTodo => ({
 
 const ok = { sent: 1, failed: 0, suppressed: false, noRecipient: false };
 
+/**
+ * 假仓储按 `kinds` 分两拼回：ALERT_KINDS 那拼回 items，NOTICE_ONLY_KINDS 那拼回 noticeItems。
+ * 实现具名（不走 mockImplementationOnce）：按调用顺序排桩会把「两拼谁先谁后」也钉死，
+ * 而那不是契约。
+ */
 const jobWith = (
   items: OpsTodo[],
   alertTodo = vi.fn().mockResolvedValue(ok),
+  noticeItems: OpsTodo[] = [],
 ) => {
-  const list = vi.fn().mockResolvedValue(items);
+  const impl = async (opts: { kinds: readonly string[] }) => {
+    if (opts.kinds === ALERT_KINDS) return items;
+    if (opts.kinds === NOTICE_ONLY_KINDS) return noticeItems;
+    throw new Error(`list 收到未知的 kinds：${opts.kinds.join(",")}`);
+  };
+  const list = vi.fn(impl);
+  const noticeEscalatedTodo = vi.fn().mockResolvedValue(undefined);
   const job = new OpsTodoAlertJob(
     { list } as unknown as OpsTodoRepository,
-    { alertTodo } as unknown as OperatorAlertsWiring,
+    { alertTodo, noticeEscalatedTodo } as unknown as OperatorAlertsWiring,
     noopHeartbeat,
   );
-  return { job, list, alertTodo };
+  return { job, list, alertTodo, noticeEscalatedTodo };
 };
 
 describe("OpsTodoAlertJob.pass", () => {
-  it("向共享算法要裁定过的九类、默认 15 分钟、上限 50、不要富化块，每条各发一封", async () => {
+  it("向共享算法要裁定过的九类、默认 15 分钟、上限 50、不要富化块，每条各发一封；只写通告的类别另起一拼", async () => {
     const items = [
       todo({}),
       todo({
@@ -75,8 +92,9 @@ describe("OpsTodoAlertJob.pass", () => {
         progress: "refundAudit",
       }),
     ];
-    const { job, list, alertTodo } = jobWith(items);
+    const { job, list, alertTodo, noticeEscalatedTodo } = jobWith(items);
     await job.tick();
+    expect(list).toHaveBeenCalledTimes(2);
     expect(list).toHaveBeenCalledWith({
       kinds: ALERT_KINDS,
       minAgeMinutes: 15,
@@ -84,9 +102,68 @@ describe("OpsTodoAlertJob.pass", () => {
       // 少了这一项，生产上整条查询 42501：本进程的角色没有 account / admin 的多数表。
       includeApplicant: false,
     });
+    // 第二拼：同样的停留 / 上限 / 不带富化块，只是类别换成只写通告的那几类。
+    // 必须是**另一拼**：limit 50 按 rose 优先取，amber 的通告类别并进第一拼会被挤没。
+    expect(list).toHaveBeenCalledWith({
+      kinds: NOTICE_ONLY_KINDS,
+      minAgeMinutes: 15,
+      limit: 50,
+      includeApplicant: false,
+    });
     expect(alertTodo).toHaveBeenCalledTimes(2);
     expect(alertTodo).toHaveBeenCalledWith(items[0]);
     expect(alertTodo).toHaveBeenCalledWith(items[1]);
+    expect(noticeEscalatedTodo).not.toHaveBeenCalled();
+  });
+
+  it("只写通告那一拼：升档的调 noticeEscalatedTodo 一次、不发邮件；没升档的什么都不做", async () => {
+    const escalated = todo({
+      id: "verification:200000010",
+      kind: "verification",
+      severity: "rose",
+      priority: 20,
+      subject: { type: "tenant", no: "200000010" },
+      amount: null,
+      product: null,
+      progress: "verification",
+      href: "/verifications",
+      escalated: true,
+      escalationStep: 2,
+    });
+    const calm = todo({
+      id: "verification:200000011",
+      kind: "verification",
+      severity: "amber",
+      priority: 20,
+      subject: { type: "tenant", no: "200000011" },
+      amount: null,
+      product: null,
+      progress: "verification",
+      href: "/verifications",
+      escalated: false,
+      escalationStep: 0,
+    });
+    const { job, alertTodo, noticeEscalatedTodo } = jobWith(
+      [],
+      vi.fn().mockResolvedValue(ok),
+      [escalated, calm],
+    );
+    await job.tick();
+    expect(noticeEscalatedTodo).toHaveBeenCalledTimes(1);
+    expect(noticeEscalatedTodo).toHaveBeenCalledWith(escalated);
+    // 一封邮件都不发：verification 的邮件半仍未裁定（守卫的 UNRULED）。
+    expect(alertTodo).not.toHaveBeenCalled();
+    // 本轮不算失败（没有「无人可达」这回事：通告不要收件人）。
+    expect(noopHeartbeat.recordFailure).not.toHaveBeenCalled();
+  });
+
+  it("只写通告的类别逐字：verification（有阈值、邮件半未裁的那一类）", () => {
+    expect(NOTICE_ONLY_KINDS).toEqual(["verification"]);
+    // 两拼不重叠：同一类既发邮件又单独写通告会写两条一样的通告（去重键相同，第二条落 inserted:false，
+    // 但那是靠库兜住，不是设计）。
+    for (const kind of NOTICE_ONLY_KINDS) {
+      expect(ALERT_KINDS, kind).not.toContain(kind);
+    }
   });
 
   /**
@@ -108,10 +185,11 @@ describe("OpsTodoAlertJob.pass", () => {
     ]);
   });
 
-  it("没有待办就不发", async () => {
-    const { job, alertTodo } = jobWith([]);
+  it("没有待办就不发（两拼都空）", async () => {
+    const { job, alertTodo, noticeEscalatedTodo } = jobWith([]);
     await job.tick();
     expect(alertTodo).not.toHaveBeenCalled();
+    expect(noticeEscalatedTodo).not.toHaveBeenCalled();
   });
 
   it("有待办却无人可达 → 本轮记失败（心跳 recordFailure）", async () => {

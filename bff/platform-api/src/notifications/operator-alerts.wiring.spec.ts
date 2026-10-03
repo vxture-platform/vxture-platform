@@ -214,6 +214,136 @@ describe("composeEscalatedTodoNotice", () => {
     expect(notice.body).not.toMatch(UUID_SHAPE);
     expect(notice.body).toContain("已隐去内部 id");
   });
+
+  /**
+   * 2026-10-04 owner 裁定 3「通告尽量覆盖全」：十类有升档阈值，每一类每一级恰好一条通告。
+   * 表驱动遍历十类（与 check-ops-todo-alerts 的 ESCALATES 逐字一致）：去重键 = `{id}:{step}`，
+   * 同一级同一键、不同级不同键；标签表对每一种主体都有词（不回落成「待办」）。
+   */
+  it("十类升档通告：每一类每一级恰好一个去重键，主体标签都有词", () => {
+    const cases: ReadonlyArray<{
+      kind: OpsTodo["kind"];
+      subject: OpsTodo["subject"];
+      id: string;
+      label: string;
+      href: string | null;
+    }> = [
+      {
+        kind: "confirm_payment",
+        subject: { type: "order", no: "ORD-1" },
+        id: "confirm_payment:ORD-1",
+        label: "订单",
+        href: "/orders/ORD-1",
+      },
+      {
+        kind: "refund_audit",
+        subject: { type: "refund", no: "RFD-1" },
+        id: "refund_audit:RFD-1",
+        label: "退款单",
+        href: "/orders/ORD-1",
+      },
+      {
+        kind: "reprovision",
+        subject: { type: "order", no: "ORD-2" },
+        id: "reprovision:ORD-2",
+        label: "订单",
+        href: "/orders/ORD-2",
+      },
+      {
+        kind: "verification",
+        subject: { type: "tenant", no: "200000010" },
+        id: "verification:200000010",
+        label: "租户",
+        href: "/verifications",
+      },
+      {
+        kind: "refund_execute",
+        subject: { type: "refund", no: "RFD-2" },
+        id: "refund_execute:RFD-2",
+        label: "退款单",
+        href: "/orders/ORD-1",
+      },
+      {
+        kind: "refund_processing_stuck",
+        subject: { type: "refund", no: "RFD-3" },
+        id: "refund_processing_stuck:RFD-3",
+        label: "退款单",
+        href: "/orders/ORD-1",
+      },
+      {
+        kind: "refund_failed",
+        subject: { type: "refund", no: "RFD-4" },
+        id: "refund_failed:RFD-4",
+        label: "退款单",
+        href: "/orders/ORD-1",
+      },
+      {
+        kind: "addon_pending_confirm",
+        subject: { type: "addon", no: "ORD-ADDON-1" },
+        id: "addon_pending_confirm:ORD-ADDON-1",
+        label: "加油包单",
+        href: "/addon-orders",
+      },
+      {
+        kind: "ticket_sla",
+        subject: { type: "ticket", no: "TCK-1" },
+        id: "ticket_sla:TCK-1",
+        label: "工单",
+        href: "/tickets/TCK-1",
+      },
+      {
+        kind: "maintenance_overdue",
+        subject: { type: "maintenance", no: "例行维护" },
+        id: "maintenance_overdue:aaaaaaaa-1111-4111-8111-111111111111",
+        label: "维护窗口",
+        href: null,
+      },
+    ];
+    expect(cases).toHaveLength(10);
+    const keys = new Set<string>();
+    for (const c of cases) {
+      const base = escalatedTodo({
+        id: c.id,
+        kind: c.kind,
+        subject: c.subject,
+        href: c.href,
+        tenant:
+          c.kind === "maintenance_overdue" ? null : escalatedTodo().tenant,
+        amount:
+          c.subject.type === "order" ||
+          c.subject.type === "refund" ||
+          c.subject.type === "addon"
+            ? { value: "99.00", currency: "CNY", paid: null }
+            : null,
+      });
+      for (const step of [1, 2, 3]) {
+        const notice = composeEscalatedTodoNotice({
+          ...base,
+          escalationStep: step,
+        });
+        expect(notice.referenceId, `${c.kind} step ${step}`).toBe(
+          `${c.id}:${step}`,
+        );
+        expect(notice.referenceType).toBe("ops_signal");
+        expect(notice.severity).toBe("critical");
+        expect(notice.expiresAt).toBeNull();
+        expect(notice.title, c.kind).toContain(`${c.label} ${c.subject.no}`);
+        expect(notice.title).not.toMatch(UUID_SHAPE);
+        expect(notice.body).not.toMatch(UUID_SHAPE);
+        expect(notice.link).toBe(c.href);
+        expect(notice.targetPlanes).toEqual(
+          c.href ? ["admin"] : ["opera", "admin"],
+        );
+        keys.add(notice.referenceId);
+      }
+      // 同一级再算一遍 → 同一个键（一步只播一条）。
+      expect(
+        composeEscalatedTodoNotice({ ...base, escalationStep: 2 }).referenceId,
+      ).toBe(`${c.id}:2`);
+    }
+    // 十类 × 三级 = 三十个互不相同的键。
+    expect(keys.size).toBe(30);
+  });
 });
 
 /* ── 邮件素材：维护窗口那一支的两道处理（2026-09-28 批 3 复审补）───────────────── */
@@ -412,6 +542,52 @@ describe("OperatorAlertsWiring —— 邮件正文同样不许带 uuid", () => {
       escalatedTodo({ escalated: false, escalationStep: 0 }),
     );
     expect(sent()).toHaveLength(1);
+    expect(notices()).toEqual([]);
+  });
+
+  /**
+   * 只写通告那条路（作业的 NOTICE_ONLY_KINDS，2026-10-04）：升档 → 恰好一条通告、零封邮件；
+   * 没升档的传进来是接线错，抛——与 todoAlertInput 的 default throw 同一哲学。
+   */
+  it("noticeEscalatedTodo：升档 → 恰好一条 critical 通告、不发邮件；去重键与 alertTodo 那半同一格式", async () => {
+    const { wiring, sent, notices } = wiringWithCapture();
+    await wiring.noticeEscalatedTodo(
+      escalatedTodo({
+        id: "verification:200000010",
+        kind: "verification",
+        severity: "rose",
+        priority: 20,
+        subject: { type: "tenant", no: "200000010" },
+        amount: null,
+        href: "/verifications",
+        escalationStep: 3,
+      }),
+    );
+    expect(sent()).toEqual([]);
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toMatchObject({
+      severity: "critical",
+      targetPlanes: ["admin"],
+      link: "/verifications",
+      referenceType: "ops_signal",
+      referenceId: "verification:200000010:3",
+    });
+    expect(notices()[0]!.title).toContain("租户 200000010");
+  });
+
+  it("noticeEscalatedTodo：没升档的直接抛，不静默跳过", async () => {
+    const { wiring, sent, notices } = wiringWithCapture();
+    await expect(
+      wiring.noticeEscalatedTodo(
+        escalatedTodo({
+          kind: "verification",
+          subject: { type: "tenant", no: "200000010" },
+          escalated: false,
+          escalationStep: 0,
+        }),
+      ),
+    ).rejects.toThrow(/未升档/);
+    expect(sent()).toEqual([]);
     expect(notices()).toEqual([]);
   });
 

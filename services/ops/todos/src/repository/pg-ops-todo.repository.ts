@@ -73,13 +73,28 @@
  * ——这一页是排班表，不是动态流）。同优先级不同类是有意的（confirm_payment 与 refund_audit
  * 都是 2，refund_execute 与 reprovision 都是 3）：它们一样急，谁先办看谁等得久。
  *
- * ── 升档（2026-09-28 第三批）──
- * 四类有「等太久」的阈值（env，见 `opsTodoThresholds`）：越过一次阈值就把严重度升一档
+ * ── 升档（2026-09-28 第三批；2026-10-04 owner 裁定 3「通告尽量覆盖全」铺到十类）──
+ * 十类有「等太久」的阈值（env，见 `opsTodoThresholds`）：越过一次阈值就把严重度升一档
  * （blue→amber→rose；rose 已是顶档，留在 rose，靠 `escalated` 这个位说话），并把
  * `escalation_step = floor(已等 / 阈值)`（封顶 12）报出去。作业拿 step 当去重键的一格，
  * 于是同一件事每多拖一个阈值周期就多一条 critical 运营通告，而不是被 4h 静默窗口吞掉。
  * 升档算在**外层**（LIST_OPS_TODOS_TAIL）而不是各片段里：它对所有类别同一套算法，
  * 而且升档后的严重度就是排序键，排序在 limit 之前——所以它不能等到 TS 再算。
+ *
+ * 「已等」默认从 waiting_since 算，但三类的**升档起点不是等待起点**，各片段用投影列
+ * `escalate_from`（null = 用 waiting_since）另给一个：
+ *   · addon_pending_confirm  从**申报腿**（billing.payments 最早一条 pending_verify）算；
+ *                            没申报过 → 不升档。从 created_at 算会把客户自己没付的时间
+ *                            记到运营头上：未申报的单由 sweepExpiredOrders 按 TTL 自动取消，
+ *                            申报过的才永不自动取消——「等运营」只从申报起算，与
+ *                            confirm_payment 的 declared_at 同一语义。
+ *   · ticket_sla             从**破约时刻**（created_at + 本档 SLA）算，破约后每再拖
+ *                            OPS_ESCALATE_TICKET_SLA_HOURS 一级；四档统一一个周期——
+ *                            优先级差异已在 priority 1/6/8/9 的排序里。
+ *   · refund_processing_stuck 从「成为卡住」那一刻（updated_at + OPS_REFUND_STUCK_HOURS）算，
+ *                            不从进入 processing 算：卡住时它已是 rose/6 且已发邮件，
+ *                            再拖一个周期没落终态才升档。
+ * 其余七类升档起点 = 等待起点。
  *
  * ── 为什么严重度 / 优先级也算在 SQL 里 ──
  * 告警作业要「最久的前 50 条」，minAge 与 limit 必须落在库里；而 limit 之前要排序，排序键
@@ -88,12 +103,13 @@
  *
  * ── 为什么不是一条大 SQL，而是按类别拼片段 ──
  * Postgres 对语句里**出现过的每一个关系**查权限，不管那一支会不会返回行、外层有没有把它
- * 的类别过滤掉。一条把七类全写进去的 SQL 会同时引用 `account.users` / `account.user_profiles` /
- * `kyc.tenant_verifications` / `admin.risk_records` / `session.auth_sessions` / `support.tickets` /
- * `tenancy.tenant_contacts`——而告警作业的库角色 `svc_platform_api` 只有 7 个 schema
- * （metering / product / sharing / provisioning / tenancy / billing / promotion，见
- * `deploy/database/ddl/97_service_roles.sql`）。那条 SQL 在本机（owner 连库）畅通无阻，
- * 到生产就是 `42501 permission denied for schema account`，整轮作业失败——而这正是那种
+ * 的类别过滤掉。一条把全部类别写进去的 SQL 会同时引用 `account.users` / `account.user_profiles` /
+ * `admin.risk_records` / `session.auth_sessions` / `tenancy.tenant_contacts`——而告警作业的
+ * 库角色 `svc_platform_api` 只有 7 个 schema（metering / product / sharing / provisioning /
+ * tenancy / billing / promotion）外加逐条写明的表级例外（`kyc.tenant_verifications` /
+ * `support.tickets` / `admin.maintenance_windows` 等，见
+ * `deploy/database/ddl/97_service_roles.sql` 末尾）。那条 SQL 在本机（owner 连库）畅通无阻，
+ * 到生产就是 `42501 permission denied for schema session`，整轮作业失败——而这正是那种
  * 本机怎么跑都跑不出来的坏法。
  *
  * 所以：**请求哪几类，就只把那几类的 CTE 拼进文本**（`buildListOpsTodosSql`）。
@@ -130,17 +146,19 @@
  * 这一层给的是**原文**：脱敏在读方（admin-bff 的 ops-todos.router 按 user:pii.read 掩码，
  * 与 orders.router 的 declaredBy 同一道闸门、同一套掩码函数）。
  *
- * 参数全部绑定（$1 类别数组 / $2 最短停留分钟 / $3 limit / $4..$9 六个时长阈值），
+ * 参数全部绑定（$1 类别数组 / $2 最短停留分钟 / $3 limit / $4..$15 十二个时长阈值），
  * `$n is null` 写进谓词而不是 JS 拼 where——SQL 一旦插值，lint:anchor-writes 那一族
  * 静态守卫就读不懂它。
  *
- * ── 为什么六个阈值全在外层用到 ──
+ * ── 为什么十二个阈值全在外层用到 ──
  * 绑定参数的**个数**由文本决定：Postgres 会拿「文本里出现过的最大 $n」和送来的参数个数
  * 对账，多一个就是 `bind message supplies 9 parameters, but prepared statement requires 7`。
  * 而本文件按类别拼文本——某个只在可选片段里出现的 $n，在不含那片段的那一拼里就消失了。
  * 所以两个「成熟」阈值（$8 订单挂账 / $9 退款卡住）不写在片段的 where 里，而是写成外层
- * 「等待起点 + 本类别的成熟期 <= now()」——外层永远都在，参数个数于是恒为 9。
+ * 「等待起点 + 本类别的成熟期 <= now()」——外层永远都在，参数个数于是恒为 15。
  * 它与片段里写一遍等价（等待起点正是那两类要计时的那一列），而且少一处重复。
+ * 退款片段的 `escalate_from` 也引用 $9（卡住时刻 = updated_at + $9），那是**第二次**出现，
+ * 不是唯一一次——tail 里那一次保证了它在每一拼都在。
  */
 
 import { Inject, Injectable } from "@nestjs/common";
@@ -194,6 +212,8 @@ export const TODO_COLUMN_ORDER: readonly string[] = [
   "severity",
   "priority",
   "waiting_since",
+  // 升档起点；null = 用 waiting_since（见头注「升档」）。只进外层算法，不进契约。
+  "escalate_from",
   "ticket_title",
   "ticket_priority",
   "ticket_status",
@@ -263,6 +283,7 @@ export const ORDER_TODOS_HEAD = `order_todos as (
       when 'pending_payment' then
         case when inv.bill_status = 'partial' then o.updated_at else o.created_at end
     end                                                    as waiting_since,
+    null::timestamptz                                      as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 export const ORDER_TODOS_RICH_COLUMNS = `    ${RISK_LEVEL_SUBQUERY}   as tenant_risk_level,
@@ -303,7 +324,7 @@ export const ORDER_TODOS_RICH_JOINS = `  left join account.users ou on ou.id = t
   left join account.user_profiles dup on dup.user_id = du.id`;
 
 // 第三支（挂着没人付的单）只写「待付款 + 从没申报过」；「挂了多久才算」在外层按
-// $8 判（见头注「为什么六个阈值全在外层用到」）。已申报过的待付款单不在此列——
+// $8 判（见头注「为什么十二个阈值全在外层用到」）。已申报过的待付款单不在此列——
 // 那是客户付了一部分或正在付，不是没人管。
 export const ORDER_TODOS_WHERE = `  where o.status in ('pending_verify', 'paid')
      or (o.status = 'pending_payment' and inv.bill_status = 'partial')
@@ -361,6 +382,8 @@ export const REFUND_TODOS_HEAD = `refund_todos as (
         then r.created_at
       else r.updated_at
     end                                                    as waiting_since,
+    case when r.refund_status = 'processing'
+         then r.updated_at + make_interval(hours => $9::int) end as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 export const REFUND_TODOS_RICH_COLUMNS = `    ${RISK_LEVEL_SUBQUERY}   as tenant_risk_level,
@@ -429,6 +452,7 @@ export const SUBSCRIPTION_TODOS_HEAD = `subscription_todos as (
     'amber'::text                                          as severity,
     12                                                     as priority,
     coalesce(hist.entered_at, s.end_at, s.updated_at)      as waiting_since,
+    null::timestamptz                                      as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 export const SUBSCRIPTION_TODOS_RICH_COLUMNS = `    ${RISK_LEVEL_SUBQUERY}   as tenant_risk_level,
@@ -493,6 +517,7 @@ export const INVOICE_TODOS_HEAD = `invoice_todos as (
       when 'applying' then ir.created_at
       else coalesce(ir.audit_at, ir.updated_at)
     end                                                    as waiting_since,
+    null::timestamptz                                      as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 export const INVOICE_TODOS_RICH_COLUMNS = `    ${RISK_LEVEL_SUBQUERY}   as tenant_risk_level,
@@ -546,6 +571,7 @@ export const ADDON_TODOS_HEAD = `addon_todos as (
     'rose'::text                                           as severity,
     7                                                      as priority,
     ap.created_at                                          as waiting_since,
+    decl.declared_at                                       as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 export const ADDON_TODOS_RICH_COLUMNS = `    ${RISK_LEVEL_SUBQUERY}   as tenant_risk_level,
@@ -558,9 +584,16 @@ export const ADDON_TODOS_LEAN_COLUMNS = `    null::text as tenant_risk_level,
     null::text as applicant_email,
     null::text as applicant_phone`;
 
+// 申报腿 = 这张单的账单上最早一条 pending_verify 支付腿（AddonService.declare 只写这一种）；
+// 它是升档起点（见头注「升档」），没有就 null → 不升档。等待列仍是 created_at。
 export const ADDON_TODOS_FROM = `  from metering.addon_purchases ap
   join tenancy.tenants t on t.id = ap.tenant_id
-  left join tenancy.tenant_profiles tp on tp.tenant_id = t.id`;
+  left join tenancy.tenant_profiles tp on tp.tenant_id = t.id
+  left join lateral (
+    select min(p.created_at) as declared_at
+      from billing.payments p
+     where p.bill_id = ap.invoice_id and p.pay_status = 'pending_verify'
+  ) decl on true`;
 
 export const ADDON_TODOS_RICH_JOINS = `  left join account.users ou on ou.id = t.owner_user_id
   left join account.user_profiles oup on oup.user_id = ou.id`;
@@ -591,6 +624,7 @@ export const USER_TODOS_HEAD = `user_todos as (
     case when dl.purge_soon then 'amber' else 'blue' end   as severity,
     case when dl.purge_soon then 16 else 45 end            as priority,
     coalesce(u.deletion_requested_at, u.updated_at)        as waiting_since,
+    null::timestamptz                                      as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 export const USER_TODOS_RICH_COLUMNS = `    null::text                                             as tenant_risk_level,
@@ -644,6 +678,7 @@ export const MAINTENANCE_TODOS_HEAD = `maintenance_todos as (
     'rose'::text                                           as severity,
     9                                                      as priority,
     mw.end_at                                              as waiting_since,
+    null::timestamptz                                      as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 /**
@@ -660,10 +695,13 @@ export const MAINTENANCE_TODOS_FROM = `  from admin.maintenance_windows mw`;
 export const MAINTENANCE_TODOS_WHERE = `  where mw.status = 'in_progress' and mw.end_at < now()
 )`;
 
-// ── tenant_base：认证 / 风险两类共用的租户底座 ───────────────────────────────
-// 它天生跨 kyc / admin / session 三个 schema——认证提交时刻、风险档、最近活跃都在那边。
-// 这两类**从不**被告警作业请求（check-ops-todo-alerts 的 UNRULED），所以底座整块只在
-// verification / risk 入选时才拼进文本。
+// ── tenant_base：风险那一类的租户底座 ──────────────────────────────────────
+// 它天生跨 admin / session 两个 schema——风险档、最近活跃都在那边。risk **从不**被告警
+// 作业请求（check-ops-todo-alerts 的 UNRULED，且 admin.risk_records 被三份已合并迁移断言
+// 为 0 项权限），所以底座整块只在 risk 入选时才拼进文本。
+// 2026-10-04 起 verification 不再从这里投影：认证那一类真正需要的只有
+// tenancy.tenants.verification_status 与 kyc.tenant_verifications.created_at，拆成自己的
+// 片段（VERIFICATION_TODOS_*）之后作业角色跑得通，它才进得了作业的 NOTICE_ONLY_KINDS。
 export const TENANT_BASE_HEAD = `tenant_base as (
   select
     t.id,
@@ -674,14 +712,7 @@ export const TENANT_BASE_HEAD = `tenant_base as (
     coalesce(nullif(tp.address, ''), nullif(tp.country_code, '')) as region,
     nullif(tp.industry, '')                                as industry,
     nullif(tp.scale, '')                                   as scale,
-    t.verification_status,
     t.created_at,
-    (
-      select tv.created_at from kyc.tenant_verifications tv
-       where tv.tenant_id = t.id
-       order by tv.created_at desc
-       limit 1
-    )                                                      as verification_submitted_at,
     ${RISK_LEVEL_SUBQUERY}                                 as risk_level,
     -- 最近活跃 = 成员在 customer realm 的会话最近活动时刻（与租户页同源）。
     (
@@ -707,8 +738,7 @@ export const TENANT_BASE_RICH_JOINS = `  left join account.users ou on ou.id = t
 
 export const TENANT_BASE_WHERE = `  where t.deleted_at is null
     and (
-      t.verification_status = 'pending'
-      or t.status = 'suspended'
+      t.status = 'suspended'
       or exists (
         select 1 from admin.risk_records rr
          where rr.tenant_id = t.id and rr.deleted_at is null
@@ -717,26 +747,63 @@ export const TENANT_BASE_WHERE = `  where t.deleted_at is null
     )
 )`;
 
-// ── verification / risk：只是对底座的两次投影，没有自己的 join ────────────────
-export const VERIFICATION_TODOS_CTE = `verification_todos as (
+// ── verification_todos：认证 pending 的租户（2026-10-04 从底座拆出）────────────
+// 此前它是对 tenant_base 的投影，而底座天生跨 kyc / admin / session 三个 schema。认证这
+// 一类真正需要的只有 tenancy.tenants.verification_status 与 kyc.tenant_verifications 的
+// 最近一次提交时刻——后者 97 已授 SELECT（2026-11-23 迁移灌活库），tenancy 整 schema 在
+// 授权面内。拆出来之后作业角色 svc_platform_api 跑得通，风险档只在富化块里取（admin
+// 不在授权面内）。这正是它能进作业的 NOTICE_ONLY_KINDS 而**零授权变更**的原因；
+// check-ops-todo-alerts 第 5 段按 97 对账下面四段 LEAN 片段，itest 的 set role 用例真跑。
+export const VERIFICATION_TODOS_HEAD = `verification_todos as (
   select
-    'verification'::text as kind, 'tenant'::text as subject_type, tenant_no as subject_no,
-    null::text as subject_key,
-    null::text as order_no,
-    tenant_no as tenant_no, tenant_name as tenant_name, tenant_type as tenant_type,
-    status as tenant_status,
-    region as tenant_region, industry as tenant_industry, scale as tenant_scale,
+    'verification'::text                                   as kind,
+    'tenant'::text                                         as subject_type,
+    t.tenant_no::text                                      as subject_no,
+    null::text                                             as subject_key,
+    null::text                                             as order_no,
+    t.tenant_no::text                                      as tenant_no,
+    coalesce(nullif(t.display_name, ''), t.name)           as tenant_name,
+    case when t.type = 'personal' then 'individual' else 'company' end as tenant_type,
+    t.status                                               as tenant_status,
+    coalesce(nullif(tp.address, ''), nullif(tp.country_code, '')) as tenant_region,
+    nullif(tp.industry, '')                                as tenant_industry,
+    nullif(tp.scale, '')                                   as tenant_scale,
     null::text as amount_value, null::text as amount_paid, null::text as amount_currency,
     null::text as product_code, null::text as product_name, null::text as plan_name,
-    'amber'::text as severity, 20 as priority,
-    coalesce(verification_submitted_at, created_at) as waiting_since,
-    null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,
-    risk_level as tenant_risk_level,
-    owner_name as applicant_name, owner_email as applicant_email, owner_phone as applicant_phone
-  from tenant_base
-  where verification_status = 'pending'
+    'amber'::text                                          as severity,
+    20                                                     as priority,
+    coalesce(kv.submitted_at, t.created_at)                as waiting_since,
+    null::timestamptz                                      as escalate_from,
+    null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
+
+export const VERIFICATION_TODOS_RICH_COLUMNS = `    ${RISK_LEVEL_SUBQUERY}   as tenant_risk_level,
+    coalesce(nullif(oup.display_name, ''), ou.account)     as applicant_name,
+    ou.email                                               as applicant_email,
+    ou.phone                                               as applicant_phone`;
+
+export const VERIFICATION_TODOS_LEAN_COLUMNS = `    null::text as tenant_risk_level,
+    null::text as applicant_name,
+    null::text as applicant_email,
+    null::text as applicant_phone`;
+
+// 最近一次认证提交 = kyc.tenant_verifications 里最新的一条；没有提交记录就退回租户创建时刻。
+export const VERIFICATION_TODOS_FROM = `  from tenancy.tenants t
+  left join tenancy.tenant_profiles tp on tp.tenant_id = t.id
+  left join lateral (
+    select tv.created_at as submitted_at
+      from kyc.tenant_verifications tv
+     where tv.tenant_id = t.id
+     order by tv.created_at desc
+     limit 1
+  ) kv on true`;
+
+export const VERIFICATION_TODOS_RICH_JOINS = `  left join account.users ou on ou.id = t.owner_user_id
+  left join account.user_profiles oup on oup.user_id = ou.id`;
+
+export const VERIFICATION_TODOS_WHERE = `  where t.deleted_at is null and t.verification_status = 'pending'
 )`;
 
+// ── risk：只是对底座的一次投影，没有自己的 join ─────────────────────────────
 export const RISK_TODOS_CTE = `risk_todos as (
   select
     'risk'::text as kind, 'tenant'::text as subject_type, tenant_no as subject_no,
@@ -751,6 +818,7 @@ export const RISK_TODOS_CTE = `risk_todos as (
     case when risk_level = 'high' then 5 else 25 end as priority,
     -- 风险没有「进入风险态」的时刻列，只能拿最近活跃 / 创建时刻当起点。
     coalesce(last_active_at, created_at) as waiting_since,
+    null::timestamptz as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,
     risk_level as tenant_risk_level,
     owner_name as applicant_name, owner_email as applicant_email, owner_phone as applicant_phone
@@ -790,6 +858,7 @@ export const TICKET_TODOS_HEAD = `ticket_todos as (
          else case k.priority when 'p0' then 1 when 'p1' then 10 when 'p2' then 30 else 50 end
     end                                                    as priority,
     case when sla.breached then k.created_at else k.updated_at end as waiting_since,
+    case when sla.breached then sla_at.deadline end        as escalate_from,
     k.title                                                as ticket_title,
     k.priority                                             as ticket_priority,
     k.status                                               as ticket_status,`;
@@ -804,18 +873,23 @@ export const TICKET_TODOS_LEAN_COLUMNS = `    null::text as tenant_risk_level,
     null::text as applicant_email,
     null::text as applicant_phone`;
 
+// 首响时限（deadline）单独一段 lateral：它既是「破没破」的判据，也是 ticket_sla 的
+// 升档起点（escalate_from，破约后每拖一个周期一级）。两处共用一个值，不各算一遍。
 export const TICKET_TODOS_FROM = `  from support.tickets k
   join tenancy.tenants t on t.id = k.tenant_id
   left join tenancy.tenant_profiles tp on tp.tenant_id = t.id
   cross join lateral (
+    select k.created_at + case k.priority
+                            when 'p0' then interval '1 hour'
+                            when 'p1' then interval '4 hours'
+                            when 'p2' then interval '24 hours'
+                            else interval '72 hours'
+                          end                              as deadline
+  ) sla_at
+  cross join lateral (
     select (k.status in ('open', 'reopened')
             and k.first_response_at is null
-            and k.created_at + case k.priority
-                                 when 'p0' then interval '1 hour'
-                                 when 'p1' then interval '4 hours'
-                                 when 'p2' then interval '24 hours'
-                                 else interval '72 hours'
-                               end <= now())               as breached
+            and sla_at.deadline <= now())                  as breached
   ) sla`;
 
 export const TICKET_TODOS_RICH_JOINS = `  left join lateral (
@@ -830,12 +904,17 @@ export const TICKET_TODOS_WHERE = `  where k.deleted_at is null
 )`;
 
 /**
- * 外层：升档 + 类别 / 停留时长 / 成熟期过滤 + 排序 + limit。九个参数全绑定。
+ * 外层：升档 + 类别 / 停留时长 / 成熟期过滤 + 排序 + limit。十五个参数全绑定。
  *
  * ── 升档（escalated 这一段 CTE）──
- * 四类有阈值（$4..$7），其余类别 `seconds` 为 null → step 恒 0。step = 已等 / 阈值 的整数
- * 倍数，封顶 12。`nullif(…, 0)` 是安全带：阈值真被配成 0 时宁可不升档，也不要除出一个
- * 天文数字把每一条都染成「已超时」（TS 侧已把非正整数挡在外面，这里是第二道）。
+ * 十类有阈值（$4..$7 首批四类，$10..$15 2026-10-04 的六类），其余类别 `seconds` 为 null
+ * → step 恒 0。step = 已等 / 阈值 的整数倍数，封顶 12；「已等」从 `escalate_from` 算，
+ * 为 null 退回 `waiting_since`（见头注「升档」）。加油包那一行多包一层 case：没有申报腿
+ * （escalate_from 为 null）就连阈值都不给——否则 coalesce 退回 created_at，把客户自己没付
+ * 的时间算成运营超时。`nullif(…, 0)` 是安全带：阈值真被配成 0 时宁可不升档，也不要除出
+ * 一个天文数字把每一条都染成「已超时」（TS 侧已把非正整数挡在外面，这里是第二道）。
+ * check-ops-todo-alerts 第 7 段从 `case x.kind … end` 这一段解析「SQL 里真有阈值的类别」
+ * 与它的裁定表对账——往这里加一行 `when '<kind>'` 而不登记，守卫当场红。
  *
  * ── 升档后的严重度才是排序键 ──
  * 所以 `severity_effective` 与 `severity_rank` 都在这里算：blue→amber→rose，rose 已是顶档
@@ -852,7 +931,7 @@ export const LIST_OPS_TODOS_TAIL = `, escalated as (
          case
            when thr.seconds is null then 0
            else least(greatest(floor(
-                  extract(epoch from (now() - x.waiting_since)) / thr.seconds
+                  extract(epoch from (now() - coalesce(x.escalate_from, x.waiting_since))) / thr.seconds
                 ), 0), 12)::int
          end                                               as escalation_step
     from todos x
@@ -862,6 +941,13 @@ export const LIST_OPS_TODOS_TAIL = `, escalated as (
                when 'refund_audit'    then $5::int * 3600
                when 'reprovision'     then $6::int * 60
                when 'verification'    then $7::int * 86400
+               when 'refund_execute'  then $10::int * 3600
+               when 'refund_processing_stuck' then $11::int * 3600
+               when 'refund_failed'   then $12::int * 3600
+               when 'addon_pending_confirm'
+                 then case when x.escalate_from is null then null else $13::int * 3600 end
+               when 'ticket_sla'      then $14::int * 3600
+               when 'maintenance_overdue' then $15::int * 60
              end, 0)::numeric                              as seconds
     ) thr
 )
@@ -1014,21 +1100,22 @@ const MAINTENANCE_FRAGMENT: TodoCteFragment = {
   unionAll: "  union all select * from maintenance_todos",
 };
 
-/** 认证 / 风险：整段 CTE 是一块（只从底座投影），没有自己的 join。 */
+/** 认证：自 2026-10-04 起有自己的片段，不要底座（见 VERIFICATION_TODOS_HEAD 那一段）。 */
 const VERIFICATION_FRAGMENT: TodoCteFragment = {
   cteName: "verification_todos",
   kinds: ["verification"],
-  needsTenantBase: true,
-  head: VERIFICATION_TODOS_CTE,
-  richColumns: "",
-  leanColumns: "",
-  from: "",
-  richJoins: "",
-  where: "",
+  needsTenantBase: false,
+  head: VERIFICATION_TODOS_HEAD,
+  richColumns: VERIFICATION_TODOS_RICH_COLUMNS,
+  leanColumns: VERIFICATION_TODOS_LEAN_COLUMNS,
+  from: VERIFICATION_TODOS_FROM,
+  richJoins: VERIFICATION_TODOS_RICH_JOINS,
+  where: VERIFICATION_TODOS_WHERE,
   selectAll: "  select * from verification_todos",
   unionAll: "  union all select * from verification_todos",
 };
 
+/** 风险：整段 CTE 是一块（只从底座投影），没有自己的 join。 */
 const RISK_FRAGMENT: TodoCteFragment = {
   cteName: "risk_todos",
   kinds: ["risk"],
@@ -1083,7 +1170,7 @@ const TENANT_BASE_FRAGMENT = {
   where: TENANT_BASE_WHERE,
 } as const;
 
-/** 一段片段拼成整块 CTE 文本；空串片段直接跳过（认证 / 风险那两段就一整块）。 */
+/** 一段片段拼成整块 CTE 文本；空串片段直接跳过（风险那一段就一整块）。 */
 function renderCte(
   fragment: {
     readonly head: string;
@@ -1170,16 +1257,18 @@ export function buildListOpsTodosSql(
 
 /**
  * 全类别 + 带富化块的那一版——admin 待办页读的就是它。
- * 导出仅为可测与文档；告警作业读的是另一拼（三类 + 不带富化块）。
+ * 导出仅为可测与文档；告警作业读的是另外两拼（ALERT_KINDS 九类 / NOTICE_ONLY_KINDS，
+ * 都不带富化块）。
  */
 export const LIST_OPS_TODOS_SQL = buildListOpsTodosSql();
 
 /**
  * 库里回来的一行；导出仅为可测。
  *
- * 前 28 列逐一对应 TODO_COLUMN_ORDER（各片段的投影），后三列由外层算出来
+ * 前 29 列逐一对应 TODO_COLUMN_ORDER（各片段的投影），后三列由外层算出来
  * （见 LIST_OPS_TODOS_TAIL）：
  *   · `severity`           片段给的**基准档**，映射不用它，留着便于排查；
+ *   · `escalate_from`      升档起点（null = waiting_since），只进外层算法，映射不用它；
  *   · `severity_effective` 升档后的那一档——`OpsTodo.severity` 取的是这一列；
  *   · `escalated` / `escalation_step` 升档位与级数。
  */
@@ -1210,6 +1299,7 @@ export interface OpsTodoRow {
   severity: string;
   priority: number | string;
   waiting_since: Date | string;
+  escalate_from: Date | string | null;
   ticket_title: string | null;
   ticket_priority: string | null;
   ticket_status: string | null;
@@ -1440,14 +1530,20 @@ export function mapOpsTodoRow(row: OpsTodoRow): OpsTodo {
 }
 
 /**
- * 六个时长阈值的兜底值（env 读不到 / 不是正整数时用）。
- * 与 types.ts 的 OpsTodoThresholds 注释逐条对应。
+ * 十二个时长阈值的兜底值（env 读不到 / 不是正整数时用）。
+ * 与 types.ts 的 OpsTodoThresholds 注释逐条对应。六个新默认值是设计提议，owner 可调。
  */
 export const DEFAULT_OPS_TODO_THRESHOLDS: OpsTodoThresholds = {
   confirmPaymentHours: 4,
   refundAuditHours: 24,
   reprovisionMinutes: 30,
   verificationDays: 3,
+  refundExecuteHours: 24,
+  refundProcessingHours: 24,
+  refundFailedHours: 4,
+  addonConfirmHours: 4,
+  ticketSlaHours: 4,
+  maintenanceOverdueMinutes: 30,
   orderAgingHours: 24,
   refundStuckHours: 4,
 };
@@ -1459,8 +1555,9 @@ function positiveIntEnv(name: string, fallback: number): number {
 }
 
 /**
- * 本次要用的六个阈值：env 为准，`overrides` 只给测试用。
+ * 本次要用的十二个阈值：env 为准，`overrides` 只给测试用。
  * 导出仅为可测与文档——两个调用方（页面、告警作业）都不传，读的是同一套值。
+ * 这里出现的 env 名就是 check-ops-threshold-env-parity 对账两份 example 的词表。
  */
 export function opsTodoThresholds(
   overrides: Partial<OpsTodoThresholds> = {},
@@ -1482,6 +1579,30 @@ export function opsTodoThresholds(
       "OPS_ESCALATE_VERIFICATION_DAYS",
       DEFAULT_OPS_TODO_THRESHOLDS.verificationDays,
     ),
+    refundExecuteHours: positiveIntEnv(
+      "OPS_ESCALATE_REFUND_EXECUTE_HOURS",
+      DEFAULT_OPS_TODO_THRESHOLDS.refundExecuteHours,
+    ),
+    refundProcessingHours: positiveIntEnv(
+      "OPS_ESCALATE_REFUND_PROCESSING_HOURS",
+      DEFAULT_OPS_TODO_THRESHOLDS.refundProcessingHours,
+    ),
+    refundFailedHours: positiveIntEnv(
+      "OPS_ESCALATE_REFUND_FAILED_HOURS",
+      DEFAULT_OPS_TODO_THRESHOLDS.refundFailedHours,
+    ),
+    addonConfirmHours: positiveIntEnv(
+      "OPS_ESCALATE_ADDON_CONFIRM_HOURS",
+      DEFAULT_OPS_TODO_THRESHOLDS.addonConfirmHours,
+    ),
+    ticketSlaHours: positiveIntEnv(
+      "OPS_ESCALATE_TICKET_SLA_HOURS",
+      DEFAULT_OPS_TODO_THRESHOLDS.ticketSlaHours,
+    ),
+    maintenanceOverdueMinutes: positiveIntEnv(
+      "OPS_ESCALATE_MAINTENANCE_OVERDUE_MINUTES",
+      DEFAULT_OPS_TODO_THRESHOLDS.maintenanceOverdueMinutes,
+    ),
     orderAgingHours: positiveIntEnv(
       "OPS_ORDER_AGING_HOURS",
       DEFAULT_OPS_TODO_THRESHOLDS.orderAgingHours,
@@ -1500,7 +1621,14 @@ export function opsTodoThresholds(
   return merged;
 }
 
-/** 九个绑定参数，位置即 $1..$9。 */
+/**
+ * 十五个绑定参数，位置即 $1..$15：
+ *   $1 类别 / $2 最短停留 / $3 limit /
+ *   $4 confirm_payment h / $5 refund_audit h / $6 reprovision min / $7 verification d /
+ *   $8 订单挂账成熟 h / $9 退款卡住成熟 h（也是 refund_processing_stuck 的升档起点）/
+ *   $10 refund_execute h / $11 refund_processing_stuck h / $12 refund_failed h /
+ *   $13 addon_pending_confirm h / $14 ticket_sla h / $15 maintenance_overdue min
+ */
 export type ListOpsTodosParams = [
   OpsTodoKind[] | null,
   number | null,
@@ -1511,9 +1639,15 @@ export type ListOpsTodosParams = [
   number,
   number,
   number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
 ];
 
-/** 调用方给的选项要先落到九个绑定参数；坏值在这里抛，不进 SQL。 */
+/** 调用方给的选项要先落到十五个绑定参数；坏值在这里抛，不进 SQL。 */
 export function bindListOptions(
   options: ListOpsTodosOptions = {},
 ): ListOpsTodosParams {
@@ -1545,6 +1679,12 @@ export function bindListOptions(
     thresholds.verificationDays,
     thresholds.orderAgingHours,
     thresholds.refundStuckHours,
+    thresholds.refundExecuteHours,
+    thresholds.refundProcessingHours,
+    thresholds.refundFailedHours,
+    thresholds.addonConfirmHours,
+    thresholds.ticketSlaHours,
+    thresholds.maintenanceOverdueMinutes,
   ];
 }
 
@@ -1568,7 +1708,7 @@ export class OpsTodoRepository {
       kinds: kinds ?? undefined,
       includeApplicant: options.includeApplicant,
     });
-    // 参数个数恒为 9：$4..$9 全落在外层，外层每一拼都有（见文件头注）。
+    // 参数个数恒为 15：$4..$15 全落在外层，外层每一拼都有（见文件头注）。
     const result = await this.pool.query<OpsTodoRow>(sql, params);
     return result.rows.map(mapOpsTodoRow);
   }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * check-ops-todo-alerts.mjs — 运营待办：算法产出的每一类都有「推不推告警」的裁定（#231）。
+ * check-ops-todo-alerts.mjs — 运营待办：算法产出的每一类都有「推不推告警」的裁定（#231），
+ * 且每一类**有升档阈值**的都有人扫（2026-10-04 owner 裁定 3「通告尽量覆盖全」）。
  *
  * ── 补的是哪个盲区 ──
  * 2026-09-28 之前待办在**浏览器里**拼（admin 的 OpsTodosPage.buildOpsTodos），告警在
@@ -14,7 +15,7 @@
  * ——而它看起来完全正常。所以这条守卫不判「该不该告警」（那是 owner 的裁定），只判
  * **有没有人做过裁定**：算法的类别值域里每一类都必须在下面的 DECIDED 或 UNRULED 里明文归属。
  *
- * ── owner 的裁定 ──
+ * ── owner 的裁定（邮件这根轴）──
  *   confirm_payment    → 告警（2026-09-08：客户在等你确认收款，拖着就是拖客户的钱）
  *   reprovision        → 告警（2026-09-08：那天的事故正是它）
  *   follow_up_balance  → 不告警（2026-09-08：那一类在等客户，不在等运营）
@@ -25,32 +26,56 @@
  * 明写在 UNRULED——「没裁定」是写下来的状态，不是默认。要推告警先找 owner，再搬进 DECIDED。
  * 另有「自愈放弃」一条不在待办里，由 OrderService 在放弃点直接报（ops-alerter.ts）。
  *
- * ── 还判五条对应关系 ──
+ * ── 第二根轴：通告（2026-10-04 owner 裁定 3）──
+ * 升档（等太久）的待办另写一条 critical 运营通告——与邮件裁定是两件事。此前只有四类有
+ * 升档阈值、且通告半只覆盖 ALERT_KINDS：九类里六类升不了档，`verification` 升了档也没有
+ * 通告（owner：「6/9 待办类别没有通告兜底」）。现在共享算法 SQL 里十类有阈值（ESCALATES），
+ * 有阈值而不推邮件的类别走作业的 NOTICE_ONLY_KINDS（只写通告）。本文件第 7 段守的是：
+ * **SQL 里真有阈值的类别 == ESCALATES，且 ESCALATES ⊆ ALERT_KINDS ∪ NOTICE_ONLY**——
+ * 有阈值却两边都不在，就是「升档了也没人写通告」，正是 owner 说的那个洞，被做成了判据。
+ * 邮件轴不动：NOTICE_ONLY 里的类别仍可以在 UNRULED（邮件半未裁），两轴独立。
+ *
+ * ── 还判七条对应关系 ──
  *   1. 作业实扫的类别（ops-todo-alert.job.ts 的 ALERT_KINDS）== 裁定要告警的类别。
  *   2. 共享算法确实从库里的原始订单态产出裁定要告警的订单类（`case o.status when … then …`）；
- *      其余告警类各有一张谓词字面清单（PREDICATE_LITERALS）——谓词漂了就红。
+ *      其余告警类（与 NOTICE_ONLY 类）各有一张谓词字面清单（PREDICATE_LITERALS）——谓词漂了就红。
  *   3. admin-bff 的 mapEntityOrderStatus 仍把这些原始态一一映射到订单页的派生态——告警邮件
  *      链接落到的那一页就是按它显示的；映射一改，运营点开看到的就不是告警说的那一类。
- *   4. **作业那条 SQL 只碰 svc_platform_api 有权的关系**（2026-09-28 补）。Postgres 对语句里
+ *   4. **作业那两拼 SQL 只碰 svc_platform_api 有权的关系**（2026-09-28 补）。Postgres 对语句里
  *      出现过的每一个关系查权限——哪一支返不返回行都一样。platform-api 的角色只有 7 个
- *      schema（97_service_roles.sql）加一张表级例外 admin.operator_notices；往作业会拼进去
+ *      schema（97_service_roles.sql）加逐条写明的表级例外；往作业会拼进去
  *      的那几段片段里加一个 `account.` / `admin.` / `kyc.` / `session.` / `support.` 的 join，
  *      本机（owner 连库）照样全绿，生产上是 42501、整轮作业失败。这一段拿 97 的授权面
  *      对账片段文本，把那种改动挡在合并之前。
  *      **本段看不见什么**：只读片段的字面文本。片段里一旦出现 `${…}` 插值，插进来的那段
  *      本段读不到——碰到就报错而不是放行。真判据是 ops-todos.itest 里 `set role
- *      svc_platform_api` 之后跑作业那个调用形状的那一条。
+ *      svc_platform_api` 之后跑作业那两个调用形状的那一条。
  *
- *      2026-09-28 第三批起，作业那一拼**合法地**碰两张表级例外（97 末尾逐条 GRANT SELECT，
- *      活库由 2026-11-23 那份迁移灌）：`support.tickets`（ticket_sla）与
- *      `admin.maintenance_windows`（maintenance_overdue）。本段读 97 的实际授权面，
- *      所以这两张自动算「有权」，不必在这里另开白名单。
+ *      2026-09-28 第三批起，作业那一拼**合法地**碰表级例外（97 末尾逐条 GRANT SELECT，
+ *      活库由 2026-11-23 那份迁移灌）：`support.tickets`（ticket_sla）、
+ *      `admin.maintenance_windows`（maintenance_overdue）；2026-10-04 起 NOTICE_ONLY 那一拼
+ *      碰 `kyc.tenant_verifications`（verification）。本段读 97 的实际授权面，
+ *      所以这几张自动算「有权」，不必在这里另开白名单。
  *   5. **裁定要告警的每一类在 todoAlertInput 里都有文案**（2026-09-28 第三批补）。
  *      ALERT_KINDS 加一类不会让构建红，而 todoAlertInput 的 default 是 throw——
  *      于是症状是「这个作业一直失败」，不是「少了一封邮件」。反向也判：写了文案却没裁定的
  *      那个分支永远走不到。
+ *   6. **升档阈值的两根轴对得上**（2026-10-04）：tail 里 `case x.kind when '<kind>' then $n`
+ *      解析出的集合 == ESCALATES；ESCALATES ⊆ ALERT_KINDS ∪ NOTICE_ONLY；NOTICE_ONLY 与
+ *      邮件裁定不重叠；作业真的把 NOTICE_ONLY_KINDS 传给 list 并调 noticeEscalatedTodo；
+ *      每一类的阈值行与升档起点字面钉在 ESCALATION_LITERALS / PREDICATE_LITERALS。
+ *   7. 本文件的 NOTICE_ONLY 与作业的 NOTICE_ONLY_KINDS 逐字相等（裁定表只有一份）。
+ *
+ * ── 看不见什么 ──
+ *   · 阈值的**值**对不对（那是 env 与 owner 的事；两份 example 的相等由
+ *     check-ops-threshold-env-parity 守）；
+ *   · 通告真的落库了没有（去重键 / 平面在 operator-alerts.wiring.spec 与 notice 包的 itest）；
+ *   · 升档的**起点**算得对不对（itest 逐类用「错的起点会得到另一个数」钉）。
  *
  * 用法：node scripts/guardrails/check-ops-todo-alerts.mjs
+ *       node scripts/guardrails/check-ops-todo-alerts.mjs --self-test
+ *   --self-test 用合成文本证第 6 段三态：SQL 里多一个没登记的阈值要红、登记表多一类要红、
+ *   把 NOTICE_ONLY 清空（裁定 3 之前的现场：verification 有阈值没人扫）要红、复原要绿。
  */
 
 import { readFileSync } from "node:fs";
@@ -140,12 +165,13 @@ const LEAN_PIECES = {
     "TICKET_TODOS_FROM",
     "TICKET_TODOS_WHERE",
   ],
+  // 2026-10-04 起认证有自己的片段，不再从 tenant_base 投影——底座的 HEAD 含
+  // `${RISK_LEVEL_SUBQUERY}` 插值，留在这张表里会被第 4 段当场拒绝；拆段不是可选项。
   verification: [
-    "TENANT_BASE_HEAD",
-    "TENANT_BASE_LEAN_COLUMNS",
-    "TENANT_BASE_FROM",
-    "TENANT_BASE_WHERE",
-    "VERIFICATION_TODOS_CTE",
+    "VERIFICATION_TODOS_HEAD",
+    "VERIFICATION_TODOS_LEAN_COLUMNS",
+    "VERIFICATION_TODOS_FROM",
+    "VERIFICATION_TODOS_WHERE",
   ],
   risk: [
     "TENANT_BASE_HEAD",
@@ -166,7 +192,7 @@ const LEAN_PIECES = {
 const SHARED_PIECES = ["LIST_OPS_TODOS_TAIL"];
 
 /**
- * 待办类 → 是否告警。owner 定；改这里等于改裁定。
+ * 待办类 → 是否告警（邮件）。owner 定；改这里等于改裁定。
  *
  * ── 2026-09-28 第三批的裁定规则 ──
  * owner 本轮的方针是「先把通知、信息、任务、提醒做全做多，后续再在订阅选择上做筛选」。
@@ -200,13 +226,48 @@ const DECIDED = {
 };
 
 /**
- * 从未被裁定过的类别：不告警，但这是「没人定过」，不是「定了不推」。
+ * 从未被裁定过（邮件）的类别：不告警，但这是「没人定过」，不是「定了不推」。
  *
  * 这三类的严重度**随行变**（风险档 high / 工单 p0 或 reopened 才 rose），所以第三批那条
  * 「恒 rose 就推」的规则对它们不成立——要推就得先定「哪一档推」，那是 owner 的裁定。
  * `ticket_sla` 不在此列：它是第三批新立的类别、恒 rose，问的事情也明确（首次响应已超时）。
+ *
+ * 2026-10-04 起 `verification` 虽然进了作业的 NOTICE_ONLY_KINDS（只写通告），**邮件半仍未裁**，
+ * 所以它留在这里——两根轴独立，通告覆盖不替 owner 裁邮件。
+ * ticket 的升档（「未结工单 N 小时无动静」）与 risk 的升档（要碰 admin.risk_records，被三份
+ * 已合并迁移断言为 0 项权限）都 needsOwner，本表不自决。
  */
 const UNRULED = ["verification", "risk", "ticket"];
+
+/**
+ * 升档阈值的登记表（2026-10-04 owner 裁定 3）：共享算法 tail 里**有升档阈值**的类别。
+ * 升档 ⇒ 作业另写一条 critical 运营通告。通告这根轴与邮件裁定是两根轴：
+ *   · 在 ALERT_KINDS 里的：邮件 + 通告两半都有（OperatorAlertsWiring.alertTodo）；
+ *   · 在 NOTICE_ONLY 里的：只写通告（noticeEscalatedTodo），邮件半仍在 UNRULED。
+ * 第 6 段判：SQL 解析出的集合 == 本表；本表 ⊆ ALERT_KINDS ∪ NOTICE_ONLY；
+ * 往 tail 加一行 `when '<kind>'` 而不登记，或登记了却没给阈值，都红。
+ */
+const ESCALATES = [
+  // 2026-09-28 第三批的四类。
+  "confirm_payment",
+  "refund_audit",
+  "reprovision",
+  "verification",
+  // 2026-10-04 覆盖全加的六类（默认值是设计提议，owner 可调）。
+  "refund_execute",
+  "refund_processing_stuck",
+  "refund_failed",
+  "addon_pending_confirm",
+  "ticket_sla",
+  "maintenance_overdue",
+];
+
+/**
+ * 只写通告、不发邮件的类别——与 ops-todo-alert.job 的 NOTICE_ONLY_KINDS 逐字相等（第 7 段）。
+ * 条件：有升档阈值（在 ESCALATES）且邮件半未裁（不在 DECIDED 为 true 的集合）。
+ * ticket（D6）与 risk（D7）等 owner 裁定，没进来。
+ */
+const NOTICE_ONLY = ["verification"];
 
 /** 告警的订单类 → 它在库里的原始订单态（共享算法的 `case o.status` 保证）。 */
 const RAW_STATUS = {
@@ -215,12 +276,15 @@ const RAW_STATUS = {
 };
 
 /**
- * 不由订单态派生的告警类 → 它的谓词在共享算法里长什么样（逐字子串）。
+ * 不由订单态派生的告警类（以及只写通告的类）→ 它的谓词在共享算法里长什么样（逐字子串）。
  *
  * 为什么钉字面而不是「看得懂 SQL」：这一段要答的问题是「作业扫的还是不是当初裁定的那件事」。
  * 谓词一改（比如把 `refund_status = 'failed'` 换成别的），邮件照发、页面照红，只是发的不再
  * 是那一类——那种坏法不报错。字面断言粗，但它盯的正是那个会静默漂掉的地方。
  * 改谓词是正当的，那时**连这里一起改**，改动就被记在裁定表旁边。
+ *
+ * 2026-10-04 起三类的**升档起点**也钉在这里（它们不从等待起点算）：卡住的退款从
+ * updated_at + $9 算、加油包从申报腿算、工单首响从破约时刻算。
  */
 const PREDICATE_LITERALS = {
   refund_audit: [
@@ -234,27 +298,138 @@ const PREDICATE_LITERALS = {
   refund_processing_stuck: [
     "when r.refund_status = 'processing' then 'refund_processing_stuck'",
     "when 'refund_processing_stuck'     then make_interval(hours => $9::int)",
+    "then r.updated_at + make_interval(hours => $9::int) end as escalate_from",
   ],
   refund_failed: ["when r.refund_status = 'failed'     then 'refund_failed'"],
   addon_pending_confirm: [
     "'addon_pending_confirm'::text",
     "where ap.status = 'pending_payment'",
+    "decl.declared_at",
+    "where p.bill_id = ap.invoice_id and p.pay_status = 'pending_verify'",
   ],
   ticket_sla: [
     "case when sla.breached then 'ticket_sla' else 'ticket' end",
     "and k.first_response_at is null",
+    "case when sla.breached then sla_at.deadline end",
   ],
   maintenance_overdue: [
     "'maintenance_overdue'::text",
     "where mw.status = 'in_progress' and mw.end_at < now()",
   ],
+  verification: [
+    "'verification'::text",
+    "where t.deleted_at is null and t.verification_status = 'pending'",
+    "from kyc.tenant_verifications tv",
+  ],
 };
+
+/**
+ * 每一类的阈值行在 tail 里长什么样（逐字子串，含参数位）。参数位是绑定顺序
+ * （bindListOptions）与 SQL 的唯一对账点——$n 漂了，阈值就静默读成了另一类的值。
+ */
+const ESCALATION_LITERALS = {
+  confirm_payment: "when 'confirm_payment' then $4::int * 3600",
+  refund_audit: "when 'refund_audit'    then $5::int * 3600",
+  reprovision: "when 'reprovision'     then $6::int * 60",
+  verification: "when 'verification'    then $7::int * 86400",
+  refund_execute: "when 'refund_execute'  then $10::int * 3600",
+  refund_processing_stuck:
+    "when 'refund_processing_stuck' then $11::int * 3600",
+  refund_failed: "when 'refund_failed'   then $12::int * 3600",
+  // 没有申报腿（escalate_from 为 null）连阈值都不给——否则会退回 created_at 算。
+  addon_pending_confirm:
+    "when 'addon_pending_confirm'\n                 then case when x.escalate_from is null then null else $13::int * 3600 end",
+  ticket_sla: "when 'ticket_sla'      then $14::int * 3600",
+  maintenance_overdue: "when 'maintenance_overdue' then $15::int * 60",
+};
+
+/** 「已等」从升档起点算、没有就退回等待起点——少了这一句，三类的起点改了也没用。 */
+const ESCALATE_FROM_LITERAL =
+  "extract(epoch from (now() - coalesce(x.escalate_from, x.waiting_since)))";
 
 /** 原始订单态 → admin-bff 订单投影里的派生态（mapEntityOrderStatus 保证）。 */
 const DERIVED = {
   pending_verify: "pending_verify",
   paid: "paid_unprovisioned",
 };
+
+/* ── 第 6 段的纯函数（--self-test 用合成文本喂反例，不碰真文件）────────────── */
+
+/**
+ * tail 里 `select nullif(case x.kind … end, 0)::numeric` 那一段解析出「SQL 里真有阈值的类别」。
+ * 找不到那一段 → null（判据瞎了，调用方要 die，不是放行）。
+ */
+function escalatesInTail(repoText) {
+  const block = repoText.match(
+    /select nullif\(case x\.kind\n([\s\S]*?)\n\s*end, 0\)::numeric/,
+  );
+  if (!block) return null;
+  return [...block[1].matchAll(/when '([a-z_]+)'/g)].map((m) => m[1]).sort();
+}
+
+/**
+ * 两根轴对账：返回问题清单（空 = 对得上）。
+ * @param {object} p
+ * @param {string[]} p.sqlKinds   tail 里解析出的类别
+ * @param {string[]} p.registry   ESCALATES
+ * @param {string[]} p.alertKinds 作业的 ALERT_KINDS
+ * @param {string[]} p.noticeOnly 作业的 NOTICE_ONLY_KINDS
+ * @param {string[]} p.alerting   DECIDED 为 true 的集合（邮件裁定）
+ * @param {string[]} p.listed     OPS_TODO_KINDS 值域
+ */
+function escalationProblems({
+  sqlKinds,
+  registry,
+  alertKinds,
+  noticeOnly,
+  alerting,
+  listed,
+}) {
+  const out = [];
+  const reg = [...registry].sort();
+  const unregistered = sqlKinds.filter((k) => !reg.includes(k));
+  const noThreshold = reg.filter((k) => !sqlKinds.includes(k));
+  if (unregistered.length) {
+    out.push(
+      `共享算法 tail 里有升档阈值、却没登记在本文件 ESCALATES 的类别：${unregistered.join(", ")}\n` +
+        "  → 阈值长在 SQL 里就会升档、就会有通告——有阈值的每一类都要在这里登记，才能对账它有没有人扫。",
+    );
+  }
+  if (noThreshold.length) {
+    out.push(
+      `ESCALATES 登记了、而 tail 里没有阈值的类别：${noThreshold.join(", ")}\n` +
+        "  → 登记表过期：那一类升不了档，登记在这里只会让人以为它有通告兜底。",
+    );
+  }
+  const scannedAll = new Set([...alertKinds, ...noticeOnly]);
+  const unscanned = reg.filter((k) => !scannedAll.has(k));
+  if (unscanned.length) {
+    out.push(
+      `有升档阈值、却不在作业扫描集（ALERT_KINDS ∪ NOTICE_ONLY_KINDS）的类别：${unscanned.join(", ")}\n` +
+        "  → 升档了也没有通告：页面上红着、运营台一条都没有，而且不报错——这正是 owner 2026-10-04 说的「没有通告兜底」。" +
+        "推邮件的进 ALERT_KINDS（先找 owner 搬进 DECIDED），只写通告的进 NOTICE_ONLY_KINDS。",
+    );
+  }
+  const overlap = noticeOnly.filter((k) => alerting.includes(k));
+  if (overlap.length) {
+    out.push(
+      `NOTICE_ONLY 里有已裁定要推邮件的类别：${overlap.join(", ")}——它该在 ALERT_KINDS（邮件 + 通告），不该两边都在。`,
+    );
+  }
+  const noticeNoThreshold = noticeOnly.filter((k) => !reg.includes(k));
+  if (noticeNoThreshold.length) {
+    out.push(
+      `NOTICE_ONLY 里有没有升档阈值的类别：${noticeNoThreshold.join(", ")}——它永远升不了档，通告永远不会写（做了没接）。`,
+    );
+  }
+  const unknown = [...reg, ...noticeOnly].filter((k) => !listed.includes(k));
+  if (unknown.length) {
+    out.push(
+      `ESCALATES / NOTICE_ONLY 里有算法不产出的类别：${[...new Set(unknown)].join(", ")}`,
+    );
+  }
+  return out;
+}
 
 const problems = [];
 const die = (msg) => {
@@ -298,16 +473,112 @@ const alerting = Object.entries(DECIDED)
   .map(([k]) => k)
   .sort();
 
-// ── 2. 作业实扫的类别 == 裁定要告警的类别 ─────────────────────────────────
+// ── 2. 作业实扫的类别 == 裁定要告警的类别；只写通告的那一拼也接上了 ───────────
 const jobSrc = readFileSync(JOB, "utf8");
-const alertKindsBlock = jobSrc.match(
-  /export const ALERT_KINDS[^=]*=\s*\[([\s\S]*?)\];/,
-);
-if (!alertKindsBlock) die("在 ops-todo-alert.job 里找不到 ALERT_KINDS");
-const scanned = [...alertKindsBlock[1].matchAll(/"([a-z_]+)"/g)]
-  .map((m) => m[1])
-  .sort();
+const repoSrc = readFileSync(REPO, "utf8");
+const wiringSrc = readFileSync(WIRING, "utf8");
+
+const parseKindList = (name) => {
+  const block = jobSrc.match(
+    new RegExp(`export const ${name}[^=]*=\\s*\\[([\\s\\S]*?)\\];`),
+  );
+  if (!block) die(`在 ops-todo-alert.job 里找不到 ${name}`);
+  return [...block[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]).sort();
+};
+const scanned = parseKindList("ALERT_KINDS");
 if (scanned.length === 0) die("ALERT_KINDS 解析出 0 个类别");
+const noticeScanned = parseKindList("NOTICE_ONLY_KINDS");
+
+// ── --self-test：用合成文本证第 6 段会动（三态），不碰真文件 ───────────────────
+if (process.argv.includes("--self-test")) {
+  let bad = 0;
+  const say = (ok, msg) => {
+    if (!ok) bad += 1;
+    console.log(`${ok ? "✓" : "✗"} ${msg}`);
+  };
+  console.log("══ 自检：第 6 段（升档阈值两根轴）看得见正例，并且会对反例说话 ══\n");
+
+  const real = escalatesInTail(repoSrc);
+  say(
+    real !== null && real.length > 0,
+    `tail 里解析出 ${real ? real.length : 0} 个有阈值的类别（${real ? real.join(" / ") : "没解析到"}）`,
+  );
+  const base = {
+    sqlKinds: real ?? [],
+    registry: ESCALATES,
+    alertKinds: scanned,
+    noticeOnly: NOTICE_ONLY,
+    alerting,
+    listed,
+  };
+  say(
+    escalationProblems(base).length === 0,
+    "正例：真文本 + 本文件登记表 → 0 条问题",
+  );
+
+  // 反例一：tail 里多一个没登记的阈值。
+  const anchor = ESCALATION_LITERALS.maintenance_overdue;
+  const injected = repoSrc.replace(
+    anchor,
+    `${anchor}\n               when 'subscription_overdue' then $16::int * 3600`,
+  );
+  say(injected !== repoSrc, "反例一能构造出来（找到了 maintenance_overdue 那一行阈值）");
+  const injectedKinds = escalatesInTail(injected) ?? [];
+  const p1 = escalationProblems({ ...base, sqlKinds: injectedKinds });
+  say(
+    injectedKinds.includes("subscription_overdue") &&
+      p1.some((m) => m.includes("subscription_overdue")),
+    `反例一：tail 里多一个 subscription_overdue 的阈值 → 报「没登记」（${p1.length} 条）`,
+  );
+
+  // 反例二：登记表多一类。
+  const p2 = escalationProblems({
+    ...base,
+    registry: [...ESCALATES, "deletion_pending"],
+  });
+  say(
+    p2.some((m) => m.includes("deletion_pending")),
+    `反例二：ESCALATES 多登记 deletion_pending → 报「没有阈值 / 没人扫」（${p2.length} 条）`,
+  );
+
+  // 反例三：把 NOTICE_ONLY 清空 —— 这就是裁定 3 之前的现场（verification 有阈值、没人扫）。
+  const p3 = escalationProblems({ ...base, noticeOnly: [] });
+  say(
+    p3.some((m) => m.includes("verification") && m.includes("没有通告兜底")),
+    `反例三：NOTICE_ONLY 清空 → 报 verification 有阈值却没人扫（${p3.length} 条）`,
+  );
+
+  // 反例四：NOTICE_ONLY 与邮件裁定重叠。
+  const p4 = escalationProblems({
+    ...base,
+    noticeOnly: [...NOTICE_ONLY, "confirm_payment"],
+  });
+  say(
+    p4.some((m) => m.includes("confirm_payment")),
+    `反例四：NOTICE_ONLY 混进已裁邮件的 confirm_payment → 报重叠（${p4.length} 条）`,
+  );
+
+  // 反例五：tail 那一段不见了 → 解析器要说「看不见」，不是回空集。
+  say(
+    escalatesInTail("select 1") === null,
+    "反例五：找不到 case x.kind 那一段 → 返回 null（调用方 die），不是空集",
+  );
+
+  // 复原。
+  say(
+    escalationProblems(base).length === 0,
+    "复原：真文本 + 本文件登记表 → 又是 0 条",
+  );
+
+  console.log(`\n── 汇总 ──\n看得见 ${9 - bad}/9 项`);
+  if (bad) {
+    console.log("判据还不能用 —— 先让它看得见上面标 ✗ 的那几条。");
+    process.exit(1);
+  }
+  console.log("正例绿、五种反例各自红、复原绿。这个判据可以用了。");
+  process.exit(0);
+}
+
 if (JSON.stringify(alerting) !== JSON.stringify(scanned)) {
   problems.push(
     `告警作业扫描的类别与裁定对不上：\n` +
@@ -320,9 +591,24 @@ if (!/kinds:\s*ALERT_KINDS/.test(jobSrc)) {
     "ops-todo-alert.job 没有把 ALERT_KINDS 传给 OpsTodoRepository.list({ kinds })——常量在、没接上，等于没扫。",
   );
 }
+if (!/kinds:\s*NOTICE_ONLY_KINDS/.test(jobSrc)) {
+  problems.push(
+    "ops-todo-alert.job 没有把 NOTICE_ONLY_KINDS 单独传给 OpsTodoRepository.list({ kinds })——" +
+      "常量在、没接上，等于没扫；而且必须是**另一拼**（limit 50 按 rose 优先，并进 ALERT 那拼会把 amber 行挤没）。",
+  );
+}
+if (!/\.noticeEscalatedTodo\(/.test(jobSrc)) {
+  problems.push(
+    "ops-todo-alert.job 没有调 alerts.noticeEscalatedTodo——只写通告那一拼取回来了，却没写通告。",
+  );
+}
+if (!/async noticeEscalatedTodo\(/.test(wiringSrc)) {
+  problems.push(
+    "operator-alerts.wiring 里没有 noticeEscalatedTodo——只写通告的类别没有落点。",
+  );
+}
 
 // ── 3. 共享算法从原始态产出这些类 ────────────────────────────────────────
-const repoSrc = readFileSync(REPO, "utf8");
 const caseBlock = repoSrc.match(/case o\.status\n([\s\S]*?)end\s+as kind/);
 if (!caseBlock)
   die("在 pg-ops-todo.repository 里找不到 `case o.status … end as kind`");
@@ -332,14 +618,14 @@ const produced = new Map(
   ),
 );
 if (produced.size === 0) die("订单态 → 待办类的 case 解析出 0 对");
-for (const kind of alerting) {
+for (const kind of [...alerting, ...NOTICE_ONLY]) {
   const literals = PREDICATE_LITERALS[kind];
   if (literals) {
     for (const needle of literals) {
       if (!repoSrc.includes(needle)) {
         problems.push(
           `共享算法里找不到 ${kind} 的谓词片段：\n      ${needle}\n` +
-            "  → 谓词改了（或改名了）而裁定表没跟着改：作业还在发这一类的邮件，扫的却不是当初裁定的那件事。" +
+            "  → 谓词改了（或改名了）而裁定表没跟着改：作业还在扫这一类，扫的却不是当初裁定的那件事。" +
             "如果谓词是有意改的，请把本文件 PREDICATE_LITERALS 里这一条一起改。",
         );
       }
@@ -349,8 +635,8 @@ for (const kind of alerting) {
   const raw = RAW_STATUS[kind];
   if (!raw) {
     problems.push(
-      `${kind} 裁定要告警，但本文件的 RAW_STATUS / PREDICATE_LITERALS 里都没有它的谓词——` +
-        "本段等于对那一类瞎了。新加一类告警就要在这里登记它的判据。",
+      `${kind} 裁定要告警（或只写通告），但本文件的 RAW_STATUS / PREDICATE_LITERALS 里都没有它的谓词——` +
+        "本段等于对那一类瞎了。新加一类就要在这里登记它的判据。",
     );
     continue;
   }
@@ -378,7 +664,7 @@ for (const [raw, derived] of Object.entries(DERIVED)) {
   }
 }
 
-// ── 5. 作业那条 SQL 只碰 svc_platform_api 有权的关系 ─────────────────────────
+// ── 5. 作业那两拼 SQL 只碰 svc_platform_api 有权的关系 ───────────────────────
 // 先把 SQL 行注释剥掉再解析：注释掉的 GRANT 不是授权，裸匹配会把它当真的
 // （97 里没有含 `--` 的字符串字面量，整行剥安全）。
 const rolesSrc = readFileSync(ROLES, "utf8").replace(/--[^\n]*/g, "");
@@ -418,7 +704,7 @@ if (!allowedRelations.has("admin.operator_notices")) {
 }
 
 const leanNames = new Set(SHARED_PIECES);
-for (const kind of scanned) {
+for (const kind of [...scanned, ...noticeScanned]) {
   const pieces = LEAN_PIECES[kind];
   if (!pieces) {
     die(
@@ -464,11 +750,68 @@ for (const name of leanNames) {
   }
 }
 
-// ── 6. 裁定要告警的每一类在 todoAlertInput 里都有文案 ──────────────────────────
+// ── 6. 升档阈值：SQL 里有阈值的 == 登记的，且每一类都有人扫 ────────────────────
+// 这一段补的是 2026-10-04 owner 点名的洞：阈值长在 SQL 里会让页面红、让 escalated 置真，
+// 但通告只写给作业扫到的行——有阈值而没人扫，就是「升档了也没有通告」，而且不报错。
+const sqlKinds = escalatesInTail(repoSrc);
+if (sqlKinds === null) {
+  die(
+    "在 LIST_OPS_TODOS_TAIL 里找不到 `select nullif(case x.kind … end, 0)::numeric` 那一段——本段读不到阈值表",
+  );
+}
+if (sqlKinds.length === 0) die("tail 的阈值 case 解析出 0 个类别");
+problems.push(
+  ...escalationProblems({
+    sqlKinds,
+    registry: ESCALATES,
+    alertKinds: scanned,
+    noticeOnly: noticeScanned,
+    alerting,
+    listed,
+  }),
+);
+for (const kind of ESCALATES) {
+  const needle = ESCALATION_LITERALS[kind];
+  if (!needle) {
+    problems.push(
+      `${kind} 在 ESCALATES 里，但本文件的 ESCALATION_LITERALS 没有它的阈值行——参数位没人钉，$n 漂了也看不见。`,
+    );
+    continue;
+  }
+  if (!repoSrc.includes(needle)) {
+    problems.push(
+      `共享算法 tail 里找不到 ${kind} 的阈值行：\n      ${needle.replace(/\n\s*/g, " ")}\n` +
+        "  → 参数位或单位改了而本文件没跟着改。有意改的话把 ESCALATION_LITERALS 这一条一起改（bindListOptions 的顺序也要对得上）。",
+    );
+  }
+}
+for (const kind of Object.keys(ESCALATION_LITERALS)) {
+  if (!ESCALATES.includes(kind)) {
+    problems.push(
+      `ESCALATION_LITERALS 里有 ${kind} 的阈值行，但它不在 ESCALATES——登记表只有一份，两处对不上。`,
+    );
+  }
+}
+if (!repoSrc.includes(ESCALATE_FROM_LITERAL)) {
+  problems.push(
+    `共享算法 tail 里找不到升档起点那一句：\n      ${ESCALATE_FROM_LITERAL}\n` +
+      "  → 「已等」不再从 escalate_from 算：加油包 / 工单首响 / 卡住退款的起点改了也没用。",
+  );
+}
+
+// ── 7. 本文件的 NOTICE_ONLY == 作业的 NOTICE_ONLY_KINDS ─────────────────────────
+if (JSON.stringify([...NOTICE_ONLY].sort()) !== JSON.stringify(noticeScanned)) {
+  problems.push(
+    `只写通告的类别两处对不上：\n` +
+      `    本文件 NOTICE_ONLY：${[...NOTICE_ONLY].sort().join(", ") || "（空）"}\n` +
+      `    作业 NOTICE_ONLY_KINDS：${noticeScanned.join(", ") || "（空）"}`,
+  );
+}
+
+// ── 8. 裁定要告警的每一类在 todoAlertInput 里都有文案 ──────────────────────────
 // 这一段补的是第三批才出现的洞：ALERT_KINDS 加一类、裁定表加一行，都不会让构建红；
 // 而 todoAlertInput 的 default 分支是 `throw`——于是作业每轮扫到那一类就抛，
 // 表现是「这个作业一直失败」，而不是「少了一封邮件」，排查时离现场很远。
-const wiringSrc = readFileSync(WIRING, "utf8");
 const alertInputFn = wiringSrc.match(
   /export function todoAlertInput\([\s\S]*?\n\}/,
 )?.[0];
@@ -498,7 +841,9 @@ console.log("══ 运营待办告警一致性检查（check-ops-todo-alerts）
 console.log(
   `待办算法产出 ${listed.length} 类（${listed.join(" / ")}），` +
     `裁定告警 ${alerting.length} 类（${alerting.join(" / ")}），` +
-    `未裁定 ${UNRULED.length} 类（${UNRULED.join(" / ")}）。\n`,
+    `未裁定 ${UNRULED.length} 类（${UNRULED.join(" / ")}）；` +
+    `有升档阈值 ${sqlKinds.length} 类（${sqlKinds.join(" / ")}），` +
+    `只写通告 ${noticeScanned.length} 类（${noticeScanned.join(" / ") || "无"}）。\n`,
 );
 
 if (problems.length > 0) {
@@ -509,6 +854,6 @@ if (problems.length > 0) {
 
 console.log(
   "✓ 每一类都有明文归属，作业实扫 == 裁定，共享算法的原始态与 admin 投影的派生态一致，" +
-    "作业那一拼只碰 svc_platform_api 有权的关系。",
+    "作业那两拼只碰 svc_platform_api 有权的关系，有升档阈值的每一类都有人扫。",
 );
 console.log("\n── 汇总 ──\nerror: 0");

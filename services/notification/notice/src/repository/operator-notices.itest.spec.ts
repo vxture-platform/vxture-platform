@@ -358,6 +358,52 @@ describe.skipIf(!RUN)("admin.operator_notices 可见性谓词（真库）", () =
     expect(past.unread).toBe(all.unread);
   });
 
+  /**
+   * 升档通告的去重键 = `{待办 id}:{级数}`（operator-alerts.wiring 的 composeEscalatedTodoNotice）。
+   * 「每一级恰好一条」靠的是 `uq_operator_notices_system`（80_admin.sql，部分唯一索引
+   * on (reference_type, reference_id) where source='system' and deleted_at is null）+ `do nothing`。
+   * 作业每 5 分钟扫一轮、同一级会反复写——第二次必须 inserted:false、表里仍 1 行；
+   * 级数 +1 才是新的一条。假 pool 钉不住索引，这里真库跑。
+   */
+  it("系统通告按 (reference_type, reference_id) 去重：同一级写两次只落一行，级数 +1 再落一行", async () => {
+    const base = {
+      targetPlanes: ["admin"] as NoticePlane[],
+      severity: "critical" as NoticeSeverity,
+      title: TITLE_PREFIX + "待办已超时：订单 ORD-ITEST（已等 5 小时）",
+      body: "itest escalated",
+      link: "/orders/ORD-ITEST",
+      referenceType: "ops_signal",
+      expiresAt: null,
+    };
+    const first = await repo.createSystemNotice({
+      ...base,
+      referenceId: TITLE_PREFIX + "confirm_payment:ORD-ITEST:1",
+    });
+    expect(first.inserted).toBe(true);
+    const again = await repo.createSystemNotice({
+      ...base,
+      referenceId: TITLE_PREFIX + "confirm_payment:ORD-ITEST:1",
+    });
+    expect(again.inserted).toBe(false);
+    const countAt = async (step: number) =>
+      (
+        await pool.query<{ n: string }>(
+          `select count(*)::text as n from admin.operator_notices
+            where source = 'system' and reference_type = 'ops_signal' and reference_id = $1
+              and deleted_at is null`,
+          [TITLE_PREFIX + `confirm_payment:ORD-ITEST:${step}`],
+        )
+      ).rows[0]!.n;
+    expect(await countAt(1)).toBe("1");
+    const next = await repo.createSystemNotice({
+      ...base,
+      referenceId: TITLE_PREFIX + "confirm_payment:ORD-ITEST:2",
+    });
+    expect(next.inserted).toBe(true);
+    expect(await countAt(2)).toBe("1");
+    expect(await countAt(1)).toBe("1");
+  });
+
   it("markAllRead 把本平面全部未读一次记上，按完 unread 归零；再按回 0", async () => {
     /* 这个用例会记上库里**本来就有**的那些通告（它的作用域就是这样定的），
        所以先记下这个人此前读过哪些，末尾把多出来的读记删掉，库回到原样。 */
