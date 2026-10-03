@@ -1414,6 +1414,104 @@ export class PgSubscriptionRepository {
       createdAt: row.created_at,
     };
   }
+
+  /**
+   * 暂停半态对账（只读，2026-10-03）。
+   *
+   * ── 为什么需要它 ──
+   * 「改订阅状态」与「开 / 闭 episode」是**两个独立事务**（`update` 与
+   * `openSuspension` / `closeSuspension` 各自 `pool.connect()` + `begin`），
+   * 而调用方把第二步的异常按行 catch 成一行日志。于是中途失败会留下两种半态，
+   * **而三条恢复判据（出窗口恢复 / 到点处置 / 再次进窗口）没有一条看得见它们**：
+   *
+   *   A「停了服但没有 episode」—— `findMaintenanceReleases` 与 `findOverdueSuspensions`
+   *     都从 episode 表起算 ⇒ 捞不到；`findMaintenanceCandidates` 要
+   *     `status in (active/trialing/expiring/overdue)` ⇒ 也捞不到。
+   *     后果：客户停着服直到原到期日，整段维护期零补偿、零通知。
+   *
+   *   B「已恢复但 episode 没闭合」—— 到期扫描的有效到期日是
+   *     `end_at + (now() - paused_at)`，这个加数**每秒都在变大** ⇒ 永远 > now()
+   *     ⇒ 这条订阅永不到期、永不释放、永不再计费，欠客户的顺延也永不结算。
+   *
+   * 根治要把两步并进一个事务（那是 `update` 的事务边界重构，碰钱、调用方众多，
+   * 单独一轮做）。在那之前先让它**可见**：这个方法不改任何写路径，只回两种半态的条数
+   * 与样本 id，由作业打出来 —— 顺带回答一个今天没人知道的问题：生产上到底有没有。
+   *
+   * 两个坑都是真跑一次才现形的，写在这里免得下一个人再踩：
+   *   · CTE 不能叫 both —— 那是 PG 的保留字（trim(both ...) 那个语法），
+   *     叫了就是 syntax error at or near "both"。它在模板串里，
+   *     tsc / prettier / 全部 55 道门一个都看不见；
+   *   · 取样要按形状各取 N 条（见下面的 row_number 注释），
+   *     否则行多的那个形状会把另一个的样本挤成 0 行，而总数就跟着读成 0。
+   */
+  async countSuspensionHalfStates(sampleLimit = 5): Promise<{
+    suspendedWithoutEpisode: number;
+    resumedWithOpenEpisode: number;
+    samples: { shape: "no_episode" | "open_episode"; subscriptionId: string }[];
+  }> {
+    const { rows } = await this.pool.query<{
+      shape: "no_episode" | "open_episode";
+      subscription_id: string;
+      total: string;
+    }>(
+      `with no_episode as (
+         select s.id as subscription_id
+           from metering.subscriptions s
+          where s.status = 'suspended'
+            and s.deleted_at is null
+            and not exists (
+              select 1 from metering.subscription_suspensions sus
+               where sus.subscription_id = s.id and sus.resumed_at is null)
+       ), open_episode as (
+         select s.id as subscription_id
+           from metering.subscriptions s
+           join metering.subscription_suspensions sus
+                on sus.subscription_id = s.id and sus.resumed_at is null
+          where s.status <> 'suspended'
+            and s.deleted_at is null
+       ), half_states as (
+         select 'no_episode'::text as shape, subscription_id from no_episode
+         union all
+         select 'open_episode'::text as shape, subscription_id from open_episode
+       ), ranked as (
+         select shape, subscription_id,
+                count(*) over (partition by shape)::text as total,
+                row_number() over (partition by shape order by subscription_id) as rn
+           from half_states
+       )
+       select shape, subscription_id, total
+         from ranked
+        where rn <= $1
+        order by shape, subscription_id`,
+      [Math.max(sampleLimit, 1)],
+    );
+
+    /*
+     * 取样要**按形状各取 N 条**，不能「排完序取前 N 条」。
+     *
+     * 第一版就是 `order by shape, subscription_id limit $1` —— 而 'no_episode' 字典序在
+     * 'open_episode' 前面，于是前者只要超过 N 条，后者的样本会被挤成 0 行；
+     * `totalOf('open_episode')` 从 rows 里找不到那个 shape 就回 0，
+     * **把两种半态里更危险的那一种报成「没有」**。
+     * 这正是这一整轮在别处反复找到的那类缺陷（一个数静默读成 0），所以这里写清楚。
+     *
+     * 现在用 `row_number() over (partition by shape)` 各取 N 条；`count(*) over (partition by shape)`
+     * 在窗口阶段算完、早于 `where rn <= $1`，所以总数不随取样条数变小。
+     * 某个形状真的 0 条时它压根不出现在 rows 里 ⇒ totalOf 回 0，那是对的。
+     */
+    const totalOf = (shape: string): number => {
+      const hit = rows.find((r) => r.shape === shape);
+      return hit ? Number(hit.total) : 0;
+    };
+    return {
+      suspendedWithoutEpisode: totalOf("no_episode"),
+      resumedWithOpenEpisode: totalOf("open_episode"),
+      samples: rows.map((r) => ({
+        shape: r.shape,
+        subscriptionId: r.subscription_id,
+      })),
+    };
+  }
 }
 
 // 可视码：{PREFIX}-{YYYYMM}-{10位}，与 admin-bff billingCode() 同规（唯一约束兜底防重）。
