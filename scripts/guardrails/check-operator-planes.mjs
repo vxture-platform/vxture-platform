@@ -45,62 +45,40 @@ const LEGACY_DOMAINS = new Set(["platform", "release", "notification"]);
  * 新增一条没有消费方的码必须来这里登记，否则红。
  */
 /**
- * 2026-10-03 逐码核实（12 条共用理由的那些）。两件事要先说清楚：
+ * 2026-10-03 逐码核实、2026-10-04 复核。两件事要先说清楚：
  *
  * ① **原来那句理由把三种处境写成一句「或」** ——「仍经旧桥检查扁平码，或这一页尚未设门」。
  *    其中「尚未设门」会是 P0，另一种什么都不是，读者分不出自己面对的是哪一种，
  *    这句话就不可证伪。核完 12 条：**「这一页尚未设门」一条实例都没有**，那半句已删。
  *
- * ② **「没有消费方」是症状，不是病。** 这 12 条不是零散的债，它们精确地聚在
- *    仍由两个遗留扁平码把门的区域：
+ * ② **「没有消费方」是症状，不是病。** 2026-10-03 那 12 条不是零散的债，它们精确地聚在
+ *    当时仍由两个遗留扁平码把门的区域：
  *
- *      platform.tenant.manage   → 原 **27** 个 HTTP 入口
- *                                 租户 12 / 工单 10 / 账号 3 / 运营待办 1 / 全局搜索 1
- *      platform.product.manage  → **32** 个 HTTP 入口（products.router 全部，含定价）
+ *      platform.tenant.manage   → 原 27 个 HTTP 入口（租户 12 / 工单 10 / 账号 3 / 待办 1 / 搜索 1）
+ *      platform.product.manage  → 原 32 个 HTTP 入口（products.router 全部，含定价）
  *
- *    **租户 12 与工单 10 已拆**（owner 2026-10-03 裁决「拆门，按细码粒度，先做租户和
- *    工单那两条」）：22 个入口改判本域细码，粗门余 **5** 个（账号 3 个读 / 待办 / 搜索）。
- *    于是 tenant:profile.read、tenant:verification.review、support:ticket.read、
- *    support:ticket.manage 四条从本登记表里删掉了 —— 它们有消费方了。
+ *    两道粗门**今天都不存在了**：
+ *      · 租户 12 与工单 10 —— 2026-10-03（#577，owner「拆门，按细码粒度，先做租户和工单那两条」）；
+ *      · 账号 3 / 待办 1 / 搜索 1 与产品目录 / 解决方案 / 套餐 / 定价 32 —— 2026-10-04
+ *        （owner ruling 1：「一个码 tenant manage，和一个码 product manage，这个必须要拆解，
+ *        首先是按照 admin，opera 两个平面，再按照同类业务维度，你参考行业梳理和拆分」）。
+ *      · auth.service 的 LEGACY_CAPABILITY_BRIDGE 随之整个删除：req.capabilities 现在就是
+ *        operator_role_permission 里的 perm_code，没有任何运行时合成的码。
  *
- *    27 那个数是**传递算出来的**：只认「函数体里直接出现这个码」时是 19，
- *    而 approveTenantVerification / rejectTenantVerification 调的是私有
- *    reviewVerification，门写在那一层 —— 门往下传一跳就数不到了。
- *
- *    而且粗门**两头都错**，这一点是拆门时才量出来的（按 seed 的 OPERATOR_ROLE_PERMS
- *    + withMenuClosure 复算六个角色）：旧桥只从 tenant:profile.manage 合成粗码，于是
- *      · operator 只被授予 support:ticket.read，却能**写**工单（十个入口全开）；
- *      · support 角色持 ticket.read + ticket.manage 两码却拿不到粗码 ⇒ 十个入口全 403，
- *        而 withMenuClosure 恰按这两码把工单菜单放进了它的侧栏 ——
- *        **专职处理工单的角色在侧栏看得见、点进来吃 403**；auditor（只读）同形。
+ *    粗门**两头都错**，这一点是拆门时才量出来的（按 seed 的 OPERATOR_ROLE_PERMS 复算）：
+ *    旧桥只从 tenant:profile.manage / product:plan.manage 合成，于是
+ *      · operator 只被授予 support:ticket.read，却能**写**工单；能改套餐的人同时能改产品目录、
+ *        建解决方案、改价格；
+ *      · support 持 ticket.read + ticket.manage 却十个入口全 403；finance / auditor 持
+ *        plan.read + price.read、engineer / auditor 持 capability.read、finance / support /
+ *        auditor 持 user:profile.read —— 都在侧栏闭包里有那一页，点进来吃 403。
  *    所以「粗门」不只是放得太宽，它同时把该进的人关在外面。
  *
- *    后果说人话：拿到 platform.tenant.manage 的运营者**同时**能改租户资料、
- *    **批准/驳回实名审核**（kyc.tenant_verifications + tenancy.tenants.verification_status）、
- *    **读写全部工单**（含客户可见回复与内部备注）、读全部账号、全局搜索。
- *    目录里给实名审核与工单各留了自己的码，正因为这两道粗门而没有消费方。
+ *    本仓自己写明了被违反的原则：tenants.router 的 assertCanResetTenantBrand 上方写着
+ *    「能改租户资料的人不等于能抹掉租户传的标识」。同一条推理对合规裁定与对客户说话只会更强。
  *
- *    **本仓自己写明了被违反的原则**：tenants.router 的 assertCanResetTenantBrand 上方写着
- *    「重置主体标识……故与宽口径的 platform.tenant.manage 分开设门 ——
- *    能改租户资料的人不等于能抹掉租户传的标识」。同一条推理对合规裁定与对客户说话只会更强。
- *
- *    顺带：auth.service 的 LEGACY_CAPABILITY_BRIDGE 今天**只剩两条活的**
- *    （tenant:profile.manage、product:plan.manage），所以「仍经旧桥」对多数条目并不成立 ——
- *    真正的理由是「这些路由从没按域重新设门」。
- *
- * 处置与 commerce:refund.execute 同一个取舍：**改过来要给角色授细码（迁移 + 灌存量库）**，
- * 是 owner 的决定。本轮只把理由改成真话，一道门都没动。
+ * 2026-10-04 之后登记表里剩下的每一条都是**独立的理由**，不再有「坐在粗门后面」这一种。
  */
-const COARSE_TENANT_GATE =
-  "**页面有门，但是粗门**（2026-10-03 核实，同日部分拆完）：这一页坐在遗留扁平码 " +
-  "platform.tenant.manage 后面。那个码原先开着 27 个入口，租户 12 与工单 10 已按细码拆门" +
-  "（owner 裁决「先做租户和工单那两条」），**余 5 个**：账号列表 / 账号详情 / 账号头像读（3）" +
-  "＋ 运营待办（1）＋ 全局搜索（1）。本条的细码因此仍没有消费方 —— 症状在这里，病在那道粗门。" +
-  "剩下这三处是 owner 明确后做的那一批";
-const COARSE_PRODUCT_GATE =
-  "**页面有门，但是粗门**（2026-10-03 核实）：products.router 32 个入口（含定价写入）全判" +
-  "遗留扁平码 platform.product.manage，本域的细码因此没有消费方。" +
-  "注：platform.pricing.manage 已退役（见 auth.service 的注释），所以这不是「旧桥还在用」";
 const MANAGE_IMPLIES_READ =
   "**正常，不是债**（2026-10-03 核实）：本域只有 .manage 有消费方，而 manage 蕴含 read，" +
   "页面判 .manage 即可。读码留在目录里是给将来拆只读角色用的";
@@ -112,18 +90,19 @@ const GRANULARITY_ABSENT =
 const UNCONSUMED = {
   "tenant:quota.read": GRANULARITY_ABSENT,
   "tenant:quota.manage": GRANULARITY_ABSENT,
-  "user:profile.read": COARSE_TENANT_GATE,
   "commerce:refund.execute":
-    "**不是没设门，是用错了码**（2026-10-03 核实）：orders.router 的四个退款端点" +
-    "（refund-audit / refund-execute / refund-create / refund-fail）都挂 @RequireStepUp，" +
-    "但判的是 commerce:payment.settle —— 收款的码。同一份文件为 void 写明了相反的原则：" +
-    "「与 settle 是不同的危险类别，所以挂自己的 commerce:order.void」。退款是钱出去，" +
-    "目录里早就给了它自己的码，没人用。改过来要给角色授这个码（迁移 + 存量库），" +
-    "是 owner 的取舍，不是顺手改的事",
+    "**按设计不消费**（owner 2026-10-03 裁决）：orders.router 的四个退款端点" +
+    "（refund-audit / refund-execute / refund-create / refund-fail）判的是 commerce:payment.settle，" +
+    "owner 定这是合理的——「确认收款的人和确认退款的人是同一角色（运营），真正收款的人+" +
+    "真正退款的人处理退款资金（财务）」。退款在 admin 里是「确认」，与确认收款同一角色同一码；" +
+    "真正动钱的那一步在财务侧，不在这几个端点上。此码留在目录里不改门、不授角色，" +
+    "等财务侧的退款资金动作进 admin 那天再接",
   "promotion:campaign.read": MANAGE_IMPLIES_READ,
-  "product:plan.read": COARSE_PRODUCT_GATE,
-  "product:price.read": COARSE_PRODUCT_GATE,
-  "product:price.manage": COARSE_PRODUCT_GATE,
+  "product:price.read":
+    "**这个粒度的读端点不存在**（2026-10-04 核实）：价格没有自己的读入口，它作为套餐版本" +
+    "详情的一部分随 product:plan.read 下发（GET plans / plan-versions/:id / plan-matrix / " +
+    "releases / service-plans）。写侧有门：套餐草稿 PATCH 带 prices 时补判 product:price.manage。" +
+    "目录里 finance / auditor 两码并授，读的那一个今天不是门",
   "content:announcement.read": MANAGE_IMPLIES_READ,
   "support:impersonate":
     "**功能根本没做**（2026-10-03 核实）：这个码只出现在 seed、本守卫与设计文档里，" +

@@ -38,7 +38,7 @@
 | 建档 | `POST /plans`                     | 同产品同档已有非 deprecated 套餐（草稿骨架也算占格）→ 409                                |
 | 发布 | `POST /plan-versions/:id/publish` | 同产品同档已有**其他套餐的当前发布版** → 409（先退役旧套餐）；同套餐 v2 覆盖 v1 不受影响 |
 
-## 4. 端点（全部 `platform.product.manage`）
+## 4. 端点（读 `product:plan.read` | `.manage`，写 `product:plan.manage`；草稿 `PATCH plan-versions/:id` 带 `prices` 另判 `product:price.manage`。2026-10-04 拆门前全部判 `platform.product.manage`）
 
 - `GET /api/products/plan-matrix` — 矩阵读模型（一条 SQL，LEFT JOIN LATERAL 保空产品行）
 - `POST /api/products/plans` — 空档建骨架：plan + v1 草稿 + primary 组件一个事务；不 step-up（发布前不可售，发布才是危操作）

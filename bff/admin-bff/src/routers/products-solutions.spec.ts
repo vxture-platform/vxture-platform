@@ -407,14 +407,19 @@ describe("solution write paths", () => {
     is_public: true,
   };
 
-  it("rejects a caller without platform.product.manage before any DB access", async () => {
+  /* 拆门的反例：能改套餐（plan.manage，旧桥正是从它合成粗码）加上能读方案，仍建不了方案。
+     2026-10-04 之前这一组码能建——那正是被拆掉的那道粗门。 */
+  it("plan.manage + solution.read cannot create a solution (gate split proof)", async () => {
     const rw = noDbPool();
     const router = new ProductsRouter(noDbPool().pool, rw.pool);
     await expect(
-      router.createSolution(makeReq(["platform.product.read"]), {
-        solutionCode: "x",
-        solutionName: "X",
-      }),
+      router.createSolution(
+        makeReq(["product:plan.manage", "product:solution.read"]),
+        {
+          solutionCode: "x",
+          solutionName: "X",
+        },
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(rw.connect).not.toHaveBeenCalled();
   });

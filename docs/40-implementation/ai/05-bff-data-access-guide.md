@@ -86,38 +86,48 @@ interface ConsoleUser {
 
 interface RequestContext {
   user?: ConsoleUser;
-  capabilities?: string[]; // 能力码列表，如 ['platform.tenant.manage', ...]
+  capabilities?: string[]; // 目录里的三段式能力码，如 ['tenant:profile.read', 'support:ticket.manage', ...]
 }
 ```
 
 ### 2.2 capabilities 守卫模式
 
 ```typescript
-// 在 router 方法顶部做能力断言，不要用 @UseGuards（admin-bff 的能力守卫是函数断言形式）
+// 在 router 方法顶部做能力断言，不要用 @UseGuards（admin-bff 的能力守卫是函数断言形式）。
+// 用 ../auth/capability 的 assertAnyCapability：401 无会话、403 缺码。
+// 读门收 .read | .manage（manage 蕴含 read），写门只收 .manage。
+import { assertAnyCapability } from "../auth/capability";
+
+function assertCanReadTenants(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["tenant:profile.read", "tenant:profile.manage"]);
+}
 function assertCanManageTenants(req: Request & RequestContext): void {
-  if (!req.user) throw new UnauthorizedException('No active session');
-  if (req.capabilities && !req.capabilities.includes('platform.tenant.manage')) {
-    throw new ForbiddenException('Missing platform.tenant.manage capability');
-  }
+  assertAnyCapability(req, ["tenant:profile.manage"]);
 }
 
 // 在 handler 首行调用
 @Get()
 async listTenants(@Req() req: Request & RequestContext) {
-  assertCanManageTenants(req);
+  assertCanReadTenants(req);
   // ...
 }
 ```
 
+遗留扁平串（`platform.tenant.manage` / `platform.product.manage` …）与 auth.service 里把目录码合成成
+它们的 `LEGACY_CAPABILITY_BRIDGE` 已于 2026-10-04 全部退役：`req.capabilities` 就是
+`admin.operator_role_permission` 里的 `perm_code`，没有任何运行时合成的码。
+
 ### 2.3 能力码速查
 
-| capability code           | 控制范围                                 |
-| ------------------------- | ---------------------------------------- |
-| `platform.tenant.manage`  | 租户 / 账号 / 订阅 / 账单 / 工单 / 角色  |
-| `platform.pricing.manage` | 订阅 / 账单（与 tenant.manage 任一即可） |
-| `platform.product.manage` | 产品目录                                 |
-| `platform.model.manage`   | Model Platform 模型管理                  |
-| `platform.admin.manage`   | 运营账号管理                             |
+| capability code（目录三段式，权威在 `deploy/database/seed/seed-catalog.mjs`）               | 控制范围                                                |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `tenant:profile.read` / `.manage`、`tenant:verification.review`、`tenant:lifecycle.suspend` | 租户 / 实名审核 / 停用恢复                              |
+| `user:profile.read`、`user:pii.read`、`user:account.manage`、`user:avatar.reset`            | 账号读 / 明文 PII / 生命周期 / 头像重置                 |
+| `support:ticket.read` / `.manage`                                                           | 工单                                                    |
+| `commerce:subscription.*` / `order.*` / `billing.*` / `invoice.*` / `payment.*`             | 订阅 / 订单 / 账单 / 发票 / 收款（TD-027）              |
+| `product:capability.*` / `product:solution.*` / `product:plan.*` / `product:price.manage`   | 产品目录 / 解决方案 / 套餐 / 定价第二道门               |
+| `pricing:model.read`、`pricing:price_rule.*`、`pricing:policy.*`                            | 模型计价策略（/atlas）                                  |
+| `operator:*`、`audit:*`、`config:*`（arche）与 `model:*`、`ops:*`、`integration:*`（opera） | 不归 admin 判——三平台严格隔离，见 check-operator-planes |
 
 ---
 

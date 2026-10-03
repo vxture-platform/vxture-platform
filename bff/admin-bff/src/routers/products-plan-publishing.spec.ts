@@ -126,11 +126,11 @@ function draftVersionResponder(overrides?: Responder): Responder {
 // ============================================================================
 
 describe("plan matrix — read model", () => {
-  it("rejects a caller without platform.product.manage before DB", async () => {
+  it("rejects a caller without a plan read code before DB (a solution code does not open the plan matrix)", async () => {
     const ro = noDbPool();
     const router = new ProductsRouter(ro.pool, noDbPool().pool);
     await expect(
-      router.listPlanMatrix(makeReq(["platform.product.read"])),
+      router.listPlanMatrix(makeReq(["product:solution.read"])),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -199,7 +199,7 @@ describe("plan matrix — read model", () => {
 // ============================================================================
 
 describe("plan creation — pre-DB guards", () => {
-  it("rejects a caller without platform.product.manage", async () => {
+  it("rejects a caller without product:plan.manage", async () => {
     const rw = noDbPool();
     const router = new ProductsRouter(noDbPool().pool, rw.pool);
     await expect(

@@ -177,9 +177,10 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/accounts` — 账号运营管理
 
-**需要能力：`platform.tenant.manage`**（列表 / 详情 / 头像读这三个；头像重置判
-`user:avatar.reset`，停用 / 启用 / 强制下线判 `user:account.manage`）。
-账号这一域仍坐在粗码后面 —— owner 2026-10-03 裁决先拆租户与工单，账号 / 待办 / 搜索后做。
+**需要能力（2026-10-04 按细码拆门）：`user:profile.read`**（列表 / 详情 / 头像读这三个；
+头像重置判 `user:avatar.reset`，停用 / 启用 / 强制下线判 `user:account.manage`）。
+此前三个读入口判遗留扁平码 `platform.tenant.manage`（旧桥从 `tenant:profile.manage` 合成）：
+目录里持 `user:profile.read` 的 finance / support / auditor 侧栏闭包里有账号页，点进来却 403。
 
 **GET `/api/accounts`** — 账号列表（含租户绑定关系）
 
@@ -192,7 +193,7 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/subscriptions` — 订阅运营管理
 
-**需要能力：`platform.pricing.manage` 或 `platform.tenant.manage`**
+**需要能力：读 `commerce:subscription.read` | `.manage`，写 `commerce:subscription.manage`**（TD-027 按域收口；此前借 `platform.pricing.manage` / `platform.tenant.manage`）
 
 **GET `/api/subscriptions`** — 订阅列表
 
@@ -230,7 +231,7 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/billing` — 账单运营管理
 
-**需要能力：`platform.pricing.manage` 或 `platform.tenant.manage`**
+**需要能力：读 `commerce:billing.read` | `.manage`；写按动作分 `commerce:billing.manage` / `billing.discount` / `invoice.manage` / `invoice.void`**（TD-027 按域收口；此前借 `platform.pricing.manage` / `platform.tenant.manage`）
 
 **GET `/api/billing`** — 账单列表
 
@@ -312,7 +313,15 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/products` — 产品目录管理
 
-**需要能力：`platform.product.manage`**
+**需要能力（2026-10-04 按细码拆门，逐线不同；此前 32 个入口全判遗留扁平码
+`platform.product.manage`，由旧桥从 `product:plan.manage` 合成）**
+
+| 线       | 读（`.read` \| `.manage`）                                                                                                                                | 写（`.manage`）                                                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 产品目录 | `product:capability.*`：capabilities / capabilities/:code / agents                                                                                        | `product:capability.manage`：capabilities/:code/move · /content（step-up）                                                                 |
+| 解决方案 | `product:solution.*`：solutions / solutions/:code / service-plans/:s/:t                                                                                   | `product:solution.manage`：七个写入口（全部 step-up）                                                                                      |
+| 套餐     | `product:plan.*`：releases / plans / plans/:id/versions / plan-versions/:id / deletable / plan-matrix / products/:code/metric-options（套餐页取度量定义） | `product:plan.manage`：建 / 改 / 可见性 / 退役 / 删 / 发布 / 捆绑组件 / 草稿 PATCH                                                         |
+| 定价     | 无独立读入口（价格随套餐详情下发）                                                                                                                        | 草稿 `PATCH plan-versions/:id` 带非空 `prices` 时**另判** `product:price.manage`（第二道门，判在任何写之前；不带 prices 只要 plan.manage） |
 
 **GET `/api/products/plans`** — 套餐计划列表（读 DB）
 
@@ -484,7 +493,7 @@ middleware 顺序：`auth → capabilities → router`
 
 ### `/api/admin-roles` — 运营角色管理
 
-**需要能力：`platform.admin.manage` 或 `platform.tenant.manage`**
+**本路由已随 2026-09-14 三平面拆分迁往治理平台 arche（`bff/arche-bff/src/routers/admin-roles.router.ts`），admin-bff 不再提供；下面的形状保留作历史参考。**
 
 **GET `/api/admin-roles`** — 运营角色列表（含权限明细）
 
@@ -543,17 +552,19 @@ middleware 顺序：`auth → capabilities → router`
 
 ## 能力守卫汇总
 
-| 能力 code                         | 保护范围                                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `platform.tenant.manage`          | accounts（3 个读）/ 运营待办 / 全局搜索 —— **余 5 个入口**；租户 12 与工单 10 已于 2026-10-03 拆成细码 |
-| `tenant:profile.read` / `.manage` | tenants 读 / 写                                                                                        |
-| `tenant:verification.review`      | 实名审核列表 / 批准 / 驳回                                                                             |
-| `support:ticket.read` / `.manage` | tickets 读 / 写                                                                                        |
-| `platform.pricing.manage`         | subscriptions / billing（与 tenant.manage 任一即可）                                                   |
-| `platform.product.manage`         | products                                                                                               |
-| `platform.model.manage`           | model-platform                                                                                         |
-| `capability:runos.read`           | runos（只读目录；`capability:runos.manage` 亦可）                                                      |
-| `platform.admin.manage`           | platform-admins / admin-roles                                                                          |
+| 能力 code                                                         | 保护范围                                                                                                                                  |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `user:profile.read`                                               | accounts（3 个读，2026-10-04 起）                                                                                                         |
+| 运营待办                                                          | 进门 = 任一类别的门（tenant:profile / verification / support:ticket / user:profile.read / commerce:order.read），每类按点开那一页的码剪裁 |
+| 全局搜索                                                          | 租户源 `tenant:profile.read` \| `.manage`，订单源 `commerce:order.read`，缺码少一源不 403                                                 |
+| `tenant:profile.read` / `.manage`                                 | tenants 读 / 写                                                                                                                           |
+| `tenant:verification.review`                                      | 实名审核列表 / 批准 / 驳回                                                                                                                |
+| `support:ticket.read` / `.manage`                                 | tickets 读 / 写                                                                                                                           |
+| `commerce:*`                                                      | subscriptions / billing / orders / payments（TD-027 按域收口）                                                                            |
+| `product:capability.*` / `solution.*` / `plan.*` / `price.manage` | products（2026-10-04 逐线拆门，见上）                                                                                                     |
+| `platform.model.manage`                                           | model-platform                                                                                                                            |
+| `capability:runos.read`                                           | runos（只读目录；`capability:runos.manage` 亦可）                                                                                         |
+| （已迁 arche）                                                    | platform-admins / admin-roles —— 2026-09-14 起由治理平台提供                                                                              |
 
 ---
 

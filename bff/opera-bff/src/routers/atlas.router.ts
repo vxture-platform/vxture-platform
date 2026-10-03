@@ -32,12 +32,14 @@
  * 三段式码（2026-08-11 核对：admin/super_admin/tech_ops 三个角色都直接持有这两
  * 个，opera 与 admin 从同一套 admin.operator_role_permission 表解析能力码，
  * "能力码是平台级的，不因为换了个门户就换一套"——operator-authz.service.ts 文件
- * 头）。**不用** `platform.model.manage`：那是旧扁平码，早已从 seed 目录退役，
- * 现在只活在 admin-bff 自己的 `LEGACY_CAPABILITY_BRIDGE`（auth.service.ts）里，
+ * 头）。**不用** `platform.model.manage`：那是旧扁平码，早已从 seed 目录退役。
+ * 写这段时它还活在 admin-bff 的 `LEGACY_CAPABILITY_BRIDGE`（auth.service.ts）里，
  * 靠那层桥接把 model:*.manage 现算成 platform.model.manage 回填进
  * capabilities——桥接是 admin 侧为了不动旧路由签名而加的过渡垫片，opera-bff 没
  * 有这段历史包袱，没有理由背同一个死码：第一次实测直接验证过（一个持
  * model:provider.manage 的账号在 opera 侧读 providers 时被判 403，查明是这里）。
+ * 那座桥的 model 那一条 2026-09-14 摘掉、整座桥 2026-10-04 删除；今天两个 BFF 的
+ * capabilities 都只是 operator_role_permission 里的 perm_code。
  *
  * 范围覆盖 opera 技术面用得到的：providers（全 CRUD，含 health 字段与
  * providers/performance 近实时聚合，2026-08-12 补，liaison #245）、models（全

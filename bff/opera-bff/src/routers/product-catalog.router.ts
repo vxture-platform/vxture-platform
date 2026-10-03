@@ -380,7 +380,8 @@ export interface ProductWriteBody {
   capabilityKeys?: string[];
   tags?: string[];
   standaloneSubscribable?: boolean;
-  isCustomerVisible?: boolean;
+  /* `isCustomerVisible` 不在这里：上站可见性归 admin 的产品目录（owner 2026-10-04，
+     与 `sort` 同一条裁定）。送了会被 `validateWrite` 按字段 400 拒掉，不是静默忽略。 */
   isWorkforceVisible?: boolean;
   origin?: ProductOrigin;
   originProvider?: string | null;
@@ -2794,6 +2795,16 @@ export function validateWrite(
   /** `requireCode` 缺省随 `requireCore`——只有「改」显式传 false（产品码不可改）。 */
   opts: { requireCore: boolean; requireCode?: boolean },
 ): void {
+  /* 上站可见性（is_customer_visible）归 admin（owner 2026-10-04：它和 `sort` 一样是
+     营销运营决定的陈列，运维台不写）。**按字段拒，不静默忽略**：一个送了却不生效的
+     字段比灰按钮更糟——界面说保存成功、官网没变，没有任何一处会报错。 */
+  if ("isCustomerVisible" in body) {
+    throw invalidRequest(
+      "VALIDATION_IMMUTABLE",
+      "客户域可见性由运营平台（admin）的产品目录设置，运维台不接这个字段",
+      "isCustomerVisible",
+    );
+  }
   /* `new` 被 opera 的「接入产品」页占用（`/product/catalog/new`，静态段优先于
      `[productCode]`）。登记成产品码的话，这个产品的页面永远打不开。 */
   if (body.productCode?.trim() === "new") {
@@ -2933,13 +2944,15 @@ export async function insertProductTx(
        *
        * 空表时 max 为 NULL，coalesce 兜到 0 ⇒ 第一个产品拿 1。
        */
+      /* `is_customer_visible` 不在列清单里：取列默认值（40_product.sql：NOT NULL DEFAULT
+         true）。上站与否由 admin 的产品目录决定，这里不替它选。 */
       `INSERT INTO product.products (
          product_code, product_type, category_id, product_name, product_nick,
          description, capability_keys, tags, standalone_subscribable, status,
-         is_customer_visible, is_workforce_visible, origin, origin_provider,
+         is_workforce_visible, origin, origin_provider,
          icon_url, created_by, updated_by, layer, sort
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $15, $15, $16,
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $14, $15,
          (SELECT coalesce(max(sort), 0) + 1 FROM product.products)
        ) RETURNING ${SELECT_COLUMNS}`,
       [
@@ -2952,7 +2965,6 @@ export async function insertProductTx(
         body.capabilityKeys ?? [],
         body.tags ?? [],
         body.standaloneSubscribable ?? true,
-        body.isCustomerVisible ?? true,
         body.isWorkforceVisible ?? true,
         body.origin ?? "self",
         body.originProvider?.trim() || null,
@@ -3063,22 +3075,21 @@ export async function updateProductTx(
       `UPDATE product.products SET
          product_type = $1,
          product_name = $2,
-         product_code            = CASE WHEN $27::bool THEN $28 ELSE product_code            END,
+         product_code            = CASE WHEN $25::bool THEN $26 ELSE product_code            END,
          category_id             = CASE WHEN  $3::bool THEN  $4 ELSE category_id             END,
          product_nick            = CASE WHEN  $5::bool THEN  $6 ELSE product_nick            END,
          description             = CASE WHEN  $7::bool THEN  $8 ELSE description             END,
          capability_keys         = CASE WHEN  $9::bool THEN $10 ELSE capability_keys         END,
          tags                    = CASE WHEN $11::bool THEN $12 ELSE tags                    END,
          standalone_subscribable = CASE WHEN $13::bool THEN $14 ELSE standalone_subscribable END,
-         is_customer_visible     = CASE WHEN $15::bool THEN $16 ELSE is_customer_visible     END,
-         is_workforce_visible    = CASE WHEN $17::bool THEN $18 ELSE is_workforce_visible    END,
-         origin                  = CASE WHEN $19::bool THEN $20 ELSE origin                  END,
-         origin_provider         = CASE WHEN $21::bool THEN $22 ELSE origin_provider         END,
-         icon_url                = CASE WHEN $23::bool THEN $24 ELSE icon_url                END,
-         layer                   = CASE WHEN $29::bool THEN $30 ELSE layer                   END,
-         integration_mode        = CASE WHEN $31::bool THEN $32 ELSE integration_mode        END,
-         updated_by = $25, updated_at = now()
-       WHERE id = $26 AND deleted_at IS NULL
+         is_workforce_visible    = CASE WHEN $15::bool THEN $16 ELSE is_workforce_visible    END,
+         origin                  = CASE WHEN $17::bool THEN $18 ELSE origin                  END,
+         origin_provider         = CASE WHEN $19::bool THEN $20 ELSE origin_provider         END,
+         icon_url                = CASE WHEN $21::bool THEN $22 ELSE icon_url                END,
+         layer                   = CASE WHEN $27::bool THEN $28 ELSE layer                   END,
+         integration_mode        = CASE WHEN $29::bool THEN $30 ELSE integration_mode        END,
+         updated_by = $23, updated_at = now()
+       WHERE id = $24 AND deleted_at IS NULL
        RETURNING ${SELECT_COLUMNS}`,
       [
         body.productType!.trim(),
@@ -3095,8 +3106,7 @@ export async function updateProductTx(
         body.tags ?? [],
         has("standaloneSubscribable"),
         body.standaloneSubscribable ?? true,
-        has("isCustomerVisible"),
-        body.isCustomerVisible ?? true,
+        /* is_customer_visible 这一对 2026-10-04 摘掉（归 admin）——后面每个编号都前移了 2。 */
         has("isWorkforceVisible"),
         body.isWorkforceVisible ?? true,
         has("origin"),
@@ -3107,11 +3117,11 @@ export async function updateProductTx(
         body.iconUrl?.trim() || null,
         operatorId,
         id,
-        /* 排在最后而不是插在中间：前 24 个是成对的 CASE 参数，从中间插一个会把
+        /* 排在最后而不是插在中间：前 22 个是成对的 CASE 参数，从中间插一个会把
            后面每一个编号都推一位，而编号错位不报错、只会把值写到别的列上去。 */
         codeChange,
         codeChange ? wantedCode : null,
-        /* 同理排在最后：$29/$30 是 layer 那一对，插在中间会推移前面每一个编号。 */
+        /* 同理排在最后：$27/$28 是 layer 那一对，插在中间会推移前面每一个编号。 */
         has("layer"),
         body.layer?.trim() || null,
         has("integrationMode"),

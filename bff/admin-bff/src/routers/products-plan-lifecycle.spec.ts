@@ -131,22 +131,22 @@ describe("套餐生命周期 —— 守卫先于 DB", () => {
     [
       "deletePlanVersion",
       (r: ProductsRouter) =>
-        r.deletePlanVersion(makeReq(["platform.product.read"]), VERSION_ID),
+        r.deletePlanVersion(makeReq(["product:plan.read"]), VERSION_ID),
     ],
     [
       "deletePlan",
       (r: ProductsRouter) =>
-        r.deletePlan(makeReq(["platform.product.read"]), PLAN_ID, {
+        r.deletePlan(makeReq(["product:plan.read"]), PLAN_ID, {
           confirm: true,
         }),
     ],
     [
       "deprecatePlan",
       (r: ProductsRouter) =>
-        r.deprecatePlan(makeReq(["platform.product.read"]), PLAN_ID),
+        r.deprecatePlan(makeReq(["product:plan.read"]), PLAN_ID),
     ],
   ] as const)(
-    "%s：无 platform.product.manage → 403 且没碰库",
+    "%s：只有 product:plan.read 没有 .manage → 403 且没碰库",
     async (_n, call) => {
       const rw = noDbPool();
       const router = new ProductsRouter(noDbPool().pool, rw.pool);

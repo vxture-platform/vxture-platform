@@ -137,7 +137,7 @@ admin /login → admin-bff /auth/login → IdP /oidc/authorize (realm=operator)
 
 并入 p2-admin §4：
 
-- **token 只放粗粒度 `operator_role`**（`admin.operator_role.code`）；**细粒度回查**：admin-bff 用 `sub` 查 `admin.operator_role_permission` 裁定（capability 守卫 `platform.tenant.manage` / `platform.admin.manage` 等）。
+- **token 只放粗粒度 `operator_role`**（`admin.operator_role.code`）；**细粒度回查**：admin-bff 用 `sub` 查 `admin.operator_role_permission` 裁定（capability 守卫判目录里的三段式码，如 `tenant:profile.read` / `support:ticket.manage`；遗留扁平串与运行时合成桥已于 2026-10-04 退役）。
 - **`admin.*` 与 `iam.*` 完全隔离**：两套 RBAC 表、无外键、无交叉。
 - **中间件链**（admin-bff，operator 分支）：
   ```

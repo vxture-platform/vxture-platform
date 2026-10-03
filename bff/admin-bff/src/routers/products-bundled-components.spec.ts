@@ -130,12 +130,12 @@ function insertsOf(calls: string[]): string[] {
 // ============================================================================
 
 describe("bundled components — pre-DB guards", () => {
-  it("rejects a caller without platform.product.manage", async () => {
+  it("rejects a caller holding only product:plan.read (the read code is not the write code)", async () => {
     const rw = noDbPool();
     const router = new ProductsRouter(noDbPool().pool, rw.pool);
     await expect(
       router.replaceBundledComponents(
-        makeReq(["platform.product.read"]),
+        makeReq(["product:plan.read"]),
         VERSION_ID,
         { components: [] },
       ),

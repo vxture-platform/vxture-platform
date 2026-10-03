@@ -94,6 +94,7 @@ import {
   CopyableInput,
   FieldGrid,
   FormField,
+  HelpHint,
   SectionBody,
   ToggleRow,
 } from "./DetailForm";
@@ -239,7 +240,8 @@ interface ProductDraft {
   integrationMode: ProductIntegrationMode;
   origin: string;
   originProvider: string;
-  isCustomerVisible: boolean;
+  /* `isCustomerVisible` 不在草稿里：上站可见性归 admin 的产品目录（owner 2026-10-04），
+     这一页只显示，不送——送了 BFF 按字段 400。 */
   isWorkforceVisible: boolean;
   surfaces: ProductSurface[];
   iconUrl: string;
@@ -260,7 +262,6 @@ const EMPTY_DRAFT: ProductDraft = {
   integrationMode: "platform_managed",
   origin: "self",
   originProvider: "",
-  isCustomerVisible: true,
   isWorkforceVisible: true,
   surfaces: ["web"] as ProductSurface[],
   iconUrl: "",
@@ -279,7 +280,6 @@ function draftFromProduct(p: ProductRecord): ProductDraft {
     integrationMode: p.integrationMode ?? "platform_managed",
     origin: p.origin,
     originProvider: p.originProvider ?? "",
-    isCustomerVisible: p.isCustomerVisible,
     isWorkforceVisible: p.isWorkforceVisible,
     surfaces: (p.surfaces ?? []) as ProductSurface[],
     iconUrl: p.iconUrl ?? "",
@@ -541,7 +541,6 @@ export function ProductDetailPage({
         integrationMode: draft.integrationMode,
         origin: draft.origin,
         originProvider: draft.originProvider.trim() || null,
-        isCustomerVisible: draft.isCustomerVisible,
         isWorkforceVisible: draft.isWorkforceVisible,
         surfaces: draft.surfaces,
         iconUrl: draft.iconUrl.trim() || null,
@@ -1491,16 +1490,25 @@ export function ProductDetailPage({
                 <FieldGrid>
                   <div className="flex min-w-0 flex-col gap-sm">
                     <SectionHeader level={4} title="可见性" />
-                    <ToggleRow
-                      id="pd-customer"
-                      label="客户域"
-                      help="关掉后，这个产品在 console 与官网都不出现。"
-                      checked={draft?.isCustomerVisible ?? false}
-                      disabled={!canManage}
-                      onChange={(v) =>
-                        draft && setDraft({ ...draft, isCustomerVisible: v })
-                      }
-                    />
+                    {/* 客户域可见性归 admin 的产品目录（owner 2026-10-04）。这里不放一个
+                        灰掉的开关——灰开关读不出「不能改」还是「还没轮到你改」；同一行形状
+                        里放当前值与一句去处，运维者知道去哪改。新建时显示列默认值。 */}
+                    <div className="flex h-control-md items-center justify-between gap-sm rounded-md border border-border px-sm">
+                      <span className="flex min-w-0 items-center gap-2xs">
+                        <span className="truncate text-body-sm">客户域</span>
+                        <HelpHint label="客户域">
+                          这个产品在 console
+                          与官网出不出现，由运营平台（admin）的产品目录设置，运维台只显示。
+                        </HelpHint>
+                      </span>
+                      <Badge variant="outline">
+                        {product
+                          ? product.isCustomerVisible
+                            ? "可见"
+                            : "不可见"
+                          : "默认可见"}
+                      </Badge>
+                    </div>
                     <ToggleRow
                       id="pd-workforce"
                       label="运营域"

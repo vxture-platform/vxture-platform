@@ -35,6 +35,7 @@ import type { Request, Response } from "express";
 import type { Pool } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { RequireStepUp } from "../auth/step-up.decorator";
+import { assertAnyCapability } from "../auth/capability";
 import { OperatorAdminService } from "../auth/operator-admin.service";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { TICKET_STATUSES } from "@vxture-platform/shared";
@@ -111,7 +112,7 @@ export class AccountsRouter {
   async listAccounts(
     @Req() req: Request & RequestContext,
   ): Promise<AccountOperationRecord[]> {
-    assertCanManageAccounts(req);
+    assertCanReadAccounts(req);
     const canReadPii = hasPiiAccess(req);
 
     const { rows } = await this.pool.query<AccountRow>(ACCOUNT_LIST_SQL);
@@ -127,7 +128,7 @@ export class AccountsRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
   ): Promise<AccountOperationDetailRecord> {
-    assertCanManageAccounts(req);
+    assertCanReadAccounts(req);
     const canReadPii = hasPiiAccess(req);
 
     const userId = await this.resolveAccountId(id);
@@ -173,7 +174,7 @@ export class AccountsRouter {
     @Param("id") id: string,
     @Res() res: Response,
   ): Promise<void> {
-    assertCanManageAccounts(req);
+    assertCanReadAccounts(req);
     const userId = await this.resolveAccountId(id);
     const { rows } = await this.pool.query<AvatarRow>(
       `select data, content_type, hash from account.user_avatars
@@ -347,7 +348,7 @@ export class AccountsRouter {
 }
 
 // 重置头像是内容处置（危码 user:avatar.reset + step-up）：删掉的原图不留存、不可
-// 撤回，故与读门 platform.tenant.manage、与账号生命周期码 user:account.manage 都分开
+// 撤回，故与读门 user:profile.read、与账号生命周期码 user:account.manage 都分开
 // ——能停用账号的人不等于能抹掉用户传的头像，反之亦然（operation 角色有前者没后者）。
 function assertCanResetUserAvatar(req: Request & RequestContext): void {
   if (!req.user) {
@@ -366,7 +367,7 @@ interface AvatarRow {
 
 // C12 write guard: customer account lifecycle (disable/enable/force-logout).
 // user:account.manage (super_admin/admin per data_admin_200 §4.3). Distinct from the
-// read guard (still platform.tenant.manage, a deferred C5 domain re-gate).
+// read guard (user:profile.read since the 2026-10-04 domain re-gate).
 function assertCanManageAccountLifecycle(req: Request & RequestContext): void {
   if (!req.user) {
     throw new UnauthorizedException("No active session");
@@ -401,18 +402,13 @@ function maskPhone(phone: string | null): string | null {
   return `${digits.slice(0, digits.length - 8 > 0 ? 3 : 0)}****${digits.slice(-4)}`;
 }
 
-// 账号运营归属租户治理域；沿用现有最贴近的 platform.tenant.manage 能力（tickets.router 同款软守卫）。
-function assertCanManageAccounts(req: Request & RequestContext): void {
-  if (!req.user) {
-    throw new UnauthorizedException("No active session");
-  }
-
-  if (
-    !req.capabilities ||
-    !req.capabilities.includes("platform.tenant.manage")
-  ) {
-    throw new ForbiddenException("Missing platform.tenant.manage capability");
-  }
+// 读门（2026-10-04 按细码拆门）：列表 / 详情 / 头像读判目录里本域的 `user:profile.read`。
+// 此前判遗留扁平码 platform.tenant.manage（旧桥从 tenant:profile.manage 合成），于是
+// finance / support / auditor 三个角色目录里授了 user:profile.read、侧栏闭包里也有账号页，
+// 点进来却 403——与 #577 修掉的工单那一形一模一样。目录没有 user:profile.manage 这一档，
+// 写入各判自己的码（user:account.manage / user:avatar.reset），读门因此只收这一个。
+function assertCanReadAccounts(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["user:profile.read"]);
 }
 
 function toIso(value: Date | string | null): string {

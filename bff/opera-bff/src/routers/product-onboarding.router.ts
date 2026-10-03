@@ -290,23 +290,22 @@ function hasEdgeValues(edge: EdgeWriteBody | undefined): edge is EdgeWriteBody {
 }
 
 /**
- * 锁住产品行，取回产品码与**当前对客可见性**。非 uuid 直接 404——拿去比 uuid 列会冒成 22P02 的 500。
+ * 锁住产品行，取回产品码。非 uuid 直接 404——拿去比 uuid 列会冒成 22P02 的 500。
  *
- * 可见性跟着这一次 `FOR UPDATE` 一起读：它是 `flipsCustomerVisibility` 的判据，而那个
- * 判断必须在任何写之前做完。单开一条 SELECT 也行，但那就是同一行读两次。
+ * 2026-10-04 之前这里连 `is_customer_visible` 一起读，作为「这次保存翻没翻转上站可见性」
+ * 的 step-up 判据。上站可见性归 admin（owner），opera 的写入面不再接这个字段
+ * （`validateWrite` 按字段 400），那个判据连同它的翻转函数一起摘掉：admin 侧的同一件事
+ * （`PATCH capabilities/:productCode/content`）仍然双向都卡 step-up，门没有变虚，只是只剩一侧。
  */
 async function lockProduct(
   q: Queryable,
   id: string,
-): Promise<{ productCode: string; isCustomerVisible: boolean }> {
+): Promise<{ productCode: string }> {
   if (!UUID_RE.test(id)) {
     throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
   }
-  const result = await q.query<{
-    product_code: string;
-    is_customer_visible: boolean;
-  }>(
-    `SELECT product_code, is_customer_visible FROM product.products
+  const result = await q.query<{ product_code: string }>(
+    `SELECT product_code FROM product.products
       WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
     [id],
   );
@@ -314,32 +313,7 @@ async function lockProduct(
   if (!row) {
     throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
   }
-  return {
-    productCode: row.product_code,
-    isCustomerVisible: row.is_customer_visible,
-  };
-}
-
-/**
- * 这一次保存是否**翻转了对客可见性**。
- *
- * 纯函数、不碰库，理由与 `planClients` 同一条：step-up 要不要做是不能判错的事，
- * 判错的表现是「不经二次验证把一个产品推上官网」而接口回 200。所以它单独可测。
- *
- * **两个方向都算**：把在售产品从官网与 console 上撤下来，和把它推上去一样是对外面
- * 的改动。admin 侧的同一件事（`PATCH capabilities/:productCode/content`）本就双向都卡。
- *
- * 字段缺席（`undefined`）= 不动，送了但值没变也不算改动——反复保存同一张表单
- * 不该每次都要 TOTP。
- */
-export function flipsCustomerVisibility(
-  body: ProductWriteBody,
-  before: { isCustomerVisible: boolean },
-): boolean {
-  return (
-    body.isCustomerVisible !== undefined &&
-    body.isCustomerVisible !== before.isCustomerVisible
-  );
+  return { productCode: row.product_code };
 }
 
 /**
@@ -455,17 +429,13 @@ export class ProductOnboardingRouter {
     validateWrite(productBody, { requireCore: true, requireCode: false });
     const inputs = clientList(body.clients);
     return withTransaction(this.pool, async (client) => {
-      const before = await lockProduct(client, id);
+      await lockProduct(client, id);
       const existing = await lockProductClientsTx(client, id);
       const plan = planClients(inputs, existing);
       await assertClientIdsFree(client, plan);
-      /* 两条安全边界并列：客户端凭证（回调 / scopes / PKCE / 新发）与对客可见性。
-         后者决定一个产品在不在官网与 console 的目录里，是对外面的改动，而 admin 侧
-         的同一件事一直要 step-up——两边不一致等于这道门有一侧是虚的。 */
-      if (
-        plan.touchesSecurity ||
-        flipsCustomerVisibility(productBody, before)
-      ) {
+      /* 安全边界：客户端凭证（回调 / scopes / PKCE / 新发）。对客可见性那一条
+         2026-10-04 起不再经 opera 写（归 admin，见 lockProduct 上方）。 */
+      if (plan.touchesSecurity) {
         await assertFreshStepUp(req, this.oidcClient, this.rpRuntime);
       }
       const product = await updateProductTx(
