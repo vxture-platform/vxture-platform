@@ -397,6 +397,64 @@ describe("offline-payment-confirm: stage-2 dispatch decision (product_330 §4)",
   });
 });
 
+/* 2026-10-03「拆退款码」：四个退款动作从 commerce:payment.settle 改判
+   commerce:refund.execute。这一段是那次改判的判据 —— 两个方向各一条。
+
+   要说清它**今天不分开任何人**：seed 把两个码授给同一组三个角色
+   （administrator / finance / super_admin），所以生产上「能确认收款的人同时能执行退款」
+   在改判之后照旧成立。买到的是「以后在角色目录里摘一个码就能分开」——
+   此前摘 payment.settle 会连收款确认一起摘走。这两条用例守的是那个能力本身。 */
+describe("退款四个动作判 refund.execute，不再判收款的码", () => {
+  const WRITES = [
+    [
+      "refund-audit",
+      (r, req) => r.auditRefund(req, ORDER_ID, { decision: "approve" }),
+    ],
+    ["refund-execute", (r, req) => r.executeRefund(req, ORDER_ID, {})],
+    [
+      "refund-create",
+      (r, req) =>
+        r.createRefund(req, ORDER_ID, { reason: "计费错误，客服已答应" }),
+    ],
+    [
+      "refund-fail",
+      (r, req) => r.failRefund(req, ORDER_ID, { reason: "银行退回，账号不对" }),
+    ],
+  ] as const;
+
+  function router() {
+    const orders = makeOrdersMock();
+    return new OrdersRouter(
+      noDbPool().pool,
+      noDbPool().pool,
+      orders as unknown as OrderService,
+      PROMOTION_STUB,
+    );
+  }
+
+  it.each(WRITES)("%s：只有收款码（settle）进不去", async (_name, call) => {
+    await expect(
+      call(
+        router(),
+        makeReq(["commerce:order.read", "commerce:payment.settle"]),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it.each(WRITES)(
+    "%s：有 refund.execute 时门过得去（别把门拆成墙）",
+    async (_name, call) => {
+      // 过了门就会去碰库 / 校验入参，所以这里只断言**不是** 403。
+      await expect(
+        call(
+          router(),
+          makeReq(["commerce:order.read", "commerce:refund.execute"]),
+        ),
+      ).rejects.not.toBeInstanceOf(ForbiddenException);
+    },
+  );
+});
+
 describe("void: authz + delegation", () => {
   it("rejects a caller without order.void before any DB access", async () => {
     const rw = noDbPool();

@@ -503,7 +503,8 @@ export class OrdersRouter {
   // 驳回付款申报（product_321 P9/P8b）：现金腿 pending_verify → failed（原因落 status_msg，
   //   透传用户付款页横幅）+ 完整释放编排（券回 assigned + 计价层回滚 + 凭据 released）+
   //   histories payment_rejected（TTL 重锚）。与确认同码同级（commerce:payment.settle +
-  //   step-up）——驳回申报与确认收款是同一职责的正反面。
+  //   step-up）——驳回申报与确认收款是同一职责的正反面。这里的「确认」指**收款**确认：
+  //   退款那四个动作 2026-10-03 起判 commerce:refund.execute，不再与收款共用一个码。
   @Post(":orderId/payment-reject")
   @RequireStepUp()
   async rejectPaymentDeclaration(
@@ -729,8 +730,14 @@ export class OrdersRouter {
   }
 
   // ── 退款（product_330 §5，owner 决策 3）──────────────────────────────────────
-  // 审核（同意 / 驳回）与执行（已按原渠道打款后）都是钱的动作，复用 commerce:payment.settle
+  // 审核（同意 / 驳回）与执行（已按原渠道打款后）都是钱的动作，四个退款动作同码同级
   // + step-up；执行 = 冲正流水 + 订单 refunded + 订阅回滚到未订阅。
+  //
+  // **2026-10-03 改了「同哪个码」**（owner 裁决「拆退款码」）：原文是「复用
+  // commerce:payment.settle」，现在判 commerce:refund.execute。「四个动作尺度相同」
+  // 这一半没动，变的只是它们不再与**收款**共用一个码 —— 钱进来和钱出去是两件事，
+  // 而目录早就为退款留了码。今天不分开任何人（两个码授给同一组角色），
+  // 见 assertCanExecuteRefund 上方。
 
   @Post(":orderId/refund-audit")
   @RequireStepUp()
@@ -739,7 +746,7 @@ export class OrdersRouter {
     @Param("orderId") orderId: string,
     @Body() body: { decision?: string; remark?: string },
   ): Promise<OrderOperationDetailRecord> {
-    assertCanSettleOrderPayment(req);
+    assertCanExecuteRefund(req);
     const actorId = requireOperatorId(req.user?.id);
     const orderEntityId = await this.resolveOrderId(orderId);
     const decision = body?.decision;
@@ -767,7 +774,7 @@ export class OrdersRouter {
     @Param("orderId") orderId: string,
     @Body() body: VoidOrderBody,
   ): Promise<OrderOperationDetailRecord> {
-    assertCanSettleOrderPayment(req);
+    assertCanExecuteRefund(req);
     const actorId = requireOperatorId(req.user?.id);
     const orderEntityId = await this.resolveOrderId(orderId);
     const remark = normalizeVoidReason(body);
@@ -794,9 +801,11 @@ export class OrdersRouter {
    * 放开的是**政策**（时间窗 / 是否首购 / 用量），不放开的是**事实与账目完整性**（未履约、
    * 0 元单、已有在途退款单）——判据见 service 层那段注释。
    *
-   * 同码同门（`commerce:payment.settle` + step-up）：它与审核 / 执行是同一类动作，权限尺度
-   * 不该有差别。要收得更紧（例如只给 super）是角色目录里把这个码从非 super 角色摘掉的事，
-   * 不是这里再加一层。理由必填，会带前缀落进 refund_reason 与 order_events。
+   * 同码同门（`commerce:refund.execute` + step-up，2026-10-03 前是
+   * `commerce:payment.settle`）：它与审核 / 执行是同一类动作，权限尺度不该有差别。
+   * 要收得更紧（例如只给 super）**仍然**是角色目录里把这个码从非 super 角色摘掉的事，
+   * 不是这里再加一层 —— 而改判之后那件事才做得到：此前摘掉 payment.settle 会连
+   * 收款确认一起摘走。理由必填，会带前缀落进 refund_reason 与 order_events。
    */
   @Post(":orderId/refund-create")
   @RequireStepUp()
@@ -805,7 +814,7 @@ export class OrdersRouter {
     @Param("orderId") orderId: string,
     @Body() body: VoidOrderBody & { amount?: string },
   ): Promise<OrderOperationDetailRecord> {
-    assertCanSettleOrderPayment(req);
+    assertCanExecuteRefund(req);
     const actorId = requireOperatorId(req.user?.id);
     const orderEntityId = await this.resolveOrderId(orderId);
     const reason = normalizeVoidReason(body);
@@ -829,8 +838,8 @@ export class OrdersRouter {
   /**
    * 退款执行失败（2026-09-25）：钱**没有**打出去（账号不对、银行退回）。
    *
-   * 与 refund-execute 成对、同码同级（`commerce:payment.settle` + step-up）：两个动作都
-   * 在陈述「那笔钱到底怎么了」，权限尺度不该有差别。原因必填——它既是给客户那封通知的
+   * 与 refund-execute 成对、同码同级（`commerce:refund.execute` + step-up，2026-10-03 前是
+   * `commerce:payment.settle`）：两个动作都在陈述「那笔钱到底怎么了」，权限尺度不该有差别。原因必填——它既是给客户那封通知的
    * 依据，也是 order_events 时间线上唯一能解释这一步的记录。
    *
    * 订单与订阅都不动。客户可以再申请一次（资格判定明确排除 failed），但 24 小时窗口仍
@@ -843,7 +852,7 @@ export class OrdersRouter {
     @Param("orderId") orderId: string,
     @Body() body: VoidOrderBody,
   ): Promise<OrderOperationDetailRecord> {
-    assertCanSettleOrderPayment(req);
+    assertCanExecuteRefund(req);
     const actorId = requireOperatorId(req.user?.id);
     const orderEntityId = await this.resolveOrderId(orderId);
     const reason = normalizeVoidReason(body);
@@ -1104,6 +1113,21 @@ function assertCanReadOrders(req: Request & RequestContext): void {
 
 function assertCanSettleOrderPayment(req: Request & RequestContext): void {
   assertAnyCapability(req, ["commerce:payment.settle"]);
+}
+
+// 退款四个动作（审核 / 执行 / 创建 / 标失败）判目录里为退款留的那个码。
+// **owner 2026-10-03 裁决「拆退款码」。** 这一条只改「退款复用收款的码」那半句，
+// 没有改「四个退款动作权限尺度相同」那一半 —— 四个仍然同码同级 + step-up。
+//
+// 要说清这次改动**今天不分开任何人**：seed 把 commerce:payment.settle 与
+// commerce:refund.execute 授给的是**同一组三个角色**（administrator / finance /
+// super_admin），所以「能确认收款的人同时能执行退款」在改判之后照旧成立。
+// 它买到的是别的东西：目录里唯一一个没有消费方的 commerce 码有了消费方，
+// 而「钱进来」与「钱出去」从此是两个码 —— 真要分开，以后只需在角色目录里
+// 把一个码从某个角色摘掉，不必再改代码。这正是本文件 refund-create 上方那段
+// 写的机制（「是角色目录里把这个码从非 super 角色摘掉的事，不是这里再加一层」）。
+function assertCanExecuteRefund(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["commerce:refund.execute"]);
 }
 
 // Void rejects an UNPAID order (no money moves) — distinct danger class from

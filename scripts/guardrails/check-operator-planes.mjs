@@ -58,6 +58,14 @@ const LEGACY_DOMAINS = new Set(["platform", "release", "notification"]);
  *                                 租户 12 / 工单 10 / 账号 3 / 运营待办 1 / 全局搜索 1
  *      platform.product.manage  → **32** 个 HTTP 入口（products.router 全部，含定价）
  *
+ *    **退款那条也已改判**（owner 2026-10-03 裁决「拆退款码」）：四个退款端点从
+ *    commerce:payment.settle 改判 commerce:refund.execute，该码从此有消费方。
+ *    这里要更正本守卫此前写下的一句话 —— 原来的理由说「改过来要给角色授这个码
+ *    （迁移 + 存量库）」，**那句是错的**：问活库（DDL+seed）得到的是两个码授给
+ *    **同一组三个角色**（administrator / finance / super_admin），所以改判不需要迁移、
+ *    也不改变任何人今天能做什么。真要把「收款」与「退款」分开，是在角色目录里
+ *    把一个码从某个角色摘掉 —— 而那件事此前做不到：摘 payment.settle 会连收款确认一起摘走。
+ *
  *    **租户 12 与工单 10 已拆**（owner 2026-10-03 裁决「拆门，按细码粒度，先做租户和
  *    工单那两条」）：22 个入口改判本域细码，粗门余 **5** 个（账号 3 个读 / 待办 / 搜索）。
  *    于是 tenant:profile.read、tenant:verification.review、support:ticket.read、
@@ -113,13 +121,6 @@ const UNCONSUMED = {
   "tenant:quota.read": GRANULARITY_ABSENT,
   "tenant:quota.manage": GRANULARITY_ABSENT,
   "user:profile.read": COARSE_TENANT_GATE,
-  "commerce:refund.execute":
-    "**不是没设门，是用错了码**（2026-10-03 核实）：orders.router 的四个退款端点" +
-    "（refund-audit / refund-execute / refund-create / refund-fail）都挂 @RequireStepUp，" +
-    "但判的是 commerce:payment.settle —— 收款的码。同一份文件为 void 写明了相反的原则：" +
-    "「与 settle 是不同的危险类别，所以挂自己的 commerce:order.void」。退款是钱出去，" +
-    "目录里早就给了它自己的码，没人用。改过来要给角色授这个码（迁移 + 存量库），" +
-    "是 owner 的取舍，不是顺手改的事",
   "promotion:campaign.read": MANAGE_IMPLIES_READ,
   "product:plan.read": COARSE_PRODUCT_GATE,
   "product:price.read": COARSE_PRODUCT_GATE,

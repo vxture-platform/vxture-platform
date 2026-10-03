@@ -57,6 +57,10 @@ function req(capabilities: string[]): Request & RequestContext {
 }
 
 const CAPS_SETTLE = ["commerce:order.read", "commerce:payment.settle"];
+/* 2026-10-03「拆退款码」：退款四个动作改判 commerce:refund.execute。
+   这里**刻意不把两个码塞进同一个常量** —— 塞在一起就测不出「收款的码开不了退款」。
+   seed 把两个码授给同一组三个角色，所以生产上持码的人没变；测试里要分开注。 */
+const CAPS_REFUND = ["commerce:order.read", "commerce:refund.execute"];
 const CAPS_PROMO = ["promotion:campaign.manage"];
 
 describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
@@ -828,18 +832,18 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
     // 未审核不能执行
     await expect(
-      orders.executeRefund(req(CAPS_SETTLE), orderId, {
+      orders.executeRefund(req(CAPS_REFUND), orderId, {
         reason: "e2e pay out",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    const approved = await orders.auditRefund(req(CAPS_SETTLE), orderId, {
+    const approved = await orders.auditRefund(req(CAPS_REFUND), orderId, {
       decision: "approved",
       remark: "e2e approve",
     });
     expect(approved.refund?.auditStatus).toBe("approved");
 
-    const done = await orders.executeRefund(req(CAPS_SETTLE), orderId, {
+    const done = await orders.executeRefund(req(CAPS_REFUND), orderId, {
       reason: "e2e paid back via alipay",
     });
     expect(done.orderStatus).toBe("closed");
@@ -972,11 +976,11 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       userId,
       reason: "e2e notify",
     });
-    await orders.auditRefund(req(CAPS_SETTLE), orderId, {
+    await orders.auditRefund(req(CAPS_REFUND), orderId, {
       decision: "approved",
       remark: "e2e approve",
     });
-    await orders.executeRefund(req(CAPS_SETTLE), orderId, {
+    await orders.executeRefund(req(CAPS_REFUND), orderId, {
       reason: "e2e paid back",
     });
     const refundInbox = await pool.query<{ template_code: string }>(
