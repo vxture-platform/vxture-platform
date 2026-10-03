@@ -39,7 +39,8 @@ import {
  * 或 audit_logs 加一列，占位符整体右移而断言含义不该跟着漂。
  */
 
-const MANAGE = ["platform.tenant.manage"];
+// 2026-10-03 拆门：工单域判 support:ticket.*；两个都给，这些 spec 读写都走。
+const MANAGE = ["support:ticket.read", "support:ticket.manage"];
 const TENANT_UUID = "33333333-3333-4333-8333-333333333333";
 const TICKET_UUID = "44444444-4444-4444-8444-444444444444";
 
@@ -258,11 +259,57 @@ describe("工单写路径 —— 可见性契约", () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it("没有 platform.tenant.manage 时，回复端点在碰库之前就 403", async () => {
+  it("没有 support:ticket.manage 时，回复端点在碰库之前就 403", async () => {
     const tx = noDbPool();
     const router = new TicketsRouter(tx.pool, tx.pool, silentNotifier());
     await expect(
       router.addTicketReply(makeReq([]), "TK-1", { body: "x" }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(tx.connect).not.toHaveBeenCalled();
+  });
+
+  /* 读门的正向一半：别把门拆成墙。只授了 support:ticket.read 的角色
+     （auditor、以及今天的 operator）必须读得到时间线。 */
+  it("只有 support:ticket.read 的人读得到工单时间线（读门别拆成墙）", async () => {
+    const reader = vi.fn().mockResolvedValue({ rows: [] });
+    const router = new TicketsRouter(
+      { query: reader } as unknown as Pool,
+      noDbPool().pool,
+      silentNotifier(),
+    );
+    await expect(
+      router.listTicketComments(makeReq(["support:ticket.read"]), TICKET_UUID),
+    ).resolves.toEqual([]);
+    expect(reader).toHaveBeenCalled();
+  });
+
+  /* 拆门的反例。注入的**不是**「只有 read」—— 那一组码在旧门下同样 403，
+     证明不了任何事。注入的是 operator 角色今天的真实持码：seed 给它
+     support:ticket.read 与 tenant:profile.manage，而 auth.service 的
+     LEGACY_CAPABILITY_BRIDGE 据后者合成出 platform.tenant.manage。
+     这一组码在拆门前**能写**工单（旧门只认粗码），所以这条用例在旧代码下是红的；
+     拆门后它必须 403 —— 对客户说话、内部备注、分派、关单，一条都不行。 */
+  const OPERATOR_TODAY = [
+    "support:ticket.read",
+    "tenant:profile.manage",
+    "platform.tenant.manage",
+  ];
+
+  it("operator 今天的持码（只授了工单读码）写不了工单：四个写入口逐个验", async () => {
+    const tx = noDbPool();
+    const router = new TicketsRouter(tx.pool, tx.pool, silentNotifier());
+    const readOnly = () => makeReq(OPERATOR_TODAY);
+    await expect(
+      router.addTicketReply(readOnly(), "TK-1", { body: "x" }),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      router.addInternalNote(readOnly(), "TK-1", { body: "x" }),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      router.assignTicket(readOnly(), "TK-1", { assigneeId: null }),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      router.closeTicketEndpoint(readOnly(), "TK-1", {}),
     ).rejects.toThrow(ForbiddenException);
     expect(tx.connect).not.toHaveBeenCalled();
   });

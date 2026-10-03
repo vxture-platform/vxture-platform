@@ -35,7 +35,8 @@ import { TicketsRouter } from "./tickets.router";
 import { ADMIN_CUSTOMER_NOTIFIER } from "../providers/commerce-services.provider";
 import { makeReq, makeTxClient, readerOf } from "../testing/pool-mocks";
 
-const MANAGE = ["platform.tenant.manage"];
+// 2026-10-03 拆门：工单域判 support:ticket.*；两个都给，这些 spec 读写都走。
+const MANAGE = ["support:ticket.read", "support:ticket.manage"];
 const TICKET_UUID = "44444444-4444-4444-8444-444444444444";
 const TENANT_UUID = "33333333-3333-4333-8333-333333333333";
 const REPORTER_UUID = "55555555-5555-4555-8555-555555555555";

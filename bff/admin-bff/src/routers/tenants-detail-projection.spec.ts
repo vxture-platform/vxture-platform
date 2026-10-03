@@ -15,7 +15,8 @@ import type { RequestContext } from "../types/console.types";
 
 const OPERATOR_ID = "11111111-1111-4111-8111-111111111111";
 const TENANT_ID = "22222222-2222-4222-8222-222222222222";
-const MANAGE = ["platform.tenant.manage"];
+// 2026-10-03 拆门：粗码 platform.tenant.manage 不再是租户域的门，换成本域的读 + 写两码。
+const MANAGE = ["tenant:profile.read", "tenant:profile.manage"];
 
 function makeReq(capabilities: string[]): Request & RequestContext {
   return {
@@ -252,7 +253,7 @@ describe("GET /api/tenants/:id detail projection", () => {
         userNo: "1799729056",
         account: "demo_acme",
         name: "陈立",
-        /* MANAGE 只有 `platform.tenant.manage`，**没有** `user:pii.read`，
+        /* MANAGE 只有租户域那两个码，**没有** `user:pii.read`，
            而联系方式照样是明文——成员表刻意不走账号页那道闸门（owner
            2026-09-21：运营者本来就是管理员）。这条钉住的就是「不遮」，
            下次有人以"对齐账号页"为由加回掩码时它会红。 */
