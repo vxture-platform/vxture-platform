@@ -21,17 +21,22 @@
  * 最该被看见的那一档藏掉：
  *   · `none`             请求里没有主体（列运营者会话）；
  *   · `proven`           请求体点名主体，**同时带只有该主体能给出的证明**（TOTP 码）；
- *   · `declared-ignored` DTO 里有这个字段，但本路由**有意不读**（见
- *                        `account-admin-internal.router.ts` 的说明：客户正文里点名
- *                        一个运营者既无必要也是泄露）；
- *   · `declared-unbound` 请求体点名**代为操作的运营者**，而没有任何东西证明它——
- *                        rank 门比的也是这个自报主体。**这一档就是共享口令的真实半径**，
- *                        它在册、有数、不许悄悄变多。
+ *   · `token-bound`      请求体点名**代为操作的运营者**，且类级 `ActorBindingGuard` 用该
+ *                        运营者**自己的会话 access token**（`x-vxture-actor-token`）证明它：
+ *                        验签、aud ∈ {admin, arche}、sub 相符、中央会话仍在（2026-10-04 PR C）。
+ *                        handler 读不读那个字段是另一件事——`account-admin-internal` 的三条
+ *                        有意不读（客户正文里点名一个运营者既无必要也是泄露），门上照样绑；
+ *   · `declared-unbound` 请求体点名代为操作的运营者，而没有任何东西证明它——rank 门比的也是
+ *                        这个自报主体。**这一档曾是共享口令的真实半径**（8 条），PR C 之后为 0；
+ *                        它仍在册、有数，再出现一条就是在给共享口令开一扇无绑定的新门。
+ *   （`declared-ignored` 曾是第三档——「字段在、handler 不读」；PR C 后那三条路由门上已绑定，
+ *   这一档没有住户，撤了。）
  *
  * ── 这一层不做什么 ──
- * 它**不**把 `declared-unbound` 改成绑定主体——那要给每个调用方发独立凭据（E2/E3），
- * 会动 6 个发送点与部署密钥，不在本批。它只保证：这个面今天有多大是写下来的，
- * 明天变大需要有人签字。
+ * 主体绑定在 `actor-binding.guard.ts`，不在这里；这里只保证：这个面今天有多大、哪些路由
+ * 的主体是绑定的，都是写下来的，明天变化需要有人签字（`check-internal-route-policy.mjs`
+ * 同时核「声明 token-bound 的 controller 真挂着 ActorBindingGuard」这一半）。按调用方发独立
+ * 凭据、让 IdP 分得出 admin 还是 arche 在调（E2/E3）仍不在本批。
  */
 import { ForbiddenException, SetMetadata } from "@nestjs/common";
 
@@ -50,7 +55,7 @@ export type InternalRouteRisk =
 export type InternalRouteActor =
   | "none"
   | "proven"
-  | "declared-ignored"
+  | "token-bound"
   | "declared-unbound";
 
 export interface InternalRoutePolicy {

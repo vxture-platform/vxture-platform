@@ -83,6 +83,9 @@ export class OperatorAuthMiddleware implements NestMiddleware {
     context.capabilities = resolved.capabilities;
     const sid = outcome.claims.sid;
     if (typeof sid === "string" && sid) context.sessionId = sid;
+    // 委托给 IdP 的账号动作要用它当「代为操作者」的证明（ActorBindingGuard，PR C）；
+    // admin-bff 的 AuthMiddleware 一直挂着，这里此前漏了——outcome 里本来就有。
+    context.operatorAccessToken = outcome.accessToken;
 
     /* 平台门（owner 2026-09-14，三平台严格隔离）：进得了 IdP 的运营账号不等于进得了
        本平台。根码由授权闭包自动授予，能做本平台任一件事的角色都有它；没有的一律 403，

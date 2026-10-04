@@ -40,7 +40,7 @@ describe("evaluateInternalRoutePolicy", () => {
     const actors: InternalRoutePolicy["actor"][] = [
       "none",
       "proven",
-      "declared-ignored",
+      "token-bound",
       "declared-unbound",
     ];
     for (const actor of actors) {

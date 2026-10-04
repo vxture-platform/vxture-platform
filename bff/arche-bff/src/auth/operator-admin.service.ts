@@ -5,10 +5,15 @@
  * Mirrors OperatorStepUpService: server-to-server POST to the IdP internal endpoints
  * (IDP_INTERNAL_TOKEN over the container-internal URL — never the public issuer) for
  * admin-delegated operator disable / enable / force-logout (B9-P1b-α). Credentials and
- * sessions stay IdP-owned. actorOperatorId is the acting operator (from the RP session),
- * never the browser body. Fail-closed when internal auth / IdP URL is unconfigured.
+ * sessions stay IdP-owned. The acting operator comes from the RP session, never the
+ * browser body — and since 2026-10-04 (E1 PR C) it is sent as a **pair**: `actorOperatorId`
+ * in the body (audit text needs it) plus the operator's own session access token in
+ * `x-vxture-actor-token`, which auth-bff's `ActorBindingGuard` verifies (aud=arche,
+ * sub == actorOperatorId, central session alive). Holding IDP_INTERNAL_TOKEN alone no longer
+ * lets a caller name an arbitrary operator. Fail-closed when internal auth / IdP URL is
+ * unconfigured.
  *
- * Design: docs/design/identity-platform-internal-delegation.md §3.
+ * Design: docs/30-design/identity/100-internal-delegation.md §3.
  */
 import {
   BadRequestException,
@@ -18,9 +23,14 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
   UnprocessableEntityException,
 } from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
+import type { ActingOperator } from "./acting-operator";
+
+/** auth-bff `ActorBindingGuard` 读的头；与 `bff/auth-bff/src/authn/actor-binding.guard.ts` 逐字相同。 */
+export const ACTOR_TOKEN_HEADER = "x-vxture-actor-token";
 
 export interface OperatorDisableResult {
   ok: true;
@@ -85,13 +95,22 @@ export class OperatorAdminService {
     return token;
   }
 
-  /** POST to an IdP internal operator endpoint; map errors without leaking internals. */
+  /**
+   * POST to an IdP internal operator endpoint; map errors without leaking internals.
+   * `actor.accessToken` goes in `x-vxture-actor-token` (ActorBindingGuard), `actor.operatorId`
+   * in the body — both halves of the binding, from the same RP session.
+   */
   private async delegate<T>(
     path: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason?: string,
     extra?: Record<string, unknown>,
   ): Promise<T> {
+    if (!actor.operatorId || !actor.accessToken) {
+      // 调用点该用 requireActingOperator 取主体；到这里还缺一半就是调用点漏了，不能带着
+      // 半个主体去敲 IdP（它会 401，而这边映射成 503 把排障引向「IdP 挂了」）。
+      throw new UnauthorizedException("operator_actor_incomplete");
+    }
     let res: Response;
     try {
       res = await fetch(`${this.idpBaseUrl()}${path}`, {
@@ -99,8 +118,13 @@ export class OperatorAdminService {
         headers: {
           "content-type": "application/json",
           "x-vxture-internal-auth": this.internalToken(),
+          [ACTOR_TOKEN_HEADER]: actor.accessToken,
         },
-        body: JSON.stringify({ actorOperatorId, reason, ...extra }),
+        body: JSON.stringify({
+          actorOperatorId: actor.operatorId,
+          reason,
+          ...extra,
+        }),
       });
     } catch {
       throw new ServiceUnavailableException("operator_admin_unavailable");
@@ -118,7 +142,7 @@ export class OperatorAdminService {
     // 400 = anti-lockout / self / bad request (surface to operator);
     // 403 = insufficient_rank (TD-017 graded model); 404 = operator not found;
     // 409 = last_super_admin (survival guard); 422 = no_email (out-of-band reset);
-    // anything else (401 internal-auth, 5xx) = unavailable.
+    // anything else (401 internal-auth / actor_token_*, 5xx) = unavailable.
     if (res.status === 400) throw new BadRequestException(message);
     if (res.status === 403) throw new ForbiddenException(message);
     if (res.status === 404) throw new NotFoundException(message);
@@ -155,7 +179,7 @@ export class OperatorAdminService {
    * creating admin only gets a masked delivery confirmation, never the link.
    */
   createOperator(
-    actorOperatorId: string,
+    actor: ActingOperator,
     input: {
       username: string;
       displayName: string;
@@ -166,7 +190,7 @@ export class OperatorAdminService {
   ): Promise<CreateOperatorResult> {
     return this.delegate<CreateOperatorResult>(
       "/internal/operator/accounts",
-      actorOperatorId,
+      actor,
       undefined,
       input,
     );
@@ -174,64 +198,67 @@ export class OperatorAdminService {
 
   disableOperator(
     operatorId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason?: string,
   ): Promise<OperatorDisableResult> {
     return this.delegate<OperatorDisableResult>(
       `/internal/operator/accounts/${encodeURIComponent(operatorId)}/disable`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }
 
   enableOperator(
     operatorId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason?: string,
   ): Promise<OperatorEnableResult> {
     return this.delegate<OperatorEnableResult>(
       `/internal/operator/accounts/${encodeURIComponent(operatorId)}/enable`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }
 
   forceLogoutOperator(
     operatorId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason?: string,
   ): Promise<OperatorForceLogoutResult> {
     return this.delegate<OperatorForceLogoutResult>(
       `/internal/operator/accounts/${encodeURIComponent(operatorId)}/sessions/revoke`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }
 
   resetOperatorMfa(
     operatorId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason?: string,
   ): Promise<OperatorForceLogoutResult> {
     return this.delegate<OperatorForceLogoutResult>(
       `/internal/operator/accounts/${encodeURIComponent(operatorId)}/mfa/reset`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }
 
   /**
    * Self-service email change (TD-017 §③) — the operator changes their OWN email;
-   * a code is sent to the NEW address (step 1). operatorId is the acting operator
-   * (self); the IdP enforces id === actor.
+   * a code is sent to the NEW address (step 1). The actor IS the target (self); the IdP
+   * enforces id === actorOperatorId, and (PR C) that the session token is the actor's.
+   * No router in arche-bff calls this today (self-service moved to auth-bff's cookie
+   * path, see admin-bff's note of 2026-09-02); kept with the bound signature so a future
+   * caller cannot reach delegate() with half a principal.
    */
   startEmailChange(
-    operatorId: string,
+    actor: ActingOperator,
     newEmail: string,
   ): Promise<{ ok: true; sentTo: string }> {
     return this.delegate<{ ok: true; sentTo: string }>(
-      `/internal/operator/accounts/${encodeURIComponent(operatorId)}/contact/email/start`,
-      operatorId,
+      `/internal/operator/accounts/${encodeURIComponent(actor.operatorId)}/contact/email/start`,
+      actor,
       undefined,
       { newEmail },
     );
@@ -239,12 +266,12 @@ export class OperatorAdminService {
 
   /** Self-service email change — step 2: submit the code → new email + verified. */
   verifyEmailChange(
-    operatorId: string,
+    actor: ActingOperator,
     code: string,
   ): Promise<{ ok: true; email: string }> {
     return this.delegate<{ ok: true; email: string }>(
-      `/internal/operator/accounts/${encodeURIComponent(operatorId)}/contact/email/verify`,
-      operatorId,
+      `/internal/operator/accounts/${encodeURIComponent(actor.operatorId)}/contact/email/verify`,
+      actor,
       undefined,
       { code },
     );
@@ -257,12 +284,12 @@ export class OperatorAdminService {
    */
   resetOperatorPassword(
     operatorId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason?: string,
   ): Promise<OperatorResetPasswordResult> {
     return this.delegate<OperatorResetPasswordResult>(
       `/internal/operator/accounts/${encodeURIComponent(operatorId)}/reset-password`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }
@@ -284,36 +311,36 @@ export class OperatorAdminService {
 
   disableAccount(
     userId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason: string,
   ): Promise<{ ok: true; status: string; revoked: number }> {
     return this.delegate(
       `/internal/account/users/${encodeURIComponent(userId)}/disable`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }
 
   enableAccount(
     userId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason: string,
   ): Promise<{ ok: true; status: string }> {
     return this.delegate(
       `/internal/account/users/${encodeURIComponent(userId)}/enable`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }
 
   forceLogoutAccount(
     userId: string,
-    actorOperatorId: string,
+    actor: ActingOperator,
     reason: string,
   ): Promise<{ ok: true; revoked: number }> {
     return this.delegate(
       `/internal/account/users/${encodeURIComponent(userId)}/sessions/revoke`,
-      actorOperatorId,
+      actor,
       reason,
     );
   }

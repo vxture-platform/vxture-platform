@@ -142,10 +142,15 @@ jobs:
       # 之前。同样**没有** `pnpm lint:` 入口（加一个要改根 package.json，那会触发一次
       # 全栈重建），照 site-takeover / audit-env 的先例直接用 runner 自带的 node 调。
       #
-      # 它钉住的是「共享口令能进哪些路由」这个面，以及其中「主体自报且无绑定」的条数。
-      # 这一步红了不要直接 --update：先确认那条路由是不是真的必须走旧凭据。
+      # 它钉住的是「共享口令能进哪些路由」这个面，以及其中「主体自报且无绑定」的条数——
+      # 2026-10-04 PR C 后那一档为 0，再出现一条即红；同时核「声明 token-bound 的 controller
+      # 真挂着 ActorBindingGuard」（声明与门是两处，只改一处不报错），挂门的 controller 清单
+      # 也进快照。--self-test 用合成 router 证每条反例都会红（摘门 / 谎称绑定 / 陌生档 …）。
+      # 这一步红了不要直接 --update：先确认那条路由是不是真的必须走内部口令。
       - name: Internal route policy guardrail
-        run: node scripts/guardrails/check-internal-route-policy.mjs
+        run: |
+          node scripts/guardrails/check-internal-route-policy.mjs
+          node scripts/guardrails/check-internal-route-policy.mjs --self-test
 
       # 始终运行（含 docs-only）：共用列表仓储的读取作用域。纯 node、只读源码、秒级。
       # 同样没有 `pnpm lint:` 入口（加入口要改根 package.json → 全栈重建）。

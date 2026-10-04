@@ -9,6 +9,10 @@
  * mutations here — the IdP owns customer credentials & sessions (realm=customer).
  * Realm-isolated: AccountService resolves targets via account.users only, so an
  * operator id yields 404. NEVER exposed publicly (nginx must not route /internal/*).
+ * Since 2026-10-04 (PR C) the class-level `ActorBindingGuard` also requires the acting
+ * operator's own session access token in `x-vxture-actor-token` (sub == actorOperatorId,
+ * central session alive): without it the shared secret alone could disable any customer.
+ * The handlers still do not READ actorOperatorId (see below) — binding happens at the door.
  *
  * Unlike the operator router there is no rank gate (operators managing customers is
  * not a cross-peer action) and no anti-lockout (an operator may fully disable an
@@ -27,6 +31,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { AccountService } from "@vxture/service-account";
+import { ActorBindingGuard } from "../authn/actor-binding.guard";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
 import { InternalRoute } from "../authn/internal-route-policy";
 
@@ -34,8 +39,10 @@ import { InternalRoute } from "../authn/internal-route-policy";
  * S2S 请求体。admin-bff 的 `delegate` 一直就送 `{ actorOperatorId, reason }`——本路由此前
  * 把整个 body 丢掉了，所以运营填的原因走到 IdP 就没了。
  *
- * `actorOperatorId` 这一批不用：客户正文里点名一个运营者的身份既无必要也是泄露，客户要
- * 知道的是「平台做了这件事，原因是什么」。留着声明是为了说明这个字段确实在线上、不是猜的。
+ * `actorOperatorId` handler 不读：客户正文里点名一个运营者的身份既无必要也是泄露，客户要
+ * 知道的是「平台做了这件事，原因是什么」。但它不再只是「在线上」——类级 `ActorBindingGuard`
+ * 把它绑到 `x-vxture-actor-token` 里那张会话票的 sub（2026-10-04 PR C），所以字段必须送、必须
+ * 是票主人的 id；不读与绑定是两件事，一个在 handler、一个在门上。
  */
 interface AdminAccountActionBody {
   actorOperatorId?: string;
@@ -59,7 +66,7 @@ function requireReason(body: AdminAccountActionBody | undefined): string {
 }
 
 @Controller("internal/account/users")
-@UseGuards(InternalAuthGuard)
+@UseGuards(InternalAuthGuard, ActorBindingGuard)
 export class AccountAdminInternalRouter {
   constructor(
     @Inject(AccountService) private readonly accounts: AccountService,
@@ -68,8 +75,8 @@ export class AccountAdminInternalRouter {
   // POST /internal/account/users/:id/disable — status='disabled' + revoke all sessions.
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-ignored",
-    why: "admin-bff 代运营者停用客户账号。本路由有意不读 actorOperatorId —— 客户正文里点名一个运营者既无必要也是泄露（见文件头）",
+    actor: "token-bound",
+    why: "admin-bff 代运营者停用客户账号。门上 ActorBindingGuard 把 actorOperatorId 绑到会话票；handler 有意不读它——客户正文里点名一个运营者既无必要也是泄露（见文件头）",
   })
   @Post(":id/disable")
   @HttpCode(HttpStatus.OK)
@@ -87,8 +94,8 @@ export class AccountAdminInternalRouter {
   // POST /internal/account/users/:id/enable — status='active'.
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-ignored",
-    why: "停用的反向动作。同样不读 actorOperatorId",
+    actor: "token-bound",
+    why: "停用的反向动作。门上绑定、handler 同样不读 actorOperatorId",
   })
   @Post(":id/enable")
   @HttpCode(HttpStatus.OK)
@@ -106,8 +113,8 @@ export class AccountAdminInternalRouter {
   // POST /internal/account/users/:id/sessions/revoke — revoke all active customer sessions.
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-ignored",
-    why: "强制客户下线。同样不读 actorOperatorId",
+    actor: "token-bound",
+    why: "强制客户下线。门上绑定、handler 同样不读 actorOperatorId",
   })
   @Post(":id/sessions/revoke")
   @HttpCode(HttpStatus.OK)

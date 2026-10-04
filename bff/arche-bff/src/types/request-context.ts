@@ -31,4 +31,11 @@ export interface RequestContext {
    * 它就是 IdP 会话 cookie 的值，**不下发**。
    */
   sessionId?: string;
+  /**
+   * 这次请求背后那张 RP 会话的 access token 原文（RS256，已验签）。只在服务端用：委托给
+   * IdP 的账号动作把它放进 `x-vxture-actor-token`，auth-bff 的 ActorBindingGuard 据此证明
+   * 「代为操作的运营者」就是票主人（2026-10-04 PR C）。**不下发**、不进日志。与 admin-bff
+   * 的 `RequestContext.operatorAccessToken` 同名同义。
+   */
+  operatorAccessToken?: string;
 }

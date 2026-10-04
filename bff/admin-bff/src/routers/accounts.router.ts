@@ -41,7 +41,7 @@ import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { TICKET_STATUSES } from "@vxture-platform/shared";
 import type { TicketStatus } from "@vxture-platform/shared";
 import {
-  requireOperatorId,
+  requireActingOperator,
   requireText,
   requireUuid,
 } from "./governance.shared";
@@ -245,7 +245,9 @@ export class AccountsRouter {
   }
 
   // ── C12 write path — admin处置 C 端账号（委派 IdP，守卫 user:account.manage）──
-  // 凭据/会话由 IdP 拥有；admin-bff 只委派 + 本地写审计。actor = RP 会话，非请求体。
+  // 凭据/会话由 IdP 拥有；admin-bff 只委派 + 本地写审计。actor = RP 会话，非请求体——
+  // 并且（2026-10-04 PR C）连同他自己的会话 access token 一起送：IdP 的 ActorBindingGuard
+  // 把 body.actorOperatorId 绑到那张票的 sub，缺票 / 票不是他的一律 401。
   //
   // **`reason` 由可选改为必填**（owner 2026-09-29）。这三件事从此会通知到客户本人，
   // 而正文照抄运营填的这句话；留成可选，客户就会收到一条「你的账号已被停用」而没有
@@ -265,7 +267,7 @@ export class AccountsRouter {
     @Body() body: AccountLifecycleActionBody,
   ): Promise<{ ok: true; status: string; revoked: number }> {
     assertCanManageAccountLifecycle(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
     const userId = requireUuid(id, "Invalid account id");
     const reason = requireText(
       body?.reason,
@@ -274,7 +276,7 @@ export class AccountsRouter {
     );
     const result = await this.operatorAdmin.disableAccount(
       userId,
-      actorId,
+      actor,
       reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
@@ -295,7 +297,7 @@ export class AccountsRouter {
     @Body() body: AccountLifecycleActionBody,
   ): Promise<{ ok: true; status: string }> {
     assertCanManageAccountLifecycle(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
     const userId = requireUuid(id, "Invalid account id");
     const reason = requireText(
       body?.reason,
@@ -304,7 +306,7 @@ export class AccountsRouter {
     );
     const result = await this.operatorAdmin.enableAccount(
       userId,
-      actorId,
+      actor,
       reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
@@ -325,7 +327,7 @@ export class AccountsRouter {
     @Body() body: AccountLifecycleActionBody,
   ): Promise<{ ok: true; revoked: number }> {
     assertCanManageAccountLifecycle(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
     const userId = requireUuid(id, "Invalid account id");
     const reason = requireText(
       body?.reason,
@@ -334,7 +336,7 @@ export class AccountsRouter {
     );
     const result = await this.operatorAdmin.forceLogoutAccount(
       userId,
-      actorId,
+      actor,
       reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {

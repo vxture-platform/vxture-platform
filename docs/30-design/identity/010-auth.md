@@ -261,6 +261,10 @@ POST /internal/operator/stepup/totp  —— 内部面（server-to-server）
   x-vxture-internal-auth，值 = IDP_INTERNAL_TOKEN（2026-10-04 起只认这把，secrets/platform-idp-internal.env，
   只注入 auth / admin / arche / opera 四个容器）；拿产品面的 AUTH_INTERNAL_TOKEN 来是 401 invalid_internal_auth。
   凭据过了还要过路由准入（@InternalRoute 声明，internal-route-policy.ts），没声明的路由 403。
+  /internal/operator/accounts/* 与 /internal/account/users/*（共 11 条）还要过 ActorBindingGuard（2026-10-04 PR C）：
+  x-vxture-actor-token = 代为操作的运营者自己的会话 access token（aud ∈ {admin, arche}、sub == body.actorOperatorId、
+  中央会话仍在），缺 / 不是合法会话票 / 绑不上分别 401 actor_token_missing / actor_token_invalid / actor_token_mismatch；
+  只有口令再也开不了这两组路由。step-up 与 sessions GET 不绑（TOTP 本身是证明 / 无主体）。
 
 GET  /auth/oauth/{provider}/start
   生成授权跳转 URL，将随机 state 存入 Redis，重定向至第三方平台
