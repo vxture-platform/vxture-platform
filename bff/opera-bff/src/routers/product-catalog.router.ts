@@ -2895,9 +2895,14 @@ export function validateWrite(
   if (familyConflict) {
     throw invalidRequest("VALIDATION_INVALID_VALUE", familyConflict, "layer");
   }
-  /* 受管值域，非法值先接住免得冒成 500（库上 chk_products_integration_mode 焊着同一条）。 */
+  /* 受管值域，非法值先接住免得冒成 500（库上 chk_products_integration_mode 焊着同一条）。
+     判式是「键在场」而不是「值为真」：列 NOT NULL DEFAULT platform_managed，没有「清空」
+     这条路，送 null / 空串就是域外值。此前按真值判，`""` 绕过这里、到 INSERT / UPDATE 里
+     `?? 默认值` 又留不住（`"" ?? x` 是 ""），库上 CHECK 拒的是 23514，而下面只翻译分层那条
+     约束，API 调用方拿到的是 500 而不是字段 400；PUT 送 null 则被 `??` 静默改回默认。
+     缺席（undefined）才是「登记取默认 / 改时不动」。origin 同形，同一条判式。 */
   if (
-    body.integrationMode &&
+    body.integrationMode !== undefined &&
     !(PRODUCT_INTEGRATION_MODES as readonly string[]).includes(
       body.integrationMode,
     )
@@ -2908,7 +2913,10 @@ export function validateWrite(
       "integrationMode",
     );
   }
-  if (body.origin && !(ORIGINS as readonly string[]).includes(body.origin)) {
+  if (
+    body.origin !== undefined &&
+    !(ORIGINS as readonly string[]).includes(body.origin)
+  ) {
     throw invalidRequest(
       "VALIDATION_INVALID_VALUE",
       `origin must be one of ${ORIGINS.join(", ")}`,

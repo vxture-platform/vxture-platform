@@ -100,7 +100,7 @@ CREATE TABLE product.products (
     --   product_type='undefined' 占位型说的是「类型未定」不是「层未定」，与任何层相容（吸收）；
     --   后缀归族                 与 @vxture/core-utils productTypeFamily 同判：历史裸值 agent 与 data_platform 等照样归族。
     -- 用 right() 不用 LIKE：'_' 在 LIKE 里是单字符通配。**必须单行**（lint:column-locks 的解析器按行读）；谓词文本与
-    -- 迁移 2026-12-01-l3-layer-truth.sql 逐字相同（lint:product-layer-family 比对），那份迁移用同一谓词的全称否定式点名矛盾行。
+    -- 迁移 2026-12-01-l3-layer-truth.sql 逐字相同（守卫 check-product-layer-family.mjs 比对；CI 直跑 node，不设 pnpm lint:* 入口），那份迁移用同一谓词的全称否定式点名矛盾行。
     CONSTRAINT chk_products_layer_type_family CHECK (deleted_at IS NOT NULL OR layer IS NULL OR product_type = 'undefined' OR (layer = 'L2' AND right(product_type, 9) = '_platform') OR (layer = 'L3' AND (product_type = 'agent' OR right(product_type, 6) = '_agent'))),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
     CONSTRAINT chk_products_integration_mode CHECK (integration_mode IN ('platform_managed','login_only')),

@@ -19,7 +19,7 @@
 --       OR (layer = 'L2' AND right(product_type, 9) = '_platform')
 --       OR (layer = 'L3' AND (product_type = 'agent' OR right(product_type, 6) = '_agent')))
 -- M0 / M2 用 `NOT (P)`，M3 用 `CHECK (P)`，**逐字同一段**：M3 会拒的行没有一条逃得过 M2 的点名。
--- 两处判据不同形正是审查（§12 R2/R6）抓到的根因；lint:product-layer-family 比对 DDL 与本文件的 P 逐字相同。
+-- 两处判据不同形正是审查（§12 R2/R6）抓到的根因；守卫 check-product-layer-family.mjs（CI 直跑 node，不设 pnpm lint:* 入口）比对 DDL 与本文件的 P 逐字相同。
 -- 用 right() 不用 LIKE：'_' 在 LIKE 里是单字符通配。
 --
 -- ── 分段 ──

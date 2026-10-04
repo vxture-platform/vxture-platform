@@ -10,6 +10,9 @@
  *  3. **改时组合取「送来的 ∪ 库里的」**：只改类型不动分层，同样是分叉，同样 400。
  *  4. **POST 不再静默丢 integrationMode**：此前 INSERT 列清单没有它，一个 login_only 的新产品被登记成
  *     platform_managed、回调判「待配置」，接口回 200。
+ *  5. **integrationMode / origin 键在场就验值域**：此前按真值判，`""` 绕过校验、到 INSERT 里 `?? 默认值`
+ *     留不住，库上 chk_products_integration_mode 拒成 23514 而翻译函数只认分层那条 → 500；PUT 送 null
+ *     被 `??` 静默改回默认。两列都 NOT NULL DEFAULT，没有「清空」这条路：缺席才是取默认 / 不改。
  */
 import type { PoolClient } from "pg";
 import { describe, expect, it, vi } from "vitest";
@@ -318,6 +321,91 @@ describe("insertProductTx —— POST 不再静默丢 integrationMode", () => {
         constraint: "chk_products_origin",
       },
     );
+  });
+});
+
+describe("validateWrite —— integrationMode / origin：键在场就必须在值域里", () => {
+  const sane = {
+    ...core,
+    productType: "industry_agent",
+    layer: "L3",
+  };
+  /* null / 空串在 TS 类型上进不来（ProductIntegrationMode / ProductOrigin 都是字面量联合），
+     但 JSON 调用方不经过 TS——这正是要钉的形状，所以绕过类型喂进去。 */
+  const loose = (over: Record<string, unknown>) =>
+    ({ ...sane, ...over }) as unknown as ProductWriteBody;
+  const reg = (over: Record<string, unknown>) =>
+    validateWrite(loose(over), { requireCore: true });
+  const upd = (over: Record<string, unknown>) =>
+    validateWrite(loose(over), { requireCore: true, requireCode: false });
+
+  it('登记 integrationMode: "" → 400 VALIDATION_INVALID_VALUE 字段 integrationMode（此前放过，库上 23514 冒成 500）', () => {
+    const e = envelope(() => reg({ integrationMode: "" }));
+    expect(e.status).toBe(400);
+    expect(e.code).toBe("VALIDATION_INVALID_VALUE");
+    expect(e.field).toBe("integrationMode");
+  });
+
+  it("登记 integrationMode: null → 同样 400", () => {
+    const e = envelope(() => reg({ integrationMode: null }));
+    expect(e.code).toBe("VALIDATION_INVALID_VALUE");
+    expect(e.field).toBe("integrationMode");
+  });
+
+  it("改时 integrationMode: null → 400：列 NOT NULL，null 不是「重置为默认」", () => {
+    const e = envelope(() => upd({ integrationMode: null }));
+    expect(e.code).toBe("VALIDATION_INVALID_VALUE");
+    expect(e.field).toBe("integrationMode");
+  });
+
+  it('origin: "" / null → 400 字段 origin（同形）', () => {
+    for (const origin of ["", null]) {
+      const e = envelope(() => reg({ origin }));
+      expect(e.code, String(origin)).toBe("VALIDATION_INVALID_VALUE");
+      expect(e.field, String(origin)).toBe("origin");
+    }
+  });
+
+  it("缺席与合法值放行", () => {
+    expect(() => reg({})).not.toThrow();
+    expect(() => upd({})).not.toThrow();
+    expect(() => reg({ integrationMode: "login_only" })).not.toThrow();
+    expect(() => reg({ integrationMode: "platform_managed" })).not.toThrow();
+    expect(() => reg({ origin: "other" })).not.toThrow();
+    expect(() =>
+      reg({ origin: "third_party", originProvider: "acme" }),
+    ).not.toThrow();
+  });
+
+  it("性质：validateWrite 放过的任何 integrationMode，INSERT 第 16 个参数都在值域里", async () => {
+    const candidates = [
+      undefined,
+      "",
+      null,
+      "x",
+      "login_only",
+      "platform_managed",
+    ];
+    let admitted = 0;
+    for (const integrationMode of candidates) {
+      const body = loose({ integrationMode });
+      let ok = true;
+      try {
+        validateWrite(body, { requireCore: true });
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      admitted += 1;
+      const c = captureClient({});
+      await insertProductTx(c.client, body, "op-1");
+      expect(
+        ["platform_managed", "login_only"],
+        `integrationMode=${String(integrationMode)}`,
+      ).toContain(c.params[15]);
+    }
+    /* 判据会动：只有缺席与两个合法值能进 INSERT。 */
+    expect(admitted).toBe(3);
   });
 });
 

@@ -22,6 +22,9 @@
 //   C. ⑤里 family 为 "undefined" 的值**恰好只有 "undefined" 这一个**：新增一个既非 _platform 也非
 //      _agent 的类型时红，逼人决定它蕴含哪一层（第一次运行就绿，不是「将来才红」）。并且每个值
 //      声明的 family 与后缀推出来的一致——DDL 只认后缀，TS 表另说一套就是两处权威。
+//   D. 自述一致：①②④与 docs/**/*.md 里凡提到本守卫，不得写一个根 package.json 没有的 pnpm 别名
+//      `lint:product-layer-family`——第一版七处都这么写，读者照着跑是 Command not found。
+//      哪天真加了这条 script，本段自动放行。
 //
 // ── 看不见什么 ──
 //   · 不读库。运营手工登记的行（tenderforge / yucer 与十余个智能体）在生产库里，它们的对齐
@@ -35,7 +38,7 @@
 //   在 .github/workflows/ci.yml 里直接 `node` 跑。
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -49,6 +52,10 @@ const SEED_CATALOG = "deploy/database/seed/seed-catalog.mjs";
 const SEED_DEMO = "deploy/database/seed/seed-demo.mjs";
 const TAXONOMY = "packages/core/utils/src/product-taxonomy.ts";
 const CONSTRAINT = "chk_products_layer_type_family";
+const PACKAGE_JSON = "package.json";
+const DOCS_DIR = "docs";
+/** 本守卫若有 pnpm 别名会叫这个名；今天没有（头注说明为什么），所以哪里写了它哪里就是错话。 */
+const ALIAS = "lint:product-layer-family";
 
 /** 与 @vxture/core-utils productTypeFamily 同判（SQL 不能 import TS，这里是那条链路的抄本）。 */
 function familyOf(type) {
@@ -158,8 +165,11 @@ function taxonomyDefs(src) {
   return { defs };
 }
 
-/** 全部判据。入参是五份源码文本，便于自检喂反例。返回问题清单（空 = 绿）。 */
-export function collectProblems({ ddl, migration, seedCatalog, seedDemo, taxonomy }) {
+/**
+ * 全部判据。入参是五份源码文本 + 根 package.json 的 script 名 + 会提到本守卫的文本
+ * （{ file, text }[]），便于自检喂反例。返回问题清单（空 = 绿）。
+ */
+export function collectProblems({ ddl, migration, seedCatalog, seedDemo, taxonomy, packageScripts, citations }) {
   const problems = [];
 
   // A. ①② 同一谓词
@@ -219,16 +229,46 @@ export function collectProblems({ ddl, migration, seedCatalog, seedDemo, taxonom
     }
   }
 
+  // D. 自述一致：没有这条 pnpm script 时，谁写了它谁就在指一个不存在的机制
+  if (!packageScripts.includes(ALIAS)) {
+    for (const c of citations) {
+      const hits = c.text.split(ALIAS).length - 1;
+      if (hits > 0) {
+        problems.push(
+          `${c.file}：写了 \`${ALIAS}\`（${hits} 处），根 package.json 没有这条 script——本守卫在 ci.yml 里直跑 node，读者照着跑是 Command not found；写 check-product-layer-family.mjs`,
+        );
+      }
+    }
+  }
+
   return problems;
 }
 
+function walkMd(dir, out) {
+  for (const e of readdirSync(resolve(root, dir), { withFileTypes: true })) {
+    const p = `${dir}/${e.name}`;
+    if (e.isDirectory()) walkMd(p, out);
+    else if (e.name.endsWith(".md")) out.push({ file: p, text: read(p) });
+  }
+  return out;
+}
+
 function loadSources() {
+  const ddl = read(DDL);
+  const migration = read(MIGRATION);
+  const seedDemo = read(SEED_DEMO);
   return {
-    ddl: read(DDL),
-    migration: read(MIGRATION),
+    ddl,
+    migration,
     seedCatalog: read(SEED_CATALOG),
-    seedDemo: read(SEED_DEMO),
+    seedDemo,
     taxonomy: read(TAXONOMY),
+    packageScripts: Object.keys(JSON.parse(read(PACKAGE_JSON)).scripts ?? {}),
+    citations: walkMd(DOCS_DIR, [
+      { file: DDL, text: ddl },
+      { file: MIGRATION, text: migration },
+      { file: SEED_DEMO, text: seedDemo },
+    ]),
   };
 }
 
@@ -280,9 +320,17 @@ if (process.argv.includes("--self-test")) {
     run({ seedDemo: good.seedDemo.replace("const DEMO_PRODUCTS = [", "const DEMO_PRODUCTS_X = [") }).some((x) => x.includes("DEMO_PRODUCTS")),
     "反例八：seed-demo 的表改名/消失 → 报找不到，不是通过",
   );
+  say(
+    run({ citations: [...good.citations, { file: "docs/x.md", text: `守卫 \`${ALIAS}\` 锁蕴含` }] }).some((x) => x.includes("docs/x.md") && x.includes("Command not found")),
+    "反例九：某份文档写了 pnpm 别名而根 package.json 没有这条 script → 点名那份文档",
+  );
+  say(
+    run({ citations: [...good.citations, { file: "docs/x.md", text: `守卫 \`${ALIAS}\` 锁蕴含` }], packageScripts: [...good.packageScripts, ALIAS] }).length === 0,
+    "正例三：同一份文档，但根 package.json 真有这条 script → 放行",
+  );
   say(run({}).length === 0, "复原：又是 0 条");
 
-  console.log(`\n── 汇总 ──\n看得见 ${10 - bad}/10 项`);
+  console.log(`\n── 汇总 ──\n看得见 ${12 - bad}/12 项`);
   if (bad) {
     console.log("error: 自检有判据不会动——先修守卫再谈守卫");
     process.exit(1);
@@ -299,4 +347,4 @@ if (problems.length) {
   );
   process.exit(1);
 }
-console.log(`error: 0   (DDL ↔ 迁移谓词逐字相同；seed-catalog / seed-demo 产品行与受管类型表均与分层蕴含一致)`);
+console.log(`error: 0   (DDL ↔ 迁移谓词逐字相同；seed-catalog / seed-demo 产品行与受管类型表均与分层蕴含一致；没有人把本守卫写成不存在的 pnpm 别名)`);
