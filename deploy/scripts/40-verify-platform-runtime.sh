@@ -149,7 +149,8 @@ check_public_https() {
 #   :8081/healthz                      → 200  IdP 别名，经 nginx 到 auth-bff（E1 PR D）
 #   :8081/internal/operator/sessions   → 404  **必须是 nginx 的 404，不是 auth-bff 的 401**：401 意味着
 #                                             auth-bff 又被直接发布了、或 nginx 把 /internal/ 转了过去——门回到路边
-#   宿主口 :8081 的发布者                → 恰好 vxture-nginx（docker ps，lib/nginx-idp-port.sh）
+#   宿主口 :8081 的发布者                → 恰好 vxture-nginx（docker inspect 的端口绑定，lib/nginx-idp-port.sh；
+#                                             不读 docker ps 的 PORTS 列——它把 nginx 的 8080+8081 折成一个区间）
 check_tailnet_aliases() {
   local base url code publishers cls
   if [ -z "${VX_WORKER01_TAILNET_IP:-}" ]; then

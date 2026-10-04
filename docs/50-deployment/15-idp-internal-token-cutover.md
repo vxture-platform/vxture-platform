@@ -86,7 +86,7 @@ grep -c CHANGEME "$F"                          # 0
    **不要看 `docker ps` 找 tag——它只显示 `@sha256`**（`30-deploy` :159-161 自己的注释）。
 
 3. `cat /srv/vxture/runtime/.last-deploy-tag` = 本次 tag。
-   3b. （PR D 在本 tag 里时）第 [4/4] 步日志里 `-- auth-bff: tailnet :8081 交接给 nginx` 之后紧跟一行 `交接完成：:8081 由 vxture-nginx 发布`，且 `docker ps --format '{{.Names}}\t{{.Ports}}' | grep ':8081->'` 只有 `vxture-nginx` 一行。更早的「20 同步 Nginx 配置」步里应有一句 `仍由 vx-platform-auth-bff 直接发布（切换中）→ 本次落盘**不带**别名发布`——那是 20 把交接让给 30 的证据；少了它而 31 的「启动或更新 Nginx」又重建了 nginx，就要看 nginx 有没有 `port is already allocated`（机制见 `deploy/scripts/lib/nginx-idp-port.sh` 头注）。
+   3b. （PR D 在本 tag 里时）第 [4/4] 步日志里 `-- auth-bff: tailnet :8081 交接给 nginx` 之后紧跟一行 `交接完成：:8081 由 vxture-nginx 发布`，且主机上 `docker port vxture-nginx 8081` 打印 `<worker-01 tailnet ip>:8081`、`docker port vx-platform-auth-bff` 打印空。**不要用 `docker ps` 的 PORTS 列去 grep `:8081->`**：那一列把同一 IP 上连号且宿主口 == 容器口的发布折成一个区间，交接后 nginx 那行是 `…:8080-8081->8080-8081/tcp`，子串永远不出现——grep 空 ≠ 没交接（`lib/nginx-idp-port.sh` 第一版就栽在这里，判据自此只读 `docker inspect` 的端口绑定）。更早的「20 同步 Nginx 配置」步里应有一句 `仍由 vx-platform-auth-bff 直接发布（切换中）→ 本次落盘**不带**别名发布`——那是 20 把交接让给 30 的证据；少了它而 31 的「启动或更新 Nginx」又重建了 nginx，就要看 nginx 有没有 `port is already allocated`（机制见 `deploy/scripts/lib/nginx-idp-port.sh` 头注）。
 4. `bash /srv/vxture/deploy/scripts/40-verify-platform-runtime.sh` 全 OK——**含新加的 `arche-bff` 健康行**（此前清单里没有第三个发送方），以及 Required files 里新加的 `.env.opera-bff` / `.env.arche-bff` / `.env.platform-api` 与 sms / identity / app / idp-internal 四份 secrets（此前 40 与日巡检 51 的文件清单都停在五个 RP 时代，缺这些文件要到下次 deploy 才被 30 拦下；`lib/runtime-file-lists.test.sh` 钉住 30 / 40 / 51 三处一致）。
 
 ### deploy 中途失败怎么办
@@ -94,6 +94,12 @@ grep -c CHANGEME "$F"                          # 0
 **不是 `33-recreate-service.sh`**：它在 2026-09-01 digest 钉死后已经坏了（从 `…@sha256:<hex>` 引用里拆 tag 得到裸 hex；多服务时 digest 各不相同直接「拒绝混批」），而且就算能跑，它钉在**容器正在跑的旧镜像**上——没轮到的发送方还是旧代码、读旧键，给它注入新文件也不读。修法另立 PR A2，切换不依赖它。
 
 正确的收尾是**重跑 deploy（31 → 30）**：digest 钉死正是为此——已换好的服务 digest 不变、compose 跳过，只有还没换的那几个被重建。证明：第二次 run 的 [4/4] 日志里已换好的服务没有 `Recreate`。
+
+PR D 在本 tag 里而 31 死在 30 的 auth-bff 那步**之前**（13 / 契约检查 / 20 / nginx up / 21）时，主机处在「bundle 已是 PR D、auth-bff 还直接发布着 :8081」的切换中状态。这时**不要跑 db-init 的 `provision-secrets` / `sync-env`，也不要手跑 `33-recreate-service.sh auth-bff`**：它们用 bundle 里不带 `ports:` 的 compose 重建 auth-bff，宿主口放掉而没人接。33 自己会拒绝这种现场并指向 31（`idp_alias_guard_recreate`，`lib/recreate-service.test.sh` 第 9 组）；收尾仍是重跑 31。
+
+### 回滚到 PR D 之前的 tag
+
+走正常的 deploy（`deploy.yml` → `31`），**不要单跑旧 30**。旧 bundle 的 20-sync 是裸 cp、旧 `compose.nginx.yml` 没有 :8081 那一行 → 31 的「启动或更新 Nginx」重建 nginx 摘掉 :8081（80/443 闪断一次）→ 旧 30 用带 `ports:` 的 compose 重建 auth-bff，它把 :8081 拿回去。:8081 的不可用窗口从 nginx 重建起、到旧 30 走到 auth-bff 为止（旧 30 的服务顺序不钉死，最坏整次 30）。只跑旧 30、不走 20 与 nginx up → nginx 还发布着 :8081，auth-bff 起不来：`Bind for <ip>:8081 failed: port is already allocated`，auth-bff 下线。两条路都在 `lib/nginx-idp-port.test.sh` 的「回滚」两组里用假 docker 走过。回滚后 `/internal/*` 重新对整个 tailnet 可达——那是 PR D 之前的状态，不是新口子。
 
 ---
 

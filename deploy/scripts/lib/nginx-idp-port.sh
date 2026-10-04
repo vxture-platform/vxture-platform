@@ -33,45 +33,66 @@
 #     再读一遍现场，发布者必须恰是 vxture-nginx，否则退出 1。auth-bff 重建后**仍**占着 :8081 →
 #     退出 1，一个 compose 动作都不做（那意味着主机上的 compose.platform.yml 还带 ports:，
 #     bundle 过旧；此时去重建 nginx 等于把全站打下线）。
+#   · 33-recreate-service（idp_alias_guard_recreate）：重建 auth-bff **之前**调用。auth-bff 还直接
+#     发布着 :8081、而要用的 compose 已经不给它 ports:（PR D 的 bundle 上了机、31 却没走到 30 的
+#     auth-bff 那步）→ 拒绝：此刻重建会把口放掉而 nginx 没接，产品换票口无人服务直到重跑 31。
 #   往后每次 deploy：20-sync 判到 nginx 已占 → 终态；30 的交接判到 nginx 已占 → `up -d` 无变化。
 #   新主机：没人占 → 20-sync 直接落终态，31 的 `up -d` 第一次就带 :8081。
 # :8081 的不可用窗口 = 旧 auth-bff 停 → nginx 重建完成，几秒；nginx 重建也会让 80/443/8080 闪断
 # 同一个量级（与此前每次改 compose.nginx.yml 的重建同一类）。
 #
 # ── 判据从哪读 ──
-# 「谁发布了宿主口 :8081」读 `docker ps --format '{{.Names}}\t{{.Ports}}'` 的 Ports 列（形如
-# `100.64.0.1:8081->3081/tcp`），不用 `--filter publish=`：那个过滤器按宿主口还是容器口匹配
-# 在不同版本里不一样，本机 29.7 实测按宿主口，但 Ports 列的 `:8081->` 在哪个版本都只有一个意思。
+# 「谁发布了宿主口 :8081」读 `docker inspect` 的 `.NetworkSettings.Ports`（每个绑定一行：容器名、
+# 宿主 IP、宿主口、容器口），宿主口按整串精确比较。**不读 `docker ps` 的 Ports 列**：那一列是给人看的
+# 渲染——同一 IP 上宿主口 == 容器口且连号的会被折成一个区间，nginx 的 compose 正好是这个形状
+# （`${IP}:8080:8080` + `${IP}:8081:8081`），docker 29.7 实测打印 `IP:8080-8081->8080-8081/tcp`，
+# 子串 `:8081->` 根本不出现——按子串找会把已交接的主机判成「没人发布」：30 的交接后断言红、
+# 之后每次 20-sync 又被 `ss` 里 nginx 自己的 docker-proxy 判成「宿主进程在听」而拒绝。第一版就是
+# 这样写的，离线证明全绿、真 docker 上全红。也不用 `--filter publish=`：它按宿主口还是容器口匹配
+# 在不同版本里不一样。
 # 「宿主上有没有非 docker 的进程在听」读 `ss -ltnH '( sport = :8081 )'`（docker 发布本身也会以
 # docker-proxy 出现在这里，所以它只在 docker 侧零发布者时才有判别力）。
 #
-# 纯函数（_from_ps / classify / render）零依赖，可被 nginx-idp-port.test.sh 直接喂文本；
-# 带副作用的两个入口（sync / handover）在同一测试里用 PATH 上的假 docker / 假 ss 真跑。
+# 纯函数（_from_bindings / classify / render / compose_publishes_port）零依赖，可被
+# nginx-idp-port.test.sh 直接喂文本；带副作用的入口（sync / handover / guard_recreate）在同一测试里
+# 用 PATH 上的假 docker / 假 ss 真跑，假 docker 的 Ports 列按 docker 的 DisplayablePorts 规则渲染
+# （区间折叠），第一版的子串解析对着它是红的。NGINX_IDP_PORT_LIVE=1 时测试还会对真 docker 跑一遍。
 set -o pipefail
 
 IDP_ALIAS_PORT="${IDP_ALIAS_PORT:-8081}"
 IDP_ALIAS_MARKER='# @vx-idp-alias-8081'
 IDP_ALIAS_NGINX_CONTAINER="${IDP_ALIAS_NGINX_CONTAINER:-vxture-nginx}"
 IDP_ALIAS_LEGACY_PUBLISHER="${IDP_ALIAS_LEGACY_PUBLISHER:-vx-platform-auth-bff}"
+# docker inspect 模板：每个宿主口绑定一行 `/<容器名>\t<宿主 IP>\t<宿主口>\t<容器口/协议>`。
+# 没发布任何口的容器一行不出（exposed-but-unpublished 的 `80/tcp: null` 在 range 里是零次）。
+# shellcheck disable=SC2016  # 这是 Go 模板，$n / $cp / $bs 不是 shell 变量
+IDP_ALIAS_INSPECT_FORMAT='{{$n := .Name}}{{range $cp, $bs := .NetworkSettings.Ports}}{{range $bs}}{{$n}}{{"\t"}}{{.HostIp}}{{"\t"}}{{.HostPort}}{{"\t"}}{{$cp}}{{"\n"}}{{end}}{{end}}'
 
-# idp_alias_publishers_from_ps "<docker ps --format '{{.Names}}\t{{.Ports}}' 的输出>"
-#   输出：发布了宿主口 :$IDP_ALIAS_PORT 的容器名，一行一个（按输入顺序）。
-#   只认 `:<port>->`（宿主侧），`:18081->` 不算、容器侧 `->8081/tcp` 不算。
-idp_alias_publishers_from_ps() {
+# idp_alias_publishers_from_bindings "<上面模板的输出>"
+#   输出：发布了宿主口 :$IDP_ALIAS_PORT 的容器名，一行一个（按输入顺序，同一容器只一次）。
+#   宿主口整串精确比较：`18081` 不算、容器侧 `3081/tcp` 或 `8081/tcp` 不算；只看第 3 列。
+idp_alias_publishers_from_bindings() {
   printf '%s\n' "${1:-}" | awk -F'\t' -v port="$IDP_ALIAS_PORT" '
-    NF >= 2 {
-      n = split($2, m, /, /)
-      for (i = 1; i <= n; i++) {
-        if (index(m[i], ":" port "->") > 0) { print $1; break }
-      }
+    NF >= 4 && $3 == port {
+      name = $1; sub(/^\//, "", name)
+      if (!(name in seen)) { seen[name] = 1; print name }
     }'
 }
 
-# idp_alias_publishers → 现场：谁发布了宿主口。docker 本身失败则函数失败（不能判就不判）。
+# idp_alias_bindings → 现场：所有在跑容器的宿主口绑定（模板行）。docker 本身失败则函数失败（不能判就不判）。
+idp_alias_bindings() {
+  local names
+  names="$(docker ps --format '{{.Names}}')" || return 1
+  [ -n "$names" ] || return 0
+  # shellcheck disable=SC2086  # 容器名不含空白；按行展开成多个参数正是要的
+  docker inspect --format "$IDP_ALIAS_INSPECT_FORMAT" $names || return 1
+}
+
+# idp_alias_publishers → 现场：谁发布了宿主口。
 idp_alias_publishers() {
-  local ps_out
-  ps_out="$(docker ps --format '{{.Names}}\t{{.Ports}}')" || return 1
-  idp_alias_publishers_from_ps "$ps_out"
+  local bindings
+  bindings="$(idp_alias_bindings)" || return 1
+  idp_alias_publishers_from_bindings "$bindings"
 }
 
 # idp_alias_host_listeners → 宿主上在听 :$IDP_ALIAS_PORT 的 socket（ss 一行一个）；没有 ss 则输出空。
@@ -127,6 +148,19 @@ idp_alias_render_compose() {
   esac
 }
 
+# idp_alias_compose_publishes_port <compose.platform.yml>
+#   0 = 该文件里 auth-bff 服务段仍有一行把宿主口 :$IDP_ALIAS_PORT 发布出去（切换前的 compose）；
+#   1 = 没有（PR D 之后的 compose）。注释行不算。只看 auth-bff 段，别的服务段里的 :8081 不算。
+idp_alias_compose_publishes_port() {
+  local f="$1"
+  [ -f "$f" ] || return 1
+  tr -d '\r' < "$f" | awk -v port="$IDP_ALIAS_PORT" '
+    /^  [a-z][a-z0-9-]*:[[:space:]]*$/ { in_auth = ($1 == "auth-bff:") }
+    in_auth && /^[[:space:]]*#/ { next }
+    in_auth && index($0, ":" port ":") > 0 { found = 1 }
+    END { exit !found }'
+}
+
 # idp_alias_explain_foreign <classification> → 给 foreign / host-listener 两种现场的统一报错文案
 idp_alias_explain_foreign() {
   local cls="$1"
@@ -148,7 +182,7 @@ idp_alias_explain_foreign() {
 #   20-sync 用。决定落终态还是延后，并落盘；不动任何容器。
 idp_alias_sync() {
   local src="$1" dst="$2" publishers cls
-  publishers="$(idp_alias_publishers)" || { echo "错误：docker ps 失败，无法判断 :$IDP_ALIAS_PORT 现场，不落 compose。" >&2; return 1; }
+  publishers="$(idp_alias_publishers)" || { echo "错误：读不到 docker 的端口绑定（docker ps / inspect），无法判断 :$IDP_ALIAS_PORT 现场，不落 compose。" >&2; return 1; }
   cls="$(idp_alias_classify "$publishers" "$(idp_alias_host_listeners)")"
   case "$cls" in
     free)
@@ -178,7 +212,7 @@ idp_alias_handover() {
   local src="$1" dst="$2" publishers cls after
   [ -f "$src" ] || { echo "错误：找不到 $src（deploy bundle 不完整）" >&2; return 1; }
   [ -d "$(dirname "$dst")" ] || { echo "错误：找不到 $(dirname "$dst")——nginx 从没同步过，先跑 20-sync-nginx-config.sh" >&2; return 1; }
-  publishers="$(idp_alias_publishers)" || { echo "错误：docker ps 失败，无法判断 :$IDP_ALIAS_PORT 现场。" >&2; return 1; }
+  publishers="$(idp_alias_publishers)" || { echo "错误：读不到 docker 的端口绑定（docker ps / inspect），无法判断 :$IDP_ALIAS_PORT 现场。" >&2; return 1; }
   cls="$(idp_alias_classify "$publishers" "$(idp_alias_host_listeners)")"
   case "$cls" in
     nginx)
@@ -205,8 +239,27 @@ idp_alias_handover() {
   after="$(idp_alias_classify "$(idp_alias_publishers || true)" "")"
   if [ "$after" != "nginx" ]; then
     echo "错误：交接后 :$IDP_ALIAS_PORT 的发布者应恰是 $IDP_ALIAS_NGINX_CONTAINER，实际判为 '$after'。" >&2
-    echo "      产品的换票口此刻可能无人服务：docker ps 看 $IDP_ALIAS_NGINX_CONTAINER 的 PORTS 列。" >&2
+    echo "      产品的换票口此刻可能无人服务：docker port $IDP_ALIAS_NGINX_CONTAINER $IDP_ALIAS_PORT 看它有没有真的发布。" >&2
     return 1
   fi
   echo "  交接完成：:$IDP_ALIAS_PORT 由 $IDP_ALIAS_NGINX_CONTAINER 发布，auth-bff 不再直接发布宿主口。"
+}
+
+# idp_alias_guard_recreate <将要用的 compose.platform.yml>
+#   33-recreate-service 在重建 auth-bff **之前**调用（任何 compose 动作之前）。拒绝的只有一种现场：
+#   auth-bff 此刻还直接发布着 :$IDP_ALIAS_PORT（legacy）**且**这份 compose 已不给它 ports:——重建会把
+#   宿主口放掉，而 33 不做 nginx 交接（它不带 compose.nginx.yml、db-init 的同步也不带），产品换票口
+#   从此无人服务直到有人重跑 31。其余现场（nginx 已接 / compose 仍带 ports: 的旧 bundle / 没人占）
+#   重建 auth-bff 都不改变这个口归谁，放行。读不到现场 → 拒绝（不能判就不判）。
+idp_alias_guard_recreate() {
+  local compose="$1" publishers cls
+  publishers="$(idp_alias_publishers)" || { echo "错误：读不到 docker 的端口绑定（docker ps / inspect），无法判断 :$IDP_ALIAS_PORT 现场，不重建 auth-bff。" >&2; return 1; }
+  cls="$(idp_alias_classify "$publishers" "")"
+  if [ "$cls" = "legacy" ] && ! idp_alias_compose_publishes_port "$compose"; then
+    echo "错误：auth-bff 此刻还直接发布着宿主口 :$IDP_ALIAS_PORT，而 $compose 已不再给它 ports:（PR D 的端口交接还没做）。" >&2
+    echo "      现在重建它会把 :$IDP_ALIAS_PORT 放掉而 nginx 没有接上——产品换票口无人服务，直到重跑 31。" >&2
+    echo "      先跑 31-regular-upgrade-platform.sh 完成交接（30-deploy 在 auth-bff 重建后立刻让 nginx 接 :$IDP_ALIAS_PORT），再回来重载 env。" >&2
+    return 1
+  fi
+  echo "  :$IDP_ALIAS_PORT 现场：$cls——重建 auth-bff 不改变这个口归谁"
 }

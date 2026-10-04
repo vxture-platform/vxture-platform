@@ -314,7 +314,7 @@ check_nginx_and_tls() {
 check_tailnet_alias_publisher() {
   local publishers cls
   if ! publishers="$(idp_alias_publishers 2>/dev/null)"; then
-    medium "读不到 docker ps，tailnet :${IDP_ALIAS_PORT} 的发布者未核验"
+    medium "读不到 docker 的端口绑定（docker ps / inspect），tailnet :${IDP_ALIAS_PORT} 的发布者未核验"
     return 0
   fi
   cls="$(idp_alias_classify "$publishers" "")"
