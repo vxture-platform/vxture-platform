@@ -32,7 +32,7 @@
 三个业务端点统一走 `PlatformAuthGuard` 双凭证（迁移期并行，任一满足）：
 
 1. **legacy**：`x-vxture-internal-auth: ${AUTH_INTERNAL_TOKEN}`（platform.env 共享键；arda 现行）。2026-10-04 起这把钥匙**只**开本宿主的产品面：auth-bff 的 `/internal/*` 内部面改认 `IDP_INTERNAL_TOKEN`（只注入 auth/admin/arche/opera 四个容器），产品手里的值开不了运营管理面；反过来新键也开不了这里——`platform-auth.guard.spec.ts` 钉着「头带 IDP 值 → 401」；
-2. **S2S bearer**（product_210 T1/T2）：`Authorization: Bearer <token>`，`aud=vxture`、`act.sub`=调用方产品码；经 `S2sTokenVerifier` 以 IdP JWKS（`${AUTH_BFF_URL}/oidc/jwks`，kid 缓存）验签——**签名私钥不出 auth-bff**（D13 凭证分权）。
+2. **S2S bearer**（product_210 T1/T2）：`Authorization: Bearer <token>`，`aud=vxture`、`act.sub`=调用方产品码；经 `S2sTokenVerifier` 以 IdP JWKS（`${AUTH_BFF_URL}/oidc/jwks`，kid 缓存）验签——**签名私钥不出 auth-bff**（D13 凭证分权）。同一张 `aud=vxture` 票还有一种**代上报形态**（2026-10-04 决策 3 PR C）：`act.sub="atlas"`（L1 上报者，不是产品码）、`delegated:true`、**无 `workspace_id`**；guard 把 `delegated` 原样搬进 `s2sCaller`，`scopeToS2sCaller` 的第四个档位决定每个调用点收不收——只有 `GET /platform/entitlements` 与 `POST /usage/consume`（token 形态）是 `attribute-declared`（自报产品 = 归属产品、自报 workspace 照用），其余 403 `s2s_delegated_path_not_allowed`；登记在 `scripts/guardrails/s2s-legacy-scope.snapshot.json` 的 `delegatedAttributing`，只许减少。
 
 口令比较用 `@vxture/core-auth` 的 `sharedSecretMatches`（与 auth-bff 的 `InternalAuthGuard` 同一个实现：fail-closed、字节长度、`timingSafeEqual`；guard 类仍分开）。
 

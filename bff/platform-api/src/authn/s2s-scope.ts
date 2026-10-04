@@ -57,9 +57,10 @@ export type LegacyScopePolicy = "trust-declared" | "deny";
  * 那个产品；票里**没有** workspace。它存在的理由只有一个——atlas 替调用方产品上报推理用量
  * （ADR-013 D1）并按调用方产品读 C2，而「产品只能报自己」对它永远不成立。
  *
- *   · `"attribute-declared"` —— 请求体自报的产品码就是**归属产品**，工作区取自报值。归属产品
- *     仍须在目录里能解析——那一道由调用点自己的 `resolveProductId` 把关（L0/L1 不在目录 ⇒
- *     400 `unknown_product` 不变），本函数不查库。选它的调用点在
+ *   · `"attribute-declared"` —— 请求体自报的产品码就是**归属产品**，工作区取自报值。本函数不查库；
+ *     归属产品在不在目录里由调用点自己定：C3 token 上报经 `resolveProductId` 把关（L0/L1 不在目录
+ *     ⇒ 400 `unknown_product`，`product="atlas"` 照样被拒），C2 读**不查目录**（与旧 header 路径
+ *     相同，未知码得到空权益视图而不是 400）。选它的调用点在
  *     `check-s2s-legacy-scope.mjs` 的快照里登记：那张表就是「一张被盗的代上报票能驱动什么」。
  *   · `"deny"` —— 代上报票不许走这条路，当场 403 `s2s_delegated_path_not_allowed`。
  *     上报者只做 C2 读与 C3 token 上报；其余能力（gauge / 共享可见集 / 开通回执）没有

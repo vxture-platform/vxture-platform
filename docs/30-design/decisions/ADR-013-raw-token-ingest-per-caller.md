@@ -53,19 +53,24 @@ token→credit 的换算表（文档只写了基线「1 credit ≈ 2K tokens」�
 - **代上报（E3a 的前置件，平台这一半已落地 2026-10-04 PR C）**：Atlas→平台今天仍走共享口令（legacy），平台
   **验不了**请求体自报的调用方产品码（`trust-declared`，已登记的缺口 E2/E3）。Atlas 换成 Bearer 那天，它自己的
   令牌身份是 atlas 而用量归调用方，`scopeToS2sCaller` 的「只能上报自己产品」会把它拦下——所以要先有一条
-  「代上报」的授权形态，决策 4 把它提前成 E3a 的前置件：不先落地，产品面一停收旧 header，经 atlas 的全部推理
-  用量上报 401、C2 降级 fail-open，两边都不报错。**已落地的形状（L3 分层设计 §4.3 形态 A，命名按 E3a 设计 §3.1）**：
+  「代上报」的授权形态；owner 2026-10-04 把 E3a（产品面停收旧 header）提前到分层线之后，所以它成了 E3a 的
+  前置件：不先落地，产品面一停收旧 header，经 atlas 的全部推理用量上报 401、C2 降级 fail-open，两边都不报错。**已落地的形状（L3 分层设计 §4.3 形态 A，命名按 E3a 设计 §3.1）**：
   auth-bff `PLATFORM_LEVEL_S2S_CALLERS` 的 atlas 条目持 `delegated-reporter` 授权，`POST /oidc/token`
   （token-exchange，`audience=vxture`，**不带** `workspace_id`）铸 `aud=vxture · act.sub="atlas" · mode=service ·
 delegated=true`、无 workspace、TTL 300s，审计行 `after.delegated=true`；console 等仍铸不出 `aud=vxture`。
   platform-api `PlatformAuthGuard` 把 `delegated` 原样搬进 `s2sCaller`，`scopeToS2sCaller` 多一个必填档位
-  `delegated`：C2 读与 C3 **token 形态**上报 `attribute-declared`（自报产品 = 归属产品，目录解析不变，自报
-  workspace 照用）；gauge / 共享可见集 / 开通回执 / amount 形态 `deny`（403 `s2s_delegated_path_not_allowed`）——
-  `check-s2s-legacy-scope.mjs` 的快照把这两格登记成 `delegatedAttributing: 2`，只许减少。C2 信号多一个
-  `reporter`（opera 显示「由 atlas 代报」，免得把代报读成产品自己换票了）。**未落地**：atlas 仓的客户端换票
-  （`platform-entitlement.client.ts` 改 Bearer，另一条线）；在那之前运行时一个字不变。顺序：分层 PR A → PR C
-  → atlas 换票 → E3a 关 header（判据 = E6 计数里 `entitlements|*` 与 `usage.consume|*` 全部产品码为 0，
-  **atlas 换票前这两个数按自报产品码归因、发送方其实是 atlas**）。
+  `delegated`：C2 读与 C3 **token 形态**上报 `attribute-declared`（自报产品 = 归属产品，自报 workspace 照用；
+  **C3 的归属产品须在目录里**，否则 400 `unknown_product`——`product="atlas"` 照样被拒；**C2 读不查目录**，
+  与旧 header 路径相同，未知码得到的是空权益视图而不是 400）；gauge / 共享可见集 / 开通回执 / amount 形态
+  `deny`（403 `s2s_delegated_path_not_allowed`）——`check-s2s-legacy-scope.mjs` 的快照把这两格登记成
+  `delegatedAttributing: 2`，只许减少。C2 信号多一个 `reporter`，opera 上线检查把它挂在 C2 那一条上、抽屉经
+  i18n 键 `integrationSignals.delegatedReporter` 说「最近一次权益拉取由 atlas 代为发起，不是这个产品自己换票调的」
+  （免得把代报读成产品自己换票了）。**未落地**：atlas 仓的客户端换票（`platform-entitlement.client.ts` 改 Bearer，
+  另一条线）；在那之前运行时一个字不变。顺序：分层 PR A → PR C → atlas 换票 → E3a 关 header（判据 = E6 计数里
+  `entitlements|*` 与 `usage.consume|*` 全部产品码为 0，**atlas 换票前这两个数按自报产品码归因、发送方其实是
+  atlas**）。**atlas 换票的前置条件是带 PR C 的平台 tag 真正在跑，不只是合并**：旧 platform-api 对无 workspace 的
+  票回 403 `s2s_scope_missing_workspace`，而 atlas 把非 2xx 一律当 unreachable——C2 fail-open、C3 不计费、两边都
+  不报错，正是本件要防的那种沉默；atlas 侧应把 `s2s_*` 的 403 当配置错误告警而不是 unreachable（atlas 仓另行）。
 - 文档改正（#547 点名的三处）：product_220 §4.2、admin/80-plan-bundled-components.md、product_100_matrix §5，
   统一成「Atlas 上报原始 token（四维，计入调用方产品）；换算与 `ai.credit` 扣减在平台」。
 

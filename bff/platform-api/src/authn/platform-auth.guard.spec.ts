@@ -264,6 +264,22 @@ describe("PlatformAuthGuard — S2S Bearer path (T2, JWKS-verified)", () => {
     );
   });
 
+  it("a delegated claim on a wrong-audience token buys nothing: delegated is honored only under aud=vxture", async () => {
+    // The claim is copied after the audience check, never instead of it — a
+    // reporter-shaped ticket minted for some other audience must not become
+    // a delegated s2sCaller here.
+    const guard = makeGuard({ authInternalToken: SHARED_SECRET });
+    const token = signer.sign(
+      { act: { sub: "atlas" }, mode: "service", delegated: true },
+      { audience: "atlas", expiresInSec: 300 },
+    );
+    const req = fakeRequest({ authorization: `Bearer ${token}` });
+    await expect(guard.canActivate(ctx(req))).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(req.s2sCaller).toBeUndefined();
+  });
+
   it("rejects a token with no act.sub claim", async () => {
     const guard = makeGuard({ authInternalToken: SHARED_SECRET });
     const token = signer.sign(

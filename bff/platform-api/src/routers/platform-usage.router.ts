@@ -123,7 +123,9 @@ export class PlatformUsageRouter {
     //     上报原始 token（ADR-013 D1），`product` 是归属产品，工作区取自报值。
     //   · amount 形态（含 reserve）→ **deny**。上报者不替任何产品报业务指标，更不替它预留；
     //     没有在产调用方的能力直接关掉。
-    const { workspaceId } = scopeToS2sCaller(
+    // `reporter`：代上报时是上报者的 act.sub（"atlas"），其余 null。C3 事实行今天不记它
+    // （`reported_by` 列是 DDL，留作 follow-up），所以只能跟着运营告警日志走——别让它静默消失。
+    const { workspaceId, reporter } = scopeToS2sCaller(
       s2sCaller,
       {
         workspaceId: parsed.workspaceId,
@@ -202,7 +204,7 @@ export class PlatformUsageRouter {
           });
         } catch (err) {
           this.logger.warn(
-            `配额耗尽的运营通告没写成（${parsed.productCode} / ai.credit / tokens）— ${String(err)}`,
+            `配额耗尽的运营通告没写成（${parsed.productCode} / ai.credit / tokens${reporter ? ` / 代报者 ${reporter}` : ""}）— ${String(err)}`,
           );
         }
       }

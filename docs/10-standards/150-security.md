@@ -151,6 +151,11 @@ if (
   原样采用自报的 `workspace_id`，而那个值下一跳就进 SQL 的归属谓词。
   五个调用点的档位登记在 `scripts/guardrails/s2s-legacy-scope.snapshot.json`，
   `trustDeclared` 这个数只该减少。
+- **同一函数 2026-10-04 起还有第二条信请求体的路（决策 3 PR C）**：代上报票（`delegated:true`，auth-bff 只为
+  L1 上报者 atlas 铸，`aud=vxture · act.sub="atlas"`、无 workspace）在 `attribute-declared` 的两格——C2 读、C3
+  token 上报——按自报产品归属、自报 `workspace_id` 照用；与旧口令那条路的差别只是**发送方身份可证**。快照里的
+  `delegatedAttributing` 同样只该减少；一张被盗的代上报票的半径 = 这两格 × 300s，可按 `appoidc.oidc_clients`
+  的那一行停用（共享口令做不到）。
 - **内部面的例外（2026-10-04 PR C）**：auth-bff `/internal/operator/accounts/*`、`/internal/account/users/*`
   这 11 条路由自报的 `actorOperatorId` 现在有东西校验了——类级 `ActorBindingGuard` 要求
   `x-vxture-actor-token` 带该运营者自己的会话 access token（验签、`aud ∈ {admin, arche}`、sub 相符、

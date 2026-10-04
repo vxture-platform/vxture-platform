@@ -88,7 +88,7 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
 
 > **同端点的 operator-OBO 模式(2026-07-28 登记,不属本协议)**:token 端点另承载管理面的操作者换票(subject=workforce 操作者 access token,铸 `mode="operator"`/`scope="mgmt:{aud}"`),治理归 `product_250_management-plane-contract.md` M-1——**不是 S2S 产品契约的一部分**,供给面守卫按 `scope` 前缀即可结构性拒收管理票。
 >
-> **同端点的代上报模式(2026-10-04 登记,决策 3 PR C;只对 L1 上报者,产品不可用)**:§3.1 的 `act.sub` = 调用方产品、`workspace_id` = 调用上下文,对 atlas 这种**替调用方产品**上报推理用量的 L1 上报者永远不成立(ADR-013 D1)。所以 token 端点为 auth-bff `PLATFORM_LEVEL_S2S_CALLERS` 里持 `delegated-reporter` 授权的客户端(今天只有 atlas)另铸一种 `aud=vxture` 的票:`act.sub` = 上报者 client_id、`mode=service`、**多一枚 `delegated: true`**、**没有 `workspace_id`**;请求 `audience=vxture` 且不带 `workspace_id`。被调方只有平台产品面自己(`PlatformAuthGuard`):`delegated` 为真时请求体自报的 `product` 是归属产品(仍须在目录里)、自报的 `workspace_id` 照用——且只在 C2 读与 C3 token 上报两格收,其余 403。产品 ↔ 产品之间**没有**这种票:§3.3 第 8 条对产品被调方照旧成立,一张 `delegated` 票到任何产品的 `aud` 都不匹配。
+> **同端点的代上报模式(2026-10-04 登记,决策 3 PR C;只对 L1 上报者,产品不可用)**:§3.1 的 `act.sub` = 调用方产品、`workspace_id` = 调用上下文,对 atlas 这种**替调用方产品**上报推理用量的 L1 上报者永远不成立(ADR-013 D1)。所以 token 端点为 auth-bff `PLATFORM_LEVEL_S2S_CALLERS` 里持 `delegated-reporter` 授权的客户端(今天只有 atlas)另铸一种 `aud=vxture` 的票:`act.sub` = 上报者 client_id、`mode=service`、**多一枚 `delegated: true`**、**没有 `workspace_id`**;请求 `audience=vxture` 且不带 `workspace_id`。被调方只有平台产品面自己(`PlatformAuthGuard`):`delegated` 为真时请求体自报的 `product` 是归属产品(C3 token 上报仍须在目录里,否则 400 `unknown_product`;C2 读与旧 header 路径一样不查目录)、自报的 `workspace_id` 照用——且只在 C2 读与 C3 token 上报两格收,其余 403。产品 ↔ 产品之间**没有**这种票:§3.3 第 8 条对产品被调方照旧成立,一张 `delegated` 票到任何产品的 `aud` 都不匹配。
 
 ## 4. 工具 schema 约定(MCP 风格)
 

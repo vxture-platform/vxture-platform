@@ -682,9 +682,11 @@ describe("TokenExchangeService.exchange — delegated-reporter mode (atlas→vxt
   });
 
   it("console → aud=vxture: still invalid_target (workspace-service grant never mints a delegated ticket)", async () => {
-    m.pool.query
-      .mockResolvedValueOnce({ rows: [] }) // product lookup: no row named vxture
-      .mockResolvedValueOnce({ rows: [] }); // not a platform-level target either
+    // One SQL only: the product lookup finds no row named "vxture", and
+    // "vxture" is not a platform-level target, so resolveTargetProductCode
+    // returns the L0 sentinel without a second query — which the
+    // workspace-service grant then refuses as invalid_target.
+    m.pool.query.mockResolvedValueOnce({ rows: [] });
     await expect(
       m.service.exchange(CALLER_PLATFORM, {
         audience: PLATFORM_S2S_AUDIENCE,
@@ -693,6 +695,7 @@ describe("TokenExchangeService.exchange — delegated-reporter mode (atlas→vxt
         orgId: undefined,
       }),
     ).rejects.toMatchObject({ message: "invalid_target" });
+    expect(m.pool.query).toHaveBeenCalledTimes(1);
     expect(m.keys.sign).not.toHaveBeenCalled();
   });
 
@@ -722,10 +725,13 @@ describe("TokenExchangeService.exchange — delegated-reporter mode (atlas→vxt
     expect(claims).not.toHaveProperty("delegated");
   });
 
-  it("atlas presenting a subject_token (OBO shape) does not reach the reporter branch: invalid_request", async () => {
-    // A verified non-operator subject token on a platform-level client is the
-    // pre-existing T1 invalid_client/invalid_request path — the reporter grant
-    // is service-shaped only, so OBO must not become a second way in.
+  it("atlas presenting a subject_token (OBO shape) does not reach the reporter branch: invalid_client", async () => {
+    // A verified non-operator subject token on a platform-level client falls
+    // through to the pre-existing T1 "no productCode" refusal (invalid_client)
+    // — the reporter grant is service-shaped only, so OBO must not become a
+    // second way in. Pin the exact code: a bare toThrow(BadRequestException)
+    // would also pass if the reporter branch leaked its own invalid_request /
+    // invalid_target.
     m.keys.verify.mockReturnValue({
       sub: "usr_1",
       aud: "atlas",
@@ -736,7 +742,7 @@ describe("TokenExchangeService.exchange — delegated-reporter mode (atlas→vxt
         ...mintRequest,
         subjectToken: "user.jwt",
       }),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toMatchObject({ message: "invalid_client" });
     expect(m.keys.sign).not.toHaveBeenCalled();
   });
 });

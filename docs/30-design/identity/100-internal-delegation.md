@@ -231,9 +231,9 @@ customer 代客（reset-password[A]/disable/enable/unlock + AccountsPage），�
 | ---------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | 谁替谁     | admin / arche-bff 替**在场的运营者**          | atlas（L1 上报者）替**调用方产品**（karda / tenderforge…）                                          |
 | 凭据       | `IDP_INTERNAL_TOKEN` + `x-vxture-actor-token` | 换票得到的 S2S 票：`aud=vxture · act.sub="atlas" · delegated:true`，**无 workspace**                |
-| 绑定在哪   | guard 核票（`ActorBindingGuard`，§3）         | 请求体：自报 `product` = 归属产品（须在目录里）、自报 `workspace_id` 照用（`scopeToS2sCaller`）     |
+| 绑定在哪   | guard 核票（`ActorBindingGuard`，§3）         | 请求体：自报 `product` = 归属产品（C3 须在目录里）、自报 `workspace_id` 照用（`scopeToS2sCaller`）  |
 | 谁能铸     | 不铸——口令是静态的                            | 只有 auth-bff `PLATFORM_LEVEL_S2S_CALLERS` 里持 `delegated-reporter` 授权的客户端（今天只有 atlas） |
 | 能驱动什么 | 11 条 `/internal/*` 账号路由                  | 只有 C2 读与 C3 token 上报两格（快照 `delegatedAttributing: 2`），其余产品面端点 403                |
-| 面         | 内部面（`/internal/*`，容器网）               | 产品面（`/platform/*` `/usage/*`，tailnet :8080）                                                   |
+| 面         | 内部面（`/internal/*`，容器网）               | 产品面（`/platform/*` `/usage/*` `/provisioning/*`，tailnet :8080）                                 |
 
 两者唯一的共同点是「请求里带着一个不是发送方自己的主体」。本文的解法是**把主体绑到票上**（不信自报）；代上报的解法是**承认自报、但只对一个身份可证的上报者承认、且只在两格承认**——它与旧共享口令那条 `trust-declared` 路同形，差别只在「发送方是谁」这一格有了答案。E3a 关掉产品面旧 header 以它落地为前提（`ADR-013` 后果段）。
