@@ -142,9 +142,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -H "x-vxture-internal-auth: $TOK" \
 
 ## 6. 功能验证（functional check）
 
-### 步 6 · 在 admin（`y.vxture.com`）做一次 step-up + 一次运营者「停用 / 启用」（owner）
+### 步 6 · 在 admin（`y.vxture.com`）做一次 step-up + 一次**客户账号**「停用 / 启用」（owner）
 
-两个动作成功即三个发送方里至少 admin 的新值在送、auth-bff 的新值在收。再看日志——**基线取在步 5 之后**，不是 deploy 完成时刻：
+运营者的停用 / 启用不在 admin——admin-bff 的路由只委托客户账号的停用 / 启用 / 强制下线三动作（`accounts.router.ts`），运营者六动作在 arche 的 `platform-admins.router.ts`；要顺手验 arche 这个发送方，就在 arche 再做一次运营者「停用 / 启用」。两个动作成功即三个发送方里至少 admin 的新值在送、auth-bff 的新值在收。再看日志——**基线取在步 5 之后**，不是 deploy 完成时刻：
 
 ```bash
 # 步 4（41-verify 探针 1/3/7）与步 5（半径探针）自己故意送旧值 / 无头，各留下一条 warn。
@@ -154,9 +154,14 @@ docker logs vx-platform-auth-bff --since <步 5 完成时刻> 2>&1 | grep -c inv
 # 只有 deploy 完成时刻可用时：按 remote 分组，期望恰好三个 remote 各 1 条——
 #   worker-01 宿主（探针 1/3，同 IP 限速成一条）、vx-platform-admin-bff 容器 IP（探针 7）、worker-02 tailnet IP（步 5）。
 docker logs vx-platform-auth-bff --since <deploy 完成时刻> 2>&1 | grep -o 'invalid_internal_auth remote=[^ ]*' | sort | uniq -c
+
+# PR C（主体绑定，在 PR A 之后的 tag 里）之后再看一行：绑定门的拒绝。基线之后期望 0。
+# PR C 自己的部署窗口里（§8 末条）会有 actor_token_missing remote=<admin-bff / arche-bff 容器 IP>——
+# 那是旧发送方，不是攻击；基线取在步 5 之后就不会数到它。
+docker logs vx-platform-auth-bff --since <步 5 完成时刻> 2>&1 | grep -c 'actor_token_'   # 期望 0
 ```
 
-这条 `warn`（`invalid_internal_auth remote=<ip> route=<router.handler>`，每 IP 每分钟至多一条）随 PR A 出；此前 401 路径一行日志都没有，所以这一步的可观测物就是它。步 4 / 步 5 必然留下上面那三条——**数到 3 不是泄漏**；基线之后再出现一条才是「谁还拿着旧值在敲门」，按 `remote` 去找是哪台机器。
+这条 `warn`（`invalid_internal_auth remote=<ip> route=<router.handler>`，每 IP 每分钟至多一条）随 PR A 出；此前 401 路径一行日志都没有，所以这一步的可观测物就是它。步 4 / 步 5 必然留下上面那三条——**数到 3 不是泄漏**；基线之后再出现一条才是「谁还拿着旧值在敲门」，按 `remote` 去找是哪台机器。绑定门的三条 warn（`actor_token_missing` / `actor_token_invalid` / `actor_token_mismatch`，格式 `<码> route=<Router.handler> remote=<ip>`，同一套每 IP 每分钟一条的限速）随 PR C 出，与上面那条**分开数**：它们不是「谁拿着旧值」，是「谁没带 / 带错会话票」——部署窗口里的旧发送方（§8 末条），或一个只持口令、拿不出运营者会话票的调用方。
 
 ---
 
@@ -182,6 +187,7 @@ docker logs vx-platform-auth-bff --since <deploy 完成时刻> 2>&1 | grep -o 'i
 - 顺序钉死没合进 PR A → §3 证明 1 当场看出来，窗口回到最坏整次部署。
 - 只改了 CI 副本审计、没改主机副本 → 主机把新文件当未知文件静默放过（identity 文件今天就是这样）；本 PR 两份逐字一样，diff 两份是 PR 里的证明。
 - 忘了 `12-generate` 配对 → 下次新主机 13-prepare 补不出这个文件；`30-deploy` 的 `check_file` 兜底，且 `GENERATE_ENV_REQUIRED_GLOBAL_TOKENS` 加了就红。
+- **PR C 的镜像出去那次**（主体绑定，不换钥匙；PR A 已在 v0.26.307 里，PR C 在之后的 tag）：auth-bff 先于 admin-bff / arche-bff 重建的那几分钟里，**账号动作** 503 `operator_admin_unavailable`——旧发送方不带 `x-vxture-actor-token`，新 auth-bff 回 401 `actor_token_missing`，发送方把 400/403/404/409/422 之外的状态一律压成 503。auth-bff 日志是 `actor_token_missing route=<Router.handler> remote=<发送方容器 IP>`（**不是** `invalid_internal_auth`，§6 第一条 grep 看不见它，所以 §6 多了一条）。两个发送方换上新镜像即自愈；反向顺序（发方先）无影响——旧 auth-bff 不认识多出来的头、照常放行；step-up（`operator-stepup` 不挂绑定门）、登录、客户面、产品面不受影响。**这一条没有拦它的地方**：它是接受下来的窗口，与钥匙窗口同一个「收方先」序（换钥匙真需要那个序，`lib/service-order.sh` 不改），写在这里是让看日志的人认得它、不去怀疑发送方；同类「收方新增必填头」的改动下次可把发方那一半先一个 tag 出去，就是零窗口。
 
 ---
 
@@ -190,6 +196,6 @@ docker logs vx-platform-auth-bff --since <deploy 完成时刻> 2>&1 | grep -o 'i
 - **D7 / PR D**：tailnet:8081 直通不变——拆钥匙只换了开门的值，门还在路边。把 8081 像 8080 一样前置 nginx、只放 `/oidc/*` `/.well-known/*`、`/internal/*` 404，需要 owner 确认 worker-02 上没有别的进程打 8081 的其他路径。
 - **PR A2**：修 `33-recreate-service.sh`（E3a 轮换值、未来改 secrets 都要它）。
 - ~~**PR B**：删 `@vxture/core-auth` 里零消费方的 `resolveInternalAuthToken` / `assertInternalAuth` / `InternalAuthGuard`，并把 `check-internal-auth-key-usage.mjs` 里 `packages/core/auth` 那条 EXPECTED 一起删掉（留着会红）。~~ **已做（2026-10-04，PR B）**：三件已删，两个活 guard 改调 core-auth 的 `sharedSecretMatches`，EXPECTED 表项已删（自检 (vi) 改用合成期望表盯同一条性质）；同 PR 带 E6 旧凭据计数（platform-api 写、opera 读，TD-038 进展）。它改了 `packages/core/`，随下一个 tag 整栈 14 镜像重建——与本页切换本身无关，但那次 deploy 的时长按 §3 算。
-- **PR C**：主体绑定（`declaredUnbound` 8 → 0）。
+- ~~**PR C**：主体绑定（`declaredUnbound` 8 → 0）。~~ **已做（2026-10-04，PR C landed: actor bound）**：auth-bff 两个账号 router 挂 `ActorBindingGuard`，admin / arche-bff 随委托带 `x-vxture-actor-token`（运营者自己的会话票），快照 `declaredUnbound` 8 → 0。**无 env 改动，但它自己有一个混版窗口**（与钥匙窗口不是一回事）：PR A 已在 v0.26.307 里，PR C 在之后的 tag——那次 deploy 仍按 §0 钉死的「收方先」序走，从 auth-bff `up -d` 到 admin-bff、arche-bff 各自 `up -d` 之间，**账号动作** 503 `operator_admin_unavailable`（admin 的停用 / 启用 / 强制下线，arche 的建号 / 停用 / 启用 / 强制下线 / 重置 MFA / 重置密码；auth-bff 日志 `actor_token_missing`，见 §8 末条），登录 / step-up / 客户面 / 产品面不受影响，两个发送方换上新镜像即自愈，**中途不要停**。反向顺序（发方先）本来是零窗口——旧 auth-bff 不认识多出来的头、照常放行——但换钥匙真需要收方先，`service-order.sh` 不改。
 - CI 副本审计 `scripts/guardrails/audit-env.mjs` 没有 opera / arche / platform-api 三条服务 env 规则（也没有主机副本的 `OIDC_FUTURE_APP_HASH_KEYS` 与 `forbidsClientSecretHashes`），所以 arche 那条只能补在主机副本——它不审运行时文件，这里拦的本来就是主机副本。两份的其余差异是旧债，不在本线合并。
 - 本地开发：根 `.env.local` 要补 `IDP_INTERNAL_TOKEN=`（与 `AUTH_INTERNAL_TOKEN` 不同值），否则本地 step-up / 运营动作 503。

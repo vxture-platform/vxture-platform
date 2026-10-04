@@ -1,6 +1,7 @@
 # Identity Platform — admin↔IdP 内部委托设计（B9 凭据类写操作）
 
 > 状态：v1 草案 · 2026-07-04 · 待评审（doc-driven，先固化后实施）
+> 2026-10-04（E1 PR C）：§3 的 actor 从「自报」改为**绑定**——委托请求还要带运营者自己的会话 access token（`x-vxture-actor-token`），auth-bff 的 `ActorBindingGuard` 核对（见 §3、§5 第 7 条、§9 验收）。
 > 范围：admin 运营后台对 operator/customer 账号的**凭据类写操作**如何经 IdP（auth-bff）委托，而非 admin-bff 直写库。
 > 依据调研：本仓现状（见 §1 事实）；关联 [`identity-platform-operator.md`](./090-operator.md) §2.3 step-up、[`identity-platform-access-topology.md`](./110-access-topology.md)、[`data_admin_200_schema.md`](../data_admin_200_schema.md)、[`data_identity_200_schema.md`](../data_identity_200_schema.md)。
 > 上游背景：admin 应用补齐 [`../product/platform/admin/admin-app-completion-plan.md`](../../20-specs/000-platform/admin/10-admin-app-completion-plan.md) B9。
@@ -48,14 +49,18 @@ admin 侧「平台用户(operator)/账号(customer) 管理」的动作按钮当�
 ```
 admin 前端 ──(cookie 会话)──▶ admin-bff router（能力守卫 + step-up 守卫）
    admin-bff *Delegation Service*  ──POST ${AUTH_BFF_URL}/internal/{operator,customer}/…
-        header x-vxture-internal-auth: AUTH_INTERNAL_TOKEN（容器内网，绝不公开 issuer）
+        header x-vxture-internal-auth: IDP_INTERNAL_TOKEN（容器内网，绝不公开 issuer）
+        header x-vxture-actor-token:   运营者自己的会话 access token（RP 会话解析出的那张，2026-10-04 PR C）
    ▼
-auth-bff /internal/… router（@UseGuards(InternalAuthGuard)）
+auth-bff /internal/… router（@UseGuards(InternalAuthGuard, ActorBindingGuard)）
+   → ActorBindingGuard：验签、aud ∈ {admin, arche}、sub == body.actorOperatorId、中央会话仍在；任一不符 401
    → 归属 realm 的 service（新增方法）写 credential/status/session
    → 返回结果（如一次性重置令牌，见 §6），绝不回明文密码给浏览器直显除非 §6 决策允许
 ```
 
 - actor（operatorId）、reason、目标 id **由 admin-bff 从 RP 会话+请求体传入**，浏览器不得直接指定 actor。
+- **actor 是绑定的，不是自报的（2026-10-04 PR C）**：发送方（admin-bff / arche-bff）把 RP 会话里那张运营者自己的 access token 放进 `x-vxture-actor-token`，auth-bff 的 `ActorBindingGuard`（`bff/auth-bff/src/authn/actor-binding.guard.ts`）六条判据全过才放：验签（iss/exp）、`aud ∈ {admin, arche}`（opera 与产品的票不收）、`userType === "operator"` 且 `stripSubPrefix(sub) === body.actorOperatorId`、不是 step-up / OBO 票、是 access token 不是 id_token（`sid` + `roles`）、`sid` 对应的中央会话仍在且属于这个 sub（停用 / 强制下线后旧票立刻失效）。401 `actor_token_missing` / `actor_token_invalid` / `actor_token_mismatch`，按组不按 claim。于是一个只持 `IDP_INTERNAL_TOKEN` 的调用方再也不能凭空点名一个 super admin；剩下的半径是「冒充此刻在 admin / arche 上有活会话的运营者」，而 IdP 分不出是谁在调——那是 E2/E3。
+- 发送方的调用点不再传裸 `actorOperatorId`，传 `ActingOperator { operatorId, accessToken }`（`requireActingOperator(req)`）：请求上下文里没有票就 401、一次委托都不发——缺票是调用点的错，不该走到 IdP 再变成 503。
 - fail-closed：token/URL 未配置 → 503/401，不降级为直写。
 - 新增 admin-bff 服务仿 `OperatorStepUpService`（同 idpBaseUrl/token/错误语义）：`OperatorAdminService`（operator 面）、`CustomerAdminService`（customer 面）。
 
@@ -92,6 +97,7 @@ auth-bff /internal/… router（@UseGuards(InternalAuthGuard)）
 4. **防锁死**：不得停用/删除最后一个在职超管；不得停用自己；operator 解绑 MFA 需保留至少一个可登录第二因子或走恢复流（对齐 operator 文档 anti-lockout）。
 5. **Realm 校验**：`/internal/operator/*` 校验目标 id ∈ `admin.operator_account`；`/internal/customer/*` 校验 ∈ `account.users`；越界 404，不泄漏另一 realm 存在性。
 6. **能力守卫**：operator 面走治理平台 arche 的 `operator:*` 码；customer 面读 `user:profile.read`、写 `user:account.manage`（2026-10-04 起 admin 的账号读门判前者；原文的 `platform.tenant.manage` / 细分 `platform.account.manage` 已退役，见 D4）。
+7. **主体绑定**（2026-10-04 PR C）：`/internal/operator/accounts/*` 与 `/internal/account/users/*` 共 11 条路由，`actorOperatorId` 必须与 `x-vxture-actor-token` 里那张会话票的 sub 相符、票的中央会话必须还在（§3）。`internal-route-policy.ts` 的声明从 `declared-unbound` / `declared-ignored` 改为 `token-bound`；`scripts/guardrails/check-internal-route-policy.mjs` 同时核「声明 token-bound 的 controller 真挂着 `ActorBindingGuard`、且它排在 `InternalAuthGuard` 之后（反写或分写成两个 `@UseGuards` 即红——否则没口令的调用方会先撞到绑定门）」，快照 `declaredUnbound` 8 → 0、`actorBoundControllers` 两个。不绑的两条：`operator-stepup/totp`（TOTP 本身就是证明）、`operator/sessions` GET（无主体）。
 
 ## 6. 凭据下发方式（决策项）
 
@@ -120,7 +126,7 @@ auth-bff /internal/… router（@UseGuards(InternalAuthGuard)）
 - **P1 operator 面**（admin-bff 主管 operator，最刚需）：新建/重置密码/停用启用/解锁/MFA重置/强制下线 + 前端。含新建 operator 密码 repository 方法（当前完全缺）。
 - **P2 customer 面**（代客，合规更敏感）：reset-password(A)/disable/enable/unlock + 前端。可能需合规评审。
 - **并行（无 IdP 依赖）**：admin-roles/permissions CRUD + operator 角色/元数据编辑（直写库 + PREPARE）。
-- **验收**：内部端点经 InternalAuthGuard（无 token 401）；step-up 未满足 403；停用/重置后目标会话立即失效；审计落 `support.audit_logs`；realm 越界 404；防锁死断言生效。部署前置 env：`IDP_INTERNAL_TOKEN`（2026-10-04 起，`secrets/platform-idp-internal.env`；此前为 `AUTH_INTERNAL_TOKEN`）、operator 密码 hasher/临时凭据配置。
+- **验收**：内部端点经 InternalAuthGuard（无 token 401）；没有 `x-vxture-actor-token` 401 `actor_token_missing`、票不是 actor 的 / 会话已删 401 `actor_token_mismatch`（PR C，`account-admin-internal.actor-binding.spec.ts` / `operator-admin-internal.actor-binding.spec.ts` 各起真 HTTP 走一遍两道门的顺序——没口令时口令门先判、Redis 零次；静态那半由 `check-internal-route-policy.mjs` 第 ⑧ 条钉住）；step-up 未满足 403；停用/重置后目标会话立即失效；审计落 `support.audit_logs`；realm 越界 404；防锁死断言生效。部署前置 env：`IDP_INTERNAL_TOKEN`（2026-10-04 起，`secrets/platform-idp-internal.env`；此前为 `AUTH_INTERNAL_TOKEN`）、operator 密码 hasher/临时凭据配置。
 
 ## 10. 决策（owner 已拍板 2026-07-04）
 

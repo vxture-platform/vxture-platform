@@ -19,6 +19,7 @@ import { ARCHE_BFF_RO_POOL, ARCHE_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 import type { PlatformAdminRecord } from "../types/governance.types";
 import { RequireStepUp } from "../auth/step-up.decorator";
+import type { ActingOperator } from "../auth/acting-operator";
 import { OperatorAdminService } from "../auth/operator-admin.service";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { pgErrorCode, withTransaction, type Queryable } from "../db/tx";
@@ -100,10 +101,11 @@ export class PlatformAdminsRouter {
     @Body() body: CreateAdminBody,
   ): Promise<{ record: PlatformAdminRecord; deliveredTo: string }> {
     assertCanManagePlatformAdmins(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
+    const actorId = actor.operatorId;
     const input = normalizeCreateAdminInput(body);
 
-    const result = await this.operatorAdmin.createOperator(actorId, input);
+    const result = await this.operatorAdmin.createOperator(actor, input);
     await insertOperatorAuditLog(this.rwPool, req, {
       action: "operator.account.create",
       resourceType: "operator_account",
@@ -224,6 +226,10 @@ export class PlatformAdminsRouter {
   // ── B9-P1b-α credential/session ops — delegated to the IdP (auth-bff), which owns
   //   operator credentials + sessions. admin-bff never writes them directly. All
   //   step-up gated + audited; the IdP enforces realm isolation + anti-lockout.
+  //   Since 2026-10-04 (PR C) the delegate carries the acting operator's own session
+  //   access token (requireActingOperator → x-vxture-actor-token): the IdP's
+  //   ActorBindingGuard binds body.actorOperatorId to that token, so no token → 401 here,
+  //   before anything is delegated.
 
   // POST /api/platform-admins/:id/disable — IdP disables the operator + revokes all
   //   sessions. body: { reason?: string }. response: refreshed PlatformAdminRecord.
@@ -235,10 +241,11 @@ export class PlatformAdminsRouter {
     @Body() body: { reason?: unknown },
   ): Promise<PlatformAdminRecord> {
     assertCanManagePlatformAdmins(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
+    const actorId = actor.operatorId;
     const accountId = requireUuid(id, "Invalid platform admin id");
     const reason = typeof body?.reason === "string" ? body.reason : undefined;
-    await this.operatorAdmin.disableOperator(accountId, actorId, reason);
+    await this.operatorAdmin.disableOperator(accountId, actor, reason);
     await insertOperatorAuditLog(this.rwPool, req, {
       action: "operator.account.disable",
       resourceType: "operator_account",
@@ -256,10 +263,11 @@ export class PlatformAdminsRouter {
     @Body() body: { reason?: unknown },
   ): Promise<PlatformAdminRecord> {
     assertCanManagePlatformAdmins(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
+    const actorId = actor.operatorId;
     const accountId = requireUuid(id, "Invalid platform admin id");
     const reason = typeof body?.reason === "string" ? body.reason : undefined;
-    await this.operatorAdmin.enableOperator(accountId, actorId, reason);
+    await this.operatorAdmin.enableOperator(accountId, actor, reason);
     await insertOperatorAuditLog(this.rwPool, req, {
       action: "operator.account.enable",
       resourceType: "operator_account",
@@ -278,12 +286,12 @@ export class PlatformAdminsRouter {
     @Body() body: { reason?: unknown },
   ): Promise<{ ok: true; revoked: number }> {
     assertCanManagePlatformAdmins(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
     const accountId = requireUuid(id, "Invalid platform admin id");
     const reason = typeof body?.reason === "string" ? body.reason : undefined;
     const result = await this.operatorAdmin.forceLogoutOperator(
       accountId,
-      actorId,
+      actor,
       reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
@@ -305,12 +313,12 @@ export class PlatformAdminsRouter {
     @Body() body: { reason?: unknown },
   ): Promise<{ ok: true; revoked: number }> {
     assertCanManagePlatformAdmins(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
     const accountId = requireUuid(id, "Invalid platform admin id");
     const reason = typeof body?.reason === "string" ? body.reason : undefined;
     const result = await this.operatorAdmin.resetOperatorMfa(
       accountId,
-      actorId,
+      actor,
       reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
@@ -333,12 +341,12 @@ export class PlatformAdminsRouter {
     @Body() body: { reason?: unknown },
   ): Promise<{ ok: true; deliveredTo: string; expiresIn: number }> {
     assertCanManagePlatformAdmins(req);
-    const actorId = requireOperatorId(req);
+    const actor = requireActingOperator(req);
     const accountId = requireUuid(id, "Invalid platform admin id");
     const reason = typeof body?.reason === "string" ? body.reason : undefined;
     const result = await this.operatorAdmin.resetOperatorPassword(
       accountId,
-      actorId,
+      actor,
       reason,
     );
     await insertOperatorAuditLog(this.rwPool, req, {
@@ -602,6 +610,21 @@ function requireOperatorId(req: Request & RequestContext): string {
     throw new UnauthorizedException("Invalid platform admin principal");
   }
   return id;
+}
+
+/**
+ * 代为操作的运营者 = id + 他自己的会话 access token（`OperatorAuthMiddleware` 挂的
+ * `operatorAccessToken`）。委托给 IdP 的写路径一律用这个取主体：auth-bff 的
+ * `ActorBindingGuard`（2026-10-04 PR C）要求两样一起到，缺票就是 401——在这里拦住，比让
+ * IdP 回 401、再被 delegate 映射成 503「IdP 不可用」清楚得多。
+ */
+function requireActingOperator(req: Request & RequestContext): ActingOperator {
+  const operatorId = requireOperatorId(req);
+  const accessToken = req.operatorAccessToken;
+  if (typeof accessToken !== "string" || !accessToken) {
+    throw new UnauthorizedException("Operator session token missing");
+  }
+  return { operatorId, accessToken };
 }
 
 function requireUuid(value: string | undefined, message: string): string {

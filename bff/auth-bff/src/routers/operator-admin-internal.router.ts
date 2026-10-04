@@ -8,8 +8,12 @@
  * behalf of an authenticated + step-up'd operator, delegates operator status/session
  * mutations here — the IdP owns operator credentials & sessions (realm=workforce).
  * NEVER exposed publicly (nginx must not route /internal/*). actorOperatorId is
- * supplied by the trusted caller (RP session), never a browser. Realm-isolated: every
- * target is resolved via admin.operator_account only, so a customer id yields 404.
+ * supplied by the trusted caller (RP session), never a browser — and since 2026-10-04
+ * (PR C) it is **bound**: the class-level `ActorBindingGuard` requires the operator's own
+ * session access token in `x-vxture-actor-token` (aud admin / arche, sub == actorOperatorId,
+ * central session still alive), so a caller holding only IDP_INTERNAL_TOKEN can no longer
+ * name an arbitrary operator. Realm-isolated: every target is resolved via
+ * admin.operator_account only, so a customer id yields 404.
  *
  * Design: docs/design/identity-platform-internal-delegation.md §4/§5/§11b.
  * Credential ops (reset-password / create / mfa-reset) are P1b-β (need a public
@@ -34,6 +38,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { VxConfigService } from "@vxture/core-config";
 import { PgOperatorRepository } from "@vxture/service-iam";
 import { MailService } from "@vxture/service-mail";
+import { ActorBindingGuard } from "../authn/actor-binding.guard";
 import { InternalAuthGuard } from "../authn/internal-auth.guard";
 import { InternalRoute } from "../authn/internal-route-policy";
 import { OidcService } from "../oidc/oidc.service";
@@ -61,7 +66,7 @@ function maskEmail(email: string): string {
 }
 
 @Controller("internal/operator/accounts")
-@UseGuards(InternalAuthGuard)
+@UseGuards(InternalAuthGuard, ActorBindingGuard)
 export class OperatorAdminInternalRouter {
   constructor(
     @Inject(PgOperatorRepository)
@@ -122,8 +127,8 @@ export class OperatorAdminInternalRouter {
    */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "admin-bff 代运营者建号。rank 门比的是请求体自报的 actorOperatorId，没有东西证明它——这一档就是共享口令的真实半径",
+    actor: "token-bound",
+    why: "arche / admin-bff 代运营者建号。rank 门比的是请求体点名的 actorOperatorId，ActorBindingGuard 以该运营者自己的会话票证明它（PR C 之前这一档是共享口令的真实半径）",
   })
   @Post()
   @HttpCode(HttpStatus.OK)
@@ -219,8 +224,8 @@ export class OperatorAdminInternalRouter {
    */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "停用另一个运营者。rank 门比自报主体",
+    actor: "token-bound",
+    why: "停用另一个运营者。rank 门比的主体由 ActorBindingGuard 绑到会话票",
   })
   @Post(":id/disable")
   @HttpCode(HttpStatus.OK)
@@ -256,8 +261,8 @@ export class OperatorAdminInternalRouter {
   /** Re-enable a disabled operator (status → active). Idempotent. Rank-gated. */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "停用的反向动作。rank 门比自报主体",
+    actor: "token-bound",
+    why: "停用的反向动作。rank 门比的主体由 ActorBindingGuard 绑到会话票",
   })
   @Post(":id/enable")
   @HttpCode(HttpStatus.OK)
@@ -279,8 +284,8 @@ export class OperatorAdminInternalRouter {
   /** Force-logout: end every central session and revoke the refresh tokens. Rank-gated. */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "强制目标运营者下线（中央会话 + 刷新令牌）。rank 门比自报主体",
+    actor: "token-bound",
+    why: "强制目标运营者下线（中央会话 + 刷新令牌）。rank 门比的主体由 ActorBindingGuard 绑到会话票",
   })
   @Post(":id/sessions/revoke")
   @HttpCode(HttpStatus.OK)
@@ -301,8 +306,8 @@ export class OperatorAdminInternalRouter {
    */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "清掉目标运营者的 MFA 注册。rank 门比自报主体",
+    actor: "token-bound",
+    why: "清掉目标运营者的 MFA 注册。rank 门比的主体由 ActorBindingGuard 绑到会话票",
   })
   @Post(":id/mfa/reset")
   @HttpCode(HttpStatus.OK)
@@ -330,8 +335,8 @@ export class OperatorAdminInternalRouter {
    */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "签发一次性重置令牌、外发到目标本人邮箱（发起方看不到链接）。rank 门比自报主体",
+    actor: "token-bound",
+    why: "签发一次性重置令牌、外发到目标本人邮箱（发起方看不到链接）。rank 门比的主体由 ActorBindingGuard 绑到会话票",
   })
   @Post(":id/reset-password")
   @HttpCode(HttpStatus.OK)
@@ -395,8 +400,8 @@ export class OperatorAdminInternalRouter {
    */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "改运营者本人邮箱第一步：向新地址发码。本人路径要求自报主体 == 目标 id，而「自报主体是谁」没有证明",
+    actor: "token-bound",
+    why: "改运营者本人邮箱第一步：向新地址发码。本人路径要求点名主体 == 目标 id，而点名主体由 ActorBindingGuard 绑到会话票",
   })
   @Post(":id/contact/email/start")
   @HttpCode(HttpStatus.OK)
@@ -431,8 +436,8 @@ export class OperatorAdminInternalRouter {
    */
   @InternalRoute({
     risk: "admin-action",
-    actor: "declared-unbound",
-    why: "改运营者本人邮箱第二步：核码落库。同上，要求自报主体 == 目标 id",
+    actor: "token-bound",
+    why: "改运营者本人邮箱第二步：核码落库。同上，点名主体 == 目标 id 且已绑到会话票",
   })
   @Post(":id/contact/email/verify")
   @HttpCode(HttpStatus.OK)

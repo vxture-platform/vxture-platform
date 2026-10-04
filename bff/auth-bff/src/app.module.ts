@@ -42,6 +42,7 @@ import { OperatorSessionsInternalRouter } from "./routers/operator-sessions-inte
 import { AccountAdminInternalRouter } from "./routers/account-admin-internal.router";
 import { OperatorPublicRouter } from "./routers/operator-public.router";
 import { InternalAuthGuard } from "./authn/internal-auth.guard";
+import { ActorBindingGuard } from "./authn/actor-binding.guard";
 import { AvatarController } from "./avatar/avatar.controller";
 import { AvatarUploadController } from "./avatar/avatar-upload.controller";
 import { RedisModule } from "./redis/redis.module";
@@ -95,6 +96,7 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     OperatorAnomalyService,
     OperatorSelfService,
     InternalAuthGuard,
+    ActorBindingGuard,
     TenantLoginGuard,
     AccessTokenGuard,
     /*

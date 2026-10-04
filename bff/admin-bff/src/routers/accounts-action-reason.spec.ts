@@ -15,10 +15,17 @@
  *      端点连 `@Body()` 都不收），而弹窗上写着「将写入审计日志」；
  *   5. 新加的这道门**没有挤到既有两道门前面**：无能力码仍是 403、id 不是 uuid 仍是
  *      「Invalid account id」。两道判据长在同一条路上时，后面那条会被前面那条吃掉，
- *      而吃掉的方向决定客户看到的是哪种错。
+ *      而吃掉的方向决定客户看到的是哪种错；
+ *   6.（2026-10-04 PR C）委派收到的主体是 **{ operatorId, accessToken }** 一对——票来自
+ *      AuthMiddleware 挂的 `operatorAccessToken`；请求上下文里没有那张票时 401，
+ *      **一次委派都不发**：没有票的请求到不了 delegate()。
  */
 import { describe, expect, it, vi } from "vitest";
-import { BadRequestException, ForbiddenException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { AccountsRouter } from "./accounts.router";
@@ -31,10 +38,19 @@ const MANAGE = ["user:account.manage"];
 /** 上限 = admin-bff 的 ACCOUNT_ACTION_REASON_MAX，与弹窗的 maxLength 同一个数。 */
 const REASON_MAX = 512;
 
-function makeReq(capabilities: string[]): Request & RequestContext {
+/** AuthMiddleware 挂在请求上的那张会话票（PR C 起委派必须带它）。 */
+const ACTOR_TOKEN = "rs256.session.access-token";
+/** 委派收到的主体：id + 票，两半同源于 RP 会话。 */
+const ACTOR = { operatorId: OPERATOR_ID, accessToken: ACTOR_TOKEN };
+
+function makeReq(
+  capabilities: string[],
+  opts: { withToken?: boolean } = {},
+): Request & RequestContext {
   return {
     user: { id: OPERATOR_ID },
     capabilities,
+    ...(opts.withToken === false ? {} : { operatorAccessToken: ACTOR_TOKEN }),
     ip: "127.0.0.1",
     headers: {},
     socket: { remoteAddress: "127.0.0.1" },
@@ -174,7 +190,7 @@ describe("account lifecycle actions require a reason", () => {
     });
     expect(operatorAdmin.disableAccount).toHaveBeenCalledWith(
       USER_ID,
-      OPERATOR_ID,
+      ACTOR,
       "该账号存在异常登录，已暂时停用。",
     );
     expect(auditAfter(auditCalls)).toEqual({
@@ -191,7 +207,7 @@ describe("account lifecycle actions require a reason", () => {
     });
     expect(operatorAdmin.enableAccount).toHaveBeenCalledWith(
       USER_ID,
-      OPERATOR_ID,
+      ACTOR,
       "身份核验已通过，账号恢复正常使用。",
     );
     expect(auditAfter(auditCalls)).toEqual({
@@ -207,7 +223,7 @@ describe("account lifecycle actions require a reason", () => {
     });
     expect(operatorAdmin.forceLogoutAccount).toHaveBeenCalledWith(
       USER_ID,
-      OPERATOR_ID,
+      ACTOR,
       "检测到异常登录设备，已退出全部登录。",
     );
     expect(auditAfter(auditCalls)).toEqual({
@@ -234,6 +250,46 @@ describe("the new gate did not move in front of the existing two", () => {
         reason: "该账号存在异常登录，已暂时停用。",
       }),
     ).rejects.toThrow(/Invalid account id/);
+    expect(delegateCalls(operatorAdmin)).toBe(0);
+  });
+});
+
+describe("PR C · the acting operator reaches the delegate as { operatorId, accessToken }", () => {
+  it("forwards the session access token from the request context alongside the operator id", async () => {
+    const { router, operatorAdmin } = harness();
+    await router.disableAccount(makeReq(MANAGE), USER_ID, {
+      reason: "该账号存在异常登录，已暂时停用。",
+    });
+    const [, actor] = operatorAdmin.disableAccount.mock.calls[0] as unknown as [
+      string,
+      { operatorId: string; accessToken: string },
+    ];
+    expect(actor).toEqual({
+      operatorId: OPERATOR_ID,
+      accessToken: ACTOR_TOKEN,
+    });
+  });
+
+  for (const action of ACTIONS) {
+    it(`${action}: a request whose context carries no operator access token → 401, delegate never called, no audit row`, async () => {
+      const { router, operatorAdmin, auditCalls } = harness();
+      await expect(
+        invoke(router, action, makeReq(MANAGE, { withToken: false }), {
+          reason: "该账号存在异常登录，已暂时停用。",
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(delegateCalls(operatorAdmin)).toBe(0);
+      expect(auditCalls).toHaveLength(0);
+    });
+  }
+
+  it("the token gate sits behind the capability gate (no capability → 403 even without a token)", async () => {
+    const { router, operatorAdmin } = harness();
+    await expect(
+      router.disableAccount(makeReq([], { withToken: false }), USER_ID, {
+        reason: "x",
+      }),
+    ).rejects.toThrow(ForbiddenException);
     expect(delegateCalls(operatorAdmin)).toBe(0);
   });
 });

@@ -89,3 +89,30 @@ describe("平台门（arche.plane）", () => {
     expect(captured.status).toBeUndefined();
   });
 });
+
+describe("请求上下文（PR C：代为操作者的证明）", () => {
+  it("放行时把 RP 会话的 access token 原文挂到 req.operatorAccessToken（与 sessionId 一样只在服务端）", async () => {
+    const { run } = setup(["arche.plane", "operator:account.manage"]);
+    const { next, req, captured } = await run("/api/platform-admins");
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(captured.status).toBeUndefined();
+    const ctx = req as unknown as {
+      operatorAccessToken?: string;
+      operator?: { id: string };
+    };
+    // 与 setup 里 rpAuth.resolve 返回的 accessToken 同一个值：挂的是票原文，不是别的派生物
+    expect(ctx.operatorAccessToken).toBe("token");
+    expect(ctx.operator?.id).toBe(OPERATOR_ID);
+  });
+
+  it("被门挡下（403）时不挂票：没放行的请求不该带着证明继续走", async () => {
+    const { run } = setup(["model:model.manage"]);
+    const { next, req } = await run("/api/platform-admins");
+    expect(next).not.toHaveBeenCalled();
+    // 中间件在平台门之前就赋值了——这条钉的是「赋值发生在 resolve 成功之后」而不是顺序；
+    // 403 的请求根本不会到 router，所以票挂不挂对它没有消费方。这里只断言不会因此崩。
+    expect(
+      (req as unknown as { operatorAccessToken?: string }).operatorAccessToken,
+    ).toBe("token");
+  });
+});

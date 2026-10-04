@@ -42,6 +42,12 @@
  *
  * 这一道门**不**改变 `declared-unbound` 本身（给每个调用方发独立凭据是 E2/E3，会动
  * 6 个发送点与部署密钥）。它只保证这个面是写下来的、变大要签字。
+ *
+ * **主体绑定（2026-10-04 PR C）**：上面 Scope note 说的「只靠请求体自报的 actorOperatorId、
+ * 没有密码学绑定」已经不成立——两个账号 router 在本 guard 之后还挂着类级
+ * `ActorBindingGuard`（`actor-binding.guard.ts`）：要求 `x-vxture-actor-token` 里那张
+ * 运营者自己的会话 access token（验签、aud ∈ {admin, arche}、sub == actorOperatorId、中央
+ * 会话仍在）。本 guard 本身不变：它仍只证明「持有内部口令」。
  */
 import {
   CanActivate,

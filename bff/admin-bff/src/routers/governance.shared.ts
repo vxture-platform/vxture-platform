@@ -18,6 +18,7 @@
 
 import { BadRequestException, UnauthorizedException } from "@nestjs/common";
 import type { Request } from "express";
+import type { ActingOperator } from "../auth/acting-operator";
 import type { RequestContext } from "../types/console.types";
 
 /**
@@ -55,6 +56,23 @@ export function requireOperatorId(req: Request & RequestContext): string {
     throw new UnauthorizedException("Invalid platform operator principal");
   }
   return id;
+}
+
+/**
+ * 代为操作的运营者 = id + 他自己的会话 access token（`AuthMiddleware` 挂的
+ * `operatorAccessToken`）。委托给 IdP 的写路径一律用这个取主体：auth-bff 的
+ * `ActorBindingGuard`（2026-10-04 PR C）要求两样一起到，缺票就是 401——在这里拦住，比让
+ * IdP 回 401、再被 delegate 映射成 503「IdP 不可用」清楚得多。
+ */
+export function requireActingOperator(
+  req: Request & RequestContext,
+): ActingOperator {
+  const operatorId = requireOperatorId(req);
+  const accessToken = req.operatorAccessToken;
+  if (typeof accessToken !== "string" || !accessToken) {
+    throw new UnauthorizedException("Operator session token missing");
+  }
+  return { operatorId, accessToken };
 }
 
 export function requireUuid(

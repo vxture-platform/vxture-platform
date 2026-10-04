@@ -151,6 +151,13 @@ if (
   原样采用自报的 `workspace_id`，而那个值下一跳就进 SQL 的归属谓词。
   五个调用点的档位登记在 `scripts/guardrails/s2s-legacy-scope.snapshot.json`，
   `trustDeclared` 这个数只该减少。
+- **内部面的例外（2026-10-04 PR C）**：auth-bff `/internal/operator/accounts/*`、`/internal/account/users/*`
+  这 11 条路由自报的 `actorOperatorId` 现在有东西校验了——类级 `ActorBindingGuard` 要求
+  `x-vxture-actor-token` 带该运营者自己的会话 access token（验签、`aud ∈ {admin, arche}`、sub 相符、
+  不是 step-up / OBO / id_token、中央会话仍在），401 `actor_token_missing` / `actor_token_invalid` /
+  `actor_token_mismatch`。`scripts/guardrails/internal-route-policy.snapshot.json` 的 `declaredUnbound` 8 → 0，
+  守卫同时核「声明 token-bound 的 controller 真挂着这道 guard」。剩下的半径：攻破的 admin-bff / arche-bff
+  只能冒充此刻在两者之一有活会话的运营者，而 IdP 分不出是谁在调（E2/E3）。产品面那条 trust-declared 不受影响。
 
 **而这件事与本文下一节自相矛盾**：§4 的 BFF 层写着「❌ 禁止从 request body / query 读取
 tenantId 覆盖 JWT 中的值」—— 共享口令那条路做的正是这件事。两句话不能同时成立，
