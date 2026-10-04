@@ -431,11 +431,19 @@ export class TokenExchangeService {
    *   · workspace_id / org_id present → `invalid_request` (the ticket has no
    *     workspace by design — silently dropping a declared one would let the
    *     caller believe it was bound);
-   *   · reporter's client row not active / not `client_kind = 'platform'` →
-   *     `invalid_client` (same predicate as PLATFORM_LEVEL_S2S_TARGETS: the
-   *     allowlist says *who may*, the DB says *whether it counts right now*
-   *     — disabling the atlas client row stops delegated minting without a
-   *     code change, which the shared header never allowed).
+   *   · reporter's client row not `client_kind = 'platform'` → 400
+   *     `invalid_client`. The predicate below also requires `status =
+   *     'active'`, but over HTTP that half is unreachable: the token endpoint
+   *     authenticates the client first (`OidcService.authClient` →
+   *     `findEnabledByClientId`, which filters `status = 'active'`) and
+   *     answers **401** `invalid_client` for a stopped row before this branch
+   *     runs. So "disable the atlas row" reaches atlas as 401, not 400 — both
+   *     are non-retryable (080-rp-integration §7). Keeping `status` here is
+   *     defence in depth for direct callers (the live-DB itest is one) and
+   *     keeps this the same SQL as PLATFORM_LEVEL_S2S_TARGETS: the allowlist
+   *     says *who may*, the DB says *whether it counts right now* — stopping
+   *     delegated minting needs no code change, which the shared header never
+   *     allowed.
    *
    * Blast radius of a stolen ticket = today's shared header (can attribute
    * usage to any catalog product), bounded by 300s and revocable per client

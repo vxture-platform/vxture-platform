@@ -29,30 +29,43 @@
 //
 // ## 判据
 //
-// ① 扫 `bff/platform-api/**` 里所有 `scopeToS2sCaller(` 调用点，解析第三、第四个实参；
+// ① 整份源码先剥掉注释（换行一个不少，行号与编辑器一致），再扫 `bff/platform-api/**` 里所有
+//    `scopeToS2sCaller(` 调用点（`(` 前允许空白 / 换行），解析第三、第四个实参；
 // ② 每个调用点（文件:行 + 它解析出的两档）必须与快照逐字相符；
-// ③ 第三 / 第四个实参既不是字面量也不是三元里的两个字面量 → 红（动态值等于说不清这一格是哪档）；
-//    少于四个实参 → 红（缺一档就是缺一张登记）；
-// ④ 快照里的 `trustDeclared` 与 `delegatedAttributing` 两个计数只应**减少**。增加必须是
-//    有意的，改快照时要写理由。
+// ③ 第三 / 第四个实参必须**整个**是一个档位字面量，或「条件 ? 字面量 : 字面量」（两支都整个是
+//    字面量）；别的形状——变量、嵌套三元、注释里夹一个字面量、不在词表里的字面量——→ 红
+//    （动态值等于说不清这一格是哪档）；少于四个实参 → 红（缺一档就是缺一张登记）；
+// ④ 在产文件里 `scopeToS2sCaller` 这个名字只许两种出现：import 说明符里的原名、与一次调用。
+//    `as` 改名（import / export）、赋给变量、当回调传 → 红：守卫按原名找调用点，改了名就看不见，
+//    而看不见的那一格照样在信请求体；
+// ⑤ 快照里的 `trustDeclared` 与 `delegatedAttributing` 两个计数只应**减少**。增加必须是
+//    有意的，改快照时要写理由。`--self-test` 的正例也只认这个方向（计数 ≤ 快照），不钉今天的数：
+//    钉「正好 5 个 / 正好 2 格」会让一次合法的收紧（某格 attribute-declared → deny，`--update`
+//    之后主检查绿）在 CI 里紧跟着跑的自检上红掉，而守卫打印的处置里没有一条能解开它
+//    （2026-10-05 审查 3c 抓到）。
 //
 // ## 本守卫看不见什么
 //
 //   · 它只看 `scopeToS2sCaller` 这一个函数。别处若另写一份「没有 s2sCaller 就信请求体」
 //     的逻辑，本守卫一无所知 —— 那种情况靠 `PlatformAuthGuard` 的调用点清单去兜；
+//   · 把这一次调用包进一个 wrapper、再从多处调 wrapper：登记只有 wrapper 里那一处。今天没有
+//     这种写法；出现时要连 wrapper 的调用方一起读，快照上看不出「一处登记、多处生效」；
 //   · 它不验运行时：`trust-declared` 的那几处今天**确实**在信任自报值，这是登记而非修复；
 //     `attribute-declared` 的两处也**确实**只凭 `delegated` claim 就信自报的归属与工作区；
 //   · 三元之外的条件形式（if/else 分支里各调一次）会被当成两个独立调用点，那是对的；
 //   · 档位若经一个**变量**传进来（`scopeToS2sCaller(c, r, policyVar, …)`），取不到字面量会报红
 //     —— 那是刻意的：类型系统只保证它是两个值之一，而快照要的是「哪一格是哪档」看得见。
 //     要用变量就把它内联成三元，别绕过登记；
+//   · 去注释是按字符走的简单扫描（认 " ' ` 三种字符串与反斜杠转义），正则字面量里的 `//`
+//     会被当成行注释——同一行它后面的调用会丢；`import * as ns` 之后 `ns.scopeToS2sCaller(`
+//     按名能看见；
 //   · 它不验 `delegated` claim 怎么来的——那是 `platform-auth.guard.spec.ts` 与 auth-bff
 //     `token-exchange.service.spec.ts` 的事（谁能铸、铸出来长什么样）。
 //
 // 运行：node scripts/guardrails/check-s2s-legacy-scope.mjs
 //      node scripts/guardrails/check-s2s-legacy-scope.mjs --update
 //      node scripts/guardrails/check-s2s-legacy-scope.mjs --self-test   （解析器与棘轮的反例）
-// 退出码：新增调用点 / 档位与快照不符 / 动态实参 / 缺实参 / 计数变多 → 1
+// 退出码：新增调用点 / 档位与快照不符 / 动态实参 / 缺实参 / 改名引用 / 计数变多 → 1
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -81,21 +94,153 @@ const NOTE =
 
 // ── 解析：一份源码里的所有调用点 ────────────────────────────────────────────
 /**
- * @param {string} src
+ * 剥掉注释；字符串原样留着，换行一个不少（行号要和编辑器里一致）。
+ * 认 " ' ` 三种字符串与反斜杠转义；正则字面量不认（见文件头「看不见什么」）。
+ * @param {string} text
+ */
+export function stripComments(text) {
+  let out = "";
+  let quote = null;
+  for (let i = 0; i < text.length; ) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (quote) {
+      out += ch;
+      if (ch === "\\" && next !== undefined) {
+        out += next;
+        i += 2;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      out += ch;
+      i++;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      const end = text.indexOf("*/", i + 2);
+      const stop = end === -1 ? text.length : end + 2;
+      // 块注释换成一个空格 + 它里面的换行，行号不漂。
+      out += " " + text.slice(i, stop).replace(/[^\n]/g, "");
+      i = stop;
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      const end = text.indexOf("\n", i);
+      i = end === -1 ? text.length : end;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
+const FN = "scopeToS2sCaller";
+const CALL_RE = /\bscopeToS2sCaller\s*\(/g;
+const NAME_RE = /\bscopeToS2sCaller\b/g;
+/** `import { … } from "…"` / `import type { … } from "…"`：说明符括号的范围。 */
+const IMPORT_RE = /\bimport\s+(?:type\s+)?\{[^}]*\}\s*from\s*["'][^"']+["']/g;
+
+/** 顶层逗号切分实参串。 */
+function splitArgs(args) {
+  const parts = [];
+  let d = 0;
+  let cur = "";
+  for (const ch of args) {
+    if ("([{".includes(ch)) d++;
+    else if (")]}".includes(ch)) d--;
+    if (ch === "," && d === 0) {
+      parts.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  parts.push(cur);
+  // 末尾的 trailing comma 会多切出一个空串。
+  while (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
+  return parts;
+}
+
+/**
+ * 一个实参 → 档位。整个实参必须是 `"档"`，或 `条件 ? "档" : "档"`（两支都整个是字面量）。
+ *
+ * 第一版「取实参里所有字符串」把三元条件里的 "reserve" 当成未知档位报了红；第二版改成
+ * 「取实参里任何位置属于词表的字面量」，于是 `/* "deny" *​/ policyVar` 也登记成了固定档
+ * （2026-10-05 审查 3c）。现在：注释在 extractSites 里已先剥掉，这里只认整体形状。
+ * @param {string} raw
+ * @param {Set<string>} allowed
+ * @returns {{ tier: string } | { error: string }}
+ */
+export function parseTier(raw, allowed) {
+  const text = raw.replace(/\s+/g, " ").trim();
+  const words = [...allowed].join(" / ");
+  const lit = /^"([a-z-]+)"$/.exec(text);
+  if (lit) {
+    return allowed.has(lit[1])
+      ? { tier: lit[1] }
+      : { error: `"${lit[1]}" 不在词表里（${words}）` };
+  }
+  // 贪婪的 `(.*)\?` 把条件吃到最后一个 `?`；条件里不许再有 `?`（嵌套三元拒——拆成 if/else
+  // 各调一次才登记得清）。`?.` / `??` 与字符串里的 `?` 不算。
+  const tern = /^(.*)\?\s*"([a-z-]+)"\s*:\s*"([a-z-]+)"$/.exec(text);
+  if (tern) {
+    const cond = tern[1]
+      .replace(/"[^"]*"|'[^']*'|`[^`]*`/g, "")
+      .replace(/\?\?|\?\./g, "");
+    if (!cond.includes("?")) {
+      const [a, b] = [tern[2], tern[3]];
+      if (!allowed.has(a) || !allowed.has(b))
+        return {
+          error: `三元两支里有不在词表里的："${a}" / "${b}"（${words}）`,
+        };
+      return { tier: `${a}+${b}` };
+    }
+  }
+  return {
+    error: `不是档位字面量，也不是「条件 ? 字面量 : 字面量」：${text.slice(0, 80)}`,
+  };
+}
+
+/**
+ * @param {string} rawSrc
  * @param {string} rel  仓库相对路径（只用来标 at 与判 spec）
  * @returns {{ sites: {at:string, policy:string, delegated:string}[], findings: string[] }}
  */
-export function extractSites(src, rel) {
+export function extractSites(rawSrc, rel) {
   const sites = [];
   const findings = [];
   // spec 里的调用是测这个函数本身，不是「一个在产的调用点」；
   // s2s-scope.ts 里那一处是**函数定义**（第一版把它当调用点报了红）。
   const isSpec = /\.spec\.ts$/.test(rel) || /\/s2s-scope\.ts$/.test(rel);
-  let idx = 0;
-  for (;;) {
-    idx = src.indexOf("scopeToS2sCaller(", idx);
-    if (idx === -1) break;
-    const open = src.indexOf("(", idx);
+  if (isSpec) return { sites, findings };
+  const src = stripComments(rawSrc);
+  const lineOf = (pos) => src.slice(0, pos).split("\n").length;
+
+  // ④ 这个名字只许以原名 import、与被调用。
+  const importRanges = [...src.matchAll(IMPORT_RE)].map((m) => [
+    m.index,
+    m.index + m[0].length,
+  ]);
+  for (const m of src.matchAll(NAME_RE)) {
+    const after = src.slice(m.index + FN.length);
+    if (/^\s*\(/.test(after)) continue;
+    const inImport = importRanges.some(
+      ([a, b]) => m.index >= a && m.index < b,
+    );
+    if (inImport && !/^\s+as\s+/.test(after)) continue;
+    findings.push(
+      inImport
+        ? `${rel}:${lineOf(m.index)} —— scopeToS2sCaller 被 as 改名导入：守卫按原名找调用点，改了名就看不见`
+        : `${rel}:${lineOf(m.index)} —— scopeToS2sCaller 被当成值引用（改名导出 / 赋给变量 / 当回调传），不是一次可登记的调用`,
+    );
+  }
+
+  for (const m of src.matchAll(CALL_RE)) {
+    const open = m.index + m[0].length - 1;
     // 括号配平取出整个实参串。
     let depth = 0;
     let i = open;
@@ -107,51 +252,26 @@ export function extractSites(src, rel) {
       }
     }
     const args = src.slice(open + 1, i);
-    const line = src.slice(0, idx).split("\n").length;
-    idx = i;
-    if (isSpec) continue;
-
-    // 顶层逗号切分 → 第三、第四个实参。
-    const parts = [];
-    let d = 0;
-    let cur = "";
-    for (const ch of args) {
-      if ("([{".includes(ch)) d++;
-      else if (")]}".includes(ch)) d--;
-      if (ch === "," && d === 0) {
-        parts.push(cur);
-        cur = "";
-      } else cur += ch;
-    }
-    parts.push(cur);
-    // 末尾的 trailing comma 会多切出一个空串。
-    while (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
+    const line = lineOf(m.index);
+    const parts = splitArgs(args);
     if (parts.length < 4) {
       findings.push(
         `${rel}:${line} —— 只有 ${parts.length} 个实参，缺 ${parts.length < 3 ? "legacy 与 delegated" : "delegated"} 档位`,
       );
       continue;
     }
-    const pick = (text, allowed, name) => {
-      // **只取属于各自词表的字面量**。三元里会有别的字符串（如
-      // `parsed.intent === "reserve" ? …`、`parsed.kind === "tokens" ? …`），
-      // 第一版把 "reserve" 当成未知档位报了红。
-      const literals = [...text.matchAll(/"([a-z-]+)"/g)]
-        .map((m) => m[1])
-        .filter((l) => allowed.has(l));
-      if (literals.length === 0) {
-        findings.push(
-          `${rel}:${line} —— 第${name}个实参里找不到任何档位字面量：${text.trim().replace(/\s+/g, " ").slice(0, 80)}`,
-        );
-        return null;
-      }
-      // 三元会给出两个字面量，按顺序记下来；一个就是固定档。
-      return literals.join("+");
-    };
-    const policy = pick(parts[2], POLICIES, "三");
-    const delegated = pick(parts[3], DELEGATED_POLICIES, "四");
-    if (policy === null || delegated === null) continue;
-    sites.push({ at: `${rel}:${line}`, policy, delegated });
+    const policy = parseTier(parts[2], POLICIES);
+    const delegated = parseTier(parts[3], DELEGATED_POLICIES);
+    if ("error" in policy)
+      findings.push(`${rel}:${line} —— 第三个实参${policy.error}`);
+    if ("error" in delegated)
+      findings.push(`${rel}:${line} —— 第四个实参${delegated.error}`);
+    if ("error" in policy || "error" in delegated) continue;
+    sites.push({
+      at: `${rel}:${line}`,
+      policy: policy.tier,
+      delegated: delegated.tier,
+    });
   }
   return { sites, findings };
 }
@@ -251,6 +371,30 @@ function selfTest() {
       "三元里含那一档就计入棘轮",
     );
   }
+  // 正例 3：`(` 前有空白 / 换行也是调用；注释掉的调用不是；行号按原文算。
+  {
+    const { sites, findings } = extractSites(
+      `// scopeToS2sCaller(s2sCaller, parsed, "deny", "deny");
+      /* scopeToS2sCaller(s2sCaller, parsed, "trust-declared", "attribute-declared") */
+      const a = scopeToS2sCaller (s2sCaller, parsed, "deny", "deny");
+      const b = scopeToS2sCaller
+        (s2sCaller, parsed, "deny", "attribute-declared");`,
+      R,
+    );
+    must(findings.length === 0 && sites.length === 2, "空白 / 换行后的 `(` 也是调用；注释掉的调用不计");
+    must(sites[0].at === `${R}:3` && sites[1].at === `${R}:4`, "行号按原文算（去注释不吃换行）");
+  }
+  // 正例 4：跨多行的块注释在前，行号仍对。
+  {
+    const { sites } = extractSites(
+      `/* 一
+         二
+         三 */
+      scopeToS2sCaller(s2sCaller, parsed, "deny", "deny");`,
+      R,
+    );
+    must(sites.length === 1 && sites[0].at === `${R}:4`, "多行块注释之后的调用，行号不漂");
+  }
   // 反例 1：只有三个实参（2026-10-04 之前的写法）→ 红。
   {
     const { sites, findings } = extractSites(
@@ -258,6 +402,58 @@ function selfTest() {
       R,
     );
     must(sites.length === 0 && findings.length === 1 && /缺 delegated 档位/.test(findings[0]), "三个实参 → 红「缺 delegated 档位」");
+  }
+  // 反例 5：注释里夹一个档位字面量、实际传的是变量 → 两条红（上一版把它登记成了固定档）。
+  {
+    const { sites, findings } = extractSites(
+      `scopeToS2sCaller(s2sCaller, parsed, /* "deny" */ policyVar, /* "deny" */ delegatedVar);`,
+      R,
+    );
+    must(
+      sites.length === 0 && findings.length === 2 && /第三个实参/.test(findings[0]) && /第四个实参/.test(findings[1]),
+      "注释里的字面量不算：变量仍红（两档各一条）",
+    );
+  }
+  // 反例 6：字面量不在词表里 / 三元一支不在词表里 → 红。
+  {
+    const a = extractSites(`scopeToS2sCaller(s2sCaller, parsed, "maybe", "deny");`, R);
+    const b = extractSites(`scopeToS2sCaller(s2sCaller, parsed, "deny", x ? "attribute-declared" : "allow");`, R);
+    must(a.sites.length === 0 && a.findings.length === 1 && /不在词表里/.test(a.findings[0]), "不在词表里的字面量 → 红");
+    must(b.sites.length === 0 && b.findings.length === 1 && /三元两支/.test(b.findings[0]), "三元一支不在词表里 → 红");
+  }
+  // 反例 7：嵌套三元 → 红；条件里的 `?.` / `??` 不当成嵌套。
+  {
+    const nested = extractSites(`scopeToS2sCaller(s2sCaller, parsed, a ? "deny" : b ? "deny" : "trust-declared", "deny");`, R);
+    must(nested.sites.length === 0 && nested.findings.length === 1 && /第三个实参/.test(nested.findings[0]), "嵌套三元 → 红");
+    const chain = extractSites(`scopeToS2sCaller(s2sCaller, parsed, parsed?.kind === (x ?? "amount") ? "deny" : "trust-declared", "deny");`, R);
+    must(chain.sites.length === 1 && chain.sites[0].policy === "deny+trust-declared", "条件里的 ?. / ?? 不当成嵌套三元");
+  }
+  // 反例 8：改名导入 / 改名导出 / 赋给变量 → 红，且改名后的调用不算调用点；多行 import 里的原名不报。
+  {
+    const alias = extractSites(
+      `import { scopeToS2sCaller as bind } from "../authn/s2s-scope";
+      const { workspaceId } = bind(s2sCaller, parsed, "deny", "attribute-declared");`,
+      R,
+    );
+    must(alias.sites.length === 0 && alias.findings.length === 1 && /改名导入/.test(alias.findings[0]), "import … as … → 红，改名后的调用不计");
+    const reexport = extractSites(`export { scopeToS2sCaller as scope } from "./s2s-scope";`, "bff/platform-api/src/authn/index.ts");
+    must(reexport.sites.length === 0 && reexport.findings.length === 1 && /值引用/.test(reexport.findings[0]), "export … as … → 红");
+    const value = extractSites(
+      `import { scopeToS2sCaller } from "../authn/s2s-scope";
+      const bind = scopeToS2sCaller;
+      bind(s2sCaller, parsed, "deny", "deny");`,
+      R,
+    );
+    must(value.sites.length === 0 && value.findings.length === 1 && /值引用/.test(value.findings[0]), "赋给变量 → 红");
+    const plain = extractSites(
+      `import {
+        type S2sCallerCtx,
+        scopeToS2sCaller,
+      } from "../authn/s2s-scope";
+      scopeToS2sCaller(s2sCaller, parsed, "deny", "deny");`,
+      R,
+    );
+    must(plain.sites.length === 1 && plain.findings.length === 0, "多行 import 里的原名不报");
   }
   // 反例 2：第四个实参走变量 → 红。
   {
@@ -304,16 +500,28 @@ function selfTest() {
     const f = compare([], { trustDeclared: 0, sites: [] });
     must(f.length === 1 && /快照结构不对/.test(f[0]), "缺 delegatedAttributing 的旧快照 → 红");
   }
-  // 正例 3：真仓里信号会动——五个调用点、两格收代上报票（entitlements、usage.consume）。
+  // 正例 5：真仓里信号会动——至少一个调用点、零 finding，两个计数不高于快照。
+  //   只认棘轮的方向，不钉今天的数（「正好 5 个 / 正好 2 格」会让一次合法的收紧在这里红掉，
+  //   而 --update 解不开它；2026-10-05 审查 3c）。哪几格收代上报票，看快照的 diff。
   {
     const real = scanRepo();
+    let snap = null;
+    try {
+      snap = JSON.parse(readFileSync(SNAPSHOT, "utf8"));
+    } catch {
+      snap = null;
+    }
+    must(
+      snap !== null && typeof snap.trustDeclared === "number" && typeof snap.delegatedAttributing === "number",
+      "读得到快照（读不到要红，不当通过）",
+    );
     const t = tally(real.sites);
     must(real.findings.length === 0, "真仓零 finding");
-    must(real.sites.length === 5, `真仓命中 5 个调用点（实得 ${real.sites.length}）`);
-    must(t.delegatedAttributing === 2, `真仓两格收代上报票（实得 ${t.delegatedAttributing}）`);
+    must(real.sites.length >= 1, `真仓至少命中一个调用点（实得 ${real.sites.length}）`);
+    must(t.trustDeclared <= snap.trustDeclared, `trust-declared 计数不高于快照（实得 ${t.trustDeclared}，快照 ${snap.trustDeclared}）`);
     must(
-      real.sites.filter((s) => s.delegated.includes("attribute-declared")).every((s) => /platform-(entitlements|usage)\.router\.ts/.test(s.at)),
-      "收代上报票的两格只在 entitlements 与 usage router",
+      t.delegatedAttributing <= snap.delegatedAttributing,
+      `attribute-declared 计数不高于快照（实得 ${t.delegatedAttributing}，快照 ${snap.delegatedAttributing}）`,
     );
   }
   console.log("✓ check-s2s-legacy-scope --self-test 全部通过");

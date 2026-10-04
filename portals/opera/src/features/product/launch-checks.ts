@@ -243,6 +243,34 @@ export function legacyAuthThisMonth(
   return Object.values(legacyAuth.byRoute).reduce((sum, n) => sum + n, 0);
 }
 
+/**
+ * 实测结果里「只是一句事实、不进判定」的那几个字段：E6 的 n、代上报的 reporter。
+ *
+ * 抽屉的行从这里**整段抄**，不逐个字段挑。挑是按字段名复制，多一个字段就多两处要记得加——
+ * `delegatedReporter` 就是这样只到了运行健康抽屉、没到接入检查抽屉（2026-10-05 审查 3c）。
+ * 以后往 `CheckResult` 加这一类字段，只改这里和各抽屉的渲染分支。
+ */
+export type SignalFacts = Pick<
+  CheckResult,
+  "legacyAuthThisMonth" | "delegatedReporter"
+>;
+
+/**
+ * @param live - 这一行对应的实测结果；没有（没跑 / 没这一项）时给空对象
+ * @returns 有值的键才给（`exactOptionalPropertyTypes`：没有的键不出现，不是 undefined）
+ */
+export function signalFacts(live: CheckResult | undefined): SignalFacts {
+  if (!live) return {};
+  return {
+    ...(live.legacyAuthThisMonth !== undefined
+      ? { legacyAuthThisMonth: live.legacyAuthThisMonth }
+      : {}),
+    ...(live.delegatedReporter !== undefined
+      ? { delegatedReporter: live.delegatedReporter }
+      : {}),
+  };
+}
+
 function reason(error: unknown, fallback: string): string {
   return error instanceof OperaApiError ? error.message : fallback;
 }

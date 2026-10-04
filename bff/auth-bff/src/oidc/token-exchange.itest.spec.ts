@@ -10,6 +10,13 @@
  * client_kind='platform'`) is the same SQL the platform-level target lookup
  * uses, and the seed must satisfy it or atlas can never report.
  *
+ * These calls go to TokenExchangeService directly. Over HTTP the token
+ * endpoint authenticates the client first (`OidcService.authClient`, which
+ * filters `status = 'active'`), so a stopped atlas row is refused there with
+ * **401** `invalid_client` and never reaches this service — the 400
+ * `invalid_client` asserted below is the service's own answer, reachable over
+ * HTTP only for `client_kind <> 'platform'` (080-rp-integration §7).
+ *
  * Gated (needs a seeded platform DB):
  *   AUTH_ITEST=1 DATABASE_URL=postgresql://... pnpm test
  */
@@ -216,7 +223,7 @@ describe.runIf(RUN)("T1 token exchange — D2 coverage gate (live DB)", () => {
     });
   });
 
-  it("delegated reporter: an inactive atlas client row stops the mint (invalid_client) — the DB says whether it counts right now", async () => {
+  it("delegated reporter: an inactive atlas client row stops the mint (invalid_client, service-direct; over HTTP authClient answers 401 first) — the DB says whether it counts right now", async () => {
     await pool.query(
       `update appoidc.oidc_clients set status = 'inactive' where client_id = 'atlas'`,
     );
