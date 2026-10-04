@@ -161,6 +161,8 @@ secrets/tair-pw-default
 
 `secrets/platform.env` 先加载，`secrets/platform-mail.env` 只对发邮件 BFF 加载，服务专属 `.env.<service>` 最后加载。服务专属文件不得覆盖共享密钥或 SMTP 配置。
 
+**宿主口归 nginx，不归平台容器**（2026-10-04 起）：`compose.platform.yml` 里没有任何服务发布宿主端口，平台服务只在容器网 `vxture-prod` 内互相可达。tailnet 边缘带的两个口——platform-api 的 S2S 别名与 auth-bff 的 IdP 换票别名（号码见端口登记表，本仓不重建端口表）——都由 `compose.nginx.yml` 的 vx-nginx 绑 Tailscale 接口发布，再按路径只放产品面（`deploy/nginx/sites-enabled/platform-internal.conf` / `idp-internal.conf`，其余 404）。对外契约值住在 nginx、不住在应用容器上，所以应用内口怎么重排都不牵动产品仓；auth-bff 的 `/internal/*` 因此只在容器网内可达。切换期两个 compose 之间的端口交接见 `deploy/scripts/lib/nginx-idp-port.sh`。
+
 ---
 
 ## 五、平台共享运行配置：secrets/platform.env

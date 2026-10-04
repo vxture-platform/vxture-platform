@@ -15,10 +15,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
+# nginx 的 compose 落点（与 31 / 51 同一个路径）：auth-bff 重建后的 :8081 交接要重落它、重建 nginx。
+NGINX_COMPOSE_SRC="$COMPOSE_DIR/compose.nginx.yml"
+NGINX_COMPOSE_FILE="${NGINX_COMPOSE_FILE:-/srv/vxture/data/nginx/compose.yml}"
 
 # 变量加载器已抽到 lib/compose-env.sh —— 这里原有的 read_compose_env 是它的出处，
 # 现在由所有 compose 调用方共用，避免各脚本各拿一份、tailnet 变量漏喂。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+. "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
 
 IMAGE_REGISTRY="$VX_IMAGE_REGISTRY"
@@ -170,6 +174,17 @@ for svc in $SERVICES; do
   docker compose "${COMPOSE_FILES[@]}" pull "$svc" 2>&1 | grep -iE "Pulled|already|error|warn" | tail -1 || true
   echo "  -- $svc: up -d"
   docker compose "${COMPOSE_FILES[@]}" up -d --no-deps "$svc"
+  # **tailnet :8081 交接**（E1 PR D）：auth-bff 的新 compose 不再发布宿主口，旧容器一停 :8081 就空出来；
+  # 产品的换票口此刻无人服务，所以必须**紧跟在这里**（不等整栈收尾、不等 40-verify）让 nginx 把它接上：
+  # 落终态 compose.yml → `compose up -d` 重建 nginx（一次，80/443/8080 同时闪断数秒）→ 断言发布者恰是
+  # vxture-nginx。往后每次 deploy 这一步判到「nginx 已占」→ up -d 无变化。auth-bff 重建后仍占着 :8081
+  # （主机上的 compose.platform.yml 过旧）或别的东西占着 → 退出 1 中止部署，一个 compose 动作都不做——
+  # 此刻去重建 nginx 等于把全站打下线。20-sync 在它之前已按现场落过一次 compose（见其注释）。
+  # 机制与离线证明：lib/nginx-idp-port.sh、lib/nginx-idp-port.test.sh（两种主机现场 + 失败控制组）。
+  if [ "$svc" = "auth-bff" ]; then
+    echo "  -- auth-bff: tailnet :${IDP_ALIAS_PORT} 交接给 nginx"
+    idp_alias_handover "$NGINX_COMPOSE_SRC" "$NGINX_COMPOSE_FILE"
+  fi
 done
 # 收尾：移除改名/退役后的孤儿容器（已在跑的服务不重建）。
 docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans

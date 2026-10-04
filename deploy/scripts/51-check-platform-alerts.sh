@@ -16,6 +16,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 统一变量入口：compose 里的 ${VX_*} 在调用方进程环境求值，tailnet 地址既不能
 # 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+. "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
@@ -307,6 +308,24 @@ check_nginx_and_tls() {
   fi
 }
 
+# tailnet :8081（IdP 换票口）必须由 vxture-nginx 发布（E1 PR D，sites-enabled/idp-internal.conf 只放
+# /oidc/ /.well-known/ /healthz）。auth-bff 直接发布 = 门回到路边（/internal/* 对整个 tailnet 可达）；
+# 没人发布 = 产品换不了票；别人发布 = 不认识的现场。判据与 30-deploy 的交接同一份（lib/nginx-idp-port.sh）。
+check_tailnet_alias_publisher() {
+  local publishers cls
+  if ! publishers="$(idp_alias_publishers 2>/dev/null)"; then
+    medium "读不到 docker ps，tailnet :${IDP_ALIAS_PORT} 的发布者未核验"
+    return 0
+  fi
+  cls="$(idp_alias_classify "$publishers" "")"
+  case "$cls" in
+    nginx)  ok "tailnet :${IDP_ALIAS_PORT} 由 ${IDP_ALIAS_NGINX_CONTAINER} 发布（IdP 别名，/internal/* 在边缘 404）" ;;
+    legacy) high "tailnet :${IDP_ALIAS_PORT} 仍由 ${IDP_ALIAS_LEGACY_PUBLISHER} 直接发布——/internal/* 对整个 tailnet 可达（PR D 的交接没完成，重跑 31）" ;;
+    free)   high "没有容器发布 tailnet :${IDP_ALIAS_PORT}——产品换票口无人服务（主机 nginx compose 缺 IdP 别名发布？重跑 31）" ;;
+    *)      high "tailnet :${IDP_ALIAS_PORT} 的发布者不认识：$cls" ;;
+  esac
+}
+
 check_firewall() {
   local ufw_output
   ufw_output="$(ufw status 2>/dev/null || true)"
@@ -394,6 +413,7 @@ check_docker_runtime
 check_host_memory
 check_container_health
 check_nginx_and_tls
+check_tailnet_alias_publisher
 check_firewall
 check_deploy_bundle
 check_backups

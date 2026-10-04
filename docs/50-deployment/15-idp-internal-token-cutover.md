@@ -25,7 +25,7 @@
 - [ ] worker-01 上 `/srv/vxture/runtime/secrets/platform-idp-internal.env` 已由 `34` 铸出（§2 步 1）。旧容器的 compose 定义里没有这个文件，先放着零影响。
 - [ ] `/srv/vxture/runtime/.env.arche-bff` 存在——`30-deploy` 新加的 `check_file` 会要它（worker-01 上 arche-bff 在跑，这份文件就在；主机审计也新加了 `arche-bff env` 规则）。
 - [ ] `bash /srv/vxture/deploy/scripts/50-backup-runtime-env.sh` 跑过一次——用**落地后的新版**（旧版不认识新文件），34 铸完再跑一次。
-- [ ] **对照组**：切换前从 worker-02 用产品值打内部面一次（§5 的同一条命令），此刻应是 `200`。没有这个「切换前 200」，切换后的 `401` 证明不了任何事。
+- [ ] **对照组**：切换前从 worker-02 用产品值打 tailnet:8081 的内部面一次（§5 的同一条命令），此刻应是 `200`（带 JSON 正文——auth-bff 直接发布在这个口上，产品值开得了门）。没有这个「切换前 200」，切换后的 `404` / `401` 证明不了任何事。
 
 ---
 
@@ -86,6 +86,7 @@ grep -c CHANGEME "$F"                          # 0
    **不要看 `docker ps` 找 tag——它只显示 `@sha256`**（`30-deploy` :159-161 自己的注释）。
 
 3. `cat /srv/vxture/runtime/.last-deploy-tag` = 本次 tag。
+   3b. （PR D 在本 tag 里时）第 [4/4] 步日志里 `-- auth-bff: tailnet :8081 交接给 nginx` 之后紧跟一行 `交接完成：:8081 由 vxture-nginx 发布`，且 `docker ps --format '{{.Names}}\t{{.Ports}}' | grep ':8081->'` 只有 `vxture-nginx` 一行。更早的「20 同步 Nginx 配置」步里应有一句 `仍由 vx-platform-auth-bff 直接发布（切换中）→ 本次落盘**不带**别名发布`——那是 20 把交接让给 30 的证据；少了它而 31 的「启动或更新 Nginx」又重建了 nginx，就要看 nginx 有没有 `port is already allocated`（机制见 `deploy/scripts/lib/nginx-idp-port.sh` 头注）。
 4. `bash /srv/vxture/deploy/scripts/40-verify-platform-runtime.sh` 全 OK——**含新加的 `arche-bff` 健康行**（此前清单里没有第三个发送方），以及 Required files 里新加的 `.env.opera-bff` / `.env.arche-bff` / `.env.platform-api` 与 sms / identity / app / idp-internal 四份 secrets（此前 40 与日巡检 51 的文件清单都停在五个 RP 时代，缺这些文件要到下次 deploy 才被 30 拦下；`lib/runtime-file-lists.test.sh` 钉住 30 / 40 / 51 三处一致）。
 
 ### deploy 中途失败怎么办
@@ -106,17 +107,18 @@ VX_VERIFY_WORKSPACE_ID=<一个真实存在的 workspace uuid> VX_VERIFY_PRODUCT=
   bash scripts/41-verify-internal-face.sh
 ```
 
-七条探针，只打印状态码与错误码（正文落在 0700 私有目录、退出即删；口令经 `-H @file` / `-H @-` 传递，不进 argv）。脚本自己先断言两值非空且不等，否则拒跑——「读不到不是通过」。
+八条探针，只打印状态码与错误码（正文落在 0700 私有目录、退出即删；口令经 `-H @file` / `-H @-` 传递，不进 argv）。脚本自己先断言两值非空且不等，否则拒跑——「读不到不是通过」。内部面**真正住的地方**是容器网 `vx-platform-auth-bff:3081`（三个发送方走的地址），1–3 从 `vx-platform-admin-bff` 容器里打它；tailnet:8081 自 PR D 起是 nginx 别名，`/internal/*` 在边缘就 404，7–8 打它证「门不在路边、而产品的口还在」。
 
-| #   | 探针                                     | 期望         | 它证明什么                                  |
-| --- | ---------------------------------------- | ------------ | ------------------------------------------- |
-| 1   | 内部面 · 旧值                            | `401`        | 产品值开不了内部面                          |
-| 2   | 内部面 · 新值                            | `200`        | env → 容器那一半真的接上了                  |
-| 3   | 内部面 · 无头                            | `401`        | 没有不带凭据的路                            |
-| 4   | 产品面 · 旧值                            | **非** `401` | 产品不受影响（工作区不存在时 400/404 都算） |
-| 5   | 产品面 · 新值                            | `401`        | 拆分是双向的：新钥匙开不了产品面            |
-| 6   | 公网 `api.vxture.com/auth-api/internal/` | `404`        | 边缘那道墙还在                              |
-| 7   | 容器网 · 旧值                            | `401`        | 发送方真正走的地址上，旧值也死了            |
+| #   | 探针                                      | 期望         | 它证明什么                                                                  |
+| --- | ----------------------------------------- | ------------ | --------------------------------------------------------------------------- |
+| 1   | 内部面（容器网）· 旧值                    | `401`        | 产品值开不了内部面                                                          |
+| 2   | 内部面（容器网）· 新值                    | `200`        | env → 容器那一半真的接上了                                                  |
+| 3   | 内部面（容器网）· 无头                    | `401`        | 没有不带凭据的路                                                            |
+| 4   | 产品面 · 旧值                             | **非** `401` | 产品不受影响（工作区不存在时 400/404 都算）                                 |
+| 5   | 产品面 · 新值                             | `401`        | 拆分是双向的：新钥匙开不了产品面                                            |
+| 6   | 公网 `api.vxture.com/auth-api/internal/`  | `404`        | 边缘那道墙还在                                                              |
+| 7   | tailnet 别名 `:8081/internal/` · **新值** | `404`        | nginx 的 404、不是 auth-bff 的 401：带着真钥匙也进不了，门已不在 tailnet 上 |
+| 8   | tailnet 别名 `:8081/oidc/jwks`            | `200`        | 产品换票口照旧（地址不变，只是经 nginx）                                    |
 
 第 4 条的 `(workspace, product)` 要填真实存在的；填错会得到 400，判据写的是「不是 401」，所以 400 仍然 PASS——但那就没证到「产品能读到权益」，要用真的。
 
@@ -128,15 +130,23 @@ VX_VERIFY_WORKSPACE_ID=<一个真实存在的 workspace uuid> VX_VERIFY_PRODUCT=
 
 ```bash
 TOK="$(docker exec <arda-container> printenv PLATFORM_INTERNAL_AUTH_TOKEN)"
-# 内部面：切换前 200（§1 对照组），切换后期望 401
-curl -s -o /dev/null -w '%{http_code}\n' -H "x-vxture-internal-auth: $TOK" \
+# 内部面：切换前 200（§1 对照组）。切换后期望值看 PR D 在不在本 tag 里（下表）；-D - 把响应头一起打出来，
+# 因为 404 与 401 的**出处**不同：404 是 nginx（Server: nginx、HTML 正文），401 是 auth-bff（JSON 正文 invalid_internal_auth）。
+curl -s -D - -o /dev/null -H "x-vxture-internal-auth: $TOK" \
   http://<worker-01-tailnet-ip>:8081/internal/operator/sessions
 # 产品面：期望非 401（产品没受影响）
 curl -s -o /dev/null -w '%{http_code}\n' -H "x-vxture-internal-auth: $TOK" \
   "http://<worker-01-tailnet-ip>:8080/platform/entitlements?workspace_id=<真实>&product=arda"
+# 换票口：期望 200（PR D 之后它经 nginx 到 auth-bff，地址一个字没变）
+curl -s -o /dev/null -w '%{http_code}\n' http://<worker-01-tailnet-ip>:8081/oidc/jwks
 ```
 
-**这一条才是 E1 的半径证明**：拿着产品值的 tailnet 对端，切换前能打到 `/internal/operator/accounts/*`，切换后不能。只有 §1 的对照组是 200、这里是 401，才算。
+| 本 tag 里有什么 | 切换前（§1 对照组） | 切换后 `/internal/operator/sessions`                    | 它证明什么                                                                 |
+| --------------- | ------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| PR A，无 PR D   | `200`               | **`401`**（auth-bff，JSON `invalid_internal_auth`）     | 门还在路边，只是钥匙换了：产品值开不了                                     |
+| PR A + PR D     | `200`               | **`404`**（nginx，`Server: nginx`、HTML 正文、无 JSON） | 门不在 tailnet 上了：钥匙对错都一样，`/internal/*` 从 worker-02 根本到不了 |
+
+**这一条才是 E1 的半径证明**：拿着产品值的 tailnet 对端，切换前能打到 `/internal/operator/accounts/*`，切换后不能。只有 §1 的对照组是 200、这里是上表对应的那个码，才算。PR D 在场时，「钥匙换了」这一半的运行态证明在 §4 探针 1（容器网 401）——tailnet 上已经看不到 guard 了。**`/oidc/jwks` 那条必须是 200**：它证明 PR D 没有顺手把产品的换票口也堵掉。
 
 ---
 
@@ -147,12 +157,14 @@ curl -s -o /dev/null -w '%{http_code}\n' -H "x-vxture-internal-auth: $TOK" \
 运营者的停用 / 启用不在 admin——admin-bff 的路由只委托客户账号的停用 / 启用 / 强制下线三动作（`accounts.router.ts`），运营者六动作在 arche 的 `platform-admins.router.ts`；要顺手验 arche 这个发送方，就在 arche 再做一次运营者「停用 / 启用」。两个动作成功即三个发送方里至少 admin 的新值在送、auth-bff 的新值在收。再看日志——**基线取在步 5 之后**，不是 deploy 完成时刻：
 
 ```bash
-# 步 4（41-verify 探针 1/3/7）与步 5（半径探针）自己故意送旧值 / 无头，各留下一条 warn。
+# 步 4（41-verify 探针 1/3）与步 5（半径探针）自己故意送旧值 / 无头，会留下 warn（哪几条见下）。
 # 41-verify 结尾打印 finished_at=<UTC>，步 5 的 curl 打完记一下时间；--since 取两者中靠后的那个。
 docker logs vx-platform-auth-bff --since <步 5 完成时刻> 2>&1 | grep -c invalid_internal_auth   # 期望 0
 
-# 只有 deploy 完成时刻可用时：按 remote 分组，期望恰好三个 remote 各 1 条——
-#   worker-01 宿主（探针 1/3，同 IP 限速成一条）、vx-platform-admin-bff 容器 IP（探针 7）、worker-02 tailnet IP（步 5）。
+# 只有 deploy 完成时刻可用时：按 remote 分组——
+#   PR D 在本 tag 里：期望恰好 1 个 remote（vx-platform-admin-bff 容器 IP，探针 1/3 限速成一条）；
+#     步 5 与探针 7 在 nginx 就被 404，根本到不了 auth-bff，不留 warn。
+#   PR D 不在：期望恰好三个 remote 各 1 条——worker-01 宿主（探针 1/3）、admin-bff 容器 IP（探针 7）、worker-02 tailnet IP（步 5）。
 docker logs vx-platform-auth-bff --since <deploy 完成时刻> 2>&1 | grep -o 'invalid_internal_auth remote=[^ ]*' | sort | uniq -c
 
 # PR C（主体绑定，在 PR A 之后的 tag 里）之后再看一行：绑定门的拒绝。基线之后期望 0。
@@ -161,7 +173,7 @@ docker logs vx-platform-auth-bff --since <deploy 完成时刻> 2>&1 | grep -o 'i
 docker logs vx-platform-auth-bff --since <步 5 完成时刻> 2>&1 | grep -c 'actor_token_'   # 期望 0
 ```
 
-这条 `warn`（`invalid_internal_auth remote=<ip> route=<router.handler>`，每 IP 每分钟至多一条）随 PR A 出；此前 401 路径一行日志都没有，所以这一步的可观测物就是它。步 4 / 步 5 必然留下上面那三条——**数到 3 不是泄漏**；基线之后再出现一条才是「谁还拿着旧值在敲门」，按 `remote` 去找是哪台机器。绑定门的三条 warn（`actor_token_missing` / `actor_token_invalid` / `actor_token_mismatch`，格式 `<码> route=<Router.handler> remote=<ip>`，同一套每 IP 每分钟一条的限速）随 PR C 出，与上面那条**分开数**：它们不是「谁拿着旧值」，是「谁没带 / 带错会话票」——部署窗口里的旧发送方（§8 末条），或一个只持口令、拿不出运营者会话票的调用方。
+这条 `warn`（`invalid_internal_auth remote=<ip> route=<router.handler>`，每 IP 每分钟至多一条）随 PR A 出；此前 401 路径一行日志都没有，所以这一步的可观测物就是它。步 4 / 步 5 必然留下上面那几条——**数到那个数不是泄漏**；基线之后再出现一条才是「谁还拿着旧值在敲门」，按 `remote` 去找是哪台机器。PR D 之后，一条来自 tailnet 地址的 warn 本身就不该再出现——tailnet 上的 `/internal/*` 在 nginx 就 404 了，能到 guard 的只有容器网。
 
 ---
 
@@ -193,7 +205,7 @@ docker logs vx-platform-auth-bff --since <步 5 完成时刻> 2>&1 | grep -c 'ac
 
 ## 9. 还没做、要 owner 定的
 
-- **D7 / PR D**：tailnet:8081 直通不变——拆钥匙只换了开门的值，门还在路边。把 8081 像 8080 一样前置 nginx、只放 `/oidc/*` `/.well-known/*`、`/internal/*` 404，需要 owner 确认 worker-02 上没有别的进程打 8081 的其他路径。
+- ~~**D7 / PR D**：tailnet:8081 直通不变——拆钥匙只换了开门的值，门还在路边。把 8081 像 8080 一样前置 nginx、只放 `/oidc/*` `/.well-known/*`、`/internal/*` 404。~~ **已做（2026-10-04，PR D）**：`compose.nginx.yml` 发布 tailnet :8081、`sites-enabled/idp-internal.conf` 只转 `/oidc/` `/.well-known/` `/healthz` 到 auth-bff、其余 404；`compose.platform.yml` 摘掉 auth-bff 的 `ports:`。端口交接在同一次 deploy 里完成：20-sync 判到 auth-bff 还占着 :8081 就先落**不带**别名发布的 nginx compose（31 的 `up -d` 因此不重建 nginx），30-deploy 在 auth-bff `up -d` 之后立刻重落终态 compose、重建 nginx 一次并断言发布者恰是 vxture-nginx；交接不成（auth-bff 仍占 / 别人占 / 宿主进程在听 / up 后没接上）即中止，不静默跳过（`lib/nginx-idp-port.sh`，离线证明 `lib/nginx-idp-port.test.sh` 跑两种主机现场 + 裸 cp 的失败控制组）。:8081 的不可用窗口 = 旧 auth-bff 停到 nginx 重建完成，几秒；nginx 重建让 80/443/8080 同时闪断同一量级（与此前每次改 compose.nginx.yml 同一类）。40-verify 新增别名探针，51 日巡检核发布者，41 的探针改成 §4 那八条。**仍要 owner 确认**：worker-02 上没有别的进程在打 :8081 的 `/oidc/` `/.well-known/` `/healthz` 以外的路径（平台这边看不见 worker-02 的调用方；切换后在 nginx 的 access.log 里 grep `:8081` 的 404 行可以回答）。
 - **PR A2**：修 `33-recreate-service.sh`（E3a 轮换值、未来改 secrets 都要它）。
 - ~~**PR B**：删 `@vxture/core-auth` 里零消费方的 `resolveInternalAuthToken` / `assertInternalAuth` / `InternalAuthGuard`，并把 `check-internal-auth-key-usage.mjs` 里 `packages/core/auth` 那条 EXPECTED 一起删掉（留着会红）。~~ **已做（2026-10-04，PR B）**：三件已删，两个活 guard 改调 core-auth 的 `sharedSecretMatches`，EXPECTED 表项已删（自检 (vi) 改用合成期望表盯同一条性质）；同 PR 带 E6 旧凭据计数（platform-api 写、opera 读，TD-038 进展）。它改了 `packages/core/`，随下一个 tag 整栈 14 镜像重建——与本页切换本身无关，但那次 deploy 的时长按 §3 算。
 - ~~**PR C**：主体绑定（`declaredUnbound` 8 → 0）。~~ **已做（2026-10-04，PR C landed: actor bound）**：auth-bff 两个账号 router 挂 `ActorBindingGuard`，admin / arche-bff 随委托带 `x-vxture-actor-token`（运营者自己的会话票），快照 `declaredUnbound` 8 → 0。**无 env 改动，但它自己有一个混版窗口**（与钥匙窗口不是一回事）：PR A 已在 v0.26.307 里，PR C 在之后的 tag——那次 deploy 仍按 §0 钉死的「收方先」序走，从 auth-bff `up -d` 到 admin-bff、arche-bff 各自 `up -d` 之间，**账号动作** 503 `operator_admin_unavailable`（admin 的停用 / 启用 / 强制下线，arche 的建号 / 停用 / 启用 / 强制下线 / 重置 MFA / 重置密码；auth-bff 日志 `actor_token_missing`，见 §8 末条），登录 / step-up / 客户面 / 产品面不受影响，两个发送方换上新镜像即自愈，**中途不要停**。反向顺序（发方先）本来是零窗口——旧 auth-bff 不认识多出来的头、照常放行——但换钥匙真需要收方先，`service-order.sh` 不改。

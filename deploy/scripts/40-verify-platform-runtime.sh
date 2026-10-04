@@ -15,6 +15,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 统一变量入口：compose 里的 ${VX_*} 在调用方进程环境求值，tailnet 地址既不能
 # 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+. "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
@@ -142,6 +143,45 @@ check_public_https() {
   fi
 }
 
+# tailnet 边缘带的两个别名都由 vxture-nginx 发布、只绑 tailnet 接口、按路径只放产品面。
+# 从宿主机打自己的 tailnet 地址（宿主能连到自己发布的口）：
+#   :8080/healthz                      → 200  platform-api 别名（此前没有任何运行态检查）
+#   :8081/healthz                      → 200  IdP 别名，经 nginx 到 auth-bff（E1 PR D）
+#   :8081/internal/operator/sessions   → 404  **必须是 nginx 的 404，不是 auth-bff 的 401**：401 意味着
+#                                             auth-bff 又被直接发布了、或 nginx 把 /internal/ 转了过去——门回到路边
+#   宿主口 :8081 的发布者                → 恰好 vxture-nginx（docker ps，lib/nginx-idp-port.sh）
+check_tailnet_aliases() {
+  local base url code publishers cls
+  if [ -z "${VX_WORKER01_TAILNET_IP:-}" ]; then
+    echo "  [FAIL] VX_WORKER01_TAILNET_IP 为空（runtime/.env）——别名探针无从打起"
+    mark_fail
+    return 0
+  fi
+  base="http://$VX_WORKER01_TAILNET_IP"
+  check_public_https "$base:8080/healthz"
+  check_public_https "$base:${IDP_ALIAS_PORT}/healthz"
+
+  url="$base:${IDP_ALIAS_PORT}/internal/operator/sessions"
+  echo -n "  $url -> "
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$url" || echo 000)"
+  if [ "$code" = "404" ]; then
+    echo "404 (nginx)"
+  else
+    echo "FAIL (got $code, want 404 —— 401 = auth-bff 又被直接发布 / nginx 转了 /internal/；000 = 别名没起来)"
+    mark_fail
+  fi
+
+  echo -n "  host :${IDP_ALIAS_PORT} publisher -> "
+  publishers="$(idp_alias_publishers 2>/dev/null || true)"
+  cls="$(idp_alias_classify "$publishers" "")"
+  if [ "$cls" = "nginx" ]; then
+    echo "$IDP_ALIAS_NGINX_CONTAINER"
+  else
+    echo "FAIL ($cls; want exactly $IDP_ALIAS_NGINX_CONTAINER)"
+    mark_fail
+  fi
+}
+
 echo "=== Vxture Platform Runtime Verification ==="
 echo ""
 
@@ -163,6 +203,10 @@ echo ""
 
 run_check "Nginx config test" \
   check_nginx_runtime
+
+echo "==> Tailnet aliases (nginx :8080 platform-api / :${IDP_ALIAS_PORT} IdP)"
+check_tailnet_aliases
+echo ""
 
 echo "==> Public HTTPS endpoints"
 check_public_https "https://vxture.com/"

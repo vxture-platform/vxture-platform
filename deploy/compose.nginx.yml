@@ -29,6 +29,18 @@ services:
       # product-facing S2S surface via nginx path routing, so the platform
       # can re-home /platform/* + /usage/* without any product-side change.
       - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:8080:8080"
+      # IdP (auth-bff) tailnet alias (E1 PR D, 2026-10-04): products reach
+      # /oidc/* + /.well-known/* + /healthz through sites-enabled/idp-internal.conf;
+      # everything else (incl. /internal/*) is 404 at the edge. auth-bff itself no
+      # longer publishes any host port. Product-side address unchanged.
+      #
+      # The trailing marker on the next line is load-bearing: 20-sync-nginx-config.sh
+      # drops exactly that line when vx-platform-auth-bff still publishes :8081 (a host
+      # mid-cutover), because `compose up -d` would otherwise recreate nginx into a port
+      # that is still taken and leave 80/443 down. 30-deploy re-renders the full file
+      # and recreates nginx right after auth-bff's own recreate. Mechanism + proof:
+      # deploy/scripts/lib/nginx-idp-port.sh / nginx-idp-port.test.sh.
+      - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:8081:8081" # @vx-idp-alias-8081
     volumes:
       - /srv/vxture/data/nginx/conf/conf.d:/etc/nginx/conf.d:ro
       - /srv/vxture/data/nginx/conf/sites-enabled:/etc/nginx/sites-enabled:ro

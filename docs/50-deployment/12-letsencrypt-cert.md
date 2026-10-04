@@ -115,7 +115,8 @@ docker exec vxture-nginx nginx -t && docker exec vxture-nginx nginx -s reload
 
 灰色云失去 CF 兜底后,`deploy/nginx/conf.d/00-hardening.conf` 在 nginx 层补了最基本护栏:
 每 IP 请求限速(50r/s,burst 100)+ 并发连接上限(50)+ slowloris 慢速超时;内部 S2S
-监听器(:8080)经空 key 豁免、绝不被限。经 `20-sync-nginx-config.sh` 随 nginx 配置一起
+监听器(:8080 platform-api 别名、:8081 IdP 换票别名,都只绑 tailnet)经空 key 豁免、绝不被限
+(worker-02 上全部产品共用一个来源 IP,按 IP 限速会把它们算进一个桶)。经 `20-sync-nginx-config.sh` 随 nginx 配置一起
 部署(该脚本现一并同步 `conf.d/`)。限速 key 按直连客户端 IP——**若把某域名切回橙色云,
 需为其启用 real_ip 信任层**(见该文件顶部注释),否则该域名全部用户会共用一个限速桶。
 阈值可按实际流量在该文件调。
