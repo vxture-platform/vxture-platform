@@ -24,6 +24,7 @@ import { SharingService, type VisibleSetResult } from "@vxture/service-sharing";
 import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
 import { scopeToS2sCaller } from "../authn/s2s-scope";
+import { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import { parseVisibleSetQuery } from "../platform/sharing-view";
 
 @Controller()
@@ -32,6 +33,9 @@ export class PlatformSharingRouter {
   constructor(
     @Inject(SharingService)
     private readonly sharing: SharingService,
+    // E6：旧凭据计数（legacy-auth-usage.service.ts）
+    @Inject(LegacyAuthUsageService)
+    private readonly legacyAuth: LegacyAuthUsageService,
   ) {}
 
   /** GET /platform/sharing/visible-set?workspace_id={W}&product={P} */
@@ -63,6 +67,13 @@ export class PlatformSharingRouter {
       },
       "trust-declared",
     );
+    if (!s2sCaller) {
+      // E6（2026-10-04）：谁还在走旧凭据——只在旧头那条路上记，Bearer 调用方不记。
+      this.legacyAuth.record({
+        route: "sharing.visible-set",
+        productCode: parsed.productCode,
+      });
+    }
     return this.sharing.resolveVisibleSet(workspaceId, parsed.productCode);
   }
 }

@@ -295,39 +295,35 @@ admin-bff 通过 `reporting_ro`（只读）或 `DATABASE_URL`（读写）连接�
   → 前端: 收到 Cookie（HTTP-only，JS 不可读）
 ```
 
-### 4.2 调用 internal/sign 的代码模式
+### 4.2 共享口令：两把钥匙、一个比较函数（2026-10-04 起的写法）
 
-> **这段示例正在被移除**（2026-10-04）：`resolveInternalAuthToken` 是 `@vxture/core-auth` 里零消费方的死代码（`!==` 比较、非生产硬编码回落值），`150-security.md` §3.2 点名的错误形态；删它的 PR 会连本节一起改。新代码按 `150-security.md` §3.1 走换票；确需共享口令的内部面读 `config.auth.IDP_INTERNAL_TOKEN`（见 `bff/admin-bff/src/auth/operator-stepup.service.ts`）。
+`@vxture/core-auth` 里曾有 `resolveInternalAuthToken` / `assertInternalAuth` / `InternalAuthGuard`——`!==` 比较、非生产硬编码回落值、零消费方，`150-security.md` §3.2 点名的错误形态。**2026-10-04 已删**（PR B）；不要再 import 这三个名字，也不要在 BFF 里自己写一份。新代码一律按 `150-security.md` §3.1 走换票；下面只管「确需共享口令」的存量两张面。
 
-```typescript
-import { resolveInternalAuthToken } from "@vxture/core-auth";
+同一个请求头 `x-vxture-internal-auth` 后面有**两把钥匙**，各开一张面、互不认、不回落：
 
-// 从 @vxture/core-auth 导入，禁止本地定义 resolveInternalAuthToken
-const signResponse = await fetch(`${AUTH_BFF_URL}/auth/internal/sign`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "x-vxture-internal-auth": resolveInternalAuthToken(),
-  },
-  body: JSON.stringify({
-    sub: user.id,
-    email: user.email,
-    role: user.roleCode,
-    source: "admin", // 'admin' | 'console' | 外部业务 source（如 'ruyin'）
-  }),
-});
-```
+| 面     | 收方                                                             | 读的键                            | 发方                              | 住哪                                            |
+| ------ | ---------------------------------------------------------------- | --------------------------------- | --------------------------------- | ----------------------------------------------- |
+| 内部面 | auth-bff `/internal/*`（`InternalAuthGuard`，auth-bff 自己的类） | `config.auth.IDP_INTERNAL_TOKEN`  | admin-bff / arche-bff / opera-bff | `secrets/platform-idp-internal.env`，只四个容器 |
+| 产品面 | platform-api C2/C3（`PlatformAuthGuard`）                        | `config.auth.AUTH_INTERNAL_TOKEN` | console-bff、各产品后台           | `secrets/platform.env`                          |
 
-### 4.3 auth-bff 接收方守卫
+谁读哪把由 `scripts/guardrails/check-internal-auth-key-usage.mjs` 精确钉住（多一个读者、少一个读者都红）。**发送方**的写法看 `bff/admin-bff/src/auth/operator-stepup.service.ts`：从 `config.auth` 读键、未配置就 503 `operator_*_unavailable`，不写默认值。
+
+**接收方**两个 guard 类分开（2026-07-12 的 guard-scope 事故是理由），但比较只有一个实现——`@vxture/core-auth` 的 `sharedSecretMatches(presented, expected)`：`expected` 为空 / 未配置 → false（fail-closed）、`presented` 不是字符串 → false、字节长度不等 → false、其余 `timingSafeEqual`。它不读 env、不认键名。
 
 ```typescript
-// auth-bff/src/routers/password-auth.router.ts
-import { InternalAuthGuard } from '@vxture/core-auth';
+import { sharedSecretMatches } from "@vxture/core-auth";
 
-@UseGuards(InternalAuthGuard)   // 替代原来的函数式校验
-@Post('internal/sign')
-async internalSign(@Body() body: InternalSignDto) { ... }
+// 收方 guard 里（auth-bff internal-auth.guard.ts / platform-api platform-auth.guard.ts 都是这个形状）
+const expected = this.config.auth.IDP_INTERNAL_TOKEN; // 产品面读 AUTH_INTERNAL_TOKEN
+if (!expected) throw new UnauthorizedException("internal_auth_unavailable");
+if (!sharedSecretMatches(req.header("x-vxture-internal-auth"), expected)) {
+  throw new UnauthorizedException("invalid_internal_auth");
+}
 ```
+
+### 4.3 auth-bff 接收方守卫（历史写法，已退役）
+
+旧文在这里教人 `import { InternalAuthGuard } from '@vxture/core-auth'` 挂到 `internal/sign` 上。那个共享 guard 已删（§4.2）；今天 auth-bff 的 `/internal/*` 用的是它**自己的** `bff/auth-bff/src/authn/internal-auth.guard.ts`（凭据过了之后还有一道路由准入，`@InternalRoute` 声明，deny-by-default）。
 
 ### 4.4 跨域 SSO（外部业务 BFF，以 Ruyin 为例）
 
@@ -431,12 +427,12 @@ PostgreSQL: vxturestudio_platform_main
 
 ## 8. 禁止项（AI 编码硬约束）
 
-| 禁止操作                                       | 原因                                                        |
-| ---------------------------------------------- | ----------------------------------------------------------- |
-| 在 BFF 中本地定义 `resolveInternalAuthToken()` | 已集中在 `@vxture/core-auth`，重复定义会在轮换 token 时遗漏 |
-| 在 router 文件中 `new Pool()`                  | 只允许 `pools.module.ts` 创建 Pool，router 只能 @Inject     |
-| 用 RW Pool 做纯读操作                          | RW Pool 是主库连接，读压力必须走 RO Pool                    |
-| 在 BFF 中直接签发 JWT                          | auth-bff 是唯一签发者，其他 BFF 只能调 internal/sign        |
-| 查询 `model_platform.*` 表                     | 旧表，admin-bff 应查 `model.*` 表                           |
-| 在 service 层 import `bff-*`                   | 层违反，dep-cruiser 会 blocking                             |
-| 跨 BFF 直接 import                             | BFF 之间通信只能通过 HTTP                                   |
+| 禁止操作                                    | 原因                                                                                                                                          |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 在 BFF 中自己写共享口令比较或读口令的默认值 | 比较只用 `@vxture/core-auth` 的 `sharedSecretMatches`（常量时间、fail-closed）；口令从 `config.auth` 读、未配置即关门，禁止回落默认值（§4.2） |
+| 在 router 文件中 `new Pool()`               | 只允许 `pools.module.ts` 创建 Pool，router 只能 @Inject                                                                                       |
+| 用 RW Pool 做纯读操作                       | RW Pool 是主库连接，读压力必须走 RO Pool                                                                                                      |
+| 在 BFF 中直接签发 JWT                       | auth-bff 是唯一签发者，其他 BFF 只能调 internal/sign                                                                                          |
+| 查询 `model_platform.*` 表                  | 旧表，admin-bff 应查 `model.*` 表                                                                                                             |
+| 在 service 层 import `bff-*`                | 层违反，dep-cruiser 会 blocking                                                                                                               |
+| 跨 BFF 直接 import                          | BFF 之间通信只能通过 HTTP                                                                                                                     |

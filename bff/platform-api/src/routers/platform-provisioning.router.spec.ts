@@ -18,6 +18,7 @@
  * @date 2026-09-17
  */
 import { describe, expect, it, vi, type Mock } from "vitest";
+import type { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import type { PlatformProvisioningService } from "../platform/platform-provisioning.service";
 import {
   parseAckBody,
@@ -45,11 +46,15 @@ function makeRouter(
     async (): Promise<string | null> => PRODUCT_ID,
   ),
 ) {
-  const router = new PlatformProvisioningRouter({
-    resolveProductId,
-    recordAck,
-  } as unknown as PlatformProvisioningService);
-  return { router, recordAck, resolveProductId };
+  const recordLegacy = vi.fn();
+  const router = new PlatformProvisioningRouter(
+    {
+      resolveProductId,
+      recordAck,
+    } as unknown as PlatformProvisioningService,
+    { record: recordLegacy } as unknown as LegacyAuthUsageService,
+  );
+  return { router, recordAck, resolveProductId, recordLegacy };
 }
 
 const s2s = (productCode: string) => ({
@@ -143,6 +148,28 @@ describe("POST /provisioning/ack", () => {
     );
     expect((error as { getStatus?: () => number }).getStatus?.()).toBe(400);
     expect(recordAck).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /provisioning/ack —— E6 旧凭据计数只在旧头那条路上", () => {
+  it("旧头（无 s2sCaller）：记一笔 provisioning.ack，按自报产品码", async () => {
+    const { router, recordLegacy } = makeRouter();
+    await router.ack(
+      { workspace_id: WS_DECLARED, product: "karda", status: "ready" },
+      undefined,
+    );
+    expect(recordLegacy.mock.calls.map((c) => c[0])).toEqual([
+      { route: "provisioning.ack", productCode: "karda" },
+    ]);
+  });
+
+  it("Bearer 调用方在场：一笔都不记", async () => {
+    const { router, recordLegacy } = makeRouter();
+    await router.ack(
+      { workspace_id: WS_DECLARED, product: "karda", status: "ready" },
+      s2s("karda"),
+    );
+    expect(recordLegacy).not.toHaveBeenCalled();
   });
 });
 

@@ -121,7 +121,7 @@ Header：x-vxture-internal-auth: {口令}
 
 拆开的意义：产品手里的值从此开不了运营管理面。谁读哪把由 `scripts/guardrails/check-internal-auth-key-usage.mjs` 精确钉住（auth-bff 出现 `AUTH_INTERNAL_TOKEN` 即红）。
 
-接收方必须在入口中间件校验此 Header，拒绝不合法请求。
+接收方必须在入口中间件校验此 Header，拒绝不合法请求。比较只有一个实现：`@vxture/core-auth` 的 `sharedSecretMatches(presented, expected)`（2026-10-04 起；下面那段是它做的事，别在 BFF 里再抄一份）。`core-auth` 里曾有一份可复用的共享口令 guard（`!==` 比较、非生产硬编码回落值），已删——这一节禁止新增共享口令校验，留一个可复用的 guard 是在招人用它。
 
 ```typescript
 // ✅ 正确：常量时间比较

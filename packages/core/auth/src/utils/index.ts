@@ -10,10 +10,7 @@ export {
   getTokenRemainingMs,
 } from "./auth.utils";
 
-export {
-  resolveInternalAuthToken,
-  assertInternalAuth,
-} from "./internal-auth.utils";
+export { sharedSecretMatches } from "./shared-secret";
 
 export {
   hasPermission,

@@ -18,7 +18,12 @@
  * are unaffected):
  *
  *  - legacy: the shared AUTH_INTERNAL_TOKEN in `x-vxture-internal-auth`.
- *    Fail-closed when the token is unconfigured; constant-time compare.
+ *    Fail-closed when the token is unconfigured; constant-time compare via
+ *    `sharedSecretMatches` (`@vxture/core-auth`, the same function auth-bff's
+ *    InternalAuthGuard uses — one implementation, two guard classes).
+ *    Requests that come in on this header (no `s2sCaller`) are counted by
+ *    `LegacyAuthUsageService` from the routers (E6: who is still on the
+ *    legacy credential, per month / route / product).
  *  - S2S token (new): `Authorization: Bearer <token>`, a token minted by
  *    the token-exchange grant (T1) with `aud = PLATFORM_S2S_AUDIENCE`.
  *    Verified via S2sTokenVerifier (IdP JWKS over the internal network —
@@ -46,7 +51,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
-import { timingSafeEqual } from "node:crypto";
+import { sharedSecretMatches } from "@vxture/core-auth";
 import { VxConfigService } from "@vxture/core-config";
 import type { Request } from "express";
 import type { S2sCallerCtx } from "./s2s-caller";
@@ -87,7 +92,7 @@ export class PlatformAuthGuard implements CanActivate {
       throw new UnauthorizedException("internal_auth_unavailable");
     }
     const presented = req.header(INTERNAL_AUTH_HEADER) ?? "";
-    if (!safeEqual(presented, expected)) {
+    if (!sharedSecretMatches(presented, expected)) {
       throw new UnauthorizedException("invalid_internal_auth");
     }
     return true;
@@ -122,11 +127,4 @@ export class PlatformAuthGuard implements CanActivate {
     };
     return true;
   }
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
 }

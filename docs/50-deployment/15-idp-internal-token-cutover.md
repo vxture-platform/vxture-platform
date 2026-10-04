@@ -189,7 +189,7 @@ docker logs vx-platform-auth-bff --since <deploy 完成时刻> 2>&1 | grep -o 'i
 
 - **D7 / PR D**：tailnet:8081 直通不变——拆钥匙只换了开门的值，门还在路边。把 8081 像 8080 一样前置 nginx、只放 `/oidc/*` `/.well-known/*`、`/internal/*` 404，需要 owner 确认 worker-02 上没有别的进程打 8081 的其他路径。
 - **PR A2**：修 `33-recreate-service.sh`（E3a 轮换值、未来改 secrets 都要它）。
-- **PR B**：删 `@vxture/core-auth` 里零消费方的 `resolveInternalAuthToken` / `assertInternalAuth` / `InternalAuthGuard`，并把 `check-internal-auth-key-usage.mjs` 里 `packages/core/auth` 那条 EXPECTED 一起删掉（留着会红）。
+- ~~**PR B**：删 `@vxture/core-auth` 里零消费方的 `resolveInternalAuthToken` / `assertInternalAuth` / `InternalAuthGuard`，并把 `check-internal-auth-key-usage.mjs` 里 `packages/core/auth` 那条 EXPECTED 一起删掉（留着会红）。~~ **已做（2026-10-04，PR B）**：三件已删，两个活 guard 改调 core-auth 的 `sharedSecretMatches`，EXPECTED 表项已删（自检 (vi) 改用合成期望表盯同一条性质）；同 PR 带 E6 旧凭据计数（platform-api 写、opera 读，TD-038 进展）。它改了 `packages/core/`，随下一个 tag 整栈 14 镜像重建——与本页切换本身无关，但那次 deploy 的时长按 §3 算。
 - **PR C**：主体绑定（`declaredUnbound` 8 → 0）。
 - CI 副本审计 `scripts/guardrails/audit-env.mjs` 没有 opera / arche / platform-api 三条服务 env 规则（也没有主机副本的 `OIDC_FUTURE_APP_HASH_KEYS` 与 `forbidsClientSecretHashes`），所以 arche 那条只能补在主机副本——它不审运行时文件，这里拦的本来就是主机副本。两份的其余差异是旧债，不在本线合并。
 - 本地开发：根 `.env.local` 要补 `IDP_INTERNAL_TOKEN=`（与 `AUTH_INTERNAL_TOKEN` 不同值），否则本地 step-up / 运营动作 503。

@@ -37,6 +37,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Badge,
   Banner,
@@ -149,6 +150,8 @@ interface Row {
   confirmedAt: string | null;
   item?: ChecklistEntry;
   order: number;
+  /** E6：C2 那条上「本月仍走旧凭据 n 次」的 n；没有就不上屏。 */
+  legacyAuthThisMonth?: number;
 }
 
 /**
@@ -308,6 +311,9 @@ function buildRows(
       confirmedAt: !auto && item.isSatisfied ? item.checkedAt : null,
       item,
       order: meta?.order ?? 900,
+      ...(live?.legacyAuthThisMonth !== undefined
+        ? { legacyAuthThisMonth: live.legacyAuthThisMonth }
+        : {}),
     });
   }
 
@@ -334,6 +340,9 @@ function buildRows(
       ...(live?.href ? { href: live.href } : {}),
       confirmedAt: null,
       order: meta.order,
+      ...(live?.legacyAuthThisMonth !== undefined
+        ? { legacyAuthThisMonth: live.legacyAuthThisMonth }
+        : {}),
     });
   }
 
@@ -406,6 +415,7 @@ export function LaunchDrawer({
   onLaunched,
 }: LaunchDrawerProps) {
   const { toast } = useToast();
+  const tShared = useTranslations();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -696,6 +706,14 @@ export function LaunchDrawer({
         ) : null}
         {row.detail ? (
           <p className="text-body-sm text-foreground">{row.detail}</p>
+        ) : null}
+        {row.legacyAuthThisMonth !== undefined ? (
+          /* E6：一句事实，不是控件、不进判定。E3a（产品面停收旧头）那天看这个数。 */
+          <p className="text-body-sm text-muted-foreground">
+            {tShared("integrationSignals.legacyAuthThisMonth", {
+              count: row.legacyAuthThisMonth,
+            })}
+          </p>
         ) : null}
         {row.remedy ? (
           <p className="text-body-sm text-warning-text">下一步：{row.remedy}</p>

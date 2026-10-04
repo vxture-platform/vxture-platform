@@ -13,17 +13,36 @@
 import { HttpException } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { RpRuntime } from "../oidc/oidc-rp.tokens";
 import type { RequestContext } from "../types/request-context";
 import {
   CONSUME_LOOKBACK,
+  LEGACY_AUTH_KEY_INFIX,
   ProductIntegrationSignalsRouter,
   S2S_LOOKBACK,
+  legacyAuthMonth,
   parseEntitlementSignal,
+  parseLegacyAuthSignal,
 } from "./product-integration-signals.router";
 
 const PRODUCT_ID = "3d9f0c1e-0000-4000-8000-000000000001";
+
+/* E6 的 legacy-auth hash 按 UTC 月取键；把时钟钉死，月份才是确定的。只替换 Date，
+   不碰 setTimeout——这个 router 不用计时器，而 vitest 的 Promise 断言不受影响。 */
+const NOW = new Date("2026-10-04T12:00:00.000Z");
+const MONTH = "2026-10";
+const LEGACY_KEY = `vx:${LEGACY_AUTH_KEY_INFIX}${MONTH}`;
+/** 没有任何旧凭据调用时的那一段：永远在场，`byRoute` 为空。 */
+const NO_LEGACY = { month: MONTH, byRoute: {} };
+
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now: NOW });
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 function makeReq(
   opts: { capabilities?: string[]; anonymous?: boolean } = {},
@@ -64,6 +83,8 @@ interface Fixture {
     response_code: number | null;
     last_attempt_at: Date | null;
   };
+  /** E6：本月 legacy-auth hash 的原样内容（HGETALL；键不存在时是空对象）。 */
+  legacyAuthHash?: Record<string, string>;
 }
 
 function makeRouter(fx: Fixture) {
@@ -110,12 +131,13 @@ function makeRouter(fx: Fixture) {
     throw new Error(`unexpected sql: ${sql}`);
   });
   const get = vi.fn(async () => fx.redisValue ?? null);
+  const hgetall = vi.fn(async () => fx.legacyAuthHash ?? {});
   const router = new ProductIntegrationSignalsRouter(
     { query } as unknown as Pool,
-    { get },
+    { get, hgetall },
     { keyPrefix: "vx:" } as RpRuntime,
   );
-  return { router, sqls, get };
+  return { router, sqls, get, hgetall };
 }
 
 async function failure(
@@ -163,6 +185,7 @@ describe("GET /api/products/:id/integration-signals", () => {
       delivery: null,
       plan: null,
       subscription: null,
+      legacyAuth: NO_LEGACY,
     });
     expect(get).toHaveBeenCalledWith("vx:integration:c2:arda");
 
@@ -173,8 +196,8 @@ describe("GET /api/products/:id/integration-signals", () => {
     expect(usageSql).toMatch(/LIMIT 1/);
   });
 
-  it("都没有：九个字段都是 null（不是 404，产品在，只是没接通）", async () => {
-    const { router } = makeRouter({ productCode: "karda" });
+  it("都没有：九段都是 null，legacyAuth 是空计数（不是 404，产品在，只是没接通）", async () => {
+    const { router, hgetall } = makeRouter({ productCode: "karda" });
     await expect(router.get(makeReq(), PRODUCT_ID)).resolves.toEqual({
       login: null,
       entitlement: null,
@@ -185,7 +208,37 @@ describe("GET /api/products/:id/integration-signals", () => {
       delivery: null,
       plan: null,
       subscription: null,
+      legacyAuth: NO_LEGACY,
     });
+    /* 键的形状与 platform-api 写的同一个串：prefix + infix + UTC 月。 */
+    expect(hgetall).toHaveBeenCalledWith(LEGACY_KEY);
+  });
+
+  it("E6：本月 legacy-auth hash 只取本产品的 field，按路由给数；别的产品的 field 不混进来", async () => {
+    const { router } = makeRouter({
+      productCode: "arda",
+      legacyAuthHash: {
+        "entitlements|arda": "12",
+        "usage.consume|arda": "3",
+        "usage.consume|karda": "99",
+        "provisioning.ack|vxtpl": "1",
+      },
+    });
+    const out = await router.get(makeReq(), PRODUCT_ID);
+    expect(out.legacyAuth).toEqual({
+      month: MONTH,
+      byRoute: { entitlements: 12, "usage.consume": 3 },
+    });
+  });
+
+  it("E6：计数不是非负整数 → 500 INTEGRATION_SIGNAL_MALFORMED，不悄悄当成 0", async () => {
+    const { router } = makeRouter({
+      productCode: "arda",
+      legacyAuthHash: { "entitlements|arda": "lots" },
+    });
+    const { status, body } = await failure(router.get(makeReq(), PRODUCT_ID));
+    expect(status).toBe(500);
+    expect(body["code"]).toBe("INTEGRATION_SIGNAL_MALFORMED");
   });
 
   it("开通回执：与开通取同一行，回执缺席时是 null 而不是报错", async () => {
@@ -460,5 +513,53 @@ describe("parseEntitlementSignal", () => {
     expect(() => parseEntitlementSignal("{not json", "k")).toThrow(
       HttpException,
     );
+  });
+});
+
+describe("E6 · legacyAuthMonth / parseLegacyAuthSignal", () => {
+  it("月份按 UTC，不按本地时区", () => {
+    expect(legacyAuthMonth(new Date("2026-10-31T23:59:59.000Z"))).toBe(
+      "2026-10",
+    );
+    expect(legacyAuthMonth(new Date("2026-11-01T00:00:00.000Z"))).toBe(
+      "2026-11",
+    );
+  });
+
+  it("空 hash = 本月零次：byRoute 是空对象，month 照给", () => {
+    expect(parseLegacyAuthSignal({}, "arda", "2026-10", "k")).toEqual({
+      month: "2026-10",
+      byRoute: {},
+    });
+  });
+
+  it("只留本产品的 field；产品码里带 | 也按第一个 | 切（route 不含 |）", () => {
+    expect(
+      parseLegacyAuthSignal(
+        { "entitlements|arda": "2", "entitlements|karda": "5" },
+        "arda",
+        "2026-10",
+        "k",
+      ).byRoute,
+    ).toEqual({ entitlements: 2 });
+  });
+
+  it("没有 | 的 field 是本方故障 → 500", () => {
+    expect(() =>
+      parseLegacyAuthSignal({ garbage: "1" }, "arda", "2026-10", "k"),
+    ).toThrow(HttpException);
+  });
+
+  it("负数 / 小数 / 非数字都是本方故障 → 500", () => {
+    for (const bad of ["-1", "1.5", "NaN", ""]) {
+      expect(() =>
+        parseLegacyAuthSignal(
+          { "entitlements|arda": bad },
+          "arda",
+          "2026-10",
+          "k",
+        ),
+      ).toThrow(HttpException);
+    }
   });
 });

@@ -25,6 +25,7 @@ import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
 import { scopeToS2sCaller } from "../authn/s2s-scope";
 import { IntegrationSignalService } from "../platform/integration-signal.service";
+import { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import { PlatformEntitlementsService } from "../platform/platform-entitlements.service";
 import {
   parseEntitlementQuery,
@@ -39,6 +40,8 @@ export class PlatformEntitlementsRouter {
     private readonly entitlements: PlatformEntitlementsService,
     @Inject(IntegrationSignalService)
     private readonly signals: IntegrationSignalService,
+    @Inject(LegacyAuthUsageService)
+    private readonly legacyAuth: LegacyAuthUsageService,
   ) {}
 
   /**
@@ -77,6 +80,14 @@ export class PlatformEntitlementsRouter {
       parsed,
       "trust-declared",
     );
+    if (!s2sCaller) {
+      // E6（2026-10-04）：谁还在走旧凭据。只在旧头那条路上记——Bearer 调用方已有身份
+      // （act.sub），不是这张表要回答的问题。一次请求问几个产品码就记几笔（问的是
+      // 「哪个产品还在走」）。永不改响应（legacy-auth-usage.service.ts）。
+      for (const code of parsed.productCodes) {
+        this.legacyAuth.record({ route: "entitlements", productCode: code });
+      }
+    }
 
     const views = await this.entitlements.resolve(
       workspaceId,

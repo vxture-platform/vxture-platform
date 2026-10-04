@@ -34,6 +34,10 @@
 1. **legacy**：`x-vxture-internal-auth: ${AUTH_INTERNAL_TOKEN}`（platform.env 共享键；arda 现行）。2026-10-04 起这把钥匙**只**开本宿主的产品面：auth-bff 的 `/internal/*` 内部面改认 `IDP_INTERNAL_TOKEN`（只注入 auth/admin/arche/opera 四个容器），产品手里的值开不了运营管理面；反过来新键也开不了这里——`platform-auth.guard.spec.ts` 钉着「头带 IDP 值 → 401」；
 2. **S2S bearer**（product_210 T1/T2）：`Authorization: Bearer <token>`，`aud=vxture`、`act.sub`=调用方产品码；经 `S2sTokenVerifier` 以 IdP JWKS（`${AUTH_BFF_URL}/oidc/jwks`，kid 缓存）验签——**签名私钥不出 auth-bff**（D13 凭证分权）。
 
+口令比较用 `@vxture/core-auth` 的 `sharedSecretMatches`（与 auth-bff 的 `InternalAuthGuard` 同一个实现：fail-closed、字节长度、`timingSafeEqual`；guard 类仍分开）。
+
+**E6 指标：谁还在走旧凭据（2026-10-04）**。四个 router 在 `scopeToS2sCaller` 之后、`s2sCaller` 为空（= 旧头进来）时调 `LegacyAuthUsageService.record({ route, productCode })`（`src/platform/legacy-auth-usage.service.ts`）：进程内 Map 聚合、每 60s 一次 HINCRBY 到 Redis hash `<REDIS_KEY_PREFIX>integration:legacy-auth:<YYYY-MM>`（UTC 月），field `<route>|<product>`，route ∈ `entitlements` / `usage.consume` / `usage.gauge` / `sharing.visible-set` / `provisioning.ack`，product = 请求自报的产品码（旧头没有身份，归因同 C2 信号），键 TTL 90 天；每 (route, product) 每小时至多一行日志 `legacy internal-auth: route=… product=… n=…`。永不改响应、永不抛；Redis 坏了一个 streak 一条 warn。opera-bff `GET /api/products/:id/integration-signals` 回 `legacyAuth {month, byRoute}`，门户在 C2 那行下显示「本月仍有 n 次调用走旧的共享凭据」——E3a（产品面停收旧头）那天看这个数。看不见：进程退出前不满一分钟的那批、`intent=reserve` 走旧头被 `deny` 的调用（在发射点之前 403）；每月 field 上限 512，超过归 `<route>|__other__`。
+
 ## 接口契约
 
 契约权威不在本文（本文只是宿主说明）：

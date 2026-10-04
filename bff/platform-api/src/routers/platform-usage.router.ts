@@ -36,6 +36,7 @@ import type { Response } from "express";
 import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
 import { scopeToS2sCaller } from "../authn/s2s-scope";
+import { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import { PlatformUsageService } from "../platform/platform-usage.service";
 import { TokenUsageService } from "../platform/token-usage.service";
 import {
@@ -57,6 +58,9 @@ export class PlatformUsageRouter {
     // #547：token 形态走它；Nest × esbuild 要显式 @Inject
     @Inject(TokenUsageService)
     private readonly tokens: TokenUsageService,
+    // E6：旧凭据计数（legacy-auth-usage.service.ts）
+    @Inject(LegacyAuthUsageService)
+    private readonly legacyAuth: LegacyAuthUsageService,
   ) {}
 
   /**
@@ -123,6 +127,14 @@ export class PlatformUsageRouter {
         ? "deny"
         : "trust-declared",
     );
+    if (!s2sCaller) {
+      // E6（2026-10-04）：谁还在走旧凭据——只在旧头那条路上记，Bearer 调用方不记。
+      // `deny` 那档在上一行就 403 了，到不了这里（写在 service 头注的「看不见什么」里）。
+      this.legacyAuth.record({
+        route: "usage.consume",
+        productCode: parsed.productCode,
+      });
+    }
 
     const productId = await this.usage.resolveProductId(parsed.productCode);
     if (!productId) throw new BadRequestException("unknown_product");
@@ -273,6 +285,13 @@ export class PlatformUsageRouter {
       },
       "trust-declared",
     );
+    if (!s2sCaller) {
+      // E6：同 consume()。
+      this.legacyAuth.record({
+        route: "usage.gauge",
+        productCode: parsed.productCode,
+      });
+    }
 
     const productId = await this.usage.resolveProductId(parsed.productCode);
     if (!productId) throw new BadRequestException("unknown_product");

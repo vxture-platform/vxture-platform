@@ -14,7 +14,11 @@
  * 所以这里钉的不是「advisory 这个字段存在」，是**它真的被排除在判定之外**。
  */
 import { describe, expect, it } from "vitest";
-import { allPassed, type CheckResult } from "./launch-checks";
+import {
+  allPassed,
+  legacyAuthThisMonth,
+  type CheckResult,
+} from "./launch-checks";
 
 function check(over: Partial<CheckResult>): CheckResult {
   return {
@@ -64,5 +68,23 @@ describe("allPassed —— 只数参与判定的那些", () => {
 
   it("空数组：false（读不到不等于通过，与全文件的失败方向一致）", () => {
     expect(allPassed([])).toBe(false);
+  });
+});
+
+describe("legacyAuthThisMonth —— E6 那句话里的 n", () => {
+  it("按路由的计数合成一个总数", () => {
+    expect(
+      legacyAuthThisMonth({
+        byRoute: { entitlements: 12, "usage.consume": 3 },
+      }),
+    ).toBe(15);
+  });
+
+  it("空 byRoute 是 0——0 要上屏（E3a 那天看的就是 0），不是「没有」", () => {
+    expect(legacyAuthThisMonth({ byRoute: {} })).toBe(0);
+  });
+
+  it("BFF 没给这一段：undefined，那句话不上屏；不把「读不到」画成 0", () => {
+    expect(legacyAuthThisMonth(undefined)).toBeUndefined();
   });
 });

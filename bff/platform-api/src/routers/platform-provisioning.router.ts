@@ -40,6 +40,7 @@ import {
 import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
 import { scopeToS2sCaller } from "../authn/s2s-scope";
+import { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import { PlatformProvisioningService } from "../platform/platform-provisioning.service";
 
 /** `POST /provisioning/ack` 的响应体。`replayed` 与 C3 consume 同义。 */
@@ -104,6 +105,9 @@ export class PlatformProvisioningRouter {
   constructor(
     @Inject(PlatformProvisioningService)
     private readonly provisioning: PlatformProvisioningService,
+    // E6：旧凭据计数（legacy-auth-usage.service.ts）
+    @Inject(LegacyAuthUsageService)
+    private readonly legacyAuth: LegacyAuthUsageService,
   ) {}
 
   /** POST /provisioning/ack { workspace_id, product, status, delivery_id?, detail? } */
@@ -137,6 +141,13 @@ export class PlatformProvisioningRouter {
       },
       "trust-declared",
     );
+    if (!s2sCaller) {
+      // E6（2026-10-04）：谁还在走旧凭据——只在旧头那条路上记，Bearer 调用方不记。
+      this.legacyAuth.record({
+        route: "provisioning.ack",
+        productCode: parsed.productCode,
+      });
+    }
 
     const productId = await this.provisioning.resolveProductId(
       parsed.productCode,
