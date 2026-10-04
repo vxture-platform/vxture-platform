@@ -17,6 +17,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
 . "$COMPOSE_DIR/scripts/lib/site-takeover.sh"
+. "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
 SRC="$COMPOSE_DIR/nginx"
 COMPOSE_SRC="$COMPOSE_DIR/compose.nginx.yml"
@@ -54,6 +55,17 @@ render_nginx() {
   echo "  渲染 $(basename "$src") → $dst"
 }
 
+# compose 不再是裸 cp：仓内 compose.nginx.yml 是**终态**（nginx 发布 tailnet :8081 作 IdP 换票
+# 别名）。在一台 auth-bff 还直接发布 :8081 的主机上原样落下，31 紧接着的 `compose up -d` 会重建
+# nginx 去绑一个还被占着的口——compose 先停旧再起新，新的起不来，**全站 80/443 一起下线**。
+# 所以这里按现场决定带不带那一行：没人占 / nginx 已占 → 终态；auth-bff 占着 → 去掉那一行、
+# 交接延后到 30-deploy 在 auth-bff 重建之后立刻做；别人占着 → 报错停（不是跳过）。
+# 放在**任何配置文件落盘之前**：它是本脚本唯一会「拒绝」的判定，拒绝时下面的 sites-enabled
+# 先清后渲还没开始，运行中的 nginx 与它的配置目录都原样不动。
+# 判据与证明：lib/nginx-idp-port.sh、lib/nginx-idp-port.test.sh。
+echo "==> 落 nginx compose（按 :8081 现场决定 IdP 别名发布）"
+idp_alias_sync "$COMPOSE_SRC" "$COMPOSE_DST"
+
 render_nginx "$SRC/nginx.conf" "$DST/nginx.conf"
 for f in "$SRC/conf.d/"*.conf;        do render_nginx "$f" "$DST/conf.d/$(basename "$f")"; done
 for f in "$SRC/snippets/"*.conf;      do render_nginx "$f" "$DST/snippets/$(basename "$f")"; done
@@ -66,7 +78,7 @@ for f in "$SRC/snippets/"*.conf;      do render_nginx "$f" "$DST/snippets/$(base
 # 不受影响；下次成功运行即完整重建。
 rm -f "$DST/sites-enabled/"*.conf
 for f in "$SRC/sites-enabled/"*.conf; do render_nginx "$f" "$DST/sites-enabled/$(basename "$f")"; done
-cp -v "$COMPOSE_SRC"                        "$COMPOSE_DST"
+# （compose.nginx.yml 已在上方、任何文件落盘之前按现场落为 $COMPOSE_DST。）
 
 # ── 模板渲染：admin vhost（2026-07-28 加固决策追加，与 opera 同一性质）──────
 # 真实域名不入仓：从主机 runtime env 的 ADMIN_BASE_URL 取主机名渲染模板。

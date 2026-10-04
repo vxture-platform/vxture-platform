@@ -33,22 +33,22 @@
 
 L0 各面的**段归属与段内取号规则**(x0=UI / x1=BFF / x2–x9 归本面)见端口登记表,本表只登记域名/容器/宿主绑定:
 
-| 面(L0)           | 域名                                                                       | 容器                              | 宿主绑定                           |
-| ---------------- | -------------------------------------------------------------------------- | --------------------------------- | ---------------------------------- |
-| website          | vxture.com(www 301→apex) + ruyin.work(占位页,另一注册域,见 06 §ruyin.work) | vx-platform-website / website-bff | —                                  |
-| console          | console.vxture.com                                                         | vx-platform-console / console-bff | —                                  |
-| admin            | y.vxture.com                                                               | vx-platform-admin / admin-bff     | —                                  |
-| opera            | x.vxture.com                                                               | vx-platform-opera / opera-bff     | —                                  |
-| accounts(IdP)    | accounts.vxture.com(`/oidc/*`→auth-bff)                                    | vx-platform-accounts / auth-bff   | auth-bff 经 tailnet 暴露(见下)     |
-| varda(非面,内嵌) | 无域名(console/admin `/varda/*` 反代)                                      | varda-bff / varda-agent           | worker-02 发布(UFW 仅放行 tailnet) |
+| 面(L0)           | 域名                                                                       | 容器                              | 宿主绑定                                       |
+| ---------------- | -------------------------------------------------------------------------- | --------------------------------- | ---------------------------------------------- |
+| website          | vxture.com(www 301→apex) + ruyin.work(占位页,另一注册域,见 06 §ruyin.work) | vx-platform-website / website-bff | —                                              |
+| console          | console.vxture.com                                                         | vx-platform-console / console-bff | —                                              |
+| admin            | y.vxture.com                                                               | vx-platform-admin / admin-bff     | —                                              |
+| opera            | x.vxture.com                                                               | vx-platform-opera / opera-bff     | —                                              |
+| accounts(IdP)    | accounts.vxture.com(`/oidc/*`→auth-bff)                                    | vx-platform-accounts / auth-bff   | auth-bff 经 vx-nginx 的 tailnet 别名暴露(见下) |
+| varda(非面,内嵌) | 无域名(console/admin `/varda/*` 反代)                                      | varda-bff / varda-agent           | worker-02 发布(UFW 仅放行 tailnet)             |
 
-**边缘带(不占应用段,两个 API 边缘 + 一个 S2S 暴露口;具体端口见端口登记表)**:
+**边缘带(不占应用段,一个公网 API 边缘 + 两个 tailnet S2S 别名,三个口都由 vx-nginx 发布、平台容器不发布任何宿主口;具体端口见端口登记表)**:
 
-| 边缘           | 服务         | 性质                                                                        |
-| -------------- | ------------ | --------------------------------------------------------------------------- |
-| 公网 API 边缘  | gateway-bff  | nginx `api.vxture.com` 回源                                                 |
-| S2S 内网别名   | platform-api | **跨仓契约值**——产品仓 `.env.example` 的 `PLATFORM_API_URL` 写死此地址,不变 |
-| S2S token 交换 | auth-bff     | 产品仓 S2S 换票入口,见 `product_230` §2                                     |
+| 边缘           | 服务         | 性质                                                                                                                                                                                                                |
+| -------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 公网 API 边缘  | gateway-bff  | nginx `api.vxture.com` 回源                                                                                                                                                                                         |
+| S2S 内网别名   | platform-api | **跨仓契约值**——产品仓 `.env.example` 的 `PLATFORM_API_URL` 写死此地址,不变;`platform-internal.conf` 只放 `/platform/ /usage/ /provisioning/ /openapi.json /healthz`                                                |
+| S2S token 交换 | auth-bff     | 产品仓 S2S 换票入口,见 `product_230` §2;2026-10-04 起由 vx-nginx 别名承接(`idp-internal.conf` 只放 `/oidc/` `/.well-known/` `/healthz`,其余含 `/internal/*` 404),auth-bff 容器本身不再发布宿主口;**地址与端口不变** |
 
 > **为什么 tailnet 口要独立于 L0 map**:2026-07-24 那次挪了 auth-bff 的内部端口,而 `product_230`(定稿的跨仓 mesh 契约)三处仍写着旧值——契约文档与运行态整整两周对不上,产品仓看的是错的。根因是"对外契约值 = 内部端口"这个耦合。现在解耦:**内部怎么重排都不出应用块,对外只暴露边缘带**,内部再动不需要发一封跨仓通知。
 >

@@ -187,8 +187,10 @@ services:
     pids_limit: 128
     memswap_limit: 160m
     networks: [vxture-prod]
-    ports:
-      - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:8081:3081" # 绑定 Tailscale 接口，仅 Tailscale 对端可达。宿主口进 80xx 边缘带（8080=platform-api S2S，8081=auth-bff S2S），容器内口跟 L0 map（3081）——跨仓契约从此只认 80xx，内部重排不再波及产品仓（原 3090 → 3061 → 本次）
+    # 不发布任何宿主口（E1 PR D，2026-10-04）。此前这里把整个容器发布在
+    # ${VX_WORKER01_TAILNET_IP}:8081，任何 tailnet 对端都能打到 /internal/*。现在 :8081 由
+    # vx-nginx 发布（compose.nginx.yml）、sites-enabled/idp-internal.conf 只转 /oidc/ /.well-known/
+    # /healthz、其余 404；产品侧地址不变。切换期的端口交接见 scripts/lib/nginx-idp-port.sh。
     # Overrides any NODE_OPTIONS from env_file (inline wins). Owner: confirm no
     # host .env.* already sets NODE_OPTIONS flags that would be clobbered.
     environment:

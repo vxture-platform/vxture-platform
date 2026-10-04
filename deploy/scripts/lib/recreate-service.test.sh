@@ -11,6 +11,9 @@
 #   · CONTAINER_OF 与 compose.platform.yml 的 service → container_name 一一对账（加服务忘记登记即红）
 #   · 仓里别处（.github/workflows、deploy/scripts）不得再长一份「拆 tag + compose up --force-recreate」
 #     ——db-init.yml 的 provision-secrets / sync-env 曾各抄一份，修 33 时没人看见；负例喂旧块
+#   · tailnet :8081 的前置门（E1 PR D）：auth-bff 在目标里、主机还在切换中（auth-bff 直接发布着 :8081、
+#     compose 已无 ports:）→ 在任何 compose 动作之前拒绝、指向 31；nginx 已接（docker 会把它的 8080+8081
+#     折成一个区间，假 docker 按同样的绑定喂）/ 旧 bundle 的 compose 仍带 ports: / 目标不含 auth-bff → 放行
 # 运行：bash deploy/scripts/lib/recreate-service.test.sh
 # 对照：RECREATE_SCRIPT 指向改动前的 33（`git show <rev>:deploy/scripts/33-recreate-service.sh > /tmp/x.sh`）
 #       时，digest / 混批两组要红——它们就是 2026-09-01 之后生产上的现场。
@@ -45,7 +48,9 @@ VX_WORKER02_TAILNET_IP=203.0.113.2
 EOF
 
 # 假 docker：夹具目录 $FAKE_DOCKER_DIR 里
-#   containers/<容器名>  内容 = 该容器的 Config.Image；文件不存在 = 容器不在
+#   containers/<容器名>  内容 = 该容器的 Config.Image；文件不存在 = 容器不在（`docker ps --format '{{.Names}}'` 列的就是这些）
+#   bindings.txt         宿主口绑定 <容器名>\t<宿主 IP>\t<宿主口>\t<容器口/协议>，一绑定一行；
+#                        `docker inspect --format <NetworkSettings.Ports 模板> <名>…` 按它吐行（lib/nginx-idp-port.sh 的判据）
 #   images.txt           本地有的镜像引用，一行一个（`docker image inspect <ref>` 按整行精确匹配）
 #   calls.log            每次 docker 调用的 argv（断言「拒绝发生在任何 docker 动作之前」用）
 #   compose.args         每次 `docker compose …` 的 argv
@@ -55,10 +60,25 @@ cat > "$T/bin/docker" <<'EOF'
 D="${FAKE_DOCKER_DIR:?}"
 printf '%s\n' "$*" >> "$D/calls.log"
 case "${1:-}" in
+  ps)
+    [ "$*" = "ps --format {{.Names}}" ] || { echo "fake docker: 未预期的 ps 参数 $*" >&2; exit 99; }
+    ls "$D/containers"
+    ;;
   inspect)
     shift
     fmt=""
     if [ "${1:-}" = "--format" ]; then fmt="$2"; shift 2; fi
+    case "$fmt" in
+      *NetworkSettings.Ports*)
+        rc=0
+        for c in "$@"; do
+          [ -f "$D/containers/$c" ] || { echo "Error: No such object: $c" >&2; rc=1; continue; }
+          awk -F'\t' -v OFS='\t' -v n="$c" '$1 == n { print "/" $1, $2, $3, $4 }' "$D/bindings.txt" 2>/dev/null
+          echo
+        done
+        exit $rc
+        ;;
+    esac
     cname="${1:?}"
     [ -f "$D/containers/$cname" ] || { echo "Error: No such object: $cname" >&2; exit 1; }
     case "$fmt" in
@@ -98,18 +118,22 @@ IMG_WEB_TAG="$REG/platform_website:v0.26.20"
 
 FX=""
 fixture() { # fixture <名> → 空夹具
-  FX="$T/fx/$1"; rm -rf "$FX"; mkdir -p "$FX/containers"; : > "$FX/images.txt"
+  FX="$T/fx/$1"; rm -rf "$FX"; mkdir -p "$FX/containers"; : > "$FX/images.txt"; : > "$FX/bindings.txt"
 }
 container() { # container <容器名> <Config.Image> [local=yes|no]
   printf '%s\n' "$2" > "$FX/containers/$1"
   [ "${3:-yes}" = "yes" ] && printf '%s\n' "$2" >> "$FX/images.txt"
   return 0
 }
-# run33 <服务…>：在当前夹具上真跑脚本；stdout+stderr 进 $OUT，退出码进 $RC
+binding() { # binding <容器名> <宿主 IP> <宿主口> <容器口/协议>
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >> "$FX/bindings.txt"
+}
+# run33 <服务…>：在当前夹具上真跑脚本；stdout+stderr 进 $OUT，退出码进 $RC。
+# RUN33_COMPOSE_DIR 可指向别的 bundle 目录（第 9 组用一份 auth-bff 仍带 ports: 的旧 compose）。
 OUT=""; RC=0
 run33() {
   set +e
-  OUT="$(env PATH="$T/bin:$PATH" FAKE_DOCKER_DIR="$FX" COMPOSE_DIR="$DEPLOY_DIR" RUNTIME_DIR="$T/runtime" \
+  OUT="$(env PATH="$T/bin:$PATH" FAKE_DOCKER_DIR="$FX" COMPOSE_DIR="${RUN33_COMPOSE_DIR:-$DEPLOY_DIR}" RUNTIME_DIR="$T/runtime" \
             bash "$SCRIPT" "$@" 2>&1)"
   RC=$?
   set -e
@@ -265,6 +289,53 @@ if [ -f "$DBINIT" ]; then
 $invocations
 EOF
 fi
+
+# ── 9. tailnet :8081 的前置门（E1 PR D）：切换中的主机上不许重建 auth-bff ──────────────────────
+# 现场 = PR D 的 bundle 已上机（compose.platform.yml 不再给 auth-bff ports:），31 却没走到 30 的 auth-bff
+# 那步：auth-bff 还直接发布着 :8081。此时 db-init 的 provision-secrets / sync-env（都经 33 重建 auth-bff）
+# 或手跑 33 会把宿主口放掉而没人接——产品换票口无人服务，直到有人重跑 31。
+echo "== 第 9 组：切换中的主机"
+fixture cutover_legacy
+container vx-platform-auth-bff  "$IMG_AUTH"
+container vx-platform-admin-bff "$IMG_ADMIN"
+binding vx-platform-auth-bff 203.0.113.1 8081 3081/tcp
+run33 auth-bff
+[ "$RC" -eq 1 ] && [ "$(compose_calls)" = "0" ] && printf '%s' "$OUT" | grep -q "31" && printf '%s' "$OUT" | grep -q "8081" \
+  && ok "切换中 + 目标 auth-bff → exit 1、零 compose 动作、指向 31" || bad "cutover_legacy：rc=$RC compose=$(compose_calls) out=[$OUT]"
+run33 auth-bff admin-bff
+[ "$RC" -eq 1 ] && [ "$(compose_calls)" = "0" ] && ok "切换中 + 一批里含 auth-bff → 整批不动" || bad "cutover_legacy·batch：rc=$RC compose=$(compose_calls)"
+run33 admin-bff
+[ "$RC" -eq 0 ] && [ "$(compose_calls)" = "1" ] && ok "切换中 + 目标不含 auth-bff → 不问 :8081，照常重建" || bad "cutover_legacy·admin：rc=$RC compose=$(compose_calls) out=[$OUT]"
+
+fixture cutover_done                                                             # 已交接：nginx 发布 8080+8081（docker 会折成一个区间，判据不读那一列）
+container vx-platform-auth-bff "$IMG_AUTH"
+container vxture-nginx "nginx:1.29-alpine"
+binding vxture-nginx 203.0.113.1 8080 8080/tcp
+binding vxture-nginx 203.0.113.1 8081 8081/tcp
+run33 auth-bff
+[ "$RC" -eq 0 ] && [ "$(compose_calls)" = "1" ] && printf '%s' "$OUT" | grep -q "现场：nginx" && ok "已交接（nginx 发布 :8081）+ 目标 auth-bff → 放行、恰一次 compose up" || bad "cutover_done：rc=$RC compose=$(compose_calls) out=[$OUT]"
+
+fixture cutover_none                                                             # 没人发布：33 不是修这个的地方
+container vx-platform-auth-bff "$IMG_AUTH"
+run33 auth-bff
+[ "$RC" -eq 0 ] && [ "$(compose_calls)" = "1" ] && ok "没人发布 :8081 + 目标 auth-bff → 放行（重建不改变它）" || bad "cutover_none：rc=$RC out=[$OUT]"
+
+# 旧 bundle：compose 仍给 auth-bff ports:（db-init 的 ref 新、deploy 的 ref 旧时会这样）→ 重建后它自己再发布一次，放行
+OLD_BUNDLE="$T/oldbundle"; mkdir -p "$OLD_BUNDLE/scripts"; cp -R "$DEPLOY_DIR/scripts/lib" "$OLD_BUNDLE/scripts/lib"
+awk '{ print } /^    container_name: vx-platform-auth-bff$/ { print "    ports:"; print "      - \"${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:8081:3081\"" }' "$COMPOSE_YML" > "$OLD_BUNDLE/compose.platform.yml"
+grep -q ':8081:3081' "$OLD_BUNDLE/compose.platform.yml" || bad "旧 bundle 夹具没插进 ports:（compose 的 auth-bff 段形状变了？）"
+fixture cutover_oldcompose
+container vx-platform-auth-bff "$IMG_AUTH"
+binding vx-platform-auth-bff 203.0.113.1 8081 3081/tcp
+RUN33_COMPOSE_DIR="$OLD_BUNDLE" run33 auth-bff
+[ "$RC" -eq 0 ] && [ "$(compose_calls)" = "1" ] && ok "切换中 + 旧 bundle 的 compose 仍带 ports: → 放行" || bad "cutover_oldcompose：rc=$RC out=[$OUT]"
+
+# 接线：33 source 了库，门在 [1/3] 之后、compose up 之前
+l_src="$(grep -n 'lib/nginx-idp-port.sh' "$SCRIPT" | grep -v '^[0-9]*:#' | head -1 | cut -d: -f1)"
+l_guard="$(grep -n 'idp_alias_guard_recreate "\$COMPOSE_FILE"' "$SCRIPT" | head -1 | cut -d: -f1)"
+l_up="$(grep -n 'up -d --pull never --no-deps --force-recreate' "$SCRIPT" | head -1 | cut -d: -f1)"
+[ -n "$l_src" ] && [ -n "$l_guard" ] && [ -n "$l_up" ] && [ "$l_src" -lt "$l_guard" ] && [ "$l_guard" -lt "$l_up" ] \
+  && ok "33 接线：source 库（:$l_src）→ 门（:$l_guard）→ compose up（:$l_up）" || bad "33 接线：src=$l_src guard=$l_guard up=$l_up"
 
 if [ "$fail" -eq 0 ]; then
   echo "recreate-service.test: 全部通过"

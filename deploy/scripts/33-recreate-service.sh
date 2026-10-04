@@ -34,6 +34,10 @@
 #
 # 注意：本脚本只重载 env / 重建容器，**不拉新镜像、不改代码版本**——钉的是容器此刻在跑的那个
 #   镜像，重建后代码一字不变、只重读 env。要上新代码走晋升 → deploy（31 → 30）。
+#
+#   切换中的主机上重建 auth-bff 会把 tailnet :8081 放掉而没人接（E1 PR D：auth-bff 还直接发布着
+#   :8081、而 bundle 里的 compose 已不给它 ports:，本脚本又不做 nginx 交接）——[1/3] 末尾先问现场，
+#   这种现场即拒绝、指向 31；其余现场放行（lib/nginx-idp-port.sh，lib/recreate-service.test.sh 钉四格）。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -46,6 +50,8 @@ RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 # 镜像三变量也由它从 runtime/.env 读出——目标服务的 image 随后被覆盖钉死，这三个值只用来让
 # compose 把其余（不动的）服务的 image 串解析出来。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+# tailnet :8081 归谁的判据（E1 PR D）：重建 auth-bff 之前先问现场，见 [1/3] 末尾。
+. "$COMPOSE_DIR/scripts/lib/nginx-idp-port.sh"
 load_compose_env
 
 # compose 服务名 → 容器名（按在跑容器取 Config.Image 用）。与 compose.platform.yml 的 14 个
@@ -121,6 +127,19 @@ for svc in "${TARGETS[@]}"; do
   IMAGE_OF[$svc]="$running_image"
   echo "  [OK] $svc → $cname，image=$running_image（本地镜像在册）"
 done
+
+# ── auth-bff 在目标里：先问 tailnet :8081 归谁（E1 PR D 的端口交接）──────────────────────
+# 切换中的主机（PR D 的 bundle 已上机、31 却没走到 30 的 auth-bff 那步）上，auth-bff 还直接发布着
+# :8081，而这里要用的 compose.platform.yml 已不给它 ports:——此刻 --force-recreate 会把宿主口放掉，
+# 本脚本不做 nginx 交接（它不带 compose.nginx.yml；db-init 的同步也不带），产品换票口从此无人服务，
+# 直到有人重跑 31。所以在任何 compose 动作之前拒绝、指向 31。其余现场（nginx 已接 / 旧 bundle 的
+# compose 仍带 ports: / 没人占）重建 auth-bff 不改变这个口归谁，放行。判据与 20 / 30 同一份。
+case " ${TARGETS[*]} " in
+  *" auth-bff "*)
+    echo "  auth-bff 在目标里 → 先核 tailnet :${IDP_ALIAS_PORT} 现场"
+    idp_alias_guard_recreate "$COMPOSE_FILE"
+    ;;
+esac
 
 # ── 写 pinned 覆盖：只含本次目标，image 原样 = 在跑值；用完即删，不与 30 的 compose.pinned.yml 混 ──
 PIN_DIR="$(mktemp -d)"
