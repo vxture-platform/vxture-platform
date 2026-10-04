@@ -44,16 +44,13 @@
  * `/healthz`+`/readyz`），两条并发探，先拿到的非 404 响应视为命中；两条都 404 记
  * "未实现"（readiness）或"异常"（liveness——它不是可选项）；两条都连不上记"不可达"。
  *
- * ── 2026-08-31：client 型产品不探测，标「不适用」──────────────────────────────
+ * ── 2026-10-04：「client 型产品不探测」的分支已删 ───────────────────────────────
  *
- * 桌面 / 原生客户端产品（`product_type='client'`，如 ruyin）的 OIDC 客户端是 RFC 8252
- * 的公共客户端，回调地址是 loopback（`http://127.0.0.1/...`）。它没有服务面可探——
- * 按 redirect_uri 的 origin 去探，探到的是 opera-bff 自己容器的 127.0.0.1，永远
- * 「不可达」，还会被算进「需要关注」。这不是产品故障，是探测对象不存在。所以：
- * 层级判为 client 的产品，已登记的渠道**不发探测**，存活 / 就绪两列都记
- * `not_applicable`（渠道本身照样列出：客户端登记是事实，只是没有东西可探）；
- * 没登记的渠道仍是 `not_configured`（登记与否是另一个事实）。见
- * `channelProbeMode()`。
+ * 2026-08-31 曾为桌面客户端产品（当时 `product_type='client'`，如 ruyin）留过一档
+ * `not_applicable`：回调是 loopback，探到的是 opera-bff 自己的 127.0.0.1。那一档的判据
+ * 是「层级判为 client」，而层级自 2026-09-17 起只读 `products.layer` 列、值域只收 L1/L2/L3
+ * ——`client` 永远取不到，分支成了死代码；ruyin 自 2026-08-31 起也不再是目录产品
+ * （平台级桌面客户端，不建产品行）。已登记的渠道一律探测；没登记的渠道是 `not_configured`。
  *
  * 只读、零持久化：每次请求现探，不落库、不缓存趋势，前端定时轮询。未设专属能力码：
  * admin 原页面从未挂过权限码，迁移不新增门槛，只要求已登录 operator。
@@ -75,13 +72,12 @@ const PROBE_TIMEOUT_MS = 4_000;
 const LIVENESS_PATHS = ["/api/health", "/healthz"] as const;
 const READINESS_PATHS = ["/api/ready", "/readyz"] as const;
 
-export type ProductLayer =
-  | "L1"
-  | "L2"
-  | "L3"
-  | "client"
-  | "external"
-  | "unclassified";
+/**
+ * 服务状态页的层级词表 = `products.layer` 的三个受管值 + 「未分层」显示态。
+ * `client` / `external` 两个值 2026-10-04 删掉：external 是来源轴（`products.origin`），
+ * 客户端不是目录产品，列永远取不到它们——留着只会让渲染层多两条走不到的分支。
+ */
+export type ProductLayer = "L1" | "L2" | "L3" | "unclassified";
 
 /**
  * 与 `product.products.status` 的 CHECK 词表一致（40_product.sql）——**引用，不复述**。
@@ -107,16 +103,14 @@ export type LivenessStatus =
   | "healthy"
   | "unhealthy"
   | "unreachable"
-  | "not_configured"
-  | "not_applicable";
+  | "not_configured";
 export type ReadinessStatus =
   | "ready"
   | "degraded"
   | "fail"
   | "not_implemented"
   | "unreachable"
-  | "not_configured"
-  | "not_applicable";
+  | "not_configured";
 
 export interface LivenessProbe {
   status: LivenessStatus;
@@ -223,9 +217,11 @@ select p.id as product_id, p.product_code, p.product_name, p.product_type, p.lay
  *
  * 值域只收 L1/L2/L3（@vxture-platform/shared `PRODUCT_LAYERS`，DDL 有
  * `chk_products_layer`）。`client` 与 `external` 不在其中：external 是**来源**
- * （`products.origin`），客户端与内部服务不是目录产品。二者仍留在 `ProductLayer`
- * 里是因为渲染层与 `channelProbeMode` 还按它们分支——**它们的判据来源待「另一个轴」
- * 落地后再接**，在那之前没有任何产品会取到这两个值。
+ * （`products.origin`），客户端与内部服务不是目录产品。值域外的任何值（含这两个
+ * 历史词）一律落「未分层」，不猜。
+ *
+ * 2026-10-04 起分层还蕴含类型族（DDL `chk_products_layer_type_family`：L2 ⇒ `*_platform`，
+ * L3 ⇒ `*_agent`），所以这里读到的 L3 一定是智能体——本页只读列，不再需要看类型。
  */
 export function layerFromColumn(layer: string | null): ProductLayer {
   return layer === "L1" || layer === "L2" || layer === "L3"
@@ -299,9 +295,9 @@ export class ProductHealthRouter {
       groups.map(async (group) => {
         const layer = layerFromColumn(group.layer);
         const [prod, beta, canary] = await Promise.all([
-          resolveChannel(layer, group.channels.stable),
-          resolveChannel(layer, group.channels.beta),
-          resolveChannel(layer, group.channels.canary),
+          probeChannel(group.channels.stable),
+          probeChannel(group.channels.beta),
+          probeChannel(group.channels.canary),
         ]);
         return {
           productId: group.productId,
@@ -653,68 +649,8 @@ async function probeReadiness(origin: string | null): Promise<ReadinessProbe> {
   };
 }
 
-/** 一个渠道 = 一个客户端的 origin；没有客户端就没有探测这回事（两列都是 not_configured）。 */
-export type ChannelProbeMode = "probe" | "not_applicable";
-
-/**
- * Whether a registered channel gets probed. Pure: unit-tested in
- * product-health.spec.ts. Only `client` products with a registered channel are
- * exempt — an unregistered channel stays `not_configured` regardless of layer,
- * because "not registered" is a different fact from "nothing to probe".
- */
-export function channelProbeMode(
-  layer: ProductLayer,
-  channel: ChannelClient | null,
-): ChannelProbeMode {
-  return channel && layer === "client" ? "not_applicable" : "probe";
-}
-
-/** A registered channel on a client product: nothing to probe, no network call. */
-export function notApplicableChannel(
-  channel: ChannelClient,
-): ProductChannelHealth {
-  const checkedAt = NOW();
-  const origin = channel.origin;
-  return {
-    clientId: channel.clientId,
-    origin,
-    health: {
-      status: "not_applicable",
-      origin,
-      path: null,
-      httpStatus: null,
-      durationMs: null,
-      service: null,
-      version: null,
-      gitSha: null,
-      stage: null,
-      buildTime: null,
-      error: null,
-      checkedAt,
-    },
-    status: {
-      status: "not_applicable",
-      origin,
-      path: null,
-      httpStatus: null,
-      durationMs: null,
-      checks: null,
-      error: null,
-      checkedAt,
-    },
-  };
-}
-
-async function resolveChannel(
-  layer: ProductLayer,
-  channel: ChannelClient | null,
-): Promise<ProductChannelHealth> {
-  if (channel && channelProbeMode(layer, channel) === "not_applicable") {
-    return notApplicableChannel(channel);
-  }
-  return probeChannel(channel);
-}
-
+/* 一个渠道 = 一个客户端的 origin；没有客户端就没有探测这回事（两列都是 not_configured）。
+   已登记的渠道一律探测——「client 型不探测」那一档 2026-10-04 删掉，理由见文件头。 */
 async function probeChannel(
   channel: ChannelClient | null,
 ): Promise<ProductChannelHealth> {

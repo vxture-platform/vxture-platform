@@ -48,7 +48,11 @@ import {
   isValidProductSurface,
 } from "@vxture/core-utils";
 import { VxConfigService } from "@vxture/core-config";
-import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
+import {
+  isValidProductType,
+  PRODUCT_TYPES,
+  productTypeFamily,
+} from "@vxture/core-utils";
 import {
   COST_CLASSES,
   isValidProductLayer,
@@ -2836,6 +2840,25 @@ export function validateWrite(
         "productName",
       );
     }
+    /*
+     * 分层必填（owner 2026-10-04，决策 3 D2「产品定义时层就明确」）。判式与 productType 同形
+     * ——页面「未分类」送的是 **null**，只查空串会放过它。
+     *
+     * 登记（新建）时必须送；改（requireCode:false）时允许**缺席**（缺席即不改：umbra 这类刻意
+     * 不占层的外部边界改个描述，不该被迫选层），但送来的空值一律拒——分层没有「清空」这条路，
+     * 一个 L3 不能被改回「未分类」然后从官网分区里消失而没有任何信号。
+     */
+    const registering = opts.requireCode ?? true;
+    const layerEmpty = !body.layer?.trim();
+    if (registering ? layerEmpty : body.layer !== undefined && layerEmpty) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        registering
+          ? "layer is required：智能体填 L3，域平台填 L2"
+          : "分层不能清空：智能体是 L3，域平台是 L2，没有「未分类」这一档",
+        "layer",
+      );
+    }
   }
   // product_type 走受管枚举(@vxture/core-utils 单一权威源),不再自由输入。
   // create/update 只要带了 productType 就校验;历史遗留值经此写入面一律被挡下、需改成枚举值。
@@ -2847,7 +2870,7 @@ export function validateWrite(
     );
   }
   // layer 同样走受管值域（@vxture-platform/shared 单一权威源，DDL 有 chk_products_layer）。
-  // 空串按「不分层」处理：下拉的「未分类」选项送的就是空串。
+  // 必填与「不许清空」在上面的 requireCore 段；这里只验值域。
   if (body.layer && !isValidProductLayer(body.layer.trim())) {
     throw invalidRequest(
       "VALIDATION_INVALID_VALUE",
@@ -2865,6 +2888,12 @@ export function validateWrite(
       `layer must be one of ${PRODUCT_LAYER_CHOICES.join(", ")}`,
       "layer",
     );
+  }
+  /* 分层蕴含类型族（库上 chk_products_layer_type_family 焊着同一条，这里先接住免得冒成 500）。
+     两者都送了才在这里判；改时只送一边的组合在 updateProductTx 里与库里的现值合起来判。 */
+  const familyConflict = layerTypeFamilyConflict(body.layer, body.productType);
+  if (familyConflict) {
+    throw invalidRequest("VALIDATION_INVALID_VALUE", familyConflict, "layer");
   }
   /* 受管值域，非法值先接住免得冒成 500（库上 chk_products_integration_mode 焊着同一条）。 */
   if (
@@ -2916,6 +2945,51 @@ function mapProductCodeTaken(
 }
 
 /**
+ * 分层 ↔ 类型族的蕴含（owner 2026-10-04，决策 3）：`layer` 是定位轴的唯一权威，`product_type`
+ * 的 platform / agent 这一半由它蕴含——L2 ⇒ `*_platform`，L3 ⇒ `*_agent`；`undefined` 型是
+ * 「类型未定」的占位，与任何层相容（吸收，D10）。与 DDL `chk_products_layer_type_family`
+ * 同一张真值表（归族按后缀，与 `productTypeFamily` 同判；历史裸值 `agent` 照样归 agent 族）。
+ *
+ * 任一边为空 ⇒ 相容（各自的必填由 `validateWrite` 的 requireCore 段管）。
+ * 返回 null = 相容；否则是给运营看的那句话（点名类型、族与该有的层）。
+ */
+export function layerTypeFamilyConflict(
+  layer: string | null | undefined,
+  productType: string | null | undefined,
+): string | null {
+  const l = layer?.trim();
+  const t = productType?.trim();
+  if (!l || !t) return null;
+  if (t === "undefined") return null;
+  const family = productTypeFamily(t);
+  if (l === "L2" && family === "platform") return null;
+  if (l === "L3" && family === "agent") return null;
+  if (family === "agent") {
+    return `智能体必须是 L3：产品类型「${t}」是智能体族，分层不能是 ${l}`;
+  }
+  if (family === "platform") {
+    return `域平台必须是 L2：产品类型「${t}」是平台族，分层不能是 ${l}`;
+  }
+  return `产品类型「${t}」既不是 *_platform 也不是 *_agent，推不出它该在哪一层——先把类型改成受管枚举值`;
+}
+
+/**
+ * 库上 chk_products_layer_type_family 拒了（23514 check_violation）⇒ 按字段 400，不冒 500。
+ * 正常路径在写之前就被 `validateWrite` / `updateProductTx` 接住；这里兜的是两处判据漂移的那一天。
+ */
+function mapLayerFamilyViolation(error: unknown): unknown {
+  const e = error as { code?: string; constraint?: string };
+  if (e.code === "23514" && e.constraint === "chk_products_layer_type_family") {
+    return invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      "分层与产品类型不符：智能体必须是 L3，域平台必须是 L2（chk_products_layer_type_family）",
+      "layer",
+    );
+  }
+  return error;
+}
+
+/**
  * 登记一个产品（草稿）。调用方先跑过 `validateWrite(body, { requireCore: true })`。
  *
  * 产品行与端在同一个事务里：端是关系表，分两次写的话「产品建好了但端没写进去」是一个
@@ -2946,13 +3020,17 @@ export async function insertProductTx(
        */
       /* `is_customer_visible` 不在列清单里：取列默认值（40_product.sql：NOT NULL DEFAULT
          true）。上站与否由 admin 的产品目录决定，这里不替它选。 */
+      /* `integration_mode` 在列清单里（2026-10-04）：此前 INSERT 没有它，校验却收它、PUT 也写它
+         ——POST 静默丢掉 integrationMode，取列默认 platform_managed，接入事务随后用 RETURNING
+         出来的默认值去写边缘：一个 login_only 的新产品被登记成「收下发」、回调判「待配置」。
+         与 updateProductTx 同一个默认值。 */
       `INSERT INTO product.products (
          product_code, product_type, category_id, product_name, product_nick,
          description, capability_keys, tags, standalone_subscribable, status,
          is_workforce_visible, origin, origin_provider,
-         icon_url, created_by, updated_by, layer, sort
+         icon_url, created_by, updated_by, layer, integration_mode, sort
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $14, $15,
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10, $11, $12, $13, $14, $14, $15, $16,
          (SELECT coalesce(max(sort), 0) + 1 FROM product.products)
        ) RETURNING ${SELECT_COLUMNS}`,
       [
@@ -2971,11 +3049,14 @@ export async function insertProductTx(
         body.iconUrl?.trim() || null,
         operatorId,
         body.layer?.trim() || null,
+        body.integrationMode ?? "platform_managed",
       ],
     )
     .then((r) => r.rows[0]!)
     .catch((error: unknown) => {
-      throw mapProductCodeTaken(error, body.productCode);
+      throw mapLayerFamilyViolation(
+        mapProductCodeTaken(error, body.productCode),
+      );
     });
   if (surfaces.length > 0) {
     await client.query(
@@ -3012,14 +3093,29 @@ export async function updateProductTx(
   const current = await client.query<{
     product_code: string;
     status: string;
+    product_type: string;
+    layer: string | null;
   }>(
-    `SELECT product_code, status FROM product.products
+    `SELECT product_code, status, product_type, layer FROM product.products
       WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
     [id],
   );
   const before = current.rows[0];
   if (!before) {
     throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+  }
+  /*
+   * 分层 ↔ 类型族：组合取「送来的 ∪ 库里的」。`validateWrite` 只能判两者都送了的情形；
+   * 改时 layer 可以缺席（缺席即不改），那就拿库里的现值与送来的类型合起来判——
+   * 把一个 L3 的类型改成 general_platform 而不动分层，同样是分叉，同样要在这里 400，
+   * 而不是让库上的 CHECK 冒成 500。
+   */
+  const familyConflict = layerTypeFamilyConflict(
+    body.layer !== undefined ? body.layer : before.layer,
+    body.productType ?? before.product_type,
+  );
+  if (familyConflict) {
+    throw invalidRequest("VALIDATION_INVALID_VALUE", familyConflict, "layer");
   }
   const wantedCode = body.productCode?.trim();
   const codeChange =
@@ -3130,7 +3226,9 @@ export async function updateProductTx(
     )
     .then((r) => r.rows[0])
     .catch((error: unknown) => {
-      throw mapProductCodeTaken(error, body.productCode);
+      throw mapLayerFamilyViolation(
+        mapProductCodeTaken(error, body.productCode),
+      );
     });
   if (!row) {
     throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");

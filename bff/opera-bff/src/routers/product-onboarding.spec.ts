@@ -250,9 +250,23 @@ function makeRouter(
       if (/SELECT product_code FROM product\.products/.test(text)) {
         return { rows: [{ product_code: "acme" }], rowCount: 1 };
       }
-      if (/SELECT product_code, status FROM product\.products/.test(text)) {
+      /* updateProductTx 的 FOR UPDATE 读：2026-10-04 起连带读 product_type / layer（分层蕴含类型族，
+         组合取「送来的 ∪ 库里的」）。桩按真库的行形状作答。 */
+      if (
+        /SELECT product_code, status, product_type, layer FROM product\.products/.test(
+          text,
+        )
+      ) {
         return {
-          rows: [{ product_code: "acme", status: "draft" }],
+          rows: [
+            {
+              product_code: "acme",
+              status: "draft",
+              /* 与下面 body 送的 PRODUCT_TYPES[0]（general_platform）同族：L2。 */
+              product_type: "general_platform",
+              layer: "L2",
+            },
+          ],
           rowCount: 1,
         };
       }

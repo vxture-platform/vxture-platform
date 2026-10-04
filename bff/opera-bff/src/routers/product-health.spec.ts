@@ -4,7 +4,7 @@
  * 三组：
  *   1. `groupProductChannels`：清单以 product.products 为主表这条口径（2026-08-30，
  *      40-product-registry.md §4）——没有客户端的产品必须出现、渠道只认
- *      release_channel、层级只认 product_type。这些都是"漏了不报错、只是表少一行"
+ *      release_channel、层级只认 `products.layer` 列。这些都是"漏了不报错、只是表少一行"
  *      的那类缺陷，所以钉在测试里。
  *   2. `readinessFromBody`、3. `readChecks`：就绪探测里两条**翻译**。词表对不齐的表现
  *      是「页面绿着 / 栏目空着」，不是报错。两条都由 2026-08-23 的 atlas / runos
@@ -20,8 +20,6 @@ import {
   readChecks,
   readinessFromBody,
   type ProductChannelRow,
-  channelProbeMode,
-  notApplicableChannel,
 } from "./product-health.router";
 
 function row(
@@ -152,9 +150,10 @@ describe("layerFromColumn —— 层级只认 products.layer 这一列", () => {
     expect(layerFromColumn("")).toBe("unclassified");
   });
 
-  /* 这两个值曾经由 product_type 推出来，现在层级只读列、而列的值域不收它们。
+  /* 这两个值曾经由 product_type 推出来，现在层级只读列、而列的值域不收它们；2026-10-04 起
+     它们连 `ProductLayer` 这个词表都退出了（渲染层与探测分支里的 client/external 档一并删除）。
      写成断言而不是注释：将来谁把 client/external 塞回 layer 列，这里会当场红。 */
-  it("client / external 不是层级——它们归来源轴与「不是目录产品」", () => {
+  it("client / external 不是层级——它们归来源轴与「不是目录产品」，落「未分层」", () => {
     expect(layerFromColumn("client")).toBe("unclassified");
     expect(layerFromColumn("external")).toBe("unclassified");
   });
@@ -218,46 +217,5 @@ describe("readChecks —— 逐依赖明细", () => {
     expect(readChecks(null)).toBeNull();
     expect(readChecks({})).toBeNull();
     expect(readChecks({ checks: ["a"] })).toBeNull();
-  });
-});
-
-describe("channelProbeMode —— client 型产品不探测", () => {
-  const registered = { clientId: "ruyin", origin: "http://127.0.0.1" };
-
-  it("client 层 + 已登记渠道 → 不适用（回调是 loopback，探到的是自己）", () => {
-    expect(channelProbeMode("client", registered)).toBe("not_applicable");
-  });
-
-  it("client 层 + 未登记渠道 → 照常走 probe（结果是未配置，登记与否是另一个事实）", () => {
-    expect(channelProbeMode("client", null)).toBe("probe");
-  });
-
-  it("其它层一律探测，包括未分类", () => {
-    for (const layer of [
-      "L1",
-      "L2",
-      "L3",
-      "external",
-      "unclassified",
-    ] as const) {
-      expect(channelProbeMode(layer, registered)).toBe("probe");
-    }
-  });
-});
-
-describe("notApplicableChannel —— 形状与探测结果同构", () => {
-  it("两列都是 not_applicable，保留 clientId/origin，不带路径与错误", () => {
-    const out = notApplicableChannel({
-      clientId: "ruyin-beta",
-      origin: "http://127.0.0.1",
-    });
-    expect(out.clientId).toBe("ruyin-beta");
-    expect(out.origin).toBe("http://127.0.0.1");
-    expect(out.health.status).toBe("not_applicable");
-    expect(out.status.status).toBe("not_applicable");
-    expect(out.health.path).toBeNull();
-    expect(out.health.error).toBeNull();
-    expect(out.status.checks).toBeNull();
-    expect(out.health.checkedAt).toBe(out.status.checkedAt);
   });
 });

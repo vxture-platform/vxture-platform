@@ -48,6 +48,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import { productTypeLabel, isValidProductType } from "@vxture/core-utils";
+import { productLayerLabel } from "@vxture-platform/shared";
 import {
   ConfigPopover,
   DateCell,
@@ -93,6 +94,8 @@ interface ProductRecord {
   isWorkforceVisible: boolean;
   origin: ProductOrigin;
   originProvider: string | null;
+  /** 分层 L2/L3；null = 还没分层。列表上显影：运营此前在列表里看不出谁没分层。 */
+  layer: string | null;
   createdAt: string;
   updatedAt: string;
   /** 产品图标。console 应用中心磁贴在读它。 */
@@ -822,9 +825,11 @@ function ProductsPageContent() {
               },
               {
                 /* 类型为主、来源为辅（owner 2026-09-16「相似的两列合并，上下主辅」）。
-                   受管枚举外的 product_type 仍标「非合规」——显影而非静默。 */
+                   受管枚举外的 product_type 仍标「非合规」——显影而非静默。
+                   分层徽标并排（owner 2026-10-04 决策 3）：分层是定位的唯一权威，列表上此前
+                   看不出谁没分层；没分层的显示「—」，不显示成某一层。 */
                 id: "type",
-                header: "类型 / 来源",
+                header: "类型 / 分层 / 来源",
                 sortable: true,
                 width: "md",
                 cell: (r: ProductRecord) => (
@@ -844,6 +849,15 @@ function ProductsPageContent() {
                           <StatusBadge tone="warning" dot>
                             {tShared("common.nonCompliant")}
                           </StatusBadge>
+                        )}
+                        {r.layer ? (
+                          <StatusBadge tone="neutral">
+                            {productLayerLabel(r.layer, typeLocale)}
+                          </StatusBadge>
+                        ) : (
+                          <span aria-label={tShared("common.uncategorized")}>
+                            —
+                          </span>
                         )}
                       </span>
                     }

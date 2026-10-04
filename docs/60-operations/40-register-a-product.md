@@ -62,18 +62,20 @@
 
 opera → **产品目录** → 「接入产品」（`/product/catalog/new`）。第 2–5 步都在这一张页上，填完点「创建草稿」一次写入。
 
-| 字段             | 必填 | 取值 / 约束                                                                                                                        | 填错时                                         |
-| ---------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `productCode`    | ✅   | 全局唯一；草稿态可改，**启用后锁定**；`new` 是保留字                                                                               | `VALIDATION_REQUIRED`                          |
-| `productType`    | ✅   | `general_platform` / `industry_platform` / `general_agent` / `industry_agent` / `undefined`（受管枚举，权威 `@vxture/core-utils`） | `VALIDATION_INVALID_VALUE`，消息列出全部合法值 |
-| `productName`    | ✅   | 中文主名                                                                                                                           | `VALIDATION_REQUIRED`                          |
-| `productNick`    | —    | 副名 / 英文名                                                                                                                      | —                                              |
-| `categoryId`     | —    | 复用现有 `1=智能体` / `2=平台`                                                                                                     | —                                              |
-| `origin`         | —    | `self` / `third_party` / `other`，缺省 `self`                                                                                      | `VALIDATION_INVALID_VALUE`                     |
-| `originProvider` | 条件 | **`origin=third_party` 时必填**                                                                                                    | `VALIDATION_REQUIRED`                          |
-| `description`    | —    | 外部文案                                                                                                                           | —                                              |
-| `surfaces`       | —    | 可露出的端，多选：`web` / `desktop` / `app` / `miniprogram`，缺省 `web`（受管枚举，权威 `@vxture/core-utils`）                     | `VALIDATION_INVALID_VALUE`                     |
-| `iconUrl`        | —    | console 应用中心磁贴用的图标                                                                                                       | —                                              |
+| 字段              | 必填 | 取值 / 约束                                                                                                                                                              | 填错时                                                                                                |
+| ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `productCode`     | ✅   | 全局唯一；草稿态可改，**启用后锁定**；`new` 是保留字                                                                                                                     | `VALIDATION_REQUIRED`                                                                                 |
+| `productType`     | ✅   | `general_platform` / `industry_platform` / `general_agent` / `industry_agent` / `undefined`（受管枚举，权威 `@vxture/core-utils`）                                       | `VALIDATION_INVALID_VALUE`，消息列出全部合法值                                                        |
+| `layer`           | ✅   | `L3`（智能体）/ `L2`（域平台）。**分层蕴含类型族**：智能体必须是 L3，平台必须是 L2；`undefined` 型任一层都收。页面选了类型会自动预选层（可改）。登记后可改层，但不能清空 | `VALIDATION_REQUIRED`（缺）；`VALIDATION_INVALID_VALUE`（与类型不符，消息点名该有的层），字段 `layer` |
+| `integrationMode` | —    | `platform_managed`（收平台下发：开通 / 权益 / 用量回调，缺省）/ `login_only`（只用统一登录，平台不向它下发）。它决定「没有回调」显示「待配置」还是「无需接入」           | `VALIDATION_INVALID_VALUE`                                                                            |
+| `productName`     | ✅   | 中文主名                                                                                                                                                                 | `VALIDATION_REQUIRED`                                                                                 |
+| `productNick`     | —    | 副名 / 英文名                                                                                                                                                            | —                                                                                                     |
+| `categoryId`      | —    | 复用现有 `1=智能体` / `2=平台`                                                                                                                                           | —                                                                                                     |
+| `origin`          | —    | `self` / `third_party` / `other`，缺省 `self`                                                                                                                            | `VALIDATION_INVALID_VALUE`                                                                            |
+| `originProvider`  | 条件 | **`origin=third_party` 时必填**                                                                                                                                          | `VALIDATION_REQUIRED`                                                                                 |
+| `description`     | —    | 外部文案                                                                                                                                                                 | —                                                                                                     |
+| `surfaces`        | —    | 可露出的端，多选：`web` / `desktop` / `app` / `miniprogram`，缺省 `web`（受管枚举，权威 `@vxture/core-utils`）                                                           | `VALIDATION_INVALID_VALUE`                                                                            |
+| `iconUrl`         | —    | console 应用中心磁贴用的图标                                                                                                                                             | —                                                                                                     |
 
 **「端」是产品自身的形态属性，与租户无关。** 要按租户开关的是权益，那挂在订阅 / 套餐上。
 桌面客户端（如影）据此决定列不列这个产品——不是每个产品都适合每个端。
@@ -257,6 +259,9 @@ select home_url, webhook_url, edge_upstream, (webhook_secret_enc is not null) as
 只有一种情况：**平台代码需要以字面量引用这个产品码**——token-exchange 的 audience、
 opera 的模块挂载前缀、app-scope 豁免集。全仓目前只有 7 处这样的引用，**全是 atlas / runos
 这类 L1 平台级集成**，普通 L3 智能体一处都不沾。
+
+**分层与类型不一致不是「动代码」的理由**：登记处会按字段拒（`layer` 400，消息点名该有的层），
+改分层或改类型即可——智能体是 L3、域平台是 L2，库上 `chk_products_layer_type_family` 焊着同一条。
 
 判据见 `40-product-registry.md` §5：一行产品能进 `seed-catalog.mjs` 的 `PRODUCTS`，
 必须满足 A（代码依赖）或 B（seed 内 FK 依赖）**并且**满足 C（形状一致）。

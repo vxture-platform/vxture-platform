@@ -80,10 +80,9 @@ import {
 } from "@vxture/core-utils";
 import {
   formatDateTime,
-  PRODUCT_LAYER_CHOICES,
-  productLayerLabel,
   type ProductIntegrationMode,
 } from "@vxture-platform/shared";
+import { impliedLayerForType, layerOptions, layerPayload } from "./layer-field";
 import { api, OperaApiError } from "@/lib/api";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
@@ -235,7 +234,7 @@ interface ProductDraft {
   productNick: string;
   description: string;
   productType: string;
-  /** 分层；空串 = 未分类（下拉的第一项）。 */
+  /** 分层；空串 = 库里还没分层（新建时必填；改时空串缺席不送，见 layer-field.ts）。 */
   layer: string;
   integrationMode: ProductIntegrationMode;
   origin: string;
@@ -309,6 +308,7 @@ const FIELD_META: Record<string, { label: string; inputId: string }> = {
   categoryId: { label: "产品分类", inputId: "pd-category" },
   productName: { label: "产品名称", inputId: "pd-name" },
   productType: { label: "产品类型", inputId: "pd-type" },
+  layer: { label: "产品分层", inputId: "pd-layer" },
   originProvider: { label: "供应方", inputId: "pd-provider" },
   productNick: { label: "英文名称", inputId: "pd-nick" },
   description: { label: "产品介绍", inputId: "pd-desc" },
@@ -537,7 +537,8 @@ export function ProductDetailPage({
         productNick: draft.productNick.trim() || null,
         description: draft.description.trim() || null,
         productType: draft.productType,
-        layer: draft.layer || null,
+        /* 空分层不送（缺席即不改），不送 null：登记处对空值按字段 400。 */
+        ...layerPayload(draft.layer),
         integrationMode: draft.integrationMode,
         origin: draft.origin,
         originProvider: draft.originProvider.trim() || null,
@@ -1356,7 +1357,14 @@ export function ProductDetailPage({
                       aria-invalid={!!errors["productType"]}
                       onChange={(e) =>
                         draft &&
-                        setDraft({ ...draft, productType: e.target.value })
+                        setDraft({
+                          ...draft,
+                          productType: e.target.value,
+                          /* 类型蕴含层（智能体族 ⇒ L3、平台族 ⇒ L2）：选了类型就把分层预选上。
+                             预填不是锁死——下拉仍可改，改错了登记处会按字段 400。 */
+                          layer:
+                            impliedLayerForType(e.target.value) ?? draft.layer,
+                        })
                       }
                     >
                       {isCreate ? <option value="">请选择</option> : null}
@@ -1368,27 +1376,36 @@ export function ProductDetailPage({
                     </NativeSelect>
                   </FormField>
 
-                  {/* 分层与类型并列：类型说「是什么」，分层说「在栈里站哪一层」。
-                      两个轴正交，所以是两个下拉，不是一个。 */}
+                  {/* 分层与类型并列：类型说「是什么」，分层说「在栈里站哪一层」。分层是
+                      定位的唯一权威，类型的平台 / 智能体那一半由它蕴含（owner 2026-10-04）。
+                      登记时必填、没有「未分类」；选项与预填的规则在 layer-field.ts。 */}
                   <FormField
                     id="pd-layer"
                     label="产品分层"
-                    help="L2 域平台 / L3 智能体；决定它能否被别的套餐绑定"
+                    required={isCreate}
+                    error={errors["layer"]}
+                    help="智能体是 L3，域平台是 L2；分层决定它能否被别的套餐绑定、在官网进哪个分区"
                   >
                     <NativeSelect
                       id="pd-layer"
                       value={draft?.layer ?? ""}
                       disabled={!canManage}
+                      required={isCreate}
+                      aria-invalid={!!errors["layer"]}
                       onChange={(e) =>
                         draft && setDraft({ ...draft, layer: e.target.value })
                       }
                     >
-                      <option value="">未分类</option>
-                      {/* CHOICES 不是 DEFS：L1 是平台基础环境，不是商品，库上拦着
-                          活的 L1 产品。DEFS 仍带着 L1 的文案，供历史行显示。 */}
-                      {PRODUCT_LAYER_CHOICES.map((value) => (
-                        <option key={value} value={value}>
-                          {productLayerLabel(value, typeLocale)}
+                      {/* 新建时第一项是提示，不是「未分类」：分层必填。CHOICES 不是 DEFS——
+                          L1 是平台基础环境，不是商品，库上拦着活的 L1 产品。 */}
+                      {isCreate ? <option value="">请选择</option> : null}
+                      {layerOptions(
+                        { isCreate, currentLayer: product?.layer ?? null },
+                        typeLocale,
+                        { unclassified: tShared("common.uncategorized") },
+                      ).map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
                         </option>
                       ))}
                     </NativeSelect>
