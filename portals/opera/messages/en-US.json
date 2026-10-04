@@ -397,6 +397,7 @@
     "truncated": "{matched} notices match; only the first {shown} were fetched (per-request cap). Narrow the severity, source or keyword — paging only moves within what was fetched."
   },
   "integrationSignals": {
-    "legacyAuthThisMonth": "{count, plural, =0 {No calls this month used the legacy shared credential.} one {# call this month still used the legacy shared credential.} other {# calls this month still used the legacy shared credential.}}"
+    "legacyAuthThisMonth": "{count, plural, =0 {No calls this month used the legacy shared credential.} one {# call this month still used the legacy shared credential.} other {# calls this month still used the legacy shared credential.}}",
+    "delegatedReporter": "The latest entitlement read was made by {reporter} on this product's behalf, not by the product with a token of its own."
   }
 }

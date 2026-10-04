@@ -5,6 +5,11 @@
  * and that PgOidcClientRepository's product_id join resolves the seeded
  * `arda` client to `act.sub = "arda"` end to end.
  *
+ * Also proves the delegated-reporter mode (decision 3 PR C) against the seeded
+ * `atlas` client row: the mint predicate (`status='active' AND
+ * client_kind='platform'`) is the same SQL the platform-level target lookup
+ * uses, and the seed must satisfy it or atlas can never report.
+ *
  * Gated (needs a seeded platform DB):
  *   AUTH_ITEST=1 DATABASE_URL=postgresql://... pnpm test
  */
@@ -172,5 +177,79 @@ describe.runIf(RUN)("T1 token exchange — D2 coverage gate (live DB)", () => {
         },
       ),
     ).rejects.toThrow();
+  });
+
+  it("delegated reporter: the seeded atlas client (platform kind, active, no product) mints a delegated aud=vxture ticket", async () => {
+    const client = await clients.findEnabledByClientId("atlas");
+    expect(client?.productCode ?? null).toBeNull();
+    const result = await service.exchange(
+      { clientId: "atlas", productCode: null },
+      {
+        audience: "vxture",
+        subjectToken: undefined,
+        workspaceId: undefined,
+        orgId: undefined,
+      },
+    );
+    const [, payload] = result.accessToken.split(".");
+    const claims = JSON.parse(
+      Buffer.from(payload!, "base64url").toString("utf8"),
+    ) as Record<string, unknown>;
+    expect(claims).toMatchObject({
+      aud: "vxture",
+      act: { sub: "atlas" },
+      mode: "service",
+      delegated: true,
+      scope: "tool:vxture",
+    });
+    expect(claims).not.toHaveProperty("workspace_id");
+    expect(claims).not.toHaveProperty("sub");
+    const audit = await pool.query<{ after: Record<string, unknown> }>(
+      `select after from support.audit_logs
+        where action = 'oidc.token_exchange.issued' and resource_id = $1`,
+      [claims["jti"]],
+    );
+    expect(audit.rows[0]?.after).toMatchObject({
+      caller_product: "atlas",
+      target_product: "vxture",
+      delegated: true,
+    });
+  });
+
+  it("delegated reporter: an inactive atlas client row stops the mint (invalid_client) — the DB says whether it counts right now", async () => {
+    await pool.query(
+      `update appoidc.oidc_clients set status = 'inactive' where client_id = 'atlas'`,
+    );
+    try {
+      await expect(
+        service.exchange(
+          { clientId: "atlas", productCode: null },
+          {
+            audience: "vxture",
+            subjectToken: undefined,
+            workspaceId: undefined,
+            orgId: undefined,
+          },
+        ),
+      ).rejects.toMatchObject({ message: "invalid_client" });
+    } finally {
+      await pool.query(
+        `update appoidc.oidc_clients set status = 'active' where client_id = 'atlas'`,
+      );
+    }
+  });
+
+  it("console (workspace-service grant) still cannot mint aud=vxture", async () => {
+    await expect(
+      service.exchange(
+        { clientId: "console", productCode: null },
+        {
+          audience: "vxture",
+          subjectToken: undefined,
+          workspaceId: WS_SUBSCRIBED,
+          orgId: undefined,
+        },
+      ),
+    ).rejects.toMatchObject({ message: "invalid_target" });
   });
 });

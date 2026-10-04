@@ -28,6 +28,16 @@
  * operator/account admin-internal routers and must never accept this
  * grant's tokens), which accepts `aud = PLATFORM_S2S_AUDIENCE` tokens
  * minted by this same grant.
+ *
+ * Fourth minting shape (decision 3 PR C, 2026-10-04 — L3 分层设计 §4.3 形态 A,
+ * E3a 的前置件): the **delegated reporter** ticket. atlas (L1, the platform's
+ * only inference metering entry) attributes every served inference to the
+ * CALLER product (ADR-013 D1), so it needs a platform-face ticket that does
+ * not name a product at all: `aud = vxture`, `act.sub = "atlas"`, `mode =
+ * service`, `delegated: true`, **no workspace_id**. platform-api's
+ * `scopeToS2sCaller` reads `delegated` and takes the request's declared
+ * product as the ATTRIBUTED product (still catalog-resolved) and the declared
+ * workspace as-is. See `exchangeDelegatedReporter`.
  */
 import {
   BadRequestException,
@@ -74,18 +84,44 @@ export const TOKEN_EXCHANGE_TTL_SECONDS = 300;
 export const PLATFORM_S2S_AUDIENCE = "vxture";
 
 /**
+ * What an allowlisted platform-level caller may mint. One grant per member —
+ * the two shapes are deliberately disjoint, so membership never says more
+ * than the member needs:
+ *
+ *  - `"workspace-service"`: service-mode tokens for a platform-level target
+ *    (atlas / runos) or a product, declaring an explicit `workspace_id`
+ *    (`exchangePlatformCaller`). `aud = vxture` is refused on this grant.
+ *  - `"delegated-reporter"`: exactly one shape — `aud = vxture`,
+ *    `delegated: true`, no workspace (`exchangeDelegatedReporter`). Any other
+ *    audience is refused on this grant.
+ */
+type PlatformCallerGrant = "workspace-service" | "delegated-reporter";
+
+/**
  * Platform-level caller allowlist (2026-07-28, atlas C2/C3 wiring line):
  * confidential platform BFFs that are not themselves products (productCode
- * null) but need to mint service-mode tokens on behalf of an
- * already-authenticated tenant workspace — their own session middleware,
- * not this service, establishes that workspace binding before this code
- * path is ever reached. `console` is the first member: it proxies tenant
- * model/grant/quota/usage reads to atlas and needs a signed S2S token
- * (atlas's S2sAuthGuard has no shared-secret fallback). Deliberately an
- * explicit allowlist, not "any platform-level client" — keeps the blast
- * radius of this bypass scoped and auditable.
+ * null) but need to mint service-mode tokens without asserting a product
+ * identity. Deliberately an explicit allowlist, not "any platform-level
+ * client" — keeps the blast radius of this bypass scoped and auditable.
+ *
+ *  - `console` (2026-07-28): proxies tenant model/grant/quota/usage reads to
+ *    atlas and needs a signed S2S token (atlas's S2sAuthGuard has no
+ *    shared-secret fallback). Its own session middleware, not this service,
+ *    establishes the workspace binding before this code path is reached.
+ *  - `atlas` (2026-10-04, decision 3 PR C): the L1 reporter. It reports
+ *    inference usage under the CALLER product (ADR-013 D1) and reads C2 for
+ *    that product, so it can never satisfy `act.sub == product`; it gets the
+ *    delegated-reporter shape instead. Built once per L1 reporter — the Nth
+ *    L3 product still needs zero platform code (owner 铁律; L3 分层设计 D9).
+ *
+ * Naming: E3a 设计 §3.1 (one allowlist, atlas joins it); ticket shape: L3
+ * 分层设计 §4.3 形态 A (`delegated: true`, not a `caller_kind` claim).
  */
-const PLATFORM_LEVEL_S2S_CALLERS = new Set(["console"]);
+const PLATFORM_LEVEL_S2S_CALLERS: ReadonlyMap<string, PlatformCallerGrant> =
+  new Map([
+    ["console", "workspace-service"],
+    ["atlas", "delegated-reporter"],
+  ]);
 
 /**
  * Platform-level *target* allowlist (2026-09-23, L1-out-of-catalog line) —
@@ -159,11 +195,14 @@ export class TokenExchangeService {
         return this.exchangeOperator(caller, req, subjClaims);
       }
     }
-    if (
-      !req.subjectToken &&
-      !caller.productCode &&
-      PLATFORM_LEVEL_S2S_CALLERS.has(caller.clientId)
-    ) {
+    const platformGrant =
+      !req.subjectToken && !caller.productCode
+        ? PLATFORM_LEVEL_S2S_CALLERS.get(caller.clientId)
+        : undefined;
+    if (platformGrant === "delegated-reporter") {
+      return this.exchangeDelegatedReporter(caller, req);
+    }
+    if (platformGrant === "workspace-service") {
       return this.exchangePlatformCaller(caller, req);
     }
     if (!caller.productCode) {
@@ -369,6 +408,90 @@ export class TokenExchangeService {
   }
 
   /**
+   * Delegated-reporter mode (decision 3 PR C, 2026-10-04): an allowlisted L1
+   * reporter (grant `"delegated-reporter"`, today only atlas) mints the one
+   * platform-face ticket that carries **no product and no workspace**:
+   *
+   *   aud = vxture · act.sub = <reporter client_id> · mode = service ·
+   *   delegated = true · scope = tool:vxture · TTL 300s (D1, re-exchanged on
+   *   expiry — the reporter caches one ticket for every workspace it serves)
+   *
+   * Why this shape and not the product-caller one: atlas reports inference
+   * usage under the CALLER product (ADR-013 D1) and reads C2 for that
+   * product. A product ticket binds `act.sub == product` and one
+   * `workspace_id` at mint time; a reporter speaks for many products across
+   * many workspaces per minute, and none of them is itself. So the binding
+   * moves to the request: platform-api's `scopeToS2sCaller` takes the
+   * declared product as the ATTRIBUTED product (it must still resolve in the
+   * catalog — L0/L1 never do, so `product = "atlas"` stays 400
+   * `unknown_product`) and the declared workspace as-is.
+   *
+   * Refusals, each one shape only:
+   *   · audience ≠ vxture → `invalid_target` (a reporter mints nothing else);
+   *   · workspace_id / org_id present → `invalid_request` (the ticket has no
+   *     workspace by design — silently dropping a declared one would let the
+   *     caller believe it was bound);
+   *   · reporter's client row not active / not `client_kind = 'platform'` →
+   *     `invalid_client` (same predicate as PLATFORM_LEVEL_S2S_TARGETS: the
+   *     allowlist says *who may*, the DB says *whether it counts right now*
+   *     — disabling the atlas client row stops delegated minting without a
+   *     code change, which the shared header never allowed).
+   *
+   * Blast radius of a stolen ticket = today's shared header (can attribute
+   * usage to any catalog product), bounded by 300s and revocable per client
+   * row. No D2 coverage check: there is no caller product to check coverage
+   * for, and the attributed products' coverage is the consume engine's
+   * business (no pool → recorded, not deducted; ADR-013 D10).
+   */
+  private async exchangeDelegatedReporter(
+    caller: TokenExchangeCaller,
+    req: TokenExchangeRequest,
+  ): Promise<TokenExchangeResult> {
+    if (!req.audience) {
+      throw new BadRequestException("invalid_request");
+    }
+    if (req.audience !== PLATFORM_S2S_AUDIENCE) {
+      throw new BadRequestException("invalid_target");
+    }
+    if (req.workspaceId || req.orgId) {
+      throw new BadRequestException("invalid_request");
+    }
+    const client = await this.pool.query<{ client_id: string }>(
+      `select client_id from appoidc.oidc_clients
+        where client_id = $1 and status = 'active'
+          and client_kind = 'platform'`,
+      [caller.clientId],
+    );
+    if (!client.rows[0]) {
+      throw new BadRequestException("invalid_client");
+    }
+    const jti = randomUUID();
+    const accessToken = this.keys.sign(
+      {
+        act: { sub: caller.clientId },
+        mode: "service",
+        delegated: true,
+        scope: `tool:${PLATFORM_S2S_AUDIENCE}`,
+      },
+      {
+        audience: PLATFORM_S2S_AUDIENCE,
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: jti,
+      },
+    );
+    await this.recordAudit({
+      jti,
+      callerProduct: caller.clientId,
+      targetProduct: PLATFORM_S2S_AUDIENCE,
+      mode: "service",
+      workspaceId: "",
+      orgId: null,
+      delegated: true,
+    });
+    return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
+  }
+
+  /**
    * product_210 §6: append-only audit trail for successful token exchanges
    * (actor_type='system' — the caller is a product/client, not a person; see
    * AUDIT_SYSTEM_ACTOR_ID). Best-effort: a write failure must not undo an
@@ -386,6 +509,8 @@ export class TokenExchangeService {
     workspaceId: string;
     orgId: string | null;
     tenantId?: string | null;
+    /** delegated-reporter mode only; absent (not `false`) on every other row. */
+    delegated?: boolean;
   }): Promise<void> {
     try {
       await this.pool.query(
@@ -402,6 +527,7 @@ export class TokenExchangeService {
             workspace_id: input.workspaceId,
             org_id: input.orgId,
             tenant_id: input.tenantId ?? null,
+            ...(input.delegated ? { delegated: true } : {}),
           }),
         ],
       );

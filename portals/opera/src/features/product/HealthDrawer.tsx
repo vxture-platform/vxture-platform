@@ -218,6 +218,14 @@ export function HealthDrawer({
                     })}
                   </p>
                 ) : null}
+                {c.delegatedReporter !== undefined ? (
+                  /* 代上报（决策 3 PR C）：同样一句事实——这次 C2 读是谁替它发起的。 */
+                  <p className="text-body-sm text-muted-foreground">
+                    {tShared("integrationSignals.delegatedReporter", {
+                      reporter: c.delegatedReporter,
+                    })}
+                  </p>
+                ) : null}
               </div>
             ))
           ) : (

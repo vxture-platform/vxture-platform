@@ -89,6 +89,12 @@ export interface EntitlementSignal {
   via: string;
   /** 拉的是哪个工作区。共享内部令牌路径上取请求声明的那个；只给机器看，门户不上屏。 */
   workspaceId: string | null;
+  /**
+   * 代上报（2026-10-04 决策 3 PR C）：这次读是 L1 上报者（如 `atlas`）持代上报票替这个产品读的，
+   * 不是产品自己来的。缺省 null = 产品自己（或共享口令，分不出）。门户按它把「经 S2S 令牌」补成
+   * 「由 atlas 代报」——否则 E3a 会把代报读成「产品已换票」。
+   */
+  reporter: string | null;
 }
 
 /** C3：对方最近一次上报用量。 */
@@ -336,12 +342,14 @@ export function parseEntitlementSignal(
     lastSeenAt: string;
     via: string;
     workspaceId?: unknown;
+    reporter?: unknown;
   };
   return {
     lastSeenAt: value.lastSeenAt,
     via: value.via,
     workspaceId:
       typeof value.workspaceId === "string" ? value.workspaceId : null,
+    reporter: typeof value.reporter === "string" ? value.reporter : null,
   };
 }
 

@@ -32,6 +32,9 @@ const build = (): Mocks => {
 
 const CALLER_ARDA = { clientId: "arda", productCode: "arda" };
 const CALLER_PLATFORM = { clientId: "console", productCode: null };
+// The L1 reporter (decision 3 PR C): allowlisted with the "delegated-reporter"
+// grant — the ONLY platform-level caller that may mint aud=vxture.
+const CALLER_ATLAS = { clientId: "atlas", productCode: null };
 // A platform-level client NOT in PLATFORM_LEVEL_S2S_CALLERS — still hits the
 // original invalid_client rejection (unlike CALLER_PLATFORM/"console", which
 // is allowlisted, see the "platform-caller mode" describe block below).
@@ -572,6 +575,169 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
       org_id: null,
       tenant_id: "tenant-1",
     });
+  });
+});
+
+describe("TokenExchangeService.exchange — delegated-reporter mode (atlas→vxture, decision 3 PR C)", () => {
+  let m: Mocks;
+  beforeEach(() => (m = build()));
+
+  const mintRequest = {
+    audience: PLATFORM_S2S_AUDIENCE,
+    subjectToken: undefined,
+    workspaceId: undefined,
+    orgId: undefined,
+  };
+
+  it("atlas → aud=vxture: mints act.sub=atlas, mode=service, delegated=true, NO workspace/org/tenant claims", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] }) // reporter client row: active + platform
+      .mockResolvedValueOnce({ rows: [] }); // audit insert
+
+    const result = await m.service.exchange(CALLER_ATLAS, mintRequest);
+
+    expect(result).toEqual({
+      accessToken: "signed.jwt.token",
+      expiresIn: TOKEN_EXCHANGE_TTL_SECONDS,
+    });
+    // Exact claim set: a stray workspace_id/org_id key (even null) would let a
+    // provider read "bound to nothing" as "bound to null".
+    expect(m.keys.sign).toHaveBeenCalledWith(
+      {
+        act: { sub: "atlas" },
+        mode: "service",
+        delegated: true,
+        scope: `tool:${PLATFORM_S2S_AUDIENCE}`,
+      },
+      {
+        audience: PLATFORM_S2S_AUDIENCE,
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: expect.any(String),
+      },
+    );
+    expect(m.keys.sign.mock.calls[0]![1]).not.toHaveProperty("subject");
+    // No product lookup, no D2 coverage query: the only SQL before the audit
+    // row is the reporter's own client-row check.
+    const sqls = m.pool.query.mock.calls.map((c) => String(c[0]));
+    expect(sqls).toHaveLength(2);
+    expect(sqls[0]).toContain("appoidc.oidc_clients");
+    expect(sqls[0]).toContain("client_kind = 'platform'");
+    expect(m.pool.query.mock.calls[0]![1]).toEqual(["atlas"]);
+    expect(sqls.some((q) => q.includes("as covered"))).toBe(false);
+    expect(sqls.some((q) => q.includes("product.products"))).toBe(false);
+  });
+
+  it("audit row: caller_product=atlas, target_product=vxture, mode=service, delegated=true, empty workspace", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] });
+    await m.service.exchange(CALLER_ATLAS, mintRequest);
+    const audit = auditCall(m.pool.query) as [string, [string, string, string]];
+    expect(JSON.parse(audit[1][2])).toEqual({
+      caller_product: "atlas",
+      target_product: PLATFORM_S2S_AUDIENCE,
+      mode: "service",
+      workspace_id: "",
+      org_id: null,
+      tenant_id: null,
+      delegated: true,
+    });
+  });
+
+  it("atlas → any audience other than vxture: invalid_target (a reporter mints nothing else — not even a product or runos)", async () => {
+    for (const audience of ["karda", "runos", "atlas"]) {
+      await expect(
+        m.service.exchange(CALLER_ATLAS, { ...mintRequest, audience }),
+      ).rejects.toMatchObject({ message: "invalid_target" });
+    }
+    expect(m.keys.sign).not.toHaveBeenCalled();
+    expect(m.pool.query).not.toHaveBeenCalled();
+  });
+
+  it("atlas with a declared workspace_id or org_id: invalid_request (the ticket has no workspace by design; silently dropping it is worse than refusing)", async () => {
+    await expect(
+      m.service.exchange(CALLER_ATLAS, { ...mintRequest, workspaceId: "ws-1" }),
+    ).rejects.toMatchObject({ message: "invalid_request" });
+    await expect(
+      m.service.exchange(CALLER_ATLAS, { ...mintRequest, orgId: "org-1" }),
+    ).rejects.toMatchObject({ message: "invalid_request" });
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("atlas with a missing audience: invalid_request", async () => {
+    await expect(
+      m.service.exchange(CALLER_ATLAS, { ...mintRequest, audience: undefined }),
+    ).rejects.toMatchObject({ message: "invalid_request" });
+  });
+
+  it("atlas whose client row is not active / not client_kind=platform: invalid_client, nothing minted", async () => {
+    m.pool.query.mockResolvedValueOnce({ rows: [] }); // no matching row
+    await expect(
+      m.service.exchange(CALLER_ATLAS, mintRequest),
+    ).rejects.toMatchObject({ message: "invalid_client" });
+    expect(m.keys.sign).not.toHaveBeenCalled();
+    expect(
+      m.pool.query.mock.calls.some((c) => String(c[0]).includes("audit_logs")),
+    ).toBe(false);
+  });
+
+  it("console → aud=vxture: still invalid_target (workspace-service grant never mints a delegated ticket)", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [] }) // product lookup: no row named vxture
+      .mockResolvedValueOnce({ rows: [] }); // not a platform-level target either
+    await expect(
+      m.service.exchange(CALLER_PLATFORM, {
+        audience: PLATFORM_S2S_AUDIENCE,
+        subjectToken: undefined,
+        workspaceId: "ws-1",
+        orgId: undefined,
+      }),
+    ).rejects.toMatchObject({ message: "invalid_target" });
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("a platform-level client outside the allowlist (website) → aud=vxture: invalid_client, unchanged", async () => {
+    await expect(
+      m.service.exchange(CALLER_PLATFORM_UNLISTED, mintRequest),
+    ).rejects.toMatchObject({ message: "invalid_client" });
+    expect(m.pool.query).not.toHaveBeenCalled();
+  });
+
+  it("a product caller (arda) → aud=vxture: a normal T1 ticket — act.sub=arda, bound workspace, and NO delegated claim", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [] }) // product lookup: no row named vxture → sentinel (no platform-target query for "vxture")
+      .mockResolvedValueOnce({ rows: [{ covered: true }] }) // D2
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }); // resolveTenantId
+    await m.service.exchange(CALLER_ARDA, {
+      audience: PLATFORM_S2S_AUDIENCE,
+      subjectToken: undefined,
+      workspaceId: "ws-1",
+      orgId: undefined,
+    });
+    const claims = m.keys.sign.mock.calls[0]![0] as Record<string, unknown>;
+    expect(claims).toMatchObject({
+      act: { sub: "arda" },
+      workspace_id: "ws-1",
+    });
+    expect(claims).not.toHaveProperty("delegated");
+  });
+
+  it("atlas presenting a subject_token (OBO shape) does not reach the reporter branch: invalid_request", async () => {
+    // A verified non-operator subject token on a platform-level client is the
+    // pre-existing T1 invalid_client/invalid_request path — the reporter grant
+    // is service-shaped only, so OBO must not become a second way in.
+    m.keys.verify.mockReturnValue({
+      sub: "usr_1",
+      aud: "atlas",
+      active_workspace: "ws-1",
+    });
+    await expect(
+      m.service.exchange(CALLER_ATLAS, {
+        ...mintRequest,
+        subjectToken: "user.jwt",
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.keys.sign).not.toHaveBeenCalled();
   });
 });
 

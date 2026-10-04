@@ -193,7 +193,48 @@ describe("PlatformAuthGuard — S2S Bearer path (T2, JWKS-verified)", () => {
       mode: "service",
       orgId: "org-1",
       workspaceId: "ws-1",
+      delegated: false,
     });
+  });
+
+  /*
+   * 代上报票（决策 3 PR C，2026-10-04）：auth-bff 为 atlas 铸的 aud=vxture 票——`delegated: true`、
+   * 没有 workspace。guard 只负责把 claim 原样搬进 s2sCaller，**严格布尔**：别的真值都不是委托。
+   * 怎么用它是 scopeToS2sCaller 按路由决定的事（entitlements / usage.consume 两格收，其余 403）。
+   */
+  it("delegated-reporter ticket: delegated=true is carried, workspaceId stays null (no workspace by design)", async () => {
+    const guard = makeGuard({ authInternalToken: SHARED_SECRET });
+    const token = signer.sign(
+      {
+        act: { sub: "atlas" },
+        mode: "service",
+        delegated: true,
+        scope: "tool:vxture",
+      },
+      { audience: PLATFORM_S2S_AUDIENCE, expiresInSec: 300 },
+    );
+    const req = fakeRequest({ authorization: `Bearer ${token}` });
+    await expect(guard.canActivate(ctx(req))).resolves.toBe(true);
+    expect(req.s2sCaller).toEqual({
+      productCode: "atlas",
+      mode: "service",
+      orgId: null,
+      workspaceId: null,
+      delegated: true,
+    });
+  });
+
+  it('delegated is a strict boolean: "true" / 1 / {} are not a delegation claim', async () => {
+    const guard = makeGuard({ authInternalToken: SHARED_SECRET });
+    for (const bogus of ["true", 1, {}]) {
+      const token = signer.sign(
+        { act: { sub: "atlas" }, workspace_id: "ws-1", delegated: bogus },
+        { audience: PLATFORM_S2S_AUDIENCE, expiresInSec: 300 },
+      );
+      const req = fakeRequest({ authorization: `Bearer ${token}` });
+      await expect(guard.canActivate(ctx(req))).resolves.toBe(true);
+      expect(req.s2sCaller).toMatchObject({ delegated: false });
+    }
   });
 
   it("passes an OBO token (sub present, mode=obo)", async () => {

@@ -113,6 +113,13 @@ export interface CheckResult {
    * `undefined` = BFF 没给这一段，不上屏。
    */
   legacyAuthThisMonth?: number;
+  /**
+   * 代上报（决策 3 PR C，2026-10-04）：最近一次 C2 读是 L1 上报者（如 `atlas`）持代上报票
+   * 替这个产品发起的，不是产品自己换票。只挂在 C2 那一条上；同样**数据不是文案**，句子由抽屉
+   * 经 next-intl 拼（`integrationSignals.delegatedReporter`）。缺席 = 产品自己（或共享口令，分不出）。
+   * 不说出来，E3a 关旧 header 时「经 S2S 令牌」会被读成「产品已换票」。
+   */
+  delegatedReporter?: string;
 }
 
 interface ProductLike {
@@ -180,6 +187,8 @@ interface IntegrationSignalsLite {
     lastSeenAt: string;
     via: string;
     workspaceId: string | null;
+    /** 代上报（决策 3 PR C）：持代上报票替它读的 L1 上报者（如 `atlas`）；null = 产品自己。 */
+    reporter?: string | null;
   } | null;
   consume: { lastEventAt: string; metricKey: string } | null;
   /** C1 出站。形状与 opera-bff 的 `S2sSignal` 一致——两边不互相引类型，靠单测钉住。 */
@@ -683,6 +692,10 @@ export async function runLaunchChecks(
       itemCode: "c2_entitlement",
       href: entitlementsHref,
       ...legacyAuthField,
+      /* 代上报（决策 3 PR C）：数据不是文案，句子由抽屉经 next-intl 拼（同 E6）。 */
+      ...(entitlement?.reporter
+        ? { delegatedReporter: entitlement.reporter }
+        : {}),
     });
     results.push({
       id: "c3-metering",

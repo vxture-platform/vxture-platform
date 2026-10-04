@@ -177,6 +177,7 @@ describe("GET /api/products/:id/integration-signals", () => {
         lastSeenAt: "2026-08-31T01:02:03.000Z",
         via: "s2s",
         workspaceId: "ws-1",
+        reporter: null,
       },
       consume: { lastEventAt: "2026-08-30T08:00:00.000Z", metricKey: "tokens" },
       s2s: null,
@@ -500,13 +501,43 @@ describe("parseEntitlementSignal", () => {
     expect(parseEntitlementSignal(null, "k")).toBeNull();
   });
 
-  it("workspaceId 缺省或非字符串落 null，其余两字段原样", () => {
+  it("workspaceId / reporter 缺省或非字符串落 null，其余两字段原样", () => {
     expect(
       parseEntitlementSignal(
         JSON.stringify({ lastSeenAt: "t", via: "internal-auth" }),
         "k",
       ),
-    ).toEqual({ lastSeenAt: "t", via: "internal-auth", workspaceId: null });
+    ).toEqual({
+      lastSeenAt: "t",
+      via: "internal-auth",
+      workspaceId: null,
+      reporter: null,
+    });
+    expect(
+      parseEntitlementSignal(
+        JSON.stringify({ lastSeenAt: "t", via: "s2s", reporter: 7 }),
+        "k",
+      ),
+    ).toMatchObject({ reporter: null });
+  });
+
+  it("代上报（决策 3 PR C）：platform-api 写的 reporter 原样带出", () => {
+    expect(
+      parseEntitlementSignal(
+        JSON.stringify({
+          lastSeenAt: "t",
+          via: "s2s",
+          workspaceId: "ws-1",
+          reporter: "atlas",
+        }),
+        "k",
+      ),
+    ).toEqual({
+      lastSeenAt: "t",
+      via: "s2s",
+      workspaceId: "ws-1",
+      reporter: "atlas",
+    });
   });
 
   it("非 JSON 抛 500", () => {

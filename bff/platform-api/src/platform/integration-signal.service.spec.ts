@@ -52,6 +52,36 @@ describe("c2SignalKey", () => {
 });
 
 describe("EntitlementSeenRecorder — write shape", () => {
+  it("delegated read: `reporter` is written only when given (never as null)", async () => {
+    const t0 = Date.UTC(2026, 9, 4, 12, 0, 0);
+    const { recorder, set } = makeRecorder({ now: () => t0 });
+    recorder.record({
+      productCode: "tenderforge",
+      via: "s2s",
+      workspaceId: "ws-1",
+      reporter: "atlas",
+    });
+    recorder.record({
+      productCode: "karda",
+      via: "s2s",
+      workspaceId: "ws-1",
+      reporter: null,
+    });
+    await settle();
+    expect(set).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(set.mock.calls[0]![1]))).toEqual({
+      lastSeenAt: "2026-10-04T12:00:00.000Z",
+      via: "s2s",
+      workspaceId: "ws-1",
+      reporter: "atlas",
+    });
+    expect(JSON.parse(String(set.mock.calls[1]![1]))).toEqual({
+      lastSeenAt: "2026-10-04T12:00:00.000Z",
+      via: "s2s",
+      workspaceId: "ws-1",
+    });
+  });
+
   it("writes JSON {lastSeenAt, via, workspaceId} with the 30-day TTL", async () => {
     const t0 = Date.UTC(2026, 7, 31, 12, 0, 0);
     const { recorder, set } = makeRecorder({ now: () => t0 });
