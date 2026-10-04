@@ -42,12 +42,17 @@
 //    有意的，改快照时要写理由。`--self-test` 的正例也只认这个方向（计数 ≤ 快照），不钉今天的数：
 //    钉「正好 5 个 / 正好 2 格」会让一次合法的收紧（某格 attribute-declared → deny，`--update`
 //    之后主检查绿）在 CI 里紧跟着跑的自检上红掉，而守卫打印的处置里没有一条能解开它
-//    （2026-10-05 审查 3c 抓到）。
+//    （2026-10-05 审查 3c 抓到）；
+// ⑥ 凡挂着 `@UseGuards(PlatformAuthGuard)` 的文件，handler 装饰器（`@Get` / `@Post` / `@Put` /
+//    `@Patch` / `@Delete` …）的个数必须等于 `scopeToS2sCaller(` 的调用次数。一个收着票却不过这一道
+//    的 handler，等于在两条「信请求体」的路上都没登记——快照上看不见它，而它照样在信请求体
+//    （2026-10-05 独立评审补：此前文件头把这件事推给一份不存在的「PlatformAuthGuard 调用点清单」）。
 //
 // ## 本守卫看不见什么
 //
 //   · 它只看 `scopeToS2sCaller` 这一个函数。别处若另写一份「没有 s2sCaller 就信请求体」
-//     的逻辑，本守卫一无所知 —— 那种情况靠 `PlatformAuthGuard` 的调用点清单去兜；
+//     的逻辑，本守卫只能靠 ⑥ 兜住一半：挂了 PlatformAuthGuard 的 handler 必须调它，但调了之后
+//     又另读请求体、绕开返回值的，看不见；没挂 guard 的 controller 也不在 ⑥ 的范围里；
 //   · 把这一次调用包进一个 wrapper、再从多处调 wrapper：登记只有 wrapper 里那一处。今天没有
 //     这种写法；出现时要连 wrapper 的调用方一起读，快照上看不出「一处登记、多处生效」；
 //   · 它不验运行时：`trust-declared` 的那几处今天**确实**在信任自报值，这是登记而非修复；
@@ -65,7 +70,7 @@
 // 运行：node scripts/guardrails/check-s2s-legacy-scope.mjs
 //      node scripts/guardrails/check-s2s-legacy-scope.mjs --update
 //      node scripts/guardrails/check-s2s-legacy-scope.mjs --self-test   （解析器与棘轮的反例）
-// 退出码：新增调用点 / 档位与快照不符 / 动态实参 / 缺实参 / 改名引用 / 计数变多 → 1
+// 退出码：新增调用点 / 档位与快照不符 / 动态实参 / 缺实参 / 改名引用 / 受保护 handler 没调 / 计数变多 → 1
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -145,13 +150,35 @@ const CALL_RE = /\bscopeToS2sCaller\s*\(/g;
 const NAME_RE = /\bscopeToS2sCaller\b/g;
 /** `import { … } from "…"` / `import type { … } from "…"`：说明符括号的范围。 */
 const IMPORT_RE = /\bimport\s+(?:type\s+)?\{[^}]*\}\s*from\s*["'][^"']+["']/g;
+/** ⑥：这份文件（class 级或 handler 级）挂着产品面的 guard。 */
+const GUARD_RE = /@UseGuards\(\s*PlatformAuthGuard\s*\)/;
+/** ⑥：Nest 的路由 handler 装饰器。 */
+const HANDLER_RE = /@(?:Get|Post|Put|Patch|Delete|All|Head|Options)\s*\(/g;
 
-/** 顶层逗号切分实参串。 */
+/**
+ * 顶层逗号切分实参串。字符串字面量里的括号与逗号不算（`productCodes: ["a,b"]` 之类）——
+ * 否则一个带 `)` 的字符串会把实参数目报错成「只有 2 个实参」，把作者引去数实参。
+ */
 function splitArgs(args) {
   const parts = [];
   let d = 0;
   let cur = "";
-  for (const ch of args) {
+  let quote = null;
+  for (let i = 0; i < args.length; i++) {
+    const ch = args[i];
+    if (quote) {
+      cur += ch;
+      if (ch === "\\" && i + 1 < args.length) {
+        cur += args[i + 1];
+        i++;
+      } else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      cur += ch;
+      continue;
+    }
     if ("([{".includes(ch)) d++;
     else if (")]}".includes(ch)) d--;
     if (ch === "," && d === 0) {
@@ -213,9 +240,14 @@ export function parseTier(raw, allowed) {
 export function extractSites(rawSrc, rel) {
   const sites = [];
   const findings = [];
-  // spec 里的调用是测这个函数本身，不是「一个在产的调用点」；
+  // 测试文件里的调用是测这个函数本身，不是「一个在产的调用点」——`.spec.ts` 之外，
+  // `.test.ts` / `.itest.ts` / `.e2e-spec.ts` / `__tests__/` 同理（今天 platform-api 只有
+  // `.spec.ts`，但第一份别的形态出现时不该被登记成在产调用点、更不该推高棘轮）；
   // s2s-scope.ts 里那一处是**函数定义**（第一版把它当调用点报了红）。
-  const isSpec = /\.spec\.ts$/.test(rel) || /\/s2s-scope\.ts$/.test(rel);
+  const isSpec =
+    /\.(spec|test|itest|e2e-spec)\.tsx?$/.test(rel) ||
+    /\/__tests__\//.test(rel) ||
+    /\/s2s-scope\.ts$/.test(rel);
   if (isSpec) return { sites, findings };
   const src = stripComments(rawSrc);
   const lineOf = (pos) => src.slice(0, pos).split("\n").length;
@@ -241,12 +273,23 @@ export function extractSites(rawSrc, rel) {
 
   for (const m of src.matchAll(CALL_RE)) {
     const open = m.index + m[0].length - 1;
-    // 括号配平取出整个实参串。
+    // 括号配平取出整个实参串；字符串字面量里的括号不算（与 splitArgs 同一条规矩）。
     let depth = 0;
+    let quote = null;
     let i = open;
     for (; i < src.length; i++) {
-      if (src[i] === "(") depth++;
-      else if (src[i] === ")") {
+      const ch = src[i];
+      if (quote) {
+        if (ch === "\\") i++;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") {
+        quote = ch;
+        continue;
+      }
+      if (ch === "(") depth++;
+      else if (ch === ")") {
         depth--;
         if (depth === 0) break;
       }
@@ -272,6 +315,19 @@ export function extractSites(rawSrc, rel) {
       policy: policy.tier,
       delegated: delegated.tier,
     });
+  }
+
+  // ⑥ 挂着 PlatformAuthGuard 的文件：每个 handler 都要过 scopeToS2sCaller。
+  //    调用次数按 CALL_RE 的命中数算（含上面因实参形状报红的那些——它们是「调了但没登记清」，
+  //    不是「没调」，两种红各报各的）。
+  if (GUARD_RE.test(src)) {
+    const handlers = [...src.matchAll(HANDLER_RE)].length;
+    const calls = [...src.matchAll(CALL_RE)].length;
+    if (handlers > calls) {
+      findings.push(
+        `${rel} —— 挂着 PlatformAuthGuard 的 ${handlers} 个 handler 里只有 ${calls} 处调 scopeToS2sCaller：没调的那个收着票却没在两条「信请求体」的路上登记`,
+      );
+    }
   }
   return { sites, findings };
 }
@@ -471,11 +527,56 @@ function selfTest() {
     );
     must(sites.length === 0 && findings.length === 1 && /第三个实参/.test(findings[0]), "第三个实参是变量 → 红");
   }
-  // 反例 4：spec 与定义处不算调用点。
+  // 反例 4：spec 与定义处不算调用点；别的测试文件形态同理（否则第一份 .test.ts 会被登记成在产调用点）。
   {
     const spec = extractSites(`scopeToS2sCaller(undefined, r, "deny", "deny")`, R.replace(/\.ts$/, ".spec.ts"));
     const def = extractSites(`export function scopeToS2sCaller(a, b, c, d) {}`, "bff/platform-api/src/authn/s2s-scope.ts");
     must(spec.sites.length === 0 && def.sites.length === 0, "spec 与函数定义不计");
+    const attributing = `scopeToS2sCaller(undefined, r, "trust-declared", "attribute-declared")`;
+    const others = [
+      R.replace(/\.ts$/, ".test.ts"),
+      R.replace(/\.ts$/, ".itest.ts"),
+      R.replace(/\.ts$/, ".e2e-spec.ts"),
+      "bff/platform-api/src/routers/__tests__/x.ts",
+    ].map((p) => extractSites(attributing, p));
+    must(
+      others.every((o) => o.sites.length === 0 && o.findings.length === 0),
+      ".test.ts / .itest.ts / .e2e-spec.ts / __tests__/ 同样不计（不推高棘轮）",
+    );
+    const prod = extractSites(attributing, "bff/platform-api/src/routers/x.testable.ts");
+    must(prod.sites.length === 1, "名字里只是带了 test 字样的在产文件照常计（失败对照）");
+  }
+  // 正例 6：字符串字面量里的括号 / 逗号不算实参边界（上一版会报成「只有 2 个实参」）。
+  {
+    const { sites, findings } = extractSites(
+      `scopeToS2sCaller(s2sCaller, { workspaceId: ws, productCodes: ["a)b", 'c,d', \`e(\${f}\`] }, "deny", "deny");`,
+      R,
+    );
+    must(findings.length === 0 && sites.length === 1, "字符串里的 ) 与 , 不算：四个实参照常登记");
+  }
+  // 反例 9：挂着 PlatformAuthGuard 的文件里，有 handler 不过 scopeToS2sCaller → 红；都过 → 不红。
+  {
+    const guarded = (body) =>
+      `import { scopeToS2sCaller } from "../authn/s2s-scope";
+      @Controller()
+      @UseGuards(PlatformAuthGuard)
+      export class XRouter {
+        ${body}
+      }`;
+    const bad = extractSites(
+      guarded(`@Get("platform/a") a() { const { workspaceId } = scopeToS2sCaller(s, r, "deny", "deny"); }
+        @Post("platform/b") b(@Body() body) { return this.svc.run(body.workspace_id); }`),
+      R,
+    );
+    must(bad.findings.length === 1 && /2 个 handler 里只有 1 处/.test(bad.findings[0]), "受保护的 handler 没调 scopeToS2sCaller → 红");
+    const good = extractSites(
+      guarded(`@Get("platform/a") a() { scopeToS2sCaller(s, r, "deny", "deny"); }
+        @Put("platform/b") b() { scopeToS2sCaller(s, r, "trust-declared", "deny"); }`),
+      R,
+    );
+    must(good.findings.length === 0 && good.sites.length === 2, "每个受保护的 handler 都过一道 → 不红");
+    const unguarded = extractSites(`@Controller() export class H { @Get("healthz") h() { return { ok: true }; } }`, "bff/platform-api/src/routers/health.router.ts");
+    must(unguarded.findings.length === 0, "没挂 guard 的 controller 不在 ⑥ 的范围里（health）");
   }
   // 棘轮 1：代码里多了一格收代上报票 → 红。
   {
@@ -499,6 +600,29 @@ function selfTest() {
   {
     const f = compare([], { trustDeclared: 0, sites: [] });
     must(f.length === 1 && /快照结构不对/.test(f[0]), "缺 delegatedAttributing 的旧快照 → 红");
+    // 顶层计数在、条目却是旧格式（没有 delegated 字段）：那一格的代上报档位等于没登记。
+    const legacyEntry = compare(
+      [{ at: `${R}:1`, policy: "trust-declared", delegated: "deny" }],
+      { trustDeclared: 1, delegatedAttributing: 0, sites: [{ at: `${R}:1`, policy: "trust-declared" }] },
+    );
+    must(
+      legacyEntry.some((x) => /未登记/.test(x)) && legacyEntry.some((x) => /代码里没有/.test(x)),
+      "快照条目缺 delegated 字段 → 红（两条）",
+    );
+  }
+  // 棘轮 4：trust-declared 的那个棘轮也要真的会动（此前只有 delegatedAttributing 有反例）。
+  {
+    const sites = [
+      { at: `${R}:1`, policy: "trust-declared", delegated: "deny" },
+      { at: `${R}:9`, policy: "trust-declared", delegated: "deny" },
+    ];
+    const f = compare(sites, { trustDeclared: 1, delegatedAttributing: 0, sites: [sites[0]] });
+    must(f.some((x) => /trust-declared.*从 1 增到 2/.test(x)), "trustDeclared 变多 → 红");
+    const tightened = compare([sites[0]], { trustDeclared: 2, delegatedAttributing: 0, sites });
+    must(
+      !tightened.some((x) => /增到/.test(x)) && tightened.some((x) => /代码里没有/.test(x)),
+      "收紧（少了一处）不触发「增到」，只提醒快照要重算",
+    );
   }
   // 正例 5：真仓里信号会动——至少一个调用点、零 finding，两个计数不高于快照。
   //   只认棘轮的方向，不钉今天的数（「正好 5 个 / 正好 2 格」会让一次合法的收紧在这里红掉，
