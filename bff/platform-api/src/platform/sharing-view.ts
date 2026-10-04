@@ -4,7 +4,8 @@
  * data_sharing_100 §4). Pure logic, unit-testable without Nest.
  */
 
-const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+import { PRODUCT_CODE_RE } from "./product-code";
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

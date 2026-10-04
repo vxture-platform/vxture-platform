@@ -20,16 +20,42 @@ async function bootstrap() {
   // TD-024 boot-smoke: resolve the full DI graph from the real esbuild bundle
   // with fake env, without listening, then exit (surfaces the esbuild
   // implicit-constructor-injection trap that tsc and unit tests miss).
-  if (process.env["BOOT_SMOKE"] === "1") {
-    const app = await NestFactory.create(AppModule, { logger: ["error"] });
-    await app.init();
-    await app.close();
+  const smoke = process.env["BOOT_SMOKE"] === "1";
 
-    console.log("[boot-smoke] platform-api DI graph resolved OK");
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+    smoke ? { logger: ["error"] } : {},
+  );
+
+  // SIGTERM → onModuleDestroy / onApplicationShutdown, then the process
+  // drains. Without this call Nest registers no signal listener, and in the
+  // container node is PID 1 with no init (exec-form CMD, no `init:` in
+  // compose): the kernel ignores a SIGTERM that has no handler, so a recreate
+  // sat out stop_grace_period and died by SIGKILL with every hook unrun — the
+  // E6 legacy-credential counter (LegacyAuthUsageService) flushes its last
+  // batch in onModuleDestroy and lost it on every deploy. Measured locally in
+  // docker (2026-10-04): the old bundle did not exit 30s after SIGTERM and the
+  // month hash stayed empty; with this line the count landed and the process
+  // exited on its own. Shared by the smoke path on purpose: boot-smoke asserts
+  // the listener is really there, the only check of this line that runs on
+  // every CI build of the bundle.
+  app.enableShutdownHooks();
+
+  if (smoke) {
+    await app.init();
+    const sigtermListeners = process.listenerCount("SIGTERM");
+    await app.close();
+    if (sigtermListeners < 1) {
+      console.error(
+        "[boot-smoke] platform-api: enableShutdownHooks() registered no SIGTERM listener; onModuleDestroy would never run on container stop",
+      );
+      process.exit(1);
+    }
+    console.log(
+      `[boot-smoke] platform-api DI graph resolved OK; SIGTERM listeners=${sigtermListeners}`,
+    );
     process.exit(0);
   }
-
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Log the real stack of every 5xx / unhandled throw (otherwise hidden behind
   // NestJS's generic 500), and return a clean error body.

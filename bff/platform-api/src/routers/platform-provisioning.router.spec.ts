@@ -171,6 +171,29 @@ describe("POST /provisioning/ack —— E6 旧凭据计数只在旧头那条路�
     );
     expect(recordLegacy).not.toHaveBeenCalled();
   });
+
+  it("形状不对的产品码：400 invalid_product，计数、目录、落库一个都不碰——它在经目录校验之前就会变成 Redis field 与日志字段", async () => {
+    const { router, recordLegacy, resolveProductId, recordAck } = makeRouter();
+    for (const product of [
+      "x\ny",
+      "legacy internal-auth: route=entitlements product=karda n=0",
+      "Karda",
+      "a".repeat(33),
+      "9lives",
+    ]) {
+      const error = await rejection(
+        router.ack(
+          { workspace_id: WS_DECLARED, product, status: "ready" },
+          undefined,
+        ),
+      );
+      expect((error as { getStatus?: () => number }).getStatus?.()).toBe(400);
+      expect((error as Error).message).toBe("invalid_product");
+    }
+    expect(recordLegacy).not.toHaveBeenCalled();
+    expect(resolveProductId).not.toHaveBeenCalled();
+    expect(recordAck).not.toHaveBeenCalled();
+  });
 });
 
 describe("parseAckBody —— 读不出来就抛，不给默认值", () => {
@@ -211,6 +234,27 @@ describe("parseAckBody —— 读不出来就抛，不给默认值", () => {
     expect(() =>
       parseAckBody({ workspace_id: "   ", product: "karda", status: "ready" }),
     ).toThrow(/workspace_id/);
+  });
+
+  it("product 要是产品码的形状（同 entitlements / usage / sharing 的正则）；首尾空白照旧剪掉", () => {
+    expect(
+      parseAckBody({
+        workspace_id: WS_TOKEN,
+        product: " karda ",
+        status: "ready",
+      }).productCode,
+    ).toBe("karda");
+    for (const product of [
+      "x\ny",
+      "Karda",
+      "a".repeat(33),
+      "9lives",
+      "k|arda",
+    ]) {
+      expect(() =>
+        parseAckBody({ workspace_id: WS_TOKEN, product, status: "ready" }),
+      ).toThrow("invalid_product");
+    }
   });
 
   it("detail 不是对象时忽略，不抛——它是可选的产品侧上下文，不是契约字段", () => {
