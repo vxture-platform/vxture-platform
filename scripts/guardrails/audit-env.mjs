@@ -44,6 +44,11 @@ const SHARED_SECRET_KEYS = new Set([
   "AUTH_INTERNAL_TOKEN",
 ]);
 
+// 内部面钥匙（2026-10-04 拆分）：auth-bff /internal/* 只认它，只注入 auth / admin / arche /
+// opera 四个容器。它**不在** SHARED_SECRET_KEYS 里——那组住 platform.env、进七个容器；
+// 放进去等于把新钥匙也交给 platform-api / console / website 三个用不着它的进程。
+const IDP_INTERNAL_KEYS = new Set(["IDP_INTERNAL_TOKEN"]);
+
 // Kept in step with deploy/guardrails/39-audit-env.mjs — that copy is the one the
 // host runs before a deploy, and a key allowed there but not here (or vice versa)
 // means CI and production disagree about what may sit in the compose env.
@@ -191,6 +196,20 @@ const ENV_FILE_RULES = [
     requiredKeys: MAIL_KEYS,
   },
   {
+    // 内部面钥匙（2026-10-04 拆分）：auth-bff /internal/* 只认 IDP_INTERNAL_TOKEN；只注入
+    // auth / admin / arche / opera 四个容器（compose env_file 短语法，缺文件即 config 失败）。
+    // 本仓第一条「单服务集 secrets 文件」的规则——形状照 mail（allowed = required，占位
+    // 严格），不照 identity（那份文件只在两张清单里、没有规则）。值 ≠ AUTH_INTERNAL_TOKEN
+    // 的跨文件断言在主机副本的 auditRuntimeSecretFiles（只在严格运行模式下跑，CI 没有运行时文件）。
+    label: "worker platform idp-internal secrets",
+    actual: `${RUNTIME_DIR}/secrets/platform-idp-internal.env`,
+    example: `${WORKER_DIR}/secrets/platform-idp-internal.env.example`,
+    requiredActual: STRICT_RUNTIME,
+    requiredExample: true,
+    allowedKeys: IDP_INTERNAL_KEYS,
+    requiredKeys: IDP_INTERNAL_KEYS,
+  },
+  {
     label: "auth-bff env",
     actual: `${RUNTIME_DIR}/.env.auth-bff`,
     example: `${WORKER_DIR}/.env.auth-bff.example`,
@@ -210,6 +229,8 @@ const ENV_FILE_RULES = [
     ]),
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       ...FRONTEND_SITE_KEYS,
       ...MAIL_KEYS,
@@ -254,6 +275,8 @@ const ENV_FILE_RULES = [
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
@@ -285,6 +308,8 @@ const ENV_FILE_RULES = [
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
@@ -316,6 +341,8 @@ const ENV_FILE_RULES = [
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       // admin-bff is RP-only (Batch 8): operator login + its Turnstile moved to
       // the IdP (auth-bff). admin-bff verifies no Turnstile.
@@ -349,6 +376,8 @@ const ENV_FILE_RULES = [
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
@@ -400,6 +429,7 @@ const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
   "secrets/platform-mail.env",
   "secrets/platform-sms.env",
   "secrets/platform-identity.env",
+  "secrets/platform-idp-internal.env",
   "secrets/rds-owner.env",
   "secrets/rds-pw-platform_svc",
   "secrets/rds-pw-reporting_ro",
@@ -442,6 +472,7 @@ const GENERATE_ENV_REQUIRED_GLOBAL_TOKENS = [
   "secrets/platform-mail.env",
   "secrets/platform-sms.env",
   "secrets/platform-identity.env",
+  "secrets/platform-idp-internal.env",
   "CHANGEME",
   "已废弃待删除",
 ];

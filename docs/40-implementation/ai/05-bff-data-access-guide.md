@@ -284,7 +284,7 @@ admin-bff 通过 `reporting_ro`（只读）或 `DATABASE_URL`（读写）连接�
 前端 POST /api/auth/login (admin-bff)
   → admin-bff: 限速 → 验证码 → DB 密码校验
   → admin-bff: fetch POST http://auth-bff:3081/auth/internal/sign
-      Header: x-vxture-internal-auth: <INTERNAL_TOKEN>
+      Header: x-vxture-internal-auth: <IDP_INTERNAL_TOKEN>   ← auth-bff 内部面只认这把（2026-10-04 起）；AUTH_INTERNAL_TOKEN 只开 platform-api 的产品面
       Body: { sub, email, username, displayName, role, roleLabel, permissions, source: 'admin' }
   → auth-bff: 签发 JWT → Set-Cookie: vx_admin_access_token
   → admin-bff: 透传 Set-Cookie header 给浏览器
@@ -292,6 +292,8 @@ admin-bff 通过 `reporting_ro`（只读）或 `DATABASE_URL`（读写）连接�
 ```
 
 ### 4.2 调用 internal/sign 的代码模式
+
+> **这段示例正在被移除**（2026-10-04）：`resolveInternalAuthToken` 是 `@vxture/core-auth` 里零消费方的死代码（`!==` 比较、非生产硬编码回落值），`150-security.md` §3.2 点名的错误形态；删它的 PR 会连本节一起改。新代码按 `150-security.md` §3.1 走换票；确需共享口令的内部面读 `config.auth.IDP_INTERNAL_TOKEN`（见 `bff/admin-bff/src/auth/operator-stepup.service.ts`）。
 
 ```typescript
 import { resolveInternalAuthToken } from "@vxture/core-auth";
@@ -391,13 +393,14 @@ PostgreSQL: vxturestudio_platform_main
 
 ### 6.3 环境变量
 
-| 变量                        | 用途                                                       |
-| --------------------------- | ---------------------------------------------------------- |
-| `DATABASE_URL`              | 主库读写连接（RW Pool + Prisma migrations）                |
-| `REPORTING_RO_DATABASE_URL` | 只读副本（RO Pool，未设置时降级用 DATABASE_URL）           |
-| `AUTH_BFF_URL`              | auth-bff 地址，默认 `http://localhost:3081`                |
-| `AUTH_INTERNAL_TOKEN`       | 内部服务鉴权 token，生产环境必填                           |
-| `MODEL_PLATFORM_URL`        | Model Platform 地址（admin-bff model-platform 路由透传用） |
+| 变量                        | 用途                                                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | 主库读写连接（RW Pool + Prisma migrations）                                                                      |
+| `REPORTING_RO_DATABASE_URL` | 只读副本（RO Pool，未设置时降级用 DATABASE_URL）                                                                 |
+| `AUTH_BFF_URL`              | auth-bff 地址，默认 `http://localhost:3081`                                                                      |
+| `AUTH_INTERNAL_TOKEN`       | 产品面共享口令（platform-api 收、console-bff 发），生产必填                                                      |
+| `IDP_INTERNAL_TOKEN`        | IdP 内部面口令（auth-bff `/internal/*` 收、admin/arche/opera-bff 发），只注入这四个容器；≠ `AUTH_INTERNAL_TOKEN` |
+| `MODEL_PLATFORM_URL`        | Model Platform 地址（admin-bff model-platform 路由透传用）                                                       |
 
 ---
 

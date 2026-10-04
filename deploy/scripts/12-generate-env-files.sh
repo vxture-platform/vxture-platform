@@ -156,10 +156,18 @@ sync_env_from_example "$WORKER_DIR/secrets/platform.env.example" "$SECRETS_DIR/p
 sync_env_from_example "$WORKER_DIR/secrets/platform-mail.env.example" "$SECRETS_DIR/platform-mail.env" "platform mail env"
 sync_env_from_example "$WORKER_DIR/secrets/platform-sms.env.example" "$SECRETS_DIR/platform-sms.env" "platform sms env"
 sync_env_from_example "$WORKER_DIR/secrets/platform-identity.env.example" "$SECRETS_DIR/platform-identity.env" "platform identity (signing key) env"
+# 内部面钥匙（IDP_INTERNAL_TOKEN，只进 auth/admin/arche/opera 四个容器）。这里只能从
+# example 落一个 CHANGEME 占位（本脚本不许自己铸随机值，两份审计盯着 openssl 的生成命令）；
+# 真实值由 34-provision-idp-internal-secret.sh 在主机上铸。占位不会放行：主机审计占位严格。
+sync_env_from_example "$WORKER_DIR/secrets/platform-idp-internal.env.example" "$SECRETS_DIR/platform-idp-internal.env" "platform idp-internal (IdP internal face) env"
 sync_env_from_example "$WORKER_DIR/.env.auth-bff.example" "$PLATFORM_DIR/.env.auth-bff" "auth-bff env"
 sync_env_from_example "$WORKER_DIR/.env.website-bff.example" "$PLATFORM_DIR/.env.website-bff" "website-bff env"
 sync_env_from_example "$WORKER_DIR/.env.console-bff.example" "$PLATFORM_DIR/.env.console-bff" "console-bff env"
 sync_env_from_example "$WORKER_DIR/.env.admin-bff.example" "$PLATFORM_DIR/.env.admin-bff" "admin-bff env"
+# opera / arche 是后加的两个 RP，此前不在配对里：新主机 13-prepare 补不出它们的 env，
+# 30-deploy 的 check_file 才会第一次说「缺文件」。
+sync_env_from_example "$WORKER_DIR/.env.opera-bff.example" "$PLATFORM_DIR/.env.opera-bff" "opera-bff env"
+sync_env_from_example "$WORKER_DIR/.env.arche-bff.example" "$PLATFORM_DIR/.env.arche-bff" "arche-bff env"
 sync_env_from_example "$WORKER_DIR/.env.platform-api.example" "$PLATFORM_DIR/.env.platform-api" "platform-api env"
 sync_env_from_example "$WORKER_DIR/.env.gateway-bff.example" "$PLATFORM_DIR/.env.gateway-bff" "gateway-bff env"
 

@@ -55,6 +55,10 @@ copy_if_exists "$RUNTIME_DIR/secrets/platform.env" "$BACKUP_DIR/runtime/secrets/
 copy_if_exists "$RUNTIME_DIR/secrets/platform-mail.env" "$BACKUP_DIR/runtime/secrets/platform-mail.env"
 copy_if_exists "$RUNTIME_DIR/secrets/platform-sms.env" "$BACKUP_DIR/runtime/secrets/platform-sms.env"
 copy_if_exists "$RUNTIME_DIR/secrets/platform-identity.env" "$BACKUP_DIR/runtime/secrets/platform-identity.env"
+# 内部面钥匙（IDP_INTERNAL_TOKEN，34-provision 铸）与 TD-018 的 DB 凭据覆盖层（32-provision 铸）：
+# 两个都是主机上生成、不走 example 配对的 secrets 文件，此前都不在备份里。
+copy_if_exists "$RUNTIME_DIR/secrets/platform-idp-internal.env" "$BACKUP_DIR/runtime/secrets/platform-idp-internal.env"
+copy_if_exists "$RUNTIME_DIR/secrets/platform-app.env" "$BACKUP_DIR/runtime/secrets/platform-app.env"
 copy_if_exists "$RUNTIME_DIR/secrets/rds-owner.env" "$BACKUP_DIR/runtime/secrets/rds-owner.env"
 copy_if_exists "$RUNTIME_DIR/secrets/rds-pw-platform_svc" "$BACKUP_DIR/runtime/secrets/rds-pw-platform_svc"
 copy_if_exists "$RUNTIME_DIR/secrets/rds-pw-reporting_ro" "$BACKUP_DIR/runtime/secrets/rds-pw-reporting_ro"

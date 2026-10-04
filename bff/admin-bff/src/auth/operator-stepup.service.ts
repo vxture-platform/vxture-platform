@@ -3,7 +3,7 @@
  * @package @vxture/bff-admin
  *
  * Forwards an authenticated operator's TOTP code to the IdP's internal step-up
- * endpoint (server-to-server, AUTH_INTERNAL_TOKEN over the internal IdP URL —
+ * endpoint (server-to-server, IDP_INTERNAL_TOKEN over the internal IdP URL —
  * never the public issuer). The operatorId is supplied by the caller from the RP
  * session, not the browser body. Returns the short-lived step-up credential the
  * OperatorStepUpGuard later verifies. Fail-closed when internal auth / IdP URL
@@ -39,7 +39,9 @@ export class OperatorStepUpService {
   }
 
   private internalToken(): string {
-    const token = this.config.auth.AUTH_INTERNAL_TOKEN;
+    // 内部面的钥匙（2026-10-04 拆分）：auth-bff 的 /internal/* 只认 IDP_INTERNAL_TOKEN；
+    // 产品面的 AUTH_INTERNAL_TOKEN 对它是外人，这里不回落到它。
+    const token = this.config.auth.IDP_INTERNAL_TOKEN;
     if (!token) {
       throw new ServiceUnavailableException("operator_stepup_unavailable");
     }

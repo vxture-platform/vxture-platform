@@ -108,8 +108,11 @@ pnpm -F @vxture/bff-auth dev  # 直接 curl / Postman 测
 DATABASE_URL=postgresql://vxture:localdev@localhost:5433/platform_main
 REDIS_URL=redis://localhost:6379
 AUTH_INTERNAL_TOKEN=local-dev-internal-token
+IDP_INTERNAL_TOKEN=local-dev-idp-internal-token
 AUTH_COOKIE_DOMAIN=localhost
 ```
+
+两把内部口令（2026-10-04 拆分）：`AUTH_INTERNAL_TOKEN` 只开 platform-api 的产品面，`IDP_INTERNAL_TOKEN` 只开 auth-bff 的 `/internal/*`（运营账号管理、step-up）。本地一份 `.env.local` 两个键都放，dev-panel 注入每个子进程；**不填 `IDP_INTERNAL_TOKEN` 不报错**——admin / arche / opera 的 step-up 与运营动作会 503 `operator_*_unavailable`、auth-bff 内部面 401，登录照常。两个值本地也不要相同。
 
 库名 `platform_main` 与生产一致（`platform` 是 L0 stack 标识符，不是 product code，见 [`140-repo-governance-standard.md`](../../10-standards/140-repo-governance-standard.md) §4）。端口 5433 而非 5432：本机 atlas dev 栈的 forwarder 已经占了 127.0.0.1:5432。
 

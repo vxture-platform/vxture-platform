@@ -252,7 +252,8 @@ POST /auth/refresh
   Redis 缺失、异常或 token 不匹配必须 fail-closed，返回未授权或服务不可用
 
 POST /auth/internal/sign
-  内部签发接口，只允许可信 BFF 调用，必须携带 x-vxture-internal-auth
+  内部签发接口，只允许可信 BFF 调用，必须携带 x-vxture-internal-auth（值 = IDP_INTERNAL_TOKEN，
+  2026-10-04 起 auth-bff 的内部面只认这把；AUTH_INTERNAL_TOKEN 只开 platform-api 的产品面）
   source=admin 时签发 operator JWT，不以租户 account 作为登录身份来源
 
 GET  /auth/oauth/{provider}/start
@@ -499,7 +500,7 @@ console-bff 和外部业务 BFF 的所有业务路由，tenantId 只能从 JWT �
 
 完整变量清单以 [`docs/50-deployment/01-environments.md`](../../50-deployment/01-environments.md) 为准。本设计文档只保留认证域相关归属规则：
 
-- `DATABASE_URL`、`REDIS_URL`、`JWT_SECRET`、`JWT_REFRESH_SECRET`、`AUTH_INTERNAL_TOKEN` 只放 `/srv/vxture/runtime/secrets/platform.env`；`SMTP_*` 只放 `/srv/vxture/runtime/secrets/platform-mail.env`。本地真实值使用 `runtime/secrets/`。
+- `DATABASE_URL`、`REDIS_URL`、`JWT_SECRET`、`JWT_REFRESH_SECRET`、`AUTH_INTERNAL_TOKEN` 只放 `/srv/vxture/runtime/secrets/platform.env`；`IDP_INTERNAL_TOKEN`（auth-bff `/internal/*` 内部面的钥匙，2026-10-04 起与产品面的 `AUTH_INTERNAL_TOKEN` 分家）只放 `/srv/vxture/runtime/secrets/platform-idp-internal.env`、只注入 auth/admin/arche/opera 四个容器；`SMTP_*` 只放 `/srv/vxture/runtime/secrets/platform-mail.env`。本地真实值使用 `runtime/secrets/`。
 - `auth-bff` 持有租户端认证配置、OAuth 配置、SMTP 配置、tenant Turnstile secret，并负责签发 `vx_tenant_*` cookie。
 - `admin-bff` 持有 admin Turnstile secret 和运营账号校验配置，校验通过后委托 auth-bff 内部签发 `vx_admin_*` cookie。
 - `website-bff`、`console-bff` 不持有 Turnstile secret、OAuth provider secret、SMTP secret，只代理前端请求并校验自身安全域。

@@ -296,7 +296,9 @@ bff/website-bff/src/
 DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=                     # shared JWT verification secret
-AUTH_INTERNAL_TOKEN=            # internal BFF calls, if needed
+# (AUTH_INTERNAL_TOKEN also arrives via platform.env but website-bff has no reader for it — it must not call
+#  auth-bff /internal/* nor platform-api with it; check-internal-auth-key-usage.mjs reds if one appears.
+#  IDP_INTERNAL_TOKEN is deliberately NOT injected here.)
 
 # From /srv/vxture/runtime/.env.website-bff
 NODE_ENV=production

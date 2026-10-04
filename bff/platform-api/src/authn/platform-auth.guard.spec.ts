@@ -71,9 +71,14 @@ function makeVerifier(): S2sTokenVerifier {
 function makeGuard(opts: {
   verifier?: S2sTokenVerifier;
   authInternalToken?: string | undefined;
+  /** 内部面（auth-bff /internal/*）那把钥匙；对这个 guard 必须是外人。 */
+  idpInternalToken?: string | undefined;
 }): PlatformAuthGuard {
   const config = {
-    auth: { AUTH_INTERNAL_TOKEN: opts.authInternalToken },
+    auth: {
+      AUTH_INTERNAL_TOKEN: opts.authInternalToken,
+      IDP_INTERNAL_TOKEN: opts.idpInternalToken,
+    },
   } as unknown as VxConfigService;
   return new PlatformAuthGuard(config, opts.verifier ?? makeVerifier());
 }
@@ -145,6 +150,20 @@ describe("PlatformAuthGuard — legacy shared-secret path (unchanged)", () => {
     const guard = makeGuard({ authInternalToken: SHARED_SECRET });
     await expect(guard.canActivate(ctx(fakeRequest()))).rejects.toThrow(
       UnauthorizedException,
+    );
+  });
+
+  it("两把都设、头带 IDP_INTERNAL_TOKEN 的值 → 401：新钥匙开不了产品面（拆分是双向的）", async () => {
+    // 2026-10-04 拆钥匙：auth-bff 的内部面换认 IDP_INTERNAL_TOKEN，这里（产品面）继续只认
+    // AUTH_INTERNAL_TOKEN。若这个 guard 也认了新键，拿到新键的四个平台容器就同时拿到了产品面。
+    const IDP_SECRET = "idp-internal-face-secret-value-32-bytes";
+    const guard = makeGuard({
+      authInternalToken: SHARED_SECRET,
+      idpInternalToken: IDP_SECRET,
+    });
+    const req = fakeRequest({ [INTERNAL_AUTH_HEADER]: IDP_SECRET });
+    await expect(guard.canActivate(ctx(req))).rejects.toThrow(
+      /invalid_internal_auth/,
     );
   });
 });

@@ -38,7 +38,8 @@
   - `REDIS_URL`（指向阿里云 Tair 内网 endpoint）
   - `JWT_SECRET`（≥32 位）
   - `JWT_REFRESH_SECRET`（≥32 位，且不同于 `JWT_SECRET`）
-  - `AUTH_INTERNAL_TOKEN`
+  - `AUTH_INTERNAL_TOKEN`（产品面；值已发给产品团队，不轮换）
+- [ ] VXTURE_DEPLOY_HOST `secrets/platform-idp-internal.env` 已由 `scripts/34-provision-idp-internal-secret.sh` 铸出：0600、`IDP_INTERNAL_TOKEN` 为 32 位 hex、**不等于** `AUTH_INTERNAL_TOKEN`；`.env.arche-bff` 存在（30-deploy 的 `check_file` 两个都要）。切换日按 [`15-idp-internal-token-cutover.md`](./15-idp-internal-token-cutover.md)。
 - [ ] VXTURE_DEPLOY_HOST `secrets/tair-pw-default` 已存在且非空；`.env` 和 `secrets/platform.env` 均不含 `REDIS_PASSWORD`。
 - [ ] `DATABASE_URL` 密码与 `secrets/rds-pw-platform_svc` 一致，`REDIS_URL` 密码与 `secrets/tair-pw-default` 一致。
 - [ ] RDS 白名单已放行 VXTURE_DEPLOY_HOST 内网 IP；`secrets/rds-owner.env` 与 `secrets/rds-pw-*` 已置备（0600）。库数据无需保留的重建走 `scripts/26-reset-platform-database.sh`。

@@ -260,15 +260,15 @@ website 的 RP **后端已就绪但未启用**，前端仍 legacy，且比 conso
 
 退役清单：
 
-| 类         | 旧物                                                                                     | 由谁取代 / 处理                                              |
-| ---------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 代码/路径  | auth-bff 旧自定义 JWT 端点（`/auth/login`/`/signup`/`/refresh`/`/logout`/`/tenant/*`）   | IdP `/authorize`…`/token` + RP-BFF                           |
-| 代码/路径  | `/auth/internal/sign`（admin delegate-sign）、`crossdomain.router`                       | admin OIDC RP / ruyin OIDC（**crossdomain 已删**）           |
-| 代码/路径  | HS256 签名 + `JwtAuthGuard` HS256 验签、RP-BFF 双读中间件 legacy 分支、`OIDC_RP_ENABLED` | RS256+JWKS / 单一 OIDC RP 会话 / 恒 on                       |
-| cookie     | `vx_tenant_*`、`vx_admin_*`、`ry_*`                                                      | 停写 + 清理逻辑移除                                          |
-| Redis      | `vx:refresh:tenant:*`、`vx:refresh:operator:*`、`vx:crossdomain:*`                       | 停用；新路径用 `vx:oidc:rt:*`/`vx:sess:*`                    |
-| Redis 保留 | `vx:blacklist:*`、`vx:oauth:state/bind:*`                                                | **保留**（OIDC 仍用：jti 吊销、入站 broker）                 |
-| secret     | `JWT_SECRET`、`JWT_REFRESH_SECRET`、`AUTH_INTERNAL_TOKEN`                                | HS256 路径下线后移除；RS256 私钥（`OIDC_SIGNING_KEY_*`）保留 |
+| 类         | 旧物                                                                                     | 由谁取代 / 处理                                                                                                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 代码/路径  | auth-bff 旧自定义 JWT 端点（`/auth/login`/`/signup`/`/refresh`/`/logout`/`/tenant/*`）   | IdP `/authorize`…`/token` + RP-BFF                                                                                                                                                                         |
+| 代码/路径  | `/auth/internal/sign`（admin delegate-sign）、`crossdomain.router`                       | admin OIDC RP / ruyin OIDC（**crossdomain 已删**）                                                                                                                                                         |
+| 代码/路径  | HS256 签名 + `JwtAuthGuard` HS256 验签、RP-BFF 双读中间件 legacy 分支、`OIDC_RP_ENABLED` | RS256+JWKS / 单一 OIDC RP 会话 / 恒 on                                                                                                                                                                     |
+| cookie     | `vx_tenant_*`、`vx_admin_*`、`ry_*`                                                      | 停写 + 清理逻辑移除                                                                                                                                                                                        |
+| Redis      | `vx:refresh:tenant:*`、`vx:refresh:operator:*`、`vx:crossdomain:*`                       | 停用；新路径用 `vx:oidc:rt:*`/`vx:sess:*`                                                                                                                                                                  |
+| Redis 保留 | `vx:blacklist:*`、`vx:oauth:state/bind:*`                                                | **保留**（OIDC 仍用：jti 吊销、入站 broker）                                                                                                                                                               |
+| secret     | `JWT_SECRET`、`JWT_REFRESH_SECRET`、`AUTH_INTERNAL_TOKEN`                                | HS256 路径下线后移除；RS256 私钥（`OIDC_SIGNING_KEY_*`）保留。`AUTH_INTERNAL_TOKEN` 自 2026-10-04 起只开 platform-api 产品面（退役归 E3a）；auth-bff 内部面改认 `IDP_INTERNAL_TOKEN`，不在本表的退役序列里 |
 
 **安全退役顺序**（零流量门槛 + 金丝雀，逐项一 PR）：① 全平台 `OIDC_RP_ENABLED=on` → ② 观测窗确认旧端点/cookie/HS256 零流量（持续 N 天）→ ③ 删 RP-BFF 双读 legacy 分支 → ④ 删 auth-bff 旧 JWT 端点 + HS256 + `/auth/internal/sign` → ⑤ 删旧 Redis key 用法 → ⑥ 移除 `OIDC_RP_ENABLED` → ⑦ 下线 secret → ⑧ 文档收口。每步前用真实指标确认零流量（不靠推断），先停用后删除。
 

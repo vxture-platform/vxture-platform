@@ -921,11 +921,13 @@
 | **登记日期** | 2026-07-14                                                                                                         |
 | **来源**     | AUTH_INTERNAL_TOKEN 轮换（cutover 窗口）；`deploy/compose.platform.yml` 六服务共享 `secrets/platform.env` env_file |
 
-**描述**：`secrets/platform.env` 的五个共享键（DATABASE_URL/REDIS_URL/JWT×2/AUTH_INTERNAL_TOKEN）由 6 个平台服务经 `env_file` 注入。任一键轮换 = 6 个容器（auth/admin/console/website-bff + model-platform + platform-api）全部 `--force-recreate` 才能加载新值——`docker restart` 不重读 env_file，无热更机制。轮换期间守卫只认单值、无双值并行窗口，故必有一段跨服务 401 窗口（本次靠 arda 缓冲重试吸收，但任何直连内部调用方都会短暂受影响）。
+**描述**：`secrets/platform.env` 的五个共享键（DATABASE_URL/REDIS_URL/JWT×2/AUTH_INTERNAL_TOKEN）由 **7** 个平台服务经 `env_file` 注入（2026-10-04 核对 `compose.platform.yml`：auth-bff / website-bff / console-bff / admin-bff / opera-bff / arche-bff / platform-api；登记时写的 6 个与 model-platform 已过时，model-platform 2026-07-28 退役）。任一键轮换 = 这些容器全部重建才能加载新值——`docker restart` 不重读 env_file，无热更机制。轮换期间守卫只认单值、无双值并行窗口，故必有一段跨服务 401 窗口（本次靠 arda 缓冲重试吸收，但任何直连内部调用方都会短暂受影响）。
 
 **影响**：秘钥轮换是整栈重启事件而非单点操作，放大爆炸半径与窗口时长；共享单值无灰度（新旧双认）通道，轮换必然产生短 401 窗口，制约轮换频率与随时性。
 
 **解决方向**：低优先，登记备案。可选方向：①守卫支持双值并行（`AUTH_INTERNAL_TOKEN` + `AUTH_INTERNAL_TOKEN_NEXT`，轮换期间双认，切换后退役旧值）消除 401 窗口；②秘钥面接入支持热重载的 secret 源（如挂载文件 + 进程 SIGHUP 重读）避免整栈重启；③按 [[project_arda_integration]] D13 已完成的宿主拆分思路，进一步收窄哪些服务真正需要 AUTH_INTERNAL_TOKEN（platform-api 是发/收方，console/website-bff 是否仍需可复核，缩小共享面）。当前整栈重建可接受（14 容器、~90s、内存无忧），不阻塞，故列 LOW。
+
+**进展（2026-10-04，内部面口令拆分 PR A）**：方向③兑现一半——auth-bff 的 `/internal/*` 内部面改认**新键** `IDP_INTERNAL_TOKEN`（`secrets/platform-idp-internal.env`，只注入 auth/admin/arche/opera 四个容器），`AUTH_INTERNAL_TOKEN` 从此只开 platform-api 的产品面；产品手里的值开不了运营管理面，产品零改动、旧值不轮换。随之：`30-deploy` 第 [4/4] 步把这四个服务钉到最前相邻重建（`config --services` 的序不稳定，不钉时切换窗口最坏是整次部署）；主机审计多一条「新值 ≠ 旧值」跨文件断言；`check-internal-auth-key-usage.mjs` 钉死谁读哪把（auth-bff 出现旧键即红）。**仍然成立的**：platform.env 五键轮换仍是整栈重建；旧值轮换（E3a）要与产品团队同窗；内部面换钥匙的窗口压成了四次相邻重建、不是零——方向①的「双认」没做（owner 定 D1 选 α）。**顺手发现**：`33-recreate-service.sh` 在 2026-09-01 digest 钉死后已坏（从 `@sha256:` 引用拆 tag 得裸 hex、多服务直接拒绝），切换不依赖它，修法另立 PR A2；`secrets/platform-app.env`（TD-018 覆盖层，进 5 个容器）此前不在 12-generate 配对、50/53 备份与两份审计里，本批只补进 50/53。切换步骤：`docs/50-deployment/15-idp-internal-token-cutover.md`。
 
 ### TD-039 — 疑似死 CI 凭证待审计清理（需全域确认）
 

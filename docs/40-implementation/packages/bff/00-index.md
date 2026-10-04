@@ -39,4 +39,4 @@
 - BFF 层**禁止直接操作数据库**，禁止 import Prisma Client
 - BFF 层**禁止直接调用 LLM**，AI 请求通过 agent-server → model-platform 路由
 - Business BFF 不持有 JWT 签发密钥，仅做验证
-- 跨服务调用 auth-bff 必须经 `x-vxture-internal-auth` 头鉴权
+- 跨服务调用 auth-bff 内部面必须经 `x-vxture-internal-auth` 头鉴权，值为 `IDP_INTERNAL_TOKEN`（只注入 auth/admin/arche/opera 四个容器）；`AUTH_INTERNAL_TOKEN` 只开 platform-api 的产品面，两把不互认

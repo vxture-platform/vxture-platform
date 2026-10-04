@@ -269,8 +269,10 @@ POST /auth/crossdomain/verify  — 验证 token，在 ruyin domain 写入 Cookie
 ### `/auth/internal/sign` — 内部签发接口
 
 ```typescript
-// Header 必须携带：x-vxture-internal-auth: {AUTH_INTERNAL_TOKEN}
-// 由 InternalAuthGuard 验证，非内部调用直接 401
+// Header 必须携带：x-vxture-internal-auth: {IDP_INTERNAL_TOKEN}
+// 由 InternalAuthGuard 验证，非内部调用直接 401。2026-10-04 起 auth-bff 的内部面只认
+// IDP_INTERNAL_TOKEN（secrets/platform-idp-internal.env，只注入 auth/admin/arche/opera）；
+// AUTH_INTERNAL_TOKEN 只开 platform-api 的产品面，拿它来这里是 401 invalid_internal_auth。
 
 // POST /auth/internal/sign
 // Request body
@@ -345,7 +347,10 @@ DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=                     # shared by BFF services, >= 32 chars
 JWT_REFRESH_SECRET=             # must differ from JWT_SECRET
-AUTH_INTERNAL_TOKEN=            # x-vxture-internal-auth for internal/sign
+AUTH_INTERNAL_TOKEN=            # product face only (platform-api); NOT accepted by auth-bff /internal/* since 2026-10-04
+
+# From /srv/vxture/runtime/secrets/platform-idp-internal.env (auth/admin/arche/opera only)
+IDP_INTERNAL_TOKEN=             # x-vxture-internal-auth for /internal/* (InternalAuthGuard); must differ from AUTH_INTERNAL_TOKEN
 
 # From /srv/vxture/runtime/.env.auth-bff
 JWT_ACCESS_EXPIRES_IN=8h

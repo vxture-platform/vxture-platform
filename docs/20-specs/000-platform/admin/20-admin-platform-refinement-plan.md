@@ -229,7 +229,7 @@ owner 将定码授权交予我，按 catalog 哲学定 3 新码并补齐缺口�
 owner 裁：A（全禁用 status='disabled'）+ 本轮做停用/恢复 + 强制下线，凭据重置延后。**4 层建设**（镜像 operator B9，对 C 端用户）：
 
 - **account service**（services/identity/account）：加 admin 方法 `adminDisableAccount`（status='disabled' + 吊销全部会话）/`adminEnableAccount`/`adminForceLogout`（revoke all customer sessions）+ repo `adminSetAccountStatus`/`revokeAllSessions`（realm='customer' 过滤）。无自助的防自锁（管理员可全禁用）。
-- **auth-bff**：新 `internal/account/users` 内部委派 router（`:id/disable|enable|sessions/revoke`，InternalAuthGuard/AUTH_INTERNAL_TOKEN，realm 隔离——operator id → 404）。
+- **auth-bff**：新 `internal/account/users` 内部委派 router（`:id/disable|enable|sessions/revoke`，InternalAuthGuard / `IDP_INTERNAL_TOKEN`——2026-10-04 起内部面不再认 `AUTH_INTERNAL_TOKEN`，realm 隔离——operator id → 404）。
 - **admin-bff**：`OperatorAdminService` 复用 delegate 加 3 个 account 方法；`accounts.router` 加 3 个 POST 写端点（守卫 `user:account.manage`，事务外委派 + 本地写审计）。
 - **前端**：AccountsPage 启用「停用/恢复」+「强制下线」动作（确认对话框 + 可选备注写审计）；「重置密码」保持置灰（延后）。
 - **catalog 补码**：`user:account.manage`（seed 50→**51**，super_admin/admin，可逆故无 step-up；`data_admin_200 §4` 同步）。**需并入生产 reseed，计数目标现为 51。**

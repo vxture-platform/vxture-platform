@@ -4,7 +4,7 @@
  * @layer BFF
  *
  * 把已认证 operator 提交的 TOTP 码转发到 IdP 的内部 step-up 端点（S2S，
- * `AUTH_INTERNAL_TOKEN` + 内部 IdP URL，**绝不走公开 issuer**）。`operatorId`
+ * `IDP_INTERNAL_TOKEN` + 内部 IdP URL，**绝不走公开 issuer**）。`operatorId`
  * 由本服务从 RP 会话取，不信浏览器请求体。
  *
  * **`audience: "opera"` 是本文件存在的原因之一**：IdP 此前把 step-up 凭证的 `aud`
@@ -49,7 +49,9 @@ export class OperatorStepUpService {
   }
 
   private internalToken(): string {
-    const token = this.config.auth.AUTH_INTERNAL_TOKEN;
+    // 内部面的钥匙（2026-10-04 拆分）：auth-bff 的 /internal/* 只认 IDP_INTERNAL_TOKEN；
+    // 产品面的 AUTH_INTERNAL_TOKEN 对它是外人，这里不回落到它。
+    const token = this.config.auth.IDP_INTERNAL_TOKEN;
     if (!token) {
       throw serviceUnavailable(
         "AUTH_STEP_UP_UNAVAILABLE",

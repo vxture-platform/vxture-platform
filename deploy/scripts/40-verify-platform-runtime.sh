@@ -105,6 +105,9 @@ check_platform_health() {
   check_service_health "console-bff" "http://localhost:3021/healthz"
   check_service_health "admin-bff" "http://localhost:3031/healthz"
   check_service_health "opera-bff" "http://localhost:3041/healthz"
+  # arche-bff（治理平面 BFF，内部面的第三个发送方）此前不在清单里：切换日「全 healthy」
+  # 对它是盲的。端口按 compose 自己的 healthcheck（3051）。
+  check_service_health "arche-bff" "http://localhost:3051/healthz"
   check_service_health "platform-api" "http://localhost:8080/healthz"
 }
 

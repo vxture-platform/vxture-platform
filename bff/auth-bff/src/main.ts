@@ -10,6 +10,7 @@
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
+import { VxConfigService } from "@vxture/core-config";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
 import { setupOpenApi } from "@vxture/core-config/openapi";
@@ -30,6 +31,19 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // 启动时点名内部面的钥匙。未配置 ⇒ /internal/*（运营账号 / 客户账号管理、step-up）
+  // 全部 401 internal_auth_unavailable；admin / arche / opera 的对应动作 503。**不退出**：
+  // auth-bff 是 IdP，退出等于全平台登录停摆；生产上的硬闸在部署层（30-deploy 缺文件 /
+  // 占位即停，容器一个不换）。这条 warn 只在真实启动日志里看得见——BOOT_SMOKE 路径在
+  // 上面已经 exit，而且那条路以 logger: ["error"] 建应用，warn 本来也打不出来；所以它
+  // 不是任何守卫的断言物，只是给运维看的一行。
+  if (!app.get(VxConfigService).auth.IDP_INTERNAL_TOKEN) {
+    Logger.warn(
+      "IDP_INTERNAL_TOKEN unset — /internal/* closed (401 internal_auth_unavailable)",
+      "Bootstrap",
+    );
+  }
 
   // Log the real stack of every 5xx / unhandled throw (otherwise hidden behind
   // NestJS's generic 500), and return a clean error body.
