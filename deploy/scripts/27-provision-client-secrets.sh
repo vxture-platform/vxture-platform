@@ -31,9 +31,10 @@
 # Idempotent: a client whose secret + hash are already present is left untouched.
 # Force rotation with FORCE_PROVISION_SECRETS=1.
 #
-# Follow-up (NOT done here): re-seed (23) so the DB picks up the hashes, then
-# recreate the RP bffs so they load the new OIDC_CLIENT_SECRET. The
-# The `db-init` workflow `provision-secrets` action chains all three.
+# Follow-up (NOT done here): re-seed (29) so the DB picks up the hashes, then
+# recreate every service whose env file this script wrote (auth-bff, the five
+# local RP bffs, platform-api) via `33-recreate-service.sh` so they load the new
+# values. The `db-init` workflow `provision-secrets` action chains all three.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -308,7 +309,7 @@ $PAIRS
 EOF
 
 echo "=== Client secrets provisioned ==="
-echo "下一步：重新 seed（iam.oidc_client 写入 hash），再 recreate website/console/admin-bff。"
+echo "下一步：重新 seed（appoidc.oidc_clients 写入 hash），再 bash scripts/33-recreate-service.sh auth-bff website-bff console-bff admin-bff opera-bff arche-bff platform-api（db-init 的 provision-secrets 把三步串起来）。"
 if [ "${#REMOTE_HANDOFF[@]}" -gt 0 ]; then
   echo ""
   echo "!! 远程跨域 RP 需手动转运明文 secret 到其 app-bff env（OIDC_CLIENT_SECRET）："
