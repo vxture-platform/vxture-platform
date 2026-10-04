@@ -379,20 +379,28 @@ jobs:
                 # 2026-09-10 实际后果：provision-secrets 因为跑到 seed-sample 而整体失败
                 #（那里另有一个 gender 取值的 bug），连带把「铸密钥」这件事也报成失败。
                 CONFIRM_SEED=yes SEED_SAMPLE=false bash scripts/29-seed-platform-ddl.sh
-                # 3) recreate auth-bff + the RP bffs so they load the new env.
-                # env_file changes only take effect on container *recreate*, not
-                # restart. auth-bff MUST be included: 27-provision mints
-                # OPERATOR_TOTP_ENC_KEY into .env.auth-bff, and without a recreate
-                # the IdP runs without it → operator TOTP enroll/verify 503
-                # (operator_totp_unavailable). Derive image coords from the running
-                # auth-bff so the recreate reuses the exact deployed tag (no pull).
-                IMG="$(docker inspect --format '{{.Config.Image}}' vx-platform-auth-bff)"
-                export VX_IMAGE_TAG="${IMG##*:}"
-                REPO="${IMG%:*}"
-                export VX_IMAGE_NAMESPACE="$(printf '%s' "$REPO" | awk -F/ '{print $(NF-1)}')"
-                export VX_IMAGE_REGISTRY="${REPO%/*/*}"
-                docker compose -f compose.platform.yml up -d --force-recreate --no-deps \
-                  auth-bff website-bff console-bff admin-bff
+                # 3) recreate every service whose env file 27-provision writes, so
+                # they load the new values. env_file changes only take effect on
+                # container *recreate*, not restart. Which file → which service:
+                #   .env.auth-bff      OPERATOR_TOTP_ENC_KEY + OIDC_CLIENT_SECRET_HASH_*
+                #                      → auth-bff (without the recreate the IdP runs
+                #                        without the key → operator TOTP enroll/verify
+                #                        503 operator_totp_unavailable)
+                #   .env.<client>-bff  OIDC_CLIENT_SECRET for every LOCAL RP — the seed
+                #                      registers five platform clients with a runtime
+                #                      env on this box: website / console / admin /
+                #                      opera / arche
+                #   .env.platform-api + .env.opera-bff  PLATFORM_WEBHOOK_ENC_KEY
+                # Delegated to 33-recreate-service.sh (TD-037). The inline copy that
+                # used to live here split VX_IMAGE_TAG off the running Config.Image
+                # with `${IMG##*:}` and ran `compose up` without --pull never; since
+                # 2026-09-01 (#112) containers run `registry/ns/img@sha256:<hex>`, so
+                # that resolved a tag that exists nowhere and failed AFTER the secrets
+                # were minted (new values never loaded). 33 pins each target to its
+                # running Config.Image verbatim, --pull never --no-deps, and refuses
+                # before touching a container when the image is not local.
+                bash scripts/33-recreate-service.sh \
+                  auth-bff website-bff console-bff admin-bff opera-bff arche-bff platform-api
                 ;;
               sync-env)
                 # Ensure each RP's own *_BASE_URL is present in its runtime env,
@@ -432,13 +440,11 @@ jobs:
                          OFFLINE_PAY_ACCOUNT_NO OFFLINE_PAY_ALIPAY_QR; do
                   ensure_kv "$RT/.env.console-bff" "$k" "$(ex_val .env.console-bff.example "$k")"
                 done
-                # recreate RP bffs so they load the new env (env_file → recreate).
-                IMG="$(docker inspect --format '{{.Config.Image}}' vx-platform-auth-bff)"
-                export VX_IMAGE_TAG="${IMG##*:}"
-                REPO="${IMG%:*}"
-                export VX_IMAGE_NAMESPACE="$(printf '%s' "$REPO" | awk -F/ '{print $(NF-1)}')"
-                export VX_IMAGE_REGISTRY="${REPO%/*/*}"
-                docker compose -f compose.platform.yml up -d --force-recreate --no-deps \
+                # recreate the four services whose env files ensure_kv touched above
+                # (env_file → recreate). Same delegation as provision-secrets: the
+                # inline tag-splitting copy broke under digest pinning (#112), 33 pins
+                # each target to its running Config.Image verbatim.
+                bash scripts/33-recreate-service.sh \
                   auth-bff website-bff console-bff admin-bff
                 ;;
               *)

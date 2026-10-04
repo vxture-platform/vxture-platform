@@ -9,6 +9,8 @@
 #   · 容器不在 / 本地缺镜像 / 册外服务 / 无参 → 在任何 compose 动作之前拒绝；
 #     一批里有一个不在 → 整批不动（不会先重建前面几个）
 #   · CONTAINER_OF 与 compose.platform.yml 的 service → container_name 一一对账（加服务忘记登记即红）
+#   · 仓里别处（.github/workflows、deploy/scripts）不得再长一份「拆 tag + compose up --force-recreate」
+#     ——db-init.yml 的 provision-secrets / sync-env 曾各抄一份，修 33 时没人看见；负例喂旧块
 # 运行：bash deploy/scripts/lib/recreate-service.test.sh
 # 对照：RECREATE_SCRIPT 指向改动前的 33（`git show <rev>:deploy/scripts/33-recreate-service.sh > /tmp/x.sh`）
 #       时，digest / 混批两组要红——它们就是 2026-09-01 之后生产上的现场。
@@ -189,6 +191,80 @@ script_pairs="$(sed -n '/^declare -A CONTAINER_OF=(/,/^)/p' "$SCRIPT" | grep -oE
 n_compose="$(printf '%s\n' "$compose_pairs" | grep -c . || true)"
 [ -n "$compose_pairs" ] && [ "$compose_pairs" = "$script_pairs" ] && ok "CONTAINER_OF == compose 的 service→container_name（$n_compose 个）" || bad "CONTAINER_OF 与 compose 不一致：compose=[$(printf '%s ' $compose_pairs)] script=[$(printf '%s ' $script_pairs)]"
 printf '%s\n' "$script_pairs" | grep -qx 'arche-bff=vx-platform-arche-bff' && ok "arche-bff 在册" || bad "arche-bff 不在册"
+
+# ── 7. 重建的调用方只认 33：仓里别处不得再长一份「拆 tag + compose up --force-recreate」──────
+# db-init.yml 的 provision-secrets / sync-env 两步曾各抄一份旧机制（`VX_IMAGE_TAG="${IMG##*:}"` +
+# `compose up --force-recreate`，没有 --pull never）：digest 钉死后它们解析出本地 / 仓里都没有的
+# `img:<hex>`，而且是在 27 已经铸完密钥之后才失败——新值永远加载不进去。修 33 时只修了 33，
+# 这两份抄本没人看见。这里扫 workflow 与 deploy/scripts：凡自带 --force-recreate 或从镜像引用
+# 拆 VX_IMAGE_TAG 即红（33 本身与 *.test.sh 除外）；负例喂旧块证明扫描器看得见。
+scan_recreate_callers() { # scan_recreate_callers <file…> → 命中行 file:line:text
+  grep -n -H -E -e '--force-recreate' -e 'VX_IMAGE_TAG=.*##\*:' "$@" 2>/dev/null || true
+}
+callers=(); n_wf=0
+for f in "$DEPLOY_DIR/../.github/workflows/"*.yml "$DEPLOY_DIR/scripts/"*.sh "$DEPLOY_DIR/scripts/lib/"*.sh; do
+  [ -f "$f" ] || continue
+  case "$f" in */33-recreate-service.sh|*.test.sh) continue ;; esac
+  case "$f" in */.github/workflows/*) n_wf=$((n_wf + 1)) ;; esac
+  callers+=("$f")
+done
+hits="$(scan_recreate_callers "${callers[@]}")"
+if [ -d "$DEPLOY_DIR/../.github/workflows" ]; then
+  # 仓内跑：曾经长着抄本的那份 workflow 必须在扫描范围里，否则「零命中」只是没看。
+  printf '%s\n' "${callers[@]}" | grep -q '/db-init\.yml$' && ok "扫描范围含 db-init.yml（workflow $n_wf 份）" || bad "扫描范围漏了 db-init.yml：workflow 只扫到 $n_wf 份"
+fi
+[ "${#callers[@]}" -gt 0 ] && [ -z "$hits" ] && ok "重建调用方只认 33（扫了 ${#callers[@]} 个 workflow / 脚本，零处自带 --force-recreate 或拆 tag）" || bad "别处仍长着旧重建机制（扫了 ${#callers[@]} 个）：$hits"
+
+mkdir -p "$T/fx/neg"
+cat > "$T/fx/neg/old-db-init-block.yml" <<'EOF'
+                IMG="$(docker inspect --format '{{.Config.Image}}' vx-platform-auth-bff)"
+                export VX_IMAGE_TAG="${IMG##*:}"
+                REPO="${IMG%:*}"
+                docker compose -f compose.platform.yml up -d --force-recreate --no-deps \
+                  auth-bff website-bff console-bff admin-bff
+EOF
+neg="$(scan_recreate_callers "$T/fx/neg/old-db-init-block.yml")"
+[ "$(printf '%s\n' "$neg" | grep -c .)" = "2" ] && ok "负例：旧 db-init 块被扫出 2 行（拆 tag + --force-recreate）" || bad "负例：扫描器没看见旧块：[$neg]"
+
+# ── 8. db-init.yml 真正传给 33 的那几行：逐名在册，且整条命令在假主机上跑通 ─────────────────
+# 名字打错一个（或加了服务没登记）→ 33 exit 2，而那时 27 已经铸完密钥、29 已经重 seed——
+# 和旧抄本一样的后果。所以不只扫「有没有调 33」，还把每次调用的参数原样喂给 33 跑一遍。
+# RECREATE_DBINIT 可指向别的副本（对照：指向改动前的 db-init.yml → 「只找到 0 处」红）。
+DBINIT="${RECREATE_DBINIT:-$DEPLOY_DIR/../.github/workflows/db-init.yml}"
+if [ -f "$DBINIT" ]; then
+  # 取每次 `bash scripts/33-recreate-service.sh …` 的参数（含 `\` 续行），一次调用一行
+  invocations="$(tr -d '\r' < "$DBINIT" | awk '
+    function flush() { gsub(/[[:space:]]+/, " ", acc); sub(/^ /, "", acc); sub(/ $/, "", acc); if (acc != "") print acc; acc = "" }
+    /bash scripts\/33-recreate-service\.sh/ {
+      sub(/.*33-recreate-service\.sh/, ""); acc = $0
+      if (acc ~ /\\[[:space:]]*$/) { sub(/\\[[:space:]]*$/, "", acc); cont = 1 } else { cont = 0; flush() }
+      next
+    }
+    cont {
+      line = $0
+      if (line ~ /\\[[:space:]]*$/) { sub(/\\[[:space:]]*$/, "", line); acc = acc " " line } else { acc = acc " " line; cont = 0; flush() }
+    }
+  ')"
+  n_inv="$(printf '%s\n' "$invocations" | grep -c . || true)"
+  [ "$n_inv" -ge 2 ] && ok "db-init.yml 调 33 共 $n_inv 处（provision-secrets + sync-env）" || bad "db-init.yml 调 33 只找到 $n_inv 处：[$invocations]"
+  i=0
+  while IFS= read -r inv; do
+    [ -n "$inv" ] || continue
+    i=$((i + 1))
+    fixture "dbinit$i"
+    for s in $inv; do
+      c="$(printf '%s\n' "$script_pairs" | sed -n "s/^$s=//p")"
+      [ -n "$c" ] || { bad "db-init 第 $i 处传了册外服务 '$s'——33 会 exit 2，密钥已铸、容器没重建"; continue; }
+      container "$c" "$REG/platform_$s@sha256:$DIG_A"
+    done
+    # shellcheck disable=SC2086
+    run33 $inv
+    n_svc="$(printf '%s\n' $inv | sort -u | grep -c .)"
+    [ "$RC" -eq 0 ] && [ "$(grep -c '^    image: ' "$FX/pinned.yml" 2>/dev/null || true)" = "$n_svc" ] && ok "db-init 第 $i 处（$inv）→ 33 exit 0，覆盖钉 $n_svc 个服务" || bad "db-init 第 $i 处（$inv）：rc=$RC out=[$OUT]"
+  done <<EOF
+$invocations
+EOF
+fi
 
 if [ "$fail" -eq 0 ]; then
   echo "recreate-service.test: 全部通过"
