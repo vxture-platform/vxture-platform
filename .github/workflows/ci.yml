@@ -144,8 +144,9 @@ jobs:
       #
       # 它钉住的是「共享口令能进哪些路由」这个面，以及其中「主体自报且无绑定」的条数——
       # 2026-10-04 PR C 后那一档为 0，再出现一条即红；同时核「声明 token-bound 的 controller
-      # 真挂着 ActorBindingGuard」（声明与门是两处，只改一处不报错），挂门的 controller 清单
-      # 也进快照。--self-test 用合成 router 证每条反例都会红（摘门 / 谎称绑定 / 陌生档 …）。
+      # 真挂着 ActorBindingGuard、且排在 InternalAuthGuard 之后」（声明与门是两处，只改一处
+      # 不报错；顺序反了 CI 照绿、运行时绑定门先跑），挂门的 controller 清单也进快照。
+      # --self-test 用合成 router 证每条反例都会红（摘门 / 谎称绑定 / 陌生档 / 顺序反了 …）。
       # 这一步红了不要直接 --update：先确认那条路由是不是真的必须走内部口令。
       - name: Internal route policy guardrail
         run: |

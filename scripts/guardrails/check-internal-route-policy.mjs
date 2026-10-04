@@ -28,7 +28,15 @@
 //      不许再有 `declared-unbound`——门上已经绑了，声明却说没绑，快照会把半径报大；
 //   ⑥ `actor` 只认四个值（none / proven / token-bound / declared-unbound）；陌生值在这里就红，
 //      不等 tsc（CI 里本守卫跑在装依赖之前）；
-//   ⑦ 挂着 `ActorBindingGuard` 的 controller 清单进快照，少一个即红（摘门不许无声）。
+//   ⑦ 挂着 `ActorBindingGuard` 的 controller 清单进快照，少一个即红（摘门不许无声）；
+//   ⑧ 两道门的**顺序**：`ActorBindingGuard` 必须与 `InternalAuthGuard` 写在**同一个**类级
+//      `@UseGuards(…)` 里、且排在它之后。反过来写，CI 照绿、运行时却是绑定门先跑：没口令的
+//      调用方能从 `actor_token_invalid` / `actor_token_mismatch` 的差别里探出一张偷来的票有没有
+//      活会话，还会在认证之前触发 Redis 会话查询。分写成两个 `@UseGuards` 也不行——Nest 把
+//      多个装饰器的 guard 数组按装饰器**求值序**（自下而上）拼起来，下面那个先跑，不是阅读序
+//      （本机对 @nestjs/common 实跑过：`@UseGuards(A)` 在上、`@UseGuards(B)` 在下 → `[B, A]`）。
+//      此前这条只靠 `*.actor-binding.spec.ts` 的真 HTTP 钉着，8 条路由的运营账号 router 没有
+//      那份 spec；现在静态也钉（自检 (ix)–(xi)），两份 spec 各走一遍真 HTTP。
 //
 // ## 判据
 //
@@ -40,6 +48,9 @@
 //
 //   · 动态注册的路由（`app.use` / 手搓 router），本仓这条路径上没有，但它扫不出来；
 //   · `@UseGuards(…)` 写在**方法**上的情形（本仓都是类级）；
+//   · 多行 `@UseGuards(` 它解析不了——但这**不是**静默盲区：类级块匹配不到 `InternalAuthGuard`，
+//     整个 controller 被跳过，其路由从面上消失，快照当场报「准入面减少」（自检 (xii) 用真
+//     router 证明信号会动）；
 //   · 声明与实现是否相符——`actor: "none"` 的路由真的不读主体、`ActorBindingGuard` 真的
 //     在比 sub，这些靠 spec 与人看；机器只对账「声明存在、门在、面没变」；
 //   · 另一条路径（platform-api 的 `PlatformAuthGuard` 双接受）不在范围内，那边有
@@ -48,7 +59,7 @@
 // 运行：node scripts/guardrails/check-internal-route-policy.mjs
 //      node scripts/guardrails/check-internal-route-policy.mjs --update     （重算快照）
 //      node scripts/guardrails/check-internal-route-policy.mjs --self-test  （合成夹具：每条反例都要红）
-// 退出码：漏标 / 类级声明 / why 空 / actor 陌生值 / 声明与门不符 / 面与快照不符 → 1
+// 退出码：漏标 / 类级声明 / why 空 / actor 陌生值 / 声明与门不符 / 两道门顺序反了 / 面与快照不符 → 1
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -73,6 +84,7 @@ const INTERNAL_ROUTE_OPEN = /^\s*@InternalRoute\(\{/;
 const CONTROLLER = /^\s*@Controller\(/;
 const USE_GUARDS_INTERNAL = /^\s*@UseGuards\([^)]*\bInternalAuthGuard\b/;
 const USE_GUARDS_ACTOR = /^\s*@UseGuards\([^)]*\bActorBindingGuard\b/;
+const USE_GUARDS_LIST = /^\s*@UseGuards\(([^)]*)\)/;
 // 方法签名：`async foo(` 或 `foo(`，缩进两格，不是装饰器也不是注释
 const METHOD_SIG = /^ {2}(?:async\s+)?[A-Za-z_$][\w$]*\s*\(/;
 
@@ -111,6 +123,31 @@ function parsePolicy(lines, start) {
 }
 
 /**
+ * ⑧ 类级 @UseGuards 里两道门的顺序。合规返回 null，否则返回一句 finding 文案。
+ * 只看带 ActorBindingGuard 的那一行：它必须同时含 InternalAuthGuard，且 InternalAuthGuard 在前。
+ */
+function guardOrderFinding(classBlock) {
+  for (const line of classBlock) {
+    const m = line.match(USE_GUARDS_LIST);
+    if (!m) continue;
+    const list = m[1]
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const actorIdx = list.indexOf("ActorBindingGuard");
+    if (actorIdx < 0) continue;
+    const internalIdx = list.indexOf("InternalAuthGuard");
+    if (internalIdx < 0) {
+      return "ActorBindingGuard 单独写在另一个 @UseGuards 里 —— 两道门必须写在同一个 @UseGuards(InternalAuthGuard, ActorBindingGuard) 里、口令在前：Nest 按装饰器求值序（自下而上）拼 guard 数组，分写时下面那个先跑，不是阅读序";
+    }
+    if (actorIdx < internalIdx) {
+      return "@UseGuards 里 ActorBindingGuard 排在 InternalAuthGuard 前面 —— 顺序反了：没口令的调用方会先撞到绑定门，能从 actor_token_invalid / actor_token_mismatch 的差别里探出一张票有没有活会话，还会在认证前查 Redis；写成 @UseGuards(InternalAuthGuard, ActorBindingGuard)";
+    }
+  }
+  return null;
+}
+
+/**
  * 对一组 router 源码求判。纯函数：自检靠合成源码喂反例。
  * @param {Map<string, string>} sources 文件名（basename）→ 源码
  * @returns {{ findings: string[]; surface: string[]; bound: string[]; scannedControllers: number; scannedRoutes: number }}
@@ -136,7 +173,12 @@ export function scan(sources) {
     if (!classBlock.some((l) => USE_GUARDS_INTERNAL.test(l))) continue;
     scannedControllers += 1;
     const hasActorGuard = classBlock.some((l) => USE_GUARDS_ACTOR.test(l));
-    if (hasActorGuard) bound.push(file);
+    if (hasActorGuard) {
+      bound.push(file);
+      // ⑧ 门在，但顺序 / 写法要对。门在就算 bound（快照那一半不翻面），顺序错单独一条红。
+      const order = guardOrderFinding(classBlock);
+      if (order) findings.push(`${rel}:${controllerIdx + 1}  ${order}`);
+    }
 
     // ② 类级 @InternalRoute 是静默失效的陷阱
     if (classBlock.some((l) => INTERNAL_ROUTE_OPEN.test(l))) {
@@ -446,6 +488,67 @@ if (SELF_TEST) {
     "(vii) 漏标仍红、why 空仍红（新判据没有挤掉旧判据）",
   );
 
+  // (ix) 反例：两道门顺序反了（合成 controller）→ 红「顺序反了」；门仍算 bound（快照那一半不翻面）
+  {
+    const m = mutate({
+      "zz.router.ts": controller("ActorBindingGuard, InternalAuthGuard", decl("token-bound")),
+    });
+    const r = scan(m);
+    say(
+      r.findings.some((f) => f.includes("zz.router.ts") && f.includes("顺序反了")) &&
+        !r.findings.some((f) => f.includes("没有 ActorBindingGuard")) &&
+        r.bound.includes("zz.router.ts"),
+      "(ix) @UseGuards(ActorBindingGuard, InternalAuthGuard) → 红「顺序反了」，且只红这一条（门仍算在）",
+    );
+  }
+
+  // (x) 反例：真仓 8 条路由的运营账号 router 顺序反了 → 恰好一条红；它此前没有任何可执行的门序判据
+  {
+    const file = "operator-admin-internal.router.ts";
+    const src = real.get(file).replace(
+      "@UseGuards(InternalAuthGuard, ActorBindingGuard)",
+      "@UseGuards(ActorBindingGuard, InternalAuthGuard)",
+    );
+    const r = scan(mutate({ [file]: src }));
+    const mine = r.findings.filter((f) => f.includes(file));
+    say(
+      src !== real.get(file) &&
+        mine.length === 1 &&
+        mine[0].includes("顺序反了") &&
+        r.bound.includes(file),
+      "(x) 把真仓 operator-admin-internal 的两道门调换 → 恰好一条红（顺序），门仍算在、其余不翻面",
+    );
+  }
+
+  // (xi) 反例：ActorBindingGuard 单独写在第二个 @UseGuards 里（阅读序对、执行序反）→ 红
+  {
+    const src = controller("InternalAuthGuard", decl("token-bound")).replace(
+      "@UseGuards(InternalAuthGuard)",
+      "@UseGuards(InternalAuthGuard)\n@UseGuards(ActorBindingGuard)",
+    );
+    say(
+      redWith(mutate({ "zz.router.ts": src }), "单独写在另一个 @UseGuards"),
+      "(xi) 两道门分写成两个 @UseGuards → 红「单独写在另一个 @UseGuards」",
+    );
+  }
+
+  // (xii) 多行 @UseGuards 不是静默盲区：controller 被跳过 → 面变小 → 快照比对红「准入面减少」
+  {
+    const file = "operator-admin-internal.router.ts";
+    const src = real.get(file).replace(
+      "@UseGuards(InternalAuthGuard, ActorBindingGuard)",
+      "@UseGuards(\n  InternalAuthGuard,\n  ActorBindingGuard,\n)",
+    );
+    const r = scan(mutate({ [file]: src }));
+    const d = diffSnapshot(toSnapshot(r), toSnapshot(realResult));
+    say(
+      r.scannedControllers === realResult.scannedControllers - 1 &&
+        d.filter((f) => f.includes("准入面减少")).length === 8 &&
+        d.some((f) => f.includes("不再有 ActorBindingGuard")),
+      "(xii) 多行 @UseGuards → 该 controller 被跳过，快照比对红「准入面减少」×8 +「摘门」（声明的盲区会出声）",
+    );
+  }
+
   // (viii) 复原 → 真仓再评一次仍无 finding，且与入库快照一致
   {
     let expected = null;
@@ -461,7 +564,7 @@ if (SELF_TEST) {
     );
   }
 
-  const total = 11;
+  const total = 15;
   console.log(`\n── 汇总 ──\n看得见 ${total - bad}/${total} 项判据`);
   if (bad) {
     console.log("这条判据还不能用 —— 先让它看得见上面标 ✗ 的那几条。");
@@ -511,6 +614,6 @@ if (findings.length) {
   console.log(`error: ${findings.length}`);
   process.exit(1);
 }
-console.log("✓ 准入面与快照一致，每条路由都有声明，声明与门相符。");
+console.log("✓ 准入面与快照一致，每条路由都有声明，声明与门相符、门的顺序对。");
 console.log("\n── 汇总 ──");
 console.log("error: 0");

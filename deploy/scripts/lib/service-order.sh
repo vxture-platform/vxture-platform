@@ -16,6 +16,11 @@
 set -o pipefail
 
 # 内部面的四个服务，按「收方先、发方后」排：auth-bff 换好之后，三个发方逐个跟上。
+# 这个方向是为换钥匙选的：两头都会 401，先后无所谓，只求相邻。对「收方新增一个必填头」的
+# 改动（2026-10-04 PR C 的 x-vxture-actor-token）它是**更差**的方向——新收方在等头、旧发方还不送，
+# 发方先才是零窗口。接受下来，不改：窗口 = admin-bff、arche-bff 两次重建，账号动作 503
+# operator_admin_unavailable、auth-bff 日志 actor_token_missing；症状与自愈写在
+# docs/50-deployment/15-idp-internal-token-cutover.md §8 末条。同类改动下次可把发方那一半先一个 tag。
 INTERNAL_FACE_SERVICES="auth-bff admin-bff arche-bff opera-bff"
 
 # order_services_internal_face_first "<whitespace-separated services>"

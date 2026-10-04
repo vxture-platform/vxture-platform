@@ -43,6 +43,16 @@
  * 路由所在 controller 必须挂着这道门，挂着这道门的 controller 不许再有 `declared-unbound`。
  * 顺序：口令（401）→ 路由准入（403）→ 主体绑定（401）。前两道在 `InternalAuthGuard` 里，
  * 所以持口令者能从 403/401 的差别里读出路由存不存在——它已经持有口令，这不是本门要防的人。
+ * 这个顺序**不是写法自由**：反过来写（或分写成两个 `@UseGuards`——Nest 按装饰器求值序拼 guard
+ * 数组，下面那个先跑）没口令的人会先撞到本门、从 invalid / mismatch 的差别里探会话、并让 IdP
+ * 查 Redis。`check-internal-route-policy.mjs` 第 ⑧ 条静态钉住（反写 / 分写即红），
+ * `operator-admin-internal` / `account-admin-internal` 两份 `*.actor-binding.spec.ts` 各走一遍真 HTTP。
+ *
+ * ── 部署窗口（不是攻击）──
+ * 换上本门的那次 deploy 按「收方先」序重建（`deploy/scripts/lib/service-order.sh`）：auth-bff 换好
+ * 到 admin-bff / arche-bff 换好之间，旧发送方不带 `x-vxture-actor-token`，这里回 `actor_token_missing`，
+ * 发送方把它压成 503 `operator_admin_unavailable`；两个发送方换上新镜像即自愈。见
+ * `docs/50-deployment/15-idp-internal-token-cutover.md` §8 末条。
  *
  * ── 诚实地说它能缩到哪 ──
  * 攻破的 admin-bff 或 arche-bff 只能冒充**此刻在两者之一有活会话的运营者**（同一把口令分不出
