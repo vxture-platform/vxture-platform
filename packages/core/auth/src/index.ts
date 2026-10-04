@@ -24,7 +24,7 @@ export type {
 } from "./types";
 
 // Guards
-export { JwtAuthGuard, RolesGuard, InternalAuthGuard } from "./guards";
+export { JwtAuthGuard, RolesGuard } from "./guards";
 
 // Decorators
 export {
@@ -48,8 +48,7 @@ export {
   isValidProvider,
   buildOAuthProfile,
   generateJti,
-  resolveInternalAuthToken,
-  assertInternalAuth,
+  sharedSecretMatches,
 } from "./utils";
 
 // Session

@@ -5,4 +5,3 @@
 
 export { JwtAuthGuard } from "./jwt-auth.guard";
 export { RolesGuard } from "./roles.guard";
-export { InternalAuthGuard } from "./internal-auth.guard";

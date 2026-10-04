@@ -395,5 +395,8 @@
       "linkPlaceholder": "如 /products/karda"
     },
     "truncated": "命中 {matched} 条，这一次只取回了前 {shown} 条（单次上限）。收窄严重度、来源或关键词再看，翻页只在取回来的这一批里。"
+  },
+  "integrationSignals": {
+    "legacyAuthThisMonth": "{count, plural, =0 {本月没有调用走旧的共享凭据。} other {本月仍有 # 次调用走旧的共享凭据。}}"
   }
 }

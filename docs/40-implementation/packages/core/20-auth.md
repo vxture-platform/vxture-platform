@@ -24,11 +24,11 @@ OAuth provider 抽象接口、Cloudflare Turnstile 验证。
 src/
 ├── client/     # VxJwtClient（JWT 签发/验证）
 ├── decorators/ # @Public、@Roles、@CurrentUser
-├── guards/     # JwtAuthGuard、RolesGuard、InternalAuthGuard
+├── guards/     # JwtAuthGuard、RolesGuard（InternalAuthGuard 已于 2026-10-04 删除：零消费方、!== 比较）
 ├── session/    # AccessTokenRevocationService（Redis）
 ├── turnstile/  # TurnstileVerifier（Cloudflare 人机验证）
 ├── types/      # JwtAccessPayload、AuthUser、OAuthProvider 等
-├── utils/      # token 解析、权限检查、provider 工具
+├── utils/      # token 解析、权限检查、provider 工具、sharedSecretMatches（共享口令常量时间比较，两个 BFF guard 共用）
 └── index.ts
 ```
 

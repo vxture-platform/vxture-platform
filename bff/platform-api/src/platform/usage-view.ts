@@ -29,6 +29,7 @@ import {
   opsNoticeTenantLabel,
 } from "../notifications/ops-notice";
 import type { QuotaPoolView } from "./entitlement-view";
+import { PRODUCT_CODE_RE } from "./product-code";
 // C3 consume response body now lives in @vxture-platform/shared (single SoT); re-export
 // so existing `from "./usage-view"` importers stay unchanged.
 import type { ConsumeResponseBody } from "@vxture-platform/shared";
@@ -229,7 +230,6 @@ export function composeQuotaExhaustedNotice(
   };
 }
 
-const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const METRIC_KEY_RE = /^[a-z][a-z0-9_.\-]{0,63}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

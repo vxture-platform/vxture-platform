@@ -45,8 +45,10 @@
 // ## EXPECTED 表怎么改
 //
 //   加一个读者 = 在表里登记它读哪把、为什么。删读者 = 同一个 PR 删掉表项（否则这里红：
-//   期望非空、命中为 0）。`packages/core/auth` 那条就是这样留的：那里有一份零消费方的
-//   `resolveInternalAuthToken`（死代码，另批删除）；删它的那个 PR 必须把那一行一起删。
+//   期望非空、命中为 0）。`packages/core/auth` 曾经有一条（零消费方的 `resolveInternalAuthToken`
+//   死代码），2026-10-04 PR B 删代码时一并删了表项——「表项活着而读者没了」这条性质由
+//   自检 (vi) 用一张合成的期望表继续盯着。那个包今天只剩 `sharedSecretMatches`（纯比较，
+//   不读 env、不认键名），两把都不许出现。
 //
 // 运行：node scripts/guardrails/check-internal-auth-key-usage.mjs
 //      node scripts/guardrails/check-internal-auth-key-usage.mjs --self-test
@@ -118,16 +120,6 @@ const EXPECTED = new Map([
   [
     "scripts/guardrails/audit-env.mjs",
     { keys: [AUTH, IDP], why: "审计规则文本点名两把键（共享键集合 / idp-internal 规则）" },
-  ],
-  // ── 待删的死代码（E5 / PR B）──
-  [
-    "packages/core/auth",
-    {
-      keys: [AUTH],
-      why:
-        "死代码 resolveInternalAuthToken / assertInternalAuth / InternalAuthGuard（零消费方）。" +
-        "PR B 删它们时**必须同时删掉本条**：本条留着而读者没了，这里会红（期望非空、命中 0）。",
-    },
   ],
 ]);
 
@@ -237,10 +229,12 @@ function readersIn(relPath, text) {
 }
 
 /**
- * 对一份源码表求判。纯函数：自检靠改表（不改盘）喂反例。
+ * 对一份源码表求判。纯函数：自检靠改表（不改盘）喂反例；期望表也可替换——自检 (vi)
+ * 用一张多了一条「没有读者的包」的期望表证明「表项活着而读者没了」会红。
  * @param {Map<string, string>} sources relPath → text
+ * @param {Map<string, { keys: string[]; why: string }>} expected 期望表，默认 EXPECTED
  */
-function evaluate(sources) {
+function evaluate(sources, expected = EXPECTED) {
   /** @type {Map<string, Map<string, string[]>>} pkg → key → locations */
   const hits = new Map();
   for (const [relPath, text] of sources) {
@@ -255,7 +249,7 @@ function evaluate(sources) {
   }
 
   const violations = [];
-  for (const [pkg, { keys }] of EXPECTED) {
+  for (const [pkg, { keys }] of expected) {
     const got = hits.get(pkg) ?? new Map();
     for (const k of keys) {
       if (!got.has(k)) {
@@ -271,7 +265,7 @@ function evaluate(sources) {
     }
   }
   for (const [pkg, byKey] of hits) {
-    if (EXPECTED.has(pkg)) continue;
+    if (expected.has(pkg)) continue;
     for (const [k, locs] of byKey) {
       violations.push(`${pkg}: 不在 EXPECTED 里却读 ${k}（${locs.length} 处）：${locs.join(", ")}`);
     }
@@ -363,13 +357,18 @@ if (process.argv.includes("--self-test")) {
     "(v) console-bff 同时读两把 → 红",
   );
 
-  // (vi) 反例：期望表里有、读者没了（模拟 PR B 删了 core-auth 的死代码却没删表项）
+  // (vi) 反例：期望表里有、读者没了。2026-10-04 PR B 之前这里真有一条 packages/core/auth
+  //      的表项（死代码读者）；代码与表项同 PR 删掉之后，用一张多了那条的合成期望表
+  //      对**真仓**求判——读者确实不在了，这条必须红。它同时证明真仓里 core/auth 今天
+  //      一把都不读（否则这条不会以「命中 0」的措辞红）。
   {
-    const edits = {};
-    for (const p of pkgFiles("packages/core/auth")) edits[p] = real.get(p).replaceAll("AUTH_INTERNAL_TOKEN", "ZZ_GONE");
+    const withStaleEntry = new Map(EXPECTED);
+    withStaleEntry.set("packages/core/auth", { keys: [AUTH], why: "自检：已删读者的陈旧表项" });
+    const { violations } = evaluate(real, withStaleEntry);
     say(
-      redWith(mutate(edits), "packages/core/auth: 期望读 AUTH_INTERNAL_TOKEN，命中 0"),
-      "(vi) packages/core/auth 的读者被删而 EXPECTED 条目还在 → 红（PR B 必须一并删表项）",
+      violations.some((v) => v.includes("packages/core/auth: 期望读 AUTH_INTERNAL_TOKEN，命中 0")) &&
+        !EXPECTED.has("packages/core/auth"),
+      "(vi) 期望表里留着 packages/core/auth 而真仓里读者已删 → 红「命中 0」；真表里没有这条",
     );
   }
 

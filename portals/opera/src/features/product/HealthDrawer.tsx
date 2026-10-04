@@ -32,6 +32,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Button,
   Drawer,
@@ -99,6 +100,7 @@ export function HealthDrawer({
   locale,
 }: HealthDrawerProps) {
   const { toast } = useToast();
+  const tShared = useTranslations();
   const [checks, setChecks] = useState<CheckResult[] | null>(null);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -208,6 +210,14 @@ export function HealthDrawer({
                   </div>
                 </div>
                 <p className="text-body-sm text-muted-foreground">{c.detail}</p>
+                {c.legacyAuthThisMonth !== undefined ? (
+                  /* E6：一句事实，不进三态判定。 */
+                  <p className="text-body-sm text-muted-foreground">
+                    {tShared("integrationSignals.legacyAuthThisMonth", {
+                      count: c.legacyAuthThisMonth,
+                    })}
+                  </p>
+                ) : null}
               </div>
             ))
           ) : (

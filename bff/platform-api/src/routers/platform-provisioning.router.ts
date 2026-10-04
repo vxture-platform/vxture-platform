@@ -40,7 +40,9 @@ import {
 import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
 import { scopeToS2sCaller } from "../authn/s2s-scope";
+import { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import { PlatformProvisioningService } from "../platform/platform-provisioning.service";
+import { isProductCode } from "../platform/product-code";
 
 /** `POST /provisioning/ack` 的响应体。`replayed` 与 C3 consume 同义。 */
 export interface AckResponseBody {
@@ -62,6 +64,10 @@ interface ParsedAckBody {
 /**
  * 请求体校验。**读不出来就抛**，不给默认值——一个把 `status` 猜成 `ready` 的兜底，
  * 会把产品报上来的失败悄悄记成成功。
+ *
+ * `product` 还要过 `isProductCode`（与 entitlements / usage / sharing 同一条正则）：
+ * 这个串在经目录校验之前就已经被 E6 当作 Redis field 与日志字段在用，不限形状等于让
+ * 拿着口令的调用方往日志里写任意长度、带换行的内容。
  */
 export function parseAckBody(body: unknown): ParsedAckBody {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -72,6 +78,7 @@ export function parseAckBody(body: unknown): ParsedAckBody {
   if (!workspaceId) throw new Error("workspace_id_required");
   const productCode = str(b["product"]);
   if (!productCode) throw new Error("product_required");
+  if (!isProductCode(productCode)) throw new Error("invalid_product");
 
   const rawStatus = str(b["status"]);
   if (rawStatus !== "ready" && rawStatus !== "failed") {
@@ -104,6 +111,9 @@ export class PlatformProvisioningRouter {
   constructor(
     @Inject(PlatformProvisioningService)
     private readonly provisioning: PlatformProvisioningService,
+    // E6：旧凭据计数（legacy-auth-usage.service.ts）
+    @Inject(LegacyAuthUsageService)
+    private readonly legacyAuth: LegacyAuthUsageService,
   ) {}
 
   /** POST /provisioning/ack { workspace_id, product, status, delivery_id?, detail? } */
@@ -137,6 +147,13 @@ export class PlatformProvisioningRouter {
       },
       "trust-declared",
     );
+    if (!s2sCaller) {
+      // E6（2026-10-04）：谁还在走旧凭据——只在旧头那条路上记，Bearer 调用方不记。
+      this.legacyAuth.record({
+        route: "provisioning.ack",
+        productCode: parsed.productCode,
+      });
+    }
 
     const productId = await this.provisioning.resolveProductId(
       parsed.productCode,

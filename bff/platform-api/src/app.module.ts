@@ -46,6 +46,7 @@ import { CustomerNotificationsWiring } from "./notifications/customer-notificati
 import { OperatorAlertsWiring } from "./notifications/operator-alerts.wiring";
 import { DatabaseTimezoneCheck } from "./platform/database-timezone.check";
 import { IntegrationSignalService } from "./platform/integration-signal.service";
+import { LegacyAuthUsageService } from "./platform/legacy-auth-usage.service";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
 import { PlatformProvisioningService } from "./platform/platform-provisioning.service";
 import { PlatformUsageService } from "./platform/platform-usage.service";
@@ -85,6 +86,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     TokenUsageService,
     PlatformProvisioningService,
     IntegrationSignalService,
+    // E6（2026-10-04）：谁还在走旧凭据——四个产品面 router 在旧头那条路上计数，opera 读回
+    LegacyAuthUsageService,
     PlatformAuthGuard,
     S2sTokenVerifier,
     JobHeartbeatService,

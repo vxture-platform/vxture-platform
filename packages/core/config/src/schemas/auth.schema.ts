@@ -54,7 +54,8 @@ export const authSchema = z.object({
    * 发送方 503 `operator_*_unavailable`。**代码里不写回落**（`IDP ?? AUTH` 会把产品值重新
    * 放进内部面），谁读哪把钥匙由 `scripts/guardrails/check-internal-auth-key-usage.mjs` 钉住。
    * 此前这里写着「本地有非密默认值」——不成立，schema 从来没有默认值；真有默认值的是
-   * `@vxture/core-auth` 里那份零消费方的 `resolveInternalAuthToken`（另批删除）。
+   * `@vxture/core-auth` 里那份零消费方的 `resolveInternalAuthToken`（2026-10-04 PR B 已删，
+   * 那个包只剩 `sharedSecretMatches`，不读 env）。
    */
   AUTH_INTERNAL_TOKEN: z.string().min(1).optional(),
   IDP_INTERNAL_TOKEN: z.string().min(1).optional(),

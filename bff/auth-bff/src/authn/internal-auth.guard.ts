@@ -6,8 +6,10 @@
  * admin-bff requesting an operator step-up credential, or admin-bff acting
  * on operator/tenant accounts via the internal admin routers). Requires the
  * shared IDP_INTERNAL_TOKEN in the `x-vxture-internal-auth` header;
- * fail-closed when the token is unconfigured. Constant-time compare to
- * avoid leaking via timing.
+ * fail-closed when the token is unconfigured. Constant-time compare
+ * (`sharedSecretMatches` from `@vxture/core-auth` — one implementation shared
+ * with platform-api's PlatformAuthGuard; the two guard *classes* stay apart,
+ * see the scope note below) to avoid leaking via timing.
  *
  * **两把钥匙（2026-10-04 拆分）**：这个面只认 `IDP_INTERNAL_TOKEN`。此前它与 platform-api
  * 的产品面共用 `AUTH_INTERNAL_TOKEN`——那个值发给了产品团队，于是任何拿着产品值的 tailnet
@@ -50,7 +52,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { timingSafeEqual } from "node:crypto";
+import { sharedSecretMatches } from "@vxture/core-auth";
 import { VxConfigService } from "@vxture/core-config";
 import type { Request } from "express";
 import {
@@ -86,7 +88,7 @@ export class InternalAuthGuard implements CanActivate {
     }
     const req = context.switchToHttp().getRequest<Request>();
     const presented = req.header(INTERNAL_AUTH_HEADER) ?? "";
-    if (!safeEqual(presented, expected)) {
+    if (!sharedSecretMatches(presented, expected)) {
       this.warnInvalid(req, routeLabel(context));
       throw new UnauthorizedException("invalid_internal_auth");
     }
@@ -128,11 +130,4 @@ function routeLabel(context: ExecutionContext): string {
   const cls = context.getClass?.()?.name ?? "UnknownRouter";
   const handler = context.getHandler?.()?.name ?? "unknownHandler";
   return `${cls}.${handler}`;
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
 }

@@ -10,6 +10,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { Response } from "express";
+import type { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import type { PlatformUsageService } from "../platform/platform-usage.service";
 import type { TokenUsageService } from "../platform/token-usage.service";
 import type { PoolIdentity } from "../platform/usage-view";
@@ -73,7 +74,13 @@ function routerWith(opts: {
     })),
     readPools: vi.fn(async () => pools),
     noteQuotaExhausted,
+    recordGauge: vi.fn(async () => ({
+      value: "7",
+      observedAt: new Date("2026-10-04T00:00:00.000Z"),
+      applied: true,
+    })),
   };
+  const recordLegacy = vi.fn();
   const router = new PlatformUsageRouter(
     usage as unknown as PlatformUsageService,
     // token 形态在本 spec 里不走；形状上要给一个（ingest 被叫到就是错的）
@@ -82,9 +89,60 @@ function routerWith(opts: {
         throw new Error("tokens path must not run here");
       }),
     } as unknown as TokenUsageService,
+    { record: recordLegacy } as unknown as LegacyAuthUsageService,
   );
-  return { router, usage, noteQuotaExhausted };
+  return { router, usage, noteQuotaExhausted, recordLegacy };
 }
+
+const S2S_KARDA = {
+  productCode: "karda",
+  mode: "service" as const,
+  orgId: null,
+  workspaceId: WS,
+};
+
+describe("E6 —— 旧凭据计数只在旧头那条路上", () => {
+  it("consume · 旧头（无 s2sCaller）：记一笔 usage.consume，按自报产品码", async () => {
+    const { router, recordLegacy } = routerWith({ status: "ok" });
+    await router.consume(body, res());
+    expect(recordLegacy.mock.calls.map((c) => c[0])).toEqual([
+      { route: "usage.consume", productCode: "karda" },
+    ]);
+  });
+
+  it("consume · Bearer 调用方在场：一笔都不记", async () => {
+    const { router, recordLegacy } = routerWith({ status: "ok" });
+    await router.consume(body, res(), undefined, S2S_KARDA);
+    expect(recordLegacy).not.toHaveBeenCalled();
+  });
+
+  it("consume · 旧头 + intent=reserve：403 在发射点之前，所以不记（头注「看不见什么」那一条）", async () => {
+    const { router, recordLegacy, usage } = routerWith({ status: "ok" });
+    await expect(
+      router.consume({ ...body, intent: "reserve" }, res()),
+    ).rejects.toMatchObject({ message: "s2s_legacy_path_not_allowed" });
+    expect(recordLegacy).not.toHaveBeenCalled();
+    expect(usage.consume).not.toHaveBeenCalled();
+  });
+
+  it("gauge · 旧头：记一笔 usage.gauge；Bearer：不记", async () => {
+    const { router, recordLegacy, usage } = routerWith({ status: "ok" });
+    usage.isGaugeMetric.mockResolvedValue(true);
+    const gaugeBody = {
+      workspace_id: WS,
+      product: "karda",
+      metric: "storage.bytes",
+      value: 7,
+      observed_at: "2026-10-04T00:00:00.000Z",
+    };
+    await router.gauge(gaugeBody);
+    expect(recordLegacy.mock.calls.map((c) => c[0])).toEqual([
+      { route: "usage.gauge", productCode: "karda" },
+    ]);
+    await router.gauge(gaugeBody, S2S_KARDA);
+    expect(recordLegacy).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("POST /usage/consume —— gated 时的运营通告", () => {
   it("gated：按工作空间 / 产品码 / 指标 / 本次量 / 池状态上报一次", async () => {

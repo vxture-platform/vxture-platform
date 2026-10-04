@@ -107,6 +107,12 @@ export interface CheckResult {
    * 其它值是别的页面，抽屉里以新标签页打开。
    */
   href?: string;
+  /**
+   * E6：本月仍走旧共享凭据的调用次数（只挂在 C2 那一条上）。**数据不是文案**：句子由
+   * 抽屉经 next-intl 拼（`integrationSignals.legacyAuthThisMonth`），不参与任何判定。
+   * `undefined` = BFF 没给这一段，不上屏。
+   */
+  legacyAuthThisMonth?: number;
 }
 
 interface ProductLike {
@@ -207,6 +213,25 @@ interface IntegrationSignalsLite {
     status: string;
     startAt: string;
   } | null;
+  /**
+   * E6（2026-10-04）：本月（UTC）仍走旧共享凭据的调用次数，按路由分。opera-bff 永远给
+   * 这一段（空 `byRoute` = 本月零次）；这里仍写成可选，老一版 BFF 不给时那句话就不上屏，
+   * 而不是把「读不到」画成 0。
+   */
+  legacyAuth?: { month: string; byRoute: Record<string, number> };
+}
+
+/**
+ * E6：把按路由的计数合成一个数。`undefined` = BFF 没给这一段（不显示），不是 0。
+ *
+ * @param legacyAuth - opera-bff `legacyAuth` 段
+ * @returns 本月走旧凭据的总次数；没有这一段时 undefined
+ */
+export function legacyAuthThisMonth(
+  legacyAuth: { byRoute: Record<string, number> } | undefined,
+): number | undefined {
+  if (!legacyAuth) return undefined;
+  return Object.values(legacyAuth.byRoute).reduce((sum, n) => sum + n, 0);
 }
 
 function reason(error: unknown, fallback: string): string {
@@ -545,7 +570,12 @@ export async function runLaunchChecks(
       delivery,
       plan,
       subscription,
+      legacyAuth,
     } = signals;
+    /* E6：挂在 C2 那条上的一个数。exactOptionalPropertyTypes：没有就不给键。 */
+    const legacyCount = legacyAuthThisMonth(legacyAuth);
+    const legacyAuthField =
+      legacyCount === undefined ? {} : { legacyAuthThisMonth: legacyCount };
     /* 端到端链路 —— **呈现型，不写回检查单**（没有 itemCode）。
      *
      * `acceptance` 的判据是 `login → provision → gate → consume → invalidate` 五段。
@@ -652,6 +682,7 @@ export async function runLaunchChecks(
         : "这一项卡「转正式版」，不卡上线。上线、发布套餐之后，让一个测试用途的真实租户订阅并使用；对方在那个工作空间以 S2S 令牌拉一次权益后重跑。",
       itemCode: "c2_entitlement",
       href: entitlementsHref,
+      ...legacyAuthField,
     });
     results.push({
       id: "c3-metering",
