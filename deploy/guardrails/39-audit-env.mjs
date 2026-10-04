@@ -497,6 +497,47 @@ const ENV_FILE_RULES = [
     placeholderOptionalKeys: new Set(["PLATFORM_WEBHOOK_ENC_KEY"]),
   },
   {
+    // 治理平面 shell BFF（arche）：第三个 workforce-realm RP，也是内部面的第三个发送方。
+    // 2026-10-04 之前这里没有它的规则：IDP_INTERNAL_TOKEN 复制进 .env.arche-bff 静默放过
+    // （同一份复制进 .env.opera-bff 是红的），OIDC_CLIENT_SECRET 空值也不拦；而 12-generate
+    // 现在会从 example 补出这份文件（此前缺文件靠 compose 短语法报错），于是「缺文件停」
+    // 变成了「带占位起」——没有这条规则，arche-bff 会带着空 secret 被重建。
+    // requiredActual 直接 STRICT_RUNTIME：30-deploy 的 check_file 本就要这份文件。
+    label: "arche-bff env",
+    actual: `${RUNTIME_DIR}/.env.arche-bff`,
+    example: `${WORKER_DIR}/.env.arche-bff.example`,
+    requiredActual: STRICT_RUNTIME,
+    requiredExample: true,
+    forbidsClientSecretHashes: true,
+    forbiddenKeys: new Set([
+      ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
+      "REDIS_PASSWORD",
+      "CF_TURNSTILE_ENABLED",
+      ...TENANT_TURNSTILE_KEYS,
+      ...ADMIN_TURNSTILE_KEYS,
+      ...FRONTEND_SITE_KEYS,
+      ...OAUTH_KEYS,
+      ...MAIL_KEYS,
+      // bcrypt hash belongs in IdP env (.env.auth-bff), not the RP's.
+      ...OIDC_CLIENT_SECRET_HASH_KEYS,
+      ...OIDC_FUTURE_APP_HASH_KEYS,
+    ]),
+    requiredKeys: new Set([
+      "NODE_ENV",
+      "ARCHE_BFF_PORT",
+      "AUTH_BFF_URL",
+      "OIDC_ISSUER",
+      // this RP's own public origin (the real hostname lives ONLY in runtime
+      // env — the repo carries the g.vxture.com placeholder by hardening policy).
+      "ARCHE_BASE_URL",
+      // confidential RP secret presented at the IdP token endpoint; missing →
+      // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
+      "OIDC_CLIENT_SECRET",
+    ]),
+  },
+  {
     label: "platform-api env",
     actual: `${RUNTIME_DIR}/.env.platform-api`,
     example: `${WORKER_DIR}/.env.platform-api.example`,

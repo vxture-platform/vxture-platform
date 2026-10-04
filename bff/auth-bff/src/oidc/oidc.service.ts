@@ -1985,7 +1985,7 @@ export class OidcService {
      * `product_250` v0.4 把 step-up 的执行位定在 console 层，opera 也要跑
      * 仪式，所以这里必须按调用方参数化。
      *
-     * 调用方是持 `AUTH_INTERNAL_TOKEN` 的同信任域 BFF，与 `operatorId` 同等
+     * 调用方是持 `IDP_INTERNAL_TOKEN`（内部面钥匙）的同信任域 BFF，与 `operatorId` 同等
      * 信任级别——它已经在替操作者声明身份了，再替自己声明受众不放大风险。
      */
     audience?: string | undefined;

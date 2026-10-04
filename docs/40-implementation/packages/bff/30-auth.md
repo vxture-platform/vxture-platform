@@ -266,15 +266,25 @@ POST /auth/crossdomain/verify  — 验证 token，在 ruyin domain 写入 Cookie
 
 ---
 
-### `/auth/internal/sign` — 内部签发接口
+### `/internal/*` — 内部面（server-to-server）
+
+今天 auth-bff 真实存在的内部面是四个 controller：`internal/operator/accounts`（运营账号管理）、`internal/account/users`（客户账号管理）、`internal/operator/sessions`（运营者会话）、`POST internal/operator/stepup/totp`（step-up）。全部由 `InternalAuthGuard` 守着：
 
 ```typescript
 // Header 必须携带：x-vxture-internal-auth: {IDP_INTERNAL_TOKEN}
-// 由 InternalAuthGuard 验证，非内部调用直接 401。2026-10-04 起 auth-bff 的内部面只认
-// IDP_INTERNAL_TOKEN（secrets/platform-idp-internal.env，只注入 auth/admin/arche/opera）；
-// AUTH_INTERNAL_TOKEN 只开 platform-api 的产品面，拿它来这里是 401 invalid_internal_auth。
+// 2026-10-04 起 auth-bff 的内部面只认 IDP_INTERNAL_TOKEN（secrets/platform-idp-internal.env，
+// 只注入 auth/admin/arche/opera 四个容器）；AUTH_INTERNAL_TOKEN 只开 platform-api 的产品面，
+// 拿它来这里是 401 invalid_internal_auth。凭据过了还要过路由准入：没有 @InternalRoute 声明的
+// 路由一律 403（internal-route-policy.ts；check-internal-route-policy.mjs 把这个面钉进快照）。
+// 发送方：admin-bff / arche-bff 的 operator-admin.service 与 operator-stepup.service、opera-bff 的 operator-stepup.service。
+```
 
-// POST /auth/internal/sign
+### `/auth/internal/sign` — 【已退役】内部签发接口
+
+auth-bff 里**没有**这个 controller（`grep -rn 'internal/sign' bff/auth-bff/src` 为空）；它是 HS256 时代 admin delegate-sign 的接口，退役见 `docs/30-design/identity/120-implementation.md` 退役清单。下面的契约只作历史记录，**不要按它配任何调用方**：
+
+```typescript
+// （历史）POST /auth/internal/sign
 // Request body
 {
   sub: string;
@@ -292,7 +302,7 @@ POST /auth/crossdomain/verify  — 验证 token，在 ruyin domain 写入 Cookie
 { status: 'signed'; userId: string }
 ```
 
-供 admin-bff 在运营账号登录后委托签发 operator token 使用。
+（历史）曾供 admin-bff 在运营账号登录后委托签发 operator token 使用；admin 今天是 OIDC RP，运营者登录走 IdP 的 `/authorize` → `/token`。
 **普通 portal BFF 禁止调用此接口**（它们只代理用户密码到 `/auth/login`）。
 
 ---

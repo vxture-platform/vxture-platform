@@ -16,7 +16,8 @@
  * 「新键没到位」的每一刻把产品值重新放进这扇门，而没到位正是出事时最常见的状态。
  * 未配置 ⇒ 401 `internal_auth_unavailable`（生产的硬闸在部署层：缺文件 / 占位即停）。
  * 头带旧值 ⇒ 401 `invalid_internal_auth` 并打一条限速 warn（见 `warnInvalid`）——切换后
- * 这条 warn 应当是零，出现一条就是有谁还拿着旧值在敲门。
+ * 除 41-verify 与半径探针自己故意送旧值留下的几条外应当是零（基线从它们之后取），
+ * 再出现一条就是有谁还拿着旧值在敲门。
  *
  * **Scope note (post-review correction, 2026-07-12)**: this guard does
  * NOT accept T1/T2 S2S bearer tokens. It originally did (T2), but several

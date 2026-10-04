@@ -60,8 +60,13 @@ echo "  密钥文件:"
 check_file "$RUNTIME_DIR/secrets/tair-pw-default"
 check_file "$RUNTIME_DIR/secrets/platform.env"
 check_file "$RUNTIME_DIR/secrets/platform-mail.env"
-# 内部面钥匙（IDP_INTERNAL_TOKEN，只进 auth/admin/arche/opera）。compose 用短语法引用它，
-# 缺了 [3/4] 的 `config` 也会停；这里先拦，是为了在任何容器被替换之前就说清缺的是什么。
+# 下面四份 compose 都用短语法引用（缺了 [3/4] 的 `config` 也会停）；这里先拦，是为了在任何
+# 容器被替换之前就说清缺的是什么。sms / identity / app 此前不在清单里——同一份清单住三处
+# （这里、40-verify、51-alerts），lib/runtime-file-lists.test.sh 钉住 compose 引用的每一份都在。
+check_file "$RUNTIME_DIR/secrets/platform-sms.env"
+check_file "$RUNTIME_DIR/secrets/platform-identity.env"
+check_file "$RUNTIME_DIR/secrets/platform-app.env"
+# 内部面钥匙（IDP_INTERNAL_TOKEN，只进 auth/admin/arche/opera）。
 check_file "$RUNTIME_DIR/secrets/platform-idp-internal.env"
 check_file "$COMPOSE_DIR/guardrails/39-audit-env.mjs"
 

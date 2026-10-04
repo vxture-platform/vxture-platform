@@ -276,15 +276,19 @@ admin-bff 通过 `reporting_ro`（只读）或 `DATABASE_URL`（读写）连接�
 
 ---
 
-## 4. auth-bff 委托签发流程
+## 4. auth-bff 委托签发流程【历史，已退役】
 
-### 4.1 完整登录链路
+> **本节描述的 `/auth/internal/sign` 委托签发链路已退役**：auth-bff 里没有这个 controller（`grep -rn 'internal/sign' bff/auth-bff/src` 为空；退役清单见 `docs/30-design/identity/120-implementation.md`），admin / console 今天都是 OIDC RP，登录走 IdP `/authorize` → `/token`。保留本节只为读懂旧代码与旧讨论，**不要按它配任何调用方**。
+>
+> **今天 auth-bff 的内部面**只有 `/internal/*` 四个 controller（`internal/operator/accounts`、`internal/account/users`、`internal/operator/sessions`、`POST internal/operator/stepup/totp`），由 `InternalAuthGuard` 守着：头 `x-vxture-internal-auth` 的值 = `IDP_INTERNAL_TOKEN`（2026-10-04 起只认这把，`secrets/platform-idp-internal.env`，只注入 auth / admin / arche / opera 四个容器）；拿产品面的 `AUTH_INTERNAL_TOKEN` 来是 401 `invalid_internal_auth`。发送方的写法看 `bff/admin-bff/src/auth/operator-stepup.service.ts`（读 `config.auth.IDP_INTERNAL_TOKEN`，不回落）。
+
+### 4.1 完整登录链路（历史）
 
 ```
 前端 POST /api/auth/login (admin-bff)
   → admin-bff: 限速 → 验证码 → DB 密码校验
-  → admin-bff: fetch POST http://auth-bff:3081/auth/internal/sign
-      Header: x-vxture-internal-auth: <IDP_INTERNAL_TOKEN>   ← auth-bff 内部面只认这把（2026-10-04 起）；AUTH_INTERNAL_TOKEN 只开 platform-api 的产品面
+  → admin-bff: fetch POST http://auth-bff:3081/auth/internal/sign          ← 已退役的端点
+      Header: x-vxture-internal-auth: <当时的共享口令 AUTH_INTERNAL_TOKEN>   ← 历史写法；今天内部面 /internal/* 只认 IDP_INTERNAL_TOKEN
       Body: { sub, email, username, displayName, role, roleLabel, permissions, source: 'admin' }
   → auth-bff: 签发 JWT → Set-Cookie: vx_admin_access_token
   → admin-bff: 透传 Set-Cookie header 给浏览器

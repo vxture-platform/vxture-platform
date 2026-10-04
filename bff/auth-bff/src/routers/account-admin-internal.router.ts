@@ -3,7 +3,8 @@
  * customer account management (C12: disable / enable / force-logout).
  * @package @vxture/bff-auth
  *
- * Server-to-server only (InternalAuthGuard / AUTH_INTERNAL_TOKEN). admin-bff, on
+ * Server-to-server only (InternalAuthGuard / IDP_INTERNAL_TOKEN — the IdP internal-face
+ * key since 2026-10-04; the product-face AUTH_INTERNAL_TOKEN gets 401 here). admin-bff, on
  * behalf of an authenticated operator, delegates customer account status/session
  * mutations here — the IdP owns customer credentials & sessions (realm=customer).
  * Realm-isolated: AccountService resolves targets via account.users only, so an

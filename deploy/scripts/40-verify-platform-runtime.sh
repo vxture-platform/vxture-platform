@@ -57,9 +57,19 @@ check_required_files() {
   check_file "$RUNTIME_DIR/.env.website-bff"
   check_file "$RUNTIME_DIR/.env.console-bff"
   check_file "$RUNTIME_DIR/.env.admin-bff"
+  # 2026-10-04 补齐：这份清单此前停在五个 RP 时代。30-deploy [1/4] 要的每一份这里都要有，
+  # 否则「40-verify 全 OK」对缺 .env.arche-bff / 新 secrets 文件的主机是盲的，要到下次 deploy
+  # 才被 30 拦下。三处清单（30 / 40 / 51）由 lib/runtime-file-lists.test.sh 钉成一致。
+  check_file "$RUNTIME_DIR/.env.opera-bff"
+  check_file "$RUNTIME_DIR/.env.arche-bff"
+  check_file "$RUNTIME_DIR/.env.platform-api"
   check_file "$RUNTIME_DIR/secrets/tair-pw-default"
   check_file "$RUNTIME_DIR/secrets/platform.env"
   check_file "$RUNTIME_DIR/secrets/platform-mail.env"
+  check_file "$RUNTIME_DIR/secrets/platform-sms.env"
+  check_file "$RUNTIME_DIR/secrets/platform-identity.env"
+  check_file "$RUNTIME_DIR/secrets/platform-app.env"
+  check_file "$RUNTIME_DIR/secrets/platform-idp-internal.env"
 }
 
 compose_cmd() {

@@ -20,8 +20,15 @@
 #   2. 值是 32 位 hex（`openssl rand -hex 16`，docs/10-standards/150-security.md §1.4 对
 #      AUTH_INTERNAL_TOKEN 的同一条强度标准）。
 #
-# 幂等：文件已存在即拒绝（exit 1，打印 `exists: <path>`），不覆盖。轮换用
+# 幂等：文件已存在**且值是真值**即拒绝（exit 1，打印 `exists: <path>`），不覆盖。轮换用
 # FORCE_PROVISION_IDP_INTERNAL=1，轮换后要重建四个容器（它们在容器启动时读 env_file）。
+#
+# **占位视同不存在**（打印 `placeholder: <path>`，不需要 FORCE）：12-generate 在每次
+# 31-regular-upgrade（→ 13-prepare）里都会跑，而它会先从 example 落一个 CHANGEME 占位——
+# 所以「切换日先派发 deploy、在 [1/4] 占位审计红了之后再跑本脚本」时文件已经在了。
+# 这里若按「存在即拒绝」处理，owner 就被卡在两个拒绝之间（审计拒占位、本脚本拒覆盖）。
+# 占位判据与 39-audit-env 的 isPlaceholder 同一套：空 / CHANGEME / CHANGE_ME / 两者前缀 /
+# your- / change-me-。真值永远不被静默覆盖，这一条由 lib/provision-idp-internal.test.sh 钉住。
 #
 # 切换步骤见 docs/50-deployment/15-idp-internal-token-cutover.md。
 set -euo pipefail
@@ -53,10 +60,28 @@ if [ ! -f "$PLATFORM_ENV_FILE" ]; then
   exit 1
 fi
 
-if [ -f "$TARGET_FILE" ] && [ "$FORCE" != "1" ]; then
-  echo "exists: $TARGET_FILE"
-  echo "（已存在即不覆盖。轮换：FORCE_PROVISION_IDP_INTERNAL=1，然后重建 auth/admin/arche/opera 四个容器。）" >&2
-  exit 1
+# 占位判据（与 39-audit-env isPlaceholder 同一套）。去掉一层引号后判。
+is_placeholder() {
+  local v="$1"
+  v="${v#\"}"; v="${v%\"}"; v="${v#\'}"; v="${v%\'}"
+  case "$v" in
+    ""|CHANGEME|CHANGE_ME|CHANGEME_*|CHANGE_ME_*|your-*|change-me-*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ -f "$TARGET_FILE" ]; then
+  CURRENT_VALUE="$(read_kv "$TARGET_FILE" IDP_INTERNAL_TOKEN)"
+  if is_placeholder "$CURRENT_VALUE"; then
+    # 12-generate 落的占位：视同不存在，铸真值，不需要 FORCE。
+    echo "placeholder: $TARGET_FILE（IDP_INTERNAL_TOKEN 是空值或 CHANGEME 占位，视同不存在，铸真值）"
+  elif [ "$FORCE" != "1" ]; then
+    echo "exists: $TARGET_FILE"
+    echo "（已有真值即不覆盖。轮换：FORCE_PROVISION_IDP_INTERNAL=1，然后重建 auth/admin/arche/opera 四个容器。）" >&2
+    exit 1
+  else
+    echo "rotate: $TARGET_FILE（FORCE_PROVISION_IDP_INTERNAL=1：覆盖已有真值，之后要重建四个容器）"
+  fi
 fi
 
 OLD_VALUE="$(read_kv "$PLATFORM_ENV_FILE" AUTH_INTERNAL_TOKEN)"

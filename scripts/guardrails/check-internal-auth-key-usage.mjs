@@ -17,8 +17,12 @@
 //
 // ## 判据（按它做的事找，不按名字找）
 //
-// 扫 `bff/*/src`、`packages/core/*/src`、`services/*/*/src`（.ts，排除 spec/test、dist）与
-// `scripts/**/*.mjs`（排除本文件），用 TypeScript 的解析器取 AST：**注释是 trivia、永远不是节点**，
+// 扫 `bff/<pkg>`、`packages/core/<pkg>`、`services/<g>/<pkg>` **整个包目录**（不只 src：lib/、test/
+// 夹具、根下的 .js 入口都算），文件类型 .ts / .tsx / .js / .mjs / .cjs（排除 spec/test、.d.ts、
+// node_modules / dist / .next / coverage / build），加 `scripts/**/*.mjs`（排除本文件）。
+// 此前只扫 `src/**/*.ts`：gateway-bff 的真实入口是 `src/main.mjs`，任何 BFF 里新放一个 .js 助手或
+// src 之外的 .ts 都看不见——而设计要求 gateway / website 两把都不许读，那个盲区恰好盖着它们。
+// 用 TypeScript 的解析器取 AST：**注释是 trivia、永远不是节点**，
 // 字符串里的 `//` 也不会被当成注释——两类正则剥注释器各错各的，这里不用正则。
 // 一处「读者」= 下面三种节点之一，文本**整体等于**键名：
 //   · 标识符        `config.auth.IDP_INTERNAL_TOKEN`、`process.env.AUTH_INTERNAL_TOKEN`、schema 的属性名
@@ -151,7 +155,12 @@ function walk(dir, pred, out = []) {
   return out;
 }
 
-const isSourceTs = (n) => /\.ts$/.test(n) && !/\.(spec|test)\.ts$/.test(n) && !/\.d\.ts$/.test(n);
+/**
+ * 包内源码：.ts / .tsx / .js / .mjs / .cjs，排除 spec/test 与 .d.ts。**整个包目录**而不只 src——
+ * gateway-bff 的入口是 src/main.mjs，而 lib/ 与 test/ 夹具里的读者此前都在盲区里。
+ */
+const isSource = (n) =>
+  /\.(ts|tsx|js|mjs|cjs)$/.test(n) && !/\.(spec|test)\.(ts|tsx|js|mjs|cjs)$/.test(n) && !/\.d\.ts$/.test(n);
 const isMjs = (n) => /\.mjs$/.test(n);
 
 /** 扫描范围：一组 (根目录, 文件谓词)。 */
@@ -160,12 +169,12 @@ function collectSources() {
   for (const group of ["bff", "packages/core"]) {
     const base = join(ROOT, group);
     for (const pkg of safeList(base)) {
-      files.push(...walk(join(base, pkg, "src"), isSourceTs));
+      files.push(...walk(join(base, pkg), isSource));
     }
   }
   for (const g of safeList(join(ROOT, "services"))) {
     for (const pkg of safeList(join(ROOT, "services", g))) {
-      files.push(...walk(join(ROOT, "services", g, pkg, "src"), isSourceTs));
+      files.push(...walk(join(ROOT, "services", g, pkg), isSource));
     }
   }
   files.push(...walk(join(ROOT, "scripts"), isMjs));
@@ -208,7 +217,11 @@ function packageOf(relPath) {
  * @returns {Map<string, string[]>} key → ["file:line", …]
  */
 function readersIn(relPath, text) {
-  const kind = relPath.endsWith(".mjs") ? ts.ScriptKind.JS : ts.ScriptKind.TS;
+  const kind = /\.(js|mjs|cjs)$/.test(relPath)
+    ? ts.ScriptKind.JS
+    : relPath.endsWith(".tsx")
+      ? ts.ScriptKind.TSX
+      : ts.ScriptKind.TS;
   const sf = ts.createSourceFile(relPath, text, ts.ScriptTarget.Latest, true, kind);
   const found = new Map(KEYS.map((k) => [k, []]));
   const at = (n) => `${relPath}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`;
@@ -404,7 +417,49 @@ if (process.argv.includes("--self-test")) {
   // (xi) 复原 → 绿（mutate 不动 real，这里再评一次真仓）
   say(green(real), "(xi) 复原后再评真仓 → 绿");
 
-  const total = 12;
+  // (xii) 扫描范围真的宽了：gateway-bff 的入口 src/main.mjs 是仓里真实存在的 .mjs，此前不在扫描集里。
+  //       这条看的是 collectSources 的产物，不是 mutate 喂进去的路径——谓词改了没生效这里会红。
+  say(real.has("bff/gateway-bff/src/main.mjs"), "(xii) 真仓扫描集含 bff/gateway-bff/src/main.mjs（.mjs 入口不再是盲区）");
+
+  // (xiii) 反例：.mjs / .js / .cjs 里的读者（gateway 两把都不许读）
+  say(
+    redWith(
+      mutate({ "bff/gateway-bff/src/zz-fixture.mjs": "export const t = process.env.AUTH_INTERNAL_TOKEN;\n" }),
+      "bff/gateway-bff: 不在 EXPECTED 里却读 AUTH_INTERNAL_TOKEN",
+    ) &&
+      redWith(
+        mutate({ "bff/gateway-bff/src/zz-fixture.cjs": 'const t = process.env["IDP_INTERNAL_TOKEN"]; module.exports = t;\n' }),
+        "bff/gateway-bff: 不在 EXPECTED 里却读 IDP_INTERNAL_TOKEN",
+      ),
+    "(xiii) gateway-bff 的 .mjs / .cjs 读者 → 红",
+  );
+
+  // (xiv) 反例：.tsx（带 JSX）里的读者 —— 解析要按 TSX 走，否则 `<div>` 会让解析器把后面的节点吞掉
+  say(
+    redWith(
+      mutate({
+        "bff/website-bff/src/zz-fixture.tsx":
+          "export const C = () => <div title={process.env.IDP_INTERNAL_TOKEN}>x</div>;\n",
+      }),
+      "bff/website-bff: 不在 EXPECTED 里却读 IDP_INTERNAL_TOKEN",
+    ),
+    "(xiv) website-bff 的 .tsx 读者（JSX 属性里）→ 红",
+  );
+
+  // (xv) 反例：src 之外的读者（lib/、test/ 夹具）——此前只扫 src
+  say(
+    redWith(
+      mutate({ "bff/website-bff/lib/zz-fixture.ts": "export const t = process.env.AUTH_INTERNAL_TOKEN;\n" }),
+      "bff/website-bff: 不在 EXPECTED 里却读 AUTH_INTERNAL_TOKEN",
+    ) &&
+      isSource("zz.js") &&
+      isSource("zz.tsx") &&
+      !isSource("zz.spec.tsx") &&
+      !isSource("zz.d.ts"),
+    "(xv) src 之外（bff/website-bff/lib/）的读者 → 红；谓词收 .js/.tsx、仍排除 spec 与 .d.ts",
+  );
+
+  const total = 16;
   console.log(`\n── 汇总 ──\n看得见 ${total - bad}/${total} 项判据`);
   if (bad) {
     console.log("这条判据还不能用 —— 先让它看得见上面标 ✗ 的那几条。");

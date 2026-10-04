@@ -23,6 +23,11 @@
 # 口令**绝不进 argv**（ps 看得见）：curl 用 `-H @file` 读 0600 头文件；容器内那一条用 `-H @-`
 # 从 stdin 读。脚本自己先断言两值非空且不等——「读不到要抛，不要通过」。
 # 探针用 `/internal/operator/sessions`（GET、只读、actor none），是这个面上最安全的一条。
+#
+# **本脚本自己会在 auth-bff 日志里留下 `invalid_internal_auth` warn**：探针 1/3 故意送旧值 / 无头
+# （来源 = 本机，限速后一条）、探针 7 故意从 $SENDER_CONTAINER 容器送旧值（来源 = 容器 IP，一条）。
+# 所以「切换后还有谁拿旧值敲门」的 `docker logs --since` 要用本脚本结尾打印的 `finished_at`
+# 之后的时刻（半径探针 §5 也会留一条，--since 取它之后）。拿 deploy 完成时刻当基线会数进这几条。
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -116,6 +121,12 @@ else
 fi
 
 echo ""
+# 结束时刻（UTC、可直接喂 `docker logs --since`）：本脚本的探针 1/3/7 自己在 auth-bff 日志里留下了
+# invalid_internal_auth warn（本机一条 + 容器 IP 一条），切换后找「还有谁拿旧值敲门」要从这一刻之后数。
+FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "finished_at=$FINISHED_AT"
+echo "（本脚本留下的 invalid_internal_auth warn 来源：本机（探针 1/3）、$SENDER_CONTAINER 容器 IP（探针 7）。"
+echo "  之后看「谁还在敲门」：docker logs $AUTH_BFF_CONTAINER --since $FINISHED_AT 2>&1 | grep invalid_internal_auth）"
 if [ "$FAILED" -eq 0 ]; then
   echo "=== Internal face verified: old value is dead on /internal/*, new value does not open the product face ==="
 else
