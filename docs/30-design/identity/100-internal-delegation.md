@@ -13,9 +13,9 @@ admin 侧「平台用户(operator)/账号(customer) 管理」的动作按钮当�
 
 - **唯一现存内部端点**：`POST /internal/operator/stepup/totp`（`bff/auth-bff/src/routers/operator-stepup.router.ts`，类级 `InternalAuthGuard`）。全仓仅此一个 `/internal/*`。
 - **委托 plumbing 已成型**（B9 直接复用为模板）：
-  - admin-bff `OperatorStepUpService`（`bff/admin-bff/src/auth/operator-stepup.service.ts`）：`fetch(${idpBaseUrl}/internal/...)` + header `x-vxture-internal-auth: AUTH_INTERNAL_TOKEN`；`idpBaseUrl = OIDC_BACKCHANNEL_ISSUER ?? AUTH_BFF_URL`（容器内网 `http://vx-auth-bff:3081`，**绝不走公开 issuer** `accounts.vxture.com`）；未配置 fail-closed。
-  - auth-bff `InternalAuthGuard`（`bff/auth-bff/src/authn/internal-auth.guard.ts`）：`x-vxture-internal-auth` 与 `AUTH_INTERNAL_TOKEN` `timingSafeEqual`；未配置/不匹配 401。
-  - `AUTH_INTERNAL_TOKEN` = 共享密钥（`deploy/secrets/platform.env`），compose 同一 env_file 注入 auth-bff 与 admin-bff。
+  - admin-bff `OperatorStepUpService`（`bff/admin-bff/src/auth/operator-stepup.service.ts`）：`fetch(${idpBaseUrl}/internal/...)` + header `x-vxture-internal-auth: IDP_INTERNAL_TOKEN`；`idpBaseUrl = OIDC_BACKCHANNEL_ISSUER ?? AUTH_BFF_URL`（容器内网 `http://vx-auth-bff:3081`，**绝不走公开 issuer** `accounts.vxture.com`）；未配置 fail-closed。
+  - auth-bff `InternalAuthGuard`（`bff/auth-bff/src/authn/internal-auth.guard.ts`）：`x-vxture-internal-auth` 与 `IDP_INTERNAL_TOKEN` `timingSafeEqual`；未配置/不匹配 401。
+  - `IDP_INTERNAL_TOKEN` = 内部面专用密钥（`deploy/secrets/platform-idp-internal.env`，2026-10-04 起），compose 只注入 auth-bff 与 admin / arche / opera-bff 四个容器。此前这张面与 platform-api 的产品面共用 `AUTH_INTERNAL_TOKEN`（`secrets/platform.env`，进七个容器、值发给了产品团队）；拆开后产品值开不了内部面，产品面照旧用旧值。
 - **凭据存储（realm 硬隔离，无跨 realm FK）**：
   - operator：`admin.operator_credential.password_hash`(Argon2id)、`admin.operator_mfa.totp_secret`(AES-256-GCM，key=`OPERATOR_TOTP_ENC_KEY`)、`admin.operator_recovery_code`(哈希)、`admin.operator_webauthn_credential`、`admin.operator_refresh_token`(含 `revokeSession()` 无端点)。会话中央表 `session.auth_sessions`(realm=`workforce`, sub 前缀 `opr_`)。
   - customer：`credential.user_credentials.password_hash`(Argon2id)、`account.users.status` + `account.users.account_login_disabled`、`session.{auth_sessions,refresh_tokens,password_reset_tokens,login_attempts}`。customer 侧**无 MFA 实现**。
@@ -120,7 +120,7 @@ auth-bff /internal/… router（@UseGuards(InternalAuthGuard)）
 - **P1 operator 面**（admin-bff 主管 operator，最刚需）：新建/重置密码/停用启用/解锁/MFA重置/强制下线 + 前端。含新建 operator 密码 repository 方法（当前完全缺）。
 - **P2 customer 面**（代客，合规更敏感）：reset-password(A)/disable/enable/unlock + 前端。可能需合规评审。
 - **并行（无 IdP 依赖）**：admin-roles/permissions CRUD + operator 角色/元数据编辑（直写库 + PREPARE）。
-- **验收**：内部端点经 InternalAuthGuard（无 token 401）；step-up 未满足 403；停用/重置后目标会话立即失效；审计落 `support.audit_logs`；realm 越界 404；防锁死断言生效。部署前置 env：`AUTH_INTERNAL_TOKEN`（已有）、operator 密码 hasher/临时凭据配置。
+- **验收**：内部端点经 InternalAuthGuard（无 token 401）；step-up 未满足 403；停用/重置后目标会话立即失效；审计落 `support.audit_logs`；realm 越界 404；防锁死断言生效。部署前置 env：`IDP_INTERNAL_TOKEN`（2026-10-04 起，`secrets/platform-idp-internal.env`；此前为 `AUTH_INTERNAL_TOKEN`）、operator 密码 hasher/临时凭据配置。
 
 ## 10. 决策（owner 已拍板 2026-07-04）
 
@@ -149,7 +149,7 @@ auth-bff /internal/… router（@UseGuards(InternalAuthGuard)）
 
 **P1c · 前端**：`PlatformUsersPage` 启用 新建/查看/调整角色/停用启用/重置密码/MFA重置/强制下线；重置 UX 显「重置链接已生成」（D1）；step-up 未满足先弹 TOTP。`AdminRolesPage`/`AdminPermissionsPage` 启用 CRUD。
 
-**部署前置**：`AUTH_INTERNAL_TOKEN`（已有）；operator hasher/Redis 令牌前缀 env（若需）。
+**部署前置**：`IDP_INTERNAL_TOKEN`（`secrets/platform-idp-internal.env`，2026-10-04 起取代 `AUTH_INTERNAL_TOKEN` 开这张面）；operator hasher/Redis 令牌前缀 env（若需）。
 
 ## 11b. P1b 实施细化（grounding 后，2026-07-04）
 

@@ -31,7 +31,7 @@
 
 三个业务端点统一走 `PlatformAuthGuard` 双凭证（迁移期并行，任一满足）：
 
-1. **legacy**：`x-vxture-internal-auth: ${AUTH_INTERNAL_TOKEN}`（platform.env 共享键；arda 现行）；
+1. **legacy**：`x-vxture-internal-auth: ${AUTH_INTERNAL_TOKEN}`（platform.env 共享键；arda 现行）。2026-10-04 起这把钥匙**只**开本宿主的产品面：auth-bff 的 `/internal/*` 内部面改认 `IDP_INTERNAL_TOKEN`（只注入 auth/admin/arche/opera 四个容器），产品手里的值开不了运营管理面；反过来新键也开不了这里——`platform-auth.guard.spec.ts` 钉着「头带 IDP 值 → 401」；
 2. **S2S bearer**（product_210 T1/T2）：`Authorization: Bearer <token>`，`aud=vxture`、`act.sub`=调用方产品码；经 `S2sTokenVerifier` 以 IdP JWKS（`${AUTH_BFF_URL}/oidc/jwks`，kid 缓存）验签——**签名私钥不出 auth-bff**（D13 凭证分权）。
 
 ## 接口契约

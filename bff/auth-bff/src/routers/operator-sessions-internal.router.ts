@@ -6,7 +6,8 @@
  * 不是「刷新令牌表里还有 active 行」：令牌链会被并发刷新的重放判定整条吊销，而中央会话
  * 仍在、静默 SSO 照样放行，按令牌表判在线会把登录着的人显示成不在线。
  *
- * Server-to-server only（InternalAuthGuard / AUTH_INTERNAL_TOKEN）。
+ * Server-to-server only（InternalAuthGuard / IDP_INTERNAL_TOKEN——2026-10-04 起内部面只认这把；
+ * 产品面的 AUTH_INTERNAL_TOKEN 在这里是 401）。
  *
  * **sid 不出本进程**：sid 就是 IdP 会话 cookie 的值，拿到它等于拿到会话。对外只给
  * `sessionRef` = sha256(sid) 前 32 位十六进制；调用方用同一算法对「当前请求的 sid」求值，

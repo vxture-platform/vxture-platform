@@ -277,6 +277,18 @@ jobs:
           node scripts/guardrails/check-required-settings-seeded.mjs
           node scripts/guardrails/check-required-settings-seeded.mjs --self-test
 
+      # 两把内部口令各归谁读（2026-10-04 拆分）：auth-bff 的 /internal/* 只认 IDP_INTERNAL_TOKEN，
+      # 产品面只认 AUTH_INTERNAL_TOKEN。拆分会以两种方式静默失效——auth-bff 写回落 `IDP ?? AUTH`
+      # （产品值重新开门，不报错）、新键没接进 schema（config 里永远 undefined，tsc 一个字不说）。
+      # 用 TS 解析器数读者、按包与 EXPECTED 表精确相等；看不见什么写在守卫头注里。
+      # --self-test 里的反例每条都要能让它红（回落行、读者进了不许读的包、期望包命中为 0、
+      # 读者被删而表项还在…）。同样不加 `pnpm lint:` 入口（改根 package.json 会触发全栈重建）。
+      - name: Internal auth key usage guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          node scripts/guardrails/check-internal-auth-key-usage.mjs
+          node scripts/guardrails/check-internal-auth-key-usage.mjs --self-test
+
       # 用户名格式写在三处(后端判据 + 两个补齐页的前端校验),漂了不报错:
       # 前端比后端松 → 用户填得进去、提交被 400 拒;紧 → 后端接受的名字被拦下,
       # 用户永远不知道那可以用。2026-09-08 实际漂过一次,是靠人翻源码撞见的。

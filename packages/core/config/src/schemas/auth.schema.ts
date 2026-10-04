@@ -42,10 +42,22 @@ export const authSchema = z.object({
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14).default(12),
 
   /**
-   * Shared secret for internal service-to-service requests (X-Vxture-Internal-Auth header).
-   * Required in production; defaults to a non-secret fallback for local development.
+   * 两把共享口令，同一个请求头 `x-vxture-internal-auth`，**各开一张面**（2026-10-04 拆分）：
+   *
+   * - `AUTH_INTERNAL_TOKEN` —— **产品面**。platform-api 的 C2/C3 自助端点收它，console-bff 与
+   *   各产品后台发它。值发给了产品团队，本次拆分不轮换、不改。
+   * - `IDP_INTERNAL_TOKEN` —— **内部面**。auth-bff 的 `/internal/*`（运营账号 / 客户账号管理、
+   *   step-up）只认它；admin-bff / arche-bff / opera-bff 发它。只注入这四个容器
+   *   （`deploy/secrets/platform-idp-internal.env`），产品手里的值从此开不了运营管理面。
+   *
+   * 两者都没有默认值：未配置时各自的接收方 401 `internal_auth_unavailable`（fail-closed），
+   * 发送方 503 `operator_*_unavailable`。**代码里不写回落**（`IDP ?? AUTH` 会把产品值重新
+   * 放进内部面），谁读哪把钥匙由 `scripts/guardrails/check-internal-auth-key-usage.mjs` 钉住。
+   * 此前这里写着「本地有非密默认值」——不成立，schema 从来没有默认值；真有默认值的是
+   * `@vxture/core-auth` 里那份零消费方的 `resolveInternalAuthToken`（另批删除）。
    */
   AUTH_INTERNAL_TOKEN: z.string().min(1).optional(),
+  IDP_INTERNAL_TOKEN: z.string().min(1).optional(),
 
   // ── OIDC IdP (P0; coexists with the HS256 path until P5) ──────────────────
   /** OIDC issuer — the public-facing auth origin used as the `iss` claim */

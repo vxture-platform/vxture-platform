@@ -103,6 +103,12 @@ restore_required "$BACKUP_DIR/runtime/.env.gateway-bff" "$RUNTIME_DIR/.env.gatew
 restore_required "$BACKUP_DIR/runtime/.env.website-bff" "$RUNTIME_DIR/.env.website-bff"
 restore_required "$BACKUP_DIR/runtime/.env.console-bff" "$RUNTIME_DIR/.env.console-bff"
 restore_required "$BACKUP_DIR/runtime/.env.admin-bff" "$RUNTIME_DIR/.env.admin-bff"
+# 2026-10-04 补齐：53 的 `.env.*` 循环早就把这三份备走了，这里此前漏了恢复——恢复出来的主机
+# 过不了 30-deploy [1/4] 的 check_file（三份都在它的清单里），而 docs/09 写的是 53/61 对称。
+# lib/runtime-file-lists.test.sh 钉住：30-deploy 要的每一份 .env.<svc> 这里都要恢复。
+restore_required "$BACKUP_DIR/runtime/.env.platform-api" "$RUNTIME_DIR/.env.platform-api"
+restore_required "$BACKUP_DIR/runtime/.env.opera-bff" "$RUNTIME_DIR/.env.opera-bff"
+restore_required "$BACKUP_DIR/runtime/.env.arche-bff" "$RUNTIME_DIR/.env.arche-bff"
 
 # 站点接管的现场档位（docs/50-deployment/14-site-takeover.md）。optional：没有它时
 # 20-sync-nginx-config.sh 按仓内默认渲染，那是安全的一档。
@@ -112,6 +118,24 @@ echo ""
 echo "==> Platform secret files"
 restore_required "$BACKUP_DIR/runtime/secrets/platform.env" "$RUNTIME_DIR/secrets/platform.env"
 restore_required "$BACKUP_DIR/runtime/secrets/platform-mail.env" "$RUNTIME_DIR/secrets/platform-mail.env"
+# 2026-10-04 补齐：compose 以短语法引用下面四份（缺一份 `config` 就失败），53 全都备；这里此前
+# 只恢复 platform / mail 两份。sms 是手填值、没有生成脚本 → required。另外三份是主机上铸的
+# （identity=25、app=32、idp-internal=34）：备份早于它们登记的日期时没有，恢复后用对应脚本重铸
+# 即可，**不要手抄旧值**；所以 optional + 明说去哪重铸，而不是 required 把 owner 卡在一份
+# 本来就不该从备份来的文件上。
+restore_required "$BACKUP_DIR/runtime/secrets/platform-sms.env" "$RUNTIME_DIR/secrets/platform-sms.env"
+restore_minted() {
+  local source="$1" target="$2" minter="$3"
+  if [ ! -e "$source" ]; then
+    echo "[SKIP] $source"
+    echo "       备份里没有这份主机铸的文件：恢复完成后用 scripts/$minter 重铸（下次 deploy 会重建读它的容器）。"
+    return
+  fi
+  restore_optional "$source" "$target"
+}
+restore_minted "$BACKUP_DIR/runtime/secrets/platform-identity.env" "$RUNTIME_DIR/secrets/platform-identity.env" "25-provision-signing-key.sh"
+restore_minted "$BACKUP_DIR/runtime/secrets/platform-app.env" "$RUNTIME_DIR/secrets/platform-app.env" "32-provision-service-db-roles.sh"
+restore_minted "$BACKUP_DIR/runtime/secrets/platform-idp-internal.env" "$RUNTIME_DIR/secrets/platform-idp-internal.env" "34-provision-idp-internal-secret.sh"
 restore_required "$BACKUP_DIR/runtime/secrets/rds-owner.env" "$RUNTIME_DIR/secrets/rds-owner.env"
 restore_required "$BACKUP_DIR/runtime/secrets/rds-pw-platform_svc" "$RUNTIME_DIR/secrets/rds-pw-platform_svc"
 restore_required "$BACKUP_DIR/runtime/secrets/rds-pw-reporting_ro" "$RUNTIME_DIR/secrets/rds-pw-reporting_ro"

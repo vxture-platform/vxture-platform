@@ -1,5 +1,6 @@
 /**
- * internal-route-policy.ts — 旧凭据（`AUTH_INTERNAL_TOKEN`）路径的路由准入声明。
+ * internal-route-policy.ts — 共享口令（`IDP_INTERNAL_TOKEN`，2026-10-04 起；此前与产品面共用
+ * `AUTH_INTERNAL_TOKEN`）路径的路由准入声明。
  * @package @vxture/bff-auth
  *
  * ── 补的是哪个盲区 ──

@@ -3,7 +3,7 @@
  * @package @vxture/bff-admin
  *
  * Mirrors OperatorStepUpService: server-to-server POST to the IdP internal endpoints
- * (AUTH_INTERNAL_TOKEN over the container-internal URL — never the public issuer) for
+ * (IDP_INTERNAL_TOKEN over the container-internal URL — never the public issuer) for
  * admin-delegated operator disable / enable / force-logout (B9-P1b-α). Credentials and
  * sessions stay IdP-owned. actorOperatorId is the acting operator (from the RP session),
  * never the browser body. Fail-closed when internal auth / IdP URL is unconfigured.
@@ -65,7 +65,9 @@ export class OperatorAdminService {
   }
 
   private internalToken(): string {
-    const token = this.config.auth.AUTH_INTERNAL_TOKEN;
+    // 内部面的钥匙（2026-10-04 拆分）：auth-bff 的 /internal/* 只认 IDP_INTERNAL_TOKEN；
+    // 产品面的 AUTH_INTERNAL_TOKEN 对它是外人，这里不回落到它。
+    const token = this.config.auth.IDP_INTERNAL_TOKEN;
     if (!token) {
       throw new ServiceUnavailableException("operator_admin_unavailable");
     }

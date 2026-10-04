@@ -173,13 +173,23 @@ check_tool_versions() {
 }
 
 check_runtime_files() {
+  check_required_file "$RUNTIME_DIR/.env"
   check_required_file "$RUNTIME_DIR/.env.auth-bff"
   check_required_file "$RUNTIME_DIR/.env.website-bff"
   check_required_file "$RUNTIME_DIR/.env.console-bff"
   check_required_file "$RUNTIME_DIR/.env.admin-bff"
   check_required_file "$RUNTIME_DIR/.env.gateway-bff"
+  # 2026-10-04 补齐：日巡检的文件清单此前停在五个 RP 时代，缺 .env.arche-bff / 新 secrets
+  # 文件只会在下次 deploy 被 30 拦下。三处清单（30 / 40 / 51）由 lib/runtime-file-lists.test.sh 钉成一致。
+  check_required_file "$RUNTIME_DIR/.env.opera-bff"
+  check_required_file "$RUNTIME_DIR/.env.arche-bff"
+  check_required_file "$RUNTIME_DIR/.env.platform-api"
   check_required_file "$RUNTIME_DIR/secrets/platform.env"
   check_required_file "$RUNTIME_DIR/secrets/platform-mail.env"
+  check_required_file "$RUNTIME_DIR/secrets/platform-sms.env"
+  check_required_file "$RUNTIME_DIR/secrets/platform-identity.env"
+  check_required_file "$RUNTIME_DIR/secrets/platform-app.env"
+  check_required_file "$RUNTIME_DIR/secrets/platform-idp-internal.env"
   check_required_file "$RUNTIME_DIR/secrets/tair-pw-default"
   check_required_file "/srv/vxture/data/nginx/ssl/live/vxture.com/fullchain.pem"
   check_required_file "/srv/vxture/data/nginx/ssl/live/vxture.com/privkey.pem"

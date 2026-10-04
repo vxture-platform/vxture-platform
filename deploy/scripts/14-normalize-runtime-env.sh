@@ -141,10 +141,13 @@ normalize_one "$WORKER_DIR/secrets/platform-app.env.example" "$SECRETS_DIR/platf
 normalize_one "$WORKER_DIR/secrets/platform-mail.env.example" "$SECRETS_DIR/platform-mail.env" "platform mail env"
 normalize_one "$WORKER_DIR/secrets/platform-sms.env.example" "$SECRETS_DIR/platform-sms.env" "platform sms env"
 normalize_one "$WORKER_DIR/secrets/platform-identity.env.example" "$SECRETS_DIR/platform-identity.env" "platform identity (signing key) env"
+normalize_one "$WORKER_DIR/secrets/platform-idp-internal.env.example" "$SECRETS_DIR/platform-idp-internal.env" "platform idp-internal (IdP internal face) env"
 normalize_one "$WORKER_DIR/.env.auth-bff.example" "$PLATFORM_DIR/.env.auth-bff" "auth-bff env"
 normalize_one "$WORKER_DIR/.env.website-bff.example" "$PLATFORM_DIR/.env.website-bff" "website-bff env"
 normalize_one "$WORKER_DIR/.env.console-bff.example" "$PLATFORM_DIR/.env.console-bff" "console-bff env"
 normalize_one "$WORKER_DIR/.env.admin-bff.example" "$PLATFORM_DIR/.env.admin-bff" "admin-bff env"
+normalize_one "$WORKER_DIR/.env.opera-bff.example" "$PLATFORM_DIR/.env.opera-bff" "opera-bff env"
+normalize_one "$WORKER_DIR/.env.arche-bff.example" "$PLATFORM_DIR/.env.arche-bff" "arche-bff env"
 normalize_one "$WORKER_DIR/.env.platform-api.example" "$PLATFORM_DIR/.env.platform-api" "platform-api env"
 normalize_one "$WORKER_DIR/.env.gateway-bff.example" "$PLATFORM_DIR/.env.gateway-bff" "gateway-bff env"
 

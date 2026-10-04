@@ -276,15 +276,19 @@ admin-bff 通过 `reporting_ro`（只读）或 `DATABASE_URL`（读写）连接�
 
 ---
 
-## 4. auth-bff 委托签发流程
+## 4. auth-bff 委托签发流程【历史，已退役】
 
-### 4.1 完整登录链路
+> **本节描述的 `/auth/internal/sign` 委托签发链路已退役**：auth-bff 里没有这个 controller（`grep -rn 'internal/sign' bff/auth-bff/src` 为空；退役清单见 `docs/30-design/identity/120-implementation.md`），admin / console 今天都是 OIDC RP，登录走 IdP `/authorize` → `/token`。保留本节只为读懂旧代码与旧讨论，**不要按它配任何调用方**。
+>
+> **今天 auth-bff 的内部面**只有 `/internal/*` 四个 controller（`internal/operator/accounts`、`internal/account/users`、`internal/operator/sessions`、`POST internal/operator/stepup/totp`），由 `InternalAuthGuard` 守着：头 `x-vxture-internal-auth` 的值 = `IDP_INTERNAL_TOKEN`（2026-10-04 起只认这把，`secrets/platform-idp-internal.env`，只注入 auth / admin / arche / opera 四个容器）；拿产品面的 `AUTH_INTERNAL_TOKEN` 来是 401 `invalid_internal_auth`。发送方的写法看 `bff/admin-bff/src/auth/operator-stepup.service.ts`（读 `config.auth.IDP_INTERNAL_TOKEN`，不回落）。
+
+### 4.1 完整登录链路（历史）
 
 ```
 前端 POST /api/auth/login (admin-bff)
   → admin-bff: 限速 → 验证码 → DB 密码校验
-  → admin-bff: fetch POST http://auth-bff:3081/auth/internal/sign
-      Header: x-vxture-internal-auth: <INTERNAL_TOKEN>
+  → admin-bff: fetch POST http://auth-bff:3081/auth/internal/sign          ← 已退役的端点
+      Header: x-vxture-internal-auth: <当时的共享口令 AUTH_INTERNAL_TOKEN>   ← 历史写法；今天内部面 /internal/* 只认 IDP_INTERNAL_TOKEN
       Body: { sub, email, username, displayName, role, roleLabel, permissions, source: 'admin' }
   → auth-bff: 签发 JWT → Set-Cookie: vx_admin_access_token
   → admin-bff: 透传 Set-Cookie header 给浏览器
@@ -292,6 +296,8 @@ admin-bff 通过 `reporting_ro`（只读）或 `DATABASE_URL`（读写）连接�
 ```
 
 ### 4.2 调用 internal/sign 的代码模式
+
+> **这段示例正在被移除**（2026-10-04）：`resolveInternalAuthToken` 是 `@vxture/core-auth` 里零消费方的死代码（`!==` 比较、非生产硬编码回落值），`150-security.md` §3.2 点名的错误形态；删它的 PR 会连本节一起改。新代码按 `150-security.md` §3.1 走换票；确需共享口令的内部面读 `config.auth.IDP_INTERNAL_TOKEN`（见 `bff/admin-bff/src/auth/operator-stepup.service.ts`）。
 
 ```typescript
 import { resolveInternalAuthToken } from "@vxture/core-auth";
@@ -391,13 +397,14 @@ PostgreSQL: vxturestudio_platform_main
 
 ### 6.3 环境变量
 
-| 变量                        | 用途                                                       |
-| --------------------------- | ---------------------------------------------------------- |
-| `DATABASE_URL`              | 主库读写连接（RW Pool + Prisma migrations）                |
-| `REPORTING_RO_DATABASE_URL` | 只读副本（RO Pool，未设置时降级用 DATABASE_URL）           |
-| `AUTH_BFF_URL`              | auth-bff 地址，默认 `http://localhost:3081`                |
-| `AUTH_INTERNAL_TOKEN`       | 内部服务鉴权 token，生产环境必填                           |
-| `MODEL_PLATFORM_URL`        | Model Platform 地址（admin-bff model-platform 路由透传用） |
+| 变量                        | 用途                                                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | 主库读写连接（RW Pool + Prisma migrations）                                                                      |
+| `REPORTING_RO_DATABASE_URL` | 只读副本（RO Pool，未设置时降级用 DATABASE_URL）                                                                 |
+| `AUTH_BFF_URL`              | auth-bff 地址，默认 `http://localhost:3081`                                                                      |
+| `AUTH_INTERNAL_TOKEN`       | 产品面共享口令（platform-api 收、console-bff 发），生产必填                                                      |
+| `IDP_INTERNAL_TOKEN`        | IdP 内部面口令（auth-bff `/internal/*` 收、admin/arche/opera-bff 发），只注入这四个容器；≠ `AUTH_INTERNAL_TOKEN` |
+| `MODEL_PLATFORM_URL`        | Model Platform 地址（admin-bff model-platform 路由透传用）                                                       |
 
 ---
 

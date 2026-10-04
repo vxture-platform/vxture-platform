@@ -44,6 +44,11 @@ const SHARED_SECRET_KEYS = new Set([
   "AUTH_INTERNAL_TOKEN",
 ]);
 
+// 内部面钥匙（2026-10-04 拆分）：auth-bff /internal/* 只认它，只注入 auth / admin / arche /
+// opera 四个容器。它**不在** SHARED_SECRET_KEYS 里——那组住 platform.env、进七个容器；
+// 放进去等于把新钥匙也交给 platform-api / console / website 三个用不着它的进程。
+const IDP_INTERNAL_KEYS = new Set(["IDP_INTERNAL_TOKEN"]);
+
 const COMPOSE_ONLY_KEYS = new Set([
   "VX_IMAGE_REGISTRY",
   "VX_IMAGE_NAMESPACE",
@@ -230,6 +235,20 @@ const ENV_FILE_RULES = [
     requiredKeys: MAIL_KEYS,
   },
   {
+    // 内部面钥匙（2026-10-04 拆分）：auth-bff /internal/* 只认 IDP_INTERNAL_TOKEN；只注入
+    // auth / admin / arche / opera 四个容器（compose env_file 短语法，缺文件即 config 失败）。
+    // 本仓第一条「单服务集 secrets 文件」的规则——形状照 mail（allowed = required，占位
+    // 严格），不照 identity（那份文件只在两张清单里、没有规则）。值 ≠ AUTH_INTERNAL_TOKEN
+    // 的跨文件断言在主机副本的 auditRuntimeSecretFiles（只在严格运行模式下跑，CI 没有运行时文件）。
+    label: "worker platform idp-internal secrets",
+    actual: `${RUNTIME_DIR}/secrets/platform-idp-internal.env`,
+    example: `${WORKER_DIR}/secrets/platform-idp-internal.env.example`,
+    requiredActual: STRICT_RUNTIME,
+    requiredExample: true,
+    allowedKeys: IDP_INTERNAL_KEYS,
+    requiredKeys: IDP_INTERNAL_KEYS,
+  },
+  {
     label: "auth-bff env",
     actual: `${RUNTIME_DIR}/.env.auth-bff`,
     example: `${WORKER_DIR}/.env.auth-bff.example`,
@@ -274,6 +293,8 @@ const ENV_FILE_RULES = [
     ]),
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       ...FRONTEND_SITE_KEYS,
       ...MAIL_KEYS,
@@ -319,6 +340,8 @@ const ENV_FILE_RULES = [
     forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
@@ -352,6 +375,8 @@ const ENV_FILE_RULES = [
     forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
@@ -385,6 +410,8 @@ const ENV_FILE_RULES = [
     forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       // admin-bff is RP-only (Batch 8): operator login + its Turnstile moved to
       // the IdP (auth-bff). admin-bff verifies no Turnstile.
@@ -437,6 +464,8 @@ const ENV_FILE_RULES = [
     forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
@@ -468,6 +497,47 @@ const ENV_FILE_RULES = [
     placeholderOptionalKeys: new Set(["PLATFORM_WEBHOOK_ENC_KEY"]),
   },
   {
+    // 治理平面 shell BFF（arche）：第三个 workforce-realm RP，也是内部面的第三个发送方。
+    // 2026-10-04 之前这里没有它的规则：IDP_INTERNAL_TOKEN 复制进 .env.arche-bff 静默放过
+    // （同一份复制进 .env.opera-bff 是红的），OIDC_CLIENT_SECRET 空值也不拦；而 12-generate
+    // 现在会从 example 补出这份文件（此前缺文件靠 compose 短语法报错），于是「缺文件停」
+    // 变成了「带占位起」——没有这条规则，arche-bff 会带着空 secret 被重建。
+    // requiredActual 直接 STRICT_RUNTIME：30-deploy 的 check_file 本就要这份文件。
+    label: "arche-bff env",
+    actual: `${RUNTIME_DIR}/.env.arche-bff`,
+    example: `${WORKER_DIR}/.env.arche-bff.example`,
+    requiredActual: STRICT_RUNTIME,
+    requiredExample: true,
+    forbidsClientSecretHashes: true,
+    forbiddenKeys: new Set([
+      ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
+      "REDIS_PASSWORD",
+      "CF_TURNSTILE_ENABLED",
+      ...TENANT_TURNSTILE_KEYS,
+      ...ADMIN_TURNSTILE_KEYS,
+      ...FRONTEND_SITE_KEYS,
+      ...OAUTH_KEYS,
+      ...MAIL_KEYS,
+      // bcrypt hash belongs in IdP env (.env.auth-bff), not the RP's.
+      ...OIDC_CLIENT_SECRET_HASH_KEYS,
+      ...OIDC_FUTURE_APP_HASH_KEYS,
+    ]),
+    requiredKeys: new Set([
+      "NODE_ENV",
+      "ARCHE_BFF_PORT",
+      "AUTH_BFF_URL",
+      "OIDC_ISSUER",
+      // this RP's own public origin (the real hostname lives ONLY in runtime
+      // env — the repo carries the g.vxture.com placeholder by hardening policy).
+      "ARCHE_BASE_URL",
+      // confidential RP secret presented at the IdP token endpoint; missing →
+      // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
+      "OIDC_CLIENT_SECRET",
+    ]),
+  },
+  {
     label: "platform-api env",
     actual: `${RUNTIME_DIR}/.env.platform-api`,
     example: `${WORKER_DIR}/.env.platform-api.example`,
@@ -488,6 +558,8 @@ const ENV_FILE_RULES = [
     forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       // S2S-only host: no browser traffic, no RP identity, no Turnstile,
       // no OAuth, no mail — and never the IdP signing key material.
@@ -522,6 +594,8 @@ const ENV_FILE_RULES = [
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
+      // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
+      "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
@@ -574,6 +648,7 @@ const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
   "secrets/platform-mail.env",
   "secrets/platform-sms.env",
   "secrets/platform-identity.env",
+  "secrets/platform-idp-internal.env",
   "secrets/rds-owner.env",
   "secrets/rds-pw-platform_svc",
   "secrets/rds-pw-reporting_ro",
@@ -621,6 +696,7 @@ const GENERATE_ENV_REQUIRED_GLOBAL_TOKENS = [
   "secrets/platform-mail.env",
   "secrets/platform-sms.env",
   "secrets/platform-identity.env",
+  "secrets/platform-idp-internal.env",
   "CHANGEME",
   "已废弃待删除",
 ];
@@ -1115,6 +1191,32 @@ function auditRuntimeSecretFiles() {
           "env/derived-redis-url-mismatch",
           "REDIS_URL password must match secrets/tair-pw-default.",
           `${RUNTIME_DIR}/secrets/platform.env`,
+        ),
+      );
+    }
+
+    // 内部面钥匙 ≠ 产品面钥匙（2026-10-04 拆分）。相等就是把拆分做成了空操作——产品手里的
+    // AUTH_INTERNAL_TOKEN 照样开得了 auth-bff 的 /internal/*。只比**运行时文件**：这个函数
+    // 本就只在 STRICT_RUNTIME 下跑，CI 没有运行时文件；example 里两边都是 CHANGEME 占位，
+    // 比它们没有意义。
+    const idpEnv = parseEnvFile(
+      `${RUNTIME_DIR}/secrets/platform-idp-internal.env`,
+    );
+    const normalizeSecret = (value) =>
+      (value ?? "").trim().replace(/^["']|["']$/gu, "");
+    const authInternal = normalizeSecret(
+      platformEnv.byKey.get("AUTH_INTERNAL_TOKEN")?.[0]?.value,
+    );
+    const idpInternal = idpEnv.exists
+      ? normalizeSecret(idpEnv.byKey.get("IDP_INTERNAL_TOKEN")?.[0]?.value)
+      : "";
+    if (authInternal && idpInternal && authInternal === idpInternal) {
+      results.push(
+        diagnostic(
+          "error",
+          "env/idp-internal-token-equals-auth-internal-token",
+          "IDP_INTERNAL_TOKEN must differ from AUTH_INTERNAL_TOKEN: with equal values the product-face secret still opens the IdP internal face (/internal/*). Re-mint with scripts/34-provision-idp-internal-secret.sh (FORCE_PROVISION_IDP_INTERNAL=1).",
+          `${RUNTIME_DIR}/secrets/platform-idp-internal.env`,
         ),
       );
     }

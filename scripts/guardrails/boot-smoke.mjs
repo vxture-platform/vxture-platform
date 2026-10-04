@@ -55,6 +55,10 @@ const FAKE_ENV = {
   JWT_REFRESH_EXPIRES_IN: "7d",
   AUTH_COOKIE_DOMAIN: ".example.com",
   AUTH_INTERNAL_TOKEN: "boot-smoke-internal-token",
+  // 内部面钥匙（2026-10-04 拆分）。只为让 smoke 的 env 形状与生产一致（schema 里的键
+  // 有值）；smoke 下 auth-bff 以 logger: ["error"] 建应用且先 exit，启动 warn 本来就打不出来，
+  // 所以这一行**不**证明任何日志行为。
+  IDP_INTERNAL_TOKEN: "boot-smoke-idp-internal-token",
   // platform / app (cross-service URLs + origins)
   WEBSITE_BASE_URL: "https://smoke.example.com",
   CONSOLE_BASE_URL: "https://console.smoke.example.com",

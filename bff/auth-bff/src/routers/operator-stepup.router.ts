@@ -2,7 +2,8 @@
  * operator-stepup.router.ts — internal IdP endpoint for operator step-up (P4.2).
  * @package @vxture/bff-auth
  *
- * Server-to-server only (InternalAuthGuard / AUTH_INTERNAL_TOKEN): admin-bff
+ * Server-to-server only (InternalAuthGuard / IDP_INTERNAL_TOKEN, the IdP internal-face key
+ * since 2026-10-04; the product-face AUTH_INTERNAL_TOKEN gets 401 here): admin-bff
  * forwards an authenticated operator's TOTP code here; the IdP verifies it and
  * mints a short-lived step-up credential. Not part of the public /oidc/* surface
  * — nginx must not expose /internal/*. The operatorId is supplied by the trusted

@@ -15,6 +15,7 @@
 JWT_SECRET
 JWT_REFRESH_SECRET
 AUTH_INTERNAL_TOKEN
+IDP_INTERNAL_TOKEN
 DINGTALK_APP_SECRET
 DATABASE_URL
 ```
@@ -38,12 +39,13 @@ DATABASE_URL
 
 ### 1.4 密钥强度要求
 
-| Secret                | 最小长度     | 生成方式                  |
-| --------------------- | ------------ | ------------------------- |
-| `JWT_SECRET`          | 64 字符      | `openssl rand -base64 48` |
-| `JWT_REFRESH_SECRET`  | 64 字符      | 与 `JWT_SECRET` 不同值    |
-| `AUTH_INTERNAL_TOKEN` | 32 字符      | `openssl rand -hex 16`    |
-| OAuth App Secret      | 由提供商决定 | 不自定义                  |
+| Secret                | 最小长度     | 生成方式                                                                                                   |
+| --------------------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`          | 64 字符      | `openssl rand -base64 48`                                                                                  |
+| `JWT_REFRESH_SECRET`  | 64 字符      | 与 `JWT_SECRET` 不同值                                                                                     |
+| `AUTH_INTERNAL_TOKEN` | 32 字符      | `openssl rand -hex 16`                                                                                     |
+| `IDP_INTERNAL_TOKEN`  | 32 字符      | `openssl rand -hex 16`（`deploy/scripts/34-provision-idp-internal-secret.sh`），且 ≠ `AUTH_INTERNAL_TOKEN` |
+| OAuth App Secret      | 由提供商决定 | 不自定义                                                                                                   |
 
 ---
 
@@ -107,8 +109,17 @@ if (!redis.isConnected()) {
 ### 3.2 共享口令（退役中，仅存量）
 
 ```
-Header：x-vxture-internal-auth: {AUTH_INTERNAL_TOKEN}
+Header：x-vxture-internal-auth: {口令}
 ```
+
+**同一个头后面有两把钥匙、各开一张面（2026-10-04 拆分）**，不互认、不回落：
+
+| 钥匙                  | 开哪张面                                                                                    | 谁收 / 谁发                                                        | 住哪                                              |
+| --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------- |
+| `AUTH_INTERNAL_TOKEN` | **产品面**：platform-api 的 C2/C3 自助端点（`PlatformAuthGuard` 旧头路径）                  | 收：platform-api；发：console-bff 与各产品后台（值已发出，不轮换） | `secrets/platform.env`（七个容器）                |
+| `IDP_INTERNAL_TOKEN`  | **内部面**：auth-bff `/internal/*`（运营账号 / 客户账号管理、step-up，`InternalAuthGuard`） | 收：auth-bff；发：admin-bff / arche-bff / opera-bff                | `secrets/platform-idp-internal.env`（只四个容器） |
+
+拆开的意义：产品手里的值从此开不了运营管理面。谁读哪把由 `scripts/guardrails/check-internal-auth-key-usage.mjs` 精确钉住（auth-bff 出现 `AUTH_INTERNAL_TOKEN` 即红）。
 
 接收方必须在入口中间件校验此 Header，拒绝不合法请求。
 

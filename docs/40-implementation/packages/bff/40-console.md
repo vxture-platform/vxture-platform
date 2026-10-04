@@ -402,7 +402,7 @@ Console BFF 模型平台路由的权限含义：
 DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=                     # shared JWT verification secret
-AUTH_INTERNAL_TOKEN=            # internal BFF calls, if needed
+AUTH_INTERNAL_TOKEN=            # PRODUCT face only: console-bff's C2 entitlements read against platform-api. Not an IdP key — console-bff never calls auth-bff /internal/* and is NOT injected with IDP_INTERNAL_TOKEN.
 
 # From /srv/vxture/runtime/.env.console-bff
 NODE_ENV=production

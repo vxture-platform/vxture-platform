@@ -52,12 +52,22 @@ check_file "$RUNTIME_DIR/.env.admin-bff"
 # opera 是后加的 RP —— 这一行此前漏了，于是 .env.opera-bff 缺失/缺键不拦截，
 # 容器带着 zod 默认值(localhost 上游)静默起来，比"缺文件即失败"更糟。
 check_file "$RUNTIME_DIR/.env.opera-bff"
+# arche 与 opera 同一个病：后加的 RP，缺文件不拦。
+check_file "$RUNTIME_DIR/.env.arche-bff"
 check_file "$RUNTIME_DIR/.env.platform-api"
 
 echo "  密钥文件:"
 check_file "$RUNTIME_DIR/secrets/tair-pw-default"
 check_file "$RUNTIME_DIR/secrets/platform.env"
 check_file "$RUNTIME_DIR/secrets/platform-mail.env"
+# 下面四份 compose 都用短语法引用（缺了 [3/4] 的 `config` 也会停）；这里先拦，是为了在任何
+# 容器被替换之前就说清缺的是什么。sms / identity / app 此前不在清单里——同一份清单住三处
+# （这里、40-verify、51-alerts），lib/runtime-file-lists.test.sh 钉住 compose 引用的每一份都在。
+check_file "$RUNTIME_DIR/secrets/platform-sms.env"
+check_file "$RUNTIME_DIR/secrets/platform-identity.env"
+check_file "$RUNTIME_DIR/secrets/platform-app.env"
+# 内部面钥匙（IDP_INTERNAL_TOKEN，只进 auth/admin/arche/opera）。
+check_file "$RUNTIME_DIR/secrets/platform-idp-internal.env"
 check_file "$COMPOSE_DIR/guardrails/39-audit-env.mjs"
 
 if [ "${MISSING:-0}" -eq 1 ]; then
@@ -146,7 +156,15 @@ COMPOSE_FILES=(-f "$COMPOSE_FILE" -f "$PINNED_FILE")
 echo ""
 echo "==> [4/4] 逐服务拉取并替换（memory-safe）"
 # VX_IMAGE_* 与 VX_WORKER0x_TAILNET_IP 已由 load_compose_env 导出，此处不再重复。
-SERVICES="$(docker compose "${COMPOSE_FILES[@]}" config --services)"
+#
+# **顺序钉死**（2026-10-04，内部面口令拆分）：`config --services` 的顺序**不是 YAML 顺序、
+# 每次都不同**（本机 Compose v5.5.1 连跑三次三种序）。auth-bff 与 admin/arche/opera-bff 之间
+# 有一把共享钥匙（IDP_INTERNAL_TOKEN）：换钥匙那一版里，先换谁都会让另一头 401，窗口 =
+# 这四个里第一个被重建到最后一个被重建之间——按随机序最坏就是整次部署。把它们排到最前、
+# 相邻重建，窗口就压成四次串行重建。`--no-deps` 本就不看依赖，重排对 compose 无副作用。
+# 纯函数在 lib/service-order.sh，有 lib/service-order.test.sh 钉三种乱序。
+. "$COMPOSE_DIR/scripts/lib/service-order.sh"
+SERVICES="$(order_services_internal_face_first "$(docker compose "${COMPOSE_FILES[@]}" config --services)")"
 for svc in $SERVICES; do
   echo "  -- $svc: pull"
   docker compose "${COMPOSE_FILES[@]}" pull "$svc" 2>&1 | grep -iE "Pulled|already|error|warn" | tail -1 || true
