@@ -421,14 +421,18 @@ GRANT UPDATE (bill_id, tenant_id, workspace_id, subscription_id, product_id, met
 REVOKE UPDATE ON billing.invoice_receipts FROM platform_svc;
 GRANT UPDATE (tenant_id, bill_id, invoice_type, invoice_tax_type, invoice_title, company_info, bank_info, address_info, invoice_amount, tax_amount, currency, invoice_status, status_remark, invoice_code, invoice_electronic_no, invoice_file_url, issued_at, express_company, express_no, send_at, created_by_type, created_by_id, auditor_id, audit_at, updated_at, deleted_at) ON billing.invoice_receipts TO platform_svc;
 
--- billing.payments  [anchor: id, pay_order_no, created_at]
+-- billing.payments  [anchor: id, pay_order_no, created_at, receive_account_id, receive_account_label]
 -- channel_order_no / channel_transaction_no 是晚绑定 `_no`（网关回调时才有值），同上可写。
+-- receive_account_* 是申报那一刻的平台收款账户快照（2026-12-01）：INSERT 写、之后不改，规则⑤显式锚点
+-- （column-locks.shared.mjs EXTRA_ANCHOR），有意不进白名单。
 REVOKE UPDATE ON billing.payments FROM platform_svc;
 GRANT UPDATE (tenant_id, bill_id, transaction_id, pay_source, pay_channel, pay_method, offline_pay_type, offline_payer_name, offline_pay_time, offline_evidence_url, total_amount, paid_amount, currency, pay_status, status_msg, channel_order_no, channel_transaction_no, channel_raw_data, pay_expire_at, paid_at, closed_at, actor_type, actor_id, operate_remark, updated_at) ON billing.payments TO platform_svc;
 
 -- billing.refunds  [anchor: id, refund_no, channel_refund_no, created_at]
+-- transfer_* / payout_account_* / recipient_* 十一列（2026-12-01 退款转账段）都可写：流水号在
+-- 「失败 → 再发起」时换号、收款账号在发起前可改正，所以有意不带 `_no` 后缀、不当锚点。
 REVOKE UPDATE ON billing.refunds FROM platform_svc;
-GRANT UPDATE (tenant_id, bill_id, pay_record_id, transaction_id, order_id, refund_amount, currency, refund_reason, refund_type, audit_status, audit_remark, auditor_id, audit_at, refund_status, refund_at, created_by_type, created_by_id, updated_at) ON billing.refunds TO platform_svc;
+GRANT UPDATE (tenant_id, bill_id, pay_record_id, transaction_id, order_id, refund_amount, currency, refund_reason, refund_type, audit_status, audit_remark, auditor_id, audit_at, refund_status, refund_at, transfer_channel, transfer_reference, transfer_initiated_at, transfer_initiated_by, transfer_date, transfer_attempt, payout_account_id, payout_account_label, recipient_account_name, recipient_bank_name, recipient_bank_account, created_by_type, created_by_id, updated_at) ON billing.refunds TO platform_svc;
 
 -- billing.order_events  [anchor: id, created_at]  (product_330 P1-b2：订单阶段 append-only 审计)
 REVOKE UPDATE ON billing.order_events FROM platform_svc;

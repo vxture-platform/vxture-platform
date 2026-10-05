@@ -20,6 +20,18 @@ describe("inboxPresentation", () => {
 
   it("退款流转、履约、公告是 info", () => {
     expect(inboxPresentation("refund.requested").icon).toBe("wallet");
+    // 2026-12-01 退款转账线的三条归 wallet；漏了 switch 只会落兜底 bell——这里就是那条反例。
+    for (const code of [
+      "refund.transfer_initiated",
+      "refund.approved_original_channel",
+      "refund.completed_original_channel",
+    ]) {
+      expect(inboxPresentation(code)).toEqual({
+        level: "info",
+        icon: "wallet",
+      });
+    }
+    expect(inboxPresentation("refund.not_a_template").icon).toBe("bell");
     expect(inboxPresentation("order.fulfilled").icon).toBe("seal-check");
     expect(inboxPresentation("announcement.published").icon).toBe("bell");
   });

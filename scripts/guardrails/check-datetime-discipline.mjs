@@ -64,6 +64,11 @@ const ALLOW_PADDED = [
   "portals/console/src/modules/commerce/components/CyclePicker.tsx",
   // 用量图表的**轴标**（小时档只要 `14:00` 这个刻度），规范里短形态点名的场合。
   "portals/console/src/modules/commerce/UsagePage.tsx",
+  // 退款转账日 `transfer_date`（DATE 列）→ `YYYY-MM-DD`：运营填入、原样回显的**数据值**，
+  // 与 CyclePicker 同类（固定形状、与语言无关）。node-pg 把 DATE 解析成本地午夜的 Date，
+  // 走 formatDay（按时区格式化一个绝对时刻）会在边界处拨日、且输出 locale 串而非定形 —— 都不对；
+  // 按本地分量取回才是对的。见 dateOnly()。
+  "services/commerce/subscription/src/repository/pg-order.repository.ts",
 ];
 
 const FORMATTER = /\b(formatDay|formatDateTime|sharedDay|sharedDateTime)\s*\(/;

@@ -91,8 +91,37 @@ function refundView(over: Partial<RefundRecordView> = {}): RefundRecordView {
     requestedAt: new Date(),
     auditedAt: null,
     refundedAt: null,
+    transferChannel: null,
+    transferReference: null,
+    transferInitiatedAt: null,
+    transferInitiatedBy: null,
+    transferDate: null,
+    transferAttempt: 0,
+    payoutAccountId: null,
+    payoutAccountLabel: null,
+    recipient: null,
     ...over,
   };
+}
+
+/** 已发起过一次银行转账的退款单（processing）。 */
+function transferringView(over: Partial<RefundRecordView> = {}) {
+  return refundView({
+    auditStatus: "approved",
+    refundStatus: "processing",
+    transferChannel: "bank_transfer",
+    transferReference: "BANK-REF-1",
+    transferInitiatedAt: new Date(),
+    transferInitiatedBy: "op",
+    transferDate: "2026-12-01",
+    transferAttempt: 1,
+    recipient: {
+      accountName: "张三",
+      bankName: "中国银行",
+      bankAccount: "6222021234567891234",
+    },
+    ...over,
+  });
 }
 
 function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
@@ -148,6 +177,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
            不给的话折算那一半在测试里根本跑不到。 */
         consumableShare: 0.5,
         payRecordId: "pay-1",
+        payChannel: "bank",
         invoiceId: "inv-1",
         existingRefundId: null,
       }),
@@ -167,6 +197,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
     markRefundFailed: vi.fn(async () =>
       refundView({ auditStatus: "approved", refundStatus: "failed" }),
     ),
+    markRefundTransferInitiated: vi.fn(async () => transferringView()),
     findExpiredIds: vi.fn(
       async (_ttl: number, _limit: number): Promise<string[]> => [],
     ),
@@ -790,6 +821,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       usageRatio: 0,
       consumableShare: 0.5,
       payRecordId: "pay-1",
+      payChannel: "bank",
       invoiceId: "inv-1",
       existingRefundId: null,
     });
@@ -805,6 +837,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       usageRatio: 1,
       consumableShare: 1,
       payRecordId: "pay-1",
+      payChannel: "bank",
       invoiceId: "inv-1",
       existingRefundId: null,
     });
@@ -837,6 +870,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       usageRatio: 0.5,
       consumableShare: 0.5,
       payRecordId: "pay-1",
+      payChannel: "bank",
       invoiceId: "inv-1",
       existingRefundId: "rfd-0",
     });
@@ -886,6 +920,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       usageRatio: 0,
       consumableShare: 0.5,
       payRecordId: "pay-1",
+      payChannel: "bank",
       invoiceId: "inv-1",
       existingRefundId: null,
     });
@@ -903,9 +938,8 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       service.executeRefund("rfd-1", { actorType: "operator", actorId: "op" }),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    orders.getRefundById.mockResolvedValueOnce(
-      refundView({ auditStatus: "approved" }),
-    );
+    // 2026-12-01 起执行 = 确认到账，只认 processing（已发起转账）的单。
+    orders.getRefundById.mockResolvedValueOnce(transferringView());
     const out = await service.executeRefund("rfd-1", {
       actorType: "operator",
       actorId: "op",
@@ -951,6 +985,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       usageRatio: 0.9, // 用量远超旧阈值
       consumableShare: 0.5,
       payRecordId: "pay-1",
+      payChannel: "bank",
       invoiceId: "inv-1",
       existingRefundId: null,
     });
@@ -1022,6 +1057,7 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       usageRatio: 0,
       consumableShare: 0.5,
       payRecordId: "pay-1",
+      payChannel: "bank",
       invoiceId: "inv-1",
       existingRefundId: "rfd-0",
     });
@@ -1051,6 +1087,20 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
     const { service, orders } = build(fulfilled(), null);
     orders.getRefundById.mockResolvedValueOnce(
       refundView({ auditStatus: "approved", refundStatus: "success" }),
+    );
+    await expect(
+      service.failRefund("rfd-1", "银行退回", {
+        actorType: "operator",
+        actorId: "op",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.markRefundFailed).not.toHaveBeenCalled();
+  });
+
+  it("failRefund: 已是失败的单不再落 0 行，当场 409（去再次发起）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved", refundStatus: "failed" }),
     );
     await expect(
       service.failRefund("rfd-1", "银行退回", {
@@ -1102,6 +1152,289 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
       actorId: null,
     });
     expect(orders.executeRefund).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * 「已发起转账」这一段（2026-12-01，设计 A）。此前 refund_status 只被写成 success / failed，
+ * processing 零写入方；failed 之后的「重新打款」是死承诺。这组用例钉状态机：
+ *   pending ──发起──▶ processing ──确认到账──▶ success
+ *      └──失败──▶ failed ──再次发起──▶ processing（attempt + 1）
+ * 以及通知的去重键带第几次、approved / completed 两条按处境分句。
+ * 两个部分唯一索引（同一回单 / 一张订单一张活单）在仓储层按约束名分流成 409，那一半在
+ * 真库 itest（refund-transfer.itest.spec）里证，这里只证服务把仓储抛出的 409 原样放行。
+ */
+describe("OrderService refund transfer step（2026-12-01）", () => {
+  const fulfilled = (over: Partial<OrderRecord> = {}) =>
+    order({
+      status: "fulfilled",
+      subscriptionId: "sub-new",
+      fulfilledAt: new Date(Date.now() - 2 * 3_600_000),
+      ...over,
+    });
+  const actor = { actorType: "operator" as const, actorId: "op" };
+  const bankInput = {
+    channel: "bank_transfer" as const,
+    reference: "BANK-REF-1",
+    transferDate: "2026-12-01",
+    recipient: {
+      accountName: "张三",
+      bankName: "中国银行",
+      bankAccount: "6222021234567891234",
+    },
+  };
+
+  it("initiate: 未审的单不能发起", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(refundView());
+    await expect(
+      service.initiateRefundTransfer("rfd-1", bankInput, actor),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.markRefundTransferInitiated).not.toHaveBeenCalled();
+  });
+
+  it("initiate: 已在 processing 的单再发起 → 409（双击「已发起」）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(transferringView());
+    await expect(
+      service.initiateRefundTransfer("rfd-1", bankInput, actor),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.markRefundTransferInitiated).not.toHaveBeenCalled();
+  });
+
+  it("initiate: 已成功的单不能再发起", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      transferringView({ refundStatus: "success" }),
+    );
+    await expect(
+      service.initiateRefundTransfer("rfd-1", bankInput, actor),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("initiate: 银行转账没有收款账户（单上没有、本次也没给）→ 409，不碰仓储", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+    await expect(
+      service.initiateRefundTransfer(
+        "rfd-1",
+        { channel: "bank_transfer", reference: "BANK-REF-1" },
+        actor,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(orders.markRefundTransferInitiated).not.toHaveBeenCalled();
+  });
+
+  it("initiate: 支付宝不要求收款账户（owner 决策 1：原渠道优先、银行始终可选）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+    orders.markRefundTransferInitiated.mockResolvedValueOnce(
+      transferringView({
+        transferChannel: "alipay",
+        transferReference: "ALI-1",
+        recipient: null,
+      }),
+    );
+    const out = await service.initiateRefundTransfer(
+      "rfd-1",
+      { channel: "alipay", reference: "ALI-1" },
+      actor,
+    );
+    expect(out.refundStatus).toBe("processing");
+    expect(orders.markRefundTransferInitiated).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: "alipay", reference: "ALI-1" }),
+    );
+  });
+
+  it("initiate: pending → processing，发「退款已打出」，引用 id 带第几次", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+    const out = await service.initiateRefundTransfer("rfd-1", bankInput, actor);
+    expect(out.refundStatus).toBe("processing");
+    expect(out.transferAttempt).toBe(1);
+    expect(orders.markRefundTransferInitiated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "bank_transfer",
+        reference: "BANK-REF-1",
+        transferDate: "2026-12-01",
+        recipient: bankInput.recipient,
+        actor,
+      }),
+    );
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateCode: "refund.transfer_initiated",
+        reference: { type: "refund", id: "rfd-1:transfer_initiated:1" },
+        params: expect.objectContaining({ date: "2026-12-01" }),
+      }),
+    );
+  });
+
+  it("initiate: failed → 再次发起，用单上已有的收款账户，attempt 变 2，通知键也变", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.getRefundById.mockResolvedValueOnce(
+      transferringView({ refundStatus: "failed" }),
+    );
+    orders.markRefundTransferInitiated.mockResolvedValueOnce(
+      transferringView({ transferReference: "BANK-REF-2", transferAttempt: 2 }),
+    );
+    const out = await service.initiateRefundTransfer(
+      "rfd-1",
+      { channel: "bank_transfer", reference: "BANK-REF-2" },
+      actor,
+    );
+    expect(out.transferAttempt).toBe(2);
+    // 本次没给收款账户 → 仓储收到 null（保留单上已有的），不是把门关上。
+    expect(orders.markRefundTransferInitiated).toHaveBeenCalledWith(
+      expect.objectContaining({ reference: "BANK-REF-2", recipient: null }),
+    );
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reference: { type: "refund", id: "rfd-1:transfer_initiated:2" },
+      }),
+    );
+  });
+
+  it("initiate: 仓储按约束名抛出的 409（同一回单 / 另有活单）原样放行", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+    orders.markRefundTransferInitiated.mockRejectedValueOnce(
+      new ConflictException("该订单另有在途退款单 RFD-B，先处置它"),
+    );
+    await expect(
+      service.initiateRefundTransfer("rfd-1", bankInput, actor),
+    ).rejects.toThrow("RFD-B");
+  });
+
+  it("executeRefund: 没发起过转账（pending）→ 409，不动钱", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+    await expect(service.executeRefund("rfd-1", actor)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(orders.executeRefund).not.toHaveBeenCalled();
+  });
+
+  it("executeRefund: failed 的单也不能直接确认到账（要先再次发起）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      transferringView({ refundStatus: "failed" }),
+    );
+    await expect(service.executeRefund("rfd-1", actor)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(orders.executeRefund).not.toHaveBeenCalled();
+  });
+
+  it("executeRefund: 银行转账 → refund.completed（退回到你提供的收款账户）", async () => {
+    const { service, orders, subscriptions } = build(fulfilled(), null);
+    (subscriptions as unknown as Record<string, unknown>).cancelSubscription =
+      vi.fn(async () => sub({ id: "sub-new", status: "cancelled" }));
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.getRefundById.mockResolvedValueOnce(transferringView());
+    await service.executeRefund("rfd-1", actor);
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateCode: "refund.completed",
+        reference: { type: "refund", id: "rfd-1:completed" },
+      }),
+    );
+  });
+
+  it("executeRefund: 支付宝 → refund.completed_original_channel（已退回原付款渠道）", async () => {
+    const { service, orders, subscriptions } = build(fulfilled(), null);
+    (subscriptions as unknown as Record<string, unknown>).cancelSubscription =
+      vi.fn(async () => sub({ id: "sub-new", status: "cancelled" }));
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.getRefundById.mockResolvedValueOnce(
+      transferringView({ transferChannel: "alipay", recipient: null }),
+    );
+    await service.executeRefund("rfd-1", actor);
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateCode: "refund.completed_original_channel",
+      }),
+    );
+  });
+
+  it("auditRefund(approved): 单上有收款账户 → refund.approved；没有 → *_original_channel", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({
+        recipient: {
+          accountName: "张三",
+          bankName: "中国银行",
+          bankAccount: "6222021234567891234",
+        },
+      }),
+    );
+    await service.auditRefund("rfd-1", {
+      decision: "approved",
+      remark: "符合条件",
+      operatorId: "op",
+    });
+    expect(notifier.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({ templateCode: "refund.approved" }),
+    );
+
+    orders.getRefundById.mockResolvedValueOnce(refundView());
+    await service.auditRefund("rfd-1", {
+      decision: "approved",
+      remark: "符合条件",
+      operatorId: "op",
+    });
+    expect(notifier.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        templateCode: "refund.approved_original_channel",
+      }),
+    );
+  });
+
+  it("failRefund: 通知引用 id 带第几次（第二次失败不会被第一次的去重键吞掉）", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    const notifier = { notify: vi.fn(async () => undefined) };
+    service.setCustomerNotifier(notifier);
+    orders.getRefundById.mockResolvedValueOnce(transferringView());
+    orders.markRefundFailed.mockResolvedValueOnce(
+      transferringView({ refundStatus: "failed", transferAttempt: 2 }),
+    );
+    await service.failRefund("rfd-1", "银行退回", actor);
+    expect(notifier.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateCode: "refund.failed",
+        reference: { type: "refund", id: "rfd-1:failed:2" },
+      }),
+    );
+  });
+
+  it("requestRefund: 客户填的收款账户原样落到仓储", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    await service.requestRefund("ord-1", {
+      userId: "u-1",
+      reason: null,
+      recipient: bankInput.recipient,
+    });
+    expect(orders.createRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient: bankInput.recipient }),
+    );
   });
 });
 

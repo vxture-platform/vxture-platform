@@ -33,8 +33,12 @@ export type {
   RefundPolicy,
   RefundEligibility,
   RefundIneligibleReason,
+  RefundRecipient,
   RefundRecordView,
+  RefundTransferChannel,
 } from "./types/order.types";
+export { REFUND_TRANSFER_CHANNELS } from "./types/order.types";
+export { maskBankAccount } from "./bank-account-mask";
 export {
   computeProration,
   cycleDays,

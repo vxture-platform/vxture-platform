@@ -165,6 +165,20 @@ export type RefundIneligibleReason =
   | "fully_consumed"
   | "refund_exists";
 
+/**
+ * 发起转账时可选的渠道（2026-12-01）。`legacy` 只出现在读侧：迁移给存量 success 行回填的值
+ * （那时没有「发起」这一段），不是一个可以选的渠道。
+ */
+export const REFUND_TRANSFER_CHANNELS = ["bank_transfer", "alipay"] as const;
+export type RefundTransferChannel = (typeof REFUND_TRANSFER_CHANNELS)[number];
+
+/** 客户的收款账户（PII）：户名 / 开户行 / 账号。落地文本（事件 remark、审计、通知）只写掩码。 */
+export interface RefundRecipient {
+  accountName: string;
+  bankName: string;
+  bankAccount: string;
+}
+
 export interface RefundRecordView {
   id: string;
   refundNo: string;
@@ -178,6 +192,25 @@ export interface RefundRecordView {
   requestedAt: Date;
   auditedAt: Date | null;
   refundedAt: Date | null;
+  /*
+   * 「已发起转账」这一段（2026-12-01）。pending → processing 由 initiateRefundTransfer 写；
+   * 字段在那之前全是 null / 0。`transferAttempt` 每次发起加一——它进通知去重键与失败事件
+   * 的 remark，没有它第二次发起的通知会被收件箱唯一键静默吞掉。
+   */
+  transferChannel: RefundTransferChannel | "legacy" | null;
+  transferReference: string | null;
+  transferInitiatedAt: Date | null;
+  /** 发起人 operator 裸值；对外展示由读方解成显示名，不下发。 */
+  transferInitiatedBy: string | null;
+  /** 实际转账日 `YYYY-MM-DD`。 */
+  transferDate: string | null;
+  transferAttempt: number;
+  /** 平台付款账户（设计 B 落地后指向治理台的账户行；今天恒 null）。 */
+  payoutAccountId: string | null;
+  /** 付款账户快照「中国银行 ****1234」（今天由运营手填）。 */
+  payoutAccountLabel: string | null;
+  /** 客户收款账户；三项齐才算有，缺一项按 null 处理。 */
+  recipient: RefundRecipient | null;
 }
 
 /** 订单账单（锁定后交给申报编排）。 */

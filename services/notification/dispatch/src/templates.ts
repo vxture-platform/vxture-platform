@@ -59,6 +59,16 @@ export type NotificationTemplateCode =
   /* 2026-09-25 批 3：退款执行失败（`failRefund`）。批 2 撤掉过一次，理由与现在补上的
      理由是同一个——那时没有写入方，现在有了。 */
   | "refund.failed"
+  /* 2026-12-01 退款转账线（设计 A）：`refunds.refund_status='processing'` 终于有了写入方
+     （OrderService.initiateRefundTransfer），「退款已打出」这一条随它一起加——此前批 2 撤掉
+     refund.failed 的理由（没有写入方就别先加模板）对它同样成立，现在不成立了。
+     approved / completed 各拆出「按原付款渠道退回」的一条：钱退到「你提供的收款账户」还是
+     「原付款渠道」是两种处境，各一句完整的话，不在一条模板里写「或者…或者」（判据与
+     subscription.cancelled_* 三条相同）。发侧按退款单上有没有收款账户 / 实际走的渠道选。
+     「退款已打出」只说「到账后会再通知你」，不写到账时限（禁自加承诺）。 */
+  | "refund.transfer_initiated"
+  | "refund.approved_original_channel"
+  | "refund.completed_original_channel"
   /* 2026-09-28 批 5：客户侧的七条「状态变了但一句话不发」。前四批把**运营侧**做全了
      （服务端唯一待办 + 客户通知的运营镜像 + 两轮巡检 + 两个平面的筛选与已读），客户这
      边仍有几处发生了却不告诉本人的事。七条各自都有**已经在跑的写入方**：
@@ -338,6 +348,9 @@ const TITLES_ZH: Record<NotificationTemplateCode, string> = {
   "order.payment_rejected": "付款信息未通过核对：订单 {{orderNo}}",
   "order.restored": "订单已恢复：{{orderNo}}",
   "refund.failed": "退款未能完成：订单 {{orderNo}}",
+  "refund.transfer_initiated": "退款已打出：订单 {{orderNo}}",
+  "refund.approved_original_channel": "退款已审核通过：订单 {{orderNo}}",
+  "refund.completed_original_channel": "退款已完成：订单 {{orderNo}}",
   "tenant.verification_approved": "企业认证已通过：{{tenantName}}",
   "tenant.verification_rejected": "企业认证未通过：{{tenantName}}",
   "subscription.trial_expired": "试用已结束：{{productName}} {{planName}}",
@@ -415,10 +428,13 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
   "order.renewal_created":
     "已按自动续费生成续费订单 {{orderNo}}，应付 {{amount}}，请在 {{payBy}} 前完成付款；逾期订单关闭，订阅到期后权益停止。",
   "refund.requested": "退款金额 {{amount}}，我们会尽快审核。",
-  "refund.approved": "退款 {{amount}} 将按原付款渠道退回，到账后另行通知。",
+  /* 2026-12-01：approved / completed 按「退到哪儿」分两句——退款单上有客户提供的收款账户
+     就是这两条；没有（支付宝付的单可不填）/ 实际按原渠道退的走 *_original_channel。 */
+  "refund.approved":
+    "退款 {{amount}} 将退回到你提供的收款账户，到账后另行通知。",
   "refund.rejected": "原因：{{reason}}。如有疑问请联系客服。",
   "refund.completed":
-    "退款 {{amount}} 已退回原付款渠道，订阅已回到未订阅状态。",
+    "退款 {{amount}} 已退回到你提供的收款账户，订阅已回到未订阅状态。",
   "announcement.published": "{{content}}",
   /* 只说机制:谁、什么身份、到什么时候截止。不写「欢迎加入」这类替对方做决定的话——
      这条消息的意义就是那个决定还没做。 */
@@ -461,6 +477,13 @@ const BODIES_ZH: Record<NotificationTemplateCode, string> = {
      提一句「尽快」是因为 24 小时退款窗仍在走，拖过就真退不了。 */
   "refund.failed":
     "退款 {{amount}} 未能完成，款项尚未退回。请尽快联系客服跟进。",
+  /* 只说已经发生的事：哪天打出去的。到账时间不写——跨行到账由银行决定，写了就是替银行许诺。 */
+  "refund.transfer_initiated":
+    "退款 {{amount}} 已于 {{date}} 打出，到账后会再通知你。",
+  "refund.approved_original_channel":
+    "退款 {{amount}} 将按原付款渠道退回，到账后另行通知。",
+  "refund.completed_original_channel":
+    "退款 {{amount}} 已退回原付款渠道，订阅已回到未订阅状态。",
   /* ── 批 5（2026-09-28）──
      参数名与来源列写在这里，两个包的调用方按这份对：
        tenantName  tenancy.tenants.display_name 回落 name（可视名，不是 tenant_no）
@@ -644,6 +667,9 @@ const TITLES_EN: Record<NotificationTemplateCode, string> = {
   "order.payment_rejected": "Payment details not confirmed: order {{orderNo}}",
   "order.restored": "Order reopened: {{orderNo}}",
   "refund.failed": "Refund could not be completed: order {{orderNo}}",
+  "refund.transfer_initiated": "Refund sent: order {{orderNo}}",
+  "refund.approved_original_channel": "Refund approved: order {{orderNo}}",
+  "refund.completed_original_channel": "Refund completed: order {{orderNo}}",
   "tenant.verification_approved":
     "Business verification approved: {{tenantName}}",
   "tenant.verification_rejected":
@@ -695,11 +721,11 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "Auto-renew created renewal order {{orderNo}} for {{amount}}. Please pay before {{payBy}}; unpaid orders close and access stops at expiry.",
   "refund.requested": "Refund amount {{amount}}. We will review it shortly.",
   "refund.approved":
-    "The refund of {{amount}} will be returned via the original payment channel; you will be notified when it lands.",
+    "The refund of {{amount}} will be returned to the receiving account you provided; you will be notified when it lands.",
   "refund.rejected":
     "Reason: {{reason}}. Contact support if you have questions.",
   "refund.completed":
-    "The refund of {{amount}} has been returned via the original payment channel and the subscription is back to unsubscribed.",
+    "The refund of {{amount}} has been returned to the receiving account you provided and the subscription is back to unsubscribed.",
   "announcement.published": "{{content}}",
   "tenant.invitation":
     "{{inviterName}} invited you to join {{tenantName}} as {{roleKey}}. The invitation is valid until {{expiresAt}}.",
@@ -730,6 +756,12 @@ const BODIES_EN: Record<NotificationTemplateCode, string> = {
     "Order {{orderNo}} ({{productName}}) is open for payment again, {{amount}} due.",
   "refund.failed":
     "The {{amount}} refund could not be completed and the money has not been returned yet. Please contact support soon.",
+  "refund.transfer_initiated":
+    "The refund of {{amount}} was sent on {{date}}. We will notify you again once it arrives.",
+  "refund.approved_original_channel":
+    "The refund of {{amount}} will be returned via the original payment channel; you will be notified when it lands.",
+  "refund.completed_original_channel":
+    "The refund of {{amount}} has been returned via the original payment channel and the subscription is back to unsubscribed.",
   "tenant.verification_approved":
     "Approved on {{reviewedAt}}. Verification lives on the tenant and every workspace inherits it; the details are on the Business verification page.",
   "tenant.verification_rejected":
@@ -1029,6 +1061,9 @@ const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
   "order.payment_rejected": "order_status",
   "order.restored": "order_status",
   "refund.failed": "refund_progress",
+  "refund.transfer_initiated": "refund_progress",
+  "refund.approved_original_channel": "refund_progress",
+  "refund.completed_original_channel": "refund_progress",
   /* 批 5（2026-09-28）。两条认证结果 → 偏好中心早就留好的认证主题（此前有位无模板）。 */
   "tenant.verification_approved": "verification_result",
   "tenant.verification_rejected": "verification_result",
@@ -1328,7 +1363,11 @@ export function smsParams(
     case "refund.requested":
     case "refund.approved":
     case "refund.completed":
+    case "refund.approved_original_channel":
+    case "refund.completed_original_channel":
       return { order, amount: money(params.amount) };
+    case "refund.transfer_initiated":
+      return { order, amount: money(params.amount), date: s(params.date) };
     case "announcement.published":
       return { title: s(params.title) };
     default:

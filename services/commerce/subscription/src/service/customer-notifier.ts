@@ -53,6 +53,13 @@ export const CUSTOMER_NOTIFICATION_TEMPLATES = [
   /* 2026-09-25 批 3：退款执行失败。批 2 本想加它，当时撤掉了——那会儿 `failed` 全仓
      零写入方，先加模板就是一处「做了没接」。本批把 `failRefund` 这条路补上了。 */
   "refund.failed",
+  /* 2026-12-01 退款转账线：`processing` 终于有了写入方（initiateRefundTransfer），
+     「退款已打出」这一条随它一起加。approved / completed 各拆出「按原付款渠道退回」的
+     一条：钱退到「你提供的收款账户」还是「原付款渠道」是两种处境，各一句完整的话，
+     不在一条模板里写「或者…或者」（与 subscription.cancelled_* 三条同一判据）。 */
+  "refund.transfer_initiated",
+  "refund.approved_original_channel",
+  "refund.completed_original_channel",
   /* 2026-09-28 批 5：试用到期与加油包四态。五条的写入方都在本包——
      试用到期在 subscription.service 的 sweepLapsedTrials，加油包开通在付款确认之后，
      即将到期 / 用尽 / 过期来自加油包池巡检（每趟重扫同一批行，去重靠收件箱唯一键，

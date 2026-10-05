@@ -183,6 +183,53 @@ describe("NotificationDispatcher", () => {
     expect(mail.send).toHaveBeenCalledTimes(1);
   });
 
+  /*
+   * 2026-12-01 退款转账线的反例：同一张退款单「失败 → 再次发起」会第二次发「已打出」。
+   * 发侧把第几次放进引用 id（`{refund}:transfer_initiated:{attempt}`），于是两条都落收件箱，
+   * 运营镜像也各一条；把第几次去掉（同一个引用 id），第二条就被唯一键吞掉、镜像也没有——
+   * 这正是去重键要带 attempt 的理由。
+   */
+  it("同一张退款单两次「已打出」（attempt 1 / 2）两条都落，镜像各一条；去掉 attempt 第二条被吞", async () => {
+    const f = fakePool();
+    const d = new NotificationDispatcher(f.pool);
+    const base = {
+      tenantId: "t-1",
+      templateCode: "refund.transfer_initiated" as const,
+      params: { orderNo: "ORD-1", amount: "¥99.00", date: "2026-12-01" },
+    };
+    const first = await d.notify({
+      ...base,
+      reference: { type: "refund", id: "rfd-1:transfer_initiated:1" },
+    });
+    const second = await d.notify({
+      ...base,
+      reference: { type: "refund", id: "rfd-1:transfer_initiated:2" },
+    });
+    expect(first.inboxCreated).toBe(1);
+    expect(second.inboxCreated).toBe(1);
+    expect(f.inbox.size).toBe(2);
+    expect(f.notices).toHaveLength(2);
+    expect(f.notices.map((n) => n.referenceId)).toEqual([
+      "refund.transfer_initiated:refund:rfd-1:transfer_initiated:1",
+      "refund.transfer_initiated:refund:rfd-1:transfer_initiated:2",
+    ]);
+
+    // 反面：没有 attempt 的引用 id，第二次就是重放。
+    const g = fakePool();
+    const e = new NotificationDispatcher(g.pool);
+    await e.notify({
+      ...base,
+      reference: { type: "refund", id: "rfd-1:transfer_initiated" },
+    });
+    const swallowed = await e.notify({
+      ...base,
+      reference: { type: "refund", id: "rfd-1:transfer_initiated" },
+    });
+    expect(swallowed).toMatchObject({ inboxCreated: 0, skipped: 1 });
+    expect(g.inbox.size).toBe(1);
+    expect(g.notices).toHaveLength(1);
+  });
+
   it("unions explicit recipients with the owner", async () => {
     const f = fakePool({
       emails: { "owner-1": "o@x.test", "u-2": "u2@x.test" },
