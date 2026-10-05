@@ -102,22 +102,22 @@ function downloadCsv(filename: string, rows: readonly string[][]) {
 
 const REFRESH_INTERVAL_MS = 30_000;
 
-type ProductLayer = "L1" | "L2" | "L3" | "client" | "external" | "unclassified";
+/* 与 opera-bff product-health.router.ts 的 ProductLayer 同形：三个受管值 + 「未分层」显示态。
+   client / external 两档 2026-10-04 删掉——层级只读 products.layer 列，列的值域不收它们。 */
+type ProductLayer = "L1" | "L2" | "L3" | "unclassified";
 
 type LivenessStatus =
   | "healthy"
   | "unhealthy"
   | "unreachable"
-  | "not_configured"
-  | "not_applicable";
+  | "not_configured";
 type ReadinessStatus =
   | "ready"
   | "degraded"
   | "fail"
   | "not_implemented"
   | "unreachable"
-  | "not_configured"
-  | "not_applicable";
+  | "not_configured";
 
 interface LivenessProbe {
   status: LivenessStatus;
@@ -170,8 +170,6 @@ const LAYER_LABEL: Record<ProductLayer, string> = {
   L1: "L1",
   L2: "L2",
   L3: "L3",
-  client: "Client",
-  external: "External",
   unclassified: "未分类",
 };
 
@@ -179,8 +177,6 @@ const LAYER_ICON: Record<ProductLayer, IconName> = {
   L1: "stack",
   L2: "cube",
   L3: "squares-four",
-  client: "desktop",
-  external: "globe",
   unclassified: "circle-dashed",
 };
 
@@ -189,7 +185,6 @@ const LIVENESS_LABELS: Record<LivenessStatus, string> = {
   unhealthy: "异常",
   unreachable: "不可达",
   not_configured: "未配置",
-  not_applicable: "不适用",
 };
 
 const READINESS_LABELS: Record<ReadinessStatus, string> = {
@@ -199,32 +194,25 @@ const READINESS_LABELS: Record<ReadinessStatus, string> = {
   not_implemented: "未实现",
   unreachable: "不可达",
   not_configured: "未配置",
-  not_applicable: "不适用",
 };
 
-/** 渠道级的第三个中性态（2026-08-31）：client 型产品登记了客户端、但没有服务面可探
- *  （回调是 loopback）。与「未配置」（渠道没登记）、「未接入」（产品没有任何客户端）
- *  是三件事，各用各的词，都不计入「需要关注」。 */
-const NOT_APPLICABLE_DETAIL = "客户端产品，无服务面";
+/* 渠道级曾有第三个中性态 not_applicable（2026-08-31，client 型产品不探测）。它的判据是
+   「层级判为 client」，而层级只读 products.layer 列、值域不收 client——分支永远走不到，
+   2026-10-04 连同 BFF 侧一起删掉。渠道只有「未配置」（没登记）与探测结果两种。 */
 
 /** 产品级的中性态：目录里有、没有任何客户端。与渠道级的「未配置」是两个词。 */
 const NOT_ONBOARDED_LABEL = "未接入";
 
 function livenessTone(status: LivenessStatus): StatusBadgeTone {
   if (status === "healthy") return "success";
-  if (status === "not_configured" || status === "not_applicable")
-    return "neutral";
+  if (status === "not_configured") return "neutral";
   return "danger";
 }
 
 function readinessTone(status: ReadinessStatus): StatusBadgeTone {
   if (status === "ready") return "success";
   if (status === "degraded") return "warning";
-  if (
-    status === "not_configured" ||
-    status === "not_implemented" ||
-    status === "not_applicable"
-  )
+  if (status === "not_configured" || status === "not_implemented")
     return "neutral";
   return "danger";
 }
@@ -322,9 +310,7 @@ function LivenessLine({
         ? (probe.error ?? "连接失败")
         : probe.status === "unhealthy"
           ? (probe.error ?? `HTTP ${probe.httpStatus ?? "?"}`)
-          : probe.status === "not_applicable"
-            ? NOT_APPLICABLE_DETAIL
-            : null;
+          : null;
 
   return (
     <span className="inline-flex items-center gap-2xs min-w-0">

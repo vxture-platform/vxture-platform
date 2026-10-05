@@ -26,7 +26,7 @@
  * 打回原样。要回到出厂状态就先删掉 demo 数据（见文件末尾的清理 SQL）。
  */
 
-import { runSeed, isMain } from './seed-lib.mjs';
+import { runSeed, isMain, SYS } from './seed-lib.mjs';
 
 // ── 固定 UUID 段（幂等的基础）────────────────────────────────────────────────
 // 全部 demo 行都落在 `00000000-0000-4000-b000-…` 下，一眼可辨、也方便整段清理。
@@ -55,6 +55,9 @@ const ID = {
   // 枚举覆盖行另开段，不与"每租户一条"的段位重叠
   coverInvoice: (i) => uid(19000 + i),
   coverPayment: (i) => uid(19100 + i),
+  // 联调预置的 L3 智能体（§0b）。也在固定段里：lint:seed 第 ⑤ 条不许本文件出现 gen_random_uuid()，
+  // 否则文件头「整段可清理」的承诺对那张表失效、按段清理会把它漏下。
+  product: (i) => uid(20000 + i),
 };
 
 /**
@@ -235,6 +238,65 @@ export async function seedDemo(client) {
 
   const stats = {};
   const bump = (k, n = 1) => (stats[k] = (stats[k] ?? 0) + n);
+
+  // ── 0b. 联调预置的 L3 智能体（owner 2026-10-04，决策 3）───────────────────
+  /* tenderforge / yucer 在生产上由运营经 opera 登记（40-product-registry.md §5 D2 禁止
+     进 seed-catalog 的 PRODUCTS：没有代码字面量依赖、seed 内无 FK 指向它们）。本地联调要有
+     这两行才能把 L3 的接入线（换票目标 / atlas 授权 / 订阅与池）跑起来，所以预置在**这里**
+     ——本文件有 assertNotProduction()，seed-sample 没有。形状与 seed-catalog 的 PRODUCTS
+     同形，三列按蕴含关系写（L3 ⇒ *_agent，库上 chk_products_layer_type_family 焊着；
+     守卫 check-product-layer-family.mjs 逐条对账）。与 catalog 唯一的不同是 id：那边
+     gen_random_uuid() 按 product_code 幂等，这里走 ID.product(i) 固定段——本文件的清理承诺
+     是「全部 demo 行都在 …-b000-… 段内」，随机 id 的行会被按段清理漏下。
+     不建 OIDC 客户端：非生产 seed 也不该铸真密钥。
+     中文主名待 owner 定——tenderforge 按定位直译（标书智能体），yucer 本仓只知道它是与
+     vxtpl 同构的行业智能体，先以英文名占位；demo 数据不对外。 */
+  const DEMO_PRODUCTS = [
+    {
+      i: 1,
+      code: 'tenderforge',
+      type: 'industry_agent',
+      layer: 'L3',
+      cat: 1,
+      origin: 'self',
+      name: '标书智能体',
+      nick: 'TenderForge',
+      desc: 'Bid/tender document agent.',
+    },
+    {
+      i: 2,
+      code: 'yucer',
+      type: 'industry_agent',
+      layer: 'L3',
+      cat: 1,
+      origin: 'self',
+      name: 'Yucer',
+      nick: 'Yucer',
+      desc: 'Industry agent (same shape as vxtpl); registered in production via opera.',
+    },
+  ];
+  for (const p of DEMO_PRODUCTS) {
+    await client.query(
+      `insert into product.products
+         (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, release_stage, origin, created_by, layer, created_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, 'active', 'stable', $9, $10, $11, now(), now())
+       on conflict (product_code) do nothing`,
+      [
+        ID.product(p.i),
+        p.code,
+        p.type,
+        p.cat,
+        p.name,
+        p.nick,
+        p.desc,
+        `product.product.${p.code}.desc`,
+        p.origin,
+        SYS,
+        p.layer,
+      ],
+    );
+    bump('product.products');
+  }
 
   // ── 1. 用户 + 资料 + 积分 ──────────────────────────────────────────────────
   /* 刻意**不写 credential.user_credentials**：这些是演示账号，仓库里不该带任何

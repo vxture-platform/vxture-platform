@@ -219,9 +219,14 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 > 2026-09-10 起平台侧这六步**全部是页面操作**——不改 seed、不发版、不跑 db-init
 > （唯一例外见那份 §10：产品码被平台代码字面量引用时）。
 
-1. **目录**:product 目录登记(code/layer/类型/checklist 项)+ plan 结构(运营);
+1. **目录**:product 目录登记(code/**layer**/类型/checklist 项)+ plan 结构(运营)。**智能体的分层 = L3、类型 = `*_agent`**(2026-10-04 决策 3 起登记处拒绝其它组合:`layer` 是定位轴的唯一权威,类型族由它蕴含,`undefined` 型任一层都收;库上 `chk_products_layer_type_family`)——上线自查第 1 条「能被解析、不返 `unknown_product`」连同这一句一起验;
 2. **C1**:OIDC client 登记(redirect_uris、scopes、back-channel logout)+ RP 实现(按接入标准);
 3. **C3**:webhook 端点(验签/幂等)+ provisioning 消费;`local_usage` 缓冲 + consume 上报 Job;
 4. **C2**:entitlement 拉取与缓存失效;门控渲染;资产面产品另接可见集解析;
 5. **数据面**:按业务面模板建 agent-db(`vxturebiz_{product}_{env}`,workspace_id 隔离键,`vx_provision`/`local_authz`/`local_usage` 三契约 schema + N 领域 schema,见 product_240 §2.4);
 6. **验收**:登录→开通→门控→consume→invalidate 全链 e2e;上架 launch checklist 过检。
+
+> **接入通则原件（artifact 20e37039，唯一权威）待 owner 增补的两条**（2026-10-04，L3 分层设计 D7/D8；本仓不另立标准，本节只是仓内镜像，原件由 owner 在 artifact 上改或授权实施者改）：
+> ① 「上线自查清单」#1 的「怎么验」加：**分层 = L3、类型 = `*_agent`（登记处拒绝其它组合）**；
+> ② Atlas 段 / D-2 加：**推理用量由 atlas 代上报（按 L1 上报者建一次的平台件，接第 N 个 L3 仍零代码）；产品面停收旧 header（E3a）以代上报落地为前提**——否则经 atlas 的全部推理用量上报 401、C2 降级 fail-open，两边都不报错（`ADR-013` 后果段）。
+> 「开始之前 · 你要拿到」不动。

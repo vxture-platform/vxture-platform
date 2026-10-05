@@ -32,8 +32,8 @@ CREATE INDEX idx_product_categories_parent_id ON product.product_categories (par
 CREATE TABLE product.products (
     id                       uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     product_code             varchar(64)  NOT NULL,                   -- 可视码
-    product_type             varchar(32)  NOT NULL,                   -- 扩展型 kind，不加 CHECK
-    layer                    varchar(8),                              -- 定位轴 L1/L2/L3（product_100_matrix §2）：L1=基础支撑 / L2=域平台 / L3=智能体。与 product_type（类型）、origin（来源）正交；NULL=未分类。封闭值域，值域权威 @vxture-platform/shared PRODUCT_LAYERS（lint:catalog-domains 锁 DDL 一致）
+    product_type             varchar(32)  NOT NULL,                   -- 扩展型 kind，不加值域 CHECK；类型族（_platform / _agent 后缀）与 layer 的蕴含由下方 chk_products_layer_type_family 管
+    layer                    varchar(8),                              -- 定位轴 L1/L2/L3（product_100_matrix §2）：L1=基础支撑 / L2=域平台 / L3=智能体。定位是唯一权威，类型族由它蕴含（L2⇒*_platform / L3⇒*_agent，chk_products_layer_type_family）；origin（来源）仍正交。NULL=未分层（umbra 这类刻意不占层的外部边界，或登记处之外的历史行；opera 登记时必填）。封闭值域，值域权威 @vxture-platform/shared PRODUCT_LAYERS（lint:catalog-domains 锁 DDL 一致）
     category_id              smallint     REFERENCES product.product_categories(id),
     product_name             varchar(128) NOT NULL,                   -- 主名/品牌名
     product_nick             varchar(128),                            -- 译名/副名
@@ -91,6 +91,17 @@ CREATE TABLE product.products (
     -- （PRODUCT_LAYER_CHOICES），两处一致——不然选了 L1 会撞成 500。
     -- 判据若哪天翻案（某个 L1 真的作为商品出售），删这条约束，别在写侧绕过它。
     CONSTRAINT chk_products_live_layer_not_l1 CHECK (deleted_at IS NOT NULL OR layer IS NULL OR layer IN ('L2','L3')),
+    -- 分层蕴含类型族（owner 2026-10-04，决策 3「分层清楚」）：layer 是定位轴的唯一权威，product_type 的
+    -- platform / agent 这一半从来就是它的影子（product_100_matrix §1：L2「对象域平台」、L3「行业 agent 应用」）。
+    -- 此前库能收 layer='L3' + product_type='general_platform'：admin 的绑定门读 layer、官网分区读类型后缀，
+    -- 三张面各说各的，这就是「分层不清楚」的机制。四条放行支各有理由：
+    --   deleted_at IS NOT NULL   软删历史是事实不是错误；
+    --   layer IS NULL            umbra（外部边界归 origin 轴）与登记处之外的历史行——写侧 opera 登记时必填；
+    --   product_type='undefined' 占位型说的是「类型未定」不是「层未定」，与任何层相容（吸收）；
+    --   后缀归族                 与 @vxture/core-utils productTypeFamily 同判：历史裸值 agent 与 data_platform 等照样归族。
+    -- 用 right() 不用 LIKE：'_' 在 LIKE 里是单字符通配。**必须单行**（lint:column-locks 的解析器按行读）；谓词文本与
+    -- 迁移 2026-12-01-l3-layer-truth.sql 逐字相同（守卫 check-product-layer-family.mjs 比对；CI 直跑 node，不设 pnpm lint:* 入口），那份迁移用同一谓词的全称否定式点名矛盾行。
+    CONSTRAINT chk_products_layer_type_family CHECK (deleted_at IS NOT NULL OR layer IS NULL OR product_type = 'undefined' OR (layer = 'L2' AND right(product_type, 9) = '_platform') OR (layer = 'L3' AND (product_type = 'agent' OR right(product_type, 6) = '_agent'))),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
     CONSTRAINT chk_products_integration_mode CHECK (integration_mode IN ('platform_managed','login_only')),
     CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL),

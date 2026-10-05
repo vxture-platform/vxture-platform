@@ -23,10 +23,16 @@ function tsArray(src, name) {
   return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
 }
 
-/** Extract the value list of a named CHECK ... IN ('a','b') constraint from DDL. */
+/**
+ * Extract the value list of a named CHECK ... IN ('a','b') constraint from DDL.
+ *
+ * 约束名后面必须是空白：`chk_products_layer` 是 `chk_products_layer_type_family` 的前缀
+ * （2026-10-04 加的蕴含约束，它不是 IN(...) 值域，由 check-product-layer-family.mjs 对账）。
+ * 不加边界的话，谁把两条约束的顺序对调一下，这里就会拿一条表达式约束里的字面量当值域读。
+ */
 function ddlCheckIn(src, constraintName) {
   const m = src.match(
-    new RegExp(`CONSTRAINT ${constraintName}[^\\n]*?IN \\(([^)]*)\\)`, "s"),
+    new RegExp(`CONSTRAINT ${constraintName}\\s[^\\n]*?IN \\(([^)]*)\\)`, "s"),
   );
   if (!m)
     throw new Error(`DDL constraint ${constraintName} (…IN(…)) not found`);

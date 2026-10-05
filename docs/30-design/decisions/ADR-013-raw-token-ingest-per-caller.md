@@ -41,13 +41,23 @@ token→credit 的换算表（文档只写了基线「1 credit ≈ 2K tokens」�
 - 平台：四张新表（§6b/§6c/§6d/§8b）、一份迁移（先 migrate 再 deploy）、`ConsumeResponseBody` 多四个可选字段
   （`token_event_id` / `credits_micro` / `credits_deducted` / `credit_skip_reason`），旧形态调用方形状不变。
 - Atlas（`ADR-010` 的「平台定下接收方式后」那一半）：改上报载荷、C2 按调用方产品查、`usage_event_id` 落 reqlog、
-  按 reqlog 补报历史（`backfill: true`）。
+  按 reqlog 补报历史（`backfill: true`）。**补报「做了没接」（2026-10-04 核）**：平台这一半能收——`backfill:true`
+  的行以 `credit_skip_reason='pre_cutover'` 落表、不换算、不扣（`token-usage.service.ts`）；atlas 那一半没发——
+  `reportTokens` 全仓两个调用点都不带 `backfill`，它只在 client 透传入参。reqlog 行带 `productCode`，按调用方补报
+  可做；要不要补是 owner 的事（L3 分层设计 D11：建议做，只记不扣）。
 - **调用方产品必须在目录里**：生产真实调用方 `tenderforge`、`yucer` 都不在 seed 里，要经 opera 产品注册
-  （L2）登记，否则上报仍是 400 `unknown_product` —— 这是 owner 的运营动作，不是代码。
+  （**L3**——它们是智能体，不是 L2；而且它们**早已在生产目录里**，缺的是分层对齐：`layer` / `product_type` 族
+  此前没有任何机械链路，2026-10-04 决策 3 起由 `chk_products_layer_type_family` 焊住，迁移
+  `2026-12-01-l3-layer-truth.sql` 在矛盾行上停手点名、交运营在 opera 改）登记，否则上报仍是 400
+  `unknown_product` —— 这是 owner 的运营动作，不是代码。
 - **已知约束（不在本批解决）**：Atlas→平台今天走共享口令（legacy），平台**验不了**请求体自报的调用方产品码
   （`trust-declared`，已登记的缺口 E2/E3）。Atlas 换成 Bearer 那天，它自己的令牌身份是 atlas 而用量归调用方，
   `scopeToS2sCaller` 的「只能上报自己产品」会把它拦下 —— 届时要给 L1 调用方一条「代上报」的授权形态
-  （令牌里带原始调用方），那是 E2/E3 那一轮的事。
+  （令牌里带原始调用方），那是 E2/E3 那一轮的事。**2026-10-04 起它是 E3a 的前置件**：决策 4 把那一轮提前了
+  ——产品面停收旧 header 之前必须先落地代上报（PR C：auth-bff `PLATFORM_LEVEL_REPORTERS` 为 atlas 铸
+  `aud=vxture` + `delegated:true` 的票、platform-api `scopeToS2sCaller` 加 delegated 支、atlas 换 Bearer），
+  否则经 atlas 的全部推理用量上报 401、C2 降级 fail-open，两边都不报错。顺序：分层 PR A → PR C → atlas 换票
+  → E3a 关 header（判据 = E6 计数里 `entitlements|*` 与 `usage.consume|*` 全部产品码为 0）。
 - 文档改正（#547 点名的三处）：product_220 §4.2、admin/80-plan-bundled-components.md、product_100_matrix §5，
   统一成「Atlas 上报原始 token（四维，计入调用方产品）；换算与 `ai.credit` 扣减在平台」。
 

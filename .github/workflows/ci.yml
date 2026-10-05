@@ -529,6 +529,18 @@ jobs:
           # 这种数会随后来的任何一次新增而失效(2026-09-09 三条一起炸,连挂三次生产迁移)
           pnpm lint:migration-counts
 
+      # 分层蕴含类型族（决策 3，owner 2026-10-04）：layer 是定位轴的唯一权威，L2 ⇒ *_platform、
+      # L3 ⇒ *_agent，undefined 型吸收。这条规矩写在五处（DDL CHECK / 迁移的同一谓词 / 两份 seed
+      # 的产品行 / 受管类型表），彼此没有机械链路——此前库能收 L3 + general_platform，官网把它放进
+      # 平台区、详情页「敬请期待」。这一步比对五处逐字一致，并断言「family 为 undefined 的类型恰好只有
+      # undefined」（新加一个既非 _platform 也非 _agent 的类型时红，逼人决定它蕴含哪一层）。
+      # 不加 `pnpm lint:` 入口：那要改根 package.json，会触发全栈 14 镜像重建。
+      - name: Product layer / type family guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          node scripts/guardrails/check-product-layer-family.mjs
+          node scripts/guardrails/check-product-layer-family.mjs --self-test
+
       # 租户权限配置体系门控(批 0a):权限目录在 seed / core-utils / console 导航 / 迁移
       # 四处必须逐码一致;console-bff 每条路由必须声明 @Public / @SelfScope /
       # @RequireCapability——漏标运行时是 403,这里在 lint 期就报出来。

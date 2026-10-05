@@ -100,6 +100,28 @@ function checkFile(file) {
       '不得为 `platform` 建产品行：L0 平台本体不作 product code（product_100 §1 / ADR-12 D6）。' +
       '`platform` 只是 stack 标识符（容器/镜像/库名前缀），见 140-repo-governance-standard §7');
   }
+
+  // ── ⑤ seed-demo 的 id 必须是本文件写死的固定 UUID（…-b000-… 段）───────────
+  // seed-demo.mjs 文件头与收尾都承诺「全部 demo 行的 id 都在 00000000-0000-4000-b000-… 段内，
+  // 要回出厂状态可整段删」——这段固定 id 就是它的幂等与清理机制。一条 insert 改用
+  // gen_random_uuid()，这句承诺就对那张表失效：按段清理会把它漏下，而 on conflict (自然键)
+  // do nothing 让下一次 seed 静默保留陈行，界面上 demo 数据「已清」而目录里还活着两个产品。
+  // 2026-10-04 DEMO_PRODUCTS 照抄 seed-catalog 的形状（那边按 product_code 幂等、id 随机）就是
+  // 这样漏的。只盯 seed-demo：catalog / sample 没有这条承诺。
+  // 先把注释抹成等长空白再找：解释这条规矩的注释本身就会写出 gen_random_uuid()，裸 grep 把注释当代码。
+  // 等长抹除（只保留换行）让 lineOf 的行号仍对得上原文。
+  if (/seed-demo\.mjs$/.test(file)) {
+    const blank = (m) => m.replace(/[^\n]/g, ' ');
+    const code = content
+      .replace(/\/\*[\s\S]*?\*\//g, blank)
+      .replace(/(^|[^:'"`])\/\/[^\n]*/g, (m, lead) => lead + blank(m.slice(lead.length)));
+    const randRe = /gen_random_uuid\s*\(\s*\)/g;
+    let rm;
+    while ((rm = randRe.exec(code))) {
+      report(file, lineOf(content, rm.index),
+        'seed-demo 的 id 不得用 gen_random_uuid()：文件头承诺全部 demo 行落在 …-b000-… 固定段（整段可清理），给它一个 ID.<表>(i)');
+    }
+  }
 }
 
 const files = existsSync(SEED_DIR)
