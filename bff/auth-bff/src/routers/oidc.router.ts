@@ -63,7 +63,10 @@ interface TokenRequestBody {
   client_id?: string;
   client_secret?: string;
   // token-exchange grant (RFC 8693, T1, product_210 §3.2). `subject_token`
-  // present = OBO mode; absent = service mode (requires `workspace_id`).
+  // present = OBO mode; absent = service mode, which requires `workspace_id`
+  // — except the delegated-reporter shape (decision 3 PR C, product_210 §3.5:
+  // an allowlisted L1 reporter asking for `audience=vxture`), which requires
+  // it ABSENT. The service decides per grant; nothing is validated here.
   subject_token?: string;
   audience?: string;
   workspace_id?: string;

@@ -1,26 +1,32 @@
 {
-  "note": "本文件由 check-s2s-legacy-scope.mjs --update 生成，不要手改。登记的是走旧凭据（共享 x-vxture-internal-auth，无 s2sCaller）时各调用点的选择。trust-declared 的条目是**已登记的缺口**：那一格今天确实在信任请求体自报的 workspace，收紧要先让五个对接方换凭据（E2/E3）。条目只应减少（改成 deny），增加必须是有意的。",
+  "note": "本文件由 check-s2s-legacy-scope.mjs --update 生成，不要手改。登记的是 scopeToS2sCaller 每个调用点在两条「信请求体」的路上各自的选择：policy = 走旧凭据（共享 x-vxture-internal-auth，无 s2sCaller）时怎么办；delegated = 来的是代上报票（auth-bff 为 L1 上报者 atlas 铸的 aud=vxture 票，delegated:true、无 workspace）时怎么办。trust-declared 的条目是**已登记的缺口**：那一格今天确实在信任请求体自报的 workspace，收紧要先让五个对接方换凭据（E2/E3）。attribute-declared 的条目是代上报票**被允许驱动的能力**（C2 读、C3 token 上报），一张被盗的票能做的事就是这两格。两个计数都只应减少，增加必须是有意的。",
   "trustDeclared": 5,
+  "delegatedAttributing": 2,
   "sites": [
     {
-      "at": "bff/platform-api/src/routers/platform-entitlements.router.ts:78",
-      "policy": "trust-declared"
+      "at": "bff/platform-api/src/routers/platform-entitlements.router.ts:80",
+      "policy": "trust-declared",
+      "delegated": "attribute-declared"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-provisioning.router.ts:142",
-      "policy": "trust-declared"
+      "at": "bff/platform-api/src/routers/platform-provisioning.router.ts:143",
+      "policy": "trust-declared",
+      "delegated": "deny"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-sharing.router.ts:62",
-      "policy": "trust-declared"
+      "at": "bff/platform-api/src/routers/platform-sharing.router.ts:64",
+      "policy": "trust-declared",
+      "delegated": "deny"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-usage.router.ts:120",
-      "policy": "deny+trust-declared"
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:128",
+      "policy": "deny+trust-declared",
+      "delegated": "attribute-declared+deny"
     },
     {
-      "at": "bff/platform-api/src/routers/platform-usage.router.ts:280",
-      "policy": "trust-declared"
+      "at": "bff/platform-api/src/routers/platform-usage.router.ts:299",
+      "policy": "trust-declared",
+      "delegated": "deny"
     }
   ]
 }

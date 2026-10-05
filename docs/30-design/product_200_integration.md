@@ -226,7 +226,7 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 5. **数据面**:按业务面模板建 agent-db(`vxturebiz_{product}_{env}`,workspace_id 隔离键,`vx_provision`/`local_authz`/`local_usage` 三契约 schema + N 领域 schema,见 product_240 §2.4);
 6. **验收**:登录→开通→门控→consume→invalidate 全链 e2e;上架 launch checklist 过检。
 
-> **接入通则原件（artifact 20e37039，唯一权威）待 owner 增补的两条**（2026-10-04，L3 分层设计 D7/D8；本仓不另立标准，本节只是仓内镜像，原件由 owner 在 artifact 上改或授权实施者改）：
+> **接入通则原件（artifact 20e37039，唯一权威）待 owner 增补的两条**（2026-10-04，L3 分层设计 D7/D8 + 决策 3 PR C；本仓不另立标准，本节只是仓内镜像，原件由 owner 在 artifact 上改或授权实施者改）：
 > ① 「上线自查清单」#1 的「怎么验」加：**分层 = L3、类型 = `*_agent`（登记处拒绝其它组合）**；
-> ② Atlas 段 / D-2 加：**推理用量由 atlas 代上报（按 L1 上报者建一次的平台件，接第 N 个 L3 仍零代码）；产品面停收旧 header（E3a）以代上报落地为前提**——否则经 atlas 的全部推理用量上报 401、C2 降级 fail-open，两边都不报错（`ADR-013` 后果段）。
+> ② C3 上行 §3「计量归属 · 例外：AI 推理用量由 Atlas 统一上报」与 Atlas 段（原件 Atlas 段「作为产品…走 C2/C3」要同步改成「作为 L1 上报者替调用方产品走 C2/C3」）：**推理用量由 atlas 代上报**——按 L1 上报者建一次的平台件，接第 N 个 L3 仍零代码；**产品面停收旧 header（E3a）以代上报落地为前提**，否则经 atlas 的全部推理用量上报 401、C2 降级 fail-open，两边都不报错（`ADR-013` 后果段）。平台这一半已落地：atlas 以自己的机密客户端换 `audience=vxture`、不带 `workspace_id` 的票，得 `act.sub="atlas"` + `delegated:true`、无 workspace 的 `aud=vxture` 票（TTL 300s，一张票覆盖全部工作区）；拿它调 `GET /platform/entitlements` 与 `POST /usage/consume`（token 形态），`product` 填**调用方产品码**（C3 上报须在目录里，否则 400 `unknown_product`；C2 读与旧 header 路径一样不查目录）、`workspace_id` 照填，平台按自报归属；别的产品面端点对这张票 403 `s2s_delegated_path_not_allowed`。L3 产品自己仍**不**上报推理用量、也不需要为此接任何东西；atlas 客户端换 Bearer 在 atlas 仓另行。
 > 「开始之前 · 你要拿到」不动。

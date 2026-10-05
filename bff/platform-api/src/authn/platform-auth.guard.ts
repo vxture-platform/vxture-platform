@@ -30,7 +30,12 @@
  *    D13 host split: the signing private key stays confined to auth-bff);
  *    `act.sub` (rule 6, §3.3) must be present and becomes the caller's
  *    product identity, attached to the request as `s2sCaller` for handlers
- *    to read via the `@S2sCaller()` decorator.
+ *    to read via the `@S2sCaller()` decorator. The ticket's `delegated`
+ *    claim (decision 3 PR C, 2026-10-04) is copied as-is: `true` only on a
+ *    delegated-reporter ticket (auth-bff mints it for an allowlisted L1
+ *    reporter such as atlas, `aud = vxture`, no workspace), and then
+ *    `act.sub` is the REPORTER, not the product the request is about —
+ *    `scopeToS2sCaller` is where that difference is acted on, per route.
  *
  * 第四个（开通回执，2026-09-17）是按同一条判据加进来的，不是把半径放宽:它与
  * `POST /usage/consume` 一字不差——产品**用自己的 S2S 票上报自己的事实**，`act.sub`
@@ -124,6 +129,8 @@ export class PlatformAuthGuard implements CanActivate {
       mode: claims["mode"] === "obo" ? "obo" : "service",
       orgId: typeof orgId === "string" ? orgId : null,
       workspaceId: typeof workspaceId === "string" ? workspaceId : null,
+      // Strict boolean: "true" / 1 / {} are not a delegation claim.
+      delegated: claims["delegated"] === true,
     };
     return true;
   }

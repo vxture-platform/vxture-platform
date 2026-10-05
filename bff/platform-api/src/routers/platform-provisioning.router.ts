@@ -139,6 +139,7 @@ export class PlatformProvisioningRouter {
     /* TD-035，同 consume/gauge:产品只能为**自己**回执，工作区取 token 里的那个，
        请求体声明的直接丢弃——调用方自报身份等于没有鉴权（通则被调方纪律第 8 条）。 */
     /* 旧凭据：`trust-declared`（开通回执走这条，有在产调用方）。 */
+    /* 代上报票：`deny`——「空间建好了」只能由那个产品自己说；上报者替人回执等于凭空造信号。 */
     const { workspaceId } = scopeToS2sCaller(
       s2sCaller,
       {
@@ -146,6 +147,7 @@ export class PlatformProvisioningRouter {
         productCodes: [parsed.productCode],
       },
       "trust-declared",
+      "deny",
     );
     if (!s2sCaller) {
       // E6（2026-10-04）：谁还在走旧凭据——只在旧头那条路上记，Bearer 调用方不记。
@@ -158,7 +160,13 @@ export class PlatformProvisioningRouter {
     const productId = await this.provisioning.resolveProductId(
       parsed.productCode,
     );
-    if (!productId) throw new BadRequestException("unknown_product");
+    if (!productId) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: "unknown_product",
+        product: parsed.productCode,
+      });
+    }
 
     const result = await this.provisioning.recordAck({
       workspaceId,

@@ -62,7 +62,17 @@ const s2s = (productCode: string) => ({
   mode: "service" as const,
   orgId: null,
   workspaceId: WS_TOKEN,
+  delegated: false,
 });
+
+/** 代上报票（决策 3 PR C）：act.sub 是上报者 atlas，票里没有 workspace。 */
+const DELEGATED_ATLAS = {
+  productCode: "atlas",
+  mode: "service" as const,
+  orgId: null,
+  workspaceId: null,
+  delegated: true,
+};
 
 async function rejection(promise: Promise<unknown>): Promise<unknown> {
   try {
@@ -135,7 +145,7 @@ describe("POST /provisioning/ack", () => {
     expect(res.acked_at).toBe("2026-09-16T08:00:00.000Z");
   });
 
-  it("未知产品码：400，不落库", async () => {
+  it("未知产品码：400，不落库；message 仍是裸码，被拒的码单独放 product", async () => {
     const { router, recordAck } = makeRouter(
       undefined,
       vi.fn(async (): Promise<string | null> => null),
@@ -147,6 +157,26 @@ describe("POST /provisioning/ack", () => {
       ),
     );
     expect((error as { getStatus?: () => number }).getStatus?.()).toBe(400);
+    expect((error as Error).message).toBe("unknown_product");
+    expect((error as { getResponse?: () => unknown }).getResponse?.()).toEqual({
+      statusCode: 400,
+      message: "unknown_product",
+      product: "nope",
+    });
+    expect(recordAck).not.toHaveBeenCalled();
+  });
+
+  it("代上报票替人回执：403 s2s_delegated_path_not_allowed，目录与落库都不碰", async () => {
+    const { router, recordAck, resolveProductId } = makeRouter();
+    const error = await rejection(
+      router.ack(
+        { workspace_id: WS_DECLARED, product: "karda", status: "ready" },
+        DELEGATED_ATLAS,
+      ),
+    );
+    expect((error as { getStatus?: () => number }).getStatus?.()).toBe(403);
+    expect((error as Error).message).toBe("s2s_delegated_path_not_allowed");
+    expect(resolveProductId).not.toHaveBeenCalled();
     expect(recordAck).not.toHaveBeenCalled();
   });
 });

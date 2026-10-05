@@ -38,7 +38,17 @@ const s2s = (productCode: string) => ({
   mode: "service" as const,
   orgId: null,
   workspaceId: WS_TOKEN,
+  delegated: false,
 });
+
+/** 代上报票（决策 3 PR C）：act.sub 是上报者 atlas，票里没有 workspace。 */
+const DELEGATED_ATLAS = {
+  productCode: "atlas",
+  mode: "service" as const,
+  orgId: null,
+  workspaceId: null,
+  delegated: true,
+};
 
 describe("GET /platform/sharing/visible-set", () => {
   it("S2S caller: the token's workspace is used, the declared one is discarded, nothing is counted as legacy", async () => {
@@ -73,6 +83,18 @@ describe("GET /platform/sharing/visible-set", () => {
     expect(recordLegacy.mock.calls.map((c) => c[0])).toEqual([
       { route: "sharing.visible-set", productCode: "arda" },
     ]);
+  });
+
+  it("delegated reporter ticket → 403 s2s_delegated_path_not_allowed: the visible set is the asset product's own, and the read path writes materialized rows", async () => {
+    const { router, resolveVisibleSet, recordLegacy } = makeRouter();
+    await expect(
+      router.visibleSet(
+        { workspace_id: WS_DECLARED, product: "arda" },
+        DELEGATED_ATLAS,
+      ),
+    ).rejects.toMatchObject({ message: "s2s_delegated_path_not_allowed" });
+    expect(resolveVisibleSet).not.toHaveBeenCalled();
+    expect(recordLegacy).not.toHaveBeenCalled();
   });
 
   it("bad query → 400 before anything is read or counted", async () => {

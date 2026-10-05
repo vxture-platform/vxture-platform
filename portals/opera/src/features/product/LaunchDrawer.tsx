@@ -57,8 +57,10 @@ import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import {
   allPassed,
   runLaunchChecks,
+  signalFacts,
   type CheckResult,
   type CheckSide,
+  type SignalFacts,
 } from "./launch-checks";
 import {
   canLaunchFrom,
@@ -133,7 +135,13 @@ const STATUS_META: Record<RowStatus, { label: string; tone: StatusBadgeTone }> =
     probing: { label: "探测中…", tone: "info" },
   };
 
-interface Row {
+/**
+ * 一行。`SignalFacts` 那几个字段（E6 的 n、代上报的 reporter）是「一句事实、不进判定」，
+ * 由 `signalFacts()` 从实测结果**整段抄**过来——逐个字段挑会漏：`delegatedReporter` 曾只到了
+ * 运行健康抽屉、没到这一屏，于是 E3a 那天这里仍把 atlas 代发的「经 S2S 令牌」读成
+ * 「产品已换票」（2026-10-05 审查 3c）。
+ */
+interface Row extends SignalFacts {
   key: string;
   stage: ChecklistStage;
   label: string;
@@ -150,8 +158,6 @@ interface Row {
   confirmedAt: string | null;
   item?: ChecklistEntry;
   order: number;
-  /** E6：C2 那条上「本月仍走旧凭据 n 次」的 n；没有就不上屏。 */
-  legacyAuthThisMonth?: number;
 }
 
 /**
@@ -311,9 +317,7 @@ function buildRows(
       confirmedAt: !auto && item.isSatisfied ? item.checkedAt : null,
       item,
       order: meta?.order ?? 900,
-      ...(live?.legacyAuthThisMonth !== undefined
-        ? { legacyAuthThisMonth: live.legacyAuthThisMonth }
-        : {}),
+      ...signalFacts(live),
     });
   }
 
@@ -340,9 +344,7 @@ function buildRows(
       ...(live?.href ? { href: live.href } : {}),
       confirmedAt: null,
       order: meta.order,
-      ...(live?.legacyAuthThisMonth !== undefined
-        ? { legacyAuthThisMonth: live.legacyAuthThisMonth }
-        : {}),
+      ...signalFacts(live),
     });
   }
 
@@ -712,6 +714,15 @@ export function LaunchDrawer({
           <p className="text-body-sm text-muted-foreground">
             {tShared("integrationSignals.legacyAuthThisMonth", {
               count: row.legacyAuthThisMonth,
+            })}
+          </p>
+        ) : null}
+        {row.delegatedReporter !== undefined ? (
+          /* 代上报（决策 3 PR C）：同样一句事实——这次 C2 读是谁替它发起的。没有这句，
+             E3a 关旧 header 那天「经 S2S 令牌」会被读成「产品已换票」。 */
+          <p className="text-body-sm text-muted-foreground">
+            {tShared("integrationSignals.delegatedReporter", {
+              reporter: row.delegatedReporter,
             })}
           </p>
         ) : null}

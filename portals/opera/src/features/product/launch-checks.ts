@@ -113,6 +113,13 @@ export interface CheckResult {
    * `undefined` = BFF 没给这一段，不上屏。
    */
   legacyAuthThisMonth?: number;
+  /**
+   * 代上报（决策 3 PR C，2026-10-04）：最近一次 C2 读是 L1 上报者（如 `atlas`）持代上报票
+   * 替这个产品发起的，不是产品自己换票。只挂在 C2 那一条上；同样**数据不是文案**，句子由抽屉
+   * 经 next-intl 拼（`integrationSignals.delegatedReporter`）。缺席 = 产品自己（或共享口令，分不出）。
+   * 不说出来，E3a 关旧 header 时「经 S2S 令牌」会被读成「产品已换票」。
+   */
+  delegatedReporter?: string;
 }
 
 interface ProductLike {
@@ -180,6 +187,8 @@ interface IntegrationSignalsLite {
     lastSeenAt: string;
     via: string;
     workspaceId: string | null;
+    /** 代上报（决策 3 PR C）：持代上报票替它读的 L1 上报者（如 `atlas`）；null = 产品自己。 */
+    reporter?: string | null;
   } | null;
   consume: { lastEventAt: string; metricKey: string } | null;
   /** C1 出站。形状与 opera-bff 的 `S2sSignal` 一致——两边不互相引类型，靠单测钉住。 */
@@ -232,6 +241,34 @@ export function legacyAuthThisMonth(
 ): number | undefined {
   if (!legacyAuth) return undefined;
   return Object.values(legacyAuth.byRoute).reduce((sum, n) => sum + n, 0);
+}
+
+/**
+ * 实测结果里「只是一句事实、不进判定」的那几个字段：E6 的 n、代上报的 reporter。
+ *
+ * 抽屉的行从这里**整段抄**，不逐个字段挑。挑是按字段名复制，多一个字段就多两处要记得加——
+ * `delegatedReporter` 就是这样只到了运行健康抽屉、没到接入检查抽屉（2026-10-05 审查 3c）。
+ * 以后往 `CheckResult` 加这一类字段，只改这里和各抽屉的渲染分支。
+ */
+export type SignalFacts = Pick<
+  CheckResult,
+  "legacyAuthThisMonth" | "delegatedReporter"
+>;
+
+/**
+ * @param live - 这一行对应的实测结果；没有（没跑 / 没这一项）时给空对象
+ * @returns 有值的键才给（`exactOptionalPropertyTypes`：没有的键不出现，不是 undefined）
+ */
+export function signalFacts(live: CheckResult | undefined): SignalFacts {
+  if (!live) return {};
+  return {
+    ...(live.legacyAuthThisMonth !== undefined
+      ? { legacyAuthThisMonth: live.legacyAuthThisMonth }
+      : {}),
+    ...(live.delegatedReporter !== undefined
+      ? { delegatedReporter: live.delegatedReporter }
+      : {}),
+  };
 }
 
 function reason(error: unknown, fallback: string): string {
@@ -683,6 +720,10 @@ export async function runLaunchChecks(
       itemCode: "c2_entitlement",
       href: entitlementsHref,
       ...legacyAuthField,
+      /* 代上报（决策 3 PR C）：数据不是文案，句子由抽屉经 next-intl 拼（同 E6）。 */
+      ...(entitlement?.reporter
+        ? { delegatedReporter: entitlement.reporter }
+        : {}),
     });
     results.push({
       id: "c3-metering",

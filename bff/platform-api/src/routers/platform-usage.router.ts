@@ -117,7 +117,15 @@ export class PlatformUsageRouter {
     //     先与五个对接方换凭据（E2/E3，owner 的取舍 + 对外协调）。
     //     **这一格是已登记的缺口，不是被忽略的缺口**：见
     //     `scripts/guardrails/s2s-legacy-scope.snapshot.json`。
-    const { workspaceId } = scopeToS2sCaller(
+    //
+    // 代上报票（决策 3 PR C，2026-10-04）也分两档：
+    //   · token 形态 → **attribute-declared**。这就是代上报票存在的理由：atlas 替调用方产品
+    //     上报原始 token（ADR-013 D1），`product` 是归属产品，工作区取自报值。
+    //   · amount 形态（含 reserve）→ **deny**。上报者不替任何产品报业务指标，更不替它预留；
+    //     没有在产调用方的能力直接关掉。
+    // `reporter`：代上报时是上报者的 act.sub（"atlas"），其余 null。C3 事实行今天不记它
+    // （`reported_by` 列是 DDL，留作 follow-up），所以只能跟着运营告警日志走——别让它静默消失。
+    const { workspaceId, reporter } = scopeToS2sCaller(
       s2sCaller,
       {
         workspaceId: parsed.workspaceId,
@@ -126,6 +134,7 @@ export class PlatformUsageRouter {
       parsed.kind === "amount" && parsed.intent === "reserve"
         ? "deny"
         : "trust-declared",
+      parsed.kind === "tokens" ? "attribute-declared" : "deny",
     );
     if (!s2sCaller) {
       // E6（2026-10-04）：谁还在走旧凭据——只在旧头那条路上记，Bearer 调用方不记。
@@ -137,12 +146,21 @@ export class PlatformUsageRouter {
     }
 
     const productId = await this.usage.resolveProductId(parsed.productCode);
-    if (!productId) throw new BadRequestException("unknown_product");
+    // `message` 仍是裸码（atlas 把它当指标标签，`platform-entitlement.client.ts` 的 REFUSAL_WORD
+    // 只认 [a-z0-9_]）；被拒的码单独放 `product`，代上报时上报者才知道是哪个产品没登记。
+    if (!productId) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: "unknown_product",
+        product: parsed.productCode,
+      });
+    }
 
     // ── token 形态（#547 / ADR-013）：原始事实落表 → 换算 → 结转 → 引擎扣 ai.credit ──
     // 与 amount 形态共用上面那一道 scopeToS2sCaller（同一个调用点：s2s-legacy-scope 快照的
-    // trust-declared 计数只许减少，不新增调用点）。调用方产品必须在目录里（L0/L1 不在，所以
-    // product="atlas" 在这里照样 unknown_product —— 那正是 owner 要的）。
+    // trust-declared 计数只许减少，不新增调用点）。归属产品必须在目录里（L0/L1 不在，所以
+    // product="atlas" 在这里照样 unknown_product —— 那正是 owner 要的；代上报票也一样，
+    // 票只证明「是 atlas 在报」，不替它造出一个目录行）。
     if (parsed.kind === "tokens") {
       const ingested = await this.tokens.ingest({
         workspaceId,
@@ -186,7 +204,7 @@ export class PlatformUsageRouter {
           });
         } catch (err) {
           this.logger.warn(
-            `配额耗尽的运营通告没写成（${parsed.productCode} / ai.credit / tokens）— ${String(err)}`,
+            `配额耗尽的运营通告没写成（${parsed.productCode} / ai.credit / tokens${reporter ? ` / 代报者 ${reporter}` : ""}）— ${String(err)}`,
           );
         }
       }
@@ -277,6 +295,7 @@ export class PlatformUsageRouter {
     }
     // TD-035: same S2S scope binding as consume().
     // 旧凭据：`trust-declared`（在产的存量观测上报走这条，收紧要先换凭据）。
+    // 代上报票：`deny`——上报者不替任何产品报存量观测（gauge 是产品自己的库存事实）。
     const { workspaceId } = scopeToS2sCaller(
       s2sCaller,
       {
@@ -284,6 +303,7 @@ export class PlatformUsageRouter {
         productCodes: [parsed.productCode],
       },
       "trust-declared",
+      "deny",
     );
     if (!s2sCaller) {
       // E6：同 consume()。
@@ -294,7 +314,13 @@ export class PlatformUsageRouter {
     }
 
     const productId = await this.usage.resolveProductId(parsed.productCode);
-    if (!productId) throw new BadRequestException("unknown_product");
+    if (!productId) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: "unknown_product",
+        product: parsed.productCode,
+      });
+    }
 
     // must be a registered gauge metric (counter/unknown → wrong endpoint).
     if (!(await this.usage.isGaugeMetric(parsed.metric))) {

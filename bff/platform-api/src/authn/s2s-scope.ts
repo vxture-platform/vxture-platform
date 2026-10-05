@@ -49,34 +49,71 @@ import type { S2sCallerCtx } from "./s2s-caller";
 export type LegacyScopePolicy = "trust-declared" | "deny";
 
 /**
+ * 代上报票（`s2sCaller.delegated === true`，决策 3 PR C，2026-10-04，L3 分层设计 §4.3 形态 A）
+ * 到了本调用点怎么办。**同样必填**，理由与 `legacy` 一样：默认值会让下一个调用点在没人注意
+ * 的情况下把代上报票也放进来。
+ *
+ * 代上报票是 auth-bff 为 L1 上报者（今天只有 atlas）铸的：`act.sub` 是上报者，不是请求说的
+ * 那个产品；票里**没有** workspace。它存在的理由只有一个——atlas 替调用方产品上报推理用量
+ * （ADR-013 D1）并按调用方产品读 C2，而「产品只能报自己」对它永远不成立。
+ *
+ *   · `"attribute-declared"` —— 请求体自报的产品码就是**归属产品**，工作区取自报值。本函数不查库；
+ *     归属产品在不在目录里由调用点自己定：C3 token 上报经 `resolveProductId` 把关（L0/L1 不在目录
+ *     ⇒ 400 `unknown_product`，`product="atlas"` 照样被拒），C2 读**不查目录**（与旧 header 路径
+ *     相同，未知码得到空权益视图而不是 400）。选它的调用点在
+ *     `check-s2s-legacy-scope.mjs` 的快照里登记：那张表就是「一张被盗的代上报票能驱动什么」。
+ *   · `"deny"` —— 代上报票不许走这条路，当场 403 `s2s_delegated_path_not_allowed`。
+ *     上报者只做 C2 读与 C3 token 上报；其余能力（gauge / 共享可见集 / 开通回执）没有
+ *     代上报的理由，关掉——「守卫只长在一条分支，等于给别条留门」。
+ */
+export type DelegatedScopePolicy = "attribute-declared" | "deny";
+
+/**
  * Resolve the workspace to actually use, and reject a request whose declared
  * product(s) don't match the caller's own product identity.
  *
- * `legacy` 决定没有 `s2sCaller`（= 走旧凭据共享口令）时怎么办，见上面的类型注释。
+ * `legacy` 决定没有 `s2sCaller`（= 走旧凭据共享口令）时怎么办；`delegated` 决定票是
+ * 代上报票时怎么办——两个档位各管一条路，互不影响（product 票两个都不看）。见上面的类型注释。
+ *
+ * 返回的 `reporter`：代上报时是上报者的 `act.sub`（如 `"atlas"`），其余为 null——调用点用它
+ * 把「谁替谁报的」记进信号，而不是把代上报记成产品自己来过。
  */
 export function scopeToS2sCaller(
   s2sCaller: S2sCallerCtx | undefined,
   requested: { workspaceId: string; productCodes: readonly string[] },
   legacy: LegacyScopePolicy,
-): { workspaceId: string } {
+  delegated: DelegatedScopePolicy,
+): { workspaceId: string; reporter: string | null } {
   if (!s2sCaller) {
     if (legacy === "deny") {
       // 旧凭据证明不了「是谁在调」——共享口令每个产品同一个值，请求体里的 `product`
       // 是自报的。所以这条路不许驱动会拒绝客户操作的能力。
       throw new ForbiddenException("s2s_legacy_path_not_allowed");
     }
-    return { workspaceId: requested.workspaceId };
+    return { workspaceId: requested.workspaceId, reporter: null };
+  }
+  if (s2sCaller.delegated) {
+    if (delegated === "deny") {
+      throw new ForbiddenException("s2s_delegated_path_not_allowed");
+    }
+    // 代上报：身份可证（是 atlas），归属按请求体——与旧凭据那条路的区别正是「发送方是谁」
+    // 这一格有了答案。产品码不与 act.sub 比对（永远不等），目录解析留给调用点。
+    return {
+      workspaceId: requested.workspaceId,
+      reporter: s2sCaller.productCode,
+    };
   }
   if (!s2sCaller.workspaceId) {
-    // Defensive: every token minted by TokenExchangeService carries
+    // Defensive: every product token minted by TokenExchangeService carries
     // workspace_id (OBO derives it from active_workspace, service mode
     // requires it to mint at all) — this should be unreachable, but a token
     // whose scope can't be verified must fail closed, not fall back to
-    // trusting the caller-declared workspace_id.
+    // trusting the caller-declared workspace_id. (A delegated ticket has no
+    // workspace by design and is handled above — it never reaches here.)
     throw new ForbiddenException("s2s_scope_missing_workspace");
   }
   if (requested.productCodes.some((code) => code !== s2sCaller.productCode)) {
     throw new ForbiddenException("s2s_product_mismatch");
   }
-  return { workspaceId: s2sCaller.workspaceId };
+  return { workspaceId: s2sCaller.workspaceId, reporter: null };
 }

@@ -18,6 +18,11 @@
  *     `act.sub` (which `scopeToS2sCaller` already forces to equal the
  *     requested product). Shared-internal-header callers carry no identity,
  *     so they are attributed to the product code(s) they asked about.
+ *     A delegated-reporter ticket (decision 3 PR C: atlas reading C2 on a
+ *     caller product's behalf) is attributed to the product it asked about,
+ *     `via: "s2s"`, **plus** `reporter` naming who actually asked — so the
+ *     launch check can say "atlas 代报" instead of implying the product
+ *     itself has moved to Bearer.
  *
  *   Operational contract: this is a side channel of a hot read path, so it
  *   must never change the HTTP response. Writes are throttled in memory
@@ -51,6 +56,8 @@ export interface EntitlementSeenInput {
   productCode: string;
   via: EntitlementSeenVia;
   workspaceId: string | null;
+  /** The L1 reporter's `act.sub` when the read came on a delegated ticket; null / absent otherwise. */
+  reporter?: string | null;
 }
 
 /**
@@ -61,6 +68,8 @@ export interface EntitlementSeenSignal {
   lastSeenAt: string;
   via: EntitlementSeenVia;
   workspaceId: string | null;
+  /** Present only on a delegated read (e.g. `"atlas"`); never written as null. */
+  reporter?: string;
 }
 
 /** The one Redis command the recorder needs; ioredis satisfies it. */
@@ -153,6 +162,7 @@ export class EntitlementSeenRecorder {
       lastSeenAt: new Date(now).toISOString(),
       via: input.via,
       workspaceId: input.workspaceId,
+      ...(input.reporter ? { reporter: input.reporter } : {}),
     };
     const key = c2SignalKey(this.keyPrefix, input.productCode);
 

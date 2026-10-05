@@ -59,6 +59,8 @@ export class PlatformSharingRouter {
     // （`sharing.service.ts`），不只是读。收紧它同样要先换凭据，所以今天只能登记。
     // 下一轮的判据（完备性复核给的）：拿别的工作空间 uuid 走旧凭据打这里要求 4xx，
     // 且 `sharing.visible_set_current` 上不许新增该工作空间的物化行。
+    // 代上报票：`deny`——可见集是资产面产品自己的事（L3 在 L2 入口求值，atlas 从不调这里），
+    // 而且下游会**写**物化行；一张代上报票不该能往任意工作空间写东西。
     const { workspaceId } = scopeToS2sCaller(
       s2sCaller,
       {
@@ -66,6 +68,7 @@ export class PlatformSharingRouter {
         productCodes: [parsed.productCode],
       },
       "trust-declared",
+      "deny",
     );
     if (!s2sCaller) {
       // E6（2026-10-04）：谁还在走旧凭据——只在旧头那条路上记，Bearer 调用方不记。

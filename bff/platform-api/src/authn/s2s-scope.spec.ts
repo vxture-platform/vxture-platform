@@ -8,8 +8,25 @@ const caller = (overrides: Partial<S2sCallerCtx> = {}): S2sCallerCtx => ({
   mode: "service",
   orgId: null,
   workspaceId: "11111111-1111-1111-1111-111111111111",
+  delegated: false,
   ...overrides,
 });
+
+/**
+ * 代上报票（决策 3 PR C）：auth-bff 为 L1 上报者铸的 `aud=vxture` 票——`act.sub` 是上报者
+ * （atlas）、`delegated: true`、**没有** workspace。它的全部意义就是「产品码不等于 act.sub
+ * 也要放行」，所以下面的矩阵要钉住的是：放行只发生在 delegated 票 + attribute-declared 这一格，
+ * 别的格子一个都不松。
+ */
+const delegatedAtlas = (): S2sCallerCtx => ({
+  productCode: "atlas",
+  mode: "service",
+  orgId: null,
+  workspaceId: null,
+  delegated: true,
+});
+
+const WS_DECLARED = "22222222-2222-2222-2222-222222222222";
 
 describe("scopeToS2sCaller", () => {
   /*
@@ -24,12 +41,13 @@ describe("scopeToS2sCaller", () => {
     const result = scopeToS2sCaller(
       undefined,
       {
-        workspaceId: "22222222-2222-2222-2222-222222222222",
+        workspaceId: WS_DECLARED,
         productCodes: ["arda"],
       },
       "trust-declared",
+      "deny",
     );
-    expect(result.workspaceId).toBe("22222222-2222-2222-2222-222222222222");
+    expect(result).toEqual({ workspaceId: WS_DECLARED, reporter: null });
   });
 
   it("legacy + deny：当场 403，不回显任何 workspace", () => {
@@ -37,9 +55,10 @@ describe("scopeToS2sCaller", () => {
       scopeToS2sCaller(
         undefined,
         {
-          workspaceId: "22222222-2222-2222-2222-222222222222",
+          workspaceId: WS_DECLARED,
           productCodes: ["arda"],
         },
+        "deny",
         "deny",
       ),
     ).toThrow(ForbiddenException);
@@ -50,9 +69,10 @@ describe("scopeToS2sCaller", () => {
     const result = scopeToS2sCaller(
       caller(),
       {
-        workspaceId: "22222222-2222-2222-2222-222222222222",
+        workspaceId: WS_DECLARED,
         productCodes: ["arda"],
       },
+      "deny",
       "deny",
     );
     expect(result.workspaceId).toBe("11111111-1111-1111-1111-111111111111");
@@ -62,12 +82,16 @@ describe("scopeToS2sCaller", () => {
     const result = scopeToS2sCaller(
       caller(),
       {
-        workspaceId: "22222222-2222-2222-2222-222222222222",
+        workspaceId: WS_DECLARED,
         productCodes: ["arda"],
       },
       "trust-declared",
+      "deny",
     );
-    expect(result.workspaceId).toBe("11111111-1111-1111-1111-111111111111");
+    expect(result).toEqual({
+      workspaceId: "11111111-1111-1111-1111-111111111111",
+      reporter: null,
+    });
   });
 
   it("allows a request for the caller's own product code", () => {
@@ -78,6 +102,7 @@ describe("scopeToS2sCaller", () => {
         productCodes: ["runos"],
       },
       "trust-declared",
+      "deny",
     );
     expect(result.workspaceId).toBe("11111111-1111-1111-1111-111111111111");
   });
@@ -91,6 +116,7 @@ describe("scopeToS2sCaller", () => {
           productCodes: ["runos"],
         },
         "trust-declared",
+        "deny",
       ),
     ).toThrow(ForbiddenException);
   });
@@ -104,6 +130,7 @@ describe("scopeToS2sCaller", () => {
           productCodes: ["arda", "runos"],
         },
         "trust-declared",
+        "deny",
       ),
     ).toThrow(ForbiddenException);
   });
@@ -113,11 +140,106 @@ describe("scopeToS2sCaller", () => {
       scopeToS2sCaller(
         caller({ workspaceId: null }),
         {
-          workspaceId: "22222222-2222-2222-2222-222222222222",
+          workspaceId: WS_DECLARED,
           productCodes: ["arda"],
         },
         "trust-declared",
+        "deny",
       ),
     ).toThrow(ForbiddenException);
+  });
+});
+
+describe("scopeToS2sCaller —— 代上报票（决策 3 PR C，2026-10-04）", () => {
+  it("delegated + attribute-declared：自报产品就是归属产品，工作区取自报值，reporter = act.sub", () => {
+    const result = scopeToS2sCaller(
+      delegatedAtlas(),
+      { workspaceId: WS_DECLARED, productCodes: ["tenderforge"] },
+      "trust-declared",
+      "attribute-declared",
+    );
+    expect(result).toEqual({ workspaceId: WS_DECLARED, reporter: "atlas" });
+  });
+
+  it("delegated + attribute-declared：一次问几个归属产品都放行（C2 批量读）", () => {
+    const result = scopeToS2sCaller(
+      delegatedAtlas(),
+      { workspaceId: WS_DECLARED, productCodes: ["karda", "tenderforge"] },
+      "trust-declared",
+      "attribute-declared",
+    );
+    expect(result.workspaceId).toBe(WS_DECLARED);
+    expect(result.reporter).toBe("atlas");
+  });
+
+  it("delegated 票没有 workspace 是设计，不是缺陷——不走 s2s_scope_missing_workspace", () => {
+    /* 产品票缺 workspace 要 fail-closed（上面那条）；代上报票的绑定在请求体，两者不是同一格。 */
+    expect(() =>
+      scopeToS2sCaller(
+        delegatedAtlas(),
+        { workspaceId: WS_DECLARED, productCodes: ["tenderforge"] },
+        "trust-declared",
+        "attribute-declared",
+      ),
+    ).not.toThrow();
+  });
+
+  it("delegated + deny：403 s2s_delegated_path_not_allowed，归属与工作区都不回", () => {
+    expect(() =>
+      scopeToS2sCaller(
+        delegatedAtlas(),
+        { workspaceId: WS_DECLARED, productCodes: ["tenderforge"] },
+        "trust-declared",
+        "deny",
+      ),
+    ).toThrow(
+      expect.objectContaining({ message: "s2s_delegated_path_not_allowed" }),
+    );
+  });
+
+  it("delegated 档位不松动产品票：product 票 + attribute-declared 仍按 act.sub 比对（403）", () => {
+    /* 「attribute-declared」说的是代上报票；一张普通产品票带着别人的产品码照样 s2s_product_mismatch。 */
+    expect(() =>
+      scopeToS2sCaller(
+        caller({ productCode: "arda" }),
+        { workspaceId: WS_DECLARED, productCodes: ["tenderforge"] },
+        "trust-declared",
+        "attribute-declared",
+      ),
+    ).toThrow(expect.objectContaining({ message: "s2s_product_mismatch" }));
+  });
+
+  it("delegated 档位不碰旧凭据那条路：legacy 仍只看 legacy 档位", () => {
+    const echoed = scopeToS2sCaller(
+      undefined,
+      { workspaceId: WS_DECLARED, productCodes: ["tenderforge"] },
+      "trust-declared",
+      "attribute-declared",
+    );
+    expect(echoed).toEqual({ workspaceId: WS_DECLARED, reporter: null });
+    expect(() =>
+      scopeToS2sCaller(
+        undefined,
+        { workspaceId: WS_DECLARED, productCodes: ["tenderforge"] },
+        "deny",
+        "attribute-declared",
+      ),
+    ).toThrow(
+      expect.objectContaining({ message: "s2s_legacy_path_not_allowed" }),
+    );
+  });
+
+  it("delegated 票若带了 workspace 也不用它——绑定在请求体，票里的值不是判据", () => {
+    /* auth-bff 不铸这种票；钉住是为了让「票里有 workspace 就信票」这条捷径永远不出现。 */
+    const result = scopeToS2sCaller(
+      {
+        ...delegatedAtlas(),
+        workspaceId: "99999999-9999-9999-9999-999999999999",
+      },
+      { workspaceId: WS_DECLARED, productCodes: ["tenderforge"] },
+      "trust-declared",
+      "attribute-declared",
+    );
+    expect(result.workspaceId).toBe(WS_DECLARED);
   });
 });

@@ -75,10 +75,13 @@ export class PlatformEntitlementsRouter {
     // own workspace_id (the token's, not the caller-declared one) is used.
     // 旧凭据：`trust-declared`。C2 是六个产品里五个仍走共享口令的那条路
     // （生产 Redis 的 `vx:integration:c2:<code>` 可查），收紧前必须先换凭据。
-    const { workspaceId } = scopeToS2sCaller(
+    // 代上报票：`attribute-declared`——atlas 按**调用方产品**读 C2（ADR-013 D11），
+    // 问的产品就是归属产品，工作区取自报值；这一格是代上报票存在的两个理由之一。
+    const { workspaceId, reporter } = scopeToS2sCaller(
       s2sCaller,
       parsed,
       "trust-declared",
+      "attribute-declared",
     );
     if (!s2sCaller) {
       // E6（2026-10-04）：谁还在走旧凭据。只在旧头那条路上记——Bearer 调用方已有身份
@@ -99,13 +102,17 @@ export class PlatformEntitlementsRouter {
     // throttles and swallows Redis failures, so this line cannot change the
     // response. Attribution: S2S = act.sub (already forced equal to the
     // requested code above); shared internal header carries no identity, so
-    // each requested code is attributed as-is.
+    // each requested code is attributed as-is. A delegated read is attributed
+    // to the product asked about, with `reporter` naming who asked (atlas) —
+    // otherwise the launch check would read "经 S2S 令牌" as "this product
+    // has moved to Bearer", which is exactly the E3a trap (设计 §4.3).
     const via = s2sCaller ? "s2s" : "internal-auth";
     for (const code of parsed.productCodes) {
       this.signals.recordEntitlementRead({
         productCode: code,
         via,
         workspaceId,
+        reporter,
       });
     }
 

@@ -17,7 +17,7 @@
  * @author AI-Generated
  * @date 2026-08-31
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import type { IntegrationSignalService } from "../platform/integration-signal.service";
 import type { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import type { PlatformEntitlementsService } from "../platform/platform-entitlements.service";
@@ -36,7 +36,12 @@ const VIEW = {
 };
 
 function makeRouter(
-  resolve = vi.fn(async () => ({ arda: VIEW, karda: VIEW })),
+  resolve: Mock<
+    (
+      workspaceId: string,
+      codes: string[],
+    ) => Promise<Record<string, typeof VIEW>>
+  > = vi.fn(async () => ({ arda: VIEW, karda: VIEW })),
 ) {
   const recordEntitlementRead = vi.fn();
   const recordLegacy = vi.fn();
@@ -53,6 +58,16 @@ const S2S_ARDA = {
   mode: "service" as const,
   orgId: null,
   workspaceId: WS_TOKEN,
+  delegated: false,
+};
+
+/** 代上报票（决策 3 PR C）：act.sub 是上报者 atlas，票里没有 workspace。 */
+const DELEGATED_ATLAS = {
+  productCode: "atlas",
+  mode: "service" as const,
+  orgId: null,
+  workspaceId: null,
+  delegated: true,
 };
 
 describe("PlatformEntitlementsRouter — E6 legacy-credential counter", () => {
@@ -100,6 +115,7 @@ describe("PlatformEntitlementsRouter — C2 last-seen signal", () => {
         mode: "service",
         orgId: null,
         workspaceId: WS_TOKEN,
+        delegated: false,
       },
     );
     expect(recordEntitlementRead).toHaveBeenCalledTimes(1);
@@ -107,6 +123,7 @@ describe("PlatformEntitlementsRouter — C2 last-seen signal", () => {
       productCode: "arda",
       via: "s2s",
       workspaceId: WS_TOKEN,
+      reporter: null,
     });
   });
 
@@ -117,9 +134,48 @@ describe("PlatformEntitlementsRouter — C2 last-seen signal", () => {
       undefined,
     );
     expect(recordEntitlementRead.mock.calls.map((c) => c[0])).toEqual([
-      { productCode: "arda", via: "internal-auth", workspaceId: WS_DECLARED },
-      { productCode: "karda", via: "internal-auth", workspaceId: WS_DECLARED },
+      {
+        productCode: "arda",
+        via: "internal-auth",
+        workspaceId: WS_DECLARED,
+        reporter: null,
+      },
+      {
+        productCode: "karda",
+        via: "internal-auth",
+        workspaceId: WS_DECLARED,
+        reporter: null,
+      },
     ]);
+  });
+
+  /*
+   * 代上报（决策 3 PR C）：atlas 按调用方产品读 C2（ADR-013 D11）。三件事一起钉：
+   *   · 问的产品（≠ act.sub）就是归属产品，工作区取自报值（票里没有）；
+   *   · 不记旧凭据计数（它有身份）；
+   *   · 信号归到被问的产品、via=s2s、**reporter=atlas**——少了 reporter，opera 会把它读成
+   *     「tenderforge 自己换票了」，而那正是 E3a 的陷阱。
+   */
+  it("delegated reporter (atlas) asking for tenderforge: declared workspace, attributed to tenderforge with reporter=atlas, not counted as legacy", async () => {
+    const { router, resolve, recordEntitlementRead, recordLegacy } = makeRouter(
+      vi.fn(async () => ({ tenderforge: VIEW })),
+    );
+    const res = await router.resolve(
+      { workspace_id: WS_DECLARED, product: "tenderforge" },
+      DELEGATED_ATLAS,
+    );
+    expect(resolve).toHaveBeenCalledWith(WS_DECLARED, ["tenderforge"]);
+    expect(recordLegacy).not.toHaveBeenCalled();
+    expect(recordEntitlementRead).toHaveBeenCalledWith({
+      productCode: "tenderforge",
+      via: "s2s",
+      workspaceId: WS_DECLARED,
+      reporter: "atlas",
+    });
+    expect(res).toMatchObject({
+      workspace_id: WS_DECLARED,
+      product: "tenderforge",
+    });
   });
 
   it("nothing is recorded when the read itself fails", async () => {

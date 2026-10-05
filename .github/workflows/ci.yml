@@ -168,8 +168,14 @@ jobs:
       # 请求体自报的 workspace，而那个值下一跳就进 SQL 的归属谓词。根治要五个产品端换凭据
       # （E2/E3，owner 的取舍 + 对外协调），在那之前守的是**别再悄悄多一处**。
       # 快照里的 trust-declared 条目是**已登记的缺口**，这个数只该减少。
+      # 2026-10-04（决策 3 PR C）起同一张快照还登记第二条「信请求体」的路：代上报票
+      # （auth-bff 为 L1 上报者 atlas 铸的 aud=vxture 票，delegated:true、无 workspace）到了每个
+      # 调用点怎么办——attribute-declared 的条目就是「一张被盗的代上报票能驱动什么」，同样只该减少。
+      # --self-test 跑解析器与两个棘轮的反例（三个实参 / 档位走变量 / 计数变多 / 旧格式快照都要红）。
       - name: S2S legacy scope guardrail
-        run: node scripts/guardrails/check-s2s-legacy-scope.mjs
+        run: |
+          node scripts/guardrails/check-s2s-legacy-scope.mjs
+          node scripts/guardrails/check-s2s-legacy-scope.mjs --self-test
 
       - name: Docs-only quality gate
         if: steps.changes.outputs.docs_only == 'true'

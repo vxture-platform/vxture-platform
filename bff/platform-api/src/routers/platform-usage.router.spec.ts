@@ -52,6 +52,10 @@ function res(): Response & { status: ReturnType<typeof vi.fn> } {
 function routerWith(opts: {
   status: "ok" | "insufficient" | "denied";
   noteThrows?: boolean;
+  /** token 形态要走到 ingest 的用例才给；缺省的 ingest 一被叫到就是错的。 */
+  ingest?: ReturnType<typeof vi.fn>;
+  /** 归属产品不在目录（代上报的 unknown_product 用例）。 */
+  unknownProduct?: boolean;
 }) {
   // 参数带上类型，mock.calls 才有形状可断言（vi.fn(async () => …) 的 calls 是 [][]）。
   const noteQuotaExhausted = vi.fn(
@@ -62,7 +66,9 @@ function routerWith(opts: {
     },
   );
   const usage = {
-    resolveProductId: vi.fn(async () => PRODUCT_ID),
+    resolveProductId: vi.fn(async () =>
+      opts.unknownProduct ? null : PRODUCT_ID,
+    ),
     isGaugeMetric: vi.fn(async () => false),
     consume: vi.fn(async () => ({
       status: opts.status,
@@ -81,17 +87,18 @@ function routerWith(opts: {
     })),
   };
   const recordLegacy = vi.fn();
+  const ingest =
+    opts.ingest ??
+    vi.fn(async () => {
+      // token 形态只在代上报那几条用例里走；别处 ingest 被叫到就是错的
+      throw new Error("tokens path must not run here");
+    });
   const router = new PlatformUsageRouter(
     usage as unknown as PlatformUsageService,
-    // token 形态在本 spec 里不走；形状上要给一个（ingest 被叫到就是错的）
-    {
-      ingest: vi.fn(async () => {
-        throw new Error("tokens path must not run here");
-      }),
-    } as unknown as TokenUsageService,
+    { ingest } as unknown as TokenUsageService,
     { record: recordLegacy } as unknown as LegacyAuthUsageService,
   );
-  return { router, usage, noteQuotaExhausted, recordLegacy };
+  return { router, usage, ingest, noteQuotaExhausted, recordLegacy };
 }
 
 const S2S_KARDA = {
@@ -99,7 +106,131 @@ const S2S_KARDA = {
   mode: "service" as const,
   orgId: null,
   workspaceId: WS,
+  delegated: false,
 };
+
+/** 代上报票（决策 3 PR C）：act.sub 是上报者 atlas，票里没有 workspace。 */
+const DELEGATED_ATLAS = {
+  productCode: "atlas",
+  mode: "service" as const,
+  orgId: null,
+  workspaceId: null,
+  delegated: true,
+};
+
+const WS_OTHER = "33333333-3333-4333-8333-333333333333";
+
+/** atlas 替 tenderforge 报的一次推理（ADR-013 D2 的 token 形态）。 */
+const tokenBody = {
+  workspace_id: WS_OTHER,
+  product: "tenderforge",
+  request_id: "req-1",
+  occurred_at: "2026-10-04T00:00:00.000Z",
+  tokens: { input: 10, output: 5, cache_write: 0, cache_read: 0 },
+};
+
+/** ingest 的返回形状（token-usage.service.ts TokenUsageResult 里 buildTokenConsumeResponse 用到的那几格）。 */
+const ingested = () => ({
+  tokenEventId: "tok-1",
+  creditsMicro: 7_500n,
+  creditSkipReason: null,
+  wholeDue: 0n,
+  consume: null,
+  replayed: false,
+});
+
+describe("代上报票（决策 3 PR C）—— consume 只收 token 形态，别的路一律 403", () => {
+  it("token 形态：归属=自报产品、工作区=自报值、ingest 收到的是 tenderforge 不是 atlas，旧凭据不记", async () => {
+    const ingest = vi.fn(async (_input: unknown) => ingested());
+    const { router, usage, recordLegacy } = routerWith({
+      status: "ok",
+      ingest,
+    });
+    const r = res();
+    const out = await router.consume(tokenBody, r, undefined, DELEGATED_ATLAS);
+    expect(usage.resolveProductId).toHaveBeenCalledWith("tenderforge");
+    expect(ingest).toHaveBeenCalledTimes(1);
+    expect(ingest.mock.calls[0]![0]).toMatchObject({
+      workspaceId: WS_OTHER,
+      productId: PRODUCT_ID,
+      productCode: "tenderforge",
+      requestId: "req-1",
+    });
+    expect(usage.readPools).toHaveBeenCalledWith(
+      WS_OTHER,
+      PRODUCT_ID,
+      "ai.credit",
+    );
+    expect(r.status).toHaveBeenCalledWith(200);
+    expect(out).toMatchObject({ token_event_id: "tok-1", credits_micro: 7500 });
+    expect(recordLegacy).not.toHaveBeenCalled();
+  });
+
+  it("token 形态 + 归属产品不在目录：400，body.message 仍是裸码 unknown_product、body.product 点名，ingest 不跑", async () => {
+    const ingest = vi.fn(async () => ingested());
+    const { router } = routerWith({
+      status: "ok",
+      ingest,
+      unknownProduct: true,
+    });
+    await expect(
+      router.consume(
+        { ...tokenBody, product: "ghost" },
+        res(),
+        undefined,
+        DELEGATED_ATLAS,
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "unknown_product",
+      response: {
+        statusCode: 400,
+        message: "unknown_product",
+        product: "ghost",
+      },
+    });
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("amount 形态（含 reserve）：403 s2s_delegated_path_not_allowed，引擎与目录都不碰", async () => {
+    const { router, usage, recordLegacy } = routerWith({ status: "ok" });
+    for (const b of [body, { ...body, intent: "reserve" }]) {
+      await expect(
+        router.consume(b, res(), undefined, DELEGATED_ATLAS),
+      ).rejects.toMatchObject({ message: "s2s_delegated_path_not_allowed" });
+    }
+    expect(usage.resolveProductId).not.toHaveBeenCalled();
+    expect(usage.consume).not.toHaveBeenCalled();
+    expect(recordLegacy).not.toHaveBeenCalled();
+  });
+
+  it("gauge：403 s2s_delegated_path_not_allowed，不落库", async () => {
+    const { router, usage } = routerWith({ status: "ok" });
+    usage.isGaugeMetric.mockResolvedValue(true);
+    await expect(
+      router.gauge(
+        {
+          workspace_id: WS_OTHER,
+          product: "tenderforge",
+          metric: "storage.bytes",
+          value: 7,
+          observed_at: "2026-10-04T00:00:00.000Z",
+        },
+        DELEGATED_ATLAS,
+      ),
+    ).rejects.toMatchObject({ message: "s2s_delegated_path_not_allowed" });
+    expect(usage.recordGauge).not.toHaveBeenCalled();
+  });
+
+  it("产品票（非 delegated）报别人的 token：仍是 403 s2s_product_mismatch——代上报档位不松动产品票", async () => {
+    const ingest = vi.fn(async () => ingested());
+    const { router } = routerWith({ status: "ok", ingest });
+    await expect(
+      router.consume(tokenBody, res(), undefined, S2S_KARDA),
+    ).rejects.toMatchObject({ message: "s2s_product_mismatch" });
+    expect(ingest).not.toHaveBeenCalled();
+  });
+});
 
 describe("E6 —— 旧凭据计数只在旧头那条路上", () => {
   it("consume · 旧头（无 s2sCaller）：记一笔 usage.consume，按自报产品码", async () => {

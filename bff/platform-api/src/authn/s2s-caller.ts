@@ -13,11 +13,26 @@
 import { createParamDecorator, type ExecutionContext } from "@nestjs/common";
 
 export interface S2sCallerCtx {
-  /** act.sub — the calling product's product_code. */
+  /**
+   * act.sub — the calling product's product_code. On a delegated ticket it is
+   * the L1 reporter's client_id (today `"atlas"`), which is NOT a catalog
+   * product: see `delegated`.
+   */
   productCode: string;
   mode: "obo" | "service";
   orgId: string | null;
   workspaceId: string | null;
+  /**
+   * The ticket's `delegated` claim (decision 3 PR C, 2026-10-04 — L3 分层设计
+   * §4.3 形态 A). `true` only on a delegated-reporter ticket minted by
+   * auth-bff for an allowlisted L1 reporter: the reporter attributes usage
+   * to the CALLER product (ADR-013 D1), so `act.sub` names the reporter, the
+   * request's declared product is the ATTRIBUTED product, and the ticket
+   * carries no workspace (the declared one is used — `scopeToS2sCaller`).
+   * `false` on every product ticket; the guard sets it from the claim, never
+   * from the request.
+   */
+  delegated: boolean;
 }
 
 /**
