@@ -22,8 +22,11 @@ import type {
   OrderRecord,
   OrderStatus,
   RefundPolicy,
+  RefundRecipient,
   RefundRecordView,
+  RefundTransferChannel,
 } from "../types/order.types";
+import { maskBankAccount } from "../bank-account-mask";
 
 interface OrderRow {
   id: string;
@@ -89,9 +92,45 @@ interface RefundRow {
   refund_status: string;
   refund_at: Date | null;
   created_at: Date;
+  // 「已发起转账」段（2026-12-01）
+  transfer_channel: string | null;
+  transfer_reference: string | null;
+  transfer_initiated_at: Date | null;
+  transfer_initiated_by: string | null;
+  /** pg 把 `date` 解析成本地午夜的 Date；也可能是 text（显式 ::text 投影时）。 */
+  transfer_date: Date | string | null;
+  transfer_attempt: number | string | null;
+  payout_account_id: string | null;
+  payout_account_label: string | null;
+  recipient_account_name: string | null;
+  recipient_bank_name: string | null;
+  recipient_bank_account: string | null;
+}
+
+/**
+ * `date` 列 → `YYYY-MM-DD`。node-pg 把 DATE 解析成**本地**午夜的 Date，所以要按本地分量取回，
+ * 用 toISOString 会在东八区把日期往前拨一天。
+ */
+function dateOnly(value: Date | string | null): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value.slice(0, 10);
+  const y = value.getFullYear();
+  const m = String(value.getMonth() + 1).padStart(2, "0");
+  const d = String(value.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function mapRefund(r: RefundRow): RefundRecordView {
+  const recipient =
+    r.recipient_account_name &&
+    r.recipient_bank_name &&
+    r.recipient_bank_account
+      ? {
+          accountName: r.recipient_account_name,
+          bankName: r.recipient_bank_name,
+          bankAccount: r.recipient_bank_account,
+        }
+      : null;
   return {
     id: r.id,
     refundNo: r.refund_no,
@@ -105,7 +144,35 @@ function mapRefund(r: RefundRow): RefundRecordView {
     requestedAt: r.created_at,
     auditedAt: r.audit_at,
     refundedAt: r.refund_at,
+    transferChannel:
+      (r.transfer_channel as RefundRecordView["transferChannel"]) ?? null,
+    transferReference: r.transfer_reference ?? null,
+    transferInitiatedAt: r.transfer_initiated_at ?? null,
+    transferInitiatedBy: r.transfer_initiated_by ?? null,
+    transferDate: dateOnly(r.transfer_date ?? null),
+    transferAttempt: Number(r.transfer_attempt ?? 0),
+    payoutAccountId: r.payout_account_id ?? null,
+    payoutAccountLabel: r.payout_account_label ?? null,
+    recipient,
   };
+}
+
+/**
+ * 23505 按约束名分流成 409（2026-12-01）。两道库级门各有自己的话：
+ *   uq_refunds_one_live_per_order —— 该订单另有在途退款单（先处置它）；
+ *   uq_refunds_transfer_reference —— 该流水号已登记在别的退款单上。
+ * 不是这两个约束的 23505 原样抛出（那是别的问题，不该被说成这两句）。
+ */
+function isUniqueViolation(
+  err: unknown,
+  constraint: string,
+): err is Error & { code: string; constraint: string } {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "23505" &&
+    (err as { constraint?: unknown }).constraint === constraint
+  );
 }
 
 /** 退款判定输入（product_330 §5）。 */
@@ -123,6 +190,11 @@ export interface RefundBasis {
    */
   consumableShare: number | null;
   payRecordId: string | null;
+  /**
+   * 那条现金腿的付款渠道（billing.payments.pay_channel：'bank' / 'alipay'，2026-12-01）。
+   * 客户申请退款时「银行付的单必须填收款账户」这条规则按它判；null = 没有现金腿或渠道没记。
+   */
+  payChannel: string | null;
   invoiceId: string | null;
   /** 未被驳回/失败的既有退款单 */
   existingRefundId: string | null;
@@ -885,6 +957,7 @@ export class PgOrderRepository {
       usage_limit: string | null;
       consumable_share: string | null;
       pay_record_id: string | null;
+      pay_channel: string | null;
       invoice_id: string | null;
       existing_refund: string | null;
     }>(
@@ -901,6 +974,11 @@ export class PgOrderRepository {
            join billing.invoices i on i.id = p.bill_id
           where i.order_id = o.id and p.pay_status = 'paid'
           order by (p.pay_source = 'voucher') asc, p.paid_at desc nulls last limit 1) as pay_record_id,
+         -- 同一条腿的渠道（与上面同一个排序取同一行）：退款申请按它判「银行付的单要填收款账户」。
+         (select p.pay_channel from billing.payments p
+           join billing.invoices i on i.id = p.bill_id
+          where i.order_id = o.id and p.pay_status = 'paid'
+          order by (p.pay_source = 'voucher') asc, p.paid_at desc nulls last limit 1) as pay_channel,
          (select i.id from billing.invoices i
            where i.order_id = o.id and i.deleted_at is null
            order by i.created_at desc limit 1) as invoice_id,
@@ -941,6 +1019,7 @@ export class PgOrderRepository {
       usageRatio: limit > 0 ? Number(r.usage_used ?? 0) / limit : 0,
       consumableShare: Number.isFinite(share as number) ? share : null,
       payRecordId: r.pay_record_id,
+      payChannel: r.pay_channel,
       invoiceId: r.invoice_id,
       existingRefundId: r.existing_refund,
     };
@@ -985,32 +1064,50 @@ export class PgOrderRepository {
      */
     createdByType?: "customer" | "operator";
     clientIp?: string | null;
+    /**
+     * 客户申请时填的收款账户（2026-12-01）。银行付的单必填、支付宝付的单选填——那条规则在
+     * 调用方（console-bff 的 refund-request）判；这里只落列。运营发起转账前可改正。
+     */
+    recipient?: RefundRecipient | null;
   }): Promise<RefundRecordView> {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
-      const res = await client.query<RefundRow>(
-        `insert into billing.refunds (
-           tenant_id, bill_id, pay_record_id, order_id, refund_no,
-           refund_amount, currency, refund_reason, refund_type,
-           audit_status, refund_status, created_by_type, created_by_id, created_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $10,
-                   'pending', 'pending', $11, $9, now(), now())
-         returning *`,
-        [
-          input.order.tenantId,
-          input.invoiceId,
-          input.payRecordId,
-          input.order.id,
-          visibleCode("RFD"),
-          input.amount ?? input.order.payableAmount,
-          input.order.currency,
-          input.reason,
-          input.userId,
-          input.refundType ?? "normal",
-          input.createdByType ?? "customer",
-        ],
-      );
+      const res = await client
+        .query<RefundRow>(
+          `insert into billing.refunds (
+             tenant_id, bill_id, pay_record_id, order_id, refund_no,
+             refund_amount, currency, refund_reason, refund_type,
+             audit_status, refund_status, created_by_type, created_by_id,
+             recipient_account_name, recipient_bank_name, recipient_bank_account,
+             created_at, updated_at
+           ) values ($1, $2, $3, $4, $5, $6, $7, $8, $10,
+                     'pending', 'pending', $11, $9, $12, $13, $14, now(), now())
+           returning *`,
+          [
+            input.order.tenantId,
+            input.invoiceId,
+            input.payRecordId,
+            input.order.id,
+            visibleCode("RFD"),
+            input.amount ?? input.order.payableAmount,
+            input.order.currency,
+            input.reason,
+            input.userId,
+            input.refundType ?? "normal",
+            input.createdByType ?? "customer",
+            input.recipient?.accountName ?? null,
+            input.recipient?.bankName ?? null,
+            input.recipient?.bankAccount ?? null,
+          ],
+        )
+        .catch((err: unknown) => {
+          /* 库级门兜底（应用层 existing_refund 判定在前）：并发两次申请只有一张能落地。 */
+          if (isUniqueViolation(err, "uq_refunds_one_live_per_order")) {
+            throw new ConflictException("该订单已有在途退款单");
+          }
+          throw err;
+        });
       await this.insertEventTx(client, {
         orderId: input.order.id,
         eventType: "refund_requested",
@@ -1074,9 +1171,124 @@ export class PgOrderRepository {
   }
 
   /**
-   * 退款执行（运营已按原渠道打款后）：refunds → success + 冲正流水（trade_type=refund，
-   * 预付池不动、快照 before=after）+ 折抵溢出回冲（credits −= leftover，adjust 流水）
-   * + orders → refunded + order_events。订阅回滚由服务层随后经 SubscriptionService 做。
+   * 「已发起转账」（2026-12-01）：pending | failed → processing，带转账凭证；一个事务里
+   * 改退款单 + 写 order_events(refund_transfer_initiated)。
+   *
+   * WHERE 里的状态条件就是并发 CAS：两个人同时点「已发起」只有一个能命中，另一个 0 行 → 409。
+   * `transfer_attempt + 1` 让第二次发起（failed → processing）与第一次在通知去重键与事件
+   * remark 上分得开。收款账户给了就覆盖、没给就保留退款单上已有的（运营发起前可改正）。
+   *
+   * 两个部分唯一索引在这里按约束名分流成 409（见 isUniqueViolation）：撞上哪一道，就把
+   * 对方的单号查出来放进话里——「先处置它」要能指得出是谁。
+   */
+  async markRefundTransferInitiated(input: {
+    refund: Pick<RefundRecordView, "id" | "refundNo" | "orderId">;
+    order: Pick<OrderRecord, "id" | "status">;
+    channel: RefundTransferChannel;
+    reference: string;
+    /** `YYYY-MM-DD`；null = 当天（库里 current_date）。 */
+    transferDate: string | null;
+    payoutAccountLabel: string | null;
+    /** null = 保留退款单上已有的收款账户。 */
+    recipient: RefundRecipient | null;
+    remark: string | null;
+    actor: OrderActor;
+  }): Promise<RefundRecordView> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const res = await client
+        .query<RefundRow>(
+          `update billing.refunds
+              set refund_status          = 'processing',
+                  transfer_attempt       = transfer_attempt + 1,
+                  transfer_channel       = $2,
+                  transfer_reference     = $3,
+                  transfer_date          = coalesce($4::date, current_date),
+                  transfer_initiated_at  = now(),
+                  transfer_initiated_by  = $5,
+                  payout_account_label   = $6,
+                  recipient_account_name = coalesce($7, recipient_account_name),
+                  recipient_bank_name    = coalesce($8, recipient_bank_name),
+                  recipient_bank_account = coalesce($9, recipient_bank_account),
+                  updated_at             = now()
+            where id = $1 and audit_status = 'approved'
+              and refund_status in ('pending', 'failed')
+            returning *`,
+          [
+            input.refund.id,
+            input.channel,
+            input.reference,
+            input.transferDate,
+            input.actor.actorId,
+            input.payoutAccountLabel,
+            input.recipient?.accountName ?? null,
+            input.recipient?.bankName ?? null,
+            input.recipient?.bankAccount ?? null,
+          ],
+        )
+        .catch(async (err: unknown) => {
+          if (isUniqueViolation(err, "uq_refunds_transfer_reference")) {
+            await client.query("rollback");
+            const other = await this.pool.query<{ refund_no: string }>(
+              `select refund_no from billing.refunds
+                where transfer_channel = $1 and transfer_reference = $2 limit 1`,
+              [input.channel, input.reference],
+            );
+            throw new ConflictException(
+              `该流水号已登记在退款单 ${other.rows[0]?.refund_no ?? "（查不到）"}`,
+            );
+          }
+          if (isUniqueViolation(err, "uq_refunds_one_live_per_order")) {
+            await client.query("rollback");
+            const other = await this.pool.query<{ refund_no: string }>(
+              `select refund_no from billing.refunds
+                where order_id = $1 and id <> $2
+                  and audit_status <> 'rejected' and refund_status <> 'failed'
+                order by created_at desc limit 1`,
+              [input.refund.orderId, input.refund.id],
+            );
+            throw new ConflictException(
+              `该订单另有在途退款单 ${other.rows[0]?.refund_no ?? "（查不到）"}，先处置它`,
+            );
+          }
+          throw err;
+        });
+      const row = res.rows[0];
+      if (!row) throw new ConflictException("退款单不是已审核待发起转账状态");
+      const refund = mapRefund(row);
+      await this.insertEventTx(client, {
+        orderId: input.order.id,
+        eventType: "refund_transfer_initiated",
+        // 订单状态没变——事件记的是钱那一侧的事。
+        fromStatus: input.order.status,
+        toStatus: input.order.status,
+        actorType: input.actor.actorType,
+        actorId: input.actor.actorId,
+        // 只写掩码账号：remark 会上 admin 时间线，也会进审计。
+        remark:
+          `#${refund.transferAttempt} ${refund.transferChannel} ${refund.transferReference}` +
+          (refund.recipient
+            ? ` → ${maskBankAccount(refund.recipient.bankAccount)}`
+            : "") +
+          (input.remark ? `：${input.remark}` : ""),
+        clientIp: input.actor.clientIp ?? null,
+      });
+      await client.query("commit");
+      return refund;
+    } catch (err) {
+      await client.query("rollback").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 退款执行 = 「确认到账」（2026-12-01 起只认 processing：没发起过转账的单不能直接确认到账）：
+   * refunds → success + 冲正流水（trade_type=refund，预付池不动、快照 before=after）
+   * + 折抵溢出回冲（credits −= leftover，adjust 流水）+ orders → refunded + order_events。
+   * 订阅回滚由服务层随后经 SubscriptionService 做。
    */
   async executeRefund(input: {
     refund: RefundRecordView;
@@ -1156,12 +1368,12 @@ export class PgOrderRepository {
       const refundRow = await client.query<RefundRow>(
         `update billing.refunds
             set refund_status = 'success', refund_at = now(), transaction_id = $2, updated_at = now()
-          where id = $1 and audit_status = 'approved' and refund_status in ('pending', 'processing')
+          where id = $1 and audit_status = 'approved' and refund_status = 'processing'
           returning *`,
         [input.refund.id, txn.rows[0]!.id],
       );
       const refund = refundRow.rows[0];
-      if (!refund) throw new ConflictException("退款单不是已审核待执行状态");
+      if (!refund) throw new ConflictException("退款单不是转账处理中状态");
       const updated = await client.query<OrderRow>(
         `update billing.orders
             set status = 'refunded', closed_at = now(), close_reason = 'refunded', updated_at = now()
@@ -1222,6 +1434,7 @@ export class PgOrderRepository {
       );
       const row = res.rows[0];
       if (!row) throw new ConflictException("退款单不是已审核待执行状态");
+      const failed = mapRefund(row);
       await this.insertEventTx(client, {
         orderId: input.order.id,
         eventType: "refund_failed",
@@ -1230,11 +1443,19 @@ export class PgOrderRepository {
         toStatus: input.order.status,
         actorType: input.actor.actorType,
         actorId: input.actor.actorId,
-        remark: `refund ${input.refund.refundNo} failed: ${input.reason}`,
+        /*
+         * 2026-12-01 起带「第几次 渠道 流水号」：再次发起会覆盖 transfer_reference，不记进
+         * 事件就只能靠顺序推哪张回单失败了。没发起过（pending → failed）就是 #0，渠道与
+         * 流水号留 `-`。
+         */
+        remark:
+          `refund ${input.refund.refundNo} failed ` +
+          `(#${failed.transferAttempt} ${failed.transferChannel ?? "-"} ${failed.transferReference ?? "-"}): ` +
+          input.reason,
         clientIp: input.actor.clientIp ?? null,
       });
       await client.query("commit");
-      return mapRefund(row);
+      return failed;
     } catch (err) {
       await client.query("rollback");
       throw err;

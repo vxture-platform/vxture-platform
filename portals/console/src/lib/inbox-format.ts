@@ -26,6 +26,10 @@ export function inboxPresentation(templateCode: string): {
     case "refund.requested":
     case "refund.approved":
     case "refund.completed":
+    /* 2026-12-01 退款转账线：已打出 / 两条「按原渠道退回」都是退款流转的一步，归 wallet。 */
+    case "refund.transfer_initiated":
+    case "refund.approved_original_channel":
+    case "refund.completed_original_channel":
       return { level: "info", icon: "wallet" };
     case "order.fulfilled":
     case "subscription.renewed":

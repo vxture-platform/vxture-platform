@@ -1373,6 +1373,10 @@ const OPERATOR_ROLE_PERMS = {
     "tenant:profile.read",
     "tenant:quota.read",
     "user:profile.read",
+    // 退款走银行转账（2026-12-02）：客户收款账户是 PII，admin-bff 按这个码掩码；去银行
+    // 转账的人必须看明文。一道门、既有 step-up，不另立新码。存量库由
+    // 2026-12-02-finance-pii-read 迁移灌。
+    "user:pii.read",
     "commerce:subscription.read",
     "commerce:subscription.manage",
     "commerce:order.read",

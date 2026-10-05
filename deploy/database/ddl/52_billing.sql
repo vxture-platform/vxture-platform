@@ -350,6 +350,12 @@ CREATE TABLE billing.payments (
     actor_type             varchar(16)   NOT NULL DEFAULT 'customer',  -- §0.1 system/customer/operator
     actor_id               uuid,                                    -- 裸值，按 actor_type 解引用（边界#2）
     operate_remark         text,                                    -- 线下支付/手工对账备注
+    -- 申报那一刻客户看到的平台收款账户（2026-12-01 退款转账线，迁移 2026-12-01-refund-transfer-step）：
+    -- INSERT 时写、之后永不改的快照，语义上是锚点（scripts/guardrails/column-locks.shared.mjs
+    -- EXTRA_ANCHOR，98 对它们不 GRANT）。账户换了、停了，老单仍能说清钱进了哪儿。
+    -- 写入方在治理台收款账户（设计 B，admin.platform_bank_accounts）落地那天接上；今天两列恒 NULL。
+    receive_account_id     uuid,
+    receive_account_label  varchar(128),
     created_at             timestamptz   NOT NULL DEFAULT now(),
     updated_at             timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT uq_payments_pay_order_no  UNIQUE (pay_order_no),
@@ -390,6 +396,23 @@ CREATE TABLE billing.refunds (
     channel_refund_no varchar(128),                                 -- 网关退款单号（占位）
     refund_status     varchar(32)   NOT NULL DEFAULT 'pending',
     refund_at         timestamptz,
+    -- ── 「已发起转账」这一段（2026-12-01，迁移 2026-12-01-refund-transfer-step）──────────────
+    -- 此前 refund_status 只被写成 success / failed，processing 在值域里却零写入方：钱打出去了、
+    -- 还没到账的那一段没有时钟、没有凭证、没有流水号。下面十一列记这一段；pending → processing
+    -- 由「已发起转账」动作写，processing → success 由「确认到账」写，failed → processing 是再次发起。
+    -- 命名纪律：不带 `_no` 后缀——98 规则②会把 `_no` 列自动判为锚点，而流水号在「失败 → 再发起」
+    -- 时要换号、收款账号在发起前要能改正。词汇沿用 billing_addresses.bank_account。
+    transfer_channel        varchar(16),                            -- bank_transfer / alipay / legacy（legacy = 回填的存量 success 行：那时没有这一段）
+    transfer_reference      varchar(128),                           -- 银行回单号 / 支付宝退款单号
+    transfer_initiated_at   timestamptz,                            -- 发起时刻（待办 refund_processing_stuck 的时钟，两处都读它）
+    transfer_initiated_by   uuid,                                   -- 发起人恒为 operator（裸值→admin.operator_account，边界#2）
+    transfer_date           date,                                   -- 实际转账日
+    transfer_attempt        int           NOT NULL DEFAULT 0,       -- 第几次发起（通知去重键与事件 remark 都带它）
+    payout_account_id       uuid,                                   -- 平台付款账户（设计 B 落地后指向 admin.platform_bank_accounts；今天恒 NULL）
+    payout_account_label    varchar(128),                           -- 付款账户快照「中国银行 ****1234」（今天由运营手填）
+    recipient_account_name  varchar(128),                           -- 客户收款户名（PII：admin 按 user:pii.read 掩码）
+    recipient_bank_name     varchar(128),                           -- 客户开户行
+    recipient_bank_account  varchar(64),                            -- 客户收款账号（PII：落地文本只写掩码末四位）
     created_by_type   varchar(16)   NOT NULL,                       -- §0.1 customer/operator（去 system）
     created_by_id     uuid          NOT NULL,                       -- 裸值，按 type 解引用（边界#2）
     created_at        timestamptz   NOT NULL DEFAULT now(),
@@ -408,13 +431,25 @@ CREATE TABLE billing.refunds (
     -- 一条旁路 SQL 就能绕过。读法：refund_status 还在 pending 时 audit 可以是任意值，
     -- 一动（processing/success/failed）就必须已经 approved。
     CONSTRAINT chk_refunds_execute_needs_approval
-      CHECK (refund_status = 'pending' OR audit_status = 'approved')
+      CHECK (refund_status = 'pending' OR audit_status = 'approved'),
+    -- 转账段的三道门（2026-12-01，迁移 2026-12-01-refund-transfer-step）。每条写在一行：守卫按行解析。
+    --   ① transfer_channel 三值；② processing / success 必须先有「发起」的事实；③ 银行转账必须有回单号。
+    CONSTRAINT chk_refunds_transfer_channel CHECK (transfer_channel IS NULL OR transfer_channel IN ('bank_transfer','alipay','legacy')),
+    CONSTRAINT chk_refunds_moved_has_transfer CHECK (refund_status IN ('pending','failed') OR transfer_initiated_at IS NOT NULL),
+    CONSTRAINT chk_refunds_bank_needs_reference CHECK (transfer_channel IS DISTINCT FROM 'bank_transfer' OR transfer_reference IS NOT NULL)
 );
 CREATE INDEX idx_refunds_audit_status ON billing.refunds (audit_status);
 CREATE INDEX idx_refunds_tenant_id    ON billing.refunds (tenant_id);
 CREATE INDEX idx_refunds_bill_id      ON billing.refunds (bill_id);
 CREATE INDEX idx_refunds_pay_record   ON billing.refunds (pay_record_id);
 CREATE INDEX idx_refunds_order_id     ON billing.refunds (order_id);
+-- 同一张回单不能挂两张退款单（2026-12-01）。
+CREATE UNIQUE INDEX uq_refunds_transfer_reference ON billing.refunds (transfer_channel, transfer_reference) WHERE transfer_reference IS NOT NULL;
+-- 一张订单同一时刻至多一张**活**退款单（2026-12-01）。活 = 非 rejected 且非 failed——谓词与
+-- pg-order.repository.getRefundBasis 的 existing_refund 子查询逐字同义：应用层判定与库级门从此是同一条
+-- 规则的两份拷贝。failed 不算活：客户仍可再申请（既有承诺不变）；success 留在索引里，于是 A（failed）
+-- 要再发起时若已有别的活单 B 当场拒绝，B 要开出来时若 A 已是 processing / success 同样拒绝。
+CREATE UNIQUE INDEX uq_refunds_one_live_per_order ON billing.refunds (order_id) WHERE audit_status <> 'rejected' AND refund_status <> 'failed';
 
 -- 预付费实时扣费批次（~5min）【结构预留，业务陆续接】。窗口用自然时间（非订阅锚定），pay-as-you-go。
 -- idempotency_key 全局唯一防同窗口重复扣。金融例外：无 updated_at/deleted_at（仅 created_at）。

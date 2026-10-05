@@ -109,6 +109,16 @@ export const EXTRA_ANCHOR = new Set([
   "metering.product_seats.subscription_id",
   "metering.product_seats.granted_by",
   "metering.product_seats.granted_at",
+  /*
+   * 申报那一刻客户看到的平台收款账户（2026-12-01，billing.payments，退款转账线 PR-D1）。
+   * 形状上是两个普通可空列，语义上是**快照**：INSERT 时写、之后永不改——账户换了、停了，
+   * 老单仍要能说清「钱当初进了哪儿」。改它等于改写一笔已申报付款的去向。
+   * 与 tenancy.tenants.purpose 同一条理由：98 对它们不 GRANT（不然 check-column-locks 报
+   * 「漏列可写列」），check-anchor-writes 反过来盯住应用代码别去 UPDATE 它们。
+   * 写入方在治理台收款账户（设计 B）落地那天接上；今天两列恒 NULL。
+   */
+  "billing.payments.receive_account_id",
+  "billing.payments.receive_account_label",
 ]);
 
 /**

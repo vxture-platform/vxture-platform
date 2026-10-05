@@ -246,6 +246,21 @@ export const OPERATOR_MIRROR: Readonly<
     severity: "warning",
     title: (p) => `退款执行失败 · ${pick(p, "refundNo") || order(p)}`,
   },
+  /* 2026-12-01 退款转账线。「已打出」是运营自己刚登记的回执，info；两条 *_original_channel
+     与它们的本体同一档——分的是客户那边的措辞，不是运营这边的严重度。镜像锚从客户引用 id
+     派生，而发侧对 transfer_initiated 的引用 id 带第几次，所以第二次发起的镜像不会被吞。 */
+  "refund.transfer_initiated": {
+    severity: "info",
+    title: (p) => `退款已打出 ${pick(p, "amount")} · ${order(p)}`,
+  },
+  "refund.approved_original_channel": {
+    severity: "info",
+    title: (p) => `退款已审核通过 ${pick(p, "amount")} · ${order(p)}`,
+  },
+  "refund.completed_original_channel": {
+    severity: "info",
+    title: (p) => `退款已完成 ${pick(p, "amount")} · ${order(p)}`,
+  },
   /* ── 批 5（2026-09-28）的七条，逐条定过，结论是**七条全 info**。────────────
      本文件的 warning 有一个成文含义：「在等运营动手」，于是**不过期**、留在列表里
      直到有人处理。按这条判据逐条问「哪个运营动作能让这条消失」：

@@ -155,6 +155,104 @@ const NEW_CASES: Record<string, NewCase> = {
   },
 };
 
+/*
+ * 2026-12-01 退款转账线的三条。「已打出」只说哪天打出去的、到账后再通知；不写到账时限
+ * （跨行到账由银行决定，写了就是替银行许诺，owner 决策 5）。approved / completed 的本体
+ * 改成「退回到你提供的收款账户」，*_original_channel 两条保留「按原付款渠道退回」——按处境
+ * 分两句完整的话，发侧选。
+ */
+const REFUND_TRANSFER_CASES: Record<string, NewCase> = {
+  "refund.transfer_initiated": {
+    topic: "refund_progress",
+    params: { orderNo: "ORD-202612-1", amount: "¥99.00", date: "2026-12-01" },
+    mustContain: ["ORD-202612-1", "¥99.00", "2026-12-01"],
+    placeholders: ["amount", "date", "orderNo"],
+  },
+  "refund.approved_original_channel": {
+    topic: "refund_progress",
+    params: { orderNo: "ORD-202612-1", amount: "¥99.00" },
+    mustContain: ["ORD-202612-1", "¥99.00"],
+    placeholders: ["amount", "orderNo"],
+  },
+  "refund.completed_original_channel": {
+    topic: "refund_progress",
+    params: { orderNo: "ORD-202612-1", amount: "¥99.00" },
+    mustContain: ["ORD-202612-1", "¥99.00"],
+    placeholders: ["amount", "orderNo"],
+  },
+};
+
+describe("退款转账线的三条客户模板（2026-12-01）", () => {
+  it("三条，不多不少，且都在模板表里", () => {
+    expect(Object.keys(REFUND_TRANSFER_CASES)).toHaveLength(3);
+    for (const code of Object.keys(REFUND_TRANSFER_CASES)) {
+      expect(Object.keys(NOTIFICATION_TEMPLATES)).toContain(code);
+    }
+  });
+
+  for (const [code, c] of Object.entries(REFUND_TRANSFER_CASES)) {
+    const key = code as NotificationTemplateCode;
+    it(`${code} → 主题 ${c.topic}，参数集合就是约定的那几个`, () => {
+      expect(topicOf(key)).toBe(c.topic);
+      const def = NOTIFICATION_TEMPLATES[key];
+      expect(placeholders(def.title, def.body)).toEqual([...c.placeholders]);
+    });
+    for (const locale of LOCALES) {
+      it(`${code}（${locale}）渲染后带可视把手、不含 uuid、参数不留空`, () => {
+        const text = rendered(key, c.params, locale);
+        for (const v of c.mustContain) expect(text).toContain(v);
+        expect(text).not.toMatch(UUID_ANYWHERE);
+        expect(text).not.toMatch(/\{\{/);
+      });
+    }
+  }
+
+  it("「退款已打出」不写到账时限，也不解释机制", () => {
+    for (const locale of LOCALES) {
+      const text = rendered(
+        "refund.transfer_initiated",
+        REFUND_TRANSFER_CASES["refund.transfer_initiated"]!.params,
+        locale,
+      ).toLowerCase();
+      for (const promise of [
+        "工作日",
+        "小时内",
+        "天内",
+        "business day",
+        "within",
+        "hours",
+      ]) {
+        expect(text).not.toContain(promise.toLowerCase());
+      }
+      for (const mechanism of ["银行", "bank", "转账", "transfer"]) {
+        expect(text).not.toContain(mechanism.toLowerCase());
+      }
+    }
+  });
+
+  it("approved / completed 本体说「你提供的收款账户」，*_original_channel 说「原付款渠道」——两句不同", () => {
+    const t = NOTIFICATION_TEMPLATES;
+    expect(t["refund.approved"].body).toContain("你提供的收款账户");
+    expect(t["refund.completed"].body).toContain("你提供的收款账户");
+    expect(t["refund.approved_original_channel"].body).toContain("原付款渠道");
+    expect(t["refund.completed_original_channel"].body).toContain("原付款渠道");
+    expect(t["refund.approved"].body).not.toBe(
+      t["refund.approved_original_channel"].body,
+    );
+    expect(t["refund.completed"].body).not.toBe(
+      t["refund.completed_original_channel"].body,
+    );
+    for (const code of [
+      "refund.approved",
+      "refund.completed",
+      "refund.approved_original_channel",
+      "refund.completed_original_channel",
+    ] as const) {
+      expect(t[code].body).not.toContain("或者");
+    }
+  });
+});
+
 describe("批 5 的七条新客户模板", () => {
   it("七条，不多不少，且都在模板表里", () => {
     expect(Object.keys(NEW_CASES)).toHaveLength(7);
@@ -1436,8 +1534,9 @@ describe("全表通则", () => {
     /* = 模板码总数。加一条码就在这里 +1 —— 这个数字当探针的全部意义就是「加了码却没有
        任何一条用例覆盖到它」当场红。2026-09-28 收尾加两条（运营代客续期 / 升级维护暂停）：
        32 → 34。2026-09-29 成员邀请四态：34 → 38；同日账号安全线十四条：38 → 52；
-       同日工单线三条（回复 / 处理完成 / 关闭）：52 → 55。 */
-    expect(codes).toHaveLength(55);
+       同日工单线三条（回复 / 处理完成 / 关闭）：52 → 55。2026-12-01 退款转账线三条
+       （已打出 / approved 与 completed 各拆一条按原渠道退回）：55 → 58。 */
+    expect(codes).toHaveLength(58);
     for (const code of codes) {
       const { params } = markers(code);
       for (const locale of LOCALES) {

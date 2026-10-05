@@ -328,7 +328,8 @@ const PREDICATE_LITERALS = {
   refund_processing_stuck: [
     "when r.refund_status = 'processing' then 'refund_processing_stuck'",
     "when 'refund_processing_stuck'     then make_interval(hours => $9::int)",
-    "then r.updated_at + make_interval(hours => $9::int) end as escalate_from",
+    "then r.transfer_initiated_at + make_interval(hours => $9::int) end as escalate_from",
+    "when r.refund_status = 'processing'\n        then r.transfer_initiated_at",
   ],
   refund_failed: ["when r.refund_status = 'failed'     then 'refund_failed'"],
   addon_pending_confirm: [

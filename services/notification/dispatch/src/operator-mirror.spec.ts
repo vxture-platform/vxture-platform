@@ -310,6 +310,27 @@ const CASES: Record<NotificationTemplateCode, Case> = {
     title: "退款执行失败 · RFD-202609-1",
     link: "/orders/ORD-202609-1",
   },
+  /* 2026-12-01 退款转账线：三条全 info。「已打出」是运营自己刚登记的回执；两条
+     *_original_channel 只是客户那边的措辞不同。引用 id 带第几次（`:1`）——发侧对
+     transfer_initiated 这样写，第二次发起的镜像才不会撞同一个锚。 */
+  "refund.transfer_initiated": {
+    reference: refundRef("transfer_initiated:1"),
+    params: { orderNo: "ORD-202609-1", amount: "¥99.00", date: "2026-12-01" },
+    severity: "info",
+    title: "退款已打出 ¥99.00 · ORD-202609-1",
+  },
+  "refund.approved_original_channel": {
+    reference: refundRef("approved"),
+    params: { orderNo: "ORD-202609-1", amount: "¥99.00", reason: "符合条件" },
+    severity: "info",
+    title: "退款已审核通过 ¥99.00 · ORD-202609-1",
+  },
+  "refund.completed_original_channel": {
+    reference: refundRef("completed"),
+    params: { orderNo: "ORD-202609-1", amount: "¥99.00" },
+    severity: "info",
+    title: "退款已完成 ¥99.00 · ORD-202609-1",
+  },
   /* 批 5（2026-09-28）：七条**全 info**。判据是本文件对 warning 的成文含义——
      「在等运营动手，直到处理才消失」。两条认证结果是运营刚刚自己审的回执；试用到期
      没有「处理试用到期」这个动作；加油包四条客户自助再买一份即可，而且来自每趟重扫

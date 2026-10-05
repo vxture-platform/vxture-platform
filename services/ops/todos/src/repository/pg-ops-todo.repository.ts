@@ -27,8 +27,9 @@
  *   refund_execute     refunds.audit_status = 'approved' and refund_status = 'pending'
  *                                                                    rose / 3  / 等待自 audit_at（退回 updated_at）
  *   refund_processing_stuck
- *                      refunds.refund_status = 'processing' 且已停留 ≥ OPS_REFUND_STUCK_HOURS（默认 4h）
- *                                                                    rose / 6  / 等待自 updated_at
+ *                      refunds.refund_status = 'processing' 且已停留 ≥ OPS_REFUND_STUCK_HOURS（默认 72h）
+ *                                                                    rose / 6  / 等待自 transfer_initiated_at
+ *                                                                    （2026-12-01 起；此前 updated_at——改备注就归零）
  *   refund_failed      refunds.refund_status = 'failed'              rose / 4  / 等待自 updated_at
  *   subscription_overdue
  *                      metering.subscriptions.status = 'overdue' and deleted_at is null
@@ -91,9 +92,11 @@
  *   · ticket_sla             从**破约时刻**（created_at + 本档 SLA）算，破约后每再拖
  *                            OPS_ESCALATE_TICKET_SLA_HOURS 一级；四档统一一个周期——
  *                            优先级差异已在 priority 1/6/8/9 的排序里。
- *   · refund_processing_stuck 从「成为卡住」那一刻（updated_at + OPS_REFUND_STUCK_HOURS）算，
- *                            不从进入 processing 算：卡住时它已是 rose/6 且已发邮件，
- *                            再拖一个周期没落终态才升档。
+ *   · refund_processing_stuck 从「成为卡住」那一刻（transfer_initiated_at + OPS_REFUND_STUCK_HOURS）
+ *                            算，不从进入 processing 算：卡住时它已是 rose/6 且已发邮件，
+ *                            再拖一个周期没落终态才升档。2026-12-01 起两处时钟（waiting_since 与
+ *                            escalate_from）都读 transfer_initiated_at——updated_at 不能当这个时钟，
+ *                            改正收款账号、补备注都会写它，一碰就把「卡了多久」归零。
  * 其余七类升档起点 = 等待起点。
  *
  * ── 为什么严重度 / 优先级也算在 SQL 里 ──
@@ -334,6 +337,10 @@ export const ORDER_TODOS_WHERE = `  where o.status in ('pending_verify', 'paid')
 // ── refund_todos：退款单的四类待办 ───────────────────────────────────────────
 // 2026-09-28 首批只做了「待审核」；第三批把另外三格补齐——审过没执行、执行卡住、执行失败。
 // 客户的钱在外面，这三格每一格都是钱没回去而没人知道。
+// 2026-12-01 起 processing 有了写入方（OrderService.initiateRefundTransfer，「已发起转账」）：
+// 卡住那一格的时钟是 transfer_initiated_at（发起时刻），waiting_since 与 escalate_from 两处
+// 都读它——成熟门（外层 where）读的是 waiting_since，只改 escalate_from 治不到「改一次备注
+// 就把卡住时长归零」的病。refund_execute 的含义随之收紧为「审过没发起转账」，谓词不变。
 //
 // 两根状态机（audit_status → refund_status）叉乘 12 格，落在待办里的只有四格：
 //   pending  × pending     待审核        refund_audit
@@ -380,10 +387,12 @@ export const REFUND_TODOS_HEAD = `refund_todos as (
         then coalesce(r.audit_at, r.updated_at)
       when r.refund_status = 'pending'
         then r.created_at
+      when r.refund_status = 'processing'
+        then r.transfer_initiated_at
       else r.updated_at
     end                                                    as waiting_since,
     case when r.refund_status = 'processing'
-         then r.updated_at + make_interval(hours => $9::int) end as escalate_from,
+         then r.transfer_initiated_at + make_interval(hours => $9::int) end as escalate_from,
     null::text as ticket_title, null::text as ticket_priority, null::text as ticket_status,`;
 
 export const REFUND_TODOS_RICH_COLUMNS = `    ${RISK_LEVEL_SUBQUERY}   as tenant_risk_level,
@@ -1545,7 +1554,9 @@ export const DEFAULT_OPS_TODO_THRESHOLDS: OpsTodoThresholds = {
   ticketSlaHours: 4,
   maintenanceOverdueMinutes: 30,
   orderAgingHours: 24,
-  refundStuckHours: 4,
+  /* 2026-12-01 起 72：卡住的判据是「发起转账后多久没到账」，跨行到账 1–3 个工作日，4h 会把
+     每一笔正常的银行转账都报成卡住（owner 决策 4）。两份 .env example 登记同一个默认值。 */
+  refundStuckHours: 72,
 };
 
 /**

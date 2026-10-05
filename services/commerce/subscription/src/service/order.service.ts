@@ -59,7 +59,9 @@ import type {
   OrderRecord,
   RefundEligibility,
   RefundIneligibleReason,
+  RefundRecipient,
   RefundRecordView,
+  RefundTransferChannel,
 } from "../types/order.types";
 import type {
   DeclarePaymentInput,
@@ -1258,6 +1260,12 @@ export class OrderService {
       clientIp?: string | null;
       /** 发起人身份；缺省 customer（客户自助）。运营代客户退订时必须显式给 operator。 */
       actorType?: "customer" | "operator";
+      /**
+       * 客户填的收款账户（2026-12-01）。「银行付的单必填」在 console-bff 的 refund-request
+       * 端点判（它知道这次是客户在表单上申请，而不是退订顺带发起的）；退订结算那条路不带它，
+       * 运营发起转账前再补。
+       */
+      recipient?: RefundRecipient | null;
     },
   ): Promise<RefundRecordView> {
     const eligibility = await this.getRefundEligibility(orderId);
@@ -1291,6 +1299,7 @@ export class OrderService {
       userId: input.userId,
       createdByType: input.actorType ?? "customer",
       clientIp: input.clientIp ?? null,
+      recipient: input.recipient ?? null,
     });
     await this.emit(`refund_requested ${created.refundNo}`, async () =>
       this.refundNotice("refund.requested", created, order, "requested", {
@@ -1308,8 +1317,13 @@ export class OrderService {
   }
 
   /**
-   * 退款四阶段通知的共同形状：引用 = 退款单 × 阶段（去重键），金额 = 退款额，
+   * 退款各阶段通知的共同形状：引用 = 退款单 × 阶段（去重键），金额 = 退款额，
    * 收件人缺省 = 租户 owner + 订单下单人。
+   *
+   * `attempt`（2026-12-01）：transfer_initiated 与 failed 两个阶段一张单会发生**多次**
+   * （失败 → 再次发起 → 又失败），引用 id 再带上第几次；否则第二次的通知撞收件箱唯一键
+   * `uq_inbox_messages_dedupe` 被 `do nothing` 静默吞掉，运营镜像跟着没有。
+   * requested / approved / rejected / completed 一张单只发生一次，照旧不带。
    */
   private refundNotice(
     templateCode: CustomerNotifyInput["templateCode"],
@@ -1319,12 +1333,19 @@ export class OrderService {
     extra: {
       params?: Record<string, string | number>;
       recipients?: string[];
+      attempt?: number;
     } = {},
   ): CustomerNotifyInput {
     return {
       tenantId: order.tenantId,
       templateCode,
-      reference: { type: "refund", id: `${refund.id}:${stage}` },
+      reference: {
+        type: "refund",
+        id:
+          extra.attempt === undefined
+            ? `${refund.id}:${stage}`
+            : `${refund.id}:${stage}:${extra.attempt}`,
+      },
       params: {
         orderNo: order.orderNo,
         amount: formatNotifyMoney(refund.amount, refund.currency),
@@ -1355,7 +1376,14 @@ export class OrderService {
     const audited = await this.orders.auditRefund({ refund, order, ...input });
     await this.emit(`refund_${input.decision} ${refund.refundNo}`, async () =>
       this.refundNotice(
-        input.decision === "approved" ? "refund.approved" : "refund.rejected",
+        input.decision === "rejected"
+          ? "refund.rejected"
+          : /* 通过时渠道还没定（发起转账那一步才选）：客户提供了收款账户就说「退回到
+               你提供的收款账户」，没提供（支付宝付的单可不填）就说「按原付款渠道退回」。
+               两种处境各一句完整的话，不在一条模板里写「或者…或者」。 */
+            refund.recipient
+            ? "refund.approved"
+            : "refund.approved_original_channel",
         refund,
         order,
         input.decision,
@@ -1366,9 +1394,11 @@ export class OrderService {
   }
 
   /**
-   * 退款执行（运营已按原渠道打款）：钱的冲正 + 订单 refunded 一个事务，随后订阅整体回到
-   * 未订阅（cancelled，end=now，含 free 前身——旧档价值已折进这张单）。订阅回滚失败不回滚
-   * 钱：记日志、留给 reconcile / 人工（订单已 refunded，订阅仍 active 是可见的异常态）。
+   * 退款执行 = 「确认到账」（2026-12-01 起**只认 processing**：钱要先「已发起转账」才谈得上
+   * 到账；没发起过就点确认是把流程跳了一步，409 把人送回「已发起转账」）：钱的冲正 + 订单
+   * refunded 一个事务，随后订阅整体回到未订阅（cancelled，end=now，含 free 前身——旧档价值
+   * 已折进这张单）。订阅回滚失败不回滚钱：记日志、留给 reconcile / 人工（订单已 refunded，
+   * 订阅仍 active 是可见的异常态）。
    */
   async executeRefund(
     refundId: string,
@@ -1382,6 +1412,11 @@ export class OrderService {
     if (refund.refundStatus === "success") {
       const order = await this.getOrder(refund.orderId);
       return { refund, order };
+    }
+    if (refund.refundStatus !== "processing") {
+      throw new ConflictException(
+        "转账尚未发起，先登记「已发起转账」再确认到账",
+      );
     }
     const order = await this.getOrder(refund.orderId);
     const done = await this.orders.executeRefund({ refund, order, actor });
@@ -1405,9 +1440,94 @@ export class OrderService {
       }
     }
     await this.emit(`refund_completed ${refund.refundNo}`, async () =>
-      this.refundNotice("refund.completed", refund, order, "completed"),
+      this.refundNotice(
+        /* 按真实走的渠道说话：银行转账 → 「已退回到你提供的收款账户」；支付宝（与回填的
+           legacy）→ 「已退回原付款渠道」。 */
+        refund.transferChannel === "bank_transfer"
+          ? "refund.completed"
+          : "refund.completed_original_channel",
+        refund,
+        order,
+        "completed",
+      ),
     );
     return done;
+  }
+
+  /**
+   * 「已发起转账」（2026-12-01，设计 A）：pending | failed → processing，带转账凭证。
+   *
+   * 此前退款只有「审 → 钱已经打出去了」两段：中间那段（钱打出去了、还没到账）在值域里有
+   * （processing）却零写入方——没有时钟、没有凭证、没有流水号；failed 之后的「重新打款」是
+   * 死承诺（两条 SQL 的 WHERE 都不认 failed）。这个动作把那一段接通：
+   *   · 审核通过是前提（与 failRefund 同句式）；processing / success 都 409——processing 要去
+   *     确认到账或标失败，success 已经完了。
+   *   · channel=bank_transfer 必须有收款人三项（退款单上已有的，或本次给的；给了就覆盖）；
+   *     alipay 不要求（owner 决策 1：原渠道优先、银行始终可选）。
+   *   · 仓储一个事务改单 + 写事件，WHERE 就是并发 CAS，0 行 = 409；两个部分唯一索引撞上时
+   *     仓储按约束名分流成带对方单号的 409。
+   *   · 事务后发客户通知 `refund.transfer_initiated`，引用 id 带第几次。
+   */
+  async initiateRefundTransfer(
+    refundId: string,
+    input: {
+      channel: RefundTransferChannel;
+      reference: string;
+      /** `YYYY-MM-DD`；缺省当天。 */
+      transferDate?: string | null;
+      payoutAccountLabel?: string | null;
+      /** 缺省取退款单上已有的；给了就覆盖。 */
+      recipient?: RefundRecipient | null;
+      remark?: string | null;
+    },
+    actor: OrderActor,
+  ): Promise<RefundRecordView> {
+    const refund = await this.orders.getRefundById(refundId);
+    if (!refund) throw new NotFoundException(`退款单 ${refundId} 不存在`);
+    if (refund.auditStatus !== "approved") {
+      throw new ConflictException("退款申请未审核通过，不能发起转账");
+    }
+    if (refund.refundStatus === "processing") {
+      throw new ConflictException(
+        "转账已发起，先确认到账或标记打款失败，再发起下一次",
+      );
+    }
+    if (refund.refundStatus === "success") {
+      throw new ConflictException("退款已完成，不能再发起转账");
+    }
+    const recipient = input.recipient ?? refund.recipient;
+    if (input.channel === "bank_transfer" && !recipient) {
+      throw new ConflictException(
+        "银行转账需要收款人户名、开户行与账号，先补齐收款账户",
+      );
+    }
+    const order = await this.getOrder(refund.orderId);
+    const initiated = await this.orders.markRefundTransferInitiated({
+      refund,
+      order,
+      channel: input.channel,
+      reference: input.reference,
+      transferDate: input.transferDate ?? null,
+      payoutAccountLabel: input.payoutAccountLabel ?? null,
+      recipient: input.recipient ?? null,
+      remark: input.remark ?? null,
+      actor,
+    });
+    await this.emit(
+      `refund_transfer_initiated ${refund.refundNo} #${initiated.transferAttempt}`,
+      async () =>
+        this.refundNotice(
+          "refund.transfer_initiated",
+          refund,
+          order,
+          "transfer_initiated",
+          {
+            params: { date: initiated.transferDate ?? "" },
+            attempt: initiated.transferAttempt,
+          },
+        ),
+    );
+    return initiated;
   }
 
   /**
@@ -1500,6 +1620,10 @@ export class OrderService {
    * 订单与订阅都不动（钱没退出去，服务该怎样还怎样）。资格判定里 `refund_exists` 明确
    * 排除 `failed`，所以客户还能再申请一次——但 24 小时窗口仍在走，拖过窗口就真的退不了，
    * 这一点写在通知文案里让客户尽快联系客服。
+   *
+   * 2026-12-01 起 failed 不再是死胡同：运营可「再次发起」（initiateRefundTransfer 的 WHERE
+   * 含 failed），客户再申请与运营再发起两条路由库级索引 uq_refunds_one_live_per_order 互斥、
+   * 先到先得。通知引用 id 带第几次（见 refundNotice）——同一张单第二次失败的通知不能被吞。
    */
   async failRefund(
     refundId: string,
@@ -1514,6 +1638,11 @@ export class OrderService {
     if (refund.refundStatus === "success") {
       throw new ConflictException("退款已完成，不能再标记失败");
     }
+    if (refund.refundStatus === "failed") {
+      // markRefundFailed 的 WHERE 只认 pending/processing；不先拦 failed，这里会落到 0 行
+      // 并报「不是已审核待执行状态」——与实情（已经是失败）不符。要再走一遍先「再次发起」。
+      throw new ConflictException("退款已是失败状态，如需重试请先再次发起转账");
+    }
     const order = await this.getOrder(refund.orderId);
     const failed = await this.orders.markRefundFailed({
       refund,
@@ -1522,7 +1651,9 @@ export class OrderService {
       actor,
     });
     await this.emit(`refund_failed ${refund.refundNo}`, async () =>
-      this.refundNotice("refund.failed", refund, order, "failed"),
+      this.refundNotice("refund.failed", refund, order, "failed", {
+        attempt: failed.transferAttempt,
+      }),
     );
     return failed;
   }

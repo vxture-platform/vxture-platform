@@ -655,9 +655,10 @@ describe("LIST_OPS_TODOS_SQL 的谓词字面", () => {
     expect(LIST_OPS_TODOS_SQL).toContain(
       "extract(epoch from (now() - coalesce(x.escalate_from, x.waiting_since)))",
     );
-    // 卡住的退款：从「成为卡住」那一刻（updated_at + 成熟期 $9）算，不从进入 processing 算。
+    // 卡住的退款：从「发起转账」那一刻（transfer_initiated_at + 成熟期 $9）算，不从进入 processing 算。
+    // 2026-12-01 起时钟改读 transfer_initiated_at——updated_at 被改收款账号 / 补备注写脏，会把卡住时长归零。
     expect(LIST_OPS_TODOS_SQL).toContain(
-      "case when r.refund_status = 'processing'\n         then r.updated_at + make_interval(hours => $9::int) end as escalate_from",
+      "case when r.refund_status = 'processing'\n         then r.transfer_initiated_at + make_interval(hours => $9::int) end as escalate_from",
     );
     // 加油包：申报腿最早一条 pending_verify 的时刻；没申报 → null → 不升档。
     expect(LIST_OPS_TODOS_SQL).toContain(
