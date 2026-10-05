@@ -696,7 +696,14 @@ const BASELINE = {
   //   **刻意不为这 3 条单独抽 t()**：同一块「可见性与终端」里「运营域 / 可独立订阅 /
   //   终端支持」全部写死（ProductDetailPage 自己 130 余条），只抽这一行就是 08-27 走查
   //   抓到的半中半英。要清就整页一起抽，归 opera 外壳 i18n 专项。
-  opera: 2408,
+  // 2026-10-05 2408 → 2447（+39）：模型服务商/模型的查看/添加/编辑提成二级页
+  //   （ProviderDetailPage / ModelDetailPage / ProbeInspection / WireReport /
+  //   model-service.ts）。表单文案从旧 `/model/services` 弹窗逐字搬来（净差是新增的
+  //   自检完整反馈与两张整页的壳文案）。**刻意不为这一批单独抽 t()**：opera 整体仍是
+  //   inline zh-CN（i18n 基座已统一但铺开尚早，本页旁的 registry 自己 205 条、
+  //   ProductDetailPage 155 条都写死），只抽这两张新页会造出半中半英——正是 08-27
+  //   走查抓到的坏法。归 opera 外壳 i18n 专项时整段一起抽。
+  opera: 2447,
   // 2026-09-08 290 → 321：新增注册补齐面（OnboardingPanel + /onboarding + api/oidc
   // 的两个端点客户端），随 accounts 现行体例写死中文。**刻意不为这一页单独抽 t()**：
   // 这个门户整体还没铺 i18n（同目录的 AuthLogin.tsx 自己就有 58 条），只抽新增的一页
