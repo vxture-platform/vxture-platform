@@ -59,19 +59,19 @@ m = 70%、锚价 ¥0.20 ⇒ 分母 `(1−0.7)×0.20 = 0.06`：
 
 - **admin 新增「模型换算/定价」面**：全局锚价+目标毛利；每模型「成本(四维,采集/手配) → 推导换算(四维,可覆盖) → 实测毛利」；预览各模型毛利趋同并点名偏离（无成本/手动覆盖）；「应用」写 `token_credit_rates` 新生效窗口行。
 - **新通道 admin-bff → platform-api（运营面鉴权，不是产品 S2S）**：`token_credit_rates` 在平台库（metering），由 platform-api 管。**不能复用 `PlatformAuthGuard`**——它认的是「任意可信产品 S2S 调用方」，拿它当门会让任何产品（karda / tenderforge…）改价。费率写必须是运营/admin 面的凭据，所以这条通道与它的 HTTP 端点一起随 admin PR 落（届时定鉴权形态）。平台侧 PR1 先落**写语义的服务**（`CreditRatesService`，纯 DB：先关旧窗口再插新行、不改价、可复算），端点留到通道就位。
-- **atlas 补成本采集端点**（已获 owner 授权改 atlas）：admin 同步每模型四维供应商价（`model_price_rules`）作为成本默认；实付成本汇总（`reqlog.upstream_cost`）供毛利对账/告警。
+- **atlas 成本采集端点已存在**（2026-10-06 核：无需改 atlas）：`GET capability/price-rules` 回每模型四维供应商单价（`ModelPriceRuleAdminRecord`：input/output/cachedInput/cacheWrite/cacheWrite1h + currency + unitTokens + 生效窗口）——这是推导的成本输入；`GET capability/logs/cost` 回实付成本汇总（`reqlog.upstream_cost`，按 model/provider、峰谷覆盖）——供毛利对账/告警。两者都挂 `OperatorAuthGuard`（运营面），与 opera-bff 现用的 atlas capability 代理同一条通道。
 - **opera 不变**：模型服务二级页（看/增/改模型 + 自检）保持；可只读显示生效换算比例，不在 opera 编辑费率。
 - **毛利/漏计量可见**：admin 预览毛利趋同；`no_rate`/`failed_attempt` 作为「有成本却没配费率＝在漏计量」的告警。
 
 ## 实现落点（待排 PR）
 
 - platform-api（**PR1**）：`CreditRatesService`——`token_credit_rates` 的写语义（新建=事务内先关同作用域旧窗口再插新行；关闭=撤覆盖回落更粗档；永不 UPDATE 价列）。复用 ADR-013 的表，无 DDL。HTTP 端点不在本 PR（见上，随 admin 通道落）。
-- atlas（**PR2**）：成本采集端点（`model_price_rules` 快照 + `reqlog.upstream_cost` 周期汇总）。
-- admin（**PR3**）：`portals/admin` 新「换算/定价」模块（锚价+目标毛利设置、每模型成本→分维费率推导、毛利趋同预览、应用）；admin-bff **运营面**费率读写 router → platform-api（新通道 + HTTP 费率端点一起落）。
+- atlas（**PR2 = 无需改**，2026-10-06 核）：成本采集端点 `capability/price-rules` + `capability/logs/cost` 已存在（OperatorAuthGuard），直接供 admin 用。
+- admin（**PR3**，剩下的主体）：`portals/admin` 新「换算/定价」模块（锚价+目标毛利设置、每模型成本→分维费率推导、毛利趋同预览、应用）；admin-bff 两条**运营面**通道——读 atlas（`price-rules` + `logs/cost`，OperatorAuthGuard，比照 opera-bff 现用代理）、写 platform-api（`token_credit_rates`，需给 platform-api 加一个**运营面**守卫，比照 atlas 的 `OperatorAuthGuard`，并把 PR1 的 `CreditRatesService` 包成 HTTP 端点）。
 - 种子：锚价 ¥0.20、目标毛利 70%（归 admin）、默认兜底费率（沿用 ADR-013）。
 - 守卫：费率行不可改（column-locks EXTRA_ANCHOR 已含价列）；写语义单元测试（事务顺序、冲突回滚）；换算推导单元测试（分维毛利=m，PR3）。
 
 ## 实现顺序
 
-分层 ADR-013（已上线）→ **PR1 平台写语义服务（CreditRatesService + 测试，无端点）** → **PR2 atlas 成本采集端点** → **PR3 admin 换算面 + 运营面通道 + HTTP 费率端点 + 锚价/目标毛利配置**。
+分层 ADR-013（已上线）→ **PR1 平台写语义服务（CreditRatesService + 测试，无端点）** → **~~PR2 atlas 成本采集端点~~（已存在，无需改）** → **PR3 admin 换算面 + 两条运营面通道 + platform-api 运营面守卫与 HTTP 费率端点 + 锚价/目标毛利配置**。
 真实成本/毛利校准待 reporting_ro 生产取数（owner 当次授权）。
