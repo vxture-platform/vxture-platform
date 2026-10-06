@@ -45,7 +45,6 @@ import { WsBasePoolJob } from "./jobs/ws-base-pool.job";
 import { CustomerNotificationsWiring } from "./notifications/customer-notifications.wiring";
 import { OperatorAlertsWiring } from "./notifications/operator-alerts.wiring";
 import { DatabaseTimezoneCheck } from "./platform/database-timezone.check";
-import { CreditRatesService } from "./platform/credit-rates.service";
 import { IntegrationSignalService } from "./platform/integration-signal.service";
 import { LegacyAuthUsageService } from "./platform/legacy-auth-usage.service";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
@@ -53,7 +52,6 @@ import { PlatformProvisioningService } from "./platform/platform-provisioning.se
 import { PlatformUsageService } from "./platform/platform-usage.service";
 import { TokenUsageService } from "./platform/token-usage.service";
 import { HealthRouter } from "./routers/health.router";
-import { PlatformCreditRatesRouter } from "./routers/platform-credit-rates.router";
 import { PlatformEntitlementsRouter } from "./routers/platform-entitlements.router";
 import { PlatformProvisioningRouter } from "./routers/platform-provisioning.router";
 import { PlatformSharingRouter } from "./routers/platform-sharing.router";
@@ -77,7 +75,6 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
   controllers: [
     HealthRouter,
     PlatformEntitlementsRouter,
-    PlatformCreditRatesRouter,
     PlatformUsageRouter,
     PlatformSharingRouter,
     PlatformProvisioningRouter,
@@ -85,8 +82,6 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
   providers: [
     PlatformEntitlementsService,
     PlatformUsageService,
-    // ADR-014：token_credit_rates 读写（admin 换算/定价落库的平台写入口）
-    CreditRatesService,
     // #547：原始 token 用量接收（同一个 /usage/consume 端点的 tokens 形态）
     TokenUsageService,
     PlatformProvisioningService,
