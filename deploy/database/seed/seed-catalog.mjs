@@ -580,6 +580,18 @@ const OPERATOR_PERMISSIONS = [
   ["pricing:policy.activate", "Activate model policy"],
   ["pricing:policy.deactivate", "Deactivate model policy"],
   ["pricing:policy.delete", "Soft-delete model policy"],
+  /* 积分换算（ADR-014）：与 price_rule（供应商成本）/ policy 并列的第三个 pricing 资源，
+     管的是 token→credit 费率（我方按 credit 收多少）。读看推导与毛利，管写 token_credit_rates。 */
+  [
+    "pricing:credit_rate.read",
+    "View credit conversion",
+    "View token→credit rates, the derived margin-equalizing rates and realized margin",
+  ],
+  [
+    "pricing:credit_rate.manage",
+    "Manage credit conversion",
+    "Set the credit anchor and target margin, and apply derived token→credit rates",
+  ],
   ["capability:runos.read", "View runos capabilities and endpoints"],
   [
     "capability:runos.manage",
@@ -898,6 +910,8 @@ const MENU_TREE = [
               "pricing:policy.activate",
               "pricing:policy.deactivate",
               "pricing:policy.delete",
+              "pricing:credit_rate.read",
+              "pricing:credit_rate.manage",
             ],
           },
           {
@@ -3181,6 +3195,18 @@ export async function seedCatalog(client) {
     ["默认档：2K tokens = 1 credit（product_220 §4.2 基线）；缓存读写同价、rerank/parse 暂为 0，运营按需另插行"],
   );
   console.log("✓  metering — token_credit_rates 默认档（2K tokens = 1 credit）");
+
+  // ── 积分换算配置（ADR-014）：锚价 ¥0.20/credit + 目标毛利 70% ────────────────
+  // 单例一行，admin 可随时调。锚价 micro-CNY/credit：¥0.20 = 200000。目标毛利 bps：70% = 7000。
+  // 换算面按「每模型成本 ÷ ((1−毛利)×锚价)」逐维反推 token_credit_rates，使各模型毛利趋同。
+  await client.query(
+    `
+    insert into metering.credit_pricing_config (singleton, anchor_micro_cny_per_credit, target_margin_bps)
+    values (true, 200000, 7000)
+    on conflict (singleton) do nothing
+  `,
+  );
+  console.log("✓  metering — credit_pricing_config（锚价 ¥0.20 / 目标毛利 70%）");
 
   // ── addon packs (加油包/扩展包目录,owner 2026-08-20 用量配额线) ──────────
   // 初步预置定价(参考市场,owner 授权;运营侧接管后在 admin 调整——upsert 仅

@@ -434,6 +434,24 @@ CREATE TABLE metering.token_credit_carry (
     CONSTRAINT chk_token_credit_carry_range CHECK (carry_micro >= 0 AND carry_micro < 1000000)
 );
 
+-- ── §6e 积分换算配置（ADR-014）：锚价 + 目标毛利，单例一行、可调 ──────────────────
+--   anchor_micro_cny_per_credit = 1 credit 值多少钱，以 micro-CNY（¥/1e6）计（¥0.20 = 200000）。
+--   target_margin_bps = 目标毛利基点（0–9999，70% = 7000）。admin 换算面按
+--   「每模型成本 ÷ ((1−毛利)×锚价)」逐维反推 token_credit_rates，使各模型毛利趋同（ADR-014）。
+--   与 token_credit_rates 的**不可改**行相反，这张是**可调**的全局推导基准（改一行即改基准），
+--   所以它的列不入 column-locks 的 EXTRA_ANCHOR。单例靠主键 + CHECK 锁成一行。
+CREATE TABLE metering.credit_pricing_config (
+    singleton                   boolean       NOT NULL DEFAULT true,
+    anchor_micro_cny_per_credit bigint        NOT NULL,
+    target_margin_bps           integer       NOT NULL,
+    updated_by                  uuid,                               -- 裸值→admin.operator_accounts（谁改的）
+    updated_at                  timestamptz   NOT NULL DEFAULT now(),
+    PRIMARY KEY (singleton),
+    CONSTRAINT chk_credit_pricing_config_singleton CHECK (singleton),
+    CONSTRAINT chk_credit_pricing_config_anchor CHECK (anchor_micro_cny_per_credit > 0),
+    CONSTRAINT chk_credit_pricing_config_margin CHECK (target_margin_bps >= 0 AND target_margin_bps < 10000)
+);
+
 -- ── §8b 原始 token 用量的幂等权威（非分区）────────────────────────────────────
 --   键 = (workspace, 调用方产品, request_id, attempt_index)。与 §8 同一个理由：键由 Atlas 自选
 --   （request_id），归属必须进键。重放回先前结果（token_event_id / credits / usage_event_id）。

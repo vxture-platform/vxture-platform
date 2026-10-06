@@ -358,6 +358,11 @@ GRANT UPDATE (effective_to, note) ON metering.token_credit_rates TO platform_svc
 REVOKE UPDATE ON metering.token_credit_carry FROM platform_svc;
 GRANT UPDATE (carry_micro, updated_at) ON metering.token_credit_carry TO platform_svc;
 
+-- metering.credit_pricing_config  [anchor: singleton（单例键）]
+--   可调的全局推导基准（ADR-014）：锚价 / 目标毛利 / 谁改的 / 何时。singleton 是单例 PK，不可改。
+REVOKE UPDATE ON metering.credit_pricing_config FROM platform_svc;
+GRANT UPDATE (anchor_micro_cny_per_credit, target_margin_bps, updated_by, updated_at) ON metering.credit_pricing_config TO platform_svc;
+
 -- metering.token_usage_idempotencies  [anchor: workspace_id, product_id, request_id, attempt_index, created_at]
 REVOKE UPDATE ON metering.token_usage_idempotencies FROM platform_svc;
 GRANT UPDATE (token_event_id, token_event_created_at, credits_micro, credit_skip_reason, whole_due, usage_event_id) ON metering.token_usage_idempotencies TO platform_svc;
