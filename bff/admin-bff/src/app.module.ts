@@ -48,6 +48,7 @@ import { OpsTodosRouter } from "./routers/ops-todos.router";
 import { PaymentsRouter } from "./routers/payments.router";
 import { SubscriptionsRouter } from "./routers/subscriptions.router";
 import { CommercialRouter } from "./routers/commercial.router";
+import { CreditPricingRouter } from "./routers/credit-pricing.router";
 import { NotificationLogsRouter } from "./routers/notification-logs.router";
 import { SearchRouter } from "./routers/search.router";
 @Module({
@@ -86,6 +87,7 @@ import { SearchRouter } from "./routers/search.router";
     PaymentsRouter,
     SubscriptionsRouter,
     CommercialRouter,
+    CreditPricingRouter,
     NotificationLogsRouter,
     // TD-036 首页聚合。2026-09-08 自 PlatformAdminsRouter 搬出——那个路由随治理平面
     // cutover(#121)整体迁去 arche 了,只剩这一个端点还有人调,不该拖着 1176 行不能删。
