@@ -178,7 +178,7 @@
     "overrides": {
       "body-parser@1": "^1.20.6",
       "body-parser@2": "^2.3.0",
-      "shell-quote": "^1.8.4",
+      "shell-quote": "^1.11.0",
       "postcss": "^8.5.23",
       "vite": "7.3.6",
       "@babel/plugin-transform-modules-systemjs": "^7.29.4",
@@ -203,7 +203,7 @@
       "proxy-addr": "^2.0.8",
       "compression": "^1.8.2",
       "source-map-js": "^1.2.2",
-      "sharp": "^0.35.4",
+      "sharp": "^0.35.5",
       "websocket-driver": "^0.7.5",
       "yaml@2": "^2.8.3"
     }
