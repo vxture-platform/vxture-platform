@@ -2874,3 +2874,110 @@ export async function fetchOpsTodos(): Promise<OpsTodo[]> {
   if (Array.isArray(body.items)) return body.items;
   throw new AdminBffError("Unexpected response shape: /api/ops/todos", 502);
 }
+
+// ── 积分换算（ADR-014 PR3b）────────────────────────────────────────────────
+// admin-bff /api/credit-pricing/*（直写平台库 metering，运营会话 + pricing:credit_rate.*）。
+// 成本仍从 atlas /api/atlas/price-rules 读；毛利对账从 /api/atlas/logs/cost 读。
+
+export interface CreditPricingConfig {
+  anchor_micro_cny_per_credit: string;
+  target_margin_bps: number;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface CreditRateRecord {
+  id: string;
+  provider_code: string | null;
+  model_code: string | null;
+  input_micro_per_1k: string;
+  output_micro_per_1k: string;
+  cache_write_micro_per_1k: string;
+  cache_read_micro_per_1k: string;
+  rerank_micro_per_candidate: string;
+  parse_micro_per_page: string;
+  effective_from: string;
+  effective_to: string | null;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface DerivedCreditRate {
+  provider_code: string | null;
+  model_code: string | null;
+  input_micro_per_1k: string;
+  output_micro_per_1k: string;
+  cache_read_micro_per_1k: string;
+  cache_write_micro_per_1k: string;
+}
+
+export interface DeriveModelCostInput {
+  provider_code?: string | null;
+  model_code: string;
+  unit_tokens: number;
+  input_unit_price: string;
+  output_unit_price: string;
+  cached_input_unit_price?: string | null;
+  cache_write_unit_price?: string | null;
+}
+
+export async function fetchCreditPricingConfig(): Promise<CreditPricingConfig> {
+  return readJsonStrict<CreditPricingConfig>("/api/credit-pricing/config");
+}
+
+export async function updateCreditPricingConfig(payload: {
+  anchor_micro_cny_per_credit: number | string;
+  target_margin_bps: number;
+}): Promise<CreditPricingConfig> {
+  return mutateJson<CreditPricingConfig>(
+    "/api/credit-pricing/config",
+    "PUT",
+    payload,
+    "Credit pricing config update failed",
+  );
+}
+
+export async function fetchCreditRates(
+  includeHistory = false,
+): Promise<CreditRateRecord[]> {
+  const res = await readJsonStrict<{ rates: CreditRateRecord[] }>(
+    `/api/credit-pricing/rates${includeHistory ? "?includeHistory=true" : ""}`,
+  );
+  return res.rates;
+}
+
+export async function deriveCreditRates(
+  models: DeriveModelCostInput[],
+): Promise<{
+  target_margin_bps: number;
+  anchor_micro_cny_per_credit: string;
+  derived: DerivedCreditRate[];
+}> {
+  return mutateJson(
+    "/api/credit-pricing/rates/derive",
+    "POST",
+    { models },
+    "Credit rate derivation failed",
+  );
+}
+
+export async function applyCreditRate(payload: {
+  provider_code?: string | null;
+  model_code?: string | null;
+  input_micro_per_1k: string;
+  output_micro_per_1k: string;
+  cache_write_micro_per_1k: string;
+  cache_read_micro_per_1k: string;
+  rerank_micro_per_candidate?: string;
+  parse_micro_per_page?: string;
+  effective_from?: string;
+  note?: string;
+}): Promise<{ created: CreditRateRecord; closed_id: string | null }> {
+  return mutateJson(
+    "/api/credit-pricing/rates",
+    "POST",
+    payload,
+    "Credit rate apply failed",
+  );
+}
