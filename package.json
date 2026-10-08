@@ -200,6 +200,7 @@
       "picomatch@2": "^2.3.2",
       "picomatch@4": "^4.0.4",
       "qs": "^6.16.0",
+      "next": "^15.5.27",
       "proxy-addr": "^2.0.8",
       "compression": "^1.8.2",
       "source-map-js": "^1.2.2",
