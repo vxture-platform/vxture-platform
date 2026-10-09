@@ -74,8 +74,21 @@ FORCE="${FORCE_PROVISION_SECRETS:-0}"
 # single client); unset = every registered client.
 
 # An RP is local iff this box holds its runtime env file.
+# Local runtime env file for a client. Almost every confidential client is an
+# app-bff (`.env.<client>-bff`), but platform-api is an S2S-only client (#562)
+# whose runtime env is `.env.platform-api` (no `-bff`). Resolve per client so it
+# is treated as local, not mis-classified remote (which would drop its secret in
+# a hand-off file nobody picks up).
+env_file_for() {
+  if [ "$1" = "platform-api" ]; then
+    printf '%s' "${PLATFORM_API_ENV_FILE:-$RUNTIME_DIR/.env.platform-api}"
+  else
+    printf '%s' "$RUNTIME_DIR/.env.${1}-bff"
+  fi
+}
+
 is_remote() {
-  [ ! -f "$RUNTIME_DIR/.env.${1}-bff" ]
+  [ ! -f "$(env_file_for "$1")" ]
 }
 
 # All active clients from the live catalog, one per line. Runs in the same
@@ -239,7 +252,7 @@ for c in $CLIENTS_DISCOVERED; do
       echo "  [skip] $c (remote) — hash already present"
     fi
   else
-    rp_file="$RUNTIME_DIR/.env.${c}-bff"
+    rp_file="$(env_file_for "$c")"
     sec="$(read_kv "$rp_file" OIDC_CLIENT_SECRET)"
     if [ "$FORCE" = "1" ] || is_unset "$sec" || is_unset "$hash"; then
       NEED+=("$c")
@@ -298,7 +311,7 @@ while IFS="$(printf '\t')" read -r c secret hash; do
     REMOTE_HANDOFF+=("$c:$secret_file")
     echo "  [ok] $c (remote) — hash → $(basename "$AUTH_ENV_FILE"), plaintext → $secret_file (0600)"
   else
-    rp_file="$RUNTIME_DIR/.env.${c}-bff"
+    rp_file="$(env_file_for "$c")"
     # Plaintext (base64url, no '$') → local RP env, unquoted.
     upsert_kv "$rp_file" OIDC_CLIENT_SECRET "$secret"
     chmod 600 "$rp_file" 2>/dev/null || true
