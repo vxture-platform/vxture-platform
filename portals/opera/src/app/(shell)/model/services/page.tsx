@@ -68,6 +68,7 @@ import {
   formatTime,
   healthMeta,
   modelStateMeta,
+  summarizeHealth,
   MODEL_TYPES,
   MODEL_MANAGE,
   ORPHAN,
@@ -76,6 +77,7 @@ import {
   type AiModelRecord,
   type LoadState,
   type ModelProviderRecord,
+  type ServiceHealthView,
 } from "@/features/atlas/model-service";
 
 /** `useSearchParams` 需要 Suspense 边界。 */
@@ -103,6 +105,7 @@ function ModelServiceContent() {
 
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
   const [models, setModels] = useState<AiModelRecord[]>([]);
+  const [health, setHealth] = useState<ServiceHealthView | null>(null);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -124,6 +127,12 @@ function ModelServiceContent() {
       ]);
       setProviders(providerRows);
       setModels(modelRows);
+      // 能力面健康是尽力而为：读失败（无权限 / Atlas 不可达）不拖垮台账主体，
+      // 只是不显示那条健康横幅。无人值守告警另有 platform-api watchdog 兜着（#562）。
+      const healthView = await api
+        .get<ServiceHealthView>("/api/atlas/health")
+        .catch(() => null);
+      setHealth(healthView);
       setLoad({ kind: "ready" });
     } catch (error) {
       setLoad({
@@ -155,6 +164,35 @@ function ModelServiceContent() {
   }, [models, providerById]);
 
   const orphanModels = modelsByProvider.get(ORPHAN) ?? [];
+
+  /** 能力面健康（configIssues / 余额 / Atlas 组件）收敛成一条横幅。 */
+  const healthSummary = useMemo(
+    () => (health ? summarizeHealth(health) : null),
+    [health],
+  );
+  const healthLines = useMemo(() => {
+    if (!healthSummary) return [] as string[];
+    const out: string[] = [];
+    if (healthSummary.routesDown.length > 0) {
+      out.push(`路由不可用：${healthSummary.routesDown.join("、")}`);
+    }
+    if (healthSummary.routesWithConfigIssues.length > 0) {
+      out.push(
+        `路由配置异常：${healthSummary.routesWithConfigIssues.join("、")}（有兜底在服务，但未按声明配好）`,
+      );
+    }
+    if (healthSummary.vendorsLow.length > 0) {
+      out.push(
+        `供应商余额不足：${healthSummary.vendorsLow
+          .map((x) => x.providerCode + (x.outOfMoney ? "（已耗尽）" : ""))
+          .join("、")}`,
+      );
+    }
+    if (healthSummary.atlasNotOk.length > 0) {
+      out.push(`Atlas 组件异常：${healthSummary.atlasNotOk.join("、")}`);
+    }
+    return out;
+  }, [healthSummary]);
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -584,15 +622,27 @@ function ModelServiceContent() {
         />
       }
       summary={
-        orphanModels.length > 0 ? (
-          /* 孤儿模型不藏。它们无法服务任何调用——挂不到 provider 就解析不出上游，
-             而这恰恰是最需要被看见的一类。 */
-          <Banner
-            tone="warning"
-            title={`${orphanModels.length} 个模型没有可解析的 Provider`}
-            description="providerId 为空、或指向一个不存在的供应商。这些模型解析不出上游，无法服务任何调用。它们列在表格下方——打开它改归属或删除。"
-          />
-        ) : null
+        <>
+          {/* 能力面健康（#562）：configIssues / 余额 / 宕机 / Atlas 组件。与上面行内
+              「健康」（真实流量派生）互补——这条是配置态，没流量也看得见。无人值守时
+              另有 platform-api watchdog 发 operator 通告。 */}
+          {healthSummary && healthSummary.total > 0 ? (
+            <Banner
+              tone={healthSummary.hasCritical ? "danger" : "warning"}
+              title={`模型服务健康：${healthSummary.total} 项待处理`}
+              description={healthLines.join("；")}
+            />
+          ) : null}
+          {orphanModels.length > 0 ? (
+            /* 孤儿模型不藏。它们无法服务任何调用——挂不到 provider 就解析不出上游，
+               而这恰恰是最需要被看见的一类。 */
+            <Banner
+              tone="warning"
+              title={`${orphanModels.length} 个模型没有可解析的 Provider`}
+              description="providerId 为空、或指向一个不存在的供应商。这些模型解析不出上游，无法服务任何调用。它们列在表格下方——打开它改归属或删除。"
+            />
+          ) : null}
+        </>
       }
       footer={
         /* 孤儿模型给出**可操作的**清单，而不是只在横幅里点名。上面那条横幅让人

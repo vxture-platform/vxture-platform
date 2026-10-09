@@ -238,6 +238,83 @@ export function healthMeta(status: string | undefined): {
   );
 }
 
+/**
+ * Atlas 能力面健康快照（#562）。与上面 provider 行的「健康」（由真实流量派生）不同：
+ * 这份是 `/capability/health` 的配置态——路由 configIssues、供应商余额、Atlas 组件，
+ * 与实时流量无关。逐字抄自 atlas service/src/health，多出来的字段忽略。
+ */
+export interface ServiceHealthView {
+  generatedAt: string;
+  models: Array<{
+    modelCode: string;
+    providerCode: string;
+    state: string;
+    detail?: string;
+  }>;
+  routes: Array<{
+    code: string;
+    state: "ok" | "degraded" | "down";
+    configIssues: Array<{
+      role: string;
+      modelCode: string;
+      code: string;
+      detail: string;
+    }>;
+  }>;
+  vendors: Array<{
+    providerCode: string;
+    state: "ok" | "balance_low" | "not_supported" | "unknown";
+    detail?: string;
+    balance?: number;
+  }>;
+  atlas: Array<{ component: string; state: string; detail?: string }>;
+}
+
+export interface CapabilityHealthSummary {
+  routesDown: string[];
+  routesWithConfigIssues: string[];
+  vendorsLow: Array<{ providerCode: string; outOfMoney: boolean }>;
+  atlasNotOk: string[];
+  hasCritical: boolean;
+  total: number;
+}
+
+/** 把一份快照收敛成「有几件该管的事」。ok 的不计——只数 warning 及以上。 */
+export function summarizeHealth(v: ServiceHealthView): CapabilityHealthSummary {
+  const routesDown = v.routes
+    .filter((r) => r.state === "down")
+    .map((r) => r.code);
+  const routesWithConfigIssues = v.routes
+    .filter((r) => r.state !== "down" && r.configIssues.length > 0)
+    .map((r) => r.code);
+  const vendorsLow = v.vendors
+    .filter((x) => x.state === "balance_low")
+    .map((x) => ({
+      providerCode: x.providerCode,
+      outOfMoney: typeof x.balance === "number" && x.balance <= 0,
+    }));
+  const atlasNotOk = v.atlas
+    .filter((c) => c.state !== "ok")
+    .map((c) => c.component);
+  const hasCritical =
+    routesDown.length > 0 ||
+    vendorsLow.some((x) => x.outOfMoney) ||
+    v.atlas.some((c) => c.state === "down");
+  const total =
+    routesDown.length +
+    routesWithConfigIssues.length +
+    vendorsLow.length +
+    atlasNotOk.length;
+  return {
+    routesDown,
+    routesWithConfigIssues,
+    vendorsLow,
+    atlasNotOk,
+    hasCritical,
+    total,
+  };
+}
+
 /** 与本仓其它页同一份写法（`RunosChangeTable` / 审计页）：解析失败就原样显示。 */
 /* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
    中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，

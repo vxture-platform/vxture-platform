@@ -222,6 +222,50 @@ export interface ProviderHealth {
   lastObservedAt: string | null;
 }
 
+/**
+ * Atlas 模型服务健康快照（#562）。逐字抄自 atlas service/src/health 的
+ * `ServiceHealthView`（不跨仓 import）；opera 代理只透传，字段多出来忽略即可。
+ */
+export interface ServiceHealthView {
+  generatedAt: string;
+  models: Array<{
+    modelCode: string;
+    providerCode: string;
+    state: string;
+    since?: string;
+    upstreamStatus?: number;
+    detail?: string;
+  }>;
+  routes: Array<{
+    code: string;
+    state: "ok" | "degraded" | "down";
+    severity: "info" | "warning" | "critical" | null;
+    primary: { modelCode: string; state: string };
+    fallback: { modelCode: string; state: string } | null;
+    configIssues: Array<{
+      role: "primary" | "fallback";
+      modelCode: string;
+      code: string;
+      detail: string;
+    }>;
+  }>;
+  vendors: Array<{
+    providerCode: string;
+    state: "ok" | "balance_low" | "not_supported" | "unknown";
+    since?: string;
+    detail?: string;
+    currency?: string;
+    balance?: number;
+    daysLeft?: number;
+  }>;
+  atlas: Array<{
+    component: string;
+    state: string;
+    since?: string;
+    detail?: string;
+  }>;
+}
+
 export interface ModelProviderRecord {
   /** 该 provider 名下**未删除**的模型数（不论启停）——就是挡住
    *  `DELETE /capability/providers/:id` 的那个数，与删除前置条件同源。列上显示 0
@@ -820,6 +864,20 @@ export class AtlasRouter {
     return this.request<ProtocolCatalogResponse>(req, "/capability/protocols", {
       contract: "protocols",
     });
+  }
+
+  // ── Health (#562) ──────────────────────────────────────────────────────────
+
+  /**
+   * 模型服务健康快照（路由 configIssues / 模型态 / 供应商余额 / Atlas 组件）。
+   * 走 operator 登录态 OBO 读 Atlas 的 operator 面 `/capability/health`——这是**当页
+   * 可见**的那一半（运维坐在页面上实时看）；无人值守告警是 platform-api 的 watchdog
+   * 那一半（#562），两边读同一份 ServiceHealthView。读权限按模型读能力。
+   */
+  @Get("health")
+  getHealth(@Req() req: Request & RequestContext): Promise<ServiceHealthView> {
+    assertCanReadModels(req);
+    return this.request<ServiceHealthView>(req, "/capability/health");
   }
 
   // ── Providers ────────────────────────────────────────────────────────────
