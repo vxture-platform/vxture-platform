@@ -1021,3 +1021,67 @@ describe("TokenExchangeService.exchange — scope 是跨仓契约（atlas TD-036
     expect(scopeOf()).toBe("tool:atlas");
   });
 });
+
+describe("TokenExchangeService.exchange — health-reader mode (platform-api→atlas, #562)", () => {
+  let m: Mocks;
+  beforeEach(() => (m = build()));
+
+  const CALLER_PLATFORM_API = { clientId: "platform-api", productCode: null };
+  const req = {
+    audience: "atlas",
+    subjectToken: undefined,
+    workspaceId: undefined,
+    orgId: undefined,
+  };
+
+  it("platform-api → aud=atlas: mints act.sub=platform-api, mode=service, scope=health:atlas, NO workspace/org", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [] }) // resolveTargetProductCode: product.products (none — atlas is not a product)
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] }) // resolveTargetProductCode: atlas oidc_clients row
+      .mockResolvedValueOnce({ rows: [{ client_id: "platform-api" }] }) // caller client row: active + platform
+      .mockResolvedValueOnce({ rows: [] }); // audit insert
+
+    const result = await m.service.exchange(CALLER_PLATFORM_API, req);
+
+    expect(result).toEqual({
+      accessToken: "signed.jwt.token",
+      expiresIn: TOKEN_EXCHANGE_TTL_SECONDS,
+    });
+    expect(m.keys.sign).toHaveBeenCalledWith(
+      { act: { sub: "platform-api" }, mode: "service", scope: "health:atlas" },
+      {
+        audience: "atlas",
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: expect.any(String),
+      },
+    );
+    // No tool:/mgmt: scope, no workspace binding.
+    const signed = m.keys.sign.mock.calls[0]![0] as Record<string, unknown>;
+    expect(signed.scope).toBe("health:atlas");
+    expect(signed).not.toHaveProperty("workspace_id");
+    expect(signed).not.toHaveProperty("delegated");
+  });
+
+  it("platform-api with a declared workspace_id: invalid_request (health ticket has no tenant context)", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] });
+    await expect(
+      m.service.exchange(CALLER_PLATFORM_API, { ...req, workspaceId: "ws-1" }),
+    ).rejects.toMatchObject({ message: "invalid_request" });
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("platform-api → aud=vxture: invalid_target (health-reader never mints the delegated-reporter audience)", async () => {
+    // resolveTargetProductCode("vxture") does one product.products lookup, then
+    // returns PLATFORM_S2S_AUDIENCE — which exchangeHealthReader rejects.
+    m.pool.query.mockResolvedValue({ rows: [] });
+    await expect(
+      m.service.exchange(CALLER_PLATFORM_API, {
+        ...req,
+        audience: PLATFORM_S2S_AUDIENCE,
+      }),
+    ).rejects.toMatchObject({ message: "invalid_target" });
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+});

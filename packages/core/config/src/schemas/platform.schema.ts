@@ -44,6 +44,16 @@ export const platformSchema = z.object({
   LOGIN_UI_BASE_URL: z.string().url().default("http://localhost:3080"),
   /** Atlas (AI model supply provider) internal S2S API base URL. */
   ATLAS_API_URL: z.string().url().default("http://localhost:3100"),
+  /**
+   * platform-api's own confidential OIDC client_id / secret (#562). Used ONLY
+   * by the model-health watchdog to mint a `health:atlas` ticket via
+   * token-exchange (health-reader grant); platform-api is otherwise a token
+   * receiver, not an RP. Secret is provisioned by
+   * scripts/27-provision-client-secrets.sh; empty (the default) = the watchdog
+   * stays dormant and logs that it is unconfigured rather than throwing.
+   */
+  OIDC_CLIENT_ID: z.string().default("platform-api"),
+  OIDC_CLIENT_SECRET: z.string().default(""),
   /** Runos (capability platform) internal management API base URL. */
   RUNOS_API_URL: z.string().url().default("http://localhost:3120"),
   /** Auth BFF internal base URL (used by proxy BFFs to delegate auth operations) */

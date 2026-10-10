@@ -33,6 +33,7 @@ import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
 import { InvitationExpiryJob } from "./jobs/invitation-expiry.job";
 import { JobHealthAlertJob } from "./jobs/job-health-alert.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
+import { ModelHealthWatchJob } from "./jobs/model-health-watch.job";
 import { OpsTodoAlertJob } from "./jobs/ops-todo-alert.job";
 import { OperatorSignalSweepJob } from "./jobs/operator-signal-sweep.job";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
@@ -42,6 +43,7 @@ import { SubscriptionRenewalJob } from "./jobs/subscription-renewal.job";
 import { TrialExpiryJob } from "./jobs/trial-expiry.job";
 import { UsageRollupJob } from "./jobs/usage-rollup.job";
 import { WsBasePoolJob } from "./jobs/ws-base-pool.job";
+import { AtlasHealthClient } from "./notifications/atlas-health.client";
 import { CustomerNotificationsWiring } from "./notifications/customer-notifications.wiring";
 import { OperatorAlertsWiring } from "./notifications/operator-alerts.wiring";
 import { DatabaseTimezoneCheck } from "./platform/database-timezone.check";
@@ -101,6 +103,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // 2026-09-28 第二批：运营侧信号巡检（业务事件 11 类 + 审计白名单动作），
     // 产出 admin.operator_notices 的系统通告；去重键挡住回看窗口的重叠。
     OperatorSignalSweepJob,
+    AtlasHealthClient,
+    ModelHealthWatchJob,
     // #231 第二段：后台作业健康（失败 + 静默）——静默是真盲区，作业死了什么都不留
     JobHealthAlertJob,
     ProvisioningDispatchJob,

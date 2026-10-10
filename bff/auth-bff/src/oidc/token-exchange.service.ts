@@ -95,7 +95,10 @@ export const PLATFORM_S2S_AUDIENCE = "vxture";
  *    `delegated: true`, no workspace (`exchangeDelegatedReporter`). Any other
  *    audience is refused on this grant.
  */
-type PlatformCallerGrant = "workspace-service" | "delegated-reporter";
+type PlatformCallerGrant =
+  | "workspace-service"
+  | "delegated-reporter"
+  | "health-reader";
 
 /**
  * Platform-level caller allowlist (2026-07-28, atlas C2/C3 wiring line):
@@ -121,6 +124,12 @@ const PLATFORM_LEVEL_S2S_CALLERS: ReadonlyMap<string, PlatformCallerGrant> =
   new Map([
     ["console", "workspace-service"],
     ["atlas", "delegated-reporter"],
+    // `platform-api` (2026-10-09, #562): the unattended model-health watchdog.
+    // It has no human operator session and no workspace — it only needs to READ
+    // Atlas health — so it gets a workspace-less `health:<target>` ticket, a
+    // third grant disjoint from both `tool:` (supply) and `mgmt:` (management).
+    // Atlas accepts it only on `GET /s2s/health` via HealthReadGuard.
+    ["platform-api", "health-reader"],
   ]);
 
 /**
@@ -201,6 +210,9 @@ export class TokenExchangeService {
         : undefined;
     if (platformGrant === "delegated-reporter") {
       return this.exchangeDelegatedReporter(caller, req);
+    }
+    if (platformGrant === "health-reader") {
+      return this.exchangeHealthReader(caller, req);
     }
     if (platformGrant === "workspace-service") {
       return this.exchangePlatformCaller(caller, req);
@@ -495,6 +507,66 @@ export class TokenExchangeService {
       workspaceId: "",
       orgId: null,
       delegated: true,
+    });
+    return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
+  }
+
+  /**
+   * health-reader (#562): mint a workspace-less `health:<target>` service
+   * ticket for the platform's model-health watchdog. Unlike delegated-reporter
+   * (which only ever mints `aud=vxture`), this one targets a real platform-level
+   * S2S audience (atlas) and carries a dedicated `health:` scope — a third plane
+   * disjoint from `tool:` (supply) and `mgmt:` (management). Atlas's
+   * HealthReadGuard accepts it ONLY on the read-only `GET /s2s/health`; it can
+   * reach neither `/v1/*` nor `/capability/*`, so the monitor's blast radius is
+   * "read health, nothing else". No workspace/org by design (a fleet-wide
+   * monitor has no tenant context).
+   */
+  private async exchangeHealthReader(
+    caller: TokenExchangeCaller,
+    req: TokenExchangeRequest,
+  ): Promise<TokenExchangeResult> {
+    if (!req.audience) {
+      throw new BadRequestException("invalid_request");
+    }
+    const target = await this.resolveTargetProductCode(req.audience);
+    if (!target || target === PLATFORM_S2S_AUDIENCE) {
+      throw new BadRequestException("invalid_target");
+    }
+    if (req.workspaceId || req.orgId) {
+      // A health ticket carries no tenant context; reject rather than silently
+      // drop, so a miswired caller is told, not quietly given a narrower token.
+      throw new BadRequestException("invalid_request");
+    }
+    const client = await this.pool.query<{ client_id: string }>(
+      `select client_id from appoidc.oidc_clients
+        where client_id = $1 and status = 'active'
+          and client_kind = 'platform'`,
+      [caller.clientId],
+    );
+    if (!client.rows[0]) {
+      throw new BadRequestException("invalid_client");
+    }
+    const jti = randomUUID();
+    const accessToken = this.keys.sign(
+      {
+        act: { sub: caller.clientId },
+        mode: "service",
+        scope: `health:${target}`,
+      },
+      {
+        audience: target,
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: jti,
+      },
+    );
+    await this.recordAudit({
+      jti,
+      callerProduct: caller.clientId,
+      targetProduct: target,
+      mode: "service",
+      workspaceId: "",
+      orgId: null,
     });
     return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
   }
