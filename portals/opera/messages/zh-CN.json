@@ -396,6 +396,18 @@
     },
     "truncated": "命中 {matched} 条，这一次只取回了前 {shown} 条（单次上限）。收窄严重度、来源或关键词再看，翻页只在取回来的这一批里。"
   },
+  "modelServicesPage": {
+    "health": {
+      "title": "模型服务健康：{count} 项待处理",
+      "routesDown": "路由不可用：{routes}",
+      "routesWithConfigIssues": "路由配置异常：{routes}（有兜底在服务，但未按声明配好）",
+      "vendorsLow": "供应商余额不足：{vendors}",
+      "vendorExhausted": "{provider}（已耗尽）",
+      "atlasNotOk": "Atlas 组件异常：{components}",
+      "listSeparator": "、",
+      "sectionSeparator": "；"
+    }
+  },
   "integrationSignals": {
     "legacyAuthThisMonth": "{count, plural, =0 {本月没有调用走旧的共享凭据。} other {本月仍有 # 次调用走旧的共享凭据。}}",
     "delegatedReporter": "最近一次权益拉取由 {reporter} 代为发起，不是这个产品自己换票调的。"

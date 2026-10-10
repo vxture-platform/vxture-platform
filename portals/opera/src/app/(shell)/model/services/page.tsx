@@ -165,7 +165,7 @@ function ModelServiceContent() {
 
   const orphanModels = modelsByProvider.get(ORPHAN) ?? [];
 
-  /** 能力面健康（configIssues / 余额 / Atlas 组件）收敛成一条横幅。 */
+  /** Summarize capability health in one banner without changing its severity. */
   const healthSummary = useMemo(
     () => (health ? summarizeHealth(health) : null),
     [health],
@@ -173,26 +173,45 @@ function ModelServiceContent() {
   const healthLines = useMemo(() => {
     if (!healthSummary) return [] as string[];
     const out: string[] = [];
+    const separator = tShared("modelServicesPage.health.listSeparator");
     if (healthSummary.routesDown.length > 0) {
-      out.push(`路由不可用：${healthSummary.routesDown.join("、")}`);
+      out.push(
+        tShared("modelServicesPage.health.routesDown", {
+          routes: healthSummary.routesDown.join(separator),
+        }),
+      );
     }
     if (healthSummary.routesWithConfigIssues.length > 0) {
       out.push(
-        `路由配置异常：${healthSummary.routesWithConfigIssues.join("、")}（有兜底在服务，但未按声明配好）`,
+        tShared("modelServicesPage.health.routesWithConfigIssues", {
+          routes: healthSummary.routesWithConfigIssues.join(separator),
+        }),
       );
     }
     if (healthSummary.vendorsLow.length > 0) {
       out.push(
-        `供应商余额不足：${healthSummary.vendorsLow
-          .map((x) => x.providerCode + (x.outOfMoney ? "（已耗尽）" : ""))
-          .join("、")}`,
+        tShared("modelServicesPage.health.vendorsLow", {
+          vendors: healthSummary.vendorsLow
+            .map((x) =>
+              x.outOfMoney
+                ? tShared("modelServicesPage.health.vendorExhausted", {
+                    provider: x.providerCode,
+                  })
+                : x.providerCode,
+            )
+            .join(separator),
+        }),
       );
     }
     if (healthSummary.atlasNotOk.length > 0) {
-      out.push(`Atlas 组件异常：${healthSummary.atlasNotOk.join("、")}`);
+      out.push(
+        tShared("modelServicesPage.health.atlasNotOk", {
+          components: healthSummary.atlasNotOk.join(separator),
+        }),
+      );
     }
     return out;
-  }, [healthSummary]);
+  }, [healthSummary, tShared]);
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -629,8 +648,12 @@ function ModelServiceContent() {
           {healthSummary && healthSummary.total > 0 ? (
             <Banner
               tone={healthSummary.hasCritical ? "danger" : "warning"}
-              title={`模型服务健康：${healthSummary.total} 项待处理`}
-              description={healthLines.join("；")}
+              title={tShared("modelServicesPage.health.title", {
+                count: healthSummary.total,
+              })}
+              description={healthLines.join(
+                tShared("modelServicesPage.health.sectionSeparator"),
+              )}
             />
           ) : null}
           {orphanModels.length > 0 ? (
