@@ -396,6 +396,9 @@
     },
     "truncated": "{matched} notices match; only the first {shown} were fetched (per-request cap). Narrow the severity, source or keyword — paging only moves within what was fetched."
   },
+  "modelMeteringPage": {
+    "description": "Every request must be metered. This page records request and token usage. Atlas meters without billing; admin price rules record upstream vendor procurement prices. The platform manages tenant sales prices and the conversion from tokens to ai.credit."
+  },
   "modelServicesPage": {
     "health": {
       "title": "Model service health: {count, plural, one {# issue needs attention} other {# issues need attention}}",

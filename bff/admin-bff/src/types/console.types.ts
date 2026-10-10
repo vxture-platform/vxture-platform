@@ -361,6 +361,10 @@ export interface ModelPriceRuleRecord {
    *  命中价的 1/30。**`null` 不是「免费」，是「没声明」**：算成本时回退到
    *  `inputUnitPrice`，只会高估不会低估。 */
   cachedInputUnitPrice: string | null;
+  /** Vendor 5-minute cache-write price; null falls back to the input price. */
+  cacheWriteUnitPrice: string | null;
+  /** Vendor 1-hour price; null falls back to the 5-minute price, then input. */
+  cacheWrite1hUnitPrice: string | null;
   state: ObjectState;
   effectiveAt: string;
   expiresAt: string | null;

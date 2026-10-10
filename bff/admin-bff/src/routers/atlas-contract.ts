@@ -4,8 +4,9 @@
  * @layer BFF
  *
  * 机制在 `@vxture-platform/shared`，这里只有**词表**——「我方读哪些字段」是本仓的事实，
- * 「怎么查」不是。清单与 opera 那份不同（admin 管商业封装：grants / price-rules /
- * policies / quotas / usage-summaries；opera 管技术供给），规矩相同。
+ * 「怎么查」不是。
+ * Admin reads vendor procurement prices, policies, grants, quotas and usage
+ * summaries; Opera manages technical supply. Both enforce the same mechanism.
  *
  * 两个 `*-bff` 之间不建依赖仍是本仓明确纪律：它们共用的是 shared，不是彼此。
  *
@@ -76,9 +77,11 @@ export const ATLAS_CONTRACT = {
       "inputUnitPrice",
       "outputUnitPrice",
       "requestUnitPrice",
-      // atlas v0.3.0 起必发（值可空，键必在）。列进来是有意的：这一列决定成本
-      // 差 30 倍，上游哪天不发了，要在入口响一声而不是在报表里安静地错。
+      // Vendor procurement rates: nullable values, but Atlas always sends
+      // these keys. Missing fields must not masquerade as undeclared prices.
       "cachedInputUnitPrice",
+      "cacheWriteUnitPrice",
+      "cacheWrite1hUnitPrice",
       "state",
       "effectiveAt",
     ],

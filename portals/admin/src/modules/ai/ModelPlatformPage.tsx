@@ -96,8 +96,10 @@ interface PriceRuleForm {
   inputUnitPrice: string;
   outputUnitPrice: string;
   requestUnitPrice: string;
-  /** 留空 = 不声明缓存价。见 `defaultPriceRuleForm` 为什么它不默认 "0"。 */
+  /** Empty cache prices are undeclared; an explicit "0" means free. */
   cachedInputUnitPrice: string;
+  cacheWriteUnitPrice: string;
+  cacheWrite1hUnitPrice: string;
   effectiveAt: string;
   expiresAt: string;
 }
@@ -106,15 +108,16 @@ function defaultPriceRuleForm(modelId: string): PriceRuleForm {
   return {
     modelId,
     billingMode: "token",
-    currency: "CNY",
+    currency: "",
     unitTokens: "1000000",
     inputUnitPrice: "0",
     outputUnitPrice: "0",
     requestUnitPrice: "0",
-    // 空字符串，不是 "0"。上面三个默认 0 是安全的（没配价就是不计费）；缓存价
-    // 的 0 却是一句具体的假话——「缓存输入免费」，对每一家供应商都不成立，而且
-    // 会被静默写进每一条新规则。空 = 没声明，算成本时回退到输入单价（只高估）。
+    // Leave cache prices undeclared so Atlas applies its procurement-cost
+    // fallback: 1-hour writes -> 5-minute writes -> ordinary input price.
     cachedInputUnitPrice: "",
+    cacheWriteUnitPrice: "",
+    cacheWrite1hUnitPrice: "",
     effectiveAt: "",
     expiresAt: "",
   };
@@ -130,6 +133,8 @@ function priceRuleFormFromRecord(rule: ModelPriceRuleRecord): PriceRuleForm {
     outputUnitPrice: rule.outputUnitPrice,
     requestUnitPrice: rule.requestUnitPrice,
     cachedInputUnitPrice: rule.cachedInputUnitPrice ?? "",
+    cacheWriteUnitPrice: rule.cacheWriteUnitPrice ?? "",
+    cacheWrite1hUnitPrice: rule.cacheWrite1hUnitPrice ?? "",
     effectiveAt: toDateTimeLocal(rule.effectiveAt),
     expiresAt: toDateTimeLocal(rule.expiresAt),
   };
@@ -764,18 +769,29 @@ export function ModelPlatformPage() {
     event.preventDefault();
     if (!priceRuleDialog) return;
 
+    const currency = priceRuleForm.currency.trim().toUpperCase();
+    if (priceRuleDialog.mode === "create" && !currency) {
+      toast({ tone: "danger", title: t("procurement.currencyRequired") });
+      return;
+    }
+
     const common: Partial<Omit<ModelPriceRuleWriteInput, "modelId">> = {
       billingMode: priceRuleForm.billingMode.trim() || "token",
-      currency: priceRuleForm.currency.trim() || "CNY",
+      currency,
       inputUnitPrice: priceRuleForm.inputUnitPrice.trim() || "0",
       outputUnitPrice: priceRuleForm.outputUnitPrice.trim() || "0",
       requestUnitPrice: priceRuleForm.requestUnitPrice.trim() || "0",
       expiresAt: priceRuleForm.expiresAt || null,
     };
-    // 没填就不发这个键——不能像上面三个那样 `|| "0"` 兜底，那会把「没声明」
-    // 写成「免费」。
-    const cachedInput = priceRuleForm.cachedInputUnitPrice.trim();
-    if (cachedInput) common.cachedInputUnitPrice = cachedInput;
+    // Omit undeclared cache rates while preserving an explicit "0".
+    for (const field of [
+      "cachedInputUnitPrice",
+      "cacheWriteUnitPrice",
+      "cacheWrite1hUnitPrice",
+    ] as const) {
+      const price = priceRuleForm[field].trim();
+      if (price !== "") common[field] = price;
+    }
     const parsedUnitTokens = Number(priceRuleForm.unitTokens);
     if (Number.isFinite(parsedUnitTokens) && parsedUnitTokens > 0) {
       common.unitTokens = parsedUnitTokens;
@@ -797,13 +813,9 @@ export function ModelPlatformPage() {
         });
         toast({ tone: "success", title: "计价规则已创建" });
       } else if (priceRuleDialog.id) {
-        // 计价规则是**追加版本化**的：atlas 的 PATCH 逐个按名拒绝 billingMode /
-        // currency / unitTokens / 三个单价 / cachedInputUnitPrice / effectiveAt
-        // ——数据库对这些列根本不授予 UPDATE，改价会篡改 reqlog 已经引用过的历史。
-        // 复用 `common` 会把它们全发出去，于是「编辑 → 保存」必然 400，报的还是
-        // 一串用户没动过的字段。这里只发 atlas 真正收的那一个。
-        //
-        // 要改价请新建一条规则，再把旧规则的 expiresAt 设过去。
+        // Procurement prices are append-versioned. Atlas rejects all price,
+        // currency, unit and effective-time edits, including cache-write rates.
+        // Change prices by creating a rule and expiring the previous version.
         await updateModelPriceRule(priceRuleDialog.id, {
           expiresAt: priceRuleForm.expiresAt || null,
         });
@@ -1217,9 +1229,9 @@ export function ModelPlatformPage() {
       <div className="grid min-w-0">
         <section
           className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
-          aria-label="计价规则管理"
+          aria-label={t("procurement.managementLabel")}
         >
-          <strong>计价规则</strong>
+          <strong>{t("procurement.title")}</strong>
           <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(priceRules.length)}
           </span>
@@ -1234,8 +1246,11 @@ export function ModelPlatformPage() {
         </section>
         <section
           className="grid min-w-0 max-w-full gap-xs"
-          aria-label="计价规则列表"
+          aria-label={t("procurement.listLabel")}
         >
+          <p className="text-body-sm text-muted-foreground">
+            {t("procurement.description")}
+          </p>
           {priceRules.length ? (
             <ListCardGrid>
               {pagedPriceRules.map((rule) => {
@@ -1304,6 +1319,22 @@ export function ModelPlatformPage() {
                         label: "缓存输入单价",
                       },
                       {
+                        key: "cache-write",
+                        value:
+                          rule.cacheWriteUnitPrice !== null
+                            ? trimUnitPrice(rule.cacheWriteUnitPrice)
+                            : t("procurement.undeclared"),
+                        label: t("procurement.cacheWritePrice"),
+                      },
+                      {
+                        key: "cache-write-1h",
+                        value:
+                          rule.cacheWrite1hUnitPrice !== null
+                            ? trimUnitPrice(rule.cacheWrite1hUnitPrice)
+                            : t("procurement.undeclared"),
+                        label: t("procurement.cacheWrite1hPrice"),
+                      },
+                      {
                         key: "unit",
                         value: formatNumber(rule.unitTokens),
                         label: "计价单位",
@@ -1315,8 +1346,8 @@ export function ModelPlatformPage() {
             </ListCardGrid>
           ) : (
             <EmptyState
-              title="暂无计价规则"
-              description="点击「新建规则」为模型配置计价。"
+              title={t("procurement.emptyTitle")}
+              description={t("procurement.emptyDescription")}
             />
           )}
         </section>
@@ -1523,7 +1554,9 @@ export function ModelPlatformPage() {
         <DialogForm
           open
           title={
-            priceRuleDialog.mode === "create" ? "新建计价规则" : "编辑计价规则"
+            priceRuleDialog.mode === "create"
+              ? t("procurement.createTitle")
+              : t("procurement.editTitle")
           }
           submitLabel={t("dialogs.actions.save")}
           cancelLabel={t("dialogs.actions.cancel")}
@@ -1533,13 +1566,13 @@ export function ModelPlatformPage() {
           }}
           onSubmit={(event) => void submitPriceRule(event)}
         >
-          {/* 载荷只发 expiresAt 是对的（atlas 逐个按名拒绝其余字段），但表单不能
-              继续邀请那些它会丢掉的输入 —— 否则 400 只是换成了一句假的「已更新」。
-              下面的追加式字段在编辑态一律禁用，与载荷保持同一句话。 */}
+          <p className="text-body-sm text-muted-foreground">
+            {t("procurement.description")}
+          </p>
+          {/* Keep immutable fields disabled to match the expiry-only update. */}
           {priceRuleDialog.mode === "edit" ? (
             <p className="text-body-sm text-muted-foreground">
-              计价规则按追加版本化：价格与生效时间不可就地修改。要改价请新建一条规则，
-              再把这一条的失效时间设过去。
+              {t("procurement.appendOnlyHint")}
             </p>
           ) : null}
           <div>
@@ -1582,11 +1615,12 @@ export function ModelPlatformPage() {
             </Field>
             <Field>
               <FieldLabel htmlFor="modelplatformpage-columns-currency">
-                {tShared("columns.currency")}
+                {t("procurement.currency")}
               </FieldLabel>
               <Input
                 id="modelplatformpage-columns-currency"
                 value={priceRuleForm.currency}
+                required
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
@@ -1594,8 +1628,11 @@ export function ModelPlatformPage() {
                     currency: event.target.value,
                   }))
                 }
-                placeholder="CNY"
+                placeholder="USD / CNY"
               />
+              <p className="text-body-sm text-muted-foreground">
+                {t("procurement.currencyHint")}
+              </p>
             </Field>
             <Field>
               <FieldLabel htmlFor="modelplatformpage-field-3">
@@ -1614,6 +1651,9 @@ export function ModelPlatformPage() {
                   }))
                 }
               />
+              <p className="text-body-sm text-muted-foreground">
+                {t("procurement.unitHint")}
+              </p>
             </Field>
           </div>
           <div>
@@ -1665,7 +1705,41 @@ export function ModelPlatformPage() {
                     cachedInputUnitPrice: event.target.value,
                   }))
                 }
-                placeholder="留空 = 不声明"
+                placeholder={t("procurement.undeclaredPlaceholder")}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-cache-write-price">
+                {t("procurement.cacheWritePrice")}
+              </FieldLabel>
+              <Input
+                id="modelplatformpage-cache-write-price"
+                value={priceRuleForm.cacheWriteUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
+                onChange={(event) =>
+                  setPriceRuleForm((old) => ({
+                    ...old,
+                    cacheWriteUnitPrice: event.target.value,
+                  }))
+                }
+                placeholder={t("procurement.undeclaredPlaceholder")}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-cache-write-1h-price">
+                {t("procurement.cacheWrite1hPrice")}
+              </FieldLabel>
+              <Input
+                id="modelplatformpage-cache-write-1h-price"
+                value={priceRuleForm.cacheWrite1hUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
+                onChange={(event) =>
+                  setPriceRuleForm((old) => ({
+                    ...old,
+                    cacheWrite1hUnitPrice: event.target.value,
+                  }))
+                }
+                placeholder={t("procurement.undeclaredPlaceholder")}
               />
             </Field>
             <Field>
@@ -1686,6 +1760,9 @@ export function ModelPlatformPage() {
               />
             </Field>
           </div>
+          <p className="text-body-sm text-muted-foreground">
+            {t("procurement.cacheFallbackHint")}
+          </p>
           <div>
             <Field>
               <FieldLabel htmlFor="modelplatformpage-field-8">
