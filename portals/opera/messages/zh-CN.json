@@ -396,6 +396,9 @@
     },
     "truncated": "命中 {matched} 条，这一次只取回了前 {shown} 条（单次上限）。收窄严重度、来源或关键词再看，翻页只在取回来的这一批里。"
   },
+  "modelMeteringPage": {
+    "description": "所有请求必须被计量。这里记录请求 / Token 用量事实。Atlas 计量但不计费，admin 的价格规则记录上游厂商采购价；租户销售价格与 Token 到 ai.credit 的换算由平台管理。"
+  },
   "modelServicesPage": {
     "health": {
       "title": "模型服务健康：{count} 项待处理",

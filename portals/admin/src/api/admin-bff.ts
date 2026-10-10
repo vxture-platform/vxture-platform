@@ -1815,7 +1815,7 @@ export async function fetchDevServices(
 // 创建/管理这条 legacy 轴。只留上方 fetchAiModelGrants 只读供运营总览观测存量。
 
 // Model providers 的创建/编辑/启停/删除已迁往 opera-bff（2026-08-11，同上）。
-// fetchModelProviders 只读留着给下面的商业写路径当 provider 上下文。
+// Read-only providers supply context for procurement prices and model policies.
 
 // ── Model price rules 写路径（B14）───────────────────────────────────────────
 // 注：后端仅提供 create/update/activate/deactivate，没有 price-rule 的 delete 端点。
@@ -1831,9 +1831,13 @@ export interface ModelPriceRuleWriteInput {
   /** 缺省 = 不声明缓存价（列留 null）。**不要为了"补齐"传 0** —— 那是在声称
    *  缓存输入免费，对每一家供应商都是假的。 */
   cachedInputUnitPrice?: string | number | null;
+  /** Vendor cache-write price per unitTokens; omit/null means undeclared. */
+  cacheWriteUnitPrice?: string | number | null;
+  /** Vendor 1-hour TTL price; omit/null falls back to 5-minute, then input. */
+  cacheWrite1hUnitPrice?: string | number | null;
   effectiveAt?: string | null;
   expiresAt?: string | null;
-  /** 仅 create 收；update 侧由 `Omit` 去掉（atlas 的 update body 不含状态）。 */
+  /** Creation only; updates accept expiry, while state uses named actions. */
   state?: ObjectState;
 }
 
@@ -1850,7 +1854,7 @@ export async function createModelPriceRule(
 
 export async function updateModelPriceRule(
   priceRuleId: string,
-  payload: Partial<Omit<ModelPriceRuleWriteInput, "modelId" | "state">>,
+  payload: Pick<ModelPriceRuleWriteInput, "expiresAt">,
 ): Promise<ModelPriceRuleRecord> {
   return mutateJson<ModelPriceRuleRecord>(
     `/api/atlas/price-rules/${encodeURIComponent(priceRuleId)}`,
