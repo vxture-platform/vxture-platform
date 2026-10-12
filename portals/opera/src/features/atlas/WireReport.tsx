@@ -15,6 +15,7 @@
  */
 
 import { Banner, StatusBadge } from "@vxture/design-system";
+import { useTranslations } from "next-intl";
 import type { AiModelRecord, ModelProviderRecord } from "./model-service";
 
 /**
@@ -25,22 +26,6 @@ import type { AiModelRecord, ModelProviderRecord } from "./model-service";
  * 实现，且失败方式是安静的：渲染出一个从来没有请求用过的描述符。
  */
 type WireOrigin = "model" | "provider" | "merged" | "default";
-
-const WIRE_ORIGIN_LABEL: Record<WireOrigin, string> = {
-  model: "本模型覆盖",
-  provider: "Provider 覆盖",
-  /**
-   * 对象类的键（`headers` / `supports` / `paramMap`）是**逐子键**合并的，所以多层
-   * 同时声明时，生效值里每个子键可能来自不同的层。
-   *
-   * 实测过一个真实例子：`supports` 的四个子键分别来自三层——`temperature` 是协议
-   * 默认、`topP` 来自 Provider、`tools`/`toolChoice` 被本模型改成 false。此时标
-   * 「本模型覆盖」会让人以为整个值由模型定，那是**这个抽屉自己在撒谎**，而它存在的
-   * 理由恰恰是消灭这种误读。
-   */
-  merged: "多层合并",
-  default: "协议默认",
-};
 
 const WIRE_ORIGIN_TONE: Record<
   WireOrigin,
@@ -92,8 +77,11 @@ function wireOriginOf(
  * 的不是——DeepSeek 关思考的开关是 `thinking: {"type":"disabled"}`，`String()`
  * 会把它渲染成 `thinking=[object Object]`，也就是把唯一要看的那部分吃掉。
  */
-function formatWireValue(value: unknown): string {
-  if (value === null) return "—（用适配器默认）";
+function formatWireValue(
+  value: unknown,
+  labels: { defaultValue: string; emptyValue: string },
+): string {
+  if (value === null) return labels.defaultValue;
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>);
     return entries.length
@@ -102,7 +90,7 @@ function formatWireValue(value: unknown): string {
             ([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`,
           )
           .join("  ")
-      : "—（空）";
+      : labels.emptyValue;
   }
   return String(value);
 }
@@ -114,6 +102,7 @@ export function WireReport({
   readonly model: AiModelRecord;
   readonly provider: ModelProviderRecord | undefined;
 }) {
+  const t = useTranslations("modelDetailPage.wire.report");
   const wire = model.resolvedWire;
   const rows: ReadonlyArray<{ key: string; value: unknown }> = [
     { key: "chatPath", value: wire.chatPath },
@@ -126,18 +115,23 @@ export function WireReport({
        模型（关掉思考的 DeepSeek）在这个抽屉里看不到自己真正的开关——抽屉存在的
        理由是「实际跑什么」，少一个键就是把它变回一句半真话。 */
     { key: "extraBody", value: wire.extraBody },
+    { key: "thinking", value: wire.thinking },
+    { key: "contextOverflow", value: wire.contextOverflow },
   ];
 
   return (
     <div className="flex flex-col gap-md">
       <Banner
         tone="info"
-        title="这是生效值，不是声明值"
-        description={`协议默认 ← Provider 的 config.wire ← 本模型的，三层叠加后的结果，由 Atlas 合并（wire schema v${wire.schemaVersion}）。标签指出每个键由哪一层声明——那是存在性判断；合并本身不在门户做，逐键合并的语义只有一份，在上游。`}
+        title={t("title")}
+        description={t("description", { version: wire.schemaVersion })}
       />
       <dl className="flex flex-col gap-sm">
         {rows.map((r) => {
           const origin = wireOriginOf(r.key, r.value, model, provider);
+          const isModeMap = r.key === "thinking";
+          const isOverflow = r.key === "contextOverflow";
+          const isJson = isModeMap || isOverflow;
           return (
             <div
               key={r.key}
@@ -145,12 +139,27 @@ export function WireReport({
             >
               <div className="flex items-center justify-between gap-sm">
                 <dt className="font-mono text-code-sm">{r.key}</dt>
-                <StatusBadge tone={WIRE_ORIGIN_TONE[origin]} dot>
-                  {WIRE_ORIGIN_LABEL[origin]}
+                <StatusBadge
+                  tone={isOverflow ? "info" : WIRE_ORIGIN_TONE[origin]}
+                  dot
+                >
+                  {isOverflow ? t("accumulated") : t(`origin.${origin}`)}
                 </StatusBadge>
               </div>
-              <dd className="font-mono text-code-sm break-all text-muted-foreground">
-                {formatWireValue(r.value)}
+              <dd className="font-mono text-code-sm whitespace-pre-wrap break-all text-muted-foreground">
+                {isJson
+                  ? r.value === undefined
+                    ? t("unavailable")
+                    : JSON.stringify(r.value, null, 2)
+                  : formatWireValue(r.value, {
+                      defaultValue: t("defaultValue"),
+                      emptyValue: t("emptyValue"),
+                    })}
+                {isJson ? (
+                  <p className="mt-2xs font-sans text-caption">
+                    {t(isModeMap ? "thinkingHint" : "contextOverflowHint")}
+                  </p>
+                ) : null}
               </dd>
             </div>
           );

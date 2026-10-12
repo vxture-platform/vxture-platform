@@ -396,6 +396,36 @@
     },
     "truncated": "{matched} notices match; only the first {shown} were fetched (per-request cap). Narrow the severity, source or keyword — paging only moves within what was fetched."
   },
+  "modelDetailPage": {
+    "wire": {
+      "advancedHint": "Optional declarations. Leave empty to follow Provider and protocol defaults.",
+      "extraBodyHint": "A static JSON object added to every request body. Leave empty to inherit. Use paramMap to rename parameters and thinking below for mode-specific fragments.",
+      "thinkingLabel": "Thinking mode mapping (JSON)",
+      "thinkingHint": "An object with off/on keys, each containing an upstream body fragment. An empty object supports that mode without adding fields; an absent mode inherits Provider's fragment. The model replaces each declared mode's entire fragment. A mode absent from every layer is unsupported (422 THINKING_MODE_UNSUPPORTED). Fragments cannot contain model, messages, stream, stream_options or system. Atlas validates these rules when saving and returns the original error.",
+      "contextOverflowLabel": "Context overflow rules (JSON)",
+      "contextOverflowHint": "An array of objects, each with a nonempty code or message. If both are given, both must match. Message matches a case-insensitive literal substring, not a regex, up to 200 characters. Rules add to built-in and Provider detection; clearing this field removes only model rules. Atlas validates these rules when saving and returns the original error.",
+      "invalidJsonTitle": "Wire configuration contains invalid JSON",
+      "invalidJson": "{field} is not valid JSON. Fix its syntax before saving.",
+      "catalogUnavailableTitle": "Could not load the protocol catalog",
+      "catalogUnavailable": "Refresh this page before saving thinking or context overflow declarations so the wire schema version comes from Atlas.",
+      "report": {
+        "title": "Effective values, after inheritance",
+        "description": "Atlas supplies the effective wire configuration (schema v{version}) from protocol defaults, Provider and model declarations. Badges indicate declaring layers. Thinking inherits per mode; context overflow rules accumulate.",
+        "origin": {
+          "model": "Model declaration",
+          "provider": "Provider declaration",
+          "merged": "Multiple layers",
+          "default": "Protocol default"
+        },
+        "accumulated": "Rules accumulate",
+        "defaultValue": "— (adapter default)",
+        "emptyValue": "— (empty)",
+        "unavailable": "Not returned by Atlas",
+        "thinkingHint": "An empty mode fragment supports that mode without extra body fields. An absent mode is unsupported (422 THINKING_MODE_UNSUPPORTED).",
+        "contextOverflowHint": "These effective additional rules extend built-in detection. Model rules add to Provider rules; clearing them cannot disable inherited or built-in detection."
+      }
+    }
+  },
   "modelMeteringPage": {
     "description": "Every request must be metered. This page records request and token usage. Atlas meters without billing; admin price rules record upstream vendor procurement prices. The platform manages tenant sales prices and the conversion from tokens to ai.credit."
   },

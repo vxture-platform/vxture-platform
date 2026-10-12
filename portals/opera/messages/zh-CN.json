@@ -396,6 +396,36 @@
     },
     "truncated": "命中 {matched} 条，这一次只取回了前 {shown} 条（单次上限）。收窄严重度、来源或关键词再看，翻页只在取回来的这一批里。"
   },
+  "modelDetailPage": {
+    "wire": {
+      "advancedHint": "可选声明，留空时跟随 Provider 与协议默认。",
+      "extraBodyHint": "每次请求都并入的静态 JSON 对象，留空＝继承。参数改名用 paramMap，按思考模式切换的片段请填写下方 thinking。",
+      "thinkingLabel": "思考模式映射（JSON）",
+      "thinkingHint": "对象只含 off/on 键，每个模式的值是上游请求体片段。空对象表示支持该模式但不追加字段；缺席模式则继承 Provider。模型按模式整体替换片段；各层都缺席时才不支持（422 THINKING_MODE_UNSUPPORTED）。片段不能含 model、messages、stream、stream_options、system。业务规则由 Atlas 在保存时校验，错误原样展示。",
+      "contextOverflowLabel": "上下文超长规则（JSON）",
+      "contextOverflowHint": "对象数组，每条至少含非空 code 或 message；两者都有时必须同时匹配。message 是大小写不敏感的字面子串，非正则，最多 200 字符。规则与内置及 Provider 检测叠加；清空只撤下模型规则。业务规则由 Atlas 在保存时校验，错误原样展示。",
+      "invalidJsonTitle": "线协议配置不是合法 JSON",
+      "invalidJson": "{field} 不是合法 JSON，请修正语法后保存。",
+      "catalogUnavailableTitle": "协议词表读取失败",
+      "catalogUnavailable": "请刷新页面后再保存 thinking 或上下文超长声明，确保线协议版本号来自 Atlas。",
+      "report": {
+        "title": "这是继承后的生效值",
+        "description": "生效线协议由 Atlas 根据协议默认、Provider 与模型声明给出（schema v{version}）。标签标示声明层；thinking 按模式继承，上下文超长规则累加。",
+        "origin": {
+          "model": "模型声明",
+          "provider": "Provider 声明",
+          "merged": "多层声明",
+          "default": "协议默认"
+        },
+        "accumulated": "规则累加",
+        "defaultValue": "—（用适配器默认）",
+        "emptyValue": "—（空）",
+        "unavailable": "Atlas 未返回此字段",
+        "thinkingHint": "模式值为空对象表示支持该模式但不追加请求体字段；缺席模式表示不支持（422 THINKING_MODE_UNSUPPORTED）。",
+        "contextOverflowHint": "这些生效的附加规则扩展内置检测。模型规则与 Provider 累加，清空模型声明不能关闭继承及内置检测。"
+      }
+    }
+  },
   "modelMeteringPage": {
     "description": "所有请求必须被计量。这里记录请求 / Token 用量事实。Atlas 计量但不计费，admin 的价格规则记录上游厂商采购价；租户销售价格与 Token 到 ai.credit 的换算由平台管理。"
   },
