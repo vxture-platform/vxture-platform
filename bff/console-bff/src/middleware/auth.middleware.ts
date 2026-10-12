@@ -103,6 +103,9 @@ export class AuthMiddleware implements NestMiddleware {
     }
     const context = req as Request & RequestContext;
     context.auth = payload;
+    const workspaceId = mapAccessClaims(outcome.claims).activeWorkspace;
+    if (workspaceId) context.activeWorkspaceId = workspaceId;
+    else delete context.activeWorkspaceId;
     context.user = user;
     // 删除保留期(050-account §7):账号还在、能登录,但工作台不可用——只放行会话恢复
     // 的几条读与删除相关的三条,其余一律 403,前端据码画「撤销删除并重新启用」。

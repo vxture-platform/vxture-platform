@@ -26,7 +26,11 @@ export class CapabilitiesRouter {
 
     return (
       req.capabilities ??
-      this.sessionAggregator.getCapabilities(req.user.id, req.tenant?.id)
+      this.sessionAggregator.getCapabilities(
+        req.user.id,
+        req.tenant?.id,
+        req.tenant?.workspace === "default" ? undefined : req.tenant?.workspace,
+      )
     );
   }
 }

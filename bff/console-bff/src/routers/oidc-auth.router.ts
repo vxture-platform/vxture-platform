@@ -69,7 +69,13 @@ export interface AuthReq {
   surface?: "native";
   /** 桌面端给的 sha256 十六进制，回调时据它绑定待领会话。 */
   handle?: string;
+  /** Requested native scope; verified against issued claims before binding. */
+  tenantId?: string;
+  workspaceId?: string;
 }
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Redis key of a pending authorize request. Shared with TenantSwitchRouter: its
@@ -138,14 +144,46 @@ export class OidcAuthRouter {
 
   /** Begin login: stash PKCE/nonce/returnTo, redirect to the IdP authorize page. */
   @Get("login")
+  @Header("Cache-Control", "no-store")
   async login(
     @Query("returnTo") returnTo: string | undefined,
     @Query("prompt") prompt: string | undefined,
     @Query("surface") surface: string | undefined,
     @Query("handle") handle: string | undefined,
+    @Query("tenantId") tenantId: unknown,
+    @Query("workspaceId") workspaceId: unknown,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    const isNative = surface === "native";
+    const hasTarget = tenantId !== undefined || workspaceId !== undefined;
+    const query = new URL(req.originalUrl, this.rt.defaultReturnTo)
+      .searchParams;
+    if (
+      ["surface", "handle", "tenantId", "workspaceId"].some(
+        (key) => query.getAll(key).length > 1,
+      ) ||
+      [...query.keys()].some((key) =>
+        /^(surface|handle|tenantId|workspaceId)\[/.test(key),
+      ) ||
+      (isNative &&
+        (typeof handle !== "string" || !/^[0-9a-f]{64}$/.test(handle))) ||
+      (!isNative && (handle !== undefined || hasTarget)) ||
+      (tenantId !== undefined &&
+        (typeof tenantId !== "string" || !UUID_RE.test(tenantId))) ||
+      (workspaceId !== undefined &&
+        (typeof workspaceId !== "string" || !UUID_RE.test(workspaceId)))
+    ) {
+      throw new BadRequestException({
+        code: "NATIVE_LOGIN_REQUEST_INVALID",
+        message:
+          "Native login requires a SHA-256 handle and unambiguous UUID scope hints",
+      });
+    }
+    const targetTenant =
+      typeof tenantId === "string" ? tenantId.toLowerCase() : undefined;
+    const targetWorkspace =
+      typeof workspaceId === "string" ? workspaceId.toLowerCase() : undefined;
     /* 上一轮刚确认过没有中央会话 → 这一轮别再静默问一遍，省掉
      * 「authorize(prompt=none) → callback(login_required) → 回门户」那 3 跳。
      * 门户 middleware 也做同一判断，这里是兜底：请求未必经过它（可直连 BFF），
@@ -162,16 +200,18 @@ export class OidcAuthRouter {
       this.rt.allowedReturnOrigins,
       this.rt.defaultReturnTo,
     );
-    /* 桌面端的两个参数**一起生效或一起不生效**：只给 surface 不给 handle，
-       回调时无从绑定，用户会登录成功而应用永远领不到——那种失败没有任何提示。
-       所以在入口就要求成对出现。 */
-    const isNative = surface === "native" && typeof handle === "string";
+    // Native inputs were validated together before creating a pending request;
+    // an incomplete handshake must never degrade into a browser login.
     const payload: AuthReq = {
       codeVerifier: verifier,
       nonce,
       returnTo: dest,
       ...(prompt && { prompt }),
-      ...(isNative ? { surface: "native" as const, handle } : {}),
+      ...(isNative && typeof handle === "string"
+        ? { surface: "native" as const, handle }
+        : {}),
+      ...(targetTenant ? { tenantId: targetTenant } : {}),
+      ...(targetWorkspace ? { workspaceId: targetWorkspace } : {}),
     };
     await this.redis.setex(
       this.authReqKey(state),
@@ -184,12 +224,15 @@ export class OidcAuthRouter {
         nonce,
         codeChallenge: challenge,
         ...(prompt !== undefined && { prompt }),
+        ...(targetTenant ? { tenantHint: targetTenant } : {}),
+        ...(targetWorkspace ? { workspaceHint: targetWorkspace } : {}),
       }),
     );
   }
 
   /** OIDC callback: exchange the code, verify, establish the RP session, set cookie. */
   @Get("callback")
+  @Header("Cache-Control", "no-store")
   async callback(
     @Query("code") code: string | undefined,
     @Query("state") state: string | undefined,
@@ -208,7 +251,7 @@ export class OidcAuthRouter {
         const raw = await this.redis.getdel(this.authReqKey(state));
         if (raw) {
           const authReq = JSON.parse(raw) as AuthReq;
-          if (authReq.prompt === "none") {
+          if (authReq.prompt === "none" && authReq.surface !== "native") {
             // 记住这次静默失败，下一次 /auth/login?prompt=none 直接转交互式。
             this.markAnonymous(res);
             res.redirect(silentFailureReturnTo(authReq.returnTo));
@@ -239,6 +282,24 @@ export class OidcAuthRouter {
       tokens.accessToken,
     );
 
+    const scope = mapAccessClaims(accessClaims);
+    // IdP hints may fall back to defaults. Never hand the desktop a session for
+    // a different scope while reporting its requested switch as successful.
+    if (
+      authReq.surface === "native" &&
+      ((authReq.tenantId && scope.activeOrg !== authReq.tenantId) ||
+        (authReq.workspaceId &&
+          (scope.activeWorkspace !== authReq.workspaceId ||
+            !scope.roles.some((role) => role.startsWith("workspace:")))))
+    ) {
+      res.status(403).json({
+        code: "NATIVE_CONTEXT_NOT_APPLIED",
+        message:
+          "The requested tenant or workspace is not accessible; no session was bound",
+      });
+      return;
+    }
+
     const session: RpSession = {
       sid: id.sid,
       sub: id.sub,
@@ -246,34 +307,40 @@ export class OidcAuthRouter {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       accessExpiresAt: tokens.accessExpiresAt,
-      activeOrg: mapAccessClaims(accessClaims).activeOrg,
+      activeOrg: scope.activeOrg,
     };
     const rpsid = randomToken();
     await this.store.create(rpsid, session, this.rt.config.sessionTtlSec);
-    /* 切租户走的是「静默重授权 → 新会话」:浏览器手里的旧 rpsid 随即被下面的
-     * Set-Cookie 覆盖,服务端那份不收就一直躺到 TTL。顺手销毁(best-effort:
-     * 收不掉也不该让登录失败)。 */
-    const previous = req.cookies?.[this.cookieName] as string | undefined;
-    if (previous && previous !== rpsid) {
-      await this.store.destroy(previous).catch(() => undefined);
-    }
 
     /* ── 桌面端：绑定待领，不种 cookie ──────────────────────────────────
        浏览器这一侧完成的是「批准」，不是「持有」。给它种 cookie 意味着系统浏览器里
        凭空多出一个没人会用的登录态——用户在浏览器里并没有要求登录 console。
        会话归应用，应用用自己那个从未外露的 deviceSecret 去领。 */
     if (authReq.surface === "native" && authReq.handle) {
-      const bound = await bindNativePending(
-        this.redis,
-        this.rt.keyPrefix,
-        authReq.handle,
-        rpsid,
-      );
-      this.clearPresence(res);
+      let bound: boolean;
+      try {
+        bound = await bindNativePending(
+          this.redis,
+          this.rt.keyPrefix,
+          authReq.handle,
+          rpsid,
+        );
+      } catch (error) {
+        await this.store.destroy(rpsid);
+        throw error;
+      }
+      if (!bound) await this.store.destroy(rpsid);
       /* 停在一个纯提示页。**URL 里不带任何凭据**——回跳地址会进浏览器历史。
          绑定失败（handle 形状不合法）也要让用户看见，否则他会一直等着应用变化。 */
       res.redirect(this.nativeDonePage(bound));
       return;
+    }
+
+    // Only browser flows replace their cookie session. Native approval must
+    // preserve the system browser's existing RP session and presence state.
+    const previous = req.cookies?.[this.cookieName] as string | undefined;
+    if (previous && previous !== rpsid) {
+      await this.store.destroy(previous).catch(() => undefined);
     }
 
     res.cookie(this.cookieName, rpsid, {

@@ -32,6 +32,7 @@ export class TenantMiddleware implements NestMiddleware {
     const tenant = await this.sessionAggregator.getTenantContext(
       context.user.id,
       tenantId,
+      context.activeWorkspaceId,
     );
     if (tenant.mode !== "tenant") {
       res.status(403).json({ message: "Tenant context is not accessible" });
