@@ -77,6 +77,34 @@ describe("反向验证：把 2026-08-23 实测到的漂移退回去", () => {
   });
 });
 
+// ── Procurement price contract ──────────────────────────────────────────────
+
+describe("cache-write procurement prices", () => {
+  it.each(["cacheWriteUnitPrice", "cacheWrite1hUnitPrice"])(
+    "rejects a missing %s key instead of treating it as undeclared",
+    (field) => {
+      const body = thrown(() =>
+        assertAtlasContract(payloadFor("price-rules", [field]), "price-rules"),
+      );
+      expect(body["code"]).toBe("ATLAS_CONTRACT_FIELD_MISSING");
+      expect(body["field"]).toBe(field);
+    },
+  );
+
+  it.each([null, "0", "3.75"])(
+    "accepts declared keys with value %s",
+    (price) => {
+      const rows = payloadFor("price-rules") as Record<string, unknown>[];
+      const row = rows[0]!;
+      row["cacheWriteUnitPrice"] = price;
+      row["cacheWrite1hUnitPrice"] = price;
+      expect(() => assertAtlasContract(rows, "price-rules")).not.toThrow();
+      expect(row["cacheWriteUnitPrice"]).toBe(price);
+      expect(row["cacheWrite1hUnitPrice"]).toBe(price);
+    },
+  );
+});
+
 /**
  * 这一组是把机制换成共用实现的**全部理由**。
  *

@@ -1233,10 +1233,30 @@
     }
   },
   "modelPlatformPage": {
+    "procurement": {
+      "title": "上游厂商价格（采购价）",
+      "managementLabel": "上游采购价管理",
+      "listLabel": "上游采购价列表",
+      "description": "按上游厂商报价录入采购价，供 Atlas 计算调用成本。租户销售价格和 Token 到 ai.credit 的换算由平台管理。",
+      "createTitle": "新建上游采购价规则",
+      "editTitle": "查看 / 编辑上游采购价规则",
+      "emptyTitle": "暂无上游采购价规则",
+      "emptyDescription": "点击「新建规则」，按厂商报价录入模型采购价。",
+      "currency": "厂商报价币种（必填）",
+      "currencyHint": "请明确填写厂商报价的币种，例如 USD 或 CNY；数据库默认 CNY 不代表厂商报价币种。",
+      "currencyRequired": "请填写厂商报价币种",
+      "unitHint": "默认每 1,000,000 Token 的价格；输入、输出和缓存单价使用同一计价单位。",
+      "cacheWritePrice": "写缓存单价（5 分钟 TTL）",
+      "cacheWrite1hPrice": "写缓存单价（1 小时 TTL）",
+      "undeclared": "未声明",
+      "undeclaredPlaceholder": "留空 = 未声明",
+      "cacheFallbackHint": "缓存价留空表示未声明，填写 0 表示零价。缓存输入价未声明时回退到普通输入价；1 小时写缓存价未声明时回退到 5 分钟写缓存价，再回退到普通输入价。",
+      "appendOnlyHint": "采购价规则按追加版本保存，价格与生效时间不可就地修改。改价请新建规则，再调整旧规则的失效时间。"
+    },
     "header": {
       "eyebrow": "Model Platform",
-      "title": "模型计价与策略",
-      "description": "配置模型计价规则与限流策略；供应商与模型在此为只读，其生命周期管理在运维台。",
+      "title": "模型采购价与策略",
+      "description": "录入上游厂商采购价与配置限流策略；供应商与模型在此为只读，其生命周期管理在运维台。",
       "badge": "待接入生产密钥"
     },
     "summary": {

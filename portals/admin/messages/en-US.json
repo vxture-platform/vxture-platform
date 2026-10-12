@@ -1233,10 +1233,30 @@
     }
   },
   "modelPlatformPage": {
+    "procurement": {
+      "title": "Upstream vendor prices (procurement)",
+      "managementLabel": "Upstream procurement price management",
+      "listLabel": "Upstream procurement price list",
+      "description": "Enter procurement prices from the upstream vendor's quote so Atlas can calculate call costs. The platform manages tenant sales prices and the conversion from tokens to ai.credit.",
+      "createTitle": "Create upstream procurement price rule",
+      "editTitle": "View / edit upstream procurement price rule",
+      "emptyTitle": "No upstream procurement price rules",
+      "emptyDescription": "Select Add rule to enter model procurement prices from the vendor's quote.",
+      "currency": "Vendor quote currency (required)",
+      "currencyHint": "Enter the vendor's quoted currency explicitly, such as USD or CNY. The database default of CNY does not identify the vendor's currency.",
+      "currencyRequired": "Enter the vendor's quoted currency",
+      "unitHint": "Prices default to a basis of 1,000,000 tokens. Input, output and cache prices share the same token basis.",
+      "cacheWritePrice": "Cache-write price (5-minute TTL)",
+      "cacheWrite1hPrice": "Cache-write price (1-hour TTL)",
+      "undeclared": "Undeclared",
+      "undeclaredPlaceholder": "Blank = undeclared",
+      "cacheFallbackHint": "A blank cache price is undeclared; 0 is an explicit zero price. An undeclared cache-read price falls back to the ordinary input price. An undeclared 1-hour cache-write price falls back to the 5-minute price, then the ordinary input price.",
+      "appendOnlyHint": "Procurement price rules are versioned by appending. Prices and effective times cannot be edited in place. To change prices, create a rule and adjust the previous rule's expiry."
+    },
     "header": {
       "eyebrow": "Model Platform",
-      "title": "Model Pricing & Policy",
-      "description": "Configure model pricing rules and rate-limit policies; providers and models are read-only here, with lifecycle management in Operations.",
+      "title": "Model Procurement Prices & Policy",
+      "description": "Enter upstream vendor procurement prices and configure rate-limit policies. Providers and models are read-only here, with lifecycle management in Operations.",
       "badge": "Production keys pending"
     },
     "summary": {

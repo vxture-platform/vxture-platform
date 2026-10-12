@@ -18,8 +18,8 @@
  * endpoint / product 五根轴，每一行还带 `dimension` 说明自己是按哪根轴聚出来的。
  * 一条描述过时上游状态的横幅比没有横幅更糟——它会让人以为这里已经没什么可看的了。
  *
- * 成本那半句仍然成立且保留：Atlas **计量但不计费**（ADR-004），请求路径上没有任何
- * 地方把 token 乘以价格。这页不显示、也不估算任何金额。
+ * Atlas meters without billing. It calculates upstream procurement cost at
+ * request-record write time; this usage-summary page does not display amounts.
  *
  * 三件与"轴"有关、必须如实讲出来的事：
  *
@@ -37,7 +37,9 @@
  *    因为它就是跨所有租户求和的。所以列随轴变，而不是画一张五轴通用、四列常年空着
  *    的宽表。
  *
- * 只读：这里记的是请求/Token 用量事实，定价是 admin 商业层（price-rules）的事。 */
+ * Read-only usage facts. Admin price rules record upstream vendor procurement
+ * prices; tenant sales prices and token-to-ai.credit conversion belong to the
+ * platform, not Atlas (ADR-010 / ADR-012). */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -576,7 +578,7 @@ export default function MeteringPage() {
       <ViewHeader
         icon="gauge"
         title="用量计量"
-        description="所有请求必须被计量。这里记的是请求 / Token 用量事实，不做定价——Atlas 计量但不计费，销售价格归 admin 的价格规则。"
+        description={tShared("modelMeteringPage.description")}
       />
 
       {axis === "endpoint" ? (

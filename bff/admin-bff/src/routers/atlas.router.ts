@@ -33,13 +33,14 @@ import { assertAtlasContract, type AtlasResource } from "./atlas-contract";
  * 类型/函数名同步(`ATLAS_AUDIENCE` 常量此前只有 console-bff 一侧改过,两边现已
  * 一致)。
  *
- * 2026-08-11(技术面迁 opera):provider / model 的生命周期管理(创建/编辑/启停/
- * 删除)迁去 opera-bff 自己的 atlas.router.ts——"两段裁决"里 opera 管技术供给、
- * admin 管商业封装(product_100_matrix.md),provider/model 生命周期属前者。这里
- * 只留 GET providers / GET models 只读代理,给本文件仍在管的商业层(grants /
- * price-rules / policies / quotas)当模型下拉的数据源——它们创建价格规则、策略
- * 时要引用具体的 provider/model。opera-bff 那份是独立实现,不 import 这里任何
- * 东西,两个 *-bff 之间零交叉引用是明确纪律。
+ * Provider/model lifecycle writes live in opera-bff's own atlas.router.ts.
+ * Opera manages technical supply; admin manages procurement price entry and
+ * model policies (product_100_matrix.md / ADR-012).
+ * Read-only providers/models supply model choices for vendor procurement
+ * price rules, policies, grants and quotas. Price rules record what upstream
+ * vendors charge Atlas (ADR-012), not tenant sales prices or token-to-ai.credit
+ * conversion; those remain platform-owned. Opera's implementation is separate:
+ * neither BFF imports the other.
  *
  * 2026-08-23(上游路径改名 product_251 X-4,vxture-atlas#206):atlas 把三个含糊的
  * 资源名改成了说清「授的是什么、路由的是什么」的名字。本文件用到的那个是
