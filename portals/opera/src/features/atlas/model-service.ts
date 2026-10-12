@@ -82,6 +82,10 @@ export interface AiModelRecord {
     paramMap: Record<string, string>;
     /** 厂商私有开关（wire schema v2）。值是任意 JSON，不是 string-map。 */
     extraBody: Record<string, unknown>;
+    /** Effective mode fragments; an absent mode differs from an empty fragment. */
+    thinking: Partial<Record<"off" | "on", Record<string, unknown>>>;
+    /** Additional upstream context overflow matchers, accumulated across layers. */
+    contextOverflow: Array<{ code?: string; message?: string }>;
   };
   /**
    * `managed` = 引用密钥库（vault）别名，运行时唯一认的来源；`env` 是 ADR-003
@@ -515,6 +519,9 @@ export interface ModelDraft {
    * 输入框里等人改完，转成对象的那一步放到提交前，失败就点名不提交。
    */
   extraBody: string;
+  /** Raw declarations: blank inherits; explicit empty objects/arrays remain declared. */
+  thinking: string;
+  contextOverflow: string;
 }
 
 /** 空串 → 不送这个键（让 atlas 用它自己的默认）；有值 → 必须是非负整数。 */
@@ -545,6 +552,8 @@ export function emptyModelDraft(
     keyAlias: "",
     upstreamModel: "",
     extraBody: "",
+    thinking: "",
+    contextOverflow: "",
   };
 }
 
@@ -577,7 +586,32 @@ export function modelDraftFrom(row: AiModelRecord): ModelDraft {
     extraBody: formatJsonForEdit(
       readWireRecord(readDeclaredWire(row.config), "extraBody"),
     ),
+    thinking: formatWireDeclaration(readDeclaredWire(row.config)?.["thinking"]),
+    contextOverflow: formatWireDeclaration(
+      readDeclaredWire(row.config)?.["contextOverflow"],
+    ),
   };
+}
+
+/** Preserve declarations verbatim, including {}, [], and invalid shapes for Atlas to validate. */
+function formatWireDeclaration(value: unknown): string {
+  return value === undefined ? "" : JSON.stringify(value, null, 2);
+}
+
+export type WireJsonParse = { ok: true; value: unknown } | { ok: false };
+
+/**
+ * Only parse syntax. Undefined means blank; JSON null must reach Atlas unchanged.
+ * @param raw - The model's JSON editor text.
+ * @returns Parsed JSON or a syntax failure, without applying Atlas business rules.
+ */
+export function parseWireJson(raw: string): WireJsonParse {
+  if (raw.trim() === "") return { ok: true, value: undefined };
+  try {
+    return { ok: true, value: JSON.parse(raw) as unknown };
+  } catch {
+    return { ok: false };
+  }
 }
 
 /**
@@ -970,20 +1004,23 @@ export function buildProviderConfig(
  * 覆盖与 `upstreamModel` 悄悄抹平。读回的 config 已被 atlas 剥掉密钥类键
  * （managedKeyAlias 由它按 keyReference 自己并回去），round-trip 无损。
  *
- * 同一条道理往下一层：`wire` 里除 `extraBody` 之外的键（chatPath / headers /
- * supports / paramMap…）本表单一个都不管，但它们和 extraBody 住在同一个对象里，
- * 所以这里逐键重建 `wire` 而不是整体覆盖。
- *
- * 写 extraBody 时把 `schemaVersion` 一并声明进去（取自协议词表信封里上游自报的
- * 那个数）。理由在 atlas 的 wire.ts 头注上：一个只认识 v1 的旧服务读到带
- * `extraBody` 的行会忽略它，版本号是让这件事出声的唯一防线——不声明就得到一个
- * 配了却静默不生效的开关。词表没取到（`null`）时不声明：宁可少一句话，也不写
- * 一个我们并没有观测到的版本号。
+ * Rebuild only the fields owned by this form. Unknown config and wire keys survive.
+ * The catalog supplies schemaVersion; never invent a version when it is unavailable.
+ * Clearing a declaration deletes its key, while explicit empty fragments remain intact.
+ * @param existing - Current model config returned by Atlas.
+ * @param upstreamModel - Optional upstream model name from the draft.
+ * @param parsed - Parsed declarations; undefined removes a JSON editor's declaration.
+ * @param wireSchemaVersion - Version from the protocol catalog, or null when unavailable.
+ * @returns Replacement config preserving keys outside the form's ownership.
  */
 export function buildModelConfig(
   existing: Record<string, unknown> | null,
   upstreamModel: string,
-  extraBody: Record<string, unknown> | null,
+  parsed: {
+    extraBody: Record<string, unknown> | null;
+    thinking: unknown;
+    contextOverflow: unknown;
+  },
   wireSchemaVersion: number | null,
 ): Record<string, unknown> | null {
   const next: Record<string, unknown> = { ...(existing ?? {}) };
@@ -999,13 +1036,19 @@ export function buildModelConfig(
       ? { ...(existingWire as Record<string, unknown>) }
       : {};
   delete wire["extraBody"];
-  if (extraBody) {
-    wire["extraBody"] = extraBody;
-    if (wireSchemaVersion !== null) wire["schemaVersion"] = wireSchemaVersion;
-  }
+  delete wire["thinking"];
+  delete wire["contextOverflow"];
+  if (parsed.extraBody) wire["extraBody"] = parsed.extraBody;
+  if (parsed.thinking !== undefined) wire["thinking"] = parsed.thinking;
+  if (parsed.contextOverflow !== undefined)
+    wire["contextOverflow"] = parsed.contextOverflow;
 
-  if (Object.keys(wire).length > 0) next["wire"] = wire;
-  else delete next["wire"];
+  if (Object.keys(wire).some((key) => key !== "schemaVersion")) {
+    if (wireSchemaVersion !== null) wire["schemaVersion"] = wireSchemaVersion;
+    next["wire"] = wire;
+  } else {
+    delete next["wire"];
+  }
 
   return Object.keys(next).length > 0 ? next : null;
 }

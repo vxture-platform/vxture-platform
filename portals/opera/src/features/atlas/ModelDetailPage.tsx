@@ -72,6 +72,7 @@ import {
   modelStateMeta,
   parseExtraBody,
   parseOptionalInt,
+  parseWireJson,
   type AiModelRecord,
   type LoadState,
   type ModelDraft,
@@ -90,6 +91,7 @@ export function ModelDetailPage({
 }) {
   const router = useRouter();
   const tShared = useTranslations();
+  const tWire = useTranslations("modelDetailPage.wire");
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MODEL_MANAGE);
@@ -285,6 +287,30 @@ export function ModelDetailPage({
       return;
     }
 
+    const thinking = parseWireJson(draft.thinking);
+    const contextOverflow = parseWireJson(draft.contextOverflow);
+    if (!thinking.ok || !contextOverflow.ok) {
+      toast({
+        tone: "danger",
+        title: tWire("invalidJsonTitle"),
+        description: tWire("invalidJson", {
+          field: !thinking.ok ? "thinking" : "contextOverflow",
+        }),
+      });
+      return;
+    }
+    if (
+      wireSchemaVersion === null &&
+      (thinking.value !== undefined || contextOverflow.value !== undefined)
+    ) {
+      toast({
+        tone: "danger",
+        title: tWire("catalogUnavailableTitle"),
+        description: tWire("catalogUnavailable"),
+      });
+      return;
+    }
+
     const mutable = {
       modelName: draft.modelName.trim(),
       providerId: draft.providerId || null,
@@ -304,7 +330,11 @@ export function ModelDetailPage({
       config: buildModelConfig(
         row?.config ?? null,
         draft.upstreamModel,
-        extraBody.value,
+        {
+          extraBody: extraBody.value,
+          thinking: thinking.value,
+          contextOverflow: contextOverflow.value,
+        },
         wireSchemaVersion,
       ),
     };
@@ -663,8 +693,12 @@ export function ModelDetailPage({
           <FieldTier
             tier="advanced"
             title={FIELD_TIER_TITLE.advanced}
-            defaultOpen={draft.extraBody.trim() !== ""}
-            hint="都可留空，留空＝用 Atlas 默认。"
+            defaultOpen={
+              draft.extraBody.trim() !== "" ||
+              draft.thinking.trim() !== "" ||
+              draft.contextOverflow.trim() !== ""
+            }
+            hint={tWire("advancedHint")}
           >
             <FieldGroup>
               <div className="grid grid-cols-2 gap-md">
@@ -682,7 +716,7 @@ export function ModelDetailPage({
                 </Field>
                 <Field>
                   <FieldLabel
-                    hint="原样并进请求体的 JSON 对象，留空＝不声明。改名已有参数用 paramMap，这里管的是新字段。"
+                    hint={tWire("extraBodyHint")}
                     {...FIELD_LABEL_A11Y}
                     htmlFor="model-extra-body"
                   >
@@ -695,9 +729,53 @@ export function ModelDetailPage({
                     onChange={(e) =>
                       setDraft({ ...draft, extraBody: e.target.value })
                     }
-                    placeholder={'{"thinking":{"type":"disabled"}}'}
+                    placeholder={'{"vendor_option":true}'}
                     className="font-mono"
                   />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-thinking">
+                    {tWire("thinkingLabel")}
+                  </FieldLabel>
+                  <Textarea
+                    id="model-thinking"
+                    aria-describedby="model-thinking-description"
+                    rows={6}
+                    value={draft.thinking}
+                    onChange={(e) =>
+                      setDraft({ ...draft, thinking: e.target.value })
+                    }
+                    placeholder={
+                      '{"off":{"thinking":{"type":"disabled"}},"on":{}}'
+                    }
+                    className="font-mono"
+                  />
+                  <FieldDescription id="model-thinking-description">
+                    {tWire("thinkingHint")}
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-context-overflow">
+                    {tWire("contextOverflowLabel")}
+                  </FieldLabel>
+                  <Textarea
+                    id="model-context-overflow"
+                    aria-describedby="model-context-overflow-description"
+                    rows={6}
+                    value={draft.contextOverflow}
+                    onChange={(e) =>
+                      setDraft({ ...draft, contextOverflow: e.target.value })
+                    }
+                    placeholder={
+                      '[{"code":"context_length_exceeded"},{"message":"maximum context length"}]'
+                    }
+                    className="font-mono"
+                  />
+                  <FieldDescription id="model-context-overflow-description">
+                    {tWire("contextOverflowHint")}
+                  </FieldDescription>
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-md">
