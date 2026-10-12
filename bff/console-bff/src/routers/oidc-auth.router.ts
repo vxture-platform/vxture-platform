@@ -4,8 +4,9 @@
  * @description
  *   /auth/* RP endpoints (outside api/*, so the legacy AuthMiddleware is not
  *   involved): login → IdP authorize, callback → token exchange + RP session,
- *   session lookup, local logout. Tokens stay server-side; the browser holds
- *   only the opaque __Host-vx_rp_session cookie. See identity-platform-rp-integration.md §2/§4.
+ *   session lookup, native local logout, and browser global logout. Tokens stay
+ *   server-side; the browser holds only the opaque __Host-vx_rp_session cookie.
+ *   See identity-platform-rp-integration.md §2/§4.
  */
 import {
   BadRequestException,
@@ -20,6 +21,7 @@ import {
   Query,
   Req,
   Res,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
@@ -345,6 +347,51 @@ export class OidcAuthRouter {
   @Get("logout")
   async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
     await this.endCentralSession(req, res, "signout");
+  }
+
+  /**
+   * Destroy only the explicitly supplied RP session, without ending IdP SSO.
+   * The legacy POST path serves desktop clients already using /auth/logout.
+   * Cookies are deliberately ignored: ambient browser credentials must not
+   * select a session for this native-only operation.
+   *
+   * @throws {BadRequestException} The session header is missing or ambiguous.
+   * @throws {ServiceUnavailableException} Session storage cannot complete logout.
+   */
+  @Post(["native/logout", "logout"])
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header("Cache-Control", "no-store")
+  async nativeLogout(@Req() req: Request): Promise<void> {
+    const rpsid = req.headers["x-vxture-session"];
+    const headerCount = req.rawHeaders.filter(
+      (value, index) =>
+        index % 2 === 0 && value.toLowerCase() === "x-vxture-session",
+    ).length;
+    // Node joins duplicate custom headers; reject them even when values match.
+    // Keep the handle opaque rather than tying the API to a generated length.
+    if (
+      headerCount !== 1 ||
+      typeof rpsid !== "string" ||
+      rpsid.length === 0 ||
+      /[\s,]/.test(rpsid)
+    ) {
+      throw new BadRequestException({
+        code: "NATIVE_SESSION_HEADER_INVALID",
+        message: "A single non-empty X-Vxture-Session header is required",
+        retryable: false,
+      });
+    }
+
+    try {
+      // Do not resolve or refresh tokens just to destroy an expired RP session.
+      await this.store.destroy(rpsid);
+    } catch {
+      throw new ServiceUnavailableException({
+        code: "NATIVE_LOGOUT_UNAVAILABLE",
+        message: "Session logout could not be completed; retry the request",
+        retryable: true,
+      });
+    }
   }
 
   /**
