@@ -16,6 +16,7 @@ import {
   Delete,
   Get,
   Inject,
+  ForbiddenException,
   Logger,
   NotFoundException,
   Param,
@@ -866,7 +867,7 @@ export class SubscriptionRouter {
   }
 
   // --------------------------------------------------------------------------
-  // GET /api/subscription/quota-usage — 当前租户默认工作空间的配额用量
+  // GET /api/subscription/quota-usage - Quota usage in the active workspace.
   // (header "配额 / Usage Quota" 面板；storage.bytes + ai.credit 是 L0 平台指标,
   // 与具体产品无关, 故按 workspace 聚合展示, 不做 product 归属区分)
   // --------------------------------------------------------------------------
@@ -877,7 +878,7 @@ export class SubscriptionRouter {
     @Req() req: Request & RequestContext,
   ): Promise<QuotaUsageView> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId = await this.resolveRequestWorkspace(req.tenant);
 
     const entitlements = await this.resolveWorkspaceEntitlements(workspaceId);
     // No live subscriptions (or platform-api unreachable) → zero display,
@@ -888,7 +889,7 @@ export class SubscriptionRouter {
   }
 
   // --------------------------------------------------------------------------
-  // GET /api/subscription/entitlements — 当前租户默认工作空间的权益概览
+  // GET /api/subscription/entitlements - Entitlements in the active workspace.
   // (TD-042 remediation: sources tier/status/bundled/limits from the C2
   // `/platform/entitlements` contract instead of leaving console blind to them)
   // --------------------------------------------------------------------------
@@ -899,7 +900,7 @@ export class SubscriptionRouter {
     @Req() req: Request & RequestContext,
   ): Promise<WorkspaceEntitlementView[]> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId = await this.resolveRequestWorkspace(req.tenant);
 
     const entitlements = await this.resolveWorkspaceEntitlements(workspaceId);
     if (!entitlements) return [];
@@ -1042,9 +1043,12 @@ export class SubscriptionRouter {
       };
     }
 
+    const workspaceId = req.tenant.workspace
+      ? await this.resolveRequestWorkspace(req.tenant)
+      : undefined;
     const [current, pendingOrder, plans] = await Promise.all([
-      this.queryCurrentForProduct(req.tenant.id, product.code),
-      this.queryPendingOrder(req.tenant.id, product.code),
+      this.queryCurrentForProduct(req.tenant.id, product.code, workspaceId),
+      this.queryPendingOrder(req.tenant.id, product.code, workspaceId),
       this.queryPlanLadder(product.code, req.user.id, req.tenant.id),
     ]);
     /*
@@ -1184,6 +1188,7 @@ export class SubscriptionRouter {
   private async queryCurrentForProduct(
     tenantId: string,
     productCode: string,
+    workspaceId?: string,
   ): Promise<SubscribeCurrent | null> {
     const res = await this.pool.query<{
       id: string;
@@ -1214,13 +1219,19 @@ export class SubscriptionRouter {
          join product.plans pl on pl.id = pv.plan_id
          ${openSuspensionLateralSql("ts")}
         where ts.tenant_id = $1
+          ${workspaceId ? "and ts.workspace_id = $4" : ""}
           and ts.deleted_at is null
           and not (ts.subscription_kind = 'trial'
                    and ts.status in ('expired', 'cancelled'))
         order by array_position($3::text[], ts.status) asc,
                  ts.end_at desc nulls first
         limit 1`,
-      [tenantId, productCode, [...SUBSCRIPTION_STATUSES]],
+      [
+        tenantId,
+        productCode,
+        [...SUBSCRIPTION_STATUSES],
+        ...(workspaceId ? [workspaceId] : []),
+      ],
     );
     const row = res.rows[0];
     if (!row) return null;
@@ -1337,7 +1348,7 @@ export class SubscriptionRouter {
   }
 
   // --------------------------------------------------------------------------
-  // GET /api/subscription/my — 查询当前租户的全部订阅
+  // GET /api/subscription/my - Subscription rows in the active workspace.
   //
   // Deliberately bypasses SubscriptionService.listSubscriptions: that method
   // returns the raw metering.subscriptions row (SubscriptionRecord — no plan
@@ -1354,6 +1365,9 @@ export class SubscriptionRouter {
     @Req() req: Request & RequestContext,
   ): Promise<ConsoleSubscriptionView[]> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    const workspaceId = req.tenant.workspace
+      ? await this.resolveRequestWorkspace(req.tenant)
+      : undefined;
     const res = await this.pool.query<MySubscriptionRow>(
       `select ts.id, ts.tenant_id, pl.id as plan_id, pl.plan_name, ts.status,
               ts.pay_amount, ts.currency, ts.cycle_unit, ts.end_at, ts.auto_renew,
@@ -1365,9 +1379,10 @@ export class SubscriptionRouter {
          join product.plans pl on pl.id = pv.plan_id
          ${openSuspensionLateralSql("ts")}
         where ts.tenant_id = $1 and ts.deleted_at is null
+          ${workspaceId ? "and ts.workspace_id = $2" : ""}
         order by ts.created_at desc
         limit 100`,
-      [req.tenant.id],
+      [req.tenant.id, ...(workspaceId ? [workspaceId] : [])],
     );
     return res.rows.map((r) => ({
       id: r.id,
@@ -1388,7 +1403,7 @@ export class SubscriptionRouter {
   // --------------------------------------------------------------------------
   // GET /api/subscription/subscribed-products — 「我的订阅」产品卡（product_330）
   //
-  // 当前租户默认工作空间的订阅 × 产品投影：档位/席位/周期/起止/版本号/收藏。
+  // Active-workspace subscription/product projection: tier, seats, term, version, favorites.
   // free/trial 同为订阅；cancelled 不展示（从未生效或已终止的意愿态），
   // expired 保留（页面「全部」筛选可见）。收藏失败只降级不阻断（表刚上线，
   // 存量库未跑迁移时页面必须照常渲染）。
@@ -1401,7 +1416,7 @@ export class SubscriptionRouter {
   ): Promise<SubscribedProductView[]> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     if (!req.user) throw new UnauthorizedException("No active session");
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId = await this.resolveRequestWorkspace(req.tenant);
     const favorites = await this.safeFavoriteIds(req.user.id);
 
     const res = await this.pool.query<{
@@ -1779,6 +1794,10 @@ export class SubscriptionRouter {
      * 「能买」，不改变「要付钱」**——客户照常下单、照常付款，与运营直接发订阅
      * （`operator_grant`，无订单无钱）和兑换码（`redemption`，输码抵扣）是三件事。
      */
+    // Validate an explicit workspace before any invitation can be consumed.
+    const scopedWorkspaceId = req.tenant.workspace
+      ? await this.resolveRequestWorkspace(req.tenant)
+      : undefined;
     if (!sold.plan_is_public) {
       /*
        * 续订例外：邀请挡的是**进门**，不是挡已经在里面的人续费。
@@ -1792,7 +1811,11 @@ export class SubscriptionRouter {
        */
       const renewingOwnPlan =
         intent === "renew" &&
-        (await this.holdsSubscriptionOnPlan(req.tenant.id, planVersionId));
+        (await this.holdsSubscriptionOnPlan(
+          req.tenant.id,
+          planVersionId,
+          scopedWorkspaceId,
+        ));
       if (!renewingOwnPlan) {
         const invite = await this.consumeInviteForPlan({
           userId: req.user.id,
@@ -1809,7 +1832,8 @@ export class SubscriptionRouter {
       }
     }
 
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId =
+      scopedWorkspaceId ?? (await this.resolveRequestWorkspace(req.tenant));
     const createdBy = req.user.id;
 
     // One open order per (workspace × product)，0 元订单同样受限（P3/§7.3）；
@@ -1828,6 +1852,7 @@ export class SubscriptionRouter {
       const current = await this.queryCurrentForProduct(
         req.tenant.id,
         productCode,
+        workspaceId,
       );
       if (!fromSubscriptionId) {
         if (!current)
@@ -1854,12 +1879,16 @@ export class SubscriptionRouter {
         if (effectiveIntent === "new") fromSubscriptionId = undefined;
       }
     }
-    // 归属校验：原订阅须属本租户（服务层再校 workspace / 状态 / 套餐）
+    // Renewal/upgrade targets must belong to this exact tenant and workspace.
     if (fromSubscriptionId) {
       const target = await this.subscriptionService
         .getSubscription(fromSubscriptionId)
         .catch(() => null);
-      if (!target || target.tenantId !== req.tenant.id)
+      if (
+        !target ||
+        target.tenantId !== req.tenant.id ||
+        target.workspaceId !== workspaceId
+      )
         throw new BadRequestException("目标订阅不存在或无权操作");
     }
 
@@ -2311,6 +2340,7 @@ export class SubscriptionRouter {
   private async holdsSubscriptionOnPlan(
     tenantId: string,
     planVersionId: string,
+    workspaceId?: string,
   ): Promise<boolean> {
     const res = await this.pool.query<{ one: number }>(
       `select 1 as one
@@ -2318,9 +2348,10 @@ export class SubscriptionRouter {
          join product.plan_versions mine on mine.id = ts.plan_version_id
          join product.plan_versions want on want.plan_id = mine.plan_id
         where ts.tenant_id = $1 and ts.deleted_at is null
+          ${workspaceId ? "and ts.workspace_id = $3" : ""}
           and want.id = $2
         limit 1`,
-      [tenantId, planVersionId],
+      [tenantId, planVersionId, ...(workspaceId ? [workspaceId] : [])],
     );
     return res.rows.length > 0;
   }
@@ -2450,15 +2481,17 @@ export class SubscriptionRouter {
   private async queryPendingOrder(
     tenantId: string,
     productCode: string,
+    workspaceId?: string,
   ): Promise<PendingOrderSummary | null> {
     const res = await this.pool.query<OrderRow>(
       `${ORDER_ROW_SELECT}
         where o.tenant_id = $1
+          ${workspaceId ? "and o.workspace_id = $3" : ""}
           and prod.product_code = $2
           and o.status in ('pending_payment', 'pending_verify', 'paid')
         order by o.created_at desc
         limit 1`,
-      [tenantId, productCode],
+      [tenantId, productCode, ...(workspaceId ? [workspaceId] : [])],
     );
     const r = res.rows[0];
     if (!r) return null;
@@ -2481,16 +2514,26 @@ export class SubscriptionRouter {
     };
   }
 
-  /** 服务端解析租户 default workspace（不信任 req.tenant.workspace 字符串）。 */
-  private async resolveDefaultWorkspace(tenantId: string): Promise<string> {
+  /** Recheck tenant ownership; never replace a revoked explicit scope with default. */
+  private async resolveRequestWorkspace(
+    tenant: NonNullable<RequestContext["tenant"]>,
+  ): Promise<string> {
+    const explicit = Boolean(
+      tenant.workspace && tenant.workspace !== "default",
+    );
+    if (explicit && !UUID_RE.test(tenant.workspace)) {
+      throw new ForbiddenException("Workspace context is not accessible");
+    }
     const res = await this.pool.query<{ id: string }>(
       `select id from tenancy.workspaces
-        where tenant_id = $1 and is_default and deleted_at is null
+        where tenant_id = $1 and ${explicit ? "id = $2" : "is_default"} and deleted_at is null
+          and status = 'active'
         limit 1`,
-      [tenantId],
+      [tenant.id, ...(explicit ? [tenant.workspace] : [])],
     );
     const id = res.rows[0]?.id;
-    if (!id) throw new BadRequestException("租户缺少默认工作空间");
+    if (!id)
+      throw new ForbiddenException("Workspace context is not accessible");
     return id;
   }
 

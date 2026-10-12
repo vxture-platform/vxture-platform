@@ -130,9 +130,26 @@ export class SessionAggregator {
   }
 
   /** Resolve the caller's active org (id + view); null when the user has none. */
-  private async resolveOrg(userId: string, orgId?: string) {
-    const ctx = await this.active.resolveActiveContext(userId, orgId);
+  private async resolveOrg(
+    userId: string,
+    orgId?: string,
+    workspaceId?: string,
+  ) {
+    const ctx = await this.active.resolveActiveContext(
+      userId,
+      orgId,
+      workspaceId,
+    );
     if (!ctx?.activeOrg) return null;
+    // ActiveContextService intentionally falls back during login. Explicit API
+    // scope must instead fail closed, including lost default-workspace membership.
+    if (
+      (orgId && ctx.activeOrg !== orgId) ||
+      (workspaceId &&
+        (ctx.activeWorkspace !== workspaceId ||
+          !ctx.roles.some((role) => role.startsWith("workspace:"))))
+    )
+      return null;
     const org = await this.org.getOrgById(ctx.activeOrg);
     return org
       ? { orgId: ctx.activeOrg, org, workspace: ctx.activeWorkspace }
@@ -546,8 +563,9 @@ export class SessionAggregator {
   async getTenantContext(
     userId: string,
     orgId?: string,
+    workspaceId?: string,
   ): Promise<TenantContext> {
-    const resolved = await this.resolveOrg(userId, orgId);
+    const resolved = await this.resolveOrg(userId, orgId, workspaceId);
     if (!resolved) {
       return {
         id: `platform:${userId}`,
@@ -561,11 +579,26 @@ export class SessionAggregator {
     return toTenantContext(resolved.orgId, resolved.org, resolved.workspace);
   }
 
-  /** 展示端点用：补齐 workspaceName / workspaceNo（UUID 禁展示的替代物）。 */
+  /** Display metadata must describe the actual selected workspace. */
   async withWorkspaceMeta(tenant: TenantContext): Promise<TenantContext> {
     if (tenant.mode !== "tenant") return tenant;
-    const meta = await this.defaultWorkspaceMeta([tenant.id]);
-    const m = meta.get(tenant.id) ?? null;
+    let m: { name: string; workspaceNo: string | null } | null;
+    if (tenant.workspace === "default") {
+      const meta = await this.defaultWorkspaceMeta([tenant.id]);
+      m = meta.get(tenant.id) ?? null;
+    } else {
+      const result = await this.pool.query<{
+        name: string;
+        workspace_no: string | null;
+      }>(
+        `select name, workspace_no::text as workspace_no
+           from tenancy.workspaces
+          where tenant_id = $1 and id = $2 and deleted_at is null`,
+        [tenant.id, tenant.workspace],
+      );
+      const row = result.rows[0];
+      m = row ? { name: row.name, workspaceNo: row.workspace_no } : null;
+    }
     return {
       ...tenant,
       workspaceName: m?.name ?? null,
@@ -618,7 +651,7 @@ export class SessionAggregator {
     return this.org.getOrgLogo(tenantId);
   }
 
-  /** (tenant,user) → caps 短 TTL 缓存(middleware 每请求命中内存,不打 DB)。 */
+  /** Short-lived capability cache isolated by tenant, user, and workspace. */
   private readonly capsCache = new Map<
     string,
     { at: number; caps: Capability[] }
@@ -631,14 +664,16 @@ export class SessionAggregator {
   async capabilitiesFor(
     userId: string,
     tenantId: string,
+    workspaceId?: string,
   ): Promise<Capability[]> {
-    const key = `${tenantId}:${userId}`;
+    const key = `${tenantId}:${userId}:${workspaceId ?? "org"}`;
     const hit = this.capsCache.get(key);
     if (hit && Date.now() - hit.at < CAPS_CACHE_TTL_MS) return [...hit.caps];
     let caps: Capability[];
     try {
       const perms = await this.gov.getEffectivePermissions(userId, {
         orgId: tenantId,
+        ...(workspaceId ? { workspaceId } : {}),
       });
       // 只认目录里登记过的码:库里若混进未知码(手工 SQL / 旧数据),不让它流到前端。
       caps = [...new Set(perms.filter(isGovernancePermissionCode))];
@@ -655,13 +690,20 @@ export class SessionAggregator {
    * 这在「刚被降权」这个场景里格外像 bug。
    */
   private invalidateCapabilities(userId: string, tenantId: string): void {
-    this.capsCache.delete(`${tenantId}:${userId}`);
+    const prefix = `${tenantId}:${userId}:`;
+    for (const key of this.capsCache.keys()) {
+      if (key.startsWith(prefix)) this.capsCache.delete(key);
+    }
   }
 
-  async getCapabilities(userId: string, orgId?: string) {
-    const resolved = await this.resolveOrg(userId, orgId);
+  async getCapabilities(userId: string, orgId?: string, workspaceId?: string) {
+    const resolved = await this.resolveOrg(userId, orgId, workspaceId);
     if (!resolved) return [];
-    return this.capabilitiesFor(userId, resolved.orgId);
+    return this.capabilitiesFor(
+      userId,
+      resolved.orgId,
+      resolved.workspace ?? undefined,
+    );
   }
 
   async getIamSummary(userId: string, orgId?: string) {

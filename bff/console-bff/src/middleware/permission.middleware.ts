@@ -19,13 +19,15 @@ export class PermissionMiddleware implements NestMiddleware {
 
     const context = req as Request & RequestContext;
     if (context.user) {
-      // P0 分权(2026-08-21):capability 按成员实际治理角色派生,不再「有租户
-      // 全给」。aggregator 内部有 (tenant,user) 短 TTL 缓存,常态命中内存;
-      // 回查失败降级为只读保底,绝不放大权限。
+      // Permissions include only roles in the verified active workspace.
+      // The aggregator caches by tenant, user, and workspace and fails conservatively.
       context.capabilities = context.tenant
         ? await this.sessionAggregator.capabilitiesFor(
             context.user.id,
             context.tenant.id,
+            context.tenant.workspace === "default"
+              ? undefined
+              : context.tenant.workspace,
           )
         : [];
     }

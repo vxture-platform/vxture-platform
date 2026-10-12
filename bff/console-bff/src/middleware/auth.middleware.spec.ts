@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { isDeletionAllowedRoute } from "./auth.middleware";
+import { describe, expect, it, vi } from "vitest";
+import type { Request, Response } from "express";
+import type { RequestContext } from "../types/console.types";
+import { AuthMiddleware, isDeletionAllowedRoute } from "./auth.middleware";
 
 /**
  * 删除保留期的路由放行表(050-account §7):会话恢复的四条读 + 删除相关三条,
@@ -53,4 +55,46 @@ describe("isDeletionAllowedRoute", () => {
       expect(isDeletionAllowedRoute(req("DELETE", path))).toBe(false);
     }
   });
+});
+
+// ============================================================================
+// Verified RP scope propagation
+// ============================================================================
+
+describe("AuthMiddleware workspace claims", () => {
+  it.each(["workspace-2", null])(
+    "uses verified active_workspace %s instead of query hints",
+    async (workspace) => {
+      const resolve = vi.fn(async () => ({
+        status: "ok",
+        claims: {
+          sub: "user",
+          active_org: "tenant",
+          active_workspace: workspace,
+          roles: ["org:member"],
+        },
+      }));
+      const middleware = new AuthMiddleware(
+        {
+          getCurrentUser: vi.fn(async () => ({ id: "user", timezone: null })),
+        } as never,
+        { resolve } as never,
+        { cookieSecure: false, config: { clientId: "console" } } as never,
+      );
+      const req = {
+        headers: { "x-vxture-session": "native" },
+        cookies: {},
+        query: { workspaceId: "attacker-workspace" },
+        activeWorkspaceId: "stale",
+        method: "GET",
+        url: "/api/tenant-context",
+      } as unknown as Request & RequestContext;
+      const next = vi.fn();
+      await middleware.use(req, {} as Response, next);
+      expect(req.auth?.tenantId).toBe("tenant");
+      expect(req.activeWorkspaceId).toBe(workspace ?? undefined);
+      expect(resolve).toHaveBeenCalledWith("native");
+      expect(next).toHaveBeenCalledOnce();
+    },
+  );
 });
