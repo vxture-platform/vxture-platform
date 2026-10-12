@@ -1553,6 +1553,7 @@ export function ModelPlatformPage() {
       {priceRuleDialog ? (
         <DialogForm
           open
+          size="xl"
           title={
             priceRuleDialog.mode === "create"
               ? t("procurement.createTitle")
