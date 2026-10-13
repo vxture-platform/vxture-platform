@@ -26,6 +26,7 @@ import { ProvisioningModule } from "@vxture/service-provisioning";
 import { SharingModule } from "@vxture/service-sharing";
 import { SubscriptionModule } from "@vxture/service-subscription";
 import { PlatformAuthGuard } from "./authn/platform-auth.guard";
+import { ProvisioningReadGuard } from "./authn/provisioning-read.guard";
 import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
 import { AccountDeletionPurgeJob } from "./jobs/account-deletion-purge.job";
 import { AddonLifecycleJob } from "./jobs/addon-lifecycle.job";
@@ -49,11 +50,17 @@ import { IntegrationSignalService } from "./platform/integration-signal.service"
 import { LegacyAuthUsageService } from "./platform/legacy-auth-usage.service";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
 import { PlatformProvisioningService } from "./platform/platform-provisioning.service";
+import { ProvisioningReadService } from "./platform/provisioning-read.service";
+import {
+  provisioningReadPoolProvider,
+  ProvisioningReadPoolLifecycle,
+} from "./providers/pg-pool.provider";
 import { PlatformUsageService } from "./platform/platform-usage.service";
 import { TokenUsageService } from "./platform/token-usage.service";
 import { HealthRouter } from "./routers/health.router";
 import { PlatformEntitlementsRouter } from "./routers/platform-entitlements.router";
 import { PlatformProvisioningRouter } from "./routers/platform-provisioning.router";
+import { PlatformProvisioningReadRouter } from "./routers/platform-provisioning-read.router";
 import { PlatformSharingRouter } from "./routers/platform-sharing.router";
 import { PlatformUsageRouter } from "./routers/platform-usage.router";
 
@@ -78,6 +85,7 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     PlatformUsageRouter,
     PlatformSharingRouter,
     PlatformProvisioningRouter,
+    PlatformProvisioningReadRouter,
   ],
   providers: [
     PlatformEntitlementsService,
@@ -85,6 +93,10 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // #547：原始 token 用量接收（同一个 /usage/consume 端点的 tokens 形态）
     TokenUsageService,
     PlatformProvisioningService,
+    ProvisioningReadService,
+    ProvisioningReadGuard,
+    provisioningReadPoolProvider,
+    ProvisioningReadPoolLifecycle,
     IntegrationSignalService,
     // E6（2026-10-04）：谁还在走旧凭据——四个产品面 router 在旧头那条路上计数，opera 读回
     LegacyAuthUsageService,

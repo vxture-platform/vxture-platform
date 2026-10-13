@@ -4,6 +4,7 @@ import {
   TokenExchangeService,
   TOKEN_EXCHANGE_TTL_SECONDS,
   PLATFORM_S2S_AUDIENCE,
+  PROVISIONING_READ_SCOPE,
 } from "./token-exchange.service";
 import type { OidcKeyService } from "./oidc-key.service";
 
@@ -53,6 +54,93 @@ function auditCall(pool: { mock: { calls: unknown[][] } }): unknown[] {
   if (!call) throw new Error("no audit insert was recorded");
   return call;
 }
+
+describe("TokenExchangeService — provisioning discovery grant", () => {
+  const req = {
+    audience: PLATFORM_S2S_AUDIENCE,
+    scope: PROVISIONING_READ_SCOPE,
+    subjectToken: undefined,
+    workspaceId: undefined,
+    orgId: undefined,
+  };
+
+  it("mints a 300-second non-refreshable product read ticket without context", async () => {
+    const m = build();
+    m.pool.query.mockResolvedValueOnce({ rows: [{ product_code: "arda" }] });
+    m.pool.query.mockResolvedValue({ rows: [] });
+    expect(
+      await m.service.exchange({ ...CALLER_ARDA, clientId: "arda-beta" }, req),
+    ).toEqual({
+      accessToken: "signed.jwt.token",
+      expiresIn: 300,
+    });
+    expect(m.keys.sign).toHaveBeenCalledWith(
+      { act: { sub: "arda" }, mode: "service", scope: PROVISIONING_READ_SCOPE },
+      { audience: "vxture", expiresInSec: 300, jwtid: expect.any(String) },
+    );
+    expect(m.keys.verify).not.toHaveBeenCalled();
+    expect(m.pool.query.mock.calls[0]?.[1]).toEqual(["arda-beta", "arda"]);
+    const sql = String(m.pool.query.mock.calls[0]?.[0]);
+    for (const predicate of [
+      "c.status = 'active'",
+      "c.client_kind = 'product'",
+      "c.token_endpoint_auth_method <> 'none'",
+      "p.status = 'active'",
+      "p.deleted_at is null",
+    ])
+      expect(sql).toContain(predicate);
+    expect(sql).not.toContain("subscriptions");
+    expect(auditCall(m.pool.query)).toBeDefined();
+  });
+
+  it.each([CALLER_PLATFORM, CALLER_ATLAS, CALLER_PLATFORM_UNLISTED])(
+    "denies platform and delegated callers %j",
+    async (caller) => {
+      const m = build();
+      await expect(m.service.exchange(caller, req)).rejects.toThrow(
+        "invalid_client",
+      );
+      expect(m.keys.sign).not.toHaveBeenCalled();
+      expect(m.pool.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, "arda"])(
+    "requires the platform audience %j",
+    async (audience) => {
+      const m = build();
+      await expect(
+        m.service.exchange(CALLER_ARDA, { ...req, audience }),
+      ).rejects.toThrow("invalid_target");
+      expect(m.keys.sign).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["subjectToken", "workspaceId", "orgId"] as const)(
+    "rejects %s including an explicit empty value",
+    async (field) => {
+      for (const value of ["", "context"]) {
+        const m = build();
+        await expect(
+          m.service.exchange(CALLER_ARDA, { ...req, [field]: value }),
+        ).rejects.toThrow("invalid_request");
+        expect(m.keys.sign).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each([{ rows: [] }, { rows: [{ product_code: "another-product" }] }])(
+    "denies missing or changed active binding %j",
+    async ({ rows }) => {
+      const m = build();
+      m.pool.query.mockResolvedValue({ rows });
+      await expect(m.service.exchange(CALLER_ARDA, req)).rejects.toThrow(
+        "invalid_client",
+      );
+      expect(m.keys.sign).not.toHaveBeenCalled();
+    },
+  );
+});
 
 describe("TokenExchangeService.exchange — request validation", () => {
   let m: Mocks;

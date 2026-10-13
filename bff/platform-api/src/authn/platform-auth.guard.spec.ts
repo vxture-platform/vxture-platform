@@ -122,6 +122,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("PlatformAuthGuard — discovery tickets", () => {
+  it("denies a correctly signed read ticket even with a valid shared-secret fallback", async () => {
+    const signer = makeSigner();
+    stubJwks(signer);
+    const guard = makeGuard({ authInternalToken: SHARED_SECRET });
+    const token = signer.sign(
+      { act: { sub: "arda" }, mode: "service", scope: "provisioning:read" },
+      { audience: "vxture", expiresInSec: 300 },
+    );
+    const req = fakeRequest({
+      authorization: `Bearer ${token}`,
+      [INTERNAL_AUTH_HEADER]: SHARED_SECRET,
+    });
+    await expect(guard.canActivate(ctx(req))).rejects.toThrow("invalid_token");
+    expect(req.s2sCaller).toBeUndefined();
+  });
+});
+
 describe("PlatformAuthGuard — legacy shared-secret path (unchanged)", () => {
   it("passes with a correct x-vxture-internal-auth header", async () => {
     const guard = makeGuard({ authInternalToken: SHARED_SECRET });
