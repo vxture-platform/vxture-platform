@@ -66,7 +66,8 @@ interface TokenRequestBody {
   // present = OBO mode; absent = service mode, which requires `workspace_id`
   // — except the delegated-reporter shape (decision 3 PR C, product_210 §3.5:
   // an allowlisted L1 reporter asking for `audience=vxture`), which requires
-  // it ABSENT. The service decides per grant; nothing is validated here.
+  // it ABSENT. The explicit provisioning:read scope is another separate
+  // no-workspace grant. The service decides per grant; nothing is validated here.
   subject_token?: string;
   audience?: string;
   workspace_id?: string;
@@ -667,6 +668,7 @@ export class OidcRouter {
           subjectToken: body.subject_token,
           workspaceId: body.workspace_id,
           orgId: body.org_id,
+          scope: body.scope,
         });
       }
       default:

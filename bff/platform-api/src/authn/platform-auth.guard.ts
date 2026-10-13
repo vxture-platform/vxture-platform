@@ -118,6 +118,11 @@ export class PlatformAuthGuard implements CanActivate {
     if (claims["aud"] !== PLATFORM_S2S_AUDIENCE) {
       throw new UnauthorizedException("invalid_token");
     }
+    // A discovery ticket has no workspace authority and must reach only its
+    // dedicated reader guard, never any existing C2/C3 handler.
+    if (claims["scope"] === "provisioning:read") {
+      throw new UnauthorizedException("invalid_token");
+    }
     const act = claims["act"] as { sub?: unknown } | undefined;
     if (!act || typeof act.sub !== "string" || !act.sub) {
       throw new UnauthorizedException("invalid_token");

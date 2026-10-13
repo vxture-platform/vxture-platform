@@ -82,6 +82,8 @@ export const TOKEN_EXCHANGE_TTL_SECONDS = 300;
  * sentinel rather than being silently shadowed by it.
  */
 export const PLATFORM_S2S_AUDIENCE = "vxture";
+/** Workspace discovery is a separate read-only grant, never a supply token. */
+export const PROVISIONING_READ_SCOPE = "provisioning:read";
 
 /**
  * What an allowlisted platform-level caller may mint. One grant per member —
@@ -164,6 +166,8 @@ export interface TokenExchangeRequest {
   /** service mode: explicit workspace context (required when no subject_token). */
   workspaceId: string | undefined;
   orgId: string | undefined;
+  /** Explicit product-wide reconciliation grant; absent for existing grants. */
+  scope?: string | undefined;
 }
 
 export interface TokenExchangeResult {
@@ -184,6 +188,9 @@ export class TokenExchangeService {
     caller: TokenExchangeCaller,
     req: TokenExchangeRequest,
   ): Promise<TokenExchangeResult> {
+    if (req.scope === PROVISIONING_READ_SCOPE) {
+      return this.exchangeProvisioningReader(caller, req);
+    }
     // Operator-OBO (product_250 M-1, batch B): a workforce-realm RP (admin —
     // and later the capability-console shell) presents its operator's access
     // token to mint a management-plane token for a provider (aud=atlas/...).
@@ -252,6 +259,66 @@ export class TokenExchangeService {
       workspaceId: context.workspaceId,
       orgId: context.orgId,
       tenantId: context.tenantId,
+    });
+    return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
+  }
+
+  /**
+   * Mint discovery authority for one registered product, without a workspace.
+   * The caller is authenticated by OidcService before reaching this method.
+   * @param caller - Authenticated confidential client and its catalog identity.
+   * @param req - Explicit read scope with no person or tenant context.
+   * @returns A non-refreshable, 300-second reconciliation token.
+   * @throws {BadRequestException} If context, audience, or product binding is invalid.
+   */
+  private async exchangeProvisioningReader(
+    caller: TokenExchangeCaller,
+    req: TokenExchangeRequest,
+  ): Promise<TokenExchangeResult> {
+    if (!caller.productCode) throw new BadRequestException("invalid_client");
+    if (req.audience !== PLATFORM_S2S_AUDIENCE) {
+      throw new BadRequestException("invalid_target");
+    }
+    if (
+      req.subjectToken !== undefined ||
+      req.workspaceId !== undefined ||
+      req.orgId !== undefined
+    ) {
+      throw new BadRequestException("invalid_request");
+    }
+    const result = await this.pool.query<{ product_code: string }>(
+      `select p.product_code from appoidc.oidc_clients c
+         join product.products p on p.id = c.product_id
+        where c.client_id = $1 and c.status = 'active'
+          and c.client_kind = 'product'
+          and c.token_endpoint_auth_method <> 'none'
+          and p.product_code = $2 and p.status = 'active'
+          and p.deleted_at is null`,
+      [caller.clientId, caller.productCode],
+    );
+    if (result.rows[0]?.product_code !== caller.productCode) {
+      throw new BadRequestException("invalid_client");
+    }
+    const jti = randomUUID();
+    const accessToken = this.keys.sign(
+      {
+        act: { sub: caller.productCode },
+        mode: "service",
+        scope: PROVISIONING_READ_SCOPE,
+      },
+      {
+        audience: PLATFORM_S2S_AUDIENCE,
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: jti,
+      },
+    );
+    await this.recordAudit({
+      jti,
+      callerProduct: caller.productCode,
+      targetProduct: PLATFORM_S2S_AUDIENCE,
+      mode: "service",
+      workspaceId: "",
+      orgId: null,
     });
     return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
   }
