@@ -114,9 +114,28 @@
 
 **命名(owner 2026-07-20 定案)**:前缀编码 SoT 方向——`vx_` = 平台源/平台契约面,`local_` = 产品自持;后缀点明域。① **`vx_provision`**:平台驱动的开通/绑定 + 入站事件簿(数据来自 provisioning webhook);② **`local_authz`**:产品本地授权(成员 + 功能角色/权限),`local_` 前缀**根除**了平台控制面库 `access` schema(治理 RBAC)的重名地雷——一看即知是产品本地授权、非平台治理;③ **`local_usage`**:产品本地用量缓冲,`local_` 扛住"只缓冲、非权威计量"(平台才是唯一写入方),且此名本就是 `data_platform_100 §2.3.1` 用量缓冲 schema 原名(平台侧零改)。非对称前缀是**特性**:SoT 方向直接写在 schema 名上。数量按需,不为整齐硬凑。
 
-#### E. DDL 与值域(不变)
+#### E. DDL 与值域
 
-DDL 三段式单一权威:`deploy/database/ddl/00_baseline.sql`(建三契约 schema + 产品领域 schema)+ `97_service_role.sql`(`{product}_svc` 最小权限)+ `98_column_locks.sql`(列锁白名单)+ `incr/`(幂等 `CREATE TABLE / ADD COLUMN … IF NOT EXISTS` 编号增量);prisma schema 仅作 client 生成源(prisma-client generator + driver adapter,无 migrations 目录),`check-data-architecture.mjs` 三件套锁步校验;入口 entrypoint 永不 migrate,结构变更只走 db-init.yml。值域:`@vxture/shared` 唯一权威,`check-catalog-domains.mjs` 校 DDL CHECK == @shared;产品自有业务值域留域内。
+DDL 三段式单一权威:`deploy/database/ddl/00_baseline.sql`(建三契约 schema + 产品领域 schema)+ `97_service_role.sql`(`{product}_svc` 最小权限)+ `98_column_locks.sql`(列锁白名单)+ `incr/`(幂等 `CREATE TABLE / ADD COLUMN … IF NOT EXISTS` 编号增量);使用 Prisma 的产品以 prisma schema 作 client 生成源(prisma-client generator + driver adapter,无 migrations 目录),`check-data-architecture.mjs` 按下列深度校验 DDL↔ORM;入口 entrypoint 永不 migrate,结构变更只走 db-init.yml。值域:`@vxture/shared` 唯一权威,`check-catalog-domains.mjs` 校 DDL CHECK == @shared;产品自有业务值域留域内。
+
+**DDL↔ORM 守护深度（2026-10-13 修订，依据 [平台 #18 item 4](https://github.com/vxture-platform/vxture-platform/issues/18) 的标准裁决请求与本次 owner 确认）**：本条适用于使用 ORM 的自带 DB 产品。使用 raw-pg 等直接 SQL 的实现继续遵守 DDL 唯一权威、列锁与 db-init 纪律，不为满足本条引入 ORM；数据访问方式不是本次裁决对象。
+
+| 检查面         | CI 必须核验的语义                                                                                                                                                 | 边界                                                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 物理表与列     | 按 ORM 的 schema/table/column 映射解析物理名称（Prisma 的 `@@schema`、`@@map`、`@map` 及未显式映射时的默认名称）；每个持久化模型及其标量列必须存在于 DDL 最终结构 | ORM 关系字段不是数据库列；标量数组仍是列。有意不建 ORM 模型的 DDL 表、或不暴露给 ORM 的 DDL 列允许保留，须逐项记录对象与原因（如限制写入面），校验器报告这些差集；不得无依据放行整个 schema |
+| 可空性与类型   | 对映射列核对 NULL/NOT NULL 与 ORM 可空性，核对数据库持久化类型及其长度、精度、标度、数组维度等适用参数                                                            | 比较数据库语义及 ORM connector 的实际类型映射，不把 `String` 等语言类型直接当 PostgreSQL 类型；等价别名先规范化，不能以“能转换”放行不等价类型                                               |
+| 默认值与生成值 | 区分数据库默认表达式、数据库 identity/generated 列与 ORM 客户端生成值；ORM 声明数据库默认或生成行为时，核对 DDL 是否提供相应语义                                  | `uuid()` 等客户端生成值不要求 DDL 同时有默认值；DDL 独有默认值须明确为数据库负责，不能伪报 ORM 已检查其一致性。等价表达式按数据库语义比较，不按字符串逐字比较                               |
+| 索引与约束     | 对 ORM 声明的主键、唯一约束、索引与外键核对 DDL 中的对应语义，包括适用的列顺序、唯一性与外键动作；对 DDL 独有对象验证其合法性及执行顺序                           | 部分/表达式索引、CHECK 等 ORM 不支持的对象仍由 DDL 持有，不能要求 ORM 重复表达或删除它们；守护须报告这些对象的检查范围与依据，不得将它们静默算作已通过 ORM 对照                             |
+
+**最终结构与失败纪律**：
+
+1. 以实际 db-init 的文件清单与执行顺序为输入，计算基线及增量执行后的最终结构。必须处理本仓使用的建表、加/删/改列、改类型/可空性/默认值、重命名及索引/约束变更；不能只把 `CREATE TABLE` 与 `ADD COLUMN` 的正则匹配结果取并集。初始化路径与既有库升级路径都要验证，避免基线中的索引或列锁提前引用增量才创建的列。
+2. 实现可采用完整覆盖本仓语法的静态解析，或在隔离的临时 PostgreSQL 库按同序应用 DDL 后读取结构元数据。缺少/漏读应检查的文件、解析不了检查范围内的声明、或临时库应用失败，均须使 CI 非零退出；不得通过捕获异常返回成功。明确无 DB 或无 ORM 的产品可按适用性不运行对应检查，不能把输入丢失当作“不适用”。
+3. 差异输出至少定位到物理对象、对应来源及不一致属性；有意未映射对象须有可核查的记名依据。新增例外必须与设计理由同批审查，不以扩大 ORM 写入面消除差异，也不以增加泛化豁免使 CI 变绿。
+
+**守护验收**：在检查器回归用例或隔离数据库中分别注入并证明以下漂移使 CI 失败：ORM 列无对应 DDL 列、可空性不一致、持久化类型/参数不一致、数据库默认/生成行为不一致、ORM 所声明的索引/约束缺失或语义不一致；另覆盖缺失文件、未支持语法及基线/增量执行顺序错误。通过用例须覆盖关系字段排除、物理名称映射、记名的 DDL 独有列、客户端生成默认值、合法的 DDL 独有部分索引，以及初始化与升级后的等价结构。只证明当前仓库“全绿”不构成这些能力的验收。
+
+**本次核对与落地状态**：2026-10-13 本地只读核对两仓 `scripts/guardrails/check-data-architecture.mjs` 并运行 `--strict`：Runos 通过 12 张表的表集合对照，尚无列级属性检查；Atlas 通过 19 张表/291 个映射列，报告 6 个有意未映射的 DDL 列，并检查基线索引/列锁不提前引用增量列，但尚未覆盖上述可空性、类型、默认值及完整索引/约束语义。平台本仓的同名脚本是设计文档 linter，不是产品 DDL↔ORM 校验器。以上为本地源码/命令证据，不代表生产数据库已验证；本次仅补标准，产品仓升级护栏另行实施并提供验收证据，#18 在该证据齐备前保留。
 
 ### 2.5 应用层形态槽(治理规范 §10 既定槽位,按 profile 取用)
 
