@@ -391,6 +391,8 @@ const ENV_FILE_RULES = [
     requiredKeys: new Set([
       "NODE_ENV",
       "CONSOLE_BFF_PORT",
+      // Required for the desktop catalog; never fall back to localhost:3120.
+      "RUNOS_API_URL",
       "AUTH_BFF_URL",
       "OIDC_ISSUER",
       // this RP's own public origin; redirect_uri is derived from it. Missing �?
