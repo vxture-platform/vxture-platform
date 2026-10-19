@@ -33,6 +33,7 @@ import { ApplicationsRouter } from "./routers/applications.router";
 import { NativeAuthRouter } from "./routers/native-auth.router";
 import { AuditRouter } from "./routers/audit.router";
 import { AtlasRouter } from "./routers/atlas.router";
+import { RunosRouter } from "./routers/runos.router";
 import { BillingRouter } from "./routers/billing.router";
 import { CapabilitiesRouter } from "./routers/capabilities.router";
 import { HealthRouter } from "./routers/health.router";
@@ -86,6 +87,7 @@ import { VerificationRouter } from "./routers/verification.router";
     VerificationRouter,
     AuditRouter,
     AtlasRouter,
+    RunosRouter,
     SearchRouter,
   ],
   providers: [
