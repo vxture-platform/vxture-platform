@@ -52,7 +52,7 @@ describe("composeModelHealthNotices", () => {
     expect(out).toEqual([]);
   });
 
-  it("route down → critical, opera+admin, no expiry, route_down key", () => {
+  it("route down → critical, Admin only, no expiry, route_down key", () => {
     const n = first(
       composeModelHealthNotices(
         view({
@@ -71,13 +71,13 @@ describe("composeModelHealthNotices", () => {
       ),
     );
     expect(n.severity).toBe("critical");
-    expect(n.targetPlanes).toEqual(["opera", "admin"]);
+    expect(n.targetPlanes).toEqual(["admin"]);
     expect(n.expiresAt).toBeNull();
     expect(n.referenceType).toBe(MODEL_HEALTH_REFERENCE_TYPE);
     expect(n.referenceId).toBe("route_down:chat/pro");
   });
 
-  it("route configIssues (not down) → warning, opera-only, fingerprint key", () => {
+  it("route configIssues (not down) → warning, Admin only, fingerprint key", () => {
     const n = first(
       composeModelHealthNotices(
         view({
@@ -103,7 +103,7 @@ describe("composeModelHealthNotices", () => {
       ),
     );
     expect(n.severity).toBe("warning");
-    expect(n.targetPlanes).toEqual(["opera"]);
+    expect(n.targetPlanes).toEqual(["admin"]);
     expect(n.referenceId).toBe("route_config:chat/x:primary:p:no_key");
     expect(n.expiresAt).toBeInstanceOf(Date);
   });
@@ -127,7 +127,7 @@ describe("composeModelHealthNotices", () => {
     expect(n.referenceId).toBe("model_rate_limited:dsv4");
   });
 
-  it("vendor out of money → critical opera+admin; low-but-positive → warning opera", () => {
+  it("vendor out of money → critical Admin only; low-but-positive → warning Admin only", () => {
     const crit = first(
       composeModelHealthNotices(
         view({
@@ -139,7 +139,7 @@ describe("composeModelHealthNotices", () => {
       ),
     );
     expect(crit.severity).toBe("critical");
-    expect(crit.targetPlanes).toEqual(["opera", "admin"]);
+    expect(crit.targetPlanes).toEqual(["admin"]);
     expect(crit.referenceId).toBe("vendor_balance:deepseek:critical");
 
     const warn = first(
@@ -176,23 +176,76 @@ describe("composeModelHealthNotices", () => {
     expect(n.body).toContain("已隐去内部 id");
   });
 
-  it("atlas component down → critical; degraded → warning", () => {
+  it("Atlas request-log failing → critical; partitions at-risk → warning", () => {
     const out = composeModelHealthNotices(
       view({
         atlas: [
-          { component: "request_log", state: "down" },
-          { component: "partitions", state: "degraded" },
+          { component: "request_log", state: "failing" },
+          { component: "partitions", state: "at_risk" },
         ],
       }),
       NOW,
     );
     expect(
-      out.find((n) => n.referenceId === "atlas_component:request_log:down")
+      out.find((n) => n.referenceId === "atlas_component:request_log:failing")
         ?.severity,
     ).toBe("critical");
     expect(
-      out.find((n) => n.referenceId === "atlas_component:partitions:degraded")
+      out.find((n) => n.referenceId === "atlas_component:partitions:at_risk")
         ?.severity,
     ).toBe("warning");
   });
+  it("reports degraded routes without configuration defects and degraded models", () => {
+    const out = composeModelHealthNotices(
+      view({
+        routes: [
+          {
+            code: "chat/slow",
+            state: "degraded",
+            severity: "warning",
+            primary: { modelCode: "m", state: "unavailable" },
+            fallback: { modelCode: "f", state: "ok" },
+            configIssues: [],
+          },
+        ],
+        models: [{ modelCode: "slow", providerCode: "p", state: "degraded" }],
+      }),
+      NOW,
+    );
+    expect(out).toHaveLength(2);
+    for (const n of out) {
+      expect(n.targetPlanes).toEqual(["admin"]);
+      expect(n.link).toBeNull();
+      expect(n.severity).toBe("warning");
+      expect(n.body.length).toBeGreaterThan(0);
+    }
+    expect(out[0]?.referenceId).toBe("route_degraded:chat/slow");
+  });
+
+  it.each(["usage_reporting", "request_log", "partitions"] as const)(
+    "ignores unknown %s instead of inventing a failure",
+    (component) => {
+      expect(
+        composeModelHealthNotices(
+          view({ atlas: [{ component, state: "unknown" }] }),
+          NOW,
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it.each(["usage_reporting", "partitions"] as const)(
+    "keeps failing %s at Atlas warning severity",
+    (component) => {
+      const n = first(
+        composeModelHealthNotices(
+          view({ atlas: [{ component, state: "failing" }] }),
+          NOW,
+        ),
+      );
+      expect(n.severity).toBe("warning");
+      expect(n.targetPlanes).toEqual(["admin"]);
+      expect(n.link).toBeNull();
+    },
+  );
 });

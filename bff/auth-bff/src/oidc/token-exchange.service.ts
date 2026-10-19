@@ -529,14 +529,23 @@ export class TokenExchangeService {
     if (!req.audience) {
       throw new BadRequestException("invalid_request");
     }
-    const target = await this.resolveTargetProductCode(req.audience);
-    if (!target || target === PLATFORM_S2S_AUDIENCE) {
+    if (req.audience !== "atlas") {
       throw new BadRequestException("invalid_target");
     }
     if (req.workspaceId || req.orgId) {
       // A health ticket carries no tenant context; reject rather than silently
       // drop, so a miswired caller is told, not quietly given a narrower token.
       throw new BadRequestException("invalid_request");
+    }
+    const target = "atlas";
+    const targetClient = await this.pool.query<{ client_id: string }>(
+      `select client_id from appoidc.oidc_clients
+        where client_id = $1 and status = 'active'
+          and client_kind = 'platform'`,
+      [target],
+    );
+    if (!targetClient.rows[0]) {
+      throw new BadRequestException("invalid_target");
     }
     const client = await this.pool.query<{ client_id: string }>(
       `select client_id from appoidc.oidc_clients

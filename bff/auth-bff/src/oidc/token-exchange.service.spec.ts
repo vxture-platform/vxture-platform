@@ -1036,7 +1036,6 @@ describe("TokenExchangeService.exchange — health-reader mode (platform-api→a
 
   it("platform-api → aud=atlas: mints act.sub=platform-api, mode=service, scope=health:atlas, NO workspace/org", async () => {
     m.pool.query
-      .mockResolvedValueOnce({ rows: [] }) // resolveTargetProductCode: product.products (none — atlas is not a product)
       .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] }) // resolveTargetProductCode: atlas oidc_clients row
       .mockResolvedValueOnce({ rows: [{ client_id: "platform-api" }] }) // caller client row: active + platform
       .mockResolvedValueOnce({ rows: [] }); // audit insert
@@ -1073,8 +1072,7 @@ describe("TokenExchangeService.exchange — health-reader mode (platform-api→a
   });
 
   it("platform-api → aud=vxture: invalid_target (health-reader never mints the delegated-reporter audience)", async () => {
-    // resolveTargetProductCode("vxture") does one product.products lookup, then
-    // returns PLATFORM_S2S_AUDIENCE — which exchangeHealthReader rejects.
+    // Health readers may only target Atlas, regardless of catalog state.
     m.pool.query.mockResolvedValue({ rows: [] });
     await expect(
       m.service.exchange(CALLER_PLATFORM_API, {
@@ -1082,6 +1080,62 @@ describe("TokenExchangeService.exchange — health-reader mode (platform-api→a
         audience: PLATFORM_S2S_AUDIENCE,
       }),
     ).rejects.toMatchObject({ message: "invalid_target" });
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+  it.each(["runos", "arda", "ATLAS", "vxture"])(
+    "refuses other target %s without looking up catalog products",
+    async (audience) => {
+      await expect(
+        m.service.exchange(CALLER_PLATFORM_API, { ...req, audience }),
+      ).rejects.toMatchObject({ message: "invalid_target" });
+      expect(m.pool.query).not.toHaveBeenCalled();
+      expect(m.keys.sign).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["workspaceId", "orgId"] as const)(
+    "refuses declared %s before any lookup",
+    async (field) => {
+      await expect(
+        m.service.exchange(CALLER_PLATFORM_API, { ...req, [field]: "context" }),
+      ).rejects.toMatchObject({ message: "invalid_request" });
+      expect(m.pool.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it("requires an active platform Atlas client, without product-catalog fallback", async () => {
+    m.pool.query.mockResolvedValue({ rows: [] });
+    await expect(
+      m.service.exchange(CALLER_PLATFORM_API, req),
+    ).rejects.toMatchObject({ message: "invalid_target" });
+    expect(m.pool.query).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(
+        /oidc_clients[\s\S]*status = 'active'[\s\S]*client_kind = 'platform'/,
+      ),
+      ["atlas"],
+    );
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("requires the caller to remain an active platform client", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ client_id: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] });
+    await expect(
+      m.service.exchange(CALLER_PLATFORM_API, req),
+    ).rejects.toMatchObject({ message: "invalid_client" });
+    expect(m.pool.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/status = 'active'[\s\S]*client_kind = 'platform'/),
+      ["platform-api"],
+    );
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing audience", async () => {
+    await expect(
+      m.service.exchange(CALLER_PLATFORM_API, { ...req, audience: undefined }),
+    ).rejects.toMatchObject({ message: "invalid_request" });
     expect(m.keys.sign).not.toHaveBeenCalled();
   });
 });

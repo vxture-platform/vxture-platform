@@ -1,28 +1,14 @@
 /**
- * model-health-notice.ts — issue #562：把 Atlas 的模型服务健康信号翻成运营通告。
- *
- * 纯函数，和 `operator-alerts.wiring` 里的 compose* 同一形状：输入一份 Atlas
- * `ServiceHealthView`（快照），输出零到多条 `CreateSystemNoticeInput`，由
- * `ModelHealthWatchJob` 逐条 `createSystemNotice`。写侧去重锚（`uq_operator_notices_system`）
- * 保证「一事一条」——巡检重扫只会落成 `inserted: false`，不刷屏。
- *
- * 四类信号（issue #562 的措辞「欠费 / 宕机 / 路由不可用」加上限流）：
- *   · 欠费   —— 供应商余额不足（vendors[].state === "balance_low"），或模型被上游拒付
- *                （models[].state === "account_refused"）。
- *   · 宕机   —— 模型连不上/不可用（unavailable / unreachable），或路由整条 down。
- *   · 路由不可用 —— 路由有 configIssues（某个点名模型服务不了这条路由），与实时流量无关。
- *   · 限流   —— 模型 rate_limited（429）。
- * 另加 Atlas 自身组件（usage_reporting / request_log / partitions）非 ok。
- *
- * 口径：只对 warning 及以上发通告（ok / 纯 info 不发，避免噪声——owner 的「先全后筛」
- * 指的是信号种类要全，不是把正常态也播一遍）。`referenceType` 用独立的 `model_health`，
- * 不与 `ops_signal` 挤同一个唯一索引（见 ops-notice.ts 的说明）。引进来的 detail 文本
- * 一律过 `redactUuids`（全站铁律：通告不出现 UUID）。
+ * model-health-notice.ts - Compose Admin-only notices from Atlas health snapshots.
+ * @package @vxture/bff-platform-api
+ * @layer Application
+ * @category notifications
+ * @author AI-Generated
+ * @date 2026-10-19
+ * Snapshot keys suppress duplicate writes, but do not yet track recovery episodes.
  */
-
 import type {
   CreateSystemNoticeInput,
-  NoticePlane,
   NoticeSeverity,
 } from "@vxture/service-notice";
 
@@ -34,9 +20,6 @@ import {
 
 /** 去重锚类别：与 `ops_signal` 分家，各自占一套键规则，不挤同一个唯一索引。 */
 export const MODEL_HEALTH_REFERENCE_TYPE = "model_health";
-
-/** 点开去哪：opera 的模型服务页。三平面内相对路径。 */
-const MODEL_SERVICES_LINK = "/model/services";
 
 // ── Atlas ServiceHealthView 的形状（逐字抄自 atlas service/src/health，不跨仓 import） ──
 // 跨仓 import 会把两份构建拴死；这里只声明本文件消费到的字段，多出来的忽略即可。
@@ -103,7 +86,7 @@ export interface HealthVendorView {
 
 export interface HealthAtlasComponentView {
   readonly component: "usage_reporting" | "request_log" | "partitions";
-  readonly state: string;
+  readonly state: "ok" | "failing" | "at_risk" | "unknown";
   readonly since?: string;
   readonly detail?: string;
 }
@@ -116,17 +99,19 @@ export interface ServiceHealthView {
   readonly atlas: readonly HealthAtlasComponentView[];
 }
 
-/** 模型「正在失败」的态（degraded / unknown 不算失败——还在兜底服务或信息不足）。 */
+/** Warning model states follow Atlas modelSeverity; unknown is informational. */
 const MODEL_FAILING: ReadonlySet<ModelHealthState> = new Set<ModelHealthState>([
   "rate_limited",
   "account_refused",
   "unavailable",
   "unreachable",
   "model_missing",
+  "degraded",
 ]);
 
 /** 每个模型失败态对应的人读说法。 */
 const MODEL_STATE_LABEL: Record<string, string> = {
+  degraded: "服务降级（延迟或空响应）",
   rate_limited: "被上游限流（429）",
   account_refused: "被上游拒付（账户/余额）",
   unavailable: "上游不可用（5xx / 超时）",
@@ -157,10 +142,8 @@ function composeRouteNotice(
 ): CreateSystemNoticeInput | null {
   const hasIssues = route.configIssues.length > 0;
   const down = route.state === "down";
-  if (!down && !hasIssues) return null; // ok / 纯 degraded 且无配置问题：不发
+  if (!down && !hasIssues && route.state !== "degraded") return null;
 
-  // down 影响客户（这条路由当前服务不了），升到 admin；仅配置问题留 opera。
-  const planes: NoticePlane[] = down ? ["opera", "admin"] : ["opera"];
   const severity: NoticeSeverity = down ? "critical" : "warning";
 
   const lines: string[] = [];
@@ -171,6 +154,11 @@ function composeRouteNotice(
           ? `，兜底 ${route.fallback.modelCode} 为 ${route.fallback.state}`
           : "，无兜底") +
         "）。",
+    );
+  }
+  if (!down && route.state === "degraded") {
+    lines.push(
+      `路由 ${route.code} 当前降级，主模型 ${route.primary.modelCode} 为 ${route.primary.state}。`,
     );
   }
   if (hasIssues) {
@@ -190,30 +178,33 @@ function composeRouteNotice(
     );
   }
 
-  // 去重锚：down 用 route_down:<code>（一条占着直到恢复）；配置问题带 issue 指纹，
-  // 增删了某个问题才算新的一条。
+  // Snapshot deduplication is retained; recurring episodes need the event feed.
   const issueFingerprint = route.configIssues
     .map((i) => `${i.role}:${i.modelCode}:${i.code}`)
     .sort()
     .join(",");
   const key = down
     ? `route_down:${route.code}`
-    : `route_config:${route.code}:${issueFingerprint}`;
+    : hasIssues
+      ? `route_config:${route.code}:${issueFingerprint}`
+      : `route_degraded:${route.code}`;
 
   return {
-    targetPlanes: planes,
+    targetPlanes: ["admin"],
     severity,
     title: clip(
       down
         ? `模型路由不可用：${route.code}`
-        : `模型路由配置异常：${route.code}（${route.configIssues.length} 项）`,
+        : hasIssues
+          ? `模型路由配置异常：${route.code}（${route.configIssues.length} 项）`
+          : `模型路由降级：${route.code}`,
       256,
     ),
     body: lines.join("\n"),
-    link: planes.length === 1 ? MODEL_SERVICES_LINK : null,
+    link: null,
     referenceType: MODEL_HEALTH_REFERENCE_TYPE,
     referenceId: opsNoticeReferenceId(key),
-    // down 是持续故障，留到恢复（或被读掉）；配置问题按 warning 常规过期。
+    // Expiry only controls visibility; episode recovery is not implemented here.
     expiresAt: down ? null : warningExpiry(now),
   };
 }
@@ -237,11 +228,11 @@ function composeModelNotice(
   if (detail) lines.push(`详情：${detail}`);
 
   return {
-    targetPlanes: ["opera"],
+    targetPlanes: ["admin"],
     severity: "warning",
     title: clip(`模型异常：${model.modelCode}（${label}）`, 256),
     body: lines.join("\n"),
-    link: MODEL_SERVICES_LINK,
+    link: null,
     referenceType: MODEL_HEALTH_REFERENCE_TYPE,
     // 一个 modelCode 一个失败态一条；态变了（如 rate_limited→unavailable）自然成新的一条。
     referenceId: opsNoticeReferenceId(
@@ -260,7 +251,6 @@ function composeVendorNotice(
 
   const outOfMoney = typeof vendor.balance === "number" && vendor.balance <= 0;
   const severity: NoticeSeverity = outOfMoney ? "critical" : "warning";
-  const planes: NoticePlane[] = outOfMoney ? ["opera", "admin"] : ["opera"];
 
   const lines = [
     `供应商 ${vendor.providerCode} 余额不足` +
@@ -274,11 +264,11 @@ function composeVendorNotice(
   );
 
   return {
-    targetPlanes: planes,
+    targetPlanes: ["admin"],
     severity,
     title: clip(`供应商余额不足：${vendor.providerCode}`, 256),
     body: lines.join("\n"),
-    link: planes.length === 1 ? MODEL_SERVICES_LINK : null,
+    link: null,
     referenceType: MODEL_HEALTH_REFERENCE_TYPE,
     // 按 provider + severity：warning 升到 critical 时再发一条（口径变了该提醒）。
     referenceId: opsNoticeReferenceId(
@@ -288,13 +278,13 @@ function composeVendorNotice(
   };
 }
 
-/** Atlas 自身组件（计量上报 / 请求日志 / 分区）非 ok → warning（down 升 critical）。 */
+/** Match Atlas atlasSeverity: lost request logs are critical; unknown is informational. */
 function composeAtlasComponentNotice(
   comp: HealthAtlasComponentView,
   now: Date,
 ): CreateSystemNoticeInput | null {
-  if (comp.state === "ok") return null;
-  const critical = comp.state === "down";
+  if (comp.state === "ok" || comp.state === "unknown") return null;
+  const critical = comp.component === "request_log" && comp.state === "failing";
   const severity: NoticeSeverity = critical ? "critical" : "warning";
 
   const lines = [`Atlas 组件 ${comp.component} 状态 ${comp.state}。`];
@@ -302,11 +292,11 @@ function composeAtlasComponentNotice(
   if (detail) lines.push(`详情：${detail}`);
 
   return {
-    targetPlanes: ["opera"],
+    targetPlanes: ["admin"],
     severity,
     title: clip(`Atlas 组件异常：${comp.component}（${comp.state}）`, 256),
     body: lines.join("\n"),
-    link: MODEL_SERVICES_LINK,
+    link: null,
     referenceType: MODEL_HEALTH_REFERENCE_TYPE,
     referenceId: opsNoticeReferenceId(
       `atlas_component:${comp.component}:${comp.state}`,

@@ -49,8 +49,8 @@ export const platformSchema = z.object({
    * by the model-health watchdog to mint a `health:atlas` ticket via
    * token-exchange (health-reader grant); platform-api is otherwise a token
    * receiver, not an RP. Secret is provisioned by
-   * scripts/27-provision-client-secrets.sh; empty (the default) = the watchdog
-   * stays dormant and logs that it is unconfigured rather than throwing.
+   * scripts/27-provision-client-secrets.sh. Empty (the default) permits boot,
+   * but watchdog ticks fail visibly until credentials are provisioned.
    */
   OIDC_CLIENT_ID: z.string().default("platform-api"),
   OIDC_CLIENT_SECRET: z.string().default(""),

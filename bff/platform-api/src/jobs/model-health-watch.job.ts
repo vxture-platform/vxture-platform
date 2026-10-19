@@ -1,26 +1,12 @@
 /**
- * model-health-watch.job.ts — 模型服务健康巡检（#562）。
+ * model-health-watch.job.ts - Unattended Atlas snapshot monitoring.
  * @package @vxture/bff-platform-api
- *
- * 平台侧的无人值守 watchdog：周期性读 Atlas 的 `/s2s/health`，把其中的欠费 / 宕机 /
- * 路由不可用 / 限流翻成 `admin.operator_notices` 的系统通告（`composeModelHealthNotices`），
- * 让运营在没人盯着页面时也看得见。此前平台对 Atlas 的健康信号零消费——6 条坏路由在产、
- * tenderforge 两天静默丢了 180/188 次调用都没人被通知（见 issue #562）。
- *
- * ── 为什么在 platform-api ──
- * 它要的是无会话、无租户的后台巡检，而 opera/admin 的 Atlas 代理都要 operator 登录态。
- * platform-api 用自己的机密客户端（health-reader grant）铸 `health:atlas` 票读健康，
- * 这是唯一不需要人坐在那儿的通路。
- *
- * ── 重叠无害，靠去重键 ──
- * 每轮取全量快照，`createSystemNotice` 的 `on conflict do nothing` 打在
- * `uq_operator_notices_system` 上，一条持续坏的路由只落一条通告，重扫只是 `inserted: false`。
- * 不记游标（同 operator-signal-sweep 的理由）。
- *
- * ── 失败要有声音 ──
- * 读健康抛了就让 `pass()` 抛出去：心跳记 failed，opera「任务调度」显红，job-health-alert
- * 再发一条「监测自己停了」。监测瞎了绝不能一路绿着（未配 secret 是例外——那是正常中间态，
- * 由 client 返回 null、这里记一条 log 跳过）。
+ * @layer Application
+ * @category job
+ * @author AI-Generated
+ * @date 2026-10-19
+ * Failed reads, missing credentials and notice writes fail the heartbeat.
+ * Snapshot deduplication does not yet implement recovery or recurring episodes.
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
@@ -30,10 +16,7 @@ import type { Pool } from "pg";
 
 import { AtlasHealthClient } from "../notifications/atlas-health.client";
 import { composeModelHealthNotices } from "../notifications/model-health-notice";
-import {
-  writeOpsNotice,
-  type SystemNoticeWriter,
-} from "../notifications/ops-notice";
+import { type SystemNoticeWriter } from "../notifications/ops-notice";
 import { JobHeartbeatService } from "./job-heartbeat.service";
 import { runHeartbeatTick, sweepIntervalMs } from "./sweep-interval.util";
 
@@ -55,8 +38,7 @@ export class ModelHealthWatchJob {
   private readonly notices: SystemNoticeWriter;
 
   constructor(
-    // 必须显式 @Inject：BFF 打包走 esbuild，它不产 emitDecoratorMetadata。
-    // pool 只在构造里包成 notices（同 operator-signal-sweep 的手法），不留字段。
+    // esbuild does not emit constructor metadata; keep injection explicit.
     @Inject(COMMERCE_PG_POOL) pool: Pool,
     @Inject(JobHeartbeatService)
     private readonly heartbeat: JobHeartbeatService,
@@ -90,20 +72,29 @@ export class ModelHealthWatchJob {
   private async pass(): Promise<number> {
     const view = await this.atlas.getHealth();
     if (!view) {
-      // 未配 secret：client 已记 log，本轮按 0 条正常收尾（不是失败）。
-      return 0;
+      throw new Error("Atlas health snapshot is unavailable");
     }
     const inputs = composeModelHealthNotices(view, new Date());
     let inserted = 0;
+    let failed = 0;
     for (const input of inputs) {
-      // writeOpsNotice 永不抛：去重命中与写失败都只记 log，不中断整轮。
-      await writeOpsNotice(this.notices, input, this.logger, input.referenceId);
+      try {
+        const result = await this.notices.createSystemNotice(input);
+        if (result.inserted) inserted++;
+      } catch {
+        // Attempt the remaining notices; retry failed writes on the next tick.
+        failed++;
+      }
     }
-    inserted = inputs.length;
+    if (failed > 0) {
+      throw new Error(
+        `Model health notice writes failed: ${failed}; inserted: ${inserted}`,
+      );
+    }
     this.logger.log(
       `model health watch：快照 models ${view.models.length} / routes ${view.routes.length} ` +
         `/ vendors ${view.vendors.length} / atlas ${view.atlas.length}，` +
-        `产出通告 ${inputs.length} 条（去重后按库为准）。`,
+        `新写入通告 ${inserted} 条，候选 ${inputs.length} 条。`,
     );
     return inserted;
   }

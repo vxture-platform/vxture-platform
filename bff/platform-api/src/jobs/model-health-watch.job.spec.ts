@@ -1,110 +1,153 @@
 /**
- * model-health-watch.job.spec.ts — #562 作业编排：
- *   · 未配 secret（client 返回 null）→ 0 条、不抛；
- *   · 有坏信号 → 逐条写通告（走内部 PgNoticeRepository → 假 pool 的 insert）；
- *   · 读健康抛了 → pass() 抛（心跳记 failed，不静默）。
- * 通告文案/去重键在 model-health-notice.spec 里测，这里只测编排。
+ * model-health-watch.job.spec.ts - Watchdog heartbeat and persistence regressions.
+ * @package @vxture/bff-platform-api
+ * @layer Application
+ * @category test
+ * @author AI-Generated
+ * @date 2026-10-19
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-
-import { ModelHealthWatchJob } from "./model-health-watch.job";
+import { ModelHealthWatchJob, JOB_NAME } from "./model-health-watch.job";
 import type { JobHeartbeatService } from "./job-heartbeat.service";
-import { AtlasHealthClient } from "../notifications/atlas-health.client";
+import type { AtlasHealthClient } from "../notifications/atlas-health.client";
 import type { ServiceHealthView } from "../notifications/model-health-notice";
 
-afterEach(() => {
-  delete process.env.MODEL_HEALTH_WATCH_INTERVAL_MS;
-});
-
-interface Call {
-  sql: string;
-  params: readonly unknown[];
-}
-
-/** 假 pool：记录调用；insert 回一行（=inserted）。 */
-function fakePool(): { pool: Pool; calls: Call[] } {
-  const calls: Call[] = [];
-  const query = async (sql: string, params: readonly unknown[] = []) => {
-    calls.push({ sql, params });
-    return { rows: [{ id: "n1" }], rowCount: 1 };
-  };
-  return { pool: { query } as unknown as Pool, calls };
-}
-
-function fakeClient(
-  impl: () => Promise<ServiceHealthView | null>,
-): AtlasHealthClient {
-  return { getHealth: impl } as unknown as AtlasHealthClient;
-}
-
-const heartbeat = {} as JobHeartbeatService;
+// ============================================================================
+// Fixtures
+// ============================================================================
 
 const okView: ServiceHealthView = {
-  generatedAt: "2026-10-09T00:00:00.000Z",
+  generatedAt: "2026-10-19T00:00:00.000Z",
   models: [],
   routes: [],
   vendors: [],
   atlas: [],
 };
-
-function newJob(client: AtlasHealthClient, pool: Pool): ModelHealthWatchJob {
-  return new ModelHealthWatchJob(pool, heartbeat, client);
+const badView: ServiceHealthView = {
+  ...okView,
+  models: [
+    { modelCode: "m", providerCode: "p", state: "unavailable" },
+    { modelCode: "n", providerCode: "p", state: "rate_limited" },
+  ],
+};
+function setup(view = okView) {
+  const query = vi.fn().mockResolvedValue({ rows: [{ id: "n1" }] });
+  const heartbeat = {
+    recordStart: vi.fn(),
+    recordSuccess: vi.fn(),
+    recordFailure: vi.fn(),
+  };
+  const atlas = { getHealth: vi.fn().mockResolvedValue(view) };
+  const job = new ModelHealthWatchJob(
+    { query } as unknown as Pool,
+    heartbeat as unknown as JobHeartbeatService,
+    atlas as unknown as AtlasHealthClient,
+  );
+  return { job, query, heartbeat, atlas };
 }
 
-describe("ModelHealthWatchJob.pass", () => {
-  it("writes one notice per qualifying signal (route down)", async () => {
-    const { pool, calls } = fakePool();
-    const view: ServiceHealthView = {
-      ...okView,
-      routes: [
-        {
-          code: "chat/pro",
-          state: "down",
-          severity: "critical",
-          primary: { modelCode: "p", state: "unavailable" },
-          fallback: null,
-          configIssues: [],
-        },
-      ],
-    };
-    const job = newJob(
-      fakeClient(async () => view),
-      pool,
+// ============================================================================
+// Observable tick behavior
+// ============================================================================
+
+describe("ModelHealthWatchJob", () => {
+  it("records zero for a healthy snapshot without writing notices", async () => {
+    const m = setup();
+    await m.job.tick();
+    expect(m.heartbeat.recordStart).toHaveBeenCalledWith(
+      JOB_NAME,
+      expect.any(Number),
     );
-    const inserted = await (
-      job as unknown as { pass(): Promise<number> }
-    ).pass();
-    expect(inserted).toBe(1);
-    const inserts = calls.filter((c) =>
-      /insert into admin\.operator_notices/i.test(c.sql),
+    expect(m.heartbeat.recordSuccess).toHaveBeenCalledWith(
+      JOB_NAME,
+      expect.any(Number),
+      0,
     );
-    expect(inserts).toHaveLength(1);
+    expect(m.query).not.toHaveBeenCalled();
+    expect(m.heartbeat.recordFailure).not.toHaveBeenCalled();
   });
 
-  it("returns 0 and writes nothing when unconfigured (client returns null)", async () => {
-    const { pool, calls } = fakePool();
-    const job = newJob(
-      fakeClient(async () => null),
-      pool,
+  it("counts only newly inserted notices, excluding duplicate signals", async () => {
+    const m = setup(badView);
+    m.query.mockResolvedValueOnce({ rows: [] });
+    await m.job.tick();
+    expect(m.query).toHaveBeenCalledTimes(2);
+    expect(m.query).toHaveBeenCalledWith(
+      expect.stringMatching(/insert into admin.operator_notices/i),
+      expect.arrayContaining([["admin"]]),
     );
-    const inserted = await (
-      job as unknown as { pass(): Promise<number> }
-    ).pass();
-    expect(inserted).toBe(0);
-    expect(calls).toHaveLength(0);
+    expect(m.heartbeat.recordSuccess).toHaveBeenCalledWith(
+      JOB_NAME,
+      expect.any(Number),
+      1,
+    );
   });
 
-  it("throws when the health read fails (so the heartbeat records failed)", async () => {
-    const { pool } = fakePool();
-    const job = newJob(
-      fakeClient(async () => {
-        throw new Error("Atlas /s2s/health returned status 503");
+  it("marks a read or missing-credentials failure instead of a successful zero", async () => {
+    const m = setup();
+    m.atlas.getHealth.mockRejectedValueOnce(
+      new Error("credentials are not configured"),
+    );
+    await m.job.tick();
+    expect(m.heartbeat.recordFailure).toHaveBeenCalledWith(
+      JOB_NAME,
+      expect.any(Number),
+      expect.stringContaining("credentials are not configured"),
+    );
+    expect(m.heartbeat.recordSuccess).not.toHaveBeenCalled();
+    expect(m.query).not.toHaveBeenCalled();
+    await m.job.tick();
+    expect(m.heartbeat.recordSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not accept an absent snapshot as health", async () => {
+    const m = setup();
+    m.atlas.getHealth.mockResolvedValueOnce(null);
+    await m.job.tick();
+    expect(m.heartbeat.recordFailure).toHaveBeenCalledWith(
+      JOB_NAME,
+      expect.any(Number),
+      expect.stringContaining("snapshot is unavailable"),
+    );
+    expect(m.heartbeat.recordSuccess).not.toHaveBeenCalled();
+  });
+
+  it("attempts remaining notices and fails the heartbeat when one write fails", async () => {
+    const m = setup(badView);
+    m.query.mockRejectedValueOnce(new Error("private database error"));
+    await m.job.tick();
+    expect(m.query).toHaveBeenCalledTimes(2);
+    expect(m.heartbeat.recordFailure).toHaveBeenCalledWith(
+      JOB_NAME,
+      expect.any(Number),
+      "Error: Model health notice writes failed: 1; inserted: 1",
+    );
+    expect(m.heartbeat.recordSuccess).not.toHaveBeenCalled();
+    await m.job.tick();
+    expect(m.heartbeat.recordSuccess).toHaveBeenCalledWith(
+      JOB_NAME,
+      expect.any(Number),
+      2,
+    );
+  });
+
+  it("skips overlapping ticks and resumes after the in-flight read", async () => {
+    const m = setup();
+    let release!: (v: ServiceHealthView) => void;
+    m.atlas.getHealth.mockReturnValueOnce(
+      new Promise<ServiceHealthView>((resolve) => {
+        release = resolve;
       }),
-      pool,
     );
-    await expect(
-      (job as unknown as { pass(): Promise<number> }).pass(),
-    ).rejects.toThrow(/503/);
+    const first = m.job.tick();
+    await Promise.resolve();
+    await m.job.tick();
+    expect(m.atlas.getHealth).toHaveBeenCalledTimes(1);
+    release(okView);
+    await first;
+    await m.job.tick();
+    expect(m.atlas.getHealth).toHaveBeenCalledTimes(2);
+    expect(m.heartbeat.recordSuccess).toHaveBeenCalledTimes(2);
   });
 });
