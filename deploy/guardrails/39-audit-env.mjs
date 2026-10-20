@@ -266,6 +266,8 @@ const ENV_FILE_RULES = [
     placeholderOptionalKeys: new Set([
       "OPERATOR_TOTP_ENC_KEY",
       "OPERATOR_SUPERADMIN_PASSWORD_HASH",
+      // Seed projection only; provision separately before enabling the watchdog.
+      "OIDC_CLIENT_SECRET_HASH_PLATFORM_API",
       // superadmin contact: optional seed projection (empty = keep DB values)
       "OPERATOR_SUPERADMIN_EMAIL",
       "OPERATOR_SUPERADMIN_PHONE",
@@ -563,8 +565,8 @@ const ENV_FILE_RULES = [
       // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
       "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
-      // S2S-only host: no browser traffic, no RP identity, no Turnstile,
-      // no OAuth, no mail — and never the IdP signing key material.
+      // This S2S-only host has its own confidential client for health reads.
+      // Browser credentials and IdP signing material still belong elsewhere.
       "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
@@ -573,7 +575,6 @@ const ENV_FILE_RULES = [
       ...MAIL_KEYS,
       ...OIDC_CLIENT_SECRET_HASH_KEYS,
       ...OIDC_FUTURE_APP_HASH_KEYS,
-      "OIDC_CLIENT_SECRET",
       // D13 credential separation: the signing private key stays in auth-bff;
       // this host verifies S2S bearers via the IdP JWKS only.
       "OIDC_SIGNING_PRIVATE_KEY",
