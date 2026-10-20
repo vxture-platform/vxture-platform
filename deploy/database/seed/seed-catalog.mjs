@@ -2376,6 +2376,22 @@ export async function seedCatalog(client) {
       scopes: ["openid", "profile", "admin"],
       postLogoutUris: [`${B.arche}/`, postLogout],
     },
+    // platform-api — S2S-only confidential client (#562). NOT an RP: no login,
+    // no callback, no SLO. Exists so the unattended model-health watchdog can
+    // mint a `health:atlas` ticket via token-exchange (health-reader grant).
+    // Secret provisioned by scripts/27-provision-client-secrets.sh (hash →
+    // .env.auth-bff as OIDC_CLIENT_SECRET_HASH_PLATFORM_API; plaintext →
+    // platform-api runtime env OIDC_CLIENT_SECRET). realm=customer (same as the
+    // other platform S2S clients); empty redirectUris ⇒ slo none (see insert).
+    {
+      clientId: "platform-api",
+      kind: "platform",
+      name: "Vxture Platform API",
+      displayName: "Vxture Platform API",
+      realm: "customer",
+      redirectUris: [],
+      scopes: ["openid"],
+    },
     // umbra — the cross-domain RP at ruyin.ai (ex-`ruyin`; renamed in place by the
     // U-line migration below, product_300 §2). No beta — single prod URI only.
     {
@@ -2632,8 +2648,11 @@ export async function seedCatalog(client) {
     const secretHash = authMethod === "none" ? null : envSecretHash;
     // 公共客户端无服务端、无 back-channel（回调是 loopback，不是 /auth/callback）；
     // 机密 web RP 才由回调基址推出 back-channel 端点。
+    // 公共客户端无服务端、无 back-channel；机密 web RP 由回调基址推出端点。
+    // S2S-only 机密客户端（如 platform-api #562）无登录流、redirectUris 为空——
+    // 没有回调基址可推，也不参与登出通知，slo 归 none。
     const backChannelUri =
-      authMethod === "none"
+      authMethod === "none" || c.redirectUris.length === 0
         ? null
         : `${c.redirectUris[0].replace("/auth/callback", "")}/auth/backchannel-logout`;
     await client.query(
