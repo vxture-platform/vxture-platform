@@ -158,6 +158,8 @@
  */
 
 import {
+  BadGatewayException,
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -878,6 +880,69 @@ export class AtlasRouter {
   getHealth(@Req() req: Request & RequestContext): Promise<ServiceHealthView> {
     assertCanReadModels(req);
     return this.request<ServiceHealthView>(req, "/capability/health");
+  }
+
+  /** Read Atlas's effective values and sources; do not reimplement inheritance. */
+  @Get("health-settings")
+  async getHealthSettings(
+    @Req() req: Request & RequestContext,
+    @Query("kind") kind?: string,
+  ): Promise<unknown> {
+    if (kind !== undefined && kind !== "model" && kind !== "provider")
+      throw new BadRequestException({
+        code: "HEALTH_SETTING_INVALID",
+        message: "kind must be model or provider",
+        retryable: false,
+      });
+    if (kind === "provider") assertCanReadProviders(req);
+    else assertCanReadModels(req);
+    const view = await this.request<Record<string, unknown>>(
+      req,
+      "/capability/health-settings",
+    );
+    if (
+      !Array.isArray(view["overrides"]) ||
+      !Array.isArray(view["targets"]) ||
+      !Array.isArray(view["vendors"])
+    )
+      throw new BadGatewayException({
+        code: "ATLAS_CONTRACT_SHAPE_CHANGED",
+        message: "Invalid health settings response",
+        retryable: false,
+      });
+    return {
+      ...view,
+      overrides: view["overrides"].filter(
+        (row: unknown) =>
+          typeof row === "object" &&
+          row !== null &&
+          "subjectKind" in row &&
+          row.subjectKind === (kind ?? "model"),
+      ),
+      targets: kind === "provider" ? [] : view["targets"],
+      vendors: kind === "provider" ? view["vendors"] : [],
+    };
+  }
+
+  /** Write only the selected subject with the corresponding existing capability. */
+  @Patch("health-settings/:subject")
+  updateHealthSettings(
+    @Req() req: Request & RequestContext,
+    @Param("subject") subject: string,
+    @Body() body: JsonObject,
+  ): Promise<unknown> {
+    if (subject.startsWith("provider:")) assertCanManageProviders(req);
+    else assertCanManageModels(req);
+    return this.writeThrough<unknown>(
+      req,
+      `/capability/health-settings/${encodeURIComponent(subject)}`,
+      { method: "PATCH", body },
+      () => ({
+        action: "atlas.health_settings.update",
+        resourceType: "atlas_health_settings",
+        resourceId: subject,
+      }),
+    );
   }
 
   // ── Providers ────────────────────────────────────────────────────────────

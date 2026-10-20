@@ -35,6 +35,13 @@
 -- 两列都是复合主键，只 REVOKE）。
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Health watcher anchors remain immutable under the shared application role.
+REVOKE UPDATE ON provisioning.health_watch_state FROM platform_svc;
+GRANT UPDATE (event_cursor, initialized, consecutive_failures, updated_at) ON provisioning.health_watch_state TO platform_svc;
+REVOKE UPDATE ON provisioning.health_watch_events FROM platform_svc;
+REVOKE UPDATE ON provisioning.health_watch_subjects FROM platform_svc;
+GRANT UPDATE (fingerprint, state, episode, notice_reference, last_source, updated_at) ON provisioning.health_watch_subjects TO platform_svc;
+
 -- account.users  [anchor: id, user_no, level_no, created_at]
 REVOKE UPDATE ON account.users FROM platform_svc;
 GRANT UPDATE (account, email, email_verified_at, phone, phone_verified_at, account_changed_at, account_login_disabled, status, source, updated_at, deleted_at, deletion_requested_at, profile_completed_at) ON account.users TO platform_svc;

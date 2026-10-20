@@ -35,6 +35,7 @@ import { InvitationExpiryJob } from "./jobs/invitation-expiry.job";
 import { JobHealthAlertJob } from "./jobs/job-health-alert.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
 import { ModelHealthWatchJob } from "./jobs/model-health-watch.job";
+import { HealthWatchRepository } from "./notifications/health-watch.repository";
 import { OpsTodoAlertJob } from "./jobs/ops-todo-alert.job";
 import { OperatorSignalSweepJob } from "./jobs/operator-signal-sweep.job";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
@@ -116,6 +117,7 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // 产出 admin.operator_notices 的系统通告；去重键挡住回看窗口的重叠。
     OperatorSignalSweepJob,
     AtlasHealthClient,
+    HealthWatchRepository,
     ModelHealthWatchJob,
     // #231 第二段：后台作业健康（失败 + 静默）——静默是真盲区，作业死了什么都不留
     JobHealthAlertJob,

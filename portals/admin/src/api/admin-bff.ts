@@ -221,6 +221,19 @@ export async function fetchCapabilities(): Promise<Capability[]> {
   return readJsonStrict<Capability[]>("/api/capabilities");
 }
 
+/** Read monitoring data through the same configured Admin BFF origin as other pages. */
+export async function fetchAtlasMonitoring<T>(
+  resource: "health" | "health/events",
+  after?: string,
+): Promise<T> {
+  const query = new URLSearchParams();
+  if (resource === "health/events") query.set("limit", "50");
+  if (after !== undefined) query.set("after", after);
+  return readJsonStrict<T>(
+    `/api/atlas/${resource}${query.size ? `?${query}` : ""}`,
+  );
+}
+
 export async function fetchAiModels(
   includeInactive = true,
 ): Promise<AiModelRecord[]> {

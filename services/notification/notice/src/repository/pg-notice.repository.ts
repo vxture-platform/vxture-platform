@@ -13,7 +13,7 @@
  */
 
 import { Inject, Injectable } from "@nestjs/common";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { likePattern } from "../filters/notice-filters";
 import { NOTICE_PG_POOL } from "../tokens";
 import { NOTICE_SEVERITIES } from "../types/notice.types";
@@ -352,8 +352,9 @@ export class PgNoticeRepository {
    */
   async createSystemNotice(
     input: CreateSystemNoticeInput,
+    transaction?: PoolClient,
   ): Promise<CreateSystemNoticeResult> {
-    const result = await this.pool.query<{ id: string }>(
+    const result = await (transaction ?? this.pool).query<{ id: string }>(
       CREATE_SYSTEM_NOTICE_SQL,
       [
         [...input.targetPlanes],
@@ -368,5 +369,26 @@ export class PgNoticeRepository {
     );
     const row = result.rows[0];
     return row ? { inserted: true, id: row.id } : { inserted: false, id: null };
+  }
+
+  /**
+   * End one explicitly referenced system notice without changing its history.
+   * @param referenceType - Producer-owned notification namespace.
+   * @param referenceId - Exact durable episode reference.
+   * @param transaction - Transaction coupling recovery with its consumed event.
+   * @returns Number of active notices ended.
+   */
+  async endSystemNotice(
+    referenceType: string,
+    referenceId: string,
+    transaction: PoolClient,
+  ): Promise<number> {
+    const result = await transaction.query(
+      `update admin.operator_notices set expires_at = now(), updated_at = now()
+       where source = 'system' and reference_type = $1 and reference_id = $2
+         and deleted_at is null and (expires_at is null or expires_at > now())`,
+      [referenceType, referenceId],
+    );
+    return result.rowCount ?? 0;
   }
 }

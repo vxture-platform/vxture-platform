@@ -174,6 +174,8 @@ $$;
 -- （ON CONFLICT 的部分唯一索引），别的 admin 表一律不给。
 GRANT USAGE ON SCHEMA admin TO svc_platform_api;
 GRANT SELECT, INSERT ON admin.operator_notices TO svc_platform_api;
+-- Recovery may end only system notices through the producer's exact reference.
+GRANT UPDATE (expires_at, updated_at) ON admin.operator_notices TO svc_platform_api;
 
 -- ── svc_platform_api 的读面例外：运营侧信号巡检（OperatorSignalSweepJob，2026-09-28）──
 -- 第二批「做全做多」加了两条巡检（bff/platform-api/src/jobs/operator-signal-sweep.job.ts）：

@@ -66,6 +66,7 @@ import { api, OperaApiError } from "@/lib/api";
 import { DateCell } from "@/components/table/ConfigCells";
 import { LOG_LEVEL_META, type LogLevel } from "@/lib/status";
 import { RunosCallStreams } from "./RunosCallStreams";
+import { atlasLogError } from "@/features/atlas/log-error";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useTableSort, type SortAccessor } from "@/lib/table-sort";
 
@@ -649,6 +650,21 @@ export default function LogsPage() {
               width: "xs",
               cell: (r: AtlasRequestLogRecord) =>
                 r.latencyMs != null ? `${r.latencyMs}ms` : "—",
+            },
+            {
+              id: "error",
+              header: "错误码 / 厂商原文",
+              cell: (r: AtlasRequestLogRecord) => {
+                const error = atlasLogError(r.error);
+                return (
+                  <div className="flex flex-col gap-2xs">
+                    <span className="font-mono">{error.code}</span>
+                    <span className="whitespace-pre-wrap break-words">
+                      {error.message}
+                    </span>
+                  </div>
+                );
+              },
             },
             {
               id: "status",

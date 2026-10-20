@@ -15,7 +15,7 @@
  * 任何东西会报错）。两者都只在语句文本上看得见。
  */
 import { describe, expect, it, vi } from "vitest";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import {
   CREATE_SYSTEM_NOTICE_SQL,
   PgNoticeRepository,
@@ -78,6 +78,38 @@ describe("CREATE_SYSTEM_NOTICE_SQL", () => {
 });
 
 describe("PgNoticeRepository.createSystemNotice", () => {
+  it("uses the caller transaction for atomic notice and checkpoint writes", async () => {
+    const f = fakePool([]);
+    const tx = fakePool([{ id: "transaction-notice" }]);
+    expect(
+      await new PgNoticeRepository(f.pool).createSystemNotice(
+        input,
+        tx.pool as unknown as PoolClient,
+      ),
+    ).toEqual({ inserted: true, id: "transaction-notice" });
+    expect(f.query).not.toHaveBeenCalled();
+    expect(tx.query).toHaveBeenCalledOnce();
+  });
+  it("ends only the exact live system reference through the caller transaction", async () => {
+    const f = fakePool([]);
+    const tx = fakePool([{ id: "ended" }]);
+    expect(
+      await new PgNoticeRepository(f.pool).endSystemNotice(
+        "model_health",
+        "episode:1",
+        tx.pool as unknown as PoolClient,
+      ),
+    ).toBe(1);
+    expect(f.query).not.toHaveBeenCalled();
+    const [sql, params] = tx.query.mock.calls[0]!;
+    expect(flatten(sql)).toContain(
+      "source = 'system' and reference_type = $1 and reference_id = $2",
+    );
+    expect(flatten(sql)).toContain(
+      "deleted_at is null and (expires_at is null or expires_at > now())",
+    );
+    expect(params).toEqual(["model_health", "episode:1"]);
+  });
   it("八个参数按占位顺序绑定；回行 → inserted:true 带 id", async () => {
     const f = fakePool([{ id: "n-1" }]);
     const repo = new PgNoticeRepository(f.pool);

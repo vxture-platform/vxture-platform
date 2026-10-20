@@ -74,6 +74,43 @@ afterEach(() => {
 // ============================================================================
 
 describe("AtlasHealthClient", () => {
+  it("uses the existing health ticket for ordered event reads and encodes the opaque cursor", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(ticket))
+      .mockResolvedValueOnce(json({ items: [], nextCursor: "opaque+/" }));
+    expect(await client().getEvents("opaque+/")).toEqual({
+      items: [],
+      nextCursor: "opaque+/",
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://atlas.example/s2s/health/events?limit=200&after=opaque%2B%2F",
+    );
+  });
+  it("rejects an empty feed that changes the checkpoint", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(ticket))
+      .mockResolvedValueOnce(json({ items: [], nextCursor: "changed" }));
+    await expect(client().getEvents("stored")).rejects.toThrow(
+      /changed its cursor/,
+    );
+  });
+  it("rejects invalid event identities and severity before persistence", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(ticket))
+      .mockResolvedValueOnce(
+        json({ items: [{ id: "e", severity: "low" }], nextCursor: "next" }),
+      );
+    await expect(client().getEvents(null)).rejects.toThrow(/invalid page/);
+  });
+  it("probes liveness without credentials and requires the Atlas identity", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ status: "ok", service: "atlas" }))
+      .mockResolvedValueOnce(json({ status: "ok", service: "other" }));
+    expect(await client("").isAlive()).toBe(true);
+    expect(await client("").isAlive()).toBe(false);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://atlas.example/healthz");
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toBeUndefined();
+  });
   it("fails missing credentials without any HTTP request", async () => {
     await expect(client("  ").getHealth()).rejects.toThrow(/credentials/);
     expect(fetchMock).not.toHaveBeenCalled();

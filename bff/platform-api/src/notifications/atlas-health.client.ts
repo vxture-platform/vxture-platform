@@ -10,6 +10,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
 
 import type { ServiceHealthView } from "./model-health-notice";
+import type { HealthEventPage } from "./health-watch.types";
 
 // ============================================================================
 // Wire validation (additive fields are allowed; consumed fields must be valid)
@@ -238,5 +239,80 @@ export class AtlasHealthClient {
     if (!isHealthView(body))
       throw new Error("Atlas health read returned an invalid snapshot");
     return body;
+  }
+
+  /**
+   * Read ordered transitions without widening the existing machine scope.
+   * @param after - Last successfully committed opaque cursor.
+   * @returns A validated page of at most 200 events.
+   * @throws Error on credentials, transport or malformed feed responses.
+   */
+  async getEvents(after: string | null): Promise<HealthEventPage> {
+    if (!this.isConfigured())
+      throw new Error("Atlas health monitoring credentials are not configured");
+    const token = await this.mintToken();
+    const query = new URLSearchParams({ limit: "200" });
+    if (after !== null) query.set("after", after);
+    const body = await this.readJson(
+      `${this.config.platform.ATLAS_API_URL.replace(/\/+$/, "")}/s2s/health/events?${query}`,
+      { headers: { authorization: `Bearer ${token}` } },
+      "Atlas health events",
+      () => {
+        if (this.cached?.token === token) this.cached = undefined;
+      },
+    );
+    if (
+      !object(body) ||
+      !(body.nextCursor === null || text(body.nextCursor)) ||
+      !Array.isArray(body.items) ||
+      body.items.length > 200 ||
+      !body.items.every(
+        (e: unknown) =>
+          object(e) &&
+          text(e.id) &&
+          text(e.createdAt) &&
+          Number.isFinite(Date.parse(e.createdAt)) &&
+          member(e.subjectKind, ["model", "route", "vendor", "atlas"]) &&
+          text(e.subjectKey) &&
+          text(e.from) &&
+          text(e.to) &&
+          member(e.severity, ["info", "warning", "critical"]) &&
+          (e.providerCode === null || text(e.providerCode)) &&
+          (e.detail === null || typeof e.detail === "string") &&
+          (e.upstreamStatus === null ||
+            (Number.isInteger(e.upstreamStatus) &&
+              Number(e.upstreamStatus) >= 100 &&
+              Number(e.upstreamStatus) <= 599)) &&
+          Array.isArray(e.affectedRoutes) &&
+          e.affectedRoutes.every(text),
+      )
+    ) {
+      throw new Error("Atlas health events returned an invalid page");
+    }
+    if (
+      body.items.length > 0 &&
+      (body.nextCursor === null || body.nextCursor === after)
+    )
+      throw new Error("Atlas health events cursor did not advance");
+    if (body.items.length === 0 && body.nextCursor !== after)
+      throw new Error("Atlas health empty page changed its cursor");
+    return body as unknown as HealthEventPage;
+  }
+
+  /**
+   * Probe process liveness independently of token minting and database readiness.
+   * @returns Whether Atlas answered with its expected liveness identity.
+   */
+  async isAlive(): Promise<boolean> {
+    try {
+      const body = await this.readJson(
+        `${this.config.platform.ATLAS_API_URL.replace(/\/+$/, "")}/healthz`,
+        {},
+        "Atlas liveness",
+      );
+      return object(body) && body.service === "atlas" && body.status === "ok";
+    } catch {
+      return false;
+    }
   }
 }

@@ -56,6 +56,7 @@ import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 import { WireReport } from "./WireReport";
+import { HealthSettingsPanel } from "./HealthSettingsPanel";
 import {
   ProbeInspection,
   ProbeWarning,
@@ -910,6 +911,13 @@ export function ModelDetailPage({
           </div>
         </div>
       </form>
+      {row ? (
+        <HealthSettingsPanel
+          kind="model"
+          subjectKey={row.modelCode}
+          canManage={canManage}
+        />
+      ) : null}
     </ViewLayout>
   );
 }

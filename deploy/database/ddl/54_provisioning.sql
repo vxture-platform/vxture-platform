@@ -105,3 +105,26 @@ CREATE TABLE provisioning.background_jobs (
 -- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
 CREATE INDEX idx_webhook_deliveries_tenant  ON provisioning.webhook_deliveries (tenant_id);
 CREATE INDEX idx_webhook_deliveries_product ON provisioning.webhook_deliveries (product_id);
+-- Durable state for the Atlas watcher; no credentials or user identifiers.
+CREATE TABLE provisioning.health_watch_state (
+    watcher               varchar(32) PRIMARY KEY,
+    event_cursor          text,
+    initialized           boolean NOT NULL DEFAULT false,
+    consecutive_failures  int NOT NULL DEFAULT 0 CHECK (consecutive_failures BETWEEN 0 AND 3),
+    updated_at            timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE provisioning.health_watch_events (
+    event_id              varchar(128) PRIMARY KEY,
+    created_at            timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE provisioning.health_watch_subjects (
+    subject_kind          varchar(32) NOT NULL,
+    subject_key           varchar(256) NOT NULL,
+    fingerprint           varchar(64) NOT NULL,
+    state                 varchar(64) NOT NULL,
+    episode               int NOT NULL CHECK (episode >= 1),
+    notice_reference      varchar(256),
+    last_source           varchar(256) NOT NULL,
+    updated_at            timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (subject_kind, subject_key)
+);
