@@ -1,4 +1,27 @@
 {
+  "atlasMonitoring": {
+    "title": "模型服务状态与事件",
+    "refresh": "刷新监测数据",
+    "snapshotTime": "快照时间：{time}。此视图只读，服务配置由 Opera 管理。",
+    "snapshotInvalid": "监测快照响应不完整",
+    "eventsInvalid": "监测事件响应不完整",
+    "partialFailure": "部分模型监测数据读取失败；保留上次成功结果，请重试。",
+    "cursorStalled": "事件游标未前进",
+    "historyFailed": "历史读取失败",
+    "vendor": "厂商",
+    "route": "路由",
+    "model": "模型",
+    "component": "Atlas 组件",
+    "subject": "对象",
+    "name": "名称",
+    "currentState": "当前状态",
+    "detail": "详情",
+    "historyOrder": "状态变化历史按发生时间从旧到新加载。",
+    "occurredAt": "发生时间",
+    "transition": "状态变化",
+    "upstreamDetail": "上游详情",
+    "loadMore": "加载更多事件"
+  },
   "meta": {
     "plane": "运营平台",
     "description": "平台商业运营：租户、订单、计费、产品目录与运营台账。"

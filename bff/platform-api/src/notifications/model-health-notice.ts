@@ -17,6 +17,7 @@ import {
   opsNoticeReferenceId,
   redactUuids,
 } from "./ops-notice";
+import type { HealthSubject } from "./health-watch.types";
 
 /** 去重锚类别：与 `ops_signal` 分家，各自占一套键规则，不挤同一个唯一索引。 */
 export const MODEL_HEALTH_REFERENCE_TYPE = "model_health";
@@ -331,4 +332,89 @@ export function composeModelHealthNotices(
     if (n) out.push(n);
   }
   return out;
+}
+
+/**
+ * Project the current snapshot without using amounts or poll timestamps as keys.
+ * @param view - Validated Atlas snapshot.
+ * @returns Subjects used to bootstrap and reconcile durable episodes.
+ */
+export function healthSnapshotSubjects(
+  view: ServiceHealthView,
+): HealthSubject[] {
+  return [
+    ...view.models.map(
+      (m): HealthSubject => ({
+        kind: "model",
+        key: m.modelCode,
+        state: m.state,
+        severity:
+          m.state === "ok" || m.state === "unknown" ? "info" : "warning",
+        detail:
+          `模型 ${m.modelCode}（${m.providerCode}）：${m.state}` +
+          (m.detail ? `\n${m.detail}` : ""),
+      }),
+    ),
+    ...view.routes.map(
+      (r): HealthSubject => ({
+        kind: "route",
+        key: r.code,
+        state: r.state,
+        severity: r.severity ?? "info",
+        detail:
+          `路由 ${r.code}：${r.state}；主模型 ${r.primary.modelCode}` +
+          (r.fallback ? `；兜底 ${r.fallback.modelCode}` : "；无兜底"),
+      }),
+    ),
+    ...view.routes.map(
+      (r): HealthSubject => ({
+        kind: "route_config",
+        key: r.code,
+        state: r.configIssues.length ? "misconfigured" : "ok",
+        severity: r.configIssues.length ? "warning" : "info",
+        configuration: r.configIssues
+          .map((i) => `${i.role}:${i.modelCode}:${i.code}`)
+          .sort()
+          .join(","),
+        detail:
+          r.configIssues
+            .map((i) => `${i.role} · ${i.modelCode} · ${i.code}：${i.detail}`)
+            .join("\n") || "路由配置已恢复。",
+      }),
+    ),
+    ...view.vendors.map(
+      (v): HealthSubject => ({
+        kind: "vendor",
+        key: v.providerCode,
+        state: v.state,
+        severity:
+          v.state === "balance_low"
+            ? typeof v.balance === "number" && v.balance <= 0
+              ? "critical"
+              : "warning"
+            : v.state === "unknown" && v.detail
+              ? "warning"
+              : "info",
+        detail:
+          `厂商 ${v.providerCode}：${v.state}` +
+          (v.detail ? `\n${v.detail}` : ""),
+      }),
+    ),
+    ...view.atlas.map(
+      (c): HealthSubject => ({
+        kind: "atlas",
+        key: c.component,
+        state: c.state,
+        severity:
+          c.state === "ok" || c.state === "unknown"
+            ? "info"
+            : c.component === "request_log" && c.state === "failing"
+              ? "critical"
+              : "warning",
+        detail:
+          `Atlas ${c.component}：${c.state}` +
+          (c.detail ? `\n${c.detail}` : ""),
+      }),
+    ),
+  ];
 }

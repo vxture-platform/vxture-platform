@@ -3,7 +3,7 @@
   "surfaces": {
     "opera-bff": {
       "files": 43,
-      "retryable": 21,
+      "retryable": 23,
       "NOT_ENTITLED": 3,
       "POLICY_DENIED": 2,
       "APPROVAL_REQUIRED": 1,
@@ -12,7 +12,7 @@
     },
     "admin-bff": {
       "files": 58,
-      "retryable": 3,
+      "retryable": 4,
       "NOT_ENTITLED": 1,
       "POLICY_DENIED": 0,
       "APPROVAL_REQUIRED": 0,
@@ -38,17 +38,17 @@
       "RATE_LIMITED": 0
     },
     "atlas": {
-      "files": 110,
-      "retryable": 10,
+      "files": 135,
+      "retryable": 18,
       "NOT_ENTITLED": 4,
       "POLICY_DENIED": 0,
       "APPROVAL_REQUIRED": 0,
       "QUOTA_EXCEEDED": 3,
-      "RATE_LIMITED": 2
+      "RATE_LIMITED": 4
     },
     "runos": {
-      "files": 78,
-      "retryable": 26,
+      "files": 80,
+      "retryable": 27,
       "NOT_ENTITLED": 2,
       "POLICY_DENIED": 2,
       "APPROVAL_REQUIRED": 2,

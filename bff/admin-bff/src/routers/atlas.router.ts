@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -150,6 +151,32 @@ export class AtlasRouter {
     return options?.contract
       ? assertAtlasContract(payload, options.contract)
       : payload;
+  }
+
+  /** Current health is read-only and uses the existing Admin model-read permission. */
+  @Get("health")
+  getHealth(@Req() req: Request & RequestContext): Promise<unknown> {
+    assertCanReadPricingModels(req);
+    return this.request<unknown>(req, "/capability/health");
+  }
+
+  /** Read source history without accepting identity or workspace filters. */
+  @Get("health/events")
+  getHealthEvents(
+    @Req() req: Request & RequestContext,
+    @Query() query: Record<string, string>,
+  ): Promise<unknown> {
+    assertCanReadPricingModels(req);
+    if (Object.keys(query).some((key) => key !== "after" && key !== "limit"))
+      throw new BadRequestException({
+        code: "HEALTH_UNKNOWN_FILTER",
+        message: "Unknown health event filter",
+        retryable: false,
+      });
+    return this.request<unknown>(
+      req,
+      `/capability/health/events?${new URLSearchParams(query)}`,
+    );
   }
 
   @Get("providers")

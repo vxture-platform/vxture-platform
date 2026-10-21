@@ -50,6 +50,7 @@ import { FIELD_LABEL_A11Y, FIELD_TIER_TITLE } from "@/lib/form-labels";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { isEnabled } from "@/features/atlas/state";
+import { HealthSettingsPanel } from "./HealthSettingsPanel";
 import { api, OperaApiError } from "@/lib/api";
 import {
   ProbeInspection,
@@ -867,6 +868,13 @@ export function ProviderDetailPage({
             </div>
           </div>
         </form>
+        {row ? (
+          <HealthSettingsPanel
+            kind="provider"
+            subjectKey={row.providerCode}
+            canManage={canManage}
+          />
+        ) : null}
       </ViewLayout>
 
       {/* ── 密钥抽屉 ─────────────────────────────────────────────────────── */}

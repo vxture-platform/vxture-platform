@@ -1,4 +1,34 @@
 {
+  "atlasHealthSettings": {
+    "title": "Service monitoring settings",
+    "invalidResponse": "The monitoring settings response is incomplete",
+    "readFailed": "Could not read monitoring settings",
+    "saveFailed": "Could not save monitoring settings",
+    "inheritHint": "{label} (leave blank to inherit)",
+    "reload": "Reload monitoring settings",
+    "effectiveProbe": "Current probe interval: {interval} minutes ({intervalSource}); probing: {enabled} ({enabledSource}).",
+    "enabled": "On",
+    "disabled": "Off",
+    "inherit": "Inherit",
+    "notTargeted": "This model is not currently a probe target. Saving overrides does not enable models or routes.",
+    "probeSkipped": "Probing is currently skipped: {reason}",
+    "probeInterval": "Active probe interval (5–60 minutes)",
+    "probeEnabled": "Enable probing",
+    "balanceMinAmount": "Minimum balance ({currency}; 0 disables)",
+    "vendorCurrency": "provider currency",
+    "balanceMinDays": "Estimated days remaining (0–30; 0 disables)",
+    "balancePollMinutes": "Balance polling interval (15–1440 minutes)",
+    "notSet": "Not set",
+    "effectiveBalance": "Current balance threshold: {amount} ({amountSource}); days: {days} ({daysSource}); polling: {minutes} minutes ({minutesSource}).",
+    "balanceUnsupported": "Balance monitoring is not applicable: {reason}",
+    "balanceUnavailable": "The provider does not expose a usable balance query",
+    "saving": "Saving…",
+    "save": "Save monitoring settings",
+    "errors": {
+      "invalidToggle": "Choose on, off, or inherit",
+      "invalidNumber": "Enter a valid number"
+    }
+  },
   "meta": {
     "plane": "Infrastructure Platform",
     "description": "Platform infrastructure: technical resources, runtime, metering, releases, observability and security. No commercial operations."

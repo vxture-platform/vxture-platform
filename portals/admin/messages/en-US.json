@@ -1,4 +1,27 @@
 {
+  "atlasMonitoring": {
+    "title": "Model service status and events",
+    "refresh": "Refresh monitoring data",
+    "snapshotTime": "Snapshot: {time}. This view is read-only; manage service settings in Opera.",
+    "snapshotInvalid": "The monitoring snapshot response is incomplete",
+    "eventsInvalid": "The monitoring event response is incomplete",
+    "partialFailure": "Some monitoring data could not be read. Previous results are retained; please retry.",
+    "cursorStalled": "The event cursor did not advance",
+    "historyFailed": "Could not read event history",
+    "vendor": "Provider",
+    "route": "Route",
+    "model": "Model",
+    "component": "Atlas component",
+    "subject": "Subject",
+    "name": "Name",
+    "currentState": "Current state",
+    "detail": "Details",
+    "historyOrder": "State changes load from oldest to newest.",
+    "occurredAt": "Occurred at",
+    "transition": "State change",
+    "upstreamDetail": "Upstream details",
+    "loadMore": "Load more events"
+  },
   "meta": {
     "plane": "Operations Platform",
     "description": "Platform business operations: tenants, orders, billing, product catalog and operational ledgers."
