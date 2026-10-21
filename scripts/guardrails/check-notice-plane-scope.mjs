@@ -74,6 +74,10 @@ const ALLOW = {
     "撤回前的存在性探测（只回 id，用来把「已撤回」与「不存在」分开）",
   [`${NOTICE_REPO}|insert|CREATE_SYSTEM_NOTICE_SQL`]:
     "系统通告落库：巡检作业是发布者，自己定 target_planes",
+  ["bff/platform-api/src/notifications/health-watch.repository.ts|update|sql:3e237d9e81"]:
+    "Publisher bootstrap retires active system model_health notices from the previous producer, across its original target planes; this is not a recipient read or acknowledgement.",
+  [`${NOTICE_REPO}|update|sql:ba240c72aa`]:
+    "Publisher recovery ends only the exact source=system, reference_type and reference_id episode inside its transaction; recipient-plane filtering would leave part of the published episode active.",
 };
 
 const rel = (f) => relative(ROOT, f).replace(/\\/g, "/");
@@ -114,7 +118,8 @@ function walk(dir, out = []) {
  */
 function expandTemplates(src) {
   const consts = new Map();
-  const re = /(?:^|\n)\s*(?:export\s+)?const\s+([A-Za-z_]\w*)\s*=\s*`([\s\S]*?)`/g;
+  const re =
+    /(?:^|\n)\s*(?:export\s+)?const\s+([A-Za-z_]\w*)\s*=\s*`([\s\S]*?)`/g;
   let m;
   while ((m = re.exec(src))) consts.set(m[1], m[2]);
   const expand = (text, depth = 0) => {
@@ -136,7 +141,8 @@ function expandTemplates(src) {
  * 平面谓词的两半。「空数组 = 全部平面」那一半是必需的 —— 少了它，面向全平面的通告
  * 一条都看不见。
  */
-const PLANE_EXPR = /target_planes\s*=\s*'\{\}'\s*or\s*\$\d+\s*=\s*any\(\s*n?\.?target_planes\s*\)/gi;
+const PLANE_EXPR =
+  /target_planes\s*=\s*'\{\}'\s*or\s*\$\d+\s*=\s*any\(\s*n?\.?target_planes\s*\)/gi;
 
 /**
  * 「过滤」与「投影」**用的是同一段文本** —— 共享仓储那份注释说的正是这件事：
@@ -238,7 +244,9 @@ function scan(files) {
   const out = [];
   for (const f of files) out.push(...statementsIn(f));
   return out.sort((a, b) =>
-    `${a.file}|${a.verb}|${a.stmt}`.localeCompare(`${b.file}|${b.verb}|${b.stmt}`),
+    `${a.file}|${a.verb}|${a.stmt}`.localeCompare(
+      `${b.file}|${b.verb}|${b.stmt}`,
+    ),
   );
 }
 
@@ -255,7 +263,9 @@ if (process.argv.includes("--self-test")) {
   console.log("══ 自检：先证这个判据看得见已知的三档，并且会对反例说话 ══\n");
 
   const repo = stmts.filter((s) =>
-    s.file.endsWith("services/notification/notice/src/repository/pg-notice.repository.ts"),
+    s.file.endsWith(
+      "services/notification/notice/src/repository/pg-notice.repository.ts",
+    ),
   );
   const sel = repo.find((s) => s.verb === "select");
   say(
@@ -367,8 +377,11 @@ for (const s of stmts) {
 
 console.log(`══ 运营通告平面谓词：扫到 ${stmts.length} 条语句`);
 for (const s of stmts) {
-  const mark = s.cls === "filtered" ? "过滤" : s.cls === "projected" ? "投影" : "都没有";
-  console.log(`   ${mark.padEnd(4)} ${s.verb.padEnd(6)} ${s.stmt.padEnd(22)} ${s.file}`);
+  const mark =
+    s.cls === "filtered" ? "过滤" : s.cls === "projected" ? "投影" : "都没有";
+  console.log(
+    `   ${mark.padEnd(4)} ${s.verb.padEnd(6)} ${s.stmt.padEnd(22)} ${s.file}`,
+  );
 }
 if (stmts.length === 0) {
   console.log("\n✗ 一条都没扫到 —— 那不是「通过」，是判据瞎了（表名改了？）。");
