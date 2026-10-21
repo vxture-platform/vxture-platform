@@ -6,6 +6,11 @@
  * @author AI-Generated
  * @date 2026-10-20
  */
+
+// ============================================================================
+// Wire types and editable overrides
+// ============================================================================
+
 export interface ProbeEffective {
   intervalMinutes: number;
   enabled: boolean;
@@ -50,13 +55,24 @@ export interface HealthDraft {
   balancePollMinutes: string;
 }
 
+// ============================================================================
+// Local validation stays distinguishable from literal upstream errors
+// ============================================================================
+
+export class HealthSettingsInputError extends Error {
+  constructor(readonly code: "invalidToggle" | "invalidNumber") {
+    super(code);
+    this.name = "HealthSettingsInputError";
+  }
+}
+
 /**
  * Serialize changed fields only; blank explicitly clears a stored override.
  * @param draft - Current input strings; zero is a meaningful threshold.
  * @param original - Initial strings loaded from the last successful server read.
  * @param balance - Whether the provider supports balance monitoring.
  * @returns A PATCH body with null for explicit clears.
- * @throws Error when a changed numeric input is not finite.
+ * @throws HealthSettingsInputError when a changed toggle or number is invalid.
  */
 export function healthSettingsPatch(
   draft: HealthDraft,
@@ -77,11 +93,12 @@ export function healthSettingsPatch(
     if (!raw) body[key] = null;
     else if (key === "probeEnabled") {
       if (raw !== "true" && raw !== "false")
-        throw new Error("请选择开启、关闭或继承");
+        throw new HealthSettingsInputError("invalidToggle");
       body[key] = raw === "true";
     } else {
       const value = Number(raw);
-      if (!Number.isFinite(value)) throw new Error("请输入有效数字");
+      if (!Number.isFinite(value))
+        throw new HealthSettingsInputError("invalidNumber");
       body[key] = value;
     }
   }

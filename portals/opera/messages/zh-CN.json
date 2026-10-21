@@ -1,4 +1,34 @@
 {
+  "atlasHealthSettings": {
+    "title": "服务监测设置",
+    "invalidResponse": "监测设置响应不完整",
+    "readFailed": "监测设置读取失败",
+    "saveFailed": "保存失败",
+    "inheritHint": "{label}（留空继承）",
+    "reload": "重新读取监测设置",
+    "effectiveProbe": "当前探测间隔：{interval} 分钟（{intervalSource}）；探测：{enabled}（{enabledSource}）。",
+    "enabled": "开启",
+    "disabled": "关闭",
+    "inherit": "继承",
+    "notTargeted": "该模型当前不在探测目标中；保存覆盖不会自动启用模型或路由。",
+    "probeSkipped": "当前跳过探测：{reason}",
+    "probeInterval": "主动探测间隔（5–60 分钟）",
+    "probeEnabled": "是否探测",
+    "balanceMinAmount": "余额最低额度（{currency}，0 关闭）",
+    "vendorCurrency": "厂商币种",
+    "balanceMinDays": "预计可用天数（0–30，0 关闭）",
+    "balancePollMinutes": "余额查询间隔（15–1440 分钟）",
+    "notSet": "未设",
+    "effectiveBalance": "当前余额阈值：{amount}（{amountSource}）；天数：{days}（{daysSource}）；查询：{minutes} 分钟（{minutesSource}）。",
+    "balanceUnsupported": "余额监测不适用：{reason}",
+    "balanceUnavailable": "厂商未提供可用的余额读取能力",
+    "saving": "保存中…",
+    "save": "保存监测设置",
+    "errors": {
+      "invalidToggle": "请选择开启、关闭或继承",
+      "invalidNumber": "请输入有效数字"
+    }
+  },
   "meta": {
     "plane": "运维平台",
     "description": "平台技术资源、运行、计量、发布、可观测与安全管理。不承担商业运营职责。"

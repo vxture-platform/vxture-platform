@@ -9,6 +9,7 @@
  * @date 2026-10-20
  */
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Banner, Button, DataTable, Section } from "@vxture/design-system";
 import { useTableLabels } from "@/modules/shared/table";
 import { fetchAtlasMonitoring } from "@/api/admin-bff";
@@ -56,7 +57,7 @@ const rowsOf = (v: unknown, fields: string[]): boolean =>
       fields.every((k) => typeof r[k] === "string") &&
       (r.detail === undefined || typeof r.detail === "string"),
   );
-function snapshotBody(v: unknown): HealthSnapshot {
+function snapshotBody(v: unknown, invalidMessage: string): HealthSnapshot {
   if (
     !object(v) ||
     typeof v.generatedAt !== "string" ||
@@ -68,10 +69,10 @@ function snapshotBody(v: unknown): HealthSnapshot {
       rowsOf(r.configIssues, ["detail"]),
     )
   )
-    throw new Error("监测快照响应不完整");
+    throw new Error(invalidMessage);
   return v as unknown as HealthSnapshot;
 }
-function eventBody(v: unknown): EventPage {
+function eventBody(v: unknown, invalidMessage: string): EventPage {
   if (
     !object(v) ||
     !(v.nextCursor === null || typeof v.nextCursor === "string") ||
@@ -94,7 +95,7 @@ function eventBody(v: unknown): EventPage {
         e.affectedRoutes.every((r) => typeof r === "string"),
     )
   )
-    throw new Error("监测事件响应不完整");
+    throw new Error(invalidMessage);
   return v as unknown as EventPage;
 }
 
@@ -103,6 +104,7 @@ function eventBody(v: unknown): EventPage {
 // ============================================================================
 
 export function ModelHealthPanel() {
+  const t = useTranslations("atlasMonitoring");
   const labels = useTableLabels();
   const [snapshot, setSnapshot] = useState<HealthSnapshot | null>(null);
   const [events, setEvents] = useState<HealthEvent[]>([]);
@@ -114,8 +116,12 @@ export function ModelHealthPanel() {
     setBusy(true);
     setError("");
     const [health, history] = await Promise.allSettled([
-      fetchAtlasMonitoring<unknown>("health").then(snapshotBody),
-      fetchAtlasMonitoring<unknown>("health/events").then(eventBody),
+      fetchAtlasMonitoring<unknown>("health").then((v) =>
+        snapshotBody(v, t("snapshotInvalid")),
+      ),
+      fetchAtlasMonitoring<unknown>("health/events").then((v) =>
+        eventBody(v, t("eventsInvalid")),
+      ),
     ]);
     if (health.status === "fulfilled") setSnapshot(health.value);
     if (history.status === "fulfilled") {
@@ -124,9 +130,9 @@ export function ModelHealthPanel() {
       setHasMore(history.value.items.length === 50);
     }
     if (health.status === "rejected" || history.status === "rejected")
-      setError("部分模型监测数据读取失败；保留上次成功结果，请重试。");
+      setError(t("partialFailure"));
     setBusy(false);
-  }, []);
+  }, [t]);
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -137,16 +143,17 @@ export function ModelHealthPanel() {
     try {
       const page = eventBody(
         await fetchAtlasMonitoring<unknown>("health/events", cursor),
+        t("eventsInvalid"),
       );
       if (page.items.length && page.nextCursor === cursor)
-        throw new Error("事件游标未前进");
+        throw new Error(t("cursorStalled"));
       setEvents((old) => [
         ...new Map([...old, ...page.items].map((e) => [e.id, e])).values(),
       ]);
       setCursor(page.nextCursor);
       setHasMore(page.items.length === 50);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "历史读取失败");
+      setError(e instanceof Error ? e.message : t("historyFailed"));
     } finally {
       setBusy(false);
     }
@@ -155,28 +162,28 @@ export function ModelHealthPanel() {
     ? [
         ...snapshot.vendors.map((v) => ({
           id: `vendor:${v.providerCode}`,
-          kind: "厂商",
+          kind: t("vendor"),
           key: v.providerCode,
           state: v.state,
           detail: v.detail ?? "",
         })),
         ...snapshot.routes.map((r) => ({
           id: `route:${r.code}`,
-          kind: "路由",
+          kind: t("route"),
           key: r.code,
           state: r.state,
-          detail: r.configIssues.map((i) => i.detail).join("；"),
+          detail: r.configIssues.map((i) => i.detail).join("; "),
         })),
         ...snapshot.models.map((m) => ({
           id: `model:${m.modelCode}`,
-          kind: "模型",
+          kind: t("model"),
           key: m.modelCode,
           state: m.state,
           detail: m.detail ?? "",
         })),
         ...snapshot.atlas.map((c) => ({
           id: `atlas:${c.component}`,
-          kind: "Atlas 组件",
+          kind: t("component"),
           key: c.component,
           state: c.state,
           detail: c.detail ?? "",
@@ -184,27 +191,25 @@ export function ModelHealthPanel() {
       ]
     : [];
   return (
-    <Section title="模型服务状态与事件" level={2}>
+    <Section title={t("title")} level={2}>
       {error ? <Banner tone="danger" title={error} /> : null}
       <Button variant="secondary" disabled={busy} onClick={() => void reload()}>
-        刷新监测数据
+        {t("refresh")}
       </Button>
       {snapshot ? (
-        <p>
-          快照时间：{snapshot.generatedAt}。此视图只读，服务配置由 Opera 管理。
-        </p>
+        <p>{t("snapshotTime", { time: snapshot.generatedAt })}</p>
       ) : null}
       <DataTable
         labels={labels}
         rows={rows}
         rowKey={(r) => r.id}
         columns={[
-          { id: "kind", header: "对象", cell: (r) => r.kind },
-          { id: "key", header: "名称", cell: (r) => r.key },
-          { id: "state", header: "当前状态", cell: (r) => r.state },
+          { id: "kind", header: t("subject"), cell: (r) => r.kind },
+          { id: "key", header: t("name"), cell: (r) => r.key },
+          { id: "state", header: t("currentState"), cell: (r) => r.state },
           {
             id: "detail",
-            header: "详情",
+            header: t("detail"),
             cell: (r) => (
               <span className="whitespace-pre-wrap break-words">
                 {r.detail}
@@ -213,26 +218,26 @@ export function ModelHealthPanel() {
           },
         ]}
       />
-      <p>状态变化历史按发生时间从旧到新加载。</p>
+      <p>{t("historyOrder")}</p>
       <DataTable
         labels={labels}
         rows={events}
         rowKey={(r) => r.id}
         columns={[
-          { id: "time", header: "发生时间", cell: (r) => r.createdAt },
+          { id: "time", header: t("occurredAt"), cell: (r) => r.createdAt },
           {
             id: "subject",
-            header: "对象",
+            header: t("subject"),
             cell: (r) => `${r.subjectKind} · ${r.subjectKey}`,
           },
           {
             id: "state",
-            header: "状态变化",
+            header: t("transition"),
             cell: (r) => `${r.from} → ${r.to} · ${r.severity}`,
           },
           {
             id: "detail",
-            header: "上游详情",
+            header: t("upstreamDetail"),
             cell: (r) => (
               <span className="whitespace-pre-wrap break-words">
                 {r.upstreamStatus ?? ""} {r.detail ?? ""}
@@ -246,7 +251,7 @@ export function ModelHealthPanel() {
       />
       {hasMore ? (
         <Button variant="secondary" disabled={busy} onClick={() => void more()}>
-          加载更多事件
+          {t("loadMore")}
         </Button>
       ) : null}
     </Section>

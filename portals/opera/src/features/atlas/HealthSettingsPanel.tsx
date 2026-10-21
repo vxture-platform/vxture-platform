@@ -9,6 +9,7 @@
  * @date 2026-10-20
  */
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Banner,
   Button,
@@ -20,6 +21,7 @@ import {
 } from "@vxture/design-system";
 import { api, OperaApiError } from "@/lib/api";
 import {
+  HealthSettingsInputError,
   healthSettingsDraft,
   healthSettingsPatch,
   type HealthDraft,
@@ -39,6 +41,7 @@ export function HealthSettingsPanel({
   readonly subjectKey: string;
   readonly canManage: boolean;
 }) {
+  const t = useTranslations("atlasHealthSettings");
   const [view, setView] = useState<HealthSettingsView | null>(null);
   const [original, setOriginal] = useState(healthSettingsDraft());
   const [draft, setDraft] = useState(healthSettingsDraft());
@@ -57,7 +60,7 @@ export function HealthSettingsPanel({
         !Array.isArray(data.vendors) ||
         !Array.isArray(data.overrides)
       )
-        throw new Error("监测设置响应不完整");
+        throw new Error(t("invalidResponse"));
       const next = healthSettingsDraft(
         data.overrides.find(
           (r) => r.subjectKind === kind && r.subjectKey === subjectKey,
@@ -69,9 +72,9 @@ export function HealthSettingsPanel({
       setError("");
       setLoaded(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "监测设置读取失败");
+      setError(e instanceof Error ? e.message : t("readFailed"));
     }
-  }, [kind, subjectKey]);
+  }, [kind, subjectKey, t]);
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -110,7 +113,7 @@ export function HealthSettingsPanel({
   ) => (
     <Field key={key}>
       <FieldLabel htmlFor={`health-${kind}-${key}`}>
-        {label}（留空继承）
+        {t("inheritHint", { label })}
       </FieldLabel>
       <Input
         id={`health-${kind}-${key}`}
@@ -138,10 +141,12 @@ export function HealthSettingsPanel({
     } catch (e) {
       setError(
         e instanceof OperaApiError
-          ? `${e.code ?? ""}：${e.message}`
-          : e instanceof Error
-            ? e.message
-            : "保存失败",
+          ? `${e.code ?? ""}: ${e.message}`
+          : e instanceof HealthSettingsInputError
+            ? t(`errors.${e.code}`)
+            : e instanceof Error
+              ? e.message
+              : t("saveFailed"),
       );
     } finally {
       setSaving(false);
@@ -153,31 +158,35 @@ export function HealthSettingsPanel({
   // ============================================================================
 
   return (
-    <Section title="服务监测设置" level={2}>
+    <Section title={t("title")} level={2}>
       {error ? <Banner tone="danger" title={error} /> : null}
       {!view ? (
         <Button type="button" variant="secondary" onClick={() => void reload()}>
-          重新读取监测设置
+          {t("reload")}
         </Button>
       ) : (
         <>
           {kind === "provider" || target ? (
             <p>
-              当前探测间隔：{interval} 分钟（{intervalSource}）；探测：
-              {enabled ? "开启" : "关闭"}（{enabledSource}）。
+              {t("effectiveProbe", {
+                interval: interval ?? "",
+                intervalSource: intervalSource ?? "",
+                enabled: enabled ? t("enabled") : t("disabled"),
+                enabledSource: enabledSource ?? "",
+              })}
             </p>
           ) : null}
-          {kind === "model" && !target ? (
-            <p>该模型当前不在探测目标中；保存覆盖不会自动启用模型或路由。</p>
-          ) : null}
+          {kind === "model" && !target ? <p>{t("notTargeted")}</p> : null}
           {target?.probeSkipped ? (
-            <p>当前跳过探测：{target.probeSkipped.reason}</p>
+            <p>{t("probeSkipped", { reason: target.probeSkipped.reason })}</p>
           ) : null}
           <div className="grid gap-md md:grid-cols-2">
-            {input("probeIntervalMinutes", "主动探测间隔（5–60 分钟）", 5, 60)}
+            {input("probeIntervalMinutes", t("probeInterval"), 5, 60)}
             {kind === "model" ? (
               <Field>
-                <FieldLabel htmlFor="health-probe-enabled">是否探测</FieldLabel>
+                <FieldLabel htmlFor="health-probe-enabled">
+                  {t("probeEnabled")}
+                </FieldLabel>
                 <NativeSelect
                   id="health-probe-enabled"
                   value={draft.probeEnabled}
@@ -189,9 +198,9 @@ export function HealthSettingsPanel({
                     }))
                   }
                 >
-                  <option value="">继承</option>
-                  <option value="true">开启</option>
-                  <option value="false">关闭</option>
+                  <option value="">{t("inherit")}</option>
+                  <option value="true">{t("enabled")}</option>
+                  <option value="false">{t("disabled")}</option>
                 </NativeSelect>
               </Field>
             ) : null}
@@ -199,31 +208,33 @@ export function HealthSettingsPanel({
               <>
                 {input(
                   "balanceMinAmount",
-                  `余额最低额度（${vendor.currency ?? "厂商币种"}，0 关闭）`,
+                  t("balanceMinAmount", {
+                    currency: vendor.currency ?? t("vendorCurrency"),
+                  }),
                   0,
                 )}
-                {input("balanceMinDays", "预计可用天数（0–30，0 关闭）", 0, 30)}
-                {input(
-                  "balancePollMinutes",
-                  "余额查询间隔（15–1440 分钟）",
-                  15,
-                  1440,
-                )}
+                {input("balanceMinDays", t("balanceMinDays"), 0, 30)}
+                {input("balancePollMinutes", t("balancePollMinutes"), 15, 1440)}
               </>
             ) : null}
           </div>
           {vendor ? (
             balance ? (
               <p>
-                当前余额阈值：{vendor.minAmount ?? "未设"}（
-                {vendor.minAmountSource}）；天数：{vendor.minDays}（
-                {vendor.minDaysSource}）；查询：{vendor.pollMinutes} 分钟（
-                {vendor.pollMinutesSource}）。
+                {t("effectiveBalance", {
+                  amount: vendor.minAmount ?? t("notSet"),
+                  amountSource: vendor.minAmountSource,
+                  days: vendor.minDays,
+                  daysSource: vendor.minDaysSource,
+                  minutes: vendor.pollMinutes,
+                  minutesSource: vendor.pollMinutesSource,
+                })}
               </p>
             ) : (
               <p>
-                余额监测不适用：
-                {vendor.reason ?? "厂商未提供可用的余额读取能力"}
+                {t("balanceUnsupported", {
+                  reason: vendor.reason ?? t("balanceUnavailable"),
+                })}
               </p>
             )
           ) : null}
@@ -237,7 +248,7 @@ export function HealthSettingsPanel({
               }
               onClick={() => void save()}
             >
-              {saving ? "保存中…" : "保存监测设置"}
+              {saving ? t("saving") : t("save")}
             </Button>
           ) : null}
         </>

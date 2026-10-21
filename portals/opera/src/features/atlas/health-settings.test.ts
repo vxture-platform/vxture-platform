@@ -7,7 +7,11 @@
  * @date 2026-10-20
  */
 import { describe, expect, it } from "vitest";
-import { healthSettingsDraft, healthSettingsPatch } from "./health-settings";
+import {
+  HealthSettingsInputError,
+  healthSettingsDraft,
+  healthSettingsPatch,
+} from "./health-settings";
 import { atlasLogError } from "./log-error";
 
 describe("health monitoring partial updates", () => {
@@ -59,14 +63,14 @@ describe("health monitoring partial updates", () => {
           empty,
           false,
         ),
-      ).toThrow();
+      ).toThrow(new HealthSettingsInputError("invalidNumber"));
     },
   );
   it("rejects an invalid toggle instead of silently turning probing off", () => {
     const empty = healthSettingsDraft();
     expect(() =>
       healthSettingsPatch({ ...empty, probeEnabled: "yes" }, empty, false),
-    ).toThrow();
+    ).toThrow(new HealthSettingsInputError("invalidToggle"));
   });
   it("keeps raw upstream messages as literal text and handles absent errors", () => {
     expect(
