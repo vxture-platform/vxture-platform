@@ -44,6 +44,10 @@ import {
   type OidcTokenExchangeResponse,
 } from "../oidc/oidc.service";
 import { TOKEN_EXCHANGE_GRANT_TYPE } from "../oidc/token-exchange.service";
+import {
+  parseSessionStatusCredentials,
+  type OidcSessionStatus,
+} from "../oidc/session-status";
 import type { OidcJwk } from "../oidc/oidc-key.service";
 import {
   buildSidCookie,
@@ -228,6 +232,35 @@ export class OidcRouter {
   ): Promise<void> {
     if (body.token) {
       await this.oidc.revoke(body.token, body.token_type_hint);
+    }
+  }
+
+  /** Product-side central session status; confidential Basic clients only. */
+  @Post("oidc/session/status")
+  @HttpCode(HttpStatus.OK)
+  async sessionStatus(
+    @Body() body: unknown,
+    @Headers("authorization") authorization: string | undefined,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<OidcSessionStatus> {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
+    try {
+      const creds = parseSessionStatusCredentials(authorization);
+      if (!req.is("application/json") || Object.keys(req.query).length > 0) {
+        throw new BadRequestException({
+          code: "INVALID_REQUEST",
+          message: "Expected JSON body without query parameters",
+          retryable: false,
+        });
+      }
+      return await this.oidc.sessionStatus(creds, body);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        res.setHeader("WWW-Authenticate", 'Basic realm="accounts"');
+      }
+      throw error;
     }
   }
 

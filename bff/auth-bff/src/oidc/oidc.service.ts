@@ -35,6 +35,12 @@ import {
   type OperatorView,
 } from "@vxture/service-iam";
 import { RedisService, type OidcLoginChallenge } from "../redis/redis.service";
+import {
+  parseSessionStatusBody,
+  sessionStatusUnauthorized,
+  sessionStatusUnavailable,
+  type OidcSessionStatus,
+} from "./session-status";
 import { AuthnService } from "../authn/authn.service";
 import { SessionService } from "../authn/session.service";
 import { UserOnboardingService } from "../authn/user-onboarding.service";
@@ -2202,6 +2208,44 @@ export class OidcService {
       throw new UnauthorizedException("invalid_client");
     }
     return client;
+  }
+
+  /**
+   * Query one client's binding to a central session without renewing it.
+   * @throws {UnauthorizedException} For disabled, public or invalid clients.
+   * @throws {BadRequestException} For malformed status requests.
+   * @throws {ServiceUnavailableException} When status cannot be determined.
+   */
+  async sessionStatus(
+    creds: OidcClientCredentials,
+    body: unknown,
+  ): Promise<OidcSessionStatus> {
+    let client: OidcClientConfig;
+    try {
+      client = await this.authClient(creds);
+      if (client.tokenEndpointAuthMethod !== "client_secret_basic") {
+        throw sessionStatusUnauthorized();
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw sessionStatusUnauthorized();
+      }
+      throw sessionStatusUnavailable();
+    }
+    const request = parseSessionStatusBody(body);
+    if (client.realm !== "customer" && client.realm !== "workforce") {
+      throw sessionStatusUnavailable();
+    }
+    try {
+      return await this.redis.checkOidcSessionStatus(
+        request.sid,
+        client.clientId,
+        client.realm,
+        request.active,
+      );
+    } catch {
+      throw sessionStatusUnavailable();
+    }
   }
 
   /**
