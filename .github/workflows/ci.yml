@@ -723,6 +723,17 @@ jobs:
   test:
     name: test-coverage
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: platform_usage_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     # .npmrc 里的 ${NODE_AUTH_TOKEN} 由 pnpm 在**每次调用**时求值——不只是 install。
     # 不在 job 层给出，其余步骤（build / lint / type-check…）每跑一次 pnpm 就刷两行
     #   WARN Issue while reading ".npmrc". Failed to replace env in config
@@ -760,6 +771,7 @@ jobs:
       - name: Run tests (changed packages + dependents)
         if: needs.check.outputs.docs_only != 'true'
         env:
+          CAPABILITY_USAGE_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/platform_usage_test
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           set -euo pipefail

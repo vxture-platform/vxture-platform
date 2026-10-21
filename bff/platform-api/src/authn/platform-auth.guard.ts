@@ -127,6 +127,20 @@ export class PlatformAuthGuard implements CanActivate {
     if (!act || typeof act.sub !== "string" || !act.sub) {
       throw new UnauthorizedException("invalid_token");
     }
+    // The capability reporter has no C2 or general-purpose product authority.
+    if (
+      act.sub === "runos" &&
+      (claims["delegated"] !== true ||
+        claims["mode"] !== "service" ||
+        claims["scope"] !== "tool:vxture" ||
+        claims["workspace_id"] != null ||
+        claims["org_id"] != null ||
+        claims["sub"] != null ||
+        req.method !== "POST" ||
+        req.path !== "/usage/consume")
+    ) {
+      throw new UnauthorizedException("invalid_token");
+    }
     const orgId = claims["org_id"];
     const workspaceId = claims["workspace_id"];
     req.s2sCaller = {

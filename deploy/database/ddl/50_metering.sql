@@ -677,6 +677,28 @@ CREATE INDEX idx_product_seats_member       ON metering.product_seats (workspace
 CREATE INDEX idx_product_seats_subscription ON metering.product_seats (subscription_id);
 CREATE INDEX idx_product_seats_product      ON metering.product_seats (product_id);              -- FK 支撑
 
+-- Raw capability facts are neither priced usage nor a copy of caller audit data.
+CREATE TABLE metering.capability_usage_events (
+    id uuid PRIMARY KEY,
+    reported_by text NOT NULL CHECK (reported_by = 'runos'),
+    source_event_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    product_id uuid NOT NULL,
+    call_id text NOT NULL,
+    capability_id text NOT NULL,
+    metric_key text NOT NULL,
+    amount bigint NOT NULL CHECK (amount >= 0),
+    unit text NOT NULL,
+    occurred_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uq_capability_usage_source UNIQUE (reported_by, source_event_id),
+    CONSTRAINT chk_capability_usage_measure CHECK (
+      (metric_key = 'runos.call' AND unit = 'call' AND amount = 1) OR
+      (metric_key = 'runos.sandbox_mb_ms' AND unit = 'mb_ms'))
+);
+CREATE INDEX idx_capability_usage_workspace ON metering.capability_usage_events (workspace_id, occurred_at);
+CREATE INDEX idx_capability_usage_product ON metering.capability_usage_events (product_id, occurred_at);
+
 -- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
 CREATE INDEX idx_subscriptions_payment_mandate     ON metering.subscriptions (payment_mandate_id);
 CREATE INDEX idx_quota_pools_subscription          ON metering.quota_pools (subscription_id);

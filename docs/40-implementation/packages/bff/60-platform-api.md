@@ -29,6 +29,30 @@
 
 ## 鉴权
 
+### Runos 原始能力用量实现
+
+`CapabilityUsageService` 通过现有 `COMMERCE_PG_POOL` 将原始事实写入独立的
+`metering.capability_usage_events`，不调用现有扣减引擎。结构来自
+`deploy/database/ddl/50_metering.sql` 及增量
+`2026-12-06-capability-usage-facts.sql`；上线须先应用增量，不重建数据库。
+跨仓接口以《产品接入通则》及《产品接入范本》原件为准。
+
+入口沿用 `POST /usage/consume`，Runos delegated 服务票仅可访问原始能力用量
+分支，其余形状和路由拒绝；Atlas 的现有路径保持。产品和工作区由接收方查库
+确认，源事件键全局唯一；并发重放返回同一持久化回执，归属或事实变化返回冲突。
+已接收事实在产品软删除后仍可重放原回执，新事实拒绝该产品。
+
+账本由数据库触发器禁止改写，回执仅在事务提交后返回。`settlement=not_configured`
+表示尚未配置商业结算，不代表额度或费用已扣减；不创建价格、客户商品或额度池。
+没有用户原始 ID、假名、令牌或调用载荷。上线顺序为平台加表及接收端 → Runos
+增量捕获 → 开启推送；回滚保留两端事实和待投递事件。
+
+真实签名 HTTP 与 PostgreSQL 回归位于 `capability-usage.http.spec.ts`，CI 使用专用
+`platform_usage_test` 库自动执行；最小父表夹具只模拟查询所需列，不等同全平台
+数据库启动验收。生产验收待完成。
+
+### 既有凭据与 Atlas 路径
+
 三个业务端点统一走 `PlatformAuthGuard` 双凭证（迁移期并行，任一满足）：
 
 1. **legacy**：`x-vxture-internal-auth: ${AUTH_INTERNAL_TOKEN}`（platform.env 共享键；arda 现行）。2026-10-04 起这把钥匙**只**开本宿主的产品面：auth-bff 的 `/internal/*` 内部面改认 `IDP_INTERNAL_TOKEN`（只注入 auth/admin/arche/opera 四个容器），产品手里的值开不了运营管理面；反过来新键也开不了这里——`platform-auth.guard.spec.ts` 钉着「头带 IDP 值 → 401」；

@@ -7,10 +7,9 @@
  * (ADR-11 §11.7 is the path authority; D1's /platform/* note applies to the
  * C2 read API). nginx routes neither — internal network only.
  *
- * The commerce consume engine stays the single writer (idempotent waterfall);
- * this router only validates, resolves product_code → id, and enriches the
- * engine result with the contract's remaining_total / per-subscription
- * breakdown via a read-only period-aware pool read.
+ * Commercial amounts use the existing idempotent waterfall. Delegated raw
+ * capability measurements use a separate append-only fact service and receipt;
+ * recording those measurements never implies quota or monetary deduction.
  *
  * **2026-10-01（owner 裁定）**：请求体可带 `intent`。默认 `report` —— 行为与此前
  * 完全一致（旧调用方一个字不用改）。`reserve` 是事前问许可：硬限且额度不足时本端点
@@ -24,6 +23,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Headers,
   Inject,
   Logger,
@@ -39,6 +39,11 @@ import { scopeToS2sCaller } from "../authn/s2s-scope";
 import { LegacyAuthUsageService } from "../platform/legacy-auth-usage.service";
 import { PlatformUsageService } from "../platform/platform-usage.service";
 import { TokenUsageService } from "../platform/token-usage.service";
+import { CapabilityUsageService } from "../platform/capability-usage.service";
+import {
+  parseCapabilityUsage,
+  type CapabilityUsageReceipt,
+} from "../platform/capability-usage";
 import {
   buildConsumeResponse,
   buildTokenConsumeResponse,
@@ -61,14 +66,14 @@ export class PlatformUsageRouter {
     // E6：旧凭据计数（legacy-auth-usage.service.ts）
     @Inject(LegacyAuthUsageService)
     private readonly legacyAuth: LegacyAuthUsageService,
+    @Inject(CapabilityUsageService)
+    private readonly capabilities: CapabilityUsageService,
   ) {}
 
   /**
-   * POST /usage/consume —— 两种形态，同一个端点（ADR-013 D2）：
-   *   amount 形态 { workspace_id, product, metric, amount, idempotency_key, end_user_id?, intent? }
-   *   tokens 形态 { workspace_id, product(调用方), request_id, occurred_at, tokens:{input,output,cache_write,cache_read},
-   *                attempt_index?, outcome?, model_code?, provider_code?, reasoning_tokens?, rerank_candidates?, parse_pages?, backfill? }
-   * 两种不许混：同时带 tokens 与 metric/amount 是 400。
+   * POST /usage/consume accepts commercial amounts, Atlas raw tokens, or
+   * Runos capability_usage facts. Shapes cannot be mixed. Capability facts
+   * require the dedicated delegated reporter and return a persistence receipt.
    */
   @Post("usage/consume")
   async consume(
@@ -95,11 +100,32 @@ export class PlatformUsageRouter {
       rerank_candidates?: unknown;
       parse_pages?: unknown;
       backfill?: unknown;
+      capability_usage?: unknown;
     },
     @Res({ passthrough: true }) res: Response,
     @Headers("x-request-id") requestId?: string,
     @S2sCaller() s2sCaller?: S2sCallerCtx,
-  ): Promise<ConsumeResponseBody> {
+  ): Promise<ConsumeResponseBody | CapabilityUsageReceipt> {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new BadRequestException("invalid_consume_body");
+    }
+    if (body.capability_usage !== undefined) {
+      if (
+        !s2sCaller?.delegated ||
+        s2sCaller.productCode !== "runos" ||
+        s2sCaller.mode !== "service"
+      ) {
+        throw new ForbiddenException("capability_usage_reporter_required");
+      }
+      const receipt = await this.capabilities.ingest(
+        parseCapabilityUsage(body),
+      );
+      res.status(200);
+      return receipt;
+    }
+    if (s2sCaller?.delegated && s2sCaller.productCode === "runos") {
+      throw new ForbiddenException("capability_usage_reporter_shape_required");
+    }
     let parsed;
     try {
       parsed = parseConsumeRequest(body);

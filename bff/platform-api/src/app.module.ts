@@ -60,6 +60,7 @@ import {
 } from "./providers/pg-pool.provider";
 import { PlatformUsageService } from "./platform/platform-usage.service";
 import { TokenUsageService } from "./platform/token-usage.service";
+import { CapabilityUsageService } from "./platform/capability-usage.service";
 import { HealthRouter } from "./routers/health.router";
 import { PlatformEntitlementsRouter } from "./routers/platform-entitlements.router";
 import { PlatformProvisioningRouter } from "./routers/platform-provisioning.router";
@@ -95,6 +96,7 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     PlatformUsageService,
     // #547：原始 token 用量接收（同一个 /usage/consume 端点的 tokens 形态）
     TokenUsageService,
+    CapabilityUsageService,
     PlatformProvisioningService,
     ProvisioningReadService,
     ProvisioningReadGuard,

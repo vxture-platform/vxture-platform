@@ -36,6 +36,7 @@ const CALLER_PLATFORM = { clientId: "console", productCode: null };
 // The L1 reporter (decision 3 PR C): allowlisted with the "delegated-reporter"
 // grant — the ONLY platform-level caller that may mint aud=vxture.
 const CALLER_ATLAS = { clientId: "atlas", productCode: null };
+const CALLER_RUNOS = { clientId: "runos", productCode: null };
 // A platform-level client NOT in PLATFORM_LEVEL_S2S_CALLERS — still hits the
 // original invalid_client rejection (unlike CALLER_PLATFORM/"console", which
 // is allowlisted, see the "platform-caller mode" describe block below).
@@ -54,6 +55,51 @@ function auditCall(pool: { mock: { calls: unknown[][] } }): unknown[] {
   if (!call) throw new Error("no audit insert was recorded");
   return call;
 }
+
+describe("Runos delegated usage reporter", () => {
+  const req = {
+    audience: "vxture",
+    subjectToken: undefined,
+    workspaceId: undefined,
+    orgId: undefined,
+  };
+  it("mints a short-lived machine identity without a catalog product or workspace", async () => {
+    const m = build();
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ client_id: "runos" }] })
+      .mockResolvedValue({ rows: [] });
+    await m.service.exchange(CALLER_RUNOS, req);
+    expect(m.keys.sign.mock.calls[0]?.[0]).toEqual({
+      act: { sub: "runos" },
+      mode: "service",
+      delegated: true,
+      scope: "tool:vxture",
+    });
+    expect(m.keys.sign.mock.calls[0]?.[1]).toMatchObject({
+      audience: "vxture",
+      expiresInSec: 300,
+    });
+  });
+  it.each([
+    { workspaceId: "" },
+    { orgId: "" },
+    { scope: "tool:vxture" },
+    { audience: "atlas" },
+  ])("refuses context or expanded authority %j", async (change) => {
+    const m = build();
+    await expect(
+      m.service.exchange(CALLER_RUNOS, { ...req, ...change }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+  it("rejects a disabled or non-platform client", async () => {
+    const m = build();
+    m.pool.query.mockResolvedValue({ rows: [] });
+    await expect(m.service.exchange(CALLER_RUNOS, req)).rejects.toMatchObject({
+      message: "invalid_client",
+    });
+  });
+});
 
 describe("TokenExchangeService — provisioning discovery grant", () => {
   const req = {

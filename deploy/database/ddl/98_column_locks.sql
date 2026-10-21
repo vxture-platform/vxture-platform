@@ -351,6 +351,9 @@ GRANT UPDATE (event_id, event_created_at, consumed, per_pool) ON metering.usage_
 REVOKE UPDATE ON metering.usage_idempotencies_orphaned FROM platform_svc;
 
 -- metering.token_usage_events  [anchor: id, created_at]
+-- Raw facts are immutable by trigger, matching the existing token ledger policy.
+REVOKE UPDATE ON metering.capability_usage_events FROM platform_svc;
+GRANT UPDATE (reported_by, source_event_id, workspace_id, product_id, call_id, capability_id, metric_key, amount, unit, occurred_at) ON metering.capability_usage_events TO platform_svc;
 -- #547 原始 token 用量。与 usage_events 同款：95 的 append-only 触发器才是真守卫，这里的白名单
 -- 只是让 check-column-locks 认得出「哪些列形状上可写」。
 REVOKE UPDATE ON metering.token_usage_events FROM platform_svc;

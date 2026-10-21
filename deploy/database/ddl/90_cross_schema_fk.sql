@@ -8,6 +8,15 @@
 
 -- ── B0：tenancy → account ────────────────────────────────────────────────────
 DO $$ BEGIN
+  ALTER TABLE metering.capability_usage_events ADD CONSTRAINT fk_capability_usage_workspace
+    FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.capability_usage_events ADD CONSTRAINT fk_capability_usage_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
   ALTER TABLE tenancy.tenants ADD CONSTRAINT fk_tenants_owner_user
     FOREIGN KEY (owner_user_id) REFERENCES account.users(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
