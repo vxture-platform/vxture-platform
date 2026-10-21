@@ -679,6 +679,19 @@ jobs:
           if has platform_bff-platform-api;       then smoke @vxture/bff-platform-api; fi
           echo "built affected bundles: ${AFFECTED:-[]}"
 
+      # Reuse this job's Redis to exercise the atomic session query, not a mock.
+      - name: Central session status Redis regressions
+        if: needs.check.outputs.docs_only != 'true'
+        env:
+          AFFECTED: ${{ needs.check.outputs.affected_images }}
+          AUTH_ITEST: "1"
+          REDIS_ITEST_URL: redis://localhost:6379
+        run: |
+          set -euo pipefail
+          if printf '%s' "$AFFECTED" | grep -q '"platform_bff-auth"'; then
+            pnpm --filter @vxture/bff-auth exec vitest run src/redis/session-status.itest.spec.ts
+          fi
+
       # ── 门户 next build ────────────────────────────────────────────────────
       # 补的盲区(#356):在此之前 CI 只建六个 BFF bundle,**一个门户的 next build
       # 都不跑**。门户构建只在 docker-build.yml 里发生,而它只在推 tag 时触发——

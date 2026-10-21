@@ -23,6 +23,7 @@ import {
 import { buildAccessTokenBlacklistKey } from "@vxture/core-auth";
 import { VxConfigService } from "@vxture/core-config";
 import Redis from "ioredis";
+import type { OidcSessionStatus } from "../oidc/session-status";
 
 // ============================================================================
 // Types
@@ -879,6 +880,70 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.error(`getOidcSession failed: ${String(err)}`);
       throw new ServiceUnavailableException("OIDC session lookup failed");
+    }
+  }
+
+  /**
+   * Atomically verify a session, its realm and the client binding.
+   * `active` records observed activity but never extends the absolute TTL.
+   * @throws {ServiceUnavailableException} For store errors or corrupt metadata.
+   */
+  async checkOidcSessionStatus(
+    sid: string,
+    clientId: string,
+    realm: string,
+    active: boolean,
+  ): Promise<OidcSessionStatus> {
+    const client = this.requireReadyClient();
+    const script = `
+      local session = KEYS[1]
+      local clients = KEYS[2]
+      if redis.call('EXISTS', session) == 0 then return {0} end
+      local fields = redis.call('HMGET', session, 'sub', 'realm', 'absExpiresAt', 'lastActiveAt')
+      local expiry = tonumber(fields[3])
+      local last = tonumber(fields[4])
+      local ttl = redis.call('PTTL', session)
+      if not fields[1] or fields[1] == '' or not fields[2]
+          or (fields[2] ~= 'customer' and fields[2] ~= 'workforce')
+          or not expiry or expiry < 1 or expiry > 9007199254740991
+          or expiry ~= math.floor(expiry)
+          or not last or last < 0 or last > 9007199254740991
+          or last ~= math.floor(last) or ttl == -1 then return {-1} end
+      local current = tonumber(redis.call('TIME')[1])
+      if ttl <= 0 or current >= expiry then return {0} end
+      if fields[2] ~= ARGV[2] then return {0} end
+      if redis.call('SISMEMBER', clients, ARGV[1]) ~= 1 then return {0} end
+      if ARGV[3] == '1' then
+        if current > last then redis.call('HSET', session, 'lastActiveAt', current) end
+      end
+      return {1, math.min(current + 300, expiry, current + math.floor(ttl / 1000))}
+    `;
+    try {
+      const raw: unknown = await client.eval(
+        script,
+        2,
+        this.sessionKey(sid),
+        this.sessionClientsKey(sid),
+        clientId,
+        realm,
+        active ? "1" : "0",
+      );
+      if (Array.isArray(raw)) {
+        if (raw.length === 1 && raw[0] === 0) return { valid: false };
+        if (
+          raw.length === 2 &&
+          raw[0] === 1 &&
+          Number.isSafeInteger(raw[1]) &&
+          raw[1] > 0
+        ) {
+          return { valid: true, next_check_at: raw[1] as number };
+        }
+      }
+      throw new Error("Invalid session status result");
+    } catch {
+      // Never log Redis command arguments, which include the session id.
+      this.logger.error("OIDC session status lookup failed");
+      throw new ServiceUnavailableException("OIDC session status unavailable");
     }
   }
 
