@@ -97,6 +97,9 @@ function routerWith(opts: {
     usage as unknown as PlatformUsageService,
     { ingest } as unknown as TokenUsageService,
     { record: recordLegacy } as unknown as LegacyAuthUsageService,
+    {
+      ingest: vi.fn(),
+    } as unknown as import("../platform/capability-usage.service").CapabilityUsageService,
   );
   return { router, usage, ingest, noteQuotaExhausted, recordLegacy };
 }
@@ -281,6 +284,7 @@ describe("POST /usage/consume —— gated 时的运营通告", () => {
       status: "insufficient",
     });
     const out = await router.consume(body, res());
+    if ("recorded" in out) throw new Error("unexpected raw capability receipt");
     expect(out.gated).toBe(true);
     expect(noteQuotaExhausted).toHaveBeenCalledTimes(1);
     expect(noteQuotaExhausted.mock.calls[0]![0]).toEqual({
@@ -306,6 +310,7 @@ describe("POST /usage/consume —— gated 时的运营通告", () => {
     const { router, noteQuotaExhausted } = routerWith({ status: "denied" });
     const r = res();
     const out = await router.consume(body, r);
+    if ("recorded" in out) throw new Error("unexpected raw capability receipt");
     expect(r.status).toHaveBeenCalledWith(409);
     expect(out.gated).toBe(true);
     expect(out.enforcement).toBe("hard");
@@ -325,6 +330,7 @@ describe("POST /usage/consume —— gated 时的运营通告", () => {
   it("没 gated：一条都不写（配额覆盖住了不是信号）", async () => {
     const { router, noteQuotaExhausted } = routerWith({ status: "ok" });
     const out = await router.consume(body, res());
+    if ("recorded" in out) throw new Error("unexpected raw capability receipt");
     expect(out.gated).toBe(false);
     expect(noteQuotaExhausted).not.toHaveBeenCalled();
   });

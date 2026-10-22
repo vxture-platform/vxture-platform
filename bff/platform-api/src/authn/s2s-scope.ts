@@ -93,6 +93,10 @@ export function scopeToS2sCaller(
     return { workspaceId: requested.workspaceId, reporter: null };
   }
   if (s2sCaller.delegated) {
+    // Runos has a dedicated raw-fact ingestion path, never general C2/C3 rights.
+    if (s2sCaller.productCode === "runos") {
+      throw new ForbiddenException("s2s_delegated_path_not_allowed");
+    }
     if (delegated === "deny") {
       throw new ForbiddenException("s2s_delegated_path_not_allowed");
     }

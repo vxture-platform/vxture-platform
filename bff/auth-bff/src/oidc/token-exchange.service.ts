@@ -126,6 +126,7 @@ const PLATFORM_LEVEL_S2S_CALLERS: ReadonlyMap<string, PlatformCallerGrant> =
   new Map([
     ["console", "workspace-service"],
     ["atlas", "delegated-reporter"],
+    ["runos", "delegated-reporter"],
     // `platform-api` (2026-10-09, #562): the unattended model-health watchdog.
     // It has no human operator session and no workspace — it only needs to READ
     // Atlas health — so it gets a workspace-less `health:<target>` ticket, a
@@ -534,6 +535,14 @@ export class TokenExchangeService {
     caller: TokenExchangeCaller,
     req: TokenExchangeRequest,
   ): Promise<TokenExchangeResult> {
+    if (
+      caller.clientId === "runos" &&
+      (req.workspaceId !== undefined ||
+        req.orgId !== undefined ||
+        req.scope !== undefined)
+    ) {
+      throw new BadRequestException("invalid_request");
+    }
     if (!req.audience) {
       throw new BadRequestException("invalid_request");
     }
