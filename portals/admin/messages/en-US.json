@@ -1,4 +1,28 @@
 {
+  "invoiceReview": {
+    "approve": "Approve application",
+    "reject": "Reject application",
+    "issue": "Record actual issuance",
+    "cancel": "Cancel",
+    "failed": "Could not process the application. Refresh and try again.",
+    "issueNotice": "Record the number and file after issuance in the tax system. This updates the original application without calling a tax invoicing service or creating another invoice.",
+    "reviewNotice": "Check every associated bill and the submitted billing details before proceeding. Customers can reapply after rejection.",
+    "reason": "Processing notes",
+    "number": "Actual invoice number",
+    "code": "Invoice code (optional)",
+    "file": "Invoice file HTTPS URL",
+    "tax": "Tax amount (included in total)",
+    "issuedAt": "Actual issuance time (UTC)",
+    "pageDescription": "Review invoice applications for individual or merged bills, record actual issuance, and track delivery and voiding. No automated tax invoicing service is called.",
+    "company": {
+      "title": "Billing name",
+      "taxNo": "Tax ID",
+      "phone": "Phone",
+      "address": "Address",
+      "bankName": "Bank",
+      "bankAccount": "Bank account"
+    }
+  },
   "atlasMonitoring": {
     "title": "Model service status and events",
     "refresh": "Refresh monitoring data",

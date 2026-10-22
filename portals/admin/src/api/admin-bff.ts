@@ -1524,6 +1524,36 @@ export async function syncOfflineInvoice(
   return (await response.json()) as BillingDetailRecord;
 }
 
+/** Review the original application; issuance records an externally issued invoice. */
+export async function reviewInvoiceApplication(
+  id: string,
+  payload: {
+    action: "approve" | "reject" | "issue";
+    reason: string;
+    invoiceElectronicNo?: string;
+    invoiceCode?: string;
+    invoiceFileUrl?: string;
+    taxAmount?: string;
+    issuedAt?: string;
+  },
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/invoices/${encodeURIComponent(id)}/review`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      message?: string;
+    };
+    throw new AdminBffError(body.message ?? "发票处理失败", response.status);
+  }
+}
+
 export async function submitBillingInvoiceReceiptAction(
   billId: string,
   receiptId: string,

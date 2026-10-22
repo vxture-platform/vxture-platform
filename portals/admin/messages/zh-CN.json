@@ -1,4 +1,28 @@
 {
+  "invoiceReview": {
+    "approve": "受理申请",
+    "reject": "驳回申请",
+    "issue": "登记实际开具结果",
+    "cancel": "取消",
+    "failed": "处理失败，请刷新后重试",
+    "issueNotice": "请在税务系统实际开具后登记号码和文件。本操作更新原申请，不会调用税务开票服务或新建一张发票。",
+    "reviewNotice": "核对全部关联账单及提交时的抬头快照后处理。驳回后客户可重新申请。",
+    "reason": "处理说明",
+    "number": "实际发票号码",
+    "code": "发票代码（可选）",
+    "file": "发票文件 HTTPS 地址",
+    "tax": "税额（价税合计内）",
+    "issuedAt": "实际开具时间（UTC）",
+    "pageDescription": "审核单张或合并账单的开票申请，登记实际开具结果并跟踪寄送及红冲。不调用税务自动开票服务。",
+    "company": {
+      "title": "抬头",
+      "taxNo": "税号",
+      "phone": "电话",
+      "address": "地址",
+      "bankName": "开户行",
+      "bankAccount": "开户账号"
+    }
+  },
   "atlasMonitoring": {
     "title": "模型服务状态与事件",
     "refresh": "刷新监测数据",

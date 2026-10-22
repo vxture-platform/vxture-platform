@@ -783,6 +783,13 @@ jobs:
             pnpm --recursive --if-present test
           fi
 
+      - name: Invoice application database regression
+        if: needs.check.outputs.docs_only != 'true'
+        env:
+          INVOICE_TEST_ADMIN_URL: postgresql://postgres@127.0.0.1:5432/postgres
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/tests/run-invoice-receipts.mjs
+
   # ── 6. SonarQube ───────────────────────────────────────────────────────────
   # Coverage generate/upload/download steps removed 2026-07-28: model-platform
   # (旧 model-platform 服务已迁 vxture-atlas,2026-07-28)

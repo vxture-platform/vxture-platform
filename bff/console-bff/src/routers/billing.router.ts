@@ -81,6 +81,8 @@ export interface BillingOverview {
 
 /** 账单管理页行视图：可视码 + 账期 + 金额三段 + 状态，日期一律 ISO 字符串。 */
 export interface ConsoleBillView {
+  invoiceStatus?: string | null;
+  invoiceFileUrl?: string | null;
   id: string;
   billNo: string;
   billCycle: string;
@@ -147,6 +149,7 @@ export interface ConsoleInvoiceReceiptView {
   invoiceNo: string;
   billId: string;
   billNo: string | null;
+  bills: InvoiceReceiptRecord["bills"];
   invoiceType: string;
   invoiceTaxType: string;
   invoiceTitle: string;
@@ -190,6 +193,7 @@ function mapReceiptView(r: InvoiceReceiptRecord): ConsoleInvoiceReceiptView {
     invoiceNo: r.invoiceNo,
     billId: r.billId,
     billNo: r.billNo,
+    bills: r.bills,
     invoiceType: r.invoiceType,
     invoiceTaxType: r.invoiceTaxType,
     invoiceTitle: r.invoiceTitle,
@@ -355,7 +359,12 @@ export class BillingRouter {
   async applyReceipt(
     @Req() req: Request & RequestContext,
     @Body()
-    body: { billId?: unknown; addressId?: unknown; invoiceType?: unknown },
+    body: {
+      billId?: unknown;
+      billIds?: unknown;
+      addressId?: unknown;
+      invoiceType?: unknown;
+    },
   ): Promise<ConsoleInvoiceReceiptView> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     if (!req.user) throw new UnauthorizedException("No active session");
@@ -363,7 +372,19 @@ export class BillingRouter {
     const addressId = typeof body.addressId === "string" ? body.addressId : "";
     const invoiceType =
       typeof body.invoiceType === "string" ? body.invoiceType : "";
-    if (!UUID_RE.test(billId)) throw new BadRequestException("billId 非法");
+    const billIds = body.billIds === undefined ? [billId] : body.billIds;
+    if (
+      !Array.isArray(billIds) ||
+      billIds.length < 1 ||
+      billIds.length > 50 ||
+      new Set(billIds).size !== billIds.length ||
+      billIds.some(
+        (id: unknown) => typeof id !== "string" || !UUID_RE.test(id),
+      ) ||
+      (body.billIds !== undefined && body.billId !== undefined)
+    ) {
+      throw new BadRequestException("请选择 1 至 50 张不重复的有效账单");
+    }
     if (!UUID_RE.test(addressId))
       throw new BadRequestException("addressId 非法");
     if (!INVOICE_TYPES.has(invoiceType)) {
@@ -388,7 +409,7 @@ export class BillingRouter {
     const record = await this.receipts.applyReceipt({
       tenantId: req.tenant.id,
       userId: req.user.id,
-      billId,
+      billIds: billIds as string[],
       addressId,
       invoiceType: invoiceType as
         | "electronic_general"
@@ -399,7 +420,7 @@ export class BillingRouter {
       action: "billing.invoice.apply",
       resourceType: "invoice_receipt",
       resourceId: record.invoiceNo,
-      after: { billNo: record.billNo, type: record.invoiceType },
+      after: { bills: record.bills, type: record.invoiceType },
     });
     return mapReceiptView(record);
   }
@@ -453,8 +474,24 @@ export class BillingRouter {
       page,
       pageSize,
     });
+    const active = await this.pool.query<{
+      bill_id: string;
+      invoice_status: string;
+      invoice_file_url: string | null;
+    }>(
+      `select distinct on (rb.bill_id) rb.bill_id, r.invoice_status, r.invoice_file_url
+        from billing.invoice_receipt_bills rb join billing.invoice_receipts r on r.id = rb.receipt_id
+        where rb.bill_id = any($1::uuid[]) and r.tenant_id = $2 and r.deleted_at is null
+          and r.invoice_status not in ('rejected', 'voided') order by rb.bill_id, r.created_at desc`,
+      [result.items.map((item) => item.id), req.tenant.id],
+    );
+    const receiptMap = new Map(active.rows.map((r) => [r.bill_id, r]));
     return {
-      items: result.items.map(mapBill),
+      items: result.items.map((item) => ({
+        ...mapBill(item),
+        invoiceStatus: receiptMap.get(item.id)?.invoice_status ?? null,
+        invoiceFileUrl: receiptMap.get(item.id)?.invoice_file_url ?? null,
+      })),
       total: result.total,
       page,
       pageSize,

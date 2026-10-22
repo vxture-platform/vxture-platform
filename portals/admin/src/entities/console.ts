@@ -1677,6 +1677,10 @@ export type BillingInvoiceTaxType =
 export type BillingInvoiceReceiptAction = "update_shipping" | "finish" | "red";
 
 export interface BillingInvoiceReceiptRecord {
+  bills?: { id: string; billNo: string; amount: string }[];
+  companyInfo?: Record<string, unknown>;
+  bankInfo?: Record<string, unknown> | null;
+  addressInfo?: Record<string, unknown> | null;
   id: string;
   billId?: string;
   invoiceNo: string;
@@ -1718,7 +1722,7 @@ export interface BillingInvoiceLedgerRecord extends BillingInvoiceReceiptRecord 
   orderNo: string | null;
   servicePlanName: string | null;
   tierName: string | null;
-  sourceLabel: "offline";
+  sourceLabel: "offline" | "invoice";
 }
 
 export interface BillingOperationEvent {

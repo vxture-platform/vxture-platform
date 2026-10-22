@@ -425,6 +425,7 @@ function BillingDetails({
                     title={<>{receipt.invoiceNo}</>}
                     description={
                       <>
+                        {receipt.bills?.map((b) => b.billNo).join(" / ")} |{" "}
                         {invoiceTypeLabel(receipt.invoiceType)} |{" "}
                         {taxTypeLabel(receipt.invoiceTaxType)} |{" "}
                         {t(`status.invoice.${receipt.invoiceStatus}`)}

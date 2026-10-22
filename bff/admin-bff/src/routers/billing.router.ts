@@ -135,6 +135,17 @@ export class BillingRouter {
 
       const bill = await this.lockBillForAction(client, billId);
 
+      const pending = await client.query(
+        `select 1 from billing.invoice_receipts r
+        join billing.invoice_receipt_bills rb on rb.receipt_id = r.id
+        where rb.bill_id = $1 and r.deleted_at is null and r.invoice_status in ('applying', 'approved') limit 1`,
+        [bill.id],
+      );
+      if (pending.rowCount)
+        throw new ConflictException(
+          "该账单已有待处理申请,请从发票管理审核并开具原申请",
+        );
+      // Preserve the bill's currency for legacy single-bill registrations too.
       await client.query(INSERT_OFFLINE_RECEIPT_SQL, [
         bill.tenant_id,
         bill.id,
@@ -156,6 +167,7 @@ export class BillingRouter {
         emptyToNull(body?.expressNo),
         optionalIso(body?.sendAt),
         operatorId,
+        bill.currency ?? "CNY",
       ]);
 
       const detail = await this.loadBillingDetail(client, bill.id);
@@ -874,6 +886,7 @@ function mapInvoiceReceiptRow(
   return {
     id: row.id,
     billId: row.bill_id,
+    bills: row.bills ?? [],
     invoiceNo: row.invoice_no,
     invoiceType: normalizeInvoiceType(row.invoice_type),
     invoiceTaxType: normalizeInvoiceTaxType(row.invoice_tax_type),
@@ -930,11 +943,12 @@ const BILLING_SELECT = `
   i.created_at,
   i.updated_at,
   coalesce((
-    select sum(ir.invoice_amount)
+    select sum(rb.amount)
     from billing.invoice_receipts ir
-    where ir.bill_id = i.id
+    join billing.invoice_receipt_bills rb on rb.receipt_id = ir.id
+    where rb.bill_id = i.id
       and ir.deleted_at is null
-      and ir.invoice_status <> 'voided'
+      and ir.invoice_status not in ('rejected', 'voided')
   ), 0) as invoiced_amount,
   lr.invoice_no as latest_invoice_no,
   lr.invoice_status as latest_invoice_status
@@ -944,7 +958,7 @@ left join tenancy.tenant_profiles p on p.tenant_id = i.tenant_id
 left join lateral (
   select r.invoice_no, r.invoice_status
   from billing.invoice_receipts r
-  where r.bill_id = i.id and r.deleted_at is null
+  where exists (select 1 from billing.invoice_receipt_bills rb where rb.receipt_id = r.id and rb.bill_id = i.id) and r.deleted_at is null
   order by r.created_at desc
   limit 1
 ) lr on true
@@ -989,6 +1003,7 @@ order by created_at asc
 
 const INVOICE_RECEIPTS_SQL = `
 select
+  (select jsonb_agg(jsonb_build_object('id', b.id, 'billNo', b.bill_no, 'amount', rb.amount::text) order by b.id) from billing.invoice_receipt_bills rb join billing.invoices b on b.id = rb.bill_id where rb.receipt_id = invoice_receipts.id) as bills,
   id,
   bill_id,
   invoice_no,
@@ -1011,7 +1026,7 @@ select
   created_at,
   updated_at
 from billing.invoice_receipts
-where bill_id = $1
+where id in (select receipt_id from billing.invoice_receipt_bills where bill_id = $1)
   and deleted_at is null
 order by created_at desc
 `;
@@ -1079,6 +1094,7 @@ interface InvoiceItemRow {
 }
 
 interface InvoiceReceiptRow {
+  bills?: { id: string; billNo: string; amount: string }[];
   id: string;
   bill_id: string;
   invoice_no: string;
@@ -1131,12 +1147,14 @@ select
   i.discount_amount,
   i.payable_amount,
   i.paid_amount,
+  i.currency,
   coalesce((
-    select sum(ir.invoice_amount)
+    select sum(rb.amount)
     from billing.invoice_receipts ir
-    where ir.bill_id = i.id
+    join billing.invoice_receipt_bills rb on rb.receipt_id = ir.id
+    where rb.bill_id = i.id
       and ir.deleted_at is null
-      and ir.invoice_status <> 'voided'
+      and ir.invoice_status not in ('rejected', 'voided')
   ), 0) as invoiced_amount
 from billing.invoices i
 where i.deleted_at is null
@@ -1151,13 +1169,13 @@ insert into billing.invoice_receipts (
   tax_no, company_info, invoice_amount, tax_amount, invoice_status, status_remark,
   invoice_code, invoice_electronic_no, invoice_file_url, issued_at,
   express_company, express_no, send_at,
-  created_by_type, created_by_id, auditor_id, audit_at, created_at, updated_at
+  created_by_type, created_by_id, auditor_id, audit_at, created_at, updated_at, currency
 ) values (
   $1, $2, $3, $4, $5, $6,
   $7, $8::jsonb, $9, coalesce($10, 0), $11, $12,
   $13, $14, $15, $16,
   $17, $18, $19,
-  'operator', $20, $20, now(), now(), now()
+  'operator', $20, $20, now(), now(), now(), $21
 )
 returning id
 `;
@@ -1235,7 +1253,8 @@ insert into billing.invoice_items (
 const LOCK_RECEIPT_SQL = `
 select r.id, r.bill_id, r.invoice_status
 from billing.invoice_receipts r
-join billing.invoices i on i.id = r.bill_id
+join billing.invoice_receipt_bills rb on rb.receipt_id = r.id
+join billing.invoices i on i.id = rb.bill_id
 where r.id = $1
   and r.deleted_at is null
   and i.deleted_at is null
@@ -1439,6 +1458,7 @@ interface InvoiceReceiptVoidBody {
 interface BillActionLockRow {
   id: string;
   tenant_id: string;
+  currency: string | null;
   bill_status: string | null;
   bill_cycle: string;
   cycle_start_date: Date | string | null;

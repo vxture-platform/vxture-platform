@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { InvoiceReviewDialog } from "./InvoiceReviewDialog";
+import { useAdminSession } from "@/features/session/AdminSessionProvider";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
 import {
@@ -128,6 +130,7 @@ function invoiceSearchText(invoice: BillingInvoiceLedgerRecord) {
     invoice.expressCompany,
     invoice.expressNo,
     invoice.billNo,
+    ...(invoice.bills ?? []).map((b) => b.billNo),
     invoice.orderNo,
     formatPrincipalNoOr(invoice.tenantCode, "tenant", "—"),
     invoice.tenantName,
@@ -190,7 +193,10 @@ function invoiceCsvColumns(
       value: (v) => formatPrincipalNoOr(v.tenantCode, "tenant", "—"),
     },
     { label: "租户名称", value: (v) => v.tenantName },
-    { label: "关联账单", value: (v) => v.billNo },
+    {
+      label: "关联账单",
+      value: (v) => v.bills?.map((b) => b.billNo).join(" / ") ?? v.billNo,
+    },
     { label: "订单编号", value: (v) => v.orderNo ?? "" },
     { label: "币种", value: (v) => v.currency },
     { label: "开票金额", value: (v) => v.invoiceAmount },
@@ -207,14 +213,21 @@ function invoiceCsvColumns(
 function InvoiceActionsMenu({
   invoice,
   onReceiptAction,
+  onReview,
 }: {
   invoice: BillingInvoiceLedgerRecord;
+  onReview: (
+    invoice: BillingInvoiceLedgerRecord,
+    action: "approve" | "reject" | "issue",
+  ) => void;
   onReceiptAction: (
     invoice: BillingInvoiceLedgerRecord,
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
   const tShared = useTranslations();
+  const { session } = useAdminSession();
+  const canReview = session.capabilities.includes("commerce:invoice.manage");
   const router = useRouter();
 
   return (
@@ -225,6 +238,27 @@ function InvoiceActionsMenu({
       <ActionMenu
         label={`${invoice.invoiceNo} 发票操作`}
         items={[
+          ...(["approve", "reject", "issue"] as const).map(
+            (action): ActionMenuItem => ({
+              id: action,
+              label:
+                action === "approve"
+                  ? tShared("invoiceReview.approve")
+                  : action === "reject"
+                    ? tShared("invoiceReview.reject")
+                    : tShared("invoiceReview.issue"),
+              disabled:
+                !canReview ||
+                (action === "approve"
+                  ? invoice.invoiceStatus !== "applying"
+                  : action === "issue"
+                    ? invoice.invoiceStatus !== "auditing"
+                    : !["applying", "auditing"].includes(
+                        invoice.invoiceStatus,
+                      )),
+              onSelect: () => onReview(invoice, action),
+            }),
+          ),
           {
             id: "bill",
             label: "账单详情",
@@ -337,7 +371,9 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
             </span>
           }
           <span className="text-body-sm text-muted-foreground">
-            {invoice.billNo}
+            {(invoice.bills ?? [{ billNo: invoice.billNo }])
+              .map((b) => b.billNo)
+              .join(" / ")}
           </span>
         </span>
       ),
@@ -400,6 +436,10 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
 export function InvoicesPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const [reviewTarget, setReviewTarget] = useState<{
+    invoice: BillingInvoiceLedgerRecord;
+    action: "approve" | "reject" | "issue";
+  } | null>(null);
   const tableLabels = useTableLabels();
   const [invoices, setInvoices] = useState<BillingInvoiceLedgerRecord[]>([]);
   const [invoicesTruncated, setInvoicesTruncated] = useState(false);
@@ -591,7 +631,7 @@ export function InvoicesPage() {
             icon="key"
             eyebrow="财务结算"
             title="发票管理"
-            description="线下发票台账 MVP：集中查看人工登记的发票、寄送状态和红冲/作废结果，不调用在线开票接口。"
+            description={tShared("invoiceReview.pageDescription")}
             action={
               <Button asChild variant="outline">
                 <Link href="/billing">
@@ -795,6 +835,9 @@ export function InvoicesPage() {
                 <InvoiceActionsMenu
                   invoice={invoice}
                   onReceiptAction={requestReceiptAction}
+                  onReview={(invoice, action) =>
+                    setReviewTarget({ invoice, action })
+                  }
                 />
               )}
               empty={
@@ -831,6 +874,19 @@ export function InvoicesPage() {
         }
       />
 
+      {reviewTarget ? (
+        <InvoiceReviewDialog
+          invoice={reviewTarget.invoice}
+          action={reviewTarget.action}
+          onClose={() => setReviewTarget(null)}
+          onCompleted={async () => {
+            const records = await fetchInvoiceLedgerRecords();
+            setInvoices(records);
+            setInvoicesTruncated(isListTruncated(records));
+            setReviewTarget(null);
+          }}
+        />
+      ) : null}
       {receiptActionTarget ? (
         <InvoiceReceiptActionDialog
           receipt={receiptActionTarget.invoice}

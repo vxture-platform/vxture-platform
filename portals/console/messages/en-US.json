@@ -319,6 +319,23 @@
         "noticeBills": "Invoice requests cannot be submitted online yet. Contact support with your bill number and invoice title; invoices already issued stay available under Invoices & titles.",
         "noticeLedger": "Invoice requests cannot be submitted online yet. Contact support with your bill number and invoice title; requests already submitted and invoices already issued stay listed below, where you can view and download them.",
         "contactCta": "Contact support"
+      },
+      "application": {
+        "title": "Apply for an invoice",
+        "rules": "Combine up to 50 bills in one currency, including different billing periods. Operations reviews and issues the invoice.",
+        "eligibility": "Select settled, positive-value bills without an active invoice application. Full business verification is required.",
+        "submit": "Submit application",
+        "cancel": "Cancel",
+        "failed": "Application failed. Please retry.",
+        "selected": "{count} selected bills (kept across pages)",
+        "total": "Total including tax: {currency} {amount}",
+        "address": "Invoice title",
+        "chooseAddress": "Choose an invoice title",
+        "type": "Invoice type",
+        "manageAddresses": "Manage invoice titles",
+        "clear": "Clear selection",
+        "selectionInvalid": "Selection unchanged: choose up to 50 settled, positive-value bills in one currency without an active application.",
+        "verificationRequired": "Full business verification is required before applying. Lite verification does not support invoicing. Contact support for assistance."
       }
     },
     "viewInvoices": "Invoices & titles",

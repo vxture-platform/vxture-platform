@@ -42,6 +42,7 @@ import { TenantsRouter } from "./routers/tenants.router";
 import { AccountsRouter } from "./routers/accounts.router";
 import { BillingRouter } from "./routers/billing.router";
 import { InvoicesRouter } from "./routers/invoices.router";
+import { InvoiceReviewRouter } from "./routers/invoice-review.router";
 import { AddonOrdersRouter } from "./routers/addon-orders.router";
 import { OrdersRouter } from "./routers/orders.router";
 import { OpsTodosRouter } from "./routers/ops-todos.router";
@@ -81,6 +82,7 @@ import { SearchRouter } from "./routers/search.router";
     AccountsRouter,
     BillingRouter,
     InvoicesRouter,
+    InvoiceReviewRouter,
     OrdersRouter,
     OpsTodosRouter,
     AddonOrdersRouter,
