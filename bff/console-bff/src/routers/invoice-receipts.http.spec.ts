@@ -150,7 +150,9 @@ describe("invoice application HTTP", () => {
       amount: "999.00",
     });
     expect(response.status).toBe(201);
-    expect((await response.json()).bills).toEqual(record.bills);
+    expect(await response.json()).toEqual(
+      expect.objectContaining({ bills: record.bills }),
+    );
     expect(apply).toHaveBeenCalledWith({
       ...input,
       tenantId: TENANT,
