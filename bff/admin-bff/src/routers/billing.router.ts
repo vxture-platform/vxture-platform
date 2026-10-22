@@ -440,7 +440,7 @@ export class BillingRouter {
         operatorId,
       ]);
 
-      const detail = await this.loadBillingDetail(client, receipt.bill_id);
+      const detail = await this.loadBillingDetail(client, billId);
       await client.query("commit");
       return detail as BillingDetailRecord;
     } catch (e) {
@@ -495,7 +495,7 @@ export class BillingRouter {
         operatorId,
       ]);
 
-      const detail = await this.loadBillingDetail(client, receipt.bill_id);
+      const detail = await this.loadBillingDetail(client, billId);
       await client.query("commit");
       return detail as BillingDetailRecord;
     } catch (e) {
