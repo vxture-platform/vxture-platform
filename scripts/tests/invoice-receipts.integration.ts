@@ -345,6 +345,36 @@ test("merged invoice applications and migration", async (t) => {
       },
     );
     await t.test(
+      "non-anchor delivery and voiding preserve the current bill and release all members",
+      async () => {
+        const selected = [a, b].find((id) => id !== merged.billId)!;
+        const sent = await adminBilling.runInvoiceReceiptAction(
+          req,
+          selected,
+          merged.id,
+          { action: "finish", statusRemark: "Delivery complete" },
+        );
+        assert.equal(sent.id, selected);
+        assert.equal(
+          sent.invoiceReceipts.find((r) => r.id === merged.id)?.invoiceStatus,
+          "finished",
+        );
+        const voided = await adminBilling.voidInvoiceReceipt(
+          req,
+          selected,
+          merged.id,
+          { statusRemark: "Actual tax void recorded" },
+        );
+        assert.equal(voided.id, selected);
+        for (const id of [a, b])
+          assert.equal(
+            (await adminBilling.getBilling(req, id))?.invoicedAmount,
+            0,
+          );
+        assert.notEqual((await apply([a, b])).id, merged.id);
+      },
+    );
+    await t.test(
       "rejection releases every member for a new application",
       async () => {
         const ids = [await bill(), await bill()];
