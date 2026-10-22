@@ -243,10 +243,10 @@ function InvoiceActionsMenu({
               id: action,
               label:
                 action === "approve"
-                  ? "受理申请"
+                  ? tShared("invoiceReview.approve")
                   : action === "reject"
-                    ? "驳回申请"
-                    : "登记开具结果",
+                    ? tShared("invoiceReview.reject")
+                    : tShared("invoiceReview.issue"),
               disabled:
                 !canReview ||
                 (action === "approve"
@@ -631,7 +631,7 @@ export function InvoicesPage() {
             icon="key"
             eyebrow="财务结算"
             title="发票管理"
-            description="审核单张或合并账单的开票申请，登记实际开具结果并跟踪寄送及红冲。不调用税务自动开票服务。"
+            description={tShared("invoiceReview.pageDescription")}
             action={
               <Button asChild variant="outline">
                 <Link href="/billing">

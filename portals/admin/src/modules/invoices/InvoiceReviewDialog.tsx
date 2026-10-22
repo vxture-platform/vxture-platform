@@ -8,6 +8,7 @@
  * @date 2026-10-22
  */
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Banner,
   DialogForm,
@@ -33,6 +34,7 @@ export function InvoiceReviewDialog({
   onClose: () => void;
   onCompleted: () => Promise<void>;
 }) {
+  const t = useTranslations("invoiceReview");
   const [reason, setReason] = useState("");
   const [number, setNumber] = useState("");
   const [code, setCode] = useState("");
@@ -43,12 +45,7 @@ export function InvoiceReviewDialog({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const title =
-    action === "approve"
-      ? "受理申请"
-      : action === "reject"
-        ? "驳回申请"
-        : "登记实际开具结果";
+  const title = t(action);
   return (
     <DialogForm
       open
@@ -56,7 +53,7 @@ export function InvoiceReviewDialog({
       title={title}
       description={`${invoice.invoiceNo} · ${invoice.invoiceTitle} · ${invoice.currency} ${invoice.invoiceAmount}`}
       submitLabel={title}
-      cancelLabel="取消"
+      cancelLabel={t("cancel")}
       submitting={busy}
       submitDisabled={
         !reason.trim() ||
@@ -82,18 +79,14 @@ export function InvoiceReviewDialog({
           });
           await onCompleted();
         } catch (err) {
-          setError(
-            err instanceof Error ? err.message : "处理失败,请刷新后重试",
-          );
+          setError(err instanceof Error ? err.message : t("failed"));
         } finally {
           setBusy(false);
         }
       }}
     >
       <p className="text-body-sm">
-        {action === "issue"
-          ? "请在税务系统实际开具后登记号码和文件。本操作更新原申请，不会调用税务开票服务或新建一张发票。"
-          : "核对全部关联账单及提交时的抬头快照后处理。驳回后客户可重新申请。"}
+        {t(action === "issue" ? "issueNotice" : "reviewNotice")}
       </p>
       <ul className="grid gap-xs text-body-sm">
         {(
@@ -112,27 +105,29 @@ export function InvoiceReviewDialog({
       </ul>
       {invoice.companyInfo ? (
         <dl className="grid gap-xs text-body-sm">
-          {Object.entries(invoice.companyInfo).map(([key, value]) => (
+          {(
+            [
+              "title",
+              "taxNo",
+              "phone",
+              "address",
+              "bankName",
+              "bankAccount",
+            ] as const
+          ).map((key) => (
             <div key={key}>
-              <dt>
-                {(
-                  {
-                    title: "抬头",
-                    taxNo: "税号",
-                    phone: "电话",
-                    address: "地址",
-                    bankName: "开户行",
-                    bankAccount: "开户账号",
-                  } as Record<string, string>
-                )[key] ?? key}
-              </dt>
-              <dd>{typeof value === "string" ? value : "—"}</dd>
+              <dt>{t(`company.${key}`)}</dt>
+              <dd>
+                {typeof invoice.companyInfo?.[key] === "string"
+                  ? invoice.companyInfo[key]
+                  : "—"}
+              </dd>
             </div>
           ))}
         </dl>
       ) : null}
       <Field>
-        <FieldLabel htmlFor="review-reason">处理说明</FieldLabel>
+        <FieldLabel htmlFor="review-reason">{t("reason")}</FieldLabel>
         <Textarea
           id="review-reason"
           value={reason}
@@ -143,7 +138,7 @@ export function InvoiceReviewDialog({
       {action === "issue" ? (
         <>
           <Field>
-            <FieldLabel htmlFor="review-number">实际发票号码</FieldLabel>
+            <FieldLabel htmlFor="review-number">{t("number")}</FieldLabel>
             <Input
               id="review-number"
               value={number}
@@ -152,7 +147,7 @@ export function InvoiceReviewDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="review-code">发票代码（可选）</FieldLabel>
+            <FieldLabel htmlFor="review-code">{t("code")}</FieldLabel>
             <Input
               id="review-code"
               value={code}
@@ -161,7 +156,7 @@ export function InvoiceReviewDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="review-file">发票文件 HTTPS 地址</FieldLabel>
+            <FieldLabel htmlFor="review-file">{t("file")}</FieldLabel>
             <Input
               id="review-file"
               type="url"
@@ -170,7 +165,7 @@ export function InvoiceReviewDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="review-tax">税额（价税合计内）</FieldLabel>
+            <FieldLabel htmlFor="review-tax">{t("tax")}</FieldLabel>
             <Input
               id="review-tax"
               inputMode="decimal"
@@ -179,7 +174,7 @@ export function InvoiceReviewDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="review-issued">实际开具时间（UTC）</FieldLabel>
+            <FieldLabel htmlFor="review-issued">{t("issuedAt")}</FieldLabel>
             <Input
               id="review-issued"
               type="datetime-local"
