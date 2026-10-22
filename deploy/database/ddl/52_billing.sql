@@ -320,6 +320,15 @@ CREATE INDEX idx_invoice_receipts_tenant_id   ON billing.invoice_receipts (tenan
 CREATE INDEX idx_invoice_receipts_status      ON billing.invoice_receipts (invoice_status);
 CREATE INDEX idx_invoice_receipts_deleted_at  ON billing.invoice_receipts (deleted_at);
 
+-- Each allocation retains its share of a merged receipt; bill_id remains the legacy anchor.
+CREATE TABLE billing.invoice_receipt_bills (
+    receipt_id uuid NOT NULL REFERENCES billing.invoice_receipts(id),
+    bill_id uuid NOT NULL REFERENCES billing.invoices(id),
+    amount numeric(12,2) NOT NULL,
+    PRIMARY KEY (receipt_id, bill_id)
+);
+CREATE INDEX idx_receipt_bills_bill ON billing.invoice_receipt_bills (bill_id);
+
 -- 支付（线上+线下多渠道+凭证）。pay_order_no 唯一落地"支付不能双份"。channel_* 为网关占位（未接入为空）。
 -- 金融例外：无 deleted_at（作废走 pay_status）。bill_id 域内 FK ON DELETE RESTRICT；
 -- transaction_id 域内 FK（支付成功写流水）；tenant_id→tenancy（90）；actor_id 裸值（边界#2）。

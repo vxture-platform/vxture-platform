@@ -168,6 +168,10 @@ function mapInvoiceLedgerRow(
   return {
     id: row.id,
     billId: row.bill_id,
+    bills: row.bills,
+    companyInfo: row.company_info,
+    bankInfo: row.bank_info,
+    addressInfo: row.address_info,
     invoiceNo: row.invoice_no,
     invoiceType: mapInvoiceType(row.invoice_type),
     invoiceTaxType: mapInvoiceTaxType(row.invoice_tax_type),
@@ -206,7 +210,7 @@ function mapInvoiceLedgerRow(
     orderNo: null,
     servicePlanName: null,
     tierName: null,
-    sourceLabel: "offline",
+    sourceLabel: "invoice",
   };
 }
 
@@ -217,6 +221,9 @@ const INVOICE_LEDGER_SQL = `
 select
   r.id,
   r.bill_id,
+  r.company_info, r.bank_info, r.address_info,
+  (select jsonb_agg(jsonb_build_object('id', ib.id, 'billNo', ib.bill_no, 'amount', rb.amount::text) order by ib.id)
+    from billing.invoice_receipt_bills rb join billing.invoices ib on ib.id = rb.bill_id where rb.receipt_id = r.id) as bills,
   r.invoice_no,
   r.invoice_type,
   r.invoice_tax_type,
@@ -260,6 +267,10 @@ limit 500
 `;
 
 interface InvoiceLedgerRow {
+  bills: NonNullable<BillingInvoiceLedgerRecord["bills"]>;
+  company_info: Record<string, unknown>;
+  bank_info: Record<string, unknown> | null;
+  address_info: Record<string, unknown> | null;
   id: string;
   bill_id: string;
   invoice_no: string;

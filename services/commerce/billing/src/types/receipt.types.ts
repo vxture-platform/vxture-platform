@@ -25,6 +25,7 @@ export interface InvoiceReceiptRecord {
   billId: string;
   /** joined 账单可视码 */
   billNo: string | null;
+  bills: { id: string; billNo: string; amount: string }[];
   invoiceType: "electronic_general" | "electronic_special" | "paper_special";
   invoiceTaxType: "general" | "special";
   invoiceTitle: string;
@@ -64,7 +65,8 @@ export interface UpsertBillingAddressInput {
 export interface ApplyInvoiceReceiptInput {
   tenantId: string;
   userId: string;
-  billId: string;
+  billId?: string;
+  billIds?: string[];
   addressId: string;
   invoiceType: "electronic_general" | "electronic_special" | "paper_special";
 }

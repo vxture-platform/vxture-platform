@@ -74,8 +74,22 @@ export class InvoiceReceiptService {
   async applyReceipt(
     input: ApplyInvoiceReceiptInput,
   ): Promise<InvoiceReceiptRecord> {
+    const ids = input.billIds ?? (input.billId ? [input.billId] : []);
+    if (
+      ids.length < 1 ||
+      ids.length > 50 ||
+      new Set(ids).size !== ids.length ||
+      ids.some(
+        (id) =>
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            id,
+          ),
+      ) ||
+      (input.billIds !== undefined && input.billId !== undefined)
+    )
+      throw new BadRequestException("请选择 1 至 50 张不重复的有效账单");
     try {
-      const record = await this.repo.applyReceipt(input);
+      const record = await this.repo.applyReceipt({ ...input, billIds: ids });
       this.logger.log(
         `invoice receipt applied: ${record.invoiceNo} (bill ${record.billNo ?? record.billId}, ${record.invoiceType})`,
       );
@@ -83,6 +97,14 @@ export class InvoiceReceiptService {
     } catch (err) {
       const code = err instanceof Error ? err.message : "";
       switch (code) {
+        case "receipt_bill_nonpositive":
+          throw new BadRequestException("仅金额大于零的账单可开票");
+        case "receipt_currency_mismatch":
+          throw new BadRequestException("不同币种的账单不能合并开票");
+        case "receipt_amount_overflow":
+          throw new BadRequestException("合计金额超过单张发票上限,请分批申请");
+        case "receipt_paper_needs_address":
+          throw new BadRequestException("纸质发票需要完整的寄送地址与电话");
         case "receipt_bill_not_found":
           throw new NotFoundException("账单不存在");
         case "receipt_bill_not_paid":

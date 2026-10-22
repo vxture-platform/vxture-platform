@@ -19,10 +19,7 @@
  * 发票记录与开票抬头是**台账**,降为二级页 `/billing/invoices`;「申请发票」是账单行
  * 上的**动作**,留在本页(动作要发生在对象所在的那一页)。
  *
- * **2026-09-29 owner 裁定「发票整体灰掉,规划中」**:「申请发票」不再是一个可用动作。
- * 菜单项留在原位但常灰、hint 讲清为什么(凭空消失会被读成「功能坏了」),申请弹窗与
- * 勾选列一并撤掉——后者唯一的下游是「合并开票」的候选集。发票列照旧画真实状态:
- * 运营线下开出的票、以及客户此前提交还停在那里的申请,都必须看得见。
+ * Online single/merged applications use the same reviewed receipt lifecycle.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -71,7 +68,7 @@ import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { ADDON_SECTION_ID } from "./addon-routes";
 import { useDateFormat } from "@/lib/use-date-format";
-import { buildWebsiteContactUrl } from "@/lib/website-entry";
+import { InvoiceApplicationDialog } from "./components/InvoiceApplicationDialog";
 import { OrdersSection } from "./components/OrdersSection";
 
 const BILLS_PAGE_SIZE = 10;
@@ -103,9 +100,8 @@ const KNOWN_BILL_TYPES = new Set([
  * `rejected` / `voided` 不在这张表里——它们已被 `receiptByBill` 滤掉,账单因此回到
  * 「未开票」。
  *
- * 2026-09-29「灰掉」之后中间那一档的文案从「开票中」改成「已申请」:没有人在开这张
- * 票,写「开票中」会和同一屏的「规划中」横幅正面矛盾。改的是这条**派生态**的词,不是
- * `status.*` 那六个库值的词——后者说的是记录自己的状态,运营侧用同一套词。
+ * Applying and approved receipts remain pending until an operator records the
+ * actual issuance; this derived phase does not replace the receipt's status.
  */
 type InvoicePhase = "none" | "processing" | "issued";
 
@@ -160,10 +156,23 @@ export function BillingPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [page, setPage] = useState(1);
+  const [selectedBills, setSelectedBills] = useState<ConsoleBill[]>([]);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [applicationBills, setApplicationBills] = useState<
+    ConsoleBill[] | null
+  >(null);
+  useEffect(() => {
+    setSelectedBills([]);
+    setApplicationBills(null);
+    setSelectionError(null);
+  }, [session.tenant?.id]);
+  const eligible = (bill: ConsoleBill) =>
+    bill.billStatus === "paid" &&
+    Number(bill.payableAmount) > 0 &&
+    !bill.invoiceStatus;
 
-  /* 发票记录:本页只有两个读者——发票列的三态与行菜单的「下载发票」。抬头簿不在
-     本页读了,它只服务已经撤掉的申请弹窗,留在二级页。认证等级那一路读也随之撤:
-     它只为申请弹窗的提前告知而存在。 */
+  // The ledger supplements bill status and downloads. The application dialog
+  // loads address and verification details; the BFF enforces write eligibility.
   const reloadReceipts = useCallback(async () => {
     setReceipts(await fetchInvoiceReceipts());
   }, []);
@@ -224,7 +233,8 @@ export function BillingPage() {
     for (const r of receipts) {
       if (r.invoiceStatus === "rejected" || r.invoiceStatus === "voided")
         continue;
-      if (!map.has(r.billId)) map.set(r.billId, r);
+      for (const bill of r.bills ?? [{ id: r.billId }])
+        if (!map.has(bill.id)) map.set(bill.id, r);
     }
     return map;
   }, [receipts]);
@@ -233,8 +243,10 @@ export function BillingPage() {
   const invoicePhase = useCallback(
     (b: ConsoleBill): InvoicePhase => {
       const receipt = receiptByBill.get(b.id);
-      if (!receipt) return "none";
-      return INVOICE_PHASE_BY_STATUS[receipt.invoiceStatus] ?? "processing";
+      const status = b.invoiceStatus ?? receipt?.invoiceStatus;
+      return status
+        ? (INVOICE_PHASE_BY_STATUS[status] ?? "processing")
+        : "none";
     },
     [receiptByBill],
   );
@@ -401,25 +413,20 @@ export function BillingPage() {
     const receipt = receiptByBill.get(b.id);
     return [
       {
-        /* 常灰(2026-09-29「发票整体灰掉」)。留在原位而不是删掉:入口凭空消失会被
-           读成「功能坏了」。理由挂在 hint 上——DS 的 hint 就是为「讲清这一项为什么
-           灰着」准备的;同一句话在本节顶部的横幅里也看得见,不必悬停才知道。
-           不再按结清/金额/是否已申请分支:那些判据现在一条都改变不了结果,留着
-           只会让人以为某个条件满足了就点得动。 */
         id: "apply-invoice",
         label: t("invoicing.applyAction"),
-        disabled: true,
-        hint: t("invoicing.applyHintPlanned"),
+        disabled: !canManageInvoices || !eligible(b),
+        hint: !eligible(b) ? t("invoicing.application.eligibility") : undefined,
+        onSelect: () => setApplicationBills([b]),
       },
       {
-        /* 下载照旧可用:运营线下开出的发票是客户已经拿到的凭证,灰掉入口不该
-           顺手把它藏了。 */
+        // Issued files remain available alongside application actions.
         id: "download-invoice",
         label: t("invoicing.records.download"),
-        disabled: !receipt?.invoiceFileUrl,
+        disabled: !(b.invoiceFileUrl ?? receipt?.invoiceFileUrl),
         onSelect: () => {
-          if (receipt?.invoiceFileUrl)
-            window.open(receipt.invoiceFileUrl, "_blank", "noreferrer");
+          const url = b.invoiceFileUrl ?? receipt?.invoiceFileUrl;
+          if (url) window.open(url, "_blank", "noreferrer");
         },
       },
       /* 「就这张账单求助」(owner 2026-09-29 第 5 条裁决):**只跳转**。带上账单
@@ -435,6 +442,17 @@ export function BillingPage() {
 
   return (
     <ViewLayout>
+      {applicationBills && canManageInvoices ? (
+        <InvoiceApplicationDialog
+          bills={applicationBills}
+          onClose={() => setApplicationBills(null)}
+          onApplied={() => {
+            setApplicationBills(null);
+            setSelectedBills([]);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      ) : null}
       <ViewHeader
         icon="receipt"
         title={t("title")}
@@ -485,43 +503,53 @@ export function BillingPage() {
         title={t("table.title")}
         description={t("table.description")}
         action={
-          /* 合并开票:一张发票覆盖多张账单。库里还表达不了——invoice_receipts.bill_id
-           * 是 NOT NULL 单值外键,一票一单;要做得先加关联表并改 admin 的审核/开具侧。
-           * 按本页 exportStatement 的既有做法:意图可见、禁用不装样。
-           * 勾选列随申请入口一起撤了,所以标题不再带条数——没有可勾的东西。
-           * 没有开票权限的角色不出这个动作。 */
           canManageInvoices ? (
             <span className="flex items-center gap-sm">
-              <Button size="md" variant="outline" disabled>
+              <Button
+                size="md"
+                variant="outline"
+                disabled={
+                  !selectedBills.length ||
+                  selectedBills.length > 50 ||
+                  loadFailed ||
+                  billsLoading
+                }
+                onClick={() => setApplicationBills(selectedBills)}
+              >
                 <Icon name="receipt" size="xs" fallback="placeholder" />
-                <span>{t("invoicing.mergeAction")}</span>
+                <span>
+                  {t("invoicing.mergeAction")} ({selectedBills.length})
+                </span>
               </Button>
-              <PlannedBadge />
+              {selectedBills.length ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedBills([])}
+                >
+                  {t("invoicing.application.clear")}
+                </Button>
+              ) : null}
             </span>
           ) : undefined
         }
       >
-        {/* 灰掉要说得出口。行菜单的 hint 只在悬停时出现,所以这一节需要一条
-            看得见的说明;它落在这里而不是页头,因为本页灰掉的只是发票这一块。
-            文案只讲客户要知道的两件事:现在不能在线申请、需要发票怎么办;「怎么办」
-            配一个真出口——官网 /contact 是真页(有电话与邮箱),联系方式不在这里
-            写死,改的时候只改官网那一处。 */}
         <Banner
           tone="info"
-          title={t("invoicing.planned.notice")}
-          description={t("invoicing.planned.noticeBills")}
-          action={
-            <Button asChild size="sm" variant="outline">
-              <a
-                href={buildWebsiteContactUrl(locale)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t("invoicing.planned.contactCta")}
-              </a>
-            </Button>
-          }
+          title={t("invoicing.application.rules")}
+          description={t("invoicing.application.eligibility")}
         />
+        {selectionError ? (
+          <Banner tone="warning" title={selectionError} />
+        ) : null}
+        {selectedBills.length ? (
+          <p className="text-body-sm">
+            {t("invoicing.application.selected", {
+              count: selectedBills.length,
+            })}
+            : {selectedBills.map((b) => b.billNo).join("、")}
+          </p>
+        ) : null}
         <DataTable<ConsoleBill>
           labels={tableLabels}
           columns={billColumns}
@@ -529,8 +557,37 @@ export function BillingPage() {
           rowKey={(b) => b.id}
           loading={loading || billsLoading}
           indexStart={(page - 1) * BILLS_PAGE_SIZE + 1}
-          /* 勾选列撤掉(2026-09-29):它唯一的下游是「合并开票」的候选集,而开票入口
-             已经灰掉——勾得上却什么都做不了的复选框就是个死控件。 */
+          isRowSelectable={(bill) =>
+            canManageInvoices &&
+            eligible(bill) &&
+            (!selectedBills.length ||
+              selectedBills[0]?.currency === bill.currency)
+          }
+          {...(canManageInvoices
+            ? {
+                selectedKeys: selectedBills.map((b) => b.id),
+                onSelectionChange: (keys: readonly string[]) => {
+                  const current = new Map(
+                    [...selectedBills, ...bills].map((b) => [b.id, b]),
+                  );
+                  const candidates = keys
+                    .map((id) => current.get(id))
+                    .filter((b): b is ConsoleBill => !!b);
+                  if (
+                    candidates.some((b) => !eligible(b)) ||
+                    candidates.length > 50 ||
+                    new Set(candidates.map((b) => b.currency)).size > 1
+                  ) {
+                    setSelectionError(
+                      t("invoicing.application.selectionInvalid"),
+                    );
+                    return;
+                  }
+                  setSelectionError(null);
+                  setSelectedBills(candidates);
+                },
+              }
+            : {})}
           rowActions={(b) => (
             <ActionMenu label={t("invoicing.rowMenu")} items={billActions(b)} />
           )}

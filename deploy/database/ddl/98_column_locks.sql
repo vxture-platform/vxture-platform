@@ -623,3 +623,7 @@ GRANT UPDATE (tenant_id, workspace_id, product_id, resource_type, resource_produ
 -- sharing.visible_set_refresh  [anchor: id, created_at]
 REVOKE UPDATE ON sharing.visible_set_refresh FROM platform_svc;
 GRANT UPDATE (tenant_id, workspace_id, product_id, refreshed_at, updated_at) ON sharing.visible_set_refresh TO platform_svc;
+
+-- billing.invoice_receipt_bills [anchor: receipt_id, bill_id]
+REVOKE UPDATE ON billing.invoice_receipt_bills FROM platform_svc;
+GRANT UPDATE (amount) ON billing.invoice_receipt_bills TO platform_svc;

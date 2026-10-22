@@ -187,7 +187,7 @@ export class PgReceiptRepository {
 
   async listReceipts(
     tenantId: string,
-    limit = 100,
+    limit = 500,
   ): Promise<InvoiceReceiptRecord[]> {
     const res = await this.pool.query<ReceiptRow>(
       `${RECEIPT_SELECT}
@@ -221,21 +221,35 @@ export class PgReceiptRepository {
         `select id, payable_amount::text as payable_amount,
                 coalesce(currency, 'CNY') as currency, bill_status
            from billing.invoices
-          where id = $1 and tenant_id = $2 and deleted_at is null
+          where id = any($1::uuid[]) and tenant_id = $2 and deleted_at is null
+          order by id
           for update`,
-        [input.billId, input.tenantId],
+        [input.billIds, input.tenantId],
       );
       const bill = billRes.rows[0];
-      if (!bill) throw new Error("receipt_bill_not_found");
-      if (bill.bill_status !== "paid") throw new Error("receipt_bill_not_paid");
+      if (!bill || billRes.rows.length !== input.billIds?.length)
+        throw new Error("receipt_bill_not_found");
+      if (billRes.rows.some((row) => row.bill_status !== "paid"))
+        throw new Error("receipt_bill_not_paid");
+      if (billRes.rows.some((row) => row.currency !== bill.currency))
+        throw new Error("receipt_currency_mismatch");
+      const totalCents = billRes.rows.reduce((total, row) => {
+        const cents = BigInt(row.payable_amount.replace(".", ""));
+        if (cents <= 0n) throw new Error("receipt_bill_nonpositive");
+        return total + cents;
+      }, 0n);
+      if (totalCents > 999999999999n)
+        throw new Error("receipt_amount_overflow");
+      const totalAmount = `${totalCents / 100n}.${String(totalCents % 100n).padStart(2, "0")}`;
 
       // v1 整单开票不拆票:活跃申请(非 rejected/voided)存在即拒
       const dup = await client.query(
-        `select 1 from billing.invoice_receipts
-          where bill_id = $1 and deleted_at is null
-            and invoice_status not in ('rejected', 'voided')
+        `select 1 from billing.invoice_receipts ir
+          join billing.invoice_receipt_bills rb on rb.receipt_id = ir.id
+          where rb.bill_id = any($1::uuid[]) and ir.deleted_at is null
+            and ir.invoice_status not in ('rejected', 'voided')
           limit 1`,
-        [input.billId],
+        [input.billIds],
       );
       if ((dup.rowCount ?? 0) > 0) throw new Error("receipt_already_applied");
 
@@ -257,6 +271,12 @@ export class PgReceiptRepository {
         (!addr.tax_no || !addr.bank_name || !addr.bank_account)
       ) {
         throw new Error("receipt_special_needs_tax_no");
+      }
+      if (
+        input.invoiceType === "paper_special" &&
+        (!addr.address?.trim() || !addr.phone?.trim())
+      ) {
+        throw new Error("receipt_paper_needs_address");
       }
 
       const companyInfo = {
@@ -289,7 +309,7 @@ export class PgReceiptRepository {
          ) returning id`,
         [
           input.tenantId,
-          input.billId,
+          bill.id,
           visibleCode("FAP"),
           input.invoiceType,
           addr.invoice_tax_type,
@@ -298,14 +318,26 @@ export class PgReceiptRepository {
           JSON.stringify(companyInfo),
           bankInfo ? JSON.stringify(bankInfo) : null,
           addressInfo ? JSON.stringify(addressInfo) : null,
-          bill.payable_amount,
+          totalAmount,
           bill.currency,
           input.userId,
         ],
       );
-      await client.query("commit");
-      const record = await this.getReceipt(res.rows[0]!.id, input.tenantId);
+      const receiptId = res.rows[0]!.id;
+      // The insert trigger also covers legacy single-bill/operator writers.
+      await client.query(
+        `update billing.invoice_receipt_bills set amount = $3 where receipt_id = $1 and bill_id = $2`,
+        [receiptId, bill.id, bill.payable_amount],
+      );
+      for (const row of billRes.rows.slice(1)) {
+        await client.query(
+          `insert into billing.invoice_receipt_bills (receipt_id, bill_id, amount) values ($1, $2, $3)`,
+          [receiptId, row.id, row.payable_amount],
+        );
+      }
+      const record = await this.getReceipt(receiptId, input.tenantId, client);
       if (!record) throw new Error("receipt_readback_failed");
+      await client.query("commit");
       return record;
     } catch (err) {
       await client.query("rollback");
@@ -318,8 +350,9 @@ export class PgReceiptRepository {
   private async getReceipt(
     id: string,
     tenantId: string,
+    db: Pool | PoolClient = this.pool,
   ): Promise<InvoiceReceiptRecord | null> {
-    const res = await this.pool.query<ReceiptRow>(
+    const res = await db.query<ReceiptRow>(
       `${RECEIPT_SELECT} where ir.id = $1 and ir.tenant_id = $2 and ir.deleted_at is null`,
       [id, tenantId],
     );
@@ -366,6 +399,7 @@ interface ReceiptRow {
   invoice_no: string;
   bill_id: string;
   bill_no: string | null;
+  bills: InvoiceReceiptRecord["bills"];
   invoice_type: InvoiceReceiptRecord["invoiceType"];
   invoice_tax_type: "general" | "special";
   invoice_title: string;
@@ -383,6 +417,9 @@ interface ReceiptRow {
 
 const RECEIPT_SELECT = `
   select ir.id, ir.invoice_no, ir.bill_id, inv.bill_no,
+         (select jsonb_agg(jsonb_build_object('id', b.id, 'billNo', b.bill_no, 'amount', rb.amount::text) order by b.id)
+            from billing.invoice_receipt_bills rb join billing.invoices b on b.id = rb.bill_id
+            where rb.receipt_id = ir.id) as bills,
          ir.invoice_type, ir.invoice_tax_type, ir.invoice_title,
          ir.invoice_amount::text as invoice_amount,
          coalesce(ir.currency, 'CNY') as currency,
@@ -398,6 +435,7 @@ function mapReceipt(r: ReceiptRow): InvoiceReceiptRecord {
     invoiceNo: r.invoice_no,
     billId: r.bill_id,
     billNo: r.bill_no,
+    bills: r.bills,
     invoiceType: r.invoice_type,
     invoiceTaxType: r.invoice_tax_type,
     invoiceTitle: r.invoice_title,

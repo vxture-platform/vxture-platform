@@ -10,12 +10,8 @@
  *   ① 发票记录:申请号/账单/抬头/金额/六态状态/文件下载与寄送信息;
  *   ② 开票抬头:抬头簿 CRUD + 设默认(专票强制税号+开户信息)。
  *
- * **2026-09-29 owner 裁定「发票整体灰掉,规划中」**:在线申请那一半从本件整体撤掉
- * ——申请弹窗、它的认证提示、以及 `mode` 开关一并去掉,本件只剩台账。撤的理由不是
- * 「还没做完」而是「接不下去」:客户提交后落 `applying` 的那一行,库里没有写者能把它
- * 推进(approved / rejected 两值全仓零写者;运营真开票时是另插一行),所以这个入口
- * 收的是答不了的请求。撤掉的只是**入口**,不是读路径——已提交的申请与运营线下开出的
- * 发票照旧在这两张表里可读可下载:把停住的请求藏起来等于把它弄丢。
+ * Applications, including merged bills, are submitted from the billing page.
+ * Review and issue transitions are owned by the admin invoice ledger.
  *
  * 抬头簿保持可编辑:它是客户自己的数据,增删改都真落库,不是空跑的控件。
  * DS 组合件,无自造样式。
@@ -199,12 +195,15 @@ export function InvoiceSections({
     {
       id: "bill",
       header: t("records.colBill"),
-      cell: (r) =>
-        r.billNo ? (
-          <span className="font-mono text-body-sm">{r.billNo}</span>
-        ) : (
-          "—"
-        ),
+      cell: (r) => (
+        <span className="flex flex-col gap-xs text-body-sm">
+          {(
+            r.bills ?? (r.billNo ? [{ id: r.billId, billNo: r.billNo }] : [])
+          ).map((bill) => (
+            <span key={bill.id}>{bill.billNo}</span>
+          ))}
+        </span>
+      ),
     },
     {
       id: "title",
