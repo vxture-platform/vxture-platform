@@ -149,7 +149,7 @@ export class VxConfigModule {
         result.domains.push(domain.name);
       } catch (err) {
         if (err instanceof ZodError) {
-          const errors: ConfigValidationError[] = err.errors.map((e) => ({
+          const errors: ConfigValidationError[] = err.issues.map((e) => ({
             field: `${domain.name.toUpperCase()}.${e.path.join(".")}`,
             message: e.message,
           }));
