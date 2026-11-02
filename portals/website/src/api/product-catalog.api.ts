@@ -122,6 +122,8 @@ export interface ProductCatalogItem {
   productNick: string | null;
   /** 受管枚举 product_type：{general,industry}_{platform,agent} / undefined（历史值仍可能出现） */
   productType: string;
+  /** Product-owned icon; older catalog responses may omit it. */
+  iconUrl?: string | null;
   description: string | null;
   releaseVersion: string | null;
   /** 对外发布时间（ISO 字符串）；未填为 null。 */

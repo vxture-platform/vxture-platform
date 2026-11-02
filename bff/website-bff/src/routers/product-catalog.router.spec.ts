@@ -23,6 +23,7 @@ describe("ProductCatalogRouter", () => {
         product_name: "数据平台",
         product_nick: "Arda",
         product_type: "data_platform",
+        icon_url: "https://arda.example/icon.svg",
         description: "Enterprise data platform.",
         release_version: "1.4.0",
         released_at: new Date("2026-09-12T00:00:00.000Z"),
@@ -48,6 +49,7 @@ describe("ProductCatalogRouter", () => {
         productName: "数据平台",
         productNick: "Arda",
         productType: "data_platform",
+        iconUrl: "https://arda.example/icon.svg",
         description: "Enterprise data platform.",
         releaseVersion: "1.4.0",
         // pg 把 timestamptz 交成 Date；对外一律 ISO 字符串
@@ -65,6 +67,7 @@ describe("ProductCatalogRouter", () => {
         productName: "模板智能体",
         productNick: null,
         productType: "agent",
+        iconUrl: null,
         description: null,
         releaseVersion: null,
         releasedAt: null,
@@ -250,6 +253,7 @@ describe("ProductCatalogRouter", () => {
     expect(query).toHaveBeenCalledTimes(1);
     const sql = String(query.mock.calls[0]?.[0]).replace(/\s+/g, " ");
     expect(sql).toContain("from product.products");
+    expect(sql).toContain("p.icon_url");
     expect(sql).toContain("is_customer_visible = true");
     /*
      * 产品那一条的生命周期过滤，**带表别名**。
