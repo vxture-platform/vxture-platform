@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Card, Icon } from "@vxture/design-system";
 
 // Lineage and service examples
+/** @returns Illustrative source assets and their downstream consumers. */
 export function LineageScene() {
   const t = useTranslations("products.arda.sample");
   const sources = t.raw("lineageSources") as string[];
@@ -75,6 +76,7 @@ export function LineageScene() {
   );
 }
 
+/** @returns An illustrative data service with explicit access boundaries. */
 export function ServiceScene() {
   const t = useTranslations("products.arda.sample");
   return (

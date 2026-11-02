@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Card, Icon } from "@vxture/design-system";
 
 // Catalog and quality examples
+/** @returns A sample asset with its business and governance context. */
 export function CatalogScene() {
   const t = useTranslations("products.arda.sample");
   const properties = t.raw("properties") as { label: string; value: string }[];
@@ -62,6 +63,7 @@ export function CatalogScene() {
   );
 }
 
+/** @returns Illustrative quality rules and a visible exception. */
 export function QualityScene() {
   const t = useTranslations("products.arda.sample");
   const rules = t.raw("rules") as string[];
