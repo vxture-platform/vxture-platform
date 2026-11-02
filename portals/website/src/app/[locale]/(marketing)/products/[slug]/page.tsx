@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { notFound } from "next/navigation";
 import {
   AgentProductDetail,
+  KardaProductDetail,
   ProductComingSoon,
   ProductDetailPartOne,
 } from "@/components/marketing";
@@ -11,15 +12,10 @@ import {
 } from "@/api/product-catalog.api";
 
 /*
- * /products/[slug] —— 有没有这个产品，由公开产品目录说了算。
- *
- * 此前这里有一份 KNOWN_PRODUCTS 硬编码集合，里面的 ontos / terra 在目录里根本不存在
- * （规划产品，opera/40-product-registry.md §5 D2），官网却替它们开着「敬请期待」页——
- * 那是在宣传平台没有的产品。2026-08-31 起：slug 在目录里 → 渲染（arda 有成稿详情，
- * 其余目录产品走占位页）；不在目录里 → notFound()，是真正的 404 状态码。
- *
- * 逐请求取目录（force-dynamic）：目录一变，官网同一秒跟着变，不留"上线了官网还 404"
- * 的窗口。目录读不到时不伪装成 404——错误冒出去是 500，与"不存在"是两回事。
+ * Product existence comes from the live public catalog, never a hardcoded list.
+ * Arda and Karda have bespoke introductions; other platform entries use placeholders.
+ * Resolve on every request so newly listed products are immediately available.
+ * Missing entries return 404; catalog failures propagate as errors, not false 404s.
  */
 export const dynamic = "force-dynamic";
 
@@ -36,6 +32,7 @@ export const dynamic = "force-dynamic";
  */
 const BESPOKE_DETAIL_PAGES: Readonly<Record<string, () => ReactElement>> = {
   arda: ProductDetailPartOne,
+  karda: KardaProductDetail,
 };
 
 interface ProductDetailRouteProps {
