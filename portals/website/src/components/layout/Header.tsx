@@ -163,7 +163,9 @@ function HeaderQuickTools() {
     <div className="flex items-center gap-1">
       <HeaderThemeToggle />
       <HeaderLocaleSelect />
-      <HeaderFullscreenToggle />
+      <div className="hidden sm:block">
+        <HeaderFullscreenToggle />
+      </div>
     </div>
   );
 }
@@ -310,7 +312,7 @@ function HeaderNav() {
   const t = useTranslations("layout.header");
 
   return (
-    <nav className="hidden items-center gap-8 md:flex">
+    <nav className="hidden items-center gap-8 xl:flex">
       {HEADER_DATA.nav.map((item) => {
         if (item.children?.length) {
           return <HeaderNavMenu key={item.key} item={item} />;
@@ -573,7 +575,7 @@ export default function Header() {
           : "bg-transparent"
       }`}
     >
-      <div className="max-w-7xl xl:max-w-screen-2xl 2xl:max-w-400 mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-page-xl xl:max-w-page-2xl 2xl:max-w-400 mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link
@@ -590,7 +592,7 @@ export default function Header() {
             />
             {/* 品牌字标走 font-brand（Funnel Display）——原挂的 .logo-text 类
              * 全仓无定义，一直以默认正文字体渲染。 */}
-            <h1 className="font-brand text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
+            <h1 className="font-brand text-base sm:text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
               {t(HEADER_DATA.logo.labelKey)}
             </h1>
           </Link>
@@ -599,7 +601,7 @@ export default function Header() {
           <HeaderNav />
 
           {/* 工具栏：访客设置 / CTA / 登录用户入口 */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 sm:gap-4">
             <HeaderQuickTools />
 
             {/* 已登录：进入控制台 + 用户菜单 */}
@@ -639,8 +641,8 @@ export default function Header() {
                     href={action.href}
                     className={
                       action.variant === "secondary"
-                        ? "w-20 px-4 py-2 rounded-lg transition-all duration-300 text-center text-vx-gray-700 dark:text-vx-text-secondary font-semibold hover:text-vx-gray-900 dark:hover:text-vx-white"
-                        : "w-28 px-6 py-2 bg-linear-to-r from-vx-info-500 to-vx-brand-600 text-vx-white rounded-lg hover:from-vx-info-600 hover:to-vx-brand-700 transition-all duration-300 shadow-lg hover:shadow-xl text-center"
+                        ? "hidden sm:block w-20 px-4 py-2 rounded-lg transition-all duration-300 text-center text-vx-gray-700 dark:text-vx-text-secondary font-semibold hover:text-vx-gray-900 dark:hover:text-vx-white"
+                        : "px-2 sm:w-28 sm:px-6 py-2 bg-linear-to-r from-vx-info-500 to-vx-brand-600 text-vx-white rounded-lg hover:from-vx-info-600 hover:to-vx-brand-700 transition-all duration-300 shadow-lg hover:shadow-xl text-center"
                     }
                   >
                     {t(action.labelKey)}

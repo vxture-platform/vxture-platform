@@ -13,6 +13,8 @@ export { default as ProductTiersSection } from "./ProductTiersSection";
 export { default as TestSection } from "./TestSection";
 export { default as AgentProductDetail } from "./AgentProductDetail";
 export { default as ProductDetailPartOne } from "./ProductDetailPartOne";
+export { KardaProductDetail } from "./KardaProductDetail";
+export { ProductPlatformPeers } from "./ProductPlatformPeers";
 export { default as ProductsOverviewPage } from "./ProductsOverviewPage";
 export { default as ProductSubscribePage } from "./ProductSubscribePage";
 export { default as ProductComingSoon } from "./ProductComingSoon";

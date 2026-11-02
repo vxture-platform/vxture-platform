@@ -1,117 +1,4 @@
 {
-  "hero": {
-    "eyebrow": "Product 01 / Data Intelligence Foundation",
-    "title": "Unified Data Intelligence Platform",
-    "description": "A governable data intelligence foundation that brings multi-source data, business knowledge, and AI reasoning into one product for government and enterprise scenarios.",
-    "imageAlt": "Unified Data Intelligence Platform interface",
-    "primaryAction": "Request trial",
-    "secondaryAction": "View capabilities",
-    "highlights": [
-      "Multi-source data access",
-      "Knowledge graph modeling",
-      "Intelligent analytics"
-    ],
-    "metrics": [
-      {
-        "value": "30+",
-        "label": "Data source adapters"
-      },
-      {
-        "value": "4 layers",
-        "label": "Governance and semantic model"
-      },
-      {
-        "value": "Minutes",
-        "label": "Insight generation"
-      }
-    ]
-  },
-  "capabilities": {
-    "eyebrow": "Core Capabilities",
-    "title": "An integrated product from data access to intelligent applications",
-    "description": "This first version is intentionally drafted as editable product content, ready to be replaced with real modules, terminology, and business metrics later.",
-    "items": [
-      {
-        "title": "Data access and governance",
-        "description": "Connect databases, files, APIs, and business systems with standardization, quality checks, and permission isolation.",
-        "points": [
-          "Connector management",
-          "Quality rules",
-          "Security classification"
-        ]
-      },
-      {
-        "title": "Semantic modeling and knowledge graph",
-        "description": "Build a semantic layer around entities, relationships, metrics, and events so teams share one business language.",
-        "points": [
-          "Ontology modeling",
-          "Entity relationships",
-          "Metric definitions"
-        ]
-      },
-      {
-        "title": "Intelligent analytics and Q&A",
-        "description": "Generate conclusions for operations and governance scenarios, with natural-language retrieval and traceable explanations.",
-        "points": ["AI Q&A", "Root-cause analysis", "Report generation"]
-      },
-      {
-        "title": "Application orchestration",
-        "description": "Package data capabilities as reusable services for dashboards, workflow collaboration, and agent workspaces.",
-        "points": [
-          "Service orchestration",
-          "Permission audit",
-          "Operations monitoring"
-        ]
-      }
-    ]
-  },
-  "workflow": {
-    "eyebrow": "Product Path",
-    "title": "Four steps to an operational data intelligence loop",
-    "description": "The product does not only display data. It connects data assets, business knowledge, analysis workflows, and application delivery into a loop that can keep evolving.",
-    "steps": [
-      {
-        "title": "Connect",
-        "description": "Bring together structured, unstructured, and API data."
-      },
-      {
-        "title": "Model",
-        "description": "Define entities, relationships, metrics, and rules."
-      },
-      {
-        "title": "Analyze",
-        "description": "Generate insights, alerts, reports, and explanations."
-      },
-      {
-        "title": "Operate",
-        "description": "Serve the business through apps, APIs, and agents."
-      }
-    ]
-  },
-  "scenarios": {
-    "eyebrow": "Use Cases",
-    "title": "Designed first for complex government and enterprise data scenarios",
-    "description": "This first page focuses on platform capabilities. Later, it can be split into multiple product detail pages by industry or module.",
-    "items": [
-      {
-        "title": "Data governance and asset inventory",
-        "description": "Build a unified catalog, quality rules, lineage, and security classification so data is findable, trusted, and reusable."
-      },
-      {
-        "title": "Integrated analysis and command",
-        "description": "Connect events, resources, locations, and operational metrics to support analysis, alerts, and dispatch decisions."
-      },
-      {
-        "title": "Business analytics and operational efficiency",
-        "description": "Generate dashboards, insights, and automation suggestions across metrics, customer touchpoints, and service workflows."
-      }
-    ]
-  },
-  "cta": {
-    "title": "Use this page as the first product placeholder",
-    "description": "The content is intentionally editable. The structure is ready for real modules, cases, pricing, and demo entry points.",
-    "action": "Open console"
-  },
   "catalog": {
     "eyebrow": "Platform products",
     "title": "Full-stack intelligence, composable on demand, deployable on-premise",
@@ -336,6 +223,515 @@
     "industryScenarios": {
       "name": "Industry Scenarios",
       "description": "Platform capability packaged around the real working scenarios of an industry, ready to deploy. The first scenarios are in build; progress and availability will be posted here."
+    }
+  },
+  "arda": {
+    "hero": {
+      "product": "Intelligent Data Governance",
+      "eyebrow": "Connect data · Govern continuously · Supply applications",
+      "title": "Trust your data.",
+      "accent": "Ground your decisions.",
+      "description": "Connect scattered data and manage standards and quality. Govern assets, trace origins and supply controlled data to agent applications, while also supporting business analytics and everyday data use.",
+      "primaryAction": "Request access",
+      "secondaryAction": "Explore capabilities",
+      "invite": "Invitation-only subscription · Scoped to your data environment and governance needs",
+      "outcomes": [
+        {
+          "title": "Find it",
+          "description": "One catalog for scattered assets"
+        },
+        {
+          "title": "Trust it",
+          "description": "Check definitions, quality and origins"
+        },
+        {
+          "title": "Use it",
+          "description": "Controlled access for lasting reuse"
+        }
+      ]
+    },
+    "capabilities": {
+      "eyebrow": "Know your data",
+      "title": "From finding data to using it with confidence.",
+      "description": "See business definitions, quality, lineage and access methods in one catalog to understand each data asset in context.",
+      "label": "Explore Arda capabilities",
+      "catalog": {
+        "label": "Asset catalog",
+        "hint": "Find the data you need",
+        "title": "Know what exists before deciding what to use.",
+        "description": "Stop searching across systems, spreadsheets and colleagues. Organize metadata and business context around data assets so your team can understand them in one catalog.",
+        "points": [
+          "Bring scattered sources and assets into one view",
+          "Connect business terms, classifications and owners",
+          "Discover available data within your access scope"
+        ],
+        "sceneTitle": "One asset. One place for context."
+      },
+      "quality": {
+        "label": "Standards & quality",
+        "hint": "Build a basis for trust",
+        "title": "Shared standards for judging the same data.",
+        "description": "Turn “can I use this data?” into checks. Establish shared definitions and use quality rules to find and follow up on issues.",
+        "points": [
+          "Align business terms and data standards",
+          "Check completeness, uniqueness and other rules",
+          "Review results and outstanding issues"
+        ],
+        "sceneTitle": "Quality checks / Customer master data"
+      },
+      "lineage": {
+        "label": "Lineage & tracing",
+        "hint": "Understand the journey",
+        "title": "Trace every result back to its origins.",
+        "description": "Where did data come from, how was it processed and where is it used? Explore upstream and downstream relationships to investigate issues and assess changes.",
+        "points": [
+          "See relationships between source data and assets",
+          "Trace processing paths to investigate issues",
+          "Understand dependencies and change impact"
+        ],
+        "sceneTitle": "Sales data / Upstream and downstream"
+      },
+      "service": {
+        "label": "Data services",
+        "hint": "Support more use cases",
+        "title": "Governance delivers value when good data gets used.",
+        "description": "Supply governed data to analytics and applications through controlled services. Manage access boundaries, usage and audit together to reduce repeated integration.",
+        "points": [
+          "Connect business use cases through data services",
+          "Scope access by organization and workspace",
+          "Keep use controlled through permissions and audit"
+        ],
+        "sceneTitle": "From assets to services"
+      }
+    },
+    "sample": {
+      "disclaimer": "Illustration · Sample data",
+      "workspace": "Enterprise workspace",
+      "menu": [
+        "Overview",
+        "Sources",
+        "Catalog",
+        "Standards",
+        "Quality",
+        "Lineage",
+        "Services"
+      ],
+      "breadcrumb": "Data assets / Catalog",
+      "title": "Find data your business needs",
+      "search": "Search assets, business terms or owners",
+      "assetsLabel": "Sample data assets",
+      "assets": [
+        {
+          "name": "Customer master data",
+          "domain": "Customer operations"
+        },
+        {
+          "name": "Sales order details",
+          "domain": "Sales management"
+        },
+        {
+          "name": "Product information",
+          "domain": "Product management"
+        },
+        {
+          "name": "Inventory transactions",
+          "domain": "Supply chain"
+        }
+      ],
+      "passed": "Passed",
+      "footer": "Definitions, quality and origins in one place",
+      "stages": ["Business sources", "Standards & quality", "Trusted assets"],
+      "assetName": "Sales order details",
+      "assetDomain": "Business domain / Sales",
+      "properties": [
+        {
+          "label": "Owner",
+          "value": "Sales team"
+        },
+        {
+          "label": "Source",
+          "value": "Order database"
+        },
+        {
+          "label": "Classification",
+          "value": "Internal"
+        }
+      ],
+      "termLabel": "Related business term",
+      "term": "Valid order",
+      "termDescription": "A shared definition and understanding",
+      "governanceLabel": "Related governance",
+      "governance": "Quality rules · Source lineage",
+      "linked": "View alongside the asset",
+      "rules": [
+        "Customer code is required",
+        "Customer code must be unique",
+        "Region matches the standard"
+      ],
+      "anomaly": "Issue found",
+      "qualityNote": "Find issues → Locate records → Identify owners. Make data quality part of everyday work.",
+      "lineageSources": ["Order database", "Customer database"],
+      "consumers": ["Business analytics", "Business applications"],
+      "service": "Customer information service",
+      "serviceTags": [
+        "Source · Customer data",
+        "Controlled access",
+        "Workspace scope"
+      ],
+      "serviceConsumers": "Supply controlled data to agent applications, while also supporting business systems and analytics, in line with enterprise authorization and security policies.",
+      "serviceAudit": "Clear authorization scopes and traceable usage"
+    },
+    "flow": {
+      "eyebrow": "From source to value",
+      "title": "Connect your data supply to business value.",
+      "description": "Connect existing sources, catalog and govern them in Arda, then supply controlled data to agent applications and business systems. Turn one integration into a lasting data foundation.",
+      "diagramLabel": "Enterprise data is cataloged and governed in Arda, then supplied through controlled services to agent applications, business systems and analytics.",
+      "consumersLabel": "Data use · Agent applications and business scenarios",
+      "consumers": [
+        "Agent applications",
+        "Business systems",
+        "Business analytics"
+      ],
+      "supply": "Controlled data supply",
+      "core": "Data governance",
+      "modules": [
+        "Asset catalog",
+        "Data standards",
+        "Quality rules",
+        "Data lineage"
+      ],
+      "service": "Data services · Supply governance outcomes to applications",
+      "intake": "Data access and preparation",
+      "sourcesLabel": "Enterprise data sources",
+      "sourcesNote": "Connect progressively within supported scope",
+      "sources": ["Business databases", "Data files", "Existing data assets"],
+      "guardsLabel": "Boundaries throughout the data lifecycle",
+      "guards": [
+        {
+          "title": "Organization isolation",
+          "description": "Clear data ownership"
+        },
+        {
+          "title": "Workspace scope",
+          "description": "Defined usage boundaries"
+        },
+        {
+          "title": "Access control",
+          "description": "Authorized use"
+        },
+        {
+          "title": "Operation audit",
+          "description": "Traceable key operations"
+        }
+      ],
+      "caption": "Start with one business domain: connect → catalog → govern → supply.",
+      "illustration": "Illustrative data supply path"
+    },
+    "teams": {
+      "eyebrow": "Built for your team",
+      "title": "One trusted data foundation. Different ways to work.",
+      "description": "Data teams maintain the governed foundation, agent applications consume trusted data, and business users can analyze and verify it.",
+      "items": [
+        {
+          "role": "Application & agent teams",
+          "title": "Reuse the foundation. Focus on your application.",
+          "description": "Access existing assets through defined services and boundaries, supplying business applications and agents with controlled data.",
+          "result": "Avoid preparing data from scratch for every app"
+        },
+        {
+          "role": "Data & governance teams",
+          "title": "Make assets and responsibilities clear.",
+          "description": "Organize sources, standards, quality and lineage in one place. Move from scattered maintenance to continuous governance with less repeated inventory and coordination.",
+          "result": "Turn governance work into reusable assets"
+        },
+        {
+          "role": "Business & analytics teams",
+          "title": "Spend less time checking numbers. More time deciding.",
+          "description": "Understand available data, definitions and quality in the catalog to find a shared basis for reports, metrics and everyday decisions.",
+          "result": "Move from “is this right?” to “what next?”"
+        }
+      ]
+    },
+    "faq": {
+      "eyebrow": "Before you start",
+      "title": "Start with the data you have.",
+      "description": "You do not need all your data ready. Start with one business question, then define access and governance scope.",
+      "items": [
+        {
+          "question": "How does Arda relate to existing databases?",
+          "answer": "Arda manages access, cataloging, governance and services around existing sources. Whether data needs to be synchronized or transformed depends on the use case and integration plan. Building a catalog does not require replacing every business system first."
+        },
+        {
+          "question": "How do Arda and Karda divide their roles?",
+          "answer": "They are peer platforms. Arda manages data assets, standards, quality and lineage for controlled data supply. Karda manages documents and professional experience for knowledge retrieval and citation. Agent applications can use either service or combine them according to the task."
+        },
+        {
+          "question": "Does Arda handle knowledge Q&A or agent orchestration?",
+          "answer": "Arda focuses on data assets, governance and supply as a foundation for analytics and intelligent applications. Knowledge Q&A, model inference and agent orchestration belong to the corresponding products, which can be combined for your use case."
+        },
+        {
+          "question": "How can I try Arda?",
+          "answer": "Arda currently uses invitation-only subscriptions. Contact us with your data sources, priority use case and security requirements to define a trial. Features, supported sources and delivery arrangements depend on the agreed access plan."
+        }
+      ]
+    },
+    "cta": {
+      "eyebrow": "Start with Arda",
+      "title": "Give your next decision data you can trust.",
+      "description": "Start with the business data that matters most and build a sustainable approach to governance together.",
+      "note": "Invitation-only · Talk to us about your data needs"
+    }
+  },
+  "karda": {
+    "hero": {
+      "product": "Enterprise Knowledge Platform",
+      "eyebrow": "Organize knowledge · Retrieve sources · Support agents",
+      "title": "Knowledge for agents.",
+      "accent": "Evidence for applications.",
+      "description": "Prepare documents, business materials and professional experience as knowledge agents can retrieve and cite. Supply relevant passages and sources within authorized scope, so applications can reuse knowledge for business questions and tasks.",
+      "primaryAction": "Request access",
+      "secondaryAction": "Explore capabilities",
+      "invite": "Invitation-only subscription · Start with an agent application’s knowledge needs",
+      "outcomes": [
+        {
+          "title": "Ready to retrieve",
+          "description": "Process and index knowledge for applications"
+        },
+        {
+          "title": "Ready to cite",
+          "description": "Supply relevant passages with their sources"
+        },
+        {
+          "title": "Scoped to each app",
+          "description": "Reuse knowledge across authorized agents"
+        }
+      ]
+    },
+    "capabilities": {
+      "eyebrow": "Prepare knowledge for agents",
+      "title": "From source materials to agent applications.",
+      "description": "Process scattered materials into searchable knowledge. Supply relevant content, sources and access boundaries when agents handle a task.",
+      "label": "Explore Karda capabilities",
+      "ingest": {
+        "label": "Intake & processing",
+        "hint": "Prepare knowledge for use",
+        "title": "Scattered materials. One knowledge library.",
+        "description": "Collect policies, business materials and professional records. Parse content, prepare passages and build indexes, making human-readable materials available for agent applications to retrieve and cite.",
+        "points": [
+          "Choose sources around the agent’s business task",
+          "Prepare searchable passages from longer materials",
+          "Preserve source context for citation and verification"
+        ],
+        "sceneTitle": "Knowledge intake / From material to index"
+      },
+      "organize": {
+        "label": "Organize & maintain",
+        "hint": "Keep knowledge useful",
+        "title": "Give knowledge a home and an owner.",
+        "description": "Organize libraries by business domain and application use case. Define classification, stewardship and scope while maintaining knowledge independently for authorized agents to reuse.",
+        "points": [
+          "Organize reusable libraries around business domains",
+          "Understand content through labels and source context",
+          "Have stewards review freshness, relevance and access scope"
+        ],
+        "sceneTitle": "Knowledge library / After-sales service"
+      },
+      "retrieve": {
+        "label": "Search & cite",
+        "hint": "Find content and its basis",
+        "title": "Let agents find knowledge for the task, with its sources.",
+        "description": "Retrieve knowledge relevant to the agent’s current question or task. Provide passages and source context as evidence for applications, with a path back to the original material.",
+        "points": [
+          "Search by the meaning of a business question",
+          "Retrieve passages within the application’s authorized scope",
+          "Include source locations for citation and verification"
+        ],
+        "sceneTitle": "Knowledge retrieval / Agent task context"
+      },
+      "share": {
+        "label": "Access & reuse",
+        "hint": "Share within clear boundaries",
+        "title": "One knowledge resource. More uses. Clear limits.",
+        "description": "Connect knowledge services to business assistants, specialist agents and agent applications. Share a library across authorized applications; people maintain content, verify sources and search as a supporting activity.",
+        "points": [
+          "Define knowledge scope for each agent application",
+          "Reuse retrieval and citation instead of preparing content again",
+          "Maintain knowledge and application code independently"
+        ],
+        "sceneTitle": "Knowledge services / Authorized use"
+      }
+    },
+    "sample": {
+      "disclaimer": "Illustration · Sample data",
+      "workspace": "Knowledge for agents",
+      "breadcrumb": "Service agent / Knowledge retrieval",
+      "query": "What information should we collect when a customer reports a device fault?",
+      "filters": ["After-sales service library", "Application access scope"],
+      "resultsLabel": "Knowledge returned to the application",
+      "sources": [
+        {
+          "title": "Device service intake policy",
+          "location": "Intake process / Required information"
+        },
+        {
+          "title": "Device identification guide",
+          "location": "Identification / Basic details"
+        },
+        {
+          "title": "After-sales service FAQ",
+          "location": "Service inquiries / Reporting a fault"
+        }
+      ],
+      "sourceTitle": "Device service intake policy",
+      "excerptLabel": "Citable passage [1]",
+      "excerpt": "Record the device model and identifier, the fault symptoms, when the fault occurred and any action already taken. Check the applicable service terms before determining coverage; do not make commitments based only on the description.",
+      "citation": "Device service intake policy · Intake process · Required information",
+      "scopeNote": "Retrieve within application scope and provide passages with sources to the agent.",
+      "footer": "Task question → Relevant knowledge → Sources → Agent application",
+      "intakeSources": [
+        "Policies & handbooks",
+        "Business materials",
+        "Project & experience records"
+      ],
+      "intakeTitle": "Prepare searchable knowledge for agents",
+      "processing": ["Parse content", "Prepare passages", "Build indexes"],
+      "intakeNote": "Keep the relationship between original materials and searchable passages.",
+      "library": "After-sales service library",
+      "libraryDescription": "Business rules and professional knowledge for service agents",
+      "properties": [
+        {
+          "label": "Business area",
+          "value": "Customer service"
+        },
+        {
+          "label": "Maintained by",
+          "value": "Service operations"
+        },
+        {
+          "label": "Sources",
+          "value": "Intake policies & guides"
+        }
+      ],
+      "topicsLabel": "Knowledge topics",
+      "topics": ["Service intake", "Device checks", "Service rules"],
+      "topicsNote": "Organize knowledge around business tasks for agents to retrieve and reuse.",
+      "maintenanceLabel": "Ongoing stewardship",
+      "maintenanceTitle": "Clear ownership. Continued review.",
+      "maintenanceNote": "Use source context and stewardship to reduce the spread of outdated information.",
+      "retrievalNote": "The knowledge service supplies content and sources. The agent application decides how to use them for the task; important results still require checking the original context.",
+      "accessLabel": "Reuse within authorized scope",
+      "consumers": [
+        "Business assistants",
+        "Specialist agents",
+        "Agent applications"
+      ],
+      "accessNote": "Adding knowledge does not grant every application access. Each agent uses its authorized scope; people maintain and verify content within their own access boundaries."
+    },
+    "flow": {
+      "eyebrow": "From knowledge to applications",
+      "title": "One knowledge resource. Many agent applications.",
+      "description": "Process and organize materials into a knowledge library. When agents handle business tasks, retrieve relevant passages and sources within scope to support answers, decisions and task handling.",
+      "diagramLabel": "Karda processes and organizes source materials, then supplies passages and sources to authorized agent applications",
+      "steps": [
+        {
+          "title": "Collect business knowledge",
+          "description": "Choose rules, materials and experience around agent tasks."
+        },
+        {
+          "title": "Process & index",
+          "description": "Prepare passages while keeping the link to original sources."
+        },
+        {
+          "title": "Organize & authorize",
+          "description": "Maintain topics, relevance and application access boundaries."
+        },
+        {
+          "title": "Retrieve & apply",
+          "description": "Supply content and sources to agents for business tasks."
+        }
+      ],
+      "service": "Knowledge services · Authorized supply to agent applications",
+      "consumers": [
+        "Business assistants",
+        "Specialist agents",
+        "Agent applications"
+      ],
+      "caption": "People maintain knowledge; agent applications retrieve it for tasks. Intake methods and access scope depend on the use case."
+    },
+    "teams": {
+      "eyebrow": "Built around agent applications",
+      "title": "Give agents the business knowledge they need.",
+      "description": "Agent applications use knowledge services. People maintain and verify the content, with direct search available as a supporting activity.",
+      "items": [
+        {
+          "role": "Business assistants & specialist agents",
+          "title": "Find business knowledge while handling tasks.",
+          "description": "Retrieve authorized rules and materials for customer inquiries, service intake and professional assistance, using sources to ground the task.",
+          "result": "Bring knowledge evidence into agent task handling"
+        },
+        {
+          "role": "Agent application development",
+          "title": "Reuse knowledge services. Focus on the application.",
+          "description": "Connect retrieval and citation to the application and use authorized libraries for each task. Maintain knowledge separately instead of processing the same materials for every agent.",
+          "result": "One knowledge resource for multiple applications"
+        },
+        {
+          "role": "Knowledge stewards & domain experts",
+          "title": "Maintain content and verify its basis.",
+          "description": "Organize materials, review updates and applicability, and check original sources within scope. Stewardship and review support continued knowledge use by agents.",
+          "result": "Support application knowledge through ongoing stewardship"
+        }
+      ]
+    },
+    "faq": {
+      "eyebrow": "Questions you may have",
+      "title": "Start with the agent’s knowledge needs.",
+      "description": "Define the application’s task and required knowledge, then choose sources, stewardship and access scope.",
+      "items": [
+        {
+          "question": "How is Karda different from a file store or document library?",
+          "answer": "File stores focus on saving and collaborating on files. Karda primarily prepares and supplies retrievable, citable knowledge to agent applications. People maintain and verify content, with search as a supporting activity. Original materials remain the basis for verification; existing document systems need not all be replaced."
+        },
+        {
+          "question": "How does Karda relate to Arda?",
+          "answer": "Arda and Karda are peer platform products. Arda manages data, standards, quality and lineage for controlled data supply. Karda manages documents and professional experience for knowledge retrieval and citation. Both support agent applications and can be used separately or together, without a hierarchy between them."
+        },
+        {
+          "question": "Can every agent use an added knowledge library?",
+          "answer": "Adding content does not make it public. Each application needs a defined knowledge scope, and retrieval and citation must respect that authorization. Stewards and people using search also follow their own access boundaries."
+        },
+        {
+          "question": "Does Karda perform the agent’s business tasks?",
+          "answer": "Karda provides knowledge processing, organization, retrieval and source evidence. The agent application generates answers, combines tools and carries out business tasks. Results still depend on content quality, retrieval and application design; important decisions require checking sources and applicability."
+        },
+        {
+          "question": "How do we get started?",
+          "answer": "Tell us which business tasks the agent application handles, the knowledge sources it needs and its access scope. Start with one clear scenario and agree on intake, stewardship and authorization."
+        }
+      ]
+    },
+    "cta": {
+      "eyebrow": "Start with Karda",
+      "title": "Give your agents usable business knowledge.",
+      "description": "Start with one application task and a set of business materials. Turn them into knowledge agents can retrieve and cite.",
+      "note": "Invitation-only subscription · Discuss your agent’s knowledge needs"
+    }
+  },
+  "platformPeers": {
+    "eyebrow": "Data & knowledge · Peer platforms",
+    "title": "Distinct assets. Shared support for agent applications.",
+    "description": "Arda manages data; Karda manages knowledge. As peer products they supply data and knowledge services that agent applications can use independently or together.",
+    "arda": {
+      "label": "Manage data",
+      "description": "Connect enterprise sources and govern asset catalogs, standards, quality and lineage, giving applications trusted, controlled data.",
+      "supply": "Supplies: data and business definitions",
+      "action": "Explore Arda’s data platform"
+    },
+    "karda": {
+      "label": "Manage knowledge",
+      "description": "Organize documents and professional experience into retrievable, citable knowledge, giving agents business evidence within authorized scope.",
+      "supply": "Supplies: knowledge passages and source evidence",
+      "action": "Explore Karda’s knowledge platform"
     }
   }
 }

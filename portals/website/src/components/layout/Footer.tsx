@@ -53,7 +53,7 @@ export default function Footer() {
           : "text-vx-gray-800 bg-vx-gray-100"
       }`}
     >
-      <div className="flex flex-1 flex-col w-full max-w-7xl xl:max-w-screen-2xl mx-auto pt-8 px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-1 flex-col w-full max-w-page-xl xl:max-w-page-2xl mx-auto pt-8 px-4 sm:px-6 lg:px-8">
         {/* 主要内容区域：品牌 + 联系 + 社交 / 链接区 */}
         <div className="flex flex-1 flex-col md:flex-row gap-8 items-start">
           {/* 左侧：品牌信息 + 联系方式 */}
@@ -223,9 +223,7 @@ export default function Footer() {
           {/* 底部信息：版权 + 法律 + 备案 */}
           <div className="flex w-full justify-between items-center py-4 text-sm text-vx-gray-600 flex-wrap gap-2">
             {/* 左侧：版权 */}
-            <p className="whitespace-nowrap">
-              {t(FOOTER_DATA.copyright.textKey)}
-            </p>
+            <p>{t(FOOTER_DATA.copyright.textKey)}</p>
 
             {/* 右侧：法律链接 + 备案信息 */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 justify-end">
