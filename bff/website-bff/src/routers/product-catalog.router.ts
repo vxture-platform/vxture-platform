@@ -13,8 +13,8 @@
  * `product_type` 分区），以及 /products/[slug] 的存在性判定（不在目录里 = 404）。
  *
  * 回传的每一列都是目录真列：产品码 / 主名 / 副名 / 类型 / 描述 / 对外发布号。
- * 营销文案（价值主张、图标）仍在官网 i18n 里按 product_code 查，查不到就退回
- * 这里的名与描述——所以这里不做任何「补齐」，目录里没写的就回 null。
+ * Product icons and localized marketing content come from the registry.
+ * Missing icons stay null; the website owns the visual fallback.
  */
 import { Controller, Get, Inject } from "@nestjs/common";
 import type { Pool } from "pg";
@@ -96,6 +96,8 @@ export interface ProductCatalogItem {
   productNick: string | null;
   /** 受管枚举 product_type：{general,industry}_{platform,agent} / undefined（历史值仍可能出现） */
   productType: string;
+  /** Product-owned icon from the registry; null when not provided. */
+  iconUrl: string | null;
   description: string | null;
   releaseVersion: string | null;
   /** 对外发布时间（released_at，ISO 字符串）；未填为 null。卡片底部「v x.y.z at 日期」用。 */
@@ -185,6 +187,7 @@ interface ProductCatalogRow {
   product_name: string;
   product_nick: string | null;
   product_type: string;
+  icon_url: string | null;
   description: string | null;
   release_version: string | null;
   released_at: Date | string | null;
@@ -205,7 +208,7 @@ export class ProductCatalogRouter {
   async getCatalog(): Promise<ProductCatalogItem[]> {
     const res = await this.pool.query<ProductCatalogRow>(
       `select p.product_code, p.product_name, p.product_nick, p.product_type,
-              p.description, p.release_version, p.released_at, p.release_stage,
+              p.description, p.icon_url, p.release_version, p.released_at, p.release_stage,
               p.status, p.marketing,
               /* 产品级维护窗口（2026-09-27）：窗口 id 非空 = 升级维护中，until = 预计恢复。
                  由 opera-bff 在窗口 start / complete 时写，这里只读。 */
@@ -255,6 +258,7 @@ export class ProductCatalogRouter {
         productName: r.product_name,
         productNick: r.product_nick,
         productType: r.product_type,
+        iconUrl: r.icon_url ?? null,
         description: r.description,
         releaseVersion: r.release_version,
         releasedAt:

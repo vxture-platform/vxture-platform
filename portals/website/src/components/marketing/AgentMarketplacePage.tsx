@@ -38,7 +38,6 @@ import {
   marketingRecommend,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
-import { productTypeIcon } from "./product-catalog-view";
 import { useAuthStore } from "@/stores/auth.store";
 import { CatalogHero } from "./CatalogHero";
 import {
@@ -174,7 +173,8 @@ export default function AgentMarketplacePage({
         // per-agent 类型标签（marketing.tagline），缺省退回 kinds 映射，再退回通用「智能体」。
         typeLabel:
           m?.tagline ?? agentKinds[agent.productType] ?? t("agents.type"),
-        icon: productTypeIcon(agent.productType),
+        icon: "sparkles",
+        iconUrl: agent.iconUrl ?? null,
         description: agent.description ?? "",
         value: m?.value ?? null,
         highlights: m?.highlights ?? [],
@@ -235,7 +235,7 @@ export default function AgentMarketplacePage({
      * 「读取不到的归到『其他』——注意其他是覆盖没有单列筛选的类别」）。三种来源同一桶：
      *   · 票数排不进前 6 被折掉的；
      *   · industries 为空或缺失。
-     * 一个产品可能同时属于某个单列桶与「其他」（多标签），多选取并集时这没问题。
+     * A product can appear in an industry bucket and in Other when it has multiple tags.
      */
     const isOther = (card: AgentCard) =>
       card.industries.length === 0 ||
@@ -252,15 +252,14 @@ export default function AgentMarketplacePage({
     return list;
   }, [cards, industryLabels, t]);
 
-  /** 选中的桶（空 = 全部）。多选，取并集——「组合筛选」。 */
-  const [picked, setPicked] = useState<readonly string[]>([]);
+  // A single selected bucket; null represents All.
+  const [picked, setPicked] = useState<string | null>(null);
+  const selectedBucket = buckets.find((bucket) => bucket.key === picked);
 
   const visible = useMemo(() => {
     if (cards === null) return null;
-    const active = buckets.filter((b) => picked.includes(b.key));
-    if (active.length === 0) return cards;
-    return cards.filter((c) => active.some((b) => b.matches(c)));
-  }, [cards, picked, buckets]);
+    return selectedBucket ? cards.filter(selectedBucket.matches) : cards;
+  }, [cards, selectedBucket]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。
   const [subs, setSubs] = useState<Map<string, ProductSubscriptionState>>(
@@ -302,7 +301,7 @@ export default function AgentMarketplacePage({
           {/*
            * 标题右侧原先是一段解释这份清单从哪来的说明文字。owner 2026-09-24：
            * 「这个完全不需要，删除」——那段话讲的是实现（清单来自产品目录），
-           * 不是访客要知道的事。那个位置换成按大行业的组合筛选。
+           * 不是访客要知道的事。那个位置换成按大行业的筛选。
            */}
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -314,8 +313,7 @@ export default function AgentMarketplacePage({
               </h2>
             </div>
 
-            {/* 组合筛选：多选、取并集；一个都不选 = 全部。计数是各桶的总数，不随当前
-                选择变化——那样数字会在点击时跳动，看着像 bug。 */}
+            {/* Industry choices are mutually exclusive; counts stay fixed per bucket. */}
             {buckets.length > 0 ? (
               <div
                 className="flex flex-wrap gap-2 md:justify-end"
@@ -325,9 +323,9 @@ export default function AgentMarketplacePage({
                 <Button
                   type="button"
                   size="sm"
-                  variant={picked.length === 0 ? "default" : "outline"}
-                  onClick={() => setPicked([])}
-                  aria-pressed={picked.length === 0}
+                  variant={selectedBucket ? "outline" : "default"}
+                  onClick={() => setPicked(null)}
+                  aria-pressed={!selectedBucket}
                   className={FILTER_CHIP_CLASS}
                 >
                   {t("agents.filters.all")}
@@ -336,20 +334,14 @@ export default function AgentMarketplacePage({
                   </span>
                 </Button>
                 {buckets.map((bucket) => {
-                  const on = picked.includes(bucket.key);
+                  const on = selectedBucket?.key === bucket.key;
                   return (
                     <Button
                       key={bucket.key}
                       type="button"
                       size="sm"
                       variant={on ? "default" : "outline"}
-                      onClick={() =>
-                        setPicked((prev) =>
-                          prev.includes(bucket.key)
-                            ? prev.filter((k) => k !== bucket.key)
-                            : [...prev, bucket.key],
-                        )
-                      }
+                      onClick={() => setPicked(bucket.key)}
                       aria-pressed={on}
                       className={FILTER_CHIP_CLASS}
                     >

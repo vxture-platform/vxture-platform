@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 /**
  * ProductCatalogCard.tsx - 产品目录卡（/products 产品矩阵 与 /appcenter 智能体广场共用）
@@ -63,6 +64,8 @@ export interface ProductCatalogCardModel {
    */
   typeLabel: string;
   icon: IconName;
+  /** Product-owned image, with the type icon as a fallback. */
+  iconUrl?: string | null;
   description: string;
   /** 业务价值（marketing.value）；无则不画。 */
   value: string | null;
@@ -167,6 +170,12 @@ export function ProductCatalogCard({
   subscription: ProductSubscriptionState | undefined;
   labels: ProductCatalogCardLabels;
 }) {
+  const [failedIconUrl, setFailedIconUrl] = useState<string | null>(null);
+  const iconUrl = product.iconUrl?.trim();
+  const showProductIcon =
+    iconUrl &&
+    /^(https?:\/\/|\/(?!\/))/.test(iconUrl) &&
+    iconUrl !== failedIconUrl;
   /*
    * 「还没上线」——卡片上所有「不可订」的呈现都由它决定（灰徽标、不给奖章、底部改写
    * 「预期发布」、动作区给禁用的「敬请期待」）。
@@ -295,7 +304,19 @@ export function ProductCatalogCard({
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
-            <Icon name={product.icon} className="h-5 w-5" />
+            {showProductIcon ? (
+              <Image
+                src={iconUrl}
+                alt=""
+                width={44}
+                height={44}
+                unoptimized
+                className="h-11 w-11 rounded-md object-contain"
+                onError={() => setFailedIconUrl(iconUrl)}
+              />
+            ) : (
+              <Icon name={product.icon} className="h-5 w-5" />
+            )}
           </div>
           <div>
             <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">

@@ -69,3 +69,22 @@ version = "3.0.3"
 ecosystem = "npm"
 ignore = true
 reason = "no fixed version exists (npm latest IS 3.0.3; OSV has last_affected with no fixed event); build/dev tooling only (micromatch, chokidar) and absent from every --prod closure; availability-only DoS on patterns we author ourselves"
+
+# minimatch 3.1.5 — GHSA-g3hv-75wg-m249 is over-broad for the legacy v3 line.
+# The advisory describes amplification inside firstPhasePreProcess() with
+# optimizationLevel >= 2. The installed v3 minimatch.js has neither that method
+# nor the optimizationLevel option: make() splits each brace-expanded pattern
+# once, then maps parse() over it. The vulnerable fixpoint/clone loop does not
+# exist. pnpm why minimatch --prod -r is empty; this leaf serves ESLint plugins.
+# v3 exports a callable function consumed by those plugins, whereas v11 exports
+# an object, so a global v11 override would break development tooling without
+# removing vulnerable code from v3. Modern v10 consumers ARE upgraded to v11.
+# Keep this exact-version false-positive classification time-bounded; any new
+# resolution still receives normal auditing. Recheck the upstream range then.
+[[PackageOverrides]]
+name = "minimatch"
+version = "3.1.5"
+ecosystem = "npm"
+ignore = true
+effectiveUntil = 2026-12-02T00:00:00Z
+reason = "GHSA-g3hv-75wg-m249 false positive on legacy v3: firstPhasePreProcess/optimizationLevel and the vulnerable clone loop do not exist; exact dev-only resolution, recheck upstream range by 2026-12-02"
