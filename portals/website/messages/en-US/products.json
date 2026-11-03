@@ -744,5 +744,248 @@
       "supply": "Supplies: knowledge passages and source evidence",
       "action": "Explore Karda’s knowledge platform"
     }
+  },
+  "workbench": {
+    "meta": {
+      "title": "RUYIN · A Desktop Workspace for Professional Agents",
+      "description": "Connect Vxture business products with local projects. Keep source materials locally, use online intelligence with authorized context, and organize tasks and outputs around professional work."
+    },
+    "hero": {
+      "description": "Connect platform agents with local materials. Bring professional work to your desktop.",
+      "primaryAction": "Request a demo",
+      "tagline": "Professional agents. Right on your desktop."
+    },
+    "demo": {
+      "disclaimer": "Interactive illustration · Not an actual running task",
+      "workspace": "Business workspace",
+      "boundary": "Local projects · Authorized connections",
+      "label": "Explore illustrative business scenarios",
+      "projectLabel": "CURRENT PROJECT",
+      "filesLabel": "LOCAL MATERIALS",
+      "agentLabel": "Professional agent",
+      "stepsLabel": "ILLUSTRATIVE WORKFLOW",
+      "outputsLabel": "EXPECTED OUTPUTS",
+      "review": "Business users review outputs before formal delivery.",
+      "scenarios": {
+        "bid": {
+          "label": "Bid preparation",
+          "project": "Campus development · Bid project",
+          "title": "From tender requirements to a reviewable proposal",
+          "description": "Bring requirements, company materials and response content together around a project.",
+          "files": [
+            "Tender requirements.pdf",
+            "Company qualifications",
+            "Previous proposals"
+          ],
+          "steps": [
+            "Extract requirements into a response checklist",
+            "Prepare content using authorized materials",
+            "Check coverage and submit for human review"
+          ],
+          "outputs": ["Response matrix", "Draft proposal"]
+        },
+        "contract": {
+          "label": "Contract review",
+          "project": "Annual services · Contract project",
+          "title": "From a contract to evidence-based review notes",
+          "description": "Use contract text, standard clauses and business requirements to organize issues for review.",
+          "files": [
+            "Service agreement.docx",
+            "Standard clauses",
+            "Review requirements"
+          ],
+          "steps": [
+            "Identify parties, clauses and key obligations",
+            "Flag differences and points for clarification",
+            "Prepare notes for business and legal review"
+          ],
+          "outputs": ["Clause comparison", "Draft review notes"]
+        },
+        "operations": {
+          "label": "Business analysis",
+          "project": "Monthly performance · Analysis project",
+          "title": "From scattered reports to a business discussion",
+          "description": "Organize data, metric definitions and analysis in a project to prepare materials for the team.",
+          "files": [
+            "Monthly performance.xlsx",
+            "Metric definitions",
+            "Previous analysis"
+          ],
+          "steps": [
+            "Organize sources and metric definitions",
+            "Compare changes and identify open questions",
+            "Prepare analysis for business validation"
+          ],
+          "outputs": ["Metric summary", "Draft analysis"]
+        }
+      }
+    },
+    "foundations": {
+      "eyebrow": "CONNECTED, WITH BOUNDARIES",
+      "title": "Connected capabilities. Clear data boundaries.",
+      "description": "The platform supplies products and intelligence. The workbench brings them into your local environment. Connecting a service does not mean moving an entire project.",
+      "connection": {
+        "label": "PLATFORM × DESKTOP",
+        "title": "Find products on the platform. Do the work on your desktop.",
+        "description": "Connect a workspace using your Vxture account. Adapted business products can use local materials and organize tasks and outputs in desktop projects.",
+        "action": "Explore platform agents",
+        "nodes": [
+          {
+            "title": "Vxture platform",
+            "detail": "Account, workspace, products and services"
+          },
+          {
+            "title": "RUYIN workbench",
+            "detail": "Desktop work with adapted business products"
+          },
+          {
+            "title": "Your project",
+            "detail": "Local materials, tasks and deliverables"
+          }
+        ],
+        "note": "Desktop availability depends on product adaptation and access. Platform connectivity does not imply automatic file synchronization."
+      },
+      "data": {
+        "label": "LOCAL × ONLINE",
+        "title": "Keep materials local. Connect intelligence as needed.",
+        "description": "Organize and store source files and outputs locally. When a model is needed, transmit the authorized context selected for the task, then bring the result back into the project.",
+        "localTitle": "Local workspace",
+        "localItems": [
+          "Source files and business materials",
+          "Project records and outputs",
+          "Material permissions and usage records"
+        ],
+        "localNote": "Start with a project, without uploading your entire library.",
+        "serviceTitle": "Online intelligence",
+        "serviceItems": [
+          "Product-specific business capabilities",
+          "Model inference for the task",
+          "Evolving professional capabilities"
+        ],
+        "serviceNote": "Online services need connectivity and follow their service policies.",
+        "boundary": "Local storage does not mean zero transmission: online inference sends selected context. Environments that prohibit all content egress require a separately approved model and deployment setup."
+      }
+    },
+    "teams": {
+      "eyebrow": "PERSONAL WORK. TEAM CONTEXT.",
+      "title": "A personal workbench. A shared business purpose.",
+      "description": "Individuals do specific work; teams coordinate toward the same outcome. The platform workspace connects product access, project roles and deliverables.",
+      "points": [
+        {
+          "title": "Work in your organization’s context",
+          "description": "Connect your platform account and workspace to work within your organization’s product access."
+        },
+        {
+          "title": "Continue a project, beyond a chat",
+          "description": "Keep materials, tasks and outputs together for ongoing work and subsequent review."
+        },
+        {
+          "title": "Connect professional roles",
+          "description": "Authors, specialists and owners work toward defined deliverables. People make the final decisions."
+        }
+      ],
+      "sample": {
+        "title": "Illustrative business collaboration",
+        "label": "Example: bid preparation",
+        "workspace": "Team business workspace",
+        "resources": "Products · Business goals · Deliverable requirements",
+        "outcome": "Draft, review and approve toward a shared delivery goal."
+      },
+      "roles": [
+        {
+          "role": "Author",
+          "task": "Use materials to prepare response content and drafts."
+        },
+        {
+          "role": "Specialist",
+          "task": "Review technical content and add business judgment."
+        },
+        {
+          "role": "Project owner",
+          "task": "Confirm coverage and final delivery content."
+        }
+      ],
+      "availability": "This diagram illustrates business roles. Cross-device project sync and live co-editing are not presented as delivered features; availability depends on product adaptation."
+    },
+    "positioning": {
+      "eyebrow": "BUILT AROUND THE BUSINESS",
+      "title": "From a moment of AI help to ongoing business work.",
+      "description": "Writing, research and file processing are shared capabilities across office AI. RUYIN focuses on bringing professional business products into the workplace and using them across a project.",
+      "categories": [
+        {
+          "label": "CONTENT AND DOCUMENT ASSISTANCE",
+          "title": "Office AI assistants",
+          "description": "Help users read, write and organize documents, spreadsheets, email and meeting content.",
+          "focus": "A common starting point: a piece of content or an office action."
+        },
+        {
+          "label": "GENERAL TASK EXECUTION",
+          "title": "WorkBuddy / Cowork",
+          "description": "Accept goals, plan and use files and tools to execute tasks, with ecosystem connections, specialist extensions and team management.",
+          "focus": "A common starting point: delegate a task to AI."
+        },
+        {
+          "label": "PROFESSIONAL BUSINESS WORKSPACE",
+          "title": "RUYIN",
+          "description": "Bring Vxture business products to local materials, organizing tasks, process and outputs around projects that fit specific business workflows.",
+          "focus": "Product focus: continue business work in one environment."
+        }
+      ],
+      "note": "These are differences in emphasis, not exclusive capabilities. Refer to each product’s current availability. Official introductions:"
+    },
+    "faq": {
+      "eyebrow": "BEFORE YOU START",
+      "title": "A few practical questions",
+      "items": [
+        {
+          "question": "Does local data mean nothing ever leaves my computer?",
+          "answer": "No. A local project does not need to be uploaded in full, and source materials and outputs are stored locally. Online inference transmits authorized task context according to policy. Storage, inference and intentional sharing are separate decisions. Environments that prohibit any egress need to confirm permitted models and deployment boundaries first."
+        },
+        {
+          "question": "How does it differ from WorkBuddy or Cowork?",
+          "answer": "Those products also execute tasks, work with local files, connect tools and offer enterprise management. RUYIN is positioned to host Vxture professional business products and organize materials, tasks, process and outputs around projects. The comparison is about business fit and continuity, not exclusive ownership of common AI features."
+        },
+        {
+          "question": "Can every platform agent run on the desktop?",
+          "answer": "No. A product needs desktop adaptation and the appropriate access and runtime conditions. A catalog listing or recommendation does not mean the product can already run fully on the desktop. A demo starts by confirming the business product and its supported scope."
+        },
+        {
+          "question": "Can teams use it? Are local projects automatically shared?",
+          "answer": "RUYIN is designed for individual work and team business coordination, with organizational context provided by the platform workspace. Joining a team workspace does not automatically share local projects. Cross-device sync and live co-editing require separate adaptation and delivery."
+        },
+        {
+          "question": "Can I work offline, and how do I get started?",
+          "answer": "Local storage and online services have different availability conditions. Models and platform services need a network connection; offline operations depend on the product. Use Request a demo to tell us your operating system, business needs and data boundaries so we can confirm the right version and access."
+        }
+      ]
+    },
+    "cta": {
+      "title": "Start a desktop experience with real business work.",
+      "description": "Bring a concrete scenario: bid preparation, contract review or a specialist task your team handles. Confirm the product fit, data boundaries and deliverables, then step into the workbench."
+    },
+    "screenshots": {
+      "label": "Explore the desktop interface",
+      "badge": "Actual software interface",
+      "view": "View full image",
+      "enlarge": "View the full {screen} screenshot (new window)",
+      "note": "Actual software screenshots in Chinese; personal details redacted. Access, installation and connection states vary by account and version.",
+      "workspace": {
+        "label": "Workspace",
+        "alt": "Actual RUYIN desktop showing runtime status, platform connection, installed agents and platform recommendations. Personal information is redacted."
+      },
+      "privacy": {
+        "label": "Data & authorization",
+        "alt": "Actual RUYIN settings showing local storage, encryption, inference authorization and audit settings. Local paths and installation identifiers are redacted."
+      },
+      "capabilities": {
+        "label": "Local capabilities",
+        "alt": "Actual RUYIN capabilities interface showing runtimes, local skills and tool categories for documents, spreadsheets and search."
+      }
+    },
+    "scenarios": {
+      "eyebrow": "PROFESSIONAL WORKFLOWS",
+      "title": "Keep professional work moving, project by project.",
+      "description": "Bid preparation, contract review and business analysis use different products, each organized around materials, tasks and outputs. These scenes are illustrative; availability depends on product adaptation."
+    }
   }
 }

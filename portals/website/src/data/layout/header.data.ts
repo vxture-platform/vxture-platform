@@ -134,13 +134,12 @@ export const HEADER_DATA: HeaderData = {
           badgeKey: "productsMenu.inDevelopment",
         },
         {
-          // 桌面端如影工作台，不是后台管理——控制台入口在右侧工具区，与此无关。
+          // The desktop product is separate from the console account entry.
           key: "workbench",
           icon: "desktop",
           labelKey: "productsMenu.workbench.label",
           descriptionKey: "productsMenu.workbench.description",
           href: "/workbench",
-          badgeKey: "productsMenu.inDevelopment",
         },
       ],
     },
