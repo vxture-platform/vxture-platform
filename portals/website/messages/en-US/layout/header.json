@@ -21,7 +21,7 @@
       "description": "The shared foundation: data, models, orchestration, operations"
     },
     "workbench": {
-      "label": "RUYIN",
+      "label": "Ruyin Workbench",
       "description": "A business workspace connecting platform agents with local materials"
     },
     "inDevelopment": "In development",
