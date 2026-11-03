@@ -76,9 +76,20 @@
     }
   },
   "agentDetail": {
-    "detailLabel": "Details",
+    "detailLabel": "Product features",
+    "expandDetail": "Read full description",
+    "collapseDetail": "Show less",
     "industriesLabel": "Industries",
-    "tagsLabel": "Capabilities"
+    "tagsLabel": "Capabilities",
+    "identityLabel": "AI AGENT",
+    "explore": "Explore agent capabilities",
+    "capabilitiesEyebrow": "Product capabilities",
+    "capabilitiesTitle": "Capabilities built around the task",
+    "introductionEyebrow": "Meet the agent",
+    "contextTitle": "Industries and areas of focus",
+    "closingEyebrow": "Your next step",
+    "closingTitle": "Start with your work in mind.",
+    "closingDescription": "Explore the product and plans, or talk with us about your business needs to find the right fit."
   },
   "subscription": {
     "unavailableTitle": "Subscriptions not open yet",

@@ -76,9 +76,20 @@
     }
   },
   "agentDetail": {
-    "detailLabel": "产品详情",
+    "detailLabel": "产品特性",
+    "expandDetail": "展开完整说明",
+    "collapseDetail": "收起说明",
     "industriesLabel": "适用行业",
-    "tagsLabel": "能力标签"
+    "tagsLabel": "能力标签",
+    "identityLabel": "AI AGENT",
+    "explore": "探索智能体能力",
+    "capabilitiesEyebrow": "产品能力",
+    "capabilitiesTitle": "围绕任务，展开能力",
+    "introductionEyebrow": "走近智能体",
+    "contextTitle": "适用行业与能力方向",
+    "closingEyebrow": "下一步",
+    "closingTitle": "从你的工作场景开始。",
+    "closingDescription": "了解产品与套餐，或与我们聊聊你的业务需求，找到适合的使用方式。"
   },
   "subscription": {
     "unavailableTitle": "暂未开放订阅",
