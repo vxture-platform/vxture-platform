@@ -22,6 +22,10 @@ export async function generateMetadata({
     namespace: "products.workbench.meta",
   });
   return {
+    // The public product URL must not inherit the legacy localhost metadata base.
+    metadataBase: new URL(
+      process.env.NEXT_PUBLIC_WEBSITE_URL || "https://vxture.com",
+    ),
     title: t("title"),
     description: t("description"),
     alternates: {
