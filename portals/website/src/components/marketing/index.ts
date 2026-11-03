@@ -15,6 +15,7 @@ export { default as AgentProductDetail } from "./AgentProductDetail";
 export { default as ProductDetailPartOne } from "./ProductDetailPartOne";
 export { KardaProductDetail } from "./KardaProductDetail";
 export { ProductPlatformPeers } from "./ProductPlatformPeers";
+export { WorkbenchProductPage } from "./WorkbenchProductPage";
 export { default as ProductsOverviewPage } from "./ProductsOverviewPage";
 export { default as ProductSubscribePage } from "./ProductSubscribePage";
 export { default as ProductComingSoon } from "./ProductComingSoon";
