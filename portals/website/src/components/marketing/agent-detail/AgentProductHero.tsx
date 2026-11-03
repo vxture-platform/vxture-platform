@@ -43,7 +43,7 @@ export function AgentProductHero({
       aria-labelledby="agent-product-title"
       className="relative overflow-hidden border-b border-border bg-linear-to-br from-primary-muted/50 via-background to-muted/30 pb-10 pt-24 lg:pb-12 lg:pt-28"
     >
-      <div className="mx-auto max-w-page-xl px-6 lg:px-12">
+      <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
         <Link
           href="/appcenter"
           className="inline-flex items-center gap-2 rounded-md text-body-sm text-muted-foreground transition-colors hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

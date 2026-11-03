@@ -26,7 +26,7 @@ export function AgentProductClosing({
       aria-labelledby="agent-closing-title"
       className="border-t border-border py-12 lg:py-16"
     >
-      <div className="mx-auto max-w-page-xl px-6 lg:px-12">
+      <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
         <div className="flex flex-col gap-7 rounded-xl border border-border bg-linear-to-br from-primary-muted/40 to-card p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
           <div className="min-w-0 max-w-website-2xl lg:flex-1">
             <p className="text-label-sm font-semibold text-primary-text">

@@ -34,7 +34,7 @@ export function AgentCapabilities({
       aria-labelledby="agent-capabilities-title"
       className="scroll-mt-24 py-12 lg:py-16"
     >
-      <div className="mx-auto max-w-page-xl px-6 lg:px-12">
+      <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
         <p className="text-label-sm font-semibold text-primary-text">
           {t("capabilitiesEyebrow")}
         </p>

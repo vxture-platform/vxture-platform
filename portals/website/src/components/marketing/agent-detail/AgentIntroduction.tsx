@@ -30,7 +30,7 @@ export function AgentIntroduction({
       aria-labelledby="agent-introduction-title"
       className="border-t border-border bg-muted/20 py-12 lg:py-16"
     >
-      <div className="mx-auto max-w-page-xl px-6 lg:px-12">
+      <div className="mx-auto max-w-page-xl px-6 lg:px-8 xl:max-w-page-2xl">
         <h2
           id="agent-introduction-title"
           className="text-body-sm font-medium leading-8 text-muted-foreground"
