@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@vxture-platform/shared": "workspace:*",
     "@vxture/design-system": "12.17.0",
     "@vxture/platform-workspace-ui": "workspace:*",
     "next": "^15.5.25",

@@ -1562,6 +1562,9 @@ importers:
 
   portals/workbench:
     dependencies:
+      '@vxture-platform/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared/shared
       '@vxture/design-system':
         specifier: 12.17.0
         version: 12.17.0(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)

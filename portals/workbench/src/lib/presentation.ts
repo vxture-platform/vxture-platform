@@ -6,6 +6,7 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { civilDateInZone, formatDay } from "@vxture-platform/shared";
 import type { WorkApp } from "./contracts";
 
 export interface HomeCopy {
@@ -14,6 +15,16 @@ export interface HomeCopy {
 }
 export type Category = "all" | "agent" | "platform";
 const FALLBACK = "从容起步，稳步向前";
+const WORKBENCH_TIME_ZONE = "Asia/Shanghai";
+const WEEKDAYS = [
+  "星期日",
+  "星期一",
+  "星期二",
+  "星期三",
+  "星期四",
+  "星期五",
+  "星期六",
+] as const;
 
 // ============================================================================
 // Configuration and daily presentation
@@ -46,31 +57,15 @@ export function dailyPresentation(
   now: Date,
   copy: HomeCopy,
 ): { title: string; date: string; weekday: string; greeting: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const part = (name: Intl.DateTimeFormatPartTypes): string =>
-    parts.find((item) => item.type === name)?.value ?? "";
-  const dayIndex = Math.floor(
-    Date.UTC(
-      Number(part("year")),
-      Number(part("month")) - 1,
-      Number(part("day")),
-    ) / 86_400_000,
-  );
-  const hour = Number(part("hour"));
+  const { year, month, day } = civilDateInZone(now, WORKBENCH_TIME_ZONE);
+  const calendarDay = Date.UTC(year, month - 1, day);
+  const dayIndex = Math.floor(calendarDay / 86_400_000);
+  // The workbench calendar is explicitly Shanghai, which uses UTC+08:00.
+  const hour = (now.getUTCHours() + 8) % 24;
   return {
     title: copy.titles[dayIndex % copy.titles.length] ?? copy.fallback,
-    date: `${part("year")}/${part("month")}/${part("day")}`,
-    weekday: new Intl.DateTimeFormat("zh-CN", {
-      timeZone: "Asia/Shanghai",
-      weekday: "long",
-    }).format(now),
+    date: formatDay(now, "zh-CN", "—", { timeZone: WORKBENCH_TIME_ZONE }),
+    weekday: WEEKDAYS[new Date(calendarDay).getUTCDay()]!,
     greeting:
       hour < 12 && hour >= 5
         ? "早上好"

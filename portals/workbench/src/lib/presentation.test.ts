@@ -62,6 +62,25 @@ describe("daily presentation", () => {
     ).toBeTruthy();
     expect(copy.titles).toContain("向前一步");
   });
+  it("keeps greetings and weekdays aligned across Shanghai year boundaries", () => {
+    expect(
+      dailyPresentation(new Date("2026-12-31T16:00:00Z"), copy),
+    ).toMatchObject({
+      date: "2027/01/01",
+      weekday: "星期五",
+      greeting: "晚上好",
+    });
+    for (const [instant, greeting] of [
+      ["2027-01-01T20:59:59Z", "晚上好"],
+      ["2027-01-01T21:00:00Z", "早上好"],
+      ["2027-01-02T04:00:00Z", "下午好"],
+      ["2027-01-02T10:00:00Z", "晚上好"],
+    ] as const) {
+      expect(dailyPresentation(new Date(instant), copy).greeting).toBe(
+        greeting,
+      );
+    }
+  });
 });
 
 describe("catalog filtering", () => {

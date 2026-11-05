@@ -10,7 +10,8 @@
  */
 
 import { useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { PLATFORM_TIME_ZONE } from "@vxture-platform/shared";
 import { PrincipalNo } from "@/components/principal-no";
 import {
   Popover,
@@ -83,7 +84,7 @@ export function TenantPanel({
   onBeforeNavigate,
 }: TenantPanelProps) {
   const t = useTranslations("shell");
-  const locale = useLocale();
+  const format = useFormatter();
   const [open, setOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
 
@@ -142,10 +143,11 @@ export function TenantPanel({
           usage={quotaUsage}
           balanceLabel={balanceLabel}
           monthlyBillLabel={monthlyBillLabel}
-          billingPeriod={new Intl.DateTimeFormat(locale, {
+          billingPeriod={format.dateTime(new Date(), {
             year: "numeric",
             month: "2-digit",
-          }).format(new Date())}
+            timeZone: PLATFORM_TIME_ZONE,
+          })}
           labels={{
             resources: t("usageQuota"),
             storage: t("storageQuota"),
