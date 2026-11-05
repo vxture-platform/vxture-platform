@@ -12,6 +12,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ConflictException,
   Get,
   Header,
   HttpCode,
@@ -24,6 +25,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { Request, Response } from "express";
 import {
   generatePkce,
@@ -61,15 +63,13 @@ export interface AuthReq {
   nonce: string;
   returnTo: string;
   prompt?: string;
-  /**
-   * 发起这次登录的界面形态。`native` = 桌面端（见 `native-auth.router.ts`）。
-   * 缺省即浏览器——**不给默认值写成 `"web"`**：缺省与显式声明是两件事，
-   * 将来要按形态分流时，「没声明」该走最保守的那一支。
-   */
-  surface?: "native";
-  /** 桌面端给的 sha256 十六进制，回调时据它绑定待领会话。 */
+  /** Native approval and browser portal entry retain distinct session behavior. */
+  surface?: "native" | "portal";
+  binding?: string;
+  userId?: string;
+  /** Native SHA-256 device handle. */
   handle?: string;
-  /** Requested native scope; verified against issued claims before binding. */
+  /** Requested scope; verified against issued claims before creating a session. */
   tenantId?: string;
   workspaceId?: string;
 }
@@ -142,6 +142,57 @@ export class OidcAuthRouter {
     res.clearCookie(c.name, c.options);
   }
 
+  // ========================================================================
+  // Browser portal entry: exact account/scope and one-time browser binding
+  // ========================================================================
+  private bindingCookie(state: string): string {
+    return `${this.rt.cookieSecure ? "__Host-" : ""}vx_console_auth_${state}`;
+  }
+
+  private async assertPortalAccount(
+    req: Request,
+    userId: string,
+  ): Promise<void> {
+    const currentId: unknown = req.cookies?.[this.cookieName];
+    const current =
+      typeof currentId === "string" ? await this.store.get(currentId) : null;
+    if (current && current.sub !== `usr_${userId}`)
+      throw new ConflictException({
+        code: "PORTAL_ACCOUNT_MISMATCH",
+        message:
+          "The target portal uses another account; switch accounts explicitly",
+      });
+  }
+
+  private async consumeRequest(
+    state: string,
+    req: Request,
+    res: Response,
+  ): Promise<AuthReq | null> {
+    const raw = await this.redis.get(this.authReqKey(state));
+    if (!raw) return null;
+    const pending = JSON.parse(raw) as AuthReq;
+    if (pending.surface === "portal") {
+      const cookie: unknown = req.cookies?.[this.bindingCookie(state)];
+      if (typeof cookie !== "string" || !pending.binding) return null;
+      const actual = createHash("sha256").update(cookie).digest("hex");
+      if (
+        actual.length !== pending.binding.length ||
+        !timingSafeEqual(Buffer.from(actual), Buffer.from(pending.binding))
+      )
+        return null;
+    }
+    if ((await this.redis.getdel(this.authReqKey(state))) !== raw) return null;
+    if (pending.surface === "portal")
+      res.clearCookie(this.bindingCookie(state), {
+        path: "/",
+        secure: this.rt.cookieSecure,
+        httpOnly: true,
+        sameSite: "lax",
+      });
+    return pending;
+  }
+
   /** Begin login: stash PKCE/nonce/returnTo, redirect to the IdP authorize page. */
   @Get("login")
   @Header("Cache-Control", "no-store")
@@ -152,34 +203,59 @@ export class OidcAuthRouter {
     @Query("handle") handle: string | undefined,
     @Query("tenantId") tenantId: unknown,
     @Query("workspaceId") workspaceId: unknown,
+    @Query("userId") userId: unknown,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
     const isNative = surface === "native";
+    const isPortal = surface === "portal";
     const hasTarget = tenantId !== undefined || workspaceId !== undefined;
     const query = new URL(req.originalUrl, this.rt.defaultReturnTo)
       .searchParams;
     if (
-      ["surface", "handle", "tenantId", "workspaceId"].some(
-        (key) => query.getAll(key).length > 1,
-      ) ||
+      [
+        "surface",
+        "handle",
+        "tenantId",
+        "workspaceId",
+        "userId",
+        "prompt",
+        "returnTo",
+      ].some((key) => query.getAll(key).length > 1) ||
       [...query.keys()].some((key) =>
-        /^(surface|handle|tenantId|workspaceId)\[/.test(key),
+        /^(surface|handle|tenantId|workspaceId|userId|prompt|returnTo)\[/.test(
+          key,
+        ),
       ) ||
       (isNative &&
         (typeof handle !== "string" || !/^[0-9a-f]{64}$/.test(handle))) ||
-      (!isNative && (handle !== undefined || hasTarget)) ||
+      (!isNative &&
+        !isPortal &&
+        (handle !== undefined || hasTarget || userId !== undefined)) ||
+      (isNative && userId !== undefined) ||
+      (isPortal &&
+        (handle !== undefined ||
+          prompt !== undefined ||
+          typeof userId !== "string" ||
+          !UUID_RE.test(userId) ||
+          tenantId === undefined ||
+          workspaceId === undefined)) ||
       (tenantId !== undefined &&
         (typeof tenantId !== "string" || !UUID_RE.test(tenantId))) ||
       (workspaceId !== undefined &&
         (typeof workspaceId !== "string" || !UUID_RE.test(workspaceId)))
     ) {
       throw new BadRequestException({
-        code: "NATIVE_LOGIN_REQUEST_INVALID",
-        message:
-          "Native login requires a SHA-256 handle and unambiguous UUID scope hints",
+        code: isPortal
+          ? "PORTAL_LOGIN_REQUEST_INVALID"
+          : "NATIVE_LOGIN_REQUEST_INVALID",
+        message: isPortal
+          ? "Portal entry requires one account and exact UUID workspace context"
+          : "Native login requires a SHA-256 handle and unambiguous UUID scope hints",
       });
     }
+    if (isPortal)
+      await this.assertPortalAccount(req, String(userId).toLowerCase());
     const targetTenant =
       typeof tenantId === "string" ? tenantId.toLowerCase() : undefined;
     const targetWorkspace =
@@ -195,18 +271,25 @@ export class OidcAuthRouter {
     const { verifier, challenge } = generatePkce();
     const state = randomToken();
     const nonce = randomToken();
+    const binding = isPortal ? randomToken() : undefined;
     const dest = safeReturnTo(
       returnTo,
       this.rt.allowedReturnOrigins,
       this.rt.defaultReturnTo,
     );
-    // Native inputs were validated together before creating a pending request;
-    // an incomplete handshake must never degrade into a browser login.
+    // Explicit entry surfaces must never degrade into an unscoped browser login.
     const payload: AuthReq = {
       codeVerifier: verifier,
       nonce,
       returnTo: dest,
       ...(prompt && { prompt }),
+      ...(isPortal && binding
+        ? {
+            surface: "portal" as const,
+            userId: String(userId).toLowerCase(),
+            binding: createHash("sha256").update(binding).digest("hex"),
+          }
+        : {}),
       ...(isNative && typeof handle === "string"
         ? { surface: "native" as const, handle }
         : {}),
@@ -218,6 +301,14 @@ export class OidcAuthRouter {
       600,
       JSON.stringify(payload),
     );
+    if (binding)
+      res.cookie(this.bindingCookie(state), binding, {
+        httpOnly: true,
+        secure: this.rt.cookieSecure,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 600000,
+      });
     res.redirect(
       this.client.buildAuthorizeUrl({
         state,
@@ -240,6 +331,17 @@ export class OidcAuthRouter {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    const query = new URL(req.originalUrl, this.rt.defaultReturnTo)
+      .searchParams;
+    if (
+      ["state", "code", "error"].some((key) => query.getAll(key).length > 1) ||
+      (state !== undefined && typeof state !== "string") ||
+      (code !== undefined && typeof code !== "string") ||
+      (error !== undefined && typeof error !== "string")
+    ) {
+      res.status(400).json({ code: "INVALID_REQUEST" });
+      return;
+    }
     if (error) {
       // For prompt=none silent flows: login_required/interaction_required means
       // no active central session — redirect back to returnTo so the page renders
@@ -248,9 +350,8 @@ export class OidcAuthRouter {
         (error === "login_required" || error === "interaction_required") &&
         state
       ) {
-        const raw = await this.redis.getdel(this.authReqKey(state));
-        if (raw) {
-          const authReq = JSON.parse(raw) as AuthReq;
+        const authReq = await this.consumeRequest(state, req, res);
+        if (authReq) {
           if (authReq.prompt === "none" && authReq.surface !== "native") {
             // 记住这次静默失败，下一次 /auth/login?prompt=none 直接转交互式。
             this.markAnonymous(res);
@@ -266,12 +367,11 @@ export class OidcAuthRouter {
       res.status(400).json({ code: "INVALID_REQUEST" });
       return;
     }
-    const raw = await this.redis.getdel(this.authReqKey(state));
-    if (!raw) {
+    const authReq = await this.consumeRequest(state, req, res);
+    if (!authReq) {
       res.status(400).json({ code: "INVALID_STATE" });
       return;
     }
-    const authReq = JSON.parse(raw) as AuthReq;
 
     const tokens = await this.client.exchangeCode({
       code,
@@ -298,6 +398,35 @@ export class OidcAuthRouter {
           "The requested tenant or workspace is not accessible; no session was bound",
       });
       return;
+    }
+
+    if (authReq.surface === "portal") {
+      if (
+        id.sub !== `usr_${authReq.userId}` ||
+        scope.sub !== id.sub ||
+        scope.userType !== "tenant_user" ||
+        scope.accountStatus !== "active" ||
+        (accessClaims.sid !== undefined && accessClaims.sid !== id.sid)
+      ) {
+        res.status(403).json({
+          code: "PORTAL_ACCOUNT_MISMATCH",
+          message:
+            "Central SSO did not return the requested active customer account",
+        });
+        return;
+      }
+      if (
+        scope.activeOrg !== authReq.tenantId ||
+        scope.activeWorkspace !== authReq.workspaceId ||
+        !scope.roles.some((role) => role.startsWith("workspace:"))
+      ) {
+        res.status(403).json({
+          code: "PORTAL_CONTEXT_NOT_APPLIED",
+          message: "The requested organization or workspace is not accessible",
+        });
+        return;
+      }
+      await this.assertPortalAccount(req, authReq.userId!);
     }
 
     const session: RpSession = {

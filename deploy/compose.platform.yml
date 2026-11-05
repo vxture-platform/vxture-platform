@@ -86,6 +86,28 @@ services:
       retries: 3
       start_period: 20s
 
+  workbench:
+    image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_workbench:${VX_IMAGE_TAG:-latest}
+    container_name: vx-platform-workbench
+    restart: unless-stopped
+    mem_limit: 192m
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 192m
+    networks: [vxture-prod]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=144
+    env_file:
+      - /srv/vxture/runtime/.env.workbench
+    depends_on:
+      workbench-bff: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3060/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   admin:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_admin:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-admin
@@ -196,8 +218,7 @@ services:
     environment:
       NODE_OPTIONS: --max-old-space-size=144
       AUTH_BFF_PORT: "3081"
-    env_file:
-      [
+    env_file: [
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-app.env,
         /srv/vxture/runtime/secrets/platform-mail.env,
@@ -292,6 +313,29 @@ services:
       retries: 3
       start_period: 15s
 
+  workbench-bff:
+    image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-workbench:${VX_IMAGE_TAG:-latest}
+    container_name: vx-platform-workbench-bff
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 128m
+    networks: [vxture-prod]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=96
+    # Only DB/Redis/RP credentials; no platform-wide signing or internal-face keys.
+    env_file:
+      - /srv/vxture/runtime/.env.workbench-bff
+    depends_on:
+      auth-bff: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3061/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   admin-bff:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-admin:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-admin-bff
@@ -304,8 +348,7 @@ services:
     environment:
       NODE_OPTIONS: --max-old-space-size=144
       ADMIN_BFF_PORT: "3031"
-    env_file:
-      [
+    env_file: [
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-app.env,
         /srv/vxture/runtime/secrets/platform-mail.env,
@@ -336,8 +379,7 @@ services:
     environment:
       NODE_OPTIONS: --max-old-space-size=120
       OPERA_BFF_PORT: "3041"
-    env_file:
-      [
+    env_file: [
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-idp-internal.env, # 内部面钥匙：step-up 发给 auth-bff /internal/*
         /srv/vxture/runtime/.env.opera-bff,
@@ -365,8 +407,7 @@ services:
     environment:
       NODE_OPTIONS: --max-old-space-size=120
       ARCHE_BFF_PORT: "3051"
-    env_file:
-      [
+    env_file: [
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-idp-internal.env, # 内部面钥匙：账号管理 / step-up 发给 auth-bff /internal/*
         /srv/vxture/runtime/.env.arche-bff,
@@ -395,8 +436,7 @@ services:
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=144
-    env_file:
-      [
+    env_file: [
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-app.env,
         /srv/vxture/runtime/secrets/platform-mail.env, # P2-g：作业发客户邮件（到期提醒 / 续费单 / 退款进度），同 console-bff 的 SMTP_*
@@ -411,4 +451,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-

@@ -415,7 +415,6 @@
     "switchWorkspace": "切换工作区",
     "platformMode": "平台",
     "tenantMode": "租户",
-    "appLauncher": "应用入口",
     "featureOverview": "功能总览",
     "quickPreferences": "快捷偏好",
     "workspaceActions": "工作台操作",
@@ -437,16 +436,6 @@
     "openNavigation": "展开导航",
     "closeNavigation": "关闭导航",
     "collapseNavigation": "收起导航",
-    "views": {
-      "appcenter": {
-        "label": "应用中心",
-        "description": "已订阅应用 · 快速进入"
-      },
-      "console": {
-        "label": "控制台",
-        "description": "管理视角 · 账户与运营"
-      }
-    },
     "tenantType": {
       "individual": "个人",
       "company": "组织"
@@ -2170,7 +2159,6 @@
     "loading": {
       "label": "加载中"
     },
-    "featureBoards": "功能板块",
     "searchPlaceholder": "搜索成员、订阅、设置…",
     "search": {
       "title": "全局搜索",
@@ -2203,16 +2191,6 @@
     "densityComfy": "宽松",
     "switchUser": "切换用户",
     "signOut": "退出登录",
-    "views": {
-      "appcenter": {
-        "name": "智能体",
-        "desc": "已订阅应用 · 快速进入"
-      },
-      "console": {
-        "name": "控制台",
-        "desc": "管理视角 · 数据与运营"
-      }
-    },
     "sidebar": {
       "expandNav": "展开导航",
       "collapseNav": "收起导航",
@@ -2221,27 +2199,6 @@
     },
     "drawer": {
       "openCenter": "前往消息中心"
-    },
-    "appcenter": {
-      "title": "智能体",
-      "desc": "当前工作空间已订阅的智能体,点开就用;下方是还没订的推荐。",
-      "products": {
-        "title": "已订阅",
-        "desc": "按当前工作空间的生效订阅(含试用)列出。",
-        "empty": "当前工作空间还没有生效的产品订阅。",
-        "browse": "查看订阅",
-        "unavailable": "已订阅产品暂时读不到,请稍后刷新。",
-        "trialing": "试用中",
-        "open": "打开",
-        "detail": "产品介绍",
-        "versionAt": "v {version} at {date}"
-      },
-      "reco": {
-        "title": "热门推荐",
-        "desc": "你还没订阅的智能体,先看介绍或直接订阅。",
-        "learnMore": "产品介绍",
-        "subscribe": "订阅"
-      }
     },
     "realNameVerified": "实名认证",
     "missingPhone": "缺少手机号",
@@ -2255,9 +2212,21 @@
     "payBill": "支付账单",
     "trafficUsage": "流量用量",
     "usageLimit": "用量限额",
-    "usageQuota": "配额 / Usage Quota",
-    "storageQuota": "存储容量 / Storage",
-    "aiCredits": "AI Credits",
+    "usageQuota": "资源额度",
+    "storageQuota": "存储容量",
+    "aiCredits": "AI 点数",
+    "pointsUnit": "点",
+    "resourceUnavailable": "暂不可用",
+    "resourceTotalQuota": "总配额",
+    "resourceUsageSummary": "已使用 {used} · {percent}%",
+    "accountBalance": "账户余额",
+    "accountBalanceHint": "不含平台卡券",
+    "monthlyBill": "本月账单",
+    "tenantPanelInfo": "租户信息",
+    "tenantPanelInfoHint": "查看资料与认证",
+    "scopeDefaultWorkspace": "默认工作空间",
+    "scopeEnterTenant": "进入此单位",
+    "switchScopeHint": "切换单位、工作空间",
     "switchScope": "切换范围",
     "organization": "组织",
     "workspace": "工作空间",
@@ -2287,7 +2256,9 @@
       "reactivate": "撤销删除并重新启用",
       "keep": "保持删除并退出",
       "error": "操作失败,请稍后重试。"
-    }
+    },
+    "businessWorkbench": "业务工作台",
+    "openBusinessWorkbench": "打开业务工作台（新标签页）"
   },
   "sidebar": {
     "ariaLabel": "控制台导航",

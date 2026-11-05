@@ -44,16 +44,6 @@ export interface NavigationSection {
 }
 
 /**
- * 顶层视图（应用中心 / 控制台）。Header 九宫格 launcher 据此渲染切换项。
- */
-export interface ConsoleView {
-  id: "appcenter" | "console";
-  labelKey: string;
-  descriptionKey: string;
-  icon: IconName;
-}
-
-/**
  * 功能域：导航分组之上的组织层，也是「灵活授权」的整域门控点。
  * `capabilityAnyOf` 命中任一即放行整域；为空则不做域级门控，
  * 仍由各 item 的 capability / tenantTypes 决定可见性。
@@ -65,21 +55,6 @@ export interface ConsoleDomain {
   capabilityAnyOf?: Capability[];
   sections: NavigationSection[];
 }
-
-export const consoleViews: ConsoleView[] = [
-  {
-    id: "appcenter",
-    labelKey: "views.appcenter.label",
-    descriptionKey: "views.appcenter.description",
-    icon: "squares-four",
-  },
-  {
-    id: "console",
-    labelKey: "views.console.label",
-    descriptionKey: "views.console.description",
-    icon: "settings",
-  },
-];
 
 // ── Sections（屏幕分组）── 单独命名以便同时供 navigationSections（向后兼容）
 // 与 consoleDomains（功能域注册表）复用。

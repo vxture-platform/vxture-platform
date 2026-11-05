@@ -1,20 +1,12 @@
 "use client";
 
 /**
- * ConsoleHeader — console 顶栏（DS 外壳部件重建）。
- *
- * 取代原 `TemplateHeader`：那份是设计稿 1:1 转写，整栏挂 `.vxh-*` 遗留类、
- * 图标走 Phosphor 字体、语言下拉是裸原生控件、分段是手搓 `.vxh-seg`，因此
- * 与 opera（全 DS）在字号、间距、圆角、hover 反馈上处处对不上。本文件改用与
- * opera 同一套部件，两个门户的顶栏由同一份实现产出，剩下的差别只有内容。
- *
- * 布局与 opera 逐槽对齐：
- *   leading  = launcher · 品牌 · 竖分隔 · 当前范围
- *   center   = 全局搜索（⌘K）
- *   trailing = [助手] gap-md [系统工具组] gap-md [账户]
- *
- * `shell-template/app.css` 里的 `.vxh-*` 规则不动——admin 仍在消费，console
- * 只是不再引用它们。跟上一轮侧栏迁移同一处理方式。
+ * Console management header with a separate business workbench entry.
+ * @package @vxture/console
+ * @layer Presentation
+ * @category component
+ * @author AI-Generated
+ * @date 2026-11-05
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -24,7 +16,7 @@ import {
   ShellHeader,
   ShellIconButton,
   ShellIconGroup,
-  ShellLauncher,
+  Button,
   ShellPanelSlots,
   ShellPreferencePanel,
   ShellSearchBox,
@@ -41,14 +33,19 @@ import {
 import type { Locale, Theme } from "@vxture-platform/shared";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { fetchSwitchableWorkspaces } from "@/api/console-bff";
+import {
+  fetchMyWorkspaces,
+  fetchSwitchableWorkspaces,
+} from "@/api/console-bff";
 import { useTenant } from "@/features/tenant";
 import {
   buildLogoutUrl,
   buildSwitchUrl,
   type ConsoleQuotaUsage,
 } from "@/api/console-bff";
-import type { ShellDrawerType, ShellView } from "../shell/types";
+import type { ConsoleWorkspaceItem } from "@/entities/console";
+import type { ShellDrawerType } from "../shell/types";
+import { buildWorkbenchEntry } from "@/lib/workbench-entry";
 import { TenantPanel } from "./TenantPanel";
 import { useGlobalSearch, type NavSearchEntry } from "./useGlobalSearch";
 
@@ -62,18 +59,7 @@ function formatPhone(phone: string | null | undefined): string {
   return phone.startsWith("+86") ? phone.slice(3) : phone;
 }
 
-export interface ConsoleHeaderViewOption {
-  id: ShellView;
-  name: string;
-  desc: string;
-  /** DS IconName（原实现存的是 Phosphor class 串，转换层已随之退役）。 */
-  icon: Parameters<typeof ShellLauncher>[0]["items"][number]["icon"];
-}
-
 export interface ConsoleHeaderProps {
-  view: ShellView;
-  setView: (next: ShellView) => void;
-  viewOptions: ConsoleHeaderViewOption[];
   openDrawer: (type: ShellDrawerType) => void;
   /** 站内未读数（product_330 P2-g）；0 不画角标。 */
   unreadCount?: number;
@@ -83,14 +69,12 @@ export interface ConsoleHeaderProps {
   navEntries: readonly NavSearchEntry[];
   quotaUsage: ConsoleQuotaUsage | null;
   workspaceName: string | null;
-  billingLabel: string;
+  monthlyBillLabel: string;
+  balanceLabel?: string;
   planName: string | null;
 }
 
 export function ConsoleHeader({
-  view,
-  setView,
-  viewOptions,
   openDrawer,
   unreadCount = 0,
   onNavigate,
@@ -98,7 +82,8 @@ export function ConsoleHeader({
   navEntries,
   quotaUsage,
   workspaceName,
-  billingLabel,
+  monthlyBillLabel,
+  balanceLabel = "—",
   planName,
 }: ConsoleHeaderProps) {
   const t = useTranslations("shell");
@@ -118,20 +103,26 @@ export function ConsoleHeader({
   const [workspaceOptions, setWorkspaceOptions] = useState<
     { id: string; name: string; isDefault: boolean }[]
   >([]);
+  const [tenantWorkspaceDefaults, setTenantWorkspaceDefaults] = useState<
+    ConsoleWorkspaceItem[]
+  >([]);
   const activeWorkspaceId = session.tenant?.workspace ?? null;
   useEffect(() => {
-    if (!activeWorkspaceId) {
-      setWorkspaceOptions([]);
-      return;
-    }
     let active = true;
-    fetchSwitchableWorkspaces()
-      .then((list) => {
+    setWorkspaceOptions([]);
+    setTenantWorkspaceDefaults([]);
+    // Each endpoint keeps its own fallback; a missing list must not hide the other.
+    void Promise.allSettled([
+      (activeWorkspaceId
+        ? fetchSwitchableWorkspaces()
+        : Promise.resolve([])
+      ).then((list) => {
         if (active) setWorkspaceOptions(list);
-      })
-      .catch(() => {
-        if (active) setWorkspaceOptions([]);
-      });
+      }),
+      fetchMyWorkspaces().then((list) => {
+        if (active) setTenantWorkspaceDefaults(list);
+      }),
+    ]);
     return () => {
       active = false;
     };
@@ -173,7 +164,6 @@ export function ConsoleHeader({
           ...(entry.group ? { description: entry.group } : {}),
           icon: "arrow-long-right" as const,
           onSelect: () => {
-            setView("console");
             onNavigate(entry.href);
           },
         })),
@@ -194,14 +184,13 @@ export function ConsoleHeader({
           ...(hit.meta ? { meta: hit.meta } : {}),
           icon: kind === "member" ? ("user" as const) : ("receipt" as const),
           onSelect: () => {
-            setView("console");
             onNavigate(hit.href);
           },
         })),
       });
     }
     return groups;
-  }, [search.navHits, search.remoteHits, t, setView, onNavigate]);
+  }, [search.navHits, search.remoteHits, t, onNavigate]);
 
   return (
     <ShellHeader
@@ -209,17 +198,6 @@ export function ConsoleHeader({
       centerAlign="end"
       leading={
         <>
-          <ShellLauncher
-            items={viewOptions.map((option) => ({
-              key: option.id,
-              icon: option.icon,
-              label: option.name,
-              description: option.desc,
-              active: option.id === view,
-            }))}
-            onSelect={(key) => setView(key as ShellView)}
-            buttonLabel={t("featureBoards")}
-          />
           {/* owner 2026-09-08:字标 `Workspace Console`(全英文,品牌不翻译——
               中英文同一个串,与 admin 的 `vxture studio` 同体例)。
 
@@ -236,9 +214,57 @@ export function ConsoleHeader({
             tenant={session.tenant}
             workspaceName={workspaceName}
             quotaUsage={quotaUsage}
-            billingLabel={billingLabel}
+            monthlyBillLabel={monthlyBillLabel}
+            balanceLabel={balanceLabel}
             planName={planName}
             tenantOptions={tenantList}
+            scopeGroups={tenantList.map((item) => {
+              const context = session.tenantOptions?.find(
+                (option) => option.id === item.id,
+              );
+              const defaultSpace = tenantWorkspaceDefaults.find(
+                (option) => option.tenantId === item.id,
+              );
+              const currentSpaces = workspaceOptions.map((space) => ({
+                ...space,
+                isCurrent: space.id === activeWorkspaceId,
+              }));
+              return {
+                id: item.id,
+                name: item.name,
+                personal: item.type === "personal",
+                identifier:
+                  context?.tenantNo ||
+                  (item.isCurrent ? session.tenant?.tenantNo : undefined) ||
+                  undefined,
+                workspaces:
+                  item.isCurrent && currentSpaces.length > 0
+                    ? currentSpaces
+                    : defaultSpace?.workspaceId
+                      ? [
+                          {
+                            id: defaultSpace.workspaceId,
+                            name:
+                              defaultSpace.workspaceName ||
+                              t("defaultWorkspace"),
+                            isDefault: true,
+                            isCurrent:
+                              item.isCurrent &&
+                              defaultSpace.workspaceId === activeWorkspaceId,
+                          },
+                        ]
+                      : item.isCurrent && activeWorkspaceId
+                        ? [
+                            {
+                              id: activeWorkspaceId,
+                              name: workspaceName || t("defaultWorkspace"),
+                              isDefault: false,
+                              isCurrent: true,
+                            },
+                          ]
+                        : [],
+              };
+            })}
             onSwitchTenant={(id) => void switchTenantContext(id)}
             workspaceOptions={workspaceOptions.map((w) => ({
               ...w,
@@ -246,7 +272,6 @@ export function ConsoleHeader({
             }))}
             onSwitchWorkspace={(id) => void switchWorkspace(id)}
             onNavigate={onNavigate}
-            onBeforeNavigate={() => setView("console")}
           />
         </>
       }
@@ -265,10 +290,31 @@ export function ConsoleHeader({
         />
       }
       trailing={
-        // 三个板块（助手 / 系统工具组 / 账户）之间 gap-md，组内图标 gap-2xs：
-        // 组间是板块边界，组内是同类项。与 opera 同一套间距。
+        // Keep the business entry separate from system tools and the account menu.
         <div className="flex items-center gap-md">
-          {/* Varda 助手入口已随独立仓迁出移除(2026-08-18),重构发包后恢复。 */}
+          {user?.id &&
+          session.tenant?.mode === "tenant" &&
+          activeWorkspaceId ? (
+            <Button
+              asChild
+              variant="ghost"
+              size="md"
+              className="px-sm text-label-sm"
+            >
+              <a
+                href={buildWorkbenchEntry({
+                  userId: user.id,
+                  tenantId: session.tenant.id,
+                  workspaceId: activeWorkspaceId,
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t("openBusinessWorkbench")}
+              >
+                {t("businessWorkbench")}
+              </a>
+            </Button>
+          ) : null}
           <ShellIconGroup label={t("settings")}>
             {/* 2026-09-29:这颗按钮此前的 onClick 是 `() => {}`——有图标、有可访问
                 名、有 hover 反馈,点下去什么都不发生。owner 第 5 条裁决把它定成
@@ -304,7 +350,6 @@ export function ConsoleHeader({
               icon="settings"
               label={t("settings")}
               onClick={() => {
-                setView("console");
                 onNavigate("/settings");
               }}
             />

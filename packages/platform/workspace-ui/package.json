@@ -1,0 +1,25 @@
+{
+  "name": "@vxture/platform-workspace-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-only workspace panel compositions shared by platform portals",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vxture/design-system": "12.17.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.9.3"
+  }
+}

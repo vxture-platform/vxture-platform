@@ -148,6 +148,8 @@ normalize_one "$WORKER_DIR/.env.console-bff.example" "$PLATFORM_DIR/.env.console
 normalize_one "$WORKER_DIR/.env.admin-bff.example" "$PLATFORM_DIR/.env.admin-bff" "admin-bff env"
 normalize_one "$WORKER_DIR/.env.opera-bff.example" "$PLATFORM_DIR/.env.opera-bff" "opera-bff env"
 normalize_one "$WORKER_DIR/.env.arche-bff.example" "$PLATFORM_DIR/.env.arche-bff" "arche-bff env"
+normalize_one "$WORKER_DIR/.env.workbench.example" "$PLATFORM_DIR/.env.workbench" "workbench portal env"
+normalize_one "$WORKER_DIR/.env.workbench-bff.example" "$PLATFORM_DIR/.env.workbench-bff" "workbench-bff env"
 normalize_one "$WORKER_DIR/.env.platform-api.example" "$PLATFORM_DIR/.env.platform-api" "platform-api env"
 normalize_one "$WORKER_DIR/.env.gateway-bff.example" "$PLATFORM_DIR/.env.gateway-bff" "gateway-bff env"
 

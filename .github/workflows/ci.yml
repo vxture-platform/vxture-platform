@@ -673,6 +673,7 @@ jobs:
           if has platform_bff-admin;              then smoke @vxture/bff-admin; fi
           if has platform_bff-auth;               then smoke @vxture/bff-auth; fi
           if has platform_bff-console;            then smoke @vxture/bff-console; fi
+          if has platform_bff-workbench;          then smoke @vxture/bff-workbench; fi
           if has platform_bff-website;            then smoke @vxture/bff-website; fi
           if has platform_bff-opera;              then smoke @vxture/bff-opera; fi
           if has platform_bff-arche;              then smoke @vxture/bff-arche; fi
@@ -690,6 +691,18 @@ jobs:
           set -euo pipefail
           if printf '%s' "$AFFECTED" | grep -q '"platform_bff-auth"'; then
             pnpm --filter @vxture/bff-auth exec vitest run src/redis/session-status.itest.spec.ts
+          fi
+
+      - name: Workbench session store Redis regressions
+        if: needs.check.outputs.docs_only != 'true'
+        env:
+          AFFECTED: ${{ needs.check.outputs.affected_images }}
+          WORKBENCH_ITEST: "1"
+          REDIS_ITEST_URL: redis://localhost:6379
+        run: |
+          set -euo pipefail
+          if printf '%s' "$AFFECTED" | grep -q '"platform_bff-workbench"'; then
+            pnpm --filter @vxture/bff-workbench exec vitest run src/auth/session-store.itest.spec.ts
           fi
 
       # ── 门户 next build ────────────────────────────────────────────────────
@@ -713,6 +726,7 @@ jobs:
           has() { printf '%s' "$AFFECTED" | grep -q "\"$1\""; }
           if has platform_website;   then pnpm --filter @vxture/website build; fi
           if has platform_console;   then pnpm --filter @vxture/console build; fi
+          if has platform_workbench; then NEXT_STANDALONE=1 pnpm --filter @vxture/workbench build; fi
           if has platform_admin;     then pnpm --filter @vxture/admin build; fi
           if has platform_accounts;  then pnpm --filter @vxture/accounts build; fi
           if has platform_opera;     then pnpm --filter @vxture/opera build; fi

@@ -1,0 +1,30 @@
+/**
+ * Browser navigation into a separate OIDC portal; identifiers are hints, never credentials.
+ * @package @vxture/workbench
+ * @layer Presentation
+ * @category navigation
+ * @author AI-Generated
+ * @date 2026-11-05
+ */
+import type { WorkData } from "./contracts";
+
+/**
+ * Enter Console through its own OIDC RP rather than relying on a cross-site cookie.
+ * @param data - Current authenticated workbench identity and scope.
+ * @param origin - Configured Console origin.
+ * @param path - Console destination relative to its Chinese locale root.
+ * @returns A browser URL carrying only identifiers and an allowlisted destination.
+ */
+export function buildConsoleEntry(
+  data: WorkData,
+  origin: string,
+  path = "",
+): string {
+  const url = new URL("/auth/login", origin);
+  url.searchParams.set("surface", "portal");
+  url.searchParams.set("userId", data.user.id);
+  url.searchParams.set("tenantId", data.scope.id);
+  url.searchParams.set("workspaceId", data.scope.workspace);
+  url.searchParams.set("returnTo", new URL(`/zh-CN/${path}`, origin).href);
+  return url.href;
+}

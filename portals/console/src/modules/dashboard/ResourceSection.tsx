@@ -1,28 +1,12 @@
 "use client";
 
 /**
- * ResourceSection.tsx — 概览页第三块：你有什么。
+ * Overview resource and product summary; full management lives in subscriptions.
  * @package @vxture/console
- * @layer Application
- * @category Module
- *
- * owner 2026-09-09：概览第三块是**我有的资源、我的产品**，「更多」去智能体域主页。
- *
- * ── 这是多产品平台的那一块 ──
- * owner 的原话：「必须清楚我们是多产品服务平台，不是一款产品」。这一块回答的就是
- * 「我手里有几个产品、哪个能用」——旧版概览完全没有它，第一块是「快捷操作」三个
- * 按钮，把一个多产品工作台讲成了单一后台的入口页。
- *
- * 磁贴走 `fetchMyApps`（应用中心那一套）：它已按 `product_code` 折叠去重、且**含
- * bundled**（套餐捆绑进来的产品同样是这个工作空间持有的）。不另写一套取数——
- * 同一批磁贴两处各算一遍，就一定会有一处先漂。
- *
- * ── 「更多」去哪 ──
- * 智能体域主页（应用中心视图）。这一页只给一眼能看完的量，全量在那边。
- *
- * ── 额度只给一行 ──
- * 「还剩多少」在配额管理，那一页才是台账。这里只答「有没有快用完的」——
- * 一个需要注意的信号，不是一张表。
+ * @layer Presentation
+ * @category component
+ * @author AI-Generated
+ * @date 2026-11-05
  */
 
 import { useTranslations } from "next-intl";
@@ -38,7 +22,7 @@ import { PageSection } from "@/layout/shell";
 import { Link } from "@/lib/i18n/navigation";
 import type { ProductAppTile } from "@/api/console-bff";
 
-/** 概览上最多列几个磁贴。更多的去应用中心。 */
+/** Keep the overview compact; complete product management lives in subscriptions. */
 const MAX_TILES = 6;
 
 /** 用量超过这个比例就算「该注意了」。与配额页的告急阈值同口径。 */
@@ -78,8 +62,8 @@ export function ResourceSection({
       description={t("description")}
       action={
         <Button asChild variant="outline" size="sm">
-          {/* 智能体域主页 = 应用中心视图。它是产品的全量清单，这里只给一眼的量。 */}
-          <Link href="/?view=appcenter">{t("viewAll")}</Link>
+          {/* Keep management navigation inside Console. */}
+          <Link href="/subscription">{t("viewAll")}</Link>
         </Button>
       }
     >

@@ -52,6 +52,13 @@ export const IMAGES = [
       // Dockerfile ARG 烘成空串、回退失效，线上全部落到 console.* 404（owner 2026-09-03）。
       "PORTAL_PATH=portals/console\nPACKAGE_FILTER=@vxture/console\nNEXT_PUBLIC_API_URL=https://api.vxture.com\nNEXT_PUBLIC_CONSOLE_BFF_URL=https://console.vxture.com\nNEXT_PUBLIC_WEBSITE_URL=https://vxture.com",
   },
+  {
+    name: "platform_workbench",
+    image: ghcrImage("platform_workbench"),
+    dockerfile: "deploy/docker/Dockerfile.nextjs",
+    "build-args":
+      "PORTAL_PATH=portals/workbench\nPACKAGE_FILTER=@vxture/workbench",
+  },
   // admin：NEXT_PUBLIC_ADMIN_BFF_URL 不在此处硬编码真实域名（加固决策,
   // 2026-07-28 追加,与 opera 同一性质）——由 docker-build.yml 从 GH Actions
   // 仓库变量 vars.ADMIN_BASE_URL 注入(与 Turnstile key 同一模式)。
@@ -139,6 +146,13 @@ export const IMAGES = [
     dockerfile: "deploy/docker/Dockerfile.nestjs",
     "build-args":
       "SERVICE_PATH=bff/platform-api\nPACKAGE_FILTER=@vxture/bff-platform-api",
+  },
+  {
+    name: "platform_bff-workbench",
+    image: ghcrImage("platform_bff-workbench"),
+    dockerfile: "deploy/docker/Dockerfile.nestjs",
+    "build-args":
+      "SERVICE_PATH=bff/workbench\nPACKAGE_FILTER=@vxture/bff-workbench",
   },
   // varda 两镜像已随 vxture-varda 独立仓迁出(2026-08-18):构建与部署归其自持。
   // model-platform 服务已退役（2026-07-28）：实现整体迁至外部 vxture-atlas 仓。

@@ -63,6 +63,8 @@ check_required_files() {
   # 才被 30 拦下。三处清单（30 / 40 / 51）由 lib/runtime-file-lists.test.sh 钉成一致。
   check_file "$RUNTIME_DIR/.env.opera-bff"
   check_file "$RUNTIME_DIR/.env.arche-bff"
+  check_file "$RUNTIME_DIR/.env.workbench"
+  check_file "$RUNTIME_DIR/.env.workbench-bff"
   check_file "$RUNTIME_DIR/.env.platform-api"
   check_file "$RUNTIME_DIR/secrets/tair-pw-default"
   check_file "$RUNTIME_DIR/secrets/platform.env"
@@ -107,6 +109,8 @@ check_platform_health() {
   # 清单里根本没有它，是靠 `docker ps` 的 STATUS 才被发现的。
   check_service_health "website" "http://localhost:3000/"
   check_service_health "console" "http://localhost:3020/"
+  check_service_health "workbench" "http://localhost:3060/api/health"
+  check_service_health "workbench-bff" "http://localhost:3061/healthz"
   check_service_health "admin" "http://localhost:3030/"
   check_service_health "opera" "http://localhost:3040/"
   check_service_health "accounts" "http://localhost:3080/"

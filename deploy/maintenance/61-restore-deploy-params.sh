@@ -109,6 +109,8 @@ restore_required "$BACKUP_DIR/runtime/.env.admin-bff" "$RUNTIME_DIR/.env.admin-b
 restore_required "$BACKUP_DIR/runtime/.env.platform-api" "$RUNTIME_DIR/.env.platform-api"
 restore_required "$BACKUP_DIR/runtime/.env.opera-bff" "$RUNTIME_DIR/.env.opera-bff"
 restore_required "$BACKUP_DIR/runtime/.env.arche-bff" "$RUNTIME_DIR/.env.arche-bff"
+restore_required "$BACKUP_DIR/runtime/.env.workbench" "$RUNTIME_DIR/.env.workbench"
+restore_required "$BACKUP_DIR/runtime/.env.workbench-bff" "$RUNTIME_DIR/.env.workbench-bff"
 
 # 站点接管的现场档位（docs/50-deployment/14-site-takeover.md）。optional：没有它时
 # 20-sync-nginx-config.sh 按仓内默认渲染，那是安全的一档。
