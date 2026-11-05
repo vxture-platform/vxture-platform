@@ -124,6 +124,7 @@ const OIDC_CLIENT_SECRET_HASH_KEYS = new Set([
 // .env.auth-bff (above) vs merely allowed (here). Keeping a product here is a
 // statement that its RP is not live yet, which is a judgement, not an inventory.
 const OIDC_FUTURE_APP_HASH_KEYS = new Set([
+  "OIDC_CLIENT_SECRET_HASH_WORKBENCH",
   // opera = Capability Console shell, second workforce RP (product_250 M-4
   // batch C); local RP on the deploy host like admin. Becomes REQUIRED (move to
   // OIDC_CLIENT_SECRET_HASH_KEYS) when the opera stack first deploys.
@@ -274,6 +275,7 @@ const ENV_FILE_RULES = [
       // beta base URLs (optional until beta deployment is live)
       "RUYIN_BETA_BASE_URL",
       "RUNOS_BETA_BASE_URL",
+      "WORKBENCH_BASE_URL",
       "ATLAS_BETA_BASE_URL",
       "ARDA_BETA_BASE_URL",
       // tailnet webhook delivery target (product_230 §3.1): empty = seed falls
@@ -542,6 +544,61 @@ const ENV_FILE_RULES = [
     ]),
   },
   {
+    label: "workbench portal env",
+    actual: `${RUNTIME_DIR}/.env.workbench`,
+    example: `${WORKER_DIR}/.env.workbench.example`,
+    requiredActual: STRICT_RUNTIME,
+    requiredExample: true,
+    allowedKeys: new Set([
+      "NODE_ENV",
+      "PORT",
+      "WORKBENCH_SAME_ORIGIN_BFF",
+      "WORKBENCH_SAME_ORIGIN_CATALOG",
+      "WORKBENCH_WEBSITE_URL",
+      "WORKBENCH_CONSOLE_URL",
+      "WORKBENCH_HOME_COPY_FILE",
+    ]),
+    placeholderOptionalKeys: new Set(["WORKBENCH_HOME_COPY_FILE"]),
+  },
+  {
+    label: "workbench-bff env",
+    actual: `${RUNTIME_DIR}/.env.workbench-bff`,
+    example: `${WORKER_DIR}/.env.workbench-bff.example`,
+    requiredActual: STRICT_RUNTIME,
+    requiredExample: true,
+    forbidsClientSecretHashes: true,
+    // DB/Redis are intentionally scoped here instead of injecting platform.env.
+    allowedKeys: new Set([
+      "NODE_ENV",
+      "WORKBENCH_BFF_PORT",
+      "WORKBENCH_BASE_URL",
+      "OIDC_ISSUER",
+      "OIDC_BACKCHANNEL_ISSUER",
+      "OIDC_CLIENT_ID",
+      "OIDC_CLIENT_SECRET",
+      "RP_COOKIE_INSECURE",
+      "DATABASE_URL",
+      "REPORTING_RO_DATABASE_URL",
+      "REDIS_URL",
+    ]),
+    forbiddenKeys: new Set([
+      "IDP_INTERNAL_TOKEN",
+      "AUTH_INTERNAL_TOKEN",
+      "JWT_SECRET",
+      "JWT_REFRESH_SECRET",
+    ]),
+    requiredKeys: new Set([
+      "WORKBENCH_BASE_URL",
+      "WORKBENCH_BFF_PORT",
+      "OIDC_ISSUER",
+      "OIDC_CLIENT_ID",
+      "OIDC_CLIENT_SECRET",
+      "DATABASE_URL",
+      "REDIS_URL",
+    ]),
+    placeholderOptionalKeys: new Set(["REPORTING_RO_DATABASE_URL"]),
+  },
+  {
     label: "platform-api env",
     actual: `${RUNTIME_DIR}/.env.platform-api`,
     example: `${WORKER_DIR}/.env.platform-api.example`,
@@ -640,6 +697,8 @@ const RUNTIME_SECRET_FILE_RULES = [
 ];
 
 const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
+  ".env.workbench",
+  ".env.workbench-bff",
   ".env",
   ".env.auth-bff",
   ".env.gateway-bff",
@@ -659,6 +718,11 @@ const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
 ];
 
 const COMPOSE_SNIPPETS = [
+  { service: "workbench", snippet: "/srv/vxture/runtime/.env.workbench" },
+  {
+    service: "workbench-bff",
+    snippet: "/srv/vxture/runtime/.env.workbench-bff",
+  },
   {
     service: "auth-bff",
     snippet: "/srv/vxture/runtime/.env.auth-bff",
@@ -686,6 +750,8 @@ const COMPOSE_SNIPPETS = [
 ];
 
 const GENERATE_ENV_REQUIRED_GLOBAL_TOKENS = [
+  ".env.workbench.example",
+  ".env.workbench-bff.example",
   "sync_env_from_example",
   "ensure_plain_secret_file",
   ".env.example",

@@ -26,6 +26,7 @@ const SCRIPT = join(HERE, "classify-changes.mjs");
 const ALL_IMAGES = [
   "platform_website",
   "platform_console",
+  "platform_workbench",
   "platform_admin",
   "platform_opera",
   "platform_arche",
@@ -38,6 +39,7 @@ const ALL_IMAGES = [
   "platform_bff-opera",
   "platform_bff-arche",
   "platform_bff-platform-api",
+  "platform_bff-workbench",
 ];
 
 /** 运行分类器并把 `key=value` 行解析为对象。 */
@@ -170,7 +172,24 @@ test("image set: services/identity/organization → 依赖它的 BFF（回归 #2
     "platform_bff-website",
     "platform_bff-console",
     "platform_bff-platform-api",
+    "platform_bff-workbench",
   ]);
+});
+
+test("image set: workbench sources rebuild only their own image", () => {
+  assert.deepEqual(builtImages(["portals/workbench/src/app/page.tsx"]), [
+    "platform_workbench",
+  ]);
+  assert.deepEqual(builtImages(["bff/workbench/src/main.ts"]), [
+    "platform_bff-workbench",
+  ]);
+});
+
+test("image set: shared workspace panel rebuilds Console and Workbench", () => {
+  assert.deepEqual(
+    builtImages(["packages/platform/workspace-ui/src/index.ts"]),
+    ["platform_console", "platform_workbench"],
+  );
 });
 
 test("image set: bff/auth-bff → 仅 bff-auth", () => {

@@ -119,6 +119,28 @@ function setKey(root, relative, key, value) {
   );
 }
 
+test("Workbench rejects platform-wide secrets in its isolated runtime", (t) => {
+  const root = fixture(t);
+  setKey(
+    root,
+    "runtime/.env.workbench-bff",
+    "IDP_INTERNAL_TOKEN",
+    "fixture-only-private-token",
+  );
+  const result = audit(root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /env\/forbidden-key .*IDP_INTERNAL_TOKEN/u);
+  assert.equal(result.output.includes("fixture-only-private-token"), false);
+});
+
+test("Workbench OIDC secret must be provisioned before deployment", (t) => {
+  const root = fixture(t);
+  setKey(root, "runtime/.env.workbench-bff", "OIDC_CLIENT_SECRET", "");
+  const result = audit(root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /env\/runtime-placeholder .*OIDC_CLIENT_SECRET/u);
+});
+
 // ============================================================================
 // Supported credentials and optional seed projection
 // ============================================================================

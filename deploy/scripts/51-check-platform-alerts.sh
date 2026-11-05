@@ -184,6 +184,8 @@ check_runtime_files() {
   # 文件只会在下次 deploy 被 30 拦下。三处清单（30 / 40 / 51）由 lib/runtime-file-lists.test.sh 钉成一致。
   check_required_file "$RUNTIME_DIR/.env.opera-bff"
   check_required_file "$RUNTIME_DIR/.env.arche-bff"
+  check_required_file "$RUNTIME_DIR/.env.workbench"
+  check_required_file "$RUNTIME_DIR/.env.workbench-bff"
   check_required_file "$RUNTIME_DIR/.env.platform-api"
   check_required_file "$RUNTIME_DIR/secrets/platform.env"
   check_required_file "$RUNTIME_DIR/secrets/platform-mail.env"
@@ -248,7 +250,7 @@ check_container_health() {
     vx-platform-auth-bff vx-platform-website-bff \
     vx-platform-console-bff vx-platform-admin-bff vx-platform-gateway-bff \
     vx-platform-api vx-platform-website vx-platform-console vx-platform-admin \
-    vx-platform-accounts; do
+    vx-platform-accounts vx-platform-workbench vx-platform-workbench-bff; do
     if ! docker inspect "$name" >/dev/null 2>&1; then
       high "容器缺失：$name"
       continue

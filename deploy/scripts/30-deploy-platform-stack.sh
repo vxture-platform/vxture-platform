@@ -58,6 +58,8 @@ check_file "$RUNTIME_DIR/.env.admin-bff"
 check_file "$RUNTIME_DIR/.env.opera-bff"
 # arche 与 opera 同一个病：后加的 RP，缺文件不拦。
 check_file "$RUNTIME_DIR/.env.arche-bff"
+check_file "$RUNTIME_DIR/.env.workbench"
+check_file "$RUNTIME_DIR/.env.workbench-bff"
 check_file "$RUNTIME_DIR/.env.platform-api"
 
 echo "  密钥文件:"

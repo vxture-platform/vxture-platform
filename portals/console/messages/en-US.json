@@ -415,7 +415,6 @@
     "switchWorkspace": "Switch workspace",
     "platformMode": "Platform",
     "tenantMode": "Tenant",
-    "appLauncher": "App launcher",
     "featureOverview": "Feature overview",
     "quickPreferences": "Quick preferences",
     "workspaceActions": "Workspace actions",
@@ -437,16 +436,6 @@
     "openNavigation": "Open navigation",
     "closeNavigation": "Close navigation",
     "collapseNavigation": "Collapse navigation",
-    "views": {
-      "appcenter": {
-        "label": "App Center",
-        "description": "Subscribed apps · Quick access"
-      },
-      "console": {
-        "label": "Console",
-        "description": "Management view · Account & operations"
-      }
-    },
     "tenantType": {
       "individual": "Personal",
       "company": "Organization"
@@ -2170,7 +2159,6 @@
     "loading": {
       "label": "Loading"
     },
-    "featureBoards": "Feature boards",
     "searchPlaceholder": "Search members, subscriptions, settings…",
     "search": {
       "title": "Global search",
@@ -2203,16 +2191,6 @@
     "densityComfy": "Comfortable",
     "switchUser": "Switch user",
     "signOut": "Sign out",
-    "views": {
-      "appcenter": {
-        "name": "Agents Center",
-        "desc": "Subscribed apps · quick access"
-      },
-      "console": {
-        "name": "Tenant Console",
-        "desc": "Management · data & operations"
-      }
-    },
     "sidebar": {
       "expandNav": "Expand navigation",
       "collapseNav": "Collapse navigation",
@@ -2221,27 +2199,6 @@
     },
     "drawer": {
       "openCenter": "Open message center"
-    },
-    "appcenter": {
-      "title": "Agents",
-      "desc": "Agents this workspace subscribes to — open and use. Recommendations below.",
-      "products": {
-        "title": "Subscribed",
-        "desc": "Listed from this workspace's active subscriptions, trials included.",
-        "empty": "This workspace has no active product subscription yet.",
-        "browse": "View subscriptions",
-        "unavailable": "Subscribed products are temporarily unavailable. Please refresh.",
-        "trialing": "Trial",
-        "open": "Open",
-        "detail": "Product page",
-        "versionAt": "v {version} at {date}"
-      },
-      "reco": {
-        "title": "Popular",
-        "desc": "Agents you haven't subscribed to — read the product page or subscribe directly.",
-        "learnMore": "Product page",
-        "subscribe": "Subscribe"
-      }
     },
     "realNameVerified": "Verified",
     "missingPhone": "No phone",
@@ -2255,9 +2212,21 @@
     "payBill": "Pay invoice",
     "trafficUsage": "Traffic usage",
     "usageLimit": "Usage limits",
-    "usageQuota": "Usage Quota",
+    "usageQuota": "Resource Quotas",
     "storageQuota": "Storage",
     "aiCredits": "AI Credits",
+    "pointsUnit": "credits",
+    "resourceUnavailable": "Unavailable",
+    "resourceTotalQuota": "Total quota",
+    "resourceUsageSummary": "Used {used} · {percent}%",
+    "accountBalance": "Account balance",
+    "accountBalanceHint": "Excludes platform vouchers",
+    "monthlyBill": "Monthly bill",
+    "tenantPanelInfo": "Tenant details",
+    "tenantPanelInfoHint": "Profile and verification",
+    "scopeDefaultWorkspace": "Default workspace",
+    "scopeEnterTenant": "Enter this tenant",
+    "switchScopeHint": "Switch tenant or workspace",
     "switchScope": "Switch scope",
     "organization": "Organization",
     "workspace": "Workspace",
@@ -2287,7 +2256,9 @@
       "reactivate": "Cancel deletion and reactivate",
       "keep": "Keep deleting and sign out",
       "error": "Something went wrong. Please try again."
-    }
+    },
+    "businessWorkbench": "Business workspace",
+    "openBusinessWorkbench": "Open business workspace (new tab)"
   },
   "sidebar": {
     "ariaLabel": "Console navigation",

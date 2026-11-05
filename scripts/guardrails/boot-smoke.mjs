@@ -87,12 +87,27 @@ const FAKE_ENV = {
 const redisOverride = process.env["REDIS_URL"]
   ? { REDIS_URL: process.env["REDIS_URL"] }
   : {};
+// Keep this RP's identity isolated from every other BFF's smoke configuration.
+const targetEnv =
+  label === "workbench-bff"
+    ? {
+        NODE_ENV: FAKE_ENV.NODE_ENV,
+        BOOT_SMOKE: FAKE_ENV.BOOT_SMOKE,
+        DATABASE_URL: FAKE_ENV.DATABASE_URL,
+        REDIS_URL: FAKE_ENV.REDIS_URL,
+        WORKBENCH_BASE_URL: "https://workbench.smoke.example.com",
+        WORKBENCH_BFF_PORT: "3061",
+        OIDC_ISSUER: "https://accounts.smoke.example.com",
+        OIDC_CLIENT_ID: "workbench",
+        OIDC_CLIENT_SECRET: "boot-smoke-workbench-client-secret",
+      }
+    : FAKE_ENV;
 const child = spawn(process.execPath, [abs], {
   env: {
     PATH: process.env["PATH"],
     HOME: process.env["HOME"],
     SystemRoot: process.env["SystemRoot"],
-    ...FAKE_ENV,
+    ...targetEnv,
     ...redisOverride,
   },
   stdio: ["ignore", "pipe", "pipe"],

@@ -1251,23 +1251,6 @@ export interface SubscribedProduct {
   suspension: SubscriptionSuspension | null;
 }
 
-export interface RecommendedProduct {
-  productId: string;
-  productCode: string;
-  productName: string;
-  productNick: string | null;
-  description: string | null;
-  releaseVersion: string | null;
-  /** 产品最近一次发布的时刻(ISO)。 */
-  releasedAt: string | null;
-  iconUrl: string | null;
-  tags: string[];
-  /** 各周期最低价(元字符串)。`"0.00"` 就是 0 元,展示与其它价格同一格式,不说成「免费」。 */
-  minPrice: string;
-  currency: string;
-  favorite: boolean;
-}
-
 // ── payment page (product_321 §4.1) ─────────────────────────────────────────
 
 export interface PaymentChannelInfo {
@@ -1694,15 +1677,6 @@ export async function fetchSubscribedProducts(): Promise<SubscribedProduct[]> {
       (item as { maintenance?: ProductMaintenance | null }).maintenance ?? null;
   }
   return list;
-}
-
-/** 「热门推荐」读:未订阅的产品。消费方是智能体页(shell 的 AppCenter)。 */
-export async function fetchRecommendedProducts(): Promise<
-  RecommendedProduct[]
-> {
-  return readJsonStrict<RecommendedProduct[]>(
-    "/api/subscription/recommended-products",
-  );
 }
 
 /** 收藏开关（★，幂等）。favorite=true 收藏 / false 取消。 */

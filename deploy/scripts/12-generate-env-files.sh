@@ -168,6 +168,8 @@ sync_env_from_example "$WORKER_DIR/.env.admin-bff.example" "$PLATFORM_DIR/.env.a
 # 30-deploy 的 check_file 才会第一次说「缺文件」。
 sync_env_from_example "$WORKER_DIR/.env.opera-bff.example" "$PLATFORM_DIR/.env.opera-bff" "opera-bff env"
 sync_env_from_example "$WORKER_DIR/.env.arche-bff.example" "$PLATFORM_DIR/.env.arche-bff" "arche-bff env"
+sync_env_from_example "$WORKER_DIR/.env.workbench.example" "$PLATFORM_DIR/.env.workbench" "workbench portal env"
+sync_env_from_example "$WORKER_DIR/.env.workbench-bff.example" "$PLATFORM_DIR/.env.workbench-bff" "workbench-bff env"
 sync_env_from_example "$WORKER_DIR/.env.platform-api.example" "$PLATFORM_DIR/.env.platform-api" "platform-api env"
 sync_env_from_example "$WORKER_DIR/.env.gateway-bff.example" "$PLATFORM_DIR/.env.gateway-bff" "gateway-bff env"
 

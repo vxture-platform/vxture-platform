@@ -17,24 +17,18 @@ import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { consoleDomains } from "@/config/navigation";
 import {
-  fetchBillingSummary,
+  fetchCredits,
   fetchInbox,
   fetchInboxUnreadCount,
-  fetchMyApps,
   fetchMySubscriptions,
   fetchMyWorkspaces,
   fetchMyTickets,
   fetchQuotaUsage,
-  fetchRecommendedProducts,
-  fetchSubscribedProducts,
   markInboxAllRead,
   markInboxRead,
   type ConsoleQuotaUsage,
   type ConsoleTicket,
-  type RecommendedProduct,
-  type SubscribedProduct,
   type InboxMessage,
-  type ProductAppTile,
 } from "@/api/console-bff";
 import { formatInboxTime, inboxPresentation } from "@/lib/inbox-format";
 import { useDerivedTodos } from "@/features/todos/useDerivedTodos";
@@ -47,16 +41,12 @@ import {
   Skeleton,
   type ShellNavSection,
 } from "@vxture/design-system";
-import type { ShellView, ShellDrawerType } from "../shell/types";
-import {
-  ConsoleHeader,
-  type ConsoleHeaderViewOption,
-} from "../header/ConsoleHeader";
+import type { ShellDrawerType } from "../shell/types";
+import { ConsoleHeader } from "../header/ConsoleHeader";
 import type { NavSearchEntry } from "../header/useGlobalSearch";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
 import { HelpDrawer } from "./HelpDrawer";
 import { isOpenTicket } from "@/lib/ticket-state";
-import { AppCenter } from "./AppCenter";
 import { buildWebsiteDocsUrl } from "@/lib/website-entry";
 
 /* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template 已随批 D
@@ -64,12 +54,6 @@ import { buildWebsiteDocsUrl } from "@/lib/website-entry";
  * 锚点——用数据属性而不是继续拿类名当选择器，类名以后可以随便改。 */
 const CONTENT_SCROLL = "min-w-0 flex-1 scroll-smooth overflow-y-auto";
 const CONTENT_SCROLL_ATTR = "data-content-scroll";
-
-/* nav 收起态已迁到 cookie（见 (console)/layout.tsx 与 nav-preference.constants.ts），不再
- * 列在这里——留一个用不到的 key 会让下一个人以为它还是权威来源。 */
-const LS = {
-  view: "vx-console-view",
-};
 
 /**
  * 注入给 `ShellSidebarNav` 的链接件。
@@ -121,7 +105,6 @@ export function ConsoleAppShell({
   const tDrawer = useTranslations("drawer");
   const locale = useLocale();
 
-  const [view, setViewState] = useState<ShellView>("console");
   /* 初始值由服务端从 cookie 读出后传入，首帧即最终态。写死 false 再在 effect 里
    * 纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
    * 那个时序问题无法在客户端解决。 */
@@ -198,27 +181,13 @@ export function ConsoleAppShell({
     if (drawer !== "help") return;
     void loadHelpTickets();
   }, [drawer, loadHelpTickets]);
-  const [billing, setBilling] = useState<{ amount: number; currency: string }>({
-    amount: 0,
-    currency: "CNY",
-  });
+  const [accountBalance, setAccountBalance] = useState<{
+    balance: string;
+    currency: string;
+  } | null>(null);
   // Active subscription plan name; null until it loads or when the tenant has
   // no subscription at all — the header falls back to its free-plan label then.
   const [planName, setPlanName] = useState<string | null>(null);
-  /* 应用中心的产品磁贴。null = 还没读到，productsFailed 区分「加载中」与「读取
-   * 失败」——空数组是真实的「没订阅任何产品」，不能拿它兜故障。 */
-  const [productTiles, setProductTiles] = useState<ProductAppTile[] | null>(
-    null,
-  );
-  const [productsFailed, setProductsFailed] = useState(false);
-  /* 智能体页的两路补充数据。null = 没读到:磁贴退回只有名字与入口的形态、推荐块整块
-     不出现——它们是**补充**,读不到不该把这一页拖成读取失败。 */
-  const [subscribedProducts, setSubscribedProducts] = useState<
-    SubscribedProduct[] | null
-  >(null);
-  const [recommendedProducts, setRecommendedProducts] = useState<
-    RecommendedProduct[] | null
-  >(null);
   /* 配额与当前工作空间原先由 header 自己取。上提到这里是因为它们现在同时喂
    * 「当前范围」面板与侧栏页脚——留在 header 里会让同一份数据被拉两遍。 */
   const [quotaUsage, setQuotaUsage] = useState<ConsoleQuotaUsage | null>(null);
@@ -227,52 +196,18 @@ export function ConsoleAppShell({
   const tenantId = session.tenant?.id;
   useEffect(() => {
     let alive = true;
+    setAccountBalance(null);
 
-    const loadBilling = async () => {
-      try {
-        // 「本月费用」= 本自然月实付合计（收付实现制，owner 2026-09-03）：年付在付款
-        // 那个月记整年，之后各月为 0 是对的；不再拿当前订阅的周期价冒充月费。
-        const [summary, subs] = await Promise.all([
-          fetchBillingSummary(),
-          fetchMySubscriptions(),
-        ]);
-        if (!alive) return;
-        if (summary) {
-          setBilling({
-            amount: Number(summary.paidThisMonth ?? 0),
-            currency: summary.currency,
-          });
-        }
-        const active = subs.find((s) => s.status === "active") ?? subs[0];
-        if (active) setPlanName(active.planName || null);
-      } catch {
-        /* fallback 0 */
-      }
+    const loadBalance = async () => {
+      const value = await fetchCredits();
+      if (alive) setAccountBalance(value);
     };
 
-    const loadApps = async () => {
-      try {
-        const tiles = await fetchMyApps();
-        if (!alive) return;
-        setProductTiles(tiles);
-        setProductsFailed(false);
-      } catch {
-        if (!alive) return;
-        setProductTiles(null);
-        setProductsFailed(true);
-      }
-    };
-
-    /* 智能体页的两路补充读:订阅给磁贴补档位/周期/到期(磁贴只有入口),推荐是引导位。
-       两者都**不阻断页面**——读不到就少画一块,不把整页拖成读取失败。 */
-    const loadAgentExtras = async () => {
-      const [subs, recos] = await Promise.allSettled([
-        fetchSubscribedProducts(),
-        fetchRecommendedProducts(),
-      ]);
+    const loadPlan = async () => {
+      const subs = await fetchMySubscriptions();
       if (!alive) return;
-      setSubscribedProducts(subs.status === "fulfilled" ? subs.value : null);
-      setRecommendedProducts(recos.status === "fulfilled" ? recos.value : null);
+      const active = subs.find((s) => s.status === "active") ?? subs[0];
+      setPlanName(active?.planName || null);
     };
 
     const loadQuota = async () => {
@@ -289,15 +224,9 @@ export function ConsoleAppShell({
       setWorkspaceName(current?.workspaceName ?? null);
     };
 
-    // These reads are independent — fire them concurrently instead of chaining
-    // awaits, so the shell's billing/apps/quota data lands after one
-    // round-trip rather than several. allSettled, not all: one failing read must
-    // not blank the others (fetchMyApps / fetchQuotaUsage are strict reads
-    // that reject on failure; the rest can still reject on a network error).
     void Promise.allSettled([
-      loadBilling(),
-      loadApps(),
-      loadAgentExtras(),
+      loadBalance(),
+      loadPlan(),
       loadQuota(),
       loadWorkspace(),
     ]);
@@ -307,25 +236,6 @@ export function ConsoleAppShell({
     };
   }, [tenantId]);
 
-  // hydrate persisted UI state (client-only, avoids SSR mismatch)
-  useEffect(() => {
-    try {
-      const v = window.localStorage.getItem(LS.view);
-      if (v === "appcenter" || v === "console") setViewState(v);
-      // nav 收起态不在这里读：已由服务端经 cookie 传入（见上）。
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const setView = (v: ShellView) => {
-    setViewState(v);
-    try {
-      window.localStorage.setItem(LS.view, v);
-    } catch {
-      /* ignore */
-    }
-  };
   const toggleNav = () =>
     setNavCollapsed((c) => {
       const n = !c;
@@ -384,23 +294,6 @@ export function ConsoleAppShell({
     [visibleDomains, tSidebar, locale],
   );
 
-  /* launcher 的两个目的地。icon 现在是 DS IconName（原先是 Phosphor class
-   * 串 "ph-squares-four"，随字体图标一起退役）。 */
-  const viewOptions: ConsoleHeaderViewOption[] = [
-    {
-      id: "appcenter",
-      name: tShell("views.appcenter.name"),
-      desc: tShell("views.appcenter.desc"),
-      icon: "squares-four",
-    },
-    {
-      id: "console",
-      name: tShell("views.console.name"),
-      desc: tShell("views.console.desc"),
-      icon: "settings",
-    },
-  ];
-
   /* 搜索面板的「页面」来源：拍平已过授权过滤的导航项。用 navSections 而不是
    * 原始注册表——用户搜不到的页面不该出现在结果里。 */
   const navEntries: NavSearchEntry[] = useMemo(
@@ -422,10 +315,17 @@ export function ConsoleAppShell({
     collapseAllGroups: tShell("sidebar.collapseAllGroups"),
   };
 
-  const currencySymbol =
-    billing.currency === "USD" ? "$" : billing.currency === "EUR" ? "€" : "¥";
-  const billingAmount = Number(billing.amount ?? 0);
-  const billingLabel = `${currencySymbol}${(Number.isFinite(billingAmount) ? billingAmount : 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // No postpaid outstanding-balance source is available yet. Paid totals and
+  // prepaid subscription bills must never substitute for the amount due.
+  const monthlyBillLabel = "—";
+  const balanceAmount = accountBalance ? Number(accountBalance.balance) : NaN;
+  const balanceLabel =
+    accountBalance && Number.isFinite(balanceAmount)
+      ? new Intl.NumberFormat(locale, {
+          style: "currency",
+          currency: accountBalance.currency,
+        }).format(balanceAmount)
+      : "—";
 
   /* 抽屉条目 = 站内收件箱最近 8 条（P2-g）；点开去消息带的链接，没有链接去「待办与消息」。
      owner 2026-09-09:**不再按待办去重**——与页面同一口径。抽屉只放 8 条,藏掉一条的
@@ -462,33 +362,6 @@ export function ConsoleAppShell({
     messagesTitle: tDrawer("notifications.messagesTitle"),
   };
 
-  /* 智能体页(owner 2026-09-07:只装「已订阅产品」与「热门推荐」两块)。
-     原来的「控制台板块」入口去掉了——那是控制台的内容,它的侧栏里本来就有。 */
-  const appCenterLabels = {
-    title: tShell("appcenter.title"),
-    desc: tShell("appcenter.desc"),
-    productsTitle: tShell("appcenter.products.title"),
-    productsDesc: tShell("appcenter.products.desc"),
-    productsEmpty: tShell("appcenter.products.empty"),
-    productsBrowse: tShell("appcenter.products.browse"),
-    productsUnavailable: tShell("appcenter.products.unavailable"),
-    trialing: tShell("appcenter.products.trialing"),
-    open: tShell("appcenter.products.open"),
-    productDetail: tShell("appcenter.products.detail"),
-    versionAt: tShell("appcenter.products.versionAt"),
-    recoTitle: tShell("appcenter.reco.title"),
-    recoDesc: tShell("appcenter.reco.desc"),
-    recoLearnMore: tShell("appcenter.reco.learnMore"),
-    recoSubscribe: tShell("appcenter.reco.subscribe"),
-  };
-
-  /* 站内入口：切回控制台视图再路由。登记了主页的产品不经这里——AppCenter 直接
-   * 开新标签。 */
-  const openInConsole = (href: string) => {
-    setView("console");
-    navigate(href);
-  };
-
   if (status === "loading") {
     return (
       <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -499,7 +372,6 @@ export function ConsoleAppShell({
           centerAlign="end"
           leading={
             <>
-              <Skeleton className="size-icon-xl rounded-lg" />
               <Skeleton className="h-icon-lg w-media-xs" />
             </>
           }
@@ -545,9 +417,6 @@ export function ConsoleAppShell({
       className="flex h-screen flex-col overflow-hidden bg-background text-foreground"
     >
       <ConsoleHeader
-        view={view}
-        setView={setView}
-        viewOptions={viewOptions}
         openDrawer={(type) => setDrawer(type)}
         unreadCount={badgeCount}
         onNavigate={navigate}
@@ -555,34 +424,19 @@ export function ConsoleAppShell({
         navEntries={navEntries}
         quotaUsage={quotaUsage}
         workspaceName={workspaceName}
-        billingLabel={billingLabel}
+        monthlyBillLabel={monthlyBillLabel}
+        balanceLabel={balanceLabel}
         planName={planName}
       />
 
-      {view === "appcenter" ? (
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
-            <ShellPageContainer>
-              <AppCenter
-                products={productTiles}
-                productsFailed={productsFailed}
-                subscriptions={subscribedProducts}
-                recommended={recommendedProducts}
-                onNavigate={openInConsole}
-                labels={appCenterLabels}
-              />
-            </ShellPageContainer>
-          </main>
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* DS 外壳 + DS 导航内容：宽度状态机归 ShellSidebarFrame（w-sidebar-*），
-           * 内容归 ShellSidebarNav。原先外层是 shell-template.css 的 .sidebar，
-           * 它自带 padding 与另一套宽度，跟导航内容自己的 L1 p-xs 叠加，这正是
-           * 两个门户间距对不齐的来源（批 D：.sidebar 已随 shell-template 退役）。 */}
-          <ShellSidebarFrame mode={navCollapsed ? "collapsed" : "expanded"}>
-            <ShellSidebarNav
-              /* owner 2026-09-08:侧栏头部不显示分组名(与设计不符) —— 这条仍然有效,
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* DS 外壳 + DS 导航内容：宽度状态机归 ShellSidebarFrame（w-sidebar-*），
+         * 内容归 ShellSidebarNav。原先外层是 shell-template.css 的 .sidebar，
+         * 它自带 padding 与另一套宽度，跟导航内容自己的 L1 p-xs 叠加，这正是
+         * 两个门户间距对不齐的来源（批 D：.sidebar 已随 shell-template 退役）。 */}
+        <ShellSidebarFrame mode={navCollapsed ? "collapsed" : "expanded"}>
+          <ShellSidebarNav
+            /* owner 2026-09-08:侧栏头部不显示分组名(与设计不符) —— 这条仍然有效,
                  变的只是怎么实现。
 
                  原先的做法是传 `domainName=""`,理由写着「不改 DS——那一格是 flex-1
@@ -593,22 +447,21 @@ export function ConsoleAppShell({
                  (owner 2026-09-18)。
 
                  所以这里现在**什么都不传**。留着空串只会让人以为它有特殊作用。 */
-              sections={navSections}
-              collapsed={navCollapsed}
-              onToggleCollapsed={toggleNav}
-              isActive={(href) =>
-                href === "/" ? pathname === "/" : pathname.startsWith(href)
-              }
-              storageKeyPrefix="vx-console-nav"
-              linkComponent={NavLink}
-              labels={sidebarLabels}
-            />
-          </ShellSidebarFrame>
-          <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
-            <ShellPageContainer>{children}</ShellPageContainer>
-          </main>
-        </div>
-      )}
+            sections={navSections}
+            collapsed={navCollapsed}
+            onToggleCollapsed={toggleNav}
+            isActive={(href) =>
+              href === "/" ? pathname === "/" : pathname.startsWith(href)
+            }
+            storageKeyPrefix="vx-console-nav"
+            linkComponent={NavLink}
+            labels={sidebarLabels}
+          />
+        </ShellSidebarFrame>
+        <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
+          <ShellPageContainer>{children}</ShellPageContainer>
+        </main>
+      </div>
 
       {drawer === "notifications" && (
         <TemplateDrawer
@@ -620,7 +473,7 @@ export function ConsoleAppShell({
               .catch(() => {});
           }}
           canMarkAllRead={unreadCount > 0}
-          onOpenCenter={() => openInConsole("/inbox")}
+          onOpenCenter={() => navigate("/inbox")}
           todos={drawerTodos}
           notifications={drawerNotifs}
           labels={drawerLabels}
@@ -630,7 +483,7 @@ export function ConsoleAppShell({
       {drawer === "help" && (
         <HelpDrawer
           onClose={() => setDrawer(null)}
-          onNavigate={openInConsole}
+          onNavigate={navigate}
           tickets={helpTickets}
           loading={helpLoading}
           failed={helpFailed}

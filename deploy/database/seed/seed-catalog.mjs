@@ -2280,6 +2280,7 @@ export async function seedCatalog(client) {
     // Governance plane (operator shell, highest trust). Prod hostname is
     // repo-external by policy; arrives via ARCHE_BASE_URL runtime env.
     arche: process.env.ARCHE_BASE_URL || "http://localhost:3050",
+    workbench: process.env.WORKBENCH_BASE_URL || "https://ruyin.work",
     // ruyin = NEW client-side product surface (ruyin.vxture.com); the legacy
     // cross-domain RP at ruyin.ai is `umbra` (product_300 §2, U line).
     ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3900",
@@ -2375,6 +2376,17 @@ export async function seedCatalog(client) {
       redirectUris: [`${B.arche}/auth/callback`],
       scopes: ["openid", "profile", "admin"],
       postLogoutUris: [`${B.arche}/`, postLogout],
+    },
+    // Independent customer web RP; never change the public native Ruyin clients.
+    {
+      clientId: "workbench",
+      kind: "platform",
+      name: "Ruyin Work",
+      displayName: "Ruyin Work",
+      realm: "customer",
+      redirectUris: [`${B.workbench}/auth/callback`],
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${B.workbench}/auth/signed-out`],
     },
     // platform-api — S2S-only confidential client (#562). NOT an RP: no login,
     // no callback, no SLO. Exists so the unattended model-health watchdog can
@@ -3211,9 +3223,13 @@ export async function seedCatalog(client) {
     values (null, null, 500000, 500000, 500000, 500000, 0, 0, timestamptz '2026-01-01 00:00:00+00', $1)
     on conflict ((coalesce(provider_code, '')), (coalesce(model_code, '')), effective_from) do nothing
   `,
-    ["默认档：2K tokens = 1 credit（product_220 §4.2 基线）；缓存读写同价、rerank/parse 暂为 0，运营按需另插行"],
+    [
+      "默认档：2K tokens = 1 credit（product_220 §4.2 基线）；缓存读写同价、rerank/parse 暂为 0，运营按需另插行",
+    ],
   );
-  console.log("✓  metering — token_credit_rates 默认档（2K tokens = 1 credit）");
+  console.log(
+    "✓  metering — token_credit_rates 默认档（2K tokens = 1 credit）",
+  );
 
   // ── 积分换算配置（ADR-014）：锚价 ¥0.20/credit + 目标毛利 70% ────────────────
   // 单例一行，admin 可随时调。锚价 micro-CNY/credit：¥0.20 = 200000。目标毛利 bps：70% = 7000。
@@ -3225,7 +3241,9 @@ export async function seedCatalog(client) {
     on conflict (singleton) do nothing
   `,
   );
-  console.log("✓  metering — credit_pricing_config（锚价 ¥0.20 / 目标毛利 70%）");
+  console.log(
+    "✓  metering — credit_pricing_config（锚价 ¥0.20 / 目标毛利 70%）",
+  );
 
   // ── addon packs (加油包/扩展包目录,owner 2026-08-20 用量配额线) ──────────
   // 初步预置定价(参考市场,owner 授权;运营侧接管后在 admin 调整——upsert 仅

@@ -1,0 +1,7 @@
+# @package @vxture/workbench
+# @layer Presentation
+# @category asset
+# @author AI-Generated
+# @date 2026-11-05
+User-agent: *
+Disallow: /
