@@ -110,14 +110,24 @@ export function filterApps(
 }
 
 /**
- * Keep a full three-card home selection without implying subscription eligibility.
- * @param apps - Real catalog entries in registry order.
- * @returns Available products first, then other catalog entries with their real status.
+ * Select up to three subscribed applications without filling with public products.
+ * @param apps - Current-workspace subscribed applications in registry order.
+ * @returns Available subscribed products first, capped at three.
  */
 export function homeApps(apps: readonly WorkApp[]): WorkApp[] {
   return apps
     .toSorted((left, right) => Number(right.available) - Number(left.available))
     .slice(0, 3);
+}
+
+/**
+ * Keep the version consistent in cards and details, including absent registry values.
+ * @param version - Optional release version from the product registry.
+ * @returns One v-prefixed version with the approved initial-release fallback.
+ */
+export function appVersion(version: string | null): string {
+  const value = version?.trim().replace(/^v/i, "").trim();
+  return `v${value || "1.0.0"}`;
 }
 
 // ============================================================================

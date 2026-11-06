@@ -105,4 +105,15 @@ export class BillingService {
   async getCreditBalance(tenantId: string): Promise<CreditRecord | null> {
     return this.billing.getCreditByTenantId(tenantId);
   }
+
+  /**
+   * Read outstanding postpaid receivables independently of amounts already paid.
+   * @param tenantId - Tenant authorized by the caller.
+   * @returns Current-month unpaid amounts grouped by currency.
+   */
+  getMonthlyPostpaidDue(
+    tenantId: string,
+  ): Promise<{ balance: string; currency: string }[]> {
+    return this.billing.getMonthlyPostpaidDue(tenantId);
+  }
 }

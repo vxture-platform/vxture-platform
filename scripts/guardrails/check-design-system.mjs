@@ -22,7 +22,8 @@ function adminTokenDefinitions() {
     for (const entry of readdirSync(dir)) {
       if (!entry.endsWith(".css")) continue;
       const text = readFileSync(`${dir}/${entry}`, "utf8");
-      for (const m of text.matchAll(/(--vx-admin-[a-z0-9-]+)\s*:/g)) names.add(m[1]);
+      for (const m of text.matchAll(/(--vx-admin-[a-z0-9-]+)\s*:/g))
+        names.add(m[1]);
     }
   } catch {
     // 目录不在（子集检出）→ 规则自动噤声，不误报。
@@ -240,13 +241,20 @@ function listDirs(dir) {
 function resolveDsManifest() {
   // 解析基点不能用仓根：根 package.json 不依赖设计包，只有门户依赖，而 pnpm 的
   // 严格布局下根目录没有那条链。从任一声明了该依赖的门户起算。
-  const bases = [ROOT, ...listDirs(path.join(ROOT, "portals")).map((d) => path.join(ROOT, "portals", d))];
+  const bases = [
+    ROOT,
+    ...listDirs(path.join(ROOT, "portals")).map((d) =>
+      path.join(ROOT, "portals", d),
+    ),
+  ];
   let cur = null;
   for (const base of bases) {
     const manifestPath = path.join(base, "package.json");
     if (!existsSync(manifestPath)) continue;
     try {
-      cur = path.dirname(createRequire(manifestPath).resolve("@vxture/design-system"));
+      cur = path.dirname(
+        createRequire(manifestPath).resolve("@vxture/design-system"),
+      );
       break;
     } catch {
       /* 该基点没装，换下一个 */
@@ -266,7 +274,9 @@ function resolveDsManifest() {
     }
     cur = path.dirname(cur);
   }
-  throw new Error("解析到了 @vxture/design-system 主入口，但上溯不到它的 package.json。");
+  throw new Error(
+    "解析到了 @vxture/design-system 主入口，但上溯不到它的 package.json。",
+  );
 }
 /**
  * 拆仓后本仓已无此文件，两条以它为键的规则（no-stale-package-style-exports /
@@ -1840,14 +1850,18 @@ if (activeViolations.length > 0) {
 
    发现死条目就红,并给出 `--update-baseline`。宁可让人删一行,不要留一张空头许可。 */
 const reproduced = new Set(
-  violations.filter((item) => baseline.has(signatureFor(item))).map(signatureFor),
+  violations
+    .filter((item) => baseline.has(signatureFor(item)))
+    .map(signatureFor),
 );
 const staleBaseline = [...baseline].filter((sig) => !reproduced.has(sig));
 if (staleBaseline.length > 0) {
-  console.error(`\nDesign System baseline has entries that no longer reproduce:\n`);
+  console.error(
+    `\nDesign System baseline has entries that no longer reproduce:\n`,
+  );
   for (const sig of staleBaseline) console.error(`- ${sig}`);
   console.error(
-    '\n这些条目在为一段不存在的债发许可。删掉它们，或跑 pnpm lint:design --update-baseline。\n',
+    "\n这些条目在为一段不存在的债发许可。删掉它们，或跑 pnpm lint:design --update-baseline。\n",
   );
   process.exit(1);
 }
@@ -2075,7 +2089,9 @@ function openingTagAt(content, start) {
 }
 
 function literalProp(tag, name) {
-  const m = new RegExp(`\\s${name}=(?:"([^"]*)"|\\{\\s*"([^"]*)"\\s*\\})`).exec(tag);
+  const m = new RegExp(`\\s${name}=(?:"([^"]*)"|\\{\\s*"([^"]*)"\\s*\\})`).exec(
+    tag,
+  );
   if (m) return m[1] ?? m[2] ?? "";
   /* `size={cond ? "lg" : "sm"}`：三元各分支的字符串字面量全是合法挡位就认——
      一个弹窗按形态在两个预设之间切换是合法的，没有字面量（变量、拼接）才算不可判定。 */
@@ -2111,16 +2127,28 @@ function findOverlayPresetViolations(file, content) {
     let problem = null;
     if (m[1] === "DialogForm") {
       const size = literalProp(tag, "size");
-      const sizes = size?.startsWith("{") ? size.slice(1, -1).split("|") : [size];
-      if (!size || size === "{expr}" || !sizes.every((x) => dialogFormSizes.has(x)))
+      const sizes = size?.startsWith("{")
+        ? size.slice(1, -1).split("|")
+        : [size];
+      if (
+        !size ||
+        size === "{expr}" ||
+        !sizes.every((x) => dialogFormSizes.has(x))
+      )
         problem = `DialogForm 必须写 size="sm" | "lg" | "xl"（现为 ${size ?? "默认 md"}）`;
     } else if (m[1] === "Drawer") {
       const side = literalProp(tag, "side") ?? "right";
       const width = literalProp(tag, "width");
+      const expectedWidth = normalize(path.relative(ROOT, file)).startsWith(
+        "portals/workbench/",
+      )
+        ? "sm"
+        : "lg";
       if (side === "left")
         problem = "没有左侧抽屉这个预设：筛选用工具行下拉框 + DS FilterPopover";
-      else if (width !== "lg")
-        problem = `详情抽屉必须写 width="lg"（现为 ${width ?? "默认"}）`;
+      // Workbench uses the customer-approved 448px DS panel; admin portals retain 672px.
+      else if (width !== expectedWidth)
+        problem = `详情抽屉必须写 width="${expectedWidth}"（现为 ${width ?? "默认"}）`;
     } else {
       problem = "不写裸 DialogContent：用 DialogForm（统一的字段滚动区与页脚）";
     }
@@ -2639,9 +2667,7 @@ function isDsStyleScaleDebtFile(normalized) {
 
 /** 抹掉 CSS 块注释，保留行数（换行不动），行号才对得上。 */
 function stripCssBlockComments(content) {
-  return content.replace(/\/\*[\s\S]*?\*\//g, (m) =>
-    m.replace(/[^\n]/g, " "),
-  );
+  return content.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
 }
 
 function hasDsStyleHardcodedScale(line) {
@@ -2779,7 +2805,12 @@ function isDsTokenOwner(file) {
 
 /** 裸缓动曲线：`--vx-ease-*` 是可引用的 token，没有理由写字面量。 */
 function hasLiteralEasing(text) {
-  return /\b(?:cubic-bezier|steps)\s*\(/.test(text) || /\bease(?:-in|-out|-in-out)?\b(?!\s*\))/.test(text.replace(/var\([^)]*\)/g, ""));
+  return (
+    /\b(?:cubic-bezier|steps)\s*\(/.test(text) ||
+    /\bease(?:-in|-out|-in-out)?\b(?!\s*\))/.test(
+      text.replace(/var\([^)]*\)/g, ""),
+    )
+  );
 }
 
 function isTokenOrNoneShadowValue(value) {
@@ -2811,7 +2842,11 @@ function isTokenOrNoneMotionValue(value) {
 
   const withoutVars = normalized.replace(/var\((?:[^()]|\([^()]*\))*\)/g, " ");
   // 剥掉 var() 后只应剩属性名、时长字面量、空白与分段逗号；缓动关键字属字面值。
-  if (/\b(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)\b/.test(withoutVars))
+  if (
+    /\b(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)\b/.test(
+      withoutVars,
+    )
+  )
     return false;
   return /^[\w\s,.-]*$/.test(withoutVars);
 }

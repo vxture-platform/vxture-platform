@@ -174,6 +174,29 @@ export class PgBillingRepository {
     };
   }
 
+  /**
+   * Sum this month's outstanding postpaid invoices without mixing currencies.
+   * @param tenantId - Authorized tenant whose receivables are requested.
+   * @returns Amounts due per currency; an empty array means no unpaid postpaid bill.
+   */
+  async getMonthlyPostpaidDue(
+    tenantId: string,
+  ): Promise<{ balance: string; currency: string }[]> {
+    return (
+      await this.pool.query<{ balance: string; currency: string }>(
+        `select sum(greatest(i.payable_amount - i.paid_amount, 0))::numeric(14,2)::text as balance,
+              i.currency
+         from billing.invoices i
+        where i.tenant_id = $1 and i.deleted_at is null
+          and i.bill_cycle = to_char(now() at time zone 'UTC', 'YYYYMM')
+          and i.bill_type = 'normal'
+          and i.bill_status in ('unpaid', 'paying', 'partial', 'overdue')
+        group by i.currency`,
+        [tenantId],
+      )
+    ).rows;
+  }
+
   async getInvoiceById(id: string): Promise<InvoiceRecord | null> {
     const result = await this.pool.query<InvoiceRow>(
       `select * from billing.invoices where id = $1 and deleted_at is null limit 1`,

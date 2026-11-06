@@ -13,6 +13,7 @@ import {
   ActiveContextService,
   MockOrganizationRepository,
   OrganizationService,
+  GovernanceService,
   type ProvisionedOrg,
 } from "@vxture/service-organization"; // ⚠️ 跨层引用: exercise real domain context selection over in-memory test data.
 import type { RpUser } from "@vxture/core-oidc-rp"; // ⚠️ 跨层引用: canonical identity fixture.
@@ -31,7 +32,11 @@ describe("workbench live workspace authorization", () => {
   beforeEach(async () => {
     repo = new MockOrganizationRepository();
     active = new ActiveContextService(repo);
-    service = new ScopeService(active, new OrganizationService(repo));
+    service = new ScopeService(
+      active,
+      new OrganizationService(repo),
+      new GovernanceService(repo),
+    );
     const userId = randomUUID();
     provisioned = await repo.createPersonalOrg(userId, "Synthetic account");
     user = {
@@ -60,6 +65,29 @@ describe("workbench live workspace authorization", () => {
     expect(
       await service.canSwitch(user, undefined, provisioned.workspace.id),
     ).toBe(true);
+  });
+  it("uses live permissions and does not let workspace grants expose tenant money", async () => {
+    vi.spyOn(repo, "getEffectiveOrgPermissions").mockResolvedValue([]);
+    vi.spyOn(repo, "getEffectiveWorkspacePermissions").mockResolvedValue([
+      "tenant.quota.read",
+      "tenant.billing.read",
+    ]);
+    await expect(
+      service.assertRead(user, "tenant.quota.read"),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.assertRead(user, "tenant.billing.read", true),
+    ).rejects.toThrow();
+    vi.spyOn(repo, "getEffectiveOrgPermissions").mockResolvedValue([
+      "tenant.billing.read",
+    ]);
+    await expect(
+      service.assertRead(user, "tenant.billing.read", true),
+    ).resolves.toBeUndefined();
+    vi.spyOn(repo, "listOrgMembershipsForUser").mockResolvedValue([]);
+    await expect(
+      service.assertRead(user, "tenant.billing.read", true),
+    ).rejects.toThrow();
   });
   it("rejects a workspace hint even when domain login resolves a valid default", async () => {
     const unknown = randomUUID();

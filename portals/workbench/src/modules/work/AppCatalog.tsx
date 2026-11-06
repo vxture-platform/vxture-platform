@@ -21,6 +21,7 @@ import {
 } from "@vxture/design-system";
 import type { WorkApp } from "../../lib/contracts";
 import {
+  appVersion,
   filterApps,
   RELEASE_LABELS,
   TIER_LABELS,
@@ -125,9 +126,7 @@ export function AppCard({
         </p>
       </div>
       <div className="work-app-actions">
-        <span className="work-app-version">
-          {app.version ? `v${app.version.replace(/^v/, "")}` : ""}
-        </span>
+        <span className="work-app-version">{appVersion(app.version)}</span>
         {app.available && app.href ? (
           <Button asChild size="sm" className="work-action">
             <a
@@ -251,21 +250,25 @@ export function AppCatalog({
       ) : (
         <div className="work-empty">
           <Icon name="search" size="lg" />
-          <h3>没有找到相关应用</h3>
+          <h3>{apps.length ? "没有找到相关应用" : "尚未订阅应用"}</h3>
           <p className="text-body-sm text-muted-foreground">
-            试试其他关键词，或调整应用分类
+            {apps.length
+              ? "试试其他关键词，或调整应用分类"
+              : "订阅适合你的产品，让专业能力融入日常工作"}
           </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setQuery("");
-              setAvailability("all");
-              setCategory("all");
-            }}
-          >
-            重置筛选
-          </Button>
+          {apps.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setQuery("");
+                setAvailability("all");
+                setCategory("all");
+              }}
+            >
+              重置筛选
+            </Button>
+          )}
         </div>
       )}
     </section>

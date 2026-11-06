@@ -11,13 +11,18 @@ import { createSign, generateKeyPairSync } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Redis } from "ioredis";
-import { Module, type INestApplication } from "@nestjs/common";
+import {
+  ForbiddenException,
+  Module,
+  type INestApplication,
+} from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { loadConfig } from "../config";
 import { configureHttp } from "../bootstrap";
 import { CONFIG } from "../tokens";
 import { ApiRouter } from "../api-router";
 import { CatalogService } from "../catalog-service";
+import { ResourceOverview } from "../resource-overview";
 import { ScopeService } from "../scope-service";
 import { AuthRouter } from "./auth-router";
 import { SessionStore, type Session } from "./session-store";
@@ -134,6 +139,8 @@ export class Fixture {
   statusAuthorization: string | undefined;
   onToken: (() => Promise<void>) | undefined;
   allowedScope = true;
+  allowedResourceRead = false;
+  readonly resourceScopes: string[] = [];
   readonly subscriptionScopes: string[][] = [];
 
   sign(patch: Record<string, unknown> = {}): string {
@@ -220,6 +227,10 @@ export class Fixture {
     this.client = new WorkbenchOidcClient(this.config);
     this.auth = new SessionService(this.store, this.client, this.config);
     const scopes = {
+      assertRead: async () => {
+        if (!this.allowedScope || !this.allowedResourceRead)
+          throw new ForbiddenException();
+      },
       assertCurrent: async () => {
         if (!this.allowedScope) throw new Error("Membership revoked");
       },
@@ -255,6 +266,26 @@ export class Fixture {
         { provide: WorkbenchOidcClient, useValue: this.client },
         { provide: ScopeService, useValue: scopes },
         { provide: CatalogService, useValue: catalog },
+        {
+          provide: ResourceOverview,
+          useValue: {
+            resources: async (workspace: string) => {
+              this.resourceScopes.push(workspace);
+              return {
+                storage: { used: 10, limit: 100 },
+                aiCredit: { used: 3, limit: 10 },
+              };
+            },
+            balance: async (tenant: string) => {
+              this.resourceScopes.push(tenant);
+              return { balance: "12.34", currency: "CNY" };
+            },
+            monthlyBill: async (tenant: string) => {
+              this.resourceScopes.push(tenant);
+              return { balance: "56.78", currency: "CNY" };
+            },
+          },
+        },
       ],
     })(TestModule);
     this.app = await NestFactory.create(TestModule, {

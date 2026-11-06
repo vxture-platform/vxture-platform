@@ -18,6 +18,7 @@ import type { Redis } from "ioredis";
 import {
   ActiveContextService,
   OrganizationService,
+  GovernanceService,
   PgOrganizationRepository,
 } from "@vxture/service-organization"; // ⚠️ 跨层引用: domain-owned membership reads.
 import { PoolsModule } from "./pools.module";
@@ -30,6 +31,12 @@ import { AuthRouter } from "./auth/auth-router";
 import { ApiRouter } from "./api-router";
 import { ScopeService } from "./scope-service";
 import { CatalogService } from "./catalog-service";
+import { ResourceOverview } from "./resource-overview";
+import { BillingService, PgBillingRepository } from "@vxture/service-billing"; // ⚠️ 跨层引用: inject the existing read-only pool into domain readers.
+import {
+  MeteringReadService,
+  PgMeteringReadRepository,
+} from "@vxture/service-subscription"; // ⚠️ 跨层引用: reuse canonical period-aware quota reads.
 
 @Controller("healthz")
 class HealthRouter implements OnModuleInit {
@@ -91,6 +98,7 @@ class HealthRouter implements OnModuleInit {
         return new ScopeService(
           new ActiveContextService(repository),
           new OrganizationService(repository),
+          new GovernanceService(repository),
         );
       },
     },
@@ -98,6 +106,15 @@ class HealthRouter implements OnModuleInit {
       provide: CatalogService,
       inject: [READ_POOL],
       useFactory: (pool: Pool) => new CatalogService(pool),
+    },
+    {
+      provide: ResourceOverview,
+      inject: [READ_POOL],
+      useFactory: (pool: Pool) =>
+        new ResourceOverview(
+          new MeteringReadService(new PgMeteringReadRepository(pool)),
+          new BillingService(new PgBillingRepository(pool)),
+        ),
     },
   ],
 })

@@ -91,6 +91,7 @@ export interface WorkData {
   availabilityIssue: string | null;
   resources: LoadResult<ResourceUsage>;
   balance: LoadResult<string>;
+  monthlyBill: LoadResult<string>;
 }
 export interface WorkRuntime {
   authConfigured: boolean;

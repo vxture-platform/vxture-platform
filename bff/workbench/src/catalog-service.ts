@@ -44,7 +44,7 @@ const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status
   ${MAINTENANCE} as maintenance
   from metering.subscriptions s
   join tenancy.workspaces w on w.id = s.workspace_id
-  join product.plan_versions pv on pv.id = s.plan_version_id and pv.is_locked
+  join product.plan_versions pv on pv.id = s.plan_version_id
   join product.plan_components pc on pc.plan_version_id = s.plan_version_id
   join product.products p on p.id = pc.product_id
   left join metering.subscription_entitlement_overrides o
@@ -52,7 +52,8 @@ const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status
     and (o.expires_at is null or o.expires_at > now())
   where w.id = $1 and w.tenant_id = $2 and w.deleted_at is null
     and s.tenant_id = $2
-    and s.deleted_at is null and pc.tier is not null
+    and s.deleted_at is null and pc.component_role = 'primary' and pc.tier is not null
+    and s.status <> 'cancelled'
     and p.deleted_at is null and p.is_customer_visible
   order by p.product_code, s.status`;
 

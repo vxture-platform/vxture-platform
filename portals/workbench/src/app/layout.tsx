@@ -20,7 +20,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Ruyin Work",
+  applicationName: "Ruyin Work",
   description: "专业所长，皆为所用",
+  icons: {
+    icon: [{ url: "/favicon.ico", type: "image/x-icon" }],
+    shortcut: "/favicon.ico",
+    apple: "/brand/vxture-mark.png",
+  },
 };
 export const dynamic = "force-dynamic";
 
