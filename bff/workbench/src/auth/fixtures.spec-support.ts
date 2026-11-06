@@ -224,7 +224,16 @@ export class Fixture {
         if (!this.allowedScope) throw new Error("Membership revoked");
       },
       canSwitch: async (_user: unknown, tenant?: string, workspace?: string) =>
-        tenant === ORG || workspace === WORKSPACE,
+        tenant
+          ? tenant === ORG && (!workspace || workspace === WORKSPACE)
+          : workspace === WORKSPACE,
+      context: async () => ({
+        id: ORG,
+        name: "Updated organization",
+        tenantType: "organization",
+        workspace: WORKSPACE,
+        workspaceName: "Updated workspace",
+      }),
       organizations: async () => [{ id: ORG, name: "验收组织" }],
       workspaces: async () => [{ id: WORKSPACE, name: "default workspace" }],
     };

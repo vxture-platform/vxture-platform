@@ -106,4 +106,39 @@ describe("workbench live workspace authorization", () => {
       provisioned.workspace.id,
     ]);
   });
+  it("uses live display names and workspace names rather than stale token claims", async () => {
+    const org = new OrganizationService(repo);
+    vi.spyOn(org, "getOrgById").mockResolvedValue({
+      ...provisioned.org,
+      displayName: "Updated organization",
+    });
+    vi.spyOn(org, "listWorkspacesForSwitch").mockResolvedValue([
+      { ...provisioned.workspace, name: "Updated workspace" },
+    ]);
+    const context = await new ScopeService(active, org).context(user);
+    expect(context).toMatchObject({
+      id: provisioned.org.id,
+      name: "Updated organization",
+      workspace: provisioned.workspace.id,
+      workspaceName: "Updated workspace",
+    });
+  });
+  it("rejects a workspace from another organization even when the organization is accessible", async () => {
+    const other = await repo.createPersonalOrg(randomUUID(), "Other account");
+    expect(
+      await service.canSwitch(user, provisioned.org.id, other.workspace.id),
+    ).toBe(false);
+    expect(
+      await service.canSwitch(
+        user,
+        provisioned.org.id,
+        provisioned.workspace.id,
+      ),
+    ).toBe(true);
+    const groups = await service.organizations(user);
+    expect(groups.map((group) => group.id)).toEqual([provisioned.org.id]);
+    expect(groups[0]?.workspaces.map((space) => space.id)).toEqual([
+      provisioned.workspace.id,
+    ]);
+  });
 });

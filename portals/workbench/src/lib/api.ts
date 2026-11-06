@@ -133,6 +133,7 @@ function parseScope(input: unknown): WorkScope {
     workspace: required(row.workspace),
     workspaceName: string(row.workspaceName) || "default workspace",
     personal: row.tenantType === "personal",
+    identifier: string(row.identifier) || undefined,
   };
 }
 function parseCatalog(input: unknown): CatalogProduct[] {
@@ -180,6 +181,10 @@ function parseOptions(input: unknown): ScopeOption[] {
       id: required(row.id),
       name: required(row.name),
       personal: row.tenantType === "personal",
+      identifier: string(row.identifier) || undefined,
+      workspaces: Array.isArray(row.workspaces)
+        ? parseWorkspaces(row.workspaces)
+        : undefined,
     };
   });
 }
@@ -269,8 +274,8 @@ export function projectApps(
                 : "可使用";
       return {
         code: product.code,
-        name: product.nick || product.name,
-        brand: product.nick ? product.name : "",
+        name: product.name,
+        brand: product.nick || "",
         description: product.description,
         category: product.type.endsWith("_agent") ? "agent" : "platform",
         version: product.version,

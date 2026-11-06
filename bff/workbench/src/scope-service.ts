@@ -48,11 +48,59 @@ export class ScopeService {
   }
 
   async organizations(user: RpUser) {
-    return (await this.active.listOrgsForSwitch(user.userId)).map((item) => ({
-      id: item.orgId,
-      name: item.name,
-      tenantType: item.type,
-    }));
+    return Promise.all(
+      (await this.active.listOrgsForSwitch(user.userId)).map(async (item) => {
+        const [organization, workspaces] = await Promise.all([
+          this.org.getOrgById(item.orgId),
+          this.org.listWorkspacesForSwitch(item.orgId, user.userId),
+        ]);
+        return {
+          id: item.orgId,
+          name:
+            organization?.displayName?.trim() ||
+            organization?.name ||
+            item.name,
+          tenantType: item.type,
+          identifier: organization?.tenantNo
+            ? `T-${organization.tenantNo}`
+            : null,
+          workspaces: workspaces.map((space) => ({
+            id: space.id,
+            name: space.name,
+            isDefault: space.isDefault,
+          })),
+        };
+      }),
+    );
+  }
+
+  /**
+   * Resolve display metadata from live records rather than stale token names.
+   * @param user - Verified identity whose exact membership was checked.
+   * @returns The same display-name-first organization projection as Console.
+   * @throws When the active organization or workspace is no longer accessible.
+   */
+  async context(user: RpUser) {
+    await this.assertCurrent(user);
+    const [organization, spaces] = await Promise.all([
+      this.org.getOrgById(user.activeOrg!),
+      this.org.listWorkspacesForSwitch(user.activeOrg!, user.userId),
+    ]);
+    const workspace = spaces.find((space) => space.id === user.activeWorkspace);
+    if (!organization || !workspace)
+      throw failure(
+        403,
+        "WORKBENCH_SCOPE_FORBIDDEN",
+        "Workspace is no longer accessible",
+      );
+    return {
+      id: organization.id,
+      name: organization.displayName?.trim() || organization.name,
+      tenantType: organization.type,
+      identifier: organization.tenantNo ? `T-${organization.tenantNo}` : null,
+      workspace: workspace.id,
+      workspaceName: workspace.name,
+    };
   }
 
   async workspaces(user: RpUser) {
@@ -71,10 +119,16 @@ export class ScopeService {
     tenantId?: string,
     workspaceId?: string,
   ): Promise<boolean> {
-    if (tenantId)
-      return (await this.organizations(user)).some(
+    if (tenantId) {
+      const target = (await this.organizations(user)).find(
         (item) => item.id === tenantId,
       );
+      return Boolean(
+        target &&
+        (!workspaceId ||
+          target.workspaces.some((space) => space.id === workspaceId)),
+      );
+    }
     if (workspaceId)
       return (await this.workspaces(user)).some(
         (item) => item.id === workspaceId,

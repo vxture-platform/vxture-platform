@@ -36,6 +36,14 @@ afterEach(() => vi.unstubAllGlobals());
 // Projection safety and RP transitions
 // ============================================================================
 describe("product availability", () => {
+  it("places the catalog business name before its brand nickname", () => {
+    const app = projectApps(
+      [product],
+      { status: "ready", data: [active] },
+      { status: "ready", data: [entry] },
+    )[0];
+    expect(app).toMatchObject({ name: product.name, brand: product.nick });
+  });
   it("does not inherit default-workspace eligibility from launch tiles", () => {
     expect(
       projectApps(

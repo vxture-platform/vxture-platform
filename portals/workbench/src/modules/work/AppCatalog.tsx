@@ -10,9 +10,6 @@
  */
 import { useState } from "react";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
   Badge,
   Button,
   Icon,
@@ -20,9 +17,14 @@ import {
   InputGroupAddon,
   InputGroupInput,
   SegmentedControl,
+  type IconName,
 } from "@vxture/design-system";
 import type { WorkApp } from "../../lib/contracts";
-import { filterApps } from "../../lib/presentation";
+import {
+  filterApps,
+  RELEASE_LABELS,
+  TIER_LABELS,
+} from "../../lib/presentation";
 import type { Category } from "../../lib/presentation";
 
 const CATEGORIES: { value: Category; label: string }[] = [
@@ -30,12 +32,21 @@ const CATEGORIES: { value: Category; label: string }[] = [
   { value: "agent", label: "专业智能体" },
   { value: "platform", label: "知识与数据" },
 ];
-const STAGES: Record<string, string> = {
-  preview: "预览版",
-  beta: "公测版",
-  stable: "正式版",
-  sunset: "停售中",
+const PRODUCT_ICONS: Record<string, IconName> = {
+  tenderforge: "edit",
+  tender: "edit",
+  bidproposal: "folder",
+  solution: "folder",
+  karda: "file",
+  knowledge: "file",
+  arda: "database",
+  data: "database",
+  yucer: "users",
+  contractaudit: "shield",
+  contract: "shield",
+  review: "shield",
 };
+const TONES = ["brand", "violet", "teal", "amber"] as const;
 
 // ============================================================================
 // Presentation composition
@@ -52,47 +63,70 @@ export function AppCard({
   app: WorkApp;
   onOverview: (app: WorkApp) => void;
 }): React.JSX.Element {
+  const tone =
+    TONES[
+      Array.from(app.code).reduce((sum, char) => sum + char.charCodeAt(0), 0) %
+        TONES.length
+    ];
   return (
     <article className="work-app-card">
       <Button
+        type="button"
         variant="ghost"
         className="work-card-target"
         aria-label={`查看${app.name}的概要`}
         onClick={() => onOverview(app)}
       />
-      <div className="pointer-events-none relative flex flex-1 flex-col gap-md">
+      <div className="work-card-content">
         <div className="work-card-identity">
-          <Avatar className="size-media-sm rounded-lg">
-            <AvatarImage src={app.icon ?? undefined} alt="" />
-            <AvatarFallback className="rounded-lg bg-primary-muted text-primary-text">
-              {app.name.slice(0, 1)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <h3 className="whitespace-nowrap text-title-lg">{app.name}</h3>
+          <span
+            className={`work-app-glyph work-tone-${tone}`}
+            aria-hidden="true"
+          >
+            {app.icon ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={app.icon} alt="" width={24} height={24} />
+            ) : (
+              <Icon
+                name={
+                  PRODUCT_ICONS[app.code] ??
+                  (app.category === "agent" ? "sparkles" : "database")
+                }
+                size="lg"
+              />
+            )}
+          </span>
+          <div className="work-app-name">
+            <h3 title={app.name}>{app.name}</h3>
             {app.brand && (
-              <p
-                className="truncate text-body-sm text-muted-foreground"
-                title={app.brand}
-              >
+              <p className="work-app-brand" title={app.brand}>
                 {app.brand}
               </p>
             )}
           </div>
           <div className="work-card-badges">
-            {app.tier && <Badge variant="outline">{app.tier}</Badge>}
-            {STAGES[app.stage] && (
-              <Badge variant="secondary">{STAGES[app.stage]}</Badge>
+            {app.tier && (
+              <Badge variant="outline" className="work-plan-badge">
+                {TIER_LABELS[app.tier] ?? app.tier}
+              </Badge>
+            )}
+            {RELEASE_LABELS[app.stage] && (
+              <Badge
+                variant="outline"
+                className={`work-release-badge work-release-${app.stage}`}
+              >
+                {RELEASE_LABELS[app.stage]}
+              </Badge>
             )}
           </div>
         </div>
-        <p className="text-body-md text-muted-foreground">
+        <p className="work-app-description">
           {app.description || "产品介绍暂未提供"}
         </p>
       </div>
-      <div className="relative mt-lg flex items-center justify-between gap-md">
-        <span className="pointer-events-none text-body-sm text-muted-foreground">
-          {app.version ? `v${app.version.replace(/^v/, "")}` : "版本待发布"}
+      <div className="work-app-actions">
+        <span className="work-app-version">
+          {app.version ? `v${app.version.replace(/^v/, "")}` : ""}
         </span>
         {app.available && app.href ? (
           <Button asChild size="sm" className="work-action">
@@ -106,9 +140,7 @@ export function AppCard({
             </a>
           </Button>
         ) : (
-          <span className="text-body-sm text-muted-foreground">
-            {app.availabilityLabel}
-          </span>
+          <span className="work-app-unavailable">{app.availabilityLabel}</span>
         )}
       </div>
     </article>
@@ -137,12 +169,12 @@ export function AppCatalog({
     category,
   );
   return (
-    <section aria-label="应用目录" className="flex flex-col gap-lg">
+    <section aria-label="应用目录" className="work-catalog">
       <div className="work-catalog-toolbar">
         <div
           role="group"
           aria-label="应用分类"
-          className="flex flex-wrap gap-xs"
+          className="work-category-filters"
         >
           {CATEGORIES.map((item) => (
             <Button
@@ -150,11 +182,7 @@ export function AppCatalog({
               variant="ghost"
               size="sm"
               aria-pressed={category === item.value}
-              className={
-                category === item.value
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              }
+              className="work-category-filter"
               onClick={() => setCategory(item.value)}
             >
               {item.label}
@@ -164,7 +192,7 @@ export function AppCatalog({
             </Button>
           ))}
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-sm">
+        <div className="work-toolbar-actions">
           <InputGroup className="work-search">
             <InputGroupAddon>
               <Icon name="search" size="sm" />
@@ -177,7 +205,28 @@ export function AppCatalog({
               onChange={(event) => setQuery(event.target.value)}
             />
           </InputGroup>
-          <div className="work-availability">
+          <div
+            className="work-availability"
+            onKeyDown={(event) => {
+              const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+              if (!keys.includes(event.key)) return;
+              event.preventDefault();
+              const next =
+                event.key === "Home"
+                  ? "all"
+                  : event.key === "End"
+                    ? "available"
+                    : availability === "all"
+                      ? "available"
+                      : "all";
+              setAvailability(next);
+              const radios =
+                event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                  "[role=radio]",
+                );
+              radios[next === "all" ? 0 : 1]?.focus();
+            }}
+          >
             <SegmentedControl<"all" | "available">
               ariaLabel="应用可用性"
               value={availability}
@@ -201,8 +250,10 @@ export function AppCatalog({
         </div>
       ) : (
         <div className="work-empty">
-          <p className="text-body-md text-muted-foreground">
-            没有符合条件的应用
+          <Icon name="search" size="lg" />
+          <h3>没有找到相关应用</h3>
+          <p className="text-body-sm text-muted-foreground">
+            试试其他关键词，或调整应用分类
           </p>
           <Button
             variant="ghost"

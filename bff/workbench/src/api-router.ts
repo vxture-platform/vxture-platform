@@ -45,14 +45,7 @@ export class ApiRouter {
 
   @Get("tenant-context")
   async context(@Req() req: Request) {
-    const user = await this.user(req);
-    return {
-      id: user.activeOrg,
-      name: user.activeOrgName ?? "当前单位",
-      tenantType: user.activeOrgType,
-      workspace: user.activeWorkspace,
-      workspaceName: user.activeWorkspaceName ?? "default workspace",
-    };
+    return this.scopes.context((await this.auth.authenticate(req)).user);
   }
 
   @Get("tenant-context/options")

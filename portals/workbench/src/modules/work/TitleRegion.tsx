@@ -31,20 +31,18 @@ export function TitleRegion({
   const day = dailyPresentation(now, copy);
   return (
     <section className="work-title-region" aria-labelledby="page-title">
-      <div className="flex flex-wrap items-baseline justify-between gap-sm">
-        <p className="text-title-lg">
-          {day.greeting} <span className="text-muted-foreground">@ {name}</span>
+      <div className="work-context-row">
+        <p className="work-greeting">
+          {day.greeting} <span>@ {name}</span>
         </p>
-        <p className="flex gap-md text-body-sm text-muted-foreground">
+        <p className="work-date">
           <span>{day.date}</span>
           <span>{day.weekday}</span>
         </p>
       </div>
       <div className="relative">
-        <h1 id="page-title" className="text-heading-1 font-semibold">
-          {apps ? "专业所长，皆为所用" : day.title}
-        </h1>
-        <p className="mt-sm text-body-md text-muted-foreground">
+        <h1 id="page-title">{apps ? "专业所长，皆为所用" : day.title}</h1>
+        <p className="work-title-description">
           {apps
             ? "找到适合当前业务的应用，直接开始工作"
             : "让专业融入日常，让每一步更有方向"}
