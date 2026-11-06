@@ -230,3 +230,43 @@ GRANT SELECT ON admin.maintenance_windows TO svc_platform_api;
 -- 切角色那一次需要另写一份迁移把这两行灌进活库（跟 98 列锁同一个毛病）。
 GRANT SELECT, INSERT, UPDATE ON support.inbox_messages TO svc_platform_api;
 GRANT SELECT, INSERT, UPDATE ON support.notification_logs TO svc_platform_api;
+
+-- BEGIN WORKBENCH INBOX ROLE
+-- Isolated acknowledgement credentials: no inherited or schema-wide write access.
+-- A fresh role has no password; provision it separately through private secrets.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'svc_workbench_inbox') THEN
+    CREATE ROLE svc_workbench_inbox LOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+      NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF EXISTS (
+    SELECT FROM pg_roles WHERE rolname = 'svc_workbench_inbox'
+      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
+  ) OR EXISTS (
+    SELECT FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
+      WHERE r.rolname = 'svc_workbench_inbox'
+  ) THEN
+    RAISE EXCEPTION 'svc_workbench_inbox must be an isolated unprivileged role';
+  END IF;
+END
+$$;
+GRANT USAGE ON SCHEMA support TO svc_workbench_inbox;
+GRANT SELECT (id, account_id, deleted_at, read_at)
+  ON support.inbox_messages TO svc_workbench_inbox;
+GRANT UPDATE (read_at) ON support.inbox_messages TO svc_workbench_inbox;
+DO $$
+BEGIN
+  IF has_table_privilege('svc_workbench_inbox', 'support.inbox_messages',
+      'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR EXISTS (
+    SELECT FROM information_schema.columns c
+    WHERE c.table_schema = 'support' AND c.table_name = 'inbox_messages'
+      AND c.column_name <> 'read_at'
+      AND has_column_privilege('svc_workbench_inbox', 'support.inbox_messages',
+        c.column_name, 'UPDATE')
+  ) THEN
+    RAISE EXCEPTION 'svc_workbench_inbox has permissions beyond read_at updates';
+  END IF;
+END
+$$;
+-- END WORKBENCH INBOX ROLE

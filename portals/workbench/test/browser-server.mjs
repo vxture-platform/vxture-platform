@@ -62,9 +62,32 @@ const products = [
     description: "将业务数据连接到日常工作",
   },
 ];
+const inboxMessages = [
+  {
+    id: "00000000-0000-4000-a000-000000000001",
+    title: "订阅即将到期",
+    body: "标书编写订阅将于近期到期，请查看订阅详情。",
+    link: "/subscription",
+    readAt: null,
+    createdAt: "2026-11-06T02:00:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-a000-000000000002",
+    title: "工作空间已就绪",
+    body: "团队可以继续处理业务。",
+    link: "/inbox",
+    readAt: "2026-11-05T02:00:00.000Z",
+    createdAt: "2026-11-05T01:00:00.000Z",
+  },
+];
 const fixtures = {
   "/auth/session": { status: "active" },
-  "/api/me": { id: "qa-user", name: "林悦", email: "qa@example.invalid" },
+  "/api/me": {
+    id: "qa-user",
+    name: "林悦",
+    email: "qa@example.invalid",
+    phone: "+8613800138000",
+  },
   "/api/tenant-context": {
     id: "qa-organization",
     name: "验收组织",
@@ -134,6 +157,43 @@ const server = http.createServer((request, response) => {
   const scenario = request.headers.cookie?.match(
     /(?:^|; )workbench_qa=([a-z]+)/,
   )?.[1];
+  if (path.startsWith("/api/me/inbox")) {
+    if (scenario === "inboxfailure") {
+      response.writeHead(503, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ code: "WORKBENCH_UNAVAILABLE" }));
+      return;
+    }
+    if (request.method === "POST") {
+      if (
+        request.headers.origin !==
+          `http://127.0.0.1:${server.address().port}` ||
+        request.headers["x-workbench-request"] !== "1"
+      ) {
+        response.writeHead(403);
+        response.end();
+        return;
+      }
+      for (const item of inboxMessages) {
+        if (path.endsWith("read-all") || path.endsWith(`${item.id}/read`))
+          item.readAt ??= new Date().toISOString();
+      }
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    const items = scenario === "inboxempty" ? [] : inboxMessages;
+    response.writeHead(200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    });
+    response.end(
+      JSON.stringify({
+        items,
+        unreadCount: items.filter((item) => !item.readAt).length,
+      }),
+    );
+    return;
+  }
   if (path === "/auth/session" && scenario === "public") {
     response.writeHead(401, { "Content-Type": "application/json" });
     response.end(JSON.stringify({ status: "signed-out" }));

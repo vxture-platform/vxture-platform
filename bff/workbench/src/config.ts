@@ -19,6 +19,7 @@ export interface WorkbenchConfig {
   redisUrl: string;
   databaseUrl: string;
   reportingUrl: string;
+  inboxDatabaseUrl: string;
   oidc: OidcRpConfig;
 }
 
@@ -73,6 +74,15 @@ export function loadConfig(env: NodeJS.ProcessEnv): WorkbenchConfig {
   )
     throw new Error("Insecure cookies are restricted to loopback development");
   const databaseUrl = required(env, "DATABASE_URL");
+  const inboxDatabaseUrl = required(env, "WORKBENCH_INBOX_DATABASE_URL");
+  const inboxUrl = new URL(inboxDatabaseUrl);
+  if (
+    !["postgres:", "postgresql:"].includes(inboxUrl.protocol) ||
+    decodeURIComponent(inboxUrl.username) !== "svc_workbench_inbox"
+  )
+    throw new Error(
+      "Inbox writes require the dedicated svc_workbench_inbox role",
+    );
   return {
     origin: base,
     port,
@@ -81,6 +91,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): WorkbenchConfig {
     redisUrl: required(env, "REDIS_URL"),
     databaseUrl,
     reportingUrl: env.REPORTING_RO_DATABASE_URL?.trim() || databaseUrl,
+    inboxDatabaseUrl,
     oidc: {
       issuer,
       ...(env.OIDC_BACKCHANNEL_ISSUER?.trim()

@@ -102,3 +102,19 @@ export interface WorkRuntime {
   websiteUrl: string;
   consoleUrl: string;
 }
+
+// ============================================================================
+// Account-owned notifications, independent of product availability
+// ============================================================================
+export interface WorkNotification {
+  id: string;
+  title: string;
+  body: string;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+export interface WorkInbox {
+  items: WorkNotification[];
+  unreadCount: number;
+}

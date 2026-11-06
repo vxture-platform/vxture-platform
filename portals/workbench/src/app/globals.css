@@ -99,6 +99,18 @@ body {
 .work-brand .vx-brand-local-name {
   white-space: nowrap;
 }
+.work-header-public .work-brand .vx-brand-local-name {
+  margin-inline-start: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
+  border-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--card) 32%, transparent);
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--body-sm-font-size);
+  font-weight: 400;
+  letter-spacing: normal;
+}
 .work-header-tools {
   justify-self: end;
   display: flex;
@@ -889,14 +901,16 @@ body {
 .work-login-panel {
   display: flex;
   flex-direction: column;
+  gap: calc(var(--space-5xl) + var(--space-xs));
   padding: var(--space-2xl);
   border: var(--border-width-thin) solid
     color-mix(in srgb, var(--primary) 14%, transparent);
   border-radius: var(--radius-xl);
-  background: color-mix(in srgb, var(--card) 85%, var(--primary-muted));
-  box-shadow: var(--shadow-raised);
+  background: color-mix(in srgb, var(--card) 38%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 .work-login-eyebrow {
+  text-align: center;
   margin-bottom: var(--space-md);
   font-size: var(--body-sm-font-size);
   font-weight: 500;
@@ -904,22 +918,21 @@ body {
   letter-spacing: var(--vx-tracking-wide);
 }
 .work-login-panel h2 {
+  text-align: center;
   font-family: var(--font-brand);
   font-size: var(--heading-3-font-size);
   font-weight: 600;
 }
-.work-login-panel-description {
-  margin-top: var(--space-sm);
-  color: var(--muted-foreground);
-  font-size: var(--body-md-font-size);
-  line-height: 1.7;
+.work-login-actions {
+  display: flex;
+  flex-direction: column;
 }
 .work-login-identity {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-md);
-  margin-block: var(--space-2xl);
+  margin-bottom: var(--space-2xl);
   border: var(--border-width-thin) solid
     color-mix(in srgb, var(--primary) 14%, transparent);
   border-radius: var(--radius-md);
@@ -955,13 +968,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--space-xs);
-  margin-top: var(--space-md);
-  color: var(--muted-foreground);
-  font-size: var(--body-sm-font-size);
-}
-.work-login-note {
-  margin-top: var(--space-2xl);
-  padding-top: var(--space-md);
+  padding-top: var(--space-lg);
   border-top: var(--border-width-thin) solid
     color-mix(in srgb, var(--primary) 14%, transparent);
   color: var(--muted-foreground);
@@ -1192,19 +1199,8 @@ body {
     grid-column: 2;
     justify-self: start;
   }
-  .work-header-public .work-brand {
-    position: relative;
-    padding-bottom: var(--space-md);
-  }
   .work-header-public .work-brand .vx-brand-local-name {
-    position: absolute;
-    top: calc(100% - var(--space-sm));
-    left: 0;
-    height: auto;
-    padding: 0;
-    margin: 0;
-    background: transparent;
-    font-size: var(--body-sm-font-size);
+    display: none;
   }
   .work-login-main {
     grid-template-columns: minmax(0, 1fr);
@@ -1228,6 +1224,7 @@ body {
   }
   .work-login-panel {
     width: 100%;
+    gap: var(--space-xl);
     max-width: var(--container-overlay-xl);
     justify-self: center;
     padding: var(--space-xl) var(--space-lg);
@@ -1253,7 +1250,10 @@ body {
   }
 }
 @media (max-width: 359px) {
-  .work-header-tools > [role="group"] > button:first-child {
+  .work-header:not(.work-header-public)
+    .work-header-tools
+    > [role="group"]
+    > button:first-child {
     display: none;
   }
   .work-context-row {

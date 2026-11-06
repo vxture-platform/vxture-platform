@@ -50,6 +50,8 @@ describe.runIf(run)("workbench sessions (live Redis)", () => {
       OIDC_CLIENT_ID: "workbench",
       OIDC_CLIENT_SECRET: "synthetic-test-secret",
       DATABASE_URL: "postgresql://test:test@127.0.0.1/test",
+      WORKBENCH_INBOX_DATABASE_URL:
+        "postgresql://svc_workbench_inbox:test@127.0.0.1/test",
       REDIS_URL: process.env.REDIS_ITEST_URL,
     });
     // A unique RP namespace keeps cleanup strictly within this test invocation.

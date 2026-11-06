@@ -18,6 +18,7 @@ import type {
   WorkspaceOption,
   WorkScope,
   WorkUser,
+  WorkInbox,
 } from "./contracts";
 
 // ============================================================================
@@ -401,4 +402,64 @@ export async function loadWorkData(
             : null,
     },
   };
+}
+
+// ============================================================================
+// Notification reads and explicit read-state updates
+// ============================================================================
+/**
+ * Load recent account-owned messages with strict boundary validation.
+ * @param signal - Drawer request cancellation.
+ * @returns Latest inbox projection or an explicit recoverable error.
+ */
+export function loadInbox(signal: AbortSignal): Promise<LoadResult<WorkInbox>> {
+  return load(
+    "/api/me/inbox",
+    (input) => {
+      const row = object(input);
+      if (!Number.isSafeInteger(row.unreadCount) || Number(row.unreadCount) < 0)
+        throw new WorkApiError("通知数据格式不正确", 502);
+      return {
+        unreadCount: Number(row.unreadCount),
+        items: list(row.items).map((value) => {
+          const item = object(value);
+          const createdAt = required(item.createdAt);
+          if (!Number.isFinite(Date.parse(createdAt)))
+            throw new WorkApiError("通知时间格式不正确", 502);
+          return {
+            id: required(item.id),
+            title: required(item.title),
+            body: string(item.body),
+            link: string(item.link) || null,
+            readAt: string(item.readAt) || null,
+            createdAt,
+          };
+        }),
+      };
+    },
+    signal,
+  );
+}
+
+/**
+ * Mark one message, or all account messages, read only after an explicit action.
+ * @param id - Message identifier, or null for all messages.
+ * @param signal - Cancellation when scope or the mounted drawer changes.
+ * @returns Nothing after the authenticated mutation succeeds.
+ * @throws When the request fails; callers retain the previous unread state.
+ */
+export async function markNotificationsRead(
+  id: string | null,
+  signal: AbortSignal,
+): Promise<void> {
+  const path = id === null ? "read-all" : `${encodeURIComponent(id)}/read`;
+  const response = await fetch(`/api/me/inbox/${path}`, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { Accept: "application/json", "X-Workbench-Request": "1" },
+    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+  });
+  if (!response.ok)
+    throw new WorkApiError("标记已读失败，请重试", response.status);
 }

@@ -215,61 +215,61 @@ export function LoginPage({
           className="work-login-story"
           aria-labelledby="login-story-title"
         >
-          <p className="work-login-kicker">BUILT FOR YOUR BUSINESS</p>
+          <p className="work-login-kicker">EXPERTISE, CONNECTED</p>
           <h1 id="login-story-title">
-            让每一份专业，
+            汇聚专业智能体
             <br />
-            <span>抵达更好的交付</span>
+            <span>贯通云端与桌面</span>
           </h1>
           <p className="work-login-description">
             连接业务应用与团队知识，
             <br />
-            让工作从同一个起点展开
+            让工作在不同终端之间自然延续
           </p>
           <p className="work-login-capabilities">
             <Icon name="sparkles" size="sm" />
-            <span>专业应用</span>
+            <span>知识复用</span>
             <span aria-hidden="true">·</span>
-            <span>团队知识</span>
+            <span>团队协作</span>
             <span aria-hidden="true">·</span>
-            <span>业务协作</span>
+            <span>多端同步</span>
           </p>
         </section>
         <section className="work-login-panel" aria-labelledby="login-title">
-          <p className="work-login-eyebrow">WELCOME TO RUYIN WORK</p>
-          <h2 id="login-title">登录你的工作空间</h2>
-          <p className="work-login-panel-description">
-            连接你的应用与团队，继续业务工作
-          </p>
-          <div className="work-login-identity">
-            <span>
-              <Icon name="user" size="lg" />
-            </span>
-            <div>
-              <strong>VXTURE 统一账号</strong>
-              <p>账号、单位与工作空间，一处连接</p>
-            </div>
+          <div className="work-login-heading">
+            <p className="work-login-eyebrow">WELCOME TO RUYIN WORK</p>
+            <h2 id="login-title">登录你的工作空间</h2>
           </div>
-          {(!runtime.authConfigured || failed) && (
-            <p role="status" className="work-login-error">
-              {!runtime.authConfigured
-                ? "登录服务暂不可用，请稍后再试"
-                : error?.message}
-            </p>
-          )}
-          <Button
-            className="work-login-cta"
-            disabled={!runtime.authConfigured}
-            onClick={failed ? retry : signIn}
-          >
-            {failed ? "重新连接" : "继续登录"}
-            <Icon name="arrow-right" size="sm" />
-          </Button>
+          <div className="work-login-actions">
+            <div className="work-login-identity">
+              <span>
+                <Icon name="user" size="lg" />
+              </span>
+              <div>
+                <strong>全局统一账号</strong>
+                <p>账号、单位与工作空间，一处连接</p>
+              </div>
+            </div>
+            {(!runtime.authConfigured || failed) && (
+              <p role="status" className="work-login-error">
+                {!runtime.authConfigured
+                  ? "登录服务暂不可用，请稍后再试"
+                  : error?.message}
+              </p>
+            )}
+            <Button
+              className="work-login-cta"
+              disabled={!runtime.authConfigured}
+              onClick={failed ? retry : signIn}
+            >
+              {failed ? "重新连接" : "继续登录"}
+              <Icon name="arrow-right" size="sm" />
+            </Button>
+          </div>
           <p className="work-login-security">
             <Icon name="shield" size="sm" />
             使用平台账号安全登录
           </p>
-          <div className="work-login-note">单位与工作空间随账号同步</div>
         </section>
       </main>
       <footer className="work-legal-footer">
