@@ -9,6 +9,7 @@
  * @date 2026-11-05
  */
 export { TenantPanelOverview } from "./TenantPanelOverview";
+export { getTenantPanelCopy } from "./tenant-panel-copy";
 export type { TenantPanelOverviewProps } from "./TenantPanelOverview";
 export { TenantScopePicker } from "./TenantScopePicker";
 export type {

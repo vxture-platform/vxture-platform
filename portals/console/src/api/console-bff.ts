@@ -1458,9 +1458,23 @@ export async function declareOrderPayment(
 export async function fetchCredits(): Promise<{
   balance: string;
   currency: string;
+} | null> {
+  return readJsonStrict<{ balance: string; currency: string } | null>(
+    "/api/subscription/credits",
+  );
+}
+
+/**
+ * Read current-month unpaid postpaid business without substituting paid totals.
+ * @returns Amount and currency still due for the authenticated tenant.
+ * @throws When the billing read is unavailable or not authorized.
+ */
+export async function fetchMonthlyBill(): Promise<{
+  balance: string;
+  currency: string;
 }> {
   return readJsonStrict<{ balance: string; currency: string }>(
-    "/api/subscription/credits",
+    "/api/subscription/monthly-bill",
   );
 }
 

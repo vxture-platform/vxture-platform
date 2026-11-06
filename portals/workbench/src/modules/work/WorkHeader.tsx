@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import {
+  ShellBrand,
   ShellIconButton,
   ShellIconGroup,
   ShellPreferencePanel,
@@ -65,27 +66,17 @@ export function WorkHeader({
       className={`work-header ${data || pending ? "" : "work-header-public"}`}
     >
       <div className="work-header-leading">
-        <Link
+        <ShellBrand
           href="/"
-          className="work-brand vx-brand-lockup"
-          aria-label="Ruyin Work 首页"
-        >
-          {/* The same official mark and two-tone wordmark are used on both surfaces. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="vx-brand-mark"
-            src="/brand/vxture-mark.png"
-            alt=""
-            width={24}
-            height={24}
-          />
-          <span className="work-brand-name">
-            <span>Ruyin</span> Work
-          </span>
-          {!data && !pending && (
-            <span className="work-brand-caption">BUSINESS WORKSPACE</span>
-          )}
-        </Link>
+          className="work-brand"
+          logoSrc="/brand/vxture-mark.png"
+          label={
+            <>
+              <span className="text-primary-text">Ruyin</span> Work
+            </>
+          }
+          tag={!data && !pending ? "BUSINESS WORKSPACE" : undefined}
+        />
         {data && <ScopeMenu data={data} runtime={runtime} />}
       </div>
       {(data || pending) && (

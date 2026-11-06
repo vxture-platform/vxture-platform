@@ -112,11 +112,15 @@ export function filterApps(
 /**
  * Select up to three subscribed applications without filling with public products.
  * @param apps - Current-workspace subscribed applications in registry order.
- * @returns Available subscribed products first, capped at three.
+ * @returns User favorites first, then available subscribed products, capped at three.
  */
 export function homeApps(apps: readonly WorkApp[]): WorkApp[] {
   return apps
-    .toSorted((left, right) => Number(right.available) - Number(left.available))
+    .toSorted(
+      (left, right) =>
+        Number(Boolean(right.favorite)) - Number(Boolean(left.favorite)) ||
+        Number(right.available) - Number(left.available),
+    )
     .slice(0, 3);
 }
 

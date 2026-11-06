@@ -96,27 +96,7 @@ body {
   flex: 0 0 auto;
   height: var(--space-control-md);
 }
-.work-brand-name {
-  white-space: nowrap;
-  font-family: var(--font-brand);
-  font-size: var(--vx-text-2xl);
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: normal;
-}
-.work-brand-name > span {
-  color: var(--primary-text);
-}
-.work-brand-caption {
-  display: inline-flex;
-  align-items: center;
-  height: var(--space-control-2xs);
-  margin-left: var(--space-xs);
-  padding: var(--space-2xs) var(--space-sm);
-  border-radius: var(--radius-full);
-  background: var(--primary-muted);
-  color: var(--muted-foreground);
-  font-size: var(--body-sm-font-size);
+.work-brand .vx-brand-local-name {
   white-space: nowrap;
 }
 .work-header-tools {
@@ -1125,9 +1105,6 @@ body {
   .work-header {
     padding-inline: var(--space-md);
   }
-  .work-brand-name {
-    font-size: var(--body-lg-font-size);
-  }
   .work-brand .vx-brand-mark {
     width: var(--spacing-icon-md);
     height: var(--spacing-icon-md);
@@ -1219,7 +1196,7 @@ body {
     position: relative;
     padding-bottom: var(--space-md);
   }
-  .work-header-public .work-brand-caption {
+  .work-header-public .work-brand .vx-brand-local-name {
     position: absolute;
     top: calc(100% - var(--space-sm));
     left: 0;

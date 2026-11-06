@@ -134,3 +134,19 @@ it("formats one version prefix and falls back for missing release metadata", () 
   expect(appVersion("1.2.3")).toBe("v1.2.3");
   expect(appVersion(" v2.0.0 ")).toBe("v2.0.0");
 });
+it("selects user favorites before available subscription fill-ins without mutating input", () => {
+  const catalog = [
+    app("history", "agent", false),
+    app("available", "platform", true),
+    { ...app("favorite-expired", "agent", false), favorite: true },
+    { ...app("favorite-live", "agent", true), favorite: true },
+    app("another-live", "agent", true),
+  ];
+  expect(homeApps(catalog).map((item) => item.code)).toEqual([
+    "favorite-live",
+    "favorite-expired",
+    "available",
+  ]);
+  expect(catalog[0]?.code).toBe("history");
+  expect(homeApps(catalog.slice(2, 3))).toHaveLength(1);
+});

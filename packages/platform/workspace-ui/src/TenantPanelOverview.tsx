@@ -40,7 +40,6 @@ export interface TenantPanelOverviewProps {
   personal?: boolean;
   suspendedLabel?: string | undefined;
   workspaceName: string;
-  identifier?: ReactNode;
   logoSrc?: string | undefined;
   usage: { storage: UsageMetric; aiCredit: UsageMetric } | null;
   balanceLabel: string;
@@ -233,11 +232,6 @@ export function TenantPanelOverview(
           >
             {props.workspaceName}
           </span>
-          {props.identifier && (
-            <span className="text-body-sm text-muted-foreground">
-              {props.identifier}
-            </span>
-          )}
         </div>
       </div>
       <ShellPanelSection title={labels.resources} divided={false}>

@@ -194,6 +194,7 @@ export function ConsoleHeader({
 
   return (
     <ShellHeader
+      className="max-sm:gap-xs max-sm:px-md max-sm:[&>div:nth-child(2)]:hidden"
       height="lg"
       centerAlign="end"
       leading={
@@ -205,11 +206,16 @@ export function ConsoleHeader({
               人本来就在自己的租户里,而紧邻右侧的 TenantPanel 已经写着当前租户
               并且能切换。品牌位再说一遍等于同一个信息占两处。 */}
           <ShellBrand
+            className="h-control-md"
+            labelClassName="max-sm:hidden"
             href="/"
             label={brandName}
             logoSrc="/brand/vxture-logo-white.png"
           />
-          <span className="h-lg w-px bg-border" aria-hidden="true" />
+          <span
+            className="h-lg w-px bg-border max-sm:hidden"
+            aria-hidden="true"
+          />
           <TenantPanel
             tenant={session.tenant}
             workspaceName={workspaceName}
@@ -291,7 +297,7 @@ export function ConsoleHeader({
       }
       trailing={
         // Keep the business entry separate from system tools and the account menu.
-        <div className="flex items-center gap-md">
+        <div className="flex items-center gap-md max-sm:gap-xs">
           {user?.id &&
           session.tenant?.mode === "tenant" &&
           activeWorkspaceId ? (

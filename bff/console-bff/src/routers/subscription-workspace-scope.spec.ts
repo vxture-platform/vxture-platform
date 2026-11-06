@@ -133,6 +133,11 @@ function setup(
     },
   }));
   const none = undefined as never;
+  const getQuotaOverviewRows = vi.fn(async () => ({
+    pools: [],
+    gauges: [],
+    sharing: [],
+  }));
   const router = new SubscriptionRouter(
     subscriptionService as never,
     orderService as never,
@@ -142,6 +147,7 @@ function setup(
     { query } as unknown as Pool,
     { resolveWorkspaceEntitlements } as never,
     { listProductIds: async () => [] } as never,
+    { getQuotaOverviewRows } as never,
   );
   return {
     router,
@@ -149,6 +155,7 @@ function setup(
     orderService,
     subscriptionService,
     resolveWorkspaceEntitlements,
+    getQuotaOverviewRows,
   };
 }
 
@@ -157,7 +164,7 @@ function setup(
 // ============================================================================
 
 describe("subscription workspace scope", () => {
-  it.each(["getQuotaUsage", "getEntitlements"] as const)(
+  it.each(["getEntitlements"] as const)(
     "%s resolves C2 for the selected workspace",
     async (method) => {
       const { router, query, resolveWorkspaceEntitlements } = setup();
@@ -168,6 +175,19 @@ describe("subscription workspace scope", () => {
       ]);
     },
   );
+
+  it("reads raw quota sources for the selected workspace without requesting C2 views", async () => {
+    const {
+      router,
+      query,
+      getQuotaOverviewRows,
+      resolveWorkspaceEntitlements,
+    } = setup();
+    await router.getQuotaUsage(req());
+    expect(query.mock.calls[0]?.[1]).toEqual([TENANT, SELECTED]);
+    expect(getQuotaOverviewRows).toHaveBeenCalledWith(SELECTED);
+    expect(resolveWorkspaceEntitlements).not.toHaveBeenCalled();
+  });
 
   it("reads product cards and subscription rows from the selected workspace", async () => {
     const { router, query } = setup();

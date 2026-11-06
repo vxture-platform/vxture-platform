@@ -73,7 +73,11 @@ export class ApiRouter {
   @Get("subscription/subscribed-products")
   async subscriptions(@Req() req: Request) {
     const user = await this.user(req);
-    return this.catalog.subscriptions(user.activeWorkspace!, user.activeOrg!);
+    return this.catalog.subscriptions(
+      user.activeWorkspace!,
+      user.activeOrg!,
+      user.userId,
+    );
   }
 
   @Get("subscription/quota-usage")

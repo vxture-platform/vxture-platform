@@ -20,6 +20,7 @@ import {
 import {
   TenantPanelOverview,
   TenantScopePicker,
+  getTenantPanelCopy,
 } from "@vxture/platform-workspace-ui";
 import type { WorkData, WorkRuntime } from "../../lib/contracts";
 import { buildConsoleEntry } from "../../lib/console-entry";
@@ -44,6 +45,7 @@ export function ScopeMenu({
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const { scope } = data;
+  const copy = getTenantPanelCopy("zh-CN");
   const external = (path: string): void => {
     setOpen(false);
     window.open(
@@ -120,9 +122,8 @@ export function ScopeMenu({
         >
           <TenantPanelOverview
             name={scope.name}
-            identifier={scope.identifier}
             personal={scope.personal}
-            typeLabel={scope.personal ? "个人租户" : "组织租户"}
+            typeLabel={scope.personal ? copy.personal : copy.organization}
             workspaceName={scope.workspaceName}
             usage={
               data.resources.status === "ready" ? data.resources.data : null
@@ -133,22 +134,8 @@ export function ScopeMenu({
             monthlyBillLabel={
               data.monthlyBill.status === "ready" ? data.monthlyBill.data : "—"
             }
-            billingPeriod="本月后付费应付"
-            labels={{
-              resources: "资源",
-              storage: "存储容量",
-              aiCredits: "AI 点数",
-              pointsUnit: "点",
-              unavailable: "暂时无法读取用量",
-              totalQuota: "总配额",
-              usageSummary: (percent, used) => `已使用 ${used} · ${percent}%`,
-              billing: "账务",
-              accountBalance: "账户余额",
-              balanceHint: "可用于后续业务支出",
-              monthlyBill: "本月账单",
-              tenantInfo: "组织信息",
-              tenantInfoHint: "在控制台查看与管理",
-            }}
+            billingPeriod={copy.billingPeriod}
+            labels={copy.overview}
             onBilling={() => external("billing")}
             onTenantInfo={() => external("tenant")}
           >
@@ -157,8 +144,8 @@ export function ScopeMenu({
                 <div>
                   <ShellPanelRow
                     icon="arrow-left-right"
-                    label="切换组织"
-                    description="选择组织及其工作空间"
+                    label={copy.switchScope}
+                    description={copy.switchScopeHint}
                     onClick={() => setSwitching(true)}
                     active={switching}
                   />
@@ -182,10 +169,10 @@ export function ScopeMenu({
                   <TenantScopePicker
                     groups={groups}
                     labels={{
-                      organization: "组织租户",
-                      personal: "个人租户",
-                      defaultWorkspace: "登录后默认进入",
-                      enterTenant: "进入此单位选择工作空间",
+                      organization: copy.organization,
+                      personal: copy.personal,
+                      defaultWorkspace: copy.defaultWorkspace,
+                      enterTenant: copy.enterTenant,
                     }}
                     onSelect={select}
                   />

@@ -24,6 +24,8 @@ interface SubscriptionRow {
   productCode: string;
   status: string;
   tier: string | null;
+  bundled: boolean;
+  favorite: boolean;
   maintenance: { until: string | null } | null;
 }
 
@@ -40,7 +42,11 @@ const CATALOG = `select p.product_code as "productCode", p.product_name as "prod
   where p.deleted_at is null and p.is_customer_visible and p.status in ('active', 'developing')
   order by p.sort, p.product_code`;
 const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status,
-  coalesce(o.override_tier_code, pc.tier) as tier,
+  case when pc.component_role = 'primary'
+    then coalesce(o.override_tier_code, pc.tier) else null end as tier,
+  (pc.component_role = 'bundled') as bundled,
+  exists(select 1 from account.user_product_favorites f
+    where f.product_id = p.id and f.user_id = $3) as favorite,
   ${MAINTENANCE} as maintenance
   from metering.subscriptions s
   join tenancy.workspaces w on w.id = s.workspace_id
@@ -52,10 +58,10 @@ const SUBSCRIPTIONS = `select distinct p.product_code as "productCode", s.status
     and (o.expires_at is null or o.expires_at > now())
   where w.id = $1 and w.tenant_id = $2 and w.deleted_at is null
     and s.tenant_id = $2
-    and s.deleted_at is null and pc.component_role = 'primary' and pc.tier is not null
+    and s.deleted_at is null and pc.component_role in ('primary', 'bundled')
     and s.status <> 'cancelled'
     and p.deleted_at is null and p.is_customer_visible
-  order by p.product_code, s.status`;
+  order by p.product_code, s.status, bundled, tier`;
 
 /** Read models contain no price, payment, plan-management or private registry fields. */
 export class CatalogService {
@@ -66,9 +72,14 @@ export class CatalogService {
   async subscriptions(
     workspace: string,
     tenant: string,
+    user: string,
   ): Promise<SubscriptionRow[]> {
     return (
-      await this.pool.query<SubscriptionRow>(SUBSCRIPTIONS, [workspace, tenant])
+      await this.pool.query<SubscriptionRow>(SUBSCRIPTIONS, [
+        workspace,
+        tenant,
+        user,
+      ])
     ).rows;
   }
   async entries(): Promise<{ code: string; homeUrl: string | null }[]> {

@@ -36,7 +36,17 @@ function recordingPool() {
 
 function routerWith(pool: Pool): SubscriptionRouter {
   const none = null as never;
-  return new SubscriptionRouter(none, none, none, none, none, pool, none, none);
+  return new SubscriptionRouter(
+    none,
+    none,
+    none,
+    none,
+    none,
+    pool,
+    none,
+    none,
+    none,
+  );
 }
 
 function req(): Request & RequestContext {

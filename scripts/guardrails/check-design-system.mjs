@@ -2139,14 +2139,15 @@ function findOverlayPresetViolations(file, content) {
     } else if (m[1] === "Drawer") {
       const side = literalProp(tag, "side") ?? "right";
       const width = literalProp(tag, "width");
-      const expectedWidth = normalize(path.relative(ROOT, file)).startsWith(
-        "portals/workbench/",
-      )
-        ? "sm"
-        : "lg";
+      const relativeFile = normalize(path.relative(ROOT, file));
+      const expectedWidth =
+        relativeFile.startsWith("portals/workbench/") ||
+        relativeFile === "portals/console/src/layout/template/HelpDrawer.tsx"
+          ? "sm"
+          : "lg";
       if (side === "left")
         problem = "没有左侧抽屉这个预设：筛选用工具行下拉框 + DS FilterPopover";
-      // Workbench uses the customer-approved 448px DS panel; admin portals retain 672px.
+      // Workbench and Console help use the approved 448px DS panel; other presets retain 672px.
       else if (width !== expectedWidth)
         problem = `详情抽屉必须写 width="${expectedWidth}"（现为 ${width ?? "默认"}）`;
     } else {

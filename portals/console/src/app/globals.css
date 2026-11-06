@@ -8,3 +8,6 @@
  * Phosphor icon font is loaded via <link> in app/layout.tsx (CSS @import would
  * violate "@import must precede all rules" once inlined after DS rules). */
 @import "../styles/console-template.css";
+
+/* Generate shared panel sizing utilities in this portal's production CSS. */
+@source "../../../../packages/platform/workspace-ui/src";
