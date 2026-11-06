@@ -21,7 +21,13 @@ import type {
   WorkRuntime,
 } from "../../lib/contracts";
 import type { HomeCopy } from "../../lib/presentation";
-import { homeApps, RELEASE_LABELS, TIER_LABELS } from "../../lib/presentation";
+import {
+  appVersion,
+  homeApps,
+  RELEASE_LABELS,
+  TIER_LABELS,
+} from "../../lib/presentation";
+import { buildConsoleEntry } from "../../lib/console-entry";
 import { WorkHeader } from "./WorkHeader";
 import { TitleRegion } from "./TitleRegion";
 import { AppCard, AppCatalog } from "./AppCatalog";
@@ -222,7 +228,7 @@ export function WorkPortal({
                       ) : (
                         <div className="work-empty">
                           <p className="text-body-md text-muted-foreground">
-                            暂无可展示的应用
+                            尚未订阅应用
                           </p>
                           <Link
                             href="/apps"
@@ -238,12 +244,10 @@ export function WorkPortal({
                         {
                           title: "继续工作",
                           description: "从上次停下的地方，接着推进",
-                          message: "工作事项暂不可用，可从应用中继续处理",
                         },
                         {
                           title: "与我协作",
                           description: "让协同有序，让进展清晰",
-                          message: "协作事项暂不可用，可进入对应应用查看",
                         },
                       ].map((section) => (
                         <section key={section.title}>
@@ -264,18 +268,14 @@ export function WorkPortal({
                                 <Icon
                                   name={
                                     section.title === "继续工作"
-                                      ? "file"
-                                      : "users"
+                                      ? "clock-counter-clockwise"
+                                      : "list-checks"
                                   }
                                   size="lg"
                                 />
                               </span>
-                              <h3>
-                                {section.title === "继续工作"
-                                  ? "工作记录暂不可用"
-                                  : "协作记录暂不可用"}
-                              </h3>
-                              <p>{section.message}</p>
+                              <h3 role="status">工作记录暂不可用</h3>
+                              <p>工作事项暂不可用，可从应用中继续处理</p>
                             </div>
                           </div>
                         </section>
@@ -306,6 +306,33 @@ export function WorkPortal({
                     </aside>
                   </>
                 )}
+                {appsPage && (
+                  <aside
+                    className="work-desktop-callout"
+                    aria-label="订阅更多产品"
+                  >
+                    <span className="work-desktop-glyph">
+                      <Icon name="sparkles" size="lg" />
+                    </span>
+                    <div>
+                      <h2>拓展所长，开启更多可能</h2>
+                      <p>探索更多专业智能体与产品，为业务增添新的能力</p>
+                    </div>
+                    <a
+                      className="work-section-link"
+                      href={buildConsoleEntry(
+                        data,
+                        runtime.consoleUrl,
+                        "subscription",
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      订阅更多产品
+                      <Icon name="arrow-right" size="sm" />
+                    </a>
+                  </aside>
+                )}
               </>
             )
           )}
@@ -332,7 +359,7 @@ export function WorkPortal({
       <Drawer
         open={Boolean(overview) || help}
         onClose={closeDetails}
-        width="lg"
+        width="sm"
         title={overview?.name ?? "使用帮助"}
         description={
           overview
@@ -392,7 +419,7 @@ export function WorkPortal({
             <dl className="work-detail-facts">
               <div>
                 <dt>版本</dt>
-                <dd>{overview.version ?? "暂未提供"}</dd>
+                <dd>{appVersion(overview.version)}</dd>
               </div>
               {RELEASE_LABELS[overview.stage] && (
                 <div>

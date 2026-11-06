@@ -50,8 +50,8 @@ describe("product availability", () => {
         [product],
         { status: "ready", data: [] },
         { status: "ready", data: [entry] },
-      )[0]?.available,
-    ).toBe(false);
+      ),
+    ).toEqual([]);
     expect(
       projectApps(
         [product],
@@ -80,8 +80,41 @@ describe("product availability", () => {
         [product],
         { status: "error", code: 403, message: "forbidden" },
         { status: "ready", data: [entry] },
-      )[0]?.availabilityLabel,
-    ).toBe("权限待确认");
+      ),
+    ).toEqual([]);
+  });
+  it("shows only subscribed products while retaining unavailable subscribed cards", () => {
+    const apps = projectApps(
+      [
+        product,
+        { ...product, code: "unsubscribed" },
+        { ...product, code: "expired" },
+      ],
+      {
+        status: "ready",
+        data: [active, { ...active, code: "expired", status: "expired" }],
+      },
+      { status: "ready", data: [entry, { code: "expired", href: entry.href }] },
+    );
+    expect(apps.map((item) => item.code)).toEqual(["agent", "expired"]);
+    expect(apps[1]).toMatchObject({
+      available: false,
+      availabilityLabel: "已到期",
+    });
+  });
+  it("keeps grace-period coverage and prefers it over expired history", () => {
+    const app = projectApps(
+      [product],
+      {
+        status: "ready",
+        data: [
+          { ...active, status: "expired" },
+          { ...active, status: "overdue" },
+        ],
+      },
+      { status: "ready", data: [entry] },
+    )[0];
+    expect(app?.available).toBe(true);
   });
   it("rejects script, relative and credential-bearing destinations", () => {
     for (const value of [

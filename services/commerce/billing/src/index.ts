@@ -1,5 +1,6 @@
 export { BillingModule } from "./module/billing.module";
 export { BillingService } from "./service/billing.service";
+export { PgBillingRepository } from "./repository/pg-billing.repository";
 export type {
   InvoiceRecord,
   InvoiceItemRecord,

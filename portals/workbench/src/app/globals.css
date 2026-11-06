@@ -94,6 +94,7 @@ body {
 .work-brand {
   gap: var(--space-xs);
   flex: 0 0 auto;
+  height: var(--space-control-md);
 }
 .work-brand-name {
   white-space: nowrap;
@@ -122,18 +123,19 @@ body {
   justify-self: end;
   display: flex;
   align-items: center;
-  gap: var(--space-2xs);
+  gap: var(--space-md);
 }
 .work-nav {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: var(--space-lg);
-  height: 100%;
+  height: var(--space-control-md);
   white-space: nowrap;
 }
 .work-nav a {
   display: inline-flex;
   align-items: center;
+  height: var(--space-control-md);
   position: relative;
   font-size: var(--body-md-font-size);
   font-weight: 500;
@@ -1078,14 +1080,14 @@ body {
     position: absolute;
     top: 100%;
     inset-inline: 0;
-    height: var(--space-control-xl);
+    height: var(--space-control-md);
     padding-inline: var(--space-lg);
     background: inherit;
     border-bottom: var(--border-width-thin) solid var(--border);
   }
   .work-main {
     padding-top: calc(
-      var(--spacing-header-lg) + var(--space-control-xl) + var(--space-xl)
+      var(--spacing-header-lg) + var(--space-control-md) + var(--space-xl)
     );
     padding-inline: var(--space-lg);
   }

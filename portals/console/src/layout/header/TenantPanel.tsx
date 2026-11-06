@@ -113,8 +113,18 @@ export function TenantPanel({
     >
       <PopoverTrigger asChild>
         <ShellScopeButton
-          icon="buildings"
-          label={tenantName}
+          className="w-auto max-w-[var(--container-overlay-xl)] hover:w-auto hover:max-w-[var(--container-overlay-xl)]"
+          icon={tenant?.tenantType === "personal" ? "user" : "buildings"}
+          label={
+            <span className="flex min-w-0 items-baseline gap-xs">
+              <span className="max-w-[var(--container-overlay-sm)] shrink-0 truncate">
+                {tenantName}
+              </span>
+              <span className="truncate text-body-sm font-normal text-muted-foreground">
+                / {workspaceName || t("defaultWorkspace")}
+              </span>
+            </span>
+          }
           ariaLabel={t("tenantOrg")}
           active={open}
         />

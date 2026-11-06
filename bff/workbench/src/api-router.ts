@@ -12,7 +12,7 @@ import type { RpUser } from "@vxture/core-oidc-rp"; // ⚠️ 跨层引用: use 
 import { SessionService } from "./auth/session-service";
 import { ScopeService } from "./scope-service";
 import { CatalogService } from "./catalog-service";
-import { failure } from "./errors";
+import { ResourceOverview } from "./resource-overview";
 
 // ============================================================================
 // Read-only routes authorize the verified active workspace before domain reads.
@@ -23,6 +23,7 @@ export class ApiRouter {
     @Inject(SessionService) private readonly auth: SessionService,
     @Inject(ScopeService) private readonly scopes: ScopeService,
     @Inject(CatalogService) private readonly catalog: CatalogService,
+    @Inject(ResourceOverview) private readonly overview: ResourceOverview,
   ) {}
 
   private async user(req: Request): Promise<RpUser> {
@@ -75,14 +76,24 @@ export class ApiRouter {
     return this.catalog.subscriptions(user.activeWorkspace!, user.activeOrg!);
   }
 
-  @Get(["subscription/quota-usage", "subscription/credits"])
-  async unavailable(@Req() req: Request): Promise<never> {
-    await this.user(req);
-    // Do not reintroduce retired shared credentials or expose billing data to members.
-    throw failure(
-      503,
-      "WORKBENCH_RESOURCE_UNAVAILABLE",
-      "Resource overview is not connected yet",
-    );
+  @Get("subscription/quota-usage")
+  async resources(@Req() req: Request) {
+    const { user } = await this.auth.authenticate(req);
+    await this.scopes.assertRead(user, "tenant.quota.read");
+    return this.overview.resources(user.activeWorkspace!);
+  }
+
+  @Get("subscription/credits")
+  async balance(@Req() req: Request) {
+    const { user } = await this.auth.authenticate(req);
+    await this.scopes.assertRead(user, "tenant.billing.read", true);
+    return this.overview.balance(user.activeOrg!);
+  }
+
+  @Get("subscription/monthly-bill")
+  async monthlyBill(@Req() req: Request) {
+    const { user } = await this.auth.authenticate(req);
+    await this.scopes.assertRead(user, "tenant.billing.read", true);
+    return this.overview.monthlyBill(user.activeOrg!);
   }
 }

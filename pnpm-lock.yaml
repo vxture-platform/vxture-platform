@@ -714,9 +714,15 @@ importers:
       '@vxture/core-oidc-rp':
         specifier: workspace:*
         version: link:../../packages/core/oidc-rp
+      '@vxture/service-billing':
+        specifier: workspace:*
+        version: link:../../services/commerce/billing
       '@vxture/service-organization':
         specifier: workspace:*
         version: link:../../services/identity/organization
+      '@vxture/service-subscription':
+        specifier: workspace:*
+        version: link:../../services/commerce/subscription
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7

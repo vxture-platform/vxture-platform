@@ -25,6 +25,7 @@ it("preserves identity, organization, workspace and the Console destination", ()
     availabilityIssue: null,
     resources: { status: "error", code: 503, message: "Unavailable" },
     balance: { status: "ready", data: "0" },
+    monthlyBill: { status: "ready", data: "0" },
   };
   const url = new URL(
     buildConsoleEntry(data, "https://console.vxture.com", "billing"),

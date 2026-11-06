@@ -235,24 +235,32 @@ function parseBalance(input: unknown): string {
  * @param catalog - Public product metadata.
  * @param subscriptions - Current-workspace subscriptions; errors remain unknown.
  * @param entries - Registered launch URLs, never a source of availability.
- * @returns Cards whose availability is confirmed by all required sources.
+ * @returns Only subscribed cards; launch availability is a separate selection axis.
  */
 export function projectApps(
   catalog: readonly CatalogProduct[],
   subscriptions: LoadResult<Subscription[]>,
   entries: LoadResult<ProductEntry[]>,
 ): WorkApp[] {
+  if (subscriptions.status === "error") return [];
   return catalog
-    .filter((product) => /_(agent|platform)$/.test(product.type))
+    .filter(
+      (product) =>
+        /_(agent|platform)$/.test(product.type) &&
+        subscriptions.data.some((item) => item.code === product.code),
+    )
     .map((product) => {
+      // Prefer live coverage when multiple historical subscriptions exist.
+      const subscribed =
+        subscriptions.data.find(
+          (item) =>
+            item.code === product.code &&
+            ["active", "trialing", "overdue"].includes(item.status),
+        ) ?? subscriptions.data.find((item) => item.code === product.code)!;
       const active =
-        subscriptions.status === "ready"
-          ? subscriptions.data.find(
-              (item) =>
-                item.code === product.code &&
-                ["active", "trialing"].includes(item.status) &&
-                !item.maintenance,
-            )
+        ["active", "trialing", "overdue"].includes(subscribed.status) &&
+        !subscribed.maintenance
+          ? subscribed
           : undefined;
       const href =
         entries.status === "ready"
@@ -265,10 +273,14 @@ export function projectApps(
         ? "即将上线"
         : product.maintenance
           ? "维护中"
-          : subscriptions.status === "error"
-            ? "权限待确认"
+          : subscribed.maintenance
+            ? "维护中"
             : !active
-              ? "未开通"
+              ? ({
+                  expired: "已到期",
+                  suspended: "已暂停",
+                  cancelled: "已取消",
+                }[subscribed.status] ?? "暂不可用")
               : !href
                 ? "入口暂不可用"
                 : "可使用";
@@ -280,7 +292,7 @@ export function projectApps(
         category: product.type.endsWith("_agent") ? "agent" : "platform",
         version: product.version,
         stage: product.stage,
-        tier: active?.tier ?? null,
+        tier: subscribed.tier,
         icon: product.icon,
         href,
         available,
@@ -326,6 +338,7 @@ export async function loadWorkData(
     workspaces,
     resources,
     balance,
+    monthlyBill,
   ] = await Promise.all([
     catalogConfigured
       ? load("/api/products/catalog", parseCatalog, signal)
@@ -335,13 +348,13 @@ export async function loadWorkData(
           message: "应用目录暂未连接",
         }),
     load("/api/subscription/subscribed-products", parseSubscriptions, signal),
-    // This endpoint currently lists default-workspace tiles. Only reuse its URLs;
-    // subscription eligibility above is resolved against the active workspace.
+    // Registered destinations never establish subscription eligibility.
     load("/api/me/apps", parseEntries, signal),
     load("/api/tenant-context/options", parseOptions, signal),
     load("/api/iam/workspaces/mine", parseWorkspaces, signal),
     load("/api/subscription/quota-usage", parseResources, signal),
     load("/api/subscription/credits", parseBalance, signal),
+    load("/api/subscription/monthly-bill", parseBalance, signal),
   ]);
   const expired = [
     catalog,
@@ -351,6 +364,7 @@ export async function loadWorkData(
     workspaces,
     resources,
     balance,
+    monthlyBill,
   ].find((result) => result.status === "error" && result.code === 401);
   if (expired?.status === "error") return expired;
   return {
@@ -362,13 +376,16 @@ export async function loadWorkData(
       workspaces,
       resources,
       balance,
+      monthlyBill,
       catalog:
         catalog.status === "error"
           ? catalog
-          : {
-              status: "ready",
-              data: projectApps(catalog.data, subscriptions, entries),
-            },
+          : subscriptions.status === "error"
+            ? subscriptions
+            : {
+                status: "ready",
+                data: projectApps(catalog.data, subscriptions, entries),
+              },
       availabilityIssue:
         subscriptions.status === "error"
           ? subscriptions.message

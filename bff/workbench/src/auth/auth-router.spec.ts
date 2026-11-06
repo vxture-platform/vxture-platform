@@ -303,6 +303,28 @@ describe("workspace access", () => {
     ).toBeGreaterThanOrEqual(400);
     expect(fixture.subscriptionScopes).toHaveLength(1);
   });
+  it("authorizes overview reads before calling any resource or billing service", async () => {
+    const cookie = await fixture.login();
+    const paths = ["quota-usage", "credits", "monthly-bill"];
+    for (const path of paths) {
+      expect(
+        (await fixture.request(`/api/subscription/${path}`, cookie)).status,
+      ).toBe(403);
+    }
+    expect(fixture.resourceScopes).toEqual([]);
+    fixture.allowedResourceRead = true;
+    for (const path of paths) {
+      expect(
+        (await fixture.request(`/api/subscription/${path}`, cookie)).status,
+      ).toBe(200);
+    }
+    expect(fixture.resourceScopes).toEqual([WORKSPACE, ORG, ORG]);
+    fixture.allowedScope = false;
+    expect(
+      (await fixture.request("/api/subscription/credits", cookie)).status,
+    ).toBe(403);
+    expect(fixture.resourceScopes).toHaveLength(3);
+  });
   it("prechecks switch membership and verifies the applied IdP context", async () => {
     const cookie = await fixture.login();
     expect(
@@ -363,13 +385,10 @@ describe("workspace access", () => {
     expect(url.searchParams.get("workspace_hint")).toBe(WORKSPACE);
     expect(url.searchParams.get("prompt")).toBe("none");
   });
-  it("reports unsupported resources explicitly and hides internal routes", async () => {
+  it("denies unauthorized billing reads and hides internal routes", async () => {
     const cookie = await fixture.login();
     const response = await fixture.request("/api/subscription/credits", cookie);
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({
-      code: "WORKBENCH_RESOURCE_UNAVAILABLE",
-    });
+    expect(response.status).toBe(403);
     expect((await fixture.request("/api/subscription/credits")).status).toBe(
       401,
     );

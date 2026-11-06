@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  appVersion,
   dailyPresentation,
   filterApps,
   parseHomeCopy,
@@ -109,7 +110,7 @@ describe("catalog filtering", () => {
 // ============================================================================
 // Home selection preserves real availability while keeping the approved rhythm.
 // ============================================================================
-it("fills three home slots when only one product is available without promoting the others", () => {
+it("caps subscribed home cards at three without inventing additional products", () => {
   const catalog = [
     app("locked-first", "agent", false),
     app("locked-second", "platform", false),
@@ -125,4 +126,11 @@ it("fills three home slots when only one product is available without promoting 
   expect(selection.filter((item) => item.available)).toHaveLength(1);
   expect(catalog[0]?.code).toBe("locked-first");
   expect(homeApps([])).toEqual([]);
+  expect(homeApps(catalog.slice(0, 1))).toHaveLength(1);
+});
+it("formats one version prefix and falls back for missing release metadata", () => {
+  for (const version of [null, "", " ", "v"])
+    expect(appVersion(version)).toBe("v1.0.0");
+  expect(appVersion("1.2.3")).toBe("v1.2.3");
+  expect(appVersion(" v2.0.0 ")).toBe("v2.0.0");
 });

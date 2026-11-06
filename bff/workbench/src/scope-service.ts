@@ -9,6 +9,7 @@
 import type {
   ActiveContextService,
   OrganizationService,
+  GovernanceService,
 } from "@vxture/service-organization"; // ⚠️ 跨层引用: delegate live membership decisions to the organization domain.
 import type { RpUser } from "@vxture/core-oidc-rp"; // ⚠️ 跨层引用: consume the canonical authenticated identity.
 import { failure } from "./errors";
@@ -20,7 +21,41 @@ export class ScopeService {
   constructor(
     private readonly active: ActiveContextService,
     private readonly org: OrganizationService,
+    private readonly governance?: Pick<GovernanceService, "can">,
   ) {}
+
+  /**
+   * Recheck live membership and permission before exposing resource or billing data.
+   * @param user - Verified current RP identity.
+   * @param permission - Canonical governance read permission.
+   * @param tenantOnly - Tenant money must never inherit a workspace-only grant.
+   * @returns Nothing when the requested read is permitted.
+   * @throws When membership or permission is absent.
+   */
+  async assertRead(
+    user: RpUser,
+    permission: string,
+    tenantOnly = false,
+  ): Promise<void> {
+    await this.assertCurrent(user);
+    if (
+      !this.governance ||
+      !(await this.governance.can(
+        user.userId,
+        {
+          orgId: user.activeOrg!,
+          ...(!tenantOnly ? { workspaceId: user.activeWorkspace! } : {}),
+        },
+        permission,
+      ))
+    ) {
+      throw failure(
+        403,
+        "WORKBENCH_READ_FORBIDDEN",
+        "This account cannot view the requested overview",
+      );
+    }
+  }
 
   async assertCurrent(user: RpUser): Promise<void> {
     if (!user.activeOrg || !user.activeWorkspace)

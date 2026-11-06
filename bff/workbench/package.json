@@ -22,6 +22,8 @@
     "@nestjs/platform-express": "^11.0.0",
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/service-organization": "workspace:*",
+    "@vxture/service-billing": "workspace:*",
+    "@vxture/service-subscription": "workspace:*",
     "cookie-parser": "^1.4.7",
     "express": "^4.22.1",
     "ioredis": "^5.0.0",

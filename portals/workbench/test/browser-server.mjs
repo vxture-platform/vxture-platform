@@ -88,22 +88,22 @@ const fixtures = {
     { id: "qa-default", name: "default workspace", isDefault: true },
     { id: "qa-contract", name: "采购合同空间", isDefault: false },
   ],
-  "/api/products/catalog": products.map((product) => ({
+  "/api/products/catalog": products.map((product, index) => ({
     productCode: product.code,
     productName: product.nick,
     productNick: product.name,
     productType: product.type,
     description: product.description,
-    releaseVersion: "1.0.0",
+    releaseVersion: index === 0 ? null : "1.2.0",
     releaseStage: "beta",
     status: "active",
     maintenance: null,
   })),
   "/api/subscription/subscribed-products": products
-    .slice(0, 3)
-    .map((product) => ({
+    .slice(0, 5)
+    .map((product, index) => ({
       productCode: product.code,
-      status: "active",
+      status: index === 3 ? "expired" : "active",
       tier: "团队版",
       maintenance: null,
     })),
@@ -116,6 +116,7 @@ const fixtures = {
     storage: { used: 300 * 1024 ** 2, limit: 1000 * 1024 ** 2 },
   },
   "/api/subscription/credits": { balance: "200.00", currency: "CNY" },
+  "/api/subscription/monthly-bill": { balance: "88.50", currency: "CNY" },
 };
 
 // ============================================================================
@@ -140,10 +141,14 @@ const server = http.createServer((request, response) => {
   }
   if (
     (path === "/api/products/catalog" && scenario === "failure") ||
-    (["/api/subscription/quota-usage", "/api/subscription/credits"].includes(
-      path,
-    ) &&
-      scenario === "unavailable")
+    ([
+      "/api/subscription/quota-usage",
+      "/api/subscription/credits",
+      "/api/subscription/monthly-bill",
+    ].includes(path) &&
+      scenario === "unavailable") ||
+    (path === "/api/subscription/subscribed-products" &&
+      scenario === "subfailure")
   ) {
     response.writeHead(503, { "Content-Type": "application/json" });
     response.end(JSON.stringify({ code: "WORKBENCH_RESOURCE_UNAVAILABLE" }));
@@ -180,14 +185,16 @@ const server = http.createServer((request, response) => {
     return;
   }
   if (
-    scenario === "single" &&
+    ["single", "empty"].includes(scenario) &&
     path === "/api/subscription/subscribed-products"
   ) {
     response.writeHead(200, {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
     });
-    response.end(JSON.stringify(fixtures[path].slice(0, 1)));
+    response.end(
+      JSON.stringify(fixtures[path].slice(0, scenario === "empty" ? 0 : 1)),
+    );
     return;
   }
   if (path in fixtures) {

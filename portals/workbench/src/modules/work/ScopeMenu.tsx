@@ -130,7 +130,9 @@ export function ScopeMenu({
             balanceLabel={
               data.balance.status === "ready" ? data.balance.data : "—"
             }
-            monthlyBillLabel="—"
+            monthlyBillLabel={
+              data.monthlyBill.status === "ready" ? data.monthlyBill.data : "—"
+            }
             billingPeriod="本月后付费应付"
             labels={{
               resources: "资源",
@@ -144,7 +146,7 @@ export function ScopeMenu({
               accountBalance: "账户余额",
               balanceHint: "可用于后续业务支出",
               monthlyBill: "本月账单",
-              tenantInfo: "单位信息",
+              tenantInfo: "组织信息",
               tenantInfoHint: "在控制台查看与管理",
             }}
             onBilling={() => external("billing")}
@@ -155,8 +157,8 @@ export function ScopeMenu({
                 <div>
                   <ShellPanelRow
                     icon="arrow-left-right"
-                    label="切换单位与工作空间"
-                    description="选择单位及其工作空间"
+                    label="切换组织"
+                    description="选择组织及其工作空间"
                     onClick={() => setSwitching(true)}
                     active={switching}
                   />
@@ -167,7 +169,7 @@ export function ScopeMenu({
                 align="end"
                 collisionPadding={12}
                 className="work-scope-panel"
-                aria-label="切换单位与工作空间"
+                aria-label="切换组织"
               >
                 {data.scopeOptions.status === "error" ? (
                   <p

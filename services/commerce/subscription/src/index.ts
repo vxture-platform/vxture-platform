@@ -57,6 +57,7 @@ export type {
   CreateOrderResult,
 } from "./types/order.types";
 export { PgUsageRollupRepository } from "./repository/pg-usage-rollup.repository";
+export { PgMeteringReadRepository } from "./repository/pg-metering-read.repository";
 export {
   MeteringReadService,
   resolveBucketZone,
