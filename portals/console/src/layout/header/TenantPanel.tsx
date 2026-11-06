@@ -10,9 +10,8 @@
  */
 
 import { useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
-import { PLATFORM_TIME_ZONE } from "@vxture-platform/shared";
-import { PrincipalNo } from "@/components/principal-no";
+import { useLocale, useTranslations } from "next-intl";
+import { getTenantPanelCopy } from "@vxture/platform-workspace-ui";
 import {
   Popover,
   PopoverTrigger,
@@ -22,7 +21,6 @@ import {
 } from "@vxture/design-system";
 import { tenantLogoUrl, type ConsoleQuotaUsage } from "@/api/console-bff";
 import type { TenantContext } from "@/entities/console";
-import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import { TenantPanelOverview } from "./TenantPanelOverview";
 import { TenantScopePicker, type TenantScopeGroup } from "./TenantScopePicker";
 
@@ -84,14 +82,13 @@ export function TenantPanel({
   onBeforeNavigate,
 }: TenantPanelProps) {
   const t = useTranslations("shell");
-  const format = useFormatter();
+  const copy = getTenantPanelCopy(useLocale());
   const [open, setOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
 
-  const tenantName =
-    formatTenantDisplay(tenant?.name, tenant?.tenantType) || t("tenantOrg");
+  const tenantName = tenant?.name.trim() || t("tenantOrg");
   const tenantTypeLabel =
-    tenant?.tenantType === "personal" ? t("personalTenant") : t("orgTenant");
+    tenant?.tenantType === "personal" ? copy.personal : copy.organization;
   const suspended =
     tenant?.status === "suspended" || tenant?.status === "cancelled";
 
@@ -113,7 +110,7 @@ export function TenantPanel({
     >
       <PopoverTrigger asChild>
         <ShellScopeButton
-          className="w-auto max-w-[var(--container-overlay-xl)] hover:w-auto hover:max-w-[var(--container-overlay-xl)]"
+          className="w-auto max-w-[var(--container-overlay-xl)] hover:w-auto hover:max-w-[var(--container-overlay-xl)] max-sm:w-control-md max-sm:min-w-control-md max-sm:max-w-control-md max-sm:justify-center max-sm:p-0 max-sm:hover:w-control-md max-sm:hover:max-w-control-md max-sm:[&>span]:hidden max-sm:[&>svg:last-child]:hidden"
           icon={tenant?.tenantType === "personal" ? "user" : "buildings"}
           label={
             <span className="flex min-w-0 items-baseline gap-xs">
@@ -140,11 +137,6 @@ export function TenantPanel({
           personal={tenant?.tenantType === "personal"}
           suspendedLabel={suspended ? t("verifySuspended") : undefined}
           workspaceName={workspaceName || t("defaultWorkspace")}
-          identifier={
-            tenant?.tenantNo ? (
-              <PrincipalNo no={tenant.tenantNo} kind="tenant" />
-            ) : undefined
-          }
           logoSrc={
             tenant?.logoHash
               ? tenantLogoUrl(tenant.id, tenant.logoHash)
@@ -153,27 +145,8 @@ export function TenantPanel({
           usage={quotaUsage}
           balanceLabel={balanceLabel}
           monthlyBillLabel={monthlyBillLabel}
-          billingPeriod={format.dateTime(new Date(), {
-            year: "numeric",
-            month: "2-digit",
-            timeZone: PLATFORM_TIME_ZONE,
-          })}
-          labels={{
-            resources: t("usageQuota"),
-            storage: t("storageQuota"),
-            aiCredits: t("aiCredits"),
-            pointsUnit: t("pointsUnit"),
-            unavailable: t("resourceUnavailable"),
-            totalQuota: t("resourceTotalQuota"),
-            usageSummary: (percent, used) =>
-              t("resourceUsageSummary", { percent, used }),
-            billing: t("billing"),
-            accountBalance: t("accountBalance"),
-            balanceHint: t("accountBalanceHint"),
-            monthlyBill: t("monthlyBill"),
-            tenantInfo: t("tenantPanelInfo"),
-            tenantInfoHint: t("tenantPanelInfoHint"),
-          }}
+          billingPeriod={copy.billingPeriod}
+          labels={copy.overview}
           onBilling={() => go("/billing")}
           onTenantInfo={() => go("/tenant")}
         >
@@ -182,8 +155,8 @@ export function TenantPanel({
               <div>
                 <ShellPanelRow
                   icon="arrow-left-right"
-                  label={t("switchScope")}
-                  description={t("switchScopeHint")}
+                  label={copy.switchScope}
+                  description={copy.switchScopeHint}
                   active={scopeOpen}
                   onClick={() => setScopeOpen((current) => !current)}
                 />
@@ -198,10 +171,10 @@ export function TenantPanel({
               <TenantScopePicker
                 groups={scopeGroups}
                 labels={{
-                  organization: t("orgTenant"),
-                  personal: t("personalTenant"),
-                  defaultWorkspace: t("scopeDefaultWorkspace"),
-                  enterTenant: t("scopeEnterTenant"),
+                  organization: copy.organization,
+                  personal: copy.personal,
+                  defaultWorkspace: copy.defaultWorkspace,
+                  enterTenant: copy.enterTenant,
                 }}
                 onSelect={(tenantId, workspaceId) => {
                   setOpen(false);

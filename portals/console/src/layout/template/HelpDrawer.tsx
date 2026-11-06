@@ -88,7 +88,7 @@ export function HelpDrawer({
       open
       onClose={onClose}
       side="right"
-      width="lg"
+      width="sm"
       closeLabel={t("close")}
       title={
         <span className="flex items-center gap-sm">

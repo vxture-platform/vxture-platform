@@ -274,7 +274,7 @@ export function WorkPortal({
                                   size="lg"
                                 />
                               </span>
-                              <h3 role="status">工作记录暂不可用</h3>
+                              <h3 role="status">工作记录正在接通中…</h3>
                               <p>工作事项暂不可用，可从应用中继续处理</p>
                             </div>
                           </div>

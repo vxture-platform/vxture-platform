@@ -163,6 +163,8 @@ function parseSubscriptions(input: unknown): Subscription[] {
             status: required(row.status),
             tier: string(row.tier) || string(row.planName) || null,
             maintenance: row.maintenance != null,
+            bundled: row.bundled === true,
+            favorite: row.favorite === true,
           },
         ]
       : [];
@@ -250,13 +252,17 @@ export function projectApps(
         subscriptions.data.some((item) => item.code === product.code),
     )
     .map((product) => {
-      // Prefer live coverage when multiple historical subscriptions exist.
+      const coverage = subscriptions.data.filter(
+        (item) => item.code === product.code,
+      );
+      const live = (item: Subscription): boolean =>
+        ["active", "trialing", "overdue"].includes(item.status);
+      // Live bundled coverage remains usable even after a direct purchase expires.
+      // Prefer a live direct purchase for its own commercial tier when both exist.
       const subscribed =
-        subscriptions.data.find(
-          (item) =>
-            item.code === product.code &&
-            ["active", "trialing", "overdue"].includes(item.status),
-        ) ?? subscriptions.data.find((item) => item.code === product.code)!;
+        coverage.find((item) => !item.bundled && live(item)) ??
+        coverage.find(live) ??
+        coverage[0]!;
       const active =
         ["active", "trialing", "overdue"].includes(subscribed.status) &&
         !subscribed.maintenance
@@ -297,6 +303,7 @@ export function projectApps(
         href,
         available,
         availabilityLabel,
+        favorite: coverage.some((item) => item.favorite),
       };
     });
 }

@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadWorkData, projectApps, safeHttpUrl } from "./api";
 import { authNavigation } from "./navigation";
+import { homeApps } from "./presentation";
 import type { CatalogProduct, Subscription } from "./contracts";
 
 const product: CatalogProduct = {
@@ -36,6 +37,60 @@ afterEach(() => vi.unstubAllGlobals());
 // Projection safety and RP transitions
 // ============================================================================
 describe("product availability", () => {
+  it("keeps bundled-only products visible and usable without inventing a commercial tier", () => {
+    const app = projectApps(
+      [product],
+      {
+        status: "ready",
+        data: [{ ...active, bundled: true, tier: null, favorite: true }],
+      },
+      { status: "ready", data: [entry] },
+    )[0];
+    expect(app).toMatchObject({ available: true, tier: null, favorite: true });
+  });
+  it("does not let expired primary history hide active bundled coverage", () => {
+    const app = projectApps(
+      [product],
+      {
+        status: "ready",
+        data: [
+          { ...active, status: "expired", tier: "free" },
+          { ...active, bundled: true, tier: null },
+        ],
+      },
+      { status: "ready", data: [entry] },
+    )[0];
+    expect(app).toMatchObject({
+      available: true,
+      tier: null,
+      availabilityLabel: "可使用",
+    });
+  });
+  it("preserves a live direct purchase's tier alongside bundled coverage", () => {
+    const app = projectApps(
+      [product],
+      {
+        status: "ready",
+        data: [{ ...active, bundled: true, tier: null }, active],
+      },
+      { status: "ready", data: [entry] },
+    )[0];
+    expect(app).toMatchObject({ available: true, tier: "team" });
+  });
+  it("does not turn expired or maintained bundled coverage into an available product", () => {
+    for (const subscription of [
+      { ...active, bundled: true, tier: null, status: "expired" },
+      { ...active, bundled: true, tier: null, maintenance: true },
+    ]) {
+      expect(
+        projectApps(
+          [product],
+          { status: "ready", data: [subscription] },
+          { status: "ready", data: [entry] },
+        )[0]?.available,
+      ).toBe(false);
+    }
+  });
   it("places the catalog business name before its brand nickname", () => {
     const app = projectApps(
       [product],
@@ -148,6 +203,73 @@ describe("product availability", () => {
 // Real adapter lifecycle and independent failures
 // ============================================================================
 describe("HTTP adapter", () => {
+  it("preserves bundled coverage and favorites through the HTTP response boundary", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string) => {
+        const payloads: Record<string, unknown> = {
+          "/auth/session": { status: "active" },
+          "/api/me": { id: "u", name: "User" },
+          "/api/tenant-context": {
+            id: "t",
+            name: "Organization",
+            workspace: "w",
+          },
+          "/api/products/catalog": ["agent", "favorite", "public"].map(
+            (code) => ({
+              productCode: code,
+              productName: code,
+              productType: "industry_agent",
+              status: "active",
+              maintenance: null,
+            }),
+          ),
+          "/api/subscription/subscribed-products": [
+            {
+              productCode: "agent",
+              status: "expired",
+              tier: "free",
+              maintenance: null,
+            },
+            {
+              productCode: "agent",
+              status: "active",
+              tier: null,
+              bundled: true,
+              maintenance: null,
+            },
+            {
+              productCode: "favorite",
+              status: "active",
+              tier: "team",
+              favorite: true,
+              maintenance: null,
+            },
+          ],
+          "/api/me/apps": ["agent", "favorite", "public"].map((code) => ({
+            code,
+            homeUrl: `https://${code}.example/`,
+          })),
+        };
+        return Response.json(payloads[path] ?? []);
+      }),
+    );
+    const result = await loadWorkData(new AbortController().signal, true);
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") return;
+    expect(result.data.catalog.status).toBe("ready");
+    if (result.data.catalog.status !== "ready") return;
+    expect(result.data.catalog.data).toHaveLength(2);
+    expect(result.data.catalog.data[0]).toMatchObject({
+      code: "agent",
+      available: true,
+      tier: null,
+    });
+    expect(homeApps(result.data.catalog.data).map((app) => app.code)).toEqual([
+      "favorite",
+      "agent",
+    ]);
+  });
   it("returns unauthenticated immediately without requesting private data", async () => {
     const fetcher = vi
       .fn()

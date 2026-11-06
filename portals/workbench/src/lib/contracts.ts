@@ -40,6 +40,7 @@ export interface WorkApp {
   href: string | null;
   available: boolean;
   availabilityLabel: string;
+  favorite?: boolean;
 }
 export interface CatalogProduct {
   code: string;
@@ -58,6 +59,8 @@ export interface Subscription {
   status: string;
   tier: string | null;
   maintenance: boolean;
+  bundled?: boolean;
+  favorite?: boolean;
 }
 export interface ProductEntry {
   code: string;
