@@ -23,6 +23,7 @@ import {
   Post,
   Query,
   Req,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
@@ -39,6 +40,7 @@ import {
   type DiscountEffect,
 } from "@vxture/service-promotion";
 import {
+  MeteringReadService, // ⚠️ 跨层引用: reuse the period-aware domain resource read service.
   OrderService,
   SubscriptionService,
 } from "@vxture/service-subscription";
@@ -847,23 +849,45 @@ export class SubscriptionRouter {
     private readonly entitlementsClient: PlatformEntitlementsClient,
     @Inject(FavoritesService)
     private readonly favoritesService: FavoritesService,
+    @Inject(MeteringReadService)
+    private readonly metering: MeteringReadService,
   ) {}
 
   // --------------------------------------------------------------------------
   // GET /api/subscription/credits — 租户钱包余额（product_321 P6：V1 只读展示）
   // --------------------------------------------------------------------------
 
-  @RequireCapability("tenant.quota.read")
+  @RequireCapability("tenant.billing.read")
   @Get("credits")
   async getCredits(
     @Req() req: Request & RequestContext,
-  ): Promise<{ balance: string; currency: string }> {
+  ): Promise<{ balance: string; currency: string } | null> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     const record = await this.billingService.getCreditBalance(req.tenant.id);
-    return {
-      balance: record?.balance ?? "0.00",
-      currency: record?.currency ?? "CNY",
-    };
+    // A missing wallet is unknown, rather than a persisted zero balance.
+    return record
+      ? { balance: record.balance, currency: record.currency }
+      : null;
+  }
+
+  /**
+   * Read the current month's outstanding postpaid amount from the billing domain.
+   * @param req - Authenticated tenant request authorized by the billing read guard.
+   * @returns Amount still due; no outstanding invoices means zero CNY due.
+   * @throws When tenant context is absent or currencies cannot be combined.
+   */
+  @RequireCapability("tenant.billing.read")
+  @Get("monthly-bill")
+  async getMonthlyBill(
+    @Req() req: Request & RequestContext,
+  ): Promise<{ balance: string; currency: string }> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    const rows = await this.billingService.getMonthlyPostpaidDue(req.tenant.id);
+    if (rows.length > 1)
+      throw new ServiceUnavailableException(
+        "Multiple billing currencies require the bill list",
+      );
+    return rows[0] ?? { balance: "0.00", currency: "CNY" };
   }
 
   // --------------------------------------------------------------------------
@@ -880,12 +904,34 @@ export class SubscriptionRouter {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     const workspaceId = await this.resolveRequestWorkspace(req.tenant);
 
-    const entitlements = await this.resolveWorkspaceEntitlements(workspaceId);
-    // No live subscriptions (or platform-api unreachable) → zero display,
-    // never a 500: the quota header panel must degrade, not break the page.
-    return aggregateWorkspaceQuota(
-      entitlements ? Object.values(entitlements) : [],
-    );
+    // Product C2 views can repeat shared pools. Read workspace sources once,
+    // preserving domain period resets and storage's gauge semantics.
+    const { pools, gauges } =
+      await this.metering.getQuotaOverviewRows(workspaceId);
+    const metric = (key: string, gauge: boolean): QuotaMetricView => {
+      const rows = pools.filter((pool) => pool.metricKey === key);
+      const result = {
+        limit: rows.reduce((sum, pool) => sum + pool.quotaLimit, 0),
+        used: gauge
+          ? gauges
+              .filter((row) => row.metricKey === key)
+              .reduce((sum, row) => sum + row.value, 0)
+          : rows.reduce((sum, pool) => sum + pool.effectiveUsed, 0),
+      };
+      if (
+        Object.values(result).some(
+          (value) => !Number.isSafeInteger(value) || value < 0,
+        )
+      )
+        throw new ServiceUnavailableException(
+          "Resource overview is unavailable",
+        );
+      return result;
+    };
+    return {
+      storage: metric("storage.bytes", true),
+      aiCredit: metric("ai.credit", false),
+    };
   }
 
   // --------------------------------------------------------------------------
@@ -2804,58 +2850,6 @@ function buildPaymentInstructions(orderNo: string): OfflinePaymentInstructions {
     reference: orderNo,
   };
 }
-
-/**
- * Workspace-total {used, limit} for the two WS-level platform metrics
- * (storage.bytes gauge, ai.credit counter) — product-agnostic by design (this
- * is the header panel, product_220 §4.4), but the two metric kinds must be
- * aggregated differently across the per-product C2 views, or the result is
- * wrong rather than merely imprecise:
- *
- * - storage.bytes (gauge, WS-uniform): `platform-entitlements.service.ts`
- *   computes ONE workspace-wide row and injects the identical object into
- *   EVERY requested product's `quota_pools` (§4.4 — "same for every
- *   product"). Summing it across N subscribed products would multiply the
- *   true total by N. Read it once from whichever product view carries it.
- * - ai.credit (counter, per-product reserved pool, §4.3): each product's
- *   view shows only pools it can see — currently exactly its OWN
- *   contribution, because no tenant sharing-policy config UI exists yet to
- *   populate `metering.resource_sharing_policies` (TD-033, `Open`, no write
- *   path). Under that real invariant, summing every product's entry is safe
- *   and matches the pre-TD-042 workspace-total semantics with zero
- *   double-count risk. **Revisit this sum if/when TD-033 ships a sharing
- *   config UI** — a populated policy could then make one shared pool appear
- *   in more than one product's view, which this sum would double-count.
- */
-function aggregateWorkspaceQuota(
-  views: ProductEntitlementView[],
-): QuotaUsageView {
-  const allPools = views.flatMap((v) => v.quota_pools);
-
-  const storagePool = allPools.find((p) => p.metric === "storage.bytes");
-  const storage: QuotaMetricView = storagePool
-    ? {
-        used: storagePool.limit - storagePool.remaining,
-        limit: storagePool.limit,
-      }
-    : EMPTY_QUOTA_METRIC;
-
-  let aiLimit = 0;
-  let aiUsed = 0;
-  for (const p of allPools) {
-    if (p.metric !== "ai.credit") continue;
-    aiLimit += p.limit;
-    aiUsed += p.limit - p.remaining;
-  }
-  const aiCredit: QuotaMetricView =
-    aiLimit === 0 && aiUsed === 0
-      ? EMPTY_QUOTA_METRIC
-      : { used: aiUsed, limit: aiLimit };
-
-  return { storage, aiCredit };
-}
-
-const EMPTY_QUOTA_METRIC: QuotaMetricView = { used: 0, limit: 0 };
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

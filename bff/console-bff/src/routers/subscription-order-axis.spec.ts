@@ -69,7 +69,17 @@ function routerWith(rows: Record<string, unknown>[]): SubscriptionRouter {
     query: async () => ({ rows }),
   } as unknown as Pool;
   const none = undefined as never;
-  return new SubscriptionRouter(none, none, none, none, none, pool, none, none);
+  return new SubscriptionRouter(
+    none,
+    none,
+    none,
+    none,
+    none,
+    pool,
+    none,
+    none,
+    none,
+  );
 }
 
 /**
@@ -95,6 +105,7 @@ function detailRouterWith(
     none,
     none,
     pool,
+    none,
     none,
     none,
   );

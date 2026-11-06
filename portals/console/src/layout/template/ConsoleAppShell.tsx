@@ -18,6 +18,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { consoleDomains } from "@/config/navigation";
 import {
   fetchCredits,
+  fetchMonthlyBill,
   fetchInbox,
   fetchInboxUnreadCount,
   fetchMySubscriptions,
@@ -181,51 +182,79 @@ export function ConsoleAppShell({
     if (drawer !== "help") return;
     void loadHelpTickets();
   }, [drawer, loadHelpTickets]);
-  const [accountBalance, setAccountBalance] = useState<{
-    balance: string;
-    currency: string;
-  } | null>(null);
-  // Active subscription plan name; null until it loads or when the tenant has
-  // no subscription at all — the header falls back to its free-plan label then.
-  const [planName, setPlanName] = useState<string | null>(null);
-  /* 配额与当前工作空间原先由 header 自己取。上提到这里是因为它们现在同时喂
-   * 「当前范围」面板与侧栏页脚——留在 header 里会让同一份数据被拉两遍。 */
-  const [quotaUsage, setQuotaUsage] = useState<ConsoleQuotaUsage | null>(null);
-  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
-
   const tenantId = session.tenant?.id;
+  const workspaceId = session.tenant?.workspace;
+  const userId = session.user?.id;
+  const scopeKey = JSON.stringify([userId, tenantId, workspaceId]);
+  const [overview, setOverview] = useState<{
+    scopeKey: string;
+    balance: { balance: string; currency: string } | null;
+    bill: { balance: string; currency: string } | null;
+    quota: ConsoleQuotaUsage | null;
+    plan: string | null;
+    workspace: string | null;
+  } | null>(null);
+  // Never paint the previous scope while the next effect is still pending.
+  const currentOverview = overview?.scopeKey === scopeKey ? overview : null;
+  const accountBalance = currentOverview?.balance ?? null;
+  const monthlyBill = currentOverview?.bill ?? null;
+  const quotaUsage = currentOverview?.quota ?? null;
+  const planName = currentOverview?.plan ?? null;
+  const workspaceName =
+    currentOverview?.workspace ?? session.tenant?.workspaceName ?? null;
   useEffect(() => {
     let alive = true;
-    setAccountBalance(null);
+    const empty = {
+      scopeKey,
+      balance: null,
+      bill: null,
+      quota: null,
+      plan: null,
+      workspace: null,
+    };
+    setOverview(empty);
+    if (status !== "ready" || !userId || !tenantId) return;
+
+    const update = (value: Partial<NonNullable<typeof overview>>) => {
+      if (alive)
+        setOverview((previous) => ({
+          ...(previous?.scopeKey === scopeKey ? previous : empty),
+          ...value,
+        }));
+    };
 
     const loadBalance = async () => {
       const value = await fetchCredits();
-      if (alive) setAccountBalance(value);
+      update({ balance: value });
+    };
+
+    const loadBill = async () => {
+      update({ bill: await fetchMonthlyBill() });
     };
 
     const loadPlan = async () => {
       const subs = await fetchMySubscriptions();
-      if (!alive) return;
       const active = subs.find((s) => s.status === "active") ?? subs[0];
-      setPlanName(active?.planName || null);
+      update({ plan: active?.planName || null });
     };
 
     const loadQuota = async () => {
       const usage = await fetchQuotaUsage();
-      if (alive) setQuotaUsage(usage);
+      update({ quota: usage });
     };
 
     const loadWorkspace = async () => {
       const items = await fetchMyWorkspaces();
-      if (!alive) return;
       const current =
-        items.find((w) => w.tenantId === tenantId) ??
-        items.find((w) => w.isCurrent);
-      setWorkspaceName(current?.workspaceName ?? null);
+        items.find(
+          (w) => w.tenantId === tenantId && w.workspaceId === workspaceId,
+        ) ?? items.find((w) => w.tenantId === tenantId && w.isCurrent);
+      update({ workspace: current?.workspaceName ?? null });
     };
 
     void Promise.allSettled([
       loadBalance(),
+      loadBill(),
       loadPlan(),
       loadQuota(),
       loadWorkspace(),
@@ -234,7 +263,7 @@ export function ConsoleAppShell({
     return () => {
       alive = false;
     };
-  }, [tenantId]);
+  }, [scopeKey, userId, tenantId, workspaceId, status]);
 
   const toggleNav = () =>
     setNavCollapsed((c) => {
@@ -315,9 +344,14 @@ export function ConsoleAppShell({
     collapseAllGroups: tShell("sidebar.collapseAllGroups"),
   };
 
-  // No postpaid outstanding-balance source is available yet. Paid totals and
-  // prepaid subscription bills must never substitute for the amount due.
-  const monthlyBillLabel = "—";
+  const billAmount = monthlyBill ? Number(monthlyBill.balance) : NaN;
+  const monthlyBillLabel =
+    monthlyBill && Number.isFinite(billAmount)
+      ? new Intl.NumberFormat(locale, {
+          style: "currency",
+          currency: monthlyBill.currency,
+        }).format(billAmount)
+      : "—";
   const balanceAmount = accountBalance ? Number(accountBalance.balance) : NaN;
   const balanceLabel =
     accountBalance && Number.isFinite(balanceAmount)

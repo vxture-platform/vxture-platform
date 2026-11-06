@@ -94,7 +94,17 @@ function sqlsMentioning(
 /** 八个注入里只有 pool 需要真货：两道门都排在任何 service 调用之前。 */
 function routerWith(pool: Pool): SubscriptionRouter {
   const none = null as never;
-  return new SubscriptionRouter(none, none, none, none, none, pool, none, none);
+  return new SubscriptionRouter(
+    none,
+    none,
+    none,
+    none,
+    none,
+    pool,
+    none,
+    none,
+    none,
+  );
 }
 
 function req(): Request & RequestContext {

@@ -41,6 +41,7 @@ function noDbRouter(): SubscriptionRouter {
     pool,
     none,
     none,
+    none,
   );
 }
 

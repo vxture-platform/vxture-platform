@@ -57,6 +57,7 @@ function routerWith(pool: Pool): SubscriptionRouter {
     pool,
     none,
     favorites,
+    none,
   );
 }
 
