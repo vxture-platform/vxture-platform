@@ -94,6 +94,8 @@ const targetEnv =
         NODE_ENV: FAKE_ENV.NODE_ENV,
         BOOT_SMOKE: FAKE_ENV.BOOT_SMOKE,
         DATABASE_URL: FAKE_ENV.DATABASE_URL,
+        WORKBENCH_INBOX_DATABASE_URL:
+          "postgresql://svc_workbench_inbox:smoke@127.0.0.1:5432/smoke",
         REDIS_URL: FAKE_ENV.REDIS_URL,
         WORKBENCH_BASE_URL: "https://workbench.smoke.example.com",
         WORKBENCH_BFF_PORT: "3061",

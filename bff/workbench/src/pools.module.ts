@@ -1,5 +1,5 @@
 /**
- * Dedicated primary authorization pool and read-only reporting pool.
+ * Read-only query pools and a column-restricted inbox acknowledgement pool.
  * @package @vxture/bff-workbench
  * @layer Application
  * @category module
@@ -10,16 +10,27 @@ import { Inject, Module, type OnApplicationShutdown } from "@nestjs/common";
 import { Pool } from "pg";
 import Redis from "ioredis";
 import { loadConfig, type WorkbenchConfig } from "./config";
-import { CONFIG, PRIMARY_POOL, READ_POOL, REDIS } from "./tokens";
+import {
+  CONFIG,
+  INBOX_WRITE_POOL,
+  PRIMARY_POOL,
+  READ_POOL,
+  REDIS,
+} from "./tokens";
 
 class Connections implements OnApplicationShutdown {
   constructor(
     @Inject(PRIMARY_POOL) private readonly primary: Pool,
     @Inject(READ_POOL) private readonly reporting: Pool,
+    @Inject(INBOX_WRITE_POOL) private readonly inbox: Pool,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
   async onApplicationShutdown(): Promise<void> {
-    await Promise.all([this.primary.end(), this.reporting.end()]);
+    await Promise.all([
+      this.primary.end(),
+      this.reporting.end(),
+      this.inbox.end(),
+    ]);
     this.redis.disconnect();
   }
 }
@@ -52,6 +63,18 @@ class Connections implements OnApplicationShutdown {
         }),
     },
     {
+      provide: INBOX_WRITE_POOL,
+      inject: [CONFIG],
+      useFactory: (config: WorkbenchConfig) =>
+        new Pool({
+          connectionString: config.inboxDatabaseUrl,
+          max: 2,
+          connectionTimeoutMillis: 3000,
+          statement_timeout: 5000,
+          options: "-c default_transaction_read_only=off",
+        }),
+    },
+    {
       provide: REDIS,
       inject: [CONFIG],
       useFactory: (config: WorkbenchConfig) =>
@@ -66,6 +89,6 @@ class Connections implements OnApplicationShutdown {
     },
     Connections,
   ],
-  exports: [CONFIG, PRIMARY_POOL, READ_POOL, REDIS],
+  exports: [CONFIG, PRIMARY_POOL, READ_POOL, INBOX_WRITE_POOL, REDIS],
 })
 export class PoolsModule {}

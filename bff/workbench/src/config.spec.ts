@@ -17,6 +17,8 @@ const env: NodeJS.ProcessEnv = {
   OIDC_CLIENT_ID: "workbench",
   OIDC_CLIENT_SECRET: "synthetic-secret",
   DATABASE_URL: "postgresql://test:test@127.0.0.1/test",
+  WORKBENCH_INBOX_DATABASE_URL:
+    "postgresql://svc_workbench_inbox:test@127.0.0.1/test",
   REDIS_URL: "redis://127.0.0.1:6379",
 };
 
@@ -28,6 +30,7 @@ describe("workbench runtime configuration", () => {
     expect(config.cookieName).toMatch(/^__Host-/);
     expect(config.oidc.redirectUri).toBe("https://ruyin.work/auth/callback");
     expect(config.reportingUrl).toBe(config.databaseUrl);
+    expect(config.inboxDatabaseUrl).toBe(env.WORKBENCH_INBOX_DATABASE_URL);
   });
   it.each([
     ["OIDC_CLIENT_SECRET", ""],
@@ -41,6 +44,19 @@ describe("workbench runtime configuration", () => {
     ["RP_COOKIE_INSECURE", "true"],
     ["REDIS_URL", ""],
     ["DATABASE_URL", ""],
+    ["WORKBENCH_INBOX_DATABASE_URL", ""],
+    [
+      "WORKBENCH_INBOX_DATABASE_URL",
+      "postgresql://reporting_ro@127.0.0.1/test",
+    ],
+    [
+      "WORKBENCH_INBOX_DATABASE_URL",
+      "postgresql://platform_svc@127.0.0.1/test",
+    ],
+    [
+      "WORKBENCH_INBOX_DATABASE_URL",
+      "https://svc_workbench_inbox@localhost/test",
+    ],
   ])("rejects unsafe or incomplete %s=%s", (key, value) => {
     expect(() => loadConfig({ ...env, [key]: value })).toThrow();
   });

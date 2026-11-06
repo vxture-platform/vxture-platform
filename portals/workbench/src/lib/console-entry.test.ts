@@ -7,7 +7,7 @@
  * @date 2026-11-05
  */
 import { expect, it } from "vitest";
-import { buildConsoleEntry } from "./console-entry";
+import { buildConsoleEntry, notificationEntry } from "./console-entry";
 import type { WorkData } from "./contracts";
 it("preserves identity, organization, workspace and the Console destination", () => {
   const data: WorkData = {
@@ -27,6 +27,28 @@ it("preserves identity, organization, workspace and the Console destination", ()
     balance: { status: "ready", data: "0" },
     monthlyBill: { status: "ready", data: "0" },
   };
+  for (const unsafe of [
+    "https://evil.invalid/billing",
+    "javascript:alert(1)",
+    "/auth/logout",
+    "/../auth/logout",
+    "https://console.vxture.com.evil.invalid/inbox",
+  ]) {
+    expect(
+      new URL(
+        notificationEntry(data, "https://console.vxture.com", unsafe),
+      ).searchParams.get("returnTo"),
+    ).toBe("https://console.vxture.com/zh-CN/inbox");
+  }
+  expect(
+    new URL(
+      notificationEntry(
+        data,
+        "https://console.vxture.com",
+        "/zh-CN/billing?tab=unpaid",
+      ),
+    ).searchParams.get("returnTo"),
+  ).toBe("https://console.vxture.com/zh-CN/billing?tab=unpaid");
   const url = new URL(
     buildConsoleEntry(data, "https://console.vxture.com", "billing"),
   );

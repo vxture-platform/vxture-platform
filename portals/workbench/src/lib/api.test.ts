@@ -7,7 +7,13 @@
  * @date 2026-11-05
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadWorkData, projectApps, safeHttpUrl } from "./api";
+import {
+  loadWorkData,
+  projectApps,
+  safeHttpUrl,
+  loadInbox,
+  markNotificationsRead,
+} from "./api";
 import { authNavigation } from "./navigation";
 import { homeApps } from "./presentation";
 import type { CatalogProduct, Subscription } from "./contracts";
@@ -343,5 +349,56 @@ describe("HTTP adapter", () => {
     expect(
       await loadWorkData(new AbortController().signal, true),
     ).toMatchObject({ status: "error", code: 401 });
+  });
+});
+
+// ============================================================================
+// Inbox boundary failures must never masquerade as an empty inbox.
+// ============================================================================
+describe("notification adapters", () => {
+  it("rejects malformed unread totals and timestamps", async () => {
+    for (const payload of [
+      { items: [], unreadCount: -1 },
+      {
+        unreadCount: 1,
+        items: [{ id: "one", title: "Test", createdAt: "bad-date" }],
+      },
+    ]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify(payload))),
+      );
+      expect((await loadInbox(new AbortController().signal)).status).toBe(
+        "error",
+      );
+    }
+  });
+  it("preserves server failures rather than declaring no notifications", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 503 })),
+    );
+    expect(await loadInbox(new AbortController().signal)).toMatchObject({
+      status: "error",
+      code: 503,
+    });
+  });
+  it("uses explicit same-origin POSTs and surfaces write failures", async () => {
+    const fetcher = vi.fn(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetcher);
+    const signal = new AbortController().signal;
+    await markNotificationsRead("message/id", signal);
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/me/inbox/message%2Fid/read",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        headers: expect.objectContaining({ "X-Workbench-Request": "1" }),
+      }),
+    );
+    fetcher.mockImplementation(async () => new Response("", { status: 403 }));
+    await expect(markNotificationsRead(null, signal)).rejects.toThrow(
+      "标记已读失败",
+    );
   });
 });

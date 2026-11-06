@@ -32,6 +32,7 @@ import { WorkHeader } from "./WorkHeader";
 import { TitleRegion } from "./TitleRegion";
 import { AppCard, AppCatalog } from "./AppCatalog";
 import { LoginPage } from "./LoginPage";
+import { NotificationDrawer } from "./NotificationDrawer";
 
 // ============================================================================
 // Data lifecycle and public login state
@@ -57,7 +58,8 @@ export function WorkPortal({
   const [result, setResult] = useState<LoadResult<WorkData> | null>(null);
   const [revision, setRevision] = useState(0);
   const [overview, setOverview] = useState<WorkApp | null>(null);
-  const [help, setHelp] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const detailsOrigin = useRef<HTMLElement | null>(null);
   const rememberDetailsOrigin = (): void => {
     detailsOrigin.current =
@@ -68,13 +70,13 @@ export function WorkPortal({
   const showOverview = (app: WorkApp): void => {
     rememberDetailsOrigin();
     setOverview(app);
+    setDetailsOpen(true);
   };
   const closeDetails = (): void => {
-    setOverview(null);
-    setHelp(false);
+    setDetailsOpen(false);
   };
   useEffect(() => {
-    if (overview || help || !detailsOrigin.current) return;
+    if (detailsOpen || !detailsOrigin.current) return;
     let frame = 0;
     // The portal remains mounted through its exit animation; restore focus afterwards.
     const restore = (): void => {
@@ -91,7 +93,7 @@ export function WorkPortal({
       observer.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [overview, help]);
+  }, [detailsOpen]);
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(timer);
@@ -115,8 +117,8 @@ export function WorkPortal({
     return () => controller.abort();
   }, [runtime.authConfigured, runtime.catalogConfigured, revision, knownRoute]);
   useEffect(() => {
-    setOverview(null);
-    setHelp(false);
+    setDetailsOpen(false);
+    setNotificationsOpen(false);
   }, [appsPage]);
   const data = result?.status === "ready" ? result.data : null;
   const checking = runtime.authConfigured && result === null;
@@ -145,9 +147,11 @@ export function WorkPortal({
         apps={appsPage}
         runtime={runtime}
         pending={checking}
+        onNotifications={() => setNotificationsOpen(true)}
         onHelp={() => {
           rememberDetailsOrigin();
-          setHelp(true);
+          setOverview(null);
+          setDetailsOpen(true);
         }}
       />
       {!data && !checking ? (
@@ -355,9 +359,18 @@ export function WorkPortal({
         </main>
       )}
 
+      {data && (
+        <NotificationDrawer
+          key={`${data.user.id}:${data.scope.id}:${data.scope.workspace}`}
+          data={data}
+          runtime={runtime}
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+        />
+      )}
       {/* All details share DS Drawer chrome, close icon, width and footer position. */}
       <Drawer
-        open={Boolean(overview) || help}
+        open={detailsOpen}
         onClose={closeDetails}
         width="sm"
         title={overview?.name ?? "使用帮助"}

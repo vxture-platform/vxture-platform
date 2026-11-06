@@ -9,19 +9,23 @@
  * @date 2026-11-05
  */
 import Link from "next/link";
+import Image from "next/image";
 import { useSyncExternalStore } from "react";
 import {
   ShellBrand,
   ShellIconButton,
   ShellIconGroup,
   ShellPreferencePanel,
+  ShellPanelSlots,
   ShellUserMenu,
   ShellFullscreenToggle,
+  ShellLocaleSwitcher,
   useTheme,
 } from "@vxture/design-system";
 import type { WorkData, WorkRuntime } from "../../lib/contracts";
 import { authNavigation } from "../../lib/navigation";
 import { buildConsoleEntry } from "../../lib/console-entry";
+import { accountPhone } from "../../lib/presentation";
 import { ScopeMenu } from "./ScopeMenu";
 
 // ============================================================================
@@ -39,12 +43,14 @@ export function WorkHeader({
   apps,
   runtime,
   onHelp,
+  onNotifications,
   pending = false,
 }: {
   data: WorkData | null;
   apps: boolean;
   runtime: WorkRuntime;
   onHelp: () => void;
+  onNotifications: () => void;
   pending?: boolean;
 }): React.JSX.Element {
   const theme = useTheme();
@@ -66,17 +72,34 @@ export function WorkHeader({
       className={`work-header ${data || pending ? "" : "work-header-public"}`}
     >
       <div className="work-header-leading">
-        <ShellBrand
-          href="/"
-          className="work-brand"
-          logoSrc="/brand/vxture-mark.png"
-          label={
-            <>
+        {data || pending ? (
+          <ShellBrand
+            href="/"
+            className="work-brand"
+            logoSrc="/brand/vxture-mark.png"
+            label={
+              <>
+                <span className="text-primary-text">Ruyin</span> Work
+              </>
+            }
+          />
+        ) : (
+          <div className="vx-brand-lockup work-brand">
+            <Image
+              src="/brand/vxture-mark.png"
+              width={24}
+              height={24}
+              alt=""
+              className="vx-brand-mark"
+              draggable={false}
+              unoptimized
+            />
+            <span className="vx-brand-name">
               <span className="text-primary-text">Ruyin</span> Work
-            </>
-          }
-          tag={!data && !pending ? "BUSINESS WORKSPACE" : undefined}
-        />
+            </span>
+            <span className="vx-brand-local-name">BUSINESS WORKSPACE</span>
+          </div>
+        )}
         {data && <ScopeMenu data={data} runtime={runtime} />}
       </div>
       {(data || pending) && (
@@ -90,7 +113,13 @@ export function WorkHeader({
         </nav>
       )}
       <div className="work-header-tools">
-        <ShellIconGroup label="显示、通知、帮助与控制台">
+        <ShellIconGroup
+          label={
+            data || pending
+              ? "显示、通知、帮助与控制台"
+              : "主题、语言、全屏与主站"
+          }
+        >
           <ShellIconButton
             icon={hydrated && theme.theme === "dark" ? "sun" : "moon"}
             label="切换主题"
@@ -99,18 +128,40 @@ export function WorkHeader({
           {data && (
             <ShellIconButton
               icon="bell"
-              label="工作通知（新标签页）"
-              onClick={() => openConsole("inbox")}
+              label="工作通知"
+              onClick={onNotifications}
             />
           )}
           {!data && !pending && (
-            <ShellFullscreenToggle
-              targetId="workbench-root"
-              enterLabel="全屏显示"
-              exitLabel="退出全屏"
-            />
+            <>
+              <ShellLocaleSwitcher
+                currentLocale="zh-CN"
+                options={[{ locale: "zh-CN", nativeName: "简体中文" }]}
+                buttonLabel="语言"
+                panelLabel="选择语言"
+                onLocaleChange={() => undefined}
+              />
+              <ShellFullscreenToggle
+                targetId="workbench-root"
+                enterLabel="全屏显示"
+                exitLabel="退出全屏"
+              />
+              <ShellIconButton
+                icon="home"
+                label="VXTURE 主站（新标签页）"
+                onClick={() =>
+                  window.open(
+                    runtime.websiteUrl,
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
+              />
+            </>
           )}
-          <ShellIconButton icon="help" label="使用帮助" onClick={onHelp} />
+          {(data || pending) && (
+            <ShellIconButton icon="help" label="使用帮助" onClick={onHelp} />
+          )}
           {data && (
             <ShellIconButton
               icon="settings"
@@ -126,9 +177,22 @@ export function WorkHeader({
               displayName: data.user.name,
               avatarAlt: data.user.name,
               avatarSrc: data.user.picture ?? undefined,
-              uniqueLine: data.user.phone || data.user.email || "账号信息",
+              uniqueLine: accountPhone(data.user.phone) || "未绑定手机号",
               meta: data.user.email,
             }}
+            extras={
+              <ShellPanelSlots
+                label="用户等级"
+                leadIcon="medal"
+                lead="row"
+                slots={[
+                  { key: "role", icon: "user", label: "角色 · —" },
+                  { key: "level", icon: "star", label: "其他奖章 · 待解锁" },
+                  { key: "slot-3", icon: "medal", label: "其他奖章 · 待解锁" },
+                  { key: "slot-4", icon: "medal", label: "其他奖章 · 待解锁" },
+                ]}
+              />
+            }
             links={[
               {
                 key: "profile",

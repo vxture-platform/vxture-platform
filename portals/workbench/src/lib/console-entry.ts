@@ -28,3 +28,35 @@ export function buildConsoleEntry(
   url.searchParams.set("returnTo", new URL(`/zh-CN/${path}`, origin).href);
   return url.href;
 }
+
+/**
+ * Resolve notification destinations only inside known Console business routes.
+ * @param data - Current authenticated identity and scope.
+ * @param origin - Configured Console origin.
+ * @param link - Untrusted message destination.
+ * @returns An OIDC entry preserving context, falling back to the inbox.
+ */
+export function notificationEntry(
+  data: WorkData,
+  origin: string,
+  link: string | null,
+): string {
+  let path = "inbox";
+  try {
+    const target = new URL(link ?? "/inbox", origin);
+    const relative = target.pathname.replace(/^\/(?:zh-CN|en-US)\//, "/");
+    if (
+      target.origin === new URL(origin).origin &&
+      !target.username &&
+      !target.password &&
+      /^\/(?:inbox|billing|subscription|subscribe|quotas|tickets|members|invitations|accept-invitation|tenant|profile|vouchers|usage)(?:\/|$)/.test(
+        relative,
+      )
+    ) {
+      path = relative.slice(1) + target.search + target.hash;
+    }
+  } catch {
+    /* Invalid message links return to the authenticated inbox. */
+  }
+  return buildConsoleEntry(data, origin, path);
+}

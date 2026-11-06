@@ -117,6 +117,8 @@ export class Fixture {
     OIDC_CLIENT_SECRET: "fixture-only",
     REDIS_URL: "redis://127.0.0.1",
     DATABASE_URL: "postgres://127.0.0.1/unused",
+    WORKBENCH_INBOX_DATABASE_URL:
+      "postgresql://svc_workbench_inbox@127.0.0.1/unused",
     RP_COOKIE_INSECURE: "true",
   });
   store!: MemoryStore;
