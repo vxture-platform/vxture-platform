@@ -72,9 +72,18 @@ describe.runIf(run)("inbox storage (isolated live PostgreSQL)", () => {
       /CREATE TABLE IF NOT EXISTS support\.inbox_messages \([\s\S]*?\n\);/,
     )?.[0];
     if (!tableSql) throw new Error("Inbox table DDL not found");
+    const supportDdl = readFileSync(
+      new URL("../../../deploy/database/ddl/72_support.sql", import.meta.url),
+      "utf8",
+    );
+    const deliveryTableSql = supportDdl.match(
+      /CREATE TABLE support\.notification_logs \([\s\S]*?\n\);/,
+    )?.[0];
+    if (!deliveryTableSql)
+      throw new Error("Notification delivery DDL not found");
     await fixture.query(`create schema support; ${tableSql}
       alter table support.inbox_messages add column deleted_at timestamptz;
-      create table support.unrelated_private (secret text);`);
+      ${deliveryTableSql}`);
     const rolesSql = readFileSync(
       new URL(
         "../../../deploy/database/ddl/97_service_roles.sql",
@@ -230,7 +239,7 @@ describe.runIf(run)("inbox storage (isolated live PostgreSQL)", () => {
       "delete from support.inbox_messages",
       "insert into support.inbox_messages (title) values ('forbidden')",
       "select title, body from support.inbox_messages",
-      "select * from support.unrelated_private",
+      "select * from support.notification_logs",
     ])
       await expect(writer.query(sql)).rejects.toMatchObject({ code: "42501" });
   });
