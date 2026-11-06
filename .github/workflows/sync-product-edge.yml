@@ -1,0 +1,105 @@
+name: sync-product-edge
+
+# @package @vxture/repo
+# @layer Infrastructure
+# @category deployment
+# @author AI-Generated
+# @date 2026-11-06
+# A reviewed edge-only update does not rebuild or restart platform applications.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed main commit to install
+        required: true
+        type: string
+permissions:
+  contents: read
+  checks: read
+concurrency:
+  group: shared-product-edge
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Require checked main revision and pinned host
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ github.token }}
+          HOST_FINGERPRINT: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -n "$HOST_FINGERPRINT"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_SHA/check-runs?per_page=100" \
+            --jq '.check_runs[] | [.name,.conclusion] | @tsv' > /tmp/edge-checks.tsv
+          for check in quality-gate build test-coverage audit gitleaks; do
+            grep -Fxq "$(printf '%s\tsuccess' "$check")" /tmp/edge-checks.tsv
+          done
+      - name: Join tailnet
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          tags: ${{ vars.TAILSCALE_OAUTH_CLIENT_TAG }}
+      - name: Upload reviewed routing configuration
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
+          username: ${{ secrets.DEPLOY_HOST_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
+          fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          source: deploy/nginx/sites-enabled/registered-ruyin-products.conf
+          target: /tmp/vxture-edge-${{ github.run_id }}
+      - name: Install with syntax validation and rollback
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          EDGE_RUN_ID: ${{ github.run_id }}
+          EDGE_SHA: ${{ inputs.expected_sha }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
+          username: ${{ secrets.DEPLOY_HOST_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
+          fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          envs: EDGE_RUN_ID,EDGE_SHA
+          script: |
+            set -eu
+            test "$(hostname -s)" = vx-worker-01
+            stage="/tmp/vxture-edge-$EDGE_RUN_ID"
+            name=registered-ruyin-products.conf
+            src="/srv/vxture/deploy/nginx/sites-enabled/$name"
+            live="/srv/vxture/data/nginx/conf/sites-enabled/$name"
+            sudo cp -a /srv/vxture/data/nginx/conf/conf.d/agents-upstream.map "$stage/previous.map"
+            for file in "$src" "$live"; do
+              if sudo test -f "$file"; then sudo cp -a "$file" "$stage/$(echo "$file" | tr / _).bak"; fi
+            done
+            rollback() {
+              for file in "$src" "$live"; do
+                backup="$stage/$(echo "$file" | tr / _).bak"
+                if sudo test -f "$backup"; then sudo cp -a "$backup" "$file"; else sudo rm -f -- "$file"; fi
+              done
+              sudo cp -a "$stage/previous.map" /srv/vxture/data/nginx/conf/conf.d/agents-upstream.map
+            }
+            sudo install -m 0644 "$stage/deploy/nginx/sites-enabled/$name" "$src"
+            sudo install -m 0644 "$src" "$live"
+            sudo docker run --rm --network vxture-prod \
+              --env-file /srv/vxture/runtime/secrets/platform.env \
+              -v /srv/vxture/deploy/nginx:/edge:ro \
+              -v /srv/vxture/data/nginx/conf/conf.d:/out \
+              -v /srv/vxture/data/db-tool-cache:/tmp/vxture-db \
+              node:24-alpine sh -ec 'export NODE_PATH=/tmp/vxture-db/node_modules; node /edge/render-agent-map.mjs /out/agents-upstream.map'
+            if ! sudo docker exec vxture-nginx nginx -t; then rollback; exit 1; fi
+            if ! sudo docker exec vxture-nginx nginx -s reload; then rollback; exit 1; fi
+            printf '%s\n' "$EDGE_SHA" | sudo tee /srv/vxture/runtime/product-edge-revision >/dev/null
+            test "$(realpath "$stage")" = "/tmp/vxture-edge-$EDGE_RUN_ID"
+            sudo rm -rf -- "$stage"
