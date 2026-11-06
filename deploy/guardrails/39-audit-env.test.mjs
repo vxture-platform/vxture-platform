@@ -31,6 +31,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DEPLOY = resolve(HERE, "..");
 const SCRIPT = join(HERE, "39-audit-env.mjs");
 const CLIENT_SECRET = "fixture-platform-api-client-secret";
+const INBOX_CONNECTION =
+  "postgresql://svc_workbench_inbox:fixture-inbox-password@db.invalid/db";
 
 /** Create synthetic runtime files from examples without reading local secrets. */
 function fixture(t) {
@@ -55,6 +57,7 @@ function fixture(t) {
           const value =
             {
               DATABASE_URL: "postgresql://fixture:fixture-db@db.invalid/db",
+              WORKBENCH_INBOX_DATABASE_URL: INBOX_CONNECTION,
               REDIS_URL: "redis://:fixture-redis@cache.invalid:6379",
               OIDC_CLIENT_ID: "platform-api",
               OIDC_CLIENT_SECRET: CLIENT_SECRET,
@@ -103,6 +106,7 @@ function audit(root) {
   assert.ifError(result.error);
   const output = result.stdout + result.stderr;
   assert.equal(output.includes(CLIENT_SECRET), false, output);
+  assert.equal(output.includes(INBOX_CONNECTION), false, output);
   return { status: result.status, output };
 }
 
@@ -139,6 +143,77 @@ test("Workbench OIDC secret must be provisioned before deployment", (t) => {
   const result = audit(root);
   assert.notEqual(result.status, 0);
   assert.match(result.output, /env\/runtime-placeholder .*OIDC_CLIENT_SECRET/u);
+});
+
+test("Workbench accepts its dedicated inbox connection in strict host mode", (t) => {
+  const result = audit(fixture(t));
+  assert.equal(result.status, 0, result.output);
+});
+
+test("Workbench rejects an absent required inbox connection", (t) => {
+  const root = fixture(t);
+  const file = join(root, "runtime/.env.workbench-bff");
+  writeFileSync(
+    file,
+    readFileSync(file, "utf8").replace(
+      /^WORKBENCH_INBOX_DATABASE_URL=.*\r?\n/gmu,
+      "",
+    ),
+  );
+  const result = audit(root);
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /env\/missing-key .*WORKBENCH_INBOX_DATABASE_URL/u,
+  );
+});
+
+test("Workbench rejects an unprovisioned inbox connection", (t) => {
+  const root = fixture(t);
+  setKey(
+    root,
+    "runtime/.env.workbench-bff",
+    "WORKBENCH_INBOX_DATABASE_URL",
+    "",
+  );
+  const result = audit(root);
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /env\/runtime-placeholder .*WORKBENCH_INBOX_DATABASE_URL/u,
+  );
+});
+
+test("the inbox connection is rejected in the browser-facing portal environment", (t) => {
+  const root = fixture(t);
+  setKey(
+    root,
+    "runtime/.env.workbench",
+    "WORKBENCH_INBOX_DATABASE_URL",
+    INBOX_CONNECTION,
+  );
+  const result = audit(root);
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /env\/unexpected-key .*WORKBENCH_INBOX_DATABASE_URL is not allowed in workbench portal env/u,
+  );
+});
+
+test("the dedicated connection does not allow arbitrary Workbench database keys", (t) => {
+  const root = fixture(t);
+  setKey(
+    root,
+    "runtime/.env.workbench-bff",
+    "WORKBENCH_EXTRA_DATABASE_URL",
+    INBOX_CONNECTION,
+  );
+  const result = audit(root);
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /env\/unexpected-key .*WORKBENCH_EXTRA_DATABASE_URL/u,
+  );
 });
 
 // ============================================================================
