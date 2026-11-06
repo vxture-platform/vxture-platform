@@ -9,6 +9,7 @@
  * @date 2026-11-05
  */
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import {
   ShellIconButton,
   ShellIconGroup,
@@ -25,6 +26,8 @@ import { ScopeMenu } from "./ScopeMenu";
 // ============================================================================
 // Presentation composition
 // ============================================================================
+const subscribeHydration = (): (() => void) => () => undefined;
+
 /**
  * Render one coordinated tool group and the account menu.
  * @param props - Current identity, route and help action.
@@ -44,6 +47,12 @@ export function WorkHeader({
   pending?: boolean;
 }): React.JSX.Element {
   const theme = useTheme();
+  // Browser-stored theme preferences must not change the first hydration tree.
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    () => true,
+    () => false,
+  );
   const consoleLink = (path: string): string =>
     data
       ? buildConsoleEntry(data, runtime.consoleUrl, path)
@@ -92,7 +101,7 @@ export function WorkHeader({
       <div className="work-header-tools">
         <ShellIconGroup label="显示、通知、帮助与控制台">
           <ShellIconButton
-            icon={theme.theme === "dark" ? "sun" : "moon"}
+            icon={hydrated && theme.theme === "dark" ? "sun" : "moon"}
             label="切换主题"
             onClick={theme.toggle}
           />
