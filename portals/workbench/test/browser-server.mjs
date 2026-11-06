@@ -74,7 +74,15 @@ const fixtures = {
   },
   "/api/tenant-context/options": [
     { id: "qa-organization", name: "验收组织", tenantType: "organization" },
-    { id: "qa-other", name: "协作组织", tenantType: "organization" },
+    {
+      id: "qa-other",
+      name: "协作组织",
+      tenantType: "organization",
+      identifier: "T-QA-2",
+      workspaces: [
+        { id: "qa-other-default", name: "default workspace", isDefault: true },
+      ],
+    },
   ],
   "/api/iam/workspaces/mine": [
     { id: "qa-default", name: "default workspace", isDefault: true },
@@ -82,8 +90,8 @@ const fixtures = {
   ],
   "/api/products/catalog": products.map((product) => ({
     productCode: product.code,
-    productName: product.name,
-    productNick: product.nick,
+    productName: product.nick,
+    productNick: product.name,
     productType: product.type,
     description: product.description,
     releaseVersion: "1.0.0",
@@ -120,7 +128,68 @@ const app = next({
 await app.prepare();
 const handle = app.getRequestHandler();
 const server = http.createServer((request, response) => {
-  const path = new URL(request.url ?? "/", "http://localhost").pathname;
+  const requestUrl = new URL(request.url ?? "/", "http://localhost");
+  const path = requestUrl.pathname;
+  const scenario = request.headers.cookie?.match(
+    /(?:^|; )workbench_qa=([a-z]+)/,
+  )?.[1];
+  if (path === "/auth/session" && scenario === "public") {
+    response.writeHead(401, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ status: "signed-out" }));
+    return;
+  }
+  if (
+    (path === "/api/products/catalog" && scenario === "failure") ||
+    (["/api/subscription/quota-usage", "/api/subscription/credits"].includes(
+      path,
+    ) &&
+      scenario === "unavailable")
+  ) {
+    response.writeHead(503, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ code: "WORKBENCH_RESOURCE_UNAVAILABLE" }));
+    return;
+  }
+  if (
+    scenario === "long" &&
+    ["/api/products/catalog", "/api/tenant-context"].includes(path)
+  ) {
+    const value =
+      path === "/api/tenant-context"
+        ? {
+            ...fixtures[path],
+            name: "远山产业集团工程技术与咨询服务有限公司",
+            workspaceName: "大型客户定制业务工作空间",
+          }
+        : fixtures[path].map((product, index) =>
+            index === 0
+              ? {
+                  ...product,
+                  productName: "工业设备全生命周期巡检与风险研判智能体",
+                  productNick: "Industrial Equipment Inspection Agent",
+                  description:
+                    "连接设备传感、巡检记录、维修工单和专家知识，识别设备异常趋势并建议处置动作。支持跨团队的持续协作与专业交付。",
+                }
+              : product,
+          );
+    response.writeHead(200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "X-Work-QA": "fixture",
+    });
+    response.end(JSON.stringify(value));
+    return;
+  }
+  if (
+    scenario === "single" &&
+    path === "/api/subscription/subscribed-products"
+  ) {
+    response.writeHead(200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    });
+    response.end(JSON.stringify(fixtures[path].slice(0, 1)));
+    return;
+  }
   if (path in fixtures) {
     response.writeHead(200, {
       "Content-Type": "application/json",

@@ -108,3 +108,33 @@ export function filterApps(
     ),
   };
 }
+
+/**
+ * Keep a full three-card home selection without implying subscription eligibility.
+ * @param apps - Real catalog entries in registry order.
+ * @returns Available products first, then other catalog entries with their real status.
+ */
+export function homeApps(apps: readonly WorkApp[]): WorkApp[] {
+  return apps
+    .toSorted((left, right) => Number(right.available) - Number(left.available))
+    .slice(0, 3);
+}
+
+// ============================================================================
+// Shared product labels for cards and detail panels
+// ============================================================================
+export const RELEASE_LABELS: Record<string, string> = {
+  preview: "预览版",
+  beta: "公测版",
+  stable: "正式版",
+  sunset: "停售中",
+};
+export const TIER_LABELS: Record<string, string> = {
+  free: "免费版",
+  starter: "入门版",
+  standard: "标准版",
+  pro: "专业版",
+  professional: "专业版",
+  team: "团队版",
+  enterprise: "企业版",
+};

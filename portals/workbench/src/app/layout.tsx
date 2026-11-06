@@ -8,7 +8,11 @@
  */
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { ThemeProvider, themeBootstrapScript } from "@vxture/design-system";
+import {
+  FullscreenProvider,
+  ThemeProvider,
+  themeBootstrapScript,
+} from "@vxture/design-system";
 import { loadRuntime } from "../lib/runtime";
 import { WorkPortal } from "../modules/work/WorkPortal";
 import "@vxture/design-system/styles/fonts.css";
@@ -38,8 +42,10 @@ export default async function RootLayout({
       </head>
       <body>
         <ThemeProvider defaultMode="system">
-          <WorkPortal {...configuration} />
-          {children}
+          <FullscreenProvider>
+            <WorkPortal {...configuration} />
+            {children}
+          </FullscreenProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -7,7 +7,12 @@
  * @date 2026-11-05
  */
 import { describe, expect, it } from "vitest";
-import { dailyPresentation, filterApps, parseHomeCopy } from "./presentation";
+import {
+  dailyPresentation,
+  filterApps,
+  parseHomeCopy,
+  homeApps,
+} from "./presentation";
 import type { WorkApp } from "./contracts";
 
 const copy = parseHomeCopy({
@@ -99,4 +104,25 @@ describe("catalog filtering", () => {
     expect(filterApps(apps, "不存在", false, "all").items).toEqual([]);
     expect(filterApps(apps, "业务", false, "all").counts.all).toBe(3);
   });
+});
+
+// ============================================================================
+// Home selection preserves real availability while keeping the approved rhythm.
+// ============================================================================
+it("fills three home slots when only one product is available without promoting the others", () => {
+  const catalog = [
+    app("locked-first", "agent", false),
+    app("locked-second", "platform", false),
+    app("available", "agent", true),
+    app("fourth", "agent", false),
+  ];
+  const selection = homeApps(catalog);
+  expect(selection.map((item) => item.code)).toEqual([
+    "available",
+    "locked-first",
+    "locked-second",
+  ]);
+  expect(selection.filter((item) => item.available)).toHaveLength(1);
+  expect(catalog[0]?.code).toBe("locked-first");
+  expect(homeApps([])).toEqual([]);
 });

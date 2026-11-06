@@ -8,7 +8,7 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button, Drawer, Icon } from "@vxture/design-system";
@@ -21,9 +21,11 @@ import type {
   WorkRuntime,
 } from "../../lib/contracts";
 import type { HomeCopy } from "../../lib/presentation";
+import { homeApps, RELEASE_LABELS, TIER_LABELS } from "../../lib/presentation";
 import { WorkHeader } from "./WorkHeader";
 import { TitleRegion } from "./TitleRegion";
 import { AppCard, AppCatalog } from "./AppCatalog";
+import { LoginPage } from "./LoginPage";
 
 // ============================================================================
 // Data lifecycle and public login state
@@ -50,6 +52,40 @@ export function WorkPortal({
   const [revision, setRevision] = useState(0);
   const [overview, setOverview] = useState<WorkApp | null>(null);
   const [help, setHelp] = useState(false);
+  const detailsOrigin = useRef<HTMLElement | null>(null);
+  const rememberDetailsOrigin = (): void => {
+    detailsOrigin.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+  };
+  const showOverview = (app: WorkApp): void => {
+    rememberDetailsOrigin();
+    setOverview(app);
+  };
+  const closeDetails = (): void => {
+    setOverview(null);
+    setHelp(false);
+  };
+  useEffect(() => {
+    if (overview || help || !detailsOrigin.current) return;
+    let frame = 0;
+    // The portal remains mounted through its exit animation; restore focus afterwards.
+    const restore = (): void => {
+      if (document.querySelector(".work-detail-drawer")) return;
+      observer.disconnect();
+      frame = requestAnimationFrame(() => {
+        if (detailsOrigin.current?.isConnected) detailsOrigin.current.focus();
+      });
+    };
+    const observer = new MutationObserver(restore);
+    observer.observe(document.body, { childList: true, subtree: true });
+    restore();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [overview, help]);
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(timer);
@@ -77,11 +113,9 @@ export function WorkPortal({
     setHelp(false);
   }, [appsPage]);
   const data = result?.status === "ready" ? result.data : null;
+  const checking = runtime.authConfigured && result === null;
   const catalog = data?.catalog;
-  const common =
-    catalog?.status === "ready"
-      ? catalog.data.filter((app) => app.available).slice(0, 3)
-      : [];
+  const common = catalog?.status === "ready" ? homeApps(catalog.data) : [];
   const signIn = (): void => {
     window.location.assign(authNavigation("login", location.href));
   };
@@ -93,7 +127,10 @@ export function WorkPortal({
   // Shared page frame and authenticated content
   // ========================================================================
   return (
-    <div className="work-shell">
+    <div
+      id="workbench-root"
+      className={`work-shell ${!data && !checking ? "work-shell-public" : ""}`}
+    >
       <a className="work-skip" href="#main">
         跳到主要内容
       </a>
@@ -101,195 +138,212 @@ export function WorkPortal({
         data={data}
         apps={appsPage}
         runtime={runtime}
-        onHelp={() => setHelp(true)}
+        pending={checking}
+        onHelp={() => {
+          rememberDetailsOrigin();
+          setHelp(true);
+        }}
       />
-      <main id="main" className={`work-main ${data ? "" : "work-main-public"}`}>
-        {!data ? (
-          <section className="work-login" aria-labelledby="login-title">
-            <div className="work-login-copy">
-              <p className="text-label-lg text-primary">RUYIN WORK</p>
-              <h1
-                id="login-title"
-                className="mt-lg text-heading-1 font-semibold"
-              >
-                专业所长，皆为所用
-              </h1>
-              <p className="mt-md text-body-lg text-muted-foreground">
-                连接专业智能体，开启从容有序的工作
-              </p>
-              <div className="work-login-art" aria-hidden="true">
-                <Icon name="sparkles" size="lg" />
+      {!data && !checking ? (
+        <LoginPage
+          runtime={runtime}
+          error={result?.status === "error" ? result : null}
+          retry={retry}
+          signIn={signIn}
+        />
+      ) : (
+        <main id="main" className="work-main" aria-busy={checking || undefined}>
+          {checking ? (
+            <div className="work-loading" role="status">
+              <span className="work-loading-line" />
+              <span className="work-loading-title" />
+              <p>正在载入工作空间…</p>
+              <div className="work-app-grid">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="work-card-skeleton" />
+                ))}
               </div>
             </div>
-            <div className="work-login-panel">
-              <h2 className="text-title-xl">进入工作空间</h2>
-              {runtime.authConfigured && !result ? (
-                <p role="status" className="text-body-md text-muted-foreground">
-                  正在确认登录状态…
-                </p>
-              ) : (
-                <>
-                  <p
-                    role="status"
-                    className="text-body-md text-muted-foreground"
-                  >
-                    {!runtime.authConfigured
-                      ? "登录服务暂不可用，请稍后再试"
-                      : result?.status === "error" && result.code !== 401
-                        ? result.message
-                        : "使用 VXTURE 账号继续"}
-                  </p>
-                  {runtime.authConfigured && (
-                    <Button
-                      className="rounded-full"
-                      onClick={
-                        result?.status === "error" && result.code !== 401
-                          ? retry
-                          : signIn
-                      }
-                    >
-                      {result?.status === "error" && result.code !== 401
-                        ? "重新连接"
-                        : "登录"}
-                    </Button>
-                  )}
-                </>
-              )}
-              <p className="text-body-sm text-muted-foreground">
-                账号、组织和工作空间由统一身份服务管理
-              </p>
-            </div>
-          </section>
-        ) : (
-          <>
-            <TitleRegion
-              name={data.user.name}
-              now={now}
-              copy={copy}
-              apps={appsPage}
-            />
-            {data.availabilityIssue && (
-              <div role="status" className="work-status">
-                应用可用状态暂无法确认：{data.availabilityIssue}
-                <Button size="sm" variant="ghost" onClick={retry}>
-                  重试
-                </Button>
-              </div>
-            )}
-            {catalog?.status === "error" ? (
-              <div role="alert" className="work-empty">
-                <p>{catalog.message}</p>
-                <Button size="sm" variant="secondary" onClick={retry}>
-                  重新加载
-                </Button>
-              </div>
-            ) : appsPage ? (
-              <AppCatalog
-                apps={catalog?.status === "ready" ? catalog.data : []}
-                onOverview={setOverview}
-              />
-            ) : (
+          ) : (
+            data && (
               <>
-                <section aria-labelledby="common-apps">
-                  <div className="mb-md flex items-baseline justify-between gap-md">
-                    <h2 id="common-apps" className="text-title-xl">
-                      常用应用
-                    </h2>
-                    <Link
-                      className="text-body-sm text-muted-foreground hover:text-primary"
-                      href="/apps"
-                    >
-                      全部应用
-                    </Link>
+                <TitleRegion
+                  name={data.user.name}
+                  now={now}
+                  copy={copy}
+                  apps={appsPage}
+                />
+                {data.availabilityIssue && (
+                  <div role="status" className="work-status">
+                    应用可用状态暂无法确认：{data.availabilityIssue}
+                    <Button size="sm" variant="ghost" onClick={retry}>
+                      重试
+                    </Button>
                   </div>
-                  {common.length ? (
-                    <div className="work-app-grid">
-                      {common.map((app) => (
-                        <AppCard
-                          key={app.code}
-                          app={app}
-                          onOverview={setOverview}
-                        />
+                )}
+                {catalog?.status === "error" ? (
+                  <div role="alert" className="work-empty">
+                    <p>{catalog.message}</p>
+                    <Button size="sm" variant="secondary" onClick={retry}>
+                      重新加载
+                    </Button>
+                  </div>
+                ) : appsPage ? (
+                  <AppCatalog
+                    apps={catalog?.status === "ready" ? catalog.data : []}
+                    onOverview={showOverview}
+                  />
+                ) : (
+                  <>
+                    <section
+                      aria-labelledby="common-apps"
+                      className="work-common-apps"
+                    >
+                      <div className="work-section-heading">
+                        <div>
+                          <h2 id="common-apps">常用应用</h2>
+                          <p>专业能力，随时进入</p>
+                        </div>
+                        <Link className="work-section-link" href="/apps">
+                          全部应用
+                          <Icon name="arrow-right" size="sm" />
+                        </Link>
+                      </div>
+                      {common.length ? (
+                        <div className="work-app-grid">
+                          {common.map((app) => (
+                            <AppCard
+                              key={app.code}
+                              app={app}
+                              onOverview={showOverview}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="work-empty">
+                          <p className="text-body-md text-muted-foreground">
+                            暂无可展示的应用
+                          </p>
+                          <Link
+                            href="/apps"
+                            className="text-body-sm text-primary"
+                          >
+                            浏览应用中心
+                          </Link>
+                        </div>
+                      )}
+                    </section>
+                    <div className="work-task-grid">
+                      {[
+                        {
+                          title: "继续工作",
+                          description: "从上次停下的地方，接着推进",
+                          message: "工作事项暂不可用，可从应用中继续处理",
+                        },
+                        {
+                          title: "与我协作",
+                          description: "让协同有序，让进展清晰",
+                          message: "协作事项暂不可用，可进入对应应用查看",
+                        },
+                      ].map((section) => (
+                        <section key={section.title}>
+                          <div className="work-section-heading">
+                            <div>
+                              <h2>{section.title}</h2>
+                              <p>{section.description}</p>
+                            </div>
+                          </div>
+                          <div className="work-task-panel">
+                            <div className="work-panel-heading">
+                              {section.title === "继续工作"
+                                ? "工作事项"
+                                : "协作事项"}
+                            </div>
+                            <div className="work-task-empty">
+                              <span className="work-empty-glyph">
+                                <Icon
+                                  name={
+                                    section.title === "继续工作"
+                                      ? "file"
+                                      : "users"
+                                  }
+                                  size="lg"
+                                />
+                              </span>
+                              <h3>
+                                {section.title === "继续工作"
+                                  ? "工作记录暂不可用"
+                                  : "协作记录暂不可用"}
+                              </h3>
+                              <p>{section.message}</p>
+                            </div>
+                          </div>
+                        </section>
                       ))}
                     </div>
-                  ) : (
-                    <div className="work-empty">
-                      <p className="text-body-md text-muted-foreground">
-                        暂无可直接进入的应用
-                      </p>
-                      <Link href="/apps" className="text-body-sm text-primary">
-                        浏览应用中心
-                      </Link>
-                    </div>
-                  )}
-                </section>
-                <div className="work-task-grid">
-                  {[
-                    {
-                      title: "继续工作",
-                      description: "从上次停下的地方，接着推进",
-                      message: "工作事项暂不可用，可从应用中继续处理",
-                    },
-                    {
-                      title: "与我协作",
-                      description: "让协同有序，让进展清晰",
-                      message: "协作事项暂不可用，可进入对应应用查看",
-                    },
-                  ].map((section) => (
-                    <section key={section.title}>
-                      <h2 className="text-title-xl">{section.title}</h2>
-                      <p className="mt-xs mb-md text-body-sm text-muted-foreground">
-                        {section.description}
-                      </p>
-                      <div className="work-empty">
-                        <Icon name="folder" size="lg" />
-                        <p className="text-body-sm text-muted-foreground">
-                          {section.message}
-                        </p>
+                    <aside
+                      className="work-desktop-callout"
+                      aria-label="桌面工作环境"
+                    >
+                      <span className="work-desktop-glyph">
+                        <Icon name="desktop" size="lg" />
+                      </span>
+                      <div>
+                        <h2>本地资料，也能接着用</h2>
+                        <p>通过 RUYIN 桌面端，连接你的本地工作环境</p>
                       </div>
-                    </section>
-                  ))}
-                </div>
+                      <a
+                        className="work-section-link"
+                        href={
+                          new URL("/zh-CN/workbench", runtime.websiteUrl).href
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        了解桌面端
+                        <Icon name="external-link" size="sm" />
+                      </a>
+                    </aside>
+                  </>
+                )}
               </>
-            )}
-          </>
-        )}
-        <footer className="work-footer">
-          <span>{data?.scope.name ?? "Ruyin Work"}</span>
-          <a
-            href={runtime.websiteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            VXTURE 官网
-          </a>
-        </footer>
-      </main>
+            )
+          )}
+          {!checking && (
+            <footer className="work-footer">
+              <span>
+                <Icon name="shield" size="sm" />
+                {data?.scope.name ?? "Ruyin Work"}
+              </span>
+              <a
+                href={runtime.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                VXTURE 官网
+                <Icon name="external-link" size="sm" />
+              </a>
+            </footer>
+          )}
+        </main>
+      )}
 
       {/* All details share DS Drawer chrome, close icon, width and footer position. */}
       <Drawer
         open={Boolean(overview) || help}
-        onClose={() => {
-          setOverview(null);
-          setHelp(false);
-        }}
-        width="lg"
+        onClose={closeDetails}
+        width="md"
         title={overview?.name ?? "使用帮助"}
+        description={
+          overview
+            ? `${overview.brand ? `${overview.brand} · ` : ""}应用概要`
+            : undefined
+        }
         closeLabel="关闭详情"
+        className="work-detail-drawer"
         footer={
           overview ? (
             <>
-              {overview.available && overview.href && (
-                <Button asChild className="work-action">
-                  <a
-                    href={overview.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    进入
-                  </a>
-                </Button>
-              )}
               <Button variant="ghost" asChild>
                 <a
                   href={
@@ -305,6 +359,17 @@ export function WorkPortal({
                   <Icon name="external-link" size="sm" />
                 </a>
               </Button>
+              {overview.available && overview.href && (
+                <Button asChild className="work-action">
+                  <a
+                    href={overview.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    进入
+                  </a>
+                </Button>
+              )}
             </>
           ) : (
             <Button asChild variant="secondary">
@@ -320,19 +385,21 @@ export function WorkPortal({
         }
       >
         {overview ? (
-          <div className="flex flex-col gap-lg">
+          <div className="work-detail-body">
             <p className="text-body-md text-muted-foreground">
               {overview.description || "产品介绍暂未提供"}
             </p>
             <dl className="work-detail-facts">
               <div>
-                <dt>品牌</dt>
-                <dd>{overview.brand || overview.name}</dd>
-              </div>
-              <div>
                 <dt>版本</dt>
                 <dd>{overview.version ?? "暂未提供"}</dd>
               </div>
+              {RELEASE_LABELS[overview.stage] && (
+                <div>
+                  <dt>版本类型</dt>
+                  <dd>{RELEASE_LABELS[overview.stage]}</dd>
+                </div>
+              )}
               <div>
                 <dt>使用状态</dt>
                 <dd>{overview.availabilityLabel}</dd>
@@ -340,7 +407,7 @@ export function WorkPortal({
               {overview.tier && (
                 <div>
                   <dt>套餐</dt>
-                  <dd>{overview.tier}</dd>
+                  <dd>{TIER_LABELS[overview.tier] ?? overview.tier}</dd>
                 </div>
               )}
             </dl>

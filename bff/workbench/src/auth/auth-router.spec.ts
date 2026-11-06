@@ -276,6 +276,18 @@ describe("authorization", () => {
 // Context facts are scoped to the verified member, including non-admin users.
 // ============================================================================
 describe("workspace access", () => {
+  it("returns live scope display metadata behind authentication", async () => {
+    expect((await fixture.request("/api/tenant-context")).status).toBe(401);
+    const cookie = await fixture.login();
+    const response = await fixture.request("/api/tenant-context", cookie);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: ORG,
+      name: "Updated organization",
+      workspace: WORKSPACE,
+      workspaceName: "Updated workspace",
+    });
+  });
   it("allows an ordinary workspace member to read only the current workspace's subscriptions", async () => {
     const cookie = await fixture.login();
     const response = await fixture.request(
@@ -325,6 +337,31 @@ describe("workspace access", () => {
         )
       ).status,
     ).toBe(403);
+  });
+  it("preserves an explicitly selected workspace during an organization transition", async () => {
+    const cookie = await fixture.login();
+    for (const workspace of [
+      "invalid",
+      "00000000-0000-4000-8000-000000000099",
+    ]) {
+      expect(
+        (
+          await fixture.request(
+            `/auth/switch-tenant?tenantId=${ORG}&workspaceId=${workspace}`,
+            cookie,
+          )
+        ).status,
+      ).toBe(403);
+    }
+    const response = await fixture.request(
+      `/auth/switch-tenant?tenantId=${ORG}&workspaceId=${WORKSPACE}`,
+      cookie,
+    );
+    expect(response.status).toBe(302);
+    const url = new URL(response.headers.get("location")!);
+    expect(url.searchParams.get("tenant_hint")).toBe(ORG);
+    expect(url.searchParams.get("workspace_hint")).toBe(WORKSPACE);
+    expect(url.searchParams.get("prompt")).toBe("none");
   });
   it("reports unsupported resources explicitly and hides internal routes", async () => {
     const cookie = await fixture.login();

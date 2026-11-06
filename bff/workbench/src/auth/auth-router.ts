@@ -331,17 +331,24 @@ export class AuthRouter {
     this.assertNavigation(req);
     const { user } = await this.auth.authenticate(req);
     const tenantId = parameter(req, "tenantId");
+    const workspaceId = parameter(req, "workspaceId");
     if (
       !tenantId ||
       !UUID.test(tenantId) ||
-      !(await this.scopes.canSwitch(user, tenantId))
+      (workspaceId !== undefined && !UUID.test(workspaceId)) ||
+      !(await this.scopes.canSwitch(user, tenantId, workspaceId))
     )
       throw failure(
         403,
         "WORKBENCH_SCOPE_FORBIDDEN",
         "Organization is not accessible",
       );
-    await this.begin(req, res, { tenantId }, "none");
+    await this.begin(
+      req,
+      res,
+      { tenantId, ...(workspaceId ? { workspaceId } : {}) },
+      "none",
+    );
   }
 
   @Get("switch-workspace")

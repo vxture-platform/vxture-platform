@@ -14,6 +14,7 @@ import {
   ShellIconGroup,
   ShellPreferencePanel,
   ShellUserMenu,
+  ShellFullscreenToggle,
   useTheme,
 } from "@vxture/design-system";
 import type { WorkData, WorkRuntime } from "../../lib/contracts";
@@ -34,11 +35,13 @@ export function WorkHeader({
   apps,
   runtime,
   onHelp,
+  pending = false,
 }: {
   data: WorkData | null;
   apps: boolean;
   runtime: WorkRuntime;
   onHelp: () => void;
+  pending?: boolean;
 }): React.JSX.Element {
   const theme = useTheme();
   const consoleLink = (path: string): string =>
@@ -49,23 +52,34 @@ export function WorkHeader({
     window.open(consoleLink(path), "_blank", "noopener,noreferrer");
   };
   return (
-    <header className={`work-header ${data ? "" : "work-header-public"}`}>
-      <div className="work-header-leading flex min-w-0 items-center gap-sm">
+    <header
+      className={`work-header ${data || pending ? "" : "work-header-public"}`}
+    >
+      <div className="work-header-leading">
         <Link
           href="/"
-          className="vx-brand-lockup shrink-0"
+          className="work-brand vx-brand-lockup"
           aria-label="Ruyin Work 首页"
         >
-          <span className="vx-brand-name">Ruyin Work</span>
-          {!data && (
-            <span className="text-body-sm text-muted-foreground">
-              BUSINESS WORKSPACE
-            </span>
+          {/* The same official mark and two-tone wordmark are used on both surfaces. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="vx-brand-mark"
+            src="/brand/vxture-mark.png"
+            alt=""
+            width={24}
+            height={24}
+          />
+          <span className="work-brand-name">
+            <span>Ruyin</span> Work
+          </span>
+          {!data && !pending && (
+            <span className="work-brand-caption">BUSINESS WORKSPACE</span>
           )}
         </Link>
         {data && <ScopeMenu data={data} runtime={runtime} />}
       </div>
-      {data && (
+      {(data || pending) && (
         <nav className="work-nav" aria-label="主导航">
           <Link href="/" aria-current={!apps ? "page" : undefined}>
             首页
@@ -75,7 +89,7 @@ export function WorkHeader({
           </Link>
         </nav>
       )}
-      <div className="ml-auto flex shrink-0 items-center gap-xs">
+      <div className="work-header-tools">
         <ShellIconGroup label="显示、通知、帮助与控制台">
           <ShellIconButton
             icon={theme.theme === "dark" ? "sun" : "moon"}
@@ -87,6 +101,13 @@ export function WorkHeader({
               icon="bell"
               label="工作通知（新标签页）"
               onClick={() => openConsole("inbox")}
+            />
+          )}
+          {!data && !pending && (
+            <ShellFullscreenToggle
+              targetId="workbench-root"
+              enterLabel="全屏显示"
+              exitLabel="退出全屏"
             />
           )}
           <ShellIconButton icon="help" label="使用帮助" onClick={onHelp} />

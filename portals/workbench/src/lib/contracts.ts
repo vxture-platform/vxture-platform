@@ -25,6 +25,7 @@ export interface WorkScope {
   workspace: string;
   workspaceName: string;
   personal: boolean;
+  identifier?: string | undefined;
 }
 export interface WorkApp {
   code: string;
@@ -66,6 +67,8 @@ export interface ScopeOption {
   id: string;
   name: string;
   personal: boolean;
+  identifier?: string | undefined;
+  workspaces?: WorkspaceOption[] | undefined;
 }
 export interface WorkspaceOption {
   id: string;
