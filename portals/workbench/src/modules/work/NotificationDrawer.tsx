@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Button, Drawer } from "@vxture/design-system";
+import { formatDateTime } from "@vxture-platform/shared";
 import { loadInbox, markNotificationsRead } from "../../lib/api";
 import { buildConsoleEntry, notificationEntry } from "../../lib/console-entry";
 import type {
@@ -149,7 +150,7 @@ export function NotificationDrawer({
                 className="text-body-sm text-muted-foreground"
                 dateTime={item.createdAt}
               >
-                {new Date(item.createdAt).toLocaleString("zh-CN")}
+                {formatDateTime(item.createdAt, "zh-CN")}
               </time>
               <div className="flex items-center justify-end gap-sm">
                 {!item.readAt && (
