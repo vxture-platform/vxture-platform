@@ -332,7 +332,7 @@ export function WorkPortal({
       <Drawer
         open={Boolean(overview) || help}
         onClose={closeDetails}
-        width="md"
+        width="lg"
         title={overview?.name ?? "使用帮助"}
         description={
           overview

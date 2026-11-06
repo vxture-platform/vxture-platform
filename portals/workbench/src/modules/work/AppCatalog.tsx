@@ -70,8 +70,9 @@ export function AppCard({
     ];
   return (
     <article className="work-app-card">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         className="work-card-target"
         aria-label={`查看${app.name}的概要`}
         onClick={() => onOverview(app)}
