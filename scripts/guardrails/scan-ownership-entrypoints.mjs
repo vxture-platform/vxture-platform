@@ -94,7 +94,9 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 import ts from "typescript";
 
-const REPO_ROOT = resolvePath(fileURLToPath(new URL("../../", import.meta.url)));
+const REPO_ROOT = resolvePath(
+  fileURLToPath(new URL("../../", import.meta.url)),
+);
 const SKIP = new Set(["node_modules", "dist", ".next", "coverage", "build"]);
 const OPERATOR_FACES = ["bff/admin-bff", "bff/opera-bff", "bff/arche-bff"];
 const CUSTOMER_FACES = [
@@ -138,6 +140,21 @@ const NON_GATE_DECORATORS = new Set([
   "Header",
   ...HTTP_VERBS,
 ]);
+// These keys configure CustomerSelfGuard; metadata alone never authorizes access.
+// Do not allow SetMetadata by name: unfamiliar keys must remain visible as drift.
+const ACCOUNT_METADATA_KEYS = new Set([
+  "ACCOUNT_RAW_IMAGE",
+  "ACCOUNT_RECOVERY",
+]);
+
+function isKnownConfigurationDecorator(decorator) {
+  return (
+    decorator.name === "SetMetadata" &&
+    decorator.metadataArguments?.length === 2 &&
+    ACCOUNT_METADATA_KEYS.has(decorator.metadataArguments[0]) &&
+    decorator.metadataArguments[1] === "true"
+  );
+}
 /** 报告里点名：既不在门清单也不在非门清单里的装饰器。 */
 const UNKNOWN_DECORATORS = new Map();
 const DENY = new Set(["ForbiddenException", "UnauthorizedException"]);
@@ -188,6 +205,17 @@ function readDecorator(d) {
     return {
       name: e.expression.text,
       args: e.arguments.map((a) => (ts.isStringLiteral(a) ? a.text : null)),
+      ...(e.expression.text === "SetMetadata"
+        ? {
+            metadataArguments: e.arguments.map((a) =>
+              ts.isIdentifier(a)
+                ? a.text
+                : a.kind === ts.SyntaxKind.TrueKeyword
+                  ? "true"
+                  : null,
+            ),
+          }
+        : {}),
     };
   }
   if (ts.isIdentifier(e)) return { name: e.text, args: [] };
@@ -387,7 +415,8 @@ for (const file of files) {
         imports.set(el.name.text, node.moduleSpecifier.text);
       }
     }
-    if (ts.isFunctionDeclaration(node) && node.name) decls.set(node.name.text, node);
+    if (ts.isFunctionDeclaration(node) && node.name)
+      decls.set(node.name.text, node);
     if (ts.isVariableStatement(node)) {
       for (const d of node.declarationList.declarations) {
         if (ts.isIdentifier(d.name)) decls.set(d.name.text, d);
@@ -520,11 +549,16 @@ for (const file of ENTRY_FILES) {
     if (ts.isClassDeclaration(node)) {
       classDecs = decoratorsOf(node).map(readDecorator).filter(Boolean);
     }
-    if (ts.isMethodDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+    if (
+      ts.isMethodDeclaration(node) &&
+      node.name &&
+      ts.isIdentifier(node.name)
+    ) {
       const decs = decoratorsOf(node).map(readDecorator).filter(Boolean);
       const http = decs.find((d) => HTTP_VERBS.has(d.name));
       if (http) {
-        const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+        const line =
+          sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
         const params = [];
         let takesSession = false;
         for (const p of node.parameters) {
@@ -613,7 +647,11 @@ for (const file of ENTRY_FILES) {
             .map((d) => `@${d.name}(类级)`),
         ]);
         for (const d of [...decs, ...classDecs]) {
-          if (!GATE_DECORATORS.has(d.name) && !NON_GATE_DECORATORS.has(d.name)) {
+          if (
+            !GATE_DECORATORS.has(d.name) &&
+            !NON_GATE_DECORATORS.has(d.name) &&
+            !isKnownConfigurationDecorator(d)
+          ) {
             UNKNOWN_DECORATORS.set(
               d.name,
               (UNKNOWN_DECORATORS.get(d.name) ?? 0) + 1,
@@ -765,12 +803,15 @@ if (process.argv.includes("--self-test")) {
       run: () =>
         inAll(
           "bff/admin-bff/src/routers/orders.router.ts",
-          (e) => e.route === ":orderId" && !/(^|\s)resolve(\s|$)/.test(e.gateHints),
+          (e) =>
+            e.route === ":orderId" && !/(^|\s)resolve(\s|$)/.test(e.gateHints),
         ),
     },
   ];
 
-  console.log("══ 自检：先证这个单元看得见那两条已知真缺口的入口，且不会凭空判出门 ══\n");
+  console.log(
+    "══ 自检：先证这个单元看得见那两条已知真缺口的入口，且不会凭空判出门 ══\n",
+  );
   console.log(
     "（①② 两条都已在 2026-10-02 #567 修掉，所以今天不是缺口了 —— 但**一个看不见它们的\n" +
       "  分母，正是漏掉它们的那个分母**。自检要的是「分母看得见」，不是「它还坏着」。\n" +
@@ -791,7 +832,8 @@ if (process.argv.includes("--self-test")) {
 
   const sessionOnly = entries.filter((e) => e.cls === "session-only").length;
   const noParams = entries.filter((e) => e.cls === "no-params").length;
-  const discriminates = sessionOnly + noParams > 0 && todo.length < entries.length;
+  const discriminates =
+    sessionOnly + noParams > 0 && todo.length < entries.length;
   console.log(
     `\n${discriminates ? "✓" : "✗"} 清单是真子集：入口 ${entries.length} → 待判 ${todo.length}` +
       `（session-only ${sessionOnly}、no-params ${noParams}）`,
@@ -810,7 +852,9 @@ if (process.argv.includes("--self-test")) {
   );
   if (!driftOk) {
     for (const [k, n] of UNKNOWN_DECORATORS) {
-      console.log(`    @${k}（${n} 处）不在 GATE_DECORATORS 也不在 NON_GATE_DECORATORS`);
+      console.log(
+        `    @${k}（${n} 处）不在 GATE_DECORATORS 也不在 NON_GATE_DECORATORS`,
+      );
     }
     console.log(
       "    ← 去文件头把它归档：是门就进 GATE_DECORATORS，不是门就进 NON_GATE_DECORATORS。\n" +
@@ -819,19 +863,57 @@ if (process.argv.includes("--self-test")) {
     bad += 1;
   }
 
-  const checks = CHECKS.length + 2;
+  // Exercise the same AST reader and classifier used by the real inventory.
+  const metadataCases = [
+    ["SetMetadata(ACCOUNT_RECOVERY, true)", true],
+    ["SetMetadata(ACCOUNT_RAW_IMAGE, true)", true],
+    ["SetMetadata(UNKNOWN_KEY, true)", false],
+    ['SetMetadata("ACCOUNT_RECOVERY", true)', false],
+    ["SetMetadata(ACCOUNT_RECOVERY, false)", false],
+    ["SetMetadata(ACCOUNT_RECOVERY, enabled)", false],
+    ["SetMetadata(ACCOUNT_RECOVERY)", false],
+    ["SetMetadata(ACCOUNT_RECOVERY, true, extra)", false],
+    ["SetMetadata", false],
+  ];
+  const metadataOk = metadataCases.every(([expression, expected]) => {
+    const source = ts.createSourceFile(
+      "metadata.ts",
+      `class Fixture { @${expression} method() {} }`,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const method = source.statements[0].members[0];
+    const decorator = readDecorator(decoratorsOf(method)[0]);
+    return (
+      isKnownConfigurationDecorator(decorator) === expected &&
+      !GATE_DECORATORS.has(decorator.name) &&
+      !NON_GATE_DECORATORS.has(decorator.name)
+    );
+  });
+  console.log(
+    `\n${metadataOk ? "✓" : "✗"} Accounts metadata: two known configurations, seven rejected variants, no authorization hints`,
+  );
+  if (!metadataOk) bad += 1;
+
+  const checks = CHECKS.length + 3;
   console.log(`\n── 汇总 ──\n看得见 ${checks - bad}/${checks} 项判据`);
   if (bad) {
     console.log("这个单元还不能用 —— 先让它看得见上面标 ✗ 的那几条。");
     process.exit(1);
   }
-  console.log("已知缺口都在清单里，线索列不凭空判门，清单是真子集。这个单元可以用了。");
+  console.log(
+    "已知缺口都在清单里，线索列不凭空判门，清单是真子集。这个单元可以用了。",
+  );
   process.exit(0);
 }
 
 if (process.argv.includes("--json")) {
   console.log(
-    JSON.stringify({ total: entries.length, todo: todo.length, entries }, null, 2),
+    JSON.stringify(
+      { total: entries.length, todo: todo.length, entries },
+      null,
+      2,
+    ),
   );
   process.exit(0);
 }
@@ -853,9 +935,11 @@ console.log(
     `解析门时还索引了 services/ 与 packages/，共 ${files.length} 份（本仓的门大量住在那边）。\n`,
 );
 console.log("── 按档");
-for (const [k, n] of by((e) => e.cls)) console.log(`   ${String(n).padStart(4)}  ${k}`);
+for (const [k, n] of by((e) => e.cls))
+  console.log(`   ${String(n).padStart(4)}  ${k}`);
 console.log("\n── 要逐条判的（external-id）按面");
-for (const [k, n] of by((e) => e.face, todo)) console.log(`   ${String(n).padStart(4)}  ${k}`);
+for (const [k, n] of by((e) => e.face, todo))
+  console.log(`   ${String(n).padStart(4)}  ${k}`);
 
 // 读的顺序按**同一份文件内部不一致**排 —— 两条真缺口都是这个形状：
 // governance.controller.ts 五个处理器里四个有 assertCan，第五个没有。
@@ -872,33 +956,48 @@ const allBare = [];
 for (const [f, es] of byFile) {
   const bare = es.filter((e) => !e.gateHints);
   if (bare.length === 0) continue;
-  (bare.length === es.length ? allBare : mixed).push({ f, bare, total: es.length });
+  (bare.length === es.length ? allBare : mixed).push({
+    f,
+    bare,
+    total: es.length,
+  });
 }
 mixed.sort((a, b) => a.bare.length - b.bare.length || b.total - a.total);
 
-console.log("\n── ① 同一份文件里「别人有门我没门」（这是两条真缺口的形状，先看这些）");
-console.log(`   ${mixed.length} 份文件，共 ${mixed.reduce((n, x) => n + x.bare.length, 0)} 条`);
+console.log(
+  "\n── ① 同一份文件里「别人有门我没门」（这是两条真缺口的形状，先看这些）",
+);
+console.log(
+  `   ${mixed.length} 份文件，共 ${mixed.reduce((n, x) => n + x.bare.length, 0)} 条`,
+);
 // 「跟不过去的去处」按文件去重打一行，不跟在每条后面 —— 每条后面跟会把清单淹掉
 // （`pool.query@Pool` 这种每个处理器都有），而它要回答的问题是按文件问的：
 // **这份文件里「没门」这个结论可不可信**。
 const opaque = (es) => {
   const s = new Set();
-  for (const e of es) for (const u of e.unresolved.split(" ").filter(Boolean)) s.add(u);
+  for (const e of es)
+    for (const u of e.unresolved.split(" ").filter(Boolean)) s.add(u);
   return [...s];
 };
 for (const x of mixed) {
   console.log(`\n   ${x.f}  —— ${x.bare.length}/${x.total} 条没门`);
   for (const e of x.bare) {
-    console.log(`     :${e.at.split(":")[1]}  ${e.verb} ${e.route}  ${e.externalParams}`);
+    console.log(
+      `     :${e.at.split(":")[1]}  ${e.verb} ${e.route}  ${e.externalParams}`,
+    );
   }
   const op = opaque(x.bare);
-  if (op.length) console.log(`     ↳ 跟不过去的去处（门可能在这些后面）：${op.join("、")}`);
+  if (op.length)
+    console.log(`     ↳ 跟不过去的去处（门可能在这些后面）：${op.join("、")}`);
 }
 
 console.log("\n── ② 整份文件都没有门的线索（多半按设计，但要逐份说出理由）");
 allBare.sort((a, b) => b.total - a.total);
-console.log(`   ${allBare.length} 份文件，共 ${allBare.reduce((n, x) => n + x.total, 0)} 条`);
-for (const x of allBare) console.log(`   ${String(x.total).padStart(3)} 条  ${x.f}`);
+console.log(
+  `   ${allBare.length} 份文件，共 ${allBare.reduce((n, x) => n + x.total, 0)} 条`,
+);
+for (const x of allBare)
+  console.log(`   ${String(x.total).padStart(3)} 条  ${x.f}`);
 
 if (UNKNOWN_DECORATORS.size) {
   console.log(
@@ -915,7 +1014,12 @@ console.log(
     "（**不是**「没门」，是「看不见」）",
 );
 
-const OUT = join(REPO_ROOT, "scripts", "guardrails", "ownership-entrypoints.todo.json");
+const OUT = join(
+  REPO_ROOT,
+  "scripts",
+  "guardrails",
+  "ownership-entrypoints.todo.json",
+);
 writeFileSync(
   OUT,
   `${JSON.stringify(
