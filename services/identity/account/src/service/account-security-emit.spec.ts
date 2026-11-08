@@ -45,8 +45,7 @@ type NotifyRead =
 
 /**
  * 在 MockUserRepository 上加三样东西：记下每次调用、按名字让某次读抛、以及补上离线
- * mock 刻意留空的那几项（个人租户、登录流水、会话吊销）——不补的话每一条通知都会落在
- * `no_personal_tenant` 上，于是「发信点接没接上」这件事永远测不到。
+ * Tenant lookup remains instrumented so tests prove notification delivery never calls it.
  */
 class SpyRepo extends MockUserRepository {
   readonly calls: string[] = [];
@@ -118,7 +117,9 @@ interface Harness {
   codes: () => AccountNotificationTemplate[];
 }
 
-async function harness(opts: { notifier?: boolean } = {}): Promise<Harness> {
+async function harness(
+  opts: { notifier?: boolean; email?: string | null } = {},
+): Promise<Harness> {
   const repo = new SpyRepo();
   const service = new AccountService(repo as never, hasher as never);
   const sent: CustomerNotifyInput[] = [];
@@ -131,8 +132,10 @@ async function harness(opts: { notifier?: boolean } = {}): Promise<Harness> {
   }
   const user = await repo.createUser({
     account: "takeover",
-    email: FIRST_EMAIL,
+    email: opts.email === undefined ? FIRST_EMAIL : opts.email,
     phone: "+8613800000001",
+    phoneVerified: true,
+    emailVerified: false,
     name: "Tester",
     passwordHash: null,
   } as never);
@@ -213,8 +216,7 @@ describe("发信点：每一次真的改动恰好一条", () => {
   });
 
   it("此前没有邮箱 ⇒ 只发新地址那条，绝不往空地址发", async () => {
-    const fresh = await harness();
-    await fresh.repo.updateProfile(fresh.userId, { email: null });
+    const fresh = await harness({ email: null });
     fresh.repo.calls.length = 0;
     await fresh.service.changeEmail(fresh.userId, SECOND_EMAIL);
     expect(fresh.codes()).toEqual(["account.email_changed_new"]);
@@ -359,7 +361,7 @@ describe("通知的失败不许把安全操作判成失败", () => {
    * 两次取事实各自抛一遍。判据不是「通知发出去了吗」（它当然发不出去），而是**业务调用
    * 本身照旧成功**：改密码的 true、换手机号的那一行、锁定返回的那个壳。
    */
-  const reads: NotifyRead[] = ["findUserForAdmin", "findPersonalTenantId"];
+  const reads: NotifyRead[] = ["findUserForAdmin"];
 
   for (const read of reads) {
     it(`${read} 抛了，改密码照旧成功、一条都不发`, async () => {
@@ -414,11 +416,14 @@ describe("通知的失败不许把安全操作判成失败", () => {
     ).resolves.toMatchObject({ phone: "+8613800000010" });
   });
 
-  it("没有个人租户：不发，但业务照旧成功（社交注册那条尾巴）", async () => {
+  it("delivers without a personal tenant or a functioning tenancy lookup", async () => {
     const h = await harness();
     h.repo.personalTenantId = null;
+    h.repo.failing.add("findPersonalTenantId");
     await h.service.changePhone(h.userId, "+8613800000002");
-    expect(h.sent).toEqual([]);
+    expect(h.sent).toHaveLength(1);
+    expect(h.sent[0]?.tenantId).toBeNull();
+    expect(h.repo.countOf("findPersonalTenantId")).toBe(0);
   });
 });
 
@@ -461,7 +466,7 @@ describe("未注入 notifier：为凑参数多做的读一次都不发生", () =
     await with_.service.adminForceLogout(with_.userId, "客户报被盗");
     /* 挂了 notifier 之后多出来的那一次是通知自己的（在 emit 的闭包里）。 */
     expect(with_.repo.countOf("findUserForAdmin")).toBe(2);
-    expect(with_.repo.countOf("findPersonalTenantId")).toBe(1);
+    expect(with_.repo.countOf("findPersonalTenantId")).toBe(0);
   });
 
   it("登录判据那一读也不发生（detectUnseenDevice 直接回 null）", async () => {

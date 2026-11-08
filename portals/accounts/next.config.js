@@ -57,11 +57,6 @@ const nextConfig = {
     // dev: auth-bff directly). The login form POSTs to ${base}/oidc/authorize/login.
     NEXT_PUBLIC_OIDC_API_BASE:
       process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081",
-    NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY:
-      process.env.NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY ?? "",
-    // operator surface reuses the ops/admin Turnstile (运营面)
-    NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY:
-      process.env.NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY ?? "",
     // Dead-end recovery fallback (see AutoReturnToApp / resolveReturnUrl).
     NEXT_PUBLIC_WEBSITE_URL: process.env.NEXT_PUBLIC_WEBSITE_URL ?? "",
   },

@@ -25,21 +25,31 @@ export class PgTenantClosureRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
 
   async getSnapshot(tenantId: string): Promise<TenantClosureSnapshot> {
-    const [bills, credit, refunds, receipts, orders, subscriptions] =
-      await Promise.all([
-        this.pool.query<{ unpaid: string }>(
-          `select count(*)::text as unpaid
-             from billing.invoices
-            where tenant_id = $1 and deleted_at is null
-              and bill_status in ('unpaid', 'paying', 'partial', 'overdue')`,
-          [tenantId],
-        ),
-        this.pool.query<{
-          balance: string | null;
-          currency: string | null;
-          paid_flow: string | null;
-        }>(
-          `select c.balance::text as balance, c.currency,
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin isolation level repeatable read read only");
+      const [bills, credit, refunds, receipts, orders, subscriptions] =
+        await Promise.all([
+          client.query<{ unpaid: string }>(
+            `select count(*)::text as unpaid
+             from billing.invoices i
+            where i.tenant_id = $1 and i.deleted_at is null
+              and i.bill_status in ('unpaid', 'paying', 'partial', 'overdue')
+              and not (i.bill_status='unpaid' and coalesce(i.paid_amount,0)=0
+                and exists (select 1 from billing.orders o where o.id=i.order_id
+                  and o.status='pending_payment'
+                  and not exists(select 1 from billing.invoices paid where paid.order_id=o.id
+                    and paid.deleted_at is null and (paid.bill_status='paid' or paid.paid_amount>0))
+                  and not exists(select 1 from billing.payments p join billing.invoices ip on ip.id=p.bill_id
+                    where ip.order_id=o.id and p.pay_status='pending_verify')))`,
+            [tenantId],
+          ),
+          client.query<{
+            balance: string | null;
+            currency: string | null;
+            paid_flow: string | null;
+          }>(
+            `select c.balance::text as balance, c.currency,
                   (select coalesce(sum(t.amount), 0)::numeric(12,2)::text
                      from billing.transactions t
                     where t.tenant_id = $1
@@ -48,26 +58,26 @@ export class PgTenantClosureRepository {
              from billing.credits c
             where c.tenant_id = $1
             limit 1`,
-          [tenantId],
-        ),
-        this.pool.query<{ in_progress: string }>(
-          `select count(*)::text as in_progress
+            [tenantId],
+          ),
+          client.query<{ in_progress: string }>(
+            `select count(*)::text as in_progress
              from billing.refunds
             where tenant_id = $1
               and (audit_status = 'pending'
                    or (audit_status = 'approved'
                        and refund_status in ('pending', 'processing')))`,
-          [tenantId],
-        ),
-        this.pool.query<{ in_progress: string }>(
-          `select count(*)::text as in_progress
+            [tenantId],
+          ),
+          client.query<{ in_progress: string }>(
+            `select count(*)::text as in_progress
              from billing.invoice_receipts
             where tenant_id = $1 and deleted_at is null
               and invoice_status in ('applying', 'approved')`,
-          [tenantId],
-        ),
-        this.pool.query<{ id: string; with_money: boolean }>(
-          `select o.id,
+            [tenantId],
+          ),
+          client.query<{ id: string; with_money: boolean }>(
+            `select o.id,
                   (o.status = 'pending_verify'
                    or exists (select 1 from billing.invoices i
                                where i.order_id = o.id and i.deleted_at is null
@@ -80,38 +90,45 @@ export class PgTenantClosureRepository {
             where o.tenant_id = $1
               and o.status in ('pending_payment', 'pending_verify')
             order by o.created_at asc`,
-          [tenantId],
-        ),
-        this.pool.query<{ unexpired: string }>(
-          `select count(*)::text as unexpired
+            [tenantId],
+          ),
+          client.query<{ unexpired: string }>(
+            `select count(*)::text as unexpired
              from metering.subscriptions
             where tenant_id = $1 and deleted_at is null
               and status not in ('expired', 'cancelled')
               and (end_at is null or end_at > now())`,
-          [tenantId],
-        ),
-      ]);
+            [tenantId],
+          ),
+        ]);
 
-    const creditRow = credit.rows[0];
-    const balance = Number(creditRow?.balance ?? 0);
-    const paidFlow = Number(creditRow?.paid_flow ?? 0);
-    const paidBalance = Math.max(0, Math.min(balance, paidFlow));
-    const giftedBalance = Math.max(0, balance - paidBalance);
+      await client.query("commit");
+      const creditRow = credit.rows[0];
+      const balance = Number(creditRow?.balance ?? 0);
+      const paidFlow = Number(creditRow?.paid_flow ?? 0);
+      const paidBalance = Math.max(0, Math.min(balance, paidFlow));
+      const giftedBalance = Math.max(0, balance - paidBalance);
 
-    return {
-      tenantId,
-      unpaidBills: Number(bills.rows[0]?.unpaid ?? 0),
-      currency: creditRow?.currency ?? "CNY",
-      balance: balance.toFixed(2),
-      paidBalance: paidBalance.toFixed(2),
-      giftedBalance: giftedBalance.toFixed(2),
-      refundsInProgress: Number(refunds.rows[0]?.in_progress ?? 0),
-      receiptsInProgress: Number(receipts.rows[0]?.in_progress ?? 0),
-      pendingOrdersCancellable: orders.rows
-        .filter((r) => !r.with_money)
-        .map((r) => r.id),
-      pendingOrdersWithMoney: orders.rows.filter((r) => r.with_money).length,
-      unexpiredSubscriptions: Number(subscriptions.rows[0]?.unexpired ?? 0),
-    };
+      return {
+        tenantId,
+        unpaidBills: Number(bills.rows[0]?.unpaid ?? 0),
+        currency: creditRow?.currency ?? "CNY",
+        balance: balance.toFixed(2),
+        paidBalance: paidBalance.toFixed(2),
+        giftedBalance: giftedBalance.toFixed(2),
+        refundsInProgress: Number(refunds.rows[0]?.in_progress ?? 0),
+        receiptsInProgress: Number(receipts.rows[0]?.in_progress ?? 0),
+        pendingOrdersCancellable: orders.rows
+          .filter((r) => !r.with_money)
+          .map((r) => r.id),
+        pendingOrdersWithMoney: orders.rows.filter((r) => r.with_money).length,
+        unexpiredSubscriptions: Number(subscriptions.rows[0]?.unexpired ?? 0),
+      };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

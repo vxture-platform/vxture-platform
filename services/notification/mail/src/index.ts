@@ -12,5 +12,6 @@
 
 export { MailModule } from "./module/mail.module";
 export { MailService } from "./service/mail.service";
+export type { EmailCodePurpose } from "./service/verifycode.service";
 export { VerifyCodeService } from "./service/verifycode.service";
 export type { IMailProvider, MailMessage } from "./types/mail.types";

@@ -86,8 +86,6 @@ export interface SecurityNotifyFacts {
   readonly accountId: string;
   /** 可视码；去重锚用它，**不用账号 uuid**。取不到 / 形状不对 → 锚里退成 `unknown`。 */
   readonly userNo: string | null | undefined;
-  /** 个人租户 id；`support.inbox_messages.tenant_id` 是 NOT NULL。 */
-  readonly personalTenantId: string | null | undefined;
   readonly occurredAt: Date;
   /**
    * 运营处置那三条的原因，**照搬运营填的那一句**（owner 2026-09-29 裁定第 3 条）。
@@ -113,20 +111,14 @@ export interface SecurityNotifyFacts {
   readonly emailTo?: string | null | undefined;
 }
 
-/**
- * 每条事件各自额外要的那几项。`accountId` / `userNo` / `personalTenantId` / `occurredAt`
- * 四项由服务层统一取，调用点不必（也不该）各取一遍。
- */
+/** Event-specific data; account identity and occurrence time are supplied centrally. */
 export type SecurityNotifyExtras = Omit<
   SecurityNotifyFacts,
-  "accountId" | "userNo" | "personalTenantId" | "occurredAt"
+  "accountId" | "userNo" | "occurredAt"
 >;
 
 /** 发不出去的原因。要**记一行日志**，不许静默返回——否则「没发」和「发了」在日志里一样。 */
-export type SecurityNotifyGap =
-  | "no_personal_tenant"
-  | "no_reason"
-  | "no_old_address";
+export type SecurityNotifyGap = "no_reason" | "no_old_address";
 
 export type SecurityNotifyOutcome =
   | { readonly ok: true; readonly input: CustomerNotifyInput }
@@ -154,23 +146,8 @@ const NEEDS_REASON: ReadonlySet<string> = new Set([
 const OLD_ADDRESS_TEMPLATE: AccountNotificationTemplate =
   "account.email_changed_old";
 
-/**
- * 账号安全事件的点击落点 = console 的**我的账号**页 `/profile`。**一处定义，不许抄第二份。**
- *
- * 值从 console 自己的两份配置对出来：路由表 `portals/console/src/config/routes.ts` 的
- * `routeLabels` 里有 `/profile`，侧栏 `config/navigation.ts` 的 `accountTenantSection` 也指着
- * 它，而 `app/[locale]/(console)/profile/page.tsx` 是真页面——三样齐了才叫「点得进去」。
- * 单测按那几个文件对账，不照抄这个字符串。
- *
- * 此前这里写的是 `/account/profile`。那是 `@/modules/account/profile/ProfilePage` 这个**源码
- * 路径**的形状，不是路由：console 里根本没有 `/account` 这一段，于是十四条安全通知每一条
- * 点开都是 404——而让它上线的正是一个手抄的期望值，它和被测的那个常量一起错，所以永远相等。
- *
- * 为什么不是 `/security`：那条路由从 2026-09-04 起只是一条跳转（安全设置整段并入我的账号，
- * 见 console 那个 page.tsx）。发一个会 302 的地址等于让客户多跳一次，而跳转的目标随时会
- * 再变一次。
- */
-export const SECURITY_LINK = "/profile";
+/** Customer security events open the independent account center. */
+export const SECURITY_LINK = "/account";
 
 function trimmed(v: string | null | undefined): string {
   return typeof v === "string" ? v.trim() : "";
@@ -188,9 +165,6 @@ export function securityNotice(
   templateCode: AccountNotificationTemplate,
   facts: SecurityNotifyFacts,
 ): SecurityNotifyOutcome {
-  const tenantId = trimmed(facts.personalTenantId);
-  if (!tenantId) return { ok: false, gap: "no_personal_tenant" };
-
   const params: Record<string, string | number> = {
     occurredAt: formatOccurredAt(facts.occurredAt),
   };
@@ -218,7 +192,7 @@ export function securityNotice(
   return {
     ok: true,
     input: {
-      tenantId,
+      tenantId: null,
       templateCode,
       reference: {
         type: SECURITY_REFERENCE_TYPE,

@@ -15,6 +15,7 @@ import {
   Controller,
   Get,
   Headers,
+  Header,
   HttpCode,
   HttpStatus,
   Inject,
@@ -43,6 +44,7 @@ import {
   type OidcTokenResponse,
   type OidcTokenExchangeResponse,
 } from "../oidc/oidc.service";
+import { AccountsOriginGuard } from "../accounts/accounts-origin.guard";
 import { TOKEN_EXCHANGE_GRANT_TYPE } from "../oidc/token-exchange.service";
 import {
   parseSessionStatusCredentials,
@@ -149,9 +151,11 @@ export class OidcRouter {
     // accounts.vxture.com, same-origin with these OIDC endpoints).
     // See docs/design/identity-platform-idp.md.
     const loginBase = this.config.platform.LOGIN_UI_BASE_URL;
-    const loginUrl = new URL("/login", loginBase);
+    const loginUrl = new URL(
+      result.realm === "workforce" ? "/workforce/login" : "/login",
+      loginBase,
+    );
     loginUrl.searchParams.set("login_challenge", result.loginChallenge);
-    loginUrl.searchParams.set("realm", result.realm);
     res.redirect(loginUrl.toString());
   }
 
@@ -173,21 +177,29 @@ export class OidcRouter {
       return;
     }
     const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
-    /* 同 /authorize：两个都取，由下游按 realm 挑。 */
-    const sid = cookies[SID_COOKIE.operator] ?? cookies[SID_COOKIE.tenant];
-    if (!sid) {
-      res.status(204).end();
-      return;
-    }
     const redirectTo = await this.oidc.resumeWithExistingSession(
       loginChallenge,
-      sid,
+      {
+        tenant: cookies[SID_COOKIE.tenant],
+        operator: cookies[SID_COOKIE.operator],
+      },
     );
     if (!redirectTo) {
       res.status(204).end();
       return;
     }
     res.json({ redirectTo });
+  }
+
+  /** Read-only presentation context; never returns credentials or redirect targets. */
+  @Get("oidc/authorize/login-context")
+  async loginContext(
+    @Query("login_challenge") challenge: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ realm: "customer" | "workforce" }> {
+    res.setHeader("Cache-Control", "no-store");
+    if (!challenge) throw new BadRequestException("invalid_request");
+    return this.oidc.loginContext(challenge);
   }
 
   /** JWKS — RP signature verification (active + rotating public keys). */
@@ -357,7 +369,7 @@ export class OidcRouter {
       login_challenge?: string;
       identifier?: string;
       password?: string;
-      turnstile_token?: string;
+      captcha_token?: string;
     },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -369,7 +381,7 @@ export class OidcRouter {
       loginChallenge: body.login_challenge,
       identifier: body.identifier,
       password: body.password,
-      turnstileToken: body.turnstile_token,
+      captchaToken: body.captcha_token,
       clientIp: extractClientIp(req),
       userAgent: resolveUserAgent(req),
     });
@@ -539,6 +551,35 @@ export class OidcRouter {
    * UI POSTs the login_challenge + phone + SMS code; on success the central
    * session cookie is set and the client redirect (with code) is returned.
    */
+  @Post("oidc/authorize/login/workforce-phone")
+  @HttpCode(HttpStatus.OK)
+  async workforcePhone(
+    @Req() req: Request,
+    @Body() body: { login_challenge?: string; phone?: string; code?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    new AccountsOriginGuard(this.config).assertRequest(req);
+    if (
+      typeof body?.login_challenge !== "string" ||
+      !body.login_challenge ||
+      typeof body.phone !== "string" ||
+      !body.phone ||
+      typeof body.code !== "string" ||
+      !/^\d{6}$/.test(body.code)
+    )
+      throw new BadRequestException("invalid_request");
+    const result = await this.oidc.completeWorkforcePhone({
+      loginChallenge: body.login_challenge,
+      phone: body.phone,
+      code: body.code,
+      clientIp: extractClientIp(req),
+      userAgent: resolveUserAgent(req),
+    });
+    if ("status" in result) return result;
+    this.setSessionCookie(res, result);
+    return { redirectTo: result.redirectTo };
+  }
+
   @Post("oidc/authorize/login/phone")
   @HttpCode(HttpStatus.OK)
   async authorizeLoginPhone(
@@ -546,7 +587,7 @@ export class OidcRouter {
     body: { login_challenge?: string; phone?: string; code?: string },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ redirectTo: string }> {
+  ): Promise<{ redirectTo: string } | OidcMfaChallenge> {
     if (!body.login_challenge || !body.phone || !body.code) {
       throw new BadRequestException("invalid_request");
     }
@@ -557,6 +598,10 @@ export class OidcRouter {
       clientIp: extractClientIp(req),
       userAgent: resolveUserAgent(req),
     });
+    if ("status" in completion) {
+      this.setCustomerMfaCookie(res, completion.mfaToken);
+      return completion;
+    }
     this.setSessionCookie(res, completion);
     return { redirectTo: completion.redirectTo };
   }
@@ -568,6 +613,19 @@ export class OidcRouter {
    * 身份只认中央会话 cookie —— 会话在手机验证那一步就建好了，
    * 缺的只是资料；授权码则还没发（finishTenantLogin 判定补齐未完成时会把回跳意图挂起）。
    */
+  @Get("oidc/onboarding/account-availability")
+  async onboardingAvailability(
+    @Req() req: Request,
+    @Query("account") account: string,
+  ) {
+    if (typeof account !== "string" || account.length > 24)
+      throw new BadRequestException("invalid_account");
+    return this.oidc.checkOnboardingAccount(
+      this.requireTenantSid(req),
+      account,
+    );
+  }
+
   @Get("oidc/onboarding")
   async onboardingState(@Req() req: Request): Promise<{
     phone: string;
@@ -624,7 +682,7 @@ export class OidcRouter {
     body: { login_challenge?: string; email?: string; code?: string },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ redirectTo: string }> {
+  ): Promise<{ redirectTo: string } | OidcMfaChallenge> {
     if (!body.login_challenge || !body.email || !body.code) {
       throw new BadRequestException("invalid_request");
     }
@@ -635,11 +693,56 @@ export class OidcRouter {
       clientIp: extractClientIp(req),
       userAgent: resolveUserAgent(req),
     });
+    if ("status" in completion) {
+      this.setCustomerMfaCookie(res, completion.mfaToken);
+      return completion;
+    }
     this.setSessionCookie(res, completion);
     return { redirectTo: completion.redirectTo };
   }
 
   /** Set the realm central-session cookie (tenant shares .vxture.com; operator host-only, D-7). */
+  private setCustomerMfaCookie(res: Response, token: string) {
+    res.cookie("vx_customer_mfa", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env["IDP_COOKIE_INSECURE"] !== "true",
+      path: "/",
+      maxAge: 300000,
+    });
+  }
+
+  @Get("oidc/customer/mfa/pending")
+  @Header("Cache-Control", "no-store")
+  customerMfaPending(@Req() req: Request) {
+    new AccountsOriginGuard(this.config).assertRequest(req);
+    const token: unknown = req.cookies?.vx_customer_mfa;
+    if (typeof token !== "string" || !/^[0-9a-f-]{36}$/.test(token))
+      throw new UnauthorizedException("mfa_session_expired");
+    return { mfaToken: token };
+  }
+
+  @Post("oidc/customer/mfa/verify")
+  @HttpCode(200)
+  @Header("Cache-Control", "no-store")
+  async customerMfaVerify(
+    @Req() req: Request,
+    @Body() body: { mfa_token?: string; method?: string; code?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    new AccountsOriginGuard(this.config).assertRequest(req);
+    if (!body?.mfa_token || !body.method || !body.code)
+      throw new BadRequestException("invalid_request");
+    const completion = await this.oidc.completeCustomerMfa(
+      body.mfa_token,
+      body.method,
+      body.code,
+    );
+    this.setSessionCookie(res, completion);
+    res.clearCookie("vx_customer_mfa", { path: "/" });
+    return { redirectTo: completion.redirectTo };
+  }
+
   private setSessionCookie(
     res: Response,
     completion: { sid: string; realm: string; sessionMaxAge: number },

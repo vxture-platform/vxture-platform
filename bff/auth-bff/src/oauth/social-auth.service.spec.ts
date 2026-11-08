@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { SocialAuthService } from "./social-auth.service";
 import type { OAuthProviderRegistry } from "./provider-registry";
 import type { AccountService } from "@vxture/service-account";
-import type { PhoneCodeService } from "@vxture/service-sms";
+import type { CustomerPhoneCodeService } from "../authn/customer-phone-code.service";
 import type { RedisService } from "../redis/redis.service";
 import type { OidcService } from "../oidc/oidc.service";
 
@@ -24,8 +24,12 @@ interface Mocks {
   redis: {
     consumeOauthState: ReturnType<typeof vi.fn>;
     consumeOauthBind: ReturnType<typeof vi.fn>;
+    readOauthBind: ReturnType<typeof vi.fn>;
   };
-  oidc: { completeLoginWithUser: ReturnType<typeof vi.fn> };
+  oidc: {
+    completeLoginWithUser: ReturnType<typeof vi.fn>;
+    loginContext: ReturnType<typeof vi.fn>;
+  };
   service: SocialAuthService;
 }
 
@@ -42,8 +46,10 @@ function build(): Mocks {
   const redis = {
     consumeOauthState: vi.fn(),
     consumeOauthBind: vi.fn(),
+    readOauthBind: vi.fn(async () => ({ loginChallenge: "chal-1" })),
   };
   const oidc = {
+    loginContext: vi.fn(async () => ({ realm: "customer" })),
     completeLoginWithUser: vi.fn().mockResolvedValue({
       sid: "sid-1",
       realm: "customer",
@@ -54,9 +60,11 @@ function build(): Mocks {
   const service = new SocialAuthService(
     registry as unknown as OAuthProviderRegistry,
     account as unknown as AccountService,
-    phoneCode as unknown as PhoneCodeService,
+    phoneCode as unknown as CustomerPhoneCodeService,
     redis as unknown as RedisService,
     oidc as unknown as OidcService,
+    {} as never,
+    {} as never,
   );
   return { registry, account, phoneCode, redis, oidc, service };
 }

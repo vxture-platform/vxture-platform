@@ -8,3 +8,5 @@
 export { SmsModule } from "./module/sms.module";
 export { SmsService } from "./service/sms.service";
 export { PhoneCodeService } from "./service/phone-code.service";
+
+export type { PhoneCodeOptions } from "./service/phone-code.service";

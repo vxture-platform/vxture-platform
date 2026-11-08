@@ -18,6 +18,7 @@ import type { Pool } from "pg";
 import { PgNoticeRepository } from "@vxture/service-notice";
 import { OperatorMirror, type OperatorMirrorPort } from "./operator-mirror";
 import {
+  SECURITY_TEMPLATE_CODES,
   localeOf,
   render,
   smsParams,
@@ -30,7 +31,8 @@ import {
 } from "./templates";
 
 export interface NotifyInput {
-  tenantId: string;
+  /** Null only for an account security event with one explicit recipient. */
+  tenantId: string | null;
   templateCode: NotificationTemplateCode;
   /** id 可为复合键，如 `${subscriptionId}:${endAtDate}`（同一到期只通知一次）。 */
   reference: { type: NotificationReferenceType; id: string };
@@ -126,6 +128,8 @@ export interface NotificationDispatcherOptions {
   provider?: string | undefined;
   /** 邮件里链接的绝对前缀（如 https://console.vxture.com）；未设则相对链接不进邮件。 */
   consoleBaseUrl?: string | null | undefined;
+  /** Independent account-center origin for security links. */
+  accountsBaseUrl?: string | null | undefined;
   logger?: NotifyLogger | undefined;
   /**
    * 运营镜像（2026-09-28）：客户消息落库后再写一条 admin.operator_notices。
@@ -152,6 +156,7 @@ export class NotificationDispatcher {
   private readonly prefs: PreferenceGate | null;
   private readonly provider: string;
   private readonly consoleBaseUrl: string | null;
+  private readonly accountsBaseUrl: string | null;
   private readonly logger: NotifyLogger;
   private readonly operatorMirror: OperatorMirrorPort | null;
 
@@ -165,6 +170,7 @@ export class NotificationDispatcher {
     this.prefs = options.prefs ?? null;
     this.provider = options.provider ?? "smtp";
     this.consoleBaseUrl = options.consoleBaseUrl?.replace(/\/$/, "") ?? null;
+    this.accountsBaseUrl = options.accountsBaseUrl?.replace(/\/$/, "") ?? null;
     this.logger = options.logger ?? {
       warn: (m) => console.warn(`[notification] ${m}`),
     };
@@ -183,6 +189,22 @@ export class NotificationDispatcher {
       smsFailed: 0,
       skipped: 0,
     };
+    const security = SECURITY_TEMPLATE_CODES.some(
+      (code) => code === input.templateCode,
+    );
+    // Security messages never inherit a tenant owner, including legacy scoped calls.
+    if (
+      (security &&
+        (input.reference.type !== "security" ||
+          input.exactRecipients?.length !== 1 ||
+          !input.exactRecipients[0]?.trim())) ||
+      (input.tenantId === null && !security) ||
+      (input.tenantId !== null && !input.tenantId?.trim())
+    ) {
+      result.skipped++;
+      this.logger.warn("notification rejected: invalid account/tenant scope");
+      return result;
+    }
     const recipients = await this.resolveRecipients(input);
     if (recipients.length === 0) {
       result.skipped += 1;
@@ -192,7 +214,7 @@ export class NotificationDispatcher {
       return result;
     }
     const topic = topicOf(input.templateCode);
-    const absoluteLink = this.absoluteLink(input.link);
+    const absoluteLink = this.absoluteLink(input.link, security);
     let mirrored = false;
 
     for (const accountId of recipients) {
@@ -223,7 +245,7 @@ export class NotificationDispatcher {
             input.templateCode,
             rendered.title.slice(0, 256),
             rendered.body,
-            input.link ?? null,
+            security ? absoluteLink : (input.link ?? null),
             input.reference.type,
             input.reference.id,
           ],
@@ -291,7 +313,12 @@ export class NotificationDispatcher {
     input: NotifyInput,
     rendered: { title: string; body: string },
   ): Promise<void> {
-    if (!this.operatorMirror) return;
+    if (
+      !this.operatorMirror ||
+      input.tenantId === null ||
+      SECURITY_TEMPLATE_CODES.some((code) => code === input.templateCode)
+    )
+      return;
     try {
       await this.operatorMirror.mirror(
         {
@@ -410,12 +437,16 @@ export class NotificationDispatcher {
     }
   }
 
-  /** 相对路径拼 console 前缀；已是绝对 URL（公告 CTA）原样进邮件；没前缀的相对路径不进邮件。 */
-  private absoluteLink(link: string | undefined): string | null {
+  /** Resolve security paths on the account center and business paths on Console. */
+  private absoluteLink(
+    link: string | undefined,
+    security: boolean,
+  ): string | null {
     if (!link) return null;
     if (/^https?:\/\//i.test(link)) return link;
-    if (!this.consoleBaseUrl) return null;
-    return `${this.consoleBaseUrl}${link.startsWith("/") ? "" : "/"}${link}`;
+    const base = security ? this.accountsBaseUrl : this.consoleBaseUrl;
+    if (!base) return null;
+    return `${base}${link.startsWith("/") ? "" : "/"}${link}`;
   }
 
   /** 调用方给的收件人 ∪ 租户 owner，去重、去空。 */
@@ -424,6 +455,7 @@ export class NotificationDispatcher {
     if (input.exactRecipients) {
       return [...new Set(input.exactRecipients.filter(Boolean))];
     }
+    if (input.tenantId === null) return [];
     const res = await this.pool.query<{ owner_user_id: string | null }>(
       `select owner_user_id from tenancy.tenants where id = $1`,
       [input.tenantId],
@@ -478,7 +510,7 @@ export class NotificationDispatcher {
   }
 
   private async log(row: {
-    tenantId: string;
+    tenantId: string | null;
     accountId: string;
     channel: "inapp" | "email" | "sms";
     status: "sent" | "delivered" | "failed";

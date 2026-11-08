@@ -36,6 +36,7 @@ import {
   deriveSecretKey,
   encryptSecret,
 } from "./operator-secret-cipher";
+import { RedisService } from "../redis/redis.service";
 
 /** Authenticator-app issuer label shown next to the operator account. */
 const TOTP_ISSUER = "Vxture";
@@ -62,6 +63,10 @@ export interface TotpEnrollment {
   otpauthUri: string;
 }
 
+// ============================================================================
+// Policy, verification and enrollment
+// ============================================================================
+
 @Injectable()
 export class OperatorMfaService {
   private totpKey: Buffer | null = null;
@@ -70,6 +75,7 @@ export class OperatorMfaService {
     @Inject(PgOperatorRepository)
     private readonly operators: PgOperatorRepository,
     @Inject(VxConfigService) private readonly config: VxConfigService,
+    @Inject(RedisService) private readonly redis: RedisService,
   ) {}
 
   /** Derived AES key for TOTP secrets; fail-closed when unconfigured. */
@@ -84,48 +90,14 @@ export class OperatorMfaService {
     return this.totpKey;
   }
 
-  /**
-   * Resolve the MFA obligation for an operator login. An unknown operator id
-   * (anomalous after a successful first factor) resolves to "no MFA" so the
-   * caller fails downstream on findById rather than this path leaking account
-   * existence.
-   *
-   * OPERATOR_MFA_DEV_BYPASS: explicit opt-in, local convenience only. Read via
-   * VxConfigService (not raw process.env) so it can't leak across test workers
-   * that load `.env.local` for unrelated config domains, and fails closed in
-   * production regardless of the value — never gate it on anything an operator
-   * deploy could set.
-   */
+  /** Workforce authentication always requires an enrolled second factor. */
   async resolveLoginMfa(operatorId: string): Promise<OperatorLoginMfa> {
-    if (!this.config.isProduction && this.config.auth.OPERATOR_MFA_DEV_BYPASS) {
-      return {
-        decision: {
-          effectivePolicy: "disabled",
-          mfaRequired: false,
-          enrollRequired: false,
-          webauthnRequired: false,
-          enrollFactor: null,
-        },
-        methods: [],
-      };
-    }
     const ctx = await this.operators.getMfaContext(operatorId);
-    if (!ctx) {
-      return {
-        decision: {
-          effectivePolicy: "disabled",
-          mfaRequired: false,
-          enrollRequired: false,
-          webauthnRequired: false,
-          enrollFactor: null,
-        },
-        methods: [],
-      };
-    }
+    if (!ctx) throw new BadRequestException("invalid_grant");
     const decision = decideMfa(
       {
         platformDefault: ctx.platformDefault,
-        roleFloor: ctx.roleFloor,
+        roleFloor: "required",
         personal: ctx.personalPolicy,
       },
       {
@@ -201,18 +173,48 @@ export class OperatorMfaService {
   }
 
   /**
-   * Begin TOTP enrollment: generate a fresh secret, stage it (encrypted,
-   * unconfirmed) on the operator_mfa row, and return the base32 secret +
-   * otpauth URI for the QR. Confirmed by the first valid code (confirmTotp).
+   * Stage an encrypted secret without changing the active factor or recovery codes.
+   * @param operatorId - Workforce account owning this ceremony.
+   * @param context - Login challenge or authenticated session plus ceremony token.
+   * @param initialOnly - Reject enrollment-on-login once any factor exists.
+   * @param expected - Factor state observed before self-service reauthentication.
+   * @returns QR material for this ceremony only.
+   * @throws {BadRequestException} When the account or enrollment policy rejects it.
    */
-  async beginTotpEnrollment(operatorId: string): Promise<TotpEnrollment> {
+  async beginTotpEnrollment(
+    operatorId: string,
+    context: string,
+    initialOnly = false,
+    expected?: { secret: string | null; enabled: boolean },
+  ): Promise<TotpEnrollment> {
     const operator = await this.operators.findById(operatorId);
     if (!operator) throw new BadRequestException("invalid_grant");
+    const ctx = await this.operators.getMfaContext(operatorId);
+    if (!ctx || ctx.webauthnRequired)
+      throw new BadRequestException("webauthn_required");
+    if (initialOnly && (ctx.totpEnabled || ctx.webauthnCredentialCount > 0)) {
+      throw new BadRequestException("mfa_already_enrolled");
+    }
+    const previous = await this.operators.getTotpEnrollment(operatorId);
+    if (
+      expected &&
+      ((previous?.secret ?? null) !== expected.secret ||
+        (previous?.enabled ?? false) !== expected.enabled)
+    ) {
+      throw new BadRequestException("mfa_state_changed");
+    }
     const secret = generateTotpSecret();
-    await this.operators.upsertPendingTotpSecret(
+    const stored = await this.redis.storeOperatorTotpPending(
       operatorId,
-      encryptSecret(secret, this.secretKey()),
+      context,
+      {
+        secret: encryptSecret(secret, this.secretKey()),
+        previousSecret: previous?.secret ?? null,
+        previousEnabled: previous?.enabled ?? false,
+        initialOnly,
+      },
     );
+    if (!stored) throw new BadRequestException("mfa_enrollment_in_progress");
     return {
       secret,
       otpauthUri: buildOtpauthUri({
@@ -224,21 +226,40 @@ export class OperatorMfaService {
   }
 
   /**
-   * Confirm TOTP enrollment with the first code. On success the staged secret is
-   * enabled, a fresh batch of recovery codes is issued (returned once for
-   * display), and TOTP becomes a usable factor. `{ ok: false }` on a wrong code
-   * (the caller decides whether to burn an attempt).
+   * Consume one ceremony and atomically activate its factor and recovery codes.
+   * @param operatorId - Workforce account owning this ceremony.
+   * @param code - First code generated by the new authenticator.
+   * @param context - Exact context used to stage the secret.
+   * @returns Recovery codes once, or failure for expired, stale or invalid proof.
+   * @throws {Error} When the stores are unavailable; active material remains intact.
    */
   async confirmTotpEnrollment(
     operatorId: string,
     code: string,
+    context: string,
   ): Promise<{ ok: false } | { ok: true; recoveryCodes: string[] }> {
-    const enrollment = await this.operators.getTotpEnrollment(operatorId);
-    if (!enrollment?.secret) return { ok: false };
-    const secret = decryptSecret(enrollment.secret, this.secretKey());
+    const attempt = await this.redis.attemptOperatorTotpPending(
+      operatorId,
+      context,
+    );
+    if (!attempt) return { ok: false };
+    const secret = decryptSecret(attempt.pending.secret, this.secretKey());
     if (!verifyTotp(secret, code, { window: 1 })) return { ok: false };
-    await this.operators.enableTotp(operatorId);
-    const recoveryCodes = await this.issueRecoveryCodes(operatorId);
+    if (
+      !(await this.redis.consumeOperatorTotpPending(
+        operatorId,
+        context,
+        attempt.version,
+      ))
+    ) {
+      return { ok: false };
+    }
+    const recoveryCodes = generateRecoveryCodes();
+    const activated = await this.operators.activateTotpEnrollment(operatorId, {
+      ...attempt.pending,
+      recoveryHashes: recoveryCodes.map(hashRecoveryCode),
+    });
+    if (!activated) return { ok: false };
     return { ok: true, recoveryCodes };
   }
 }

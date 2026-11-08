@@ -14,6 +14,8 @@ const FACTOR_TO_AMR: Record<string, string> = {
   password: "pwd",
   email_otp: "otp",
   phone_otp: "otp",
+  phone: "sms",
+  email: "otp",
   totp: "otp",
   webauthn: "hwk",
   recovery: "rc",

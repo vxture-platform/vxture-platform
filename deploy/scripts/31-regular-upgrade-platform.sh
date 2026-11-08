@@ -32,7 +32,7 @@ run_step() {
 
 check_auth_runtime_contract() {
   local auth_env="$RUNTIME_DIR/.env.auth-bff"
-  local turnstile_hosts raw_line
+  local captcha_enabled captcha_customer captcha_workforce captcha_key
   if [ ! -f "$auth_env" ]; then
     echo "错误：缺少 runtime auth env：$auth_env" >&2
     exit 1
@@ -42,36 +42,54 @@ check_auth_runtime_contract() {
     echo "runtime config 由人工维护，请补齐后再部署。" >&2
     exit 1
   fi
-  # 这一条守的是"widget 在哪个页面上被解开"：Turnstile 校验拿 siteverify 回的
-  # hostname 比这张白名单。2026-08-29 核实：全仓渲染 widget 的只有 accounts
-  # （OidcLoginForm / BindPhonePanel），所以必须在的是 accounts.vxture.com；
-  # 此前这里要求 console.vxture.com，那是登录面还内嵌在 console 时的事实。
-  #
-  # 值用 env_value / csv_contains 读（lib/env-values.sh）：引号、`= ` 后的空格、
-  # 行尾 CR、逗号两侧空格都不算数。v0.26.3 的部署就死在这里——值是对的，
-  # 只是写法不合一个 `case` 模式的口味；守卫读值必须按语义读。
-  turnstile_hosts="$(env_value "$auth_env" CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES)"
-  if [ -z "$turnstile_hosts" ]; then
-    echo "错误：$auth_env 缺少 CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES。" >&2
+  # Validate runtime Aliyun scenes before any stack mutation. Never print secret values.
+  captcha_enabled="$(env_value "$auth_env" ALIYUN_CAPTCHA_ENABLED)"
+  if [ "$captcha_enabled" != "true" ]; then
+    echo "错误：生产环境要求 ALIYUN_CAPTCHA_ENABLED=true。" >&2
     exit 1
   fi
-  # 判据与校验器的 isAllowedHostname 完全一致：精确命中，或 apex/父域按后缀覆盖。
-  # v0.26.4 的部署曾因"字面上没有 accounts.vxture.com"被拦，而当时线上的值
-  # `vxture.com,console.vxture.com,ruyin.ai` 靠 apex 后缀覆盖着 accounts、登录一直是通的
-  # ——一条契约检查拦下一个能工作的配置，是检查在撒谎，不是配置错了。
-  # 靠 apex 兜住只 warn：apex 会放开整个子域，该收窄，但那是运维决定，不是部署失败。
-  local hit
-  if ! hit="$(csv_covers_host "$turnstile_hosts" accounts.vxture.com)"; then
-    raw_line="$(grep -nE '^[[:space:]]*CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES[[:space:]]*=' "$auth_env" | tail -n 1 | cat -A)"
-    echo "错误：CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES 没有覆盖 accounts.vxture.com（登录 widget 实际渲染的页面）。" >&2
-    echo "  读到的值：[$turnstile_hosts]" >&2
-    echo "  原始行（cat -A）：$raw_line" >&2
-    echo "runtime config 由人工维护，请补齐后再部署。" >&2
+  for captcha_key in ALIYUN_CAPTCHA_ACCESS_KEY_ID ALIYUN_CAPTCHA_ACCESS_KEY_SECRET ALIYUN_CAPTCHA_PREFIX ALIYUN_CAPTCHA_CUSTOMER_SCENE_ID ALIYUN_CAPTCHA_WORKFORCE_SCENE_ID; do
+    if [ -z "$(env_value "$auth_env" "$captcha_key")" ]; then
+      echo "错误：auth-bff 缺少 $captcha_key。" >&2
+      exit 1
+    fi
+  done
+  captcha_customer="$(env_value "$auth_env" ALIYUN_CAPTCHA_CUSTOMER_SCENE_ID)"
+  captcha_workforce="$(env_value "$auth_env" ALIYUN_CAPTCHA_WORKFORCE_SCENE_ID)"
+  if [ "$captcha_customer" = "$captcha_workforce" ]; then
+    echo "错误：customer/workforce 人机验证场景必须不同。" >&2
     exit 1
   fi
-  if [ "$hit" != "accounts.vxture.com" ]; then
-    echo "警告：accounts.vxture.com 只靠 apex/父域 '$hit' 的后缀匹配覆盖。apex 会放开整个子域，建议收窄为 accounts.vxture.com。" >&2
+  case "$(env_value "$auth_env" ALIYUN_CAPTCHA_REGION)" in
+    cn|sgp) ;;
+    *) echo "错误：ALIYUN_CAPTCHA_REGION 必须是 cn 或 sgp。" >&2; exit 1 ;;
+  esac
+  # Every OTP purpose must resolve to an explicit, distinct provider scheme.
+  local sms_env="$RUNTIME_DIR/secrets/platform-sms.env"
+  local sms_key sms_value existing
+  local -a sms_schemes=()
+  if [ ! -f "$sms_env" ]; then
+    echo "错误：缺少短信凭据配置文件。" >&2
+    exit 1
   fi
+  for sms_key in ALIYUN_SMS_SCHEME_NAME ALIYUN_SMS_CUSTOMER_LOGIN_SCHEME_NAME ALIYUN_SMS_CUSTOMER_REGISTER_SCHEME_NAME ALIYUN_SMS_CUSTOMER_SOCIAL_BIND_SCHEME_NAME ALIYUN_SMS_WORKFORCE_LOGIN_SCHEME_NAME ALIYUN_SMS_WORKFORCE_PHONE_CHANGE_SCHEME_NAME ALIYUN_SMS_CUSTOMER_SECURITY_SCHEME_NAME ALIYUN_SMS_CUSTOMER_PHONE_CHANGE_SCHEME_NAME; do
+    sms_value="$(env_value "$sms_env" "$sms_key")"
+    if [ -z "$sms_value" ]; then
+      echo "错误：短信配置缺少 $sms_key。" >&2
+      exit 1
+    fi
+    if [ "${#sms_value}" -gt 20 ]; then
+      echo "错误：$sms_key 不能超过 20 个字符。" >&2
+      exit 1
+    fi
+    for existing in "${sms_schemes[@]}"; do
+      if [ "$sms_value" = "$existing" ]; then
+        echo "错误：短信验证码方案必须按用途隔离。" >&2
+        exit 1
+      fi
+    done
+    sms_schemes+=("$sms_value")
+  done
 }
 
 cd "$COMPOSE_DIR"

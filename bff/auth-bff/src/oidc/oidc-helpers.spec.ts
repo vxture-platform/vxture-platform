@@ -135,9 +135,9 @@ describe("pickSessionForRealm", () => {
     expect(pickSessionForRealm("workforce", {})).toBeUndefined();
   });
 
-  it("未知 realm 按客户侧处理，绝不落到运营者会话上", () => {
+  it("rejects unknown realms without selecting either session", () => {
     expect(
       pickSessionForRealm("nonesuch", { tenant: "t-1", operator: "o-1" }),
-    ).toBe("t-1");
+    ).toBeUndefined();
   });
 });

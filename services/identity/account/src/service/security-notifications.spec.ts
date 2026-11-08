@@ -9,7 +9,7 @@
  *      写反，症状是「这条通知看起来装好了却永远不响」或者「每次登录都响」。
  *   ④ 点击落点 —— 见下面那一段：它此前是被一个**手抄的期望值**放过去的。
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -36,7 +36,6 @@ const OLD_EMAIL = "old.address@example.com";
 const BASE = {
   accountId: "11111111-2222-3333-4444-555555555555",
   userNo: "1234567890",
-  personalTenantId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
   occurredAt: AT,
 } as const;
 
@@ -52,37 +51,8 @@ const COMPLETE = {
   emailTo: OLD_EMAIL,
 } as const;
 
-// ── console 的两份配置：路由表与侧栏导航 ────────────────────────────────────
-//
-// 为什么读文本而不是 import：`no-service-to-upper` 那条边界规则不许 services 依赖
-// portals，而这里要的本来也不是那个模块——要的是「console 的路由表里到底有没有这个
-// 地址」。读文本只发生在**跑测试的时候**，运行时一个依赖都没加。
-//
-// 为什么非得对账不可：上一版那个 `/account/profile` 是被一个手抄的期望值放过去的。
-// 期望值和被测的常量一起错，于是它永远相等，而十四条安全通知每一条点开都是 404。
+// The independent account route must exist; no Console configuration is involved.
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
-const CONSOLE_CONFIG = join(REPO_ROOT, "portals", "console", "src", "config");
-const CONSOLE_APP = join(
-  REPO_ROOT,
-  "portals",
-  "console",
-  "src",
-  "app",
-  "[locale]",
-  "(console)",
-);
-
-function matches(file: string, re: RegExp): string[] {
-  const text = readFileSync(join(CONSOLE_CONFIG, file), "utf8");
-  return [...text.matchAll(re)]
-    .map((m) => m[1])
-    .filter((v): v is string => Boolean(v));
-}
-
-/** `routes.ts` 的 `routeLabels`：console 认得的每一条应用内路径。 */
-const routeTablePaths = matches("routes.ts", /\["(\/[^"]*)",/g);
-/** `navigation.ts` 的每一个 `href`：侧栏真的指得到的那些。 */
-const navigationHrefs = matches("navigation.ts", /href:\s*"(\/[^"]*)"/g);
 
 const CHROME_WIN =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36";
@@ -143,23 +113,21 @@ describe("securityNotice 组装", () => {
     expect(typeof outcome.input.params.occurredAt).toBe("string");
   });
 
-  it("引用类型是 security，收件人只有本人，租户是个人租户", () => {
+  it("security reference targets only the affected account with no tenant", () => {
     const outcome = securityNotice("account.phone_changed", BASE);
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.input.reference.type).toBe(SECURITY_REFERENCE_TYPE);
     expect(outcome.input.exactRecipients).toEqual([BASE.accountId]);
-    expect(outcome.input.tenantId).toBe(BASE.personalTenantId);
-    /* 落点的值对不对由下面「点击落点」那一组按 console 的配置判；这里只钉它确实被带上。 */
+    expect(outcome.input.tenantId).toBeNull();
+    /* Destination existence is checked against the independent accounts route below. */
     expect(outcome.input.link).toBe(SECURITY_LINK);
   });
 
-  it("没有个人租户 ⇒ 不发并点名（收件箱的 tenant_id 是 NOT NULL）", () => {
-    const outcome = securityNotice("account.phone_changed", {
-      ...BASE,
-      personalTenantId: null,
-    });
-    expect(outcome).toEqual({ ok: false, gap: "no_personal_tenant" });
+  it("builds an account-owned notice without any tenant fact", () => {
+    const outcome = securityNotice("account.phone_changed", BASE);
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.input.tenantId).toBeNull();
   });
 
   it("运营处置三条缺原因 ⇒ 不发并点名（绝不自己编一句）", () => {
@@ -226,26 +194,19 @@ describe("securityNotice 组装", () => {
   });
 });
 
-describe("点击落点", () => {
-  it("是 console 路由表里真有的那一条（按 routes.ts 对账，不照抄字符串）", () => {
-    /* 先证这条判据不是空的：正则没命中时空数组 `not.toContain` 恒过，那种绿是假的。 */
-    expect(routeTablePaths.length).toBeGreaterThan(10);
-    expect(routeTablePaths).toContain(SECURITY_LINK);
-  });
-
-  it("侧栏导航也指得到它（是进得去的页，不是一条孤路由）", () => {
-    expect(navigationHrefs.length).toBeGreaterThan(3);
-    expect(navigationHrefs).toContain(SECURITY_LINK);
-  });
-
-  it("app 路由下有对应的真页面", () => {
-    const dir = join(CONSOLE_APP, ...SECURITY_LINK.split("/").filter(Boolean));
-    expect(existsSync(join(dir, "page.tsx"))).toBe(true);
-  });
-
-  it("上一版那个值不是路由：console 里没有 /account 这一段", () => {
-    expect(existsSync(join(CONSOLE_APP, "account"))).toBe(false);
-    expect(routeTablePaths).not.toContain("/account/profile");
+describe("account-center destination", () => {
+  it("points to a real independent accounts page", () => {
+    expect(SECURITY_LINK).toBe("/account");
+    expect(
+      existsSync(
+        join(
+          REPO_ROOT,
+          "portals/accounts/src/app",
+          SECURITY_LINK.slice(1),
+          "page.tsx",
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("十四条共用同一个落点（一处定义，没有第二份副本）", () => {
@@ -299,7 +260,7 @@ describe("旧地址那一条：emailTo", () => {
     expect(outcome.input.reference.id).not.toContain(OLD_EMAIL);
   });
 
-  it("站内那一半不变：收件人仍然只有本人，仍落在个人租户名下", () => {
+  it("old-address notice remains owned by the account without a tenant", () => {
     const outcome = securityNotice("account.email_changed_old", {
       ...BASE,
       emailTo: OLD_EMAIL,
@@ -307,7 +268,7 @@ describe("旧地址那一条：emailTo", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.input.exactRecipients).toEqual([BASE.accountId]);
-    expect(outcome.input.tenantId).toBe(BASE.personalTenantId);
+    expect(outcome.input.tenantId).toBeNull();
   });
 });
 

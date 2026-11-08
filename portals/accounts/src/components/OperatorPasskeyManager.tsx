@@ -16,6 +16,7 @@
  */
 "use client";
 
+import { AccountHeading } from "./AccountPrimitives";
 import { useCallback, useEffect, useState } from "react";
 import {
   Banner,
@@ -118,20 +119,16 @@ export function OperatorPasskeyManager() {
 
   return (
     <section className="flex flex-col gap-lg">
-      <header className="flex flex-wrap items-start justify-between gap-md">
-        <div className="flex flex-col gap-2xs">
-          <h2 className="text-heading-3 text-foreground">
-            {t("sectionTitle")}
-          </h2>
-          <p className="text-body-sm text-muted-foreground">
-            {t("sectionDescription")}
-          </p>
-        </div>
-        <Button disabled={busy} onClick={handleAdd}>
-          <Icon name="plus" size="sm" />
-          {busy ? tCommon("processing") : t("add")}
-        </Button>
-      </header>
+      <AccountHeading
+        title={t("sectionTitle")}
+        icon="key"
+        action={
+          <Button disabled={busy} onClick={handleAdd}>
+            <Icon name="plus" size="sm" />
+            {busy ? tCommon("processing") : t("add")}
+          </Button>
+        }
+      />
 
       {error !== null ? (
         <Banner tone="danger" title={error || tCommon("loadFailed")} />
@@ -156,7 +153,7 @@ export function OperatorPasskeyManager() {
             <li key={passkey.id}>
               <Card
                 surface="soft"
-                className="flex-row flex-wrap items-center justify-between gap-md px-lg py-md"
+                className="accounts-section flex-row flex-wrap items-center justify-between gap-md px-lg py-md"
               >
                 <div className="flex min-w-0 items-center gap-md">
                   <span

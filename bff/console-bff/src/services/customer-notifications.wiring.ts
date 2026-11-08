@@ -11,6 +11,7 @@
  */
 import { Logger, type Provider } from "@nestjs/common";
 import type { Pool } from "pg";
+import { VxConfigService } from "@vxture/core-config";
 import { MailService } from "@vxture/core-mail";
 import {
   AccountService,
@@ -43,6 +44,7 @@ export const customerNotificationsProvider: Provider = {
     AddonService,
     OrganizationService,
     AccountService,
+    VxConfigService,
   ],
   useFactory: (
     pool: Pool,
@@ -54,6 +56,7 @@ export const customerNotificationsProvider: Provider = {
     addons: AddonService,
     orgs: OrganizationService,
     accounts: AccountService,
+    config: VxConfigService,
   ): NotificationDispatcher => {
     const options = {
       mail,
@@ -61,6 +64,7 @@ export const customerNotificationsProvider: Provider = {
       smsTemplates: smsTemplatesFromEnv(),
       prefs,
       consoleBaseUrl: process.env.CONSOLE_BASE_URL?.replace(/\/$/, ""),
+      accountsBaseUrl: config.platform.LOGIN_UI_BASE_URL,
       logger: new Logger("CustomerNotifications"),
     };
     const dispatcher = new NotificationDispatcher(pool, options);

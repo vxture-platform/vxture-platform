@@ -12,6 +12,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { FactoryProvider } from "@nestjs/common";
+import { VxConfigService } from "@vxture/core-config";
 import {
   AccountService,
   NotificationPreferencesService,
@@ -27,6 +28,12 @@ import {
 const provider = customerNotificationsProvider as FactoryProvider;
 
 describe("auth-bff 的 customerNotificationsProvider", () => {
+  it("uses the independent accounts origin for security links", () => {
+    const wired = build();
+    const dispatcher = wired.dispatcher as { accountsBaseUrl?: string };
+    expect(dispatcher.accountsBaseUrl).toBe("https://accounts.example.com");
+  });
+
   it("inject 清单逐项对上（顺序即形参顺序）", () => {
     expect(provider.provide).toBe(CUSTOMER_NOTIFIER);
     expect(provider.inject).toEqual([
@@ -35,6 +42,7 @@ describe("auth-bff 的 customerNotificationsProvider", () => {
       SmsService,
       NotificationPreferencesService,
       AccountService,
+      VxConfigService,
     ]);
   });
 
@@ -74,7 +82,9 @@ function build() {
   const sms = {};
   const prefs = {};
   const accounts = { setCustomerNotifier: vi.fn() };
-  const dispatcher = provider.useFactory(pool, mail, sms, prefs, accounts);
+  const dispatcher = provider.useFactory(pool, mail, sms, prefs, accounts, {
+    platform: { LOGIN_UI_BASE_URL: "https://accounts.example.com" },
+  });
   return { dispatcher, pool, mail, sms, prefs, accounts };
 }
 

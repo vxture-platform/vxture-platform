@@ -161,7 +161,7 @@ CREATE INDEX idx_notification_logs_reference      ON support.notification_logs (
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE support.inbox_messages (
     id              uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id       uuid          NOT NULL,                             -- 跨 schema→tenancy.tenants（真 FK，90）
+    tenant_id       uuid,                                              -- Account security alone may be tenantless; see scope constraint.
     account_id      uuid          NOT NULL,                             -- 收件人，裸值→account.users（边界#3）
     template_code   varchar(64)   NOT NULL,                             -- 与 notification_logs.template_code 同一套键（subscription.* / order.* / refund.*）
     title           varchar(256)  NOT NULL,
@@ -174,6 +174,7 @@ CREATE TABLE support.inbox_messages (
     -- 删除表达的是「不想再看见」，不是「这件事没发生过」，硬删会让同一条通知重发。
     deleted_at      timestamptz,
     created_at      timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT chk_inbox_messages_scope CHECK (tenant_id IS NOT NULL OR (reference_type='security' AND template_code IN ('account.locked','account.unlocked','account.sessions_ended_by_operator','account.password_changed','account.password_reset','account.phone_changed','account.email_changed_old','account.email_changed_new','account.identity_linked','account.identity_unlinked','account.password_login_enabled','account.password_login_disabled','account.session_ended_by_self','account.new_device_signin'))),
     CONSTRAINT uq_inbox_messages_dedupe UNIQUE (account_id, template_code, reference_type, reference_id)
 );
 CREATE INDEX idx_inbox_messages_account_created ON support.inbox_messages (account_id, created_at DESC);

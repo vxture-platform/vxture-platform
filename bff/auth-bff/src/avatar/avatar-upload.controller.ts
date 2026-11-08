@@ -14,10 +14,11 @@ import {
   Controller,
   Inject,
   Put,
+  Delete,
   Req,
-  UnauthorizedException,
+  UseGuards,
+  SetMetadata,
 } from "@nestjs/common";
-import type { Request } from "express";
 import { createHash } from "node:crypto";
 import { VxConfigService } from "@vxture/core-config";
 import {
@@ -25,28 +26,31 @@ import {
   AVATAR_MAX_BYTES,
   sniffImageType,
 } from "@vxture/service-account";
-import { RedisService } from "../redis/redis.service";
-import { SID_COOKIE_NAME } from "../authn/cookie";
-import { stripSubPrefix } from "../oidc/oidc.service";
+import {
+  CustomerSelfGuard,
+  type CustomerSelfRequest,
+} from "../authn/customer-self.guard";
+import { ACCOUNT_RAW_IMAGE } from "../accounts/accounts-origin.guard";
 
 @Controller("api/me")
+@UseGuards(CustomerSelfGuard)
 export class AvatarUploadController {
   constructor(
-    @Inject(RedisService) private readonly redis: RedisService,
     @Inject(AccountService) private readonly account: AccountService,
     @Inject(VxConfigService) private readonly config: VxConfigService,
   ) {}
 
+  /** Restore the account's generated avatar without changing identity information. */
+  @Delete("avatar")
+  async restore(@Req() req: CustomerSelfRequest): Promise<{ ok: true }> {
+    await this.account.deleteAvatar(req.customer.userId);
+    return { ok: true };
+  }
+
   @Put("avatar")
-  async upload(@Req() req: Request): Promise<{ picture: string }> {
-    const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
-    const sid = cookies[SID_COOKIE_NAME.tenant];
-    if (!sid) throw new UnauthorizedException("no_session");
-    const session = await this.redis.getOidcSession(sid);
-    if (!session || session.realm !== "customer") {
-      throw new UnauthorizedException("no_session");
-    }
-    const userId = stripSubPrefix(session.sub);
+  @SetMetadata(ACCOUNT_RAW_IMAGE, true)
+  async upload(@Req() req: CustomerSelfRequest): Promise<{ picture: string }> {
+    const userId = req.customer.userId;
 
     const body: unknown = req.body;
     if (!Buffer.isBuffer(body) || body.length === 0) {

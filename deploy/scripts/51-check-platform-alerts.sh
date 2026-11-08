@@ -200,8 +200,8 @@ check_runtime_files() {
 
 check_env_residue() {
   check_forbidden_keys "$RUNTIME_DIR/.env" '^(REDIS_PASSWORD)$'
-  check_forbidden_keys "$RUNTIME_DIR/.env.auth-bff" '^(CF_TURNSTILE_ADMIN_|SMTP_)'
-  check_forbidden_keys "$RUNTIME_DIR/.env.website-bff" '^(CF_TURNSTILE_|DINGTALK_|FEISHU_|SMTP_)'
+  check_forbidden_keys "$RUNTIME_DIR/.env.auth-bff" '^(CF_TURNSTILE_|SMTP_)'
+  check_forbidden_keys "$RUNTIME_DIR/.env.website-bff" '^(CF_TURNSTILE_|ALIYUN_CAPTCHA_|DINGTALK_|FEISHU_|SMTP_)'
   check_forbidden_keys "$RUNTIME_DIR/.env.console-bff" '^(SMTP_)'
   check_forbidden_keys "$RUNTIME_DIR/.env.admin-bff" '^(SMTP_)'
   check_forbidden_keys "$RUNTIME_DIR/secrets/platform.env" '^(REDIS_PASSWORD|SMTP_)'

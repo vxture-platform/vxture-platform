@@ -1,19 +1,14 @@
 /**
- * page.tsx - /security/passkeys (operator passkey management, P3.4)
+ * Compatibility entry for workforce passkey management.
  * @package @vxture/accounts
- *
- * Authenticated operator credential-management surface. The manager component
- * loads the operator's passkeys via the operator central session cookie; an
- * unauthenticated visitor sees the "please log in" error from the API.
+ * @layer Presentation
+ * @category page
+ * @author AI-Generated
+ * @date 2026-11-06
  */
-import { OperatorPasskeyManager } from "@/components/OperatorPasskeyManager";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-
-export default function OperatorPasskeysPage() {
-  return (
-    <main className="mx-auto w-full max-w-panel-lg px-md py-3xl">
-      <OperatorPasskeyManager />
-    </main>
-  );
+export default function LegacyPasskeysPage() {
+  redirect("/workforce/security/passkeys");
 }

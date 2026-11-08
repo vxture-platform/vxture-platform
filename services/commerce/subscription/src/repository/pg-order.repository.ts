@@ -1596,6 +1596,7 @@ export class PgOrderRepository {
     orderId: string,
     actor: OrderActor,
     kind: "cancelled" | "expired",
+    lifecycleId?: string,
   ): Promise<OrderRecord> {
     const client = await this.pool.connect();
     try {
@@ -1607,6 +1608,21 @@ export class PgOrderRepository {
       const row = res.rows[0];
       if (!row) throw new ConflictException("订单不存在");
       if (row.status !== "pending_payment" && row.status !== "pending_verify") {
+        if (
+          lifecycleId &&
+          row.status === "cancelled" &&
+          actor.actorType === "customer"
+        ) {
+          const previous = await client.query(
+            `select 1 from billing.order_events where order_id=$1 and event_type='cancelled'
+              and actor_type='customer' and actor_id=$2 and remark=$3 limit 1`,
+            [orderId, actor.actorId, `account_deletion:${lifecycleId}`],
+          );
+          if (previous.rows[0]) {
+            await client.query("commit");
+            return this.mapOrder(row);
+          }
+        }
         throw new ConflictException("订单不是待付款状态，不能取消");
       }
       const invoice = await this.lockInvoiceTx(client, orderId);
@@ -1656,7 +1672,9 @@ export class PgOrderRepository {
         toStatus: kind,
         actorType: actor.actorType,
         actorId: actor.actorId,
-        remark: actor.remark ?? null,
+        remark: lifecycleId
+          ? `account_deletion:${lifecycleId}`
+          : (actor.remark ?? null),
         clientIp: actor.clientIp ?? null,
       });
       await client.query("commit");

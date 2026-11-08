@@ -16,6 +16,7 @@ CREATE TABLE account.users (
     phone_verified_at    timestamptz  NOT NULL,
     account_changed_at   timestamptz,                              -- 限频判据
     account_login_disabled boolean    NOT NULL DEFAULT false,
+    email_login_disabled boolean NOT NULL DEFAULT false,
     status               varchar(32)  NOT NULL DEFAULT 'active',
     level_no             int          NOT NULL DEFAULT 1,          -- 反规范化只读，SoT=loyalty.level_policies
     source               varchar(32),                             -- 注册来源 web/invite/oidc，不可变事实
@@ -76,3 +77,22 @@ CREATE TABLE account.user_product_favorites (
     created_at  timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT pk_user_product_favorites PRIMARY KEY (user_id, product_id)
 );
+
+-- Customer deletion work is committed with the retention transition.
+CREATE TABLE account.lifecycle_operations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES account.users(id),
+    deletion_requested_at timestamptz NOT NULL,
+    status varchar(16) NOT NULL DEFAULT 'pending',
+    payload jsonb NOT NULL DEFAULT '{"sessions":[]}'::jsonb,
+    attempts integer NOT NULL DEFAULT 0,
+    next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    last_error varchar(128),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uq_lifecycle_request UNIQUE (user_id,deletion_requested_at),
+    CONSTRAINT chk_lifecycle_status CHECK (status IN ('pending','completed','purge_ready','cancelled')),
+    CONSTRAINT chk_lifecycle_attempts CHECK (attempts>=0),
+    CONSTRAINT chk_lifecycle_payload CHECK (jsonb_typeof(payload)='object' AND payload ? 'sessions' AND jsonb_typeof(payload->'sessions')='array')
+);
+CREATE INDEX idx_lifecycle_pending ON account.lifecycle_operations(next_attempt_at) WHERE status='pending';

@@ -1,16 +1,10 @@
 /**
- * operator-self.service.ts — operator SELF-service account management, authorized
- * by the operator central session cookie (vx_sid_op).
+ * Workforce account self-service, authorized exclusively by the central operator session.
  * @package @vxture/bff-auth
- *
- * Phase B(收敛到身份层,2026-09-02):运营者本人的账户自助(读身份、改邮箱)统一收口在
- * 身份层。此前只有 admin-bff 的 RP 会话代理到 `internal/operator/accounts/:id/contact/
- * email/*`(内部 token + body 自证);本服务把同一套逻辑改为**浏览器直连、`vx_sid_op`
- * cookie 鉴权**,与 operator-webauthn.service 同一 guard 模式(`resolveOperatorId`),供
- * accounts 门户「个人信息」页同源调用,三门户 popover 深链于此。
- *
- * 只覆盖 whoami + 改邮箱(B.1)。改手机/改密码/MFA 自助是 net-new 流程(B.2)。
- * 写入面(admin.operator_account)只经 PgOperatorRepository,与内部委托路径同一张表。
+ * @layer Application
+ * @category service
+ * @author AI-Generated
+ * @date 2026-11-07
  */
 import {
   BadRequestException,
@@ -18,19 +12,19 @@ import {
   Inject,
   Injectable,
   UnauthorizedException,
+  HttpException,
+  HttpStatus,
 } from "@nestjs/common";
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { PgOperatorRepository } from "@vxture/service-iam";
 import { MailService } from "@vxture/service-mail";
 import { PhoneCodeService } from "@vxture/service-sms";
 import { RedisService } from "../redis/redis.service";
+import { RealmSessionService } from "./realm-session.service";
 import { OperatorRefreshTokenRepository } from "../token/operator-refresh-token.repository";
 import { OperatorMfaService } from "./operator-mfa.service";
+import { OidcService } from "./oidc.service";
 
-/** operator central-session `sub` prefix (workforce realm). Mirrors webauthn service. */
-const OPERATOR_SUB_PREFIX = "opr_";
-/** pending contact-change TTL — matches operator-admin-internal.router. */
-const OPERATOR_CONTACT_TTL_SECONDS = 10 * 60;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 /** 国内裸 11 位手机号(与租户侧同口径)。 */
 const PHONE_RE = /^1\d{10}$/;
@@ -69,11 +63,14 @@ export class OperatorSelfService {
     @Inject(PgOperatorRepository)
     private readonly operators: PgOperatorRepository,
     @Inject(RedisService) private readonly redis: RedisService,
+    @Inject(RealmSessionService)
+    private readonly realmSession: RealmSessionService,
     @Inject(MailService) private readonly mail: MailService,
     @Inject(PhoneCodeService) private readonly phoneCode: PhoneCodeService,
     @Inject(OperatorRefreshTokenRepository)
     private readonly refreshTokens: OperatorRefreshTokenRepository,
     @Inject(OperatorMfaService) private readonly mfa: OperatorMfaService,
+    @Inject(OidcService) private readonly oidc: OidcService,
   ) {}
 
   /**
@@ -82,16 +79,7 @@ export class OperatorSelfService {
    * workforce-realm `vx_sid_op` session.
    */
   private async resolveOperatorId(sid: string | undefined): Promise<string> {
-    if (!sid) throw new UnauthorizedException("operator_session_required");
-    const session = await this.redis.getOidcSession(sid);
-    if (
-      !session ||
-      session.realm !== "workforce" ||
-      !session.sub.startsWith(OPERATOR_SUB_PREFIX)
-    ) {
-      throw new UnauthorizedException("operator_session_required");
-    }
-    return session.sub.slice(OPERATOR_SUB_PREFIX.length);
+    return this.realmSession.requireOperator(sid);
   }
 
   /** Read the authenticated operator's own account view (no secret material). */
@@ -114,51 +102,66 @@ export class OperatorSelfService {
   }
 
   /**
-   * Self-service email change — step 1: send a 6-digit code to the NEW address
-   * (proving ownership). Nothing is mutated here; a pending record is parked in
-   * Redis (short TTL). Same logic as the internal delegation path, but authorized
-   * by the session cookie instead of an internal token + body self-assertion.
+   * Stage a session-bound email proof before delivery and activate its exact version.
+   * @throws {Error} On invalid input, exhausted send budget or delivery/store failure.
    */
   async startEmailChange(
     sid: string | undefined,
     newEmailRaw: string | undefined,
   ): Promise<{ ok: true; sentTo: string }> {
     const operatorId = await this.resolveOperatorId(sid);
-    const newEmail = (newEmailRaw ?? "").trim().toLowerCase();
+    const newEmail =
+      typeof newEmailRaw === "string" ? newEmailRaw.trim().toLowerCase() : "";
     if (!newEmail || !EMAIL_RE.test(newEmail)) {
       throw new BadRequestException("invalid_email");
     }
     const view = await this.operators.getOperatorAdminView(operatorId);
     if (!view) throw new UnauthorizedException("operator_session_required");
     const code = String(randomInt(100000, 1000000));
-    await this.redis.storeOperatorContactChange(
+    const version = await this.redis.beginOperatorEmailChange(
       operatorId,
-      "email",
+      sid!,
       newEmail,
       code,
-      OPERATOR_CONTACT_TTL_SECONDS,
     );
-    await this.mail.sendVerifyCode(newEmail, code);
+    if (!version)
+      throw new HttpException(
+        "too_many_attempts",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    try {
+      await this.mail.sendVerifyCode(newEmail, code);
+    } catch (error) {
+      await this.redis.finishOperatorEmailChange(operatorId, version, true);
+      throw error;
+    }
+    if (
+      !(await this.redis.finishOperatorEmailChange(operatorId, version, false))
+    )
+      throw new BadRequestException("invalid_or_expired_code");
     return { ok: true, sentTo: maskEmail(newEmail) };
   }
 
   /**
-   * Self-service email change — step 2: submit the code from the new address. On
-   * match, writes the new email + email_verified=true (proven owned). Unique
-   * collision → 409; bad/expired code → 400.
+   * Consume a one-use email proof before rechecking the operator and writing contact data.
+   * @throws {Error} On invalid/expired proof, revoked session or address collision.
    */
   async verifyEmailChange(
     sid: string | undefined,
     codeRaw: string | undefined,
   ): Promise<{ ok: true; email: string }> {
     const operatorId = await this.resolveOperatorId(sid);
-    const code = (codeRaw ?? "").trim();
-    const newEmail = await this.redis.verifyOperatorContactChange(
+    const code = typeof codeRaw === "string" ? codeRaw.trim() : "";
+    if (!/^\d{6}$/.test(code))
+      throw new BadRequestException("invalid_or_expired_code");
+    const newEmail = await this.redis.consumeOperatorEmailChange(
       operatorId,
-      "email",
+      sid!,
       code,
     );
     if (!newEmail) throw new BadRequestException("invalid_or_expired_code");
+    if ((await this.resolveOperatorId(sid)) !== operatorId)
+      throw new UnauthorizedException("operator_session_required");
     try {
       const ok = await this.operators.setOperatorContactVerified(
         operatorId,
@@ -176,28 +179,50 @@ export class OperatorSelfService {
   }
 
   /**
-   * Self-service phone change — step 1: send an SMS code to the NEW number.
-   * PhoneCodeService(阿里云)拥有验证码的生成/有效期/频控;此处不自管码。绑定关系由
-   * verify 步骤的 verifyCode(newPhone, code) 保证(码只对发到的号有效),故 newPhone 由
-   * 客户端在两步都带上是安全的。
+   * Send a code through the isolated workforce scheme, bound to this account,
+   * session and new number. Staging first prevents verification during dispatch.
+   * @throws {Error} On invalid input, exhausted budget, store or provider failure.
    */
   async startPhoneChange(
     sid: string | undefined,
     newPhoneRaw: string | undefined,
   ): Promise<{ ok: true; sentTo: string }> {
-    await this.resolveOperatorId(sid);
-    const newPhone = (newPhoneRaw ?? "").trim();
+    const operatorId = await this.resolveOperatorId(sid);
+    const newPhone = typeof newPhoneRaw === "string" ? newPhoneRaw.trim() : "";
     if (!PHONE_RE.test(newPhone)) {
       throw new BadRequestException("invalid_phone");
     }
-    await this.phoneCode.sendCode(newPhone);
+    const version = await this.redis.beginOperatorPhoneChange(
+      operatorId,
+      sid!,
+      newPhone,
+    );
+    if (!version) {
+      throw new HttpException(
+        "too_many_attempts",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    try {
+      await this.phoneCode.sendCode(newPhone, {
+        scope: "workforce-phone-change",
+      });
+    } catch (error) {
+      await this.redis.finishOperatorPhoneChange(operatorId, version, true);
+      throw error;
+    }
+    if (
+      !(await this.redis.finishOperatorPhoneChange(operatorId, version, false))
+    ) {
+      throw new BadRequestException("invalid_or_expired_code");
+    }
     return { ok: true, sentTo: maskPhone(newPhone) };
   }
 
   /**
-   * Self-service phone change — step 2: submit the code sent to the new number.
-   * On a valid code, writes the new phone + phone_verified=true. Unique collision
-   * → 409; bad code → 400.
+   * Verify only a pending phone change owned by the current account/session.
+   * Consume before writing so replays and stale in-flight results cannot mutate contact data.
+   * @throws {Error} On invalid input/code, collision, store or provider failure.
    */
   async verifyPhoneChange(
     sid: string | undefined,
@@ -205,13 +230,37 @@ export class OperatorSelfService {
     codeRaw: string | undefined,
   ): Promise<{ ok: true; phone: string }> {
     const operatorId = await this.resolveOperatorId(sid);
-    const newPhone = (newPhoneRaw ?? "").trim();
-    const code = (codeRaw ?? "").trim();
-    if (!PHONE_RE.test(newPhone) || !code) {
+    const newPhone = typeof newPhoneRaw === "string" ? newPhoneRaw.trim() : "";
+    const code = typeof codeRaw === "string" ? codeRaw.trim() : "";
+    if (!PHONE_RE.test(newPhone) || !/^\d{6}$/.test(code)) {
       throw new BadRequestException("invalid_request");
     }
-    const ok = await this.phoneCode.verifyCode(newPhone, code);
+    const version = await this.redis.attemptOperatorPhoneChange(
+      operatorId,
+      sid!,
+      newPhone,
+    );
+    if (!version) throw new BadRequestException("invalid_or_expired_code");
+    let ok: boolean;
+    try {
+      ok = await this.phoneCode.verifyCode(newPhone, code, {
+        scope: "workforce-phone-change",
+      });
+    } catch (error) {
+      await this.redis.finishOperatorPhoneChange(operatorId, version, false);
+      throw error;
+    }
+    const owned = await this.redis.finishOperatorPhoneChange(
+      operatorId,
+      version,
+      ok,
+    );
+    if (!owned) throw new BadRequestException("invalid_or_expired_code");
     if (!ok) throw new BadRequestException("invalid_or_expired_code");
+    // Recheck the session after external I/O; logout during verification must fail closed.
+    if ((await this.resolveOperatorId(sid)) !== operatorId) {
+      throw new UnauthorizedException("operator_session_required");
+    }
     try {
       const written = await this.operators.setOperatorContactVerified(
         operatorId,
@@ -230,10 +279,8 @@ export class OperatorSelfService {
   }
 
   /**
-   * Self-service password change: verify the CURRENT password (re-auth, no
-   * last-login side effect), set the new one (Argon2id, min 12), and revoke all
-   * refresh tokens so other sessions must re-login. 当前浏览器会话 cookie 仍有效至
-   * 到期(RP 会话独立),用户体验上不会把自己踢下线。
+   * Change the password and end every workforce login, including this browser.
+   * Revoking refresh tokens alone would still allow silent central-session SSO.
    */
   async changePassword(
     sid: string | undefined,
@@ -241,8 +288,8 @@ export class OperatorSelfService {
     newPassword: string | undefined,
   ): Promise<{ ok: true }> {
     const operatorId = await this.resolveOperatorId(sid);
-    const current = currentPassword ?? "";
-    const next = newPassword ?? "";
+    const current = typeof currentPassword === "string" ? currentPassword : "";
+    const next = typeof newPassword === "string" ? newPassword : "";
     if (next.length < OPERATOR_PASSWORD_MIN) {
       throw new BadRequestException("weak_password");
     }
@@ -255,20 +302,73 @@ export class OperatorSelfService {
       forceChange: false,
     });
     if (!ok) throw new UnauthorizedException("operator_session_required");
-    await this.refreshTokens.revokeAllForOperator(operatorId);
+    // Attempt both authorities even if one fails after the password was committed.
+    const results = await Promise.allSettled([
+      this.refreshTokens.revokeAllForOperator(operatorId),
+      this.oidc.endOperatorSessions(operatorId),
+    ]);
+    for (const result of results)
+      if (result.status === "rejected") throw result.reason;
     return { ok: true };
   }
 
+  // ============================================================================
+  // Workforce MFA self-service
+  // ============================================================================
+
   /**
-   * Self-service TOTP (re-)enrollment — step 1: stage a fresh secret, return the
-   * base32 secret + otpauth URI for the QR. **防锁死**:只暂存待确认的新密钥,旧的
-   * TOTP 在 confirm 前仍有效,中途放弃不会把自己锁在外面(复用登录时的 enroll ceremony)。
+   * Reauthenticate before staging a session-bound secret. The active factor and
+   * recovery codes remain valid until the new ceremony is confirmed.
    */
   async startMfaTotp(
     sid: string | undefined,
-  ): Promise<{ secret: string; otpauthUri: string }> {
+    currentPassword: unknown,
+    currentCode: unknown,
+  ): Promise<{ secret: string; otpauthUri: string; enrollmentToken: string }> {
     const operatorId = await this.resolveOperatorId(sid);
-    return this.mfa.beginTotpEnrollment(operatorId);
+    if (!(await this.redis.reserveOperatorMfaStepUp(operatorId))) {
+      throw new HttpException(
+        "too_many_attempts",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    const ctx = await this.operators.getMfaContext(operatorId);
+    if (
+      !ctx ||
+      ctx.webauthnRequired ||
+      (!ctx.totpEnabled && ctx.webauthnCredentialCount > 0)
+    ) {
+      throw new BadRequestException("webauthn_required");
+    }
+    const previous = await this.operators.getTotpEnrollment(operatorId);
+    if (
+      typeof currentPassword !== "string" ||
+      !(await this.operators.verifyOperatorPassword(
+        operatorId,
+        currentPassword,
+      ))
+    ) {
+      throw new BadRequestException("invalid_current_password");
+    }
+    if (
+      previous?.enabled &&
+      (typeof currentCode !== "string" ||
+        !(await this.mfa.verifySecondFactor({
+          operatorId,
+          method: "totp",
+          code: currentCode.trim(),
+        })))
+    ) {
+      throw new BadRequestException("invalid_current_mfa_code");
+    }
+    const enrollmentToken = randomUUID();
+    const enrollment = await this.mfa.beginTotpEnrollment(
+      operatorId,
+      `self:${sid}:${enrollmentToken}`,
+      false,
+      { secret: previous?.secret ?? null, enabled: previous?.enabled ?? false },
+    );
+    return { ...enrollment, enrollmentToken };
   }
 
   /**
@@ -279,11 +379,22 @@ export class OperatorSelfService {
   async confirmMfaTotp(
     sid: string | undefined,
     codeRaw: string | undefined,
+    enrollmentToken: unknown,
   ): Promise<{ ok: true; recoveryCodes: string[] }> {
     const operatorId = await this.resolveOperatorId(sid);
-    const code = (codeRaw ?? "").trim();
-    if (!code) throw new BadRequestException("invalid_or_expired_code");
-    const result = await this.mfa.confirmTotpEnrollment(operatorId, code);
+    const code = typeof codeRaw === "string" ? codeRaw.trim() : "";
+    if (
+      !/^\d{6}$/.test(code) ||
+      typeof enrollmentToken !== "string" ||
+      !/^[0-9a-f-]{36}$/.test(enrollmentToken)
+    ) {
+      throw new BadRequestException("invalid_or_expired_code");
+    }
+    const result = await this.mfa.confirmTotpEnrollment(
+      operatorId,
+      code,
+      `self:${sid}:${enrollmentToken}`,
+    );
     if (!result.ok) throw new BadRequestException("invalid_or_expired_code");
     return { ok: true, recoveryCodes: result.recoveryCodes };
   }

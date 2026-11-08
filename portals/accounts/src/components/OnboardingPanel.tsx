@@ -1,267 +1,239 @@
 /**
- * OnboardingPanel.tsx — 注册补齐（owner 2026-09-08 定档）。
+ * OnboardingPanel.tsx - minimal account completion with server-owned verification facts.
  * @package @vxture/accounts
- *
- * ── 补的是哪个洞 ──
- * 从子域应用发起注册时，手机验证通过就直接回跳应用了：没有补齐资料，也没有任何
- * 「注册成功」的交代；过几天打开 console 才被 console 自己的门拦下来补。根因在
- * auth-bff 的 completeLoginWithPhone —— 它拿到了 `{ user, isNew }` 却只解构 user，
- * 把 isNew 丢掉，新老用户走同一个出口。
- *
- * 更要紧的是**位置错了**：补齐此前只在 console 外壳里实现，于是从 karda 注册的人
- * 可以永远不补齐，显示名一直是 `_10000123`——而发票、通知、邀请都要用它。补齐属于
- * 身份面，不属于某一个消费方应用，所以搬到这里：一处实现，每个信赖方都拿到完整账号。
- *
- * ── 三项必填 ──
- * 账号名 / 显示名 / 邮箱。邮箱必填是 owner 的裁定：账单、到期提醒、退款进度默认都走
- * 邮件，没有邮箱等于这些通知全发不出去。手机号是验证过的锚点，只读展示。
- *
- * ── 为什么成功态原地切换、不另开一个路由 ──
- * 授权码是在**提交成功那一刻**才发的（TTL 300 秒），带着它跨路由传递要么塞进
- * URL（进浏览器历史）要么存 sessionStorage。原地切换省掉这一整类问题：拿到
- * redirectTo 就先画「注册完成」，几秒后自己跳过去。
+ * @layer Presentation
+ * @category component
+ * @author AI-Generated
+ * @date 2026-11-08
  */
 "use client";
+import { useTranslations } from "next-intl";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Button, Field, FieldLabel, Input } from "@vxture/design-system";
+import { Banner, Button, Input, StatusBadge } from "@vxture/design-system";
 import { AuthLoginTemplate } from "./auth/AuthLogin";
 import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
 import {
   fetchOnboardingState,
   submitOnboarding,
-  OnboardingSessionError,
+  checkOnboardingAccount,
+  type OnboardingState,
 } from "@/api/oidc";
 
-/* 与后端 assertValidAccount 同口径：字母开头，只能用字母/数字/下划线，3–24 位。
-   **这一行必须与 services/identity/account 的 ACCOUNT_RE 逐字一致**——
-   2026-09-08 首版写成了 {3,31}（4–32 位），注释却写着「与后端同口径」：
-   填 3 位的被前端拦下（后端本来接受），填 25 位的前端放行、后端回 400。
-   两种都不报错，只表现为「这个用户名怎么不让用」。 */
+// ============================================================================
+// Account completion
+// ============================================================================
 const ACCOUNT_RE = /^[A-Za-z][A-Za-z0-9_]{2,23}$/;
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-/** 建号时发的默认用户名（`_{user_no}`）——预填时要清掉，不能让人直接提交它。 */
-const DEFAULT_ACCOUNT_RE = /^_\d+$/;
-/** 「注册完成」停留时长。够读完一句话，不至于让人等。 */
-const RETURN_DELAY_MS = 2500;
 
-function maskPhone(phone: string): string {
-  const d = phone.replace(/\D/g, "");
-  if (d.length < 7) return phone;
-  return `${d.slice(0, 3)}****${d.slice(-4)}`;
-}
-
+/** Complete only the four identity fields; contact proof is never inferred from prefill. */
 export function OnboardingPanel() {
-  const [phone, setPhone] = useState("");
+  const formText = useTranslations("accountsForms");
+  const [initial, setInitial] = useState<OnboardingState | null>(null);
+  const [name, setName] = useState("");
   const [account, setAccount] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [doneRedirect, setDoneRedirect] = useState<string | null>(null);
-
+  const [availability, setAvailability] = useState<
+    "idle" | "checking" | "available" | "taken" | "invalid" | "error"
+  >("idle");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [availabilityRevision, setAvailabilityRevision] = useState(0);
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true;
-    void (async () => {
-      try {
-        const s = await fetchOnboardingState();
+    setError("");
+    fetchOnboardingState()
+      .then((state) => {
         if (!active) return;
-        setPhone(s.phone);
-        // 默认用户名不预填：留着它，人一路回车就把 `_10000123` 提交上去了。
-        setAccount(DEFAULT_ACCOUNT_RE.test(s.account) ? "" : s.account);
-        setDisplayName(s.displayName ?? "");
-        setEmail(s.email ?? "");
-      } catch (err) {
-        if (!active) return;
-        setErrors({
-          form:
-            err instanceof OnboardingSessionError
-              ? "登录会话已失效，请回到应用重新发起登录。"
-              : "读取账号信息失败，请刷新重试。",
-        });
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+        setInitial(state);
+        setName(state.displayName ?? "");
+        setEmail(state.email ?? "");
+        setAccount(/^_\d+$/.test(state.account) ? "" : state.account);
+      })
+      .catch((e: unknown) => {
+        if (active)
+          setError(e instanceof Error ? e.message : formText("unable_to_load"));
+      });
     return () => {
       active = false;
     };
-  }, []);
-
-  // 成功之后自动回应用。用 location.assign 而不是 router：redirectTo 是应用的
-  // 绝对地址，不属于本站路由表。
+  }, [revision, formText]);
   useEffect(() => {
-    if (!doneRedirect) return;
-    const t = setTimeout(() => {
-      window.location.assign(doneRedirect);
-    }, RETURN_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [doneRedirect]);
-
-  async function onSubmit(event: FormEvent) {
+    if (!account.trim()) {
+      setAvailability("idle");
+      return;
+    }
+    if (!ACCOUNT_RE.test(account.trim())) {
+      setAvailability("invalid");
+      return;
+    }
+    const controller = new AbortController();
+    setAvailability("checking");
+    const timer = setTimeout(() => {
+      checkOnboardingAccount(account.trim(), controller.signal)
+        .then((available) => {
+          if (!controller.signal.aborted)
+            setAvailability(available ? "available" : "taken");
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setAvailability("error");
+        });
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [account, availabilityRevision]);
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const a = account.trim();
-    const n = displayName.trim();
-    const e = email.trim();
-
-    // 逐字段校验，一次把问题说全：三条共用一个错误串会变成「改完一条才被告知
-    // 还有一条」。
-    const next: Record<string, string> = {};
-    if (!ACCOUNT_RE.test(a))
-      next.account = "3–24 位，字母开头，只能用字母、数字、下划线";
-    if (!n) next.displayName = "请填写显示名称";
-    if (!EMAIL_RE.test(e)) next.email = "请填写有效的邮箱地址";
-    setErrors(next);
-    if (Object.keys(next).length > 0) return;
-
-    setSubmitting(true);
+    if (busy || !initial || availability !== "available") return;
+    if (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError(formText("enter_your_name_and_a_valid_email"));
+      return;
+    }
+    setBusy(true);
+    setError("");
     try {
-      const { redirectTo } = await submitOnboarding({
-        account: a,
-        displayName: n,
-        email: e,
+      const result = await submitOnboarding({
+        account: account.trim(),
+        displayName: name.trim(),
+        email: email.trim(),
       });
-      setDoneRedirect(redirectTo);
-    } catch (err) {
-      if (err instanceof OnboardingSessionError) {
-        setErrors({ form: "登录会话已失效，请回到应用重新发起登录。" });
-      } else {
-        // 409 说的是「这一格被占了」，不是整张表单的问题——按字段回报。
-        const msg = err instanceof Error ? err.message : "";
-        if (msg.includes("username"))
-          setErrors({ account: "这个账号名已被使用" });
-        else if (msg.includes("email"))
-          setErrors({ email: "这个邮箱已被使用" });
-        else setErrors({ form: "提交失败，请重试。" });
-      }
-    } finally {
-      setSubmitting(false);
+      window.location.assign(result.redirectTo);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : formText("unable_to_save"));
+      setBusy(false);
     }
   }
-
-  if (doneRedirect) {
-    return (
-      <AuthLoginTemplate
-        header={<AccountsAuthHeader />}
-        footer={<AccountsAuthFooter />}
-        title="注册完成"
-        description="账号已创建，个人工作空间已就绪。正在返回应用…"
-      >
-        <div className="flex flex-col gap-lg">
-          {/* 把**刚创建了什么**摆出来。此前这一步只有一句「正在返回应用」加一个
-              按钮:内容量比前两步少一大截,一路走下来是逐级塌陷(owner 2026-09-20
-              实看「最后只剩一条,太难看」);更要紧的是它什么都没交代——账号名与
-              显示名是当场定下、之后到处要用的东西,注册完成却不复述一遍。
-              这不是为了撑高度,是这一步本来就该回答「我刚得到了什么」。 */}
-          <dl className="flex flex-col gap-sm">
-            {[
-              ["账号名", account.trim()],
-              ["显示名称", displayName.trim()],
-              ["邮箱", email.trim()],
-              ["手机号", maskPhone(phone)],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="flex items-baseline justify-between gap-md"
-              >
-                <dt className="text-body-sm text-muted-foreground">{label}</dt>
-                {/* 读不到就写「—」,不留白:留白分不清「没有」与「没读到」。 */}
-                <dd className="min-w-0 truncate text-body-sm">
-                  {value || "—"}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
-          <p className="text-body-sm text-muted-foreground">
-            个人工作空间已就绪。如果没有自动跳转，请点下面的按钮。
-          </p>
-          <Button
-            type="button"
-            onClick={() => window.location.assign(doneRedirect)}
-          >
-            返回应用
-          </Button>
-        </div>
-      </AuthLoginTemplate>
-    );
-  }
-
+  const verifiedEmail = Boolean(
+    initial?.emailVerified && email === initial.email,
+  );
+  const statuses = {
+    idle: "",
+    checking: formText("checking"),
+    available: formText("available"),
+    taken: formText("already_taken"),
+    invalid: formText(
+      "3_24_characters_starting_with_a_letter_letters_numbers_and_underscores",
+    ),
+    error: formText("unable_to_check_please_try_again"),
+  };
   return (
     <AuthLoginTemplate
       header={<AccountsAuthHeader />}
       footer={<AccountsAuthFooter />}
-      title="完善账号信息"
-      description="还差最后一步。这些信息会用在账单、通知和团队邀请里。"
+      title={formText("complete_your_account")}
     >
-      <form className="flex flex-col gap-lg" onSubmit={onSubmit}>
-        <Field>
-          <FieldLabel>手机号</FieldLabel>
-          <Input value={maskPhone(phone)} readOnly disabled />
-          <p className="text-body-sm text-muted-foreground">
-            已验证，作为账号的身份锚点，不可在此修改。
-          </p>
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor="onboarding-account">账号名</FieldLabel>
-          <Input
-            id="onboarding-account"
-            value={account}
-            onChange={(ev) => setAccount(ev.target.value)}
-            placeholder="用于登录，3–24 位"
-            autoComplete="username"
-            disabled={loading || submitting}
-          />
-          {errors.account ? (
-            <p className="text-body-sm text-destructive-text">
-              {errors.account}
+      <form className="accounts-onboarding" onSubmit={submit}>
+        <div className="accounts-onboarding-row">
+          <label htmlFor="onboarding-name">{formText("name")}</label>
+          <div>
+            <Input
+              id="onboarding-name"
+              maxLength={100}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={!initial || busy}
+              autoComplete="name"
+              required
+            />
+          </div>
+        </div>
+        <div className="accounts-onboarding-row">
+          <label htmlFor="onboarding-account">{formText("account")}</label>
+          <div>
+            <Input
+              id="onboarding-account"
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              disabled={!initial || busy}
+              autoComplete="username"
+              maxLength={24}
+              required
+            />
+            <p
+              role="status"
+              className={
+                availability === "available"
+                  ? "accounts-available"
+                  : "text-body-sm text-muted-foreground"
+              }
+            >
+              {statuses[availability]}
             </p>
-          ) : null}
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor="onboarding-name">显示名称</FieldLabel>
-          <Input
-            id="onboarding-name"
-            value={displayName}
-            onChange={(ev) => setDisplayName(ev.target.value)}
-            placeholder="其他人看到的称呼"
-            disabled={loading || submitting}
-          />
-          {errors.displayName ? (
-            <p className="text-body-sm text-destructive-text">
-              {errors.displayName}
+            {availability === "error" ? (
+              <Button
+                type="button"
+                variant="link"
+                onClick={() => setAvailabilityRevision((value) => value + 1)}
+              >
+                {formText("retry")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="accounts-onboarding-row">
+          <label htmlFor="onboarding-phone">{formText("phone")}</label>
+          <div>
+            <div className="accounts-contact-input">
+              <Input
+                id="onboarding-phone"
+                value={initial?.phone ?? ""}
+                disabled
+              />
+              <StatusBadge
+                tone={initial?.phoneVerified ? "success" : "neutral"}
+              >
+                {initial?.phoneVerified
+                  ? formText("verified")
+                  : formText("unverified")}
+              </StatusBadge>
+            </div>
+            <p className="text-body-sm text-muted-foreground">
+              {initial?.phoneVerified
+                ? formText("phone_ownership_verified")
+                : formText("phone_not_yet_verified")}
             </p>
-          ) : null}
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor="onboarding-email">邮箱</FieldLabel>
-          <Input
-            id="onboarding-email"
-            type="email"
-            value={email}
-            onChange={(ev) => setEmail(ev.target.value)}
-            placeholder="接收账单与重要通知"
-            autoComplete="email"
-            disabled={loading || submitting}
-          />
-          {errors.email ? (
-            <p className="text-body-sm text-destructive-text">{errors.email}</p>
-          ) : null}
-        </Field>
-
-        {errors.form ? (
-          <p className="text-body-sm text-destructive-text" role="alert">
-            {errors.form}
-          </p>
-        ) : null}
-
-        <Button type="submit" disabled={loading || submitting}>
-          {submitting ? "提交中…" : "完成注册"}
-        </Button>
+          </div>
+        </div>
+        <div className="accounts-onboarding-row">
+          <label htmlFor="onboarding-email">{formText("email")}</label>
+          <div>
+            <div className="accounts-contact-input">
+              <Input
+                id="onboarding-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={!initial || busy || initial.emailVerified}
+                autoComplete="email"
+                maxLength={128}
+                required
+              />
+              <StatusBadge tone={verifiedEmail ? "success" : "neutral"}>
+                {verifiedEmail ? formText("verified") : formText("unverified")}
+              </StatusBadge>
+            </div>
+            <p className="text-body-sm text-muted-foreground">
+              {verifiedEmail
+                ? formText("email_ownership_verified")
+                : formText("you_can_verify_after_registration")}
+            </p>
+          </div>
+        </div>
+        {error ? <Banner tone="danger" title={error} /> : null}
+        {!initial && error ? (
+          <Button type="button" onClick={() => setRevision((v) => v + 1)}>
+            {formText("retry")}
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            disabled={!initial || busy || availability !== "available"}
+          >
+            {busy ? formText("saving") : formText("save_and_continue")}
+          </Button>
+        )}
       </form>
     </AuthLoginTemplate>
   );

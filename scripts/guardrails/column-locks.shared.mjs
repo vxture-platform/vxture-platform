@@ -7,6 +7,9 @@
 
 /** 规则⑤：显式安全语义锚点列（schema.table.column）。 */
 export const EXTRA_ANCHOR = new Set([
+  // A deletion request retains its original owner and request timestamp.
+  "account.lifecycle_operations.user_id",
+  "account.lifecycle_operations.deletion_requested_at",
   "admin.operator_role.rank",
   /*
    * 幂等权威的归档位（2026-11-30 换主键时从 usage_idempotencies 移进来的行）。

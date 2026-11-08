@@ -1,4 +1,7 @@
+// ⚠️ 跨层引用: Reuse infrastructure phone normalization to match PostgreSQL behavior.
+import { toE164 } from "@vxture/core-utils";
 import { ConflictException, Injectable } from "@nestjs/common";
+import { ACCOUNT_DELETION_RETENTION_DAYS } from "../types/account.types";
 import type {
   AvatarRecord,
   BackfillProfileInput,
@@ -14,6 +17,9 @@ import type {
   UpdateProfileInput,
   UserCredentialRecord,
   UserReadRepository,
+  CustomerSecurityMutation,
+  CustomerDeletionTransactionResult,
+  CustomerSecuritySnapshot,
   UserView,
 } from "../types/account.types";
 
@@ -62,9 +68,12 @@ export class MockUserRepository implements UserReadRepository {
     const userNo = this.nextUserNo();
     const view: UserCredentialRecord = {
       id,
+      userNo: String(userNo),
       account: record.account?.trim() || `_${userNo}`,
-      email: record.email,
+      email: record.email?.trim().toLowerCase() ?? null,
+      emailVerified: Boolean(record.email) && record.emailVerified,
       phone: record.phone,
+      phoneVerified: record.phoneVerified,
       name: record.name,
       status: "active",
       avatarHash: null,
@@ -76,7 +85,17 @@ export class MockUserRepository implements UserReadRepository {
 
   async getUserById(userId: string): Promise<UserView | null> {
     const u = this.users.get(userId);
-    return u ? toView(u) : null;
+    return u && (u.status === "active" || u.status === "deleting")
+      ? toView(u)
+      : null;
+  }
+
+  async isAccountAvailable(
+    account: string,
+    excludeUserId: string,
+  ): Promise<boolean> {
+    const user = await this.findUserByIdentifier(account);
+    return !user || user.id === excludeUserId;
   }
 
   async findUserByIdentifier(
@@ -84,6 +103,7 @@ export class MockUserRepository implements UserReadRepository {
   ): Promise<UserCredentialRecord | null> {
     const id = identifier.trim().toLowerCase();
     for (const u of this.users.values()) {
+      if (u.status !== "active" && u.status !== "deleting") continue;
       if (
         u.account.toLowerCase() === id ||
         (u.email && u.email.toLowerCase() === id) ||
@@ -106,7 +126,7 @@ export class MockUserRepository implements UserReadRepository {
     const raw = userNo.trim();
     if (!/^\d{1,20}$/.test(raw)) return null;
     const hit = [...this.users.values()].find(
-      (u) => (u.userNo ?? "").trim() === raw,
+      (u) => u.status !== "deleted" && (u.userNo ?? "").trim() === raw,
     );
     return hit
       ? {
@@ -123,12 +143,132 @@ export class MockUserRepository implements UserReadRepository {
   async findCredentialById(
     userId: string,
   ): Promise<UserCredentialRecord | null> {
-    return this.users.get(userId) ?? null;
+    const u = this.users.get(userId);
+    return u && (u.status === "active" || u.status === "deleting") ? u : null;
   }
 
-  async setPassword(userId: string, passwordHash: string): Promise<void> {
+  /** Mirror the atomic proof checks used by the PostgreSQL repository. */
+  async applySelfSecurity(
+    userId: string,
+    mutation: CustomerSecurityMutation,
+  ): Promise<void> {
+    const user = this.users.get(userId);
+    const e = mutation.snapshot;
+    if (
+      !user ||
+      user.status !== "active" ||
+      user.phone !== e.phone ||
+      user.email !== e.email ||
+      user.account !== e.account ||
+      Boolean(user.phoneVerified) !== e.phoneVerified ||
+      Boolean(user.emailVerified) !== e.emailVerified ||
+      Boolean(user.accountLoginDisabled) !== e.accountLoginDisabled ||
+      Boolean(user.emailLoginDisabled) !== Boolean(e.emailLoginDisabled) ||
+      Boolean(user.passwordHash) !== e.hasPassword ||
+      user.passwordHash !== mutation.expectedPasswordHash
+    )
+      throw new ConflictException("security_proof_stale");
+    const { operation, target } = mutation;
+    if (
+      [...this.users.values()].some(
+        (u) =>
+          u.id !== userId &&
+          (operation === "phone-change"
+            ? u.phone === (toE164(target) ?? target)
+            : operation === "email-change"
+              ? u.email === target
+              : operation === "username"
+                ? u.account === target
+                : false),
+      )
+    )
+      throw new ConflictException("security_target_in_use");
+    if (operation === "phone-change") {
+      user.phone = toE164(target) ?? target;
+      user.phoneVerified = true;
+    } else if (operation === "email-change") {
+      user.email = target;
+      user.emailVerified = true;
+    } else if (operation === "phone-verify") user.phoneVerified = true;
+    else if (operation === "email-verify") user.emailVerified = true;
+    else if (operation === "password") {
+      if (!mutation.passwordHash)
+        throw new ConflictException("password_required");
+      user.passwordHash = mutation.passwordHash;
+    } else if (operation === "email-login") {
+      if (!["true", "false"].includes(target) || !user.phoneVerified)
+        throw new ConflictException("verified_phone_required");
+      if (target === "true" && !user.emailVerified)
+        throw new ConflictException("verified_email_required");
+      user.emailLoginDisabled = target === "false";
+    } else if (operation === "username") {
+      if (
+        user.accountChangedAt &&
+        Date.now() - new Date(user.accountChangedAt).getTime() < 30 * 86400000
+      )
+        throw new ConflictException("username_change_cooldown");
+      user.account = target;
+      user.accountChangedAt = new Date().toISOString();
+    } else if (
+      operation === "identity-unlink" ||
+      operation === "account-login"
+    ) {
+      const identities = [...this.identities.entries()].filter(
+        ([, id]) => id === userId,
+      );
+      const remaining = identities.filter(
+        ([key]) =>
+          operation !== "identity-unlink" || !key.startsWith(target + ":"),
+      );
+      const passwordAvailable =
+        Boolean(user.passwordHash) &&
+        (operation === "account-login"
+          ? target === "true"
+          : !user.accountLoginDisabled);
+      if (
+        !user.phoneVerified &&
+        !(user.emailVerified && !user.emailLoginDisabled) &&
+        !passwordAvailable &&
+        !remaining.length
+      )
+        throw new ConflictException("cannot_remove_last_login_method");
+      if (operation === "identity-unlink") {
+        const subjects = identities
+          .filter(([key]) => key.startsWith(target + ":"))
+          .map(([key]) => key.slice(target.length + 1))
+          .sort();
+        if (
+          JSON.stringify(subjects) !== JSON.stringify(e.identitySubjects ?? [])
+        )
+          throw new ConflictException("security_proof_stale");
+        if (remaining.length === identities.length)
+          throw new ConflictException("identity_not_bound");
+        for (const [key] of identities)
+          if (key.startsWith(target + ":")) this.identities.delete(key);
+      } else {
+        if (target === "true" && !user.passwordHash)
+          throw new ConflictException("password_required");
+        user.accountLoginDisabled = target === "false";
+      }
+    } else throw new ConflictException("invalid_security_operation");
+    await this.revokeAllSessions(userId);
+    await this.revokeAllRefreshTokens(userId);
+  }
+
+  async setPassword(
+    userId: string,
+    passwordHash: string,
+    revokeSessions = true,
+  ): Promise<void> {
     const u = this.users.get(userId);
-    if (u) u.passwordHash = passwordHash;
+    if (!u) return;
+    if (!revokeSessions && u.passwordHash)
+      throw new ConflictException("password_already_set");
+    u.passwordHash = passwordHash;
+    if (revokeSessions) {
+      await this.revokeAllSessions(userId);
+      await this.revokeAllRefreshTokens(userId);
+    }
   }
 
   async updateProfile(
@@ -136,9 +276,13 @@ export class MockUserRepository implements UserReadRepository {
     input: UpdateProfileInput,
   ): Promise<UserView | null> {
     const u = this.users.get(userId);
-    if (!u) return null;
+    if (!u || u.status === "deleted") return null;
     if (input.name !== undefined) u.name = input.name;
-    if (input.email !== undefined) u.email = input.email;
+    if (input.email != null) {
+      const email = input.email.trim().toLowerCase();
+      if (u.email !== email) u.emailVerified = false;
+      u.email = email;
+    }
     if (input.bio !== undefined) u.bio = input.bio;
     if (input.gender !== undefined && input.gender !== null) {
       u.gender = input.gender === "" ? null : input.gender;
@@ -164,7 +308,10 @@ export class MockUserRepository implements UserReadRepository {
       const taken = [...this.users.values()].some(
         (o) => o.id !== userId && o.email?.toLowerCase() === email,
       );
-      if (!taken) u.email = email;
+      if (!taken) {
+        u.email = email;
+        u.emailVerified = input.emailVerified ?? false;
+      }
     }
   }
 
@@ -242,10 +389,14 @@ export class MockUserRepository implements UserReadRepository {
     return toView(u);
   }
 
-  async markEmailVerified(userId: string): Promise<UserView | null> {
+  async markEmailVerified(
+    userId: string,
+    expectedEmail: string,
+  ): Promise<UserView | null> {
     const u = this.users.get(userId);
-    if (!u) return null;
-    if (u.email) u.emailVerified = true;
+    if (!u || !u.email || u.email !== expectedEmail.trim().toLowerCase())
+      return null;
+    u.emailVerified = true;
     return toView(u);
   }
 
@@ -350,15 +501,16 @@ export class MockUserRepository implements UserReadRepository {
     status: "active" | "disabled",
   ): Promise<AdminStatusChange | null> {
     const u = this.users.get(userId);
-    if (!u) return null;
+    if (!u || u.status === "deleted") return null;
     const changed = u.status !== status;
     u.status = status;
     return { user: toView(u), changed };
   }
 
-  /** 离线模式的 users map 本来就不按状态过滤,所以与 getUserById 同一个实现。 */
+  /** Admin reads include disabled accounts but exclude purged tombstones. */
   async findUserForAdmin(userId: string): Promise<UserView | null> {
-    return this.getUserById(userId);
+    const u = this.users.get(userId);
+    return u && u.status !== "deleted" ? toView(u) : null;
   }
 
   async revokeAllSessions(_userId: string): Promise<number> {
@@ -369,33 +521,121 @@ export class MockUserRepository implements UserReadRepository {
     return 0;
   }
 
-  async removeAllIdentities(_userId: string): Promise<number> {
-    return 0;
+  async removeAllIdentities(userId: string): Promise<number> {
+    return this.removeIdentityRecords(userId);
   }
 
-  async requestDeletion(userId: string): Promise<UserView | null> {
+  // ============================================================================
+  // Customer lifecycle (no awaits inside an in-memory state transition)
+  // ============================================================================
+
+  private removeIdentityRecords(userId: string): number {
+    let removed = 0;
+    for (const [key, owner] of this.identities) {
+      if (owner !== userId) continue;
+      this.identities.delete(key);
+      removed++;
+    }
+    return removed;
+  }
+
+  async requestDeletion(
+    userId: string,
+    snapshot?: CustomerSecuritySnapshot,
+  ): Promise<CustomerDeletionTransactionResult | null> {
     const u = this.users.get(userId);
     if (!u || u.status !== "active") return null;
+    if (
+      snapshot &&
+      (u.phone !== snapshot.phone ||
+        u.email !== snapshot.email ||
+        u.account !== snapshot.account ||
+        Boolean(u.phoneVerified) !== snapshot.phoneVerified ||
+        Boolean(u.emailVerified) !== snapshot.emailVerified ||
+        Boolean(u.accountLoginDisabled) !== snapshot.accountLoginDisabled ||
+        Boolean(u.passwordHash) !== snapshot.hasPassword)
+    )
+      return null;
+    const deletionRequestedAt = new Date().toISOString();
     u.status = "deleting";
-    return toView(u);
+    u.deletionRequestedAt = deletionRequestedAt;
+    return {
+      deletionRequestedAt,
+      revokedSessions: 0,
+      unboundIdentities: this.removeIdentityRecords(userId),
+    };
   }
 
-  async cancelDeletion(userId: string): Promise<UserView | null> {
+  async cancelDeletion(
+    userId: string,
+    expectedRequestedAt?: string,
+  ): Promise<UserView | null> {
     const u = this.users.get(userId);
-    if (!u || u.status !== "deleting") return null;
+    if (
+      !u ||
+      u.status !== "deleting" ||
+      !u.deletionRequestedAt ||
+      (expectedRequestedAt !== undefined &&
+        u.deletionRequestedAt !== expectedRequestedAt) ||
+      !(
+        Date.parse(u.deletionRequestedAt) +
+          ACCOUNT_DELETION_RETENTION_DAYS * 86400000 >
+        Date.now()
+      )
+    )
+      return null;
     u.status = "active";
+    u.deletionRequestedAt = null;
     return toView(u);
   }
 
   async listDeletionDue(
-    _retentionDays: number,
-    _limit: number,
+    retentionDays: number,
+    limit: number,
   ): Promise<string[]> {
-    return [];
+    return [...this.users.values()]
+      .filter(
+        (u) =>
+          u.status === "deleting" &&
+          u.deletionRequestedAt &&
+          Date.parse(u.deletionRequestedAt) + retentionDays * 86400000 <=
+            Date.now(),
+      )
+      .sort(
+        (a, b) =>
+          Date.parse(a.deletionRequestedAt!) -
+          Date.parse(b.deletionRequestedAt!),
+      )
+      .slice(0, Math.min(Math.max(limit, 1), 500))
+      .map((u) => u.id);
   }
 
-  async purgeUser(_userId: string): Promise<boolean> {
-    return false;
+  async purgeUser(userId: string): Promise<boolean> {
+    const u = this.users.get(userId);
+    if (
+      !u ||
+      u.status !== "deleting" ||
+      !u.deletionRequestedAt ||
+      !(
+        Date.parse(u.deletionRequestedAt) +
+          ACCOUNT_DELETION_RETENTION_DAYS * 86400000 <=
+        Date.now()
+      )
+    )
+      return false;
+    u.status = "deleted";
+    u.account = `deleted_${u.userNo ?? u.id}`;
+    u.email = null;
+    u.phone = `deleted:${u.id.slice(0, 24)}`;
+    u.accountLoginDisabled = true;
+    u.passwordHash = null;
+    u.name = null;
+    u.avatarHash = null;
+    u.bio = null;
+    u.gender = null;
+    this.avatars.delete(userId);
+    this.removeIdentityRecords(userId);
+    return true;
   }
 }
 
@@ -420,11 +660,10 @@ function toView(u: UserCredentialRecord): UserView {
     id: u.id,
     account: u.account,
     email: u.email,
-    // Mock has no verified-at timestamps: phone is the mandatory verified anchor
-    // (always true); email is treated as unverified offline.
+    // Preserve explicit verification evidence, including the unverified state.
     emailVerified: u.emailVerified ?? false,
     phone: u.phone,
-    phoneVerified: u.phoneVerified ?? true,
+    phoneVerified: u.phoneVerified ?? false,
     accountLoginDisabled: u.accountLoginDisabled ?? false,
     name: u.name,
     status: u.status,
@@ -434,6 +673,8 @@ function toView(u: UserCredentialRecord): UserView {
     timezone: u.timezone ?? null,
     language: u.language ?? null,
     accountChangedAt: u.accountChangedAt ?? null,
+    ...(u.userNo ? { userNo: u.userNo } : {}),
+    deletionRequestedAt: u.deletionRequestedAt ?? null,
     hasPassword: u.passwordHash != null,
   };
 }

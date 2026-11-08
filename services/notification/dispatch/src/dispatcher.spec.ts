@@ -695,3 +695,101 @@ describe("运营镜像", () => {
     expect(mirrorWrites(off)).toHaveLength(0);
   });
 });
+
+// ============================================================================
+// Independent account security scope
+// ============================================================================
+describe("tenant-independent security notifications", () => {
+  const security: NotifyInput = {
+    tenantId: null,
+    templateCode: "account.email_changed_old",
+    reference: {
+      type: "security",
+      id: "sec:1234567890:email_changed_old:2026-11-07T00:00:00Z",
+    },
+    params: { occurredAt: "2026-11-07 08:00:00 (UTC+8)" },
+    exactRecipients: ["acct"],
+    emailTo: "old@example.com",
+    link: "/account",
+  };
+  it("delivers only to the account, sends to the old email and stores an accounts link", async () => {
+    const f = fakePool({ emails: { acct: "new@example.com" } });
+    const mail = { send: vi.fn(async () => {}) };
+    const mirror = { mirror: vi.fn(async () => {}) };
+    const d = new NotificationDispatcher(f.pool, {
+      mail,
+      operatorMirror: mirror,
+      consoleBaseUrl: "https://console.example.com",
+      accountsBaseUrl: "https://accounts.example.com/",
+    });
+    const out = await d.notify(security);
+    expect(out).toMatchObject({ inboxCreated: 1, emailsSent: 1 });
+    expect(mail.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "old@example.com",
+        text: expect.stringContaining("https://accounts.example.com/account"),
+      }),
+    );
+    const insert = f.query.mock.calls.find(([sql]) =>
+      sql.includes("insert into support.inbox_messages"),
+    )!;
+    expect(insert[1]?.slice(0, 2)).toEqual([null, "acct"]);
+    expect(insert[1]?.[5]).toBe("https://accounts.example.com/account");
+    expect(
+      f.query.mock.calls.some(([sql]) => sql.includes("from tenancy.tenants")),
+    ).toBe(false);
+    expect(mirror.mirror).not.toHaveBeenCalled();
+    const logs = f.query.mock.calls.filter(([sql]) =>
+      sql.includes("insert into support.notification_logs"),
+    );
+    expect(logs).toHaveLength(2);
+    for (const [, params] of logs) expect(params?.[0]).toBeNull();
+    expect((await d.notify(security)).skipped).toBe(1);
+    expect(mail.send).toHaveBeenCalledOnce();
+  });
+  it.each([
+    { ...security, templateCode: "subscription.expiring_soon" },
+    { ...security, reference: { type: "order", id: "order" } },
+    { ...security, exactRecipients: undefined },
+    { ...security, exactRecipients: [] },
+    { ...security, exactRecipients: ["acct", "owner"] },
+    { ...security, exactRecipients: [""] },
+  ])(
+    "rejects invalid account scope before any lookup or side effect",
+    async (bad) => {
+      const f = fakePool();
+      const mail = { send: vi.fn() };
+      const out = await new NotificationDispatcher(f.pool, { mail }).notify(
+        bad as NotifyInput,
+      );
+      expect(out).toMatchObject({ inboxCreated: 0, emailsSent: 0, skipped: 1 });
+      expect(f.query).not.toHaveBeenCalled();
+      expect(mail.send).not.toHaveBeenCalled();
+    },
+  );
+  it("does not fall back to Console when the accounts origin is absent", async () => {
+    const f = fakePool();
+    const mail = { send: vi.fn(async () => {}) };
+    await new NotificationDispatcher(f.pool, {
+      mail,
+      consoleBaseUrl: "https://console.example.com",
+    }).notify(security);
+    const insert = f.query.mock.calls.find(([sql]) =>
+      sql.includes("insert into support.inbox_messages"),
+    )!;
+    expect(insert[1]?.[5]).toBeNull();
+    expect(mail.send).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        text: expect.stringContaining("https://console.example.com"),
+      }),
+    );
+  });
+  it("keeps security events out of the default mirror even for older tenant-scoped calls", async () => {
+    const f = fakePool();
+    await new NotificationDispatcher(f.pool).notify({
+      ...security,
+      tenantId: "personal",
+    });
+    expect(mirrorWrites(f)).toHaveLength(0);
+  });
+});

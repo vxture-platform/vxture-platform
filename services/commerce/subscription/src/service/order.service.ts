@@ -1674,8 +1674,11 @@ export class OrderService {
     orderId: string,
     actor: OrderActor,
     kind: "cancelled" | "expired" = "cancelled",
+    lifecycleId?: string,
   ): Promise<OrderRecord> {
-    const cancelled = await this.orders.cancelOrder(orderId, actor, kind);
+    const cancelled = lifecycleId
+      ? await this.orders.cancelOrder(orderId, actor, kind, lifecycleId)
+      : await this.orders.cancelOrder(orderId, actor, kind);
     await this.emit(`${kind} ${cancelled.orderNo}`, async () => {
       const display = await this.orders.getPlanDisplay(cancelled.planVersionId);
       return {

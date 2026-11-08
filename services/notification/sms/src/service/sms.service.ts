@@ -1,13 +1,16 @@
 /**
  * sms.service.ts - 阿里云号码认证服务（PNVS / Dypnsapi）短信验证码
  * @package @vxture/service-sms
+ * @layer Domain
+ * @category service
  * @description
  *   封装阿里云「号码认证服务」的短信验证码托管能力，目标是手机号登录：
  *     - SendSmsVerifyCode  发码：阿里云生成并存储验证码（模板用 ##code## 占位），
  *                          内置同号频控（Interval，默认 60s）与有效期（ValidTime）。
  *     - CheckSmsVerifyCode 校验：阿里云服务端校验，Model.VerifyResult === "PASS" 通过。
  *   平台不再自行生成 / 存储 / 比对验证码（旧的 Redis 验证码逻辑已下线）。
- *   未配置凭据时降级为控制台输出 + 固定开发验证码 DEV_CODE，便于本地与自动化联调。
+ *   Legacy development flows can use DEV_CODE without credentials. Named customer
+ *   and workforce purposes require configured credentials and isolated schemes.
  *   Fail-closed in production: when NODE_ENV=production and credentials are
  *   missing, sending throws and verification rejects every code — the public
  *   dev code must never authenticate anyone in production.
@@ -21,6 +24,7 @@
  */
 
 import { Injectable } from "@nestjs/common";
+import type { PhoneCodeOptions } from "./phone-code.service";
 
 // pop-core 没有内置类型，手动声明最小接口
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -79,14 +83,20 @@ interface DysmsResponse {
 @Injectable()
 export class SmsService {
   /**
-   * 发送验证码短信（阿里云生成验证码）。
-   * @param phone 目标手机号（国内裸 11 位，如 18092907523）
-   * @throws Error 当阿里云返回非 OK 状态时
+   * Send a provider-generated code through a server-selected verification scheme.
+   * @param phone - Target domestic phone number.
+   * @param scope - Trusted server-side verification purpose.
+   * @returns When Aliyun accepts the message.
+   * @throws {Error} On missing/overlapping schemes, credentials or provider failure.
    */
-  async sendVerifyCode(phone: string): Promise<void> {
+  async sendVerifyCode(
+    phone: string,
+    scope: NonNullable<PhoneCodeOptions["scope"]> = "tenant-auth",
+  ): Promise<void> {
+    const schemeName = this.verificationScheme(scope);
     if (!this.isConfigured()) {
       // Fail closed in production: never fall back to the public dev code.
-      if (process.env["NODE_ENV"] === "production") {
+      if (process.env["NODE_ENV"] === "production" || scope !== "tenant-auth") {
         throw new Error(
           "短信服务未配置（ALIYUN_SMS_*），生产环境拒绝发送验证码",
         );
@@ -116,7 +126,6 @@ export class SmsService {
       CodeLength: codeLength,
       ValidTime: validSeconds,
     };
-    const schemeName = process.env["ALIYUN_SMS_SCHEME_NAME"];
     if (schemeName) params["SchemeName"] = schemeName;
 
     const response = (await this.client().request("SendSmsVerifyCode", params, {
@@ -131,16 +140,24 @@ export class SmsService {
   }
 
   /**
-   * 校验验证码（阿里云服务端校验，命中即在阿里云侧失效）。
-   * @param phone 目标手机号（与发码时一致）
-   * @param code 用户输入的验证码
-   * @returns 通过返回 true，否则 false
+   * Verify in the same scheme used for dispatch. The caller owns ceremony binding
+   * and single-use consumption; provider acceptance alone cannot authorize a write.
+   * @param phone - Target phone number.
+   * @param code - Submitted verification code.
+   * @param scope - Trusted server-side verification purpose.
+   * @returns Whether Aliyun accepts the code.
+   * @throws {Error} On invalid scheme configuration or provider failure.
    */
-  async checkVerifyCode(phone: string, code: string): Promise<boolean> {
+  async checkVerifyCode(
+    phone: string,
+    code: string,
+    scope: NonNullable<PhoneCodeOptions["scope"]> = "tenant-auth",
+  ): Promise<boolean> {
+    const schemeName = this.verificationScheme(scope);
     if (!this.isConfigured()) {
       // Fail closed in production: missing SMS credentials must never let the
       // publicly-known dev code pass phone-code login.
-      if (process.env["NODE_ENV"] === "production") {
+      if (process.env["NODE_ENV"] === "production" || scope !== "tenant-auth") {
         console.error(
           "[SMS] ALIYUN_SMS_* not configured in production — rejecting all verification codes",
         );
@@ -153,7 +170,6 @@ export class SmsService {
       PhoneNumber: phone,
       VerifyCode: code.trim(),
     };
-    const schemeName = process.env["ALIYUN_SMS_SCHEME_NAME"];
     if (schemeName) params["SchemeName"] = schemeName;
 
     const response = (await this.client().request(
@@ -218,6 +234,55 @@ export class SmsService {
   }
 
   // ─── 私有方法 ─────────────────────────────────────────────────────────────
+
+  /**
+   * Require an explicit scheme distinct from every configured verification purpose.
+   * Both names are required because an implicit provider default cannot prove isolation.
+   * @throws {Error} On an unsupported purpose or missing/overlapping schemes.
+   */
+  private verificationScheme(scope: string): string | undefined {
+    const customer = process.env["ALIYUN_SMS_SCHEME_NAME"]?.trim();
+    if (customer && [...customer].length > 20) {
+      throw new Error("sms_scheme_name_too_long");
+    }
+    if (scope === "tenant-auth") return customer || undefined;
+    const names: Record<string, string | undefined> = {
+      "tenant-auth": customer,
+      "workforce-login":
+        process.env["ALIYUN_SMS_WORKFORCE_LOGIN_SCHEME_NAME"]?.trim(),
+      "workforce-phone-change":
+        process.env["ALIYUN_SMS_WORKFORCE_PHONE_CHANGE_SCHEME_NAME"]?.trim(),
+      "customer-security":
+        process.env["ALIYUN_SMS_CUSTOMER_SECURITY_SCHEME_NAME"]?.trim(),
+      "customer-phone-change":
+        process.env["ALIYUN_SMS_CUSTOMER_PHONE_CHANGE_SCHEME_NAME"]?.trim(),
+      "customer-login":
+        process.env["ALIYUN_SMS_CUSTOMER_LOGIN_SCHEME_NAME"]?.trim(),
+      "customer-register":
+        process.env["ALIYUN_SMS_CUSTOMER_REGISTER_SCHEME_NAME"]?.trim(),
+      "customer-social-bind":
+        process.env["ALIYUN_SMS_CUSTOMER_SOCIAL_BIND_SCHEME_NAME"]?.trim(),
+    };
+    if (!Object.hasOwn(names, scope)) throw new Error("invalid_sms_scope");
+    const selected = names[scope];
+    if (selected && [...selected].length > 20) {
+      throw new Error("sms_scheme_name_too_long");
+    }
+    if (
+      !customer ||
+      !selected ||
+      Object.entries(names).some(
+        ([purpose, name]) => purpose !== scope && name === selected,
+      )
+    ) {
+      throw new Error(
+        scope === "workforce-phone-change"
+          ? "workforce_phone_change_sms_scheme_not_isolated"
+          : "customer_sms_scheme_not_isolated",
+      );
+    }
+    return selected;
+  }
 
   private client(endpoint: string = DYPNS_ENDPOINT) {
     return new PopCore({

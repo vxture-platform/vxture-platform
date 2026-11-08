@@ -230,8 +230,9 @@ export class SessionAggregator {
 
   async markCurrentUserEmailVerified(
     userId: string,
+    expectedEmail: string,
   ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.markEmailVerified(userId);
+    const user = await this.account.markEmailVerified(userId, expectedEmail);
     return user ? toUserProfile(user, this.pictureFor(user)) : null;
   }
 

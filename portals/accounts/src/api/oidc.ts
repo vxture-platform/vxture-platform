@@ -8,6 +8,7 @@
  * it targets the auth-bff directly. The IdP sets the central-session cookie and
  * returns the RP redirect carrying the authorization code.
  */
+import { apiMessage } from "@/lib/api-message";
 const OIDC_API_BASE =
   process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
 
@@ -18,17 +19,50 @@ const OIDC_API_BASE =
  */
 export class SessionExpiredError extends Error {
   constructor() {
-    super("登录会话已失效，请从应用重新发起登录");
+    super(apiMessage("error_1"));
     this.name = "SessionExpiredError";
   }
+}
+
+/**
+ * Read the realm from the server-owned login challenge.
+ * @param loginChallenge - Opaque authorization request.
+ * @returns The validated customer or workforce realm.
+ * @throws {SessionExpiredError} When the parked request is no longer valid.
+ * @throws {Error} When the identity service is unreachable or returns invalid data.
+ */
+export async function fetchLoginContext(
+  loginChallenge: string,
+): Promise<{ realm: "customer" | "workforce" }> {
+  let res: Response;
+  try {
+    res = await fetch(
+      `${OIDC_API_BASE}/oidc/authorize/login-context?login_challenge=${encodeURIComponent(loginChallenge)}`,
+      { cache: "no-store", signal: AbortSignal.timeout(10000) },
+    );
+  } catch {
+    throw new Error(apiMessage("error_2"));
+  }
+  if (res.status === 400) throw new SessionExpiredError();
+  if (!res.ok) throw new Error(apiMessage("error_3"));
+  const data: unknown = await res.json();
+  if (
+    data &&
+    typeof data === "object" &&
+    "realm" in data &&
+    (data.realm === "customer" || data.realm === "workforce")
+  ) {
+    return { realm: data.realm };
+  }
+  throw new Error(apiMessage("error_4"));
 }
 
 export interface CompleteOidcLoginInput {
   loginChallenge: string;
   identifier: string;
   password: string;
-  /** Cloudflare Turnstile token (verified for both tenant and operator realms). */
-  turnstileToken?: string;
+  /** Single-use realm-scoped captcha proof (verified for both tenant and operator realms). */
+  captchaToken?: string;
 }
 
 /** Operator second-factor continuation (identity-platform-operator.md §3.2). */
@@ -64,19 +98,23 @@ export async function completeOidcLogin(
         login_challenge: input.loginChallenge,
         identifier: input.identifier,
         password: input.password,
-        ...(input.turnstileToken
-          ? { turnstile_token: input.turnstileToken }
-          : {}),
+        ...(input.captchaToken ? { captcha_token: input.captchaToken } : {}),
       }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
 
   if (!res.ok) {
-    if (res.status === 401) throw new Error("账号或密码错误");
+    const error = (await res.json().catch(() => ({}))) as { message?: string };
+    if (error.message === "human_verification_failed")
+      throw new Error(apiMessage("error_6"));
+    if (error.message === "human_verification_unavailable")
+      throw new Error(apiMessage("error_7"));
+    if (res.status === 429) throw new Error(apiMessage("error_8"));
+    if (res.status === 401) throw new Error(apiMessage("error_9"));
     if (res.status === 400) throw new SessionExpiredError();
-    throw new Error("登录失败，请稍后重试");
+    throw new Error(apiMessage("error_10"));
   }
 
   const data = (await res.json().catch(() => ({}))) as {
@@ -96,7 +134,8 @@ export async function completeOidcLogin(
       enrollFactor: data.enrollFactor ?? null,
     };
   }
-  if (!data.redirectTo) throw new Error("登录响应异常，请重试");
+  if (!("redirectTo" in data) || !data.redirectTo)
+    throw new Error(apiMessage("error_11"));
   return { redirectTo: data.redirectTo };
 }
 
@@ -106,14 +145,14 @@ async function mfaError(res: Response): Promise<Error> {
   const message = data.message ?? "";
   if (res.status === 401) {
     if (message.includes("locked")) {
-      return new Error("尝试次数过多，请重新登录");
+      return new Error(apiMessage("error_12"));
     }
-    return new Error("验证码错误，请重试");
+    return new Error(apiMessage("error_13"));
   }
   if (res.status === 400) {
-    return new Error("验证会话已失效，请重新登录");
+    return new Error(apiMessage("error_14"));
   }
-  return new Error("验证失败，请稍后重试");
+  return new Error(apiMessage("error_15"));
 }
 
 /** POST /oidc/authorize/mfa/verify (totp | recovery) → { redirectTo }. */
@@ -131,11 +170,11 @@ export async function verifyOperatorMfa(
       body: JSON.stringify({ mfa_token: mfaToken, method, code }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) throw await mfaError(res);
   const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
-  if (!data.redirectTo) throw new Error("验证响应异常，请重试");
+  if (!data.redirectTo) throw new Error(apiMessage("error_16"));
   return { redirectTo: data.redirectTo };
 }
 
@@ -152,7 +191,7 @@ export async function beginOperatorTotpEnroll(
       body: JSON.stringify({ mfa_token: mfaToken }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) throw await mfaError(res);
   const data = (await res.json().catch(() => ({}))) as {
@@ -160,7 +199,7 @@ export async function beginOperatorTotpEnroll(
     otpauthUri?: string;
   };
   if (!data.secret || !data.otpauthUri) {
-    throw new Error("注册响应异常，请重试");
+    throw new Error(apiMessage("error_17"));
   }
   return { secret: data.secret, otpauthUri: data.otpauthUri };
 }
@@ -182,59 +221,97 @@ export async function confirmOperatorTotpEnroll(
       },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) throw await mfaError(res);
   const data = (await res.json().catch(() => ({}))) as {
     redirectTo?: string;
     recoveryCodes?: string[];
   };
-  if (!data.redirectTo) throw new Error("注册响应异常，请重试");
+  if (!data.redirectTo) throw new Error(apiMessage("error_17"));
   return {
     redirectTo: data.redirectTo,
     recoveryCodes: data.recoveryCodes ?? [],
   };
 }
 
-/** Send an SMS login code (reuses the IdP's existing endpoint; gated by Turnstile). */
+/** Send an SMS login code (reuses the IdP's existing endpoint; gated by human verification). */
 export async function sendPhoneCode(
   phone: string,
-  turnstileToken: string,
+  captchaToken: string,
 ): Promise<void> {
   let res: Response;
   try {
     res = await fetch(`${OIDC_API_BASE}/auth/send-phone-code`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone, turnstile_token: turnstileToken }),
+      body: JSON.stringify({ phone, captcha_token: captchaToken }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) {
-    if (res.status === 429) throw new Error("发送过于频繁，请稍后再试");
-    throw new Error("验证码发送失败，请重试");
+    const error = (await res.json().catch(() => ({}))) as { message?: string };
+    if (error.message === "human_verification_failed")
+      throw new Error(apiMessage("error_6"));
+    if (res.status === 503) throw new Error(apiMessage("error_18"));
+    if (res.status === 429) throw new Error(apiMessage("error_19"));
+    throw new Error(apiMessage("error_20"));
   }
 }
 
-/** Send an email login code (D-CC; gated by Turnstile, same as the SMS path). */
+/** Send an SMS code bound to a pending social login. */
+export async function sendBindPhoneCode(
+  bindingToken: string,
+  phone: string,
+  captchaToken: string,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/auth/oauth/send-phone-code`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        binding_token: bindingToken,
+        phone,
+        captcha_token: captchaToken,
+      }),
+    });
+  } catch {
+    throw new Error(apiMessage("error_5"));
+  }
+  if (!res.ok) {
+    const error = (await res.json().catch(() => ({}))) as { message?: string };
+    if (error.message === "human_verification_failed")
+      throw new Error(apiMessage("error_6"));
+    if (res.status === 503) throw new Error(apiMessage("error_18"));
+    if (res.status === 429) throw new Error(apiMessage("error_19"));
+    throw new Error(apiMessage("error_20"));
+  }
+}
+
+/** Send an email login code (D-CC; gated by human verification, same as the SMS path). */
 export async function sendEmailCode(
   email: string,
-  turnstileToken: string,
+  captchaToken: string,
 ): Promise<void> {
   let res: Response;
   try {
     res = await fetch(`${OIDC_API_BASE}/auth/send-email-code`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, turnstile_token: turnstileToken }),
+      body: JSON.stringify({ email, captcha_token: captchaToken }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) {
-    if (res.status === 429) throw new Error("发送过于频繁，请稍后再试");
-    throw new Error("验证码发送失败，请重试");
+    const error = (await res.json().catch(() => ({}))) as { message?: string };
+    if (error.message === "human_verification_failed")
+      throw new Error(apiMessage("error_6"));
+    if (res.status === 503) throw new Error(apiMessage("error_18"));
+    if (res.status === 429) throw new Error(apiMessage("error_19"));
+    throw new Error(apiMessage("error_20"));
   }
 }
 
@@ -252,9 +329,9 @@ export async function requestPasswordReset(email: string): Promise<void> {
       body: JSON.stringify({ email }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
-  if (!res.ok) throw new Error("提交失败，请稍后重试");
+  if (!res.ok) throw new Error(apiMessage("error_21"));
 }
 
 /** Consume a reset token and set the new password. 400 ⇒ link expired/used or password too weak. */
@@ -270,13 +347,13 @@ export async function resetPassword(
       body: JSON.stringify({ token, password }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) {
     if (res.status === 400) {
-      throw new Error("链接已失效或密码不符合要求，请重新申请重置");
+      throw new Error(apiMessage("error_22"));
     }
-    throw new Error("重置失败，请稍后重试");
+    throw new Error(apiMessage("error_23"));
   }
 }
 
@@ -299,15 +376,16 @@ export async function resetOperatorPassword(
       body: JSON.stringify({ token, password }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) {
     if (res.status === 400) {
       const data = (await res.json().catch(() => ({}))) as { message?: string };
-      if (data.message === "weak_password") throw new Error("密码至少 12 位");
-      throw new Error("链接无效或已过期，请联系管理员重新生成");
+      if (data.message === "weak_password")
+        throw new Error(apiMessage("error_24"));
+      throw new Error(apiMessage("error_25"));
     }
-    throw new Error("重置失败，请稍后重试");
+    throw new Error(apiMessage("error_23"));
   }
 }
 
@@ -386,15 +464,15 @@ export async function bindOAuthPhone(
       body: JSON.stringify({ binding_token: bindingToken, phone, code }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) {
-    if (res.status === 401) throw new Error("验证码错误或已过期");
-    if (res.status === 400) throw new Error("绑定会话已失效，请重新登录");
-    throw new Error("绑定失败，请稍后重试");
+    if (res.status === 401) throw new Error(apiMessage("error_26"));
+    if (res.status === 400) throw new Error(apiMessage("error_27"));
+    throw new Error(apiMessage("error_28"));
   }
   const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
-  if (!data.redirectTo) throw new Error("绑定响应异常，请重试");
+  if (!data.redirectTo) throw new Error(apiMessage("error_29"));
   return { redirectTo: data.redirectTo };
 }
 
@@ -407,7 +485,7 @@ export interface CompleteOidcPhoneLoginInput {
 /** POST /oidc/authorize/login/phone → { redirectTo }. Tenant realm only. */
 export async function completeOidcLoginWithPhone(
   input: CompleteOidcPhoneLoginInput,
-): Promise<{ redirectTo: string }> {
+): Promise<OidcLoginResult> {
   let res: Response;
   try {
     res = await fetch(`${OIDC_API_BASE}/oidc/authorize/login/phone`, {
@@ -421,15 +499,19 @@ export async function completeOidcLoginWithPhone(
       }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) {
-    if (res.status === 401) throw new Error("验证码错误或已过期");
+    if (res.status === 401) throw new Error(apiMessage("error_26"));
     if (res.status === 400) throw new SessionExpiredError();
-    throw new Error("登录失败，请稍后重试");
+    throw new Error(apiMessage("error_10"));
   }
-  const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
-  if (!data.redirectTo) throw new Error("登录响应异常，请重试");
+  const data = (await res.json().catch(() => ({}))) as
+    | { redirectTo?: string }
+    | OidcMfaRequired;
+  if ("status" in data && data.status === "mfa_required") return data;
+  if (!("redirectTo" in data) || !data.redirectTo)
+    throw new Error(apiMessage("error_11"));
   return { redirectTo: data.redirectTo };
 }
 
@@ -446,7 +528,7 @@ export interface CompleteOidcEmailLoginInput {
  */
 export async function completeOidcLoginWithEmail(
   input: CompleteOidcEmailLoginInput,
-): Promise<{ redirectTo: string }> {
+): Promise<OidcLoginResult> {
   let res: Response;
   try {
     res = await fetch(`${OIDC_API_BASE}/oidc/authorize/login/email`, {
@@ -460,18 +542,22 @@ export async function completeOidcLoginWithEmail(
       }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (!res.ok) {
-    if (res.status === 401) throw new Error("验证码错误或已过期");
+    if (res.status === 401) throw new Error(apiMessage("error_26"));
     if (res.status === 404) {
-      throw new Error("该邮箱未注册，请先用手机号注册后在账号中心绑定邮箱");
+      throw new Error(apiMessage("error_30"));
     }
     if (res.status === 400) throw new SessionExpiredError();
-    throw new Error("登录失败，请稍后重试");
+    throw new Error(apiMessage("error_10"));
   }
-  const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
-  if (!data.redirectTo) throw new Error("登录响应异常，请重试");
+  const data = (await res.json().catch(() => ({}))) as
+    | { redirectTo?: string }
+    | OidcMfaRequired;
+  if ("status" in data && data.status === "mfa_required") return data;
+  if (!("redirectTo" in data) || !data.redirectTo)
+    throw new Error(apiMessage("error_11"));
   return { redirectTo: data.redirectTo };
 }
 
@@ -483,12 +569,14 @@ export async function completeOidcLoginWithEmail(
  */
 export class OnboardingSessionError extends Error {
   constructor() {
-    super("登录会话已失效，请从应用重新发起登录");
+    super(apiMessage("error_1"));
     this.name = "OnboardingSessionError";
   }
 }
 
 export interface OnboardingState {
+  phoneVerified: boolean;
+  emailVerified: boolean;
   phone: string;
   account: string;
   displayName: string | null;
@@ -503,10 +591,10 @@ export async function fetchOnboardingState(): Promise<OnboardingState> {
       credentials: "include",
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (res.status === 401) throw new OnboardingSessionError();
-  if (!res.ok) throw new Error("读取账号信息失败");
+  if (!res.ok) throw new Error(apiMessage("error_31"));
   return (await res.json()) as OnboardingState;
 }
 
@@ -532,15 +620,40 @@ export async function submitOnboarding(input: {
       }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_5"));
   }
   if (res.status === 401) throw new OnboardingSessionError();
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string };
     // 409 的 message 形如 "username already in use" / "email already in use"。
-    throw new Error(body.message ?? "提交失败，请重试");
+    throw new Error(body.message ?? apiMessage("error_32"));
   }
   const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
-  if (!data.redirectTo) throw new Error("提交响应异常，请重试");
+  if (!data.redirectTo) throw new Error(apiMessage("error_33"));
   return { redirectTo: data.redirectTo };
+}
+
+/** Check a proposed platform account within the current onboarding session. */
+export async function checkOnboardingAccount(
+  account: string,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const response = await fetch(
+    `${OIDC_API_BASE}/oidc/onboarding/account-availability?account=${encodeURIComponent(account)}`,
+    {
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    },
+  );
+  if (!response.ok) throw new Error(apiMessage("error_34"));
+  const data: unknown = await response.json();
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !("available" in data) ||
+    typeof data.available !== "boolean"
+  )
+    throw new Error(apiMessage("error_35"));
+  return data.available;
 }

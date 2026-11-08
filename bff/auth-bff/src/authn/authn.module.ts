@@ -11,6 +11,7 @@ import { MailModule } from "@vxture/service-mail";
 import { SmsModule } from "@vxture/service-sms";
 import { Pool } from "pg";
 import { TokenModule } from "../token/token.module";
+import { CustomerPhoneCodeService } from "./customer-phone-code.service";
 import { AuthnService } from "./authn.service";
 import { UserOnboardingService } from "./user-onboarding.service";
 import { PasswordResetRepository } from "./password-reset.repository";
@@ -54,7 +55,13 @@ import { SESSION_PG_POOL } from "./tokens";
     PasswordResetRepository,
     UserOnboardingService,
     AuthnService,
+    CustomerPhoneCodeService,
   ],
-  exports: [AuthnService, SessionService, UserOnboardingService],
+  exports: [
+    CustomerPhoneCodeService,
+    AuthnService,
+    SessionService,
+    UserOnboardingService,
+  ],
 })
 export class AuthnModule {}
