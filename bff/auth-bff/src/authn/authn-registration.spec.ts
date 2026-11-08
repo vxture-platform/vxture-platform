@@ -56,7 +56,7 @@ const INPUT = {
   code: "123456",
   account: "customer",
   name: "Customer",
-  password: "customer-password",
+  password: "Customer-password1",
 } satisfies RegisterInput;
 
 // ============================================================================
@@ -87,6 +87,19 @@ describe("customer registration requires phone ownership", () => {
     expect(phoneCode.verifyCode).not.toHaveBeenCalled();
     expect(account.createUser).not.toHaveBeenCalled();
   });
+
+  it.each(["customer-password", "Short1!", "a".repeat(129)])(
+    "rejects a weak new password before consuming phone proof",
+    async (password) => {
+      const { controller, phoneCode, account, onboarding } = build();
+      await expect(controller.register({ ...INPUT, password })).rejects.toThrow(
+        "weak_password",
+      );
+      expect(phoneCode.verifyCode).not.toHaveBeenCalled();
+      expect(account.createUser).not.toHaveBeenCalled();
+      expect(onboarding.onboardNewUser).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects invalid or expired proof without creating any resources", async () => {
     const { controller, phoneCode, account, onboarding } = build();

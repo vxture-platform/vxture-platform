@@ -9,6 +9,7 @@
  * Application return navigation is owned by the route shell.
  */
 "use client";
+import { validNewPassword } from "@/lib/password-policy";
 
 import {
   useCallback,
@@ -262,6 +263,7 @@ function ReadyView({
                   </FieldLabel>
                   <Input
                     id="operatoraccountcenter-email-newlabel"
+                    required
                     type={flow.kind === "email" ? "email" : "tel"}
                     value={flow.value}
                     onChange={(ev) =>
@@ -347,6 +349,7 @@ function MfaCard({
 }) {
   const t = useTranslations("operatorAccount");
   const [phase, setPhase] = useState<"idle" | "enroll" | "done">("idle");
+  const [expanded, setExpanded] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [currentCode, setCurrentCode] = useState("");
   const [enrollmentToken, setEnrollmentToken] = useState("");
@@ -398,6 +401,7 @@ function MfaCard({
   }
 
   function reset() {
+    setExpanded(false);
     setPhase("idle");
     setCurrentPassword("");
     setCurrentCode("");
@@ -410,15 +414,28 @@ function MfaCard({
   }
 
   return (
-    <AccountSection title={t("mfa.title")} icon="shield-check">
+    <AccountSection
+      title={t("mfa.title")}
+      icon="shield-check"
+      action={
+        phase === "idle" && !expanded ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setExpanded(true)}
+          >
+            {enabled ? t("mfa.reenroll") : t("mfa.setup")}
+          </Button>
+        ) : undefined
+      }
+    >
       <div className="flex items-center gap-sm">
         <StatusBadge tone={enabled ? "success" : "warning"}>
           {enabled ? t("mfa.enabled") : t("mfa.disabled")}
         </StatusBadge>
       </div>
-      <p className="text-body-sm text-muted-foreground">{t("mfa.hint")}</p>
-
-      {phase === "idle" ? (
+      {phase === "idle" && expanded ? (
         <form
           className="flex flex-col gap-sm"
           onSubmit={(event) => {
@@ -435,6 +452,7 @@ function MfaCard({
             </FieldLabel>
             <Input
               id="mfa-current-password"
+              required
               type="password"
               autoComplete="current-password"
               value={currentPassword}
@@ -463,6 +481,15 @@ function MfaCard({
             }
           >
             {enabled ? t("mfa.reenroll") : t("mfa.setup")}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={reset}
+            disabled={busy}
+          >
+            {t("email.cancel")}
           </Button>
         </form>
       ) : phase === "enroll" ? (
@@ -494,7 +521,7 @@ function MfaCard({
             </Button>
           </div>
         </form>
-      ) : (
+      ) : phase === "done" ? (
         <div className="flex flex-col gap-sm">
           <MfaRecoveryCodes
             codes={recoveryCodes}
@@ -502,7 +529,7 @@ function MfaCard({
             continueLabel={t("mfa.done")}
           />
         </div>
-      )}
+      ) : null}
     </AccountSection>
   );
 }
@@ -527,7 +554,7 @@ function ContactValue({
   disabled: boolean;
 }) {
   return (
-    <span className="inline-flex items-center gap-sm">
+    <span className="accounts-contact-value">
       <span className="inline-flex items-center gap-xs">
         {value ?? notSet}
         {value ? (
@@ -544,6 +571,7 @@ function ContactValue({
 }
 
 function PasswordCard({ onDone }: { onDone: () => void }) {
+  const policyText = useTranslations("accountsForms");
   const t = useTranslations("operatorAccount");
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState("");
@@ -562,6 +590,10 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!validNewPassword(next, "workforce")) {
+      setError(policyText("password_policy_workforce"));
+      return;
+    }
     if (next !== confirm) {
       setError(t("password.mismatch"));
       return;
@@ -580,7 +612,22 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <AccountSection title={t("password.title")} icon="key">
+    <AccountSection
+      title={t("password.title")}
+      icon="key"
+      action={
+        !open ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen(true)}
+          >
+            {t("password.change")}
+          </Button>
+        ) : undefined
+      }
+    >
       {open ? (
         <form className="flex flex-col gap-sm" onSubmit={onSubmit}>
           <Field>
@@ -589,6 +636,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             </FieldLabel>
             <Input
               id="operatoraccountcenter-password-current"
+              required
               type="password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
@@ -601,6 +649,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             </FieldLabel>
             <Input
               id="operatoraccountcenter-password-new"
+              required
               type="password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
@@ -613,6 +662,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             </FieldLabel>
             <Input
               id="operatoraccountcenter-password-confirm"
+              required
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -620,7 +670,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             />
           </Field>
           <p className="text-body-sm text-muted-foreground">
-            {t("password.hint")}
+            {policyText("password_policy_workforce")} {t("password.hint")}
           </p>
           {error ? <Banner tone="danger" title={error} /> : null}
           <div className="flex gap-xs">
@@ -642,13 +692,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             </Button>
           </div>
         </form>
-      ) : (
-        <div>
-          <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-            {t("password.change")}
-          </Button>
-        </div>
-      )}
+      ) : null}
     </AccountSection>
   );
 }

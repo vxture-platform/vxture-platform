@@ -1,4 +1,11 @@
-/* Accounts composition uses DS scale, typography and surface tokens. */
+/**
+ * Accounts page composition aligned with the approved prototype and Console.
+ * @package @vxture/accounts
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-11-09
+ */
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
 @import "@vxture/design-system/styles/workbench.css";
@@ -25,7 +32,7 @@ body {
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--primary) 9%, var(--background)),
+      color-mix(in srgb, var(--primary) 5%, var(--background)),
       var(--background) 46%
     );
 }
@@ -57,7 +64,7 @@ body {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: calc(var(--vx-spacing) * 4);
 }
 .accounts-tools {
   gap: var(--space-2xs);
@@ -238,7 +245,7 @@ body {
 .accounts-auth {
   width: calc(100% - var(--space-2xl));
   max-width: calc(var(--vx-spacing) * 112);
-  margin: calc(var(--vx-spacing) * 18) auto var(--space-4xl);
+  margin: calc(var(--vx-spacing) * 19) auto var(--space-3xl);
 }
 .accounts-auth-heading {
   text-align: center;
@@ -246,8 +253,9 @@ body {
 }
 .accounts-auth-heading h1 {
   font-size: calc(var(--vx-text-2xl) + var(--vx-spacing) / 2);
-  font-weight: 500;
-  line-height: 1.5;
+  font-family: var(--font-brand);
+  font-weight: 600;
+  line-height: 1.35;
   letter-spacing: calc(var(--vx-spacing) * -0.1);
 }
 .accounts-auth-heading p {
@@ -277,10 +285,64 @@ body {
 .accounts-login-form {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--vx-spacing) * 5);
+  gap: var(--space-lg);
 }
 .accounts-login-form > section:first-child {
   gap: calc(var(--vx-spacing) * 5);
+}
+.accounts-login-tabs {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  height: calc(var(--vx-spacing) * 11.5);
+  gap: var(--space-lg);
+  padding: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.accounts-login-tabs [role="tab"] {
+  flex: 0 0 auto;
+  height: 100%;
+  padding: 0 0 var(--space-xs);
+  border: 0;
+  border-bottom: calc(var(--vx-spacing) / 2) solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  box-shadow: none;
+}
+.accounts-login-tabs [role="tab"][data-state="active"] {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+  background: transparent;
+  font-weight: 600;
+  box-shadow: none;
+}
+.accounts-verification {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.accounts-verification:empty {
+  display: none;
+}
+.accounts-captcha {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-xs);
+}
+.accounts-captcha[data-state="disabled"] {
+  display: none;
+}
+.accounts-captcha > button {
+  align-self: flex-start;
+  height: var(--space-xl);
+  padding: 0;
+}
+.accounts-captcha > div:empty {
+  display: none;
 }
 .accounts-login-form .accounts-auth-field {
   position: relative;
@@ -295,6 +357,8 @@ body {
 }
 .accounts-login-form input {
   height: calc(var(--vx-spacing) * 11);
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
 }
 .accounts-social-divider {
   display: flex;
@@ -308,10 +372,22 @@ body {
   display: flex;
   gap: calc(var(--vx-spacing) * 3);
 }
+.accounts-auth-surface > .accounts-login-social {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--vx-spacing) * 5);
+  margin-top: var(--space-xl);
+}
+.accounts-login-social:not(:has(button)) {
+  display: none;
+}
 .accounts-social-buttons button {
   flex: 1;
   min-width: 0;
   font-size: var(--vx-text-xs);
+  height: calc(var(--vx-spacing) * 9.5);
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
 }
 .accounts-back {
   margin-bottom: var(--space-2xl);
@@ -346,10 +422,7 @@ body {
   font-size: calc((var(--vx-text-xs) + var(--vx-text-sm)) / 2);
 }
 .accounts-result > div:last-child {
-  padding: var(--space-xl);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--background) 70%, transparent);
+  width: 100%;
 }
 .accounts-operator-panels {
   display: flex;
@@ -439,7 +512,7 @@ body {
     gap: calc(var(--vx-spacing) * 3.5);
   }
   .accounts-auth {
-    margin: calc(var(--vx-spacing) * 11) auto var(--space-3xl);
+    margin: var(--space-2xl) auto;
   }
   .accounts-auth-surface {
     padding: var(--space-lg);
@@ -478,29 +551,16 @@ body {
   }
 }
 
-/* Preserve login geometry while allowing validation messages to grow naturally. */
-.accounts-login-form > section:first-child > div {
+/* Match field geometry without reserving anonymous descendant boxes. */
+.accounts-login-fields {
   gap: calc(var(--vx-spacing) * 5);
-}
-.accounts-login-form
-  > section:first-child
-  > div
-  > div:last-child
-  > div:first-child {
-  min-height: var(--space-lg);
 }
 .accounts-login-form .accounts-auth-field > div > button {
   height: calc(var(--vx-spacing) * 11);
-  min-width: calc(var(--vx-spacing) * 28);
 }
 @media (max-width: 380px) {
   .accounts-header-end {
     gap: var(--space-md);
-  }
-  .accounts-brand span {
-    max-width: calc(var(--vx-spacing) * 23);
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 }
 
@@ -508,7 +568,7 @@ body {
 .accounts-code-field {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--vx-spacing) * 3);
+  gap: var(--space-xs);
   min-width: 0;
 }
 .accounts-code-label {
@@ -533,7 +593,7 @@ body {
   flex: 1;
   min-width: 0;
   width: auto;
-  height: var(--space-4xl);
+  height: calc(var(--vx-spacing) * 12);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: calc(var(--vx-text-2xl) + var(--vx-spacing));
@@ -587,18 +647,44 @@ body {
   }
 }
 
-/* Reserve the same second-field space across password and code login. */
-.accounts-code-label > button {
-  height: calc(var(--vx-spacing) * 11);
+/* Password and code modes share a fixed field area; errors may extend it. */
+.accounts-code-label {
+  min-height: var(--space-xl);
+}
+.accounts-send-code {
+  height: var(--space-xl);
+  min-width: calc(var(--vx-spacing) * 22);
+  padding: 0 var(--space-sm);
+  color: var(--foreground);
+  font-size: var(--vx-text-xs);
 }
 .accounts-login-fields > :nth-child(2) {
-  min-height: calc(var(--vx-spacing) * 28);
+  min-height: calc(var(--vx-spacing) * 11);
   justify-content: flex-end;
 }
-@media (max-width: 700px) {
-  .accounts-login-fields > :nth-child(2) {
-    min-height: calc(var(--vx-spacing) * 26);
-  }
+.accounts-login-options {
+  margin-top: calc(var(--vx-spacing) * 3);
+}
+.accounts-login-form > section[aria-label="三方登录"],
+.accounts-login-form > section:has(.accounts-social-buttons) {
+  margin-top: var(--space-xs);
+  gap: calc(var(--vx-spacing) * 5);
+}
+.accounts-login-form .accounts-send-code {
+  border-color: var(--border);
+  border-radius: var(--radius-full);
+}
+.accounts-login-options-tools:not(:has(button, a, input)) {
+  display: none;
+}
+.accounts-verification:has(.accounts-captcha[data-trigger="action"]):not(
+    :has([data-state="error"], [role="alert"])
+  ) {
+  display: contents;
+}
+.accounts-captcha[data-trigger="action"]:not([data-state="error"]) {
+  height: 0;
+  gap: 0;
 }
 .accounts-auth:has(.accounts-onboarding) {
   max-width: calc(var(--vx-spacing) * 150);
@@ -616,7 +702,11 @@ body {
 .accounts-onboarding-row > label {
   width: var(--space-4xl);
   flex-shrink: 0;
-  padding-top: calc(var(--vx-spacing) * 3);
+  min-height: var(--control-md);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
   color: var(--muted-foreground);
   font-size: calc((var(--vx-text-xs) + var(--vx-text-sm)) / 2);
 }
@@ -638,6 +728,14 @@ body {
 }
 .accounts-contact-input > span {
   flex-shrink: 0;
+  min-width: calc(var(--vx-spacing) * 18.5);
+  justify-content: center;
+}
+.accounts-profile-contact {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
 }
 .accounts-available {
   color: var(--success);
@@ -650,7 +748,8 @@ body {
   line-height: calc(var(--vx-spacing) * 11.25);
   letter-spacing: calc(var(--vx-spacing) * -0.15);
 }
-.accounts-workforce-page .accounts-viewport {
+.accounts-workforce-page .accounts-viewport,
+.accounts-viewport.accounts-workforce-page {
   background:
     radial-gradient(
       ellipse at 95% 0,
@@ -714,4 +813,153 @@ body {
   color: var(--muted-foreground);
   font-size: calc((var(--vx-text-xs) + var(--vx-text-sm)) / 2);
   line-height: 2;
+}
+
+/* Account rows, provider identity and responsive activity lists. */
+.accounts-provider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.accounts-contact-value {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.accounts-activity-list {
+  list-style: none;
+  padding: 0;
+}
+.accounts-activity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-top: 1px dashed var(--border);
+  font-size: var(--vx-text-xs);
+}
+.accounts-activity-icon {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.accounts-activity-details {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.accounts-activity-details > * + * {
+  margin-top: var(--space-xs);
+}
+.accounts-activity-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.accounts-activity-meta {
+  color: var(--muted-foreground);
+}
+.accounts-activity-actions {
+  flex-shrink: 0;
+}
+.accounts-section-body > .accounts-settings-form,
+.accounts-section-body > form {
+  margin-top: var(--space-md);
+}
+@media (max-width: 700px) {
+  .accounts-row {
+    flex-wrap: wrap;
+  }
+  .accounts-row > :last-child:not(.accounts-row-value) {
+    margin-left: auto;
+  }
+  .accounts-activity-row {
+    flex-wrap: wrap;
+  }
+  .accounts-activity-actions {
+    margin-left: auto;
+  }
+}
+@media (max-height: 760px) and (min-width: 701px) {
+  .accounts-auth {
+    margin-top: var(--space-md);
+    margin-bottom: var(--space-md);
+  }
+  .accounts-auth-heading {
+    margin-bottom: var(--space-lg);
+  }
+  .accounts-auth-surface {
+    padding: var(--space-lg) var(--space-xl);
+  }
+}
+
+/* The auxiliary avatar action stays at the footer's left edge inside the DS dialog. */
+.accounts-avatar-reset {
+  position: absolute;
+  left: var(--space-xl);
+  bottom: var(--space-xl);
+}
+.accounts-brand .accounts-brand-name {
+  color: var(--primary);
+}
+
+.accounts-login-options-tools {
+  min-height: var(--space-lg);
+}
+@media (max-height: 760px) and (min-width: 701px) {
+  .accounts-login-form,
+  .accounts-login-fields,
+  .accounts-login-form > section:first-child {
+    gap: calc(var(--vx-spacing) * 5);
+  }
+  .accounts-auth-surface {
+    padding-top: var(--space-md);
+    padding-bottom: var(--space-md);
+  }
+}
+
+/* The avatar's three short actions fit one row even on phone dialogs. */
+[role="dialog"]:has(.accounts-avatar-reset) form > div:last-child {
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.accounts-login-form > section:empty {
+  display: none;
+}
+.accounts-social-buttons button:disabled img {
+  filter: grayscale(1);
+}
+
+.accounts-onboarding-row > label {
+  height: calc(var(--vx-spacing) * 8);
+  padding: 0;
+}
+.accounts-required {
+  color: var(--destructive);
+  margin-inline-start: var(--space-2xs);
+}
+.accounts-settings-form
+  label:has(input[required]):not(:has(.accounts-required))::after,
+label:has(+ input[required]):not(:has(.accounts-required))::after {
+  content: "*";
+  color: var(--destructive);
+  margin-inline-start: var(--space-2xs);
+}
+.accounts-contact-input > input {
+  flex: 1;
+}
+.accounts-contact-input > [role="status"] {
+  flex-shrink: 0;
+}
+
+/* Reserve the status column even when a field has no badge. */
+.accounts-onboarding-row:first-child > div {
+  padding-inline-end: calc(var(--vx-spacing) * 21.5);
+}
+.accounts-onboarding .accounts-contact-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(var(--vx-spacing) * 18.5);
 }

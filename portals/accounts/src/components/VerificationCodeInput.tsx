@@ -43,7 +43,12 @@ export function VerificationCodeInput({
   return (
     <div className="accounts-code-field">
       <div className="accounts-code-label">
-        <label htmlFor={id}>{label}</label>
+        <label htmlFor={id}>
+          {label}
+          <span className="accounts-required" aria-hidden="true">
+            *
+          </span>
+        </label>
         {action}
       </div>
       <InputOTP
@@ -57,6 +62,7 @@ export function VerificationCodeInput({
         disabled={disabled}
         autoFocus={autoFocus}
         aria-invalid={Boolean(error)}
+        required
         aria-describedby={error ? `${id}-error` : undefined}
         containerClassName="accounts-code-container"
         onChange={(next) => onChange(next.replace(/\D/g, "").slice(0, length))}

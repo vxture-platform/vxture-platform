@@ -6,6 +6,8 @@
  * @author AI-Generated
  * @date 2026-11-07
  */
+import { validNewPassword } from "../authn/password-policy";
+
 import {
   BadRequestException,
   Inject,
@@ -130,6 +132,11 @@ export class CustomerSecurityService {
       body && typeof body === "object"
         ? (body as { password?: unknown; currentPassword?: unknown })
         : {};
+    if (
+      proof.operation === "password" &&
+      !validNewPassword(passwords.password, "customer")
+    )
+      throw new BadRequestException("weak_password");
     const sessions = await this.accounts.listSessions(context.userId);
     await this.accounts.applySelfSecurity(context.userId, proof, passwords);
     try {

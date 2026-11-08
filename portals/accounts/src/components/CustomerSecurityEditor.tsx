@@ -7,6 +7,8 @@
  * @date 2026-11-08
  */
 "use client";
+import { validNewPassword } from "@/lib/password-policy";
+
 import { useLocale, useTranslations } from "next-intl";
 import { formatDay } from "@vxture-platform/shared";
 import { useEffect, useState } from "react";
@@ -81,11 +83,9 @@ export function CustomerSecurityEditor({
       if (stage === "start") {
         if (
           action.operation === "password" &&
-          (password.length < 8 || password !== confirmation)
+          (!validNewPassword(password, "customer") || password !== confirmation)
         )
-          throw new Error(
-            formText("use_at_least_8_characters_and_matching_passwords"),
-          );
+          throw new Error(formText("password_policy_customer"));
         const result = await accountsRequest<{ challengeId: string }>(base, {
           method: "POST",
           body: JSON.stringify({ operation: action.operation, method, target }),
@@ -326,7 +326,18 @@ export function CustomerSecurityEditor({
           return (
             <AccountRow
               key={provider.code}
-              label={provider.name}
+              label={
+                <span className="accounts-provider-label">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/brand/${provider.logo}`}
+                    alt=""
+                    width={20}
+                    height={20}
+                  />
+                  {provider.name}
+                </span>
+              }
               action={
                 connected ? (
                   <Button
@@ -369,21 +380,11 @@ export function CustomerSecurityEditor({
               }
             >
               <span className="accounts-provider-value">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/brand/${provider.logo}`}
-                  alt=""
-                  width={20}
-                  height={20}
-                />
                 <StatusBadge tone={connected ? "success" : "neutral"}>
                   {connected
                     ? formText("connected")
                     : formText("not_connected")}
                 </StatusBadge>
-                <span className="text-muted-foreground">
-                  {formText("provider_login", { provider: provider.name })}
-                </span>
                 {connected ? (
                   <span className="text-muted-foreground">
                     {formatDay(connected.connectedAt, locale)}
@@ -458,17 +459,42 @@ export function CustomerSecurityEditor({
                 {action?.operation === "password" ? (
                   <>
                     {security.hasPassword ? (
-                      <Input
-                        aria-label={formText("current_password")}
-                        type="password"
-                        autoComplete="current-password"
-                        placeholder={formText("current_password")}
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        required
-                      />
+                      <>
+                        <label
+                          className="accounts-required-label"
+                          htmlFor="security-current_password"
+                        >
+                          {formText("current_password")}
+                          <span
+                            className="accounts-required"
+                            aria-hidden="true"
+                          >
+                            *
+                          </span>
+                        </label>
+                        <Input
+                          id="security-current_password"
+                          aria-label={formText("current_password")}
+                          type="password"
+                          autoComplete="current-password"
+                          placeholder={formText("current_password")}
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          required
+                        />
+                      </>
                     ) : null}
+                    <label
+                      className="accounts-required-label"
+                      htmlFor="security-new_password"
+                    >
+                      {formText("new_password")}
+                      <span className="accounts-required" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
                     <Input
+                      id="security-new_password"
                       aria-label={formText("new_password")}
                       type="password"
                       autoComplete="new-password"
@@ -481,7 +507,20 @@ export function CustomerSecurityEditor({
                       onChange={(e) => setPassword(e.target.value)}
                       required
                     />
+                    <p className="text-body-sm text-muted-foreground">
+                      {formText("password_policy_customer")}
+                    </p>
+                    <label
+                      className="accounts-required-label"
+                      htmlFor="security-confirm_password"
+                    >
+                      {formText("confirm_password")}
+                      <span className="accounts-required" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
                     <Input
+                      id="security-confirm_password"
                       aria-label={formText("confirm_password")}
                       type="password"
                       autoComplete="new-password"

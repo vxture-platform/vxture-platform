@@ -6,6 +6,8 @@
  * interactive login completions themselves live on the OIDC surface
  * (/oidc/authorize/login[/phone]); these endpoints feed those flows.
  */
+import { validNewPassword } from "./password-policy";
+
 import {
   BadRequestException,
   Body,
@@ -60,6 +62,8 @@ export class AuthnController {
     if (typeof body.code !== "string" || !body.code.trim()) {
       throw new BadRequestException("phone verification code is required");
     }
+    if (body.password && !validNewPassword(body.password, "customer"))
+      throw new BadRequestException("weak_password");
     const result = await this.authn.register({
       account: body.account ?? null,
       email: body.email ?? null,
@@ -172,8 +176,8 @@ export class AuthnController {
     if (!body.token || !body.password) {
       throw new BadRequestException("token and password are required");
     }
-    if (body.password.length < 8) {
-      throw new BadRequestException("password must be at least 8 characters");
+    if (!validNewPassword(body.password, "customer")) {
+      throw new BadRequestException("weak_password");
     }
     const ok = await this.authn.resetPassword(body.token, body.password);
     if (!ok) throw new BadRequestException("invalid or expired token");

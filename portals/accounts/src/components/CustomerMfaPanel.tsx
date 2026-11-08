@@ -111,6 +111,19 @@ export function CustomerMfaPanel() {
             : formText("multi_factor_authentication")
       }
       icon="shield-check"
+      action={
+        phase === "idle" && enabled === false ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => void run()}
+          >
+            {busy ? formText("processing") : formText("enable")}
+          </Button>
+        ) : undefined
+      }
     >
       <div className="accounts-settings-form">
         {phase === "codes" ? (
@@ -155,7 +168,7 @@ export function CustomerMfaPanel() {
                 disabled={busy}
               />
             ) : null}
-            {enabled === false || phase === "phone" || phase === "enroll" ? (
+            {phase === "phone" || phase === "enroll" ? (
               <Button
                 disabled={
                   busy ||
@@ -165,11 +178,9 @@ export function CustomerMfaPanel() {
               >
                 {busy
                   ? formText("processing")
-                  : phase === "idle"
-                    ? formText("enable")
-                    : phase === "enroll"
-                      ? formText("confirm_authenticator")
-                      : formText("continue")}
+                  : phase === "enroll"
+                    ? formText("confirm_authenticator")
+                    : formText("continue")}
               </Button>
             ) : null}
           </>

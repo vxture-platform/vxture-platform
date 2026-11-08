@@ -459,6 +459,7 @@
     "show_password": "Show password",
     "phone_number": "Phone number",
     "sending": "Sending…",
+    "security_verifying": "Security check…",
     "checking_code": "Checking code…",
     "back_to_sign_in": "Back to sign in",
     "enter_your_email_to_receive_a_reset_link": "Enter your email to receive a reset link",
@@ -470,7 +471,10 @@
     "a_reset_link_was_sent_to": "A reset link was sent to",
     "reset_your_password_within_15_minutes": ". Reset your password within 15 minutes.",
     "back": "Back",
-    "retry_after": "Retry in {seconds}s"
+    "retry_after": "Retry in {seconds}s",
+    "enter_your_email": "Enter your email",
+    "password_policy_customer": "8–128 characters, including at least three of uppercase letters, lowercase letters, numbers and symbols.",
+    "password_policy_workforce": "12–128 characters, including at least three of uppercase letters, lowercase letters, numbers and symbols."
   },
   "accountsApi": {
     "error_1": "Sign-in expired. Start again from your app.",
@@ -496,7 +500,7 @@
     "error_21": "Unable to submit. Please try again.",
     "error_22": "The link expired or the password does not meet requirements. Request another reset.",
     "error_23": "Unable to reset. Please try again.",
-    "error_24": "Use at least 12 characters.",
+    "error_24": "12–128 characters, including at least three of uppercase letters, lowercase letters, numbers and symbols.",
     "error_25": "The link expired. Ask your administrator for a new one.",
     "error_26": "Incorrect or expired code.",
     "error_27": "Connection session expired. Please sign in again.",
@@ -536,5 +540,56 @@
     "error_61": "This account is already in use.",
     "error_62": "Multi-factor authentication is temporarily unavailable.",
     "error_63": "Unable to complete this action. Please try again."
+  },
+  "accountsStates": {
+    "retry": "Retry",
+    "loading": {
+      "title": "Loading",
+      "description": "Please wait."
+    },
+    "load-error": {
+      "title": "Unable to load",
+      "description": "The service could not be reached. Please retry."
+    },
+    "session-expired": {
+      "title": "Session expired",
+      "description": "Sign in again from your application."
+    },
+    "link-expired": {
+      "title": "Link unavailable",
+      "description": "The link may have expired or already been used. Request a new one."
+    },
+    "not-found": {
+      "title": "Page not found",
+      "description": "Check the page address."
+    },
+    "signed-out": {
+      "title": "Signed out",
+      "description": "Your sign-in session has ended."
+    },
+    "password-reset": {
+      "title": "Password reset",
+      "description": "Sign in again with your new password."
+    },
+    "binding-complete": {
+      "title": "Phone linked",
+      "description": "Phone ownership has been verified."
+    },
+    "mfa-enabled": {
+      "title": "MFA enabled",
+      "description": "Additional verification will be required at your next sign-in."
+    },
+    "recovery-saved": {
+      "title": "Recovery codes generated",
+      "description": "Store them securely. They are only shown once."
+    },
+    "email-sent": {
+      "title": "Email sent",
+      "description": "Check your inbox and follow the instructions."
+    },
+    "success": {
+      "title": "Completed",
+      "description": ""
+    }
   }
 }

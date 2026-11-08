@@ -19,6 +19,7 @@ import {
   AuthResultPanel,
 } from "./auth/AuthLogin";
 import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
+import { validNewPassword } from "@/lib/password-policy";
 import { resetPassword } from "@/api/oidc";
 
 export function ResetPasswordPanel({ token }: { readonly token: string }) {
@@ -32,8 +33,8 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (password.length < 8) {
-      setError(formText("use_at_least_8_characters"));
+    if (!validNewPassword(password, "customer")) {
+      setError(formText("password_policy_customer"));
       return;
     }
     if (password !== confirm) {
@@ -63,7 +64,6 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
       // 顶着"设置新密码"，正文却说"密码已重置"，两个 h1 自相矛盾。
       layout="single"
       title={formText("set_a_new_password")}
-      description={formText("sign_in_again_after_changing_your_password")}
       useLoginLayout={!done}
     >
       {done ? (
@@ -91,9 +91,11 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
             placeholder={formText("at_least_8_characters")}
             icon="lock"
             value={password}
+            required
             autoComplete="new-password"
             autoFocus
             disabled={loading}
+            hint={formText("password_policy_customer")}
             onChange={setPassword}
           />
           <AuthField
@@ -103,6 +105,7 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
             placeholder={formText("enter_your_new_password_again")}
             icon="lock"
             value={confirm}
+            required
             autoComplete="new-password"
             disabled={loading}
             onChange={setConfirm}

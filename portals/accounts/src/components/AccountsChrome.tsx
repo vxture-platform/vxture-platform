@@ -55,7 +55,15 @@ export function AccountsHeader({
         {/* The approved brand asset is served by this portal. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/vxture-logo-icon.svg" alt="" width={28} height={28} />
-        <span>{brandLabel}</span>
+        <span>
+          {brandLabel === "Vxture Accounts" ? (
+            <>
+              <span className="accounts-brand-name">Vxture</span> Accounts
+            </>
+          ) : (
+            brandLabel
+          )}
+        </span>
       </Link>
       <div className="accounts-header-end">
         <ShellIconGroup label={t("tools")} className="accounts-tools">

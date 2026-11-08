@@ -459,6 +459,7 @@
     "show_password": "显示密码",
     "phone_number": "手机号",
     "sending": "发送中...",
+    "security_verifying": "安全验证中…",
     "checking_code": "验证中...",
     "back_to_sign_in": "返回登录",
     "enter_your_email_to_receive_a_reset_link": "输入注册邮箱，获取重置链接",
@@ -470,7 +471,10 @@
     "a_reset_link_was_sent_to": "重置链接已发送至",
     "reset_your_password_within_15_minutes": "，请在 15 分钟内查收并完成重置。",
     "back": "返回",
-    "retry_after": "{seconds}s 后重试"
+    "retry_after": "{seconds}s 后重试",
+    "enter_your_email": "请输入邮箱",
+    "password_policy_customer": "8–128 位，须包含大写字母、小写字母、数字、符号中的至少三类。",
+    "password_policy_workforce": "12–128 位，须包含大写字母、小写字母、数字、符号中的至少三类。"
   },
   "accountsApi": {
     "error_1": "登录会话已失效，请从应用重新发起登录",
@@ -496,7 +500,7 @@
     "error_21": "提交失败，请稍后重试",
     "error_22": "链接已失效或密码不符合要求，请重新申请重置",
     "error_23": "重置失败，请稍后重试",
-    "error_24": "密码至少 12 位",
+    "error_24": "12–128 位，须包含大写字母、小写字母、数字、符号中的至少三类。",
     "error_25": "链接无效或已过期，请联系管理员重新生成",
     "error_26": "验证码错误或已过期",
     "error_27": "绑定会话已失效，请重新登录",
@@ -536,5 +540,56 @@
     "error_61": "账号已被使用",
     "error_62": "多因素认证暂不可用",
     "error_63": "操作失败，请稍后重试"
+  },
+  "accountsStates": {
+    "retry": "重试",
+    "loading": {
+      "title": "正在加载",
+      "description": "请稍候。"
+    },
+    "load-error": {
+      "title": "加载失败",
+      "description": "暂时无法连接服务，请重试。"
+    },
+    "session-expired": {
+      "title": "登录已过期",
+      "description": "请从原应用重新登录。"
+    },
+    "link-expired": {
+      "title": "链接已失效",
+      "description": "链接可能已过期或已使用，请重新申请。"
+    },
+    "not-found": {
+      "title": "页面不存在",
+      "description": "请检查访问地址。"
+    },
+    "signed-out": {
+      "title": "已安全退出",
+      "description": "当前登录会话已结束。"
+    },
+    "password-reset": {
+      "title": "密码已重置",
+      "description": "请使用新密码重新登录。"
+    },
+    "binding-complete": {
+      "title": "手机已绑定",
+      "description": "手机号所有权验证已完成。"
+    },
+    "mfa-enabled": {
+      "title": "多因素认证已开启",
+      "description": "下次登录时需要完成额外身份验证。"
+    },
+    "recovery-saved": {
+      "title": "恢复码已生成",
+      "description": "请妥善保存，恢复码仅展示一次。"
+    },
+    "email-sent": {
+      "title": "邮件已发送",
+      "description": "请查看邮箱并按邮件指引继续。"
+    },
+    "success": {
+      "title": "操作已完成",
+      "description": ""
+    }
   }
 }

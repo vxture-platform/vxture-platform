@@ -16,6 +16,7 @@ import {
   Banner,
   Button,
   DialogForm,
+  Icon,
   Skeleton,
   StatusBadge,
 } from "@vxture/design-system";
@@ -210,6 +211,7 @@ export function CustomerAccountCenter() {
             <>
               <CustomerProfileEditor
                 profile={load.profile}
+                security={load.security.ok ? load.security.value : null}
                 onSaved={() => setRevision((v) => v + 1)}
               />
             </>
@@ -226,31 +228,37 @@ export function CustomerAccountCenter() {
               <Panel title={t("sessions")} icon="desktop">
                 {load.sessions.ok ? (
                   load.sessions.value.length ? (
-                    <ul className="flex flex-col gap-md">
+                    <ul className="accounts-activity-list">
                       {load.sessions.value.map((session) => (
-                        <li
-                          key={session.sid}
-                          className="flex flex-col gap-xs border-b border-border pb-md text-body-sm"
-                        >
-                          <p className="break-words font-medium">
-                            {device(session.userAgent)}
-                          </p>
-                          <div>
-                            <StatusBadge
-                              tone={session.current ? "success" : "neutral"}
-                            >
-                              {t(
-                                session.current
-                                  ? "currentSession"
-                                  : "otherSession",
-                              )}
-                            </StatusBadge>
+                        <li key={session.sid} className="accounts-activity-row">
+                          <Icon
+                            name="desktop"
+                            size="md"
+                            className="accounts-activity-icon"
+                          />
+                          <div className="accounts-activity-details">
+                            <div className="accounts-activity-title">
+                              <strong>{device(session.userAgent)}</strong>
+                              <StatusBadge
+                                tone={session.current ? "success" : "neutral"}
+                              >
+                                {t(
+                                  session.current
+                                    ? "currentSession"
+                                    : "otherSession",
+                                )}
+                              </StatusBadge>
+                            </div>
+                            <p className="accounts-activity-meta">
+                              {session.ipAddress || t("notSet")} ·{" "}
+                              {method(session.authMethod)}
+                            </p>
+                            <p className="accounts-activity-meta">
+                              {t("lastActive")} · {date(session.lastActiveAt)}
+                            </p>
                           </div>
-                          <p className="text-muted-foreground">
-                            {session.ipAddress || t("notSet")} ·{" "}
-                            {method(session.authMethod)}
-                          </p>
                           <Button
+                            className="accounts-activity-actions"
                             size="sm"
                             variant="ghost"
                             onClick={() => {
@@ -264,9 +272,6 @@ export function CustomerAccountCenter() {
                                 : "signOutDevice",
                             )}
                           </Button>
-                          <p className="text-muted-foreground">
-                            {t("lastActive")} · {date(session.lastActiveAt)}
-                          </p>
                         </li>
                       ))}
                     </ul>
@@ -282,24 +287,30 @@ export function CustomerAccountCenter() {
               <Panel title={t("history")} icon="timer">
                 {load.history.ok ? (
                   load.history.value.length ? (
-                    <ul className="flex flex-col gap-md">
+                    <ul className="accounts-activity-list">
                       {load.history.value.map((attempt, index) => (
                         <li
                           key={`${attempt.loginAt}-${index}`}
-                          className="flex flex-wrap justify-between gap-sm border-b border-border pb-md text-body-sm"
+                          className="accounts-activity-row"
                         >
-                          <span>
+                          <span className="accounts-activity-details">
                             {date(attempt.loginAt)} · {attempt.ipAddress} ·{" "}
                             {method(attempt.authMethod)}
                             <span className="block text-muted-foreground">
                               {device(attempt.userAgent)}
                             </span>
                           </span>
-                          <span>
+                          <StatusBadge
+                            tone={
+                              attempt.result === "success"
+                                ? "success"
+                                : "danger"
+                            }
+                          >
                             {attempt.result === "success"
                               ? t("success")
                               : t("unsuccessful")}
-                          </span>
+                          </StatusBadge>
                         </li>
                       ))}
                     </ul>
