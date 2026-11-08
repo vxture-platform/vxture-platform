@@ -24,6 +24,12 @@ import { OperatorSelfRouter } from "../routers/operator-self.router";
 import { OperatorWebauthnRouter } from "../routers/operator-webauthn.router";
 import { AvatarUploadController } from "../avatar/avatar-upload.controller";
 
+// This suite inspects boundary-module exports and runs its guards/controllers
+// with stubbed domain authorities. Do not load the transitive token authority:
+// TokenModule validates deployment JWT secrets during import, before the test's
+// VxConfigService provider exists. Bundle boot-smoke covers the real module graph.
+vi.mock("../authn/authn.module", () => ({ AuthnModule: class AuthnModule {} }));
+
 // ============================================================================
 // Real HTTP boundary with domain authorities stubbed at their public contract
 // ============================================================================
