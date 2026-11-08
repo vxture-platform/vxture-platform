@@ -18,9 +18,14 @@ import {
   NativeSelect,
   SegmentedControl,
   useTheme,
+  StatusBadge,
 } from "@vxture/design-system";
 import { useRouter } from "next/navigation";
-import { accountsRequest, type CustomerProfile } from "@/api/customer-self";
+import {
+  accountsRequest,
+  type CustomerProfile,
+  type CustomerSecurity,
+} from "@/api/customer-self";
 import { AccountSection, AccountRow } from "./AccountPrimitives";
 
 // ============================================================================
@@ -32,8 +37,10 @@ const BASE = process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
 export function CustomerProfileEditor({
   profile,
   onSaved,
+  security,
 }: {
   profile: CustomerProfile;
+  security: CustomerSecurity | null;
   onSaved: () => void;
 }) {
   const formText = useTranslations("accountsForms");
@@ -147,10 +154,22 @@ export function CustomerProfileEditor({
           </Button>
         }
       >
-        <AccountRow label={formText("name")}>
+        <AccountRow
+          label={
+            <>
+              {formText("name")}
+              {editing ? (
+                <span className="accounts-required" aria-hidden="true">
+                  *
+                </span>
+              ) : null}
+            </>
+          }
+        >
           {editing ? (
             <Input
               aria-label={formText("name")}
+              required
               maxLength={100}
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -161,9 +180,32 @@ export function CustomerProfileEditor({
           )}
         </AccountRow>
         <AccountRow label={formText("account")}>{profile.account}</AccountRow>
-        <AccountRow label={formText("user_number")}>
-          {formatPrincipalNoOr(profile.userNo, "user", "—")}
-        </AccountRow>
+        {(["phone", "email"] as const).map((kind) => (
+          <AccountRow key={kind} label={formText(kind)}>
+            <div className="accounts-profile-contact">
+              <span>{security?.[kind] || "—"}</span>
+              {security?.[kind] ? (
+                <StatusBadge
+                  tone={
+                    security[
+                      kind === "phone" ? "phoneVerified" : "emailVerified"
+                    ]
+                      ? "success"
+                      : "neutral"
+                  }
+                >
+                  {formText(
+                    security[
+                      kind === "phone" ? "phoneVerified" : "emailVerified"
+                    ]
+                      ? "verified"
+                      : "unverified",
+                  )}
+                </StatusBadge>
+              ) : null}
+            </div>
+          </AccountRow>
+        ))}
         {editing ? (
           <Button disabled={busy || !name.trim()} onClick={() => void save()}>
             {formText("save")}
@@ -216,7 +258,7 @@ export function CustomerProfileEditor({
           />
         </label>
         {error ? <Banner tone="danger" title={error} /> : null}
-        <div className="accounts-dialog-actions">
+        <div className="accounts-avatar-reset">
           <Button
             type="button"
             variant="ghost"

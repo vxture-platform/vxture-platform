@@ -11,6 +11,8 @@
  *
  * Design: docs/design/identity-platform-internal-delegation.md §11c step 4.
  */
+import { validNewPassword } from "../authn/password-policy";
+
 import {
   BadRequestException,
   Body,
@@ -26,7 +28,6 @@ import { OperatorRefreshTokenRepository } from "../token/operator-refresh-token.
 import { RedisService } from "../redis/redis.service";
 
 // Operators are privileged; enforce a higher floor than the customer flow (8).
-const OPERATOR_PASSWORD_MIN_LENGTH = 12;
 
 @Controller("auth/operator")
 export class OperatorPublicRouter {
@@ -66,7 +67,7 @@ export class OperatorPublicRouter {
     if (!token) {
       throw new BadRequestException("invalid_token");
     }
-    if (password.length < OPERATOR_PASSWORD_MIN_LENGTH) {
+    if (!validNewPassword(password, "workforce")) {
       throw new BadRequestException("weak_password");
     }
     const operatorId = await this.redis.consumeOperatorPasswordReset(token);

@@ -28,7 +28,7 @@ export function BindPhonePanel({ token }: { readonly token: string }) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const captcha = useHumanCaptcha("customer");
+  const captcha = useHumanCaptcha("customer", true);
   const [sentCodeTarget, setSentCodeTarget] = useState("");
 
   useEffect(() => {
@@ -38,19 +38,21 @@ export function BindPhonePanel({ token }: { readonly token: string }) {
   }, [countdown]);
 
   const handleSendCode = async () => {
+    if (sending || captcha.verifying) return;
     const next: Record<string, string> = {};
     if (!PHONE_RE.test(phone.trim()))
       next.phone = formText("enter_a_valid_phone_number_2");
-    if (!captcha.ready)
-      next.form = formText("complete_the_human_verification_first");
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    const target = phone.trim();
+    const proof = await captcha.verify();
+    if (proof === null) return;
     setSending(true);
     try {
-      await sendBindPhoneCode(token, phone.trim(), captcha.token);
+      await sendBindPhoneCode(token, target, proof);
       setCountdown(60);
-      setSentCodeTarget(phone.trim());
+      setSentCodeTarget(target);
     } catch (error) {
       setErrors({
         form:
@@ -110,9 +112,11 @@ export function BindPhonePanel({ token }: { readonly token: string }) {
         agreementChecked={agreed}
         errors={errors}
         loading={loading}
-        codeSending={sending}
+        codeSending={sending || captcha.verifying}
         codeCountdown={countdown}
-        sendCodeDisabled={countdown > 0 || sending || !captcha.ready}
+        sendCodeDisabled={
+          countdown > 0 || sending || captcha.verifying || !captcha.available
+        }
         verification={captcha.node}
         primaryDisabled={
           !sentCodeTarget || sentCodeTarget !== phone.trim() || !agreed

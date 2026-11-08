@@ -19,6 +19,7 @@ import {
   AuthResultPanel,
 } from "./auth/AuthLogin";
 import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
+import { validNewPassword } from "@/lib/password-policy";
 import { resetOperatorPassword } from "@/api/oidc";
 
 export function OperatorResetPasswordPanel({
@@ -36,8 +37,8 @@ export function OperatorResetPasswordPanel({
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (password.length < 12) {
-      setError(formText("use_at_least_12_characters"));
+    if (!validNewPassword(password, "workforce")) {
+      setError(formText("password_policy_workforce"));
       return;
     }
     if (password !== confirm) {
@@ -61,11 +62,11 @@ export function OperatorResetPasswordPanel({
 
   return (
     <AuthLoginTemplate
+      className="accounts-workforce-page"
       header={<AccountsAuthHeader />}
       footer={<AccountsAuthFooter />}
       layout="single"
       title={formText("set_a_new_password")}
-      description={formText("sign_in_again_after_changing_your_password")}
       useLoginLayout={!done}
     >
       {done ? (
@@ -100,9 +101,11 @@ export function OperatorResetPasswordPanel({
             placeholder={formText("at_least_12_characters")}
             icon="lock"
             value={password}
+            required
             autoComplete="new-password"
             autoFocus
             disabled={loading}
+            hint={formText("password_policy_workforce")}
             onChange={setPassword}
           />
           <AuthField
@@ -112,6 +115,7 @@ export function OperatorResetPasswordPanel({
             placeholder={formText("enter_your_new_password_again")}
             icon="lock"
             value={confirm}
+            required
             autoComplete="new-password"
             disabled={loading}
             onChange={setConfirm}

@@ -31,7 +31,6 @@
 
 "use client";
 import { useTranslations } from "next-intl";
-import { VerificationCodeInput } from "../VerificationCodeInput";
 import { AccountsHeader } from "../AccountsChrome";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { type Locale, type Theme } from "@vxture-platform/shared";
@@ -151,6 +150,9 @@ export interface AuthFieldProps {
   hint?: string | undefined;
   autoComplete?: string | undefined;
   autoFocus?: boolean | undefined;
+  inputMode?: "numeric" | undefined;
+  maxLength?: number | undefined;
+  required?: boolean | undefined;
   disabled?: boolean | undefined;
   onChange: (value: string) => void;
 }
@@ -583,7 +585,7 @@ export function AuthTabs({
     >
       {/* 与输入框、提交按钮同高（control-xl / 40）。认证表单是竖着一列控件，
           三种高度（36 / 32 / 40）叠在一起时参差是一眼能看出来的。 */}
-      <TabsList className="h-control-xl w-full">
+      <TabsList className="accounts-login-tabs">
         {order.map((tab) => (
           <TabsTrigger key={tab} value={tab}>
             {labels[tab]}
@@ -633,6 +635,9 @@ export function AuthField({
   hint,
   autoComplete,
   autoFocus,
+  inputMode,
+  maxLength,
+  required = true,
   disabled,
   onChange,
 }: Readonly<AuthFieldProps>) {
@@ -640,7 +645,14 @@ export function AuthField({
   const describedById = error || hint ? `${inputId}-desc` : undefined;
   return (
     <div className="accounts-auth-field">
-      <Label htmlFor={inputId}>{label}</Label>
+      <Label htmlFor={inputId}>
+        {label}
+        {required ? (
+          <span className="accounts-required" aria-hidden="true">
+            *
+          </span>
+        ) : null}
+      </Label>
       {/* 标签下的一行：输入框 + 可选的并列控件。并列控件在这一行里对齐，
           不靠调用方补 margin 去跳过标签高度。 */}
       <div className="flex items-center gap-sm">
@@ -672,6 +684,9 @@ export function AuthField({
             placeholder={placeholder}
             autoComplete={autoComplete}
             autoFocus={autoFocus}
+            inputMode={inputMode}
+            maxLength={maxLength}
+            required={required}
             disabled={disabled}
             onChange={(event) => onChange(event.target.value)}
             aria-invalid={Boolean(error)}
@@ -729,7 +744,7 @@ function AuthPrimarySection({
 }>) {
   return (
     <>
-      <div className="flex flex-col gap-sm empty:hidden">
+      <div className="accounts-verification">
         {verification}
         {/* 表单级错误原先是一行居中的红字，夹在 human-verification 那块灰盒子和提交按钮
             中间——整页视觉最重的元素正好压在它上面，而它自己没有任何形状。
@@ -810,6 +825,7 @@ export function AuthSocialButtons({
       <div className="accounts-social-buttons">
         {providers.map((provider) => (
           <Button
+            type="button"
             key={provider.provider}
             variant="outline"
             className="flex-1 gap-sm"
@@ -940,8 +956,8 @@ export function AuthLoginOptions({
   // "忘记密码？"是句末独立的链接，补 margin 会把它推离右缘。
   const inlineLinkClass = cn(linkClass, "mx-2xs");
   return (
-    <div className="flex flex-col gap-sm">
-      <div className="flex items-center justify-between gap-sm">
+    <div className="accounts-login-options flex flex-col gap-sm">
+      <div className="accounts-login-options-tools flex items-center justify-between gap-sm">
         {showRemember ? (
           <span className="flex items-center gap-xs">
             <Checkbox
@@ -965,7 +981,7 @@ export function AuthLoginOptions({
         <span className="flex items-center gap-sm">
           {showForgot ? (
             onForgot ? (
-              <Button variant="link" size="xs" onClick={onForgot}>
+              <Button type="button" variant="link" size="xs" onClick={onForgot}>
                 {forgotLabel}
               </Button>
             ) : (
@@ -1095,20 +1111,41 @@ export function AuthPasswordLoginPanel({
               placeholder={passwordPlaceholder}
               icon="lock"
               trailingAction={
-                <Button
-                  variant="ghost"
-                  size="icon-md"
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={passwordVisibilityLabel}
-                  title={passwordVisibilityLabel}
-                  disabled={loading}
-                  onClick={() => setPasswordVisible((visible) => !visible)}
-                >
-                  <Icon
-                    name={passwordVisible ? "eye" : "eye-slash"}
-                    size="sm"
-                  />
-                </Button>
+                showForgot ? (
+                  onForgot ? (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="xs"
+                      onClick={onForgot}
+                    >
+                      {formText("forgot_password")}
+                    </Button>
+                  ) : (
+                    <a
+                      className="text-body-sm text-link"
+                      href="/forgot-password"
+                    >
+                      {formText("forgot_password")}
+                    </a>
+                  )
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-md"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={passwordVisibilityLabel}
+                    title={passwordVisibilityLabel}
+                    disabled={loading}
+                    onClick={() => setPasswordVisible((visible) => !visible)}
+                  >
+                    <Icon
+                      name={passwordVisible ? "eye" : "eye-slash"}
+                      size="sm"
+                    />
+                  </Button>
+                )
               }
               value={password}
               error={errors?.password}
@@ -1120,7 +1157,7 @@ export function AuthPasswordLoginPanel({
             <AuthLoginOptions
               {...options}
               disabled={loading}
-              showForgot={showForgot}
+              showForgot={false}
               rememberChecked={rememberChecked}
               agreementChecked={agreementChecked}
               onRememberChange={onRememberChange}
@@ -1176,7 +1213,6 @@ export function AuthPhoneLoginPanel({
   codeName = "code",
   sendCodeLabel,
   sendingCodeLabel,
-  verificationPendingLabel,
   retryCodeLabel,
   showForgot = true,
   options,
@@ -1197,12 +1233,8 @@ export function AuthPhoneLoginPanel({
   codeLabel ??= formText("verification_code");
   sendCodeLabel ??= formText("send_code");
   sendingCodeLabel ??= formText("sending");
-  verificationPendingLabel ??= formText("checking_code");
   retryCodeLabel ??= (seconds) => formText("retry_after", { seconds });
   let resolvedSendCodeLabel = sendCodeLabel;
-  if (sendCodeDisabled) {
-    resolvedSendCodeLabel = verificationPendingLabel;
-  }
   if (codeSending) {
     resolvedSendCodeLabel = sendingCodeLabel;
   }
@@ -1227,24 +1259,32 @@ export function AuthPhoneLoginPanel({
               error={errors?.phone}
               autoComplete={phoneAutoComplete}
               autoFocus
-              disabled={loading}
+              disabled={loading || codeSending}
               onChange={onChangePhone}
             />
 
-            <VerificationCodeInput
+            <AuthField
               label={codeLabel}
               name={codeName}
+              type="text"
+              placeholder={formText("enter_the_6_digit_code")}
+              icon="shield"
+              inputMode="numeric"
+              maxLength={6}
+              autoComplete="one-time-code"
               value={code}
               error={errors?.code}
-              disabled={loading}
-              onChange={onChangeCode}
+              disabled={loading || codeSending}
+              onChange={(value) =>
+                onChangeCode(value.replace(/\D/g, "").slice(0, 6))
+              }
               action={
                 <Button
                   type="button"
                   variant="outline"
-                  size="xl"
-                  // Keep the send action stable throughout the countdown.
-                  className="min-w-overlay-xs shrink-0"
+                  size="sm"
+                  // Preserve the action width throughout the countdown.
+                  className="accounts-send-code"
                   onClick={onSendCode}
                   disabled={
                     loading ||

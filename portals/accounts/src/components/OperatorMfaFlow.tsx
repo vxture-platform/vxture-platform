@@ -339,6 +339,7 @@ function Shell({
 }) {
   return (
     <AuthLoginTemplate
+      className="accounts-workforce-page"
       header={<AccountsAuthHeader />}
       footer={<AccountsAuthFooter />}
       title={title}

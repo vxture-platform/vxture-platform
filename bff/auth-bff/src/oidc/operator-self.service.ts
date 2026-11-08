@@ -6,6 +6,8 @@
  * @author AI-Generated
  * @date 2026-11-07
  */
+import { validNewPassword } from "../authn/password-policy";
+
 import {
   BadRequestException,
   ConflictException,
@@ -29,7 +31,6 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 /** 国内裸 11 位手机号(与租户侧同口径)。 */
 const PHONE_RE = /^1\d{10}$/;
 /** operator 密码下限,与 operator-public.router 的重置口径一致(12)。 */
-const OPERATOR_PASSWORD_MIN = 12;
 
 /** Mask an email for API responses: b***@example.com. */
 function maskEmail(email: string): string {
@@ -290,7 +291,7 @@ export class OperatorSelfService {
     const operatorId = await this.resolveOperatorId(sid);
     const current = typeof currentPassword === "string" ? currentPassword : "";
     const next = typeof newPassword === "string" ? newPassword : "";
-    if (next.length < OPERATOR_PASSWORD_MIN) {
+    if (!validNewPassword(next, "workforce")) {
       throw new BadRequestException("weak_password");
     }
     const verified = await this.operators.verifyOperatorPassword(

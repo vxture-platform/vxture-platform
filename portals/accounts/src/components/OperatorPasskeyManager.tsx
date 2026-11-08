@@ -24,6 +24,8 @@ import {
   Card,
   DestructiveButton,
   EmptyState,
+  DialogForm,
+  Input,
   Icon,
   Skeleton,
 } from "@vxture/design-system";
@@ -57,6 +59,7 @@ export function OperatorPasskeyManager() {
   const withLabels = useConfirmLabels();
   const t = useTranslations("passkeys");
   const tCommon = useTranslations("common");
+  const formText = useTranslations("accountsForms");
   const locale = useLocale();
   const [passkeys, setPasskeys] = useState<OperatorPasskey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,12 +105,12 @@ export function OperatorPasskeyManager() {
   };
 
   const handleAdd = () => withBusy(() => registerOperatorPasskey().then());
+  const [renaming, setRenaming] = useState<{
+    id: string;
+    label: string;
+  } | null>(null);
   const handleRename = (id: string, current: string | null) => {
-    const label = window.prompt(t("renamePrompt"), current ?? "");
-    if (label === null) return;
-    const trimmed = label.trim();
-    if (!trimmed) return;
-    void withBusy(() => renameOperatorPasskey(id, trimmed));
+    setRenaming({ id, label: current ?? "" });
   };
   /* 原来是 `window.confirm`：一句没有主语的「确定删除此通行密钥？」——删的是
      哪一把、删完还剩几把、会不会把自己锁在门外，一个字都没有。而且原生
@@ -141,7 +144,7 @@ export function OperatorPasskeyManager() {
           <Skeleton className="h-row-lg w-full" />
           <Skeleton className="h-row-lg w-full" />
         </div>
-      ) : passkeys.length === 0 ? (
+      ) : error !== null ? null : passkeys.length === 0 ? (
         <EmptyState
           icon="key"
           title={t("emptyTitle")}
@@ -209,6 +212,47 @@ export function OperatorPasskeyManager() {
           ))}
         </ul>
       )}
+      <DialogForm
+        size="sm"
+        title={t("rename")}
+        open={renaming !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setRenaming(null);
+        }}
+        submitLabel={formText("save")}
+        cancelLabel={formText("cancel")}
+        submitting={busy}
+        submitDisabled={!renaming?.label.trim()}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!renaming || busy) return;
+          const ok = await withBusy(() =>
+            renameOperatorPasskey(renaming.id, renaming.label.trim()),
+          );
+          if (ok) setRenaming(null);
+        }}
+      >
+        <label htmlFor="passkey-label">
+          {t("rename")}
+          <span className="accounts-required" aria-hidden="true">
+            *
+          </span>
+        </label>
+        <Input
+          id="passkey-label"
+          required
+          aria-label={t("rename")}
+          value={renaming?.label ?? ""}
+          maxLength={100}
+          disabled={busy}
+          onChange={(event) =>
+            setRenaming((current) =>
+              current ? { ...current, label: event.target.value } : null,
+            )
+          }
+        />
+        {error ? <Banner tone="danger" title={error} /> : null}
+      </DialogForm>
     </section>
   );
 }

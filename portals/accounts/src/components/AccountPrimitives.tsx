@@ -58,7 +58,7 @@ export function AccountRow({
   children,
   action,
 }: {
-  label: string;
+  label: ReactNode;
   children: ReactNode;
   action?: ReactNode;
 }) {

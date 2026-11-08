@@ -11,6 +11,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import {
   AuthForgotPasswordPanel,
   AuthLoginTemplate,
@@ -22,6 +23,7 @@ import {
 import { requestPasswordReset } from "@/api/oidc";
 
 export default function ForgotPasswordPage() {
+  const formText = useTranslations("accountsForms");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
@@ -30,7 +32,7 @@ export default function ForgotPasswordPage() {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!email.trim()) {
-      setError("请输入邮箱");
+      setError(formText("enter_your_email"));
       return;
     }
     setError(undefined);
@@ -39,7 +41,11 @@ export default function ForgotPasswordPage() {
       await requestPasswordReset(email.trim());
       setResetSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "提交失败，请稍后重试");
+      setError(
+        err instanceof Error
+          ? err.message
+          : formText("unable_to_complete_this_action"),
+      );
     } finally {
       setLoading(false);
     }
@@ -63,7 +69,7 @@ export default function ForgotPasswordPage() {
         error={error}
         loading={loading}
         resetSent={resetSent}
-        onBack={() => window.history.back()}
+        onBack={() => window.location.assign("/login")}
         onChangeEmail={setEmail}
         onSubmit={onSubmit}
       />

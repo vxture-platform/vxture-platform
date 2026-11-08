@@ -126,7 +126,12 @@ export function OnboardingPanel() {
     >
       <form className="accounts-onboarding" onSubmit={submit}>
         <div className="accounts-onboarding-row">
-          <label htmlFor="onboarding-name">{formText("name")}</label>
+          <label htmlFor="onboarding-name">
+            {formText("name")}
+            <span className="accounts-required" aria-hidden="true">
+              *
+            </span>
+          </label>
           <div>
             <Input
               id="onboarding-name"
@@ -140,27 +145,36 @@ export function OnboardingPanel() {
           </div>
         </div>
         <div className="accounts-onboarding-row">
-          <label htmlFor="onboarding-account">{formText("account")}</label>
+          <label htmlFor="onboarding-account">
+            {formText("account")}
+            <span className="accounts-required" aria-hidden="true">
+              *
+            </span>
+          </label>
           <div>
-            <Input
-              id="onboarding-account"
-              value={account}
-              onChange={(e) => setAccount(e.target.value)}
-              disabled={!initial || busy}
-              autoComplete="username"
-              maxLength={24}
-              required
-            />
-            <p
-              role="status"
-              className={
-                availability === "available"
-                  ? "accounts-available"
-                  : "text-body-sm text-muted-foreground"
-              }
-            >
-              {statuses[availability]}
-            </p>
+            <div className="accounts-contact-input">
+              <Input
+                id="onboarding-account"
+                value={account}
+                onChange={(e) => setAccount(e.target.value)}
+                disabled={!initial || busy}
+                autoComplete="username"
+                maxLength={24}
+                required
+              />
+              {availability === "available" || availability === "checking" ? (
+                <StatusBadge
+                  tone={availability === "available" ? "success" : "neutral"}
+                >
+                  {statuses[availability]}
+                </StatusBadge>
+              ) : null}
+            </div>
+            {availability !== "available" && availability !== "checking" ? (
+              <p role="status" className="text-body-sm text-muted-foreground">
+                {statuses[availability]}
+              </p>
+            ) : null}
             {availability === "error" ? (
               <Button
                 type="button"
@@ -173,11 +187,17 @@ export function OnboardingPanel() {
           </div>
         </div>
         <div className="accounts-onboarding-row">
-          <label htmlFor="onboarding-phone">{formText("phone")}</label>
+          <label htmlFor="onboarding-phone">
+            {formText("phone")}
+            <span className="accounts-required" aria-hidden="true">
+              *
+            </span>
+          </label>
           <div>
             <div className="accounts-contact-input">
               <Input
                 id="onboarding-phone"
+                aria-required="true"
                 value={initial?.phone ?? ""}
                 disabled
               />
@@ -197,7 +217,12 @@ export function OnboardingPanel() {
           </div>
         </div>
         <div className="accounts-onboarding-row">
-          <label htmlFor="onboarding-email">{formText("email")}</label>
+          <label htmlFor="onboarding-email">
+            {formText("email")}
+            <span className="accounts-required" aria-hidden="true">
+              *
+            </span>
+          </label>
           <div>
             <div className="accounts-contact-input">
               <Input

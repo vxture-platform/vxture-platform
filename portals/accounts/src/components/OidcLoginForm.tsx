@@ -75,7 +75,7 @@ export function OidcLoginForm({
 }: OidcLoginFormProps) {
   const formText = useTranslations("accountsForms");
   const isOperator = realm === "workforce";
-  const captcha = useHumanCaptcha(realm);
+  const captcha = useHumanCaptcha(realm, true);
   // Workforce phone verification uses its isolated provider scheme.
   const [mode, setMode] = useState<AuthLoginTab>("phone");
   const [identifier, setIdentifier] = useState("");
@@ -151,8 +151,6 @@ export function OidcLoginForm({
 
   // Common gates shared by both submit paths.
   const commonError = (): string | null => {
-    if (!captcha.ready)
-      return formText("complete_the_human_verification_first");
     if (!acceptedTerms)
       return formText("please_accept_the_terms_and_privacy_policy");
     return null;
@@ -190,13 +188,15 @@ export function OidcLoginForm({
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    const proof = await captcha.verify();
+    if (proof === null) return;
     setLoading(true);
     try {
       const result = await completeOidcLogin({
         loginChallenge,
         identifier: identifier.trim(),
         password,
-        ...(captcha.token ? { captchaToken: captcha.token } : {}),
+        ...(proof ? { captchaToken: proof } : {}),
       });
       if ("status" in result) {
         // Operator owes a second factor → hand off to the MFA continuation.
@@ -221,7 +221,7 @@ export function OidcLoginForm({
   };
 
   // Every send attempt spends its local human-verification proof.
-  const doSendCode = async () => {
+  const doSendCode = async (proof: string) => {
     const channel = detectCodeChannel(codeId);
     if (!channel) return;
 
@@ -233,13 +233,13 @@ export function OidcLoginForm({
           body: JSON.stringify({
             login_challenge: loginChallenge,
             phone: codeId.trim(),
-            captcha_token: captcha.token,
+            captcha_token: proof,
           }),
         });
       } else if (channel === "phone") {
-        await sendPhoneCode(codeId.trim(), captcha.token);
+        await sendPhoneCode(codeId.trim(), proof);
       } else {
-        await sendEmailCode(codeId.trim(), captcha.token);
+        await sendEmailCode(codeId.trim(), proof);
       }
       setCountdown(60);
       setSentCodeTarget(codeId.trim());
@@ -255,18 +255,19 @@ export function OidcLoginForm({
   };
 
   const handleSendCode = async () => {
+    if (sending || countdown > 0 || captcha.verifying) return;
     const next: Record<string, string> = {};
     const channel = detectCodeChannel(codeId);
     if (!channel || (isOperator && channel !== "phone"))
       next.phone = isOperator
         ? formText("enter_a_valid_phone_number")
         : formText("enter_a_valid_phone_number_or_email");
-    if (!captcha.ready)
-      next.form = formText("complete_the_human_verification_first");
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    await doSendCode();
+    const proof = await captcha.verify();
+    if (proof === null) return;
+    await doSendCode(proof);
   };
 
   const handleCodeSubmit = async (event: FormEvent) => {
@@ -366,7 +367,7 @@ export function OidcLoginForm({
     identifier.trim().length > 0 &&
     password.length > 0 &&
     acceptedTerms &&
-    captcha.ready;
+    captcha.available;
 
   return (
     <div
@@ -395,11 +396,15 @@ export function OidcLoginForm({
             agreementChecked={acceptedTerms}
             errors={errors}
             loading={loading}
-            codeSending={sending}
             codeCountdown={countdown}
-            sendCodeDisabled={countdown > 0 || sending || !captcha.ready}
+            sendCodeDisabled={countdown > 0 || sending || !captcha.available}
+            sendingCodeLabel={
+              captcha.verifying
+                ? formText("security_verifying")
+                : formText("sending")
+            }
+            codeSending={sending || captcha.verifying}
             verification={captcha.node}
-            social={socialNode}
             showForgot={false}
             submitLabel={
               isOperator ? formText("continue") : formText("sign_in_register")
@@ -434,9 +439,13 @@ export function OidcLoginForm({
             password={password}
             agreementChecked={acceptedTerms}
             errors={errors}
-            loading={loading}
+            loading={loading || captcha.verifying}
+            submitLoadingLabel={
+              captcha.verifying
+                ? formText("security_verifying")
+                : formText("signing_in")
+            }
             verification={captcha.node}
-            social={socialNode}
             showForgot={!isOperator}
             primaryDisabled={!passwordCanSubmit}
             // 标签与占位符要说同一件事：面板缺省标签是"邮箱"，而这里接受的是
@@ -461,6 +470,9 @@ export function OidcLoginForm({
             onSubmit={handlePasswordSubmit}
           />
         )}
+        {socialNode ? (
+          <div className="accounts-login-social">{socialNode}</div>
+        ) : null}
       </AuthLoginTemplate>
     </div>
   );
