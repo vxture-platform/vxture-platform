@@ -1,13 +1,13 @@
 /**
- * page.tsx - accounts root
+ * Neutral account-center entry.
  * @package @vxture/accounts
- *
- * v1 ships only /login. The account center (profile / security / connected
- * apps / sessions) lands later. See docs/design/identity-platform-idp.md §7.
- * A bare visit here (no app context) auto-returns rather than dead-ending.
+ * @layer Presentation
+ * @category page
+ * @author AI-Generated
+ * @date 2026-11-07
  */
-import { AutoReturnToApp } from "@/components/AutoReturnToApp";
+import { AccountCenterHome } from "@/components/AccountCenterHome";
 
 export default function HomePage() {
-  return <AutoReturnToApp />;
+  return <AccountCenterHome />;
 }

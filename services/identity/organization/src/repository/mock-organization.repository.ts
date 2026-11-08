@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { ConflictException, Injectable } from "@nestjs/common";
 import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import { ALLOW_MULTI_WORKSPACE } from "../types/organization.types";
 import type {
@@ -499,6 +499,27 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     const p = this.profiles.get(orgId);
     if (p) p.logoHash = null;
   }
+  async listOwnedOrganizations(userId: string): Promise<OrgView[]> {
+    return [...this.orgs.values()].filter((org) => org.ownerUserId === userId);
+  }
+
+  async cleanupAccountMemberships(userId: string): Promise<number> {
+    const memberships = this.orgMembers.filter(
+      (m) =>
+        m.userId === userId &&
+        this.orgs.get(m.organizationId)?.type === "organization",
+    );
+    if (
+      memberships.some(
+        (m) => this.orgs.get(m.organizationId)?.ownerUserId === userId,
+      )
+    )
+      throw new ConflictException("org_owner");
+    for (const m of memberships)
+      await this.removeOrgMember(m.organizationId, userId);
+    return memberships.length;
+  }
+
   async listOrgMembershipsForUser(
     userId: string,
   ): Promise<OrgMembershipView[]> {

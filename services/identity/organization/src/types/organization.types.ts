@@ -591,6 +591,10 @@ export interface OrganizationReadRepository {
   /** Remove the org's logo bytes (clears logo_hash). */
   deleteOrgLogo(orgId: string): Promise<void>;
   listOrgMembershipsForUser(userId: string): Promise<OrgMembershipView[]>;
+  /** All live owned tenants, including those with missing or suspended memberships. */
+  listOwnedOrganizations(userId: string): Promise<OrgView[]>;
+  /** Remove all non-owner organization memberships; reject owner races under lock. */
+  cleanupAccountMemberships(userId: string): Promise<number>;
   /**
    * 把某个租户设为该用户登录后默认进入的租户(owner 2026-09-05 走查):同一用户
    * 其它成员关系的 is_default 清掉,目标置 true,一个事务。目标不是该用户的活跃

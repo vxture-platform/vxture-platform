@@ -63,6 +63,11 @@ export type { AccessRevocationSurface, RedisRevocationConfig } from "./session";
 
 // Human verification
 export { TurnstileVerifier, TurnstileVerificationError } from "./turnstile";
+export {
+  AliyunCaptchaVerifier,
+  AliyunCaptchaError,
+} from "./captcha/aliyun-captcha.verifier";
+export type { AliyunCaptchaOptions } from "./captcha/aliyun-captcha.verifier";
 export type {
   TurnstileSurface,
   TurnstileSiteverifyResponse,

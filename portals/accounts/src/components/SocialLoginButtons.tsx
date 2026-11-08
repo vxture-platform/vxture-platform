@@ -14,6 +14,7 @@
  * accounts/public/brand.
  */
 "use client";
+import { useTranslations } from "next-intl";
 
 import { useEffect, useState } from "react";
 import {
@@ -32,16 +33,18 @@ import {
 // omitted (hidden for compliance); WeChat is appended separately below as a
 // disabled placeholder, independent of the backend registry. Unknown codes are
 // skipped.
-const PROVIDER_LABELS: Partial<Record<AuthSocialProvider, string>> = {
-  feishu: "飞书",
-  dingtalk: "钉钉",
-};
 
 export function SocialLoginButtons({
   loginChallenge,
 }: {
   readonly loginChallenge: string;
 }) {
+  const formText = useTranslations("accountsForms");
+
+  const PROVIDER_LABELS: Partial<Record<AuthSocialProvider, string>> = {
+    feishu: formText("feishu"),
+    dingtalk: formText("dingtalk"),
+  };
   const [providers, setProviders] = useState<EnabledProvider[]>([]);
 
   useEffect(() => {
@@ -72,10 +75,13 @@ export function SocialLoginButtons({
   // WeChat: shown but disabled until its upstream broker is wired (还未对接).
   const buttons: AuthSocialButtonConfig[] = [
     ...liveButtons,
-    { provider: "wechat", label: "微信", disabled: true },
+    { provider: "wechat", label: formText("wechat"), disabled: true },
   ];
 
   return (
-    <AuthSocialButtons providers={buttons} separatorLabel="其他方式登录" />
+    <AuthSocialButtons
+      providers={buttons}
+      separatorLabel={formText("other_sign_in_methods")}
+    />
   );
 }

@@ -8,6 +8,7 @@
  * server-side, so they must re-authenticate with the new password).
  */
 "use client";
+import { useTranslations } from "next-intl";
 
 import { useState, type FormEvent } from "react";
 import { Banner, Button } from "@vxture/design-system";
@@ -25,6 +26,8 @@ export function OperatorResetPasswordPanel({
 }: {
   readonly token: string;
 }) {
+  const formText = useTranslations("accountsForms");
+
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
@@ -34,11 +37,11 @@ export function OperatorResetPasswordPanel({
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (password.length < 12) {
-      setError("密码至少 12 位");
+      setError(formText("use_at_least_12_characters"));
       return;
     }
     if (password !== confirm) {
-      setError("两次输入的密码不一致");
+      setError(formText("passwords_do_not_match"));
       return;
     }
     setError(undefined);
@@ -47,7 +50,11 @@ export function OperatorResetPasswordPanel({
       await resetOperatorPassword(token, password);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "重置失败，请稍后重试");
+      setError(
+        err instanceof Error
+          ? err.message
+          : formText("unable_to_reset_please_try_again_later"),
+      );
       setLoading(false);
     }
   };
@@ -57,8 +64,8 @@ export function OperatorResetPasswordPanel({
       header={<AccountsAuthHeader />}
       footer={<AccountsAuthFooter />}
       layout="single"
-      title="设置运营账号新密码"
-      description="运营密码至少 12 位。重置后当前账号的全部会话都会失效，需要重新登录。"
+      title={formText("set_a_new_password")}
+      description={formText("sign_in_again_after_changing_your_password")}
       useLoginLayout={!done}
     >
       {done ? (
@@ -66,15 +73,17 @@ export function OperatorResetPasswordPanel({
          * 无定义的死类名。原先"重新登录"是句子里的一个裸 <a>，在一屏只有一件
          * 事可做的终态屏上，它该是那个按钮。 */
         <AuthResultPanel
-          title="密码已重置"
-          description="原有会话已全部失效，请使用新密码重新登录。"
+          title={formText("password_reset")}
+          description={formText(
+            "all_previous_sessions_have_ended_sign_in_with_your_new_password",
+          )}
           action={
             <Button
               size="xl"
               className="w-full"
-              onClick={() => window.location.assign("/login")}
+              onClick={() => window.location.assign("/workforce/login")}
             >
-              重新登录
+              {formText("sign_in_again")}
             </Button>
           }
         />
@@ -85,10 +94,10 @@ export function OperatorResetPasswordPanel({
           autoComplete="on"
         >
           <AuthField
-            label="新密码"
+            label={formText("new_password")}
             name="new-password"
             type="password"
-            placeholder="至少 12 位"
+            placeholder={formText("at_least_12_characters")}
             icon="lock"
             value={password}
             autoComplete="new-password"
@@ -97,10 +106,10 @@ export function OperatorResetPasswordPanel({
             onChange={setPassword}
           />
           <AuthField
-            label="确认新密码"
+            label={formText("confirm_new_password")}
             name="confirm-password"
             type="password"
-            placeholder="再次输入新密码"
+            placeholder={formText("enter_your_new_password_again")}
             icon="lock"
             value={confirm}
             autoComplete="new-password"
@@ -110,8 +119,8 @@ export function OperatorResetPasswordPanel({
           {error ? <Banner tone="danger" title={error} /> : null}
           <AuthPrimaryButton
             loading={loading}
-            label="重置密码"
-            loadingLabel="重置中..."
+            label={formText("reset_password")}
+            loadingLabel={formText("resetting")}
           />
         </form>
       )}

@@ -44,7 +44,7 @@ GRANT UPDATE (fingerprint, state, episode, notice_reference, last_source, update
 
 -- account.users  [anchor: id, user_no, level_no, created_at]
 REVOKE UPDATE ON account.users FROM platform_svc;
-GRANT UPDATE (account, email, email_verified_at, phone, phone_verified_at, account_changed_at, account_login_disabled, status, source, updated_at, deleted_at, deletion_requested_at, profile_completed_at) ON account.users TO platform_svc;
+GRANT UPDATE (account, email, email_verified_at, phone, phone_verified_at, account_changed_at, account_login_disabled, email_login_disabled, status, source, updated_at, deleted_at, deletion_requested_at, profile_completed_at) ON account.users TO platform_svc;
 
 -- account.user_profiles  [anchor: user_id, created_at]
 REVOKE UPDATE ON account.user_profiles FROM platform_svc;
@@ -75,7 +75,7 @@ GRANT UPDATE (password_hash, password_changed_at, force_password_change, updated
 
 -- credential.user_mfas  [anchor: user_id, created_at]
 REVOKE UPDATE ON credential.user_mfas FROM platform_svc;
-GRANT UPDATE (policy, totp_secret, totp_enabled, webauthn_required, updated_at) ON credential.user_mfas TO platform_svc;
+GRANT UPDATE (policy, totp_secret, totp_enabled, version, last_counter, webauthn_required, updated_at) ON credential.user_mfas TO platform_svc;
 
 -- credential.user_webauthn_credentials  [anchor: id, created_at]
 REVOKE UPDATE ON credential.user_webauthn_credentials FROM platform_svc;
@@ -627,3 +627,7 @@ GRANT UPDATE (tenant_id, workspace_id, product_id, refreshed_at, updated_at) ON 
 -- billing.invoice_receipt_bills [anchor: receipt_id, bill_id]
 REVOKE UPDATE ON billing.invoice_receipt_bills FROM platform_svc;
 GRANT UPDATE (amount) ON billing.invoice_receipt_bills TO platform_svc;
+
+-- account.lifecycle_operations [anchor: id, user_id, deletion_requested_at, created_at]
+REVOKE UPDATE ON account.lifecycle_operations FROM platform_svc;
+GRANT UPDATE (status,payload,attempts,next_attempt_at,last_error,updated_at) ON account.lifecycle_operations TO platform_svc;

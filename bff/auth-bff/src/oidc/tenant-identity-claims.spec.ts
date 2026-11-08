@@ -83,4 +83,14 @@ describe("buildTenantIdentityClaims", () => {
     expect("phone" in c).toBe(false);
     expect("phone_verified" in c).toBe(false);
   });
+  it("releases durable email verification evidence and defaults missing evidence to false", () => {
+    expect(
+      buildTenantIdentityClaims({ ...user, emailVerified: true }, "openid")
+        .email_verified,
+    ).toBe(true);
+    expect(
+      buildTenantIdentityClaims({ ...user, emailVerified: false }, "openid")
+        .email_verified,
+    ).toBe(false);
+  });
 });

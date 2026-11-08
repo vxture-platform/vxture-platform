@@ -25,6 +25,7 @@ import {
   ConflictException,
   Controller,
   ForbiddenException,
+  GoneException,
   HttpCode,
   HttpStatus,
   Inject,
@@ -34,7 +35,7 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from "@nestjs/common";
-import { randomBytes, randomInt } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { VxConfigService } from "@vxture/core-config";
 import { PgOperatorRepository } from "@vxture/service-iam";
 import { MailService } from "@vxture/service-mail";
@@ -56,7 +57,6 @@ type OperatorAdminView = NonNullable<
 
 const OPERATOR_STATUS_ACTIVE = "active";
 const OPERATOR_RESET_TTL_SECONDS = 30 * 60;
-const OPERATOR_CONTACT_TTL_SECONDS = 10 * 60;
 
 /** Mask an email for API responses: b***@example.com. */
 function maskEmail(email: string): string {
@@ -390,18 +390,11 @@ export class OperatorAdminInternalRouter {
     };
   }
 
-  /**
-   * Self-service email change — step 1 (TD-017 §③). The operator (self only,
-   * id must equal actorOperatorId) requests a change to a NEW email; a 6-digit
-   * code is sent to that NEW address, proving ownership. The account is NOT
-   * mutated here — only a pending record (Redis, short TTL) is stored. Verifying
-   * (step 2) is what writes the new email + sets email_verified=true, which is
-   * the ONLY path that restores out-of-band-delivery eligibility.
-   */
+  /** Retired self-service entry; account-center session proofs are now required. */
   @InternalRoute({
     risk: "admin-action",
     actor: "token-bound",
-    why: "改运营者本人邮箱第一步：向新地址发码。本人路径要求点名主体 == 目标 id，而点名主体由 ActorBindingGuard 绑到会话票",
+    why: "Retired self-service entry; preserves actor binding while directing callers to the workforce account center",
   })
   @Post(":id/contact/email/start")
   @HttpCode(HttpStatus.OK)
@@ -411,33 +404,17 @@ export class OperatorAdminInternalRouter {
   ): Promise<{ ok: true; sentTo: string }> {
     const actor = requireActor(body);
     if (id !== actor) throw new ForbiddenException("self_only");
-    const newEmail = (body.newEmail ?? "").trim().toLowerCase();
-    if (!newEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) {
-      throw new BadRequestException("invalid_email");
-    }
-    const target = await this.operators.getOperatorAdminView(id);
-    if (!target) throw new NotFoundException("operator_not_found");
-    const code = String(randomInt(100000, 1000000));
-    await this.redis.storeOperatorContactChange(
-      id,
-      "email",
-      newEmail,
-      code,
-      OPERATOR_CONTACT_TTL_SECONDS,
-    );
-    await this.mail.sendVerifyCode(newEmail, code);
-    return { ok: true, sentTo: maskEmail(newEmail) };
+    throw new GoneException({
+      code: "account_center_required",
+      path: "/workforce/account",
+    });
   }
 
-  /**
-   * Self-service email change — step 2: submit the code from the new address.
-   * On match, writes the new email + email_verified=true (proven owned).
-   * Unique collision → 409; bad/expired code → 400.
-   */
+  /** Retired verification entry; legacy pending records can no longer mutate accounts. */
   @InternalRoute({
     risk: "admin-action",
     actor: "token-bound",
-    why: "改运营者本人邮箱第二步：核码落库。同上，点名主体 == 目标 id 且已绑到会话票",
+    why: "Retired verification entry; old internal proofs cannot bypass account-center session binding",
   })
   @Post(":id/contact/email/verify")
   @HttpCode(HttpStatus.OK)
@@ -447,27 +424,10 @@ export class OperatorAdminInternalRouter {
   ): Promise<{ ok: true; email: string }> {
     const actor = requireActor(body);
     if (id !== actor) throw new ForbiddenException("self_only");
-    const code = (body.code ?? "").trim();
-    const newEmail = await this.redis.verifyOperatorContactChange(
-      id,
-      "email",
-      code,
-    );
-    if (!newEmail) throw new BadRequestException("invalid_or_expired_code");
-    try {
-      const ok = await this.operators.setOperatorContactVerified(
-        id,
-        "email",
-        newEmail,
-      );
-      if (!ok) throw new NotFoundException("operator_not_found");
-    } catch (err) {
-      if ((err as { code?: string })?.code === "23505") {
-        throw new ConflictException("email_in_use");
-      }
-      throw err;
-    }
-    return { ok: true, email: newEmail };
+    throw new GoneException({
+      code: "account_center_required",
+      path: "/workforce/account",
+    });
   }
 }
 

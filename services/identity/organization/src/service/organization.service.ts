@@ -243,6 +243,16 @@ export class OrganizationService {
   deleteOrgLogo(orgId: string): Promise<void> {
     return this.repo.deleteOrgLogo(orgId);
   }
+  /** Read ownership from the tenant authority rather than active membership. */
+  listOwnedOrganizations(userId: string): Promise<OrgView[]> {
+    return this.repo.listOwnedOrganizations(userId);
+  }
+
+  /** Remove non-owner memberships with domain-level race protection. */
+  cleanupAccountMemberships(userId: string): Promise<number> {
+    return this.repo.cleanupAccountMemberships(userId);
+  }
+
   listOrgMembershipsForUser(userId: string): Promise<OrgMembershipView[]> {
     return this.repo.listOrgMembershipsForUser(userId);
   }

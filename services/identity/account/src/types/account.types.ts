@@ -16,6 +16,8 @@ export interface UserView {
   phoneVerified?: boolean;
   /** Whether username+password login is disabled (account_login_disabled). Other login paths unaffected. */
   accountLoginDisabled?: boolean;
+  /** Email identifiers and email OTP may be disabled independently of phone login. */
+  emailLoginDisabled?: boolean;
   name: string | null;
   status: string;
   /** Content hash of the custom avatar (NULL = no custom avatar → frontend default). */
@@ -38,6 +40,16 @@ export interface UserView {
   hasPassword?: boolean;
   /** ISO timestamp the user asked to delete the account (status='deleting'); null otherwise. */
   deletionRequestedAt?: string | null;
+}
+
+/** Fixed retention duration; hours are used in SQL to avoid calendar/DST drift. */
+export const ACCOUNT_DELETION_RETENTION_DAYS = 30;
+
+/** Committed identity-domain deletion effects, produced by one transaction. */
+export interface CustomerDeletionTransactionResult {
+  deletionRequestedAt: string;
+  revokedSessions: number;
+  unboundIdentities: number;
 }
 
 /** Mutable profile fields a user may edit (console info spec §1.1). */
@@ -187,6 +199,12 @@ export interface BindIdentityInput {
 
 /** Data access contract for identity-core users (raw SQL impl + mock impl). */
 export interface UserReadRepository {
+  isAccountAvailable(account: string, excludeUserId: string): Promise<boolean>;
+  /** Atomically check current account facts, apply a security mutation and revoke customer login state. */
+  applySelfSecurity(
+    userId: string,
+    mutation: CustomerSecurityMutation,
+  ): Promise<void>;
   /** Idempotent growth-baseline heal (loyalty.user_points). */
   ensureUserPoints(userId: string): Promise<void>;
   createUser(record: CreateUserRecord): Promise<UserView>;
@@ -212,7 +230,12 @@ export interface UserReadRepository {
     phone: string | null;
   } | null>;
   findCredentialById(userId: string): Promise<UserCredentialRecord | null>;
-  setPassword(userId: string, passwordHash: string): Promise<void>;
+  /** Password changes revoke customer sessions/tokens atomically unless this is initial setup. */
+  setPassword(
+    userId: string,
+    passwordHash: string,
+    revokeSessions?: boolean,
+  ): Promise<void>;
   /** Update mutable profile fields (name/email/bio/timezone/language); returns the updated view or null. */
   updateProfile(
     userId: string,
@@ -252,8 +275,11 @@ export interface UserReadRepository {
   changePhone(userId: string, newPhone: string): Promise<UserView | null>;
   /** Atomically replace the email + set email_verified_at=now(). Throws ConflictException if taken. */
   changeEmail(userId: string, newEmail: string): Promise<UserView | null>;
-  /** Set email_verified_at=now() for the user's current email (verify-current). */
-  markEmailVerified(userId: string): Promise<UserView | null>;
+  /** Verify only when the current address still matches the proven email. */
+  markEmailVerified(
+    userId: string,
+    expectedEmail: string,
+  ): Promise<UserView | null>;
   /** Set phone_verified_at=now() for the user's current phone (verify-current). */
   markPhoneVerified(userId: string): Promise<UserView | null>;
   /** Enable/disable username+password login (account_login_disabled flag). */
@@ -315,13 +341,18 @@ export interface UserReadRepository {
   /** Unbind every federated identity of the user; returns the count removed. */
   removeAllIdentities(userId: string): Promise<number>;
   /**
-   * Self-service deletion (050-account §7): active → deleting, stamp
-   * deletion_requested_at = now(). Returns the updated view, or null when the
-   * user is gone or not active (the caller maps to 404 / 409).
+   * Atomically enter retention, revoke customer sessions and refresh tokens,
+   * and unbind identities. Null when absent or no longer active.
    */
-  requestDeletion(userId: string): Promise<UserView | null>;
-  /** Undo a pending deletion: deleting → active, clear deletion_requested_at. Null when not deleting. */
-  cancelDeletion(userId: string): Promise<UserView | null>;
+  requestDeletion(
+    userId: string,
+    snapshot?: CustomerSecuritySnapshot,
+  ): Promise<CustomerDeletionTransactionResult | null>;
+  /** Undo only before the retention deadline. Null when ineligible or expired. */
+  cancelDeletion(
+    userId: string,
+    expectedRequestedAt?: string,
+  ): Promise<UserView | null>;
   /** Users whose retention window has elapsed (status='deleting', not yet purged), oldest first. */
   listDeletionDue(retentionDays: number, limit: number): Promise<string[]>;
   /**
@@ -330,4 +361,43 @@ export interface UserReadRepository {
    * true when this call performed the purge.
    */
   purgeUser(userId: string): Promise<boolean>;
+}
+
+/** Server-selected customer self-service operations. */
+export type CustomerSecurityOperation =
+  | "phone-change"
+  | "email-change"
+  | "phone-verify"
+  | "email-verify"
+  | "password"
+  | "identity-unlink"
+  | "username"
+  | "email-login"
+  | "identity-link"
+  | "account-login"
+  | "mfa-enable"
+  | "account-deletion"
+  | "account-recovery";
+
+/** Account facts captured before issuing a sensitive-operation proof. */
+export interface CustomerSecuritySnapshot {
+  /** Exact provider subjects captured for unlink; never returned to the browser. */
+  identitySubjects?: string[];
+  phone: string;
+  email: string | null;
+  phoneVerified: boolean;
+  emailVerified: boolean;
+  account: string;
+  accountLoginDisabled: boolean;
+  emailLoginDisabled?: boolean;
+  hasPassword: boolean;
+}
+
+/** Trusted mutation with an exact account snapshot and optional hashed credential. */
+export interface CustomerSecurityMutation {
+  operation: CustomerSecurityOperation;
+  target: string;
+  snapshot: CustomerSecuritySnapshot;
+  passwordHash?: string;
+  expectedPasswordHash: string | null;
 }

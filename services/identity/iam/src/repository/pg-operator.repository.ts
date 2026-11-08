@@ -141,6 +141,16 @@ export class PgOperatorRepository {
    * invalid credentials). No PLG, no phone anchor, no self-registration — operator
    * accounts are pre-provisioned.
    */
+  /** Resolve only active, pre-provisioned workforce accounts with a verified phone. */
+  async findByVerifiedPhone(phone: string): Promise<OperatorView | null> {
+    const result = await this.pool.query<OperatorRow>(
+      `${SELECT_OPERATOR}
+      and replace(coalesce(a.phone,''),'+86','')=$1 and a.phone_verified=true limit 1`,
+      [phone],
+    );
+    return result.rows[0] ? toView(result.rows[0]) : null;
+  }
+
   async authenticateOperator(
     identifier: string,
     password: string,
@@ -281,7 +291,9 @@ export class PgOperatorRepository {
     const result = await this.pool.query<{ id: string }>(
       `update admin.operator_account
           set ${col} = $2, ${verifiedCol} = true, updated_at = now()
-        where id = $1 and deleted_at is null
+        where id = $1 and deleted_at is null and status = 'active'
+          and exists (select 1 from admin.operator_role r
+            where r.id=admin.operator_account.role_id and r.status='active')
         returning id`,
       [operatorId, value],
     );
@@ -667,6 +679,91 @@ export class PgOperatorRepository {
       [operatorId, codeHash],
     );
     return (r.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * Atomically switch a verified factor and recovery codes against its snapshot.
+   * @param operatorId - Workforce account owning the factor.
+   * @param input - Encrypted new secret, expected old state and hashed recovery codes.
+   * @returns False when another ceremony or an administrator changed the factor.
+   * @throws {Error} When persistence fails; the complete change is rolled back.
+   */
+  async activateTotpEnrollment(
+    operatorId: string,
+    input: {
+      secret: string;
+      previousSecret: string | null;
+      previousEnabled: boolean;
+      initialOnly: boolean;
+      recoveryHashes: string[];
+    },
+  ): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const operator = await client.query(
+        `select id from admin.operator_account where id = $1 and status = 'active' and deleted_at is null for update`,
+        [operatorId],
+      );
+      if (operator.rowCount !== 1) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        `insert into admin.operator_mfa (operator_id, created_at, updated_at)
+         values ($1, now(), now()) on conflict (operator_id) do nothing`,
+        [operatorId],
+      );
+      const current = await client.query<{
+        totp_secret: string | null;
+        totp_enabled: boolean;
+        webauthn_required: boolean;
+      }>(
+        `select totp_secret, totp_enabled, webauthn_required
+           from admin.operator_mfa where operator_id = $1 for update`,
+        [operatorId],
+      );
+      const row = current.rows[0];
+      const passkeys = await client.query(
+        `select id from admin.operator_webauthn_credential where operator_id = $1 limit 1`,
+        [operatorId],
+      );
+      if (
+        !row ||
+        row.webauthn_required ||
+        row.totp_secret !== input.previousSecret ||
+        row.totp_enabled !== input.previousEnabled ||
+        (input.initialOnly &&
+          (row.totp_enabled || (passkeys.rowCount ?? 0) > 0))
+      ) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        `update admin.operator_mfa set totp_secret = $2, totp_enabled = true,
+           totp_confirmed_at = now(), enrolled_at = coalesce(enrolled_at, now()),
+           updated_at = now() where operator_id = $1`,
+        [operatorId, input.secret],
+      );
+      await client.query(
+        `delete from admin.operator_recovery_code where operator_id = $1`,
+        [operatorId],
+      );
+      for (const hash of input.recoveryHashes) {
+        await client.query(
+          `insert into admin.operator_recovery_code (operator_id, code_hash, created_at)
+           values ($1, $2, now())`,
+          [operatorId, hash],
+        );
+      }
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /** Confirm + enable a staged TOTP secret (after first-code verification). */

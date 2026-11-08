@@ -63,6 +63,16 @@ const COMPOSE_ONLY_KEYS = new Set([
   "VX_WORKER02_TAILNET_IP",
 ]);
 
+const ALIYUN_CAPTCHA_KEYS = new Set([
+  "ALIYUN_CAPTCHA_ENABLED",
+  "ALIYUN_CAPTCHA_ACCESS_KEY_ID",
+  "ALIYUN_CAPTCHA_ACCESS_KEY_SECRET",
+  "ALIYUN_CAPTCHA_REGION",
+  "ALIYUN_CAPTCHA_PREFIX",
+  "ALIYUN_CAPTCHA_CUSTOMER_SCENE_ID",
+  "ALIYUN_CAPTCHA_WORKFORCE_SCENE_ID",
+]);
+
 const TENANT_TURNSTILE_KEYS = new Set([
   "CF_TURNSTILE_TENANT_SECRET_KEY",
   "CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES",
@@ -296,6 +306,10 @@ const ENV_FILE_RULES = [
       ...OIDC_FUTURE_APP_HASH_KEYS,
     ]),
     forbiddenKeys: new Set([
+      "CF_TURNSTILE_ENABLED",
+      "CF_TURNSTILE_ALLOW_TESTING_KEYS",
+      ...TENANT_TURNSTILE_KEYS,
+      ...ADMIN_TURNSTILE_KEYS,
       ...SHARED_SECRET_KEYS,
       // 内部面钥匙（2026-10-04 拆分）只住 secrets/platform-idp-internal.env；和五个共享键一样不许复制进服务 env。
       "IDP_INTERNAL_TOKEN",
@@ -325,11 +339,7 @@ const ENV_FILE_RULES = [
       "ADMIN_BASE_URL",
       "UMBRA_BASE_URL",
       "RUYIN_BASE_URL",
-      "CF_TURNSTILE_ENABLED",
-      // auth-bff (IdP) verifies BOTH tenant and operator (admin-surface)
-      // Turnstile via OperatorLoginGuard; admin-bff is RP-only and verifies none.
-      ...TENANT_TURNSTILE_KEYS,
-      ...ADMIN_TURNSTILE_KEYS,
+      ...ALIYUN_CAPTCHA_KEYS,
       ...OAUTH_KEYS,
       // bcrypt hashes the seed projects into appoidc.oidc_clients; missing �?401.
       ...OIDC_CLIENT_SECRET_HASH_KEYS,
@@ -348,6 +358,7 @@ const ENV_FILE_RULES = [
       "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
+      ...ALIYUN_CAPTCHA_KEYS,
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -383,6 +394,7 @@ const ENV_FILE_RULES = [
       "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
+      ...ALIYUN_CAPTCHA_KEYS,
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -422,6 +434,7 @@ const ENV_FILE_RULES = [
       // admin-bff is RP-only (Batch 8): operator login + its Turnstile moved to
       // the IdP (auth-bff). admin-bff verifies no Turnstile.
       "CF_TURNSTILE_ENABLED",
+      ...ALIYUN_CAPTCHA_KEYS,
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -474,6 +487,7 @@ const ENV_FILE_RULES = [
       "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
+      ...ALIYUN_CAPTCHA_KEYS,
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -521,6 +535,7 @@ const ENV_FILE_RULES = [
       "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
+      ...ALIYUN_CAPTCHA_KEYS,
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -627,6 +642,7 @@ const ENV_FILE_RULES = [
       // This S2S-only host has its own confidential client for health reads.
       // Browser credentials and IdP signing material still belong elsewhere.
       "CF_TURNSTILE_ENABLED",
+      ...ALIYUN_CAPTCHA_KEYS,
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -660,6 +676,7 @@ const ENV_FILE_RULES = [
       "IDP_INTERNAL_TOKEN",
       "REDIS_PASSWORD",
       "CF_TURNSTILE_ENABLED",
+      ...ALIYUN_CAPTCHA_KEYS,
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,

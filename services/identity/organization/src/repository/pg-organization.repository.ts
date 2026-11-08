@@ -1484,6 +1484,55 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     );
   }
 
+  /** Read every live owned tenant, even without an active membership. */
+  async listOwnedOrganizations(userId: string): Promise<OrgView[]> {
+    const result = await this.pool.query<OrgRow>(
+      `select id,name,type,owner_user_id,status from tenancy.tenants
+        where owner_user_id=$1 and deleted_at is null order by id`,
+      [userId],
+    );
+    return result.rows.map((row) => mapOrg(row)!);
+  }
+
+  /**
+   * Lock tenants before unlinking either membership level.
+   * @param userId - Customer being deleted.
+   * @returns Removed tenant membership count.
+   * @throws {ConflictException} On concurrent ownership of an organization.
+   * @throws {Error} On database failure, rolling back both membership levels.
+   */
+  async cleanupAccountMemberships(userId: string): Promise<number> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const tenants = await client.query<{ id: string; owner_user_id: string }>(
+        `select t.id,t.owner_user_id from tenancy.tenants t
+          join tenancy.tenant_memberships m on m.tenant_id=t.id
+          where m.user_id=$1 and t.type='organization' and t.deleted_at is null
+          order by t.id for update of t`,
+        [userId],
+      );
+      if (tenants.rows.some((row) => row.owner_user_id === userId))
+        throw new ConflictException("org_owner");
+      const ids = tenants.rows.map((row) => row.id);
+      await client.query(
+        `delete from tenancy.workspace_memberships where user_id=$1 and tenant_id=any($2::uuid[])`,
+        [userId, ids],
+      );
+      const removed = await client.query(
+        `delete from tenancy.tenant_memberships where user_id=$1 and tenant_id=any($2::uuid[])`,
+        [userId, ids],
+      );
+      await client.query("commit");
+      return removed.rowCount ?? 0;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async listOrgMembershipsForUser(
     userId: string,
   ): Promise<OrgMembershipView[]> {

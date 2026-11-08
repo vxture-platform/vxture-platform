@@ -40,9 +40,9 @@ import type {
   RegistrationResponseJSON,
 } from "@simplewebauthn/server";
 import { RedisService } from "../redis/redis.service";
+import { RealmSessionService } from "./realm-session.service";
 
 const WEBAUTHN_CHALLENGE_TTL_SECONDS = 60;
-const OPERATOR_SUB_PREFIX = "opr_";
 
 interface WebauthnRp {
   rpID: string;
@@ -57,6 +57,8 @@ export class OperatorWebauthnService {
     @Inject(PgOperatorRepository)
     private readonly operators: PgOperatorRepository,
     @Inject(RedisService) private readonly redis: RedisService,
+    @Inject(RealmSessionService)
+    private readonly realmSession: RealmSessionService,
   ) {}
 
   /** Env-driven RP config; fail-closed when unconfigured. */
@@ -72,16 +74,7 @@ export class OperatorWebauthnService {
 
   /** Resolve the operator id from the operator central session; 401 otherwise. */
   private async resolveOperatorId(sid: string | undefined): Promise<string> {
-    if (!sid) throw new UnauthorizedException("operator_session_required");
-    const session = await this.redis.getOidcSession(sid);
-    if (
-      !session ||
-      session.realm !== "workforce" ||
-      !session.sub.startsWith(OPERATOR_SUB_PREFIX)
-    ) {
-      throw new UnauthorizedException("operator_session_required");
-    }
-    return session.sub.slice(OPERATOR_SUB_PREFIX.length);
+    return this.realmSession.requireOperator(sid);
   }
 
   /**

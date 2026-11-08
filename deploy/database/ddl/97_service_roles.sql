@@ -270,3 +270,14 @@ BEGIN
 END
 $$;
 -- END WORKBENCH INBOX ROLE
+
+-- Identity lifecycle coordinates only these commerce facts and cancellation writes.
+GRANT USAGE ON SCHEMA billing TO svc_auth_bff;
+GRANT SELECT ON billing.invoices,billing.orders,billing.payments,billing.credits,
+  billing.transactions,billing.refunds,billing.invoice_receipts,billing.invoice_items,billing.order_events TO svc_auth_bff;
+GRANT UPDATE (status,closed_at,close_reason,updated_at) ON billing.orders TO svc_auth_bff;
+GRANT UPDATE (bill_status,updated_at) ON billing.invoices TO svc_auth_bff;
+GRANT UPDATE (deleted_at,updated_at) ON billing.invoice_items TO svc_auth_bff;
+GRANT INSERT ON billing.order_events TO svc_auth_bff;
+
+GRANT SELECT ON account.lifecycle_operations TO svc_platform_api;

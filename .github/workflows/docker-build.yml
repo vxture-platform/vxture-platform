@@ -218,9 +218,6 @@ jobs:
           target: runner
           build-args: |
             ${{ matrix.build-args }}
-            NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY=${{ vars.CF_TURNSTILE_TENANT_SITE_KEY }}
-            NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_ID=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
-            NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
             NEXT_PUBLIC_ADMIN_BFF_URL=${{ vars.ADMIN_BASE_URL }}
             NEXT_PUBLIC_ARCHE_URL=${{ vars.ARCHE_BASE_URL }}
             APP_VERSION=${{ steps.prov.outputs.app_version }}
@@ -260,9 +257,6 @@ jobs:
           target: runner
           build-args: |
             ${{ matrix.build-args }}
-            NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY=${{ vars.CF_TURNSTILE_TENANT_SITE_KEY }}
-            NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_ID=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
-            NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
             NEXT_PUBLIC_ADMIN_BFF_URL=${{ vars.ADMIN_BASE_URL }}
             NEXT_PUBLIC_ARCHE_URL=${{ vars.ARCHE_BASE_URL }}
             APP_VERSION=${{ steps.prov.outputs.app_version }}

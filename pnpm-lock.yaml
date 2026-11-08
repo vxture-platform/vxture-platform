@@ -299,6 +299,9 @@ importers:
       '@vxture/service-account':
         specifier: workspace:*
         version: link:../../services/identity/account
+      '@vxture/service-billing':
+        specifier: workspace:*
+        version: link:../../services/commerce/billing
       '@vxture/service-iam':
         specifier: workspace:*
         version: link:../../services/identity/iam
@@ -1061,9 +1064,6 @@ importers:
       '@fontsource/inter':
         specifier: ^5.3.0
         version: 5.3.0
-      '@marsidev/react-turnstile':
-        specifier: ^1.5.2
-        version: 1.5.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@simplewebauthn/browser':
         specifier: ^13.3.0
         version: 13.3.0
@@ -1654,6 +1654,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: 4.1.12
+        version: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.12)(vite@7.3.7(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
 
   services/commerce/promotion:
     dependencies:
@@ -3351,12 +3354,6 @@ packages:
   '@lukeed/csprng@1.1.0':
     resolution: {integrity: sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA==}
     engines: {node: '>=8'}
-
-  '@marsidev/react-turnstile@1.5.2':
-    resolution: {integrity: sha512-+3aBPxp86JzSC0ZmgyonoGoUEENcUkH3LGahXSpkV87ArvD2DzRCmPgh0FyQk6PQRmJwQJDAfwNavFsxUxMQWA==}
-    peerDependencies:
-      react: ^17.0.2 || ^18.0.0 || ^19.0
-      react-dom: ^17.0.2 || ^18.0.0 || ^19.0
 
   '@microsoft/tsdoc@0.16.0':
     resolution: {integrity: sha512-xgAyonlVVS+q7Vc7qLW0UrJU7rSFcETRWsqdXZtjzRU8dF+6CkozTK4V4y1LwOX7j8r/vHphjDeMeGI4tNGeGA==}
@@ -9913,11 +9910,6 @@ snapshots:
   '@levischuck/tiny-cbor@0.2.11': {}
 
   '@lukeed/csprng@1.1.0': {}
-
-  '@marsidev/react-turnstile@1.5.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
-    dependencies:
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
 
   '@microsoft/tsdoc@0.16.0': {}
 

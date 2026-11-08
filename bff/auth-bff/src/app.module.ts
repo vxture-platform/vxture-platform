@@ -11,6 +11,10 @@ import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { VxConfigModule } from "@vxture/core-config";
 import { IamModule } from "@vxture/service-iam";
+import { BillingModule } from "@vxture/service-billing";
+import { CustomerLifecycleService } from "./oidc/customer-lifecycle.service";
+import { CustomerLifecycleRouter } from "./routers/customer-lifecycle.router";
+import { CustomerLifecycleJob } from "./accounts/customer-lifecycle.job";
 import { AccountModule } from "@vxture/service-account";
 import { OrganizationModule } from "@vxture/service-organization";
 import { SubscriptionModule } from "@vxture/service-subscription";
@@ -23,6 +27,8 @@ import { SocialController } from "./oauth/social.controller";
 import { AuthnController } from "./authn/authn.controller";
 import { AccessTokenGuard } from "./authn/access-token.guard";
 import { TenantLoginGuard } from "./authn/tenant-login-guard.service";
+import { HumanCaptchaService } from "./authn/human-captcha.service";
+import { CaptchaRouter } from "./routers/captcha.router";
 import { GovernanceController } from "./governance/governance.controller";
 import { TokenModule } from "./token/token.module";
 import { OidcService } from "./oidc/oidc.service";
@@ -33,6 +39,15 @@ import { OperatorMfaService } from "./oidc/operator-mfa.service";
 import { OperatorWebauthnService } from "./oidc/operator-webauthn.service";
 import { OperatorAnomalyService } from "./oidc/operator-anomaly.service";
 import { OperatorSelfService } from "./oidc/operator-self.service";
+import { CustomerSecurityService } from "./oidc/customer-security.service";
+import { CustomerSecurityChallengeService } from "./authn/customer-security-challenge.service";
+import { CustomerSecurityRouter } from "./routers/customer-security.router";
+import { AccountsBoundaryModule } from "./accounts/accounts-boundary.module";
+import { CustomerMfaService } from "./oidc/customer-mfa.service";
+import { CustomerMfaRouter } from "./routers/customer-mfa.router";
+import { CustomerSelfService } from "./oidc/customer-self.service";
+import { CustomerSelfRouter } from "./routers/customer-self.router";
+import { AccountsLoginRouter } from "./routers/accounts-login.router";
 import { OidcRouter } from "./routers/oidc.router";
 import { OperatorWebauthnRouter } from "./routers/operator-webauthn.router";
 import { OperatorSelfRouter } from "./routers/operator-self.router";
@@ -58,10 +73,12 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     RedisModule,
     IamModule,
     AccountModule,
+    BillingModule,
     OrganizationModule,
     MailModule,
     SmsModule,
     AuthnModule,
+    AccountsBoundaryModule,
     OauthModule,
     TokenModule,
     // Kept after the D13 platform-api split NOT for any /platform/* router
@@ -70,12 +87,18 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     SubscriptionModule,
   ],
   controllers: [
+    CaptchaRouter,
     HealthRouter,
     AuthnController,
     GovernanceController,
     OidcRouter,
+    AccountsLoginRouter,
     OperatorWebauthnRouter,
     OperatorSelfRouter,
+    CustomerSelfRouter,
+    CustomerMfaRouter,
+    CustomerSecurityRouter,
+    CustomerLifecycleRouter,
     OperatorStepUpRouter,
     OperatorAdminInternalRouter,
     OperatorSessionsInternalRouter,
@@ -86,6 +109,7 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     AvatarUploadController,
   ],
   providers: [
+    HumanCaptchaService,
     OidcService,
     AppScopeResolver,
     TokenExchangeService,
@@ -95,6 +119,12 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     OperatorWebauthnService,
     OperatorAnomalyService,
     OperatorSelfService,
+    CustomerSelfService,
+    CustomerMfaService,
+    CustomerSecurityService,
+    CustomerLifecycleService,
+    CustomerLifecycleJob,
+    CustomerSecurityChallengeService,
     InternalAuthGuard,
     ActorBindingGuard,
     TenantLoginGuard,

@@ -25,9 +25,14 @@ import {
   AVATAR_MAX_BYTES,
   sniffImageType,
 } from "@vxture/service-account";
-import { PhoneCodeService } from "@vxture/service-sms";
-import { OidcService, type OidcLoginCompletion } from "../oidc/oidc.service";
+import { CustomerPhoneCodeService } from "../authn/customer-phone-code.service";
+import { OidcService, type OidcLoginResult } from "../oidc/oidc.service";
 import { RedisService } from "../redis/redis.service";
+import {
+  RealmSessionService,
+  type CustomerSessionContext,
+} from "../oidc/realm-session.service";
+import { CustomerSecurityChallengeService } from "../authn/customer-security-challenge.service";
 import { OAuthProviderRegistry } from "./provider-registry";
 
 // The social round-trip includes a (first-time) provider login + app-consent
@@ -38,8 +43,9 @@ const SOCIAL_FLOW_TTL_SECONDS = 1800;
 const BIND_TTL_SECONDS = 600;
 
 export type SocialCallbackResult =
-  | { kind: "login"; completion: OidcLoginCompletion }
-  | { kind: "bind"; bindToken: string };
+  | { kind: "login"; completion: OidcLoginResult }
+  | { kind: "bind"; bindToken: string }
+  | { kind: "linked" };
 
 @Injectable()
 export class SocialAuthService {
@@ -49,9 +55,13 @@ export class SocialAuthService {
     @Inject(OAuthProviderRegistry)
     private readonly registry: OAuthProviderRegistry,
     @Inject(AccountService) private readonly account: AccountService,
-    @Inject(PhoneCodeService) private readonly phoneCode: PhoneCodeService,
+    @Inject(CustomerPhoneCodeService)
+    private readonly phoneCode: CustomerPhoneCodeService,
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(OidcService) private readonly oidc: OidcService,
+    @Inject(RealmSessionService) private readonly sessions: RealmSessionService,
+    @Inject(CustomerSecurityChallengeService)
+    private readonly proofs: CustomerSecurityChallengeService,
   ) {}
 
   /** Enabled providers for the login surface (code + display name; no secrets). */
@@ -60,11 +70,49 @@ export class SocialAuthService {
     return providers.map((p) => ({ code: p.code, name: p.name }));
   }
 
+  /** Only a phone-proven, session-bound ceremony can add a login identity. */
+  async buildLinkStartUrl(
+    context: CustomerSessionContext,
+    providerCode: string,
+    challengeId: string,
+  ): Promise<string> {
+    if (!["feishu", "dingtalk"].includes(providerCode))
+      throw new BadRequestException("provider_unavailable");
+    const resolved = await this.registry.resolve(providerCode);
+    if (!resolved?.config.redirectUri)
+      throw new BadRequestException("provider_unavailable");
+    const proof = await this.proofs.consume(
+      context,
+      challengeId,
+      "identity-link",
+    );
+    if (proof.target !== providerCode)
+      throw new BadRequestException("security_proof_required");
+    const state = randomUUID();
+    await this.redis.storeOauthState(
+      state,
+      {
+        providerCode,
+        redirectUri: resolved.config.redirectUri,
+        loginChallenge: "",
+        link: { userId: context.userId, sid: context.sid },
+      },
+      300,
+    );
+    return resolved.provider.buildAuthorizationUrl(
+      resolved.config.redirectUri,
+      state,
+    );
+  }
+
   /** Begin social login: stash state + the parked challenge, return the upstream authorize URL. */
   async buildStartUrl(
     providerCode: string,
     loginChallenge: string,
   ): Promise<string> {
+    const context = await this.oidc.loginContext(loginChallenge);
+    if (context.realm !== "customer")
+      throw new BadRequestException("unsupported_realm");
     const resolved = await this.registry.resolve(providerCode);
     if (!resolved || !resolved.config.redirectUri) {
       throw new BadRequestException("provider_unavailable");
@@ -106,10 +154,25 @@ export class SocialAuthService {
     state: string,
     ipAddress?: string | undefined,
     userAgent?: string | undefined,
+    customerSid?: string,
   ): Promise<SocialCallbackResult> {
     const statePayload = await this.redis.consumeOauthState(state);
     if (!statePayload || statePayload.providerCode !== providerCode) {
       throw new BadRequestException("invalid_state");
+    }
+    if (statePayload.link) {
+      if (statePayload.link.sid !== customerSid)
+        throw new UnauthorizedException("link_session_required");
+      const current = await this.sessions.requireCustomer(customerSid);
+      if (
+        current.userId !== statePayload.link.userId ||
+        current.user.status !== "active"
+      )
+        throw new UnauthorizedException("link_session_required");
+    } else {
+      const context = await this.oidc.loginContext(statePayload.loginChallenge);
+      if (context.realm !== "customer")
+        throw new BadRequestException("unsupported_realm");
     }
     const resolved = await this.registry.resolve(providerCode);
     if (!resolved) throw new BadRequestException("provider_unavailable");
@@ -120,6 +183,31 @@ export class SocialAuthService {
     );
     const profile = await resolved.provider.getUserInfo(tokens.accessToken);
     const authMethod = `social:${providerCode}`;
+
+    if (statePayload.link) {
+      // Provider calls may outlive the original session or account status.
+      const current = await this.sessions.requireCustomer(customerSid);
+      if (
+        current.userId !== statePayload.link.userId ||
+        current.user.status !== "active"
+      )
+        throw new UnauthorizedException("link_session_required");
+      const owner = await this.account.findUserByProviderSubject(
+        providerCode,
+        profile.providerId,
+      );
+      if (owner && owner.id !== statePayload.link.userId)
+        throw new BadRequestException("identity_already_bound");
+      if (!owner)
+        await this.bindProfile(statePayload.link.userId, providerCode, profile);
+      const bound = await this.account.findUserByProviderSubject(
+        providerCode,
+        profile.providerId,
+      );
+      if (!bound || bound.id !== statePayload.link.userId)
+        throw new BadRequestException("identity_already_bound");
+      return { kind: "linked" };
+    }
 
     // 1) Known identity → log in directly.
     const existing = await this.account.findUserByProviderSubject(
@@ -192,6 +280,16 @@ export class SocialAuthService {
     return { kind: "bind", bindToken };
   }
 
+  /** Send only for an existing customer social binding and isolate the token owner. */
+  async sendBindPhoneCode(bindToken: string, phone: string): Promise<void> {
+    const pending = await this.redis.readOauthBind(bindToken);
+    if (!pending) throw new BadRequestException("invalid_binding_token");
+    await this.phoneCode.sendCode(phone, {
+      scope: "customer-social-bind",
+      context: bindToken,
+    });
+  }
+
   /**
    * Complete a pending social→phone binding: consume the bind token, verify the
    * SMS code, resolve/create the account by the verified phone (login==register),
@@ -204,12 +302,15 @@ export class SocialAuthService {
     code: string,
     ipAddress?: string | undefined,
     userAgent?: string | undefined,
-  ): Promise<OidcLoginCompletion> {
+  ): Promise<OidcLoginResult> {
+    if (!(await this.redis.readOauthBind(bindToken)))
+      throw new BadRequestException("invalid_binding_token");
     // Verify the SMS code BEFORE consuming the (single-use) bind token, so a
     // wrong code doesn't burn the token and force a full re-OAuth — the code has
     // its own per-phone attempt/rate limits.
     const verified = await this.phoneCode.verifyCode(phone, code, {
-      scope: "tenant-auth",
+      scope: "customer-social-bind",
+      context: bindToken,
     });
     if (!verified) throw new UnauthorizedException("invalid_phone_code");
 

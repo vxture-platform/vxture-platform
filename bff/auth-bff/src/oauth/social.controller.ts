@@ -26,7 +26,12 @@ import {
 import type { Request, Response } from "express";
 import { extractClientIp } from "@vxture/core-utils";
 import { VxConfigService } from "@vxture/core-config";
-import { buildSidCookie, buildHintCookie } from "../authn/cookie";
+import {
+  buildSidCookie,
+  buildHintCookie,
+  SID_COOKIE_NAME,
+} from "../authn/cookie";
+import { TenantLoginGuard } from "../authn/tenant-login-guard.service";
 import { SocialAuthService } from "./social-auth.service";
 
 @Controller("auth/oauth")
@@ -34,6 +39,7 @@ export class SocialController {
   constructor(
     @Inject(SocialAuthService) private readonly social: SocialAuthService,
     @Inject(VxConfigService) private readonly config: VxConfigService,
+    @Inject(TenantLoginGuard) private readonly human: TenantLoginGuard,
   ) {}
 
   /** Enabled providers for the login surface (code + display name; no secrets). */
@@ -81,10 +87,21 @@ export class SocialController {
       state,
       clientIp,
       userAgent,
+      ...(req.cookies?.[SID_COOKIE_NAME.tenant]
+        ? [req.cookies[SID_COOKIE_NAME.tenant] as string]
+        : []),
     );
+    if (result.kind === "linked") {
+      res.redirect(new URL("/account?section=security", loginBase).toString());
+      return;
+    }
     if (result.kind === "login") {
       this.setSessionCookie(res, result.completion);
-      res.redirect(result.completion.redirectTo);
+      res.redirect(
+        "status" in result.completion
+          ? new URL("/mfa", loginBase).toString()
+          : result.completion.redirectTo,
+      );
       return;
     }
 
@@ -92,6 +109,25 @@ export class SocialController {
     const url = new URL("/bind-phone", loginBase);
     url.searchParams.set("binding_token", result.bindToken);
     res.redirect(url.toString());
+  }
+
+  /** The binding token selects the only permitted SMS consumption context. */
+  @Post("send-phone-code")
+  @HttpCode(HttpStatus.OK)
+  async sendBindPhoneCode(
+    @Body()
+    body: { binding_token?: string; phone?: string; captcha_token?: string },
+    @Req() req: Request,
+  ): Promise<{ sent: true }> {
+    if (
+      typeof body?.binding_token !== "string" ||
+      !body.binding_token ||
+      typeof body.phone !== "string"
+    )
+      throw new BadRequestException("invalid_request");
+    await this.human.verifyHuman(body.captcha_token, extractClientIp(req));
+    await this.social.sendBindPhoneCode(body.binding_token, body.phone);
+    return { sent: true };
   }
 
   /**
@@ -120,15 +156,27 @@ export class SocialController {
       userAgent,
     );
     this.setSessionCookie(res, completion);
-    return { redirectTo: completion.redirectTo };
+    return {
+      redirectTo: "status" in completion ? "/mfa" : completion.redirectTo,
+    };
   }
 
   /** Set the tenant central-session cookie (shares .vxture.com; mirrors oidc.router). */
   private setSessionCookie(
     res: Response,
-    completion: { sid: string; realm: string; sessionMaxAge: number },
+    completion: import("../oidc/oidc.service").OidcLoginResult,
   ): void {
     const secure = process.env["IDP_COOKIE_INSECURE"] !== "true";
+    if ("status" in completion) {
+      res.cookie("vx_customer_mfa", completion.mfaToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure,
+        path: "/",
+        maxAge: 300000,
+      });
+      return;
+    }
     const cookie = buildSidCookie({
       sid: completion.sid,
       realm: completion.realm === "workforce" ? "workforce" : "customer",

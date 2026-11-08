@@ -11,6 +11,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { FactoryProvider } from "@nestjs/common";
+import { VxConfigService } from "@vxture/core-config";
 import { MailService } from "@vxture/core-mail";
 import {
   AccountService,
@@ -34,6 +35,12 @@ const provider = customerNotificationsProvider as FactoryProvider;
 const stub = () => ({ setCustomerNotifier: vi.fn() });
 
 describe("customerNotificationsProvider", () => {
+  it("uses the independent accounts origin for security links", () => {
+    const wired = build();
+    const dispatcher = wired.securityDispatcher as { accountsBaseUrl?: string };
+    expect(dispatcher.accountsBaseUrl).toBe("https://accounts.example.com");
+  });
+
   it("inject 清单逐项对上（顺序即形参顺序）", () => {
     expect(provider.provide).toBe(CUSTOMER_NOTIFIER);
     expect(provider.inject).toEqual([
@@ -46,6 +53,7 @@ describe("customerNotificationsProvider", () => {
       AddonService,
       OrganizationService,
       AccountService,
+      VxConfigService,
     ]);
   });
 
@@ -114,6 +122,7 @@ function build() {
     addons,
     orgs,
     accounts,
+    { platform: { LOGIN_UI_BASE_URL: "https://accounts.example.com" } },
   );
   return {
     dispatcher,

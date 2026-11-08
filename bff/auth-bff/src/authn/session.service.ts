@@ -1,10 +1,9 @@
 /**
- * session.service.ts — central session (durable mirror in session.auth_sessions).
+ * session.service.ts — durable customer central-session authority.
  *
- * docs/design/platform-data-architecture-schema.md §4 identity (auth_session §4.9, central session)
- * (auth_session = central session mirror; Redis is the primary cache, fronted by
- * the existing redis.service and wired in Task 4.4). This service owns the durable
- * record + the `sid` that the vx_sid cookie carries.
+ * Redis carries the interactive session, while session.auth_sessions controls
+ * durable validity and revocation. A missing durable row cannot authorize SSO.
+ * Workforce sessions remain independent of this customer store.
  */
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -101,17 +100,26 @@ export class SessionService {
   }
 
   /**
-   * 镜像行**存在且**已不是 active(console「下线此设备」只翻镜像行,Redis 不知情)。
-   * 没有镜像行的老会话(本改动之前登录的)一律视为未吊销——这是「有行才判」,
-   * 不是「无行即拒」,否则上线一刻全站被踢。
+   * Fail closed for missing, expired or revoked customer session records.
+   * This store is customer-only; workforce uses its own central session checks.
    */
   async isRevoked(sid: string): Promise<boolean> {
-    const r = await this.pool.query<{ status: string }>(
-      `select status from session.auth_sessions where sid = $1 limit 1`,
+    const r = await this.pool.query<{
+      status: string;
+      realm: string;
+      unexpired: boolean;
+    }>(
+      `select status, realm, expires_at > now() as unexpired
+         from session.auth_sessions where sid = $1 limit 1`,
       [sid],
     );
     const row = r.rows[0];
-    return Boolean(row && row.status !== "active");
+    return (
+      !row ||
+      row.realm !== "customer" ||
+      row.status !== "active" ||
+      row.unexpired !== true
+    );
   }
 
   /** Keep the durable mirror's last_active_at roughly current (best-effort). */

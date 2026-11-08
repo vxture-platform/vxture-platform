@@ -21,6 +21,7 @@
  * 逐字比结果。
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   SECURITY_NOTIFICATION_TEMPLATES,
   SECURITY_REFERENCE_TYPE as ACCOUNT_SECURITY_REFERENCE_TYPE,
@@ -80,7 +81,6 @@ describe("账号安全线：service-account 的副本 vs dispatch 的权威", ()
     const outcome = securityNotice("account.password_reset", {
       accountId: "acct",
       userNo: USER_NO,
-      personalTenantId: "tenant",
       occurredAt: AT,
     });
     expect(outcome.ok).toBe(true);
@@ -118,4 +118,32 @@ describe("账号安全线：service-account 的副本 vs dispatch 的权威", ()
     );
     expect(longestMirrored).toBeLessThanOrEqual(128);
   });
+});
+
+// ============================================================================
+// Database and runtime allowlists must evolve together
+// ============================================================================
+describe("tenantless inbox schema contract", () => {
+  it.each([
+    "deploy/database/ddl/72_support.sql",
+    "deploy/database/migrations/2026-11-07-account-security-notifications.sql",
+  ])(
+    "limits tenantless messages to authoritative security templates in %s",
+    (path) => {
+      const sql = readFileSync(
+        new URL(`../../../../${path}`, import.meta.url),
+        "utf8",
+      );
+      const constraint = sql.match(
+        /CONSTRAINT chk_inbox_messages_scope CHECK \(([^;]+?)\)\)/,
+      )?.[1];
+      expect(constraint).toBeDefined();
+      expect(constraint).toContain("tenant_id IS NOT NULL OR");
+      expect(constraint).toContain("reference_type='security'");
+      const codes = [...constraint!.matchAll(/'(account\.[^']+)'/g)].map(
+        (match) => match[1],
+      );
+      expect(codes.sort()).toEqual([...SECURITY_TEMPLATE_CODES].sort());
+    },
+  );
 });

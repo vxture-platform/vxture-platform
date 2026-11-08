@@ -6,7 +6,7 @@
  * `vx_sid_op` 鉴权读身份(fetchOperatorSelf);内联两步流改邮箱/手机(email 走邮件码、
  * phone 走短信码),改密码(验旧+设新),并给出通行密钥管理入口。未登录 → 显示登录提示
  * (与 passkeys 页同口径)。B.1 邮箱、B.2 手机/密码;MFA 自助为 B.2c。
- * `?returnTo=` 为可选的回控制台入口(白名单由 page 服务端把关,不接受任意跳转)。
+ * Application return navigation is owned by the route shell.
  */
 "use client";
 
@@ -20,14 +20,18 @@ import {
 import {
   Banner,
   Button,
-  Card,
   Field,
   FieldLabel,
-  Icon,
   Input,
   Skeleton,
   StatusBadge,
 } from "@vxture/design-system";
+import { useSearchParams } from "next/navigation";
+import {
+  AccountHeading,
+  AccountSection,
+  AccountRow,
+} from "./AccountPrimitives";
 import { useTranslations } from "next-intl";
 import {
   fetchOperatorSelf,
@@ -41,16 +45,23 @@ import {
   OperatorUnauthenticatedError,
   type OperatorSelf,
 } from "@/api/operator-self";
-import { TotpQrCode } from "@/components/TotpQrCode";
+import { VerificationCodeInput } from "./VerificationCodeInput";
+import { MfaEnrollment } from "./MfaEnrollment";
+import { MfaRecoveryCodes } from "./MfaRecoveryCodes";
 
 type Load =
   | { state: "loading" }
   | { state: "unauth" }
+  | { state: "passwordChanged" }
   | { state: "error"; message: string }
   | { state: "ready"; self: OperatorSelf };
 
-export function OperatorAccountCenter({ returnTo }: { returnTo?: string }) {
+export function OperatorAccountCenter() {
   const t = useTranslations("operatorAccount");
+  const center = useTranslations("accountCenter");
+  const ui = useTranslations("accountsUi");
+  const section =
+    useSearchParams().get("section") === "security" ? "security" : "profile";
   const [load, setLoad] = useState<Load>({ state: "loading" });
 
   const refresh = useCallback(async () => {
@@ -72,34 +83,64 @@ export function OperatorAccountCenter({ returnTo }: { returnTo?: string }) {
   }, [refresh]);
 
   return (
-    <main className="mx-auto flex w-full max-w-panel-lg flex-col gap-lg px-md py-3xl">
-      <header className="flex items-start justify-between gap-md">
-        <div className="flex flex-col gap-2xs">
-          <h1 className="text-title-md font-semibold">{t("title")}</h1>
-          <p className="text-body-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        {returnTo ? (
-          <Button asChild variant="ghost" size="sm">
-            <a href={returnTo}>
-              <Icon name="arrow-left" size="sm" aria-hidden="true" />
-              {t("back")}
-            </a>
-          </Button>
-        ) : null}
-      </header>
+    <main className="flex flex-col gap-lg">
+      <AccountHeading
+        title={ui(section)}
+        icon={section === "security" ? "shield-check" : "user"}
+      />
 
       {load.state === "loading" ? (
         <Skeleton className="h-40 w-full" />
       ) : load.state === "unauth" ? (
-        <Banner tone="warning" title={t("loginRequired")} />
+        <div className="flex flex-col items-start gap-md">
+          <Banner
+            tone="warning"
+            title={t("loginRequired")}
+            description={center("workforceLoginHint")}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setLoad({ state: "loading" });
+              void refresh();
+            }}
+          >
+            {center("retry")}
+          </Button>
+        </div>
       ) : load.state === "error" ? (
+        <div className="flex flex-col items-start gap-md">
+          <Banner
+            tone="danger"
+            title={t("loadFailed")}
+            description={load.message}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setLoad({ state: "loading" });
+              void refresh();
+            }}
+          >
+            {center("retry")}
+          </Button>
+        </div>
+      ) : load.state === "passwordChanged" ? (
         <Banner
-          tone="danger"
-          title={t("loadFailed")}
-          description={load.message}
+          tone="success"
+          title={t("password.updated")}
+          description={t("password.signedOutHint")}
         />
       ) : (
-        <ReadyView self={load.self} onChanged={refresh} />
+        <ReadyView
+          key={section}
+          section={section}
+          self={load.self}
+          onChanged={refresh}
+          onPasswordChanged={() => setLoad({ state: "passwordChanged" })}
+        />
       )}
     </main>
   );
@@ -115,11 +156,15 @@ type ContactFlow = {
 };
 
 function ReadyView({
+  section,
   self,
   onChanged,
+  onPasswordChanged,
 }: {
+  section: "profile" | "security";
   self: OperatorSelf;
   onChanged: () => void;
+  onPasswordChanged: () => void;
 }) {
   const t = useTranslations("operatorAccount");
   const [flow, setFlow] = useState<ContactFlow | null>(null);
@@ -172,139 +217,122 @@ function ReadyView({
     <div className="flex flex-col gap-lg">
       {notice ? <Banner tone="success" title={notice} /> : null}
 
-      <Card className="flex flex-col gap-md p-lg">
-        <h2 className="text-title-sm font-semibold">{t("section.account")}</h2>
-        <dl className="flex flex-col gap-sm">
-          <Row label={t("field.username")}>{self.username}</Row>
-          <Row label={t("field.email")}>
-            <ContactValue
-              value={self.email}
-              verified={self.emailVerified}
-              notSet={t("notSet")}
-              verifiedLabel={t("verified")}
-              unverifiedLabel={t("unverified")}
-              onChange={() => open("email")}
-              changeLabel={t("email.change")}
-              disabled={flow !== null}
-            />
-          </Row>
-          <Row label={t("field.phone")}>
-            <ContactValue
-              value={self.phone}
-              verified={self.phoneVerified}
-              notSet={t("notSet")}
-              verifiedLabel={t("verified")}
-              unverifiedLabel={t("unverified")}
-              onChange={() => open("phone")}
-              changeLabel={t("phone.change")}
-              disabled={flow !== null}
-            />
-          </Row>
-          <Row label={t("field.role")}>{self.role}</Row>
-        </dl>
+      {section === "profile" ? (
+        <AccountSection title={t("section.account")} icon="user">
+          <div>
+            <Row label={t("field.username")}>{self.username}</Row>
+            <Row label={t("field.email")}>
+              <ContactValue
+                value={self.email}
+                verified={self.emailVerified}
+                notSet={t("notSet")}
+                verifiedLabel={t("verified")}
+                unverifiedLabel={t("unverified")}
+                onChange={() => open("email")}
+                changeLabel={t("email.change")}
+                disabled={flow !== null}
+              />
+            </Row>
+            <Row label={t("field.phone")}>
+              <ContactValue
+                value={self.phone}
+                verified={self.phoneVerified}
+                notSet={t("notSet")}
+                verifiedLabel={t("verified")}
+                unverifiedLabel={t("unverified")}
+                onChange={() => open("phone")}
+                changeLabel={t("phone.change")}
+                disabled={flow !== null}
+              />
+            </Row>
+            <Row label={t("field.role")}>{self.role}</Row>
+          </div>
 
-        {flow ? (
-          <form
-            className="flex flex-col gap-sm border-t border-border pt-md"
-            onSubmit={onSubmitContact}
-          >
-            {flow.step === "input" ? (
-              <Field>
-                <FieldLabel htmlFor="operatoraccountcenter-email-newlabel">
-                  {flow.kind === "email"
-                    ? t("email.newLabel")
-                    : t("phone.newLabel")}
-                </FieldLabel>
-                <Input
-                  id="operatoraccountcenter-email-newlabel"
-                  type={flow.kind === "email" ? "email" : "tel"}
-                  value={flow.value}
-                  onChange={(ev) =>
-                    setFlow({ ...flow, value: ev.target.value })
-                  }
-                  placeholder={
-                    flow.kind === "email" ? "you@example.com" : "13800000000"
-                  }
-                  autoComplete={flow.kind === "email" ? "email" : "tel"}
-                />
-              </Field>
-            ) : (
-              <>
-                <p className="text-body-sm text-muted-foreground">
-                  {t("email.sentHint", { target: flow.sentTo })}
-                </p>
+          {flow ? (
+            <form
+              className="flex flex-col gap-sm border-t border-border pt-md"
+              onSubmit={onSubmitContact}
+            >
+              {flow.step === "input" ? (
                 <Field>
-                  <FieldLabel htmlFor="operatoraccountcenter-email-codelabel">
-                    {t("email.codeLabel")}
+                  <FieldLabel htmlFor="operatoraccountcenter-email-newlabel">
+                    {flow.kind === "email"
+                      ? t("email.newLabel")
+                      : t("phone.newLabel")}
                   </FieldLabel>
                   <Input
-                    id="operatoraccountcenter-email-codelabel"
-                    value={flow.code}
+                    id="operatoraccountcenter-email-newlabel"
+                    type={flow.kind === "email" ? "email" : "tel"}
+                    value={flow.value}
                     onChange={(ev) =>
-                      setFlow({ ...flow, code: ev.target.value })
+                      setFlow({ ...flow, value: ev.target.value })
                     }
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
+                    placeholder={
+                      flow.kind === "email" ? "you@example.com" : "13800000000"
+                    }
+                    autoComplete={flow.kind === "email" ? "email" : "tel"}
                   />
                 </Field>
-              </>
-            )}
-            {error ? (
-              <Banner tone="danger" title={error || t("loadFailed")} />
-            ) : null}
-            <div className="flex gap-xs">
-              <Button
-                type="submit"
-                size="sm"
-                disabled={
-                  busy ||
-                  (flow.step === "input"
-                    ? !flow.value.trim()
-                    : !flow.code.trim())
-                }
-              >
-                {flow.step === "input"
-                  ? t("email.sendCode")
-                  : t("email.verify")}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={cancel}
-                disabled={busy}
-              >
-                {t("email.cancel")}
-              </Button>
-            </div>
-          </form>
-        ) : null}
-      </Card>
+              ) : (
+                <>
+                  <p className="text-body-sm text-muted-foreground">
+                    {t("email.sentHint", { target: flow.sentTo })}
+                  </p>
+                  <VerificationCodeInput
+                    name="contact_code"
+                    label={t("email.codeLabel")}
+                    value={flow.code}
+                    disabled={busy}
+                    onChange={(code) => setFlow({ ...flow, code })}
+                  />
+                </>
+              )}
+              {error ? (
+                <Banner tone="danger" title={error || t("loadFailed")} />
+              ) : null}
+              <div className="flex gap-xs">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    busy ||
+                    (flow.step === "input"
+                      ? !flow.value.trim()
+                      : !/^\d{6}$/.test(flow.code))
+                  }
+                >
+                  {flow.step === "input"
+                    ? t("email.sendCode")
+                    : t("email.verify")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={cancel}
+                  disabled={busy}
+                >
+                  {t("email.cancel")}
+                </Button>
+              </div>
+            </form>
+          ) : null}
+        </AccountSection>
+      ) : null}
 
-      <PasswordCard onDone={() => setNotice(t("password.updated"))} />
+      {section === "security" ? (
+        <>
+          <PasswordCard onDone={onPasswordChanged} />
 
-      <MfaCard
-        enabled={self.mfaTotpEnabled}
-        onDone={() => {
-          setNotice(t("mfa.updated"));
-          onChanged();
-        }}
-      />
-
-      <Card className="flex flex-col gap-md p-lg">
-        <h2 className="text-title-sm font-semibold">{t("security.title")}</h2>
-        <div className="flex items-center justify-between gap-md">
-          <div className="flex flex-col gap-3xs">
-            <span className="text-body-md">{t("security.passkeys")}</span>
-            <span className="text-body-sm text-muted-foreground">
-              {t("security.passkeysHint")}
-            </span>
-          </div>
-          <Button asChild variant="secondary" size="sm">
-            <a href="/security/passkeys">{t("security.passkeysManage")}</a>
-          </Button>
-        </div>
-      </Card>
+          <MfaCard
+            enabled={self.mfaTotpEnabled}
+            onDone={() => {
+              setNotice(t("mfa.updated"));
+              onChanged();
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -319,6 +347,9 @@ function MfaCard({
 }) {
   const t = useTranslations("operatorAccount");
   const [phase, setPhase] = useState<"idle" | "enroll" | "done">("idle");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [currentCode, setCurrentCode] = useState("");
+  const [enrollmentToken, setEnrollmentToken] = useState("");
   const [otpauthUri, setOtpauthUri] = useState("");
   const [secret, setSecret] = useState("");
   const [code, setCode] = useState("");
@@ -330,9 +361,12 @@ function MfaCard({
     setBusy(true);
     setError(null);
     try {
-      const res = await startOperatorMfaTotp();
+      const res = await startOperatorMfaTotp(currentPassword, currentCode);
       setOtpauthUri(res.otpauthUri);
       setSecret(res.secret);
+      setEnrollmentToken(res.enrollmentToken);
+      setCurrentPassword("");
+      setCurrentCode("");
       setPhase("enroll");
     } catch (err) {
       setError(err instanceof Error ? err.message : "");
@@ -344,14 +378,17 @@ function MfaCard({
   async function confirm(e: FormEvent) {
     e.preventDefault();
     const c = code.trim();
-    if (!c) return;
+    if (!/^\d{6}$/.test(c)) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await confirmOperatorMfaTotp(c);
+      const res = await confirmOperatorMfaTotp(c, enrollmentToken);
       setRecoveryCodes(res.recoveryCodes);
       setPhase("done");
       setCode("");
+      setSecret("");
+      setOtpauthUri("");
+      setEnrollmentToken("");
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "");
@@ -362,6 +399,9 @@ function MfaCard({
 
   function reset() {
     setPhase("idle");
+    setCurrentPassword("");
+    setCurrentCode("");
+    setEnrollmentToken("");
     setOtpauthUri("");
     setSecret("");
     setCode("");
@@ -370,9 +410,8 @@ function MfaCard({
   }
 
   return (
-    <Card className="flex flex-col gap-md p-lg">
+    <AccountSection title={t("mfa.title")} icon="shield-check">
       <div className="flex items-center gap-sm">
-        <h2 className="text-title-sm font-semibold">{t("mfa.title")}</h2>
         <StatusBadge tone={enabled ? "success" : "warning"}>
           {enabled ? t("mfa.enabled") : t("mfa.disabled")}
         </StatusBadge>
@@ -380,38 +419,68 @@ function MfaCard({
       <p className="text-body-sm text-muted-foreground">{t("mfa.hint")}</p>
 
       {phase === "idle" ? (
-        <div>
-          <Button variant="secondary" size="sm" disabled={busy} onClick={begin}>
-            {enabled ? t("mfa.reenroll") : t("mfa.setup")}
-          </Button>
-        </div>
-      ) : phase === "enroll" ? (
-        <form className="flex flex-col gap-sm" onSubmit={confirm}>
+        <form
+          className="flex flex-col gap-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void begin();
+          }}
+        >
           <p className="text-body-sm text-muted-foreground">
-            {t("mfa.scanHint")}
-          </p>
-          {otpauthUri ? <TotpQrCode value={otpauthUri} /> : null}
-          <p className="text-body-sm">
-            {t("mfa.secretLabel")}：
-            <code className="rounded bg-muted px-xs py-3xs font-mono">
-              {secret}
-            </code>
+            {t("mfa.reauthHint")}
           </p>
           <Field>
-            <FieldLabel htmlFor="operatoraccountcenter-mfa-codelabel">
-              {t("mfa.codeLabel")}
+            <FieldLabel htmlFor="mfa-current-password">
+              {t("mfa.currentPassword")}
             </FieldLabel>
             <Input
-              id="operatoraccountcenter-mfa-codelabel"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              inputMode="numeric"
-              autoComplete="one-time-code"
+              id="mfa-current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              disabled={busy}
             />
           </Field>
+          {enabled ? (
+            <VerificationCodeInput
+              name="mfa-current-code"
+              label={t("mfa.currentCode")}
+              value={currentCode}
+              onChange={setCurrentCode}
+              disabled={busy}
+            />
+          ) : null}
           {error ? <Banner tone="danger" title={error} /> : null}
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={
+              busy ||
+              !currentPassword ||
+              (enabled && !/^\d{6}$/.test(currentCode))
+            }
+          >
+            {enabled ? t("mfa.reenroll") : t("mfa.setup")}
+          </Button>
+        </form>
+      ) : phase === "enroll" ? (
+        <form className="flex flex-col gap-sm" onSubmit={confirm}>
+          <MfaEnrollment
+            secret={secret}
+            otpauthUri={otpauthUri}
+            code={code}
+            onChange={setCode}
+            disabled={busy}
+            error={error ?? undefined}
+          />
           <div className="flex gap-xs">
-            <Button type="submit" size="sm" disabled={busy || !code.trim()}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={busy || !/^\d{6}$/.test(code)}
+            >
               {t("mfa.confirm")}
             </Button>
             <Button
@@ -427,25 +496,14 @@ function MfaCard({
         </form>
       ) : (
         <div className="flex flex-col gap-sm">
-          <Banner tone="success" title={t("mfa.recoveryTitle")} />
-          <p className="text-body-sm text-muted-foreground">
-            {t("mfa.recoveryHint")}
-          </p>
-          <ul className="grid grid-cols-2 gap-xs font-mono text-body-sm">
-            {recoveryCodes.map((rc) => (
-              <li key={rc} className="rounded bg-muted px-sm py-2xs">
-                {rc}
-              </li>
-            ))}
-          </ul>
-          <div>
-            <Button variant="secondary" size="sm" onClick={reset}>
-              {t("mfa.done")}
-            </Button>
-          </div>
+          <MfaRecoveryCodes
+            codes={recoveryCodes}
+            onContinue={reset}
+            continueLabel={t("mfa.done")}
+          />
         </div>
       )}
-    </Card>
+    </AccountSection>
   );
 }
 
@@ -522,8 +580,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <Card className="flex flex-col gap-md p-lg">
-      <h2 className="text-title-sm font-semibold">{t("password.title")}</h2>
+    <AccountSection title={t("password.title")} icon="key">
       {open ? (
         <form className="flex flex-col gap-sm" onSubmit={onSubmit}>
           <Field>
@@ -592,17 +649,10 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
           </Button>
         </div>
       )}
-    </Card>
+    </AccountSection>
   );
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-md">
-      <dt className="w-24 shrink-0 text-body-sm text-muted-foreground">
-        {label}
-      </dt>
-      <dd className="text-body-md">{children}</dd>
-    </div>
-  );
+  return <AccountRow label={label}>{children}</AccountRow>;
 }

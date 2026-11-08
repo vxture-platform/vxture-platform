@@ -7,6 +7,7 @@
  * central session cookie (vx_sid_op) is included; unauthenticated → 401 "请先登录".
  * Mirrors operator-webauthn.ts (same base, credentials:"include", 401 handling).
  */
+import { apiMessage } from "@/lib/api-message";
 const OIDC_API_BASE =
   process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
 
@@ -39,11 +40,11 @@ export async function fetchOperatorSelf(): Promise<OperatorSelf> {
       cache: "no-store",
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
-    throw new Error("无法加载账户信息，请重试");
+    throw new Error(apiMessage("error_37"));
   }
   return (await res.json()) as OperatorSelf;
 }
@@ -61,12 +62,12 @@ export async function startOperatorEmailChange(
       body: JSON.stringify({ newEmail }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
-    if (res.status === 400) throw new Error("邮箱格式不正确");
-    throw new Error("发送验证码失败，请重试");
+    if (res.status === 400) throw new Error(apiMessage("error_38"));
+    throw new Error(apiMessage("error_39"));
   }
   return (await res.json()) as { sentTo: string };
 }
@@ -84,13 +85,13 @@ export async function verifyOperatorEmailChange(
       body: JSON.stringify({ code }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
-    if (res.status === 409) throw new Error("该邮箱已被占用");
-    if (res.status === 400) throw new Error("验证码错误或已过期");
-    throw new Error("验证失败，请重试");
+    if (res.status === 409) throw new Error(apiMessage("error_40"));
+    if (res.status === 400) throw new Error(apiMessage("error_41"));
+    throw new Error(apiMessage("error_42"));
   }
   return (await res.json()) as { email: string };
 }
@@ -108,12 +109,12 @@ export async function startOperatorPhoneChange(
       body: JSON.stringify({ newPhone }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
-    if (res.status === 400) throw new Error("手机号格式不正确");
-    throw new Error("发送验证码失败，请重试");
+    if (res.status === 400) throw new Error(apiMessage("error_43"));
+    throw new Error(apiMessage("error_39"));
   }
   return (await res.json()) as { sentTo: string };
 }
@@ -132,13 +133,13 @@ export async function verifyOperatorPhoneChange(
       body: JSON.stringify({ newPhone, code }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
-    if (res.status === 409) throw new Error("该手机号已被占用");
-    if (res.status === 400) throw new Error("验证码错误或已过期");
-    throw new Error("验证失败，请重试");
+    if (res.status === 409) throw new Error(apiMessage("error_44"));
+    if (res.status === 400) throw new Error(apiMessage("error_41"));
+    throw new Error(apiMessage("error_42"));
   }
   return (await res.json()) as { phone: string };
 }
@@ -157,7 +158,7 @@ export async function changeOperatorPassword(
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
@@ -165,38 +166,59 @@ export async function changeOperatorPassword(
       const data = (await res.json().catch(() => ({}))) as { message?: string };
       const m = data.message ?? "";
       if (m.includes("invalid_current_password"))
-        throw new Error("当前密码不正确");
-      if (m.includes("weak_password")) throw new Error("新密码至少 12 位");
-      throw new Error("修改失败，请检查输入");
+        throw new Error(apiMessage("error_45"));
+      if (m.includes("weak_password")) throw new Error(apiMessage("error_46"));
+      throw new Error(apiMessage("error_47"));
     }
-    throw new Error("修改密码失败，请重试");
+    throw new Error(apiMessage("error_48"));
   }
 }
 
 /** TOTP (re-)enroll step 1: stage a new secret. Returns base32 secret + otpauth URI (QR). */
-export async function startOperatorMfaTotp(): Promise<{
+export async function startOperatorMfaTotp(
+  currentPassword: string,
+  currentCode: string,
+): Promise<{
   secret: string;
   otpauthUri: string;
+  enrollmentToken: string;
 }> {
   let res: Response;
   try {
     res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/mfa/totp/start`, {
       method: "POST",
       credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currentPassword, currentCode }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
-    throw new Error("无法发起二次验证设置，请重试");
+    if (res.status === 429) throw new Error(apiMessage("error_49"));
+    if (res.status === 400) {
+      const data = (await res.json().catch(() => ({}))) as { message?: string };
+      if (data.message === "invalid_current_password")
+        throw new Error(apiMessage("error_45"));
+      if (data.message === "invalid_current_mfa_code")
+        throw new Error(apiMessage("error_50"));
+      if (data.message === "webauthn_required")
+        throw new Error(apiMessage("error_51"));
+    }
+    throw new Error(apiMessage("error_52"));
   }
-  return (await res.json()) as { secret: string; otpauthUri: string };
+  return (await res.json()) as {
+    secret: string;
+    otpauthUri: string;
+    enrollmentToken: string;
+  };
 }
 
 /** TOTP (re-)enroll step 2: confirm the code → enable + one-time recovery codes. */
 export async function confirmOperatorMfaTotp(
   code: string,
+  enrollmentToken: string,
 ): Promise<{ recoveryCodes: string[] }> {
   let res: Response;
   try {
@@ -204,15 +226,15 @@ export async function confirmOperatorMfaTotp(
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, enrollmentToken }),
     });
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("error_36"));
   }
   if (!res.ok) {
     if (res.status === 401) throw new OperatorUnauthenticatedError();
-    if (res.status === 400) throw new Error("验证码错误或已过期");
-    throw new Error("设置失败，请重试");
+    if (res.status === 400) throw new Error(apiMessage("error_41"));
+    throw new Error(apiMessage("error_53"));
   }
   return (await res.json()) as { recoveryCodes: string[] };
 }

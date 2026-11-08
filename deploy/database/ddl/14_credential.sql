@@ -23,6 +23,8 @@ CREATE TABLE credential.user_mfas (
     policy             varchar(32)  NOT NULL DEFAULT 'off',
     totp_secret        varchar(255),                                 -- 加密存储
     totp_enabled       boolean      NOT NULL DEFAULT false,
+    version            uuid         NOT NULL DEFAULT gen_random_uuid(),
+    last_counter       bigint       NOT NULL DEFAULT -1,
     webauthn_required  boolean      NOT NULL DEFAULT false,
     created_at         timestamptz  NOT NULL DEFAULT now(),
     updated_at         timestamptz  NOT NULL DEFAULT now(),

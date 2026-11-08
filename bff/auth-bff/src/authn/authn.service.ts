@@ -8,7 +8,12 @@
  *
  * Replaces the old service-iam AccountAuthService + tenant-provisioning paths.
  */
-import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
 import { AccountService, type UserView } from "@vxture/service-account";
 import { UserOnboardingService } from "./user-onboarding.service";
@@ -17,7 +22,7 @@ import {
   ActiveContextService,
   type ProvisionedOrg,
 } from "@vxture/service-organization";
-import { PhoneCodeService } from "@vxture/service-sms";
+import { CustomerPhoneCodeService } from "./customer-phone-code.service";
 import { TokenService } from "../token/token.service";
 import { PasswordResetRepository } from "./password-reset.repository";
 import { SessionService } from "./session.service";
@@ -29,6 +34,7 @@ export interface RegisterInput {
   account?: string | null;
   email?: string | null;
   phone: string;
+  code: string;
   password?: string | null;
   name?: string | null;
 }
@@ -62,7 +68,8 @@ export class AuthnService {
     private readonly activeContext: ActiveContextService,
     @Inject(TokenService) private readonly token: TokenService,
     @Inject(SessionService) private readonly session: SessionService,
-    @Inject(PhoneCodeService) private readonly phoneCode: PhoneCodeService,
+    @Inject(CustomerPhoneCodeService)
+    private readonly phoneCode: CustomerPhoneCodeService,
     @Inject(PasswordResetRepository)
     private readonly passwordReset: PasswordResetRepository,
     @Inject(MailService) private readonly mail: MailService,
@@ -70,14 +77,32 @@ export class AuthnService {
     @Inject(VxConfigService) private readonly config: VxConfigService,
   ) {}
 
-  /** §13.1: create User (Argon2id) + personal Org + default Workspace + owner@both. */
+  /**
+   * Verify phone ownership, then create the customer and provision its organization.
+   * @param input - Customer details and the SMS code issued for this phone.
+   * @returns The created customer and its provisioned organization/workspace.
+   * @throws {BadRequestException} When the phone or code is missing.
+   * @throws {UnauthorizedException} When phone verification fails.
+   */
   async register(
     input: RegisterInput,
   ): Promise<{ user: UserView } & ProvisionedOrg> {
+    const phone = typeof input.phone === "string" ? input.phone.trim() : "";
+    const code = typeof input.code === "string" ? input.code.trim() : "";
+    if (!phone || !code) {
+      throw new BadRequestException("phone and verification code are required");
+    }
+    // Enforce proof here as well as at HTTP validation: internal callers must
+    // never create a verified customer using an unverified phone assertion.
+    const verified = await this.phoneCode.verifyCode(phone, code, {
+      scope: "customer-register",
+    });
+    if (!verified) throw new UnauthorizedException("invalid_phone_code");
+
     const user = await this.account.createUser({
       account: input.account ?? null,
       email: input.email ?? null,
-      phone: input.phone,
+      phone,
       password: input.password ?? null,
       name: input.name ?? null,
       phoneVerified: true,
@@ -103,7 +128,7 @@ export class AuthnService {
     code: string,
   ): Promise<{ user: UserView; isNew: boolean }> {
     const verified = await this.phoneCode.verifyCode(phone, code, {
-      scope: "tenant-auth",
+      scope: "customer-login",
     });
     if (!verified) throw new UnauthorizedException("invalid_phone_code");
 
@@ -113,6 +138,8 @@ export class AuthnService {
         id: existing.id,
         account: existing.account,
         email: existing.email,
+        emailVerified: existing.emailVerified ?? false,
+        phoneVerified: existing.phoneVerified ?? false,
         phone: existing.phone,
         name: existing.name,
         status: existing.status,
@@ -127,7 +154,7 @@ export class AuthnService {
 
   /** Send an email login code (reuses the shared email verify-code service). */
   sendEmailCode(email: string): Promise<void> {
-    return this.emailCode.sendCode(email);
+    return this.emailCode.sendCode(email, "customer-login");
   }
 
   /**
@@ -143,22 +170,20 @@ export class AuthnService {
     code: string,
   ): Promise<UserView | null> {
     const normalized = email.toLowerCase().trim();
-    const verified = await this.emailCode.verifyCode(normalized, code);
+    const verified = await this.emailCode.verifyCode(
+      normalized,
+      code,
+      "customer-login",
+    );
     if (!verified) throw new UnauthorizedException("invalid_email_code");
 
     const existing = await this.account.findUserByIdentifier(normalized);
     if (!existing || existing.email?.toLowerCase() !== normalized) {
       return null;
     }
-    return {
-      id: existing.id,
-      account: existing.account,
-      email: existing.email,
-      phone: existing.phone,
-      name: existing.name,
-      status: existing.status,
-      avatarHash: existing.avatarHash,
-    };
+    if (existing.emailLoginDisabled)
+      throw new UnauthorizedException("email_login_disabled");
+    return this.account.markEmailVerified(existing.id, normalized);
   }
 
   /** Establish the central session and issue tokens with the active-org claim context. */

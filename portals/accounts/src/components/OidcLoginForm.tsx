@@ -6,10 +6,11 @@
  * login_challenge + realm, collects credentials, and completes the challenge.
  * Tenant realm offers verification-code (phone OR email, smart-detected — the
  * default/left tab) + password (account/phone/email) via the design-system
- * login panels; operator realm is password-only (no code/social/register). See
+ * login panels; workforce uses phone or password followed by mandatory MFA. See
  * docs/design/identity-platform-idp.md §5 + identity-platform-account.md.
  */
 "use client";
+import { useTranslations } from "next-intl";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -17,7 +18,6 @@ import {
   AuthPasswordLoginPanel,
   AuthPhoneLoginPanel,
   AuthTabs,
-  AuthTurnstile,
   type AuthLoginTab,
 } from "./auth/AuthLogin";
 import {
@@ -40,7 +40,10 @@ import {
   sendPhoneCode,
   type OidcMfaRequired,
 } from "@/api/oidc";
-import { turnstileSiteKey } from "@/lib/turnstile";
+import { accountsRequest } from "@/api/customer-self";
+import type { OidcLoginResult } from "@/api/oidc";
+import { useHumanCaptcha } from "./HumanCaptcha";
+import { CustomerMfaChallenge } from "./CustomerMfaPanel";
 import { OperatorMfaFlow } from "./OperatorMfaFlow";
 import { SocialLoginButtons } from "./SocialLoginButtons";
 
@@ -51,13 +54,8 @@ type Realm = "customer" | "workforce";
 interface OidcLoginFormProps {
   readonly loginChallenge: string;
   readonly realm: Realm;
+  readonly standalone?: boolean;
 }
-
-// site key 与「前端这一半的开关」都收在 lib/turnstile 里:服务端的
-// CF_TURNSTILE_ENABLED 关掉后,前端也要跟着不渲染,否则开关只拄了一半。
-const TENANT_TURNSTILE_KEY = turnstileSiteKey("tenant");
-// 运营面复用既有的 ops/admin Turnstile(运营面),不另起一个 key。
-const OPERATOR_TURNSTILE_KEY = turnstileSiteKey("operator");
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -70,19 +68,16 @@ function detectCodeChannel(value: string): "phone" | "email" | null {
   return null;
 }
 
-export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
+export function OidcLoginForm({
+  loginChallenge,
+  realm,
+  standalone,
+}: OidcLoginFormProps) {
+  const formText = useTranslations("accountsForms");
   const isOperator = realm === "workforce";
-  const turnstileKey = isOperator
-    ? OPERATOR_TURNSTILE_KEY
-    : TENANT_TURNSTILE_KEY;
-  const turnstileAction = isOperator ? "operator_auth" : "tenant_auth";
-
-  // Verification-code login is the primary mode (D-CA); the "phone" tab value now
-  // denotes the unified phone-or-email code tab. Operator realm has no tabs and
-  // is forced to password below.
-  const [mode, setMode] = useState<AuthLoginTab>(
-    isOperator ? "login" : "phone",
-  );
+  const captcha = useHumanCaptcha(realm);
+  // Workforce phone verification uses its isolated provider scheme.
+  const [mode, setMode] = useState<AuthLoginTab>("phone");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   // Phone OR email for the verification-code tab (smart-detected, D-CC).
@@ -95,37 +90,7 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   const [countdown, setCountdown] = useState(0);
   // Whether a code has actually been sent this session — gates the code-login
   // submit button so it can't be clicked before a code exists to check.
-  const [codeSent, setCodeSent] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState("");
-  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
-  // The current token was already consumed by a send-code call (single-use
-  // server-side) — the next resend needs a fresh one, not this one.
-  const [turnstileConsumed, setTurnstileConsumed] = useState(false);
-  // Set while waiting for a fresh token after resetTurnstile() so the code can
-  // actually be (re)sent once it arrives (or once Turnstile degrades to best-effort).
-  const pendingResendRef = useRef(false);
-  // Graceful degradation: if the Turnstile widget can't load/complete (e.g. the
-  // Cloudflare script is unreachable), don't hard-block login — treat it as
-  // best-effort. The server still enforces when CF_TURNSTILE_ENABLED is on.
-  const [turnstileFailed, setTurnstileFailed] = useState(false);
-  // WHY the widget failed - the six-digit Cloudflare code, "script-load-failed",
-  // "unsupported", or "timeout" for the grace window below. Until 2026-08-29
-  // `onError` collapsed all of them into the boolean above and the code was
-  // gone before anyone could read it; a production incident was then diagnosed
-  // by guesswork across several rounds. Shown next to the widget, sent nowhere.
-  const [turnstileErrorCode, setTurnstileErrorCode] = useState<string | null>(
-    null,
-  );
-  // Fallback: if the widget yields neither a token nor an error within a grace
-  // window (script blocked/hung), degrade too so login is never stuck.
-  useEffect(() => {
-    if (!turnstileKey || turnstileToken || turnstileFailed) return undefined;
-    const t = setTimeout(() => {
-      setTurnstileErrorCode("timeout");
-      setTurnstileFailed(true);
-    }, 12000);
-    return () => clearTimeout(t);
-  }, [turnstileKey, turnstileToken, turnstileFailed]);
+  const [sentCodeTarget, setSentCodeTarget] = useState("");
   // Set when an operator first factor succeeds but a second factor is owed.
   const [mfaChallenge, setMfaChallenge] = useState<OidcMfaRequired | null>(
     null,
@@ -142,16 +107,6 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   useEffect(() => {
     rememberRpOrigin(realm);
   }, [realm]);
-
-  // Once a send-code call has consumed the current token, wait for a fresh one
-  // (issued via resetTurnstile()) before actually firing the resend request.
-  useEffect(() => {
-    if (!pendingResendRef.current) return;
-    if (!turnstileToken && !turnstileFailed) return;
-    pendingResendRef.current = false;
-    void doSendCode();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turnstileToken, turnstileFailed]);
 
   // Cross-tab session detection: when the user logs in via another RP while this
   // login page is open, the vx_sid cookie appears on accounts.vxture.com. On
@@ -188,22 +143,18 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     };
   }, [loginChallenge]);
 
-  const resetTurnstile = () => {
-    if (!turnstileKey) return;
-    setTurnstileToken("");
-    setTurnstileResetSignal((v) => v + 1);
-  };
-
   const switchMode = (m: AuthLoginTab) => {
     setMode(m);
     setErrors({});
+    captcha.reset();
   };
 
   // Common gates shared by both submit paths.
   const commonError = (): string | null => {
-    if (turnstileKey && !turnstileToken && !turnstileFailed)
-      return "请先完成人机验证";
-    if (!acceptedTerms) return "请先阅读并同意用户协议和隐私政策";
+    if (!captcha.ready)
+      return formText("complete_the_human_verification_first");
+    if (!acceptedTerms)
+      return formText("please_accept_the_terms_and_privacy_policy");
     return null;
   };
 
@@ -212,6 +163,10 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   // back to an operator app; with none known they are told to restart there —
   // never sent to the tenant side (website / console).
   const redirectToReturnUrl = () => {
+    if (standalone) {
+      window.location.assign(isOperator ? "/workforce/login" : "/login");
+      return;
+    }
     if (isOperator) {
       const origin = resolveRealmReturnOrigin("workforce");
       if (origin) {
@@ -228,8 +183,8 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   const handlePasswordSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const next: Record<string, string> = {};
-    if (!identifier.trim()) next.identifier = "请输入账号";
-    if (!password) next.password = "请输入密码";
+    if (!identifier.trim()) next.identifier = formText("enter_your_account");
+    if (!password) next.password = formText("enter_your_password");
     const c = commonError();
     if (c) next.form = c;
     setErrors(next);
@@ -241,7 +196,7 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
         loginChallenge,
         identifier: identifier.trim(),
         password,
-        ...(turnstileToken ? { turnstileToken } : {}),
+        ...(captcha.token ? { captchaToken: captcha.token } : {}),
       });
       if ("status" in result) {
         // Operator owes a second factor → hand off to the MFA continuation.
@@ -255,57 +210,62 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
         return;
       }
       setErrors({
-        form: error instanceof Error ? error.message : "登录失败，请重试",
+        form:
+          error instanceof Error
+            ? error.message
+            : formText("unable_to_sign_in_please_try_again"),
       });
-      resetTurnstile();
+      captcha.reset();
       setLoading(false);
     }
   };
 
-  // Actually calls the send-code API once a usable Turnstile token is in hand
-  // (either the page-load token on the first send, or a freshly re-verified
-  // one on a resend — see handleSendCode/the pending-resend effect above).
+  // Every send attempt spends its local human-verification proof.
   const doSendCode = async () => {
     const channel = detectCodeChannel(codeId);
     if (!channel) return;
 
     setSending(true);
     try {
-      if (channel === "phone") {
-        await sendPhoneCode(codeId.trim(), turnstileToken);
+      if (isOperator) {
+        await accountsRequest("/oidc/accounts/workforce/send-code", {
+          method: "POST",
+          body: JSON.stringify({
+            login_challenge: loginChallenge,
+            phone: codeId.trim(),
+            captcha_token: captcha.token,
+          }),
+        });
+      } else if (channel === "phone") {
+        await sendPhoneCode(codeId.trim(), captcha.token);
       } else {
-        await sendEmailCode(codeId.trim(), turnstileToken);
+        await sendEmailCode(codeId.trim(), captcha.token);
       }
       setCountdown(60);
-      setCodeSent(true);
-      // This token is now spent server-side; only a resend after it expires
-      // needs a new one, so don't force a visible re-verification yet.
-      setTurnstileConsumed(true);
+      setSentCodeTarget(codeId.trim());
     } catch (error) {
-      setErrors({ form: error instanceof Error ? error.message : "发送失败" });
+      setErrors({
+        form:
+          error instanceof Error ? error.message : formText("unable_to_send"),
+      });
     } finally {
       setSending(false);
+      captcha.reset();
     }
   };
 
   const handleSendCode = async () => {
     const next: Record<string, string> = {};
     const channel = detectCodeChannel(codeId);
-    if (!channel) next.phone = "请输入有效的手机号或邮箱";
-    if (turnstileKey && !turnstileToken && !turnstileFailed)
-      next.form = "请先完成人机验证";
+    if (!channel || (isOperator && channel !== "phone"))
+      next.phone = isOperator
+        ? formText("enter_a_valid_phone_number")
+        : formText("enter_a_valid_phone_number_or_email");
+    if (!captcha.ready)
+      next.form = formText("complete_the_human_verification_first");
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    if (turnstileConsumed && turnstileKey) {
-      // Resending: the held token was already used for the previous send —
-      // get a fresh one (this is the only case Turnstile re-verifies).
-      setTurnstileConsumed(false);
-      resetTurnstile();
-      pendingResendRef.current = true;
-      setSending(true);
-      return;
-    }
     await doSendCode();
   };
 
@@ -313,16 +273,34 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     event.preventDefault();
     const next: Record<string, string> = {};
     const channel = detectCodeChannel(codeId);
-    if (!channel) next.phone = "请输入有效的手机号或邮箱";
-    if (code.trim().length !== 6) next.code = "请输入 6 位验证码";
-    if (!acceptedTerms) next.form = "请先阅读并同意用户协议和隐私政策";
+    if (!channel || (isOperator && channel !== "phone"))
+      next.phone = isOperator
+        ? formText("enter_a_valid_phone_number")
+        : formText("enter_a_valid_phone_number_or_email");
+    if (code.trim().length !== 6)
+      next.code = formText("enter_the_6_digit_code");
+    if (!sentCodeTarget || sentCodeTarget !== codeId.trim())
+      next.form = formText("request_a_verification_code_first");
+    if (!acceptedTerms)
+      next.form = formText("please_accept_the_terms_and_privacy_policy");
     setErrors(next);
     if (Object.keys(next).length > 0 || !channel) return;
 
     setLoading(true);
     try {
-      const { redirectTo } =
-        channel === "phone"
+      const result = isOperator
+        ? await accountsRequest<OidcLoginResult>(
+            "/oidc/authorize/login/workforce-phone",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                login_challenge: loginChallenge,
+                phone: codeId.trim(),
+                code: code.trim(),
+              }),
+            },
+          )
+        : channel === "phone"
           ? await completeOidcLoginWithPhone({
               loginChallenge,
               phone: codeId.trim(),
@@ -333,14 +311,21 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
               email: codeId.trim(),
               code: code.trim(),
             });
-      window.location.assign(redirectTo);
+      if ("status" in result) {
+        setMfaChallenge(result);
+        return;
+      }
+      window.location.assign(result.redirectTo);
     } catch (error) {
       if (error instanceof SessionExpiredError) {
         redirectToReturnUrl();
         return;
       }
       setErrors({
-        form: error instanceof Error ? error.message : "登录失败，请重试",
+        form:
+          error instanceof Error
+            ? error.message
+            : formText("unable_to_sign_in_please_try_again"),
       });
       setLoading(false);
     }
@@ -348,6 +333,8 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
 
   // Operator second-factor continuation replaces the login form entirely.
   if (mfaChallenge) {
+    if (!isOperator)
+      return <CustomerMfaChallenge token={mfaChallenge.mfaToken} />;
     return (
       <OperatorMfaFlow
         mfaToken={mfaChallenge.mfaToken}
@@ -358,39 +345,8 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     );
   }
 
-  const turnstileNode = turnstileKey ? (
-    <AuthTurnstile
-      siteKey={turnstileKey}
-      action={turnstileAction}
-      resetSignal={turnstileResetSignal}
-      onToken={(token) => setTurnstileToken(token)}
-      onExpire={() => setTurnstileToken("")}
-      onError={(code) => {
-        setTurnstileErrorCode(code ?? "unknown");
-        setTurnstileFailed(true);
-      }}
-    />
-  ) : null;
-  /* The degraded state used to be silent: the form let you submit and the
-     server then refused with a bare 401. Now the code is on screen, so a user
-     reporting "验证故障" can read it out instead of describing a spinner. */
-  const turnstileSlot = turnstileNode ? (
-    <>
-      {turnstileNode}
-      {turnstileFailed ? (
-        <p
-          className="text-center text-sm text-warning"
-          data-testid="turnstile-degraded"
-        >
-          {`人机验证未完成（${turnstileErrorCode ?? "unknown"}），提交可能被拒绝`}
-        </p>
-      ) : null}
-    </>
-  ) : null;
-
-  // Tenant realm offers code + password tabs (verification-code first, D-CA);
-  // operator is password-only.
-  const tabsNode = isOperator ? undefined : (
+  // Both entry points share stable code/password tab geometry.
+  const tabsNode = (
     <AuthTabs active={mode} onChange={switchMode} order={["phone", "login"]} />
   );
 
@@ -400,97 +356,112 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     <SocialLoginButtons loginChallenge={loginChallenge} />
   );
 
-  const turnstileReady =
-    Boolean(turnstileToken) || turnstileFailed || !turnstileKey;
-  // Code-login submit never re-checks Turnstile server-side (D-CA), but the
-  // button itself still waits for a code to have actually been sent + a token
-  // to have been available at some point, matching the password path's gate.
   const codeCanSubmit =
-    codeSent &&
+    sentCodeTarget === codeId.trim() &&
+    Boolean(sentCodeTarget) &&
     Boolean(detectCodeChannel(codeId)) &&
     code.trim().length === 6 &&
-    acceptedTerms &&
-    turnstileReady;
+    acceptedTerms;
   const passwordCanSubmit =
     identifier.trim().length > 0 &&
     password.length > 0 &&
     acceptedTerms &&
-    turnstileReady;
+    captcha.ready;
 
   return (
-    <AuthLoginTemplate
-      header={<AccountsAuthHeader />}
-      footer={<AccountsAuthFooter />}
-      // 标题此前是 "Welcome to Vxture"，一句英文孤零零挂在一整页中文上面。
-      // 副标题写的是"登录之后会到哪里"——登录页最该回答的问题就是这个，
-      // 而两个 realm 的去向不是同一个地方。
-      title={isOperator ? "运营登录" : "欢迎回来"}
-      description={
+    <div
+      className={
         isOperator
-          ? "运营账号仅限内部使用，登录需通过二次验证。"
-          : "登录后进入控制台，管理你的模型、凭据与配额。"
+          ? "accounts-login-page accounts-workforce-page"
+          : "accounts-login-page"
       }
-      visual={ACCOUNTS_AUTH_VISUAL}
-      useLoginLayout
     >
-      {!isOperator && mode === "phone" ? (
-        <AuthPhoneLoginPanel
-          tabs={tabsNode}
-          phone={codeId}
-          code={code}
-          agreementChecked={acceptedTerms}
-          errors={errors}
-          loading={loading}
-          codeSending={sending}
-          codeCountdown={countdown}
-          sendCodeDisabled={countdown > 0 || sending}
-          turnstile={turnstileSlot}
-          social={socialNode}
-          showForgot={false}
-          submitLabel="登录 / 注册"
-          primaryDisabled={!codeCanSubmit}
-          phoneLabel="手机号 / 邮箱"
-          phonePlaceholder="请输入手机号或邮箱"
-          phoneInputType="text"
-          phoneIcon="user"
-          phoneAutoComplete="username"
-          options={{ showRemember: false }}
-          onChangePhone={setCodeId}
-          onChangeCode={setCode}
-          onSendCode={handleSendCode}
-          onAgreementChange={setAcceptedTerms}
-          onSubmit={handleCodeSubmit}
-        />
-      ) : (
-        <AuthPasswordLoginPanel
-          tabs={tabsNode}
-          identifier={identifier}
-          password={password}
-          agreementChecked={acceptedTerms}
-          errors={errors}
-          loading={loading}
-          turnstile={turnstileSlot}
-          social={socialNode}
-          showForgot={!isOperator}
-          primaryDisabled={!passwordCanSubmit}
-          // 标签与占位符要说同一件事：面板缺省标签是"邮箱"，而这里接受的是
-          // 账号/手机号/邮箱三种——标签写"账号"，具体形态由占位符举例。
-          identifierLabel={isOperator ? "运营账号" : "账号"}
-          identifierPlaceholder={
-            isOperator ? "请输入运营账号" : "邮箱 / 用户名 / 手机号"
-          }
-          options={{ showRemember: false }}
-          onChangeIdentifier={setIdentifier}
-          onChangePassword={setPassword}
-          onAgreementChange={setAcceptedTerms}
-          onForgot={
-            isOperator
-              ? undefined
-              : () => window.location.assign("/forgot-password")
-          }
-          onSubmit={handlePasswordSubmit}
-        />
-      )}
-    </AuthLoginTemplate>
+      <AuthLoginTemplate
+        header={<AccountsAuthHeader />}
+        footer={<AccountsAuthFooter />}
+        title={
+          isOperator
+            ? formText("platform_operations")
+            : formText("sign_in_to_vxture")
+        }
+        visual={ACCOUNTS_AUTH_VISUAL}
+        useLoginLayout
+      >
+        {mode === "phone" ? (
+          <AuthPhoneLoginPanel
+            tabs={tabsNode}
+            phone={codeId}
+            code={code}
+            agreementChecked={acceptedTerms}
+            errors={errors}
+            loading={loading}
+            codeSending={sending}
+            codeCountdown={countdown}
+            sendCodeDisabled={countdown > 0 || sending || !captcha.ready}
+            verification={captcha.node}
+            social={socialNode}
+            showForgot={false}
+            submitLabel={
+              isOperator ? formText("continue") : formText("sign_in_register")
+            }
+            primaryDisabled={!codeCanSubmit}
+            phoneLabel={
+              isOperator ? formText("phone") : formText("phone_email")
+            }
+            phonePlaceholder={
+              isOperator
+                ? formText("enter_your_phone_number")
+                : formText("enter_your_phone_number_or_email")
+            }
+            phoneInputType="text"
+            phoneIcon="user"
+            phoneAutoComplete="username"
+            options={{ showRemember: false }}
+            onChangePhone={(value) => {
+              setCodeId(value);
+              setCode("");
+              setSentCodeTarget("");
+            }}
+            onChangeCode={setCode}
+            onSendCode={handleSendCode}
+            onAgreementChange={setAcceptedTerms}
+            onSubmit={handleCodeSubmit}
+          />
+        ) : (
+          <AuthPasswordLoginPanel
+            tabs={tabsNode}
+            identifier={identifier}
+            password={password}
+            agreementChecked={acceptedTerms}
+            errors={errors}
+            loading={loading}
+            verification={captcha.node}
+            social={socialNode}
+            showForgot={!isOperator}
+            primaryDisabled={!passwordCanSubmit}
+            // 标签与占位符要说同一件事：面板缺省标签是"邮箱"，而这里接受的是
+            // 账号/手机号/邮箱三种——标签写"账号"，具体形态由占位符举例。
+            identifierLabel={
+              isOperator ? formText("operator_account") : formText("account")
+            }
+            identifierPlaceholder={
+              isOperator
+                ? formText("enter_your_operator_account")
+                : formText("email_account_phone")
+            }
+            options={{ showRemember: false }}
+            onChangeIdentifier={setIdentifier}
+            onChangePassword={setPassword}
+            onAgreementChange={setAcceptedTerms}
+            onForgot={
+              isOperator
+                ? undefined
+                : () => window.location.assign("/forgot-password")
+            }
+            onSubmit={handlePasswordSubmit}
+          />
+        )}
+      </AuthLoginTemplate>
+    </div>
   );
 }

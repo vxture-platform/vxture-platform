@@ -18,7 +18,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import { extractClientIp } from "@vxture/core-utils";
-import { PhoneCodeService } from "@vxture/service-sms";
+import { CustomerPhoneCodeService } from "./customer-phone-code.service";
 import { AuthnService } from "./authn.service";
 import { TenantLoginGuard } from "./tenant-login-guard.service";
 
@@ -26,14 +26,15 @@ import { TenantLoginGuard } from "./tenant-login-guard.service";
 export class AuthnController {
   constructor(
     @Inject(AuthnService) private readonly authn: AuthnService,
-    @Inject(PhoneCodeService) private readonly phoneCode: PhoneCodeService,
+    @Inject(CustomerPhoneCodeService)
+    private readonly phoneCode: CustomerPhoneCodeService,
     @Inject(TenantLoginGuard) private readonly tenantGuard: TenantLoginGuard,
   ) {}
 
   /**
    * Register a user (§13.1): creates the User (Argon2id when a password is given)
    * + a personal Org + default Workspace + owner membership at both levels.
-   * Phone is the mandatory verified anchor.
+   * Phone ownership must be verified before any account is created.
    */
   @Post("register")
   @HttpCode(HttpStatus.OK)
@@ -43,6 +44,7 @@ export class AuthnController {
       account?: string;
       email?: string;
       phone?: string;
+      code?: string;
       password?: string;
       name?: string;
     },
@@ -52,13 +54,17 @@ export class AuthnController {
     orgId: string;
     workspaceId: string;
   }> {
-    if (!body.phone) {
+    if (typeof body.phone !== "string" || !body.phone.trim()) {
       throw new BadRequestException("phone is required");
+    }
+    if (typeof body.code !== "string" || !body.code.trim()) {
+      throw new BadRequestException("phone verification code is required");
     }
     const result = await this.authn.register({
       account: body.account ?? null,
       email: body.email ?? null,
       phone: body.phone,
+      code: body.code,
       password: body.password ?? null,
       name: body.name ?? null,
     });
@@ -71,30 +77,50 @@ export class AuthnController {
   }
 
   /**
-   * Send an SMS verification code for phone-code login (scope must match
-   * verifyCode). Turnstile-gated (tenant surface, env-gated via
-   * CF_TURNSTILE_ENABLED) ahead of the per-phone send rate-limit in
-   * PhoneCodeService — the SMS-bombing gate.
+   * Send a customer login code after consuming a one-time human-verification proof.
    */
   @Post("send-phone-code")
   @HttpCode(HttpStatus.OK)
   async sendPhoneCode(
-    @Body() body: { phone?: string; turnstile_token?: string },
+    @Body() body: { phone?: string; captcha_token?: string },
     @Req() req: Request,
   ): Promise<{ sent: true }> {
-    if (!body.phone) {
+    if (
+      typeof body?.phone !== "string" ||
+      !/^1[3-9]\d{9}$/.test(body.phone.trim())
+    ) {
       throw new BadRequestException("phone is required");
     }
-    await this.tenantGuard.verifyTurnstile(
-      body.turnstile_token,
+    await this.tenantGuard.verifyHuman(
+      body.captcha_token,
       extractClientIp(req),
     );
-    await this.phoneCode.sendCode(body.phone, { scope: "tenant-auth" });
+    await this.phoneCode.sendCode(body.phone, { scope: "customer-login" });
+    return { sent: true };
+  }
+
+  /** Issue an OTP exclusively for explicit customer registration. */
+  @Post("register/send-phone-code")
+  @HttpCode(HttpStatus.OK)
+  async sendRegistrationCode(
+    @Body() body: { phone?: string; captcha_token?: string },
+    @Req() req: Request,
+  ): Promise<{ sent: true }> {
+    if (
+      typeof body?.phone !== "string" ||
+      !/^1[3-9]\d{9}$/.test(body.phone.trim())
+    )
+      throw new BadRequestException("invalid_phone");
+    await this.tenantGuard.verifyHuman(
+      body.captcha_token,
+      extractClientIp(req),
+    );
+    await this.phoneCode.sendCode(body.phone, { scope: "customer-register" });
     return { sent: true };
   }
 
   /**
-   * Send an email verification code for email-code login (D-CC). Same Turnstile
+   * Send an email verification code for email-code login (D-CC). Same human-verification
    * gate as the SMS path, ahead of the per-email send rate-limit in
    * VerifyCodeService. Email-code login is login-only (D-CB) — issuing a code
    * here does not create an account.
@@ -102,14 +128,17 @@ export class AuthnController {
   @Post("send-email-code")
   @HttpCode(HttpStatus.OK)
   async sendEmailCode(
-    @Body() body: { email?: string; turnstile_token?: string },
+    @Body() body: { email?: string; captcha_token?: string },
     @Req() req: Request,
   ): Promise<{ sent: true }> {
-    if (!body.email || !body.email.includes("@")) {
+    if (
+      typeof body?.email !== "string" ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())
+    ) {
       throw new BadRequestException("a valid email is required");
     }
-    await this.tenantGuard.verifyTurnstile(
-      body.turnstile_token,
+    await this.tenantGuard.verifyHuman(
+      body.captcha_token,
       extractClientIp(req),
     );
     await this.authn.sendEmailCode(body.email);

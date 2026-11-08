@@ -73,6 +73,10 @@ export {
 } from "./avatar/image-sniff";
 
 export type {
+  CustomerDeletionTransactionResult,
+  CustomerSecurityOperation,
+  CustomerSecuritySnapshot,
+  CustomerSecurityMutation,
   UserView,
   UserCredentialRecord,
   CreateUserInput,
@@ -90,3 +94,14 @@ export type {
   AdminStatusChange,
   SignInDeviceHistory,
 } from "./types/account.types";
+
+export { AccountLifecycleRepository } from "./repository/account-lifecycle.repository";
+export type {
+  CustomerLifecycleOperation,
+  CustomerLifecyclePayload,
+} from "./repository/account-lifecycle.repository";
+
+export {
+  CustomerMfaRepository,
+  type CustomerFactor,
+} from "./repository/customer-mfa.repository";

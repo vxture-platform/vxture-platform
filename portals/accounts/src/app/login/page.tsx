@@ -1,14 +1,12 @@
 /**
- * page.tsx - /login (OIDC interactive login)
+ * Realm-specific interactive login entry.
  * @package @vxture/accounts
- *
- * The IdP redirects unauthenticated /authorize here as
- * /login?login_challenge=…&realm=customer|workforce. Reads those, then renders the
- * realm-driven login form. A missing login_challenge means the page was opened
- * out of band — show a friendly notice instead of a broken form.
+ * @layer Presentation
+ * @category page
+ * @author AI-Generated
+ * @date 2026-11-06
  */
-import { AutoReturnToApp } from "@/components/AutoReturnToApp";
-import { OidcLoginForm } from "@/components/OidcLoginForm";
+import { LoginEntry } from "@/components/LoginEntry";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +16,7 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const loginChallenge =
+  const challenge =
     typeof params.login_challenge === "string" ? params.login_challenge : "";
-  const realm = params.realm === "workforce" ? "workforce" : "customer";
-
-  if (!loginChallenge) {
-    return <AutoReturnToApp />;
-  }
-
-  return <OidcLoginForm loginChallenge={loginChallenge} realm={realm} />;
+  return <LoginEntry loginChallenge={challenge} entryRealm="customer" />;
 }

@@ -14,12 +14,14 @@ import {
   Delete,
   Get,
   HttpCode,
+  Header,
   HttpStatus,
   Inject,
   Param,
   Patch,
   Post,
   Req,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
 import type {
@@ -28,9 +30,15 @@ import type {
 } from "@simplewebauthn/server";
 import type { OperatorWebauthnCredentialDetail } from "@vxture/service-iam";
 import { OperatorWebauthnService } from "../oidc/operator-webauthn.service";
+import { OperatorSelfGuard } from "../authn/operator-self.guard";
 import { SID_COOKIE_NAME as SID_COOKIE } from "../authn/cookie";
 
+// ============================================================================
+// Workforce account self-service
+// ============================================================================
+
 @Controller()
+@UseGuards(OperatorSelfGuard)
 export class OperatorWebauthnRouter {
   constructor(
     @Inject(OperatorWebauthnService)
@@ -39,6 +47,7 @@ export class OperatorWebauthnRouter {
 
   /** Begin passkey registration → options JSON (challenge parked server-side). */
   @Post("oidc/operator/webauthn/register/options")
+  @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async options(
     @Req() req: Request,
@@ -48,12 +57,13 @@ export class OperatorWebauthnRouter {
 
   /** Finish passkey registration → verify attestation + persist the credential. */
   @Post("oidc/operator/webauthn/register/verify")
+  @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async verify(
     @Body() body: { response?: RegistrationResponseJSON },
     @Req() req: Request,
   ): Promise<{ credentialId: string }> {
-    if (!body.response) {
+    if (!body?.response) {
       throw new BadRequestException("invalid_request");
     }
     return this.webauthn.verifyRegistration(operatorSid(req), body.response);
@@ -61,6 +71,7 @@ export class OperatorWebauthnRouter {
 
   /** List the authenticated operator's passkeys (management UI). */
   @Get("oidc/operator/webauthn/credentials")
+  @Header("Cache-Control", "no-store")
   async list(
     @Req() req: Request,
   ): Promise<{ credentials: OperatorWebauthnCredentialDetail[] }> {
@@ -71,13 +82,14 @@ export class OperatorWebauthnRouter {
 
   /** Rename a passkey. */
   @Patch("oidc/operator/webauthn/credentials/:id")
+  @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async rename(
     @Param("id") id: string,
     @Body() body: { label?: string },
     @Req() req: Request,
   ): Promise<{ ok: true }> {
-    if (!body.label) {
+    if (!body?.label) {
       throw new BadRequestException("invalid_request");
     }
     await this.webauthn.renameCredential(operatorSid(req), id, body.label);
@@ -86,6 +98,7 @@ export class OperatorWebauthnRouter {
 
   /** Revoke a passkey (anti-lockout enforced for webauthn-required operators). */
   @Delete("oidc/operator/webauthn/credentials/:id")
+  @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async revoke(
     @Param("id") id: string,
@@ -95,6 +108,10 @@ export class OperatorWebauthnRouter {
     return { ok: true };
   }
 }
+
+// ============================================================================
+// Cookie selection
+// ============================================================================
 
 /** Read the operator central-session cookie from the request. */
 function operatorSid(req: Request): string | undefined {

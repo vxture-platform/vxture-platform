@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
 import { toE164 } from "@vxture/core-utils";
 import { ACCOUNT_PG_POOL } from "../tokens";
+import { ACCOUNT_DELETION_RETENTION_DAYS } from "../types/account.types";
 import type {
   AvatarRecord,
   BackfillProfileInput,
@@ -17,6 +18,9 @@ import type {
   UpdateProfileInput,
   UserCredentialRecord,
   UserReadRepository,
+  CustomerSecurityMutation,
+  CustomerDeletionTransactionResult,
+  CustomerSecuritySnapshot,
   UserView,
 } from "../types/account.types";
 
@@ -36,6 +40,7 @@ interface UserRow {
   language: string | null;
   account_changed_at: string | null;
   account_login_disabled: boolean | null;
+  email_login_disabled: boolean | null;
   user_no: string | null;
   created_at: string | null;
   has_password: boolean | null;
@@ -61,7 +66,7 @@ const USER_VIEW_SELECT_SQL = `select u.id, u.account, u.email, u.email_verified_
               u.phone, u.phone_verified_at::text as phone_verified_at,
               p.display_name as name, u.status, p.avatar_hash, p.bio, p.gender, p.timezone, p.language,
               u.account_changed_at::text as account_changed_at,
-              u.account_login_disabled,
+              u.account_login_disabled, u.email_login_disabled,
               u.user_no::text as user_no, u.created_at::text as created_at,
               (c.password_hash is not null) as has_password,
               u.deletion_requested_at::text as deletion_requested_at
@@ -73,11 +78,14 @@ interface UserCredentialRow {
   id: string;
   account: string;
   email: string | null;
+  email_verified_at: string | null;
+  phone_verified_at: string | null;
   phone: string;
   name: string | null;
   status: string;
   avatar_hash: string | null;
   account_login_disabled: boolean | null;
+  email_login_disabled: boolean | null;
   password_hash: string | null;
 }
 
@@ -89,6 +97,18 @@ interface UserCredentialRow {
 @Injectable()
 export class PgUserRepository implements UserReadRepository {
   constructor(@Inject(ACCOUNT_PG_POOL) private readonly pool: Pool) {}
+
+  /** Include inactive accounts because their names remain reserved. */
+  async isAccountAvailable(
+    account: string,
+    excludeUserId: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      "select 1 from account.users where lower(account) = lower($1) and id <> $2 limit 1",
+      [account, excludeUserId],
+    );
+    return result.rows.length === 0;
+  }
 
   async createUser(record: CreateUserRecord): Promise<UserView> {
     const id = crypto.randomUUID();
@@ -217,7 +237,7 @@ export class PgUserRepository implements UserReadRepository {
     // Phone may be presented in different formats; match canonical E.164 too.
     const e164 = toE164(raw);
     const result = await this.pool.query<UserCredentialRow>(
-      `select u.id, u.account, u.email, u.phone, p.display_name as name, u.status, p.avatar_hash, u.account_login_disabled, c.password_hash
+      `select u.id, u.account, u.email, u.email_verified_at::text as email_verified_at, u.phone_verified_at::text as phone_verified_at, u.phone, p.display_name as name, u.status, p.avatar_hash, u.account_login_disabled, u.email_login_disabled, c.password_hash
          from account.users u
          left join credential.user_credentials c on c.user_id = u.id
          left join account.user_profiles p on p.user_id = u.id
@@ -294,7 +314,7 @@ export class PgUserRepository implements UserReadRepository {
     userId: string,
   ): Promise<UserCredentialRecord | null> {
     const result = await this.pool.query<UserCredentialRow>(
-      `select u.id, u.account, u.email, u.phone, p.display_name as name, u.status, p.avatar_hash, u.account_login_disabled, c.password_hash
+      `select u.id, u.account, u.email, u.email_verified_at::text as email_verified_at, u.phone_verified_at::text as phone_verified_at, u.phone, p.display_name as name, u.status, p.avatar_hash, u.account_login_disabled, u.email_login_disabled, c.password_hash
          from account.users u
          left join credential.user_credentials c on c.user_id = u.id
          left join account.user_profiles p on p.user_id = u.id
@@ -305,16 +325,218 @@ export class PgUserRepository implements UserReadRepository {
     return mapCredential(result.rows[0]);
   }
 
-  async setPassword(userId: string, passwordHash: string): Promise<void> {
-    await this.pool.query(
-      `insert into credential.user_credentials (user_id, password_hash, created_at, updated_at)
-       values ($1, $2, now(), now())
+  /** Apply a proof-bound mutation under an account row lock, including durable logout. */
+  async applySelfSecurity(
+    userId: string,
+    mutation: CustomerSecurityMutation,
+  ): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<{
+        phone: string;
+        email: string | null;
+        account: string;
+        phone_verified: boolean;
+        email_verified: boolean;
+        account_login_disabled: boolean;
+        email_login_disabled: boolean;
+        password_hash: string | null;
+        account_changed_at: Date | null;
+      }>(
+        `select u.phone, u.email, u.account, u.phone_verified_at is not null as phone_verified,
+          u.email_verified_at is not null as email_verified, u.account_login_disabled, u.email_login_disabled,
+          c.password_hash, u.account_changed_at
+        from account.users u left join credential.user_credentials c on c.user_id = u.id
+        where u.id = $1 and u.status = 'active' and u.deleted_at is null for update of u`,
+        [userId],
+      );
+      const row = result.rows[0];
+      const expected = mutation.snapshot;
+      if (
+        !row ||
+        row.phone !== expected.phone ||
+        row.email !== expected.email ||
+        row.account !== expected.account ||
+        row.phone_verified !== expected.phoneVerified ||
+        row.email_verified !== expected.emailVerified ||
+        Boolean(row.account_login_disabled) !== expected.accountLoginDisabled ||
+        Boolean(row.email_login_disabled) !==
+          Boolean(expected.emailLoginDisabled) ||
+        Boolean(row.password_hash) !== expected.hasPassword ||
+        row.password_hash !== mutation.expectedPasswordHash
+      ) {
+        throw new ConflictException("security_proof_stale");
+      }
+      const { operation, target } = mutation;
+      if (operation === "phone-change") {
+        await client.query(
+          "update account.users set phone=$2, phone_verified_at=now(), updated_at=now() where id=$1",
+          [userId, toE164(target) ?? target],
+        );
+      } else if (operation === "email-change") {
+        await client.query(
+          "update account.users set email=$2, email_verified_at=now(), updated_at=now() where id=$1",
+          [userId, target],
+        );
+      } else if (operation === "phone-verify" || operation === "email-verify") {
+        const column =
+          operation === "phone-verify"
+            ? "phone_verified_at"
+            : "email_verified_at";
+        await client.query(
+          `update account.users set ${column}=coalesce(${column},now()), updated_at=now() where id=$1`,
+          [userId],
+        );
+      } else if (operation === "password") {
+        if (!mutation.passwordHash)
+          throw new ConflictException("password_required");
+        const credential = await client.query(
+          `insert into credential.user_credentials (user_id,password_hash,password_changed_at,created_at,updated_at)
+          values ($1,$2,now(),now(),now()) on conflict (user_id) do update set password_hash=$2,password_changed_at=now(),updated_at=now()
+          where credential.user_credentials.password_hash is not distinct from $3 returning user_id`,
+          [userId, mutation.passwordHash, mutation.expectedPasswordHash],
+        );
+        if (credential.rowCount !== 1)
+          throw new ConflictException("security_proof_stale");
+      } else if (operation === "email-login") {
+        if (!["true", "false"].includes(target) || !row.phone_verified)
+          throw new ConflictException("verified_phone_required");
+        if (target === "true" && !row.email_verified)
+          throw new ConflictException("verified_email_required");
+        await client.query(
+          "update account.users set email_login_disabled=$2,updated_at=now() where id=$1",
+          [userId, target === "false"],
+        );
+      } else if (operation === "username") {
+        if (
+          row.account_changed_at &&
+          Date.now() - new Date(row.account_changed_at).getTime() <
+            30 * 86400000
+        )
+          throw new ConflictException("username_change_cooldown");
+        await client.query(
+          "update account.users set account=$2, account_changed_at=now(), updated_at=now() where id=$1",
+          [userId, target],
+        );
+      } else if (
+        operation === "identity-unlink" ||
+        operation === "account-login"
+      ) {
+        const identities = await client.query<{
+          provider: string;
+          provider_subject: string;
+        }>(
+          "select provider, provider_subject from identity.identities where user_id=$1 for update",
+          [userId],
+        );
+        const remaining = identities.rows.filter(
+          (item) => operation !== "identity-unlink" || item.provider !== target,
+        );
+        const passwordAvailable =
+          Boolean(row.password_hash) &&
+          (operation === "account-login"
+            ? target === "true"
+            : !row.account_login_disabled);
+        if (
+          !row.phone_verified &&
+          !(row.email_verified && !row.email_login_disabled) &&
+          !passwordAvailable &&
+          !remaining.length
+        )
+          throw new ConflictException("cannot_remove_last_login_method");
+        if (operation === "identity-unlink") {
+          const subjects = identities.rows
+            .filter((item) => item.provider === target)
+            .map((item) => item.provider_subject)
+            .sort();
+          if (
+            JSON.stringify(subjects) !==
+            JSON.stringify(expected.identitySubjects ?? [])
+          )
+            throw new ConflictException("security_proof_stale");
+          if (!identities.rows.some((item) => item.provider === target))
+            throw new ConflictException("identity_not_bound");
+          await client.query(
+            "delete from identity.identities where user_id=$1 and provider=$2",
+            [userId, target],
+          );
+        } else {
+          if (target === "true" && !row.password_hash)
+            throw new ConflictException("password_required");
+          await client.query(
+            "update account.users set account_login_disabled=$2, updated_at=now() where id=$1",
+            [userId, target === "false"],
+          );
+        }
+      } else throw new ConflictException("invalid_security_operation");
+      await client.query(
+        "update session.auth_sessions set status='revoked',revoked_at=now() where user_id=$1 and realm='customer' and status='active'",
+        [userId],
+      );
+      await client.query(
+        "update session.refresh_tokens set status='revoked' where user_id=$1 and status='active'",
+        [userId],
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      if (isUniqueViolation(error))
+        throw new ConflictException("security_target_in_use");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Update a customer credential and revoke its login state in one transaction.
+   * @param userId - Customer account owning the credential.
+   * @param passwordHash - Argon2id password hash.
+   * @param revokeSessions - False only for first-time password setup.
+   * @returns When the credential and any required revocations are committed.
+   * @throws {Error} When any write fails; all writes are rolled back.
+   */
+  async setPassword(
+    userId: string,
+    passwordHash: string,
+    revokeSessions = true,
+  ): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const updated = await client.query(
+        `insert into credential.user_credentials (user_id, password_hash, password_changed_at, created_at, updated_at)
+       values ($1, $2, now(), now(), now())
        on conflict (user_id) do update set
          password_hash = excluded.password_hash,
          password_changed_at = now(),
-         updated_at = now()`,
-      [userId, passwordHash],
-    );
+         updated_at = now()
+       where $3::boolean or credential.user_credentials.password_hash is null
+       returning user_id`,
+        [userId, passwordHash, revokeSessions],
+      );
+      if (updated.rowCount !== 1)
+        throw new ConflictException("password_already_set");
+      if (revokeSessions) {
+        await client.query(
+          `update session.auth_sessions set status = 'revoked', revoked_at = now()
+            where user_id = $1 and realm = 'customer' and status = 'active'`,
+          [userId],
+        );
+        await client.query(
+          `update session.refresh_tokens set status = 'revoked'
+            where user_id = $1 and status = 'active'`,
+          [userId],
+        );
+      }
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async updateProfile(
@@ -328,7 +550,10 @@ export class PgUserRepository implements UserReadRepository {
       // email stays on the core auth table.
       await client.query(
         `update account.users
-            set email = coalesce($2, email), updated_at = now()
+            set email_verified_at = case
+                  when $2::text is not null and email is distinct from $2 then null
+                  else email_verified_at end,
+                email = coalesce($2, email), updated_at = now()
           where id = $1 and deleted_at is null`,
         [userId, email],
       );
@@ -593,14 +818,19 @@ export class PgUserRepository implements UserReadRepository {
     return this.getUserById(userId);
   }
 
-  async markEmailVerified(userId: string): Promise<UserView | null> {
-    await this.pool.query(
+  async markEmailVerified(
+    userId: string,
+    expectedEmail: string,
+  ): Promise<UserView | null> {
+    const result = await this.pool.query(
       `update account.users
-          set email_verified_at = now(), updated_at = now()
-        where id = $1 and email is not null and deleted_at is null and status = 'active'`,
-      [userId],
+          set email_verified_at = coalesce(email_verified_at, now()), updated_at = now()
+        where id = $1 and email = $2 and deleted_at is null and status in ('active', 'deleting')`,
+      [userId, expectedEmail.trim().toLowerCase()],
     );
-    return this.getUserById(userId);
+    if (!result.rowCount) return null;
+    const user = await this.getUserById(userId);
+    return user?.email === expectedEmail.trim().toLowerCase() ? user : null;
   }
 
   async markPhoneVerified(userId: string): Promise<UserView | null> {
@@ -865,27 +1095,103 @@ export class PgUserRepository implements UserReadRepository {
     return result.rowCount ?? 0;
   }
 
-  // ── 自助删除(050-account §7):active → deleting(保留期)→ 清扫 ──────────
+  // ============================================================================
+  // Customer lifecycle: all identity cleanup commits with the state transition
+  // ============================================================================
 
-  async requestDeletion(userId: string): Promise<UserView | null> {
-    const result = await this.pool.query(
-      `update account.users
-          set status = 'deleting', deletion_requested_at = now(), updated_at = now()
-        where id = $1 and deleted_at is null and status = 'active'
-        returning id`,
-      [userId],
-    );
-    if ((result.rowCount ?? 0) === 0) return null;
-    return this.getUserById(userId);
+  /**
+   * Commit retention and identity cleanup under the account row lock.
+   * @param userId - Customer account identifier.
+   * @returns Committed cleanup counts, or null when ineligible.
+   * @throws {Error} When any database operation fails; all writes roll back.
+   */
+  async requestDeletion(
+    userId: string,
+    snapshot?: CustomerSecuritySnapshot,
+  ): Promise<CustomerDeletionTransactionResult | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const marked = await client.query<{ deletion_requested_at: string }>(
+        `update account.users
+            set status = 'deleting', deletion_requested_at = clock_timestamp(), updated_at = now()
+          where id = $1 and deleted_at is null and status = 'active'
+            and ($2::jsonb is null or jsonb_build_object(
+              'phone', phone, 'email', email, 'account', account,
+              'phoneVerified', phone_verified_at is not null,
+              'emailVerified', email_verified_at is not null,
+              'accountLoginDisabled', account_login_disabled,
+              'hasPassword', exists(select 1 from credential.user_credentials c where c.user_id=account.users.id)
+            ) = $2::jsonb)
+          returning deletion_requested_at::text`,
+        [userId, snapshot ? JSON.stringify(snapshot) : null],
+      );
+      const row = marked.rows[0];
+      if (!row) {
+        await client.query("rollback");
+        return null;
+      }
+      const sessions = await client.query(
+        `update session.auth_sessions set status = 'revoked', revoked_at = now()
+          where user_id = $1 and realm = 'customer' and status = 'active' returning sid`,
+        [userId],
+      );
+      await client.query(
+        `update session.refresh_tokens set status = 'revoked'
+          where user_id = $1 and status = 'active'`,
+        [userId],
+      );
+      const identities = await client.query(
+        `delete from identity.identities where user_id = $1`,
+        [userId],
+      );
+      await client.query(
+        `insert into account.lifecycle_operations (user_id, deletion_requested_at, payload)
+         values ($1, $2::timestamptz, $3::jsonb)`,
+        [
+          userId,
+          row.deletion_requested_at,
+          JSON.stringify({
+            sessions: sessions.rows.map((s: { sid: string }) => ({
+              sid: s.sid,
+              clients: null,
+            })),
+          }),
+        ],
+      );
+      await client.query("commit");
+      return {
+        deletionRequestedAt: row.deletion_requested_at,
+        revokedSessions: sessions.rowCount ?? 0,
+        unboundIdentities: identities.rowCount ?? 0,
+      };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
-  async cancelDeletion(userId: string): Promise<UserView | null> {
+  async cancelDeletion(
+    userId: string,
+    expectedRequestedAt?: string,
+  ): Promise<UserView | null> {
     const result = await this.pool.query(
-      `update account.users
-          set status = 'active', deletion_requested_at = null, updated_at = now()
-        where id = $1 and deleted_at is null and status = 'deleting'
-        returning id`,
-      [userId],
+      `with restored as (
+         update account.users
+            set status = 'active', deletion_requested_at = null, updated_at = now()
+          where id = $1 and deleted_at is null and status = 'deleting'
+            and deletion_requested_at is not null
+            and deletion_requested_at + $2 * interval '24 hours' > clock_timestamp()
+            and ($3::timestamptz is null or deletion_requested_at=$3::timestamptz)
+          returning id
+       ), cancelled as (
+         update account.lifecycle_operations set status='cancelled', updated_at=now()
+          where user_id in (select id from restored) and status in ('pending','completed','purge_ready')
+          returning id
+       ) select id from restored`,
+      [userId, ACCOUNT_DELETION_RETENTION_DAYS, expectedRequestedAt ?? null],
     );
     if ((result.rowCount ?? 0) === 0) return null;
     return this.getUserById(userId);
@@ -900,7 +1206,7 @@ export class PgUserRepository implements UserReadRepository {
          from account.users
         where status = 'deleting' and deleted_at is null
           and deletion_requested_at is not null
-          and deletion_requested_at < now() - make_interval(days => $1)
+          and deletion_requested_at + $1 * interval '24 hours' <= clock_timestamp()
         order by deletion_requested_at asc
         limit $2`,
       [retentionDays, Math.min(Math.max(limit, 1), 500)],
@@ -927,8 +1233,14 @@ export class PgUserRepository implements UserReadRepository {
                 deleted_at = now(),
                 updated_at = now()
           where id = $1 and status = 'deleting' and deleted_at is null
+            and deletion_requested_at is not null
+            and deletion_requested_at + $2 * interval '24 hours' <= clock_timestamp()
+            and exists (select 1 from account.lifecycle_operations l
+              where l.user_id=account.users.id
+                and l.deletion_requested_at=account.users.deletion_requested_at
+                and l.status='purge_ready' and l.updated_at>clock_timestamp()-interval '60 seconds')
           returning id`,
-        [userId],
+        [userId, ACCOUNT_DELETION_RETENTION_DAYS],
       );
       if ((marked.rowCount ?? 0) === 0) {
         await client.query("rollback");
@@ -955,7 +1267,7 @@ export class PgUserRepository implements UserReadRepository {
       await client.query(
         `update session.auth_sessions
             set status = 'revoked', revoked_at = now()
-          where user_id = $1 and status = 'active'`,
+          where user_id = $1 and realm = 'customer' and status = 'active'`,
         [userId],
       );
       await client.query(
@@ -984,6 +1296,7 @@ function mapUser(row?: UserRow): UserView | null {
     phone: row.phone,
     phoneVerified: row.phone_verified_at != null,
     accountLoginDisabled: row.account_login_disabled ?? false,
+    emailLoginDisabled: row.email_login_disabled ?? false,
     name: row.name,
     status: row.status,
     avatarHash: row.avatar_hash,
@@ -1007,11 +1320,14 @@ function mapCredential(row?: UserCredentialRow): UserCredentialRecord | null {
     id: row.id,
     account: row.account,
     email: row.email,
+    emailVerified: row.email_verified_at != null,
     phone: row.phone,
+    phoneVerified: row.phone_verified_at != null,
     name: row.name,
     status: row.status,
     avatarHash: row.avatar_hash,
     accountLoginDisabled: row.account_login_disabled ?? false,
+    emailLoginDisabled: row.email_login_disabled ?? false,
     passwordHash: row.password_hash,
   };
 }

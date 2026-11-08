@@ -23,7 +23,16 @@ import {
 import { buildAccessTokenBlacklistKey } from "@vxture/core-auth";
 import { VxConfigService } from "@vxture/core-config";
 import Redis from "ioredis";
+import { createHash, randomUUID } from "node:crypto";
 import type { OidcSessionStatus } from "../oidc/session-status";
+
+/** Encrypted enrollment staged separately from the active workforce factor. */
+export interface OperatorTotpPending {
+  secret: string;
+  previousSecret: string | null;
+  previousEnabled: boolean;
+  initialOnly: boolean;
+}
 
 // ============================================================================
 // Types
@@ -72,6 +81,8 @@ export interface PendingProfileCompletion {
 }
 
 export interface OidcLoginChallenge {
+  /** A focus/resume probe must never bypass an explicit interactive prompt. */
+  requiresReauthentication?: boolean;
   clientId: string;
   realm: string;
   redirectUri: string;
@@ -91,6 +102,8 @@ export interface OidcLoginChallenge {
  * callback can resume the original OIDC authorize after resolving the user.
  */
 export interface OauthStatePayload {
+  /** Present only for proof-authorized customer self-service linking. */
+  link?: { userId: string; sid: string };
   providerCode: string;
   /** the provider callback redirect_uri (must match the one used at exchangeCode) */
   redirectUri: string;
@@ -224,11 +237,272 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Store a realm-namespaced, expiring, first-party ceremony. */
+  async storeAccountsCeremony(
+    token: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await this.requireReadyClient().set(
+      `${this.prefix}accounts:ceremony:${token}`,
+      JSON.stringify({ ...data, attempts: 0 }),
+      "EX",
+      300,
+      "NX",
+    );
+  }
+
+  /** Reserve one attempt atomically, keeping the original expiry. */
+  async attemptAccountsCeremony(token: string): Promise<string | null> {
+    if (!/^[0-9a-f-]{36}$/.test(token)) return null;
+    const raw = await this.requireReadyClient().eval(
+      `local raw=redis.call('GET',KEYS[1]); if not raw then return nil end
+       local data=cjson.decode(raw); if data.attempts>=5 then redis.call('DEL',KEYS[1]); return nil end
+       data.attempts=data.attempts+1; local next=cjson.encode(data)
+       redis.call('SET',KEYS[1],next,'KEEPTTL'); return next`,
+      1,
+      `${this.prefix}accounts:ceremony:${token}`,
+    );
+    return typeof raw === "string" ? raw : null;
+  }
+
+  /** Only the most recently reserved attempt can consume the ceremony. */
+  async consumeAccountsCeremony(
+    token: string,
+    version: string,
+  ): Promise<boolean> {
+    return (
+      (await this.requireReadyClient().eval(
+        `if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end; return redis.call('DEL',KEYS[1])`,
+        1,
+        `${this.prefix}accounts:ceremony:${token}`,
+        version,
+      )) === 1
+    );
+  }
+
   private requireReadyClient(): Redis {
     if (this.client.status !== "ready") {
       throw new ServiceUnavailableException("Auth session store unavailable");
     }
     return this.client;
+  }
+
+  // ============================================================================
+  // Workforce TOTP ceremonies
+  // ============================================================================
+
+  /** Bound provider traffic per source IP without storing raw IP addresses. */
+  async reserveCaptchaVerification(ip: string): Promise<boolean> {
+    const key = `${this.prefix}captcha:rate:${createHash("sha256").update(ip).digest("hex")}`;
+    const count = await this.requireReadyClient().eval(
+      `local n = redis.call('INCR', KEYS[1]); if n == 1 then redis.call('EXPIRE', KEYS[1], 60) end; return n`,
+      1,
+      key,
+    );
+    return typeof count === "number" && count <= 30;
+  }
+
+  /** Reserve the provider ceremony before I/O; duplicate/concurrent proofs fail closed. */
+  async reserveCaptchaCeremony(scene: string, id: string): Promise<boolean> {
+    const digest = createHash("sha256").update(`${scene}:${id}`).digest("hex");
+    return (
+      (await this.requireReadyClient().set(
+        `${this.prefix}captcha:ceremony:${digest}`,
+        "1",
+        "EX",
+        600,
+        "NX",
+      )) === "OK"
+    );
+  }
+
+  /** Store an opaque two-minute local proof; raw SDK material is never persisted. */
+  async storeCaptchaProof(
+    token: string,
+    realm: "customer" | "workforce",
+  ): Promise<void> {
+    await this.requireReadyClient().setex(
+      `${this.prefix}captcha:proof:${token}`,
+      120,
+      realm,
+    );
+  }
+
+  /** Atomic compare-and-delete prevents replay and cross-realm consumption. */
+  async consumeCaptchaProof(
+    token: string,
+    realm: "customer" | "workforce",
+  ): Promise<boolean> {
+    return (
+      (await this.requireReadyClient().eval(
+        `if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end; return redis.call('DEL', KEYS[1])`,
+        1,
+        `${this.prefix}captcha:proof:${token}`,
+        realm,
+      )) === 1
+    );
+  }
+
+  private operatorTotpKey(operatorId: string, context: string): string {
+    const digest = createHash("sha256").update(context).digest("hex");
+    return `${this.prefix}operator:totp:${operatorId}:${digest}`;
+  }
+
+  /** Stage encrypted material for five minutes without touching the active factor. */
+  async storeOperatorTotpPending(
+    operatorId: string,
+    context: string,
+    pending: OperatorTotpPending,
+  ): Promise<boolean> {
+    const stored = await this.requireReadyClient().set(
+      this.operatorTotpKey(operatorId, context),
+      JSON.stringify({ ...pending, attempts: 0 }),
+      "EX",
+      300,
+      "NX",
+    );
+    return stored === "OK";
+  }
+
+  /** Atomically reserve one of five confirmation attempts while preserving expiry. */
+  async attemptOperatorTotpPending(
+    operatorId: string,
+    context: string,
+  ): Promise<{ pending: OperatorTotpPending; version: string } | null> {
+    const raw = await this.requireReadyClient().eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw then return nil end
+       local pending = cjson.decode(raw)
+       if pending.attempts >= 5 then redis.call('DEL', KEYS[1]); return nil end
+       pending.attempts = pending.attempts + 1
+       local updated = cjson.encode(pending)
+       redis.call('SET', KEYS[1], updated, 'KEEPTTL')
+       return updated`,
+      1,
+      this.operatorTotpKey(operatorId, context),
+    );
+    if (typeof raw !== "string") return null;
+    return { pending: JSON.parse(raw) as OperatorTotpPending, version: raw };
+  }
+
+  /** Only the latest reserved attempt may consume a ceremony, exactly once. */
+  async consumeOperatorTotpPending(
+    operatorId: string,
+    context: string,
+    version: string,
+  ): Promise<boolean> {
+    const result = await this.requireReadyClient().eval(
+      `if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+       return redis.call('DEL', KEYS[1])`,
+      1,
+      this.operatorTotpKey(operatorId, context),
+      version,
+    );
+    return result === 1;
+  }
+
+  /** Account-wide budget bounds password/current-factor guesses across sessions. */
+  async reserveOperatorMfaStepUp(operatorId: string): Promise<boolean> {
+    const count = await this.requireReadyClient().eval(
+      `local n = redis.call('INCR', KEYS[1])
+       if n == 1 then redis.call('EXPIRE', KEYS[1], 900) end
+       return n`,
+      1,
+      `${this.prefix}operator:mfa-step-up:${operatorId}`,
+    );
+    return typeof count === "number" && count <= 5;
+  }
+
+  // ============================================================================
+  // Workforce phone-change ceremonies (independent of email changes)
+  // ============================================================================
+
+  /**
+   * Stage a phone change before sending. One start per account per minute bounds
+   * retries across sessions. The nonce prevents an older request consuming a resend.
+   * @returns The opaque pending version, or null when the send budget is exhausted.
+   * @throws {Error} When Redis is unavailable.
+   */
+  async beginOperatorPhoneChange(
+    operatorId: string,
+    sid: string,
+    phone: string,
+  ): Promise<string | null> {
+    const pending = JSON.stringify({
+      sidHash: createHash("sha256").update(sid).digest("hex"),
+      phone,
+      nonce: randomUUID(),
+      attempts: 0,
+      phase: "sending",
+    });
+    const result = await this.requireReadyClient().eval(
+      `if not redis.call('SET', KEYS[2], '1', 'EX', 60, 'NX') then return nil end
+       redis.call('SET', KEYS[1], ARGV[1], 'EX', 300)
+       return ARGV[1]`,
+      2,
+      `${this.prefix}operator:phone-change:${operatorId}`,
+      `${this.prefix}operator:phone-change-budget:${operatorId}`,
+      pending,
+    );
+    return typeof result === "string" ? result : null;
+  }
+
+  /**
+   * Reserve one attempt only for the issuing account, session and target phone.
+   * A verifying record excludes concurrent provider checks until completed or expired.
+   * @returns The reserved version, or null for invalid, busy or exhausted ceremonies.
+   * @throws {Error} When Redis is unavailable.
+   */
+  async attemptOperatorPhoneChange(
+    operatorId: string,
+    sid: string,
+    phone: string,
+  ): Promise<string | null> {
+    const result = await this.requireReadyClient().eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw then return nil end
+       local pending = cjson.decode(raw)
+       if pending.sidHash ~= ARGV[1] or pending.phone ~= ARGV[2] or pending.phase ~= 'ready' then return nil end
+       if pending.attempts >= 5 then redis.call('DEL', KEYS[1]); return nil end
+       pending.attempts = pending.attempts + 1
+       pending.phase = 'verifying'
+       local updated = cjson.encode(pending)
+       redis.call('SET', KEYS[1], updated, 'KEEPTTL')
+       return updated`,
+      1,
+      `${this.prefix}operator:phone-change:${operatorId}`,
+      createHash("sha256").update(sid).digest("hex"),
+      phone,
+    );
+    return typeof result === "string" ? result : null;
+  }
+
+  /**
+   * Compare before consuming or releasing a pending send/check. Expiry and resends
+   * invalidate in-flight results; releasing never extends the original lifetime.
+   * @returns Whether this request still owns the pending version.
+   * @throws {Error} When Redis is unavailable.
+   */
+  async finishOperatorPhoneChange(
+    operatorId: string,
+    version: string,
+    consume: boolean,
+  ): Promise<boolean> {
+    const result = await this.requireReadyClient().eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw or raw ~= ARGV[1] then return 0 end
+       if ARGV[2] == '1' then return redis.call('DEL', KEYS[1]) end
+       local pending = cjson.decode(raw)
+       if pending.attempts >= 5 then return redis.call('DEL', KEYS[1]) end
+       pending.phase = 'ready'
+       redis.call('SET', KEYS[1], cjson.encode(pending), 'KEEPTTL')
+       return 1`,
+      1,
+      `${this.prefix}operator:phone-change:${operatorId}`,
+      version,
+      consume ? "1" : "0",
+    );
+    return result === 1;
   }
 
   // ─── jti blacklist (access-token revocation) ──────────────────────────────
@@ -354,75 +628,115 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // ─── operator self-service contact change (email/phone re-verify, TD-017 §③) ──
-  //   {prefix}operator:contact:{operatorId}:{targetType} → { newValue, code, attempts }.
-  //   Code sent to the NEW address; verify consumes on match, else counts attempts.
+  // ============================================================================
+  // Session-bound workforce email changes with atomic verification
+  // ============================================================================
 
-  async storeOperatorContactChange(
+  /**
+   * Stage before delivery; one send per account/minute across all sessions.
+   * @param operatorId - Authenticated workforce account identifier.
+   * @param sid - Issuing workforce central session.
+   * @param email - Normalized destination verified by this ceremony.
+   * @param code - Code to hash before storing.
+   * @returns Pending version or null when the send budget is exhausted.
+   * @throws {Error} When Redis is unavailable.
+   */
+  async beginOperatorEmailChange(
     operatorId: string,
-    targetType: "email" | "phone",
-    newValue: string,
+    sid: string,
+    email: string,
     code: string,
-    ttlSeconds: number,
-  ): Promise<void> {
-    const client = this.requireReadyClient();
-    const key = `${this.prefix}operator:contact:${operatorId}:${targetType}`;
-    try {
-      await client.setex(
-        key,
-        ttlSeconds,
-        JSON.stringify({ newValue, code, attempts: 0 }),
-      );
-    } catch (err) {
-      this.logger.error(`storeOperatorContactChange failed: ${String(err)}`);
-      throw new ServiceUnavailableException(
-        "operator_contact_persistence_failed",
-      );
-    }
+  ): Promise<string | null> {
+    const nonce = randomUUID();
+    const pending = JSON.stringify({
+      sidHash: createHash("sha256").update(sid).digest("hex"),
+      email,
+      nonce,
+      digest: createHash("sha256").update(`${nonce}:${code}`).digest("hex"),
+      attempts: 0,
+      phase: "sending",
+    });
+    const result = await this.requireReadyClient().eval(
+      `if not redis.call('SET', KEYS[2], '1', 'EX', 60, 'NX') then return nil end
+       redis.call('SET', KEYS[1], ARGV[1], 'EX', 600)
+       return ARGV[1]`,
+      2,
+      `${this.prefix}operator:email-change:${operatorId}`,
+      `${this.prefix}operator:email-change-budget:${operatorId}`,
+      pending,
+    );
+    return typeof result === "string" ? result : null;
   }
 
   /**
-   * Verify a submitted code against the pending contact change. Returns the new
-   * value on match (and deletes the pending record), null on no-pending/mismatch.
-   * Caps attempts (deletes after 5 wrong tries → forces a fresh code request).
+   * Activate or discard only the exact version whose delivery just finished.
+   * @param operatorId - Account owning the pending ceremony.
+   * @param version - Version returned before delivery.
+   * @param discard - Whether delivery failed and the version must be removed.
+   * @returns Whether this version still owns the pending ceremony.
+   * @throws {Error} When Redis is unavailable.
    */
-  async verifyOperatorContactChange(
+  async finishOperatorEmailChange(
     operatorId: string,
-    targetType: "email" | "phone",
+    version: string,
+    discard: boolean,
+  ): Promise<boolean> {
+    const result = await this.requireReadyClient().eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw or raw ~= ARGV[1] then return 0 end
+       if ARGV[2] == '1' then return redis.call('DEL', KEYS[1]) end
+       local pending = cjson.decode(raw)
+       pending.phase = 'ready'
+       redis.call('SET', KEYS[1], cjson.encode(pending), 'KEEPTTL')
+       return 1`,
+      1,
+      `${this.prefix}operator:email-change:${operatorId}`,
+      version,
+      discard ? "1" : "0",
+    );
+    return result === 1;
+  }
+
+  /**
+   * Atomically consume a session-bound proof; wrong codes retain the original TTL.
+   * @param operatorId - Authenticated workforce account identifier.
+   * @param sid - Session that issued the pending ceremony.
+   * @param code - Submitted six-digit code.
+   * @returns Verified destination or null for a rejected proof.
+   * @throws {Error} When Redis or its stored payload is unavailable/invalid.
+   */
+  async consumeOperatorEmailChange(
+    operatorId: string,
+    sid: string,
     code: string,
   ): Promise<string | null> {
     const client = this.requireReadyClient();
-    const key = `${this.prefix}operator:contact:${operatorId}:${targetType}`;
-    try {
-      const raw = await client.get(key);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as {
-        newValue?: string;
-        code?: string;
-        attempts?: number;
-      };
-      if (parsed.code === code && typeof parsed.newValue === "string") {
-        await client.del(key);
-        return parsed.newValue;
-      }
-      const attempts = (parsed.attempts ?? 0) + 1;
-      if (attempts >= 5) {
-        await client.del(key);
-      } else {
-        const ttl = await client.ttl(key);
-        await client.setex(
-          key,
-          ttl > 0 ? ttl : 1,
-          JSON.stringify({ ...parsed, attempts }),
-        );
-      }
-      return null;
-    } catch (err) {
-      this.logger.error(`verifyOperatorContactChange failed: ${String(err)}`);
-      throw new ServiceUnavailableException(
-        "operator_contact_verification_failed",
-      );
-    }
+    const key = `${this.prefix}operator:email-change:${operatorId}`;
+    const raw = await client.get(key);
+    if (!raw) return null;
+    const pending = JSON.parse(raw) as { nonce: string };
+    const digest = createHash("sha256")
+      .update(`${pending.nonce}:${code}`)
+      .digest("hex");
+    const result = await client.eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw or raw ~= ARGV[1] then return nil end
+       local pending = cjson.decode(raw)
+       if pending.sidHash ~= ARGV[2] or pending.phase ~= 'ready' then return nil end
+       if pending.digest == ARGV[3] then
+         redis.call('DEL', KEYS[1]); return pending.email
+       end
+       pending.attempts = pending.attempts + 1
+       if pending.attempts >= 5 then redis.call('DEL', KEYS[1])
+       else redis.call('SET', KEYS[1], cjson.encode(pending), 'KEEPTTL') end
+       return nil`,
+      1,
+      key,
+      raw,
+      createHash("sha256").update(sid).digest("hex"),
+      digest,
+    );
+    return typeof result === "string" ? result : null;
   }
 
   // ─── OIDC: pending profile completion (注册补齐挂起) ───────────────────────
@@ -594,6 +908,194 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`consumeOauthState failed: ${String(err)}`);
       throw new ServiceUnavailableException("OAuth state verification failed");
     }
+  }
+
+  /** Read a pending binding before spending an SMS attempt or dispatching a code. */
+  async readOauthBind(token: string): Promise<OauthBindPayload | null> {
+    const raw = await this.requireReadyClient().get(
+      `${this.prefix}oauth:bind:${token}`,
+    );
+    return raw ? (JSON.parse(raw) as OauthBindPayload) : null;
+  }
+
+  // ============================================================================
+  // Customer SMS ceremonies: purpose + normalized phone + optional binding owner
+  // ============================================================================
+
+  /** Reserve bounded security requests before any delivery or password hashing. */
+  async reserveCustomerSecurityBudget(
+    bucket: string,
+    limits = [1, 5, 20],
+  ): Promise<boolean> {
+    const hash = createHash("sha256").update(bucket).digest("hex");
+    return (
+      (await this.requireReadyClient().eval(
+        `
+local ttls={60,3600,86400}
+for i=1,3 do if tonumber(redis.call('GET',KEYS[i]) or '0') >= tonumber(ARGV[i]) then return 0 end end
+for i=1,3 do local n=redis.call('INCR',KEYS[i]); if n==1 then redis.call('EXPIRE',KEYS[i],ttls[i]) end end
+return 1`,
+        3,
+        ...["m", "h", "d"].map(
+          (window) =>
+            `${this.prefix}customer-security:budget:${hash}:${window}`,
+        ),
+        ...limits,
+      )) === 1
+    );
+  }
+
+  /** Create a random-token ceremony with a fixed absolute lifetime. */
+  async createCustomerSecurity(id: string, value: string): Promise<boolean> {
+    return (
+      (await this.requireReadyClient().set(
+        this.customerSecurityKey(id),
+        value,
+        "EX",
+        600,
+        "NX",
+      )) === "OK"
+    );
+  }
+
+  /** Read a ceremony without extending its lifetime. */
+  async readCustomerSecurity(id: string): Promise<string | null> {
+    return this.requireReadyClient().get(this.customerSecurityKey(id));
+  }
+
+  /** Compare-and-swap or consume the exact ceremony; expiry never gets renewed. */
+  async swapCustomerSecurity(
+    id: string,
+    expected: string,
+    next: string | null,
+  ): Promise<boolean> {
+    return (
+      (await this.requireReadyClient().eval(
+        `
+if redis.call('GET',KEYS[1]) ~= ARGV[1] then return 0 end
+if ARGV[2] == '' then redis.call('DEL',KEYS[1]) else redis.call('SET',KEYS[1],ARGV[2],'KEEPTTL') end
+return 1`,
+        1,
+        this.customerSecurityKey(id),
+        expected,
+        next ?? "",
+      )) === 1
+    );
+  }
+
+  private customerSecurityKey(id: string): string {
+    return `${this.prefix}customer-security:ceremony:${createHash("sha256").update(id).digest("hex")}`;
+  }
+
+  private customerCodeKey(
+    purpose: string,
+    phone: string,
+    _context: string,
+  ): string {
+    const hash = createHash("sha256")
+      .update(JSON.stringify([purpose, phone]))
+      .digest("hex");
+    return `${this.prefix}customer-code:${hash}`;
+  }
+
+  /** Reserve aggregate phone send budgets and replace this purpose's ceremony. */
+  async beginCustomerCode(
+    purpose: string,
+    phone: string,
+    context: string,
+    owner: string,
+  ): Promise<boolean> {
+    const phoneHash = createHash("sha256").update(phone).digest("hex");
+    return (
+      (await this.requireReadyClient().eval(
+        `
+local limits = {1, 5, 10}
+local ttls = {60, 3600, 86400}
+for i=1,3 do
+  if tonumber(redis.call('GET', KEYS[i]) or '0') >= limits[i] then return 0 end
+end
+for i=1,3 do
+  local n = redis.call('INCR', KEYS[i])
+  if n == 1 then redis.call('EXPIRE', KEYS[i], ttls[i]) end
+end
+redis.call('HSET', KEYS[4], 'owner', ARGV[1], 'phase', 'sending', 'attempts', 0, 'context', ARGV[2])
+redis.call('EXPIRE', KEYS[4], 300)
+return 1`,
+        4,
+        `${this.prefix}customer-code:rl:1m:${phoneHash}`,
+        `${this.prefix}customer-code:rl:1h:${phoneHash}`,
+        `${this.prefix}customer-code:rl:1d:${phoneHash}`,
+        this.customerCodeKey(purpose, phone, context),
+        owner,
+        createHash("sha256").update(context).digest("hex"),
+      )) === 1
+    );
+  }
+
+  /** Transition only the dispatch owned by this request; expired/resend results cannot reactivate it. */
+  async finishCustomerCodeSend(
+    purpose: string,
+    phone: string,
+    context: string,
+    owner: string,
+    success: boolean,
+  ): Promise<boolean> {
+    return (
+      (await this.requireReadyClient().eval(
+        `
+if redis.call('HGET', KEYS[1], 'owner') ~= ARGV[1] or redis.call('HGET', KEYS[1], 'phase') ~= 'sending' then return 0 end
+if ARGV[2] == '1' then redis.call('HSET', KEYS[1], 'phase', 'ready'); return 1 end
+return redis.call('DEL', KEYS[1])`,
+        1,
+        this.customerCodeKey(purpose, phone, context),
+        owner,
+        success ? "1" : "0",
+      )) === 1
+    );
+  }
+
+  /** Acquire one of five attempts, excluding concurrent provider checks. */
+  async acquireCustomerCode(
+    purpose: string,
+    phone: string,
+    context: string,
+  ): Promise<string | null> {
+    const owner = await this.requireReadyClient().eval(
+      `
+if redis.call('HGET', KEYS[1], 'phase') ~= 'ready' or redis.call('HGET', KEYS[1], 'context') ~= ARGV[1] then return '' end
+if tonumber(redis.call('HGET', KEYS[1], 'attempts') or '5') >= 5 then redis.call('DEL', KEYS[1]); return '' end
+redis.call('HINCRBY', KEYS[1], 'attempts', 1)
+redis.call('HSET', KEYS[1], 'phase', 'verifying')
+return redis.call('HGET', KEYS[1], 'owner')`,
+      1,
+      this.customerCodeKey(purpose, phone, context),
+      createHash("sha256").update(context).digest("hex"),
+    );
+    return typeof owner === "string" && owner ? owner : null;
+  }
+
+  /** A successful check consumes the ceremony atomically; failures keep only the remaining budget. */
+  async finishCustomerCodeCheck(
+    purpose: string,
+    phone: string,
+    context: string,
+    owner: string,
+    success: boolean,
+  ): Promise<boolean> {
+    return (
+      (await this.requireReadyClient().eval(
+        `
+if redis.call('HGET', KEYS[1], 'owner') ~= ARGV[1] or redis.call('HGET', KEYS[1], 'phase') ~= 'verifying' then return 0 end
+if ARGV[2] == '1' then redis.call('DEL', KEYS[1]); return 1 end
+if tonumber(redis.call('HGET', KEYS[1], 'attempts')) >= 5 then redis.call('DEL', KEYS[1])
+else redis.call('HSET', KEYS[1], 'phase', 'ready') end
+return 0`,
+        1,
+        this.customerCodeKey(purpose, phone, context),
+        owner,
+        success ? "1" : "0",
+      )) === 1
+    );
   }
 
   async storeOauthBind(

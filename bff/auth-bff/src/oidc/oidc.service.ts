@@ -47,6 +47,8 @@ import { UserOnboardingService } from "../authn/user-onboarding.service";
 import { LoginAttemptRepository } from "../token/login-attempt.repository";
 import { TokenService } from "../token/token.service";
 import { OidcKeyService, type OidcJwk } from "./oidc-key.service";
+import { PhoneCodeService } from "@vxture/service-sms";
+import { CustomerMfaService } from "./customer-mfa.service";
 import { OperatorLoginGuard } from "./operator-login-guard.service";
 import {
   OperatorMfaService,
@@ -55,6 +57,10 @@ import {
 import { OperatorWebauthnService } from "./operator-webauthn.service";
 import { OperatorAnomalyService } from "./operator-anomaly.service";
 import { TenantLoginGuard } from "../authn/tenant-login-guard.service";
+import {
+  realmSubjectMatches,
+  type IdentityRealm,
+} from "./realm-session.service";
 import { AppScopeResolver } from "./app-scope.resolver";
 import {
   TokenExchangeService,
@@ -153,9 +159,9 @@ export interface OidcPasswordLoginInput {
   loginChallenge: string;
   identifier: string;
   password: string;
-  /** Cloudflare Turnstile token (verified for both tenant and operator realms). */
-  turnstileToken?: string | undefined;
-  /** Resolved client IP (operator rate-limiting + Turnstile remoteip + audit). */
+  /** Single-use human-verification proof for the server-selected identity realm. */
+  captchaToken?: string | undefined;
+  /** Resolved client IP (operator rate-limiting and audit). */
   clientIp?: string | undefined;
   /** User-Agent (operator audit). */
   userAgent?: string | undefined;
@@ -191,6 +197,7 @@ export interface OidcLoginCompletion {
  */
 export interface OidcMfaChallenge {
   status: "mfa_required";
+  realm?: "customer" | "workforce";
   mfaToken: string;
   /** Registered second factors usable now; empty when enrollment is required. */
   methods: string[];
@@ -260,6 +267,9 @@ export class OidcService {
     private readonly appScope: AppScopeResolver,
     @Inject(TokenExchangeService)
     private readonly tokenExchangeSvc: TokenExchangeService,
+    @Inject(CustomerMfaService)
+    private readonly customerMfa: CustomerMfaService,
+    @Inject(PhoneCodeService) private readonly workforcePhone: PhoneCodeService,
   ) {}
 
   /** OIDC discovery document (/.well-known/openid-configuration). */
@@ -385,7 +395,8 @@ export class OidcService {
       phone_number: user.phone,
       phone_number_verified: true,
       email: user.email ?? undefined,
-      email_verified: user.email != null ? false : undefined,
+      email_verified:
+        user.email != null ? (user.emailVerified ?? false) : undefined,
     };
   }
 
@@ -496,6 +507,83 @@ export class OidcService {
     return false;
   }
 
+  /** Resolve recipients before deleting Redis; the lifecycle journal persists them. */
+  async getCustomerLogoutClients(
+    userId: string,
+    sid: string,
+  ): Promise<string[]> {
+    const cached = await this.redis.getOidcSession(sid);
+    if (
+      cached &&
+      (cached.realm !== "customer" || cached.sub !== `usr_${userId}`)
+    )
+      throw new BadRequestException("customer_session_owner_mismatch");
+    return this.redis.getOidcSessionClients(sid);
+  }
+
+  /** Retry an exact customer logout target; persisted recipients survive cache loss. */
+  async cleanupCustomerLifecycleSession(
+    userId: string,
+    sid: string,
+    clients: readonly string[],
+  ): Promise<void> {
+    const cached = await this.redis.getOidcSession(sid);
+    if (
+      cached &&
+      (cached.realm !== "customer" || cached.sub !== `usr_${userId}`)
+    )
+      throw new BadRequestException("customer_session_owner_mismatch");
+    await this.token.revokeSession(sid);
+    await this.redis.deleteOidcSession(sid);
+    await this.sendBackChannelLogouts(sid, `usr_${userId}`, [...clients], true);
+  }
+
+  /** Clean only matching customer caches and RP sessions after durable security revocation. */
+  async cleanupCustomerSessions(
+    userId: string,
+    sids: readonly string[],
+  ): Promise<void> {
+    for (const sid of sids) {
+      const cached = await this.redis.getOidcSession(sid);
+      if (
+        cached &&
+        (cached.realm !== "customer" || cached.sub !== `usr_${userId}`)
+      )
+        continue;
+      const clients = await this.redis.getOidcSessionClients(sid);
+      await this.token.revokeSession(sid);
+      await this.redis.deleteOidcSession(sid);
+      await this.sendBackChannelLogouts(sid, `usr_${userId}`, clients);
+    }
+  }
+
+  /**
+   * Revoke an owned customer session before cleaning caches and notifying RPs.
+   * @param userId - Authenticated customer, never taken from request input.
+   * @param sid - Target central session.
+   * @returns Whether an active customer session was revoked.
+   * @throws {Error} If durable revocation or token/cache cleanup fails.
+   */
+  async endCustomerSession(userId: string, sid: string): Promise<boolean> {
+    const durable = await this.durableSession.get(sid);
+    if (!durable || durable.realm !== "customer" || durable.userId !== userId)
+      return false;
+    const cached = await this.redis.getOidcSession(sid);
+    // Refuse inconsistent authority records rather than touching another realm.
+    if (
+      cached &&
+      (cached.realm !== "customer" || cached.sub !== `usr_${userId}`)
+    )
+      return false;
+    const clients = await this.redis.getOidcSessionClients(sid);
+    const revoked = await this.account.revokeSession(userId, sid);
+    if (!revoked) return false;
+    await this.token.revokeSession(sid);
+    await this.redis.deleteOidcSession(sid);
+    await this.sendBackChannelLogouts(sid, `usr_${userId}`, clients);
+    return true;
+  }
+
   /**
    * 结束一个运营者的全部中央会话（强制下线、停用、重置 MFA / 密码）。
    *
@@ -524,6 +612,7 @@ export class OidcService {
     sid: string,
     sub: string,
     clientIds: string[],
+    strict = false,
   ): Promise<void> {
     await Promise.all(
       clientIds.map(async (clientId) => {
@@ -557,13 +646,17 @@ export class OidcService {
           { audience: client.clientId, subject: sub, expiresInSec: 120 },
         );
         try {
-          await fetch(client.backChannelLogoutUri, {
+          const response = await fetch(client.backChannelLogoutUri, {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({ logout_token: logoutToken }).toString(),
+            ...(strict ? { signal: AbortSignal.timeout(5000) } : {}),
           });
-        } catch {
-          // Best-effort.
+          if (strict && !response.ok)
+            throw new Error("backchannel_delivery_failed");
+        } catch (error) {
+          if (strict) throw error;
+          // Existing callers retain best-effort delivery.
         }
       }),
     );
@@ -583,6 +676,9 @@ export class OidcService {
     if (!client) {
       throw new BadRequestException("invalid_client");
     }
+    if (client.realm !== "customer" && client.realm !== "workforce") {
+      throw new BadRequestException("unsupported_realm");
+    }
     const sid = pickSessionForRealm(client.realm, sids);
     if (!redirectUriAllowed(client.redirectUris, req.redirectUri)) {
       throw new BadRequestException("invalid_redirect_uri");
@@ -600,11 +696,23 @@ export class OidcService {
 
     let session = sid ? await this.redis.getOidcSession(sid) : null;
     // 已被远程下线(持久镜像 status ≠ active)的中央会话不再可用于静默 SSO。
-    if (session && sid && (await this.durableSession.isRevoked(sid))) {
+    if (
+      session &&
+      sid &&
+      session.realm === "customer" &&
+      ((await this.durableSession.isRevoked(sid)) ||
+        ((await this.customerMfa.enabled(session.sub.slice(4))) &&
+          !/\+(totp|recovery)$/.test(session.authMethod)))
+    ) {
       await this.redis.deleteOidcSession(sid);
       await this.token.revokeSession(sid);
       session = null;
     }
+    if (
+      session?.realm === "workforce" &&
+      !/\+(totp|recovery|webauthn)$/.test(session.authMethod)
+    )
+      session = null;
     /*
      * ── prompt 的三态（RFC 6749 / OIDC Core §3.1.2.1）────────────────────────
      *
@@ -634,7 +742,10 @@ export class OidcService {
     const forcesInteraction =
       req.prompt === "login" || req.prompt === "select_account";
     const hasUsableSession = Boolean(
-      session && session.realm === client.realm && !forcesInteraction,
+      session &&
+      session.realm === client.realm &&
+      realmSubjectMatches(client.realm, session.sub) &&
+      !forcesInteraction,
     );
 
     if (!hasUsableSession) {
@@ -645,6 +756,7 @@ export class OidcService {
       await this.redis.storeOidcLoginChallenge(challenge, {
         clientId: client.clientId,
         realm: client.realm,
+        requiresReauthentication: forcesInteraction,
         redirectUri: req.redirectUri,
         scope: req.scope,
         state: req.state,
@@ -766,6 +878,12 @@ export class OidcService {
     activeOrg: string | null;
     amr?: string[] | undefined;
   }): Promise<string> {
+    if (
+      input.client.realm !== input.realm ||
+      !realmSubjectMatches(input.realm, input.sub)
+    ) {
+      throw new BadRequestException("invalid_grant");
+    }
     const code = randomUUID();
     await this.redis.storeOidcAuthCode(
       code,
@@ -829,6 +947,50 @@ export class OidcService {
    * complete directly; an operator login may return an `mfa_required`
    * continuation when a second factor is owed (§3.2).
    */
+  /** Start a first-party identity session with a fixed destination and no RP tokens. */
+  async beginAccountsLogin(realm: "customer" | "workforce") {
+    const loginChallenge = randomUUID();
+    await this.redis.storeOidcLoginChallenge(loginChallenge, {
+      clientId: `accounts-self:${realm}`,
+      realm,
+      redirectUri: realm === "customer" ? "/account" : "/workforce/account",
+      scope: "openid",
+      codeChallenge: randomUUID(),
+    });
+    return { loginChallenge };
+  }
+
+  /** Resolve internal intents only on the interactive-login path, never at authorize/token. */
+  private async loginClient(
+    clientId: string,
+  ): Promise<OidcClientConfig | null> {
+    if (
+      clientId !== "accounts-self:customer" &&
+      clientId !== "accounts-self:workforce"
+    )
+      return this.clients.findEnabledByClientId(clientId);
+    const realm = clientId.endsWith(":customer") ? "customer" : "workforce";
+    return {
+      clientId,
+      realm,
+      name: "Accounts",
+      displayName: null,
+      logoUrl: null,
+      clientSecretHash: null,
+      redirectUris: [],
+      postLogoutRedirectUris: [],
+      backChannelLogoutUri: null,
+      sloParticipation: "none",
+      allowedScopes: [],
+      accessTokenTtl: 0,
+      refreshTokenTtl: 0,
+      pkceRequired: true,
+      tokenEndpointAuthMethod: "none",
+      isEnabled: true,
+      productCode: null,
+    };
+  }
+
   async completeLoginWithPassword(
     input: OidcPasswordLoginInput,
   ): Promise<OidcLoginResult> {
@@ -839,9 +1001,12 @@ export class OidcService {
     if (!challenge) {
       throw new BadRequestException("invalid_login_challenge");
     }
-    const client = await this.clients.findEnabledByClientId(challenge.clientId);
+    const client = await this.loginClient(challenge.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
+    }
+    if (client.realm !== challenge.realm) {
+      throw new BadRequestException("invalid_client_realm");
     }
 
     if (challenge.realm === "workforce") {
@@ -851,11 +1016,11 @@ export class OidcService {
       throw new BadRequestException("unsupported_realm");
     }
 
-    // Tenant-surface Turnstile (env-gated via CF_TURNSTILE_ENABLED), before
-    // touching credentials. The accounts password form solves a fresh token
+    // Consume the customer proof before checking credentials.
+    // The accounts password form solves a fresh token
     // per attempt; phone-code login is gated separately at send time.
-    await this.tenantGuard.verifyTurnstile(
-      input.turnstileToken,
+    await this.tenantGuard.verifyHuman(
+      input.captchaToken,
       input.clientIp ?? "unknown",
     );
 
@@ -891,7 +1056,7 @@ export class OidcService {
   /** Interactive phone-code login (tenant realm only; login == registration for new phones). */
   async completeLoginWithPhone(
     input: OidcPhoneLoginInput,
-  ): Promise<OidcLoginCompletion> {
+  ): Promise<OidcLoginResult> {
     /* 先读不消耗：凭据验过才用掉它（claimLoginChallenge）。 */
     const challenge = await this.redis.readOidcLoginChallenge(
       input.loginChallenge,
@@ -902,9 +1067,12 @@ export class OidcService {
     if (challenge.realm !== "customer") {
       throw new BadRequestException("unsupported_realm");
     }
-    const client = await this.clients.findEnabledByClientId(challenge.clientId);
+    const client = await this.loginClient(challenge.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
+    }
+    if (client.realm !== challenge.realm) {
+      throw new BadRequestException("invalid_client_realm");
     }
 
     let user;
@@ -960,7 +1128,7 @@ export class OidcService {
    */
   async completeLoginWithEmail(
     input: OidcEmailLoginInput,
-  ): Promise<OidcLoginCompletion> {
+  ): Promise<OidcLoginResult> {
     /* 先读不消耗：凭据验过才用掉它（claimLoginChallenge）。 */
     const challenge = await this.redis.readOidcLoginChallenge(
       input.loginChallenge,
@@ -971,9 +1139,12 @@ export class OidcService {
     if (challenge.realm !== "customer") {
       throw new BadRequestException("unsupported_realm");
     }
-    const client = await this.clients.findEnabledByClientId(challenge.clientId);
+    const client = await this.loginClient(challenge.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
+    }
+    if (client.realm !== challenge.realm) {
+      throw new BadRequestException("invalid_client_realm");
     }
 
     const user = await this.authn.loginWithEmailCode(input.email, input.code);
@@ -1016,7 +1187,7 @@ export class OidcService {
       ipAddress?: string | undefined;
       userAgent?: string | undefined;
     },
-  ): Promise<OidcLoginCompletion> {
+  ): Promise<OidcLoginResult> {
     const challenge =
       await this.redis.consumeOidcLoginChallenge(loginChallenge);
     if (!challenge) {
@@ -1025,9 +1196,12 @@ export class OidcService {
     if (challenge.realm !== "customer") {
       throw new BadRequestException("unsupported_realm");
     }
-    const client = await this.clients.findEnabledByClientId(challenge.clientId);
+    const client = await this.loginClient(challenge.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
+    }
+    if (client.realm !== challenge.realm) {
+      throw new BadRequestException("invalid_client_realm");
     }
     // Social/bind-tail: the caller owns authentication, so this is a success
     // record by definition. ipAddress/userAgent are supplied by the caller
@@ -1048,6 +1222,27 @@ export class OidcService {
   }
 
   /**
+   * Resolve login presentation from the parked request, never a browser realm parameter.
+   * @param loginChallenge - Opaque parked authorization request.
+   * @returns Validated identity realm for the login entry.
+   * @throws {BadRequestException} For expired challenges or changed client realms.
+   */
+  async loginContext(
+    loginChallenge: string,
+  ): Promise<{ realm: IdentityRealm }> {
+    const challenge = await this.redis.readOidcLoginChallenge(loginChallenge);
+    if (!challenge) throw new BadRequestException("invalid_login_challenge");
+    const client = await this.loginClient(challenge.clientId);
+    if (!client || client.realm !== challenge.realm) {
+      throw new BadRequestException("invalid_client_realm");
+    }
+    if (challenge.realm !== "customer" && challenge.realm !== "workforce") {
+      throw new BadRequestException("unsupported_realm");
+    }
+    return { realm: challenge.realm };
+  }
+
+  /**
    * Resume a parked OIDC challenge using an already-established central session
    * (vx_sid). Used by the accounts login page for cross-tab session detection:
    * when a user logs in via another RP while the login page is open in other tabs,
@@ -1056,23 +1251,55 @@ export class OidcService {
    */
   async resumeWithExistingSession(
     loginChallenge: string,
-    sid: string,
+    sids: RealmSids,
   ): Promise<string | null> {
     // Peek first to avoid destroying the challenge if the session is invalid.
     const peeked = await this.redis.peekOidcLoginChallenge(loginChallenge);
-    if (!peeked) return null;
+    if (!peeked || peeked.requiresReauthentication) return null;
+    const sid = pickSessionForRealm(peeked.realm, sids);
+    if (!sid) return null;
 
     const session = await this.redis.getOidcSession(sid);
-    if (!session || session.realm !== peeked.realm) return null;
-    if (await this.durableSession.isRevoked(sid)) return null;
+    if (
+      !session ||
+      session.realm !== peeked.realm ||
+      (session.realm === "workforce" &&
+        !/\+(totp|recovery|webauthn)$/.test(session.authMethod)) ||
+      !realmSubjectMatches(session.realm, session.sub)
+    )
+      return null;
+    if (
+      session.realm === "customer" &&
+      ((await this.durableSession.isRevoked(sid)) ||
+        ((await this.customerMfa.enabled(session.sub.slice(4))) &&
+          !/\+(totp|recovery)$/.test(session.authMethod)))
+    )
+      return null;
 
-    const client = await this.clients.findEnabledByClientId(peeked.clientId);
-    if (!client) return null;
+    const client = await this.loginClient(peeked.clientId);
+    if (!client || client.realm !== peeked.realm) return null;
 
     // Atomic consume — another tab may have won this race; that's fine.
     const challenge =
       await this.redis.consumeOidcLoginChallenge(loginChallenge);
     if (!challenge) return null;
+
+    if (client.clientId.startsWith("accounts-self:")) {
+      if (client.realm === "workforce") return "/workforce/account";
+      if (await this.account.isProfileCompleted(session.sub.slice(4)))
+        return "/account";
+      await this.redis.storePendingProfileCompletion(sid, {
+        clientId: client.clientId,
+        redirectUri: challenge.redirectUri,
+        scope: challenge.scope,
+        state: challenge.state,
+        codeChallenge: challenge.codeChallenge,
+        nonce: challenge.nonce,
+        sub: session.sub,
+        activeOrg: null,
+      });
+      return this.onboardingUrl();
+    }
 
     const activeOrg = await this.resolveActiveOrg(
       sid,
@@ -1092,6 +1319,7 @@ export class OidcService {
       codeChallenge: challenge.codeChallenge,
       nonce: challenge.nonce,
       activeOrg,
+      amr: session.amr,
     });
 
     return this.appendParams(challenge.redirectUri, {
@@ -1104,13 +1332,75 @@ export class OidcService {
    * Shared tail for tenant-realm interactive logins: ensure a personal org (PLG),
    * establish the central session, persist active_org, and issue the code.
    */
+  /** Complete the customer second factor before creating any central session or code. */
+  async completeCustomerMfa(
+    token: string,
+    method: string,
+    code: string,
+  ): Promise<OidcLoginCompletion> {
+    const raw = await this.redis.attemptAccountsCeremony(token);
+    if (!raw) throw new BadRequestException("mfa_session_expired");
+    const pending = JSON.parse(raw) as {
+      kind: string;
+      userId: string;
+      challenge: OidcLoginChallenge;
+      authMethod: string;
+      meta: { ipAddress?: string; userAgent?: string };
+    };
+    if (
+      pending.kind !== "customer-login" ||
+      pending.challenge.realm !== "customer"
+    )
+      throw new BadRequestException("invalid_mfa_context");
+    if (!(await this.customerMfa.verify(pending.userId, method, code)))
+      throw new UnauthorizedException("invalid_mfa_code");
+    if (!(await this.redis.consumeAccountsCeremony(token, raw)))
+      throw new BadRequestException("mfa_session_expired");
+    const user = await this.account.getUserById(pending.userId);
+    if (!user || !["active", "deleting"].includes(user.status))
+      throw new UnauthorizedException("invalid_session");
+    const client = await this.loginClient(pending.challenge.clientId);
+    if (!client || client.realm !== "customer")
+      throw new BadRequestException("invalid_client");
+    const result = await this.finishTenantLogin(
+      pending.userId,
+      client,
+      pending.challenge,
+      `${pending.authMethod}+${method}`,
+      pending.meta,
+      true,
+    );
+    if ("status" in result)
+      throw new BadRequestException("invalid_mfa_context");
+    return result;
+  }
+
   private async finishTenantLogin(
     userId: string,
     client: OidcClientConfig,
     challenge: OidcLoginChallenge,
     authMethod: string,
     meta?: { ipAddress?: string | undefined; userAgent?: string | undefined },
-  ): Promise<OidcLoginCompletion> {
+    mfaVerified = false,
+  ): Promise<OidcLoginResult> {
+    if (!mfaVerified && (await this.customerMfa.enabled(userId))) {
+      const mfaToken = randomUUID();
+      await this.redis.storeAccountsCeremony(mfaToken, {
+        kind: "customer-login",
+        userId,
+        challenge,
+        authMethod,
+        meta: meta ?? {},
+      });
+      return {
+        status: "mfa_required",
+        realm: "customer",
+        mfaToken,
+        methods: ["totp"],
+        enrollRequired: false,
+        enrollFactor: null,
+      };
+    }
     let ctx = await this.activeContext.resolveActiveContext(
       userId,
       challenge.orgHint,
@@ -1137,6 +1427,7 @@ export class OidcService {
         sub: `usr_${userId}`,
         realm: "customer",
         authMethod,
+        amr: authMethodToAmr(authMethod),
         createdAt: now,
         lastActiveAt: now,
         absExpiresAt: now + absTtl,
@@ -1206,6 +1497,14 @@ export class OidcService {
       };
     }
 
+    if (client.clientId === "accounts-self:customer")
+      return {
+        sid,
+        realm: "customer",
+        sessionMaxAge: absTtl,
+        redirectTo: "/account",
+      };
+
     const code = await this.issueAuthCode({
       client,
       sub: `usr_${userId}`,
@@ -1247,12 +1546,16 @@ export class OidcService {
     account: string;
     displayName: string | null;
     email: string | null;
+    phoneVerified: boolean;
+    emailVerified: boolean;
   }> {
     const userId = await this.userIdFromSid(sid);
     const user = await this.account.getUserById(userId);
     if (!user) throw new UnauthorizedException("invalid_session");
     return {
       phone: user.phone,
+      phoneVerified: user.phoneVerified ?? false,
+      emailVerified: user.emailVerified ?? false,
       account: user.account,
       displayName: user.name ?? null,
       email: user.email ?? null,
@@ -1264,6 +1567,13 @@ export class OidcService {
    * 三项都落库、标记完成之后才发授权码——所以「注册完成」这件事和「能回应用」
    * 是同一个瞬间，不会出现资料没填全却已经进了应用的中间态。
    */
+  async checkOnboardingAccount(sid: string, account: string) {
+    const userId = await this.userIdFromSid(sid);
+    return {
+      available: await this.account.isAccountAvailable(account, userId),
+    };
+  }
+
   async submitProfileCompletion(
     sid: string,
     input: { account: string; displayName: string; email: string },
@@ -1276,7 +1586,14 @@ export class OidcService {
   /** 会话 cookie → user id。补齐页除了 sid 没有别的身份可用。 */
   private async userIdFromSid(sid: string): Promise<string> {
     const session = await this.redis.getOidcSession(sid);
-    if (!session?.sub?.startsWith("usr_")) {
+    if (
+      !session ||
+      session.realm !== "customer" ||
+      !realmSubjectMatches("customer", session.sub) ||
+      (await this.durableSession.isRevoked(sid)) ||
+      ((await this.customerMfa.enabled(session.sub.slice(4))) &&
+        !/\+(totp|recovery)$/.test(session.authMethod))
+    ) {
       throw new UnauthorizedException("invalid_session");
     }
     return session.sub.slice("usr_".length);
@@ -1291,10 +1608,16 @@ export class OidcService {
     if (!pending) {
       throw new BadRequestException("no_pending_login");
     }
-    const client = await this.clients.findEnabledByClientId(pending.clientId);
-    if (!client) {
-      throw new BadRequestException("invalid_client");
+    const client = await this.loginClient(pending.clientId);
+    if (
+      !client ||
+      client.realm !== "customer" ||
+      !realmSubjectMatches("customer", pending.sub)
+    ) {
+      throw new BadRequestException("invalid_client_realm");
     }
+    if (client.clientId === "accounts-self:customer") return "/account";
+
     const code = await this.issueAuthCode({
       client,
       sub: pending.sub,
@@ -1318,17 +1641,81 @@ export class OidcService {
    * operator session + code immediately (unchanged behaviour); otherwise park an
    * mfa_pending challenge and return an `mfa_required` continuation for Step2.
    */
+  /** Send through a dedicated workforce scheme without registering or enumerating accounts. */
+  async sendWorkforceLoginCode(input: {
+    loginChallenge: string;
+    phone: string;
+    captchaToken?: string;
+    clientIp: string;
+  }) {
+    const context = await this.loginContext(input.loginChallenge);
+    if (context.realm !== "workforce" || !/^1[3-9]\d{9}$/.test(input.phone))
+      throw new BadRequestException("invalid_request");
+    this.operatorGuard.assertWithinRateLimit(input.clientIp, input.phone);
+    await this.operatorGuard.verifyHuman(input.captchaToken, input.clientIp);
+    if (
+      !(await this.redis.reserveCustomerSecurityBudget(
+        `workforce-login-send:${input.phone}`,
+      ))
+    )
+      throw new BadRequestException("too_many_attempts");
+    await this.workforcePhone.sendCode(input.phone, {
+      scope: "workforce-login",
+    });
+    return { sent: true };
+  }
+
+  async completeWorkforcePhone(
+    input: OidcPhoneLoginInput,
+  ): Promise<OidcLoginResult> {
+    const challenge = await this.redis.readOidcLoginChallenge(
+      input.loginChallenge,
+    );
+    if (!challenge || challenge.realm !== "workforce")
+      throw new BadRequestException("invalid_login_challenge");
+    const client = await this.loginClient(challenge.clientId);
+    if (!client || client.realm !== "workforce")
+      throw new BadRequestException("invalid_client_realm");
+    const ip = input.clientIp ?? "unknown";
+    this.operatorGuard.assertWithinRateLimit(ip, input.phone);
+    if (
+      !/^1[3-9]\d{9}$/.test(input.phone) ||
+      !/^\d{6}$/.test(input.code) ||
+      !(await this.workforcePhone.verifyCode(input.phone, input.code, {
+        scope: "workforce-login",
+      }))
+    ) {
+      this.operatorGuard.recordFailure(ip, input.phone);
+      throw new UnauthorizedException("invalid_credentials");
+    }
+    const operator = await this.operators.findByVerifiedPhone(input.phone);
+    if (!operator) {
+      this.operatorGuard.recordFailure(ip, input.phone);
+      throw new UnauthorizedException("invalid_credentials");
+    }
+    await this.claimLoginChallenge(input.loginChallenge);
+    this.operatorGuard.recordSuccess(ip, input.phone);
+    return this.beginOperatorSecondFactor(
+      operator,
+      client,
+      challenge,
+      "phone",
+      ip,
+      input.userAgent,
+    );
+  }
+
   private async completeOperatorLogin(
     input: OidcPasswordLoginInput,
     challenge: OidcLoginChallenge,
     client: OidcClientConfig,
   ): Promise<OidcLoginResult> {
     // Operator-realm hardening (D-X): rate-limit by IP+identifier, then verify
-    // the admin-surface Turnstile (no-op until CF_TURNSTILE_ENABLED), before
+    // the workforce human-verification proof before
     // touching credentials.
     const ip = input.clientIp ?? "unknown";
     this.operatorGuard.assertWithinRateLimit(ip, input.identifier);
-    await this.operatorGuard.verifyTurnstile(input.turnstileToken, ip);
+    await this.operatorGuard.verifyHuman(input.captchaToken, ip);
 
     const operator = await this.operators.authenticateOperator(
       input.identifier,
@@ -1348,51 +1735,37 @@ export class OidcService {
     await this.claimLoginChallenge(input.loginChallenge);
     this.operatorGuard.recordSuccess(ip, input.identifier);
 
+    return this.beginOperatorSecondFactor(
+      operator,
+      client,
+      challenge,
+      "password",
+      ip,
+      input.userAgent,
+    );
+  }
+
+  private async beginOperatorSecondFactor(
+    operator: OperatorView,
+    client: OidcClientConfig,
+    challenge: OidcLoginChallenge,
+    factor1Method: string,
+    ip: string,
+    userAgent?: string,
+  ): Promise<OidcLoginResult> {
     const { decision, methods } = await this.operatorMfa.resolveLoginMfa(
       operator.id,
     );
-    if (!decision.mfaRequired) {
-      // No second factor owed → finish as before (today's seed: optional +
-      // unenrolled → not required, so password-only operators are unaffected).
-      const completion = await this.finishOperatorSession(
-        operator,
-        client,
-        challenge,
-        "password",
-      );
-      // Anomaly check before recording this success (so history excludes it).
-      await this.operatorAnomaly.evaluateLogin(
-        operator.id,
-        ip,
-        input.userAgent,
-      );
-      await this.recordOperatorAttempt({
-        operatorId: operator.id,
-        identifier: input.identifier,
-        authMethod: "password",
-        result: "success",
-        ip,
-        userAgent: input.userAgent,
-      });
-      await this.recordOperatorAudit({
-        operatorId: operator.id,
-        action: "OperatorLogin",
-        result: "success",
-        resourceId: operator.id,
-        ip,
-        userAgent: input.userAgent,
-        metadata: { amr: ["pwd"] },
-      });
-      return completion;
-    }
+    if (!decision.mfaRequired)
+      throw new UnauthorizedException("workforce_mfa_required");
 
     await this.recordOperatorAttempt({
       operatorId: operator.id,
-      identifier: input.identifier,
-      authMethod: "password",
+      identifier: operator.username,
+      authMethod: factor1Method,
       result: "mfa_required",
       ip,
-      userAgent: input.userAgent,
+      userAgent: userAgent,
     });
     const mfaToken = randomUUID();
     const now = Math.floor(Date.now() / 1000);
@@ -1406,7 +1779,7 @@ export class OidcService {
         state: challenge.state,
         codeChallenge: challenge.codeChallenge,
         nonce: challenge.nonce,
-        factor1Method: "password",
+        factor1Method,
         attempts: 0,
         enrollRequired: decision.enrollRequired,
         webauthnRequired: decision.webauthnRequired,
@@ -1502,7 +1875,7 @@ export class OidcService {
     if (!operator) {
       throw new BadRequestException("invalid_grant");
     }
-    const client = await this.clients.findEnabledByClientId(pending.clientId);
+    const client = await this.loginClient(pending.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
     }
@@ -1628,7 +2001,7 @@ export class OidcService {
     if (!operator) {
       throw new BadRequestException("invalid_grant");
     }
-    const client = await this.clients.findEnabledByClientId(pending.clientId);
+    const client = await this.loginClient(pending.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
     }
@@ -1749,7 +2122,7 @@ export class OidcService {
     if (!operator) {
       throw new BadRequestException("invalid_grant");
     }
-    const client = await this.clients.findEnabledByClientId(pending.clientId);
+    const client = await this.loginClient(pending.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
     }
@@ -1804,7 +2177,13 @@ export class OidcService {
       // High-privilege: must enroll a passkey, not TOTP (§2.1).
       throw new BadRequestException("webauthn_required");
     }
-    return this.operatorMfa.beginTotpEnrollment(pending.operatorId);
+    if (!pending.enrollRequired)
+      throw new BadRequestException("mfa_already_enrolled");
+    return this.operatorMfa.beginTotpEnrollment(
+      pending.operatorId,
+      `login:${mfaToken}`,
+      true,
+    );
   }
 
   /**
@@ -1829,9 +2208,12 @@ export class OidcService {
       throw new BadRequestException("webauthn_required");
     }
 
+    if (!pending.enrollRequired)
+      throw new BadRequestException("mfa_already_enrolled");
     const result = await this.operatorMfa.confirmTotpEnrollment(
       pending.operatorId,
       input.code,
+      `login:${input.mfaToken}`,
     );
     if (!result.ok) {
       const attempts = pending.attempts + 1;
@@ -1871,7 +2253,7 @@ export class OidcService {
     if (!operator) {
       throw new BadRequestException("invalid_grant");
     }
-    const client = await this.clients.findEnabledByClientId(pending.clientId);
+    const client = await this.loginClient(pending.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
     }
@@ -1944,6 +2326,14 @@ export class OidcService {
       },
       absTtl,
     );
+
+    if (client.clientId === "accounts-self:workforce")
+      return {
+        sid,
+        realm: "workforce",
+        sessionMaxAge: absTtl,
+        redirectTo: "/workforce/account",
+      };
 
     const code = await this.issueAuthCode({
       client,
@@ -2362,12 +2752,23 @@ export class OidcService {
       throw new BadRequestException("invalid_grant");
     }
     const session = await this.redis.getOidcSession(presented.sessionId);
-    if (!session) {
+    if (
+      !session ||
+      session.realm !== client.realm ||
+      (session.realm === "workforce" &&
+        !/\+(totp|recovery|webauthn)$/.test(session.authMethod)) ||
+      !realmSubjectMatches(client.realm, session.sub)
+    ) {
       throw new BadRequestException("invalid_grant");
     }
     // console「下线此设备」只翻持久镜像的 status:刷新时回查,已吊销就把 Redis 会话
     // 一并收掉——远程下线在下一次刷新生效。
-    if (await this.durableSession.isRevoked(presented.sessionId)) {
+    if (
+      session.realm === "customer" &&
+      ((await this.durableSession.isRevoked(presented.sessionId)) ||
+        ((await this.customerMfa.enabled(session.sub.slice(4))) &&
+          !/\+(totp|recovery)$/.test(session.authMethod)))
+    ) {
       await this.redis.deleteOidcSession(presented.sessionId);
       // 真登出：这里才该收整条会话（不传 clientId）。
       await this.token.revokeSession(presented.sessionId);
@@ -2423,6 +2824,9 @@ export class OidcService {
     amr?: string[] | undefined;
   }): Promise<{ accessToken: string; idToken: string }> {
     const { client, sub, sid, realm } = input;
+    if (client.realm !== realm || !realmSubjectMatches(realm, sub)) {
+      throw new BadRequestException("invalid_grant");
+    }
     const userId = stripSubPrefix(sub);
     const userType = realm === "workforce" ? "operator" : "tenant_user";
 
@@ -2570,7 +2974,7 @@ export function buildTenantIdentityClaims(
   }
   if (user.email) {
     claims.email = user.email;
-    claims.email_verified = false;
+    claims.email_verified = user.emailVerified ?? false;
   }
   if (user.phone) {
     claims.phone = user.phone;
@@ -2593,19 +2997,20 @@ export interface RealmSids {
 }
 
 /**
- * 按 client 的 realm 选出该用哪一份会话。
- *
- * 之所以是一个具名函数而不是一行三元：它替换掉的是 `sids.tenant ?? sids.operator`，
- * 而那一行**只在浏览器恰好只有一份 cookie 时是对的**。两份都在时（任何登过 console
- * 或 website 的人再进 admin/opera 都是这个状态），运营者会话被租户会话遮蔽，
- * authorize 找不到可复用的会话，于是强制重新登录一次——两个工作台还互相遮蔽。
- * 没有报错、没有日志，只有"又要登一次"。
+ * Select only the session belonging to a supported server-owned realm.
+ * @param realm - Realm recorded on the enabled OIDC client or login challenge.
+ * @param sids - Both independent browser session candidates.
+ * @returns The matching session, or undefined without cross-realm fallback.
  */
 export function pickSessionForRealm(
   realm: string,
   sids: RealmSids,
 ): string | undefined {
-  return realm === "workforce" ? sids.operator : sids.tenant;
+  return realm === "workforce"
+    ? sids.operator
+    : realm === "customer"
+      ? sids.tenant
+      : undefined;
 }
 
 export function verifyPkceS256(verifier: string, challenge: string): boolean {

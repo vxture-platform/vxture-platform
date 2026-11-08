@@ -89,29 +89,15 @@ export const ACTOR_PARAM = "actorLabel";
 export const PROVIDER_PARAM = "providerName";
 
 export interface CustomerNotifyInput {
-  /**
-   * 安全事件挂在账号的**个人租户**名下。
-   *
-   * `support.inbox_messages.tenant_id` 是 NOT NULL，而安全事件是账号级的——这不是阻塞：
-   * 每个账号必有个人租户（注册时自动开通、部分唯一索引保证 ≤1、且有自愈尾巴），而收件箱
-   * 读路由只按 `account_id` 过滤、**不按租户**，所以填个人租户即可，用户以任何身份浏览
-   * 都看得见。解析语句见 `UserReadRepository.findPersonalTenantId`。
-   */
-  tenantId: string;
+  /** Account security events are never owned by a tenant. */
+  tenantId: null;
   templateCode: AccountNotificationTemplate;
   /** 去重锚。形状与位宽算术见 `securityReferenceId`。 */
   reference: { type: typeof SECURITY_REFERENCE_TYPE; id: string };
   params: Record<string, string | number>;
-  /**
-   * 只发这个人，不并入租户 owner。
-   *
-   * 这一批**必须**用它。个人租户的 owner 恰好就是本人，所以今天两条路结果相同；但默认那条
-   * 「owner 永远包含」的规则在这里是错的：组织管理员替成员设密码那一条收件人是**成员**，
-   * 而正文是第二人称（「由你所在组织的管理员修改」）——一旦哪天安全消息落到组织租户名下，
-   * 并入 owner 就会让一个管理员读到一句指着他说的话。
-   */
+  /** Only the affected account receives this event; never include a tenant owner. */
   exactRecipients: string[];
-  /** console 内相对路径。 */
+  /** Account-center path; the composition layer supplies the accounts origin. */
   link?: string | undefined;
   /**
    * 这条通知的**邮件那一半**改送这个地址；站内那一半不变，照旧落在

@@ -8,6 +8,7 @@
  * See docs/design/identity-platform-implementation.md §3 (16c), D-BE=A.
  */
 "use client";
+import { useTranslations } from "next-intl";
 
 import { useState, type FormEvent } from "react";
 import { Banner } from "@vxture/design-system";
@@ -21,6 +22,8 @@ import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
 import { resetPassword } from "@/api/oidc";
 
 export function ResetPasswordPanel({ token }: { readonly token: string }) {
+  const formText = useTranslations("accountsForms");
+
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
@@ -30,11 +33,11 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (password.length < 8) {
-      setError("密码至少 8 位");
+      setError(formText("use_at_least_8_characters"));
       return;
     }
     if (password !== confirm) {
-      setError("两次输入的密码不一致");
+      setError(formText("passwords_do_not_match"));
       return;
     }
     setError(undefined);
@@ -43,7 +46,11 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
       await resetPassword(token, password);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "重置失败，请稍后重试");
+      setError(
+        err instanceof Error
+          ? err.message
+          : formText("unable_to_reset_please_try_again_later"),
+      );
       setLoading(false);
     }
   };
@@ -55,8 +62,8 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
       // 办事面，单栏。成功态自带标题，故那一支不再套 useLoginLayout——否则页面
       // 顶着"设置新密码"，正文却说"密码已重置"，两个 h1 自相矛盾。
       layout="single"
-      title="设置新密码"
-      description="新密码将立即生效，这台设备之外的登录状态不受影响。"
+      title={formText("set_a_new_password")}
+      description={formText("sign_in_again_after_changing_your_password")}
       useLoginLayout={!done}
     >
       {done ? (
@@ -64,8 +71,10 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
          * 样式层退役后**没有任何定义**——渲染出来是一个裸的 ✓ 字符加两行无间距
          * 的文字。改用 DS 的终态屏。 */
         <AuthResultPanel
-          title="密码已重置"
-          description="请返回应用，使用新密码登录。"
+          title={formText("password_reset")}
+          description={formText(
+            "return_to_the_app_and_sign_in_with_your_new_password",
+          )}
         />
       ) : (
         /* `<form>` 原先不带任何布局类，三个字段是靠浏览器默认样式堆在一起的，
@@ -76,10 +85,10 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
           autoComplete="on"
         >
           <AuthField
-            label="新密码"
+            label={formText("new_password")}
             name="new-password"
             type="password"
-            placeholder="至少 8 位"
+            placeholder={formText("at_least_8_characters")}
             icon="lock"
             value={password}
             autoComplete="new-password"
@@ -88,10 +97,10 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
             onChange={setPassword}
           />
           <AuthField
-            label="确认新密码"
+            label={formText("confirm_new_password")}
             name="confirm-password"
             type="password"
-            placeholder="再次输入新密码"
+            placeholder={formText("enter_your_new_password_again")}
             icon="lock"
             value={confirm}
             autoComplete="new-password"
@@ -103,8 +112,8 @@ export function ResetPasswordPanel({ token }: { readonly token: string }) {
           {error ? <Banner tone="danger" title={error} /> : null}
           <AuthPrimaryButton
             loading={loading}
-            label="重置密码"
-            loadingLabel="重置中..."
+            label={formText("reset_password")}
+            loadingLabel={formText("resetting")}
           />
         </form>
       )}

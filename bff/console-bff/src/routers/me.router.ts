@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  GoneException,
   Inject,
   Logger,
   NotFoundException,
@@ -208,7 +209,7 @@ export class MeRouter {
     return this.accountDeletion.getState(req.user.id);
   }
 
-  /** 申请删除:再判一次资格,连带动作做完后账号进 30 天保留期。 */
+  /** Retired write entry: deletion now requires an account-center proof. */
   @Post("deletion")
   async requestAccountDeletion(
     @Req() req: Request & RequestContext,
@@ -218,26 +219,22 @@ export class MeRouter {
     if (body?.acknowledged !== true) {
       throw new BadRequestException("acknowledgement_required");
     }
-    const requested = await this.accountDeletion.request(req.user.id, req.ip);
-    auditCustomerAction(this.pool, req, {
-      action: "account.deletion.request",
-      resourceType: "account",
-      resourceId: req.user.id,
+    throw new GoneException({
+      code: "account_center_required",
+      message: "account_center_required",
+      path: "/account",
     });
-    return requested;
   }
 
-  /** 保留期内撤销删除并重新启用。 */
+  /** Retired write entry: recovery now requires an account-center proof. */
   @Post("deletion/cancel")
   async cancelAccountDeletion(@Req() req: Request & RequestContext) {
     if (!req.user) throw new UnauthorizedException("No active session");
-    const cancelled = await this.accountDeletion.cancel(req.user.id);
-    auditCustomerAction(this.pool, req, {
-      action: "account.deletion.cancel",
-      resourceType: "account",
-      resourceId: req.user.id,
+    throw new GoneException({
+      code: "account_center_required",
+      message: "account_center_required",
+      path: "/account",
     });
-    return cancelled;
   }
 
   @Get("workspaces")
@@ -792,6 +789,7 @@ export class MeRouter {
     if (!ok) throw new BadRequestException("invalid_code");
     const updated = await this.sessionAggregator.markCurrentUserEmailVerified(
       req.user.id,
+      ok.email,
     );
     if (!updated) throw new NotFoundException("user_not_found");
     return updated;

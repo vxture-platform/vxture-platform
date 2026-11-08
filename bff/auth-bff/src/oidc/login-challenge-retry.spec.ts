@@ -36,18 +36,19 @@ function build(
   };
   const service = Object.create(OidcService.prototype) as OidcService;
   Object.assign(service, {
+    customerMfa: { enabled: async () => false },
     redis,
     clients: {
       findEnabledByClientId: vi.fn(async () => ({ clientId: "opera", realm })),
     },
     operatorGuard: {
       assertWithinRateLimit: vi.fn(),
-      verifyTurnstile: vi.fn(async () => undefined),
+      verifyHuman: vi.fn(async () => undefined),
       recordFailure: vi.fn(),
       recordSuccess: vi.fn(),
     },
     operators: { authenticateOperator: vi.fn(async () => null) },
-    tenantGuard: { verifyTurnstile: vi.fn(async () => undefined) },
+    tenantGuard: { verifyHuman: vi.fn(async () => undefined) },
     authn: { loginWithPassword: vi.fn(async () => null) },
     recordOperatorAttempt: vi.fn(async () => undefined),
     recordTenantAttempt: vi.fn(async () => undefined),
@@ -75,9 +76,9 @@ describe("交互登录：失败不消耗登录挑战", () => {
     const { service, store } = build("workforce");
     (
       service as unknown as {
-        operatorGuard: { verifyTurnstile: ReturnType<typeof vi.fn> };
+        operatorGuard: { verifyHuman: ReturnType<typeof vi.fn> };
       }
-    ).operatorGuard.verifyTurnstile.mockRejectedValueOnce(
+    ).operatorGuard.verifyHuman.mockRejectedValueOnce(
       new UnauthorizedException("human_verification_failed"),
     );
     await expect(

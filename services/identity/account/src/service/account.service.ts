@@ -10,6 +10,8 @@ import {
 import { isIanaTimeZone } from "@vxture/core-utils";
 import { PasswordHasher } from "../password/password-hasher";
 import { USER_REPOSITORY } from "../tokens";
+import { ACCOUNT_DELETION_RETENTION_DAYS } from "../types/account.types";
+export { ACCOUNT_DELETION_RETENTION_DAYS } from "../types/account.types";
 import { SECURITY_ACTORS } from "./customer-notifier";
 import type {
   AccountNotificationTemplate,
@@ -35,6 +37,9 @@ import type {
   SetAvatarInput,
   UpdateProfileInput,
   UserReadRepository,
+  CustomerSecurityMutation,
+  CustomerSecuritySnapshot,
+  CustomerSecurityOperation,
   UserView,
 } from "../types/account.types";
 
@@ -51,21 +56,20 @@ export const USERNAME_CHANGE_COOLDOWN_DAYS = 30;
 const USERNAME_CHANGE_COOLDOWN_MS =
   USERNAME_CHANGE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
 
-/**
- * 自助删除的保留期(050-account §7,owner 2026-09-04):申请后 30 天内重新登录可撤销,
- * 到期由 platform-api 的 account-deletion-purge 清扫。
- */
-export const ACCOUNT_DELETION_RETENTION_DAYS = 30;
-
 export interface DeletionRequestResult {
   deletionRequestedAt: string;
-  /** 保留期到期、可被清扫的时刻(ISO)。 */
+  /** ISO timestamp at which recovery ends and purge becomes eligible. */
   purgeAt: string;
   revokedSessions: number;
   unboundIdentities: number;
 }
 
-/** 保留期到期时刻 = 申请时刻 + 30 天。 */
+/**
+ * Compute the fixed retention deadline.
+ * @param deletionRequestedAt - Committed deletion request timestamp.
+ * @returns The ISO deadline.
+ * @throws {RangeError} When the timestamp is invalid.
+ */
 export function accountPurgeAt(deletionRequestedAt: string): string {
   return new Date(
     new Date(deletionRequestedAt).getTime() +
@@ -213,20 +217,9 @@ export class AccountService {
   }
 
   /**
-   * 一条账号安全通知。取两件公共事实（可视码 + 个人租户），组装，投递。
-   *
-   * **取事实的两次读整个在 `emit` 的闭包里面。** 这不是排版：`emit` 的 try 只罩得住它自己
-   * 调的那个 build，读一旦被提到闭包外面，一次库抖动（连接被掐、语句超时）就会从这里抛回
-   * 业务调用方——客户的密码明明已经改成了，页面上收到的却是「改密失败」。也就是说一条
-   * 通知的失败反过来把它观察的那件安全操作判成失败，而这是 best-effort 这个词的反面。
-   * organization 那侧的 emit 是同一个形状：能抛的东西全在 build 里，docstring 说的「延迟
-   * 求值」才是真的。
-   *
-   * 取可视码走 `findUserForAdmin` 而不是 `getUserById`：被锁定的账号在后者的读谓词里
-   * 恒为 null，而「你的账号被锁定了」恰恰是最该发出去的那一条。
-   *
-   * 发不出去的情形**记一行日志**，不静默返回——否则「没发」和「发了」在日志里一样。
-   * 日志里放 user_no 不放账号 uuid：那一列是 uuid，日志也是人在读。
+   * Assemble account-owned security notices without querying tenant state.
+   * Reads stay inside emit so notification failures never invalidate committed writes.
+   * Disabled accounts must remain addressable for lock and forced-logout notices.
    */
   private async notifySecurity(
     templateCode: AccountNotificationTemplate,
@@ -235,14 +228,10 @@ export class AccountService {
   ): Promise<boolean> {
     if (!this.notifier) return false;
     return this.emit(`security ${templateCode}`, async () => {
-      const [user, personalTenantId] = await Promise.all([
-        this.users.findUserForAdmin(userId),
-        this.users.findPersonalTenantId(userId),
-      ]);
+      const user = await this.users.findUserForAdmin(userId);
       const outcome = securityNotice(templateCode, {
         accountId: userId,
         userNo: user?.userNo,
-        personalTenantId,
         occurredAt: new Date(),
         ...extra,
       });
@@ -330,6 +319,12 @@ export class AccountService {
     return this.users.getUserById(userId);
   }
 
+  /** Check names without exposing credential records to the browser. */
+  isAccountAvailable(account: string, userId: string): Promise<boolean> {
+    assertValidAccount(account);
+    return this.users.isAccountAvailable(account, userId);
+  }
+
   findUserByIdentifier(identifier: string) {
     return this.users.findUserByIdentifier(identifier);
   }
@@ -365,14 +360,22 @@ export class AccountService {
     if (!ok) return null;
     // Checked AFTER the password verifies so a disabled account can't be probed
     // via this flag. Username+password login is off; phone/email/social still work.
-    if (record.accountLoginDisabled) {
+    if (
+      identifier.includes("@")
+        ? record.emailLoginDisabled
+        : /^\+?\d+$/.test(identifier)
+          ? false
+          : record.accountLoginDisabled
+    ) {
       throw new UnauthorizedException("account_login_disabled");
     }
     return {
       id: record.id,
       account: record.account,
       email: record.email,
+      emailVerified: record.emailVerified ?? false,
       phone: record.phone,
+      phoneVerified: record.phoneVerified ?? false,
       name: record.name,
       status: record.status,
       avatarHash: record.avatarHash,
@@ -408,9 +411,118 @@ export class AccountService {
     context: PasswordWriteContext,
   ): Promise<void> {
     const hash = await this.hasher.hash(password);
-    await this.users.setPassword(userId, hash);
+    // Keep first-time password setup usable during onboarding; every actual
+    // credential change must revoke customer sessions and refresh tokens.
+    await this.users.setPassword(userId, hash, context.cause !== "initial_set");
     const notice = PASSWORD_NOTICE_OF[context.cause];
     await this.notifySecurity(notice.code, userId, { actor: notice.actor });
+  }
+
+  /**
+   * Apply a customer action whose ownership proof was already consumed by the identity boundary.
+   * @param userId - Authenticated customer.
+   * @param input - Operation, immutable target and captured account facts.
+   * @param passwords - Password values, never persisted or included in audit data.
+   * @returns Once the mutation, durable logout and security notification complete.
+   * @throws {Error} For stale facts, invalid credentials or unsafe mutations.
+   */
+  async applySelfSecurity(
+    userId: string,
+    input: {
+      operation: CustomerSecurityOperation;
+      target: string;
+      snapshot: CustomerSecuritySnapshot;
+    },
+    passwords: { password?: unknown; currentPassword?: unknown } = {},
+  ): Promise<void> {
+    const record = await this.users.findCredentialById(userId);
+    if (!record || record.status !== "active")
+      throw new NotFoundException("account_not_found");
+    const mutation: CustomerSecurityMutation = {
+      ...input,
+      expectedPasswordHash: record.passwordHash,
+    };
+    if (input.operation === "password") {
+      if (
+        typeof passwords.password !== "string" ||
+        passwords.password.length < 8 ||
+        passwords.password.length > 128
+      )
+        throw new BadRequestException("invalid_password");
+      if (
+        record.passwordHash &&
+        (typeof passwords.currentPassword !== "string" ||
+          passwords.currentPassword.length > 128 ||
+          !(await this.hasher.verify(
+            passwords.currentPassword,
+            record.passwordHash,
+          )))
+      )
+        throw new UnauthorizedException("invalid_current_password");
+      mutation.passwordHash = await this.hasher.hash(passwords.password);
+    }
+    if (
+      input.operation === "phone-change" &&
+      !/^1[3-9]\d{9}$/.test(input.target)
+    )
+      throw new BadRequestException("invalid_phone");
+    if (input.operation === "email-change") {
+      // Preserve the accepted address shape without ambiguous regex repetition.
+      const parts = input.target.split("@");
+      const domain = parts[1] ?? "";
+      const dot = domain.indexOf(".", 1);
+      if (
+        input.target.length > 128 ||
+        parts.length !== 2 ||
+        !parts[0] ||
+        /\s/.test(input.target) ||
+        dot < 1 ||
+        dot === domain.length - 1
+      )
+        throw new BadRequestException("invalid_email");
+    }
+    if (
+      ["account-login", "email-login"].includes(input.operation) &&
+      !["true", "false"].includes(input.target)
+    )
+      throw new BadRequestException("invalid_login_setting");
+    if (
+      input.operation === "phone-verify" &&
+      input.target !== input.snapshot.phone
+    )
+      throw new BadRequestException("security_proof_stale");
+    if (
+      input.operation === "email-verify" &&
+      (!input.target || input.target !== input.snapshot.email)
+    )
+      throw new BadRequestException("security_proof_stale");
+    if (input.operation === "username") assertValidAccount(input.target);
+    await this.users.applySelfSecurity(userId, mutation);
+    if (input.operation === "phone-change")
+      await this.notifySecurity("account.phone_changed", userId);
+    else if (input.operation === "email-change") {
+      await this.notifySecurity("account.email_changed_new", userId);
+      if (input.snapshot.email)
+        await this.notifySecurity("account.email_changed_old", userId, {
+          emailTo: input.snapshot.email,
+        });
+    } else if (input.operation === "password") {
+      const notice =
+        PASSWORD_NOTICE_OF[
+          input.snapshot.hasPassword ? "self_change" : "initial_set"
+        ];
+      await this.notifySecurity(notice.code, userId, { actor: notice.actor });
+    } else if (input.operation === "identity-unlink")
+      await this.notifySecurity("account.identity_unlinked", userId, {
+        provider: input.target,
+      });
+    else if (input.operation === "account-login")
+      await this.notifySecurity(
+        input.target === "true"
+          ? "account.password_login_enabled"
+          : "account.password_login_disabled",
+        userId,
+      );
   }
 
   /**
@@ -546,9 +658,12 @@ export class AccountService {
     return user;
   }
 
-  /** Mark the user's current email verified (verify-current flow). */
-  markEmailVerified(userId: string): Promise<UserView | null> {
-    return this.users.markEmailVerified(userId);
+  /** Mark only the exact email whose ownership was proven; reject stale proofs. */
+  markEmailVerified(
+    userId: string,
+    expectedEmail: string,
+  ): Promise<UserView | null> {
+    return this.users.markEmailVerified(userId, expectedEmail);
   }
 
   /** Mark the user's current phone verified (verify-current flow). */
@@ -627,8 +742,7 @@ export class AccountService {
    * 绑定一个第三方身份。**只有真的插了一行才通知**：社交登录每次都会走到这里，而 SQL 是
    * `on conflict do nothing`，不看返回值就会每次登录都发一条「你绑定了新的第三方账号」。
    *
-   * 社交注册那条尾巴此刻个人租户可能还没开通，那一趟会落在 `no_personal_tenant` 上并记
-   * 一行日志——那是对的：租户还不存在时收件箱无处可落，而它必须留下痕迹。
+   * Security delivery is account-owned even before personal-tenant provisioning.
    */
   async bindIdentity(input: BindIdentityInput): Promise<boolean> {
     const bound = await this.users.bindIdentity(input);
@@ -777,18 +891,24 @@ export class AccountService {
     return { revoked };
   }
 
-  // ── Self-service deletion (050-account §7) ──────────────────────────────
-  //   资格判定(组织 owner / 未清账单 / 付费余额 / 在途退款开票 / 有钱在途的订单)不在
-  //   这里——那些事实分属 organization / billing / subscription,由 console-bff 的
-  //   AccountDeletionAggregator 汇总后才调本方法。本方法只管账号自己这一段:状态、
-  //   会话、刷新令牌、三方绑定。
+  // ============================================================================
+  // Customer lifecycle; business blockers remain the caller's responsibility
+  // ============================================================================
 
   /**
    * Enter the retention window: active → deleting, revoke every session and
    * refresh token, unbind all federated identities. 404 when gone, 409 when
    * already deleting or otherwise not active.
+   * @param userId - Customer account identifier after business eligibility checks.
+   * @returns The committed retention deadline and cleanup counts.
+   * @throws {NotFoundException} When the account does not exist.
+   * @throws {ConflictException} When the account is no longer active.
+   * @throws {Error} When the identity transaction fails.
    */
-  async requestDeletion(userId: string): Promise<DeletionRequestResult> {
+  async requestDeletion(
+    userId: string,
+    snapshot?: CustomerSecuritySnapshot,
+  ): Promise<DeletionRequestResult> {
     const user = await this.users.getUserById(userId);
     if (!user) throw new NotFoundException("account_not_found");
     if (user.status === "deleting") {
@@ -797,24 +917,31 @@ export class AccountService {
     if (user.status !== "active") {
       throw new ConflictException("account_not_active");
     }
-    const updated = await this.users.requestDeletion(userId);
-    if (!updated?.deletionRequestedAt) {
+    const updated = snapshot
+      ? await this.users.requestDeletion(userId, snapshot)
+      : await this.users.requestDeletion(userId);
+    if (!updated) {
       throw new ConflictException("account_not_active");
     }
-    const revokedSessions = await this.users.revokeAllSessions(userId);
-    await this.users.revokeAllRefreshTokens(userId);
-    const unboundIdentities = await this.users.removeAllIdentities(userId);
     return {
-      deletionRequestedAt: updated.deletionRequestedAt,
+      ...updated,
       purgeAt: accountPurgeAt(updated.deletionRequestedAt),
-      revokedSessions,
-      unboundIdentities,
     };
   }
 
-  /** Undo within the retention window: deleting → active. 409 when not deleting. */
-  async cancelDeletion(userId: string): Promise<UserView> {
-    const user = await this.users.cancelDeletion(userId);
+  /**
+   * Restore only within retention; never restore revoked sessions or identities.
+   * @param userId - Customer account identifier.
+   * @returns The restored account.
+   * @throws {ConflictException} When not deleting or retention has expired.
+   */
+  async cancelDeletion(
+    userId: string,
+    expectedRequestedAt?: string,
+  ): Promise<UserView> {
+    const user = expectedRequestedAt
+      ? await this.users.cancelDeletion(userId, expectedRequestedAt)
+      : await this.users.cancelDeletion(userId);
     if (!user) throw new ConflictException("account_not_deleting");
     return user;
   }

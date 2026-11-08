@@ -32,6 +32,7 @@ function build(): Mocks {
   const controller = new SocialController(
     social as unknown as SocialAuthService,
     config as unknown as VxConfigService,
+    { verifyHuman: vi.fn(async () => {}) } as never,
   );
   return { social, config, controller };
 }

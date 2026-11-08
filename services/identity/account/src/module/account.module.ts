@@ -6,6 +6,8 @@ import { PasswordHasher } from "../password/password-hasher";
 import { MockUserRepository, PgUserRepository } from "../repository";
 import { FavoritesService } from "../favorites/favorites.service";
 import { NotificationPreferencesService } from "../notification-preferences/notification-preferences.service";
+import { AccountLifecycleRepository } from "../repository/account-lifecycle.repository";
+import { CustomerMfaRepository } from "../repository/customer-mfa.repository";
 import { AccountService } from "../service/account.service";
 import { ACCOUNT_PG_POOL, USER_REPOSITORY } from "../tokens";
 
@@ -81,11 +83,15 @@ export function resolveUserRepository(
     },
     PasswordHasher,
     AccountService,
+    AccountLifecycleRepository,
+    CustomerMfaRepository,
     FavoritesService,
     NotificationPreferencesService,
   ],
   exports: [
     AccountService,
+    AccountLifecycleRepository,
+    CustomerMfaRepository,
     PasswordHasher,
     FavoritesService,
     NotificationPreferencesService,
