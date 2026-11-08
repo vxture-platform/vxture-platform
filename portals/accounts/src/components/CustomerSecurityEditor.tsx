@@ -12,10 +12,7 @@ import { useEffect, useState } from "react";
 import {
   Banner,
   Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogForm,
   Icon,
   Input,
   NativeSelect,
@@ -395,170 +392,161 @@ export function CustomerSecurityEditor({
           );
         })}
       </AccountSection>
-      <Dialog
+      <DialogForm
+        size="sm"
+        title={action?.title}
+        submitting={busy}
+        cancelLabel={formText("cancel")}
+        pendingLabel={formText("processing")}
+        submitDisabled={
+          ["anchor", "target"].includes(stage) && code.length !== 6
+        }
+        submitLabel={
+          stage === "done"
+            ? formText("sign_in_again")
+            : stage === "start" || stage === "target-pending"
+              ? formText("send_code")
+              : stage === "authorized"
+                ? formText("confirm_change")
+                : formText("continue")
+        }
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (stage === "done") window.location.assign("/login");
+          else void run();
+        }}
         open={Boolean(action)}
         onOpenChange={(open) => {
           if (!open && !busy) setAction(null);
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{action?.title}</DialogTitle>
-          </DialogHeader>
-          {stage === "done" ? (
-            <>
-              <Banner
-                tone="success"
-                title={formText("done_please_sign_in_again")}
-              />
-              <Button onClick={() => window.location.assign("/login")}>
-                {formText("sign_in_again")}
-              </Button>
-            </>
-          ) : (
-            <form
-              className="accounts-settings-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void run();
-              }}
-            >
-              {stage === "start" ? (
-                <>
-                  {action &&
-                  ["phone-change", "email-change", "username"].includes(
-                    action.operation,
-                  ) ? (
-                    <Input
-                      aria-label={formText("new_value")}
-                      type={
-                        action.operation === "email-change" ? "email" : "text"
-                      }
-                      value={target}
-                      onChange={(e) => setTarget(e.target.value)}
-                      placeholder={
-                        action.operation === "phone-change"
-                          ? formText("new_phone_number")
-                          : action.operation === "email-change"
-                            ? formText("new_email")
-                            : formText("new_account_name")
-                      }
-                      required
-                      disabled={busy}
-                    />
-                  ) : null}
-                  {action?.operation === "password" ? (
-                    <>
-                      {security.hasPassword ? (
-                        <Input
-                          aria-label={formText("current_password")}
-                          type="password"
-                          autoComplete="current-password"
-                          placeholder={formText("current_password")}
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                          required
-                        />
-                      ) : null}
-                      <Input
-                        aria-label={formText("new_password")}
-                        type="password"
-                        autoComplete="new-password"
-                        placeholder={formText(
-                          "new_password_at_least_8_characters",
-                        )}
-                        minLength={8}
-                        maxLength={128}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
-                      <Input
-                        aria-label={formText("confirm_password")}
-                        type="password"
-                        autoComplete="new-password"
-                        placeholder={formText("confirm_password")}
-                        value={confirmation}
-                        onChange={(e) => setConfirmation(e.target.value)}
-                        required
-                      />
-                    </>
-                  ) : null}
-                  <label className="text-body-sm text-muted-foreground">
-                    {formText("verification_method")}
-                    <NativeSelect
-                      aria-label={formText("verification_method")}
-                      value={method}
-                      onChange={(e) => setMethod(e.target.value)}
-                      disabled={busy || action?.operation.endsWith("-verify")}
-                    >
-                      <option
-                        value="phone"
-                        disabled={
-                          !security.phoneVerified &&
-                          action?.operation !== "phone-verify"
-                        }
-                      >
-                        {formText("sms_code")}
-                      </option>
-                      <option
-                        value="email"
-                        disabled={
-                          !security.emailVerified &&
-                          action?.operation !== "email-verify"
-                        }
-                      >
-                        {formText("email_code")}
-                      </option>
-                    </NativeSelect>
-                  </label>
-                </>
-              ) : stage === "anchor" || stage === "target" ? (
-                <>
-                  <p className="text-body-sm text-muted-foreground">
-                    {stage === "anchor"
-                      ? formText("verify_your_current_contact")
-                      : formText("verify_new_contact", { target })}
-                  </p>
-                  <VerificationCodeInput
-                    name="security_code"
-                    label={formText("verification_code")}
-                    value={code}
-                    onChange={setCode}
+        {stage === "done" ? (
+          <>
+            <Banner
+              tone="success"
+              title={formText("done_please_sign_in_again")}
+            />
+          </>
+        ) : (
+          <div className="accounts-settings-form">
+            {stage === "start" ? (
+              <>
+                {action &&
+                ["phone-change", "email-change", "username"].includes(
+                  action.operation,
+                ) ? (
+                  <Input
+                    aria-label={formText("new_value")}
+                    type={
+                      action.operation === "email-change" ? "email" : "text"
+                    }
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                    placeholder={
+                      action.operation === "phone-change"
+                        ? formText("new_phone_number")
+                        : action.operation === "email-change"
+                          ? formText("new_email")
+                          : formText("new_account_name")
+                    }
+                    required
                     disabled={busy}
                   />
-                </>
-              ) : (
+                ) : null}
+                {action?.operation === "password" ? (
+                  <>
+                    {security.hasPassword ? (
+                      <Input
+                        aria-label={formText("current_password")}
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder={formText("current_password")}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        required
+                      />
+                    ) : null}
+                    <Input
+                      aria-label={formText("new_password")}
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={formText(
+                        "new_password_at_least_8_characters",
+                      )}
+                      minLength={8}
+                      maxLength={128}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <Input
+                      aria-label={formText("confirm_password")}
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={formText("confirm_password")}
+                      value={confirmation}
+                      onChange={(e) => setConfirmation(e.target.value)}
+                      required
+                    />
+                  </>
+                ) : null}
+                <label className="text-body-sm text-muted-foreground">
+                  {formText("verification_method")}
+                  <NativeSelect
+                    aria-label={formText("verification_method")}
+                    value={method}
+                    onChange={(e) => setMethod(e.target.value)}
+                    disabled={busy || action?.operation.endsWith("-verify")}
+                  >
+                    <option
+                      value="phone"
+                      disabled={
+                        !security.phoneVerified &&
+                        action?.operation !== "phone-verify"
+                      }
+                    >
+                      {formText("sms_code")}
+                    </option>
+                    <option
+                      value="email"
+                      disabled={
+                        !security.emailVerified &&
+                        action?.operation !== "email-verify"
+                      }
+                    >
+                      {formText("email_code")}
+                    </option>
+                  </NativeSelect>
+                </label>
+              </>
+            ) : stage === "anchor" || stage === "target" ? (
+              <>
                 <p className="text-body-sm text-muted-foreground">
-                  {stage === "authorized"
-                    ? action?.operation === "identity-link"
-                      ? formText("link_verified")
-                      : formText(
-                          "verified_confirming_will_sign_out_all_devices",
-                        )
-                    : formText("send_a_code_to_the_new_contact")}
+                  {stage === "anchor"
+                    ? formText("verify_your_current_contact")
+                    : formText("verify_new_contact", { target })}
                 </p>
-              )}
-              {error ? <Banner tone="danger" title={error} /> : null}
-              <Button
-                type="submit"
-                disabled={
-                  busy ||
-                  (["anchor", "target"].includes(stage) && code.length !== 6)
-                }
-              >
-                {busy
-                  ? formText("processing")
-                  : stage === "start" || stage === "target-pending"
-                    ? formText("send_code")
-                    : stage === "authorized"
-                      ? formText("confirm_change")
-                      : formText("continue")}
-              </Button>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+                <VerificationCodeInput
+                  name="security_code"
+                  label={formText("verification_code")}
+                  value={code}
+                  onChange={setCode}
+                  disabled={busy}
+                />
+              </>
+            ) : (
+              <p className="text-body-sm text-muted-foreground">
+                {stage === "authorized"
+                  ? action?.operation === "identity-link"
+                    ? formText("link_verified")
+                    : formText("verified_confirming_will_sign_out_all_devices")
+                  : formText("send_a_code_to_the_new_contact")}
+              </p>
+            )}
+            {error ? <Banner tone="danger" title={error} /> : null}
+          </div>
+        )}
+      </DialogForm>
     </>
   );
 }

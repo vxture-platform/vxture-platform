@@ -15,10 +15,7 @@ import { useLocale, useTranslations } from "next-intl";
 import {
   Banner,
   Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogForm,
   Skeleton,
   StatusBadge,
 } from "@vxture/design-system";
@@ -324,63 +321,47 @@ export function CustomerAccountCenter() {
           ) : null}
         </>
       ) : null}
-      <Dialog
+      <DialogForm
+        size="sm"
+        title={t(signOut?.current ? "signOutCurrent" : "signOutDevice")}
+        submitLabel={t("confirm")}
+        cancelLabel={t("cancel")}
+        submitting={revoking}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!signOut || revoking) return;
+          setRevoking(true);
+          setRevokeError("");
+          try {
+            await accountsRequest(
+              `/oidc/customer/self/sessions/${encodeURIComponent(signOut.sid)}`,
+              { method: "DELETE" },
+            );
+            if (signOut.current) window.location.assign("/login");
+            else {
+              setSignOut(null);
+              setRevision((v) => v + 1);
+            }
+          } catch (error) {
+            setRevokeError(
+              error instanceof Error ? error.message : t("loadFailed"),
+            );
+          } finally {
+            setRevoking(false);
+          }
+        }}
         open={Boolean(signOut)}
         onOpenChange={(open) => {
           if (!open && !revoking) setSignOut(null);
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t(signOut?.current ? "signOutCurrent" : "signOutDevice")}
-            </DialogTitle>
-          </DialogHeader>
-          {signOut ? (
-            <p className="text-body-sm text-muted-foreground">
-              {device(signOut.userAgent)}
-            </p>
-          ) : null}
-          {revokeError ? <Banner tone="danger" title={revokeError} /> : null}
-          <div className="accounts-dialog-actions">
-            <span />
-            <Button
-              variant="outline"
-              disabled={revoking}
-              onClick={() => setSignOut(null)}
-            >
-              {t("cancel")}
-            </Button>
-            <Button
-              disabled={revoking}
-              onClick={async () => {
-                if (!signOut || revoking) return;
-                setRevoking(true);
-                setRevokeError("");
-                try {
-                  await accountsRequest(
-                    `/oidc/customer/self/sessions/${encodeURIComponent(signOut.sid)}`,
-                    { method: "DELETE" },
-                  );
-                  if (signOut.current) window.location.assign("/login");
-                  else {
-                    setSignOut(null);
-                    setRevision((v) => v + 1);
-                  }
-                } catch (error) {
-                  setRevokeError(
-                    error instanceof Error ? error.message : t("loadFailed"),
-                  );
-                } finally {
-                  setRevoking(false);
-                }
-              }}
-            >
-              {t("confirm")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        {signOut ? (
+          <p className="text-body-sm text-muted-foreground">
+            {device(signOut.userAgent)}
+          </p>
+        ) : null}
+        {revokeError ? <Banner tone="danger" title={revokeError} /> : null}
+      </DialogForm>
     </main>
   );
 }

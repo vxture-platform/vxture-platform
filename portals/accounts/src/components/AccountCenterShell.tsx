@@ -119,7 +119,8 @@ export function AccountCenterShell({
       />
       <div className={`accounts-workspace${open ? " accounts-nav-open" : ""}`}>
         {open ? (
-          <button
+          <Button
+            variant="ghost"
             className="accounts-nav-dismiss"
             aria-label={t("closeNav")}
             onClick={() => setOpen(false)}

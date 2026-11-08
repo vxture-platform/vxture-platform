@@ -224,14 +224,16 @@ function HumanCaptcha({
   return (
     <div className="flex w-full flex-col gap-sm" data-testid="human-captcha">
       <div id={id} ref={container} />
-      <button
+      <Button
         id={`${id}-button`}
         type="button"
-        hidden={status !== "challenge"}
-        className="text-body-sm text-primary"
+        variant="ghost"
+        className={
+          status === "challenge" ? "text-body-sm text-primary" : "hidden"
+        }
       >
         {formText("complete_human_verification")}
-      </button>
+      </Button>
       <p role="status" className="text-body-sm text-muted-foreground">
         {status === "loading"
           ? formText("loading_human_verification")

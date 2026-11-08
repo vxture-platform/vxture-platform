@@ -12,10 +12,7 @@ import { useEffect, useState } from "react";
 import {
   Banner,
   Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogForm,
   Input,
   NativeSelect,
   SegmentedControl,
@@ -112,7 +109,8 @@ export function CustomerProfileEditor({
   return (
     <>
       <div className="accounts-identity">
-        <button
+        <Button
+          variant="ghost"
           className="accounts-identity-avatar"
           aria-label={formText("change_avatar")}
           onClick={() => {
@@ -123,7 +121,7 @@ export function CustomerProfileEditor({
           }}
         >
           {avatar(currentPicture)}
-        </button>
+        </Button>
         <div>
           <h2>{profile.name || profile.account}</h2>
           <div className="accounts-identity-meta">
@@ -173,72 +171,64 @@ export function CustomerProfileEditor({
         {error && !avatarOpen ? <Banner tone="danger" title={error} /> : null}
       </AccountSection>
       <CustomerPreferences profile={profile} />
-      <Dialog
+      <DialogForm
+        size="sm"
+        title={formText("change_avatar")}
+        submitLabel={formText("save")}
+        cancelLabel={formText("cancel")}
+        submitting={busy}
+        submitDisabled={!file && !resetAvatar}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveAvatar();
+        }}
         open={avatarOpen}
         onOpenChange={(open) => {
           if (!busy) setAvatarOpen(open);
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{formText("change_avatar")}</DialogTitle>
-          </DialogHeader>
-          <div className="accounts-avatar-preview">{avatar(picture)}</div>
-          <label className="text-body-sm">
-            {formText("choose_image")}
-            <Input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              disabled={busy}
-              onChange={(e) => {
-                const next = e.target.files?.[0];
-                if (!next) return;
-                if (
-                  next.size > 1048576 ||
-                  !["image/png", "image/jpeg", "image/webp"].includes(next.type)
-                ) {
-                  setError(
-                    formText(
-                      "choose_a_png_jpeg_or_webp_image_no_larger_than_1mb",
-                    ),
-                  );
-                  return;
-                }
-                setFile(next);
-                setResetAvatar(false);
-                setError("");
-              }}
-            />
-          </label>
-          {error ? <Banner tone="danger" title={error} /> : null}
-          <div className="accounts-dialog-actions">
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => {
-                setFile(null);
-                setResetAvatar(true);
-              }}
-            >
-              {formText("restore_default")}
-            </Button>
-            <span />
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setAvatarOpen(false)}
-            >
-              {formText("cancel")}
-            </Button>
-            <Button
-              disabled={busy || (!file && !resetAvatar)}
-              onClick={() => void saveAvatar()}
-            >
-              {formText("save")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        <div className="accounts-avatar-preview">{avatar(picture)}</div>
+        <label className="text-body-sm">
+          {formText("choose_image")}
+          <Input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.files?.[0];
+              if (!next) return;
+              if (
+                next.size > 1048576 ||
+                !["image/png", "image/jpeg", "image/webp"].includes(next.type)
+              ) {
+                setError(
+                  formText(
+                    "choose_a_png_jpeg_or_webp_image_no_larger_than_1mb",
+                  ),
+                );
+                return;
+              }
+              setFile(next);
+              setResetAvatar(false);
+              setError("");
+            }}
+          />
+        </label>
+        {error ? <Banner tone="danger" title={error} /> : null}
+        <div className="accounts-dialog-actions">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => {
+              setFile(null);
+              setResetAvatar(true);
+            }}
+          >
+            {formText("restore_default")}
+          </Button>
+        </div>
+      </DialogForm>
     </>
   );
 }
