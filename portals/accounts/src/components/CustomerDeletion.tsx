@@ -7,7 +7,8 @@
  * @date 2026-11-08
  */
 "use client";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime } from "@vxture-platform/shared";
 import { useEffect, useState } from "react";
 import { Banner, Button, Checkbox, NativeSelect } from "@vxture/design-system";
 import { accountsRequest, type CustomerSecurity } from "@/api/customer-self";
@@ -41,6 +42,7 @@ export function CustomerDeletion({
 }: {
   security: CustomerSecurity | null;
 }) {
+  const locale = useLocale();
   const formText = useTranslations("accountsForms");
   const LABELS: Record<string, string> = {
     org_owner: formText("transfer_or_close_the_organizations_you_own_first"),
@@ -165,9 +167,7 @@ export function CustomerDeletion({
               {recovery ? (
                 <p className="text-body-sm text-muted-foreground">
                   {formText("scheduled_permanent_deletion")}
-                  {state.purgeAt
-                    ? new Date(state.purgeAt).toLocaleString()
-                    : "—"}
+                  {state.purgeAt ? formatDateTime(state.purgeAt, locale) : "—"}
                 </p>
               ) : (
                 <p className="text-body-sm text-muted-foreground">

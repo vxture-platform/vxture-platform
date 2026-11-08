@@ -45,20 +45,11 @@ const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
   denied: "warning",
 };
 
-/** 已知动作 → i18n 键(点转下划线;未知动作回退原码,契约演进容错)。 */
-/**
- * 已知动作码 —— **必须与 console-bff 实写的集合一致**（守卫 lint:audit-actions）。
- *
- * 不一致的两种后果都不报错、都只在界面上现形：
- *  · UI 多 → 筛选项永远空列表，而空列表看起来像「没发生过」；
- *  · UI 少 → 日志显示成原始码（`tenant.owner.transfer`），且筛不到——转让所有权、
- *    注销租户这两条恰恰是这一页最该被看见的。
- *
- * 2026-09-08 清点：BFF 实写 37 个，UI 只认 18 个，差 19 个全是「少」。
- */
+// ============================================================================
+// Active writers and retained historical actions
+// ============================================================================
+/** Active action codes must match the current Console audit writers. */
 const KNOWN_ACTIONS = new Set([
-  "account.deletion.cancel",
-  "account.deletion.request",
   "account.email.change",
   "account.identity.unbind",
   "account.login_method.update",
@@ -104,12 +95,18 @@ const KNOWN_ACTIONS = new Set([
   "tenant.workspace.update",
 ]);
 
+/** Retired writers still have readable, filterable records in the audit log. */
+const HISTORICAL_ACTIONS = new Set([
+  "account.deletion.cancel",
+  "account.deletion.request",
+]);
+
 type ResultFilter = "all" | "success" | "failure";
 
 /** 服务端分页页大小(与账单页同档)。 */
 const PAGE_SIZE = 20;
 /** 动作筛选的选项 = 有译名的受管动作码,按字母序。 */
-const ACTION_OPTIONS = [...KNOWN_ACTIONS].sort();
+const ACTION_OPTIONS = [...KNOWN_ACTIONS, ...HISTORICAL_ACTIONS].sort();
 
 export function AuditLogsPage() {
   const { fmtDate, fmtTime } = useDateFormat();
@@ -175,7 +172,7 @@ export function AuditLogsPage() {
   // 它只依赖 t,包一层即可两头都对。
   const actionLabel = useCallback(
     (action: string): string =>
-      KNOWN_ACTIONS.has(action)
+      KNOWN_ACTIONS.has(action) || HISTORICAL_ACTIONS.has(action)
         ? t(`action.${action.replace(/\./g, "_")}`)
         : action,
     [t],

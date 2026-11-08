@@ -8,6 +8,7 @@
  */
 "use client";
 import { useTranslations } from "next-intl";
+import { formatPrincipalNoOr } from "@vxture-platform/shared";
 import { useEffect, useState } from "react";
 import {
   Banner,
@@ -126,7 +127,7 @@ export function CustomerProfileEditor({
           <h2>{profile.name || profile.account}</h2>
           <div className="accounts-identity-meta">
             <span>{profile.account}</span>
-            <span>{profile.userNo}</span>
+            <span>{formatPrincipalNoOr(profile.userNo, "user", "—")}</span>
           </div>
         </div>
       </div>
@@ -161,7 +162,7 @@ export function CustomerProfileEditor({
         </AccountRow>
         <AccountRow label={formText("account")}>{profile.account}</AccountRow>
         <AccountRow label={formText("user_number")}>
-          {profile.userNo || "—"}
+          {formatPrincipalNoOr(profile.userNo, "user", "—")}
         </AccountRow>
         {editing ? (
           <Button disabled={busy || !name.trim()} onClick={() => void save()}>

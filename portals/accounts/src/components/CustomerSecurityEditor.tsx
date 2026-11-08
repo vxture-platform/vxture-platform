@@ -7,7 +7,8 @@
  * @date 2026-11-08
  */
 "use client";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDay } from "@vxture-platform/shared";
 import { useEffect, useState } from "react";
 import {
   Banner,
@@ -36,6 +37,7 @@ export function CustomerSecurityEditor({
 }: {
   security: CustomerSecurity;
 }) {
+  const locale = useLocale();
   const formText = useTranslations("accountsForms");
   const [enabledProviders, setEnabledProviders] = useState<string[]>([]);
   useEffect(() => {
@@ -384,7 +386,7 @@ export function CustomerSecurityEditor({
                 </span>
                 {connected ? (
                   <span className="text-muted-foreground">
-                    {new Date(connected.connectedAt).toLocaleDateString()}
+                    {formatDay(connected.connectedAt, locale)}
                   </span>
                 ) : null}
               </span>
