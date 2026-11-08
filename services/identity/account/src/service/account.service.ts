@@ -466,12 +466,21 @@ export class AccountService {
       !/^1[3-9]\d{9}$/.test(input.target)
     )
       throw new BadRequestException("invalid_phone");
-    if (
-      input.operation === "email-change" &&
-      (input.target.length > 128 ||
-        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.target))
-    )
-      throw new BadRequestException("invalid_email");
+    if (input.operation === "email-change") {
+      // Preserve the accepted address shape without ambiguous regex repetition.
+      const parts = input.target.split("@");
+      const domain = parts[1] ?? "";
+      const dot = domain.indexOf(".", 1);
+      if (
+        input.target.length > 128 ||
+        parts.length !== 2 ||
+        !parts[0] ||
+        /\s/.test(input.target) ||
+        dot < 1 ||
+        dot === domain.length - 1
+      )
+        throw new BadRequestException("invalid_email");
+    }
     if (
       ["account-login", "email-login"].includes(input.operation) &&
       !["true", "false"].includes(input.target)

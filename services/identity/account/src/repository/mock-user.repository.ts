@@ -233,10 +233,11 @@ export class MockUserRepository implements UserReadRepository {
       )
         throw new ConflictException("cannot_remove_last_login_method");
       if (operation === "identity-unlink") {
+        // Match the code-unit ordering used by persisted security snapshots.
         const subjects = identities
           .filter(([key]) => key.startsWith(target + ":"))
           .map(([key]) => key.slice(target.length + 1))
-          .sort();
+          .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
         if (
           JSON.stringify(subjects) !== JSON.stringify(e.identitySubjects ?? [])
         )

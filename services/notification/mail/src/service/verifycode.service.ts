@@ -132,7 +132,18 @@ export class VerifyCodeService {
     if (typeof email !== "string")
       throw new BadRequestException("invalid_email");
     const address = email.trim().toLowerCase();
-    if (address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+    // Split once so invalid addresses cannot trigger regex backtracking.
+    const parts = address.split("@");
+    const domain = parts[1] ?? "";
+    const dot = domain.indexOf(".", 1);
+    if (
+      address.length > 254 ||
+      parts.length !== 2 ||
+      !parts[0] ||
+      /\s/.test(address) ||
+      dot < 1 ||
+      dot === domain.length - 1
+    )
       throw new BadRequestException("invalid_email");
     const addressKey = createHash("sha256").update(address).digest("hex");
     return {

@@ -102,8 +102,9 @@ export class AliyunCaptchaVerifier {
       CaptchaVerifyParam: param,
       SceneId: sceneId,
     };
+    // RPC signatures require ASCII order, independent of the process locale.
     const canonical = Object.keys(params)
-      .sort()
+      .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
       .map((key) => `${encode(key)}=${encode(params[key]!)}`)
       .join("&");
     params.Signature = createHmac("sha1", `${this.options.accessKeySecret}&`)
