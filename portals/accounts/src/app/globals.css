@@ -250,13 +250,19 @@ body {
   letter-spacing: calc(var(--vx-spacing) * -0.1);
   flex: 1;
 }
+.accounts-section,
+.accounts-identity {
+  background-color: color-mix(in srgb, var(--card) 55%, transparent);
+  background-image: none;
+  border-color: color-mix(in srgb, var(--border) 65%, transparent);
+  box-shadow: none;
+}
+.dark .accounts-section,
+.dark .accounts-identity {
+  background-color: color-mix(in srgb, var(--card) 65%, transparent);
+}
 .accounts-section {
   --accounts-body-size: calc((var(--vx-text-xs) + var(--vx-text-sm)) / 2);
-  --accounts-section-background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--card) 96%, var(--primary)),
-    color-mix(in srgb, var(--card) 88%, var(--primary))
-  );
   padding: var(--space-lg);
   gap: 0;
   border-radius: var(--radius-md);
@@ -266,11 +272,6 @@ body {
 }
 .accounts-section-danger {
   border-color: color-mix(in srgb, var(--destructive) 32%, var(--border));
-  --accounts-section-background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--card) 98%, var(--destructive)),
-    color-mix(in srgb, var(--card) 93%, var(--destructive))
-  );
 }
 .accounts-section-danger .accounts-section-heading,
 .accounts-section-danger .accounts-section-heading > svg {
@@ -339,8 +340,8 @@ body {
   gap: var(--space-lg);
   padding: var(--space-lg);
   border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--border) 65%, transparent);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--background) 70%, transparent);
 }
 .accounts-identity-avatar {
   width: calc(var(--vx-spacing) * 24);
@@ -371,6 +372,11 @@ body {
 }
 .accounts-identity > div {
   min-width: 0;
+  flex: 1;
+}
+.accounts-identity-edit {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .accounts-identity-meta {
   display: flex;
@@ -653,6 +659,7 @@ body {
     padding: var(--space-lg);
   }
   .accounts-identity {
+    flex-wrap: wrap;
     gap: var(--space-md);
     padding: calc(var(--vx-spacing) * 5);
   }
