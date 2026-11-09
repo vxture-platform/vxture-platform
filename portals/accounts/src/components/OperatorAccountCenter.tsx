@@ -2,11 +2,8 @@
  * OperatorAccountCenter.tsx — operator self-service account center (Phase B).
  * @package @vxture/accounts
  *
- * 运营者本人账户自助中心,身份层单点(收敛 admin/opera/arche 各自的入口)。同源
- * `vx_sid_op` 鉴权读身份(fetchOperatorSelf);内联两步流改邮箱/手机(email 走邮件码、
- * phone 走短信码),改密码(验旧+设新),并给出通行密钥管理入口。未登录 → 显示登录提示
- * (与 passkeys 页同口径)。B.1 邮箱、B.2 手机/密码;MFA 自助为 B.2c。
- * Application return navigation is owned by the route shell.
+ * Reads only the workforce identity and manages its contact, password and MFA.
+ * Confirmed session loss clears the account shell and returns to the public home.
  */
 "use client";
 import { validNewPassword } from "@/lib/password-policy";
@@ -50,6 +47,10 @@ import {
 import { VerificationCodeInput } from "./VerificationCodeInput";
 import { MfaEnrollment } from "./MfaEnrollment";
 import { MfaRecoveryCodes } from "./MfaRecoveryCodes";
+import {
+  useAccountSessionExpired,
+  useAccountMenuUpdate,
+} from "./AccountCenterShell";
 
 type Load =
   | { state: "loading" }
@@ -59,6 +60,8 @@ type Load =
   | { state: "ready"; self: OperatorSelf };
 
 export function OperatorAccountCenter() {
+  const expire = useAccountSessionExpired();
+  const updateMenu = useAccountMenuUpdate();
   const t = useTranslations("operatorAccount");
   const center = useTranslations("accountCenter");
   const ui = useTranslations("accountsUi");
@@ -67,6 +70,17 @@ export function OperatorAccountCenter() {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const inFlight = useRef(false);
   const active = useRef(false);
+
+  useEffect(() => {
+    if (load.state !== "ready") return;
+    updateMenu({
+      identityKey: `workforce:${load.self.username}`,
+      account: load.self.username,
+      displayName: load.self.username,
+      phone: load.self.phone,
+      email: load.self.email,
+    });
+  }, [load, updateMenu]);
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return;
@@ -81,9 +95,10 @@ export function OperatorAccountCenter() {
         );
     } catch (e) {
       if (!active.current) return;
-      if (e instanceof OperatorUnauthenticatedError)
+      if (e instanceof OperatorUnauthenticatedError) {
         setLoad({ state: "unauth" });
-      else
+        expire();
+      } else
         setLoad((previous) =>
           previous.state === "ready" || previous.state === "passwordChanged"
             ? previous
@@ -95,7 +110,7 @@ export function OperatorAccountCenter() {
     } finally {
       inFlight.current = false;
     }
-  }, []);
+  }, [expire]);
 
   useEffect(() => {
     active.current = true;
@@ -123,6 +138,7 @@ export function OperatorAccountCenter() {
     };
   }, [refresh]);
 
+  if (load.state === "unauth") return null;
   return (
     <main className="flex flex-col gap-lg">
       <AccountHeading
@@ -132,24 +148,6 @@ export function OperatorAccountCenter() {
 
       {load.state === "loading" ? (
         <Skeleton className="h-40 w-full" />
-      ) : load.state === "unauth" ? (
-        <div className="flex flex-col items-start gap-md">
-          <Banner
-            tone="warning"
-            title={t("loginRequired")}
-            description={center("workforceLoginHint")}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setLoad({ state: "loading" });
-              void refresh();
-            }}
-          >
-            {center("retry")}
-          </Button>
-        </div>
       ) : load.state === "error" ? (
         <div className="flex flex-col items-start gap-md">
           <Banner
@@ -180,7 +178,10 @@ export function OperatorAccountCenter() {
           section={section}
           self={load.self}
           onChanged={refresh}
-          onPasswordChanged={() => setLoad({ state: "passwordChanged" })}
+          onPasswordChanged={() => {
+            setLoad({ state: "passwordChanged" });
+            expire();
+          }}
         />
       )}
     </main>

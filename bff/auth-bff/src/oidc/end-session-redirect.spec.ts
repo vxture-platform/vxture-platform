@@ -28,6 +28,7 @@ function build(registered: string[]) {
   const service = Object.create(OidcService.prototype) as OidcService;
   Object.assign(service, {
     clients,
+    config: { platform: { WEBSITE_BASE_URL: "https://vxture.com/zh-CN" } },
     redis: {
       /* 会话已过期:两个读都给空——这正是走查那一幕。 */
       getOidcSession: vi.fn(async () => null),
@@ -91,5 +92,77 @@ describe("end_session 回跳:会话已过期时", () => {
       "不存在的客户端",
     );
     expect(target).toBeNull();
+  });
+});
+
+// ============================================================================
+// Accounts self-service logout
+// ============================================================================
+
+describe("Accounts logout destination", () => {
+  it.each(["customer", "workforce"])(
+    "returns %s Accounts sessions to the configured public home",
+    async (realm) => {
+      const { service, clients } = build([]);
+      expect(
+        await service.endSession(
+          ["sid-expired"],
+          undefined,
+          undefined,
+          `accounts-self:${realm}`,
+        ),
+      ).toBe("https://vxture.com/");
+      expect(clients.findEnabledByClientId).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ignores an injected destination and state for an internal Accounts intent", async () => {
+    const { service } = build([]);
+    expect(
+      await service.endSession(
+        [],
+        "https://evil.example/",
+        "secret",
+        "accounts-self:customer",
+      ),
+    ).toBe("https://vxture.com/");
+  });
+
+  it("revokes the selected session and notifies its relying parties before returning home", async () => {
+    const { service } = build([]);
+    const redis = {
+      getOidcSession: vi.fn(async () => ({ sub: "usr-1" })),
+      getOidcSessionClients: vi.fn(async () => ["website"]),
+      deleteOidcSession: vi.fn(),
+    };
+    const token = { revokeSession: vi.fn() };
+    const notify = vi.fn();
+    Object.assign(service, { redis, token, sendBackChannelLogouts: notify });
+    expect(
+      await service.endSession(
+        ["sid-current"],
+        undefined,
+        undefined,
+        "accounts-self:customer",
+      ),
+    ).toBe("https://vxture.com/");
+    expect(redis.deleteOidcSession).toHaveBeenCalledWith("sid-current");
+    expect(token.revokeSession).toHaveBeenCalledWith("sid-current");
+    expect(notify).toHaveBeenCalledWith("sid-current", "usr-1", ["website"]);
+  });
+
+  it("does not recognize lookalike internal client identifiers", async () => {
+    const { service } = build([]);
+    expect(
+      await service.logoutRealmOf("accounts-self:customer:evil"),
+    ).toBeNull();
+    expect(
+      await service.endSession(
+        [],
+        "https://evil.example/",
+        undefined,
+        "accounts-self:customer:evil",
+      ),
+    ).toBeNull();
   });
 });

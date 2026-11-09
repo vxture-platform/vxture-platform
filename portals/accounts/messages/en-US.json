@@ -167,6 +167,16 @@
     "methodUnknown": "Other method"
   },
   "accountsUi": {
+    "userMenu": {
+      "open": "User panel",
+      "profile": "Personal information",
+      "signOut": "Sign out",
+      "signingOut": "Signing out…",
+      "realNameUnverified": "Identity unverified",
+      "phoneNotBound": "No phone linked",
+      "emailNotBound": "No email linked",
+      "contactUnavailable": "Contact details unavailable"
+    },
     "tools": "Page tools",
     "theme": "Toggle theme",
     "language": "Select language",

@@ -11,6 +11,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AccountHeading, AccountSection as Panel } from "./AccountPrimitives";
+import {
+  useAccountSessionExpired,
+  useAccountMenuUpdate,
+} from "./AccountCenterShell";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Banner,
@@ -64,6 +68,8 @@ function projection<T>(result: PromiseSettledResult<T>): Projection<T> {
  * @returns Customer profile, security status and recent activity.
  */
 export function CustomerAccountCenter() {
+  const expire = useAccountSessionExpired();
+  const updateMenu = useAccountMenuUpdate();
   const t = useTranslations("accountCenter");
   const locale = useLocale();
   const ui = useTranslations("accountsUi");
@@ -77,6 +83,26 @@ export function CustomerAccountCenter() {
   const [signOut, setSignOut] = useState<CustomerSession | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState("");
+
+  useEffect(() => {
+    if (load.state !== "ready") return;
+    const { profile, security } = load;
+    const base =
+      process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
+    updateMenu({
+      identityKey: `customer:${profile.id}`,
+      account: profile.account,
+      displayName: profile.name?.trim() || profile.account,
+      ...(profile.avatarHash
+        ? {
+            avatarSrc: `${base}/avatar/usr_${profile.id}?v=${encodeURIComponent(profile.avatarHash)}`,
+          }
+        : {}),
+      ...(security.ok
+        ? { phone: security.value.phone, email: security.value.email }
+        : {}),
+    });
+  }, [load, updateMenu]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,6 +139,7 @@ export function CustomerAccountCenter() {
           )
         ) {
           setLoad({ state: "unauthenticated" });
+          expire();
           return;
         }
         setLoad({
@@ -123,15 +150,18 @@ export function CustomerAccountCenter() {
           history: projection(results[2]),
         });
       } catch (error) {
-        if (!controller.signal.aborted)
+        if (controller.signal.aborted) return;
+        if (
+          error instanceof CustomerReadError &&
+          error.kind === "unauthenticated"
+        ) {
+          setLoad({ state: "unauthenticated" });
+          expire();
+        } else {
           setLoad((previous) =>
-            error instanceof CustomerReadError &&
-            error.kind === "unauthenticated"
-              ? { state: "unauthenticated" }
-              : previous.state === "ready"
-                ? previous
-                : { state: "error" },
+            previous.state === "ready" ? previous : { state: "error" },
           );
+        }
       } finally {
         inFlight = false;
       }
@@ -151,7 +181,7 @@ export function CustomerAccountCenter() {
       window.removeEventListener("pageshow", reconcile);
       document.removeEventListener("visibilitychange", reconcile);
     };
-  }, [revision]);
+  }, [revision, expire]);
 
   function date(value: string | undefined) {
     if (!value) return t("notSet");
@@ -201,6 +231,7 @@ export function CustomerAccountCenter() {
     </div>
   );
 
+  if (load.state === "unauthenticated") return null;
   return (
     <main className="flex flex-col gap-lg">
       <AccountHeading
@@ -219,16 +250,6 @@ export function CustomerAccountCenter() {
         <div role="status" aria-label={t("loading")}>
           <Skeleton className="h-40 w-full" />
           <span className="sr-only">{t("loading")}</span>
-        </div>
-      ) : null}
-      {load.state === "unauthenticated" ? (
-        <div className="flex flex-col items-start gap-md">
-          <Banner
-            tone="warning"
-            title={t("customerLoginRequired")}
-            description={t("customerLoginHint")}
-          />
-          {retry}
         </div>
       ) : null}
       {load.state === "error" ? failed : null}
@@ -379,7 +400,7 @@ export function CustomerAccountCenter() {
               `/oidc/customer/self/sessions/${encodeURIComponent(signOut.sid)}`,
               { method: "DELETE" },
             );
-            if (signOut.current) window.location.assign("/login");
+            if (signOut.current) expire();
             else {
               setSignOut(null);
               setRevision((v) => v + 1);
