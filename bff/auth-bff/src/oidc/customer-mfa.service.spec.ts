@@ -21,6 +21,12 @@ function fixture() {
   const hashes = new Set<string>();
   const repo = {
     read: vi.fn(async () => factor),
+    remove: vi.fn(async (_id: string, version: string, _sid: string) => {
+      if (!factor || factor.version !== version) return false;
+      factor = null;
+      hashes.clear();
+      return true;
+    }),
     activate: vi.fn(
       async (
         _id: string,
@@ -182,6 +188,86 @@ describe("customer MFA ceremonies", () => {
       ),
     ).rejects.toThrow("mfa_owner_mismatch");
     expect(f.repo.activate).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// Fresh proof, exact factor version and removal races
+// ============================================================================
+describe("customer MFA removal", () => {
+  async function enrolled() {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-09T00:00:00Z"));
+    const f = fixture();
+    const setup = await f.service.beginEnrollment("customer", "sid", "alice");
+    const result = await f.service.confirmEnrollment(
+      "customer",
+      "sid",
+      setup.enrollmentToken,
+      generateTotp(setup.secret),
+    );
+    vi.advanceTimersByTime(30000);
+    return { ...f, secret: setup.secret, recoveryCodes: result.recoveryCodes };
+  }
+  it("requires fresh TOTP and removes exactly its proven factor version", async () => {
+    const f = await enrolled();
+    await expect(
+      f.service.disable("customer", "sid", "totp", "wrong"),
+    ).rejects.toThrow("invalid_code");
+    expect(f.repo.remove).not.toHaveBeenCalled();
+    await expect(
+      f.service.disable("customer", "sid", "totp", generateTotp(f.secret)),
+    ).resolves.toEqual({ ok: true, reauthenticate: true });
+    expect(f.repo.remove).toHaveBeenCalledWith(
+      "customer",
+      "factor-version",
+      "sid",
+    );
+    expect(await f.service.enabled("customer")).toBe(false);
+    expect(f.hashes.size).toBe(0);
+  });
+  it("accepts a one-time recovery proof and rejects replay", async () => {
+    const f = await enrolled();
+    await f.service.disable("customer", "sid", "recovery", f.recoveryCodes[0]!);
+    await expect(
+      f.service.disable("customer", "sid", "recovery", f.recoveryCodes[0]!),
+    ).rejects.toThrow("invalid_code");
+    expect(f.repo.remove).toHaveBeenCalledTimes(1);
+  });
+  it("allows only one concurrent request to consume a TOTP time step", async () => {
+    const f = await enrolled();
+    const code = generateTotp(f.secret);
+    const attempts = await Promise.allSettled([
+      f.service.disable("customer", "sid", "totp", code),
+      f.service.disable("customer", "sid", "totp", code),
+    ]);
+    expect(
+      attempts.filter((attempt) => attempt.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(f.repo.remove).toHaveBeenCalledTimes(1);
+  });
+  it("does not remove a replacement factor after proof consumption", async () => {
+    const f = await enrolled();
+    f.repo.remove.mockResolvedValueOnce(false);
+    await expect(
+      f.service.disable("customer", "sid", "totp", generateTotp(f.secret)),
+    ).rejects.toThrow("mfa_state_changed");
+    expect(await f.service.enabled("customer")).toBe(true);
+  });
+  it("shares the login attempt budget and rejects unsupported proofs", async () => {
+    const f = await enrolled();
+    await expect(
+      f.service.disable("customer", "sid", "password", "password"),
+    ).rejects.toThrow("invalid_code");
+    expect(f.repo.remove).not.toHaveBeenCalled();
+    f.redis.reserveCustomerSecurityBudget.mockResolvedValueOnce(false);
+    await expect(
+      f.service.disable("customer", "sid", "totp", generateTotp(f.secret)),
+    ).rejects.toThrow("too_many_attempts");
+    expect(f.redis.reserveCustomerSecurityBudget).toHaveBeenLastCalledWith(
+      "mfa:customer",
+      [10, 50, 100],
+    );
   });
 });
 

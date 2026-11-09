@@ -11,6 +11,7 @@
  */
 "use client";
 import { useTranslations } from "next-intl";
+import { Button } from "@vxture/design-system";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -24,6 +25,7 @@ import {
   ACCOUNTS_AUTH_VISUAL,
   AccountsAuthFooter,
   AccountsAuthHeader,
+  AccountsNotice,
 } from "./AuthChrome";
 import {
   rememberRpOrigin,
@@ -50,6 +52,9 @@ import { SocialLoginButtons } from "./SocialLoginButtons";
 const WEBSITE_HOME_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? "";
 
 type Realm = "customer" | "workforce";
+type ResumeState =
+  | { key: string; phase: "checking" | "ready" | "redirecting" }
+  | { key: string; phase: "error"; message: string; retryable: boolean };
 
 interface OidcLoginFormProps {
   readonly loginChallenge: string;
@@ -75,6 +80,14 @@ export function OidcLoginForm({
 }: OidcLoginFormProps) {
   const formText = useTranslations("accountsForms");
   const isOperator = realm === "workforce";
+  const resumeKey = `${realm}:${loginChallenge}`;
+  const [resumeState, setResumeState] = useState<ResumeState>({
+    key: resumeKey,
+    phase: "checking",
+  });
+  const [resumeRetry, setResumeRetry] = useState(0);
+  const resolvedResumeKey = useRef<string | null>(null);
+  const navigatingResumeKey = useRef<string | null>(null);
   const captcha = useHumanCaptcha(realm, true);
   // Workforce phone verification uses its isolated provider scheme.
   const [mode, setMode] = useState<AuthLoginTab>("phone");
@@ -114,7 +127,7 @@ export function OidcLoginForm({
   // session can satisfy the parked challenge, navigate without re-authenticating.
   const loadingRef = useRef(false);
   const resumeRequest = useRef<{
-    challenge: string;
+    key: string;
     promise: ReturnType<typeof resumeOidcLogin>;
   } | null>(null);
   useEffect(() => {
@@ -130,6 +143,7 @@ export function OidcLoginForm({
     const check = async () => {
       if (
         loadingRef.current ||
+        navigatingResumeKey.current === resumeKey ||
         cancelled ||
         inFlight ||
         document.visibilityState !== "visible" ||
@@ -138,19 +152,37 @@ export function OidcLoginForm({
         return;
       inFlight = true;
       lastProbeAt = Date.now();
+      const initialCheck = resolvedResumeKey.current !== resumeKey;
+      if (initialCheck) setResumeState({ key: resumeKey, phase: "checking" });
       try {
         // Reuse the in-flight request across Strict Mode's effect replay: resume
         // can consume a one-time challenge and must not be sent twice.
-        if (resumeRequest.current?.challenge !== loginChallenge) {
+        if (resumeRequest.current?.key !== resumeKey) {
           resumeRequest.current = {
-            challenge: loginChallenge,
+            key: resumeKey,
             promise: resumeOidcLogin(loginChallenge),
           };
         }
         const request = resumeRequest.current;
         const result = await request.promise;
-        if (result && !cancelled) {
+        if (cancelled) return;
+        if (result) {
+          navigatingResumeKey.current = resumeKey;
+          setResumeState({ key: resumeKey, phase: "redirecting" });
           window.location.replace(result.redirectTo);
+        } else {
+          resolvedResumeKey.current = resumeKey;
+          setResumeState({ key: resumeKey, phase: "ready" });
+        }
+      } catch (error) {
+        // A background outage must not erase a form that is already usable.
+        if (!cancelled && initialCheck) {
+          setResumeState({
+            key: resumeKey,
+            phase: "error",
+            message: error instanceof Error ? error.message : "",
+            retryable: !(error instanceof SessionExpiredError),
+          });
         }
       } finally {
         if (!cancelled) resumeRequest.current = null;
@@ -176,7 +208,7 @@ export function OidcLoginForm({
       window.removeEventListener("pageshow", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [loginChallenge, mfaChallenge]);
+  }, [loginChallenge, resumeKey, mfaChallenge, resumeRetry]);
 
   const switchMode = (m: AuthLoginTab) => {
     setMode(m);
@@ -377,6 +409,49 @@ export function OidcLoginForm({
         methods={mfaChallenge.methods}
         enrollRequired={mfaChallenge.enrollRequired}
         enrollFactor={mfaChallenge.enrollFactor}
+      />
+    );
+  }
+
+  // Keep the existing state-page composition until session restoration is resolved.
+  if (
+    resumeState.key !== resumeKey ||
+    resumeState.phase === "checking" ||
+    resumeState.phase === "redirecting"
+  ) {
+    return (
+      <AccountsNotice
+        tone="neutral"
+        title={
+          <span role="status" aria-live="polite">
+            {formText("checking_sign_in_context")}
+          </span>
+        }
+        description={formText("please_wait")}
+      />
+    );
+  }
+  if (resumeState.phase === "error") {
+    return (
+      <AccountsNotice
+        title={formText("unable_to_confirm_sign_in_status")}
+        description={
+          resumeState.message || formText("unable_to_check_please_try_again")
+        }
+        action={
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (resumeState.retryable) setResumeRetry((value) => value + 1);
+              else
+                window.location.assign(
+                  isOperator ? "/workforce/login" : "/login",
+                );
+            }}
+          >
+            {formText(resumeState.retryable ? "retry" : "sign_in_again")}
+          </Button>
+        }
       />
     );
   }

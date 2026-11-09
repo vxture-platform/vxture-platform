@@ -143,6 +143,7 @@ export function CustomerDeletion({
         recovery ? formText("deletion_request") : formText("delete_account")
       }
       icon="warning"
+      tone={recovery ? "default" : "danger"}
     >
       {done ? (
         <Banner
@@ -230,6 +231,13 @@ export function CustomerDeletion({
                     </p>
                   )}
                   <Button
+                    {...(!recovery && verified
+                      ? {
+                          variant: "destructive" as const,
+                          confirmExempt:
+                            "The verified deletion flow already requires an explicit consequence acknowledgment and an operation-bound code.",
+                        }
+                      : { variant: "default" as const })}
                     disabled={
                       busy ||
                       (!recovery && !accepted) ||

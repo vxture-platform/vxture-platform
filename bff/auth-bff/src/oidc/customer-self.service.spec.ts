@@ -7,6 +7,8 @@
  * @date 2026-11-07
  */
 import { describe, expect, it, vi } from "vitest";
+// ⚠️ 跨层引用: Exercise the public account-domain history contract.
+import type { LoginHistoryEntry } from "@vxture/service-account";
 import { CustomerSelfService } from "./customer-self.service";
 import { OidcService } from "./oidc.service";
 import type { CustomerSessionContext } from "./realm-session.service";
@@ -35,11 +37,24 @@ function fixture() {
       { provider: "google", providerSubject: "private", connectedAt: "date" },
     ]),
     listSessions: vi.fn(async () => [{ sid: "current" }, { sid: "other" }]),
-    listLoginHistory: vi.fn(async () => []),
+    listLoginHistory: vi.fn<() => Promise<LoginHistoryEntry[]>>(async () => []),
   };
   const oidc = { endCustomerSession: vi.fn(async () => true) };
-  const service = new CustomerSelfService(accounts as never, oidc as never);
-  return { accounts, oidc, service };
+  const locations = {
+    locate: vi.fn(() => ({
+      kind: "public",
+      country: "中国",
+      region: "广东省",
+      city: "深圳市",
+      countryCode: "CN",
+    })),
+  };
+  const service = new CustomerSelfService(
+    accounts as never,
+    oidc as never,
+    locations as never,
+  );
+  return { accounts, oidc, locations, service };
 }
 
 describe("customer account-center data boundary", () => {
@@ -80,6 +95,48 @@ describe("customer account-center data boundary", () => {
     expect(JSON.stringify(await f.service.getSecurity(context))).not.toContain(
       "private",
     );
+  });
+  it.each([
+    [null, null],
+    ["2026-10-10T08:15:00.000Z", "2026-11-09T08:15:00.000Z"],
+  ])(
+    "projects the account and its next change time from %s",
+    async (changedAt, nextAt) => {
+      const f = fixture();
+      await expect(
+        f.service.getSecurity({
+          ...context,
+          user: { ...context.user, accountChangedAt: changedAt },
+        }),
+      ).resolves.toMatchObject({
+        account: "customer",
+        accountChangeableAt: nextAt,
+      });
+    },
+  );
+  it("enriches only owned history from the thirty-day window", async () => {
+    const f = fixture();
+    const entry = {
+      loginAt: new Date(Date.now() - 60000).toISOString(),
+      ipAddress: "113.118.113.77",
+      userAgent: null,
+      countryCode: null,
+      authMethod: "phone",
+      result: "success",
+    };
+    f.accounts.listLoginHistory.mockResolvedValue([
+      entry,
+      { ...entry, loginAt: new Date(Date.now() - 31 * 86400000).toISOString() },
+      { ...entry, loginAt: "invalid" },
+      { ...entry, loginAt: new Date(Date.now() + 86400000).toISOString() },
+    ]);
+    const history = await f.service.getLoginHistory(context);
+    expect(history).toEqual([
+      { ...entry, location: f.locations.locate.mock.results[0]!.value },
+    ]);
+    expect(f.accounts.listLoginHistory).toHaveBeenCalledWith("123", 20);
+    expect(f.locations.locate).toHaveBeenCalledOnce();
+    expect(f.locations.locate).toHaveBeenCalledWith(entry.ipAddress);
   });
   it("marks only the current device and bounds login history", async () => {
     const f = fixture();

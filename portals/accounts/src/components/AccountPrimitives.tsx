@@ -33,15 +33,20 @@ export function AccountSection({
   title,
   icon = "user",
   action,
+  tone = "default",
   children,
 }: {
   title: string;
   icon?: IconName;
   action?: ReactNode;
+  tone?: "default" | "danger";
   children: ReactNode;
 }) {
   return (
-    <Card className="accounts-section">
+    <Card
+      className={`accounts-section${tone === "danger" ? " accounts-section-danger" : ""}`}
+      style={{ backgroundImage: "var(--accounts-section-background)" }}
+    >
       <div className="accounts-section-heading">
         <Icon name={icon} size="md" />
         <h2>{title}</h2>

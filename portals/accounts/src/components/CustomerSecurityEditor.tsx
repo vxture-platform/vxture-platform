@@ -62,6 +62,9 @@ export function CustomerSecurityEditor({
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const accountChangeable =
+    !security.accountChangeableAt ||
+    Date.parse(security.accountChangeableAt) <= Date.now();
   function open(next: Action) {
     setAction(next);
     setTarget(next.target ?? "");
@@ -81,6 +84,14 @@ export function CustomerSecurityEditor({
     const base = "/oidc/customer/self/security/challenges";
     try {
       if (stage === "start") {
+        if (action.operation === "username") {
+          if (!accountChangeable)
+            throw new Error(formText("account_change_cooldown"));
+          if (!/^[A-Za-z][A-Za-z0-9_]{2,23}$/.test(target.trim()))
+            throw new Error(formText("account_format_hint"));
+          if (target.trim().toLowerCase() === security.account.toLowerCase())
+            throw new Error(formText("account_unchanged"));
+        }
         if (
           action.operation === "password" &&
           (!validNewPassword(password, "customer") || password !== confirmation)
@@ -156,6 +167,37 @@ export function CustomerSecurityEditor({
   return (
     <>
       <AccountSection title={formText("authentication")} icon="shield-check">
+        <AccountRow
+          label={formText("account")}
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!accountChangeable}
+              onClick={() =>
+                open({
+                  operation: "username",
+                  title: formText("change_account"),
+                })
+              }
+            >
+              {formText("change")}
+            </Button>
+          }
+        >
+          <div className="accounts-account-value">
+            <span className="font-mono">{security.account}</span>
+            <span className="text-body-sm text-muted-foreground">
+              {accountChangeable
+                ? formText("account_change_interval")
+                : formText("account_next_change", {
+                    date: new Date(
+                      security.accountChangeableAt!,
+                    ).toLocaleString(locale),
+                  })}
+            </span>
+          </div>
+        </AccountRow>
         <AccountRow
           label={formText("password")}
           action={
@@ -255,6 +297,8 @@ export function CustomerSecurityEditor({
             ? formText("verified")
             : formText("unverified")}
         </AccountRow>
+      </AccountSection>
+      <AccountSection title={formText("login_permissions")} icon="key">
         <AccountRow
           label={formText("account_login")}
           action={
@@ -434,12 +478,46 @@ export function CustomerSecurityEditor({
           <div className="accounts-settings-form">
             {stage === "start" ? (
               <>
+                {action?.operation === "username" ? (
+                  <>
+                    <p className="text-body-sm text-muted-foreground">
+                      {formText("account_change_interval")}
+                    </p>
+                    <label
+                      className="accounts-required-label"
+                      htmlFor="security-new-account"
+                    >
+                      {formText("new_account_name")}
+                      <span className="accounts-required" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
+                  </>
+                ) : null}
                 {action &&
                 ["phone-change", "email-change", "username"].includes(
                   action.operation,
                 ) ? (
                   <Input
-                    aria-label={formText("new_value")}
+                    id={
+                      action.operation === "username"
+                        ? "security-new-account"
+                        : undefined
+                    }
+                    aria-label={formText(
+                      action.operation === "username"
+                        ? "new_account_name"
+                        : "new_value",
+                    )}
+                    aria-describedby={
+                      action.operation === "username"
+                        ? "security-account-hint"
+                        : undefined
+                    }
+                    maxLength={action.operation === "username" ? 24 : undefined}
+                    autoComplete={
+                      action.operation === "username" ? "off" : undefined
+                    }
                     type={
                       action.operation === "email-change" ? "email" : "text"
                     }
@@ -455,6 +533,14 @@ export function CustomerSecurityEditor({
                     required
                     disabled={busy}
                   />
+                ) : null}
+                {action?.operation === "username" ? (
+                  <p
+                    id="security-account-hint"
+                    className="text-body-sm text-muted-foreground"
+                  >
+                    {formText("account_format_hint")}
+                  </p>
                 ) : null}
                 {action?.operation === "password" ? (
                   <>

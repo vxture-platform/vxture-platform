@@ -95,3 +95,60 @@ describe("customer MFA activation transaction", () => {
     expect(f.release).toHaveBeenCalledOnce();
   });
 });
+
+// ============================================================================
+// Factor removal and durable logout share a transaction.
+// ============================================================================
+describe("customer MFA removal transaction", () => {
+  it("binds the factor version and active customer session before clearing credentials", async () => {
+    const f = fixture();
+    expect(await f.repository.remove("customer", "factor-version", "sid")).toBe(
+      true,
+    );
+    const statements = f.query.mock.calls.map(([sql]) => sql);
+    expect(statements[0]).toBe("begin");
+    expect(statements[1]).toContain("for update");
+    expect(statements[2]).toContain("version=$2::uuid");
+    expect(statements[2]).toContain("totp_enabled=true");
+    expect(statements[2]).toContain("sid=$3");
+    expect(statements[2]).toContain("realm='customer'");
+    expect(statements[2]).toContain("expires_at>now()");
+    expect(statements[2]).toContain("policy='off'");
+    expect(f.query.mock.calls[2]?.[1]).toEqual([
+      "customer",
+      "factor-version",
+      "sid",
+    ]);
+    expect(statements[3]).toContain(
+      "delete from credential.user_recovery_codes",
+    );
+    expect(statements[4]).toContain("realm='customer'");
+    expect(statements[5]).toContain("session.refresh_tokens");
+    expect(statements.at(-1)).toBe("commit");
+    expect(statements.some((sql) => sql.includes("admin."))).toBe(false);
+    expect(f.release).toHaveBeenCalledOnce();
+  });
+  it("does not clear recovery codes or sessions when proof version/session eligibility changed", async () => {
+    const f = fixture(undefined, false);
+    expect(await f.repository.remove("customer", "stale", "expired")).toBe(
+      false,
+    );
+    expect(f.query.mock.calls).toHaveLength(4);
+    expect(f.query.mock.calls.at(-1)?.[0]).toBe("rollback");
+  });
+  it.each([
+    "update credential.user_mfas",
+    "delete from credential.user_recovery_codes",
+    "update session.auth_sessions",
+    "update session.refresh_tokens",
+  ])("rolls back removal when %s fails", async (failOn) => {
+    const f = fixture(failOn);
+    await expect(
+      f.repository.remove("customer", "factor-version", "sid"),
+    ).rejects.toThrow("write_failed");
+    const statements = f.query.mock.calls.map(([sql]) => sql);
+    expect(statements.at(-1)).toBe("rollback");
+    expect(statements).not.toContain("commit");
+    expect(f.release).toHaveBeenCalledOnce();
+  });
+});

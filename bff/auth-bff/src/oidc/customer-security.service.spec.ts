@@ -6,7 +6,7 @@
  * @author AI-Generated
  * @date 2026-11-07
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CustomerSecurityService } from "./customer-security.service";
 import { OidcService } from "./oidc.service";
 import type { CustomerSessionContext } from "./realm-session.service";
@@ -24,6 +24,7 @@ const context = {
     account: "account",
   },
 } as CustomerSessionContext;
+afterEach(() => vi.restoreAllMocks());
 function fixture() {
   const proof = {
     operation: "email-change",
@@ -82,6 +83,78 @@ describe("customer sensitive self-service orchestration", () => {
       "new@example.com",
       "phone",
     );
+  });
+  it.each([1, 29 * 86400000, 30 * 86400000 - 1, -60000])(
+    "rejects a username change before sending a code when elapsed time is %d ms",
+    async (elapsed) => {
+      const f = fixture();
+      const now = Date.parse("2026-11-09T08:15:00.000Z");
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      await expect(
+        f.service.start(
+          {
+            ...context,
+            user: {
+              ...context.user,
+              accountChangedAt: new Date(now - elapsed).toISOString(),
+            },
+          },
+          { operation: "username", target: "new_account", method: "phone" },
+        ),
+      ).rejects.toThrow("username_change_cooldown");
+      expect(f.challenges.start).not.toHaveBeenCalled();
+    },
+  );
+  it.each([null, 30 * 86400000, 30 * 86400000 + 1])(
+    "allows the first username change or an elapsed interval of %s ms",
+    async (elapsed) => {
+      const f = fixture();
+      const now = Date.parse("2026-11-09T08:15:00.000Z");
+      vi.spyOn(Date, "now").mockReturnValue(now);
+      const current = {
+        ...context,
+        user: {
+          ...context.user,
+          accountChangedAt:
+            elapsed === null ? null : new Date(now - elapsed).toISOString(),
+        },
+      };
+      await f.service.start(current, {
+        operation: "username",
+        target: " new_account ",
+        method: "phone",
+      });
+      expect(f.challenges.start).toHaveBeenCalledExactlyOnceWith(
+        current,
+        "username",
+        "new_account",
+        "phone",
+      );
+    },
+  );
+  it("rejects a case-only username change without sending a code", async () => {
+    const f = fixture();
+    await expect(
+      f.service.start(context, {
+        operation: "username",
+        target: "ACCOUNT",
+        method: "phone",
+      }),
+    ).rejects.toThrow("security_target_unchanged");
+    expect(f.challenges.start).not.toHaveBeenCalled();
+  });
+  it("preserves the transactional cooldown failure without reporting logout success", async () => {
+    const f = fixture();
+    f.proof.operation = "username";
+    f.proof.target = "new_account";
+    f.accounts.applySelfSecurity.mockRejectedValueOnce(
+      new Error("username_change_cooldown"),
+    );
+    await expect(f.service.execute(context, "id", {})).rejects.toThrow(
+      "username_change_cooldown",
+    );
+    expect(f.challenges.consume).toHaveBeenCalledWith(context, "id");
+    expect(f.oidc.cleanupCustomerSessions).not.toHaveBeenCalled();
   });
   it("binds unlink proof to the exact current provider subject", async () => {
     const f = fixture();

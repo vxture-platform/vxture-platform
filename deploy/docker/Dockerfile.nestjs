@@ -53,6 +53,12 @@ ARG PACKAGE_FILTER
 # 各 BFF 的 build 脚本内部会先调用 pnpm -w build:backend-deps，无需额外步骤
 RUN pnpm --filter ${PACKAGE_FILTER} build
 
+# Only auth-bff ships offline location data; other BFF images get an empty directory.
+RUN mkdir -p /runtime-assets \
+    && if [ "${PACKAGE_FILTER}" = "@vxture/bff-auth" ]; then \
+         cp -R /repo/bff/auth-bff/dist/assets/. /runtime-assets/; \
+       fi
+
 # ── 运行层（单文件，无 node_modules）────────────────────────────────────────
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app
@@ -77,6 +83,8 @@ RUN apk add --no-cache curl \
 
 ARG SERVICE_PATH
 COPY --from=builder --chown=nodeapp:nodejs /repo/${SERVICE_PATH}/dist/main.cjs ./
+
+COPY --from=builder --chown=nodeapp:nodejs /runtime-assets/ ./assets/
 
 USER nodeapp
 

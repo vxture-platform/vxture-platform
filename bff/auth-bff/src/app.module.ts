@@ -45,6 +45,7 @@ import { CustomerSecurityRouter } from "./routers/customer-security.router";
 import { AccountsBoundaryModule } from "./accounts/accounts-boundary.module";
 import { CustomerMfaService } from "./oidc/customer-mfa.service";
 import { CustomerMfaRouter } from "./routers/customer-mfa.router";
+import { IpGeolocationService } from "./oidc/ip-geolocation.service";
 import { CustomerSelfService } from "./oidc/customer-self.service";
 import { CustomerSelfRouter } from "./routers/customer-self.router";
 import { AccountsLoginRouter } from "./routers/accounts-login.router";
@@ -120,6 +121,7 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     OperatorAnomalyService,
     OperatorSelfService,
     CustomerSelfService,
+    IpGeolocationService,
     CustomerMfaService,
     CustomerSecurityService,
     CustomerLifecycleService,

@@ -17,6 +17,7 @@ import {
 // ⚠️ 跨层引用: Account writes and login-method safety belong to the account domain.
 import {
   AccountService,
+  USERNAME_CHANGE_COOLDOWN_DAYS,
   assertValidAccount,
   type CustomerSecurityOperation,
 } from "@vxture/service-account";
@@ -90,6 +91,14 @@ export class CustomerSecurityService {
         target.toLowerCase() === context.user.account.toLowerCase())
     )
       throw new BadRequestException("security_target_unchanged");
+    // Avoid sending a verification code for a change the account row lock will reject.
+    if (
+      operation === "username" &&
+      context.user.accountChangedAt &&
+      Date.now() - Date.parse(context.user.accountChangedAt) <
+        USERNAME_CHANGE_COOLDOWN_DAYS * 86400000
+    )
+      throw new BadRequestException("username_change_cooldown");
     if (operation === "identity-unlink") {
       const identities = (
         await this.accounts.listIdentitiesByUser(context.userId)

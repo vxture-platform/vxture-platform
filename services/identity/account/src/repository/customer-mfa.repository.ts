@@ -111,12 +111,54 @@ export class CustomerMfaRepository {
     return result.rows.length === 1;
   }
 
-  /** Removal requires proof of the exact factor version verified by the caller. */
-  async remove(userId: string, version: string): Promise<boolean> {
-    const result = await this.pool.query(
-      "update credential.user_mfas set totp_enabled=false,totp_secret=null,version=gen_random_uuid(),updated_at=now() where user_id=$1 and version=$2::uuid returning user_id",
-      [userId, version],
-    );
-    return result.rows.length === 1;
+  /**
+   * Remove a proven factor and revoke customer credentials in one transaction.
+   * @param userId - Authenticated customer, serialized with enrollment via its user row.
+   * @param version - Exact factor version whose proof has already been consumed.
+   * @param sid - The active customer session authorizing this write.
+   * @returns Whether the factor was removed before any concurrent replacement.
+   * @throws {Error} When a write fails; all changes are rolled back together.
+   */
+  async remove(userId: string, version: string, sid: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "select id from account.users where id=$1 for update",
+        [userId],
+      );
+      const result = await client.query(
+        `update credential.user_mfas set policy='off',totp_enabled=false,totp_secret=null,
+           version=gen_random_uuid(),updated_at=now()
+         where user_id=$1 and version=$2::uuid and totp_enabled=true
+           and exists(select 1 from account.users where id=$1 and status='active' and deleted_at is null)
+           and exists(select 1 from session.auth_sessions where sid=$3 and user_id=$1 and realm='customer' and status='active' and expires_at>now())
+         returning user_id`,
+        [userId, version, sid],
+      );
+      if (result.rows.length !== 1) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        "delete from credential.user_recovery_codes where user_id=$1",
+        [userId],
+      );
+      await client.query(
+        "update session.auth_sessions set status='revoked',revoked_at=now() where user_id=$1 and realm='customer' and status='active'",
+        [userId],
+      );
+      await client.query(
+        "update session.refresh_tokens set status='revoked' where user_id=$1 and status='active'",
+        [userId],
+      );
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
