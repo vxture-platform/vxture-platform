@@ -24,17 +24,65 @@ body {
   flex-direction: column;
   overflow: hidden;
   color: var(--foreground);
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+}
+/* Fixed artwork stays behind shared authentication and account management chrome. */
+.accounts-viewport::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
   background:
     radial-gradient(
-      ellipse at 12% 95%,
-      color-mix(in srgb, var(--primary) 8%, transparent),
-      transparent 54%
+      ellipse at 32% 90%,
+      color-mix(in srgb, var(--primary) 7%, transparent),
+      transparent 52%
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--primary) 5%, var(--background)),
-      var(--background) 46%
+      color-mix(in srgb, var(--primary) 13%, var(--card)) 0%,
+      color-mix(in srgb, var(--primary) 6%, var(--card)) 22%,
+      var(--background) 52%,
+      var(--primary-muted) 100%
     );
+}
+.dark .accounts-viewport::before {
+  background:
+    radial-gradient(
+      ellipse at 32% 90%,
+      color-mix(in srgb, var(--primary) 7%, transparent),
+      transparent 52%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--primary) 12%, var(--background)),
+      color-mix(in srgb, var(--primary) 5%, var(--background)) 38%,
+      var(--background) 78%
+    );
+}
+.accounts-background-art {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: -1;
+  width: 100%;
+  height: 56vh;
+  pointer-events: none;
+  color: var(--primary);
+}
+.accounts-background-art svg {
+  width: 100%;
+  height: 100%;
+  transform: translateY(calc(var(--vx-spacing) * 37.5));
+  opacity: 0.58;
+}
+@media (max-width: 600px) {
+  .accounts-background-art {
+    height: 42vh;
+    opacity: 0.65;
+  }
 }
 .accounts-header {
   height: var(--space-4xl);
@@ -55,9 +103,9 @@ body {
 }
 .accounts-brand span {
   font-family: var(--font-brand);
-  font-size: var(--vx-text-lg);
-  line-height: calc(var(--vx-spacing) * 4.5);
-  font-weight: 700;
+  font-size: var(--vx-text-2xl);
+  line-height: 1;
+  font-weight: var(--vx-font-weight-semibold);
   letter-spacing: calc(var(--vx-spacing) * -0.1125);
 }
 .accounts-header-end {
@@ -442,9 +490,6 @@ body {
     padding: 0 calc(var(--vx-spacing) * 5);
     gap: calc(var(--vx-spacing) * 3);
   }
-  .accounts-brand span {
-    font-size: var(--vx-text-base);
-  }
   .accounts-header-end {
     gap: var(--space-md);
   }
@@ -535,9 +580,6 @@ body {
   .accounts-header {
     padding: 0 calc(var(--vx-spacing) * 3);
     gap: var(--space-xs);
-  }
-  .accounts-brand span {
-    font-size: var(--vx-text-sm);
   }
   .accounts-brand img {
     width: var(--space-lg);
@@ -750,13 +792,7 @@ body {
 }
 .accounts-workforce-page .accounts-viewport,
 .accounts-viewport.accounts-workforce-page {
-  background:
-    radial-gradient(
-      ellipse at 95% 0,
-      color-mix(in srgb, var(--primary) 12%, transparent),
-      transparent 55%
-    ),
-    color-mix(in srgb, var(--muted) 85%, var(--background));
+  background: transparent;
 }
 .accounts-workforce-page .accounts-auth-surface {
   background: color-mix(in srgb, var(--background) 90%, transparent);

@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
   Icon,
   ShellFullscreenToggle,
+  ShellIconGroup,
   ShellLocaleSwitcher,
   ShellPanelSlots,
   ShellPreferencePanel,
@@ -159,14 +160,15 @@ function HeaderFullscreenToggle() {
 }
 
 function HeaderQuickTools() {
+  const t = useTranslations("layout.header");
   return (
-    <div className="flex items-center gap-1">
+    <ShellIconGroup label={t("preferences.title")}>
       <HeaderThemeToggle />
       <HeaderLocaleSelect />
       <div className="hidden sm:block">
         <HeaderFullscreenToggle />
       </div>
-    </div>
+    </ShellIconGroup>
   );
 }
 
@@ -592,7 +594,7 @@ export default function Header() {
             />
             {/* 品牌字标走 font-brand（Funnel Display）——原挂的 .logo-text 类
              * 全仓无定义，一直以默认正文字体渲染。 */}
-            <h1 className="font-brand text-base sm:text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
+            <h1 className="font-brand text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
               {t(HEADER_DATA.logo.labelKey)}
             </h1>
           </Link>
