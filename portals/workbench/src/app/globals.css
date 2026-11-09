@@ -96,6 +96,13 @@ body {
   flex: 0 0 auto;
   height: var(--space-control-md);
 }
+/* Keep the shared portal wordmark consistent across public and signed-in headers. */
+.work-brand .vx-brand-name {
+  font-family: var(--font-brand);
+  font-size: var(--vx-text-2xl);
+  font-weight: var(--vx-font-weight-semibold);
+  line-height: 1;
+}
 .work-brand .vx-brand-local-name {
   white-space: nowrap;
 }
