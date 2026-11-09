@@ -130,6 +130,24 @@ body {
   height: var(--space-xl);
   padding: 0;
 }
+.accounts-user-panel {
+  max-width: calc(100vw - var(--space-lg));
+}
+.accounts-user-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--vx-spacing) * 2);
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+.accounts-user-dial-code {
+  color: var(--muted-foreground);
+}
+@media (max-width: 560px) {
+  .accounts-brand .accounts-brand-product {
+    display: none;
+  }
+}
 .accounts-footer {
   display: flex;
   align-items: center;

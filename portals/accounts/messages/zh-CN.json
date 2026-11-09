@@ -167,6 +167,16 @@
     "methodUnknown": "其他方式"
   },
   "accountsUi": {
+    "userMenu": {
+      "open": "用户面板",
+      "profile": "个人信息",
+      "signOut": "退出登录",
+      "signingOut": "正在退出…",
+      "realNameUnverified": "未实名",
+      "phoneNotBound": "手机未绑定",
+      "emailNotBound": "邮箱未绑定",
+      "contactUnavailable": "联系方式暂不可用"
+    },
     "tools": "页面工具",
     "theme": "切换主题",
     "language": "选择语言",

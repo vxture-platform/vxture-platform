@@ -470,6 +470,14 @@ export class OidcService {
         await this.sendBackChannelLogouts(sid, session.sub, sessionClients);
       }
     }
+    // Internal Accounts intents have no registered RP. Their exit is fixed by
+    // server configuration, never by a caller-provided redirect or state.
+    if (
+      initiatingClientId === "accounts-self:customer" ||
+      initiatingClientId === "accounts-self:workforce"
+    ) {
+      return new URL("/", this.config.platform.WEBSITE_BASE_URL).toString();
+    }
     if (!postLogoutRedirectUri) return null;
     // Open-redirect guard: only redirect to a post_logout_redirect_uri registered
     // by one of the session's clients (origin+path match; query like ?client= ok).
@@ -929,12 +937,14 @@ export class OidcService {
   }
 
   /**
-   * 发起登出的 client 属于哪个 realm；认不出（没带 client_id、client 不存在或已停用）
-   * 给 null，由调用方退回「两个 realm 都结束」。
+   * Resolve registered RP clients and the two reserved Accounts intents.
+   * Unknown or disabled clients retain the existing all-realms fallback.
    */
   async logoutRealmOf(
     clientId: string | undefined,
   ): Promise<"customer" | "workforce" | null> {
+    if (clientId === "accounts-self:customer") return "customer";
+    if (clientId === "accounts-self:workforce") return "workforce";
     if (!clientId) return null;
     const client = await this.clients.findEnabledByClientId(clientId);
     return client?.realm === "customer" || client?.realm === "workforce"

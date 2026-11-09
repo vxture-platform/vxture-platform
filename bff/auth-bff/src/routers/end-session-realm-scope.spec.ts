@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
 import { OidcRouter } from "./oidc.router";
+import { OidcService } from "../oidc/oidc.service";
 
 /**
  * 登出只结束发起方所在 realm 的会话（owner 2026-09-15 报「串台」）。
@@ -74,4 +75,41 @@ describe("end_session 按发起方 realm 收口", () => {
       expect.arrayContaining(["vx_sid", "vx_sid_op", "vx_hint"]),
     );
   });
+});
+
+// ============================================================================
+// Internal Accounts intents use the real realm resolver
+// ============================================================================
+
+describe("Accounts realm isolation", () => {
+  it.each([
+    ["customer", "sid-tenant", ["vx_sid", "vx_hint"]],
+    ["workforce", "sid-operator", ["vx_sid_op"]],
+  ] as const)(
+    "ends only the %s session with both realm cookies present",
+    async (realm, sid, expectedCookies) => {
+      const { router, oidc, req, res } = build(null);
+      const service = Object.create(OidcService.prototype) as OidcService;
+      const clients = { findEnabledByClientId: vi.fn() };
+      Object.assign(service, { clients });
+      oidc.logoutRealmOf.mockImplementation((clientId) =>
+        service.logoutRealmOf(clientId),
+      );
+      await router.endSession(
+        { client_id: `accounts-self:${realm}` },
+        req as unknown as Request,
+        res as unknown as Response,
+      );
+      expect(oidc.endSession).toHaveBeenCalledWith(
+        [sid],
+        undefined,
+        undefined,
+        `accounts-self:${realm}`,
+      );
+      expect(res.clearCookie.mock.calls.map(([cookie]) => cookie)).toEqual([
+        ...expectedCookies,
+      ]);
+      expect(clients.findEnabledByClientId).not.toHaveBeenCalled();
+    },
+  );
 });

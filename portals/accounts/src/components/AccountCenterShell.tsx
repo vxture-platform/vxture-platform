@@ -8,7 +8,15 @@
  */
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -16,10 +24,44 @@ import {
   ShellSidebarFrame,
   ShellSidebarNav,
   Button,
+  Banner,
   Icon,
+  Skeleton,
   type ShellNavSection,
 } from "@vxture/design-system";
 import { AccountsHeader, AccountsFooter } from "./AccountsChrome";
+import type { AccountsMenuUser } from "./AccountsUserMenu";
+
+// ============================================================================
+// Account-session boundary
+// ============================================================================
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
+const WEBSITE_HOME =
+  process.env.NEXT_PUBLIC_WEBSITE_URL || "https://vxture.com/";
+const SessionExpiredContext = createContext(() => {
+  window.location.replace(WEBSITE_HOME);
+});
+const AccountMenuContext = createContext<(user: AccountsMenuUser) => void>(
+  () => {},
+);
+
+/**
+ * Publish refreshed account data without another identity request.
+ * @returns The shell-owned identity update callback.
+ */
+export function useAccountMenuUpdate() {
+  return useContext(AccountMenuContext);
+}
+
+/**
+ * Leave protected content when an account API confirms the session is absent.
+ * @returns The shell-owned handler that clears the entire account surface.
+ */
+export function useAccountSessionExpired(): () => void {
+  return useContext(SessionExpiredContext);
+}
 
 // ============================================================================
 // Route-owned navigation
@@ -38,10 +80,27 @@ export function AccountCenterShell({
   section?: "overview" | "passkeys";
 }) {
   const t = useTranslations("accountsUi");
+  const center = useTranslations("accountCenter");
   const pathname = usePathname();
   const params = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
+  const [session, setSession] = useState<
+    "checking" | "authenticated" | "error" | "expired"
+  >("checking");
+  const [revision, setRevision] = useState(0);
+  const [accountUser, setAccountUser] = useState<AccountsMenuUser | null>(null);
+  const updateMenu = useCallback((user: AccountsMenuUser) => {
+    if (!leaving.current) setAccountUser(user);
+  }, []);
+  const leaving = useRef(false);
+  const expire = useCallback(() => {
+    if (leaving.current) return;
+    leaving.current = true;
+    setSession("expired");
+    // Replace history so Back cannot restore a signed-out account screen.
+    window.location.replace(WEBSITE_HOME);
+  }, []);
   const base = realm === "customer" ? "/account" : "/workforce/account";
   const requested = params.get("section");
   const allowed =
@@ -81,6 +140,97 @@ export function AccountCenterShell({
     },
   ];
   useEffect(() => {
+    const controller = new AbortController();
+    let inFlight = false;
+    let lastReadAt = 0;
+    async function read() {
+      if (
+        controller.signal.aborted ||
+        leaving.current ||
+        inFlight ||
+        document.visibilityState !== "visible" ||
+        Date.now() - lastReadAt < 1500
+      )
+        return;
+      inFlight = true;
+      lastReadAt = Date.now();
+      try {
+        const resource = realm === "customer" ? "customer" : "operator";
+        const response = await fetch(`${API_BASE}/oidc/${resource}/self`, {
+          credentials: "include",
+          cache: "no-store",
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(10000),
+          ]),
+        });
+        if (controller.signal.aborted || leaving.current) return;
+        if (response.status === 401) {
+          expire();
+          return;
+        }
+        if (!response.ok) throw new Error("account_session_unavailable");
+        const data: unknown = await response.json();
+        if (!data || typeof data !== "object")
+          throw new Error("invalid_account");
+        const profile = data as Record<string, unknown>;
+        const account =
+          realm === "customer" ? profile.account : profile.username;
+        if (
+          typeof account !== "string" ||
+          (realm === "customer" &&
+            (profile.realm !== "customer" || typeof profile.id !== "string"))
+        )
+          throw new Error("invalid_account_realm");
+        const identityKey = `${realm}:${realm === "customer" ? profile.id : account}`;
+        if (controller.signal.aborted || leaving.current) return;
+        setAccountUser((previous) => ({
+          ...(previous?.identityKey === identityKey ? previous : {}),
+          identityKey,
+          account,
+          displayName:
+            typeof profile.name === "string" && profile.name.trim()
+              ? profile.name
+              : account,
+          ...(realm === "customer"
+            ? {
+                avatarSrc:
+                  typeof profile.avatarHash === "string" && profile.avatarHash
+                    ? `${API_BASE}/avatar/usr_${profile.id}?v=${encodeURIComponent(profile.avatarHash)}`
+                    : undefined,
+              }
+            : {
+                phone: typeof profile.phone === "string" ? profile.phone : null,
+                email: typeof profile.email === "string" ? profile.email : null,
+              }),
+        }));
+        setSession("authenticated");
+      } catch {
+        if (!controller.signal.aborted && !leaving.current)
+          setSession((previous) =>
+            previous === "authenticated" ? previous : "error",
+          );
+      } finally {
+        inFlight = false;
+      }
+    }
+    void read();
+    const reconcile = () => {
+      void read();
+    };
+    const interval = window.setInterval(reconcile, 300_000);
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("pageshow", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("pageshow", reconcile);
+      document.removeEventListener("visibilitychange", reconcile);
+    };
+  }, [realm, pathname, active, revision, expire]);
+  useEffect(() => {
     setOpen(false);
   }, [pathname, active]);
   useEffect(() => {
@@ -99,65 +249,105 @@ export function AccountCenterShell({
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
   }, [open]);
-  return (
-    <div className="accounts-viewport">
-      <AccountsHeader
-        accountHref={href("profile")}
-        navigation={
-          <Button
-            variant="ghost"
-            size="icon-md"
-            className="accounts-mobile-trigger"
-            aria-label={t(open ? "closeNav" : "openNav")}
-            aria-expanded={open}
-            aria-controls="accounts-sidebar"
-            onClick={() => setOpen((value) => !value)}
-          >
-            <Icon name={open ? "x" : "list"} size="sm" />
-          </Button>
-        }
-      />
-      <div className={`accounts-workspace${open ? " accounts-nav-open" : ""}`}>
-        {open ? (
-          <Button
-            variant="ghost"
-            className="accounts-nav-dismiss"
-            aria-label={t("closeNav")}
-            onClick={() => setOpen(false)}
-          />
-        ) : null}
-        <aside
-          id="accounts-sidebar"
-          className="accounts-sidebar"
-          aria-label={t("navigation")}
-        >
-          <ShellSidebarFrame mode={collapsed ? "collapsed" : "expanded"}>
-            <ShellSidebarNav
-              sections={sections}
-              collapsed={collapsed}
-              onToggleCollapsed={() => setCollapsed((value) => !value)}
-              isActive={(url) => url === href(active)}
-              storageKeyPrefix={`accounts-${realm}`}
-              linkComponent={Link}
-              labels={{
-                expandNav: t("openNav"),
-                collapseNav: t("closeNav"),
-                expandAllGroups: t("expandGroups"),
-                collapseAllGroups: t("collapseGroups"),
-              }}
-            />
-          </ShellSidebarFrame>
-        </aside>
-        <div
-          className="accounts-content"
-          inert={open}
-          aria-hidden={open || undefined}
-          key={`${pathname}-${active}`}
-        >
-          <div className="accounts-management">{children}</div>
-        </div>
+  if (session === "expired") return null;
+  if (session !== "authenticated") {
+    return (
+      <div className="accounts-viewport">
+        <AccountsHeader />
+        <main className="accounts-content">
+          <div className="accounts-management">
+            {session === "checking" ? (
+              <div role="status" aria-label={center("loading")}>
+                <Skeleton className="h-40 w-full" />
+              </div>
+            ) : (
+              <div className="flex flex-col items-start gap-sm">
+                <Banner tone="danger" title={center("loadFailed")} />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSession("checking");
+                    setRevision((value) => value + 1);
+                  }}
+                >
+                  {center("retry")}
+                </Button>
+              </div>
+            )}
+          </div>
+        </main>
+        <AccountsFooter />
       </div>
-      <AccountsFooter />
-    </div>
+    );
+  }
+  return (
+    <SessionExpiredContext.Provider value={expire}>
+      <AccountMenuContext.Provider value={updateMenu}>
+        <div className="accounts-viewport">
+          <AccountsHeader
+            accountHref={href("profile")}
+            accountUser={accountUser}
+            realm={realm}
+            navigation={
+              <Button
+                variant="ghost"
+                size="icon-md"
+                className="accounts-mobile-trigger"
+                aria-label={t(open ? "closeNav" : "openNav")}
+                aria-expanded={open}
+                aria-controls="accounts-sidebar"
+                onClick={() => setOpen((value) => !value)}
+              >
+                <Icon name={open ? "x" : "list"} size="sm" />
+              </Button>
+            }
+          />
+          <div
+            className={`accounts-workspace${open ? " accounts-nav-open" : ""}`}
+          >
+            {open ? (
+              <Button
+                variant="ghost"
+                className="accounts-nav-dismiss"
+                aria-label={t("closeNav")}
+                onClick={() => setOpen(false)}
+              />
+            ) : null}
+            <aside
+              id="accounts-sidebar"
+              className="accounts-sidebar"
+              aria-label={t("navigation")}
+            >
+              <ShellSidebarFrame mode={collapsed ? "collapsed" : "expanded"}>
+                <ShellSidebarNav
+                  sections={sections}
+                  collapsed={collapsed}
+                  onToggleCollapsed={() => setCollapsed((value) => !value)}
+                  isActive={(url) => url === href(active)}
+                  storageKeyPrefix={`accounts-${realm}`}
+                  linkComponent={Link}
+                  labels={{
+                    expandNav: t("openNav"),
+                    collapseNav: t("closeNav"),
+                    expandAllGroups: t("expandGroups"),
+                    collapseAllGroups: t("collapseGroups"),
+                  }}
+                />
+              </ShellSidebarFrame>
+            </aside>
+            <div
+              className="accounts-content"
+              inert={open}
+              aria-hidden={open || undefined}
+              key={`${pathname}-${active}`}
+            >
+              <div className="accounts-management">{children}</div>
+            </div>
+          </div>
+          <AccountsFooter />
+        </div>
+      </AccountMenuContext.Provider>
+    </SessionExpiredContext.Provider>
   );
 }

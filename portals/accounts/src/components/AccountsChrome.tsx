@@ -9,6 +9,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { AccountsUserMenu, type AccountsMenuUser } from "./AccountsUserMenu";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -33,10 +34,14 @@ import {
 export function AccountsHeader({
   navigation,
   accountHref,
+  accountUser,
+  realm,
   brandLabel = "Vxture Accounts",
 }: {
   navigation?: ReactNode;
   accountHref?: string;
+  accountUser?: AccountsMenuUser | null;
+  realm?: "customer" | "workforce";
   brandLabel?: ReactNode;
 }) {
   const t = useTranslations("accountsUi");
@@ -334,7 +339,8 @@ export function AccountsHeader({
           <span>
             {brandLabel === "Vxture Accounts" ? (
               <>
-                <span className="accounts-brand-name">Vxture</span> Accounts
+                <span className="accounts-brand-name">Vxture</span>
+                <span className="accounts-brand-product"> Accounts</span>
               </>
             ) : (
               brandLabel
@@ -383,18 +389,12 @@ export function AccountsHeader({
               </a>
             </Button>
           </ShellIconGroup>
-          {accountHref ? (
-            <Button
-              asChild
-              variant="ghost"
-              size="icon-md"
-              className="accounts-header-avatar"
-              aria-label={t("profile")}
-            >
-              <Link href={accountHref}>
-                <Icon name="user" size="sm" />
-              </Link>
-            </Button>
+          {accountHref && accountUser && realm ? (
+            <AccountsUserMenu
+              user={accountUser}
+              realm={realm}
+              profileHref={accountHref}
+            />
           ) : null}
         </div>
       </header>
