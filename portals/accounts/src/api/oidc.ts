@@ -409,27 +409,51 @@ export async function fetchEnabledProviders(): Promise<EnabledProvider[]> {
 }
 
 /**
- * GET /oidc/authorize/resume — cross-tab session detection. Called by the
- * accounts login page on visibilitychange/focus to check whether a central
- * session (vx_sid) has appeared (e.g. user logged in via another RP). Returns
- * { redirectTo } when the challenge can be completed immediately, null otherwise.
+ * Resume the server-owned challenge using a central session.
+ * @param loginChallenge - Realm-bound parked authorization request.
+ * @returns A navigation target, or null only when the server confirms interactive login is needed.
+ * @throws {SessionExpiredError} When the authorization request is invalid.
+ * @throws {Error} When the bounded session check fails or returns malformed data.
  */
 export async function resumeOidcLogin(
   loginChallenge: string,
 ): Promise<{ redirectTo: string } | null> {
+  let response: Response;
   try {
-    const res = await fetch(
+    response = await fetch(
       `${OIDC_API_BASE}/oidc/authorize/resume?login_challenge=${encodeURIComponent(loginChallenge)}`,
-      { credentials: "include" },
+      {
+        credentials: "include",
+        cache: "no-store",
+        signal: AbortSignal.timeout(10000),
+      },
     );
-    if (res.status === 204 || !res.ok) return null;
-    const data = (await res.json().catch(() => ({}))) as {
-      redirectTo?: string;
-    };
-    return data.redirectTo ? { redirectTo: data.redirectTo } : null;
   } catch {
-    return null;
+    throw new Error(apiMessage("error_5"));
   }
+  if (response.status === 204) return null;
+  if (response.status === 400) throw new SessionExpiredError();
+  if (response.status === 429) throw new Error(apiMessage("error_8"));
+  if (!response.ok) throw new Error(apiMessage("error_3"));
+  const data: unknown = await response.json().catch(() => null);
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !("redirectTo" in data) ||
+    typeof data.redirectTo !== "string" ||
+    !data.redirectTo.trim()
+  ) {
+    throw new Error(apiMessage("error_4"));
+  }
+  // The IdP may return a local account route or an HTTP(S) relying-party callback.
+  try {
+    const target = new URL(data.redirectTo, OIDC_API_BASE);
+    if (!["https:", "http:"].includes(target.protocol))
+      throw new Error("invalid_redirect");
+  } catch {
+    throw new Error(apiMessage("error_4"));
+  }
+  return { redirectTo: data.redirectTo };
 }
 
 /**

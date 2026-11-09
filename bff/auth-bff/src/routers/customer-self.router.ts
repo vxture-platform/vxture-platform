@@ -66,7 +66,7 @@ export class CustomerSelfRouter {
   // Activity and device management
   // ============================================================================
 
-  /** Read the latest twenty login attempts. */
+  /** Read at most twenty attempts from the last thirty days with approximate IP location. */
   @Get("login-history")
   @Header("Cache-Control", "no-store")
   getLoginHistory(@Req() req: CustomerSelfRequest) {

@@ -166,6 +166,21 @@ describe("customer account center over HTTP", () => {
       expect(res.headers.get("cache-control")).toBe("no-store");
     }
   });
+  it("returns location fields only through owned history and prevents workforce access", async () => {
+    const response = await fetch(`${base}/login-history`, {
+      headers: { cookie: "vx_sid=customer-sid; vx_sid_op=operator-sid" },
+    });
+    expect(response.status).toBe(200);
+    expect(self.getLoginHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "123" }),
+    );
+    const before = self.getLoginHistory.mock.calls.length;
+    const denied = await fetch(`${base}/login-history`, {
+      headers: { cookie: "vx_sid_op=operator-sid" },
+    });
+    expect(denied.status).toBe(401);
+    expect(self.getLoginHistory).toHaveBeenCalledTimes(before);
+  });
   it("clears parent-domain customer cookies when ending the current session", async () => {
     const res = await fetch(`${base}/sessions/customer-sid`, {
       method: "DELETE",

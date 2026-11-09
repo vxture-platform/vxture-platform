@@ -15,9 +15,11 @@ import {
 // ⚠️ 跨层引用: Delegate customer profile and security reads to the account domain.
 import {
   AccountService,
+  USERNAME_CHANGE_COOLDOWN_DAYS,
   type UpdateProfileInput,
 } from "@vxture/service-account";
 import type { CustomerSessionContext } from "./realm-session.service";
+import { IpGeolocationService } from "./ip-geolocation.service";
 import { OidcService } from "./oidc.service";
 
 // ============================================================================
@@ -29,6 +31,8 @@ export class CustomerSelfService {
   constructor(
     @Inject(AccountService) private readonly accounts: AccountService,
     @Inject(OidcService) private readonly oidc: OidcService,
+    @Inject(IpGeolocationService)
+    private readonly locations: IpGeolocationService,
   ) {}
 
   /** Return only the fields owned by the customer account center. */
@@ -54,6 +58,13 @@ export class CustomerSelfService {
     const identities = await this.accounts.listIdentitiesByUser(context.userId);
     const user = context.user;
     return {
+      account: user.account,
+      accountChangeableAt: user.accountChangedAt
+        ? new Date(
+            Date.parse(user.accountChangedAt) +
+              USERNAME_CHANGE_COOLDOWN_DAYS * 86400000,
+          ).toISOString()
+        : null,
       email: user.email,
       emailVerified: user.emailVerified ?? false,
       phone: user.phone,
@@ -115,8 +126,20 @@ export class CustomerSelfService {
   // ============================================================================
 
   /** Return a bounded login history without accepting a caller-supplied user identifier. */
-  getLoginHistory(context: CustomerSessionContext) {
-    return this.accounts.listLoginHistory(context.userId, 20);
+  async getLoginHistory(context: CustomerSessionContext) {
+    const history = await this.accounts.listLoginHistory(context.userId, 20);
+    const now = Date.now();
+    return Promise.all(
+      history
+        .filter((entry) => {
+          const at = Date.parse(entry.loginAt);
+          return Number.isFinite(at) && at > now - 30 * 86400000 && at <= now;
+        })
+        .map(async (entry) => ({
+          ...entry,
+          location: await this.locations.locate(entry.ipAddress),
+        })),
+    );
   }
 
   /** Mark the requesting session in the customer's active device list. */

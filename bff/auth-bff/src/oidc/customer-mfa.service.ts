@@ -15,7 +15,10 @@ import {
 } from "@nestjs/common";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 // ⚠️ Cross-layer reference: persistence stays in the customer account domain.
-import { CustomerMfaRepository } from "@vxture/service-account";
+import {
+  CustomerMfaRepository,
+  type CustomerFactor,
+} from "@vxture/service-account";
 // ⚠️ Cross-layer reference: reuse tested RFC primitives, without workforce account access.
 import {
   buildOtpauthUri,
@@ -130,8 +133,12 @@ export class CustomerMfaService {
     return { recoveryCodes };
   }
 
-  /** Bound guesses across every pending login, then consume the factor proof atomically. */
-  async verify(userId: string, method: string, code: string): Promise<boolean> {
+  /** Share the account attempt budget and bind a consumed proof to its factor version. */
+  private async verifiedFactor(
+    userId: string,
+    method: string,
+    code: string,
+  ): Promise<CustomerFactor | null> {
     if (
       !(await this.redis.reserveCustomerSecurityBudget(
         `mfa:${userId}`,
@@ -140,21 +147,45 @@ export class CustomerMfaService {
     )
       throw new HttpException("too_many_attempts", 429);
     const factor = await this.factors.read(userId);
-    if (!factor) return false;
-    if (method === "recovery")
-      return this.factors.consumeRecovery(
+    if (!factor) return null;
+    if (method === "recovery") {
+      const accepted = await this.factors.consumeRecovery(
         userId,
         factor.version,
         hashRecoveryCode(code),
       );
-    if (method !== "totp") return false;
+      return accepted ? factor : null;
+    }
+    if (method !== "totp") return null;
     const counter = this.counter(
       decryptSecret(factor.secret, this.key()),
       code,
     );
-    return (
+    const accepted =
       counter !== null &&
-      this.factors.consumeCounter(userId, factor.version, counter)
-    );
+      (await this.factors.consumeCounter(userId, factor.version, counter));
+    return accepted ? factor : null;
+  }
+
+  /** Bound guesses across every pending login, then consume the factor proof atomically. */
+  async verify(userId: string, method: string, code: string): Promise<boolean> {
+    return Boolean(await this.verifiedFactor(userId, method, code));
+  }
+
+  /**
+   * Disable only the factor version proven by this authenticated customer.
+   * @param userId - Guard-owned customer identifier.
+   * @param sid - Current customer session, rechecked by the write transaction.
+   * @param method - TOTP or a one-use recovery code.
+   * @param code - Fresh proof that is never stored in plaintext.
+   * @returns Confirmation after durable revocation of all customer sessions.
+   * @throws {BadRequestException} For an invalid proof or a concurrent factor change.
+   */
+  async disable(userId: string, sid: string, method: string, code: string) {
+    const factor = await this.verifiedFactor(userId, method, code);
+    if (!factor) throw new BadRequestException("invalid_code");
+    if (!(await this.factors.remove(userId, factor.version, sid)))
+      throw new BadRequestException("mfa_state_changed");
+    return { ok: true as const, reauthenticate: true as const };
   }
 }

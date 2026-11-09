@@ -30,6 +30,8 @@ import {
 // Shared header and footer
 // ============================================================================
 
+type AccountsChromeLayout = "public" | "account";
+
 /** Render the stationary brand and utility controls without exposing another realm. */
 export function AccountsHeader({
   navigation,
@@ -37,12 +39,14 @@ export function AccountsHeader({
   accountUser,
   realm,
   brandLabel = "Vxture Accounts",
+  layout = "public",
 }: {
   navigation?: ReactNode;
   accountHref?: string;
   accountUser?: AccountsMenuUser | null;
   realm?: "customer" | "workforce";
   brandLabel?: ReactNode;
+  layout?: AccountsChromeLayout;
 }) {
   const t = useTranslations("accountsUi");
   const { theme, toggle } = useTheme();
@@ -325,77 +329,83 @@ export function AccountsHeader({
           </g>
         </svg>
       </div>
-      <header className="accounts-header">
-        {navigation}
-        <Link href="/" className="accounts-brand" aria-label="Vxture Accounts">
-          {/* The approved brand asset is served by this portal. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/vxture-logo-icon.svg"
-            alt=""
-            width={28}
-            height={28}
-          />
-          <span>
-            {brandLabel === "Vxture Accounts" ? (
-              <>
-                <span className="accounts-brand-name">Vxture</span>
-                <span className="accounts-brand-product"> Accounts</span>
-              </>
-            ) : (
-              brandLabel
-            )}
-          </span>
-        </Link>
-        <div className="accounts-header-end">
-          <ShellIconGroup label={t("tools")} className="accounts-tools">
-            <ShellIconButton
-              label={t("theme")}
-              icon={theme === "dark" ? "sun" : "moon"}
-              onClick={toggle}
+      <header className={`accounts-header accounts-header-${layout}`}>
+        <div className="accounts-header-inner">
+          {navigation}
+          <Link
+            href="/"
+            className="accounts-brand"
+            aria-label="Vxture Accounts"
+          >
+            {/* The approved brand asset is served by this portal. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/vxture-logo-icon.svg"
+              alt=""
+              width={28}
+              height={28}
             />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <ShellIconButton label={t("language")} icon="globe" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuRadioGroup
-                  value={locale}
-                  onValueChange={changeLocale}
-                >
-                  <DropdownMenuRadioItem value="zh-CN">
-                    简体中文
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="en-US">
-                    English
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="ghost"
-              size="icon-md"
-              aria-label={t("help")}
-              title={t("help")}
-              className="text-muted-foreground hover:text-foreground"
-              asChild
-            >
-              <a
-                href={`${process.env.NEXT_PUBLIC_WEBSITE_URL || "https://vxture.com"}/docs`}
-                target="_blank"
-                rel="noopener noreferrer"
+            <span>
+              {brandLabel === "Vxture Accounts" ? (
+                <>
+                  <span className="accounts-brand-name">Vxture</span>
+                  <span className="accounts-brand-product"> Accounts</span>
+                </>
+              ) : (
+                brandLabel
+              )}
+            </span>
+          </Link>
+          <div className="accounts-header-end">
+            <ShellIconGroup label={t("tools")} className="accounts-tools">
+              <ShellIconButton
+                label={t("theme")}
+                icon={theme === "dark" ? "sun" : "moon"}
+                onClick={toggle}
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <ShellIconButton label={t("language")} icon="globe" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuRadioGroup
+                    value={locale}
+                    onValueChange={changeLocale}
+                  >
+                    <DropdownMenuRadioItem value="zh-CN">
+                      简体中文
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="en-US">
+                      English
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="ghost"
+                size="icon-md"
+                aria-label={t("help")}
+                title={t("help")}
+                className="text-muted-foreground hover:text-foreground"
+                asChild
               >
-                <Icon name="help" size="sm" />
-              </a>
-            </Button>
-          </ShellIconGroup>
-          {accountHref && accountUser && realm ? (
-            <AccountsUserMenu
-              user={accountUser}
-              realm={realm}
-              profileHref={accountHref}
-            />
-          ) : null}
+                <a
+                  href={`${process.env.NEXT_PUBLIC_WEBSITE_URL || "https://vxture.com"}/docs`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Icon name="help" size="sm" />
+                </a>
+              </Button>
+            </ShellIconGroup>
+            {accountHref && accountUser && realm ? (
+              <AccountsUserMenu
+                user={accountUser}
+                realm={realm}
+                profileHref={accountHref}
+              />
+            ) : null}
+          </div>
         </div>
       </header>
     </>
@@ -403,30 +413,36 @@ export function AccountsHeader({
 }
 
 /** Keep legal navigation outside the scrolling page content. */
-export function AccountsFooter() {
+export function AccountsFooter({
+  layout = "public",
+}: {
+  layout?: AccountsChromeLayout;
+}) {
   const t = useTranslations("accountsUi");
   const website = process.env.NEXT_PUBLIC_WEBSITE_URL || "https://vxture.com";
   return (
-    <footer className="accounts-footer">
-      <span>© {new Date().getFullYear()} Vxture Studio</span>
-      <nav aria-label={t("legal")}>
-        {(
-          [
-            ["terms", "/legal/terms"],
-            ["privacy", "/legal/privacy"],
-            ["copyright", "/legal/copyright"],
-          ] as const
-        ).map(([key, path]) => (
-          <a
-            key={key}
-            href={`${website}${path}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t(key)}
-          </a>
-        ))}
-      </nav>
+    <footer className={`accounts-footer accounts-footer-${layout}`}>
+      <div className="accounts-footer-inner">
+        <span>© {new Date().getFullYear()} Vxture Studio</span>
+        <nav aria-label={t("legal")}>
+          {(
+            [
+              ["terms", "/legal/terms"],
+              ["privacy", "/legal/privacy"],
+              ["copyright", "/legal/copyright"],
+            ] as const
+          ).map(([key, path]) => (
+            <a
+              key={key}
+              href={`${website}${path}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t(key)}
+            </a>
+          ))}
+        </nav>
+      </div>
     </footer>
   );
 }

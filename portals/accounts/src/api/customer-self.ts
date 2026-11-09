@@ -26,6 +26,8 @@ export interface CustomerProfile {
 }
 
 export interface CustomerSecurity {
+  account: string;
+  accountChangeableAt: string | null;
   email: string | null;
   emailVerified: boolean;
   phone: string | null;
@@ -45,9 +47,19 @@ export interface CustomerSession {
   current: boolean;
 }
 
+export interface LoginLocation {
+  kind: "public" | "private" | "unknown";
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  countryCode: string | null;
+}
+
 export interface CustomerLoginAttempt {
   loginAt: string;
   ipAddress: string;
+  countryCode?: string | null;
+  location?: LoginLocation;
   userAgent: string | null;
   authMethod: string;
   result: string;
@@ -86,6 +98,18 @@ function nullableString(value: unknown): boolean {
   return value === null || typeof value === "string";
 }
 
+function validLocation(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (record(value) &&
+      typeof value.kind === "string" &&
+      ["public", "private", "unknown"].includes(value.kind) &&
+      [value.country, value.region, value.city, value.countryCode].every(
+        nullableString,
+      ))
+  );
+}
+
 function validProjection(
   resource: keyof CustomerProjections,
   data: unknown,
@@ -110,6 +134,9 @@ function validProjection(
         (item: unknown) =>
           record(item) &&
           strings(item, ["loginAt", "ipAddress", "authMethod", "result"]) &&
+          (item.countryCode === undefined ||
+            nullableString(item.countryCode)) &&
+          validLocation(item.location) &&
           nullableString(item.userAgent),
       )
     );
@@ -125,6 +152,10 @@ function validProjection(
     );
   }
   return (
+    typeof data.account === "string" &&
+    (data.accountChangeableAt === null ||
+      (typeof data.accountChangeableAt === "string" &&
+        Number.isFinite(Date.parse(data.accountChangeableAt)))) &&
     [data.email, data.phone].every(nullableString) &&
     [
       "emailVerified",
@@ -217,6 +248,8 @@ export async function accountsRequest<T>(
       verified_anchor_required: apiMessage("error_59"),
       deletion_blocked: apiMessage("error_60"),
       username_already_taken: apiMessage("error_61"),
+      username_change_cooldown: apiMessage("username_change_cooldown"),
+      security_target_unchanged: apiMessage("security_target_unchanged"),
       mfa_unavailable: apiMessage("error_62"),
     };
     throw new Error(

@@ -46,6 +46,22 @@ const SessionExpiredContext = createContext(() => {
 const AccountMenuContext = createContext<(user: AccountsMenuUser) => void>(
   () => {},
 );
+interface AccountCompletion {
+  complete: (view: ReactNode) => void;
+  cancel: () => void;
+}
+const CompletionContext = createContext<() => AccountCompletion>(() => ({
+  complete: () => {},
+  cancel: () => {},
+}));
+
+/**
+ * Finish an operation that intentionally revokes its own account session.
+ * @returns A bounded-operation lease for presenting a non-account completion result.
+ */
+export function useAccountCompletion() {
+  return useContext(CompletionContext);
+}
 
 /**
  * Publish refreshed account data without another identity request.
@@ -90,17 +106,40 @@ export function AccountCenterShell({
   >("checking");
   const [revision, setRevision] = useState(0);
   const [accountUser, setAccountUser] = useState<AccountsMenuUser | null>(null);
+  const [completion, setCompletion] = useState<ReactNode>(null);
+  const completionPending = useRef(false);
+  const expiryObserved = useRef(false);
   const updateMenu = useCallback((user: AccountsMenuUser) => {
     if (!leaving.current) setAccountUser(user);
   }, []);
   const leaving = useRef(false);
   const expire = useCallback(() => {
     if (leaving.current) return;
+    if (completionPending.current) {
+      expiryObserved.current = true;
+      return;
+    }
     leaving.current = true;
     setSession("expired");
     // Replace history so Back cannot restore a signed-out account screen.
     window.location.replace(WEBSITE_HOME);
   }, []);
+  const beginCompletion = useCallback((): AccountCompletion => {
+    completionPending.current = true;
+    return {
+      complete: (view) => {
+        // A completed revocation retains only its one-time receipt, never the account UI.
+        leaving.current = true;
+        completionPending.current = false;
+        setAccountUser(null);
+        setCompletion(view);
+      },
+      cancel: () => {
+        completionPending.current = false;
+        if (expiryObserved.current) expire();
+      },
+    };
+  }, [expire]);
   const base = realm === "customer" ? "/account" : "/workforce/account";
   const requested = params.get("section");
   const allowed =
@@ -249,11 +288,20 @@ export function AccountCenterShell({
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
   }, [open]);
+  if (completion) {
+    return (
+      <div className="accounts-viewport">
+        <AccountsHeader />
+        <main className="accounts-content">{completion}</main>
+        <AccountsFooter />
+      </div>
+    );
+  }
   if (session === "expired") return null;
   if (session !== "authenticated") {
     return (
       <div className="accounts-viewport">
-        <AccountsHeader />
+        <AccountsHeader layout="account" />
         <main className="accounts-content">
           <div className="accounts-management">
             {session === "checking" ? (
@@ -277,77 +325,80 @@ export function AccountCenterShell({
             )}
           </div>
         </main>
-        <AccountsFooter />
+        <AccountsFooter layout="account" />
       </div>
     );
   }
   return (
-    <SessionExpiredContext.Provider value={expire}>
-      <AccountMenuContext.Provider value={updateMenu}>
-        <div className="accounts-viewport">
-          <AccountsHeader
-            accountHref={href("profile")}
-            accountUser={accountUser}
-            realm={realm}
-            navigation={
-              <Button
-                variant="ghost"
-                size="icon-md"
-                className="accounts-mobile-trigger"
-                aria-label={t(open ? "closeNav" : "openNav")}
-                aria-expanded={open}
-                aria-controls="accounts-sidebar"
-                onClick={() => setOpen((value) => !value)}
-              >
-                <Icon name={open ? "x" : "list"} size="sm" />
-              </Button>
-            }
-          />
-          <div
-            className={`accounts-workspace${open ? " accounts-nav-open" : ""}`}
-          >
-            {open ? (
-              <Button
-                variant="ghost"
-                className="accounts-nav-dismiss"
-                aria-label={t("closeNav")}
-                onClick={() => setOpen(false)}
-              />
-            ) : null}
-            <aside
-              id="accounts-sidebar"
-              className="accounts-sidebar"
-              aria-label={t("navigation")}
-            >
-              <ShellSidebarFrame mode={collapsed ? "collapsed" : "expanded"}>
-                <ShellSidebarNav
-                  sections={sections}
-                  collapsed={collapsed}
-                  onToggleCollapsed={() => setCollapsed((value) => !value)}
-                  isActive={(url) => url === href(active)}
-                  storageKeyPrefix={`accounts-${realm}`}
-                  linkComponent={Link}
-                  labels={{
-                    expandNav: t("openNav"),
-                    collapseNav: t("closeNav"),
-                    expandAllGroups: t("expandGroups"),
-                    collapseAllGroups: t("collapseGroups"),
-                  }}
-                />
-              </ShellSidebarFrame>
-            </aside>
+    <CompletionContext.Provider value={beginCompletion}>
+      <SessionExpiredContext.Provider value={expire}>
+        <AccountMenuContext.Provider value={updateMenu}>
+          <div className="accounts-viewport">
+            <AccountsHeader
+              layout="account"
+              accountHref={href("profile")}
+              accountUser={accountUser}
+              realm={realm}
+              navigation={
+                <Button
+                  variant="ghost"
+                  size="icon-md"
+                  className="accounts-mobile-trigger"
+                  aria-label={t(open ? "closeNav" : "openNav")}
+                  aria-expanded={open}
+                  aria-controls="accounts-sidebar"
+                  onClick={() => setOpen((value) => !value)}
+                >
+                  <Icon name={open ? "x" : "list"} size="sm" />
+                </Button>
+              }
+            />
             <div
-              className="accounts-content"
-              inert={open}
-              aria-hidden={open || undefined}
-              key={`${pathname}-${active}`}
+              className={`accounts-workspace${open ? " accounts-nav-open" : ""}`}
             >
-              <div className="accounts-management">{children}</div>
+              {open ? (
+                <Button
+                  variant="ghost"
+                  className="accounts-nav-dismiss"
+                  aria-label={t("closeNav")}
+                  onClick={() => setOpen(false)}
+                />
+              ) : null}
+              <aside
+                id="accounts-sidebar"
+                className="accounts-sidebar"
+                aria-label={t("navigation")}
+              >
+                <ShellSidebarFrame mode={collapsed ? "collapsed" : "expanded"}>
+                  <ShellSidebarNav
+                    sections={sections}
+                    collapsed={collapsed}
+                    onToggleCollapsed={() => setCollapsed((value) => !value)}
+                    isActive={(url) => url === href(active)}
+                    storageKeyPrefix={`accounts-${realm}`}
+                    linkComponent={Link}
+                    labels={{
+                      expandNav: t("openNav"),
+                      collapseNav: t("closeNav"),
+                      expandAllGroups: t("expandGroups"),
+                      collapseAllGroups: t("collapseGroups"),
+                    }}
+                  />
+                </ShellSidebarFrame>
+              </aside>
+              <div
+                className="accounts-content"
+                inert={open}
+                aria-hidden={open || undefined}
+                key={`${pathname}-${active}`}
+              >
+                <div className="accounts-management">{children}</div>
+              </div>
             </div>
+            <AccountsFooter layout="account" />
           </div>
-          <AccountsFooter />
-        </div>
-      </AccountMenuContext.Provider>
-    </SessionExpiredContext.Provider>
+        </AccountMenuContext.Provider>
+      </SessionExpiredContext.Provider>
+    </CompletionContext.Provider>
   );
 }

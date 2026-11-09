@@ -17,9 +17,15 @@ import {
 } from "./AccountCenterShell";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  formatClock,
+  formatDateTime,
+  formatDay,
+} from "@vxture-platform/shared";
+import {
   Banner,
   Button,
   DialogForm,
+  DataTable,
   Icon,
   Skeleton,
   StatusBadge,
@@ -184,11 +190,7 @@ export function CustomerAccountCenter() {
   }, [revision, expire]);
 
   function date(value: string | undefined) {
-    if (!value) return t("notSet");
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? t("notSet")
-      : parsed.toLocaleString(locale);
+    return formatDateTime(value, locale, t("notSet"));
   }
 
   function device(userAgent: string | null) {
@@ -196,7 +198,7 @@ export function CustomerAccountCenter() {
     return `${info.browser || t("unknownBrowser")} · ${info.os || t("unknownOs")}`;
   }
 
-  function method(value: string) {
+  function methodParts(value: string) {
     const labels: Record<string, string> = {
       phone: t("methodPhone"),
       password: t("methodPassword"),
@@ -211,9 +213,46 @@ export function CustomerAccountCenter() {
         (part) =>
           labels[part] ??
           (part.startsWith("social:") ? t("methodSocial") : t("methodUnknown")),
-      )
-      .join(" · ");
+      );
   }
+
+  function method(value: string) {
+    return methodParts(value).join(" · ");
+  }
+
+  function locationLabel(attempt: CustomerLoginAttempt) {
+    if (attempt.location?.kind === "private") return t("privateLocation");
+    const location = attempt.location;
+    const region = location?.region;
+    const city = location?.city;
+    const countryCode = location?.countryCode || attempt.countryCode;
+    let country = location?.country;
+    if (countryCode && /^[A-Z]{2}$/.test(countryCode)) {
+      country =
+        new Intl.DisplayNames([locale], { type: "region" }).of(countryCode) ||
+        country;
+    }
+    const parts =
+      countryCode === "CN" && (region || city)
+        ? [region, city]
+        : [country, region, city];
+    return (
+      [...new Set(parts.filter(Boolean))].join(" · ") || t("unknownLocation")
+    );
+  }
+
+  const historyNow = Date.now();
+  const recentHistory =
+    load.state === "ready" && load.history.ok
+      ? load.history.value.filter((attempt) => {
+          const at = Date.parse(attempt.loginAt);
+          return (
+            Number.isFinite(at) &&
+            at > historyNow - 30 * 86400000 &&
+            at <= historyNow
+          );
+        })
+      : [];
 
   const retry = (
     <Button
@@ -305,9 +344,12 @@ export function CustomerAccountCenter() {
                               {session.ipAddress || t("notSet")} ·{" "}
                               {method(session.authMethod)}
                             </p>
-                            <p className="accounts-activity-meta">
-                              {t("lastActive")} · {date(session.lastActiveAt)}
-                            </p>
+                          </div>
+                          <div className="accounts-session-active">
+                            <span>{t("lastActive")}</span>
+                            <time dateTime={session.lastActiveAt}>
+                              {date(session.lastActiveAt)}
+                            </time>
                           </div>
                           <Button
                             className="accounts-activity-actions"
@@ -337,35 +379,104 @@ export function CustomerAccountCenter() {
                 )}
               </Panel>
               <Panel title={t("history")} icon="timer">
+                <p className="accounts-history-range">{t("historyRange")}</p>
                 {load.history.ok ? (
-                  load.history.value.length ? (
-                    <ul className="accounts-activity-list">
-                      {load.history.value.map((attempt, index) => (
-                        <li
-                          key={`${attempt.loginAt}-${index}`}
-                          className="accounts-activity-row"
-                        >
-                          <span className="accounts-activity-details">
-                            {date(attempt.loginAt)} · {attempt.ipAddress} ·{" "}
-                            {method(attempt.authMethod)}
-                            <span className="block text-muted-foreground">
-                              {device(attempt.userAgent)}
-                            </span>
-                          </span>
-                          <StatusBadge
-                            tone={
-                              attempt.result === "success"
-                                ? "success"
-                                : "danger"
-                            }
-                          >
-                            {attempt.result === "success"
-                              ? t("success")
-                              : t("unsuccessful")}
-                          </StatusBadge>
-                        </li>
-                      ))}
-                    </ul>
+                  recentHistory.length ? (
+                    <div
+                      className="accounts-history-scroll"
+                      role="region"
+                      aria-label={t("history")}
+                      tabIndex={0}
+                    >
+                      <DataTable
+                        className="accounts-history"
+                        rows={recentHistory}
+                        rowKey={(attempt, index) =>
+                          `${attempt.loginAt}-${index}`
+                        }
+                        columns={[
+                          {
+                            id: "time",
+                            header: t("loginTime"),
+                            align: "center",
+                            cell: (attempt) => (
+                              <time dateTime={attempt.loginAt}>
+                                {formatDay(
+                                  attempt.loginAt,
+                                  locale,
+                                  t("notSet"),
+                                )}
+                                <span className="accounts-history-secondary">
+                                  {formatClock(attempt.loginAt, locale)}
+                                </span>
+                              </time>
+                            ),
+                          },
+                          {
+                            id: "client",
+                            header: t("browserAndOs"),
+                            align: "center",
+                            cell: (attempt) => {
+                              const client = deviceInfo(attempt.userAgent);
+                              return (
+                                <>
+                                  {client.browser || t("unknownBrowser")}
+                                  <span className="accounts-history-secondary">
+                                    {client.os || t("unknownOs")}
+                                  </span>
+                                </>
+                              );
+                            },
+                          },
+                          {
+                            id: "location",
+                            header: t("loginAddress"),
+                            align: "center",
+                            cell: (attempt) => (
+                              <>
+                                {locationLabel(attempt)}
+                                <span className="accounts-history-secondary">
+                                  {attempt.ipAddress || t("notSet")}
+                                </span>
+                              </>
+                            ),
+                          },
+                          {
+                            id: "method",
+                            header: t("loginMethod"),
+                            align: "center",
+                            cell: (attempt) => (
+                              <span className="accounts-history-method">
+                                {methodParts(attempt.authMethod).map(
+                                  (part, index) => (
+                                    <span key={`${part}-${index}`}>{part}</span>
+                                  ),
+                                )}
+                              </span>
+                            ),
+                          },
+                          {
+                            id: "result",
+                            header: t("loginResult"),
+                            align: "center",
+                            width: "xs",
+                            cell: (attempt) => (
+                              <StatusBadge
+                                tone={
+                                  attempt.result === "success"
+                                    ? "success"
+                                    : "danger"
+                                }
+                              >
+                                {attempt.result === "success"
+                                  ? t("success")
+                                  : t("unsuccessful")}
+                              </StatusBadge>
+                            ),
+                          },
+                        ]}
+                      />
+                    </div>
                   ) : (
                     <p className="text-body-sm text-muted-foreground">
                       {t("noHistory")}
