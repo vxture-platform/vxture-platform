@@ -27,7 +27,10 @@ export function authNavigation(
       `${current.origin}${current.pathname}${current.hash}`,
     );
   for (const [key, value] of Object.entries(parameters)) {
-    if ((key === "tenantId" || key === "workspaceId") && value)
+    if (
+      ((key === "tenantId" || key === "workspaceId") && value) ||
+      (action === "login" && key === "prompt" && value === "none")
+    )
       target.searchParams.set(key, value);
   }
   return `${target.pathname}${target.search}`;

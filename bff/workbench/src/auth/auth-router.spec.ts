@@ -240,6 +240,43 @@ describe("authorization", () => {
     expect(response.status).toBe(401);
     expect(fixture.store.records.size).toBe(0);
   });
+  it.each(["login_required", "interaction_required"])(
+    "returns a silent %s to the portal once",
+    async (error) => {
+      const start = await fixture.begin(
+        "/auth/login?prompt=none&returnTo=%2Fapps%3Ffilter%3Dall",
+      );
+      const response = await fixture.request(
+        `/auth/callback?state=${start.state}&error=${error}`,
+        start.cookie,
+      );
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(
+        "http://127.0.0.1/apps?filter=all&vx_sso_silent=0",
+      );
+      expect(fixture.tokenCalls).toBe(0);
+      expect(fixture.store.records.size).toBe(0);
+      expect(
+        (
+          await fixture.request(
+            `/auth/callback?state=${start.state}&error=${error}`,
+            start.cookie,
+          )
+        ).status,
+      ).toBe(400);
+    },
+  );
+  it("does not mask a denied silent authorization as an anonymous visit", async () => {
+    const start = await fixture.begin("/auth/login?prompt=none");
+    expect(
+      (
+        await fixture.request(
+          `/auth/callback?state=${start.state}&error=access_denied`,
+          start.cookie,
+        )
+      ).status,
+    ).toBe(401);
+  });
   it("consumes failed authorization and rejects duplicate query values", async () => {
     const start = await fixture.begin();
     const response = await fixture.request(

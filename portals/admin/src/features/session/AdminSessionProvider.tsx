@@ -45,48 +45,81 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionSnapshot>(EMPTY_SESSION);
   const [status, setStatus] = useState<SessionStatus>("loading");
 
+  // Probe independently: restoreSession also returns an empty snapshot on outages.
   useEffect(() => {
     let active = true;
-
+    let inFlight = false;
+    let lastSyncAt = 0;
+    const controller = new AbortController();
     const params = new URLSearchParams(window.location.search);
     const silentJustFailed = params.get("vx_sso_silent") === "0";
     if (silentJustFailed) {
       params.delete("vx_sso_silent");
-      const cleanUrl = `${window.location.pathname}${params.size ? `?${params.toString()}` : ""}${window.location.hash}`;
-      window.history.replaceState(null, "", cleanUrl);
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${params.size ? `?${params}` : ""}${window.location.hash}`,
+      );
     }
-
-    restoreSession()
-      .then((snapshot) => {
+    const sessionUrl = new URL(buildRpLoginUrl(), window.location.origin);
+    sessionUrl.pathname = sessionUrl.pathname.replace(/\/login$/, "/session");
+    sessionUrl.search = "";
+    const sync = async () => {
+      if (
+        !active ||
+        inFlight ||
+        document.visibilityState !== "visible" ||
+        Date.now() - lastSyncAt < 1500
+      )
+        return;
+      inFlight = true;
+      lastSyncAt = Date.now();
+      try {
+        const response = await fetch(sessionUrl.href, {
+          credentials: "include",
+          cache: "no-store",
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(15_000),
+          ]),
+        });
         if (!active) return;
-        setSession(snapshot);
-        if (snapshot.isAuthenticated) {
-          setStatus("ready");
+        if (response.status === 401 || response.status === 403) {
+          setSession(EMPTY_SESSION);
+          setStatus("loading");
+          window.location.replace(
+            silentJustFailed
+              ? buildRpLoginUrl(window.location.href)
+              : buildRpLoginUrl(window.location.href, { prompt: "none" }),
+          );
           return;
         }
-        /* 未登录：**不置 ready**，直接把浏览器送走。
-         *
-         * 原先这里先 setStatus('ready') 再跳转，于是外壳会拿着"已就绪但未登录"
-         * 的状态渲染一帧（骨架/空壳），紧接着整页被替换掉——冷启动要落回门户
-         * 两次，这一帧就闪两次。状态停在 loading，加载页一直盖着，直到导航发生。
-         *
-         * 静默失败过就直接走交互式登录，不再退回 `/login` 中转页：那一跳是一次
-         * 完整的页面加载，只为了在屏幕上写一句"正在跳转到登录…"再跳走。
-         * BFF 侧还记了一个 5 分钟的备忘 cookie，所以连着刷新也不会重复静默往返。 */
-        window.location.replace(
-          silentJustFailed
-            ? buildRpLoginUrl(window.location.href)
-            : buildRpLoginUrl(window.location.href, { prompt: "none" }),
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        setSession(EMPTY_SESSION);
+        if (!response.ok) return;
+        const snapshot = await restoreSession();
+        if (!active || !snapshot.isAuthenticated) return;
+        setSession(snapshot);
         setStatus("ready");
-      });
-
+      } catch {
+        // Retain the authenticated shell on transient failures; retry on focus.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const reconcile = () => {
+      void sync();
+    };
+    reconcile();
+    const interval = window.setInterval(reconcile, 300_000);
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("pageshow", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
     return () => {
       active = false;
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("pageshow", reconcile);
+      document.removeEventListener("visibilitychange", reconcile);
     };
   }, []);
 

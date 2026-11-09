@@ -57,6 +57,10 @@ export function WorkPortal({
   const [now, setNow] = useState(() => new Date(initialTime));
   const [result, setResult] = useState<LoadResult<WorkData> | null>(null);
   const [revision, setRevision] = useState(0);
+  const syncInFlight = useRef(false);
+  const lastSyncAt = useRef(0);
+  const allowSilentSso = useRef(true);
+  const silentFailure = useRef(false);
   const [overview, setOverview] = useState<WorkApp | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -101,10 +105,60 @@ export function WorkPortal({
   useEffect(() => {
     if (!runtime.authConfigured || !knownRoute) return;
     const controller = new AbortController();
-    setResult(null);
+    syncInFlight.current = true;
+    lastSyncAt.current = Date.now();
+    const current = new URL(window.location.href);
+    const silentFailed = current.searchParams.get("vx_sso_silent") === "0";
+    if (silentFailed) {
+      silentFailure.current = true;
+      current.searchParams.delete("vx_sso_silent");
+      window.history.replaceState(null, "", current.href);
+    }
     void loadWorkData(controller.signal, runtime.catalogConfigured)
       .then((value) => {
-        if (!controller.signal.aborted) setResult(value);
+        if (controller.signal.aborted) return;
+        // ruyin.work cannot read the IdP cookie on accounts.vxture.com.
+        // A bounded top-level prompt=none flow restores this RP independently.
+        if (value.status === "error" && value.code === 401) {
+          let attemptedAt = 0;
+          try {
+            attemptedAt = Number(sessionStorage.getItem("vx:work:sso-at")) || 0;
+            if (silentFailed) {
+              attemptedAt = Date.now();
+              sessionStorage.setItem("vx:work:sso-at", String(attemptedAt));
+            }
+          } catch {
+            // The callback marker still prevents a redirect loop without storage.
+          }
+          if (
+            allowSilentSso.current &&
+            !silentFailure.current &&
+            Date.now() - attemptedAt >= 1500
+          ) {
+            allowSilentSso.current = false;
+            try {
+              sessionStorage.setItem("vx:work:sso-at", String(Date.now()));
+            } catch {
+              // Storage is optional; authorization remains server-bound.
+            }
+            window.location.replace(
+              authNavigation("login", window.location.href, { prompt: "none" }),
+            );
+            return;
+          }
+        }
+        allowSilentSso.current = false;
+        // Keep the authenticated shell during a transient data outage.
+        setResult((previous) =>
+          value.status === "error" &&
+          value.code !== 401 &&
+          previous?.status === "ready"
+            ? {
+                ...previous,
+                data: { ...previous.data, availabilityIssue: value.message },
+              }
+            : value,
+        );
       })
       .catch(() => {
         if (!controller.signal.aborted)
@@ -113,9 +167,46 @@ export function WorkPortal({
             code: 0,
             message: "连接失败，请稍后重试",
           });
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) syncInFlight.current = false;
       });
-    return () => controller.abort();
-  }, [runtime.authConfigured, runtime.catalogConfigured, revision, knownRoute]);
+    return () => {
+      controller.abort();
+      syncInFlight.current = false;
+    };
+  }, [
+    runtime.authConfigured,
+    runtime.catalogConfigured,
+    revision,
+    knownRoute,
+    pathname,
+  ]);
+  useEffect(() => {
+    if (!runtime.authConfigured || !knownRoute) return;
+    const sync = (foreground: boolean): void => {
+      if (
+        document.visibilityState !== "visible" ||
+        syncInFlight.current ||
+        Date.now() - lastSyncAt.current < 1500
+      )
+        return;
+      allowSilentSso.current = foreground;
+      if (foreground) silentFailure.current = false;
+      setRevision((value) => value + 1);
+    };
+    const foreground = (): void => sync(true);
+    const interval = window.setInterval(() => sync(false), 300_000);
+    window.addEventListener("focus", foreground);
+    window.addEventListener("pageshow", foreground);
+    document.addEventListener("visibilitychange", foreground);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", foreground);
+      window.removeEventListener("pageshow", foreground);
+      document.removeEventListener("visibilitychange", foreground);
+    };
+  }, [runtime.authConfigured, knownRoute]);
   useEffect(() => {
     setDetailsOpen(false);
     setNotificationsOpen(false);

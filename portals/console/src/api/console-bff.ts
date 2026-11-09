@@ -2347,7 +2347,9 @@ async function hasActiveSession(): Promise<boolean | null> {
       },
     );
 
-    return response.ok;
+    if (response.ok) return true;
+    if (response.status === 401 || response.status === 403) return false;
+    return null;
   } catch {
     return null;
   }

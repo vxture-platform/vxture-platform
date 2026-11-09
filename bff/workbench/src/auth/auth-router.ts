@@ -23,6 +23,7 @@ import { SessionService } from "./session-service";
 import { CONFIG } from "../tokens";
 
 interface AuthRequest {
+  silent?: boolean;
   nonce: string;
   verifier: string;
   binding: string;
@@ -130,6 +131,7 @@ export class AuthRouter {
       verifier: pkce.verifier,
       binding: digest(binding),
       returnTo: this.destination(req),
+      ...(prompt === "none" && !hints.tenantId && { silent: true }),
       ...hints,
     };
     await this.store.redis.setex(
@@ -256,7 +258,17 @@ export class AuthRouter {
         "Authorization request already consumed",
       );
     res.clearCookie(this.stateCookie(state), this.options());
-    if (parameter(req, "error"))
+    const error = parameter(req, "error");
+    if (
+      pending.silent &&
+      (error === "login_required" || error === "interaction_required")
+    ) {
+      const destination = new URL(pending.returnTo);
+      destination.searchParams.set("vx_sso_silent", "0");
+      res.redirect(destination.href);
+      return;
+    }
+    if (error)
       throw failure(
         401,
         "WORKBENCH_LOGIN_FAILED",

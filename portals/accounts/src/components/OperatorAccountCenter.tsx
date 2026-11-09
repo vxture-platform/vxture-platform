@@ -14,6 +14,7 @@ import { validNewPassword } from "@/lib/password-policy";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -64,23 +65,62 @@ export function OperatorAccountCenter() {
   const section =
     useSearchParams().get("section") === "security" ? "security" : "profile";
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const inFlight = useRef(false);
+  const active = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     try {
-      setLoad({ state: "ready", self: await fetchOperatorSelf() });
+      const self = await fetchOperatorSelf();
+      if (active.current)
+        setLoad((previous) =>
+          previous.state === "passwordChanged"
+            ? previous
+            : { state: "ready", self },
+        );
     } catch (e) {
+      if (!active.current) return;
       if (e instanceof OperatorUnauthenticatedError)
         setLoad({ state: "unauth" });
       else
-        setLoad({
-          state: "error",
-          message: e instanceof Error ? e.message : "",
-        });
+        setLoad((previous) =>
+          previous.state === "ready" || previous.state === "passwordChanged"
+            ? previous
+            : {
+                state: "error",
+                message: e instanceof Error ? e.message : "",
+              },
+        );
+    } finally {
+      inFlight.current = false;
     }
   }, []);
 
   useEffect(() => {
+    active.current = true;
+    let lastReadAt = Date.now();
     void refresh();
+    const reconcile = () => {
+      if (
+        document.visibilityState !== "visible" ||
+        Date.now() - lastReadAt < 1500
+      )
+        return;
+      lastReadAt = Date.now();
+      void refresh();
+    };
+    const interval = window.setInterval(reconcile, 300_000);
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("pageshow", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
+    return () => {
+      active.current = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("pageshow", reconcile);
+      document.removeEventListener("visibilitychange", reconcile);
+    };
   }, [refresh]);
 
   return (
@@ -136,7 +176,7 @@ export function OperatorAccountCenter() {
         />
       ) : (
         <ReadyView
-          key={section}
+          key={`${section}:${load.self.username}`}
           section={section}
           self={load.self}
           onChanged={refresh}
