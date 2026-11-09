@@ -204,10 +204,12 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-auth:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-auth-bff
     restart: unless-stopped
-    mem_limit: 160m # 实测 64MiB（worker-01，2026-08-17）
+    # Allow service RSS, the V8 heap and Argon2id's 64 MiB WASM workspace.
+    # The previous 160 MiB cgroup limit killed password reset on 2026-11-09.
+    mem_limit: 384m
     cpus: 1.0
     pids_limit: 128
-    memswap_limit: 160m
+    memswap_limit: 384m # Equal to mem_limit: keep swap disabled.
     networks: [vxture-prod]
     # 不发布任何宿主口（E1 PR D，2026-10-04）。此前这里把整个容器发布在
     # ${VX_WORKER01_TAILNET_IP}:8081，任何 tailnet 对端都能打到 /internal/*。现在 :8081 由
@@ -216,7 +218,7 @@ services:
     # Overrides any NODE_OPTIONS from env_file (inline wins). Owner: confirm no
     # host .env.* already sets NODE_OPTIONS flags that would be clobbered.
     environment:
-      NODE_OPTIONS: --max-old-space-size=144
+      NODE_OPTIONS: --max-old-space-size=192
       AUTH_BFF_PORT: "3081"
     env_file: [
         /srv/vxture/runtime/secrets/platform.env,
