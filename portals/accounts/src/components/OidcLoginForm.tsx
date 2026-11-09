@@ -113,18 +113,48 @@ export function OidcLoginForm({
   // tab-focus or visibility-restored, probe the resume endpoint; if the central
   // session can satisfy the parked challenge, navigate without re-authenticating.
   const loadingRef = useRef(false);
+  const resumeRequest = useRef<{
+    challenge: string;
+    promise: ReturnType<typeof resumeOidcLogin>;
+  } | null>(null);
   useEffect(() => {
-    loadingRef.current = loading;
-  }, [loading]);
+    loadingRef.current = loading || sending || mfaChallenge !== null;
+  }, [loading, sending, mfaChallenge]);
 
   useEffect(() => {
+    if (mfaChallenge) return;
     let cancelled = false;
+    let inFlight = false;
+    let lastProbeAt = 0;
 
     const check = async () => {
-      if (loadingRef.current || cancelled) return;
-      const result = await resumeOidcLogin(loginChallenge);
-      if (result && !cancelled) {
-        window.location.assign(result.redirectTo);
+      if (
+        loadingRef.current ||
+        cancelled ||
+        inFlight ||
+        document.visibilityState !== "visible" ||
+        Date.now() - lastProbeAt < 1500
+      )
+        return;
+      inFlight = true;
+      lastProbeAt = Date.now();
+      try {
+        // Reuse the in-flight request across Strict Mode's effect replay: resume
+        // can consume a one-time challenge and must not be sent twice.
+        if (resumeRequest.current?.challenge !== loginChallenge) {
+          resumeRequest.current = {
+            challenge: loginChallenge,
+            promise: resumeOidcLogin(loginChallenge),
+          };
+        }
+        const request = resumeRequest.current;
+        const result = await request.promise;
+        if (result && !cancelled) {
+          window.location.replace(result.redirectTo);
+        }
+      } finally {
+        if (!cancelled) resumeRequest.current = null;
+        inFlight = false;
       }
     };
 
@@ -133,15 +163,20 @@ export function OidcLoginForm({
       if (document.visibilityState === "visible") void check();
     };
 
+    void check();
+    const interval = window.setInterval(handleFocus, 300_000);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [loginChallenge]);
+  }, [loginChallenge, mfaChallenge]);
 
   const switchMode = (m: AuthLoginTab) => {
     setMode(m);

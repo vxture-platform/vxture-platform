@@ -103,56 +103,90 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>("loading");
   const [capabilities, setCapabilities] = useState<readonly string[]>([]);
 
+  // Revalidate identity and capabilities together after foreground transitions.
   useEffect(() => {
     let active = true;
-    fetch("/auth/session", { credentials: "include", cache: "no-store" })
-      .then(async (res) => {
+    let inFlight = false;
+    let lastSyncAt = 0;
+    const controller = new AbortController();
+    const sync = async () => {
+      if (
+        !active ||
+        inFlight ||
+        document.visibilityState !== "visible" ||
+        Date.now() - lastSyncAt < 1500
+      )
+        return;
+      inFlight = true;
+      lastSyncAt = Date.now();
+      const options = {
+        credentials: "include" as const,
+        cache: "no-store" as const,
+        signal: AbortSignal.any([
+          controller.signal,
+          AbortSignal.timeout(15_000),
+        ]),
+      };
+      try {
+        const response = await fetch("/auth/session", options);
         if (!active) return;
-        if (res.ok) {
-          const body = (await res.json()) as {
-            claims?: Record<string, unknown>;
-          };
-          setOperator(toIdentity(body.claims ?? {}));
-          setStatus("ready");
+        if (response.status === 401 || response.status === 403) {
+          setOperator(null);
+          setCapabilities([]);
+          setStatus("anonymous");
+          window.location.replace(buildLoginUrl(window.location.href));
           return;
         }
-        setStatus("anonymous");
-        if (res.status === 401 || res.status === 403) {
+        if (!response.ok) return;
+        const body = (await response.json()) as {
+          claims?: Record<string, unknown>;
+        };
+        if (!active) return;
+        const identity = toIdentity(body.claims ?? {});
+        // Clear old grants before applying an identity which may have changed.
+        setCapabilities([]);
+        setOperator(identity);
+        setStatus("ready");
+        const permissions = await fetch("/api/session", options);
+        if (!active) return;
+        if (permissions.status === 401) {
+          setOperator(null);
+          setCapabilities([]);
+          setStatus("anonymous");
           window.location.replace(buildLoginUrl(window.location.href));
+          return;
         }
-      })
-      .catch(() => {
-        if (active) setStatus("anonymous");
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // 能力码单独取：来源是库不是令牌。失败就保持空数组——界面按"没有权限"渲染，
-  // 这个方向是安全的（多藏按钮不会造成越权，多显才会）。
-  useEffect(() => {
-    if (status !== "ready") return;
-    let active = true;
-    fetch("/api/session", { credentials: "include", cache: "no-store" })
-      .then(async (res) => {
-        if (!active || !res.ok) return;
-        const body = (await res.json()) as {
+        if (!permissions.ok) return;
+        const access = (await permissions.json()) as {
           capabilities?: string[];
           planeEntitled?: boolean;
         };
-        setCapabilities(body.capabilities ?? []);
-        /* 进得了 IdP 不等于进得了本平台：没有根码时 BFF 对其余接口一律 403，
-           这里据此整屏说明，而不是放进去看一页页的读取失败。 */
-        if (body.planeEntitled === false) setStatus("forbidden");
-      })
-      .catch(() => {
-        /* 保持空数组 */
-      });
+        if (!active) return;
+        setCapabilities(access.capabilities ?? []);
+        if (access.planeEntitled === false) setStatus("forbidden");
+      } catch {
+        // A network failure is not proof that the central session ended.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const reconcile = () => {
+      void sync();
+    };
+    reconcile();
+    const interval = window.setInterval(reconcile, 300_000);
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("pageshow", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
     return () => {
       active = false;
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("pageshow", reconcile);
+      document.removeEventListener("visibilitychange", reconcile);
     };
-  }, [status]);
+  }, []);
 
   const can = useCallback(
     (capability: string) => capabilities.includes(capability),

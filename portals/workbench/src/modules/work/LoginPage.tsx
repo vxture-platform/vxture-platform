@@ -238,7 +238,9 @@ export function LoginPage({
         <section className="work-login-panel" aria-labelledby="login-title">
           <div className="work-login-heading">
             <p className="work-login-eyebrow">WELCOME TO RUYIN WORK</p>
-            <h2 id="login-title">登录你的工作空间</h2>
+            <h2 id="login-title">
+              {failed ? "工作空间暂不可用" : "登录你的工作空间"}
+            </h2>
           </div>
           <div className="work-login-actions">
             <div className="work-login-identity">

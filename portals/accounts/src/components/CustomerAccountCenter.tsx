@@ -81,7 +81,18 @@ export function CustomerAccountCenter() {
   useEffect(() => {
     const controller = new AbortController();
     setLoad({ state: "loading" });
+    let inFlight = false;
+    let lastReadAt = 0;
     async function read() {
+      if (
+        controller.signal.aborted ||
+        inFlight ||
+        document.visibilityState !== "visible" ||
+        Date.now() - lastReadAt < 1500
+      )
+        return;
+      inFlight = true;
+      lastReadAt = Date.now();
       try {
         const profile = await fetchCustomerSelf("", controller.signal);
         // A route must never display an account from the other identity domain.
@@ -113,17 +124,33 @@ export function CustomerAccountCenter() {
         });
       } catch (error) {
         if (!controller.signal.aborted)
-          setLoad({
-            state:
-              error instanceof CustomerReadError &&
-              error.kind === "unauthenticated"
-                ? "unauthenticated"
-                : "error",
-          });
+          setLoad((previous) =>
+            error instanceof CustomerReadError &&
+            error.kind === "unauthenticated"
+              ? { state: "unauthenticated" }
+              : previous.state === "ready"
+                ? previous
+                : { state: "error" },
+          );
+      } finally {
+        inFlight = false;
       }
     }
     void read();
-    return () => controller.abort();
+    const reconcile = () => {
+      void read();
+    };
+    const interval = window.setInterval(reconcile, 300_000);
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("pageshow", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("pageshow", reconcile);
+      document.removeEventListener("visibilitychange", reconcile);
+    };
   }, [revision]);
 
   function date(value: string | undefined) {
@@ -210,6 +237,7 @@ export function CustomerAccountCenter() {
           {section === "profile" ? (
             <>
               <CustomerProfileEditor
+                key={load.profile.id}
                 profile={load.profile}
                 security={load.security.ok ? load.security.value : null}
                 onSaved={() => setRevision((v) => v + 1)}
@@ -218,7 +246,10 @@ export function CustomerAccountCenter() {
           ) : null}
           {section === "security" ? (
             load.security.ok ? (
-              <CustomerSecurityEditor security={load.security.value} />
+              <CustomerSecurityEditor
+                key={load.profile.id}
+                security={load.security.value}
+              />
             ) : (
               failed
             )
