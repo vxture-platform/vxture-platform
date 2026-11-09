@@ -316,9 +316,20 @@ export function CustomerSecurityEditor({
             />
           }
         >
-          {security.accountLoginEnabled
-            ? formText("enabled")
-            : formText("disabled")}
+          <div className="accounts-account-value">
+            <span>
+              {!security.hasPassword
+                ? formText("login_unavailable")
+                : security.accountLoginEnabled
+                  ? formText("enabled")
+                  : formText("disabled")}
+            </span>
+            {!security.hasPassword ? (
+              <span className="text-muted-foreground">
+                {formText("password_not_set")}
+              </span>
+            ) : null}
+          </div>
         </AccountRow>
         <AccountRow
           label={formText("phone_login")}
@@ -326,9 +337,18 @@ export function CustomerSecurityEditor({
             <Switch aria-label={formText("phone_login")} checked disabled />
           }
         >
-          <span className="text-muted-foreground">
-            {formText("always_enabled")}
-          </span>
+          <div className="accounts-account-value">
+            <span>
+              {security.phoneVerified
+                ? formText("enabled")
+                : formText("login_unavailable")}
+            </span>
+            <span className="text-muted-foreground">
+              {security.phoneVerified
+                ? formText("always_enabled")
+                : formText("phone_not_yet_verified")}
+            </span>
+          </div>
         </AccountRow>
         <AccountRow
           label={formText("email_login")}
@@ -349,11 +369,22 @@ export function CustomerSecurityEditor({
             />
           }
         >
-          <span className="text-muted-foreground">
-            {security.emailVerified
-              ? formText("available_for_login")
-              : formText("verify_your_email_to_enable")}
-          </span>
+          <div className="accounts-account-value">
+            <span>
+              {!security.emailVerified || !security.phoneVerified
+                ? formText("login_unavailable")
+                : security.emailLoginEnabled
+                  ? formText("enabled")
+                  : formText("disabled")}
+            </span>
+            {!security.emailVerified || !security.phoneVerified ? (
+              <span className="text-muted-foreground">
+                {!security.emailVerified
+                  ? formText("email_not_verified")
+                  : formText("phone_not_yet_verified")}
+              </span>
+            ) : null}
+          </div>
         </AccountRow>
       </AccountSection>
       <CustomerMfaPanel />

@@ -52,6 +52,12 @@ export function CustomerProfileEditor({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [resetAvatar, setResetAvatar] = useState(false);
+  function openAvatar() {
+    setFile(null);
+    setResetAvatar(false);
+    setError("");
+    setAvatarOpen(true);
+  }
   useEffect(() => {
     if (!file) {
       setPreview("");
@@ -121,22 +127,24 @@ export function CustomerProfileEditor({
           variant="ghost"
           className="accounts-identity-avatar"
           aria-label={formText("change_avatar")}
-          onClick={() => {
-            setFile(null);
-            setResetAvatar(false);
-            setError("");
-            setAvatarOpen(true);
-          }}
+          onClick={openAvatar}
         >
           {avatar(currentPicture)}
         </Button>
         <div>
           <h2>{profile.name || profile.account}</h2>
           <div className="accounts-identity-meta">
-            <span>{profile.account}</span>
             <span>{formatPrincipalNoOr(profile.userNo, "user", "—")}</span>
           </div>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="accounts-identity-edit"
+          onClick={openAvatar}
+        >
+          {formText("edit_avatar")}
+        </Button>
       </div>
       <AccountSection
         title={formText("basic_information")}
