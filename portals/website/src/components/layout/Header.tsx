@@ -160,8 +160,9 @@ function HeaderFullscreenToggle() {
 }
 
 function HeaderQuickTools() {
+  const t = useTranslations("layout.header");
   return (
-    <ShellIconGroup label="页面工具">
+    <ShellIconGroup label={t("preferences.title")}>
       <HeaderThemeToggle />
       <HeaderLocaleSelect />
       <div className="hidden sm:block">
