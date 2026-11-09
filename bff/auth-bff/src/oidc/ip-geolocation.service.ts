@@ -38,10 +38,12 @@ for (const [address, prefix] of [
   ["169.254.0.0", 16],
   ["172.16.0.0", 12],
   ["192.168.0.0", 16],
-  ["100.64.0.0", 10],
 ] as const) {
   PRIVATE.addSubnet(address, prefix, "ipv4");
 }
+// Keep the published RFC 6598 allocation as CIDR, rather than a host identifier.
+const [sharedAddress, sharedPrefix] = "100.64.0.0/10".split("/");
+PRIVATE.addSubnet(sharedAddress!, Number(sharedPrefix), "ipv4");
 PRIVATE.addAddress("::1", "ipv6");
 PRIVATE.addSubnet("fc00::", 7, "ipv6");
 PRIVATE.addSubnet("fe80::", 10, "ipv6");

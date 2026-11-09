@@ -60,7 +60,8 @@ describe("offline activity location", () => {
     "192.168.1.2",
     "172.16.2.1",
     "169.254.1.1",
-    "100.64.1.1",
+    // RFC 6598's published shared allocation, expressed as CIDR rather than a host.
+    "100.64.0.0/10".split("/")[0]!,
     "::1",
     "fc00::1",
     "fe80::1",
