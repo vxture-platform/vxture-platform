@@ -17,6 +17,11 @@ import {
 } from "./AccountCenterShell";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  formatClock,
+  formatDateTime,
+  formatDay,
+} from "@vxture-platform/shared";
+import {
   Banner,
   Button,
   DialogForm,
@@ -185,11 +190,7 @@ export function CustomerAccountCenter() {
   }, [revision, expire]);
 
   function date(value: string | undefined) {
-    if (!value) return t("notSet");
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? t("notSet")
-      : parsed.toLocaleString(locale);
+    return formatDateTime(value, locale, t("notSet"));
   }
 
   function device(userAgent: string | null) {
@@ -398,22 +399,18 @@ export function CustomerAccountCenter() {
                             id: "time",
                             header: t("loginTime"),
                             align: "center",
-                            cell: (attempt) => {
-                              const at = new Date(attempt.loginAt);
-                              const valid = !Number.isNaN(at.getTime());
-                              return (
-                                <time dateTime={attempt.loginAt}>
-                                  {valid
-                                    ? at.toLocaleDateString(locale)
-                                    : t("notSet")}
-                                  <span className="accounts-history-secondary">
-                                    {valid
-                                      ? at.toLocaleTimeString(locale)
-                                      : "—"}
-                                  </span>
-                                </time>
-                              );
-                            },
+                            cell: (attempt) => (
+                              <time dateTime={attempt.loginAt}>
+                                {formatDay(
+                                  attempt.loginAt,
+                                  locale,
+                                  t("notSet"),
+                                )}
+                                <span className="accounts-history-secondary">
+                                  {formatClock(attempt.loginAt, locale)}
+                                </span>
+                              </time>
+                            ),
                           },
                           {
                             id: "client",

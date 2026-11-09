@@ -10,7 +10,7 @@
 import { validNewPassword } from "@/lib/password-policy";
 
 import { useLocale, useTranslations } from "next-intl";
-import { formatDay } from "@vxture-platform/shared";
+import { formatDateTime, formatDay } from "@vxture-platform/shared";
 import { useEffect, useState } from "react";
 import {
   Banner,
@@ -191,9 +191,7 @@ export function CustomerSecurityEditor({
               {accountChangeable
                 ? formText("account_change_interval")
                 : formText("account_next_change", {
-                    date: new Date(
-                      security.accountChangeableAt!,
-                    ).toLocaleString(locale),
+                    date: formatDateTime(security.accountChangeableAt, locale),
                   })}
             </span>
           </div>
