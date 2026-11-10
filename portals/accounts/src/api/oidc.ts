@@ -8,6 +8,7 @@
  * it targets the auth-bff directly. The IdP sets the central-session cookie and
  * returns the RP redirect carrying the authorization code.
  */
+import { accountsFetch } from "@/lib/http";
 import { apiMessage } from "@/lib/api-message";
 const OIDC_API_BASE =
   process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
@@ -36,7 +37,7 @@ export async function fetchLoginContext(
 ): Promise<{ realm: "customer" | "workforce" }> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await accountsFetch(
       `${OIDC_API_BASE}/oidc/authorize/login-context?login_challenge=${encodeURIComponent(loginChallenge)}`,
       { cache: "no-store", signal: AbortSignal.timeout(10000) },
     );
@@ -90,7 +91,7 @@ export async function completeOidcLogin(
 ): Promise<OidcLoginResult> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/authorize/login`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/authorize/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
@@ -163,7 +164,7 @@ export async function verifyOperatorMfa(
 ): Promise<{ redirectTo: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/authorize/mfa/verify`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/authorize/mfa/verify`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
@@ -184,12 +185,15 @@ export async function beginOperatorTotpEnroll(
 ): Promise<{ secret: string; otpauthUri: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/authorize/mfa/enroll/totp`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ mfa_token: mfaToken }),
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/authorize/mfa/enroll/totp`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ mfa_token: mfaToken }),
+      },
+    );
   } catch {
     throw new Error(apiMessage("error_5"));
   }
@@ -211,7 +215,7 @@ export async function confirmOperatorTotpEnroll(
 ): Promise<{ redirectTo: string; recoveryCodes: string[] }> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await accountsFetch(
       `${OIDC_API_BASE}/oidc/authorize/mfa/enroll/totp/confirm`,
       {
         method: "POST",
@@ -242,7 +246,7 @@ export async function sendPhoneCode(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/auth/send-phone-code`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/auth/send-phone-code`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ phone, captcha_token: captchaToken }),
@@ -268,7 +272,7 @@ export async function sendBindPhoneCode(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/auth/oauth/send-phone-code`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/auth/oauth/send-phone-code`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -297,7 +301,7 @@ export async function sendEmailCode(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/auth/send-email-code`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/auth/send-email-code`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, captcha_token: captchaToken }),
@@ -323,7 +327,7 @@ export async function sendEmailCode(
 export async function requestPasswordReset(email: string): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/auth/forgot-password`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/auth/forgot-password`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email }),
@@ -341,7 +345,7 @@ export async function resetPassword(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/auth/reset-password`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/auth/reset-password`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token, password }),
@@ -370,7 +374,7 @@ export async function resetOperatorPassword(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/auth/operator/reset-password`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/auth/operator/reset-password`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token, password }),
@@ -397,7 +401,7 @@ export interface EnabledProvider {
 /** Enabled social providers (table-driven) for rendering the login buttons. */
 export async function fetchEnabledProviders(): Promise<EnabledProvider[]> {
   try {
-    const res = await fetch(`${OIDC_API_BASE}/auth/oauth/providers`, {
+    const res = await accountsFetch(`${OIDC_API_BASE}/auth/oauth/providers`, {
       cache: "no-store",
     });
     if (!res.ok) return [];
@@ -420,7 +424,7 @@ export async function resumeOidcLogin(
 ): Promise<{ redirectTo: string } | null> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await accountsFetch(
       `${OIDC_API_BASE}/oidc/authorize/resume?login_challenge=${encodeURIComponent(loginChallenge)}`,
       {
         credentials: "include",
@@ -481,7 +485,7 @@ export async function bindOAuthPhone(
 ): Promise<{ redirectTo: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/auth/oauth/bind-phone`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/auth/oauth/bind-phone`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
@@ -512,7 +516,7 @@ export async function completeOidcLoginWithPhone(
 ): Promise<OidcLoginResult> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/authorize/login/phone`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/authorize/login/phone`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
@@ -555,7 +559,7 @@ export async function completeOidcLoginWithEmail(
 ): Promise<OidcLoginResult> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/authorize/login/email`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/authorize/login/email`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
@@ -611,7 +615,7 @@ export interface OnboardingState {
 export async function fetchOnboardingState(): Promise<OnboardingState> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/onboarding`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/onboarding`, {
       credentials: "include",
     });
   } catch {
@@ -633,7 +637,7 @@ export async function submitOnboarding(input: {
 }): Promise<{ redirectTo: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/onboarding`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/onboarding`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
@@ -662,7 +666,7 @@ export async function checkOnboardingAccount(
   account: string,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const response = await fetch(
+  const response = await accountsFetch(
     `${OIDC_API_BASE}/oidc/onboarding/account-availability?account=${encodeURIComponent(account)}`,
     {
       credentials: "include",

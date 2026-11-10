@@ -7,6 +7,9 @@
  * post the response back for verification + persistence. Same-origin with the
  * OIDC API on the accounts surface (operator central session cookie included).
  */
+import { apiMessage } from "@/lib/api-message";
+import { AccountSessionError } from "@/lib/account-session";
+import { accountsFetch } from "@/lib/http";
 import {
   startAuthentication,
   startRegistration,
@@ -29,18 +32,22 @@ export async function registerOperatorPasskey(): Promise<{
   // 1. Options (challenge parked server-side).
   let optRes: Response;
   try {
-    optRes = await fetch(
+    optRes = await accountsFetch(
       `${OIDC_API_BASE}/oidc/operator/webauthn/register/options`,
       { method: "POST", credentials: "include" },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!optRes.ok) {
-    if (optRes.status === 401) throw new Error("请先登录运营账号");
+    if (optRes.status === 401)
+      throw new AccountSessionError(
+        "workforce",
+        apiMessage("operator_sign_in_required"),
+      );
     if (optRes.status === 503)
-      throw new Error("通行密钥暂不可用，请联系管理员");
-    throw new Error("无法发起通行密钥注册，请稍后重试");
+      throw new Error(apiMessage("passkey_unavailable"));
+    throw new Error(apiMessage("passkey_register_start_failed"));
   }
   const options =
     (await optRes.json()) as PublicKeyCredentialCreationOptionsJSON;
@@ -50,13 +57,13 @@ export async function registerOperatorPasskey(): Promise<{
   try {
     response = await startRegistration({ optionsJSON: options });
   } catch {
-    throw new Error("通行密钥注册被取消或不受支持");
+    throw new Error(apiMessage("passkey_register_cancelled"));
   }
 
   // 3. Verify + persist.
   let verRes: Response;
   try {
-    verRes = await fetch(
+    verRes = await accountsFetch(
       `${OIDC_API_BASE}/oidc/operator/webauthn/register/verify`,
       {
         method: "POST",
@@ -66,12 +73,17 @@ export async function registerOperatorPasskey(): Promise<{
       },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!verRes.ok) {
-    if (verRes.status === 400) throw new Error("注册会话已失效，请重试");
-    if (verRes.status === 401) throw new Error("请先登录运营账号");
-    throw new Error("通行密钥注册失败，请重试");
+    if (verRes.status === 400)
+      throw new Error(apiMessage("passkey_registration_expired"));
+    if (verRes.status === 401)
+      throw new AccountSessionError(
+        "workforce",
+        apiMessage("operator_sign_in_required"),
+      );
+    throw new Error(apiMessage("passkey_register_failed"));
   }
   return (await verRes.json()) as { credentialId: string };
 }
@@ -88,7 +100,7 @@ export async function enrollOperatorPasskeyOnLogin(
   // 1. Registration options (challenge parked server-side).
   let optRes: Response;
   try {
-    optRes = await fetch(
+    optRes = await accountsFetch(
       `${OIDC_API_BASE}/oidc/authorize/mfa/enroll/webauthn/options`,
       {
         method: "POST",
@@ -98,13 +110,14 @@ export async function enrollOperatorPasskeyOnLogin(
       },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!optRes.ok) {
-    if (optRes.status === 400) throw new Error("注册会话已失效，请重新登录");
+    if (optRes.status === 400)
+      throw new Error(apiMessage("passkey_registration_sign_in"));
     if (optRes.status === 503)
-      throw new Error("通行密钥暂不可用，请联系管理员");
-    throw new Error("无法发起通行密钥注册，请重试");
+      throw new Error(apiMessage("passkey_unavailable"));
+    throw new Error(apiMessage("passkey_register_retry"));
   }
   const options =
     (await optRes.json()) as PublicKeyCredentialCreationOptionsJSON;
@@ -114,13 +127,13 @@ export async function enrollOperatorPasskeyOnLogin(
   try {
     response = await startRegistration({ optionsJSON: options });
   } catch {
-    throw new Error("通行密钥注册被取消或不受支持");
+    throw new Error(apiMessage("passkey_register_cancelled"));
   }
 
   // 3. Verify → complete login.
   let verRes: Response;
   try {
-    verRes = await fetch(
+    verRes = await accountsFetch(
       `${OIDC_API_BASE}/oidc/authorize/mfa/enroll/webauthn/verify`,
       {
         method: "POST",
@@ -130,16 +143,18 @@ export async function enrollOperatorPasskeyOnLogin(
       },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!verRes.ok) {
-    if (verRes.status === 400) throw new Error("注册会话已失效，请重新登录");
-    throw new Error("通行密钥注册失败，请重试");
+    if (verRes.status === 400)
+      throw new Error(apiMessage("passkey_registration_sign_in"));
+    throw new Error(apiMessage("passkey_register_failed"));
   }
   const data = (await verRes.json().catch(() => ({}))) as {
     redirectTo?: string;
   };
-  if (!data.redirectTo) throw new Error("注册响应异常，请重试");
+  if (!data.redirectTo)
+    throw new Error(apiMessage("passkey_registration_response_invalid"));
   return { redirectTo: data.redirectTo };
 }
 
@@ -157,17 +172,24 @@ export interface OperatorPasskey {
 export async function listOperatorPasskeys(): Promise<OperatorPasskey[]> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/webauthn/credentials`, {
-      method: "GET",
-      credentials: "include",
-      cache: "no-store",
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/operator/webauthn/credentials`,
+      {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      },
+    );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!res.ok) {
-    if (res.status === 401) throw new Error("请先登录运营账号");
-    throw new Error("无法加载通行密钥列表，请重试");
+    if (res.status === 401)
+      throw new AccountSessionError(
+        "workforce",
+        apiMessage("operator_sign_in_required"),
+      );
+    throw new Error(apiMessage("passkey_list_failed"));
   }
   const data = (await res.json().catch(() => ({}))) as {
     credentials?: OperatorPasskey[];
@@ -182,7 +204,7 @@ export async function renameOperatorPasskey(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await accountsFetch(
       `${OIDC_API_BASE}/oidc/operator/webauthn/credentials/${encodeURIComponent(id)}`,
       {
         method: "PATCH",
@@ -192,12 +214,16 @@ export async function renameOperatorPasskey(
       },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!res.ok) {
-    if (res.status === 401) throw new Error("请先登录运营账号");
-    if (res.status === 404) throw new Error("通行密钥不存在");
-    throw new Error("重命名失败，请重试");
+    if (res.status === 401)
+      throw new AccountSessionError(
+        "workforce",
+        apiMessage("operator_sign_in_required"),
+      );
+    if (res.status === 404) throw new Error(apiMessage("passkey_not_found"));
+    throw new Error(apiMessage("passkey_rename_failed"));
   }
 }
 
@@ -205,24 +231,28 @@ export async function renameOperatorPasskey(
 export async function revokeOperatorPasskey(id: string): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(
+    res = await accountsFetch(
       `${OIDC_API_BASE}/oidc/operator/webauthn/credentials/${encodeURIComponent(id)}`,
       { method: "DELETE", credentials: "include" },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { message?: string };
-    if (res.status === 401) throw new Error("请先登录运营账号");
-    if (res.status === 404) throw new Error("通行密钥不存在");
+    if (res.status === 401)
+      throw new AccountSessionError(
+        "workforce",
+        apiMessage("operator_sign_in_required"),
+      );
+    if (res.status === 404) throw new Error(apiMessage("passkey_not_found"));
     if (
       res.status === 400 &&
       (data.message ?? "").includes("last_webauthn_credential")
     ) {
-      throw new Error("这是唯一的通行密钥，且账号要求通行密钥，无法删除");
+      throw new Error(apiMessage("passkey_last_required"));
     }
-    throw new Error("删除失败，请重试");
+    throw new Error(apiMessage("passkey_delete_failed"));
   }
 }
 
@@ -237,7 +267,7 @@ export async function authenticateOperatorPasskey(
   // 1. Options (challenge parked server-side).
   let optRes: Response;
   try {
-    optRes = await fetch(
+    optRes = await accountsFetch(
       `${OIDC_API_BASE}/oidc/authorize/mfa/webauthn/options`,
       {
         method: "POST",
@@ -247,11 +277,12 @@ export async function authenticateOperatorPasskey(
       },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!optRes.ok) {
-    if (optRes.status === 400) throw new Error("验证会话已失效，请重新登录");
-    throw new Error("无法发起通行密钥验证，请重试");
+    if (optRes.status === 400)
+      throw new Error(apiMessage("passkey_verification_expired"));
+    throw new Error(apiMessage("passkey_auth_start_failed"));
   }
   const options =
     (await optRes.json()) as PublicKeyCredentialRequestOptionsJSON;
@@ -261,13 +292,13 @@ export async function authenticateOperatorPasskey(
   try {
     response = await startAuthentication({ optionsJSON: options });
   } catch {
-    throw new Error("通行密钥验证被取消或不受支持");
+    throw new Error(apiMessage("passkey_auth_cancelled"));
   }
 
   // 3. Verify → complete login.
   let verRes: Response;
   try {
-    verRes = await fetch(
+    verRes = await accountsFetch(
       `${OIDC_API_BASE}/oidc/authorize/mfa/webauthn/verify`,
       {
         method: "POST",
@@ -277,16 +308,19 @@ export async function authenticateOperatorPasskey(
       },
     );
   } catch {
-    throw new Error("网络异常，请稍后重试");
+    throw new Error(apiMessage("network_error"));
   }
   if (!verRes.ok) {
-    if (verRes.status === 401) throw new Error("通行密钥验证失败，请重试");
-    if (verRes.status === 400) throw new Error("验证会话已失效，请重新登录");
-    throw new Error("通行密钥验证失败，请重试");
+    if (verRes.status === 401)
+      throw new Error(apiMessage("passkey_auth_failed"));
+    if (verRes.status === 400)
+      throw new Error(apiMessage("passkey_verification_expired"));
+    throw new Error(apiMessage("passkey_auth_failed"));
   }
   const data = (await verRes.json().catch(() => ({}))) as {
     redirectTo?: string;
   };
-  if (!data.redirectTo) throw new Error("验证响应异常，请重试");
+  if (!data.redirectTo)
+    throw new Error(apiMessage("passkey_auth_response_invalid"));
   return { redirectTo: data.redirectTo };
 }

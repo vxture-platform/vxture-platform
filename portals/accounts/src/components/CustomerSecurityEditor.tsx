@@ -9,6 +9,7 @@
 "use client";
 import { validNewPassword } from "@/lib/password-policy";
 
+import { PasswordInput } from "./PasswordInput";
 import { useLocale, useTranslations } from "next-intl";
 import { formatDateTime, formatDay } from "@vxture-platform/shared";
 import { useEffect, useState } from "react";
@@ -27,6 +28,8 @@ import { accountsRequest, type CustomerSecurity } from "@/api/customer-self";
 import { AccountSection, AccountRow } from "./AccountPrimitives";
 import { CustomerMfaPanel } from "./CustomerMfaPanel";
 import { VerificationCodeInput } from "./VerificationCodeInput";
+import { useAccountCompletion } from "./AccountCenterShell";
+import { AccountReauthentication } from "./AccountReauthentication";
 
 type Action = { operation: string; title: string; target?: string };
 
@@ -41,6 +44,7 @@ export function CustomerSecurityEditor({
 }) {
   const locale = useLocale();
   const formText = useTranslations("accountsForms");
+  const beginCompletion = useAccountCompletion();
   const [enabledProviders, setEnabledProviders] = useState<string[]>([]);
   useEffect(() => {
     let active = true;
@@ -136,11 +140,17 @@ export function CustomerSecurityEditor({
         );
         window.location.assign(result.url);
       } else {
-        await accountsRequest(`${base}/${challenge}/execute`, {
-          method: "POST",
-          body: JSON.stringify({ currentPassword, password }),
-        });
-        setStage("done");
+        const completion = beginCompletion();
+        try {
+          await accountsRequest(`${base}/${challenge}/execute`, {
+            method: "POST",
+            body: JSON.stringify({ currentPassword, password }),
+          });
+          completion.complete(<AccountReauthentication />);
+        } catch (error) {
+          completion.cancel();
+          throw error;
+        }
         setCurrentPassword("");
         setPassword("");
         setConfirmation("");
@@ -478,230 +488,211 @@ export function CustomerSecurityEditor({
           ["anchor", "target"].includes(stage) && code.length !== 6
         }
         submitLabel={
-          stage === "done"
-            ? formText("sign_in_again")
-            : stage === "start" || stage === "target-pending"
-              ? formText("send_code")
-              : stage === "authorized"
-                ? formText("confirm_change")
-                : formText("continue")
+          stage === "start" || stage === "target-pending"
+            ? formText("send_code")
+            : stage === "authorized"
+              ? formText("confirm_change")
+              : formText("continue")
         }
         onSubmit={(event) => {
           event.preventDefault();
-          if (stage === "done") window.location.assign("/login");
-          else void run();
+          void run();
         }}
         open={Boolean(action)}
         onOpenChange={(open) => {
           if (!open && !busy) setAction(null);
         }}
       >
-        {stage === "done" ? (
-          <>
-            <Banner
-              tone="success"
-              title={formText("done_please_sign_in_again")}
-            />
-          </>
-        ) : (
-          <div className="accounts-settings-form">
-            {stage === "start" ? (
-              <>
-                {action?.operation === "username" ? (
-                  <>
-                    <p className="text-body-sm text-muted-foreground">
-                      {formText("account_change_interval")}
-                    </p>
-                    <label
-                      className="accounts-required-label"
-                      htmlFor="security-new-account"
-                    >
-                      {formText("new_account_name")}
-                      <span className="accounts-required" aria-hidden="true">
-                        *
-                      </span>
-                    </label>
-                  </>
-                ) : null}
-                {action &&
-                ["phone-change", "email-change", "username"].includes(
-                  action.operation,
-                ) ? (
-                  <Input
-                    id={
-                      action.operation === "username"
-                        ? "security-new-account"
-                        : undefined
-                    }
-                    aria-label={formText(
-                      action.operation === "username"
-                        ? "new_account_name"
-                        : "new_value",
-                    )}
-                    aria-describedby={
-                      action.operation === "username"
-                        ? "security-account-hint"
-                        : undefined
-                    }
-                    maxLength={action.operation === "username" ? 24 : undefined}
-                    autoComplete={
-                      action.operation === "username" ? "off" : undefined
-                    }
-                    type={
-                      action.operation === "email-change" ? "email" : "text"
-                    }
-                    value={target}
-                    onChange={(e) => setTarget(e.target.value)}
-                    placeholder={
-                      action.operation === "phone-change"
-                        ? formText("new_phone_number")
-                        : action.operation === "email-change"
-                          ? formText("new_email")
-                          : formText("new_account_name")
-                    }
-                    required
-                    disabled={busy}
-                  />
-                ) : null}
-                {action?.operation === "username" ? (
-                  <p
-                    id="security-account-hint"
-                    className="text-body-sm text-muted-foreground"
-                  >
-                    {formText("account_format_hint")}
+        <div className="accounts-settings-form">
+          {stage === "start" ? (
+            <>
+              {action?.operation === "username" ? (
+                <>
+                  <p className="text-body-sm text-muted-foreground">
+                    {formText("account_change_interval")}
                   </p>
-                ) : null}
-                {action?.operation === "password" ? (
-                  <>
-                    {security.hasPassword ? (
-                      <>
-                        <label
-                          className="accounts-required-label"
-                          htmlFor="security-current_password"
-                        >
-                          {formText("current_password")}
-                          <span
-                            className="accounts-required"
-                            aria-hidden="true"
-                          >
-                            *
-                          </span>
-                        </label>
-                        <Input
-                          id="security-current_password"
-                          aria-label={formText("current_password")}
-                          type="password"
-                          autoComplete="current-password"
-                          placeholder={formText("current_password")}
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                          required
-                        />
-                      </>
-                    ) : null}
-                    <label
-                      className="accounts-required-label"
-                      htmlFor="security-new_password"
-                    >
-                      {formText("new_password")}
-                      <span className="accounts-required" aria-hidden="true">
-                        *
-                      </span>
-                    </label>
-                    <Input
-                      id="security-new_password"
-                      aria-label={formText("new_password")}
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder={formText(
-                        "new_password_at_least_8_characters",
-                      )}
-                      minLength={8}
-                      maxLength={128}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                    <p className="text-body-sm text-muted-foreground">
-                      {formText("password_policy_customer")}
-                    </p>
-                    <label
-                      className="accounts-required-label"
-                      htmlFor="security-confirm_password"
-                    >
-                      {formText("confirm_password")}
-                      <span className="accounts-required" aria-hidden="true">
-                        *
-                      </span>
-                    </label>
-                    <Input
-                      id="security-confirm_password"
-                      aria-label={formText("confirm_password")}
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder={formText("confirm_password")}
-                      value={confirmation}
-                      onChange={(e) => setConfirmation(e.target.value)}
-                      required
-                    />
-                  </>
-                ) : null}
-                <label className="text-body-sm text-muted-foreground">
-                  {formText("verification_method")}
-                  <NativeSelect
-                    aria-label={formText("verification_method")}
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                    disabled={busy || action?.operation.endsWith("-verify")}
+                  <label
+                    className="accounts-required-label"
+                    htmlFor="security-new-account"
                   >
-                    <option
-                      value="phone"
-                      disabled={
-                        !security.phoneVerified &&
-                        action?.operation !== "phone-verify"
-                      }
-                    >
-                      {formText("sms_code")}
-                    </option>
-                    <option
-                      value="email"
-                      disabled={
-                        !security.emailVerified &&
-                        action?.operation !== "email-verify"
-                      }
-                    >
-                      {formText("email_code")}
-                    </option>
-                  </NativeSelect>
-                </label>
-              </>
-            ) : stage === "anchor" || stage === "target" ? (
-              <>
-                <p className="text-body-sm text-muted-foreground">
-                  {stage === "anchor"
-                    ? formText("verify_your_current_contact")
-                    : formText("verify_new_contact", { target })}
-                </p>
-                <VerificationCodeInput
-                  name="security_code"
-                  label={formText("verification_code")}
-                  value={code}
-                  onChange={setCode}
+                    {formText("new_account_name")}
+                    <span className="accounts-required" aria-hidden="true">
+                      *
+                    </span>
+                  </label>
+                </>
+              ) : null}
+              {action &&
+              ["phone-change", "email-change", "username"].includes(
+                action.operation,
+              ) ? (
+                <Input
+                  id={
+                    action.operation === "username"
+                      ? "security-new-account"
+                      : undefined
+                  }
+                  aria-label={formText(
+                    action.operation === "username"
+                      ? "new_account_name"
+                      : "new_value",
+                  )}
+                  aria-describedby={
+                    action.operation === "username"
+                      ? "security-account-hint"
+                      : undefined
+                  }
+                  maxLength={action.operation === "username" ? 24 : undefined}
+                  autoComplete={
+                    action.operation === "username" ? "off" : undefined
+                  }
+                  type={action.operation === "email-change" ? "email" : "text"}
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder={
+                    action.operation === "phone-change"
+                      ? formText("new_phone_number")
+                      : action.operation === "email-change"
+                        ? formText("new_email")
+                        : formText("new_account_name")
+                  }
+                  required
                   disabled={busy}
                 />
-              </>
-            ) : (
+              ) : null}
+              {action?.operation === "username" ? (
+                <p
+                  id="security-account-hint"
+                  className="text-body-sm text-muted-foreground"
+                >
+                  {formText("account_format_hint")}
+                </p>
+              ) : null}
+              {action?.operation === "password" ? (
+                <>
+                  {security.hasPassword ? (
+                    <>
+                      <label
+                        className="accounts-required-label"
+                        htmlFor="security-current_password"
+                      >
+                        {formText("current_password")}
+                        <span className="accounts-required" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      <PasswordInput
+                        id="security-current_password"
+                        aria-label={formText("current_password")}
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder={formText("current_password")}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        required
+                      />
+                    </>
+                  ) : null}
+                  <label
+                    className="accounts-required-label"
+                    htmlFor="security-new_password"
+                  >
+                    {formText("new_password")}
+                    <span className="accounts-required" aria-hidden="true">
+                      *
+                    </span>
+                  </label>
+                  <PasswordInput
+                    id="security-new_password"
+                    aria-label={formText("new_password")}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={formText("new_password_at_least_8_characters")}
+                    minLength={8}
+                    maxLength={128}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <p className="text-body-sm text-muted-foreground">
+                    {formText("password_policy_customer")}
+                  </p>
+                  <label
+                    className="accounts-required-label"
+                    htmlFor="security-confirm_password"
+                  >
+                    {formText("confirm_password")}
+                    <span className="accounts-required" aria-hidden="true">
+                      *
+                    </span>
+                  </label>
+                  <PasswordInput
+                    id="security-confirm_password"
+                    aria-label={formText("confirm_password")}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={formText("confirm_password")}
+                    value={confirmation}
+                    onChange={(e) => setConfirmation(e.target.value)}
+                    required
+                  />
+                </>
+              ) : null}
+              <label className="text-body-sm text-muted-foreground">
+                {formText("verification_method")}
+                <NativeSelect
+                  aria-label={formText("verification_method")}
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value)}
+                  disabled={busy || action?.operation.endsWith("-verify")}
+                >
+                  <option
+                    value="phone"
+                    disabled={
+                      !security.phoneVerified &&
+                      action?.operation !== "phone-verify"
+                    }
+                  >
+                    {formText("sms_code")}
+                  </option>
+                  <option
+                    value="email"
+                    disabled={
+                      !security.emailVerified &&
+                      action?.operation !== "email-verify"
+                    }
+                  >
+                    {formText("email_code")}
+                  </option>
+                </NativeSelect>
+              </label>
+            </>
+          ) : stage === "anchor" || stage === "target" ? (
+            <>
               <p className="text-body-sm text-muted-foreground">
-                {stage === "authorized"
-                  ? action?.operation === "identity-link"
-                    ? formText("link_verified")
-                    : formText("verified_confirming_will_sign_out_all_devices")
-                  : formText("send_a_code_to_the_new_contact")}
+                {stage === "anchor"
+                  ? formText("verify_your_current_contact")
+                  : formText("verify_new_contact", { target })}
               </p>
-            )}
-            {error ? <Banner tone="danger" title={error} /> : null}
-          </div>
-        )}
+              <VerificationCodeInput
+                name="security_code"
+                label={formText("verification_code")}
+                value={code}
+                onChange={setCode}
+                disabled={busy}
+              />
+            </>
+          ) : (
+            <p className="text-body-sm text-muted-foreground">
+              {stage === "authorized"
+                ? action?.operation === "identity-link"
+                  ? formText("link_verified")
+                  : formText("verified_confirming_will_sign_out_all_devices")
+                : formText("send_a_code_to_the_new_contact")}
+            </p>
+          )}
+          {error ? <Banner tone="danger" title={error} /> : null}
+        </div>
       </DialogForm>
     </>
   );

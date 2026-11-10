@@ -7,7 +7,7 @@
  * @date 2026-11-07
  */
 "use client";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@vxture/design-system";
 
@@ -26,7 +26,7 @@ interface CaptchaOptions {
   mode: "embed" | "popup";
   element: string;
   button: string;
-  language: "cn";
+  language: "cn" | "en";
   captchaVerifyCallback: (
     param: string,
   ) => Promise<{ captchaResult: boolean; bizResult: boolean }>;
@@ -88,6 +88,8 @@ function loadSdk(): Promise<void> {
  * @returns Current proof, readiness, reset and the verification component.
  */
 export function useHumanCaptcha(realm: Realm, onDemand = false) {
+  const locale = useLocale();
+  const previousLocale = useRef(locale);
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<Status>("loading");
   const [generation, setGeneration] = useState(0);
@@ -114,6 +116,12 @@ export function useHumanCaptcha(realm: Realm, onDemand = false) {
     trigger.current = null;
     setGeneration(generationRef.current);
   }, [settle]);
+  useEffect(() => {
+    if (previousLocale.current !== locale) {
+      previousLocale.current = locale;
+      reset();
+    }
+  }, [locale, reset]);
   const update = useCallback(
     (next: Status, proof = "") => {
       // Ignore callbacks from a cancelled or timed-out challenge immediately.
@@ -170,6 +178,7 @@ export function useHumanCaptcha(realm: Realm, onDemand = false) {
       <HumanCaptcha
         key={`${realm}-${generation}`}
         realm={realm}
+        language={locale === "en-US" ? "en" : "cn"}
         onStatus={update}
         onRetry={reset}
         onDemand={onDemand}
@@ -186,6 +195,7 @@ export function useHumanCaptcha(realm: Realm, onDemand = false) {
 
 function HumanCaptcha({
   realm,
+  language,
   onStatus,
   onRetry,
   onDemand,
@@ -193,6 +203,7 @@ function HumanCaptcha({
   onCancel,
 }: {
   realm: Realm;
+  language: "cn" | "en";
   onStatus: (status: Status, token?: string) => void;
   onRetry: () => void;
   onDemand: boolean;
@@ -247,7 +258,7 @@ function HumanCaptcha({
           mode: onDemand ? "popup" : "embed",
           element: `#${id}`,
           button: `#${id}-button`,
-          language: "cn",
+          language,
           onClose: () => {
             if (!cancelled && !completed) onCancel();
           },
@@ -313,7 +324,7 @@ function HumanCaptcha({
       onTrigger(null);
       host?.replaceChildren();
     };
-  }, [realm, id, onStatus, onDemand, onTrigger, onCancel]);
+  }, [realm, language, id, onStatus, onDemand, onTrigger, onCancel]);
   return (
     <div
       className="accounts-captcha"

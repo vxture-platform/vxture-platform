@@ -13,6 +13,7 @@ import { AccountsUserMenu, type AccountsMenuUser } from "./AccountsUserMenu";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { setAccountsLocale } from "@/lib/locale-preference";
 import {
   Button,
   Icon,
@@ -54,7 +55,7 @@ export function AccountsHeader({
   const router = useRouter();
   function changeLocale(value: string) {
     if (value !== "zh-CN" && value !== "en-US") return;
-    document.cookie = `NEXT_LOCALE=${value}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    setAccountsLocale(value);
     router.refresh();
   }
   return (

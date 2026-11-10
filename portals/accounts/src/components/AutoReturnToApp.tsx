@@ -10,12 +10,14 @@
  */
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { resolveReturnUrl } from "@vxture/platform-browser";
 
 const WEBSITE_HOME_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? "";
 
 export function AutoReturnToApp() {
+  const t = useTranslations("accountsForms");
   useEffect(() => {
     window.location.replace(resolveReturnUrl(WEBSITE_HOME_URL));
   }, []);
@@ -29,7 +31,7 @@ export function AutoReturnToApp() {
         aria-hidden="true"
       />
       <p className="text-body-md text-muted-foreground">
-        登录会话已失效，正在返回…
+        {t("session_expired_returning")}
       </p>
     </main>
   );

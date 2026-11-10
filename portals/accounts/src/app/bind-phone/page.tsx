@@ -6,6 +6,7 @@
  * one-time binding token and renders the phone-binding form; a missing token
  * means the page was opened out of band — show a friendly notice.
  */
+import { getTranslations } from "next-intl/server";
 import { AccountsNotice } from "@/components/AuthChrome";
 import { BindPhonePanel } from "@/components/BindPhonePanel";
 
@@ -16,6 +17,7 @@ export default async function BindPhonePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const t = await getTranslations("accountsForms");
   const params = await searchParams;
   const token =
     typeof params.binding_token === "string" ? params.binding_token : "";
@@ -23,8 +25,8 @@ export default async function BindPhonePage({
   if (!token) {
     return (
       <AccountsNotice
-        title="绑定会话无效"
-        description="这个绑定链接已过期或被使用过。请回到应用重新发起登录。"
+        title={t("invalid_binding_session")}
+        description={t("invalid_binding_detail")}
       />
     );
   }

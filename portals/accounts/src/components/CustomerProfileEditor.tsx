@@ -21,6 +21,7 @@ import {
   StatusBadge,
 } from "@vxture/design-system";
 import { useRouter } from "next/navigation";
+import { setAccountsLocale } from "@/lib/locale-preference";
 import {
   accountsRequest,
   type CustomerProfile,
@@ -295,16 +296,18 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
   const [timezone, setTimezone] = useState(profile.timezone || "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [saved, setSaved] = useState(false);
   async function save() {
     setBusy(true);
     setMessage("");
+    setSaved(false);
     try {
       await accountsRequest("/oidc/customer/self", {
         method: "PATCH",
         body: JSON.stringify({ language, timezone }),
       });
-      document.cookie = `NEXT_LOCALE=${language}; Path=/; Max-Age=31536000; SameSite=Lax`;
-      setMessage(formText("saved"));
+      setAccountsLocale(language === "en-US" ? "en-US" : "zh-CN");
+      setSaved(true);
       router.refresh();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : formText("unable_to_save"));
@@ -404,9 +407,9 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
       <Button size="sm" disabled={busy} onClick={() => void save()}>
         {formText("save")}
       </Button>
-      {message ? (
+      {saved || message ? (
         <p role="status" className="text-body-sm text-muted-foreground">
-          {message}
+          {saved ? formText("saved") : message}
         </p>
       ) : null}
     </AccountSection>

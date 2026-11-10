@@ -14,6 +14,8 @@ import { Banner, Button, Checkbox, NativeSelect } from "@vxture/design-system";
 import { accountsRequest, type CustomerSecurity } from "@/api/customer-self";
 import { AccountSection } from "./AccountPrimitives";
 import { VerificationCodeInput } from "./VerificationCodeInput";
+import { useAccountCompletion } from "./AccountCenterShell";
+import { AccountReauthentication } from "./AccountReauthentication";
 
 // ============================================================================
 // Account lifecycle
@@ -43,6 +45,7 @@ export function CustomerDeletion({
   security: CustomerSecurity | null;
 }) {
   const locale = useLocale();
+  const beginCompletion = useAccountCompletion();
   const formText = useTranslations("accountsForms");
   const LABELS: Record<string, string> = {
     org_owner: formText("transfer_or_close_the_organizations_you_own_first"),
@@ -106,14 +109,22 @@ export function CustomerDeletion({
         setVerified(true);
         setCode("");
       } else {
-        await accountsRequest(recovery ? `${base}/cancel` : base, {
-          method: "POST",
-          body: JSON.stringify({
-            challengeId: challenge,
-            acknowledged: accepted,
-          }),
-        });
-        setDone(true);
+        const completion = recovery ? null : beginCompletion();
+        try {
+          await accountsRequest(recovery ? `${base}/cancel` : base, {
+            method: "POST",
+            body: JSON.stringify({
+              challengeId: challenge,
+              acknowledged: accepted,
+            }),
+          });
+          if (completion)
+            completion.complete(<AccountReauthentication deletion />);
+          else setDone(true);
+        } catch (error) {
+          completion?.cancel();
+          throw error;
+        }
       }
     } catch (e) {
       setError(
