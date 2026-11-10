@@ -52,7 +52,16 @@ export const middleware = createAuthMiddleware({
       if (SUPPORTED_LOCALES.includes(prefix))
         target.pathname = target.pathname.replace(`/${prefix}`, `/${hint}`);
       const response = NextResponse.redirect(target);
-      const host = request.nextUrl.hostname;
+      // NextURL can contain the container origin behind the production proxy.
+      const host = (
+        request.headers.get("x-forwarded-host") ??
+        request.headers.get("host") ??
+        request.nextUrl.host
+      )
+        .split(",")[0]!
+        .trim()
+        .split(":")[0]!
+        .toLowerCase();
       const domain =
         host === "vxture.com" || host.endsWith(".vxture.com")
           ? ".vxture.com"
@@ -62,7 +71,10 @@ export const middleware = createAuthMiddleware({
         domain,
         sameSite: "lax",
         maxAge: 31536000,
-        secure: request.nextUrl.protocol === "https:",
+        secure:
+          Boolean(domain) ||
+          request.nextUrl.protocol === "https:" ||
+          request.headers.get("x-forwarded-proto") === "https",
       });
       if (domain)
         response.headers.append(
