@@ -85,8 +85,13 @@ export class OperatorAdminInternalRouter {
 
   /** 吊销刷新令牌，并结束中央会话（否则静默 SSO 会把人放回来）。返回结束的会话数。 */
   private async endSessions(operatorId: string): Promise<number> {
-    await this.refreshTokens.revokeAllForOperator(operatorId);
-    return this.oidc.endOperatorSessions(operatorId);
+    const results = await Promise.allSettled([
+      this.refreshTokens.revokeAllForOperator(operatorId),
+      this.oidc.endOperatorSessions(operatorId),
+    ]);
+    for (const result of results)
+      if (result.status === "rejected") throw result.reason;
+    return results[1].status === "fulfilled" ? results[1].value : 0;
   }
 
   /**
@@ -183,9 +188,15 @@ export class OperatorAdminInternalRouter {
     }
 
     const token = randomBytes(32).toString("base64url");
+    const proof = await this.operators.passwordResetProof(
+      created.id,
+      email,
+      true,
+    );
+    if (!proof) throw new BadRequestException("reset_eligibility_changed");
     await this.redis.storeOperatorPasswordReset(
       token,
-      created.id,
+      proof,
       OPERATOR_RESET_TTL_SECONDS,
     );
     const base = this.config.platform.LOGIN_UI_BASE_URL.replace(/\/$/, "");
@@ -357,9 +368,11 @@ export class OperatorAdminInternalRouter {
       throw new UnprocessableEntityException("contact_unverified");
     }
     const token = randomBytes(32).toString("base64url");
+    const proof = await this.operators.passwordResetProof(id, target.email);
+    if (!proof) throw new BadRequestException("reset_eligibility_changed");
     await this.redis.storeOperatorPasswordReset(
       token,
-      id,
+      proof,
       OPERATOR_RESET_TTL_SECONDS,
     );
     const base = this.config.platform.LOGIN_UI_BASE_URL.replace(/\/$/, "");

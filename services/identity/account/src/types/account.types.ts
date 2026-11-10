@@ -381,6 +381,11 @@ export type CustomerSecurityOperation =
 
 /** Account facts captured before issuing a sensitive-operation proof. */
 export interface CustomerSecuritySnapshot {
+  /** Current session and factor state, checked again under the account row lock. */
+  sessionId?: string;
+  mfaVersion?: string | null;
+  /** Opaque credential/contact version captured before fresh ownership verification. */
+  credentialVersion?: string;
   /** Exact provider subjects captured for unlink; never returned to the browser. */
   identitySubjects?: string[];
   phone: string;

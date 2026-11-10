@@ -26,7 +26,7 @@ const OIDC_API_BASE =
  * Register a new operator passkey. Throws a user-facing message on failure
  * (including a user-cancelled/unsupported ceremony). Returns the new credential id.
  */
-export async function registerOperatorPasskey(): Promise<{
+export async function registerOperatorPasskey(proofToken: string): Promise<{
   credentialId: string;
 }> {
   // 1. Options (challenge parked server-side).
@@ -34,7 +34,12 @@ export async function registerOperatorPasskey(): Promise<{
   try {
     optRes = await accountsFetch(
       `${OIDC_API_BASE}/oidc/operator/webauthn/register/options`,
-      { method: "POST", credentials: "include" },
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proofToken }),
+      },
     );
   } catch {
     throw new Error(apiMessage("network_error"));
@@ -69,7 +74,7 @@ export async function registerOperatorPasskey(): Promise<{
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ response }),
+        body: JSON.stringify({ response, proofToken }),
       },
     );
   } catch {
@@ -228,12 +233,20 @@ export async function renameOperatorPasskey(
 }
 
 /** Revoke a passkey (server blocks removing the last one for required operators). */
-export async function revokeOperatorPasskey(id: string): Promise<void> {
+export async function revokeOperatorPasskey(
+  id: string,
+  proofToken: string,
+): Promise<void> {
   let res: Response;
   try {
     res = await accountsFetch(
       `${OIDC_API_BASE}/oidc/operator/webauthn/credentials/${encodeURIComponent(id)}`,
-      { method: "DELETE", credentials: "include" },
+      {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proofToken }),
+      },
     );
   } catch {
     throw new Error(apiMessage("network_error"));

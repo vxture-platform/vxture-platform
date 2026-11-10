@@ -13,6 +13,7 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import { VxConfigService } from "@vxture/core-config";
 import { AccountService } from "@vxture/service-account";
+import { AccountReauthenticationService } from "../authn/account-reauthentication.service";
 import { AccountsBoundaryModule } from "./accounts-boundary.module";
 import { RealmSessionService } from "../oidc/realm-session.service";
 import { AccountsOriginGuard } from "./accounts-origin.guard";
@@ -42,6 +43,7 @@ describe("account-center legacy routes share the browser and realm boundary", ()
     startEmailChange: vi.fn(async () => ({ ok: true })),
     changePassword: vi.fn(async () => ({ ok: true })),
   };
+  const reauthentication = { require: vi.fn(async () => {}) };
   const passkeys = {
     listCredentials: vi.fn(async () => []),
     createRegistrationOptions: vi.fn(async () => ({ challenge: "challenge" })),
@@ -72,6 +74,7 @@ describe("account-center legacy routes share the browser and realm boundary", ()
       ],
       providers: [
         AccountsOriginGuard,
+        { provide: AccountReauthenticationService, useValue: reauthentication },
         CustomerSelfGuard,
         OperatorSelfGuard,
         { provide: RealmSessionService, useValue: realms },

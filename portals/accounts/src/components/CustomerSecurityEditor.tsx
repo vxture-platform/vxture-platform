@@ -19,7 +19,7 @@ import {
   DialogForm,
   Icon,
   Input,
-  NativeSelect,
+  useToast,
   StatusBadge,
   Switch,
 } from "@vxture/design-system";
@@ -31,6 +31,16 @@ import { VerificationCodeInput } from "./VerificationCodeInput";
 import { useAccountCompletion } from "./AccountCenterShell";
 import { AccountReauthentication } from "./AccountReauthentication";
 
+import {
+  SecurityVerification,
+  useSecurityVerificationControls,
+} from "./SecurityVerification";
+import {
+  securityVerificationOptions,
+  startSecurityVerification,
+  verifySecurityTicket,
+} from "@/api/security-verification";
+
 type Action = { operation: string; title: string; target?: string };
 
 // ============================================================================
@@ -39,10 +49,14 @@ type Action = { operation: string; title: string; target?: string };
 /** Keep both verification stages and execution tied to the server challenge. */
 export function CustomerSecurityEditor({
   security,
+  onSaved,
 }: {
   security: CustomerSecurity;
+  onSaved: () => void;
 }) {
+  const verification = useSecurityVerificationControls();
   const locale = useLocale();
+  const { toast } = useToast();
   const formText = useTranslations("accountsForms");
   const beginCompletion = useAccountCompletion();
   const [enabledProviders, setEnabledProviders] = useState<string[]>([]);
@@ -57,7 +71,8 @@ export function CustomerSecurityEditor({
   }, []);
   const [action, setAction] = useState<Action | null>(null);
   const [target, setTarget] = useState("");
-  const [method, setMethod] = useState("phone");
+  const [passwordIssue, setPasswordIssue] = useState("");
+  const [confirmationIssue, setConfirmationIssue] = useState("");
   const [challenge, setChallenge] = useState("");
   const [stage, setStage] = useState("start");
   const [code, setCode] = useState("");
@@ -79,13 +94,69 @@ export function CustomerSecurityEditor({
     setPassword("");
     setConfirmation("");
     setError("");
-    setMethod(next.operation === "email-verify" ? "email" : "phone");
+    setPasswordIssue("");
+    setConfirmationIssue("");
+  }
+  const base = "/oidc/customer/self/security/challenges";
+  async function execute(id: string) {
+    if (!action) return;
+    const completion =
+      action.operation === "username" ? null : beginCompletion();
+    try {
+      const result = await accountsRequest<{ reauthenticate: boolean }>(
+        `${base}/${id}/execute`,
+        {
+          method: "POST",
+          body: JSON.stringify({ currentPassword, password }),
+        },
+      );
+      if (result.reauthenticate)
+        completion?.complete(<AccountReauthentication />);
+      else {
+        completion?.cancel();
+        toast({ tone: "success", title: formText("saved") });
+        setAction(null);
+        onSaved();
+      }
+      setCurrentPassword("");
+      setPassword("");
+      setConfirmation("");
+    } catch (error) {
+      completion?.cancel();
+      setStage("start");
+      setChallenge("");
+      throw error;
+    }
+  }
+  async function begin(proofToken?: string) {
+    if (!action) return;
+    const result = await accountsRequest<{
+      challengeId: string;
+      stage: string;
+    }>(base, {
+      method: "POST",
+      body: JSON.stringify({ operation: action.operation, target, proofToken }),
+    });
+    setChallenge(result.challengeId);
+    setCode("");
+    setStage(result.stage);
+    if (result.stage === "target-pending") {
+      await accountsRequest(`${base}/${result.challengeId}/target`, {
+        method: "POST",
+        body: "{}",
+      });
+      setStage("target");
+    } else if (
+      result.stage === "authorized" &&
+      ["username", "password"].includes(action.operation)
+    ) {
+      await execute(result.challengeId);
+    }
   }
   async function run() {
-    if (!action || busy) return;
+    if (!action || busy || stage === "verification") return;
     setBusy(true);
     setError("");
-    const base = "/oidc/customer/self/security/challenges";
     try {
       if (stage === "start") {
         if (action.operation === "username") {
@@ -96,31 +167,50 @@ export function CustomerSecurityEditor({
           if (target.trim().toLowerCase() === security.account.toLowerCase())
             throw new Error(formText("account_unchanged"));
         }
+        if (action.operation === "password") {
+          const issue = validNewPassword(password, "customer")
+            ? ""
+            : formText("password_policy_customer");
+          const mismatch =
+            password === confirmation ? "" : formText("password_mismatch");
+          setPasswordIssue(issue);
+          setConfirmationIssue(mismatch);
+          if (issue || mismatch) return;
+        }
         if (
-          action.operation === "password" &&
-          (!validNewPassword(password, "customer") || password !== confirmation)
-        )
-          throw new Error(formText("password_policy_customer"));
-        const result = await accountsRequest<{ challengeId: string }>(base, {
-          method: "POST",
-          body: JSON.stringify({ operation: action.operation, method, target }),
-        });
-        setChallenge(result.challengeId);
-        setStage("anchor");
+          ["username", "phone-verify", "email-verify"].includes(
+            action.operation,
+          )
+        ) {
+          await begin();
+        } else if (action.operation === "password" && security.hasPassword) {
+          const scope = {
+            realm: "customer" as const,
+            operation: action.operation,
+            target: "",
+          };
+          const options = await securityVerificationOptions(scope);
+          if (options.methods.includes("password")) {
+            const ticket = await startSecurityVerification(scope, "password");
+            const proof = await verifySecurityTicket(
+              scope,
+              ticket.verificationId,
+              { password: currentPassword },
+            );
+            await begin(proof.proofToken);
+          } else setStage("verification");
+        } else setStage("verification");
       } else if (stage === "anchor" || stage === "target") {
-        const result = await accountsRequest<{ stage: string }>(
+        await accountsRequest(
           `${base}/${challenge}/${stage === "target" ? "target/" : ""}verify`,
-          { method: "POST", body: JSON.stringify({ code }) },
+          {
+            method: "POST",
+            body: JSON.stringify({ code }),
+          },
         );
         setCode("");
-        if (result.stage === "target-pending") {
-          setStage("target-pending");
-          await accountsRequest(`${base}/${challenge}/target`, {
-            method: "POST",
-            body: "{}",
-          });
-          setStage("target");
-        } else setStage("authorized");
+        setStage("authorized");
+        await execute(challenge);
       } else if (stage === "target-pending") {
         await accountsRequest(`${base}/${challenge}/target`, {
           method: "POST",
@@ -139,28 +229,18 @@ export function CustomerSecurityEditor({
           },
         );
         window.location.assign(result.url);
-      } else {
-        const completion = beginCompletion();
-        try {
-          await accountsRequest(`${base}/${challenge}/execute`, {
-            method: "POST",
-            body: JSON.stringify({ currentPassword, password }),
-          });
-          completion.complete(<AccountReauthentication />);
-        } catch (error) {
-          completion.cancel();
-          throw error;
-        }
-        setCurrentPassword("");
-        setPassword("");
-        setConfirmation("");
-      }
-    } catch (e) {
+      } else await execute(challenge);
+    } catch (reason) {
       setError(
-        e instanceof Error
-          ? e.message
+        reason instanceof Error
+          ? reason.message
           : formText("unable_to_complete_this_action"),
       );
+      // Consumed challenges cannot be retried. Keep the entered password fields for correction.
+      if (stage === "authorized" || stage === "anchor" || stage === "target") {
+        setStage("start");
+        setChallenge("");
+      }
     } finally {
       setBusy(false);
     }
@@ -197,7 +277,7 @@ export function CustomerSecurityEditor({
         >
           <div className="accounts-account-value">
             <span className="font-mono">{security.account}</span>
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-small text-muted-foreground">
               {accountChangeable
                 ? formText("account_change_interval")
                 : formText("account_next_change", {
@@ -479,6 +559,13 @@ export function CustomerSecurityEditor({
         })}
       </AccountSection>
       <DialogForm
+        footerNote={
+          action?.operation === "password"
+            ? formText("password_relogin_hint")
+            : action?.operation === "username"
+              ? formText("account_change_interval")
+              : undefined
+        }
         size="sm"
         title={action?.title}
         danger={
@@ -487,30 +574,43 @@ export function CustomerSecurityEditor({
             action?.target === "false")
         }
         description={
-          action?.operation === "identity-unlink"
-            ? formText("unlink_consequence")
-            : ["account-login", "email-login"].includes(
-                  action?.operation ?? "",
-                ) && action?.target === "false"
-              ? formText("disable_login_consequence")
-              : formText("security_change_consequence")
+          action?.operation === "password" || action?.operation === "username"
+            ? undefined
+            : action?.operation === "identity-unlink"
+              ? formText("unlink_consequence")
+              : ["account-login", "email-login"].includes(
+                    action?.operation ?? "",
+                  )
+                ? formText("disable_login_consequence")
+                : formText("security_change_consequence")
         }
         submitting={busy}
         cancelLabel={formText("cancel")}
         pendingLabel={formText("processing")}
         submitDisabled={
-          ["anchor", "target"].includes(stage) && code.length !== 6
+          stage === "verification"
+            ? verification.disabled
+            : ["anchor", "target"].includes(stage) && code.length !== 6
         }
         submitLabel={
-          stage === "start" || stage === "target-pending"
-            ? formText("send_code")
-            : stage === "authorized"
-              ? formText("confirm_change")
-              : formText("continue")
+          stage === "verification"
+            ? verification.label
+            : formText(
+                stage === "target-pending"
+                  ? "send_code"
+                  : stage === "anchor" || stage === "target"
+                    ? "verify"
+                    : stage === "start" &&
+                        action?.operation !== "username" &&
+                        action?.operation !== "password"
+                      ? "continue"
+                      : "confirm_change",
+              )
         }
         onSubmit={(event) => {
           event.preventDefault();
-          void run();
+          if (stage === "verification") verification.submit();
+          else void run();
         }}
         open={Boolean(action)}
         onOpenChange={(open) => {
@@ -518,77 +618,77 @@ export function CustomerSecurityEditor({
         }}
       >
         <div className="accounts-settings-form">
-          {stage === "start" ? (
+          {stage === "verification" && action ? (
+            <SecurityVerification
+              key={`${action.operation}:${target}`}
+              controls={verification.controls}
+              realm="customer"
+              operation={action.operation}
+              target={target}
+              onBusyChange={setBusy}
+              onVerified={async (token) => {
+                try {
+                  await begin(token);
+                } catch (reason) {
+                  setStage("start");
+                  setError(
+                    reason instanceof Error
+                      ? reason.message
+                      : formText("verification_failed"),
+                  );
+                  throw reason;
+                }
+              }}
+            />
+          ) : stage === "start" ? (
             <>
-              {action?.operation === "username" ? (
-                <>
-                  <p className="text-body-sm text-muted-foreground">
-                    {formText("account_change_interval")}
-                  </p>
-                  <label
-                    className="accounts-required-label"
-                    htmlFor="security-new-account"
-                  >
-                    {formText("new_account_name")}
-                    <span className="accounts-required" aria-hidden="true">
-                      *
-                    </span>
-                  </label>
-                </>
-              ) : null}
               {action &&
               ["phone-change", "email-change", "username"].includes(
                 action.operation,
               ) ? (
-                <Input
-                  id={
-                    action.operation === "username"
-                      ? "security-new-account"
-                      : undefined
-                  }
-                  aria-label={formText(
-                    action.operation === "username"
-                      ? "new_account_name"
-                      : "new_value",
-                  )}
-                  aria-describedby={
-                    action.operation === "username"
-                      ? "security-account-hint"
-                      : undefined
-                  }
-                  maxLength={action.operation === "username" ? 24 : undefined}
-                  autoComplete={
-                    action.operation === "username" ? "off" : undefined
-                  }
-                  type={action.operation === "email-change" ? "email" : "text"}
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                  placeholder={
-                    action.operation === "phone-change"
-                      ? formText("new_phone_number")
-                      : action.operation === "email-change"
-                        ? formText("new_email")
-                        : formText("new_account_name")
-                  }
-                  required
-                  disabled={busy}
-                />
-              ) : null}
-              {action?.operation === "username" ? (
-                <p
-                  id="security-account-hint"
-                  className="text-body-sm text-muted-foreground"
-                >
-                  {formText("account_format_hint")}
-                </p>
+                <>
+                  <Input
+                    id="security-new-value"
+                    aria-label={formText(
+                      action.operation === "username"
+                        ? "new_account_name"
+                        : "new_value",
+                    )}
+                    type={
+                      action.operation === "email-change"
+                        ? "email"
+                        : action.operation === "phone-change"
+                          ? "tel"
+                          : "text"
+                    }
+                    maxLength={action.operation === "username" ? 24 : 128}
+                    autoComplete="off"
+                    value={target}
+                    onChange={(event) => setTarget(event.target.value)}
+                    required
+                    disabled={busy}
+                    placeholder={formText(
+                      action.operation === "username"
+                        ? "new_account_name"
+                        : action.operation === "email-change"
+                          ? "new_email"
+                          : "new_phone_number",
+                    )}
+                  />
+                  {action.operation === "username" ? (
+                    <p className="text-body-small text-muted-foreground">
+                      {formText("account_format_hint")}
+                    </p>
+                  ) : null}
+                </>
               ) : null}
               {action?.operation === "password" ? (
                 <>
                   {security.hasPassword ? (
-                    <>
+                    <div className="accounts-password-group">
                       <label
-                        className="accounts-required-label"
-                        htmlFor="security-current_password"
+                        htmlFor="security-current-password"
+                        className="accounts-password-group-label"
                       >
                         {formText("current_password")}
                         <span className="accounts-required" aria-hidden="true">
@@ -596,100 +696,103 @@ export function CustomerSecurityEditor({
                         </span>
                       </label>
                       <PasswordInput
-                        id="security-current_password"
+                        id="security-current-password"
                         aria-label={formText("current_password")}
-                        type="password"
-                        autoComplete="current-password"
                         placeholder={formText("current_password")}
+                        autoComplete="current-password"
+                        maxLength={128}
                         value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        onChange={(event) =>
+                          setCurrentPassword(event.target.value)
+                        }
                         required
+                        disabled={busy}
                       />
-                    </>
+                    </div>
                   ) : null}
-                  <label
-                    className="accounts-required-label"
-                    htmlFor="security-new_password"
-                  >
-                    {formText("new_password")}
-                    <span className="accounts-required" aria-hidden="true">
-                      *
-                    </span>
-                  </label>
-                  <PasswordInput
-                    id="security-new_password"
-                    aria-label={formText("new_password")}
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder={formText("new_password_at_least_8_characters")}
-                    minLength={8}
-                    maxLength={128}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                  <p className="text-body-sm text-muted-foreground">
-                    {formText("password_policy_customer")}
-                  </p>
-                  <label
-                    className="accounts-required-label"
-                    htmlFor="security-confirm_password"
-                  >
-                    {formText("confirm_password")}
-                    <span className="accounts-required" aria-hidden="true">
-                      *
-                    </span>
-                  </label>
-                  <PasswordInput
-                    id="security-confirm_password"
-                    aria-label={formText("confirm_password")}
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder={formText("confirm_password")}
-                    value={confirmation}
-                    onChange={(e) => setConfirmation(e.target.value)}
-                    required
-                  />
+                  <div className="accounts-password-group">
+                    <label
+                      htmlFor="security-new-password"
+                      className="accounts-password-group-label"
+                    >
+                      {formText("new_password")}
+                      <span className="accounts-required" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
+                    <div className="accounts-password-field">
+                      <PasswordInput
+                        id="security-new-password"
+                        aria-label={formText("new_password")}
+                        placeholder={formText("new_password")}
+                        autoComplete="new-password"
+                        minLength={8}
+                        maxLength={128}
+                        value={password}
+                        disabled={busy}
+                        required
+                        aria-invalid={!!passwordIssue}
+                        aria-describedby="security-password-policy"
+                        onChange={(event) => {
+                          setPassword(event.target.value);
+                          setPasswordIssue("");
+                        }}
+                      />
+                    </div>
+                    <div className="accounts-password-field">
+                      <PasswordInput
+                        id="security-confirm-password"
+                        aria-label={formText("confirm_password")}
+                        placeholder={formText("confirm_password")}
+                        autoComplete="new-password"
+                        maxLength={128}
+                        value={confirmation}
+                        disabled={busy}
+                        required
+                        aria-invalid={!!confirmationIssue}
+                        aria-describedby={
+                          confirmationIssue
+                            ? "security-password-mismatch"
+                            : undefined
+                        }
+                        onChange={(event) => {
+                          setConfirmation(event.target.value);
+                          setConfirmationIssue("");
+                        }}
+                      />
+                      {confirmationIssue ? (
+                        <p
+                          id="security-password-mismatch"
+                          className="text-body-small text-danger"
+                          role="alert"
+                        >
+                          {confirmationIssue}
+                        </p>
+                      ) : null}
+                    </div>
+                    <p
+                      id="security-password-policy"
+                      className={
+                        passwordIssue
+                          ? "text-body-small text-danger"
+                          : "text-body-small text-muted-foreground"
+                      }
+                    >
+                      {formText("password_policy_customer")}
+                    </p>
+                  </div>
                 </>
               ) : null}
-              <label className="text-body-sm text-muted-foreground">
-                {formText("verification_method")}
-                <NativeSelect
-                  aria-label={formText("verification_method")}
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                  disabled={busy || action?.operation.endsWith("-verify")}
-                >
-                  <option
-                    value="phone"
-                    disabled={
-                      !security.phoneVerified &&
-                      action?.operation !== "phone-verify"
-                    }
-                  >
-                    {formText("sms_code")}
-                  </option>
-                  <option
-                    value="email"
-                    disabled={
-                      !security.emailVerified &&
-                      action?.operation !== "email-verify"
-                    }
-                  >
-                    {formText("email_code")}
-                  </option>
-                </NativeSelect>
-              </label>
             </>
           ) : stage === "anchor" || stage === "target" ? (
             <>
-              <p className="text-body-sm text-muted-foreground">
-                {stage === "anchor"
-                  ? formText("verify_your_current_contact")
-                  : formText("verify_new_contact", { target })}
+              <p className="text-body-small text-muted-foreground">
+                {stage === "target"
+                  ? formText("verify_new_contact", { target })
+                  : formText("verify_your_current_contact")}
               </p>
               <VerificationCodeInput
-                name="security_code"
+                name="security-code"
                 label={formText("verification_code")}
                 value={code}
                 onChange={setCode}
@@ -697,12 +800,14 @@ export function CustomerSecurityEditor({
               />
             </>
           ) : (
-            <p className="text-body-sm text-muted-foreground">
-              {stage === "authorized"
-                ? action?.operation === "identity-link"
-                  ? formText("link_verified")
-                  : formText("verified_confirming_will_sign_out_all_devices")
-                : formText("send_a_code_to_the_new_contact")}
+            <p className="text-body-small text-muted-foreground">
+              {formText(
+                stage === "authorized"
+                  ? action?.operation === "identity-link"
+                    ? "link_verified"
+                    : "verified_confirming_will_sign_out_all_devices"
+                  : "send_a_code_to_the_new_contact",
+              )}
             </p>
           )}
           {error ? <Banner tone="danger" title={error} /> : null}

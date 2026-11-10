@@ -37,7 +37,7 @@ export function MfaEnrollment({
   const formText = useTranslations("accountsForms");
   return (
     <div className="accounts-mfa-enrollment">
-      <p className="text-body-sm text-muted-foreground">
+      <p className="text-body-small text-muted-foreground">
         {formText("scan_with_your_authenticator")}
       </p>
       {otpauthUri ? (

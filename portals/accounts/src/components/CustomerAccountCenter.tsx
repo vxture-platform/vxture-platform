@@ -311,6 +311,7 @@ export function CustomerAccountCenter() {
               <CustomerSecurityEditor
                 key={load.profile.id}
                 security={load.security.value}
+                onSaved={() => setRevision((value) => value + 1)}
               />
             ) : (
               failed
@@ -372,7 +373,7 @@ export function CustomerAccountCenter() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-body-sm text-muted-foreground">
+                    <p className="text-body-small text-muted-foreground">
                       {t("noSessions")}
                     </p>
                   )
@@ -480,7 +481,7 @@ export function CustomerAccountCenter() {
                       />
                     </div>
                   ) : (
-                    <p className="text-body-sm text-muted-foreground">
+                    <p className="text-body-small text-muted-foreground">
                       {t("noHistory")}
                     </p>
                   )
@@ -535,7 +536,7 @@ export function CustomerAccountCenter() {
         }}
       >
         {signOut ? (
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {device(signOut.userAgent)}
           </p>
         ) : null}

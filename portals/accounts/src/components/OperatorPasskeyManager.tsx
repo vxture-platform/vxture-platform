@@ -16,6 +16,12 @@
  */
 "use client";
 
+import {
+  SecurityVerification,
+  useSecurityVerificationControls,
+  SecurityCompletion,
+} from "./SecurityVerification";
+import { useAccountCompletion } from "./AccountCenterShell";
 import { AccountHeading } from "./AccountPrimitives";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -55,7 +61,11 @@ function formatUsage(
 }
 
 export function OperatorPasskeyManager() {
+  const verification = useSecurityVerificationControls();
   const { toast } = useToast();
+  const beginCompletion = useAccountCompletion();
+  const [adding, setAdding] = useState(false);
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [removing, setRemoving] = useState<OperatorPasskey | null>(null);
   const [removeError, setRemoveError] = useState("");
   const t = useTranslations("passkeys");
@@ -107,7 +117,7 @@ export function OperatorPasskeyManager() {
     }
   };
 
-  const handleAdd = () => withBusy(() => registerOperatorPasskey().then());
+  const handleAdd = () => setAdding(true);
   const [renaming, setRenaming] = useState<{
     id: string;
     label: string;
@@ -117,16 +127,18 @@ export function OperatorPasskeyManager() {
     setRenaming({ id, label: current ?? "" });
   };
   // Keep removal feedback in its own modal while consuming the pinned DS.
-  async function removePasskey() {
-    if (!removing || busy) return;
+  async function removePasskey(proofToken: string) {
+    if (!removing) return;
     setBusy(true);
     setRemoveError("");
+    const completion = beginCompletion();
     try {
-      await revokeOperatorPasskey(removing.id);
+      await revokeOperatorPasskey(removing.id, proofToken);
       setRemoving(null);
-      toast({ tone: "success", title: formText("passkey_deleted") });
-      await refresh();
+      completion.complete(<SecurityCompletion realm="workforce" />);
     } catch (reason) {
+      completion.cancel();
+      setConfirmingRemoval(false);
       setRemoveError(
         reason instanceof Error ? reason.message : t("revokeFailed"),
       );
@@ -181,10 +193,10 @@ export function OperatorPasskeyManager() {
                     <Icon name="key" size="sm" />
                   </span>
                   <div className="flex min-w-0 flex-col gap-2xs">
-                    <strong className="truncate text-label-md text-foreground">
+                    <strong className="truncate text-label text-foreground">
                       {passkey.label ?? t("unnamed")}
                     </strong>
-                    <span className="text-body-sm text-muted-foreground">
+                    <span className="text-body-small text-muted-foreground">
                       {formatUsage(passkey, locale, t)}
                     </span>
                   </div>
@@ -204,6 +216,7 @@ export function OperatorPasskeyManager() {
                     disabled={busy}
                     onClick={() => {
                       setRemoveError("");
+                      setConfirmingRemoval(false);
                       setRemoving(passkey);
                     }}
                   >
@@ -216,6 +229,41 @@ export function OperatorPasskeyManager() {
         </ul>
       )}
       <DialogForm
+        open={adding}
+        size="sm"
+        title={t("add")}
+        submitLabel={verification.label || formText("continue")}
+        cancelLabel={formText("cancel")}
+        submitDisabled={verification.disabled}
+        submitting={busy}
+        onOpenChange={(value) => {
+          if (!busy) setAdding(value);
+        }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          verification.submit();
+        }}
+      >
+        <SecurityVerification
+          controls={verification.controls}
+          realm="workforce"
+          operation="passkey-add"
+          target=""
+          onBusyChange={setBusy}
+          onVerified={async (proofToken) => {
+            const completion = beginCompletion();
+            try {
+              await registerOperatorPasskey(proofToken);
+              setAdding(false);
+              completion.complete(<SecurityCompletion realm="workforce" />);
+            } catch (reason) {
+              completion.cancel();
+              throw reason;
+            }
+          }}
+        />
+      </DialogForm>
+      <DialogForm
         size="sm"
         title={formText("delete_passkey_title")}
         description={t(
@@ -226,13 +274,17 @@ export function OperatorPasskeyManager() {
           if (!open && !busy) setRemoving(null);
         }}
         danger
+        submitDisabled={confirmingRemoval && verification.disabled}
         submitting={busy}
         pendingLabel={tCommon("processing")}
-        submitLabel={t("delete")}
+        submitLabel={confirmingRemoval ? verification.label : t("delete")}
         cancelLabel={formText("cancel")}
         onSubmit={(event) => {
           event.preventDefault();
-          void removePasskey();
+          if (!busy) {
+            if (confirmingRemoval) verification.submit();
+            else setConfirmingRemoval(true);
+          }
         }}
       >
         <p>
@@ -240,6 +292,16 @@ export function OperatorPasskeyManager() {
             ? t("confirmTarget", { name: removing.label ?? t("unnamed") })
             : null}
         </p>
+        {confirmingRemoval && removing ? (
+          <SecurityVerification
+            controls={verification.controls}
+            realm="workforce"
+            operation="passkey-remove"
+            target={removing.id}
+            onBusyChange={setBusy}
+            onVerified={removePasskey}
+          />
+        ) : null}
         {removeError ? <Banner tone="danger" title={removeError} /> : null}
       </DialogForm>
       <DialogForm

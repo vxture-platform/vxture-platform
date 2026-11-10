@@ -58,8 +58,16 @@ export class CustomerMfaRouter {
   @Post("challenges")
   @HttpCode(200)
   @Header("Cache-Control", "no-store")
-  start(@Req() req: CustomerSelfRequest) {
-    return this.challenges.start(req.customer, "mfa-enable", "", "phone");
+  start(
+    @Req() req: CustomerSelfRequest,
+    @Body() body: { proofToken?: unknown },
+  ) {
+    return this.challenges.startAuthorized(
+      req.customer,
+      "mfa-enable",
+      "",
+      body?.proofToken,
+    );
   }
 
   @Post("enroll")

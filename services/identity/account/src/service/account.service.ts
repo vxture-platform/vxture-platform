@@ -7,6 +7,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import { isIanaTimeZone } from "@vxture/core-utils";
 import { PasswordHasher } from "../password/password-hasher";
 import { USER_REPOSITORY } from "../tokens";
@@ -350,6 +351,38 @@ export class AccountService {
    * blunt user-enumeration timing (only meaningful once a dummy hash is used;
    * acceptable for MVP). No side effects (login auditing lives in identity-server).
    */
+  /** Verify an authenticated account's password independently of login switches. */
+  async verifySelfPassword(userId: string, password: string): Promise<boolean> {
+    if (!password || password.length > 128) return false;
+    const record = await this.users.findCredentialById(userId);
+    return (
+      !!record &&
+      record.status === "active" &&
+      !!record.passwordHash &&
+      (await this.hasher.verify(password, record.passwordHash))
+    );
+  }
+
+  /** Return an opaque credential/contact version for short-lived security proofs. */
+  async selfSecurityVersion(userId: string): Promise<string> {
+    const record = await this.users.findCredentialById(userId);
+    if (!record || record.status !== "active")
+      throw new NotFoundException("account_not_found");
+    return createHash("sha256")
+      .update(
+        JSON.stringify([
+          record.passwordHash,
+          record.phone,
+          record.email,
+          record.phoneVerified,
+          record.emailVerified,
+          record.accountLoginDisabled,
+          record.emailLoginDisabled,
+        ]),
+      )
+      .digest("hex");
+  }
+
   async verifyCredential(
     identifier: string,
     password: string,
@@ -438,6 +471,12 @@ export class AccountService {
     const record = await this.users.findCredentialById(userId);
     if (!record || record.status !== "active")
       throw new NotFoundException("account_not_found");
+    if (
+      input.snapshot.credentialVersion &&
+      input.snapshot.credentialVersion !==
+        (await this.selfSecurityVersion(userId))
+    )
+      throw new ConflictException("security_proof_stale");
     const mutation: CustomerSecurityMutation = {
       ...input,
       expectedPasswordHash: record.passwordHash,
@@ -458,7 +497,7 @@ export class AccountService {
             record.passwordHash,
           )))
       )
-        throw new UnauthorizedException("invalid_current_password");
+        throw new BadRequestException("invalid_current_password");
       mutation.passwordHash = await this.hasher.hash(passwords.password);
     }
     if (

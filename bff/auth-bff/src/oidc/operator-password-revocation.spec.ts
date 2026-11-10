@@ -17,6 +17,7 @@ import { OperatorSelfRouter } from "../routers/operator-self.router";
 
 function build() {
   const operators = {
+    findById: vi.fn(async () => ({ credentialVersion: "credentials-v1" })),
     verifyOperatorPassword: vi.fn(async () => true),
     setOperatorPassword: vi.fn(async () => true),
   };
@@ -55,6 +56,7 @@ function build() {
     refreshTokens as never,
     {} as never,
     oidc,
+    { require: vi.fn(async () => {}) } as never,
   );
   const router = new OperatorSelfRouter(service);
   const request = {
@@ -110,7 +112,7 @@ describe("workforce password change", () => {
     expect(operators.setOperatorPassword).toHaveBeenCalledWith(
       "operator-1",
       BODY.newPassword,
-      { forceChange: false },
+      { forceChange: false, expectedCredentialVersion: "credentials-v1" },
     );
     expect(refreshTokens.revokeAllForOperator).toHaveBeenCalledExactlyOnceWith(
       "operator-1",

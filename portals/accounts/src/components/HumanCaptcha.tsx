@@ -340,7 +340,7 @@ function HumanCaptcha({
         variant="ghost"
         className={
           status === "challenge" && !onDemand
-            ? "text-body-sm text-primary"
+            ? "text-body-small text-primary"
             : "hidden"
         }
       >
@@ -353,7 +353,7 @@ function HumanCaptcha({
           status === "disabled" ||
           (onDemand && status !== "error")
             ? "sr-only"
-            : "text-body-sm text-muted-foreground"
+            : "text-body-small text-muted-foreground"
         }
       >
         {onDemand && status !== "error"

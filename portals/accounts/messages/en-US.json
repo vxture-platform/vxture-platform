@@ -541,7 +541,13 @@
     "operator_mfa_consequence": "Workforce accounts require MFA. After replacement, the old authenticator and recovery codes will stop working and all devices must sign in again. Save the new recovery codes.",
     "deletion_final_consequence": "Submitting signs out all devices and performs the account cleanup listed above. Deletion becomes permanent and cannot be undone after the retention period.",
     "passkey_deleted": "Passkey deleted",
-    "delete_passkey_title": "Delete passkey"
+    "delete_passkey_title": "Delete passkey",
+    "password_mismatch": "Passwords do not match",
+    "password_relogin_hint": "Sign in again after changing your password",
+    "confirm_identity_hint": "Confirm your identity to continue this action.",
+    "confirm_identity": "Confirm identity",
+    "verify_passkey": "Use a passkey",
+    "verified_contact_required": "No verification method is available. Verify an existing contact first."
   },
   "accountsApi": {
     "error_1": "Sign-in expired. Start again from your app.",
@@ -628,7 +634,10 @@
     "passkey_auth_start_failed": "Unable to start passkey verification. Please try again.",
     "passkey_auth_cancelled": "Passkey verification was cancelled or is not supported.",
     "passkey_auth_failed": "Passkey verification failed. Please try again.",
-    "passkey_auth_response_invalid": "Invalid verification response. Please try again."
+    "passkey_auth_response_invalid": "Invalid verification response. Please try again.",
+    "security_proof_required": "Confirm your identity again to continue",
+    "security_proof_expired": "Identity confirmation expired. Please try again.",
+    "security_proof_stale": "Account security changed. Confirm your identity again."
   },
   "accountsStates": {
     "retry": "Retry",

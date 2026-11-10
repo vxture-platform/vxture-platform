@@ -62,27 +62,36 @@ export class OperatorPublicRouter {
   async resetPassword(
     @Body() body: { token?: unknown; password?: unknown },
   ): Promise<{ ok: true }> {
-    const token = typeof body.token === "string" ? body.token : "";
-    const password = typeof body.password === "string" ? body.password : "";
-    if (!token) {
+    const token = typeof body?.token === "string" ? body.token : "";
+    const password = typeof body?.password === "string" ? body.password : "";
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
       throw new BadRequestException("invalid_token");
     }
     if (!validNewPassword(password, "workforce")) {
       throw new BadRequestException("weak_password");
     }
-    const operatorId = await this.redis.consumeOperatorPasswordReset(token);
-    if (!operatorId) {
+    const proof = await this.redis.consumeOperatorPasswordReset(token);
+    if (!proof) {
       throw new BadRequestException("invalid_or_expired_token");
     }
-    const ok = await this.operators.setOperatorPassword(operatorId, password, {
-      forceChange: false,
-    });
+    const ok = await this.operators.setOperatorPassword(
+      proof.operatorId,
+      password,
+      {
+        forceChange: false,
+        expectedCredentialVersion: proof.credentialVersion,
+        verifyEmail: proof.email,
+      },
+    );
     if (!ok) {
       throw new BadRequestException("invalid_or_expired_token");
     }
-    await this.operators.markOwnEmailVerified(operatorId);
-    await this.refreshTokens.revokeAllForOperator(operatorId);
-    await this.oidc.endOperatorSessions(operatorId);
+    const cleanup = await Promise.allSettled([
+      this.refreshTokens.revokeAllForOperator(proof.operatorId),
+      this.oidc.endOperatorSessions(proof.operatorId),
+    ]);
+    for (const result of cleanup)
+      if (result.status === "rejected") throw result.reason;
     return { ok: true };
   }
 }

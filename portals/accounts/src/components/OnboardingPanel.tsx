@@ -171,7 +171,10 @@ export function OnboardingPanel() {
               ) : null}
             </div>
             {availability !== "available" && availability !== "checking" ? (
-              <p role="status" className="text-body-sm text-muted-foreground">
+              <p
+                role="status"
+                className="text-body-small text-muted-foreground"
+              >
                 {statuses[availability]}
               </p>
             ) : null}
@@ -209,7 +212,7 @@ export function OnboardingPanel() {
                   : formText("unverified")}
               </StatusBadge>
             </div>
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {initial?.phoneVerified
                 ? formText("phone_ownership_verified")
                 : formText("phone_not_yet_verified")}
@@ -239,7 +242,7 @@ export function OnboardingPanel() {
                 {verifiedEmail ? formText("verified") : formText("unverified")}
               </StatusBadge>
             </div>
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {verifiedEmail
                 ? formText("email_ownership_verified")
                 : formText("you_can_verify_after_registration")}

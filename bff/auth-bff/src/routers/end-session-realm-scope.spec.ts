@@ -66,15 +66,33 @@ describe("end_session 按发起方 realm 收口", () => {
     expect(cleared).toEqual(["vx_sid_op"]);
   });
 
-  /* 反向对照：认不出发起方时仍然两个都结束——没有这条，「永远只清一份」的实现
-     也能过上面两条，而那会留下退不出去的会话。 */
-  it("认不出 realm（没带 client_id）：两个都结束、两份都清", async () => {
-    const { ended, cleared } = await logout(null);
-    expect(ended).toEqual(["sid-operator", "sid-tenant"]);
-    expect(cleared).toEqual(
-      expect.arrayContaining(["vx_sid", "vx_sid_op", "vx_hint"]),
-    );
-  });
+  it.each([
+    undefined,
+    "",
+    "unknown",
+    "disabled",
+    "accounts-self:customer:evil",
+  ])(
+    "rejects unresolved client %s without ending either realm",
+    async (clientId) => {
+      const { router, oidc, req, res } = build(null);
+      const service = Object.create(OidcService.prototype) as OidcService;
+      Object.assign(service, {
+        clients: { findEnabledByClientId: vi.fn(async () => null) },
+      });
+      oidc.logoutRealmOf.mockImplementation((id) => service.logoutRealmOf(id));
+      await expect(
+        router.endSession(
+          { ...(clientId === undefined ? {} : { client_id: clientId }) },
+          req as unknown as Request,
+          res as unknown as Response,
+        ),
+      ).rejects.toThrow("invalid_client");
+      expect(oidc.endSession).not.toHaveBeenCalled();
+      expect(res.clearCookie).not.toHaveBeenCalled();
+      expect(res.redirect).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // ============================================================================

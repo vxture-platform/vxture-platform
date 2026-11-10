@@ -152,6 +152,9 @@ export class MockUserRepository implements UserReadRepository {
     userId: string,
     mutation: CustomerSecurityMutation,
   ): Promise<void> {
+    // This in-memory repository cannot verify durable sessions or factor versions.
+    if (mutation.snapshot.sessionId || mutation.snapshot.mfaVersion)
+      throw new ConflictException("security_proof_stale");
     const user = this.users.get(userId);
     const e = mutation.snapshot;
     if (
@@ -252,8 +255,10 @@ export class MockUserRepository implements UserReadRepository {
         user.accountLoginDisabled = target === "false";
       }
     } else throw new ConflictException("invalid_security_operation");
-    await this.revokeAllSessions(userId);
-    await this.revokeAllRefreshTokens(userId);
+    if (operation !== "username") {
+      await this.revokeAllSessions(userId);
+      await this.revokeAllRefreshTokens(userId);
+    }
   }
 
   async setPassword(

@@ -682,8 +682,8 @@ jobs:
           if has platform_bff-platform-api;       then smoke @vxture/bff-platform-api; fi
           echo "built affected bundles: ${AFFECTED:-[]}"
 
-      # Reuse this job's Redis to exercise the atomic session query, not a mock.
-      - name: Central session status Redis regressions
+      # Exercise all authentication Redis lifecycles against this job's isolated service.
+      - name: Authentication Redis regressions
         if: needs.check.outputs.docs_only != 'true'
         env:
           AFFECTED: ${{ needs.check.outputs.affected_images }}
@@ -692,7 +692,7 @@ jobs:
         run: |
           set -euo pipefail
           if printf '%s' "$AFFECTED" | grep -q '"platform_bff-auth"'; then
-            pnpm --filter @vxture/bff-auth exec vitest run src/redis/session-status.itest.spec.ts
+            pnpm --filter @vxture/bff-auth exec vitest run src/redis --maxWorkers=2
           fi
 
       - name: Workbench session store Redis regressions

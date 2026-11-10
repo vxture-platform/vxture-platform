@@ -113,6 +113,35 @@ describe("customer security domain policy", () => {
     ).rejects.toThrow("security_proof_stale");
     expect(f.users.applySelfSecurity).not.toHaveBeenCalled();
   });
+  it("verifies an authenticated account by id even when username login is disabled", async () => {
+    const f = build();
+    f.users.findCredentialById.mockResolvedValue({
+      status: "active",
+      passwordHash: "old-hash",
+      accountLoginDisabled: true,
+    } as never);
+    expect(await f.service.verifySelfPassword("123", "old-password")).toBe(
+      true,
+    );
+    expect(await f.service.verifySelfPassword("123", "wrong")).toBe(false);
+    expect(f.users.findCredentialById).toHaveBeenCalledWith("123");
+  });
+  it("rejects a changed opaque credential version before any write", async () => {
+    const f = build();
+    const version = await f.service.selfSecurityVersion("123");
+    f.users.findCredentialById.mockResolvedValue({
+      status: "active",
+      passwordHash: "changed-hash",
+    });
+    await expect(
+      f.service.applySelfSecurity("123", {
+        operation: "username",
+        target: "changed",
+        snapshot: { ...snapshot, credentialVersion: version },
+      }),
+    ).rejects.toThrow("security_proof_stale");
+    expect(f.users.applySelfSecurity).not.toHaveBeenCalled();
+  });
 });
 
 describe("mock repository proof enforcement", () => {
@@ -233,5 +262,26 @@ describe("mock repository proof enforcement", () => {
       expectedPasswordHash: null,
     });
     expect(await repo.listIdentitiesByUser(user.id)).toHaveLength(0);
+  });
+  it("keeps sessions for usernames but revokes them for contact credentials", async () => {
+    const { repo, user, proof } = await fixture();
+    const sessions = vi.spyOn(repo, "revokeAllSessions");
+    const tokens = vi.spyOn(repo, "revokeAllRefreshTokens");
+    await repo.applySelfSecurity(user.id, {
+      operation: "username",
+      target: "new_account",
+      snapshot: proof,
+      expectedPasswordHash: null,
+    });
+    expect(sessions).not.toHaveBeenCalled();
+    expect(tokens).not.toHaveBeenCalled();
+    await repo.applySelfSecurity(user.id, {
+      operation: "email-change",
+      target: "new@example.com",
+      snapshot: { ...proof, account: "new_account" },
+      expectedPasswordHash: null,
+    });
+    expect(sessions).toHaveBeenCalledOnce();
+    expect(tokens).toHaveBeenCalledOnce();
   });
 });

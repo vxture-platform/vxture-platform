@@ -225,8 +225,11 @@ export class OidcRouter {
   /** UserInfo — Bearer access_token → profile claims. */
   @Get("oidc/userinfo")
   async userinfo(
+    @Res({ passthrough: true }) res: Response,
     @Headers("authorization") authorization?: string,
   ): Promise<Record<string, unknown>> {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
     const token = authorization?.startsWith("Bearer ")
       ? authorization.slice("Bearer ".length)
       : null;
@@ -236,14 +239,52 @@ export class OidcRouter {
     return this.oidc.userinfo(token);
   }
 
-  /** Token revocation (RFC 7009) — always 200. */
+  /** Authenticated revocation (RFC 7009); unknown/foreign tokens return 200. */
   @Post("oidc/revoke")
   @HttpCode(HttpStatus.OK)
   async revoke(
-    @Body() body: { token?: string; token_type_hint?: string },
+    @Body()
+    body: TokenRequestBody & { token?: string; token_type_hint?: string },
+    @Res({ passthrough: true }) res: Response,
+    @Headers("authorization") authorization?: string,
   ): Promise<void> {
-    if (body.token) {
-      await this.oidc.revoke(body.token, body.token_type_hint);
+    res.setHeader("Cache-Control", "no-store");
+    if (
+      typeof body?.token !== "string" ||
+      !body.token ||
+      (body.token_type_hint !== undefined &&
+        typeof body.token_type_hint !== "string")
+    )
+      throw new BadRequestException("invalid_request");
+    let creds: OidcClientCredentials;
+    try {
+      if (
+        authorization === undefined &&
+        (typeof body.client_id !== "string" ||
+          (body.client_secret !== undefined &&
+            typeof body.client_secret !== "string"))
+      )
+        throw new UnauthorizedException("invalid_client");
+      creds =
+        authorization !== undefined
+          ? parseSessionStatusCredentials(authorization)
+          : resolveClientCredentials(body);
+      if (
+        typeof creds.clientId !== "string" ||
+        (creds.clientSecret !== undefined &&
+          typeof creds.clientSecret !== "string")
+      )
+        throw new UnauthorizedException("invalid_client");
+    } catch {
+      res.setHeader("WWW-Authenticate", 'Basic realm="accounts"');
+      throw new UnauthorizedException("invalid_client");
+    }
+    try {
+      await this.oidc.revoke(creds, body.token, body.token_type_hint);
+    } catch (error) {
+      if (error instanceof UnauthorizedException)
+        res.setHeader("WWW-Authenticate", 'Basic realm="accounts"');
+      throw error;
     }
   }
 
@@ -295,16 +336,16 @@ export class OidcRouter {
      * 销毁了租户会话，下一次 authorize 又被静默 SSO 送回登录态。按 client 的 realm 挑
      * 两件事都满足。
      *
-     * 认不出 realm（没带 client_id、client 不存在或已停用）时退回两个都结束：宁可多退，
-     * 不留一个退不出去的会话。所有 RP 都经 oidc-rp 的 buildEndSessionUrl 带 client_id。
      */
     const realm = await this.oidc.logoutRealmOf(q.client_id);
+    // An unresolved caller must never broaden logout into both identity realms.
+    if (!realm) throw new BadRequestException("invalid_client");
     const sids = {
       tenant: cookies[SID_COOKIE.tenant],
       operator: cookies[SID_COOKIE.operator],
     };
     const redirect = await this.oidc.endSession(
-      realm ? [pickSessionForRealm(realm, sids)] : [sids.operator, sids.tenant],
+      [pickSessionForRealm(realm, sids)],
       q.post_logout_redirect_uri,
       q.state,
       /* 发起登出的 RP(RP-Initiated Logout 1.0)。回跳白名单**兜底**用它:
@@ -313,12 +354,12 @@ export class OidcRouter {
       q.client_id,
     );
 
-    // Clear the ended realm's session cookie (both when the realm is unknown).
+    // Clear only the cookie belonging to the resolved realm.
     const cookieDomain = this.config.platform.COOKIE_DOMAIN_PLATFORM;
-    if (realm !== "customer") {
+    if (realm === "workforce") {
       res.clearCookie(SID_COOKIE.operator, { path: "/" });
     }
-    if (realm !== "workforce") {
+    if (realm === "customer") {
       res.clearCookie(SID_COOKIE.tenant, {
         path: "/",
         ...(cookieDomain ? { domain: cookieDomain } : {}),

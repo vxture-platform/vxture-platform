@@ -25,6 +25,7 @@ import type {
   CustomerSecurityOperation,
   CustomerSecuritySnapshot,
 } from "@vxture/service-account";
+import { AccountReauthenticationService } from "./account-reauthentication.service";
 import { CustomerPhoneCodeService } from "./customer-phone-code.service";
 import { RedisService } from "../redis/redis.service";
 import type { CustomerSessionContext } from "../oidc/realm-session.service";
@@ -34,6 +35,7 @@ import type { CustomerSessionContext } from "../oidc/realm-session.service";
 // ============================================================================
 
 export interface CustomerSecurityChallenge {
+  proofToken?: string;
   userId: string;
   sid: string;
   operation: CustomerSecurityOperation;
@@ -61,7 +63,64 @@ export class CustomerSecurityChallengeService {
     @Inject(CustomerPhoneCodeService)
     private readonly sms: CustomerPhoneCodeService,
     @Inject(MailService) private readonly mail: MailService,
+    @Inject(AccountReauthenticationService)
+    private readonly reauthentication: AccountReauthenticationService,
   ) {}
+
+  /** Create an exact action after server-side ownership verification; usernames need login only. */
+  async startAuthorized(
+    context: CustomerSessionContext,
+    operation: CustomerSecurityOperation,
+    target: string,
+    proofToken?: unknown,
+    identitySubjects?: string[],
+  ) {
+    if (operation !== "username")
+      await this.reauthentication.require(
+        "customer",
+        context.sid,
+        proofToken,
+        operation,
+        target,
+      );
+    const user = context.user;
+    const id = randomUUID();
+    const record: CustomerSecurityChallenge = {
+      userId: context.userId,
+      sid: context.sid,
+      operation,
+      target,
+      method: "phone",
+      anchor: "",
+      ...(typeof proofToken === "string" ? { proofToken } : {}),
+      snapshot: {
+        sessionId: context.sid,
+        mfaVersion: await this.reauthentication.customerFactorVersion(
+          context.userId,
+        ),
+        credentialVersion: await this.reauthentication.customerVersion(
+          context.userId,
+        ),
+        ...(identitySubjects ? { identitySubjects } : {}),
+        phone: user.phone,
+        email: user.email,
+        phoneVerified: user.phoneVerified ?? false,
+        emailVerified: user.emailVerified ?? false,
+        account: user.account,
+        accountLoginDisabled: user.accountLoginDisabled ?? false,
+        emailLoginDisabled: user.emailLoginDisabled ?? false,
+        hasPassword: user.hasPassword ?? false,
+      },
+      phase: ["phone-change", "email-change"].includes(operation)
+        ? "target-pending"
+        : "authorized",
+      attempts: 0,
+      digest: "",
+    };
+    if (!(await this.redis.createCustomerSecurity(id, JSON.stringify(record))))
+      throw new ServiceUnavailableException("security_challenge_unavailable");
+    return { challengeId: id, expiresIn: 300, stage: record.phase };
+  }
 
   /** Start an operation-bound challenge after reserving the account send budget. */
   async start(
@@ -100,6 +159,7 @@ export class CustomerSecurityChallengeService {
       method,
       anchor: method === "phone" ? user.phone : user.email!,
       snapshot: {
+        sessionId: context.sid,
         ...(identitySubjects ? { identitySubjects } : {}),
         phone: user.phone,
         email: user.email,
@@ -237,6 +297,20 @@ export class CustomerSecurityChallengeService {
     operation?: CustomerSecurityOperation,
   ): Promise<CustomerSecurityChallenge> {
     const { record, raw } = await this.load(context, id);
+    if (
+      (operation !== undefined && record.operation !== operation) ||
+      record.phase !== "authorized"
+    )
+      throw new BadRequestException("security_proof_required");
+    if (record.proofToken)
+      await this.reauthentication.require(
+        "customer",
+        context.sid,
+        record.proofToken,
+        record.operation,
+        record.target,
+        true,
+      );
     if (
       (operation !== undefined && record.operation !== operation) ||
       record.phase !== "authorized" ||

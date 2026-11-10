@@ -14,7 +14,7 @@
  * PHC-interoperable with the platform hasher. See identity-platform-operator.md §4.
  */
 import { argon2Verify, argon2id } from "hash-wasm";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
 import { IAM_PG_POOL } from "../tokens";
@@ -56,6 +56,7 @@ export interface OperatorWebauthnCredentialSummary {
 
 /** Input to persist a verified WebAuthn credential. */
 export interface InsertOperatorWebauthnCredential {
+  expectedAuthenticationVersion?: string;
   operatorId: string;
   credentialId: string;
   /** COSE public key bytes. */
@@ -97,6 +98,13 @@ export interface OperatorView {
   roleCode: string;
   /** operator_account.email → OIDC email claim (RPs like Cloudflare Access require it). */
   email: string | null;
+  /** Durable proof that the operator controls the current email address. */
+  emailVerified: boolean;
+  /** Internal opaque state bindings; never emitted as OIDC claims. */
+  credentialVersion?: string;
+  authenticationVersion?: string;
+  mfaEnrolled?: boolean;
+  webauthnRequired?: boolean;
 }
 
 interface OperatorRow {
@@ -106,27 +114,76 @@ interface OperatorRow {
   password_hash: string | null;
   role_code: string;
   email: string | null;
+  email_verified: boolean;
+  phone?: string | null;
+  phone_verified?: boolean;
+  password_changed_at?: string | null;
+  mfa_updated_at?: string | null;
+  totp_enabled?: boolean;
+  webauthn_required?: boolean;
+  passkey_ids?: string[];
 }
 
 const SELECT_OPERATOR = `
-  select a.id, a.username, a.status, c.password_hash, a.email, r.role_code
+  select a.id, a.username, a.status, c.password_hash, a.email, a.email_verified, r.role_code,
+         a.phone, a.phone_verified, c.password_changed_at::text,
+         m.updated_at::text as mfa_updated_at, coalesce(m.totp_enabled,false) as totp_enabled,
+         coalesce(m.webauthn_required,false) as webauthn_required,
+         array(select w.id::text from admin.operator_webauthn_credential w
+                where w.operator_id=a.id order by w.id) as passkey_ids
     from admin.operator_account a
     join admin.operator_role r
       on r.id = a.role_id
      and r.status = 'active'
     left join admin.operator_credential c
       on c.operator_id = a.id
+    left join admin.operator_mfa m on m.operator_id=a.id
    where a.deleted_at is null
      and a.status = 'active'
 `;
 
+function credentialVersion(row: OperatorRow): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        row.id,
+        row.password_hash,
+        row.password_changed_at,
+        row.username,
+        row.email,
+        row.email_verified,
+        row.phone,
+        row.phone_verified,
+        row.role_code,
+      ]),
+    )
+    .digest("hex");
+}
+
 function toView(row: OperatorRow): OperatorView {
+  const credentials = credentialVersion(row);
   return {
     id: row.id,
     username: row.username,
     status: row.status,
     roleCode: row.role_code,
     email: row.email,
+    emailVerified: row.email_verified === true,
+    credentialVersion: credentials,
+    authenticationVersion: createHash("sha256")
+      .update(
+        JSON.stringify([
+          credentials,
+          row.mfa_updated_at,
+          row.totp_enabled,
+          row.webauthn_required,
+          row.passkey_ids ?? [],
+        ]),
+      )
+      .digest("hex"),
+    mfaEnrolled:
+      row.totp_enabled === true || (row.passkey_ids?.length ?? 0) > 0,
+    webauthnRequired: row.webauthn_required === true,
   };
 }
 
@@ -284,20 +341,53 @@ export class PgOperatorRepository {
     operatorId: string,
     targetType: "email" | "phone",
     value: string,
+    expectedAuthenticationVersion?: string,
   ): Promise<boolean> {
     const col = targetType === "email" ? "email" : "phone";
     const verifiedCol =
       targetType === "email" ? "email_verified" : "phone_verified";
-    const result = await this.pool.query<{ id: string }>(
-      `update admin.operator_account
-          set ${col} = $2, ${verifiedCol} = true, updated_at = now()
-        where id = $1 and deleted_at is null and status = 'active'
-          and exists (select 1 from admin.operator_role r
-            where r.id=admin.operator_account.role_id and r.status='active')
-        returning id`,
-      [operatorId, value],
-    );
-    return (result.rowCount ?? 0) > 0;
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "select id from admin.operator_account where id=$1 for update",
+        [operatorId],
+      );
+      const current = await client.query<OperatorRow>(
+        `${SELECT_OPERATOR} and a.id=$1`,
+        [operatorId],
+      );
+      const row = current.rows[0];
+      if (
+        !row ||
+        (expectedAuthenticationVersion !== undefined &&
+          toView(row).authenticationVersion !== expectedAuthenticationVersion)
+      ) {
+        await client.query("rollback");
+        return false;
+      }
+      const result = await client.query<{ id: string }>(
+        `update admin.operator_account set ${col}=$2, ${verifiedCol}=true, updated_at=clock_timestamp()
+        where id=$1 and deleted_at is null and status='active'
+        and exists (select 1 from admin.operator_role r where r.id=admin.operator_account.role_id and r.status='active') returning id`,
+        [operatorId, value],
+      );
+      if (!result.rowCount) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        "update admin.operator_refresh_token set status='revoked' where operator_id=$1 and status in ('active','rotated')",
+        [operatorId],
+      );
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -468,7 +558,7 @@ export class PgOperatorRepository {
       await client.query("begin");
       const exists = await client.query(
         `select 1 from admin.operator_account
-          where id = $1 and deleted_at is null`,
+          where id = $1 and deleted_at is null for update`,
         [operatorId],
       );
       if (!exists.rowCount) {
@@ -506,22 +596,21 @@ export class PgOperatorRepository {
   /**
    * Set/replace an operator's password (Argon2id, encoded PHC), upserting
    * admin.operator_credential. For the internal admin-delegated reset flow (P1b-β).
-   * Resets failed_attempts + clears locked_until (a reset also unlocks). The caller is
-   * responsible for authorization + session revocation. `forceChange` sets
-   * force_password_change (e.g. an initial/temporary credential). Returns false if the
-   * operator does not exist / is soft-deleted.
+   * Locks the account, checks the proved credential state and revokes refresh
+   * tokens in the same transaction as the write. Callers authorize the operation
+   * and clean up central Redis sessions afterward. Returns false for stale proof
+   * or an inactive identity. `forceChange` marks an initial/temporary credential.
    */
   async setOperatorPassword(
     operatorId: string,
     newPassword: string,
-    options?: { forceChange?: boolean },
+    options: {
+      forceChange?: boolean;
+      expectedCredentialVersion: string;
+      expectedAuthenticationVersion?: string;
+      verifyEmail?: string;
+    },
   ): Promise<boolean> {
-    const exists = await this.pool.query(
-      `select 1 from admin.operator_account
-        where id = $1 and deleted_at is null`,
-      [operatorId],
-    );
-    if (!exists.rowCount) return false;
     const passwordHash = await argon2id({
       password: newPassword,
       salt: randomBytes(16),
@@ -531,21 +620,96 @@ export class PgOperatorRepository {
       hashLength: 32,
       outputType: "encoded",
     });
-    await this.pool.query(
-      `insert into admin.operator_credential
-         (operator_id, password_hash, password_changed_at, force_password_change,
-          failed_attempts, locked_until, created_at, updated_at)
-       values ($1, $2, now(), $3, 0, null, now(), now())
-       on conflict (operator_id) do update
-         set password_hash = excluded.password_hash,
-             password_changed_at = now(),
-             force_password_change = excluded.force_password_change,
-             failed_attempts = 0,
-             locked_until = null,
-             updated_at = now()`,
-      [operatorId, passwordHash, options?.forceChange ?? false],
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "select id from admin.operator_account where id=$1 for update",
+        [operatorId],
+      );
+      const current = await client.query<OperatorRow>(
+        `${SELECT_OPERATOR} and a.id=$1`,
+        [operatorId],
+      );
+      const row = current.rows[0];
+      if (
+        !row ||
+        !options.expectedCredentialVersion ||
+        credentialVersion(row) !== options.expectedCredentialVersion ||
+        (options.expectedAuthenticationVersion !== undefined &&
+          toView(row).authenticationVersion !==
+            options.expectedAuthenticationVersion) ||
+        (options.verifyEmail !== undefined &&
+          row.email?.trim().toLowerCase() !== options.verifyEmail)
+      ) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        `insert into admin.operator_credential
+          (operator_id,password_hash,password_changed_at,force_password_change,failed_attempts,locked_until,created_at,updated_at)
+         values ($1,$2,clock_timestamp(),$3,0,null,now(),now())
+         on conflict (operator_id) do update set password_hash=excluded.password_hash,
+           password_changed_at=excluded.password_changed_at,force_password_change=excluded.force_password_change,
+           failed_attempts=0,locked_until=null,updated_at=clock_timestamp()`,
+        [operatorId, passwordHash, options.forceChange ?? false],
+      );
+      if (options.verifyEmail !== undefined) {
+        await client.query(
+          `update admin.operator_account set email_verified=true,updated_at=clock_timestamp()
+          where id=$1 and lower(trim(email))=$2`,
+          [operatorId, options.verifyEmail],
+        );
+      }
+      // The credential write cannot commit while old refresh families remain active.
+      await client.query(
+        `update admin.operator_refresh_token set status='revoked'
+        where operator_id=$1 and status in ('active','rotated')`,
+        [operatorId],
+      );
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Bind mailed recovery to the exact eligible contact and credential state.
+   * @param operatorId - Independently provisioned workforce account.
+   * @param email - Delivery address selected by the trusted caller.
+   * @param initial - Permit an unverified address only before a password exists.
+   * @returns An opaque recovery binding or null when eligibility changed.
+   */
+  async passwordResetProof(
+    operatorId: string,
+    email: string,
+    initial = false,
+  ): Promise<{
+    operatorId: string;
+    email: string;
+    credentialVersion: string;
+  } | null> {
+    const result = await this.pool.query<OperatorRow>(
+      `${SELECT_OPERATOR} and a.id=$1`,
+      [operatorId],
     );
-    return true;
+    const row = result.rows[0];
+    const normalized = email.trim().toLowerCase();
+    if (
+      !row ||
+      row.email?.trim().toLowerCase() !== normalized ||
+      (initial ? !!row.password_hash : !row.email_verified)
+    )
+      return null;
+    return {
+      operatorId,
+      email: normalized,
+      credentialVersion: credentialVersion(row),
+    };
   }
 
   /**
@@ -877,13 +1041,50 @@ export class PgOperatorRepository {
   async deleteWebauthnCredential(
     operatorId: string,
     id: string,
+    expectedAuthenticationVersion?: string,
   ): Promise<boolean> {
-    const r = await this.pool.query(
-      `delete from admin.operator_webauthn_credential
-        where operator_id = $1 and id = $2`,
-      [operatorId, id],
-    );
-    return (r.rowCount ?? 0) > 0;
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "select id from admin.operator_account where id=$1 for update",
+        [operatorId],
+      );
+      const current = await client.query<OperatorRow>(
+        `${SELECT_OPERATOR} and a.id=$1`,
+        [operatorId],
+      );
+      const row = current.rows[0];
+      if (
+        !row ||
+        (expectedAuthenticationVersion !== undefined &&
+          toView(row).authenticationVersion !==
+            expectedAuthenticationVersion) ||
+        (row.webauthn_required && (row.passkey_ids?.length ?? 0) <= 1)
+      ) {
+        await client.query("rollback");
+        return false;
+      }
+      const removed = await client.query(
+        "delete from admin.operator_webauthn_credential where operator_id=$1 and id=$2",
+        [operatorId, id],
+      );
+      if (!removed.rowCount) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        "update admin.operator_refresh_token set status='revoked' where operator_id=$1 and status in ('active','rotated')",
+        [operatorId],
+      );
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /** Persist the new signature counter after a successful assertion. */
@@ -904,20 +1105,50 @@ export class PgOperatorRepository {
   async insertWebauthnCredential(
     input: InsertOperatorWebauthnCredential,
   ): Promise<void> {
-    await this.pool.query(
-      `insert into admin.operator_webauthn_credential
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "select id from admin.operator_account where id=$1 for update",
+        [input.operatorId],
+      );
+      const current = await client.query<OperatorRow>(
+        `${SELECT_OPERATOR} and a.id=$1`,
+        [input.operatorId],
+      );
+      const row = current.rows[0];
+      if (
+        !row ||
+        (input.expectedAuthenticationVersion !== undefined &&
+          toView(row).authenticationVersion !==
+            input.expectedAuthenticationVersion)
+      )
+        throw new Error("security_proof_stale");
+      await client.query(
+        `insert into admin.operator_webauthn_credential
          (operator_id, credential_id, public_key, sign_count, transports, aaguid, label, created_at)
        values ($1, $2, $3, $4, $5, $6, $7, now())`,
-      [
-        input.operatorId,
-        input.credentialId,
-        input.publicKey,
-        String(input.signCount),
-        input.transports,
-        input.aaguid ?? null,
-        input.label ?? null,
-      ],
-    );
+        [
+          input.operatorId,
+          input.credentialId,
+          input.publicKey,
+          String(input.signCount),
+          input.transports,
+          input.aaguid ?? null,
+          input.label ?? null,
+        ],
+      );
+      await client.query(
+        "update admin.operator_refresh_token set status='revoked' where operator_id=$1 and status in ('active','rotated')",
+        [input.operatorId],
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private async recordLastLogin(operatorId: string): Promise<void> {

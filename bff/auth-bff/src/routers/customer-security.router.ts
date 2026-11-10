@@ -115,8 +115,10 @@ export class CustomerSecurityRouter {
     const result = await this.security.execute(req.customer, id, body);
     const domain = this.config.platform.COOKIE_DOMAIN_PLATFORM;
     const options = { path: "/", ...(domain ? { domain } : {}) };
-    res.clearCookie(SID_COOKIE_NAME.tenant, options);
-    res.clearCookie(HINT_COOKIE_NAME, options);
+    if (result.reauthenticate) {
+      res.clearCookie(SID_COOKIE_NAME.tenant, options);
+      res.clearCookie(HINT_COOKIE_NAME, options);
+    }
     return result;
   }
 }

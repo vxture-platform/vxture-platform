@@ -51,10 +51,14 @@ export class OperatorSelfRouter {
   @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async startEmail(
-    @Body() body: { newEmail?: string },
+    @Body() body: { newEmail?: string; proofToken?: unknown },
     @Req() req: Request,
   ): Promise<{ ok: true; sentTo: string }> {
-    return this.self.startEmailChange(operatorSid(req), body?.newEmail);
+    return this.self.startEmailChange(
+      operatorSid(req),
+      body?.newEmail,
+      body?.proofToken,
+    );
   }
 
   /** Email change — step 2: verify the code, write the new email. */
@@ -62,10 +66,15 @@ export class OperatorSelfRouter {
   @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async verifyEmail(
-    @Body() body: { code?: string },
+    @Body() body: { code?: string; newEmail?: string; proofToken?: unknown },
     @Req() req: Request,
   ): Promise<{ ok: true; email: string }> {
-    return this.self.verifyEmailChange(operatorSid(req), body?.code);
+    return this.self.verifyEmailChange(
+      operatorSid(req),
+      body?.code,
+      body?.proofToken,
+      body?.newEmail,
+    );
   }
 
   /** Phone change — step 1: send an SMS code to the new number. */
@@ -73,10 +82,14 @@ export class OperatorSelfRouter {
   @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async startPhone(
-    @Body() body: { newPhone?: string },
+    @Body() body: { newPhone?: string; proofToken?: unknown },
     @Req() req: Request,
   ): Promise<{ ok: true; sentTo: string }> {
-    return this.self.startPhoneChange(operatorSid(req), body?.newPhone);
+    return this.self.startPhoneChange(
+      operatorSid(req),
+      body?.newPhone,
+      body?.proofToken,
+    );
   }
 
   /** Phone change — step 2: verify the code, write the new phone. */
@@ -84,13 +97,14 @@ export class OperatorSelfRouter {
   @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async verifyPhone(
-    @Body() body: { newPhone?: string; code?: string },
+    @Body() body: { newPhone?: string; code?: string; proofToken?: unknown },
     @Req() req: Request,
   ): Promise<{ ok: true; phone: string }> {
     return this.self.verifyPhoneChange(
       operatorSid(req),
       body?.newPhone,
       body?.code,
+      body?.proofToken,
     );
   }
 
@@ -99,7 +113,12 @@ export class OperatorSelfRouter {
   @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async changePassword(
-    @Body() body: { currentPassword?: string; newPassword?: string },
+    @Body()
+    body: {
+      currentPassword?: string;
+      newPassword?: string;
+      proofToken?: unknown;
+    },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ ok: true }> {
@@ -107,6 +126,7 @@ export class OperatorSelfRouter {
       operatorSid(req),
       body?.currentPassword,
       body?.newPassword,
+      body?.proofToken,
     );
     res.clearCookie(SID_COOKIE.operator, { path: "/" });
     return result;

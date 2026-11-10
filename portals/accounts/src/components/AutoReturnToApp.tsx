@@ -30,7 +30,7 @@ export function AutoReturnToApp() {
         className="size-icon-lg animate-spin rounded-full border-medium border-primary border-t-transparent"
         aria-hidden="true"
       />
-      <p className="text-body-md text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t("session_expired_returning")}
       </p>
     </main>

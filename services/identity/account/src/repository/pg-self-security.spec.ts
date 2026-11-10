@@ -135,4 +135,41 @@ describe("atomic customer security mutation", () => {
       "select provider, provider_subject from identity.identities where user_id=$1 for update",
     );
   });
+  it("changes a username under the same cooldown lock without revoking sessions or tokens", async () => {
+    const f = build();
+    await f.repo.applySelfSecurity("123", {
+      ...mutation,
+      operation: "username",
+      target: "new_account",
+    });
+    const sql = f.query.mock.calls.map((call) => call[0]);
+    expect(sql[1]).toContain("for update of u");
+    expect(
+      sql.some((value) => value.includes("account_changed_at=now()")),
+    ).toBe(true);
+    expect(sql.some((value) => value.includes("update session."))).toBe(false);
+    expect(sql.at(-1)).toBe("commit");
+  });
+
+  it("binds a fresh proof to its durable session and current factor under the account lock", async () => {
+    const f = build({ mfa_version: "factor-v2" });
+    await expect(
+      f.repo.applySelfSecurity("123", {
+        ...mutation,
+        snapshot: {
+          ...mutation.snapshot,
+          sessionId: "sid",
+          mfaVersion: "factor-v1",
+        },
+      }),
+    ).rejects.toThrow("security_proof_stale");
+    const [sql, params] = f.query.mock.calls[1]!;
+    expect(sql).toContain("s.status='active'");
+    expect(sql).toContain("s.expires_at>now()");
+    expect(sql).toContain("s.realm='customer'");
+    expect(params).toEqual(["123", "sid"]);
+    expect(
+      f.query.mock.calls.some((call) => call[0].startsWith("update")),
+    ).toBe(false);
+  });
 });

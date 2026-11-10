@@ -47,12 +47,21 @@ const clients = {
       : null,
   ),
 };
-const redis = { checkOidcSessionStatus: vi.fn() };
+const workforceSession = () => ({
+  realm: "workforce",
+  sub: "opr_operator-1",
+  authMethod: "password+totp",
+  authenticationVersion: "auth-v1",
+  absExpiresAt: Math.floor(Date.now() / 1000) + 300,
+});
+const redis = { checkOidcSessionStatus: vi.fn(), getOidcSession: vi.fn() };
+const operators = { findById: vi.fn() };
 const service = Object.assign(
   Object.create(OidcService.prototype) as OidcService,
   {
     clients,
     redis,
+    operators,
   },
 );
 @Module({
@@ -93,6 +102,13 @@ afterAll(async () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  redis.getOidcSession.mockReset().mockResolvedValue(workforceSession());
+  operators.findById.mockReset().mockResolvedValue({
+    id: "operator-1",
+    authenticationVersion: "auth-v1",
+    mfaEnrolled: true,
+    webauthnRequired: false,
+  });
   redis.checkOidcSessionStatus
     .mockReset()
     .mockResolvedValue({ valid: true, next_check_at: 1800000300 });
@@ -101,6 +117,20 @@ beforeEach(() => {
 // ── Credential and request gates ──
 
 describe("central session status HTTP", () => {
+  it("rejects a legacy workforce session before extending activity", async () => {
+    redis.getOidcSession.mockResolvedValueOnce({
+      ...workforceSession(),
+      authenticationVersion: undefined,
+    });
+    const res = await post(
+      { sid: "session-test", active: true },
+      basic("admin"),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ valid: false });
+    expect(redis.checkOidcSessionStatus).not.toHaveBeenCalled();
+  });
+
   it.each([
     null,
     "Bearer token",

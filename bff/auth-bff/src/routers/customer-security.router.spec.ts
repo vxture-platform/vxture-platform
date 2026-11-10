@@ -149,4 +149,10 @@ describe("customer security HTTP endpoints", () => {
     expect(cookies).toContain("Domain=.vxture.com");
     expect(cookies).not.toContain("vx_sid_op");
   });
+  it("keeps customer cookies after a username-only change", async () => {
+    security.execute.mockResolvedValueOnce({ ok: true, reauthenticate: false });
+    const res = await post("/challenges/proof/execute");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
 });

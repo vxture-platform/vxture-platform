@@ -8,7 +8,7 @@
  */
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 // ⚠️ 跨层引用: Use the public service or configuration API for identity orchestration.
-import { PgOperatorRepository } from "@vxture/service-iam";
+import { PgOperatorRepository, type OperatorView } from "@vxture/service-iam";
 // ⚠️ 跨层引用: Use the public service or configuration API for identity orchestration.
 import {
   AccountService,
@@ -16,7 +16,7 @@ import {
   type UserView,
 } from "@vxture/service-account";
 import { SessionService } from "../authn/session.service";
-import { RedisService } from "../redis/redis.service";
+import { RedisService, type OidcCentralSession } from "../redis/redis.service";
 
 export type IdentityRealm = "customer" | "workforce";
 
@@ -31,6 +31,29 @@ export function realmSubjectMatches(realm: string, sub: string): boolean {
     realm === "customer" ? "usr_" : realm === "workforce" ? "opr_" : null;
   return (
     prefix !== null && sub.startsWith(prefix) && sub.length > prefix.length
+  );
+}
+
+/**
+ * Bind workforce authority to the current credentials, factors and policy.
+ * @param session - Stored central authorization.
+ * @param operator - Fresh, active workforce identity from its own repository.
+ * @returns Whether this exact authentication is still authorized.
+ */
+export function operatorSessionCurrent(
+  session: OidcCentralSession,
+  operator: OperatorView | null,
+): boolean {
+  return (
+    !!operator?.authenticationVersion &&
+    session.realm === "workforce" &&
+    session.sub === `opr_${operator.id}` &&
+    session.authenticationVersion === operator.authenticationVersion &&
+    operator.mfaEnrolled === true &&
+    /\+(totp|recovery|webauthn)$/.test(session.authMethod) &&
+    (!operator.webauthnRequired || session.authMethod.endsWith("+webauthn")) &&
+    Number.isFinite(session.absExpiresAt) &&
+    session.absExpiresAt > Math.floor(Date.now() / 1000)
   );
 }
 
@@ -77,7 +100,12 @@ export class RealmSessionService {
     }
     const operatorId = session.sub.slice("opr_".length);
     // The repository excludes disabled accounts and inactive operator roles.
-    if (!(await this.operators.findById(operatorId))) {
+    if (
+      !operatorSessionCurrent(
+        session,
+        await this.operators.findById(operatorId),
+      )
+    ) {
       throw new UnauthorizedException("operator_session_required");
     }
     return operatorId;

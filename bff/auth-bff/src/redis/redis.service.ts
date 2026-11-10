@@ -136,6 +136,8 @@ export interface OauthBindPayload {
  */
 export interface OperatorMfaPending {
   operatorId: string;
+  credentialVersion?: string;
+  authenticationVersion?: string;
   /** login_challenge snapshot — resume authorize after the second factor. */
   clientId: string;
   redirectUri: string;
@@ -171,6 +173,7 @@ export interface OperatorCentralSession {
 
 /** OIDC central session record (vx:sess:{sid}); per-client active_org lives in vx:sess:{sid}:org. */
 export interface OidcCentralSession {
+  authenticationVersion?: string | undefined;
   sub: string;
   realm: string;
   authMethod: string;
@@ -238,6 +241,48 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Store a realm-namespaced, expiring, first-party ceremony. */
+  async createAccountReauthentication(
+    id: string,
+    value: string,
+  ): Promise<boolean> {
+    return (
+      (await this.client.set(
+        `${this.prefix}accounts:reauth:${id}`,
+        value,
+        "EX",
+        300,
+        "NX",
+      )) === "OK"
+    );
+  }
+
+  async readAccountReauthentication(id: string): Promise<string | null> {
+    return this.client.get(`${this.prefix}accounts:reauth:${id}`);
+  }
+
+  async swapAccountReauthentication(
+    id: string,
+    expected: string,
+    replacement: string | null,
+  ): Promise<boolean> {
+    const script = `
+      if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+      if ARGV[2] == '' then redis.call('DEL', KEYS[1])
+      else redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL') end
+      return 1`;
+    return (
+      Number(
+        await this.client.eval(
+          script,
+          1,
+          `${this.prefix}accounts:reauth:${id}`,
+          expected,
+          replacement ?? "",
+        ),
+      ) === 1
+    );
+  }
+
   async storeAccountsCeremony(
     token: string,
     data: Record<string, unknown>,
@@ -577,19 +622,27 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async storeOperatorPasswordReset(
     token: string,
-    operatorId: string,
+    proof: { operatorId: string; email: string; credentialVersion: string },
     ttlSeconds: number,
   ): Promise<void> {
     const client = this.requireReadyClient();
-    const key = `${this.prefix}operator:pwreset:${token}`;
-    const ownerKey = `${this.prefix}operator:pwreset:by-op:${operatorId}`;
+    const ownerKey = `${this.prefix}operator:pwreset:by-op:${proof.operatorId}`;
+    const tokenPrefix = `${this.prefix}operator:pwreset:`;
     try {
-      const priorToken = await client.get(ownerKey);
-      if (priorToken) {
-        await client.del(`${this.prefix}operator:pwreset:${priorToken}`);
-      }
-      await client.setex(key, ttlSeconds, JSON.stringify({ operatorId }));
-      await client.setex(ownerKey, ttlSeconds, token);
+      await client.eval(
+        `
+        local prior=redis.call('GET',KEYS[1])
+        if prior then redis.call('DEL',ARGV[1]..prior) end
+        redis.call('SET',ARGV[1]..ARGV[2],ARGV[3],'EX',ARGV[4])
+        redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[4])
+        return 1`,
+        1,
+        ownerKey,
+        tokenPrefix,
+        token,
+        JSON.stringify(proof),
+        ttlSeconds,
+      );
     } catch (err) {
       this.logger.error(`storeOperatorPasswordReset failed: ${String(err)}`);
       throw new ServiceUnavailableException(
@@ -598,28 +651,42 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Single-use consume: returns the operatorId or null (unknown/expired/replayed).
-   * Also clears the by-op invalidation pointer IF it still points at this exact
-   * token (never clobbers a newer pointer written by a reissue that raced in).
-   */
-  async consumeOperatorPasswordReset(token: string): Promise<string | null> {
+  /** Consume only the latest issued, well-formed recovery binding atomically. */
+  async consumeOperatorPasswordReset(token: string): Promise<{
+    operatorId: string;
+    email: string;
+    credentialVersion: string;
+  } | null> {
     const client = this.requireReadyClient();
-    const key = `${this.prefix}operator:pwreset:${token}`;
     try {
-      const raw = await client.getdel(key);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as { operatorId?: string };
-      const operatorId =
-        typeof parsed.operatorId === "string" ? parsed.operatorId : null;
-      if (operatorId) {
-        const ownerKey = `${this.prefix}operator:pwreset:by-op:${operatorId}`;
-        const current = await client.get(ownerKey);
-        if (current === token) {
-          await client.del(ownerKey);
-        }
-      }
-      return operatorId;
+      const raw = await client.eval(
+        `
+        local raw=redis.call('GET',KEYS[1])
+        if not raw then return nil end
+        local ok,proof=pcall(cjson.decode,raw)
+        redis.call('DEL',KEYS[1])
+        if not ok or type(proof)~='table' or type(proof.operatorId)~='string'
+          or type(proof.email)~='string' or type(proof.credentialVersion)~='string' then return nil end
+        local owner=ARGV[1]..proof.operatorId
+        if redis.call('GET',owner)~=ARGV[2] then return nil end
+        redis.call('DEL',owner)
+        return raw`,
+        1,
+        `${this.prefix}operator:pwreset:${token}`,
+        `${this.prefix}operator:pwreset:by-op:`,
+        token,
+      );
+      if (typeof raw !== "string") return null;
+      const proof = JSON.parse(raw) as {
+        operatorId: string;
+        email: string;
+        credentialVersion: string;
+      };
+      return /^[a-f0-9]{64}$/.test(proof.credentialVersion) &&
+        !!proof.email &&
+        !!proof.operatorId
+        ? proof
+        : null;
     } catch (err) {
       this.logger.error(`consumeOperatorPasswordReset failed: ${String(err)}`);
       throw new ServiceUnavailableException(
@@ -1340,6 +1407,7 @@ return 0`,
         sub: session.sub,
         realm: session.realm,
         authMethod: session.authMethod,
+        authenticationVersion: session.authenticationVersion ?? "",
         amr: JSON.stringify(session.amr ?? []),
         createdAt: String(session.createdAt),
         lastActiveAt: String(session.lastActiveAt),
@@ -1374,6 +1442,7 @@ return 0`,
         sub: h.sub,
         realm: h.realm ?? "",
         authMethod: h.authMethod ?? "",
+        authenticationVersion: h.authenticationVersion || undefined,
         amr: h.amr ? (JSON.parse(h.amr) as string[]) : [],
         createdAt: Number(h.createdAt),
         lastActiveAt: Number(h.lastActiveAt),

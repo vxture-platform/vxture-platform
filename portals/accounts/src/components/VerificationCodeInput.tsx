@@ -81,7 +81,7 @@ export function VerificationCodeInput({
         <p
           id={`${id}-error`}
           role="alert"
-          className="text-body-sm text-destructive"
+          className="text-body-small text-destructive"
         >
           {error}
         </p>

@@ -47,6 +47,7 @@ function build(enabled = true) {
     {} as never,
     mfa as never,
     {} as never,
+    {} as never,
   );
   return { service, operators, redis, realmSession, mfa };
 }

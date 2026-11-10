@@ -299,7 +299,7 @@ body {
 }
 .accounts-section-body :is(input, select, textarea),
 .accounts-section-body button:not([role="switch"]):not([role="checkbox"]),
-.accounts-section-body .text-body-sm {
+.accounts-section-body .text-body-small {
   font-size: var(--accounts-body-size);
 }
 .accounts-row {
@@ -424,11 +424,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-}
-.accounts-auth-field > label {
-  font-size: var(--vx-text-xs);
-  color: var(--muted-foreground);
-  font-weight: 400;
 }
 .accounts-login-form {
   display: flex;
@@ -721,10 +716,6 @@ body {
   justify-content: space-between;
   gap: calc(var(--vx-spacing) * 3);
 }
-.accounts-code-label > label {
-  font-size: var(--vx-text-xs);
-  color: var(--muted-foreground);
-}
 .accounts-code-container {
   /* Keep preferred slot widths out of the surrounding dialog's intrinsic size. */
   contain: inline-size;
@@ -847,7 +838,7 @@ body {
 .accounts-onboarding-row > label {
   width: var(--space-4xl);
   flex-shrink: 0;
-  min-height: var(--control-md);
+  min-height: var(--space-control-md);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -921,17 +912,6 @@ body {
   border-top: 1px solid var(--border);
   padding-top: var(--space-lg);
   margin-top: var(--space-xs);
-}
-/* Native popups need an explicit scheme while Accounts consumes the pinned DS. */
-body:has(.accounts-viewport) select {
-  color-scheme: light;
-}
-html.dark body:has(.accounts-viewport) select {
-  color-scheme: dark;
-}
-body:has(.accounts-viewport) select :is(option, optgroup) {
-  background-color: var(--popover);
-  color: var(--foreground);
 }
 .accounts-avatar-preview {
   width: calc(var(--vx-spacing) * 25);
@@ -1127,7 +1107,7 @@ body:has(.accounts-viewport) select :is(option, optgroup) {
 .accounts-preference-control [role="radio"][aria-checked="true"] {
   background: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-raised);
 }
 .accounts-mfa-summary {
   display: flex;
@@ -1202,35 +1182,6 @@ body:has(.accounts-viewport) select :is(option, optgroup) {
   margin-top: var(--space-sm);
   font-size: var(--vx-text-xs);
   color: var(--muted-foreground);
-}
-/* Compatibility for Accounts' pinned DS version until the shared fix is released. */
-body:has(.accounts-viewport) [role="dialog"] > form > .overflow-y-auto {
-  /* Match the shared field scroller without clipping 3px rings in compact mode. */
-  margin: calc(-1 * var(--space-xs));
-  padding: var(--space-xs);
-  scroll-padding: var(--space-xs);
-}
-body:has(.accounts-viewport)
-  :is([role="dialog"], [role="alertdialog"])
-  > button.absolute:has(> svg) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-control-md);
-  height: var(--space-control-md);
-  min-width: var(--space-control-md);
-  min-height: var(--space-control-md);
-  padding: 0;
-  flex-shrink: 0;
-  border-radius: var(--radius-md);
-}
-body:has(.accounts-viewport)
-  :is([role="dialog"], [role="alertdialog"])
-  > button.absolute:has(> svg):hover {
-  background: var(--accent);
-}
-.accounts-code-slot > [aria-hidden="true"] > div {
-  height: var(--vx-text-2xl);
 }
 .accounts-brand .accounts-brand-name {
   color: var(--primary);
@@ -1318,4 +1269,79 @@ label:has(+ input[required]):not(:has(.accounts-required))::after {
     top: calc(100% + var(--space-2xs));
     white-space: nowrap;
   }
+}
+
+/* Security forms preserve one field rhythm and contextual, accessible feedback. */
+.accounts-password-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.accounts-security-verification {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Password sections remain stable while focus moves between the three inputs. */
+.accounts-password-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+body:has(.accounts-viewport)
+  [data-slot="dialog-form-footer"]:has(> [data-slot="dialog-form-note"]) {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+body:has(.accounts-viewport) [data-slot="dialog-form-note"] {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--vx-text-xs);
+  color: var(--muted-foreground);
+}
+body:has(.accounts-viewport) [data-slot="dialog-form-actions"] {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-sm);
+}
+@media (max-width: 480px) {
+  body:has(.accounts-viewport)
+    [data-slot="dialog-form-footer"]:has(> [data-slot="dialog-form-note"]) {
+    flex-wrap: wrap;
+  }
+  body:has(.accounts-viewport) [data-slot="dialog-form-actions"] {
+    margin-inline-start: auto;
+  }
+}
+
+/* Field labels share a small, quiet rhythm across profile and security flows. */
+body:has(.accounts-viewport)
+  :is(
+    .accounts-auth-field > label,
+    .accounts-code-label > label,
+    .accounts-profile-name-editor > label,
+    .accounts-password-group-label,
+    .accounts-onboarding-row > label,
+    label[data-slot="field-label"],
+    label[data-slot="field-label-text"],
+    label:has(+ input:not([type="checkbox"]):not([type="radio"]))
+  ) {
+  font-size: var(--body-small-font-size);
+  font-weight: var(--body-small-font-weight);
+  line-height: var(--body-small-line-height);
+  letter-spacing: var(--body-small-letter-spacing);
+  color: var(--muted-foreground);
+}
+.accounts-profile-name-editor,
+.accounts-password-group {
+  gap: var(--space-sm);
+}
+body:has(.accounts-viewport) label[data-slot] > span[aria-hidden="true"] {
+  color: var(--destructive);
+  margin-inline-start: var(--space-2xs);
 }

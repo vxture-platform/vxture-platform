@@ -160,7 +160,10 @@ export class AuthnController {
   async forgotPassword(
     @Body() body: { email?: string },
   ): Promise<{ ok: true }> {
-    if (body.email) await this.authn.requestPasswordReset(body.email);
+    if (typeof body?.email !== "string" || !body.email.trim()) {
+      throw new BadRequestException("a valid email is required");
+    }
+    await this.authn.requestPasswordReset(body.email);
     return { ok: true };
   }
 
@@ -173,7 +176,12 @@ export class AuthnController {
   async resetPassword(
     @Body() body: { token?: string; password?: string },
   ): Promise<{ ok: true }> {
-    if (!body.token || !body.password) {
+    if (
+      typeof body?.token !== "string" ||
+      !/^[a-f0-9]{64}$/.test(body.token) ||
+      typeof body.password !== "string" ||
+      !body.password
+    ) {
       throw new BadRequestException("token and password are required");
     }
     if (!validNewPassword(body.password, "customer")) {

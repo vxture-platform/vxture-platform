@@ -361,7 +361,7 @@ function StepHint({
   readonly className?: string;
 }) {
   return (
-    <p className={`text-body-sm text-muted-foreground ${className ?? ""}`}>
+    <p className={`text-body-small text-muted-foreground ${className ?? ""}`}>
       {children}
     </p>
   );

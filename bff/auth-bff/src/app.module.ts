@@ -7,6 +7,11 @@
  * the OIDC protocol surface is OidcRouter/OidcService.
  */
 
+import { AccountReauthenticationService } from "./authn/account-reauthentication.service";
+import {
+  AccountReauthenticationRouter,
+  OperatorAccountReauthenticationRouter,
+} from "./routers/account-reauthentication.router";
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { VxConfigModule } from "@vxture/core-config";
@@ -88,6 +93,8 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     SubscriptionModule,
   ],
   controllers: [
+    AccountReauthenticationRouter,
+    OperatorAccountReauthenticationRouter,
     CaptchaRouter,
     HealthRouter,
     AuthnController,
@@ -110,6 +117,7 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     AvatarUploadController,
   ],
   providers: [
+    AccountReauthenticationService,
     HumanCaptchaService,
     OidcService,
     AppScopeResolver,

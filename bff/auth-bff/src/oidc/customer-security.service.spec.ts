@@ -33,6 +33,7 @@ function fixture() {
   };
   const challenges = {
     start: vi.fn(async () => ({ challengeId: "id" })),
+    startAuthorized: vi.fn(async () => ({ challengeId: "id" })),
     consume: vi.fn(async () => proof),
   };
   const accounts = {
@@ -68,7 +69,7 @@ describe("customer sensitive self-service orchestration", () => {
   ])("rejects malformed request %j", async (body) => {
     const f = fixture();
     await expect(f.service.start(context, body)).rejects.toThrow();
-    expect(f.challenges.start).not.toHaveBeenCalled();
+    expect(f.challenges.startAuthorized).not.toHaveBeenCalled();
   });
   it("normalizes email before binding it into the ceremony", async () => {
     const f = fixture();
@@ -77,11 +78,11 @@ describe("customer sensitive self-service orchestration", () => {
       target: " NEW@Example.com ",
       method: "phone",
     });
-    expect(f.challenges.start).toHaveBeenCalledWith(
+    expect(f.challenges.startAuthorized).toHaveBeenCalledWith(
       context,
       "email-change",
       "new@example.com",
-      "phone",
+      undefined,
     );
   });
   it.each([1, 29 * 86400000, 30 * 86400000 - 1, -60000])(
@@ -102,7 +103,7 @@ describe("customer sensitive self-service orchestration", () => {
           { operation: "username", target: "new_account", method: "phone" },
         ),
       ).rejects.toThrow("username_change_cooldown");
-      expect(f.challenges.start).not.toHaveBeenCalled();
+      expect(f.challenges.startAuthorized).not.toHaveBeenCalled();
     },
   );
   it.each([null, 30 * 86400000, 30 * 86400000 + 1])(
@@ -124,11 +125,11 @@ describe("customer sensitive self-service orchestration", () => {
         target: " new_account ",
         method: "phone",
       });
-      expect(f.challenges.start).toHaveBeenCalledExactlyOnceWith(
+      expect(f.challenges.startAuthorized).toHaveBeenCalledExactlyOnceWith(
         current,
         "username",
         "new_account",
-        "phone",
+        undefined,
       );
     },
   );
@@ -141,7 +142,7 @@ describe("customer sensitive self-service orchestration", () => {
         method: "phone",
       }),
     ).rejects.toThrow("security_target_unchanged");
-    expect(f.challenges.start).not.toHaveBeenCalled();
+    expect(f.challenges.startAuthorized).not.toHaveBeenCalled();
   });
   it("preserves the transactional cooldown failure without reporting logout success", async () => {
     const f = fixture();
@@ -163,11 +164,11 @@ describe("customer sensitive self-service orchestration", () => {
       target: "google",
       method: "phone",
     });
-    expect(f.challenges.start).toHaveBeenCalledWith(
+    expect(f.challenges.startAuthorized).toHaveBeenCalledWith(
       context,
       "identity-unlink",
       "google",
-      "phone",
+      undefined,
       ["subject"],
     );
   });
@@ -181,7 +182,7 @@ describe("customer sensitive self-service orchestration", () => {
         method: "phone",
       }),
     ).rejects.toThrow("identity_not_bound");
-    expect(f.challenges.start).not.toHaveBeenCalled();
+    expect(f.challenges.startAuthorized).not.toHaveBeenCalled();
   });
   it("ignores caller-supplied account and target at execution", async () => {
     const f = fixture();
@@ -250,3 +251,31 @@ it("does not delete another customer's or workforce cache", async () => {
   expect(redis.deleteOidcSession).toHaveBeenCalledExactlyOnceWith("owned");
   expect(logout).toHaveBeenCalledWith("owned", "usr_123", ["console"]);
 });
+
+it("keeps customer sessions and credentials active after a username-only change", async () => {
+  const f = fixture();
+  f.proof.operation = "username";
+  f.proof.target = "new_account";
+  await expect(f.service.execute(context, "id", {})).resolves.toEqual({
+    ok: true,
+    reauthenticate: false,
+    logoutPropagationPending: false,
+  });
+  expect(f.accounts.listSessions).not.toHaveBeenCalled();
+  expect(f.oidc.cleanupCustomerSessions).not.toHaveBeenCalled();
+});
+
+it.each(["phone-verify", "email-verify"])(
+  "uses only the unverified contact's own code for %s",
+  async (operation) => {
+    const f = fixture();
+    await f.service.start(context, { operation });
+    expect(f.challenges.startAuthorized).not.toHaveBeenCalled();
+    expect(f.challenges.start).toHaveBeenCalledWith(
+      context,
+      operation,
+      operation === "phone-verify" ? context.user.phone : context.user.email,
+      operation === "phone-verify" ? "phone" : "email",
+    );
+  },
+);

@@ -44,7 +44,7 @@ export function MfaRecoveryCodes({
   }
   return (
     <div className="accounts-recovery">
-      <p className="text-body-sm text-muted-foreground">
+      <p className="text-body-small text-muted-foreground">
         {formText(
           "save_these_recovery_codes_now_each_code_can_only_be_used_once",
         )}
@@ -71,7 +71,7 @@ export function MfaRecoveryCodes({
           checked={saved}
           onCheckedChange={(value) => setSaved(value === true)}
         />
-        <label htmlFor={id} className="text-body-sm">
+        <label htmlFor={id} className="text-body-small">
           {formText("i_have_saved_my_recovery_codes")}
         </label>
       </div>

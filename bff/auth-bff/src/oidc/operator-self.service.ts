@@ -6,6 +6,7 @@
  * @author AI-Generated
  * @date 2026-11-07
  */
+import { AccountReauthenticationService } from "../authn/account-reauthentication.service";
 import { validNewPassword } from "../authn/password-policy";
 
 import {
@@ -72,6 +73,8 @@ export class OperatorSelfService {
     private readonly refreshTokens: OperatorRefreshTokenRepository,
     @Inject(OperatorMfaService) private readonly mfa: OperatorMfaService,
     @Inject(OidcService) private readonly oidc: OidcService,
+    @Inject(AccountReauthenticationService)
+    private readonly reauthentication: AccountReauthenticationService,
   ) {}
 
   /**
@@ -109,6 +112,7 @@ export class OperatorSelfService {
   async startEmailChange(
     sid: string | undefined,
     newEmailRaw: string | undefined,
+    proofToken?: unknown,
   ): Promise<{ ok: true; sentTo: string }> {
     const operatorId = await this.resolveOperatorId(sid);
     const newEmail =
@@ -118,6 +122,13 @@ export class OperatorSelfService {
     }
     const view = await this.operators.getOperatorAdminView(operatorId);
     if (!view) throw new UnauthorizedException("operator_session_required");
+    await this.requireContactProof(
+      sid,
+      operatorId,
+      "email",
+      newEmail,
+      proofToken,
+    );
     const code = String(randomInt(100000, 1000000));
     const version = await this.redis.beginOperatorEmailChange(
       operatorId,
@@ -150,6 +161,8 @@ export class OperatorSelfService {
   async verifyEmailChange(
     sid: string | undefined,
     codeRaw: string | undefined,
+    proofToken?: unknown,
+    expectedEmail?: string,
   ): Promise<{ ok: true; email: string }> {
     const operatorId = await this.resolveOperatorId(sid);
     const code = typeof codeRaw === "string" ? codeRaw.trim() : "";
@@ -160,7 +173,20 @@ export class OperatorSelfService {
       sid!,
       code,
     );
-    if (!newEmail) throw new BadRequestException("invalid_or_expired_code");
+    if (
+      !newEmail ||
+      (expectedEmail !== undefined &&
+        newEmail !== expectedEmail.trim().toLowerCase())
+    )
+      throw new BadRequestException("invalid_or_expired_code");
+    const securityVersion = await this.requireContactProof(
+      sid,
+      operatorId,
+      "email",
+      newEmail,
+      proofToken,
+      true,
+    );
     if ((await this.resolveOperatorId(sid)) !== operatorId)
       throw new UnauthorizedException("operator_session_required");
     try {
@@ -168,6 +194,7 @@ export class OperatorSelfService {
         operatorId,
         "email",
         newEmail,
+        securityVersion,
       );
       if (!ok) throw new UnauthorizedException("operator_session_required");
     } catch (err) {
@@ -176,6 +203,7 @@ export class OperatorSelfService {
       }
       throw err;
     }
+    await this.finishContactChange(operatorId);
     return { ok: true, email: newEmail };
   }
 
@@ -187,12 +215,20 @@ export class OperatorSelfService {
   async startPhoneChange(
     sid: string | undefined,
     newPhoneRaw: string | undefined,
+    proofToken?: unknown,
   ): Promise<{ ok: true; sentTo: string }> {
     const operatorId = await this.resolveOperatorId(sid);
     const newPhone = typeof newPhoneRaw === "string" ? newPhoneRaw.trim() : "";
     if (!PHONE_RE.test(newPhone)) {
       throw new BadRequestException("invalid_phone");
     }
+    await this.requireContactProof(
+      sid,
+      operatorId,
+      "phone",
+      newPhone,
+      proofToken,
+    );
     const version = await this.redis.beginOperatorPhoneChange(
       operatorId,
       sid!,
@@ -229,6 +265,7 @@ export class OperatorSelfService {
     sid: string | undefined,
     newPhoneRaw: string | undefined,
     codeRaw: string | undefined,
+    proofToken?: unknown,
   ): Promise<{ ok: true; phone: string }> {
     const operatorId = await this.resolveOperatorId(sid);
     const newPhone = typeof newPhoneRaw === "string" ? newPhoneRaw.trim() : "";
@@ -262,11 +299,20 @@ export class OperatorSelfService {
     if ((await this.resolveOperatorId(sid)) !== operatorId) {
       throw new UnauthorizedException("operator_session_required");
     }
+    const securityVersion = await this.requireContactProof(
+      sid,
+      operatorId,
+      "phone",
+      newPhone,
+      proofToken,
+      true,
+    );
     try {
       const written = await this.operators.setOperatorContactVerified(
         operatorId,
         "phone",
         newPhone,
+        securityVersion,
       );
       if (!written)
         throw new UnauthorizedException("operator_session_required");
@@ -276,6 +322,7 @@ export class OperatorSelfService {
       }
       throw err;
     }
+    await this.finishContactChange(operatorId);
     return { ok: true, phone: newPhone };
   }
 
@@ -287,6 +334,7 @@ export class OperatorSelfService {
     sid: string | undefined,
     currentPassword: string | undefined,
     newPassword: string | undefined,
+    proofToken?: unknown,
   ): Promise<{ ok: true }> {
     const operatorId = await this.resolveOperatorId(sid);
     const current = typeof currentPassword === "string" ? currentPassword : "";
@@ -294,13 +342,28 @@ export class OperatorSelfService {
     if (!validNewPassword(next, "workforce")) {
       throw new BadRequestException("weak_password");
     }
+    const before = await this.operators.findById(operatorId);
+    if (!before?.credentialVersion)
+      throw new UnauthorizedException("operator_session_required");
     const verified = await this.operators.verifyOperatorPassword(
       operatorId,
       current,
     );
     if (!verified) throw new BadRequestException("invalid_current_password");
+    await this.reauthentication.require(
+      "workforce",
+      sid,
+      proofToken,
+      "password",
+      "",
+      true,
+    );
     const ok = await this.operators.setOperatorPassword(operatorId, next, {
       forceChange: false,
+      expectedCredentialVersion: before.credentialVersion,
+      ...(before.authenticationVersion
+        ? { expectedAuthenticationVersion: before.authenticationVersion }
+        : {}),
     });
     if (!ok) throw new UnauthorizedException("operator_session_required");
     // Attempt both authorities even if one fails after the password was committed.
@@ -311,6 +374,40 @@ export class OperatorSelfService {
     for (const result of results)
       if (result.status === "rejected") throw result.reason;
     return { ok: true };
+  }
+
+  /** Unverified current contacts need only their own delivery proof; replacements need MFA. */
+  private async requireContactProof(
+    sid: string | undefined,
+    operatorId: string,
+    kind: "email" | "phone",
+    target: string,
+    proofToken: unknown,
+    consume = false,
+  ) {
+    const view = await this.operators.getOperatorAdminView(operatorId);
+    if (!view) throw new UnauthorizedException("operator_session_required");
+    const current = kind === "email" ? view.email : view.phone;
+    const verified = kind === "email" ? view.emailVerified : view.phoneVerified;
+    const operator = await this.operators.findById(operatorId);
+    if (!operator?.authenticationVersion)
+      throw new UnauthorizedException("operator_session_required");
+    if (current === target && !verified) return operator.authenticationVersion;
+    await this.reauthentication.require(
+      "workforce",
+      sid,
+      proofToken,
+      `${kind}-change`,
+      target,
+      consume,
+    );
+    return operator.authenticationVersion;
+  }
+
+  private async finishContactChange(operatorId: string) {
+    // Durable revocation commits with the contact. Current credential versions also
+    // reject old central authorization when best-effort Redis cleanup is unavailable.
+    await this.oidc.endOperatorSessions(operatorId).catch(() => undefined);
   }
 
   // ============================================================================
