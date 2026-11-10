@@ -10,6 +10,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // Match the application source alias without requiring local build artifacts.
+      "@vxture/platform-browser": fileURLToPath(
+        new URL("../../packages/platform/browser/src", import.meta.url),
+      ),
     },
   },
   test: {
