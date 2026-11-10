@@ -17,6 +17,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
+import { SUPPORTED_LOCALES, type Locale } from "@vxture-platform/shared";
 import { VxConfigService } from "@vxture/core-config";
 import {
   AccountService,
@@ -438,6 +439,7 @@ export class OidcService {
     return {
       sub,
       name: user.name ?? user.account,
+      language: user.language ?? null,
       ...(user.avatarHash
         ? {
             picture: `${this.config.auth.OIDC_ISSUER}/avatar/usr_${user.id}?v=${user.avatarHash}`,
@@ -449,6 +451,39 @@ export class OidcService {
       email_verified:
         user.email != null ? (user.emailVerified ?? false) : undefined,
     };
+  }
+
+  /**
+   * Persist only language for the customer identified by a live RP access token.
+   * @param accessToken - Server-held customer session access token.
+   * @param body - Untrusted language-only patch.
+   * @returns The saved language.
+   * @throws {BadRequestException} For unsupported languages or extra fields.
+   * @throws {UnauthorizedException} For non-customer or inactive identities.
+   */
+  async updateLanguage(accessToken: string, body: unknown) {
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      Object.keys(body).length !== 1 ||
+      !("language" in body) ||
+      !SUPPORTED_LOCALES.includes(body.language as Locale)
+    ) {
+      throw new BadRequestException("invalid_language");
+    }
+    const identity = await this.userinfo(accessToken);
+    if (typeof identity.sub !== "string" || !identity.sub.startsWith("usr_")) {
+      throw new UnauthorizedException("invalid_token");
+    }
+    const user = await this.account.getUserById(stripSubPrefix(identity.sub));
+    if (!user || user.status !== "active")
+      throw new UnauthorizedException("invalid_token");
+    const updated = await this.account.updateProfile(user.id, {
+      language: body.language as Locale,
+    });
+    if (!updated) throw new UnauthorizedException("invalid_token");
+    return { language: body.language as Locale };
   }
 
   /**

@@ -139,6 +139,8 @@ export class Fixture {
   statusCalls = 0;
   statusBody: unknown;
   statusAuthorization: string | undefined;
+  language = "zh-CN";
+  preferenceAuthorization: string | undefined;
   onToken: (() => Promise<void>) | undefined;
   allowedScope = true;
   allowedResourceRead = false;
@@ -189,6 +191,17 @@ export class Fixture {
             ],
           }),
         );
+      } else if (
+        req.url === "/oidc/userinfo" ||
+        req.url === "/oidc/customer/language"
+      ) {
+        this.preferenceAuthorization = req.headers.authorization;
+        if (req.method === "PATCH") {
+          let body = "";
+          for await (const chunk of req) body += String(chunk);
+          this.language = (JSON.parse(body) as { language: string }).language;
+        }
+        res.end(JSON.stringify({ language: this.language }));
       } else if (req.url === "/oidc/token") {
         this.tokenCalls++;
         await this.onToken?.();

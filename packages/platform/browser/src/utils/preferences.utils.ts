@@ -206,7 +206,51 @@ export function setGlobalUserPreferences(
 export function setGlobalLocalePreference(
   locale: Locale,
 ): GlobalUserPreferences {
-  return setGlobalUserPreferences({ locale });
+  const preferences = setGlobalUserPreferences({ locale });
+  localeRevision++;
+  for (const listener of localeWriters) listener(locale);
+  return preferences;
+}
+
+let localeRevision = 0;
+const localeWriters = new Set<(locale: Locale) => void>();
+let pendingLocaleWrites = 0;
+let localeWriteQueue = Promise.resolve();
+
+export interface LocalePreferenceTransport {
+  read: () => Promise<unknown>;
+  write: (locale: Locale) => Promise<unknown>;
+}
+
+/**
+ * Adapt a portal-owned profile endpoint without embedding account routes in the SDK.
+ * @param endpoint - Portal-selected authenticated profile URL.
+ * @param method - Existing partial profile update method.
+ * @param headers - Portal-owned request protection headers.
+ * @returns Bounded credentialed reads and writes; tokens remain server-side.
+ */
+export function createLocalePreferenceTransport(
+  endpoint: string,
+  method: "PUT" | "PATCH" = "PUT",
+  headers: Record<string, string> = {},
+): LocalePreferenceTransport {
+  const request = async (locale?: Locale): Promise<unknown> => {
+    const response = await fetch(endpoint, {
+      method: locale ? method : "GET",
+      credentials: "include",
+      cache: "no-store",
+      keepalive: locale !== undefined,
+      signal: AbortSignal.timeout(10000),
+      headers: {
+        ...headers,
+        ...(locale ? { "content-type": "application/json" } : {}),
+      },
+      ...(locale ? { body: JSON.stringify({ language: locale }) } : {}),
+    });
+    if (!response.ok) throw new Error("Preference request failed");
+    return response.json();
+  };
+  return { read: () => request(), write: (locale) => request(locale) };
 }
 
 export function setGlobalThemePreference(theme: Theme): GlobalUserPreferences {
@@ -283,12 +327,13 @@ export function subscribeToGlobalPreferenceChanges(
 export function synchronizeGlobalLocale(
   renderedLocale: Locale,
   onLocale: (locale: Locale) => void,
+  transport?: LocalePreferenceTransport,
 ): () => void {
   if (!isBrowser()) return () => undefined;
   const url = new URL(window.location.href);
   const hint = url.searchParams.get("vx_locale");
   if (SUPPORTED_LOCALES.includes(hint as Locale)) {
-    setGlobalLocalePreference(hint as Locale);
+    setGlobalUserPreferences({ locale: hint as Locale });
     url.searchParams.delete("vx_locale");
     window.history.replaceState(window.history.state, "", url.href);
   }
@@ -301,22 +346,75 @@ export function synchronizeGlobalLocale(
       readCookie(LOCALE_CONSTANTS.COOKIE_KEY) ??
       readStorage(LOCALE_CONSTANTS.STORAGE_KEY);
     const locale = saved ? normalizeLocale(saved) : renderedLocale;
-    if (!saved) setGlobalLocalePreference(locale);
+    if (!saved) setGlobalUserPreferences({ locale });
     onLocale(locale);
   };
   // Register after initialization so an initial write cannot reenter this observer.
   sync();
+  let stopped = false;
+  let reading = false;
+  const persist = (locale: Locale): void => {
+    if (!transport) return;
+    pendingLocaleWrites++;
+    // Serialize rapid choices so a slower earlier write cannot become the final value.
+    localeWriteQueue = localeWriteQueue
+      .then(() => transport.write(locale))
+      .then(
+        () => {
+          pendingLocaleWrites--;
+        },
+        () => {
+          pendingLocaleWrites--;
+        },
+      );
+  };
+  const remote = async (): Promise<void> => {
+    if (!transport || stopped || reading || pendingLocaleWrites) return;
+    reading = true;
+    const revision = localeRevision;
+    const before = getGlobalUserPreferences().locale;
+    try {
+      const profile = await transport.read();
+      if (
+        stopped ||
+        pendingLocaleWrites ||
+        revision !== localeRevision ||
+        before !== getGlobalUserPreferences().locale ||
+        !profile ||
+        typeof profile !== "object" ||
+        !("language" in profile) ||
+        !SUPPORTED_LOCALES.includes(profile.language as Locale)
+      )
+        return;
+      setGlobalUserPreferences({ locale: profile.language as Locale });
+    } catch {
+      // Guests and unavailable account services retain their local preference.
+    } finally {
+      reading = false;
+    }
+  };
+  localeWriters.add(persist);
+  void remote();
   const unsubscribe = subscribeToGlobalPreferenceChanges(() => sync());
   const visible = (): void => {
-    if (document.visibilityState === "visible") sync();
+    if (document.visibilityState === "visible") {
+      sync();
+      void remote();
+    }
   };
-  window.addEventListener("focus", sync);
-  window.addEventListener("pageshow", sync);
+  const returning = (): void => {
+    sync();
+    void remote();
+  };
+  window.addEventListener("focus", returning);
+  window.addEventListener("pageshow", returning);
   document.addEventListener("visibilitychange", visible);
   return () => {
     unsubscribe();
-    window.removeEventListener("focus", sync);
-    window.removeEventListener("pageshow", sync);
+    stopped = true;
+    localeWriters.delete(persist);
+    window.removeEventListener("focus", returning);
+    window.removeEventListener("pageshow", returning);
     document.removeEventListener("visibilitychange", visible);
   };
 }

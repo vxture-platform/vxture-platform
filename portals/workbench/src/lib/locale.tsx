@@ -24,6 +24,7 @@ import {
 import {
   setGlobalLocalePreference,
   synchronizeGlobalLocale,
+  createLocalePreferenceTransport,
 } from "@vxture/platform-browser";
 import { translate } from "./messages";
 
@@ -32,6 +33,13 @@ import { translate } from "./messages";
 // ============================================================================
 export const LOCALE_OPTIONS = SUPPORTED_LOCALES.map(
   (locale) => LOCALE_CONFIGS[locale],
+);
+const accountLocale = createLocalePreferenceTransport(
+  "/auth/language",
+  "PATCH",
+  {
+    "x-workbench-request": "1",
+  },
 );
 const LocaleContext = createContext({
   locale: DEFAULT_LOCALE,
@@ -48,7 +56,7 @@ export function WorkLocaleProvider({
 }): React.JSX.Element {
   const [locale, setLocale] = useState<Locale>(initialLocale);
   useEffect(
-    () => synchronizeGlobalLocale(initialLocale, setLocale),
+    () => synchronizeGlobalLocale(initialLocale, setLocale, accountLocale),
     [initialLocale],
   );
   useEffect(() => {

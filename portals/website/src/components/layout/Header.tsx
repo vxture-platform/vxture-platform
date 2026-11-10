@@ -47,7 +47,11 @@ import {
 } from "@/lib/console-entry";
 import { buildLogoutUrl, buildSwitchUserUrl } from "@/api/auth.api";
 import type { UserInfo } from "@/types/auth.types";
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "@vxture-platform/shared";
+import {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  LOCALE_CONFIGS,
+} from "@vxture-platform/shared";
 import type { Locale } from "@vxture-platform/shared";
 import {
   getGuestPreferences,
@@ -143,6 +147,7 @@ function HeaderLocaleSelect() {
   return (
     <ShellLocaleSwitcher
       currentLocale={locale}
+      options={SUPPORTED_LOCALES.map((code) => LOCALE_CONFIGS[code])}
       buttonLabel={t("language.title")}
       onLocaleChange={(next) => handleLocaleChange(next as Locale)}
     />

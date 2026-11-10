@@ -29,6 +29,53 @@ afterEach(async () => {
 // ============================================================================
 const portalPath = () =>
   `/auth/login?surface=portal&userId=${USER.slice(4)}&tenantId=${ORG}&workspaceId=${WORKSPACE}`;
+describe("Account language bridge", () => {
+  it("reads and saves the account language without exposing the server-held token", async () => {
+    const cookie = await fixture.login();
+    const read = await fixture.request("/auth/language", cookie);
+    expect(await read.json()).toEqual({ language: "zh-CN" });
+    expect(fixture.preferenceAuthorization).toMatch(/^Bearer /);
+    const save = await fixture.request("/auth/language", cookie, {
+      method: "PATCH",
+      headers: {
+        origin: fixture.config.origin,
+        "content-type": "application/json",
+        "x-workbench-request": "1",
+      },
+      body: JSON.stringify({ language: "en-US" }),
+    });
+    expect(save.status).toBe(200);
+    expect(await save.json()).toEqual({ language: "en-US" });
+    expect(
+      await (await fixture.request("/auth/language", cookie)).json(),
+    ).toEqual({ language: "en-US" });
+  });
+  it("requires authentication and rejects foreign-origin writes or identity hints", async () => {
+    expect((await fixture.request("/auth/language")).status).toBe(401);
+    const cookie = await fixture.login();
+    for (const [origin, body, expected] of [
+      ["https://evil.example", { language: "en-US" }, 403],
+      [fixture.config.origin, { language: "en-US", userId: "other" }, 400],
+      [fixture.config.origin, { language: "fr" }, 400],
+    ] as const) {
+      expect(
+        (
+          await fixture.request("/auth/language", cookie, {
+            method: "PATCH",
+            headers: {
+              origin,
+              "content-type": "application/json",
+              "x-workbench-request": "1",
+            },
+            body: JSON.stringify(body),
+          })
+        ).status,
+      ).toBe(expected);
+    }
+    expect(fixture.language).toBe("zh-CN");
+  });
+});
+
 describe("Console portal entry", () => {
   it("preserves hints and reuses central SSO without a forced login prompt", async () => {
     const start = await fixture.begin(`${portalPath()}&returnTo=%2Fapps`);

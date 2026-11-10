@@ -24,7 +24,12 @@ import {
 } from "@vxture/platform-browser";
 import { HEADER_DATA } from "@/data/layout/header.data";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
-import type { Locale, Theme } from "@vxture-platform/shared";
+import {
+  SUPPORTED_LOCALES,
+  LOCALE_CONFIGS,
+  type Locale,
+  type Theme,
+} from "@vxture-platform/shared";
 
 export function AuthHeader() {
   const t = useTranslations("layout.header");
@@ -46,6 +51,7 @@ export function AuthHeader() {
         <div className="flex items-center gap-xs">
           <ShellLocaleSwitcher
             currentLocale={locale}
+            options={SUPPORTED_LOCALES.map((code) => LOCALE_CONFIGS[code])}
             buttonLabel={t("language.title")}
             panelLabel={t("language.title")}
             onLocaleChange={(next) => {

@@ -11,8 +11,15 @@
 import { useEffect } from "react";
 import { useLocale } from "next-intl";
 import type { Locale } from "@vxture-platform/shared";
-import { synchronizeGlobalLocale } from "@vxture/platform-browser";
+import {
+  synchronizeGlobalLocale,
+  createLocalePreferenceTransport,
+} from "@vxture/platform-browser";
+import { API_BASE_URL } from "@/api/client";
 import { useRouter } from "next/navigation";
+const accountLocale = createLocalePreferenceTransport(
+  `${API_BASE_URL}/api/me/profile`,
+);
 
 /** Preserve the complete route, query and fragment while applying the shared locale. */
 export function LocaleSync(): null {
@@ -20,14 +27,18 @@ export function LocaleSync(): null {
   const router = useRouter();
   useEffect(
     () =>
-      synchronizeGlobalLocale(locale, (next) => {
-        document.documentElement.lang = next;
-        if (next === locale) return;
-        const url = new URL(window.location.href);
-        const segments = url.pathname.split("/");
-        segments[1] = next;
-        router.replace(`${segments.join("/")}${url.search}${url.hash}`);
-      }),
+      synchronizeGlobalLocale(
+        locale,
+        (next) => {
+          document.documentElement.lang = next;
+          if (next === locale) return;
+          const url = new URL(window.location.href);
+          const segments = url.pathname.split("/");
+          segments[1] = next;
+          router.replace(`${segments.join("/")}${url.search}${url.hash}`);
+        },
+        accountLocale,
+      ),
     [locale, router],
   );
   return null;

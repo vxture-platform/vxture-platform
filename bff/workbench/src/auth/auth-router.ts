@@ -13,7 +13,16 @@ import {
   type Locale,
 } from "@vxture-platform/shared";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { Controller, Get, Post, Inject, Req, Res } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Inject,
+  Req,
+  Res,
+} from "@nestjs/common";
 import type { CookieOptions, Request, Response } from "express";
 import {
   generatePkce,
@@ -351,6 +360,46 @@ export class AuthRouter {
   async session(@Req() req: Request) {
     const current = await this.auth.authenticate(req);
     return { status: "active", userId: current.user.userId };
+  }
+
+  /** Read the current account language without returning session tokens. */
+  @Get("language")
+  async language(@Req() req: Request) {
+    return this.accountLanguage(req);
+  }
+
+  /** Save a language-only choice from this origin after session verification. */
+  @Patch("language")
+  async saveLanguage(@Req() req: Request, @Body() body: unknown) {
+    if (
+      req.headers.origin !== this.config.origin ||
+      req.headers["x-workbench-request"] !== "1" ||
+      (req.headers["sec-fetch-site"] &&
+        req.headers["sec-fetch-site"] !== "same-origin")
+    )
+      throw failure(
+        403,
+        "WORKBENCH_REQUEST_FORBIDDEN",
+        "Same-origin request required",
+      );
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      Object.keys(body).length !== 1 ||
+      !("language" in body) ||
+      !SUPPORTED_LOCALES.includes(body.language as Locale)
+    )
+      throw failure(400, "WORKBENCH_INVALID_INPUT", "Invalid language");
+    return this.accountLanguage(req, body.language as Locale);
+  }
+
+  private async accountLanguage(req: Request, language?: Locale) {
+    const current = await this.auth.authenticate(req);
+    const record = await this.store.read(current.id);
+    if (!record)
+      throw failure(401, "WORKBENCH_LOGIN_REQUIRED", "Sign in to continue");
+    return this.client.languagePreference(record.session.accessToken, language);
   }
 
   @Get("switch-tenant")

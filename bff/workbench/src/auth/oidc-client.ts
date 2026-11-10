@@ -107,6 +107,45 @@ export class WorkbenchOidcClient extends HttpOidcRpClient {
     });
   }
 
+  /**
+   * Read or update the account locale using the RP's server-held token.
+   * @param token - Validated session access token.
+   * @param language - Optional language-only mutation.
+   * @returns The central account preference projection.
+   * @throws When the identity service rejects or cannot complete the request.
+   */
+  async languagePreference(token: string, language?: string): Promise<unknown> {
+    const issuer =
+      this.runtime.oidc.backchannelIssuer ?? this.runtime.oidc.issuer;
+    const response = await fetch(
+      `${issuer}/oidc/${language ? "customer/language" : "userinfo"}`,
+      {
+        method: language ? "PATCH" : "GET",
+        redirect: "error",
+        signal: AbortSignal.timeout(5000),
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(language ? { "content-type": "application/json" } : {}),
+        },
+        ...(language ? { body: JSON.stringify({ language }) } : {}),
+      },
+    );
+    if (!response.ok)
+      throw failure(
+        response.status === 401 ? 401 : 503,
+        "WORKBENCH_PREFERENCE_UNAVAILABLE",
+        "Account preferences are unavailable",
+      );
+    const profile: unknown = await response.json();
+    if (!profile || typeof profile !== "object" || !("language" in profile))
+      throw failure(
+        503,
+        "WORKBENCH_PREFERENCE_UNAVAILABLE",
+        "Invalid account preference response",
+      );
+    return { language: profile.language };
+  }
+
   override async verifyIdToken(
     token: string,
     nonce?: string,
