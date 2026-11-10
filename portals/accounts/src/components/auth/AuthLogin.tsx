@@ -31,6 +31,7 @@
 
 "use client";
 import { useTranslations } from "next-intl";
+import { PasswordInput } from "../PasswordInput";
 import { AccountsHeader } from "../AccountsChrome";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { type Locale, type Theme } from "@vxture-platform/shared";
@@ -641,6 +642,7 @@ export function AuthField({
   disabled,
   onChange,
 }: Readonly<AuthFieldProps>) {
+  const FieldInput = type === "password" ? PasswordInput : Input;
   const inputId = `vx-auth-${name}`;
   const describedById = error || hint ? `${inputId}-desc` : undefined;
   return (
@@ -669,7 +671,7 @@ export function AuthField({
               )}
             </span>
           ) : null}
-          <Input
+          <FieldInput
             // 认证表单统一到 control-xl(40)：`Input` 基座是 control-md(32)，
             // 与同屏的 Tabs(36) / 提交按钮(40) 三个高度并存。
             className={cn(
@@ -677,6 +679,7 @@ export function AuthField({
               icon && "pl-xl",
               trailingAction && "pr-3xl",
             )}
+            {...(type === "password" ? { trailingAction } : {})}
             id={inputId}
             name={name}
             type={type}
@@ -692,7 +695,7 @@ export function AuthField({
             aria-invalid={Boolean(error)}
             aria-describedby={describedById}
           />
-          {trailingAction ? (
+          {trailingAction && type !== "password" ? (
             <span className="absolute right-2xs flex items-center">
               {trailingAction}
             </span>
@@ -1079,10 +1082,6 @@ export function AuthPasswordLoginPanel({
   identifierLabel ??= formText("email");
   passwordLabel ??= formText("password_2");
   passwordPlaceholder ??= formText("enter_your_password");
-  const [passwordVisible, setPasswordVisible] = useState(false);
-  const passwordVisibilityLabel = passwordVisible
-    ? formText("hide_password")
-    : formText("show_password");
 
   return (
     <AuthFlowForm
@@ -1107,7 +1106,7 @@ export function AuthPasswordLoginPanel({
             <AuthField
               label={passwordLabel}
               name={passwordName}
-              type={passwordVisible ? "text" : "password"}
+              type="password"
               placeholder={passwordPlaceholder}
               icon="lock"
               trailingAction={
@@ -1129,23 +1128,7 @@ export function AuthPasswordLoginPanel({
                       {formText("forgot_password")}
                     </a>
                   )
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-md"
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label={passwordVisibilityLabel}
-                    title={passwordVisibilityLabel}
-                    disabled={loading}
-                    onClick={() => setPasswordVisible((visible) => !visible)}
-                  >
-                    <Icon
-                      name={passwordVisible ? "eye" : "eye-slash"}
-                      size="sm"
-                    />
-                  </Button>
-                )
+                ) : undefined
               }
               value={password}
               error={errors?.password}

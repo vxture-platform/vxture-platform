@@ -31,6 +31,7 @@ import {
 } from "@vxture/design-system";
 import { AccountsHeader, AccountsFooter } from "./AccountsChrome";
 import type { AccountsMenuUser } from "./AccountsUserMenu";
+import { ACCOUNT_SESSION_EXPIRED } from "@/lib/account-session";
 
 // ============================================================================
 // Account-session boundary
@@ -120,10 +121,19 @@ export function AccountCenterShell({
       return;
     }
     leaving.current = true;
+    setAccountUser(null);
     setSession("expired");
     // Replace history so Back cannot restore a signed-out account screen.
     window.location.replace(WEBSITE_HOME);
   }, []);
+  useEffect(() => {
+    const handleExpiry = (event: Event) => {
+      if ((event as CustomEvent<unknown>).detail === realm) expire();
+    };
+    window.addEventListener(ACCOUNT_SESSION_EXPIRED, handleExpiry);
+    return () =>
+      window.removeEventListener(ACCOUNT_SESSION_EXPIRED, handleExpiry);
+  }, [realm, expire]);
   const beginCompletion = useCallback((): AccountCompletion => {
     completionPending.current = true;
     return {

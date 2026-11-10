@@ -1223,3 +1223,34 @@ label:has(+ input[required]):not(:has(.accounts-required))::after {
   display: grid;
   grid-template-columns: minmax(0, 1fr) calc(var(--vx-spacing) * 18.5);
 }
+
+/* Password controls share the same visibility affordance in every account flow. */
+.accounts-password-control {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.accounts-password-actions {
+  position: absolute;
+  inset-inline-end: var(--space-2xs);
+  inset-block: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+.accounts-password-control input.accounts-password-with-action {
+  padding-inline-end: calc(var(--vx-spacing) * 42);
+}
+@media (max-width: 480px) {
+  .accounts-auth-field:has(.accounts-password-with-action) {
+    margin-bottom: var(--space-xl);
+  }
+  .accounts-password-actions > :first-child:not(:last-child) {
+    position: absolute;
+    inset-inline-end: 0;
+    top: calc(100% + var(--space-2xs));
+    white-space: nowrap;
+  }
+}

@@ -6,7 +6,9 @@
  * @author AI-Generated
  * @date 2026-11-07
  */
+import { accountsFetch } from "@/lib/http";
 import { apiMessage } from "@/lib/api-message";
+import { AccountSessionError } from "@/lib/account-session";
 
 // ============================================================================
 // HTTP projections
@@ -184,11 +186,14 @@ export async function fetchCustomerSelf<K extends keyof CustomerProjections>(
   signal: AbortSignal,
 ): Promise<CustomerProjections[K]> {
   try {
-    const response = await fetch(`${API_BASE}/oidc/customer/self${resource}`, {
-      credentials: "include",
-      cache: "no-store",
-      signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
-    });
+    const response = await accountsFetch(
+      `${API_BASE}/oidc/customer/self${resource}`,
+      {
+        credentials: "include",
+        cache: "no-store",
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+      },
+    );
     if (response.status === 401) throw new CustomerReadError("unauthenticated");
     if (!response.ok) throw new CustomerReadError("unavailable");
     const data: unknown = await response.json();
@@ -218,11 +223,10 @@ export async function accountsRequest<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await accountsFetch(`${API_BASE}${path}`, {
       ...init,
       credentials: "include",
       cache: "no-store",
-      signal: init.signal ?? AbortSignal.timeout(15000),
       headers: {
         ...(init.body instanceof Blob
           ? {}
@@ -234,7 +238,15 @@ export async function accountsRequest<T>(
     if (init.signal?.aborted) throw error;
     throw new Error(apiMessage("error_5"));
   }
-  if (response.status === 401) throw new Error(apiMessage("error_54"));
+  if (response.status === 401) {
+    if (
+      path === "/oidc/customer/self" ||
+      path.startsWith("/oidc/customer/self/") ||
+      path === "/api/me/avatar"
+    )
+      throw new AccountSessionError("customer", apiMessage("error_54"));
+    throw new Error(apiMessage("error_54"));
+  }
   if (response.status === 429) throw new Error(apiMessage("error_55"));
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as {

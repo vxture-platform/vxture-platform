@@ -16,6 +16,8 @@
  */
 "use client";
 
+import { accountsFetch } from "@/lib/http";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Button } from "@vxture/design-system";
 import { AccountsNotice } from "./AuthChrome";
@@ -71,12 +73,12 @@ function resolveDestination(
 function resolveExit(
   clientId: string,
   relogin: string | null,
-): { href: string; label: string } | null {
+): { href: string; label: "return_home" | "sign_in_again" } | null {
   if (HOME_CLIENTS.has(clientId)) {
-    return { href: WEBSITE_HOME, label: "返回首页" };
+    return { href: WEBSITE_HOME, label: "return_home" };
   }
   const reloginUrl = safeReturnUrl(relogin);
-  return reloginUrl ? { href: reloginUrl, label: "重新登录" } : null;
+  return reloginUrl ? { href: reloginUrl, label: "sign_in_again" } : null;
 }
 
 export function PostLogout({
@@ -88,6 +90,7 @@ export function PostLogout({
   mode?: string;
   relogin?: string | null;
 }) {
+  const t = useTranslations("accountsForms");
   const [info, setInfo] = useState<ClientInfo | null>(null);
   const dest = resolveDestination(mode, relogin);
   const exit = resolveExit(clientId, relogin);
@@ -102,7 +105,7 @@ export function PostLogout({
   useEffect(() => {
     if (!clientId || dest) return;
     const url = `${OIDC_API_BASE}/oidc/client-info?client_id=${encodeURIComponent(clientId)}`;
-    fetch(url)
+    accountsFetch(url)
       .then((r) => (r.ok ? (r.json() as Promise<ClientInfo>) : null))
       .then(setInfo)
       .catch(() => setInfo(null));
@@ -115,7 +118,7 @@ export function PostLogout({
           className="size-icon-lg animate-spin rounded-full border-medium border-primary border-t-transparent"
           aria-hidden="true"
         />
-        <p className="text-body-md text-muted-foreground">正在跳转…</p>
+        <p className="text-body-md text-muted-foreground">{t("redirecting")}</p>
       </main>
     );
   }
@@ -128,7 +131,7 @@ export function PostLogout({
   return (
     <AccountsNotice
       tone="success"
-      title={`已从 ${title} 安全退出`}
+      title={t("signed_out_from", { app: title })}
       description={
         <>
           {info?.logoUrl ? (
@@ -140,14 +143,14 @@ export function PostLogout({
               alt={title}
             />
           ) : null}
-          你已登出当前应用及所有关联应用。
+          {t("signed_out_apps")}
         </>
       }
       /* 没有出口的确认屏是死胡同：告诉人"你登出了"，却不给一条回去的路。 */
       action={
         exit ? (
           <Button asChild size="lg">
-            <a href={exit.href}>{exit.label}</a>
+            <a href={exit.href}>{t(exit.label)}</a>
           </Button>
         ) : undefined
       }

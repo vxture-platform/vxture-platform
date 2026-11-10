@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
@@ -17,6 +18,7 @@ interface TotpQrCodeProps {
 }
 
 export function TotpQrCode({ value, size = 192 }: TotpQrCodeProps) {
+  const t = useTranslations("accountsForms");
   const [dataUrl, setDataUrl] = useState("");
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function TotpQrCode({ value, size = 192 }: TotpQrCodeProps) {
       // 白底二维码贴在卡面上，给一圈白色内衬 + 圆角，边缘才不会和卡面直接切开。
       className="mx-auto block rounded-lg bg-white p-sm"
       src={dataUrl}
-      alt="TOTP 二维码"
+      alt={t("totp_qr_code")}
       width={size}
       height={size}
     />

@@ -25,6 +25,7 @@ import {
   Skeleton,
   StatusBadge,
 } from "@vxture/design-system";
+import { PasswordInput } from "./PasswordInput";
 import { useSearchParams } from "next/navigation";
 import {
   AccountHeading,
@@ -491,7 +492,7 @@ function MfaCard({
             <FieldLabel htmlFor="mfa-current-password">
               {t("mfa.currentPassword")}
             </FieldLabel>
-            <Input
+            <PasswordInput
               id="mfa-current-password"
               required
               type="password"
@@ -675,7 +676,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             <FieldLabel htmlFor="operatoraccountcenter-password-current">
               {t("password.current")}
             </FieldLabel>
-            <Input
+            <PasswordInput
               id="operatoraccountcenter-password-current"
               required
               type="password"
@@ -688,7 +689,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             <FieldLabel htmlFor="operatoraccountcenter-password-new">
               {t("password.new")}
             </FieldLabel>
-            <Input
+            <PasswordInput
               id="operatoraccountcenter-password-new"
               required
               type="password"
@@ -701,7 +702,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
             <FieldLabel htmlFor="operatoraccountcenter-password-confirm">
               {t("password.confirm")}
             </FieldLabel>
-            <Input
+            <PasswordInput
               id="operatoraccountcenter-password-confirm"
               required
               type="password"

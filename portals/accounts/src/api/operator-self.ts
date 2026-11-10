@@ -7,7 +7,9 @@
  * central session cookie (vx_sid_op) is included; unauthenticated → 401 "请先登录".
  * Mirrors operator-webauthn.ts (same base, credentials:"include", 401 handling).
  */
+import { accountsFetch } from "@/lib/http";
 import { apiMessage } from "@/lib/api-message";
+import { AccountSessionError } from "@/lib/account-session";
 const OIDC_API_BASE =
   process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
 
@@ -23,9 +25,9 @@ export interface OperatorSelf {
 }
 
 /** A 401 from these endpoints means "no operator session" — callers show a login prompt. */
-export class OperatorUnauthenticatedError extends Error {
+export class OperatorUnauthenticatedError extends AccountSessionError {
   constructor() {
-    super("operator_unauthenticated");
+    super("workforce", "operator_unauthenticated");
     this.name = "OperatorUnauthenticatedError";
   }
 }
@@ -34,7 +36,7 @@ export class OperatorUnauthenticatedError extends Error {
 export async function fetchOperatorSelf(): Promise<OperatorSelf> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/operator/self`, {
       method: "GET",
       credentials: "include",
       cache: "no-store",
@@ -55,12 +57,15 @@ export async function startOperatorEmailChange(
 ): Promise<{ sentTo: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/email/start`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ newEmail }),
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/operator/self/email/start`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ newEmail }),
+      },
+    );
   } catch {
     throw new Error(apiMessage("error_36"));
   }
@@ -78,12 +83,15 @@ export async function verifyOperatorEmailChange(
 ): Promise<{ email: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/email/verify`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ code }),
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/operator/self/email/verify`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code }),
+      },
+    );
   } catch {
     throw new Error(apiMessage("error_36"));
   }
@@ -102,12 +110,15 @@ export async function startOperatorPhoneChange(
 ): Promise<{ sentTo: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/phone/start`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ newPhone }),
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/operator/self/phone/start`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ newPhone }),
+      },
+    );
   } catch {
     throw new Error(apiMessage("error_36"));
   }
@@ -126,12 +137,15 @@ export async function verifyOperatorPhoneChange(
 ): Promise<{ phone: string }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/phone/verify`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ newPhone, code }),
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/operator/self/phone/verify`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ newPhone, code }),
+      },
+    );
   } catch {
     throw new Error(apiMessage("error_36"));
   }
@@ -151,7 +165,7 @@ export async function changeOperatorPassword(
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/password`, {
+    res = await accountsFetch(`${OIDC_API_BASE}/oidc/operator/self/password`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
@@ -185,12 +199,15 @@ export async function startOperatorMfaTotp(
 }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/mfa/totp/start`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ currentPassword, currentCode }),
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/operator/self/mfa/totp/start`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currentPassword, currentCode }),
+      },
+    );
   } catch {
     throw new Error(apiMessage("error_36"));
   }
@@ -222,12 +239,15 @@ export async function confirmOperatorMfaTotp(
 ): Promise<{ recoveryCodes: string[] }> {
   let res: Response;
   try {
-    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/mfa/totp/confirm`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ code, enrollmentToken }),
-    });
+    res = await accountsFetch(
+      `${OIDC_API_BASE}/oidc/operator/self/mfa/totp/confirm`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code, enrollmentToken }),
+      },
+    );
   } catch {
     throw new Error(apiMessage("error_36"));
   }

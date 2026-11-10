@@ -9,7 +9,7 @@
 "use client";
 import { useTranslations } from "next-intl";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@vxture/design-system";
 import { accountsRequest } from "@/api/customer-self";
 import { fetchLoginContext, SessionExpiredError } from "@/api/oidc";
@@ -39,6 +39,8 @@ export function LoginEntry({
   readonly entryRealm: Realm;
 }) {
   const formText = useTranslations("accountsForms");
+  const latestText = useRef(formText);
+  latestText.current = formText;
   const [state, setState] = useState<State>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
   const [challenge, setChallenge] = useState(loginChallenge);
@@ -77,14 +79,15 @@ export function LoginEntry({
           message:
             error instanceof Error
               ? error.message
-              : formText("unable_to_load_sign_in_context"),
+              : latestText.current("unable_to_load_sign_in_context"),
           retryable: !(error instanceof SessionExpiredError),
         });
       });
     return () => {
       active = false;
     };
-  }, [challenge, entryRealm, retry, formText]);
+    // Translation changes must not unmount an active login or MFA ceremony.
+  }, [challenge, entryRealm, retry]);
 
   if (state.kind === "ready") {
     return (
