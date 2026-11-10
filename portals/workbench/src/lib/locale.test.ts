@@ -11,6 +11,7 @@ import {
   getGlobalUserPreferences,
   setGlobalLocalePreference,
   synchronizeGlobalLocale,
+  createLocalePreferenceTransport,
 } from "@vxture/platform-browser";
 import { dailyPresentation, parseHomeCopy } from "./presentation";
 import { translate } from "./messages";
@@ -64,9 +65,116 @@ function browser(
 }
 afterEach(() => vi.unstubAllGlobals());
 
+it("loads a newer account preference on another root domain without writing it back", async () => {
+  browser("NEXT_LOCALE=zh-CN", "https://ruyin.work/");
+  const changed = vi.fn();
+  const transport = {
+    read: vi.fn(async () => ({ language: "en-US" })),
+    write: vi.fn(async () => undefined),
+  };
+  const stop = synchronizeGlobalLocale("zh-CN", changed, transport);
+  await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith("en-US"));
+  expect(getGlobalUserPreferences().locale).toBe("en-US");
+  expect(transport.write).not.toHaveBeenCalled();
+  stop();
+});
+
+it("ignores a stale account read after an explicit language choice", async () => {
+  browser("NEXT_LOCALE=zh-CN");
+  let resolveRead!: (value: unknown) => void;
+  const read = new Promise<unknown>((resolve) => {
+    resolveRead = resolve;
+  });
+  const transport = { read: () => read, write: vi.fn(async () => undefined) };
+  const changed = vi.fn();
+  const stop = synchronizeGlobalLocale("zh-CN", changed, transport);
+  setGlobalLocalePreference("en-US");
+  resolveRead({ language: "zh-CN" });
+  await vi.waitFor(() => expect(transport.write).toHaveBeenCalledWith("en-US"));
+  expect(changed).toHaveBeenLastCalledWith("en-US");
+  stop();
+});
+
+it("serializes writes and preserves pending saves when the locale route remounts", async () => {
+  browser("NEXT_LOCALE=zh-CN");
+  let finish!: () => void;
+  const first = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const transport = {
+    read: vi.fn(async () => ({ language: "zh-CN" })),
+    write: vi
+      .fn()
+      .mockImplementationOnce(() => first)
+      .mockResolvedValue(undefined),
+  };
+  const stop = synchronizeGlobalLocale("zh-CN", vi.fn(), transport);
+  setGlobalLocalePreference("en-US");
+  setGlobalLocalePreference("zh-CN");
+  await vi.waitFor(() => expect(transport.write).toHaveBeenCalledTimes(1));
+  stop();
+  const reads = transport.read.mock.calls.length;
+  const stopAgain = synchronizeGlobalLocale("zh-CN", vi.fn(), transport);
+  expect(transport.read).toHaveBeenCalledTimes(reads);
+  finish();
+  await vi.waitFor(() => expect(transport.write).toHaveBeenCalledTimes(2));
+  expect(transport.write.mock.calls.map(([locale]) => locale)).toEqual([
+    "en-US",
+    "zh-CN",
+  ]);
+  stopAgain();
+});
+
+it("retains the local language when account reads fail or have no preference", async () => {
+  browser("NEXT_LOCALE=en-US");
+  const stop = synchronizeGlobalLocale("zh-CN", vi.fn(), {
+    read: async () => {
+      throw new Error("unauthenticated");
+    },
+    write: async () => undefined,
+  });
+  await Promise.resolve();
+  expect(getGlobalUserPreferences().locale).toBe("en-US");
+  stop();
+});
+
 it("uses the shared cookie ahead of an older portal-local preference", () => {
   browser();
   expect(getGlobalUserPreferences().locale).toBe("en-US");
+});
+
+it("uses credentialed bounded profile requests and sends only the chosen language", async () => {
+  const fetcher = vi.fn(
+    async () => new Response(JSON.stringify({ language: "en-US" })),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const transport = createLocalePreferenceTransport("/auth/language", "PATCH", {
+    "x-workbench-request": "1",
+  });
+  await transport.read();
+  await transport.write("en-US");
+  expect(fetcher).toHaveBeenNthCalledWith(
+    1,
+    "/auth/language",
+    expect.objectContaining({
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    }),
+  );
+  expect(fetcher).toHaveBeenNthCalledWith(
+    2,
+    "/auth/language",
+    expect.objectContaining({
+      method: "PATCH",
+      keepalive: true,
+      body: '{"language":"en-US"}',
+      headers: {
+        "x-workbench-request": "1",
+        "content-type": "application/json",
+      },
+    }),
+  );
 });
 
 it("removes legacy host cookies and writes the shared parent-domain preference", () => {

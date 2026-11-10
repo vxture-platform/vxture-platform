@@ -43,11 +43,13 @@ function build(realm: "customer" | "workforce") {
     isBlacklisted: vi.fn(async () => false),
   };
   const customers = {
+    updateProfile: vi.fn(async () => ({ language: "en-US" })),
     getUserById: vi.fn(async () => ({
       id: "identity",
       account: "Customer",
       name: "Customer",
       status: "active",
+      language: "zh-CN",
       email: "customer@example.test",
       emailVerified: true,
     })),
@@ -104,6 +106,47 @@ function build(realm: "customer" | "workforce") {
 // ============================================================================
 // Purpose, revocation and realm boundaries
 // ============================================================================
+describe("Customer language preferences", () => {
+  it("reads the current account language and persists only the authenticated identity", async () => {
+    const f = build("customer");
+    await expect(f.service.userinfo("access")).resolves.toHaveProperty(
+      "language",
+      "zh-CN",
+    );
+    await expect(
+      f.service.updateLanguage("access", { language: "en-US" }),
+    ).resolves.toEqual({ language: "en-US" });
+    expect(f.customers.updateProfile).toHaveBeenCalledWith("identity", {
+      language: "en-US",
+    });
+  });
+  it.each([
+    { language: "fr" },
+    { language: "en-US", userId: "other" },
+    null,
+    {},
+  ])("rejects invalid patches %j", async (patch) => {
+    const f = build("customer");
+    await expect(f.service.updateLanguage("access", patch)).rejects.toThrow(
+      "invalid_language",
+    );
+    expect(f.customers.updateProfile).not.toHaveBeenCalled();
+  });
+  it("rejects workforce tokens and revoked customer sessions", async () => {
+    const workforce = build("workforce");
+    await expect(
+      workforce.service.updateLanguage("access", { language: "en-US" }),
+    ).rejects.toThrow("invalid_token");
+    expect(workforce.customers.updateProfile).not.toHaveBeenCalled();
+    const customer = build("customer");
+    customer.redis.isBlacklisted.mockResolvedValue(true);
+    await expect(
+      customer.service.updateLanguage("access", { language: "en-US" }),
+    ).rejects.toThrow("invalid_token");
+    expect(customer.customers.updateProfile).not.toHaveBeenCalled();
+  });
+});
+
 describe.each(["customer", "workforce"] as const)("%s UserInfo", (realm) => {
   it("returns its own identity through a live session", async () => {
     const f = build(realm);

@@ -26,6 +26,7 @@ import {
   Inject,
   NotFoundException,
   Post,
+  Patch,
   Query,
   Req,
   Res,
@@ -263,6 +264,20 @@ export class OidcRouter {
       throw new UnauthorizedException("invalid_token");
     }
     return this.oidc.userinfo(token);
+  }
+
+  /** Save the account language using a live customer RP access token. */
+  @Patch("oidc/customer/language")
+  @Header("Cache-Control", "private, no-store")
+  async updateLanguage(
+    @Body() body: unknown,
+    @Headers("authorization") authorization?: string,
+  ) {
+    const token = authorization?.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : "";
+    if (!token) throw new UnauthorizedException("invalid_token");
+    return this.oidc.updateLanguage(token, body);
   }
 
   /** Authenticated revocation (RFC 7009); unknown/foreign tokens return 200. */
