@@ -300,3 +300,77 @@ describe("interactive prompt persistence", () => {
     },
   );
 });
+
+// ============================================================================
+// Interface language propagation is independent of identity realm and sessions.
+// ============================================================================
+it.each(["en-US", "zh-CN"])(
+  "persists supported OIDC ui_locales %s before interactive login",
+  async (locale) => {
+    const router = new OidcRouter(
+      {
+        authorize: vi.fn(async () => ({
+          kind: "login",
+          realm: "customer",
+          loginChallenge: "challenge",
+        })),
+      } as never,
+      {
+        platform: { LOGIN_UI_BASE_URL: "https://accounts.vxture.com" },
+      } as never,
+    );
+    const response = {
+      cookie: vi.fn(),
+      clearCookie: vi.fn(),
+      redirect: vi.fn(),
+    };
+    await router.authorize(
+      {
+        client_id: "work",
+        redirect_uri: "https://ruyin.work/auth/callback",
+        scope: "openid",
+        code_challenge: "challenge",
+        ui_locales: `unsupported ${locale}`,
+      },
+      { cookies: {}, hostname: "accounts.vxture.com", secure: true } as Request,
+      response as unknown as Response,
+    );
+    expect(response.cookie).toHaveBeenCalledWith(
+      "NEXT_LOCALE",
+      locale,
+      expect.objectContaining({
+        domain: ".vxture.com",
+        path: "/",
+        secure: true,
+      }),
+    );
+    expect(response.redirect).toHaveBeenCalledWith(
+      "https://accounts.vxture.com/login?login_challenge=challenge",
+    );
+  },
+);
+
+it("ignores unsupported OIDC ui_locales without changing language cookies", async () => {
+  const router = new OidcRouter(
+    {
+      authorize: vi.fn(async () => ({
+        kind: "redirect",
+        location: "https://app.example/callback",
+      })),
+    } as never,
+    {} as never,
+  );
+  const response = { cookie: vi.fn(), redirect: vi.fn() };
+  await router.authorize(
+    {
+      client_id: "work",
+      redirect_uri: "https://app.example/callback",
+      scope: "openid",
+      code_challenge: "challenge",
+      ui_locales: "unsupported",
+    },
+    { cookies: {} } as Request,
+    response as unknown as Response,
+  );
+  expect(response.cookie).not.toHaveBeenCalled();
+});

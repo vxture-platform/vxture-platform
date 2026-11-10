@@ -96,3 +96,25 @@ CREATE TABLE account.lifecycle_operations (
     CONSTRAINT chk_lifecycle_payload CHECK (jsonb_typeof(payload)='object' AND payload ? 'sessions' AND jsonb_typeof(payload->'sessions')='array')
 );
 CREATE INDEX idx_lifecycle_pending ON account.lifecycle_operations(next_attempt_at) WHERE status='pending';
+
+-- Portal activity uses server timestamps and deduplicates retried launch requests.
+CREATE TABLE account.user_app_launches (
+    user_id uuid NOT NULL REFERENCES account.users(id) ON DELETE CASCADE,
+    tenant_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    product_id uuid NOT NULL,
+    event_id uuid NOT NULL,
+    occurred_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT pk_user_app_launches PRIMARY KEY (user_id, tenant_id, workspace_id, event_id)
+);
+CREATE INDEX idx_user_app_launches_scope_product_time
+    ON account.user_app_launches (user_id, tenant_id, workspace_id, product_id, occurred_at DESC);
+
+CREATE TABLE account.user_app_views (
+    user_id uuid NOT NULL REFERENCES account.users(id) ON DELETE CASCADE,
+    tenant_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    view varchar(16) NOT NULL DEFAULT 'favorites',
+    CONSTRAINT pk_user_app_views PRIMARY KEY (user_id, tenant_id, workspace_id),
+    CONSTRAINT chk_user_app_views_view CHECK (view IN ('favorites', 'recent', 'frequent'))
+);

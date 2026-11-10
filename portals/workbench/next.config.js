@@ -7,11 +7,27 @@
  * @date 2026-11-05
  */
 
+import { fileURLToPath } from "node:url";
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  transpilePackages: ["@vxture/platform-workspace-ui"],
+  transpilePackages: [
+    "@vxture/platform-workspace-ui",
+    "@vxture/platform-browser",
+  ],
   output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
+  turbopack: {
+    resolveAlias: {
+      "@vxture/platform-browser": "../../packages/platform/browser/src",
+    },
+  },
+  webpack(config) {
+    config.resolve.alias["@vxture/platform-browser"] = fileURLToPath(
+      new URL("../../packages/platform/browser/src", import.meta.url),
+    );
+    return config;
+  },
   async rewrites() {
     const rules = [];
     // The dedicated Work RP must accept this portal's return origin and cookie.

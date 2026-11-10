@@ -734,3 +734,15 @@ DO $$ BEGIN
   ALTER TABLE account.user_product_favorites ADD CONSTRAINT fk_user_product_favorites_product
     FOREIGN KEY (product_id) REFERENCES product.products(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Account activity cross-schema ownership anchors.
+ALTER TABLE account.user_app_launches ADD CONSTRAINT fk_user_app_launches_tenant
+    FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id) ON DELETE CASCADE;
+ALTER TABLE account.user_app_launches ADD CONSTRAINT fk_user_app_launches_workspace
+    FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id) ON DELETE CASCADE;
+ALTER TABLE account.user_app_launches ADD CONSTRAINT fk_user_app_launches_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id) ON DELETE CASCADE;
+ALTER TABLE account.user_app_views ADD CONSTRAINT fk_user_app_views_tenant
+    FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id) ON DELETE CASCADE;
+ALTER TABLE account.user_app_views ADD CONSTRAINT fk_user_app_views_workspace
+    FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id) ON DELETE CASCADE;

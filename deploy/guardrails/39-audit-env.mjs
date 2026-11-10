@@ -595,6 +595,7 @@ const ENV_FILE_RULES = [
       "DATABASE_URL",
       "REPORTING_RO_DATABASE_URL",
       "WORKBENCH_INBOX_DATABASE_URL",
+      "WORKBENCH_ACTIVITY_DATABASE_URL",
       "REDIS_URL",
     ]),
     forbiddenKeys: new Set([
@@ -611,6 +612,7 @@ const ENV_FILE_RULES = [
       "OIDC_CLIENT_SECRET",
       "DATABASE_URL",
       "WORKBENCH_INBOX_DATABASE_URL",
+      "WORKBENCH_ACTIVITY_DATABASE_URL",
       "REDIS_URL",
     ]),
     placeholderOptionalKeys: new Set(["REPORTING_RO_DATABASE_URL"]),

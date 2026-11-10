@@ -8,6 +8,7 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { useWorkLocale } from "../../lib/locale";
 import { useState } from "react";
 import {
   useMediaQuery,
@@ -41,15 +42,16 @@ export function ScopeMenu({
   data: WorkData;
   runtime: WorkRuntime;
 }): React.JSX.Element {
+  const { locale, t } = useWorkLocale();
   const compactPanels = useMediaQuery("(max-width: 1024px)");
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const { scope } = data;
-  const copy = getTenantPanelCopy("zh-CN");
+  const copy = getTenantPanelCopy(locale);
   const external = (path: string): void => {
     setOpen(false);
     window.open(
-      buildConsoleEntry(data, runtime.consoleUrl, path),
+      buildConsoleEntry(data, runtime.consoleUrl, path, locale),
       "_blank",
       "noopener,noreferrer",
     );
@@ -101,7 +103,7 @@ export function ScopeMenu({
             className="work-scope-trigger"
             icon={scope.personal ? "user" : "buildings"}
             active={open}
-            ariaLabel="单位 / 工作空间"
+            ariaLabel={t("单位 / 工作空间")}
             label={
               <span className="flex min-w-0 items-baseline gap-xs">
                 <span className="work-scope-organization truncate">
@@ -118,7 +120,7 @@ export function ScopeMenu({
           align="start"
           collisionPadding={12}
           className="work-scope-panel"
-          aria-label="单位与工作空间"
+          aria-label={t("单位与工作空间")}
         >
           <TenantPanelOverview
             name={scope.name}
@@ -156,14 +158,14 @@ export function ScopeMenu({
                 align="end"
                 collisionPadding={12}
                 className="work-scope-panel"
-                aria-label="切换组织"
+                aria-label={t("切换组织")}
               >
                 {data.scopeOptions.status === "error" ? (
                   <p
                     role="status"
                     className="p-md text-body-sm text-muted-foreground"
                   >
-                    {data.scopeOptions.message}
+                    {t(data.scopeOptions.message)}
                   </p>
                 ) : (
                   <TenantScopePicker
@@ -182,7 +184,8 @@ export function ScopeMenu({
                     role="status"
                     className="p-md text-body-sm text-muted-foreground"
                   >
-                    工作空间列表：{data.workspaces.message}
+                    {t("工作空间列表：")}
+                    {t(data.workspaces.message)}
                   </p>
                 )}
               </ShellPanelContent>

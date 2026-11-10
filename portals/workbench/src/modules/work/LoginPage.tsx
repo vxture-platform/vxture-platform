@@ -8,6 +8,8 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { withLocalePreference } from "@vxture/platform-browser";
+import { useWorkLocale } from "../../lib/locale";
 import { Button, Icon } from "@vxture/design-system";
 import { SITE_FILINGS } from "@vxture-platform/shared";
 import type { WorkRuntime } from "../../lib/contracts";
@@ -205,8 +207,9 @@ export function LoginPage({
   retry: () => void;
   signIn: () => void;
 }): React.JSX.Element {
+  const { locale, t } = useWorkLocale();
   const failed = error !== null && error.code !== 401;
-  const website = new URL("/zh-CN", runtime.websiteUrl).href;
+  const website = new URL(`/${locale}`, runtime.websiteUrl).href;
   return (
     <>
       <LoginArtwork />
@@ -217,29 +220,29 @@ export function LoginPage({
         >
           <p className="work-login-kicker">EXPERTISE, CONNECTED</p>
           <h1 id="login-story-title">
-            汇聚专业智能体
+            {t("汇聚专业智能体")}
             <br />
-            <span>贯通云端与桌面</span>
+            <span>{t("贯通云端与桌面")}</span>
           </h1>
           <p className="work-login-description">
-            连接业务应用与团队知识，
+            {t("连接业务应用与团队知识，")}
             <br />
-            让工作在不同终端之间自然延续
+            {t("让工作在不同终端之间自然延续")}
           </p>
           <p className="work-login-capabilities">
             <Icon name="sparkles" size="sm" />
-            <span>知识复用</span>
+            <span>{t("知识复用")}</span>
             <span aria-hidden="true">·</span>
-            <span>团队协作</span>
+            <span>{t("团队协作")}</span>
             <span aria-hidden="true">·</span>
-            <span>多端同步</span>
+            <span>{t("多端同步")}</span>
           </p>
         </section>
         <section className="work-login-panel" aria-labelledby="login-title">
           <div className="work-login-heading">
             <p className="work-login-eyebrow">WELCOME TO RUYIN WORK</p>
             <h2 id="login-title">
-              {failed ? "工作空间暂不可用" : "登录你的工作空间"}
+              {failed ? t("工作空间暂不可用") : t("登录你的工作空间")}
             </h2>
           </div>
           <div className="work-login-actions">
@@ -248,15 +251,15 @@ export function LoginPage({
                 <Icon name="user" size="lg" />
               </span>
               <div>
-                <strong>全局统一账号</strong>
-                <p>账号、单位与工作空间，一处连接</p>
+                <strong>{t("全局统一账号")}</strong>
+                <p>{t("账号、单位与工作空间，一处连接")}</p>
               </div>
             </div>
             {(!runtime.authConfigured || failed) && (
               <p role="status" className="work-login-error">
                 {!runtime.authConfigured
-                  ? "登录服务暂不可用，请稍后再试"
-                  : error?.message}
+                  ? t("登录服务暂不可用，请稍后再试")
+                  : error && t(error.message)}
               </p>
             )}
             <Button
@@ -264,13 +267,13 @@ export function LoginPage({
               disabled={!runtime.authConfigured}
               onClick={failed ? retry : signIn}
             >
-              {failed ? "重新连接" : "继续登录"}
+              {failed ? t("重新连接") : t("继续登录")}
               <Icon name="arrow-right" size="sm" />
             </Button>
           </div>
           <p className="work-login-security">
             <Icon name="shield" size="sm" />
-            使用平台账号安全登录
+            {t("使用平台账号安全登录")}
           </p>
         </section>
       </main>
@@ -280,31 +283,31 @@ export function LoginPage({
             © {new Date().getFullYear()} VXTURE{" "}
             <span aria-hidden="true">|</span> RUYIN
           </span>
-          <nav aria-label="法律信息">
+          <nav aria-label={t("法律信息")}>
             <a
-              href={`${website}/legal/terms`}
+              href={withLocalePreference(`${website}/legal/terms`, locale)}
               target="_blank"
               rel="noopener noreferrer"
             >
-              服务条款
+              {t("服务条款")}
             </a>
             <a
-              href={`${website}/legal/privacy`}
+              href={withLocalePreference(`${website}/legal/privacy`, locale)}
               target="_blank"
               rel="noopener noreferrer"
             >
-              隐私政策
+              {t("隐私政策")}
             </a>
             <a
-              href={`${website}/legal/copyright`}
+              href={withLocalePreference(`${website}/legal/copyright`, locale)}
               target="_blank"
               rel="noopener noreferrer"
             >
-              版权声明
+              {t("版权声明")}
             </a>
           </nav>
         </div>
-        <nav aria-label="网站备案">
+        <nav aria-label={t("网站备案")}>
           {SITE_FILINGS.map((filing) => (
             <a
               key={filing.link}

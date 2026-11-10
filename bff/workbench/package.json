@@ -17,10 +17,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@vxture-platform/shared": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.1.28",
     "@nestjs/platform-express": "^11.0.0",
     "@vxture/core-oidc-rp": "workspace:*",
+    "@vxture/service-account": "workspace:*",
     "@vxture/service-organization": "workspace:*",
     "@vxture/service-billing": "workspace:*",
     "@vxture/service-subscription": "workspace:*",

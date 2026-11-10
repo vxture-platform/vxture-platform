@@ -308,11 +308,15 @@ export function ConsoleHeader({
               className="px-sm text-label-sm"
             >
               <a
-                href={buildWorkbenchEntry({
-                  userId: user.id,
-                  tenantId: session.tenant.id,
-                  workspaceId: activeWorkspaceId,
-                })}
+                href={buildWorkbenchEntry(
+                  {
+                    userId: user.id,
+                    tenantId: session.tenant.id,
+                    workspaceId: activeWorkspaceId,
+                  },
+                  undefined,
+                  locale,
+                )}
                 target="_blank"
                 rel="noopener noreferrer"
                 title={t("openBusinessWorkbench")}

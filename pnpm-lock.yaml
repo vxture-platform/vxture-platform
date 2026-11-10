@@ -708,6 +708,9 @@ importers:
 
   bff/workbench:
     dependencies:
+      '@vxture-platform/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared/shared
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -720,6 +723,9 @@ importers:
       '@vxture/core-oidc-rp':
         specifier: workspace:*
         version: link:../../packages/core/oidc-rp
+      '@vxture/service-account':
+        specifier: workspace:*
+        version: link:../../services/identity/account
       '@vxture/service-billing':
         specifier: workspace:*
         version: link:../../services/commerce/billing
@@ -1577,6 +1583,9 @@ importers:
       '@vxture/design-system':
         specifier: 12.17.0
         version: 12.17.0(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
+      '@vxture/platform-browser':
+        specifier: workspace:*
+        version: link:../../packages/platform/browser
       '@vxture/platform-workspace-ui':
         specifier: workspace:*
         version: link:../../packages/platform/workspace-ui

@@ -262,3 +262,14 @@ describe("portal entry", () => {
     expect(pending.size).toBe(0);
   });
 });
+
+it("forwards cross-origin language preference to Accounts without changing scope", async () => {
+  await begin("&ui_locales=en-US", "NEXT_LOCALE=zh-CN");
+  expect(client.buildAuthorizeUrl).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      uiLocales: "en-US",
+      tenantHint: ORG,
+      workspaceHint: WORKSPACE,
+    }),
+  );
+});

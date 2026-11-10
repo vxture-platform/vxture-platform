@@ -1283,10 +1283,81 @@ body {
   max-width: var(--container-overlay-sm);
 }
 
-/* In the narrow three-column band, protect product names from badge compression. */
-@media (min-width: 901px) and (max-width: 1200px) {
-  .work-card-badges {
-    flex-direction: column;
-    align-items: flex-end;
+/* Keep home actions in the title region and match the catalog control height. */
+.work-common-heading {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.work-home-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+.work-home-sort {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.work-home-sort:disabled {
+  opacity: 0.5;
+}
+.work-all-apps {
+  height: var(--space-control-md);
+  min-height: var(--space-control-md);
+  gap: var(--space-xs);
+}
+/* The favorite action follows the badges on the same row, including narrow cards. */
+.work-card-badges {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.work-card-favorite {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  width: var(--space-control-md);
+  height: var(--space-control-md);
+  padding: 0;
+  color: var(--muted-foreground);
+}
+.work-card-favorite[aria-pressed="true"] {
+  color: var(--primary-text);
+}
+.work-card-favorite[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+/* Both routes reserve the same control region so their first card row stays aligned. */
+.work-common-heading,
+.work-catalog-toolbar {
+  box-sizing: border-box;
+  min-height: calc(var(--space-control-md) * 2 + var(--space-md));
+  padding: 0 0 var(--space-md);
+  align-content: center;
+  border-bottom: var(--border-width-thin) solid transparent;
+}
+.work-catalog-toolbar {
+  border-bottom-color: var(--border);
+}
+.work-common-heading {
+  margin-bottom: var(--space-lg);
+}
+@media (max-width: 1200px) {
+  .work-common-heading,
+  .work-catalog-toolbar {
+    min-height: calc(var(--space-control-md) * 3 + var(--space-sm));
+  }
+}
+@media (max-width: 620px) {
+  .work-common-heading,
+  .work-catalog-toolbar {
+    min-height: calc(var(--space-control-md) * 4);
+  }
+  .work-common-heading {
+    margin-bottom: var(--space-md);
   }
 }

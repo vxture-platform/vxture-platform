@@ -8,13 +8,16 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { withLocalePreference } from "@vxture/platform-browser";
+import { useWorkLocale } from "../../lib/locale";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button, Drawer, Icon } from "@vxture/design-system";
+import { Button, Drawer, Icon, SegmentedControl } from "@vxture/design-system";
 import { loadWorkData } from "../../lib/api";
 import { authNavigation } from "../../lib/navigation";
 import type {
+  AppView,
   LoadResult,
   WorkApp,
   WorkData,
@@ -24,6 +27,7 @@ import type { HomeCopy } from "../../lib/presentation";
 import {
   appVersion,
   homeApps,
+  sortApps,
   RELEASE_LABELS,
   TIER_LABELS,
 } from "../../lib/presentation";
@@ -32,6 +36,7 @@ import { WorkHeader } from "./WorkHeader";
 import { TitleRegion } from "./TitleRegion";
 import { AppCard, AppCatalog } from "./AppCatalog";
 import { LoginPage } from "./LoginPage";
+import { useAppActivity } from "./use-app-activity";
 import { NotificationDrawer } from "./NotificationDrawer";
 
 // ============================================================================
@@ -51,6 +56,7 @@ export function WorkPortal({
   copy: HomeCopy;
   initialTime: string;
 }): React.JSX.Element | null {
+  const { locale, t } = useWorkLocale();
   const pathname = usePathname();
   const appsPage = pathname === "/apps";
   const knownRoute = pathname === "/" || appsPage;
@@ -142,7 +148,10 @@ export function WorkPortal({
               // Storage is optional; authorization remains server-bound.
             }
             window.location.replace(
-              authNavigation("login", window.location.href, { prompt: "none" }),
+              authNavigation("login", window.location.href, {
+                prompt: "none",
+                ui_locales: document.documentElement.lang,
+              }),
             );
             return;
           }
@@ -214,9 +223,17 @@ export function WorkPortal({
   const data = result?.status === "ready" ? result.data : null;
   const checking = runtime.authConfigured && result === null;
   const catalog = data?.catalog;
-  const common = catalog?.status === "ready" ? homeApps(catalog.data) : [];
+  const activity = useAppActivity(data);
+  const common = homeApps(activity.apps, activity.view, copy.appLimit);
+  const appActions = {
+    onFavorite: activity.favorite,
+    onLaunch: activity.launch,
+    favoritesEnabled: activity.enabled,
+  };
   const signIn = (): void => {
-    window.location.assign(authNavigation("login", location.href));
+    window.location.assign(
+      authNavigation("login", location.href, { ui_locales: locale }),
+    );
   };
   const retry = (): void => setRevision((value) => value + 1);
 
@@ -231,7 +248,7 @@ export function WorkPortal({
       className={`work-shell ${!data && !checking ? "work-shell-public" : ""}`}
     >
       <a className="work-skip" href="#main">
-        跳到主要内容
+        {t("跳到主要内容")}
       </a>
       <WorkHeader
         data={data}
@@ -258,7 +275,7 @@ export function WorkPortal({
             <div className="work-loading" role="status">
               <span className="work-loading-line" />
               <span className="work-loading-title" />
-              <p>正在载入工作空间…</p>
+              <p>{t("正在载入工作空间…")}</p>
               <div className="work-app-grid">
                 {[0, 1, 2].map((item) => (
                   <div key={item} className="work-card-skeleton" />
@@ -276,22 +293,37 @@ export function WorkPortal({
                 />
                 {data.availabilityIssue && (
                   <div role="status" className="work-status">
-                    应用可用状态暂无法确认：{data.availabilityIssue}
+                    {t("应用可用状态暂无法确认：")}
+                    {t(data.availabilityIssue)}
                     <Button size="sm" variant="ghost" onClick={retry}>
-                      重试
+                      {t("重试")}
+                    </Button>
+                  </div>
+                )}
+                {activity.message && (
+                  <p className="work-status" role="status">
+                    {t(activity.message)}
+                  </p>
+                )}
+                {appsPage && activity.result?.status === "error" && (
+                  <div className="work-status" role="status">
+                    {t("收藏和使用记录暂不可用")}
+                    <Button variant="ghost" size="sm" onClick={activity.retry}>
+                      {t("重试")}
                     </Button>
                   </div>
                 )}
                 {catalog?.status === "error" ? (
                   <div role="alert" className="work-empty">
-                    <p>{catalog.message}</p>
+                    <p>{t(catalog.message)}</p>
                     <Button size="sm" variant="secondary" onClick={retry}>
-                      重新加载
+                      {t("重新加载")}
                     </Button>
                   </div>
                 ) : appsPage ? (
                   <AppCatalog
-                    apps={catalog?.status === "ready" ? catalog.data : []}
+                    {...appActions}
+                    apps={sortApps(activity.apps, activity.view)}
                     onOverview={showOverview}
                   />
                 ) : (
@@ -300,22 +332,95 @@ export function WorkPortal({
                       aria-labelledby="common-apps"
                       className="work-common-apps"
                     >
-                      <div className="work-section-heading">
+                      <div className="work-section-heading work-common-heading">
                         <div>
-                          <h2 id="common-apps">常用应用</h2>
-                          <p>专业能力，随时进入</p>
+                          <h2 id="common-apps">{t("常用应用")}</h2>
+                          <p>{t("专业能力，随时进入")}</p>
                         </div>
-                        <Link className="work-section-link" href="/apps">
-                          全部应用
-                          <Icon name="arrow-right" size="sm" />
-                        </Link>
+                        <div className="work-home-actions">
+                          <fieldset
+                            className="work-availability work-home-sort"
+                            disabled={!activity.enabled}
+                            onKeyDown={(event) => {
+                              const views: AppView[] = [
+                                "favorites",
+                                "recent",
+                                "frequent",
+                              ];
+                              if (
+                                ![
+                                  "ArrowLeft",
+                                  "ArrowRight",
+                                  "Home",
+                                  "End",
+                                ].includes(event.key) ||
+                                !activity.enabled
+                              )
+                                return;
+                              event.preventDefault();
+                              const current = views.indexOf(activity.view);
+                              const index =
+                                event.key === "Home"
+                                  ? 0
+                                  : event.key === "End"
+                                    ? 2
+                                    : (current +
+                                        (event.key === "ArrowRight" ? 1 : 2)) %
+                                      3;
+                              activity.changeView(views[index]!);
+                              event.currentTarget
+                                .querySelectorAll<HTMLButtonElement>(
+                                  '[role="radio"]',
+                                )
+                                [index]?.focus();
+                            }}
+                          >
+                            <SegmentedControl<AppView>
+                              ariaLabel={t("常用应用排序")}
+                              value={activity.view}
+                              items={[
+                                { value: "favorites", label: t("收藏") },
+                                { value: "recent", label: t("最近") },
+                                { value: "frequent", label: t("最多") },
+                              ]}
+                              onChange={activity.changeView}
+                            />
+                          </fieldset>
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="work-all-apps"
+                          >
+                            <Link href="/apps">
+                              {t("全部应用")}
+                              <Icon name="arrow-right" size="sm" />
+                            </Link>
+                          </Button>
+                        </div>
                       </div>
-                      {common.length ? (
+                      {activity.result?.status === "error" ? (
+                        <div className="work-empty" role="status">
+                          <p>{t("收藏和使用记录暂不可用")}</p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={activity.retry}
+                          >
+                            {t("重新加载")}
+                          </Button>
+                        </div>
+                      ) : !activity.result ? (
+                        <div className="work-empty" role="status">
+                          {t("正在载入应用记录…")}
+                        </div>
+                      ) : common.length ? (
                         <div className="work-app-grid">
                           {common.map((app) => (
                             <AppCard
                               key={app.code}
                               app={app}
+                              {...appActions}
                               onOverview={showOverview}
                             />
                           ))}
@@ -323,13 +428,17 @@ export function WorkPortal({
                       ) : (
                         <div className="work-empty">
                           <p className="text-body-md text-muted-foreground">
-                            尚未订阅应用
+                            {activity.apps.length === 0
+                              ? t("尚未订阅应用")
+                              : activity.view === "recent"
+                                ? t("还没有使用记录")
+                                : t("近 30 天还没有使用记录")}
                           </p>
                           <Link
                             href="/apps"
                             className="text-body-sm text-primary"
                           >
-                            浏览应用中心
+                            {t("浏览应用中心")}
                           </Link>
                         </div>
                       )}
@@ -338,25 +447,25 @@ export function WorkPortal({
                       {[
                         {
                           title: "继续工作",
-                          description: "从上次停下的地方，接着推进",
+                          description: t("从上次停下的地方，接着推进"),
                         },
                         {
                           title: "与我协作",
-                          description: "让协同有序，让进展清晰",
+                          description: t("让协同有序，让进展清晰"),
                         },
                       ].map((section) => (
-                        <section key={section.title}>
+                        <section key={t(section.title)}>
                           <div className="work-section-heading">
                             <div>
-                              <h2>{section.title}</h2>
-                              <p>{section.description}</p>
+                              <h2>{t(section.title)}</h2>
+                              <p>{t(section.description)}</p>
                             </div>
                           </div>
                           <div className="work-task-panel">
                             <div className="work-panel-heading">
                               {section.title === "继续工作"
-                                ? "工作事项"
-                                : "协作事项"}
+                                ? t("工作事项")
+                                : t("协作事项")}
                             </div>
                             <div className="work-task-empty">
                               <span className="work-empty-glyph">
@@ -369,8 +478,8 @@ export function WorkPortal({
                                   size="lg"
                                 />
                               </span>
-                              <h3 role="status">工作记录正在接通中…</h3>
-                              <p>工作事项暂不可用，可从应用中继续处理</p>
+                              <h3 role="status">{t("工作记录正在接通中…")}</h3>
+                              <p>{t("工作事项暂不可用，可从应用中继续处理")}</p>
                             </div>
                           </div>
                         </section>
@@ -378,24 +487,26 @@ export function WorkPortal({
                     </div>
                     <aside
                       className="work-desktop-callout"
-                      aria-label="桌面工作环境"
+                      aria-label={t("桌面工作环境")}
                     >
                       <span className="work-desktop-glyph">
                         <Icon name="desktop" size="lg" />
                       </span>
                       <div>
-                        <h2>本地资料，也能接着用</h2>
-                        <p>通过 RUYIN 桌面端，连接你的本地工作环境</p>
+                        <h2>{t("本地资料，也能接着用")}</h2>
+                        <p>{t("通过 RUYIN 桌面端，连接你的本地工作环境")}</p>
                       </div>
                       <a
                         className="work-section-link"
-                        href={
-                          new URL("/zh-CN/workbench", runtime.websiteUrl).href
-                        }
+                        href={withLocalePreference(
+                          new URL(`/${locale}/workbench`, runtime.websiteUrl)
+                            .href,
+                          locale,
+                        )}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        了解桌面端
+                        {t("了解桌面端")}
                         <Icon name="external-link" size="sm" />
                       </a>
                     </aside>
@@ -404,14 +515,14 @@ export function WorkPortal({
                 {appsPage && (
                   <aside
                     className="work-desktop-callout"
-                    aria-label="订阅更多产品"
+                    aria-label={t("订阅更多产品")}
                   >
                     <span className="work-desktop-glyph">
                       <Icon name="sparkles" size="lg" />
                     </span>
                     <div>
-                      <h2>拓展所长，开启更多可能</h2>
-                      <p>探索更多专业智能体与产品，为业务增添新的能力</p>
+                      <h2>{t("拓展所长，开启更多可能")}</h2>
+                      <p>{t("探索更多专业智能体与产品，为业务增添新的能力")}</p>
                     </div>
                     <a
                       className="work-section-link"
@@ -419,11 +530,12 @@ export function WorkPortal({
                         data,
                         runtime.consoleUrl,
                         "subscription",
+                        locale,
                       )}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      订阅更多产品
+                      {t("订阅更多产品")}
                       <Icon name="arrow-right" size="sm" />
                     </a>
                   </aside>
@@ -438,11 +550,14 @@ export function WorkPortal({
                 {data?.scope.name ?? "Ruyin Work"}
               </span>
               <a
-                href={runtime.websiteUrl}
+                href={withLocalePreference(
+                  new URL(`/${locale}`, runtime.websiteUrl).href,
+                  locale,
+                )}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                VXTURE 官网
+                {t("VXTURE 官网")}
                 <Icon name="external-link" size="sm" />
               </a>
             </footer>
@@ -464,40 +579,45 @@ export function WorkPortal({
         open={detailsOpen}
         onClose={closeDetails}
         width="sm"
-        title={overview?.name ?? "使用帮助"}
+        title={overview?.name ?? t("使用帮助")}
         description={
           overview
-            ? `${overview.brand ? `${overview.brand} · ` : ""}应用概要`
+            ? t("{0}应用概要", overview.brand ? `${overview.brand} · ` : "")
             : undefined
         }
-        closeLabel="关闭详情"
+        closeLabel={t("关闭详情")}
         className="work-detail-drawer"
         footer={
           overview ? (
             <>
               <Button variant="ghost" asChild>
                 <a
-                  href={
+                  href={withLocalePreference(
                     new URL(
-                      `/zh-CN/products/${encodeURIComponent(overview.code)}`,
+                      `/${locale}/products/${encodeURIComponent(overview.code)}`,
                       runtime.websiteUrl,
-                    ).href
-                  }
+                    ).href,
+                    locale,
+                  )}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  产品介绍
+                  {t("产品介绍")}
                   <Icon name="external-link" size="sm" />
                 </a>
               </Button>
               {overview.available && overview.href && (
                 <Button asChild className="work-action">
                   <a
+                    onClick={() => activity.launch(overview)}
+                    onAuxClick={(event) => {
+                      if (event.button === 1) activity.launch(overview);
+                    }}
                     href={overview.href}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    进入
+                    {t("进入")}
                   </a>
                 </Button>
               )}
@@ -505,11 +625,14 @@ export function WorkPortal({
           ) : (
             <Button asChild variant="secondary">
               <a
-                href={runtime.websiteUrl}
+                href={withLocalePreference(
+                  new URL(`/${locale}`, runtime.websiteUrl).href,
+                  locale,
+                )}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                访问 VXTURE 官网
+                {t("访问 VXTURE 官网")}
               </a>
             </Button>
           )
@@ -518,27 +641,27 @@ export function WorkPortal({
         {overview ? (
           <div className="work-detail-body">
             <p className="text-body-md text-muted-foreground">
-              {overview.description || "产品介绍暂未提供"}
+              {overview.description || t("产品介绍暂未提供")}
             </p>
             <dl className="work-detail-facts">
               <div>
-                <dt>版本</dt>
+                <dt>{t("版本")}</dt>
                 <dd>{appVersion(overview.version)}</dd>
               </div>
               {RELEASE_LABELS[overview.stage] && (
                 <div>
-                  <dt>版本类型</dt>
-                  <dd>{RELEASE_LABELS[overview.stage]}</dd>
+                  <dt>{t("版本类型")}</dt>
+                  <dd>{t(RELEASE_LABELS[overview.stage]!)}</dd>
                 </div>
               )}
               <div>
-                <dt>使用状态</dt>
-                <dd>{overview.availabilityLabel}</dd>
+                <dt>{t("使用状态")}</dt>
+                <dd>{t(overview.availabilityLabel)}</dd>
               </div>
               {overview.tier && (
                 <div>
-                  <dt>套餐</dt>
-                  <dd>{TIER_LABELS[overview.tier] ?? overview.tier}</dd>
+                  <dt>{t("套餐")}</dt>
+                  <dd>{t(TIER_LABELS[overview.tier] ?? overview.tier)}</dd>
                 </div>
               )}
             </dl>
@@ -546,10 +669,12 @@ export function WorkPortal({
         ) : (
           <div className="flex flex-col gap-lg">
             <p className="text-body-md text-muted-foreground">
-              选择应用卡片查看产品概要，点击“进入”直接开始工作。
+              {t("选择应用卡片查看产品概要，点击“进入”直接开始工作。")}
             </p>
             <p className="text-body-md text-muted-foreground">
-              在顶部单位面板切换组织或工作空间，账号与账务信息可在管理控制台查看。
+              {t(
+                "在顶部单位面板切换组织或工作空间，账号与账务信息可在管理控制台查看。",
+              )}
             </p>
           </div>
         )}

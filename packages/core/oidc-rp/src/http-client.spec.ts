@@ -74,6 +74,7 @@ describe("HttpOidcRpClient.buildAuthorizeUrl", () => {
         nonce: "nc",
         codeChallenge: "ch",
         prompt: "none",
+        uiLocales: "en-US",
         tenantHint: "tn1",
       }),
     );
@@ -82,6 +83,7 @@ describe("HttpOidcRpClient.buildAuthorizeUrl", () => {
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("scope")).toBe("openid profile console");
     expect(url.searchParams.get("prompt")).toBe("none");
+    expect(url.searchParams.get("ui_locales")).toBe("en-US");
     expect(url.searchParams.get("tenant_hint")).toBe("tn1");
   });
 

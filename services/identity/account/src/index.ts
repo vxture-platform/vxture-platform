@@ -105,3 +105,13 @@ export {
   CustomerMfaRepository,
   type CustomerFactor,
 } from "./repository/customer-mfa.repository";
+
+// ============================================================================
+// Portal application activity
+// ============================================================================
+export { AppActivityService } from "./favorites/app-activity.service";
+export type {
+  AppView,
+  AppActivityScope,
+  AppUsage,
+} from "./favorites/app-activity.service";

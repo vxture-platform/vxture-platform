@@ -15,6 +15,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { LocaleSync } from "@/components/LocaleSync";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { routing } from "@/lib/i18n/routing";
@@ -52,6 +53,7 @@ export default async function LocaleLayout({ children, params }: Props) {
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
+      <LocaleSync />
       <AuthSessionBootstrap />
       <Notifications />
       {children}

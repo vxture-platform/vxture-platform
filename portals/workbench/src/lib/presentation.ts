@@ -6,12 +6,19 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
-import { civilDateInZone, formatDay } from "@vxture-platform/shared";
+import {
+  civilDateInZone,
+  formatDay,
+  DEFAULT_LOCALE,
+  type Locale,
+} from "@vxture-platform/shared";
+import { translate } from "./messages";
 import type { WorkApp } from "./contracts";
 
 export interface HomeCopy {
   titles: readonly string[];
   fallback: string;
+  appLimit?: number;
 }
 export type Category = "all" | "agent" | "platform";
 const FALLBACK = "从容起步，稳步向前";
@@ -44,7 +51,11 @@ export function parseHomeCopy(input: unknown): HomeCopy {
   const titles = Array.isArray(object.titles)
     ? object.titles.map(clean).filter(Boolean)
     : [];
-  return { titles, fallback: clean(object.fallback) || FALLBACK };
+  const appLimit =
+    Number.isSafeInteger(object.appLimit) && Number(object.appLimit) > 0
+      ? Number(object.appLimit)
+      : 3;
+  return { titles, fallback: clean(object.fallback) || FALLBACK, appLimit };
 }
 
 /**
@@ -56,6 +67,7 @@ export function parseHomeCopy(input: unknown): HomeCopy {
 export function dailyPresentation(
   now: Date,
   copy: HomeCopy,
+  locale: Locale = DEFAULT_LOCALE,
 ): { title: string; date: string; weekday: string; greeting: string } {
   const { year, month, day } = civilDateInZone(now, WORKBENCH_TIME_ZONE);
   const calendarDay = Date.UTC(year, month - 1, day);
@@ -63,15 +75,20 @@ export function dailyPresentation(
   // The workbench calendar is explicitly Shanghai, which uses UTC+08:00.
   const hour = (now.getUTCHours() + 8) % 24;
   return {
-    title: copy.titles[dayIndex % copy.titles.length] ?? copy.fallback,
-    date: formatDay(now, "zh-CN", "—", { timeZone: WORKBENCH_TIME_ZONE }),
-    weekday: WEEKDAYS[new Date(calendarDay).getUTCDay()]!,
-    greeting:
+    title: translate(
+      locale,
+      copy.titles[dayIndex % copy.titles.length] ?? copy.fallback,
+    ),
+    date: formatDay(now, locale, "—", { timeZone: WORKBENCH_TIME_ZONE }),
+    weekday: translate(locale, WEEKDAYS[new Date(calendarDay).getUTCDay()]!),
+    greeting: translate(
+      locale,
       hour < 12 && hour >= 5
         ? "早上好"
         : hour < 18 && hour >= 12
           ? "下午好"
           : "晚上好",
+    ),
   };
 }
 
@@ -110,18 +127,45 @@ export function filterApps(
 }
 
 /**
- * Select up to three subscribed applications without filling with public products.
- * @param apps - Current-workspace subscribed applications in registry order.
- * @returns User favorites first, then available subscribed products, capped at three.
+ * Prioritize availability, then apply the persisted application order.
+ * @param apps - Current-workspace subscribed applications with server activity.
+ * @param view - Shared favorite priority, recent launches or thirty-day frequency.
+ * @returns Every application in availability groups, each ranked by the selected preference.
  */
-export function homeApps(apps: readonly WorkApp[]): WorkApp[] {
-  return apps
-    .toSorted(
-      (left, right) =>
-        Number(Boolean(right.favorite)) - Number(Boolean(left.favorite)) ||
-        Number(right.available) - Number(left.available),
-    )
-    .slice(0, 3);
+export function sortApps(
+  apps: readonly WorkApp[],
+  view: "favorites" | "recent" | "frequent" = "favorites",
+): WorkApp[] {
+  const lastUsed = (app: WorkApp): number =>
+    app.lastUsedAt ? Date.parse(app.lastUsedAt) || 0 : 0;
+  return apps.toSorted(
+    (left, right) =>
+      Number(right.available) - Number(left.available) ||
+      (view === "favorites"
+        ? Number(Boolean(right.favorite)) - Number(Boolean(left.favorite))
+        : 0) ||
+      (view !== "recent"
+        ? (right.launches30d ?? 0) - (left.launches30d ?? 0)
+        : 0) ||
+      lastUsed(right) - lastUsed(left) ||
+      left.code.localeCompare(right.code),
+  );
+}
+
+/**
+ * Select the configured number of applications from the full catalog order.
+ * @param apps - Current-workspace subscribed applications with server activity.
+ * @param view - Shared portal sort preference.
+ * @param limit - Positive configured home count; invalid values use three.
+ * @returns The leading subscribed products in the selected global order.
+ */
+export function homeApps(
+  apps: readonly WorkApp[],
+  view: "favorites" | "recent" | "frequent" = "favorites",
+  limit = 3,
+): WorkApp[] {
+  const count = Number.isSafeInteger(limit) && limit > 0 ? limit : 3;
+  return sortApps(apps, view).slice(0, count);
 }
 
 /**

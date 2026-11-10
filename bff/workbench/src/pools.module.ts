@@ -11,6 +11,7 @@ import { Pool } from "pg";
 import Redis from "ioredis";
 import { loadConfig, type WorkbenchConfig } from "./config";
 import {
+  ACTIVITY_WRITE_POOL,
   CONFIG,
   INBOX_WRITE_POOL,
   PRIMARY_POOL,
@@ -18,18 +19,23 @@ import {
   REDIS,
 } from "./tokens";
 
+// ============================================================================
+// Connection lifecycle
+// ============================================================================
 class Connections implements OnApplicationShutdown {
   constructor(
     @Inject(PRIMARY_POOL) private readonly primary: Pool,
     @Inject(READ_POOL) private readonly reporting: Pool,
     @Inject(INBOX_WRITE_POOL) private readonly inbox: Pool,
     @Inject(REDIS) private readonly redis: Redis,
+    @Inject(ACTIVITY_WRITE_POOL) private readonly activity: Pool | null,
   ) {}
   async onApplicationShutdown(): Promise<void> {
     await Promise.all([
       this.primary.end(),
       this.reporting.end(),
       this.inbox.end(),
+      this.activity?.end(),
     ]);
     this.redis.disconnect();
   }
@@ -75,6 +81,20 @@ class Connections implements OnApplicationShutdown {
         }),
     },
     {
+      provide: ACTIVITY_WRITE_POOL,
+      inject: [CONFIG],
+      useFactory: (config: WorkbenchConfig) =>
+        config.activityDatabaseUrl
+          ? new Pool({
+              connectionString: config.activityDatabaseUrl,
+              max: 2,
+              connectionTimeoutMillis: 3000,
+              statement_timeout: 5000,
+              options: "-c default_transaction_read_only=off",
+            })
+          : null,
+    },
+    {
       provide: REDIS,
       inject: [CONFIG],
       useFactory: (config: WorkbenchConfig) =>
@@ -89,6 +109,13 @@ class Connections implements OnApplicationShutdown {
     },
     Connections,
   ],
-  exports: [CONFIG, PRIMARY_POOL, READ_POOL, INBOX_WRITE_POOL, REDIS],
+  exports: [
+    CONFIG,
+    PRIMARY_POOL,
+    READ_POOL,
+    INBOX_WRITE_POOL,
+    ACTIVITY_WRITE_POOL,
+    REDIS,
+  ],
 })
 export class PoolsModule {}

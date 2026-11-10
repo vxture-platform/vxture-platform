@@ -8,6 +8,8 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { withLocalePreference } from "@vxture/platform-browser";
+import { useWorkLocale, LOCALE_OPTIONS } from "../../lib/locale";
 import Link from "next/link";
 import Image from "next/image";
 import { useSyncExternalStore } from "react";
@@ -53,6 +55,7 @@ export function WorkHeader({
   onNotifications: () => void;
   pending?: boolean;
 }): React.JSX.Element {
+  const { locale, t, changeLocale } = useWorkLocale();
   const theme = useTheme();
   // Browser-stored theme preferences must not change the first hydration tree.
   const hydrated = useSyncExternalStore(
@@ -62,7 +65,7 @@ export function WorkHeader({
   );
   const consoleLink = (path: string): string =>
     data
-      ? buildConsoleEntry(data, runtime.consoleUrl, path)
+      ? buildConsoleEntry(data, runtime.consoleUrl, path, locale)
       : runtime.consoleUrl;
   const openConsole = (path: string): void => {
     window.open(consoleLink(path), "_blank", "noopener,noreferrer");
@@ -103,12 +106,12 @@ export function WorkHeader({
         {data && <ScopeMenu data={data} runtime={runtime} />}
       </div>
       {(data || pending) && (
-        <nav className="work-nav" aria-label="主导航">
+        <nav className="work-nav" aria-label={t("主导航")}>
           <Link href="/" aria-current={!apps ? "page" : undefined}>
-            首页
+            {t("首页")}
           </Link>
           <Link href="/apps" aria-current={apps ? "page" : undefined}>
-            应用中心
+            {t("应用中心")}
           </Link>
         </nav>
       )}
@@ -116,42 +119,45 @@ export function WorkHeader({
         <ShellIconGroup
           label={
             data || pending
-              ? "显示、通知、帮助与控制台"
-              : "主题、语言、全屏与主站"
+              ? t("显示、通知、帮助与控制台")
+              : t("主题、语言、全屏与主站")
           }
         >
           <ShellIconButton
             icon={hydrated && theme.theme === "dark" ? "sun" : "moon"}
-            label="切换主题"
+            label={t("切换主题")}
             onClick={theme.toggle}
           />
           {data && (
             <ShellIconButton
               icon="bell"
-              label="工作通知"
+              label={t("工作通知")}
               onClick={onNotifications}
             />
           )}
           {!data && !pending && (
             <>
               <ShellLocaleSwitcher
-                currentLocale="zh-CN"
-                options={[{ locale: "zh-CN", nativeName: "简体中文" }]}
-                buttonLabel="语言"
-                panelLabel="选择语言"
-                onLocaleChange={() => undefined}
+                currentLocale={locale}
+                options={LOCALE_OPTIONS}
+                buttonLabel={t("语言")}
+                panelLabel={t("选择语言")}
+                onLocaleChange={changeLocale}
               />
               <ShellFullscreenToggle
                 targetId="workbench-root"
-                enterLabel="全屏显示"
-                exitLabel="退出全屏"
+                enterLabel={t("全屏显示")}
+                exitLabel={t("退出全屏")}
               />
               <ShellIconButton
                 icon="home"
-                label="VXTURE 主站（新标签页）"
+                label={t("VXTURE 主站（新标签页）")}
                 onClick={() =>
                   window.open(
-                    runtime.websiteUrl,
+                    withLocalePreference(
+                      new URL(`/${locale}`, runtime.websiteUrl).href,
+                      locale,
+                    ),
                     "_blank",
                     "noopener,noreferrer",
                   )
@@ -160,43 +166,55 @@ export function WorkHeader({
             </>
           )}
           {(data || pending) && (
-            <ShellIconButton icon="help" label="使用帮助" onClick={onHelp} />
+            <ShellIconButton
+              icon="help"
+              label={t("使用帮助")}
+              onClick={onHelp}
+            />
           )}
           {data && (
             <ShellIconButton
               icon="settings"
-              label="管理控制台（新标签页）"
+              label={t("管理控制台（新标签页）")}
               onClick={() => openConsole("")}
             />
           )}
         </ShellIconGroup>
         {data && (
           <ShellUserMenu
-            openLabel="账号信息"
+            openLabel={t("账号信息")}
             user={{
               displayName: data.user.name,
               avatarAlt: data.user.name,
               avatarSrc: data.user.picture ?? undefined,
-              uniqueLine: accountPhone(data.user.phone) || "未绑定手机号",
+              uniqueLine: accountPhone(data.user.phone) || t("未绑定手机号"),
               meta: data.user.email,
             }}
             extras={
               <ShellPanelSlots
-                label="用户等级"
+                label={t("用户等级")}
                 leadIcon="medal"
                 lead="row"
                 slots={[
-                  { key: "role", icon: "user", label: "角色 · —" },
-                  { key: "level", icon: "star", label: "其他奖章 · 待解锁" },
-                  { key: "slot-3", icon: "medal", label: "其他奖章 · 待解锁" },
-                  { key: "slot-4", icon: "medal", label: "其他奖章 · 待解锁" },
+                  { key: "role", icon: "user", label: t("角色 · —") },
+                  { key: "level", icon: "star", label: t("其他奖章 · 待解锁") },
+                  {
+                    key: "slot-3",
+                    icon: "medal",
+                    label: t("其他奖章 · 待解锁"),
+                  },
+                  {
+                    key: "slot-4",
+                    icon: "medal",
+                    label: t("其他奖章 · 待解锁"),
+                  },
                 ]}
               />
             }
             links={[
               {
                 key: "profile",
-                label: "账号信息",
+                label: t("账号信息"),
                 href: consoleLink("profile"),
                 icon: "user",
                 newTab: true,
@@ -204,30 +222,34 @@ export function WorkHeader({
             ]}
             settings={
               <ShellPreferencePanel
-                locale="zh-CN"
-                localeOptions={[{ locale: "zh-CN", nativeName: "简体中文" }]}
+                locale={locale}
+                localeOptions={LOCALE_OPTIONS}
                 theme={theme.mode}
                 density={theme.density}
                 fontSize={theme.fontSize}
                 labels={{
-                  title: "偏好设置",
-                  locale: "语言",
-                  theme: "主题",
-                  density: "密度",
-                  fontSize: "文字大小",
-                  themeOptions: { system: "系统", light: "亮色", dark: "暗色" },
+                  title: t("偏好设置"),
+                  locale: t("语言"),
+                  theme: t("主题"),
+                  density: t("密度"),
+                  fontSize: t("文字大小"),
+                  themeOptions: {
+                    system: t("系统"),
+                    light: t("亮色"),
+                    dark: t("暗色"),
+                  },
                   densityOptions: {
-                    compact: "紧凑",
-                    default: "默认",
-                    comfortable: "宽松",
+                    compact: t("紧凑"),
+                    default: t("默认"),
+                    comfortable: t("宽松"),
                   },
                   fontSizeOptions: {
-                    small: "小",
-                    default: "默认",
-                    large: "大",
+                    small: t("小"),
+                    default: t("默认"),
+                    large: t("大"),
                   },
                 }}
-                onLocaleChange={() => undefined}
+                onLocaleChange={changeLocale}
                 onThemeChange={theme.setMode}
                 onDensityChange={theme.setDensity}
                 onFontSizeChange={theme.setFontSize}
@@ -236,14 +258,14 @@ export function WorkHeader({
             actions={[
               {
                 key: "switch",
-                label: "切换用户",
+                label: t("切换用户"),
                 icon: "user-switch",
                 onClick: () =>
                   location.assign(authNavigation("switch", location.href)),
               },
               {
                 key: "logout",
-                label: "退出登录",
+                label: t("退出登录"),
                 icon: "sign-out",
                 danger: true,
                 onClick: () =>

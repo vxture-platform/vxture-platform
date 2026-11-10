@@ -6,6 +6,12 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  LOCALE_CONSTANTS,
+  type Locale,
+} from "@vxture-platform/shared";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Controller, Get, Post, Inject, Req, Res } from "@nestjs/common";
 import type { CookieOptions, Request, Response } from "express";
@@ -148,6 +154,15 @@ export class AuthRouter {
         state,
         nonce,
         codeChallenge: pkce.challenge,
+        uiLocales: (() => {
+          const queryLocale = parameter(req, "ui_locales");
+          const cookieLocale: unknown =
+            req.cookies?.[LOCALE_CONSTANTS.COOKIE_KEY];
+          const locale = queryLocale ?? cookieLocale;
+          return SUPPORTED_LOCALES.includes(locale as Locale)
+            ? (locale as Locale)
+            : DEFAULT_LOCALE;
+        })(),
         ...(prompt ? { prompt } : {}),
         ...(hints.tenantId ? { tenantHint: hints.tenantId } : {}),
         ...(hints.workspaceId ? { workspaceHint: hints.workspaceId } : {}),

@@ -38,7 +38,7 @@ it("preserves identity, organization, workspace and the Console destination", ()
       new URL(
         notificationEntry(data, "https://console.vxture.com", unsafe),
       ).searchParams.get("returnTo"),
-    ).toBe("https://console.vxture.com/zh-CN/inbox");
+    ).toBe("https://console.vxture.com/zh-CN/inbox?vx_locale=zh-CN");
   }
   expect(
     new URL(
@@ -48,7 +48,7 @@ it("preserves identity, organization, workspace and the Console destination", ()
         "/zh-CN/billing?tab=unpaid",
       ),
     ).searchParams.get("returnTo"),
-  ).toBe("https://console.vxture.com/zh-CN/billing?tab=unpaid");
+  ).toBe("https://console.vxture.com/zh-CN/billing?tab=unpaid&vx_locale=zh-CN");
   const url = new URL(
     buildConsoleEntry(data, "https://console.vxture.com", "billing"),
   );
@@ -59,6 +59,7 @@ it("preserves identity, organization, workspace and the Console destination", ()
     tenantId: "org",
     workspaceId: "space",
     surface: "portal",
-    returnTo: "https://console.vxture.com/zh-CN/billing",
+    ui_locales: "zh-CN",
+    returnTo: "https://console.vxture.com/zh-CN/billing?vx_locale=zh-CN",
   });
 });

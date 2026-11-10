@@ -97,6 +97,8 @@ export class HttpOidcRpClient implements OidcRpClient {
     nonce: string;
     codeChallenge: string;
     prompt?: string;
+    /** Preferred interface language, carried using the standard OIDC parameter. */
+    uiLocales?: string;
     tenantHint?: string;
     workspaceHint?: string;
   }): string {
@@ -112,6 +114,7 @@ export class HttpOidcRpClient implements OidcRpClient {
     u.searchParams.set("nonce", input.nonce);
     u.searchParams.set("code_challenge", input.codeChallenge);
     u.searchParams.set("code_challenge_method", "S256");
+    if (input.uiLocales) u.searchParams.set("ui_locales", input.uiLocales);
     if (input.prompt) u.searchParams.set("prompt", input.prompt);
     if (input.tenantHint) u.searchParams.set("tenant_hint", input.tenantHint);
     if (input.workspaceHint)

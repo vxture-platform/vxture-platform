@@ -29,6 +29,7 @@ import { SessionService } from "./auth/session-service";
 import { WorkbenchOidcClient } from "./auth/oidc-client";
 import { AuthRouter } from "./auth/auth-router";
 import { ApiRouter } from "./api-router";
+import { AppActivityRouter } from "./app-activity-router";
 import { InboxRouter } from "./inbox-router";
 import { ScopeService } from "./scope-service";
 import { CatalogService } from "./catalog-service";
@@ -69,7 +70,13 @@ class HealthRouter implements OnModuleInit {
 // ============================================================================
 @Module({
   imports: [PoolsModule],
-  controllers: [AuthRouter, ApiRouter, InboxRouter, HealthRouter],
+  controllers: [
+    AuthRouter,
+    ApiRouter,
+    InboxRouter,
+    AppActivityRouter,
+    HealthRouter,
+  ],
   providers: [
     {
       provide: SessionStore,

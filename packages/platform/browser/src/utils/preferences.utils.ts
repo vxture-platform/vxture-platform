@@ -5,6 +5,7 @@
 
 import {
   DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
   LOCALE_CONSTANTS,
   type Locale,
   type Theme,
@@ -49,6 +50,23 @@ function cookieDomainAttribute(): string {
   return "";
 }
 
+/** Storage may be blocked independently of cookies in private browser sessions. */
+function readStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* Cookies remain usable. */
+  }
+}
+
 function readCookie(name: string): string | undefined {
   if (!isBrowser()) return undefined;
 
@@ -75,7 +93,7 @@ function dispatchPreferenceSync(preferences: GlobalUserPreferences): void {
     updatedAt: Date.now(),
   });
 
-  window.localStorage.setItem(PREFERENCE_CONSTANTS.SYNC_STORAGE_KEY, payload);
+  writeStorage(PREFERENCE_CONSTANTS.SYNC_STORAGE_KEY, payload);
   window.dispatchEvent(
     new CustomEvent(PREFERENCE_CONSTANTS.SYNC_EVENT, { detail: preferences }),
   );
@@ -89,8 +107,8 @@ function normalizeTheme(theme: string | null | undefined): Theme {
 }
 
 function normalizeLocale(locale: string | null | undefined): Locale {
-  if (locale === "zh-CN" || locale === "en-US") {
-    return locale;
+  if (SUPPORTED_LOCALES.includes(locale as Locale)) {
+    return locale as Locale;
   }
   return DEFAULT_PREFERENCES.locale;
 }
@@ -123,23 +141,23 @@ export function getGlobalUserPreferences(): GlobalUserPreferences {
   }
 
   const locale = normalizeLocale(
-    window.localStorage.getItem(LOCALE_CONSTANTS.STORAGE_KEY) ??
-      readCookie(LOCALE_CONSTANTS.COOKIE_KEY),
+    readCookie(LOCALE_CONSTANTS.COOKIE_KEY) ??
+      readStorage(LOCALE_CONSTANTS.STORAGE_KEY),
   );
 
   const theme = normalizeTheme(
-    window.localStorage.getItem(THEME_CONSTANTS.STORAGE_KEY) ??
-      window.localStorage.getItem("theme") ??
+    readStorage(THEME_CONSTANTS.STORAGE_KEY) ??
+      readStorage("theme") ??
       readCookie(THEME_CONSTANTS.COOKIE_KEY),
   );
 
   const density = normalizeDensity(
-    window.localStorage.getItem(PREFERENCE_CONSTANTS.DENSITY_STORAGE_KEY) ??
+    readStorage(PREFERENCE_CONSTANTS.DENSITY_STORAGE_KEY) ??
       readCookie(PREFERENCE_CONSTANTS.DENSITY_COOKIE_KEY),
   );
 
   const fontSize = normalizeFontSize(
-    window.localStorage.getItem(PREFERENCE_CONSTANTS.FONTSIZE_STORAGE_KEY) ??
+    readStorage(PREFERENCE_CONSTANTS.FONTSIZE_STORAGE_KEY) ??
       readCookie(PREFERENCE_CONSTANTS.FONTSIZE_COOKIE_KEY),
   );
 
@@ -158,23 +176,21 @@ export function setGlobalUserPreferences(
     ...partial,
   };
 
-  window.localStorage.setItem(
-    LOCALE_CONSTANTS.STORAGE_KEY,
-    nextPreferences.locale,
-  );
-  window.localStorage.setItem(
-    THEME_CONSTANTS.STORAGE_KEY,
-    nextPreferences.theme,
-  );
-  window.localStorage.setItem(
+  writeStorage(LOCALE_CONSTANTS.STORAGE_KEY, nextPreferences.locale);
+  writeStorage(THEME_CONSTANTS.STORAGE_KEY, nextPreferences.theme);
+  writeStorage(
     PREFERENCE_CONSTANTS.DENSITY_STORAGE_KEY,
     nextPreferences.density,
   );
-  window.localStorage.setItem(
+  writeStorage(
     PREFERENCE_CONSTANTS.FONTSIZE_STORAGE_KEY,
     nextPreferences.fontSize,
   );
 
+  // Remove legacy host-only cookies that would shadow the parent-domain cookie.
+  if (cookieDomainAttribute()) {
+    document.cookie = `${LOCALE_CONSTANTS.COOKIE_KEY}=; path=/; max-age=0; samesite=lax`;
+  }
   writeCookie(LOCALE_CONSTANTS.COOKIE_KEY, nextPreferences.locale);
   writeCookie(THEME_CONSTANTS.COOKIE_KEY, nextPreferences.theme);
   writeCookie(PREFERENCE_CONSTANTS.DENSITY_COOKIE_KEY, nextPreferences.density);
@@ -258,4 +274,56 @@ export function subscribeToGlobalPreferenceChanges(
       onCustomEvent as EventListener,
     );
   };
+}
+
+// =============================================================================
+// Locale synchronization and cross-origin navigation
+// =============================================================================
+/** Observe the shared cookie as well as same-origin preference events. */
+export function synchronizeGlobalLocale(
+  renderedLocale: Locale,
+  onLocale: (locale: Locale) => void,
+): () => void {
+  if (!isBrowser()) return () => undefined;
+  const url = new URL(window.location.href);
+  const hint = url.searchParams.get("vx_locale");
+  if (SUPPORTED_LOCALES.includes(hint as Locale)) {
+    setGlobalLocalePreference(hint as Locale);
+    url.searchParams.delete("vx_locale");
+    window.history.replaceState(window.history.state, "", url.href);
+  }
+  const sync = (): void => {
+    // Migrate legacy host-only cookies on every returning portal before reading.
+    if (cookieDomainAttribute()) {
+      document.cookie = `${LOCALE_CONSTANTS.COOKIE_KEY}=; path=/; max-age=0; samesite=lax`;
+    }
+    const saved =
+      readCookie(LOCALE_CONSTANTS.COOKIE_KEY) ??
+      readStorage(LOCALE_CONSTANTS.STORAGE_KEY);
+    const locale = saved ? normalizeLocale(saved) : renderedLocale;
+    if (!saved) setGlobalLocalePreference(locale);
+    onLocale(locale);
+  };
+  // Register after initialization so an initial write cannot reenter this observer.
+  sync();
+  const unsubscribe = subscribeToGlobalPreferenceChanges(() => sync());
+  const visible = (): void => {
+    if (document.visibilityState === "visible") sync();
+  };
+  window.addEventListener("focus", sync);
+  window.addEventListener("pageshow", sync);
+  document.addEventListener("visibilitychange", visible);
+  return () => {
+    unsubscribe();
+    window.removeEventListener("focus", sync);
+    window.removeEventListener("pageshow", sync);
+    document.removeEventListener("visibilitychange", visible);
+  };
+}
+
+/** Carry a locale between separate registrable domains without sharing cookies. */
+export function withLocalePreference(href: string, locale: Locale): string {
+  const url = new URL(href);
+  url.searchParams.set("vx_locale", locale);
+  return url.href;
 }

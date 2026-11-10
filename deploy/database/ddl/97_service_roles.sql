@@ -281,3 +281,29 @@ GRANT UPDATE (deleted_at,updated_at) ON billing.invoice_items TO svc_auth_bff;
 GRANT INSERT ON billing.order_events TO svc_auth_bff;
 
 GRANT SELECT ON account.lifecycle_operations TO svc_platform_api;
+
+-- BEGIN WORKBENCH ACTIVITY ROLE
+-- Portal favorites/activity writer; deliberately independent of the inbox role.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'svc_workbench_activity') THEN
+    CREATE ROLE svc_workbench_activity LOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+      NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'svc_workbench_activity'
+      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR rolinherit))
+    OR EXISTS (SELECT FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
+      WHERE r.rolname = 'svc_workbench_activity') THEN
+    RAISE EXCEPTION 'svc_workbench_activity must be an isolated unprivileged role';
+  END IF;
+END
+$$;
+GRANT USAGE ON SCHEMA account TO svc_workbench_activity;
+GRANT SELECT, INSERT, DELETE ON account.user_product_favorites TO svc_workbench_activity;
+GRANT SELECT ON account.user_app_launches, account.user_app_views TO svc_workbench_activity;
+GRANT INSERT (user_id, tenant_id, workspace_id, product_id, event_id)
+    ON account.user_app_launches TO svc_workbench_activity;
+GRANT INSERT (user_id, tenant_id, workspace_id, view), UPDATE (view)
+    ON account.user_app_views TO svc_workbench_activity;
+
+-- END WORKBENCH ACTIVITY ROLE

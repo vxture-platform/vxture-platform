@@ -132,6 +132,7 @@ test("image set: packages/platform → 仅前端镜像", () => {
   assert.deepEqual(builtImages(["packages/platform/browser/src/x.ts"]), [
     "platform_website",
     "platform_console",
+    "platform_workbench",
     "platform_admin",
     "platform_opera",
     "platform_arche",

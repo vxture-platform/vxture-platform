@@ -41,6 +41,8 @@ export interface WorkApp {
   available: boolean;
   availabilityLabel: string;
   favorite?: boolean;
+  lastUsedAt?: string | null;
+  launches30d?: number;
 }
 export interface CatalogProduct {
   code: string;
@@ -117,4 +119,18 @@ export interface WorkNotification {
 export interface WorkInbox {
   items: WorkNotification[];
   unreadCount: number;
+}
+
+// ============================================================================
+// Server-persisted home view and application activity
+// ============================================================================
+export type AppView = "favorites" | "recent" | "frequent";
+export interface AppActivity {
+  view: AppView;
+  items: {
+    code: string;
+    favorite: boolean;
+    lastUsedAt: string | null;
+    launches30d: number;
+  }[];
 }
