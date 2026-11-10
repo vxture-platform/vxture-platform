@@ -48,3 +48,25 @@ it("ignores unsupported language hints and proceeds normally", async () => {
   const response = await middleware(request);
   expect(response?.headers.get("location")).toBeNull();
 });
+
+it("shares locale cookies when NextURL uses the internal proxy origin", async () => {
+  const request = new NextRequest(
+    "http://localhost:3000/en-US/signin?vx_locale=en-US",
+    { headers: { host: "vxture.com", "x-forwarded-proto": "https" } },
+  );
+  const response = await middleware(request);
+  const cookie = response?.headers.get("set-cookie");
+  expect(cookie).toContain("NEXT_LOCALE=en-US");
+  expect(cookie).toContain("Domain=.vxture.com");
+  expect(cookie).toContain("Secure");
+  expect(cookie).toContain("Max-Age=0");
+});
+
+it("keeps local development cookies on their own host", async () => {
+  const request = new NextRequest(
+    "http://localhost:3000/en-US/signin?vx_locale=en-US",
+    { headers: { host: "localhost:3000" } },
+  );
+  const response = await middleware(request);
+  expect(response?.headers.get("set-cookie")).not.toContain("Domain=");
+});
