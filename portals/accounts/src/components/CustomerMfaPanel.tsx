@@ -16,6 +16,7 @@ import {
   Checkbox,
   Input,
   StatusBadge,
+  useToast,
 } from "@vxture/design-system";
 import { useAccountCompletion } from "./AccountCenterShell";
 import { accountsRequest } from "@/api/customer-self";
@@ -29,8 +30,15 @@ import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
 // Optional customer enrollment
 // ============================================================================
 /** Show a one-time result without keeping revoked account content mounted. */
-function MfaCompletion({ codes }: { codes?: readonly string[] }) {
+export function MfaCompletion({
+  codes,
+  realm = "customer",
+}: {
+  codes?: readonly string[];
+  realm?: "customer" | "workforce";
+}) {
   const formText = useTranslations("accountsForms");
+  const { toast } = useToast();
   const [saved, setSaved] = useState(false);
   const [feedback, setFeedback] = useState("");
   const checkboxId = useId();
@@ -39,7 +47,9 @@ function MfaCompletion({ codes }: { codes?: readonly string[] }) {
       setFeedback(formText("recovery_ack_required"));
       return;
     }
-    window.location.replace("/login");
+    window.location.replace(
+      realm === "workforce" ? "/workforce/login" : "/login",
+    );
   }
   return (
     <DialogForm
@@ -82,7 +92,8 @@ function MfaCompletion({ codes }: { codes?: readonly string[] }) {
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(codes.join("\n"));
-                setFeedback(formText("copied"));
+                setFeedback("");
+                toast({ tone: "success", title: formText("copied") });
               } catch {
                 setFeedback(
                   formText("unable_to_copy_save_the_recovery_codes_manually"),
@@ -104,11 +115,7 @@ function MfaCompletion({ codes }: { codes?: readonly string[] }) {
           </div>
         </div>
       ) : null}
-      {feedback ? (
-        <p role="status" className="text-body-sm">
-          {feedback}
-        </p>
-      ) : null}
+      {feedback ? <Banner tone="warning" title={feedback} /> : null}
     </DialogForm>
   );
 }

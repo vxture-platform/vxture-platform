@@ -17,6 +17,7 @@ import { accountsLocale, accountsMessages } from "@/lib/intl";
 import {
   BootSplash,
   ThemeProvider,
+  ToastProvider,
   themeBootstrapScript,
 } from "@vxture/design-system";
 import "@vxture/design-system/styles/fonts.css";
@@ -50,7 +51,12 @@ export default async function RootLayout({
         <BootSplash />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider defaultMode="system" defaultDensity="default">
-            {children}
+            <ToastProvider
+              regionLabel={messages.accountsForms.notifications}
+              dismissLabel={messages.accountsForms.dismiss_notification}
+            >
+              {children}
+            </ToastProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

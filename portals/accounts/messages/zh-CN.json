@@ -173,7 +173,9 @@
     "methodRecovery": "恢复码",
     "methodPasskey": "通行密钥",
     "methodSocial": "第三方账号",
-    "methodUnknown": "其他方式"
+    "methodUnknown": "其他方式",
+    "signOutConsequence": "确认后，此设备上的会话将结束，继续使用时需要重新登录。",
+    "deviceSignedOut": "设备已退出登录"
   },
   "accountsUi": {
     "userMenu": {
@@ -232,7 +234,7 @@
     "mfa_disabled_sign_in": "多因素认证已关闭，请重新登录。",
     "recovery_ack_required": "请先保存恢复码，并勾选确认。",
     "3_24_characters_starting_with_a_letter_letters_numbers_and_underscores": "3–24 位，字母开头，可包含数字与下划线",
-    "connected_accounts": "三方登录",
+    "connected_accounts": "第三方登录",
     "preferences": "个人偏好",
     "theme": "主题",
     "use_a_recovery_code": "使用恢复码",
@@ -325,7 +327,6 @@
     "unable_to_sign_in": "暂时无法登录",
     "change_contact": "更换",
     "change_avatar": "更换头像",
-    "edit_avatar": "编辑头像",
     "change_phone": "更换手机",
     "change_email": "更换邮箱",
     "change_account": "修改账号",
@@ -525,7 +526,22 @@
     "return_home": "返回首页",
     "redirecting": "正在跳转…",
     "session_expired_returning": "登录会话已失效，正在返回…",
-    "totp_qr_code": "TOTP 二维码"
+    "totp_qr_code": "TOTP 二维码",
+    "edit_profile": "编辑个人资料",
+    "avatar_source_too_large": "请选择不超过 20 MB 的原始图片。",
+    "processing_image": "正在处理…",
+    "avatar_upload_hint": "PNG、JPG 或 WebP，原图不超过 20 MB，上传时自动优化",
+    "profile_partial_save": "姓名已保存，头像保存失败：{message}。请重试头像或取消。",
+    "notifications": "通知",
+    "dismiss_notification": "关闭通知",
+    "unlink_consequence": "解绑后无法再通过此第三方账号登录。确认后，所有设备需要重新登录。",
+    "disable_login_consequence": "关闭后将无法使用此方式登录。请确认你仍可使用已验证的手机登录；确认后，所有设备需要重新登录。",
+    "security_change_consequence": "修改将影响账号登录。验证并确认后，所有设备需要重新登录。",
+    "contact_change_consequence": "更换后，新的联系方式将用于账号验证和找回。请核对目标地址或号码，再输入收到的验证码确认。",
+    "operator_mfa_consequence": "运营账号必须保留多因素认证。重新设置后，旧验证器和旧恢复码将失效，所有设备需要重新登录。请保存新恢复码。",
+    "deletion_final_consequence": "提交后将退出所有设备并执行上方列出的账号清理操作。保留期结束后永久删除，无法恢复。",
+    "passkey_deleted": "通行密钥已删除",
+    "delete_passkey_title": "删除通行密钥"
   },
   "accountsApi": {
     "error_1": "登录会话已失效，请从应用重新发起登录",

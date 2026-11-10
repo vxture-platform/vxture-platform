@@ -9,6 +9,11 @@
 import type { ReactNode } from "react";
 import { Card, Icon, type IconName } from "@vxture/design-system";
 
+/** Separate section mutations from the editable values above them. */
+export function AccountActions({ children }: { children: ReactNode }) {
+  return <div className="accounts-section-actions">{children}</div>;
+}
+
 /** Render one page heading with the shared icon scale. */
 export function AccountHeading({
   title,

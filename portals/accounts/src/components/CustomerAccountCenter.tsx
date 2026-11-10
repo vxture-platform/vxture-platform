@@ -23,6 +23,7 @@ import {
 } from "@vxture-platform/shared";
 import {
   Banner,
+  useToast,
   Button,
   DialogForm,
   DataTable,
@@ -74,6 +75,7 @@ function projection<T>(result: PromiseSettledResult<T>): Projection<T> {
  * @returns Customer profile, security status and recent activity.
  */
 export function CustomerAccountCenter() {
+  const { toast } = useToast();
   const expire = useAccountSessionExpired();
   const updateMenu = useAccountMenuUpdate();
   const t = useTranslations("accountCenter");
@@ -498,7 +500,9 @@ export function CustomerAccountCenter() {
       <DialogForm
         size="sm"
         title={t(signOut?.current ? "signOutCurrent" : "signOutDevice")}
-        submitLabel={t("confirm")}
+        danger
+        description={t("signOutConsequence")}
+        submitLabel={t(signOut?.current ? "signOutCurrent" : "signOutDevice")}
         cancelLabel={t("cancel")}
         submitting={revoking}
         onSubmit={async (event) => {
@@ -514,6 +518,7 @@ export function CustomerAccountCenter() {
             if (signOut.current) expire();
             else {
               setSignOut(null);
+              toast({ tone: "success", title: t("deviceSignedOut") });
               setRevision((v) => v + 1);
             }
           } catch (error) {

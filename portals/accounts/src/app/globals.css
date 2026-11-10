@@ -726,21 +726,29 @@ body {
   color: var(--muted-foreground);
 }
 .accounts-code-container {
+  /* Keep preferred slot widths out of the surrounding dialog's intrinsic size. */
+  contain: inline-size;
+  min-width: 0;
   width: 100%;
+  padding-block: var(--space-xs);
 }
 .accounts-code-slots {
   display: flex;
+  justify-content: center;
+  min-width: 0;
   width: 100%;
-  gap: calc(var(--vx-spacing) * 2.5);
+  gap: var(--space-xs);
 }
 .accounts-code-slots .accounts-code-slot {
-  flex: 1;
+  flex: 0 1 var(--space-control-2xl);
   min-width: 0;
-  width: auto;
-  height: calc(var(--vx-spacing) * 12);
+  width: var(--space-control-2xl);
+  height: auto;
+  aspect-ratio: 1;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: calc(var(--vx-text-2xl) + var(--vx-spacing));
+  font-size: var(--vx-text-2xl);
+  line-height: 1;
   box-shadow: none;
 }
 .accounts-code-field:has(input[aria-invalid="true"]) .accounts-code-slot {
@@ -757,15 +765,18 @@ body {
   align-self: center;
 }
 .accounts-mfa-secret {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-block: var(--space-xs);
   font-size: var(--vx-text-xs);
   color: var(--muted-foreground);
-}
-.accounts-mfa-secret summary {
-  cursor: pointer;
+  text-align: center;
 }
 .accounts-mfa-secret code {
   display: block;
-  margin-top: calc(var(--vx-spacing) * 3);
+  max-width: 100%;
 }
 .accounts-recovery-codes {
   list-style: none;
@@ -781,16 +792,6 @@ body {
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
 }
-@media (max-width: 700px) {
-  .accounts-code-slots {
-    gap: var(--space-xs);
-  }
-  .accounts-code-slots .accounts-code-slot {
-    height: var(--space-3xl);
-    font-size: var(--vx-text-2xl);
-  }
-}
-
 /* Password and code modes share a fixed field area; errors may extend it. */
 .accounts-code-label {
   min-height: var(--space-xl);
@@ -911,6 +912,26 @@ body {
 .accounts-preference-control {
   width: 100%;
   max-width: calc(var(--vx-spacing) * 75);
+}
+.accounts-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-lg);
+  margin-top: var(--space-xs);
+}
+/* Native popups need an explicit scheme while Accounts consumes the pinned DS. */
+body:has(.accounts-viewport) select {
+  color-scheme: light;
+}
+html.dark body:has(.accounts-viewport) select {
+  color-scheme: dark;
+}
+body:has(.accounts-viewport) select :is(option, optgroup) {
+  background-color: var(--popover);
+  color: var(--foreground);
 }
 .accounts-avatar-preview {
   width: calc(var(--vx-spacing) * 25);
@@ -1154,11 +1175,62 @@ body {
   }
 }
 
-/* The auxiliary avatar action stays at the footer's left edge inside the DS dialog. */
+.accounts-profile-editor,
+.accounts-profile-name-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.accounts-profile-editor {
+  gap: var(--space-xl);
+}
+.accounts-profile-avatar-editor {
+  text-align: center;
+}
+.accounts-profile-upload-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
 .accounts-avatar-reset {
-  position: absolute;
-  left: var(--space-xl);
-  bottom: var(--space-xl);
+  font-weight: var(--vx-font-weight-normal);
+  font-size: var(--vx-text-xs);
+}
+.accounts-profile-upload-hint {
+  margin-top: var(--space-sm);
+  font-size: var(--vx-text-xs);
+  color: var(--muted-foreground);
+}
+/* Compatibility for Accounts' pinned DS version until the shared fix is released. */
+body:has(.accounts-viewport) [role="dialog"] > form > .overflow-y-auto {
+  /* Match the shared field scroller without clipping 3px rings in compact mode. */
+  margin: calc(-1 * var(--space-xs));
+  padding: var(--space-xs);
+  scroll-padding: var(--space-xs);
+}
+body:has(.accounts-viewport)
+  :is([role="dialog"], [role="alertdialog"])
+  > button.absolute:has(> svg) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-control-md);
+  height: var(--space-control-md);
+  min-width: var(--space-control-md);
+  min-height: var(--space-control-md);
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+}
+body:has(.accounts-viewport)
+  :is([role="dialog"], [role="alertdialog"])
+  > button.absolute:has(> svg):hover {
+  background: var(--accent);
+}
+.accounts-code-slot > [aria-hidden="true"] > div {
+  height: var(--vx-text-2xl);
 }
 .accounts-brand .accounts-brand-name {
   color: var(--primary);
@@ -1177,13 +1249,6 @@ body {
     padding-top: var(--space-md);
     padding-bottom: var(--space-md);
   }
-}
-
-/* The avatar's three short actions fit one row even on phone dialogs. */
-[role="dialog"]:has(.accounts-avatar-reset) form > div:last-child {
-  flex-direction: row;
-  justify-content: flex-end;
-  gap: var(--space-sm);
 }
 
 .accounts-login-form > section:empty {

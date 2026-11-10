@@ -22,7 +22,7 @@ import {
   Banner,
   Button,
   Card,
-  DestructiveButton,
+  useToast,
   EmptyState,
   DialogForm,
   Input,
@@ -37,7 +37,6 @@ import {
   type OperatorPasskey,
 } from "@/api/operator-webauthn";
 import { useLocale, useTranslations } from "next-intl";
-import { useConfirmLabels } from "@/lib/destructive";
 import { formatDay } from "@vxture-platform/shared";
 
 /* 收 `locale` 与 `t`：`toLocaleDateString()` 不带参数走的是**浏览器默认语言**，
@@ -56,7 +55,9 @@ function formatUsage(
 }
 
 export function OperatorPasskeyManager() {
-  const withLabels = useConfirmLabels();
+  const { toast } = useToast();
+  const [removing, setRemoving] = useState<OperatorPasskey | null>(null);
+  const [removeError, setRemoveError] = useState("");
   const t = useTranslations("passkeys");
   const tCommon = useTranslations("common");
   const formText = useTranslations("accountsForms");
@@ -90,10 +91,12 @@ export function OperatorPasskeyManager() {
      rejected。不改成抛出是因为 `handleAdd`/`handleRename` 都是 `void` 调用，
      抛出会变成 unhandled rejection；返回布尔让每个调用点自己决定怎么用。 */
   const withBusy = async (fn: () => Promise<void>): Promise<boolean> => {
+    if (busy) return false;
     setBusy(true);
     setError(null);
     try {
       await fn();
+      toast({ tone: "success", title: formText("saved") });
       await refresh();
       return true;
     } catch (e) {
@@ -110,15 +113,27 @@ export function OperatorPasskeyManager() {
     label: string;
   } | null>(null);
   const handleRename = (id: string, current: string | null) => {
+    setError(null);
     setRenaming({ id, label: current ?? "" });
   };
-  /* 原来是 `window.confirm`：一句没有主语的「确定删除此通行密钥？」——删的是
-     哪一把、删完还剩几把、会不会把自己锁在门外，一个字都没有。而且原生
-     对话框会阻塞整个页面。改走 DS 的确认契约，落锤重新抛出，失败时框不关。 */
-  const revokePasskey = async (id: string) => {
-    const ok = await withBusy(() => revokeOperatorPasskey(id));
-    if (!ok) throw new Error(t("revokeFailed"));
-  };
+  // Keep removal feedback in its own modal while consuming the pinned DS.
+  async function removePasskey() {
+    if (!removing || busy) return;
+    setBusy(true);
+    setRemoveError("");
+    try {
+      await revokeOperatorPasskey(removing.id);
+      setRemoving(null);
+      toast({ tone: "success", title: formText("passkey_deleted") });
+      await refresh();
+    } catch (reason) {
+      setRemoveError(
+        reason instanceof Error ? reason.message : t("revokeFailed"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section className="flex flex-col gap-lg">
@@ -183,35 +198,50 @@ export function OperatorPasskeyManager() {
                   >
                     {t("rename")}
                   </Button>
-                  <DestructiveButton
+                  <Button
                     size="sm"
+                    variant="outline"
                     disabled={busy}
-                    confirm={withLabels({
-                      verb: t("delete"),
-                      target: t("confirmTarget", {
-                        name: passkey.label ?? t("unnamed"),
-                      }),
-                      /* 「这是最后一把」是这一页唯一真正要紧的事实，而它此前
-                         一个字都没写。服务端只在「该运营账号强制 webauthn」时
-                         才拒绝删最后一把，前端看不到那个开关，所以它是后果里
-                         的一句提醒，不是 precondition——precondition 是闩，写成
-                         闩会把合法的删除也挡住。 */
-                      consequence: t(
-                        passkeys.length === 1
-                          ? "consequenceLast"
-                          : "consequenceOther",
-                      ),
-                      onConfirm: () => revokePasskey(passkey.id),
-                    })}
+                    onClick={() => {
+                      setRemoveError("");
+                      setRemoving(passkey);
+                    }}
                   >
                     {t("delete")}
-                  </DestructiveButton>
+                  </Button>
                 </div>
               </Card>
             </li>
           ))}
         </ul>
       )}
+      <DialogForm
+        size="sm"
+        title={formText("delete_passkey_title")}
+        description={t(
+          passkeys.length === 1 ? "consequenceLast" : "consequenceOther",
+        )}
+        open={removing !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setRemoving(null);
+        }}
+        danger
+        submitting={busy}
+        pendingLabel={tCommon("processing")}
+        submitLabel={t("delete")}
+        cancelLabel={formText("cancel")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void removePasskey();
+        }}
+      >
+        <p>
+          {removing
+            ? t("confirmTarget", { name: removing.label ?? t("unnamed") })
+            : null}
+        </p>
+        {removeError ? <Banner tone="danger" title={removeError} /> : null}
+      </DialogForm>
       <DialogForm
         size="sm"
         title={t("rename")}

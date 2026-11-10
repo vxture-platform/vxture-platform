@@ -46,10 +46,10 @@ export function MfaEnrollment({
         <p role="status">{formText("generating_qr_code")}</p>
       )}
       {secret ? (
-        <details className="accounts-mfa-secret">
-          <summary>{formText("unable_to_scan")}</summary>
+        <div className="accounts-mfa-secret">
+          <p>{formText("unable_to_scan")}</p>
           <code className="break-all font-mono select-all">{secret}</code>
-        </details>
+        </div>
       ) : null}
       <VerificationCodeInput
         name="totp_code"
