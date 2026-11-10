@@ -12,6 +12,13 @@ import type { Locale } from "@vxture-platform/shared";
 // Interface messages and interpolation
 // ============================================================================
 export const EN_MESSAGES: Record<string, string> = {
+  星期日: "Sunday",
+  星期一: "Monday",
+  星期二: "Tuesday",
+  星期三: "Wednesday",
+  星期四: "Thursday",
+  星期五: "Friday",
+  星期六: "Saturday",
   "收藏{0}": "Add {0} to favorites",
   "取消收藏{0}": "Remove {0} from favorites",
   全部: "All",

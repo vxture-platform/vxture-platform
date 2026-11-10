@@ -80,13 +80,7 @@ export function dailyPresentation(
       copy.titles[dayIndex % copy.titles.length] ?? copy.fallback,
     ),
     date: formatDay(now, locale, "—", { timeZone: WORKBENCH_TIME_ZONE }),
-    weekday:
-      locale === "en-US"
-        ? new Intl.DateTimeFormat(locale, {
-            weekday: "long",
-            timeZone: WORKBENCH_TIME_ZONE,
-          }).format(now)
-        : WEEKDAYS[new Date(calendarDay).getUTCDay()]!,
+    weekday: translate(locale, WEEKDAYS[new Date(calendarDay).getUTCDay()]!),
     greeting: translate(
       locale,
       hour < 12 && hour >= 5
