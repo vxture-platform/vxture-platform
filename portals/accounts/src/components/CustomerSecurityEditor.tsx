@@ -481,6 +481,20 @@ export function CustomerSecurityEditor({
       <DialogForm
         size="sm"
         title={action?.title}
+        danger={
+          action?.operation === "identity-unlink" ||
+          (["account-login", "email-login"].includes(action?.operation ?? "") &&
+            action?.target === "false")
+        }
+        description={
+          action?.operation === "identity-unlink"
+            ? formText("unlink_consequence")
+            : ["account-login", "email-login"].includes(
+                  action?.operation ?? "",
+                ) && action?.target === "false"
+              ? formText("disable_login_consequence")
+              : formText("security_change_consequence")
+        }
         submitting={busy}
         cancelLabel={formText("cancel")}
         pendingLabel={formText("processing")}

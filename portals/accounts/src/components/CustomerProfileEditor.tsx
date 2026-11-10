@@ -9,7 +9,8 @@
 "use client";
 import { useTranslations } from "next-intl";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { downscaleImage } from "@vxture/platform-browser";
 import {
   Banner,
   Button,
@@ -18,6 +19,7 @@ import {
   NativeSelect,
   SegmentedControl,
   useTheme,
+  useToast,
   StatusBadge,
 } from "@vxture/design-system";
 import { useRouter } from "next/navigation";
@@ -27,7 +29,11 @@ import {
   type CustomerProfile,
   type CustomerSecurity,
 } from "@/api/customer-self";
-import { AccountSection, AccountRow } from "./AccountPrimitives";
+import {
+  AccountSection,
+  AccountRow,
+  AccountActions,
+} from "./AccountPrimitives";
 
 // ============================================================================
 // Profile and avatar
@@ -45,15 +51,23 @@ export function CustomerProfileEditor({
   onSaved: () => void;
 }) {
   const formText = useTranslations("accountsForms");
+  const { toast } = useToast();
   const [name, setName] = useState(profile.name ?? "");
-  const [editing, setEditing] = useState(false);
+  const [savedName, setSavedName] = useState(profile.name ?? "");
+  const [refreshPending, setRefreshPending] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const nameId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<Blob | null>(null);
   const [preview, setPreview] = useState("");
   const [resetAvatar, setResetAvatar] = useState(false);
   function openAvatar() {
+    setName(profile.name ?? "");
+    setSavedName(profile.name ?? "");
+    setRefreshPending(false);
     setFile(null);
     setResetAvatar(false);
     setError("");
@@ -68,26 +82,52 @@ export function CustomerProfileEditor({
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  async function save() {
-    setBusy(true);
+  async function selectImage(next: File) {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(next.type)) {
+      setError(formText("choose_a_png_jpeg_or_webp_image_no_larger_than_1mb"));
+      return;
+    }
+    if (next.size > 20 * 1024 * 1024) {
+      setError(formText("avatar_source_too_large"));
+      return;
+    }
+    setProcessing(true);
     setError("");
     try {
-      await accountsRequest("/oidc/customer/self", {
-        method: "PATCH",
-        body: JSON.stringify({ name: name.trim() }),
-      });
-      setEditing(false);
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : formText("unable_to_save"));
+      const image = await downscaleImage(next);
+      if (image.size > 1048576) {
+        setError(
+          formText("choose_a_png_jpeg_or_webp_image_no_larger_than_1mb"),
+        );
+        return;
+      }
+      setFile(image);
+      setResetAvatar(false);
+    } catch (reason) {
+      setError(
+        reason instanceof Error && reason.message
+          ? reason.message
+          : formText("unable_to_save"),
+      );
     } finally {
-      setBusy(false);
+      setProcessing(false);
     }
   }
-  async function saveAvatar() {
+  async function saveProfile() {
+    if (busy || processing) return;
     setBusy(true);
     setError("");
+    let nameChanged = false;
     try {
+      if (name.trim() !== savedName) {
+        await accountsRequest("/oidc/customer/self", {
+          method: "PATCH",
+          body: JSON.stringify({ name: name.trim() }),
+        });
+        setSavedName(name.trim());
+        setRefreshPending(true);
+        nameChanged = true;
+      }
       if (resetAvatar)
         await accountsRequest("/api/me/avatar", { method: "DELETE" });
       else if (file)
@@ -97,9 +137,16 @@ export function CustomerProfileEditor({
           headers: { "Content-Type": file.type },
         });
       setAvatarOpen(false);
+      toast({ tone: "success", title: formText("saved") });
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : formText("unable_to_save"));
+      const message =
+        e instanceof Error ? e.message : formText("unable_to_save");
+      setError(
+        nameChanged || refreshPending
+          ? formText("profile_partial_save", { message })
+          : message,
+      );
     } finally {
       setBusy(false);
     }
@@ -144,50 +191,11 @@ export function CustomerProfileEditor({
           className="accounts-identity-edit"
           onClick={openAvatar}
         >
-          {formText("edit_avatar")}
+          {formText("edit")}
         </Button>
       </div>
-      <AccountSection
-        title={formText("basic_information")}
-        icon="user"
-        action={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setName(profile.name ?? "");
-              setEditing(!editing);
-            }}
-          >
-            {editing ? formText("cancel") : formText("edit")}
-          </Button>
-        }
-      >
-        <AccountRow
-          label={
-            <>
-              {formText("name")}
-              {editing ? (
-                <span className="accounts-required" aria-hidden="true">
-                  *
-                </span>
-              ) : null}
-            </>
-          }
-        >
-          {editing ? (
-            <Input
-              aria-label={formText("name")}
-              required
-              maxLength={100}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={busy}
-            />
-          ) : (
-            profile.name || "—"
-          )}
-        </AccountRow>
+      <AccountSection title={formText("basic_information")} icon="user">
+        <AccountRow label={formText("name")}>{profile.name || "—"}</AccountRow>
         <AccountRow label={formText("account")}>{profile.account}</AccountRow>
         {(["phone", "email"] as const).map((kind) => (
           <AccountRow key={kind} label={formText(kind)}>
@@ -215,70 +223,96 @@ export function CustomerProfileEditor({
             </div>
           </AccountRow>
         ))}
-        {editing ? (
-          <Button disabled={busy || !name.trim()} onClick={() => void save()}>
-            {formText("save")}
-          </Button>
-        ) : null}
-        {error && !avatarOpen ? <Banner tone="danger" title={error} /> : null}
       </AccountSection>
       <CustomerPreferences profile={profile} />
       <DialogForm
         size="sm"
-        title={formText("change_avatar")}
+        title={formText("edit_profile")}
         submitLabel={formText("save")}
         cancelLabel={formText("cancel")}
         submitting={busy}
-        submitDisabled={!file && !resetAvatar}
+        submitDisabled={
+          processing ||
+          !name.trim() ||
+          (name.trim() === savedName && !file && !resetAvatar)
+        }
         onSubmit={(event) => {
           event.preventDefault();
-          void saveAvatar();
+          if (!processing) void saveProfile();
         }}
         open={avatarOpen}
         onOpenChange={(open) => {
-          if (!busy) setAvatarOpen(open);
+          if (!busy && !processing) {
+            setAvatarOpen(open);
+            if (!open && refreshPending) onSaved();
+          }
         }}
       >
-        <div className="accounts-avatar-preview">{avatar(picture)}</div>
-        <label className="text-body-sm">
-          {formText("choose_image")}
-          <Input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={busy}
-            onChange={(e) => {
-              const next = e.target.files?.[0];
-              if (!next) return;
-              if (
-                next.size > 1048576 ||
-                !["image/png", "image/jpeg", "image/webp"].includes(next.type)
-              ) {
-                setError(
-                  formText(
-                    "choose_a_png_jpeg_or_webp_image_no_larger_than_1mb",
-                  ),
-                );
-                return;
-              }
-              setFile(next);
-              setResetAvatar(false);
-              setError("");
-            }}
-          />
-        </label>
-        {error ? <Banner tone="danger" title={error} /> : null}
-        <div className="accounts-avatar-reset">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => {
-              setFile(null);
-              setResetAvatar(true);
-            }}
-          >
-            {formText("restore_default")}
-          </Button>
+        <div className="accounts-profile-editor" aria-busy={processing || busy}>
+          <div className="accounts-profile-avatar-editor">
+            <div className="accounts-avatar-preview">{avatar(picture)}</div>
+            <div className="accounts-profile-upload-actions">
+              <Input
+                ref={fileInput}
+                type="file"
+                hidden
+                className="hidden"
+                aria-label={formText("choose_image")}
+                accept="image/png,image/jpeg,image/webp"
+                disabled={busy || processing}
+                onChange={(event) => {
+                  const next = event.target.files?.[0];
+                  event.target.value = "";
+                  if (next) void selectImage(next);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || processing}
+                onClick={() => fileInput.current?.click()}
+              >
+                {formText(processing ? "processing_image" : "choose_image")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="accounts-avatar-reset"
+                disabled={busy || processing || (!file && !currentPicture)}
+                onClick={() => {
+                  setFile(null);
+                  setResetAvatar(Boolean(currentPicture));
+                  setError("");
+                }}
+              >
+                {formText("restore_default")}
+              </Button>
+            </div>
+            <p className="accounts-profile-upload-hint">
+              {formText("avatar_upload_hint")}
+            </p>
+          </div>
+          <div className="accounts-profile-name-editor">
+            <label htmlFor={nameId}>
+              {formText("name")}
+              <span className="accounts-required" aria-hidden="true">
+                {" "}
+                *
+              </span>
+            </label>
+            <Input
+              id={nameId}
+              required
+              maxLength={96}
+              value={name}
+              disabled={busy || processing}
+              autoComplete="name"
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          {error ? <Banner tone="danger" title={error} /> : null}
         </div>
       </DialogForm>
     </>
@@ -290,27 +324,29 @@ export function CustomerProfileEditor({
 // ============================================================================
 function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
   const formText = useTranslations("accountsForms");
+  const { toast } = useToast();
   const theme = useTheme();
   const router = useRouter();
   const [language, setLanguage] = useState(profile.language || "zh-CN");
   const [timezone, setTimezone] = useState(profile.timezone || "");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [saved, setSaved] = useState(false);
   async function save() {
+    if (busy) return;
     setBusy(true);
-    setMessage("");
-    setSaved(false);
     try {
       await accountsRequest("/oidc/customer/self", {
         method: "PATCH",
         body: JSON.stringify({ language, timezone }),
       });
       setAccountsLocale(language === "en-US" ? "en-US" : "zh-CN");
-      setSaved(true);
+      toast({ tone: "success", title: formText("saved") });
       router.refresh();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : formText("unable_to_save"));
+      toast({
+        tone: "danger",
+        title: formText("unable_to_save"),
+        ...(e instanceof Error ? { description: e.message } : {}),
+      });
     } finally {
       setBusy(false);
     }
@@ -320,7 +356,7 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
       <AccountRow label={formText("language")}>
         <NativeSelect
           aria-label={formText("language")}
-          className="accounts-preference-control"
+          wrapperClassName="accounts-preference-control"
           value={language}
           disabled={busy}
           onChange={(e) => setLanguage(e.target.value)}
@@ -332,7 +368,7 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
       <AccountRow label={formText("time_zone")}>
         <NativeSelect
           aria-label={formText("time_zone")}
-          className="accounts-preference-control"
+          wrapperClassName="accounts-preference-control"
           value={timezone}
           disabled={busy}
           onChange={(e) => setTimezone(e.target.value)}
@@ -404,14 +440,11 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
           ]}
         />
       </AccountRow>
-      <Button size="sm" disabled={busy} onClick={() => void save()}>
-        {formText("save")}
-      </Button>
-      {saved || message ? (
-        <p role="status" className="text-body-sm text-muted-foreground">
-          {saved ? formText("saved") : message}
-        </p>
-      ) : null}
+      <AccountActions>
+        <Button size="sm" disabled={busy} onClick={() => void save()}>
+          {busy ? formText("processing") : formText("save")}
+        </Button>
+      </AccountActions>
     </AccountSection>
   );
 }

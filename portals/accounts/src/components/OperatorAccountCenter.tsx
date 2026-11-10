@@ -19,6 +19,8 @@ import {
 import {
   Banner,
   Button,
+  DialogForm,
+  useToast,
   Field,
   FieldLabel,
   Input,
@@ -47,10 +49,11 @@ import {
 } from "@/api/operator-self";
 import { VerificationCodeInput } from "./VerificationCodeInput";
 import { MfaEnrollment } from "./MfaEnrollment";
-import { MfaRecoveryCodes } from "./MfaRecoveryCodes";
+import { MfaCompletion } from "./CustomerMfaPanel";
 import {
   useAccountSessionExpired,
   useAccountMenuUpdate,
+  useAccountCompletion,
 } from "./AccountCenterShell";
 
 type Load =
@@ -213,7 +216,8 @@ function ReadyView({
   const [flow, setFlow] = useState<ContactFlow | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const { toast } = useToast();
+  const formText = useTranslations("accountsForms");
 
   function open(kind: "email" | "phone") {
     setError(null);
@@ -226,7 +230,7 @@ function ReadyView({
 
   async function onSubmitContact(e: FormEvent) {
     e.preventDefault();
-    if (!flow) return;
+    if (!flow || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -243,9 +247,11 @@ function ReadyView({
         if (!code) return;
         if (flow.kind === "email") await verifyOperatorEmailChange(code);
         else await verifyOperatorPhoneChange(flow.value.trim(), code);
-        setNotice(
-          flow.kind === "email" ? t("email.updated") : t("phone.updated"),
-        );
+        toast({
+          tone: "success",
+          title:
+            flow.kind === "email" ? t("email.updated") : t("phone.updated"),
+        });
         setFlow(null);
         onChanged();
       }
@@ -258,8 +264,6 @@ function ReadyView({
 
   return (
     <div className="flex flex-col gap-lg">
-      {notice ? <Banner tone="success" title={notice} /> : null}
-
       {section === "profile" ? (
         <AccountSection title={t("section.account")} icon="user">
           <div>
@@ -292,8 +296,27 @@ function ReadyView({
           </div>
 
           {flow ? (
-            <form
-              className="flex flex-col gap-sm border-t border-border pt-md"
+            <DialogForm
+              open
+              size="sm"
+              title={
+                flow.kind === "email" ? t("email.change") : t("phone.change")
+              }
+              description={formText("contact_change_consequence")}
+              submitting={busy}
+              pendingLabel={formText("processing")}
+              cancelLabel={formText("cancel")}
+              submitLabel={
+                flow.step === "input" ? t("email.sendCode") : t("email.verify")
+              }
+              submitDisabled={
+                flow.step === "input"
+                  ? !flow.value.trim()
+                  : !/^\d{6}$/.test(flow.code)
+              }
+              onOpenChange={(next) => {
+                if (!next && !busy) cancel();
+              }}
               onSubmit={onSubmitContact}
             >
               {flow.step === "input" ? (
@@ -306,6 +329,7 @@ function ReadyView({
                   <Input
                     id="operatoraccountcenter-email-newlabel"
                     required
+                    disabled={busy}
                     type={flow.kind === "email" ? "email" : "tel"}
                     value={flow.value}
                     onChange={(ev) =>
@@ -334,32 +358,7 @@ function ReadyView({
               {error ? (
                 <Banner tone="danger" title={error || t("loadFailed")} />
               ) : null}
-              <div className="flex gap-xs">
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={
-                    busy ||
-                    (flow.step === "input"
-                      ? !flow.value.trim()
-                      : !/^\d{6}$/.test(flow.code))
-                  }
-                >
-                  {flow.step === "input"
-                    ? t("email.sendCode")
-                    : t("email.verify")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={cancel}
-                  disabled={busy}
-                >
-                  {t("email.cancel")}
-                </Button>
-              </div>
-            </form>
+            </DialogForm>
           ) : null}
         </AccountSection>
       ) : null}
@@ -368,82 +367,30 @@ function ReadyView({
         <>
           <PasswordCard onDone={onPasswordChanged} />
 
-          <MfaCard
-            enabled={self.mfaTotpEnabled}
-            onDone={() => {
-              setNotice(t("mfa.updated"));
-              onChanged();
-            }}
-          />
+          <MfaCard enabled={self.mfaTotpEnabled} />
         </>
       ) : null}
     </div>
   );
 }
 
-/** TOTP two-factor (re-)enrollment: stage secret → scan QR → confirm code → recovery codes. */
-function MfaCard({
-  enabled,
-  onDone,
-}: {
-  enabled: boolean;
-  onDone: () => void;
-}) {
+/** Keep current-factor proof, enrollment and recovery acknowledgment in modal flows. */
+function MfaCard({ enabled }: { enabled: boolean }) {
   const t = useTranslations("operatorAccount");
-  const [phase, setPhase] = useState<"idle" | "enroll" | "done">("idle");
-  const [expanded, setExpanded] = useState(false);
+  const formText = useTranslations("accountsForms");
+  const beginCompletion = useAccountCompletion();
+  const [phase, setPhase] = useState<"idle" | "enroll">("idle");
+  const [open, setOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [currentCode, setCurrentCode] = useState("");
   const [enrollmentToken, setEnrollmentToken] = useState("");
   const [otpauthUri, setOtpauthUri] = useState("");
   const [secret, setSecret] = useState("");
   const [code, setCode] = useState("");
-  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function begin() {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await startOperatorMfaTotp(currentPassword, currentCode);
-      setOtpauthUri(res.otpauthUri);
-      setSecret(res.secret);
-      setEnrollmentToken(res.enrollmentToken);
-      setCurrentPassword("");
-      setCurrentCode("");
-      setPhase("enroll");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirm(e: FormEvent) {
-    e.preventDefault();
-    const c = code.trim();
-    if (!/^\d{6}$/.test(c)) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await confirmOperatorMfaTotp(c, enrollmentToken);
-      setRecoveryCodes(res.recoveryCodes);
-      setPhase("done");
-      setCode("");
-      setSecret("");
-      setOtpauthUri("");
-      setEnrollmentToken("");
-      onDone();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const [error, setError] = useState("");
   function reset() {
-    setExpanded(false);
+    setOpen(false);
     setPhase("idle");
     setCurrentPassword("");
     setCurrentCode("");
@@ -451,127 +398,125 @@ function MfaCard({
     setOtpauthUri("");
     setSecret("");
     setCode("");
-    setRecoveryCodes([]);
-    setError(null);
+    setError("");
   }
-
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (phase === "idle") {
+        const result = await startOperatorMfaTotp(currentPassword, currentCode);
+        setOtpauthUri(result.otpauthUri);
+        setSecret(result.secret);
+        setEnrollmentToken(result.enrollmentToken);
+        setCurrentPassword("");
+        setCurrentCode("");
+        setPhase("enroll");
+      } else {
+        const completion = beginCompletion();
+        try {
+          const result = await confirmOperatorMfaTotp(
+            code.trim(),
+            enrollmentToken,
+          );
+          completion.complete(
+            <MfaCompletion realm="workforce" codes={result.recoveryCodes} />,
+          );
+          reset();
+        } catch (reason) {
+          completion.cancel();
+          throw reason;
+        }
+      }
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : formText("unable_to_complete_this_action"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <AccountSection
       title={t("mfa.title")}
       icon="shield-check"
       action={
-        phase === "idle" && !expanded ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(true)}
-          >
-            {enabled ? t("mfa.reenroll") : t("mfa.setup")}
-          </Button>
-        ) : undefined
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setOpen(true)}
+        >
+          {enabled ? t("mfa.reenroll") : t("mfa.setup")}
+        </Button>
       }
     >
-      <div className="flex items-center gap-sm">
-        <StatusBadge tone={enabled ? "success" : "warning"}>
-          {enabled ? t("mfa.enabled") : t("mfa.disabled")}
-        </StatusBadge>
-      </div>
-      {phase === "idle" && expanded ? (
-        <form
-          className="flex flex-col gap-sm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void begin();
-          }}
-        >
-          <p className="text-body-sm text-muted-foreground">
-            {t("mfa.reauthHint")}
-          </p>
-          <Field>
-            <FieldLabel htmlFor="mfa-current-password">
-              {t("mfa.currentPassword")}
-            </FieldLabel>
-            <PasswordInput
-              id="mfa-current-password"
-              required
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-              disabled={busy}
-            />
-          </Field>
-          {enabled ? (
-            <VerificationCodeInput
-              name="mfa-current-code"
-              label={t("mfa.currentCode")}
-              value={currentCode}
-              onChange={setCurrentCode}
-              disabled={busy}
-            />
-          ) : null}
-          {error ? <Banner tone="danger" title={error} /> : null}
-          <Button
-            type="submit"
-            variant="secondary"
-            size="sm"
-            disabled={
-              busy ||
-              !currentPassword ||
-              (enabled && !/^\d{6}$/.test(currentCode))
-            }
-          >
-            {enabled ? t("mfa.reenroll") : t("mfa.setup")}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={reset}
-            disabled={busy}
-          >
-            {t("email.cancel")}
-          </Button>
-        </form>
-      ) : phase === "enroll" ? (
-        <form className="flex flex-col gap-sm" onSubmit={confirm}>
+      <StatusBadge tone={enabled ? "success" : "warning"}>
+        {enabled ? t("mfa.enabled") : t("mfa.disabled")}
+      </StatusBadge>
+      <DialogForm
+        open={open}
+        size="sm"
+        title={enabled ? t("mfa.reenroll") : t("mfa.setup")}
+        description={formText("operator_mfa_consequence")}
+        danger={enabled && phase === "enroll"}
+        submitting={busy}
+        pendingLabel={formText("processing")}
+        cancelLabel={formText("cancel")}
+        submitLabel={phase === "idle" ? formText("continue") : t("mfa.confirm")}
+        submitDisabled={
+          phase === "idle"
+            ? !currentPassword || (enabled && !/^\d{6}$/.test(currentCode))
+            : !/^\d{6}$/.test(code)
+        }
+        onOpenChange={(next) => {
+          if (!next && !busy) reset();
+        }}
+        onSubmit={submit}
+      >
+        {phase === "idle" ? (
+          <>
+            <p className="text-body-sm text-muted-foreground">
+              {t("mfa.reauthHint")}
+            </p>
+            <Field>
+              <FieldLabel htmlFor="mfa-current-password">
+                {t("mfa.currentPassword")}
+              </FieldLabel>
+              <PasswordInput
+                id="mfa-current-password"
+                required
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                disabled={busy}
+              />
+            </Field>
+            {enabled ? (
+              <VerificationCodeInput
+                name="mfa-current-code"
+                label={t("mfa.currentCode")}
+                value={currentCode}
+                onChange={setCurrentCode}
+                disabled={busy}
+              />
+            ) : null}
+          </>
+        ) : (
           <MfaEnrollment
             secret={secret}
             otpauthUri={otpauthUri}
             code={code}
             onChange={setCode}
             disabled={busy}
-            error={error ?? undefined}
           />
-          <div className="flex gap-xs">
-            <Button
-              type="submit"
-              size="sm"
-              disabled={busy || !/^\d{6}$/.test(code)}
-            >
-              {t("mfa.confirm")}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={reset}
-              disabled={busy}
-            >
-              {t("email.cancel")}
-            </Button>
-          </div>
-        </form>
-      ) : phase === "done" ? (
-        <div className="flex flex-col gap-sm">
-          <MfaRecoveryCodes
-            codes={recoveryCodes}
-            onContinue={reset}
-            continueLabel={t("mfa.done")}
-          />
-        </div>
-      ) : null}
+        )}
+        {error ? <Banner tone="danger" title={error} /> : null}
+      </DialogForm>
     </AccountSection>
   );
 }
@@ -632,6 +577,7 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     if (!validNewPassword(next, "workforce")) {
       setError(policyText("password_policy_workforce"));
       return;
@@ -670,71 +616,68 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
         ) : undefined
       }
     >
-      {open ? (
-        <form className="flex flex-col gap-sm" onSubmit={onSubmit}>
-          <Field>
-            <FieldLabel htmlFor="operatoraccountcenter-password-current">
-              {t("password.current")}
-            </FieldLabel>
-            <PasswordInput
-              id="operatoraccountcenter-password-current"
-              required
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              autoComplete="current-password"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="operatoraccountcenter-password-new">
-              {t("password.new")}
-            </FieldLabel>
-            <PasswordInput
-              id="operatoraccountcenter-password-new"
-              required
-              type="password"
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-              autoComplete="new-password"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="operatoraccountcenter-password-confirm">
-              {t("password.confirm")}
-            </FieldLabel>
-            <PasswordInput
-              id="operatoraccountcenter-password-confirm"
-              required
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              autoComplete="new-password"
-            />
-          </Field>
-          <p className="text-body-sm text-muted-foreground">
-            {policyText("password_policy_workforce")} {t("password.hint")}
-          </p>
-          {error ? <Banner tone="danger" title={error} /> : null}
-          <div className="flex gap-xs">
-            <Button
-              type="submit"
-              size="sm"
-              disabled={busy || !current || !next || !confirm}
-            >
-              {t("password.change")}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={reset}
-              disabled={busy}
-            >
-              {t("email.cancel")}
-            </Button>
-          </div>
-        </form>
-      ) : null}
+      <DialogForm
+        open={open}
+        size="sm"
+        title={t("password.change")}
+        description={policyText("security_change_consequence")}
+        submitting={busy}
+        pendingLabel={policyText("processing")}
+        cancelLabel={t("email.cancel")}
+        submitLabel={t("password.change")}
+        submitDisabled={!current || !next || !confirm}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !busy) reset();
+        }}
+        onSubmit={onSubmit}
+      >
+        <Field>
+          <FieldLabel htmlFor="operatoraccountcenter-password-current">
+            {t("password.current")}
+          </FieldLabel>
+          <PasswordInput
+            id="operatoraccountcenter-password-current"
+            required
+            disabled={busy}
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            autoComplete="current-password"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="operatoraccountcenter-password-new">
+            {t("password.new")}
+          </FieldLabel>
+          <PasswordInput
+            id="operatoraccountcenter-password-new"
+            required
+            disabled={busy}
+            type="password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            autoComplete="new-password"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="operatoraccountcenter-password-confirm">
+            {t("password.confirm")}
+          </FieldLabel>
+          <PasswordInput
+            id="operatoraccountcenter-password-confirm"
+            required
+            disabled={busy}
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+          />
+        </Field>
+        <p className="text-body-sm text-muted-foreground">
+          {policyText("password_policy_workforce")} {t("password.hint")}
+        </p>
+        {error ? <Banner tone="danger" title={error} /> : null}
+      </DialogForm>
     </AccountSection>
   );
 }

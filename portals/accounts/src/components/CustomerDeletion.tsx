@@ -10,9 +10,16 @@
 import { useLocale, useTranslations } from "next-intl";
 import { formatDateTime } from "@vxture-platform/shared";
 import { useEffect, useState } from "react";
-import { Banner, Button, Checkbox, NativeSelect } from "@vxture/design-system";
+import {
+  Banner,
+  Button,
+  Checkbox,
+  DialogForm,
+  NativeSelect,
+  useToast,
+} from "@vxture/design-system";
 import { accountsRequest, type CustomerSecurity } from "@/api/customer-self";
-import { AccountSection } from "./AccountPrimitives";
+import { AccountSection, AccountActions } from "./AccountPrimitives";
 import { VerificationCodeInput } from "./VerificationCodeInput";
 import { useAccountCompletion } from "./AccountCenterShell";
 import { AccountReauthentication } from "./AccountReauthentication";
@@ -47,6 +54,7 @@ export function CustomerDeletion({
   const locale = useLocale();
   const beginCompletion = useAccountCompletion();
   const formText = useTranslations("accountsForms");
+  const { toast } = useToast();
   const LABELS: Record<string, string> = {
     org_owner: formText("transfer_or_close_the_organizations_you_own_first"),
     unpaid_bills: formText("outstanding_bills_remain"),
@@ -74,6 +82,7 @@ export function CustomerDeletion({
   const [verified, setVerified] = useState(false);
   const [method, setMethod] = useState("phone");
   const [done, setDone] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [revision, setRevision] = useState(0);
   const base = "/oidc/customer/self/deletion";
   useEffect(() => {
@@ -120,7 +129,13 @@ export function CustomerDeletion({
           });
           if (completion)
             completion.complete(<AccountReauthentication deletion />);
-          else setDone(true);
+          else {
+            setDone(true);
+            toast({
+              tone: "success",
+              title: formText("deletion_cancelled_your_account_is_restored"),
+            });
+          }
         } catch (error) {
           completion?.cancel();
           throw error;
@@ -241,38 +256,39 @@ export function CustomerDeletion({
                       {formText("identity_verified")}
                     </p>
                   )}
-                  <Button
-                    {...(!recovery && verified
-                      ? {
-                          variant: "destructive" as const,
-                          confirmExempt:
-                            "The verified deletion flow already requires an explicit consequence acknowledgment and an operation-bound code.",
-                        }
-                      : { variant: "default" as const })}
-                    disabled={
-                      busy ||
-                      (!recovery && !accepted) ||
-                      (Boolean(challenge) && !verified && code.length !== 6)
-                    }
-                    onClick={() => void run()}
-                  >
-                    {busy
-                      ? formText("processing")
-                      : !challenge
-                        ? formText("send_code")
-                        : !verified
-                          ? formText("verify")
-                          : recovery
-                            ? formText("cancel_deletion")
-                            : formText("confirm_account_deletion")}
-                  </Button>
+                  <AccountActions>
+                    <Button
+                      variant="default"
+                      disabled={
+                        busy ||
+                        (!recovery && !accepted) ||
+                        (Boolean(challenge) && !verified && code.length !== 6)
+                      }
+                      onClick={() => {
+                        if (!recovery && verified) {
+                          setError("");
+                          setConfirmOpen(true);
+                        } else void run();
+                      }}
+                    >
+                      {busy
+                        ? formText("processing")
+                        : !challenge
+                          ? formText("send_code")
+                          : !verified
+                            ? formText("verify")
+                            : recovery
+                              ? formText("cancel_deletion")
+                              : formText("confirm_account_deletion")}
+                    </Button>
+                  </AccountActions>
                 </>
               ) : null}
             </>
           ) : (
             <p role="status">{formText("loading_account_status")}</p>
           )}
-          {error ? (
+          {error && !confirmOpen ? (
             <>
               <Banner tone="danger" title={error} />
               <Button
@@ -290,6 +306,30 @@ export function CustomerDeletion({
           ) : null}
         </div>
       )}
+      <DialogForm
+        size="sm"
+        open={confirmOpen}
+        onOpenChange={(next) => {
+          if (!busy) setConfirmOpen(next);
+        }}
+        title={formText("confirm_account_deletion")}
+        description={formText("retention_notice", {
+          days: state?.retentionDays ?? 30,
+        })}
+        danger
+        submitting={busy}
+        submitDisabled={!allowed || !accepted || !verified}
+        submitLabel={formText("confirm_account_deletion")}
+        cancelLabel={formText("cancel")}
+        pendingLabel={formText("processing")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (verified) void run();
+        }}
+      >
+        <p className="text-body-sm">{formText("deletion_final_consequence")}</p>
+        {error ? <Banner tone="danger" title={error} /> : null}
+      </DialogForm>
     </AccountSection>
   );
 }

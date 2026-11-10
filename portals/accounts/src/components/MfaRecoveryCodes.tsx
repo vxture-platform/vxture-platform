@@ -10,7 +10,7 @@
 import { useTranslations } from "next-intl";
 
 import { useId, useState } from "react";
-import { Button, Checkbox } from "@vxture/design-system";
+import { Banner, Button, Checkbox, useToast } from "@vxture/design-system";
 
 interface MfaRecoveryCodesProps {
   readonly codes: readonly string[];
@@ -29,13 +29,15 @@ export function MfaRecoveryCodes({
   continueLabel,
 }: MfaRecoveryCodesProps) {
   const formText = useTranslations("accountsForms");
+  const { toast } = useToast();
   const id = useId();
   const [saved, setSaved] = useState(false);
   const [feedback, setFeedback] = useState("");
   async function copy() {
     try {
       await navigator.clipboard.writeText(codes.join("\n"));
-      setFeedback(formText("copied"));
+      setFeedback("");
+      toast({ tone: "success", title: formText("copied") });
     } catch {
       setFeedback(formText("unable_to_copy_save_the_recovery_codes_manually"));
     }
@@ -62,11 +64,7 @@ export function MfaRecoveryCodes({
       >
         {formText("copy_recovery_codes")}
       </Button>
-      {feedback ? (
-        <p role="status" className="text-body-sm text-muted-foreground">
-          {feedback}
-        </p>
-      ) : null}
+      {feedback ? <Banner tone="warning" title={feedback} /> : null}
       <div className="flex items-center gap-sm">
         <Checkbox
           id={id}

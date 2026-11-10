@@ -22,3 +22,10 @@
  */
 
 export * from "./utils";
+export {
+  downscaleImage,
+  MAX_EDGE,
+  pickOutputType,
+  shouldSkipDownscale,
+  targetSize,
+} from "./image-downscale";
