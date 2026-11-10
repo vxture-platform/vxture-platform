@@ -54,9 +54,7 @@ export class CustomerSecurityService {
     ];
     if (
       typeof input.operation !== "string" ||
-      !operations.includes(input.operation) ||
-      typeof input.method !== "string" ||
-      !["phone", "email"].includes(input.method)
+      !operations.includes(input.operation)
     )
       throw new BadRequestException("invalid_security_request");
     const operation = input.operation as CustomerSecurityOperation;
@@ -105,19 +103,26 @@ export class CustomerSecurityService {
       ).filter((identity) => identity.provider === target);
       if (!identities.length)
         throw new BadRequestException("identity_not_bound");
+      return this.challenges.startAuthorized(
+        context,
+        operation,
+        target,
+        input.proofToken,
+        identities.map((identity) => identity.providerSubject).sort(),
+      );
+    }
+    if (["phone-verify", "email-verify"].includes(operation))
       return this.challenges.start(
         context,
         operation,
         target,
-        input.method as "phone" | "email",
-        identities.map((identity) => identity.providerSubject).sort(),
+        operation === "phone-verify" ? "phone" : "email",
       );
-    }
-    return this.challenges.start(
+    return this.challenges.startAuthorized(
       context,
       operation,
       target,
-      input.method as "phone" | "email",
+      input.proofToken,
     );
   }
 
@@ -146,8 +151,17 @@ export class CustomerSecurityService {
       !validNewPassword(passwords.password, "customer")
     )
       throw new BadRequestException("weak_password");
-    const sessions = await this.accounts.listSessions(context.userId);
+    const sessions =
+      proof.operation === "username"
+        ? []
+        : await this.accounts.listSessions(context.userId);
     await this.accounts.applySelfSecurity(context.userId, proof, passwords);
+    if (proof.operation === "username")
+      return {
+        ok: true as const,
+        reauthenticate: false as const,
+        logoutPropagationPending: false,
+      };
     try {
       await this.oidc.cleanupCustomerSessions(
         context.userId,

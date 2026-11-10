@@ -236,9 +236,25 @@ export class AuthnService {
    */
   async requestPasswordReset(email: string): Promise<void> {
     const normalized = email.toLowerCase().trim();
+    if (
+      normalized.length > 128 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
+    )
+      return;
     const user = await this.account.findUserByIdentifier(normalized);
-    if (!user || !user.email) return;
-    const raw = await this.passwordReset.issue(user.id, RESET_TTL_SECONDS);
+    if (
+      !user ||
+      user.email?.toLowerCase().trim() !== normalized ||
+      user.emailVerified !== true ||
+      !["active", "deleting"].includes(user.status)
+    )
+      return;
+    const raw = await this.passwordReset.issue(
+      user.id,
+      RESET_TTL_SECONDS,
+      normalized,
+    );
+    if (!raw) return;
     const base = this.config.platform.LOGIN_UI_BASE_URL.replace(/\/$/, "");
     const resetUrl = `${base}/reset-password?token=${raw}`;
     // Delivery failure must not surface to the caller (anti-enumeration: same 200

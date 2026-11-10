@@ -15,7 +15,13 @@ import { OperatorAdminInternalRouter } from "../routers/operator-admin-internal.
 // ============================================================================
 function fixture() {
   const operators = {
-    getOperatorAdminView: vi.fn(async () => ({ email: "old@example.com" })),
+    findById: vi.fn(async () => ({ authenticationVersion: "v1" })),
+    getOperatorAdminView: vi.fn(async () => ({
+      email: "old@example.com",
+      emailVerified: true,
+      phone: "13900139000",
+      phoneVerified: true,
+    })),
     setOperatorContactVerified: vi.fn(async () => true),
   };
   const redis = {
@@ -37,7 +43,8 @@ function fixture() {
     {} as never,
     {} as never,
     {} as never,
-    {} as never,
+    { endOperatorSessions: vi.fn(async () => {}) } as never,
+    { require: vi.fn(async () => {}) } as never,
   );
   return { service, operators, redis, realms, mail };
 }
@@ -101,6 +108,7 @@ describe("workforce email change", () => {
       "operator",
       "email",
       "new@example.com",
+      "v1",
     );
   });
   it("rejects missing or replayed proof without writing", async () => {

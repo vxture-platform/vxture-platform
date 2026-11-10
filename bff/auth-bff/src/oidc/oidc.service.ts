@@ -34,7 +34,12 @@ import {
   type OidcClientInfo,
   type OperatorView,
 } from "@vxture/service-iam";
-import { RedisService, type OidcLoginChallenge } from "../redis/redis.service";
+import {
+  RedisService,
+  type OidcCentralSession,
+  type OidcLoginChallenge,
+  type OperatorMfaPending,
+} from "../redis/redis.service";
 import {
   parseSessionStatusBody,
   sessionStatusUnauthorized,
@@ -59,6 +64,7 @@ import { OperatorAnomalyService } from "./operator-anomaly.service";
 import { TenantLoginGuard } from "../authn/tenant-login-guard.service";
 import {
   realmSubjectMatches,
+  operatorSessionCurrent,
   type IdentityRealm,
 } from "./realm-session.service";
 import { AppScopeResolver } from "./app-scope.resolver";
@@ -220,6 +226,9 @@ export interface OidcEnrollCompletion extends OidcLoginCompletion {
 
 /** Snapshot fields needed to resume an authorize and issue the code. */
 interface OperatorAuthorizeSnapshot {
+  credentialVersion?: string;
+  authenticationVersion?: string;
+  enrollRequired?: boolean;
   redirectUri: string;
   scope: string;
   state?: string | undefined;
@@ -361,7 +370,47 @@ export class OidcService {
     } catch {
       throw new UnauthorizedException("invalid_token");
     }
-    const sub = String(claims.sub ?? "");
+    const realm =
+      claims.userType === "operator"
+        ? "workforce"
+        : claims.userType === "tenant_user"
+          ? "customer"
+          : null;
+    const sub = claims.sub;
+    if (
+      !realm ||
+      typeof sub !== "string" ||
+      !realmSubjectMatches(realm, sub) ||
+      typeof claims.aud !== "string" ||
+      typeof claims.sid !== "string" ||
+      !claims.sid ||
+      typeof claims.jti !== "string" ||
+      !claims.jti ||
+      !Array.isArray(claims.roles) ||
+      typeof claims.scope !== "string" ||
+      !claims.scope.split(/\s+/).includes("openid") ||
+      claims.scope.split(/\s+/).some((scope) => scope.startsWith("mgmt:")) ||
+      claims.stepup === true ||
+      claims.act !== undefined ||
+      claims.mode !== undefined
+    ) {
+      throw new UnauthorizedException("invalid_token");
+    }
+    const client = await this.clients.findEnabledByClientId(claims.aud);
+    if (
+      !client ||
+      client.realm !== realm ||
+      (await this.redis.isBlacklisted(claims.jti))
+    ) {
+      throw new UnauthorizedException("invalid_token");
+    }
+    try {
+      await this.requireTokenSession(client, { sid: claims.sid, sub, realm });
+    } catch (error) {
+      if (error instanceof BadRequestException)
+        throw new UnauthorizedException("invalid_token");
+      throw error;
+    }
     const id = stripSubPrefix(sub);
 
     if (sub.startsWith("opr_")) {
@@ -369,13 +418,15 @@ export class OidcService {
       if (!operator) {
         throw new UnauthorizedException("invalid_token");
       }
-      // email is required by some RPs (e.g. Cloudflare Access rejects logins
-      // without it). Operators are admin-provisioned, so treat email as verified.
+      // Provisioning an operator does not prove control of its email address.
       return {
         sub,
         name: operator.username,
         ...(operator.email
-          ? { email: operator.email, email_verified: true }
+          ? {
+              email: operator.email,
+              email_verified: operator.emailVerified === true,
+            }
           : {}),
       };
     }
@@ -402,27 +453,51 @@ export class OidcService {
 
   /**
    * Revoke a token (RFC 7009). access_token → blacklist its jti; refresh_token →
-   * revoke its session chain in the realm store that holds it (identity.* or
-   * admin.operator_refresh_token). Always succeeds.
+   * revoke only the authenticated client's family in its own realm store.
+   * Unknown or foreign tokens are a no-op after client authentication.
    */
-  async revoke(token: string, hint?: string): Promise<void> {
+  async revoke(
+    creds: OidcClientCredentials,
+    token: string,
+    hint?: string,
+  ): Promise<void> {
+    const client = await this.authClient(creds);
+    if (client.realm !== "customer" && client.realm !== "workforce")
+      throw new UnauthorizedException("invalid_client");
+    const binding = { clientId: client.clientId, realm: client.realm };
     if (hint === "refresh_token") {
-      await this.token.revokeRefreshToken(token);
+      await this.token.revokeRefreshToken(token, binding);
       return;
     }
+    let claims: Record<string, unknown>;
     try {
-      const claims = this.keys.verify(token);
-      const jti = claims.jti ? String(claims.jti) : null;
-      const exp = typeof claims.exp === "number" ? claims.exp : null;
-      if (jti) {
-        const ttl = exp
-          ? Math.max(1, exp - Math.floor(Date.now() / 1000))
-          : 900;
-        await this.redis.addToBlacklist(jti, ttl);
-      }
+      claims = this.keys.verify(token);
     } catch {
-      await this.token.revokeRefreshToken(token);
+      await this.token.revokeRefreshToken(token, binding);
+      return;
     }
+    // Ownership and token purpose precede any revocation side effect.
+    if (
+      claims.aud !== client.clientId ||
+      typeof claims.sub !== "string" ||
+      !realmSubjectMatches(client.realm, claims.sub) ||
+      claims.userType !==
+        (client.realm === "workforce" ? "operator" : "tenant_user") ||
+      !Array.isArray(claims.roles) ||
+      typeof claims.sid !== "string" ||
+      !claims.sid ||
+      claims.stepup === true ||
+      claims.act !== undefined ||
+      claims.mode !== undefined ||
+      typeof claims.jti !== "string" ||
+      !claims.jti ||
+      typeof claims.exp !== "number"
+    )
+      return;
+    await this.redis.addToBlacklist(
+      claims.jti,
+      Math.max(1, claims.exp - Math.floor(Date.now() / 1000)),
+    );
   }
 
   /** End the central session, revoke its refresh chain, and back-channel-logout RPs. */
@@ -718,7 +793,7 @@ export class OidcService {
     }
     if (
       session?.realm === "workforce" &&
-      !/\+(totp|recovery|webauthn)$/.test(session.authMethod)
+      !(await this.workforceSessionCurrent(session))
     )
       session = null;
     /*
@@ -938,7 +1013,7 @@ export class OidcService {
 
   /**
    * Resolve registered RP clients and the two reserved Accounts intents.
-   * Unknown or disabled clients retain the existing all-realms fallback.
+   * Unknown or disabled clients cannot establish a logout realm.
    */
   async logoutRealmOf(
     clientId: string | undefined,
@@ -1286,6 +1361,11 @@ export class OidcService {
     )
       return null;
 
+    if (
+      session.realm === "workforce" &&
+      !(await this.workforceSessionCurrent(session))
+    )
+      return null;
     const client = await this.loginClient(peeked.clientId);
     if (!client || client.realm !== peeked.realm) return null;
 
@@ -1763,6 +1843,13 @@ export class OidcService {
     ip: string,
     userAgent?: string,
   ): Promise<OidcLoginResult> {
+    const current = await this.operators.findById(operator.id);
+    if (
+      !operator.credentialVersion ||
+      !operator.authenticationVersion ||
+      current?.authenticationVersion !== operator.authenticationVersion
+    )
+      throw new UnauthorizedException("invalid_credentials");
     const { decision, methods } = await this.operatorMfa.resolveLoginMfa(
       operator.id,
     );
@@ -1783,6 +1870,8 @@ export class OidcService {
       mfaToken,
       {
         operatorId: operator.id,
+        credentialVersion: operator.credentialVersion,
+        authenticationVersion: operator.authenticationVersion,
         clientId: client.clientId,
         redirectUri: challenge.redirectUri,
         scope: challenge.scope,
@@ -1826,6 +1915,7 @@ export class OidcService {
       if (pending) await this.redis.deleteOperatorMfaPending(input.mfaToken);
       throw new BadRequestException("mfa_session_expired");
     }
+    await this.requireOperatorPending(pending);
     if (pending.enrollRequired) {
       // Nothing enrolled to verify against — the client must run the enroll-on-
       // login ceremony first (P2.3+), then retry.
@@ -1938,6 +2028,7 @@ export class OidcService {
       if (pending) await this.redis.deleteOperatorMfaPending(mfaToken);
       throw new BadRequestException("mfa_session_expired");
     }
+    await this.requireOperatorPending(pending);
     if (pending.enrollRequired) {
       throw new BadRequestException("mfa_enrollment_required");
     }
@@ -1965,6 +2056,7 @@ export class OidcService {
       if (pending) await this.redis.deleteOperatorMfaPending(input.mfaToken);
       throw new BadRequestException("mfa_session_expired");
     }
+    await this.requireOperatorPending(pending);
     if (pending.enrollRequired) {
       throw new BadRequestException("mfa_enrollment_required");
     }
@@ -2064,6 +2156,9 @@ export class OidcService {
       if (pending) await this.redis.deleteOperatorMfaPending(mfaToken);
       throw new BadRequestException("mfa_session_expired");
     }
+    await this.requireOperatorPending(pending);
+    if (!pending.enrollRequired)
+      throw new BadRequestException("mfa_already_enrolled");
     return this.operatorWebauthn.createRegistrationOptionsForOperator(
       pending.operatorId,
     );
@@ -2088,6 +2183,9 @@ export class OidcService {
       if (pending) await this.redis.deleteOperatorMfaPending(input.mfaToken);
       throw new BadRequestException("mfa_session_expired");
     }
+    await this.requireOperatorPending(pending);
+    if (!pending.enrollRequired)
+      throw new BadRequestException("mfa_already_enrolled");
 
     try {
       await this.operatorWebauthn.verifyRegistrationForOperator(
@@ -2183,6 +2281,7 @@ export class OidcService {
       if (pending) await this.redis.deleteOperatorMfaPending(mfaToken);
       throw new BadRequestException("mfa_session_expired");
     }
+    await this.requireOperatorPending(pending);
     if (pending.webauthnRequired) {
       // High-privilege: must enroll a passkey, not TOTP (§2.1).
       throw new BadRequestException("webauthn_required");
@@ -2214,6 +2313,7 @@ export class OidcService {
       if (pending) await this.redis.deleteOperatorMfaPending(input.mfaToken);
       throw new BadRequestException("mfa_session_expired");
     }
+    await this.requireOperatorPending(pending);
     if (pending.webauthnRequired) {
       throw new BadRequestException("webauthn_required");
     }
@@ -2315,6 +2415,16 @@ export class OidcService {
     snap: OperatorAuthorizeSnapshot,
     authMethod: string,
   ): Promise<OidcLoginCompletion> {
+    const fresh = await this.operators.findById(operator.id);
+    if (
+      !snap.credentialVersion ||
+      fresh?.credentialVersion !== snap.credentialVersion ||
+      (!snap.enrollRequired &&
+        fresh.authenticationVersion !== snap.authenticationVersion) ||
+      !fresh.mfaEnrolled ||
+      (fresh.webauthnRequired && !authMethod.endsWith("+webauthn"))
+    )
+      throw new BadRequestException("mfa_session_expired");
     const now = Math.floor(Date.now() / 1000);
     // Operator plane uses shorter session TTLs than tenant (§2.3): idle ≤ 30min,
     // absolute ≤ 8h.
@@ -2328,6 +2438,7 @@ export class OidcService {
       {
         sub,
         realm: "workforce",
+        authenticationVersion: fresh.authenticationVersion,
         authMethod,
         amr,
         createdAt: now,
@@ -2637,6 +2748,11 @@ export class OidcService {
       throw sessionStatusUnavailable();
     }
     try {
+      if (client.realm === "workforce") {
+        const session = await this.redis.getOidcSession(request.sid);
+        if (!session || !(await this.workforceSessionCurrent(session)))
+          return { valid: false };
+      }
       return await this.redis.checkOidcSessionStatus(
         request.sid,
         client.clientId,
@@ -2680,6 +2796,101 @@ export class OidcService {
     };
   }
 
+  private async workforceSessionCurrent(
+    session: OidcCentralSession,
+  ): Promise<boolean> {
+    if (
+      session.realm !== "workforce" ||
+      !realmSubjectMatches("workforce", session.sub)
+    )
+      return false;
+    return operatorSessionCurrent(
+      session,
+      await this.operators.findById(session.sub.slice(4)),
+    );
+  }
+
+  /** Reject stale first factors before MFA verification or enrollment side effects. */
+  private async requireOperatorPending(
+    pending: OperatorMfaPending,
+  ): Promise<void> {
+    const operator = await this.operators.findById(pending.operatorId);
+    if (
+      !pending.credentialVersion ||
+      !pending.authenticationVersion ||
+      operator?.credentialVersion !== pending.credentialVersion ||
+      operator.authenticationVersion !== pending.authenticationVersion
+    )
+      throw new BadRequestException("mfa_session_expired");
+    const { decision } = await this.operatorMfa.resolveLoginMfa(
+      pending.operatorId,
+    );
+    if (
+      !decision.mfaRequired ||
+      decision.enrollRequired !== pending.enrollRequired ||
+      decision.webauthnRequired !== pending.webauthnRequired
+    )
+      throw new BadRequestException("mfa_session_expired");
+  }
+
+  /**
+   * Revalidate the grant against the current authority before minting tokens.
+   * A code or refresh record is not evidence that its session is still alive.
+   * @param client - Authenticated relying party.
+   * @param binding - Identity and session captured by the presented grant.
+   * @returns The live central session in the grant's own identity domain.
+   * @throws {BadRequestException} For invalid, revoked or insufficiently authenticated identities.
+   */
+  private async requireTokenSession(
+    client: OidcClientConfig,
+    binding: { sid: string; sub: string; realm: string },
+  ): Promise<OidcCentralSession> {
+    if (
+      !binding.sid ||
+      client.realm !== binding.realm ||
+      !realmSubjectMatches(binding.realm, binding.sub)
+    ) {
+      throw new BadRequestException("invalid_grant");
+    }
+    const session = await this.redis.getOidcSession(binding.sid);
+    if (
+      !session ||
+      session.realm !== binding.realm ||
+      session.sub !== binding.sub ||
+      !Number.isFinite(session.absExpiresAt) ||
+      session.absExpiresAt <= Math.floor(Date.now() / 1000)
+    ) {
+      throw new BadRequestException("invalid_grant");
+    }
+    const userId = stripSubPrefix(binding.sub);
+    if (binding.realm === "workforce") {
+      if (!(await this.workforceSessionCurrent(session))) {
+        throw new BadRequestException("invalid_grant");
+      }
+    } else {
+      // get() excludes revoked, missing and expired durable customer sessions.
+      const durable = await this.durableSession.get(binding.sid);
+      if (
+        !durable ||
+        durable.realm !== "customer" ||
+        durable.userId !== userId
+      ) {
+        throw new BadRequestException("invalid_grant");
+      }
+      const user = await this.account.getUserById(userId);
+      if (
+        !user ||
+        !["active", "deleting"].includes(user.status) ||
+        ((await this.customerMfa.enabled(userId)) &&
+          !/\+(totp|recovery)$/.test(session.authMethod))
+      ) {
+        throw new BadRequestException("invalid_grant");
+      }
+    }
+    // Rejection never broadens into revocation in the other identity domain.
+    return session;
+  }
+
   /** authorization_code grant → token response. */
   async tokenWithAuthCode(
     creds: OidcClientCredentials,
@@ -2703,6 +2914,8 @@ export class OidcService {
     if (!verifyPkceS256(grant.codeVerifier, payload.codeChallenge)) {
       throw new BadRequestException("invalid_grant");
     }
+
+    await this.requireTokenSession(client, payload);
 
     const { accessToken, idToken } = await this.issueAccessAndId({
       client,
@@ -2735,8 +2948,8 @@ export class OidcService {
   /**
    * refresh_token grant → 轮换后的令牌响应。
    *
-   * 顺序是关键：**先校验、再消费**。三项校验（client 绑定 / 中央会话存在 /
-   * 是否已远程下线）全部跑在 `consumeRefreshToken` 之前。
+   * Validate the client, session owner, current account and MFA before rotation.
+   * All authority checks run before `consumeRefreshToken`.
    *
    * 旧写法把 `rotateRefreshToken` 放在最前面，于是上面任一项校验失败都已经
    * **烧掉了一枚令牌**（标 rotated + 插入一枚永不交付的子令牌）；客户端重试时
@@ -2753,7 +2966,10 @@ export class OidcService {
 
     let located;
     try {
-      located = await this.token.inspectRefreshToken(grant.refreshToken);
+      located = await this.token.inspectRefreshToken(grant.refreshToken, {
+        clientId: client.clientId,
+        realm: client.realm,
+      });
     } catch {
       throw new BadRequestException("invalid_grant");
     }
@@ -2761,31 +2977,13 @@ export class OidcService {
     if (presented.clientId !== client.clientId) {
       throw new BadRequestException("invalid_grant");
     }
-    const session = await this.redis.getOidcSession(presented.sessionId);
-    if (
-      !session ||
-      session.realm !== client.realm ||
-      (session.realm === "workforce" &&
-        !/\+(totp|recovery|webauthn)$/.test(session.authMethod)) ||
-      !realmSubjectMatches(client.realm, session.sub)
-    ) {
-      throw new BadRequestException("invalid_grant");
-    }
-    // console「下线此设备」只翻持久镜像的 status:刷新时回查,已吊销就把 Redis 会话
-    // 一并收掉——远程下线在下一次刷新生效。
-    if (
-      session.realm === "customer" &&
-      ((await this.durableSession.isRevoked(presented.sessionId)) ||
-        ((await this.customerMfa.enabled(session.sub.slice(4))) &&
-          !/\+(totp|recovery)$/.test(session.authMethod)))
-    ) {
-      await this.redis.deleteOidcSession(presented.sessionId);
-      // 真登出：这里才该收整条会话（不传 clientId）。
-      await this.token.revokeSession(presented.sessionId);
-      throw new BadRequestException("invalid_grant");
-    }
+    const session = await this.requireTokenSession(client, {
+      sid: presented.sessionId,
+      sub: `${client.realm === "workforce" ? "opr_" : "usr_"}${presented.userId}`,
+      realm: client.realm,
+    });
 
-    /* 三项都过了，现在才消费。 */
+    // Invalid authority must not consume a refresh token or issue a successor.
     let rotated;
     try {
       rotated = await this.token.consumeRefreshToken(located);
@@ -2853,7 +3051,10 @@ export class OidcService {
       idProfile = {
         name: operator.username,
         ...(operator.email
-          ? { email: operator.email, email_verified: true }
+          ? {
+              email: operator.email,
+              email_verified: operator.emailVerified === true,
+            }
           : {}),
       };
       accessToken = this.token.issueAccessToken({
@@ -2883,7 +3084,10 @@ export class OidcService {
              认证态，只能要么不显示、要么写死一个字面量——admin 那边正是这么错过
              一轮（"原实现恒显未认证，那是一个写死的字面量"）。 */
           ...(operator.email
-            ? { email: operator.email, email_verified: true }
+            ? {
+                email: operator.email,
+                email_verified: operator.emailVerified === true,
+              }
             : {}),
           dataScope: "global",
           scope: input.scope,
@@ -2907,6 +3111,9 @@ export class OidcService {
       // cannot reach the IdP DB the way same-origin BFFs do — so release the
       // human-identity claims here (contract §8). Loaded once per token mint.
       const user = await this.account.getUserById(userId);
+      if (!user || !["active", "deleting"].includes(user.status)) {
+        throw new BadRequestException("invalid_grant");
+      }
       const activeOrgId = ctx?.activeOrg ?? input.activeOrg ?? null;
       const activeWorkspaceId = ctx?.activeWorkspace ?? null;
       const requestedScopes = new Set(input.scope.split(/\s+/).filter(Boolean));

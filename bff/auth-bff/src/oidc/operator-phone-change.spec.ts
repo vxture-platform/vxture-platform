@@ -17,7 +17,16 @@ const PHONE = "13800000000";
 const SCOPE = { scope: "workforce-phone-change" };
 
 function build() {
-  const operators = { setOperatorContactVerified: vi.fn(async () => true) };
+  const operators = {
+    findById: vi.fn(async () => ({ authenticationVersion: "v1" })),
+    getOperatorAdminView: vi.fn(async () => ({
+      email: "old@example.com",
+      emailVerified: true,
+      phone: "13900139000",
+      phoneVerified: true,
+    })),
+    setOperatorContactVerified: vi.fn(async () => true),
+  };
   const realm = { requireOperator: vi.fn(async () => "operator-1") };
   const redis = {
     beginOperatorPhoneChange: vi.fn(
@@ -40,7 +49,8 @@ function build() {
     phone as never,
     {} as never,
     {} as never,
-    {} as never,
+    { endOperatorSessions: vi.fn(async () => {}) } as never,
+    { require: vi.fn(async () => {}) } as never,
   );
   return { service, operators, redis, realm, phone };
 }
@@ -129,6 +139,7 @@ describe("workforce phone-change verification", () => {
       "operator-1",
       "phone",
       PHONE,
+      "v1",
     );
   });
 

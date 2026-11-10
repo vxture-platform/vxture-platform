@@ -54,6 +54,7 @@ export async function fetchOperatorSelf(): Promise<OperatorSelf> {
 /** Email change step 1: send a 6-digit code to the new address. Returns the masked target. */
 export async function startOperatorEmailChange(
   newEmail: string,
+  proofToken?: string,
 ): Promise<{ sentTo: string }> {
   let res: Response;
   try {
@@ -63,7 +64,7 @@ export async function startOperatorEmailChange(
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ newEmail }),
+        body: JSON.stringify({ newEmail, proofToken }),
       },
     );
   } catch {
@@ -80,6 +81,8 @@ export async function startOperatorEmailChange(
 /** Email change step 2: submit the code from the new address. Returns the new email. */
 export async function verifyOperatorEmailChange(
   code: string,
+  newEmail: string,
+  proofToken?: string,
 ): Promise<{ email: string }> {
   let res: Response;
   try {
@@ -89,7 +92,7 @@ export async function verifyOperatorEmailChange(
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, newEmail, proofToken }),
       },
     );
   } catch {
@@ -107,6 +110,7 @@ export async function verifyOperatorEmailChange(
 /** Phone change step 1: send an SMS code to the new number. Returns the masked target. */
 export async function startOperatorPhoneChange(
   newPhone: string,
+  proofToken?: string,
 ): Promise<{ sentTo: string }> {
   let res: Response;
   try {
@@ -116,7 +120,7 @@ export async function startOperatorPhoneChange(
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ newPhone }),
+        body: JSON.stringify({ newPhone, proofToken }),
       },
     );
   } catch {
@@ -134,6 +138,7 @@ export async function startOperatorPhoneChange(
 export async function verifyOperatorPhoneChange(
   newPhone: string,
   code: string,
+  proofToken?: string,
 ): Promise<{ phone: string }> {
   let res: Response;
   try {
@@ -143,7 +148,7 @@ export async function verifyOperatorPhoneChange(
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ newPhone, code }),
+        body: JSON.stringify({ newPhone, code, proofToken }),
       },
     );
   } catch {
@@ -162,6 +167,7 @@ export async function verifyOperatorPhoneChange(
 export async function changeOperatorPassword(
   currentPassword: string,
   newPassword: string,
+  proofToken: string,
 ): Promise<void> {
   let res: Response;
   try {
@@ -169,7 +175,7 @@ export async function changeOperatorPassword(
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ currentPassword, newPassword }),
+      body: JSON.stringify({ currentPassword, newPassword, proofToken }),
     });
   } catch {
     throw new Error(apiMessage("error_36"));

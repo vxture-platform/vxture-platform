@@ -136,9 +136,14 @@ export class OperatorWebauthnService {
     sid: string | undefined,
     response: RegistrationResponseJSON,
   ): Promise<{ credentialId: string }> {
+    const operatorId = await this.resolveOperatorId(sid);
+    const operator = await this.operators.findById(operatorId);
+    if (!operator?.authenticationVersion)
+      throw new UnauthorizedException("operator_session_required");
     return this.verifyRegistrationForOperator(
-      await this.resolveOperatorId(sid),
+      operatorId,
       response,
+      operator.authenticationVersion,
     );
   }
 
@@ -146,6 +151,7 @@ export class OperatorWebauthnService {
   async verifyRegistrationForOperator(
     operatorId: string,
     response: RegistrationResponseJSON,
+    expectedAuthenticationVersion?: string,
   ): Promise<{ credentialId: string }> {
     const { rpID, origin } = this.rp();
 
@@ -167,6 +173,9 @@ export class OperatorWebauthnService {
 
     const { credential, aaguid } = verification.registrationInfo;
     await this.operators.insertWebauthnCredential({
+      ...(expectedAuthenticationVersion
+        ? { expectedAuthenticationVersion }
+        : {}),
       operatorId,
       credentialId: credential.id,
       publicKey: Buffer.from(credential.publicKey),
@@ -186,6 +195,7 @@ export class OperatorWebauthnService {
    */
   async createAuthenticationOptions(
     operatorId: string,
+    persist = true,
   ): Promise<PublicKeyCredentialRequestOptionsJSON> {
     const { rpID } = this.rp();
     const creds =
@@ -201,11 +211,12 @@ export class OperatorWebauthnService {
       })),
       userVerification: "preferred",
     });
-    await this.redis.storeOperatorWebauthnAuthChallenge(
-      operatorId,
-      options.challenge,
-      WEBAUTHN_CHALLENGE_TTL_SECONDS,
-    );
+    if (persist)
+      await this.redis.storeOperatorWebauthnAuthChallenge(
+        operatorId,
+        options.challenge,
+        WEBAUTHN_CHALLENGE_TTL_SECONDS,
+      );
     return options;
   }
 
@@ -218,10 +229,12 @@ export class OperatorWebauthnService {
   async verifyAuthentication(
     operatorId: string,
     response: AuthenticationResponseJSON,
+    boundChallenge?: string,
   ): Promise<boolean> {
     const { rpID, origin } = this.rp();
     const expectedChallenge =
-      await this.redis.consumeOperatorWebauthnAuthChallenge(operatorId);
+      boundChallenge ??
+      (await this.redis.consumeOperatorWebauthnAuthChallenge(operatorId));
     if (!expectedChallenge) {
       throw new BadRequestException("webauthn_challenge_expired");
     }
@@ -302,7 +315,14 @@ export class OperatorWebauthnService {
     if (ctx?.webauthnRequired && ctx.webauthnCredentialCount <= 1) {
       throw new BadRequestException("last_webauthn_credential");
     }
-    const ok = await this.operators.deleteWebauthnCredential(operatorId, id);
+    const operator = await this.operators.findById(operatorId);
+    if (!operator?.authenticationVersion)
+      throw new UnauthorizedException("operator_session_required");
+    const ok = await this.operators.deleteWebauthnCredential(
+      operatorId,
+      id,
+      operator.authenticationVersion,
+    );
     if (!ok) throw new NotFoundException("credential_not_found");
   }
 }

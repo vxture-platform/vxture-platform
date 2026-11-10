@@ -13,6 +13,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UnauthorizedException } from "@nestjs/common";
 import { TokenService } from "./token.service";
+import { OidcService } from "../oidc/oidc.service";
 import type {
   RefreshInsert,
   RefreshRecord,
@@ -21,6 +22,7 @@ import type {
 
 const SESSION = "sess-1";
 const CLIENT = "console";
+const BINDING = { clientId: CLIENT, realm: "customer" };
 
 interface RevokeCall {
   sessionId: string;
@@ -109,7 +111,7 @@ describe("TokenService.refresh 轮换", () => {
 
   it("正常轮换：签发后继，一次都不吊销", async () => {
     const f = makeStore(record("active"));
-    const out = await service(f.store).rotateRefreshToken("raw");
+    const out = await service(f.store).rotateRefreshToken("raw", BINDING);
 
     expect(out.sessionId).toBe(SESSION);
     expect(out.clientId).toBe(CLIENT);
@@ -127,7 +129,7 @@ describe("TokenService.refresh 轮换", () => {
     f.setCasWins(false);
 
     await expect(
-      service(f.store).rotateRefreshToken("raw"),
+      service(f.store).rotateRefreshToken("raw", BINDING),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(f.revokes).toEqual([]);
     expect(f.inserted).toEqual([]);
@@ -138,7 +140,7 @@ describe("TokenService.refresh 轮换", () => {
     f.setChildIssuedAt(new Date(Date.now() - 500));
 
     await expect(
-      service(f.store).rotateRefreshToken("raw"),
+      service(f.store).rotateRefreshToken("raw", BINDING),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(f.revokes).toEqual([]);
   });
@@ -152,7 +154,7 @@ describe("TokenService.refresh 轮换", () => {
     f.setChildIssuedAt(new Date(Date.now() - 5 * 60_000));
 
     await expect(
-      service(f.store).rotateRefreshToken("raw"),
+      service(f.store).rotateRefreshToken("raw", BINDING),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(f.revokes).toEqual([{ sessionId: SESSION, clientId: CLIENT }]);
   });
@@ -162,7 +164,7 @@ describe("TokenService.refresh 轮换", () => {
     f.setChildIssuedAt(null);
 
     await expect(
-      service(f.store).rotateRefreshToken("raw"),
+      service(f.store).rotateRefreshToken("raw", BINDING),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(f.revokes).toEqual([{ sessionId: SESSION, clientId: CLIENT }]);
   });
@@ -173,7 +175,7 @@ describe("TokenService.refresh 轮换", () => {
     const f = makeStore(rec);
 
     await expect(
-      service(f.store).rotateRefreshToken("raw"),
+      service(f.store).rotateRefreshToken("raw", BINDING),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(f.revokes).toEqual([]);
   });
@@ -186,7 +188,7 @@ describe("TokenService.refresh 轮换", () => {
     const f = makeStore(record("active"));
     const svc = service(f.store);
 
-    const located = await svc.inspectRefreshToken("raw");
+    const located = await svc.inspectRefreshToken("raw", BINDING);
     const first = await svc.consumeRefreshToken(located);
     expect(first.refreshToken).toBeTruthy();
 
@@ -199,3 +201,126 @@ describe("TokenService.refresh 轮换", () => {
     expect(f.revokes).toEqual([]);
   });
 });
+
+// ============================================================================
+// Refresh inspection cannot mutate another client or identity domain
+// ============================================================================
+
+describe.each(["customer", "workforce"] as const)(
+  "%s refresh inspection binding",
+  (realm) => {
+    function scoped(status: string, ownerClient = CLIENT) {
+      const rec = { ...record(status), clientId: ownerClient };
+      const own = makeStore(rec);
+      const other = makeStore(rec);
+      const ownRead = vi.spyOn(own.store, "findByHash");
+      const otherRead = vi.spyOn(other.store, "findByHash");
+      const childRead = vi.spyOn(own.store, "findActiveChildIssuedAt");
+      const svc = new TokenService(
+        {} as never,
+        realm === "customer" ? own.store : other.store,
+        realm === "workforce" ? own.store : other.store,
+        { auth: { OIDC_REFRESH_TTL: 600 } } as never,
+      );
+      return { svc, own, other, ownRead, otherRead, childRead };
+    }
+
+    it.each(["active", "rotated", "revoked"])(
+      "rejects another client's %s token before replay side effects",
+      async (status) => {
+        const f = scoped(status, "other-client");
+        await expect(
+          f.svc.inspectRefreshToken("raw", { clientId: CLIENT, realm }),
+        ).rejects.toThrow("invalid_grant");
+        expect(f.ownRead).toHaveBeenCalledOnce();
+        expect(f.otherRead).not.toHaveBeenCalled();
+        expect(f.childRead).not.toHaveBeenCalled();
+        expect(f.own.revokes).toEqual([]);
+        expect(f.other.revokes).toEqual([]);
+      },
+    );
+
+    it("never falls back to the opposite realm when the owning store has no token", async () => {
+      const f = scoped("rotated");
+      f.ownRead.mockResolvedValue(null);
+      await expect(
+        f.svc.inspectRefreshToken("raw", { clientId: CLIENT, realm }),
+      ).rejects.toThrow("invalid_grant");
+      expect(f.otherRead).not.toHaveBeenCalled();
+      expect(f.own.revokes).toEqual([]);
+      expect(f.other.revokes).toEqual([]);
+    });
+
+    it("rotates an active token only in the owning domain", async () => {
+      const f = scoped("active");
+      await expect(
+        f.svc.rotateRefreshToken("raw", { clientId: CLIENT, realm }),
+      ).resolves.toMatchObject({ userId: "user-1", clientId: CLIENT });
+      expect(f.own.inserted).toHaveLength(1);
+      expect(f.other.inserted).toEqual([]);
+      expect(f.otherRead).not.toHaveBeenCalled();
+      expect(f.own.revokes).toEqual([]);
+      expect(f.other.revokes).toEqual([]);
+    });
+
+    it("preserves replay detection within the authenticated client's own domain", async () => {
+      const f = scoped("rotated");
+      await expect(
+        f.svc.inspectRefreshToken("raw", { clientId: CLIENT, realm }),
+      ).rejects.toThrow("refresh token reuse detected");
+      expect(f.own.revokes).toEqual([{ sessionId: SESSION, clientId: CLIENT }]);
+      expect(f.otherRead).not.toHaveBeenCalled();
+      expect(f.other.revokes).toEqual([]);
+    });
+
+    it("preserves concurrent rotation grace within its own domain", async () => {
+      const f = scoped("rotated");
+      f.own.setChildIssuedAt(new Date(Date.now() - 500));
+      await expect(
+        f.svc.inspectRefreshToken("raw", { clientId: CLIENT, realm }),
+      ).rejects.toThrow("invalid_grant");
+      expect(f.own.revokes).toEqual([]);
+      expect(f.otherRead).not.toHaveBeenCalled();
+      expect(f.other.revokes).toEqual([]);
+    });
+
+    it("rejects an unsupported realm before reading either store", async () => {
+      const f = scoped("rotated");
+      await expect(
+        f.svc.inspectRefreshToken("raw", {
+          clientId: CLIENT,
+          realm: "unknown",
+        }),
+      ).rejects.toThrow("invalid_grant");
+      expect(f.ownRead).not.toHaveBeenCalled();
+      expect(f.otherRead).not.toHaveBeenCalled();
+      expect(f.own.revokes).toEqual([]);
+      expect(f.other.revokes).toEqual([]);
+    });
+
+    it("passes the authenticated OIDC client's binding before inspecting a foreign token", async () => {
+      const f = scoped("rotated");
+      f.ownRead.mockResolvedValue(null);
+      const inspect = vi.spyOn(f.svc, "inspectRefreshToken");
+      const oidc = Object.create(OidcService.prototype) as OidcService;
+      Object.assign(oidc, {
+        keys: { isReady: () => true },
+        clients: {
+          findEnabledByClientId: vi.fn(async () => ({
+            clientId: CLIENT,
+            realm,
+            tokenEndpointAuthMethod: "none",
+          })),
+        },
+        token: f.svc,
+      });
+      await expect(
+        oidc.tokenWithRefresh({ clientId: CLIENT }, { refreshToken: "raw" }),
+      ).rejects.toThrow("invalid_grant");
+      expect(inspect).toHaveBeenCalledWith("raw", { clientId: CLIENT, realm });
+      expect(f.otherRead).not.toHaveBeenCalled();
+      expect(f.own.revokes).toEqual([]);
+      expect(f.other.revokes).toEqual([]);
+    });
+  },
+);

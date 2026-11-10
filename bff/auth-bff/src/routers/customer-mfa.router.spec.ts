@@ -183,3 +183,45 @@ describe("customer MFA removal endpoints", () => {
     });
   });
 });
+
+// ============================================================================
+// Enrollment reuses the same operation-bound owner proof as other critical changes.
+// ============================================================================
+it("requires mfa-enable proof before issuing enrollment material", async () => {
+  const startAuthorized = vi.fn(
+    async (
+      _context: unknown,
+      operation: string,
+      target: string,
+      token: unknown,
+    ) => {
+      if (token !== "fresh" || operation !== "mfa-enable" || target !== "")
+        throw new BadRequestException("security_proof_required");
+      return { challengeId: "challenge", stage: "authorized" };
+    },
+  );
+  const consume = vi.fn(async () => ({}));
+  const beginEnrollment = vi.fn(async () => ({ secret: "secret" }));
+  const router = new CustomerMfaRouter(
+    { beginEnrollment } as never,
+    { startAuthorized, consume } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+  );
+  const req = {
+    customer: { userId: "user", sid: "sid", user: { account: "account" } },
+  } as never;
+  await expect(router.start(req, {})).rejects.toThrow(
+    "security_proof_required",
+  );
+  expect(beginEnrollment).not.toHaveBeenCalled();
+  await router.start(req, { proofToken: "fresh" });
+  await router.enroll(req, { challengeId: "challenge" });
+  expect(consume).toHaveBeenCalledWith(
+    expect.objectContaining({ userId: "user", sid: "sid" }),
+    "challenge",
+    "mfa-enable",
+  );
+  expect(beginEnrollment).toHaveBeenCalledWith("user", "sid", "account");
+});

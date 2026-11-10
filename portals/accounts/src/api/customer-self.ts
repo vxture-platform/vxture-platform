@@ -239,6 +239,8 @@ export async function accountsRequest<T>(
     throw new Error(apiMessage("error_5"));
   }
   if (response.status === 401) {
+    if (path.startsWith("/oidc/operator/self/"))
+      throw new AccountSessionError("workforce", apiMessage("error_54"));
     if (
       path === "/oidc/customer/self" ||
       path.startsWith("/oidc/customer/self/") ||
@@ -253,6 +255,10 @@ export async function accountsRequest<T>(
       message?: unknown;
     };
     const messages: Record<string, string> = {
+      security_proof_required: apiMessage("security_proof_required"),
+      security_proof_expired: apiMessage("security_proof_expired"),
+      security_proof_stale: apiMessage("security_proof_stale"),
+      weak_password: apiMessage("error_46"),
       invalid_code: apiMessage("error_56"),
       invalid_security_code: apiMessage("error_56"),
       security_challenge_expired: apiMessage("error_57"),

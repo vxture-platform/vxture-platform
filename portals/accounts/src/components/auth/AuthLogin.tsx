@@ -704,12 +704,12 @@ export function AuthField({
         {action}
       </div>
       {error ? (
-        <p id={describedById} className="text-body-sm text-destructive-text">
+        <p id={describedById} className="text-body-small text-destructive-text">
           {error}
         </p>
       ) : null}
       {hint && !error ? (
-        <p id={describedById} className="text-body-sm text-muted-foreground">
+        <p id={describedById} className="text-body-small text-muted-foreground">
           {hint}
         </p>
       ) : null}
@@ -818,7 +818,7 @@ export function AuthSocialButtons({
         <span className="flex-1">
           <Separator />
         </span>
-        <em className="shrink-0 text-label-sm text-muted-foreground not-italic">
+        <em className="shrink-0 text-label-small text-muted-foreground not-italic">
           {separatorLabel}
         </em>
         <span className="flex-1">
@@ -896,7 +896,7 @@ export function AuthRegisterPrompt({
   prefix ??= formText("new_here");
   label ??= formText("register");
   return (
-    <p className="flex items-center gap-2xs text-body-sm text-muted-foreground">
+    <p className="flex items-center gap-2xs text-body-small text-muted-foreground">
       {prefix}
       <Button variant="link" size="xs" onClick={onRegister}>
         {label}
@@ -973,7 +973,7 @@ export function AuthLoginOptions({
             />
             <Label
               htmlFor="vx-auth-remember"
-              className="text-body-sm text-muted-foreground"
+              className="text-body-small text-muted-foreground"
             >
               {rememberLabel}
             </Label>
@@ -988,7 +988,7 @@ export function AuthLoginOptions({
                 {forgotLabel}
               </Button>
             ) : (
-              <a className={cn("text-body-sm", linkClass)} href={forgotHref}>
+              <a className={cn("text-body-small", linkClass)} href={forgotHref}>
                 {forgotLabel}
               </a>
             )
@@ -1017,7 +1017,7 @@ export function AuthLoginOptions({
         />
         <Label
           htmlFor="vx-auth-agreement"
-          className="block text-body-sm text-muted-foreground"
+          className="block text-body-small text-muted-foreground"
         >
           {agreementPrefix}
           <a
@@ -1122,7 +1122,7 @@ export function AuthPasswordLoginPanel({
                     </Button>
                   ) : (
                     <a
-                      className="text-body-sm text-link"
+                      className="text-body-small text-link"
                       href="/forgot-password"
                     >
                       {formText("forgot_password")}
@@ -1359,14 +1359,14 @@ export function AuthResultPanel({
       <span className={cn("accounts-result-icon", badge)} aria-hidden="true">
         <Icon name={icon} size="lg" />
       </span>
-      <h1 className="text-balance text-title-lg text-foreground">{title}</h1>
+      <h1 className="text-balance text-heading-1 text-foreground">{title}</h1>
       {description ? (
-        <p className="text-pretty text-body-md text-muted-foreground">
+        <p className="text-pretty text-body text-muted-foreground">
           {description}
         </p>
       ) : null}
       {hint ? (
-        <p className="text-body-sm text-muted-foreground">{hint}</p>
+        <p className="text-body-small text-muted-foreground">{hint}</p>
       ) : null}
       {action ? <div className="w-full pt-2xs">{action}</div> : null}
     </div>

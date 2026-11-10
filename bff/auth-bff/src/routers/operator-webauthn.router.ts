@@ -29,6 +29,7 @@ import type {
   RegistrationResponseJSON,
 } from "@simplewebauthn/server";
 import type { OperatorWebauthnCredentialDetail } from "@vxture/service-iam";
+import { AccountReauthenticationService } from "../authn/account-reauthentication.service";
 import { OperatorWebauthnService } from "../oidc/operator-webauthn.service";
 import { OperatorSelfGuard } from "../authn/operator-self.guard";
 import { SID_COOKIE_NAME as SID_COOKIE } from "../authn/cookie";
@@ -43,6 +44,8 @@ export class OperatorWebauthnRouter {
   constructor(
     @Inject(OperatorWebauthnService)
     private readonly webauthn: OperatorWebauthnService,
+    @Inject(AccountReauthenticationService)
+    private readonly reauthentication: AccountReauthenticationService,
   ) {}
 
   /** Begin passkey registration → options JSON (challenge parked server-side). */
@@ -51,7 +54,15 @@ export class OperatorWebauthnRouter {
   @HttpCode(HttpStatus.OK)
   async options(
     @Req() req: Request,
+    @Body() body: { proofToken?: unknown },
   ): Promise<PublicKeyCredentialCreationOptionsJSON> {
+    await this.reauthentication.require(
+      "workforce",
+      operatorSid(req),
+      body?.proofToken,
+      "passkey-add",
+      "",
+    );
     return this.webauthn.createRegistrationOptions(operatorSid(req));
   }
 
@@ -60,12 +71,20 @@ export class OperatorWebauthnRouter {
   @Header("Cache-Control", "no-store")
   @HttpCode(HttpStatus.OK)
   async verify(
-    @Body() body: { response?: RegistrationResponseJSON },
+    @Body() body: { response?: RegistrationResponseJSON; proofToken?: unknown },
     @Req() req: Request,
   ): Promise<{ credentialId: string }> {
     if (!body?.response) {
       throw new BadRequestException("invalid_request");
     }
+    await this.reauthentication.require(
+      "workforce",
+      operatorSid(req),
+      body.proofToken,
+      "passkey-add",
+      "",
+      true,
+    );
     return this.webauthn.verifyRegistration(operatorSid(req), body.response);
   }
 
@@ -103,7 +122,16 @@ export class OperatorWebauthnRouter {
   async revoke(
     @Param("id") id: string,
     @Req() req: Request,
+    @Body() body: { proofToken?: unknown },
   ): Promise<{ ok: true }> {
+    await this.reauthentication.require(
+      "workforce",
+      operatorSid(req),
+      body?.proofToken,
+      "passkey-remove",
+      id,
+      true,
+    );
     await this.webauthn.revokeCredential(operatorSid(req), id);
     return { ok: true };
   }

@@ -343,18 +343,22 @@ export class PgUserRepository implements UserReadRepository {
         email_login_disabled: boolean;
         password_hash: string | null;
         account_changed_at: Date | null;
+        mfa_version: string | null;
       }>(
         `select u.phone, u.email, u.account, u.phone_verified_at is not null as phone_verified,
           u.email_verified_at is not null as email_verified, u.account_login_disabled, u.email_login_disabled,
-          c.password_hash, u.account_changed_at
+          c.password_hash, u.account_changed_at,
+          (select version::text from credential.user_mfas where user_id=u.id and totp_enabled=true) as mfa_version
         from account.users u left join credential.user_credentials c on c.user_id = u.id
-        where u.id = $1 and u.status = 'active' and u.deleted_at is null for update of u`,
-        [userId],
+        where u.id = $1 and u.status = 'active' and u.deleted_at is null and ($2::text is null or exists (select 1 from session.auth_sessions s where s.sid=$2 and s.user_id=u.id and s.realm='customer' and s.status='active' and s.expires_at>now())) for update of u`,
+        [userId, mutation.snapshot.sessionId ?? null],
       );
       const row = result.rows[0];
       const expected = mutation.snapshot;
       if (
         !row ||
+        (expected.mfaVersion !== undefined &&
+          row.mfa_version !== expected.mfaVersion) ||
         row.phone !== expected.phone ||
         row.email !== expected.email ||
         row.account !== expected.account ||
@@ -470,14 +474,16 @@ export class PgUserRepository implements UserReadRepository {
           );
         }
       } else throw new ConflictException("invalid_security_operation");
-      await client.query(
-        "update session.auth_sessions set status='revoked',revoked_at=now() where user_id=$1 and realm='customer' and status='active'",
-        [userId],
-      );
-      await client.query(
-        "update session.refresh_tokens set status='revoked' where user_id=$1 and status='active'",
-        [userId],
-      );
+      if (operation !== "username") {
+        await client.query(
+          "update session.auth_sessions set status='revoked',revoked_at=now() where user_id=$1 and realm='customer' and status='active'",
+          [userId],
+        );
+        await client.query(
+          "update session.refresh_tokens set status='revoked' where user_id=$1 and status='active'",
+          [userId],
+        );
+      }
       await client.query("commit");
     } catch (error) {
       await client.query("rollback");

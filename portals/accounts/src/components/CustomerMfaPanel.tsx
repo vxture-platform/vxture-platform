@@ -7,6 +7,10 @@
  * @date 2026-11-08
  */
 "use client";
+import {
+  SecurityVerification,
+  useSecurityVerificationControls,
+} from "./SecurityVerification";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import {
@@ -74,7 +78,7 @@ export function MfaCompletion({
     >
       {codes ? (
         <div className="accounts-recovery">
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body-small text-muted-foreground">
             {formText(
               "save_these_recovery_codes_now_each_code_can_only_be_used_once",
             )}
@@ -109,7 +113,7 @@ export function MfaCompletion({
               checked={saved}
               onCheckedChange={(value) => setSaved(value === true)}
             />
-            <label htmlFor={checkboxId} className="text-body-sm">
+            <label htmlFor={checkboxId} className="text-body-small">
               {formText("i_have_saved_my_recovery_codes")}
             </label>
           </div>
@@ -120,15 +124,15 @@ export function MfaCompletion({
   );
 }
 
-/** Require phone ownership for enrollment and factor ownership for removal. */
+/** Confirm the current identity for enrollment and factor ownership for removal. */
 export function CustomerMfaPanel() {
+  const verification = useSecurityVerificationControls();
   const formText = useTranslations("accountsForms");
   const beginCompletion = useAccountCompletion();
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [phase, setPhase] = useState<"start" | "phone" | "enroll">("start");
+  const [phase, setPhase] = useState<"start" | "enroll">("start");
   const [open, setOpen] = useState(false);
   const [recovery, setRecovery] = useState(false);
-  const [challenge, setChallenge] = useState("");
   const [material, setMaterial] = useState({
     secret: "",
     otpauthUri: "",
@@ -161,14 +165,13 @@ export function CustomerMfaPanel() {
     if (busy) return;
     setOpen(false);
     setCode("");
-    setChallenge("");
     setMaterial({ secret: "", otpauthUri: "", enrollmentToken: "" });
     setPhase("start");
     setError("");
     setRecovery(false);
   }
   async function run() {
-    if (busy || enabled === null) return;
+    if (busy || enabled === null || (!enabled && phase === "start")) return;
     setBusy(true);
     setError("");
     // The receipt owns the result before a background read can observe self-revocation.
@@ -183,25 +186,6 @@ export function CustomerMfaPanel() {
           }),
         });
         completion?.complete(<MfaCompletion />);
-      } else if (phase === "start") {
-        const result = await accountsRequest<{ challengeId: string }>(
-          "/oidc/customer/self/mfa/challenges",
-          { method: "POST", body: "{}" },
-        );
-        setChallenge(result.challengeId);
-        setPhase("phone");
-      } else if (phase === "phone") {
-        await accountsRequest(
-          `/oidc/customer/self/security/challenges/${challenge}/verify`,
-          { method: "POST", body: JSON.stringify({ code }) },
-        );
-        const result = await accountsRequest<typeof material>(
-          "/oidc/customer/self/mfa/enroll",
-          { method: "POST", body: JSON.stringify({ challengeId: challenge }) },
-        );
-        setMaterial(result);
-        setCode("");
-        setPhase("enroll");
       } else {
         const result = await accountsRequest<{ recoveryCodes: string[] }>(
           "/oidc/customer/self/mfa/confirm",
@@ -224,12 +208,6 @@ export function CustomerMfaPanel() {
           ? e.message
           : formText("unable_to_complete_this_action"),
       );
-      // An anchor proof is consumed on enrollment: a retry must start a new ceremony.
-      if (!enabled && phase === "phone") {
-        setPhase("start");
-        setChallenge("");
-        setCode("");
-      }
     } finally {
       setBusy(false);
     }
@@ -277,34 +255,28 @@ export function CustomerMfaPanel() {
         }}
         size="sm"
         title={formText(enabled ? "disable_mfa" : "enable_mfa")}
-        description={
-          enabled
-            ? formText("mfa_disable_warning")
-            : phase === "start"
-              ? formText("mfa_phone_step")
-              : undefined
-        }
+        description={enabled ? formText("mfa_disable_warning") : undefined}
         danger={enabled === true}
         submitting={busy}
         pendingLabel={formText("processing")}
         cancelLabel={formText("cancel")}
-        submitLabel={formText(
-          enabled
-            ? "mfa_disable_confirm"
-            : phase === "start"
-              ? "send_code"
-              : phase === "phone"
-                ? "continue"
-                : "confirm_authenticator",
-        )}
+        submitLabel={
+          !enabled && phase === "start"
+            ? verification.label
+            : formText(
+                enabled ? "mfa_disable_confirm" : "confirm_authenticator",
+              )
+        }
         submitDisabled={
           enabled === null ||
+          (!enabled && phase === "start" && verification.disabled) ||
           ((enabled || phase !== "start") &&
             (enabled && recovery ? !code.trim() : code.length !== 6))
         }
         onSubmit={(event) => {
           event.preventDefault();
-          void run();
+          if (!enabled && phase === "start") verification.submit();
+          else void run();
         }}
       >
         {enabled ? (
@@ -339,14 +311,6 @@ export function CustomerMfaPanel() {
               {formText(recovery ? "use_authenticator" : "use_a_recovery_code")}
             </Button>
           </>
-        ) : phase === "phone" ? (
-          <VerificationCodeInput
-            name="enable_mfa_code"
-            label={formText("sms_verification_code")}
-            value={code}
-            onChange={setCode}
-            disabled={busy}
-          />
         ) : phase === "enroll" ? (
           <MfaEnrollment
             secret={material.secret}
@@ -356,9 +320,32 @@ export function CustomerMfaPanel() {
             disabled={busy}
           />
         ) : (
-          <p className="text-body-sm text-muted-foreground">
-            {formText("mfa_help")}
-          </p>
+          <SecurityVerification
+            controls={verification.controls}
+            realm="customer"
+            operation="mfa-enable"
+            target=""
+            onBusyChange={setBusy}
+            onVerified={async (proofToken) => {
+              const result = await accountsRequest<{ challengeId: string }>(
+                "/oidc/customer/self/mfa/challenges",
+                {
+                  method: "POST",
+                  body: JSON.stringify({ proofToken }),
+                },
+              );
+              const enrollment = await accountsRequest<typeof material>(
+                "/oidc/customer/self/mfa/enroll",
+                {
+                  method: "POST",
+                  body: JSON.stringify({ challengeId: result.challengeId }),
+                },
+              );
+              setMaterial(enrollment);
+              setCode("");
+              setPhase("enroll");
+            }}
+          />
         )}
         {error ? <Banner tone="danger" title={error} /> : null}
       </DialogForm>

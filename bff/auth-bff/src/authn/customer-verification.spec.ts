@@ -226,7 +226,36 @@ describe("trusted entry points", () => {
     "returns durable email verification in userinfo (%s)",
     async (emailVerified) => {
       const service = Object.assign(Object.create(OidcService.prototype), {
-        keys: { verify: () => ({ sub: "usr_user" }) },
+        keys: {
+          verify: () => ({
+            sub: "usr_user",
+            aud: "customer-client",
+            sid: "sid",
+            jti: "jti",
+            userType: "tenant_user",
+            roles: [],
+            scope: "openid email",
+          }),
+        },
+        clients: {
+          findEnabledByClientId: async () => ({
+            clientId: "customer-client",
+            realm: "customer",
+          }),
+        },
+        redis: {
+          isBlacklisted: async () => false,
+          getOidcSession: async () => ({
+            sub: "usr_user",
+            realm: "customer",
+            authMethod: "phone",
+            absExpiresAt: Math.floor(Date.now() / 1000) + 60,
+          }),
+        },
+        durableSession: {
+          get: async () => ({ realm: "customer", userId: "user" }),
+        },
+        customerMfa: { enabled: async () => false },
         account: {
           getUserById: async () => ({
             id: "user",
@@ -234,6 +263,7 @@ describe("trusted entry points", () => {
             email: "alice@example.com",
             phone: "13800138000",
             emailVerified,
+            status: "active",
           }),
         },
       }) as OidcService;

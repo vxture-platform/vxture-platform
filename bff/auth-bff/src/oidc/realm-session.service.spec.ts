@@ -15,6 +15,7 @@ import {
 function build(overrides: Record<string, unknown> = {}, enabled = true) {
   const session = {
     realm: "workforce",
+    authenticationVersion: "auth-v1",
     authMethod: "phone+totp",
     sub: "opr_123",
     absExpiresAt: Math.floor(Date.now() / 1000) + 60,
@@ -22,7 +23,11 @@ function build(overrides: Record<string, unknown> = {}, enabled = true) {
   };
   const redis = { getOidcSession: vi.fn(async () => session) };
   const operators = {
-    findById: vi.fn(async () => (enabled ? { id: "123" } : null)),
+    findById: vi.fn(async () =>
+      enabled
+        ? { id: "123", authenticationVersion: "auth-v1", mfaEnrolled: true }
+        : null,
+    ),
   };
   return {
     service: new RealmSessionService(

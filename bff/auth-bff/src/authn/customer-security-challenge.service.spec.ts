@@ -56,11 +56,18 @@ function fixture() {
   const mail = {
     sendVerifyCode: vi.fn(async (_to: string, _code: string) => {}),
   };
+  const reauthentication = {
+    require: vi.fn(async () => {}),
+    customerVersion: vi.fn(async () => "credentials-v1"),
+    customerFactorVersion: vi.fn(async () => null),
+  };
   return {
+    reauthentication,
     service: new CustomerSecurityChallengeService(
       redis as never,
       sms as never,
       mail as never,
+      reauthentication as never,
     ),
     redis,
     sms,
@@ -297,5 +304,79 @@ describe("lifecycle proof isolation", () => {
     await expect(
       f.service.consume(context, challengeId, "account-recovery"),
     ).rejects.toThrow();
+  });
+});
+
+// ============================================================================
+// Fresh proof handoff; target delivery and lifecycle authorization stay separate.
+// ============================================================================
+describe("risk-based customer ceremonies", () => {
+  it("creates usernames without sending a code or requiring a factor proof", async () => {
+    const f = fixture();
+    const result = await f.service.startAuthorized(
+      context,
+      "username",
+      "new_account",
+    );
+    expect(result.stage).toBe("authorized");
+    expect(f.reauthentication.require).not.toHaveBeenCalled();
+    expect(f.sms.sendCode).not.toHaveBeenCalled();
+    expect(f.mail.sendVerifyCode).not.toHaveBeenCalled();
+    expect(
+      (await f.service.consume(context, result.challengeId)).snapshot,
+    ).toMatchObject({
+      sessionId: context.sid,
+      credentialVersion: "credentials-v1",
+      mfaVersion: null,
+    });
+  });
+  it("requires a fresh proof again at consumption and still sends a new-contact code", async () => {
+    const f = fixture();
+    const result = await f.service.startAuthorized(
+      context,
+      "phone-change",
+      "13900139000",
+      "proof",
+    );
+    expect(result.stage).toBe("target-pending");
+    expect(f.sms.sendCode).not.toHaveBeenCalled();
+    await expect(
+      f.service.consume(context, result.challengeId),
+    ).rejects.toThrow("security_proof_required");
+    await f.service.sendTarget(context, result.challengeId);
+    await f.service.verify(context, result.challengeId, "123456", true);
+    expect(f.sms.sendCode).toHaveBeenCalledWith("13900139000", {
+      scope: "customer-phone-change",
+      context: result.challengeId,
+    });
+    f.reauthentication.require.mockRejectedValue(
+      new Error("security_proof_expired"),
+    );
+    await expect(
+      f.service.consume(context, result.challengeId),
+    ).rejects.toThrow("security_proof_expired");
+  });
+  it("does not let MFA or lifecycle endpoints consume another operation's proof", async () => {
+    const f = fixture();
+    const result = await f.service.startAuthorized(
+      context,
+      "password",
+      "",
+      "proof",
+    );
+    f.reauthentication.require.mockClear();
+    await expect(
+      f.service.consume(context, result.challengeId, "mfa-enable"),
+    ).rejects.toThrow("security_proof_required");
+    expect(f.reauthentication.require).not.toHaveBeenCalled();
+    await f.service.consume(context, result.challengeId, "password");
+    expect(f.reauthentication.require).toHaveBeenCalledWith(
+      "customer",
+      context.sid,
+      "proof",
+      "password",
+      "",
+      true,
+    );
   });
 });

@@ -541,7 +541,13 @@
     "operator_mfa_consequence": "运营账号必须保留多因素认证。重新设置后，旧验证器和旧恢复码将失效，所有设备需要重新登录。请保存新恢复码。",
     "deletion_final_consequence": "提交后将退出所有设备并执行上方列出的账号清理操作。保留期结束后永久删除，无法恢复。",
     "passkey_deleted": "通行密钥已删除",
-    "delete_passkey_title": "删除通行密钥"
+    "delete_passkey_title": "删除通行密钥",
+    "password_mismatch": "两次输入的密码不一致",
+    "password_relogin_hint": "修改后需重新登录",
+    "confirm_identity_hint": "请确认当前身份，以继续此项操作。",
+    "confirm_identity": "确认身份",
+    "verify_passkey": "使用通行密钥",
+    "verified_contact_required": "暂无可用的身份验证方式，请先验证已有联系方式。"
   },
   "accountsApi": {
     "error_1": "登录会话已失效，请从应用重新发起登录",
@@ -628,7 +634,10 @@
     "passkey_auth_start_failed": "无法发起通行密钥验证，请重试",
     "passkey_auth_cancelled": "通行密钥验证被取消或不受支持",
     "passkey_auth_failed": "通行密钥验证失败，请重试",
-    "passkey_auth_response_invalid": "验证响应异常，请重试"
+    "passkey_auth_response_invalid": "验证响应异常，请重试",
+    "security_proof_required": "请重新确认身份后继续",
+    "security_proof_expired": "身份确认已过期，请重试",
+    "security_proof_stale": "账号安全信息已变化，请重新确认身份"
   },
   "accountsStates": {
     "retry": "重试",

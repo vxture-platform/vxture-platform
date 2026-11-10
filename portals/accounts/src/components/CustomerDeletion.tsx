@@ -192,18 +192,18 @@ export function CustomerDeletion({
           {state ? (
             <>
               {recovery ? (
-                <p className="text-body-sm text-muted-foreground">
+                <p className="text-body-small text-muted-foreground">
                   {formText("scheduled_permanent_deletion")}
                   {state.purgeAt ? formatDateTime(state.purgeAt, locale) : "—"}
                 </p>
               ) : (
-                <p className="text-body-sm text-muted-foreground">
+                <p className="text-body-small text-muted-foreground">
                   {formText("retention_notice", { days: state.retentionDays })}
                 </p>
               )}
               {state.blockers.length ? (
                 <div>
-                  <p className="text-body-sm">
+                  <p className="text-body-small">
                     {formText("items_requiring_action")}
                   </p>
                   {items(state.blockers)}
@@ -218,7 +218,7 @@ export function CustomerDeletion({
               {allowed ? (
                 <>
                   {!recovery ? (
-                    <label className="flex items-start gap-sm text-body-sm">
+                    <label className="flex items-start gap-sm text-body-small">
                       <Checkbox
                         checked={accepted}
                         onCheckedChange={(value) => setAccepted(value === true)}
@@ -252,7 +252,7 @@ export function CustomerDeletion({
                       disabled={busy}
                     />
                   ) : (
-                    <p className="text-body-sm">
+                    <p className="text-body-small">
                       {formText("identity_verified")}
                     </p>
                   )}
@@ -327,7 +327,9 @@ export function CustomerDeletion({
           if (verified) void run();
         }}
       >
-        <p className="text-body-sm">{formText("deletion_final_consequence")}</p>
+        <p className="text-body-small">
+          {formText("deletion_final_consequence")}
+        </p>
         {error ? <Banner tone="danger" title={error} /> : null}
       </DialogForm>
     </AccountSection>

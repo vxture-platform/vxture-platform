@@ -16,6 +16,8 @@ import { OidcService } from "./oidc.service";
 function build(enrollRequired: boolean, webauthnRequired = false) {
   const pending = {
     operatorId: "operator-1",
+    credentialVersion: "credential-v1",
+    authenticationVersion: "auth-v1",
     expiresAt: Math.floor(Date.now() / 1000) + 300,
     enrollRequired,
     webauthnRequired,
@@ -26,6 +28,9 @@ function build(enrollRequired: boolean, webauthnRequired = false) {
     deleteOperatorMfaPending: vi.fn(async () => {}),
   };
   const operatorMfa = {
+    resolveLoginMfa: vi.fn(async () => ({
+      decision: { mfaRequired: true, enrollRequired, webauthnRequired },
+    })),
     beginTotpEnrollment: vi.fn(async () => ({
       secret: "new",
       otpauthUri: "otpauth://new",
@@ -35,11 +40,18 @@ function build(enrollRequired: boolean, webauthnRequired = false) {
   const service = Object.create(OidcService.prototype) as OidcService;
   Object.assign(service, {
     redis,
+    operators: {
+      findById: vi.fn(async () => ({
+        id: "operator-1",
+        credentialVersion: "credential-v1",
+        authenticationVersion: "auth-v1",
+      })),
+    },
     operatorMfa,
     recordOperatorAttempt: vi.fn(async () => {}),
     recordOperatorAudit: vi.fn(async () => {}),
   });
-  return { service, operatorMfa };
+  return { service, operatorMfa, pending };
 }
 
 // ============================================================================
@@ -47,6 +59,15 @@ function build(enrollRequired: boolean, webauthnRequired = false) {
 // ============================================================================
 
 describe("workforce enrollment-on-login context", () => {
+  it("rejects an enrollment context without a credential snapshot", async () => {
+    const { service, operatorMfa, pending } = build(true);
+    pending.credentialVersion = "";
+    await expect(service.beginOperatorTotpEnrollment("token")).rejects.toThrow(
+      "mfa_session_expired",
+    );
+    expect(operatorMfa.beginTotpEnrollment).not.toHaveBeenCalled();
+  });
+
   it("binds first-time setup to its pending login token", async () => {
     const { service, operatorMfa } = build(true);
     await service.beginOperatorTotpEnrollment("pending-token");

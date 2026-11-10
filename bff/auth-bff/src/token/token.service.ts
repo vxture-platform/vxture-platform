@@ -78,6 +78,12 @@ export interface RotatedRefresh {
   clientId: string;
 }
 
+/** Authenticated client boundary, established before token inspection. */
+export interface RefreshBinding {
+  clientId: string;
+  realm: string;
+}
+
 @Injectable()
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
@@ -94,22 +100,6 @@ export class TokenService {
   /** Refresh store for a realm: operator → ops.*, else tenant → identity.*. */
   private storeFor(realm?: string): RefreshStore {
     return realm === "workforce" ? this.operatorRefresh : this.refresh;
-  }
-
-  /**
-   * Find a presented refresh token in whichever realm store holds it (tenant
-   * first, then operator). Returns the record + its owning store so rotation /
-   * revocation stays within the right table.
-   */
-  private async locate(
-    rawToken: string,
-  ): Promise<{ store: RefreshStore; rec: RefreshRecord } | null> {
-    const hash = hashToken(rawToken);
-    const tenant = await this.refresh.findByHash(hash);
-    if (tenant) return { store: this.refresh, rec: tenant };
-    const operator = await this.operatorRefresh.findByHash(hash);
-    if (operator) return { store: this.operatorRefresh, rec: operator };
-    return null;
   }
 
   /** Mint an RS256 access token with the new claim set. */
@@ -136,20 +126,35 @@ export class TokenService {
   }
 
   /**
-   * 校验一枚 refresh 令牌，**不消费它**。
-   *
-   * 拆出这一步是为了让调用方先把 client 绑定、中央会话、远程下线三项查完
-   * 再调 `consumeRefreshToken`。旧写法是先轮换再校验，于是「用错 client_id 刷一次」
-   * 或「中央会话已到期」都会先烧掉一枚令牌，而客户端重试时拿的就是那枚已 rotated
-   * 的旧令牌 ⇒ 走重放门 ⇒ 整条链被吊。本仓记过这个形状：凭据过了才消耗。
+   * Inspect without rotation, binding the realm and client before replay effects.
+   * The caller must then validate current session authority before consumption.
+   * @param rawToken - Presented opaque refresh token.
+   * @param binding - Authenticated client and its server-controlled identity realm.
+   * @returns The active token and its owning store.
+   * @throws {UnauthorizedException} For invalid grants or detected replay.
    */
-  async inspectRefreshToken(rawToken: string): Promise<LocatedRefresh> {
-    const found = await this.locate(rawToken);
-    if (!found || found.rec.expiresAt.getTime() <= Date.now()) {
+  async inspectRefreshToken(
+    rawToken: string,
+    binding: RefreshBinding,
+  ): Promise<LocatedRefresh> {
+    if (
+      !binding.clientId ||
+      (binding.realm !== "customer" && binding.realm !== "workforce")
+    ) {
       throw new UnauthorizedException("invalid_grant");
     }
-    const { store, rec } = found;
-    if (rec.status === "active") return found;
+    // Never search another identity domain, even for an unknown presented token.
+    const store = this.storeFor(binding.realm);
+    const rec = await store.findByHash(hashToken(rawToken));
+    if (
+      !rec ||
+      rec.clientId !== binding.clientId ||
+      rec.expiresAt.getTime() <= Date.now()
+    ) {
+      throw new UnauthorizedException("invalid_grant");
+    }
+    // Client ownership must be proven before replay detection can revoke a family.
+    if (rec.status === "active") return { store, rec };
 
     /* 已经不是 active。两种可能，处置完全不同：
        (1) 它的子令牌刚生成且仍 active => 别的请求几百毫秒前刚刷过，这是**并发**；
@@ -214,11 +219,20 @@ export class TokenService {
   }
 
   /**
-   * 校验 + 消费一步做完。留给不需要在两者之间插校验的调用方；
-   * `tokenWithRefresh` 不走这条，它要在中间查三项。
+   * Inspect and consume within one authenticated client boundary.
+   * OIDC grants inspect separately so live authority can be checked before rotation.
+   * @param rawToken - Presented opaque refresh token.
+   * @param binding - Authenticated client and its identity realm.
+   * @returns The rotated token and its original identity binding.
+   * @throws {UnauthorizedException} For invalid grants, concurrent rotation or replay.
    */
-  async rotateRefreshToken(rawToken: string): Promise<RotatedRefresh> {
-    return this.consumeRefreshToken(await this.inspectRefreshToken(rawToken));
+  async rotateRefreshToken(
+    rawToken: string,
+    binding: RefreshBinding,
+  ): Promise<RotatedRefresh> {
+    return this.consumeRefreshToken(
+      await this.inspectRefreshToken(rawToken, binding),
+    );
   }
 
   /**
@@ -230,9 +244,22 @@ export class TokenService {
     await this.operatorRefresh.revokeSession(sessionId);
   }
 
-  /** Revoke a refresh token by its raw value (RFC 7009) — revokes its session chain. */
-  async revokeRefreshToken(rawToken: string): Promise<void> {
-    const found = await this.locate(rawToken);
-    if (found) await found.store.revokeSession(found.rec.sessionId);
+  /**
+   * Revoke only the authenticated client's family in its own identity domain.
+   * @param rawToken - Presented opaque token; unknown tokens are a no-op.
+   * @param binding - Authenticated client and its server-controlled realm.
+   * @returns When any matching client family has been revoked.
+   * @throws {UnauthorizedException} For an unsupported client identity domain.
+   */
+  async revokeRefreshToken(
+    rawToken: string,
+    binding: RefreshBinding,
+  ): Promise<void> {
+    if (!binding.clientId || !["customer", "workforce"].includes(binding.realm))
+      throw new UnauthorizedException("invalid_client");
+    const store = this.storeFor(binding.realm);
+    const rec = await store.findByHash(hashToken(rawToken));
+    if (rec?.clientId === binding.clientId)
+      await store.revokeSession(rec.sessionId, binding.clientId);
   }
 }

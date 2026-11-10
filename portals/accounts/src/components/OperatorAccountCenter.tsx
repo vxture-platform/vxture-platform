@@ -6,6 +6,11 @@
  * Confirmed session loss clears the account shell and returns to the public home.
  */
 "use client";
+import {
+  SecurityVerification,
+  useSecurityVerificationControls,
+  SecurityCompletion,
+} from "./SecurityVerification";
 import { validNewPassword } from "@/lib/password-policy";
 
 import {
@@ -20,7 +25,6 @@ import {
   Banner,
   Button,
   DialogForm,
-  useToast,
   Field,
   FieldLabel,
   Input,
@@ -59,7 +63,6 @@ import {
 type Load =
   | { state: "loading" }
   | { state: "unauth" }
-  | { state: "passwordChanged" }
   | { state: "error"; message: string }
   | { state: "ready"; self: OperatorSelf };
 
@@ -91,12 +94,7 @@ export function OperatorAccountCenter() {
     inFlight.current = true;
     try {
       const self = await fetchOperatorSelf();
-      if (active.current)
-        setLoad((previous) =>
-          previous.state === "passwordChanged"
-            ? previous
-            : { state: "ready", self },
-        );
+      if (active.current) setLoad({ state: "ready", self });
     } catch (e) {
       if (!active.current) return;
       if (e instanceof OperatorUnauthenticatedError) {
@@ -104,7 +102,7 @@ export function OperatorAccountCenter() {
         expire();
       } else
         setLoad((previous) =>
-          previous.state === "ready" || previous.state === "passwordChanged"
+          previous.state === "ready"
             ? previous
             : {
                 state: "error",
@@ -170,22 +168,11 @@ export function OperatorAccountCenter() {
             {center("retry")}
           </Button>
         </div>
-      ) : load.state === "passwordChanged" ? (
-        <Banner
-          tone="success"
-          title={t("password.updated")}
-          description={t("password.signedOutHint")}
-        />
       ) : (
         <ReadyView
           key={`${section}:${load.self.username}`}
           section={section}
           self={load.self}
-          onChanged={refresh}
-          onPasswordChanged={() => {
-            setLoad({ state: "passwordChanged" });
-            expire();
-          }}
         />
       )}
     </main>
@@ -195,7 +182,8 @@ export function OperatorAccountCenter() {
 /** null = no flow open; otherwise the two-step contact-change flow for email|phone. */
 type ContactFlow = {
   kind: "email" | "phone";
-  step: "input" | "code";
+  step: "input" | "verification" | "code";
+  proofToken?: string;
   value: string;
   sentTo: string;
   code: string;
@@ -204,19 +192,16 @@ type ContactFlow = {
 function ReadyView({
   section,
   self,
-  onChanged,
-  onPasswordChanged,
 }: {
   section: "profile" | "security";
   self: OperatorSelf;
-  onChanged: () => void;
-  onPasswordChanged: () => void;
 }) {
   const t = useTranslations("operatorAccount");
+  const beginCompletion = useAccountCompletion();
+  const verification = useSecurityVerificationControls();
   const [flow, setFlow] = useState<ContactFlow | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
   const formText = useTranslations("accountsForms");
 
   function open(kind: "email" | "phone") {
@@ -228,35 +213,67 @@ function ReadyView({
     setError(null);
   }
 
-  async function onSubmitContact(e: FormEvent) {
-    e.preventDefault();
+  async function sendContact(proofToken?: string) {
+    if (!flow) return;
+    const value =
+      flow.kind === "email"
+        ? flow.value.trim().toLowerCase()
+        : flow.value.trim();
+    const res =
+      flow.kind === "email"
+        ? await startOperatorEmailChange(value, proofToken)
+        : await startOperatorPhoneChange(value, proofToken);
+    setFlow({
+      ...flow,
+      step: "code",
+      sentTo: res.sentTo,
+      ...(proofToken ? { proofToken } : {}),
+    });
+  }
+  async function onSubmitContact(event: FormEvent) {
+    event.preventDefault();
     if (!flow || busy) return;
+    if (flow.step === "verification") {
+      verification.submit();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       if (flow.step === "input") {
-        const value = flow.value.trim();
-        if (!value) return;
-        const res =
+        const value =
           flow.kind === "email"
-            ? await startOperatorEmailChange(value.toLowerCase())
-            : await startOperatorPhoneChange(value);
-        setFlow({ ...flow, step: "code", sentTo: res.sentTo });
+            ? flow.value.trim().toLowerCase()
+            : flow.value.trim();
+        const current = flow.kind === "email" ? self.email : self.phone;
+        const verified =
+          flow.kind === "email" ? self.emailVerified : self.phoneVerified;
+        if (value === current && !verified) await sendContact();
+        else setFlow({ ...flow, step: "verification" });
       } else {
-        const code = flow.code.trim();
-        if (!code) return;
-        if (flow.kind === "email") await verifyOperatorEmailChange(code);
-        else await verifyOperatorPhoneChange(flow.value.trim(), code);
-        toast({
-          tone: "success",
-          title:
-            flow.kind === "email" ? t("email.updated") : t("phone.updated"),
-        });
-        setFlow(null);
-        onChanged();
+        const completion = beginCompletion();
+        try {
+          if (flow.kind === "email")
+            await verifyOperatorEmailChange(
+              flow.code.trim(),
+              flow.value.trim().toLowerCase(),
+              flow.proofToken,
+            );
+          else
+            await verifyOperatorPhoneChange(
+              flow.value.trim(),
+              flow.code.trim(),
+              flow.proofToken,
+            );
+          completion.complete(<SecurityCompletion realm="workforce" />);
+          setFlow(null);
+        } catch (reason) {
+          completion.cancel();
+          throw reason;
+        }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "");
     } finally {
       setBusy(false);
     }
@@ -307,19 +324,38 @@ function ReadyView({
               pendingLabel={formText("processing")}
               cancelLabel={formText("cancel")}
               submitLabel={
-                flow.step === "input" ? t("email.sendCode") : t("email.verify")
+                flow.step === "verification"
+                  ? verification.label
+                  : flow.step === "input"
+                    ? formText("continue")
+                    : t("email.verify")
               }
               submitDisabled={
-                flow.step === "input"
-                  ? !flow.value.trim()
-                  : !/^\d{6}$/.test(flow.code)
+                flow.step === "verification"
+                  ? verification.disabled
+                  : flow.step === "input"
+                    ? !flow.value.trim()
+                    : !/^\d{6}$/.test(flow.code)
               }
               onOpenChange={(next) => {
                 if (!next && !busy) cancel();
               }}
               onSubmit={onSubmitContact}
             >
-              {flow.step === "input" ? (
+              {flow.step === "verification" ? (
+                <SecurityVerification
+                  controls={verification.controls}
+                  realm="workforce"
+                  operation={`${flow.kind}-change`}
+                  target={
+                    flow.kind === "email"
+                      ? flow.value.trim().toLowerCase()
+                      : flow.value.trim()
+                  }
+                  onBusyChange={setBusy}
+                  onVerified={sendContact}
+                />
+              ) : flow.step === "input" ? (
                 <Field>
                   <FieldLabel htmlFor="operatoraccountcenter-email-newlabel">
                     {flow.kind === "email"
@@ -343,7 +379,7 @@ function ReadyView({
                 </Field>
               ) : (
                 <>
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-small text-muted-foreground">
                     {t("email.sentHint", { target: flow.sentTo })}
                   </p>
                   <VerificationCodeInput
@@ -365,7 +401,7 @@ function ReadyView({
 
       {section === "security" ? (
         <>
-          <PasswordCard onDone={onPasswordChanged} />
+          <PasswordCard />
 
           <MfaCard enabled={self.mfaTotpEnabled} />
         </>
@@ -480,7 +516,7 @@ function MfaCard({ enabled }: { enabled: boolean }) {
       >
         {phase === "idle" ? (
           <>
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-small text-muted-foreground">
               {t("mfa.reauthHint")}
             </p>
             <Field>
@@ -557,125 +593,192 @@ function ContactValue({
   );
 }
 
-function PasswordCard({ onDone }: { onDone: () => void }) {
-  const policyText = useTranslations("accountsForms");
-  const t = useTranslations("operatorAccount");
+function PasswordCard() {
+  const verification = useSecurityVerificationControls();
+  const t = useTranslations("accountsForms");
+  const operator = useTranslations("operatorAccount");
+  const beginCompletion = useAccountCompletion();
   const [open, setOpen] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [policyError, setPolicyError] = useState(false);
+  const [mismatch, setMismatch] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [error, setError] = useState("");
   function reset() {
     setOpen(false);
+    setVerifying(false);
     setCurrent("");
     setNext("");
     setConfirm("");
-    setError(null);
+    setPolicyError(false);
+    setMismatch(false);
+    setError("");
   }
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (busy) return;
-    if (!validNewPassword(next, "workforce")) {
-      setError(policyText("password_policy_workforce"));
-      return;
-    }
-    if (next !== confirm) {
-      setError(t("password.mismatch"));
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await changeOperatorPassword(current, next);
-      reset();
-      onDone();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <AccountSection
-      title={t("password.title")}
+      title={operator("password.title")}
       icon="key"
       action={
-        !open ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            {t("password.change")}
-          </Button>
-        ) : undefined
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setOpen(true)}
+        >
+          {operator("password.change")}
+        </Button>
       }
     >
       <DialogForm
+        footerNote={t("password_relogin_hint")}
         open={open}
         size="sm"
-        title={t("password.change")}
-        description={policyText("security_change_consequence")}
+        title={operator("password.change")}
         submitting={busy}
-        pendingLabel={policyText("processing")}
-        cancelLabel={t("email.cancel")}
-        submitLabel={t("password.change")}
-        submitDisabled={!current || !next || !confirm}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen && !busy) reset();
+        pendingLabel={t("processing")}
+        cancelLabel={t("cancel")}
+        submitLabel={verifying ? verification.label : t("confirm_change")}
+        submitDisabled={
+          verifying ? verification.disabled : !current || !next || !confirm
+        }
+        onOpenChange={(value) => {
+          if (!value && !busy) reset();
         }}
-        onSubmit={onSubmit}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (busy) return;
+          if (verifying) {
+            verification.submit();
+            return;
+          }
+          const valid = validNewPassword(next, "workforce");
+          setPolicyError(!valid);
+          setMismatch(next !== confirm);
+          if (valid && next === confirm) setVerifying(true);
+        }}
       >
-        <Field>
-          <FieldLabel htmlFor="operatoraccountcenter-password-current">
-            {t("password.current")}
-          </FieldLabel>
-          <PasswordInput
-            id="operatoraccountcenter-password-current"
-            required
-            disabled={busy}
-            type="password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            autoComplete="current-password"
+        {verifying ? (
+          <SecurityVerification
+            controls={verification.controls}
+            realm="workforce"
+            operation="password"
+            target=""
+            onBusyChange={setBusy}
+            onVerified={async (proofToken) => {
+              const completion = beginCompletion();
+              try {
+                await changeOperatorPassword(current, next, proofToken);
+                reset();
+                completion.complete(<SecurityCompletion realm="workforce" />);
+              } catch (reason) {
+                completion.cancel();
+                setVerifying(false);
+                setError(
+                  reason instanceof Error
+                    ? reason.message
+                    : t("verification_failed"),
+                );
+                throw reason;
+              }
+            }}
           />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="operatoraccountcenter-password-new">
-            {t("password.new")}
-          </FieldLabel>
-          <PasswordInput
-            id="operatoraccountcenter-password-new"
-            required
-            disabled={busy}
-            type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            autoComplete="new-password"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="operatoraccountcenter-password-confirm">
-            {t("password.confirm")}
-          </FieldLabel>
-          <PasswordInput
-            id="operatoraccountcenter-password-confirm"
-            required
-            disabled={busy}
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-          />
-        </Field>
-        <p className="text-body-sm text-muted-foreground">
-          {policyText("password_policy_workforce")} {t("password.hint")}
-        </p>
+        ) : (
+          <div className="accounts-settings-form">
+            <div className="accounts-password-group">
+              <label
+                htmlFor="operator-current-password"
+                className="accounts-password-group-label"
+              >
+                {t("current_password")}
+                <span className="accounts-required" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <PasswordInput
+                id="operator-current-password"
+                aria-label={t("current_password")}
+                placeholder={t("current_password")}
+                autoComplete="current-password"
+                maxLength={128}
+                required
+                disabled={busy}
+                value={current}
+                onChange={(event) => setCurrent(event.target.value)}
+              />
+            </div>
+            <div className="accounts-password-group">
+              <label
+                htmlFor="operator-new-password"
+                className="accounts-password-group-label"
+              >
+                {t("new_password")}
+                <span className="accounts-required" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <div className="accounts-password-field">
+                <PasswordInput
+                  id="operator-new-password"
+                  aria-label={t("new_password")}
+                  placeholder={t("new_password")}
+                  autoComplete="new-password"
+                  minLength={12}
+                  maxLength={128}
+                  required
+                  disabled={busy}
+                  value={next}
+                  aria-invalid={policyError}
+                  aria-describedby="operator-password-policy"
+                  onChange={(event) => {
+                    setNext(event.target.value);
+                    setPolicyError(false);
+                  }}
+                />
+              </div>
+              <div className="accounts-password-field">
+                <PasswordInput
+                  aria-label={t("confirm_password")}
+                  placeholder={t("confirm_password")}
+                  autoComplete="new-password"
+                  maxLength={128}
+                  required
+                  disabled={busy}
+                  value={confirm}
+                  aria-invalid={mismatch}
+                  aria-describedby={
+                    mismatch ? "operator-password-mismatch" : undefined
+                  }
+                  onChange={(event) => {
+                    setConfirm(event.target.value);
+                    setMismatch(false);
+                  }}
+                />
+                {mismatch ? (
+                  <p
+                    id="operator-password-mismatch"
+                    role="alert"
+                    className="text-body-small text-danger"
+                  >
+                    {t("password_mismatch")}
+                  </p>
+                ) : null}
+              </div>
+              <p
+                id="operator-password-policy"
+                className={
+                  policyError
+                    ? "text-body-small text-danger"
+                    : "text-body-small text-muted-foreground"
+                }
+              >
+                {t("password_policy_workforce")}
+              </p>
+            </div>
+          </div>
+        )}
         {error ? <Banner tone="danger" title={error} /> : null}
       </DialogForm>
     </AccountSection>

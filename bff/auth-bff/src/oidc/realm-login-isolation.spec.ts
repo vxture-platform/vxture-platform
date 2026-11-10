@@ -29,6 +29,8 @@ function build(
     consumeOidcLoginChallenge: vi.fn(async () => challenge),
     getOidcSession: vi.fn(async (sid: string) => ({
       authMethod: "password+totp",
+      authenticationVersion: "auth-v1",
+      absExpiresAt: Math.floor(Date.now() / 1000) + 300,
       realm: sid === "customer-sid" ? "customer" : "workforce",
       sub: sid === "customer-sid" ? "usr_1" : "opr_1",
     })),
@@ -37,7 +39,14 @@ function build(
   const service = Object.create(OidcService.prototype) as OidcService;
   const issueAuthCode = vi.fn(async () => "code");
   const clients = { findEnabledByClientId: vi.fn(async () => client) };
+  const operator = {
+    id: "1",
+    authenticationVersion: "auth-v1",
+    mfaEnrolled: true,
+    webauthnRequired: false,
+  };
   Object.assign(service, {
+    operators: { findById: vi.fn(async () => operator) },
     customerMfa: { enabled: async () => false },
     redis,
     clients,
@@ -45,11 +54,21 @@ function build(
     resolveActiveOrg: vi.fn(async () => null),
     issueAuthCode,
   });
-  return { service, redis, clients, client, issueAuthCode };
+  return { service, redis, clients, client, issueAuthCode, operator };
 }
 const sids = { tenant: "customer-sid", operator: "workforce-sid" };
 
 describe("login resume realm selection", () => {
+  it("rejects a workforce session without a current authentication snapshot", async () => {
+    const { service, redis, operator, issueAuthCode } = build("workforce");
+    operator.authenticationVersion = "";
+    await expect(
+      service.resumeWithExistingSession("challenge", sids),
+    ).resolves.toBeNull();
+    expect(redis.consumeOidcLoginChallenge).not.toHaveBeenCalled();
+    expect(issueAuthCode).not.toHaveBeenCalled();
+  });
+
   it.each(["customer", "workforce"] as const)(
     "selects only the %s cookie when both exist",
     async (realm) => {
@@ -105,6 +124,8 @@ describe("login resume realm selection", () => {
     const { service, redis } = build("customer");
     redis.getOidcSession.mockResolvedValueOnce({
       authMethod: "password+totp",
+      authenticationVersion: "auth-v1",
+      absExpiresAt: Math.floor(Date.now() / 1000) + 300,
       realm: "customer",
       sub: "opr_1",
     });
@@ -232,6 +253,8 @@ describe("refresh realm binding", () => {
     const { service, redis } = build("workforce");
     redis.getOidcSession.mockResolvedValueOnce({
       authMethod: "password+totp",
+      authenticationVersion: "auth-v1",
+      absExpiresAt: Math.floor(Date.now() / 1000) + 300,
       realm: "workforce",
       sub: "usr_1",
     });
