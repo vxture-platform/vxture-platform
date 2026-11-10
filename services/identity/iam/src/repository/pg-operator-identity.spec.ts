@@ -122,7 +122,7 @@ describe("workforce passkey credential transactions", () => {
       f.query.mock.calls.some(
         (call) =>
           call[0].startsWith("delete") ||
-          call[0].includes("insert into admin.operator_webauthn"),
+          call[0].includes("insert into admin.operator_webauthn_credential"),
       ),
     ).toBe(false);
   });
