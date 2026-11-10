@@ -58,6 +58,8 @@ function fixture(t) {
             {
               DATABASE_URL: "postgresql://fixture:fixture-db@db.invalid/db",
               WORKBENCH_INBOX_DATABASE_URL: INBOX_CONNECTION,
+              WORKBENCH_ACTIVITY_DATABASE_URL:
+                "postgresql://svc_workbench_activity:fixture-password@db.invalid/db",
               REDIS_URL: "redis://:fixture-redis@cache.invalid:6379",
               OIDC_CLIENT_ID: "platform-api",
               OIDC_CLIENT_SECRET: CLIENT_SECRET,
@@ -318,4 +320,19 @@ test("strict audit still rejects duplicate plaintext client secrets", (t) => {
   const result = audit(root);
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /ERROR env\/duplicate-key .*OIDC_CLIENT_SECRET/u);
+});
+
+test("requires the dedicated Workbench activity connection for production", (t) => {
+  const root = fixture(t);
+  const target = join(root, "runtime/.env.workbench-bff");
+  writeFileSync(
+    target,
+    readFileSync(target, "utf8").replace(
+      /^WORKBENCH_ACTIVITY_DATABASE_URL=.*\r?\n/gmu,
+      "",
+    ),
+  );
+  const result = audit(root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /WORKBENCH_ACTIVITY_DATABASE_URL/u);
 });

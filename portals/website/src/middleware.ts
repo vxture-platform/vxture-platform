@@ -13,6 +13,12 @@
  * @category Infrastructure
  */
 
+import { NextResponse, type NextRequest } from "next/server";
+import {
+  LOCALE_CONSTANTS,
+  SUPPORTED_LOCALES,
+  type Locale,
+} from "@vxture-platform/shared";
 import createMiddleware from "next-intl/middleware";
 import { createAuthMiddleware } from "@vxture/core-identity-sdk/edge";
 import { routing } from "./lib/i18n/routing";
@@ -37,7 +43,49 @@ export const middleware = createAuthMiddleware({
   app: "website",
   // 只有 /dashboard 参与认证；其余（含 /signin 自身）一律豁免。
   isExempt: (pathname) => !stripLocalePrefix(pathname).startsWith("/dashboard"),
-  onAllow: intlMiddleware,
+  onAllow: (request: NextRequest) => {
+    const hint = request.nextUrl.searchParams.get("vx_locale") as Locale;
+    if (SUPPORTED_LOCALES.includes(hint)) {
+      const target = request.nextUrl.clone();
+      target.searchParams.delete("vx_locale");
+      const prefix = target.pathname.split("/")[1] as Locale;
+      if (SUPPORTED_LOCALES.includes(prefix))
+        target.pathname = target.pathname.replace(`/${prefix}`, `/${hint}`);
+      const response = NextResponse.redirect(target);
+      const host = request.nextUrl.hostname;
+      const domain =
+        host === "vxture.com" || host.endsWith(".vxture.com")
+          ? ".vxture.com"
+          : undefined;
+      response.cookies.set(LOCALE_CONSTANTS.COOKIE_KEY, hint, {
+        path: "/",
+        domain,
+        sameSite: "lax",
+        maxAge: 31536000,
+        secure: request.nextUrl.protocol === "https:",
+      });
+      if (domain)
+        response.headers.append(
+          "Set-Cookie",
+          `${LOCALE_CONSTANTS.COOKIE_KEY}=; Path=/; Max-Age=0; SameSite=Lax`,
+        );
+      return response;
+    }
+    // A stale locale-prefixed link must not overwrite the shared platform choice.
+    const saved = request.cookies.get(LOCALE_CONSTANTS.COOKIE_KEY)
+      ?.value as Locale;
+    const prefix = request.nextUrl.pathname.split("/")[1] as Locale;
+    if (
+      SUPPORTED_LOCALES.includes(saved) &&
+      SUPPORTED_LOCALES.includes(prefix) &&
+      prefix !== saved
+    ) {
+      const target = request.nextUrl.clone();
+      target.pathname = target.pathname.replace(`/${prefix}`, `/${saved}`);
+      return NextResponse.redirect(target);
+    }
+    return intlMiddleware(request);
+  },
 });
 
 /* 未认证访问 /dashboard 时直接去 `/auth/login`，不再经 `/signin` 中转。

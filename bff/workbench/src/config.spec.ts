@@ -22,6 +22,9 @@ const env: NodeJS.ProcessEnv = {
   REDIS_URL: "redis://127.0.0.1:6379",
 };
 
+// ============================================================================
+// Runtime configuration validation
+// ============================================================================
 describe("workbench runtime configuration", () => {
   it("derives host-only secure callbacks from the configured origin", () => {
     const config = loadConfig(env);
@@ -72,4 +75,14 @@ describe("workbench runtime configuration", () => {
       loadConfig({ ...dev, WORKBENCH_BASE_URL: "http://test.example" }),
     ).toThrow();
   });
+});
+
+it("rejects a broad database role for activity writes", () => {
+  expect(() =>
+    loadConfig({
+      ...env,
+      WORKBENCH_ACTIVITY_DATABASE_URL:
+        "postgresql://platform_svc@127.0.0.1/test",
+    }),
+  ).toThrow();
 });

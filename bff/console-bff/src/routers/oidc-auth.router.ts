@@ -9,6 +9,12 @@
  *   See identity-platform-rp-integration.md §2/§4.
  */
 import {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  LOCALE_CONSTANTS,
+  type Locale,
+} from "@vxture-platform/shared";
+import {
   BadRequestException,
   Body,
   Controller,
@@ -314,6 +320,15 @@ export class OidcAuthRouter {
         state,
         nonce,
         codeChallenge: challenge,
+        uiLocales: (() => {
+          const queryLocale: unknown = req.query.ui_locales;
+          const cookieLocale: unknown =
+            req.cookies?.[LOCALE_CONSTANTS.COOKIE_KEY];
+          const preferred = queryLocale ?? cookieLocale;
+          return SUPPORTED_LOCALES.includes(preferred as Locale)
+            ? (preferred as Locale)
+            : DEFAULT_LOCALE;
+        })(),
         ...(prompt !== undefined && { prompt }),
         ...(targetTenant ? { tenantHint: targetTenant } : {}),
         ...(targetWorkspace ? { workspaceHint: targetWorkspace } : {}),

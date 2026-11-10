@@ -8,6 +8,7 @@
  * @author AI-Generated
  * @date 2026-11-06
  */
+import { useWorkLocale } from "../../lib/locale";
 import { useEffect, useRef, useState } from "react";
 import { Button, Drawer } from "@vxture/design-system";
 import { formatDateTime } from "@vxture-platform/shared";
@@ -39,6 +40,7 @@ export function NotificationDrawer({
   open: boolean;
   onClose: () => void;
 }): React.JSX.Element {
+  const { locale, t } = useWorkLocale();
   const [result, setResult] = useState<LoadResult<WorkInbox> | null>(null);
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -90,9 +92,9 @@ export function NotificationDrawer({
       onClose={onClose}
       width="sm"
       className="max-w-full"
-      title="工作通知"
-      description="最近消息与处理进展"
-      closeLabel="关闭通知"
+      title={t("工作通知")}
+      description={t("最近消息与处理进展")}
+      closeLabel={t("关闭通知")}
       footer={
         <>
           <Button
@@ -100,36 +102,41 @@ export function NotificationDrawer({
             disabled={busy || !inbox?.unreadCount}
             onClick={() => void markRead(null)}
           >
-            全部已读
+            {t("全部已读")}
           </Button>
           <Button variant="secondary" asChild>
             <a
-              href={buildConsoleEntry(data, runtime.consoleUrl, "inbox")}
+              href={buildConsoleEntry(
+                data,
+                runtime.consoleUrl,
+                "inbox",
+                locale,
+              )}
               target="_blank"
               rel="noopener noreferrer"
             >
-              查看全部
+              {t("查看全部")}
             </a>
           </Button>
         </>
       }
     >
       {result === null ? (
-        <p role="status">正在加载通知…</p>
+        <p role="status">{t("正在加载通知…")}</p>
       ) : result.status === "error" ? (
         <div role="alert" className="flex flex-col gap-md">
-          <p>{result.message}</p>
+          <p>{t(result.message)}</p>
           <Button
             variant="secondary"
             onClick={() => setRevision((value) => value + 1)}
           >
-            重新加载
+            {t("重新加载")}
           </Button>
         </div>
       ) : inbox?.items.length === 0 ? (
-        <p role="status">暂无通知</p>
+        <p role="status">{t("暂无通知")}</p>
       ) : (
-        <ul className="flex flex-col gap-lg" aria-label="最近通知">
+        <ul className="flex flex-col gap-lg" aria-label={t("最近通知")}>
           {inbox?.items.map((item) => (
             <li
               key={item.id}
@@ -139,7 +146,7 @@ export function NotificationDrawer({
                 <h3 className="text-title-sm">{item.title}</h3>
                 {!item.readAt && (
                   <span className="shrink-0 text-body-sm text-primary">
-                    未读
+                    {t("未读")}
                   </span>
                 )}
               </div>
@@ -150,7 +157,7 @@ export function NotificationDrawer({
                 className="text-body-sm text-muted-foreground"
                 dateTime={item.createdAt}
               >
-                {formatDateTime(item.createdAt, "zh-CN")}
+                {formatDateTime(item.createdAt, locale)}
               </time>
               <div className="flex items-center justify-end gap-sm">
                 {!item.readAt && (
@@ -159,9 +166,9 @@ export function NotificationDrawer({
                     variant="ghost"
                     disabled={busy}
                     onClick={() => void markRead(item.id)}
-                    aria-label={`标为已读：${item.title}`}
+                    aria-label={t("标为已读：{0}", item.title)}
                   >
-                    标为已读
+                    {t("标为已读")}
                   </Button>
                 )}
                 <Button size="sm" variant="secondary" asChild>
@@ -170,12 +177,13 @@ export function NotificationDrawer({
                       data,
                       runtime.consoleUrl,
                       item.link,
+                      locale,
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={`查看详情：${item.title}`}
+                    aria-label={t("查看详情：{0}", item.title)}
                   >
-                    查看详情
+                    {t("查看详情")}
                   </a>
                 </Button>
               </div>
@@ -185,7 +193,7 @@ export function NotificationDrawer({
       )}
       {actionError && (
         <p role="alert" className="text-body-sm text-destructive">
-          {actionError}
+          {t(actionError)}
         </p>
       )}
     </Drawer>

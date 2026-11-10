@@ -126,6 +126,8 @@ export interface OidcRpClient {
     codeChallenge: string;
     /** optional prompt (e.g. "none" for silent re-auth) */
     prompt?: string;
+    /** Preferred interface language, carried using the standard OIDC parameter. */
+    uiLocales?: string;
     /** optional tenant_hint for tenant switching */
     tenantHint?: string;
     /**

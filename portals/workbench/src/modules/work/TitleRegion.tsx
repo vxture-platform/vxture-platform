@@ -6,6 +6,7 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { useWorkLocale } from "../../lib/locale";
 import { dailyPresentation } from "../../lib/presentation";
 import type { HomeCopy } from "../../lib/presentation";
 
@@ -28,7 +29,8 @@ export function TitleRegion({
   copy: HomeCopy;
   apps: boolean;
 }): React.JSX.Element {
-  const day = dailyPresentation(now, copy);
+  const { locale, t } = useWorkLocale();
+  const day = dailyPresentation(now, copy, locale);
   return (
     <section className="work-title-region" aria-labelledby="page-title">
       <div className="work-context-row">
@@ -41,11 +43,11 @@ export function TitleRegion({
         </p>
       </div>
       <div className="relative">
-        <h1 id="page-title">{apps ? "专业所长，皆为所用" : day.title}</h1>
+        <h1 id="page-title">{apps ? t("专业所长，皆为所用") : day.title}</h1>
         <p className="work-title-description">
           {apps
-            ? "找到适合当前业务的应用，直接开始工作"
-            : "让专业融入日常，让每一步更有方向"}
+            ? t("找到适合当前业务的应用，直接开始工作")
+            : t("让专业融入日常，让每一步更有方向")}
         </p>
       </div>
       <svg

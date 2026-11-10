@@ -8,6 +8,7 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { useWorkLocale } from "../../lib/locale";
 import { useState } from "react";
 import {
   Badge,
@@ -60,10 +61,17 @@ const TONES = ["brand", "violet", "teal", "amber"] as const;
 export function AppCard({
   app,
   onOverview,
+  onFavorite,
+  onLaunch,
+  favoritesEnabled,
 }: {
   app: WorkApp;
   onOverview: (app: WorkApp) => void;
+  onFavorite: (app: WorkApp) => void;
+  onLaunch: (app: WorkApp) => void;
+  favoritesEnabled: boolean;
 }): React.JSX.Element {
+  const { t } = useWorkLocale();
   const tone =
     TONES[
       Array.from(app.code).reduce((sum, char) => sum + char.charCodeAt(0), 0) %
@@ -75,7 +83,7 @@ export function AppCard({
         type="button"
         variant="ghost"
         className="work-card-target"
-        aria-label={`查看${app.name}的概要`}
+        aria-label={t("查看{0}的概要", app.name)}
         onClick={() => onOverview(app)}
       />
       <div className="work-card-content">
@@ -108,7 +116,7 @@ export function AppCard({
           <div className="work-card-badges">
             {app.tier && (
               <Badge variant="outline" className="work-plan-badge">
-                {TIER_LABELS[app.tier] ?? app.tier}
+                {t(TIER_LABELS[app.tier] ?? app.tier)}
               </Badge>
             )}
             {RELEASE_LABELS[app.stage] && (
@@ -116,13 +124,25 @@ export function AppCard({
                 variant="outline"
                 className={`work-release-badge work-release-${app.stage}`}
               >
-                {RELEASE_LABELS[app.stage]}
+                {t(RELEASE_LABELS[app.stage]!)}
               </Badge>
             )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="work-card-favorite"
+              aria-label={t(app.favorite ? "取消收藏{0}" : "收藏{0}", app.name)}
+              aria-pressed={Boolean(app.favorite)}
+              disabled={!favoritesEnabled}
+              onClick={() => onFavorite(app)}
+            >
+              <Icon name="star" size="sm" />
+            </Button>
           </div>
         </div>
         <p className="work-app-description">
-          {app.description || "产品介绍暂未提供"}
+          {app.description || t("产品介绍暂未提供")}
         </p>
       </div>
       <div className="work-app-actions">
@@ -130,16 +150,22 @@ export function AppCard({
         {app.available && app.href ? (
           <Button asChild size="sm" className="work-action">
             <a
+              onClick={() => onLaunch(app)}
+              onAuxClick={(event) => {
+                if (event.button === 1) onLaunch(app);
+              }}
               href={app.href}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`进入${app.name}（新标签页）`}
+              aria-label={t("进入{0}（新标签页）", app.name)}
             >
-              进入
+              {t("进入")}
             </a>
           </Button>
         ) : (
-          <span className="work-app-unavailable">{app.availabilityLabel}</span>
+          <span className="work-app-unavailable">
+            {t(app.availabilityLabel)}
+          </span>
         )}
       </div>
     </article>
@@ -154,10 +180,17 @@ export function AppCard({
 export function AppCatalog({
   apps,
   onOverview,
+  onFavorite,
+  onLaunch,
+  favoritesEnabled,
 }: {
   apps: WorkApp[];
   onOverview: (app: WorkApp) => void;
+  onFavorite: (app: WorkApp) => void;
+  onLaunch: (app: WorkApp) => void;
+  favoritesEnabled: boolean;
 }): React.JSX.Element {
+  const { t } = useWorkLocale();
   const [query, setQuery] = useState("");
   const [availability, setAvailability] = useState<"all" | "available">("all");
   const [category, setCategory] = useState<Category>("all");
@@ -168,11 +201,11 @@ export function AppCatalog({
     category,
   );
   return (
-    <section aria-label="应用目录" className="work-catalog">
+    <section aria-label={t("应用目录")} className="work-catalog">
       <div className="work-catalog-toolbar">
         <div
           role="group"
-          aria-label="应用分类"
+          aria-label={t("应用分类")}
           className="work-category-filters"
         >
           {CATEGORIES.map((item) => (
@@ -184,7 +217,7 @@ export function AppCatalog({
               className="work-category-filter"
               onClick={() => setCategory(item.value)}
             >
-              {item.label}
+              {t(item.label)}
               <span className="text-body-sm tabular-nums">
                 {result.counts[item.value]}
               </span>
@@ -198,8 +231,8 @@ export function AppCatalog({
             </InputGroupAddon>
             <InputGroupInput
               type="search"
-              aria-label="搜索应用"
-              placeholder="搜索名称或业务能力"
+              aria-label={t("搜索应用")}
+              placeholder={t("搜索名称或业务能力")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -227,11 +260,11 @@ export function AppCatalog({
             }}
           >
             <SegmentedControl<"all" | "available">
-              ariaLabel="应用可用性"
+              ariaLabel={t("应用可用性")}
               value={availability}
               items={[
-                { value: "all", label: "全部" },
-                { value: "available", label: "可用" },
+                { value: "all", label: t("全部") },
+                { value: "available", label: t("可用") },
               ]}
               onChange={setAvailability}
             />
@@ -239,22 +272,29 @@ export function AppCatalog({
         </div>
       </div>
       <div role="status" aria-live="polite" className="sr-only">
-        {result.items.length} 个匹配应用
+        {result.items.length} {t("个匹配应用")}
       </div>
       {result.items.length ? (
         <div className="work-app-grid">
           {result.items.map((app) => (
-            <AppCard key={app.code} app={app} onOverview={onOverview} />
+            <AppCard
+              key={app.code}
+              app={app}
+              onOverview={onOverview}
+              onFavorite={onFavorite}
+              onLaunch={onLaunch}
+              favoritesEnabled={favoritesEnabled}
+            />
           ))}
         </div>
       ) : (
         <div className="work-empty">
           <Icon name="search" size="lg" />
-          <h3>{apps.length ? "没有找到相关应用" : "尚未订阅应用"}</h3>
+          <h3>{apps.length ? t("没有找到相关应用") : t("尚未订阅应用")}</h3>
           <p className="text-body-sm text-muted-foreground">
             {apps.length
-              ? "试试其他关键词，或调整应用分类"
-              : "订阅适合你的产品，让专业能力融入日常工作"}
+              ? t("试试其他关键词，或调整应用分类")
+              : t("订阅适合你的产品，让专业能力融入日常工作")}
           </p>
           {apps.length > 0 && (
             <Button
@@ -266,7 +306,7 @@ export function AppCatalog({
                 setCategory("all");
               }}
             >
-              重置筛选
+              {t("重置筛选")}
             </Button>
           )}
         </div>

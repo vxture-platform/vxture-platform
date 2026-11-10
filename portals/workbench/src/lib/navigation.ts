@@ -29,7 +29,8 @@ export function authNavigation(
   for (const [key, value] of Object.entries(parameters)) {
     if (
       ((key === "tenantId" || key === "workspaceId") && value) ||
-      (action === "login" && key === "prompt" && value === "none")
+      (action === "login" && key === "prompt" && value === "none") ||
+      (key === "ui_locales" && (value === "zh-CN" || value === "en-US"))
     )
       target.searchParams.set(key, value);
   }

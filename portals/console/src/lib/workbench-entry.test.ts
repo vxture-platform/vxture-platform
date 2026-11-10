@@ -16,6 +16,20 @@ it("enters the target RP with exact source context and no forced prompt", () => 
   expect(Object.fromEntries(url.searchParams)).toEqual({
     ...context,
     surface: "portal",
-    returnTo: "https://ruyin.work/",
+    ui_locales: "zh-CN",
+    returnTo: "https://ruyin.work/?vx_locale=zh-CN",
   });
+});
+
+it("carries English to the target callback across registrable domains", () => {
+  const url = new URL(
+    buildWorkbenchEntry(
+      { userId: "user", tenantId: "org", workspaceId: "space" },
+      undefined,
+      "en-US",
+    ),
+  );
+  expect(url.searchParams.get("returnTo")).toBe(
+    "https://ruyin.work/?vx_locale=en-US",
+  );
 });

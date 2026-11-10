@@ -57,6 +57,12 @@ GRANT UPDATE (data, content_type, hash, source, updated_at) ON account.user_avat
 -- account.user_product_favorites  [anchor: user_id, product_id, created_at]（全锚：只 REVOKE）
 REVOKE UPDATE ON account.user_product_favorites FROM platform_svc;
 
+-- Account activity identity columns remain immutable.
+REVOKE UPDATE ON account.user_app_launches FROM platform_svc;
+GRANT UPDATE (product_id, occurred_at) ON account.user_app_launches TO platform_svc;
+REVOKE UPDATE ON account.user_app_views FROM platform_svc;
+GRANT UPDATE (view) ON account.user_app_views TO platform_svc;
+
 -- identity.identities  [anchor: id, created_at]
 REVOKE UPDATE ON identity.identities FROM platform_svc;
 GRANT UPDATE (user_id, provider, provider_subject, metadata, updated_at) ON identity.identities TO platform_svc;

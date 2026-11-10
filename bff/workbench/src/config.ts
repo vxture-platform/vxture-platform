@@ -20,6 +20,7 @@ export interface WorkbenchConfig {
   databaseUrl: string;
   reportingUrl: string;
   inboxDatabaseUrl: string;
+  activityDatabaseUrl?: string | undefined;
   oidc: OidcRpConfig;
 }
 
@@ -83,7 +84,19 @@ export function loadConfig(env: NodeJS.ProcessEnv): WorkbenchConfig {
     throw new Error(
       "Inbox writes require the dedicated svc_workbench_inbox role",
     );
+  const activityDatabaseUrl = env.WORKBENCH_ACTIVITY_DATABASE_URL?.trim();
+  if (activityDatabaseUrl) {
+    const url = new URL(activityDatabaseUrl);
+    if (
+      !["postgres:", "postgresql:"].includes(url.protocol) ||
+      decodeURIComponent(url.username) !== "svc_workbench_activity"
+    )
+      throw new Error(
+        "Activity writes require the dedicated svc_workbench_activity role",
+      );
+  }
   return {
+    activityDatabaseUrl,
     origin: base,
     port,
     secure,

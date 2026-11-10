@@ -6,6 +6,9 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { DEFAULT_LOCALE, type Locale } from "@vxture-platform/shared";
+import { withLocalePreference } from "@vxture/platform-browser";
+
 interface PortalContext {
   userId: string;
   tenantId: string;
@@ -21,11 +24,16 @@ interface PortalContext {
 export function buildWorkbenchEntry(
   context: PortalContext,
   origin = "https://ruyin.work",
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
   const url = new URL("/auth/login", origin);
   url.searchParams.set("surface", "portal");
+  url.searchParams.set("ui_locales", locale);
   for (const key of ["userId", "tenantId", "workspaceId"] as const)
     url.searchParams.set(key, context[key]);
-  url.searchParams.set("returnTo", new URL("/", origin).href);
+  url.searchParams.set(
+    "returnTo",
+    withLocalePreference(new URL("/", origin).href, locale),
+  );
   return url.href;
 }

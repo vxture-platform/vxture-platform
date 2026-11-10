@@ -10,6 +10,11 @@
  *   advertises ${OIDC_ISSUER}/oidc/* — nginx must route those public paths here.
  */
 import {
+  SUPPORTED_LOCALES,
+  LOCALE_CONSTANTS,
+  type Locale,
+} from "@vxture-platform/shared";
+import {
   BadRequestException,
   Body,
   Controller,
@@ -142,6 +147,27 @@ export class OidcRouter {
       sids,
     );
 
+    const locale =
+      typeof q.ui_locales === "string"
+        ? q.ui_locales
+            .split(/\s+/)
+            .find((value) => SUPPORTED_LOCALES.includes(value as Locale))
+        : undefined;
+    if (locale) {
+      const host = req.hostname;
+      const domain =
+        host === "vxture.com" || host.endsWith(".vxture.com")
+          ? ".vxture.com"
+          : undefined;
+      if (domain) res.clearCookie(LOCALE_CONSTANTS.COOKIE_KEY, { path: "/" });
+      res.cookie(LOCALE_CONSTANTS.COOKIE_KEY, locale, {
+        path: "/",
+        domain,
+        sameSite: "lax",
+        secure: req.secure,
+        maxAge: 365 * 24 * 60 * 60 * 1000,
+      });
+    }
     if (result.kind === "redirect") {
       res.redirect(result.location);
       return;

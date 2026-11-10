@@ -10,7 +10,10 @@
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  transpilePackages: ["@vxture/platform-workspace-ui"],
+  transpilePackages: [
+    "@vxture/platform-workspace-ui",
+    "@vxture/platform-browser",
+  ],
   output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
   async rewrites() {
     const rules = [];

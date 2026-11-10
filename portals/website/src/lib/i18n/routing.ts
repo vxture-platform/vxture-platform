@@ -20,6 +20,11 @@ export const routing = defineRouting({
 
   /** 备用语言 */
   localeDetection: true,
+  // The platform preference utility owns locale writes across subdomains.
+  localeCookie: {
+    name: "NEXT_LOCALE",
+    domain: process.env.NODE_ENV === "production" ? ".vxture.com" : undefined,
+  },
 });
 
 /**

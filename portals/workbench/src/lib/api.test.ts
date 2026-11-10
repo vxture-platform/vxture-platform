@@ -6,6 +6,7 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
+import { loadAppActivity, saveAppActivity } from "./api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   loadWorkData,
@@ -400,5 +401,66 @@ describe("notification adapters", () => {
     await expect(markNotificationsRead(null, signal)).rejects.toThrow(
       "标记已读失败",
     );
+  });
+});
+
+// ============================================================================
+// Application activity failures and mutations preserve explicit intent.
+// ============================================================================
+describe("application activity adapters", () => {
+  it("rejects invalid views, counts and dates instead of inventing history", async () => {
+    for (const payload of [
+      { view: "combined", items: [] },
+      {
+        view: "favorites",
+        items: [
+          { code: "a", favorite: true, launches30d: -1, lastUsedAt: null },
+        ],
+      },
+      {
+        view: "recent",
+        items: [
+          { code: "a", favorite: false, launches30d: 1, lastUsedAt: "bad" },
+        ],
+      },
+    ]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json(payload)),
+      );
+      expect(await loadAppActivity(new AbortController().signal)).toMatchObject(
+        { status: "error", code: 502 },
+      );
+    }
+  });
+  it("sends explicit state and the expected workspace with same-origin mutations", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetcher);
+    await saveAppActivity(
+      "a/favorite",
+      { favorite: true },
+      "t:w",
+      new AbortController().signal,
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/me/app-activity/a/favorite",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ favorite: true }),
+        headers: expect.objectContaining({
+          "X-Workbench-Scope": "t:w",
+          "X-Workbench-Request": "1",
+        }),
+      }),
+    );
+    fetcher.mockImplementation(async () => new Response(null, { status: 403 }));
+    await expect(
+      saveAppActivity(
+        "view",
+        { view: "recent" },
+        "t:w",
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("操作未保存");
   });
 });

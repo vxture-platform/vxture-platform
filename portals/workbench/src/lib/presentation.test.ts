@@ -14,6 +14,7 @@ import {
   filterApps,
   parseHomeCopy,
   homeApps,
+  sortApps,
 } from "./presentation";
 import type { WorkApp } from "./contracts";
 
@@ -63,7 +64,7 @@ describe("daily presentation", () => {
   it("uses an editable fallback for malformed or empty title lists", () => {
     expect(
       parseHomeCopy({ titles: [null, "  ", 0], fallback: "继续前进。" }),
-    ).toEqual({ titles: [], fallback: "继续前进" });
+    ).toEqual({ titles: [], fallback: "继续前进", appLimit: 3 });
     expect(
       dailyPresentation(new Date(), parseHomeCopy(null)).title,
     ).toBeTruthy();
@@ -111,23 +112,18 @@ describe("catalog filtering", () => {
 // ============================================================================
 // Home selection preserves real availability while keeping the approved rhythm.
 // ============================================================================
-it("caps subscribed home cards at three without inventing additional products", () => {
+it("prioritizes favorites without filtering other subscriptions and caps at three", () => {
   const catalog = [
-    app("locked-first", "agent", false),
-    app("locked-second", "platform", false),
-    app("available", "agent", true),
-    app("fourth", "agent", false),
+    app("unstarred", "agent", false),
+    ...["a", "b", "c", "d"].map((code) => ({
+      ...app(code, "agent", false),
+      favorite: true,
+    })),
   ];
-  const selection = homeApps(catalog);
-  expect(selection.map((item) => item.code)).toEqual([
-    "available",
-    "locked-first",
-    "locked-second",
-  ]);
-  expect(selection.filter((item) => item.available)).toHaveLength(1);
-  expect(catalog[0]?.code).toBe("locked-first");
+  expect(homeApps(catalog).map((item) => item.code)).toEqual(["a", "b", "c"]);
+  expect(homeApps([catalog[0]!])).toEqual([catalog[0]!]);
   expect(homeApps([])).toEqual([]);
-  expect(homeApps(catalog.slice(0, 1))).toHaveLength(1);
+  expect(catalog[0]?.code).toBe("unstarred");
 });
 it("formats one version prefix and falls back for missing release metadata", () => {
   for (const version of [null, "", " ", "v"])
@@ -135,21 +131,47 @@ it("formats one version prefix and falls back for missing release metadata", () 
   expect(appVersion("1.2.3")).toBe("v1.2.3");
   expect(appVersion(" v2.0.0 ")).toBe("v2.0.0");
 });
-it("selects user favorites before available subscription fill-ins without mutating input", () => {
+it("prioritizes availability before recent and frequent without favorite bias", () => {
   const catalog = [
-    app("history", "agent", false),
-    app("available", "platform", true),
-    { ...app("favorite-expired", "agent", false), favorite: true },
-    { ...app("favorite-live", "agent", true), favorite: true },
-    app("another-live", "agent", true),
+    {
+      ...app("old-favorite", "agent", true),
+      favorite: true,
+      lastUsedAt: "2026-09-01T00:00:00Z",
+      launches30d: 0,
+    },
+    {
+      ...app("popular", "agent", false),
+      lastUsedAt: "2026-11-05T00:00:00Z",
+      launches30d: 20,
+    },
+    {
+      ...app("new", "agent", true),
+      lastUsedAt: "2026-11-10T00:00:00Z",
+      launches30d: 2,
+    },
+    {
+      ...app("tie-new", "agent", true),
+      lastUsedAt: "2026-11-09T00:00:00Z",
+      launches30d: 20,
+    },
+    app("unused", "agent", true),
   ];
-  expect(homeApps(catalog).map((item) => item.code)).toEqual([
-    "favorite-live",
-    "favorite-expired",
-    "available",
+  expect(homeApps(catalog, "recent").map((item) => item.code)).toEqual([
+    "new",
+    "tie-new",
+    "old-favorite",
   ]);
-  expect(catalog[0]?.code).toBe("history");
-  expect(homeApps(catalog.slice(2, 3))).toHaveLength(1);
+  expect(homeApps(catalog, "frequent").map((item) => item.code)).toEqual([
+    "tie-new",
+    "new",
+    "old-favorite",
+  ]);
+  expect(homeApps(catalog).map((item) => item.code)).toEqual([
+    "old-favorite",
+    "tie-new",
+    "new",
+  ]);
+  expect(homeApps([catalog[0]!], "frequent")).toEqual([catalog[0]!]);
 });
 
 describe("account phone display", () => {
@@ -160,4 +182,81 @@ describe("account phone display", () => {
     expect(accountPhone("+861012345678")).toBe("+861012345678");
     expect(accountPhone("")).toBe("");
   });
+});
+
+// ============================================================================
+// Home and catalog share one order; filtering must preserve that relative order.
+// ============================================================================
+it("shares every sort mode across home and the full filtered catalog", () => {
+  const catalog = [
+    {
+      ...app("favorite", "agent", true),
+      favorite: true,
+      launches30d: 1,
+      lastUsedAt: "2026-11-01T00:00:00Z",
+    },
+    {
+      ...app("popular", "platform", true),
+      launches30d: 20,
+      lastUsedAt: "2026-11-05T00:00:00Z",
+    },
+    {
+      ...app("recent", "agent", true),
+      launches30d: 3,
+      lastUsedAt: "2026-11-10T00:00:00Z",
+    },
+    app("unused", "agent", false),
+  ];
+  for (const [view, expected] of [
+    ["favorites", ["favorite", "popular", "recent", "unused"]],
+    ["recent", ["recent", "popular", "favorite", "unused"]],
+    ["frequent", ["popular", "recent", "favorite", "unused"]],
+  ] as const) {
+    const ordered = sortApps(catalog, view);
+    expect(ordered.map((item) => item.code)).toEqual(expected);
+    expect(homeApps(catalog, view)).toEqual(ordered.slice(0, 3));
+    expect(
+      filterApps(ordered, "", true, "agent").items.map((item) => item.code),
+    ).toEqual(
+      expected.filter((code) => code === "favorite" || code === "recent"),
+    );
+  }
+  expect(catalog[0]?.code).toBe("favorite");
+  expect(sortApps([])).toEqual([]);
+});
+
+it("keeps available applications above unavailable favorites, newer and frequent products", () => {
+  const available = app("available-unused", "agent", true);
+  const unavailable = {
+    ...app("unavailable", "agent", false),
+    favorite: true,
+    launches30d: 999,
+    lastUsedAt: "2026-11-11T00:00:00Z",
+  };
+  for (const view of ["favorites", "recent", "frequent"] as const) {
+    expect(sortApps([unavailable, available], view)).toEqual([
+      available,
+      unavailable,
+    ]);
+    expect(homeApps([unavailable, available], view)).toEqual([
+      available,
+      unavailable,
+    ]);
+  }
+});
+
+it("takes any configured home count from the complete global order", () => {
+  const catalog = Array.from({ length: 8 }, (_, i) => ({
+    ...app(String(i), "agent", i !== 1),
+    favorite: i === 4,
+    launches30d: i,
+  }));
+  for (const view of ["favorites", "recent", "frequent"] as const) {
+    const ordered = sortApps(catalog, view);
+    for (const count of [1, 3, 5, 8, 12])
+      expect(homeApps(catalog, view, count)).toEqual(ordered.slice(0, count));
+  }
+  expect(parseHomeCopy({ appLimit: 6 }).appLimit).toBe(6);
+  for (const appLimit of [0, -1, 1.5, "6", null])
+    expect(parseHomeCopy({ appLimit }).appLimit).toBe(3);
 });

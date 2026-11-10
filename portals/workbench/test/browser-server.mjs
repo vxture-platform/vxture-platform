@@ -62,6 +62,18 @@ const products = [
     description: "将业务数据连接到日常工作",
   },
 ];
+const activity = {
+  view: "favorites",
+  items: products
+    .slice(0, 5)
+    .map((p, i) => ({
+      code: p.code,
+      favorite: i < 2,
+      lastUsedAt:
+        i < 3 ? new Date(Date.now() - i * 86400000).toISOString() : null,
+      launches30d: i < 3 ? (i + 1) * 2 : 0,
+    })),
+};
 const inboxMessages = [
   {
     id: "00000000-0000-4000-a000-000000000001",
@@ -157,6 +169,55 @@ const server = http.createServer((request, response) => {
   const scenario = request.headers.cookie?.match(
     /(?:^|; )workbench_qa=([a-z]+)/,
   )?.[1];
+  if (path.startsWith("/api/me/app-activity")) {
+    if (scenario === "activityfailure") {
+      response.writeHead(503);
+      response.end();
+      return;
+    }
+    const reply = (value) => {
+      response.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      });
+      response.end(JSON.stringify(value));
+    };
+    if (request.method === "POST") {
+      if (
+        request.headers.origin !==
+          `http://127.0.0.1:${server.address().port}` ||
+        request.headers["x-workbench-request"] !== "1"
+      ) {
+        response.writeHead(403);
+        response.end();
+        return;
+      }
+      let body = "";
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        const input = JSON.parse(body);
+        const [, code, action] =
+          path.match(/app-activity\/([^/]+)(?:\/(.*))?$/) ?? [];
+        if (code === "view") activity.view = input.view;
+        const item = activity.items.find((entry) => entry.code === code);
+        if (item && action === "favorite") item.favorite = input.favorite;
+        if (item && action === "launch") {
+          item.lastUsedAt = new Date().toISOString();
+          item.launches30d++;
+        }
+        reply({ ok: true });
+      });
+      return;
+    }
+    reply(
+      scenario === "activityempty"
+        ? { view: "favorites", items: [] }
+        : activity,
+    );
+    return;
+  }
   if (path.startsWith("/api/me/inbox")) {
     if (scenario === "inboxfailure") {
       response.writeHead(503, { "Content-Type": "application/json" });

@@ -7,6 +7,7 @@
  * @date 2026-11-05
  */
 import type {
+  AppActivity,
   CatalogProduct,
   LoadResult,
   ProductEntry,
@@ -462,4 +463,80 @@ export async function markNotificationsRead(
   });
   if (!response.ok)
     throw new WorkApiError("标记已读失败，请重试", response.status);
+}
+
+// ============================================================================
+// Account favorites and scope-bound portal launch activity
+// ============================================================================
+/**
+ * Load activity without treating service failures as an empty history.
+ * @param signal - Scope lifecycle cancellation.
+ * @returns Validated server-owned activity or an explicit error.
+ */
+export function loadAppActivity(
+  signal: AbortSignal,
+): Promise<LoadResult<AppActivity>> {
+  return load(
+    "/api/me/app-activity",
+    (input) => {
+      const row = object(input);
+      if (!["favorites", "recent", "frequent"].includes(string(row.view)))
+        throw new WorkApiError("应用记录格式不正确", 502);
+      return {
+        view: row.view as AppActivity["view"],
+        items: list(row.items).map((value) => {
+          const item = object(value);
+          if (
+            typeof item.favorite !== "boolean" ||
+            !Number.isSafeInteger(item.launches30d) ||
+            Number(item.launches30d) < 0 ||
+            (item.lastUsedAt !== null &&
+              (typeof item.lastUsedAt !== "string" ||
+                !Number.isFinite(Date.parse(item.lastUsedAt))))
+          )
+            throw new WorkApiError("应用记录格式不正确", 502);
+          return {
+            code: required(item.code),
+            favorite: item.favorite,
+            lastUsedAt: item.lastUsedAt as string | null,
+            launches30d: Number(item.launches30d),
+          };
+        }),
+      };
+    },
+    signal,
+  );
+}
+
+/**
+ * Persist an explicit portal action in the expected authenticated workspace.
+ * @param path - Encoded product action or the view preference route.
+ * @param body - Desired preference or unique launch event.
+ * @param scope - Expected tenant and workspace; prevents a late request crossing a switch.
+ * @param signal - Scope lifecycle cancellation.
+ * @returns Nothing after the server acknowledges persistence.
+ * @throws When source, identity, storage or membership checks fail.
+ */
+export async function saveAppActivity(
+  path: string,
+  body: Record<string, unknown>,
+  scope: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`/api/me/app-activity/${path}`, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    keepalive: true,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Workbench-Request": "1",
+      "X-Workbench-Scope": scope,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+  });
+  if (!response.ok)
+    throw new WorkApiError("操作未保存，请重试", response.status);
 }

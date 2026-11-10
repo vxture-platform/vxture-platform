@@ -1,0 +1,50 @@
+/**
+ * Locale routing regressions independent of the authentication decision.
+ * @package @vxture/website
+ * @layer Presentation
+ * @category test
+ * @author AI-Generated
+ * @date 2026-11-11
+ */
+import { expect, it, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
+vi.mock("@vxture/core-identity-sdk/edge", () => ({
+  createAuthMiddleware: (options: {
+    onAllow: (request: NextRequest) => NextResponse;
+  }) => options.onAllow,
+}));
+vi.mock("next-intl/middleware", () => ({
+  default: () => () => NextResponse.next(),
+}));
+import { middleware } from "./middleware";
+
+it("follows the shared preference instead of a stale URL and preserves navigation context", async () => {
+  const request = new NextRequest("https://vxture.com/zh-CN/billing?tab=all", {
+    headers: { cookie: "NEXT_LOCALE=en-US" },
+  });
+  const response = await middleware(request);
+  expect(response?.headers.get("location")).toBe(
+    "https://vxture.com/en-US/billing?tab=all",
+  );
+});
+
+it("accepts a cross-domain preference and removes the navigation hint", async () => {
+  const request = new NextRequest(
+    "https://vxture.com/en-US/billing?vx_locale=en-US&tab=all",
+    { headers: { cookie: "NEXT_LOCALE=zh-CN" } },
+  );
+  const response = await middleware(request);
+  expect(response?.headers.get("location")).toBe(
+    "https://vxture.com/en-US/billing?tab=all",
+  );
+  expect(response?.headers.get("set-cookie")).toContain("NEXT_LOCALE=en-US");
+  expect(response?.headers.get("set-cookie")).toContain("Domain=.vxture.com");
+});
+
+it("ignores unsupported language hints and proceeds normally", async () => {
+  const request = new NextRequest(
+    "https://vxture.com/en-US?vx_locale=unsupported",
+  );
+  const response = await middleware(request);
+  expect(response?.headers.get("location")).toBeNull();
+});

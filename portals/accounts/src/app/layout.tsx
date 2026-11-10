@@ -12,6 +12,7 @@
  */
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { LocaleSync } from "@/components/LocaleSync";
 import { NextIntlClientProvider } from "next-intl";
 import { accountsLocale, accountsMessages } from "@/lib/intl";
 import {
@@ -50,6 +51,7 @@ export default async function RootLayout({
             html[data-app-ready]，CSS 随即把它隐藏。 */}
         <BootSplash />
         <NextIntlClientProvider locale={locale} messages={messages}>
+          <LocaleSync />
           <ThemeProvider defaultMode="system" defaultDensity="default">
             <ToastProvider
               regionLabel={messages.accountsForms.notifications}

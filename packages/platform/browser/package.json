@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "description": "Vxture browser environment utilities - scroll, storage, clipboard, viewport, etc.",
   "scripts": {

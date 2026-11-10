@@ -507,3 +507,13 @@ describe("logout", () => {
     expect((await send(fixture.sign(event))).status).toBe(200);
   });
 });
+
+it("carries a supported language from the browser to the central identity surface", async () => {
+  const start = await fixture.begin("/auth/login?ui_locales=en-US");
+  expect(start.location.searchParams.get("ui_locales")).toBe("en-US");
+});
+
+it("falls back safely for an unsupported language hint", async () => {
+  const start = await fixture.begin("/auth/login?ui_locales=unknown");
+  expect(start.location.searchParams.get("ui_locales")).toBe("zh-CN");
+});
