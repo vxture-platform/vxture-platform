@@ -31,7 +31,7 @@ export default function SolutionsEcosystemSection() {
       data-name="SolutionsEcosystem"
       className="vx-section-even"
     >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
+      <div className="mx-auto max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
         <div className="max-w-website-4xl">
           <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
             {t("ecosystem.eyebrow")}

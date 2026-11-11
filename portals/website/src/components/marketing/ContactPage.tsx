@@ -75,7 +75,7 @@ function ContactChannelCard({ channel }: { channel: ContactChannel }) {
       // 锚点：目录页 hero「预约演示」→ #support、「业务咨询」→ #ecosystem 直达对应板块。
       id={channel.id}
       surface="strong"
-      className="relative flex h-full scroll-mt-32 flex-col overflow-hidden p-10 lg:p-12"
+      className="relative flex h-full scroll-mt-32 flex-col overflow-hidden p-6 sm:p-10 lg:p-12"
     >
       {/* 角落水印：往里收，四周留白，不贴边裁切。 */}
       <span
@@ -148,7 +148,7 @@ export default function ContactPage() {
       <section
         className={`flex min-h-screen items-center px-4 pb-20 pt-32 sm:px-6 lg:px-8 ${MARKETING_GRADIENT_SURFACE}`}
       >
-        <div className="mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-2 xl:max-w-screen-2xl">
+        <div className="mx-auto grid w-full max-w-page-xl gap-6 lg:grid-cols-2 xl:max-w-screen-2xl">
           {CONTACT_CHANNELS.map((channel) => (
             <ContactChannelCard key={channel.id} channel={channel} />
           ))}

@@ -20,7 +20,7 @@ export function PricingFaq() {
   const items = t.raw("items") as FaqItem[];
 
   return (
-    <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
+    <div className="mx-auto max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
       <div className="mx-auto max-w-website-2xl text-center">
         <h2 className="font-display text-2xl font-bold text-vx-gray-900 dark:text-vx-white md:text-3xl">
           {t("title")}

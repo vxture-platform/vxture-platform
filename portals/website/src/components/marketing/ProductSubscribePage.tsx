@@ -6,17 +6,9 @@
  * @layer Presentation
  * @category Marketing / Pricing
  *
- * ?product= 选定产品（默认 arda），页面三板块：
- *   1. 订阅区（**撑满一屏**，owner 2026-09-03）：一行 plan bar（产品名 + 个人/全部 + 月付/年付，
- *      两组切换常驻）+ 档位卡 + 底部「更多权益，查看详情」向下滚动指示；
- *      —— 档位卡按**三槽位**排：1 档 = 左右浅色占位、中间档位；2 档 = 前两位档位、第三位占位；
- *         3 档正好；4 档及以上全显；
- *      —— 「个人」视角 = 个人档 + 右侧团队档窄卡（点击切「全部」），「全部」= 全部档位；
- *         五档产品的「收起 / 展开」就是这一对切换，不另做机制（owner 2026-09-03）；
- *   2. 对比区：分组功能对比表，选中列整列淡高亮（id=plan-compare，滚动指示的落点）；
- *   3. 答疑区：FAQ 双列卡。
- * 全局 Header/Footer 由 (marketing) layout 提供，页面不重复。
- * 档位 CTA 深链 console /subscribe（product/intent/target_tier/cycle）。
+ * Product pricing uses the existing website container and responsive breakpoints.
+ * Up to four tiers remain visible; five-tier products can filter personal plans.
+ * Desktop keeps three baseline slots; narrower containers wrap without empty slots.
  *
  * 2026-08-30 数据切到 website-bff `GET /api/products/:code/plans`（DB 真源）：
  * 价格/周期/席位/功能键/配额全部来自已发布的套餐版本，i18n 只剩标签与文案；
@@ -94,26 +86,22 @@ const DEFAULT_PRODUCT = "arda";
  */
 const DEFAULT_SELECTED_TIER = "pro";
 
-/** 三槽位基线：不足三档用浅色占位补到三列。 */
+/** Desktop baseline; empty slots disappear when cards wrap. */
 const BASE_SLOTS = 3;
 
 /** 对比区锚点：底部滚动指示的落点。 */
 const COMPARE_SECTION_ID = "plan-compare";
 
-/** 与其余营销页一致的内容容器（--vx-container-page-xl 一档，xl 放宽到 2xl 屏） */
-const CONTAINER = "mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl";
+/** Preserve the website page-width ladder and responsive gutters. */
+const CONTAINER =
+  "mx-auto max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl";
 
 const TOGGLE_GROUP =
   "inline-flex items-center gap-1 rounded-full border border-vx-gray-200 bg-vx-white p-1 shadow-sm dark:border-vx-gray-700 dark:bg-vx-gray-900";
 
-/** 浅色占位卡：不足三档时补位，纯留白，不承载信息。 */
+/** Reserve desktop alignment without suggesting an unavailable plan. */
 function PlanPlaceholderCard() {
-  return (
-    <div
-      aria-hidden="true"
-      className="rounded-2xl border border-dashed border-vx-gray-200 bg-vx-gray-50/70 dark:border-vx-gray-700 dark:bg-vx-gray-800/40"
-    />
-  );
+  return <div aria-hidden="true" className="vx-pricing-placeholder" />;
 }
 
 export default function ProductSubscribePage() {
@@ -216,6 +204,7 @@ export default function ProductSubscribePage() {
   // 切换产品回到默认选中
   useEffect(() => {
     setSelectedTier(null);
+    setAudience("person");
   }, [productCode]);
 
   // 月付/年付两个按钮常驻；阶梯里没挂价的周期禁用。当前周期没价时落到有价的那种。
@@ -226,9 +215,12 @@ export default function ProductSubscribePage() {
 
   const personPlans = model?.plans.filter((p) => p.audience === "person") ?? [];
   const teamPlans = model?.plans.filter((p) => p.audience !== "person") ?? [];
-  // 个人/全部两个按钮常驻；个人档为空的产品「个人」禁用并强制走「全部」视角。
-  const effectiveAudience: AudienceView =
-    personPlans.length === 0 ? "all" : audience;
+  // Filtering is useful only when a full five-tier ladder mixes audiences.
+  const canCollapse =
+    (model?.plans.length ?? 0) === 5 &&
+    personPlans.length > 0 &&
+    teamPlans.length > 0;
+  const effectiveAudience: AudienceView = canCollapse ? audience : "all";
   const visiblePlans =
     effectiveAudience === "person" ? personPlans : (model?.plans ?? []);
   // 选中档：用户点选优先；不在可见档里（切产品/切受众后）回落到默认档，再回落首档。
@@ -238,24 +230,15 @@ export default function ProductSubscribePage() {
       visiblePlans[0]?.tier ??
       null);
 
-  // 三槽位排布（owner 2026-09-03）：
-  //   1 档 → [占位, 档, 占位]；2 档 → [档, 档, 占位]；3 档正好；4 档及以上全显。
-  //   五档产品：「个人」= 3 个人档 + 右侧团队档窄卡，「全部」= 5 档——收起 / 展开就是这对切换。
+  // Slot placement depends on visible cards; collapsing depends on total tiers.
   const shownPlans = visiblePlans;
   const placeholderCount = Math.max(0, BASE_SLOTS - shownPlans.length);
   const leadingPlaceholders = shownPlans.length === 1 ? 1 : 0;
   const trailingPlaceholders = placeholderCount - leadingPlaceholders;
   // 右侧团队档窄卡：「个人」视角下有团队档时出现；有占位槽时放进最后一个占位槽，不另占列。
-  const teamHint = effectiveAudience === "person" && teamPlans.length > 0;
+  const teamHint = canCollapse && effectiveAudience === "person";
   const teamHintInPlaceholder = teamHint && trailingPlaceholders > 0;
   const showSideCard = teamHint && !teamHintInPlaceholder;
-  // CSS repeat() 不接受 0：分段拼接，空段直接不出现。
-  const gridColumns = [
-    `repeat(${shownPlans.length + placeholderCount}, minmax(15rem, 1fr))`,
-    showSideCard ? "minmax(8.5rem, 10rem)" : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
 
   /* 停售且没有阶梯：空态也要说「停售中」，不能说「暂未开放」——那是「还没开卖」的话，
      对一个卖过的产品是错的。 */
@@ -292,20 +275,17 @@ export default function ProductSubscribePage() {
             /* 首屏占位：一行 plan bar + 三张卡的骨架，撑住版式等真数据 */
             <div aria-busy="true">
               <Skeleton variant="line" width="18rem" height="2rem" />
-              <div
-                className="mt-8 grid gap-5"
-                style={{
-                  gridTemplateColumns: `repeat(${BASE_SLOTS}, minmax(15rem, 1fr))`,
-                }}
-              >
-                {[0, 1, 2].map((i) => (
-                  <Skeleton
-                    key={i}
-                    variant="rect"
-                    height="26rem"
-                    className="rounded-2xl"
-                  />
-                ))}
+              <div className="vx-pricing-layout mt-8">
+                <div className="vx-pricing-grid" data-count={BASE_SLOTS}>
+                  {[0, 1, 2].map((i) => (
+                    <Skeleton
+                      key={i}
+                      variant="rect"
+                      height="26rem"
+                      className="rounded-2xl"
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           ) : load.status === "error" ? (
@@ -367,9 +347,9 @@ export default function ProductSubscribePage() {
             />
           ) : (
             <>
-              {/* 一行 plan bar：产品名 + 档数 + 个人/全部 + 月付/年付（两组常驻） */}
+              {/* Keep title and controls free to wrap within the available width. */}
               <div className="flex flex-wrap items-center justify-between gap-6">
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-3">
                   <h1 className="font-brand text-2xl font-semibold leading-tight text-vx-gray-900 dark:text-vx-white md:text-3xl">
                     {model.name}
                   </h1>
@@ -392,28 +372,32 @@ export default function ProductSubscribePage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  {/* 个人 / 全部 */}
-                  <div
-                    role="group"
-                    aria-label={t("audienceGroupLabel")}
-                    className={TOGGLE_GROUP}
-                  >
-                    {(["person", "all"] as AudienceView[]).map((view) => (
-                      <Button
-                        key={view}
-                        variant={
-                          effectiveAudience === view ? "default" : "ghost"
-                        }
-                        size="md"
-                        aria-pressed={effectiveAudience === view}
-                        disabled={view === "person" && personPlans.length === 0}
-                        onClick={() => setAudience(view)}
-                        className="rounded-full px-5"
-                      >
-                        {t(`audienceToggle.${view}`)}
-                      </Button>
-                    ))}
-                  </div>
+                  {/* Audience filtering is reserved for five-tier products. */}
+                  {canCollapse ? (
+                    <div
+                      role="group"
+                      aria-label={t("audienceGroupLabel")}
+                      className={TOGGLE_GROUP}
+                    >
+                      {(["person", "all"] as AudienceView[]).map((view) => (
+                        <Button
+                          key={view}
+                          variant={
+                            effectiveAudience === view ? "default" : "ghost"
+                          }
+                          size="md"
+                          aria-pressed={effectiveAudience === view}
+                          disabled={
+                            view === "person" && personPlans.length === 0
+                          }
+                          onClick={() => setAudience(view)}
+                          className="rounded-full px-5"
+                        >
+                          {t(`audienceToggle.${view}`)}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
                   {/* 月付 / 年付 */}
                   <div
                     role="group"
@@ -437,16 +421,15 @@ export default function ProductSubscribePage() {
                 </div>
               </div>
 
-              {/* 档位卡：三槽位排布，严格一行，窄屏横向滚动。
-                  负 margin + 等量 padding 给选中卡的光晕留出血，避免被滚动容器硬裁。 */}
-              {/* 内容区上下留白压缩（顶部 pt-18 = 72px，仍盖过 64px 的常驻 header）；
-                  卡片自身留白见 PricingPlanCard（owner 2026-09-03：权益多把卡撑高、超出一屏）。 */}
-              <div className="-mx-3 mt-5 overflow-x-auto px-3 pb-3 pt-3">
+              {/* Container queries preserve desktop slots without a forced scroll row. */}
+              <div className="vx-pricing-layout -mx-3 mt-5 px-3 pb-3 pt-3">
                 <div
                   role="radiogroup"
                   aria-label={t("planGroupLabel")}
-                  className="grid items-stretch gap-5"
-                  style={{ gridTemplateColumns: gridColumns }}
+                  className="vx-pricing-grid"
+                  data-count={Math.max(BASE_SLOTS, shownPlans.length)}
+                  data-plans={shownPlans.length}
+                  data-side={showSideCard || undefined}
                 >
                   {Array.from({ length: leadingPlaceholders }, (_, i) => (
                     <PlanPlaceholderCard key={`lead-${i}`} />

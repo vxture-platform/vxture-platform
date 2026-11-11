@@ -44,7 +44,7 @@ export default function SolutionIndustrySection({
       data-name={`Solution-${industry.slug}`}
       className={`vx-solutions-industry vx-solutions-industry--${industry.accent} snap-section flex min-h-screen items-center`}
     >
-      <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
+      <div className="relative mx-auto grid w-full max-w-page-xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
         {/* 左：行业定位与核心能力 */}
         <div className="flex flex-col justify-center">
           <div className="flex items-center gap-3">

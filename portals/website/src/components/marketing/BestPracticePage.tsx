@@ -83,7 +83,7 @@ export default function BestPracticePage() {
         <div className="vx-cases-hero-bg" aria-hidden="true" />
         <div className="vx-cases-hero-wash" aria-hidden="true" />
 
-        <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="relative mx-auto w-full max-w-page-xl px-4 pb-16 pt-12 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div className="max-w-website-4xl">
             <p className="vx-website-hero-eyebrow text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
               {t("page.hero.eyebrow")}
@@ -162,7 +162,7 @@ export default function BestPracticePage() {
           data-name={`Case-${index + 1}`}
           className={`vx-solutions-industry vx-solutions-industry--${ACCENTS[index % ACCENTS.length]} snap-section flex min-h-screen items-center`}
         >
-          <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
+          <div className="relative mx-auto grid w-full max-w-page-xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
             {/* 左：客户 / 标题 / 业务需求 / 技术架构 */}
             <div className="flex flex-col justify-center">
               <div className="flex items-center gap-3">
@@ -289,7 +289,7 @@ export default function BestPracticePage() {
         data-name="CasesBottom"
         className="vx-section-even"
       >
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:max-w-screen-2xl">
+        <div className="mx-auto flex max-w-page-xl flex-col gap-5 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:max-w-screen-2xl">
           <div className="max-w-website-4xl">
             <h2 className="font-display text-2xl font-bold text-vx-gray-900 dark:text-vx-white">
               {t("page.cta.title")}
