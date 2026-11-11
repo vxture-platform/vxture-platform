@@ -43,7 +43,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 import {
   buildConsoleEntryUrl,
-  buildConsoleProfileUrl,
+  buildAccountCenterUrl,
 } from "@/lib/console-entry";
 import { buildLogoutUrl, buildSwitchUserUrl } from "@/api/auth.api";
 import type { UserInfo } from "@/types/auth.types";
@@ -452,7 +452,7 @@ function UserMenu({
         {
           key: "profile",
           label: t("profileLink"),
-          href: buildConsoleProfileUrl(locale),
+          href: buildAccountCenterUrl(locale),
           icon: "user",
           newTab: true,
         },

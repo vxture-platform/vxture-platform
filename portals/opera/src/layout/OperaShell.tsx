@@ -30,6 +30,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { operatorAccountCenterUrl } from "@/lib/account-center";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -180,6 +181,7 @@ export function OperaShell({
   const { theme, setTheme, density, setDensity, fontSize, setFontSize } =
     useTheme();
   const { locale, switchLocale } = useLocaleSwitch();
+  const tAccount = useTranslations("accountMenu");
   /* 初始值由服务端从 cookie 读出后传入，首帧即最终态。写死 false 再在 effect 里
    * 纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
    * 那个时序问题无法在客户端解决。 */
@@ -424,13 +426,12 @@ export function OperaShell({
                         : {}),
                     }}
                     links={[
-                      // 个人信息 = 运营者本人自助（只读自视,写侧待身份层补齐）。
-                      // 与治理台 /admins「管理他人」不同，这是本人账户。
                       {
                         key: "profile",
-                        label: "个人信息",
-                        href: "/me",
+                        label: tAccount("accountCenter"),
+                        href: operatorAccountCenterUrl(),
                         icon: "user",
+                        newTab: true,
                       },
                     ]}
                     settings={
