@@ -337,7 +337,7 @@ export function ConsoleHeader({
               label={t("help")}
               onClick={() => openDrawer("help")}
             />
-            {/* 未读角标：站内收件箱（P2-g）。0 不画——空角标是噪音。 */}
+            {/* Ordinary unread items use the brand tone; zero stays hidden. */}
             <span className="relative inline-flex">
               <ShellIconButton
                 icon="bell"
@@ -351,7 +351,7 @@ export function ConsoleHeader({
               {unreadCount > 0 ? (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute -right-2xs -top-2xs inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-2xs text-label-sm leading-4 text-danger-foreground tabular-nums"
+                  className="pointer-events-none absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-label-sm font-semibold leading-none text-primary-foreground ring-2 ring-background tabular-nums"
                 >
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
@@ -399,6 +399,12 @@ export function ConsoleHeader({
               />
             }
             links={[
+              {
+                key: "personal-center",
+                label: t("personalCenter"),
+                href: `/${locale}/memberships`,
+                icon: "user",
+              },
               {
                 key: "profile",
                 label: t("accountCenter"),

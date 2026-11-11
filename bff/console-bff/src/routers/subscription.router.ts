@@ -650,6 +650,8 @@ export interface SubscribedProductView {
   productCode: string | null;
   productName: string | null;
   productNick: string | null;
+  /** Registered product entry; null when no entry has been configured. */
+  homeUrl: string | null;
   /**
    * 产品最近一次发布的时刻（`products.released_at`，ISO）。
    *
@@ -662,7 +664,7 @@ export interface SubscribedProductView {
   releaseVersion: string | null;
   planName: string;
   tier: string | null;
-  /** plan_components.quota->>'member.max'；无席位口径的档为 null。 */
+  /** Product seats from plan_components.quota['seat.max']; absent = null. */
   seats: number | null;
   kind: string;
   cycleUnit: string;
@@ -1471,6 +1473,7 @@ export class SubscriptionRouter {
       product_code: string | null;
       product_name: string | null;
       product_nick: string | null;
+      home_url: string | null;
       release_version: string | null;
       released_at: Date | null;
       plan_name: string;
@@ -1490,9 +1493,9 @@ export class SubscriptionRouter {
     }>(
       `select ts.id as subscription_id,
               prod.id as product_id, prod.product_code, prod.product_name,
-              prod.product_nick, prod.release_version, prod.released_at,
+              prod.product_nick, pw.home_url, prod.release_version, prod.released_at,
               prod.maintenance_window_id, prod.maintenance_until,
-              pl.plan_name, pc.tier, pc.quota->>'member.max' as seats,
+              pl.plan_name, pc.tier, pc.quota->>'seat.max' as seats,
               ts.subscription_kind, ts.cycle_unit, ts.status,
               ts.start_at, ts.end_at, ts.auto_renew,
               sus.suspension_reason, sus.suspension_expected_resume_at,
@@ -1506,6 +1509,7 @@ export class SubscriptionRouter {
             limit 1
          ) pc on true
          left join product.products prod on prod.id = pc.product_id
+         left join product.product_webhooks pw on pw.product_id = prod.id
          ${openSuspensionLateralSql("ts")}
         where ts.workspace_id = $1 and ts.deleted_at is null
           -- 下单只建 billing.orders（product_330 P1-b2），订阅行只在履约后存在；旧模型的
@@ -1522,6 +1526,7 @@ export class SubscriptionRouter {
       productCode: r.product_code,
       productName: r.product_name,
       productNick: r.product_nick,
+      homeUrl: r.home_url ?? null,
       releaseVersion: r.release_version,
       releasedAt: r.released_at?.toISOString() ?? null,
       planName: r.plan_name,

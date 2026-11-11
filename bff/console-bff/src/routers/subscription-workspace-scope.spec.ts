@@ -204,6 +204,40 @@ describe("subscription workspace scope", () => {
     expect(subscriptions?.[1]).toEqual([TENANT, SELECTED]);
   });
 
+  it("projects the current seat metric and registered entry for team subscriptions", async () => {
+    const { router, query } = setup();
+    query.mockResolvedValueOnce({ rows: [{ id: SELECTED }] });
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          subscription_id: "yucer-business",
+          product_id: "yucer",
+          product_code: "yucer",
+          tier: "business",
+          seats: "5",
+          home_url: "https://yucer.example/",
+          status: "active",
+          start_at: null,
+          end_at: null,
+          released_at: null,
+        },
+      ],
+    } as never);
+    const [card] = await router.getSubscribedProducts(req());
+    expect(card).toMatchObject({
+      productCode: "yucer",
+      tier: "business",
+      seats: 5,
+      homeUrl: "https://yucer.example/",
+    });
+    const sql = query.mock.calls.find(([statement]) =>
+      statement.includes("as subscription_id"),
+    )?.[0];
+    expect(sql).toContain("pc.quota->>'seat.max' as seats");
+    expect(sql).not.toContain("member.max");
+    expect(sql).toContain("pw.product_id = prod.id");
+  });
+
   it("scopes the purchase landing's current subscription and pending order", async () => {
     const { router, query } = setup();
     const result = await router.getSubscribeContext(req(), {
