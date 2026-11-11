@@ -1,6 +1,6 @@
 "use client";
 /**
- * Membership rows retained from the former profile page.
+ * Personal-center tenant relationships and context actions.
  * @package @vxture/console
  * @layer Presentation
  * @category component
@@ -36,12 +36,14 @@ export function MembershipList({
   loading,
   onOpenTenant,
   onSetDefault,
+  onSwitchTenant,
   settingDefaultId,
 }: {
   tenants: readonly TenantRow[];
   loading: boolean;
   onOpenTenant: (tenant: TenantRow) => void;
   onSetDefault: (tenant: TenantRow) => void;
+  onSwitchTenant: (tenant: TenantRow) => void;
   settingDefaultId: string | null;
 }) {
   const t = useTranslations("membershipsPage");
@@ -115,6 +117,16 @@ export function MembershipList({
             </span>
 
             <span className="flex shrink-0 items-center gap-2xs">
+              {!tenant.isCurrent ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={settingDefaultId !== null}
+                  onClick={() => onSwitchTenant(tenant)}
+                >
+                  {t("identity.switchTenant")}
+                </Button>
+              ) : null}
               {tenant.isDefault ? null : (
                 <Button
                   variant="ghost"

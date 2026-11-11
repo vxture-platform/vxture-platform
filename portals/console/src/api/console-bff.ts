@@ -1206,6 +1206,8 @@ export interface SubscribedProduct {
   productCode: string | null;
   productName: string | null;
   productNick: string | null;
+  /** Registered product entry; optional while older BFF deployments remain live. */
+  homeUrl?: string | null;
   releaseVersion: string | null;
   /** 产品最近一次发布的时刻(ISO)。不是 updated_at——那是行审计列。 */
   releasedAt: string | null;

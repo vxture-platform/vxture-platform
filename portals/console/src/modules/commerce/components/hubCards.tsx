@@ -94,7 +94,7 @@ function FavoriteStar({
         active ? "text-warning-text" : "text-muted-foreground",
       )}
     >
-      <Icon name="star" size="sm" />
+      <Icon name="star" size="sm" weight={active ? "fill" : "regular"} />
     </Button>
   );
 }
@@ -196,8 +196,30 @@ export function SubscriptionProductCard({
   // kind 写死 'paid'，两个判据打架，free 卡永远显示「到期不续」却又不给开关。
   const optedOut = !item.autoRenew && item.endAt !== null && !expired;
   const autoRenewOn = item.autoRenew && item.endAt !== null && !expired;
+  // Only registered HTTP(S) entries may leave the console.
+  const entryUrl = (() => {
+    try {
+      const url = new URL(item.homeUrl ?? "");
+      return ["https:", "http:"].includes(url.protocol) ? url.href : null;
+    } catch {
+      return null;
+    }
+  })();
 
   const menuItems: ActionMenuItem[] = [
+    {
+      id: "enter-product",
+      label: t("card.enterProduct"),
+      icon: "arrow-right",
+      disabled:
+        !entryUrl ||
+        !["active", "trialing", "expiring"].includes(item.status) ||
+        item.maintenance !== null,
+      hint: !entryUrl ? t("card.entryUnavailable") : undefined,
+      onSelect: () => {
+        if (entryUrl) window.open(entryUrl, "_blank", "noopener,noreferrer");
+      },
+    },
     optedOut
       ? {
           id: "renew-on",
@@ -271,45 +293,41 @@ export function SubscriptionProductCard({
   return (
     <Card surface="base" className="gap-md py-lg">
       <CardContent className="flex flex-1 flex-col gap-md">
-        {/* ── 标题区 + 状态区 ────────────────────────────────────────────
-            owner 2026-09-09:服务状态**放右上角**,不与特性徽章混在一起。
-            混在一起时「服务中」和「专业版」「按年」长得一样重,而它们回答的是
-            完全不同的问题——一个是「这东西现在还给不给我用」,另外几个是
-            「它是什么」。放右上角是因为那是卡片上视线第二个到的位置
-            （第一个是名字）。★ 紧随其后:它是操作,比状态轻一档。 */}
+        {/* Keep the tier before service status, with the favorite action last. */}
         <div className="flex items-start gap-md">
           <ProductGlyph name={item.productName} code={item.productCode} />
           <span className="min-w-0 flex-1">
-            {/* 右侧控件与**主标题同一行盒**。
-                此前它们是两行标题块的兄弟节点,靠 `items-center` 对齐——于是对到的是
-                「名字 + 副名」两行的中线,看起来比标题低半行(owner 2026-09-09 指出)。
-                加偏移量能盖住,但换个字号或副名换行就又歪了。放进同一个 flex 行里,
-                「同高」就成了结构决定的,不是调出来的。
-                星是 icon-sm 按钮、比一行文字高,所以这一行用 items-center:
-                标题对到按钮中线,两者视觉上齐平。 */}
-            <span className="flex items-center gap-sm">
-              <span className="min-w-0 flex-1 truncate text-label-md text-foreground">
+            {/* Narrow cards wrap the right-aligned group without truncating the title. */}
+            <span className="flex flex-wrap items-center gap-sm">
+              <span className="min-w-32 flex-1 break-words text-label-md text-foreground">
                 {item.productName ?? item.planName}
               </span>
-              <StatusBadge
-                tone={
-                  suspended
-                    ? suspension.tone(item.suspension)
-                    : (SUB_STATUS_TONES[item.status] ?? "neutral")
-                }
-              >
-                {/* 冻结中按原因分词（升级维护中 / 审核中 / 服务受限 / 已暂停），词表在 enum-labels。 */}
-                {suspended
-                  ? suspension.state(item.suspension)
-                  : t(`subStatus.${item.status}`)}
-              </StatusBadge>
-              <FavoriteStar
-                active={item.favorite}
-                busy={favoriteBusy || !productCode}
-                onToggle={() => onToggleFavorite(productCode, !item.favorite)}
-                labelOn={t("favorite.remove")}
-                labelOff={t("favorite.add")}
-              />
+              <span className="ml-auto inline-flex shrink-0 items-center gap-xs">
+                {item.tier ? (
+                  <Badge variant="secondary" className="shrink-0">
+                    {t(`tier.${item.tier}`)}
+                  </Badge>
+                ) : null}
+                <StatusBadge
+                  tone={
+                    suspended
+                      ? suspension.tone(item.suspension)
+                      : (SUB_STATUS_TONES[item.status] ?? "neutral")
+                  }
+                >
+                  {/* 冻结中按原因分词（升级维护中 / 审核中 / 服务受限 / 已暂停），词表在 enum-labels。 */}
+                  {suspended
+                    ? suspension.state(item.suspension)
+                    : t(`subStatus.${item.status}`)}
+                </StatusBadge>
+                <FavoriteStar
+                  active={item.favorite}
+                  busy={favoriteBusy || !productCode}
+                  onToggle={() => onToggleFavorite(productCode, !item.favorite)}
+                  labelOn={t("favorite.remove")}
+                  labelOff={t("favorite.add")}
+                />
+              </span>
             </span>
             <span className="block truncate text-body-sm text-muted-foreground">
               {item.productNick ?? item.planName}
@@ -317,12 +335,8 @@ export function SubscriptionProductCard({
           </span>
         </div>
 
-        {/* ── 信息区:它是什么(档位 / 受众·席位 / 周期)──────────────────
-            这一行现在只剩「是什么」,状态已经移走。 */}
+        {/* Audience, product seats and billing cycle remain together. */}
         <div className="flex flex-wrap items-center gap-xs">
-          {item.tier ? (
-            <Badge variant="secondary">{t(`tier.${item.tier}`)}</Badge>
-          ) : null}
           {audience ? (
             <Badge variant="outline" className="gap-2xs">
               <Icon name={AUDIENCE_ICON[audience]} size="xs" aria-hidden />
@@ -420,9 +434,14 @@ export function SubscriptionProductCard({
               </Link>
             </Button>
           ) : null}
-          {canManage ? (
-            <ActionMenu label={t("card.moreActions")} items={menuItems} />
-          ) : null}
+          <ActionMenu
+            label={t("card.moreActions")}
+            items={menuItems.filter(
+              (entry) =>
+                canManage ||
+                ["enter-product", "review", "help"].includes(entry.id),
+            )}
+          />
         </span>
       </CardFooter>
     </Card>

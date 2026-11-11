@@ -24,6 +24,9 @@ import { useTenant } from "@/features/tenant";
 import { getPathname, useRouter } from "@/lib/i18n/navigation";
 import { formatBusinessDay } from "@/lib/display-format";
 import { MembershipList, type TenantRow } from "./MembershipList";
+import { PersonalOverview, PersonalGrowth } from "./PersonalOverview";
+import { PersonalInvitations } from "./PersonalInvitations";
+import { PageSection } from "@/layout/shell";
 
 // ===== Data and actions =====
 export function MembershipsPage() {
@@ -58,23 +61,25 @@ export function MembershipsPage() {
     };
   }, [session.user?.id, reload]);
 
-  const tenants: TenantRow[] = items.map((ws) => ({
-    tenantId: ws.tenantId,
-    tenantNo:
-      ws.tenantNo ??
-      session.tenantOptions?.find((x) => x.id === ws.tenantId)?.tenantNo ??
-      null,
-    name: ws.tenantName,
-    type: ws.tenantType,
-    role: ws.role,
-    joinedAt: formatBusinessDay(ws.joinedAt, locale, "—"),
-    isCurrent: ws.isCurrent,
-    isDefault: ws.isDefault === true,
-    logoSrc: ws.logoHash ? tenantLogoUrl(ws.tenantId, ws.logoHash) : null,
-    workspaces: ws.workspaceName
-      ? [{ name: ws.workspaceName, isDefault: true }]
-      : [],
-  }));
+  const tenants: TenantRow[] = items
+    .map((ws) => ({
+      tenantId: ws.tenantId,
+      tenantNo:
+        ws.tenantNo ??
+        session.tenantOptions?.find((x) => x.id === ws.tenantId)?.tenantNo ??
+        null,
+      name: ws.tenantName,
+      type: ws.tenantType,
+      role: ws.role,
+      joinedAt: formatBusinessDay(ws.joinedAt, locale, "—"),
+      isCurrent: ws.isCurrent,
+      isDefault: ws.isDefault === true,
+      logoSrc: ws.logoHash ? tenantLogoUrl(ws.tenantId, ws.logoHash) : null,
+      workspaces: ws.workspaceName
+        ? [{ name: ws.workspaceName, isDefault: true }]
+        : [],
+    }))
+    .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
 
   async function openTenant(tenant: TenantRow) {
     try {
@@ -106,14 +111,27 @@ export function MembershipsPage() {
     }
   }
 
+  async function switchTenant(tenant: TenantRow) {
+    setFeedback(null);
+    try {
+      await switchTenantContext(
+        tenant.tenantId,
+        getPathname({ href: "/memberships", locale: locale as Locale }),
+      );
+    } catch {
+      setFeedback("error");
+    }
+  }
+
   // ===== Business view =====
   return (
     <ViewLayout>
       <ViewHeader
-        icon="buildings"
+        icon="user"
         title={t("header.title")}
         description={t("header.description")}
       />
+      <PersonalOverview user={session.user} />
       {failed ? (
         <LoadFailedBanner
           onRetry={() => setReload((x) => x + 1)}
@@ -126,15 +144,34 @@ export function MembershipsPage() {
           title={t(`feedback.${feedback}`)}
         />
       ) : null}
-      {!failed ? (
-        <MembershipList
-          tenants={tenants}
-          loading={loading}
-          settingDefaultId={busyId}
-          onOpenTenant={(tenant) => void openTenant(tenant)}
-          onSetDefault={(tenant) => void changeDefault(tenant)}
-        />
-      ) : null}
+      <PageSection
+        title={t("sections.workspaces.title")}
+        description={t("sections.workspaces.description")}
+        icon="buildings"
+      >
+        {!failed ? (
+          <MembershipList
+            tenants={tenants}
+            loading={loading}
+            settingDefaultId={busyId}
+            onOpenTenant={(tenant) => void openTenant(tenant)}
+            onSetDefault={(tenant) => void changeDefault(tenant)}
+            onSwitchTenant={(tenant) => void switchTenant(tenant)}
+          />
+        ) : null}
+      </PageSection>
+      <PersonalInvitations userId={session.user?.id} />
+      <PersonalGrowth
+        membershipState={
+          failed
+            ? "failed"
+            : loading
+              ? "loading"
+              : tenants.length > 0
+                ? "member"
+                : "empty"
+        }
+      />
     </ViewLayout>
   );
 }

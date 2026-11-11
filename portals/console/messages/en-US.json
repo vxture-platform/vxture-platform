@@ -1705,7 +1705,8 @@
       "keep": "Keep deleting and sign out"
     },
     "businessWorkbench": "Business workspace",
-    "openBusinessWorkbench": "Open business workspace (new tab)"
+    "openBusinessWorkbench": "Open business workspace (new tab)",
+    "personalCenter": "Personal center"
   },
   "sidebar": {
     "ariaLabel": "Console navigation",
@@ -1799,13 +1800,13 @@
         "description": "Raise an issue, follow its progress and read our replies"
       },
       "memberships": {
-        "label": "My memberships",
-        "description": "Memberships and default tenant"
+        "label": "Personal center",
+        "description": "Your profile, tenant relationships and platform achievements"
       }
     },
     "sections": {
       "workspace": "Workspace",
-      "accountTenant": "Account & Tenant",
+      "accountTenant": "Personal & tenants",
       "subscriptionBilling": "Subscription & Billing",
       "helpSupport": "Help & support",
       "settingsSecurity": "Settings & Security",
@@ -1976,7 +1977,9 @@
       "unsubscribeKeep": "Keep subscription",
       "review": "Write a review",
       "reviewed": "Reviewed",
-      "autoRenewSuspended": "The subscription is paused; auto-renew returns to its pre-pause setting on resume."
+      "autoRenewSuspended": "The subscription is paused; auto-renew returns to its pre-pause setting on resume.",
+      "enterProduct": "Open product",
+      "entryUnavailable": "No product entry is registered"
     },
     "cycle": {
       "month": "Monthly",
@@ -3122,8 +3125,8 @@
   },
   "membershipsPage": {
     "header": {
-      "title": "My memberships",
-      "description": "View your tenant and workspace memberships and choose your default tenant."
+      "title": "Personal center",
+      "description": "Manage your tenant relationships and view your platform achievements."
     },
     "identity": {
       "personalTenant": "Personal",
@@ -3132,7 +3135,8 @@
       "workspace": "Workspace",
       "setDefaultTitle": "Enter this tenant by default after every sign-in",
       "setDefault": "Set as default",
-      "tenantInfo": "Tenant details"
+      "tenantInfo": "Tenant details",
+      "switchTenant": "Switch tenant"
     },
     "workspaces": {
       "current": "Current",
@@ -3144,14 +3148,58 @@
     },
     "sections": {
       "workspaces": {
-        "title": "My workspaces",
-        "description": "Tenants/workspaces you belong to and your role. Switch quickly.",
-        "empty": "No accessible workspaces yet."
+        "title": "Tenant relationships",
+        "description": "Your current tenant appears first. View tenant details, switch tenants or choose your default for sign-in.",
+        "empty": "No accessible tenants."
       }
     },
     "feedback": {
       "saved": "Default tenant updated.",
       "error": "Operation failed. Please retry."
+    },
+    "personal": {
+      "username": "Account: {name}",
+      "description": "Manage your profile and security in the account center.",
+      "manageAccount": "Manage account"
+    },
+    "invitations": {
+      "title": "Join a tenant",
+      "description": "Join an organization through an administrator invitation, then switch to it above.",
+      "empty": "No pending invitations. Ask the tenant administrator to invite you.",
+      "loading": "Loading invitations…",
+      "failed": "Unable to load invitations.",
+      "retry": "Retry",
+      "actionFailed": "Unable to respond. Refresh and try again.",
+      "unnamedTenant": "Organization tenant",
+      "expires": "Expires {date}",
+      "accept": "Accept invitation",
+      "decline": "Decline",
+      "processing": "Processing…"
+    },
+    "growth": {
+      "title": "Growth & benefits",
+      "description": "Your participation and achievements on this platform.",
+      "planned": "Planned",
+      "level": {
+        "title": "Personal level",
+        "description": "Level and progression rules are planned."
+      },
+      "points": {
+        "title": "Points",
+        "description": "Earning and redemption rules are planned."
+      },
+      "rewards": {
+        "title": "Rewards",
+        "description": "Activity rewards and claiming rules are planned."
+      },
+      "badges": {
+        "title": "My badges",
+        "member": "Platform member",
+        "description": "Earned through active tenant membership. More achievement badges are planned.",
+        "loading": "Checking membership…",
+        "failed": "Unable to verify membership.",
+        "empty": "Join a tenant to earn the platform member badge."
+      }
     }
   }
 }

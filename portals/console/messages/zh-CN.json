@@ -1705,7 +1705,8 @@
       "keep": "保持删除并退出"
     },
     "businessWorkbench": "业务工作台",
-    "openBusinessWorkbench": "打开业务工作台（新标签页）"
+    "openBusinessWorkbench": "打开业务工作台（新标签页）",
+    "personalCenter": "个人中心"
   },
   "sidebar": {
     "ariaLabel": "控制台导航",
@@ -1799,13 +1800,13 @@
         "description": "提交问题、跟进处理进度与我们的回复"
       },
       "memberships": {
-        "label": "我的归属",
-        "description": "组织归属与默认租户"
+        "label": "个人中心",
+        "description": "个人信息、租户关系与成长权益"
       }
     },
     "sections": {
       "workspace": "工作空间",
-      "accountTenant": "账户与租户",
+      "accountTenant": "个人与租户",
       "subscriptionBilling": "订阅与计费",
       "helpSupport": "帮助与支持",
       "settingsSecurity": "设置与安全",
@@ -1976,7 +1977,9 @@
       "unsubscribeKeep": "保留订阅",
       "review": "写评价",
       "reviewed": "已评价",
-      "autoRenewSuspended": "订阅暂停中，恢复后会回到暂停前的续费设置。"
+      "autoRenewSuspended": "订阅暂停中，恢复后会回到暂停前的续费设置。",
+      "enterProduct": "进入产品",
+      "entryUnavailable": "该产品尚未登记可用入口"
     },
     "cycle": {
       "month": "月付",
@@ -3122,8 +3125,8 @@
   },
   "membershipsPage": {
     "header": {
-      "title": "我的归属",
-      "description": "查看你所属的个人租户、组织和工作空间，设置登录后的默认租户。"
+      "title": "个人中心",
+      "description": "管理你在本平台的租户关系，查看个人成长与权益。"
     },
     "identity": {
       "personalTenant": "个人",
@@ -3132,7 +3135,8 @@
       "workspace": "工作区",
       "setDefaultTitle": "每次登录后默认进入这个租户",
       "setDefault": "设为默认",
-      "tenantInfo": "租户信息"
+      "tenantInfo": "租户信息",
+      "switchTenant": "切换租户"
     },
     "workspaces": {
       "current": "当前",
@@ -3144,14 +3148,58 @@
     },
     "sections": {
       "workspaces": {
-        "title": "我的工作区",
-        "description": "你所属的租户/工作区及角色，可快速切换。",
-        "empty": "暂无可访问的工作区。"
+        "title": "租户关系",
+        "description": "当前租户优先展示；可查看租户信息、切换租户或设置登录后的默认租户。",
+        "empty": "暂无可访问的租户。"
       }
     },
     "feedback": {
       "saved": "默认租户已更新。",
       "error": "操作失败，请重试。"
+    },
+    "personal": {
+      "username": "账号：{name}",
+      "description": "个人资料与安全设置在账号中心统一管理。",
+      "manageAccount": "账号管理"
+    },
+    "invitations": {
+      "title": "加入租户",
+      "description": "通过管理员发来的邀请加入组织租户；加入后可在上方切换。",
+      "empty": "暂无待处理邀请。如需加入组织，请联系该租户管理员发送邀请。",
+      "loading": "正在读取邀请…",
+      "failed": "邀请读取失败。",
+      "retry": "重试",
+      "actionFailed": "处理邀请失败，请刷新后重试。",
+      "unnamedTenant": "组织租户",
+      "expires": "有效期至 {date}",
+      "accept": "接受邀请",
+      "decline": "拒绝",
+      "processing": "处理中…"
+    },
+    "growth": {
+      "title": "成长与权益",
+      "description": "记录你在本平台的参与和成长。",
+      "planned": "规划中",
+      "level": {
+        "title": "个人等级",
+        "description": "等级规则与成长体系规划中。"
+      },
+      "points": {
+        "title": "积分",
+        "description": "积分获取与使用规则规划中。"
+      },
+      "rewards": {
+        "title": "奖励",
+        "description": "活动奖励与领取规则规划中。"
+      },
+      "badges": {
+        "title": "我的徽章",
+        "member": "平台成员",
+        "description": "拥有有效租户成员身份即可点亮；更多成就徽章规划中。",
+        "loading": "正在核验成员身份…",
+        "failed": "暂时无法核验成员身份。",
+        "empty": "加入租户后点亮平台成员徽章。"
+      }
     }
   }
 }
