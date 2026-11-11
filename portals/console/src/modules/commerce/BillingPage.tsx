@@ -265,6 +265,13 @@ export function BillingPage() {
     // 没读到就是「—」:读失败时的 0 不是没有账单,是没有数据。
     return [
       {
+        id: "credits",
+        icon: "wallet",
+        label: t("metrics.credits"),
+        value: credits ? money(credits.balance, credits.currency) : "—",
+        trend: credits ? t("metrics.creditsHint") : "",
+      },
+      {
         id: "unpaid",
         icon: "receipt",
         label: t("metrics.unpaid"),
@@ -285,13 +292,6 @@ export function BillingPage() {
         trend: summary
           ? t("metrics.paidTotalHint", { count: summary.paid })
           : "",
-      },
-      {
-        id: "credits",
-        icon: "wallet",
-        label: t("metrics.credits"),
-        value: credits ? money(credits.balance, credits.currency) : "—",
-        trend: credits ? t("metrics.creditsHint") : "",
       },
     ];
   }, [summary, credits, t, money]);

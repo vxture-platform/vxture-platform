@@ -31,6 +31,7 @@ import {
   setGlobalThemePreference,
 } from "@vxture/platform-browser";
 import type { Locale, Theme } from "@vxture-platform/shared";
+import { LOCALE_CONFIGS, SUPPORTED_LOCALES } from "@vxture-platform/shared";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import {
@@ -425,6 +426,10 @@ export function ConsoleHeader({
             settings={
               <ShellPreferencePanel
                 locale={locale}
+                localeOptions={SUPPORTED_LOCALES.map((value) => ({
+                  locale: value,
+                  label: LOCALE_CONFIGS[value].nativeName,
+                }))}
                 theme={theme}
                 density={density}
                 fontSize={fontSize as ShellFontSizePreference}

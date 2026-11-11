@@ -82,7 +82,7 @@ export function SubscriptionPage() {
   const [products, setProducts] = useState<SubscribedProduct[]>([]);
   const [orders, setOrders] = useState<MyOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subFilter, setSubFilter] = useState<SubFilter>("active");
+  const [subFilter, setSubFilter] = useState<SubFilter>("all");
   const [favBusy, setFavBusy] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   // P0 订阅自助:退订确认弹窗目标 + 续费开关在途标记
@@ -471,8 +471,8 @@ export function SubscriptionPage() {
             value={subFilter}
             onChange={setSubFilter}
             items={[
-              { value: "active", label: t("subs.filterActive") },
               { value: "all", label: t("subs.filterAll") },
+              { value: "active", label: t("subs.filterActive") },
             ]}
           />
         }
