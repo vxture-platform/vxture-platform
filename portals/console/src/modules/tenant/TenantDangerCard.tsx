@@ -23,10 +23,7 @@ import {
   Section,
   StatusBadge,
 } from "@vxture/design-system";
-import {
-  CardRows,
-  DETAIL_LIST_CLASS,
-} from "@/modules/account/profile/CardRows";
+import { CardRows, DETAIL_LIST_CLASS } from "@/components/detail";
 
 const DANGER_SECTION_CLASS =
   "ring-destructive-border/60 bg-destructive-muted/30 [&>div:first-child>span:first-child]:text-destructive-text [&_h2]:text-destructive-text";

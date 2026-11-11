@@ -35,7 +35,6 @@ import { auditCustomerAction } from "../audit/audit-log";
 import {
   AcceptInvitationDto,
   UpsertWorkspaceDto,
-  ResetMemberPasswordDto,
   UpdateMemberDto,
   UpsertMemberDto,
 } from "../dto/member.dto";
@@ -1334,34 +1333,6 @@ export class IamRouter {
     });
 
     return member;
-  }
-
-  @RequireCapability("tenant.member.manage")
-  @Post("members/:memberId/reset-password")
-  async resetMemberPassword(
-    @Req() req: Request & RequestContext,
-    @Param("memberId") memberId: string,
-    @Body() body: ResetMemberPasswordDto,
-  ) {
-    const { accountId, tenantId } = requireTenantSession(req);
-
-    const reset = await this.sessionAggregator.resetMemberPassword(
-      accountId,
-      tenantId,
-      memberId,
-      body.nextPassword,
-    );
-    if (!reset) {
-      throw new NotFoundException("Member not found");
-    }
-
-    auditCustomerAction(this.pool, req, {
-      action: "tenant.member.reset_password",
-      resourceType: "member",
-      resourceId: memberId,
-    });
-
-    return { status: "ok" as const };
   }
 
   @RequireCapability("tenant.member.manage")

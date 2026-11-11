@@ -1,15 +1,11 @@
-import { redirect } from "@/lib/i18n/navigation";
+import { redirect } from "next/navigation";
+import { accountCenterUrl } from "@/lib/account-center";
 
-/**
- * 「安全设置」并入「我的账号」(批 5a,owner 2026-09-04 定稿):密码 / 登录开关 /
- * 活跃会话 / 登录历史都在我的账号页里各自行内展开。路由保留给旧书签,直接跳过去
- * 并展开会话。
- */
 export default async function Page({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  redirect({ href: "/profile?panel=sessions", locale });
+  redirect(accountCenterUrl(locale, "security"));
 }

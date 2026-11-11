@@ -7,6 +7,7 @@ import {
 import { APP_GUARD } from "@nestjs/core";
 import { VxConfigModule } from "@vxture/core-config";
 import { MailModule } from "@vxture/core-mail";
+import { SmsModule } from "@vxture/service-sms";
 import { AccountModule } from "@vxture/service-account";
 import { IamModule } from "@vxture/service-iam";
 import { OrganizationModule } from "@vxture/service-organization";
@@ -14,16 +15,12 @@ import { BillingModule } from "@vxture/service-billing";
 import { PromotionModule } from "@vxture/service-promotion";
 import { SubscriptionModule } from "@vxture/service-subscription";
 import { ReviewModule } from "@vxture/service-review";
-import { SmsModule } from "@vxture/service-sms";
 import { OidcRpModule } from "./oidc/oidc-rp.module";
 import { ConsoleAuthService } from "./auth/auth.service";
 import { CapabilityGuard } from "./auth/capability";
 import { S2sExchangeService } from "./auth/s2s-exchange.service";
 import { SessionAggregator } from "./aggregators/session.aggregator";
-import { AccountDeletionAggregator } from "./aggregators/account-deletion.aggregator";
 import { TenantClosureAggregator } from "./aggregators/tenant-closure.aggregator";
-import { PhoneChangeService } from "./services/phone-change.service";
-import { EmailChangeService } from "./services/email-change.service";
 import { customerNotificationsProvider } from "./services/customer-notifications.wiring";
 import { PlatformEntitlementsClient } from "./platform/platform-entitlements.client";
 import { AuthMiddleware } from "./middleware/auth.middleware";
@@ -57,6 +54,7 @@ import { VerificationRouter } from "./routers/verification.router";
       domains: ["app", "auth", "database", "redis", "platform"],
     }),
     MailModule,
+    SmsModule,
     AccountModule,
     IamModule,
     OrganizationModule,
@@ -64,7 +62,6 @@ import { VerificationRouter } from "./routers/verification.router";
     PromotionModule,
     SubscriptionModule,
     ReviewModule,
-    SmsModule,
     OidcRpModule,
   ],
   controllers: [
@@ -93,10 +90,7 @@ import { VerificationRouter } from "./routers/verification.router";
   providers: [
     ConsoleAuthService,
     SessionAggregator,
-    AccountDeletionAggregator,
     TenantClosureAggregator,
-    PhoneChangeService,
-    EmailChangeService,
     // P2-g：客户通知（站内 + 邮件）挂到 OrderService / SubscriptionService
     customerNotificationsProvider,
     PlatformEntitlementsClient,

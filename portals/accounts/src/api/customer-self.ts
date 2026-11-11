@@ -24,6 +24,7 @@ export interface CustomerProfile {
   account: string;
   userNo?: string;
   name: string | null;
+  gender?: "male" | "female" | null;
   createdAt?: string;
 }
 
@@ -149,6 +150,11 @@ function validProjection(
       data.realm === "customer" &&
       strings(data, ["id", "account"]) &&
       nullableString(data.name) &&
+      (data.gender === undefined ||
+        data.gender === null ||
+        data.gender === "male" ||
+        data.gender === "female") &&
+      (data.status === undefined || typeof data.status === "string") &&
       (data.userNo === undefined || typeof data.userNo === "string") &&
       (data.createdAt === undefined || typeof data.createdAt === "string")
     );

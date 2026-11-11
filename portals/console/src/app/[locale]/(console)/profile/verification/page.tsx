@@ -1,5 +1,11 @@
-import { VerificationSkeleton } from "@/modules/account/VerificationSkeleton";
+import { redirect } from "next/navigation";
+import { accountCenterUrl } from "@/lib/account-center";
 
-export default function Page() {
-  return <VerificationSkeleton scope="personal" />;
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  redirect(accountCenterUrl(locale));
 }

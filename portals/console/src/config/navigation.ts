@@ -81,10 +81,10 @@ const accountTenantSection: NavigationSection = {
   titleKey: "accountTenant",
   items: [
     {
-      href: "/profile",
-      labelKey: "profile.label",
+      href: "/memberships",
+      labelKey: "memberships.label",
       icon: "user",
-      descriptionKey: "profile.description",
+      descriptionKey: "memberships.description",
     },
     // 批 5c:租户信息 / 组织信息合成一条(个人与组织同结构,不再按租户类型分)。
     // 系统设置也并入这一页,故「高级设置」里不再有它。
@@ -195,7 +195,7 @@ const settingsSecuritySection: NavigationSection = {
       descriptionKey: "auditLogs.description",
       capability: "tenant.audit.read",
     },
-    // 批 5a:「安全设置」并入「我的账号」(/profile),/security 路由保留跳转。
+    // Personal security lives in accounts; legacy routes redirect there.
   ],
 };
 

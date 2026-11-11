@@ -7,8 +7,8 @@
  * @date 2026-11-08
  */
 "use client";
-import { useTranslations } from "next-intl";
-import { formatPrincipalNoOr } from "@vxture-platform/shared";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDay, formatPrincipalNoOr } from "@vxture-platform/shared";
 import { useEffect, useId, useRef, useState } from "react";
 import { downscaleImage } from "@vxture/platform-browser";
 import {
@@ -17,6 +17,8 @@ import {
   DialogForm,
   Input,
   NativeSelect,
+  RadioGroup,
+  RadioGroupItem,
   SegmentedControl,
   useTheme,
   useToast,
@@ -51,13 +53,18 @@ export function CustomerProfileEditor({
   onSaved: () => void;
 }) {
   const formText = useTranslations("accountsForms");
+  const accountText = useTranslations("accountCenter");
+  const locale = useLocale();
   const { toast } = useToast();
   const [name, setName] = useState(profile.name ?? "");
   const [savedName, setSavedName] = useState(profile.name ?? "");
+  const [gender, setGender] = useState(profile.gender ?? "");
+  const [savedGender, setSavedGender] = useState(profile.gender ?? "");
   const [refreshPending, setRefreshPending] = useState(false);
   const [processing, setProcessing] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const nameId = useId();
+  const genderId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -67,6 +74,8 @@ export function CustomerProfileEditor({
   function openAvatar() {
     setName(profile.name ?? "");
     setSavedName(profile.name ?? "");
+    setGender(profile.gender ?? "");
+    setSavedGender(profile.gender ?? "");
     setRefreshPending(false);
     setFile(null);
     setResetAvatar(false);
@@ -117,16 +126,20 @@ export function CustomerProfileEditor({
     if (busy || processing) return;
     setBusy(true);
     setError("");
-    let nameChanged = false;
+    let profileChanged = false;
     try {
-      if (name.trim() !== savedName) {
+      if (name.trim() !== savedName || gender !== savedGender) {
         await accountsRequest("/oidc/customer/self", {
           method: "PATCH",
-          body: JSON.stringify({ name: name.trim() }),
+          body: JSON.stringify({
+            ...(name.trim() !== savedName ? { name: name.trim() } : {}),
+            ...(gender !== savedGender ? { gender } : {}),
+          }),
         });
         setSavedName(name.trim());
+        setSavedGender(gender);
         setRefreshPending(true);
-        nameChanged = true;
+        profileChanged = true;
       }
       if (resetAvatar)
         await accountsRequest("/api/me/avatar", { method: "DELETE" });
@@ -143,7 +156,7 @@ export function CustomerProfileEditor({
       const message =
         e instanceof Error ? e.message : formText("unable_to_save");
       setError(
-        nameChanged || refreshPending
+        profileChanged || refreshPending
           ? formText("profile_partial_save", { message })
           : message,
       );
@@ -183,6 +196,12 @@ export function CustomerProfileEditor({
           <h2>{profile.name || profile.account}</h2>
           <div className="accounts-identity-meta">
             <span>{formatPrincipalNoOr(profile.userNo, "user", "—")}</span>
+            {profile.createdAt ? (
+              <span>
+                {accountText("createdAt")} ·{" "}
+                {formatDay(profile.createdAt, locale)}
+              </span>
+            ) : null}
           </div>
         </div>
         <Button
@@ -195,7 +214,34 @@ export function CustomerProfileEditor({
         </Button>
       </div>
       <AccountSection title={formText("basic_information")} icon="user">
-        <AccountRow label={formText("name")}>{profile.name || "—"}</AccountRow>
+        <AccountRow label={formText("name")}>
+          {profile.name || "—"}
+          {profile.gender ? (
+            <span
+              role="img"
+              aria-label={formText(profile.gender)}
+              title={formText(profile.gender)}
+            >
+              {" "}
+              {profile.gender === "male" ? "♂" : "♀"}
+            </span>
+          ) : null}
+        </AccountRow>
+        {profile.status ? (
+          <AccountRow label={formText("account_status")}>
+            <StatusBadge
+              tone={profile.status === "active" ? "success" : "warning"}
+            >
+              {formText(
+                profile.status === "active"
+                  ? "account_status_active"
+                  : profile.status === "deleting"
+                    ? "account_status_deleting"
+                    : "account_status_unknown",
+              )}
+            </StatusBadge>
+          </AccountRow>
+        ) : null}
         <AccountRow label={formText("account")}>{profile.account}</AccountRow>
         {(["phone", "email"] as const).map((kind) => (
           <AccountRow key={kind} label={formText(kind)}>
@@ -234,7 +280,10 @@ export function CustomerProfileEditor({
         submitDisabled={
           processing ||
           !name.trim() ||
-          (name.trim() === savedName && !file && !resetAvatar)
+          (name.trim() === savedName &&
+            gender === savedGender &&
+            !file &&
+            !resetAvatar)
         }
         onSubmit={(event) => {
           event.preventDefault();
@@ -305,13 +354,46 @@ export function CustomerProfileEditor({
             <Input
               id={nameId}
               required
-              maxLength={96}
+              maxLength={100}
               value={name}
               disabled={busy || processing}
               autoComplete="name"
               onChange={(event) => setName(event.target.value)}
             />
           </div>
+          <fieldset disabled={busy || processing}>
+            <legend>{formText("gender")}</legend>
+            <RadioGroup
+              value={gender || "unset"}
+              aria-label={formText("gender")}
+              className="flex flex-wrap items-center gap-md"
+              onValueChange={(value) => {
+                if (value === "male" || value === "female") setGender(value);
+                else if (value === "unset") setGender("");
+              }}
+            >
+              {(["male", "female", "unset"] as const).map((value) => {
+                const label = formText(value === "unset" ? "not_set" : value);
+                return (
+                  <label
+                    key={value}
+                    htmlFor={`${genderId}-${value}`}
+                    title={label}
+                    className="flex cursor-pointer items-center gap-xs"
+                  >
+                    <RadioGroupItem
+                      id={`${genderId}-${value}`}
+                      value={value}
+                      aria-label={label}
+                    />
+                    <span aria-hidden="true">
+                      {value === "male" ? "♂" : value === "female" ? "♀" : "—"}
+                    </span>
+                  </label>
+                );
+              })}
+            </RadioGroup>
+          </fieldset>
           {error ? <Banner tone="danger" title={error} /> : null}
         </div>
       </DialogForm>

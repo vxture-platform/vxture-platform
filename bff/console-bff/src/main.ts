@@ -22,9 +22,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
-  // Raw image body for avatar / org-logo uploads; content-type is sniffed from
-  // the bytes in the router, so accept any type here. 5MB ceiling.
-  app.use("/api/me/avatar", express.raw({ type: () => true, limit: "1mb" }));
+  // Organization logo uploads are sniffed from bytes by the business router.
   app.use(
     "/api/me/organization/logo",
     express.raw({ type: () => true, limit: "1mb" }),

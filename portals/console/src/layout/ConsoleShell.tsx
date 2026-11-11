@@ -64,6 +64,7 @@ function ShellFrame({
       session.isAuthenticated &&
       session.user &&
       session.tenant &&
+      session.user.accountStatus !== "deleting" &&
       needsOnboarding &&
       pathname !== ONBOARDING_PATH
     ) {
@@ -93,7 +94,9 @@ function ShellFrame({
     !session.isAuthenticated ||
     !session.user ||
     !session.tenant ||
-    (needsOnboarding && pathname !== ONBOARDING_PATH)
+    (needsOnboarding &&
+      session.user.accountStatus !== "deleting" &&
+      pathname !== ONBOARDING_PATH)
   ) {
     return (
       <div className="console-loading">
@@ -112,7 +115,10 @@ function ShellFrame({
   //
   // 位置在会话闸之后：`status` / 登录态 / user / tenant 四项仍然先过一遍，
   // 这里只决定"过了闸之后套不套外壳"。
-  if (pathname === ONBOARDING_PATH) {
+  if (
+    pathname === ONBOARDING_PATH &&
+    session.user.accountStatus !== "deleting"
+  ) {
     return <>{children}</>;
   }
 

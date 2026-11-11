@@ -1,21 +1,15 @@
 "use client";
 
 /**
- * AccountDeletingGate — 删除保留期的强制门(批 5b,050-account §7)。
+ * Gate business access during account deletion; accounts owns proof and recovery.
  * @package @vxture/console
- * @layer Application
+ * @layer Presentation
  * @category Feature
- *
- * 账号进入 30 天保留期后仍能登录,但工作台不可用(console-bff 对其余路由一律 403
- * ACCOUNT_DELETING)。登录后只看到这一页:申请时刻、永久删除时刻、两个选择——
- * 「撤销删除并重新启用」回到正常状态;「保持删除并退出」直接登出。不套外壳:
- * 一个走不通的壳等于请人去按一排按不动的按钮(同首次补齐门的理由)。
  */
 
-import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banner, Button, Icon } from "@vxture/design-system";
-import { ConsoleBffError, cancelAccountDeletion } from "@/api/console-bff";
+import { Button, Icon } from "@vxture/design-system";
+import { accountCenterUrl } from "@/lib/account-center";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { formatDay as sharedDay } from "@vxture-platform/shared";
 
@@ -30,34 +24,13 @@ function formatDay(iso: string | null | undefined, locale: string): string {
 export function AccountDeletingGate() {
   const t = useTranslations("shell.accountDeleting");
   const locale = useLocale();
-  const { session, signOut, refreshSession } = useConsoleSession();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const { session, signOut } = useConsoleSession();
   const requestedAt = session.user?.deletionRequestedAt ?? null;
   const purgeAt = requestedAt
     ? new Date(
         new Date(requestedAt).getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000,
       ).toISOString()
     : null;
-
-  async function reactivate() {
-    setBusy(true);
-    setError(null);
-    try {
-      await cancelAccountDeletion();
-      await refreshSession({ silent: true });
-      // 会话快照里的 accountStatus 回到 active 后外壳自然恢复;整页重载最稳。
-      window.location.replace(`/${locale}/profile`);
-    } catch (err) {
-      setError(
-        err instanceof ConsoleBffError && err.message
-          ? err.message
-          : t("error"),
-      );
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-lg py-xl">
@@ -76,17 +49,16 @@ export function AccountDeletingGate() {
             </p>
           </div>
         </div>
-        {error ? <Banner tone="danger" title={error} /> : null}
         <div className="flex flex-wrap items-center justify-end gap-sm">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => signOut()}
-            disabled={busy}
-          >
+          <Button variant="outline" size="md" onClick={() => signOut()}>
             {t("keep")}
           </Button>
-          <Button size="md" onClick={() => void reactivate()} disabled={busy}>
+          <Button
+            size="md"
+            onClick={() =>
+              window.location.assign(accountCenterUrl(locale, "deletion"))
+            }
+          >
             <Icon
               name="clock-counter-clockwise"
               size="xs"

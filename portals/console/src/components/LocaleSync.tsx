@@ -13,11 +13,6 @@ import { useLocale } from "next-intl";
 import type { Locale } from "@vxture-platform/shared";
 import { synchronizeGlobalLocale } from "@vxture/platform-browser";
 import { useRouter } from "next/navigation";
-import { fetchUserProfile, updateUserProfile } from "@/api/console-bff";
-const accountLocale = {
-  read: fetchUserProfile,
-  write: (language: Locale) => updateUserProfile({ language }),
-};
 
 /** Preserve the complete route, query and fragment while applying the shared locale. */
 export function LocaleSync(): null {
@@ -25,18 +20,14 @@ export function LocaleSync(): null {
   const router = useRouter();
   useEffect(
     () =>
-      synchronizeGlobalLocale(
-        locale,
-        (next) => {
-          document.documentElement.lang = next;
-          if (next === locale) return;
-          const url = new URL(window.location.href);
-          const segments = url.pathname.split("/");
-          segments[1] = next;
-          router.replace(`${segments.join("/")}${url.search}${url.hash}`);
-        },
-        accountLocale,
-      ),
+      synchronizeGlobalLocale(locale, (next) => {
+        document.documentElement.lang = next;
+        if (next === locale) return;
+        const url = new URL(window.location.href);
+        const segments = url.pathname.split("/");
+        segments[1] = next;
+        router.replace(`${segments.join("/")}${url.search}${url.hash}`);
+      }),
     [locale, router],
   );
   return null;

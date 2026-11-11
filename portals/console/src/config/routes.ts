@@ -5,6 +5,7 @@ const routeLabels = new Map<string, string>([
   ["/todos", "todos"],
   ["/inbox", "inbox"],
   ["/profile", "profile"],
+  ["/memberships", "memberships"],
   ["/tenant", "tenant"],
   ["/tenant/verification", "tenantVerification"],
   // 提交与结果拆两页(owner 2026-09-06):面包屑最后一节要有名字,别显示 "apply"
