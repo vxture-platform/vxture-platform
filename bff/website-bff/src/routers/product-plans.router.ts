@@ -45,8 +45,8 @@ import {
 /** 与 console-bff subscription.router 相同的产品码形状约束。 */
 const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 
-/** 席位在 quota jsonb 中的指标键（seed/biz-260 口径）。 */
-const SEATS_QUOTA_KEY = "member.max";
+/** Product seat capacity uses the canonical metric shared with console. */
+const SEATS_QUOTA_KEY = "seat.max";
 
 /**
  * 承诺等级里能接新订阅的档：beta / stable；preview / sunset 与未登记值一律不可订。
@@ -84,7 +84,7 @@ export interface ProductPlanOption {
   features: string[];
   /** 该档配额键值（plan_components.quota 原样透传，前端提炼展示项）。 */
   quota: Record<string, unknown> | null;
-  /** 席位数（quota["member.max"]，无该指标 → null）。 */
+  /** Product seats from quota["seat.max"]; absent = null. */
   seats: number | null;
   prices: ProductPlanPrice[];
 }
@@ -265,7 +265,6 @@ export class ProductPlansRouter {
   }
 }
 
-/** quota["member.max"] → 席位数；缺失或非有限数值 → null。 */
 /**
  * 以 `_` 开头的配额键是套餐的内部配置（如 `_pricing.consumable_share`，折抵权重），
  * 不是客户能用的额度。此前原样透传，官网「对比所有功能」把 `_pricing {"consumable_share":0.5}`
@@ -280,6 +279,7 @@ function publicQuota(
   );
 }
 
+/** Read canonical seats without reviving the retired tenant-member metric. */
 function readSeats(quota: Record<string, unknown> | null): number | null {
   const raw = quota?.[SEATS_QUOTA_KEY];
   const n = typeof raw === "string" ? Number(raw) : raw;

@@ -46,6 +46,31 @@ function response(
 }
 
 describe("buildPricingModel · 邀请档", () => {
+  it("keeps canonical seats first in comparisons and preserves contract-only tiers", () => {
+    const business = {
+      ...plan("business", "public"),
+      seats: 5,
+      quota: {
+        "ai.credit": 2500,
+        "storage.bytes": 107374182400,
+        "seat.max": 5,
+      },
+    };
+    const enterprise = { ...plan("enterprise", "invite"), prices: [] };
+    const model = buildPricingModel(
+      response([business, enterprise], "public"),
+      null,
+    );
+
+    expect(model?.plans.map((item) => item.seats)).toEqual([5, null]);
+    expect(model?.comparison[0]?.rows[0]).toEqual({
+      key: "seat.max",
+      cells: [{ kind: "number", value: 5 }, { kind: "no" }],
+    });
+    expect(model?.plans[1]?.monthly).toBeNull();
+    expect(model?.plans[1]?.yearly).toBeNull();
+  });
+
   it("只有邀请档 → 仍建出模型，档带 access invite（不再是空态）", () => {
     const model = buildPricingModel(
       response([plan("business", "invite")], "invite"),

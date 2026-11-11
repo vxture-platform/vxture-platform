@@ -45,7 +45,7 @@ export interface ProductPlanOption {
   features: string[];
   /** 该档配额键值（plan_components.quota 原样透传） */
   quota: Record<string, unknown> | null;
-  /** 席位数（quota["member.max"]；-1 = 不限，无该指标 → null） */
+  /** Product seats from quota["seat.max"]; -1 = unlimited, absent = null. */
   seats: number | null;
   prices: ProductPlanPrice[];
 }
