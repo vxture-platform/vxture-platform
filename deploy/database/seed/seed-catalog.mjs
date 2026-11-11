@@ -96,8 +96,8 @@ const TENANT_MENU_TREE = [
     children: [
       {
         code: "tenant.menu.profile",
-        name: "个人信息",
-        route: "/profile",
+        name: "我的归属",
+        route: "/memberships",
         icon: "user",
       },
       // 批 5c(2026-09-05):租户信息 / 组织信息 / 系统设置三页合并为 `/tenant`;

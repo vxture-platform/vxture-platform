@@ -136,7 +136,8 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
   {
     code: "tenant.menu.account_tenant",
     children: [
-      { code: "tenant.menu.profile", route: "/profile" },
+      // Keep the existing menu identifier while retiring Console personal profiles.
+      { code: "tenant.menu.profile", route: "/memberships" },
       // 批 5c:三页合并为 `/tenant`;批 8:organization / settings 两节点退役,操作码并到此
       {
         code: "tenant.menu.personal_tenant",
