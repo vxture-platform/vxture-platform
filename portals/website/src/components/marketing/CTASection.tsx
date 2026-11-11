@@ -56,7 +56,7 @@ export default function CTASection({ id, name = "CTA" }: CTASectionProps) {
       className="vx-section-even vx-website-cta-section relative snap-section flex flex-col justify-center"
     >
       {/* ===== 主内容区 ===== */}
-      <div className="flex flex-col justify-center w-full h-full max-w-7xl xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="flex flex-col justify-center w-full h-full max-w-page-xl xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {/* ===== CTA 标题区 ===== */}
         <div className="w-full text-center">
           {/* 主标题 */}

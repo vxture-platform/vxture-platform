@@ -194,7 +194,7 @@ export default function ProductsOverviewPage({
       />
 
       <section id="products" className="vx-section-odd">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="mx-auto max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           {products === null ? (
             <Banner
               tone="danger"

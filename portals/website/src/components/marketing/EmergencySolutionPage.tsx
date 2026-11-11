@@ -91,7 +91,7 @@ export default function EmergencySolutionPage() {
       />
 
       <section id="solution-architecture" className="vx-section-odd">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="mx-auto max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
@@ -142,7 +142,7 @@ export default function EmergencySolutionPage() {
       </section>
 
       <section className="vx-section-even">
-        <div className="vx-website-split-grid vx-website-split-grid--30 mx-auto grid max-w-7xl gap-10 px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="vx-website-split-grid vx-website-split-grid--30 mx-auto grid max-w-page-xl gap-10 px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div>
             <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
               {t("flow.eyebrow")}
@@ -177,7 +177,7 @@ export default function EmergencySolutionPage() {
       </section>
 
       <section className="vx-section-odd">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="mx-auto max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
@@ -218,7 +218,7 @@ export default function EmergencySolutionPage() {
       </section>
 
       <section className="vx-section-even">
-        <div className="vx-website-split-grid vx-website-split-grid--38 mx-auto grid max-w-7xl gap-10 px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="vx-website-split-grid vx-website-split-grid--38 mx-auto grid max-w-page-xl gap-10 px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div>
             <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
               {t("scenarios.eyebrow")}
@@ -249,7 +249,7 @@ export default function EmergencySolutionPage() {
       </section>
 
       <section className="vx-section-odd">
-        <div className="vx-website-split-grid vx-website-split-grid--42 mx-auto grid max-w-7xl gap-10 px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="vx-website-split-grid vx-website-split-grid--42 mx-auto grid max-w-page-xl gap-10 px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div className="vx-emergency-practice-media relative overflow-hidden rounded-lg">
             <Image
               src={PRACTICE_IMAGE}
@@ -313,7 +313,7 @@ export default function EmergencySolutionPage() {
       </section>
 
       <section className="vx-section-even">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:max-w-screen-2xl">
+        <div className="mx-auto flex max-w-page-xl flex-col gap-5 px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:max-w-screen-2xl">
           <div>
             <h2 className="font-display text-2xl font-bold text-vx-gray-900 dark:text-vx-white">
               {t("cta.title")}

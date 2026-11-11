@@ -75,9 +75,9 @@ function TierCard({
       }}
       /* 不写 h-full：父行的高度由 flex-1 撑出、自身高度为 auto，h-full 会解析成
        * auto 而让卡回落到内容高度。交给 flex 的默认 align-items: stretch 拉满。
-       * -mr-5：让相邻卡略微叠压，层级由 layout.z 决定（激活卡压在两侧之上）。
+       * Negative margins apply only to the horizontal desktop overlap.
        * 激活卡 grow：吸收负外边距让出的余量，整行仍然填满。 */
-      className={`relative -mr-5 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-vx-gray-200 shadow-sm transition-all duration-500 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-ring-strong dark:border-vx-gray-700 ${
+      className={`relative lg:-mr-5 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-vx-gray-200 shadow-sm transition-all duration-500 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-ring-strong dark:border-vx-gray-700 ${
         isActive ? "grow" : "grow-0"
       } ${layout?.order} ${layout?.basis} ${layout?.dim} ${layout?.z}`}
     >
@@ -90,9 +90,8 @@ function TierCard({
             aria-hidden="true"
           />
           <div className="absolute inset-0 bg-vx-white/80 dark:bg-vx-gray-900/80" />
-          {/* 内距刻意对齐激活态（同为 p-10 / lg:p-12），图标因此落在同一水平线，
-           * 切换时不会纵向跳动。 */}
-          <div className="relative flex h-full flex-col items-center p-10 lg:p-12">
+          {/* Matching responsive padding keeps icons aligned while switching cards. */}
+          <div className="relative flex h-full flex-col items-center p-6 sm:p-10 lg:p-12">
             <span
               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${tier.chipClass}`}
             >
@@ -130,7 +129,7 @@ function TierCard({
           <div className="absolute inset-0 bg-linear-to-r from-vx-white/92 from-38% via-vx-white/62 via-70% to-transparent dark:from-vx-gray-900/92 dark:via-vx-gray-900/62" />
 
           <div className="relative flex h-full">
-            <div className="flex max-w-website-2xl flex-col justify-start p-10 lg:p-12">
+            <div className="flex max-w-website-2xl flex-col justify-start p-6 sm:p-10 lg:p-12">
               <div className="flex items-center gap-4">
                 <span
                   className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${tier.chipClass}`}
@@ -200,7 +199,7 @@ export default function ProductTiersSection({
        * 过头了——现在靠压窄未激活卡（定宽 96px）把余量让给激活卡，而不是靠撑破
        * 整页栏宽。 */}
       {/* flex-1 填满分节（分节顶部已由 .snap-section 留出 header 高度），不再自带 min-h-screen 撑破一屏。 */}
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
+      <div className="mx-auto flex w-full max-w-page-xl flex-1 flex-col px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
         <div className="pt-12 text-center">
           <h2 className="font-display mb-4 text-3xl font-bold text-vx-brand-700 dark:text-vx-brand-200 lg:text-4xl">
             {t("title")}

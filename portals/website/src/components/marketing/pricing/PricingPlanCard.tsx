@@ -430,6 +430,11 @@ export function PricingPlanCard({
                   className={selected ? GRADIENT_CTA : "w-full"}
                 >
                   <a
+                    aria-label={
+                      relation === "higher"
+                        ? t("upgradeTo", { plan: plan.name })
+                        : t("subscribe", { plan: plan.name })
+                    }
                     href={buildConsoleSubscribeUrl(
                       locale,
                       productCode,
@@ -445,10 +450,8 @@ export function PricingPlanCard({
                     rel="noopener noreferrer"
                   >
                     {relation === "higher"
-                      ? t("upgradeTo", { plan: plan.name })
-                      : isFree
-                        ? t("freeCta")
-                        : t("subscribe", { plan: plan.name })}
+                      ? tCatalog("actions.upgrade")
+                      : tCatalog("actions.subscribe")}
                   </a>
                 </Button>
               ))

@@ -588,18 +588,18 @@ export default function Header() {
           <Link
             href={HEADER_DATA.logo.href}
             aria-label={t(HEADER_DATA.logo.labelKey)}
-            className="shrink-0 flex items-center space-x-2 rounded-md transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-ring-strong focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            className="min-w-0 flex items-center space-x-2 rounded-md transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-ring-strong focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
           >
             <Image
               src={HEADER_DATA.logo.image}
               alt={t(HEADER_DATA.logo.altKey)}
               width={24}
               height={24}
-              className="object-contain"
+              className="shrink-0 object-contain"
             />
             {/* 品牌字标走 font-brand（Funnel Display）——原挂的 .logo-text 类
              * 全仓无定义，一直以默认正文字体渲染。 */}
-            <h1 className="font-brand text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
+            <h1 className="font-brand truncate text-lg sm:text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
               {t(HEADER_DATA.logo.labelKey)}
             </h1>
           </Link>
@@ -608,7 +608,7 @@ export default function Header() {
           <HeaderNav />
 
           {/* 工具栏：访客设置 / CTA / 登录用户入口 */}
-          <div className="flex items-center gap-1 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-4">
             <HeaderQuickTools />
 
             {/* 已登录：进入控制台 + 用户菜单 */}
