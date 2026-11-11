@@ -11,6 +11,7 @@
  * 渠道白名单还埋在视图里;现在渠道由服务端给什么就画什么,禁用项标「即将开放」。
  */
 
+import alipayQr from "../../../../../public/assets/payment/vx-alipay.png";
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
@@ -196,7 +197,11 @@ export function PayChannelPanel({
           <PaymentDisplayCard>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={active.qrAsset}
+              src={
+                active.qrAsset.split("?")[0] === "/assets/payment/vx-alipay.png"
+                  ? alipayQr.src
+                  : active.qrAsset
+              }
               alt={t("alipayQrAlt")}
               className="h-full min-h-0 w-full object-contain"
             />

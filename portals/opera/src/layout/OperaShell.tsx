@@ -440,10 +440,9 @@ export function OperaShell({
                            onLocaleChange 是个空函数——界面上有个语言开关，
                            拨它不会发生任何事。 */
                         locale={locale}
-                        localeOptions={SUPPORTED_LOCALES.map((code) => ({
-                          locale: code,
-                          nativeName: LOCALE_CONFIGS[code].nativeName,
-                        }))}
+                        localeOptions={SUPPORTED_LOCALES.map(
+                          (code) => LOCALE_CONFIGS[code],
+                        )}
                         theme={theme}
                         density={density}
                         fontSize={fontSize}

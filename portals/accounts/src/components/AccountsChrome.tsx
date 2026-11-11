@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { LOCALE_CONFIGS, SUPPORTED_LOCALES } from "@vxture-platform/shared";
 import type { ReactNode } from "react";
 import { AccountsUserMenu, type AccountsMenuUser } from "./AccountsUserMenu";
 import Link from "next/link";
@@ -20,11 +21,7 @@ import {
   ShellIconGroup,
   ShellIconButton,
   useTheme,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  ShellLocaleSwitcher,
 } from "@vxture/design-system";
 
 // ============================================================================
@@ -364,24 +361,13 @@ export function AccountsHeader({
                 icon={theme === "dark" ? "sun" : "moon"}
                 onClick={toggle}
               />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <ShellIconButton label={t("language")} icon="globe" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuRadioGroup
-                    value={locale}
-                    onValueChange={changeLocale}
-                  >
-                    <DropdownMenuRadioItem value="zh-CN">
-                      简体中文
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="en-US">
-                      English
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ShellLocaleSwitcher
+                currentLocale={locale}
+                options={SUPPORTED_LOCALES.map((code) => LOCALE_CONFIGS[code])}
+                buttonLabel={t("language")}
+                panelLabel={t("language")}
+                onLocaleChange={changeLocale}
+              />
               <Button
                 variant="ghost"
                 size="icon-md"

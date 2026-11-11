@@ -74,6 +74,7 @@
     "verifyUnknown": "Unverified",
     "missingPhone": "No phone",
     "missingEmail": "No email",
+    "prefsLocale": "Language",
     "prefsTitle": "Preferences",
     "themeSystem": "System",
     "themeLight": "Light",

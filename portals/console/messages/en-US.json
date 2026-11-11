@@ -1642,6 +1642,7 @@
     "tenantVerified": "Verified",
     "tenantSettings": "Tenant settings",
     "switchOrg": "Switch organization",
+    "prefsLocale": "Language",
     "prefsTitle": "Preferences",
     "themeSystem": "System",
     "themeLight": "Light",

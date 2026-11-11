@@ -8,7 +8,12 @@
  */
 "use client";
 import { useLocale, useTranslations } from "next-intl";
-import { formatDay, formatPrincipalNoOr } from "@vxture-platform/shared";
+import {
+  formatDay,
+  formatPrincipalNoOr,
+  SUPPORTED_LOCALES,
+  LOCALE_CONFIGS,
+} from "@vxture-platform/shared";
 import { useEffect, useId, useRef, useState } from "react";
 import { downscaleImage } from "@vxture/platform-browser";
 import {
@@ -17,6 +22,7 @@ import {
   DialogForm,
   Input,
   NativeSelect,
+  ShellLocaleSwitcher,
   RadioGroup,
   RadioGroupItem,
   SegmentedControl,
@@ -193,7 +199,24 @@ export function CustomerProfileEditor({
           {avatar(currentPicture)}
         </Button>
         <div>
-          <h2>{profile.name || profile.account}</h2>
+          <div className="flex flex-wrap items-center gap-sm">
+            <h2>{profile.name || profile.account}</h2>
+            {profile.status ? (
+              <span aria-label={formText("account_status")}>
+                <StatusBadge
+                  tone={profile.status === "active" ? "success" : "warning"}
+                >
+                  {formText(
+                    profile.status === "active"
+                      ? "account_status_active"
+                      : profile.status === "deleting"
+                        ? "account_status_deleting"
+                        : "account_status_unknown",
+                  )}
+                </StatusBadge>
+              </span>
+            ) : null}
+          </div>
           <div className="accounts-identity-meta">
             <span>{formatPrincipalNoOr(profile.userNo, "user", "—")}</span>
             {profile.createdAt ? (
@@ -227,21 +250,6 @@ export function CustomerProfileEditor({
             </span>
           ) : null}
         </AccountRow>
-        {profile.status ? (
-          <AccountRow label={formText("account_status")}>
-            <StatusBadge
-              tone={profile.status === "active" ? "success" : "warning"}
-            >
-              {formText(
-                profile.status === "active"
-                  ? "account_status_active"
-                  : profile.status === "deleting"
-                    ? "account_status_deleting"
-                    : "account_status_unknown",
-              )}
-            </StatusBadge>
-          </AccountRow>
-        ) : null}
         <AccountRow label={formText("account")}>{profile.account}</AccountRow>
         {(["phone", "email"] as const).map((kind) => (
           <AccountRow key={kind} label={formText(kind)}>
@@ -436,16 +444,16 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
   return (
     <AccountSection title={formText("preferences")} icon="faders">
       <AccountRow label={formText("language")}>
-        <NativeSelect
-          aria-label={formText("language")}
-          wrapperClassName="accounts-preference-control"
-          value={language}
+        <ShellLocaleSwitcher
+          variant="field"
+          buttonLabel={formText("language")}
+          panelLabel={formText("language")}
+          className="accounts-preference-control"
+          currentLocale={language}
+          options={SUPPORTED_LOCALES.map((code) => LOCALE_CONFIGS[code])}
           disabled={busy}
-          onChange={(e) => setLanguage(e.target.value)}
-        >
-          <option value="zh-CN">{formText("simplified_chinese")}</option>
-          <option value="en-US">English</option>
-        </NativeSelect>
+          onLocaleChange={setLanguage}
+        />
       </AccountRow>
       <AccountRow label={formText("time_zone")}>
         <NativeSelect

@@ -353,6 +353,7 @@ function UserMenu({
   onSignOut: () => Promise<void>;
 }) {
   const t = useTranslations("layout.header.userMenu");
+  const headerText = useTranslations("layout.header");
   const router = useRouter();
   const pathname = usePathname();
   const { theme, setTheme, density, setDensity, fontSize, setFontSize } =
@@ -460,15 +461,13 @@ function UserMenu({
       settings={
         <ShellPreferencePanel
           locale={selectedLocale}
-          localeOptions={[
-            { locale: "zh-CN", nativeName: "简体中文" },
-            { locale: "en-US", nativeName: "English" },
-          ]}
+          localeOptions={SUPPORTED_LOCALES.map((code) => LOCALE_CONFIGS[code])}
           theme={themePref as ShellThemePreference}
           density={selectedDensity}
           fontSize={fontSize as ShellFontSizePreference}
           labels={{
             title: t("settings.title"),
+            locale: headerText("language.title"),
             themeOptions: {
               system: t("settings.theme.system"),
               light: t("settings.theme.light"),
