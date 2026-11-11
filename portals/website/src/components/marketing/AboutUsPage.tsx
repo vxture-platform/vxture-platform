@@ -120,7 +120,7 @@ export default function AboutUsPage() {
           <RadarPattern />
         </div>
 
-        <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="relative mx-auto w-full max-w-page-xl px-4 pb-16 pt-12 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div className="max-w-website-4xl">
             <Statement
               eyebrow={t("positioning.eyebrow")}
@@ -152,7 +152,7 @@ export default function AboutUsPage() {
         >
           <PathPattern />
         </div>
-        <div className="relative mx-auto grid w-full max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8 xl:max-w-screen-2xl">
+        <div className="relative mx-auto grid w-full max-w-page-xl gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8 xl:max-w-screen-2xl">
           {/* 四步是真实的先后次序：大号数字承载信息，不是装饰 */}
           <ol className="order-2 lg:order-1 lg:col-span-6">
             {steps.map((step, index) => (
@@ -216,7 +216,7 @@ export default function AboutUsPage() {
           <StackPattern />
         </div>
 
-        <div className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="relative mx-auto w-full max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <Statement
             align="center"
             eyebrow={t("capabilities.eyebrow")}

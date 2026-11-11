@@ -297,7 +297,7 @@ export default function AgentMarketplacePage({
       />
 
       <section id="agent-marketplace" className="vx-section-odd">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="mx-auto max-w-page-xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           {/*
            * 标题右侧原先是一段解释这份清单从哪来的说明文字。owner 2026-09-24：
            * 「这个完全不需要，删除」——那段话讲的是实现（清单来自产品目录），

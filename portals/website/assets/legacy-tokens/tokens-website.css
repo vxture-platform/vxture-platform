@@ -314,25 +314,30 @@
      顶部要盖住 fixed header（--vx-website-header-height，64px）之后再留一大段呼吸
      （松散感），底部略收。 */
   --vx-website-catalog-hero-min-height: 440px;
-  --vx-website-catalog-hero-content-padding: 144px 24px 48px;
+  --vx-website-catalog-hero-content-padding: 144px 16px 48px;
 
   /* 营销页：分节 */
-  --vx-website-section-padding-y: 64px;
+  --vx-website-section-padding-y: clamp(2rem, 5vw, 4rem);
   --vx-website-section-border-width: 1px;
 
+  /* Pricing keeps its existing gaps and side-card width while columns wrap. */
+  --vx-website-pricing-grid-gap: 20px;
+  --vx-website-pricing-side-min-width: 136px;
+  --vx-website-pricing-side-max-width: 160px;
+
   /* 营销页：左右分栏。左栏占比逐块微调，故按占比逐个列出而不是一个通用值。 */
-  --vx-website-split-grid-30-columns: 30% 1fr;
-  --vx-website-split-grid-32-columns: 32% 1fr;
-  --vx-website-split-grid-34-columns: 34% 1fr;
-  --vx-website-split-grid-36-columns: 36% 1fr;
-  --vx-website-split-grid-38-columns: 38% 1fr;
-  --vx-website-split-grid-42-columns: 42% 1fr;
+  --vx-website-split-grid-30-columns: minmax(0, 30fr) minmax(0, 70fr);
+  --vx-website-split-grid-32-columns: minmax(0, 32fr) minmax(0, 68fr);
+  --vx-website-split-grid-34-columns: minmax(0, 34fr) minmax(0, 66fr);
+  --vx-website-split-grid-36-columns: minmax(0, 36fr) minmax(0, 64fr);
+  --vx-website-split-grid-38-columns: minmax(0, 38fr) minmax(0, 62fr);
+  --vx-website-split-grid-42-columns: minmax(0, 42fr) minmax(0, 58fr);
 
   /* 营销页：卡片与媒体块 */
   --vx-website-marketplace-card-min-height: 360px;
   --vx-website-practice-card-media-min-height: 280px;
   --vx-website-emergency-practice-media-min-height: 420px;
-  --vx-website-solution-card-grid-columns-lg: 38% 62%;
+  --vx-website-solution-card-grid-columns-lg: minmax(0, 38fr) minmax(0, 62fr);
   --vx-website-solution-index-size: 3rem;
 
   /* 营销页：CTA 与页脚 */
