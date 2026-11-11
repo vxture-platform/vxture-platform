@@ -29,7 +29,6 @@ import {
   setGlobalDensityPreference,
   setGlobalLocalePreference,
   setGlobalThemePreference,
-  withLocalePreference,
 } from "@vxture/platform-browser";
 import type { Locale, Theme } from "@vxture-platform/shared";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
@@ -47,17 +46,9 @@ import {
 import type { ConsoleWorkspaceItem } from "@/entities/console";
 import type { ShellDrawerType } from "../shell/types";
 import { buildWorkbenchEntry } from "@/lib/workbench-entry";
+import { accountCenterUrl } from "@/lib/account-center";
 import { TenantPanel } from "./TenantPanel";
 import { useGlobalSearch, type NavSearchEntry } from "./useGlobalSearch";
-
-const ACCOUNTS_BASE = (
-  process.env.NEXT_PUBLIC_ACCOUNTS_URL ??
-  (process.env.NODE_ENV === "production"
-    ? "https://accounts.vxture.com"
-    : "http://localhost:3080")
-)
-  .trim()
-  .replace(/\/+$/, "");
 
 /**
  * 展示用手机号：存储值带 E.164 国家码（+8613800000000），面板里只给号码本身。
@@ -411,7 +402,7 @@ export function ConsoleHeader({
               {
                 key: "profile",
                 label: t("accountCenter"),
-                href: withLocalePreference(`${ACCOUNTS_BASE}/account`, locale),
+                href: accountCenterUrl(locale),
                 icon: "user",
                 newTab: true,
               },

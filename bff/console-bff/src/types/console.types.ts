@@ -27,42 +27,6 @@ export interface ConsoleUser {
   timezone: string | null;
 }
 
-export interface ConsoleUserProfile {
-  id: string;
-  username: string;
-  /** ISO timestamp when the username may next be changed; null = changeable now. */
-  usernameChangeableAt: string | null;
-  displayName: string | null;
-  /** Platform avatar URL (versioned `/avatar/usr_<id>?v=<hash>`); null → default. */
-  picture: string | null;
-  /** @deprecated legacy paste-URL field; superseded by `picture` (always null). */
-  avatarUrl: string | null;
-  bio: string | null;
-  /** 性别:账号页显示为先生 / 女士 / 未设定。 */
-  gender: "male" | "female" | null;
-  email: string | null;
-  /** Whether the email is verified. */
-  emailVerified: boolean;
-  phone: string | null;
-  /** Whether the phone is verified (the mandatory anchor → normally true). */
-  phoneVerified: boolean;
-  /** Whether username+password login is disabled (other login paths unaffected). */
-  accountLoginDisabled?: boolean;
-  timezone: string | null;
-  language: string | null;
-  profileUpdatedAt: string | null;
-  /** Stable public user number (bigint as string), e.g. "1024". */
-  userNo: string | null;
-  /** ISO timestamp of account creation. */
-  accountCreatedAt: string | null;
-  /** Account status: active | deleting | suspended. */
-  accountStatus?: string | null;
-  /** ISO timestamp the user asked to delete the account (status='deleting'); null otherwise. */
-  deletionRequestedAt?: string | null;
-  /** Whether the user has a password credential set (false for phone/social-only registrants). */
-  hasPassword: boolean;
-}
-
 export interface ConsoleOrganizationProfile {
   tenantId: string;
   tenantCode: string;
@@ -188,6 +152,7 @@ export interface RequestContext {
 
 /** A tenant/workspace the user belongs to (my-workspaces, §1.6/§4.1). */
 export interface ConsoleWorkspaceItem {
+  tenantNo?: string | null;
   tenantId: string;
   tenantName: string;
   tenantType: "personal" | "organization";

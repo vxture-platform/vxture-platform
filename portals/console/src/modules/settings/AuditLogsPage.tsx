@@ -50,13 +50,6 @@ const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
 // ============================================================================
 /** Active action codes must match the current Console audit writers. */
 const KNOWN_ACTIONS = new Set([
-  "account.email.change",
-  "account.identity.unbind",
-  "account.login_method.update",
-  "account.password.change",
-  "account.password.set_initial",
-  "account.phone.change",
-  "account.session.revoke",
   "addon.order.cancel",
   "addon.order.create",
   "addon.order.payment_declare",
@@ -78,7 +71,6 @@ const KNOWN_ACTIONS = new Set([
   "tenant.member.enable",
   "tenant.member.invite",
   "tenant.member.remove",
-  "tenant.member.reset_password",
   "tenant.member.update",
   "tenant.owner.transfer",
   "tenant.role.create",
@@ -97,6 +89,14 @@ const KNOWN_ACTIONS = new Set([
 
 /** Retired writers still have readable, filterable records in the audit log. */
 const HISTORICAL_ACTIONS = new Set([
+  "account.email.change",
+  "account.identity.unbind",
+  "account.login_method.update",
+  "account.password.change",
+  "account.password.set_initial",
+  "account.phone.change",
+  "account.session.revoke",
+  "tenant.member.reset_password",
   "account.deletion.cancel",
   "account.deletion.request",
 ]);

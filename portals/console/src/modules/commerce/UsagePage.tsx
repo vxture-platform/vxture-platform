@@ -57,7 +57,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtCount } from "@/lib/format-metrics";
-import { formatTimezone } from "@/modules/account/profile/format";
+import { formatTimezone } from "@/lib/display-format";
 
 type TrendWindow = "hour" | "day" | "week" | "month" | "year";
 

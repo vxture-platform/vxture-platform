@@ -70,9 +70,57 @@ const RETIRED = [
     method: "cancelAccountDeletion",
     route: "deletion/cancel",
   },
+  {
+    code: "account.email.change",
+    file: "me.router.ts",
+    method: "changeEmail",
+    route: "email",
+  },
+  {
+    code: "account.identity.unbind",
+    file: "me.router.ts",
+    method: "unbindIdentity",
+    route: "identities/:provider",
+  },
+  {
+    code: "account.login_method.update",
+    file: "me.router.ts",
+    method: "setAccountLogin",
+    route: "account-login",
+  },
+  {
+    code: "account.password.change",
+    file: "me.router.ts",
+    method: "updatePassword",
+    route: "password",
+  },
+  {
+    code: "account.password.set_initial",
+    file: "me.router.ts",
+    method: "setInitialPassword",
+    route: "password/initial",
+  },
+  {
+    code: "account.phone.change",
+    file: "me.router.ts",
+    method: "changePhone",
+    route: "phone",
+  },
+  {
+    code: "account.session.revoke",
+    file: "me.router.ts",
+    method: "revokeSession",
+    route: "sessions/:sid",
+  },
+  {
+    code: "tenant.member.reset_password",
+    file: "iam.router.ts",
+    method: "resetMemberPassword",
+    route: "members/:memberId/reset-password",
+  },
 ];
 
-/** Reject live handlers, stale route evidence and historical catalogue drift. */
+/** Reject restored methods/routes and drift in the historical catalogue. */
 function historicalProblems(writtenActions, historicalActions, readRouter) {
   const errors = [];
   const registered = new Set(RETIRED.map((entry) => entry.code));
@@ -91,99 +139,30 @@ function historicalProblems(writtenActions, historicalActions, readRouter) {
       ts.ScriptTarget.Latest,
       true,
     );
-    const methods = [];
+    let live = false;
     function collect(node) {
-      if (
-        ts.isMethodDeclaration(node) &&
-        node.name.getText(source) === entry.method
-      )
-        methods.push(node);
+      if (ts.isMethodDeclaration(node)) {
+        if (node.name.getText(source) === entry.method) live = true;
+        for (const decorator of ts.getDecorators(node) ?? []) {
+          const expression = decorator.expression;
+          if (
+            ts.isCallExpression(expression) &&
+            ["Get", "Post", "Put", "Patch", "Delete", "All"].includes(
+              expression.expression.getText(source),
+            ) &&
+            expression.arguments.some(
+              (arg) => ts.isStringLiteral(arg) && arg.text === entry.route,
+            )
+          )
+            live = true;
+        }
+      }
       ts.forEachChild(node, collect);
     }
     collect(source);
-    const method = methods.length === 1 ? methods[0] : undefined;
-    const post =
-      method &&
-      (ts.getDecorators(method) ?? []).some((decorator) => {
-        const expression = decorator.expression;
-        return (
-          ts.isCallExpression(expression) &&
-          expression.expression.getText(source) === "Post" &&
-          expression.arguments.length === 1 &&
-          ts.isStringLiteral(expression.arguments[0]) &&
-          expression.arguments[0].text === entry.route
-        );
-      });
-    const statements = method?.body?.statements;
-    const last = statements?.[statements.length - 1];
-    const gone =
-      last &&
-      ts.isThrowStatement(last) &&
-      ts.isNewExpression(last.expression) &&
-      last.expression.expression.getText(source) === "GoneException" &&
-      last.expression.arguments?.length === 1 &&
-      ts.isObjectLiteralExpression(last.expression.arguments[0])
-        ? last.expression.arguments[0]
-        : undefined;
-    const properties = new Map(
-      (gone?.properties ?? []).flatMap((property) =>
-        ts.isPropertyAssignment(property) &&
-        ts.isStringLiteral(property.initializer)
-          ? [[property.name.getText(source), property.initializer.text]]
-          : [],
-      ),
-    );
-    // A retired handler can only reject requests. Calls, assignments, returns and
-    // other statements would allow a side effect before the final 410 response.
-    function rejectionOnly(node) {
-      if (ts.isBlock(node)) return node.statements.every(rejectionOnly);
-      if (ts.isIfStatement(node))
-        return (
-          sideEffectFree(node.expression) &&
-          rejectionOnly(node.thenStatement) &&
-          (!node.elseStatement || rejectionOnly(node.elseStatement))
-        );
-      return (
-        ts.isThrowStatement(node) &&
-        ts.isNewExpression(node.expression) &&
-        [
-          "GoneException",
-          "UnauthorizedException",
-          "BadRequestException",
-        ].includes(node.expression.expression.getText(source)) &&
-        (node.expression.arguments ?? []).every(sideEffectFree)
-      );
-    }
-    function sideEffectFree(node) {
-      if (
-        ts.isCallExpression(node) ||
-        ts.isNewExpression(node) ||
-        ts.isAwaitExpression(node) ||
-        ts.isDeleteExpression(node) ||
-        ts.isPostfixUnaryExpression(node) ||
-        (ts.isPrefixUnaryExpression(node) &&
-          [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
-            node.operator,
-          )) ||
-        (ts.isBinaryExpression(node) &&
-          node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-          node.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
-      )
-        return false;
-      let safe = true;
-      ts.forEachChild(node, (child) => {
-        if (!sideEffectFree(child)) safe = false;
-      });
-      return safe;
-    }
-    if (
-      !post ||
-      !statements?.every(rejectionOnly) ||
-      properties.get("code") !== "account_center_required" ||
-      properties.get("path") !== "/account"
-    )
+    if (live)
       errors.push(
-        `Retirement evidence missing or handler is live: ${entry.file}:${entry.method}`,
+        `Retired entry point is present: ${entry.file}:${entry.method}`,
       );
   }
   return errors;
@@ -191,35 +170,30 @@ function historicalProblems(writtenActions, historicalActions, readRouter) {
 
 if (process.argv.includes("--self-test")) {
   const historical = new Set(RETIRED.map((entry) => entry.code));
-  const fixture = RETIRED.map(
-    (entry) =>
-      `class Router { @Post("${entry.route}") async ${entry.method}() {
-      if (!req.user) throw new UnauthorizedException("No active session");
-      throw new GoneException({code: "account_center_required", path: "/account"});
-    } }`,
-  ).join("\n");
   const check = (source, active = new Set(), history = historical) =>
     historicalProblems(active, history, () => source);
-  assert.deepEqual(check(fixture), []);
-  for (const source of [
-    fixture.replace("new GoneException", "new Error"),
-    fixture.replace('@Post("deletion")', '@Post("other")'),
-    fixture.replace('path: "/account"', 'path: "/other"'),
-    fixture.replace(
-      "throw new GoneException",
-      "await writeAudit(); throw new GoneException",
-    ),
-    fixture.replace("if (!req.user)", "if (writeAudit())"),
-    fixture.replace("if (!req.user)", "if (req.user = null)"),
-  ])
-    assert.ok(check(source).length > 0);
-  assert.ok(check(fixture, new Set([RETIRED[0].code])).length > 0);
-  assert.ok(check(fixture, new Set(), new Set()).length > 0);
+  assert.deepEqual(check("class Router {}"), []);
+  for (const entry of RETIRED) {
+    assert.ok(check(`class Router { async ${entry.method}() {} }`).length > 0);
+    for (const verb of ["Get", "Post", "Put", "Patch", "Delete", "All"]) {
+      assert.ok(
+        check(`class Router { @${verb}("${entry.route}") async renamed() {} }`)
+          .length > 0,
+      );
+    }
+    assert.ok(check("class Router {}", new Set([entry.code])).length > 0);
+  }
+  assert.ok(check("class Router {}", new Set(), new Set()).length > 0);
   assert.ok(
-    check(fixture, new Set(), new Set([...historical, "unregistered"])).length >
-      0,
+    check(
+      "class Router {}",
+      new Set(),
+      new Set([...historical, "unregistered"]),
+    ).length > 0,
   );
-  console.log("Audit action retirement self-test passed (9 rejection cases).");
+  console.log(
+    "Audit retirement self-test passed (removed routes, methods, writers and catalogue).",
+  );
   process.exit(0);
 }
 

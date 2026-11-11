@@ -42,14 +42,8 @@ import {
   Switch,
 } from "@vxture/design-system";
 import { PlannedBadge, PlannedNotice } from "@/components/planned";
-import {
-  CardRows,
-  DETAIL_LIST_CLASS,
-} from "@/modules/account/profile/CardRows";
-import {
-  TIMEZONE_OPTIONS,
-  formatTimezone,
-} from "@/modules/account/profile/format";
+import { CardRows, DETAIL_LIST_CLASS } from "@/components/detail";
+import { TIMEZONE_OPTIONS, formatTimezone } from "@/lib/display-format";
 import { GenderMark } from "@/components/gender/GenderRadio";
 import { TenantSection } from "./TenantIdentityCard";
 

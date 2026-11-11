@@ -65,7 +65,6 @@ import {
   lookupUserByNo,
   type UserLookupResult,
   resendInvitation,
-  resetMemberPassword,
   revokeInvitation,
   unlinkMember,
   updateMember,
@@ -158,7 +157,6 @@ export function MembersPage() {
     null,
   );
   const [editOpen, setEditOpen] = useState(false);
-  const [resetOpen, setResetOpen] = useState(false);
   const [bulkUnlinkOpen, setBulkUnlinkOpen] = useState(false);
   /** 正在管谁的工作空间归属;null = 对话框不开。 */
   const [workspacesFor, setWorkspacesFor] = useState<MemberRecord | null>(null);
@@ -184,7 +182,6 @@ export function MembersPage() {
     channel: "email" as "email" | "user_no",
     roleId: "",
   });
-  const [passwordForm, setPasswordForm] = useState({ nextPassword: "" });
 
   useEffect(() => {
     let active = true;
@@ -250,13 +247,6 @@ export function MembersPage() {
     resetMemberForm(member);
     resetFeedback();
     setEditOpen(true);
-  }
-
-  function openResetDialog(member: MemberRecord) {
-    setSelectedId(member.id);
-    setPasswordForm({ nextPassword: "" });
-    resetFeedback();
-    setResetOpen(true);
   }
 
   async function reloadMembers(nextSelectedId?: string | null) {
@@ -387,32 +377,6 @@ export function MembersPage() {
       setMessage(t("feedback.updateSuccess"));
     } catch (caught) {
       setDialogError(errorText(caught, "feedback.updateError"));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function submitResetPassword(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selected) return;
-
-    if (passwordForm.nextPassword.length < 6) {
-      setDialogError(t("feedback.resetPasswordLength"));
-      return;
-    }
-
-    setSubmitting(true);
-    resetFeedback();
-
-    try {
-      await resetMemberPassword(selected.id, {
-        nextPassword: passwordForm.nextPassword,
-      });
-      setResetOpen(false);
-      setPasswordForm({ nextPassword: "" });
-      setMessage(t("feedback.resetPasswordSuccess", { name: selected.name }));
-    } catch (caught) {
-      setDialogError(errorText(caught, "feedback.resetPasswordError"));
     } finally {
       setSubmitting(false);
     }
@@ -813,12 +777,6 @@ export function MembersPage() {
           disabled: submitting || protectedHint !== null,
           ...(protectedHint ? { hint: protectedHint } : {}),
           onSelect: () => void handleToggleMemberStatus(member),
-        },
-        {
-          id: "reset-password",
-          label: t("actions.resetPassword"),
-          icon: "key",
-          onSelect: () => openResetDialog(member),
         },
         {
           /* 工作空间归属(owner 2026-09-09 第 2 件的写侧)。
@@ -1498,40 +1456,6 @@ export function MembersPage() {
             <Input id="member-email-current" value={selected.email} disabled />
           </Field>
           {roleSelect}
-        </DialogForm>
-      ) : null}
-
-      {resetOpen && selected ? (
-        <DialogForm
-          open
-          title={t("dialogs.reset.title")}
-          description={t("dialogs.reset.description", {
-            name: selected.name,
-          })}
-          submitLabel={t("dialogs.actions.resetPassword")}
-          cancelLabel={t("dialogs.actions.cancel")}
-          submitting={submitting}
-          onOpenChange={(open) => {
-            if (!open) setResetOpen(false);
-          }}
-          onSubmit={(event) => void submitResetPassword(event)}
-        >
-          {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
-          <Field>
-            <FieldLabel htmlFor="member-next-password">
-              {t("dialogs.fields.nextPassword")}
-            </FieldLabel>
-            <Input
-              id="member-next-password"
-              type="password"
-              value={passwordForm.nextPassword}
-              onChange={(event) =>
-                setPasswordForm({ nextPassword: event.target.value })
-              }
-              minLength={6}
-              required
-            />
-          </Field>
         </DialogForm>
       ) : null}
 

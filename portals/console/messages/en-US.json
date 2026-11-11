@@ -703,7 +703,6 @@
       "edit": "Edit user",
       "disableMember": "Disable user",
       "enableMember": "Enable user",
-      "resetPassword": "Reset password",
       "unlink": "Unlink",
       "resendInvite": "Resend invitation",
       "revokeInvite": "Revoke invitation",
@@ -729,10 +728,6 @@
       "edit": {
         "title": "Edit member"
       },
-      "reset": {
-        "title": "Reset password",
-        "description": "Set a new temporary password for {name}."
-      },
       "unlink": {
         "title": "Unlink member",
         "description": "Unlink {name} from the current tenant? This will not delete the user account.",
@@ -750,7 +745,6 @@
         "userNoHint": "The recipient must already have a platform account. No email is sent — the invitation appears in their inbox and takes effect once they accept it.",
         "role": "Role",
         "defaultRole": "Default member",
-        "nextPassword": "New temporary password",
         "workspace": "Workspace",
         "workspacePlaceholder": "Select a workspace",
         "rolePlaceholder": "Select a role"
@@ -760,7 +754,6 @@
         "create": "Create member",
         "sendInvite": "Send invite",
         "save": "Save",
-        "resetPassword": "Reset password",
         "unlink": "Unlink",
         "lookup": "Look up",
         "looking": "Looking up"
@@ -792,7 +785,6 @@
       "createSuccess": "Member created.",
       "inviteSuccess": "Member invitation created.",
       "updateSuccess": "Member profile updated.",
-      "resetPasswordSuccess": "{name}'s password has been reset.",
       "unlinkSuccess": "Member association unlinked.",
       "bulkDisabled": "{count} members disabled.",
       "bulkEnabled": "{count} members enabled.",
@@ -802,8 +794,6 @@
       "createError": "Could not create the member. Try again later.",
       "inviteError": "Could not create the invitation. Try again later.",
       "updateError": "Could not save the member profile. Try again later.",
-      "resetPasswordError": "Could not reset the password. Try again later.",
-      "resetPasswordLength": "The new temporary password must contain at least 6 characters.",
       "unlinkError": "Could not unlink the member association. Try again later.",
       "bulkDisableError": "Could not disable the selected members. Try again later.",
       "bulkEnableError": "Could not enable the selected members. Try again later.",
@@ -1081,38 +1071,6 @@
       "loadFailed": "Could not load your notification preferences.",
       "saveFailed": "Could not save notification preferences. Try again."
     }
-  },
-  "onboarding": {
-    "brand": "Vxture Studio",
-    "title": "Finish your account",
-    "description": "A few details and you're in. The account name is how you sign in; the display name is what others see.",
-    "fields": {
-      "account": "Account",
-      "accountPlaceholder": "Letters, digits, underscore — starts with a letter",
-      "displayName": "Display name",
-      "phone": "Phone",
-      "phoneVerified": "Verified",
-      "email": "Email",
-      "emailPlaceholder": "you@company.com",
-      "emailHint": "Optional. Verify it later in your profile to use it for account recovery."
-    },
-    "errors": {
-      "accountFormat": "Account must start with a letter, contain only letters/digits/underscore, and be 3-24 characters.",
-      "displayNameRequired": "Display name is required.",
-      "emailFormat": "Enter a valid email address.",
-      "accountTaken": "This account name is already taken.",
-      "generic": "Setup failed. Please try again."
-    },
-    "actions": {
-      "submit": "Finish setup",
-      "submitting": "Submitting…"
-    },
-    "legal": {
-      "terms": "Terms of Service",
-      "privacy": "Privacy Policy",
-      "cookies": "Cookie Policy"
-    },
-    "copyright": "© {year} Vxture Studio. All rights reserved."
   },
   "orderFlow": {
     "order": {
@@ -1448,487 +1406,6 @@
   "principalNo": {
     "label": "ID:"
   },
-  "profilePage": {
-    "header": {
-      "eyebrow": "Account center",
-      "title": "My account",
-      "description": "Avatar, profile, contact details, sign-in methods and preferences."
-    },
-    "common": {
-      "empty": "--",
-      "loading": "Loading..."
-    },
-    "summary": {
-      "defaultRole": "Console user",
-      "customAvatar": "Custom avatar",
-      "defaultAvatar": "Default avatar"
-    },
-    "sections": {
-      "profile": {
-        "title": "Profile",
-        "description": "Used for identity display across the console, collaboration lists, and notifications."
-      },
-      "contact": {
-        "title": "Contact",
-        "description": "Used for notifications, account recovery, and localized display."
-      },
-      "security": {
-        "title": "Security",
-        "description": "Password and third-party sign-in management."
-      },
-      "verification": {
-        "title": "Identity verification",
-        "description": "Complete personal verification to unlock more capabilities."
-      },
-      "connectedAccounts": {
-        "title": "Connected accounts",
-        "description": "Manage DingTalk, Feishu, Google, and other sign-in methods."
-      },
-      "workspaces": {
-        "title": "My workspaces",
-        "description": "Tenants/workspaces you belong to and your role. Switch quickly.",
-        "empty": "No accessible workspaces yet."
-      },
-      "accountInfo": {
-        "title": "Account info",
-        "description": "Read-only identifiers for reference and identity verification."
-      },
-      "account": {
-        "title": "Account",
-        "description": "Name, phone and email."
-      },
-      "personal": {
-        "title": "Personal info",
-        "description": "Language, timezone, bio and sign-up time."
-      },
-      "loginHistory": {
-        "title": "Login history",
-        "description": "Your most recent sign-ins.",
-        "empty": "No login records yet."
-      }
-    },
-    "fields": {
-      "displayName": "Display name",
-      "username": "Username",
-      "verifiedStatus": "Verification status",
-      "bio": "Bio",
-      "email": "Email",
-      "phone": "Phone",
-      "timezone": "Timezone",
-      "language": "Language",
-      "password": "Password",
-      "currentPassword": "Current password",
-      "nextPassword": "New password",
-      "confirmPassword": "Confirm",
-      "userNo": "User ID",
-      "accountStatus": "Status",
-      "newPhone": "New phone number",
-      "verificationCode": "Code",
-      "createdAt": "Registered",
-      "lastLogin": "Last login",
-      "lastLoginIp": "Login IP",
-      "lastLoginOs": "OS",
-      "role": "Role",
-      "newEmail": "New email",
-      "gender": "Gender"
-    },
-    "language": {
-      "zhCN": "简体中文",
-      "enUS": "English (US)"
-    },
-    "security": {
-      "passwordSet": "Set",
-      "passwordNotSet": "Not set",
-      "disableLogin": "Disable username login",
-      "enableLogin": "Enable username login",
-      "loginDisabled": "Login disabled",
-      "canLogin": "Login enabled",
-      "cannotLogin": "Login disabled",
-      "cannotLoginTip": "Username & password sign-in is off; sign in with a phone, email or social one-time code.",
-      "accountLogin": "Password sign-in",
-      "accountLoginHint": "When off, the username row shows “Sign-in disabled” and only phone, email or social one-time codes work.",
-      "twoFactor": "Two-factor authentication",
-      "twoFactorEnable": "Enable",
-      "twoFactorHint": "A one-time code (TOTP) at sign-in.",
-      "sessions": "Active sessions",
-      "manageSessions": "Manage sessions",
-      "sessionsCount": "{count} devices online",
-      "sessionsUnknown": "Expand to see online devices",
-      "sessionsEmpty": "No other devices online.",
-      "lastActive": "Last active {time}",
-      "revoke": "Sign out"
-    },
-    "verified": {
-      "verified": "Verified",
-      "unverified": "Unverified",
-      "primary": "Primary"
-    },
-    "workspaces": {
-      "current": "Current",
-      "switch": "Switch",
-      "detail": "Details",
-      "joinedAt": "Joined",
-      "defaultTag": "default",
-      "joinedOn": "Joined {date}"
-    },
-    "verification": {
-      "unverified": "Unverified",
-      "goVerify": "Go to verification"
-    },
-    "accountStatus": {
-      "active": "Active",
-      "suspended": "Suspended",
-      "unknown": "Unknown"
-    },
-    "avatar": {
-      "alt": "{name} avatar",
-      "edit": "Edit avatar",
-      "upload": "Upload avatar",
-      "previewAlt": "{name} avatar preview",
-      "customPreview": "Using custom avatar",
-      "defaultPreview": "Using default avatar"
-    },
-    "actions": {
-      "edit": "Edit",
-      "uploadAvatar": "Upload avatar",
-      "clearAvatar": "Clear avatar",
-      "changePassword": "Change password",
-      "setPassword": "Set password",
-      "changePhone": "Change",
-      "cancel": "Cancel",
-      "save": "Save",
-      "updatePassword": "Update password",
-      "next": "Next",
-      "prev": "Back",
-      "completeChange": "Complete change",
-      "close": "Close",
-      "sendCode": "Send code",
-      "resendCode": "Resend",
-      "verify": "Verify",
-      "change": "Change",
-      "confirm": "Confirm",
-      "modify": "Edit"
-    },
-    "dialogs": {
-      "profile": {
-        "title": "Edit profile",
-        "description": "Changes are saved to your console identity immediately."
-      },
-      "username": {
-        "title": "Change username",
-        "description": "Usernames are globally unique and can be changed at most once every 30 days."
-      },
-      "contact": {
-        "title": "Edit contact",
-        "description": "Keep contact details accurate for notifications and account recovery."
-      },
-      "password": {
-        "title": "Change password",
-        "description": "Use a new password with at least 6 characters.",
-        "setupTitle": "Set password",
-        "setupDescription": "You signed up with phone/social login and have no password yet. Set one with at least 6 characters to also log in with an account and password.",
-        "rule": "At least {min} characters."
-      },
-      "phoneChange": {
-        "step1Title": "Change phone number",
-        "step1Description": "Step 1 of 2: Verify your current identity before binding a new number.",
-        "step1Label": "Verify identity",
-        "step2Title": "Change phone number",
-        "step2Description": "Step 2 of 2: Enter and verify the new number. The change takes effect immediately.",
-        "step2Label": "Bind new number",
-        "successTitle": "Phone number changed",
-        "sendToPhone": "Send code to {phone}",
-        "switchToEmail": "Can't receive SMS? Verify via email {email} instead",
-        "switchToPhone": "Verify via phone instead",
-        "sentToPhone": "Code sent to {phone}",
-        "sentToEmail": "Code sent to {email}",
-        "successMessage": "Your phone number has been changed to {phone}. Use the new number on your next sign-in."
-      },
-      "name": {
-        "title": "Edit name",
-        "description": "Display name shown across the console."
-      },
-      "personal": {
-        "title": "Edit personal info",
-        "description": "Language, timezone and bio."
-      },
-      "disableLogin": {
-        "title": "Disable username login",
-        "description": "Username + password login will be turned off. Phone / email / social login are unaffected. You can re-enable anytime."
-      },
-      "contactVerify": {
-        "phone-verify": {
-          "title": "Verify phone",
-          "description": "Send a code to your current phone to verify it."
-        },
-        "email-verify": {
-          "title": "Verify email",
-          "description": "Send a code to your current email to verify it."
-        },
-        "email-change": {
-          "title": "Change email",
-          "description": "Enter a new email and verify ownership by code."
-        }
-      }
-    },
-    "placeholders": {
-      "bio": "Briefly describe your role or collaboration preference.",
-      "timezone": "Example: Asia/Shanghai",
-      "username": "Letter first, 3-24 letters/digits/underscores",
-      "verificationCode": "Enter 6-digit code",
-      "newPhone": "Enter new phone number",
-      "newEmail": "Enter a new email address"
-    },
-    "username": {
-      "cooldownHint": "Changeable after {date}"
-    },
-    "feedback": {
-      "defaultTenantSet": "“{name}” is now your default tenant; you will enter it after your next sign-in.",
-      "defaultTenantError": "Could not set the default tenant. Please try again later.",
-      "noProfile": "No profile was found.",
-      "loadError": "Failed to load your profile. Please try again later.",
-      "profileSaved": "Profile updated.",
-      "profileSaveError": "Could not save the profile. Please try again later.",
-      "usernameSaved": "Username updated.",
-      "usernameTaken": "That username is taken. Please choose another.",
-      "usernameCooldown": "Username can only be changed once every 30 days.",
-      "usernameSaveError": "Could not change the username. Please try again later.",
-      "contactSaved": "Contact details updated.",
-      "contactSaveError": "Could not save contact details. Please try again later.",
-      "passwordSaved": "Password updated.",
-      "passwordSaveError": "Password update failed. Check the current password and try again.",
-      "passwordMismatch": "The two new password entries do not match.",
-      "passwordTooShort": "The new password needs at least {min} characters.",
-      "avatarCleared": "Avatar cleared.",
-      "avatarClearError": "Could not clear the avatar. Please try again later.",
-      "avatarUploaded": "Avatar updated.",
-      "avatarUploadError": "Avatar upload failed. Please try again later.",
-      "avatarInvalidType": "Only PNG / JPEG / WEBP / GIF images are supported.",
-      "avatarTooLarge": "Image too large; please upload a file under 1MB.",
-      "connectedAccountBound": "{provider} connected.",
-      "connectedAccountUnbound": "{provider} disconnected.",
-      "unbindSuccess": "Third-party account disconnected.",
-      "unbindError": "Failed to disconnect. Please try again later.",
-      "phoneCodeSent": "Verification code sent. Please check your messages.",
-      "phoneCodeSendError": "Failed to send the code. Please try again later.",
-      "phoneIdentityError": "Incorrect or expired code. Please request a new one.",
-      "phoneChangeSuccess": "Phone number changed successfully.",
-      "phoneChangeError": "Phone number change failed. Please check the code and try again.",
-      "phoneNewCodeInvalid": "New phone verification code is incorrect or expired.",
-      "phoneAlreadyInUse": "This phone number is already associated with another account.",
-      "accountLoginEnabled": "Username login enabled.",
-      "accountLoginDisabled": "Username login disabled.",
-      "accountLoginError": "Operation failed, please try again.",
-      "accountLoginLastMethod": "Cannot disable: at least one login method must remain.",
-      "emailVerified": "Email verified.",
-      "emailChanged": "Email changed.",
-      "phoneVerified": "Phone verified.",
-      "emailInvalid": "Please enter a valid email address.",
-      "emailInUse": "This email is already used by another account.",
-      "verifyError": "Code is incorrect or expired, please retry.",
-      "sessionRevoked": "That device has been signed out.",
-      "sessionRevokeError": "Could not sign the device out. Try again later."
-    },
-    "connectedAccounts": {
-      "summary": "{count} / {total} connected",
-      "providers": {
-        "wechat": {
-          "name": "WeChat",
-          "description": "Sign in with WeChat (scan)"
-        },
-        "dingtalk": {
-          "name": "DingTalk",
-          "description": "Sign in with DingTalk"
-        },
-        "feishu": {
-          "name": "Feishu",
-          "description": "Sign in with Feishu"
-        },
-        "google": {
-          "name": "Google",
-          "description": "Sign in with Google"
-        }
-      },
-      "fields": {
-        "account": "Account",
-        "connectedAt": "Connected at"
-      },
-      "status": {
-        "connected": "Connected",
-        "disconnected": "Not connected",
-        "bindable": "Available",
-        "unavailable": "Unavailable",
-        "integrating": "Integrating"
-      },
-      "sso": "Supports SSO sign-in",
-      "actions": {
-        "bind": "Connect",
-        "rebind": "Reconnect",
-        "unbind": "Disconnect",
-        "confirmUnbind": "Disconnect"
-      },
-      "dialogs": {
-        "unbindTitle": "Disconnect account",
-        "unbindDescription": "Disconnect this account from {provider}? You will not be able to use this method to sign in until it is connected again."
-      },
-      "empty": "No linked third-party accounts.",
-      "connectedOn": "Linked {date}"
-    },
-    "loginHistory": {
-      "index": "#",
-      "time": "Time",
-      "ip": "IP",
-      "os": "OS"
-    },
-    "cards": {
-      "basic": {
-        "title": "Basic information",
-        "description": "Profile and contact details; items that need verification get their own action."
-      },
-      "security": {
-        "title": "Security",
-        "description": "Sign-in credentials, two-factor authentication and active devices."
-      },
-      "thirdParty": {
-        "title": "Social sign-in",
-        "description": "Sign in to Vxture directly with a Google, Feishu, DingTalk or WeChat account (open sign-in, independent of any organization); linking opens once integrated."
-      },
-      "prefs": {
-        "title": "Preferences",
-        "description": "Language and time zone drive copy and times; theme, density and font size preview instantly and apply across portals once saved."
-      },
-      "danger": {
-        "title": "Danger zone",
-        "description": "These actions affect the whole account. Review carefully before proceeding."
-      }
-    },
-    "identity": {
-      "registeredAt": "Registered {date}",
-      "tenants": "Tenants · {count}",
-      "personalTenant": "Personal",
-      "orgTenant": "Organization",
-      "workspace": "Workspace",
-      "tenantInfo": "Tenant details",
-      "defaultTag": "Default",
-      "setDefault": "Set as default",
-      "setDefaultTitle": "Enter this tenant by default after every sign-in"
-    },
-    "login": {
-      "history": "Sign-in history",
-      "historyEmpty": "No sign-in records yet.",
-      "historyWindow": "Sign-ins from the last 30 days.",
-      "success": "Success",
-      "failed": "Failed",
-      "showMore": "{count} more",
-      "showLess": "Show less"
-    },
-    "prefs": {
-      "theme": "Theme",
-      "density": "Density",
-      "fontSize": "Font size",
-      "timezoneUnset": "Follow the browser"
-    },
-    "footer": {
-      "dirty": "{count} unsaved changes",
-      "clean": "No unsaved changes",
-      "discard": "Discard",
-      "save": "Save"
-    },
-    "deletion": {
-      "label": "Delete account",
-      "action": "Delete account",
-      "summary": "The account enters a {days}-day retention period; signing in again during that time cancels the deletion. Afterwards personal data and the personal tenant are permanently deleted.",
-      "conditionsLabel": "Conditions",
-      "dialog": {
-        "title": "Delete account",
-        "description": "Review the items below. After confirming, the account enters a {days}-day retention period; signing in again cancels the deletion. Afterwards it is permanently deleted.",
-        "loading": "Checking the account…",
-        "blocked": "The items below block deletion. Resolve them and try again.",
-        "blockersTitle": "Blocking deletion",
-        "confirmTitle": "Forfeited on deletion",
-        "autoTitle": "Handled automatically",
-        "acknowledge": "I understand the above and confirm deleting the account (permanently deleted after {days} days)",
-        "submit": "Delete account",
-        "cancel": "Cancel"
-      },
-      "errorBlocked": "The conditions have changed. Please review again.",
-      "error": "Deletion failed. Please try again later.",
-      "blockers": {
-        "org_owner": {
-          "tag": "Organization owner",
-          "text": "You own {names}. Transfer ownership or close the organization first."
-        },
-        "unpaid_bills": {
-          "tag": "Unpaid bills",
-          "text": "{count} bill(s) are still unpaid."
-        },
-        "paid_balance": {
-          "tag": "Paid balance",
-          "text": "A paid balance of {amount} {currency} remains. Use it up or request a refund first."
-        },
-        "refund_in_progress": {
-          "tag": "Refund in progress",
-          "text": "{count} refund(s) are still in progress."
-        },
-        "receipt_in_progress": {
-          "tag": "Invoice in progress",
-          "text": "{count} invoice(s) have not been issued yet."
-        },
-        "pending_order_with_payment": {
-          "tag": "Order awaiting confirmation",
-          "text": "{count} paid order(s) are awaiting confirmation. Wait for confirmation or contact us."
-        }
-      },
-      "confirmations": {
-        "active_subscription": {
-          "tag": "Active subscription",
-          "text": "{count} subscription(s) have not expired; the remaining period is forfeited."
-        },
-        "gifted_balance": {
-          "tag": "Gifted balance",
-          "text": "The gifted balance of {amount} {currency} is forfeited."
-        }
-      },
-      "auto": {
-        "cancel_pending_orders": {
-          "tag": "Cancel orders",
-          "text": "{count} unpaid order(s) will be cancelled."
-        },
-        "leave_organizations": {
-          "tag": "Leave organizations",
-          "text": "You will leave {names}."
-        },
-        "revoke_sessions": {
-          "tag": "Sign out devices",
-          "text": "All signed-in devices will be signed out."
-        },
-        "unbind_identities": {
-          "tag": "Unlink sign-ins",
-          "text": "{count} third-party sign-in(s) will be unlinked."
-        },
-        "revoke_invitations": {
-          "tag": "Revoke invitations",
-          "text": "Pending invitations you sent will be revoked."
-        },
-        "delete_personal_tenant": {
-          "tag": "Personal tenant",
-          "text": "The personal tenant is deleted together with the account."
-        }
-      },
-      "conditionTags": {
-        "orgOwner": "Not an organization owner",
-        "unpaidBills": "No unpaid bills",
-        "paidBalance": "No paid balance",
-        "inProgress": "No refund or invoice in progress",
-        "paidOrder": "No paid order awaiting confirmation"
-      }
-    },
-    "gender": {
-      "male": "Male",
-      "female": "Female",
-      "unset": "Not set"
-    }
-  },
   "quotasPage": {
     "addons": {
       "title": "Booster & Extension Packs",
@@ -2125,36 +1602,6 @@
       "empty": "This role holds no permission points"
     }
   },
-  "securityPage": {
-    "header": {
-      "eyebrow": "Account security",
-      "title": "Security",
-      "description": "Review login history and devices to keep your account safe."
-    },
-    "common": {
-      "empty": "--",
-      "loading": "Loading...",
-      "loadError": "Could not load login history and sessions. Please retry.",
-      "revokeError": "Could not sign this device out. Please retry."
-    },
-    "sections": {
-      "loginHistory": {
-        "title": "Login history",
-        "description": "Recent sign-in attempts (including failures) with time, IP, location, and device.",
-        "empty": "No login records yet."
-      },
-      "sessions": {
-        "title": "Devices",
-        "description": "Active login sessions. Sign out devices you no longer use.",
-        "empty": "No active sessions.",
-        "revoke": "Sign out"
-      }
-    },
-    "status": {
-      "success": "Success",
-      "failed": "Failed"
-    }
-  },
   "shell": {
     "loading": {
       "label": "Loading"
@@ -2253,10 +1700,9 @@
     "currentTag": "Current",
     "accountDeleting": {
       "title": "Account in deletion retention",
-      "body": "You asked to delete this account on {requestedAt}; it will be permanently deleted on {purgeAt}. Cancel the deletion and reactivate?",
-      "reactivate": "Cancel deletion and reactivate",
-      "keep": "Keep deleting and sign out",
-      "error": "Something went wrong. Please try again."
+      "body": "Account deletion was requested on {requestedAt}, with permanent deletion scheduled for {purgeAt}. Visit the account center to verify your identity and recover the account.",
+      "reactivate": "Manage in account center",
+      "keep": "Keep deleting and sign out"
     },
     "businessWorkbench": "Business workspace",
     "openBusinessWorkbench": "Open business workspace (new tab)"
@@ -2291,10 +1737,6 @@
       "todos": {
         "label": "Todo Items",
         "description": "Key actions waiting for the current tenant"
-      },
-      "profile": {
-        "label": "My account",
-        "description": "Avatar, profile, contact details, sign-in methods and preferences"
       },
       "members": {
         "label": "Member Management",
@@ -2355,6 +1797,10 @@
       "tickets": {
         "label": "My tickets",
         "description": "Raise an issue, follow its progress and read our replies"
+      },
+      "memberships": {
+        "label": "My memberships",
+        "description": "Memberships and default tenant"
       }
     },
     "sections": {
@@ -3170,37 +2616,6 @@
     }
   },
   "verificationPage": {
-    "personal": {
-      "eyebrow": "Personal info",
-      "title": "Identity verification",
-      "description": "Completing personal verification links it to your personal tenant."
-    },
-    "organization": {
-      "eyebrow": "Tenant info",
-      "title": "Enterprise verification",
-      "description": "Complete enterprise verification to unlock organization-tenant compliance."
-    },
-    "fields": {
-      "status": "Verification status"
-    },
-    "status": {
-      "unverified": "Unverified"
-    },
-    "timeline": {
-      "empty": "No verification started yet."
-    },
-    "sections": {
-      "form": {
-        "title": "Verification details",
-        "description": "Fill in and submit verification materials (coming soon).",
-        "empty": "Verification is coming soon."
-      },
-      "history": {
-        "title": "History",
-        "description": "Submission, review, and change records.",
-        "empty": "No verification records yet."
-      }
-    },
     "org": {
       "title": "Business verification",
       "description": "Verify your business to unlock subscriptions and invoicing; one verification stays valid",
@@ -3703,6 +3118,40 @@
       "retry": "Try again",
       "submit": "Raise a ticket",
       "viewAll": "See all tickets"
+    }
+  },
+  "membershipsPage": {
+    "header": {
+      "title": "My memberships",
+      "description": "View your tenant and workspace memberships and choose your default tenant."
+    },
+    "identity": {
+      "personalTenant": "Personal",
+      "orgTenant": "Organization",
+      "defaultTag": "Default",
+      "workspace": "Workspace",
+      "setDefaultTitle": "Enter this tenant by default after every sign-in",
+      "setDefault": "Set as default",
+      "tenantInfo": "Tenant details"
+    },
+    "workspaces": {
+      "current": "Current",
+      "joinedOn": "Joined {date}",
+      "defaultTag": "default"
+    },
+    "common": {
+      "loading": "Loading..."
+    },
+    "sections": {
+      "workspaces": {
+        "title": "My workspaces",
+        "description": "Tenants/workspaces you belong to and your role. Switch quickly.",
+        "empty": "No accessible workspaces yet."
+      }
+    },
+    "feedback": {
+      "saved": "Default tenant updated.",
+      "error": "Operation failed. Please retry."
     }
   }
 }

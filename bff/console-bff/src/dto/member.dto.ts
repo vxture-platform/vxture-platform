@@ -23,10 +23,6 @@ export class UpdateMemberDto {
   roleCode?: string | null;
 }
 
-export class ResetMemberPasswordDto {
-  nextPassword!: string;
-}
-
 /**
  * 接受邀请。两条通道**二选一**:
  *

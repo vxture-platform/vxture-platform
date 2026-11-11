@@ -4,8 +4,8 @@ import type { RequestContext } from "../types/console.types";
 import { AuthMiddleware, isDeletionAllowedRoute } from "./auth.middleware";
 
 /**
- * 删除保留期的路由放行表(050-account §7):会话恢复的四条读 + 删除相关三条,
- * 其余一律 403。这张表决定保留期用户"还能碰什么",漏一条就是给保留期账号开门。
+ * During account deletion only session restoration reads remain available.
+ * Account recovery requires the proof flow owned by accounts.
  */
 describe("isDeletionAllowedRoute", () => {
   const req = (method: string, url: string) => ({
@@ -26,18 +26,18 @@ describe("isDeletionAllowedRoute", () => {
     }
   });
 
-  it("allows the deletion endpoints with any method", () => {
-    expect(isDeletionAllowedRoute(req("GET", "/api/me/deletion"))).toBe(true);
-    expect(isDeletionAllowedRoute(req("POST", "/api/me/deletion"))).toBe(true);
+  it("blocks retired account deletion endpoints", () => {
+    expect(isDeletionAllowedRoute(req("GET", "/api/me/deletion"))).toBe(false);
+    expect(isDeletionAllowedRoute(req("POST", "/api/me/deletion"))).toBe(false);
     expect(isDeletionAllowedRoute(req("POST", "/api/me/deletion/cancel"))).toBe(
-      true,
+      false,
     );
   });
 
   it("ignores query strings and trailing slashes", () => {
     expect(isDeletionAllowedRoute(req("GET", "/api/me?x=1"))).toBe(true);
     expect(isDeletionAllowedRoute(req("POST", "/api/me/deletion/?y=2"))).toBe(
-      true,
+      false,
     );
   });
 

@@ -57,7 +57,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { downscaleImage } from "@/lib/image-downscale";
 import { useRouter } from "@/lib/i18n/navigation";
-import { formatProfileDay } from "@/modules/account/profile/format";
+import { formatBusinessDay } from "@/lib/display-format";
 import {
   TenantIdentityCard,
   type TenantWorkspaceRow,
@@ -475,7 +475,7 @@ export function TenantPage() {
         status={profile?.status ?? null}
         verifiedStatus={profile?.verifiedStatus ?? null}
         verifiedLevel={profile?.verifiedLevel ?? "none"}
-        createdAt={formatProfileDay(profile?.createdAt, locale, "—")}
+        createdAt={formatBusinessDay(profile?.createdAt, locale, "—")}
         ownerName={
           members.find((m) => m.roleCode === "owner")?.name ??
           (isOrg ? null : (session.user?.name ?? null))

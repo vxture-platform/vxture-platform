@@ -5,7 +5,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
@@ -19,17 +18,7 @@ import {
   COMMERCE_PG_POOL,
   ProductSeatService,
 } from "@vxture/service-subscription";
-import {
-  AccountService,
-  USERNAME_CHANGE_COOLDOWN_DAYS,
-  type AvatarMime,
-} from "@vxture/service-account";
-import type {
-  AuthSessionRecord,
-  IdentityRecord,
-  LastLoginRecord,
-  LoginHistoryEntry,
-} from "@vxture/service-account";
+import { AccountService, type AvatarMime } from "@vxture/service-account";
 import {
   ActiveContextService,
   GovernanceService,
@@ -53,7 +42,6 @@ import type {
   ConsoleOrganizationProfile,
   ConsoleTenantPermission,
   ConsoleTenantRole,
-  ConsoleUserProfile,
   ConsoleWorkspaceItem,
   MemberRecord,
   TenantContext,
@@ -180,139 +168,9 @@ export class SessionAggregator {
       username: user.account,
       phone: user.phone,
       picture: this.pictureFor(user),
+      accountStatus: user.status,
+      deletionRequestedAt: user.deletionRequestedAt ?? null,
     };
-  }
-
-  async getCurrentUserProfile(
-    userId: string,
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.getUserById(userId);
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
-  }
-
-  async updateCurrentUserProfile(
-    userId: string,
-    input: {
-      displayName?: string | null;
-      email?: string | null;
-      bio?: string | null;
-      gender?: "male" | "female" | "" | null;
-      timezone?: string | null;
-      language?: string | null;
-    },
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.updateProfile(userId, {
-      name: input.displayName ?? null,
-      email: input.email ?? null,
-      bio: input.bio ?? null,
-      gender: input.gender ?? null,
-      timezone: input.timezone ?? null,
-      language: input.language ?? null,
-    });
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
-  }
-
-  async changeCurrentUserPhone(
-    userId: string,
-    newPhone: string,
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.changePhone(userId, newPhone);
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
-  }
-
-  async changeCurrentUserEmail(
-    userId: string,
-    newEmail: string,
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.changeEmail(userId, newEmail);
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
-  }
-
-  async markCurrentUserEmailVerified(
-    userId: string,
-    expectedEmail: string,
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.markEmailVerified(userId, expectedEmail);
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
-  }
-
-  async markCurrentUserPhoneVerified(
-    userId: string,
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.markPhoneVerified(userId);
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
-  }
-
-  async setAccountLoginEnabled(
-    userId: string,
-    enabled: boolean,
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.setAccountLoginEnabled(userId, enabled);
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
-  }
-
-  async changeCurrentUserUsername(
-    userId: string,
-    newUsername: string,
-  ): Promise<ConsoleUserProfile | null> {
-    const user = await this.account.changeUsername(userId, newUsername);
-    if (!user) return null;
-    // Keep the personal tenant's display name following the account (owner
-    // 2026-07-30): only the personal tenant, never a team/organization tenant.
-    await this.org.renamePersonalOrg(userId, user.account);
-    return toUserProfile(user, this.pictureFor(user));
-  }
-
-  /** Store/replace the caller's avatar (bytes already validated); returns picture URL. */
-  async setCurrentUserAvatar(
-    userId: string,
-    data: Buffer,
-    contentType: AvatarMime,
-  ): Promise<{ picture: string }> {
-    const hash = createHash("sha256").update(data).digest("hex");
-    await this.account.setAvatar(userId, {
-      data,
-      contentType,
-      hash,
-      source: "upload",
-    });
-    const issuer = this.config.auth.OIDC_ISSUER.replace(/\/$/, "");
-    return { picture: `${issuer}/avatar/usr_${userId}?v=${hash}` };
-  }
-
-  /** Remove the caller's custom avatar (falls back to the frontend default). */
-  async deleteCurrentUserAvatar(userId: string): Promise<void> {
-    await this.account.deleteAvatar(userId);
-  }
-
-  getUserIdentities(userId: string): Promise<IdentityRecord[]> {
-    return this.account.listIdentitiesByUser(userId);
-  }
-
-  /**
-   * Unbind a federated identity (by provider) from the caller.
-   *
-   * 返回值刻意丢掉：`removeIdentity` 现在回「真的删了一行吗」（通知只在真删了时才发），
-   * 而路由那一侧的契约是 204 无内容——解绑一个本来就没绑的渠道照旧算成功，那是幂等，
-   * 不是错误，不该因为服务层多了一个返回值就变成一个客户看得见的差别。
-   */
-  async removeUserIdentity(userId: string, provider: string): Promise<void> {
-    await this.account.removeIdentity(userId, provider);
-  }
-
-  getUserLastLogin(userId: string): Promise<LastLoginRecord | null> {
-    return this.account.getLastLogin(userId);
-  }
-
-  getUserLoginHistory(
-    userId: string,
-    limit = 20,
-  ): Promise<LoginHistoryEntry[]> {
-    return this.account.listLoginHistory(userId, limit);
-  }
-
-  getUserSessions(userId: string): Promise<AuthSessionRecord[]> {
-    return this.account.listSessions(userId);
   }
 
   /** The tenants/workspaces the user belongs to, with role (§1.6/§4.1). */
@@ -329,6 +187,7 @@ export class SessionAggregator {
       items.push({
         tenantId: org.id,
         tenantName: org.name,
+        tenantNo: org.tenantNo ?? null,
         tenantType: org.type === "organization" ? "organization" : "personal",
         role: m.role,
         workspaceId: ws?.id ?? null,
@@ -340,10 +199,6 @@ export class SessionAggregator {
       });
     }
     return items;
-  }
-
-  revokeUserSession(userId: string, sid: string): Promise<boolean> {
-    return this.account.revokeSession(userId, sid);
   }
 
   async getCurrentOrganizationProfile(
@@ -532,33 +387,6 @@ export class SessionAggregator {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return;
     await this.org.deleteOrgLogo(resolved.org.id);
-  }
-
-  async changeCurrentUserPassword(
-    userId: string,
-    currentPassword: string,
-    nextPassword: string,
-  ) {
-    const ok = await this.account.changePassword(
-      userId,
-      currentPassword,
-      nextPassword,
-    );
-    if (!ok) {
-      throw new UnauthorizedException("Current password is incorrect");
-    }
-  }
-
-  /**
-   * Self-service initial password setup for a user with no existing credential
-   * (phone/social-only registrant). No old password to verify. Throws 400 if
-   * the caller already has a password (must use `changeCurrentUserPassword`).
-   */
-  async setCurrentUserInitialPassword(
-    userId: string,
-    nextPassword: string,
-  ): Promise<void> {
-    await this.account.setInitialPassword(userId, nextPassword);
   }
 
   async getTenantContext(
@@ -1535,33 +1363,6 @@ export class SessionAggregator {
     return result;
   }
 
-  async resetMemberPassword(
-    userId: string,
-    orgId: string | undefined,
-    memberUserId: string,
-    nextPassword: string,
-  ): Promise<boolean> {
-    const resolved = await this.resolveOrg(userId, orgId);
-    if (!resolved) return false;
-    await this.gov.assertCan(
-      userId,
-      { orgId: resolved.orgId },
-      "tenant.member.manage",
-    );
-    const member = await this.org.getOrgMemberDetail(
-      resolved.orgId,
-      memberUserId,
-    );
-    if (!member) return false;
-    /* 来由必须交代：成员收到的那条回执要说清「由你所在组织的管理员修改」，否则他读到的
-       是一句「你本人修改了密码」——而他本人什么也没做，那正是这条通知要帮他识破的情形。
-       操作者放**码**不放名字：词由通知模板层按收件人语言给（见 SECURITY_ACTORS）。 */
-    await this.account.setPassword(memberUserId, nextPassword, {
-      cause: "reset_by_admin",
-    });
-    return true;
-  }
-
   /** 解除关联(member.manage)。owner 与本人不可解除——owner 先转让,本人无「退出」动作。 */
   async removeMember(
     userId: string,
@@ -1642,66 +1443,6 @@ function assertNotOwner(
   code: "owner_protected" | "owner_role_locked",
 ): void {
   if (org.ownerUserId === memberUserId) throw new BadRequestException(code);
-}
-
-/**
- * When the username may next be changed: null = now (never changed, or the
- * 30-day cooldown has elapsed), otherwise the ISO timestamp it unlocks.
- */
-function usernameChangeableAt(accountChangedAt?: string | null): string | null {
-  if (!accountChangedAt) return null;
-  const next =
-    new Date(accountChangedAt).getTime() +
-    USERNAME_CHANGE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
-  return Date.now() >= next ? null : new Date(next).toISOString();
-}
-
-function toUserProfile(
-  user: {
-    id: string;
-    account: string;
-    email: string | null;
-    emailVerified?: boolean;
-    phone: string;
-    phoneVerified?: boolean;
-    accountLoginDisabled?: boolean;
-    name: string | null;
-    status?: string;
-    bio?: string | null;
-    gender?: "male" | "female" | null;
-    timezone?: string | null;
-    language?: string | null;
-    accountChangedAt?: string | null;
-    userNo?: string;
-    createdAt?: string;
-    hasPassword?: boolean;
-    deletionRequestedAt?: string | null;
-  },
-  picture: string | null,
-): ConsoleUserProfile {
-  return {
-    id: user.id,
-    username: user.account,
-    usernameChangeableAt: usernameChangeableAt(user.accountChangedAt),
-    displayName: user.name,
-    picture,
-    avatarUrl: null,
-    bio: user.bio ?? null,
-    gender: user.gender ?? null,
-    email: user.email,
-    emailVerified: user.emailVerified ?? false,
-    phone: user.phone,
-    phoneVerified: user.phoneVerified ?? false,
-    accountLoginDisabled: user.accountLoginDisabled ?? false,
-    timezone: user.timezone ?? null,
-    language: user.language ?? null,
-    profileUpdatedAt: null,
-    userNo: user.userNo ?? null,
-    accountCreatedAt: user.createdAt ?? null,
-    accountStatus: user.status ?? null,
-    deletionRequestedAt: user.deletionRequestedAt ?? null,
-    hasPassword: user.hasPassword ?? false,
-  };
 }
 
 function toTenantContext(

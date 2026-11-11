@@ -47,7 +47,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PlannedBadge } from "@/components/planned";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
-import { CardRows } from "@/modules/account/profile/CardRows";
+import { CardRows } from "@/components/detail";
 import { VERIFICATION_METHODS } from "./verification-methods";
 
 export function TenantVerificationApplyPage() {

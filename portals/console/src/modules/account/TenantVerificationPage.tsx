@@ -42,7 +42,7 @@ import {
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
-import { CardRows } from "@/modules/account/profile/CardRows";
+import { CardRows } from "@/components/detail";
 import { useDateFormat } from "@/lib/use-date-format";
 import { VERIFICATION_STATUS_TONES } from "./verification-methods";
 

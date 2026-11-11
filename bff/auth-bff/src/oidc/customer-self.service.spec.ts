@@ -85,6 +85,18 @@ describe("customer account-center data boundary", () => {
       bio: "Hello",
     });
   });
+  it.each(["male", "female", ""] as const)(
+    "round-trips the salutation patch %j through the public profile",
+    async (gender) => {
+      const f = fixture();
+      const updated = { ...context.user, name: "New", gender: gender || null };
+      f.accounts.updateProfile.mockResolvedValueOnce(updated);
+      await expect(
+        f.service.updateProfile(context, { gender }),
+      ).resolves.toMatchObject({ gender: gender || null, realm: "customer" });
+      expect(f.accounts.updateProfile).toHaveBeenCalledWith("123", { gender });
+    },
+  );
   it("omits internal provider subjects and defaults missing verification evidence to false", async () => {
     const f = fixture();
     await expect(f.service.getSecurity(context)).resolves.toMatchObject({
