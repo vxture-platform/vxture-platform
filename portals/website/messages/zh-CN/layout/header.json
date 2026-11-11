@@ -43,7 +43,7 @@
       "verified": "已认证",
       "unverified": "未认证"
     },
-    "profileLink": "个人信息",
+    "profileLink": "账号中心",
     "tenantType": {
       "individual": "个人租户",
       "organization": "组织租户"

@@ -49,6 +49,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ShellView } from "../template/shell/types";
 import { useAdminSearch, type NavSearchEntry } from "./useAdminSearch";
 import { useLocaleSwitch } from "@/lib/useLocaleSwitch";
+import { operatorAccountCenterUrl } from "@/lib/account-center";
 
 /**
  * 展示用手机号：存储值带 E.164 国家码（+8613800000000），面板里只给号码本身。
@@ -290,13 +291,11 @@ export function AdminHeader({
             }
             links={[
               {
-                // 个人信息 = 运营者本人自助（当前:邮箱更改+验证）。三平面拆分后
-                // /platform-admins（治理·平台用户管理）已迁 arche 并从 admin 删除,
-                // 本人自助不该指向"管理他人"的治理页——改指本portal的自助账户 /settings。
                 key: "profile",
                 label: t("profile"),
-                href: "/settings",
+                href: operatorAccountCenterUrl(),
                 icon: "user",
+                newTab: true,
               },
             ]}
             settings={

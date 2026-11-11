@@ -180,7 +180,7 @@
   "accountsUi": {
     "userMenu": {
       "open": "User panel",
-      "profile": "Personal information",
+      "profile": "Account center",
       "signOut": "Sign out",
       "signingOut": "Signing out…",
       "realNameUnverified": "Identity unverified",

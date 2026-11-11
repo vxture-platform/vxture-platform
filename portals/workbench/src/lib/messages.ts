@@ -100,6 +100,7 @@ export const EN_MESSAGES: Record<string, string> = {
   使用帮助: "Help",
   "管理控制台（新标签页）": "Management console (new tab)",
   账号信息: "Account information",
+  账号中心: "Account center",
   未绑定手机号: "No phone linked",
   用户等级: "User level",
   "角色 · —": "Role · —",

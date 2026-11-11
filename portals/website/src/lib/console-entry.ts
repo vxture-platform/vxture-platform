@@ -7,7 +7,12 @@
  * @date 2026-05-06
  */
 
-import { encodePortalContext } from "@vxture-platform/shared";
+import {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  encodePortalContext,
+} from "@vxture-platform/shared";
+import { withLocalePreference } from "@vxture/platform-browser";
 
 // =============================================================================
 // 环境变量（构建时注入）
@@ -33,6 +38,13 @@ const CONSOLE_BASE_URL = normalizeBaseUrl(
 
 const WEBSITE_BASE_URL = normalizeBaseUrl(
   process.env.NEXT_PUBLIC_WEBSITE_URL ?? DEFAULT_WEBSITE_BASE_URL,
+);
+
+const ACCOUNTS_BASE_URL = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_ACCOUNTS_URL ??
+    (process.env.NODE_ENV === "production"
+      ? "https://accounts.vxture.com"
+      : "http://localhost:3080"),
 );
 
 // =============================================================================
@@ -91,20 +103,22 @@ export function buildConsoleSubscribeUrl(
 }
 
 /**
- * 构建直达 Console「个人信息」页面的 URL，携带与入口相同的来源上下文，
- * 供网站用户菜单在新标签页打开。
+ * Open the customer account center with the current locale and a return link.
  *
- * @param locale - 当前语言代码
- * @returns Console profile 页面完整 URL
+ * @param locale - Current interface locale.
+ * @returns Accounts portal entry URL.
  */
-export function buildConsoleProfileUrl(locale: string): string {
-  const queryString = encodePortalContext({
-    from: "website",
-    returnTo: `${WEBSITE_BASE_URL}/${locale}`,
-    caller: "Vxture 官网",
-    callerLogo: "/brand/vxture-logo.png",
+export function buildAccountCenterUrl(locale: string): string {
+  const accountLocale =
+    SUPPORTED_LOCALES.find((supported) => supported === locale) ??
+    DEFAULT_LOCALE;
+  const params = new URLSearchParams({
+    returnTo: `${WEBSITE_BASE_URL}/${accountLocale}`,
   });
-  return `${CONSOLE_BASE_URL}/${locale}/profile?${queryString}`;
+  return withLocalePreference(
+    `${ACCOUNTS_BASE_URL}/account?${params.toString()}`,
+    accountLocale,
+  );
 }
 
 /**

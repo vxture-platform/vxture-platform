@@ -1,4 +1,7 @@
 {
+  "accountMenu": {
+    "accountCenter": "账号中心"
+  },
   "atlasHealthSettings": {
     "title": "服务监测设置",
     "invalidResponse": "监测设置响应不完整",

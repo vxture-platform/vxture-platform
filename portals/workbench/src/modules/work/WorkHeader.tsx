@@ -34,6 +34,14 @@ import { ScopeMenu } from "./ScopeMenu";
 // Presentation composition
 // ============================================================================
 const subscribeHydration = (): (() => void) => () => undefined;
+const ACCOUNTS_BASE = (
+  process.env.NEXT_PUBLIC_ACCOUNTS_URL ??
+  (process.env.NODE_ENV === "production"
+    ? "https://accounts.vxture.com"
+    : "http://localhost:3080")
+)
+  .trim()
+  .replace(/\/+$/, "");
 
 /**
  * Render one coordinated tool group and the account menu.
@@ -214,8 +222,8 @@ export function WorkHeader({
             links={[
               {
                 key: "profile",
-                label: t("账号信息"),
-                href: consoleLink("profile"),
+                label: t("账号中心"),
+                href: withLocalePreference(`${ACCOUNTS_BASE}/account`, locale),
                 icon: "user",
                 newTab: true,
               },

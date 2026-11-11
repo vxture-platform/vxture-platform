@@ -1,4 +1,7 @@
 {
+  "accountMenu": {
+    "accountCenter": "Account center"
+  },
   "atlasHealthSettings": {
     "title": "Service monitoring settings",
     "invalidResponse": "The monitoring settings response is incomplete",

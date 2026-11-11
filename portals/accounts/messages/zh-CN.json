@@ -180,7 +180,7 @@
   "accountsUi": {
     "userMenu": {
       "open": "用户面板",
-      "profile": "个人信息",
+      "profile": "账号中心",
       "signOut": "退出登录",
       "signingOut": "正在退出…",
       "realNameUnverified": "未实名",
