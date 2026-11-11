@@ -57,7 +57,7 @@ export interface PricingPlan {
   monthly: PlanPrice | null;
   /** 年付整周期价；null = 该档不按年售 */
   yearly: PlanPrice | null;
-  /** quota["member.max"]；-1 = 不限；null = 无席位口径 */
+  /** quota["seat.max"]; -1 = unlimited, null = no seat capacity. */
   seats: number | null;
   /** 功能键（plan_components.features） */
   features: string[];
@@ -135,7 +135,7 @@ const TIER_AUDIENCE: Record<string, PlanAudience> = {
  * 字母序。
  */
 const QUOTA_KEY_ORDER = [
-  "member.max",
+  "seat.max",
   "dataset.max",
   "datasource.max",
   "service_endpoint.max",

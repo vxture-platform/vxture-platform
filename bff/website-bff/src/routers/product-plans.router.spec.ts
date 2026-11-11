@@ -69,7 +69,7 @@ describe("ProductPlansRouter", () => {
           tier: "pro",
           is_public: true,
           features: ["sync.realtime", "varda.enabled"],
-          quota: { "member.max": 1, "storage.gb": 500 },
+          quota: { "seat.max": 1, "storage.gb": 500 },
           prices: [
             {
               cycleUnit: "month",
@@ -115,12 +115,26 @@ describe("ProductPlansRouter", () => {
     expect(pro?.description).toBe("Arda Pro tier for Arda.");
     expect(free?.description).toBeNull();
     expect(pro?.seats).toBe(1);
-    expect(pro?.quota).toEqual({ "member.max": 1, "storage.gb": 500 });
+    expect(pro?.quota).toEqual({ "seat.max": 1, "storage.gb": 500 });
     expect(pro?.prices).toHaveLength(2);
     expect(free?.seats).toBeNull();
     /* 公开档 → access public；两档都公开 → 入口 public。 */
     expect(res.plans.map((p) => p.access)).toEqual(["public", "public"]);
     expect(res.subscribeAccess).toBe("public");
+  });
+
+  it.each([
+    [{ "seat.max": 5 }, 5],
+    [{ "seat.max": "5" }, 5],
+    [{ "seat.max": -1 }, -1],
+    [{ "seat.max": 5, "member.max": 99 }, 5],
+    [{ "member.max": 5 }, null],
+    [{ "seat.max": "invalid" }, null],
+    [{}, null],
+  ])("reads canonical seats from %j as %s", async (quota, expectedSeats) => {
+    const { pool } = makePool([ARDA], [{ ...PRO_ROW, quota }]);
+    const res = await new ProductPlansRouter(pool).getProductPlans("arda");
+    expect(res.plans[0]?.seats).toBe(expectedSeats);
   });
 
   it("degrades to an empty ladder for an unknown product without querying plans", async () => {
