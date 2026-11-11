@@ -1642,6 +1642,7 @@
     "tenantVerified": "已认证",
     "tenantSettings": "租户设置",
     "switchOrg": "切换组织",
+    "prefsLocale": "语言",
     "prefsTitle": "偏好设置",
     "themeSystem": "系统",
     "themeLight": "亮色",

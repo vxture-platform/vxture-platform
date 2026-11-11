@@ -3,7 +3,12 @@
 import { startTransition, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
-import { Button, NativeSelect, useTheme } from "@vxture/design-system";
+import {
+  Button,
+  NativeSelect,
+  ShellLocaleSwitcher,
+  useTheme,
+} from "@vxture/design-system";
 import type { Density } from "@vxture/design-system";
 import {
   getGlobalUserPreferences,
@@ -12,6 +17,7 @@ import {
   setGlobalThemePreference,
   subscribeToGlobalPreferenceChanges,
 } from "@vxture/platform-browser";
+import { LOCALE_CONFIGS, SUPPORTED_LOCALES } from "@vxture-platform/shared";
 import type { Locale, Theme } from "@vxture-platform/shared";
 
 const THEME_OPTIONS: readonly Theme[] = ["system", "light", "dark"];
@@ -46,20 +52,21 @@ export function ConsolePreferenceControls() {
 
   return (
     <div className="console-preferences" aria-label={t("title")}>
-      <label className="console-preferences__field">
+      <div className="console-preferences__field">
         <span>{t("locale.label")}</span>
-        <NativeSelect
-          value={locale}
-          onChange={(event) => {
-            const nextLocale = event.target.value as Locale;
+        <ShellLocaleSwitcher
+          variant="field"
+          currentLocale={locale}
+          options={SUPPORTED_LOCALES.map((code) => LOCALE_CONFIGS[code])}
+          buttonLabel={t("locale.label")}
+          panelLabel={t("locale.label")}
+          onLocaleChange={(value) => {
+            const nextLocale = value as Locale;
             setGlobalLocalePreference(nextLocale);
             router.replace(pathname, { locale: nextLocale });
           }}
-        >
-          <option value="zh-CN">{t("locale.zh-CN")}</option>
-          <option value="en-US">{t("locale.en-US")}</option>
-        </NativeSelect>
-      </label>
+        />
+      </div>
 
       <label className="console-preferences__field">
         <span>{t("density.label")}</span>

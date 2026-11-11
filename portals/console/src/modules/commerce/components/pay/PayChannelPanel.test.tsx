@@ -6,12 +6,16 @@
  * @author AI-Generated
  * @date 2026-11-11
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../../../messages/zh-CN.json";
 import { defaultPayChannel, PayChannelPanel } from "./PayChannelPanel";
 import type { PaymentChannelInfo } from "@/api/console-bff";
+
+vi.mock("../../../../../public/assets/payment/vx-alipay.png", () => ({
+  default: { src: "/_next/static/media/vx-alipay.content-hash.png" },
+}));
 
 const channels: PaymentChannelInfo[] = [
   { channel: "wechat", enabled: false },
@@ -33,7 +37,11 @@ function markup(
   showSelector = true,
 ) {
   return renderToStaticMarkup(
-    <NextIntlClientProvider locale="zh-CN" messages={messages}>
+    <NextIntlClientProvider
+      locale="zh-CN"
+      timeZone="Asia/Shanghai"
+      messages={messages}
+    >
       <PayChannelPanel
         channels={channels}
         showSelector={showSelector}
@@ -46,6 +54,29 @@ function markup(
   );
 }
 describe("payment channel panel", () => {
+  it("uses a content-versioned URL for the bundled QR, preserving custom QR URLs", () => {
+    const localChannels = channels.map((channel) =>
+      channel.channel === "alipay"
+        ? { ...channel, qrAsset: "/assets/payment/vx-alipay.png" }
+        : channel,
+    );
+    const html = renderToStaticMarkup(
+      <NextIntlClientProvider
+        locale="zh-CN"
+        timeZone="Asia/Shanghai"
+        messages={messages}
+      >
+        <PayChannelPanel
+          channels={localChannels}
+          value="alipay"
+          onChange={() => {}}
+          orderNo="ORD-1"
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(html).toContain("/_next/static/media/vx-alipay.content-hash.png");
+    expect(markup("alipay")).toContain('src="/qr.png"');
+  });
   it("shows the balance as a large number with a complete accessible label", () => {
     const html = markup("balance");
     expect(html).toContain("关联订单：ORD-1");

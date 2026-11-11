@@ -304,15 +304,15 @@ export function AdminHeader({
                    但一个选项都没有，拨不动。与 opera 那个 `onLocaleChange={() => {}}`
                    是同一类：界面上摆着一个不工作的开关。 */
                 locale={locale}
-                localeOptions={SUPPORTED_LOCALES.map((code) => ({
-                  locale: code,
-                  nativeName: LOCALE_CONFIGS[code].nativeName,
-                }))}
+                localeOptions={SUPPORTED_LOCALES.map(
+                  (code) => LOCALE_CONFIGS[code],
+                )}
                 theme={theme}
                 density={density}
                 fontSize={fontSize as ShellFontSizePreference}
                 labels={{
                   title: t("prefsTitle"),
+                  locale: t("prefsLocale"),
                   themeOptions: {
                     system: t("themeSystem"),
                     light: t("themeLight"),

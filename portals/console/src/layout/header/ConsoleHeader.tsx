@@ -426,15 +426,15 @@ export function ConsoleHeader({
             settings={
               <ShellPreferencePanel
                 locale={locale}
-                localeOptions={SUPPORTED_LOCALES.map((value) => ({
-                  locale: value,
-                  label: LOCALE_CONFIGS[value].nativeName,
-                }))}
+                localeOptions={SUPPORTED_LOCALES.map(
+                  (code) => LOCALE_CONFIGS[code],
+                )}
                 theme={theme}
                 density={density}
                 fontSize={fontSize as ShellFontSizePreference}
                 labels={{
                   title: t("prefsTitle"),
+                  locale: t("prefsLocale"),
                   themeOptions: {
                     system: t("themeSystem"),
                     light: t("themeLight"),
