@@ -71,7 +71,7 @@ export function WelcomeCard() {
 
   return (
     <Card surface="base" className="py-lg">
-      <CardContent className="flex flex-col gap-md sm:flex-row sm:items-center sm:gap-lg">
+      <CardContent className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-md sm:gap-lg">
         {/* TenantAvatar 收的是 src + tenantType，不是整个 tenant——照它的签名传。
 
             URL 走 `orgLogoUrl`,不自己拼(owner 2026-09-10 走查:概览页的租户标识
@@ -86,7 +86,7 @@ export function WelcomeCard() {
         />
 
         <div className="flex min-w-0 flex-1 flex-col gap-2xs">
-          <span className="text-title-md text-foreground">
+          <span className="break-words text-title-md text-foreground">
             {name
               ? t(`greeting.${greetingKey(new Date().getHours())}`, { name })
               : t("greetingAnonymous")}
@@ -97,19 +97,22 @@ export function WelcomeCard() {
         </div>
 
         {facts.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-md sm:justify-end">
+          <div className="col-span-full flex min-w-0 flex-wrap items-center gap-x-lg gap-y-sm">
             {facts.map((f) => (
-              <span key={f.label} className="flex items-center gap-2xs">
+              <span
+                key={f.label}
+                className="flex min-w-0 max-w-full items-start gap-2xs"
+              >
                 <Icon
                   name={f.icon}
                   size="xs"
-                  className="text-muted-foreground"
+                  className="shrink-0 text-muted-foreground"
                   aria-hidden
                 />
-                <span className="text-body-sm text-muted-foreground">
+                <span className="shrink-0 text-body-sm text-muted-foreground">
                   {f.label}
                 </span>
-                <span className="text-body-sm font-medium text-foreground">
+                <span className="min-w-0 break-words text-body-sm font-medium text-foreground">
                   {f.value}
                 </span>
               </span>
@@ -120,7 +123,12 @@ export function WelcomeCard() {
         {/* 账号处于删除保留期时要说一句：这是个有时限、可撤销的状态，
             藏起来的话人会在 30 天后突然失去账号。 */}
         {user?.accountStatus === "deleting" ? (
-          <StatusBadge tone="warning">{t("deleting")}</StatusBadge>
+          <StatusBadge
+            tone="warning"
+            className="col-span-full justify-self-start"
+          >
+            {t("deleting")}
+          </StatusBadge>
         ) : null}
       </CardContent>
     </Card>
