@@ -37,7 +37,7 @@ const CONSOLE_BASE_URL = normalizeBaseUrl(
 );
 
 const WEBSITE_BASE_URL = normalizeBaseUrl(
-  process.env.NEXT_PUBLIC_WEBSITE_URL ?? DEFAULT_WEBSITE_BASE_URL,
+  process.env.NEXT_PUBLIC_WEBSITE_URL?.trim() || DEFAULT_WEBSITE_BASE_URL,
 );
 
 const ACCOUNTS_BASE_URL = normalizeBaseUrl(
