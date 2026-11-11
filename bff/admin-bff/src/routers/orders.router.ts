@@ -255,7 +255,7 @@ export class OrdersRouter {
           const declaredAmount = toNumber(declaredLeg.total_amount);
           if (round2(input.paidAmount) !== declaredAmount) {
             throw new BadRequestException(
-              `确认金额必须等于申报金额 ${declaredAmount.toFixed(2)}；实收不符请驳回申报（payment-reject）`,
+              `确认金额必须等于客户提交的付款金额 ${declaredAmount.toFixed(2)}；实收不符请退回付款信息（payment-reject）`,
             );
           }
           voucherOff = toNumber(credential?.voucherOff ?? 0);
@@ -365,7 +365,7 @@ export class OrdersRouter {
               // operator id is not a customer user — refuse rather than
               // corrupt the redemption ledger.
               throw new BadRequestException(
-                "申报凭据缺少核销人，无法核销券（请驳回申报后由客户重新申报）",
+                "付款凭据缺少核销人，无法核销券（请退回付款信息后由客户重新提交）",
               );
             }
             // Guard above ensures non-null whenever a voucher participates.
@@ -532,7 +532,7 @@ export class OrdersRouter {
       const ord = ordResult.rows[0];
       if (!ord) throw new NotFoundException("Order not found");
       if (ord.status !== "pending_verify") {
-        throw new BadRequestException("订单不是待核验状态，无法驳回申报");
+        throw new BadRequestException("订单不是待核验状态，无法退回付款信息");
       }
 
       const invoiceResult = await client.query<InvoiceLockRow>(
@@ -560,7 +560,7 @@ export class OrdersRouter {
       );
       const declaredLeg = legResult.rows[0];
       if (!declaredLeg) {
-        throw new BadRequestException("该订单没有待确认的付款申报");
+        throw new BadRequestException("该订单没有待确认的付款信息");
       }
       const credential = parseLegCredential(declaredLeg.channel_raw_data);
 
@@ -578,7 +578,7 @@ export class OrdersRouter {
         );
         if (redeemed.rows[0]) {
           throw new BadRequestException(
-            "该申报的券已核销，不能自动驳回（状态异常，请人工处理）",
+            "本次付款使用的卡券已核销，不能自动退回付款信息（状态异常，请人工处理）",
           );
         }
       }
@@ -1453,6 +1453,7 @@ function mapPaySource(source: string | null): OrderPaySource {
   if (source === "online") return "online";
   if (source === "offline") return "offline";
   if (source === "voucher") return "voucher";
+  if (source === "balance") return "balance";
   return "none";
 }
 
@@ -1717,9 +1718,9 @@ export function mapOrderRow(
 
 const OPERATION_HINTS: Partial<Record<OrderOperationStatus, string>> = {
   pending: "待客户完成支付",
-  pending_verify: "客户已申报付款，请核对到账后确认或驳回",
+  pending_verify: "客户已提交付款信息，请核对到账后确认或退回",
   paid_unprovisioned: "已收款未开通（自愈中/需人工重驱动）",
-  partial_pending: "部分收款挂账，待客户申报剩余或线下协商",
+  partial_pending: "已收到部分款项，等待客户提交剩余付款信息或线下协商",
   refunded: "款项已退回，本单不再履约",
 };
 

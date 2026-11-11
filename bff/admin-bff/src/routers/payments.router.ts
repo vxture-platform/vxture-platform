@@ -362,9 +362,15 @@ function normalizeBillType(value: string | null): BillingBillType | null {
   return "normal";
 }
 
-// billing.payments.pay_source（online/offline）→ OrderPaySource（online/offline/none）
+// Preserve every settled payment source, including vouchers and wallet debits.
 function normalizePaySource(value: string | null): OrderPaySource {
-  if (value === "online" || value === "offline") return value;
+  if (
+    value === "online" ||
+    value === "offline" ||
+    value === "voucher" ||
+    value === "balance"
+  )
+    return value;
   return "none";
 }
 
@@ -557,7 +563,7 @@ async function assertNotInFlightOrderBill(
   const hit = res.rows[0];
   if (hit) {
     throw new ConflictException(
-      `该账单关联在途订单（${hit.order_no}），请从订单侧处理：确认收款走 offline-payment-confirm，驳回申报走 payment-reject`,
+      `该账单关联在途订单（${hit.order_no}），请从订单侧处理：确认收款走 offline-payment-confirm，退回付款信息走 payment-reject`,
     );
   }
 }
@@ -571,7 +577,13 @@ function normalizeRemark(value: unknown): string | null {
 
 // billing.payments.pay_source(online/offline) → transactions.source_method CHECK 集，兜底 operator。
 function normalizeSourceMethod(value: string | null): string {
-  if (value === "online" || value === "offline") return value;
+  if (
+    value === "online" ||
+    value === "offline" ||
+    value === "voucher" ||
+    value === "balance"
+  )
+    return value;
   return "operator";
 }
 

@@ -15,6 +15,8 @@ export interface ConsoleUser {
   roleLabel: string;
   username?: string;
   phone?: string | null;
+  /** Personal KYC result; absent only during API version skew. */
+  realNameVerified?: boolean;
   /** Platform avatar URL (versioned); null/absent → default silhouette. */
   picture?: string | null;
   /** account.users.status: active | deleting(30 天删除保留期)| … */

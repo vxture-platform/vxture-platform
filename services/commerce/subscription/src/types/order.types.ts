@@ -197,7 +197,7 @@ export interface RefundRecordView {
    * 字段在那之前全是 null / 0。`transferAttempt` 每次发起加一——它进通知去重键与失败事件
    * 的 remark，没有它第二次发起的通知会被收件箱唯一键静默吞掉。
    */
-  transferChannel: RefundTransferChannel | "legacy" | null;
+  transferChannel: RefundTransferChannel | "legacy" | "balance" | null;
   transferReference: string | null;
   transferInitiatedAt: Date | null;
   /** 发起人 operator 裸值；对外展示由读方解成显示名，不下发。 */

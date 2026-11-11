@@ -307,3 +307,7 @@ GRANT INSERT (user_id, tenant_id, workspace_id, view), UPDATE (view)
     ON account.user_app_views TO svc_workbench_activity;
 
 -- END WORKBENCH ACTIVITY ROLE
+
+-- Personal identity status only: exclude names and identity documents.
+GRANT USAGE ON SCHEMA kyc TO svc_console_bff;
+GRANT SELECT (user_id, status) ON kyc.user_kycs TO svc_console_bff;

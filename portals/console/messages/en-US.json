@@ -38,7 +38,7 @@
     "backToQuotas": "Back to Quotas",
     "status": {
       "pending": "Awaiting payment",
-      "declared": "Declared",
+      "declared": "Submitted",
       "completed": "Active",
       "cancelled": "Cancelled"
     },
@@ -55,9 +55,9 @@
       "createdAt": "Ordered at"
     },
     "pay": {
-      "title": "Offline payment & declaration",
-      "description": "Wire the payment, submit the declaration, and it activates on confirmation",
-      "deadline": "Declare within {remain} — overdue orders are cancelled automatically",
+      "title": "Offline payment",
+      "description": "Wire the payment, submit your payment details, and it activates on confirmation",
+      "deadline": "Submit payment details within {remain} — overdue orders are cancelled automatically",
       "channelLabel": "Channel",
       "referenceNote": "Include order no. {orderNo} in the transfer reference for reconciliation"
     },
@@ -80,10 +80,10 @@
       "payerNamePlaceholder": "Name on the sending account",
       "transactionNo": "Transfer reference no.",
       "transactionNoPlaceholder": "Bank slip reference (optional)",
-      "submit": "Transfer done — submit declaration"
+      "submit": "Transfer done — submit payment details"
     },
     "declared": {
-      "note": "Declaration submitted — awaiting operations confirmation; this page refreshes automatically"
+      "note": "Payment details submitted — awaiting operations confirmation; this page refreshes automatically"
     },
     "completed": {
       "note": "Active! The grant is in your pools, valid until {date}"
@@ -92,10 +92,10 @@
       "note": "This order was cancelled; place a new one from the Quotas page"
     },
     "cancelOrder": "Cancel order",
-    "declareFailed": "Declaration failed — please try again later",
+    "declareFailed": "Payment details could not be submitted — please try again later",
     "cancelFailed": "Cancel failed — please try again later",
     "declareDialog": {
-      "title": "Confirm payment declaration",
+      "title": "Confirm payment details",
       "description": "Payment method: {channel} · amount: {amount}. After submitting, the order awaits confirmation; the quota is credited once operations confirm receipt.",
       "confirm": "Submit",
       "cancel": "Not yet"
@@ -130,7 +130,7 @@
       "account_session_revoke": "Revoke session",
       "addon_order_cancel": "Cancel booster order",
       "addon_order_create": "Buy booster pack",
-      "addon_order_payment_declare": "Declare booster payment",
+      "addon_order_payment_declare": "Submit booster payment details",
       "billing_address_create": "Add invoice title",
       "billing_address_delete": "Delete invoice title",
       "billing_address_update": "Edit invoice title",
@@ -1094,7 +1094,7 @@
     "title": "Order payment",
     "notFound": "Order not found or you have no access.",
     "countdown": "Time left {time}",
-    "rejectBanner": "Your payment declaration was rejected: {reason} Vouchers were released; you can re-declare or cancel the order. The countdown has been reset.",
+    "rejectBanner": "Your payment details was rejected: {reason} Vouchers were released; you can resubmit payment details or cancel the order. The countdown has been reset.",
     "cycleStartNote": "The subscription cycle starts when the service is provisioned",
     "status": {
       "partially_paid": "Partially paid",
@@ -1126,7 +1126,7 @@
       "refunding": "We have accepted your refund request and will notify you once it is processed.",
       "refunded": "The refund is complete. Place a new order if you would like to subscribe again.",
       "partially_refunded": "This order has been partially refunded. See the refund record for the exact amount.",
-      "paid_pending_verify": "Declaration received. Your subscription activates once we confirm the funds, usually within 1 business day. This page refreshes automatically.",
+      "paid_pending_verify": "Payment details received. Your subscription activates once we confirm the funds, usually within 1 business day. This page refreshes automatically.",
       "activating": "Funds settled. Activation usually completes within minutes; this page refreshes automatically.",
       "completed": "Your subscription is live. Check the subscription page for entitlements.",
       "cancelled": "This order was cancelled. Place a new order to subscribe.",
@@ -1173,7 +1173,9 @@
     },
     "referenceNote": "Please include order no. {orderNo} in the transfer memo so we can reconcile quickly.",
     "amountDue": "Amount due",
-    "manualNote": "After you declare, operations verifies the funds manually (usually within 1 business day). Once online payment gateways land, this step completes automatically via the payment callback.",
+    "balanceSettlementNote": "Balance payments settle immediately after payment succeeds. No payment details need to be submitted.",
+    "wechatUnavailableNote": "WeChat Pay is not available yet. Please choose another payment method.",
+    "manualNote": "After you submit your payment details, we will check that the funds have arrived, usually within 1 business day.",
     "ttlFine": "Complete payment before the countdown ends; overdue orders close automatically.",
     "info": {
       "title": "Order details",
@@ -1194,10 +1196,13 @@
       "refresh": "Refresh",
       "backToSubscription": "Back to subscription",
       "cancel": "Cancel",
-      "noPaymentPermission": "Your role cannot make payments: declaring payment or cancelling this order is for the tenant owner"
+      "noPaymentPermission": "Your role cannot make payments: submitting payment details or cancelling this order is for the tenant owner",
+      "payBalance": "Pay with balance",
+      "unavailable": "Payment method unavailable",
+      "insufficientBalance": "The balance is insufficient or uses another currency. Choose another payment method."
     },
     "declareDialog": {
-      "title": "Confirm payment declaration",
+      "title": "Confirm payment details",
       "titleInstant": "Settle with vouchers",
       "description": "Method: {channel} · Amount: {amount}. After submitting, the order awaits confirmation; your subscription activates once we verify the funds.",
       "confirm": "Submit",
@@ -1205,11 +1210,13 @@
       "payerName": "Payer (optional)",
       "payerPlaceholder": "Transfer account name, for reconciliation",
       "transactionNo": "Transfer reference (optional)",
-      "optional": "Optional"
+      "optional": "Optional",
+      "titleBalance": "Confirm balance payment",
+      "descriptionBalance": "Debit {amount} from the tenant wallet for {tenant}. The subscription activates after payment."
     },
     "errors": {
       "quote": "Quote failed. Please refresh and retry.",
-      "declare": "Payment declaration failed. Please retry later.",
+      "declare": "Payment details could not be submitted. Please retry later.",
       "cancel": "Cancel failed. Please retry later."
     },
     "list": {
@@ -1279,9 +1286,10 @@
     "channel": {
       "alipay": "Alipay",
       "wechat": "WeChat Pay",
-      "bank_transfer": "Bank transfer"
+      "bank_transfer": "Bank transfer",
+      "balance": "Account balance"
     },
-    "referenceNote": "Please put order number {orderNo} in the transfer note so we can reconcile quickly.",
+    "referenceNote": "Reference: {orderNo}",
     "noneEnabled": "Payment channels are being configured; please contact support.",
     "bank": {
       "accountName": "Account name",
@@ -1289,7 +1297,11 @@
       "accountNo": "Account number",
       "reference": "Transfer note",
       "unavailable": "The corporate receiving account is not configured yet; please contact platform operations."
-    }
+    },
+    "relatedOrderNote": "Related order: {orderNo}",
+    "balanceAvailable": "Available balance: {amount} {currency}",
+    "balanceNote": "Pay from the tenant balance after confirmation.",
+    "wechatPlaceholder": "WeChat Pay is coming soon"
   },
   "permissionsPage": {
     "title": "Permissions",
@@ -1318,7 +1330,7 @@
       "tenant_delete": "Tenant deletion",
       "tenant_billing_read": "View commerce & billing",
       "tenant_billing_manage": "Commerce & billing management",
-      "tenant_payment_manage": "Declare payments",
+      "tenant_payment_manage": "Submit payment details",
       "tenant_invoice_manage": "Invoice & title management",
       "tenant_quota_read": "View quota & usage",
       "tenant_audit_read": "View audit log",
@@ -1409,7 +1421,7 @@
   "quotasPage": {
     "addons": {
       "title": "Booster & Extension Packs",
-      "description": "Storage extensions and AI booster packs: pick a card to order, then follow the full order flow — declare the payment, operations confirms, and the grant lands in your pools",
+      "description": "Storage extensions and AI booster packs: pick a card to order, then follow the full order flow — submit payment details, operations confirms, and the grant lands in your pools",
       "colPack": "Pack",
       "colContent": "Contents",
       "colValidity": "Validity",
@@ -1422,19 +1434,19 @@
       "colStatus": "Status",
       "colNote": "Note",
       "statusPending": "Awaiting payment",
-      "statusDeclared": "Declared",
+      "statusDeclared": "Submitted",
       "statusCompleted": "Active",
       "statusCancelled": "Cancelled",
       "validUntil": "Valid until {date}",
-      "payBefore": "Complete the transfer and declare before {date}",
+      "payBefore": "Complete the transfer and submit payment details before {date}",
       "awaitingConfirm": "Awaiting operations confirmation",
-      "declare": "Declare transfer",
+      "declare": "Submit payment details",
       "cancel": "Cancel order",
       "cancelFailed": "Cancel failed — please try again later",
       "ordersEmpty": "No booster pack orders yet",
       "packsEmpty": "No packs available right now",
-      "declareTitle": "Bank transfer declaration",
-      "declareDescription": "{pack} · {price} due. Wire the payment to the account below, then submit the declaration",
+      "declareTitle": "Bank transfer details",
+      "declareDescription": "{pack} · {price} due. Wire the payment to the account below, then submit your payment details",
       "bankAccountName": "Account name",
       "bankName": "Bank",
       "bankAccountNo": "Account number",
@@ -1444,9 +1456,9 @@
       "payerNamePlaceholder": "Name on the sending account (for reconciliation)",
       "transactionNo": "Transfer reference no.",
       "transactionNoPlaceholder": "Bank slip reference (optional)",
-      "declareLater": "Declare later",
-      "declareSubmit": "Transfer done — submit declaration",
-      "declareFailed": "Declaration failed — please try again later",
+      "declareLater": "Submit later",
+      "declareSubmit": "Transfer done — submit payment details",
+      "declareFailed": "Payment details could not be submitted — please try again later",
       "kindStorage": "Storage",
       "kindCredits": "AI Credits",
       "oneOffNote": "one-off purchase",
@@ -1692,7 +1704,8 @@
     "payBillDesc": "Manage payment methods",
     "trafficUsageDesc": "Traffic & call usage",
     "usageLimitDesc": "Quota limits & alert thresholds",
-    "verifyUnknown": "Verification unknown",
+    "identityVerified": "Identity verified",
+    "identityUnverified": "Identity not verified",
     "verifyActive": "Verified",
     "verifySuspended": "Suspended",
     "brandName": "Workspace Console",
@@ -2006,7 +2019,7 @@
         "partiallyRefunded": "Partially refunded",
         "submitted": "Order placed",
         "pay": "Payment",
-        "declared": "Payment declared",
+        "declared": "Payment details submitted",
         "confirm": "Payment confirmed",
         "settleZero": "Auto-settled (¥0)",
         "provision": "Service provisioned",
@@ -2075,18 +2088,18 @@
       "refunded": "Refunded",
       "partiallyRefunded": "Partially refunded",
       "pending": "Awaiting payment",
-      "declared": "Declared · verifying",
+      "declared": "Submitted · verifying",
       "received": "Payment received",
       "unpaid": "Unpaid",
       "settledZero": "Settled"
     },
     "pendingBanner": {
       "title": "{count} order(s) awaiting payment",
-      "description": "Pay in the billing center; the subscription activates once the order is fulfilled.",
+      "description": "Subscriptions activate after payment. Choose among multiple pending orders in the billing center.",
       "deadline": "The earliest expires at {time}; it closes automatically after that.",
-      "action": "Pay in billing center",
+      "action": "Pay now",
       "inflightTitle": "{count} order(s) in progress",
-      "inflightDescription": "Payment declared and awaiting confirmation; once confirmed it activates automatically and the subscription appears below.",
+      "inflightDescription": "Payment details submitted and awaiting confirmation; once confirmed it activates automatically and the subscription appears below.",
       "inflightAction": "View order status"
     },
     "stats": {
@@ -2432,7 +2445,7 @@
         },
         "receipt_in_progress": {
           "tag": "Receipt in progress",
-          "text": "{count} payment declarations await confirmation."
+          "text": "{count} payment detailss await confirmation."
         },
         "pending_order_with_payment": {
           "tag": "Paid order in progress",
@@ -2483,7 +2496,7 @@
     },
     "items": {
       "payTitle": "Pay the subscription order for {product}",
-      "payDetail": "Declare payment before {date} — overdue orders auto-cancel",
+      "payDetail": "Submit payment details before {date} — overdue orders auto-cancel",
       "payDetailNoTtl": "Order awaiting payment",
       "payAction": "Pay now",
       "renewTitle": "{product} is expiring soon",
@@ -2498,8 +2511,8 @@
       "invitesDetail": "Expiring unaccepted invitations can be revoked and re-sent",
       "invitesAction": "Open Invitations",
       "addonTitle": "Pay the order for add-on pack \"{pack}\"",
-      "addonDetail": "Complete the transfer and declare it before {date}; the order closes automatically afterwards",
-      "addonAction": "Declare payment",
+      "addonDetail": "Complete the transfer and submit payment details before {date}; the order closes automatically afterwards",
+      "addonAction": "Submit payment details",
       "incomingInviteTitle": "{tenant} invited you to join",
       "incomingInviteDetail": "{inviter} invited you to join as {role}. Valid until {expires}.",
       "incomingInviteAction": "Review",

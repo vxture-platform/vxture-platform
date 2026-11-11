@@ -1230,7 +1230,9 @@ export interface SubscribedProduct {
 // ── payment page (product_321 §4.1) ─────────────────────────────────────────
 
 export interface PaymentChannelInfo {
-  channel: "alipay" | "wechat" | "bank_transfer";
+  channel: "balance" | "alipay" | "wechat" | "bank_transfer";
+  balance?: string;
+  currency?: string;
   enabled: boolean;
   qrAsset?: string;
   account?: {
@@ -1255,7 +1257,7 @@ export interface OrderVoucherOption {
 
 export interface OrderPaymentLeg {
   paymentId: string;
-  kind: "cash" | "voucher" | "other";
+  kind: "cash" | "voucher" | "balance" | "other";
   status: string;
   amount: string;
   channel: string | null;
@@ -1380,7 +1382,11 @@ export async function fetchOrderDetail(orderId: string): Promise<OrderDetail> {
 
 export async function quoteOrder(
   orderId: string,
-  body: { discountVoucherId?: string; creditVoucherId?: string },
+  body: {
+    discountVoucherId?: string;
+    creditVoucherId?: string;
+    useBalance?: boolean;
+  },
 ): Promise<OrderQuote> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/subscription/orders/${encodeURIComponent(orderId)}/quote`,
@@ -1404,7 +1410,7 @@ export async function quoteOrder(
 export async function declareOrderPayment(
   orderId: string,
   body: {
-    payChannel: "alipay" | "bank_transfer";
+    payChannel: "balance" | "alipay" | "bank_transfer";
     discountVoucherId?: string;
     creditVoucherId?: string;
     payerName?: string;

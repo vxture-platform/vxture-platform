@@ -37,6 +37,7 @@ import {
   ViewHeader,
   ViewLayout,
   Skeleton,
+  SectionHeader,
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { PageSection } from "@/layout/shell";
@@ -46,6 +47,7 @@ import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { useConfirmLabels } from "@/lib/destructive";
 import {
   PayChannelPanel,
+  PayChannelSelector,
   defaultPayChannel,
   type PayChannel,
 } from "./components/pay/PayChannelPanel";
@@ -274,7 +276,9 @@ export function OrderPayPage() {
   useEffect(() => {
     if (!detail || !PAYABLE_STATES.includes(detail.orderState)) return;
     let cancelled = false;
+    setQuote(null);
     quoteOrder(detail.orderId, {
+      useBalance: channel === "balance",
       ...(discountId ? { discountVoucherId: discountId } : {}),
       ...(creditId ? { creditVoucherId: creditId } : {}),
     })
@@ -296,7 +300,7 @@ export function OrderPayPage() {
     return () => {
       cancelled = true;
     };
-  }, [detail, discountId, creditId, t]);
+  }, [detail, discountId, creditId, channel, t]);
 
   // Poll while awaiting confirmation / activation (shared hook: interval +
   // focus/visibility triggers; in-flight dedupe lives in reload).
@@ -322,6 +326,10 @@ export function OrderPayPage() {
   );
   // 应付 = 试算结果;报价未到就是「试算中」,不拿原价冒充(原价不含券与已付)。
   const cashDue = quote?.cashDue ?? null;
+  const balanceInsufficient =
+    channel === "balance" &&
+    quote !== null &&
+    Number(quote.balanceOff) < Number(quote.cashDue);
 
   // 归属（给谁买）来自会话——订单本就是当前租户维度的资源。
   // 展示 = 租户名 · 工作区名（UUID 禁展示；workspace 字段是内部 id，不用）。
@@ -333,14 +341,17 @@ export function OrderPayPage() {
 
   // 流程条时间戳：下单 = createdAt；付款 = 最近一笔现金腿的申报时刻。
   const declaredAt = useMemo(() => {
-    const cashLegs = detail?.legs.filter((l) => l.kind === "cash") ?? [];
+    const cashLegs =
+      detail?.legs.filter((l) => l.kind === "cash" || l.kind === "balance") ??
+      [];
     return cashLegs.length > 0
       ? (cashLegs[cashLegs.length - 1]?.createdAt ?? null)
       : null;
   }, [detail]);
 
   async function handleDeclare() {
-    if (!detail) return;
+    if (!detail || !quote || channel === "wechat" || balanceInsufficient)
+      return;
     setSubmitting(true);
     setError(null);
     try {
@@ -453,9 +464,21 @@ export function OrderPayPage() {
   };
   // 「产品主名 · 套餐名」——付款页是客户最后一次确认「我在为什么付钱」的地方，
   // 只写套餐名（入门版）看不出是哪个产品的入门版；编码只作最后兜底。
-  const planLabel = `${[detail.productName, detail.planName || detail.planCode]
+  const tierLabel = detail.tier ? tHub(`tier.${detail.tier}`) : "";
+  const planName = detail.planName || detail.planCode;
+  const planLabel = [
+    detail.productName,
+    planName,
+    tierLabel &&
+    !planName
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .includes(tierLabel.toLowerCase())
+      ? tierLabel
+      : null,
+  ]
     .filter(Boolean)
-    .join(" · ")}${detail.tier ? ` · ${tHub(`tier.${detail.tier}`)}` : ""}`;
+    .join(" · ");
 
   /* 从官网 / 订阅页深链进来时带着想要的档位与周期；与这张在途单不一致就说一句——
      客户点的是年付 Pro，落到的却是月付 Pro 的进行中订单，不说他会以为下错了单。 */
@@ -472,7 +495,7 @@ export function OrderPayPage() {
   );
 
   return (
-    <ViewLayout className="mx-auto w-full max-w-content-base-xl">
+    <ViewLayout className="mx-auto w-full max-w-content-base-xl pb-2xl">
       <ViewHeader
         icon="credit-card"
         title={t("title")}
@@ -527,22 +550,66 @@ export function OrderPayPage() {
           <PageSection
             tone="raised"
             level={2}
-            title={
-              <SectionTitle icon="credit-card">
-                {t("channels.title")}
-              </SectionTitle>
-            }
-            className={`min-w-0 flex-1 ${SECTION_TIGHT}`}
+            className={`min-w-0 flex-1 [&>div:last-child]:flex-1 ${SECTION_TIGHT}`}
           >
-            <PayChannelPanel
-              channels={detail.paymentChannels}
-              value={channel}
-              onChange={setChannel}
-              orderNo={detail.orderNo}
-            />
+            <div className="grid items-center gap-sm border-b border-dashed border-primary/10 pb-md sm:grid-cols-3 dark:border-primary/20">
+              <SectionHeader
+                level={2}
+                divider={false}
+                title={
+                  <SectionTitle icon="credit-card">
+                    {t("channels.title")}
+                  </SectionTitle>
+                }
+              />
+              <div className="min-w-0 justify-self-center">
+                <PayChannelSelector
+                  previewWechat
+                  channels={detail.paymentChannels}
+                  value={channel}
+                  onChange={setChannel}
+                />
+              </div>
+              <span aria-hidden="true" className="hidden sm:block" />
+            </div>
+            <div className="flex flex-1 flex-col gap-md px-sm pb-sm pt-xs sm:px-md">
+              <PayChannelPanel
+                showSelector={false}
+                previewWechat
+                channels={detail.paymentChannels}
+                value={channel}
+                onChange={setChannel}
+                orderNo={detail.orderNo}
+              />
 
-            <div className="mt-auto">
-              <Banner tone="info" title={t("manualNote")} />
+              <div className="mt-auto flex flex-col gap-sm">
+                <Banner
+                  tone={balanceInsufficient ? "warning" : "info"}
+                  title={t(
+                    balanceInsufficient
+                      ? "actions.insufficientBalance"
+                      : channel === "balance"
+                        ? "balanceSettlementNote"
+                        : channel === "wechat"
+                          ? "wechatUnavailableNote"
+                          : "manualNote",
+                  )}
+                />
+                <p
+                  aria-hidden="true"
+                  className="invisible text-center text-body-sm"
+                >
+                  {t("ttlFine")}
+                </p>
+                {!canPay || !canManageBilling ? (
+                  <p
+                    aria-hidden="true"
+                    className="invisible text-center text-body-sm"
+                  >
+                    {t("actions.noPaymentPermission")}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </PageSection>
 
@@ -554,7 +621,7 @@ export function OrderPayPage() {
               title={
                 <SectionTitle icon="receipt">{t("info.title")}</SectionTitle>
               }
-              className={`h-full ${SECTION_TIGHT}`}
+              className={`h-full [&>div:last-child]:flex-1 [&>div:last-child]:px-sm [&>div:last-child]:pb-sm [&>div:last-child]:pt-xs sm:[&>div:last-child]:px-md ${SECTION_TIGHT}`}
             >
               <div className="flex flex-col items-center gap-2xs py-xs">
                 <span className="text-body-sm text-muted-foreground">
@@ -567,7 +634,7 @@ export function OrderPayPage() {
                 </strong>
               </div>
 
-              <DetailList>
+              <DetailList labelWidth="compact">
                 {ownerLabel ? (
                   <DetailRow label={t("info.owner")}>{ownerLabel}</DetailRow>
                 ) : null}
@@ -652,12 +719,22 @@ export function OrderPayPage() {
                     setError(null);
                     setDeclareOpen(true);
                   }}
-                  disabled={submitting || !quote || !canPay}
+                  disabled={
+                    submitting ||
+                    !quote ||
+                    !canPay ||
+                    channel === "wechat" ||
+                    balanceInsufficient
+                  }
                   className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
                 >
-                  {fullVoucherCover
-                    ? t("actions.settleInstant")
-                    : t("actions.declarePaid")}
+                  {channel === "balance"
+                    ? t("actions.payBalance")
+                    : channel === "wechat"
+                      ? t("actions.unavailable")
+                      : fullVoucherCover
+                        ? t("actions.settleInstant")
+                        : t("actions.declarePaid")}
                 </Button>
                 {/* 取消是不可逆动作:走 DS 破坏性确认(此前单击即取消并跳走)。 */}
                 <DestructiveButton
@@ -709,7 +786,7 @@ export function OrderPayPage() {
                 {t("stateHint.completed")}
               </p>
             </div>
-            <DetailList>
+            <DetailList labelWidth="compact">
               {ownerLabel ? (
                 <DetailRow label={t("info.owner")}>{ownerLabel}</DetailRow>
               ) : null}
@@ -938,19 +1015,31 @@ export function OrderPayPage() {
       {declareOpen && detail ? (
         <DialogForm
           open
+          size="sm"
           title={
-            fullVoucherCover
-              ? t("declareDialog.titleInstant")
-              : t("declareDialog.title")
+            channel === "balance"
+              ? t("declareDialog.titleBalance")
+              : fullVoucherCover
+                ? t("declareDialog.titleInstant")
+                : t("declareDialog.title")
           }
-          description={t("declareDialog.description", {
-            amount: fmt(cashDue ?? "0", detail.currency),
-            channel: tChannels(`channel.${channel}`),
-          })}
+          description={
+            channel === "balance"
+              ? t("declareDialog.descriptionBalance", {
+                  amount: fmt(cashDue ?? "0", detail.currency),
+                  tenant: ownerLabel ?? "—",
+                })
+              : t("declareDialog.description", {
+                  amount: fmt(cashDue ?? "0", detail.currency),
+                  channel: tChannels(`channel.${channel}`),
+                })
+          }
           submitLabel={
-            fullVoucherCover
-              ? t("actions.settleInstant")
-              : t("declareDialog.confirm")
+            channel === "balance"
+              ? t("actions.payBalance")
+              : fullVoucherCover
+                ? t("actions.settleInstant")
+                : t("declareDialog.confirm")
           }
           cancelLabel={t("declareDialog.cancel")}
           submitting={submitting}
@@ -962,7 +1051,7 @@ export function OrderPayPage() {
             void handleDeclare();
           }}
         >
-          {!fullVoucherCover ? (
+          {!fullVoucherCover && channel !== "balance" ? (
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="order-pay-payer">

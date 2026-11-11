@@ -25,13 +25,62 @@ describe("business session summaries", () => {
       {} as never,
       account as never,
       {} as never,
-      {} as never,
+      { query: vi.fn().mockResolvedValue({ rows: [] }) } as never,
       {} as never,
     );
     expect(await aggregator.getCurrentUser("self")).toMatchObject({
       accountStatus: "deleting",
       deletionRequestedAt: user.deletionRequestedAt,
     });
+  });
+
+  it.each(["verified", "unverified", "pending", "rejected", null])(
+    "reports personal verification from the caller's KYC status: %s",
+    async (status) => {
+      const query = vi
+        .fn()
+        .mockResolvedValue({ rows: status ? [{ status }] : [] });
+      const account = {
+        getUserById: vi.fn().mockResolvedValue({
+          id: "self",
+          account: "customer",
+          avatarHash: null,
+        }),
+      };
+      const aggregator = new SessionAggregator(
+        {} as never,
+        {} as never,
+        {} as never,
+        account as never,
+        {} as never,
+        { query } as never,
+        {} as never,
+      );
+      const result = await aggregator.getCurrentUser("self");
+      expect(result?.realNameVerified).toBe(status === "verified");
+      expect(query).toHaveBeenCalledWith(
+        "select status from kyc.user_kycs where user_id = $1",
+        ["self"],
+      );
+      expect(result).not.toHaveProperty("status");
+    },
+  );
+
+  it("does not misreport an unavailable KYC query as unverified", async () => {
+    const aggregator = new SessionAggregator(
+      {} as never,
+      {} as never,
+      {} as never,
+      { getUserById: vi.fn().mockResolvedValue({ id: "self" }) } as never,
+      {} as never,
+      {
+        query: vi.fn().mockRejectedValue(new Error("permission denied")),
+      } as never,
+      {} as never,
+    );
+    await expect(aggregator.getCurrentUser("self")).rejects.toThrow(
+      "permission denied",
+    );
   });
 
   it("keeps public numbers distinct from internal tenant IDs", async () => {

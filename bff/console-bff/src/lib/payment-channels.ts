@@ -5,7 +5,9 @@
  */
 
 export interface PaymentChannelInfo {
-  channel: "alipay" | "wechat" | "bank_transfer";
+  channel: "balance" | "alipay" | "wechat" | "bank_transfer";
+  balance?: string;
+  currency?: string;
   enabled: boolean;
   qrAsset?: string;
   account?: {
@@ -28,13 +30,12 @@ export function buildPaymentChannels(orderNo: string): PaymentChannelInfo[] {
   const bankName = trimmed(process.env.OFFLINE_PAY_BANK_NAME);
   const accountNo = trimmed(process.env.OFFLINE_PAY_ACCOUNT_NO);
   const bankEnabled = Boolean(accountName && bankName && accountNo);
-  return [
+  const channels: PaymentChannelInfo[] = [
     {
       channel: "alipay",
       enabled: Boolean(alipayQr),
       ...(alipayQr ? { qrAsset: alipayQr } : {}),
     },
-    { channel: "wechat", enabled: false },
     {
       channel: "bank_transfer",
       enabled: bankEnabled,
@@ -44,5 +45,11 @@ export function buildPaymentChannels(orderNo: string): PaymentChannelInfo[] {
           }
         : {}),
     },
+    { channel: "wechat", enabled: false },
   ];
+  return channels.sort(
+    (a, b) =>
+      ["bank_transfer", "alipay", "wechat"].indexOf(a.channel) -
+      ["bank_transfer", "alipay", "wechat"].indexOf(b.channel),
+  );
 }

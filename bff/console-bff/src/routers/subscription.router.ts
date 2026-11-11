@@ -153,7 +153,7 @@ const PAYABLE_STATES: ReadonlySet<OrderState> = new Set<OrderState>([
   "partially_paid",
 ]);
 
-const DECLARE_CHANNELS = ["alipay", "bank_transfer"] as const;
+const DECLARE_CHANNELS = ["balance", "alipay", "bank_transfer"] as const;
 type DeclareChannel = (typeof DECLARE_CHANNELS)[number];
 
 /**
@@ -474,7 +474,7 @@ interface OrderVoucherOption {
 
 interface OrderPaymentLeg {
   paymentId: string;
-  kind: "cash" | "voucher" | "other";
+  kind: "cash" | "voucher" | "balance" | "other";
   status: string;
   amount: string;
   channel: string | null;
@@ -571,6 +571,7 @@ function mapRefundView(r: RefundRecordView): OrderRefundView {
 }
 
 interface QuoteBody {
+  useBalance?: boolean;
   discountVoucherId?: string;
   creditVoucherId?: string;
 }
@@ -2125,7 +2126,17 @@ export class SubscriptionRouter {
       rejectReason,
       vouchers: vouchers.map(mapVoucherOption),
       legs,
-      paymentChannels: buildPaymentChannels(row.order_no),
+      paymentChannels: [
+        {
+          channel: "balance",
+          enabled: Number(row.paid_amount ?? "0") === 0,
+          ...((await this.billingService.getCreditBalance(req.tenant.id)) ?? {
+            balance: "0.00",
+            currency: row.currency ?? "CNY",
+          }),
+        },
+        ...buildPaymentChannels(row.order_no),
+      ],
       refund: refund ? mapRefundView(refund) : null,
     };
   }
@@ -2233,13 +2244,22 @@ export class SubscriptionRouter {
         ? (credit.effect as { amountCents: number }).amountCents
         : null,
     });
+    const wallet = body?.useBalance
+      ? await this.billingService.getCreditBalance(req.tenant.id)
+      : null;
+    const balanceEnough =
+      Number(row.paid_amount ?? "0") === 0 &&
+      wallet?.currency === (row.currency ?? "CNY") &&
+      yuanToCents(wallet.balance) >= quote.cashDueCents;
+    const balanceOff =
+      body?.useBalance && balanceEnough ? quote.cashDueCents : 0;
     return {
       listPrice: centsToYuan(quote.listPriceCents),
       discountOff: centsToYuan(quote.discountOffCents),
       payable: centsToYuan(quote.payableCents),
       paidAmount: centsToYuan(quote.paidCents),
       voucherOff: centsToYuan(quote.voucherOffCents),
-      balanceOff: "0.00",
+      balanceOff: centsToYuan(balanceOff),
       cashDue: centsToYuan(quote.cashDueCents),
       discountApplicable: quote.discountApplicable,
     };
@@ -2260,19 +2280,22 @@ export class SubscriptionRouter {
     const payChannel = (body?.payChannel ?? "").trim();
     if (!(DECLARE_CHANNELS as readonly string[]).includes(payChannel))
       throw new BadRequestException(
-        "payChannel 必须是 alipay 或 bank_transfer",
+        "payChannel 必须是 balance、alipay 或 bank_transfer",
       );
     // Channel must be enabled by env-derived config (§4.4) — no declaring
     // against a channel the payment page can't render.
     const channel = buildPaymentChannels("").find(
       (c) => c.channel === payChannel,
     );
-    if (!channel?.enabled)
+    if (payChannel !== "balance" && !channel?.enabled)
       throw new BadRequestException("该支付渠道未开放，请选择其它渠道");
 
     // Ownership (tenant scope), same assertion as cancel.
     const row = await this.loadOrderRow(req.tenant.id, id);
     if (!row) throw new BadRequestException("订单不存在或无权操作");
+
+    if (payChannel === "balance" && !PAYABLE_STATES.has(deriveOrderState(row)))
+      throw new ConflictException("订单不是待付款状态");
 
     try {
       return await this.orderService.declarePayment({
@@ -2331,11 +2354,13 @@ export class SubscriptionRouter {
     return res.rows.map((r) => ({
       paymentId: r.id,
       kind:
-        r.pay_source === "voucher"
-          ? "voucher"
-          : r.pay_source === "offline"
-            ? "cash"
-            : "other",
+        r.pay_source === "balance"
+          ? "balance"
+          : r.pay_source === "voucher"
+            ? "voucher"
+            : r.pay_source === "offline"
+              ? "cash"
+              : "other",
       status: r.pay_status,
       amount: r.total_amount,
       channel: r.pay_channel,

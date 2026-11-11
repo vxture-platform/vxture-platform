@@ -671,7 +671,13 @@ function normalizeInvoiceTaxType(value: string | null): BillingInvoiceTaxType {
 }
 
 function normalizePaySource(value: string | null): OrderPaySource {
-  if (value === "online" || value === "offline") return value;
+  if (
+    value === "online" ||
+    value === "offline" ||
+    value === "voucher" ||
+    value === "balance"
+  )
+    return value;
   return "none";
 }
 

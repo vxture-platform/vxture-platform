@@ -2,11 +2,13 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 /**
- * console 的单元测试(批 8 起)。只覆盖 `src/lib/**` 一类不碰 React / Next 的纯逻辑:
- * 主体码展示、计量格式化、收件箱展示与列表合并。页面本身仍靠 tsc / eslint / 守卫 /
- * owner 走查,不在这里装 jsdom。
+ * Pure logic and server-rendered component regressions run without a browser DOM.
+ * @package @vxture/console
+ * @layer Presentation
+ * @category test-config
  */
 export default defineConfig({
+  esbuild: { jsx: "automatic" },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -18,6 +20,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

@@ -1586,7 +1586,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       );
       setOrder(updated);
       succeed(
-        refundDialog === "execute"
+        refundDialog === "execute" || updated.refund?.refundStatus === "success"
           ? tPage("feedback.refundExecuted")
           : refundDialog === "fail"
             ? tPage("feedback.refundMarkedFailed")

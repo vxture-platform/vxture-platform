@@ -40,22 +40,11 @@ const ICON_SIZE: Record<TenantAvatarSize, "xs" | "sm" | "md"> = {
   lg: "md",
 };
 
-/**
- * 类型图标（owner 2026-09-16 定）：**个人租户也是组织级主体**，所以归建筑族，不与
- * 自然人共用 `user`——那会让列表里「一个人」和「一个只有一个人的组织」长成同一个符号。
- * 族内轻重表示规模：`building-office` 单一办公场所 = 个人租户，`buildings` 多主体 = 组织租户。
- * （owner 2026-09-16：个人租户原用的 `building` 在 16px 下轮廓过于墓碑化，换成带门脸的
- * `building-office`；组织与用户两档不动。）
- *
- * 组织此前用 `building-library`（映射到 BankIcon，银行）——组织不是银行，一并纠正。
- * **它不再是「没 logo 时的样子」**（owner 2026-09-16）：没传过 logo 的主体现在画 DS 的
- * 默认标识图，类型图标只在**图加载失败**时兜底（Radix 的 AvatarFallback 语义）。
- * 三处共用,别各写各的。
- */
+/** Personal spaces use a person icon; organization spaces retain the building family. */
 export function tenantTypeIcon(
   tenantType: "personal" | "organization" | null | undefined,
 ): IconName {
-  return tenantType === "organization" ? "buildings" : "building-office";
+  return tenantType === "organization" ? "buildings" : "user-circle";
 }
 
 /** 方角 + 弱化底色:三处头像块共用的外观类(顶栏面板走 DS 头部件,也套这一组)。 */
@@ -79,17 +68,18 @@ export function TenantAvatar({
   readonly className?: string;
 }) {
   return (
-    /* key on src:标识换 / 清空时强制重挂。清空后 src 回到默认图，不重挂的话
-       Radix 会留着上一张自定义图的「已加载」状态，默认图换不上去。 */
+    // Remount when the custom logo changes so Radix cannot retain a stale loaded image.
     <Avatar
       key={src ?? "__default__"}
       className={cn(SIZE_CLASS[size], TENANT_AVATAR_SHAPE_CLASS, className)}
     >
-      <AvatarImage
-        src={src ?? tenantDefaultLogo.src}
-        alt={alt ?? ""}
-        className={cn(TENANT_AVATAR_SHAPE_CLASS, "object-cover")}
-      />
+      {src || tenantType !== "personal" ? (
+        <AvatarImage
+          src={src ?? tenantDefaultLogo.src}
+          alt={alt ?? ""}
+          className={cn(TENANT_AVATAR_SHAPE_CLASS, "object-cover")}
+        />
+      ) : null}
       <AvatarFallback
         delayMs={0}
         className={TENANT_AVATAR_FALLBACK_CLASS}

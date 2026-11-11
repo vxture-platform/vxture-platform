@@ -2524,6 +2524,7 @@
       "overdue": "Overdue"
     },
     "paySource": {
+      "balance": "Account balance",
       "online": "Online",
       "offline": "Offline",
       "voucher": "Voucher"
@@ -2648,7 +2649,7 @@
       "description": "The order may have been archived, or this account cannot access it."
     },
     "sections": {
-      "declaration": "Customer declaration",
+      "declaration": "Customer payment details",
       "amounts": "Amount breakdown",
       "timeline": "Timeline",
       "subscriptionEvents": "Subscription changes after provisioning",
@@ -2671,7 +2672,7 @@
       "source": "Source",
       "autoRenew": "Auto-renew",
       "deadline": "Payment countdown",
-      "deadlineFrozen": "Frozen (customer has declared)",
+      "deadlineFrozen": "Frozen (customer has submitted payment details)",
       "deadlineUntil": "Until {day} {clock}",
       "closeReason": "Close reason",
       "billingContact": "Billing contact",
@@ -2698,7 +2699,7 @@
     },
     "actions": {
       "confirmPayment": "Confirm payment",
-      "rejectDeclaration": "Reject declaration",
+      "rejectDeclaration": "Return payment details",
       "retryProvision": "Provision again",
       "restoreOrder": "Restore order",
       "approveRefund": "Approve refund",
@@ -2710,15 +2711,15 @@
       "more": "More actions"
     },
     "declaration": {
-      "amount": "Declared amount",
+      "amount": "Submitted amount",
       "channel": "Payment channel",
       "payer": "Payer",
       "txnNo": "Transaction no.",
-      "declaredAt": "Declared at",
+      "declaredAt": "Submitted at",
       "remark": "Customer note",
       "notFilled": "Not provided by customer",
       "waited": "Waiting {duration}",
-      "declaredBy": "Declared by"
+      "declaredBy": "Submitted by"
     },
     "channels": {
       "alipay": "Alipay",
@@ -2729,7 +2730,7 @@
       "hasPayment": "An order that has received money cannot be voided; use the refund flow.",
       "notPending": "Only orders awaiting payment can be voided.",
       "notRestorable": "This order cannot be restored: only closed orders that were never provisioned and never received money can be.",
-      "declaredFirst": "The customer has declared a payment; reject the declaration before voiding.",
+      "declaredFirst": "The customer has submitted payment details; return the payment details before voiding.",
       "confirm": {
         "free": "A ¥0 order does not need a payment confirmation.",
         "done": "Payment for this order is already confirmed.",
@@ -2739,14 +2740,14 @@
     },
     "feedback": {
       "paymentConfirmed": "Payment confirmed; the system is provisioning.",
-      "declarationRejected": "Declaration rejected: vouchers and discounts are released, the order is back to awaiting payment, and the customer will see the reason.",
+      "declarationRejected": "Payment details returned: vouchers and discounts are released, the order is back to awaiting payment, and the customer will see the reason.",
       "provisionRetried": "Provisioning triggered again.",
       "orderRestored": "Order restored to awaiting payment.",
       "refundExecuted": "Refund completed: the order is refunded and the subscription is back to unsubscribed.",
       "refundApproved": "Refund approved. Pay out through the original channel, then come back and click \"Refund completed\".",
       "refundRejected": "Refund request rejected.",
       "confirmPaymentFailed": "Could not confirm the payment. Try again shortly.",
-      "rejectDeclarationFailed": "Could not reject the declaration. Try again shortly.",
+      "rejectDeclarationFailed": "Could not return the payment details. Try again shortly.",
       "retryProvisionFailed": "Could not trigger provisioning. Try again shortly.",
       "refundFailed": "The refund action failed. Try again shortly.",
       "restoreFailed": "Could not restore the order. Try again shortly.",
@@ -2758,13 +2759,13 @@
     },
     "dialogs": {
       "rejectDeclaration": {
-        "title": "Reject payment declaration",
+        "title": "Return payment details",
         "description": "Order <b>{orderNo}</b>. Vouchers and discounts are released, the order goes back to awaiting payment, and the reason is shown on the customer's payment page.",
-        "submitLabel": "Reject declaration",
+        "submitLabel": "Return payment details",
         "reasonLabel": "Reason",
         "reasonHint": "Required, at least 4 characters; the customer will see it.",
-        "placeholder": "e.g. No matching transfer found, please check the amount and pay again; received 500 but 860 was declared.",
-        "descriptionWithAmount": "Order <b>{orderNo}</b> · customer declared {amount}. Vouchers and discounts are released, the order goes back to awaiting payment, and the reason is shown on the customer's payment page."
+        "placeholder": "e.g. No matching transfer found, please check the amount and pay again; received 500 but 860 was submitted.",
+        "descriptionWithAmount": "Order <b>{orderNo}</b> · customer submitted {amount}. Vouchers and discounts are released, the order goes back to awaiting payment, and the reason is shown on the customer's payment page."
       },
       "refund": {
         "titleApprove": "Approve refund request",
@@ -2827,8 +2828,8 @@
         "abnormal": "Needs attention"
       },
       "orderHint": {
-        "pending": "Waiting for the customer to pay and declare; the countdown is running",
-        "pending_verify": "The customer declared a payment; verify it arrived",
+        "pending": "Waiting for the customer to pay and submit payment details; the countdown is running",
+        "pending_verify": "The customer submitted payment details; verify it arrived",
         "paid_unprovisioned": "Money received; the system is provisioning",
         "partial_pending": "Legacy order: part of the money arrived; waiting for the rest or an offline arrangement",
         "confirmed": "The subscription is active",
@@ -2841,7 +2842,7 @@
     "stages": {
       "ariaLabel": "Order progress",
       "placed": "Placed",
-      "declared": "Customer pays and declares",
+      "declared": "Customer pays and submits payment details",
       "verify": "Operator verifies",
       "confirm": "Payment confirmed",
       "provision": "Auto-provisioned / done",
@@ -2857,7 +2858,7 @@
     "task": {
       "sectionTitle": "What to do now",
       "title": {
-        "pending": "Wait for the customer to pay and declare",
+        "pending": "Wait for the customer to pay and submit payment details",
         "pending_verify": "Check whether {amount} has arrived",
         "paid_unprovisioned": "Money received, provisioning automatically",
         "partial_pending": "Partially received, waiting for the rest",
@@ -2868,8 +2869,8 @@
         "abnormal": "This order needs manual handling"
       },
       "body": {
-        "pending": "After paying, the customer declares it on the payment page. Nothing for you to do yet. If they do not pay in time the system closes the order.",
-        "pending_verify": "If the money arrived, click \"Confirm payment\". If you cannot find it or the amount differs, click \"Reject declaration\" and say why; the customer is notified and can declare again.",
+        "pending": "After paying, the customer submits payment details on the payment page. Nothing for you to do yet. If they do not pay in time the system closes the order.",
+        "pending_verify": "If the money arrived, click \"Confirm payment\". If you cannot find it or the amount differs, click \"Return payment details\" and say why; the customer is notified and can resubmit payment details.",
         "paid_unprovisioned": "The system provisions automatically, usually within two minutes. If it is still here after ten minutes, click \"Provision again\".",
         "partial_pending": "Legacy order: {received} has arrived, {remaining} is still missing. Confirm the rest once the customer pays it, or settle it offline.",
         "confirmed": "This order is done. If the customer asks, the validity and auto-renew setting are under \"After provisioning\" below.",
@@ -2880,15 +2881,15 @@
         "refundFailed": "The last payout of {amount} did not go through. Check the receiving account and pay again; click \"Refund completed\" on success, or record \"Payout failed\" again.",
         "abnormal": "The state is unexpected and cannot be acted on here. Send the order number to technical support."
       },
-      "declared": "Customer declared on {day} {clock}: {channel} · payer {payer} · transaction no. {txn}",
+      "declared": "Customer submitted payment details on {day} {clock}: {channel} · payer {payer} · transaction no. {txn}",
       "guidance": {
         "alipay": "Where to look: Alipay merchant console → Bills, search by transaction number, amount and time.",
         "bank": "Where to look: the corporate bank account statement, search by payer, amount and time.",
-        "generic": "Where to look: search the receiving account by the declared amount and time."
+        "generic": "Where to look: search the receiving account by the submitted amount and time."
       },
       "deadline": {
         "until": "Payment deadline {day} {clock}, {remaining} left",
-        "frozen": "The customer has declared; the payment countdown is frozen",
+        "frozen": "The customer has submitted payment details; the payment countdown is frozen",
         "overdue": "The payment deadline has passed; the system will close this order"
       },
       "fulfilled": "Subscription {code} valid until {date}, auto-renew: {autoRenew}",
@@ -2963,10 +2964,10 @@
       },
       "order": {
         "created": "{actor} placed the order · {product} · {amount}",
-        "payment_declared": "{actor} declared a payment",
-        "payment_declaredWithRemark": "{actor} declared a payment: {remark}",
-        "payment_rejected": "{actor} rejected the declaration · order back to awaiting payment, countdown reset",
-        "payment_rejectedWithRemark": "{actor} rejected the declaration: {remark} · order back to awaiting payment, countdown reset",
+        "payment_declared": "{actor} submitted payment details",
+        "payment_declaredWithRemark": "{actor} submitted payment details: {remark}",
+        "payment_rejected": "{actor} returned the payment details · order back to awaiting payment, countdown reset",
+        "payment_rejectedWithRemark": "{actor} returned the payment details: {remark} · order back to awaiting payment, countdown reset",
         "payment_confirmed": "{actor} confirmed payment of {amount}",
         "payment_confirmedWithRemark": "{actor} confirmed payment of {amount}: {remark}",
         "fulfilled": "System provisioned subscription {code}",
@@ -3005,7 +3006,7 @@
     },
     "confirmDialog": {
       "title": "Confirm payment",
-      "descriptionDeclared": "{orderNo} · customer declared {amount}",
+      "descriptionDeclared": "{orderNo} · customer submitted {amount}",
       "descriptionRemaining": "{orderNo} · remaining due {amount}",
       "preview": {
         "new": "On confirmation {plan} is provisioned, valid until {date}, auto-renew: {autoRenew}, and the customer is notified.",
@@ -3016,7 +3017,7 @@
       "required": "Required",
       "optional": "Optional",
       "amountLabel": "Confirmed amount",
-      "amountLockedHint": "Locked to the amount the customer declared and must match; if the money received differs, use \"Reject declaration\" instead.",
+      "amountLockedHint": "Locked to the amount the customer submitted and must match; if the money received differs, use \"Return payment details\" instead.",
       "amountFreeHint": "Manual operator entry: cannot exceed the remaining due of {amount}.",
       "channelLabel": "Payment method",
       "offlinePayType": {
@@ -3025,7 +3026,7 @@
         "other": "Other (incl. Alipay)"
       },
       "payerLabel": "Payer",
-      "prefilledFromDeclaration": "Prefilled from the customer's declaration; you can change it.",
+      "prefilledFromDeclaration": "Prefilled from the customer's payment details; you can change it.",
       "paidAtLabel": "Received at",
       "txnLabel": "Transaction / reference no.",
       "evidenceLabel": "Evidence link",
@@ -3222,7 +3223,7 @@
     "columns": {
       "severity": "Urgency",
       "task": "Task",
-      "tenant": "Tenant · declarer / contact",
+      "tenant": "Tenant · submitter / contact",
       "amount": "Amount",
       "wait": "Waiting",
       "progress": "Progress",
@@ -3324,7 +3325,7 @@
       "code": "Number",
       "task": "Task",
       "tenant": "Tenant",
-      "contact": "Declarer / contact",
+      "contact": "Submitter / contact",
       "tenantMeta": "Tenant attributes",
       "type": "Type",
       "severity": "Urgency",

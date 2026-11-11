@@ -172,7 +172,7 @@ export interface MaintenanceRelease {
 // Orders live in billing.orders (product_330); the declare orchestration is
 // OrderService.declarePayment. These types are the shared contract for it.
 
-export type DeclarePayChannel = "alipay" | "bank_transfer";
+export type DeclarePayChannel = "balance" | "alipay" | "bank_transfer";
 
 export interface DeclarePaymentInput {
   orderId: string;

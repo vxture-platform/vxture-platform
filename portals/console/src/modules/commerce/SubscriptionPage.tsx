@@ -15,7 +15,7 @@
  *
  * 剩下的一块:我的订阅——整行铺开每行 3 卡，★ 收藏即排序优先，{服务中|全部} 筛选
  * （「全部」才显示已过期；未支付/未开通订单不在此板块——未生效）。待付订单只留一条
- * 横幅指向费用中心(拆页时补的连接点),不落台账。
+ * A single pending order links directly to checkout; multiple orders use the billing chooser.
  *
  * 概览指标：在订产品 / 即将到期——DS MetricGrid；板块标题走 PageSection 原生 icon
  * prop，全页只用 DS 组合件、不自造样式层（owner 2026-08-20 评审）。
@@ -392,7 +392,16 @@ export function SubscriptionPage() {
               : t("pendingBanner.description")
           }
           action={
-            <Button size="md" onClick={() => router.push("/billing")}>
+            <Button
+              size="md"
+              onClick={() =>
+                router.push(
+                  pendingOrders.length === 1
+                    ? `/subscribe/pay/${encodeURIComponent(pendingOrders[0]!.orderId)}`
+                    : "/billing",
+                )
+              }
+            >
               <Icon name="receipt" size="xs" fallback="placeholder" />
               <span>{t("pendingBanner.action")}</span>
             </Button>

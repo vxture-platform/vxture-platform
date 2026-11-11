@@ -1287,7 +1287,12 @@ export type OrderPaymentStatus =
   | "failed"
   | "closed"
   | "refunding";
-export type OrderPaySource = "online" | "offline" | "voucher" | "none";
+export type OrderPaySource =
+  | "online"
+  | "offline"
+  | "voucher"
+  | "balance"
+  | "none";
 export type OrderOfflinePaymentType = "bank_transfer" | "cash" | "other";
 
 export interface OrderInvoiceItemRecord {

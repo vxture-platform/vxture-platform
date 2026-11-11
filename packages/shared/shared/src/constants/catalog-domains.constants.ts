@@ -204,9 +204,10 @@ export type BillStatus = (typeof BILL_STATUSES)[number];
  * default, and a row that has no payment simply has no payments row. Callers
  * that hold a nullable reference render the absence themselves.
  *
+ * balance = a debit from the tenant wallet with an immutable settlement ledger.
  * Mirrors chk_payments_pay_source (52_billing.sql).
  */
-export const PAY_SOURCES = ["online", "offline", "voucher"] as const;
+export const PAY_SOURCES = ["online", "offline", "voucher", "balance"] as const;
 export type PaySource = (typeof PAY_SOURCES)[number];
 
 /**
