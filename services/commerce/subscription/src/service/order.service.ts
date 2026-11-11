@@ -519,7 +519,10 @@ export class OrderService {
     const settled = await this.orders.withOrderTx(
       input.orderId,
       async ({ client, order, invoice }) => {
-        if (!invoice) throw new ConflictException("订单缺少账单，无法申报");
+        if (!invoice)
+          throw new ConflictException("订单缺少账单，无法提交付款信息");
+        if (order.tenantId !== input.tenantId)
+          throw new ConflictException("订单归属不匹配");
         if (invoice.billStatus === "paid") {
           return {
             done: {
@@ -534,7 +537,15 @@ export class OrderService {
             order.status !== "pending_verify") ||
           !["unpaid", "partial"].includes(invoice.billStatus)
         ) {
-          throw new ConflictException("订单不是待付款状态，无法申报付款");
+          throw new ConflictException("订单不是待付款状态，无法提交付款信息");
+        }
+        if (
+          input.payChannel === "balance" &&
+          order.status === "pending_payment" &&
+          Number(invoice.paidAmount) === 0 &&
+          (await this.orders.isPaymentExpiredTx(client, order))
+        ) {
+          throw new ConflictException("订单已超时，请重新下单");
         }
         const existingLeg = await this.subRepo.findPendingVerifyLegTx(
           client,
@@ -615,7 +626,16 @@ export class OrderService {
           },
         };
 
-        if (quote.cashDueCents === 0) {
+        if (input.payChannel === "balance" && quote.cashDueCents > 0) {
+          await this.subRepo.settleBalanceTx(client, {
+            tenantId: order.tenantId,
+            invoiceId: invoice.id,
+            amountYuan: centsToYuan(quote.cashDueCents),
+            currency: invoice.currency,
+            actorId: input.userId,
+          });
+        }
+        if (quote.cashDueCents === 0 || input.payChannel === "balance") {
           const { voucherLegId } = await this.subRepo.settleInvoiceByVouchersTx(
             client,
             {
@@ -725,7 +745,7 @@ export class OrderService {
       await this.fulfill(input.orderId, {
         actorType: "customer",
         actorId: input.userId,
-        remark: "instant voucher settlement (declare)",
+        remark: `instant ${input.payChannel === "balance" ? "balance" : "voucher"} settlement (declare)`,
       });
       return { outcome: "activated", cashDue: "0.00", paymentId: null };
     } catch (err) {
@@ -1111,7 +1131,7 @@ export class OrderService {
      * 的规则，两样都是现成的开关。
      */
     const refund = computeWindowRefund({
-      paid: Number(order.payableAmount),
+      paid: basis?.balancePaidAmount ?? Number(order.payableAmount),
       alpha: basis?.consumableShare ?? DEFAULT_CONSUMABLE_SHARE,
       usedRatio: usageRatio,
     });
@@ -1390,15 +1410,25 @@ export class OrderService {
         { params: { reason: input.remark } },
       ),
     );
+    if (
+      input.decision === "approved" &&
+      (await this.orders.isBalancePaidOrder(order.id))
+    ) {
+      return (
+        await this.executeRefund(refundId, {
+          actorType: "operator",
+          actorId: input.operatorId,
+          ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+        })
+      ).refund;
+    }
     return audited;
   }
 
   /**
-   * 退款执行 = 「确认到账」（2026-12-01 起**只认 processing**：钱要先「已发起转账」才谈得上
-   * 到账；没发起过就点确认是把流程跳了一步，409 把人送回「已发起转账」）：钱的冲正 + 订单
-   * refunded 一个事务，随后订阅整体回到未订阅（cancelled，end=now，含 free 前身——旧档价值
-   * 已折进这张单）。订阅回滚失败不回滚钱：记日志、留给 reconcile / 人工（订单已 refunded，
-   * 订阅仍 active 是可见的异常态）。
+   * Complete an approved refund: external transfers require processing, while wallet
+   * refunds settle directly from pending. Ledger, wallet and order changes are atomic;
+   * subscription cancellation follows after commit and retains the existing retry policy.
    */
   async executeRefund(
     refundId: string,
@@ -1413,7 +1443,13 @@ export class OrderService {
       const order = await this.getOrder(refund.orderId);
       return { refund, order };
     }
-    if (refund.refundStatus !== "processing") {
+    if (
+      refund.refundStatus !== "processing" &&
+      !(
+        refund.refundStatus === "pending" &&
+        (await this.orders.isBalancePaidOrder(refund.orderId))
+      )
+    ) {
       throw new ConflictException(
         "转账尚未发起，先登记「已发起转账」再确认到账",
       );
@@ -1494,6 +1530,11 @@ export class OrderService {
     }
     if (refund.refundStatus === "success") {
       throw new ConflictException("退款已完成，不能再发起转账");
+    }
+    if (await this.orders.isBalancePaidOrder(refund.orderId)) {
+      throw new ConflictException(
+        "余额支付订单仅可退回原租户余额，不能发起外部转账",
+      );
     }
     const recipient = input.recipient ?? refund.recipient;
     if (input.channel === "bank_transfer" && !recipient) {
@@ -1580,16 +1621,14 @@ export class OrderService {
       throw new ConflictException("订单没有可退的支付记录");
     }
 
-    const paid = Number(order.payableAmount);
+    const paid = basis.balancePaidAmount ?? Number(order.payableAmount);
     const amount = input.amount ?? eligibility.amount;
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) {
       throw new ConflictException("退款金额必须大于 0");
     }
     if (value > paid) {
-      throw new ConflictException(
-        `退款金额不能超过实付 ${order.payableAmount}`,
-      );
+      throw new ConflictException(`退款金额不能超过实付 ${paid.toFixed(2)}`);
     }
 
     const created = await this.orders.createRefundRequest({

@@ -50,14 +50,18 @@ import { accountCenterUrl } from "@/lib/account-center";
 import { TenantPanel } from "./TenantPanel";
 import { useGlobalSearch, type NavSearchEntry } from "./useGlobalSearch";
 
-/**
- * 展示用手机号：存储值带 E.164 国家码（+8613800000000），面板里只给号码本身。
- * 只剥中国大陆的 +86——用户看到的是自己那串熟悉的 11 位数字，国家码在这个
- * 位置是噪音。其余国家码保留：把它们也剥掉会得到一串谁都认不出来的数字。
- */
-function formatPhone(phone: string | null | undefined): string {
+/** Keep the country code visible and group mainland mobile numbers for scanning. */
+function formatPhone(phone: string | null | undefined) {
   if (!phone) return "";
-  return phone.startsWith("+86") ? phone.slice(3) : phone;
+  const normalized = phone.replace(/[\s()-]/g, "");
+  const match = /^(?:\+86)?(1\d{2})(\d{4})(\d{4})$/.exec(normalized);
+  if (!match) return phone;
+  return (
+    <span className="inline-flex flex-wrap gap-xs tabular-nums">
+      <span className="text-content-tertiary">+86</span>
+      <span>{`${match[1]} ${match[2]} ${match[3]}`}</span>
+    </span>
+  );
 }
 
 export interface ConsoleHeaderProps {
@@ -375,7 +379,18 @@ export function ConsoleHeader({
               // 缺失读作"该补了"，两者对用户的含义完全不同。
               uniqueLine: formatPhone(user?.phone) || t("missingPhone"),
               meta: user?.email || t("missingEmail"),
-              statusTag: { label: t("verifyUnknown") },
+              ...(typeof user?.realNameVerified === "boolean"
+                ? {
+                    statusTag: {
+                      label: t(
+                        user.realNameVerified
+                          ? "identityVerified"
+                          : "identityUnverified",
+                      ),
+                      verified: user.realNameVerified,
+                    },
+                  }
+                : {}),
             }}
             extras={
               <ShellPanelSlots
@@ -399,12 +414,6 @@ export function ConsoleHeader({
               />
             }
             links={[
-              {
-                key: "personal-center",
-                label: t("personalCenter"),
-                href: `/${locale}/memberships`,
-                icon: "user",
-              },
               {
                 key: "profile",
                 label: t("accountCenter"),

@@ -2524,6 +2524,7 @@
       "overdue": "逾期"
     },
     "paySource": {
+      "balance": "账户余额",
       "online": "线上",
       "offline": "线下",
       "voucher": "券"
@@ -2648,7 +2649,7 @@
       "description": "该订单可能已归档，或当前账号无权访问。"
     },
     "sections": {
-      "declaration": "客户申报",
+      "declaration": "客户付款信息",
       "amounts": "金额构成",
       "timeline": "时间线",
       "subscriptionEvents": "开通后的订阅变更",
@@ -2671,7 +2672,7 @@
       "source": "来源",
       "autoRenew": "自动续费",
       "deadline": "付款倒计时",
-      "deadlineFrozen": "已冻结（客户已申报）",
+      "deadlineFrozen": "已冻结（客户已提交付款信息）",
       "deadlineUntil": "截止 {day} {clock}",
       "closeReason": "关闭原因",
       "billingContact": "账务联系人",
@@ -2698,7 +2699,7 @@
     },
     "actions": {
       "confirmPayment": "确认收款",
-      "rejectDeclaration": "驳回申报",
+      "rejectDeclaration": "退回付款信息",
       "retryProvision": "重新开通",
       "restoreOrder": "恢复订单",
       "approveRefund": "同意退款",
@@ -2710,15 +2711,15 @@
       "more": "更多操作"
     },
     "declaration": {
-      "amount": "申报金额",
+      "amount": "提交金额",
       "channel": "支付渠道",
       "payer": "付款人",
       "txnNo": "交易号",
-      "declaredAt": "申报时间",
+      "declaredAt": "提交时间",
       "remark": "客户备注",
       "notFilled": "客户未填",
       "waited": "已等 {duration}",
-      "declaredBy": "申报人"
+      "declaredBy": "提交人"
     },
     "channels": {
       "alipay": "支付宝",
@@ -2729,7 +2730,7 @@
       "hasPayment": "已收到款的订单不能作废，请走退款流程。",
       "notPending": "只有待付款的订单能作废。",
       "notRestorable": "这张单不能恢复：只有从未开通、也没收过钱的已关闭订单才能恢复。",
-      "declaredFirst": "客户已申报付款，先驳回申报再作废。",
+      "declaredFirst": "客户已提交付款信息，先退回付款信息再作废。",
       "confirm": {
         "free": "¥0 订单不需要确认收款。",
         "done": "本单已确认收款。",
@@ -2739,14 +2740,14 @@
     },
     "feedback": {
       "paymentConfirmed": "已确认收款，系统正在开通。",
-      "declarationRejected": "已驳回申报：券与折扣已释放，订单回到待付款，客户会看到驳回原因。",
+      "declarationRejected": "已退回付款信息：券与折扣已释放，订单回到待付款，客户会看到驳回原因。",
       "provisionRetried": "已重新开通。",
       "orderRestored": "订单已恢复为待付款。",
       "refundExecuted": "退款已完成：订单转为已退款，订阅已回到未订阅状态。",
       "refundApproved": "退款申请已通过，请按原渠道打款后回来点「退款完成」。",
       "refundRejected": "退款申请已驳回。",
       "confirmPaymentFailed": "确认收款没有成功，请稍后重试。",
-      "rejectDeclarationFailed": "驳回申报没有成功，请稍后重试。",
+      "rejectDeclarationFailed": "退回付款信息没有成功，请稍后重试。",
       "retryProvisionFailed": "重新开通没有成功，请稍后重试。",
       "refundFailed": "退款操作没有成功，请稍后重试。",
       "restoreFailed": "恢复订单没有成功，请稍后重试。",
@@ -2758,13 +2759,13 @@
     },
     "dialogs": {
       "rejectDeclaration": {
-        "title": "驳回付款申报",
+        "title": "退回付款信息",
         "description": "订单号：<b>{orderNo}</b>。驳回后券与折扣自动释放，订单回到待付款，驳回原因会显示在客户的付款页。",
-        "submitLabel": "确认驳回申报",
+        "submitLabel": "确认退回付款信息",
         "reasonLabel": "驳回原因",
         "reasonHint": "必填，最少 4 字；客户会看到这句话。",
-        "placeholder": "例如：未查到对应转账记录，请核对金额后重新付款；实收 500 与申报 860 不符。",
-        "descriptionWithAmount": "订单号：<b>{orderNo}</b> · 客户申报 {amount}。驳回后券与折扣自动释放，订单回到待付款，驳回原因会显示在客户的付款页。"
+        "placeholder": "例如：未查到对应转账记录，请核对金额后重新付款；实收 500 与客户提交的 860 不符。",
+        "descriptionWithAmount": "订单号：<b>{orderNo}</b> · 客户提交 {amount}。驳回后券与折扣自动释放，订单回到待付款，驳回原因会显示在客户的付款页。"
       },
       "refund": {
         "titleApprove": "同意退款申请",
@@ -2827,8 +2828,8 @@
         "abnormal": "需要处理"
       },
       "orderHint": {
-        "pending": "等客户付款并申报，倒计时中",
-        "pending_verify": "客户已申报付款，等你核对到账",
+        "pending": "等客户付款并提交付款信息，倒计时中",
+        "pending_verify": "客户已提交付款信息，等你核对到账",
         "paid_unprovisioned": "已收款，系统正在开通",
         "partial_pending": "存量单：账上收了一部分，等客户补齐或线下协商",
         "confirmed": "订阅生效中",
@@ -2841,7 +2842,7 @@
     "stages": {
       "ariaLabel": "订单进度",
       "placed": "下单",
-      "declared": "客户付款并申报",
+      "declared": "客户付款并提交付款信息",
       "verify": "运营核对",
       "confirm": "确认收款",
       "provision": "自动开通 / 完成",
@@ -2857,7 +2858,7 @@
     "task": {
       "sectionTitle": "现在该做什么",
       "title": {
-        "pending": "等客户付款并申报",
+        "pending": "等客户付款并提交付款信息",
         "pending_verify": "核对 {amount} 是否到账",
         "paid_unprovisioned": "已收款，正在自动开通",
         "partial_pending": "部分到账，等客户补齐",
@@ -2868,8 +2869,8 @@
         "abnormal": "这张单需要人工处理"
       },
       "body": {
-        "pending": "客户付款后会在付款页申报，你暂时不用做什么。超时未付款系统会自动关闭。",
-        "pending_verify": "到账就点「确认收款」；找不到这笔钱或金额不符，就「驳回申报」并写明原因，客户会收到通知并可重新申报。",
+        "pending": "客户付款后会在付款页提交付款信息，你暂时不用做什么。超时未付款系统会自动关闭。",
+        "pending_verify": "到账就点「确认收款」；找不到这笔钱或金额不符，就「退回付款信息」并写明原因，客户会收到通知并可重新提交付款信息。",
         "paid_unprovisioned": "系统会自动开通，通常两分钟内完成。超过十分钟还停在这里，点「重新开通」再推一次。",
         "partial_pending": "这是存量单：账上已收到 {received}，还差 {remaining}。客户补齐后再确认剩余款，或线下协商处理。",
         "confirmed": "本单已完成。客户若来问，看下面「开通后」里的生效期与自动续费。",
@@ -2880,15 +2881,15 @@
         "refundFailed": "上一次打款 {amount} 没有成功。核对收款账号后重新打款，成功点「退款完成」，仍失败就再记一次「打款失败」。",
         "abnormal": "状态异常，界面上不能操作。请把订单号发给技术支持核查。"
       },
-      "declared": "客户 {day} {clock} 申报：{channel} · 付款人 {payer} · 交易号 {txn}",
+      "declared": "客户 {day} {clock} 提交付款信息：{channel} · 付款人 {payer} · 交易号 {txn}",
       "guidance": {
         "alipay": "到哪里找这笔钱：支付宝商家后台 → 账单，按交易号、金额、时间查。",
         "bank": "到哪里找这笔钱：对公账户流水，按付款人、金额、时间查这笔转账。",
-        "generic": "到哪里找这笔钱：按申报的金额和时间在收款账户里查。"
+        "generic": "到哪里找这笔钱：按提交的金额和时间在收款账户里查。"
       },
       "deadline": {
         "until": "付款截止 {day} {clock}，还剩 {remaining}",
-        "frozen": "客户已申报，付款倒计时已冻结",
+        "frozen": "客户已提交付款信息，付款倒计时已冻结",
         "overdue": "付款期限已过，系统会自动关闭这张单"
       },
       "fulfilled": "订阅 {code} 生效至 {date}，自动续费：{autoRenew}",
@@ -2963,10 +2964,10 @@
       },
       "order": {
         "created": "{actor} 下单 · {product} · {amount}",
-        "payment_declared": "{actor} 申报已付款",
-        "payment_declaredWithRemark": "{actor} 申报已付款：{remark}",
-        "payment_rejected": "{actor} 驳回申报 · 订单回到待付款，倒计时重置",
-        "payment_rejectedWithRemark": "{actor} 驳回申报：{remark} · 订单回到待付款，倒计时重置",
+        "payment_declared": "{actor} 提交付款信息",
+        "payment_declaredWithRemark": "{actor} 提交付款信息：{remark}",
+        "payment_rejected": "{actor} 退回付款信息 · 订单回到待付款，倒计时重置",
+        "payment_rejectedWithRemark": "{actor} 退回付款信息：{remark} · 订单回到待付款，倒计时重置",
         "payment_confirmed": "{actor} 确认收款 {amount}",
         "payment_confirmedWithRemark": "{actor} 确认收款 {amount}：{remark}",
         "fulfilled": "系统开通订阅 {code}",
@@ -3005,7 +3006,7 @@
     },
     "confirmDialog": {
       "title": "确认收款",
-      "descriptionDeclared": "{orderNo} · 客户申报 {amount}",
+      "descriptionDeclared": "{orderNo} · 客户提交 {amount}",
       "descriptionRemaining": "{orderNo} · 剩余应收 {amount}",
       "preview": {
         "new": "确认后将开通 {plan}，生效至 {date}，自动续费：{autoRenew}，并通知客户。",
@@ -3016,7 +3017,7 @@
       "required": "必填",
       "optional": "可选",
       "amountLabel": "确认金额",
-      "amountLockedHint": "已锁定为客户申报的金额，必须一致；实收不符请改用「驳回申报」。",
+      "amountLockedHint": "已锁定为客户提交的金额，必须一致；实收不符请改用「退回付款信息」。",
       "amountFreeHint": "运营手工补录：不能超过剩余应收 {amount}。",
       "channelLabel": "收款方式",
       "offlinePayType": {
@@ -3025,7 +3026,7 @@
         "other": "其他（含支付宝）"
       },
       "payerLabel": "付款人",
-      "prefilledFromDeclaration": "已按客户申报预填，可以改。",
+      "prefilledFromDeclaration": "已按客户提交的付款信息预填，可以修改。",
       "paidAtLabel": "到账时间",
       "txnLabel": "交易号 / 流水号",
       "evidenceLabel": "凭证链接",
@@ -3222,7 +3223,7 @@
     "columns": {
       "severity": "紧急度",
       "task": "任务",
-      "tenant": "租户 · 申报人 / 联系人",
+      "tenant": "租户 · 提交人 / 联系人",
       "amount": "金额",
       "wait": "等待",
       "progress": "进展",
@@ -3324,7 +3325,7 @@
       "code": "编号",
       "task": "任务",
       "tenant": "租户",
-      "contact": "申报人 / 联系人",
+      "contact": "提交人 / 联系人",
       "tenantMeta": "租户属性",
       "type": "类型",
       "severity": "紧急度",

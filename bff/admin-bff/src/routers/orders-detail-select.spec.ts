@@ -284,6 +284,11 @@ function stringLeaves(value: unknown, out: string[] = []): string[] {
 }
 
 describe("mapOrderRow：重构补的字段", () => {
+  it("preserves the settled wallet source for operators", () => {
+    expect(mapOrderRow(baseRow({ pay_source: "balance" })).paySource).toBe(
+      "balance",
+    );
+  });
   const savedTtlEnv = process.env["ORDER_PAYMENT_TTL_MINUTES"];
   beforeEach(() => {
     delete process.env["ORDER_PAYMENT_TTL_MINUTES"];

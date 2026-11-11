@@ -188,6 +188,7 @@ function usePaySourceLabels(): Record<PaySource, string> {
     online: t("online"),
     offline: t("offline"),
     voucher: t("voucher"),
+    balance: t("balance"),
   } satisfies Record<PaySource, string>;
 }
 

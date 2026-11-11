@@ -38,7 +38,7 @@
     "backToQuotas": "返回配额管理",
     "status": {
       "pending": "待支付",
-      "declared": "已申报待确认",
+      "declared": "已提交 · 待确认",
       "completed": "已开通",
       "cancelled": "已取消"
     },
@@ -55,9 +55,9 @@
       "createdAt": "下单时间"
     },
     "pay": {
-      "title": "线下支付与申报",
-      "description": "完成转账后提交申报,运营核销即生效",
-      "deadline": "请在 {remain} 内完成支付申报,逾期订单自动取消",
+      "title": "线下付款",
+      "description": "完成转账后提交付款信息，确认到账后生效",
+      "deadline": "请在 {remain} 内完成付款并提交付款信息,逾期订单自动取消",
       "channelLabel": "支付渠道",
       "referenceNote": "请在转账附言中注明订单号 {orderNo},以便对账"
     },
@@ -80,10 +80,10 @@
       "payerNamePlaceholder": "转出账户户名(便于对账)",
       "transactionNo": "转账流水号",
       "transactionNoPlaceholder": "银行回单流水号(选填)",
-      "submit": "已完成转账,提交申报"
+      "submit": "已完成转账，提交付款信息"
     },
     "declared": {
-      "note": "申报已提交,等待运营确认收款;确认后额度自动入池,本页会自动刷新"
+      "note": "付款信息已提交,等待运营确认收款;确认后额度自动入池,本页会自动刷新"
     },
     "completed": {
       "note": "已开通!额度已入池,有效期至 {date};可回配额管理页查看"
@@ -92,12 +92,12 @@
       "note": "订单已取消;如需购买请回配额管理页重新下单"
     },
     "cancelOrder": "取消订单",
-    "declareFailed": "申报失败,请稍后重试",
+    "declareFailed": "付款信息提交失败,请稍后重试",
     "cancelFailed": "取消失败,请稍后重试",
     "declareDialog": {
-      "title": "确认付款申报",
+      "title": "确认提交付款信息",
       "description": "支付方式：{channel} · 金额：{amount}。提交后订单进入待确认，运营核销后额度自动入池。",
-      "confirm": "提交申报",
+      "confirm": "提交付款信息",
       "cancel": "再想想"
     },
     "cancelConfirm": {
@@ -130,7 +130,7 @@
       "account_session_revoke": "吊销登录会话",
       "addon_order_cancel": "取消加油包订单",
       "addon_order_create": "购买加油包",
-      "addon_order_payment_declare": "加油包转账申报",
+      "addon_order_payment_declare": "提交加油包付款信息",
       "billing_address_create": "新增开票抬头",
       "billing_address_delete": "删除开票抬头",
       "billing_address_update": "编辑开票抬头",
@@ -1094,7 +1094,7 @@
     "title": "订单付款",
     "notFound": "订单不存在或无权查看。",
     "countdown": "付款剩余 {time}",
-    "rejectBanner": "上次付款申报未通过：{reason} 券与折扣已释放，可重新申报或取消订单，倒计时已重置。",
+    "rejectBanner": "上次付款信息未通过核对：{reason} 券与折扣已释放，可重新提交付款信息或取消订单，倒计时已重置。",
     "cycleStartNote": "订阅周期自服务开通时刻起算",
     "status": {
       "partially_paid": "部分到账",
@@ -1126,7 +1126,7 @@
       "refunding": "退款申请已受理，处理完成后会通知你。",
       "refunded": "退款已完成。如需继续使用，请重新下单。",
       "partially_refunded": "本单已部分退款，具体金额见退款记录。",
-      "paid_pending_verify": "已收到付款申报，确认到账后订阅立即生效，一般 1 个工作日内完成，页面会自动刷新。",
+      "paid_pending_verify": "已收到付款信息，确认到账后订阅立即生效，一般 1 个工作日内完成，页面会自动刷新。",
       "activating": "款项已结清，正在为你开通订阅，通常几分钟内完成，页面会自动刷新。",
       "completed": "订阅已生效，可前往订阅页查看权益。",
       "cancelled": "该订单已取消，如需订阅请重新下单。",
@@ -1173,7 +1173,9 @@
     },
     "referenceNote": "转账请备注订单号 {orderNo}，以便我们快速核账。",
     "amountDue": "应付金额",
-    "manualNote": "申报后由运营人工核销（通常 1 个工作日内）；在线支付接入后，此步骤将由支付回调自动完成。",
+    "balanceSettlementNote": "余额支付成功后即时到账，无需提交付款信息。",
+    "wechatUnavailableNote": "微信支付暂未开放，请选择其他支付方式。",
+    "manualNote": "提交付款信息后，我们会核对到账情况，通常在 1 个工作日内完成。",
     "ttlFine": "请在倒计时结束前完成付款，超时订单自动关闭。",
     "info": {
       "title": "订单信息",
@@ -1194,22 +1196,27 @@
       "refresh": "刷新状态",
       "backToSubscription": "返回订阅页",
       "cancel": "取消",
-      "noPaymentPermission": "你的角色没有付款权限:申报付款与取消订单请由租户所有者操作"
+      "noPaymentPermission": "你的角色没有付款权限:提交付款信息与取消订单请由租户所有者操作",
+      "payBalance": "余额支付",
+      "unavailable": "该支付方式暂不可用",
+      "insufficientBalance": "当前余额不足或币种不匹配，请选择其他支付方式。"
     },
     "declareDialog": {
-      "title": "确认付款申报",
+      "title": "确认提交付款信息",
       "titleInstant": "确认使用券结清",
       "description": "支付方式：{channel} · 金额：{amount}。提交后订单进入待确认，运营核对到账后订阅生效。",
-      "confirm": "提交申报",
+      "confirm": "提交付款信息",
       "cancel": "再想想",
       "payerName": "付款人（选填）",
       "payerPlaceholder": "转账户名，便于核账",
       "transactionNo": "转账流水号（选填）",
-      "optional": "选填"
+      "optional": "选填",
+      "titleBalance": "确认余额支付",
+      "descriptionBalance": "将从「{tenant}」的租户余额扣除 {amount}，支付成功后自动开通。"
     },
     "errors": {
       "quote": "金额试算失败，请刷新重试。",
-      "declare": "付款申报失败，请稍后重试。",
+      "declare": "付款信息提交失败，请稍后重试。",
       "cancel": "取消订单失败，请稍后重试。"
     },
     "list": {
@@ -1279,9 +1286,10 @@
     "channel": {
       "alipay": "支付宝",
       "wechat": "微信支付",
-      "bank_transfer": "银行转账"
+      "bank_transfer": "银行转账",
+      "balance": "账户余额"
     },
-    "referenceNote": "转账请备注订单号 {orderNo}，以便我们快速核账。",
+    "referenceNote": "转账备注：{orderNo}",
     "noneEnabled": "支付渠道配置中，请联系客服。",
     "bank": {
       "accountName": "户名",
@@ -1289,7 +1297,11 @@
       "accountNo": "账号",
       "reference": "转账附言",
       "unavailable": "对公收款账户暂未配置，请联系平台运营。"
-    }
+    },
+    "relatedOrderNote": "关联订单：{orderNo}",
+    "balanceAvailable": "可用余额：{amount} {currency}",
+    "balanceNote": "使用租户余额，确认后扣款。",
+    "wechatPlaceholder": "微信支付即将开放"
   },
   "permissionsPage": {
     "title": "权限管理",
@@ -1318,7 +1330,7 @@
       "tenant_delete": "租户注销",
       "tenant_billing_read": "商业与账务查看",
       "tenant_billing_manage": "商业与账务管理",
-      "tenant_payment_manage": "付款申报",
+      "tenant_payment_manage": "提交付款信息",
       "tenant_invoice_manage": "发票与抬头管理",
       "tenant_quota_read": "配额与用量查看",
       "tenant_audit_read": "审计日志查看",
@@ -1409,7 +1421,7 @@
   "quotasPage": {
     "addons": {
       "title": "加油包与扩展包",
-      "description": "存储扩展包与 AI 加油包:选卡下单,走完整订单流程——付款申报、运营核销后额度自动入池生效",
+      "description": "存储扩展包与 AI 加油包:选卡下单,走完整订单流程——付款信息提交、运营核销后额度自动入池生效",
       "colPack": "包",
       "colContent": "内容",
       "colValidity": "有效期",
@@ -1422,19 +1434,19 @@
       "colStatus": "状态",
       "colNote": "说明",
       "statusPending": "待支付",
-      "statusDeclared": "已申报",
+      "statusDeclared": "已提交",
       "statusCompleted": "已开通",
       "statusCancelled": "已取消",
       "validUntil": "有效期至 {date}",
-      "payBefore": "请在 {date} 前完成转账申报",
+      "payBefore": "请在 {date} 前完成转账并提交付款信息",
       "awaitingConfirm": "等待运营确认收款",
-      "declare": "申报转账",
+      "declare": "提交付款信息",
       "cancel": "取消订单",
       "cancelFailed": "取消失败,请稍后重试",
       "ordersEmpty": "暂无加油包订单",
       "packsEmpty": "暂无可购买的加油包",
-      "declareTitle": "对公转账申报",
-      "declareDescription": "{pack} · 应付 {price}。请按以下账户完成转账,并填写申报信息",
+      "declareTitle": "提交转账信息",
+      "declareDescription": "{pack} · 应付 {price}。请按以下账户完成转账,并填写付款信息",
       "bankAccountName": "户名",
       "bankName": "开户行",
       "bankAccountNo": "账号",
@@ -1444,9 +1456,9 @@
       "payerNamePlaceholder": "转出账户的户名(便于对账)",
       "transactionNo": "转账流水号",
       "transactionNoPlaceholder": "银行回单流水号(选填)",
-      "declareLater": "稍后申报",
-      "declareSubmit": "已完成转账,提交申报",
-      "declareFailed": "申报失败,请稍后重试",
+      "declareLater": "稍后提交",
+      "declareSubmit": "已完成转账，提交付款信息",
+      "declareFailed": "付款信息提交失败,请稍后重试",
       "kindStorage": "存储",
       "kindCredits": "AI Credits",
       "oneOffNote": "一次性买断",
@@ -1692,7 +1704,8 @@
     "payBillDesc": "管理支付方式与付款",
     "trafficUsageDesc": "查看流量与调用用量",
     "usageLimitDesc": "配额上限与告警阈值",
-    "verifyUnknown": "认证未知",
+    "identityVerified": "已实名",
+    "identityUnverified": "未实名",
     "verifyActive": "已认证",
     "verifySuspended": "已暂停",
     "brandName": "Workspace Console",
@@ -2006,7 +2019,7 @@
         "partiallyRefunded": "部分退款",
         "submitted": "提交订单",
         "pay": "付款",
-        "declared": "付款申报",
+        "declared": "提交付款信息",
         "confirm": "确认收款",
         "settleZero": "自动结清（¥0）",
         "provision": "服务开通",
@@ -2075,18 +2088,18 @@
       "refunded": "已退款",
       "partiallyRefunded": "部分退款",
       "pending": "待付款",
-      "declared": "已申报 · 核验中",
+      "declared": "已提交 · 核验中",
       "received": "已收款",
       "unpaid": "未付款",
       "settledZero": "已结清"
     },
     "pendingBanner": {
       "title": "有 {count} 笔订单待支付",
-      "description": "去费用中心完成支付,订单履约后订阅才会开通。",
+      "description": "完成支付后自动开通；多笔待付订单可到费用中心选择。",
       "deadline": "最早一笔 {time} 到期,逾期自动关闭。",
-      "action": "去费用中心支付",
+      "action": "去支付",
       "inflightTitle": "有 {count} 笔订单进行中",
-      "inflightDescription": "已收到付款申报，等待确认到账；确认后自动开通，订阅会出现在下面。",
+      "inflightDescription": "已收到付款信息，等待确认到账；确认后自动开通，订阅会出现在下面。",
       "inflightAction": "查看订单状态"
     },
     "stats": {
@@ -2432,7 +2445,7 @@
         },
         "receipt_in_progress": {
           "tag": "收款在途",
-          "text": "有 {count} 笔付款申报待确认。"
+          "text": "有 {count} 笔订单的付款信息待确认。"
         },
         "pending_order_with_payment": {
           "tag": "付费订单在途",
@@ -2483,7 +2496,7 @@
     },
     "items": {
       "payTitle": "支付「{product}」的订阅订单",
-      "payDetail": "请在 {date} 前完成支付申报,逾期自动取消",
+      "payDetail": "请在 {date} 前完成付款并提交付款信息,逾期自动取消",
       "payDetailNoTtl": "订单等待支付",
       "payAction": "去支付",
       "renewTitle": "「{product}」即将到期",
@@ -2498,8 +2511,8 @@
       "invitesDetail": "临期未接受的邀请可撤销后重新发出",
       "invitesAction": "去邀请管理",
       "addonTitle": "支付加油包「{pack}」的订单",
-      "addonDetail": "请在 {date} 前完成转账申报,逾期自动取消",
-      "addonAction": "去申报",
+      "addonDetail": "请在 {date} 前完成转账并提交付款信息,逾期自动取消",
+      "addonAction": "去提交付款信息",
       "incomingInviteTitle": "{tenant} 邀请你加入",
       "incomingInviteDetail": "{inviter} 邀请你以「{role}」身份加入，{expires} 前有效。",
       "incomingInviteAction": "去处理",

@@ -129,13 +129,13 @@ export function AddonOrdersPage() {
     },
     {
       id: "declared",
-      header: "申报状态",
+      header: "付款信息",
       align: "center",
       cell: (o) =>
         o.paymentDeclared ? (
-          <StatusBadge tone="info">已申报转账</StatusBadge>
+          <StatusBadge tone="info">已提交</StatusBadge>
         ) : (
-          <StatusBadge tone="warning">未申报</StatusBadge>
+          <StatusBadge tone="warning">未提交</StatusBadge>
         ),
     },
     {
@@ -159,7 +159,7 @@ export function AddonOrdersPage() {
       <PageHeader
         icon="lightning"
         title="加油包订单"
-        description="客户自助购买的存储扩展包 / AI 加油包待核销队列(已申报优先)。确认收款即自动授予配额池。"
+        description="客户自助购买的存储扩展包 / AI 加油包待核销队列（已提交付款信息的订单优先）。确认收款即自动授予配额池。"
       />
       {error ? <Banner tone="danger" title={error} /> : null}
       {notice ? <Banner tone="success" title={notice} /> : null}
@@ -172,7 +172,7 @@ export function AddonOrdersPage() {
         empty={
           <EmptyState
             title="暂无待处理的加油包订单"
-            description="客户下单后会出现在这里;已申报转账的订单排在最前。"
+            description="客户下单后会出现在这里，已提交付款信息的订单排在最前。"
           />
         }
       />

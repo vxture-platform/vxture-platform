@@ -147,6 +147,11 @@ export class SessionAggregator {
   async getCurrentUser(userId: string, orgId?: string) {
     const user = await this.account.getUserById(userId);
     if (!user) return null;
+    // Read only the caller's status; identity documents never enter the session.
+    const kyc = await this.pool.query<{ status: string }>(
+      "select status from kyc.user_kycs where user_id = $1",
+      [userId],
+    );
     let roleLabel = "Authenticated User";
     if (orgId) {
       const member = await this.org.getOrgMemberDetail(orgId, userId);
@@ -167,6 +172,7 @@ export class SessionAggregator {
       roleLabel,
       username: user.account,
       phone: user.phone,
+      realNameVerified: kyc.rows[0]?.status === "verified",
       picture: this.pictureFor(user),
       accountStatus: user.status,
       deletionRequestedAt: user.deletionRequestedAt ?? null,

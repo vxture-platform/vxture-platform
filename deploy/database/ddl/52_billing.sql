@@ -368,7 +368,7 @@ CREATE TABLE billing.payments (
     created_at             timestamptz   NOT NULL DEFAULT now(),
     updated_at             timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT uq_payments_pay_order_no  UNIQUE (pay_order_no),
-    CONSTRAINT chk_payments_pay_source   CHECK (pay_source IN ('online','offline','voucher')),  -- 'voucher' = settlement leg (product_321 P7)
+    CONSTRAINT chk_payments_pay_source   CHECK (pay_source IN ('online','offline','voucher','balance')),  -- 'voucher' = settlement leg (product_321 P7)
     -- 值域里有两个**保留值**，2026-09-25 核过：全仓没有写入方。
     --   'pending'    线下流程里腿一建就是 pending_verify。它同时是本列的 DEFAULT，
     --                所以**不能**从 CHECK 里摘掉——摘了以后任何不显式给 pay_status 的
@@ -442,8 +442,8 @@ CREATE TABLE billing.refunds (
     CONSTRAINT chk_refunds_execute_needs_approval
       CHECK (refund_status = 'pending' OR audit_status = 'approved'),
     -- 转账段的三道门（2026-12-01，迁移 2026-12-01-refund-transfer-step）。每条写在一行：守卫按行解析。
-    --   ① transfer_channel 三值；② processing / success 必须先有「发起」的事实；③ 银行转账必须有回单号。
-    CONSTRAINT chk_refunds_transfer_channel CHECK (transfer_channel IS NULL OR transfer_channel IN ('bank_transfer','alipay','legacy')),
+    -- Wallet returns record balance and their execution time; external bank transfers require a reference.
+    CONSTRAINT chk_refunds_transfer_channel CHECK (transfer_channel IS NULL OR transfer_channel IN ('bank_transfer','alipay','legacy','balance')),
     CONSTRAINT chk_refunds_moved_has_transfer CHECK (refund_status IN ('pending','failed') OR transfer_initiated_at IS NOT NULL),
     CONSTRAINT chk_refunds_bank_needs_reference CHECK (transfer_channel IS DISTINCT FROM 'bank_transfer' OR transfer_reference IS NOT NULL)
 );

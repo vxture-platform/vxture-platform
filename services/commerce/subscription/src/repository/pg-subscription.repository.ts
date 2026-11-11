@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
 import type {
@@ -848,9 +848,83 @@ export class PgSubscriptionRepository {
     return row.id;
   }
 
+  /** Debit the tenant wallet and record the paid leg inside the locked order transaction. */
+  async settleBalanceTx(
+    client: PoolClient,
+    input: {
+      tenantId: string;
+      invoiceId: string;
+      amountYuan: string;
+      currency: string;
+      actorId: string;
+    },
+  ): Promise<string> {
+    const external = await client.query<{ paid: boolean }>(
+      `select exists(select 1 from billing.payments where bill_id=$1
+       and pay_source in ('online','offline') and pay_status='paid') as paid`,
+      [input.invoiceId],
+    );
+    if (external.rows[0]?.paid)
+      throw new ConflictException("该订单已有外部付款，请继续使用原支付方式");
+    const wallet = await client.query<{ balance: string; currency: string }>(
+      `select balance::text, currency from billing.credits where tenant_id = $1 for update`,
+      [input.tenantId],
+    );
+    const before = wallet.rows[0];
+    if (!before || before.currency !== input.currency) {
+      throw new ConflictException("当前租户没有该币种的可用余额");
+    }
+    const debit = await client.query<{ balance: string }>(
+      `update billing.credits set balance = balance - $2::numeric,
+         total_consumed = total_consumed + $2::numeric, version = version + 1, updated_at = now()
+       where tenant_id = $1 and currency = $3 and balance >= $2::numeric and $2::numeric > 0
+       returning balance::text`,
+      [input.tenantId, input.amountYuan, input.currency],
+    );
+    if (!debit.rows[0])
+      throw new ConflictException("账户余额不足，请选择其他支付方式");
+    const transaction = await client.query<{ id: string }>(
+      `insert into billing.transactions
+       (tenant_id, bill_id, transaction_no, trade_type, amount, currency,
+        balance_before, balance_after, trade_status, actor_type, actor_id)
+       values ($1,$2,$3,'consume',-$4::numeric,$5,$6,$7,'success','customer',$8) returning id`,
+      [
+        input.tenantId,
+        input.invoiceId,
+        visibleCode("TXN"),
+        input.amountYuan,
+        input.currency,
+        before.balance,
+        debit.rows[0].balance,
+        input.actorId,
+      ],
+    );
+    const payment = await client.query<{ id: string }>(
+      `insert into billing.payments
+       (tenant_id,bill_id,transaction_id,pay_order_no,pay_source,total_amount,paid_amount,
+        currency,pay_status,paid_at,actor_type,actor_id,created_at,updated_at)
+       values ($1,$2,$3,$4,'balance',$5,$5,$6,'paid',now(),'customer',$7,now(),now()) returning id`,
+      [
+        input.tenantId,
+        input.invoiceId,
+        transaction.rows[0]!.id,
+        visibleCode("PAY"),
+        input.amountYuan,
+        input.currency,
+        input.actorId,
+      ],
+    );
+    await client.query(
+      `update billing.invoices set paid_amount = paid_amount + $2::numeric,
+      payment_method = 'balance', updated_at = now() where id = $1`,
+      [input.invoiceId, input.amountYuan],
+    );
+    return payment.rows[0]!.id;
+  }
+
   /**
-   * cashDue=0 settlement (P8): insert the paid voucher leg (when a credit
-   * voucher participates) and clear the invoice in one shot. Cash never moves.
+   * Finalize voucher legs and mark the invoice paid after zero-cash or wallet
+   * settlement. The wallet leg, when present, has already funded the remainder.
    */
   async settleInvoiceByVouchersTx(
     client: PoolClient,
@@ -889,7 +963,7 @@ export class PgSubscriptionRepository {
          paid_amount = paid_amount + $2,
          bill_status = 'paid',
          paid_at = now(),
-         payment_method = 'voucher',
+         payment_method = case when payment_method = 'balance' then 'balance' else 'voucher' end,
          updated_at = now()
        where id = $1`,
       [input.invoiceId, input.voucherLegYuan],

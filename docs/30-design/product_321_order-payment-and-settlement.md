@@ -66,7 +66,7 @@ wire 值域即上表六个 slug（`GET orders` 的 `orderStatus` 契约 + i18n k
   = payable_amount ¥960（=total_amount，账单口径不双减）
 结算层（怎么付 → 支付腿，Σ腿实收 ≡ payable）
   腿① 代金券 ¥100（payments 行 pay_source='voucher'，见 P7）
-  腿② 余额   ——（预留，V1 休眠，见 P6）
+  腿② 余额   剩余应付（选择余额时即时结清，见 P6）
   腿③ 现金   cashDue（支付宝/银行转账，pending_verify → paid）
 还需实付：cashDue = max(0, payable − invoice.paid_amount − voucherOff)
          （含 −paid_amount 项：存量部分收款单进付款页时自动扣减已收，付款页展示"已收 ¥X"行）
@@ -78,12 +78,14 @@ wire 值域即上表六个 slug（`GET orders` 的 `orderStatus` 契约 + i18n k
 - **计价通道唯一**：折扣一律走 discount 负额行 + 重算。挂单账单（在途订单关联、未清）**禁用** admin 应收减免/作废/标逾期三运营操作（409 引导走订单侧），防第二折扣通道与 `operate_remark` 覆写（P10）。
 - **否决"一切支付先+入余额再−消费"**（owner 初提思路，已明示按最佳实践修正）：①充值与消费是两种开票事项，直付伪装成充值引来预付卡合规负担；②退款必须原路退回，现金变余额退不回渠道；③渠道对账多一层虚拟映射；④`credits.total_granted/consumed` 被直付虚增失真。
 
-### P6 钱包 V1 休眠（采纳）
+### P6 租户余额支付（2026-11-11 启用）
 
-- 钱包（`billing.credits`，挂租户、一租户一池——与 owner 建议一致，DDL 既有设计不动）定位 = 未来**按量扣款**（postpaid/prepaid 计量计费）资金池。V1 无扣款业务 → 余额恒 0，console 只读展示（数据通路见 §4.1 credits 端点），付款页余额行仅 balance>0 时渲染。
-- **预留不实现**：充值订单（`bill_type` 扩 `'recharge'`）、credits 写引擎（grant/consume/refund 乐观锁）、余额支付腿、运营余额调账、充值弹层/充值付款页。启用时**余额腿同样落 payments 行**（`pay_source='balance'`，届时再扩 CHECK 并同步修订 210 的 `paid_amount` 注释口径），P5 不变量无需改。
-- **钱 ≠ 配额（铁律）**：钱包=CNY 预收款负债；AI 积分/存储=产品配额（metering 配额池，扣量引擎已建成验证）。积分包/存储包 = 普通加购订单，激活时 grant 配额入池，**绝不入钱包**。
-- 凡可购之物一律**一单一账单**（套餐/续费/升级/加购统一管道），单品订单、无购物车。
+- 钱包 `billing.credits` 以租户为资金主体；个人账号在另一租户的余额不能跨租户支付。页面显示订单租户同币种可用余额，无需运营开关。
+- 结算顺序仍为折扣券 → 代金券 → 余额或外部付款。余额方式支付整笔剩余应付，不足时拒绝扣款并提示选择其他渠道，不产生部分扣款或待人工确认腿；已有外部实收的订单继续走原付款渠道，不混用余额。
+- 确认支付才写入。事务锁定订单、账单和余额行，以币种及足额条件更新余额、累计消耗和版本，追加负数 consume 流水及已支付 `pay_source='balance'` 付款腿，结清账单后复用履约及失败自愈。重复提交不重复扣款。
+- 余额订单退款仍遵守原有资格、额度折算和运营审核，退款基数仅为实际余额扣款，代金券不能转成余额；审核通过后自动原路退回同租户余额并追加正数 refund 流水，重复执行不重复入账。外部付款订单保留原有转账流程。
+- 钱 ≠ 配额：AI 点数与存储配额不作为可支付钱包。充值、运营调账与加油包余额支付不在本轮新增范围。
+- 微信支付仅提供居中占位界面；不支持付款申报或扣款，待真实渠道接入后再启用。
 
 ### P7 券语义与落库：折扣券=计价层，代金券=结算腿（采纳，修订 230 两处）
 
@@ -186,7 +188,7 @@ AND (expires_at IS NULL OR expires_at > now())
 | 端点                                   | 新/改 | 说明                                                                                                                                                                                                                                          |
 | -------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET orders/:orderId`                  | 新    | 付款页详情：订单摘要 + 金额分解（含"已收 ¥X"行，P5）+ 可用券列表（P7 谓词）+ 支付腿 + 六态（P1 有序判定）+ `expireAt` + `rejectReason`（最近 `payment_rejected` histories remark）+ `paymentChannels`（§4.4）                                 |
-| `POST orders/:orderId/quote`           | 新    | body `{discountVoucherId?, creditVoucherId?}` → `{listPrice, discountOff, payable, paidAmount, voucherOff, balanceOff:0, cashDue}` 纯试算（cashDue 公式=P5，§5.3 单点实现）；校验集=P7 谓词全集                                               |
+| `POST orders/:orderId/quote`           | 新    | body `{discountVoucherId?, creditVoucherId?, useBalance?}` → `{listPrice, discountOff, payable, paidAmount, voucherOff, balanceOff, cashDue}` 纯试算（cashDue 公式=P5，§5.3 单点实现）；校验集=P7 谓词全集                                    |
 | `POST orders/:orderId/payment-declare` | 新    | body `{payChannel:"alipay"\|"bank_transfer", discountVoucherId?, creditVoucherId?, payerName?, transactionNo?, remark?}` → P8 原子过账（渠道映射表见 P1；payChannel 须在当前 `paymentChannels` 派生结果中 `enabled`，否则 400）；返回订单新态 |
 | `GET credits`                          | 新    | `{balance, currency}`——余额卡与付款页余额行的数据通路（服务方法 `getCreditBalance` 已有，端点缺席；tenant 上下文取法同现有订单端点）                                                                                                          |
 | `POST orders`                          | 改    | 响应补 `expireAt`；前端付费路径创建后跳付款页（不再就地渲染面板）                                                                                                                                                                             |
@@ -362,7 +364,7 @@ V1 不加（现状仅订阅 actions 有 fire-and-forget 邮件）；申报/确�
 
 1. 申报/确认/驳回邮件通知（MailService 既有，挂接即可）。
 2. 在线支付网关（支付宝当面付/微信 Native）：现金腿 `pay_source='online'` + `pay_expire_at` + 渠道回调走同一段 1/段 2 编排——"自动确认"第二通道，状态机零改动。
-3. 钱包启用包（P6 预留清单：充值订单、credits 写引擎、余额腿落 payments `pay_source='balance'`、调账、充值 UI）。
+3. 钱包后续能力（P6 已启用订阅余额支付与退款；充值订单、调账与充值 UI 待实现）。
 4. 手输券码兑换栏（V1 仅定向发放券自动列出）；券过期 `expired` 转态 sweep（V1 读时过滤；设计时对照 §7 规则 1 锁序不变量——**前置能力缺口**：reserved 券无占用方反查指针（凭据只在腿侧 jsonb 无索引），启用券侧主动转态/批次 revoke 前需先解决反查（redemption 预落 reserved 行或加 `vouchers.reserved_by_payment_id` 列，均需重估零 DDL 决策）；当前不变量仅约束订单侧发起的路径）。
 5. 加购 SKU（存储包/AI 积分包）：管道已通（一单一账单 + 激活 grant 配额），待产品定义 SKU 与配额映射。
 6. **部分到账系统化**：V1 足额确认制（P9，申报腿与无腿路径双恒等，系统不再新造 partial；实收不符一律驳回+线下退回/补齐，320 存量 partial 由付款页差额闭环消化）；若线下实务高频出现金额不符，再评估拆腿方案（v1.1 版留档于 git 历史，四连雷见 P9 否决理由）或"登记实收+人工退款单"轻量方案（refunds 表有结构无业务）。

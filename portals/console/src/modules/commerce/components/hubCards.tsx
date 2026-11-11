@@ -223,6 +223,7 @@ export function SubscriptionProductCard({
     optedOut
       ? {
           id: "renew-on",
+          icon: "refresh",
           label: t("card.autoRenewOn"),
           disabled: !renewToggleable,
           /* 此前只有「关」那一支带 hint，「开」这一支灰着不说为什么——而冻结中恰恰是
@@ -238,6 +239,7 @@ export function SubscriptionProductCard({
         }
       : {
           id: "renew-off",
+          icon: "pause",
           label: t("card.autoRenewOff"),
           disabled: !renewToggleable,
           ...(renewToggleable
@@ -254,6 +256,7 @@ export function SubscriptionProductCard({
       ? [
           {
             id: "review",
+            icon: "star",
             label: reviewed ? t("card.reviewed") : t("card.review"),
             // 已评过、或订阅还没开始(无 startAt)时不给评——没用过的东西评什么。
             disabled: reviewed || item.startAt === null,
@@ -267,6 +270,7 @@ export function SubscriptionProductCard({
        回答了「关于哪个东西」。产品码缺失时不带对象,只跳(见 ticket-compose)。 */
     {
       id: "help",
+      icon: "chat-circle",
       label: tJump("subscription"),
       onSelect: () =>
         router.push(
@@ -277,6 +281,7 @@ export function SubscriptionProductCard({
     },
     {
       id: "unsubscribe",
+      icon: "prohibit",
       label: t("card.unsubscribe"),
       danger: true,
       disabled: expired,

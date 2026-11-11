@@ -20,7 +20,7 @@
     "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-locale": "workspace:*",
     "@vxture/core-utils": "workspace:*",
-    "@vxture/design-system": "latest",
+    "@vxture/design-system": "12.19.0",
     "@vxture/platform-browser": "workspace:*",
     "next": "^15.5.25",
     "next-intl": "^4.13.2",

@@ -1,4 +1,5 @@
 "use client";
+import { isNavigationActive } from "@/lib/navigation-active";
 
 /* 控制台壳层容器 — 1:1 转写自设计稿 main-template.jsx App。
  * Header 置顶 + 主体行(Sidebar / 内容 / Assistant) + Drawer——全 DS 组件与 T2 工具类。
@@ -484,9 +485,7 @@ export function ConsoleAppShell({
             sections={navSections}
             collapsed={navCollapsed}
             onToggleCollapsed={toggleNav}
-            isActive={(href) =>
-              href === "/" ? pathname === "/" : pathname.startsWith(href)
-            }
+            isActive={(href) => isNavigationActive(pathname, href)}
             storageKeyPrefix="vx-console-nav"
             linkComponent={NavLink}
             labels={sidebarLabels}

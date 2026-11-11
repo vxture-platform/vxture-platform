@@ -9,7 +9,7 @@
  * **退过款**的单在界面上写着「已取消 · 未付款」——而它付过钱。这是代码里唯一一句关于
  * 钱的假话（2026-09-25 owner 定稿的状态机文档 §差距 一之一）。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import type { Request } from "express";
 
@@ -102,7 +102,9 @@ function detailRouterWith(
     none,
     orderService,
     none,
-    none,
+    {
+      getCreditBalance: async () => ({ balance: "10.00", currency: "CNY" }),
+    } as never,
     none,
     pool,
     none,
@@ -276,5 +278,95 @@ describe("退款展示：打款失败不能说成「已通过，等待打款」"
     );
     const detail = await router.getOrderDetail(req(), ORDER_UUID);
     expect(detail.refund?.stage).toBe("refunded");
+  });
+});
+
+// ============================================================================
+// Wallet quotes and payment declaration use the authenticated tenant
+// ============================================================================
+describe("wallet checkout boundary", () => {
+  function walletRouter(balance = "100.00", currency = "CNY", found = true) {
+    const wallet = vi.fn(async () => ({ balance, currency }));
+    const declare = vi.fn(async () => ({
+      outcome: "activated",
+      cashDue: "0.00",
+      paymentId: null,
+    }));
+    const pool = {
+      query: vi.fn(async () => ({
+        rows: found
+          ? [
+              row({
+                order_id: ORDER_UUID,
+                order_status: "pending_payment",
+                bill_status: "unpaid",
+                paid_amount: "0.00",
+                payment_ttl_minutes: null,
+                declared_at: null,
+              }),
+            ]
+          : [],
+      })),
+    };
+    const none = undefined as never;
+    const router = new SubscriptionRouter(
+      none,
+      { declarePayment: declare } as never,
+      none,
+      { getCreditBalance: wallet } as never,
+      none,
+      pool as never,
+      none,
+      none,
+      none,
+    );
+    return { router, wallet, declare };
+  }
+  it("quotes full wallet funding when the same-currency balance covers the remainder", async () => {
+    const f = walletRouter();
+    expect(
+      await f.router.quoteOrder(req(), ORDER_UUID, { useBalance: true }),
+    ).toMatchObject({ balanceOff: "100.00", cashDue: "100.00" });
+    expect(f.wallet).toHaveBeenCalledWith(req().tenant!.id);
+  });
+  it.each([
+    ["99.99", "CNY"],
+    ["100.00", "USD"],
+  ])("does not quote unusable funds (%s %s)", async (balance, currency) => {
+    const f = walletRouter(balance, currency);
+    expect(
+      await f.router.quoteOrder(req(), ORDER_UUID, { useBalance: true }),
+    ).toMatchObject({ balanceOff: "0.00" });
+  });
+  it("does not read or apply a wallet for an offline quote", async () => {
+    const f = walletRouter();
+    expect(await f.router.quoteOrder(req(), ORDER_UUID, {})).toMatchObject({
+      balanceOff: "0.00",
+    });
+    expect(f.wallet).not.toHaveBeenCalled();
+  });
+  it("accepts balance payment without offline channel configuration", async () => {
+    const f = walletRouter();
+    await f.router.declarePayment(req(), ORDER_UUID, { payChannel: "balance" });
+    expect(f.declare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: req().tenant!.id,
+        payChannel: "balance",
+      }),
+    );
+  });
+  it("rejects a payment outside the current tenant", async () => {
+    const f = walletRouter("100.00", "CNY", false);
+    await expect(
+      f.router.declarePayment(req(), ORDER_UUID, { payChannel: "balance" }),
+    ).rejects.toThrow("无权");
+    expect(f.declare).not.toHaveBeenCalled();
+  });
+  it("keeps WeChat preview unavailable for actual payment", async () => {
+    const f = walletRouter();
+    await expect(
+      f.router.declarePayment(req(), ORDER_UUID, { payChannel: "wechat" }),
+    ).rejects.toThrow("payChannel");
+    expect(f.declare).not.toHaveBeenCalled();
   });
 });

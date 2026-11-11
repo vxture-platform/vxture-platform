@@ -190,6 +190,7 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
     getRefundById: vi.fn(async (): Promise<RefundRecordView | null> => null),
     createRefundRequest: vi.fn(async () => refundView()),
     auditRefund: vi.fn(async () => refundView({ auditStatus: "approved" })),
+    isBalancePaidOrder: vi.fn(async () => false),
     executeRefund: vi.fn(async () => ({
       refund: refundView({ auditStatus: "approved", refundStatus: "success" }),
       order: order({ status: "refunded" }),
@@ -1021,6 +1022,29 @@ describe("OrderService refund (P2-b, owner 决策 3)", () => {
     expect(orders.createRefundRequest).toHaveBeenCalledWith(
       expect.objectContaining({ amount: "100.00", refundType: "normal" }),
     );
+  });
+
+  it("rejects operator refunds that would convert voucher value into wallet funds", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    orders.getRefundBasis.mockResolvedValue({
+      balancePaidAmount: 60,
+      earlierFulfilledCount: 0,
+      usageRatio: 0,
+      consumableShare: 0.5,
+      payRecordId: "pay-1",
+      payChannel: null,
+      invoiceId: "inv-1",
+      existingRefundId: null,
+    });
+    await expect(
+      service.createOperatorRefund({
+        orderId: "ord-1",
+        reason: "full refund",
+        operatorId: "op-1",
+        amount: "100.00",
+      }),
+    ).rejects.toThrow("退款金额不能超过实付 60.00");
+    expect(orders.createRefundRequest).not.toHaveBeenCalled();
   });
 
   it("金额不得超过实付", async () => {
@@ -2058,5 +2082,164 @@ describe("OrderService.runAutoRenewalPass 的运营通告 (C-1)", () => {
     });
     expect(notice.referenceId).toBe("autorenew_no_price:sub-9:2026-10-01");
     expect(notice.title).toContain("2026-10-01 到期");
+  });
+});
+
+// ============================================================================
+// Wallet checkout orchestration and original-wallet refunds
+// ============================================================================
+describe("balance payment", () => {
+  function checkout(over: Partial<OrderRecord> = {}, paid = false) {
+    const record = order({ status: "pending_payment", ...over });
+    const invoice = {
+      id: "inv-1",
+      billNo: "INV-1",
+      billStatus: paid ? "paid" : "unpaid",
+      paidAmount: "0.00",
+      currency: "CNY",
+    };
+    const repo = {
+      withOrderTx: vi.fn(
+        async (
+          _id: string,
+          fn: (ctx: {
+            client: unknown;
+            order: OrderRecord;
+            invoice: typeof invoice;
+          }) => Promise<unknown>,
+        ) => fn({ client: {}, order: record, invoice }),
+      ),
+      isPaymentExpiredTx: vi.fn(
+        async () =>
+          record.createdAt.getTime() +
+            (record.paymentTtlMinutes ?? 30) * 60_000 <=
+          Date.now(),
+      ),
+      markPaidTx: vi.fn(),
+      insertEventTx: vi.fn(),
+    };
+    const subRepo = {
+      findPendingVerifyLegTx: vi.fn(async () => null),
+      softDeleteDiscountItemsTx: vi.fn(async () => 0),
+      recomputeInvoiceTx: vi.fn(async () => ({ totalAmount: "100.00" })),
+      settleBalanceTx: vi.fn(async () => "balance-leg"),
+      settleInvoiceByVouchersTx: vi.fn(async () => ({ voucherLegId: null })),
+      insertCashLegTx: vi.fn(),
+    };
+    const promotion = {
+      reserveForOrder: vi.fn(async () => []),
+      finalizeReserved: vi.fn(),
+    };
+    const service = new OrderService(
+      repo as never,
+      subRepo as never,
+      {} as never,
+      promotion as never,
+    );
+    const fulfill = vi.spyOn(service, "fulfill").mockResolvedValue({} as never);
+    const pay = () =>
+      service.declarePayment({
+        orderId: "ord-1",
+        tenantId: "t-1",
+        userId: "u-1",
+        payChannel: "balance",
+      });
+    return { pay, repo, subRepo, promotion, fulfill };
+  }
+  it("settles immediately and activates without an offline payment leg", async () => {
+    const f = checkout();
+    expect(await f.pay()).toMatchObject({ outcome: "activated" });
+    expect(f.subRepo.settleBalanceTx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: "t-1",
+        invoiceId: "inv-1",
+        amountYuan: "100.00",
+        currency: "CNY",
+      }),
+    );
+    expect(f.subRepo.insertCashLegTx).not.toHaveBeenCalled();
+    expect(f.repo.markPaidTx).toHaveBeenCalledTimes(1);
+    expect(f.fulfill).toHaveBeenCalledTimes(1);
+  });
+  it("does not debit an already paid order", async () => {
+    const f = checkout({}, true);
+    expect(await f.pay()).toMatchObject({ outcome: "already_settled" });
+    expect(f.subRepo.settleBalanceTx).not.toHaveBeenCalled();
+  });
+  it("rejects cross-tenant payment before reserving vouchers", async () => {
+    const f = checkout({ tenantId: "other" });
+    await expect(f.pay()).rejects.toThrow("归属");
+    expect(f.promotion.reserveForOrder).not.toHaveBeenCalled();
+  });
+  it("rejects expired orders without debiting", async () => {
+    const f = checkout({ createdAt: new Date(Date.now() - 60 * 60_000) });
+    await expect(f.pay()).rejects.toThrow("超时");
+    expect(f.subRepo.settleBalanceTx).not.toHaveBeenCalled();
+  });
+  it("propagates insufficient funds without marking paid or activating", async () => {
+    const f = checkout();
+    f.subRepo.settleBalanceTx.mockRejectedValueOnce(
+      new ConflictException("余额不足"),
+    );
+    await expect(f.pay()).rejects.toThrow("余额不足");
+    expect(f.repo.markPaidTx).not.toHaveBeenCalled();
+    expect(f.fulfill).not.toHaveBeenCalled();
+  });
+  it("keeps a successful debit settled if fulfillment needs retry", async () => {
+    const f = checkout();
+    f.fulfill.mockRejectedValueOnce(new Error("retry"));
+    expect(await f.pay()).toMatchObject({ outcome: "activating" });
+    expect(f.subRepo.settleBalanceTx).toHaveBeenCalledTimes(1);
+  });
+  it("bases a wallet refund only on actual wallet funds, excluding voucher value", async () => {
+    const { service, orders } = build(
+      order({ status: "fulfilled", fulfilledAt: new Date() }),
+      null,
+    );
+    orders.getRefundBasis.mockResolvedValueOnce({
+      balancePaidAmount: 60,
+      earlierFulfilledCount: 0,
+      usageRatio: 0,
+      consumableShare: 0.5,
+      payRecordId: "pay",
+      payChannel: null,
+      invoiceId: "inv",
+      existingRefundId: null,
+    });
+    expect(await service.getRefundEligibility("ord-1")).toMatchObject({
+      paidAmount: "60.00",
+      amount: "60.00",
+    });
+  });
+  it("automatically returns an approved refund to the original wallet", async () => {
+    const { service, orders } = build(order({ status: "fulfilled" }), null);
+    orders.isBalancePaidOrder.mockResolvedValue(true);
+    orders.getRefundById
+      .mockResolvedValueOnce(refundView())
+      .mockResolvedValueOnce(refundView({ auditStatus: "approved" }));
+    expect(
+      await service.auditRefund("rfd-1", {
+        decision: "approved",
+        remark: "ok",
+        operatorId: "op",
+      }),
+    ).toMatchObject({ refundStatus: "success" });
+    expect(orders.executeRefund).toHaveBeenCalledTimes(1);
+  });
+  it("never starts an external refund transfer for a wallet-paid order", async () => {
+    const { service, orders } = build(order({ status: "fulfilled" }), null);
+    orders.isBalancePaidOrder.mockResolvedValue(true);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+    await expect(
+      service.initiateRefundTransfer(
+        "rfd-1",
+        { channel: "alipay", reference: "ref" },
+        { actorType: "operator", actorId: "op" },
+      ),
+    ).rejects.toThrow("原租户余额");
+    expect(orders.markRefundTransferInitiated).not.toHaveBeenCalled();
   });
 });
