@@ -1485,7 +1485,7 @@
       "colUsed": "Used this cycle",
       "colRemaining": "Left",
       "colReset": "Reset",
-      "colExpires": "Valid until",
+      "colExpires": "Entitlement validity",
       "empty": "No AI Credits yet — subscribe to a product to receive them"
     },
     "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
@@ -1539,15 +1539,16 @@
     "storage": {
       "title": "Storage",
       "description": "A workspace-level shared resource: one row per grant source or usage subject; a product's contribution and usage read side by side",
-      "colLimit": "Grant",
-      "colExpires": "Valid until",
+      "colLimit": "Contributed capacity",
+      "colExpires": "Entitlement validity",
       "noExpiry": "No expiry",
-      "colUsed": "Used",
+      "colUsed": "Storage used",
       "colShare": "Of total",
       "colObserved": "Reported at",
       "emptySources": "No storage grants yet",
       "colItem": "Item",
-      "usageOnly": "Product usage"
+      "usageOnly": "Product usage",
+      "subscriptionTerm": "While subscribed"
     },
     "title": "Quota Management"
   },
@@ -2110,7 +2111,9 @@
       "productsHintNoFree": "in this workspace",
       "expiring": "Next expiry",
       "expiringHint": "{product} · {cycle} · {days} days left",
-      "expiringNone": "Nothing expiring soon"
+      "expiringNone": "Nothing expiring soon",
+      "resources": "Resource add-ons",
+      "resourcesHint": "Currently active add-on resource pools"
     },
     "subStatus": {
       "active": "Active",
@@ -2123,7 +2126,7 @@
     },
     "subs": {
       "title": "My agents",
-      "description": "Favorites first, then most recently provisioned; unpaid or unprovisioned orders are not listed here.",
+      "description": "Favorites first, then most recently activated. Expired subscriptions remain for one year; replaced and older subscriptions move to History.",
       "filterLabel": "Subscription filter",
       "filterActive": "Active",
       "filterAll": "All",
@@ -2134,7 +2137,8 @@
       "unsubscribeTitle": "Unsubscribe from {product}?",
       "unsubscribeBody": "Service stops immediately and no refund is issued; data follows the retention policy. If you only want to stop renewing, use \"Cancel at period end\" instead — service continues through the current cycle.",
       "unsubscribeKeep": "Keep subscription",
-      "unsubscribeConfirm": "Unsubscribe now"
+      "unsubscribeConfirm": "Unsubscribe now",
+      "filterHistory": "History"
     },
     "svcAxis": {
       "notProvisioned": "Not provisioned",
@@ -2758,7 +2762,7 @@
       "available": "Available",
       "expiringSoon": "{count} expiring within 7 days",
       "noExpiring": "None expiring soon",
-      "used": "Used",
+      "used": "Used vouchers",
       "usedHint": "Total redeemed",
       "total": "All vouchers",
       "totalHint": "Including used / expired / revoked"

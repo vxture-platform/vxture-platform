@@ -60,14 +60,18 @@ import { buildWebsiteProductsUrl } from "@/lib/website-entry";
 import { fetchReviewedSubscriptionIds } from "@/api/console-bff";
 import { SubscriptionProductCard } from "./components/hubCards";
 import { ReviewDialog } from "./components/ReviewDialog";
+import {
+  isEndedSubscription,
+  partitionSubscriptions,
+} from "./subscription-visibility";
 import { daysLeft } from "./components/hubModel";
 import { useDateFormat } from "@/lib/use-date-format";
 
 import { ResourcePacksSection } from "./components/ResourcePacksSection";
-type SubFilter = "active" | "all";
+type SubFilter = "active" | "all" | "history";
 
 export function SubscriptionPage() {
-  const { fmtDateTime, fmtDateShort } = useDateFormat();
+  const { fmtDateTime, fmtDate } = useDateFormat();
 
   const t = useTranslations("subscriptionHub");
   const locale = useLocale();
@@ -251,10 +255,13 @@ export function SubscriptionPage() {
 
   // ── 我的订阅：筛选（服务中|全部）+ 收藏优先排序 ──────────────────────────
   const visibleProducts = useMemo(() => {
+    const { current, archived } = partitionSubscriptions(products);
     const filtered =
-      subFilter === "all"
-        ? products
-        : products.filter((p) => p.status !== "expired");
+      subFilter === "history"
+        ? archived
+        : subFilter === "all"
+          ? current
+          : current.filter((p) => !isEndedSubscription(p));
     // 收藏优先；组内保持服务端「最近开通」序（sort 稳定）。
     return [...filtered].sort(
       (a, b) => Number(b.favorite) - Number(a.favorite),
@@ -304,7 +311,7 @@ export function SubscriptionPage() {
 
   // ── 概览指标（DS MetricGrid）───────────────────────────────────────────────
   const stats = useMemo<MetricGridItem[]>(() => {
-    const inService = products.filter((p) => p.status !== "expired");
+    const inService = products.filter((p) => !isEndedSubscription(p));
     const freeCount = inService.filter(
       (p) => p.kind === "free" || p.tier === "free",
     ).length;
@@ -328,10 +335,26 @@ export function SubscriptionPage() {
             : t("stats.productsHintNoFree"),
       },
       {
+        id: "resources",
+        icon: "stack",
+        label: t("stats.resources"),
+        value: loadFailed ? (
+          "—"
+        ) : (
+          <a
+            href="#subscription-resource-packs"
+            aria-label={t("stats.resources")}
+          >
+            {resourcePools.filter((p) => p.source === "addon_purchase").length}
+          </a>
+        ),
+        trend: t("stats.resourcesHint"),
+      },
+      {
         id: "expiring",
         icon: "clock",
         label: t("stats.expiring"),
-        value: fmtDateShort(expiring?.endAt),
+        value: fmtDate(expiring?.endAt),
         trend: expiring
           ? t("stats.expiringHint", {
               product: expiring.productName ?? expiring.planName,
@@ -344,7 +367,33 @@ export function SubscriptionPage() {
           : t("stats.expiringNone"),
       },
     ];
-  }, [products, t, loadFailed, fmtDateShort]);
+  }, [products, resourcePools, t, loadFailed, fmtDate]);
+
+  const marketAction = (
+    <Button asChild variant="outline" size="md">
+      <a
+        href={buildWebsiteProductsUrl(locale)}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {t("browseMarket")}
+        <Icon name="external-link" size="xs" aria-hidden />
+      </a>
+    </Button>
+  );
+
+  const subscriptionFilter = (
+    <SegmentedControl<SubFilter>
+      ariaLabel={t("subs.filterLabel")}
+      value={subFilter}
+      onChange={setSubFilter}
+      items={[
+        { value: "all", label: t("subs.filterAll") },
+        { value: "active", label: t("subs.filterActive") },
+        { value: "history", label: t("subs.filterHistory") },
+      ]}
+    />
+  );
 
   return (
     <ViewLayout>
@@ -352,19 +401,9 @@ export function SubscriptionPage() {
         icon="package"
         title={t("title")}
         description={t("description")}
-        action={
-          <Button asChild variant="outline" size="md">
-            <a
-              href={buildWebsiteProductsUrl(locale)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("browseMarket")}
-              <Icon name="external-link" size="xs" aria-hidden />
-            </a>
-          </Button>
-        }
+        action={<div className="hidden sm:block">{marketAction}</div>}
       />
+      <div className="sm:hidden">{marketAction}</div>
 
       {error ? <Banner tone="danger" title={error} /> : null}
       {/* 下单页深链里的产品 / 意图无法识别时带 ?notice=unknown-link 跳回来:说明理由,
@@ -451,10 +490,10 @@ export function SubscriptionPage() {
           ))
         : null}
 
-      {/* 本页业务 2 个指标 → columns=2（列数随业务定，不写死）。 */}
+      {/* Product, add-on and expiry metrics share the responsive DS grid. */}
       <MetricGrid
         items={stats}
-        columns={2}
+        columns={3}
         loading={loading}
         aria-label={t("stats.groupLabel")}
       />
@@ -465,18 +504,9 @@ export function SubscriptionPage() {
         level={2}
         title={t("subs.title")}
         description={t("subs.description")}
-        action={
-          <SegmentedControl<SubFilter>
-            ariaLabel={t("subs.filterLabel")}
-            value={subFilter}
-            onChange={setSubFilter}
-            items={[
-              { value: "all", label: t("subs.filterAll") },
-              { value: "active", label: t("subs.filterActive") },
-            ]}
-          />
-        }
+        action={<div className="hidden sm:block">{subscriptionFilter}</div>}
       >
+        <div className="flex justify-end sm:hidden">{subscriptionFilter}</div>
         {loading ? (
           <EmptyState icon="clock" title={t("loading")} />
         ) : loadFailed ? (

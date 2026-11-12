@@ -46,7 +46,6 @@ import {
   Icon,
   Input,
   MetricGrid,
-  Progress,
   StatusBadge,
   ViewHeader,
   ViewLayout,
@@ -75,10 +74,6 @@ import { ADDON_SECTION_HREF } from "./addon-routes";
 import { useDateFormat } from "@/lib/use-date-format";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
 import { useMetricLabel } from "@/lib/metric-label";
-
-/** 用量占比(额度 0 时归 0,超冲钳 100)。 */
-const percentOf = (used: number, limit: number): number =>
-  limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
 const KNOWN_SOURCES = new Set([
   "ws_base",
@@ -388,19 +383,6 @@ export function QuotasPage() {
         ),
     },
     {
-      id: "share",
-      header: t("storage.colShare"),
-      align: "center",
-      width: "sm",
-      cell: (r) =>
-        r.usedBytes !== null ? (
-          <Progress
-            value={percentOf(r.usedBytes, overview?.storage.limitBytes ?? 0)}
-            aria-label={t("storage.colShare")}
-          />
-        ) : null,
-    },
-    {
       id: "expires",
       header: t("storage.colExpires"),
       align: "center",
@@ -409,6 +391,8 @@ export function QuotasPage() {
           "—"
         ) : r.expiresAt ? (
           <span className="tabular-nums">{fmtDate(r.expiresAt)}</span>
+        ) : r.source === "subscription" ? (
+          t("storage.subscriptionTerm")
         ) : (
           t("storage.noExpiry")
         ),
@@ -477,6 +461,8 @@ export function QuotasPage() {
       cell: (p) =>
         p.expiresAt ? (
           <span className="tabular-nums">{fmtDate(p.expiresAt)}</span>
+        ) : p.source === "subscription" ? (
+          t("storage.subscriptionTerm")
         ) : (
           t("storage.noExpiry")
         ),

@@ -106,9 +106,13 @@ export class PgMeteringReadRepository {
               qp.quota_limit::text as quota_limit,
               qp.quota_used::text as quota_used,
               qp.current_period_start, qp.period_anchor,
-              qp.reset_period, qp.expires_at, qp.grant_reason, qp.effective_at,
+              qp.reset_period,
+              least(qp.expires_at, sub.end_at, case when sub.subscription_kind = 'trial'
+                then sub.trial_end_at end) as expires_at,
+              qp.grant_reason, qp.effective_at,
               plm.kind as platform_kind
          from metering.quota_pools qp
+         left join metering.subscriptions sub on sub.id = qp.subscription_id
          left join product.products prod on prod.id = qp.product_id
          left join product.platform_metrics plm on plm.metric_key = qp.metric_key
         where qp.workspace_id = $1
