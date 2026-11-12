@@ -193,7 +193,7 @@ export function ConsoleHeader({
 
   return (
     <ShellHeader
-      className="max-sm:gap-xs max-sm:px-md max-sm:[&>div:nth-child(2)]:hidden"
+      className="max-sm:[&>div:nth-child(2)]:hidden"
       height="lg"
       centerAlign="end"
       leading={
@@ -304,7 +304,7 @@ export function ConsoleHeader({
               asChild
               variant="ghost"
               size="md"
-              className="h-icon-xl px-sm text-label-sm"
+              className="h-icon-xl shrink-0 px-[calc(var(--vx-spacing)*2)] text-label-sm"
             >
               <a
                 href={buildWorkbenchEntry(
@@ -336,7 +336,7 @@ export function ConsoleHeader({
               onClick={() => openDrawer("help")}
             />
             {/* Ordinary unread items use the brand tone; zero stays hidden. */}
-            <span className="relative inline-flex">
+            <span className="relative inline-flex shrink-0">
               <ShellIconButton
                 icon="bell"
                 label={

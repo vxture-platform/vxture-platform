@@ -17,6 +17,7 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
+  AvatarSilhouette,
   Button,
   Popover,
   PopoverTrigger,
@@ -63,15 +64,18 @@ export function AccountsUserMenu({
   const [leaving, setLeaving] = useState(false);
   const keyboardOpening = useRef(false);
   const content = useRef<HTMLDivElement>(null);
-  const initial =
-    Array.from(user.displayName.trim())[0]?.toLocaleUpperCase() || "?";
   const phone = user.phone ? formatPhoneForDisplay(user.phone) : null;
   const avatar = (
-    <Avatar key={user.avatarSrc || "default"} className="size-icon-xl">
+    <Avatar
+      key={user.avatarSrc || "default"}
+      className="size-icon-xl shrink-0 text-muted-foreground"
+    >
       {user.avatarSrc ? (
         <AvatarImage src={user.avatarSrc} alt={user.displayName} />
       ) : null}
-      <AvatarFallback delayMs={0}>{initial}</AvatarFallback>
+      <AvatarFallback delayMs={0}>
+        <AvatarSilhouette className="size-icon-md" />
+      </AvatarFallback>
     </Avatar>
   );
 
@@ -95,7 +99,7 @@ export function AccountsUserMenu({
         <Button
           variant="ghost"
           size="icon-md"
-          className="size-icon-xl rounded-full p-0"
+          className="size-icon-xl shrink-0 rounded-full p-0"
           aria-label={t("open")}
           title={t("open")}
           onClick={(event) => {
@@ -120,7 +124,7 @@ export function AccountsUserMenu({
         <ShellPanelHeader
           avatarSrc={user.avatarSrc}
           avatarAlt={user.displayName}
-          avatarFallback={initial}
+          avatarFallback={<AvatarSilhouette className="size-media-xs" />}
           title={user.displayName}
           titleAside={
             <StatusBadge tone="neutral">{t("realNameUnverified")}</StatusBadge>

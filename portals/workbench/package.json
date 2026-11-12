@@ -15,7 +15,7 @@
   "dependencies": {
     "@vxture-platform/shared": "workspace:*",
     "@vxture/core-utils": "workspace:*",
-    "@vxture/design-system": "12.22.0",
+    "@vxture/design-system": "12.22.1",
     "@vxture/platform-browser": "workspace:*",
     "@vxture/platform-workspace-ui": "workspace:*",
     "next": "^15.5.25",

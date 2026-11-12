@@ -71,7 +71,10 @@ body {
   align-items: center;
   gap: var(--spacing-icon-sm);
   height: var(--spacing-header-lg);
-  padding-inline: var(--space-page-inset);
+  padding-inline: max(
+    calc(var(--vx-spacing) * 4),
+    calc((100% - var(--container-page-xl)) / 2 + var(--vx-spacing) * 4)
+  );
   border-bottom: var(--border-width-thin) solid
     color-mix(in srgb, var(--primary) 6%, transparent);
   background: color-mix(in srgb, var(--primary) 13%, var(--card));
@@ -90,6 +93,40 @@ body {
   align-items: center;
   gap: var(--spacing-icon-sm);
   min-width: 0;
+}
+
+/* Public headers follow the website content width and breakpoint insets. */
+@variant sm {
+  .work-header {
+    padding-inline: max(
+      calc(var(--vx-spacing) * 6),
+      calc((100% - var(--container-page-xl)) / 2 + var(--vx-spacing) * 6)
+    );
+  }
+}
+@variant lg {
+  .work-header {
+    padding-inline: max(
+      calc(var(--vx-spacing) * 8),
+      calc((100% - var(--container-page-xl)) / 2 + var(--vx-spacing) * 8)
+    );
+  }
+}
+@variant xl {
+  .work-header {
+    padding-inline: max(
+      calc(var(--vx-spacing) * 8),
+      calc((100% - var(--container-page-2xl)) / 2 + var(--vx-spacing) * 8)
+    );
+  }
+}
+@variant 2xl {
+  .work-header {
+    padding-inline: max(
+      calc(var(--vx-spacing) * 8),
+      calc((100% - var(--vx-spacing) * 400) / 2 + var(--vx-spacing) * 8)
+    );
+  }
 }
 
 /* Keep the shared portal wordmark consistent across public and signed-in headers. */
@@ -1015,10 +1052,10 @@ body {
 /* ========================================================================== */
 @media (max-width: 1200px) {
   .work-header {
-    gap: var(--space-lg);
+    gap: var(--spacing-icon-sm);
   }
   .work-header-leading {
-    gap: var(--space-sm);
+    gap: var(--spacing-icon-sm);
   }
   .work-scope {
     gap: var(--space-xs);
@@ -1054,7 +1091,6 @@ body {
   .work-header {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-xs);
-    padding-inline: var(--space-lg);
   }
   .work-nav {
     position: absolute;
@@ -1102,12 +1138,8 @@ body {
   }
 }
 @media (max-width: 620px) {
-  .work-header {
-    padding-inline: var(--space-md);
-  }
-
   .work-header-leading {
-    gap: var(--space-xs);
+    gap: calc(var(--vx-spacing) * 2);
   }
   .work-scope::before {
     display: none;

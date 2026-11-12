@@ -342,6 +342,8 @@ export function OperaShell({
                     onSelect={() => {}}
                   />
                   <ShellBrand
+                    labelClassName="max-sm:hidden"
+                    className="max-sm:[&>.vx-brand-local-name]:hidden"
                     href="/"
                     label="Vxture Platform"
                     tag="opera"

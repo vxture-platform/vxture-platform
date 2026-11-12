@@ -332,7 +332,7 @@ export function AccountsHeader({
       <ShellHeader
         height={layout === "account" ? "lg" : "xl"}
         surface="transparent"
-        layout={layout === "account" ? "full" : "centered"}
+        layout="full"
         className={`accounts-header accounts-header-${layout}`}
         leading={
           <>
@@ -371,7 +371,7 @@ export function AccountsHeader({
               <Button
                 variant="ghost"
                 size="icon-md"
-                className="size-icon-xl p-0 text-muted-foreground hover:text-foreground"
+                className="size-icon-xl shrink-0 p-0 text-muted-foreground hover:text-foreground"
                 aria-label={t("help")}
                 title={t("help")}
                 asChild
