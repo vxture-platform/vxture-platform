@@ -19,7 +19,7 @@
     "@vxture-platform/shared": "workspace:*",
     "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-locale": "workspace:*",
-    "@vxture/design-system": "12.21.0",
+    "@vxture/design-system": "12.21.1",
     "@vxture/platform-browser": "workspace:*",
     "next": "^15.5.25",
     "next-intl": "^4.13.2",
