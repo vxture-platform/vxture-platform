@@ -27,7 +27,7 @@ export function WorkFooter({ runtime }: { runtime: WorkRuntime }) {
           year: new Date().getFullYear(),
           owner: "Vxture Studio",
         },
-        brand: { href: policy("brand"), label: t("品牌政策") },
+
         cookies: { href: policy("cookies"), label: t("Cookie 政策") },
         terms: { href: policy("terms"), label: t("服务条款") },
         privacy: { href: policy("privacy"), label: t("隐私政策") },

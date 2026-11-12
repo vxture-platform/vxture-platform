@@ -149,11 +149,6 @@ export function AccountsFooter({
           year: new Date().getFullYear(),
           owner: "Vxture Studio",
         },
-        brand: { href: `${website}/${locale}/legal/brand`, label: t("brand") },
-        cookies: {
-          href: `${website}/${locale}/legal/cookies`,
-          label: t("cookies"),
-        },
         terms: { href: `${website}/${locale}/legal/terms`, label: t("terms") },
         privacy: {
           href: `${website}/${locale}/legal/privacy`,
