@@ -50,7 +50,6 @@ export function AccountSection({
   return (
     <Card
       className={`accounts-section${tone === "danger" ? " accounts-section-danger" : ""}`}
-      style={{ backgroundImage: "none" }}
     >
       <div className="accounts-section-heading">
         <Icon name={icon} size="md" />

@@ -171,11 +171,17 @@ export function WorkPortal({
       })
       .catch(() => {
         if (!controller.signal.aborted)
-          setResult({
-            status: "error",
-            code: 0,
-            message: "连接失败，请稍后重试",
-          });
+          setResult((previous) =>
+            previous?.status === "ready"
+              ? {
+                  ...previous,
+                  data: {
+                    ...previous.data,
+                    availabilityIssue: "连接失败，请稍后重试",
+                  },
+                }
+              : { status: "error", code: 0, message: "连接失败，请稍后重试" },
+          );
       })
       .finally(() => {
         if (!controller.signal.aborted) syncInFlight.current = false;
@@ -193,19 +199,18 @@ export function WorkPortal({
   ]);
   useEffect(() => {
     if (!runtime.authConfigured || !knownRoute) return;
-    const sync = (foreground: boolean): void => {
+    const sync = (): void => {
       if (
         document.visibilityState !== "visible" ||
         syncInFlight.current ||
         Date.now() - lastSyncAt.current < 1500
       )
         return;
-      allowSilentSso.current = foreground;
-      if (foreground) silentFailure.current = false;
+      // Foreground checks must not restart a failed top-level SSO bootstrap.
       setRevision((value) => value + 1);
     };
-    const foreground = (): void => sync(true);
-    const interval = window.setInterval(() => sync(false), 300_000);
+    const foreground = (): void => sync();
+    const interval = window.setInterval(sync, 300_000);
     window.addEventListener("focus", foreground);
     window.addEventListener("pageshow", foreground);
     document.addEventListener("visibilitychange", foreground);

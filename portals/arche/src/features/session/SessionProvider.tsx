@@ -108,6 +108,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let active = true;
     let inFlight = false;
     let lastSyncAt = 0;
+    let currentSubject: string | null = null;
     const controller = new AbortController();
     const sync = async () => {
       if (
@@ -143,10 +144,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         };
         if (!active) return;
         const identity = toIdentity(body.claims ?? {});
-        // Clear old grants before applying an identity which may have changed.
-        setCapabilities([]);
+        // Keep verified grants during same-account background reconciliation.
+        // Identity changes must clear the previous account before permission loading.
+        if (identity.sub !== currentSubject) {
+          currentSubject = identity.sub;
+          setCapabilities([]);
+          setStatus("ready");
+        }
         setOperator(identity);
-        setStatus("ready");
         const permissions = await fetch("/api/session", options);
         if (!active) return;
         if (permissions.status === 401) {
@@ -156,6 +161,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           window.location.replace(buildLoginUrl(window.location.href));
           return;
         }
+        if (permissions.status === 403) {
+          setCapabilities([]);
+          setStatus("forbidden");
+          return;
+        }
         if (!permissions.ok) return;
         const access = (await permissions.json()) as {
           capabilities?: string[];
@@ -163,7 +173,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         };
         if (!active) return;
         setCapabilities(access.capabilities ?? []);
-        if (access.planeEntitled === false) setStatus("forbidden");
+        setStatus(access.planeEntitled === false ? "forbidden" : "ready");
       } catch {
         // A network failure is not proof that the central session ended.
       } finally {

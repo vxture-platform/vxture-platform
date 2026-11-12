@@ -53,7 +53,7 @@ export default function Footer() {
           : "text-vx-gray-800 bg-vx-gray-100"
       }`}
     >
-      <div className="flex flex-1 flex-col w-full max-w-page-xl xl:max-w-page-2xl mx-auto pt-8 px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-1 flex-col w-full max-w-page-2xl mx-auto pt-8 px-4 sm:px-6 lg:px-8">
         {/* 主要内容区域：品牌 + 联系 + 社交 / 链接区 */}
         <div className="flex flex-1 flex-col md:flex-row gap-8 items-start">
           {/* 左侧：品牌信息 + 联系方式 */}

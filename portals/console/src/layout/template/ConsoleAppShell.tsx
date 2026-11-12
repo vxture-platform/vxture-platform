@@ -45,6 +45,7 @@ import {
   type ShellNavSection,
 } from "@vxture/design-system";
 import type { ShellDrawerType } from "../shell/types";
+import { ConsoleFooter } from "./ConsoleFooter";
 import { ConsoleHeader } from "../header/ConsoleHeader";
 import type { NavSearchEntry } from "../header/useGlobalSearch";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
@@ -400,11 +401,12 @@ export function ConsoleAppShell({
 
   if (status === "loading") {
     return (
-      <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <div className="vx-shell-user-center flex h-dvh flex-col overflow-hidden text-foreground">
         {/* 骨架用 DS 的 ShellHeader 本体（而非旧的 .vxh--skeleton 类）撑版位：
             两者高度必须逐像素相同，否则会话就绪的一刻整页会往下跳一格。 */}
         <ShellHeader
           height="lg"
+          surface="transparent"
           centerAlign="end"
           leading={
             <>
@@ -433,25 +435,20 @@ export function ConsoleAppShell({
             </div>
           </ShellSidebarFrame>
           <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
-            <ShellPageContainer className="gap-lg">
+            <ShellPageContainer layout="user-center" className="gap-lg">
               <Skeleton className="h-icon-2xl w-media-2xl" />
               <Skeleton className="h-media-lg w-full" />
               <Skeleton className="h-media-lg w-full" />
             </ShellPageContainer>
           </main>
         </div>
+        <ConsoleFooter />
       </div>
     );
   }
 
   return (
-    <div
-      // bg-background 由外壳自己上：底色原先是 console-base.css 挂在 html
-      // 上的一条渐变，退役后必须有人把 --background 画出来，跟 opera 的
-      // ShellViewport 是同一个位置（外壳根节点）。批 D：.app 遗留类换
-      // 工具类；vela-open/nav-collapsed 两个状态钩子全仓无样式引用，删。
-      className="flex h-screen flex-col overflow-hidden bg-background text-foreground"
-    >
+    <div className="vx-shell-user-center flex h-dvh flex-col overflow-hidden text-foreground">
       <ConsoleHeader
         openDrawer={(type) => setDrawer(type)}
         unreadCount={badgeCount}
@@ -493,9 +490,13 @@ export function ConsoleAppShell({
           />
         </ShellSidebarFrame>
         <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
-          <ShellPageContainer>{children}</ShellPageContainer>
+          <ShellPageContainer layout="user-center">
+            {children}
+          </ShellPageContainer>
         </main>
       </div>
+
+      <ConsoleFooter />
 
       {drawer === "notifications" && (
         <TemplateDrawer

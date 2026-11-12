@@ -21,6 +21,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
+  ShellPageContainer,
   ShellSidebarFrame,
   ShellSidebarNav,
   Button,
@@ -300,7 +301,7 @@ export function AccountCenterShell({
   }, [open]);
   if (completion) {
     return (
-      <div className="accounts-viewport">
+      <div className="accounts-viewport vx-shell-user-center">
         <AccountsHeader />
         <main className="accounts-content">{completion}</main>
         <AccountsFooter />
@@ -310,10 +311,13 @@ export function AccountCenterShell({
   if (session === "expired") return null;
   if (session !== "authenticated") {
     return (
-      <div className="accounts-viewport">
+      <div className="accounts-viewport vx-shell-user-center">
         <AccountsHeader layout="account" />
         <main className="accounts-content">
-          <div className="accounts-management">
+          <ShellPageContainer
+            layout="user-center"
+            className="accounts-management"
+          >
             {session === "checking" ? (
               <div role="status" aria-label={center("loading")}>
                 <Skeleton className="h-40 w-full" />
@@ -333,7 +337,7 @@ export function AccountCenterShell({
                 </Button>
               </div>
             )}
-          </div>
+          </ShellPageContainer>
         </main>
         <AccountsFooter layout="account" />
       </div>
@@ -343,7 +347,7 @@ export function AccountCenterShell({
     <CompletionContext.Provider value={beginCompletion}>
       <SessionExpiredContext.Provider value={expire}>
         <AccountMenuContext.Provider value={updateMenu}>
-          <div className="accounts-viewport">
+          <div className="accounts-viewport vx-shell-user-center">
             <AccountsHeader
               layout="account"
               accountHref={href("profile")}
@@ -402,7 +406,12 @@ export function AccountCenterShell({
                 aria-hidden={open || undefined}
                 key={`${pathname}-${active}`}
               >
-                <div className="accounts-management">{children}</div>
+                <ShellPageContainer
+                  layout="user-center"
+                  className="accounts-management"
+                >
+                  {children}
+                </ShellPageContainer>
               </div>
             </div>
             <AccountsFooter layout="account" />

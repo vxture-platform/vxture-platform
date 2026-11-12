@@ -15,7 +15,7 @@
   "dependencies": {
     "@vxture-platform/shared": "workspace:*",
     "@vxture/core-utils": "workspace:*",
-    "@vxture/design-system": "12.22.1",
+    "@vxture/design-system": "12.23.0",
     "@vxture/platform-browser": "workspace:*",
     "@vxture/platform-workspace-ui": "workspace:*",
     "next": "^15.5.25",
@@ -33,7 +33,8 @@
     "postcss": "^8.5.19",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "jsdom": "30.0.1"
   },
   "engines": {
     "node": ">=22.0.0"

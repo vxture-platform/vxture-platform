@@ -28,6 +28,8 @@ const SYNC_INTERVAL_MS = 300_000;
 export function AuthSessionBootstrap() {
   const pathname = usePathname();
   const ssoAttemptAt = useRef(0);
+  const bootstrapAllowed = useRef(true);
+  const initialized = useRef(false);
 
   useEffect(
     () =>
@@ -46,6 +48,7 @@ export function AuthSessionBootstrap() {
     let attemptedAt = ssoAttemptAt.current;
     const params = new URLSearchParams(window.location.search);
     if (params.get("vx_sso_silent") === "0") {
+      bootstrapAllowed.current = false;
       attemptedAt = Date.now();
       ssoAttemptAt.current = attemptedAt;
       params.delete("vx_sso_silent");
@@ -60,7 +63,7 @@ export function AuthSessionBootstrap() {
         /* Optional loop guard. */
       }
     }
-    const sync = async (foreground: boolean) => {
+    const sync = async (bootstrap: boolean) => {
       if (
         !active ||
         inFlight ||
@@ -93,9 +96,12 @@ export function AuthSessionBootstrap() {
           /* Use the in-memory guard. */
         }
         if (
+          bootstrap &&
+          bootstrapAllowed.current &&
           hint &&
-          Date.now() - attemptedAt >= (foreground ? 1500 : SYNC_INTERVAL_MS)
+          Date.now() - attemptedAt >= SYNC_INTERVAL_MS
         ) {
+          bootstrapAllowed.current = false;
           attemptedAt = Date.now();
           ssoAttemptAt.current = attemptedAt;
           try {
@@ -115,10 +121,14 @@ export function AuthSessionBootstrap() {
         if (active) useAuthStore.setState({ isLoading: false });
       }
     };
-    useAuthStore.setState({ isLoading: true });
+    // Only first bootstrap reserves a loading state; later checks retain the header.
+    if (!initialized.current) {
+      initialized.current = true;
+      useAuthStore.setState({ isLoading: true });
+    }
     void sync(true);
     const reconcile = () => {
-      void sync(true);
+      void sync(false);
     };
     const interval = window.setInterval(() => {
       void sync(false);
