@@ -596,16 +596,20 @@ export default function Header() {
           : "bg-transparent"
       }`}
     >
-      <div className="max-w-page-2xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full">
         <ShellHeader
           height="xl"
           surface="transparent"
-          className="px-0 max-sm:px-0 [.density-comfortable_&]:px-0 [.density-comfortable_&]:max-sm:px-0"
+          layout="centered"
           leading={
             <HeaderBrand
               href={HEADER_DATA.logo.href}
               logoSrc={HEADER_DATA.logo.image}
-              label={t(HEADER_DATA.logo.labelKey)}
+              label={
+                <>
+                  <span className="text-primary-text">Ruyin</span> Studio
+                </>
+              }
             />
           }
           center={<HeaderNav />}
