@@ -12,7 +12,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@vxture/design-system": "12.23.0"
+    "@vxture/design-system": "12.23.1"
   },
   "peerDependencies": {
     "react": "^19.0.0",

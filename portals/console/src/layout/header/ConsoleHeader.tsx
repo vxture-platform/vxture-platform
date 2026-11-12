@@ -199,17 +199,19 @@ export function ConsoleHeader({
       centerAlign="end"
       leading={
         <>
-          {/* owner 2026-09-08:字标 `Workspace Console`(全英文,品牌不翻译——
-              中英文同一个串,与 admin 的 `vxture studio` 同体例)。
-
-              **不带租户 tag**(owner 当日改口):租户视角下这一段是多余的——
-              人本来就在自己的租户里,而紧邻右侧的 TenantPanel 已经写着当前租户
-              并且能切换。品牌位再说一遍等于同一个信息占两处。 */}
+          {/* Tenant scope remains in the adjacent selector, outside the brand. */}
           <ShellBrand
             className="h-icon-xl"
             labelClassName="max-sm:hidden"
             href="/"
-            label={brandName}
+            label={
+              <>
+                <span className="text-primary-text">
+                  {brandName.split(" ")[0]}
+                </span>{" "}
+                {brandName.split(" ").slice(1).join(" ")}
+              </>
+            }
             logoSrc="/brand/vxture-logo-white.png"
           />
           <span

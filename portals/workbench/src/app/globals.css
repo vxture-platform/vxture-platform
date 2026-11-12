@@ -73,7 +73,7 @@ body {
   height: var(--spacing-header-lg);
   padding-inline: max(
     calc(var(--vx-spacing) * 4),
-    calc((100% - var(--container-page-2xl)) / 2 + var(--vx-spacing) * 4)
+    calc((100% - var(--container-page-2xl)) / 2)
   );
   border-bottom: var(--border-width-thin) solid
     color-mix(in srgb, var(--primary) 6%, transparent);
@@ -95,12 +95,12 @@ body {
   min-width: 0;
 }
 
-/* Public headers follow the website content width and breakpoint insets. */
+/* Public headers share a 1536px usable measure and responsive safety insets. */
 @variant sm {
   .work-header {
     padding-inline: max(
       calc(var(--vx-spacing) * 6),
-      calc((100% - var(--container-page-2xl)) / 2 + var(--vx-spacing) * 6)
+      calc((100% - var(--container-page-2xl)) / 2)
     );
   }
 }
@@ -108,7 +108,7 @@ body {
   .work-header {
     padding-inline: max(
       calc(var(--vx-spacing) * 8),
-      calc((100% - var(--container-page-2xl)) / 2 + var(--vx-spacing) * 8)
+      calc((100% - var(--container-page-2xl)) / 2)
     );
   }
 }
