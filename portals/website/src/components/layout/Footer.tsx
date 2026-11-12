@@ -229,7 +229,7 @@ export default function Footer() {
             year: new Date().getFullYear(),
             owner: "Vxture Studio",
           },
-          brand: { href: `/${locale}/legal/brand`, label: t("legal.brand") },
+
           cookies: {
             href: `/${locale}/legal/cookies`,
             label: t("legal.cookies"),
