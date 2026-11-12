@@ -1616,6 +1616,12 @@
     }
   },
   "shell": {
+    "legal": {
+      "label": "Legal information",
+      "terms": "Terms",
+      "privacy": "Privacy",
+      "copyright": "Copyright"
+    },
     "loading": {
       "label": "Loading"
     },

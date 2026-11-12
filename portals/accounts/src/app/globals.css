@@ -26,63 +26,7 @@ body {
   color: var(--foreground);
   position: relative;
   isolation: isolate;
-  background: transparent;
-}
-/* Fixed artwork stays behind shared authentication and account management chrome. */
-.accounts-viewport::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      ellipse at 32% 90%,
-      color-mix(in srgb, var(--primary) 7%, transparent),
-      transparent 52%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--primary) 13%, var(--card)) 0%,
-      color-mix(in srgb, var(--primary) 6%, var(--card)) 22%,
-      var(--background) 52%,
-      var(--primary-muted) 100%
-    );
-}
-.dark .accounts-viewport::before {
-  background:
-    radial-gradient(
-      ellipse at 32% 90%,
-      color-mix(in srgb, var(--primary) 7%, transparent),
-      transparent 52%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--primary) 12%, var(--background)),
-      color-mix(in srgb, var(--primary) 5%, var(--background)) 38%,
-      var(--background) 78%
-    );
-}
-.accounts-background-art {
-  position: fixed;
-  inset: auto 0 0;
-  z-index: -1;
-  width: 100%;
-  height: 56vh;
-  pointer-events: none;
-  color: var(--primary);
-}
-.accounts-background-art svg {
-  width: 100%;
-  height: 100%;
-  transform: translateY(calc(var(--vx-spacing) * 37.5));
-  opacity: 0.58;
-}
-@media (max-width: 600px) {
-  .accounts-background-art {
-    height: 42vh;
-    opacity: 0.65;
-  }
+  background: var(--surface-user-center);
 }
 .accounts-header {
   height: calc(var(--vx-spacing) * 16);
@@ -100,39 +44,6 @@ body {
   max-width: calc(100vw - var(--space-lg));
 }
 
-.accounts-footer {
-  flex-shrink: 0;
-  min-height: var(--space-4xl);
-  color: var(--muted-foreground);
-  font-size: calc(var(--vx-text-xs) * 11 / 12);
-}
-.accounts-footer-inner {
-  width: 100%;
-  max-width: calc(var(--vx-spacing) * 384);
-  margin-inline: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: var(--space-4xl);
-  padding: var(--space-md) calc(var(--vx-spacing) * 12);
-  gap: calc(var(--vx-spacing) * 3);
-}
-.accounts-footer-account .accounts-footer-inner {
-  max-width: none;
-  padding-inline: calc(var(--vx-spacing) * 6);
-}
-.accounts-footer nav {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--vx-spacing) * 5);
-}
-.accounts-footer a {
-  color: inherit;
-  text-decoration: none;
-}
-.accounts-footer a:hover {
-  color: var(--foreground);
-}
 .accounts-workspace {
   display: flex;
   flex: 1;
@@ -159,9 +70,7 @@ body {
   background: transparent;
 }
 .accounts-management {
-  max-width: calc(var(--vx-spacing) * 360);
-  margin: auto;
-  padding: var(--space-2xl) var(--space-3xl) calc(var(--vx-spacing) * 18);
+  width: 100%;
 }
 .accounts-management > main,
 .accounts-management > section {
@@ -187,17 +96,6 @@ body {
   font-weight: 600;
   letter-spacing: calc(var(--vx-spacing) * -0.1);
   flex: 1;
-}
-.accounts-section,
-.accounts-identity {
-  background-color: color-mix(in srgb, var(--card) 55%, transparent);
-  background-image: none;
-  border-color: color-mix(in srgb, var(--border) 65%, transparent);
-  box-shadow: none;
-}
-.dark .accounts-section,
-.dark .accounts-identity {
-  background-color: color-mix(in srgb, var(--card) 65%, transparent);
 }
 .accounts-section {
   --accounts-body-size: calc((var(--vx-text-xs) + var(--vx-text-sm)) / 2);
@@ -277,9 +175,8 @@ body {
   align-items: center;
   gap: var(--space-lg);
   padding: var(--space-lg);
-  border: 1px solid var(--border);
-  border-color: color-mix(in srgb, var(--border) 65%, transparent);
   border-radius: var(--radius-md);
+  flex-direction: row;
 }
 .accounts-identity-avatar {
   width: calc(var(--vx-spacing) * 24);
@@ -541,10 +438,6 @@ body {
     z-index: 20;
     background: transparent;
   }
-  .accounts-management {
-    padding: calc(var(--vx-spacing) * 7) calc(var(--vx-spacing) * 5)
-      var(--space-4xl);
-  }
   .accounts-page-heading {
     gap: var(--space-md);
     min-height: var(--space-3xl);
@@ -569,15 +462,6 @@ body {
   .accounts-row-label {
     width: calc(var(--vx-spacing) * 18);
   }
-  .accounts-footer-inner {
-    padding: calc(var(--vx-spacing) * 3.5) calc(var(--vx-spacing) * 6);
-    flex-wrap: wrap;
-    justify-content: center;
-    font-size: calc(var(--vx-text-xs) * 5 / 6);
-  }
-  .accounts-footer nav {
-    gap: calc(var(--vx-spacing) * 3.5);
-  }
   .accounts-auth {
     margin: var(--space-2xl) auto;
   }
@@ -597,12 +481,6 @@ body {
     flex-direction: column;
     gap: calc(var(--vx-spacing) * 1.5);
     font-size: calc(var(--vx-text-xs) * 11 / 12);
-  }
-}
-@media (max-width: 380px) {
-  .accounts-footer-inner,
-  .accounts-footer-account .accounts-footer-inner {
-    padding-inline: calc(var(--vx-spacing) * 3);
   }
 }
 

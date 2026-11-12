@@ -21,6 +21,7 @@ import { downscaleImage } from "@vxture/platform-browser";
 import {
   Banner,
   Button,
+  Card,
   DialogForm,
   Input,
   NativeSelect,
@@ -191,7 +192,7 @@ export function CustomerProfileEditor({
     );
   return (
     <>
-      <div className="accounts-identity">
+      <Card className="accounts-identity" surface="strong">
         <Button
           variant="ghost"
           className="accounts-identity-avatar"
@@ -237,7 +238,7 @@ export function CustomerProfileEditor({
         >
           {formText("edit")}
         </Button>
-      </div>
+      </Card>
       <AccountSection title={formText("basic_information")} icon="user">
         <AccountRow label={formText("name")}>
           {profile.name || "—"}

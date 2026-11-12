@@ -528,6 +528,7 @@ export default function Header() {
   const [hasMounted, setHasMounted] = useState(false);
   const t = useTranslations("layout.header");
   const locale = useNextIntlLocale();
+  const pathname = usePathname();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
   const user = useAuthStore((state) => state.user);
@@ -541,11 +542,22 @@ export default function Header() {
     setHasMounted(true);
 
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
+      setIsScrolled(window.scrollY > 0);
     };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    // Reconcile initial scroll, history restoration and delayed layout changes.
+    handleScroll();
+    const frame = requestAnimationFrame(handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("pageshow", handleScroll);
+    const observer = new ResizeObserver(handleScroll);
+    observer.observe(document.documentElement);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("pageshow", handleScroll);
+    };
+  }, [pathname]);
 
   // RP-initiated single-logout: top-level navigate to the website-bff entry, which
   // kills the central session (vx_sid) at the IdP, back-channel-logs-out every RP
@@ -577,16 +589,18 @@ export default function Header() {
 
   return (
     <div
-      className={`fixed w-full top-0 z-50 transition-all duration-300 ${
+      data-scrolled={isScrolled}
+      className={`fixed w-full top-0 z-50 transition-colors duration-300 ${
         isScrolled
-          ? "bg-vx-brand-50/80 dark:bg-vx-gray-800/80 backdrop-blur-md shadow-lg"
+          ? "bg-card/95 backdrop-blur-md shadow-sticky"
           : "bg-transparent"
       }`}
     >
-      <div className="max-w-page-xl xl:max-w-page-2xl 2xl:max-w-400 mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-page-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <ShellHeader
           height="xl"
-          className="bg-transparent px-0 shadow-none"
+          surface="transparent"
+          className="px-0 max-sm:px-0 [.density-comfortable_&]:px-0 [.density-comfortable_&]:max-sm:px-0"
           leading={
             <HeaderBrand
               href={HEADER_DATA.logo.href}
