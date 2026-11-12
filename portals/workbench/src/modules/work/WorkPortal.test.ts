@@ -28,6 +28,7 @@ vi.mock("@vxture/design-system", () => ({
   Drawer: () => null,
   Icon: () => null,
   SegmentedControl: () => null,
+  ShellFooter: () => React.createElement("footer", null, "Legal information"),
 }));
 vi.mock("./WorkHeader", () => ({ WorkHeader: () => null }));
 vi.mock("./TitleRegion", () => ({ TitleRegion: () => "Verified workspace" }));

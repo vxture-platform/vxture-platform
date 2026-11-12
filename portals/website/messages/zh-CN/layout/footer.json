@@ -37,7 +37,9 @@
     "privacy": "隐私政策",
     "copyright": "版权政策",
     "brand": "品牌政策",
-    "cookies": "Cookie 使用政策"
+    "cookies": "Cookie 使用政策",
+    "label": "法律信息",
+    "filings": "网站备案"
   },
   "copyright": {
     "text": "© 2026 Vxture Studio, All rights reserved."

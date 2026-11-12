@@ -136,29 +136,31 @@ export function AccountsFooter({
 }: {
   layout?: AccountsChromeLayout;
 }) {
+  const locale = useLocale();
   const t = useTranslations("accountsUi");
   const website = process.env.NEXT_PUBLIC_WEBSITE_URL || "https://vxture.com";
   return (
-    <ShellFooter layout={layout === "public" ? "centered" : "full"}>
-      <span>© {new Date().getFullYear()} Vxture Studio</span>
-      <nav className="flex items-center gap-4" aria-label={t("legal")}>
-        {(
-          [
-            ["terms", "/legal/terms"],
-            ["privacy", "/legal/privacy"],
-            ["copyright", "/legal/copyright"],
-          ] as const
-        ).map(([key, path]) => (
-          <a
-            key={key}
-            href={`${website}${path}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t(key)}
-          </a>
-        ))}
-      </nav>
-    </ShellFooter>
+    <ShellFooter
+      layout={layout === "public" ? "centered" : "full"}
+      legal={{
+        copyright: {
+          href: `${website}/${locale}/legal/copyright`,
+          label: t("copyright"),
+          year: new Date().getFullYear(),
+          owner: "Vxture Studio",
+        },
+        brand: { href: `${website}/${locale}/legal/brand`, label: t("brand") },
+        cookies: {
+          href: `${website}/${locale}/legal/cookies`,
+          label: t("cookies"),
+        },
+        terms: { href: `${website}/${locale}/legal/terms`, label: t("terms") },
+        privacy: {
+          href: `${website}/${locale}/legal/privacy`,
+          label: t("privacy"),
+        },
+        navigationLabel: t("legal"),
+      }}
+    />
   );
 }

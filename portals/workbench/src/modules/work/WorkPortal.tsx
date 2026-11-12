@@ -9,6 +9,7 @@
  * @date 2026-11-05
  */
 import { withLocalePreference } from "@vxture/platform-browser";
+import { WorkFooter } from "./WorkFooter";
 import { useWorkLocale } from "../../lib/locale";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -548,27 +549,9 @@ export function WorkPortal({
               </>
             )
           )}
-          {!checking && (
-            <footer className="work-footer">
-              <span>
-                <Icon name="shield" size="sm" />
-                {data?.scope.name ?? "Ruyin Work"}
-              </span>
-              <a
-                href={withLocalePreference(
-                  new URL(`/${locale}`, runtime.websiteUrl).href,
-                  locale,
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t("VXTURE 官网")}
-                <Icon name="external-link" size="sm" />
-              </a>
-            </footer>
-          )}
         </main>
       )}
+      {data && !checking && <WorkFooter runtime={runtime} />}
 
       {data && (
         <NotificationDrawer

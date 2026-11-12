@@ -217,7 +217,9 @@
     "save": "保存",
     "cancel": "取消",
     "edit": "修改",
-    "saving": "保存中…"
+    "saving": "保存中…",
+    "brand": "品牌政策",
+    "cookies": "Cookie 政策"
   },
   "accountsForms": {
     "login_permissions": "登录许可",

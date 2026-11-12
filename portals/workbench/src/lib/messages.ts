@@ -59,6 +59,8 @@ export const EN_MESSAGES: Record<string, string> = {
   重新连接: "Reconnect",
   继续登录: "Continue to sign in",
   使用平台账号安全登录: "Sign in securely with your platform account",
+  品牌政策: "Brand policy",
+  "Cookie 政策": "Cookie policy",
   法律信息: "Legal information",
   服务条款: "Terms of service",
   隐私政策: "Privacy policy",

@@ -8,10 +8,9 @@
  * @author AI-Generated
  * @date 2026-11-05
  */
-import { withLocalePreference } from "@vxture/platform-browser";
+import { WorkFooter } from "./WorkFooter";
 import { useWorkLocale } from "../../lib/locale";
 import { Button, Icon } from "@vxture/design-system";
-import { SITE_FILINGS } from "@vxture-platform/shared";
 import type { WorkRuntime } from "../../lib/contracts";
 
 // ============================================================================
@@ -207,9 +206,8 @@ export function LoginPage({
   retry: () => void;
   signIn: () => void;
 }): React.JSX.Element {
-  const { locale, t } = useWorkLocale();
+  const { t } = useWorkLocale();
   const failed = error !== null && error.code !== 401;
-  const website = new URL(`/${locale}`, runtime.websiteUrl).href;
   return (
     <>
       <LoginArtwork />
@@ -277,49 +275,7 @@ export function LoginPage({
           </p>
         </section>
       </main>
-      <footer className="work-legal-footer">
-        <div>
-          <span>
-            © {new Date().getFullYear()} VXTURE{" "}
-            <span aria-hidden="true">|</span> RUYIN
-          </span>
-          <nav aria-label={t("法律信息")}>
-            <a
-              href={withLocalePreference(`${website}/legal/terms`, locale)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t("服务条款")}
-            </a>
-            <a
-              href={withLocalePreference(`${website}/legal/privacy`, locale)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t("隐私政策")}
-            </a>
-            <a
-              href={withLocalePreference(`${website}/legal/copyright`, locale)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t("版权声明")}
-            </a>
-          </nav>
-        </div>
-        <nav aria-label={t("网站备案")}>
-          {SITE_FILINGS.map((filing) => (
-            <a
-              key={filing.link}
-              href={filing.link}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {filing.text}
-            </a>
-          ))}
-        </nav>
-      </footer>
+      <WorkFooter runtime={runtime} />
     </>
   );
 }
