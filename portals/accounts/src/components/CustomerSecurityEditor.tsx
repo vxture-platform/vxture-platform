@@ -7,6 +7,8 @@
  * @date 2026-11-08
  */
 "use client";
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { validNewPassword } from "@/lib/password-policy";
 
 import { PasswordInput } from "./PasswordInput";
@@ -341,7 +343,7 @@ export function CustomerSecurityEditor({
           }
         >
           <span>
-            {security.phone} ·{" "}
+            <PhoneNumber {...formatPhoneForDisplay(security.phone)} /> ·{" "}
             {security.phoneVerified
               ? formText("verified")
               : formText("unverified")}

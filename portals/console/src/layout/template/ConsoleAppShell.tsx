@@ -37,6 +37,7 @@ import { useDerivedTodos } from "@/features/todos/useDerivedTodos";
 import { selectVisibleDomains } from "@/features/permissions/navigation-access";
 import {
   ShellHeader,
+  ShellHeaderActions,
   ShellPageContainer,
   ShellSidebarFrame,
   ShellSidebarNav,
@@ -410,13 +411,13 @@ export function ConsoleAppShell({
               <Skeleton className="h-icon-lg w-media-xs" />
             </>
           }
-          center={<Skeleton className="h-control-md w-full max-w-media-4xl" />}
+          center={<Skeleton className="h-icon-xl w-full max-w-media-4xl" />}
           trailing={
-            <div className="flex items-center gap-md">
+            <ShellHeaderActions>
               <Skeleton className="size-icon-xl rounded-full" />
               <Skeleton className="h-icon-xl w-media-xs rounded-lg" />
               <Skeleton className="size-icon-xl rounded-full" />
-            </div>
+            </ShellHeaderActions>
           }
         />
         <div className="flex min-h-0 flex-1 overflow-hidden">

@@ -19,9 +19,11 @@ export { extractClientIp, type ClientIpRequest } from "./http.utils";
 
 export {
   normalizePhoneNumber,
+  formatPhoneForDisplay,
   toE164,
   DEFAULT_PHONE_COUNTRY,
   type NormalizedPhone,
+  type PhoneDisplayParts,
 } from "./phone.utils";
 
 export {

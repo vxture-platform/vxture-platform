@@ -81,3 +81,29 @@ export function toE164(
 ): string | null {
   return normalizePhoneNumber(raw, defaultCountry)?.e164 ?? null;
 }
+
+/** Presentation parts only; never use these strings for identity comparisons. */
+export interface PhoneDisplayParts {
+  callingCode?: string | undefined;
+  number: string;
+}
+
+/** Format known numbers for display and preserve masked or unknown input verbatim. */
+export function formatPhoneForDisplay(
+  raw: string | null | undefined,
+): PhoneDisplayParts {
+  const original = raw?.trim() ?? "";
+  if (!original) return { number: "—" };
+  // International access prefixes are not understood by every region parser.
+  const input = original.replace(/^00(?=\d)/, "+");
+  const parsed = parsePhoneNumberFromString(input, DEFAULT_PHONE_COUNTRY);
+  if (!parsed?.isValid()) return { number: original };
+  const national = String(parsed.nationalNumber);
+  const number =
+    parsed.countryCallingCode === "86" && /^1\d{10}$/.test(national)
+      ? `${national.slice(0, 3)} ${national.slice(3, 7)} ${national.slice(7)}`
+      : parsed
+          .formatInternational()
+          .slice(parsed.countryCallingCode.length + 2);
+  return { callingCode: `+${parsed.countryCallingCode}`, number };
+}

@@ -12,7 +12,7 @@
  * 布局与 console / opera 逐槽对齐：
  *   leading  = launcher · 品牌(+tag) · 竖分隔 · 当前工作域
  *   center   = 全局搜索（⌘K）
- *   trailing = [助手] gap-md [系统工具组] gap-md [账户]
+ *   trailing = action groups with shared header spacing
  *
  * admin 形态与 console 的三处内容差异：
  * 1. 第 4 槽是**当前工作域名**（运营平台），不是租户切换器——
@@ -22,6 +22,8 @@
  * 3. launcher 面板切的是工作域（两个），不是 console 的应用中心/控制台。
  */
 
+import { PhoneNumber, ShellHeaderActions } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useMemo } from "react";
 import {
   ShellBrand,
@@ -52,13 +54,10 @@ import { useLocaleSwitch } from "@/lib/useLocaleSwitch";
 import { operatorAccountCenterUrl } from "@/lib/account-center";
 
 /**
- * 展示用手机号：存储值带 E.164 国家码（+8613800000000），面板里只给号码本身。
- * 只剥中国大陆的 +86——其余国家码保留，把它们也剥掉会得到一串谁都认不出来的
- * 数字。与 console 同一处理。
+ * Use the shared number presentation rules, retaining country codes and regional grouping.
  */
-function formatPhone(phone: string | null | undefined): string {
-  if (!phone) return "";
-  return phone.startsWith("+86") ? phone.slice(3) : phone;
+function formatPhone(phone: string | null | undefined) {
+  return phone ? <PhoneNumber {...formatPhoneForDisplay(phone)} /> : "";
 }
 
 export interface AdminHeaderViewOption {
@@ -217,9 +216,8 @@ export function AdminHeader({
         />
       }
       trailing={
-        // 三个板块（助手 / 系统工具组 / 账户）之间 gap-md，组内图标 gap-2xs：
-        // 组间是板块边界，组内是同类项。与 console / opera 同一套间距。
-        <div className="flex items-center gap-md">
+        // Use the shared header group spacing across portals.
+        <ShellHeaderActions>
           {/* Varda 助手入口已随独立仓迁出移除(2026-08-18),重构发包后恢复。 */}
           <ShellIconGroup label={t("settings")}>
             <ShellIconButton icon="help" label={t("help")} onClick={() => {}} />
@@ -353,7 +351,7 @@ export function AdminHeader({
               },
             ]}
           />
-        </div>
+        </ShellHeaderActions>
       }
     />
   );

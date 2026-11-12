@@ -196,15 +196,3 @@ export const TIER_LABELS: Record<string, string> = {
   team: "团队版",
   enterprise: "企业版",
 };
-
-/**
- * Hide the China calling prefix for local mobile display without changing stored identity.
- * @param phone - Canonical phone value returned by identity.
- * @returns The local China mobile number, or the unchanged international number.
- */
-export function accountPhone(phone: string): string {
-  const value = phone.trim();
-  return /^\+86\s*1[3-9]\d{9}$/.test(value)
-    ? value.replace(/^\+86\s*/, "")
-    : value;
-}

@@ -90,78 +90,16 @@ body {
   background: transparent;
   z-index: 30;
 }
-.accounts-header-inner {
-  width: 100%;
-  height: 100%;
-  max-width: calc(var(--vx-spacing) * 384);
-  margin-inline: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding-inline: calc(var(--vx-spacing) * 12);
-}
+
 .accounts-header-account {
   height: calc(var(--vx-spacing) * 14);
   flex-basis: calc(var(--vx-spacing) * 14);
 }
-.accounts-header-account .accounts-header-inner {
-  max-width: none;
-  padding-inline: calc(var(--vx-spacing) * 6);
-}
-.accounts-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  white-space: nowrap;
-  text-decoration: none;
-}
-.accounts-brand span {
-  font-family: var(--font-brand);
-  font-size: var(--vx-text-2xl);
-  line-height: 1;
-  font-weight: var(--vx-font-weight-semibold);
-  letter-spacing: calc(var(--vx-spacing) * -0.1125);
-}
-.accounts-header-end {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: calc(var(--vx-spacing) * 4);
-}
-.accounts-tools {
-  gap: var(--space-2xs);
-  background: transparent;
-}
-.accounts-tools:hover {
-  background: var(--accent);
-}
-.accounts-tools:focus-within:not(:hover) {
-  background: transparent;
-}
-.accounts-header-avatar {
-  border-radius: 50%;
-  width: var(--space-xl);
-  height: var(--space-xl);
-  padding: 0;
-}
+
 .accounts-user-panel {
   max-width: calc(100vw - var(--space-lg));
 }
-.accounts-user-phone {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(var(--vx-spacing) * 2);
-  color: var(--foreground);
-  font-variant-numeric: tabular-nums;
-}
-.accounts-user-dial-code {
-  color: var(--muted-foreground);
-}
-@media (max-width: 560px) {
-  .accounts-brand .accounts-brand-product {
-    display: none;
-  }
-}
+
 .accounts-footer {
   flex-shrink: 0;
   min-height: var(--space-4xl);
@@ -581,13 +519,6 @@ body {
   font-size: var(--vx-text-sm);
 }
 @media (max-width: 700px) {
-  .accounts-header-inner {
-    padding-inline: calc(var(--vx-spacing) * 6);
-    gap: calc(var(--vx-spacing) * 3);
-  }
-  .accounts-header-end {
-    gap: var(--space-md);
-  }
   .accounts-mobile-trigger {
     display: inline-flex;
   }
@@ -669,24 +600,9 @@ body {
   }
 }
 @media (max-width: 380px) {
-  .accounts-header-inner,
-  .accounts-header-account .accounts-header-inner {
-    padding-inline: calc(var(--vx-spacing) * 3);
-    gap: var(--space-xs);
-  }
   .accounts-footer-inner,
   .accounts-footer-account .accounts-footer-inner {
     padding-inline: calc(var(--vx-spacing) * 3);
-  }
-  .accounts-brand img {
-    width: var(--space-lg);
-    height: var(--space-lg);
-  }
-  .accounts-tools {
-    gap: 0;
-  }
-  .accounts-tools button {
-    width: calc(var(--vx-spacing) * 7);
   }
 }
 
@@ -696,11 +612,6 @@ body {
 }
 .accounts-login-form .accounts-auth-field > div > button {
   height: calc(var(--vx-spacing) * 11);
-}
-@media (max-width: 380px) {
-  .accounts-header-end {
-    gap: var(--space-md);
-  }
 }
 
 /* Discrete DS OTP slots share one accessible input for paste and autofill. */
@@ -1182,9 +1093,6 @@ body {
   margin-top: var(--space-sm);
   font-size: var(--vx-text-xs);
   color: var(--muted-foreground);
-}
-.accounts-brand .accounts-brand-name {
-  color: var(--primary);
 }
 
 .accounts-login-options-tools {

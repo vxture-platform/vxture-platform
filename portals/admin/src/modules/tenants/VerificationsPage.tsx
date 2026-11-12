@@ -1,5 +1,7 @@
 "use client";
 
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import {
   useCallback,
   useEffect,
@@ -327,7 +329,13 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
         <TableTitleCell
           layout="stacked"
           title={tenant.contactName}
-          description={tenant.contactPhone || tenant.ownerEmail}
+          description={
+            tenant.contactPhone ? (
+              <PhoneNumber {...formatPhoneForDisplay(tenant.contactPhone)} />
+            ) : (
+              tenant.ownerEmail
+            )
+          }
         />
       ),
     },

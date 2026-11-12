@@ -21,6 +21,8 @@
  * 「邀请成员」= 发邮件 + 一次性链接(InviteLinkDialog 兜底复制)。
  */
 
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ActionMenu,
@@ -1128,7 +1130,13 @@ export function MembersPage() {
                     align: "center",
                     cell: (member: MemberRecord) => (
                       <span className="text-muted-foreground">
-                        {member.phone ?? t("table.emptyPhone")}
+                        {member.phone ? (
+                          <PhoneNumber
+                            {...formatPhoneForDisplay(member.phone)}
+                          />
+                        ) : (
+                          t("table.emptyPhone")
+                        )}
                       </span>
                     ),
                   },

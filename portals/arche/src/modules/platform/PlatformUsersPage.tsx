@@ -1,5 +1,7 @@
 "use client";
 
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ActionButton,
@@ -319,7 +321,12 @@ function usePlatformUserColumns(
       sortable: true,
       cell: (admin) => (
         <span title={admin.phone ?? undefined}>
-          {admin.email || admin.phone || EMPTY_MARK}
+          {admin.email ||
+            (admin.phone ? (
+              <PhoneNumber {...formatPhoneForDisplay(admin.phone)} />
+            ) : (
+              EMPTY_MARK
+            ))}
         </span>
       ),
     },
@@ -391,7 +398,9 @@ function PlatformUserDetailDialog({
           </div>
           <div>
             <dt>手机</dt>
-            <dd>{admin.phone || EMPTY_MARK}</dd>
+            <dd>
+              <PhoneNumber {...formatPhoneForDisplay(admin.phone)} />
+            </dd>
           </div>
           <div>
             <dt>最后登录</dt>

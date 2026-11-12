@@ -52,6 +52,7 @@ export {
   isValidUrl,
   isUuid,
   normalizePhoneNumber,
+  formatPhoneForDisplay,
   toE164,
   DEFAULT_PHONE_COUNTRY,
   extractClientIp,
@@ -60,6 +61,7 @@ export {
 
 export type {
   NormalizedPhone,
+  PhoneDisplayParts,
   ClientIpRequest,
   DevFallbackChoice,
 } from "./utils";

@@ -353,7 +353,7 @@ export function AccountCenterShell({
                 <Button
                   variant="ghost"
                   size="icon-md"
-                  className="accounts-mobile-trigger"
+                  className="accounts-mobile-trigger size-icon-xl p-0"
                   aria-label={t(open ? "closeNav" : "openNav")}
                   aria-expanded={open}
                   aria-controls="accounts-sidebar"

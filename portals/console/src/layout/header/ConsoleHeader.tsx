@@ -9,6 +9,8 @@
  * @date 2026-11-05
  */
 
+import { PhoneNumber, ShellHeaderActions } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -53,16 +55,7 @@ import { useGlobalSearch, type NavSearchEntry } from "./useGlobalSearch";
 
 /** Keep the country code visible and group mainland mobile numbers for scanning. */
 function formatPhone(phone: string | null | undefined) {
-  if (!phone) return "";
-  const normalized = phone.replace(/[\s()-]/g, "");
-  const match = /^(?:\+86)?(1\d{2})(\d{4})(\d{4})$/.exec(normalized);
-  if (!match) return phone;
-  return (
-    <span className="inline-flex flex-wrap gap-xs tabular-nums">
-      <span className="text-content-tertiary">+86</span>
-      <span>{`${match[1]} ${match[2]} ${match[3]}`}</span>
-    </span>
-  );
+  return phone ? <PhoneNumber {...formatPhoneForDisplay(phone)} /> : "";
 }
 
 export interface ConsoleHeaderProps {
@@ -212,7 +205,7 @@ export function ConsoleHeader({
               人本来就在自己的租户里,而紧邻右侧的 TenantPanel 已经写着当前租户
               并且能切换。品牌位再说一遍等于同一个信息占两处。 */}
           <ShellBrand
-            className="h-control-md"
+            className="h-icon-xl"
             labelClassName="max-sm:hidden"
             href="/"
             label={brandName}
@@ -303,7 +296,7 @@ export function ConsoleHeader({
       }
       trailing={
         // Keep the business entry separate from system tools and the account menu.
-        <div className="flex items-center gap-md max-sm:gap-xs">
+        <ShellHeaderActions>
           {user?.id &&
           session.tenant?.mode === "tenant" &&
           activeWorkspaceId ? (
@@ -311,7 +304,7 @@ export function ConsoleHeader({
               asChild
               variant="ghost"
               size="md"
-              className="px-sm text-label-sm"
+              className="h-icon-xl px-sm text-label-sm"
             >
               <a
                 href={buildWorkbenchEntry(
@@ -476,7 +469,7 @@ export function ConsoleHeader({
               },
             ]}
           />
-        </div>
+        </ShellHeaderActions>
       }
     />
   );

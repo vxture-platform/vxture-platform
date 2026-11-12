@@ -19,13 +19,14 @@
     "@simplewebauthn/browser": "^13.3.0",
     "@vxture-platform/shared": "workspace:*",
     "@vxture/core-locale": "workspace:*",
-    "@vxture/design-system": "15.2.2",
+    "@vxture/design-system": "15.3.0",
     "@vxture/platform-browser": "workspace:*",
     "next": "^15.5.25",
     "next-intl": "^4.13.2",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "@vxture/core-utils": "workspace:*"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

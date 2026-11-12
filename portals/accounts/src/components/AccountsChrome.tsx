@@ -11,7 +11,6 @@
 import { LOCALE_CONFIGS, SUPPORTED_LOCALES } from "@vxture-platform/shared";
 import type { ReactNode } from "react";
 import { AccountsUserMenu, type AccountsMenuUser } from "./AccountsUserMenu";
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { setAccountsLocale } from "@/lib/locale-preference";
@@ -19,6 +18,9 @@ import {
   Button,
   Icon,
   ShellIconGroup,
+  ShellBrand,
+  ShellHeader,
+  ShellHeaderActions,
   ShellIconButton,
   useTheme,
   ShellLocaleSwitcher,
@@ -327,35 +329,33 @@ export function AccountsHeader({
           </g>
         </svg>
       </div>
-      <header className={`accounts-header accounts-header-${layout}`}>
-        <div className="accounts-header-inner">
-          {navigation}
-          <Link
-            href="/"
-            className="accounts-brand"
-            aria-label="Vxture Accounts"
-          >
-            {/* The approved brand asset is served by this portal. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/vxture-logo-icon.svg"
-              alt=""
-              width={28}
-              height={28}
+      <ShellHeader
+        height={layout === "account" ? "lg" : "xl"}
+        surface="transparent"
+        layout={layout === "account" ? "full" : "centered"}
+        className={`accounts-header accounts-header-${layout}`}
+        leading={
+          <>
+            {navigation}
+            <ShellBrand
+              href="/"
+              logoSrc="/brand/vxture-logo-icon.svg"
+              label={
+                brandLabel === "Vxture Accounts" ? (
+                  <>
+                    <span className="text-primary-text">Vxture</span>
+                    <span className="hidden sm:inline"> Accounts</span>
+                  </>
+                ) : (
+                  brandLabel
+                )
+              }
             />
-            <span>
-              {brandLabel === "Vxture Accounts" ? (
-                <>
-                  <span className="accounts-brand-name">Vxture</span>
-                  <span className="accounts-brand-product"> Accounts</span>
-                </>
-              ) : (
-                brandLabel
-              )}
-            </span>
-          </Link>
-          <div className="accounts-header-end">
-            <ShellIconGroup label={t("tools")} className="accounts-tools">
+          </>
+        }
+        trailing={
+          <ShellHeaderActions>
+            <ShellIconGroup label={t("tools")}>
               <ShellIconButton
                 label={t("theme")}
                 icon={theme === "dark" ? "sun" : "moon"}
@@ -371,9 +371,9 @@ export function AccountsHeader({
               <Button
                 variant="ghost"
                 size="icon-md"
+                className="size-icon-xl p-0 text-muted-foreground hover:text-foreground"
                 aria-label={t("help")}
                 title={t("help")}
-                className="text-muted-foreground hover:text-foreground"
                 asChild
               >
                 <a
@@ -392,9 +392,9 @@ export function AccountsHeader({
                 profileHref={accountHref}
               />
             ) : null}
-          </div>
-        </div>
-      </header>
+          </ShellHeaderActions>
+        }
+      />
     </>
   );
 }
