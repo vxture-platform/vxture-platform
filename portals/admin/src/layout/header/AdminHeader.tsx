@@ -190,13 +190,15 @@ export function AdminHeader({
             buttonLabel={t("featureBoards")}
           />
           <ShellBrand
+            labelClassName="max-sm:hidden"
+            className="max-sm:[&>.vx-brand-local-name]:hidden"
             href="/"
             label={brandName}
             tag="admin"
             logoSrc="/brand/vxture-logo-white.png"
           />
           <span className="h-lg w-px bg-border" aria-hidden="true" />
-          <span className="truncate text-label-md text-muted-foreground">
+          <span className="hidden truncate text-label-md text-muted-foreground sm:inline">
             {activeMenuName}
           </span>
         </>
@@ -224,7 +226,7 @@ export function AdminHeader({
             {/* 未读角标：运营通告（admin.operator_notices）的未读数——客户申报付款 /
                 申请退款这类事件镜像过来的，加上 opera 手工发布的。0 不画——空角标
                 是噪音。与 console 站内收件箱同一形态。 */}
-            <span className="relative inline-flex">
+            <span className="relative inline-flex shrink-0">
               <ShellIconButton
                 icon="bell"
                 label={
@@ -237,7 +239,7 @@ export function AdminHeader({
               {unreadCount > 0 ? (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute -right-2xs -top-2xs inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-2xs text-label-sm leading-4 text-danger-foreground tabular-nums"
+                  className="pointer-events-none absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-label-sm font-semibold leading-none text-primary-foreground ring-2 ring-background tabular-nums"
                 >
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
