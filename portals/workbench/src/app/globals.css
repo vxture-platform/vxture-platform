@@ -25,6 +25,8 @@ body {
   background: var(--background);
 }
 .work-shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
   isolation: isolate;
 }
@@ -186,10 +188,11 @@ body {
 }
 .work-main {
   display: flex;
+  flex: 1;
   flex-direction: column;
   width: 100%;
   max-width: var(--container-page-2xl);
-  min-height: 100dvh;
+  min-height: 0;
   margin-inline: auto;
   padding: calc(var(--spacing-header-lg) + var(--space-3xl))
     calc(var(--vx-spacing) * 4) var(--space-lg);
@@ -206,34 +209,6 @@ body {
 }
 .work-skip:focus {
   transform: translateY(0);
-}
-.work-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  margin-top: auto;
-  padding-top: var(--space-lg);
-  border-top: var(--border-width-thin) solid var(--border);
-  color: var(--muted-foreground);
-  font-size: var(--body-sm-font-size);
-}
-.work-footer > span,
-.work-footer > a {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  min-width: 0;
-}
-.work-footer > span {
-  overflow-wrap: anywhere;
-}
-.work-footer > a {
-  flex-shrink: 0;
-  min-height: var(--space-control-md);
-}
-.work-footer a:hover {
-  color: var(--primary-text);
 }
 
 /* ========================================================================== */
@@ -1004,31 +979,6 @@ body {
   width: 100%;
   height: 100%;
 }
-.work-legal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-md);
-  width: 100%;
-  padding: var(--space-md) var(--space-page-inset);
-  border-top: var(--border-width-thin) solid
-    color-mix(in srgb, var(--primary) 10%, transparent);
-  background: color-mix(in srgb, var(--background) 35%, transparent);
-  font-size: var(--body-sm-font-size);
-  line-height: 1.7;
-  color: var(--muted-foreground);
-}
-.work-legal-footer > div,
-.work-legal-footer nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-md);
-}
-.work-legal-footer a:hover {
-  color: var(--primary-text);
-}
 
 /* ========================================================================== */
 /* Responsive parity: compact shell, readable cards and unclipped overlays */
@@ -1242,16 +1192,6 @@ body {
     max-width: none;
     margin-left: -50%;
     opacity: 0.5;
-  }
-  .work-legal-footer {
-    padding: var(--space-md);
-    justify-content: center;
-    text-align: center;
-  }
-  .work-legal-footer > div,
-  .work-legal-footer nav {
-    justify-content: center;
-    gap: var(--space-sm);
   }
 }
 @media (max-width: 359px) {

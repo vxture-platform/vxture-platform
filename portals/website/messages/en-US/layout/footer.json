@@ -37,7 +37,9 @@
     "privacy": "Privacy Policy",
     "copyright": "Copyright Policy",
     "brand": "Brand Policy",
-    "cookies": "Cookie Policy"
+    "cookies": "Cookie Policy",
+    "label": "Legal information",
+    "filings": "Site registration"
   },
   "copyright": {
     "text": "© 2026 Vxture Studio, All rights reserved."

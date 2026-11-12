@@ -217,7 +217,9 @@
     "save": "Save",
     "cancel": "Cancel",
     "edit": "Edit",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "brand": "Brand policy",
+    "cookies": "Cookie policy"
   },
   "accountsForms": {
     "login_permissions": "Login permissions",

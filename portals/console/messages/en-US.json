@@ -1620,7 +1620,9 @@
       "label": "Legal information",
       "terms": "Terms",
       "privacy": "Privacy",
-      "copyright": "Copyright"
+      "copyright": "Copyright",
+      "brand": "Brand policy",
+      "cookies": "Cookie policy"
     },
     "loading": {
       "label": "Loading"
