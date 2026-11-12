@@ -110,7 +110,7 @@ export function TenantPanel({
     >
       <PopoverTrigger asChild>
         <ShellScopeButton
-          className="w-auto max-w-[var(--container-overlay-xl)] hover:w-auto hover:max-w-[var(--container-overlay-xl)] max-sm:w-control-md max-sm:min-w-control-md max-sm:max-w-control-md max-sm:justify-center max-sm:p-0 max-sm:hover:w-control-md max-sm:hover:max-w-control-md max-sm:[&>span]:hidden max-sm:[&>svg:last-child]:hidden"
+          className="w-auto max-w-[var(--container-overlay-xl)] hover:w-auto hover:max-w-[var(--container-overlay-xl)] max-sm:size-icon-xl max-sm:min-w-(--spacing-icon-xl) max-sm:max-w-(--spacing-icon-xl) max-sm:justify-center max-sm:p-0 max-sm:hover:w-icon-xl max-sm:hover:max-w-(--spacing-icon-xl) max-sm:[&>span]:hidden max-sm:[&>svg:last-child]:hidden"
           icon={tenant?.tenantType === "personal" ? "user" : "buildings"}
           label={
             <span className="flex min-w-0 items-baseline gap-xs">

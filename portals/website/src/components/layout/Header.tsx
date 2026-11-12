@@ -15,9 +15,15 @@
  */
 "use client";
 
+import {
+  PhoneNumber,
+  ShellHeaderActions,
+  ShellBrand as HeaderBrand,
+  ShellHeader,
+} from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale as useNextIntlLocale, useTranslations } from "next-intl";
-import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,14 +82,10 @@ function getDisplayName(user: UserInfo, fallback: string): string {
 }
 
 /**
- * Strip the China country code (+86 / 86) so Chinese users see the bare 11-digit
- * mobile number. Non-Chinese formats are returned untouched.
+ * Format phone display consistently while preserving the international country code.
  */
-function formatPhone(phone: string): string {
-  const compact = phone.replace(/[\s-]/g, "");
-  const national = compact.replace(/^\+?86/, "");
-  if (/^1\d{10}$/.test(national)) return national;
-  return phone.trim();
+function formatPhone(phone: string | null | undefined) {
+  return phone ? <PhoneNumber {...formatPhoneForDisplay(phone)} /> : "";
 }
 
 function isThemePreference(value: unknown): value is ThemePreference {
@@ -574,7 +576,7 @@ export default function Header() {
     !hasMounted || (isLoading && !isAuthenticated && !user);
 
   return (
-    <header
+    <div
       className={`fixed w-full top-0 z-50 transition-all duration-300 ${
         isScrolled
           ? "bg-vx-brand-50/80 dark:bg-vx-gray-800/80 backdrop-blur-md shadow-lg"
@@ -582,83 +584,71 @@ export default function Header() {
       }`}
     >
       <div className="max-w-page-xl xl:max-w-page-2xl 2xl:max-w-400 mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link
-            href={HEADER_DATA.logo.href}
-            aria-label={t(HEADER_DATA.logo.labelKey)}
-            className="min-w-0 flex items-center space-x-2 rounded-md transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-ring-strong focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-          >
-            <Image
-              src={HEADER_DATA.logo.image}
-              alt={t(HEADER_DATA.logo.altKey)}
-              width={24}
-              height={24}
-              className="shrink-0 object-contain"
+        <ShellHeader
+          height="xl"
+          className="bg-transparent px-0 shadow-none"
+          leading={
+            <HeaderBrand
+              href={HEADER_DATA.logo.href}
+              logoSrc={HEADER_DATA.logo.image}
+              label={t(HEADER_DATA.logo.labelKey)}
             />
-            {/* 品牌字标走 font-brand（Funnel Display）——原挂的 .logo-text 类
-             * 全仓无定义，一直以默认正文字体渲染。 */}
-            <h1 className="font-brand truncate text-lg sm:text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
-              {t(HEADER_DATA.logo.labelKey)}
-            </h1>
-          </Link>
+          }
+          center={<HeaderNav />}
+          trailing={
+            <ShellHeaderActions>
+              <HeaderQuickTools />
 
-          {/* Navigation */}
-          <HeaderNav />
-
-          {/* 工具栏：访客设置 / CTA / 登录用户入口 */}
-          <div className="flex shrink-0 items-center gap-1 sm:gap-4">
-            <HeaderQuickTools />
-
-            {/* 已登录：进入控制台 + 用户菜单 */}
-            {isAuthenticated ? (
-              <>
-                <a
-                  href={consoleUrl}
-                  title={consoleLabel}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-vx-gray-700 transition-colors duration-200 hover:text-vx-primary focus-visible:outline-none dark:text-vx-text-secondary dark:hover:text-vx-brand-300"
-                >
-                  {consoleLabel}
-                </a>
-                {user ? (
-                  <UserMenu
-                    user={user}
-                    locale={locale}
-                    disabled={isLoading}
-                    onSwitchUser={handleSwitchUser}
-                    onSignOut={handleSignOut}
-                  />
-                ) : null}
-              </>
-            ) : (
-              /* 访客 CTA：会话稳定期保留占位（invisible）防止布局跳动 */
-              <div
-                className={`flex items-center gap-2 ${isSessionSettling ? "invisible" : ""}`}
-                aria-hidden={isSessionSettling ? "true" : undefined}
-              >
-                {guestActions.map((action) => (
-                  <Link
-                    // 用 labelKey 而不是 href 做键：注册与登录当前都指向
-                    // /signin（同一个入口页的两个 CTA），拿 href 当键会撞成
-                    // 同一个 key，React 报重复键并可能丢掉其中一个按钮。
-                    key={action.labelKey}
-                    href={action.href}
-                    className={
-                      action.variant === "secondary"
-                        ? "hidden sm:block w-20 px-4 py-2 rounded-lg transition-all duration-300 text-center text-vx-gray-700 dark:text-vx-text-secondary font-semibold hover:text-vx-gray-900 dark:hover:text-vx-white"
-                        : "px-2 sm:w-28 sm:px-6 py-2 bg-linear-to-r from-vx-info-500 to-vx-brand-600 text-vx-white rounded-lg hover:from-vx-info-600 hover:to-vx-brand-700 transition-all duration-300 shadow-lg hover:shadow-xl text-center"
-                    }
+              {/* 已登录：进入控制台 + 用户菜单 */}
+              {isAuthenticated ? (
+                <>
+                  <a
+                    href={consoleUrl}
+                    title={consoleLabel}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-icon-xl items-center text-sm font-medium text-vx-gray-700 transition-colors duration-200 hover:text-vx-primary focus-visible:outline-none dark:text-vx-text-secondary dark:hover:text-vx-brand-300"
                   >
-                    {t(action.labelKey)}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                    {consoleLabel}
+                  </a>
+                  {user ? (
+                    <UserMenu
+                      user={user}
+                      locale={locale}
+                      disabled={isLoading}
+                      onSwitchUser={handleSwitchUser}
+                      onSignOut={handleSignOut}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                /* 访客 CTA：会话稳定期保留占位（invisible）防止布局跳动 */
+                <div
+                  className={`flex items-center gap-2 ${isSessionSettling ? "invisible" : ""}`}
+                  aria-hidden={isSessionSettling ? "true" : undefined}
+                >
+                  {guestActions.map((action) => (
+                    <Link
+                      // 用 labelKey 而不是 href 做键：注册与登录当前都指向
+                      // /signin（同一个入口页的两个 CTA），拿 href 当键会撞成
+                      // 同一个 key，React 报重复键并可能丢掉其中一个按钮。
+                      key={action.labelKey}
+                      href={action.href}
+                      className={
+                        action.variant === "secondary"
+                          ? "hidden sm:inline-flex h-icon-xl items-center justify-center px-4 rounded-lg transition-all duration-300 text-center text-vx-gray-700 dark:text-vx-text-secondary font-semibold hover:text-vx-gray-900 dark:hover:text-vx-white"
+                          : "inline-flex h-icon-xl items-center justify-center px-2 sm:px-6 bg-linear-to-r from-vx-info-500 to-vx-brand-600 text-vx-white rounded-lg hover:from-vx-info-600 hover:to-vx-brand-700 transition-all duration-300 shadow-lg hover:shadow-xl text-center"
+                      }
+                    >
+                      {t(action.labelKey)}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </ShellHeaderActions>
+          }
+        />
       </div>
-    </header>
+    </div>
   );
 }

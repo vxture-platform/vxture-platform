@@ -7,6 +7,8 @@
  * @date 2026-11-08
  */
 "use client";
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useLocale, useTranslations } from "next-intl";
 import {
   formatDay,
@@ -254,7 +256,11 @@ export function CustomerProfileEditor({
         {(["phone", "email"] as const).map((kind) => (
           <AccountRow key={kind} label={formText(kind)}>
             <div className="accounts-profile-contact">
-              <span>{security?.[kind] || "—"}</span>
+              {kind === "phone" ? (
+                <PhoneNumber {...formatPhoneForDisplay(security?.phone)} />
+              ) : (
+                <span>{security?.email || "—"}</span>
+              )}
               {security?.[kind] ? (
                 <StatusBadge
                   tone={

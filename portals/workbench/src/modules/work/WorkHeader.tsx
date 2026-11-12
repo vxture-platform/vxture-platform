@@ -27,7 +27,8 @@ import {
 import type { WorkData, WorkRuntime } from "../../lib/contracts";
 import { authNavigation } from "../../lib/navigation";
 import { buildConsoleEntry } from "../../lib/console-entry";
-import { accountPhone } from "../../lib/presentation";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
+import { PhoneNumber, ShellHeaderActions } from "@vxture/design-system";
 import { ScopeMenu } from "./ScopeMenu";
 
 // ============================================================================
@@ -123,7 +124,7 @@ export function WorkHeader({
           </Link>
         </nav>
       )}
-      <div className="work-header-tools">
+      <ShellHeaderActions className="work-header-tools justify-self-end">
         <ShellIconGroup
           label={
             data || pending
@@ -195,7 +196,11 @@ export function WorkHeader({
               displayName: data.user.name,
               avatarAlt: data.user.name,
               avatarSrc: data.user.picture ?? undefined,
-              uniqueLine: accountPhone(data.user.phone) || t("未绑定手机号"),
+              uniqueLine: data.user.phone ? (
+                <PhoneNumber {...formatPhoneForDisplay(data.user.phone)} />
+              ) : (
+                t("未绑定手机号")
+              ),
               meta: data.user.email,
             }}
             extras={
@@ -282,7 +287,7 @@ export function WorkHeader({
             ]}
           />
         )}
-      </div>
+      </ShellHeaderActions>
     </header>
   );
 }

@@ -8,6 +8,8 @@
  */
 "use client";
 
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -38,17 +40,6 @@ export interface AccountsMenuUser {
   email?: string | null;
 }
 
-function phoneParts(phone: string) {
-  const compact = phone.replace(/[\s()-]/g, "");
-  const mainland = /^(?:\+?86)?(1\d{10})$/.exec(compact)?.[1];
-  return mainland
-    ? {
-        prefix: "+86",
-        number: `${mainland.slice(0, 3)} ${mainland.slice(3, 7)} ${mainland.slice(7)}`,
-      }
-    : { prefix: "", number: phone };
-}
-
 // ============================================================================
 // Shared account panel
 // ============================================================================
@@ -74,7 +65,7 @@ export function AccountsUserMenu({
   const content = useRef<HTMLDivElement>(null);
   const initial =
     Array.from(user.displayName.trim())[0]?.toLocaleUpperCase() || "?";
-  const phone = user.phone ? phoneParts(user.phone) : null;
+  const phone = user.phone ? formatPhoneForDisplay(user.phone) : null;
   const avatar = (
     <Avatar key={user.avatarSrc || "default"} className="size-icon-xl">
       {user.avatarSrc ? (
@@ -104,7 +95,7 @@ export function AccountsUserMenu({
         <Button
           variant="ghost"
           size="icon-md"
-          className="accounts-header-avatar"
+          className="size-icon-xl rounded-full p-0"
           aria-label={t("open")}
           title={t("open")}
           onClick={(event) => {
@@ -138,14 +129,7 @@ export function AccountsUserMenu({
             {
               key: "phone",
               content: phone ? (
-                <span className="accounts-user-phone">
-                  {phone.prefix ? (
-                    <span className="accounts-user-dial-code">
-                      {phone.prefix}
-                    </span>
-                  ) : null}
-                  <span>{phone.number}</span>
-                </span>
+                <PhoneNumber {...phone} />
               ) : user.phone === null ? (
                 t("phoneNotBound")
               ) : (

@@ -9,7 +9,6 @@
 import { describe, expect, it } from "vitest";
 import {
   appVersion,
-  accountPhone,
   dailyPresentation,
   filterApps,
   parseHomeCopy,
@@ -172,16 +171,6 @@ it("prioritizes availability before recent and frequent without favorite bias", 
     "new",
   ]);
   expect(homeApps([catalog[0]!], "frequent")).toEqual([catalog[0]!]);
-});
-
-describe("account phone display", () => {
-  it("removes only a China mobile calling prefix", () => {
-    expect(accountPhone("+8613800138000")).toBe("13800138000");
-    expect(accountPhone("+86 13800138000")).toBe("13800138000");
-    expect(accountPhone("+14155552671")).toBe("+14155552671");
-    expect(accountPhone("+861012345678")).toBe("+861012345678");
-    expect(accountPhone("")).toBe("");
-  });
 });
 
 // ============================================================================

@@ -20,7 +20,7 @@
     "@fontsource/funnel-display": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
-    "@vxture/design-system": "12.21.2",
+    "@vxture/design-system": "12.22.0",
     "@vxture/platform-browser": "workspace:*",
     "@vxture-platform/shared": "workspace:*",
     "axios": "^1.20.0",
@@ -29,7 +29,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "uuid": "^13.0.2",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "@vxture/core-utils": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

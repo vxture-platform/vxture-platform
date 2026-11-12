@@ -26,6 +26,8 @@
  * 且对话框标 danger。
  */
 
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
@@ -609,7 +611,9 @@ export function AccountDetailPage({ accountId }: { accountId: string }) {
         <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-2">
           <Field label="账号编码">{accountCode}</Field>
           <Field label="显示名称">{account.displayName}</Field>
-          <Field label="手机号">{account.phone || "—"}</Field>
+          <Field label="手机号">
+            <PhoneNumber {...formatPhoneForDisplay(account.phone)} />
+          </Field>
           <Field label="邮箱">{account.email || "—"}</Field>
           <Field label="主租户">
             {account.primaryTenantName ? (

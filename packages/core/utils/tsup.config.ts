@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: { index: "src/index.ts", phone: "src/utils/phone.utils.ts" },
   format: ["esm", "cjs"],
   outExtension({ format }) {
     return { js: format === "esm" ? ".mjs" : ".cjs" };

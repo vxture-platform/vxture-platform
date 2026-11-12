@@ -42,6 +42,7 @@ import {
   ShellBrand,
   ShellAgentButton,
   ShellHeader,
+  ShellHeaderActions,
   ShellIconButton,
   ShellLauncher,
   ShellPageContainer,
@@ -376,9 +377,8 @@ export function ArcheShell({
                 />
               }
               trailing={
-                // 三个板块（助手 / 系统工具组 / 用户菜单）之间拉开 gap-md，
-                // 跟组内图标的 gap-2xs 区分开——组间是板块边界，组内是同类项。
-                <div className="flex items-center gap-md">
+                // Share header group spacing independently of content density.
+                <ShellHeaderActions>
                   {ASSISTANT_PLACEHOLDER_ENABLED ? (
                     <ShellAgentButton
                       iconSrc="/assets/ai/ai-agent-icon-32.gif"
@@ -450,7 +450,7 @@ export function ArcheShell({
                       },
                     ]}
                   />
-                </div>
+                </ShellHeaderActions>
               }
             />
           }

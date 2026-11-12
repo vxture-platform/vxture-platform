@@ -16,8 +16,10 @@ import {
   Icon,
   StatusBadge,
   UserAvatar,
+  PhoneNumber,
   type IconName,
 } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import type { ConsoleUser } from "@/entities/console";
 import { accountCenterUrl } from "@/lib/account-center";
 import { PageSection } from "@/layout/shell";
@@ -49,7 +51,9 @@ export function PersonalOverview({ user }: { user: ConsoleUser | null }) {
             <span>{t("username", { name: user.username })}</span>
           ) : null}
           {user?.email ? <span className="break-all">{user.email}</span> : null}
-          {user?.phone ? <span>{user.phone}</span> : null}
+          {user?.phone ? (
+            <PhoneNumber {...formatPhoneForDisplay(user.phone)} />
+          ) : null}
           <span>{t("description")}</span>
         </span>
       }

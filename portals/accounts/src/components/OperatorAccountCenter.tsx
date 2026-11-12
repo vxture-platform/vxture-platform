@@ -6,6 +6,8 @@
  * Confirmed session loss clears the account shell and returns to the public home.
  */
 "use client";
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import {
   SecurityVerification,
   useSecurityVerificationControls,
@@ -300,6 +302,9 @@ function ReadyView({
             <Row label={t("field.phone")}>
               <ContactValue
                 value={self.phone}
+                displayValue={
+                  <PhoneNumber {...formatPhoneForDisplay(self.phone)} />
+                }
                 verified={self.phoneVerified}
                 notSet={t("notSet")}
                 verifiedLabel={t("verified")}
@@ -559,6 +564,7 @@ function MfaCard({ enabled }: { enabled: boolean }) {
 
 function ContactValue({
   value,
+  displayValue,
   verified,
   notSet,
   verifiedLabel,
@@ -568,6 +574,7 @@ function ContactValue({
   disabled,
 }: {
   value: string | null;
+  displayValue?: React.ReactNode;
   verified: boolean;
   notSet: string;
   verifiedLabel: string;
@@ -579,7 +586,7 @@ function ContactValue({
   return (
     <span className="accounts-contact-value">
       <span className="inline-flex items-center gap-xs">
-        {value ?? notSet}
+        {value ? (displayValue ?? value) : notSet}
         {value ? (
           <StatusBadge tone={verified ? "success" : "warning"}>
             {verified ? verifiedLabel : unverifiedLabel}

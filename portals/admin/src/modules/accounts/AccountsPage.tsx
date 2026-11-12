@@ -1,5 +1,7 @@
 "use client";
 
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -345,7 +347,7 @@ function useAccountColumns(
       cell: (account) => (
         <TableTitleCell
           layout="stacked"
-          title={account.phone || "—"}
+          title={<PhoneNumber {...formatPhoneForDisplay(account.phone)} />}
           description={account.email || "—"}
         />
       ),

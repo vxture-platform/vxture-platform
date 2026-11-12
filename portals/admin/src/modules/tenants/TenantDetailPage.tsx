@@ -1,5 +1,7 @@
 "use client";
 
+import { PhoneNumber } from "@vxture/design-system";
+import { formatPhoneForDisplay } from "@vxture/core-utils/phone";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/modules/shared/table";
@@ -626,7 +628,9 @@ function TenantInfoTab({
               <TenantConfigValue>{tenant.ownerEmail}</TenantConfigValue>
             </TenantConfigItem>
             <TenantConfigItem label="Phone">
-              <TenantConfigValue>{tenant.contactPhone}</TenantConfigValue>
+              <TenantConfigValue>
+                <PhoneNumber {...formatPhoneForDisplay(tenant.contactPhone)} />
+              </TenantConfigValue>
             </TenantConfigItem>
           </div>
         </div>
@@ -814,7 +818,7 @@ function useTenantMemberColumns(
       cell: (member) => (
         <TableTitleCell
           layout="stacked"
-          title={member.phone || "—"}
+          title={<PhoneNumber {...formatPhoneForDisplay(member.phone)} />}
           description={member.email || "—"}
         />
       ),
@@ -923,7 +927,7 @@ function TenantMemberCards({
               /* 与表格的「联系方式」列同源：电话为主、邮箱为次。 */
               {
                 key: "contact",
-                value: member.phone || "—",
+                value: <PhoneNumber {...formatPhoneForDisplay(member.phone)} />,
                 label: member.email || "—",
               },
               { key: "joined", value: joinedAt, label: "加入时间" },
