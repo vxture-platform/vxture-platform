@@ -155,4 +155,111 @@ describe.skipIf(!RUN)("metering read · 按用户时区重切本地日(真库)",
       /not recognized/,
     );
   });
+  it("subscription pools project their effective validity without changing reset semantics", async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      // Keep all fixture changes in one rollback-only connection.
+      const txRepo = new PgMeteringReadRepository({
+        query: client.query.bind(client),
+      } as unknown as Pool);
+      const plan = await client.query<{ id: string }>(
+        "select plan_version_id as id from product.plan_components where component_role = 'primary' limit 1",
+      );
+      if (!plan.rows[0])
+        throw new Error(
+          "A seeded plan version is required for the integration fixture",
+        );
+      const sub = await client.query<{ id: string }>(
+        `insert into metering.subscriptions
+          (tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, start_at, end_at, status, created_by_type)
+         values ($1, $2, $3, 'paid', 'year', now() - interval '2 months', now() + interval '10 months', 'active', 'system') returning id`,
+        [TENANT, WORKSPACE, plan.rows[0].id],
+      );
+      const id = sub.rows[0]!.id;
+      await client.query(
+        `insert into metering.quota_pools
+          (workspace_id, subscription_id, product_id, metric_key, quota_limit, quota_used,
+           pool_source, reset_period, period_anchor, current_period_start)
+         values ($1,$2,$3,'ai.credit',100,25,'subscription','month',now()-interval '2 months',now()-interval '2 months')`,
+        [WORKSPACE, id, PRODUCT],
+      );
+      const read = async () =>
+        (await txRepo.listActivePools(WORKSPACE)).find(
+          (p) =>
+            p.productCode === "tz-read-itest" &&
+            p.poolSource === "subscription",
+        )!;
+      const bounds = await client.query<{ end_at: Date }>(
+        "select end_at from metering.subscriptions where id=$1",
+        [id],
+      );
+      const first = await read();
+      expect(first.expiresAt).toEqual(bounds.rows[0]!.end_at);
+      expect(first.effectiveUsed).toBe(0);
+      expect(first.resetPeriod).toBe("month");
+      await client.query(
+        "update metering.quota_pools set expires_at = now() + interval '1 day' where subscription_id=$1",
+        [id],
+      );
+      const earlier = await read();
+      expect(earlier.expiresAt!.getTime()).toBeLessThan(
+        first.expiresAt!.getTime(),
+      );
+      await client.query(
+        "update metering.quota_pools set expires_at = null where subscription_id=$1",
+        [id],
+      );
+      await client.query(
+        "update metering.subscriptions set end_at = end_at + interval '1 year' where id=$1",
+        [id],
+      );
+      expect((await read()).expiresAt!.getTime()).toBeGreaterThan(
+        first.expiresAt!.getTime(),
+      );
+      await client.query(
+        "update metering.subscriptions set subscription_kind='trial', trial_end_at=now()+interval '2 days', auto_renew=false where id=$1",
+        [id],
+      );
+      expect((await read()).expiresAt!.getTime()).toBeLessThan(
+        first.expiresAt!.getTime(),
+      );
+      await client.query(
+        "update metering.subscriptions set end_at=now()+interval '1 day' where id=$1",
+        [id],
+      );
+      const trialBounds = await client.query<{ end_at: Date }>(
+        "select end_at from metering.subscriptions where id=$1",
+        [id],
+      );
+      expect((await read()).expiresAt).toEqual(trialBounds.rows[0]!.end_at);
+      await client.query(
+        "insert into metering.quota_pools(workspace_id,metric_key,quota_limit,pool_source) values($1,'storage.bytes',200,'ws_base')",
+        [WORKSPACE],
+      );
+      const base = (await txRepo.listActivePools(WORKSPACE)).find(
+        (p) => p.poolSource === "ws_base",
+      );
+      expect(base!.expiresAt).toBeNull();
+
+      await client.query(
+        "update metering.subscriptions set subscription_kind='free', end_at=null, trial_end_at=null where id=$1",
+        [id],
+      );
+      expect((await read()).expiresAt).toBeNull();
+      await client.query(
+        "update metering.subscriptions set status='expired' where id=$1",
+        [id],
+      );
+      expect(await read()).toBeUndefined();
+      await client.query(
+        "update metering.subscriptions set status='cancelled' where id=$1",
+        [id],
+      );
+      expect(await read()).toBeUndefined();
+    } finally {
+      await client.query("rollback");
+      client.release();
+    }
+  });
 });

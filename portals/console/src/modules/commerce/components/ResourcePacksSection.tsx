@@ -153,6 +153,7 @@ export function ResourcePacksSection({
 
   return (
     <PageSection
+      id="subscription-resource-packs"
       icon="stack"
       level={2}
       title={t("title")}

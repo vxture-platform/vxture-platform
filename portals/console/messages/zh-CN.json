@@ -1485,7 +1485,7 @@
       "colUsed": "本期已用",
       "colRemaining": "剩余",
       "colReset": "重置周期",
-      "colExpires": "有效期至",
+      "colExpires": "权益有效期",
       "empty": "暂无 AI Credits 额度,订阅产品后自动获得"
     },
     "description": "工作空间的存储与 AI Credits:额度构成、当前用量与剩余一目了然",
@@ -1539,15 +1539,16 @@
     "storage": {
       "title": "存储空间",
       "description": "工作空间级共享资源:每行一个额度来源或用量主体,同产品的贡献与用量并读",
-      "colLimit": "额度",
-      "colExpires": "有效期至",
+      "colLimit": "贡献额度",
+      "colExpires": "权益有效期",
       "noExpiry": "长期有效",
-      "colUsed": "已用",
+      "colUsed": "已用空间",
       "colShare": "占总额度",
       "colObserved": "上报时间",
       "emptySources": "暂无存储额度来源",
       "colItem": "项目",
-      "usageOnly": "产品用量"
+      "usageOnly": "产品用量",
+      "subscriptionTerm": "订阅期内"
     },
     "title": "配额管理"
   },
@@ -2110,7 +2111,9 @@
       "productsHintNoFree": "当前工作区",
       "expiring": "即将到期",
       "expiringHint": "{product} · {cycle} · 剩 {days} 天",
-      "expiringNone": "暂无到期压力"
+      "expiringNone": "暂无到期压力",
+      "resources": "扩展资源",
+      "resourcesHint": "当前有效的扩展包"
     },
     "subStatus": {
       "active": "服务中",
@@ -2123,7 +2126,7 @@
     },
     "subs": {
       "title": "我的智能体",
-      "description": "收藏优先，按最近开通排序；未支付、未开通的订单不在此列。",
+      "description": "收藏优先，按最近开通排序；到期一年内可续订，已替换或到期超过一年的订阅归入历史。",
       "filterLabel": "订阅筛选",
       "filterActive": "服务中",
       "filterAll": "全部",
@@ -2134,7 +2137,8 @@
       "unsubscribeTitle": "确认退订 {product}?",
       "unsubscribeBody": "退订后服务立即终止且不退款;已用配额与数据按数据保留策略处理。若只是不想续费,请改用「到期不续」——本周期内服务不受影响。",
       "unsubscribeKeep": "保留订阅",
-      "unsubscribeConfirm": "确认立即退订"
+      "unsubscribeConfirm": "确认立即退订",
+      "filterHistory": "历史订阅"
     },
     "svcAxis": {
       "notProvisioned": "未开通",
@@ -2758,7 +2762,7 @@
       "available": "可用卡券",
       "expiringSoon": "{count} 张将于 7 天内到期",
       "noExpiring": "近期无到期",
-      "used": "已使用",
+      "used": "已用卡券",
       "usedHint": "累计核销",
       "total": "全部卡券",
       "totalHint": "含已用/已过期/已撤销"
