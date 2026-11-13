@@ -28,16 +28,13 @@ import {
   ViewLayout,
 } from "@vxture/design-system";
 import { PageSection, SectionBody } from "@/layout/shell";
-import { isExternalLink, mergeById } from "@/lib/inbox-list";
+import { inboxMessageHref, isExternalLink, mergeById } from "@/lib/inbox-list";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   fetchInbox,
   deleteInboxMessage,
   markInboxAllRead,
   markInboxRead,
-  acceptIncomingInvitation,
-  declineIncomingInvitation,
-  ConsoleBffError,
   type InboxMessage,
 } from "@/api/console-bff";
 import { formatInboxTime } from "@/lib/inbox-format";
@@ -48,21 +45,6 @@ import {
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
 
 const PAGE_SIZE = 20;
-
-/**
- * 表态时后端可能给回的原因码(与 iam.router 的 `ACCEPT_INVITATION_ERRORS` 同一张表)。
- * 闭集:多一个码这里不认,就走通用兜底,而不是把码本身显示出来。
- */
-const INVITE_ERROR_CODES = [
-  "not_found",
-  "expired",
-  "revoked",
-  "already_accepted",
-  "email_mismatch",
-  "user_mismatch",
-  "unknown_target",
-] as const;
-type InviteErrorCode = (typeof INVITE_ERROR_CODES)[number];
 
 type Filter = "all" | "todo" | "message" | "unread";
 const FILTERS: Filter[] = ["all", "todo", "message", "unread"];
@@ -91,8 +73,6 @@ export function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* 一次只处理一条:两条邀请同时在飞,失败提示会互相盖掉。 */
-  const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   /* 正在删的那几条:按 id 记而不是一个全局 busy——同时删两条时，
      一个全局标志会让两个按钮一起变灰，看不出是哪条在动。 */
@@ -156,14 +136,15 @@ export function InboxPage() {
         /* 标已读失败不拦跳转 */
       }
     }
-    if (!message.link) return;
+    const href = inboxMessageHref(message);
+    if (!href) return;
     // 外链不能走 next-intl 的路由器:它会加语言前缀,`https://…` 变成
     // `/zh-CN/https://…`(公告的 ctaUrl 就可能是绝对地址,库里也没有约束拦它)。
-    if (isExternalLink(message.link)) {
-      window.open(message.link, "_blank", "noopener,noreferrer");
+    if (isExternalLink(href)) {
+      window.open(href, "_blank", "noopener,noreferrer");
       return;
     }
-    router.push(message.link);
+    router.push(href);
   }
 
   async function markAll() {
@@ -207,43 +188,6 @@ export function InboxPage() {
         next.delete(m.id);
         return next;
       });
-    }
-  }
-
-  /**
-   * 对一条邀请表态。**同意后要整页刷新会话**,不是只把这一行去掉:
-   * 加入新租户会改变可用租户列表、能力集、侧栏——只更新本页会让人处在一个
-   * 「已经加入了但界面还是旧的」的状态里。
-   *
-   * 拒绝不用刷会话(什么都没变),重算待办即可。
-   */
-  async function respondToInvite(
-    invitationId: string,
-    action: "accept" | "decline",
-  ) {
-    if (respondingTo) return;
-    setRespondingTo(invitationId);
-    setError(null);
-    try {
-      if (action === "accept") {
-        await acceptIncomingInvitation(invitationId);
-        /* 硬刷:会话、能力、租户列表都在服务端算,软重算追不上。 */
-        window.location.reload();
-        return;
-      }
-      await declineIncomingInvitation(invitationId);
-      derived.reload();
-    } catch (err) {
-      /* 只有闭集里的原因码才去查文案。动态拼 key 会在后端加一个新原因码那天
-         直接把 key 本身显示给用户——那时没人会去补这份文案。 */
-      const code =
-        err instanceof ConsoleBffError &&
-        (INVITE_ERROR_CODES as readonly string[]).includes(err.message)
-          ? (err.message as InviteErrorCode)
-          : null;
-      setError(code ? t(`invite.error.${code}`) : t("invite.failed"));
-    } finally {
-      setRespondingTo(null);
     }
   }
 
@@ -344,35 +288,9 @@ export function InboxPage() {
                   {todo.detail}
                 </span>
               </span>
-              {/* 待我表态的邀请就地给两个动作;其余待办仍是「点进去某一页」。
-                  拒绝用 outline:两个动作不是同等分量,主动作应当看得出来是哪个。 */}
-              {todo.actionableId ? (
-                <span className="flex shrink-0 items-center gap-sm">
-                  <Button
-                    size="sm"
-                    disabled={respondingTo !== null}
-                    onClick={() =>
-                      void respondToInvite(todo.actionableId!, "accept")
-                    }
-                  >
-                    {t("invite.accept")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={respondingTo !== null}
-                    onClick={() =>
-                      void respondToInvite(todo.actionableId!, "decline")
-                    }
-                  >
-                    {t("invite.decline")}
-                  </Button>
-                </span>
-              ) : (
-                <Button size="sm" onClick={() => router.push(todo.href)}>
-                  {todo.actionLabel}
-                </Button>
-              )}
+              <Button size="sm" onClick={() => router.push(todo.href)}>
+                {todo.actionLabel}
+              </Button>
             </li>
           ))}
           {messages.map((m) => {
@@ -407,9 +325,11 @@ export function InboxPage() {
                       {formatInboxTime(m.createdAt, locale)}
                     </span>
                   </span>
-                  {m.link ? (
+                  {inboxMessageHref(m) ? (
                     <span className="inline-flex shrink-0 items-center gap-2xs text-body-sm text-muted-foreground">
-                      {t("open")}
+                      {m.templateCode === "tenant.invitation"
+                        ? tTodo("items.incomingInviteAction")
+                        : t("open")}
                       <Icon
                         name="chevron-right"
                         size="xs"

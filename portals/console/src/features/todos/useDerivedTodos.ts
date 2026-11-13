@@ -34,15 +34,13 @@ import {
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { daysLeft } from "@/modules/commerce/components/hubModel";
+import { INCOMING_INVITATIONS_HREF } from "@/lib/inbox-list";
 import { useDateFormat } from "@/lib/use-date-format";
 
 import { buildAddonPayHref } from "@/modules/commerce/addon-routes";
 /**
- * `invitation`          我**发出**的邀请里还有人没接受(要 member.manage,去邀请台账)。
- * `invitation_incoming` **有人邀请我**加入他们的租户(自视角,同意 / 拒绝就在收件箱里做)。
- *
- * 两个都叫「邀请」但方向相反,合成一个 kind 会让文案没法写:一边是「催对方」,
- * 一边是「等我表态」。
+ * Outgoing invitations require member management access and open the invitation ledger.
+ * Incoming invitations belong to the user and open the personal memberships workflow.
  */
 export type TodoKind =
   | "payment"
@@ -65,13 +63,6 @@ export interface TodoItem {
   href: string;
   actionLabel: string;
   refs: TodoRef[];
-  /**
-   * 就地处理型待办的业务 ID(目前只有待我表态的邀请)。
-   *
-   * 有它的那几条不是「点进去某一页」而是「在原地按同意 / 拒绝」——概览页仍然按
-   * `href` 渲染成一个跳转(概览只看不做),收件箱那一页才把两个按钮画出来。
-   */
-  actionableId?: string;
 }
 
 const RENEW_THRESHOLD_DAYS = 7;
@@ -232,30 +223,26 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
         });
       }
     }
-    if (sources.pendingInvites > 0) {
-      /* 待我表态的邀请:**一条一行**。发出方那条是合成的计数(「还有 3 条没人接受」),
-         这边不行——每一条都要我单独同意或拒绝,合成一条就没法表态。 */
-      for (const inv of sources.incoming) {
-        rows.push({
-          key: `incoming-invite-${inv.id}`,
-          kind: "invitation_incoming",
-          title: t("items.incomingInviteTitle", {
-            tenant: inv.tenantName ?? t("items.incomingInviteUnnamedTenant"),
-          }),
-          detail: t("items.incomingInviteDetail", {
-            inviter: inv.inviterName ?? t("items.incomingInviteUnknownInviter"),
-            role: inv.roleCode,
-            expires: fmtDate(inv.expiresAt),
-          }),
-          /* 概览页按这个 href 渲染成一次跳转(概览只看不做);
-             收件箱那一页认 actionableId,把「同意 / 拒绝」画在原地。 */
-          href: "/inbox",
-          actionLabel: t("items.incomingInviteAction"),
-          refs: [{ type: "invitation", id: inv.id }],
-          actionableId: inv.id,
-        });
-      }
+    // Incoming invitations belong to the user, independent of outgoing invitations.
+    for (const inv of sources.incoming) {
+      rows.push({
+        key: `incoming-invite-${inv.id}`,
+        kind: "invitation_incoming",
+        title: t("items.incomingInviteTitle", {
+          tenant: inv.tenantName ?? t("items.incomingInviteUnnamedTenant"),
+        }),
+        detail: t("items.incomingInviteDetail", {
+          inviter: inv.inviterName ?? t("items.incomingInviteUnknownInviter"),
+          role: inv.roleCode,
+          expires: fmtDate(inv.expiresAt),
+        }),
+        href: INCOMING_INVITATIONS_HREF,
+        actionLabel: t("items.incomingInviteAction"),
+        refs: [{ type: "invitation", id: inv.id }],
+      });
+    }
 
+    if (sources.pendingInvites > 0) {
       rows.push({
         key: "invitations",
         kind: "invitation",

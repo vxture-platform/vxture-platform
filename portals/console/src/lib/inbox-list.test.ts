@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isExternalLink, mergeById } from "./inbox-list";
+import { inboxMessageHref, isExternalLink, mergeById } from "./inbox-list";
 
 /**
  * 批 6 两条修复的回归:外链不能进 next-intl 路由器(会被加语言前缀成 /zh-CN/https://…);
@@ -37,5 +37,21 @@ describe("mergeById", () => {
     expect(mergeById([], [a])).toEqual([a]);
     expect(mergeById([a], [])).toEqual([a]);
     expect(mergeById([], [])).toEqual([]);
+  });
+});
+
+describe("invitation message destinations", () => {
+  it("routes existing invitation messages to the personal invitation section", () => {
+    for (const link of ["/inbox", null, "/members/invitations"]) {
+      expect(
+        inboxMessageHref({ templateCode: "tenant.invitation", link }),
+      ).toBe("/memberships#invitations");
+    }
+  });
+
+  it("preserves other notification destinations", () => {
+    for (const link of ["/billing", "https://vxture.com/docs", null]) {
+      expect(inboxMessageHref({ templateCode: "order.paid", link })).toBe(link);
+    }
   });
 });
