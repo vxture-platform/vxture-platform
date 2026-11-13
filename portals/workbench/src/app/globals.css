@@ -1265,9 +1265,6 @@ body {
 .work-card-favorite[aria-pressed="true"] {
   color: var(--primary-text);
 }
-.work-card-favorite[aria-pressed="true"] svg {
-  fill: currentColor;
-}
 
 /* Both routes reserve the same control region so their first card row stays aligned. */
 .work-common-heading,

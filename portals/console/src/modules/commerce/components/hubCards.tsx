@@ -91,7 +91,7 @@ function FavoriteStar({
       onClick={onToggle}
       className={cn(
         "shrink-0",
-        active ? "text-warning-text" : "text-muted-foreground",
+        active ? "text-primary-text" : "text-muted-foreground",
       )}
     >
       <Icon name="star" size="sm" weight={active ? "fill" : "regular"} />

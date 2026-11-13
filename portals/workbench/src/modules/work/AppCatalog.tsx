@@ -137,7 +137,11 @@ export function AppCard({
               disabled={!favoritesEnabled}
               onClick={() => onFavorite(app)}
             >
-              <Icon name="star" size="sm" />
+              <Icon
+                name="star"
+                size="sm"
+                weight={app.favorite ? "fill" : "regular"}
+              />
             </Button>
           </div>
         </div>
