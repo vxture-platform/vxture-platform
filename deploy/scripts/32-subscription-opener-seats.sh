@@ -28,7 +28,7 @@ run_sql() {
     sh -c 'exec psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$1"' sh "$1"
 }
 umask 077
-SNAPSHOT_DIR="${OPENER_SEAT_SNAPSHOT_DIR:-/srv/vxture/backups/subscription-opener-seats/$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+SNAPSHOT_DIR="${OPENER_SEAT_SNAPSHOT_DIR:-$RUNTIME_DIR/backups/subscription-opener-seats/$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 mkdir -p "$SNAPSHOT_DIR"
 echo "Snapshot directory: $SNAPSHOT_DIR"
 run_sql /database/verify/subscription-opener-seats.sql | tee "$SNAPSHOT_DIR/preflight.txt"

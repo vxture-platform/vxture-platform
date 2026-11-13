@@ -237,6 +237,23 @@ jobs:
           script: |
             set -e
             SRC="${STAGE_DIR:?}/deploy"
+            # Targeted actions use the pinned staging bundle without changing shared deploy files.
+            case "$DB_ACTION" in
+              opener-seats-preflight|opener-seats-repair)
+                RUNTIME_DIR="${DEPLOY_RUNTIME_DIR:-/srv/vxture/runtime}"
+                export RUNTIME_DIR
+                echo "Targeted DB execution identity: $(id -un)"
+                ls -ld "$SRC" "$RUNTIME_DIR"
+                if [ "$DB_ACTION" = opener-seats-preflight ]; then
+                  bash "$SRC/scripts/32-subscription-opener-seats.sh" preflight
+                else
+                  CONFIRM_OPENER_SEATS=yes bash "$SRC/scripts/32-subscription-opener-seats.sh" repair
+                  CONFIRM_RESTAMP=yes bash "$SRC/scripts/28c-restamp-ddl-baseline.sh"
+                  bash "$SRC/scripts/30-verify-platform-baseline.sh"
+                fi
+                exit 0
+                ;;
+            esac
             DEPLOY_DIR="${DEPLOY_DIR:-/srv/vxture/deploy}"
             mkdir -p "$DEPLOY_DIR" "$DEPLOY_DIR/secrets"
 
@@ -249,20 +266,6 @@ jobs:
             cp -f "$SRC"/secrets/*.example "$DEPLOY_DIR/secrets/" 2>/dev/null || true
 
             cd "$DEPLOY_DIR"
-
-            # Targeted seat repair bypasses legacy env shims and unrelated migrations.
-            case "$DB_ACTION" in
-              opener-seats-preflight)
-                bash scripts/32-subscription-opener-seats.sh preflight
-                exit 0
-                ;;
-              opener-seats-repair)
-                CONFIRM_OPENER_SEATS=yes bash scripts/32-subscription-opener-seats.sh repair
-                CONFIRM_RESTAMP=yes bash scripts/28c-restamp-ddl-baseline.sh
-                bash scripts/30-verify-platform-baseline.sh
-                exit 0
-                ;;
-            esac
 
             # ── U-line env migration shim (product_300 §2.3 #4) ──────────────
             # Legacy cross-domain RP `ruyin` (ruyin.ai) is renamed `umbra`, and
