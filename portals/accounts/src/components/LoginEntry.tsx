@@ -105,10 +105,23 @@ export function LoginEntry({
         description={state.message}
         action={
           state.retryable ? (
-            <Button onClick={() => setRetry((value) => value + 1)}>
+            <Button
+              size="action"
+              onClick={() => setRetry((value) => value + 1)}
+            >
               {formText("retry")}
             </Button>
-          ) : undefined
+          ) : (
+            <Button size="action" asChild>
+              <a
+                href={
+                  entryRealm === "workforce" ? "/workforce/login" : "/login"
+                }
+              >
+                {formText("sign_in_again")}
+              </a>
+            </Button>
+          )
         }
       />
     );

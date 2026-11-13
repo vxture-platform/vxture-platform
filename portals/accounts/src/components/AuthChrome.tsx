@@ -32,7 +32,7 @@ export function AccountsAuthFooter() {
   return <AccountsFooter />;
 }
 
-/** Render an authentication outcome without extra navigation. */
+/** Render authentication outcomes using the shared result action contract. */
 export function AccountsNotice({
   tone = "danger",
   title,
