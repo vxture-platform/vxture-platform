@@ -14,7 +14,13 @@ import { useWorkLocale } from "../../lib/locale";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button, Drawer, Icon, SegmentedControl } from "@vxture/design-system";
+import {
+  Button,
+  Drawer,
+  Icon,
+  SegmentedControl,
+  ToastProvider,
+} from "@vxture/design-system";
 import { loadWorkData } from "../../lib/api";
 import { authNavigation } from "../../lib/navigation";
 import type {
@@ -48,7 +54,16 @@ import { NotificationDrawer } from "./NotificationDrawer";
  * @param props - Server-validated public runtime and configurable daily copy.
  * @returns The Work portal with one shared detail drawer.
  */
-export function WorkPortal({
+export function WorkPortal(props: Parameters<typeof WorkPortalContent>[0]) {
+  const { t } = useWorkLocale();
+  return (
+    <ToastProvider regionLabel={t("工作通知")} dismissLabel={t("关闭通知")}>
+      <WorkPortalContent {...props} />
+    </ToastProvider>
+  );
+}
+
+function WorkPortalContent({
   runtime,
   copy,
   initialTime,
@@ -305,11 +320,6 @@ export function WorkPortal({
                       {t("重试")}
                     </Button>
                   </div>
-                )}
-                {activity.message && (
-                  <p className="work-status" role="status">
-                    {t(activity.message)}
-                  </p>
                 )}
                 {appsPage && activity.result?.status === "error" && (
                   <div className="work-status" role="status">

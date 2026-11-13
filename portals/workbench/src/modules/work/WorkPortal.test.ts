@@ -26,6 +26,7 @@ vi.mock("next/link", () => ({
 vi.mock("@vxture/design-system", () => ({
   Button: ({ children }: React.PropsWithChildren) => children,
   Drawer: () => null,
+  ToastProvider: ({ children }: React.PropsWithChildren) => children,
   Icon: () => null,
   SegmentedControl: () => null,
   ShellFooter: () => React.createElement("footer", null, "Legal information"),

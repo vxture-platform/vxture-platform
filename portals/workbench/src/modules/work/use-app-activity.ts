@@ -9,6 +9,8 @@
  * @date 2026-11-10
  */
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "@vxture/design-system";
+import { useWorkLocale } from "../../lib/locale";
 import { loadAppActivity, saveAppActivity } from "../../lib/api";
 import type {
   AppActivity,
@@ -36,7 +38,8 @@ export function useAppActivity(data: WorkData | null) {
     result: LoadResult<AppActivity>;
   } | null>(null);
   const [revision, setRevision] = useState(0);
-  const [message, setMessage] = useState("");
+  const { toast } = useToast();
+  const { t } = useWorkLocale();
   const [busy, setBusy] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const locked = useRef(false);
@@ -47,7 +50,6 @@ export function useAppActivity(data: WorkData | null) {
     controller.current = request;
     locked.current = false;
     setBusy(false);
-    setMessage("");
     setState(null);
     void loadAppActivity(request.signal)
       .then((result) => {
@@ -84,7 +86,6 @@ export function useAppActivity(data: WorkData | null) {
     if (!request || !activity || locked.current) return;
     locked.current = true;
     setBusy(true);
-    setMessage("");
     try {
       await saveAppActivity(path, body, scope, request.signal);
       if (!request.signal.aborted) {
@@ -96,10 +97,16 @@ export function useAppActivity(data: WorkData | null) {
               }
             : previous,
         );
-        setMessage(success);
+        if (success)
+          toast({ title: t(success), tone: "success", duration: 3000 });
       }
     } catch {
-      if (!request.signal.aborted) setMessage("操作未保存，请重试");
+      if (!request.signal.aborted)
+        toast({
+          title: t("操作未保存，请重试"),
+          tone: "danger",
+          duration: 5000,
+        });
     } finally {
       if (!request.signal.aborted) {
         locked.current = false;
@@ -168,7 +175,11 @@ export function useAppActivity(data: WorkData | null) {
       })
       .catch(() => {
         if (!request.signal.aborted)
-          setMessage("应用已打开，使用记录未保存，可刷新后重试");
+          toast({
+            title: t("应用已打开，使用记录未保存，可刷新后重试"),
+            tone: "warning",
+            duration: 5000,
+          });
       });
   };
   return {
@@ -177,7 +188,6 @@ export function useAppActivity(data: WorkData | null) {
     result,
     busy,
     enabled: Boolean(activity) && !busy,
-    message,
     favorite,
     changeView,
     launch,
