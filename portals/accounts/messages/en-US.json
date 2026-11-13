@@ -222,6 +222,7 @@
     "cookies": "Cookie policy"
   },
   "accountsForms": {
+    "go_to_account_center": "Go to account center",
     "login_permissions": "Login permissions",
     "login_unavailable": "Unavailable",
     "password_not_set": "Password not set",

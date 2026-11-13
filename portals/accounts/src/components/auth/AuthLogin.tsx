@@ -33,7 +33,15 @@
 import { useTranslations } from "next-intl";
 import { PasswordInput } from "../PasswordInput";
 import { AccountsHeader } from "../AccountsChrome";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { usePathname } from "next/navigation";
 import { type Locale, type Theme } from "@vxture-platform/shared";
 
 /**
@@ -53,6 +61,7 @@ import {
   TabsList,
   TabsTrigger,
   cn,
+  type ButtonProps,
   type IconName,
   type LocaleSelectOption,
   type ShellLegalFooterLink,
@@ -791,12 +800,7 @@ export function AuthPrimaryButton({
   }
 
   return (
-    <Button
-      type="submit"
-      size="xl"
-      className="w-full rounded-full"
-      disabled={blocked}
-    >
+    <Button type="submit" size="action" className="w-full" disabled={blocked}>
       {buttonContent}
     </Button>
   );
@@ -1354,6 +1358,33 @@ export function AuthResultPanel({
   action,
 }: Readonly<AuthResultPanelProps>) {
   const { icon, badge } = AUTH_RESULT_TONES[tone];
+  const pathname = usePathname();
+  const formText = useTranslations("accountsForms");
+  const operator =
+    pathname.startsWith("/workforce") || pathname.startsWith("/operator");
+  const restartLogin = tone === "danger" || pathname.includes("reset-password");
+  const destination = restartLogin
+    ? operator
+      ? "/workforce/login"
+      : "/login"
+    : operator
+      ? "/workforce/account"
+      : "/account";
+  const fallback =
+    tone === "neutral" ? undefined : (
+      <Button size="action" asChild>
+        <a href={destination}>
+          {formText(restartLogin ? "sign_in_again" : "go_to_account_center")}
+        </a>
+      </Button>
+    );
+  const resolvedAction =
+    isValidElement<ButtonProps>(action) && action.type === Button
+      ? cloneElement(action, {
+          size: "action",
+          className: cn(action.props.className, "w-auto"),
+        })
+      : (action ?? fallback);
   return (
     <div className="accounts-result">
       <span className={cn("accounts-result-icon", badge)} aria-hidden="true">
@@ -1368,7 +1399,11 @@ export function AuthResultPanel({
       {hint ? (
         <p className="text-body-small text-muted-foreground">{hint}</p>
       ) : null}
-      {action ? <div className="w-full pt-2xs">{action}</div> : null}
+      {resolvedAction ? (
+        <div className="flex w-full flex-wrap justify-center gap-sm pt-2xs">
+          {resolvedAction}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1424,7 +1459,7 @@ export function AuthForgotPasswordPanel({
           }
           hint={sentHint}
           action={
-            <Button size="xl" className="w-full" onClick={onBack}>
+            <Button size="action" className="w-full" onClick={onBack}>
               {sentActionLabel}
             </Button>
           }

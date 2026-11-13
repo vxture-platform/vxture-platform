@@ -55,7 +55,9 @@ export function AccountsStatePanel({
       }
       action={
         state === "load-error" && onRetry ? (
-          <Button onClick={onRetry}>{t("retry")}</Button>
+          <Button size="action" onClick={onRetry}>
+            {t("retry")}
+          </Button>
         ) : undefined
       }
     />

@@ -440,6 +440,7 @@ export function OidcLoginForm({
         }
         action={
           <Button
+            size="action"
             variant="secondary"
             onClick={() => {
               if (resumeState.retryable) setResumeRetry((value) => value + 1);

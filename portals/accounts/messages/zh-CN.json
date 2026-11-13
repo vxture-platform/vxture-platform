@@ -222,6 +222,7 @@
     "cookies": "Cookie 政策"
   },
   "accountsForms": {
+    "go_to_account_center": "进入账号中心",
     "login_permissions": "登录许可",
     "login_unavailable": "不可用",
     "password_not_set": "尚未设置密码",
