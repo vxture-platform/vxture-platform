@@ -21,3 +21,15 @@ export function mergeById<T extends { id: string }>(
   const seen = new Set(current.map((m) => m.id));
   return [...current, ...incoming.filter((m) => !seen.has(m.id))];
 }
+
+export const INCOMING_INVITATIONS_HREF = "/memberships#invitations";
+
+/** Resolve old invitation notifications through the existing user-scoped workflow. */
+export function inboxMessageHref(message: {
+  templateCode: string;
+  link: string | null;
+}): string | null {
+  return message.templateCode === "tenant.invitation"
+    ? INCOMING_INVITATIONS_HREF
+    : message.link;
+}

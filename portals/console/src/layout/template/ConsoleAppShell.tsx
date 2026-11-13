@@ -32,6 +32,7 @@ import {
   type ConsoleTicket,
   type InboxMessage,
 } from "@/api/console-bff";
+import { inboxMessageHref } from "@/lib/inbox-list";
 import { formatInboxTime, inboxPresentation } from "@/lib/inbox-format";
 import { useDerivedTodos } from "@/features/todos/useDerivedTodos";
 import { selectVisibleDomains } from "@/features/permissions/navigation-access";
@@ -147,7 +148,6 @@ export function ConsoleAppShell({
   useEffect(() => {
     if (drawer !== "notifications") return;
     const unread = inboxItems.filter((m) => m.readAt === null);
-    if (unread.length === 0) return;
     void Promise.allSettled(unread.map((m) => markInboxRead(m.id))).then(() =>
       loadInbox(),
     );
@@ -284,7 +284,7 @@ export function ConsoleAppShell({
   const navigate = (href: string) => {
     router.push(href);
     const main = document.querySelector(`[${CONTENT_SCROLL_ATTR}]`);
-    if (main) main.scrollTop = 0;
+    if (main && !href.includes("#")) main.scrollTop = 0;
   };
 
   // ── 三级授权过滤 → 可见功能域 ──
@@ -374,7 +374,7 @@ export function ConsoleAppShell({
       icon: p.icon,
       title: m.title,
       meta: `${formatInboxTime(m.createdAt, locale)} · ${m.body}`,
-      href: m.link ?? "/inbox",
+      href: inboxMessageHref(m) ?? "/inbox",
       unread: m.readAt === null,
     };
   });

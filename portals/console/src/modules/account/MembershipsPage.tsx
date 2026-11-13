@@ -160,7 +160,9 @@ export function MembershipsPage() {
           />
         ) : null}
       </PageSection>
-      <PersonalInvitations userId={session.user?.id} />
+      <div id="invitations" className="scroll-mt-lg">
+        <PersonalInvitations userId={session.user?.id} />
+      </div>
       <PersonalGrowth
         membershipState={
           failed
