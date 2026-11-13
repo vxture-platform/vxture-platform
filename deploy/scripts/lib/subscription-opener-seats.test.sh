@@ -23,6 +23,17 @@ MOCK
 chmod +x "$FX/bin/docker"
 SCRIPT="$DEPLOY_ROOT/scripts/32-subscription-opener-seats.sh"
 
+# Targeted workflow exits before shared deploy synchronization and honors runtime layout.
+WORKFLOW="$DEPLOY_ROOT/../.github/workflows/db-init.yml"
+sed -n '/SRC="${STAGE_DIR:?}\/deploy"/,/DEPLOY_DIR="${DEPLOY_DIR:/p' "$WORKFLOW" > "$FX/targeted-workflow"
+grep -q 'opener-seats-preflight|opener-seats-repair)' "$FX/targeted-workflow"
+grep -q 'RUNTIME_DIR="${DEPLOY_RUNTIME_DIR:-/srv/vxture/runtime}"' "$FX/targeted-workflow"
+grep -q 'bash "$SRC/scripts/32-subscription-opener-seats.sh" preflight' "$FX/targeted-workflow"
+grep -q 'exit 0' "$FX/targeted-workflow"
+if grep -q 'mkdir\|rm -rf\|cp -R' "$FX/targeted-workflow"; then
+  echo 'Targeted action mutates shared deployment files'; exit 1
+fi
+
 # Preflight is read-only and repair requires explicit authorization.
 if bash "$SCRIPT" repair > "$FX/out" 2>&1; then echo 'Unconfirmed repair passed'; exit 1; fi
 [ ! -s "$MOCK_CALLS" ]
