@@ -19,6 +19,7 @@ import {
 import { ProductSeatService } from "@vxture/service-subscription";
 import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
+import { scopeToS2sCaller } from "../authn/s2s-scope";
 
 @Controller()
 @UseGuards(PlatformAuthGuard)
@@ -49,15 +50,22 @@ export class PlatformProductAccessRouter {
     }
     if (Object.keys(query).length)
       throw new BadRequestException("context_from_token_only");
+    // This new user-bound capability accepts neither legacy nor delegated credentials.
+    const { workspaceId } = scopeToS2sCaller(
+      caller,
+      { workspaceId: caller.workspaceId, productCodes: [caller.productCode] },
+      "deny",
+      "deny",
+    );
     const allowed = await this.seats.hasUserAccess({
       subject: caller.subject,
       orgId: caller.orgId,
-      workspaceId: caller.workspaceId,
+      workspaceId,
       productCode: caller.productCode,
     });
     return {
       product: caller.productCode,
-      workspace_id: caller.workspaceId,
+      workspace_id: workspaceId,
       org_id: caller.orgId,
       subject: caller.subject,
       allowed,
