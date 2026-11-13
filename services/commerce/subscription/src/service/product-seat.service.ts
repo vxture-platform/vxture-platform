@@ -25,6 +25,16 @@ export class ProductSeatService {
     return this.repo.listWorkspaceSeats(workspaceId);
   }
 
+  /** Product entry uses the same assignments as Console and operator management. */
+  hasUserAccess(input: {
+    subject: string;
+    orgId: string;
+    workspaceId: string;
+    productCode: string;
+  }): Promise<boolean> {
+    return this.repo.hasUserAccess(input);
+  }
+
   grant(input: {
     workspaceId: string;
     productId: string;

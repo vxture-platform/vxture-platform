@@ -706,7 +706,8 @@
       "unlink": "解除关联",
       "resendInvite": "重发邀请",
       "revokeInvite": "撤销邀请",
-      "manageWorkspaces": "工作空间归属"
+      "manageWorkspaces": "工作空间归属",
+      "applicationAccess": "应用授权"
     },
     "bulk": {
       "selected": "已选择 {count} 人",
@@ -2002,7 +2003,8 @@
       "reviewed": "已评价",
       "autoRenewSuspended": "订阅暂停中，恢复后会回到暂停前的续费设置。",
       "enterProduct": "进入产品",
-      "entryUnavailable": "该产品尚未登记可用入口"
+      "entryUnavailable": "该产品尚未登记可用入口",
+      "manageUsers": "管理使用成员"
     },
     "cycle": {
       "month": "月付",
@@ -2952,8 +2954,8 @@
     "failedBody": "这次请求缺少有效的设备标识，应用不会收到登录结果。请回到应用重新发起一次登录。"
   },
   "workspaceProductSeats": {
-    "title": "产品席位 · {name}",
-    "description": "这个工作空间每个已订阅产品可以给几个人用、现在是谁在用。满了要先撤销，或到套餐版本里把席位数改大。",
+    "title": "应用授权 · {name}",
+    "description": "授权当前工作空间的应用使用成员；场景内的查看和编辑权限由应用管理。",
     "done": "完成",
     "close": "关闭",
     "loading": "正在读取…",
@@ -2962,19 +2964,27 @@
     "noProductsHint": "订阅一个产品之后，它的席位会出现在这里。",
     "occupancy": "已占 {occupied} / 上限 {limit}",
     "unlimited": "无限",
-    "nobody": "还没有人使用",
-    "assignTo": "指派给",
+    "nobody": "暂无授权成员",
+    "assignTo": "授权给",
     "assignPlaceholder": "选择一位成员",
-    "assign": "指派",
+    "assign": "授权使用",
     "revoke": "撤销",
-    "fullHint": "席位已满：先撤销一个，或到套餐版本里把席位数改大。",
+    "fullHint": "席位已满，请先撤销其他成员的授权，或升级套餐。",
     "errors": {
-      "seat_limit_reached": "席位已满，无法再指派。先撤销一个，或到套餐版本里把席位数改大。",
+      "seat_limit_reached": "席位已满，请先撤销其他成员的授权，或升级套餐。",
       "already_granted": "这个人已经占着这个产品的席位了。",
       "product_not_covered": "这个工作空间没有在服务中的订阅覆盖这个产品。",
       "not_a_member": "这个人不在这个工作空间里，先把他加进来。",
       "generic": "操作失败，请稍后重试。"
-    }
+    },
+    "accessTitle": "应用授权",
+    "workspace": "所属工作空间",
+    "retry": "重试",
+    "noWorkspaces": "没有可管理的工作空间",
+    "notInWorkspace": "{name} 尚未加入此工作空间",
+    "joinWorkspace": "加入工作空间",
+    "memberUnassigned": "该成员尚未获得授权",
+    "workspaceUnavailable": "此订阅所属的工作空间不可用，请刷新页面后重试。"
   },
   "enums": {
     "suspensionState": {

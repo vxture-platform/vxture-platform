@@ -706,7 +706,8 @@
       "unlink": "Unlink",
       "resendInvite": "Resend invitation",
       "revokeInvite": "Revoke invitation",
-      "manageWorkspaces": "Workspaces"
+      "manageWorkspaces": "Workspaces",
+      "applicationAccess": "Application access"
     },
     "bulk": {
       "selected": "{count} selected",
@@ -2002,7 +2003,8 @@
       "reviewed": "Reviewed",
       "autoRenewSuspended": "The subscription is paused; auto-renew returns to its pre-pause setting on resume.",
       "enterProduct": "Open product",
-      "entryUnavailable": "No product entry is registered"
+      "entryUnavailable": "No product entry is registered",
+      "manageUsers": "Manage users"
     },
     "cycle": {
       "month": "Monthly",
@@ -2952,8 +2954,8 @@
     "failedBody": "This request was missing a valid device identifier, so the app will not receive the result. Start sign-in again from the app."
   },
   "workspaceProductSeats": {
-    "title": "Product seats · {name}",
-    "description": "How many people each subscribed product allows in this workspace, and who holds a seat right now. When it is full, revoke one or raise the seat count on the plan version.",
+    "title": "Application access · {name}",
+    "description": "Assign application users in this workspace. Scene viewing and editing permissions are managed in the application.",
     "done": "Done",
     "close": "Close",
     "loading": "Loading…",
@@ -2962,19 +2964,27 @@
     "noProductsHint": "Once you subscribe to a product, its seats show up here.",
     "occupancy": "{occupied} of {limit} used",
     "unlimited": "unlimited",
-    "nobody": "Nobody yet",
-    "assignTo": "Assign to",
+    "nobody": "No members authorized yet.",
+    "assignTo": "Grant access to",
     "assignPlaceholder": "Pick a member",
-    "assign": "Assign",
+    "assign": "Grant access",
     "revoke": "Revoke",
-    "fullHint": "All seats taken: revoke one, or raise the seat count on the plan version.",
+    "fullHint": "All seats are assigned. Revoke another assignment or upgrade your plan.",
     "errors": {
-      "seat_limit_reached": "All seats are taken. Revoke one, or raise the seat count on the plan version.",
+      "seat_limit_reached": "All seats are assigned. Revoke another assignment or upgrade your plan.",
       "already_granted": "This person already holds a seat for this product.",
       "product_not_covered": "No live subscription in this workspace covers this product.",
       "not_a_member": "This person is not in this workspace yet — add them first.",
       "generic": "That did not work. Please try again."
-    }
+    },
+    "accessTitle": "Application access",
+    "workspace": "Workspace",
+    "retry": "Retry",
+    "noWorkspaces": "No workspaces available",
+    "notInWorkspace": "{name} has not joined this workspace",
+    "joinWorkspace": "Add to workspace",
+    "memberUnassigned": "This member has not been granted access.",
+    "workspaceUnavailable": "The workspace for this subscription is unavailable. Refresh the page and try again."
   },
   "enums": {
     "suspensionState": {

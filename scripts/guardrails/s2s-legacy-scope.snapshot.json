@@ -9,6 +9,11 @@
       "delegated": "attribute-declared"
     },
     {
+      "at": "bff/platform-api/src/routers/platform-product-access.router.ts:54",
+      "policy": "deny",
+      "delegated": "deny"
+    },
+    {
       "at": "bff/platform-api/src/routers/platform-provisioning.router.ts:143",
       "policy": "trust-declared",
       "delegated": "deny"

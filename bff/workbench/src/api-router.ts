@@ -66,8 +66,30 @@ export class ApiRouter {
 
   @Get("me/apps")
   async applications(@Req() req: Request) {
-    await this.user(req);
-    return this.catalog.entries();
+    const user = await this.user(req);
+    return (await this.catalog.entries()).map((entry) => {
+      if (entry.code !== "cospace" || !entry.homeUrl) return entry;
+      try {
+        const destination = new URL(entry.homeUrl);
+        if (
+          !["http:", "https:"].includes(destination.protocol) ||
+          destination.username ||
+          destination.password
+        )
+          return { ...entry, homeUrl: null };
+        const returnTo =
+          destination.pathname + destination.search + destination.hash;
+        destination.pathname = "/auth/login";
+        destination.search = "";
+        destination.hash = "";
+        destination.searchParams.set("returnTo", returnTo);
+        destination.searchParams.set("tenant_hint", user.activeOrg!);
+        destination.searchParams.set("workspace_hint", user.activeWorkspace!);
+        return { ...entry, homeUrl: destination.href };
+      } catch {
+        return { ...entry, homeUrl: null };
+      }
+    });
   }
 
   @Get("subscription/subscribed-products")
