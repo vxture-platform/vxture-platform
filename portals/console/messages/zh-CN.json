@@ -1983,6 +1983,11 @@
       "team": "团队 · {seats} 席位",
       "private": "私有化 · {seats} 席位"
     },
+    "audienceAssignedSeats": {
+      "person": "个人 · {assigned}/{seats} 席位",
+      "team": "团队 · {assigned}/{seats} 席位",
+      "private": "私有化 · {assigned}/{seats} 席位"
+    },
     "browseMarket": "浏览产品市场",
     "card": {
       "productDetail": "产品详情",

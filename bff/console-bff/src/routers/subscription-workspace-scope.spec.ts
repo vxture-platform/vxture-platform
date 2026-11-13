@@ -204,39 +204,47 @@ describe("subscription workspace scope", () => {
     expect(subscriptions?.[1]).toEqual([TENANT, SELECTED]);
   });
 
-  it("projects the current seat metric and registered entry for team subscriptions", async () => {
-    const { router, query } = setup();
-    query.mockResolvedValueOnce({ rows: [{ id: SELECTED }] });
-    query.mockResolvedValueOnce({
-      rows: [
-        {
-          subscription_id: "yucer-business",
-          product_id: "yucer",
-          product_code: "yucer",
-          tier: "business",
-          seats: "5",
-          home_url: "https://yucer.example/",
-          status: "active",
-          start_at: null,
-          end_at: null,
-          released_at: null,
-        },
-      ],
-    } as never);
-    const [card] = await router.getSubscribedProducts(req());
-    expect(card).toMatchObject({
-      productCode: "yucer",
-      tier: "business",
-      seats: 5,
-      homeUrl: "https://yucer.example/",
-    });
-    const sql = query.mock.calls.find(([statement]) =>
-      statement.includes("as subscription_id"),
-    )?.[0];
-    expect(sql).toContain("pc.quota->>'seat.max' as seats");
-    expect(sql).not.toContain("member.max");
-    expect(sql).toContain("pw.product_id = prod.id");
-  });
+  it.each([0, 1, 5])(
+    "projects %i assigned seats and the registered entry for team subscriptions",
+    async (assigned) => {
+      const { router, query } = setup();
+      query.mockResolvedValueOnce({ rows: [{ id: SELECTED }] });
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            subscription_id: "yucer-business",
+            product_id: "yucer",
+            product_code: "yucer",
+            tier: "business",
+            seats: "5",
+            assigned_seats: String(assigned),
+            home_url: "https://yucer.example/",
+            status: "active",
+            start_at: null,
+            end_at: null,
+            released_at: null,
+          },
+        ],
+      } as never);
+      const [card] = await router.getSubscribedProducts(req());
+      expect(card).toMatchObject({
+        productCode: "yucer",
+        tier: "business",
+        seats: 5,
+        assignedSeats: assigned,
+        homeUrl: "https://yucer.example/",
+      });
+      const sql = query.mock.calls.find(([statement]) =>
+        statement.includes("as subscription_id"),
+      )?.[0];
+      expect(sql).toContain("pc.quota->>'seat.max' as seats");
+      expect(sql).not.toContain("member.max");
+      expect(sql).toContain("pw.product_id = prod.id");
+      expect(sql).toContain("ps.workspace_id = ts.workspace_id");
+      expect(sql).toContain("ps.product_id = prod.id");
+      expect(sql).toContain("ps.revoked_at is null");
+    },
+  );
 
   it("scopes the purchase landing's current subscription and pending order", async () => {
     const { router, query } = setup();

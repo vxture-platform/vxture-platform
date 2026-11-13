@@ -309,46 +309,45 @@ export function SubscriptionProductCard({
   return (
     <Card surface="base" className="gap-md py-lg">
       <CardContent className="flex flex-1 flex-col gap-md">
-        {/* Keep the tier before service status, with the favorite action last. */}
+        {/* Keep identity indivisible when the tier/status group wraps. */}
         <div className="flex items-start gap-md">
           <ProductGlyph name={item.productName} code={item.productCode} />
-          <span className="min-w-0 flex-1">
-            {/* Narrow cards wrap the right-aligned group without truncating the title. */}
-            <span className="flex flex-wrap items-center gap-sm">
-              <span className="min-w-32 flex-1 break-words text-label-md text-foreground">
+          <div className="flex min-w-0 flex-1 flex-wrap items-start gap-sm">
+            <div className="flex min-w-32 flex-1 flex-col gap-2xs">
+              <span className="break-words text-label-md text-foreground">
                 {item.productName ?? item.planName}
               </span>
-              <span className="ml-auto inline-flex shrink-0 items-center gap-xs">
-                {item.tier ? (
-                  <Badge variant="secondary" className="shrink-0">
-                    {t(`tier.${item.tier}`)}
-                  </Badge>
-                ) : null}
-                <StatusBadge
-                  tone={
-                    suspended
-                      ? suspension.tone(item.suspension)
-                      : (SUB_STATUS_TONES[item.status] ?? "neutral")
-                  }
-                >
-                  {/* 冻结中按原因分词（升级维护中 / 审核中 / 服务受限 / 已暂停），词表在 enum-labels。 */}
-                  {suspended
-                    ? suspension.state(item.suspension)
-                    : t(`subStatus.${item.status}`)}
-                </StatusBadge>
-                <FavoriteStar
-                  active={item.favorite}
-                  busy={favoriteBusy || !productCode}
-                  onToggle={() => onToggleFavorite(productCode, !item.favorite)}
-                  labelOn={t("favorite.remove")}
-                  labelOff={t("favorite.add")}
-                />
+              <span className="truncate text-body-sm text-muted-foreground">
+                {item.productNick ?? item.planName}
               </span>
+            </div>
+            <span className="ml-auto inline-flex shrink-0 items-center gap-xs">
+              {item.tier ? (
+                <Badge variant="secondary" className="shrink-0">
+                  {t(`tier.${item.tier}`)}
+                </Badge>
+              ) : null}
+              <StatusBadge
+                tone={
+                  suspended
+                    ? suspension.tone(item.suspension)
+                    : (SUB_STATUS_TONES[item.status] ?? "neutral")
+                }
+              >
+                {/* 冻结中按原因分词（升级维护中 / 审核中 / 服务受限 / 已暂停），词表在 enum-labels。 */}
+                {suspended
+                  ? suspension.state(item.suspension)
+                  : t(`subStatus.${item.status}`)}
+              </StatusBadge>
             </span>
-            <span className="block truncate text-body-sm text-muted-foreground">
-              {item.productNick ?? item.planName}
-            </span>
-          </span>
+          </div>
+          <FavoriteStar
+            active={item.favorite}
+            busy={favoriteBusy || !productCode}
+            onToggle={() => onToggleFavorite(productCode, !item.favorite)}
+            labelOn={t("favorite.remove")}
+            labelOff={t("favorite.add")}
+          />
         </div>
 
         {/* Audience, product seats and billing cycle remain together. */}
@@ -357,7 +356,12 @@ export function SubscriptionProductCard({
             <Badge variant="outline" className="gap-2xs">
               <Icon name={AUDIENCE_ICON[audience]} size="xs" aria-hidden />
               {item.seats != null
-                ? t(`audienceSeats.${audience}`, { seats: item.seats })
+                ? item.assignedSeats != null
+                  ? t(`audienceAssignedSeats.${audience}`, {
+                      assigned: item.assignedSeats,
+                      seats: item.seats,
+                    })
+                  : t(`audienceSeats.${audience}`, { seats: item.seats })
                 : t(`audience.${audience}`)}
             </Badge>
           ) : null}
@@ -404,7 +408,7 @@ export function SubscriptionProductCard({
       </CardContent>
 
       {/* 卡底行：DS CardFooter 自带虚线分隔 + 下对齐 */}
-      <CardFooter className="justify-between gap-md text-body-sm">
+      <CardFooter className="flex-wrap justify-between gap-md text-body-sm">
         <span className="flex min-w-0 items-center gap-md">
           {productCode ? (
             <a

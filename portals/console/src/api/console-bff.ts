@@ -1214,6 +1214,8 @@ export interface SubscribedProduct {
   planName: string;
   tier: string | null;
   seats: number | null;
+  /** Optional during rolling deployment; never infer missing occupancy as zero. */
+  assignedSeats?: number;
   kind: string;
   cycleUnit: string;
   status: string;
