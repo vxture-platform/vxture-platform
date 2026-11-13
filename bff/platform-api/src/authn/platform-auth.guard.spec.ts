@@ -267,7 +267,11 @@ describe("PlatformAuthGuard — S2S Bearer path (T2, JWKS-verified)", () => {
     );
     const req = fakeRequest({ authorization: `Bearer ${token}` });
     await expect(guard.canActivate(ctx(req))).resolves.toBe(true);
-    expect(req.s2sCaller).toMatchObject({ productCode: "arda", mode: "obo" });
+    expect(req.s2sCaller).toMatchObject({
+      productCode: "arda",
+      mode: "obo",
+      subject: "usr_123",
+    });
   });
 
   it("rejects a token with the wrong audience (a T1 product-to-product token, not aud=vxture)", async () => {

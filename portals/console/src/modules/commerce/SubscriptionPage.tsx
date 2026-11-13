@@ -59,6 +59,7 @@ import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductsUrl } from "@/lib/website-entry";
 import { fetchReviewedSubscriptionIds } from "@/api/console-bff";
 import { SubscriptionProductCard } from "./components/hubCards";
+import { ApplicationAccessDialog } from "@/modules/workspace/components/ApplicationAccessDialog";
 import { ReviewDialog } from "./components/ReviewDialog";
 import {
   isEndedSubscription,
@@ -83,6 +84,9 @@ export function SubscriptionPage() {
     "tenant.billing.manage",
   );
 
+  const [accessProduct, setAccessProduct] = useState<SubscribedProduct | null>(
+    null,
+  );
   const [products, setProducts] = useState<SubscribedProduct[]>([]);
   const [orders, setOrders] = useState<MyOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -523,6 +527,11 @@ export function SubscriptionPage() {
               <SubscriptionProductCard
                 key={item.subscriptionId}
                 item={item}
+                onManageMembers={
+                  hasCapability(session.capabilities, "workspace.member.manage")
+                    ? setAccessProduct
+                    : undefined
+                }
                 favoriteBusy={
                   !!item.productCode && favBusy.has(item.productCode)
                 }
@@ -562,6 +571,13 @@ export function SubscriptionPage() {
       {/* 评价面板。一份跨卡片复用,目标由 reviewTarget 指着。
           提交成功后只把这一条加进 reviewedSubs——不整页重拉:评价不改订阅本身,
           重拉一遍只是让客户白等一次。 */}
+      {accessProduct?.productCode && session.tenant?.workspace ? (
+        <ApplicationAccessDialog
+          workspaceId={session.tenant.workspace}
+          productCode={accessProduct.productCode}
+          onClose={() => setAccessProduct(null)}
+        />
+      ) : null}
       {reviewTarget ? (
         <ReviewDialog
           open

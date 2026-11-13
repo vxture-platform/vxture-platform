@@ -1,25 +1,15 @@
 "use client";
 
 /**
- * WorkspaceProductSeatsDialog.tsx — 一个工作空间里每个产品的席位：谁在用、还剩几个。
+ * Workspace application assignments shared by subscription and member management.
  * @package @vxture/console
- * @layer Application
- * @category Module
+ * @layer Presentation
+ * @category component
+ * @author AI-Generated
+ * @date 2026-11-13
  *
- * owner 2026-09-27 裁定①「要明细表，每个产品清楚谁在当前使用」+ ②「超限硬拦截」。
- *
- * ── 为什么挂在工作空间上，不挂在成员行上 ──
- * 席位是 (工作空间, 产品) 的额度，不是人的属性。从成员行进来就得先回答「哪个工作空间」
- * ——一个人可以在五个空间里，那会变成 5×产品数 行。按空间进来只有「产品数」行，
- * 而且这正是 owner 要的那个方向：**按产品看是谁在用**。
- *
- * ── 逐个指派、逐个报错（同 MemberWorkspacesDialog 的取舍）──
- * 每一次指派都是一次独立的授权变更，而失败原因有四种、下一步动作完全不同：
- * 席位满了（去发布档位改 seat.max）／他已经有了（什么都不用做）／这个产品没订阅（去订阅）
- * ／他不在这个空间（先把人加进来）。攒成一次「保存」只能说一句「保存失败」。
- *
- * ── 上限读不到显示「—」，不显示 0 ──
- * seatMax 为 null 是「没读到」，不是「零个席位」；-1 是目录的无限哨兵。
+ * Assignments take effect individually. Workspace membership is required first;
+ * the database enforces the shared product seat limit for all management clients.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -40,6 +30,7 @@ import {
   revokeProductSeat,
   type ProductSeatErrorCode,
   type ProductSeatRow,
+  addWorkspaceMember,
 } from "@/api/console-bff";
 import type { MemberRecord } from "@/entities/console";
 
@@ -48,12 +39,20 @@ export function WorkspaceProductSeatsDialog({
   workspaceName,
   members,
   onClose,
+  productCode,
+  targetMemberId,
+  workspaceSelector,
+  onMembersChanged,
 }: {
   readonly workspaceId: string;
   readonly workspaceName: string;
   /** 本租户成员全集；这里只用属于本空间的那些（席位候选人必须先是本空间成员）。 */
   readonly members: MemberRecord[];
   readonly onClose: () => void;
+  readonly productCode?: string | undefined;
+  readonly targetMemberId?: string | undefined;
+  readonly workspaceSelector?: import("react").ReactNode;
+  readonly onMembersChanged?: () => Promise<void>;
 }) {
   const t = useTranslations("workspaceProductSeats");
 
@@ -65,17 +64,26 @@ export function WorkspaceProductSeatsDialog({
   /** 每个产品行上「要指派谁」的选择。 */
   const [picked, setPicked] = useState<Record<string, string>>({});
 
-  const candidates = members.filter((m) =>
-    m.workspaces.some((w) => w.id === workspaceId),
+  const candidates = members.filter(
+    (m) =>
+      m.status === "Active" &&
+      (!targetMemberId || m.accountId === targetMemberId) &&
+      m.workspaces.some((w) => w.id === workspaceId),
   );
 
   const reload = useCallback(async () => {
     try {
-      setRows(await fetchProductSeats(workspaceId));
+      const data = await fetchProductSeats(workspaceId);
+      setRows(
+        productCode
+          ? data.filter((row) => row.productCode === productCode)
+          : data,
+      );
+      setLoadFailed(false);
     } catch {
       setLoadFailed(true);
     }
-  }, [workspaceId]);
+  }, [workspaceId, productCode]);
 
   useEffect(() => {
     void reload();
@@ -136,6 +144,39 @@ export function WorkspaceProductSeatsDialog({
         onClose();
       }}
     >
+      {workspaceSelector}
+      {onMembersChanged
+        ? members
+            .filter(
+              (m) =>
+                m.status === "Active" &&
+                (!targetMemberId || m.accountId === targetMemberId) &&
+                !m.workspaces.some((w) => w.id === workspaceId),
+            )
+            .map((m) => (
+              <div
+                key={m.accountId}
+                className="flex flex-wrap items-center justify-between gap-sm"
+              >
+                <span className="text-body-sm text-muted-foreground">
+                  {t("notInWorkspace", { name: m.name })}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void act(`join:${m.accountId}`, async () => {
+                      await addWorkspaceMember(workspaceId, m.accountId);
+                      await onMembersChanged?.();
+                    })
+                  }
+                >
+                  {t("joinWorkspace")}
+                </Button>
+              </div>
+            ))
+        : null}
       {error ? <Banner tone="danger" title={error} /> : null}
       {loadFailed ? <Banner tone="danger" title={t("loadFailed")} /> : null}
 
@@ -154,7 +195,13 @@ export function WorkspaceProductSeatsDialog({
             const free = candidates.filter(
               (m) => !row.holders.some((h) => h.userId === m.accountId),
             );
-            const pick = picked[row.productId] ?? "";
+            const pick =
+              targetMemberId && free.some((m) => m.accountId === targetMemberId)
+                ? targetMemberId
+                : (picked[row.productId] ?? "");
+            const visibleHolders = row.holders.filter(
+              (h) => !targetMemberId || h.userId === targetMemberId,
+            );
             return (
               <li key={row.productId} className="flex flex-col gap-sm py-md">
                 <span className="flex items-center justify-between gap-md">
@@ -169,13 +216,13 @@ export function WorkspaceProductSeatsDialog({
                   </StatusBadge>
                 </span>
 
-                {row.holders.length === 0 ? (
+                {visibleHolders.length === 0 ? (
                   <span className="text-body-sm text-muted-foreground">
-                    {t("nobody")}
+                    {t(targetMemberId ? "memberUnassigned" : "nobody")}
                   </span>
                 ) : (
                   <ul className="flex flex-col gap-2xs">
-                    {row.holders.map((h) => (
+                    {visibleHolders.map((h) => (
                       <li
                         key={h.userId}
                         className="flex items-center justify-between gap-md"

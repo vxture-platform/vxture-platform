@@ -20,6 +20,8 @@ export interface S2sCallerCtx {
    */
   productCode: string;
   mode: "obo" | "service";
+  /** Verified OBO subject; never accepted from request parameters. */
+  subject?: string;
   orgId: string | null;
   workspaceId: string | null;
   /**

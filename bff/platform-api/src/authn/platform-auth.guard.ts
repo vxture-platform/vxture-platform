@@ -145,6 +145,7 @@ export class PlatformAuthGuard implements CanActivate {
     const workspaceId = claims["workspace_id"];
     req.s2sCaller = {
       productCode: act.sub,
+      ...(typeof claims["sub"] === "string" ? { subject: claims["sub"] } : {}),
       mode: claims["mode"] === "obo" ? "obo" : "service",
       orgId: typeof orgId === "string" ? orgId : null,
       workspaceId: typeof workspaceId === "string" ? workspaceId : null,

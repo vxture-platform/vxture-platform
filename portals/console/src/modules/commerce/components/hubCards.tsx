@@ -21,6 +21,8 @@
  *    订阅动作由详情页承接。
  */
 
+import { productEntryUrl } from "@/lib/product-entry";
+import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
@@ -130,7 +132,9 @@ export function SubscriptionProductCard({
   canManage = true,
   reviewed = false,
   onReview,
+  onManageMembers,
 }: {
+  onManageMembers?: ((item: SubscribedProduct) => void) | undefined;
   item: SubscribedProduct;
   favoriteBusy: boolean;
   onToggleFavorite: (productCode: string, next: boolean) => void;
@@ -197,16 +201,23 @@ export function SubscriptionProductCard({
   const optedOut = !item.autoRenew && item.endAt !== null && !expired;
   const autoRenewOn = item.autoRenew && item.endAt !== null && !expired;
   // Only registered HTTP(S) entries may leave the console.
-  const entryUrl = (() => {
-    try {
-      const url = new URL(item.homeUrl ?? "");
-      return ["https:", "http:"].includes(url.protocol) ? url.href : null;
-    } catch {
-      return null;
-    }
-  })();
+  const { session } = useConsoleSession();
+  const entryUrl = productEntryUrl(item.homeUrl, productCode, session.tenant);
 
   const menuItems: ActionMenuItem[] = [
+    ...(onManageMembers
+      ? [
+          {
+            id: "manage-users",
+            label: t("card.manageUsers"),
+            icon: "users" as const,
+            disabled: !["active", "trialing", "expiring", "overdue"].includes(
+              item.status,
+            ),
+            onSelect: () => onManageMembers(item),
+          },
+        ]
+      : []),
     {
       id: "enter-product",
       label: t("card.enterProduct"),
@@ -444,7 +455,9 @@ export function SubscriptionProductCard({
             items={menuItems.filter(
               (entry) =>
                 canManage ||
-                ["enter-product", "review", "help"].includes(entry.id),
+                ["manage-users", "enter-product", "review", "help"].includes(
+                  entry.id,
+                ),
             )}
           />
         </span>

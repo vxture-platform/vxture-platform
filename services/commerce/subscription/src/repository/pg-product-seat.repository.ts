@@ -110,6 +110,35 @@ export class PgProductSeatRepository {
     });
   }
 
+  /** Resolve a verified user's product assignment without disclosing the roster. */
+  async hasUserAccess(input: {
+    subject: string;
+    orgId: string;
+    workspaceId: string;
+    productCode: string;
+  }): Promise<boolean> {
+    const result = await this.pool.query<{ allowed: boolean }>(
+      `select exists (
+        select 1 from account.users u
+        join tenancy.tenant_memberships tm on tm.user_id = u.id and tm.status = 'active'
+        join tenancy.tenants t on t.id = tm.tenant_id and t.status = 'active' and t.deleted_at is null
+        join tenancy.workspaces w on w.tenant_id = t.id and w.status = 'active' and w.deleted_at is null
+        join tenancy.workspace_memberships wm on wm.workspace_id = w.id and wm.user_id = u.id and wm.status = 'active'
+        join metering.product_seats ps on ps.workspace_id = w.id and ps.user_id = u.id and ps.revoked_at is null
+        join product.products p on p.id = ps.product_id and p.deleted_at is null
+        where ('usr_' || u.id::text) = $1 and u.status = 'active' and u.deleted_at is null
+          and t.id = $2::uuid and w.id = $3::uuid and p.product_code = $4
+          and exists (
+            select 1 from metering.subscriptions s
+            join product.plan_components pc on pc.plan_version_id = s.plan_version_id and pc.product_id = p.id
+            where s.workspace_id = w.id and s.tenant_id = t.id and s.deleted_at is null and s.status in ('active','trialing')
+          )
+      ) as allowed`,
+      [input.subject, input.orgId, input.workspaceId, input.productCode],
+    );
+    return result.rows[0]?.allowed === true;
+  }
+
   /** 指派席位。上限由库判，这里只翻译结果。 */
   async grant(input: {
     workspaceId: string;

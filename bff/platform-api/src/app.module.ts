@@ -62,6 +62,7 @@ import { PlatformUsageService } from "./platform/platform-usage.service";
 import { TokenUsageService } from "./platform/token-usage.service";
 import { CapabilityUsageService } from "./platform/capability-usage.service";
 import { HealthRouter } from "./routers/health.router";
+import { PlatformProductAccessRouter } from "./routers/platform-product-access.router";
 import { PlatformEntitlementsRouter } from "./routers/platform-entitlements.router";
 import { PlatformProvisioningRouter } from "./routers/platform-provisioning.router";
 import { PlatformProvisioningReadRouter } from "./routers/platform-provisioning-read.router";
@@ -86,6 +87,7 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
   controllers: [
     HealthRouter,
     PlatformEntitlementsRouter,
+    PlatformProductAccessRouter,
     PlatformUsageRouter,
     PlatformSharingRouter,
     PlatformProvisioningRouter,

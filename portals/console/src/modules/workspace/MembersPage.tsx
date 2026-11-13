@@ -94,6 +94,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { useDateFormat } from "@/lib/use-date-format";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
+import { ApplicationAccessDialog } from "./components/ApplicationAccessDialog";
 import { MemberWorkspacesDialog } from "./components/MemberWorkspacesDialog";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
@@ -161,6 +162,7 @@ export function MembersPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [bulkUnlinkOpen, setBulkUnlinkOpen] = useState(false);
   /** 正在管谁的工作空间归属;null = 对话框不开。 */
+  const [accessFor, setAccessFor] = useState<MemberRecord | null>(null);
   const [workspacesFor, setWorkspacesFor] = useState<MemberRecord | null>(null);
   const [inviteResult, setInviteResult] = useState<{
     result: InviteMemberResult;
@@ -757,6 +759,15 @@ export function MembersPage() {
         ? t("hints.selfProtected")
         : null;
     const items: ActionMenuItem[] = [];
+    if (hasCapability(session.capabilities, "workspace.member.manage")) {
+      items.push({
+        id: "application-access",
+        label: t("actions.applicationAccess"),
+        icon: "key",
+        disabled: member.status !== "Active",
+        onSelect: () => setAccessFor(member),
+      });
+    }
     if (canAssignRoles) {
       items.push({
         id: "edit",
@@ -1488,6 +1499,16 @@ export function MembersPage() {
         />
       ) : null}
 
+      {accessFor ? (
+        <ApplicationAccessDialog
+          workspaceId={session.tenant?.workspace ?? ""}
+          memberId={accessFor.accountId}
+          onClose={() => {
+            setAccessFor(null);
+            void reloadMembers();
+          }}
+        />
+      ) : null}
       {workspacesFor ? (
         <MemberWorkspacesDialog
           member={workspacesFor}
