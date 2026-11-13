@@ -8,7 +8,10 @@
     "products": "产品中心",
     "solutions": "解决方案",
     "cases": "实践案例",
-    "about": "关于我们"
+    "about": "关于我们",
+    "label": "主导航",
+    "open": "打开导航菜单",
+    "close": "关闭导航菜单"
   },
   "productsMenu": {
     "openLabel": "展开产品中心",

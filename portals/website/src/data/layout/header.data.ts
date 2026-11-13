@@ -103,7 +103,7 @@ export const HEADER_DATA: HeaderData = {
     altKey: "logo.alt",
   },
   nav: [
-    { key: "platform", href: "/", labelKey: "nav.platform" },
+    { key: "platform", href: "https://ruyin.work", labelKey: "nav.platform" },
     {
       key: "products",
       href: "/products",

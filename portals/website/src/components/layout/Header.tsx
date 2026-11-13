@@ -43,6 +43,7 @@ import type {
   ShellFontSizePreference,
   ShellThemePreference,
 } from "@vxture/design-system";
+import { HeaderCompactNav } from "./HeaderCompactNav";
 import { HEADER_DATA } from "@/data/layout/header.data";
 import type { HeaderNavChild, HeaderNavItem } from "@/data/layout/header.data";
 import { useAuthStore } from "@/stores/auth.store";
@@ -321,7 +322,10 @@ function HeaderNav() {
   const t = useTranslations("layout.header");
 
   return (
-    <nav className="hidden items-center gap-8 xl:flex">
+    <nav
+      aria-label={t("nav.label")}
+      className="website-header-desktop-nav items-center gap-6"
+    >
       {HEADER_DATA.nav.map((item) => {
         if (item.children?.length) {
           return <HeaderNavMenu key={item.key} item={item} />;
@@ -615,7 +619,10 @@ export default function Header() {
           center={<HeaderNav />}
           trailing={
             <ShellHeaderActions>
-              <HeaderQuickTools />
+              <div className="website-header-quick-tools">
+                <HeaderQuickTools />
+              </div>
+              <HeaderCompactNav consoleHref={consoleUrl} />
 
               {/* 已登录：进入控制台 + 用户菜单 */}
               {isAuthenticated ? (
@@ -625,7 +632,7 @@ export default function Header() {
                     title={consoleLabel}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-icon-xl items-center text-sm font-medium text-vx-gray-700 transition-colors duration-200 hover:text-vx-primary focus-visible:outline-none dark:text-vx-text-secondary dark:hover:text-vx-brand-300"
+                    className="hidden sm:inline-flex h-icon-xl items-center text-sm font-medium text-vx-gray-700 transition-colors duration-200 hover:text-vx-primary focus-visible:outline-none dark:text-vx-text-secondary dark:hover:text-vx-brand-300"
                   >
                     {consoleLabel}
                   </a>
