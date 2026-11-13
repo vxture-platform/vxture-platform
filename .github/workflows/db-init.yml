@@ -68,6 +68,8 @@ on:
           - verify
           - test-delivery
           - restamp-ddl-baseline
+          - opener-seats-preflight
+          - opener-seats-repair
       migrate_until:
         description: "migrate only: 跑到这一份迁移为止（文件名或前缀；expand/contract 中间要夹部署时用）"
         required: false
@@ -132,7 +134,7 @@ jobs:
           HEAD_SHA="$(git rev-parse HEAD)"
           if [ -z "$EXPECTED_SHA" ]; then
             case "$DB_ACTION" in
-              reset|migrate|migrate-seed|seed|provision-secrets|test-delivery|restamp-ddl-baseline)
+              reset|migrate|migrate-seed|seed|provision-secrets|test-delivery|restamp-ddl-baseline|opener-seats-repair)
                 echo "::error::DB-mutating action '$DB_ACTION' requires expected_sha (ref tips move; pin the verified version). HEAD=$HEAD_SHA" >&2
                 exit 1
                 ;;
@@ -247,6 +249,20 @@ jobs:
             cp -f "$SRC"/secrets/*.example "$DEPLOY_DIR/secrets/" 2>/dev/null || true
 
             cd "$DEPLOY_DIR"
+
+            # Targeted seat repair bypasses legacy env shims and unrelated migrations.
+            case "$DB_ACTION" in
+              opener-seats-preflight)
+                bash scripts/32-subscription-opener-seats.sh preflight
+                exit 0
+                ;;
+              opener-seats-repair)
+                CONFIRM_OPENER_SEATS=yes bash scripts/32-subscription-opener-seats.sh repair
+                CONFIRM_RESTAMP=yes bash scripts/28c-restamp-ddl-baseline.sh
+                bash scripts/30-verify-platform-baseline.sh
+                exit 0
+                ;;
+            esac
 
             # ── U-line env migration shim (product_300 §2.3 #4) ──────────────
             # Legacy cross-domain RP `ruyin` (ruyin.ai) is renamed `umbra`, and
