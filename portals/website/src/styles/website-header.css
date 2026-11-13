@@ -1,0 +1,33 @@
+/**
+ * Responsive website header navigation.
+ * @package @vxture/website
+ * @layer Presentation
+ * @category Styles - Layout
+ * @author AI-Generated
+ * @date 2026-11-13
+ */
+/* Keep every navigation destination reachable without squeezing header controls. */
+.website-header-desktop-nav {
+  display: none;
+}
+
+.website-header-nav-panel {
+  max-width: calc(100vw - var(--vx-spacing) * 8);
+  max-height: calc(100dvh - var(--vx-spacing) * 24);
+}
+
+@media (min-width: 1152px) {
+  .website-header-desktop-nav {
+    display: flex;
+  }
+
+  .website-header-compact-nav {
+    display: none;
+  }
+}
+
+@media (max-width: 479.98px) {
+  .website-header-quick-tools {
+    display: none;
+  }
+}

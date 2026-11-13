@@ -8,7 +8,10 @@
     "products": "Products",
     "solutions": "Solutions",
     "cases": "Practices",
-    "about": "Company"
+    "about": "Company",
+    "label": "Main navigation",
+    "open": "Open navigation menu",
+    "close": "Close navigation menu"
   },
   "productsMenu": {
     "openLabel": "Open products menu",
