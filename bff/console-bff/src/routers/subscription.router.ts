@@ -667,6 +667,8 @@ export interface SubscribedProductView {
   tier: string | null;
   /** Product seats from plan_components.quota['seat.max']; absent = null. */
   seats: number | null;
+  /** Live product-seat assignments in this workspace, including the opener. */
+  assignedSeats: number;
   kind: string;
   cycleUnit: string;
   status: string;
@@ -1480,6 +1482,7 @@ export class SubscriptionRouter {
       plan_name: string;
       tier: string | null;
       seats: string | null;
+      assigned_seats: string;
       subscription_kind: string;
       cycle_unit: string;
       status: string;
@@ -1497,6 +1500,9 @@ export class SubscriptionRouter {
               prod.product_nick, pw.home_url, prod.release_version, prod.released_at,
               prod.maintenance_window_id, prod.maintenance_until,
               pl.plan_name, pc.tier, pc.quota->>'seat.max' as seats,
+              (select count(*) from metering.product_seats ps
+                where ps.workspace_id = ts.workspace_id and ps.product_id = prod.id
+                  and ps.revoked_at is null) as assigned_seats,
               ts.subscription_kind, ts.cycle_unit, ts.status,
               ts.start_at, ts.end_at, ts.auto_renew,
               sus.suspension_reason, sus.suspension_expected_resume_at,
@@ -1533,6 +1539,7 @@ export class SubscriptionRouter {
       planName: r.plan_name,
       tier: r.tier,
       seats: r.seats != null && r.seats !== "" ? Number(r.seats) : null,
+      assignedSeats: Number(r.assigned_seats),
       kind: r.subscription_kind,
       cycleUnit: r.cycle_unit,
       status: r.status,

@@ -1983,6 +1983,11 @@
       "team": "Team · {seats} {seats, plural, one {seat} other {seats}}",
       "private": "Private · {seats} {seats, plural, one {seat} other {seats}}"
     },
+    "audienceAssignedSeats": {
+      "person": "Personal · {assigned}/{seats} {seats, plural, one {seat} other {seats}}",
+      "team": "Team · {assigned}/{seats} {seats, plural, one {seat} other {seats}}",
+      "private": "Private · {assigned}/{seats} {seats, plural, one {seat} other {seats}}"
+    },
     "browseMarket": "Browse products",
     "card": {
       "productDetail": "Product details",
