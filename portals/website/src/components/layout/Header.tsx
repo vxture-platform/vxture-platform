@@ -606,15 +606,18 @@ export default function Header() {
           surface="transparent"
           layout="centered"
           leading={
-            <HeaderBrand
-              href={HEADER_DATA.logo.href}
-              logoSrc={HEADER_DATA.logo.image}
-              label={
-                <>
-                  <span className="text-primary-text">Ruyin</span> Studio
-                </>
-              }
-            />
+            <>
+              <HeaderBrand
+                href={HEADER_DATA.logo.href}
+                logoSrc={HEADER_DATA.logo.image}
+                label={
+                  <>
+                    <span className="text-primary-text">Ruyin</span> Studio
+                  </>
+                }
+              />
+              <HeaderCompactNav consoleHref={consoleUrl} />
+            </>
           }
           center={<HeaderNav />}
           trailing={
@@ -622,7 +625,6 @@ export default function Header() {
               <div className="website-header-quick-tools">
                 <HeaderQuickTools />
               </div>
-              <HeaderCompactNav consoleHref={consoleUrl} />
 
               {/* 已登录：进入控制台 + 用户菜单 */}
               {isAuthenticated ? (

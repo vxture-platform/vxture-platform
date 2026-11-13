@@ -59,7 +59,7 @@ export function HeaderCompactNav({ consoleHref }: { consoleHref: string }) {
           />
         </PopoverTrigger>
         <PopoverContent
-          align="end"
+          align="start"
           sideOffset={12}
           collisionPadding={16}
           aria-label={t("nav.label")}
