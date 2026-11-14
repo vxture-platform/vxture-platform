@@ -46,6 +46,7 @@ export interface TokenUsageTokens {
 }
 
 export interface TokenUsageInput {
+  endUserId?: string;
   workspaceId: string;
   /** 调用方产品（S2S 令牌里的 act.sub），不是 atlas。 */
   productId: string;
@@ -92,6 +93,7 @@ interface RateRow {
 }
 
 interface IdemRow {
+  end_user_id: string | null;
   token_event_id: string | null;
   credits_micro: string | null;
   credit_skip_reason: TokenCreditSkipReason | null;
@@ -163,8 +165,8 @@ export class TokenUsageService {
       // 1. 幂等占位（键带归属 + attempt_index，与 §8 同一个理由：request_id 由 Atlas 自选）
       const claim = await client.query(
         `insert into metering.token_usage_idempotencies
-           (workspace_id, product_id, request_id, attempt_index, created_at)
-         values ($1, $2, $3, $4, now())
+           (workspace_id, product_id, request_id, attempt_index, end_user_id, created_at)
+         values ($1, $2, $3, $4, $5, now())
          on conflict (workspace_id, product_id, request_id, attempt_index) do nothing
          returning request_id`,
         [
@@ -172,11 +174,12 @@ export class TokenUsageService {
           input.productId,
           input.requestId,
           input.attemptIndex,
+          input.endUserId ?? null,
         ],
       );
       if ((claim.rowCount ?? 0) === 0) {
         const prev = await client.query<IdemRow>(
-          `select token_event_id, credits_micro, credit_skip_reason, whole_due, usage_event_id
+          `select end_user_id, token_event_id, credits_micro, credit_skip_reason, whole_due, usage_event_id
              from metering.token_usage_idempotencies
             where workspace_id = $1 and product_id = $2 and request_id = $3 and attempt_index = $4
             for share`,
@@ -344,7 +347,11 @@ export class TokenUsageService {
     let consume: EngineConsumeResult | null = null;
     let failed = false;
     if (wholeDue > 0n && !usageEventId) {
-      const settled = await this.settle(input, wholeDue);
+      // Attribution belongs to the original claim, including historical unknown users.
+      const retryInput = { ...input };
+      delete retryInput.endUserId;
+      if (prev?.end_user_id) retryInput.endUserId = prev.end_user_id;
+      const settled = await this.settle(retryInput, wholeDue);
       usageEventId = settled.usageEventId;
       consume = settled.consume;
       failed = settled.failed;
@@ -381,6 +388,7 @@ export class TokenUsageService {
         amount: whole.toString(),
         idempotencyKey: `${CREDIT_IDEMPOTENCY_PREFIX}:${input.requestId}:${input.attemptIndex}`,
         requestId: input.requestId,
+        ...(input.endUserId ? { endUserId: input.endUserId } : {}),
         // 事后报账：调用方已经把事做了，永远记账、永远 200（2026-08-10 裁定那一档）。
         intent: "report",
       });

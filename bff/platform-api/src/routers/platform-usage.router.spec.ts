@@ -359,3 +359,17 @@ describe("POST /usage/consume —— gated 时的运营通告", () => {
     expect(response.status).toHaveBeenCalledWith(200);
   });
 });
+
+it("forwards delegated token end-user identity to ingestion", async () => {
+  const ingest = vi.fn(async (_input: unknown) => ingested());
+  const { router } = routerWith({ status: "ok", ingest });
+  await router.consume(
+    { ...tokenBody, end_user_id: WS },
+    res(),
+    undefined,
+    DELEGATED_ATLAS,
+  );
+  expect(ingest).toHaveBeenCalledWith(
+    expect.objectContaining({ endUserId: WS, workspaceId: WS_OTHER }),
+  );
+});

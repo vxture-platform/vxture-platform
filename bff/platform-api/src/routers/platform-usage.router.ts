@@ -192,6 +192,7 @@ export class PlatformUsageRouter {
         workspaceId,
         productId,
         productCode: parsed.productCode,
+        ...(parsed.endUserId ? { endUserId: parsed.endUserId } : {}),
         requestId: parsed.requestId,
         attemptIndex: parsed.attemptIndex,
         outcome: parsed.outcome,

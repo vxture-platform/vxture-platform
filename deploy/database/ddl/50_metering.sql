@@ -460,6 +460,7 @@ CREATE TABLE metering.credit_pricing_config (
 --   whole_due = 这次该扣的整数 credit；usage_event_id 仍为 NULL 而 whole_due > 0 = 扣减那一步
 --   没做成（引擎不可达等），下一次同键重放会再试一次 —— 自愈，不必人工 replay。
 CREATE TABLE metering.token_usage_idempotencies (
+    end_user_id            uuid, -- Immutable attribution from the first report; NULL remains unknown.
     workspace_id           uuid          NOT NULL,
     product_id             uuid          NOT NULL,
     request_id             varchar(128)  NOT NULL,

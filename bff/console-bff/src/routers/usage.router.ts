@@ -1,8 +1,12 @@
 /**
- * usage.router.ts - 租户用量分析路由
+ * usage.router.ts - Workspace usage analytics and event history.
  * @package @vxture/bff-console
  * @layer Application
  * @category Router
+ *
+ * GET /api/usage/analytics is the page's global-scope read: natural periods,
+ * authenticated active workspace, one snapshot for all three dimensions.
+ * The trend/members endpoints below remain available for existing consumers.
  *
  * 用量分析页(/usage,owner 2026-08-20 用量配额线)的读侧:
  *   GET /api/usage/trend   — 周期趋势(usage_summary_* 五档降采样,纯统计/
@@ -42,6 +46,7 @@
 import {
   Controller,
   BadRequestException,
+  ForbiddenException,
   Get,
   Inject,
   Query,
@@ -226,6 +231,36 @@ export class UsageRouter {
     private readonly metering: MeteringReadService,
   ) {}
 
+  /**
+   * Return every chart under one authenticated workspace and fixed time range.
+   * @param req - Session with the active workspace selected by the user.
+   * @param window - Natural-period preset, capped at twelve calendar months.
+   * @returns A consistent analytics snapshot.
+   * @throws For unsupported windows or missing workspace access.
+   */
+  @Get("analytics")
+  async getAnalytics(
+    @Req() req: Request & RequestContext,
+    @Query("window") window = "day",
+  ) {
+    if (
+      window !== "hour" &&
+      window !== "day" &&
+      window !== "week" &&
+      window !== "month"
+    ) {
+      throw new BadRequestException("Unsupported usage window");
+    }
+    const workspaceId = await this.resolveWorkspace(req);
+    return this.metering.getUsageAnalytics({
+      workspaceId,
+      tenantId: req.tenant!.id,
+      metric: "ai.credit",
+      window,
+      zone: req.user?.timezone ?? null,
+    });
+  }
+
   // --------------------------------------------------------------------------
   // GET /api/usage/trend?metric=ai.credit&granularity=day&span=30
   // --------------------------------------------------------------------------
@@ -238,7 +273,7 @@ export class UsageRouter {
     @Query("span") spanRaw?: string,
   ): Promise<UsageTrendView> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId = await this.resolveWorkspace(req);
 
     const granularity: UsageGranularity = GRANULARITIES.has(
       granularityRaw as UsageGranularity,
@@ -285,7 +320,7 @@ export class UsageRouter {
     @Query("pageSize") pageSizeRaw?: string,
   ): Promise<UsageEventsView> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId = await this.resolveWorkspace(req);
     const { from, to } = parseWindow(fromRaw, toRaw);
     const pageSize = parsePositiveInt(
       pageSizeRaw,
@@ -348,7 +383,7 @@ export class UsageRouter {
     @Query("metric") metricRaw?: string,
   ): Promise<UsageMemberView[]> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
-    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const workspaceId = await this.resolveWorkspace(req);
     const rows = await this.metering.listUsageByMember({
       workspaceId,
       metric: parseMetric(metricRaw),
@@ -363,9 +398,23 @@ export class UsageRouter {
     }));
   }
 
-  private async resolveDefaultWorkspace(tenantId: string): Promise<string> {
-    const id = await this.metering.findDefaultWorkspaceId(tenantId);
-    if (!id) throw new BadRequestException("租户缺少默认工作空间");
-    return id;
+  private async resolveWorkspace(
+    req: Request & RequestContext,
+  ): Promise<string> {
+    const tenant = req.tenant;
+    if (!req.user || !tenant)
+      throw new UnauthorizedException("No active tenant session");
+    if (
+      tenant.mode !== "tenant" ||
+      !req.activeWorkspaceId ||
+      tenant.workspace !== req.activeWorkspaceId ||
+      tenant.workspace === "default" ||
+      tenant.workspace === "PLATFORM"
+    ) {
+      throw new ForbiddenException(
+        "An accessible active workspace is required",
+      );
+    }
+    return req.activeWorkspaceId;
   }
 }

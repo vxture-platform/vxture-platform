@@ -397,3 +397,38 @@ describe("两段事务：引擎叫不动时原始事实已提交，待同键重�
     expect(seq).toContain("rollback");
   });
 });
+
+describe("immutable end-user attribution", () => {
+  const original = "55555555-5555-4555-8555-555555555555";
+  const changed = "66666666-6666-4666-8666-666666666666";
+  it("persists the first user and passes it to the consume engine", async () => {
+    const { pool, calls } = fakePool();
+    const engine = fakeEngine();
+    await new TokenUsageService(pool, engine).ingest(
+      baseInput({ endUserId: original }),
+    );
+    const claim = calls.find((c) =>
+      c.sql.includes("insert into metering.token_usage_idempotencies"),
+    );
+    expect(claim?.params[4]).toBe(original);
+    expect(engine.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ endUserId: original }),
+    );
+  });
+  it.each([original, null])(
+    "retries with persisted attribution %s instead of the new caller",
+    async (end_user_id) => {
+      const { pool } = fakePool({
+        claimed: true,
+        prev: { end_user_id, whole_due: "1", usage_event_id: null },
+      });
+      const engine = fakeEngine();
+      await new TokenUsageService(pool, engine).ingest(
+        baseInput({ endUserId: changed }),
+      );
+      const sent = engine.consume.mock.calls[0]?.[0];
+      if (end_user_id) expect(sent).toHaveProperty("endUserId", original);
+      else expect(sent).not.toHaveProperty("endUserId");
+    },
+  );
+});

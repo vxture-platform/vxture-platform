@@ -3,6 +3,7 @@ import {
   buildConsumeResponse,
   composeQuotaExhaustedNotice,
   parseConsumeBody,
+  parseConsumeRequest,
   parseGaugeBody,
   quotaPeriodStartKey,
   type EngineConsumeResult,
@@ -444,4 +445,28 @@ describe("composeQuotaExhaustedNotice", () => {
     expect(other.referenceId).not.toBe(notice.referenceId);
     expect(other.referenceId.length).toBeLessThanOrEqual(128);
   });
+});
+
+describe("token end-user attribution", () => {
+  const body = {
+    workspace_id: "11111111-1111-4111-8111-111111111111",
+    product: "runos",
+    request_id: "attribution-1",
+    occurred_at: "2026-10-01T00:00:00Z",
+    tokens: { input: 1, output: 0, cache_write: 0, cache_read: 0 },
+  };
+  it("accepts optional UUID attribution and preserves legacy reports", () => {
+    expect(
+      parseConsumeRequest({ ...body, end_user_id: body.workspace_id }),
+    ).toMatchObject({ endUserId: body.workspace_id });
+    expect(parseConsumeRequest(body)).not.toHaveProperty("endUserId");
+  });
+  it.each([42, "usr_invalid", "invalid", {}])(
+    "rejects malformed identity %s",
+    (end_user_id) => {
+      expect(() => parseConsumeRequest({ ...body, end_user_id })).toThrow(
+        "invalid_end_user_id",
+      );
+    },
+  );
 });

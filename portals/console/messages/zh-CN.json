@@ -2543,9 +2543,16 @@
   },
   "usagePage": {
     "title": "用量分析",
+    "loading": "正在读取所选范围的用量…",
+    "globalScope": "以下概览、时间分布、产品分布与用户分布共用所选周期和当前工作空间。",
+    "range": "统计范围：{from} 至 {to}（{zone}，截至当前时刻）",
+    "zoneFallback": "账号时区无法识别，所有维度已统一使用 UTC；请到账号信息页重新选择时区。",
     "description": "工作空间的 AI Credits 用量:趋势、产品构成与成员分布一眼看完",
     "metrics": {
       "groupLabel": "用量概览",
+      "total": "所选范围消耗",
+      "products": "有消耗的产品",
+      "members": "有用量记录的用户（不含未归集）",
       "last7": "近 7 天消耗",
       "last30": "近 30 天消耗",
       "thisYear": "本年累计",
@@ -2557,8 +2564,8 @@
       "windowLabel": "统计周期",
       "windowDay": "近 30 天",
       "windowWeek": "近 12 周",
-      "windowMonth": "近 12 月",
-      "windowYear": "近 5 年",
+      "windowMonth": "近 12 个月",
+      "naturalDescription": "按所选时区的自然周期汇总；小时从整点、日从零点、周从周一、月从 1 日开始，当前周期截至当前时刻，无用量记 0。",
       "empty": "所选周期内暂无用量数据",
       "windowHour": "近 24 小时",
       "descriptionHour": "近 24 小时逐时消耗;横轴按 {zone} 显示。统计口径为纯看板数据,不作计费依据",
@@ -2574,18 +2581,20 @@
     },
     "share": {
       "title": "按产品分布",
+      "emptyZero": "产品用量合计 0 AI Credits，当前工作空间没有可展示的产品。",
       "description": "当前窗口内各产品的用量构成;占比按窗口合计计算",
       "empty": "暂无产品消耗数据"
     },
     "members": {
-      "title": "按成员统计",
-      "description": "近 30 天各成员的用量构成;产品未上报使用者的部分归入未归集",
+      "title": "按用户分布",
+      "description": "所选范围内各用户的用量；包含零用量成员，产品未上报使用者的部分归入未归集。",
       "empty": "近 30 天暂无成员用量"
     },
     "chartPeak": "峰值",
     "filters": {},
     "notes": {
       "title": "统计口径",
+      "naturalScope": "三个维度均统计同一工作空间、同一自然周期范围内的 AI Credits 实扣量，并从同一份用量事件快照汇总。零用量展示 0；读取失败单独提示。当前周期尚未结束，数据截至页面本次读取时刻；此页用于用量分析，账单以正式出账结果为准。",
       "description": "这页的数是怎么来的",
       "scopeTitle": "看板不是账单",
       "scopeBody": "本页统一按 AI Credits 口径统计,数字来自按周期降采样的看板数据;实际计费以订单与账单为准,两者可能因统计延迟略有出入。要看别的指标或逐条核对,去调用记录",

@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { isIanaTimeZone } from "@vxture-platform/shared";
 import { PgMeteringReadRepository } from "../repository/pg-metering-read.repository";
 import type {
+  UsageAnalyticsQuery,
+  UsageAnalyticsResult,
   QuotaOverviewRows,
   UsageEventsQuery,
   UsageEventsResult,
@@ -81,6 +83,35 @@ export class MeteringReadService {
 
   findDefaultWorkspaceId(tenantId: string): Promise<string | null> {
     return this.repo.findDefaultWorkspaceId(tenantId);
+  }
+
+  /**
+   * Read all dimensions at one database snapshot and one natural-period scope.
+   * @param query - Authenticated workspace and requested global window.
+   * @param now - Exclusive end shared by all dimensions.
+   * @returns Zero-filled analytics, including the effective time zone.
+   */
+  async getUsageAnalytics(
+    query: UsageAnalyticsQuery,
+    now: Date = new Date(),
+  ): Promise<UsageAnalyticsResult> {
+    const requestedZone = query.zone?.trim() || "UTC";
+    const valid =
+      requestedZone === "UTC" ||
+      (await this.zoneIsValid(requestedZone, now.getTime()));
+    const bucketZone = valid ? requestedZone : "UTC";
+    const result = await this.repo.readUsageAnalytics({
+      ...query,
+      zone: bucketZone,
+      now,
+    });
+    return {
+      ...result,
+      window: query.window,
+      metric: query.metric,
+      bucketZone,
+      zoneFallback: !valid,
+    };
   }
 
   /** 配额总览三路一次往返(池 / 水位切片 / 共享策略)。 */

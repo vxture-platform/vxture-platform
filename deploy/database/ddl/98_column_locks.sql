@@ -379,7 +379,7 @@ GRANT UPDATE (carry_micro, updated_at) ON metering.token_credit_carry TO platfor
 REVOKE UPDATE ON metering.credit_pricing_config FROM platform_svc;
 GRANT UPDATE (anchor_micro_cny_per_credit, target_margin_bps, updated_by, updated_at) ON metering.credit_pricing_config TO platform_svc;
 
--- metering.token_usage_idempotencies  [anchor: workspace_id, product_id, request_id, attempt_index, created_at]
+-- metering.token_usage_idempotencies  [anchor: end_user_id, workspace_id, product_id, request_id, attempt_index, created_at]
 REVOKE UPDATE ON metering.token_usage_idempotencies FROM platform_svc;
 GRANT UPDATE (token_event_id, token_event_created_at, credits_micro, credit_skip_reason, whole_due, usage_event_id) ON metering.token_usage_idempotencies TO platform_svc;
 

@@ -2115,6 +2115,40 @@ export async function fetchQuotaOverview(): Promise<ConsoleQuotaOverview> {
 // Usage analytics (用量分析页 /usage — GET /api/usage/*)
 // ============================================================================
 
+export type ConsoleUsageWindow = "hour" | "day" | "week" | "month";
+
+/** All dimensions use the server's exact half-open range and snapshot. */
+export interface ConsoleUsageAnalytics {
+  window: ConsoleUsageWindow;
+  metric: string;
+  from: string;
+  to: string;
+  bucketZone: string;
+  zoneFallback: boolean;
+  /** Hour keys are UTC; other period labels belong to bucketZone. */
+  buckets: { period: string; total: number }[];
+  products: { productCode: string; productName: string; total: number }[];
+  members: {
+    userNo: string | null;
+    userName: string | null;
+    total: number;
+    eventCount: number;
+  }[];
+}
+
+/**
+ * Fetch the global scope once for all usage charts.
+ * @param window - Natural-period preset, including the current partial period.
+ * @returns The authenticated workspace's analytics snapshot.
+ */
+export function fetchUsageAnalytics(
+  window: ConsoleUsageWindow,
+): Promise<ConsoleUsageAnalytics> {
+  return readJsonStrict<ConsoleUsageAnalytics>(
+    `/api/usage/analytics?window=${window}`,
+  );
+}
+
 export interface ConsoleUsageTrendBucket {
   /**
    * 桶键:hour `YYYY-MM-DD HH:00`(UTC 小时)/ day、week(ISO 周一)`YYYY-MM-DD` /
