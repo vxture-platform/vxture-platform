@@ -172,3 +172,31 @@ export interface UsageMemberRow {
   eventCount: number;
   lastAt: Date;
 }
+
+/** One immutable scope shared by every usage analytics dimension. */
+export interface UsageAnalyticsQuery {
+  workspaceId: string;
+  tenantId: string;
+  metric: string;
+  window: "hour" | "day" | "week" | "month";
+  zone?: string | null;
+}
+
+/** Natural periods include the current, incomplete period. */
+export interface UsageAnalyticsResult {
+  window: UsageAnalyticsQuery["window"];
+  metric: string;
+  from: string;
+  to: string;
+  bucketZone: string;
+  zoneFallback: boolean;
+  /** Hour keys are UTC civil timestamps; other keys are dates in bucketZone. */
+  buckets: { period: string; total: number }[];
+  products: { productCode: string; productName: string; total: number }[];
+  members: {
+    userNo: string | null;
+    userName: string | null;
+    total: number;
+    eventCount: number;
+  }[];
+}

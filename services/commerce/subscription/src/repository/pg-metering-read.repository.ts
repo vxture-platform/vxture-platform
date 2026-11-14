@@ -3,6 +3,8 @@ import type { Pool } from "pg";
 import { needsQuotaReset } from "@vxture-platform/shared";
 import { COMMERCE_PG_POOL } from "../tokens";
 import type {
+  UsageAnalyticsQuery,
+  UsageAnalyticsResult,
   QuotaPoolRow,
   SharingPolicyRow,
   UsageEventRow,
@@ -56,13 +58,133 @@ const usageEventsParams = (input: {
 
 /**
  * 计量读侧仓储(配额总览 / 用量分析;console 批 3 从 console-bff 下沉)。
- * 只读 SELECT;写一律走 consume / addon 服务。所有周期口径 UTC,与 rollup /
- * consume 的周期逻辑一致;唯一的例外是 listTrendRowsLocalDays——day 档按请求用户的
- * 时区把小时表现场重切成本地日(owner 裁定 4,2026-10-04),天表本身仍是 UTC 权威。
+ * Read-only analytics and quota queries; writes belong to consume/addon services.
+ * Legacy trend reads use UTC rollups with optional local-day re-bucketing.
+ * Global analytics reads event facts at one snapshot and uses the account zone
+ * for every natural-period window; it never changes the UTC rollup tables.
  */
 @Injectable()
 export class PgMeteringReadRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
+
+  // ============================================================================
+  // Analytics snapshot
+  // ============================================================================
+
+  /**
+   * Aggregate facts once; keep zero-usage subscriptions and workspace members.
+   * A single statement gives all dimensions the same PostgreSQL snapshot.
+   * @param input - Trusted workspace scope, natural period and fixed end time.
+   * @returns Three distributions with their exact half-open time range.
+   * @throws When the workspace does not belong to the authenticated tenant.
+   */
+  async readUsageAnalytics(
+    input: UsageAnalyticsQuery & { zone: string; now: Date },
+  ): Promise<
+    Pick<
+      UsageAnalyticsResult,
+      "from" | "to" | "buckets" | "products" | "members"
+    >
+  > {
+    const spans = { hour: 24, day: 30, week: 12, month: 12 } as const;
+    const res = await this.pool.query<{
+      from_at: Date;
+      to_at: Date;
+      buckets: UsageAnalyticsResult["buckets"];
+      products: UsageAnalyticsResult["products"];
+      members: UsageAnalyticsResult["members"];
+    }>(
+      `with scope as (
+         select w.id from tenancy.workspaces w
+          where w.id = $1 and w.tenant_id = $2 and w.deleted_at is null
+       ), bounds as (
+         select case when $4 = 'hour'
+                then date_trunc('hour', $6::timestamptz, $5) - interval '23 hours'
+                else (date_trunc($4, $6::timestamptz at time zone $5)
+                 - ($7::int - 1) * ('1 ' || $4)::interval) at time zone $5 end as from_at,
+                $6::timestamptz as to_at
+           from scope
+       ), facts as materialized (
+         select e.product_id, e.end_user_id, e.total_amount, e.created_at,
+                case when $4 = 'hour'
+                     then date_bin(interval '1 hour', e.created_at, b.from_at) at time zone 'UTC'
+                     else date_trunc($4, e.created_at at time zone $5) end as period
+           from metering.usage_events e cross join bounds b
+          where e.workspace_id = $1 and e.metric_key = $3
+            and e.created_at >= b.from_at and e.created_at < b.to_at
+       ), periods as (
+         select generate_series(
+           case when $4 = 'hour' then b.from_at at time zone 'UTC'
+                else date_trunc($4, b.from_at at time zone $5) end,
+           case when $4 = 'hour' then (b.from_at + interval '23 hours') at time zone 'UTC'
+                else date_trunc($4, b.to_at at time zone $5) end,
+           ('1 ' || $4)::interval) as period from bounds b
+       ), time_usage as (
+         select period, sum(total_amount) as total from facts group by period
+       ), product_ids as (
+         select product_id from facts
+         union
+         select pc.product_id from metering.subscriptions s
+           join product.plan_components pc on pc.plan_version_id = s.plan_version_id
+          where s.workspace_id = $1 and s.deleted_at is null
+            and s.status in ('active','trialing','expiring','overdue')
+       ), product_usage as (
+         select product_id, sum(total_amount) as total from facts group by product_id
+       ), member_ids as (
+         select end_user_id as user_id from facts
+         union
+         select user_id from tenancy.workspace_memberships
+          where workspace_id = $1 and status in ('active','suspended')
+         union select null::uuid
+       ), member_usage as (
+         select end_user_id, sum(total_amount) as total, count(*) as event_count
+           from facts group by end_user_id
+       ), members as (
+         select u.user_no::text as user_no,
+                case when u.id is null then null else coalesce(up.display_name, u.account) end as user_name,
+                sum(coalesce(mu.total, 0)) as total,
+                sum(coalesce(mu.event_count, 0)) as event_count
+           from member_ids mi
+           left join member_usage mu on mu.end_user_id is not distinct from mi.user_id
+           left join account.users u on u.id = mi.user_id
+           left join account.user_profiles up on up.user_id = mi.user_id
+          group by 1, 2
+       )
+       select b.from_at, b.to_at,
+         (select coalesce(jsonb_agg(jsonb_build_object(
+           'period', to_char(p.period, 'YYYY-MM-DD HH24:MI'),
+           'total', coalesce(t.total, 0)) order by p.period), '[]'::jsonb)
+          from periods p left join time_usage t using (period)) as buckets,
+         (select coalesce(jsonb_agg(jsonb_build_object(
+           'productCode', p.product_code, 'productName', p.product_name,
+           'total', coalesce(pu.total, 0)) order by coalesce(pu.total, 0) desc, p.product_code), '[]'::jsonb)
+          from product_ids pi join product.products p on p.id = pi.product_id
+          left join product_usage pu on pu.product_id = pi.product_id) as products,
+         (select coalesce(jsonb_agg(jsonb_build_object(
+           'userNo', user_no, 'userName', user_name, 'total', total,
+           'eventCount', event_count) order by total desc, user_no nulls last), '[]'::jsonb)
+          from members) as members
+       from bounds b`,
+      [
+        input.workspaceId,
+        input.tenantId,
+        input.metric,
+        input.window,
+        input.zone,
+        input.now,
+        spans[input.window],
+      ],
+    );
+    const row = res.rows[0];
+    if (!row) throw new Error("Usage workspace scope is unavailable");
+    return {
+      from: row.from_at.toISOString(),
+      to: row.to_at.toISOString(),
+      buckets: row.buckets,
+      products: row.products,
+      members: row.members,
+    };
+  }
 
   /** 租户默认工作空间;缺失返回 null(开租户时一并建,理论上不存在)。 */
   async findDefaultWorkspaceId(tenantId: string): Promise<string | null> {

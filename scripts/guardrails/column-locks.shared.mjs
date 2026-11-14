@@ -7,6 +7,7 @@
 
 /** 规则⑤：显式安全语义锚点列（schema.table.column）。 */
 export const EXTRA_ANCHOR = new Set([
+  "metering.token_usage_idempotencies.end_user_id",
   // A deletion request retains its original owner and request timestamp.
   "account.lifecycle_operations.user_id",
   "account.lifecycle_operations.deletion_requested_at",

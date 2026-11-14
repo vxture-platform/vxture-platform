@@ -2543,9 +2543,16 @@
   },
   "usagePage": {
     "title": "Usage Analytics",
+    "loading": "Loading usage for the selected range…",
+    "globalScope": "Overview, time, product and user distributions share the selected period and current workspace.",
+    "range": "Range: {from} to {to} ({zone}, through the current time)",
+    "zoneFallback": "Your account timezone is not recognised. All dimensions use UTC; choose your timezone again on the account page.",
     "description": "AI Credits usage for this workspace: trend, product mix and member split at a glance",
     "metrics": {
       "groupLabel": "Usage overview",
+      "total": "Selected range consumption",
+      "products": "Products with consumption",
+      "members": "Users with usage records (excluding unattributed)",
       "last7": "Last 7 days",
       "last30": "Last 30 days",
       "thisYear": "This year",
@@ -2558,7 +2565,7 @@
       "windowDay": "30 days",
       "windowWeek": "12 weeks",
       "windowMonth": "12 months",
-      "windowYear": "5 years",
+      "naturalDescription": "Calendar periods in the selected timezone start on the hour, at midnight, on Monday or on the first of the month. The current period ends now; periods without usage show 0.",
       "empty": "No usage data in this period",
       "windowHour": "24 hours",
       "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in {zone}. Dashboard figures only — never a billing basis",
@@ -2574,18 +2581,20 @@
     },
     "share": {
       "title": "By product",
+      "emptyZero": "Product usage totals 0 AI Credits. This workspace has no products to display.",
       "description": "Product mix within the current window; share is against the window total",
       "empty": "No product consumption yet"
     },
     "members": {
-      "title": "By member",
-      "description": "Member split over the last 30 days; calls with no reported user land in Unattributed",
+      "title": "By user",
+      "description": "User usage within the selected range, including members with zero usage. Calls without a reported user are Unattributed.",
       "empty": "No member usage in the last 30 days"
     },
     "chartPeak": "Peak",
     "filters": {},
     "notes": {
       "title": "How these numbers work",
+      "naturalScope": "All three dimensions aggregate deducted AI Credits from the same usage-event snapshot, workspace and calendar range. Zero usage shows 0; read failures appear separately. The current period is incomplete and ends at this page's latest read time. This page is for usage analysis; final invoices determine billing.",
       "description": "Where the figures on this page come from",
       "scopeTitle": "A dashboard, not a bill",
       "scopeBody": "This page reports AI Credits from downsampled dashboard data; actual charges follow your orders and invoices, and the two can differ slightly because of reporting lag. For other metrics or line-by-line checks, use the call records",

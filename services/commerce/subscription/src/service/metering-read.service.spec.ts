@@ -314,3 +314,72 @@ describe("MeteringReadService.getUsageTrend —— 按裁决选表", () => {
     expect(repo.isKnownTimeZone).toHaveBeenCalledTimes(2);
   });
 });
+
+// ============================================================================
+// Global natural-period analytics
+// ============================================================================
+
+describe("MeteringReadService.getUsageAnalytics", () => {
+  const snapshot = {
+    from: "2026-10-15T16:00:00.000Z",
+    to: "2026-11-14T10:30:00.000Z",
+    buckets: [{ period: "2026-11-14 00:00", total: 0 }],
+    products: [],
+    members: [],
+  };
+  const query = {
+    workspaceId: WS,
+    tenantId: "tenant",
+    metric: "ai.credit",
+    window: "day" as const,
+  };
+  it("uses the same fixed end and valid account timezone for every dimension", async () => {
+    const repo = {
+      isKnownTimeZone: vi.fn(async () => true),
+      readUsageAnalytics: vi.fn(async () => snapshot),
+    };
+    const service = new MeteringReadService(repo as never);
+    const now = new Date(snapshot.to);
+    const result = await service.getUsageAnalytics(
+      { ...query, zone: "Asia/Shanghai" },
+      now,
+    );
+    expect(repo.readUsageAnalytics).toHaveBeenCalledWith({
+      ...query,
+      zone: "Asia/Shanghai",
+      now,
+    });
+    expect(result).toMatchObject({
+      ...snapshot,
+      bucketZone: "Asia/Shanghai",
+      zoneFallback: false,
+    });
+  });
+  it("falls back globally to UTC for unsupported zones and reports that fallback", async () => {
+    const repo = {
+      isKnownTimeZone: vi.fn(),
+      readUsageAnalytics: vi.fn(async () => snapshot),
+    };
+    const service = new MeteringReadService(repo as never);
+    const result = await service.getUsageAnalytics({
+      ...query,
+      zone: "Mars/Olympus",
+    });
+    expect(repo.isKnownTimeZone).not.toHaveBeenCalled();
+    expect(repo.readUsageAnalytics).toHaveBeenCalledWith(
+      expect.objectContaining({ zone: "UTC" }),
+    );
+    expect(result.zoneFallback).toBe(true);
+  });
+  it("does not turn a database failure into zero usage", async () => {
+    const repo = {
+      readUsageAnalytics: vi.fn(async () => {
+        throw new Error("unavailable");
+      }),
+    };
+    const service = new MeteringReadService(repo as never);
+    await expect(service.getUsageAnalytics(query)).rejects.toThrow(
+      "unavailable",
+    );
+  });
+});

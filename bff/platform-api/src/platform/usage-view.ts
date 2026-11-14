@@ -406,6 +406,7 @@ const PROVIDER_CODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 export interface ParsedTokenConsumeBody {
   kind: "tokens";
   workspaceId: string;
+  endUserId?: string;
   /** 调用方产品码（act.sub），不是 atlas。 */
   productCode: string;
   requestId: string;
@@ -480,6 +481,13 @@ export function parseConsumeRequest(
   const workspaceId =
     typeof body.workspace_id === "string" ? body.workspace_id.trim() : "";
   if (!UUID_RE.test(workspaceId)) throw new Error("invalid_workspace_id");
+  let endUserId: string | undefined;
+  if (body.end_user_id != null && body.end_user_id !== "") {
+    const raw =
+      typeof body.end_user_id === "string" ? body.end_user_id.trim() : "";
+    if (!UUID_RE.test(raw)) throw new Error("invalid_end_user_id");
+    endUserId = raw;
+  }
   const productCode = typeof body.product === "string" ? body.product : "";
   if (!PRODUCT_CODE_RE.test(productCode)) throw new Error("invalid_product");
   const requestId = typeof body.request_id === "string" ? body.request_id : "";
@@ -552,6 +560,7 @@ export function parseConsumeRequest(
   return {
     kind: "tokens",
     workspaceId,
+    ...(endUserId ? { endUserId } : {}),
     productCode,
     requestId,
     attemptIndex,
