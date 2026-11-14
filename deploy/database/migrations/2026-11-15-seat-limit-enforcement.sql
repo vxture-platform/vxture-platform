@@ -123,6 +123,11 @@ BEGIN
 
   IF v_ws IS NOT NULL THEN
     BEGIN
+      -- Existing seats must not collide with the synthetic full-capacity set.
+      -- VX001 rolls this release back together with every probe insertion.
+      UPDATE metering.product_seats SET revoked_at = now()
+       WHERE workspace_id = v_ws AND product_id = v_prod AND revoked_at IS NULL;
+
       SELECT array_agg(user_id) INTO v_users FROM (
         SELECT user_id FROM tenancy.workspace_memberships
          WHERE workspace_id = v_ws ORDER BY user_id LIMIT v_max
