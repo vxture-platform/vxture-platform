@@ -32,7 +32,7 @@ import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { PageSection } from "@/layout/shell";
+import { PageSection, SectionBody } from "@/layout/shell";
 import { fmtCount } from "@/lib/format-metrics";
 import { formatTimezone } from "@/lib/display-format";
 
@@ -350,12 +350,14 @@ export function UsagePage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <p className="text-body-sm text-muted-foreground">
-          {t("notes.naturalScope")}
-        </p>
-        <p className="text-body-sm text-muted-foreground">
-          {t("notes.attributionBody")}
-        </p>
+        <SectionBody>
+          <p className="text-body-sm text-muted-foreground">
+            {t("notes.naturalScope")}
+          </p>
+          <p className="text-body-sm text-muted-foreground">
+            {t("notes.attributionBody")}
+          </p>
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );
