@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime, formatClock } from "@vxture-platform/shared";
 import {
   BarChart,
   Button,
@@ -167,24 +168,14 @@ export function UsagePage() {
   );
 
   const formatRange = (value: string, zone: string): string =>
-    new Intl.DateTimeFormat(locale, {
-      timeZone: zone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).format(new Date(value));
+    formatDateTime(value, locale, "—", { timeZone: zone });
   // Hours use UTC keys to distinguish repeated DST hours; other keys are civil dates.
   const periodLabel = (period: string): string => {
     if (window === "hour") {
-      return new Intl.DateTimeFormat(locale, {
+      return formatClock(`${period.replace(" ", "T")}:00Z`, locale, "—", {
+        time: "short",
         timeZone: current?.bucketZone ?? "UTC",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      }).format(new Date(`${period.replace(" ", "T")}:00Z`));
+      });
     }
     if (window === "month") return period.slice(0, 7);
     return period.slice(5, 10);
