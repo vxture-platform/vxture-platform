@@ -158,12 +158,25 @@ BEGIN
     FROM metering.subscriptions s
     JOIN product.plan_components pc ON pc.plan_version_id = s.plan_version_id
     JOIN tenancy.workspace_memberships wm ON wm.workspace_id = s.workspace_id
+    LEFT JOIN metering.product_seats occupied
+      ON occupied.workspace_id = s.workspace_id
+     AND occupied.product_id = pc.product_id
+     AND occupied.user_id = wm.user_id
+     AND occupied.revoked_at IS NULL
    WHERE s.deleted_at IS NULL
      AND s.status IN ('active','trialing','expiring','overdue')
+   -- Prefer an occupied candidate so a full product has a slot to reuse.
+   ORDER BY occupied.id NULLS LAST
    LIMIT 1;
 
   IF v_ws IS NOT NULL THEN
     BEGIN
+      -- Release this candidate only inside the rollback-only probe. Its real
+      -- seat is restored together with every probe write by VX001 below.
+      UPDATE metering.product_seats SET revoked_at = now()
+       WHERE workspace_id = v_ws AND product_id = v_prod AND user_id = v_user
+         AND revoked_at IS NULL;
+
       INSERT INTO metering.product_seats (workspace_id, user_id, product_id, subscription_id)
       VALUES (v_ws, v_user, v_prod, v_sub)
       RETURNING id INTO v_seat;
