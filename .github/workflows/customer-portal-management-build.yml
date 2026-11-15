@@ -1,0 +1,181 @@
+# Targeted builds for customer portal management surfaces. This workflow never deploys.
+# @package @vxture/repo
+# @layer Infrastructure
+# @category workflow
+# @author AI-Generated
+# @date 2026-11-16
+name: customer-portal-management-build
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Build environment and approval policy
+        type: choice
+        options: [develop, beta, production]
+        default: develop
+      publish:
+        description: Publish validated images to GHCR and configured ACR
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: customer-portal-management-build-${{ inputs.environment }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # Isolated regression gate; no application services are deployed
+  # ===========================================================================
+  validate:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
+      - name: Resolve management images from the canonical catalog
+        id: matrix
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { IMAGES } from './scripts/workflows/images.mjs';
+          const names = ['platform_admin', 'platform_console', 'platform_bff-admin', 'platform_bff-console'];
+          const include = names.map((name) => {
+            const matches = IMAGES.filter((entry) => entry.name === name);
+            if (matches.length !== 1) throw new Error('Missing or duplicate canonical image: ' + name);
+            return matches[0];
+          });
+          appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify({ include }) + '\n');
+          NODE
+      - name: Validate deployment behavior and column permissions
+        run: |
+          bash deploy/scripts/lib/customer-portal-deploy.test.sh
+          node scripts/guardrails/check-column-locks.mjs
+          node scripts/guardrails/check-anchor-writes.mjs
+      - name: Build BFF dependencies and validate portal packages
+        env:
+          CUSTOMER_PORTAL_TEST_DATABASE_URL: postgresql://postgres@localhost:5432/postgres
+        run: |
+          pnpm --filter @vxture/bff-customer-portal build
+          pnpm --filter @vxture/service-customer-portal type-check
+          pnpm --filter @vxture/bff-customer-portal type-check
+          pnpm --filter @vxture/service-customer-portal test
+          pnpm --filter @vxture/bff-customer-portal test
+          pnpm --filter @vxture/bff-console exec vitest run src/routers/customer-portal.http.spec.ts
+
+  # ===========================================================================
+  # Four management images; publication requires an explicit workflow input
+  # ===========================================================================
+  images:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Resolve registry configuration
+        id: acr
+        env:
+          ALIYUN_ACR_REGISTRY: ${{ vars.ALIYUN_ACR_REGISTRY }}
+          ALIYUN_ACR_INTERNAL_HOST: ${{ vars.ALIYUN_ACR_INTERNAL_HOST }}
+          ALIYUN_ACR_NAMESPACE: ${{ vars.ALIYUN_ACR_NAMESPACE }}
+          ALIYUN_ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        run: bash scripts/workflows/resolve-acr-registry.sh
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        if: inputs.publish
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        if: inputs.publish && steps.acr.outputs.acr_enabled == 'true'
+        with:
+          registry: ${{ steps.acr.outputs.acr_registry_public }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+      - name: Validate admin build configuration
+        if: matrix.name == 'platform_admin'
+        env:
+          ADMIN_BASE_URL: ${{ vars.ADMIN_BASE_URL }}
+        run: |
+          node --input-type=module <<'NODE'
+          const url = new URL(process.env.ADMIN_BASE_URL);
+          if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+            throw new Error('ADMIN_BASE_URL must be an HTTPS origin without credentials');
+          }
+          NODE
+      - name: Resolve image references
+        id: refs
+        env:
+          OWNER: ${{ github.repository_owner }}
+          IMAGE: ${{ matrix.name }}
+          ACR_ENABLED: ${{ steps.acr.outputs.acr_enabled }}
+          ACR_ROOT: ${{ steps.acr.outputs.acr_registry_public }}/${{ steps.acr.outputs.acr_namespace }}
+          BUILD_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/${OWNER,,}/$IMAGE"
+          case "$BUILD_ENVIRONMENT" in develop) stage=dev ;; *) stage="$BUILD_ENVIRONMENT" ;; esac
+          {
+            echo "repository=$repo"
+            echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            case "$BUILD_ENVIRONMENT" in develop) echo 'stage=dev' ;; *) echo "stage=$BUILD_ENVIRONMENT" ;; esac
+            echo 'tags<<IMAGE_REFS'
+            echo "$repo:management-$stage-sha-$GITHUB_SHA"
+            if [ "$ACR_ENABLED" = true ]; then echo "$ACR_ROOT/$IMAGE:management-$stage-sha-$GITHUB_SHA"; fi
+            echo IMAGE_REFS
+          } >> "$GITHUB_OUTPUT"
+      - name: Build management image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: runner
+          platforms: linux/amd64
+          push: ${{ inputs.publish }}
+          load: ${{ !inputs.publish }}
+          tags: ${{ steps.refs.outputs.tags }}
+          build-args: |
+            ${{ matrix.build-args }}
+            NEXT_PUBLIC_ADMIN_BFF_URL=${{ vars.ADMIN_BASE_URL }}
+            NEXT_PUBLIC_ARCHE_URL=${{ vars.ARCHE_BASE_URL }}
+            APP_VERSION=sha-${{ github.sha }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_TIME=${{ steps.refs.outputs.build_time }}
+            DEPLOY_STAGE=${{ steps.refs.outputs.stage }}
+          secrets: |
+            node_auth_token=${{ secrets.NODE_AUTH_TOKEN || github.token }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+      - name: Record immutable release reference
+        if: inputs.publish
+        env:
+          REPOSITORY: ${{ steps.refs.outputs.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: printf '%s@%s\n' "$REPOSITORY" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
