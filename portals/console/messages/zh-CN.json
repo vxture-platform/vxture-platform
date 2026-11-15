@@ -2545,6 +2545,7 @@
     "title": "用量分析",
     "loading": "正在读取所选范围的用量…",
     "globalScope": "以下概览、时间分布、产品分布与用户分布共用所选周期和当前工作空间。",
+    "scopeDetails": "查看统计范围与时区",
     "range": "统计范围：{from} 至 {to}（{zone}，截至当前时刻）",
     "zoneFallback": "账号时区无法识别，所有维度已统一使用 UTC；请到账号信息页重新选择时区。",
     "description": "工作空间的 AI Credits 用量:趋势、产品构成与成员分布一眼看完",
@@ -2559,15 +2560,15 @@
       "creditsUnit": "AI Credits"
     },
     "trend": {
-      "title": "用量趋势",
+      "title": "按周期用量",
       "description": "按周期查看 AI Credits 消耗;桶按 {zone} 日切分,窗口内没有用量的周期记 0。统计口径为纯看板数据,不作计费依据",
       "windowLabel": "统计周期",
-      "windowDay": "近 30 天",
+      "windowDay": "本月",
       "windowWeek": "近 12 周",
       "windowMonth": "近 12 个月",
-      "naturalDescription": "按所选时区的自然周期汇总；小时从整点、日从零点、周从周一、月从 1 日开始，当前周期截至当前时刻，无用量记 0。",
+      "naturalDescription": "按所选时区汇总：今日从 00:00:00 起按小时、本月从 1 日 00:00:00 起按日统计；近 12 周、近 12 个月按自然周、自然月滚动。范围截至当前时刻，无用量记 0。",
       "empty": "所选周期内暂无用量数据",
-      "windowHour": "近 24 小时",
+      "windowHour": "今日",
       "descriptionHour": "近 24 小时逐时消耗;横轴按 {zone} 显示。统计口径为纯看板数据,不作计费依据",
       "descriptionHourBrowser": "近 24 小时逐时消耗;横轴已换算为浏览器所在时区的时刻。统计口径为纯看板数据,不作计费依据",
       "statTotal": "窗口合计",
@@ -2581,14 +2582,17 @@
     },
     "share": {
       "title": "按产品分布",
-      "emptyZero": "产品用量合计 0 AI Credits，当前工作空间没有可展示的产品。",
-      "description": "当前窗口内各产品的用量构成;占比按窗口合计计算",
+      "emptyZero": "当前范围内 L2/L3 产品用量为 0",
+      "description": "所选范围内 L2 平台级、L3 智能体级产品的用量构成；占比按这些产品的用量合计计算，不包含 L1 能力层。",
       "empty": "暂无产品消耗数据"
     },
     "members": {
       "title": "按用户分布",
       "description": "所选范围内各用户的用量；包含零用量成员，产品未上报使用者的部分归入未归集。",
       "empty": "近 30 天暂无成员用量"
+    },
+    "breakdown": {
+      "share": "占比"
     },
     "chartPeak": "峰值",
     "filters": {},

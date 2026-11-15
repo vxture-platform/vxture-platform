@@ -2545,6 +2545,7 @@
     "title": "Usage Analytics",
     "loading": "Loading usage for the selected range…",
     "globalScope": "Overview, time, product and user distributions share the selected period and current workspace.",
+    "scopeDetails": "View reporting range and timezone",
     "range": "Range: {from} to {to} ({zone}, through the current time)",
     "zoneFallback": "Your account timezone is not recognised. All dimensions use UTC; choose your timezone again on the account page.",
     "description": "AI Credits usage for this workspace: trend, product mix and member split at a glance",
@@ -2559,15 +2560,15 @@
       "creditsUnit": "AI Credits"
     },
     "trend": {
-      "title": "Usage trend",
+      "title": "Usage by period",
       "description": "AI Credits consumption by period; buckets are cut on {zone} days and periods without usage show 0. Dashboard figures only — never a billing basis",
       "windowLabel": "Period",
-      "windowDay": "30 days",
+      "windowDay": "This month",
       "windowWeek": "12 weeks",
       "windowMonth": "12 months",
-      "naturalDescription": "Calendar periods in the selected timezone start on the hour, at midnight, on Monday or on the first of the month. The current period ends now; periods without usage show 0.",
+      "naturalDescription": "In the selected timezone, Today starts at 00:00:00 with hourly buckets and This month starts on day 1 at 00:00:00 with daily buckets. The last 12 weeks and 12 months roll by calendar week and month. All ranges end now; periods without usage show 0.",
       "empty": "No usage data in this period",
-      "windowHour": "24 hours",
+      "windowHour": "Today",
       "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in {zone}. Dashboard figures only — never a billing basis",
       "descriptionHourBrowser": "Hourly consumption over the last 24 hours; the axis is shown in your browser's local time. Dashboard figures only — never a billing basis",
       "statTotal": "Window total",
@@ -2581,14 +2582,17 @@
     },
     "share": {
       "title": "By product",
-      "emptyZero": "Product usage totals 0 AI Credits. This workspace has no products to display.",
-      "description": "Product mix within the current window; share is against the window total",
+      "emptyZero": "L2/L3 product usage is 0 in this range",
+      "description": "Usage across L2 platforms and L3 agents in the selected range. Shares use their combined usage and exclude L1 capabilities.",
       "empty": "No product consumption yet"
     },
     "members": {
       "title": "By user",
       "description": "User usage within the selected range, including members with zero usage. Calls without a reported user are Unattributed.",
       "empty": "No member usage in the last 30 days"
+    },
+    "breakdown": {
+      "share": "Share"
     },
     "chartPeak": "Peak",
     "filters": {},

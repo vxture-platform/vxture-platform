@@ -18,6 +18,10 @@ import {
   Icon,
   MetricGrid,
   SegmentedControl,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
@@ -36,32 +40,6 @@ import {
 import { PageSection, SectionBody } from "@/layout/shell";
 import { fmtCount } from "@/lib/format-metrics";
 import { formatTimezone } from "@/lib/display-format";
-
-// ============================================================================
-// Readouts
-// ============================================================================
-
-function ShareLegend({
-  items,
-}: {
-  items: { key: string; name: string; value: number; percent: number }[];
-}) {
-  return (
-    <ul className="flex flex-wrap gap-x-lg gap-y-sm text-body-sm">
-      {items.map((item) => (
-        <li key={item.key} className="flex items-baseline gap-xs">
-          <span className="text-foreground">{item.name}</span>
-          <span className="tabular-nums font-medium text-foreground">
-            {fmtCount(item.value)}
-          </span>
-          <span className="tabular-nums text-muted-foreground">
-            {item.percent}%
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 // ============================================================================
 // Global scope and data
@@ -114,15 +92,20 @@ export function UsagePage() {
 
   const total =
     current?.buckets.reduce((sum, bucket) => sum + bucket.total, 0) ?? 0;
+  const productTotal =
+    current?.products.reduce((sum, product) => sum + product.total, 0) ?? 0;
   const products = useMemo(
     () =>
       current?.products.map((product) => ({
         key: product.productCode,
         name: product.productName,
         value: product.total,
-        percent: total > 0 ? Math.round((product.total / total) * 100) : 0,
+        percent:
+          productTotal > 0
+            ? Math.round((product.total / productTotal) * 100)
+            : 0,
       })) ?? [],
-    [current, total],
+    [current, productTotal],
   );
   const members = useMemo(
     () =>
@@ -173,11 +156,11 @@ export function UsagePage() {
   const periodLabel = (period: string): string => {
     if (window === "hour") {
       return formatClock(`${period.replace(" ", "T")}:00Z`, locale, "—", {
-        time: "short",
+        time: "long",
         timeZone: current?.bucketZone ?? "UTC",
       });
     }
-    if (window === "month") return period.slice(0, 7);
+    if (window === "month") return `${period.slice(0, 7)}-01`;
     return period.slice(5, 10);
   };
   const content = (chart: React.ReactNode) =>
@@ -198,48 +181,67 @@ export function UsagePage() {
   return (
     <ViewLayout>
       <ViewHeader
+        className="[&>div:last-child]:max-w-full"
         icon="chart-line"
         title={t("title")}
         description={t("description")}
         action={
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => router.push("/usage/records")}
-          >
-            <Icon name="search" size="xs" fallback="placeholder" />
-            <span>{t("viewRecords")}</span>
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-sm">
+            <SegmentedControl<ConsoleUsageWindow>
+              ariaLabel={t("trend.windowLabel")}
+              value={window}
+              onChange={setWindow}
+              size="sm"
+              fill={false}
+              items={[
+                { value: "hour", label: t("trend.windowHour") },
+                { value: "day", label: t("trend.windowDay") },
+                { value: "week", label: t("trend.windowWeek") },
+                { value: "month", label: t("trend.windowMonth") },
+              ]}
+            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("scopeDetails")}
+                  >
+                    <Icon name="info" size="sm" fallback="placeholder" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" variant="surface">
+                  <div className="flex flex-col gap-sm text-body-sm">
+                    <p>{t("globalScope")}</p>
+                    {current ? (
+                      <p>
+                        {t("range", {
+                          from: formatRange(current.from, current.bucketZone),
+                          to: formatRange(current.to, current.bucketZone),
+                          zone: formatTimezone(
+                            current.bucketZone,
+                            current.bucketZone,
+                          ),
+                        })}
+                      </p>
+                    ) : null}
+                    {current?.zoneFallback ? <p>{t("zoneFallback")}</p> : null}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/usage/records")}
+            >
+              <Icon name="search" size="xs" fallback="placeholder" />
+              <span>{t("viewRecords")}</span>
+            </Button>
+          </div>
         }
       />
-      <div className="flex flex-col gap-sm">
-        <SegmentedControl<ConsoleUsageWindow>
-          ariaLabel={t("trend.windowLabel")}
-          value={window}
-          onChange={setWindow}
-          items={[
-            { value: "hour", label: t("trend.windowHour") },
-            { value: "day", label: t("trend.windowDay") },
-            { value: "week", label: t("trend.windowWeek") },
-            { value: "month", label: t("trend.windowMonth") },
-          ]}
-        />
-        <p className="text-body-sm text-muted-foreground">{t("globalScope")}</p>
-        {current ? (
-          <p className="text-body-sm text-muted-foreground">
-            {t("range", {
-              from: formatRange(current.from, current.bucketZone),
-              to: formatRange(current.to, current.bucketZone),
-              zone: formatTimezone(current.bucketZone, current.bucketZone),
-            })}
-          </p>
-        ) : null}
-        {current?.zoneFallback ? (
-          <p role="status" className="text-body-sm text-muted-foreground">
-            {t("zoneFallback")}
-          </p>
-        ) : null}
-      </div>
       {failed ? (
         <LoadFailedBanner
           onRetry={() => setReloadKey((key) => key + 1)}
@@ -255,6 +257,7 @@ export function UsagePage() {
       <PageSection
         icon="chart-line"
         level={2}
+        tone="glass"
         title={t("trend.title")}
         description={t("trend.naturalDescription")}
       >
@@ -270,6 +273,7 @@ export function UsagePage() {
                   key: bucket.period,
                   label: periodLabel(bucket.period),
                   value: bucket.total,
+                  description: `${t("metrics.creditsUnit")} · ${total > 0 ? Math.round((bucket.total / total) * 100) : 0}% ${t("breakdown.share")}`,
                 })) ?? []
               }
             />
@@ -286,6 +290,7 @@ export function UsagePage() {
       <PageSection
         icon="chart-pie"
         level={2}
+        tone="glass"
         title={t("share.title")}
         description={t("share.description")}
       >
@@ -297,23 +302,23 @@ export function UsagePage() {
                 aria-label={t("share.title")}
                 peakLabel={t("chartPeak")}
                 formatValue={fmtCount}
-                labelEvery={1}
                 data={products.map((product) => ({
                   key: product.key,
                   label: product.name,
                   value: product.value,
+                  description: `${t("metrics.creditsUnit")} · ${product.percent}% ${t("breakdown.share")}`,
                 }))}
               />
             ) : (
               <p className="text-body-sm">{t("share.emptyZero")}</p>
             )}
-            <ShareLegend items={products} />
           </div>,
         )}
       </PageSection>
       <PageSection
         icon="users"
         level={2}
+        tone="glass"
         title={t("members.title")}
         description={t("members.description")}
       >
@@ -324,14 +329,13 @@ export function UsagePage() {
               aria-label={t("members.title")}
               peakLabel={t("chartPeak")}
               formatValue={fmtCount}
-              labelEvery={1}
               data={members.map((member) => ({
                 key: member.key,
                 label: member.name,
                 value: member.value,
+                description: `${t("metrics.creditsUnit")} · ${member.percent}% ${t("breakdown.share")}`,
               }))}
             />
-            <ShareLegend items={members} />
           </div>,
         )}
       </PageSection>
