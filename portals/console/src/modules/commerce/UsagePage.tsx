@@ -38,32 +38,6 @@ import { fmtCount } from "@/lib/format-metrics";
 import { formatTimezone } from "@/lib/display-format";
 
 // ============================================================================
-// Readouts
-// ============================================================================
-
-function ShareLegend({
-  items,
-}: {
-  items: { key: string; name: string; value: number; percent: number }[];
-}) {
-  return (
-    <ul className="flex flex-wrap gap-x-lg gap-y-sm text-body-sm">
-      {items.map((item) => (
-        <li key={item.key} className="flex items-baseline gap-xs">
-          <span className="text-foreground">{item.name}</span>
-          <span className="tabular-nums font-medium text-foreground">
-            {fmtCount(item.value)}
-          </span>
-          <span className="tabular-nums text-muted-foreground">
-            {item.percent}%
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ============================================================================
 // Global scope and data
 // ============================================================================
 
@@ -255,6 +229,7 @@ export function UsagePage() {
       <PageSection
         icon="chart-line"
         level={2}
+        tone="glass"
         title={t("trend.title")}
         description={t("trend.naturalDescription")}
       >
@@ -270,6 +245,7 @@ export function UsagePage() {
                   key: bucket.period,
                   label: periodLabel(bucket.period),
                   value: bucket.total,
+                  description: `${t("metrics.creditsUnit")} · ${total > 0 ? Math.round((bucket.total / total) * 100) : 0}% ${t("breakdown.share")}`,
                 })) ?? []
               }
             />
@@ -286,6 +262,7 @@ export function UsagePage() {
       <PageSection
         icon="chart-pie"
         level={2}
+        tone="glass"
         title={t("share.title")}
         description={t("share.description")}
       >
@@ -297,23 +274,23 @@ export function UsagePage() {
                 aria-label={t("share.title")}
                 peakLabel={t("chartPeak")}
                 formatValue={fmtCount}
-                labelEvery={1}
                 data={products.map((product) => ({
                   key: product.key,
                   label: product.name,
                   value: product.value,
+                  description: `${t("metrics.creditsUnit")} · ${product.percent}% ${t("breakdown.share")}`,
                 }))}
               />
             ) : (
               <p className="text-body-sm">{t("share.emptyZero")}</p>
             )}
-            <ShareLegend items={products} />
           </div>,
         )}
       </PageSection>
       <PageSection
         icon="users"
         level={2}
+        tone="glass"
         title={t("members.title")}
         description={t("members.description")}
       >
@@ -324,14 +301,13 @@ export function UsagePage() {
               aria-label={t("members.title")}
               peakLabel={t("chartPeak")}
               formatValue={fmtCount}
-              labelEvery={1}
               data={members.map((member) => ({
                 key: member.key,
                 label: member.name,
                 value: member.value,
+                description: `${t("metrics.creditsUnit")} · ${member.percent}% ${t("breakdown.share")}`,
               }))}
             />
-            <ShareLegend items={members} />
           </div>,
         )}
       </PageSection>

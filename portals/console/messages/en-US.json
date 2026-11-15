@@ -2559,7 +2559,7 @@
       "creditsUnit": "AI Credits"
     },
     "trend": {
-      "title": "Usage trend",
+      "title": "Usage by period",
       "description": "AI Credits consumption by period; buckets are cut on {zone} days and periods without usage show 0. Dashboard figures only — never a billing basis",
       "windowLabel": "Period",
       "windowDay": "30 days",
@@ -2589,6 +2589,9 @@
       "title": "By user",
       "description": "User usage within the selected range, including members with zero usage. Calls without a reported user are Unattributed.",
       "empty": "No member usage in the last 30 days"
+    },
+    "breakdown": {
+      "share": "Share"
     },
     "chartPeak": "Peak",
     "filters": {},

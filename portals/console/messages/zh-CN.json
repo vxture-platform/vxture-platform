@@ -2559,7 +2559,7 @@
       "creditsUnit": "AI Credits"
     },
     "trend": {
-      "title": "用量趋势",
+      "title": "按周期用量",
       "description": "按周期查看 AI Credits 消耗;桶按 {zone} 日切分,窗口内没有用量的周期记 0。统计口径为纯看板数据,不作计费依据",
       "windowLabel": "统计周期",
       "windowDay": "近 30 天",
@@ -2589,6 +2589,9 @@
       "title": "按用户分布",
       "description": "所选范围内各用户的用量；包含零用量成员，产品未上报使用者的部分归入未归集。",
       "empty": "近 30 天暂无成员用量"
+    },
+    "breakdown": {
+      "share": "占比"
     },
     "chartPeak": "峰值",
     "filters": {},
