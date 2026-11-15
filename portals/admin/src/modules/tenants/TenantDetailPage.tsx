@@ -104,12 +104,14 @@ import {
   VERIFICATION_TONE,
   verifiedLabel,
 } from "./tenant-utils";
+import { CustomerPortalPanel } from "./CustomerPortalPanel";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 import { formatPrincipalNoOr } from "@vxture-platform/shared";
 
 // 「模型授权」页签 2026-08-30 删除：模型用量归 Atlas，平台库没有这份数据，
 // 那一页从来只渲染过空表——一个永远为空的页签比没有页签更误导。
 type TenantTabId =
+  | "portal"
   | "info"
   | "members"
   | "subscriptions"
@@ -172,6 +174,7 @@ type TenantInfoDraft = {
 };
 
 const tenantTabs: Array<{ id: TenantTabId; label: string; icon: IconName }> = [
+  { id: "portal", label: "专属门户", icon: "buildings" },
   { id: "info", label: "租户信息", icon: "buildings" },
   { id: "members", label: "成员账号", icon: "user" },
   { id: "subscriptions", label: "订阅产品", icon: "star" },
@@ -2381,7 +2384,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               className="h-auto max-w-full flex-wrap justify-start"
               aria-label={`${tenant.tenantName} 信息分区`}
             >
-              {tenantTabs.map((tab) => (
+              {tenantTabs.filter(tab => tab.id !== "portal" || tenant.tenantType === "company").map((tab) => (
                 <TabsTrigger key={tab.id} value={tab.id} className="flex-none">
                   <Icon name={tab.icon} size="xs" fallback="placeholder" />
                   {tab.label}
@@ -2419,6 +2422,9 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
             ) : null}
           </div>
 
+          <TabsContent value="portal" className="min-w-0">
+            {tenant.tenantType === "company" && <CustomerPortalPanel key={tenant.id} tenantId={tenant.id} workspaces={tenant.workspaces} />}
+          </TabsContent>
           <TabsContent value="info" className="min-w-0">
             <TenantInfoTab
               tenant={tenant}

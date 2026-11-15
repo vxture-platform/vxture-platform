@@ -1,0 +1,76 @@
+# Dedicated customer portal stack.
+# @package @vxture/repo
+# @layer Infrastructure
+# @category deployment
+# @author AI-Generated
+# @date 2026-11-15
+
+name: vx-customer-portal
+
+services:
+  frontend:
+    image: ${CUSTOMER_PORTAL_FRONTEND_IMAGE:?Set the customer portal frontend image}
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.nextjs
+      args:
+        PORTAL_PATH: portals/customer-portal
+        PACKAGE_FILTER: '@vxture/customer-portal'
+      secrets: [node_auth_token]
+    restart: unless-stopped
+    mem_limit: 384m
+    cpus: 0.75
+    pids_limit: 160
+    environment:
+      CUSTOMER_PORTAL_BFF_URL: http://bff:3000
+      CUSTOMER_PORTAL_BFF_TOKEN: ${CUSTOMER_PORTAL_BFF_TOKEN:?Set a dedicated proxy token}
+    networks:
+      private:
+      edge:
+        aliases: [vx-customer-portal-frontend]
+    healthcheck:
+      test: [CMD, curl, -fsSI, http://127.0.0.1:3000/images/agent-robot.png]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  bff:
+    image: ${CUSTOMER_PORTAL_BFF_IMAGE:?Set the customer portal BFF image}
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.nestjs
+      args:
+        SERVICE_PATH: bff/customer-portal
+        PACKAGE_FILTER: '@vxture/bff-customer-portal'
+      secrets: [node_auth_token]
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.75
+    pids_limit: 160
+    environment:
+      CUSTOMER_PORTAL_BFF_PORT: '3000'
+      CUSTOMER_PORTAL_BFF_TOKEN: ${CUSTOMER_PORTAL_BFF_TOKEN:?Set a dedicated proxy token}
+      CUSTOMER_PORTAL_DATABASE_URL: ${CUSTOMER_PORTAL_DATABASE_URL:?Set the read-only portal database URL}
+      CUSTOMER_PORTAL_REDIS_URL: ${CUSTOMER_PORTAL_REDIS_URL:?Set the portal Redis URL}
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set the customer IdP HTTPS origin}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set the independent customer portal client ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set the customer portal client secret}
+      OIDC_BACKCHANNEL_ISSUER: ${OIDC_BACKCHANNEL_ISSUER:-}
+    networks: [private]
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:3000/healthz]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+networks:
+  private:
+  edge:
+    external: true
+    name: vxture-prod
+
+secrets:
+  node_auth_token:
+    environment: NODE_AUTH_TOKEN

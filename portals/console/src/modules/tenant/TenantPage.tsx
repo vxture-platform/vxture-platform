@@ -71,6 +71,7 @@ import {
   type TenantDraftPatch,
   type ContactOption,
 } from "./TenantFormCards";
+import { CustomerPortalPanel } from "./CustomerPortalPanel";
 import { TenantDangerCard } from "./TenantDangerCard";
 import { ConvertTenantDialog } from "./ConvertTenantDialog";
 import { CloseTenantDialog } from "./CloseTenantDialog";
@@ -530,6 +531,7 @@ export function TenantPage() {
         readOnly={!canManage || loading}
       />
       <TenantPolicyCard />
+      {isOrg && canManage && session.tenant?.id && <CustomerPortalPanel key={session.tenant.id} tenantId={session.tenant.id} />}
 
       {/* 危险操作只有注销(走查 2026-09-05);个人租户随账号删除,不显示本卡 */}
       {isOrg ? (

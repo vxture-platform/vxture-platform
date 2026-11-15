@@ -32,6 +32,7 @@ import { AnnouncementsRouter } from "./routers/announcements.router";
 import { AuthRouter } from "./routers/auth.router";
 import { CapabilitiesRouter } from "./routers/capabilities.router";
 import { DashboardRouter } from "./routers/dashboard.router";
+import { CustomerPortalRouter } from "./routers/customer-portal.router";
 import { HealthRouter } from "./routers/health.router";
 import { MeRouter } from "./routers/me.router";
 import { OperatorStepUpRouter } from "./routers/operator-stepup.router";
@@ -68,6 +69,7 @@ import { SearchRouter } from "./routers/search.router";
     // back to the operator governance face only.
   ],
   controllers: [
+    CustomerPortalRouter,
     HealthRouter,
     AuthRouter,
     MeRouter,

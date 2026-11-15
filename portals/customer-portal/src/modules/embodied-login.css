@@ -1,0 +1,444 @@
+/**
+ * Full-bleed institutional gateway with a physical-world spatial scene.
+ * @package @vxture/customer-portal
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-11-15
+ */
+
+/* ========================================================================== */
+/* Immersive scene and institution header */
+/* ========================================================================== */
+.embodied-gateway {
+  min-height: 100svh;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #07111b;
+  color: #f3f7f9;
+  display: flex;
+  flex-direction: column;
+  padding: 37px 4.4% 23px;
+}
+.embodied-scene,
+.embodied-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+}
+.embodied-spatial-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.embodied-background {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+}
+.embodied-vignette {
+  z-index: -1;
+  background:
+    linear-gradient(90deg, #06101b66, transparent 47%, #050d17ad 90%),
+    linear-gradient(180deg, #07121c70, transparent 35%, #060e1880 85%, #060e18);
+}
+.embodied-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+.embodied-header .research-brand-name {
+  font-size: 21px;
+  letter-spacing: 2px;
+}
+.embodied-header .research-brand-caption {
+  font-size: 10px;
+  letter-spacing: 3.5px;
+  margin-top: 7px;
+  color: #9bafb9;
+}
+.embodied-header .research-logo {
+  width: 45px;
+  height: 45px;
+  color: #d1e3e9;
+}
+.embodied-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: #91a3af;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.embodied-header-meta > span:first-child {
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+.embodied-header-meta i,
+.embodied-footer i {
+  width: 1px;
+  height: 12px;
+  background: #43505b;
+}
+
+/* ========================================================================== */
+/* Industry context and dedicated access panel */
+/* ========================================================================== */
+.embodied-body {
+  width: 100%;
+  max-width: 1600px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 368px;
+  gap: 70px;
+  padding: 72px 0 85px;
+  align-items: start;
+}
+.embodied-positioning {
+  padding-top: 14px;
+}
+.embodied-kicker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #a4bac5;
+}
+.embodied-kicker > span {
+  width: 21px;
+  height: 2px;
+  background: #8fd0c9;
+}
+.embodied-positioning h1 {
+  white-space: pre-line;
+  font-weight: 500;
+  font-size: clamp(42px, 4vw, 66px);
+  line-height: 1.35;
+  letter-spacing: 4px;
+  margin: 28px 0 21px;
+  text-shadow: 0 3px 30px #06101a;
+}
+.embodied-description {
+  max-width: 410px;
+  color: #a3b6c2;
+  font-size: 12px;
+  line-height: 2;
+  letter-spacing: 1px;
+  margin: 0;
+}
+.embodied-domains {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-top: 26px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #d0dce2;
+}
+.embodied-domains b {
+  color: #55707f;
+  font-weight: 400;
+}
+.embodied-access {
+  padding: 30px 32px 0;
+  background: #f5f7f7;
+  color: #24323d;
+  border: 1px solid #c3d0d9;
+  box-shadow: 0 20px 80px #0005;
+  border-radius: 3px;
+}
+.embodied-access-top {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: #89969f;
+  letter-spacing: 1.7px;
+  font-size: 8px;
+  margin-bottom: 28px;
+}
+.embodied-access-mark {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 34px;
+  border: 1px solid #d8e0e3;
+  color: #5d7787;
+  border-radius: 3px;
+}
+.embodied-access h2 {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  margin: 0 0 16px;
+}
+.embodied-access-description {
+  color: #84919a;
+  font-size: 11px;
+  line-height: 1.9;
+  margin: 0;
+  max-width: 260px;
+}
+.embodied-access-error {
+  color: #8a272b;
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 16px 0 0;
+}
+.embodied-auth-provider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 34px 0 13px;
+  color: #647581;
+  font-size: 11px;
+}
+.embodied-auth-code {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #9ba8af;
+}
+.embodied-sign-in {
+  position: relative;
+  display: flex !important;
+  justify-content: center !important;
+  width: 100%;
+  height: 48px;
+  border-radius: 3px !important;
+  padding: 0 17px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: white !important;
+  background: var(--portal-brand) !important;
+}
+.embodied-sign-in-arrow {
+  position: absolute;
+  right: 17px;
+  display: flex;
+  align-items: center;
+}
+.embodied-sign-in:hover {
+  filter: brightness(1.1);
+}
+.embodied-access-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 13px 0 0;
+  font-size: 10px;
+  color: #8c9aa3;
+}
+.embodied-access-divider {
+  height: 1px;
+  background: #dce3e6;
+  margin: 27px 0 22px;
+}
+.embodied-access-support > span {
+  color: #637581;
+  font-size: 10px;
+}
+.embodied-access-support p {
+  color: #939fa7;
+  font-size: 10px;
+  line-height: 1.8;
+  margin: 7px 0 27px;
+}
+.embodied-access-bottom {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #dce3e6;
+  margin: 0 -32px;
+  padding: 14px 32px;
+  color: #7c8d98;
+  font-size: 9px;
+  letter-spacing: 1px;
+  background: #eaf0f2;
+}
+
+/* ========================================================================== */
+/* Architectural captions and responsive constraints */
+/* ========================================================================== */
+.embodied-caption {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin: -35px 0 38px;
+  width: min(650px, 57%);
+}
+.embodied-caption-rule {
+  height: 32px;
+  width: 2px;
+  background: #77bdb6;
+}
+.embodied-caption strong {
+  display: block;
+  color: #bed2d9;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 3px;
+}
+.embodied-caption div > span {
+  display: block;
+  color: #6a8494;
+  font-size: 7px;
+  letter-spacing: 1.7px;
+  margin-top: 9px;
+}
+.embodied-coordinate {
+  margin-left: auto;
+  color: #6e8d9c;
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+.embodied-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 9px;
+  color: #70828f;
+  border-top: 1px solid #70828f25;
+  padding-top: 20px;
+}
+.embodied-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.embodied-footer a:hover {
+  color: #d0e5ea;
+}
+@media (min-width: 1600px) {
+  .embodied-body {
+    padding-top: 90px;
+    padding-bottom: 110px;
+    grid-template-columns: minmax(0, 1fr) 400px;
+  }
+  .embodied-access {
+    padding-top: 36px;
+  }
+  .embodied-positioning {
+    padding-top: 30px;
+  }
+}
+@media (max-width: 1100px) {
+  .embodied-body {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 35px;
+  }
+  .embodied-access {
+    padding-left: 26px;
+    padding-right: 26px;
+  }
+  .embodied-access-bottom {
+    margin-left: -26px;
+    margin-right: -26px;
+    padding-left: 26px;
+    padding-right: 26px;
+  }
+  .embodied-positioning h1 {
+    font-size: 40px;
+  }
+  .embodied-header-meta > span:first-child {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .embodied-gateway {
+    padding: 25px 24px 22px;
+  }
+  .embodied-header .research-brand-name {
+    font-size: 18px;
+  }
+  .embodied-header .research-brand-caption {
+    font-size: 9px;
+    letter-spacing: 2px;
+  }
+  .embodied-header-meta {
+    display: none;
+  }
+  .embodied-header .research-logo {
+    width: 38px;
+    height: 38px;
+  }
+  .embodied-scene {
+    height: 740px;
+  }
+  .embodied-humanoid-image {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    transform: scale(.72);
+  }
+  .embodied-spatial-svg {
+    width: 950px;
+    max-width: none;
+    height: 640px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-39%);
+    top: 100px;
+  }
+  .embodied-vignette {
+    background: linear-gradient(
+      180deg,
+      #07121c80,
+      transparent 24%,
+      #06101b90 47%,
+      #06101b 64%
+    );
+  }
+  .embodied-body {
+    display: block;
+    padding: 48px 0 28px;
+  }
+  .embodied-positioning {
+    padding-top: 0;
+    padding-bottom: 210px;
+  }
+  .embodied-kicker {
+    font-size: 9px;
+    letter-spacing: 1.8px;
+  }
+  .embodied-positioning h1 {
+    font-size: 37px;
+    letter-spacing: 3px;
+    margin: 21px 0 17px;
+  }
+  .embodied-description {
+    font-size: 11px;
+    max-width: 300px;
+  }
+  .embodied-domains {
+    gap: 15px;
+    margin-top: 22px;
+    font-size: 10px;
+  }
+  .embodied-access {
+    max-width: 420px;
+    margin: 0 auto;
+    padding-top: 25px;
+  }
+  .embodied-access-top {
+    margin-bottom: 22px;
+  }
+  .embodied-caption {
+    display: none;
+  }
+  .embodied-footer {
+    flex-direction: column;
+    align-items: center;
+    font-size: 8px;
+    gap: 14px;
+    padding-top: 18px;
+  }
+  .embodied-footer > div {
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
