@@ -77,6 +77,7 @@ jobs:
           pnpm --filter @vxture/bff-customer-portal type-check
           pnpm --filter @vxture/service-customer-portal test
           pnpm --filter @vxture/bff-customer-portal test
+          pnpm --filter "@vxture/bff-console^..." --if-present build
           pnpm --filter @vxture/bff-console exec vitest run src/routers/customer-portal.http.spec.ts
 
   # ===========================================================================
