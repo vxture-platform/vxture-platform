@@ -9,7 +9,7 @@
  * @date 2026-11-15
  */
 import { useState, type CSSProperties } from "react";
-import { Icon } from "@vxture/design-system";
+import { Button, Icon, Input } from "@vxture/design-system";
 import type { PortalBrand, WorkspaceData } from "../lib/contracts";
 import { BrandIdentity } from "./BrandIdentity";
 import { ResearchArtwork } from "./ResearchArtwork";
@@ -96,7 +96,7 @@ export function WorkspacePage({
             </div>
             <label className="research-search">
               <Icon name="search" size="sm" />
-              <input
+              <Input
                 type="search"
                 aria-label="搜索应用"
                 placeholder="搜索应用"
@@ -107,14 +107,16 @@ export function WorkspacePage({
           </div>
           <div className="research-app-filters" aria-label="应用分类">
             {categories.map((item) => (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 key={item}
                 type="button"
                 aria-pressed={category === item}
                 onClick={() => setCategory(item)}
               >
                 {item}
-              </button>
+              </Button>
             ))}
           </div>
           <div className="research-app-grid">

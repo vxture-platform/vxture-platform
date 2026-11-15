@@ -9,7 +9,8 @@
  */
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime } from "@vxture-platform/shared";
 import {
   Banner,
   Button,
@@ -57,7 +58,7 @@ export function CustomerPortalPanel({
   workspaces?: Workspace[];
 }) {
   const locale = useLocale();
-  const label = (zh: string, en: string) => (locale.startsWith("zh") ? zh : en);
+  const t = useTranslations("customerPortal");
   const { runWithStepUp } = useStepUp();
   const { session } = useAdminSession();
   const canWrite = session.capabilities.includes("tenant:profile.manage");
@@ -111,7 +112,7 @@ export function CustomerPortalPanel({
       .catch((e) => {
         if (live) {
           setLoadFailed(true);
-          setError(e instanceof Error ? e.message : "Portal request failed");
+          setError(e instanceof Error ? e.message : t("requestFailed"));
         }
       })
       .finally(() => {
@@ -120,7 +121,7 @@ export function CustomerPortalPanel({
     return () => {
       live = false;
     };
-  }, [tenantId, reload]);
+  }, [tenantId, reload, t]);
 
   useEffect(() => {
     if (loading || loadFailed || !canWrite || record || !prefix) return;
@@ -158,17 +159,11 @@ export function CustomerPortalPanel({
       ? hostnameCheck.status
       : "checking";
   const hostnameHint = {
-    checking: label("正在检查域名…", "Checking hostname…"),
-    available: label("域名可绑定", "Hostname available"),
-    occupied: label(
-      "该域名已被占用，请更换",
-      "This hostname is already in use",
-    ),
-    invalid: label(
-      "须为 3–8 位小写字母或数字、字母开头，且不可使用平台保留名；a 为机构专属预留",
-      "Use 3–8 lowercase letters or digits, starting with a letter; reserved names are blocked. a is institution-reserved.",
-    ),
-    failed: label("暂时无法检查域名", "Could not check the hostname"),
+    checking: t("hostnameChecking"),
+    available: t("hostnameAvailable"),
+    occupied: t("hostnameOccupied"),
+    invalid: t("hostnameInvalid"),
+    failed: t("hostnameCheckFailed"),
   }[hostnameStatus];
   const dirty = Boolean(
     record && draft && JSON.stringify(record.draft) !== JSON.stringify(draft),
@@ -186,12 +181,12 @@ export function CustomerPortalPanel({
       const result = await runWithStepUp(action);
       setRecord(result);
       setDraft(result?.draft ?? null);
-      setMessage(label("操作已完成", "Changes applied"));
+      setMessage(t("changesApplied"));
     } catch (e) {
       if (!record && e instanceof AdminBffError && e.status === 409)
         setCheckAttempt((current) => current + 1);
       if (!isStepUpCancelled(e))
-        setError(e instanceof Error ? e.message : "Portal request failed");
+        setError(e instanceof Error ? e.message : t("requestFailed"));
     } finally {
       setBusy(false);
     }
@@ -202,12 +197,7 @@ export function CustomerPortalPanel({
       !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
       file.size > 2 * 1024 * 1024
     ) {
-      setError(
-        label(
-          "请选择不超过 2 MB 的 PNG、JPEG 或 WebP 图片",
-          "Select PNG, JPEG or WebP up to 2 MB",
-        ),
-      );
+      setError(t("imageValidation"));
       return;
     }
     setBusy(true);
@@ -216,7 +206,7 @@ export function CustomerPortalPanel({
       const asset = await uploadCustomerPortalAsset(tenantId, file);
       change({ [key]: asset.hash });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+      setError(e instanceof Error ? e.message : t("uploadFailed"));
     } finally {
       setBusy(false);
     }
@@ -236,30 +226,23 @@ export function CustomerPortalPanel({
   }
   const status = (value: PortalVersion["status"]) =>
     ({
-      pending: label("待审核", "Pending review"),
-      rejected: label("已驳回", "Rejected"),
-      approved: label("审核通过", "Approved"),
-      withdrawn: label("已撤回", "Withdrawn"),
+      pending: t("statusPending"),
+      rejected: t("statusRejected"),
+      approved: t("statusApproved"),
+      withdrawn: t("statusWithdrawn"),
     })[value];
 
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-heading-sm">
-          {label("客户专属门户", "Customer portal")}
-        </h2>
-        <p className="text-body-sm text-muted-foreground">
-          {label(
-            "品牌配置由机构维护，审核和发布由平台完成。",
-            "Manage your branding here. The platform reviews and publishes every version.",
-          )}
-        </p>
+        <h2 className="text-heading-sm">{t("title")}</h2>
+        <p className="text-body-sm text-muted-foreground">{t("description")}</p>
       </CardHeader>
       <CardContent className="grid gap-lg">
         {error && <Banner tone="danger" title={error} />}
         {message && <Banner tone="success" title={message} />}
         {loading ? (
-          <p>{label("正在载入…", "Loading…")}</p>
+          <p>{t("loading")}</p>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-sm">
@@ -269,14 +252,11 @@ export function CustomerPortalPanel({
                 disabled={busy || dirty}
                 onClick={() => setReload((n) => n + 1)}
               >
-                {label("刷新配置", "Refresh")}
+                {t("refresh")}
               </Button>
               {dirty && (
                 <span className="text-body-sm text-muted-foreground">
-                  {label(
-                    "有未保存修改；保存后再提交审核",
-                    "Save your changes before submitting",
-                  )}
+                  {t("unsavedChanges")}
                 </span>
               )}
               {record?.publishedVersionId && (
@@ -286,7 +266,7 @@ export function CustomerPortalPanel({
                   rel="noopener noreferrer"
                   className="text-body-sm underline"
                 >
-                  {label("打开已发布门户", "Open published portal")}
+                  {t("openPublished")}
                 </a>
               )}
             </div>
@@ -295,12 +275,10 @@ export function CustomerPortalPanel({
                 className="grid gap-md rounded-md border p-lg"
                 disabled={!canWrite || busy}
               >
-                <legend>
-                  {label("域名绑定与组织授权", "Domain binding and delegation")}
-                </legend>
+                <legend>{t("bindingTitle")}</legend>
                 <Field>
                   <FieldLabel htmlFor={`portal-prefix-${tenantId}`}>
-                    {label("门户域名", "Portal hostname")}
+                    {t("hostname")}
                   </FieldLabel>
                   <div className="flex items-center gap-sm">
                     <Input
@@ -351,7 +329,7 @@ export function CustomerPortalPanel({
                             setCheckAttempt((current) => current + 1)
                           }
                         >
-                          {label("重新检查", "Check again")}
+                          {t("checkAgain")}
                         </Button>
                       )}
                     </div>
@@ -359,7 +337,7 @@ export function CustomerPortalPanel({
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`portal-workspace-${tenantId}`}>
-                    {label("默认工作空间", "Default workspace")}
+                    {t("defaultWorkspace")}
                   </FieldLabel>
                   <NativeSelect
                     id={`portal-workspace-${tenantId}`}
@@ -367,9 +345,7 @@ export function CustomerPortalPanel({
                     disabled={Boolean(record)}
                     onChange={(e) => setWorkspaceId(e.target.value)}
                   >
-                    <option value="">
-                      {label("选择工作空间", "Select workspace")}
-                    </option>
+                    <option value="">{t("selectWorkspace")}</option>
                     {workspaces
                       .filter((w) => w.status === "active")
                       .map((w) => (
@@ -384,20 +360,14 @@ export function CustomerPortalPanel({
                     checked={selfService}
                     onCheckedChange={setSelfService}
                   />
-                  {label(
-                    "授权客户在 Console 配置门户",
-                    "Allow customer configuration in Console",
-                  )}
+                  {t("allowSelfService")}
                 </label>
                 <label className="flex items-center gap-sm">
                   <Switch checked={enabled} onCheckedChange={setEnabled} />
-                  {label("启用门户访问", "Enable portal access")}
+                  {t("enableAccess")}
                 </label>
                 <p className="text-body-sm text-muted-foreground">
-                  {label(
-                    "前缀须为 3–8 位小写字母或数字，以字母开头。禁止空格、连字符和平台保留名；a 为平台专属预留。开通后绑定不可更换。",
-                    "Use 3–8 lowercase letters or digits, starting with a letter. Spaces, hyphens and reserved names are blocked; a is platform-reserved. Binding cannot be changed after provisioning.",
-                  )}
+                  {t("hostnameRules")}
                 </p>
                 <Button
                   disabled={
@@ -418,28 +388,23 @@ export function CustomerPortalPanel({
                     )
                   }
                 >
-                  {record
-                    ? label(
-                        "更新授权与开通状态",
-                        "Update delegation and access",
-                      )
-                    : label("开通并绑定", "Provision portal")}
+                  {record ? t("updateBinding") : t("provision")}
                 </Button>
               </fieldset>
             }
             {record && draft && (
               <>
                 <p className="text-body-sm text-muted-foreground">
-                  {record.hostname} · {label("草稿修订", "Draft revision")}{" "}
-                  {record.revision} · {label("最近修改", "Last edited")}:{" "}
+                  {record.hostname} · {t("draftRevision")} {record.revision} ·{" "}
+                  {t("lastEdited")}:{" "}
                   {record.updatedSurface === "admin" ? "Admin" : "Console"} ·{" "}
-                  {new Date(record.updatedAt).toLocaleString(locale)}
+                  {formatDateTime(record.updatedAt, locale)}
                 </p>
                 <fieldset disabled={busy || !canWrite} className="grid gap-lg">
                   <div className="grid gap-md md:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="portal-name">
-                        {label("机构展示名称", "Institution name")}
+                        {t("institutionName")}
                       </FieldLabel>
                       <Input
                         id="portal-name"
@@ -450,7 +415,7 @@ export function CustomerPortalPanel({
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="portal-color">
-                        {label("品牌主色", "Brand color")}
+                        {t("brandColor")}
                       </FieldLabel>
                       <Input
                         id="portal-color"
@@ -462,7 +427,7 @@ export function CustomerPortalPanel({
                   </div>
                   <Field>
                     <FieldLabel htmlFor="portal-title">
-                      {label("登录页标题", "Login headline")}
+                      {t("loginTitle")}
                     </FieldLabel>
                     <Textarea
                       id="portal-title"
@@ -473,7 +438,7 @@ export function CustomerPortalPanel({
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="portal-subtitle">
-                      {label("登录页说明", "Login description")}
+                      {t("loginDescription")}
                     </FieldLabel>
                     <Textarea
                       id="portal-subtitle"
@@ -485,7 +450,7 @@ export function CustomerPortalPanel({
                   <div className="grid gap-md md:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="portal-density">
-                        {label("工作台密度", "Workspace density")}
+                        {t("density")}
                       </FieldLabel>
                       <NativeSelect
                         id="portal-density"
@@ -497,21 +462,17 @@ export function CustomerPortalPanel({
                           })
                         }
                       >
-                        <option value="comfortable">
-                          {label("舒适", "Comfortable")}
-                        </option>
-                        <option value="compact">
-                          {label("紧凑", "Compact")}
-                        </option>
+                        <option value="comfortable">{t("comfortable")}</option>
+                        <option value="compact">{t("compact")}</option>
                       </NativeSelect>
                     </Field>
                   </div>
                   <div className="grid gap-md md:grid-cols-3">
                     {(
                       [
-                        ["logo", label("机构标志", "Institution logo")],
-                        ["favicon", label("浏览器图标", "Browser icon")],
-                        ["background", label("登录页背景", "Login background")],
+                        ["logo", t("logo")],
+                        ["favicon", t("favicon")],
+                        ["background", t("background")],
                       ] as const
                     ).map(([key, title]) => (
                       <Field key={key}>
@@ -543,29 +504,18 @@ export function CustomerPortalPanel({
                           disabled={!draft[key]}
                           onClick={() => change({ [key]: null })}
                         >
-                          {label("恢复默认", "Use default")}
+                          {t("useDefault")}
                         </Button>
                       </Field>
                     ))}
                   </div>
                   <p className="text-body-sm text-muted-foreground">
-                    {label(
-                      "图片不超过 2 MB。请确保名称、标志及图片拥有使用权；发布后登录页公开可见。",
-                      "Images up to 2 MB. Use names and assets you have rights to. Published login pages are public.",
-                    )}
+                    {t("assetRights")}
                   </p>
                   <section className="grid gap-sm">
-                    <h3>
-                      {label(
-                        "应用分组与显示",
-                        "Application groups and visibility",
-                      )}
-                    </h3>
+                    <h3>{t("applicationRules")}</h3>
                     <p className="text-body-sm text-muted-foreground">
-                      {label(
-                        "仅调整已订阅应用的展示，不新增应用权限。",
-                        "Presentation overrides apply only to subscribed applications.",
-                      )}
+                      {t("applicationRulesHelp")}
                     </p>
                     {draft.applications.map((app, i) => (
                       <div
@@ -574,7 +524,7 @@ export function CustomerPortalPanel({
                       >
                         <span className="text-body-sm">{app.code}</span>
                         <Input
-                          aria-label={label("分组", "Group")}
+                          aria-label={t("group")}
                           value={app.group}
                           maxLength={40}
                           onChange={(e) =>
@@ -596,7 +546,7 @@ export function CustomerPortalPanel({
                               })
                             }
                           />
-                          {label("隐藏", "Hidden")}
+                          {t("hidden")}
                         </label>
                         <Button
                           variant="outline"
@@ -609,17 +559,17 @@ export function CustomerPortalPanel({
                             })
                           }
                         >
-                          {label("恢复默认", "Use default")}
+                          {t("useDefault")}
                         </Button>
                       </div>
                     ))}
                     <div className="flex gap-sm">
                       <Input
-                        aria-label={label("应用代码", "Application code")}
+                        aria-label={t("applicationCode")}
                         value={appCode}
                         maxLength={64}
                         onChange={(e) => setAppCode(e.target.value)}
-                        placeholder={label("应用代码", "Application code")}
+                        placeholder={t("applicationCode")}
                       />
                       <Button
                         variant="outline"
@@ -638,7 +588,7 @@ export function CustomerPortalPanel({
                           setAppCode("");
                         }}
                       >
-                        {label("添加展示规则", "Add display rule")}
+                        {t("addApplicationRule")}
                       </Button>
                     </div>
                   </section>
@@ -656,22 +606,19 @@ export function CustomerPortalPanel({
                         )
                       }
                     >
-                      {label("保存草稿", "Save draft")}
+                      {t("saveDraft")}
                     </Button>
                     <Button
                       variant="outline"
                       disabled={!dirty}
                       onClick={() => setDraft(record.draft)}
                     >
-                      {label("放弃修改", "Discard changes")}
+                      {t("discardChanges")}
                     </Button>
                   </div>
                   <Field>
                     <FieldLabel htmlFor="portal-note">
-                      {label(
-                        "提交说明 / 驳回原因",
-                        "Submission note / rejection reason",
-                      )}
+                      {t("reviewNoteLabel")}
                     </FieldLabel>
                     <Textarea
                       id="portal-note"
@@ -693,16 +640,14 @@ export function CustomerPortalPanel({
                       )
                     }
                   >
-                    {label("提交平台审核", "Submit for platform review")}
+                    {t("submit")}
                   </Button>
                 </fieldset>
                 <section className="grid gap-md">
-                  <h3>
-                    {label("版本与审核记录", "Versions and review history")}
-                  </h3>
+                  <h3>{t("historyTitle")}</h3>
                   {record.versions.length === 0 && (
                     <p className="text-body-sm text-muted-foreground">
-                      {label("尚未提交版本", "No submissions yet")}
+                      {t("noSubmissions")}
                     </p>
                   )}
                   {record.versions.map((version) => (
@@ -714,24 +659,21 @@ export function CustomerPortalPanel({
                         <strong>V{version.version}</strong>
                         <span>{status(version.status)}</span>
                         {record.publishedVersionId === version.id && (
-                          <strong>
-                            {label("当前线上版本", "Currently published")}
-                          </strong>
+                          <strong>{t("currentlyPublished")}</strong>
                         )}
                       </div>
                       <p className="text-body-sm">
-                        {new Date(version.submittedAt).toLocaleString(locale)} ·{" "}
+                        {formatDateTime(version.submittedAt, locale)} ·{" "}
                         {version.note}
                       </p>
                       {version.reviewNote && (
                         <p className="text-body-sm">
-                          {label("审核意见", "Review note")}:{" "}
-                          {version.reviewNote}
+                          {t("reviewNote")}: {version.reviewNote}
                         </p>
                       )}
                       <details>
                         <summary className="cursor-pointer text-body-sm">
-                          {label("查看本次提交内容", "View submitted snapshot")}
+                          {t("viewSnapshot")}
                         </summary>
                         <pre className="mt-md max-h-80 overflow-auto whitespace-pre-wrap break-all rounded border p-md text-body-sm">
                           {JSON.stringify(version.configuration, null, 2)}
@@ -764,7 +706,7 @@ export function CustomerPortalPanel({
                               disabled={busy || dirty}
                               onClick={() => transition(version, "withdraw")}
                             >
-                              {label("撤回", "Withdraw")}
+                              {t("withdraw")}
                             </Button>
                           )}
                           {version.status === "pending" && (
@@ -773,14 +715,14 @@ export function CustomerPortalPanel({
                                 disabled={busy || dirty}
                                 onClick={() => transition(version, "approve")}
                               >
-                                {label("审核通过", "Approve")}
+                                {t("approve")}
                               </Button>
                               <Button
                                 variant="outline"
                                 disabled={busy || dirty || !note.trim()}
                                 onClick={() => transition(version, "reject")}
                               >
-                                {label("驳回", "Reject")}
+                                {t("reject")}
                               </Button>
                             </>
                           )}
@@ -790,7 +732,7 @@ export function CustomerPortalPanel({
                                 disabled={busy || dirty}
                                 onClick={() => transition(version, "publish")}
                               >
-                                {label("发布此版本", "Publish this version")}
+                                {t("publish")}
                               </Button>
                             )}
                         </div>

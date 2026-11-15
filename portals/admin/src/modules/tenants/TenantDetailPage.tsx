@@ -174,7 +174,7 @@ type TenantInfoDraft = {
 };
 
 const tenantTabs: Array<{ id: TenantTabId; label: string; icon: IconName }> = [
-  { id: "portal", label: "专属门户", icon: "buildings" },
+  { id: "portal", label: "customerPortal.tabTitle", icon: "buildings" },
   { id: "info", label: "租户信息", icon: "buildings" },
   { id: "members", label: "成员账号", icon: "user" },
   { id: "subscriptions", label: "订阅产品", icon: "star" },
@@ -1857,6 +1857,7 @@ function TenantTicketsTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
 }
 
 export function TenantDetailPage({ tenantId }: { tenantId: string }) {
+  const tPortal = useTranslations("customerPortal");
   const { toast } = useToast();
   const withLabels = useConfirmLabels();
   const locale = useLocale();
@@ -2396,7 +2397,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                     className="flex-none"
                   >
                     <Icon name={tab.icon} size="xs" fallback="placeholder" />
-                    {tab.label}
+                    {tab.id === "portal" ? tPortal("tabTitle") : tab.label}
                   </TabsTrigger>
                 ))}
             </TabsList>

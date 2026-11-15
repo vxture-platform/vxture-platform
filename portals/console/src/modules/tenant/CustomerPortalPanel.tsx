@@ -9,7 +9,8 @@
  */
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime } from "@vxture-platform/shared";
 import {
   Banner,
   Button,
@@ -39,7 +40,7 @@ import type {
 // ============================================================================
 export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
   const locale = useLocale();
-  const label = (zh: string, en: string) => (locale.startsWith("zh") ? zh : en);
+  const t = useTranslations("customerPortal");
   const [record, setRecord] = useState<PortalRecord | null>(null);
   const [draft, setDraft] = useState<PortalConfiguration | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,8 +76,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
     }
     void load()
       .catch((e) => {
-        if (live)
-          setError(e instanceof Error ? e.message : "Portal request failed");
+        if (live) setError(e instanceof Error ? e.message : t("requestFailed"));
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -84,7 +84,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
     return () => {
       live = false;
     };
-  }, [tenantId, reload]);
+  }, [tenantId, reload, t]);
 
   const dirty = Boolean(
     record && draft && JSON.stringify(record.draft) !== JSON.stringify(draft),
@@ -102,9 +102,9 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
       const result = await action();
       setRecord(result);
       setDraft(result?.draft ?? null);
-      setMessage(label("操作已完成", "Changes applied"));
+      setMessage(t("changesApplied"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Portal request failed");
+      setError(e instanceof Error ? e.message : t("requestFailed"));
     } finally {
       setBusy(false);
     }
@@ -115,12 +115,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
       !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
       file.size > 2 * 1024 * 1024
     ) {
-      setError(
-        label(
-          "请选择不超过 2 MB 的 PNG、JPEG 或 WebP 图片",
-          "Select PNG, JPEG or WebP up to 2 MB",
-        ),
-      );
+      setError(t("imageValidation"));
       return;
     }
     setBusy(true);
@@ -129,7 +124,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
       const asset = await uploadCustomerPortalAsset(tenantId, file);
       change({ [key]: asset.hash });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+      setError(e instanceof Error ? e.message : t("uploadFailed"));
     } finally {
       setBusy(false);
     }
@@ -145,31 +140,24 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
   }
   const status = (value: PortalVersion["status"]) =>
     ({
-      pending: label("待审核", "Pending review"),
-      rejected: label("已驳回", "Rejected"),
-      approved: label("审核通过", "Approved"),
-      withdrawn: label("已撤回", "Withdrawn"),
+      pending: t("statusPending"),
+      rejected: t("statusRejected"),
+      approved: t("statusApproved"),
+      withdrawn: t("statusWithdrawn"),
     })[value];
 
   if (!available) return null;
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-heading-sm">
-          {label("客户专属门户", "Customer portal")}
-        </h2>
-        <p className="text-body-sm text-muted-foreground">
-          {label(
-            "品牌配置由机构维护，审核和发布由平台完成。",
-            "Manage your branding here. The platform reviews and publishes every version.",
-          )}
-        </p>
+        <h2 className="text-heading-sm">{t("title")}</h2>
+        <p className="text-body-sm text-muted-foreground">{t("description")}</p>
       </CardHeader>
       <CardContent className="grid gap-lg">
         {error && <Banner tone="danger" title={error} />}
         {message && <Banner tone="success" title={message} />}
         {loading ? (
-          <p>{label("正在载入…", "Loading…")}</p>
+          <p>{t("loading")}</p>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-sm">
@@ -179,14 +167,11 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                 disabled={busy || dirty}
                 onClick={() => setReload((n) => n + 1)}
               >
-                {label("刷新配置", "Refresh")}
+                {t("refresh")}
               </Button>
               {dirty && (
                 <span className="text-body-sm text-muted-foreground">
-                  {label(
-                    "有未保存修改；保存后再提交审核",
-                    "Save your changes before submitting",
-                  )}
+                  {t("unsavedChanges")}
                 </span>
               )}
               {record?.publishedVersionId && (
@@ -196,23 +181,23 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                   rel="noopener noreferrer"
                   className="text-body-sm underline"
                 >
-                  {label("打开已发布门户", "Open published portal")}
+                  {t("openPublished")}
                 </a>
               )}
             </div>
             {record && draft && (
               <>
                 <p className="text-body-sm text-muted-foreground">
-                  {record.hostname} · {label("草稿修订", "Draft revision")}{" "}
-                  {record.revision} · {label("最近修改", "Last edited")}:{" "}
+                  {record.hostname} · {t("draftRevision")} {record.revision} ·{" "}
+                  {t("lastEdited")}:{" "}
                   {record.updatedSurface === "admin" ? "Admin" : "Console"} ·{" "}
-                  {new Date(record.updatedAt).toLocaleString(locale)}
+                  {formatDateTime(record.updatedAt, locale)}
                 </p>
                 <fieldset disabled={busy} className="grid gap-lg">
                   <div className="grid gap-md md:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="portal-name">
-                        {label("机构展示名称", "Institution name")}
+                        {t("institutionName")}
                       </FieldLabel>
                       <Input
                         id="portal-name"
@@ -223,7 +208,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="portal-color">
-                        {label("品牌主色", "Brand color")}
+                        {t("brandColor")}
                       </FieldLabel>
                       <Input
                         id="portal-color"
@@ -235,7 +220,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                   </div>
                   <Field>
                     <FieldLabel htmlFor="portal-title">
-                      {label("登录页标题", "Login headline")}
+                      {t("loginTitle")}
                     </FieldLabel>
                     <Textarea
                       id="portal-title"
@@ -246,7 +231,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="portal-subtitle">
-                      {label("登录页说明", "Login description")}
+                      {t("loginDescription")}
                     </FieldLabel>
                     <Textarea
                       id="portal-subtitle"
@@ -258,7 +243,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                   <div className="grid gap-md md:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="portal-density">
-                        {label("工作台密度", "Workspace density")}
+                        {t("density")}
                       </FieldLabel>
                       <NativeSelect
                         id="portal-density"
@@ -270,21 +255,17 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                           })
                         }
                       >
-                        <option value="comfortable">
-                          {label("舒适", "Comfortable")}
-                        </option>
-                        <option value="compact">
-                          {label("紧凑", "Compact")}
-                        </option>
+                        <option value="comfortable">{t("comfortable")}</option>
+                        <option value="compact">{t("compact")}</option>
                       </NativeSelect>
                     </Field>
                   </div>
                   <div className="grid gap-md md:grid-cols-3">
                     {(
                       [
-                        ["logo", label("机构标志", "Institution logo")],
-                        ["favicon", label("浏览器图标", "Browser icon")],
-                        ["background", label("登录页背景", "Login background")],
+                        ["logo", t("logo")],
+                        ["favicon", t("favicon")],
+                        ["background", t("background")],
                       ] as const
                     ).map(([key, title]) => (
                       <Field key={key}>
@@ -316,29 +297,18 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                           disabled={!draft[key]}
                           onClick={() => change({ [key]: null })}
                         >
-                          {label("恢复默认", "Use default")}
+                          {t("useDefault")}
                         </Button>
                       </Field>
                     ))}
                   </div>
                   <p className="text-body-sm text-muted-foreground">
-                    {label(
-                      "图片不超过 2 MB。请确保名称、标志及图片拥有使用权；发布后登录页公开可见。",
-                      "Images up to 2 MB. Use names and assets you have rights to. Published login pages are public.",
-                    )}
+                    {t("assetRights")}
                   </p>
                   <section className="grid gap-sm">
-                    <h3>
-                      {label(
-                        "应用分组与显示",
-                        "Application groups and visibility",
-                      )}
-                    </h3>
+                    <h3>{t("applicationRules")}</h3>
                     <p className="text-body-sm text-muted-foreground">
-                      {label(
-                        "仅调整已订阅应用的展示，不新增应用权限。",
-                        "Presentation overrides apply only to subscribed applications.",
-                      )}
+                      {t("applicationRulesHelp")}
                     </p>
                     {draft.applications.map((app, i) => (
                       <div
@@ -347,7 +317,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                       >
                         <span className="text-body-sm">{app.code}</span>
                         <Input
-                          aria-label={label("分组", "Group")}
+                          aria-label={t("group")}
                           value={app.group}
                           maxLength={40}
                           onChange={(e) =>
@@ -369,7 +339,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                               })
                             }
                           />
-                          {label("隐藏", "Hidden")}
+                          {t("hidden")}
                         </label>
                         <Button
                           variant="outline"
@@ -382,17 +352,17 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                             })
                           }
                         >
-                          {label("恢复默认", "Use default")}
+                          {t("useDefault")}
                         </Button>
                       </div>
                     ))}
                     <div className="flex gap-sm">
                       <Input
-                        aria-label={label("应用代码", "Application code")}
+                        aria-label={t("applicationCode")}
                         value={appCode}
                         maxLength={64}
                         onChange={(e) => setAppCode(e.target.value)}
-                        placeholder={label("应用代码", "Application code")}
+                        placeholder={t("applicationCode")}
                       />
                       <Button
                         variant="outline"
@@ -411,7 +381,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                           setAppCode("");
                         }}
                       >
-                        {label("添加展示规则", "Add display rule")}
+                        {t("addApplicationRule")}
                       </Button>
                     </div>
                   </section>
@@ -429,19 +399,19 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                         )
                       }
                     >
-                      {label("保存草稿", "Save draft")}
+                      {t("saveDraft")}
                     </Button>
                     <Button
                       variant="outline"
                       disabled={!dirty}
                       onClick={() => setDraft(record.draft)}
                     >
-                      {label("放弃修改", "Discard changes")}
+                      {t("discardChanges")}
                     </Button>
                   </div>
                   <Field>
                     <FieldLabel htmlFor="portal-note">
-                      {label("提交说明", "Submission note")}
+                      {t("submissionNote")}
                     </FieldLabel>
                     <Textarea
                       id="portal-note"
@@ -463,16 +433,14 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                       )
                     }
                   >
-                    {label("提交平台审核", "Submit for platform review")}
+                    {t("submit")}
                   </Button>
                 </fieldset>
                 <section className="grid gap-md">
-                  <h3>
-                    {label("版本与审核记录", "Versions and review history")}
-                  </h3>
+                  <h3>{t("historyTitle")}</h3>
                   {record.versions.length === 0 && (
                     <p className="text-body-sm text-muted-foreground">
-                      {label("尚未提交版本", "No submissions yet")}
+                      {t("noSubmissions")}
                     </p>
                   )}
                   {record.versions.map((version) => (
@@ -484,24 +452,21 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                         <strong>V{version.version}</strong>
                         <span>{status(version.status)}</span>
                         {record.publishedVersionId === version.id && (
-                          <strong>
-                            {label("当前线上版本", "Currently published")}
-                          </strong>
+                          <strong>{t("currentlyPublished")}</strong>
                         )}
                       </div>
                       <p className="text-body-sm">
-                        {new Date(version.submittedAt).toLocaleString(locale)} ·{" "}
+                        {formatDateTime(version.submittedAt, locale)} ·{" "}
                         {version.note}
                       </p>
                       {version.reviewNote && (
                         <p className="text-body-sm">
-                          {label("审核意见", "Review note")}:{" "}
-                          {version.reviewNote}
+                          {t("reviewNote")}: {version.reviewNote}
                         </p>
                       )}
                       <details>
                         <summary className="cursor-pointer text-body-sm">
-                          {label("查看本次提交内容", "View submitted snapshot")}
+                          {t("viewSnapshot")}
                         </summary>
                         <pre className="mt-md max-h-80 overflow-auto whitespace-pre-wrap break-all rounded border p-md text-body-sm">
                           {JSON.stringify(version.configuration, null, 2)}
@@ -534,7 +499,7 @@ export function CustomerPortalPanel({ tenantId }: { tenantId: string }) {
                               disabled={busy || dirty}
                               onClick={() => withdraw(version)}
                             >
-                              {label("撤回", "Withdraw")}
+                              {t("withdraw")}
                             </Button>
                           )}
                         </div>
