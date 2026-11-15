@@ -2384,12 +2384,21 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               className="h-auto max-w-full flex-wrap justify-start"
               aria-label={`${tenant.tenantName} 信息分区`}
             >
-              {tenantTabs.filter(tab => tab.id !== "portal" || tenant.tenantType === "company").map((tab) => (
-                <TabsTrigger key={tab.id} value={tab.id} className="flex-none">
-                  <Icon name={tab.icon} size="xs" fallback="placeholder" />
-                  {tab.label}
-                </TabsTrigger>
-              ))}
+              {tenantTabs
+                .filter(
+                  (tab) =>
+                    tab.id !== "portal" || tenant.tenantType === "company",
+                )
+                .map((tab) => (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.id}
+                    className="flex-none"
+                  >
+                    <Icon name={tab.icon} size="xs" fallback="placeholder" />
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
             </TabsList>
 
             {/* 直属租户（没有工作空间）整个隐藏，不画一个只有「全部」的空下拉
@@ -2423,7 +2432,13 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           </div>
 
           <TabsContent value="portal" className="min-w-0">
-            {tenant.tenantType === "company" && <CustomerPortalPanel key={tenant.id} tenantId={tenant.id} workspaces={tenant.workspaces} />}
+            {tenant.tenantType === "company" && (
+              <CustomerPortalPanel
+                key={tenant.id}
+                tenantId={tenant.id}
+                workspaces={tenant.workspaces}
+              />
+            )}
           </TabsContent>
           <TabsContent value="info" className="min-w-0">
             <TenantInfoTab

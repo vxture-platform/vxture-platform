@@ -23,7 +23,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
   // Portal assets are authenticated and validated by their domain service.
-  app.use("/api/tenants/:tenantId/customer-portal/assets", express.raw({ type: "application/octet-stream", limit: "2mb" }));
+  app.use(
+    "/api/tenants/:tenantId/customer-portal/assets",
+    express.raw({ type: "application/octet-stream", limit: "2mb" }),
+  );
   const allowedOrigins =
     process.env["ALLOWED_ORIGIN"]
       ?.split(",")
