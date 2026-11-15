@@ -67,13 +67,13 @@ describe.skipIf(!RUN)("usage analytics snapshot", () => {
       [workspace, tenant],
     );
     await client.query(
-      "insert into product.products (id, product_code, product_name, product_type, status, standalone_subscribable) values ($1, $2, 'Used product', 'agent', 'active', true)",
+      "insert into product.products (id, product_code, product_name, product_type, layer, status, standalone_subscribable) values ($1, $2, 'Used product', 'agent', 'L3', 'active', true)",
       [product, `analytics-${suffix}`],
     );
     const zeroProduct = randomUUID();
     zeroProductCode = `zero-${suffix}`;
     await client.query(
-      "insert into product.products (id, product_code, product_name, product_type, status, standalone_subscribable) values ($1, $2, 'Zero product', 'agent', 'active', true)",
+      "insert into product.products (id, product_code, product_name, product_type, layer, status, standalone_subscribable) values ($1, $2, 'Zero product', 'general_platform', 'L2', 'active', true)",
       [zeroProduct, zeroProductCode],
     );
     const plan = randomUUID();
@@ -169,6 +169,43 @@ describe.skipIf(!RUN)("usage analytics snapshot", () => {
       expect(rows.reduce((sum, row) => sum + row.total, 0)).toBe(5);
     }
     expect(result.members.find((m) => m.userNo === null)?.total).toBe(2);
+  });
+
+  it("limits products to L2/L3 while retaining all billed facts in time and member totals", async () => {
+    const capability = randomUUID();
+    const unclassified = randomUUID();
+    const suffix = capability.slice(0, 8);
+    // Historical deleted capability rows can still be referenced by usage facts.
+    await client.query(
+      "insert into product.products (id, product_code, product_name, product_type, layer, status, deleted_at) values ($1, $3, 'Capability', 'undefined', 'L1', 'active', now()), ($2, $4, 'Unclassified', 'undefined', null, 'active', null)",
+      [
+        capability,
+        unclassified,
+        `capability-${suffix}`,
+        `unclassified-${suffix}`,
+      ],
+    );
+    await event("2026-11-14T10:00:00Z", 2);
+    await client.query(
+      "insert into metering.usage_events (workspace_id, product_id, metric_key, total_amount, end_user_id, created_at) values ($1, $2, 'ai.credit', 3, $4, '2026-11-14T10:00:00Z'), ($1, $3, 'ai.credit', 5, $4, '2026-11-14T10:00:00Z')",
+      [workspace, capability, unclassified, user],
+    );
+    const result = await read("day");
+    expect(result.products).toHaveLength(2);
+    expect(result.products.reduce((sum, row) => sum + row.total, 0)).toBe(2);
+    expect(
+      result.products.find((row) => row.productCode === zeroProductCode)?.total,
+    ).toBe(0);
+    expect(
+      result.products.some((row) => row.productCode === `capability-${suffix}`),
+    ).toBe(false);
+    expect(
+      result.products.some(
+        (row) => row.productCode === `unclassified-${suffix}`,
+      ),
+    ).toBe(false);
+    expect(result.buckets.reduce((sum, row) => sum + row.total, 0)).toBe(10);
+    expect(result.members.reduce((sum, row) => sum + row.total, 0)).toBe(10);
   });
 
   it("keeps the day window on midnight across a DST change", async () => {

@@ -2581,8 +2581,8 @@
     },
     "share": {
       "title": "By product",
-      "emptyZero": "Product usage totals 0 AI Credits. This workspace has no products to display.",
-      "description": "Product mix within the current window; share is against the window total",
+      "emptyZero": "L2/L3 product usage is 0 in this range",
+      "description": "Usage across L2 platforms and L3 agents in the selected range. Shares use their combined usage and exclude L1 capabilities.",
       "empty": "No product consumption yet"
     },
     "members": {

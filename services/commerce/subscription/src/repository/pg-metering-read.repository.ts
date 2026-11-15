@@ -159,7 +159,8 @@ export class PgMeteringReadRepository {
            'productCode', p.product_code, 'productName', p.product_name,
            'total', coalesce(pu.total, 0)) order by coalesce(pu.total, 0) desc, p.product_code), '[]'::jsonb)
           from product_ids pi join product.products p on p.id = pi.product_id
-          left join product_usage pu on pu.product_id = pi.product_id) as products,
+          left join product_usage pu on pu.product_id = pi.product_id
+          where p.layer in ('L2', 'L3')) as products,
          (select coalesce(jsonb_agg(jsonb_build_object(
            'userNo', user_no, 'userName', user_name, 'total', total,
            'eventCount', event_count) order by total desc, user_no nulls last), '[]'::jsonb)

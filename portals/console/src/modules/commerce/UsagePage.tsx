@@ -88,15 +88,20 @@ export function UsagePage() {
 
   const total =
     current?.buckets.reduce((sum, bucket) => sum + bucket.total, 0) ?? 0;
+  const productTotal =
+    current?.products.reduce((sum, product) => sum + product.total, 0) ?? 0;
   const products = useMemo(
     () =>
       current?.products.map((product) => ({
         key: product.productCode,
         name: product.productName,
         value: product.total,
-        percent: total > 0 ? Math.round((product.total / total) * 100) : 0,
+        percent:
+          productTotal > 0
+            ? Math.round((product.total / productTotal) * 100)
+            : 0,
       })) ?? [],
-    [current, total],
+    [current, productTotal],
   );
   const members = useMemo(
     () =>
