@@ -82,6 +82,7 @@ suite("organization-only customer portal access", () => {
       "20_tenancy.sql",
       "40_product.sql",
       "50_metering.sql",
+      "80_admin.sql",
     ])
       await admin.query(
         await readFile(resolve(root, "deploy/database/ddl", file), "utf8"),
@@ -103,7 +104,7 @@ suite("organization-only customer portal access", () => {
     );
     await admin.query(
       `insert into tenancy.tenants (id,tenant_no,name,type,owner_user_id)
-      values ($1,public.new_principal_no(2),'如影智能研究院','organization',$2)`,
+      values ($1,public.new_principal_no(2),'如影智能科技有限公司','organization',$2)`,
       [ORG, USER],
     );
     await admin.query(
@@ -143,6 +144,14 @@ suite("organization-only customer portal access", () => {
     portal = await new CustomerPortalService(reader).published("a.ruyin.work");
   });
   beforeEach(async () => {
+    await admin.query(
+      `insert into admin.settings (config_group,config_key,value_type,config_value)
+      select 'customer_portal','customer_portal.reserved_host_bindings','json',
+        jsonb_build_object('a.ruyin.work','T-' || tenant_no::text)::text
+      from tenancy.tenants where id=$1
+      on conflict (config_key) do update set config_value=excluded.config_value`,
+      [ORG],
+    );
     await admin.query("update tenancy.customer_portals set enabled=true");
     await admin.query(
       "update tenancy.tenants set status='active', deleted_at=null",
@@ -293,6 +302,103 @@ suite("organization-only customer portal access", () => {
       ).rejects.toMatchObject({ status: 409 });
     }
     await expect(service.get(tenantId, operator)).resolves.toBeNull();
+  });
+
+  it("keeps a configured reservation when the organization name changes", async () => {
+    const service = new CustomerPortalService(admin);
+    const operator = { id: USER, surface: "admin" } as const;
+    await admin.query(
+      "update tenancy.tenants set name='新的公司名称' where id=$1",
+      [ORG],
+    );
+    await expect(service.checkHostname(ORG, "a", operator)).resolves.toEqual({
+      status: "available",
+    });
+  });
+
+  it("checks reservations through a read-only management connection", async () => {
+    const readOnly = new Pool({
+      connectionString: url,
+      options: "-c default_transaction_read_only=on",
+    });
+    try {
+      await expect(
+        new CustomerPortalService(readOnly).checkHostname(ORG, "a", {
+          id: USER,
+          surface: "admin",
+        }),
+      ).resolves.toEqual({ status: "available" });
+    } finally {
+      await readOnly.end();
+    }
+  });
+
+  it("requires an explicit reservation and reads changed settings without rebuilding", async () => {
+    const service = new CustomerPortalService(admin);
+    const operator = { id: USER, surface: "admin" } as const;
+    const { tenantId } = await addOrganization("如影智能研究院");
+    await admin.query(
+      "delete from admin.settings where config_key='customer_portal.reserved_host_bindings'",
+    );
+    await expect(
+      service.checkHostname(ORG, "a", operator),
+    ).resolves.toMatchObject({ status: "invalid" });
+    await admin.query(
+      `insert into admin.settings (config_group,config_key,value_type,config_value)
+      select 'customer_portal','customer_portal.reserved_host_bindings','json',
+        jsonb_build_object('a.ruyin.work','T-' || tenant_no::text,
+          'robot05.ruyin.work','T-' || tenant_no::text)::text
+      from tenancy.tenants where id=$1`,
+      [tenantId],
+    );
+    for (const prefix of ["a", "robot05"]) {
+      await expect(
+        service.checkHostname(ORG, prefix, operator),
+      ).resolves.toMatchObject({ status: "invalid" });
+      await expect(
+        service.checkHostname(tenantId, prefix, operator),
+      ).resolves.toMatchObject({
+        status: prefix === "a" ? "occupied" : "available",
+      });
+    }
+    // A reservation never releases the existing organization's unique domain binding.
+    await expect(
+      service.checkHostname(tenantId, "a", operator),
+    ).resolves.toMatchObject({ status: "occupied" });
+  });
+
+  it.each([
+    "not-json",
+    "null",
+    "[]",
+    '{"a.ruyin.work":"company name"}',
+    '{"a.example.com":"T-2143889307"}',
+    '{"admin.ruyin.work":"T-2143889307"}',
+  ])("rejects malformed platform reservations: %s", async (value) => {
+    await admin.query(
+      "update admin.settings set config_value=$1 where config_key='customer_portal.reserved_host_bindings'",
+      [value],
+    );
+    await expect(
+      new CustomerPortalService(admin).checkHostname(ORG, "a", {
+        id: USER,
+        surface: "admin",
+      }),
+    ).resolves.toMatchObject({ status: "invalid" });
+  });
+
+  it("rechecks platform reservation authorization before publication", async () => {
+    await admin.query(
+      "update admin.settings set config_value='{}' where config_key='customer_portal.reserved_host_bindings'",
+    );
+    await expect(
+      new CustomerPortalService(admin).transition(
+        ORG,
+        VERSION,
+        { action: "publish" },
+        { id: USER, surface: "admin" },
+      ),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it("allows only one organization to claim a hostname after both availability checks pass", async () => {
