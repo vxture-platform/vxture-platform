@@ -18,6 +18,10 @@ import {
   Icon,
   MetricGrid,
   SegmentedControl,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
@@ -152,11 +156,11 @@ export function UsagePage() {
   const periodLabel = (period: string): string => {
     if (window === "hour") {
       return formatClock(`${period.replace(" ", "T")}:00Z`, locale, "—", {
-        time: "short",
+        time: "long",
         timeZone: current?.bucketZone ?? "UTC",
       });
     }
-    if (window === "month") return period.slice(0, 7);
+    if (window === "month") return `${period.slice(0, 7)}-01`;
     return period.slice(5, 10);
   };
   const content = (chart: React.ReactNode) =>
@@ -177,48 +181,67 @@ export function UsagePage() {
   return (
     <ViewLayout>
       <ViewHeader
+        className="[&>div:last-child]:max-w-full"
         icon="chart-line"
         title={t("title")}
         description={t("description")}
         action={
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => router.push("/usage/records")}
-          >
-            <Icon name="search" size="xs" fallback="placeholder" />
-            <span>{t("viewRecords")}</span>
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-sm">
+            <SegmentedControl<ConsoleUsageWindow>
+              ariaLabel={t("trend.windowLabel")}
+              value={window}
+              onChange={setWindow}
+              size="sm"
+              fill={false}
+              items={[
+                { value: "hour", label: t("trend.windowHour") },
+                { value: "day", label: t("trend.windowDay") },
+                { value: "week", label: t("trend.windowWeek") },
+                { value: "month", label: t("trend.windowMonth") },
+              ]}
+            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("scopeDetails")}
+                  >
+                    <Icon name="info" size="sm" fallback="placeholder" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" variant="surface">
+                  <div className="flex flex-col gap-sm text-body-sm">
+                    <p>{t("globalScope")}</p>
+                    {current ? (
+                      <p>
+                        {t("range", {
+                          from: formatRange(current.from, current.bucketZone),
+                          to: formatRange(current.to, current.bucketZone),
+                          zone: formatTimezone(
+                            current.bucketZone,
+                            current.bucketZone,
+                          ),
+                        })}
+                      </p>
+                    ) : null}
+                    {current?.zoneFallback ? <p>{t("zoneFallback")}</p> : null}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/usage/records")}
+            >
+              <Icon name="search" size="xs" fallback="placeholder" />
+              <span>{t("viewRecords")}</span>
+            </Button>
+          </div>
         }
       />
-      <div className="flex flex-col gap-sm">
-        <SegmentedControl<ConsoleUsageWindow>
-          ariaLabel={t("trend.windowLabel")}
-          value={window}
-          onChange={setWindow}
-          items={[
-            { value: "hour", label: t("trend.windowHour") },
-            { value: "day", label: t("trend.windowDay") },
-            { value: "week", label: t("trend.windowWeek") },
-            { value: "month", label: t("trend.windowMonth") },
-          ]}
-        />
-        <p className="text-body-sm text-muted-foreground">{t("globalScope")}</p>
-        {current ? (
-          <p className="text-body-sm text-muted-foreground">
-            {t("range", {
-              from: formatRange(current.from, current.bucketZone),
-              to: formatRange(current.to, current.bucketZone),
-              zone: formatTimezone(current.bucketZone, current.bucketZone),
-            })}
-          </p>
-        ) : null}
-        {current?.zoneFallback ? (
-          <p role="status" className="text-body-sm text-muted-foreground">
-            {t("zoneFallback")}
-          </p>
-        ) : null}
-      </div>
       {failed ? (
         <LoadFailedBanner
           onRetry={() => setReloadKey((key) => key + 1)}

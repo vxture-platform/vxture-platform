@@ -139,8 +139,8 @@ describe.skipIf(!RUN)("usage analytics snapshot", () => {
   // ============================================================================
 
   it.each([
-    ["hour", "2026-11-13T11:00:00.000Z", 24],
-    ["day", "2026-10-15T16:00:00.000Z", 30],
+    ["hour", "2026-11-13T16:00:00.000Z", 19],
+    ["day", "2026-10-31T16:00:00.000Z", 14],
     ["week", "2026-08-23T16:00:00.000Z", 12],
     ["month", "2025-11-30T16:00:00.000Z", 12],
   ] as const)(
@@ -210,22 +210,63 @@ describe.skipIf(!RUN)("usage analytics snapshot", () => {
 
   it("keeps the day window on midnight across a DST change", async () => {
     const result = await read("day", "2026-10-26T12:00:00Z", "Europe/Berlin");
-    expect(result.from).toBe("2026-09-26T22:00:00.000Z");
-    expect(result.buckets).toHaveLength(30);
+    expect(result.from).toBe("2026-09-30T22:00:00.000Z");
+    expect(result.buckets).toHaveLength(26);
   });
 
-  it("keeps repeated DST hours separate within exactly 24 hourly buckets", async () => {
+  it("keeps repeated DST hours separate from today's midnight", async () => {
     await event("2026-10-25T00:30:00Z", 2);
     await event("2026-10-25T01:30:00Z", 3);
     const result = await read("hour", "2026-10-25T12:30:00Z", "Europe/Berlin");
-    expect(result.from).toBe("2026-10-24T13:00:00.000Z");
-    expect(result.buckets).toHaveLength(24);
+    expect(result.from).toBe("2026-10-24T22:00:00.000Z");
+    expect(result.buckets).toHaveLength(15);
     expect(
       result.buckets.find((b) => b.period === "2026-10-25 00:00")?.total,
     ).toBe(2);
     expect(
       result.buckets.find((b) => b.period === "2026-10-25 01:00")?.total,
     ).toBe(3);
+  });
+
+  it.each([
+    ["hour", "2026-11-13T15:59:59Z", "2026-11-13T16:00:00Z"],
+    ["day", "2026-10-31T15:59:59Z", "2026-10-31T16:00:00Z"],
+  ] as const)(
+    "%s includes its natural start even when earlier usage exists",
+    async (window, before, start) => {
+      await event(before, 100);
+      await event(start, 3);
+      await event("2026-11-14T10:29:59Z", 2, null);
+      await event("2026-11-14T10:30:00Z", 100);
+      const result = await read(window);
+      expect(result.buckets[0]?.total).toBe(3);
+      expect(result.buckets[1]?.total).toBe(0);
+      for (const rows of [result.buckets, result.products, result.members]) {
+        expect(rows.reduce((sum, row) => sum + row.total, 0)).toBe(5);
+      }
+    },
+  );
+
+  it.each(["hour", "day"] as const)(
+    "%s retains a zero bucket exactly at the natural start",
+    async (window) => {
+      const result = await read(window, "2026-10-31T16:00:00Z");
+      expect(result.from).toBe("2026-10-31T16:00:00.000Z");
+      expect(result.to).toBe(result.from);
+      expect(result.buckets).toEqual([
+        {
+          period: window === "hour" ? "2026-10-31 16:00" : "2026-11-01 00:00",
+          total: 0,
+        },
+      ]);
+    },
+  );
+
+  it("starts at local midnight in a timezone with a half-hour offset", async () => {
+    const result = await read("hour", "2026-11-14T10:30:00Z", "Asia/Kolkata");
+    expect(result.from).toBe("2026-11-13T18:30:00.000Z");
+    expect(result.buckets).toHaveLength(17);
+    expect(result.buckets[0]).toEqual({ period: "2026-11-13 18:30", total: 0 });
   });
 
   it("does not disclose another tenant's workspace", async () => {

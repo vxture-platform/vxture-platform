@@ -99,7 +99,8 @@ export class PgMeteringReadRepository {
           where w.id = $1 and w.tenant_id = $2 and w.deleted_at is null
        ), bounds as (
          select case when $4 = 'hour'
-                then date_trunc('hour', $6::timestamptz, $5) - interval '23 hours'
+                then date_trunc('day', $6::timestamptz, $5)
+                when $4 = 'day' then date_trunc('month', $6::timestamptz, $5)
                 else (date_trunc($4, $6::timestamptz at time zone $5)
                  - ($7::int - 1) * ('1 ' || $4)::interval) at time zone $5 end as from_at,
                 $6::timestamptz as to_at
@@ -116,7 +117,7 @@ export class PgMeteringReadRepository {
          select generate_series(
            case when $4 = 'hour' then b.from_at at time zone 'UTC'
                 else date_trunc($4, b.from_at at time zone $5) end,
-           case when $4 = 'hour' then (b.from_at + interval '23 hours') at time zone 'UTC'
+           case when $4 = 'hour' then date_bin(interval '1 hour', b.to_at, b.from_at) at time zone 'UTC'
                 else date_trunc($4, b.to_at at time zone $5) end,
            ('1 ' || $4)::interval) as period from bounds b
        ), time_usage as (
