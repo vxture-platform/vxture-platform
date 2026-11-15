@@ -149,21 +149,58 @@ export class CustomerPortalService {
     db: Pool | PoolClient,
     tenantId: string,
     prefix: unknown,
+    lockSetting = false,
   ) {
-    if (prefix !== "a") return portalHostname(prefix);
+    const hostname = portalHostname(prefix, true);
+    // Platform system parameters own reservations; customer drafts cannot grant one.
+    const settings = await db.query<{
+      config_value: string;
+      value_type: string;
+      is_encrypted: boolean;
+    }>(
+      `select config_value, value_type, is_encrypted from admin.settings
+       where config_key='customer_portal.reserved_host_bindings'${lockSetting ? " for share" : ""}`,
+    );
+    const setting = settings.rows[0];
+    let bindings: unknown = {};
+    if (setting) {
+      try {
+        if (setting.value_type !== "json" || setting.is_encrypted)
+          throw new Error();
+        bindings = JSON.parse(setting.config_value);
+        if (
+          !bindings ||
+          typeof bindings !== "object" ||
+          Array.isArray(bindings)
+        )
+          throw new Error();
+        for (const [host, organization] of Object.entries(bindings)) {
+          if (
+            !host.endsWith(".ruyin.work") ||
+            portalHostname(host.slice(0, -".ruyin.work".length), true) !==
+              host ||
+            typeof organization !== "string" ||
+            !/^T-\d{10}$/.test(organization)
+          )
+            throw new Error();
+        }
+      } catch {
+        throw new BadRequestException("平台预留域名配置无效，请联系平台管理员");
+      }
+    }
+    const organization = (bindings as Record<string, string>)[hostname];
+    if (!organization) return portalHostname(prefix);
     const { rows } = await db.query(
       `select 1 from tenancy.tenants t where t.id=$1
-       and t.name='如影智能研究院' and t.type='organization'
-       and t.status='active' and t.deleted_at is null
-       and not exists (select 1 from tenancy.tenants other
-         where other.name=t.name and other.id<>t.id and other.deleted_at is null)`,
-      [tenantId],
+       and t.tenant_no::text=$2 and t.type='organization'
+       and t.status='active' and t.deleted_at is null`,
+      [tenantId, organization.slice(2)],
     );
     if (!rows.length)
       throw new BadRequestException(
-        "a.ruyin.work 为如影智能研究院的平台专属预留域名",
+        "该域名为平台预留域名，当前组织未获绑定授权",
       );
-    return portalHostname(prefix, true);
+    return hostname;
   }
 
   private async isHostnameOccupied(
@@ -202,6 +239,7 @@ export class CustomerPortalService {
     tenantId: string,
     hostname: string,
   ): Promise<void> {
+    await this.resolveHostname(db, tenantId, hostname.split(".")[0], true);
     if (await this.isHostnameOccupied(db, tenantId, hostname))
       throw new ConflictException("该域名已被其他门户或平台产品占用");
   }
@@ -229,7 +267,7 @@ export class CustomerPortalService {
         tenantId,
       ]);
       await db.query(`select pg_advisory_xact_lock(hashtext($1))`, [hostname]);
-      await this.resolveHostname(db, tenantId, body.prefix);
+      await this.resolveHostname(db, tenantId, body.prefix, true);
       const organization = await db.query(
         `select t.id from tenancy.tenants t
         join tenancy.workspaces w on w.tenant_id=t.id
