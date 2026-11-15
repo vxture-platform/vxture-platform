@@ -4026,6 +4026,91 @@ export async function seedCatalog(client) {
   );
 }
 
+// ── Dedicated first-party RP registration ────────────────────────────────────
+// Run independently so adding a host does not re-seed unrelated catalog rows.
+export async function seedCustomerPortalClient(client, env = process.env) {
+  const hosts = (env.CUSTOMER_PORTAL_HOSTS || "").split(",");
+  const validHost = /^(?:a|[a-z][a-z0-9]{2,7})\.ruyin\.work$/;
+  const reserved = new Set([
+  // Platform identity, authentication and management surfaces.
+  "www", "ruyin", "vxture", "official", "platform", "system", "root",
+  "admin", "admins", "console", "opera", "arche", "portal", "workbench",
+  "account", "accounts", "auth", "oauth", "oidc", "sso", "saml", "login",
+  "logout", "signin", "signup", "register", "password", "passwd", "reset",
+  "verify", "identity", "session", "token", "tokens", "callback", "consent",
+  // Infrastructure, delivery, storage and internal environments.
+  "api", "apis", "gateway", "backend", "frontend", "internal", "private",
+  "public", "service", "services", "server", "servers", "proxy", "edge",
+  "origin", "cdn", "static", "assets", "images", "img", "files", "upload",
+  "uploads", "download", "storage", "media", "content", "data", "database",
+  "postgres", "mysql", "redis", "cache", "backup", "backups", "logs", "audit",
+  "metrics", "monitor", "health", "healthz", "status", "trace", "tracing",
+  "dev", "develop", "test", "testing", "qa", "uat", "stage", "staging",
+  "beta", "alpha", "canary", "preview", "prod", "live", "demo", "sandbox",
+  "debug", "local", "intranet", "docker", "registry", "git", "gitlab", "ci", "cd",
+  // Messaging, security, support and commercial trust names.
+  "mail", "email", "webmail", "smtp", "imap", "pop", "pop3", "mx", "dns",
+  "ns", "ns1", "ns2", "ftp", "sftp", "ssh", "vpn", "wpad", "autoconf",
+  "autodiscover", "support", "help", "helpdesk", "contact", "abuse", "noc",
+  "security", "trust", "privacy", "legal", "terms", "policy", "policies",
+  "cert", "acme", "ssl", "tls", "billing", "payment", "payments", "pay",
+  "invoice", "invoices", "order", "orders", "checkout", "wallet", "finance",
+  "license", "pricing", "sales", "partner", "partners", "customer", "tenant",
+  "tenants", "user", "users", "member", "members", "staff", "employee",
+  "operator", "owner", "manager", "super", "adminapi", "sysadmin",
+  // Existing product brands and official information surfaces.
+  "atlas", "runos", "arda", "karda", "umbra", "vxtpl", "varda", "ontos",
+  "terra", "raven", "anlan", "forge", "xuanzhen", "nocus", "runa",
+  "app", "apps", "web", "www1", "www2", "mobile", "desktop", "client",
+  "docs", "doc", "wiki", "blog", "news", "about", "home", "index", "search",
+]);
+  const reservedFamily = /^(?:www|api|admin|auth|login|sso|oidc|oauth|mail|smtp|imap|pop|ns|dns|cdn|static|status|dev|test|stage|staging|prod|beta|canary|system|ruyin|vxture)[0-9]*$/;
+  if (
+    new Set(hosts).size !== hosts.length ||
+    hosts.some((host) => !validHost.test(host) || reserved.has(host.split(".")[0]) || reservedFamily.test(host.split(".")[0]))
+  ) {
+    throw new Error("CUSTOMER_PORTAL_HOSTS must list unique, unreserved .ruyin.work subdomains");
+  }
+
+  const hash = env.OIDC_CLIENT_SECRET_HASH_CUSTOMER_PORTAL;
+  if (!hash || !/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(hash)) {
+    throw new Error("A bcrypt customer portal OIDC client secret hash is required");
+  }
+  const logoutUris = hosts.map((host) => `https://${host}/`);
+  const redirectUris = logoutUris.map((uri) => `${uri}auth/callback`);
+  const result = await client.query(
+    `insert into appoidc.oidc_clients as existing
+       (client_id, realm, client_kind, release_channel, name, display_name,
+        client_secret_hash, redirect_uris, post_logout_redirect_uris,
+        allowed_scopes, pkce_required, token_endpoint_auth_method,
+        slo_participation, back_channel_logout_uri)
+     values ('customer-portal', 'customer', 'platform', 'stable',
+        'Customer Portal', '专属门户', $1, $2, $3, array['openid','profile'],
+        true, 'client_secret_basic', 'back_channel', $4)
+     on conflict (client_id) do update set
+        client_secret_hash = excluded.client_secret_hash,
+        redirect_uris = excluded.redirect_uris,
+        post_logout_redirect_uris = excluded.post_logout_redirect_uris,
+        allowed_scopes = excluded.allowed_scopes,
+        pkce_required = true,
+        slo_participation = excluded.slo_participation,
+        back_channel_logout_uri = excluded.back_channel_logout_uri,
+        updated_at = now()
+     where existing.client_kind = 'platform' and existing.realm = 'customer'
+       and existing.release_channel = 'stable'
+       and existing.token_endpoint_auth_method = 'client_secret_basic'`,
+    [hash, redirectUris, logoutUris, `${logoutUris[0]}auth/backchannel-logout`],
+  );
+  if (result.rowCount !== 1) {
+    throw new Error("Existing customer-portal client conflicts with the dedicated registration");
+  }
+  console.log(`✓ customer-portal OIDC client: ${hosts.length} exact redirect host(s)`);
+}
+
 if (isMain(import.meta.url)) {
-  runSeed("catalog", seedCatalog);
+  if (process.argv[2] === "--customer-portal-only") {
+    runSeed("customer-portal", seedCustomerPortalClient);
+  } else {
+    runSeed("catalog", seedCatalog);
+  }
 }

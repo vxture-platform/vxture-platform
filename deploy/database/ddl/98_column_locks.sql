@@ -637,3 +637,25 @@ GRANT UPDATE (amount) ON billing.invoice_receipt_bills TO platform_svc;
 -- account.lifecycle_operations [anchor: id, user_id, deletion_requested_at, created_at]
 REVOKE UPDATE ON account.lifecycle_operations FROM platform_svc;
 GRANT UPDATE (status,payload,attempts,next_attempt_at,last_error,updated_at) ON account.lifecycle_operations TO platform_svc;
+
+-- ===========================================================================
+-- Dedicated customer portal anchors
+-- Snapshot triggers additionally reject edits to submitted data and audit facts.
+-- These grants affect platform_svc only; svc_customer_portal remains read-only.
+-- ===========================================================================
+
+-- tenancy.customer_portals [anchor: id]
+REVOKE UPDATE ON tenancy.customer_portals FROM platform_svc;
+GRANT UPDATE (tenant_id, hostname, workspace_id, self_service, enabled, revision, draft, published_version_id, updated_at, updated_by, updated_surface) ON tenancy.customer_portals TO platform_svc;
+
+-- tenancy.customer_portal_versions [anchor: id]
+REVOKE UPDATE ON tenancy.customer_portal_versions FROM platform_svc;
+GRANT UPDATE (portal_id, version, configuration, status, note, submitted_by, submitted_surface, submitted_at, review_note, reviewed_by, reviewed_at) ON tenancy.customer_portal_versions TO platform_svc;
+
+-- tenancy.customer_portal_assets [anchor: portal_id, hash]
+REVOKE UPDATE ON tenancy.customer_portal_assets FROM platform_svc;
+GRANT UPDATE (mime, bytes) ON tenancy.customer_portal_assets TO platform_svc;
+
+-- tenancy.customer_portal_events [anchor: id, created_at]
+REVOKE UPDATE ON tenancy.customer_portal_events FROM platform_svc;
+GRANT UPDATE (portal_id, actor_id, surface, action, version_id) ON tenancy.customer_portal_events TO platform_svc;

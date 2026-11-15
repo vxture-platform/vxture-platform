@@ -55,6 +55,40 @@ render_nginx() {
   echo "  渲染 $(basename "$src") → $dst"
 }
 
+# Read the same non-secret host list as the targeted OIDC seed without sourcing credentials.
+customer_portal_env="${CUSTOMER_PORTAL_ENV_FILE:-$COMPOSE_ENV_RUNTIME_DIR/.env.customer-portal-bff}"
+customer_portal_template="$SRC/templates/customer-portal.vhost.template"
+customer_portal_hosts=()
+if [ -f "$customer_portal_env" ]; then
+  customer_portal_host_list="$(sed -n 's/^CUSTOMER_PORTAL_HOSTS=//p' "$customer_portal_env" | tail -n 1)"
+  if [ -n "$customer_portal_host_list" ]; then
+    customer_portal_label='(a|[a-z][a-z0-9]{2,7})'
+    customer_portal_host="${customer_portal_label}\.ruyin\.work"
+    if [[ ! "$customer_portal_host_list" =~ ^${customer_portal_host}(,${customer_portal_host})*$ ]] ||
+       [ ! -f "$customer_portal_template" ]; then
+      echo "Invalid CUSTOMER_PORTAL_HOSTS or missing customer portal vhost template." >&2
+      exit 1
+    fi
+    IFS=, read -r -a customer_portal_hosts <<< "$customer_portal_host_list"
+    declare -A customer_portal_seen=()
+    for host in "${customer_portal_hosts[@]}"; do
+      customer_portal_prefix="${host%%.*}"
+      customer_portal_reserved='www|ruyin|vxture|official|platform|system|root|admin|admins|console|opera|arche|portal|workbench|account|accounts|auth|oauth|oidc|sso|saml|login|logout|signin|signup|register|password|passwd|reset|verify|identity|session|token|tokens|callback|consent|api|apis|gateway|backend|frontend|internal|private|public|service|services|server|servers|proxy|edge|origin|cdn|static|assets|images|img|files|upload|uploads|download|storage|media|content|data|database|postgres|mysql|redis|cache|backup|backups|logs|audit|metrics|monitor|health|healthz|status|trace|tracing|dev|develop|test|testing|qa|uat|stage|staging|beta|alpha|canary|preview|prod|live|demo|sandbox|debug|local|intranet|docker|registry|git|gitlab|ci|cd|mail|email|webmail|smtp|imap|pop|pop3|mx|dns|ns|ns1|ns2|ftp|sftp|ssh|vpn|wpad|autoconf|autodiscover|support|help|helpdesk|contact|abuse|noc|security|trust|privacy|legal|terms|policy|policies|cert|acme|ssl|tls|billing|payment|payments|pay|invoice|invoices|order|orders|checkout|wallet|finance|license|pricing|sales|partner|partners|customer|tenant|tenants|user|users|member|members|staff|employee|operator|owner|manager|super|adminapi|sysadmin|atlas|runos|arda|karda|umbra|vxtpl|varda|ontos|terra|raven|anlan|forge|xuanzhen|nocus|runa|app|apps|web|www1|www2|mobile|desktop|client|docs|doc|wiki|blog|news|about|home|index|search'
+      customer_portal_reserved_family='^(?:www|api|admin|auth|login|sso|oidc|oauth|mail|smtp|imap|pop|ns|dns|cdn|static|status|dev|test|stage|staging|prod|beta|canary|system|ruyin|vxture)[0-9]*$'
+      if [[ "$customer_portal_prefix" =~ ^(${customer_portal_reserved})$ ]] ||
+         [[ "$customer_portal_prefix" =~ $customer_portal_reserved_family ]]; then
+        echo "Reserved customer portal host: $host" >&2
+        exit 1
+      fi
+      if [ -n "${customer_portal_seen[$host]:-}" ]; then
+        echo "Duplicate customer portal host: $host" >&2
+        exit 1
+      fi
+      customer_portal_seen[$host]=1
+    done
+  fi
+fi
+
 # compose 不再是裸 cp：仓内 compose.nginx.yml 是**终态**（nginx 发布 tailnet :8081 作 IdP 换票
 # 别名）。在一台 auth-bff 还直接发布 :8081 的主机上原样落下，31 紧接着的 `compose up -d` 会重建
 # nginx 去绑一个还被占着的口——compose 先停旧再起新，新的起不来，**全站 80/443 一起下线**。
@@ -208,6 +242,25 @@ if [ -f "$AGENT_RENDERER" ]; then
     echo "==> 已渲染智能体通配兜底 vhost → $DST/sites-enabled/agents.conf"
   fi
 fi
+
+# Render after existing sites and the product map so their hosts take precedence.
+for host in "${customer_portal_hosts[@]}"; do
+  if awk -v host="$host" '$1 == "server_name" {
+      for (i = 2; i <= NF; i++) {
+        name = $i; sub(/;$/, "", name); if (name == host) found = 1
+      }
+    } END { exit !found }' "$DST/sites-enabled/"*.conf; then
+    echo "Skipping customer portal host already routed to a site: $host" >&2
+    continue
+  fi
+  if [ -f "$AGENT_MAP" ] && awk -v host="$host" '$1 == host { found=1 } END { exit !found }' "$AGENT_MAP"; then
+    echo "Skipping customer portal host already routed to a product: $host" >&2
+    continue
+  fi
+  VX_CUSTOMER_PORTAL_HOST="$host" envsubst '${VX_CUSTOMER_PORTAL_HOST}' \
+    <"$customer_portal_template" >"$DST/sites-enabled/customer-portal-${host%%.*}.conf"
+  echo "==> Rendered customer portal vhost: $host"
+done
 
 echo ""
 # ── 站点接管档位：平台维护 / 临时门户（owner 2026-09-24）────────────────────

@@ -168,7 +168,142 @@ function historicalProblems(writtenActions, historicalActions, readRouter) {
   return errors;
 }
 
+// ============================================================================
+// Inspect audit writer payloads instead of unrelated domain action arguments.
+// ============================================================================
+/** Collect literal actions and retain nonliteral writers for explicit review. */
+function scanAuditActions(file, source) {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const writers = new Set(["auditCustomerAction"]);
+  const actions = new Set();
+  const dynamic = [];
+  for (const statement of tree.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const binding of bindings.elements) {
+      if ((binding.propertyName ?? binding.name).text === "auditCustomerAction")
+        writers.add(binding.name.text);
+    }
+  }
+  function visit(node) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      writers.has(node.expression.text)
+    ) {
+      const payload = node.arguments[2];
+      if (!payload || !ts.isObjectLiteralExpression(payload))
+        throw new Error(
+          `${file}: audit payload must be an inline object for catalogue verification`,
+        );
+      const properties = payload.properties.filter(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          (ts.isIdentifier(property.name) ||
+            ts.isStringLiteral(property.name)) &&
+          property.name.text === "action",
+      );
+      if (
+        properties.length !== 1 ||
+        payload.properties.some(ts.isSpreadAssignment)
+      )
+        throw new Error(
+          `${file}: audit payload must have one explicit action and no spreads`,
+        );
+      const property = properties[0];
+      const value = property.initializer;
+      if (
+        ts.isStringLiteral(value) ||
+        ts.isNoSubstitutionTemplateLiteral(value)
+      )
+        actions.add(value.text);
+      else dynamic.push(property.getText(tree));
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(tree);
+  return { actions, dynamic };
+}
+
 if (process.argv.includes("--self-test")) {
+  const literalActions = (source) =>
+    [...scanAuditActions("fixture.ts", source).actions].sort();
+  assert.deepEqual(
+    literalActions(
+      'auditCustomerAction(pool, req, { action: "tenant.update", after: { action: "withdraw" } });',
+    ),
+    ["tenant.update"],
+  );
+  assert.deepEqual(
+    literalActions(
+      "auditCustomerAction(pool, req, { 'action': 'tenant.update' });",
+    ),
+    ["tenant.update"],
+  );
+  assert.deepEqual(
+    literalActions(
+      'import { auditCustomerAction as recordAction } from "../audit/audit-log"; recordAction(pool, req, { action: "tenant.update" });',
+    ),
+    ["tenant.update"],
+  );
+  assert.deepEqual(
+    literalActions('service.transition(id, version, { action: "withdraw" });'),
+    [],
+  );
+  assert.deepEqual(
+    literalActions(
+      '// auditCustomerAction(pool, req, { action: "fake.comment" });\nconst example = \'action: "fake.string"\';',
+    ),
+    [],
+  );
+  assert.deepEqual(
+    literalActions(
+      "auditCustomerAction(pool, req, { action: `tenant.update` });",
+    ),
+    ["tenant.update"],
+  );
+  const dynamicAction = scanAuditActions(
+    "fixture.ts",
+    'auditCustomerAction(pool, req, { action: enabled ? "subscription.auto_renew_on" : "subscription.auto_renew_off" });',
+  );
+  assert.equal(dynamicAction.actions.size, 0);
+  assert.equal(dynamicAction.dynamic.length, 1);
+  assert.ok(
+    dynamicAction.dynamic[0].includes('? "subscription.auto_renew_on"'),
+  );
+  const templateAction = scanAuditActions(
+    "fixture.ts",
+    "auditCustomerAction(pool, req, { action: `subscription.${action}` });",
+  );
+  assert.equal(templateAction.dynamic.length, 1);
+  assert.throws(
+    () =>
+      scanAuditActions(
+        "fixture.ts",
+        "auditCustomerAction(pool, req, payload);",
+      ),
+    /inline object/,
+  );
+  assert.throws(
+    () =>
+      scanAuditActions(
+        "fixture.ts",
+        'auditCustomerAction(pool, req, { ...payload, action: "tenant.update" });',
+      ),
+    /no spreads/,
+  );
+  assert.throws(
+    () =>
+      scanAuditActions(
+        "fixture.ts",
+        "auditCustomerAction(pool, req, { after: {} });",
+      ),
+    /explicit action/,
+  );
+  console.log(
+    "Audit writer scanner self-test passed (literals, aliases, domain transitions, comments, dynamic actions and unsupported payloads).",
+  );
   const historical = new Set(RETIRED.map((entry) => entry.code));
   const check = (source, active = new Set(), history = historical) =>
     historicalProblems(active, history, () => source);
@@ -211,12 +346,25 @@ if (files.length === 0) {
 
 for (const f of files) {
   const src = readFileSync(`${ROUTERS}/${f}`, "utf8");
-  for (const m of src.matchAll(/action: "([a-z_.]+)"/g)) written.add(m[1]);
+  const { actions, dynamic } = scanAuditActions(f, src);
+  for (const action of actions) written.add(action);
+  for (const property of dynamic) {
+    if (
+      !DYNAMIC.some(
+        (entry) => entry.file === f && property.includes(entry.evidence),
+      )
+    )
+      problems.push(`Unregistered dynamic audit writer: ${f}: ${property}`);
+  }
 }
 
 for (const d of DYNAMIC) {
   const src = readFileSync(`${ROUTERS}/${d.file}`, "utf8");
-  if (!src.includes(d.evidence)) {
+  if (
+    !scanAuditActions(d.file, src).dynamic.some((property) =>
+      property.includes(d.evidence),
+    )
+  ) {
     problems.push(
       `动态登记已过期：${d.file} 里找不到证据片段 \`${d.evidence}\`——` +
         `那几个码（${d.codes.join(" / ")}）现在还写不写？`,

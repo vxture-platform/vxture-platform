@@ -311,3 +311,29 @@ GRANT INSERT (user_id, tenant_id, workspace_id, view), UPDATE (view)
 -- Personal identity status only: exclude names and identity documents.
 GRANT USAGE ON SCHEMA kyc TO svc_console_bff;
 GRANT SELECT (user_id, status) ON kyc.user_kycs TO svc_console_bff;
+-- ===========================================================================
+-- Dedicated customer portal: explicit column reads, no schema-wide grants
+-- Credentials are provisioned separately; a new role has no password.
+-- ===========================================================================
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'svc_customer_portal') THEN
+        CREATE ROLE svc_customer_portal LOGIN;
+    END IF;
+END $$;
+GRANT USAGE ON SCHEMA tenancy, account, metering, product TO svc_customer_portal;
+GRANT SELECT (id, tenant_id, workspace_id, hostname, enabled, published_version_id)
+    ON tenancy.customer_portals TO svc_customer_portal;
+GRANT SELECT (id, portal_id, configuration, status) ON tenancy.customer_portal_versions TO svc_customer_portal;
+GRANT SELECT (portal_id, hash, mime, bytes) ON tenancy.customer_portal_assets TO svc_customer_portal;
+GRANT SELECT (id, type, status, deleted_at) ON tenancy.tenants TO svc_customer_portal;
+GRANT SELECT (id, tenant_id, name, status, deleted_at) ON tenancy.workspaces TO svc_customer_portal;
+GRANT SELECT (tenant_id, user_id, status) ON tenancy.tenant_memberships TO svc_customer_portal;
+GRANT SELECT (workspace_id, tenant_id, user_id, status) ON tenancy.workspace_memberships TO svc_customer_portal;
+GRANT SELECT (id, account, status, deleted_at) ON account.users TO svc_customer_portal;
+GRANT SELECT (user_id, display_name) ON account.user_profiles TO svc_customer_portal;
+GRANT SELECT (workspace_id, tenant_id, plan_version_id, deleted_at, status, start_at, end_at, trial_end_at)
+    ON metering.subscriptions TO svc_customer_portal;
+GRANT SELECT (plan_version_id, component_role, product_id) ON product.plan_components TO svc_customer_portal;
+GRANT SELECT (id, product_code, product_name, description, deleted_at, is_customer_visible, status) ON product.products TO svc_customer_portal;
+GRANT SELECT (product_id, home_url) ON product.product_webhooks TO svc_customer_portal;

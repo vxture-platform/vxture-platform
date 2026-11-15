@@ -3028,3 +3028,58 @@ export async function applyCreditRate(payload: {
     "Credit rate apply failed",
   );
 }
+
+// ============================================================================
+// Organization-scoped customer portal management
+// ============================================================================
+export async function customerPortalRequest<T>(
+  scope: string,
+  suffix = "",
+  method: "GET" | "POST" | "PUT" = "GET",
+  body?: unknown,
+): Promise<T> {
+  const path = `/api/tenants/${encodeURIComponent(scope)}/customer-portal`;
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}${path}${suffix}`,
+    {
+      method,
+      credentials: "include",
+      cache: "no-store",
+      ...(body !== undefined
+        ? {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }
+        : {}),
+    },
+  );
+  if (!response.ok) {
+    const error = await responseError(response, "Portal request failed");
+    throw new AdminBffError(error.message, response.status, error.code);
+  }
+  return (await response.json()) as T;
+}
+export async function uploadCustomerPortalAsset(
+  scope: string,
+  file: File,
+): Promise<{ hash: string }> {
+  const path = `/api/tenants/${encodeURIComponent(scope)}/customer-portal`;
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}${path}/assets`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    },
+  );
+  if (!response.ok) {
+    const error = await responseError(response, "Portal request failed");
+    throw new AdminBffError(error.message, response.status, error.code);
+  }
+  return (await response.json()) as { hash: string };
+}
+export function customerPortalAssetUrl(scope: string, hash: string): string {
+  const path = `/api/tenants/${encodeURIComponent(scope)}/customer-portal`;
+  return `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}${path}/assets/${encodeURIComponent(hash)}`;
+}

@@ -33,6 +33,7 @@ import { AtlasRouter } from "./routers/atlas.router";
 import { RunosRouter } from "./routers/runos.router";
 import { BillingRouter } from "./routers/billing.router";
 import { CapabilitiesRouter } from "./routers/capabilities.router";
+import { CustomerPortalRouter } from "./routers/customer-portal.router";
 import { HealthRouter } from "./routers/health.router";
 import { IamRouter } from "./routers/iam.router";
 import { InboxRouter } from "./routers/inbox.router";
@@ -65,6 +66,7 @@ import { VerificationRouter } from "./routers/verification.router";
     OidcRpModule,
   ],
   controllers: [
+    CustomerPortalRouter,
     ApplicationsRouter,
     NativeAuthRouter,
     HealthRouter,
