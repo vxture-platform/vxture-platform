@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { OidcService } from "./oidc.service";
+import { logoutTestStore } from "./logout-test-store";
 
 /**
  * 登出后的回跳白名单（owner 2026-09-10 走查：会话到期后停在 accounts/logout）。
@@ -30,6 +31,7 @@ function build(registered: string[]) {
     clients,
     config: { platform: { WEBSITE_BASE_URL: "https://vxture.com/zh-CN" } },
     redis: {
+      ...logoutTestStore(() => ({ sub: null, clientIds: [] })),
       /* 会话已过期:两个读都给空——这正是走查那一幕。 */
       getOidcSession: vi.fn(async () => null),
       getOidcSessionClients: vi.fn(async () => []),
@@ -131,6 +133,7 @@ describe("Accounts logout destination", () => {
   it("revokes the selected session and notifies its relying parties before returning home", async () => {
     const { service } = build([]);
     const redis = {
+      ...logoutTestStore(() => ({ sub: "usr-1", clientIds: ["website"] })),
       getOidcSession: vi.fn(async () => ({ sub: "usr-1" })),
       getOidcSessionClients: vi.fn(async () => ["website"]),
       deleteOidcSession: vi.fn(),
@@ -146,9 +149,14 @@ describe("Accounts logout destination", () => {
         "accounts-self:customer",
       ),
     ).toBe("https://vxture.com/");
-    expect(redis.deleteOidcSession).toHaveBeenCalledWith("sid-current");
+    expect(redis.beginOidcLogout).toHaveBeenCalledWith("sid-current");
     expect(token.revokeSession).toHaveBeenCalledWith("sid-current");
-    expect(notify).toHaveBeenCalledWith("sid-current", "usr-1", ["website"]);
+    expect(notify).toHaveBeenCalledWith(
+      "sid-current",
+      "usr-1",
+      ["website"],
+      true,
+    );
   });
 
   it("does not recognize lookalike internal client identifiers", async () => {

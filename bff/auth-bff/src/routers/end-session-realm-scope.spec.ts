@@ -52,8 +52,15 @@ async function logout(
 }
 
 describe("end_session 按发起方 realm 收口", () => {
-  it("从 console（租户）退出：只结束租户会话，只清 vx_sid 与 hint，运营者会话不动", async () => {
-    const { ended, cleared } = await logout("customer", "console");
+  it.each([
+    "website",
+    "console",
+    "workbench",
+    "customer-portal",
+    "yucer",
+    "cospace",
+  ])("%s logout ends only the customer realm", async (clientId) => {
+    const { ended, cleared } = await logout("customer", clientId);
     expect(ended).toEqual(["sid-tenant"]);
     expect(cleared).toContain("vx_sid");
     expect(cleared).toContain("vx_hint");

@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CustomerSecurityService } from "./customer-security.service";
 import { OidcService } from "./oidc.service";
+import { logoutTestStore } from "./logout-test-store";
 import type { CustomerSessionContext } from "./realm-session.service";
 
 // ============================================================================
@@ -235,6 +236,7 @@ describe("customer sensitive self-service orchestration", () => {
 
 it("does not delete another customer's or workforce cache", async () => {
   const redis = {
+    ...logoutTestStore(() => ({ sub: "usr_123", clientIds: ["console"] })),
     getOidcSession: vi.fn(async (sid: string) =>
       sid === "owned"
         ? { realm: "customer", sub: "usr_123" }
@@ -246,10 +248,16 @@ it("does not delete another customer's or workforce cache", async () => {
   const token = { revokeSession: vi.fn(async () => {}) };
   const logout = vi.fn(async () => {});
   const oidc = Object.create(OidcService.prototype) as OidcService;
-  Object.assign(oidc, { redis, token, sendBackChannelLogouts: logout });
+  Object.assign(oidc, {
+    redis,
+    token,
+    sendBackChannelLogouts: logout,
+    durableSession: { revoke: vi.fn(async () => {}) },
+    logger: { warn: vi.fn(), error: vi.fn() },
+  });
   await oidc.cleanupCustomerSessions("123", ["owned", "other"]);
-  expect(redis.deleteOidcSession).toHaveBeenCalledExactlyOnceWith("owned");
-  expect(logout).toHaveBeenCalledWith("owned", "usr_123", ["console"]);
+  expect(redis.beginOidcLogout).toHaveBeenCalledExactlyOnceWith("owned");
+  expect(logout).toHaveBeenCalledWith("owned", "usr_123", ["console"], true);
 });
 
 it("keeps customer sessions and credentials active after a username-only change", async () => {

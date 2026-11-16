@@ -576,23 +576,11 @@ export class OidcService {
     let clientIds: string[] = initiatingClientId ? [initiatingClientId] : [];
     for (const sid of sids) {
       if (!sid) continue;
-      const session = await this.redis.getOidcSession(sid);
-      const sessionClients = await this.redis.getOidcSessionClients(sid);
+      const work = await this.redis.beginOidcLogout(sid);
       /* 回跳白名单要对着**所有**被结束会话的 client 校验：从 opera 登出时，
          允许回跳的是 opera 登记的地址，而它可能只挂在其中一个会话上。 */
-      clientIds = [...new Set([...clientIds, ...sessionClients])];
-      await this.redis.deleteOidcSession(sid);
-      await this.token.revokeSession(sid);
-      try {
-        await this.durableSession.revoke(sid);
-      } catch (err) {
-        this.logger.warn(
-          `durable session revoke failed for ${sid}: ${String(err)}`,
-        );
-      }
-      if (session) {
-        await this.sendBackChannelLogouts(sid, session.sub, sessionClients);
-      }
+      clientIds = [...new Set([...clientIds, ...work.clientIds])];
+      await this.processOidcLogout(sid, true);
     }
     // Internal Accounts intents have no registered RP. Their exit is fixed by
     // server configuration, never by a caller-provided redirect or state.
@@ -613,6 +601,83 @@ export class OidcService {
     return state
       ? this.appendParams(postLogoutRedirectUri, { state })
       : postLogoutRedirectUri;
+  }
+
+  // ============================================================================
+  // Resumable logout cleanup and delivery
+  // ============================================================================
+
+  /** Retry a bounded due batch; each record remains until cleanup and delivery succeed. */
+  async retryPendingLogouts(): Promise<void> {
+    await Promise.all(
+      (await this.redis.pendingOidcLogouts()).map(async (sid) => {
+        try {
+          await this.processOidcLogout(sid);
+        } catch {
+          this.logger.error("Central logout retry remains pending");
+        }
+      }),
+    );
+  }
+
+  private async processOidcLogout(
+    sid: string,
+    interactive = false,
+  ): Promise<void> {
+    const lease = randomUUID();
+    const work = await this.redis.claimOidcLogout(sid, lease);
+    if (!work) {
+      // Another worker owns cleanup; do not report durable completion prematurely.
+      if (interactive) throw sessionStatusUnavailable();
+      return;
+    }
+    work.attempts += 1;
+    try {
+      if (!work.cleanupComplete) {
+        const results = await Promise.allSettled([
+          this.token.revokeSession(sid),
+          // Workforce central sessions do not belong to the customer session store.
+          ...(work.realm === "workforce"
+            ? []
+            : [this.durableSession.revoke(sid)]),
+        ]);
+        const failure = results.find((result) => result.status === "rejected");
+        if (failure?.status === "rejected") throw failure.reason;
+        work.cleanupComplete = true;
+      }
+    } catch {
+      this.logger.error("Central logout durable cleanup remains pending");
+    }
+    // Notify even if the durable store is unavailable: the central Redis session
+    // has already been retired, so RPs should deny the old identity immediately.
+    const batch = work.clientIds.slice(0, 8);
+    const results = await Promise.allSettled(
+      batch.map(async (clientId) => {
+        if (work.sub)
+          await this.sendBackChannelLogouts(sid, work.sub, [clientId], true);
+        return clientId;
+      }),
+    );
+    const delivered = new Set(
+      results.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      ),
+    );
+    // Rotate failures behind unattempted clients so unavailable products cannot
+    // starve the rest of a growing product catalog.
+    work.clientIds = [
+      ...work.clientIds.slice(batch.length),
+      ...batch.filter((id) => !delivered.has(id)),
+    ];
+    if (work.clientIds.length > 0) {
+      this.logger.warn(
+        `Back-channel logout pending: clients=${work.clientIds.join(",")} attempt=${work.attempts}`,
+      );
+    }
+    if (!(await this.redis.saveOidcLogout(work, lease))) {
+      throw sessionStatusUnavailable();
+    }
+    if (!work.cleanupComplete && interactive) throw sessionStatusUnavailable();
   }
 
   /** Public client branding (name/display/logo) for the login + post-logout surfaces; no secrets. */
@@ -682,10 +747,7 @@ export class OidcService {
         (cached.realm !== "customer" || cached.sub !== `usr_${userId}`)
       )
         continue;
-      const clients = await this.redis.getOidcSessionClients(sid);
-      await this.token.revokeSession(sid);
-      await this.redis.deleteOidcSession(sid);
-      await this.sendBackChannelLogouts(sid, `usr_${userId}`, clients);
+      await this.endSession([sid]);
     }
   }
 
@@ -707,13 +769,10 @@ export class OidcService {
       (cached.realm !== "customer" || cached.sub !== `usr_${userId}`)
     )
       return false;
-    const clients = await this.redis.getOidcSessionClients(sid);
+    await this.redis.beginOidcLogout(sid);
     const revoked = await this.account.revokeSession(userId, sid);
-    if (!revoked) return false;
-    await this.token.revokeSession(sid);
-    await this.redis.deleteOidcSession(sid);
-    await this.sendBackChannelLogouts(sid, `usr_${userId}`, clients);
-    return true;
+    await this.processOidcLogout(sid, true);
+    return revoked;
   }
 
   /**
@@ -729,13 +788,7 @@ export class OidcService {
       (session) => session.sub === sub,
     );
     for (const session of sessions) {
-      await this.redis.deleteOidcSession(session.sid);
-      await this.token.revokeSession(session.sid);
-      await this.sendBackChannelLogouts(
-        session.sid,
-        session.sub,
-        session.clients,
-      );
+      await this.endSession([session.sid]);
     }
     return sessions.length;
   }
@@ -782,13 +835,15 @@ export class OidcService {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({ logout_token: logoutToken }).toString(),
-            ...(strict ? { signal: AbortSignal.timeout(5000) } : {}),
+            signal: AbortSignal.timeout(5000),
+            redirect: "error",
           });
-          if (strict && !response.ok)
-            throw new Error("backchannel_delivery_failed");
+          if (!response.ok) throw new Error("backchannel_delivery_failed");
         } catch (error) {
           if (strict) throw error;
-          // Existing callers retain best-effort delivery.
+          this.logger.warn(
+            `Back-channel logout delivery failed: client=${clientId}`,
+          );
         }
       }),
     );

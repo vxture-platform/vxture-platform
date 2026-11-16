@@ -26,6 +26,16 @@ import Redis from "ioredis";
 import { createHash, randomUUID } from "node:crypto";
 import type { OidcSessionStatus } from "../oidc/session-status";
 
+/** Persisted logout work; contains routing metadata, never tokens or credentials. */
+export interface OidcLogoutWork {
+  sid: string;
+  sub: string | null;
+  realm: "customer" | "workforce" | null;
+  clientIds: string[];
+  cleanupComplete: boolean;
+  attempts: number;
+}
+
 /** Encrypted enrollment staged separately from the active workforce factor. */
 export interface OperatorTotpPending {
   secret: string;
@@ -1625,6 +1635,141 @@ return 0`,
         "OIDC session client lookup failed",
       );
     }
+  }
+
+  // ============================================================================
+  // Resumable central logout
+  // ============================================================================
+
+  /** Snapshot recipients and retire the central session in one Redis operation. */
+  async beginOidcLogout(sid: string): Promise<OidcLogoutWork> {
+    const raw: unknown = await this.requireReadyClient().eval(
+      `local raw = redis.call('GET', KEYS[4])
+       if not raw then
+         local sub = redis.call('HGET', KEYS[1], 'sub')
+         local work = {sid=ARGV[1], sub=sub or cjson.null,
+           realm=redis.call('HGET', KEYS[1], 'realm') or cjson.null,
+           clientIds=sub and redis.call('SMEMBERS', KEYS[3]) or {}, cleanupComplete=false, attempts=0}
+         raw = cjson.encode(work)
+         redis.call('SET', KEYS[4], raw)
+       end
+       redis.call('ZADD', KEYS[5], 'NX', redis.call('TIME')[1], ARGV[1])
+       redis.call('DEL', KEYS[1], KEYS[2], KEYS[3])
+       redis.call('ZREM', KEYS[6], ARGV[1])
+       return raw`,
+      6,
+      this.sessionKey(sid),
+      this.sessionActiveOrgKey(sid),
+      this.sessionClientsKey(sid),
+      `${this.prefix}oidc:logout:work:${sid}`,
+      `${this.prefix}oidc:logout:pending`,
+      this.operatorSessionIndexKey(),
+      sid,
+    );
+    return this.parseOidcLogoutWork(raw);
+  }
+
+  /** Lease work across replicas; an abandoned lease becomes eligible after 30 seconds. */
+  async claimOidcLogout(
+    sid: string,
+    lease: string,
+  ): Promise<OidcLogoutWork | null> {
+    const raw: unknown = await this.requireReadyClient().eval(
+      `local raw = redis.call('GET', KEYS[1])
+       if not raw then return nil end
+       if not redis.call('SET', KEYS[2], ARGV[2], 'NX', 'EX', 30) then return nil end
+       redis.call('ZADD', KEYS[3], tonumber(redis.call('TIME')[1])+30, ARGV[1])
+       return raw`,
+      3,
+      `${this.prefix}oidc:logout:work:${sid}`,
+      `${this.prefix}oidc:logout:lease:${sid}`,
+      `${this.prefix}oidc:logout:pending`,
+      sid,
+      lease,
+    );
+    return raw === null ? null : this.parseOidcLogoutWork(raw);
+  }
+
+  /** Commit progress only for the current lease; failed recipients have no expiry. */
+  async saveOidcLogout(work: OidcLogoutWork, lease: string): Promise<boolean> {
+    const complete = work.cleanupComplete && work.clientIds.length === 0;
+    const delay = Math.min(60, 2 ** Math.min(work.attempts, 6));
+    return (
+      Number(
+        await this.requireReadyClient().eval(
+          `if redis.call('GET', KEYS[2]) ~= ARGV[2] then return 0 end
+       if ARGV[4] == '1' then
+         redis.call('DEL', KEYS[1])
+         redis.call('ZREM', KEYS[3], ARGV[1])
+       else
+         redis.call('SET', KEYS[1], ARGV[3])
+         redis.call('ZADD', KEYS[3], tonumber(redis.call('TIME')[1])+tonumber(ARGV[5]), ARGV[1])
+       end
+       redis.call('DEL', KEYS[2])
+       return 1`,
+          3,
+          `${this.prefix}oidc:logout:work:${work.sid}`,
+          `${this.prefix}oidc:logout:lease:${work.sid}`,
+          `${this.prefix}oidc:logout:pending`,
+          work.sid,
+          lease,
+          JSON.stringify(work),
+          complete ? "1" : "0",
+          delay,
+        ),
+      ) === 1
+    );
+  }
+
+  /** Scan a bounded due batch; no KEYS scan and no destructive reads. */
+  async pendingOidcLogouts(): Promise<string[]> {
+    const client = this.requireReadyClient();
+    const now = Number((await client.time())[0]);
+    if (!Number.isFinite(now)) throw new Error("Invalid Redis clock");
+    return client.zrangebyscore(
+      `${this.prefix}oidc:logout:pending`,
+      "-inf",
+      now,
+      "LIMIT",
+      0,
+      20,
+    );
+  }
+
+  private parseOidcLogoutWork(raw: unknown): OidcLogoutWork {
+    if (typeof raw !== "string") throw new Error("Invalid logout work");
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error("Invalid logout work");
+    const work = value as Record<string, unknown>;
+    // Redis Lua encodes an empty SMEMBERS result as an object.
+    const ids = work.clientIds;
+    const clientIds = Array.isArray(ids)
+      ? ids
+      : ids && typeof ids === "object" && Object.keys(ids).length === 0
+        ? []
+        : null;
+    if (
+      typeof work.sid !== "string" ||
+      !work.sid ||
+      ![null, "customer", "workforce"].includes(work.realm as string | null) ||
+      (work.sub !== null && (typeof work.sub !== "string" || !work.sub)) ||
+      !clientIds ||
+      !clientIds.every((id): id is string => typeof id === "string" && !!id) ||
+      (work.sub === null && clientIds.length > 0) ||
+      typeof work.cleanupComplete !== "boolean" ||
+      !Number.isSafeInteger(work.attempts) ||
+      Number(work.attempts) < 0
+    )
+      throw new Error("Invalid logout work");
+    return {
+      sid: work.sid,
+      sub: work.sub,
+      realm: work.realm as OidcLogoutWork["realm"],
+      clientIds,
+      cleanupComplete: work.cleanupComplete,
+      attempts: Number(work.attempts),
+    };
   }
 
   /** Destroy a central session (and its per-client active_org map). */

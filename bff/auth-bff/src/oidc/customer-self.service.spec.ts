@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { LoginHistoryEntry } from "@vxture/service-account";
 import { CustomerSelfService } from "./customer-self.service";
 import { OidcService } from "./oidc.service";
+import { logoutTestStore } from "./logout-test-store";
 import type { CustomerSessionContext } from "./realm-session.service";
 
 // ============================================================================
@@ -168,8 +169,12 @@ describe("customer account-center data boundary", () => {
 function revocation() {
   const durable = { userId: "123", realm: "customer" };
   const cached = { sub: "usr_123", realm: "customer" };
-  const durableSession = { get: vi.fn(async () => durable) };
+  const durableSession = {
+    get: vi.fn(async () => durable),
+    revoke: vi.fn(async () => {}),
+  };
   const redis = {
+    ...logoutTestStore(() => ({ sub: "usr_123", clientIds: ["console"] })),
     getOidcSession: vi.fn(async () => cached),
     getOidcSessionClients: vi.fn(async () => ["console"]),
     deleteOidcSession: vi.fn(async () => {}),
@@ -184,6 +189,7 @@ function revocation() {
     account,
     token,
     sendBackChannelLogouts,
+    logger: { warn: vi.fn(), error: vi.fn() },
   });
   return {
     oidc,
@@ -203,10 +209,13 @@ describe("owned customer session revocation", () => {
     expect(await f.oidc.endCustomerSession("123", "target")).toBe(true);
     expect(f.account.revokeSession).toHaveBeenCalledWith("123", "target");
     expect(f.token.revokeSession).toHaveBeenCalledWith("target");
-    expect(f.redis.deleteOidcSession).toHaveBeenCalledWith("target");
-    expect(f.sendBackChannelLogouts).toHaveBeenCalledWith("target", "usr_123", [
-      "console",
-    ]);
+    expect(f.redis.beginOidcLogout).toHaveBeenCalledWith("target");
+    expect(f.sendBackChannelLogouts).toHaveBeenCalledWith(
+      "target",
+      "usr_123",
+      ["console"],
+      true,
+    );
     expect(f.account.revokeSession.mock.invocationCallOrder[0]).toBeLessThan(
       f.token.revokeSession.mock.invocationCallOrder[0]!,
     );
@@ -243,7 +252,7 @@ describe("owned customer session revocation", () => {
       new Error("token store unavailable"),
     );
     await expect(f.oidc.endCustomerSession("123", "target")).rejects.toThrow(
-      "token store unavailable",
+      "Central session status unavailable",
     );
     expect(f.account.revokeSession).toHaveBeenCalled();
   });
