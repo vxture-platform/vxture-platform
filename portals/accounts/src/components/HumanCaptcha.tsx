@@ -219,6 +219,12 @@ function HumanCaptcha({
   useEffect(() => {
     let cancelled = false;
     let completed = false;
+    let popupClosed = false;
+    let retryableRejection = false;
+    let verification:
+      | Promise<{ captchaResult: boolean; bizResult: boolean }>
+      | undefined;
+    let verificationParam: string | undefined;
     let instance: CaptchaInstance | undefined;
     let expiry: ReturnType<typeof setTimeout> | undefined;
     let initialization: ReturnType<typeof setTimeout> | undefined;
@@ -260,9 +266,13 @@ function HumanCaptcha({
           button: `#${id}-button`,
           language,
           onClose: () => {
-            if (!cancelled && !completed) onCancel();
+            popupClosed = true;
+            // Closing animations can precede the server's verification response.
+            if (!cancelled && !completed && !verification) onCancel();
           },
-          onError: () => update("error"),
+          onError: () => {
+            if (!completed) update("error");
+          },
           getInstance: (value) => {
             if (!value) {
               instance = undefined;
@@ -276,39 +286,67 @@ function HumanCaptcha({
               update("challenge");
             }
           },
-          captchaVerifyCallback: async (param) => {
-            if (cancelled) return { captchaResult: false, bizResult: false };
-            try {
-              const verified = await fetch(`${API_BASE}/auth/captcha/verify`, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ realm, captchaVerifyParam: param }),
-                signal: AbortSignal.timeout(10000),
-              });
-              if (!verified.ok) throw new Error("verification_failed");
-              const proof = (await verified.json()) as {
-                token?: string;
-                expiresIn?: number;
-              };
-              if (
-                typeof proof.token !== "string" ||
-                !/^[0-9a-f-]{36}$/.test(proof.token) ||
-                proof.expiresIn !== 120
-              )
-                throw new Error("invalid_proof");
-              if (cancelled) return { captchaResult: false, bizResult: false };
-              completed = true;
-              update("verified", proof.token);
-              clearTimeout(expiry);
-              expiry = setTimeout(() => update("error"), 110000);
-              return { captchaResult: true, bizResult: true };
-            } catch {
-              update("error");
-              return { captchaResult: false, bizResult: false };
-            }
+          captchaVerifyCallback: (param) => {
+            const rejected = { captchaResult: false, bizResult: false };
+            if (cancelled) return Promise.resolve(rejected);
+            if (completed)
+              return Promise.resolve({ captchaResult: true, bizResult: true });
+            // A proof ceremony is single-use on the server; do not POST it twice.
+            if (verification)
+              return verificationParam === param
+                ? verification
+                : Promise.resolve(rejected);
+            retryableRejection = false;
+            verificationParam = param;
+            verification = (async () => {
+              try {
+                const verified = await fetch(
+                  `${API_BASE}/auth/captcha/verify`,
+                  {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ realm, captchaVerifyParam: param }),
+                    signal: AbortSignal.timeout(10000),
+                  },
+                );
+                if (cancelled) return rejected;
+                if (verified.status === 401) {
+                  // The SDK can offer another challenge in the same popup. Keep
+                  // the original sign-in waiting, bounded by the hook's timeout.
+                  retryableRejection = true;
+                  update("challenge");
+                  return rejected;
+                }
+                if (!verified.ok) throw new Error("verification_failed");
+                const proof = (await verified.json()) as {
+                  token?: string;
+                  expiresIn?: number;
+                };
+                if (
+                  typeof proof.token !== "string" ||
+                  !/^[0-9a-f-]{36}$/.test(proof.token) ||
+                  proof.expiresIn !== 120
+                )
+                  throw new Error("invalid_proof");
+                if (cancelled) return rejected;
+                completed = true;
+                update("verified", proof.token);
+                clearTimeout(expiry);
+                expiry = setTimeout(() => update("error"), 110000);
+                return { captchaResult: true, bizResult: true };
+              } catch {
+                update("error");
+                return rejected;
+              } finally {
+                verification = undefined;
+                verificationParam = undefined;
+                if (popupClosed && !cancelled && !completed) onCancel();
+              }
+            })();
+            return verification;
           },
           onBizResultCallback: (result) => {
-            if (!result) update("error");
+            if (!result && !completed && !retryableRejection) update("error");
           },
         });
       } catch {
