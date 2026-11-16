@@ -535,6 +535,20 @@ export class OidcService {
     );
   }
 
+  /** Retire the customer session replaced by a successful login in this browser. */
+  async replaceCustomerSession(previous: unknown, next: string): Promise<void> {
+    if (typeof previous !== "string" || !previous || previous === next) return;
+    const [oldSession, newSession] = await Promise.all([
+      this.redis.getOidcSession(previous),
+      this.redis.getOidcSession(next),
+    ]);
+    // A customer cookie must never select a workforce session for revocation.
+    if (oldSession?.realm !== "customer") return;
+    if (newSession?.realm !== "customer")
+      throw new UnauthorizedException("invalid_customer_session");
+    await this.endSession([previous]);
+  }
+
   /** End the central session, revoke its refresh chain, and back-channel-logout RPs. */
   async endSession(
     /**

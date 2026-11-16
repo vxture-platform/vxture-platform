@@ -24,6 +24,17 @@ afterEach(async () => {
   await fixture.stop();
 });
 
+it("clears an old local session when browser SSO no longer exists", async () => {
+  const previous = await fixture.login();
+  const start = await fixture.begin("/auth/login?prompt=none");
+  const response = await fixture.request(
+    `/auth/callback?state=${start.state}&error=login_required`,
+    `${previous}; ${start.cookie}`,
+  );
+  expect(response.status).toBe(302);
+  expect((await fixture.request("/auth/session", previous)).status).toBe(401);
+});
+
 // ============================================================================
 // Cross-portal login uses signed identity and exact context, never cookie sharing.
 // ============================================================================
@@ -87,7 +98,9 @@ describe("Console portal entry", () => {
       start.cookie,
     );
     expect(done.status).toBe(302);
-    expect(done.headers.get("location")).toBe("http://127.0.0.1/apps");
+    expect(done.headers.get("location")).toBe(
+      "http://127.0.0.1/apps?vx_sso_checked=1",
+    );
     expect((await fixture.request("/api/me", cookies(done))).status).toBe(200);
     expect(
       (
@@ -202,7 +215,9 @@ describe("authorization", () => {
       start.cookie,
     );
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("http://127.0.0.1/apps");
+    expect(response.headers.get("location")).toBe(
+      "http://127.0.0.1/apps?vx_sso_checked=1",
+    );
     expect(response.headers.get("cache-control")).toContain("no-store");
     const cookie = cookies(response);
     expect(cookie).not.toContain("private-refresh-token");
@@ -352,7 +367,9 @@ describe("authorization", () => {
       `/auth/callback?state=${start.state}&code=ok`,
       start.cookie,
     );
-    expect(response.headers.get("location")).toBe("http://127.0.0.1/");
+    expect(response.headers.get("location")).toBe(
+      "http://127.0.0.1/?vx_sso_checked=1",
+    );
   });
 });
 

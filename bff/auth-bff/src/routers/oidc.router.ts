@@ -471,7 +471,7 @@ export class OidcRouter {
       // MFA continuation: no session established yet.
       return result;
     }
-    this.setSessionCookie(res, result);
+    await this.setSessionCookie(req, res, result);
     return { redirectTo: result.redirectTo };
   }
 
@@ -499,7 +499,7 @@ export class OidcRouter {
       clientIp: extractClientIp(req),
       userAgent: resolveUserAgent(req),
     });
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     return { redirectTo: completion.redirectTo };
   }
 
@@ -540,7 +540,7 @@ export class OidcRouter {
       clientIp: extractClientIp(req),
       userAgent: resolveUserAgent(req),
     });
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     return { redirectTo: completion.redirectTo };
   }
 
@@ -579,7 +579,7 @@ export class OidcRouter {
       clientIp: extractClientIp(req),
       userAgent: resolveUserAgent(req),
     });
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     return { redirectTo: completion.redirectTo };
   }
 
@@ -620,7 +620,7 @@ export class OidcRouter {
       clientIp: extractClientIp(req),
       userAgent: resolveUserAgent(req),
     });
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     // recoveryCodes are returned ONCE here for the UI to display.
     return {
       redirectTo: completion.redirectTo,
@@ -658,7 +658,7 @@ export class OidcRouter {
       userAgent: resolveUserAgent(req),
     });
     if ("status" in result) return result;
-    this.setSessionCookie(res, result);
+    await this.setSessionCookie(req, res, result);
     return { redirectTo: result.redirectTo };
   }
 
@@ -684,7 +684,7 @@ export class OidcRouter {
       this.setCustomerMfaCookie(res, completion.mfaToken);
       return completion;
     }
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     return { redirectTo: completion.redirectTo };
   }
 
@@ -779,7 +779,7 @@ export class OidcRouter {
       this.setCustomerMfaCookie(res, completion.mfaToken);
       return completion;
     }
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     return { redirectTo: completion.redirectTo };
   }
 
@@ -820,15 +820,21 @@ export class OidcRouter {
       body.method,
       body.code,
     );
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     res.clearCookie("vx_customer_mfa", { path: "/" });
     return { redirectTo: completion.redirectTo };
   }
 
-  private setSessionCookie(
+  private async setSessionCookie(
+    req: Request,
     res: Response,
     completion: { sid: string; realm: string; sessionMaxAge: number },
-  ): void {
+  ): Promise<void> {
+    if (completion.realm === "customer")
+      await this.oidc.replaceCustomerSession(
+        req.cookies?.[SID_COOKIE.tenant],
+        completion.sid,
+      );
     const secure = process.env["IDP_COOKIE_INSECURE"] !== "true";
     const cookie = buildSidCookie({
       sid: completion.sid,

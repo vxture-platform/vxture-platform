@@ -17,8 +17,14 @@ import type { WorkspaceData } from "../../lib/contracts";
 import { WorkspacePage } from "../../modules/WorkspacePage";
 
 /** Keep fixture data inaccessible unless local design development was explicitly enabled. */
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ vx_sso_checked?: string }>;
+}) {
   if (!(await isDesignPreview())) {
+    if ((await searchParams).vx_sso_checked !== "1")
+      redirect("/auth/login?prompt=none");
     const response = await portalRequest("/api/portal/workspace");
     if (response.status === 401) redirect("/");
     if (response.status === 403) redirect("/?access=denied");

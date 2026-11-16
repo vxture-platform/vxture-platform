@@ -25,6 +25,7 @@ export { RpSessionStore } from "./rp-session.store";
 export type { RpRedis } from "./rp-session.store";
 
 export { HttpOidcRpClient } from "./http-client";
+export { checkOidcSession } from "./session-status";
 
 export { RpAuthService } from "./rp-auth.service";
 export type { RpAuthOutcome } from "./rp-auth.service";

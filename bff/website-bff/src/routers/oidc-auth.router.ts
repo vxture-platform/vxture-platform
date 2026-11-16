@@ -27,10 +27,12 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
   generatePkce,
+  checkOidcSession,
   mapAccessClaims,
   randomToken,
   safeReturnTo,
@@ -233,6 +235,30 @@ export class OidcAuthRouter {
   @Get("session")
   async session(@Req() req: Request): Promise<Record<string, unknown>> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
+    const record = rpsid ? await this.store.get(rpsid) : null;
+    if (!record || !rpsid) throw new UnauthorizedException("No active session");
+    // First-party browser bootstrap must follow the current central cookie,
+    // including its absence after logout and replacement after another login.
+    const hostname = new URL(this.rt.defaultReturnTo).hostname;
+    if (
+      (hostname === "vxture.com" || hostname.endsWith(".vxture.com")) &&
+      req.cookies?.vx_sid !== record.sid
+    ) {
+      await this.store.destroy(rpsid);
+      throw new UnauthorizedException("Central browser session changed");
+    }
+    let valid: boolean;
+    try {
+      valid = await checkOidcSession(this.rt.config, record.sid);
+    } catch {
+      throw new ServiceUnavailableException(
+        "Session verification temporarily unavailable",
+      );
+    }
+    if (!valid) {
+      await this.store.destroyBySid(record.sid);
+      throw new UnauthorizedException("Central session ended");
+    }
     const out = await this.auth.resolve(rpsid);
     if (out.status !== "ok") {
       throw new UnauthorizedException("No active session");

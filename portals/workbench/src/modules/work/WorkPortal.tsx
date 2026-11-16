@@ -84,6 +84,8 @@ function WorkPortalContent({
   const lastSyncAt = useRef(0);
   const allowSilentSso = useRef(true);
   const silentFailure = useRef(false);
+  const browserSessionChecked = useRef(false);
+  const browserSessionProbePending = useRef(false);
   const [overview, setOverview] = useState<WorkApp | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -132,6 +134,24 @@ function WorkPortalContent({
     syncInFlight.current = true;
     lastSyncAt.current = Date.now();
     const current = new URL(window.location.href);
+    if (browserSessionProbePending.current) return;
+    if (!browserSessionChecked.current) {
+      const completed = current.searchParams.get("vx_sso_checked") === "1";
+      current.searchParams.delete("vx_sso_checked");
+      if (!completed && current.searchParams.get("vx_sso_silent") !== "0") {
+        browserSessionProbePending.current = true;
+        current.searchParams.set("vx_sso_checked", "1");
+        window.location.replace(
+          authNavigation("login", current.href, {
+            prompt: "none",
+            ui_locales: document.documentElement.lang,
+          }),
+        );
+        return;
+      }
+      browserSessionChecked.current = true;
+      window.history.replaceState(null, "", current.href);
+    }
     const silentFailed = current.searchParams.get("vx_sso_silent") === "0";
     if (silentFailed) {
       silentFailure.current = true;

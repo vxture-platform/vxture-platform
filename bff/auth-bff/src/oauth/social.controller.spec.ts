@@ -33,6 +33,7 @@ function build(): Mocks {
     social as unknown as SocialAuthService,
     config as unknown as VxConfigService,
     { verifyHuman: vi.fn(async () => {}) } as never,
+    { replaceCustomerSession: vi.fn(async () => {}) } as never,
   );
   return { social, config, controller };
 }
