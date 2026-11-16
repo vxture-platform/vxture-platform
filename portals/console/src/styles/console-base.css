@@ -26,6 +26,8 @@
  * **不进 @layer**：DS 的 --background 是未分层的 :root 声明，覆盖方也必须
  * 未分层才压得住——分层的规则一律输给未分层的。 */
 :root {
+  /* Header geometry stays stable across authentication and density preferences. */
+  --spacing-header-xl: 64px;
   --background: var(--vx-color-brand-20);
 }
 

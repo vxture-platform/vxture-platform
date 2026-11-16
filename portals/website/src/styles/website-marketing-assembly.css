@@ -244,3 +244,8 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+
+/* Keep user-facing chrome stable across authentication and density preferences. */
+:root {
+  --spacing-header-xl: 64px;
+}

@@ -25,8 +25,21 @@ vi.mock("@/api/oidc", () => ({
 }));
 import { Button } from "@vxture/design-system";
 import { SessionExpiredError } from "@/api/oidc";
-import { AuthPrimaryButton, AuthResultPanel } from "./auth/AuthLogin";
+import {
+  AuthField,
+  AuthPrimaryButton,
+  AuthResultPanel,
+} from "./auth/AuthLogin";
 import { LoginEntry } from "./LoginEntry";
+import CustomerResetPage from "../app/reset-password/page";
+import OperatorResetPage from "../app/operator/reset-password/page";
+vi.mock("next-intl/server", () => ({
+  getTranslations: async () => (key: string) => key,
+}));
+vi.mock("./ResetPasswordPanel", () => ({ ResetPasswordPanel: () => null }));
+vi.mock("./OperatorResetPasswordPanel", () => ({
+  OperatorResetPasswordPanel: () => null,
+}));
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
@@ -116,6 +129,11 @@ describe("authentication actions", () => {
       expect(host.querySelector("a")?.getAttribute("href")).toBe(href);
     },
   );
+  it("moves focus to completed results without adding a tab stop", async () => {
+    await show(<AuthResultPanel tone="danger" title="Expired" />);
+    expect(document.activeElement).toBe(host.querySelector("h1"));
+    expect(host.querySelector("h1")?.getAttribute("tabindex")).toBe("-1");
+  });
   it("keeps waiting pages free of premature navigation", async () => {
     await show(<AuthResultPanel tone="neutral" title="Waiting" />);
     expect(host.querySelector("a,button")).toBeNull();
@@ -138,5 +156,47 @@ describe("authentication actions", () => {
     expect(button.className).toContain("h-control-3xl");
     expect(button.className).not.toContain("w-full");
     expect(host.querySelector("a")).toBeNull();
+  });
+  it.each([
+    ["customer", "/reset-password", "/forgot-password"],
+    ["workforce", "/operator/reset-password", "/workforce/login"],
+  ] as const)(
+    "provides the correct recovery for an invalid %s reset link",
+    async (realm, path, destination) => {
+      mocks.path = path;
+      const page = realm === "customer" ? CustomerResetPage : OperatorResetPage;
+      await show(await page({ searchParams: Promise.resolve({}) }));
+      expect(host.querySelector("a")?.getAttribute("href")).toBe(destination);
+    },
+  );
+  it("focuses the first invalid field while preserving its help association", async () => {
+    await show(
+      <form>
+        <AuthField
+          label="Email"
+          placeholder="Email"
+          name="email"
+          type="email"
+          value="bad"
+          error="Invalid email"
+          onChange={() => {}}
+        />
+        <AuthField
+          label="Name"
+          placeholder="Name"
+          name="name"
+          type="text"
+          value=""
+          error="Required"
+          onChange={() => {}}
+        />
+      </form>,
+    );
+    const input = host.querySelector("input")!;
+    expect(document.activeElement).toBe(input);
+    expect(
+      host.querySelector("#" + input.getAttribute("aria-describedby"))
+        ?.textContent,
+    ).toBe("Invalid email");
   });
 });

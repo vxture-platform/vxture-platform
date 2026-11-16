@@ -194,7 +194,7 @@ export function ConsoleHeader({
   return (
     <ShellHeader
       className="max-sm:[&>div:nth-child(2)]:hidden"
-      height="lg"
+      height="xl"
       surface="transparent"
       centerAlign="end"
       leading={

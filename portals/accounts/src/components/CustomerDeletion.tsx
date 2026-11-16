@@ -290,18 +290,24 @@ export function CustomerDeletion({
           )}
           {error && !confirmOpen ? (
             <>
-              <Banner tone="danger" title={error} />
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setError("");
-                  setRevision((v) => v + 1);
-                  setChallenge("");
-                  setVerified(false);
-                }}
-              >
-                {formText("start_again")}
-              </Button>
+              <Banner
+                className="accounts-recovery-feedback"
+                tone="danger"
+                title={error}
+                action={
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setError("");
+                      setRevision((v) => v + 1);
+                      setChallenge("");
+                      setVerified(false);
+                    }}
+                  >
+                    {formText("start_again")}
+                  </Button>
+                }
+              />
             </>
           ) : null}
         </div>

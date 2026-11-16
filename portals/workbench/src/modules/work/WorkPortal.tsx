@@ -21,7 +21,7 @@ import {
   SegmentedControl,
   ToastProvider,
 } from "@vxture/design-system";
-import { loadWorkData } from "../../lib/api";
+import { loadWorkData, loadWorkSession } from "../../lib/api";
 import { authNavigation } from "../../lib/navigation";
 import type {
   AppView,
@@ -80,6 +80,7 @@ function WorkPortalContent({
   const [result, setResult] = useState<LoadResult<WorkData> | null>(null);
   const [revision, setRevision] = useState(0);
   const syncInFlight = useRef(false);
+  const sessionEpoch = useRef(0);
   const lastSyncAt = useRef(0);
   const allowSilentSso = useRef(true);
   const silentFailure = useRef(false);
@@ -127,6 +128,7 @@ function WorkPortalContent({
   useEffect(() => {
     if (!runtime.authConfigured || !knownRoute) return;
     const controller = new AbortController();
+    const epoch = sessionEpoch.current;
     syncInFlight.current = true;
     lastSyncAt.current = Date.now();
     const current = new URL(window.location.href);
@@ -138,7 +140,7 @@ function WorkPortalContent({
     }
     void loadWorkData(controller.signal, runtime.catalogConfigured)
       .then((value) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || epoch !== sessionEpoch.current) return;
         // ruyin.work cannot read the IdP cookie on accounts.vxture.com.
         // A bounded top-level prompt=none flow restores this RP independently.
         if (value.status === "error" && value.code === 401) {
@@ -237,6 +239,43 @@ function WorkPortalContent({
       document.removeEventListener("visibilitychange", foreground);
     };
   }, [runtime.authConfigured, knownRoute]);
+  const authenticated = result?.status === "ready";
+  useEffect(() => {
+    if (!authenticated || !knownRoute) return;
+    const controller = new AbortController();
+    let pending = false;
+    const timer = window.setInterval(() => {
+      if (
+        document.visibilityState !== "visible" ||
+        pending ||
+        syncInFlight.current
+      )
+        return;
+      pending = true;
+      void loadWorkSession(controller.signal)
+        .then((value) => {
+          if (controller.signal.aborted) return;
+          if (value.status === "error" && value.code === 401) {
+            sessionEpoch.current += 1;
+            allowSilentSso.current = false;
+            setResult(value);
+            setDetailsOpen(false);
+            setNotificationsOpen(false);
+            setOverview(null);
+          }
+        })
+        .catch(() => {
+          // A transport failure is not evidence of central logout.
+        })
+        .finally(() => {
+          pending = false;
+        });
+    }, 15_000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [authenticated, knownRoute]);
   useEffect(() => {
     setDetailsOpen(false);
     setNotificationsOpen(false);

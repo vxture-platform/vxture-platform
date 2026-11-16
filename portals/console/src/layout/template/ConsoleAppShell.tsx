@@ -405,7 +405,7 @@ export function ConsoleAppShell({
         {/* 骨架用 DS 的 ShellHeader 本体（而非旧的 .vxh--skeleton 类）撑版位：
             两者高度必须逐像素相同，否则会话就绪的一刻整页会往下跳一格。 */}
         <ShellHeader
-          height="lg"
+          height="xl"
           surface="transparent"
           centerAlign="end"
           leading={

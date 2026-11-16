@@ -72,7 +72,7 @@ body {
   grid-template-columns: max-content auto minmax(0, 1fr);
   align-items: center;
   gap: var(--spacing-icon-sm);
-  height: var(--spacing-header-lg);
+  height: var(--spacing-header-xl);
   padding-inline: max(
     calc(var(--vx-spacing) * 4),
     calc((100% - var(--container-page-2xl)) / 2)
@@ -85,7 +85,6 @@ body {
   background: color-mix(in srgb, var(--primary) 12%, var(--background));
 }
 .work-header-public {
-  height: var(--spacing-header-xl);
   grid-template-columns: minmax(0, 1fr) auto;
   background: transparent;
   border-color: transparent;
@@ -194,7 +193,7 @@ body {
   max-width: var(--container-page-2xl);
   min-height: 0;
   margin-inline: auto;
-  padding: calc(var(--spacing-header-lg) + var(--space-3xl))
+  padding: calc(var(--spacing-header-xl) + var(--space-3xl))
     calc(var(--vx-spacing) * 4) var(--space-lg);
 }
 .work-skip {
@@ -1036,7 +1035,7 @@ body {
   }
   .work-main {
     padding-top: calc(
-      var(--spacing-header-lg) + var(--space-control-md) + var(--space-xl)
+      var(--spacing-header-xl) + var(--space-control-md) + var(--space-xl)
     );
     padding-inline: var(--space-lg);
   }
@@ -1310,4 +1309,9 @@ body {
   .work-main {
     padding-inline: calc(var(--vx-spacing) * 8);
   }
+}
+
+/* Keep user-facing chrome stable across authentication and density preferences. */
+:root {
+  --spacing-header-xl: 64px;
 }

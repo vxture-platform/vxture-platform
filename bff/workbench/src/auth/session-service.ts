@@ -45,7 +45,10 @@ export class SessionService {
   // ========================================================================
   // Authentication: Redis coordinates refresh and central checks across pods.
   // ========================================================================
-  async authenticate(req: Request): Promise<Authenticated> {
+  async authenticate(
+    req: Request,
+    checkCentral = false,
+  ): Promise<Authenticated> {
     const id = this.cookie(req);
     if (!id)
       throw failure(401, "WORKBENCH_LOGIN_REQUIRED", "Sign in to continue");
@@ -72,6 +75,17 @@ export class SessionService {
     const current = await this.store.read(id);
     if (!current)
       throw failure(401, "WORKBENCH_LOGIN_REQUIRED", "Sign in to continue");
+    // Explicit browser probes bypass the five-minute API cache. Outages still
+    // propagate as 503 and never revoke an otherwise valid local binding.
+    if (checkCentral) {
+      const central = await this.client.centralStatus(current.session.sid);
+      if (!central.valid) {
+        await this.store.revokeSid(current.session.sid);
+        throw failure(401, "WORKBENCH_LOGIN_REQUIRED", "Central session ended");
+      }
+      if (!(await this.store.read(id)))
+        throw failure(401, "WORKBENCH_LOGIN_REQUIRED", "Sign in to continue");
+    }
     const claims = await this.client.verifyAccessToken(
       current.session.accessToken,
     );

@@ -29,15 +29,10 @@ body {
   background: var(--surface-user-center);
 }
 .accounts-header {
-  height: calc(var(--vx-spacing) * 16);
-  flex: 0 0 calc(var(--vx-spacing) * 16);
+  height: var(--spacing-header-xl);
+  flex: 0 0 var(--spacing-header-xl);
   background: transparent;
   z-index: 30;
-}
-
-.accounts-header-account {
-  height: calc(var(--vx-spacing) * 14);
-  flex-basis: calc(var(--vx-spacing) * 14);
 }
 
 .accounts-user-panel {
@@ -302,6 +297,14 @@ body {
   flex-direction: column;
   gap: var(--space-sm);
 }
+/* Keep recovery actions beneath the message at every viewport width. */
+.accounts-recovery-feedback {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.accounts-recovery-feedback > :last-child {
+  grid-column: 2;
+}
 .accounts-verification:empty {
   display: none;
 }
@@ -313,11 +316,6 @@ body {
 }
 .accounts-captcha[data-state="disabled"] {
   display: none;
-}
-.accounts-captcha > button {
-  align-self: flex-start;
-  height: var(--space-xl);
-  padding: 0;
 }
 .accounts-captcha > div:empty {
   display: none;
@@ -1130,4 +1128,9 @@ body:has(.accounts-viewport)
 body:has(.accounts-viewport) label[data-slot] > span[aria-hidden="true"] {
   color: var(--destructive);
   margin-inline-start: var(--space-2xs);
+}
+
+/* Keep user-facing chrome stable across authentication and density preferences. */
+:root {
+  --spacing-header-xl: 64px;
 }

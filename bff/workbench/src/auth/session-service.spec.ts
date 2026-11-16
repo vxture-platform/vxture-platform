@@ -93,6 +93,23 @@ describe("RP session lifecycle", () => {
     expect(await fixture.store.read(id)).toBeNull();
     expect(fixture.store.revokedSids.has("central-session")).toBe(true);
   });
+  it("rejects a cached RP session immediately when the central session ended without backchannel delivery", async () => {
+    expect((await fixture.request("/api/me", cookie)).status).toBe(200);
+    fixture.central = { valid: false };
+    const response = await fixture.request("/auth/session", cookie);
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(await fixture.store.read(id)).toBeNull();
+    expect((await fixture.request("/api/me", cookie)).status).toBe(401);
+  });
+  it("preserves cached login during a central probe outage and recovers", async () => {
+    fixture.statusCode = 503;
+    expect((await fixture.request("/auth/session", cookie)).status).toBe(503);
+    expect(await fixture.store.read(id)).not.toBeNull();
+    fixture.statusCode = 200;
+    expect((await fixture.request("/auth/session", cookie)).status).toBe(200);
+    expect(fixture.statusBody).toMatchObject({ active: false });
+  });
   it.each(["local", "backchannel"])(
     "cannot resurrect a session during concurrent %s logout",
     async (kind) => {

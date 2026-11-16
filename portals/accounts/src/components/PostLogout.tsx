@@ -118,7 +118,9 @@ export function PostLogout({
           className="size-icon-lg animate-spin rounded-full border-medium border-primary border-t-transparent"
           aria-hidden="true"
         />
-        <p className="text-body text-muted-foreground">{t("redirecting")}</p>
+        <p role="status" className="text-body text-muted-foreground">
+          {t("redirecting")}
+        </p>
       </main>
     );
   }

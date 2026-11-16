@@ -6,6 +6,7 @@
  * token and renders the new-password form; a missing token means the link was
  * malformed/opened out of band — show a friendly notice instead of a broken form.
  */
+import { Button } from "@vxture/design-system";
 import { getTranslations } from "next-intl/server";
 import { AccountsNotice } from "@/components/AuthChrome";
 import { OperatorResetPasswordPanel } from "@/components/OperatorResetPasswordPanel";
@@ -24,6 +25,11 @@ export default async function OperatorResetPasswordPage({
   if (!token) {
     return (
       <AccountsNotice
+        action={
+          <Button asChild size="action">
+            <a href="/workforce/login">{t("back_to_workforce_login")}</a>
+          </Button>
+        }
         title={t("invalid_reset_link")}
         description={t("invalid_operator_reset_detail")}
       />

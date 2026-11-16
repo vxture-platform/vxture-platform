@@ -557,7 +557,19 @@
     "confirm_identity_hint": "Confirm your identity to continue this action.",
     "confirm_identity": "Confirm identity",
     "verify_passkey": "Use a passkey",
-    "verified_contact_required": "No verification method is available. Verify an existing contact first."
+    "verified_contact_required": "No verification method is available. Verify an existing contact first.",
+    "captcha_unavailable_title": "Verification is temporarily unavailable",
+    "captcha_unavailable_detail": "Reload verification to try again. Your entries have been kept.",
+    "captcha_network_title": "Connection interrupted",
+    "captcha_network_detail": "The verification request could not be completed. Check your connection and try again. Your entries have been kept.",
+    "captcha_expired_title": "Verification has expired",
+    "captcha_expired_detail": "Verify again before continuing to sign in.",
+    "captcha_incomplete_title": "Verification is not complete",
+    "captcha_incomplete_detail": "Follow the instructions in the verification window and try again.",
+    "request_new_reset_link": "Get a new reset link",
+    "back_to_workforce_login": "Back to operator sign-in",
+    "preferences_save_failed_detail": "Your changes have been kept but have not been saved. Please save again.",
+    "save_again": "Save again"
   },
   "accountsApi": {
     "error_1": "Sign-in expired. Start again from your app.",

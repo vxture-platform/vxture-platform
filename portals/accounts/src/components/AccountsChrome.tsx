@@ -61,7 +61,7 @@ export function AccountsHeader({
   return (
     <>
       <ShellHeader
-        height={layout === "account" ? "lg" : "xl"}
+        height="xl"
         surface="transparent"
         layout={layout === "public" ? "centered" : "full"}
         className={`accounts-header accounts-header-${layout}`}
