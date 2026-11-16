@@ -8,7 +8,7 @@
  * @author AI-Generated
  * @date 2026-11-15
  */
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Button, Icon, Input } from "@vxture/design-system";
 import type { PortalBrand, WorkspaceData } from "../lib/contracts";
 import { BrandIdentity } from "./BrandIdentity";
@@ -24,6 +24,33 @@ export function WorkspacePage({
   data: WorkspaceData;
   designPreview?: boolean;
 }) {
+  useEffect(() => {
+    if (designPreview) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("vx_sso_checked");
+    window.history.replaceState(null, "", url.href);
+    const check = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const response = await fetch("/auth/session", { cache: "no-store" });
+        if (response.status === 401 || response.status === 403)
+          window.location.replace(
+            response.status === 403 ? "/?access=denied" : "/",
+          );
+      } catch {
+        // Connectivity failures do not establish central logout.
+      }
+    };
+    const timer = window.setInterval(() => void check(), 15_000);
+    const foreground = () => void check();
+    window.addEventListener("focus", foreground);
+    document.addEventListener("visibilitychange", foreground);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", foreground);
+      document.removeEventListener("visibilitychange", foreground);
+    };
+  }, [designPreview]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("全部应用");
   const categories = [

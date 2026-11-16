@@ -287,6 +287,9 @@ export class AuthRouter {
       pending.silent &&
       (error === "login_required" || error === "interaction_required")
     ) {
+      const previous = this.auth.cookie(req);
+      if (previous) await this.store.destroy(previous);
+      res.clearCookie(this.config.cookieName, this.options());
       const destination = new URL(pending.returnTo);
       destination.searchParams.set("vx_sso_silent", "0");
       res.redirect(destination.href);
@@ -353,7 +356,9 @@ export class AuthRouter {
       ...this.options(),
       maxAge: this.config.oidc.sessionTtlSec * 1000,
     });
-    res.redirect(pending.returnTo);
+    const destination = new URL(pending.returnTo);
+    destination.searchParams.set("vx_sso_checked", "1");
+    res.redirect(destination.href);
   }
 
   @Get("session")

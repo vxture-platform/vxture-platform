@@ -84,6 +84,21 @@ export class SessionService {
         "CUSTOMER_PORTAL_LOGIN_REQUIRED",
         "Sign in to continue",
       );
+    const central = await this.client.centralStatus(current.session.sid);
+    if (!central.valid) {
+      await this.store.revokeSid(current.session.sid);
+      throw failure(
+        401,
+        "CUSTOMER_PORTAL_LOGIN_REQUIRED",
+        "Central session ended",
+      );
+    }
+    if (!(await this.store.read(id)))
+      throw failure(
+        401,
+        "CUSTOMER_PORTAL_LOGIN_REQUIRED",
+        "Sign in to continue",
+      );
     const claims = await this.client.verifyAccessToken(
       current.session.accessToken,
     );

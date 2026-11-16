@@ -119,7 +119,7 @@ beforeEach(() => {
     configurable: true,
     value: "visible",
   });
-  window.history.replaceState(null, "", "/");
+  window.history.replaceState(null, "", "/?vx_sso_checked=1");
   sessionStorage.clear();
   mocks.load.mockReset().mockResolvedValue(ready);
   mocks.probe.mockReset().mockResolvedValue({ status: "ready", data: true });
@@ -140,6 +140,18 @@ afterEach(async () => {
 // Reconciliation must not turn a background check into navigation or blank UI
 // ============================================================================
 describe("WorkPortal session reconciliation", () => {
+  it("checks the browser's central identity before loading a fresh document", async () => {
+    window.history.replaceState(null, "", "/");
+    await mount();
+    expect(mocks.login).toHaveBeenCalledWith(
+      "login",
+      expect.stringContaining("vx_sso_checked=1"),
+      expect.objectContaining({ prompt: "none" }),
+    );
+    expect(mocks.load).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain("Verified workspace");
+  });
+
   it("retains the workspace during a pending refresh and transient failures", async () => {
     await mount();
     let resolveRead!: (value: LoadResult<WorkData>) => void;

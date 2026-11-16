@@ -197,6 +197,43 @@ const request = async (
       cookie: session,
     },
   });
+
+it("rejects a centrally revoked session before the API cache expires", async () => {
+  const start = await begin();
+  const session = cookie(await request(start.path, start.cookie));
+  vi.spyOn(SessionStore.prototype, "revokeSid").mockImplementation(async () => {
+    sessions.clear();
+  });
+  vi.mocked(PortalOidcClient.prototype.centralStatus).mockResolvedValue({
+    valid: false,
+  });
+  expect((await request("/api/portal/workspace", session)).status).toBe(401);
+  expect(sessions.size).toBe(0);
+});
+
+it("preserves local sessions during central verification outages", async () => {
+  const start = await begin();
+  const session = cookie(await request(start.path, start.cookie));
+  vi.mocked(PortalOidcClient.prototype.centralStatus).mockRejectedValue(
+    new Error("offline"),
+  );
+  expect((await request("/auth/session", session)).status).toBe(503);
+  expect(sessions.size).toBe(1);
+});
+
+it("clears an old session after a failed silent browser check", async () => {
+  const start = await begin();
+  const session = cookie(await request(start.path, start.cookie));
+  const probe = await request("/auth/login?prompt=none", session);
+  const authorize = new URL(probe.headers.get("location")!);
+  expect(authorize.searchParams.get("prompt")).toBe("none");
+  const result = await request(
+    `/auth/callback?state=${authorize.searchParams.get("state")}&error=login_required`,
+    `${session}; ${cookie(probe)}`,
+  );
+  expect(result.headers.get("location")).toBe("https://a.ruyin.work/");
+  expect((await request("/auth/session", session)).status).toBe(401);
+});
 async function begin() {
   const response = await request("/auth/login");
   expect(response.status).toBe(302);

@@ -32,6 +32,7 @@ import {
   SID_COOKIE_NAME,
 } from "../authn/cookie";
 import { TenantLoginGuard } from "../authn/tenant-login-guard.service";
+import { OidcService } from "../oidc/oidc.service";
 import { SocialAuthService } from "./social-auth.service";
 
 @Controller("auth/oauth")
@@ -40,6 +41,7 @@ export class SocialController {
     @Inject(SocialAuthService) private readonly social: SocialAuthService,
     @Inject(VxConfigService) private readonly config: VxConfigService,
     @Inject(TenantLoginGuard) private readonly human: TenantLoginGuard,
+    @Inject(OidcService) private readonly oidc: OidcService,
   ) {}
 
   /** Enabled providers for the login surface (code + display name; no secrets). */
@@ -96,7 +98,7 @@ export class SocialController {
       return;
     }
     if (result.kind === "login") {
-      this.setSessionCookie(res, result.completion);
+      await this.setSessionCookie(req, res, result.completion);
       res.redirect(
         "status" in result.completion
           ? new URL("/mfa", loginBase).toString()
@@ -155,17 +157,18 @@ export class SocialController {
       clientIp,
       userAgent,
     );
-    this.setSessionCookie(res, completion);
+    await this.setSessionCookie(req, res, completion);
     return {
       redirectTo: "status" in completion ? "/mfa" : completion.redirectTo,
     };
   }
 
   /** Set the tenant central-session cookie (shares .vxture.com; mirrors oidc.router). */
-  private setSessionCookie(
+  private async setSessionCookie(
+    req: Request,
     res: Response,
     completion: import("../oidc/oidc.service").OidcLoginResult,
-  ): void {
+  ): Promise<void> {
     const secure = process.env["IDP_COOKIE_INSECURE"] !== "true";
     if ("status" in completion) {
       res.cookie("vx_customer_mfa", completion.mfaToken, {
@@ -177,6 +180,11 @@ export class SocialController {
       });
       return;
     }
+    if (completion.realm === "customer")
+      await this.oidc.replaceCustomerSession(
+        req.cookies?.[SID_COOKIE_NAME.tenant],
+        completion.sid,
+      );
     const cookie = buildSidCookie({
       sid: completion.sid,
       realm: completion.realm === "workforce" ? "workforce" : "customer",
