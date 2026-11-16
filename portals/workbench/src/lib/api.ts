@@ -314,6 +314,25 @@ export function projectApps(
 // Portal bootstrap; session failures never become empty application data
 // ============================================================================
 /**
+ * Probe central login through this domain's RP without loading application data.
+ * @param signal - Request cancellation signal.
+ * @returns Active login or an explicit authentication/availability error.
+ */
+export async function loadWorkSession(
+  signal: AbortSignal,
+): Promise<LoadResult<boolean>> {
+  return load(
+    "/auth/session",
+    (value) => {
+      if (object(value).status !== "active")
+        throw new WorkApiError("登录已过期，请重新登录", 401);
+      return true;
+    },
+    signal,
+  );
+}
+
+/**
  * Check the RP session and load independent data sources without hiding failures.
  * @param signal - Request lifecycle cancellation signal.
  * @param catalogConfigured - Whether a public catalog proxy is configured.
@@ -323,15 +342,7 @@ export async function loadWorkData(
   signal: AbortSignal,
   catalogConfigured: boolean,
 ): Promise<LoadResult<WorkData>> {
-  const session = await load(
-    "/auth/session",
-    (value) => {
-      if (object(value).status !== "active")
-        throw new WorkApiError("登录已过期，请重新登录", 401);
-      return true;
-    },
-    signal,
-  );
+  const session = await loadWorkSession(signal);
   if (session.status === "error") return session;
   const [user, scope] = await Promise.all([
     load("/api/me", parseUser, signal),

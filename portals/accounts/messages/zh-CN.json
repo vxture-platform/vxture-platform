@@ -557,7 +557,19 @@
     "confirm_identity_hint": "请确认当前身份，以继续此项操作。",
     "confirm_identity": "确认身份",
     "verify_passkey": "使用通行密钥",
-    "verified_contact_required": "暂无可用的身份验证方式，请先验证已有联系方式。"
+    "verified_contact_required": "暂无可用的身份验证方式，请先验证已有联系方式。",
+    "captcha_unavailable_title": "验证服务暂时不可用",
+    "captcha_unavailable_detail": "当前无法完成安全验证。你的输入仍保留，请重新加载验证。",
+    "captcha_network_title": "网络连接异常",
+    "captcha_network_detail": "未能完成验证请求。请检查网络后重试，你的输入仍保留。",
+    "captcha_expired_title": "人机验证已过期",
+    "captcha_expired_detail": "请重新验证，再继续登录。",
+    "captcha_incomplete_title": "暂未完成验证",
+    "captcha_incomplete_detail": "请按照验证窗口中的提示重新验证，再继续操作。",
+    "request_new_reset_link": "重新获取重置链接",
+    "back_to_workforce_login": "返回运营登录",
+    "preferences_save_failed_detail": "你的修改仍保留，但尚未保存。请重新保存。",
+    "save_again": "重新保存"
   },
   "accountsApi": {
     "error_1": "登录会话已失效，请从应用重新发起登录",

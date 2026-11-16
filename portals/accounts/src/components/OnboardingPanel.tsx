@@ -249,19 +249,28 @@ export function OnboardingPanel() {
             </p>
           </div>
         </div>
-        {error ? <Banner tone="danger" title={error} /> : null}
-        {!initial && error ? (
-          <Button type="button" onClick={() => setRevision((v) => v + 1)}>
-            {formText("retry")}
-          </Button>
-        ) : (
+        {error ? (
+          <Banner
+            className="accounts-recovery-feedback"
+            tone="danger"
+            title={error}
+            action={
+              !initial ? (
+                <Button type="button" onClick={() => setRevision((v) => v + 1)}>
+                  {formText("retry")}
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : null}
+        {initial ? (
           <Button
             type="submit"
             disabled={!initial || busy || availability !== "available"}
           >
             {busy ? formText("saving") : formText("save_and_continue")}
           </Button>
-        )}
+        ) : null}
       </form>
     </AuthLoginTemplate>
   );

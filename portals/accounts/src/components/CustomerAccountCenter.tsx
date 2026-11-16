@@ -267,8 +267,12 @@ export function CustomerAccountCenter() {
   );
   const failed = (
     <div className="flex flex-col items-start gap-sm">
-      <Banner tone="danger" title={t("loadFailed")} />
-      {retry}
+      <Banner
+        className="accounts-recovery-feedback"
+        tone="danger"
+        title={t("loadFailed")}
+        action={retry}
+      />
     </div>
   );
 

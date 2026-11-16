@@ -6,6 +6,7 @@
  * the new-password form; a missing token means the link was malformed/opened out
  * of band — show a friendly notice instead of a broken form.
  */
+import { Button } from "@vxture/design-system";
 import { getTranslations } from "next-intl/server";
 import { AccountsNotice } from "@/components/AuthChrome";
 import { ResetPasswordPanel } from "@/components/ResetPasswordPanel";
@@ -24,6 +25,11 @@ export default async function ResetPasswordPage({
   if (!token) {
     return (
       <AccountsNotice
+        action={
+          <Button asChild size="action">
+            <a href="/forgot-password">{t("request_new_reset_link")}</a>
+          </Button>
+        }
         title={t("invalid_reset_link")}
         description={t("invalid_reset_link_detail")}
       />

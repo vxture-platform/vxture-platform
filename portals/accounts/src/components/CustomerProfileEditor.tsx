@@ -427,6 +427,7 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
   const [language, setLanguage] = useState(profile.language || "zh-CN");
   const [timezone, setTimezone] = useState(profile.timezone || "");
   const [busy, setBusy] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   async function save() {
     if (busy) return;
     setBusy(true);
@@ -437,13 +438,10 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
       });
       setAccountsLocale(language === "en-US" ? "en-US" : "zh-CN");
       toast({ tone: "success", title: formText("saved") });
+      setSaveFailed(false);
       router.refresh();
-    } catch (e) {
-      toast({
-        tone: "danger",
-        title: formText("unable_to_save"),
-        ...(e instanceof Error ? { description: e.message } : {}),
-      });
+    } catch {
+      setSaveFailed(true);
     } finally {
       setBusy(false);
     }
@@ -537,9 +535,18 @@ function CustomerPreferences({ profile }: { profile: CustomerProfile }) {
           ]}
         />
       </AccountRow>
+      {saveFailed ? (
+        <Banner
+          tone="danger"
+          title={formText("unable_to_save")}
+          description={formText("preferences_save_failed_detail")}
+        />
+      ) : null}
       <AccountActions>
         <Button size="sm" disabled={busy} onClick={() => void save()}>
-          {busy ? formText("processing") : formText("save")}
+          {busy
+            ? formText("processing")
+            : formText(saveFailed ? "save_again" : "save")}
         </Button>
       </AccountActions>
     </AccountSection>

@@ -18,9 +18,9 @@ on:
         type: boolean
         default: false
       surface:
-        description: Select the management surfaces or the Accounts login frontend
+        description: Select management, Accounts, or the four user portals and workbench BFF
         type: choice
-        options: [management, accounts]
+        options: [management, accounts, user-portals]
         default: management
 permissions:
   contents: read
@@ -65,6 +65,7 @@ jobs:
           const surfaces = {
             management: ['platform_admin', 'platform_console', 'platform_bff-admin', 'platform_bff-console'],
             accounts: ['platform_accounts'],
+            'user-portals': ['platform_website', 'platform_console', 'platform_accounts', 'platform_workbench', 'platform_bff-workbench'],
           };
           const names = surfaces[process.env.BUILD_SURFACE];
           if (!names) throw new Error('Unsupported build surface');
@@ -93,11 +94,20 @@ jobs:
           pnpm --filter "@vxture/bff-console^..." --if-present build
           pnpm --filter @vxture/bff-console exec vitest run src/routers/customer-portal.http.spec.ts
       - name: Validate Accounts authentication regressions
-        if: inputs.surface == 'accounts'
+        if: inputs.surface == 'accounts' || inputs.surface == 'user-portals'
         run: |
           pnpm --filter "@vxture/accounts^..." --if-present build
           pnpm --filter @vxture/accounts type-check
           pnpm --filter @vxture/accounts test
+
+      - name: Validate user portal session reconciliation
+        if: inputs.surface == 'user-portals'
+        run: |
+          pnpm --filter "@vxture/bff-workbench^..." --if-present build
+          pnpm --filter @vxture/bff-workbench type-check
+          pnpm --filter @vxture/bff-workbench test
+          pnpm --filter @vxture/workbench type-check
+          pnpm --filter @vxture/workbench test
 
   # ===========================================================================
   # Selected frontend/BFF images; publication requires an explicit workflow input

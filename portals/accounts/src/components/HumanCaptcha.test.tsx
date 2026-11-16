@@ -56,7 +56,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   continued.mockReset();
   destroy.mockReset();
-  fetchMock = vi.fn().mockResolvedValue(
+  fetchMock = vi.fn().mockImplementation(async () =>
     Response.json({
       enabled: true,
       sceneId: "scene",
@@ -199,5 +199,52 @@ describe("captcha sign-in continuation", () => {
       await options.captchaVerifyCallback("network-failure");
     });
     expect(continued).toHaveBeenCalledExactlyOnceWith(null);
+  });
+  it("keeps network failures visible with a recovery action", async () => {
+    await begin();
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    await act(async () => {
+      await options.captchaVerifyCallback("offline");
+    });
+    expect(host.textContent).toContain("captcha_network_title");
+    expect(host.textContent).toContain("captcha_network_detail");
+    const retry = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "retry_human_verification",
+    )!;
+    expect(retry).toBeDefined();
+    await act(async () => retry.click());
+    expect(host.textContent).not.toContain("captcha_network_title");
+    expect(
+      host
+        .querySelector('[data-testid="human-captcha"]')
+        ?.getAttribute("data-state"),
+    ).toBe("challenge");
+  });
+
+  it("distinguishes unavailable verification from a network failure", async () => {
+    await begin();
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+    await act(async () => {
+      await options.captchaVerifyCallback("unavailable");
+    });
+    expect(host.textContent).toContain("captcha_unavailable_title");
+    expect(host.textContent).not.toContain("captcha_network_title");
+    expect(continued).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it("announces proof expiration and requires verification again", async () => {
+    await begin();
+    fetchMock.mockResolvedValueOnce(success());
+    await act(async () => {
+      await options.captchaVerifyCallback("accepted");
+    });
+    await act(async () => vi.advanceTimersByTime(110000));
+    expect(host.textContent).toContain("captcha_expired_title");
+    expect(
+      host
+        .querySelector('[data-testid="human-captcha"]')
+        ?.getAttribute("data-state"),
+    ).toBe("error");
+    expect(continued).toHaveBeenCalledExactlyOnceWith(proof);
   });
 });

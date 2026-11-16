@@ -38,6 +38,7 @@ import {
   isValidElement,
   useEffect,
   useState,
+  useRef,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -652,10 +653,17 @@ export function AuthField({
   onChange,
 }: Readonly<AuthFieldProps>) {
   const FieldInput = type === "password" ? PasswordInput : Input;
+  const field = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!error) return;
+    const input = field.current?.querySelector<HTMLInputElement>("input");
+    const firstInvalid = input?.form?.querySelector('[aria-invalid="true"]');
+    if (input && (!firstInvalid || input === firstInvalid)) input.focus();
+  }, [error]);
   const inputId = `vx-auth-${name}`;
   const describedById = error || hint ? `${inputId}-desc` : undefined;
   return (
-    <div className="accounts-auth-field">
+    <div className="accounts-auth-field" ref={field}>
       <Label htmlFor={inputId}>
         {label}
         {required ? (
@@ -1358,6 +1366,10 @@ export function AuthResultPanel({
   action,
 }: Readonly<AuthResultPanelProps>) {
   const { icon, badge } = AUTH_RESULT_TONES[tone];
+  const resultHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (tone !== "neutral") resultHeading.current?.focus();
+  }, [tone, title]);
   const pathname = usePathname();
   const formText = useTranslations("accountsForms");
   const operator =
@@ -1386,11 +1398,20 @@ export function AuthResultPanel({
         })
       : (action ?? fallback);
   return (
-    <div className="accounts-result">
+    <div
+      className="accounts-result"
+      role={tone === "neutral" ? "status" : undefined}
+    >
       <span className={cn("accounts-result-icon", badge)} aria-hidden="true">
         <Icon name={icon} size="lg" />
       </span>
-      <h1 className="text-balance text-heading-1 text-foreground">{title}</h1>
+      <h1
+        ref={resultHeading}
+        tabIndex={-1}
+        className="text-balance text-heading-1 text-foreground focus:outline-none"
+      >
+        {title}
+      </h1>
       {description ? (
         <p className="text-pretty text-body text-muted-foreground">
           {description}

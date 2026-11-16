@@ -9,12 +9,13 @@
 "use client";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Button } from "@vxture/design-system";
+import { Banner, Button } from "@vxture/design-system";
 
 type Realm = "customer" | "workforce";
 type Config =
   | { enabled: false }
   | { enabled: true; sceneId: string; prefix: string; region: "cn" | "sgp" };
+type Failure = "unavailable" | "network" | "expired" | "incomplete";
 type Status = "loading" | "challenge" | "verified" | "disabled" | "error";
 interface CaptchaInstance {
   destroyCaptcha: () => void;
@@ -214,11 +215,13 @@ function HumanCaptcha({
 
   const id = `captcha-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [status, setStatus] = useState<Status>("loading");
+  const [failure, setFailure] = useState<Failure>("unavailable");
   const container = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     let cancelled = false;
     let completed = false;
+    let failed = false;
     let popupClosed = false;
     let retryableRejection = false;
     let verification:
@@ -234,6 +237,11 @@ function HumanCaptcha({
         setStatus(next);
         onStatus(next, proof);
       }
+    };
+    const fail = (reason: Failure) => {
+      failed = true;
+      if (!cancelled) setFailure(reason);
+      update("error");
     };
     const init = async () => {
       try {
@@ -256,7 +264,7 @@ function HumanCaptcha({
           throw new Error("invalid_config");
         await loadSdk();
         if (cancelled) return;
-        initialization = setTimeout(() => update("error"), 15000);
+        initialization = setTimeout(() => fail("unavailable"), 15000);
         window.initAliyunCaptcha!({
           SceneId: config.sceneId,
           prefix: config.prefix,
@@ -271,7 +279,7 @@ function HumanCaptcha({
             if (!cancelled && !completed && !verification) onCancel();
           },
           onError: () => {
-            if (!completed) update("error");
+            if (!completed) fail("unavailable");
           },
           getInstance: (value) => {
             if (!value) {
@@ -317,7 +325,10 @@ function HumanCaptcha({
                   update("challenge");
                   return rejected;
                 }
-                if (!verified.ok) throw new Error("verification_failed");
+                if (!verified.ok) {
+                  fail("unavailable");
+                  return rejected;
+                }
                 const proof = (await verified.json()) as {
                   token?: string;
                   expiresIn?: number;
@@ -326,16 +337,18 @@ function HumanCaptcha({
                   typeof proof.token !== "string" ||
                   !/^[0-9a-f-]{36}$/.test(proof.token) ||
                   proof.expiresIn !== 120
-                )
-                  throw new Error("invalid_proof");
+                ) {
+                  fail("unavailable");
+                  return rejected;
+                }
                 if (cancelled) return rejected;
                 completed = true;
                 update("verified", proof.token);
                 clearTimeout(expiry);
-                expiry = setTimeout(() => update("error"), 110000);
+                expiry = setTimeout(() => fail("expired"), 110000);
                 return { captchaResult: true, bizResult: true };
               } catch {
-                update("error");
+                fail("network");
                 return rejected;
               } finally {
                 verification = undefined;
@@ -346,11 +359,12 @@ function HumanCaptcha({
             return verification;
           },
           onBizResultCallback: (result) => {
-            if (!result && !completed && !retryableRejection) update("error");
+            if (!result && !completed && !failed && !retryableRejection)
+              fail("incomplete");
           },
         });
       } catch {
-        update("error");
+        fail("unavailable");
       }
     };
     void init();
@@ -384,35 +398,32 @@ function HumanCaptcha({
       >
         {formText("complete_human_verification")}
       </Button>
-      <p
-        role="status"
-        className={
-          status === "challenge" ||
-          status === "disabled" ||
-          (onDemand && status !== "error")
-            ? "sr-only"
-            : "text-body-small text-muted-foreground"
-        }
-      >
-        {onDemand && status !== "error"
-          ? ""
-          : status === "loading"
+      {status === "error" ? (
+        <Banner
+          className="accounts-recovery-feedback"
+          tone={failure === "network" ? "danger" : "warning"}
+          title={formText(`captcha_${failure}_title`)}
+          description={formText(`captcha_${failure}_detail`)}
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="action"
+              onClick={onRetry}
+            >
+              {formText("retry_human_verification")}
+            </Button>
+          }
+        />
+      ) : (
+        <p role="status" className="sr-only">
+          {status === "loading"
             ? formText("loading_human_verification")
             : status === "verified"
               ? formText("human_verification_complete")
-              : status === "error"
-                ? formText(
-                    "verification_incomplete_or_expired_please_try_again",
-                  )
-                : status === "challenge"
-                  ? formText("complete_human_verification_first")
-                  : ""}
-      </p>
-      {status === "error" ? (
-        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          {formText("retry_human_verification")}
-        </Button>
-      ) : null}
+              : ""}
+        </p>
+      )}
     </div>
   );
 }

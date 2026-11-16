@@ -324,17 +324,23 @@ export function AccountCenterShell({
               </div>
             ) : (
               <div className="flex flex-col items-start gap-sm">
-                <Banner tone="danger" title={center("loadFailed")} />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setSession("checking");
-                    setRevision((value) => value + 1);
-                  }}
-                >
-                  {center("retry")}
-                </Button>
+                <Banner
+                  className="accounts-recovery-feedback"
+                  tone="danger"
+                  title={center("loadFailed")}
+                  action={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setSession("checking");
+                        setRevision((value) => value + 1);
+                      }}
+                    >
+                      {center("retry")}
+                    </Button>
+                  }
+                />
               </div>
             )}
           </ShellPageContainer>

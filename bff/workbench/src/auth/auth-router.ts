@@ -358,7 +358,7 @@ export class AuthRouter {
 
   @Get("session")
   async session(@Req() req: Request) {
-    const current = await this.auth.authenticate(req);
+    const current = await this.auth.authenticate(req, true);
     return { status: "active", userId: current.user.userId };
   }
 
