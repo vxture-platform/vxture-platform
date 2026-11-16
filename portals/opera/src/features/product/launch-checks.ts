@@ -133,6 +133,9 @@ interface OidcClientLite {
   clientId: string;
   state: string;
   redirectUris: string[];
+  tokenEndpointAuthMethod?: string;
+  sloParticipation?: string;
+  backChannelLogoutUri?: string | null;
 }
 
 interface AtlasGrantLite {
@@ -271,6 +274,32 @@ export function signalFacts(live: CheckResult | undefined): SignalFacts {
   };
 }
 
+/** Report registration without claiming the remote product cleared its session. */
+function logoutConfigurationDetail(clients: readonly OidcClientLite[]): string {
+  const serverClients = clients.filter(
+    (client) => client.tokenEndpointAuthMethod !== "none",
+  );
+  if (serverClients.length === 0) {
+    return clients.length > 0 ? "全域退出：公共客户端不适用后端退出通知。" : "";
+  }
+  const configured: string[] = [];
+  const missing: string[] = [];
+  for (const client of serverClients) {
+    const target =
+      client.sloParticipation === "back_channel" &&
+      client.backChannelLogoutUri?.trim()
+        ? configured
+        : missing;
+    target.push(client.clientId);
+  }
+  const parts = [
+    configured.length ? `已启用后端退出通知（${configured.join("、")}）` : "",
+    missing.length ? `未启用或缺少回调（${missing.join("、")}）` : "",
+    "配置状态不能代替实测：请在官网退出后立即刷新产品，确认旧会话已失效。",
+  ].filter(Boolean);
+  return `全域退出：${parts.join("；")}`;
+}
+
 function reason(error: unknown, fallback: string): string {
   return error instanceof OperaApiError ? error.message : fallback;
 }
@@ -376,15 +405,20 @@ export async function runLaunchChecks(
       what: "产品有一个启用中的 OIDC 客户端、配了回调地址，并且真的有人用平台账号登进去过。要害是后半句：登录台账里有行，才说明对方的登录、回调与会话确实实现了——客户端配好而没人登得进来，这一项不算通过。",
       side: "theirs",
       status: ok && loggedIn ? "pass" : "fail",
-      detail: !ok
-        ? active.length === 0
-          ? clients.length === 0
-            ? "这个产品下没有任何 OIDC 客户端。"
-            : `有 ${clients.length} 个客户端但全部处于禁用状态。`
-          : "客户端启用着，但没有配任何回调地址——换票流程走不完。"
-        : loggedIn
-          ? `${withRedirect.length} 个启用中的客户端；最近一次登录 ${formatAt(loggedIn.lastLoginAt, opts.locale)}，经 ${loggedIn.clientId}`
-          : `${withRedirect.length} 个启用中的客户端已就绪，但从来没有人登进去过：对方的登录、回调与会话还没接通，或者还没人试过。`,
+      detail: [
+        !ok
+          ? active.length === 0
+            ? clients.length === 0
+              ? "这个产品下没有任何 OIDC 客户端。"
+              : `有 ${clients.length} 个客户端但全部处于禁用状态。`
+            : "客户端启用着，但没有配任何回调地址——换票流程走不完。"
+          : loggedIn
+            ? `${withRedirect.length} 个启用中的客户端；最近一次登录 ${formatAt(loggedIn.lastLoginAt, opts.locale)}，经 ${loggedIn.clientId}`
+            : `${withRedirect.length} 个启用中的客户端已就绪，但从来没有人登进去过：对方的登录、回调与会话还没接通，或者还没人试过。`,
+        logoutConfigurationDetail(active),
+      ]
+        .filter(Boolean)
+        .join(" "),
       remedy:
         ok && loggedIn
           ? null

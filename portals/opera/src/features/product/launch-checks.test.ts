@@ -161,6 +161,55 @@ describe("runLaunchChecks —— C2 那条上的 reporter 从 BFF 信号到实�
     vi.mocked(api.get).mockReset();
   });
 
+  it("reports logout configuration separately from verified sign-in", async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/oidc-clients")) {
+        return [
+          {
+            clientId: "stable-app",
+            state: "active",
+            redirectUris: ["https://app.ruyin.work/auth/callback"],
+            sloParticipation: "back_channel",
+            backChannelLogoutUri:
+              "https://app.ruyin.work/auth/backchannel-logout",
+          },
+          {
+            clientId: "beta-app",
+            state: "active",
+            redirectUris: ["https://beta-app.vxture.com/auth/callback"],
+            sloParticipation: "none",
+            backChannelLogoutUri:
+              "https://beta-app.vxture.com/auth/backchannel-logout",
+          },
+          {
+            clientId: "native-app",
+            state: "active",
+            redirectUris: [],
+            tokenEndpointAuthMethod: "none",
+          },
+          { clientId: "retired-app", state: "inactive", redirectUris: [] },
+        ];
+      }
+      if (url.includes("/integration-signals")) {
+        return {
+          login: {
+            clientId: "stable-app",
+            lastLoginAt: "2026-11-16T01:00:00.000Z",
+          },
+        };
+      }
+      return url.includes("/webhook") ? null : [];
+    });
+    const login = (await runLaunchChecks(PRODUCT)).find(
+      (result) => result.id === "client",
+    );
+    expect(login?.status).toBe("pass");
+    expect(login?.detail).toContain("已启用后端退出通知（stable-app）");
+    expect(login?.detail).toContain("未启用或缺少回调（beta-app）");
+    expect(login?.detail).toContain("配置状态不能代替实测");
+    expect(login?.detail).not.toMatch(/native-app|retired-app/);
+  });
+
   it("atlas 持代上报票替它读过：c2-entitlement 带 delegatedReporter=atlas，且仍是「经 S2S 令牌」", async () => {
     stubSignals({
       lastSeenAt: "2026-10-05T01:02:03.000Z",
