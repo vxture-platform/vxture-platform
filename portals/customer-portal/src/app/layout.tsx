@@ -29,11 +29,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** Mount the published design system without coupling to any other portal. */
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const brand = await loadBrand();
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body>
-        <ThemeProvider defaultMode="light">{children}</ThemeProvider>
+        <ThemeProvider defaultMode={brand.appearance}>{children}</ThemeProvider>
       </body>
     </html>
   );
