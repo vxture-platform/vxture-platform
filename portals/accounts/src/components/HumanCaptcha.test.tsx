@@ -9,21 +9,12 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Button } from "@vxture/design-system";
 import { useHumanCaptcha } from "./HumanCaptcha";
 
 vi.mock("next-intl", () => ({
   useLocale: () => "zh-CN",
   useTranslations: () => (key: string) => key,
-}));
-vi.mock("@vxture/design-system", () => ({
-  Button: ({
-    variant: _variant,
-    size: _size,
-    ...props
-  }: React.ComponentProps<"button"> & {
-    variant?: string;
-    size?: string;
-  }) => <button {...props} />,
 }));
 
 // ============================================================================
@@ -43,9 +34,9 @@ function Harness() {
   return (
     <>
       {captcha.node}
-      <button onClick={() => void captcha.verify().then(continued)}>
+      <Button onClick={() => void captcha.verify().then(continued)}>
         Sign in
-      </button>
+      </Button>
     </>
   );
 }
