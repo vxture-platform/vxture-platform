@@ -20,6 +20,7 @@ import { BillingModule } from "@vxture/service-billing";
 import { CustomerLifecycleService } from "./oidc/customer-lifecycle.service";
 import { CustomerLifecycleRouter } from "./routers/customer-lifecycle.router";
 import { CustomerLifecycleJob } from "./accounts/customer-lifecycle.job";
+import { LogoutRetryJob } from "./oidc/logout-retry.job";
 import { AccountModule } from "@vxture/service-account";
 import { OrganizationModule } from "@vxture/service-organization";
 import { SubscriptionModule } from "@vxture/service-subscription";
@@ -134,6 +135,7 @@ import { customerNotificationsProvider } from "./notifications/customer-notifica
     CustomerSecurityService,
     CustomerLifecycleService,
     CustomerLifecycleJob,
+    LogoutRetryJob,
     CustomerSecurityChallengeService,
     InternalAuthGuard,
     ActorBindingGuard,

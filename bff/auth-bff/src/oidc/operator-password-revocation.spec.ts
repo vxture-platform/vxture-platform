@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { OperatorSelfService } from "./operator-self.service";
 import { OidcService } from "./oidc.service";
+import { logoutTestStore } from "./logout-test-store";
 import { OperatorSelfRouter } from "../routers/operator-self.router";
 
 // ============================================================================
@@ -29,6 +30,15 @@ function build() {
     "different-operator-sid",
   ]);
   const redis = {
+    ...logoutTestStore(
+      (sid) => ({
+        sub: "opr_operator-1",
+        clientIds: [sid === "current-sid" ? "opera" : "admin"],
+      }),
+      (sid) => {
+        liveSessions.delete(sid);
+      },
+    ),
     listOperatorSessions: vi.fn(async () => [
       { sid: "current-sid", sub: "opr_operator-1", clients: ["opera"] },
       { sid: "other-sid", sub: "opr_operator-1", clients: ["admin"] },
@@ -43,9 +53,16 @@ function build() {
     }),
   };
   const token = { revokeSession: vi.fn(async () => {}) };
+  const durableSession = { revoke: vi.fn(async () => {}) };
   const backChannel = vi.fn(async () => {});
   const oidc = Object.create(OidcService.prototype) as OidcService;
-  Object.assign(oidc, { redis, token, sendBackChannelLogouts: backChannel });
+  Object.assign(oidc, {
+    redis,
+    token,
+    sendBackChannelLogouts: backChannel,
+    durableSession,
+    logger: { warn: vi.fn(), error: vi.fn() },
+  });
   const endSessions = vi.spyOn(oidc, "endOperatorSessions");
   const service = new OperatorSelfService(
     operators as never,
@@ -76,6 +93,7 @@ function build() {
     token,
     backChannel,
     endSessions,
+    durableSession,
   };
 }
 
@@ -100,6 +118,7 @@ describe("workforce password change", () => {
       liveSessions,
       token,
       backChannel,
+      durableSession,
     } = build();
     await expect(
       router.changePassword(BODY, request as never, response as never),
@@ -119,12 +138,19 @@ describe("workforce password change", () => {
     );
     expect([...liveSessions]).toEqual(["different-operator-sid"]);
     expect(token.revokeSession).toHaveBeenCalledTimes(2);
-    expect(backChannel).toHaveBeenCalledWith("current-sid", "opr_operator-1", [
-      "opera",
-    ]);
-    expect(backChannel).toHaveBeenCalledWith("other-sid", "opr_operator-1", [
-      "admin",
-    ]);
+    expect(durableSession.revoke).not.toHaveBeenCalled();
+    expect(backChannel).toHaveBeenCalledWith(
+      "current-sid",
+      "opr_operator-1",
+      ["opera"],
+      true,
+    );
+    expect(backChannel).toHaveBeenCalledWith(
+      "other-sid",
+      "opr_operator-1",
+      ["admin"],
+      true,
+    );
     expect(response.clearCookie).toHaveBeenCalledExactlyOnceWith("vx_sid_op", {
       path: "/",
     });
