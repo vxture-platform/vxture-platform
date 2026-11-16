@@ -1,4 +1,4 @@
-# Targeted builds for customer portal management surfaces. This workflow never deploys.
+# Targeted builds for portal management and Accounts. This workflow never deploys.
 # @package @vxture/repo
 # @layer Infrastructure
 # @category workflow
@@ -17,6 +17,11 @@ on:
         description: Publish validated images to GHCR and configured ACR
         type: boolean
         default: false
+      surface:
+        description: Select the management surfaces or the Accounts login frontend
+        type: choice
+        options: [management, accounts]
+        default: management
 permissions:
   contents: read
 concurrency:
@@ -49,13 +54,20 @@ jobs:
       - uses: ./.github/actions/setup-node-pnpm
         with:
           node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
-      - name: Resolve management images from the canonical catalog
+      - name: Resolve selected images from the canonical catalog
         id: matrix
+        env:
+          BUILD_SURFACE: ${{ inputs.surface }}
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync } from 'node:fs';
           import { IMAGES } from './scripts/workflows/images.mjs';
-          const names = ['platform_admin', 'platform_console', 'platform_bff-admin', 'platform_bff-console'];
+          const surfaces = {
+            management: ['platform_admin', 'platform_console', 'platform_bff-admin', 'platform_bff-console'],
+            accounts: ['platform_accounts'],
+          };
+          const names = surfaces[process.env.BUILD_SURFACE];
+          if (!names) throw new Error('Unsupported build surface');
           const include = names.map((name) => {
             const matches = IMAGES.filter((entry) => entry.name === name);
             if (matches.length !== 1) throw new Error('Missing or duplicate canonical image: ' + name);
@@ -69,6 +81,7 @@ jobs:
           node scripts/guardrails/check-column-locks.mjs
           node scripts/guardrails/check-anchor-writes.mjs
       - name: Build BFF dependencies and validate portal packages
+        if: inputs.surface == 'management'
         env:
           CUSTOMER_PORTAL_TEST_DATABASE_URL: postgresql://postgres@localhost:5432/postgres
         run: |
@@ -79,9 +92,15 @@ jobs:
           pnpm --filter @vxture/bff-customer-portal test
           pnpm --filter "@vxture/bff-console^..." --if-present build
           pnpm --filter @vxture/bff-console exec vitest run src/routers/customer-portal.http.spec.ts
+      - name: Validate Accounts authentication regressions
+        if: inputs.surface == 'accounts'
+        run: |
+          pnpm --filter "@vxture/accounts^..." --if-present build
+          pnpm --filter @vxture/accounts type-check
+          pnpm --filter @vxture/accounts test
 
   # ===========================================================================
-  # Four management images; publication requires an explicit workflow input
+  # Selected frontend/BFF images; publication requires an explicit workflow input
   # ===========================================================================
   images:
     needs: validate
