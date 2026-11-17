@@ -612,7 +612,7 @@ export default function Header() {
                 logoSrc={HEADER_DATA.logo.image}
                 label={
                   <>
-                    <span className="text-primary-text">Ruyin</span> Studio
+                    <span className="text-primary-text">Vxture</span> Research
                   </>
                 }
               />
