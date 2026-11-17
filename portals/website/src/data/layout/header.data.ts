@@ -41,6 +41,7 @@ export interface HeaderNavItem {
   key: string;
   href: string;
   labelKey: string;
+  newTab?: boolean;
   children?: HeaderNavChild[];
 }
 
@@ -103,7 +104,12 @@ export const HEADER_DATA: HeaderData = {
     altKey: "logo.alt",
   },
   nav: [
-    { key: "platform", href: "https://ruyin.work", labelKey: "nav.platform" },
+    {
+      key: "platform",
+      href: "https://ruyin.work",
+      labelKey: "nav.platform",
+      newTab: true,
+    },
     {
       key: "products",
       href: "/products",

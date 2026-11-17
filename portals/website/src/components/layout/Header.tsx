@@ -327,6 +327,8 @@ function HeaderNav() {
           <Link
             key={item.key}
             href={item.href}
+            target={item.newTab ? "_blank" : undefined}
+            rel={item.newTab ? "noopener noreferrer" : undefined}
             className={NAV_INTERACTIVE_CLASS}
           >
             {t(item.labelKey)}

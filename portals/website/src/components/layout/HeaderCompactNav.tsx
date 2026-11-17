@@ -70,6 +70,8 @@ export function HeaderCompactNav({ consoleHref }: { consoleHref: string }) {
               <div key={item.key}>
                 <Link
                   href={item.href}
+                  target={item.newTab ? "_blank" : undefined}
+                  rel={item.newTab ? "noopener noreferrer" : undefined}
                   className={LINK_CLASS}
                   onClick={() => setOpen(false)}
                 >
