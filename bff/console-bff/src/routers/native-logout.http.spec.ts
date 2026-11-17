@@ -59,6 +59,31 @@ const values = new Map<string, string>();
 const members = new Map<string, Set<string>>();
 
 const redis = {
+  async eval(_script: string, _count: number, ...args: (string | number)[]) {
+    if (_script.includes("destroy-unchanged-session")) {
+      const [key, index, raw, id] = args.map(String);
+      if (values.get(key!) !== raw) return 0;
+      values.delete(key!);
+      members.get(index!)?.delete(id!);
+      return 1;
+    }
+    const [key, index, raw, , id, expected] = args.map(String);
+    const existing = values.get(key!);
+    if (!existing) return 0;
+    const current = JSON.parse(existing) as RpSession;
+    const next = JSON.parse(raw!) as RpSession;
+    if (
+      current.sid !== next.sid ||
+      current.sub !== next.sub ||
+      (expected && current.refreshToken !== expected)
+    )
+      return 0;
+    values.set(key!, raw!);
+    const set = members.get(index!) ?? new Set<string>();
+    set.add(id!);
+    members.set(index!, set);
+    return 1;
+  },
   get: vi.fn(async (key: string) => values.get(key) ?? null),
   setex: vi.fn(async (key: string, _ttl: number, value: string) => {
     values.set(key, value);

@@ -7,6 +7,31 @@ function fakeRedis(): RpRedis {
   const kv = new Map<string, string>();
   const sets = new Map<string, Set<string>>();
   return {
+    async eval(_script: string, _count: number, ...args: (string | number)[]) {
+      if (_script.includes("destroy-unchanged-session")) {
+        const [key, index, raw, id] = args.map(String);
+        if (kv.get(key!) !== raw) return 0;
+        kv.delete(key!);
+        sets.get(index!)?.delete(id!);
+        return 1;
+      }
+      const [key, index, raw, , id, expected] = args.map(String);
+      const existing = kv.get(key!);
+      if (!existing) return 0;
+      const current = JSON.parse(existing) as RpSession;
+      const next = JSON.parse(raw!) as RpSession;
+      if (
+        current.sid !== next.sid ||
+        current.sub !== next.sub ||
+        (expected && current.refreshToken !== expected)
+      )
+        return 0;
+      kv.set(key!, raw!);
+      const set = sets.get(index!) ?? new Set<string>();
+      set.add(id!);
+      sets.set(index!, set);
+      return 1;
+    },
     async get(k) {
       return kv.get(k) ?? null;
     },
@@ -227,4 +252,134 @@ describe("RpAuthService.resolve", () => {
     expect((await svc.resolve("rp1")).status).toBe("expired");
     expect(await store.get("rp1")).toBeNull();
   });
+});
+
+// ============================================================================
+// Revocation boundaries during asynchronous identity resolution
+// ============================================================================
+
+describe("RP revocation fencing", () => {
+  it.each(["local", "backchannel"])(
+    "does not resurrect a session revoked by %s logout during refresh",
+    async (mode) => {
+      const store = new RpSessionStore(fakeRedis(), "console");
+      await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
+      let release!: (value: OidcTokenSet) => void;
+      let started!: () => void;
+      const refreshing = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const svc = new RpAuthService(
+        store,
+        fakeClient({
+          refresh: async () => {
+            started();
+            return new Promise<OidcTokenSet>((resolve) => {
+              release = resolve;
+            });
+          },
+        }),
+        3600,
+      );
+      const pending = svc.resolve("rp1");
+      await refreshing;
+      if (mode === "local") await store.destroy("rp1");
+      else await store.destroyBySid("sidA");
+      release(session({ accessToken: "rotated", refreshToken: "rotated-ref" }));
+      expect(await pending).toEqual({ status: "expired" });
+      expect(await store.get("rp1")).toBeNull();
+    },
+  );
+
+  it("rejects verified identity if logout occurs during token verification", async () => {
+    const store = new RpSessionStore(fakeRedis(), "console");
+    await store.create("rp1", session(), 3600);
+    const svc = new RpAuthService(
+      store,
+      fakeClient({
+        verify: async () => {
+          await store.destroyBySid("sidA");
+          return { sub: "usr_1" };
+        },
+      }),
+      3600,
+    );
+    expect(await svc.resolve("rp1")).toEqual({ status: "expired" });
+  });
+
+  it("does not overwrite a replacement identity after delayed refresh", async () => {
+    const store = new RpSessionStore(fakeRedis(), "console");
+    await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
+    const replacement = session({
+      sid: "sidB",
+      sub: "usr_2",
+      accessToken: "other-user",
+    });
+    const svc = new RpAuthService(
+      store,
+      fakeClient({
+        refresh: async () => {
+          await store.destroy("rp1");
+          await store.create("rp1", replacement, 3600);
+          return session({ accessToken: "late-old-user" });
+        },
+      }),
+      3600,
+    );
+    expect(await svc.resolve("rp1")).toEqual({ status: "expired" });
+    expect(await store.get("rp1")).toEqual(replacement);
+  });
+
+  it("uses the concurrent rotation winner instead of overwriting it", async () => {
+    const store = new RpSessionStore(fakeRedis(), "console");
+    await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
+    const winner = session({
+      accessToken: "winner",
+      refreshToken: "winner-ref",
+    });
+    const svc = new RpAuthService(
+      store,
+      fakeClient({
+        refresh: async () => {
+          await store.update("rp1", winner, 3600, "ref");
+          return session({
+            accessToken: "late-loser",
+            refreshToken: "loser-ref",
+          });
+        },
+      }),
+      3600,
+    );
+    const outcome = await svc.resolve("rp1");
+    expect(outcome.status).toBe("ok");
+    if (outcome.status === "ok") expect(outcome.accessToken).toBe("winner");
+    expect(await store.get("rp1")).toEqual(winner);
+  });
+});
+
+// ============================================================================
+// Failed refresh must not delete a replacement identity
+// ============================================================================
+
+it("keeps a replacement session when an old identity refresh is rejected", async () => {
+  const store = new RpSessionStore(fakeRedis(), "console");
+  await store.create("rp1", session({ accessExpiresAt: now() + 5 }), 3600);
+  const replacement = session({
+    sid: "sidB",
+    sub: "usr_2",
+    accessToken: "new-user",
+  });
+  const svc = new RpAuthService(
+    store,
+    fakeClient({
+      refresh: async () => {
+        await store.destroy("rp1");
+        await store.create("rp1", replacement, 3600);
+        throw new Error("invalid_grant");
+      },
+    }),
+    3600,
+  );
+  expect(await svc.resolve("rp1")).toEqual({ status: "expired" });
+  expect(await store.get("rp1")).toEqual(replacement);
 });

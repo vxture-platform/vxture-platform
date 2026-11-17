@@ -13,6 +13,11 @@ import type { RpSession } from "./types";
 
 /** Narrow subset of ioredis used here (keeps the store unit-testable). */
 export interface RpRedis {
+  eval(
+    script: string,
+    numberOfKeys: number,
+    ...args: (string | number)[]
+  ): Promise<unknown>;
   get(key: string): Promise<string | null>;
   setex(key: string, ttlSeconds: number, value: string): Promise<unknown>;
   del(...keys: string[]): Promise<unknown>;
@@ -21,6 +26,31 @@ export interface RpRedis {
   smembers(key: string): Promise<string[]>;
   expire(key: string, ttlSeconds: number): Promise<unknown>;
 }
+
+// ============================================================================
+// Atomic session rotation
+// ============================================================================
+
+const UPDATE_EXISTING_SESSION = `
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local current = cjson.decode(raw)
+local replacement = cjson.decode(ARGV[1])
+if current.sid ~= replacement.sid or current.sub ~= replacement.sub then return 0 end
+if ARGV[4] ~= '' and current.refreshToken ~= ARGV[4] then return 0 end
+redis.call('SETEX', KEYS[1], ARGV[2], ARGV[1])
+redis.call('SADD', KEYS[2], ARGV[3])
+redis.call('EXPIRE', KEYS[2], ARGV[2])
+return 1
+`;
+
+const DESTROY_UNCHANGED_SESSION = `
+-- destroy-unchanged-session
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('DEL', KEYS[1])
+redis.call('SREM', KEYS[2], ARGV[2])
+return 1
+`;
 
 export class RpSessionStore {
   /**
@@ -64,17 +94,39 @@ export class RpSessionStore {
     return raw ? (JSON.parse(raw) as RpSession) : null;
   }
 
-  /** Replace a session's token set (e.g. after refresh); refreshes TTL + index. */
+  /** Rotate an existing session atomically; never recreate a revoked session. */
   async update(
     rpsid: string,
     session: RpSession,
     ttlSeconds: number,
-  ): Promise<void> {
-    await this.create(rpsid, session, ttlSeconds);
+    expectedRefreshToken?: string,
+  ): Promise<boolean> {
+    const updated = await this.redis.eval(
+      UPDATE_EXISTING_SESSION,
+      2,
+      this.sessKey(rpsid),
+      this.sidIndexKey(session.sid),
+      JSON.stringify(session),
+      ttlSeconds,
+      rpsid,
+      expectedRefreshToken ?? "",
+    );
+    return updated === 1;
   }
 
   /** Delete one RP session (local logout); also de-indexes it from its sid. */
-  async destroy(rpsid: string): Promise<void> {
+  async destroy(rpsid: string, expected?: RpSession): Promise<void> {
+    if (expected) {
+      await this.redis.eval(
+        DESTROY_UNCHANGED_SESSION,
+        2,
+        this.sessKey(rpsid),
+        this.sidIndexKey(expected.sid),
+        JSON.stringify(expected),
+        rpsid,
+      );
+      return;
+    }
     const session = await this.get(rpsid);
     await this.redis.del(this.sessKey(rpsid));
     if (session) {

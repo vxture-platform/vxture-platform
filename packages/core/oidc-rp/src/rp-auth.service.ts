@@ -80,6 +80,15 @@ export class RpAuthService {
     } catch {
       return { status: "expired" };
     }
+    // Verification may await I/O while logout removes or replaces this session.
+    const current = await this.store.get(rpsid);
+    if (
+      !current ||
+      current.sid !== session.sid ||
+      current.sub !== session.sub ||
+      current.accessToken !== session.accessToken
+    )
+      return { status: "expired" };
     return {
       status: "ok",
       rpsid,
@@ -121,17 +130,33 @@ export class RpAuthService {
         refreshToken: next.refreshToken,
         accessExpiresAt: next.accessExpiresAt,
       };
-      await this.store.update(rpsid, updated, this.sessionTtlSec);
-      return updated;
+      const persisted = await this.store.update(
+        rpsid,
+        updated,
+        this.sessionTtlSec,
+        session.refreshToken,
+      );
+      if (persisted) return updated;
+      const current = await this.store.get(rpsid);
+      return current &&
+        current.sid === session.sid &&
+        current.sub === session.sub
+        ? current
+        : null;
     } catch {
       /* 刷新被拒不等于会话没了。跨进程并发时（另一个 BFF 实例、桌面端与
          浏览器同时在用），别人可能刚刚换成功并把新令牌写回了存储。
          所以先回读一次：存储里的过期时刻向前走了，就用那份，不要把人踢下线。
          旧写法是 catch 里直接 destroy，于是任何一次刷新失败都等于登出。 */
       const fresh = await this.store.get(rpsid);
-      if (fresh && fresh.accessExpiresAt > session.accessExpiresAt)
+      if (
+        fresh &&
+        fresh.sid === session.sid &&
+        fresh.sub === session.sub &&
+        fresh.accessExpiresAt > session.accessExpiresAt
+      )
         return fresh;
-      await this.store.destroy(rpsid);
+      await this.store.destroy(rpsid, session);
       return null;
     }
   }
